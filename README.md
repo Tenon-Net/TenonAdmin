@@ -8,19 +8,20 @@
 ## 快速开始
 
 ```bash
-dotnet run --project samples/MinimalHost
-# 启动后:自动在 samples/MinimalHost/data/admin.db 建库、建 sys_schema_version 表并写种子
+dotnet run --project backend/samples/MinimalHost
+# 启动后:自动在 backend/samples/MinimalHost/data/admin.db 建库、建 sys_schema_version 表并写种子
 # 访问 http://localhost:5xxx/health -> {"status":"ok","app":"TenonAdmin"}
 ```
 
 ## 结构(v1 monorepo)
 
 ```
-src/  TenonAdmin.Core / .SqlSugar / .Services / .AspNetCore / TenonAdmin(元包)
-samples/MinimalHost   三行启动样例(即验收基准)
-web/                  Vue Naive UI 前端(后续)
-tests/                xunit(后续)
-docs/                 设计文档
+backend/                          后端(独立一层)
+├─ src/    TenonAdmin.Core / .SqlSugar / .Services / .AspNetCore / TenonAdmin(元包)
+├─ samples/MinimalHost            三行启动样例(即验收基准)
+└─ tests/                         xunit(后续)
+web/                              Vue Naive UI 前端(后续)
+docs/                             设计文档
 ```
 
 用户项目 `Program.cs`:
