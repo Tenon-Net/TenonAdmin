@@ -35,6 +35,12 @@ public static class TenonAdminSetup
         services.AddSingleton(options.Jwt);
         services.TryAddSingleton(TimeProvider.System);          // 统一时间源(§12),测试可换 Fake
 
+        // ── 当前用户 + 数据范围环境(§6):HTTP 侧实现在此先注册,压过 SqlSugar 层的 AsyncLocal 兜底 ──
+        services.AddHttpContextAccessor();
+        services.TryAddSingleton<ICurrentUser, HttpContextCurrentUser>();
+        // HttpContext.Items 版数据范围载体(避免授权过滤器里 AsyncLocal 不回流的陷阱);非 HTTP 场景回退 AsyncLocal
+        services.TryAddSingleton<IDataScopeContext, HttpContextDataScopeContext>();
+
         // ── 数据层 + 领域服务(实体程序集在此登记,§5.7 注册模型)──────────────
         services.AddTenonAdminSqlSugar(options.Database, [typeof(ServicesSetup).Assembly]);
         services.AddTenonAdminServices();

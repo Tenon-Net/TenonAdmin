@@ -21,6 +21,9 @@ public static class SqlSugarSetup
         // WorkerId 暂固定 0(单机);多实例部署的 WorkerId 配置项随部署文档一起补
         services.TryAddSingleton<IIdGenerator>(_ => new SnowflakeIdGenerator());
 
+        // ── 数据范围环境载体(§6):授权管道写入、全局过滤器读取;AsyncLocal 单例 ──
+        services.TryAddSingleton<IDataScopeContext, DataScopeContext>();
+
         // ── 实体程序集登记:本层自带 sys_schema_version;上层/用户程序集从参数并入 ──
         var sources = new TenonEntitySources();
         sources.Add(typeof(SqlSugarSetup).Assembly);
@@ -40,12 +43,22 @@ public static class SqlSugarSetup
         {
             var idGen = sp.GetRequiredService<IIdGenerator>();
             var time = sp.GetService<TimeProvider>() ?? TimeProvider.System; // 统一时间源,可测试(设计 §12)
+            var scope = sp.GetRequiredService<IDataScopeContext>();          // 数据范围载体(单例,过滤器闭包捕获)
 
             // 第二参数对每个上下文生效(Scope 内部按线程建 Client,钩子逐个挂上)
             return new SqlSugarScope(config, client =>
             {
                 // 全局软删过滤器:实现 ISoftDelete 的实体,查询自动排除已删行(设计 §12)
                 client.QueryFilter.AddTableFilter<ISoftDelete>(e => e.IsDelete == false);
+
+                // 全局数据范围过滤器(§6 招牌能力):对 IOrgScoped 实体(DataEntity 及其子类)按当前请求生效范围过滤。
+                // 按接口匹配(SqlSugar 不对基类生效,只认接口/精确类型,与软删过滤器一致)。
+                // 表达式里 scope.Current 的三个属性都与实体参数无关,SqlSugar 先本地求值成常量(机构集合 → SQL IN),
+                // 再与实体相关的部分拼成 WHERE;Unrestricted 时整体恒真(不过滤)。
+                client.QueryFilter.AddTableFilter<IOrgScoped>(e =>
+                    scope.Current.IsUnrestricted
+                    || (e.CreateOrgId != null && scope.Current.OrgIds.Contains(e.CreateOrgId.Value))
+                    || (scope.Current.IncludeSelf && e.CreateUserId == scope.Current.UserId));
 
                 // 审计字段自动填充:业务代码只管业务字段,基建字段框架兜底(见 BaseEntity 注释)
                 client.Aop.DataExecuting = (_, info) =>

@@ -470,7 +470,10 @@ public class DeviceSeedData : ISeedData
   - 标记特性 **`[RolePermission]`**(无参数)标注"此接口需授权";**权限码 = 规范化路由**。v1 约定**含 HTTP Method**(`POST:/api/v1/biz/device/add`),以区分同路径不同操作(`GET`/`POST /biz/device`);不再手写 `"sys:user:add"` 这类字符串。
   - 授权管道(对应旧 `JwtHandler.CheckAuthorizationAsync`):超管直接放行 → `[SuperAdmin]` 接口校验超管身份 → `[RolePermission]` 接口取当前用户 `PermissionCodeList`(**从缓存/Redis 读**,`IPermissionProvider` 可换)判断是否包含当前路由;`[IgnoreRolePermission]` 显式豁免。
   - **前端权限常量**:CI 从 OpenAPI / 菜单种子生成前端权限常量,页面优先用 `v-auth="Permission.BizDeviceAdd"` 而非裸串;菜单管理里仍展示实际路由码,便于排错。
-  - 数据范围由 `IDataScopeProvider` 在仓储查询处注入表达式(SqlSugar 全局过滤器),沿用旧版接口级数据范围。会话/强退/在线的模型见 §15。
+  - **数据范围(T3 落地)**:模型为**按角色**配置(`sys_role_data_scope`,每角色一条,五种范围:全部/本机构/本机构及以下/仅本人/自定义),用户生效范围 = 其各角色范围的**并集**(All 最宽优先)。`IDataScopeProvider` 解析并按用户缓存;由 **SqlSugar 全局查询过滤器**对实现 `IOrgScoped` 的实体(`DataEntity` 及子类)自动注入 `CreateOrgId ∈ 范围` / `CreateUserId == 本人` 的 WHERE——业务表继承 `DataEntity` 即自动受控,无需每个接口手写校验。
+    - 生效范围经 `IDataScopeContext` 在**授权管道**(动作执行前)按当前用户解析并写入;HTTP 侧用 `HttpContext.Items` 承载(避免授权过滤器内 AsyncLocal 不回流的陷阱),非 HTTP 用 AsyncLocal。
+    - 与旧版差异(**设计修正**):旧版是**按接口**(role×api)配置数据范围;v1 简化为**按角色**全局过滤(实现更简、覆盖更全、不易漏挂),更细的"同角色不同接口不同范围"granularity 留 v1.x 扩展。`SqlSugar 全局过滤器只认接口/精确类型、不认基类`,故用标记接口 `IOrgScoped` 匹配(与软删过滤器走 `ISoftDelete` 同理)。
+    - **范围边界**:`sys_user` 本身继承 `BaseEntity`(非 `DataEntity`),用户列表**不**走通用机构过滤(用户的机构维度是其 `OrgId` 而非 `CreateOrgId`,属特例,如需按机构筛用户在 `UserService` 显式处理);无角色 / 有角色但未配范围 → 默认"仅本人"(不放大可见面)。会话/强退/在线的模型见 §15。
 - **禁硬编码字符串**(全局约定):缓存 key / 权限码 / 类别码 一律走常量(延续你已有的 `CacheConst` / `SystemConst` / `CateGoryConst`);面向用户的文案走 i18n 资源 + 错误码枚举;魔法数走枚举。代码评审把"裸字面量字符串"当味道。
 - **操作日志**:`[OperationLog]` 特性(标题可取常量/资源键)+ 过滤器自动记录(入参/耗时/结果码),敏感字段脱敏配置。
 - **缓存策略**:用户权限/菜单/字典/配置进缓存,变更即失效(事件总线广播),保持旧版"登录后接口 10-30ms"的体验目标。

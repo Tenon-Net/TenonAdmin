@@ -9,4 +9,7 @@ public static class CacheKeys
 {
     /// <summary>某用户当前生效的权限码集合(RBAC 聚合结果;授权变更时按 userId 精确失效)</summary>
     public static string UserPermissions(long userId) => $"perm:{userId}";
+
+    /// <summary>某用户当前生效的数据范围(多角色范围合并结果;角色范围/用户角色变更时按 userId 失效)</summary>
+    public static string UserDataScope(long userId) => $"scope:{userId}";
 }

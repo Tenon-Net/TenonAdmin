@@ -22,6 +22,8 @@ public class RolePermissionAttribute : Attribute, IAsyncAuthorizationFilter
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
         var user = context.HttpContext.User;
+        var services = context.HttpContext.RequestServices;
+        var abort = context.HttpContext.RequestAborted;
 
         // 1. 必须已通过 JWT 认证(令牌缺失/过期/被篡改在认证中间件即被拒)
         if (user.Identity?.IsAuthenticated != true)
@@ -30,15 +32,24 @@ public class RolePermissionAttribute : Attribute, IAsyncAuthorizationFilter
             return;
         }
 
-        // 2. 超管直接放行(claim 随令牌下发,零查库;设计 §6 授权管道第一步)
-        if (user.HasClaim(TokenClaimNames.SUPER_ADMIN, "true"))
-            return;
+        // 数据范围载体:本请求后续的 DataEntity 查询由全局过滤器读它(设计 §6)。
+        // 在授权阶段(动作执行前)写入,保证查询时已就绪。
+        var scopeContext = services.GetRequiredService<IDataScopeContext>();
 
-        // 3. 普通用户:权限码 = 规范化路由(含 HTTP Method),与用户权限码集合比对
-        var code = BuildPermissionCode(context);
+        // 2. 超管直接放行 + 数据范围不受限(claim 随令牌下发,零查库;设计 §6 授权管道第一步)
+        if (user.HasClaim(TokenClaimNames.SUPER_ADMIN, "true"))
+        {
+            scopeContext.Current = DataScopeResult.Unrestricted;
+            return;
+        }
+
+        // 3. 普通用户:解析生效数据范围(走缓存)写入上下文
         var userId = long.Parse(user.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
-        var provider = context.HttpContext.RequestServices.GetRequiredService<IPermissionProvider>();
-        var codes = await provider.GetPermissionCodesAsync(userId, context.HttpContext.RequestAborted);
+        scopeContext.Current = await services.GetRequiredService<IDataScopeProvider>().ResolveAsync(userId, abort);
+
+        // 4. 权限码 = 规范化路由(含 HTTP Method),与用户权限码集合比对
+        var code = BuildPermissionCode(context);
+        var codes = await services.GetRequiredService<IPermissionProvider>().GetPermissionCodesAsync(userId, abort);
 
         if (!codes.Contains(code))
             context.Result = new ObjectResult(Result<object>.Fail(ErrorCode.NoPermission))

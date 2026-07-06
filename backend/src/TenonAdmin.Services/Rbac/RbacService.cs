@@ -13,6 +13,7 @@ public class RbacService(
     IRepository<SysUser> users,
     IRepository<SysUserRole> userRoles,
     IRepository<SysRoleMenu> roleMenus,
+    IRepository<SysRoleDataScope> roleScopes,
     ICacheProvider cache) : IRbacService
 {
     /// <inheritdoc />
@@ -40,7 +41,9 @@ public class RbacService(
             deleteExisting: () => userRoles.Db.Deleteable<SysUserRole>().Where(x => x.UserId == userId).ExecuteCommandAsync(),
             insertNew: links);
 
+        // 角色变了 → 权限与数据范围都可能变,两者缓存都失效
         await InvalidatePermissionsAsync([userId]);
+        await InvalidateScopesAsync([userId]);
     }
 
     /// <inheritdoc />
@@ -50,6 +53,34 @@ public class RbacService(
     /// <inheritdoc />
     public virtual async Task<IReadOnlyCollection<long>> GetUserRoleIdsAsync(long userId) =>
         await userRoles.AsQueryable().Where(x => x.UserId == userId).Select(x => x.RoleId).ToListAsync();
+
+    /// <inheritdoc />
+    public virtual async Task SetRoleDataScopeAsync(long roleId, DataScopeType scopeType, IReadOnlyCollection<long>? customOrgIds = null)
+    {
+        AdminException.ThrowIf(!await roles.AnyAsync(r => r.Id == roleId), ErrorCode.RoleNotFound);
+
+        // 自定义机构仅 Custom 有意义;非 Custom 一律清空,避免残留误导
+        var csv = scopeType == DataScopeType.Custom && customOrgIds is { Count: > 0 }
+            ? string.Join(',', customOrgIds.Distinct())
+            : "";
+
+        var existing = await roleScopes.GetFirstAsync(x => x.RoleId == roleId);
+        if (existing is null)
+            await roleScopes.InsertAsync(new SysRoleDataScope { RoleId = roleId, ScopeType = scopeType, CustomOrgIds = csv });
+        else
+        {
+            existing.ScopeType = scopeType;
+            existing.CustomOrgIds = csv;
+            await roleScopes.UpdateAsync(existing);
+        }
+
+        var affectedUsers = await userRoles.AsQueryable().Where(x => x.RoleId == roleId).Select(x => x.UserId).ToListAsync();
+        await InvalidateScopesAsync(affectedUsers);
+    }
+
+    /// <inheritdoc />
+    public virtual Task<SysRoleDataScope?> GetRoleDataScopeAsync(long roleId) =>
+        roleScopes.GetFirstAsync(x => x.RoleId == roleId);
 
     /// <summary>事务内"整删再插"。任一步失败整体回滚,关联不会处于半更新状态。</summary>
     private async Task ReplaceAsync<TLink>(Func<Task<int>> deleteExisting, List<TLink> insertNew) where TLink : BaseEntity, new()
@@ -66,5 +97,11 @@ public class RbacService(
     {
         foreach (var uid in userIds)
             await cache.RemoveAsync(CacheKeys.UserPermissions(uid));
+    }
+
+    private async Task InvalidateScopesAsync(IEnumerable<long> userIds)
+    {
+        foreach (var uid in userIds)
+            await cache.RemoveAsync(CacheKeys.UserDataScope(uid));
     }
 }

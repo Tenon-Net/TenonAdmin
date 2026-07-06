@@ -21,4 +21,13 @@ public class SysRoleController(IRbacService rbac) : ControllerBase
         await rbac.SetRoleMenusAsync(input.RoleId, input.MenuIds);
         return Result<bool>.Ok(true);
     }
+
+    /// <summary>设置某角色的数据范围(招牌能力,§6);成功后受影响用户数据范围缓存即时失效。</summary>
+    [HttpPut("datascope")]
+    [RolePermission]
+    public async Task<Result<bool>> SetDataScope(SetRoleDataScopeInput input)
+    {
+        await rbac.SetRoleDataScopeAsync(input.RoleId, input.ScopeType, input.CustomOrgIds);
+        return Result<bool>.Ok(true);
+    }
 }
