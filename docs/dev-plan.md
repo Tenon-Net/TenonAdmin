@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(T3 多机构数据范围完成)
+> 最后更新:2026-07-07(T4 会话与 Token 完整模型完成)
 
 ---
 
@@ -47,6 +47,7 @@
 | `de53a72` | T1 RBAC 纵切:SysRole/SysMenu/关联表 + ICacheProvider/MemoryCacheProvider + RbacPermissionProvider 权限码聚合 + RbacService 授权与缓存失效 + 种子(默认角色/基础菜单)。自检 7/7 通过 + MinimalHost 冒烟 |
 | `cd68d43` | T2 用户/机构/职位 CRUD:PagedList+ToPagedListAsync + DataEntity 基类 + SysOrg(树)/SysPosition + 用户全套(增删改查分页/重置密码/启停用/角色分配,守住不出哈希/不提权/超管保护)。自检 19/19 + MinimalHost 全套 CRUD 冒烟 + 清偿 T1 的 HTTP 403→200 |
 | `e3a9f7e` | T3 多机构数据范围:DataScopeType 五种范围 + SysRoleDataScope + IDataScopeProvider(多角色合并/机构树展开/按用户缓存)+ SqlSugar 全局过滤器(IOrgScoped 接口匹配)+ IDataScopeContext(HttpContext.Items/AsyncLocal)+ ICurrentUser + 授权管道解析写入。自检 12/12(真跑 ORM 过滤器)+ MinimalHost 回归 |
+| `ac7ae3a` | T4 会话/令牌模型:sys_session/sys_refresh_token(存哈希)+ SessionService(轮换/复用检测/强退/在线列表/单端限并发)+ /auth/refresh /auth/logout + SysSessionController + [RolePermission] 会话校验 + 审计字段 AOP 填充。自检 14/14 + 2/2 + MinimalHost 三条验收全绿 |
 
 ## 4. 任务队列(按依赖序;每个任务 = 一次会话可完成的纵切)
 
@@ -65,11 +66,11 @@
 **验收**:自检 12/12 直压 SqlSugar 全局过滤器——切换范围可见行集随之变化(§8 测试点 2:两机构用户查同一列表得不同数据集),五种范围解析正确 + 改范围即缓存失效;MinimalHost 回归通过。
 > 设计修正见 §6:v1 数据范围**按角色**全局过滤(非旧版 role×api 接口级);`sys_user` 本身非 DataEntity 不走通用过滤(其机构维度是 OrgId 特例)。
 
-### T4 会话与 Token 完整模型(§15)← **下一个**
+### T4 会话与 Token 完整模型(§15)✅ 完成(`ac7ae3a`)
 `sys_session` / `sys_refresh_token`(存 hash);refresh 轮换+复用检测;登出;在线用户列表/强退;`[RolePermission]` 管道加 session 状态校验(强退即 401);单端/限并发模式;CreateUserId/UpdateUserId AOP 填充接当前用户上下文。
-**验收**:刷新换发新对且旧 refresh 失效;强退后原 token 立即 401;重放旧 refresh 触发风险吊销。
+**验收**:自检 14/14(轮换/旧串失效/重放整会话吊销/强退失活/单端/限并发)+ 2/2(审计填充);MinimalHost 三条验收全绿(刷新换发新对且旧 refresh 失效;强退后原 token 立即 401;重放旧 refresh 触发风险吊销)+ 登出 + 非超管累计回归。
 
-### T5 字典 + 系统配置(§4)
+### T5 字典 + 系统配置(§4)← **下一个**
 `SysDictType`/`SysDictItem`/`SysConfig`;带缓存,变更失效(顺手落 Channels 事件总线,§2.2 替代表)。
 **验收**:CRUD + 改字典后再查走新值(缓存确实失效)。
 
