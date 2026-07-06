@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 零运行时依赖:核心契约层。禁止引入 SqlSugar / ASP.NET Core 等运行时包 -->
+</Project>

@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TenonAdmin\TenonAdmin.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\TenonAdmin.Core\TenonAdmin.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="SqlSugarCore" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+</Project>

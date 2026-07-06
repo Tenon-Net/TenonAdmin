@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/MinimalHost/MinimalHost.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/TenonAdmin.AspNetCore/TenonAdmin.AspNetCore.csproj" />
+    <Project Path="src/TenonAdmin.Core/TenonAdmin.Core.csproj" />
+    <Project Path="src/TenonAdmin.Services/TenonAdmin.Services.csproj" />
+    <Project Path="src/TenonAdmin.SqlSugar/TenonAdmin.SqlSugar.csproj" />
+    <Project Path="src/TenonAdmin/TenonAdmin.csproj" />
+  </Folder>
+</Solution>

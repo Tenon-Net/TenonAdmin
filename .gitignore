@@ -1,0 +1,18 @@
+## .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+.vs/
+
+## App runtime data
+data/
+*.db
+*.db-journal
+wwwroot/upload/
+
+## Frontend (web/)
+node_modules/
+dist/
+.env.local

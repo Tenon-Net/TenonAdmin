@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 元包:用户只装这一个,一键引全部。目前 = 引 AspNetCore(传递引 Services→SqlSugar→Core) -->
+  <ItemGroup>
+    <ProjectReference Include="..\TenonAdmin.AspNetCore\TenonAdmin.AspNetCore.csproj" />
+  </ItemGroup>
+</Project>
