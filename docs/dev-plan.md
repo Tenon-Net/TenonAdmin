@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-06(M1 认证最小闭环完成)
+> 最后更新:2026-07-06(T1 RBAC 纵切完成)
 
 ---
 
@@ -44,16 +44,19 @@
 | `5d9f605` | SqlSugar:IRepository 开放泛型仓储 / ISeedData 幂等种子 / AOP 审计填充 / 软删过滤器 |
 | `0352a58` | Services:SysUser / PBKDF2 哈希(自描述格式) / 超管种子(随机密码打印) |
 | `c46fa67` | M1 认证闭环:AuthService 模板方法 / JWT 签发+验证 / [RolePermission] / 统一异常信封 |
+| `de53a72` | T1 RBAC 纵切:SysRole/SysMenu/关联表 + ICacheProvider/MemoryCacheProvider + RbacPermissionProvider 权限码聚合 + RbacService 授权与缓存失效 + 种子(默认角色/基础菜单)。自检 7/7 通过 + MinimalHost 冒烟 |
 
 ## 4. 任务队列(按依赖序;每个任务 = 一次会话可完成的纵切)
 
-### T1 RBAC 纵切 ← **下一个**
+### T1 RBAC 纵切 ✅ 完成(`de53a72`)
 实体 `SysRole` / `SysMenu`(目录/页面/按钮三级,§16)/ `SysUserRole` / `SysRoleMenu`;
 角色-菜单授权服务;`IPermissionProvider` 真实现(按钮权限码 = 菜单表里的路由码,聚合用户全部角色,进 `ICacheProvider` 缓存——缓存抽象也在本任务落:`ICacheProvider` + `MemoryCacheProvider` 默认实现,§5.5);种子:默认角色 + 基础菜单。
-**验收**:建一个非超管用户 + 角色,只授某接口的权限码 → 该用户带 token 访问已授接口 200、未授接口 403;改授权后缓存失效即时生效。
+**验收**:自检脚本 `backend/scratchpad/t1-rbac-check.cs` 直跑 provider+service 7/7 通过(默认拒绝/授权命中/加授后缓存即时失效/收回归零/双侧失效);MinimalHost 冒烟回归通过(超管绕过、无 token 401)。
+> 遗留:非超管用户经 **HTTP** 的 200/403 完整走查依赖用户/角色 CRUD(T2 建),届时纳入累计冒烟;正式 HTTP 集成用例进 T9(WebApplicationFactory)。[RolePermission] 过滤器本身(`codes.Contains`)M1 已验、T1 未改动。
 
-### T2 用户 / 机构 / 职位 CRUD
+### T2 用户 / 机构 / 职位 CRUD ← **下一个**
 `SysOrg`(树)/ `SysPosition`;用户 CRUD(增删改查分页、重置密码、启停用);`DataEntity` 基类(+OrgId,§5.6)落地;分页模型 `PagedList`。
+> 顺带补齐 T1 的 HTTP 端到端验收:用 CRUD 建非超管用户+角色,curl 走 200/403 并入累计冒烟(见 T1 遗留)。
 **验收**:curl 全套 CRUD;用户挂机构/职位/多角色;软删生效。
 
 ### T3 多机构数据范围(招牌能力,§4/§6)
