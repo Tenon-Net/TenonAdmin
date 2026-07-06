@@ -12,7 +12,8 @@ namespace TenonAdmin.Services;
 public class AuthService(
     IRepository<SysUser> users,
     IPasswordHasher hasher,
-    ITokenProvider tokens) : IAuthService
+    ITokenProvider tokens,
+    ISessionService sessions) : IAuthService
 {
     /// <summary>
     /// 防账号枚举的陪跑哈希:账号不存在时也执行一次真实代价的哈希校验,
@@ -63,14 +64,26 @@ public class AuthService(
     }
 
     /// <summary>
-    /// 签发令牌。SessionId 用 GUID v7(时间有序,BCL 内置)——它是在线用户与强退的稳定锚点(设计 §15);
-    /// 会话落缓存/库(sys_session)随会话模块接入,当前最小闭环先只随令牌下发。
+    /// 签发令牌 + 开会话(设计 §15)。SessionId 用 GUID v7(时间有序,BCL 内置)——在线用户与强退的稳定锚点;
+    /// <see cref="ISessionService.OpenAsync"/> 负责落库/缓存会话、存刷新令牌哈希、执行单端/限并发策略。
     /// </summary>
-    protected virtual Task<TokenPair> CreateTokenAsync(SysUser user)
+    protected virtual async Task<TokenPair> CreateTokenAsync(SysUser user)
     {
         var sessionId = Guid.CreateVersion7().ToString("N");
-        return Task.FromResult(tokens.Create(new TokenSubject(user.Id, user.Account, sessionId, user.IsSuperAdmin)));
+        var pair = tokens.Create(new TokenSubject(user.Id, user.Account, sessionId, user.IsSuperAdmin));
+        await sessions.OpenAsync(user, sessionId, pair);
+        return pair;
     }
+
+    /// <inheritdoc />
+    public virtual async Task<LoginOutput> RefreshAsync(RefreshInput input)
+    {
+        var refreshed = await sessions.RefreshAsync(input.RefreshToken);
+        return BuildLoginOutput(refreshed.User, refreshed.Pair);
+    }
+
+    /// <inheritdoc />
+    public virtual Task LogoutAsync(string sessionId) => sessions.RevokeAsync(sessionId);
 
     /// <summary>登录成功后置钩子:写登录日志、发登录事件(相应模块接入后填充;也是用户加自定义动作的挂点)。</summary>
     protected virtual Task OnLoginSucceededAsync(SysUser user, TokenPair pair) => Task.CompletedTask;

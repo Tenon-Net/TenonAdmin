@@ -9,4 +9,10 @@ public interface IAuthService
 {
     /// <summary>账密登录,成功返回令牌对;任何业务失败抛 <see cref="Core.AdminException"/>(40xxx 段)</summary>
     Task<LoginOutput> LoginAsync(LoginInput input);
+
+    /// <summary>用刷新令牌换发新令牌对(轮换 + 复用检测,设计 §15);失败抛 40007。</summary>
+    Task<LoginOutput> RefreshAsync(RefreshInput input);
+
+    /// <summary>登出:吊销指定会话(原访问令牌下次请求即 401)。</summary>
+    Task LogoutAsync(string sessionId);
 }

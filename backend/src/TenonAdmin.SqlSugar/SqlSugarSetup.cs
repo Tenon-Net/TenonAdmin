@@ -24,6 +24,9 @@ public static class SqlSugarSetup
         // ── 数据范围环境载体(§6):授权管道写入、全局过滤器读取;AsyncLocal 单例 ──
         services.TryAddSingleton<IDataScopeContext, DataScopeContext>();
 
+        // ── 当前用户兜底实现(系统上下文);HTTP 侧由 AspNetCore 层前置注册覆盖 ──
+        services.TryAddSingleton<ICurrentUser, SystemCurrentUser>();
+
         // ── 实体程序集登记:本层自带 sys_schema_version;上层/用户程序集从参数并入 ──
         var sources = new TenonEntitySources();
         sources.Add(typeof(SqlSugarSetup).Assembly);
@@ -44,6 +47,7 @@ public static class SqlSugarSetup
             var idGen = sp.GetRequiredService<IIdGenerator>();
             var time = sp.GetService<TimeProvider>() ?? TimeProvider.System; // 统一时间源,可测试(设计 §12)
             var scope = sp.GetRequiredService<IDataScopeContext>();          // 数据范围载体(单例,过滤器闭包捕获)
+            var currentUser = sp.GetRequiredService<ICurrentUser>();         // 当前用户(单例,审计字段填充用)
 
             // 第二参数对每个上下文生效(Scope 内部按线程建 Client,钩子逐个挂上)
             return new SqlSugarScope(config, client =>
@@ -72,15 +76,20 @@ public static class SqlSugarSetup
                             // CreateTime 未指定 → 填当前时间
                             else if (info is { PropertyName: nameof(BaseEntity.CreateTime), EntityValue: BaseEntity { CreateTime: var ct } } && ct == default)
                                 info.SetValue(time.GetLocalNow().DateTime);
+                            // CreateUserId 未指定 → 填当前登录用户(系统上下文为 null 则留空,不硬塞)
+                            else if (info is { PropertyName: nameof(BaseEntity.CreateUserId), EntityValue: BaseEntity { CreateUserId: null } } && currentUser.UserId is { } insUid)
+                                info.SetValue(insUid);
                             break;
 
                         case DataFilterType.UpdateByObject:
                             // 每次整行更新都刷新 UpdateTime
                             if (info is { PropertyName: nameof(BaseEntity.UpdateTime), EntityValue: BaseEntity })
                                 info.SetValue(time.GetLocalNow().DateTime);
+                            // 每次整行更新记录操作人(有登录上下文时)
+                            else if (info is { PropertyName: nameof(BaseEntity.UpdateUserId), EntityValue: BaseEntity } && currentUser.UserId is { } updUid)
+                                info.SetValue(updUid);
                             break;
                     }
-                    // CreateUserId / UpdateUserId 的填充在认证闭环接入后挂到这里(取当前登录用户上下文)
                 };
             });
         });

@@ -12,4 +12,7 @@ public static class CacheKeys
 
     /// <summary>某用户当前生效的数据范围(多角色范围合并结果;角色范围/用户角色变更时按 userId 失效)</summary>
     public static string UserDataScope(long userId) => $"scope:{userId}";
+
+    /// <summary>会话活跃状态(热路径:每受保护请求校验;登出/强退时移除,设计 §15)</summary>
+    public static string Session(string sessionId) => $"session:{sessionId}";
 }

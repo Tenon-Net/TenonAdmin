@@ -1,0 +1,39 @@
+using SqlSugar;
+using TenonAdmin.SqlSugar;
+
+namespace TenonAdmin.Services;
+
+/// <summary>
+/// 会话(设计 §15)——一次登录 = 一个会话,SessionId(JWT sid claim)是<b>强退与在线用户的稳定锚点</b>。
+/// 令牌本身短命且不落库;会话落库 + 落缓存,支撑"每请求校验状态""在线列表""强退即失效"。
+/// <para>状态用 <see cref="RevokedAt"/> 表达(null=活跃);过期由 <see cref="ExpiresAt"/> 兜底。不物理删,便于审计。</para>
+/// </summary>
+[SugarTable("sys_session", TableDescription = "会话")]
+[SugarIndex("idx_sys_session_sid", nameof(SessionId), OrderByType.Asc, IsUnique = true)]
+public class SysSession : BaseEntity
+{
+    [SugarColumn(Length = 64, ColumnDescription = "会话标识(JWT sid)")]
+    public string SessionId { get; set; } = "";
+
+    [SugarColumn(ColumnDescription = "用户 Id")]
+    public long UserId { get; set; }
+
+    /// <summary>登录账号(冗余,在线列表直接展示,免联表)</summary>
+    [SugarColumn(Length = 64, ColumnDescription = "登录账号")]
+    public string Account { get; set; } = "";
+
+    /// <summary>登录 IP(原文);T6 登录日志接入时填充,当前留空</summary>
+    [SugarColumn(Length = 64, IsNullable = true, ColumnDescription = "登录 IP")]
+    public string? Ip { get; set; }
+
+    /// <summary>User-Agent(原文);T6 接入时填充</summary>
+    [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "User-Agent")]
+    public string? UserAgent { get; set; }
+
+    [SugarColumn(ColumnDescription = "会话过期时刻(= 刷新令牌有效期)")]
+    public DateTime ExpiresAt { get; set; }
+
+    /// <summary>吊销时刻;null = 活跃。登出/强退/单端踢出/复用检测吊销时置值。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "吊销时刻(null=活跃)")]
+    public DateTime? RevokedAt { get; set; }
+}

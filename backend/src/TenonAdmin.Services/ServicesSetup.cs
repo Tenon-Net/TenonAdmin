@@ -19,6 +19,9 @@ public static class ServicesSetup
         // 认证:模板方法样板服务(§5.3);Scoped——按请求生命周期,与仓储一致
         services.TryAddScoped<IAuthService, AuthService>();
 
+        // 会话与刷新令牌(§15):登录建会话、每请求校验、刷新轮换+复用检测、登出/强退
+        services.TryAddScoped<ISessionService, SessionService>();
+
         // 缓存:进程内 MemoryCache 默认实现(§5.5);IMemoryCache 需 AddMemoryCache 落地
         services.AddMemoryCache();
         services.TryAddSingleton<ICacheProvider, MemoryCacheProvider>();

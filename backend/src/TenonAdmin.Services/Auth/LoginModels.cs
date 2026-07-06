@@ -10,6 +10,13 @@ public record LoginInput
     public string Password { get; init; } = "";
 }
 
+/// <summary>刷新令牌换发入参</summary>
+public record RefreshInput
+{
+    /// <summary>登录时下发的刷新令牌明文(服务端比对其哈希)</summary>
+    public string RefreshToken { get; init; } = "";
+}
+
 /// <summary>登录出参:令牌对 + 基础用户信息(前端存令牌、显示用户名所需的最小集)</summary>
 public record LoginOutput
 {

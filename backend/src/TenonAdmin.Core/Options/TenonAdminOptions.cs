@@ -16,6 +16,9 @@ public class TenonAdminOptions
     /// <summary>JWT 配置(密钥/签发者/有效期,见 <see cref="AdminJwtOptions"/>)</summary>
     public AdminJwtOptions Jwt { get; set; } = new();
 
+    /// <summary>安全配置(会话并发策略等,见 <see cref="AdminSecurityOptions"/>)</summary>
+    public AdminSecurityOptions Security { get; set; } = new();
+
     /// <summary>是否扫描入口程序集及其引用注册用户模块(设计 §5.7)。骨架暂未启用扫描。</summary>
     public bool ScanApplicationAssemblies { get; set; } = true;
 

@@ -797,6 +797,8 @@ v1.0 必须成型的安全项(多数为 .NET 内置能力):
 - **单端模式**(`Session:Mode=Single`):新登录时吊销同用户其他 session。
 - **`MaxConcurrent`**:超过并发端数时,按最早登录时间吊销最旧 session。
 
+**实现要点(T4 落地)**:RefreshToken 存 **SHA-256 十六进制**(高熵随机串,非密码,无需 PBKDF2);刷新用**条件更新**(仅当仍 Active 才置 Used)原子轮换,兼作并发双刷保护;**复用检测**:已 Used 的令牌再现即吊销**整个会话**(连坐刷新令牌 + 清缓存),攻击者与真用户一起下线(安全优先)。会话热路径:`ISessionService.IsActiveAsync` 先读 `tenon:session:{sid}` 缓存(TTL=会话过期),未命中查库回填;`[RolePermission]` 管道对**超管与普通用户一律**校验会话状态(强退即 401)。刷新走**滑动续期**(会话过期跟到新刷新令牌过期)。审计字段 `CreateUserId/UpdateUserId` 由 SqlSugar AOP 从 `ICurrentUser` 自动填充(系统上下文留空)。
+
 ## 16. 内置表清单(草案)
 
 因为"不支持旧版迁移",**新表结构即长期契约,需尽早稳定**。v1.0 内置表(前缀 `sys_`):

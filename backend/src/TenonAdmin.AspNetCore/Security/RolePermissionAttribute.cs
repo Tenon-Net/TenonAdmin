@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using TenonAdmin.Core;
+using TenonAdmin.Services;
 
 namespace TenonAdmin.AspNetCore;
 
@@ -32,22 +33,30 @@ public class RolePermissionAttribute : Attribute, IAsyncAuthorizationFilter
             return;
         }
 
+        // 2. 会话状态校验(§15 强退即时生效):sid 对应会话被吊销/过期 → 401,超管同样受此约束。
+        var sessionId = user.FindFirstValue(TokenClaimNames.SESSION_ID);
+        if (string.IsNullOrEmpty(sessionId) || !await services.GetRequiredService<ISessionService>().IsActiveAsync(sessionId))
+        {
+            context.Result = new ObjectResult(Result<object>.Fail(ErrorCode.TokenInvalid)) { StatusCode = StatusCodes.Status401Unauthorized };
+            return;
+        }
+
         // 数据范围载体:本请求后续的 DataEntity 查询由全局过滤器读它(设计 §6)。
         // 在授权阶段(动作执行前)写入,保证查询时已就绪。
         var scopeContext = services.GetRequiredService<IDataScopeContext>();
 
-        // 2. 超管直接放行 + 数据范围不受限(claim 随令牌下发,零查库;设计 §6 授权管道第一步)
+        // 3. 超管直接放行 + 数据范围不受限(claim 随令牌下发,零查库;设计 §6 授权管道第一步)
         if (user.HasClaim(TokenClaimNames.SUPER_ADMIN, "true"))
         {
             scopeContext.Current = DataScopeResult.Unrestricted;
             return;
         }
 
-        // 3. 普通用户:解析生效数据范围(走缓存)写入上下文
+        // 4. 普通用户:解析生效数据范围(走缓存)写入上下文
         var userId = long.Parse(user.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
         scopeContext.Current = await services.GetRequiredService<IDataScopeProvider>().ResolveAsync(userId, abort);
 
-        // 4. 权限码 = 规范化路由(含 HTTP Method),与用户权限码集合比对
+        // 5. 权限码 = 规范化路由(含 HTTP Method),与用户权限码集合比对
         var code = BuildPermissionCode(context);
         var codes = await services.GetRequiredService<IPermissionProvider>().GetPermissionCodesAsync(userId, abort);
 
