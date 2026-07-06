@@ -22,8 +22,7 @@ public static class TenonAdminSetup
 
         services.AddSingleton(options);
         services.AddSingleton(options.Database);
-        services.AddTenonAdminSqlSugar(options.Database);
-        services.AddHostedService<DatabaseInitializer>();       // 首启建表 + 种子
+        services.AddTenonAdminSqlSugar(options.Database);       // 数据层(含首启建表 + 种子的 HostedService)
         return services;
     }
 

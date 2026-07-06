@@ -7,6 +7,8 @@
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.9" />
     <!-- 显式抬到 3.0.3:MDS 传递的 2.1.10/2.1.11 命中 SQLite CVE(NU1903 GHSA-2m69-gcr7-jv3q),3.0.x 已修补 -->
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
   </ItemGroup>
 </Project>
