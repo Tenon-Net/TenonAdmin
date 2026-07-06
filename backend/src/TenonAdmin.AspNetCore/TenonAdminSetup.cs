@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TenonAdmin.Core;
+using TenonAdmin.Services;
 using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.AspNetCore;
@@ -22,7 +23,9 @@ public static class TenonAdminSetup
 
         services.AddSingleton(options);
         services.AddSingleton(options.Database);
-        services.AddTenonAdminSqlSugar(options.Database);       // 数据层(含首启建表 + 种子的 HostedService)
+        // 数据层(含首启建表 + 种子的 HostedService);登记 Services 层实体程序集供 CodeFirst 扫描
+        services.AddTenonAdminSqlSugar(options.Database, [typeof(ServicesSetup).Assembly]);
+        services.AddTenonAdminServices();                       // 领域服务(显式 TryAdd,§5.7 注册模型)
         return services;
     }
 

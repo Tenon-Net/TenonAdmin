@@ -1,0 +1,34 @@
+using SqlSugar;
+using TenonAdmin.SqlSugar;
+
+namespace TenonAdmin.Services;
+
+/// <summary>
+/// 用户表(设计 §16)。认证闭环最小字段集;
+/// 组织/职位/头像等字段随组织模块(M1 后续纵切)增补——CodeFirst 会自动补列,先窄后宽零成本。
+/// </summary>
+[SugarTable("sys_user", TableDescription = "用户")]
+[SugarIndex("idx_sys_user_account", nameof(Account), OrderByType.Asc, IsUnique = true)]
+public class SysUser : BaseEntity
+{
+    [SugarColumn(Length = 64, ColumnDescription = "登录账号(唯一)")]
+    public string Account { get; set; } = "";
+
+    /// <summary>密码哈希——自描述格式(算法.迭代.盐.哈希),绝不存明文;格式见 Pbkdf2PasswordHasher</summary>
+    [SugarColumn(Length = 256, ColumnDescription = "密码哈希")]
+    public string Password { get; set; } = "";
+
+    [SugarColumn(Length = 64, ColumnDescription = "姓名/昵称")]
+    public string Name { get; set; } = "";
+
+    /// <summary>停用后无法登录、已有会话由权限过滤器拦截(设计 §15)</summary>
+    [SugarColumn(ColumnDescription = "是否启用")]
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// 超级管理员标志:授权管道直接放行、不受 RBAC 约束(设计 §6 授权管道第一步)。
+    /// 只能由种子/数据库手工设置,接口永远不暴露修改入口——防提权。
+    /// </summary>
+    [SugarColumn(ColumnDescription = "是否超级管理员")]
+    public bool IsSuperAdmin { get; set; }
+}

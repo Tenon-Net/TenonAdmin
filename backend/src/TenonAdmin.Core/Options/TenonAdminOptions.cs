@@ -7,6 +7,9 @@ public class TenonAdminOptions
 {
     public AdminDatabaseOptions Database { get; set; } = new();
 
+    /// <summary>种子配置(超管账号/初始密码,见 <see cref="AdminSeedOptions"/>)</summary>
+    public AdminSeedOptions Seed { get; set; } = new();
+
     /// <summary>是否扫描入口程序集及其引用注册用户模块(设计 §5.7)。骨架暂未启用扫描。</summary>
     public bool ScanApplicationAssemblies { get; set; } = true;
 

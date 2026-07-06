@@ -2,4 +2,8 @@
   <ItemGroup>
     <ProjectReference Include="..\TenonAdmin.SqlSugar\TenonAdmin.SqlSugar.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
 </Project>
