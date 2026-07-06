@@ -222,7 +222,8 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
     "Cache": {
       "Provider": "Memory",            // Memory(默认,进程内)| Redis(装 TenonAdmin.Caching.Redis 可选包后可用)
       "RedisConnectionString": null,
-      "KeyPrefix": "admin:"
+      "KeyPrefix": "tenon:",           // 缓存键前缀,与 §15 会话键 tenon:session:{sid} 一致;逻辑键由 ICacheProvider 统一追加
+      "PermissionMinutes": 20          // 用户权限码缓存 TTL 兜底(授权变更走显式失效即时生效);0=永不过期
     },
     "Jwt": {
       "SecretKey": null,               // null => 开发密钥 + 警告

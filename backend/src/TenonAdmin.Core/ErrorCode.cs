@@ -69,6 +69,10 @@ public enum ErrorCode
     [MsgKey("error.user.notFound")]
     UserNotFound = 42001,
 
+    /// <summary>目标角色不存在</summary>
+    [MsgKey("error.role.notFound")]
+    RoleNotFound = 42002,
+
     // ── 50xxx 系统内部 ───────────────────────────────────────────────
 
     /// <summary>未知系统错误(未捕获异常的统一出口,详情只进日志不出接口)</summary>

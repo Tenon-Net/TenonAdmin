@@ -7,6 +7,9 @@ public class TenonAdminOptions
 {
     public AdminDatabaseOptions Database { get; set; } = new();
 
+    /// <summary>缓存配置(提供者/前缀/权限缓存过期,见 <see cref="AdminCacheOptions"/>)</summary>
+    public AdminCacheOptions Cache { get; set; } = new();
+
     /// <summary>种子配置(超管账号/初始密码,见 <see cref="AdminSeedOptions"/>)</summary>
     public AdminSeedOptions Seed { get; set; } = new();
 

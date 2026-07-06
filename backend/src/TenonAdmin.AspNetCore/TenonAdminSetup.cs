@@ -31,6 +31,7 @@ public static class TenonAdminSetup
 
         services.AddSingleton(options);
         services.AddSingleton(options.Database);
+        services.AddSingleton(options.Cache);
         services.AddSingleton(options.Jwt);
         services.TryAddSingleton(TimeProvider.System);          // 统一时间源(§12),测试可换 Fake
 
@@ -44,8 +45,8 @@ public static class TenonAdminSetup
         services.TryAddSingleton<ITokenProvider>(sp => new JwtTokenProvider(
             options.Jwt, sp.GetRequiredService<SymmetricSecurityKey>(), sp.GetRequiredService<TimeProvider>()));
 
-        // 权限码提供者:RBAC 模块接入前为"空集合"占位——非超管默认全拒(§14 授权默认拒绝)
-        services.TryAddSingleton<IPermissionProvider, DefaultPermissionProvider>();
+        // 权限码提供者由 Services 层的 RbacPermissionProvider 提供(RBAC 真实现,§6);
+        // 用户前置注册同接口实现(如对接外部鉴权中心)即整体替换(§5.2)。
 
         // ── 认证/授权:微软官方 JwtBearer(§2.2 替代表)────────────────────────
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();

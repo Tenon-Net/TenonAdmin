@@ -19,8 +19,18 @@ public static class ServicesSetup
         // 认证:模板方法样板服务(§5.3);Scoped——按请求生命周期,与仓储一致
         services.TryAddScoped<IAuthService, AuthService>();
 
+        // 缓存:进程内 MemoryCache 默认实现(§5.5);IMemoryCache 需 AddMemoryCache 落地
+        services.AddMemoryCache();
+        services.TryAddSingleton<ICacheProvider, MemoryCacheProvider>();
+
+        // RBAC(§6):权限码提供者真实现(取代 AspNetCore 层的空占位)+ 角色菜单授权服务
+        services.TryAddScoped<IPermissionProvider, RbacPermissionProvider>();
+        services.TryAddScoped<IRbacService, RbacService>();
+
         // 种子:多实现集合,TryAddEnumerable 按实现类型防重
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SuperAdminSeed>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultRoleSeed>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultMenuSeed>());
 
         return services;
     }
