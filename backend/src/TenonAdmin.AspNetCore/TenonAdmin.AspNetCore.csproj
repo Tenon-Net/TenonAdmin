@@ -5,4 +5,8 @@
   <ItemGroup>
     <ProjectReference Include="..\TenonAdmin.Services\TenonAdmin.Services.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- JWT 认证(设计 §2.2 替代表:替换 MoYu.Extras JWT,用微软官方件) -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+  </ItemGroup>
 </Project>

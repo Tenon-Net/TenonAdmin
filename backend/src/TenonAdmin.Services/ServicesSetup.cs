@@ -16,6 +16,9 @@ public static class ServicesSetup
         // 密码哈希:PBKDF2 默认实现,无状态 → Singleton;用户可前置注册替换(§5.2)
         services.TryAddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
 
+        // 认证:模板方法样板服务(§5.3);Scoped——按请求生命周期,与仓储一致
+        services.TryAddScoped<IAuthService, AuthService>();
+
         // 种子:多实现集合,TryAddEnumerable 按实现类型防重
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SuperAdminSeed>());
 

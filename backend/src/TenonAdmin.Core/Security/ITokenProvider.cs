@@ -9,7 +9,20 @@ namespace TenonAdmin.Core;
 /// 会话标识(设计 §15):写入令牌 claim,作为在线用户列举与强退的稳定锚点——
 /// 强退即作废该 SessionId,令牌未到期也立刻失效。
 /// </param>
-public record TokenSubject(long UserId, string Account, string SessionId);
+/// <param name="IsSuperAdmin">
+/// 超管标志:写入令牌 claim,授权管道第一步"超管直接放行"(设计 §6)据此判断,免每请求查库。
+/// </param>
+public record TokenSubject(long UserId, string Account, string SessionId, bool IsSuperAdmin = false);
+
+/// <summary>令牌自定义 claim 名常量(禁硬编码字符串纪律,设计 §6)</summary>
+public static class TokenClaimNames
+{
+    /// <summary>会话标识(强退锚点,设计 §15)</summary>
+    public const string SESSION_ID = "sid";
+
+    /// <summary>超级管理员标志(值为 "true" 时授权直接放行)</summary>
+    public const string SUPER_ADMIN = "sadm";
+}
 
 /// <summary>
 /// 一次签发的令牌对(设计 §15):AccessToken 短期、不落库;RefreshToken 长期、服务端存哈希、支持轮换吊销。

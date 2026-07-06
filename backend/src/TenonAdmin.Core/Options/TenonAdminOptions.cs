@@ -10,6 +10,9 @@ public class TenonAdminOptions
     /// <summary>种子配置(超管账号/初始密码,见 <see cref="AdminSeedOptions"/>)</summary>
     public AdminSeedOptions Seed { get; set; } = new();
 
+    /// <summary>JWT 配置(密钥/签发者/有效期,见 <see cref="AdminJwtOptions"/>)</summary>
+    public AdminJwtOptions Jwt { get; set; } = new();
+
     /// <summary>是否扫描入口程序集及其引用注册用户模块(设计 §5.7)。骨架暂未启用扫描。</summary>
     public bool ScanApplicationAssemblies { get; set; } = true;
 
