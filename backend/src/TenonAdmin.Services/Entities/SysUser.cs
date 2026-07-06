@@ -21,6 +21,14 @@ public class SysUser : BaseEntity
     [SugarColumn(Length = 64, ColumnDescription = "姓名/昵称")]
     public string Name { get; set; } = "";
 
+    /// <summary>主属机构 Id(设计 §4"用户...主属机构");可空(超管/未分配)。数据范围以此为用户列表的机构维度(T3)。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "主属机构 Id")]
+    public long? OrgId { get; set; }
+
+    /// <summary>职位 Id;可空(未分配)。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "职位 Id")]
+    public long? PositionId { get; set; }
+
     /// <summary>停用后无法登录、已有会话由权限过滤器拦截(设计 §15)</summary>
     [SugarColumn(ColumnDescription = "是否启用")]
     public bool Enabled { get; set; } = true;

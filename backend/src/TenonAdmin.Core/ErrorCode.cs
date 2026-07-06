@@ -73,6 +73,26 @@ public enum ErrorCode
     [MsgKey("error.role.notFound")]
     RoleNotFound = 42002,
 
+    /// <summary>目标机构不存在</summary>
+    [MsgKey("error.org.notFound")]
+    OrgNotFound = 42003,
+
+    /// <summary>机构下仍有子机构,不能删除(先移除或迁移子机构)</summary>
+    [MsgKey("error.org.hasChildren")]
+    OrgHasChildren = 42004,
+
+    /// <summary>目标职位不存在</summary>
+    [MsgKey("error.position.notFound")]
+    PositionNotFound = 42005,
+
+    /// <summary>登录账号已存在(账号唯一)</summary>
+    [MsgKey("error.user.accountExists")]
+    AccountExists = 42006,
+
+    /// <summary>超级管理员受保护:不可删除/停用(防自锁死、防提权面被破坏)</summary>
+    [MsgKey("error.user.superAdminProtected")]
+    SuperAdminProtected = 42007,
+
     // ── 50xxx 系统内部 ───────────────────────────────────────────────
 
     /// <summary>未知系统错误(未捕获异常的统一出口,详情只进日志不出接口)</summary>

@@ -20,5 +20,12 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
 
         // 角色授权接口(SysRoleController: PUT /api/v1/sys/role/menu)
         new SysMenu { Id = 3, ParentId = 1, Type = MenuType.Button, Title = "角色授权", Permission = "PUT:/api/v1/sys/role/menu", Sort = 2, Enabled = true },
+
+        // 组织管理目录 + 各模块代表性接口(T2)。前端完整菜单树随 M2 落地补齐,这里只播真实存在的接口。
+        new SysMenu { Id = 10, ParentId = 0, Type = MenuType.Catalog, Title = "组织管理", Permission = "", Sort = 2, Enabled = true },
+        new SysMenu { Id = 11, ParentId = 10, Type = MenuType.Button, Title = "用户-分页", Permission = "GET:/api/v1/sys/user/page", Sort = 1, Enabled = true },
+        new SysMenu { Id = 12, ParentId = 10, Type = MenuType.Button, Title = "用户-新增", Permission = "POST:/api/v1/sys/user", Sort = 2, Enabled = true },
+        new SysMenu { Id = 13, ParentId = 10, Type = MenuType.Button, Title = "机构-列表", Permission = "GET:/api/v1/sys/org/list", Sort = 3, Enabled = true },
+        new SysMenu { Id = 14, ParentId = 10, Type = MenuType.Button, Title = "职位-分页", Permission = "GET:/api/v1/sys/position/page", Sort = 4, Enabled = true },
     ];
 }

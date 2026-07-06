@@ -27,6 +27,11 @@ public static class ServicesSetup
         services.TryAddScoped<IPermissionProvider, RbacPermissionProvider>();
         services.TryAddScoped<IRbacService, RbacService>();
 
+        // 组织模块(§4,T2):用户 / 机构(树)/ 职位 —— Scoped,与仓储一致
+        services.TryAddScoped<IUserService, UserService>();
+        services.TryAddScoped<IOrgService, OrgService>();
+        services.TryAddScoped<IPositionService, PositionService>();
+
         // 种子:多实现集合,TryAddEnumerable 按实现类型防重
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SuperAdminSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultRoleSeed>());
