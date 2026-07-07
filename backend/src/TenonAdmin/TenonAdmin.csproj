@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- 元包:用户只装这一个,一键引全部。目前 = 引 AspNetCore(传递引 Services→SqlSugar→Core) -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>TenonAdmin 元包:装这一个即引入全部内核(AspNetCore + Services + SqlSugar + Core)。ASP.NET Core + SqlSugar 企业管理系统内核,三行启动。</Description>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TenonAdmin.AspNetCore\TenonAdmin.AspNetCore.csproj" />
   </ItemGroup>

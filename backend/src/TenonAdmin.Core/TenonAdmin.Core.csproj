@@ -1,3 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- 零运行时依赖:核心契约层。禁止引入 SqlSugar / ASP.NET Core 等运行时包 -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>TenonAdmin 核心契约层(零运行时依赖):统一结果信封 / 错误码 / 雪花 ID / 安全与扩展点接口。</Description>
+  </PropertyGroup>
 </Project>

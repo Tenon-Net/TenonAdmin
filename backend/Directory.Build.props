@@ -4,6 +4,30 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- 发布包携带 XML 注释(项目注释详尽,是包价值的一部分);CS1591 不强制每个 public 都写注释 -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- ── NuGet 包元数据(T10;所有包共享)。默认不打包,src 各包显式开 IsPackable ── -->
+    <IsPackable>false</IsPackable>
+    <Version>0.0.1-preview</Version>
+    <Authors>huguodong</Authors>
+    <Company>DotNet-MoYu</Company>
+    <Product>TenonAdmin</Product>
+    <Copyright>Copyright © DotNet-MoYu</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/DotNet-MoYu/TenonAdmin</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/DotNet-MoYu/TenonAdmin</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>admin;rbac;sqlsugar;aspnetcore;scaffold;kernel</PackageTags>
+    <PackageReleaseNotes>0.0.1-preview:M1 认证 / RBAC / 多机构数据范围 / 字典配置 / 日志 / 上传 + 可替换扩展点(六件套测试锁)。预览版,API 可能变动。</PackageReleaseNotes>
+    <!-- icon:预览版暂缺,发稳定版前补 PackageIcon(§T10 follow-up) -->
   </PropertyGroup>
+
+  <!-- 每个打包项目都带仓库根 README 作包说明页;非打包项目此 None 为空操作 -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
 </Project>

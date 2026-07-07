@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>TenonAdmin 数据层:SqlSugar 单实例 + CodeFirst 建表 + 幂等种子 + 审计/软删/数据范围全局过滤器 + 开放泛型仓储。</Description>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TenonAdmin.Core\TenonAdmin.Core.csproj" />
   </ItemGroup>

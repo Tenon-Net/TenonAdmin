@@ -5,6 +5,9 @@ obj/
 [Rr]elease/
 *.user
 .vs/
+artifacts/
+*.nupkg
+*.snupkg
 
 ## App runtime data
 data/

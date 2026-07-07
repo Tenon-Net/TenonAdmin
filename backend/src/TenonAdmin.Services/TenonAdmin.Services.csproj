@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>TenonAdmin 领域服务层:认证 / RBAC / 组织 / 数据范围 / 字典 / 配置 / 日志 / 上传等业务服务与实体。</Description>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TenonAdmin.SqlSugar\TenonAdmin.SqlSugar.csproj" />
   </ItemGroup>
