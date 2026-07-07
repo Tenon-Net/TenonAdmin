@@ -12,28 +12,41 @@ namespace TenonAdmin.Services;
 /// </summary>
 public sealed class CacheChangeLogSubscriber(IEventBus events, ILogger<CacheChangeLogSubscriber> logger) : IHostedService
 {
+    // List<T> 非线程安全:StopAsync 遍历时若 StartAsync 仍在 Add(启动慢 + 收到 SIGTERM)、
+    // 或 StopAsync 被重入,枚举器会抛 "Collection was modified"。两处变更都用 _subscriptions 作锁保护,
+    // StopAsync 取快照后清空,令关闭幂等且不惧并发。
     private readonly List<IDisposable> _subscriptions = [];
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _subscriptions.Add(events.Subscribe<DictChangedEvent>((e, _) =>
+        var dict = events.Subscribe<DictChangedEvent>((e, _) =>
         {
             logger.LogInformation("字典变更事件:类型码={TypeCode} 缓存已失效", e.TypeCode);
             return Task.CompletedTask;
-        }));
-        _subscriptions.Add(events.Subscribe<ConfigChangedEvent>((e, _) =>
+        });
+        var config = events.Subscribe<ConfigChangedEvent>((e, _) =>
         {
             logger.LogInformation("配置变更事件:键={Key} 缓存已失效", e.Key);
             return Task.CompletedTask;
-        }));
+        });
+        lock (_subscriptions)
+        {
+            _subscriptions.Add(dict);
+            _subscriptions.Add(config);
+        }
         return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        foreach (var s in _subscriptions)
+        IDisposable[] snapshot;
+        lock (_subscriptions)
+        {
+            snapshot = [.. _subscriptions];
+            _subscriptions.Clear();
+        }
+        foreach (var s in snapshot)
             s.Dispose();
-        _subscriptions.Clear();
         return Task.CompletedTask;
     }
 }
