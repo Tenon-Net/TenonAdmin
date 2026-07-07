@@ -72,8 +72,13 @@ public static class TenonAdminSetup
             });
         services.AddAuthorization();
 
-        // ── MVC 控制器:本程序集作为 ApplicationPart 挂入宿主;业务异常过滤器全局生效 ──
-        services.AddControllers(o => o.Filters.Add<AdminExceptionFilter>())
+        // ── MVC 控制器:本程序集作为 ApplicationPart 挂入宿主 ──
+        //   全局过滤器:业务异常 → 统一信封;操作日志(只对 [OperationLog] 标注的动作记录,§4/T6)
+        services.AddControllers(o =>
+            {
+                o.Filters.Add<AdminExceptionFilter>();
+                o.Filters.Add<OperationLogFilter>();
+            })
             .AddApplicationPart(typeof(TenonAdminSetup).Assembly);
 
         return services;

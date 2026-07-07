@@ -19,4 +19,18 @@ public sealed class HttpContextCurrentUser(IHttpContextAccessor accessor) : ICur
         long.TryParse(Principal?.FindFirstValue(JwtRegisteredClaimNames.Sub), out var id) ? id : null;
 
     public bool IsSuperAdmin => Principal?.HasClaim(TokenClaimNames.SUPER_ADMIN, "true") == true;
+
+    // ponytail: 直接取 TCP 连接对端 IP。反向代理后面拿到的是代理 IP——上正式网关时按需接
+    //           ForwardedHeaders 中间件解析 X-Forwarded-For(§14),这里不预埋。
+    public string? IpAddress => accessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+
+    public string? UserAgent
+    {
+        // Headers.UserAgent 是强类型访问器(StringValues);空串归一为 null,日志里少一列噪声
+        get
+        {
+            var ua = accessor.HttpContext?.Request.Headers.UserAgent.ToString();
+            return string.IsNullOrEmpty(ua) ? null : ua;
+        }
+    }
 }

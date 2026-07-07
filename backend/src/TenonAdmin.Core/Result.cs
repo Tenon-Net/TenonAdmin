@@ -9,7 +9,7 @@ namespace TenonAdmin.Core;
 /// 失败:<c>{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }</c>
 /// </example>
 /// </summary>
-public class Result<T>
+public class Result<T> : IResultEnvelope
 {
     /// <summary>业务码,0 为成功,其余见 <see cref="ErrorCode"/> 分段</summary>
     public int Code { get; init; }

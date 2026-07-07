@@ -27,6 +27,7 @@ public class UserController(IUserService users) : ControllerBase
     /// <summary>新增用户,返回新用户 Id</summary>
     [HttpPost]
     [RolePermission]
+    [OperationLog("新增用户")]   // 入参含 Password,操作日志里会被脱敏为 ***
     public async Task<Result<long>> Add(AddUserInput input) =>
         Result<long>.Ok(await users.AddAsync(input));
 
@@ -51,6 +52,7 @@ public class UserController(IUserService users) : ControllerBase
     /// <summary>重置密码;返回实际生效的初始密码(供管理员当场转达)</summary>
     [HttpPut("{id}/password")]
     [RolePermission]
+    [OperationLog("重置用户密码")]   // 入参 NewPassword 会被脱敏;返回的明文密码不进日志(过滤器只记入参)
     public async Task<Result<string>> ResetPassword(long id, ResetPasswordInput input) =>
         Result<string>.Ok(await users.ResetPasswordAsync(id, input.NewPassword));
 

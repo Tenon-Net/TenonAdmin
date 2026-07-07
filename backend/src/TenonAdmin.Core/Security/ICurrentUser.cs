@@ -15,4 +15,10 @@ public interface ICurrentUser
 
     /// <summary>是否超级管理员(令牌 sadm claim);超管不受权限与数据范围约束</summary>
     bool IsSuperAdmin { get; }
+
+    /// <summary>当前请求来源 IP(原文);非 HTTP 上下文或取不到为 null。登录/操作日志(T6)记录用。</summary>
+    string? IpAddress { get; }
+
+    /// <summary>当前请求 User-Agent(原文);非 HTTP 上下文或取不到为 null。登录/操作日志(T6)记录用。</summary>
+    string? UserAgent { get; }
 }

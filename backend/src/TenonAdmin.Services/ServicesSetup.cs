@@ -46,6 +46,9 @@ public static class ServicesSetup
         services.TryAddScoped<IDictService, DictService>();
         services.TryAddScoped<IConfigService, ConfigService>();
 
+        // 日志模块(§4,T6):操作日志(过滤器写)+ 登录日志(AuthService 写);写入尽力而为
+        services.TryAddScoped<ILogService, LogService>();
+
         // 种子:多实现集合,TryAddEnumerable 按实现类型防重
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SuperAdminSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultRoleSeed>());

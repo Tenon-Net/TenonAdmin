@@ -13,7 +13,8 @@ public class AuthService(
     IRepository<SysUser> users,
     IPasswordHasher hasher,
     ITokenProvider tokens,
-    ISessionService sessions) : IAuthService
+    ISessionService sessions,
+    ILogService logService) : IAuthService
 {
     /// <summary>
     /// 防账号枚举的陪跑哈希:账号不存在时也执行一次真实代价的哈希校验,
@@ -25,12 +26,21 @@ public class AuthService(
     /// <inheritdoc />
     public virtual async Task<LoginOutput> LoginAsync(LoginInput input)
     {
-        await ValidateCaptchaAsync(input);              // 1. 验证码(模块未接入时为直通)
-        var user = await ValidateUserAsync(input);      // 2. 账密校验 —— 对接 LDAP/AD 覆写这步
-        await CheckLoginPolicyAsync(user);              // 3. 策略检查(停用/锁定)
-        var pair = await CreateTokenAsync(user);        // 4. 签发令牌
-        await OnLoginSucceededAsync(user, pair);        // 5. 成功后置(登录日志/事件,模块后接)
-        return BuildLoginOutput(user, pair);            // 6. 组装出参
+        try
+        {
+            await ValidateCaptchaAsync(input);              // 1. 验证码(模块未接入时为直通)
+            var user = await ValidateUserAsync(input);      // 2. 账密校验 —— 对接 LDAP/AD 覆写这步
+            await CheckLoginPolicyAsync(user);              // 3. 策略检查(停用/锁定)
+            var pair = await CreateTokenAsync(user);        // 4. 签发令牌
+            await OnLoginSucceededAsync(user, pair);        // 5. 成功后置(登录日志/事件)
+            return BuildLoginOutput(user, pair);            // 6. 组装出参
+        }
+        catch (AdminException ex)
+        {
+            // 任何业务失败(账密错/停用/验证码等)都记一条失败登录日志后原样抛出(§14 安全审计)
+            await OnLoginFailedAsync(input, ex.Code);
+            throw;
+        }
     }
 
     /// <summary>验证码校验。ICaptchaProvider 模块接入前为直通;接入后在此消费并校验票据。</summary>
@@ -85,8 +95,19 @@ public class AuthService(
     /// <inheritdoc />
     public virtual Task LogoutAsync(string sessionId) => sessions.RevokeAsync(sessionId);
 
-    /// <summary>登录成功后置钩子:写登录日志、发登录事件(相应模块接入后填充;也是用户加自定义动作的挂点)。</summary>
-    protected virtual Task OnLoginSucceededAsync(SysUser user, TokenPair pair) => Task.CompletedTask;
+    /// <summary>
+    /// 登录成功后置钩子:写成功登录日志(§4/§14)。也是用户挂自定义动作(发登录事件、更新最后登录时间等)的扩展点——
+    /// 覆写时记得 <c>base.OnLoginSucceededAsync(...)</c> 保留日志,或自行接管。
+    /// </summary>
+    protected virtual Task OnLoginSucceededAsync(SysUser user, TokenPair pair) =>
+        logService.RecordLoginAsync(new LoginLogEntry { Account = user.Account, Success = true, ResultCode = 0, UserId = user.Id });
+
+    /// <summary>
+    /// 登录失败后置钩子:写失败登录日志(§14)。记<b>原始输入账号</b>(哪怕账号不存在)+ 具体失败码,
+    /// 供暴力破解/账号探测排查;IP/UA 由日志服务从当前请求补全。绝不记密码。
+    /// </summary>
+    protected virtual Task OnLoginFailedAsync(LoginInput input, ErrorCode code) =>
+        logService.RecordLoginAsync(new LoginLogEntry { Account = input.Account, Success = false, ResultCode = (int)code });
 
     /// <summary>组装登录出参(要给前端加返回字段,覆写这步)。</summary>
     protected virtual LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) => new()

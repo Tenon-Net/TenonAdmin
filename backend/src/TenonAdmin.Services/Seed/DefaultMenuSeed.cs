@@ -25,6 +25,9 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         // 会话管理(SysSessionController,T4)
         new SysMenu { Id = 5, ParentId = 1, Type = MenuType.Button, Title = "在线会话", Permission = "GET:/api/v1/sys/session/online", Sort = 4, Enabled = true },
         new SysMenu { Id = 6, ParentId = 1, Type = MenuType.Button, Title = "强制下线", Permission = "DELETE:/api/v1/sys/session/{sessionid}", Sort = 5, Enabled = true },
+        // 日志查询接口(SysLogController,T6)
+        new SysMenu { Id = 7, ParentId = 1, Type = MenuType.Button, Title = "操作日志-分页", Permission = "GET:/api/v1/sys/log/op/page", Sort = 6, Enabled = true },
+        new SysMenu { Id = 8, ParentId = 1, Type = MenuType.Button, Title = "登录日志-分页", Permission = "GET:/api/v1/sys/log/login/page", Sort = 7, Enabled = true },
 
         // 组织管理目录 + 各模块代表性接口(T2)。前端完整菜单树随 M2 落地补齐,这里只播真实存在的接口。
         new SysMenu { Id = 10, ParentId = 0, Type = MenuType.Catalog, Title = "组织管理", Permission = "", Sort = 2, Enabled = true },

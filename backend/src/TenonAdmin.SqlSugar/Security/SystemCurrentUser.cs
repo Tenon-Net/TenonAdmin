@@ -12,4 +12,8 @@ public sealed class SystemCurrentUser : ICurrentUser
     public bool IsAuthenticated => false;
     public long? UserId => null;
     public bool IsSuperAdmin => false;
+
+    // 非 HTTP 上下文(启动/种子/后台)没有请求来源,IP/UA 恒 null
+    public string? IpAddress => null;
+    public string? UserAgent => null;
 }
