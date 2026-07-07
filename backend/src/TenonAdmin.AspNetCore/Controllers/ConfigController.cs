@@ -10,6 +10,7 @@ namespace TenonAdmin.AspNetCore;
 /// </summary>
 [ApiController]
 [Route("api/v1/sys/config")]
+[Module("Config")]   // 可经 Api:DisabledModules=["Config"] 关闭
 public class ConfigController(IConfigService configs) : ControllerBase
 {
     /// <summary>分页查询配置</summary>

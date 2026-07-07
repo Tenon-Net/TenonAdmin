@@ -22,6 +22,9 @@ public class TenonAdminOptions
     /// <summary>上传配置(存储根/大小上限/后缀白名单,见 <see cref="AdminUploadOptions"/>)</summary>
     public AdminUploadOptions Upload { get; set; } = new();
 
+    /// <summary>API 配置(禁用模块等,见 <see cref="AdminApiOptions"/>)</summary>
+    public AdminApiOptions Api { get; set; } = new();
+
     /// <summary>是否扫描入口程序集及其引用注册用户模块(设计 §5.7)。骨架暂未启用扫描。</summary>
     public bool ScanApplicationAssemblies { get; set; } = true;
 

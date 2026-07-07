@@ -10,6 +10,7 @@ namespace TenonAdmin.AspNetCore;
 /// </summary>
 [ApiController]
 [Route("api/v1/sys/dict")]
+[Module("Dict")]   // 可经 Api:DisabledModules=["Dict"] 关闭
 public class DictController(IDictService dictService) : ControllerBase
 {
     /// <summary>分页查询字典类型</summary>

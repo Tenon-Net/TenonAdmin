@@ -10,6 +10,7 @@ namespace TenonAdmin.AspNetCore;
 /// </summary>
 [ApiController]
 [Route("api/v1/sys/log")]
+[Module("Log")]   // 可经 Api:DisabledModules=["Log"] 关闭
 public class SysLogController(ILogService logs) : ControllerBase
 {
     /// <summary>分页查询操作日志(按时间倒序)</summary>

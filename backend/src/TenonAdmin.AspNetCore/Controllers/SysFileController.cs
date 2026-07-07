@@ -11,6 +11,7 @@ namespace TenonAdmin.AspNetCore;
 /// </summary>
 [ApiController]
 [Route("api/v1/sys/file")]
+[Module("Upload")]   // 可经 Api:DisabledModules=["Upload"] 关闭
 public class SysFileController(IFileService files) : ControllerBase
 {
     /// <summary>上传单个文件,返回文件 Id 与展示信息</summary>

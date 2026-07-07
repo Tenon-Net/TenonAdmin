@@ -35,6 +35,7 @@ public static class TenonAdminSetup
         services.AddSingleton(options.Jwt);
         services.AddSingleton(options.Security);
         services.AddSingleton(options.Upload);
+        services.AddSingleton(options.Api);
         services.TryAddSingleton(TimeProvider.System);          // 统一时间源(§12),测试可换 Fake
 
         // ── 当前用户 + 数据范围环境(§6):HTTP 侧实现在此先注册,压过 SqlSugar 层的 AsyncLocal 兜底 ──
@@ -81,6 +82,7 @@ public static class TenonAdminSetup
                 o.Filters.Add<AdminExceptionFilter>();
                 o.Filters.Add<OperationLogFilter>();
                 o.Filters.Add<ResultEnvelopeFilter>();
+                o.Conventions.Add(new DisabledModuleConvention(options.Api));   // 按配置摘除禁用模块的控制器(§5.4)
             })
             .AddApplicationPart(typeof(TenonAdminSetup).Assembly);
 
