@@ -19,13 +19,21 @@ internal sealed class DatabaseInitializer(
     AdminDatabaseOptions options,
     TenonEntitySources sources,
     IServiceScopeFactory scopeFactory,
+    IHostEnvironment env,
     ILogger<DatabaseInitializer> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         EnsureSqliteDirectory();
 
-        if (options.EnableCodeFirst)
+        // 生产建表安全闸门(§12/§4.1):生产环境即便 EnableCodeFirst=true,也需显式 EnableCodeFirstInProduction 才建表——
+        // 生产库通常 DBA 手工维护,应用不应擅自 ALTER。非生产环境不受此约束。
+        var codeFirstAllowed = options.EnableCodeFirst
+            && (!env.IsProduction() || options.EnableCodeFirstInProduction);
+        if (options.EnableCodeFirst && !codeFirstAllowed)
+            logger.LogWarning("TenonAdmin: 生产环境未显式开启 EnableCodeFirstInProduction,已跳过 CodeFirst 自动建表(§12 建表安全)。");
+
+        if (codeFirstAllowed)
         {
             // 扫描所有登记程序集中带 [SugarTable] 的非抽象类 —— 实体清单唯一来源
             var entityTypes = sources.Assemblies

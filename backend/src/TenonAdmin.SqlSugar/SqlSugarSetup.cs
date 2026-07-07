@@ -19,8 +19,9 @@ public static class SqlSugarSetup
         IEnumerable<Assembly>? entityAssemblies = null)
     {
         // ── ID 生成器:雪花默认实现(用户可换,见 IIdGenerator)──────────────
-        // WorkerId 暂固定 0(单机);多实例部署的 WorkerId 配置项随部署文档一起补
-        services.TryAddSingleton<IIdGenerator>(_ => new SnowflakeIdGenerator());
+        // WorkerId 从 TenonAdmin:Id:WorkerId 注入(默认 0);多实例水平扩展须为每实例配不同值,否则同毫秒撞号(P2-20)
+        services.TryAddSingleton<IIdGenerator>(sp =>
+            new SnowflakeIdGenerator(sp.GetService<AdminIdOptions>()?.WorkerId ?? 0, sp.GetService<TimeProvider>()));
 
         // ── 数据范围环境载体(§6):授权管道写入、全局过滤器读取;AsyncLocal 单例 ──
         services.TryAddSingleton<IDataScopeContext, DataScopeContext>();
