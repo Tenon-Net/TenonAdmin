@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(T5 字典/配置 + Channels 事件总线完成)
+> 最后更新:2026-07-07(T6 日志模块:操作日志 + 登录日志完成)
 
 ---
 
@@ -49,6 +49,7 @@
 | `e3a9f7e` | T3 多机构数据范围:DataScopeType 五种范围 + SysRoleDataScope + IDataScopeProvider(多角色合并/机构树展开/按用户缓存)+ SqlSugar 全局过滤器(IOrgScoped 接口匹配)+ IDataScopeContext(HttpContext.Items/AsyncLocal)+ ICurrentUser + 授权管道解析写入。自检 12/12(真跑 ORM 过滤器)+ MinimalHost 回归 |
 | `ac7ae3a` | T4 会话/令牌模型:sys_session/sys_refresh_token(存哈希)+ SessionService(轮换/复用检测/强退/在线列表/单端限并发)+ /auth/refresh /auth/logout + SysSessionController + [RolePermission] 会话校验 + 审计字段 AOP 填充。自检 14/14 + 2/2 + MinimalHost 三条验收全绿 |
 | `48d8cfb` | T5 字典/配置:SysDictType/SysDictItem/SysConfig + DictService/ConfigService(读穿透缓存 + 变更即失效 + 发事件)+ Channels 进程内事件总线(IEventBus/ChannelEventBus + 变更日志订阅者)+ 字典/配置菜单与种子。自检 16/16 + MinimalHost HTTP 冒烟 12/12(含经 HTTP 缓存失效验收) |
+| `7c885ec` | T6 日志:SysOpLog/SysLoginLog + [OperationLog] 特性 + 全局 OperationLogFilter(入参脱敏/耗时/结果码/操作人/IP/UA,opt-in)+ SensitiveDataMasker(按字段名递归打码)+ AuthService 加 OnLoginFailedAsync 钩子记成功/失败登录日志 + LogService(写入尽力而为、清空硬删)+ IResultEnvelope 免反射读码 + ICurrentUser 补 IP/UA + SysLogController + 日志菜单种子。masker 自检 10/10 + MinimalHost 冒烟 10/10(操作日志脱敏且明文不泄漏、登录成功/失败均留痕、401 回归) |
 
 ## 4. 任务队列(按依赖序;每个任务 = 一次会话可完成的纵切)
 
@@ -78,9 +79,10 @@
 **验收**:自检 16/16(总线投递/退订、字典&配置读穿透缓存证明生效并变更失效走新值、级联软删、唯一码守护)
 + MinimalHost HTTP 冒烟 12/12(认证回归 + 字典/配置 CRUD + 经 HTTP 缓存失效 + 种子可读 + 事件订阅者日志)。
 
-### T6 日志(§4)
+### T6 日志(§4)✅ 完成(`7c885ec`)
 `[OperationLog]` 特性 + 过滤器自动记录(入参/耗时/结果码,敏感字段脱敏);登录日志(IP/UA 原文)挂进 AuthService 的 `OnLoginSucceededAsync`/失败路径;查询/清空接口。
-**验收**:调用带特性接口后库里有操作日志且密码字段已脱敏;登录成功/失败都有登录日志。
+**验收**:masker 自检 10/10;MinimalHost 冒烟 10/10——带 `[OperationLog]` 的新增用户接口写入操作日志且入参密码脱敏为 `***`、明文不泄漏;登录成功(code 0)与失败(40001)均有登录日志;无 token 401 回归。
+> 设计说明:登录失败在 `AuthService.LoginAsync` 用 try/catch(AdminException) 统一走 `OnLoginFailedAsync` 钩子(默认钩子写登录日志),覆写登录流程的用户如需保留日志记得 `base.` 调用。日志表 `SysOpLog`/`SysLoginLog` 继承 `BaseEntity` 只为复用雪花 Id + CreateTime 自动填充,无软删语义,"清空"走 `Db.Deleteable` 硬删。写入路径尽力而为(吞异常只告警),不因日志失败破坏业务/登录。
 
 ### T7 本地文件上传(§4/§14)
 `sys_file`;`IFileStorage` + 本地实现;后缀白名单/大小限制/文件名重写/路径穿越防护;下载/列表。
