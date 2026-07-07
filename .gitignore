@@ -20,3 +20,7 @@ data/
 node_modules/
 dist/
 .env.local
+
+## Tooling / agent state (本地工具产物,不入库;无前导斜杠 → 匹配任意层级,含 backend/.omc)
+.omc/
+.codegraph/
