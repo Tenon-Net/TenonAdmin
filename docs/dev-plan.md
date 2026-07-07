@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(T4 会话与 Token 完整模型完成)
+> 最后更新:2026-07-07(T5 字典/配置 + Channels 事件总线完成)
 
 ---
 
@@ -48,6 +48,7 @@
 | `cd68d43` | T2 用户/机构/职位 CRUD:PagedList+ToPagedListAsync + DataEntity 基类 + SysOrg(树)/SysPosition + 用户全套(增删改查分页/重置密码/启停用/角色分配,守住不出哈希/不提权/超管保护)。自检 19/19 + MinimalHost 全套 CRUD 冒烟 + 清偿 T1 的 HTTP 403→200 |
 | `e3a9f7e` | T3 多机构数据范围:DataScopeType 五种范围 + SysRoleDataScope + IDataScopeProvider(多角色合并/机构树展开/按用户缓存)+ SqlSugar 全局过滤器(IOrgScoped 接口匹配)+ IDataScopeContext(HttpContext.Items/AsyncLocal)+ ICurrentUser + 授权管道解析写入。自检 12/12(真跑 ORM 过滤器)+ MinimalHost 回归 |
 | `ac7ae3a` | T4 会话/令牌模型:sys_session/sys_refresh_token(存哈希)+ SessionService(轮换/复用检测/强退/在线列表/单端限并发)+ /auth/refresh /auth/logout + SysSessionController + [RolePermission] 会话校验 + 审计字段 AOP 填充。自检 14/14 + 2/2 + MinimalHost 三条验收全绿 |
+| `48d8cfb` | T5 字典/配置:SysDictType/SysDictItem/SysConfig + DictService/ConfigService(读穿透缓存 + 变更即失效 + 发事件)+ Channels 进程内事件总线(IEventBus/ChannelEventBus + 变更日志订阅者)+ 字典/配置菜单与种子。自检 16/16 + MinimalHost HTTP 冒烟 12/12(含经 HTTP 缓存失效验收) |
 
 ## 4. 任务队列(按依赖序;每个任务 = 一次会话可完成的纵切)
 
@@ -70,9 +71,12 @@
 `sys_session` / `sys_refresh_token`(存 hash);refresh 轮换+复用检测;登出;在线用户列表/强退;`[RolePermission]` 管道加 session 状态校验(强退即 401);单端/限并发模式;CreateUserId/UpdateUserId AOP 填充接当前用户上下文。
 **验收**:自检 14/14(轮换/旧串失效/重放整会话吊销/强退失活/单端/限并发)+ 2/2(审计填充);MinimalHost 三条验收全绿(刷新换发新对且旧 refresh 失效;强退后原 token 立即 401;重放旧 refresh 触发风险吊销)+ 登出 + 非超管累计回归。
 
-### T5 字典 + 系统配置(§4)← **下一个**
-`SysDictType`/`SysDictItem`/`SysConfig`;带缓存,变更失效(顺手落 Channels 事件总线,§2.2 替代表)。
-**验收**:CRUD + 改字典后再查走新值(缓存确实失效)。
+### T5 字典 + 系统配置(§4)✅ 完成(`48d8cfb`)
+`SysDictType`/`SysDictItem`/`SysConfig`;DictService/ConfigService 读穿透缓存 + 变更即失效 + 发事件;
+顺手落 Channels 进程内事件总线(`IEventBus`+`ChannelEventBus`,Core;单例后台派发、订阅退订)+ 变更日志订阅者;
+种子:通用状态字典(启用/停用)+ 站点标题配置。
+**验收**:自检 16/16(总线投递/退订、字典&配置读穿透缓存证明生效并变更失效走新值、级联软删、唯一码守护)
++ MinimalHost HTTP 冒烟 12/12(认证回归 + 字典/配置 CRUD + 经 HTTP 缓存失效 + 种子可读 + 事件订阅者日志)。
 
 ### T6 日志(§4)
 `[OperationLog]` 特性 + 过滤器自动记录(入参/耗时/结果码,敏感字段脱敏);登录日志(IP/UA 原文)挂进 AuthService 的 `OnLoginSucceededAsync`/失败路径;查询/清空接口。
@@ -100,7 +104,7 @@
 - [ ] 雪花 `WorkerId` 固定 0,多实例部署需配置项(`TenonAdmin:Id:WorkerId`)
 - [ ] `EnableCodeFirstInProduction` 生产建表开关未接宿主环境判断(§12)
 - [ ] `./data`(SQLite/dev-jwt.key)是进程工作目录相对路径,正式宿主应改 ContentRoot 相对
-- [ ] 事件总线(Channels)未建——T5 顺手落
+- [x] 事件总线(Channels)——T5 已落:`IEventBus`+`ChannelEventBus`(Core)+ 变更日志订阅者(Services)
 - [ ] `OrgService.UpdateAsync` 拒绝"父指向自己"时复用了 `OrgNotFound`(语义略偏,应为专用码或"非法父级");阶段二审查处理
 - [ ] `UserService` 默认初始密码为固定常量 `Tenon@123456`——T8 接密码策略时改可配置默认 + 首次登录强制改密
 - [ ] `.slnx` 是 .NET 10 新方案格式(非 .sln),IDE 兼容性关注一下
