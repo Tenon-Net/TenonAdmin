@@ -84,6 +84,10 @@ public static class SqlSugarSetup
                             // CreateUserId 未指定 → 填当前登录用户(系统上下文为 null 则留空,不硬塞)
                             else if (info is { PropertyName: nameof(BaseEntity.CreateUserId), EntityValue: BaseEntity { CreateUserId: null } } && currentUser.UserId is { } insUid)
                                 info.SetValue(insUid);
+                            // CreateOrgId 未指定(仅 DataEntity 有此列)→ 填当前用户归属机构(数据范围锚点,§6);
+                            // 无机构上下文(系统/无 org 用户)则留空。缺此填充则机构维度数据范围对业务表恒 0 行。
+                            else if (info is { PropertyName: nameof(DataEntity.CreateOrgId), EntityValue: DataEntity { CreateOrgId: null } } && currentUser.OrgId is { } insOrgId)
+                                info.SetValue(insOrgId);
                             break;
 
                         case DataFilterType.UpdateByObject:
