@@ -14,7 +14,8 @@ public class AuthService(
     IPasswordHasher hasher,
     ITokenProvider tokens,
     ISessionService sessions,
-    ILogService logService) : IAuthService
+    ILogService logService,
+    ILoginLockService loginLock) : IAuthService
 {
     /// <summary>
     /// 防账号枚举的陪跑哈希:账号不存在时也执行一次真实代价的哈希校验,
@@ -28,6 +29,7 @@ public class AuthService(
     {
         try
         {
+            await CheckLoginLockAsync(input);               // 0. 失败锁定检查(§14 防爆破,锁定期正确密码也拒)
             await ValidateCaptchaAsync(input);              // 1. 验证码(模块未接入时为直通)
             var user = await ValidateUserAsync(input);      // 2. 账密校验 —— 对接 LDAP/AD 覆写这步
             await CheckLoginPolicyAsync(user);              // 3. 策略检查(停用/锁定)
@@ -42,6 +44,9 @@ public class AuthService(
             throw;
         }
     }
+
+    /// <summary>失败锁定检查(§14):账号连续密码错误达阈值则在锁定窗口内拒绝(抛 <see cref="ErrorCode.AccountLocked"/>)。</summary>
+    protected virtual Task CheckLoginLockAsync(LoginInput input) => loginLock.EnsureNotLockedAsync(input.Account);
 
     /// <summary>验证码校验。ICaptchaProvider 模块接入前为直通;接入后在此消费并校验票据。</summary>
     protected virtual Task ValidateCaptchaAsync(LoginInput input) => Task.CompletedTask;
@@ -99,15 +104,23 @@ public class AuthService(
     /// 登录成功后置钩子:写成功登录日志(§4/§14)。也是用户挂自定义动作(发登录事件、更新最后登录时间等)的扩展点——
     /// 覆写时记得 <c>base.OnLoginSucceededAsync(...)</c> 保留日志,或自行接管。
     /// </summary>
-    protected virtual Task OnLoginSucceededAsync(SysUser user, TokenPair pair) =>
-        logService.RecordLoginAsync(new LoginLogEntry { Account = user.Account, Success = true, ResultCode = 0, UserId = user.Id });
+    protected virtual async Task OnLoginSucceededAsync(SysUser user, TokenPair pair)
+    {
+        await loginLock.ResetAsync(user.Account);   // 成功即清零失败计数
+        await logService.RecordLoginAsync(new LoginLogEntry { Account = user.Account, Success = true, ResultCode = 0, UserId = user.Id });
+    }
 
     /// <summary>
     /// 登录失败后置钩子:写失败登录日志(§14)。记<b>原始输入账号</b>(哪怕账号不存在)+ 具体失败码,
     /// 供暴力破解/账号探测排查;IP/UA 由日志服务从当前请求补全。绝不记密码。
+    /// <para>仅"密码错误"计入失败锁定——验证码错/已锁定/停用等不累加,避免把锁定窗口无限延长或误伤。</para>
     /// </summary>
-    protected virtual Task OnLoginFailedAsync(LoginInput input, ErrorCode code) =>
-        logService.RecordLoginAsync(new LoginLogEntry { Account = input.Account, Success = false, ResultCode = (int)code });
+    protected virtual async Task OnLoginFailedAsync(LoginInput input, ErrorCode code)
+    {
+        if (code == ErrorCode.PasswordWrong)
+            await loginLock.RecordFailureAsync(input.Account);
+        await logService.RecordLoginAsync(new LoginLogEntry { Account = input.Account, Success = false, ResultCode = (int)code });
+    }
 
     /// <summary>组装登录出参(要给前端加返回字段,覆写这步)。</summary>
     protected virtual LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) => new()

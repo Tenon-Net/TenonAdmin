@@ -20,12 +20,25 @@ public class AdminSessionOptions
     public int MaxConcurrent { get; set; }
 }
 
+/// <summary>登录失败锁定配置(对应 <c>TenonAdmin:Security:LoginLock</c>,设计 §3.2/§14)。</summary>
+public class AdminLoginLockOptions
+{
+    /// <summary>连续密码错误多少次后锁定;&lt;=0 表示关闭该功能。</summary>
+    public int MaxFailCount { get; set; } = 5;
+
+    /// <summary>锁定时长(分钟);也是失败计数的滑动过期窗口——停手这么久后自动解锁。</summary>
+    public int LockMinutes { get; set; } = 10;
+}
+
 /// <summary>
 /// 安全配置(对应 <c>TenonAdmin:Security</c> 节,设计 §3.2/§14)。
-/// v1 先落 <see cref="Session"/>;验证码 / 登录锁定 / 密码策略随 T8 补齐。
+/// v1 落 <see cref="Session"/> + <see cref="LoginLock"/>;验证码 / 密码策略随 T8 后续小轮补齐。
 /// </summary>
 public class AdminSecurityOptions
 {
     /// <summary>会话并发策略(单端/多端/限并发数,见 <see cref="AdminSessionOptions"/>)</summary>
     public AdminSessionOptions Session { get; set; } = new();
+
+    /// <summary>登录失败锁定策略(防暴力破解,见 <see cref="AdminLoginLockOptions"/>)</summary>
+    public AdminLoginLockOptions LoginLock { get; set; } = new();
 }

@@ -21,4 +21,7 @@ public static class CacheKeys
 
     /// <summary>某系统配置项的值(按键缓存;配置变更时按键失效)</summary>
     public static string Config(string key) => $"config:{key}";
+
+    /// <summary>某账号的连续登录失败次数(登录锁定用;成功登录即清除,窗口过期自动归零,设计 §14)</summary>
+    public static string LoginFail(string account) => $"loginfail:{account}";
 }
