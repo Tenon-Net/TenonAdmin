@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(T8c SVG 验证码完成;T8 拆 4 小轮进行中,T8d 待做)
+> 最后更新:2026-07-07(T8d-i OpenAPI+HealthChecks 完成;仅剩 T8d-ii 路由前缀/模块开关配置化)
 
 ---
 
@@ -54,6 +54,7 @@
 | `0635a1f` | T8a 统一返回兜底过滤器 + 个人中心:ResultEnvelopeFilter(裸 DTO 自动包信封,内置仍显式 Result<T> 保 OpenAPI 契约,TryWrap 纯函数)+ PersonalController([Authorize] 看/改资料/验旧改密,限当前用户)。envelope 自检 8/8 + MinimalHost 冒烟 14/14 |
 | `a54c8d7` | T8b 登录失败锁定:ILoginLockService/LoginLockService(账号失败计数进缓存,达阈值锁定窗口内拒登,TTL 滑动过期)+ 接进 AuthService(CheckLoginLockAsync 最前置、成功重置、仅密码错计入)+ AdminSecurityOptions.LoginLock + CacheKeys.LoginFail。自检 6/6 + MinimalHost 冒烟 7/7。RateLimiter 暂缓(见 T8b 注) |
 | `849af1d` | T8c SVG 验证码:ICaptchaProvider 扩展点 + SvgCaptchaProvider(纯字符串 SVG 零依赖)+ CaptchaService(签发缓存 + 一次性校验)+ 接进 AuthService.ValidateCaptchaAsync + GET /auth/captcha + LoginInput 加验证码字段 + AdminSecurityOptions.Captcha(默认关)。自检 12/12 + MinimalHost 冒烟 6/6 |
+| `622f19a` | T8d-i OpenAPI + HealthChecks:AddOpenApi/MapOpenApi(/openapi/v1.json,契约含 Result 信封)+ 标准 MapHealthChecks(/health)替代极简 MapGet;修高危 CVE(Microsoft.OpenApi 2.0.0→2.7.5,NU1903)。MinimalHost 冒烟 7/7,build 0 警告 |
 
 ## 4. 任务队列(按依赖序;每个任务 = 一次会话可完成的纵切)
 
@@ -101,7 +102,9 @@
   > RateLimiter 暂缓:ASP.NET `RateLimiter` 需 `app.UseRateLimiter()` 中间件,而三行零配置宿主的 `MapTenonAdmin` 只拿到 `IEndpointRouteBuilder`、无处插中间件;强塞要么破坏零配置、要么自造节流(违 ponytail)。账号级 LoginLock 已挡住爆破主向。IP 级限流留到:①宿主提供中间件挂载点(如 `IStartupFilter` 注入,待验证不与 auth 中间件次序冲突),或 ②文档化为用户显式 `app.UseRateLimiter()` 的 opt-in。归入后续处理,不阻塞 M1。
 - **T8c ✅ 完成(`849af1d`)**:SVG 验证码 `ICaptchaProvider` 接进 `AuthService.ValidateCaptchaAsync` + `GET /auth/captcha` + 登录入参验证码票据。
   > 设计修正:`Captcha.Enabled` 默认 true→false(保零配置 API 直登;Web/生产 opt-in)。默认 SVG 机器可读(已注天花板),抗识别走扩展点。
-- **T8d**:内置 OpenAPI(`AddOpenApi` 产出 openapi.json)+ 标准 HealthChecks 替换极简 /health + `Api:RoutePrefix`/`Version`/`DisabledModules` 配置化。
+- **T8d-i ✅ 完成(`622f19a`)**:内置 OpenAPI(`/openapi/v1.json`)+ 标准 HealthChecks(`/health`);附带修 Microsoft.OpenApi 高危 CVE。
+- **T8d-ii(下一轮,风险项独立做)**:`Api:RoutePrefix`/`Version`/`DisabledModules` 配置化。
+  > ⚠ 高 churn/风险:当前所有控制器硬编码 `[Route("api/v1/...")]`,要配置化需去掉硬编码前缀 + 全局路由约定拼配置前缀,牵动**权限码**(`{METHOD}:/{route}`)与**菜单种子**里写死的 `api/v1/...`;`DisabledModules` 需 ApplicationModel 约定移除对应控制器。须专门一轮:先设计前缀约定 + 验证权限码/种子不错位(默认前缀保持 `api/v1` 使既有种子仍匹配),再逐控制器改 + 全量回归。**不阻塞 M1 其余部分**。
 
 ### T9 测试工程(§8——产品承诺,发布前必须)
 `backend/tests/TenonAdmin.Tests`(xunit + WebApplicationFactory);把 scratchpad 自检转正;
