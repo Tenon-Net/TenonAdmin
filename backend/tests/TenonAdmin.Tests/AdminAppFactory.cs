@@ -23,6 +23,9 @@ public sealed class AdminAppFactory : WebApplicationFactory<Program>
     /// <summary>每测试的服务覆盖(ConfigureTestServices;用于 Replace 框架服务)</summary>
     public Action<IServiceCollection>? Overrides { get; init; }
 
+    /// <summary>额外的配置项覆盖(在 AddTenonAdmin 绑定前生效,如 CORS 源、会话模式等)</summary>
+    public IReadOnlyDictionary<string, string?>? Settings { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
@@ -32,6 +35,8 @@ public sealed class AdminAppFactory : WebApplicationFactory<Program>
         builder.UseSetting("TenonAdmin:Jwt:SecretKey", "tenon-integration-test-signing-key-please-keep-32plus");
         for (var i = 0; i < DisabledModules.Count; i++)
             builder.UseSetting($"TenonAdmin:Api:DisabledModules:{i}", DisabledModules[i]);
+        if (Settings != null)
+            foreach (var kv in Settings) builder.UseSetting(kv.Key, kv.Value);
 
         if (Overrides != null) builder.ConfigureTestServices(Overrides);
     }

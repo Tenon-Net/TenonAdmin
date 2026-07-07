@@ -69,10 +69,50 @@ public class DataScopeTests
         try { File.Delete(dbFile); } catch { /* 尽力而为 */ }
     }
 
+    [Fact]
+    public async Task CreateOrgId_is_filled_from_current_user_org_on_insert()
+    {
+        // P1-12:经仓储插入 DataEntity 时,CreateOrgId 由审计 AOP 从 ICurrentUser.OrgId 回填(否则机构数据范围恒 0 行)
+        var dbFile = Path.Combine(Path.GetTempPath(), $"tenon-orgfill-{Guid.NewGuid():N}.db");
+        var services = new ServiceCollection();
+        services.AddSingleton(new AdminCacheOptions());
+        services.AddSingleton<ICurrentUser>(new StubCurrentUser(userId: 100, orgId: 55));   // 前置注册 → 压过 SystemCurrentUser(TryAdd)
+        services.AddTenonAdminSqlSugar(
+            new AdminDatabaseOptions { DbType = "Sqlite", ConnectionString = $"Data Source={dbFile}" },
+            [typeof(ServicesSetup).Assembly]);
+        services.AddTenonAdminServices();
+        await using var sp = services.BuildServiceProvider();
+        sp.GetRequiredService<ISqlSugarClient>().CodeFirst.InitTables(typeof(ScopeDoc));
+
+        sp.GetRequiredService<IDataScopeContext>().Current = DataScopeResult.Unrestricted;   // 读写都不过滤,便于取回验证
+
+        using (var scope = sp.CreateScope())
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IRepository<ScopeDoc>>();
+            await repo.InsertAsync(new ScopeDoc { Title = "X" });    // 不显式设 CreateOrgId
+            var saved = await repo.AsQueryable().Where(d => d.Title == "X").FirstAsync();
+            Assert.Equal(55, saved.CreateOrgId);     // 从 currentUser.OrgId 回填
+            Assert.Equal(100, saved.CreateUserId);   // 顺带验证 CreateUserId 回填
+        }
+
+        try { File.Delete(dbFile); } catch { /* 尽力而为 */ }
+    }
+
     /// <summary>临时业务实体:继承 DataEntity 即自动进入全局数据范围过滤(CreateOrgId 锚点)。</summary>
     [SugarTable("scope_doc")]
     public class ScopeDoc : DataEntity
     {
         [SugarColumn(Length = 64)] public string Title { get; set; } = "";
+    }
+
+    /// <summary>固定身份的当前用户桩(带归属机构),用于验证审计 AOP 从 OrgId/UserId 回填。</summary>
+    private sealed class StubCurrentUser(long userId, long orgId) : ICurrentUser
+    {
+        public bool IsAuthenticated => true;
+        public long? UserId => userId;
+        public bool IsSuperAdmin => false;
+        public long? OrgId => orgId;
+        public string? IpAddress => null;
+        public string? UserAgent => null;
     }
 }
