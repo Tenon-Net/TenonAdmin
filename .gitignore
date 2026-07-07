@@ -10,7 +10,8 @@ obj/
 data/
 *.db
 *.db-journal
-wwwroot/upload/
+# 带中间斜杠的模式会被锚定到仓库根;用 **/ 前缀才能匹配任意宿主(如 samples/*/wwwroot)下的上传目录
+**/wwwroot/upload/
 
 ## Frontend (web/)
 node_modules/

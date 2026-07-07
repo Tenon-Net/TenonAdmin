@@ -43,5 +43,10 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 23, ParentId = 20, Type = MenuType.Button, Title = "字典项-新增", Permission = "POST:/api/v1/sys/dict/item", Sort = 3, Enabled = true },
         new SysMenu { Id = 24, ParentId = 20, Type = MenuType.Button, Title = "配置-分页", Permission = "GET:/api/v1/sys/config/page", Sort = 4, Enabled = true },
         new SysMenu { Id = 25, ParentId = 20, Type = MenuType.Button, Title = "配置-取值", Permission = "GET:/api/v1/sys/config/value/{key}", Sort = 5, Enabled = true },
+
+        // 文件管理目录 + 代表性接口(T7)。同样只播真实存在的接口。
+        new SysMenu { Id = 30, ParentId = 0, Type = MenuType.Catalog, Title = "文件管理", Permission = "", Sort = 4, Enabled = true },
+        new SysMenu { Id = 31, ParentId = 30, Type = MenuType.Button, Title = "文件-上传", Permission = "POST:/api/v1/sys/file/upload", Sort = 1, Enabled = true },
+        new SysMenu { Id = 32, ParentId = 30, Type = MenuType.Button, Title = "文件-分页", Permission = "GET:/api/v1/sys/file/page", Sort = 2, Enabled = true },
     ];
 }

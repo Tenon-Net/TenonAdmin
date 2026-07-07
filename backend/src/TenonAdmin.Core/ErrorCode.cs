@@ -115,6 +115,24 @@ public enum ErrorCode
     [MsgKey("error.config.keyExists")]
     ConfigKeyExists = 43005,
 
+    // ── 44xxx 文件上传 ───────────────────────────────────────────────
+
+    /// <summary>空文件(未选择文件或文件长度为 0)</summary>
+    [MsgKey("error.file.empty")]
+    FileEmpty = 44001,
+
+    /// <summary>文件超过大小上限;args 可携带 maxSizeMb</summary>
+    [MsgKey("error.file.tooLarge")]
+    FileTooLarge = 44002,
+
+    /// <summary>文件后缀不在白名单;args 可携带 ext</summary>
+    [MsgKey("error.file.extNotAllowed")]
+    FileExtNotAllowed = 44003,
+
+    /// <summary>文件记录不存在(或物理文件已丢失)</summary>
+    [MsgKey("error.file.notFound")]
+    FileNotFound = 44004,
+
     // ── 50xxx 系统内部 ───────────────────────────────────────────────
 
     /// <summary>未知系统错误(未捕获异常的统一出口,详情只进日志不出接口)</summary>
