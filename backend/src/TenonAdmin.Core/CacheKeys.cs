@@ -15,4 +15,10 @@ public static class CacheKeys
 
     /// <summary>会话活跃状态(热路径:每受保护请求校验;登出/强退时移除,设计 §15)</summary>
     public static string Session(string sessionId) => $"session:{sessionId}";
+
+    /// <summary>某字典类型下的字典项列表(前端下拉数据源;字典变更时按类型码失效)</summary>
+    public static string DictItems(string typeCode) => $"dict:{typeCode}";
+
+    /// <summary>某系统配置项的值(按键缓存;配置变更时按键失效)</summary>
+    public static string Config(string key) => $"config:{key}";
 }

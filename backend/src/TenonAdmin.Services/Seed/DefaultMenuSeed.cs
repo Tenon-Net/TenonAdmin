@@ -32,5 +32,13 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 12, ParentId = 10, Type = MenuType.Button, Title = "用户-新增", Permission = "POST:/api/v1/sys/user", Sort = 2, Enabled = true },
         new SysMenu { Id = 13, ParentId = 10, Type = MenuType.Button, Title = "机构-列表", Permission = "GET:/api/v1/sys/org/list", Sort = 3, Enabled = true },
         new SysMenu { Id = 14, ParentId = 10, Type = MenuType.Button, Title = "职位-分页", Permission = "GET:/api/v1/sys/position/page", Sort = 4, Enabled = true },
+
+        // 字典与配置目录 + 代表性接口(T5)。同样只播真实存在的接口,完整菜单树随 M2 补齐。
+        new SysMenu { Id = 20, ParentId = 0, Type = MenuType.Catalog, Title = "字典配置", Permission = "", Sort = 3, Enabled = true },
+        new SysMenu { Id = 21, ParentId = 20, Type = MenuType.Button, Title = "字典类型-分页", Permission = "GET:/api/v1/sys/dict/type/page", Sort = 1, Enabled = true },
+        new SysMenu { Id = 22, ParentId = 20, Type = MenuType.Button, Title = "字典项-查询", Permission = "GET:/api/v1/sys/dict/items/{typecode}", Sort = 2, Enabled = true },
+        new SysMenu { Id = 23, ParentId = 20, Type = MenuType.Button, Title = "字典项-新增", Permission = "POST:/api/v1/sys/dict/item", Sort = 3, Enabled = true },
+        new SysMenu { Id = 24, ParentId = 20, Type = MenuType.Button, Title = "配置-分页", Permission = "GET:/api/v1/sys/config/page", Sort = 4, Enabled = true },
+        new SysMenu { Id = 25, ParentId = 20, Type = MenuType.Button, Title = "配置-取值", Permission = "GET:/api/v1/sys/config/value/{key}", Sort = 5, Enabled = true },
     ];
 }

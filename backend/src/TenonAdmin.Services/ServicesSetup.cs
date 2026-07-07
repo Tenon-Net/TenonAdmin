@@ -26,6 +26,10 @@ public static class ServicesSetup
         services.AddMemoryCache();
         services.TryAddSingleton<ICacheProvider, MemoryCacheProvider>();
 
+        // 事件总线(§2.2/§5.5,T5):Channels 进程内实现,单例;字典/配置变更即发布,订阅者做失效日志/扩展
+        services.TryAddSingleton<IEventBus, ChannelEventBus>();
+        services.AddHostedService<CacheChangeLogSubscriber>();
+
         // RBAC(§6):权限码提供者真实现(取代 AspNetCore 层的空占位)+ 角色菜单授权服务
         services.TryAddScoped<IPermissionProvider, RbacPermissionProvider>();
         services.TryAddScoped<IRbacService, RbacService>();
@@ -38,10 +42,17 @@ public static class ServicesSetup
         services.TryAddScoped<IOrgService, OrgService>();
         services.TryAddScoped<IPositionService, PositionService>();
 
+        // 字典与配置模块(§4,T5):读穿透缓存 + 变更即失效并广播事件
+        services.TryAddScoped<IDictService, DictService>();
+        services.TryAddScoped<IConfigService, ConfigService>();
+
         // 种子:多实现集合,TryAddEnumerable 按实现类型防重
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SuperAdminSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultRoleSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultMenuSeed>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DictTypeSeed>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DictItemSeed>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, ConfigSeed>());
 
         return services;
     }

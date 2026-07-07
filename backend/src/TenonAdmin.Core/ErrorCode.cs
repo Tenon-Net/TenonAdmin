@@ -93,6 +93,28 @@ public enum ErrorCode
     [MsgKey("error.user.superAdminProtected")]
     SuperAdminProtected = 42007,
 
+    // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
+
+    /// <summary>字典类型不存在</summary>
+    [MsgKey("error.dict.typeNotFound")]
+    DictTypeNotFound = 43001,
+
+    /// <summary>字典类型编码已存在(编码唯一)</summary>
+    [MsgKey("error.dict.typeCodeExists")]
+    DictTypeCodeExists = 43002,
+
+    /// <summary>字典项不存在</summary>
+    [MsgKey("error.dict.itemNotFound")]
+    DictItemNotFound = 43003,
+
+    /// <summary>系统配置不存在</summary>
+    [MsgKey("error.config.notFound")]
+    ConfigNotFound = 43004,
+
+    /// <summary>配置键已存在(键唯一)</summary>
+    [MsgKey("error.config.keyExists")]
+    ConfigKeyExists = 43005,
+
     // ── 50xxx 系统内部 ───────────────────────────────────────────────
 
     /// <summary>未知系统错误(未捕获异常的统一出口,详情只进日志不出接口)</summary>

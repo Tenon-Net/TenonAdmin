@@ -611,9 +611,9 @@ web/src/
 - [ ] `DESIGN.md` 定稿(含 tokens 文件初版;来源见 §7.1 设计流水线)→ M2 前完成即可
 
 ### M1 —— 后端骨架(核心里程碑)🔄 进行中(细粒度进度见 `dev-plan.md`)
-- [x] `Core`:实体基类 / Result / 异常 / 扩展点接口 / 雪花 ID(事件总线未动)
+- [x] `Core`:实体基类 / Result / 异常 / 扩展点接口 / 雪花 ID / Channels 事件总线(`IEventBus`+`ChannelEventBus`,T5)
 - [x] `SqlSugar`:单例封装 / 仓储 / CodeFirst / 种子机制
-- [ ] `Services`:认证 ✅;RBAC / 用户/机构/职位/角色/菜单 / 字典 / 配置 / 日志 / 上传 未做
+- [ ] `Services`:认证 ✅;RBAC ✅ / 用户/机构/职位/角色/菜单 ✅ / 字典 ✅ / 配置 ✅ / 日志 / 上传 未做
 - [ ] `AspNetCore`:AddTenonAdmin/MapTenonAdmin + JWT + 权限过滤器 ✅;统一返回 IResultFilter / 数据范围 / 日志过滤器 / OpenAPI 未做
 - [x] `samples/MinimalHost` 三行启动跑通(§3.1 即验收标准)
 - [ ] 测试:认证 / 数据范围 / 可重写三件套(暂以 scratchpad 自检代替,xunit 工程未建)
