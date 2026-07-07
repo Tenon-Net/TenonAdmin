@@ -57,4 +57,13 @@ public class AdminSecurityOptions
 
     /// <summary>验证码策略(默认关,见 <see cref="AdminCaptchaOptions"/>)</summary>
     public AdminCaptchaOptions Captcha { get; set; } = new();
+
+    /// <summary>
+    /// 新建用户 / 重置密码时未显式给定密码的默认初始口令(对应 <c>TenonAdmin:Security:DefaultInitialPassword</c>)。
+    /// <para><b>默认 null → 按账号生成密码学随机强口令</b>:安全默认,杜绝"随公开 NuGet 包分发的固定默认口令"这一
+    /// 已知凭据弱点(CWE-798/1392)。重置密码会把随机口令返回给管理员当场转达;新建用户走随机口令时,
+    /// 管理员需经"重置密码"取得可用口令(或建号时显式传密码)。</para>
+    /// <para>需要可预期的统一初始口令(如内网批量建号)可显式配置本项;生产强烈建议保持 null 或配合首次登录强制改密(v1.x)。</para>
+    /// </summary>
+    public string? DefaultInitialPassword { get; set; }
 }
