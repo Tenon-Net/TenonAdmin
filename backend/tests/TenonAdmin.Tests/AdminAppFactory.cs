@@ -33,6 +33,7 @@ public sealed class AdminAppFactory : WebApplicationFactory<Program>
         builder.UseSetting("TenonAdmin:Seed:AdminPassword", "Test@123456");
         // 固定 >=32 字节 JWT 密钥:避免各测试并发写同一 ./data/dev-jwt.key 文件
         builder.UseSetting("TenonAdmin:Jwt:SecretKey", "tenon-integration-test-signing-key-please-keep-32plus");
+        builder.UseSetting("TenonAdmin:Security:RateLimit:Enabled", "false");   // 默认关限流,隔离既有测试;限流用例经 Settings 显式开
         for (var i = 0; i < DisabledModules.Count; i++)
             builder.UseSetting($"TenonAdmin:Api:DisabledModules:{i}", DisabledModules[i]);
         if (Settings != null)

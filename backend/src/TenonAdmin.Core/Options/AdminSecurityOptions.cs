@@ -44,8 +44,30 @@ public class AdminLoginLockOptions
 }
 
 /// <summary>
+/// 请求限流配置(对应 <c>TenonAdmin:Security:RateLimit</c>,设计 §12/§14)。
+/// <para>按<b>客户端 IP</b> 固定窗口限流:全局一档 + 认证端点(<c>/api/v1/auth/*</c>:登录/刷新/验证码)更严一档,
+/// 防在线暴力破解与请求洪泛。经内置 <c>IStartupFilter</c> 挂载 <c>UseRateLimiter</c>,无需用户手动接中间件。</para>
+/// <para>反向代理后取到的是代理 IP——上正式网关时需先接 <c>ForwardedHeaders</c> 中间件解析 X-Forwarded-For,
+/// 否则同代理后所有客户端共用一个限流分区(ponytail:此处不预埋,见 <c>HttpContextCurrentUser.IpAddress</c> 同注)。</para>
+/// </summary>
+public class AdminRateLimitOptions
+{
+    /// <summary>是否启用限流(默认启用;§14 安全基线)。</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>限流窗口(秒),全局与认证端点共用同一窗口长度。</summary>
+    public int WindowSeconds { get; set; } = 60;
+
+    /// <summary>全局:单 IP 每窗口允许的请求数(宽松,只挡洪泛)。&lt;=0 视为不限全局。</summary>
+    public int PermitPerWindow { get; set; } = 300;
+
+    /// <summary>认证端点(<c>/api/v1/auth/*</c>):单 IP 每窗口允许的请求数(更严,挡在线爆破)。&lt;=0 视为不限。</summary>
+    public int AuthPermitPerWindow { get; set; } = 20;
+}
+
+/// <summary>
 /// 安全配置(对应 <c>TenonAdmin:Security</c> 节,设计 §3.2/§14)。
-/// v1 落 <see cref="Session"/> + <see cref="LoginLock"/>;验证码 / 密码策略随 T8 后续小轮补齐。
+/// v1 落 <see cref="Session"/> + <see cref="LoginLock"/> + <see cref="Captcha"/> + <see cref="RateLimit"/>。
 /// </summary>
 public class AdminSecurityOptions
 {
@@ -57,6 +79,9 @@ public class AdminSecurityOptions
 
     /// <summary>验证码策略(默认关,见 <see cref="AdminCaptchaOptions"/>)</summary>
     public AdminCaptchaOptions Captcha { get; set; } = new();
+
+    /// <summary>请求限流策略(按 IP,认证端点更严,见 <see cref="AdminRateLimitOptions"/>)</summary>
+    public AdminRateLimitOptions RateLimit { get; set; } = new();
 
     /// <summary>
     /// 新建用户 / 重置密码时未显式给定密码的默认初始口令(对应 <c>TenonAdmin:Security:DefaultInitialPassword</c>)。

@@ -57,6 +57,10 @@ public enum ErrorCode
     [MsgKey("error.auth.refreshTokenInvalid")]
     RefreshTokenInvalid = 40007,
 
+    /// <summary>请求过于频繁,已触发限流(RateLimiter,§12/§14);args 可携带 retryAfterSeconds</summary>
+    [MsgKey("error.auth.tooManyRequests")]
+    TooManyRequests = 40008,
+
     // ── 41xxx 权限与数据范围 ─────────────────────────────────────────
 
     /// <summary>无接口访问权限(权限码不在当前用户 PermissionCodeList 内)</summary>
