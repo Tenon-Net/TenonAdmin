@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(T10 NuGet 打包完成——5 包 0.0.1-preview + tag 发布流水线 + 消费者端到端验证;T1–T10 全部完成,指针到 Phase 2 自审)
+> 最后更新:2026-07-07(**Phase 2a 自审完成**——7 维多代理全量审查产出 34 条确认发现,全部处置:12 P1 全修 + 22 P2 收敛;测试 37→62;`docs/phase2-review.md` 为报告。指针到 Phase 2b:RateLimiter + MySQL CI 矩阵)
 
 ---
 
@@ -127,16 +127,26 @@
 验证:`dotnet pack` → 5 个 nupkg 0 警告;**洁净消费者工程从本地 feed 装 `TenonAdmin` → 三行 AddTenonAdmin/MapTenonAdmin 还原+编译通过**。
 > 后置(follow-up):① `PackageIcon`(预览版暂缺,发稳定版前补);② `TenonAdmin.*` ID 前缀保留——首次发布后由 owner 在 nuget.org 手动申请(无法自动化);③ 首次真推需在仓库 Secrets 配 `NUGET_API_KEY`。
 
-——以上 = **T1–T10 全部完成**。下一阶段:**Phase 2 自审**(code-reviewer + security-reviewer 全量过一遍:隐藏 bug / 设计缺陷 / 优化点;补做后置的 RoutePrefix-Version + RateLimiter + MySQL CI 矩阵)。之后进 **M2 Vue 前端**(先 `DESIGN.md` + tokens 定稿,§7.1)。
+——以上 = **T1–T10 全部完成**。
+
+### Phase 2a 自审 ✅ 完成(`9dd4b8c`…`325b471`)
+7 维多代理全量审查(code-reviewer + security-reviewer,每条 3 反驳者对抗验证)产出 **34 条确认发现(0 P0 / 12 P1 / 22 P2)**,报告见 `docs/phase2-review.md`。**全部处置**:12 P1 全修(含并发变红、超管越权护栏、防爆破绕过、软删唯一键 500、JWT 生产 fail-fast、生产建表闸门、CreateOrgId 机构范围落地、CORS 缺失等);22 P2 中 18 修 + 3 文档化 + 1 记录为已知行为。测试 **37→62**,`dotnet build` 0 警告 / `dotnet test` 62/62,偶发变红消除。
+> **RoutePrefix/Version 明确维持 v1.x 后置**(纠正:phase2-plan.md §2.3 曾把它列入 Phase 2,与 T8d-ii『低频低价值、深耦合鉴权路径』的结论冲突,以 T8d-ii 为准)。
+
+### Phase 2b(下一步)—— 补两个后置项
+- **RateLimiter**:登录/接口 IP 级限流。本轮 CORS 已落地 `IStartupFilter` 中间件挂载点(`TenonAdminMiddlewareStartupFilter`),RateLimiter 可复用它挂 `UseRateLimiter`,配置落 `AdminSecurityOptions.RateLimit`;需验证与自动插入的认证中间件次序。
+- **MySQL CI 矩阵**:① `Directory.Packages.props` 加 `MySqlConnector` 并由 SqlSugar 引用;② `AdminAppFactory`(已加 `Settings` 钩子)/`DataScopeTests` 从环境变量读 DbType/连接串;③ `backend-ci.yml` 加 mysql service 容器 + matrix 腿(DbType 字符串已直通 SqlSugar,`EnsureSqliteDirectory` 已按 Sqlite 守卫)。
+
+之后进 **M2 Vue 前端**(先 `DESIGN.md` + tokens 定稿,§7.1)。
 
 ## 5. 遗留小事(不阻塞,顺手处理)
 
-- [ ] `BaseEntity` 暂在 SqlSugar 层(带 Sugar 特性保 Core 零依赖)——待定是否 Core POCO 化(§5.6),代码已标 ponytail
-- [ ] 雪花 `WorkerId` 固定 0,多实例部署需配置项(`TenonAdmin:Id:WorkerId`)
-- [ ] `EnableCodeFirstInProduction` 生产建表开关未接宿主环境判断(§12)
-- [ ] `./data`(SQLite/dev-jwt.key)是进程工作目录相对路径,正式宿主应改 ContentRoot 相对
+- [ ] `BaseEntity` 暂在 SqlSugar 层(带 Sugar 特性保 Core 零依赖)——待定是否 Core POCO 化(§5.6),代码已标 ponytail(Phase 2a 审查结论:不阻塞,POCO 化需拆特性映射层,收益低,维持现状)
+- [x] 雪花 `WorkerId` 固定 0——Phase 2a 已接 `TenonAdmin:Id:WorkerId` 配置(`AdminIdOptions`)
+- [x] `EnableCodeFirstInProduction` 生产建表闸门——Phase 2a 已落(接 `IHostEnvironment`,生产需显式开启)
+- [x] `./data`(SQLite/dev-jwt.key)相对路径——Phase 2a 已改 ContentRoot 相对
 - [x] 事件总线(Channels)——T5 已落:`IEventBus`+`ChannelEventBus`(Core)+ 变更日志订阅者(Services)
-- [ ] `OrgService.UpdateAsync` 拒绝"父指向自己"时复用了 `OrgNotFound`(语义略偏,应为专用码或"非法父级");阶段二审查处理
-- [ ] `UserService` 默认初始密码为固定常量 `Tenon@123456`——T8 接密码策略时改可配置默认 + 首次登录强制改密
+- [x] `OrgService.UpdateAsync` 父指向自己复用 `OrgNotFound`——Phase 2a 已改专用码 `OrgInvalidParent`(42008)
+- [x] `UserService` 默认初始密码固定常量——Phase 2a 已改可配置默认(`Security:DefaultInitialPassword`,默认 null→随机);首次登录强制改密仍留 v1.x
 - [ ] `.slnx` 是 .NET 10 新方案格式(非 .sln),IDE 兼容性关注一下
 - [ ] docker-compose / Dockerfile 未建(M3,§11)

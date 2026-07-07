@@ -30,6 +30,8 @@
 
 ## 2. Phase 2 计划(T1–T10 之后的加固,发布前)
 
+> **进展(2026-07-07)**:2.1 安全审计 + 2.2 代码审计已并为 **Phase 2a 全量自审**并完成(34 条确认发现全处置,报告见 `phase2-review.md`,滚动进度见 `dev-plan.md`)。2.3 的三项中:**RateLimiter + MySQL CI 归 Phase 2b**;**RoutePrefix/Version 更正为维持 v1.x 后置**(与本文原列冲突,以 rebuild-design T8d-ii『低频低价值、深耦合鉴权路径』为准)。
+
 分三块,建议按序;每块仍走 loop:一轮聚焦、独立可验证、一任务一提交。
 
 ### 2.1 安全审计(security-reviewer 全量)
