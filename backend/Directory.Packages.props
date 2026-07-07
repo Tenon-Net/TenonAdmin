@@ -8,6 +8,9 @@
     <!-- 显式抬到 3.0.3:MDS 传递的 2.1.10/2.1.11 命中 SQLite CVE(NU1903 GHSA-2m69-gcr7-jv3q),3.0.x 已修补 -->
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <!-- 显式抬版:AspNetCore.OpenApi 10.0.9 传递的 Microsoft.OpenApi 2.0.0 命中高危 CVE(NU1903 GHSA-v5pm-xwqc-g5wc,漏洞范围 2.0.0-preview.11~2.7.4),2.7.5 起修补 -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />

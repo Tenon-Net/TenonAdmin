@@ -84,6 +84,10 @@ public static class TenonAdminSetup
             })
             .AddApplicationPart(typeof(TenonAdminSetup).Assembly);
 
+        // ── 内置 OpenAPI 文档(§13.6 契约源)+ 标准健康检查(§12)──────────────
+        services.AddOpenApi();          // 产出 /openapi/v1.json;控制器显式 Result<T> 返回 → 契约含统一信封
+        services.AddHealthChecks();     // 标准健康检查端点(替代极简 /health)
+
         return services;
     }
 
@@ -92,8 +96,9 @@ public static class TenonAdminSetup
         // 内置控制器路由(认证、探针;后续模块的控制器自动包含)
         endpoints.MapControllers();
 
-        // ponytail: 极简 /health;正式版换 Microsoft.Extensions.Diagnostics.HealthChecks(设计 §12)
-        endpoints.MapGet("/health", () => Results.Ok(new { status = "ok", app = "TenonAdmin" }));
+        // OpenAPI 文档(默认 /openapi/v1.json,§13.6)+ 标准健康检查(/health,§12)
+        endpoints.MapOpenApi();
+        endpoints.MapHealthChecks("/health");
         return endpoints;
     }
 }

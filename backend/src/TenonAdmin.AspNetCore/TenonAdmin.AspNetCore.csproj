@@ -8,5 +8,9 @@
   <ItemGroup>
     <!-- JWT 认证(设计 §2.2 替代表:替换 MoYu.Extras JWT,用微软官方件) -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <!-- 内置 OpenAPI 文档生成(设计 §12/§13.6:产出 openapi.json 作前端契约源) -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- 直接引用抬到修补版,压过 AspNetCore.OpenApi 传递来的 2.0.0(消 NU1903 高危) -->
+    <PackageReference Include="Microsoft.OpenApi" />
   </ItemGroup>
 </Project>
