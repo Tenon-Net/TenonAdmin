@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(**Phase 2a 自审完成**——7 维多代理全量审查产出 34 条确认发现,全部处置:12 P1 全修 + 22 P2 收敛;测试 37→62;`docs/phase2-review.md` 为报告。指针到 Phase 2b:RateLimiter + MySQL CI 矩阵)
+> 最后更新:2026-07-07(**Phase 2 全部完成**——2a 自审:34 发现全处置(12 P1 全修 + 22 P2 收敛),报告 `docs/phase2-review.md`;2b 补做:RateLimiter + MySQL CI 矩阵。测试 37→65,SQLite 本地全绿、MySQL 腿 CI 验证。下一阶段 M2 Vue 前端)
 
 ---
 
@@ -133,11 +133,12 @@
 7 维多代理全量审查(code-reviewer + security-reviewer,每条 3 反驳者对抗验证)产出 **34 条确认发现(0 P0 / 12 P1 / 22 P2)**,报告见 `docs/phase2-review.md`。**全部处置**:12 P1 全修(含并发变红、超管越权护栏、防爆破绕过、软删唯一键 500、JWT 生产 fail-fast、生产建表闸门、CreateOrgId 机构范围落地、CORS 缺失等);22 P2 中 18 修 + 3 文档化 + 1 记录为已知行为。测试 **37→62**,`dotnet build` 0 警告 / `dotnet test` 62/62,偶发变红消除。
 > **RoutePrefix/Version 明确维持 v1.x 后置**(纠正:phase2-plan.md §2.3 曾把它列入 Phase 2,与 T8d-ii『低频低价值、深耦合鉴权路径』的结论冲突,以 T8d-ii 为准)。
 
-### Phase 2b(下一步)—— 补两个后置项
-- **RateLimiter**:登录/接口 IP 级限流。本轮 CORS 已落地 `IStartupFilter` 中间件挂载点(`TenonAdminMiddlewareStartupFilter`),RateLimiter 可复用它挂 `UseRateLimiter`,配置落 `AdminSecurityOptions.RateLimit`;需验证与自动插入的认证中间件次序。
-- **MySQL CI 矩阵**:① `Directory.Packages.props` 加 `MySqlConnector` 并由 SqlSugar 引用;② `AdminAppFactory`(已加 `Settings` 钩子)/`DataScopeTests` 从环境变量读 DbType/连接串;③ `backend-ci.yml` 加 mysql service 容器 + matrix 腿(DbType 字符串已直通 SqlSugar,`EnsureSqliteDirectory` 已按 Sqlite 守卫)。
+### Phase 2b ✅ 完成(`4c26e07` + `8c80320`)
+- **RateLimiter**(`4c26e07`):`AdminSecurityOptions.RateLimit` 按客户端 IP 固定窗口——全局宽松档(默认 300/60s)+ 认证端点(`/api/v1/auth/*`)更严档(默认 20/60s),默认启用。经 Phase 2a 落地的 `TenonAdminMiddlewareStartupFilter` 挂 `UseRateLimiter`(CORS→RateLimiter→路由,均全局策略不依赖端点元数据,与自动插入的认证中间件次序不冲突);命中出 429 + 统一信封(`TooManyRequests=40008`)+ `Retry-After`。测试 62→65;MinimalHost 实跑验证(正常登录放行、认证端点洪泛 429 信封、`/health` 走宽松档不误伤)。
+- **MySQL CI 矩阵**(`8c80320`):`MySqlConnector` 仅测试项目直接引用(版本对齐 SqlSugarCore 传递的 2.2.5,核心四包零第三方运行时依赖不变);`TestDb` 助手按环境变量选库(默认 SQLite,本地不变;MySQL 按 identity 派生独立库、自动建/删);`AdminAppFactory`/`DataScopeTests` 改走 `TestDb`;`backend-ci.yml` matrix `db=[sqlite,mysql]` + `mysql:8.0` service。本地无 Docker:SQLite 腿本地 65/65,MySQL 腿由 CI 首跑验证。
+> RoutePrefix/Version 仍维持 v1.x 后置(理由见 Phase 2a 注)。
 
-之后进 **M2 Vue 前端**(先 `DESIGN.md` + tokens 定稿,§7.1)。
+——**Phase 2(2a 自审 + 2b 补做)全部完成**。下一阶段:**M2 Vue 前端**(先 `DESIGN.md` + tokens 定稿,§7.1)。
 
 ## 5. 遗留小事(不阻塞,顺手处理)
 
