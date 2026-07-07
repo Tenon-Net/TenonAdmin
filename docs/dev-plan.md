@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(T8a 统一返回兜底过滤器 + 个人中心完成;T8 拆 4 小轮进行中)
+> 最后更新:2026-07-07(T8b 登录失败锁定完成;T8 拆 4 小轮进行中,T8c 待做)
 
 ---
 
@@ -52,6 +52,7 @@
 | `7c885ec` | T6 日志:SysOpLog/SysLoginLog + [OperationLog] 特性 + 全局 OperationLogFilter(入参脱敏/耗时/结果码/操作人/IP/UA,opt-in)+ SensitiveDataMasker(按字段名递归打码)+ AuthService 加 OnLoginFailedAsync 钩子记成功/失败登录日志 + LogService(写入尽力而为、清空硬删)+ IResultEnvelope 免反射读码 + ICurrentUser 补 IP/UA + SysLogController + 日志菜单种子。masker 自检 10/10 + MinimalHost 冒烟 10/10(操作日志脱敏且明文不泄漏、登录成功/失败均留痕、401 回归) |
 | `c7216d1` | T7 本地上传:sys_file + IFileStorage 扩展点(LocalFileStorage,路径穿越围栏)+ FileService 三道关(非空/后缀白名单不信 CT/大小上限 + 文件名重写 {日期}/{GUIDv7})+ AdminUploadOptions + 44xxx 错误码 + SysFileController(上传/下载/列表/删)+ 上传挂 [OperationLog] + 文件菜单种子;附带修 .gitignore(`**/wwwroot/upload/`)。storage 自检 10/10 + MinimalHost 冒烟 8/8(png 上传→下载往返无损、exe 拒 44003、列表含原名、操作日志含『上传文件』、401 回归) |
 | `0635a1f` | T8a 统一返回兜底过滤器 + 个人中心:ResultEnvelopeFilter(裸 DTO 自动包信封,内置仍显式 Result<T> 保 OpenAPI 契约,TryWrap 纯函数)+ PersonalController([Authorize] 看/改资料/验旧改密,限当前用户)。envelope 自检 8/8 + MinimalHost 冒烟 14/14 |
+| `a54c8d7` | T8b 登录失败锁定:ILoginLockService/LoginLockService(账号失败计数进缓存,达阈值锁定窗口内拒登,TTL 滑动过期)+ 接进 AuthService(CheckLoginLockAsync 最前置、成功重置、仅密码错计入)+ AdminSecurityOptions.LoginLock + CacheKeys.LoginFail。自检 6/6 + MinimalHost 冒烟 7/7。RateLimiter 暂缓(见 T8b 注) |
 
 ## 4. 任务队列(按依赖序;每个任务 = 一次会话可完成的纵切)
 
@@ -95,7 +96,8 @@
 一个队列条目实为 8 个横切特性;按 loop「每轮聚焦一件、独立可验证」拆成 4 小轮依次做:
 - **T8a ✅ 完成(`0635a1f`)**:统一返回兜底过滤器(`ResultEnvelopeFilter`,裸 DTO 自动包信封,内置仍显式 `Result<T>` 保 OpenAPI 契约)+ 个人中心(改密码/改资料)。
   > 设计修正:原设计「全面裸返回替代手动 Result.Ok」与 OpenAPI 子项打架(契约会丢信封结构),经确认改为「兜底过滤器 + 内置显式」两全。
-- **T8b(下一轮)**:登录失败锁定 `LoginLock`(接 `AuthService.OnLoginFailedAsync`/策略步)+ `RateLimiter` 限流(登录等敏感端点)。安全向,自己把关。
+- **T8b ✅ 完成(`a54c8d7`)**:登录失败锁定 `LoginLock`(账号级,接 `AuthService` 前置步 + 成功重置 + 仅密码错计入)。
+  > RateLimiter 暂缓:ASP.NET `RateLimiter` 需 `app.UseRateLimiter()` 中间件,而三行零配置宿主的 `MapTenonAdmin` 只拿到 `IEndpointRouteBuilder`、无处插中间件;强塞要么破坏零配置、要么自造节流(违 ponytail)。账号级 LoginLock 已挡住爆破主向。IP 级限流留到:①宿主提供中间件挂载点(如 `IStartupFilter` 注入,待验证不与 auth 中间件次序冲突),或 ②文档化为用户显式 `app.UseRateLimiter()` 的 opt-in。归入后续处理,不阻塞 M1。
 - **T8c**:SVG 验证码 `ICaptchaProvider` 接进 `AuthService.ValidateCaptchaAsync`(默认 SVG,零绘图依赖)+ 登录入参加验证码票据。
 - **T8d**:内置 OpenAPI(`AddOpenApi` 产出 openapi.json)+ 标准 HealthChecks 替换极简 /health + `Api:RoutePrefix`/`Version`/`DisabledModules` 配置化。
 
