@@ -12,7 +12,7 @@ namespace TenonAdmin.AspNetCore;
 [ApiController]
 [Route("api/v1/personal")]
 [ActiveSession]
-public class PersonalController(IPersonalService personal, ICurrentUser currentUser) : ControllerBase
+public class PersonalController(IPersonalService personal, IMenuService menu, ICurrentUser currentUser) : ControllerBase
 {
     /// <summary>当前用户 Id;[Authorize] 已保证认证,理论上不为空,兜底当令牌异常处理。</summary>
     private long CurrentUserId => currentUser.UserId ?? throw new AdminException(ErrorCode.TokenInvalid);
@@ -37,6 +37,25 @@ public class PersonalController(IPersonalService personal, ICurrentUser currentU
     public async Task<Result<bool>> ChangePassword(ChangePasswordInput input)
     {
         await personal.ChangePasswordAsync(CurrentUserId, input);
+        return Result<bool>.Ok(true);
+    }
+
+    /// <summary>取自己可访问的应用/模块列表 + 默认应用(多应用门户;登录后拉取以决定进哪个应用)</summary>
+    [HttpGet("modules")]
+    public async Task<Result<MyModulesOutput>> GetModules() =>
+        Result<MyModulesOutput>.Ok(await personal.GetMyModulesAsync(CurrentUserId));
+
+    /// <summary>取自己在指定应用下的侧边栏菜单树(切换应用时重新拉取以重建动态路由)</summary>
+    [HttpGet("menu")]
+    public async Task<Result<IReadOnlyList<MenuNode>>> GetMenu([FromQuery] long moduleId) =>
+        Result<IReadOnlyList<MenuNode>>.Ok(await menu.GetMyMenuTreeAsync(CurrentUserId, currentUser.IsSuperAdmin, moduleId));
+
+    /// <summary>设自己的默认应用(须为可访问的应用,否则 42014/ModuleAccessDenied)</summary>
+    [HttpPut("default-module")]
+    [OperationLog("设置默认应用")]
+    public async Task<Result<bool>> SetDefaultModule(SetDefaultModuleInput input)
+    {
+        await personal.SetDefaultModuleAsync(CurrentUserId, input);
         return Result<bool>.Ok(true);
     }
 }

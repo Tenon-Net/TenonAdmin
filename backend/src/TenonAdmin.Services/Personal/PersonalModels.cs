@@ -26,3 +26,10 @@ public record ChangePasswordInput
     /// <summary>新密码</summary>
     public string NewPassword { get; init; } = "";
 }
+
+/// <summary>设默认应用入参(多应用门户)。</summary>
+public record SetDefaultModuleInput
+{
+    /// <summary>要设为默认的模块 Id(须为当前用户可访问的模块)。</summary>
+    public long ModuleId { get; init; }
+}

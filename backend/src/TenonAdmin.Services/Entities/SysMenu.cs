@@ -35,4 +35,28 @@ public class SysMenu : BaseEntity
 
     [SugarColumn(ColumnDescription = "是否启用(停用后其权限码不再授出)")]
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// 所属模块 Id(多应用门户)。<b>仅顶级目录(<c>ParentId==0</c>)设置</b>;子节点为 null,
+    /// 归属由内存树上溯到根目录解析(见 <c>MenuService</c>)。为 null 的顶级目录 = 未分配到任何应用。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "所属模块 Id(仅顶级目录设置)")]
+    public long? ModuleId { get; set; }
+
+    // ── 前端展示字段(M2 动态路由用;后端授权不依赖这些)──────────────────────
+    /// <summary>前端路由路径(页面节点用;目录/按钮可空)</summary>
+    [SugarColumn(Length = 256, IsNullable = true, ColumnDescription = "前端路由路径")]
+    public string? Path { get; set; }
+
+    /// <summary>前端组件路径(相对 views/**;页面节点用)</summary>
+    [SugarColumn(Length = 256, IsNullable = true, ColumnDescription = "前端组件路径")]
+    public string? Component { get; set; }
+
+    /// <summary>菜单图标</summary>
+    [SugarColumn(Length = 64, IsNullable = true, ColumnDescription = "图标")]
+    public string? Icon { get; set; }
+
+    /// <summary>是否在侧边栏可见(隐藏时路由仍注册,只是不显示在菜单)</summary>
+    [SugarColumn(ColumnDescription = "是否在侧边栏可见")]
+    public bool Visible { get; set; } = true;
 }

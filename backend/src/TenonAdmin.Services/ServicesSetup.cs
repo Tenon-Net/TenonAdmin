@@ -49,6 +49,10 @@ public static class ServicesSetup
         services.TryAddScoped<IOrgService, OrgService>();
         services.TryAddScoped<IPositionService, PositionService>();
 
+        // 多应用门户(§4):模块 CRUD + 按模块的"我的模块/菜单树"派生(访问权反推自菜单授权)
+        services.TryAddScoped<IModuleService, ModuleService>();
+        services.TryAddScoped<IMenuService, MenuService>();
+
         // 字典与配置模块(§4,T5):读穿透缓存 + 变更即失效并广播事件
         services.TryAddScoped<IDictService, DictService>();
         services.TryAddScoped<IConfigService, ConfigService>();
@@ -66,6 +70,7 @@ public static class ServicesSetup
         // 种子:多实现集合,TryAddEnumerable 按实现类型防重
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SuperAdminSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultRoleSeed>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultModuleSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultMenuSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DictTypeSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DictItemSeed>());

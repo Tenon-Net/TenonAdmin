@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(**Phase 2 全部完成 + CI 首次真绿**——2a 自审:34 发现全处置(12 P1 全修 + 22 P2 收敛),报告 `docs/phase2-review.md`;2b 补做:RateLimiter + MySQL CI 矩阵。测试 37→65;**GitHub Actions 双腿(SQLite+MySQL)均 success**(`455f885`)——顺带修掉自 T9b 起潜伏的 Linux 路径穿越测试 bug,此前"CI 通过"实为 Windows 本地跑。下一阶段 M2 Vue 前端)
+> 最后更新:2026-07-07(**Phase 2 全部完成 + CI 首次真绿**——2a 自审:34 发现全处置(12 P1 全修 + 22 P2 收敛),报告 `docs/phase2-review.md`;2b 补做:RateLimiter + MySQL CI 矩阵。测试 37→65;**GitHub Actions 双腿(SQLite+MySQL)均 success**(`455f885`)——顺带修掉自 T9b 起潜伏的 Linux 路径穿越测试 bug,此前"CI 通过"实为 Windows 本地跑。下一阶段 M2 Vue 前端。**2026-07-07 追加 M1.5 多应用门户后端增量**:sys_module + 菜单 ModuleId + 门户接口 + 种子,测试 65→73 全绿,详见 §4 M1.5)
 
 ---
 
@@ -140,6 +140,16 @@
 > RoutePrefix/Version 仍维持 v1.x 后置(理由见 Phase 2a 注)。
 
 ——**Phase 2(2a 自审 + 2b 补做)全部完成,CI 双腿绿**。下一阶段:**M2 Vue 前端**(先 `DESIGN.md` + tokens 定稿,§7.1)。
+
+### M1.5 多应用门户 · 后端增量 ✅ 完成(待提交)
+需求补充:一个系统下多个各自独立的子系统,登录选/切应用、每应用独立菜单树、每用户默认应用(设计 §0 决策表 / §4 / §6 / §16 已同步)。
+- **数据模型**(纯增量,CodeFirst 只增不改):新增 `sys_module`(`SysModule`,内置 `system` 不可删);`sys_menu` 增 `ModuleId`(仅顶级目录)+ 前端展示列 `Path/Component/Icon/Visible`;`sys_user` 增 `DefaultModuleId`。拒绝 SimpleAdmin 的 `MenuType.Module` 判别式(TenonAdmin 已刻意去判别式)。
+- **模块访问权按菜单授权实时反推**:不建 `sys_role_module/sys_user_module` 派生表、不加缓存键(门户/登录时算,非热路径);复用 `RbacPermissionProvider` 同款授权链 + 短路;超管见全部启用模块。`MenuService.GetMyModulesAsync/GetMyMenuTreeAsync`(整表进内存上溯根目录取 ModuleId + 授权叶子祖先脚手架 + 按钮不入导航)。
+- **权限码保持模块无关**(回归锁死的不变量):`RbacPermissionProvider` 未改,切应用只改侧边栏/路由,不改用户持有的 API 权限码。
+- **端点**:`ModuleController`(`api/v1/sys/module` CRUD,`[RolePermission]`,默认不授默认角色);`PersonalController` 增 `GET /personal/modules`、`GET /personal/menu?moduleId=`、`PUT /personal/default-module`(设默认前校验访问权,否则 `ModuleAccessDenied` 42014)。错误码 42011–42014。
+- **种子**:`DefaultModuleSeed`(内置 `system` 模块)+ `DefaultMenuSeed` 四顶级目录挂 `ModuleId=1`。
+- **验证**:`dotnet build` 0 警告 0 错误;`dotnet test` **65→73 全绿**(新增 `ModuleCrudTests` 3 + `ModulePortalTests` 5:访问权反推/无授权空/超管见全部/菜单树按模块/默认应用设与拒 + 不变量)。集成测试经 `AdminAppFactory` 走真实 HTTP+CodeFirst+种子,等价冒烟。
+> M2 前端补:app-switcher(登录选/切应用、拉 `/personal/menu` 重建动态路由)、模块管理页、菜单表单「所属应用」选择器(设计 §7.3/§7.4)。菜单授权 CRUD(`MenuController` create/update 带 `ModuleId`)属 M2 新建。旧 dev 库已有目录行不会被种子回填 `ModuleId`(种子只插不更)——dev 阶段重置库或手动 `UPDATE sys_menu SET ModuleId=1 WHERE Id IN (1,10,20,30)`。
 
 ## 5. 遗留小事(不阻塞,顺手处理)
 

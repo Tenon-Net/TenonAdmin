@@ -39,4 +39,8 @@ public class SysUser : BaseEntity
     /// </summary>
     [SugarColumn(ColumnDescription = "是否超级管理员")]
     public bool IsSuperAdmin { get; set; }
+
+    /// <summary>默认应用/模块 Id(多应用门户):登录后默认进入的应用;可空(未设=让用户选)。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "默认模块 Id")]
+    public long? DefaultModuleId { get; set; }
 }

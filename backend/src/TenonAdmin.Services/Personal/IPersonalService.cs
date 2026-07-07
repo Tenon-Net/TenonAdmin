@@ -16,4 +16,10 @@ public interface IPersonalService
 
     /// <summary>改当前用户密码:先验旧密码(错则抛 <see cref="ErrorCode.PasswordWrong"/>),再设新密码。</summary>
     Task ChangePasswordAsync(long userId, ChangePasswordInput input);
+
+    /// <summary>取当前用户可访问的模块列表 + 其默认模块(多应用门户;登录后拉取以决定进哪个应用)。</summary>
+    Task<MyModulesOutput> GetMyModulesAsync(long userId);
+
+    /// <summary>设当前用户默认应用;须校验用户确有该模块访问权,否则抛 <see cref="ErrorCode.ModuleAccessDenied"/>。</summary>
+    Task SetDefaultModuleAsync(long userId, SetDefaultModuleInput input);
 }

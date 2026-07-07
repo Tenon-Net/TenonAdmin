@@ -36,6 +36,7 @@
 | 对象映射 | Riok.Mapperly(编译期源生成器,运行时零依赖);不用 Mapster/AutoMapper |
 | 多语言 | 前后端 i18n,前端持有文案单源、后端只给错误码(见 §13) |
 | 多租户 | **不做**(不是 v1 推迟,是整体不做);实体不带租户维度,保持模型简单 |
+| 多应用门户 | **做**:独立 `sys_module` 表 + 菜单 `ModuleId`(仅顶级目录);登录选/切应用、每应用独立菜单树、一次加载一个、每用户默认应用。访问权由菜单授权**反推**(非独立权限轴);权限码保持**模块无关** |
 | 旧版迁移 | **不支持**从旧 SimpleAdmin 迁移;这是面向新系统的全新产品,不背历史数据包袱 |
 | 实时通知 | 不用 SignalR;在线用户走缓存令牌,通知用 HTTP 轮询(v1)或 MQTT 可选包(见 §12) |
 | 登录会话 | 可配置,默认多端并存(沿用旧版多 token);可切单端(新登录踢旧)或限并发数 |
@@ -287,6 +288,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 |---|---|
 | 认证 | 账密登录 + 图形验证码、JWT + Refresh Token、登录锁定、登出、在线用户列表/强退 |
 | RBAC | 角色、菜单(目录/页面/按钮三级)、按钮级权限码、角色-菜单授权 |
+| 模块/应用 | **多应用门户**:模块管理(`sys_module`);菜单按模块分区(顶级目录挂模块);登录后选/切应用,每应用独立菜单树、一次加载一个;每用户默认应用。模块访问权由菜单授权反推,权限码保持模块无关 |
 | 数据权限 | **多机构数据范围**(全部/本机构/本机构及以下/仅本人/自定义机构),接口级可配 —— 旧版招牌能力,完整保留 |
 | 组织 | 用户、机构(树)、职位;用户多角色、主属机构 |
 | 字典 | 字典类型 + 字典项,前端下拉数据源 |
@@ -487,6 +489,7 @@ public class DeviceSeedData : ISeedData
     - 生效范围经 `IDataScopeContext` 在**授权管道**(动作执行前)按当前用户解析并写入;HTTP 侧用 `HttpContext.Items` 承载(避免授权过滤器内 AsyncLocal 不回流的陷阱),非 HTTP 用 AsyncLocal。
     - 与旧版差异(**设计修正**):旧版是**按接口**(role×api)配置数据范围;v1 简化为**按角色**全局过滤(实现更简、覆盖更全、不易漏挂),更细的"同角色不同接口不同范围"granularity 留 v1.x 扩展。`SqlSugar 全局过滤器只认接口/精确类型、不认基类`,故用标记接口 `IOrgScoped` 匹配(与软删过滤器走 `ISoftDelete` 同理)。
     - **范围边界**:`sys_user` 本身继承 `BaseEntity`(非 `DataEntity`),用户列表**不**走通用机构过滤(用户的机构维度是其 `OrgId` 而非 `CreateOrgId`,属特例,如需按机构筛用户在 `UserService` 显式处理);无角色 / 有角色但未配范围 → 默认"仅本人"(不放大可见面)。会话/强退/在线的模型见 §15。
+- **多应用门户(模块分区)**:菜单按 `sys_module` 分区——`ModuleId` 仅顶级目录设置,子节点归属由内存树上溯到根目录解析。"我的模块"由菜单授权**实时反推**(用户被授权某模块下任一菜单即拥有该模块,超管见全部;门户/登录时算,非每请求热路径,不缓存),登录后按选定模块拉菜单树并注册动态路由。**权限码保持模块无关**——切应用只改侧边栏与路由,不改用户持有的 API 权限码(`RbacPermissionProvider` 不按模块过滤;这是回归锁死的不变量)。默认应用为每用户偏好(`sys_user.DefaultModuleId`)。内置 `system` 模块不可删。
 - **禁硬编码字符串**(全局约定):缓存 key / 权限码 / 类别码 一律走常量(延续你已有的 `CacheConst` / `SystemConst` / `CateGoryConst`);面向用户的文案走 i18n 资源 + 错误码枚举;魔法数走枚举。代码评审把"裸字面量字符串"当味道。
 - **操作日志**:`[OperationLog]` 特性(标题可取常量/资源键)+ 过滤器自动记录(入参/耗时/结果码),敏感字段脱敏配置。
 - **缓存策略**:用户权限/菜单/字典/配置进缓存,变更即失效(事件总线广播),保持旧版"登录后接口 10-30ms"的体验目标。
@@ -558,7 +561,7 @@ DESIGN.md
 ### 7.3 页面范围(对齐后端 v1.0)
 
 登录、工作台(简)、用户管理(机构树+表)、机构、职位、角色(含菜单授权/数据范围授权)、
-菜单管理、字典、系统配置、操作日志、登录日志、在线用户、个人中心。
+菜单管理(顶级目录可选所属应用)、模块/应用管理、字典、系统配置、操作日志、登录日志、在线用户、个人中心。
 
 ### 7.4 前端架构(以 Vue 版为准,React 版对齐)
 
@@ -583,6 +586,7 @@ web/src/
 **关键机制**:
 - **布局系统**:**默认竖向侧边栏布局**(企业最常用),保留多布局切换能力(Classic/Columns/Transverse 作为可选)。左侧菜单 + 顶栏(面包屑/搜索/主题/语言/用户)+ 内容区(可选多页签 Tabs)。布局状态存 `stores/app`,支持折叠 240↔64、明暗主题、主题色。
 - **菜单与动态路由**:登录后拉取用户菜单树 → 生成动态路由并注册 → 渲染侧边菜单;刷新页面走"路由守卫重建"避免白屏(沿用旧版模式)。菜单的 `component` 字段匹配 `views/**/*.vue`。
+- **多应用切换(app-switcher)**:登录后拉 `GET /api/v1/personal/modules`——单应用直接进,有默认且可访问进默认,否则弹「选择应用」;空列表提示未分配应用。顶栏「切换应用」重选。切换即以选定 `moduleId` 拉 `GET /api/v1/personal/menu?moduleId=` 重建动态路由(整棵菜单树按应用替换)。默认应用经 `PUT /api/v1/personal/default-module` 持久化(每用户)。逻辑沉 `composables`(useModule/useAuthMenu),视图不含 Naive 专有类型。
 - **权限**:路由级(动态路由本身即权限过滤)+ 按钮级(`v-auth="'/biz/device/add'"`,权限码就是后端路由,呼应 §6 不硬编码)。权限码列表进 `stores/auth`。
 - **请求层**:axios 封装,统一注入令牌、统一按后端 `Result` + 错误码处理(§12 i18n 把错误码映射成本地化文案),401 自动刷新/登出。
 - **页面范式**:列表页 = `SearchForm` + `ProTable`(封装分页/排序/工具栏/列设置)+ 表单弹窗/抽屉;树+表页 = `TreeFilter` + `ProTable`。这些封装都在 `components/`,逻辑在 `composables/`,页面只做装配。
@@ -819,11 +823,13 @@ v1.0 必须成型的安全项(多数为 .NET 内置能力):
 
 因为"不支持旧版迁移",**新表结构即长期契约,需尽早稳定**。v1.0 内置表(前缀 `sys_`):
 
-`sys_user`、`sys_role`、`sys_menu`、`sys_org`、`sys_position`、
+`sys_user`、`sys_role`、`sys_menu`、`sys_org`、`sys_position`、`sys_module`、
 `sys_user_role`、`sys_role_menu`、`sys_role_data_scope`、
 `sys_dict_type`、`sys_dict_item`、`sys_config`、
 `sys_login_log`、`sys_operation_log`、`sys_file`、
 `sys_session`、`sys_refresh_token`、`sys_schema_version`。
+
+> 多应用门户(§4/§6):`sys_module` 为模块/应用表;`sys_menu` 增 `ModuleId`(仅顶级目录挂模块)+ 前端展示列 `Path`/`Component`/`Icon`/`Visible`;`sys_user` 增 `DefaultModuleId`(每用户默认应用)。模块访问权由菜单授权反推,不建 `sys_role_module`/`sys_user_module` 派生表。
 
 > 均继承 `BaseEntity`/`DataEntity`(§5.6);字段级设计在 M1 前定稿,定稿后视为对外契约,破坏性变更只在主版本。
 

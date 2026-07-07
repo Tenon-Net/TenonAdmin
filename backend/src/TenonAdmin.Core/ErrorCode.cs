@@ -109,6 +109,22 @@ public enum ErrorCode
     [MsgKey("error.position.codeExists")]
     PositionCodeExists = 42010,
 
+    /// <summary>目标模块/应用不存在</summary>
+    [MsgKey("error.module.notFound")]
+    ModuleNotFound = 42011,
+
+    /// <summary>模块编码已存在(编码唯一)</summary>
+    [MsgKey("error.module.codeExists")]
+    ModuleCodeExists = 42012,
+
+    /// <summary>内置模块受保护:不可删除(如 system 模块)</summary>
+    [MsgKey("error.module.protected")]
+    ModuleProtected = 42013,
+
+    /// <summary>无该模块访问权(未被授权该模块下任何菜单;设默认应用时校验)</summary>
+    [MsgKey("error.module.accessDenied")]
+    ModuleAccessDenied = 42014,
+
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 
     /// <summary>字典类型不存在</summary>

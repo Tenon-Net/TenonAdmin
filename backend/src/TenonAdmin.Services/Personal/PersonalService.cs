@@ -9,7 +9,8 @@ namespace TenonAdmin.Services;
 /// </summary>
 public class PersonalService(
     IRepository<SysUser> users,
-    IPasswordHasher hasher) : IPersonalService
+    IPasswordHasher hasher,
+    IMenuService menu) : IPersonalService
 {
     /// <inheritdoc />
     public virtual async Task<UserProfile> GetProfileAsync(long userId)
@@ -47,6 +48,29 @@ public class PersonalService(
 
         // ponytail: 新密码强度校验待 T8 密码策略子轮接入(PasswordPolicy:MinLength 等);此处只落新哈希。
         user.Password = hasher.Hash(input.NewPassword);
+        await users.UpdateAsync(user);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<MyModulesOutput> GetMyModulesAsync(long userId)
+    {
+        var user = await users.GetByIdAsync(userId);
+        AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
+        var modules = await menu.GetMyModulesAsync(userId, user!.IsSuperAdmin);
+        return new MyModulesOutput { Modules = modules, DefaultModuleId = user.DefaultModuleId };
+    }
+
+    /// <inheritdoc />
+    public virtual async Task SetDefaultModuleAsync(long userId, SetDefaultModuleInput input)
+    {
+        var user = await users.GetByIdAsync(userId);
+        AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
+
+        // 只能把默认设为自己有权访问的模块(GetMyModulesAsync 已含"存在+启用+有权"三重过滤;超管得全部)
+        var modules = await menu.GetMyModulesAsync(userId, user!.IsSuperAdmin);
+        AdminException.ThrowIf(modules.All(m => m.Id != input.ModuleId), ErrorCode.ModuleAccessDenied);
+
+        user.DefaultModuleId = input.ModuleId;
         await users.UpdateAsync(user);
     }
 }

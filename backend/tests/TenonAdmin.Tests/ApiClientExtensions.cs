@@ -9,6 +9,9 @@ internal static class ApiClientExtensions
     public static Task<HttpResponseMessage> PostJson(this HttpClient client, string url, object body) =>
         client.PostAsync(url, new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"));
 
+    public static Task<HttpResponseMessage> PutJson(this HttpClient client, string url, object body) =>
+        client.PutAsync(url, new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"));
+
     /// <summary>读响应体为 JSON 根元素(统一信封 { code, msgKey, args, message, data })。</summary>
     public static async Task<JsonElement> ReadEnvelope(this HttpResponseMessage response)
     {
