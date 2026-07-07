@@ -11,5 +11,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TenonAdmin.Tests/TenonAdmin.Tests.csproj" />
+    <Project Path="tests/TenonAdmin.TestHost/TenonAdmin.TestHost.csproj" />
   </Folder>
 </Solution>

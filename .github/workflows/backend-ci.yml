@@ -1,0 +1,36 @@
+name: backend-ci
+
+# 后端 CI(设计 §8):push / PR 触发 build + test。仅在改到 backend 时跑。
+on:
+  push:
+    branches: [main, dev]
+    paths: ['backend/**', '.github/workflows/backend-ci.yml']
+  pull_request:
+    paths: ['backend/**', '.github/workflows/backend-ci.yml']
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # NuGet.config 已 clear 到 nuget.org(消除私有源依赖),外部贡献者可直接还原
+      - name: Restore
+        run: dotnet restore backend/TenonAdmin.slnx
+
+      - name: Build
+        run: dotnet build backend/TenonAdmin.slnx -c Release --no-restore
+
+      # 单元 + 集成测试(WebApplicationFactory,默认 SQLite)。含 §8 可替换性六件套 + 数据范围。
+      - name: Test
+        run: dotnet test backend/TenonAdmin.slnx -c Release --no-build
+
+# ── 待补(follow-up)────────────────────────────────────────────────
+# MySQL 矩阵(设计 §8「至少 SQLite + MySQL」):当前集成测试的连接串在 AdminAppFactory 里固定为 SQLite,
+# 要跑 MySQL 需:①加 MySqlConnector 依赖;②AdminAppFactory/DataScopeTests 从环境变量读 DbType/连接串;
+# ③本 job 加 services: mysql 容器 + 一条 matrix 腿。属独立小改动,不阻塞首个 CI 落地。

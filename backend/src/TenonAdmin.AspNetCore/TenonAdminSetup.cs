@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -45,7 +46,10 @@ public static class TenonAdminSetup
         services.TryAddSingleton<IDataScopeContext, HttpContextDataScopeContext>();
 
         // ── 数据层 + 领域服务(实体程序集在此登记,§5.7 注册模型)──────────────
-        services.AddTenonAdminSqlSugar(options.Database, [typeof(ServicesSetup).Assembly]);
+        //   实体扫描 = 内置 Services + 用户显式登记的业务程序集,让用户实体也 CodeFirst 建表
+        var entityAssemblies = new List<Assembly> { typeof(ServicesSetup).Assembly };
+        entityAssemblies.AddRange(options.ApplicationAssemblies);
+        services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()]);
         services.AddTenonAdminServices();
 
         // ── JWT:签名密钥惰性解析一次(含开发密钥持久化 + 警告),签发与验证共用同一实例 ──
@@ -77,14 +81,17 @@ public static class TenonAdminSetup
         // ── MVC 控制器:本程序集作为 ApplicationPart 挂入宿主 ──
         //   全局过滤器:业务异常 → 统一信封;操作日志(只记 [OperationLog] 动作,§4/T6);
         //   裸返回兜底包信封(用户控制器 return dto 即得 Result<T>,§12/T8)
-        services.AddControllers(o =>
+        var mvc = services.AddControllers(o =>
             {
                 o.Filters.Add<AdminExceptionFilter>();
                 o.Filters.Add<OperationLogFilter>();
                 o.Filters.Add<ResultEnvelopeFilter>();
                 o.Conventions.Add(new DisabledModuleConvention(options.Api));   // 按配置摘除禁用模块的控制器(§5.4)
             })
-            .AddApplicationPart(typeof(TenonAdminSetup).Assembly);
+            .AddApplicationPart(typeof(TenonAdminSetup).Assembly);   // 内置控制器
+        // 用户业务程序集里的控制器也挂进来,与内置控制器同管道(§5.7)
+        foreach (var assembly in options.ApplicationAssemblies.Distinct())
+            mvc.AddApplicationPart(assembly);
 
         // ── 内置 OpenAPI 文档(§13.6 契约源)+ 标准健康检查(§12)──────────────
         services.AddOpenApi();          // 产出 /openapi/v1.json;控制器显式 Result<T> 返回 → 契约含统一信封
