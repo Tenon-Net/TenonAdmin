@@ -93,6 +93,18 @@ public enum ErrorCode
     [MsgKey("error.user.superAdminProtected")]
     SuperAdminProtected = 42007,
 
+    /// <summary>非法父机构:父节点不能是自身(也不应是自身子孙)</summary>
+    [MsgKey("error.org.invalidParent")]
+    OrgInvalidParent = 42008,
+
+    /// <summary>机构编码已存在(编码唯一)</summary>
+    [MsgKey("error.org.codeExists")]
+    OrgCodeExists = 42009,
+
+    /// <summary>职位编码已存在(编码唯一)</summary>
+    [MsgKey("error.position.codeExists")]
+    PositionCodeExists = 42010,
+
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 
     /// <summary>字典类型不存在</summary>

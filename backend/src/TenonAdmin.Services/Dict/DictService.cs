@@ -35,7 +35,10 @@ public class DictService(
     /// <inheritdoc />
     public virtual async Task<long> AddTypeAsync(DictTypeInput input)
     {
-        AdminException.ThrowIf(await types.AnyAsync(t => t.Code == input.Code), ErrorCode.DictTypeCodeExists);
+        // 查重纳入软删行:唯一索引覆盖已软删行,漏检会撞库唯一约束抛原生 500(P1-10)
+        AdminException.ThrowIf(
+            await types.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(t => t.Code == input.Code),
+            ErrorCode.DictTypeCodeExists);
 
         var entity = new SysDictType
         {

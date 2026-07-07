@@ -51,7 +51,10 @@ public class ConfigService(
     /// <inheritdoc />
     public virtual async Task<long> AddAsync(ConfigInput input)
     {
-        AdminException.ThrowIf(await configs.AnyAsync(c => c.ConfigKey == input.ConfigKey), ErrorCode.ConfigKeyExists);
+        // 查重纳入软删行:唯一索引覆盖已软删行,漏检会撞库唯一约束抛原生 500(P1-10)。已软删的键视为永久保留。
+        AdminException.ThrowIf(
+            await configs.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(c => c.ConfigKey == input.ConfigKey),
+            ErrorCode.ConfigKeyExists);
 
         var entity = new SysConfig
         {

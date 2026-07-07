@@ -26,6 +26,10 @@ public class OrgService(IRepository<SysOrg> orgs) : IOrgService
     {
         if (input.ParentId != 0)
             AdminException.ThrowIf(!await orgs.AnyAsync(o => o.Id == input.ParentId), ErrorCode.OrgNotFound);
+        // 编码唯一(库有 idx_sys_org_code 唯一索引):无前置查重会撞约束抛原生 500;查重纳入软删行(P1-10)
+        AdminException.ThrowIf(
+            await orgs.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(o => o.Code == input.Code),
+            ErrorCode.OrgCodeExists);
 
         var entity = new SysOrg
         {
@@ -42,9 +46,16 @@ public class OrgService(IRepository<SysOrg> orgs) : IOrgService
     /// <inheritdoc />
     public virtual async Task UpdateAsync(long id, OrgInput input)
     {
-        AdminException.ThrowIf(input.ParentId == id, ErrorCode.OrgNotFound);
+        // 父指向自己是非法父级,用专用码 OrgInvalidParent(42008),不再复用语义不符的 OrgNotFound(P2-12)
+        AdminException.ThrowIf(input.ParentId == id, ErrorCode.OrgInvalidParent);
 
         var entity = await GetAsync(id);
+        // 改编码时排除自身查重(纳入软删行)
+        AdminException.ThrowIf(
+            input.Code != entity.Code &&
+            await orgs.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(o => o.Code == input.Code && o.Id != id),
+            ErrorCode.OrgCodeExists);
+
         entity.ParentId = input.ParentId;
         entity.Name = input.Name;
         entity.Code = input.Code;

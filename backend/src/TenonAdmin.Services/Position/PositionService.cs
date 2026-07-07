@@ -27,6 +27,11 @@ public class PositionService(IRepository<SysPosition> positions) : IPositionServ
     /// <inheritdoc />
     public virtual async Task<long> AddAsync(PositionInput input)
     {
+        // 编码唯一(库有 idx_sys_position_code 唯一索引):无前置查重会撞约束抛原生 500;查重纳入软删行(P1-10)
+        AdminException.ThrowIf(
+            await positions.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(p => p.Code == input.Code),
+            ErrorCode.PositionCodeExists);
+
         var position = new SysPosition
         {
             Name = input.Name,
@@ -42,6 +47,11 @@ public class PositionService(IRepository<SysPosition> positions) : IPositionServ
     public virtual async Task UpdateAsync(long id, PositionInput input)
     {
         var position = await GetAsync(id);
+        AdminException.ThrowIf(
+            input.Code != position.Code &&
+            await positions.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(p => p.Code == input.Code && p.Id != id),
+            ErrorCode.PositionCodeExists);
+
         position.Name = input.Name;
         position.Code = input.Code;
         position.Sort = input.Sort;
