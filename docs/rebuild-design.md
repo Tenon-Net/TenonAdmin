@@ -623,24 +623,25 @@ web/src/
 - [x] 本文档迁入本仓 `docs/`
 - [ ] `DESIGN.md` 定稿(含 tokens 文件初版;来源见 §7.1 设计流水线)→ M2 前完成即可
 
-### M1 —— 后端骨架(核心里程碑)🔄 进行中(细粒度进度见 `dev-plan.md`)
+### M1 —— 后端骨架(核心里程碑)✅ 完成(T1–T10 全绿 + Phase 2 加固;细粒度进度见 `dev-plan.md`)
 - [x] `Core`:实体基类 / Result / 异常 / 扩展点接口 / 雪花 ID / Channels 事件总线(`IEventBus`+`ChannelEventBus`,T5)
 - [x] `SqlSugar`:单例封装 / 仓储 / CodeFirst / 种子机制
-- [ ] `Services`:认证 ✅;RBAC ✅ / 用户/机构/职位/角色/菜单 ✅ / 字典 ✅ / 配置 ✅ / 日志 / 上传 未做
-- [ ] `AspNetCore`:AddTenonAdmin/MapTenonAdmin + JWT + 权限过滤器 ✅;统一返回 IResultFilter / 数据范围 / 日志过滤器 / OpenAPI 未做
-- [x] `samples/MinimalHost` 三行启动跑通(§3.1 即验收标准)
-- [ ] 测试:认证 / 数据范围 / 可重写三件套(暂以 scratchpad 自检代替,xunit 工程未建)
+- [x] `Services`:认证 / RBAC / 用户/机构/职位/角色/菜单 / 字典 / 配置 / **日志(T6)/ 上传(T7)** 全套
+- [x] `AspNetCore`:AddTenonAdmin/MapTenonAdmin + JWT + 权限过滤器 + **统一返回(T8a)/ 数据范围(T3)/ 日志过滤器(T6)/ OpenAPI(T8d-i)/ 健康检查 / CORS / 限流(Phase 2b)**
+- [x] `samples/MinimalHost` 三行启动跑通(§3.1 即验收标准;实跑冒烟含登录/401/健康/限流)
+- [x] 测试:xunit 工程(`TenonAdmin.Tests`)+ 认证全流程 / 数据范围 / §8 可替换六件套 / 授权与限流回归;**CI 双腿(SQLite+MySQL)均绿**
+> Phase 2:7 维多代理自审 34 发现全处置(12 P1 全修 + 22 P2 收敛,报告 `docs/phase2-review.md`);测试 37→65。
 
 ### M2 —— Vue 版(Naive UI 单套)
 - [ ] 工程搭建 + tokens 接入 + 布局/菜单/动态路由框架(§7.4)
 - [ ] `composables` 逻辑层 + `ProTable`/`SearchForm` 等通用组件;登录 → 动态路由 → `v-auth`
 - [ ] §7.3 全部页面(Naive 地道写法);openapi-typescript 生成 API 层(§13.6);i18n(zh-CN/en-US)接入
 
-### M3 —— v1.0 发布准备
+### M3 —— v1.0 发布准备(NuGet 打包提前落,其余待 M2 后)
 - [ ] 文档补全(快速开始/配置/覆写指南/自建模块走查 §5.7/i18n §13/安全 §14)
 - [ ] Docker:后端多阶段镜像 + docker-compose demo(§11)
 - [ ] `openapi.json` 归档为发布产物
-- [ ] NuGet 预发布版(0.0.x)+ Vue 前端 tag;README/宣传物料
+- [x] NuGet 预发布打包(T10):5 包 0.0.1-preview + tag→nuget.org 发布流水线 + 洁净消费者端到端验证(**首次真推待仓库 Secrets 配 `NUGET_API_KEY`**);Vue 前端 tag / README 宣传物料待 M2 后
 - [ ] 走一遍 §18 最小验收闭环
 
 ### v1.x 路线(发布后按需)
