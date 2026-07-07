@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(T8 横切收尾完成——6 子项已落,RoutePrefix/Version + RateLimiter 明确后置;指针到 T9)
+> 最后更新:2026-07-07(T9 测试工程完成——xunit 单元 + WebApplicationFactory 集成 + §8 可替换性六件套 + CI;指针到 T10 打包)
 
 ---
 
@@ -56,6 +56,8 @@
 | `849af1d` | T8c SVG 验证码:ICaptchaProvider 扩展点 + SvgCaptchaProvider(纯字符串 SVG 零依赖)+ CaptchaService(签发缓存 + 一次性校验)+ 接进 AuthService.ValidateCaptchaAsync + GET /auth/captcha + LoginInput 加验证码字段 + AdminSecurityOptions.Captcha(默认关)。自检 12/12 + MinimalHost 冒烟 6/6 |
 | `622f19a` | T8d-i OpenAPI + HealthChecks:AddOpenApi/MapOpenApi(/openapi/v1.json,契约含 Result 信封)+ 标准 MapHealthChecks(/health)替代极简 MapGet;修高危 CVE(Microsoft.OpenApi 2.0.0→2.7.5,NU1903)。MinimalHost 冒烟 7/7,build 0 警告 |
 | `dfe32ab` | T8d-ii 模块禁用:[Module] 标记 + DisabledModuleConvention(命中 Api:DisabledModules 的控制器摘除→404)+ AdminApiOptions;Dict/Config/Upload/Log 可禁,核心不可禁。MinimalHost 冒烟 7/7 |
+| `4d67377` | T9a 单元测试转正:`backend/tests/TenonAdmin.Tests`(xunit)+ 5 个纯逻辑 scratchpad 自检转正式测试(SensitiveDataMasker/ResultEnvelopeFilter/LoginLockService/CaptchaService/LocalFileStorage)。`dotnet test` 27/27 通过 |
+| `0e3fdd2` | T9b 集成 + 六件套 + CI + **修用户程序集断点**:AddTenonAdmin 之前写死只扫内置程序集,`options.ApplicationAssemblies`(§5.7 用户扩展点)未接进→用户实体不建表、控制器不注册;现接进实体扫描 + AddApplicationPart。新增 `TenonAdmin.TestHost`(示例用户 App)+ AdminAppFactory;§8 六件套(ReplaceService/OverrideAuthStep/DisabledModule/CustomController/CustomSeedData/DataScope)+ 认证全流程(登录/错密/刷新/锁定);CI `backend-ci.yml`(build+test,SQLite)。`dotnet test` 37/37 通过 |
 
 ## 4. 任务队列(按依赖序;每个任务 = 一次会话可完成的纵切)
 
@@ -109,9 +111,15 @@
 
 **T8 收尾结论**:8 子项中 6 项已落(统一返回信封 / 个人中心 / LoginLock / SVG 验证码 / OpenAPI / HealthChecks / DisabledModules),**RoutePrefix-Version** 与 **RateLimiter** 两项明确后置(理由分别见上与 T8b),均不阻塞 M1。进入 **T9 测试工程**。
 
-### T9 测试工程(§8——产品承诺,发布前必须)
-`backend/tests/TenonAdmin.Tests`(xunit + WebApplicationFactory);把 scratchpad 自检转正;
-可重写三件套用例名照 §8 写死:`ReplaceService_ShouldUseUserImplementation` 等 6 个;CI(GitHub Actions:build+test,SQLite+MySQL 矩阵)。
+### T9 测试工程(§8——产品承诺,发布前必须)✅ 完成(`4d67377` + `0e3fdd2`)
+- **T9a**:`backend/tests/TenonAdmin.Tests`(xunit),5 个纯逻辑 scratchpad 自检转正式测试。
+- **T9b**:`TenonAdmin.TestHost`(示例用户 App:实体 + 种子 + 自定义控制器)+ AdminAppFactory(WebApplicationFactory);
+  §8 可替换性六件套用例名照写死:`ReplaceService_ShouldUseUserImplementation` / `OverrideAuthStep_ShouldAffectLoginFlow` /
+  `DisabledModule_ShouldRemoveBuiltInController` / `CustomController_ShouldOwnSameRouteAfterModuleDisabled` /
+  `CustomSeedData_ShouldRunOnceAndBeIdempotent` / `DataScope_ShouldFilterByCurrentUserOrg`,+ 认证全流程;`dotnet test` 37/37。
+- **顺带修真实缺口**:`AddTenonAdmin` 之前忽略 `options.ApplicationAssemblies`,用户业务模块不生效;已接进实体扫描 + AddApplicationPart。
+- CI:`.github/workflows/backend-ci.yml`(build+test,SQLite)。
+> 后置(follow-up,已在 workflow 注明):**MySQL 矩阵**——集成测试连接串现固定 SQLite,跑 MySQL 需加 MySqlConnector + 测试从环境变量读 DbType/连接串 + CI 挂 mysql 服务容器;独立小改动,不阻塞 T10。
 
 ### T10 NuGet 打包
 5 包元数据(版本 0.0.1-preview、License、README、icon)、`dotnet pack` 产物验证、tag CI 推 nuget.org、申请 `TenonAdmin.*` 前缀保留。
