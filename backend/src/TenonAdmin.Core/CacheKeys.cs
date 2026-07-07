@@ -24,4 +24,7 @@ public static class CacheKeys
 
     /// <summary>某账号的连续登录失败次数(登录锁定用;成功登录即清除,窗口过期自动归零,设计 §14)</summary>
     public static string LoginFail(string account) => $"loginfail:{account}";
+
+    /// <summary>某验证码票据对应的明文(登录时一次性校验并消费,短 TTL 过期,设计 §14)</summary>
+    public static string Captcha(string captchaId) => $"captcha:{captchaId}";
 }

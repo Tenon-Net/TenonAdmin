@@ -12,8 +12,14 @@ namespace TenonAdmin.AspNetCore;
 /// </summary>
 [ApiController]
 [Route("api/v1/auth")]
-public class AuthController(IAuthService auth) : ControllerBase
+public class AuthController(IAuthService auth, ICaptchaService captcha) : ControllerBase
 {
+    /// <summary>获取登录验证码(SVG)。匿名;返回票据 Id + SVG,登录时回传票据 Id + 输入码。</summary>
+    [HttpGet("captcha")]
+    [AllowAnonymous]
+    public async Task<Result<CaptchaOutput>> Captcha() =>
+        Result<CaptchaOutput>.Ok(await captcha.IssueAsync());
+
     /// <summary>账密登录。业务失败(密码错/停用)由 AdminExceptionFilter 转统一信封,这里只写成功路径。</summary>
     [HttpPost("login")]
     [AllowAnonymous]

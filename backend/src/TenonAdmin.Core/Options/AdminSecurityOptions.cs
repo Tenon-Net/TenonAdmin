@@ -20,6 +20,19 @@ public class AdminSessionOptions
     public int MaxConcurrent { get; set; }
 }
 
+/// <summary>验证码配置(对应 <c>TenonAdmin:Security:Captcha</c>,设计 §3.2)。</summary>
+public class AdminCaptchaOptions
+{
+    /// <summary>
+    /// 是否启用登录验证码。<b>v1 默认关</b>:三行零配置 API 登录开箱即用;Web 模板/生产按需开
+    /// (设计 §3.2 原写默认开,经权衡改默认关——账号级 LoginLock 已挡爆破主向,验证码作浏览器侧 opt-in 加固)。
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>验证码类型:<c>Svg</c>(默认,零绘图依赖);图片/滑块走 <c>ICaptchaProvider</c> 扩展点。</summary>
+    public string Type { get; set; } = "Svg";
+}
+
 /// <summary>登录失败锁定配置(对应 <c>TenonAdmin:Security:LoginLock</c>,设计 §3.2/§14)。</summary>
 public class AdminLoginLockOptions
 {
@@ -41,4 +54,7 @@ public class AdminSecurityOptions
 
     /// <summary>登录失败锁定策略(防暴力破解,见 <see cref="AdminLoginLockOptions"/>)</summary>
     public AdminLoginLockOptions LoginLock { get; set; } = new();
+
+    /// <summary>验证码策略(默认关,见 <see cref="AdminCaptchaOptions"/>)</summary>
+    public AdminCaptchaOptions Captcha { get; set; } = new();
 }

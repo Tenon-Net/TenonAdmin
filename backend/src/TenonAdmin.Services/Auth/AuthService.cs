@@ -15,7 +15,8 @@ public class AuthService(
     ITokenProvider tokens,
     ISessionService sessions,
     ILogService logService,
-    ILoginLockService loginLock) : IAuthService
+    ILoginLockService loginLock,
+    ICaptchaService captcha) : IAuthService
 {
     /// <summary>
     /// 防账号枚举的陪跑哈希:账号不存在时也执行一次真实代价的哈希校验,
@@ -48,8 +49,8 @@ public class AuthService(
     /// <summary>失败锁定检查(§14):账号连续密码错误达阈值则在锁定窗口内拒绝(抛 <see cref="ErrorCode.AccountLocked"/>)。</summary>
     protected virtual Task CheckLoginLockAsync(LoginInput input) => loginLock.EnsureNotLockedAsync(input.Account);
 
-    /// <summary>验证码校验。ICaptchaProvider 模块接入前为直通;接入后在此消费并校验票据。</summary>
-    protected virtual Task ValidateCaptchaAsync(LoginInput input) => Task.CompletedTask;
+    /// <summary>验证码校验(§14):启用时消费并校验票据(缺失/过期 40002、不匹配 40003);未启用直通。</summary>
+    protected virtual Task ValidateCaptchaAsync(LoginInput input) => captcha.ValidateAsync(input.CaptchaId, input.CaptchaCode);
 
     /// <summary>
     /// 账密校验。安全细节(设计 §14):
