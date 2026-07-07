@@ -232,10 +232,17 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
       "RefreshExpireMinutes": 10080
     },
     "Security": {
-      "PasswordPolicy": { "MinLength": 8, "RequireDigit": true, "RequireMixedCase": false },
-      "Captcha": { "Enabled": true, "Type": "Svg" },   // 默认 SVG(零绘图依赖);想要图片/滑块走 ICaptchaProvider 扩展点
+      // PasswordPolicy 尚未实现(设计意图,v1.x);当前口令策略仅有下述 LoginLock + DefaultInitialPassword
+      "Captcha": { "Enabled": false, "Type": "Svg" },  // 默认关(保三行零配置 API 直登;Web/生产 opt-in);SVG 零绘图依赖,图片/滑块走 ICaptchaProvider
       "LoginLock": { "MaxFailCount": 5, "LockMinutes": 10 },
-      "Session": { "Mode": "Multi", "MaxConcurrent": 0 } // Multi(默认,多端并存)| Single(新登录踢旧);MaxConcurrent>0 时限制并发端数
+      "Session": { "Mode": "Multi", "MaxConcurrent": 0 }, // Multi(默认,多端并存)| Single(新登录踢旧);MaxConcurrent>0 时限制并发端数
+      "RateLimit": {                    // 请求限流(Phase 2b):按客户端 IP 固定窗口,认证端点更严
+        "Enabled": true,
+        "WindowSeconds": 60,
+        "PermitPerWindow": 300,         // 全局每 IP(宽松,挡洪泛);<=0 不限
+        "AuthPermitPerWindow": 20       // /api/v1/auth/* 每 IP(更严,挡在线爆破);<=0 不限
+      },
+      "DefaultInitialPassword": null    // 新建用户/重置密码未给时的默认口令;null => 密码学随机(安全默认,不落公开常量)
     },
     "Upload": {
       "Provider": "Local",             // Local;OSS 类走 IFileStorage 扩展点
@@ -244,9 +251,15 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
       "AllowedExtensions": [".jpg", ".png", ".pdf", ".xlsx", ".docx", ".zip"]
     },
     "Api": {
-      "RoutePrefix": "api",            // 与 Version 拼成实际前缀
-      "Version": "v1",                 // 实际路由 = /{RoutePrefix}/{Version}/... 即 /api/v1/...
-      "DisabledModules": []            // 例:["Dict","Upload"] 关闭对应模块控制器
+      // RoutePrefix / Version 配置化后置 v1.x(深耦合权限码与菜单种子);v1 内置路由固定 api/v1
+      "DisabledModules": [],           // 例:["Dict","Upload"] 关闭对应模块控制器
+      "Cors": {                         // 跨源(Phase 2b):默认收紧,无源即不放行;经 IStartupFilter 挂 UseCors
+        "AllowedOrigins": [],           // 例:["https://admin.example.com"];空=不放行任何跨源
+        "AllowCredentials": true
+      }
+    },
+    "Id": {
+      "WorkerId": 0                     // 雪花机器号(0–1023);多实例水平扩展须为每实例配不同值
     },
     "Notify": {
       "Mode": "Polling",               // v1.0 仅 Polling;Mqtt 由 v1.x 可选包 TenonAdmin.Mqtt 提供,v1 不暴露
@@ -261,8 +274,8 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 ```
 
 每个子节对应一个 Options 类:`AdminDatabaseOptions`、`AdminCacheOptions`、`AdminJwtOptions`、
-`AdminSecurityOptions`、`AdminUploadOptions`、`AdminApiOptions`、`AdminSeedOptions`,
-全部 public,支持 `builder.Services.Configure<T>(...)` 代码覆写。
+`AdminSecurityOptions`(含 `AdminRateLimitOptions`)、`AdminUploadOptions`、`AdminApiOptions`(含 `AdminCorsOptions`)、
+`AdminSeedOptions`、`AdminIdOptions`,全部 public,支持 `builder.Services.Configure<T>(...)` 代码覆写。
 
 ---
 
@@ -698,11 +711,11 @@ web/src/
 | 项 | 方案 | 归属 |
 |---|---|---|
 | **i18n / 多语言** | 独立设计,见 §13 | Core + AspNetCore + 前端,v1 |
-| **健康检查** | 内置 `Microsoft.Extensions.Diagnostics.HealthChecks`,暴露 `/health`(存活)与 `/health/ready`(依赖:DB/缓存) | AspNetCore,v1 |
-| **限流** | .NET 内置 `RateLimiter` 中间件,按 IP/用户配置化(登录接口更严) | AspNetCore,v1 |
-| **软删除 + 审计** | `BaseEntity` 带 `IsDelete`/`CreateTime`/`CreateUser`/`UpdateTime`/`UpdateUser`,SqlSugar 全局过滤器 + `AOP` 自动填充 | Core + SqlSugar,v1 |
-| **API 版本化** | 路由前缀内置版本段(`/api/v1/...`),配置项 `Api:Version`;需要多版本并存再引 `Asp.Versioning` | AspNetCore,v1 轻量 |
-| **CORS / 上传限制 / 请求体大小** | 全走 Options 配置(`Api:Cors`、`Upload:MaxSizeMb`、Kestrel 限制) | AspNetCore,v1 |
+| **健康检查** ✅ | 内置 `HealthChecks`,`/health`(存活)+ `/health/ready`(依赖:DB/缓存),匿名供编排层探针 | AspNetCore,已落(Phase 2b) |
+| **限流** ✅ | .NET 内置 `RateLimiter`,按客户端 IP 固定窗口,认证端点更严(`Security:RateLimit`);经 `IStartupFilter` 挂 `UseRateLimiter`,命中出 429 信封(40008) | AspNetCore,已落(Phase 2b) |
+| **软删除 + 审计** ✅ | `BaseEntity` 带 `IsDelete`/`CreateTime`/`CreateUserId`/`UpdateTime`/`UpdateUserId`,SqlSugar 全局过滤器 + `AOP` 自动填充(含 `DataEntity.CreateOrgId` 从令牌 org claim 回填) | Core + SqlSugar,已落 |
+| **API 版本化** | 路由前缀内置版本段(`/api/v1/...`);`RoutePrefix`/`Version` 配置化**后置 v1.x**(深耦合权限码与菜单种子),v1 固定 `api/v1` | AspNetCore,v1 固定 / 配置化 v1.x |
+| **CORS / 上传限制 / 请求体大小** ✅ | CORS 走 `Api:Cors`(命名策略 + `IStartupFilter` 挂载,默认收紧);上传走 `Upload:MaxSizeMb` + 后缀白名单 | AspNetCore,CORS 已落(Phase 2b) |
 | **在线用户 / 站内通知** | **不用 SignalR**。在线用户 = 令牌信息本就存缓存(参考旧版 `CACHE_USER_TOKEN`),直接列举/强退,无需长连接。实时性:v1 用 **HTTP 轮询**(前端定时拉未读/在线,`If-None-Match`/ETag 省流);需要推送再用 **MQTT**(可选包 `TenonAdmin.Mqtt`,前端走 mqtt.js/WebSocket)。**v1.0 只暴露 Polling**(`Notify:Mode=Polling`);`Mqtt` 模式由 v1.x 可选包 `TenonAdmin.Mqtt` 提供,v1.0 配置不暴露该值 | AspNetCore,v1(轮询)/ 可选包(MQTT,v1.x) |
 | **配置热更新** | 服务读配置用 `IOptionsMonitor<T>`,改 json / 环境不必重启 | 全局约定 |
 | **生产建表安全 / DB 策略** | Dev 默认允许 CodeFirst 建表+加列;**生产默认禁**,显式 `Database:EnableCodeFirstInProduction` 才开;内置表用 `sys_schema_version` 记版本;**不做破坏性迁移**(不自动删表/删列/改窄字段);发布说明列出每版表结构变更 | SqlSugar,v1 |
