@@ -11,6 +11,26 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    # 数据库矩阵(设计 §8「至少 SQLite + MySQL」)。fail-fast=false:一条腿红不掩盖另一条。
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [sqlite, mysql]
+
+    # MySQL 服务容器(两条腿都起,sqlite 腿忽略之;成本低、免去条件 service 的写法复杂度)。
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,11 +46,11 @@ jobs:
       - name: Build
         run: dotnet build backend/TenonAdmin.slnx -c Release --no-restore
 
-      # 单元 + 集成测试(WebApplicationFactory,默认 SQLite)。含 §8 可替换性六件套 + 数据范围。
-      - name: Test
+      # 单元 + 集成测试(WebApplicationFactory)。DB 由环境变量选择(见 tests/TestDb.cs):
+      #   sqlite 腿 → 各测试独立临时 .db 文件;mysql 腿 → 各测试独立库(按 DbPath 派生,自动建/删)。
+      #   含 §8 可替换性六件套 + 数据范围 + 认证/授权/限流回归。
+      - name: Test (${{ matrix.db }})
+        env:
+          TENON_TEST_DBTYPE: ${{ matrix.db == 'mysql' && 'MySql' || 'Sqlite' }}
+          TENON_TEST_MYSQL: ${{ matrix.db == 'mysql' && 'Server=127.0.0.1;Port=3306;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;' || '' }}
         run: dotnet test backend/TenonAdmin.slnx -c Release --no-build
-
-# ── 待补(follow-up)────────────────────────────────────────────────
-# MySQL 矩阵(设计 §8「至少 SQLite + MySQL」):当前集成测试的连接串在 AdminAppFactory 里固定为 SQLite,
-# 要跑 MySQL 需:①加 MySqlConnector 依赖;②AdminAppFactory/DataScopeTests 从环境变量读 DbType/连接串;
-# ③本 job 加 services: mysql 容器 + 一条 matrix 腿。属独立小改动,不阻塞首个 CI 落地。

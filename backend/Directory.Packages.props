@@ -20,5 +20,8 @@
     <PackageVersion Include="xunit" Version="2.9.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
+    <!-- MySQL 测试驱动(仅测试项目直接引用,用于建/删测试库);版本对齐 SqlSugarCore 5.1.4 传递的 2.2.5,不引入版本漂移。
+         核心四包不直接引用它(保持"运行时只依赖 SqlSugarCore + Microsoft.*";MySql 驱动本就随 SqlSugarCore 传递可用) -->
+    <PackageVersion Include="MySqlConnector" Version="2.2.5" />
   </ItemGroup>
 </Project>

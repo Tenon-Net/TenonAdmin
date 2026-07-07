@@ -29,7 +29,9 @@ public sealed class AdminAppFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
-        builder.UseSetting("TenonAdmin:Database:ConnectionString", $"Data Source={DbPath}");
+        // DB 选择走 TestDb:默认 SQLite(DbPath 文件);CI MySQL 腿按 DbPath 派生独立库(同 DbPath 共享库,幂等用例用)
+        builder.UseSetting("TenonAdmin:Database:DbType", TestDb.DbType);
+        builder.UseSetting("TenonAdmin:Database:ConnectionString", TestDb.ConnectionString(DbPath, DbPath));
         builder.UseSetting("TenonAdmin:Seed:AdminPassword", "Test@123456");
         // 固定 >=32 字节 JWT 密钥:避免各测试并发写同一 ./data/dev-jwt.key 文件
         builder.UseSetting("TenonAdmin:Jwt:SecretKey", "tenon-integration-test-signing-key-please-keep-32plus");
@@ -44,8 +46,8 @@ public sealed class AdminAppFactory : WebApplicationFactory<Program>
 
     protected override void Dispose(bool disposing)
     {
-        base.Dispose(disposing);   // 先释放宿主(关闭 SqlSugar 连接),再删文件
+        base.Dispose(disposing);   // 先释放宿主(关闭 SqlSugar 连接),再清理库
         if (disposing && DeleteDbOnDispose)
-            try { if (File.Exists(DbPath)) File.Delete(DbPath); } catch { /* 尽力而为 */ }
+            TestDb.Cleanup(DbPath, DbPath);   // SQLite 删文件 / MySQL 删库
     }
 }

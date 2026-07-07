@@ -19,5 +19,7 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- MySQL 矩阵腿的驱动;SQLite 默认腿不用它,但引用无害(SqlSugar 按 DbType 选驱动) -->
+    <PackageReference Include="MySqlConnector" />
   </ItemGroup>
 </Project>
