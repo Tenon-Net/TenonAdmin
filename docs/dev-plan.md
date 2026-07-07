@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(**Phase 2 全部完成**——2a 自审:34 发现全处置(12 P1 全修 + 22 P2 收敛),报告 `docs/phase2-review.md`;2b 补做:RateLimiter + MySQL CI 矩阵。测试 37→65,SQLite 本地全绿、MySQL 腿 CI 验证。下一阶段 M2 Vue 前端)
+> 最后更新:2026-07-07(**Phase 2 全部完成 + CI 首次真绿**——2a 自审:34 发现全处置(12 P1 全修 + 22 P2 收敛),报告 `docs/phase2-review.md`;2b 补做:RateLimiter + MySQL CI 矩阵。测试 37→65;**GitHub Actions 双腿(SQLite+MySQL)均 success**(`455f885`)——顺带修掉自 T9b 起潜伏的 Linux 路径穿越测试 bug,此前"CI 通过"实为 Windows 本地跑。下一阶段 M2 Vue 前端)
 
 ---
 
@@ -135,10 +135,11 @@
 
 ### Phase 2b ✅ 完成(`4c26e07` + `8c80320`)
 - **RateLimiter**(`4c26e07`):`AdminSecurityOptions.RateLimit` 按客户端 IP 固定窗口——全局宽松档(默认 300/60s)+ 认证端点(`/api/v1/auth/*`)更严档(默认 20/60s),默认启用。经 Phase 2a 落地的 `TenonAdminMiddlewareStartupFilter` 挂 `UseRateLimiter`(CORS→RateLimiter→路由,均全局策略不依赖端点元数据,与自动插入的认证中间件次序不冲突);命中出 429 + 统一信封(`TooManyRequests=40008`)+ `Retry-After`。测试 62→65;MinimalHost 实跑验证(正常登录放行、认证端点洪泛 429 信封、`/health` 走宽松档不误伤)。
-- **MySQL CI 矩阵**(`8c80320`):`MySqlConnector` 仅测试项目直接引用(版本对齐 SqlSugarCore 传递的 2.2.5,核心四包零第三方运行时依赖不变);`TestDb` 助手按环境变量选库(默认 SQLite,本地不变;MySQL 按 identity 派生独立库、自动建/删);`AdminAppFactory`/`DataScopeTests` 改走 `TestDb`;`backend-ci.yml` matrix `db=[sqlite,mysql]` + `mysql:8.0` service。本地无 Docker:SQLite 腿本地 65/65,MySQL 腿由 CI 首跑验证。
+- **MySQL CI 矩阵**(`8c80320`):`MySqlConnector` 仅测试项目直接引用(版本对齐 SqlSugarCore 传递的 2.2.5,核心四包零第三方运行时依赖不变);`TestDb` 助手按环境变量选库(默认 SQLite,本地不变;MySQL 按 identity 派生独立库、自动建/删);`AdminAppFactory`/`DataScopeTests` 改走 `TestDb`;`backend-ci.yml` matrix `db=[sqlite,mysql]` + `mysql:8.0` service。**CI 双腿均 success**(run `455f885`:`build-test (sqlite)` + `build-test (mysql)` 皆 green)——MySQL 腿首跑即过,ORM 层在 MySQL 上验证通过。
+- **顺带修 CI 长期变红**(`455f885`):CI(ubuntu)自 T9b 起一直红而本地(Windows)全绿——`LocalFileStorageTests` 的 `C:/Windows/evil.txt` 只在 Windows 上是穿越;Linux 无盘符,`C:` 是普通目录名、落存储根内不构成穿越,`SaveAsync` 不抛致断言失败。改用两平台都 rooted 的 `/evil.txt`。**此前 dev-plan 各处"CI/测试通过"实为 Windows 本地跑,现 CI 首次真绿。**
 > RoutePrefix/Version 仍维持 v1.x 后置(理由见 Phase 2a 注)。
 
-——**Phase 2(2a 自审 + 2b 补做)全部完成**。下一阶段:**M2 Vue 前端**(先 `DESIGN.md` + tokens 定稿,§7.1)。
+——**Phase 2(2a 自审 + 2b 补做)全部完成,CI 双腿绿**。下一阶段:**M2 Vue 前端**(先 `DESIGN.md` + tokens 定稿,§7.1)。
 
 ## 5. 遗留小事(不阻塞,顺手处理)
 
