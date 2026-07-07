@@ -1,6 +1,8 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +24,9 @@ namespace TenonAdmin.AspNetCore;
 /// </summary>
 public static class TenonAdminSetup
 {
+    /// <summary>内置 CORS 命名策略名(由 <see cref="TenonAdminMiddlewareStartupFilter"/> 在管道前段应用)</summary>
+    public const string CorsPolicyName = "TenonAdmin";
+
     public static IServiceCollection AddTenonAdmin(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -113,9 +118,23 @@ public static class TenonAdminSetup
         foreach (var assembly in options.ApplicationAssemblies.Distinct())
             mvc.AddApplicationPart(assembly);
 
-        // ── 内置 OpenAPI 文档(§13.6 契约源)+ 标准健康检查(§12)──────────────
+        // ── CORS(§12/§14):命名策略,默认收紧(无源=不放行);经 IStartupFilter 挂载,保三行零配置宿主 ──
+        services.AddCors(o => o.AddPolicy(CorsPolicyName, p =>
+        {
+            if (options.Api.Cors.AllowedOrigins.Length > 0)
+            {
+                p.WithOrigins(options.Api.Cors.AllowedOrigins).AllowAnyHeader().AllowAnyMethod();
+                if (options.Api.Cors.AllowCredentials) p.AllowCredentials();
+            }
+            // 空源 → 空策略:不放行任何跨源(生产必须显式配置)
+        }));
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IStartupFilter, TenonAdminMiddlewareStartupFilter>());
+
+        // ── 内置 OpenAPI 文档(§13.6 契约源)+ 健康检查(§12:/health 存活 + /health/ready 依赖就绪)──
         services.AddOpenApi();          // 产出 /openapi/v1.json;控制器显式 Result<T> 返回 → 契约含统一信封
-        services.AddHealthChecks();     // 标准健康检查端点(替代极简 /health)
+        services.AddHealthChecks()
+            .AddCheck<DatabaseHealthCheck>("db", tags: ["ready"])
+            .AddCheck<CacheHealthCheck>("cache", tags: ["ready"]);
 
         return services;
     }
@@ -133,8 +152,10 @@ public static class TenonAdminSetup
         if (env is null || env.IsDevelopment())
             endpoints.MapOpenApi().AllowAnonymous();
 
-        // 标准健康检查(/health,§12):匿名(供编排层探针),不受默认拒绝约束
-        endpoints.MapHealthChecks("/health").AllowAnonymous();
+        // 健康检查(§12):/health 只报进程存活(不跑依赖检查),/health/ready 探 DB/缓存就绪。
+        // 匿名(供编排层 liveness/readiness 探针),不受默认拒绝约束。
+        endpoints.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
+        endpoints.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = r => r.Tags.Contains("ready") }).AllowAnonymous();
         return endpoints;
     }
 }
