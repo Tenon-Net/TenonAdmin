@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(T7 本地文件上传完成)
+> 最后更新:2026-07-07(T8a 统一返回兜底过滤器 + 个人中心完成;T8 拆 4 小轮进行中)
 
 ---
 
@@ -51,6 +51,7 @@
 | `48d8cfb` | T5 字典/配置:SysDictType/SysDictItem/SysConfig + DictService/ConfigService(读穿透缓存 + 变更即失效 + 发事件)+ Channels 进程内事件总线(IEventBus/ChannelEventBus + 变更日志订阅者)+ 字典/配置菜单与种子。自检 16/16 + MinimalHost HTTP 冒烟 12/12(含经 HTTP 缓存失效验收) |
 | `7c885ec` | T6 日志:SysOpLog/SysLoginLog + [OperationLog] 特性 + 全局 OperationLogFilter(入参脱敏/耗时/结果码/操作人/IP/UA,opt-in)+ SensitiveDataMasker(按字段名递归打码)+ AuthService 加 OnLoginFailedAsync 钩子记成功/失败登录日志 + LogService(写入尽力而为、清空硬删)+ IResultEnvelope 免反射读码 + ICurrentUser 补 IP/UA + SysLogController + 日志菜单种子。masker 自检 10/10 + MinimalHost 冒烟 10/10(操作日志脱敏且明文不泄漏、登录成功/失败均留痕、401 回归) |
 | `c7216d1` | T7 本地上传:sys_file + IFileStorage 扩展点(LocalFileStorage,路径穿越围栏)+ FileService 三道关(非空/后缀白名单不信 CT/大小上限 + 文件名重写 {日期}/{GUIDv7})+ AdminUploadOptions + 44xxx 错误码 + SysFileController(上传/下载/列表/删)+ 上传挂 [OperationLog] + 文件菜单种子;附带修 .gitignore(`**/wwwroot/upload/`)。storage 自检 10/10 + MinimalHost 冒烟 8/8(png 上传→下载往返无损、exe 拒 44003、列表含原名、操作日志含『上传文件』、401 回归) |
+| `0635a1f` | T8a 统一返回兜底过滤器 + 个人中心:ResultEnvelopeFilter(裸 DTO 自动包信封,内置仍显式 Result<T> 保 OpenAPI 契约,TryWrap 纯函数)+ PersonalController([Authorize] 看/改资料/验旧改密,限当前用户)。envelope 自检 8/8 + MinimalHost 冒烟 14/14 |
 
 ## 4. 任务队列(按依赖序;每个任务 = 一次会话可完成的纵切)
 
@@ -90,8 +91,13 @@
 **验收**:storage 自检 10/10(存读删往返 + `../`/多级`../`/绝对路径/读逃逸全拒);MinimalHost 冒烟 8/8——允许后缀(.png)上传成功且下载往返无损、禁止后缀(.exe)拒 44003、列表含原始名、操作日志含『上传文件』(联动 T6)、无 token 401 回归。
 > 设计说明:后缀按原始名判定、不信 Content-Type(§14);文件名重写为 `{日期}/{GUIDv7}{后缀}`,原始名绝不进物理路径(天然免穿越),`LocalFileStorage.Resolve` 再断言落在存储根内做纵深防御。软删只隐藏记录、物理回收留 v1.x 清理任务。`**/wwwroot/upload/` 才能忽略 samples 宿主下的上传物(中间斜杠模式会被锚定到根)。
 
-### T8 横切收尾(§6/§12/§14)
-统一返回 `IResultFilter`(控制器裸返回 DTO 自动包信封,替代现在手动 `Result.Ok`);内置 OpenAPI(`AddOpenApi`,产出 openapi.json);SVG 验证码(`ICaptchaProvider`,接进 `ValidateCaptchaAsync`);登录失败锁定(LoginLock);`RateLimiter` 限流;标准 HealthChecks 替换极简 /health;`Api:RoutePrefix`/`DisabledModules` 配置化;个人中心(改密码/改资料)。
+### T8 横切收尾(§6/§12/§14)—— 8 子特性,拆 4 小轮
+一个队列条目实为 8 个横切特性;按 loop「每轮聚焦一件、独立可验证」拆成 4 小轮依次做:
+- **T8a ✅ 完成(`0635a1f`)**:统一返回兜底过滤器(`ResultEnvelopeFilter`,裸 DTO 自动包信封,内置仍显式 `Result<T>` 保 OpenAPI 契约)+ 个人中心(改密码/改资料)。
+  > 设计修正:原设计「全面裸返回替代手动 Result.Ok」与 OpenAPI 子项打架(契约会丢信封结构),经确认改为「兜底过滤器 + 内置显式」两全。
+- **T8b(下一轮)**:登录失败锁定 `LoginLock`(接 `AuthService.OnLoginFailedAsync`/策略步)+ `RateLimiter` 限流(登录等敏感端点)。安全向,自己把关。
+- **T8c**:SVG 验证码 `ICaptchaProvider` 接进 `AuthService.ValidateCaptchaAsync`(默认 SVG,零绘图依赖)+ 登录入参加验证码票据。
+- **T8d**:内置 OpenAPI(`AddOpenApi` 产出 openapi.json)+ 标准 HealthChecks 替换极简 /health + `Api:RoutePrefix`/`Version`/`DisabledModules` 配置化。
 
 ### T9 测试工程(§8——产品承诺,发布前必须)
 `backend/tests/TenonAdmin.Tests`(xunit + WebApplicationFactory);把 scratchpad 自检转正;
