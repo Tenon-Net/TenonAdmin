@@ -52,4 +52,25 @@ public class LoginLockServiceTests
         for (var i = 0; i < 20; i++) await s.RecordFailureAsync("carol");
         Assert.False(await IsLocked(s, "carol"));
     }
+
+    [Fact]
+    public async Task Case_and_whitespace_variants_share_one_counter()
+    {
+        // P1-5:大小写/尾空白变体命中同一真实账号(大小写不敏感排序规则下),锁定计数不能被拆分绕过
+        var s = Make(3);
+        await s.RecordFailureAsync("admin");
+        await s.RecordFailureAsync("ADMIN");
+        await s.RecordFailureAsync(" Admin ");
+        Assert.True(await IsLocked(s, "admin"));      // 三个变体累加达阈值
+        Assert.True(await IsLocked(s, "AdMiN"));       // 任一变体查询都判锁定
+    }
+
+    [Fact]
+    public async Task Concurrent_failures_all_count_no_lost_update()
+    {
+        // P2-11:并发失败计数走原子自增,不因读-改-写竞态丢失更新
+        var s = Make(20);
+        await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => s.RecordFailureAsync("dave")));
+        Assert.True(await IsLocked(s, "dave"));        // 20 次全部计入 → 达阈值
+    }
 }

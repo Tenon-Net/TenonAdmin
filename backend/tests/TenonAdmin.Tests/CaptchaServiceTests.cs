@@ -73,6 +73,17 @@ public class CaptchaServiceTests
         Assert.Null(await ErrOf(() => svc.ValidateAsync(null, null)));
     }
 
+    [Fact]
+    public async Task Concurrent_validate_of_same_ticket_only_one_succeeds()
+    {
+        // P1-6:原子取删 → 并发复用同一 captchaId 时,只有一个通过,其余按已消费拒绝(杜绝单票放大猜测)
+        var svc = Make(new StubProvider("aB3d"), enabled: true);
+        var c = await svc.IssueAsync();
+        var results = await Task.WhenAll(Enumerable.Range(0, 16)
+            .Select(_ => ErrOf(() => svc.ValidateAsync(c.CaptchaId, "aB3d"))));
+        Assert.Equal(1, results.Count(r => r is null));   // 恰好一个成功
+    }
+
     private sealed class StubProvider(string code) : ICaptchaProvider
     {
         public Captcha Generate() => new(code, "<svg/>");

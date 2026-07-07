@@ -18,4 +18,37 @@ public interface ICacheProvider
 
     /// <summary>移除键(权限/授权变更后主动失效对应缓存)。</summary>
     Task RemoveAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 原子自增并返回新值(不存在按 0 起算),<paramref name="expiry"/> 为写入时的过期时长。
+    /// 用于登录失败计数等并发安全计数场景(设计 §14)。
+    /// <para>默认实现是<b>非原子</b>的读-改-写兜底(并发下可能丢失更新);
+    /// 需要真原子性的 provider(内存/Redis)应覆写:内存用锁、Redis 用 <c>INCR</c>+<c>EXPIRE</c>。</para>
+    /// </summary>
+    Task<long> IncrementAsync(string key, TimeSpan? expiry = null, CancellationToken cancellationToken = default)
+        => IncrementFallbackAsync(key, expiry, cancellationToken);
+
+    /// <summary>
+    /// 原子取值并移除(get-and-delete):返回当前值后立即删除该键,并发下同一键只有一个调用能取到值。
+    /// 用于验证码等一次性票据消费(设计 §14,杜绝并发重放)。
+    /// <para>默认实现是<b>非原子</b>的先读后删兜底;provider 应覆写为原子操作(内存用锁、Redis 用 <c>GETDEL</c>)。</para>
+    /// </summary>
+    Task<T?> GetAndRemoveAsync<T>(string key, CancellationToken cancellationToken = default)
+        => GetAndRemoveFallbackAsync<T>(key, cancellationToken);
+
+    /// <summary>默认非原子自增兜底(供未覆写的实现复用)。</summary>
+    protected async Task<long> IncrementFallbackAsync(string key, TimeSpan? expiry, CancellationToken cancellationToken)
+    {
+        var next = await GetAsync<long>(key, cancellationToken) + 1;
+        await SetAsync(key, next, expiry, cancellationToken);
+        return next;
+    }
+
+    /// <summary>默认非原子取删兜底(供未覆写的实现复用)。</summary>
+    protected async Task<T?> GetAndRemoveFallbackAsync<T>(string key, CancellationToken cancellationToken)
+    {
+        var value = await GetAsync<T>(key, cancellationToken);
+        await RemoveAsync(key, cancellationToken);
+        return value;
+    }
 }

@@ -51,6 +51,11 @@ public class Pbkdf2PasswordHasher : IPasswordHasher
         }
         catch (FormatException) { return false; }
 
+        // 拒绝空/畸形哈希段:parts[3] 为空 → expected.Length==0 → Pbkdf2(outputLength:0) 与
+        // FixedTimeEquals(空,空) 双双为真 → 任意密码通过。空盐同样无意义。畸形串一律按"不匹配"。
+        // (当前写入路径恒产 32 字节段,不可达;但 §5.3 支持导入外部/旧库哈希,这是纵深防御。)
+        if (expected.Length == 0 || salt.Length == 0) return false;
+
         // 按哈希串里记录的参数重算(而非当前常量)→ 参数升级后旧哈希依旧可校验
         var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, expected.Length);
 

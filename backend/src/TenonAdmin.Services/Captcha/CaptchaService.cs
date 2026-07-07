@@ -33,9 +33,8 @@ public class CaptchaService(
 
         AdminException.ThrowIf(string.IsNullOrEmpty(captchaId) || string.IsNullOrEmpty(code), ErrorCode.CaptchaExpired);
 
-        var key = CacheKeys.Captcha(captchaId!);
-        var stored = await cache.GetAsync<string>(key);
-        await cache.RemoveAsync(key);   // 一次性消费:先作废,再比对
+        // 原子取删:并发携同一 captchaId 时只有一个调用取到非空值,杜绝单张验证码放大成 N 次猜测(§14 一次性)
+        var stored = await cache.GetAndRemoveAsync<string>(CacheKeys.Captcha(captchaId!));
 
         AdminException.ThrowIf(stored is null, ErrorCode.CaptchaExpired);
         AdminException.ThrowIf(!string.Equals(stored, code, StringComparison.OrdinalIgnoreCase), ErrorCode.CaptchaWrong);
