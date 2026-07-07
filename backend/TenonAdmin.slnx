@@ -9,4 +9,7 @@
     <Project Path="src/TenonAdmin.SqlSugar/TenonAdmin.SqlSugar.csproj" />
     <Project Path="src/TenonAdmin/TenonAdmin.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TenonAdmin.Tests/TenonAdmin.Tests.csproj" />
+  </Folder>
 </Solution>
