@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(T6 日志模块:操作日志 + 登录日志完成)
+> 最后更新:2026-07-07(T7 本地文件上传完成)
 
 ---
 
@@ -50,6 +50,7 @@
 | `ac7ae3a` | T4 会话/令牌模型:sys_session/sys_refresh_token(存哈希)+ SessionService(轮换/复用检测/强退/在线列表/单端限并发)+ /auth/refresh /auth/logout + SysSessionController + [RolePermission] 会话校验 + 审计字段 AOP 填充。自检 14/14 + 2/2 + MinimalHost 三条验收全绿 |
 | `48d8cfb` | T5 字典/配置:SysDictType/SysDictItem/SysConfig + DictService/ConfigService(读穿透缓存 + 变更即失效 + 发事件)+ Channels 进程内事件总线(IEventBus/ChannelEventBus + 变更日志订阅者)+ 字典/配置菜单与种子。自检 16/16 + MinimalHost HTTP 冒烟 12/12(含经 HTTP 缓存失效验收) |
 | `7c885ec` | T6 日志:SysOpLog/SysLoginLog + [OperationLog] 特性 + 全局 OperationLogFilter(入参脱敏/耗时/结果码/操作人/IP/UA,opt-in)+ SensitiveDataMasker(按字段名递归打码)+ AuthService 加 OnLoginFailedAsync 钩子记成功/失败登录日志 + LogService(写入尽力而为、清空硬删)+ IResultEnvelope 免反射读码 + ICurrentUser 补 IP/UA + SysLogController + 日志菜单种子。masker 自检 10/10 + MinimalHost 冒烟 10/10(操作日志脱敏且明文不泄漏、登录成功/失败均留痕、401 回归) |
+| `c7216d1` | T7 本地上传:sys_file + IFileStorage 扩展点(LocalFileStorage,路径穿越围栏)+ FileService 三道关(非空/后缀白名单不信 CT/大小上限 + 文件名重写 {日期}/{GUIDv7})+ AdminUploadOptions + 44xxx 错误码 + SysFileController(上传/下载/列表/删)+ 上传挂 [OperationLog] + 文件菜单种子;附带修 .gitignore(`**/wwwroot/upload/`)。storage 自检 10/10 + MinimalHost 冒烟 8/8(png 上传→下载往返无损、exe 拒 44003、列表含原名、操作日志含『上传文件』、401 回归) |
 
 ## 4. 任务队列(按依赖序;每个任务 = 一次会话可完成的纵切)
 
@@ -84,9 +85,10 @@
 **验收**:masker 自检 10/10;MinimalHost 冒烟 10/10——带 `[OperationLog]` 的新增用户接口写入操作日志且入参密码脱敏为 `***`、明文不泄漏;登录成功(code 0)与失败(40001)均有登录日志;无 token 401 回归。
 > 设计说明:登录失败在 `AuthService.LoginAsync` 用 try/catch(AdminException) 统一走 `OnLoginFailedAsync` 钩子(默认钩子写登录日志),覆写登录流程的用户如需保留日志记得 `base.` 调用。日志表 `SysOpLog`/`SysLoginLog` 继承 `BaseEntity` 只为复用雪花 Id + CreateTime 自动填充,无软删语义,"清空"走 `Db.Deleteable` 硬删。写入路径尽力而为(吞异常只告警),不因日志失败破坏业务/登录。
 
-### T7 本地文件上传(§4/§14)
+### T7 本地文件上传(§4/§14)✅ 完成(`c7216d1`)
 `sys_file`;`IFileStorage` + 本地实现;后缀白名单/大小限制/文件名重写/路径穿越防护;下载/列表。
-**验收**:传允许后缀成功、禁止后缀被拒、`../` 路径攻击被拒。
+**验收**:storage 自检 10/10(存读删往返 + `../`/多级`../`/绝对路径/读逃逸全拒);MinimalHost 冒烟 8/8——允许后缀(.png)上传成功且下载往返无损、禁止后缀(.exe)拒 44003、列表含原始名、操作日志含『上传文件』(联动 T6)、无 token 401 回归。
+> 设计说明:后缀按原始名判定、不信 Content-Type(§14);文件名重写为 `{日期}/{GUIDv7}{后缀}`,原始名绝不进物理路径(天然免穿越),`LocalFileStorage.Resolve` 再断言落在存储根内做纵深防御。软删只隐藏记录、物理回收留 v1.x 清理任务。`**/wwwroot/upload/` 才能忽略 samples 宿主下的上传物(中间斜杠模式会被锚定到根)。
 
 ### T8 横切收尾(§6/§12/§14)
 统一返回 `IResultFilter`(控制器裸返回 DTO 自动包信封,替代现在手动 `Result.Ok`);内置 OpenAPI(`AddOpenApi`,产出 openapi.json);SVG 验证码(`ICaptchaProvider`,接进 `ValidateCaptchaAsync`);登录失败锁定(LoginLock);`RateLimiter` 限流;标准 HealthChecks 替换极简 /health;`Api:RoutePrefix`/`DisabledModules` 配置化;个人中心(改密码/改资料)。
