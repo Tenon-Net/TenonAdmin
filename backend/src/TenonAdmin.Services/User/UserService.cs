@@ -28,6 +28,9 @@ public class UserService(
         : RandomNumberGenerator.GetString(PASSWORD_CHARS, 16);
 
     /// <inheritdoc />
+    // ponytail(P2-19): .Contains 生成参数化 LIKE(无注入风险),但未转义 LIKE 元字符 % _——
+    //   搜 "%"/"_" 会被当通配、命中面偏大。属功能精确性,后台搜索普遍接受此行为;要精确字面匹配
+    //   再引 EscapeLike + ESCAPE 子句。全部 Page 方法同此约定。
     public virtual Task<PagedList<UserItem>> PageAsync(UserPageInput input) =>
         users.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Account), u => u.Account.Contains(input.Account!))

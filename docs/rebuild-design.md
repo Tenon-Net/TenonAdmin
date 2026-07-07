@@ -799,6 +799,8 @@ v1.0 必须成型的安全项(多数为 .NET 内置能力):
 
 **实现要点(T4 落地)**:RefreshToken 存 **SHA-256 十六进制**(高熵随机串,非密码,无需 PBKDF2);刷新用**条件更新**(仅当仍 Active 才置 Used)原子轮换,兼作并发双刷保护;**复用检测**:已 Used 的令牌再现即吊销**整个会话**(连坐刷新令牌 + 清缓存),攻击者与真用户一起下线(安全优先)。会话热路径:`ISessionService.IsActiveAsync` 先读 `tenon:session:{sid}` 缓存(TTL=会话过期),未命中查库回填;`[RolePermission]` 管道对**超管与普通用户一律**校验会话状态(强退即 401)。刷新走**滑动续期**(会话过期跟到新刷新令牌过期)。审计字段 `CreateUserId/UpdateUserId` 由 SqlSugar AOP 从 `ICurrentUser` 自动填充(系统上下文留空)。
 
+**部署边界(单节点 vs 多实例,重要)**:强退/权限吊销/登录锁定/验证码一次性的**即时性均依赖共享缓存**。默认 `MemoryCacheProvider` 是**进程内**:多副本负载均衡下,节点 A 的强退/降权只清了 A 的缓存,路由到节点 B 的请求仍读旧缓存(会话 TTL 可达 RefreshExpire 天级、权限/数据范围 TTL 至 `PermissionMinutes`),这些安全动作在 B 上**不即时生效**(`PermissionMinutes=0` 永不过期时 B 上永久保留旧权限)。**故:多实例部署必须配置分布式 `ICacheProvider`(如 `TenonAdmin.Caching.Redis`),否则强退/权限即时性、登录锁定、验证码一次性都只在单节点内成立。** 跨节点失效广播(利用 `IEventBus` 在副本间传播 session/perm/scope 失效)是 Redis 可选包/多实例路线的后续项。
+
 ## 16. 内置表清单(草案)
 
 因为"不支持旧版迁移",**新表结构即长期契约,需尽早稳定**。v1.0 内置表(前缀 `sys_`):

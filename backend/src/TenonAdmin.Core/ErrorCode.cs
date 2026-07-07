@@ -147,7 +147,12 @@ public enum ErrorCode
 
     // ── 50xxx 系统内部 ───────────────────────────────────────────────
 
-    /// <summary>未知系统错误(未捕获异常的统一出口,详情只进日志不出接口)</summary>
+    /// <summary>
+    /// 未知系统错误。用于操作日志里记录未捕获异常的结果码(详情只进日志不出接口)。
+    /// 注(P2-2):框架级 400(模型校验/ProblemDetails)与未捕获 500 目前<b>不</b>套本信封——
+    /// 程序缺陷该大声失败(见 AdminExceptionFilter)。要让 400/500 也走统一信封,需自写
+    /// InvalidModelStateResponseFactory + UseExceptionHandler,留待需要面向非浏览器调用方统一形状时再做。
+    /// </summary>
     [MsgKey("error.system.internal")]
     SystemError = 50000,
 }

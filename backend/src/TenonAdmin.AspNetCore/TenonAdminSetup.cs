@@ -131,7 +131,7 @@ public static class TenonAdminSetup
         services.TryAddEnumerable(ServiceDescriptor.Transient<IStartupFilter, TenonAdminMiddlewareStartupFilter>());
 
         // ── 内置 OpenAPI 文档(§13.6 契约源)+ 健康检查(§12:/health 存活 + /health/ready 依赖就绪)──
-        services.AddOpenApi();          // 产出 /openapi/v1.json;控制器显式 Result<T> 返回 → 契约含统一信封
+        services.AddOpenApi();          // 产出 /openapi/v1.json;内置控制器显式 Result<T> → 契约含信封(裸返回端点见 ResultEnvelopeFilter 契约提示)
         services.AddHealthChecks()
             .AddCheck<DatabaseHealthCheck>("db", tags: ["ready"])
             .AddCheck<CacheHealthCheck>("cache", tags: ["ready"]);

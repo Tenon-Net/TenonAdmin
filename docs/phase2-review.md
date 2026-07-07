@@ -5,6 +5,14 @@
 
 **处置图例**:FIX=本轮修复 · TEST=本轮补测试 · DOC=本轮文档化/订正措辞 · NOTE=记录为已知行为(ponytail 后置)。
 
+## 处置结果(Phase 2a 收尾,2026-07-07)
+
+**全部 34 条已处置**:12 条 P1 全修复;22 条 P2 中 18 修复 + 3 文档化(P2-2 框架 400/500 信封口径、P2-17 多节点缓存边界、P2-21 写路径越权约定)+ 1 记录为已知行为(P2-19 LIKE 通配,ponytail)。新增回归测试:37→62 用例(+25)。`dotnet build` 0 警告、`dotnet test` 62/62。基线偶发变红(P1-7)已消除,连跑稳定。
+
+提交序(dev 分支):`fix(events)` 并发 → `fix(auth)` 防爆破 → `fix(user)` 超管/口令/事务 → `fix(data)` 软删唯一键 → `fix(aspnetcore)` JWT/授权基线 → `fix(sqlsugar)` 建表闸门/WorkerId → `fix(scope)` CreateOrgId → `fix(session)` 事务/并发 → `fix(core)` DataScopeResult → `feat(aspnetcore)` CORS/健康就绪 → `test` 回归补齐 → `docs` 契约/边界订正。
+
+**后置(Phase 2b)**:RateLimiter(与 CORS 共用本轮落地的 `IStartupFilter` 挂载点)+ MySQL CI 矩阵;RoutePrefix/Version 配置化维持 v1.x。
+
 ## 处置汇总
 
 | # | 级别 | 处置 | 标题 | 位置 |

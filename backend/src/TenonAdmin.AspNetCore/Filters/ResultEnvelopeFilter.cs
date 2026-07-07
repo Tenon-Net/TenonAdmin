@@ -9,6 +9,10 @@ namespace TenonAdmin.AspNetCore;
 /// 也会被自动包成统一信封 <c>Result&lt;T&gt;</c>,不必每处手写 <c>Result.Ok(...)</c>。
 /// <para>内置控制器仍显式返回 <c>Result&lt;T&gt;</c>(OpenAPI 契约保真、意图清晰),本过滤器对它们是空操作
 /// (值已是信封即放行)。只包<b>成功(2xx)的裸 <see cref="ObjectResult"/></b>;File/StatusCode/错误结果一律不动。</para>
+/// <para><b>契约提示(P1-3)</b>:本过滤器在结果执行阶段包信封,对 ApiExplorer 不可见——故裸返回 <c>dto</c> 的
+/// 端点,其 OpenAPI 200 schema 记为 <c>dto</c>(无信封外壳),而运行时实为 <c>Result&lt;dto&gt;</c>。若该端点要经
+/// <c>openapi-typescript</c> 生成前端类型(§13.6),<b>请显式声明返回 <c>Result&lt;T&gt;</c></b>(与内置控制器一致),
+/// 使契约与运行时对齐;否则前端会把 data 误当成顶层 dto。全量裸返回自动改写 schema 的方案留待 v1.x。</para>
 /// </summary>
 // public(非 internal):判定逻辑 <see cref="TryWrap"/> 是纯函数、便于单测;用户也可能要调整它在过滤器链里的次序。
 public sealed class ResultEnvelopeFilter : IAsyncResultFilter
