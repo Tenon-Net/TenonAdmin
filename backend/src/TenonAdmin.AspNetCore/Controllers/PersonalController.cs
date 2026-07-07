@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
@@ -6,12 +5,13 @@ using TenonAdmin.Services;
 namespace TenonAdmin.AspNetCore;
 
 /// <summary>
-/// 个人中心端点(设计 §4,T8)。<c>[Authorize]</c>——任何已登录用户可用,<b>无需具体权限码</b>
-/// (与登出一致);一切操作限当前登录用户自己(userId 取自令牌,不接受任意 Id)。
+/// 个人中心端点(设计 §4,T8)。<c>[ActiveSession]</c>——任何已登录用户可用,<b>无需具体权限码</b>,
+/// 但与受权限保护的端点同源每请求校验会话活性:被强退/登出后即 401(不再靠令牌自然过期,P2-1);
+/// 一切操作限当前登录用户自己(userId 取自令牌,不接受任意 Id)。
 /// </summary>
 [ApiController]
 [Route("api/v1/personal")]
-[Authorize]
+[ActiveSession]
 public class PersonalController(IPersonalService personal, ICurrentUser currentUser) : ControllerBase
 {
     /// <summary>当前用户 Id;[Authorize] 已保证认证,理论上不为空,兜底当令牌异常处理。</summary>

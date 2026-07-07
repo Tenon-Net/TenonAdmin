@@ -26,10 +26,11 @@ public class RolePermissionAttribute : Attribute, IAsyncAuthorizationFilter
         var services = context.HttpContext.RequestServices;
         var abort = context.HttpContext.RequestAborted;
 
-        // 1. 必须已通过 JWT 认证(令牌缺失/过期/被篡改在认证中间件即被拒)
+        // 1. 必须已通过 JWT 认证(令牌缺失/过期/被篡改在认证中间件即被拒)。
+        //    401 也套统一信封(40006),与会话失活/框架 challenge 出口一致,前端可读 msgKey(P1-2)。
         if (user.Identity?.IsAuthenticated != true)
         {
-            context.Result = new UnauthorizedResult();
+            context.Result = new ObjectResult(Result<object>.Fail(ErrorCode.TokenInvalid)) { StatusCode = StatusCodes.Status401Unauthorized };
             return;
         }
 

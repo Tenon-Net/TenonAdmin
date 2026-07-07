@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
@@ -52,9 +54,11 @@ public static class TenonAdminSetup
         services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()]);
         services.AddTenonAdminServices();
 
-        // ── JWT:签名密钥惰性解析一次(含开发密钥持久化 + 警告),签发与验证共用同一实例 ──
+        // ── JWT:签名密钥惰性解析一次(生产缺配 fail-fast;开发密钥持久化 + 警告),签发与验证共用同一实例 ──
         services.TryAddSingleton(sp =>
-            JwtKeyResolver.Resolve(options.Jwt, sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(JwtKeyResolver))));
+            JwtKeyResolver.Resolve(options.Jwt,
+                sp.GetRequiredService<IHostEnvironment>(),
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(JwtKeyResolver))));
         services.TryAddSingleton<ITokenProvider>(sp => new JwtTokenProvider(
             options.Jwt, sp.GetRequiredService<SymmetricSecurityKey>(), sp.GetRequiredService<TimeProvider>()));
 
@@ -73,9 +77,24 @@ public static class TenonAdminSetup
                     ValidIssuer = options.Jwt.Issuer,
                     IssuerSigningKey = signingKey,
                     ValidateAudience = false,                   // 单体管理后台,不启用 audience 维度
-                    NameClaimType = "unique_name",              // User.Identity.Name = 登录账号
+                    ValidateLifetime = true,                    // 显式:校验 exp/nbf
+                    ClockSkew = TimeSpan.FromSeconds(30),       // 收紧默认 5 分钟宽限,贴合短命令牌策略(P2-5)
+                    NameClaimType = JwtRegisteredClaimNames.UniqueName, // User.Identity.Name = 登录账号(走常量,不写死字面量,P2-7)
+                };
+                // 未认证/令牌过期的框架 401 challenge 也套统一信封(40006),与 [RolePermission]/[ActiveSession] 一致(P1-2)
+                o.Events = new JwtBearerEvents
+                {
+                    OnChallenge = async ctx =>
+                    {
+                        ctx.HandleResponse();
+                        ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        ctx.Response.ContentType = "application/json";
+                        await ctx.Response.WriteAsJsonAsync(Result<object>.Fail(ErrorCode.TokenInvalid));
+                    },
                 };
             });
+        // 默认拒绝走 MapControllers().RequireAuthorization()(见 MapTenonAdmin),只作用于真实控制器端点、
+        // 尊重 [AllowAnonymous],且不影响未匹配路由的 404(FallbackPolicy 会把 404 劫持成 401,故不用它)。
         services.AddAuthorization();
 
         // ── MVC 控制器:本程序集作为 ApplicationPart 挂入宿主 ──
@@ -102,12 +121,19 @@ public static class TenonAdminSetup
 
     public static IEndpointRouteBuilder MapTenonAdmin(this IEndpointRouteBuilder endpoints)
     {
-        // 内置控制器路由(认证、探针;后续模块的控制器自动包含)
-        endpoints.MapControllers();
+        // 内置控制器路由(认证、探针;后续模块的控制器自动包含)。
+        // 默认拒绝(§14/P2-6):所有控制器端点强制认证,[AllowAnonymous](登录/刷新/验证码/自定义匿名控制器)显式豁免;
+        // 漏挂 [RolePermission] 的 action 也不再静默公开。只作用于真实端点,不劫持未匹配路由的 404。
+        endpoints.MapControllers().RequireAuthorization();
 
-        // OpenAPI 文档(默认 /openapi/v1.json,§13.6)+ 标准健康检查(/health,§12)
-        endpoints.MapOpenApi();
-        endpoints.MapHealthChecks("/health");
+        // OpenAPI 文档:仅开发环境暴露(生产匿名开放会泄露完整 API 契约作侦察面,P2-8);
+        // 匿名可访问(否则被上面的 FallbackPolicy 挡成 401)。§13.6 契约源本就是开发期前端代码生成用。
+        var env = endpoints.ServiceProvider.GetService<IHostEnvironment>();
+        if (env is null || env.IsDevelopment())
+            endpoints.MapOpenApi().AllowAnonymous();
+
+        // 标准健康检查(/health,§12):匿名(供编排层探针),不受默认拒绝约束
+        endpoints.MapHealthChecks("/health").AllowAnonymous();
         return endpoints;
     }
 }

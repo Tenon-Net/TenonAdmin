@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using SqlSugar;
 using TenonAdmin.Core;
 
@@ -34,16 +35,19 @@ public static class SqlSugarSetup
         services.TryAddSingleton(sources);
 
         // ── SqlSugar 客户端:官方推荐的线程安全单例形态 SqlSugarScope ───────────
-        var config = new ConnectionConfig
-        {
-            ConfigId = "TenonAdmin",
-            DbType = Enum.Parse<DbType>(db.DbType, ignoreCase: true),
-            ConnectionString = db.ConnectionString,
-            IsAutoCloseConnection = true,
-        };
-
         services.TryAddSingleton<ISqlSugarClient>(sp =>
         {
+            // SQLite 相对路径规整为相对 ContentRoot 的绝对路径(P2-3):否则从非项目目录/服务托管启动时,
+            // 库与 EnsureSqliteDirectory 建的目录会落在意外位置。就地回写 options 单例,供 DatabaseInitializer 一致读取。
+            db.ConnectionString = ResolveSqlitePath(db.DbType, db.ConnectionString, sp.GetService<IHostEnvironment>()?.ContentRootPath);
+            var config = new ConnectionConfig
+            {
+                ConfigId = "TenonAdmin",
+                DbType = Enum.Parse<DbType>(db.DbType, ignoreCase: true),
+                ConnectionString = db.ConnectionString,
+                IsAutoCloseConnection = true,
+            };
+
             var idGen = sp.GetRequiredService<IIdGenerator>();
             var time = sp.GetService<TimeProvider>() ?? TimeProvider.System; // 统一时间源,可测试(设计 §12)
             var scope = sp.GetRequiredService<IDataScopeContext>();          // 数据范围载体(单例,过滤器闭包捕获)
@@ -102,5 +106,24 @@ public static class SqlSugarSetup
         services.AddHostedService<DatabaseInitializer>();
 
         return services;
+    }
+
+    /// <summary>
+    /// SQLite 连接串里的相对 <c>Data Source</c> 规整为相对 <paramref name="contentRoot"/> 的绝对路径。
+    /// 非 SQLite / 无 ContentRoot / 已是绝对路径 / <c>:memory:</c> 一律原样返回(幂等)。
+    /// </summary>
+    internal static string ResolveSqlitePath(string dbType, string conn, string? contentRoot)
+    {
+        if (contentRoot is null || !dbType.Equals("Sqlite", StringComparison.OrdinalIgnoreCase)) return conn;
+        const string marker = "Data Source=";
+        var idx = conn.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return conn;
+        var start = idx + marker.Length;
+        var rest = conn[start..];
+        var semi = rest.IndexOf(';');
+        var path = (semi < 0 ? rest : rest[..semi]).Trim();
+        if (path.Length == 0 || path.Equals(":memory:", StringComparison.OrdinalIgnoreCase) || Path.IsPathRooted(path)) return conn;
+        var abs = Path.GetFullPath(Path.Combine(contentRoot, path));
+        return conn[..start] + abs + (semi < 0 ? "" : rest[semi..]);
     }
 }
