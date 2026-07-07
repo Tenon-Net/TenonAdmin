@@ -38,7 +38,9 @@ public class LocalFileStorageTests : IDisposable
     [Theory]
     [InlineData("../evil.txt")]
     [InlineData("a/b/../../../evil.txt")]
-    [InlineData("C:/Windows/evil.txt")]
+    // 绝对路径逃逸:用 "/evil.txt" 而非 "C:/..."——前者在两平台都是 rooted(Linux→/evil.txt、Windows→当前盘根),
+    // 都越出存储根被拒;"C:/..." 在 Linux 上不是绝对路径(无盘符),会落在根内、不构成穿越,故不能作跨平台断言。
+    [InlineData("/evil.txt")]
     public async Task Rejects_path_traversal(string malicious) =>
         await Assert.ThrowsAnyAsync<Exception>(() => _storage.SaveAsync(Bytes("x"), malicious));
 
