@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(T9 测试工程完成——xunit 单元 + WebApplicationFactory 集成 + §8 可替换性六件套 + CI;指针到 T10 打包)
+> 最后更新:2026-07-07(T10 NuGet 打包完成——5 包 0.0.1-preview + tag 发布流水线 + 消费者端到端验证;T1–T10 全部完成,指针到 Phase 2 自审)
 
 ---
 
@@ -121,10 +121,13 @@
 - CI:`.github/workflows/backend-ci.yml`(build+test,SQLite)。
 > 后置(follow-up,已在 workflow 注明):**MySQL 矩阵**——集成测试连接串现固定 SQLite,跑 MySQL 需加 MySqlConnector + 测试从环境变量读 DbType/连接串 + CI 挂 mysql 服务容器;独立小改动,不阻塞 T10。
 
-### T10 NuGet 打包
-5 包元数据(版本 0.0.1-preview、License、README、icon)、`dotnet pack` 产物验证、tag CI 推 nuget.org、申请 `TenonAdmin.*` 前缀保留。
+### T10 NuGet 打包 ✅ 完成(`21fd4fe`)
+5 包元数据入 `Directory.Build.props`(0.0.1-preview / Apache-2.0 / README 作包说明 / XML 注释随包 / Authors 等);
+元包依赖链坐实"装一个包引全部";`backend-release.yml`(tag v*→按 tag 推导版本→pack→nuget push)。
+验证:`dotnet pack` → 5 个 nupkg 0 警告;**洁净消费者工程从本地 feed 装 `TenonAdmin` → 三行 AddTenonAdmin/MapTenonAdmin 还原+编译通过**。
+> 后置(follow-up):① `PackageIcon`(预览版暂缺,发稳定版前补);② `TenonAdmin.*` ID 前缀保留——首次发布后由 owner 在 nuget.org 手动申请(无法自动化);③ 首次真推需在仓库 Secrets 配 `NUGET_API_KEY`。
 
-——以上 = M1+M3 后端部分打完。之后进 **M2 Vue 前端**(先 `DESIGN.md` + tokens 定稿,§7.1)。
+——以上 = **T1–T10 全部完成**。下一阶段:**Phase 2 自审**(code-reviewer + security-reviewer 全量过一遍:隐藏 bug / 设计缺陷 / 优化点;补做后置的 RoutePrefix-Version + RateLimiter + MySQL CI 矩阵)。之后进 **M2 Vue 前端**(先 `DESIGN.md` + tokens 定稿,§7.1)。
 
 ## 5. 遗留小事(不阻塞,顺手处理)
 
