@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using TenonAdmin.Core;
@@ -19,6 +20,10 @@ public class SessionService(
     AdminSecurityOptions security,
     TimeProvider time) : ISessionService
 {
+    // 同一用户的"淘汰旧会话 + 开新会话"串行化锁(单实例内)。避免并发登录各自读到同一活跃集合、
+    // 各淘汰不足、最终活跃数超过单端/限并发上限(P2-15)。ponytail: 进程内锁字典;多实例需分布式锁,留待 Redis 包。
+    private static readonly ConcurrentDictionary<long, SemaphoreSlim> _openLocks = new();
+
     private DateTime Now => time.GetUtcNow().UtcDateTime;
 
     /// <summary>高熵随机串的哈希:SHA-256 十六进制(不是密码,无需 PBKDF2)。</summary>
@@ -28,19 +33,33 @@ public class SessionService(
     /// <inheritdoc />
     public virtual async Task OpenAsync(SysUser user, string sessionId, TokenPair pair)
     {
-        await EnforceConcurrencyAsync(user.Id);   // 开新会话前按单端/限并发腾位
-
-        var expiresAt = pair.RefreshExpiresAt.UtcDateTime;
-        await sessions.InsertAsync(new SysSession { SessionId = sessionId, UserId = user.Id, Account = user.Account, ExpiresAt = expiresAt });
-        await refreshTokens.InsertAsync(new SysRefreshToken
+        var gate = _openLocks.GetOrAdd(user.Id, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
         {
-            SessionId = sessionId,
-            UserId = user.Id,
-            TokenHash = Sha256Hex(pair.RefreshToken),
-            ExpiresAt = expiresAt,
-            Status = RefreshTokenStatus.Active,
-        });
-        await CacheActiveAsync(sessionId, user.Id, expiresAt);
+            await EnforceConcurrencyAsync(user.Id);   // 开新会话前按单端/限并发腾位(与开会话同锁串行,防越额)
+
+            var expiresAt = pair.RefreshExpiresAt.UtcDateTime;
+            // 会话行 + 刷新令牌成对写入包事务(P2-16):半写不留"在线却不可刷新"的僵尸会话
+            var result = await sessions.Db.Ado.UseTranAsync(async () =>
+            {
+                await sessions.InsertAsync(new SysSession { SessionId = sessionId, UserId = user.Id, Account = user.Account, ExpiresAt = expiresAt });
+                await refreshTokens.InsertAsync(new SysRefreshToken
+                {
+                    SessionId = sessionId,
+                    UserId = user.Id,
+                    TokenHash = Sha256Hex(pair.RefreshToken),
+                    ExpiresAt = expiresAt,
+                    Status = RefreshTokenStatus.Active,
+                });
+            });
+            if (!result.IsSuccess) throw result.ErrorException;
+            await CacheActiveAsync(sessionId, user.Id, expiresAt);   // 缓存写在事务提交之后
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -89,7 +108,7 @@ public class SessionService(
         if (rotated == 0) throw new AdminException(ErrorCode.RefreshTokenInvalid);
 
         // 用同一 SessionId 签发新令牌对(会话延续,不新建),存新刷新令牌哈希
-        var pair = tokens.Create(new TokenSubject(user.Id, user.Account, rt.SessionId, user.IsSuperAdmin));
+        var pair = tokens.Create(new TokenSubject(user.Id, user.Account, rt.SessionId, user.IsSuperAdmin, user.OrgId));
         var expiresAt = pair.RefreshExpiresAt.UtcDateTime;
         await refreshTokens.InsertAsync(new SysRefreshToken
         {
