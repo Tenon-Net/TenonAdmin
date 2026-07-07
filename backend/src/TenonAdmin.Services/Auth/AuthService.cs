@@ -86,7 +86,7 @@ public class AuthService(
     protected virtual async Task<TokenPair> CreateTokenAsync(SysUser user)
     {
         var sessionId = Guid.CreateVersion7().ToString("N");
-        var pair = tokens.Create(new TokenSubject(user.Id, user.Account, sessionId, user.IsSuperAdmin));
+        var pair = tokens.Create(new TokenSubject(user.Id, user.Account, sessionId, user.IsSuperAdmin, user.OrgId));
         await sessions.OpenAsync(user, sessionId, pair);
         return pair;
     }

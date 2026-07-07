@@ -12,7 +12,11 @@ namespace TenonAdmin.Core;
 /// <param name="IsSuperAdmin">
 /// 超管标志:写入令牌 claim,授权管道第一步"超管直接放行"(设计 §6)据此判断,免每请求查库。
 /// </param>
-public record TokenSubject(long UserId, string Account, string SessionId, bool IsSuperAdmin = false);
+/// <param name="OrgId">
+/// 归属机构 Id(设计 §6 数据范围锚点):写入令牌 claim,供审计 AOP 把 <c>DataEntity.CreateOrgId</c>
+/// 填成创建者当时所属机构,免每次插入查库。为 null 表示用户无归属机构。
+/// </param>
+public record TokenSubject(long UserId, string Account, string SessionId, bool IsSuperAdmin = false, long? OrgId = null);
 
 /// <summary>令牌自定义 claim 名常量(禁硬编码字符串纪律,设计 §6)</summary>
 public static class TokenClaimNames
@@ -22,6 +26,9 @@ public static class TokenClaimNames
 
     /// <summary>超级管理员标志(值为 "true" 时授权直接放行)</summary>
     public const string SUPER_ADMIN = "sadm";
+
+    /// <summary>归属机构 Id(数据范围锚点,设计 §6;审计 AOP 据此填充 CreateOrgId)</summary>
+    public const string ORG_ID = "org";
 }
 
 /// <summary>

@@ -16,6 +16,9 @@ public interface ICurrentUser
     /// <summary>是否超级管理员(令牌 sadm claim);超管不受权限与数据范围约束</summary>
     bool IsSuperAdmin { get; }
 
+    /// <summary>当前用户归属机构 Id(令牌 org claim);未认证/无机构为 null。数据范围锚点 CreateOrgId 的 AOP 填充源。</summary>
+    long? OrgId { get; }
+
     /// <summary>当前请求来源 IP(原文);非 HTTP 上下文或取不到为 null。登录/操作日志(T6)记录用。</summary>
     string? IpAddress { get; }
 

@@ -26,8 +26,8 @@ public interface IOrgScoped
 public abstract class DataEntity : BaseEntity, IOrgScoped
 {
     /// <summary>
-    /// 归属机构 Id(数据范围锚点)= 创建者当时所属机构。由当前用户上下文 AOP 填充(T4 接入),
-    /// T3 数据范围过滤器按它 + 当前用户的范围规则决定行可见性。为 null 表示不受机构范围约束(如系统内建数据)。
+    /// 归属机构 Id(数据范围锚点)= 创建者当时所属机构。插入时由审计 AOP 从 <c>ICurrentUser.OrgId</c>(令牌 org claim)自动填充,
+    /// T3 数据范围过滤器按它 + 当前用户的范围规则决定行可见性。为 null 表示不受机构范围约束(系统内建数据、或创建者无归属机构)。
     /// </summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "归属机构 Id(数据范围锚点)")]
     public long? CreateOrgId { get; set; }

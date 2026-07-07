@@ -49,6 +49,8 @@ public class JwtTokenProvider(AdminJwtOptions options, SymmetricSecurityKey sign
         yield return new Claim(TokenClaimNames.SESSION_ID, subject.SessionId);
         if (subject.IsSuperAdmin)
             yield return new Claim(TokenClaimNames.SUPER_ADMIN, "true");
+        if (subject.OrgId is { } orgId)
+            yield return new Claim(TokenClaimNames.ORG_ID, orgId.ToString());
     }
 
     /// <summary>刷新令牌:64 字节加密随机 → Base64Url(512 位熵,不可猜测)</summary>
