@@ -151,6 +151,25 @@
 - **验证**:`dotnet build` 0 警告 0 错误;`dotnet test` **65→73 全绿**(新增 `ModuleCrudTests` 3 + `ModulePortalTests` 5:访问权反推/无授权空/超管见全部/菜单树按模块/默认应用设与拒 + 不变量)。集成测试经 `AdminAppFactory` 走真实 HTTP+CodeFirst+种子,等价冒烟。
 > M2 前端补:app-switcher(登录选/切应用、拉 `/personal/menu` 重建动态路由)、模块管理页、菜单表单「所属应用」选择器(设计 §7.3/§7.4)。菜单授权 CRUD(`MenuController` create/update 带 `ModuleId`)属 M2 新建。旧 dev 库已有目录行不会被种子回填 `ModuleId`(种子只插不更)——dev 阶段重置库或手动 `UPDATE sys_menu SET ModuleId=1 WHERE Id IN (1,10,20,30)`。
 
+### M2 · 设计首刀(DESIGN.md + tokens 单源)✅ 完成(2026-07-07)
+计划见 `docs/m2-frontend-plan.md`。视觉出自 **Claude Design** 工程「设计系统 Design Tokens」;因本地 CLI 无法 `/design-login`(DesignSync/WebFetch 均不通),改导出交接:导出稿留档 `web/design-mockups/design-tokens.dc.html`(JS-bundled),解码内嵌 `manifest`/`template` 拿到权威 token 定义后落地。
+- **`web/src/styles/tokens.css`**:tokens 唯一色源。中性 10 级灰阶 + 主色四档(`#646CFF` 系)+ 语义色 base+浅底;角色令牌层(`--color-bg/text/border/fill/mask`)亮色在 `:root`、暗色在 `[data-theme="dark"]` 整体翻转;字号 12/13/14/16/20/24(正文 14/22)、间距 4px 网格、圆角 4/6/8、阴影三级。
+- **`web/DESIGN.md`**:六节规范 + **token→Naive UI `GlobalThemeOverrides` 映射表**。
+- **验证**:CSS 结构良好(括号平衡、亮暗块齐全);WCAG 对比度实测——主文字 13–16:1、次文字 ~7:1 过 AA;占位文字/白字-主色按钮 ~3.2–4.1 属 AA-large(品牌靛蓝天花板,已在 DESIGN.md §6 标注)。
+> 下一刀 = **web/ 工程脚手架**:Vite+Vue3.5+Naive+Pinia+router+openapi-typescript,tokens 接进 `n-config-provider` 验证换肤,再按 §7.3 逐页 + M1.5 门户前端(app-switcher/模块管理页/菜单「所属应用」选择器)。
+
+### M2 · 工程脚手架首版 ✅ 完成(2026-07-07,待提交)
+计划见 `.claude/plans/docs-rebuild-design-md-...md`。**技术栈**:Vite 6 + Vue 3.5 + TS + **Naive UI 单套** + Pinia(+persist) + vue-router + **openapi-fetch/openapi-typescript**(弃 axios,依赖最轻)+ vue-i18n;显式 import(弃 unplugin,typecheck 洁净不依赖生成 dts);运行时图标统一 `@iconify/vue`。
+- **设计单源对齐(Phase 0)**:按新原型 `web/design-mockups/design_handoff_rbac_admin/` 改 `tokens.css`(圆角 6/10/12/16、shadow-2 更柔、`--color-header-bg`、border-strong #D3D6DB)+ `DESIGN.md`(6 主色候选、236↔76 侧栏、密度 58/48、§7.1 派生规则权威化)。
+- **请求层**:`api/client.ts`(openapi-fetch + Bearer 中间件 + 401 共享 Promise 刷新重放)+ `api/index.ts`(`unwrap()` 容忍 `Result<T>` 信封与 ProblemDetails 两形状 + `ApiError` 带 msgKey)+ `gen:api` 从 `/openapi/v1.json` 生成 `schema.d.ts`。CORS deny-all → **Vite dev proxy** `/api`+`/openapi`→:5000。
+- **菜单驱动动态路由**:`import.meta.glob` + 菜单树叶子(type=2)映射 `views/**` → `addRoute('layout')`;刷新白屏守卫(auth store 易失、F5 重建)。**修真 bug**:守卫原按 `to.meta.public` 短路,深链未注册路由先命中 public 404 → 错显 404;改为按登录态+`routesReady` 判定。
+- **门户(M1.5)**:`useModule` 单应用自动进/默认进/多应用选择器;顶栏切应用。
+- **运行时主题**:`theme/mix.ts`(派生规则纯函数 + 自检)+ `naive-theme.ts`(tokens→GlobalThemeOverrides)+ `useTheme`;**主色 6 候选运行时切换 + 舒适/紧凑密度 + 明暗**,均 `app` store 持久化。渐变/发光仅登录页/英雄区。
+- **示范页**:登录(英雄渐变按钮)、工作台、用户管理(`n-data-table`+`useTable`,真连 `/sys/user/page`)、个人资料/改密、模块选择器、404;i18n zh-CN/en-US(error.* 键=后端 msgKey)。
+- **后端小改(前端必需)**:`DefaultMenuSeed` 加 1 行页面菜单(Id 15 用户管理,`Path=/system/user`/`Component=system/user/index`)——原种子只有目录+按钮、无页面节点,动态路由无处可去。
+- **验证**:`vue-tsc --noEmit` 0 错 + `vite build` 通过;后端 `MinimalHost` 起真库(超管 `superAdmin`/`Tenon@2026`),浏览器实跑闭环:登录→单应用自动进→动态路由→工作台;点/深链 `/system/user` 表格真拉数据;**F5 深链无白屏**(守卫重建);明暗切换实测 `data-theme` 翻转 + `--color-primary` 按 accent 派生(#10B981→暗 #3bc698);accent/密度/语言持久化生效;stale token→401→刷新失败→自动登出回登录。
+> 后续刀:后端补 `GET /personal/permissions`(暴露已有 `GetPermissionCodesAsync`)→ `v-auth` 真生效;fx 动画档 + 完整双布局 Dashboard(纯 SVG/CSS);§7.3 其余页(角色授权面板/菜单管理/字典/日志)+ 模块管理页 + 菜单「所属应用」选择器;前端 CI(lint+typecheck+build)。
+
 ## 5. 遗留小事(不阻塞,顺手处理)
 
 - [ ] `BaseEntity` 暂在 SqlSugar 层(带 Sugar 特性保 Core 零依赖)——待定是否 Core POCO 化(§5.6),代码已标 ponytail(Phase 2a 审查结论:不阻塞,POCO 化需拆特性映射层,收益低,维持现状)

@@ -625,7 +625,7 @@ web/src/
 - [x] 建仓:https://github.com/DotNet-MoYu/TenonAdmin (Apache-2.0;开发走 dev 分支);基础 CI 与 NuGet 前缀保留待发首包时补
 - [x] §2.3 依赖处置清单定稿
 - [x] 本文档迁入本仓 `docs/`
-- [ ] `DESIGN.md` 定稿(含 tokens 文件初版;来源见 §7.1 设计流水线)→ M2 前完成即可
+- [x] `DESIGN.md` 定稿(含 tokens 文件初版;来源见 §7.1 设计流水线)—— 2026-07-07 落地:`web/DESIGN.md` + `web/src/styles/tokens.css`(单源,亮/暗双主题)+ token→Naive 映射;视觉出自 Claude Design,留档 `web/design-mockups/design-tokens.dc.html`
 
 ### M1 —— 后端骨架(核心里程碑)✅ 完成(T1–T10 全绿 + Phase 2 加固;细粒度进度见 `dev-plan.md`)
 - [x] `Core`:实体基类 / Result / 异常 / 扩展点接口 / 雪花 ID / Channels 事件总线(`IEventBus`+`ChannelEventBus`,T5)

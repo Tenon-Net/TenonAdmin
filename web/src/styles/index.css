@@ -1,0 +1,46 @@
+/* 全局基础样式 + 密度变量。tokens.css 已先行 import(main.ts 顺序)。 */
+
+:root {
+  --pad-page: 24px;
+  --gap-card: 16px;
+  --row-h: 58px;
+  --sidebar-w: 236px;
+  --sidebar-w-collapsed: 76px;
+  --header-h: 62px;
+}
+
+/* 紧凑档:页内边距 / 卡片间距 / 表格行高收紧(design_handoff 密度档)。 */
+:root[data-density='compact'] {
+  --pad-page: 18px;
+  --gap-card: 12px;
+  --row-h: 48px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  color: var(--color-text-primary);
+  background: var(--color-bg-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

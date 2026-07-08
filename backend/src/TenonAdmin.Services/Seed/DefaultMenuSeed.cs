@@ -31,6 +31,9 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
 
         // 组织管理目录 + 各模块代表性接口(T2)。前端完整菜单树随 M2 落地补齐,这里只播真实存在的接口。
         new SysMenu { Id = 10, ParentId = 0, Type = MenuType.Catalog, Title = "组织管理", Permission = "", Sort = 2, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
+        // 页面节点(M2 前端动态路由入口):用户管理页,component 对应 web/src/views/system/user/index.vue。
+        // 目录仅分组,页面节点才带 Path/Component;权限码留空(导航节点),按钮码由兄弟节点 11 承载。
+        new SysMenu { Id = 15, ParentId = 10, Type = MenuType.Menu, Title = "用户管理", Permission = "", Path = "/system/user", Component = "system/user/index", Icon = "ph:users-duotone", Sort = 0, Enabled = true, Visible = true },
         new SysMenu { Id = 11, ParentId = 10, Type = MenuType.Button, Title = "用户-分页", Permission = "GET:/api/v1/sys/user/page", Sort = 1, Enabled = true },
         new SysMenu { Id = 12, ParentId = 10, Type = MenuType.Button, Title = "用户-新增", Permission = "POST:/api/v1/sys/user", Sort = 2, Enabled = true },
         new SysMenu { Id = 13, ParentId = 10, Type = MenuType.Button, Title = "机构-列表", Permission = "GET:/api/v1/sys/org/list", Sort = 3, Enabled = true },
