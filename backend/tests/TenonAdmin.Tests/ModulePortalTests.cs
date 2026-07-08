@@ -60,6 +60,33 @@ public class ModulePortalTests
     }
 
     [Fact]
+    public async Task Disabled_menu_grant_does_not_expose_module()
+    {
+        using var f = new AdminAppFactory();
+        var (account, password) = await SeedUser(f, menuId: 2);
+
+        // 模拟管理员停用已授权菜单。RBAC 权限提供者已按 Enabled 过滤,门户模块反推也必须同口径,
+        // 否则用户会看到一个实际无任何生效权限的应用入口。
+        using (var scope = f.Services.CreateScope())
+        {
+            var menus = scope.ServiceProvider.GetRequiredService<IRepository<SysMenu>>();
+            var ping = await menus.GetByIdAsync(2);
+            Assert.NotNull(ping);
+            ping!.Enabled = false;
+            await menus.UpdateAsync(ping);
+        }
+
+        var c = f.CreateClient();
+        WithToken(c, await c.LoginToken(account, password));
+
+        var mods = await (await c.GetAsync("/api/v1/personal/modules")).ReadEnvelope();
+        Assert.Empty(ModuleIds(mods));
+
+        // 权限热路径同样不授出已停用菜单权限码。
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.GetAsync("/api/v1/ping")).StatusCode);
+    }
+
+    [Fact]
     public async Task No_grants_means_no_modules()
     {
         using var f = new AdminAppFactory();

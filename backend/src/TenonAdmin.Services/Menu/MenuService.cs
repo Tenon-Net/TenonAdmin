@@ -26,8 +26,9 @@ public class MenuService(
         var grantedMenuIds = await roleMenus.AsQueryable().Where(x => roleIds.Contains(x.RoleId)).Select(x => x.MenuId).ToListAsync();
         if (grantedMenuIds.Count == 0) return [];
 
-        // 整表进内存:对每个被授权菜单上溯到根目录,取根目录的 ModuleId(仅顶级目录设 ModuleId)。
-        var byId = (await menus.AsQueryable().ToListAsync()).ToDictionary(m => m.Id);
+        // 只用启用菜单反推模块访问权:与 RbacPermissionProvider 的生效权限口径一致。
+        // 若角色仍关联已停用菜单,它不应继续让用户在门户看到该模块(Permission 本身也不会授出)。
+        var byId = (await menus.AsQueryable().Where(m => m.Enabled).ToListAsync()).ToDictionary(m => m.Id);
         var accessibleModuleIds = grantedMenuIds
             .Select(id => RootModuleId(id, byId))
             .Where(mid => mid is not null)
