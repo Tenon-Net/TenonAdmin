@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "TenonAdmin.TestHost": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:56517;http://localhost:56518"
+    }
+  }
+}
