@@ -19,7 +19,7 @@ export function useTable<T>(
 ) {
   const loading = ref(false)
   const rows = ref<T[]>([]) as Ref<T[]>
-  const params = reactive<Record<string, unknown>>({ ...(opts?.initParams ?? {}) })
+  const params = reactive<Record<string, unknown>>({ ...opts?.initParams })
   const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0 })
 
   async function load() {

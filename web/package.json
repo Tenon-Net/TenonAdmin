@@ -7,11 +7,14 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
     "typecheck": "vue-tsc --noEmit",
     "gen:api": "openapi-typescript http://localhost:5000/openapi/v1.json -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@iconify/vue": "^4.3.0",
+    "@vueuse/core": "^14.3.0",
     "naive-ui": "^2.41.0",
     "openapi-fetch": "^0.13.5",
     "pinia": "^3.0.1",
@@ -24,6 +27,7 @@
     "@types/node": "^22.13.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "openapi-typescript": "^7.6.1",
+    "oxlint": "^1.73.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.11",
     "vue-tsc": "^2.2.0"
