@@ -75,6 +75,20 @@ SQLite(默认,零配置)· MySQL · SqlServer · PostgreSQL。切换只需改连
 
 尚未发布到 nuget.org —— 现阶段请从源码运行样例体验。
 
+## 仓库布局
+
+仓库分两半:`backend/`(.NET 内核,即产品本体)与 `web/`(Vue 管理端模板)。`backend/` 下采用 .NET 标准约定:
+
+| 路径 | 是什么 |
+|---|---|
+| `backend/src/` | **产品本体** —— 待发布为 NuGet 的 5 个包(`Core → SqlSugar → Services → AspNetCore` 分层 + `TenonAdmin` 元包) |
+| `backend/samples/` | 示例消费方(`MinimalHost`,演示三行启动),供抄用,不发布 |
+| `backend/tests/` | 测试项目,不发布 |
+| `backend/artifacts/` | `dotnet pack` 的产物输出,构建生成、已被 gitignore,不进版本库 |
+| `backend/Directory.*.props` | 全仓共享构建配置 + 集中版本管理(增删依赖改这里,不动各 `.csproj`) |
+
+> 内核消费者只 `dotnet add package TenonAdmin` 拿编译产物,无需关心以上布局;此表面向会 clone 本仓库的开发者。
+
 ## 文档
 
 - 设计方案:[`docs/rebuild-design.md`](docs/rebuild-design.md)
