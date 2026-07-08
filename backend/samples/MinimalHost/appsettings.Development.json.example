@@ -1,0 +1,8 @@
+{
+  "TenonAdmin": {
+    "Seed": {
+      "AdminAccount": "superAdmin",
+      "AdminPassword": ""
+    }
+  }
+}
