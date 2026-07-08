@@ -1,227 +1,164 @@
 <script setup lang="ts">
-import { reactive, ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { NForm, NFormItem, NInput, NCheckbox, useMessage } from 'naive-ui'
+import { ref, computed, watch } from 'vue'
+import { NTooltip } from 'naive-ui'
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
-import { authApi } from '@/api'
-import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
-import { btnGrad, glowSh } from '@/theme/mix'
-import { translateError } from '@/utils/error'
-import TenonLogo from '@/components/TenonLogo.vue'
+import { LOGIN_SKINS, DEFAULT_SKIN } from './skins'
 
-const router = useRouter()
-const message = useMessage()
-const { t } = useI18n()
-const user = useUserStore()
+const KEY = 'login-skin'
 const app = useAppStore()
+const { t } = useI18n()
 
-const model = reactive({ account: '', password: '', remember: true })
-const loading = ref(false)
-
-// 英雄按钮:accent 派生渐变 + 发光(仅登录页/英雄区)。
-const heroStyle = computed(() => ({ background: btnGrad(app.accent), boxShadow: glowSh(app.accent) }))
-
-async function onSubmit() {
-  if (!model.account || !model.password) {
-    message.warning(t('login.passwordPlaceholder'))
-    return
-  }
-  loading.value = true
-  try {
-    const res = await authApi.login({ account: model.account, password: model.password })
-    user.setSession(res)
-    message.success(t('login.success'))
-    router.replace('/')
-  } catch (e) {
-    message.error(translateError(e))
-  } finally {
-    loading.value = false
-  }
+function initSkin(): string {
+  // ?skin= 一次性覆盖(便于对比预览),否则读记忆,再回退默认。
+  const q = new URLSearchParams(window.location.search).get('skin')
+  if (q && LOGIN_SKINS.some((s) => s.id === q)) return q
+  const saved = localStorage.getItem(KEY)
+  if (saved && LOGIN_SKINS.some((s) => s.id === saved)) return saved
+  return DEFAULT_SKIN
 }
+
+const skin = ref(initSkin())
+watch(skin, (v) => localStorage.setItem(KEY, v))
+
+const active = computed(() => LOGIN_SKINS.find((s) => s.id === skin.value) ?? LOGIN_SKINS[0])
 </script>
 
 <template>
-  <div class="login">
-    <!-- 左:品牌面板(窄屏隐藏)-->
-    <div class="panel">
-      <div class="glow" />
-      <div class="panel-inner">
-        <div class="logo">
-          <TenonLogo :size="40" />
-          <span>TenonAdmin</span>
-        </div>
-        <div class="bar" :style="{ background: app.accent }" />
-        <h1 class="headline">企业级<span :style="{ color: app.accent }">权限</span>管理后台</h1>
-        <p class="sub">{{ t('login.subtitle') }}</p>
-        <ul class="points">
-          <li v-for="p in ['RBAC 角色授权', '多机构数据范围', '多应用门户']" :key="p">
-            <Icon icon="ph:check-circle-duotone" :width="18" :style="{ color: app.accent }" />{{ p }}
-          </li>
-        </ul>
-      </div>
+  <div class="login-shell">
+    <component :is="active.component" />
+
+    <!-- 全局工具:主题 + 语言。深色磨砂药丸,在明/暗/极光三种底色上都可读,三种皮肤通用。 -->
+    <div class="login-tools">
+      <n-tooltip>
+        <template #trigger>
+          <button
+            class="tool-btn"
+            type="button"
+            :aria-label="app.dark ? t('app.light') : t('app.dark')"
+            @click="app.toggleDark()"
+          >
+            <Icon :icon="app.dark ? 'ph:moon-stars' : 'ph:sun'" :width="18" />
+          </button>
+        </template>
+        {{ app.dark ? t('app.light') : t('app.dark') }}
+      </n-tooltip>
+      <n-tooltip>
+        <template #trigger>
+          <button
+            class="tool-btn tool-lang"
+            type="button"
+            :aria-label="t('app.language')"
+            @click="app.setLocale(app.locale === 'zh-CN' ? 'en-US' : 'zh-CN')"
+          >
+            {{ app.locale === 'zh-CN' ? '中' : 'EN' }}
+          </button>
+        </template>
+        {{ t('app.language') }}
+      </n-tooltip>
     </div>
 
-    <!-- 右:登录卡 -->
-    <div class="form-wrap">
-      <div class="card">
-        <h2 class="card-title">{{ t('login.title') }}</h2>
-        <n-form :model="model" @keyup.enter="onSubmit">
-          <n-form-item :label="t('login.account')" path="account">
-            <n-input v-model:value="model.account" :placeholder="t('login.accountPlaceholder')" size="large">
-              <template #prefix><Icon icon="ph:user" /></template>
-            </n-input>
-          </n-form-item>
-          <n-form-item :label="t('login.password')" path="password">
-            <n-input
-              v-model:value="model.password"
-              type="password"
-              show-password-on="click"
-              :placeholder="t('login.passwordPlaceholder')"
-              size="large"
-            >
-              <template #prefix><Icon icon="ph:lock" /></template>
-            </n-input>
-          </n-form-item>
-          <div class="row">
-            <n-checkbox v-model:checked="model.remember">{{ t('login.remember') }}</n-checkbox>
-          </div>
-          <button class="hero-btn" :style="heroStyle" :disabled="loading" @click.prevent="onSubmit">
-            {{ loading ? t('common.loading') : t('login.submit') }}
-          </button>
-        </n-form>
-        <p class="hint">superAdmin / 首启控制台打印的密码</p>
-      </div>
+    <!-- 皮肤切换器:深色磨砂药丸,在明/暗/极光三种底色上都可读 -->
+    <div class="skin-switch" role="tablist" aria-label="登录页样式">
+      <button
+        v-for="s in LOGIN_SKINS"
+        :key="s.id"
+        class="skin-seg"
+        :class="{ active: s.id === skin }"
+        type="button"
+        role="tab"
+        :aria-selected="s.id === skin"
+        @click="skin = s.id"
+      >
+        {{ s.label }}
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.login {
+.login-shell {
+  position: relative;
   height: 100vh;
-  display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  background: var(--color-bg-body);
-}
-.panel {
-  position: relative;
   overflow: hidden;
-  background: var(--color-bg-container);
-  border-right: 1px solid var(--color-border);
 }
-.glow {
-  position: absolute;
-  width: 320px;
-  height: 320px;
-  top: -80px;
-  left: -60px;
-  border-radius: 50%;
-  background: var(--color-primary-light);
-  filter: blur(80px);
-  opacity: 0.7;
-}
-.panel-inner {
-  position: relative;
-  padding: 64px 56px;
+/* 全局工具药丸(右上),与底部皮肤切换器同款磨砂,自带对比,三底色皆可读 */
+.login-tools {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 10;
   display: flex;
-  flex-direction: column;
-  height: 100%;
-  justify-content: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(18, 20, 28, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
 }
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-.bar {
-  width: 40px;
-  height: 3px;
-  border-radius: 2px;
-  margin: 28px 0 20px;
-}
-.headline {
-  font-size: 42px;
-  line-height: 1.2;
-  font-weight: 800;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-.sub {
-  color: var(--color-text-secondary);
-  margin: 16px 0 28px;
-}
-.points {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.points li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--color-text-secondary);
-}
-.form-wrap {
-  display: flex;
+.tool-btn {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-}
-.card {
-  width: 100%;
-  max-width: 400px;
-  padding: 40px 36px;
-  background: var(--color-bg-container);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-2);
-}
-.card-title {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0 0 24px;
-}
-.row {
-  margin: 4px 0 20px;
-}
-.hero-btn {
-  width: 100%;
-  height: 48px;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 10px;
   border: none;
-  border-radius: var(--radius-md);
-  color: #fff;
-  font-size: var(--font-size-md);
-  font-weight: 600;
   cursor: pointer;
-  transition: transform var(--transition-fast);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.62);
+  transition:
+    color 0.2s,
+    background 0.2s;
 }
-.hero-btn:hover {
-  transform: translateY(-2px);
+.tool-btn:hover {
+  color: #fff;
 }
-.hero-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
+.tool-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
-.hint {
-  margin-top: 18px;
-  text-align: center;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-tertiary);
+/* ponytail: 固定深色药丸自带对比,纯白 spotlight 底部也够读;若极端不够再补浅色 scrim */
+.skin-switch {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(18, 20, 28, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
 }
-@media (max-width: 900px) {
-  .login {
-    grid-template-columns: 1fr;
-  }
-  .panel {
-    display: none;
-  }
+.skin-seg {
+  border: none;
+  cursor: pointer;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.62);
+  transition:
+    color 0.2s,
+    background 0.2s;
+}
+.skin-seg:hover {
+  color: #fff;
+}
+.skin-seg.active {
+  background: var(--color-primary);
+  color: #fff;
 }
 </style>
