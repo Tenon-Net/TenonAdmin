@@ -5,7 +5,7 @@ import App from './App.vue'
 import { router } from './router'
 import { i18n } from './locales'
 import { vAuth } from './directives/auth'
-import { preloadRuntimeIcons } from './lib/icons'
+import { setupIcons } from './lib/icons'
 import './styles/tokens.css'
 import './styles/index.css'
 
@@ -18,5 +18,5 @@ app.use(pinia) // 必须在 router 之前:守卫用到 store
 app.use(router)
 app.use(i18n)
 app.directive('auth', vAuth)
-void preloadRuntimeIcons() // 预热离线图标注册(ph),非阻塞:注册后 <Icon> 从本地渲染,不再命中外部 CDN
+setupIcons() // 注册离线图标集 + 本地 SVG,预热 ph(非阻塞:注册后 <Icon> 从本地渲染,不命中外部 CDN)
 app.mount('#app')

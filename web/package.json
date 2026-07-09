@@ -19,6 +19,7 @@
     "openapi-fetch": "^0.13.5",
     "pinia": "^3.0.1",
     "pinia-plugin-persistedstate": "^4.2.0",
+    "tenon-naive-iconify-picker": "^0.1.2",
     "vue": "^3.5.13",
     "vue-i18n": "^11.1.1",
     "vue-router": "^4.5.0"
