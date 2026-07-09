@@ -64,10 +64,12 @@ public static class SqlSugarSetup
                 // 按接口匹配(SqlSugar 不对基类生效,只认接口/精确类型,与软删过滤器一致)。
                 // 表达式里 scope.Current 的三个属性都与实体参数无关,SqlSugar 先本地求值成常量(机构集合 → SQL IN),
                 // 再与实体相关的部分拼成 WHERE;Unrestricted 时整体恒真(不过滤)。
+                // 两个布尔标记写成 `== true` 而非裸布尔:SqlServer 的谓词上下文不接受裸标量(裸 1/0 → "非布尔类型的表达式"),
+                // 必须是比较式(渲染成 `@p = 1`)。软删过滤器 `e.IsDelete == false` 同理已是比较式,故本就跨方言可用。
                 client.QueryFilter.AddTableFilter<IOrgScoped>(e =>
-                    scope.Current.IsUnrestricted
+                    scope.Current.IsUnrestricted == true
                     || (e.CreateOrgId != null && scope.Current.OrgIds.Contains(e.CreateOrgId.Value))
-                    || (scope.Current.IncludeSelf && e.CreateUserId == scope.Current.UserId));
+                    || (scope.Current.IncludeSelf == true && e.CreateUserId == scope.Current.UserId));
 
                 // 审计字段自动填充:业务代码只管业务字段,基建字段框架兜底(见 BaseEntity 注释)
                 client.Aop.DataExecuting = (_, info) =>
