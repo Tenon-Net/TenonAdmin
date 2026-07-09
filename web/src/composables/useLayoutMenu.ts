@@ -8,11 +8,12 @@ import { useAppStore } from '@/stores/app'
 import { t } from '@/locales'
 import { MenuType, type MenuNode } from '@/types/menu'
 
-function renderIcon(name?: string) {
-  return name ? () => h(Icon, { icon: name, width: 18, height: 18 }) : undefined
+// 无图标兜底:rail/折叠态的 n-menu 只画图标,缺图标会渲染成空槽“消失”(§组织管理),故永不返回 undefined。
+function renderIcon(name: string | undefined, fallback = 'ph:dot-outline-duotone') {
+  return () => h(Icon, { icon: name || fallback, width: 18, height: 18 })
 }
 
-// 菜单树 → n-menu options:剥按钮、丢空目录、页面叶子 key=路由 path。
+// 菜单树 → n-menu options:剥按钮、丢空目录、页面叶子 key=路由 path。目录/叶子各自兜底图标。
 function toOptions(nodes: MenuNode[]): MenuOption[] {
   return [...nodes]
     .sort((a, b) => a.sort - b.sort)
@@ -21,7 +22,7 @@ function toOptions(nodes: MenuNode[]): MenuOption[] {
       if (n.type === MenuType.Catalog) {
         const children = toOptions(n.children ?? [])
         if (!children.length) return null
-        return { label: n.title, key: `cat-${n.id}`, icon: renderIcon(n.icon), children }
+        return { label: n.title, key: `cat-${n.id}`, icon: renderIcon(n.icon, 'ph:folder-duotone'), children }
       }
       return { label: n.title, key: n.path ?? `menu-${n.id}`, icon: renderIcon(n.icon) }
     })

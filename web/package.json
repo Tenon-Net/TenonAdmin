@@ -24,6 +24,10 @@
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@iconify-json/ant-design": "^1.2.8",
+    "@iconify-json/ep": "^1.2.4",
+    "@iconify-json/lucide": "^1.2.116",
+    "@iconify-json/ph": "^1.2.2",
     "@types/node": "^22.13.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "openapi-typescript": "^7.6.1",

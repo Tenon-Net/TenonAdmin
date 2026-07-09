@@ -730,6 +730,158 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/menu/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 全量菜单树(管理端,含停用节点与按钮,全字段) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfMenuTreeNode"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfMenuTreeNode"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfMenuTreeNode"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/menu/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 新增菜单,返回新 Id */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MenuInput"];
+                    "text/json": components["schemas"]["MenuInput"];
+                    "application/*+json": components["schemas"]["MenuInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOflong"];
+                        "application/json": components["schemas"]["ResultOflong"];
+                        "text/json": components["schemas"]["ResultOflong"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/menu/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新菜单 */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MenuInput"];
+                    "text/json": components["schemas"]["MenuInput"];
+                    "application/*+json": components["schemas"]["MenuInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** 删除菜单(软删;带子节点则拒删) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/module/list": {
         parameters: {
             query?: never;
@@ -2434,6 +2586,27 @@ export interface components {
             account: string;
             name: string;
         };
+        /**
+         * @description 菜单新增/编辑入参。long? MenuInput.ModuleId<b>仅顶级目录(ParentId==0)有效</b>,
+         *     服务端对子节点强制置空——模块归属由树上溯根目录解析(见 `MenuService`),子节点不冗余存。
+         */
+        MenuInput: {
+            /** Format: int64 */
+            parentId?: number | string;
+            type?: components["schemas"]["MenuType"];
+            title?: string;
+            /** @description 规范化路由权限码(页面/按钮节点用),形如 `GET:/api/v1/ping`;目录留空。 */
+            permission?: string;
+            /** Format: int32 */
+            sort?: number | string;
+            enabled?: boolean;
+            /** Format: int64 */
+            moduleId?: null | number | string;
+            path?: null | string;
+            component?: null | string;
+            icon?: null | string;
+            visible?: boolean;
+        };
         /** @description 侧边栏菜单树节点(前端动态路由用)。 */
         MenuNode: {
             /** Format: int64 */
@@ -2450,6 +2623,30 @@ export interface components {
             visible?: boolean;
             /** @description 子节点(按 Sort、Id 排序)。 */
             children?: components["schemas"]["MenuNode"][];
+        };
+        /**
+         * @description 菜单管理端树节点(<b>全字段</b>:含权限码 / 启用 / 所属模块 / 按钮节点)。
+         *     与门户 MenuNode 区分——后者只承载前端导航需要的字段、且不含按钮。
+         */
+        MenuTreeNode: {
+            /** Format: int64 */
+            id: number | string;
+            /** Format: int64 */
+            parentId?: number | string;
+            type?: components["schemas"]["MenuType"];
+            title: string;
+            permission?: string;
+            /** Format: int32 */
+            sort?: number | string;
+            enabled?: boolean;
+            /** Format: int64 */
+            moduleId?: null | number | string;
+            path?: null | string;
+            component?: null | string;
+            icon?: null | string;
+            visible?: boolean;
+            /** @description 子节点(按 Sort、Id 排序)。 */
+            children?: components["schemas"]["MenuTreeNode"][];
         };
         /** @description 菜单节点类型(设计 §16 目录/页面/按钮三级)。用枚举而非魔法数;存库为 int。 */
         MenuType: number;
@@ -2856,6 +3053,28 @@ export interface components {
             message?: null | string;
             /** @description 业务数据载荷 */
             data?: null | components["schemas"]["MenuNode"][];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyListOfMenuTreeNode: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | components["schemas"]["MenuTreeNode"][];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。

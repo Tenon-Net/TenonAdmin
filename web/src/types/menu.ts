@@ -31,3 +31,35 @@ export interface AppModule {
   defaultRoute?: string
   sort: number
 }
+
+/** 菜单管理端树节点(后端 MenuTreeNode;全字段,含权限码 / 启用 / 所属模块 / 按钮节点)。 */
+export interface MenuTreeNode {
+  id: number
+  parentId: number
+  type: MenuType
+  title: string
+  permission: string
+  sort: number
+  enabled: boolean
+  moduleId?: number | null
+  path?: string | null
+  component?: string | null
+  icon?: string | null
+  visible: boolean
+  children: MenuTreeNode[]
+}
+
+/** 菜单新增/编辑入参(后端 MenuInput;moduleId 仅顶级目录有效)。 */
+export interface MenuInput {
+  parentId: number
+  type: MenuType
+  title: string
+  permission: string
+  sort: number
+  enabled: boolean
+  moduleId?: number | null
+  path?: string | null
+  component?: string | null
+  icon?: string | null
+  visible: boolean
+}

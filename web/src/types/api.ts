@@ -48,3 +48,27 @@ export interface UserItem {
   isSuperAdmin: boolean
   createTime: string
 }
+
+/** 模块/应用管理行(后端 SysModule;列表全字段)。 */
+export interface ModuleRow {
+  id: number
+  code: string
+  title: string
+  icon?: string | null
+  defaultRoute?: string | null
+  sort: number
+  enabled: boolean
+  remark?: string | null
+  createTime?: string
+}
+
+/** 模块新增/编辑入参(后端 ModuleInput)。 */
+export interface ModuleInput {
+  code: string
+  title: string
+  icon?: string | null
+  defaultRoute?: string | null
+  sort: number
+  enabled: boolean
+  remark?: string | null
+}

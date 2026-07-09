@@ -1,6 +1,6 @@
 import { client } from './client'
-import type { LoginOutput, MyModulesOutput, PagedList, UserItem, UserProfile } from '@/types/api'
-import type { MenuNode } from '@/types/menu'
+import type { LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, UserItem, UserProfile } from '@/types/api'
+import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
 export class ApiError extends Error {
@@ -76,4 +76,22 @@ export const userApi = {
       })
       .then((r) => unwrap<PagedList<UserItem>>(r))
       .then((p) => ({ items: p.items, total: p.total })),
+}
+
+export const moduleApi = {
+  list: () => client.GET('/api/v1/sys/module/list', {}).then((r) => unwrap<ModuleRow[]>(r)),
+  add: (body: ModuleInput) => client.POST('/api/v1/sys/module/add', { body }).then((r) => unwrap<number>(r)),
+  update: (id: number, body: ModuleInput) =>
+    client.PUT('/api/v1/sys/module/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
+  remove: (id: number) =>
+    client.DELETE('/api/v1/sys/module/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+}
+
+export const menuApi = {
+  tree: () => client.GET('/api/v1/sys/menu/tree', {}).then((r) => unwrap<MenuTreeNode[]>(r)),
+  add: (body: MenuInput) => client.POST('/api/v1/sys/menu/add', { body }).then((r) => unwrap<number>(r)),
+  update: (id: number, body: MenuInput) =>
+    client.PUT('/api/v1/sys/menu/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
+  remove: (id: number) =>
+    client.DELETE('/api/v1/sys/menu/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
 }
