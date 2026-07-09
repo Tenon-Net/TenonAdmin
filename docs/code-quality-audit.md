@@ -60,11 +60,11 @@
 
 > 均已核对源码确认。多数是“为后续开发打基础”应先补齐的项，而非线上事故。
 
-### 🔴 高 —— `DataEntity` 写路径越权（IDOR），面向即将开发的业务表
+### ✅ 已修复（原 🔴 高）—— `DataEntity` 写路径越权（IDOR）
 
-- **现象**：数据范围全局过滤器**只作用于查询（SELECT）**，不作用于按主键的 `Update`/`Delete`。对继承 `DataEntity` 的**机构隔离业务表**，直接 `repo.DeleteAsync(id)`/`UpdateAsync(dto)` 不带范围谓词，**能改删他机构的行**。
-- **现状**：当前内核 CRUD 模块（Position/Org/Menu/Module/User）都用 `BaseEntity`，**尚未触发**；代码作者已在 `DataEntity.cs:25-29`（P2-21）明确记录此坑。属**潜在**风险，但你接下来写的第一张机构隔离业务表就会踩到。
-- **建议**：① 业务服务的改/删**先经 `AsQueryable()`（带范围过滤）读到再写**（看不到即拒），这是内置服务的范式，已写入[新建业务指南 A1]；② 补一个 `DataEntity` 的 CRUD 参考模块作抄写样板；③ 评估“写路径自动补范围谓词”的机制级兜底（作者已把它列为待办）。
+- **原现象**：数据范围全局过滤器只作用于查询（SELECT），不作用于按主键的 `Update`/`Delete`，继承 `DataEntity` 的机构隔离业务表可被越权改删他机构行。
+- **修复（2026-07-09）**：`SqlSugarRepository` 对 `IOrgScoped` 实体的 `UpdateAsync`/`DeleteAsync` 内置**写路径范围守卫**——写前经带范围过滤器的查询确认目标行在当前数据范围内，越权写返回 `0` 拒绝（`BaseEntity` 编译期静态短路，零开销）。**默认安全**，开发者无需记范式。
+- **配套**：消费方 DataEntity CRUD 范本 `backend/tests/TenonAdmin.TestHost/SampleDoc*`；数据层越权测试 `DataScopeTests.Write_path_blocks_cross_org_update_and_delete` + HTTP 端到端 `SampleDocScopeTests`（经真实授权管道的范围解析）。详见[新建业务指南](./new-business-guide.md) A1。
 
 ### 🟠 中 —— 三处缓存/会话失效遗漏（授权变更并非全都“即时生效”）
 
@@ -97,7 +97,7 @@
 ## 三、结论
 
 - **可以放心在此基础上继续开发。** 架构分层、可替换性、缓存/性能、后端注释都达到了产品级内核的水准。
-- **动业务代码前，优先处理**：🔴 `DataEntity` 写路径校验范式（写进你的第一张业务表）、🟠 三处失效遗漏、🟠 权限码反向一致性校验。
+- **动业务代码前，优先处理**：🟠 三处失效遗漏、🟠 权限码反向一致性校验。（🔴 `DataEntity` 写路径 IDOR 已于 2026-07-09 机制级修复）
 - **持续改进**：前端 `.vue` 注释、`v-auth` 接线、脚手架模板。
 
 ### 建议的后续任务清单
@@ -105,7 +105,7 @@
 - [ ] 停用用户时吊销其会话（`ISessionService` 加按 userId 吊销）
 - [ ] 菜单变更时失效受影响用户的 `perm:{userId}`
 - [ ] 机构树变更时使 `scope` 缓存失效（版本号/epoch 方案）
-- [ ] 提供 `DataEntity` 机构隔离 CRUD 参考模块（含写前范围校验）
+- [x] 提供 `DataEntity` 机构隔离 CRUD 参考模块 + 写路径范围守卫（机制级默认安全，2026-07-09）
 - [ ] `PermissionCodeConsistencyTests` 加“受权端点必须有菜单节点”反向断言
 - [ ] 处理 `ScanApplicationAssemblies` 空开关（实现或标记 `[Obsolete]`）
 - [ ] 门户菜单/模块读酌情加缓存

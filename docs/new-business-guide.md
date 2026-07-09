@@ -33,8 +33,8 @@ public class Product : DataEntity   // 或 BaseEntity
 - 审计字段（Id/CreateTime/CreateUserId/CreateOrgId/UpdateTime/UpdateUserId）由 AOP 自动填，**不要手写**。
 - CodeFirst 会自动建表：内核内加时该实体在 `TenonAdmin.Services` 程序集，已在扫描范围。
 
-> ⚠️ **`DataEntity` 写路径越权风险（P2-21，务必牢记）**：数据范围全局过滤器**只作用于查询（SELECT），不作用于按主键的 Update/Delete**。因此对 `DataEntity` 业务表，`repo.DeleteAsync(id)` / `UpdateAsync(dto)` **不带范围谓词，能改删他机构的行（IDOR）**。
-> **安全范式**：改/删前先经 `AsQueryable()`（带范围过滤）读到该行——看不到即拒（抛 `NotFound`），再写。内置服务（如 `PositionService.UpdateAsync` 先 `GetAsync` 再改）都这么做。你的业务服务**务必照做**，或在写前显式校验 `CreateOrgId` 归属。参照 `DataEntity.cs:25-29`。
+> ✅ **`DataEntity` 写路径已默认安全（P2-21）**：数据范围全局过滤器只作用于查询（SELECT），但 `SqlSugarRepository` 对 `IOrgScoped` 实体的 `Update`/`Delete` **已内置写路径范围守卫**——写前确认目标行在当前数据范围内，越权改删他机构行会被拒（返回 0）。默认安全，无需手动加。
+> **仍建议**：改/删前先 `GetByIdAsync`（经范围过滤）校验存在，看不到即返回准确的"未找到/无权"，再写。抄写样板见消费方范本 `backend/tests/TenonAdmin.TestHost/`（`SampleDoc` + `SampleDocService` + `SampleDocController` 全套 DataEntity CRUD）。绕过仓储走 `Db.Updateable/Deleteable` 逃生舱口的写不受守卫，需自行校验归属。
 
 ### A2. DTO　`Services/Product/ProductModels.cs`
 
