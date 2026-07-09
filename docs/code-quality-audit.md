@@ -85,7 +85,7 @@
 ### 🟠 中 —— 新建业务缺脚手架 + 权限码易漂移
 
 - **无代码生成**：一个最小 CRUD 模块要手改 ~8 个文件跨 4 个工程，每个域都是手抄兄弟域。建议做 `dotnet new tenon-module` 模板或源生成器。
-- **权限码手工双写**：控制器路由（真源）与 `DefaultMenuSeed.Permission` 字符串手工同步。`PermissionCodeConsistencyTests` 只校验“种子→端点”，**不校验反向**——挂了 `[RolePermission]` 却没有菜单节点的端点会对普通用户静默 403，无测试无告警。建议加反向断言或启动时列出“无菜单节点的受权端点”。
+- **权限码手工双写**：控制器路由（真源）与 `DefaultMenuSeed.Permission` 字符串手工同步。~~`PermissionCodeConsistencyTests` 只校验“种子→端点”，不校验反向~~ → **✅ 已加反向锁（2026-07-09）**：`Every_permission_endpoint_is_seeded_or_explicitly_known_unseeded` 断言每个 `[RolePermission]` 端点要么有种子菜单节点、要么显式登记在 `KnownUnseededEndpoints`（当前 28 个仅超管可用的端点，随前端 M2 菜单树落地而缩小）。新增受权端点若既无菜单又不登记 → 测试红，杜绝“静默 403”无声漂移。（`dotnet new tenon-module` 脚手架/源生成器仍为独立待办。）
 - **`ScanApplicationAssemblies` 是误导性空开关**：默认 `true` 但未实现（`TenonAdminOptions.cs:31`），只有 `ApplicationAssemblies.Add(...)` 真正生效。建议实现或标 `[Obsolete]`。
 
 ### 🟡 低
@@ -101,7 +101,7 @@
 ## 三、结论
 
 - **可以放心在此基础上继续开发。** 架构分层、可替换性、缓存/性能、后端注释都达到了产品级内核的水准。
-- **动业务代码前，优先处理**：🟠 权限码反向一致性校验。（🔴 `DataEntity` 写路径 IDOR、🟠 三处缓存/会话失效遗漏均已于 2026-07-09 修复）
+- **原“动业务代码前优先处理”的高/中危项已全部于 2026-07-09 清零**：🔴 `DataEntity` 写路径 IDOR、🟠 三处缓存/会话失效遗漏、🟠 权限码反向一致性校验均已修复。剩余为 🟡 低（前端注释/`v-auth` 接线/列 i18n）与独立增强（脚手架模板、`ScanApplicationAssemblies` 空开关、门户读缓存）。
 - **持续改进**：前端 `.vue` 注释、`v-auth` 接线、脚手架模板。
 
 ### 建议的后续任务清单
@@ -110,7 +110,7 @@
 - [x] 菜单变更时失效受影响用户的 `perm:{userId}`（`IRbacService.InvalidatePermissionsByMenuAsync`，2026-07-09）
 - [x] 机构树变更时使 `scope` 缓存失效（`IRbacService.InvalidateAllScopesAsync`，全体失效；epoch 方案留作大规模升级路径，2026-07-09）
 - [x] 提供 `DataEntity` 机构隔离 CRUD 参考模块 + 写路径范围守卫（机制级默认安全，2026-07-09）
-- [ ] `PermissionCodeConsistencyTests` 加“受权端点必须有菜单节点”反向断言
+- [x] `PermissionCodeConsistencyTests` 加反向锁：端点须有菜单节点或显式登记 `KnownUnseededEndpoints`（2026-07-09）
 - [ ] 处理 `ScanApplicationAssemblies` 空开关（实现或标记 `[Obsolete]`）
 - [ ] 门户菜单/模块读酌情加缓存
 - [ ] 前端 `.vue` 视图补 WHY 注释；统一列标题 i18n 工厂形式
