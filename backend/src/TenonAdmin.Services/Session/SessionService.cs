@@ -144,6 +144,17 @@ public class SessionService(
     }
 
     /// <inheritdoc />
+    public virtual async Task RevokeAllForUserAsync(long userId)
+    {
+        // 与 EnforceConcurrencyAsync 同款"按 userId 取活跃会话再逐个吊销",少了单端/限并发的名额判断——
+        // 停用/删除用户要下线其全部会话。逐个 RevokeAsync 复用其"标记两表 + 清会话缓存"逻辑。
+        var active = await sessions.AsQueryable()
+            .Where(s => s.UserId == userId && s.RevokedAt == null && s.ExpiresAt > Now)
+            .ToListAsync();
+        foreach (var s in active) await RevokeAsync(s.SessionId);
+    }
+
+    /// <inheritdoc />
     public virtual Task<PagedList<OnlineSessionItem>> ListOnlineAsync(SessionPageInput input) =>
         sessions.AsQueryable()
             .Where(s => s.RevokedAt == null && s.ExpiresAt > Now)

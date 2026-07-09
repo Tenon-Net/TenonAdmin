@@ -7,7 +7,7 @@ namespace TenonAdmin.Services;
 /// <see cref="IOrgService"/> 默认实现。机构树本身不做环检测(设计上只禁止"父指向自己"这一种一步环),
 /// 更复杂的多级环由前端拼树时天然规避(找不到父节点的机构不会出现在树上)。
 /// </summary>
-public class OrgService(IRepository<SysOrg> orgs) : IOrgService
+public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgService
 {
     /// <inheritdoc />
     public virtual async Task<IReadOnlyList<SysOrg>> ListAsync() =>
@@ -40,6 +40,8 @@ public class OrgService(IRepository<SysOrg> orgs) : IOrgService
             Enabled = input.Enabled,
         };
         await orgs.InsertAsync(entity);
+        // 新增机构改变了祖先"本机构及以下"的子孙集 → 失效全体 scope,新机构的数据方能被相应范围用户看见
+        await rbac.InvalidateAllScopesAsync();
         return entity.Id;
     }
 
@@ -62,6 +64,8 @@ public class OrgService(IRepository<SysOrg> orgs) : IOrgService
         entity.Sort = input.Sort;
         entity.Enabled = input.Enabled;
         await orgs.UpdateAsync(entity);
+        // 改父/改编码等结构变更可能改变"本机构及以下"解析 → 失效全体 scope
+        await rbac.InvalidateAllScopesAsync();
     }
 
     /// <inheritdoc />
@@ -69,5 +73,7 @@ public class OrgService(IRepository<SysOrg> orgs) : IOrgService
     {
         AdminException.ThrowIf(await orgs.AnyAsync(o => o.ParentId == id), ErrorCode.OrgHasChildren);
         await orgs.DeleteAsync(id);
+        // 删除机构改变了相关"本机构及以下"子孙集 → 失效全体 scope
+        await rbac.InvalidateAllScopesAsync();
     }
 }

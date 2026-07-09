@@ -14,6 +14,7 @@ public class UserService(
     IRepository<SysUser> users,
     IPasswordHasher hasher,
     IRbacService rbac,
+    ISessionService sessions,
     AdminSecurityOptions security) : IUserService
 {
     // 生成随机初始口令的字符集:去掉易混字符(0/O、1/l/I),含大小写+数字+符号。
@@ -117,6 +118,8 @@ public class UserService(
         {
             await users.UpdateAsync(user);
             await rbac.SetUserRolesAsync(id, input.RoleIds);   // 全量重设角色 + 失效其权限缓存
+            // 经通用更新面停用 → 也要下线其会话(否则原访问令牌到期前仍可用;刷新已被 RefreshAsync 挡)
+            if (!input.Enabled) await sessions.RevokeAllForUserAsync(id);
         });
     }
 
@@ -131,6 +134,7 @@ public class UserService(
         {
             await rbac.SetUserRolesAsync(id, []);   // 先清角色(顺带失效缓存),再软删——避免残留孤儿关联
             await users.DeleteAsync(id);
+            await sessions.RevokeAllForUserAsync(id);   // 删除用户即下线其全部会话(原令牌不再可用)
         });
     }
 
@@ -155,6 +159,8 @@ public class UserService(
 
         user!.Enabled = enabled;
         await users.UpdateAsync(user);
+        // 停用即下线其全部会话 → 原访问令牌下次请求即 401(不等自然过期);启用则不动会话
+        if (!enabled) await sessions.RevokeAllForUserAsync(id);
     }
 
     /// <summary>

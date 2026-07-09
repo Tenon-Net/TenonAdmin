@@ -82,6 +82,27 @@ public class RbacService(
     public virtual Task<SysRoleDataScope?> GetRoleDataScopeAsync(long roleId) =>
         roleScopes.GetFirstAsync(x => x.RoleId == roleId);
 
+    /// <inheritdoc />
+    public virtual async Task InvalidatePermissionsByMenuAsync(long menuId)
+    {
+        // 菜单 → 授它的角色(sys_role_menu) → 挂这些角色的用户(sys_user_role) → 失效其权限缓存。
+        // 菜单 CRUD 低频,过量失效无害(下次请求按新授权重算);软删菜单不清 sys_role_menu,故删后此扇出仍能命中受影响用户。
+        var roleIds = await roleMenus.AsQueryable().Where(x => x.MenuId == menuId).Select(x => x.RoleId).ToListAsync();
+        if (roleIds.Count == 0) return;
+        var affectedUsers = await userRoles.AsQueryable().Where(x => roleIds.Contains(x.RoleId)).Select(x => x.UserId).ToListAsync();
+        await InvalidatePermissionsAsync(affectedUsers);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task InvalidateAllScopesAsync()
+    {
+        // 机构树结构变更影响"本机构及以下/自定义"范围的解析结果,受影响用户集难以精确圈定(跨角色、跨层级)。
+        // ponytail: 机构增改删极低频,直接失效全体用户 scope 最简且正确;若用户量巨大 + Redis 使 N 次删成本显著,
+        //           再收窄为"仅 OrgAndChildren/Custom 范围角色所属用户",或改 scope 代际(generation)键做 O(1) 失效。
+        var allUserIds = await users.AsQueryable().Select(u => u.Id).ToListAsync();
+        await InvalidateScopesAsync(allUserIds);
+    }
+
     /// <summary>事务内"整删再插"。任一步失败整体回滚,关联不会处于半更新状态。</summary>
     private async Task ReplaceAsync<TLink>(Func<Task<int>> deleteExisting, List<TLink> insertNew) where TLink : BaseEntity, new()
     {

@@ -11,7 +11,8 @@ public class MenuService(
     IRepository<SysUserRole> userRoles,
     IRepository<SysRoleMenu> roleMenus,
     IRepository<SysMenu> menus,
-    IRepository<SysModule> modules) : IMenuService
+    IRepository<SysModule> modules,
+    IRbacService rbac) : IMenuService
 {
     /// <summary>上溯 ParentId 链到根目录的最大步数(防断链/环)。菜单层级远小于此。</summary>
     private const int WalkGuard = 64;
@@ -103,6 +104,8 @@ public class MenuService(
         AdminException.ThrowIf(entity is null, ErrorCode.MenuNotFound);
         await EnsureParentValidAsync(id, input.ParentId);
         await menus.UpdateAsync(ApplyInput(entity!, input));
+        // 权限码/启用态可能已变 → 失效被授该菜单用户的权限缓存,授权改动即时生效(不等 TTL)
+        await rbac.InvalidatePermissionsByMenuAsync(id);
     }
 
     /// <summary>
@@ -137,6 +140,8 @@ public class MenuService(
         // ponytail: 不级联清 sys_role_menu——软删后该菜单被全局过滤器隐藏,其权限码不再聚合、门户不再可见,
         //           悬空关联行无害;需要物理回收再加清理任务。
         await menus.DeleteAsync(id);
+        // 悬空的 sys_role_menu 仍在,故删后扇出仍能定位受影响用户,失效其权限缓存(否则最长 TTL 内仍按旧权限)
+        await rbac.InvalidatePermissionsByMenuAsync(id);
     }
 
     /// <summary>把入参写入实体;<b>ModuleId 仅顶级目录(ParentId==0)保留,子节点强制置空</b>(归属靠上溯解析,不冗余存)。</summary>

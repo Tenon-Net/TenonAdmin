@@ -20,6 +20,9 @@ public interface ISessionService
     /// <summary>吊销会话(登出 / 强退):标记会话与其刷新令牌失效 + 清缓存。原访问令牌下次请求即 401。</summary>
     Task RevokeAsync(string sessionId);
 
+    /// <summary>吊销某用户的<b>全部</b>活跃会话(停用/删除用户时调用),使其持有的所有访问令牌下次请求即 401。</summary>
+    Task RevokeAllForUserAsync(long userId);
+
     /// <summary>在线会话分页(活跃且未过期)。</summary>
     Task<PagedList<OnlineSessionItem>> ListOnlineAsync(SessionPageInput input);
 }

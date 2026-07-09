@@ -27,4 +27,10 @@ public interface IRbacService
 
     /// <summary>取某角色的数据范围配置(未配置返回 null)</summary>
     Task<SysRoleDataScope?> GetRoleDataScopeAsync(long roleId);
+
+    /// <summary>菜单的权限码/启用态变更后,失效"经某角色被授予该菜单"用户的权限缓存(菜单→角色→用户扇出)。</summary>
+    Task InvalidatePermissionsByMenuAsync(long menuId);
+
+    /// <summary>机构树结构(增/改父/删)变更后,失效全体用户的数据范围缓存(受影响集难精确圈定,机构变更极低频)。</summary>
+    Task InvalidateAllScopesAsync();
 }
