@@ -4,3 +4,7 @@ dist-ssr
 *.local
 .DS_Store
 .vite
+
+# Syncthing 同步临时文件
+~syncthing~*
+*.tmp

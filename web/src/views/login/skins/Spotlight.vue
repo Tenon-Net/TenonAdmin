@@ -21,6 +21,8 @@ const vars = computed(() => ({
   '--my': my.value + '%',
   '--s1': rgba(app.accent, 0.28),
   '--s2': rgba(mix(app.accent, '#8B5CF6', 0.6), 0.22),
+  // 跟随光晕独立取色:亮色近白底下 0.28 几乎不可见,提到 0.5 才读得出;暗底 0.28 已够。
+  '--spot': rgba(app.accent, app.isDark ? 0.3 : 0.5),
 }))
 </script>
 
@@ -56,7 +58,7 @@ const vars = computed(() => ({
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(340px 340px at var(--mx) var(--my), var(--s1), transparent 60%);
+  background: radial-gradient(340px 340px at var(--mx) var(--my), var(--spot), transparent 60%);
   transition: background 0.12s ease-out;
 }
 .card {
@@ -83,8 +85,9 @@ const vars = computed(() => ({
 }
 @media (prefers-reduced-motion: reduce) {
   .spot {
-    /* 退化为静态居中光晕 */
-    background: radial-gradient(340px 340px at 50% 38%, var(--s1), transparent 60%);
+    /* 光晕仍跟随指针(指针驱动的位移,非自发动画);仅去掉缓动过渡。
+       Windows Server 等默认关动画的环境会命中此分支——原来退化为静态居中,
+       表现为"光晕不跟鼠标",故此处保留跟随。 */
     transition: none;
   }
   .card {

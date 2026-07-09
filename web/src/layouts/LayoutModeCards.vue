@@ -67,6 +67,8 @@ function label(m: LayoutMode) {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
+  /* animated tab 的 .n-tabs-pane-wrapper 是 overflow:hidden,会裁掉边列卡片的 2px 选中环;内缩 3px 让环留在裁剪框内 */
+  padding-inline: 3px;
 }
 .cell {
   display: flex;

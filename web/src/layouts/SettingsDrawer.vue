@@ -27,9 +27,9 @@ const show = defineModel<boolean>('show', { default: false })
 const app = useAppStore()
 const { t } = useI18n()
 
-// 窄屏不溢出:抽屉宽度取 min(360, 90vw)。
+// 窄屏不溢出:抽屉宽度取 min(400, 90vw)。加宽给布局卡片两列留出余量。
 const { width } = useWindowSize()
-const drawerWidth = computed(() => Math.min(360, Math.round(width.value * 0.9)))
+const drawerWidth = computed(() => Math.min(400, Math.round(width.value * 0.9)))
 
 // computed:t() 一次求值不随语言切换更新,故包 computed 让下拉标签跟随 locale。
 const transitionOptions = computed(() => [
@@ -37,10 +37,6 @@ const transitionOptions = computed(() => [
   { label: t('settings.transitionFade'), value: 'fade' },
   { label: t('settings.transitionFadeSlide'), value: 'fade-slide' },
 ])
-const localeOptions = [
-  { label: '简体中文', value: 'zh-CN' },
-  { label: 'English', value: 'en-US' },
-]
 </script>
 
 <template>
@@ -140,15 +136,6 @@ const localeOptions = [
             />
           </SettingRow>
 
-          <n-divider title-placement="left">{{ t('app.language') }}</n-divider>
-          <SettingRow :label="t('app.language')">
-            <n-select
-              v-model:value="app.locale"
-              :options="localeOptions"
-              size="small"
-              style="width: 120px"
-            />
-          </SettingRow>
         </n-tab-pane>
       </n-tabs>
 

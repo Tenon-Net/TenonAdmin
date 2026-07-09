@@ -14,7 +14,7 @@ import {
 import { Icon } from '@iconify/vue'
 import { useFullscreen } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
-import { useAppStore } from '@/stores/app'
+import { useAppStore, type Locale } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useLayoutMenu } from '@/composables/useLayoutMenu'
@@ -62,6 +62,15 @@ const moduleOptions = computed<DropdownOption[]>(() =>
 async function onSwitchModule(key: string) {
   const { useModule } = await import('@/composables/useModule')
   await useModule().switchModule(Number(key))
+}
+
+// 语言名按各自书写系统展示,不随当前 locale 翻译。
+const localeOptions: DropdownOption[] = [
+  { label: '简体中文', key: 'zh-CN' },
+  { label: 'English', key: 'en-US' },
+]
+function onLocale(key: string) {
+  app.setLocale(key as Locale)
 }
 
 const userOptions = computed<DropdownOption[]>(() => [
@@ -156,6 +165,15 @@ async function logout() {
         </template>
         {{ app.isDark ? t('app.dark') : t('app.light') }}
       </n-tooltip>
+
+      <n-dropdown :options="localeOptions" @select="onLocale">
+        <n-button quaternary circle>
+          <n-tooltip>
+            <template #trigger><Icon icon="ph:translate" :width="18" /></template>
+            {{ t('app.language') }}
+          </n-tooltip>
+        </n-button>
+      </n-dropdown>
 
       <n-tooltip>
         <template #trigger>
