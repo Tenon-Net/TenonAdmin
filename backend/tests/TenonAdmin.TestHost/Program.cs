@@ -8,6 +8,7 @@ using TenonAdmin.TestHost;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddTenonAdmin(builder.Configuration, o => o.ApplicationAssemblies.Add(typeof(Program).Assembly));
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleWidgetSeed>());   // 用户自定义种子
+builder.Services.TryAddScoped<ISampleDocService, SampleDocService>();   // 示例机构隔离业务服务(DataEntity 范本)
 var app = builder.Build();
 app.MapTenonAdmin();
 app.Run();

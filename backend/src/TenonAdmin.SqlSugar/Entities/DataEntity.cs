@@ -22,11 +22,12 @@ public interface IOrgScoped
 /// <see cref="CreateOrgId"/>,配合 T3 的 <c>IDataScopeProvider</c> 全局过滤器(按 <see cref="IOrgScoped"/> 匹配),
 /// 实现"本机构/本机构及以下/仅本人/自定义"隔离。
 /// <para>不需要机构隔离的表(如全局字典、机构树自身)继续用 <see cref="BaseEntity"/>。</para>
-/// <para><b>写路径提示(P2-21)</b>:全局过滤器只作用于<b>查询(SELECT)</b>,不作用于按主键的
-/// <c>Updateable</c>/<c>Deleteable</c>。故对 DataEntity 业务表,<b>改/删授权非自动</b>:直接
-/// <c>repo.DeleteAsync(id)</c>/<c>UpdateAsync(dto)</c> 不带范围谓词,可越权改删他机构的行(IDOR)。
-/// 安全范式是"先经 <c>AsQueryable</c> 过滤读到(看不到即拒)、再写"——内置服务均如此。业务端点务必遵循,
-/// 或在写前显式校验归属。机制级兜底(写路径自动补范围谓词)留待首张业务表落地时评估。</para>
+/// <para><b>写路径守卫(P2-21)</b>:数据范围全局过滤器只作用于<b>查询(SELECT)</b>,不作用于按主键的
+/// <c>Updateable</c>/<c>Deleteable</c>。为此 <see cref="SqlSugarRepository{TEntity}"/> 对 IOrgScoped 实体的
+/// <c>UpdateAsync</c>/<c>DeleteAsync</c> <b>已内置写路径范围守卫</b>:写前经带范围过滤器的查询确认目标行在当前
+/// 数据范围内,越权改删他机构行会被拒(返回 0 行),<b>默认安全</b>。仍建议业务服务改/删前先 <c>GetByIdAsync</c>
+/// (经范围过滤)校验存在,以返回准确的"未找到/无权"(内置服务均如此)。绕过仓储直接走 <c>Db.Updateable/Deleteable</c>
+/// 逃生舱口的写不受此守卫,属显式例外,需自行校验归属。</para>
 /// </summary>
 public abstract class DataEntity : BaseEntity, IOrgScoped
 {
