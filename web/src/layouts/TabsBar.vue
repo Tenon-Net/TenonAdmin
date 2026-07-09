@@ -41,6 +41,7 @@ const ctxOptions = computed<DropdownOption[]>(() => [
 function onContext(e: MouseEvent, item: TabItem) {
   e.preventDefault()
   ctxTab.value = item
+  // 先关再于 nextTick 重开:菜单已展开时右键切到别的标签,只改坐标 NDropdown 不会重定位。
   ctxShow.value = false
   nextTick(() => {
     ctxX.value = e.clientX

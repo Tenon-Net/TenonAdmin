@@ -19,6 +19,7 @@ onMounted(async () => {
     const p = await personalApi.profile()
     model.account = p.account
     model.name = p.name
+    // UserProfile 只返回 orgId/positionId、无名称字段,故直接展示 ID。
     model.org = p.orgId ? String(p.orgId) : '—'
     model.position = p.positionId ? String(p.positionId) : '—'
   } catch (e) {

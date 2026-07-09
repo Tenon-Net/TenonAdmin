@@ -18,6 +18,7 @@ const q = ref('')
 const cursor = ref(0)
 const inputRef = ref<InstanceType<typeof NInput>>()
 
+// 标题含 '.' 视为 i18n key(如 menu.dashboard)、否则为字面量——与 useMenuFlat 同一约定。
 function label(item: MenuLeaf) {
   return item.title.includes('.') ? t(item.title) : item.title
 }
@@ -43,6 +44,7 @@ function go(item?: Hit) {
   show.value = false
 }
 
+// esc/highlight 产物走模板 v-html:必须先转义原文、再插 <mark>,顺序颠倒即 XSS。
 function esc(s: string) {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c)
 }
