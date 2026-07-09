@@ -125,6 +125,18 @@ public enum ErrorCode
     [MsgKey("error.module.accessDenied")]
     ModuleAccessDenied = 42014,
 
+    /// <summary>目标菜单不存在</summary>
+    [MsgKey("error.menu.notFound")]
+    MenuNotFound = 42015,
+
+    /// <summary>菜单下仍有子节点,不能删除(先移除或迁移子节点)</summary>
+    [MsgKey("error.menu.hasChildren")]
+    MenuHasChildren = 42016,
+
+    /// <summary>非法父菜单:父节点不存在,或指向自身/自身子孙(会成环导致子树在树上消失)</summary>
+    [MsgKey("error.menu.invalidParent")]
+    MenuInvalidParent = 42017,
+
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 
     /// <summary>字典类型不存在</summary>

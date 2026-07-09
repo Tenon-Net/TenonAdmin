@@ -1,3 +1,4 @@
+using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Services;
@@ -75,6 +76,108 @@ public class MenuService(
         var navNodes = visible.Where(m => m.Type != MenuType.Button).ToList();
         return BuildForest(navNodes);
     }
+
+    // ── 管理端 CRUD ──────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    public virtual async Task<IReadOnlyList<MenuTreeNode>> GetTreeAsync()
+    {
+        // 管理端要看全量原始菜单(含停用、含按钮),不套门户的授权裁剪;软删仍由全局过滤器隐藏。
+        var all = await menus.AsQueryable().OrderBy(m => m.Sort).OrderBy(m => m.Id).ToListAsync();
+        return BuildAdminForest(all);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<long> CreateAsync(MenuInput input)
+    {
+        await EnsureParentValidAsync(null, input.ParentId);
+        var entity = ApplyInput(new SysMenu(), input);
+        await menus.InsertAsync(entity);   // AOP 补雪花 Id/审计字段
+        return entity.Id;
+    }
+
+    /// <inheritdoc />
+    public virtual async Task UpdateAsync(long id, MenuInput input)
+    {
+        var entity = await menus.GetByIdAsync(id);
+        AdminException.ThrowIf(entity is null, ErrorCode.MenuNotFound);
+        await EnsureParentValidAsync(id, input.ParentId);
+        await menus.UpdateAsync(ApplyInput(entity!, input));
+    }
+
+    /// <summary>
+    /// 校验目标父节点合法:父必须存在(顶级 ParentId==0 除外);更新时父不得指向自身或自身子孙——
+    /// 否则 <see cref="BuildAdminForest"/> 会把成环的节点挂到彼此下、永不成为根,整个子树从管理端树上消失且无从修复
+    /// (还会被 <see cref="DeleteAsync"/> 的"有子节点"判据卡死)。菜单表小,整表载入内存上溯判环。
+    /// </summary>
+    protected virtual async Task EnsureParentValidAsync(long? selfId, long parentId)
+    {
+        if (parentId == 0) return;   // 顶级目录:无父
+
+        var byId = (await menus.AsQueryable().ToListAsync()).ToDictionary(m => m.Id);
+        AdminException.ThrowIf(!byId.ContainsKey(parentId), ErrorCode.MenuInvalidParent);   // 父必须存在
+        if (selfId is null) return;   // 新增:节点尚不存在,不可能成环
+
+        // 更新:从新父上溯根,若触达自身则成环(含 parentId==selfId 的自指)——拒绝。
+        var cur = byId.GetValueOrDefault(parentId);
+        var guard = 0;
+        while (cur is not null && guard++ < WalkGuard)
+        {
+            AdminException.ThrowIf(cur.Id == selfId, ErrorCode.MenuInvalidParent);
+            if (cur.ParentId == 0) break;
+            cur = byId.GetValueOrDefault(cur.ParentId);
+        }
+    }
+
+    /// <inheritdoc />
+    public virtual async Task DeleteAsync(long id)
+    {
+        AdminException.ThrowIf(await menus.GetByIdAsync(id) is null, ErrorCode.MenuNotFound);
+        AdminException.ThrowIf(await menus.AsQueryable().AnyAsync(m => m.ParentId == id), ErrorCode.MenuHasChildren);
+        // ponytail: 不级联清 sys_role_menu——软删后该菜单被全局过滤器隐藏,其权限码不再聚合、门户不再可见,
+        //           悬空关联行无害;需要物理回收再加清理任务。
+        await menus.DeleteAsync(id);
+    }
+
+    /// <summary>把入参写入实体;<b>ModuleId 仅顶级目录(ParentId==0)保留,子节点强制置空</b>(归属靠上溯解析,不冗余存)。</summary>
+    protected virtual SysMenu ApplyInput(SysMenu e, MenuInput input)
+    {
+        e.ParentId = input.ParentId;
+        e.Type = input.Type;
+        e.Title = input.Title;
+        e.Permission = input.Permission;
+        e.Sort = input.Sort;
+        e.Enabled = input.Enabled;
+        e.ModuleId = input.ParentId == 0 ? input.ModuleId : null;
+        e.Path = input.Path;
+        e.Component = input.Component;
+        e.Icon = input.Icon;
+        e.Visible = input.Visible;
+        return e;
+    }
+
+    /// <summary>按 ParentId 把平铺(已排序)节点拼成森林(管理端全字段节点);父不在集合内的升为根。</summary>
+    private static IReadOnlyList<MenuTreeNode> BuildAdminForest(List<SysMenu> nodes)
+    {
+        var map = nodes.ToDictionary(m => m.Id, ToAdminNode);
+        var roots = new List<MenuTreeNode>();
+        foreach (var m in nodes)
+        {
+            var node = map[m.Id];
+            if (m.ParentId != 0 && map.TryGetValue(m.ParentId, out var parent))
+                parent.Children.Add(node);
+            else
+                roots.Add(node);
+        }
+        return roots;
+    }
+
+    private static MenuTreeNode ToAdminNode(SysMenu m) => new()
+    {
+        Id = m.Id, ParentId = m.ParentId, Type = m.Type, Title = m.Title, Permission = m.Permission,
+        Sort = m.Sort, Enabled = m.Enabled, ModuleId = m.ModuleId,
+        Path = m.Path, Component = m.Component, Icon = m.Icon, Visible = m.Visible,
+    };
 
     /// <summary>上溯 <paramref name="menuId"/> 的 ParentId 链到根目录,返回根目录的 ModuleId(未挂模块或断链为 null)。</summary>
     private static long? RootModuleId(long menuId, IReadOnlyDictionary<long, SysMenu> byId)
