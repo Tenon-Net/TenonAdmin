@@ -11,13 +11,13 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
-    # 数据库矩阵(设计 §8「至少 SQLite + MySQL」)。fail-fast=false:一条腿红不掩盖另一条。
+    # 数据库矩阵(设计 §8「至少 SQLite + MySQL」,这里再加 SqlServer)。fail-fast=false:一条腿红不掩盖其它。
     strategy:
       fail-fast: false
       matrix:
-        db: [sqlite, mysql]
+        db: [sqlite, mysql, sqlserver]
 
-    # MySQL 服务容器(两条腿都起,sqlite 腿忽略之;成本低、免去条件 service 的写法复杂度)。
+    # 服务容器(所有腿都起,用不到的腿忽略之;成本低、免去条件 service 的写法复杂度)。
     services:
       mysql:
         image: mysql:8.0
@@ -30,6 +30,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+      # SqlServer:不给 health-cmd —— 2022 镜像默认不带 sqlcmd,健康探针会挂;就绪由下方专门的等待步骤保证。
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Tenon_Ci_2026"
+          MSSQL_PID: "Developer"
+        ports:
+          - 1433:1433
 
     steps:
       - uses: actions/checkout@v4
@@ -46,11 +55,27 @@ jobs:
       - name: Build
         run: dotnet build backend/TenonAdmin.slnx -c Release --no-restore
 
+      # 等 SqlServer 可登录(仅 sqlserver 腿)。端口先开、随后才接受登录,故用真实登录轮询,
+      # 不依赖 DB 镜像/宿主是否装了 sqlcmd:借官方 mssql-tools 镜像 + --network host 连宿主 :1433。
+      - name: Wait for SQL Server ready
+        if: matrix.db == 'sqlserver'
+        run: |
+          for i in $(seq 1 40); do
+            if docker run --rm --network host mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S 127.0.0.1 -U sa -P 'Tenon_Ci_2026' -Q 'SELECT 1' -b >/dev/null 2>&1; then
+              echo "SQL Server is ready"; exit 0
+            fi
+            echo "waiting for SQL Server... ($i/40)"; sleep 3
+          done
+          echo "SQL Server did not become ready in time"; exit 1
+
       # 单元 + 集成测试(WebApplicationFactory)。DB 由环境变量选择(见 tests/TestDb.cs):
-      #   sqlite 腿 → 各测试独立临时 .db 文件;mysql 腿 → 各测试独立库(按 DbPath 派生,自动建/删)。
+      #   sqlite 腿 → 各测试独立临时 .db 文件;mysql/sqlserver 腿 → 各测试独立库(按 DbPath 派生,自动建/删)。
       #   含 §8 可替换性六件套 + 数据范围 + 认证/授权/限流回归。
       - name: Test (${{ matrix.db }})
         env:
-          TENON_TEST_DBTYPE: ${{ matrix.db == 'mysql' && 'MySql' || 'Sqlite' }}
+          TENON_TEST_DBTYPE: ${{ matrix.db == 'mysql' && 'MySql' || matrix.db == 'sqlserver' && 'SqlServer' || 'Sqlite' }}
           TENON_TEST_MYSQL: ${{ matrix.db == 'mysql' && 'Server=127.0.0.1;Port=3306;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;' || '' }}
+          # SqlServer 连接串带 TrustServerCertificate/Encrypt=False:MDS 5.x 默认加密且 CI 无受信证书。基础串不含 Database,TestDb 建隔离库时再补。
+          TENON_TEST_SQLSERVER: ${{ matrix.db == 'sqlserver' && 'Server=127.0.0.1;User ID=sa;Password=Tenon_Ci_2026;TrustServerCertificate=True;Encrypt=False;' || '' }}
         run: dotnet test backend/TenonAdmin.slnx -c Release --no-build
