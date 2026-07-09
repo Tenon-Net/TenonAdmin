@@ -66,17 +66,21 @@
 - **修复（2026-07-09）**：`SqlSugarRepository` 对 `IOrgScoped` 实体的 `UpdateAsync`/`DeleteAsync` 内置**写路径范围守卫**——写前经带范围过滤器的查询确认目标行在当前数据范围内，越权写返回 `0` 拒绝（`BaseEntity` 编译期静态短路，零开销）。**默认安全**，开发者无需记范式。
 - **配套**：消费方 DataEntity CRUD 范本 `backend/tests/TenonAdmin.TestHost/SampleDoc*`；数据层越权测试 `DataScopeTests.Write_path_blocks_cross_org_update_and_delete` + HTTP 端到端 `SampleDocScopeTests`（经真实授权管道的范围解析）。详见[新建业务指南](./new-business-guide.md) A1。
 
-### 🟠 中 —— 三处缓存/会话失效遗漏（授权变更并非全都“即时生效”）
+### ✅ 已修复（原 🟠 中）—— 三处缓存/会话失效遗漏（现"授权变更即时生效"）
 
-设计宣称“授权变更即时生效”，但以下三条变更路径**没有失效对应缓存**，陈旧最长持续到 TTL（默认 20 分钟；若把 `PermissionMinutes` 配成 0 则**永不自动过期**）：
+- **原现象**：设计宣称"授权变更即时生效"，但以下三条变更路径**没有失效对应缓存**，陈旧最长持续到 TTL（默认 20 分钟；若把 `PermissionMinutes` 配成 0 则**永不自动过期**）：
 
-| 变更操作 | 遗漏 | 证据 | 影响 |
-|---|---|---|---|
-| **停用用户** `SetEnabledAsync(id,false)` | 不吊销会话、不清权限/范围缓存；`RolePermissionAttribute` 也不复查 `Enabled` | `UserService.cs:150-158` | 被停用者持有的当前 access token 到期前仍可正常调接口（刷新已被挡） |
-| **改/删/停用菜单** | `MenuService` 根本没注入 `ICacheProvider`；改菜单的 `Permission`/`Enabled` 不失效 `perm:{userId}` | `MenuService.cs:91-140` | 改路由权限码/停用菜单后，已在线用户最长 20 分钟仍按旧权限 |
-| **改/删机构树** | `OrgService` 未失效 `scope:{userId}`；且 `ICacheProvider` 只有按键 `RemoveAsync`，无批量/前缀清除 | `OrgService.cs:47-72` | 重挂机构后“本机构及以下”范围最长 20 分钟陈旧 |
+| 变更操作 | 原遗漏 | 证据 |
+|---|---|---|
+| **停用/删除用户** | 不吊销会话；`RolePermissionAttribute` 也不复查 `Enabled` → 持有的当前 access token 到期前仍可用（刷新已被 `RefreshAsync` 挡） | `UserService.cs:SetEnabledAsync` |
+| **改/删菜单** | `MenuService` 未注入缓存；改菜单的 `Permission`/`Enabled` 不失效 `perm:{userId}` → 在线用户最长 20 分钟仍按旧权限 | `MenuService.cs` |
+| **改/删机构树** | `OrgService` 未失效 `scope:{userId}` → 重挂机构后"本机构及以下"范围最长 20 分钟陈旧 | `OrgService.cs` |
 
-- **建议**：停用用户→复用会话吊销路径（给 `ISessionService` 加 `按 userId 吊销`）；菜单变更→复用 `RbacService` 的“菜单→受影响用户→失效 `perm`”扇出；机构树→引入 `scope` 版本号/epoch 键，变更时自增使缓存惰性重算。（若短期不改，至少把“20 分钟有界陈旧”写进文档，并**不要**把 `PermissionMinutes` 设为 0。）
+- **修复（2026-07-09）**，均复用现有基建、机制级、低频过量失效无害：
+  - **停用/删除用户** → `ISessionService.RevokeAllForUserAsync(userId)`（仿 `EnforceConcurrencyAsync` 按 userId 查活跃会话逐个吊销），`UserService` 的 `SetEnabledAsync(false)`/`UpdateAsync(Enabled=false)`/`DeleteAsync` 调用之 → 原令牌下次请求即 401。
+  - **改/删菜单** → `IRbacService.InvalidatePermissionsByMenuAsync(menuId)`（菜单→角色→用户扇出，复用私有 `InvalidatePermissionsAsync`），`MenuService.UpdateAsync`/`DeleteAsync` 调用之。
+  - **改/删机构树** → `IRbacService.InvalidateAllScopesAsync()`（受影响集难精确圈定，机构变更极低频 → 直接失效全体用户 `scope`；ponytail 注明"用户量巨大 + Redis 时收窄或改 scope 代际键"的升级路径），`OrgService.AddAsync`/`UpdateAsync`/`DeleteAsync` 调用之。
+- **配套**：HTTP/服务级回归 `CacheInvalidationTests`（停用→原令牌 401、改菜单→同会话即 403、动机构→scope 键即清）。
 
 ### 🟠 中 —— 新建业务缺脚手架 + 权限码易漂移
 
@@ -97,14 +101,14 @@
 ## 三、结论
 
 - **可以放心在此基础上继续开发。** 架构分层、可替换性、缓存/性能、后端注释都达到了产品级内核的水准。
-- **动业务代码前，优先处理**：🟠 三处失效遗漏、🟠 权限码反向一致性校验。（🔴 `DataEntity` 写路径 IDOR 已于 2026-07-09 机制级修复）
+- **动业务代码前，优先处理**：🟠 权限码反向一致性校验。（🔴 `DataEntity` 写路径 IDOR、🟠 三处缓存/会话失效遗漏均已于 2026-07-09 修复）
 - **持续改进**：前端 `.vue` 注释、`v-auth` 接线、脚手架模板。
 
 ### 建议的后续任务清单
 
-- [ ] 停用用户时吊销其会话（`ISessionService` 加按 userId 吊销）
-- [ ] 菜单变更时失效受影响用户的 `perm:{userId}`
-- [ ] 机构树变更时使 `scope` 缓存失效（版本号/epoch 方案）
+- [x] 停用/删除用户时吊销其会话（`ISessionService.RevokeAllForUserAsync`，2026-07-09）
+- [x] 菜单变更时失效受影响用户的 `perm:{userId}`（`IRbacService.InvalidatePermissionsByMenuAsync`，2026-07-09）
+- [x] 机构树变更时使 `scope` 缓存失效（`IRbacService.InvalidateAllScopesAsync`，全体失效；epoch 方案留作大规模升级路径，2026-07-09）
 - [x] 提供 `DataEntity` 机构隔离 CRUD 参考模块 + 写路径范围守卫（机制级默认安全，2026-07-09）
 - [ ] `PermissionCodeConsistencyTests` 加“受权端点必须有菜单节点”反向断言
 - [ ] 处理 `ScanApplicationAssemblies` 空开关（实现或标记 `[Obsolete]`）
