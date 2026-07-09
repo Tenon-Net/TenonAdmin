@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "DotNet-MoYu",
+  "classifications": [ "Web", "Admin", "API", "TenonAdmin" ],
+  "identity": "TenonAdmin.App.CSharp",
+  "name": "TenonAdmin 后台 host",
+  "description": "可运行的 TenonAdmin 消费方后台 host,预接线一个机构隔离示例业务模块(Modules/SampleDoc*),开箱即跑。",
+  "shortName": "tenon-app",
+  "sourceName": "TenonApp",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "TenonPkgVersion": {
+      "type": "parameter",
+      "datatype": "text",
+      "defaultValue": "0.0.1-preview",
+      "replaces": "TENON_PKG_VERSION",
+      "description": "生成物引用的 TenonAdmin NuGet 包版本(默认与当前内核对齐)。"
+    },
+    "skipRestore": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "为 true 时跳过创建后自动 dotnet restore。"
+    }
+  },
+  "postActions": [
+    {
+      "condition": "(!skipRestore)",
+      "description": "还原 NuGet 依赖",
+      "manualInstructions": [ { "text": "在项目目录运行 dotnet restore" } ],
+      "actionId": "210D431B-A78B-4D2F-B762-4ED3E3EA9025",
+      "continueOnError": true
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TenonAdmin 的 dotnet new 模板包(PackageType=Template)。
+       刻意置于 backend/ 之外:不继承 backend/Directory.Build.props(net10 / 中央版本管理 / 自动打包 README),
+       content/** 原样打进包、保持纯净;本壳工程只搬运内容,不编译任何代码。
+       打包:dotnet pack templates/TenonAdmin.Templates.csproj -c Release -o artifacts -p:Version=<版本>。 -->
+  <PropertyGroup>
+    <PackageType>Template</PackageType>
+    <PackageId>TenonAdmin.Templates</PackageId>
+    <Title>TenonAdmin 项目模板</Title>
+    <Description>TenonAdmin 脚手架:dotnet new tenon-app 一键生成可运行的消费方后台 host(预接线一个机构隔离示例业务模块)。</Description>
+    <Version>0.0.1-preview</Version>
+    <Authors>huguodong</Authors>
+    <Company>DotNet-MoYu</Company>
+    <Product>TenonAdmin</Product>
+    <Copyright>Copyright © DotNet-MoYu</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/DotNet-MoYu/TenonAdmin</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/DotNet-MoYu/TenonAdmin</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>tenonadmin;admin;scaffold;template;dotnet-new;templates</PackageTags>
+
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IncludeContentInPack>true</IncludeContentInPack>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <ContentTargetFolders>content</ContentTargetFolders>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="content\**\*" Exclude="content\**\bin\**;content\**\obj\**" />
+    <Compile Remove="**\*" />
+  </ItemGroup>
+
+</Project>

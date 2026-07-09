@@ -84,13 +84,13 @@
 
 ### 🟠 中 —— 新建业务缺脚手架 + 权限码易漂移
 
-- **无代码生成**：一个最小 CRUD 模块要手改 ~8 个文件跨 4 个工程，每个域都是手抄兄弟域。建议做 `dotnet new tenon-module` 模板或源生成器。
+- ~~**无代码生成**：一个最小 CRUD 模块要手改 ~8 个文件跨 4 个工程~~ → **✅ 已加脚手架（2026-07-09）**：`dotnet new tenon-app -n Shop` 一键生成**可运行**的消费方 host（预接线 + 一个机构隔离示例业务模块 `Modules/SampleDoc*` 四件套=复制范本），`dotnet run` 即起。模板包 `TenonAdmin.Templates`（仓库根 `templates/`，刻意置于 `backend/` 外以不继承 net10/中央版本管理；随 release 单独 `dotnet pack` 一并推）；冒烟 `templates/smoke-test.ps1`（pack→install→scaffold→build 全绿）。注:内核内「加 Sys* 跨 4 工程」仍手抄（路线 A 本质如此），模板面向消费方（路线 B,4 文件 + 2 行接线)。
 - **权限码手工双写**：控制器路由（真源）与 `DefaultMenuSeed.Permission` 字符串手工同步。~~`PermissionCodeConsistencyTests` 只校验“种子→端点”，不校验反向~~ → **✅ 已加反向锁（2026-07-09）**：`Every_permission_endpoint_is_seeded_or_explicitly_known_unseeded` 断言每个 `[RolePermission]` 端点要么有种子菜单节点、要么显式登记在 `KnownUnseededEndpoints`（当前 28 个仅超管可用的端点，随前端 M2 菜单树落地而缩小）。新增受权端点若既无菜单又不登记 → 测试红，杜绝“静默 403”无声漂移。（`dotnet new tenon-module` 脚手架/源生成器仍为独立待办。）
 - ~~**`ScanApplicationAssemblies` 是误导性空开关**：默认 `true` 但未实现，只有 `ApplicationAssemblies.Add(...)` 真正生效~~ → **✅ 已处理（2026-07-09）**：标 `[Obsolete]` 退役（承认从未实现、代码无一处读取；引导改用 `ApplicationAssemblies.Add`）。选退役而非实现——守内核"显式、可预测、无魔法"取向,`ApplicationAssemblies` 已是文档化且被测的唯一正道。同步更新设计文档 §5.7 与新建业务指南。
 
 ### 🟡 低
 
-- **门户菜单树/模块列表未缓存**（`MenuService.GetMyModulesAsync`/`GetMyMenuTreeAsync`）：每次登录/切应用/刷新查 3–4 条。频率是“导航级”非“请求级”，小表整载，影响有限——是整体缓存覆盖里唯一的刻意例外。要极致可按 `(userId,moduleId)` 缓存并在角色-菜单变更时失效。
+- ~~**门户菜单树/模块列表未缓存**~~ → **✅ 已加缓存（2026-07-09）**：`MenuService.GetMyModulesAsync`/`GetMyMenuTreeAsync` 按 `(userId[,moduleId])` 读缓存(cache-aside + `PermissionMinutes` TTL 兜底)。失效用**门户代际计数** `portal:gen`——因 `ICacheProvider` 无前缀删除、菜单树键又是二维,菜单/模块 CRUD、角色-菜单、用户-角色变更各自增一次 `portal:gen` 令门户缓存整体惰性失效(O(1),旧代际键由 TTL 回收)。**全局代际=任一门户写失效全体门户缓存**;门户写低频、重算仅几条小表查询,过量无害(ponytail 注明可升级到 per-user 代际)。回归 `ModulePortalTests` 三例(模块增/授权/菜单增各测即时反映)。
 - **前端 `v-auth` 尚未接线**：指令已实现并全局注册，但**视图里零调用**，且后端暂无“按钮权限码”接口 → 当前 **fail-open**（不隐藏），强制全靠服务端 403。补 `/personal/permissions` 后生效。写按钮鉴权前需知道这点。
 - **前端表格列 i18n 不一致**：`module`/`menu` 页列标题用响应式 `() => t(key)`，`user` 页用一次性 `t(key)`——切换语言时 user 页列头不重译。统一成工厂形式。
 - **前端注释密度**：见问题 3，重点补 `views/` 脚本块。
@@ -101,8 +101,8 @@
 ## 三、结论
 
 - **可以放心在此基础上继续开发。** 架构分层、可替换性、缓存/性能、后端注释都达到了产品级内核的水准。
-- **原“动业务代码前优先处理”的高/中危项已全部于 2026-07-09 清零**：🔴 `DataEntity` 写路径 IDOR、🟠 三处缓存/会话失效遗漏、🟠 权限码反向一致性校验均已修复。剩余为 🟡 低（前端注释/`v-auth` 接线/列 i18n）与独立增强（脚手架模板、`ScanApplicationAssemblies` 空开关、门户读缓存）。
-- **持续改进**：前端 `.vue` 注释、`v-auth` 接线、脚手架模板。
+- **原“动业务代码前优先处理”的高/中危项已全部于 2026-07-09 清零**：🔴 `DataEntity` 写路径 IDOR、🟠 三处缓存/会话失效遗漏、🟠 权限码反向一致性校验均已修复。剩余为 🟡 低（前端注释/`v-auth` 接线/列 i18n）；独立增强（脚手架模板 `dotnet new tenon-app`、`ScanApplicationAssemblies` 退役、门户读缓存）均已于 2026-07-09 完成。
+- **持续改进**：前端 `.vue` 注释、`v-auth` 接线、前端列 i18n 一致性。
 
 ### 建议的后续任务清单
 
@@ -112,6 +112,7 @@
 - [x] 提供 `DataEntity` 机构隔离 CRUD 参考模块 + 写路径范围守卫（机制级默认安全，2026-07-09）
 - [x] `PermissionCodeConsistencyTests` 加反向锁：端点须有菜单节点或显式登记 `KnownUnseededEndpoints`（2026-07-09）
 - [x] 处理 `ScanApplicationAssemblies` 空开关（标 `[Obsolete]` 退役，引导用 `ApplicationAssemblies.Add`，2026-07-09）
-- [ ] 门户菜单/模块读酌情加缓存
+- [x] 门户菜单/模块读加缓存（代际计数失效，2026-07-09）
+- [x] 新建业务脚手架 `dotnet new tenon-app`（生成可运行 host + 机构隔离示例模块;模板包 `TenonAdmin.Templates`,冒烟 `templates/smoke-test.ps1`,2026-07-09）
 - [ ] 前端 `.vue` 视图补 WHY 注释；统一列标题 i18n 工厂形式
 - [ ] （规划中）后端 `/personal/permissions` 接口 → 前端 `v-auth` 真正生效

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 元包:一引全栈(Core + SqlSugar + Services + AspNetCore)。 -->
+    <PackageReference Include="TenonAdmin" Version="TENON_PKG_VERSION" />
+  </ItemGroup>
+
+</Project>

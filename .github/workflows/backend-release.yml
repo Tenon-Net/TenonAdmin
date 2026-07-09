@@ -1,6 +1,6 @@
 name: backend-release
 
-# 打 tag(如 v0.0.1-preview)即打包 5 个 NuGet 包并推 nuget.org(设计 §T10)。
+# 打 tag(如 v0.0.1-preview)即打包核心 NuGet 包 + dotnet new 模板包并推 nuget.org(设计 §T10)。
 # 需在仓库 Secrets 配 NUGET_API_KEY;版本从 tag 名推导(去掉前缀 v)。
 on:
   push:
@@ -23,6 +23,10 @@ jobs:
 
       - name: Pack
         run: dotnet pack backend/TenonAdmin.slnx -c Release -o artifacts -p:Version=${{ steps.ver.outputs.version }}
+
+      # 模板包在 backend/ 之外(不继承 net10/中央版本管理),需单独 pack;落同一 artifacts 目录随下方一并推。
+      - name: Pack templates
+        run: dotnet pack templates/TenonAdmin.Templates.csproj -c Release -o artifacts -p:Version=${{ steps.ver.outputs.version }}
 
       - name: Push to nuget.org
         run: dotnet nuget push "artifacts/*.nupkg" -k "${{ secrets.NUGET_API_KEY }}" -s https://api.nuget.org/v3/index.json --skip-duplicate

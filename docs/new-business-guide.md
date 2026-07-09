@@ -8,6 +8,22 @@
 
 ---
 
+## 0. 快速开始（消费方脚手架，路线 B）
+
+消费方（装 NuGet 包的使用方）可用官方模板一键生成**可运行的后台 host**，已预接线一个机构隔离示例业务模块（`Modules/SampleDoc*`）：
+
+```bash
+dotnet new install TenonAdmin.Templates      # 安装模板（一次）
+dotnet new tenon-app -n Shop                 # 生成 host + 示例模块
+cd Shop && dotnet run                        # 直接起；控制台打印随机超管密码
+```
+
+- 零配置默认 SQLite，自动建表 + 种子；换库改 `appsettings.json` 的 `TenonAdmin:Database`。
+- 生成的 `Modules/SampleDoc*` 四件套（实体 / 接口 / 实现 / 控制器）就是「加下一个业务模块」的**复制范本**：复制改名，再在 `Program.cs` 追加一行 `TryAddScoped<I你的Service, 你的Service>()`（实体自动建表、控制器自动挂路由）。
+- 需要从零手写、或在内核内加（路线 A），继续看下文。
+
+---
+
 ## A. 后端
 
 ### A1. 实体　`Services/Entities/Product.cs`
@@ -150,6 +166,8 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 ```
 
 内核会把该程序集的实体并入 CodeFirst 建表、控制器 `AddApplicationPart`。其余（实体/服务/控制器/缓存/菜单）写法与路线 A 完全一致。
+
+> 🚀 **不想手搭 host?** `dotnet new tenon-app` 直接生成已接好上面这段接线 + 一个 `DataEntity` 示例模块的可运行工程（见文首「快速开始」）。此后新增模块 = 复制生成物 `Modules/SampleDoc*` 四件套改名 + `Program.cs` 补一行 `TryAddScoped`。
 
 > ⚠️ **只有 `ApplicationAssemblies.Add(...)` 这条路生效**。`TenonAdminOptions.ScanApplicationAssemblies` 从未实现、代码里无一处读取，已于 2026-07-09 标记 `[Obsolete]`（置任何值都无效，将于后续大版本移除）。别指望它自动发现你的模块——必须显式 `Add` 程序集。
 
