@@ -9,6 +9,7 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       // 改图标包 bug 时:`NIP_LOCAL=1 npm run dev` → 直连兄弟仓库 src、HMR;不设则吃已发布 dist。
+      // 完整回路(改 → 发补丁版 → bump)见 src/lib/icons.ts 顶部注释。
       ...(process.env.NIP_LOCAL
         ? { 'tenon-naive-iconify-picker': fileURLToPath(new URL('../../tenon-naive-iconify-picker/src/index.ts', import.meta.url)) }
         : {}),
