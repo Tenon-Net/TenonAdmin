@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 可选包:多实例共享缓存。用户装它并前置 AddTenonAdminRedisCache 即把 ICacheProvider 从进程内 Memory 换成 Redis。
+       只引用 Core 契约层 + Redis 客户端;核心四包不反向引用本包,保持"运行时只依赖 SqlSugarCore + Microsoft.*"。 -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>TenonAdmin 分布式缓存可选包:基于 StackExchange.Redis 的 ICacheProvider 实现(RedisCacheProvider),前置注册即整体替换进程内缓存,支持多实例共享。</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TenonAdmin.Core\TenonAdmin.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+  </ItemGroup>
+</Project>

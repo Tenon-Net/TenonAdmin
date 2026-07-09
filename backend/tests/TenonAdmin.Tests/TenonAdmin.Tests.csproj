@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\TenonAdmin.AspNetCore\TenonAdmin.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\TenonAdmin.Caching.Redis\TenonAdmin.Caching.Redis.csproj" />
     <ProjectReference Include="..\TenonAdmin.TestHost\TenonAdmin.TestHost.csproj" />
   </ItemGroup>
 
