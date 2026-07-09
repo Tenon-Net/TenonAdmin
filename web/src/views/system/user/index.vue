@@ -18,10 +18,10 @@ const { loading, rows, params, pagination, search, onPage, onPageSize } = useTab
 
 // DataTableColumns 是 Naive 专有类型,只出现在视图层(设计 §7.2 边界)。
 const columns: DataTableColumns<UserItem> = [
-  { title: t('user.account'), key: 'account' },
-  { title: t('user.name'), key: 'name' },
+  { title: () => t('user.account'), key: 'account' },
+  { title: () => t('user.name'), key: 'name' },
   {
-    title: t('user.status'),
+    title: () => t('user.status'),
     key: 'enabled',
     render: (r) =>
       h(NTag, { type: r.enabled ? 'success' : 'default', size: 'small', bordered: false }, () =>
@@ -29,11 +29,11 @@ const columns: DataTableColumns<UserItem> = [
       ),
   },
   {
-    title: t('user.superAdmin'),
+    title: () => t('user.superAdmin'),
     key: 'isSuperAdmin',
     render: (r) => (r.isSuperAdmin ? h(NTag, { type: 'warning', size: 'small', bordered: false }, () => t('user.superAdmin')) : '—'),
   },
-  { title: t('user.createTime'), key: 'createTime', render: (r) => (r.createTime ? r.createTime.replace('T', ' ').slice(0, 19) : '') },
+  { title: () => t('user.createTime'), key: 'createTime', render: (r) => (r.createTime ? r.createTime.replace('T', ' ').slice(0, 19) : '') },
 ]
 
 function reset() {
