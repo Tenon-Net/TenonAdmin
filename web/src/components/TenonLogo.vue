@@ -7,9 +7,9 @@ import { useAppStore } from '@/stores/app'
 const props = withDefaults(defineProps<{ size?: number }>(), { size: 28 })
 const app = useAppStore()
 
-const bg = computed(() => (app.dark ? '#16181D' : '#646CFF'))
-const mark = computed(() => (app.dark ? '#7A81FF' : '#FFFFFF'))
-const markOpacity = computed(() => (app.dark ? 0.45 : 0.5))
+const bg = computed(() => (app.isDark ? '#16181D' : '#646CFF'))
+const mark = computed(() => (app.isDark ? '#7A81FF' : '#FFFFFF'))
+const markOpacity = computed(() => (app.isDark ? 0.45 : 0.5))
 </script>
 
 <template>

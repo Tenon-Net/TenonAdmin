@@ -6,6 +6,7 @@
   --row-h: 58px;
   --sidebar-w: 236px;
   --sidebar-w-collapsed: 76px;
+  --rail-w: 64px;
   --header-h: 62px;
 }
 
@@ -43,4 +44,39 @@ a {
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* 灰阶 / 色弱:整页 filter(随 app.grayscale / app.colorWeak 由 useTheme 打在 <html>)。 */
+html[data-gray] {
+  filter: grayscale(1);
+}
+html[data-color-weak] {
+  filter: invert(0.8);
+}
+html[data-gray][data-color-weak] {
+  filter: grayscale(1) invert(0.8);
+}
+
+/* 页面切换动画(default.vue 的 <transition :name="app.pageTransition">)。 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateX(16px);
+}
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-16px);
 }

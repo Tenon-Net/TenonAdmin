@@ -1,4 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
+import { namedPage } from './namedPage'
 
 // 静态路由(白名单 + 布局壳 + 固定页)。业务页由菜单树动态注册到 'layout' 下。
 export const staticRoutes: RouteRecordRaw[] = [
@@ -23,19 +24,19 @@ export const staticRoutes: RouteRecordRaw[] = [
       {
         path: '/workbench',
         name: 'workbench',
-        component: () => import('@/views/dashboard/workbench.vue'),
+        component: namedPage('workbench', () => import('@/views/dashboard/workbench.vue')),
         meta: { title: 'menu.workbench' },
       },
       {
         path: '/personal/profile',
         name: 'personal-profile',
-        component: () => import('@/views/personal/profile.vue'),
+        component: namedPage('personal-profile', () => import('@/views/personal/profile.vue')),
         meta: { title: 'menu.profile' },
       },
       {
         path: '/personal/password',
         name: 'personal-password',
-        component: () => import('@/views/personal/password.vue'),
+        component: namedPage('personal-password', () => import('@/views/personal/password.vue')),
         meta: { title: 'menu.password' },
       },
     ],

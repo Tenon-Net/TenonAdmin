@@ -17,7 +17,7 @@ const vars = computed(() => ({
 }))
 
 // 跟随应用明暗:深色用 darkTheme,浅色用 Naive 默认(null)。inherit=false 隔离应用根 overrides。
-const naiveTheme = computed(() => (app.dark ? darkTheme : null))
+const naiveTheme = computed(() => (app.isDark ? darkTheme : null))
 
 // accent 派生主色两套共用。
 const common = computed(() => ({
@@ -29,7 +29,7 @@ const common = computed(() => ({
 // 输入框做成玻璃上的半透明观感 + accent 聚焦,深/浅两套。
 // ponytail: 浅色分支硬编码了 text-primary(#1D2129)/secondary(#4E5969) 令牌值,tokens 若改需同步
 const glassTheme = computed<GlobalThemeOverrides>(() =>
-  app.dark
+  app.isDark
     ? {
         common: common.value,
         Input: {
@@ -68,7 +68,7 @@ const glassTheme = computed<GlobalThemeOverrides>(() =>
 </script>
 
 <template>
-  <div class="aurora" :class="{ light: !app.dark }" :style="vars">
+  <div class="aurora" :class="{ light: !app.isDark }" :style="vars">
     <div class="aurora-bg" />
     <div class="stars" />
     <div class="orb orb-1" />

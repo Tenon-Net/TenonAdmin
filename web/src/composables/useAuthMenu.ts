@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import { router, resetRouter, registerDynamic } from '@/router'
+import { namedPage } from '@/router/namedPage'
 import { useAuthStore } from '@/stores/auth'
 import { personalApi } from '@/api'
 import { MenuType, type MenuNode } from '@/types/menu'
@@ -33,7 +34,7 @@ export async function buildRoutesForModule(moduleId: number): Promise<void> {
     router.addRoute('layout', {
       path: node.path.startsWith('/') ? node.path : `/${node.path}`,
       name,
-      component: loader,
+      component: namedPage(name, loader),
       meta: { title: node.title, icon: node.icon, keepAlive: true },
     })
     registerDynamic(name)

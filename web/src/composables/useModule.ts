@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/auth'
+import { useTabsStore } from '@/stores/tabs'
 import { personalApi } from '@/api'
 import { buildRoutesForModule } from './useAuthMenu'
 import { router } from '@/router'
@@ -28,6 +29,9 @@ export function useModule() {
     const { modules, defaultModuleId } = await personalApi.modules()
     auth.modules = modules
     if (modules.length === 0) return { chooser: true } // 空态:选择器里提示未分配应用
+    // F5/深链优先重建"上次所在应用"(持久化的 currentModuleId),让其动态路由复活,跨应用深链不落 404。
+    const remembered = auth.currentModuleId
+    if (remembered && modules.some((m) => m.id === remembered)) return enter(remembered)
     if (modules.length === 1) return enter(modules[0]!.id)
     if (defaultModuleId && modules.some((m) => m.id === defaultModuleId)) return enter(defaultModuleId)
     return { chooser: true }
@@ -35,6 +39,7 @@ export function useModule() {
 
   async function switchModule(moduleId: number): Promise<void> {
     await enter(moduleId)
+    useTabsStore().clearTabs() // 切应用 → 标签归零(新应用路由已重建)
     const m = auth.modules.find((x) => x.id === moduleId)
     router.replace(m?.defaultRoute || firstLeafPath(auth.menuTree) || '/workbench')
   }

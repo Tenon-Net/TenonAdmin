@@ -1,16 +1,39 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NButton, NDropdown, NPopover, NTooltip, useMessage, type DropdownOption } from 'naive-ui'
+import {
+  NButton,
+  NDropdown,
+  NTooltip,
+  NMenu,
+  NBreadcrumb,
+  NBreadcrumbItem,
+  useMessage,
+  type DropdownOption,
+} from 'naive-ui'
 import { Icon } from '@iconify/vue'
+import { useFullscreen } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
-import { ACCENTS } from '@/theme/accents'
+import { useLayoutMenu } from '@/composables/useLayoutMenu'
+import { useMenuFlat } from '@/composables/useMenuFlat'
 import { authApi } from '@/api'
 import { resetRouter } from '@/router'
 import { translateError } from '@/utils/error'
+import TenonLogo from '@/components/TenonLogo.vue'
+import SettingsDrawer from './SettingsDrawer.vue'
+import MenuSearch from '@/components/MenuSearch.vue'
+
+withDefaults(
+  defineProps<{
+    showCollapse?: boolean
+    showBrand?: boolean
+    topMenu?: 'full' | 'l1' | 'l2' | null
+  }>(),
+  { showCollapse: true, showBrand: false, topMenu: null },
+)
 
 const app = useAppStore()
 const user = useUserStore()
@@ -19,12 +42,19 @@ const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const { t } = useI18n()
+const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
+const { menuOptions, l1Options, l2Options, activeKey, selectedL1, onSelect, onSelectL1 } = useLayoutMenu()
+const flat = useMenuFlat()
+
+const settingsOpen = ref(false)
+const searchOpen = ref(false)
 
 const title = computed(() => {
   const m = route.meta.title as string | undefined
   if (!m) return ''
   return m.includes('.') ? t(m) : m
 })
+const crumbs = computed(() => flat.value.find((l) => l.path === route.path)?.breadcrumb ?? [])
 
 const moduleOptions = computed<DropdownOption[]>(() =>
   auth.modules.map((m) => ({ label: m.title, key: String(m.id) })),
@@ -52,7 +82,7 @@ async function logout() {
     message.error(translateError(e)) // 尽力而为,不阻断登出
   }
   resetRouter()
-  auth.reset()
+  auth.reset() // 内部会 clearTabs()
   user.clear()
   router.replace('/login')
 }
@@ -61,56 +91,79 @@ async function logout() {
 <template>
   <div class="bar">
     <div class="left">
-      <n-button quaternary circle @click="app.toggleCollapsed()">
+      <n-button v-if="showCollapse" quaternary circle @click="app.toggleCollapsed()">
         <Icon :icon="app.collapsed ? 'ph:list' : 'ph:sidebar-simple'" :width="20" />
       </n-button>
-      <span class="title">{{ title }}</span>
+      <div v-if="showBrand" class="brand">
+        <TenonLogo :size="26" />
+        <span class="brand-name">TenonAdmin</span>
+      </div>
+      <n-breadcrumb v-if="app.showBreadcrumb && crumbs.length">
+        <n-breadcrumb-item v-for="(c, i) in crumbs" :key="i">{{ c }}</n-breadcrumb-item>
+      </n-breadcrumb>
+      <span v-else class="title">{{ title }}</span>
+    </div>
+
+    <div v-if="topMenu" class="center">
+      <n-menu
+        v-if="topMenu === 'full'"
+        mode="horizontal"
+        responsive
+        :options="menuOptions"
+        :value="activeKey"
+        @update:value="onSelect"
+      />
+      <n-menu
+        v-else-if="topMenu === 'l1'"
+        mode="horizontal"
+        responsive
+        :options="l1Options"
+        :value="selectedL1"
+        @update:value="onSelectL1"
+      />
+      <n-menu
+        v-else
+        mode="horizontal"
+        responsive
+        :options="l2Options"
+        :value="activeKey"
+        @update:value="onSelect"
+      />
     </div>
 
     <div class="right">
-      <!-- 主色 -->
-      <n-popover trigger="click" placement="bottom">
-        <template #trigger>
-          <n-button quaternary circle><Icon icon="ph:palette" :width="18" /></n-button>
-        </template>
-        <div class="accents">
-          <button
-            v-for="c in ACCENTS"
-            :key="c"
-            class="dot"
-            :class="{ on: app.accent === c }"
-            :style="{ background: c }"
-            @click="app.setAccent(c)"
-          />
-        </div>
-      </n-popover>
-
-      <!-- 密度 -->
       <n-tooltip>
         <template #trigger>
-          <n-button quaternary circle @click="app.setDensity(app.density === 'comfortable' ? 'compact' : 'comfortable')">
-            <Icon :icon="app.density === 'compact' ? 'ph:rows' : 'ph:rows-plus-bottom'" :width="18" />
-          </n-button>
+          <n-button quaternary circle @click="searchOpen = true"><Icon icon="ph:magnifying-glass" :width="18" /></n-button>
         </template>
-        {{ app.density === 'comfortable' ? t('app.comfortable') : t('app.compact') }}
+        {{ t('app.search') }} (Ctrl+K)
       </n-tooltip>
 
-      <!-- 主题 -->
+      <n-tooltip>
+        <template #trigger>
+          <n-button quaternary circle @click="toggleFullscreen()">
+            <Icon :icon="isFullscreen ? 'ph:arrows-in' : 'ph:arrows-out'" :width="18" />
+          </n-button>
+        </template>
+        {{ isFullscreen ? t('app.exitFullscreen') : t('app.fullscreen') }}
+      </n-tooltip>
+
       <n-tooltip>
         <template #trigger>
           <n-button quaternary circle @click="app.toggleDark()">
-            <Icon :icon="app.dark ? 'ph:moon-stars' : 'ph:sun'" :width="18" />
+            <Icon :icon="app.isDark ? 'ph:moon-stars' : 'ph:sun'" :width="18" />
           </n-button>
         </template>
-        {{ app.dark ? t('app.dark') : t('app.light') }}
+        {{ app.isDark ? t('app.dark') : t('app.light') }}
       </n-tooltip>
 
-      <!-- 语言 -->
-      <n-button quaternary size="small" @click="app.setLocale(app.locale === 'zh-CN' ? 'en-US' : 'zh-CN')">
-        {{ app.locale === 'zh-CN' ? '中' : 'EN' }}
-      </n-button>
+      <n-tooltip>
+        <template #trigger>
+          <n-button quaternary circle @click="settingsOpen = true"><Icon icon="ph:gear-six" :width="18" /></n-button>
+        </template>
+        {{ t('app.settings') }}
+      </n-tooltip>
 
-      <!-- 切换应用 -->
       <n-dropdown v-if="auth.modules.length > 1" :options="moduleOptions" @select="onSwitchModule">
         <n-button quaternary circle>
           <n-tooltip>
@@ -120,7 +173,6 @@ async function logout() {
         </n-button>
       </n-dropdown>
 
-      <!-- 用户 -->
       <n-dropdown :options="userOptions" @select="onUser">
         <n-button quaternary>
           <Icon icon="ph:user-circle" :width="20" style="margin-right: 6px" />
@@ -128,6 +180,9 @@ async function logout() {
         </n-button>
       </n-dropdown>
     </div>
+
+    <SettingsDrawer v-model:show="settingsOpen" />
+    <MenuSearch v-model:show="searchOpen" />
   </div>
 </template>
 
@@ -136,39 +191,40 @@ async function logout() {
   height: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   padding: 0 16px;
 }
 .left {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+.brand-name {
+  font-size: var(--font-size-md);
 }
 .title {
   font-size: var(--font-size-md);
   font-weight: 500;
   color: var(--color-text-primary);
 }
+.center {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
 .right {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.accents {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 4px;
-}
-.dot {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-  outline: 1px solid var(--color-border);
-}
-.dot.on {
-  border-color: var(--color-text-primary);
+  margin-left: auto;
+  flex-shrink: 0;
 }
 </style>

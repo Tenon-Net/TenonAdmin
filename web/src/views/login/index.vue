@@ -36,13 +36,13 @@ const active = computed(() => LOGIN_SKINS.find((s) => s.id === skin.value) ?? LO
           <button
             class="tool-btn"
             type="button"
-            :aria-label="app.dark ? t('app.light') : t('app.dark')"
+            :aria-label="app.isDark ? t('app.light') : t('app.dark')"
             @click="app.toggleDark()"
           >
-            <Icon :icon="app.dark ? 'ph:moon-stars' : 'ph:sun'" :width="18" />
+            <Icon :icon="app.isDark ? 'ph:moon-stars' : 'ph:sun'" :width="18" />
           </button>
         </template>
-        {{ app.dark ? t('app.light') : t('app.dark') }}
+        {{ app.isDark ? t('app.light') : t('app.dark') }}
       </n-tooltip>
       <n-tooltip>
         <template #trigger>
