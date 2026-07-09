@@ -193,7 +193,7 @@ app.Run();
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration, options =>
 {
-    options.ScanApplicationAssemblies = true;                       // 默认 true
+    // 注:ScanApplicationAssemblies 从未实现,已标 [Obsolete](置任何值都无效);实际只有下面这行生效。
     options.ApplicationAssemblies.Add(typeof(DeviceService).Assembly);
 });
 ```
@@ -470,8 +470,8 @@ public class DeviceSeedData : ISeedData
 
 **注册模型(双层,消除"显式 vs 扫描"的歧义)**:
 - **框架内置服务**:一律在各模块 `AddXxx()` 里**显式 `TryAdd`** 注册,不靠扫描 —— 可预测、可被用户 `Replace`(§5.2)。
-- **用户外部模块**:`AddTenonAdmin()` 默认**扫描入口程序集及其直接引用**里的 `ITransient/IScoped/ISingleton/ISeedData` 并注册。
-- 可控:`options.ScanApplicationAssemblies=false` 关闭扫描,或 `options.ApplicationAssemblies.Add(...)` 精确指定(§3.1)。
+- **用户外部模块**:经 `options.ApplicationAssemblies.Add(...)` **显式登记**业务程序集,其实体参与 CodeFirst 建表、控制器 AddApplicationPart 挂载。
+  > 实现说明:原设计的"默认扫描入口程序集及引用"(`ScanApplicationAssemblies`)最终**未实现**——为守内核"显式、可预测、无魔法"的取向,只保留显式登记这一条真源;该开关已于 2026-07-09 标 `[Obsolete]`。
 
 要覆写**内置**服务/实体行为,回到 §5.1–5.4 四层覆写;要新增**自己**的东西,就是上面这套。
 两者对称:内置模块本身也是照这套写的(区别只是内置走显式注册、用户走扫描)。

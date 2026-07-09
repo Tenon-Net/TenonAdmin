@@ -151,7 +151,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 
 内核会把该程序集的实体并入 CodeFirst 建表、控制器 `AddApplicationPart`。其余（实体/服务/控制器/缓存/菜单）写法与路线 A 完全一致。
 
-> ⚠️ **只有 `ApplicationAssemblies.Add(...)` 这条路生效**。`TenonAdminOptions.ScanApplicationAssemblies` 虽默认 `true`，但其文档注明“骨架暂未启用扫描”（当前未被读取，是空开关）。别指望它自动发现你的模块——必须显式 `Add` 程序集。
+> ⚠️ **只有 `ApplicationAssemblies.Add(...)` 这条路生效**。`TenonAdminOptions.ScanApplicationAssemblies` 从未实现、代码里无一处读取，已于 2026-07-09 标记 `[Obsolete]`（置任何值都无效，将于后续大版本移除）。别指望它自动发现你的模块——必须显式 `Add` 程序集。
 
 ---
 

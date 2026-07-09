@@ -86,7 +86,7 @@
 
 - **无代码生成**：一个最小 CRUD 模块要手改 ~8 个文件跨 4 个工程，每个域都是手抄兄弟域。建议做 `dotnet new tenon-module` 模板或源生成器。
 - **权限码手工双写**：控制器路由（真源）与 `DefaultMenuSeed.Permission` 字符串手工同步。~~`PermissionCodeConsistencyTests` 只校验“种子→端点”，不校验反向~~ → **✅ 已加反向锁（2026-07-09）**：`Every_permission_endpoint_is_seeded_or_explicitly_known_unseeded` 断言每个 `[RolePermission]` 端点要么有种子菜单节点、要么显式登记在 `KnownUnseededEndpoints`（当前 28 个仅超管可用的端点，随前端 M2 菜单树落地而缩小）。新增受权端点若既无菜单又不登记 → 测试红，杜绝“静默 403”无声漂移。（`dotnet new tenon-module` 脚手架/源生成器仍为独立待办。）
-- **`ScanApplicationAssemblies` 是误导性空开关**：默认 `true` 但未实现（`TenonAdminOptions.cs:31`），只有 `ApplicationAssemblies.Add(...)` 真正生效。建议实现或标 `[Obsolete]`。
+- ~~**`ScanApplicationAssemblies` 是误导性空开关**：默认 `true` 但未实现，只有 `ApplicationAssemblies.Add(...)` 真正生效~~ → **✅ 已处理（2026-07-09）**：标 `[Obsolete]` 退役（承认从未实现、代码无一处读取；引导改用 `ApplicationAssemblies.Add`）。选退役而非实现——守内核"显式、可预测、无魔法"取向,`ApplicationAssemblies` 已是文档化且被测的唯一正道。同步更新设计文档 §5.7 与新建业务指南。
 
 ### 🟡 低
 
@@ -111,7 +111,7 @@
 - [x] 机构树变更时使 `scope` 缓存失效（`IRbacService.InvalidateAllScopesAsync`，全体失效；epoch 方案留作大规模升级路径，2026-07-09）
 - [x] 提供 `DataEntity` 机构隔离 CRUD 参考模块 + 写路径范围守卫（机制级默认安全，2026-07-09）
 - [x] `PermissionCodeConsistencyTests` 加反向锁：端点须有菜单节点或显式登记 `KnownUnseededEndpoints`（2026-07-09）
-- [ ] 处理 `ScanApplicationAssemblies` 空开关（实现或标记 `[Obsolete]`）
+- [x] 处理 `ScanApplicationAssemblies` 空开关（标 `[Obsolete]` 退役，引导用 `ApplicationAssemblies.Add`，2026-07-09）
 - [ ] 门户菜单/模块读酌情加缓存
 - [ ] 前端 `.vue` 视图补 WHY 注释；统一列标题 i18n 工厂形式
 - [ ] （规划中）后端 `/personal/permissions` 接口 → 前端 `v-auth` 真正生效
