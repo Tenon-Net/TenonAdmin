@@ -29,6 +29,7 @@ public class RbacService(
         // 授权变了 → 失效所有挂该角色用户的权限缓存(下次请求即按新授权重算)
         var affectedUsers = await userRoles.AsQueryable().Where(x => x.RoleId == roleId).Select(x => x.UserId).ToListAsync();
         await InvalidatePermissionsAsync(affectedUsers);
+        await cache.IncrementAsync(CacheKeys.PortalGeneration);   // 授权变动改门户模块/菜单树 → 门户缓存整体失效
     }
 
     /// <inheritdoc />
@@ -44,6 +45,7 @@ public class RbacService(
         // 角色变了 → 权限与数据范围都可能变,两者缓存都失效
         await InvalidatePermissionsAsync([userId]);
         await InvalidateScopesAsync([userId]);
+        await cache.IncrementAsync(CacheKeys.PortalGeneration);   // 用户角色变动改其门户模块/菜单树 → 门户缓存整体失效
     }
 
     /// <inheritdoc />

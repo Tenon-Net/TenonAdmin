@@ -22,7 +22,7 @@
 | 系统配置值 | ✅ | `config:{key}` | 配置增删改即失效 |
 | 字典项列表 | ✅ | `dict:{typeCode}` | 字典增删改即失效 + 广播事件 |
 | 验证码 / 登录失败计数 | ✅ | `captcha:*`/`loginfail:*` | 一次性消费 / 窗口过期 |
-| 门户模块列表 / 菜单树 | ❌ | — | 每次登录/切应用/刷新查库（见问题遗漏项） |
+| 门户模块列表 / 菜单树 | ✅ | `portal:mod:{uid}:{gen}`/`portal:menu:{uid}:{mid}:{gen}` | 菜单/模块/角色-菜单/用户-角色变更即自增 `portal:gen` 整体失效（2026-07-09) |
 
 - 一次受保护请求的鉴权（会话校验 + 权限码 + 数据范围）**全部走缓存**；超管数据范围直接取 JWT claim，**零查库**。冷缓存首次约 6–8 条查询播种，之后为 0。
 - 默认 `MemoryCacheProvider`（进程内 `IMemoryCache`）；多实例共享已提供 **`TenonAdmin.Caching.Redis`** 可选包（StackExchange.Redis 实现），`AddTenonAdminRedisCache` 前置注册即整体替换，业务代码零改动（详见 [`coding-standards.md`](./coding-standards.md) §1.8）。

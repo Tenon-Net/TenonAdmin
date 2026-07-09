@@ -149,4 +149,61 @@ public class ModulePortalTests
         var denied = await c.PutJson("/api/v1/personal/default-module", new { moduleId = 999999 });
         Assert.Equal(42014, (await denied.ReadEnvelope()).GetProperty("code").GetInt32());
     }
+
+    // ── 门户读缓存:结果按 (userId[,moduleId]) 缓存,菜单/模块/授权变更经代际计数即时失效(非等 TTL) ──
+
+    [Fact]
+    public async Task Portal_modules_cache_reflects_module_add_immediately()
+    {
+        // 守 ModuleService.AddAsync 的门户代际自增:预热模块列表后新增模块,应即时可见(非陈旧缓存)。
+        using var f = new AdminAppFactory();
+        var c = f.CreateClient();
+        WithToken(c, await c.LoginToken("superAdmin", "Test@123456"));
+
+        Assert.Contains(1L, ModuleIds(await (await c.GetAsync("/api/v1/personal/modules")).ReadEnvelope()));   // 预热(含 system)
+
+        var newId = (await (await c.PostJson("/api/v1/sys/module/add", new { code = "crm2", title = "客户", sort = 5, enabled = true })).ReadEnvelope())
+            .GetProperty("data").GetInt64();
+
+        Assert.Contains(newId, ModuleIds(await (await c.GetAsync("/api/v1/personal/modules")).ReadEnvelope()));   // 即时含新模块
+    }
+
+    [Fact]
+    public async Task Portal_modules_cache_reflects_role_menu_grant_immediately()
+    {
+        // 守 RbacService.SetRoleMenusAsync 的门户代际自增:预热空门户后给角色授菜单,模块应即时出现。
+        using var f = new AdminAppFactory();
+        var (account, password) = await SeedUser(f, menuId: null);   // 角色无菜单 → 门户空
+
+        var c = f.CreateClient();
+        WithToken(c, await c.LoginToken(account, password));
+        Assert.Empty(ModuleIds(await (await c.GetAsync("/api/v1/personal/modules")).ReadEnvelope()));   // 预热(空)
+
+        using (var scope = f.Services.CreateScope())
+        {
+            var sp = scope.ServiceProvider;
+            var uid = (await sp.GetRequiredService<IRepository<SysUser>>().GetFirstAsync(u => u.Account == account))!.Id;
+            var roleId = (await sp.GetRequiredService<IRbacService>().GetUserRoleIdsAsync(uid)).First();
+            await sp.GetRequiredService<IRbacService>().SetRoleMenusAsync(roleId, [2]);   // 授 GET:/api/v1/ping(挂 system 模块下)
+        }
+
+        Assert.Equal([1L], ModuleIds(await (await c.GetAsync("/api/v1/personal/modules")).ReadEnvelope()).ToList());   // 即时见 system
+    }
+
+    [Fact]
+    public async Task Portal_menu_tree_cache_reflects_menu_add_immediately()
+    {
+        // 守 MenuService.CreateAsync 的门户代际自增:预热某模块菜单树后新增顶级目录,应即时多一个根节点。
+        using var f = new AdminAppFactory();
+        var c = f.CreateClient();
+        WithToken(c, await c.LoginToken("superAdmin", "Test@123456"));
+
+        var before = (await (await c.GetAsync("/api/v1/personal/menu?moduleId=1")).ReadEnvelope()).GetProperty("data").GetArrayLength();   // 预热
+
+        await c.PostJson("/api/v1/sys/menu/add",
+            new { parentId = 0, type = 1, title = "门户缓存测试目录", permission = "", sort = 88, enabled = true, moduleId = 1, visible = true });
+
+        var after = (await (await c.GetAsync("/api/v1/personal/menu?moduleId=1")).ReadEnvelope()).GetProperty("data").GetArrayLength();
+        Assert.Equal(before + 1, after);   // 即时多一个根(非陈旧)
+    }
 }

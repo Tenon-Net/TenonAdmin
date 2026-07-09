@@ -12,13 +12,34 @@ public class MenuService(
     IRepository<SysRoleMenu> roleMenus,
     IRepository<SysMenu> menus,
     IRepository<SysModule> modules,
-    IRbacService rbac) : IMenuService
+    IRbacService rbac,
+    ICacheProvider cache,
+    AdminCacheOptions cacheOptions) : IMenuService
 {
     /// <summary>上溯 ParentId 链到根目录的最大步数(防断链/环)。菜单层级远小于此。</summary>
     private const int WalkGuard = 64;
 
+    // 门户缓存 TTL:仅作孤儿回收 + 直连改库的兜底(正确性由 CUD 自增 PortalGeneration 保证);复用权限缓存过期配置。
+    private TimeSpan? PortalTtl => cacheOptions.PermissionMinutes > 0 ? TimeSpan.FromMinutes(cacheOptions.PermissionMinutes) : null;
+
+    /// <summary>令门户缓存(模块列表 + 菜单树)整体惰性失效——自增代际,旧键不再被读到。菜单/角色-菜单/用户-角色变更后调用。</summary>
+    private Task BumpPortalAsync() => cache.IncrementAsync(CacheKeys.PortalGeneration);
+
     /// <inheritdoc />
     public virtual async Task<IReadOnlyList<ModuleItem>> GetMyModulesAsync(long userId, bool isSuperAdmin)
+    {
+        var gen = await cache.GetAsync<long>(CacheKeys.PortalGeneration);   // 键缺失 → 0(首代)
+        var key = CacheKeys.PortalModules(userId, gen);
+        var cached = await cache.GetAsync<List<ModuleItem>>(key);
+        if (cached is not null) return cached;                              // 命中(含缓存的空列表,与未缓存可区分)
+
+        var result = await ComputeMyModulesAsync(userId, isSuperAdmin);
+        await cache.SetAsync(key, result, PortalTtl);
+        return result;
+    }
+
+    /// <summary>聚合查库计算用户可访问模块(仅缓存未命中时执行)。</summary>
+    protected virtual async Task<List<ModuleItem>> ComputeMyModulesAsync(long userId, bool isSuperAdmin)
     {
         var allModules = await modules.AsQueryable().Where(m => m.Enabled).OrderBy(m => m.Sort).OrderBy(m => m.Id).ToListAsync();
         if (isSuperAdmin) return allModules.Select(ToItem).ToList();
@@ -42,6 +63,19 @@ public class MenuService(
 
     /// <inheritdoc />
     public virtual async Task<IReadOnlyList<MenuNode>> GetMyMenuTreeAsync(long userId, bool isSuperAdmin, long moduleId)
+    {
+        var gen = await cache.GetAsync<long>(CacheKeys.PortalGeneration);
+        var key = CacheKeys.PortalMenuTree(userId, moduleId, gen);
+        var cached = await cache.GetAsync<List<MenuNode>>(key);
+        if (cached is not null) return cached;
+
+        var result = await ComputeMyMenuTreeAsync(userId, isSuperAdmin, moduleId);
+        await cache.SetAsync(key, result, PortalTtl);
+        return result;
+    }
+
+    /// <summary>聚合查库计算用户在某模块下的菜单树(仅缓存未命中时执行)。</summary>
+    protected virtual async Task<List<MenuNode>> ComputeMyMenuTreeAsync(long userId, bool isSuperAdmin, long moduleId)
     {
         var allMenus = await menus.AsQueryable().Where(m => m.Enabled).OrderBy(m => m.Sort).OrderBy(m => m.Id).ToListAsync();
         var byId = allMenus.ToDictionary(m => m.Id);
@@ -94,6 +128,7 @@ public class MenuService(
         await EnsureParentValidAsync(null, input.ParentId);
         var entity = ApplyInput(new SysMenu(), input);
         await menus.InsertAsync(entity);   // AOP 补雪花 Id/审计字段
+        await BumpPortalAsync();            // 新菜单可能改变门户模块/树 → 门户缓存整体失效
         return entity.Id;
     }
 
@@ -106,6 +141,7 @@ public class MenuService(
         await menus.UpdateAsync(ApplyInput(entity!, input));
         // 权限码/启用态可能已变 → 失效被授该菜单用户的权限缓存,授权改动即时生效(不等 TTL)
         await rbac.InvalidatePermissionsByMenuAsync(id);
+        await BumpPortalAsync();   // 标题/启用/父级/所属模块变更也会改门户模块/树 → 门户缓存整体失效
     }
 
     /// <summary>
@@ -142,6 +178,7 @@ public class MenuService(
         await menus.DeleteAsync(id);
         // 悬空的 sys_role_menu 仍在,故删后扇出仍能定位受影响用户,失效其权限缓存(否则最长 TTL 内仍按旧权限)
         await rbac.InvalidatePermissionsByMenuAsync(id);
+        await BumpPortalAsync();   // 删菜单会改门户模块/树 → 门户缓存整体失效
     }
 
     /// <summary>把入参写入实体;<b>ModuleId 仅顶级目录(ParentId==0)保留,子节点强制置空</b>(归属靠上溯解析,不冗余存)。</summary>
@@ -198,7 +235,7 @@ public class MenuService(
     }
 
     /// <summary>按 ParentId 把平铺(已排序)节点拼成森林;父不在集合内的节点升为根。</summary>
-    private static IReadOnlyList<MenuNode> BuildForest(List<SysMenu> nodes)
+    private static List<MenuNode> BuildForest(List<SysMenu> nodes)
     {
         var nodeMap = nodes.ToDictionary(m => m.Id, ToNode);
         var roots = new List<MenuNode>();

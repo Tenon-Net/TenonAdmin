@@ -27,4 +27,18 @@ public static class CacheKeys
 
     /// <summary>某验证码票据对应的明文(登录时一次性校验并消费,短 TTL 过期,设计 §14)</summary>
     public static string Captcha(string captchaId) => $"captcha:{captchaId}";
+
+    /// <summary>
+    /// 门户缓存<b>代际计数器</b>:菜单/模块 CRUD、角色-菜单、用户-角色变更时自增,令下方门户键整体惰性失效。
+    /// <para>因 <see cref="ICacheProvider"/> 无前缀/批量删除,而门户结果受影响面是全局的、菜单树键又是二维,
+    /// 用递增代际做 O(1) 失效(旧代际键不再被读到、由 TTL 回收)最简且正确。计数器本身不设过期(进程内重启即归零、
+    /// 与缓存同生共死;Redis 下跨实例共享保证分布式一致)。</para>
+    /// </summary>
+    public const string PortalGeneration = "portal:gen";
+
+    /// <summary>某用户可访问模块列表(门户导航;随 <see cref="PortalGeneration"/> 代际失效)</summary>
+    public static string PortalModules(long userId, long generation) => $"portal:mod:{userId}:{generation}";
+
+    /// <summary>某用户在某模块下的侧边栏菜单树(门户导航;随 <see cref="PortalGeneration"/> 代际失效)</summary>
+    public static string PortalMenuTree(long userId, long moduleId, long generation) => $"portal:menu:{userId}:{moduleId}:{generation}";
 }

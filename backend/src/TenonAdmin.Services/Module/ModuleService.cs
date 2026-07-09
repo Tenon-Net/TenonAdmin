@@ -7,7 +7,7 @@ namespace TenonAdmin.Services;
 /// <see cref="IModuleService"/> 默认实现。编码唯一查重纳入软删行(与 <c>OrgService</c> 同规矩,
 /// 避免撞库上唯一索引抛原生 500)。内置 system 模块按固定 Id 保护,不可删除。
 /// </summary>
-public class ModuleService(IRepository<SysModule> modules) : IModuleService
+public class ModuleService(IRepository<SysModule> modules, ICacheProvider cache) : IModuleService
 {
     /// <inheritdoc />
     public virtual async Task<IReadOnlyList<SysModule>> ListAsync() =>
@@ -39,6 +39,7 @@ public class ModuleService(IRepository<SysModule> modules) : IModuleService
             Remark = input.Remark,
         };
         await modules.InsertAsync(entity);
+        await cache.IncrementAsync(CacheKeys.PortalGeneration);   // 新模块改门户模块列表(超管即见)→ 门户缓存整体失效
         return entity.Id;
     }
 
@@ -59,6 +60,7 @@ public class ModuleService(IRepository<SysModule> modules) : IModuleService
         entity.Enabled = input.Enabled;
         entity.Remark = input.Remark;
         await modules.UpdateAsync(entity);
+        await cache.IncrementAsync(CacheKeys.PortalGeneration);   // 标题/图标/排序/启用变更改门户模块列表 → 门户缓存整体失效
     }
 
     /// <inheritdoc />
@@ -70,5 +72,6 @@ public class ModuleService(IRepository<SysModule> modules) : IModuleService
         AdminException.ThrowIf(id == DefaultModuleSeed.BUILTIN_MODULE_ID, ErrorCode.ModuleProtected);
         await GetAsync(id);   // 不存在则抛 ModuleNotFound
         await modules.DeleteAsync(id);
+        await cache.IncrementAsync(CacheKeys.PortalGeneration);   // 删模块改门户模块列表 → 门户缓存整体失效
     }
 }
