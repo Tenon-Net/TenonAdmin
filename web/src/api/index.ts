@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { DictItem, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, UserItem, UserProfile } from '@/types/api'
+import type { ConfigInput, DictItem, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, SysConfig, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -85,6 +85,22 @@ export const moduleApi = {
     client.PUT('/api/v1/sys/module/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   remove: (id: number) =>
     client.DELETE('/api/v1/sys/module/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+}
+
+export const configApi = {
+  /** 归一后端 PagedList<SysConfig> → ProTable {items,total};搜索键 configKey/name/groupCode → PascalCase 查询参。 */
+  page: (params: { page: number; pageSize: number; configKey?: string; name?: string; groupCode?: string }) =>
+    client
+      .GET('/api/v1/sys/config/page', {
+        params: { query: { Current: params.page, Size: params.pageSize, ConfigKey: params.configKey, Name: params.name, GroupCode: params.groupCode } },
+      })
+      .then((r) => unwrap<PagedList<SysConfig>>(r))
+      .then((p) => ({ items: p.items, total: p.total })),
+  add: (body: ConfigInput) => client.POST('/api/v1/sys/config', { body }).then((r) => unwrap<number>(r)),
+  update: (id: number, body: ConfigInput) =>
+    client.PUT('/api/v1/sys/config/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
+  remove: (id: number) =>
+    client.DELETE('/api/v1/sys/config/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
 }
 
 export const dictApi = {

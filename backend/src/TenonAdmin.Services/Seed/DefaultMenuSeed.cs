@@ -60,6 +60,11 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 23, ParentId = 20, Type = MenuType.Button, Title = "字典项-新增", Permission = "POST:/api/v1/sys/dict/item", Sort = 3, Enabled = true },
         new SysMenu { Id = 24, ParentId = 20, Type = MenuType.Button, Title = "配置-分页", Permission = "GET:/api/v1/sys/config/page", Sort = 4, Enabled = true },
         new SysMenu { Id = 25, ParentId = 20, Type = MenuType.Button, Title = "配置-取值", Permission = "GET:/api/v1/sys/config/value/{key}", Sort = 5, Enabled = true },
+        // 配置管理页(R1:ConfigController CRUD)。页面节点带 Path/Component;写端点授权码由兄弟按钮 57-59 承载(detail 用行数据,不放 GET config/{id})。
+        new SysMenu { Id = 55, ParentId = 20, Type = MenuType.Menu, Title = "配置管理", Permission = "", Path = "/system/config", Component = "system/config/index", Icon = "ph:sliders-horizontal-duotone", Sort = 6, Enabled = true, Visible = true },
+        new SysMenu { Id = 57, ParentId = 20, Type = MenuType.Button, Title = "配置-新增", Permission = "POST:/api/v1/sys/config", Sort = 7, Enabled = true },
+        new SysMenu { Id = 58, ParentId = 20, Type = MenuType.Button, Title = "配置-更新", Permission = "PUT:/api/v1/sys/config/{id}", Sort = 8, Enabled = true },
+        new SysMenu { Id = 59, ParentId = 20, Type = MenuType.Button, Title = "配置-删除", Permission = "DELETE:/api/v1/sys/config/{id}", Sort = 9, Enabled = true },
 
         // 文件管理目录 + 代表性接口(T7)。同样只播真实存在的接口。
         new SysMenu { Id = 30, ParentId = 0, Type = MenuType.Catalog, Title = "文件管理", Permission = "", Icon = "ph:folder-duotone", Sort = 4, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },

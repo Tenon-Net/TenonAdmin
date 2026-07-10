@@ -80,3 +80,25 @@ export interface ModuleInput {
   enabled: boolean
   remark?: string | null
 }
+
+/** 系统配置行(后端 SysConfig;列表返回全字段,int64 收敛为 number)。 */
+export interface SysConfig {
+  id: number
+  configKey: string
+  configValue?: string | null
+  name: string
+  groupCode?: string | null
+  sort: number
+  remark?: string | null
+  createTime?: string
+}
+
+/** 配置新增/编辑入参(后端 ConfigInput;configKey 创建后不可改)。 */
+export interface ConfigInput {
+  configKey: string
+  configValue?: string | null
+  name: string
+  groupCode?: string | null
+  sort: number
+  remark?: string | null
+}
