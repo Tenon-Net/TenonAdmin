@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref } from 'vue'
 import {
-  NCard, NButton, NSpace, NDataTable, NTag, NModal, NForm, NFormItem, NInput, NInputNumber, NSwitch,
-  NSelect, NPopconfirm, useMessage, type DataTableColumns,
+  NCard, NButton, NSpace, NDataTable, NTag, NForm, NFormItem, NInput, NInputNumber, NSwitch,
+  NSelect, NPopconfirm, useMessage, type DataTableColumns, type FormInst, type FormRules,
 } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
 import IconPicker from '@/components/IconPicker/index.vue'
+import FormContainer from '@/components/FormContainer/index.vue'
+import StatusSwitch from '@/components/StatusSwitch/index.vue'
+import { useConfirm } from '@/composables/useConfirm'
 import { menuApi, moduleApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { MenuType, type MenuInput, type MenuTreeNode } from '@/types/menu'
@@ -14,6 +17,7 @@ import type { ModuleRow } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
+const { run } = useConfirm()
 
 const loading = ref(false)
 const tree = ref<MenuTreeNode[]>([])
@@ -43,9 +47,13 @@ const typeTag = (ty: MenuType) =>
   : ty === MenuType.Menu ? { text: t('menu.typeMenu'), type: 'success' as const }
   : { text: t('menu.typeButton'), type: 'warning' as const }
 
-// ── 弹窗表单 ──────────────────────────────────────────────────────
-const showModal = ref(false)
-const saving = ref(false)
+// ── 弹窗表单(FormContainer:loading/底栏/关闭时机由容器按 onConfirm 协议接管)──
+const show = ref(false)
+const formRef = ref<FormInst | null>(null)
+const rules: FormRules = {
+  // whitespace: 保留原「!form.title.trim() 禁用保存」的语义,纯空白不算填写
+  title: { required: true, whitespace: true, message: () => t('menu.titleRequired'), trigger: ['input', 'blur'] },
+}
 const editingId = ref<number | null>(null)
 const blank = (): MenuInput => ({
   parentId: 0, type: MenuType.Menu, title: '', permission: '', sort: 0,
@@ -99,45 +107,36 @@ const parentOptions = computed(() => {
   return opts
 })
 
+/** 行数据 → 完整入参:openEdit 回填与 StatusSwitch 行内改状态共用(后端无独立启停端点,均走全量 update)。 */
+const toInput = (r: MenuTreeNode): MenuInput => ({
+  parentId: r.parentId, type: r.type, title: r.title, permission: r.permission, sort: r.sort,
+  enabled: r.enabled, moduleId: r.moduleId ?? null,
+  path: r.path ?? '', component: r.component ?? '', icon: r.icon ?? '', visible: r.visible,
+})
+
 function openAdd(parentId = 0) {
   editingId.value = null
   Object.assign(form, blank(), { parentId })
-  showModal.value = true
+  show.value = true
 }
 function openEdit(r: MenuTreeNode) {
   editingId.value = r.id
-  Object.assign(form, {
-    parentId: r.parentId, type: r.type, title: r.title, permission: r.permission, sort: r.sort,
-    enabled: r.enabled, moduleId: r.moduleId ?? null,
-    path: r.path ?? '', component: r.component ?? '', icon: r.icon ?? '', visible: r.visible,
-  })
-  showModal.value = true
+  Object.assign(form, toInput(r))
+  show.value = true
 }
 
-async function submit() {
-  if (!form.title.trim()) return
-  saving.value = true
+/** FormContainer onConfirm:校验失败 reject / API 失败 return false → 弹层不关;成功正常返回自动关。 */
+async function save() {
+  await formRef.value?.validate()
   try {
     const payload: MenuInput = { ...form, moduleId: isTopLevel.value ? form.moduleId : null }
     if (editingId.value === null) await menuApi.add(payload)
     else await menuApi.update(editingId.value, payload)
     message.success(t('menu.saved'))
-    showModal.value = false
     await load()
   } catch (e) {
     message.error(translateError(e))
-  } finally {
-    saving.value = false
-  }
-}
-
-async function remove(r: MenuTreeNode) {
-  try {
-    await menuApi.remove(r.id)
-    message.success(t('menu.deleted'))
-    await load()
-  } catch (e) {
-    message.error(translateError(e))
+    return false
   }
 }
 
@@ -159,9 +158,15 @@ const columns: DataTableColumns<MenuTreeNode> = [
     key: 'enabled',
     width: 84,
     render: (r) =>
-      h(NTag, { type: r.enabled ? 'success' : 'default', size: 'small', bordered: false }, () =>
-        r.enabled ? t('common.enabled') : t('common.disabled'),
-      ),
+      h(StatusSwitch, {
+        value: r.enabled,
+        // 停用是一键隐藏整棵子树的重操作,先确认;启用无副作用,跳过确认(返回 null)。
+        confirm: (next: boolean) => (next ? null : t('menu.disableConfirm', { title: r.title })),
+        request: (next: boolean) => menuApi.update(r.id, { ...toInput(r), enabled: next }),
+        'onUpdate:value': (v: boolean) => {
+          r.enabled = v
+        },
+      }),
   },
   {
     title: () => t('common.visible'),
@@ -181,7 +186,13 @@ const columns: DataTableColumns<MenuTreeNode> = [
         h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
         h(
           NPopconfirm,
-          { onPositiveClick: () => remove(r) },
+          {
+            // popconfirm 留在模板层当触发器,「执行→toast」后半段交给 useConfirm().run。
+            onPositiveClick: () =>
+              run(() => menuApi.remove(r.id), t('menu.deleted')).then((ok) => {
+                if (ok) load()
+              }),
+          },
           {
             trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
             default: () => t('menu.deleteConfirm', { title: r.title }),
@@ -210,20 +221,20 @@ const columns: DataTableColumns<MenuTreeNode> = [
       />
     </n-card>
 
-    <n-modal
-      v-model:show="showModal"
-      preset="card"
+    <FormContainer
+      v-model:show="show"
       :title="editingId === null ? t('menu.addTitle') : t('menu.editTitle')"
-      style="width: 560px"
+      :on-confirm="save"
+      :confirm-text="t('common.save')"
     >
-      <n-form :model="form" label-placement="left" :label-width="90">
+      <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :label-width="90">
         <n-form-item :label="t('menu.parent')">
           <n-select v-model:value="form.parentId" :options="parentOptions" />
         </n-form-item>
         <n-form-item :label="t('menu.type')">
           <n-select v-model:value="form.type" :options="typeOptions" />
         </n-form-item>
-        <n-form-item :label="t('menu.title')" required>
+        <n-form-item :label="t('menu.title')" path="title">
           <n-input v-model:value="form.title" :placeholder="t('menu.title')" />
         </n-form-item>
         <n-form-item :label="t('menu.permission')">
@@ -256,13 +267,7 @@ const columns: DataTableColumns<MenuTreeNode> = [
           <n-switch v-model:value="form.visible" />
         </n-form-item>
       </n-form>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showModal = false">{{ t('common.cancel') }}</n-button>
-          <n-button type="primary" :loading="saving" :disabled="!form.title.trim()" @click="submit">{{ t('common.save') }}</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </FormContainer>
   </div>
 </template>
 
