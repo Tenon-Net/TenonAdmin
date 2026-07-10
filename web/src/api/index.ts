@@ -67,7 +67,7 @@ export const personalApi = {
 }
 
 export const userApi = {
-  /** 归一后端 PagedList<UserItem>({current,size,total,items}) → useTable 期望的 {items,total}。 */
+  /** 归一后端 PagedList<UserItem>({current,size,total,items}) → ProTable fetcher 契约的 {items,total}。 */
   page: (params: { page: number; pageSize: number; account?: string; name?: string }) =>
     client
       .GET('/api/v1/sys/user/page', {

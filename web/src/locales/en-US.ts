@@ -172,6 +172,15 @@ export default {
     empty: 'No matching icon',
     more: '{n} more — keep typing to narrow',
   },
+  // ProTable (tenon-naive-pro-table) chrome text; search/reset/density reuse common/app keys, see useProTableLabels
+  proTable: {
+    refresh: 'Refresh',
+    columnSettings: 'Columns',
+    columnSettingsReset: 'Restore defaults',
+    fixedLeft: 'Pin left',
+    fixedRight: 'Pin right',
+    fixedNone: 'Unpin',
+  },
   workbench: {
     welcome: 'Hello, {name}',
     subtitle: 'TenonAdmin · Enterprise RBAC console',

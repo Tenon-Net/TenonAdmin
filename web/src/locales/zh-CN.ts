@@ -173,6 +173,15 @@ export default {
     empty: '无匹配图标',
     more: '还有 {n} 个,继续输入以缩小范围',
   },
+  // ProTable(tenon-naive-pro-table)组件文案;查询/重置/密度复用 common/app 键,见 useProTableLabels
+  proTable: {
+    refresh: '刷新',
+    columnSettings: '列设置',
+    columnSettingsReset: '恢复默认',
+    fixedLeft: '固定到左侧',
+    fixedRight: '固定到右侧',
+    fixedNone: '取消固定',
+  },
   workbench: {
     welcome: '你好,{name}',
     subtitle: 'TenonAdmin · 企业级权限管理后台',
