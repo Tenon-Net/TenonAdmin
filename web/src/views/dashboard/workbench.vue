@@ -23,7 +23,7 @@ const stats = computed(() => [
 </script>
 
 <template>
-  <div class="page">
+  <div class="view">
     <!-- 欢迎横幅(英雄区:btnGrad 头像)-->
     <div class="banner">
       <div class="avatar" :style="avatarStyle">
@@ -52,7 +52,7 @@ const stats = computed(() => [
 </template>
 
 <style scoped>
-.page {
+.view {
   display: flex;
   flex-direction: column;
   gap: var(--gap-card);

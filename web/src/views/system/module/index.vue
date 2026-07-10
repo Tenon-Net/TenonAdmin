@@ -140,7 +140,7 @@ const columns: DataTableColumns<ModuleRow> = [
 </script>
 
 <template>
-  <div class="page">
+  <div class="view">
     <n-card :bordered="true">
       <div class="bar">
         <h3>{{ t('module.manage') }}</h3>
@@ -186,7 +186,7 @@ const columns: DataTableColumns<ModuleRow> = [
 </template>
 
 <style scoped>
-.page {
+.view {
   display: flex;
   flex-direction: column;
   gap: var(--gap-card);
