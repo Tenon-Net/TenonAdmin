@@ -167,11 +167,8 @@ async function logout() {
       </n-tooltip>
 
       <n-dropdown :options="localeOptions" @select="onLocale">
-        <n-button quaternary circle>
-          <n-tooltip>
-            <template #trigger><Icon icon="ph:translate" :width="18" /></template>
-            {{ t('app.language') }}
-          </n-tooltip>
+        <n-button quaternary circle :aria-label="t('app.language')">
+          <Icon icon="ph:translate" :width="18" />
         </n-button>
       </n-dropdown>
 
@@ -183,11 +180,8 @@ async function logout() {
       </n-tooltip>
 
       <n-dropdown v-if="auth.modules.length > 1" :options="moduleOptions" @select="onSwitchModule">
-        <n-button quaternary circle>
-          <n-tooltip>
-            <template #trigger><Icon icon="ph:squares-four" :width="18" /></template>
-            {{ t('app.switchModule') }}
-          </n-tooltip>
+        <n-button quaternary circle :aria-label="t('app.switchModule')">
+          <Icon icon="ph:squares-four" :width="18" />
         </n-button>
       </n-dropdown>
 
