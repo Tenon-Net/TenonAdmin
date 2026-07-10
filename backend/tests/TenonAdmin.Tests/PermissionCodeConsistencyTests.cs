@@ -56,15 +56,13 @@ public class PermissionCodeConsistencyTests
     /// </summary>
     private static readonly HashSet<string> KnownUnseededEndpoints =
     [
-        "DELETE:/api/v1/sys/config/{id}",
         "DELETE:/api/v1/sys/dict/item/{id}",
         "DELETE:/api/v1/sys/dict/type/{id}",
         "DELETE:/api/v1/sys/file/{id}",
-        "DELETE:/api/v1/sys/log/login",
-        "DELETE:/api/v1/sys/log/op",
         "DELETE:/api/v1/sys/org/{id}",
         "DELETE:/api/v1/sys/position/{id}",
         "DELETE:/api/v1/sys/user/{id}",
+        // GET config/{id}(配置详情):R1 刻意不放详情按钮(编辑用行数据),故此端点仍未种子化,保留登记。
         "GET:/api/v1/sys/config/{id}",
         "GET:/api/v1/sys/dict/type/{id}",
         "GET:/api/v1/sys/file/{id}/download",
@@ -72,11 +70,9 @@ public class PermissionCodeConsistencyTests
         "GET:/api/v1/sys/org/{id}",
         "GET:/api/v1/sys/position/{id}",
         "GET:/api/v1/sys/user/{id}",
-        "POST:/api/v1/sys/config",
         "POST:/api/v1/sys/dict/type",
         "POST:/api/v1/sys/org/add",
         "POST:/api/v1/sys/position/add",
-        "PUT:/api/v1/sys/config/{id}",
         "PUT:/api/v1/sys/dict/item/{id}",
         "PUT:/api/v1/sys/dict/type/{id}",
         "PUT:/api/v1/sys/org/{id}",

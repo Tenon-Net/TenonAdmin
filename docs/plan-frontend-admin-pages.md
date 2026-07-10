@@ -26,7 +26,7 @@
 |---|---|---|---|
 | R1 | [x] 配置管理(`system/config`)—— 最纯 CRUD,当模板跑通配方 | — | 完成 · 2026-07-10 · 本提交 |
 | R2 | [x] 登录日志(`system/log/login`)—— 只读 ProTable | — | 完成 · 2026-07-10 · 本提交 |
-| R3 | [ ] 操作日志(`system/log/op`)—— 只读 + 详情抽屉 | — | 待办 |
+| R3 | [x] 操作日志(`system/log/op`)—— 只读 + 详情抽屉 | — | 完成 · 2026-07-10 · 本提交 |
 | R4 | [ ] 用户写侧(改造 `system/user`)+ OrgTreeSelect 组件 + orgApi.list/positionApi.page | — | 待办 |
 | R5 | [ ] 字典管理(`system/dict`)—— 主从(+ 可选后端 `dict/item/page`) | — | 待办 |
 | R6 | [ ] 岗位管理(`system/position`)—— 普通 CRUD | R4(positionApi.page) | 待办 |
@@ -56,6 +56,8 @@
 **菜单种子改法**(`backend/src/TenonAdmin.Services/Seed/DefaultMenuSeed.cs`):`HasData()` 追加记录,`DatabaseInitializer` 用 `Storageable` **按主键只插缺失行**,重启后端幂等插入。现占用 Id:1-8/10-15/20-25/30-32/40-49;**新记录统一 50-81**(见【菜单种子】)。权限码规范化:**大写 Method + 冒号 + 小写路由模板**(`{id}`/`{typecode}`/`{sessionid}` 全小写),否则授权管道匹配不上。
 
 **v-auth 现状**:`directives/auth.ts` 目前 fail-open(`permissionCodes` 恒空 → 不隐藏任何按钮)。新页面按钮照写 `v-auth="'METHOD:/route'"`(码写对),当前不误伤显示;等后端补 `/personal/permissions` 后自动生效。
+
+**⚠ 反向锁测试(每个种子权限码的强制配套,别只 build)**:`backend/tests/TenonAdmin.Tests/PermissionCodeConsistencyTests.cs` 有个 `KnownUnseededEndpoints` 清单 + 反向自清断言:**每当你在 `DefaultMenuSeed` 新种一个权限码(按钮节点),必须从该清单删掉同一条**,否则 `Every_permission_endpoint_is_seeded_or_explicitly_known_unseeded` 变红。`dotnet build` 察觉不到(编译过、测试红)——**改了种子必须跑 `dotnet test --filter PermissionCodeConsistencyTests`**(R1/R2 就因只 build 埋了雷,R3 一并清了)。剩余轮对照清单要删的条目:R4 用户 `DELETE/GET/PUT user/{id}`、`PUT user/{id}/enabled`、`PUT user/{id}/password`;R5 字典 `POST/PUT/DELETE dict/type`、`PUT/DELETE dict/item/{id}`;R6 岗位 `POST position/add`、`PUT/DELETE position/{id}`;R8 文件 `GET file/{id}/download`、`DELETE file/{id}`;R9 机构 `POST org/add`、`PUT/DELETE org/{id}`。**只删你这轮真种了码的那几条**(如 R1 没放配置详情按钮 → `GET config/{id}` 保留在清单)。
 
 ---
 
@@ -97,6 +99,7 @@ API 封装照 `web/src/api/index.ts` 现有写法:`unwrap<T>()` 解包,`page` �
 - 详情:`n-drawer`(或 FormContainer drawer)+ `n-descriptions`;`paramJson` 用 `<pre style="white-space:pre-wrap;word-break:break-all">{{ pretty }}</pre>`(`pretty`=`JSON.parse→stringify(_,2)`,失败原样)或 `n-code language="json"`(hljs 已是 naive 传递依赖,零新增)。
 - **CodeBlock 决策**:COMPONENTS.md 约定"第二个 JSON 展示消费点再归纳"。本波仅此一处 → **不落地 CodeBlock 组件**,用上面兜底,PR 里写明。
 - **done**:侧栏出现,详情抽屉展示 paramJson 可读。
+> 备注(R3 完成):只读 ProTable(操作名/结果可搜)+ 原生 `n-drawer`+`n-descriptions` 详情(行数据直填,后端无 op/{id});paramJson 走 `<pre>` 兜底美化(parse→stringify(2),失败原样),未落地 CodeBlock(仅此一处,COMPONENTS.md 约定);清空按钮同 R2。种子加 66(页)/67(清空码),分页码复用已有按钮 7。**多智能体评审(ultracode)逮到反向锁雷**:R1/R2/R3 种了权限码却没删 `KnownUnseededEndpoints`,一致性测试自 R1 起就红(只 build 没 test 埋的);R3 一并清 5 条(config POST/PUT/DELETE、log/login DELETE、log/op DELETE),`dotnet test --filter PermissionCodeConsistencyTests` 2/2 绿。已把反向锁规则写入【核心机制】+【验证】。
 
 ### R4 · 用户写侧(改造 `web/src/views/system/user/index.vue`)+ OrgTreeSelect 组件
 最复杂轮。先建组件(R9 复用),再改用户页。
@@ -205,6 +208,7 @@ API 封装照 `web/src/api/index.ts` 现有写法:`unwrap<T>()` 解包,`page` �
 ## 验证(端到端,别只靠 typecheck)
 
 - **静态**:`cd web && npm run typecheck && npm run lint` 必过。
+- **改了种子/权限码**:`dotnet test backend/TenonAdmin.slnx --filter PermissionCodeConsistencyTests` 必过(反向锁,见【核心机制】;`dotnet build` 过 ≠ 测试过)。稳妥起见跑一遍全量 `dotnet test backend/TenonAdmin.slnx`。
 - **跑起来**:根目录 `dev.bat`(后端 :5000 + 前端 :5173),或 `dotnet run --project backend/samples/MinimalHost` + `cd web && npm run dev`。首启控制台打印随机超管密码,用它登录。
 - **改了种子必须重启后端**让新菜单落库;登录后确认侧栏出现该轮页面、CRUD/搜索/分页/启停走通。
 - **动了后端 DTO/新端点**(如 dict/item/page):`npm run gen:api`(后端在跑)重生成 `schema.d.ts` 再改前端类型。

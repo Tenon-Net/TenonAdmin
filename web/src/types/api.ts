@@ -114,3 +114,19 @@ export interface SysLoginLog {
   userAgent?: string | null
   createTime: string
 }
+
+/** 操作日志行(后端 SysOpLog;只读,分页项已含全字段,详情抽屉直接用行数据)。 */
+export interface SysOpLog {
+  id: number
+  title: string
+  httpMethod: string
+  path: string
+  paramJson?: string | null
+  resultCode: number
+  success: boolean
+  elapsedMs: number
+  operatorId?: number | null
+  ip?: string | null
+  userAgent?: string | null
+  createTime: string
+}

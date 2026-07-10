@@ -238,6 +238,16 @@ export default {
     clear: 'Clear logs',
     clearLoginConfirm: 'Clear all login logs? This is a hard delete and cannot be undone.',
     cleared: 'Cleared',
+    // Operation logs (R3)
+    opTitle: 'Operation logs',
+    opName: 'Operation',
+    method: 'Method',
+    path: 'Path',
+    elapsed: 'Elapsed',
+    operator: 'Operator',
+    param: 'Params',
+    detail: 'Detail',
+    clearOpConfirm: 'Clear all operation logs? This is a hard delete and cannot be undone.',
   },
   profile: {
     title: 'Profile',

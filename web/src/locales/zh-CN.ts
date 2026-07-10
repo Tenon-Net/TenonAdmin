@@ -240,6 +240,16 @@ export default {
     clear: '清空日志',
     clearLoginConfirm: '确定清空全部登录日志?此为硬删除,不可恢复。',
     cleared: '已清空',
+    // 操作日志(R3)
+    opTitle: '操作日志',
+    opName: '操作名',
+    method: '方法',
+    path: '路径',
+    elapsed: '耗时',
+    operator: '操作人',
+    param: '入参',
+    detail: '详情',
+    clearOpConfirm: '确定清空全部操作日志?此为硬删除,不可恢复。',
   },
   profile: {
     title: '个人资料',

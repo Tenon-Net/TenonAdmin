@@ -43,6 +43,10 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 48, ParentId = 1, Type = MenuType.Button, Title = "模块-更新", Permission = "PUT:/api/v1/sys/module/{id}", Sort = 16, Enabled = true },
         new SysMenu { Id = 49, ParentId = 1, Type = MenuType.Button, Title = "模块-删除", Permission = "DELETE:/api/v1/sys/module/{id}", Sort = 17, Enabled = true },
 
+        // 操作日志页(R3:SysLogController 只读 + 详情 + 清空)。分页码由已有按钮 7 承载,此处补页节点 + 清空码。
+        new SysMenu { Id = 66, ParentId = 1, Type = MenuType.Menu, Title = "操作日志", Permission = "", Path = "/system/log/op", Component = "system/log/op/index", Icon = "ph:scroll-duotone", Sort = 18, Enabled = true, Visible = true },
+        new SysMenu { Id = 67, ParentId = 1, Type = MenuType.Button, Title = "操作日志-清空", Permission = "DELETE:/api/v1/sys/log/op", Sort = 19, Enabled = true },
+
         // 登录日志页(R2:SysLogController 只读 + 清空)。分页码由已有按钮 8 承载,此处补页节点 + 清空码。
         new SysMenu { Id = 68, ParentId = 1, Type = MenuType.Menu, Title = "登录日志", Permission = "", Path = "/system/log/login", Component = "system/log/login/index", Icon = "ph:sign-in-duotone", Sort = 20, Enabled = true, Visible = true },
         new SysMenu { Id = 69, ParentId = 1, Type = MenuType.Button, Title = "登录日志-清空", Permission = "DELETE:/api/v1/sys/log/login", Sort = 21, Enabled = true },
