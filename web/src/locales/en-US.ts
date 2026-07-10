@@ -275,6 +275,23 @@ export default {
     itemSaved: 'Saved',
     itemDeleted: 'Deleted',
   },
+  // Org management (R9, tree table + parent-org tree select)
+  org: {
+    title: 'Organizations',
+    name: 'Name',
+    code: 'Code',
+    sort: 'Sort',
+    parent: 'Parent org',
+    parentPlaceholder: 'Select parent (blank = top level)',
+    nameRequired: 'Enter a name',
+    codeRequired: 'Enter a code',
+    addChild: 'Add child',
+    addTitle: 'Add org',
+    editTitle: 'Edit org',
+    deleteConfirm: 'Delete org "{name}"?',
+    saved: 'Saved',
+    deleted: 'Deleted',
+  },
   // File management (R8, list + upload/download/delete)
   file: {
     title: 'Files',

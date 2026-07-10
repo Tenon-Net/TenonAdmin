@@ -211,6 +211,15 @@ export interface SysOrg {
   createTime?: string
 }
 
+/** 机构新增/编辑入参(后端 OrgInput;parentId 0=根,code 编辑禁用)。 */
+export interface OrgInput {
+  parentId: number
+  name: string
+  code: string
+  sort: number
+  enabled: boolean
+}
+
 /** 职位行(后端 SysPosition)。int64 收敛为 number。 */
 export interface SysPosition {
   id: number

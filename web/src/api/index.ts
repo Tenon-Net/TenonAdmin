@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, ConfigInput, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, OnlineSessionItem, PagedList, PositionInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, ConfigInput, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, OnlineSessionItem, OrgInput, PagedList, PositionInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -93,6 +93,11 @@ export const userApi = {
 export const orgApi = {
   /** 全部机构(平铺,按 Sort、Id 排序)。前端 buildTree 拼树。R4 下拉 / R9 树表复用。 */
   list: () => client.GET('/api/v1/sys/org/list', {}).then((r) => unwrap<SysOrg[]>(r)),
+  add: (body: OrgInput) => client.POST('/api/v1/sys/org/add', { body }).then((r) => unwrap<number>(r)),
+  update: (id: number, body: OrgInput) =>
+    client.PUT('/api/v1/sys/org/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
+  remove: (id: number) =>
+    client.DELETE('/api/v1/sys/org/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
 }
 
 export const positionApi = {

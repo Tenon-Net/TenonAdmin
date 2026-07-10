@@ -77,6 +77,13 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 76, ParentId = 10, Type = MenuType.Button, Title = "岗位-更新", Permission = "PUT:/api/v1/sys/position/{id}", Sort = 12, Enabled = true },
         new SysMenu { Id = 77, ParentId = 10, Type = MenuType.Button, Title = "岗位-删除", Permission = "DELETE:/api/v1/sys/position/{id}", Sort = 13, Enabled = true },
 
+        // 机构管理页(R9:OrgController 树 CRUD)。机构列表码由已有按钮 13 承载;写端点授权码由 71-73 承载;
+        // 详情 GET org/{id} 不放按钮(编辑用行数据)。
+        new SysMenu { Id = 70, ParentId = 10, Type = MenuType.Menu, Title = "机构管理", Permission = "", Path = "/system/org", Component = "system/org/index", Icon = "ph:tree-structure-duotone", Sort = 14, Enabled = true, Visible = true },
+        new SysMenu { Id = 71, ParentId = 10, Type = MenuType.Button, Title = "机构-新增", Permission = "POST:/api/v1/sys/org/add", Sort = 15, Enabled = true },
+        new SysMenu { Id = 72, ParentId = 10, Type = MenuType.Button, Title = "机构-更新", Permission = "PUT:/api/v1/sys/org/{id}", Sort = 16, Enabled = true },
+        new SysMenu { Id = 73, ParentId = 10, Type = MenuType.Button, Title = "机构-删除", Permission = "DELETE:/api/v1/sys/org/{id}", Sort = 17, Enabled = true },
+
         // 字典与配置目录 + 代表性接口(T5)。同样只播真实存在的接口,完整菜单树随 M2 补齐。
         new SysMenu { Id = 20, ParentId = 0, Type = MenuType.Catalog, Title = "字典配置", Permission = "", Icon = "ph:book-bookmark-duotone", Sort = 3, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
         new SysMenu { Id = 21, ParentId = 20, Type = MenuType.Button, Title = "字典类型-分页", Permission = "GET:/api/v1/sys/dict/type/page", Sort = 1, Enabled = true },

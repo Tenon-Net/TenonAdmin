@@ -32,7 +32,7 @@
 | R6 | [x] 岗位管理(`system/position`)—— 普通 CRUD | R4(positionApi.page) | 完成 · 2026-07-10 |
 | R7 | [x] 在线会话(`system/session`)—— 只读 + 踢人 | — | 完成 · 2026-07-10 |
 | R8 | [x] 文件管理(`system/file`)+ FileUpload 组件 —— 上传/下载/删除 | — | 完成 · 2026-07-10 |
-| R9 | [ ] 机构管理(`system/org`)—— 树,复用 OrgTreeSelect | R4(OrgTreeSelect) | 待办 |
+| R9 | [x] 机构管理(`system/org`)—— 树,复用 OrgTreeSelect | R4(OrgTreeSelect) | 完成 · 2026-07-10 |
 
 > 收尾(全绿后):在 `web/COMPONENTS.md` 补 OrgTreeSelect/FileUpload 两行;若跳过某"可选"项(日志清空按钮、dict/item/page 后端、机构列名映射),在此记一行原因。
 
@@ -149,6 +149,7 @@ API 封装照 `web/src/api/index.ts` 现有写法:`unwrap<T>()` 解包,`page` �
 - 表单:上级机构用 `OrgTreeSelect`(clearable,`:exclude-subtree-of="editingId"`,save 时 `parentId ?? 0`)、`name`/`code`(编辑禁用)/`sort`/`enabled`。
 - 删除后端会拒(有子机构),前端照常调,失败由 `translateError` 弹码。
 - **done**:树展开 + 加下级 + 编辑(上级树选)+ 删除 + 启停全通。
+> 备注(R9 完成):照抄 `menu/index.vue` 树表范式——裸 `n-data-table`(`row-key=id default-expand-all`,ProTable 不支持树行)+ FormContainer 弹窗 + StatusSwitch + useConfirm/NPopconfirm。`orgApi` 补 add(POST org/**add**)/update/remove(PUT/DELETE org/{id});list 已在 R4。`load = buildTree(orgApi.list())`(平铺→树,复用 R4 `utils/tree.ts`)。上级机构用 `OrgTreeSelect :exclude-subtree-of="editingId"`(剪自身子树防成环,`collectSubtreeIds` 定点迭代已自校验)、clearable→null,save 归一 `parentId ?? 0`;name/code(编辑禁用)/sort/enabled。StatusSwitch 无独立端点走全量 update(同 module)。删除有子机构后端拒,前端照调由 translateError 弹码。种子加页 70 + 按钮 71-73,反向锁清 3 条写端点,留 `GET org/{id}`(详情用行数据)。ultracode 3 维对抗评审(树成环逻辑/契约-种子-反向锁/i18n)0 发现。typecheck+lint+后端全量 99/99 全绿。
 
 ---
 

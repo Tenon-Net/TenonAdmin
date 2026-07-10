@@ -276,6 +276,23 @@ export default {
     itemSaved: '保存成功',
     itemDeleted: '已删除',
   },
+  // 机构管理(R9,树表 + 上级机构树选)
+  org: {
+    title: '机构管理',
+    name: '机构名称',
+    code: '机构编码',
+    sort: '排序',
+    parent: '上级机构',
+    parentPlaceholder: '选择上级机构(留空=顶级)',
+    nameRequired: '请输入机构名称',
+    codeRequired: '请输入机构编码',
+    addChild: '新增下级',
+    addTitle: '新增机构',
+    editTitle: '编辑机构',
+    deleteConfirm: '确定删除机构「{name}」?',
+    saved: '保存成功',
+    deleted: '已删除',
+  },
   // 文件管理(R8,列表 + 上传/下载/删除)
   file: {
     title: '文件管理',
