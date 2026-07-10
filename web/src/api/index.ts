@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { ConfigInput, DictItem, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, SysConfig, UserItem, UserProfile } from '@/types/api'
+import type { ConfigInput, DictItem, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, SysConfig, SysLoginLog, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -101,6 +101,19 @@ export const configApi = {
     client.PUT('/api/v1/sys/config/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   remove: (id: number) =>
     client.DELETE('/api/v1/sys/config/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+}
+
+export const logApi = {
+  /** 登录日志分页;搜索键 account/success → PascalCase Account/Success 查询参。 */
+  loginPage: (params: { page: number; pageSize: number; account?: string; success?: boolean }) =>
+    client
+      .GET('/api/v1/sys/log/login/page', {
+        params: { query: { Current: params.page, Size: params.pageSize, Account: params.account, Success: params.success } },
+      })
+      .then((r) => unwrap<PagedList<SysLoginLog>>(r))
+      .then((p) => ({ items: p.items, total: p.total })),
+  /** 清空登录日志(硬删,不可恢复)。 */
+  loginClear: () => client.DELETE('/api/v1/sys/log/login', {}).then((r) => unwrap<boolean>(r)),
 }
 
 export const dictApi = {

@@ -43,6 +43,10 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 48, ParentId = 1, Type = MenuType.Button, Title = "模块-更新", Permission = "PUT:/api/v1/sys/module/{id}", Sort = 16, Enabled = true },
         new SysMenu { Id = 49, ParentId = 1, Type = MenuType.Button, Title = "模块-删除", Permission = "DELETE:/api/v1/sys/module/{id}", Sort = 17, Enabled = true },
 
+        // 登录日志页(R2:SysLogController 只读 + 清空)。分页码由已有按钮 8 承载,此处补页节点 + 清空码。
+        new SysMenu { Id = 68, ParentId = 1, Type = MenuType.Menu, Title = "登录日志", Permission = "", Path = "/system/log/login", Component = "system/log/login/index", Icon = "ph:sign-in-duotone", Sort = 20, Enabled = true, Visible = true },
+        new SysMenu { Id = 69, ParentId = 1, Type = MenuType.Button, Title = "登录日志-清空", Permission = "DELETE:/api/v1/sys/log/login", Sort = 21, Enabled = true },
+
         // 组织管理目录 + 各模块代表性接口(T2)。前端完整菜单树随 M2 落地补齐,这里只播真实存在的接口。
         new SysMenu { Id = 10, ParentId = 0, Type = MenuType.Catalog, Title = "组织管理", Permission = "", Icon = "ph:buildings-duotone", Sort = 2, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
         // 页面节点(M2 前端动态路由入口):用户管理页,component 对应 web/src/views/system/user/index.vue。

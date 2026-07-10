@@ -25,7 +25,7 @@
 | # | 轮次 | 依赖 | 状态 |
 |---|---|---|---|
 | R1 | [x] 配置管理(`system/config`)—— 最纯 CRUD,当模板跑通配方 | — | 完成 · 2026-07-10 · 本提交 |
-| R2 | [ ] 登录日志(`system/log/login`)—— 只读 ProTable | — | 待办 |
+| R2 | [x] 登录日志(`system/log/login`)—— 只读 ProTable | — | 完成 · 2026-07-10 · 本提交 |
 | R3 | [ ] 操作日志(`system/log/op`)—— 只读 + 详情抽屉 | — | 待办 |
 | R4 | [ ] 用户写侧(改造 `system/user`)+ OrgTreeSelect 组件 + orgApi.list/positionApi.page | — | 待办 |
 | R5 | [ ] 字典管理(`system/dict`)—— 主从(+ 可选后端 `dict/item/page`) | — | 待办 |
@@ -89,6 +89,7 @@ API 封装照 `web/src/api/index.ts` 现有写法:`unwrap<T>()` 解包,`page` �
 - `logApi.loginPage`(+ 可选 `loginClear`)。只读,无表单。
 - 列:`account`、`success`(tag,**显式红/绿 typeMap 保证"失败=红"**)、`resultCode`、`userId`、`ip`、`userAgent`(ellipsis tooltip)、`createTime`(datetime)。搜索:`Account`/`Success`。
 - **done**:侧栏出现,搜索/分页/时间格式正常。
+> 备注(R2 完成):只读 ProTable(account/success 可搜),success 列 tag + 红/绿 typeMap(失败=红);**采纳可选清空按钮**(参 simpleadmin 日志页,useConfirm type:error 二次确认,硬删不可恢复)。新增共用 `log.*` i18n 命名空间(R3 复用)。种子加 68(页)/69(清空码);分页码复用已有按钮 8。i18n `log.userId` 等 int64 仅展示,类型收敛 number。验证:typecheck+lint+后端编译全绿;交互走查留待人工。
 
 ### R3 · 操作日志 `web/src/views/system/log/op/index.vue`(只读 + 详情)
 - `logApi.opPage`(+ 可选 `opClear`)。**后端无 `op/{id}` 详情** → 详情抽屉直接用行数据(分页项已含全字段)。

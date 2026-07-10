@@ -102,3 +102,15 @@ export interface ConfigInput {
   sort: number
   remark?: string | null
 }
+
+/** 登录日志行(后端 SysLoginLog;只读,int64 收敛为 number)。 */
+export interface SysLoginLog {
+  id: number
+  account: string
+  success: boolean
+  resultCode: number
+  userId?: number | null
+  ip?: string | null
+  userAgent?: string | null
+  createTime: string
+}

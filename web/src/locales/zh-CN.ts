@@ -226,6 +226,21 @@ export default {
     saved: '保存成功',
     deleted: '已删除',
   },
+  // 日志(登录 R2 / 操作 R3 共用一个命名空间;共享 result/success/failed/ip/userAgent/clear/cleared)
+  log: {
+    loginTitle: '登录日志',
+    account: '账号',
+    result: '结果',
+    success: '成功',
+    failed: '失败',
+    resultCode: '结果码',
+    userId: '用户 ID',
+    ip: 'IP 地址',
+    userAgent: '客户端',
+    clear: '清空日志',
+    clearLoginConfirm: '确定清空全部登录日志?此为硬删除,不可恢复。',
+    cleared: '已清空',
+  },
   profile: {
     title: '个人资料',
     account: '账号',
