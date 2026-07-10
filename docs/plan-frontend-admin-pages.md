@@ -27,7 +27,7 @@
 | R1 | [x] 配置管理(`system/config`)—— 最纯 CRUD,当模板跑通配方 | — | 完成 · 2026-07-10 · 本提交 |
 | R2 | [x] 登录日志(`system/log/login`)—— 只读 ProTable | — | 完成 · 2026-07-10 · 本提交 |
 | R3 | [x] 操作日志(`system/log/op`)—— 只读 + 详情抽屉 | — | 完成 · 2026-07-10 · 本提交 |
-| R4 | [ ] 用户写侧(改造 `system/user`)+ OrgTreeSelect 组件 + orgApi.list/positionApi.page | — | 待办 |
+| R4 | [x] 用户写侧(改造 `system/user`)+ OrgTreeSelect 组件 + orgApi.list/positionApi.page | — | 完成 · 2026-07-10 · 本提交 |
 | R5 | [ ] 字典管理(`system/dict`)—— 主从(+ 可选后端 `dict/item/page`) | — | 待办 |
 | R6 | [ ] 岗位管理(`system/position`)—— 普通 CRUD | R4(positionApi.page) | 待办 |
 | R7 | [ ] 在线会话(`system/session`)—— 只读 + 踢人 | — | 待办 |
@@ -112,6 +112,7 @@ API 封装照 `web/src/api/index.ts` 现有写法:`unwrap<T>()` 解包,`page` �
 - **超管行保护**:`isSuperAdmin` 行删除/停用置灰(照 module `isBuiltin`),避免自锁。
 - 机构/岗位**列名**:`UserItem` 只回 id → 列可先省机构列,或加载 `org/list`+`position/page` 做 id→name 映射(可选)。
 - **done**:新增/编辑/删除/重置密码/启停全通;编辑不清空角色;超管行受保护。
+> 备注(R4 完成):新增 `utils/tree.ts`(`buildTree`+`collectSubtreeIds`,R9 复用)。OrgTreeSelect 照 DictSelect 骨架(`inheritAttrs:false`+`$attrs` 透传 n-tree-select,`excludeSubtreeOf` 剪自身子树)。用户页:新增有 account/password、编辑无(先 `detail` 取 `roleIds` 原样带回避免清空角色);启停走专用 `setEnabled`(悲观回写);重置密码返回实际密码 → 只读结果弹层(navigator.clipboard 复制);超管行删除/停用置灰。**职位/机构名列先省**(UserItem 只回 id,ledger 标可选);职位下拉拉一页 200(ponytail,量超再分页)。种子加按钮 50-54 + 反向锁清 5 条用户端点。COMPONENTS.md 的 OrgTreeSelect 行已写入工作区,但**不并入本提交**(该文件已有他人未提交的 ModuleSwitcher 改动,避免搅入)——随【收尾】统一提交。5 维对抗评审 0 确认问题;typecheck+lint+一致性测试(2/2)+全量后端测试(99/99)全绿。交互走查留待人工。
 
 ### R5 · 字典管理 `web/src/views/system/dict/index.vue`(主从)
 - 左=类型 ProTable(`dictAdminApi.typePage`),右=选中类型的项。左行选中设 `selectedTypeCode`,`watch` 触发右侧 `dictAdminApi.items(typeCode)`。

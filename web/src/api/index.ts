@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { ConfigInput, DictItem, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, SysConfig, SysLoginLog, SysOpLog, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, ConfigInput, DictItem, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, SysConfig, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -75,6 +75,34 @@ export const userApi = {
         params: { query: { Current: params.page, Size: params.pageSize, Account: params.account, Name: params.name } },
       })
       .then((r) => unwrap<PagedList<UserItem>>(r))
+      .then((p) => ({ items: p.items, total: p.total })),
+  /** 用户详情(含 roleIds,编辑回显 + 提交时原样带回避免清空角色)。 */
+  detail: (id: number) => client.GET('/api/v1/sys/user/{id}', { params: { path: { id } } }).then((r) => unwrap<UserDetail>(r)),
+  add: (body: AddUserInput) => client.POST('/api/v1/sys/user', { body }).then((r) => unwrap<number>(r)),
+  update: (id: number, body: UpdateUserInput) =>
+    client.PUT('/api/v1/sys/user/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
+  remove: (id: number) => client.DELETE('/api/v1/sys/user/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** 重置密码;返回实际生效的初始密码(newPassword 留空 = 后端默认初始密码)。 */
+  resetPassword: (id: number, newPassword?: string | null) =>
+    client.PUT('/api/v1/sys/user/{id}/password', { params: { path: { id } }, body: { newPassword: newPassword || null } }).then((r) => unwrap<string>(r)),
+  /** 专用启停端点(非全量 update)。 */
+  setEnabled: (id: number, enabled: boolean) =>
+    client.PUT('/api/v1/sys/user/{id}/enabled', { params: { path: { id } }, body: { enabled } }).then((r) => unwrap<boolean>(r)),
+}
+
+export const orgApi = {
+  /** 全部机构(平铺,按 Sort、Id 排序)。前端 buildTree 拼树。R4 下拉 / R9 树表复用。 */
+  list: () => client.GET('/api/v1/sys/org/list', {}).then((r) => unwrap<SysOrg[]>(r)),
+}
+
+export const positionApi = {
+  /** 职位分页;搜索键 name → PascalCase Name。R4 下拉(拉大页)/ R6 ProTable 复用。 */
+  page: (params: { page: number; pageSize: number; name?: string }) =>
+    client
+      .GET('/api/v1/sys/position/page', {
+        params: { query: { Current: params.page, Size: params.pageSize, Name: params.name } },
+      })
+      .then((r) => unwrap<PagedList<SysPosition>>(r))
       .then((p) => ({ items: p.items, total: p.total })),
 }
 

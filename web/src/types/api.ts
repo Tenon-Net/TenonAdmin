@@ -130,3 +130,57 @@ export interface SysOpLog {
   userAgent?: string | null
   createTime: string
 }
+
+/** 机构行(后端 SysOrg;平铺,前端 buildTree)。int64 收敛为 number。 */
+export interface SysOrg {
+  id: number
+  parentId: number
+  name: string
+  code: string
+  sort: number
+  enabled: boolean
+  createTime?: string
+}
+
+/** 职位行(后端 SysPosition)。int64 收敛为 number。 */
+export interface SysPosition {
+  id: number
+  name: string
+  code: string
+  sort: number
+  enabled: boolean
+  createTime?: string
+}
+
+/** 新增用户入参(后端 AddUserInput;account 建后不可改,password 留空=后端默认初始密码)。 */
+export interface AddUserInput {
+  account: string
+  password?: string | null
+  name: string
+  orgId?: number | null
+  positionId?: number | null
+  enabled: boolean
+  roleIds: number[]
+}
+
+/** 更新用户入参(后端 UpdateUserInput;无 account/password。roleIds 由 detail 原样带回避免清空)。 */
+export interface UpdateUserInput {
+  name: string
+  orgId?: number | null
+  positionId?: number | null
+  enabled: boolean
+  roleIds: number[]
+}
+
+/** 用户详情(后端 UserDetail;列表字段 + roleIds,编辑回显用)。 */
+export interface UserDetail {
+  id: number
+  account: string
+  name: string
+  orgId?: number | null
+  positionId?: number | null
+  enabled: boolean
+  isSuperAdmin: boolean
+  roleIds: number[]
+  createTime?: string
+}

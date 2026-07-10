@@ -60,6 +60,12 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 12, ParentId = 10, Type = MenuType.Button, Title = "用户-新增", Permission = "POST:/api/v1/sys/user", Sort = 2, Enabled = true },
         new SysMenu { Id = 13, ParentId = 10, Type = MenuType.Button, Title = "机构-列表", Permission = "GET:/api/v1/sys/org/list", Sort = 3, Enabled = true },
         new SysMenu { Id = 14, ParentId = 10, Type = MenuType.Button, Title = "职位-分页", Permission = "GET:/api/v1/sys/position/page", Sort = 4, Enabled = true },
+        // 用户写侧授权码(R4:UserController;新增 POST 已 Id 12)。页节点 15 已在。
+        new SysMenu { Id = 50, ParentId = 10, Type = MenuType.Button, Title = "用户-详情", Permission = "GET:/api/v1/sys/user/{id}", Sort = 5, Enabled = true },
+        new SysMenu { Id = 51, ParentId = 10, Type = MenuType.Button, Title = "用户-更新", Permission = "PUT:/api/v1/sys/user/{id}", Sort = 6, Enabled = true },
+        new SysMenu { Id = 52, ParentId = 10, Type = MenuType.Button, Title = "用户-删除", Permission = "DELETE:/api/v1/sys/user/{id}", Sort = 7, Enabled = true },
+        new SysMenu { Id = 53, ParentId = 10, Type = MenuType.Button, Title = "用户-重置密码", Permission = "PUT:/api/v1/sys/user/{id}/password", Sort = 8, Enabled = true },
+        new SysMenu { Id = 54, ParentId = 10, Type = MenuType.Button, Title = "用户-启停", Permission = "PUT:/api/v1/sys/user/{id}/enabled", Sort = 9, Enabled = true },
 
         // 字典与配置目录 + 代表性接口(T5)。同样只播真实存在的接口,完整菜单树随 M2 补齐。
         new SysMenu { Id = 20, ParentId = 0, Type = MenuType.Catalog, Title = "字典配置", Permission = "", Icon = "ph:book-bookmark-duotone", Sort = 3, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
