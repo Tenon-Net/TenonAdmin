@@ -51,6 +51,9 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 68, ParentId = 1, Type = MenuType.Menu, Title = "登录日志", Permission = "", Path = "/system/log/login", Component = "system/log/login/index", Icon = "ph:sign-in-duotone", Sort = 20, Enabled = true, Visible = true },
         new SysMenu { Id = 69, ParentId = 1, Type = MenuType.Button, Title = "登录日志-清空", Permission = "DELETE:/api/v1/sys/log/login", Sort = 21, Enabled = true },
 
+        // 在线会话页(R7:SysSessionController 只读 + 强退)。在线列表码 5、强退码 6 已在,此处仅补页节点。
+        new SysMenu { Id = 81, ParentId = 1, Type = MenuType.Menu, Title = "在线会话", Permission = "", Path = "/system/session", Component = "system/session/index", Icon = "ph:broadcast-duotone", Sort = 22, Enabled = true, Visible = true },
+
         // 组织管理目录 + 各模块代表性接口(T2)。前端完整菜单树随 M2 落地补齐,这里只播真实存在的接口。
         new SysMenu { Id = 10, ParentId = 0, Type = MenuType.Catalog, Title = "组织管理", Permission = "", Icon = "ph:buildings-duotone", Sort = 2, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
         // 页面节点(M2 前端动态路由入口):用户管理页,component 对应 web/src/views/system/user/index.vue。

@@ -143,6 +143,16 @@ export interface DictItemInput {
   enabled: boolean
 }
 
+/** 在线会话行(后端 OnlineSessionItem;只读 + 强退按 sessionId)。int64 收敛为 number。 */
+export interface OnlineSessionItem {
+  sessionId: string
+  userId: number
+  account: string
+  ip?: string | null
+  loginTime?: string
+  expiresAt?: string
+}
+
 /** 登录日志行(后端 SysLoginLog;只读,int64 收敛为 number)。 */
 export interface SysLoginLog {
   id: number

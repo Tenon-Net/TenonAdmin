@@ -30,7 +30,7 @@
 | R4 | [x] 用户写侧(改造 `system/user`)+ OrgTreeSelect 组件 + orgApi.list/positionApi.page | — | 完成 · 2026-07-10 · 本提交 |
 | R5 | [x] 字典管理(`system/dict`)—— 主从 + 补后端 `dict/item/page` | — | 完成 · 2026-07-10 |
 | R6 | [x] 岗位管理(`system/position`)—— 普通 CRUD | R4(positionApi.page) | 完成 · 2026-07-10 |
-| R7 | [ ] 在线会话(`system/session`)—— 只读 + 踢人 | — | 待办 |
+| R7 | [x] 在线会话(`system/session`)—— 只读 + 踢人 | — | 完成 · 2026-07-10 |
 | R8 | [ ] 文件管理(`system/file`)+ FileUpload 组件 —— 上传/下载/删除 | — | 待办 |
 | R9 | [ ] 机构管理(`system/org`)—— 树,复用 OrgTreeSelect | R4(OrgTreeSelect) | 待办 |
 
@@ -133,6 +133,7 @@ API 封装照 `web/src/api/index.ts` 现有写法:`unwrap<T>()` 解包,`page` �
 - `sessionApi.online/kick`,无表单。列:`account`/`ip`/`loginTime`/`expiresAt`/操作「强制下线」。
 - 踢人 = `useConfirm().confirm({type:'warning',action:()=>sessionApi.kick(r.sessionId)}).then(ok=>ok && refresh())`。可选:踢自己的会话行 `disabled`(`r.userId===userStore.userId`)。
 - **done**:列表显示 + 踢人二次确认 + 踢后刷新。
+> 备注(R7 完成):只读 ProTable(无搜索列——后端仅按 UserId 过滤)。sessionApi 补 online(GET session/online 归一 {items,total})/kick(DELETE session/{sessionId})。踢人走 `useConfirm().confirm({type:'warning', action, successMsg})` 二次确认,成功后 refresh。**踢自己的会话置灰**(`r.userId === userStore.userInfo?.userId`),显示「当前会话」。种子仅补页 81(在线码 5、强退码 6 已在,**无需清反向锁**)。ultracode 2 维对抗评审 0 发现。typecheck+lint+后端全量 99/99 全绿。
 
 ### R8 · 文件管理 `web/src/views/system/file/index.vue` + FileUpload 组件
 - **FileUpload** `web/src/components/FileUpload/index.vue`(几十行):封 `n-upload` 的 `:custom-request`,内部 `await fileApi.upload(file.file)`(走 api 层自动带 Bearer),`emit('uploaded', out)`;props 最小(accept/multiple 经 `$attrs`),默认 slot 触发器。

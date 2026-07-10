@@ -275,6 +275,18 @@ export default {
     itemSaved: 'Saved',
     itemDeleted: 'Deleted',
   },
+  // Online sessions (R7, read-only + force logout)
+  session: {
+    title: 'Online sessions',
+    account: 'Account',
+    ip: 'IP',
+    loginTime: 'Login time',
+    expiresAt: 'Expires at',
+    kick: 'Force logout',
+    self: 'Current session',
+    kickConfirm: 'Force-logout the session of "{account}"? It will be invalidated immediately.',
+    kicked: 'Forced logout',
+  },
   // Position management (R6, plain CRUD; positions are not linked to orgs)
   position: {
     title: 'Positions',

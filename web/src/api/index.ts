@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, ConfigInput, DictItem, DictItemInput, DictTypeInput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, PositionInput, SysConfig, SysDictItem, SysDictType, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, ConfigInput, DictItem, DictItemInput, DictTypeInput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, OnlineSessionItem, PagedList, PositionInput, SysConfig, SysDictItem, SysDictType, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -202,6 +202,18 @@ export const dictAdminApi = {
     client.PUT('/api/v1/sys/dict/item/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   itemRemove: (id: number) =>
     client.DELETE('/api/v1/sys/dict/item/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+}
+
+export const sessionApi = {
+  /** 在线会话分页(只读)。后端仅支持按 UserId 过滤,这里不带业务搜索。 */
+  online: (params: { page: number; pageSize: number }) =>
+    client
+      .GET('/api/v1/sys/session/online', { params: { query: { Current: params.page, Size: params.pageSize } } })
+      .then((r) => unwrap<PagedList<OnlineSessionItem>>(r))
+      .then((p) => ({ items: p.items, total: p.total })),
+  /** 强制下线:按 sessionId 踢会话。 */
+  kick: (sessionId: string) =>
+    client.DELETE('/api/v1/sys/session/{sessionId}', { params: { path: { sessionId } } }).then((r) => unwrap<boolean>(r)),
 }
 
 export const menuApi = {

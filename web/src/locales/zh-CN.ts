@@ -276,6 +276,18 @@ export default {
     itemSaved: '保存成功',
     itemDeleted: '已删除',
   },
+  // 在线会话(R7,只读 + 踢人)
+  session: {
+    title: '在线会话',
+    account: '账号',
+    ip: 'IP 地址',
+    loginTime: '登录时间',
+    expiresAt: '过期时间',
+    kick: '强制下线',
+    self: '当前会话',
+    kickConfirm: '确定强制下线账号「{account}」的会话?该会话将立即失效。',
+    kicked: '已强制下线',
+  },
   // 岗位管理(R6,普通 CRUD;岗位与机构无关联)
   position: {
     title: '岗位管理',
