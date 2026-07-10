@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, UserItem, UserProfile } from '@/types/api'
+import type { DictItem, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -85,6 +85,24 @@ export const moduleApi = {
     client.PUT('/api/v1/sys/module/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   remove: (id: number) =>
     client.DELETE('/api/v1/sys/module/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+}
+
+export const dictApi = {
+  /** 按类型编码取字典项(服务端已按 sort 排序)。归一 int64 序列化噪音 → DictItem 投影,供 stores/dict 缓存消费。 */
+  items: (typeCode: string) =>
+    client
+      .GET('/api/v1/sys/dict/items/{typeCode}', { params: { path: { typeCode } } })
+      .then((r) => unwrap<{ label?: string; value?: string; sort?: number | string; enabled?: boolean }[]>(r))
+      .then((list) =>
+        list.map(
+          (i): DictItem => ({
+            label: i.label ?? '',
+            value: i.value ?? '',
+            sort: Number(i.sort ?? 0),
+            enabled: i.enabled ?? true,
+          }),
+        ),
+      ),
 }
 
 export const menuApi = {

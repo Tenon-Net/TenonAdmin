@@ -138,6 +138,12 @@ const transitionOptions = computed(() => [
             />
           </SettingRow>
 
+          <n-divider title-placement="left">{{ t('settings.formStyle') }}</n-divider>
+          <!-- FormContainer 全局形态:所有 CRUD 表单弹层一键在弹窗/抽屉间切换 -->
+          <n-radio-group v-model:value="app.formStyle" size="small" class="seg">
+            <n-radio-button value="modal">{{ t('settings.formStyleModal') }}</n-radio-button>
+            <n-radio-button value="drawer">{{ t('settings.formStyleDrawer') }}</n-radio-button>
+          </n-radio-group>
         </n-tab-pane>
       </n-tabs>
 

@@ -6,6 +6,7 @@ import { ACCENTS } from '@/theme/accents'
 const prefersDark = usePreferredDark()
 
 export type Density = 'comfortable' | 'compact'
+export type FormStyle = 'modal' | 'drawer'
 export type Locale = 'zh-CN' | 'en-US'
 export type ThemeScheme = 'light' | 'dark' | 'auto'
 export type PageTransition = 'fade' | 'fade-slide' | 'none'
@@ -41,6 +42,8 @@ const DEFAULTS = {
   colorWeak: false,
   watermark: false,
   watermarkText: '',
+  // FormContainer 的全局形态偏好(弹窗/抽屉);组件可 per-instance 覆盖。
+  formStyle: 'modal' as FormStyle,
 }
 
 /** UI 偏好:主题模式 / 主色 / 密度 / 布局 / 界面开关 / 折叠 / 语言。持久化(localStorage key "app")。 */

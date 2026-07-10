@@ -62,6 +62,14 @@ export interface ModuleRow {
   createTime?: string
 }
 
+/** 字典项消费投影(后端 SysDictItem;sort 归一为 number,甩掉 int64 序列化的 number|string 噪音)。 */
+export interface DictItem {
+  label: string
+  value: string
+  sort: number
+  enabled: boolean
+}
+
 /** 模块新增/编辑入参(后端 ModuleInput)。 */
 export interface ModuleInput {
   code: string
