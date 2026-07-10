@@ -31,7 +31,7 @@
 | R5 | [x] 字典管理(`system/dict`)—— 主从 + 补后端 `dict/item/page` | — | 完成 · 2026-07-10 |
 | R6 | [x] 岗位管理(`system/position`)—— 普通 CRUD | R4(positionApi.page) | 完成 · 2026-07-10 |
 | R7 | [x] 在线会话(`system/session`)—— 只读 + 踢人 | — | 完成 · 2026-07-10 |
-| R8 | [ ] 文件管理(`system/file`)+ FileUpload 组件 —— 上传/下载/删除 | — | 待办 |
+| R8 | [x] 文件管理(`system/file`)+ FileUpload 组件 —— 上传/下载/删除 | — | 完成 · 2026-07-10 |
 | R9 | [ ] 机构管理(`system/org`)—— 树,复用 OrgTreeSelect | R4(OrgTreeSelect) | 待办 |
 
 > 收尾(全绿后):在 `web/COMPONENTS.md` 补 OrgTreeSelect/FileUpload 两行;若跳过某"可选"项(日志清空按钮、dict/item/page 后端、机构列名映射),在此记一行原因。
@@ -141,6 +141,7 @@ API 封装照 `web/src/api/index.ts` 现有写法:`unwrap<T>()` 解包,`page` �
 - 工具栏放 `<FileUpload :show-file-list="false" @uploaded="refresh"/>`。列:`originalName`(search=FileName)/`extension`/`sizeBytes`(格式化 KB/MB)/`contentType`/`createTime`/操作(下载/删除)。
 - **下载带 Bearer**:`fileApi.download(id)` → `URL.createObjectURL` + `<a download>` + `revokeObjectURL`,包 try/catch。
 - **done**:上传→列表→下载(文件正确)→删除全通。
+> 备注(R8 完成):新增 **FileUpload 组件**(`components/FileUpload/`,封 n-upload `:custom-request`,`inheritAttrs:false`+`$attrs` 透传,内部 `fileApi.upload` 成功 `emit('uploaded')`,失败 `message.error`+`onError()`)。fileApi:page(搜索键 originalName→后端 FileName)/upload(`bodySerializer` 建 FormData 字段名 file,`IFormFile`=string 经 `as unknown` 转;client.ts 无需改)/download(`parseAs:'blob'` 取原始字节,`!response.ok` 抛错,**不套 unwrap**)/remove。页面:下载走 `createObjectURL`+`<a download=originalName>`+`revokeObjectURL`(try/catch);大小 formatSize(B/KB/MB)。种子加页 78 + 按钮 79/80(上传 31、分页 32 已在),反向锁清 2 条(GET file/{id}/download、DELETE file/{id})。**COMPONENTS.md 的 FileUpload 行随【收尾】统一提交**。ultracode 5 维对抗评审 0 发现。typecheck+lint+后端全量 99/99 全绿。
 
 ### R9 · 机构管理 `web/src/views/system/org/index.vue`(树,复用 OrgTreeSelect)
 **照抄 `menu/index.vue`**(裸 `n-data-table` 树 + FormContainer + StatusSwitch + useConfirm)。**ProTable 不支持树形行,必须用裸 n-data-table。**

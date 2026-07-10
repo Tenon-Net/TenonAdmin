@@ -276,6 +276,19 @@ export default {
     itemSaved: '保存成功',
     itemDeleted: '已删除',
   },
+  // 文件管理(R8,列表 + 上传/下载/删除)
+  file: {
+    title: '文件管理',
+    name: '文件名',
+    extension: '后缀',
+    size: '大小',
+    contentType: '类型',
+    uploadTime: '上传时间',
+    upload: '上传文件',
+    download: '下载',
+    deleteConfirm: '确定删除文件「{name}」?',
+    deleted: '已删除',
+  },
   // 在线会话(R7,只读 + 踢人)
   session: {
     title: '在线会话',

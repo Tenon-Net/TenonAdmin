@@ -275,6 +275,19 @@ export default {
     itemSaved: 'Saved',
     itemDeleted: 'Deleted',
   },
+  // File management (R8, list + upload/download/delete)
+  file: {
+    title: 'Files',
+    name: 'File name',
+    extension: 'Ext',
+    size: 'Size',
+    contentType: 'Type',
+    uploadTime: 'Uploaded',
+    upload: 'Upload',
+    download: 'Download',
+    deleteConfirm: 'Delete file "{name}"?',
+    deleted: 'Deleted',
+  },
   // Online sessions (R7, read-only + force logout)
   session: {
     title: 'Online sessions',

@@ -143,6 +143,25 @@ export interface DictItemInput {
   enabled: boolean
 }
 
+/** 文件记录行(后端 SysFile;列表返回,int64 收敛为 number)。 */
+export interface SysFile {
+  id: number
+  originalName: string
+  storagePath: string
+  extension: string
+  contentType?: string | null
+  sizeBytes: number
+  createTime?: string
+}
+
+/** 上传出参(后端 FileUploadOutput)。 */
+export interface FileUploadOutput {
+  id: number
+  originalName: string
+  storagePath: string
+  sizeBytes: number
+}
+
 /** 在线会话行(后端 OnlineSessionItem;只读 + 强退按 sessionId)。int64 收敛为 number。 */
 export interface OnlineSessionItem {
   sessionId: string

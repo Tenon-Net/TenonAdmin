@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, ConfigInput, DictItem, DictItemInput, DictTypeInput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, OnlineSessionItem, PagedList, PositionInput, SysConfig, SysDictItem, SysDictType, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, ConfigInput, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, OnlineSessionItem, PagedList, PositionInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -202,6 +202,37 @@ export const dictAdminApi = {
     client.PUT('/api/v1/sys/dict/item/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   itemRemove: (id: number) =>
     client.DELETE('/api/v1/sys/dict/item/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+}
+
+export const fileApi = {
+  /** 文件分页;搜索键 originalName → 后端 FileName 模糊过滤。 */
+  page: (params: { page: number; pageSize: number; originalName?: string }) =>
+    client
+      .GET('/api/v1/sys/file/page', {
+        params: { query: { Current: params.page, Size: params.pageSize, FileName: params.originalName } },
+      })
+      .then((r) => unwrap<PagedList<SysFile>>(r))
+      .then((p) => ({ items: p.items, total: p.total })),
+  /** 上传单个文件:bodySerializer 建 FormData(字段名 file),openapi-fetch 对 FormData 不注入 json header,浏览器自动补 boundary(client.ts 无需改)。 */
+  upload: (file: File) =>
+    client
+      .POST('/api/v1/sys/file/upload', {
+        body: { file: file as unknown as string },
+        bodySerializer: (body) => {
+          const fd = new FormData()
+          fd.append('file', (body as unknown as { file: File }).file)
+          return fd
+        },
+      })
+      .then((r) => unwrap<FileUploadOutput>(r)),
+  /** 下载:parseAs blob 取原始字节(非信封,不套 unwrap);Bearer 由 client 拦截器自动带。 */
+  download: (id: number) =>
+    client.GET('/api/v1/sys/file/{id}/download', { params: { path: { id } }, parseAs: 'blob' }).then((r) => {
+      if (!r.response.ok) throw new ApiError(r.response.status, undefined, undefined, r.response.statusText)
+      return r.data as Blob
+    }),
+  remove: (id: number) =>
+    client.DELETE('/api/v1/sys/file/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
 }
 
 export const sessionApi = {

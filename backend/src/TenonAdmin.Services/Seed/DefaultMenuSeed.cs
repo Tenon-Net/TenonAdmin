@@ -103,5 +103,9 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 30, ParentId = 0, Type = MenuType.Catalog, Title = "文件管理", Permission = "", Icon = "ph:folder-duotone", Sort = 4, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
         new SysMenu { Id = 31, ParentId = 30, Type = MenuType.Button, Title = "文件-上传", Permission = "POST:/api/v1/sys/file/upload", Sort = 1, Enabled = true },
         new SysMenu { Id = 32, ParentId = 30, Type = MenuType.Button, Title = "文件-分页", Permission = "GET:/api/v1/sys/file/page", Sort = 2, Enabled = true },
+        // 文件管理页(R8:SysFileController 列表 + 上传/下载/删除)。上传码 31、分页码 32 已在;此处补页节点 + 下载/删除码。
+        new SysMenu { Id = 78, ParentId = 30, Type = MenuType.Menu, Title = "文件管理", Permission = "", Path = "/system/file", Component = "system/file/index", Icon = "ph:files-duotone", Sort = 3, Enabled = true, Visible = true },
+        new SysMenu { Id = 79, ParentId = 30, Type = MenuType.Button, Title = "文件-下载", Permission = "GET:/api/v1/sys/file/{id}/download", Sort = 4, Enabled = true },
+        new SysMenu { Id = 80, ParentId = 30, Type = MenuType.Button, Title = "文件-删除", Permission = "DELETE:/api/v1/sys/file/{id}", Sort = 5, Enabled = true },
     ];
 }
