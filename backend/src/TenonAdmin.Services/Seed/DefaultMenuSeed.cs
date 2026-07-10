@@ -79,6 +79,15 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 57, ParentId = 20, Type = MenuType.Button, Title = "配置-新增", Permission = "POST:/api/v1/sys/config", Sort = 7, Enabled = true },
         new SysMenu { Id = 58, ParentId = 20, Type = MenuType.Button, Title = "配置-更新", Permission = "PUT:/api/v1/sys/config/{id}", Sort = 8, Enabled = true },
         new SysMenu { Id = 59, ParentId = 20, Type = MenuType.Button, Title = "配置-删除", Permission = "DELETE:/api/v1/sys/config/{id}", Sort = 9, Enabled = true },
+        // 字典管理页(R5:DictController 主从 CRUD)。写端点授权码由兄弟按钮 61-65 承载;
+        // 82 是管理端项分页(含停用,R5 新增端点);类型详情 GET dict/type/{id} 不放按钮(编辑用行数据)。
+        new SysMenu { Id = 60, ParentId = 20, Type = MenuType.Menu, Title = "字典管理", Permission = "", Path = "/system/dict", Component = "system/dict/index", Icon = "ph:book-open-text-duotone", Sort = 10, Enabled = true, Visible = true },
+        new SysMenu { Id = 61, ParentId = 20, Type = MenuType.Button, Title = "字典类型-新增", Permission = "POST:/api/v1/sys/dict/type", Sort = 11, Enabled = true },
+        new SysMenu { Id = 62, ParentId = 20, Type = MenuType.Button, Title = "字典类型-更新", Permission = "PUT:/api/v1/sys/dict/type/{id}", Sort = 12, Enabled = true },
+        new SysMenu { Id = 63, ParentId = 20, Type = MenuType.Button, Title = "字典类型-删除", Permission = "DELETE:/api/v1/sys/dict/type/{id}", Sort = 13, Enabled = true },
+        new SysMenu { Id = 64, ParentId = 20, Type = MenuType.Button, Title = "字典项-更新", Permission = "PUT:/api/v1/sys/dict/item/{id}", Sort = 14, Enabled = true },
+        new SysMenu { Id = 65, ParentId = 20, Type = MenuType.Button, Title = "字典项-删除", Permission = "DELETE:/api/v1/sys/dict/item/{id}", Sort = 15, Enabled = true },
+        new SysMenu { Id = 82, ParentId = 20, Type = MenuType.Button, Title = "字典项-分页", Permission = "GET:/api/v1/sys/dict/item/page", Sort = 16, Enabled = true },
 
         // 文件管理目录 + 代表性接口(T7)。同样只播真实存在的接口。
         new SysMenu { Id = 30, ParentId = 0, Type = MenuType.Catalog, Title = "文件管理", Permission = "", Icon = "ph:folder-duotone", Sort = 4, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },

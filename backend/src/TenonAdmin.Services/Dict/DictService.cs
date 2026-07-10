@@ -93,6 +93,13 @@ public class DictService(
     }
 
     /// <inheritdoc />
+    public virtual async Task<PagedList<SysDictItem>> PageItemsAsync(DictItemPageInput input) =>
+        await items.AsQueryable()
+            .Where(i => i.DictTypeCode == input.TypeCode)
+            .OrderBy(i => i.Sort)
+            .ToPagedListAsync(input.Current, input.Size);
+
+    /// <inheritdoc />
     public virtual async Task<long> AddItemAsync(DictItemInput input)
     {
         var entity = new SysDictItem

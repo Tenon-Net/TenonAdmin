@@ -26,6 +26,9 @@ public interface IDictService
     /// <summary>按类型编码取启用中的字典项列表(读穿透缓存,前端下拉的数据源)。</summary>
     Task<IReadOnlyList<SysDictItem>> GetItemsByTypeAsync(string typeCode);
 
+    /// <summary>分页查询某类型下的字典项(<b>含停用</b>,管理端数据源;冷路径不走缓存),按排序升序返回。</summary>
+    Task<PagedList<SysDictItem>> PageItemsAsync(DictItemPageInput input);
+
     /// <summary>新增字典项,返回新 Id。</summary>
     Task<long> AddItemAsync(DictItemInput input);
 

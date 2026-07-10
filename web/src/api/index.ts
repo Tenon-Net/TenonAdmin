@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, ConfigInput, DictItem, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, SysConfig, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, ConfigInput, DictItem, DictItemInput, DictTypeInput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, SysConfig, SysDictItem, SysDictType, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -170,6 +170,33 @@ export const dictApi = {
           }),
         ),
       ),
+}
+
+export const dictAdminApi = {
+  /** 字典类型分页;搜索键 code/name → PascalCase Code/Name 查询参。 */
+  typePage: (params: { page: number; pageSize: number; code?: string; name?: string }) =>
+    client
+      .GET('/api/v1/sys/dict/type/page', {
+        params: { query: { Current: params.page, Size: params.pageSize, Code: params.code, Name: params.name } },
+      })
+      .then((r) => unwrap<PagedList<SysDictType>>(r))
+      .then((p) => ({ items: p.items, total: p.total })),
+  typeAdd: (body: DictTypeInput) => client.POST('/api/v1/sys/dict/type', { body }).then((r) => unwrap<number>(r)),
+  typeUpdate: (id: number, body: DictTypeInput) =>
+    client.PUT('/api/v1/sys/dict/type/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
+  typeRemove: (id: number) =>
+    client.DELETE('/api/v1/sys/dict/type/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** 某类型下的字典项(管理端:含停用、带 id;非下拉缓存源)。ponytail: 拉一页 500,字典项数量小,真超再分页。 */
+  items: (typeCode: string) =>
+    client
+      .GET('/api/v1/sys/dict/item/page', { params: { query: { TypeCode: typeCode, Current: 1, Size: 500 } } })
+      .then((r) => unwrap<PagedList<SysDictItem>>(r))
+      .then((p) => p.items),
+  itemAdd: (body: DictItemInput) => client.POST('/api/v1/sys/dict/item', { body }).then((r) => unwrap<number>(r)),
+  itemUpdate: (id: number, body: DictItemInput) =>
+    client.PUT('/api/v1/sys/dict/item/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
+  itemRemove: (id: number) =>
+    client.DELETE('/api/v1/sys/dict/item/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
 }
 
 export const menuApi = {

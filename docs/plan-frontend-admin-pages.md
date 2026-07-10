@@ -28,7 +28,7 @@
 | R2 | [x] 登录日志(`system/log/login`)—— 只读 ProTable | — | 完成 · 2026-07-10 · 本提交 |
 | R3 | [x] 操作日志(`system/log/op`)—— 只读 + 详情抽屉 | — | 完成 · 2026-07-10 · 本提交 |
 | R4 | [x] 用户写侧(改造 `system/user`)+ OrgTreeSelect 组件 + orgApi.list/positionApi.page | — | 完成 · 2026-07-10 · 本提交 |
-| R5 | [ ] 字典管理(`system/dict`)—— 主从(+ 可选后端 `dict/item/page`) | — | 待办 |
+| R5 | [x] 字典管理(`system/dict`)—— 主从 + 补后端 `dict/item/page` | — | 完成 · 2026-07-10 |
 | R6 | [ ] 岗位管理(`system/position`)—— 普通 CRUD | R4(positionApi.page) | 待办 |
 | R7 | [ ] 在线会话(`system/session`)—— 只读 + 踢人 | — | 待办 |
 | R8 | [ ] 文件管理(`system/file`)+ FileUpload 组件 —— 上传/下载/删除 | — | 待办 |
@@ -121,6 +121,7 @@ API 封装照 `web/src/api/index.ts` 现有写法:`unwrap<T>()` 解包,`page` �
 - 增删改后 `useDictStore().invalidate(typeCode)` 失效下拉缓存。
 - **⚠ 后端限制**:唯一项列表端点 `GET dict/items/{typeCode}` **只回启用项** → 管理端看不到停用项。**决策(推荐)**:补小后端端点 `GET sys/dict/item/page?typeCode=`(含停用,照 `dict/type/page` 写)+ `gen:api` 重生成;不补则接受"只管启用项",在台账收尾记一行。
 - **done**:类型 CRUD + 主从联动 + 项 CRUD + 缓存失效可见。
+> 备注(R5 完成):**补了后端** `GET dict/item/page?TypeCode=`(含停用项、带 id 的管理端端点;`DictItemPageInput`+`PageItemsAsync` 冷路径不走缓存,区别于只回启用项的缓存源 `dict/items/{code}`)+ `gen:api` 重生成 schema。前端 `dictAdminApi`(typePage/typeAdd/typeUpdate/typeRemove + items/itemAdd/itemUpdate/itemRemove)。主从页:左类型 ProTable **行点击选中**(`:row-props` 经 ProTable `mergeProps($attrs)` 透传到内层 NDataTable),右字典项裸 `n-data-table` CRUD;增删改/启停后 `useDictStore().invalidate(code)` 失效下拉缓存。类型 code 编辑禁用,项表单 dictTypeCode 隐藏(取自选中类型)。种子加页 60 + 按钮 61-65 + 82(item/page),反向锁清 5 条(POST dict/type、PUT/DELETE dict/type/{id}、PUT/DELETE dict/item/{id}),保留 `GET dict/type/{id}`(详情用行数据不放按钮)。**ultracode 5 维对抗评审确认 2 项 minor 并已修**:①行内按钮/StatusSwitch 点击冒泡到行 onClick 误切选中 → status/op 列包 `stopPropagation`;②`loadItems` 缺竞态守卫 → 捕获 code、await 后 `selectedType.code===code` 才回写。typecheck+lint+后端全量 99/99 全绿。交互走查留待人工。
 
 ### R6 · 岗位管理 `web/src/views/system/position/index.vue`(普通 CRUD)
 **纠偏:岗位与机构无关联**(`PositionInput={name,code,sort,enabled}`,无 orgId),**不接 OrgTreeSelect**。

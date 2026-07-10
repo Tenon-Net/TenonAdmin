@@ -103,6 +103,46 @@ export interface ConfigInput {
   remark?: string | null
 }
 
+/** 字典类型行(后端 SysDictType;Code 创建后不可改)。int64 收敛为 number。 */
+export interface SysDictType {
+  id: number
+  code: string
+  name: string
+  sort: number
+  enabled: boolean
+  remark?: string | null
+  createTime?: string
+}
+
+/** 字典项行(后端 SysDictItem;管理端分页含停用项,带 id——区别于下拉投影 DictItem)。int64 收敛为 number。 */
+export interface SysDictItem {
+  id: number
+  dictTypeCode: string
+  label: string
+  value: string
+  sort: number
+  enabled: boolean
+  createTime?: string
+}
+
+/** 字典类型新增/编辑入参(后端 DictTypeInput;code 创建后不可改,更新时服务端忽略)。 */
+export interface DictTypeInput {
+  code: string
+  name: string
+  sort: number
+  enabled: boolean
+  remark?: string | null
+}
+
+/** 字典项新增/编辑入参(后端 DictItemInput;dictTypeCode = 当前类型,表单隐藏)。 */
+export interface DictItemInput {
+  dictTypeCode: string
+  label: string
+  value: string
+  sort: number
+  enabled: boolean
+}
+
 /** 登录日志行(后端 SysLoginLog;只读,int64 收敛为 number)。 */
 export interface SysLoginLog {
   id: number

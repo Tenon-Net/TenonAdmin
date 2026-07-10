@@ -31,6 +31,13 @@ public record DictTypePageInput : PageInputBase
     public string? Name { get; init; }
 }
 
+/// <summary>字典项分页查询入参(管理端:按类型取<b>含停用</b>的全部项)。</summary>
+public record DictItemPageInput : PageInputBase
+{
+    /// <summary>所属字典类型编码(精确匹配)</summary>
+    public string TypeCode { get; init; } = "";
+}
+
 /// <summary>字典项新增/编辑入参</summary>
 public record DictItemInput
 {

@@ -55,6 +55,12 @@ public class DictController(IDictService dictService) : ControllerBase
     public async Task<Result<IReadOnlyList<SysDictItem>>> GetItems(string typeCode) =>
         Result<IReadOnlyList<SysDictItem>>.Ok(await dictService.GetItemsByTypeAsync(typeCode));
 
+    /// <summary>分页查询字典项(管理端:含停用项,不走缓存)</summary>
+    [HttpGet("item/page")]
+    [RolePermission]
+    public async Task<Result<PagedList<SysDictItem>>> PageItems([FromQuery] DictItemPageInput input) =>
+        Result<PagedList<SysDictItem>>.Ok(await dictService.PageItemsAsync(input));
+
     /// <summary>新增字典项</summary>
     [HttpPost("item")]
     [RolePermission]
