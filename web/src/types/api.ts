@@ -192,6 +192,14 @@ export interface SysPosition {
   createTime?: string
 }
 
+/** 职位新增/编辑入参(后端 PositionInput;增改同一份字段,code 编辑禁用)。 */
+export interface PositionInput {
+  name: string
+  code: string
+  sort: number
+  enabled: boolean
+}
+
 /** 新增用户入参(后端 AddUserInput;account 建后不可改,password 留空=后端默认初始密码)。 */
 export interface AddUserInput {
   account: string

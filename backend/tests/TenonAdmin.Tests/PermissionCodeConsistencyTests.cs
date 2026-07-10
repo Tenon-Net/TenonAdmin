@@ -58,7 +58,6 @@ public class PermissionCodeConsistencyTests
     [
         "DELETE:/api/v1/sys/file/{id}",
         "DELETE:/api/v1/sys/org/{id}",
-        "DELETE:/api/v1/sys/position/{id}",
         // GET config/{id}(配置详情):R1 刻意不放详情按钮(编辑用行数据),故此端点仍未种子化,保留登记。
         "GET:/api/v1/sys/config/{id}",
         // GET dict/type/{id}(类型详情):R5 同理不放详情按钮(编辑用行数据),保留登记。
@@ -66,11 +65,10 @@ public class PermissionCodeConsistencyTests
         "GET:/api/v1/sys/file/{id}/download",
         "GET:/api/v1/sys/module/{id}",
         "GET:/api/v1/sys/org/{id}",
+        // GET position/{id}(岗位详情):R6 同理不放详情按钮(编辑用行数据),保留登记。
         "GET:/api/v1/sys/position/{id}",
         "POST:/api/v1/sys/org/add",
-        "POST:/api/v1/sys/position/add",
         "PUT:/api/v1/sys/org/{id}",
-        "PUT:/api/v1/sys/position/{id}",
     ];
 
     /// <summary>反射内置控制器,按 {大写Method}:/{小写路由模板} 生成所有 [RolePermission] 端点的权限码。</summary>

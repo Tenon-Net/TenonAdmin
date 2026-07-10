@@ -275,6 +275,20 @@ export default {
     itemSaved: 'Saved',
     itemDeleted: 'Deleted',
   },
+  // Position management (R6, plain CRUD; positions are not linked to orgs)
+  position: {
+    title: 'Positions',
+    code: 'Code',
+    name: 'Name',
+    sort: 'Sort',
+    codeRequired: 'Enter a code',
+    nameRequired: 'Enter a name',
+    addTitle: 'Add position',
+    editTitle: 'Edit position',
+    deleteConfirm: 'Delete position "{name}"?',
+    saved: 'Saved',
+    deleted: 'Deleted',
+  },
   log: {
     loginTitle: 'Login logs',
     account: 'Account',

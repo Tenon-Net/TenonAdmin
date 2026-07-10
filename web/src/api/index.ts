@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, ConfigInput, DictItem, DictItemInput, DictTypeInput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, SysConfig, SysDictItem, SysDictType, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, ConfigInput, DictItem, DictItemInput, DictTypeInput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, PagedList, PositionInput, SysConfig, SysDictItem, SysDictType, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -104,6 +104,11 @@ export const positionApi = {
       })
       .then((r) => unwrap<PagedList<SysPosition>>(r))
       .then((p) => ({ items: p.items, total: p.total })),
+  add: (body: PositionInput) => client.POST('/api/v1/sys/position/add', { body }).then((r) => unwrap<number>(r)),
+  update: (id: number, body: PositionInput) =>
+    client.PUT('/api/v1/sys/position/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
+  remove: (id: number) =>
+    client.DELETE('/api/v1/sys/position/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
 }
 
 export const moduleApi = {

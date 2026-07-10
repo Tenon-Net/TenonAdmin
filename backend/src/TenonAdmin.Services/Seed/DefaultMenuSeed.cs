@@ -67,6 +67,13 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 53, ParentId = 10, Type = MenuType.Button, Title = "用户-重置密码", Permission = "PUT:/api/v1/sys/user/{id}/password", Sort = 8, Enabled = true },
         new SysMenu { Id = 54, ParentId = 10, Type = MenuType.Button, Title = "用户-启停", Permission = "PUT:/api/v1/sys/user/{id}/enabled", Sort = 9, Enabled = true },
 
+        // 岗位管理页(R6:PositionController 普通 CRUD)。分页码由已有按钮 14 承载;写端点授权码由 75-77 承载;
+        // 详情 GET position/{id} 不放按钮(编辑用行数据)。
+        new SysMenu { Id = 74, ParentId = 10, Type = MenuType.Menu, Title = "岗位管理", Permission = "", Path = "/system/position", Component = "system/position/index", Icon = "ph:identification-badge-duotone", Sort = 10, Enabled = true, Visible = true },
+        new SysMenu { Id = 75, ParentId = 10, Type = MenuType.Button, Title = "岗位-新增", Permission = "POST:/api/v1/sys/position/add", Sort = 11, Enabled = true },
+        new SysMenu { Id = 76, ParentId = 10, Type = MenuType.Button, Title = "岗位-更新", Permission = "PUT:/api/v1/sys/position/{id}", Sort = 12, Enabled = true },
+        new SysMenu { Id = 77, ParentId = 10, Type = MenuType.Button, Title = "岗位-删除", Permission = "DELETE:/api/v1/sys/position/{id}", Sort = 13, Enabled = true },
+
         // 字典与配置目录 + 代表性接口(T5)。同样只播真实存在的接口,完整菜单树随 M2 补齐。
         new SysMenu { Id = 20, ParentId = 0, Type = MenuType.Catalog, Title = "字典配置", Permission = "", Icon = "ph:book-bookmark-duotone", Sort = 3, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
         new SysMenu { Id = 21, ParentId = 20, Type = MenuType.Button, Title = "字典类型-分页", Permission = "GET:/api/v1/sys/dict/type/page", Sort = 1, Enabled = true },

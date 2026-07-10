@@ -276,6 +276,20 @@ export default {
     itemSaved: '保存成功',
     itemDeleted: '已删除',
   },
+  // 岗位管理(R6,普通 CRUD;岗位与机构无关联)
+  position: {
+    title: '岗位管理',
+    code: '岗位编码',
+    name: '岗位名称',
+    sort: '排序',
+    codeRequired: '请输入岗位编码',
+    nameRequired: '请输入岗位名称',
+    addTitle: '新增岗位',
+    editTitle: '编辑岗位',
+    deleteConfirm: '确定删除岗位「{name}」?',
+    saved: '保存成功',
+    deleted: '已删除',
+  },
   // 日志(登录 R2 / 操作 R3 共用一个命名空间;共享 result/success/failed/ip/userAgent/clear/cleared)
   log: {
     loginTitle: '登录日志',

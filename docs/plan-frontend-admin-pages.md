@@ -29,7 +29,7 @@
 | R3 | [x] 操作日志(`system/log/op`)—— 只读 + 详情抽屉 | — | 完成 · 2026-07-10 · 本提交 |
 | R4 | [x] 用户写侧(改造 `system/user`)+ OrgTreeSelect 组件 + orgApi.list/positionApi.page | — | 完成 · 2026-07-10 · 本提交 |
 | R5 | [x] 字典管理(`system/dict`)—— 主从 + 补后端 `dict/item/page` | — | 完成 · 2026-07-10 |
-| R6 | [ ] 岗位管理(`system/position`)—— 普通 CRUD | R4(positionApi.page) | 待办 |
+| R6 | [x] 岗位管理(`system/position`)—— 普通 CRUD | R4(positionApi.page) | 完成 · 2026-07-10 |
 | R7 | [ ] 在线会话(`system/session`)—— 只读 + 踢人 | — | 待办 |
 | R8 | [ ] 文件管理(`system/file`)+ FileUpload 组件 —— 上传/下载/删除 | — | 待办 |
 | R9 | [ ] 机构管理(`system/org`)—— 树,复用 OrgTreeSelect | R4(OrgTreeSelect) | 待办 |
@@ -127,6 +127,7 @@ API 封装照 `web/src/api/index.ts` 现有写法:`unwrap<T>()` 解包,`page` �
 **纠偏:岗位与机构无关联**(`PositionInput={name,code,sort,enabled}`,无 orgId),**不接 OrgTreeSelect**。
 - API `positionApi` 补 `add/update/remove`(`page` 已在 R4)。`enabled` 用 StatusSwitch。表单 `code`(编辑禁用)/`name`/`sort`/`enabled`。
 - **done**:普通 CRUD + 启停全通。
+> 备注(R6 完成):config/module 范式克隆。`PositionInput={name,code,sort,enabled}`(无 orgId,不接 OrgTreeSelect)。positionApi 补 add(POST position/**add**)/update/remove(PUT/DELETE position/{id});page 已在 R4。StatusSwitch 无独立端点走全量 update(同 module)。code 编辑禁用。种子加页 74 + 按钮 75-77,反向锁清 3 条写端点,留 `GET position/{id}`(详情用行数据)。ultracode 3 维对抗评审 0 发现。typecheck+lint+后端全量 99/99 全绿。
 
 ### R7 · 在线会话 `web/src/views/system/session/index.vue`(只读 + 踢人)
 - `sessionApi.online/kick`,无表单。列:`account`/`ip`/`loginTime`/`expiresAt`/操作「强制下线」。
