@@ -100,7 +100,7 @@ async function logout() {
 <template>
   <div class="bar">
     <div class="left">
-      <n-button v-if="showCollapse" quaternary circle @click="app.toggleCollapsed()">
+      <n-button v-if="showCollapse" quaternary circle :aria-label="t('app.collapse')" @click="app.toggleCollapsed()">
         <Icon :icon="app.collapsed ? 'ph:list' : 'ph:sidebar-simple'" :width="20" />
       </n-button>
       <div v-if="showBrand" class="brand">

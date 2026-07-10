@@ -60,7 +60,7 @@ const active = computed(() => LOGIN_SKINS.find((s) => s.id === skin.value) ?? LO
     </div>
 
     <!-- 皮肤切换器:深色磨砂药丸,在明/暗/极光三种底色上都可读 -->
-    <div class="skin-switch" role="tablist" aria-label="登录页样式">
+    <div class="skin-switch" role="tablist" :aria-label="t('app.loginStyle')">
       <button
         v-for="s in LOGIN_SKINS"
         :key="s.id"

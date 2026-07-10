@@ -124,7 +124,7 @@ onKeyStroke('Enter', (e) => {
   background: var(--color-bg-container);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-3);
   overflow: hidden;
 }
 .search {

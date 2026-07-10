@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { NButton } from 'naive-ui'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
 const app = useAppStore()
+const { t } = useI18n()
 </script>
 
 <template>
   <div class="nf">
     <div class="code" :style="{ color: app.accent }">404</div>
-    <div class="msg">页面不存在</div>
-    <n-button type="primary" @click="router.replace('/')">返回工作台</n-button>
+    <div class="msg">{{ t('notFound.desc') }}</div>
+    <n-button type="primary" @click="router.replace('/')">{{ t('notFound.back') }}</n-button>
   </div>
 </template>
 

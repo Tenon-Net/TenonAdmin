@@ -338,6 +338,16 @@ const glassTheme = computed<GlobalThemeOverrides>(() =>
   display: none;
 }
 
+/* 窄屏收紧内边距:默认 46px 卡内边距在 ~360px 手机上会挤压表单 */
+@media (max-width: 480px) {
+  .aurora-content {
+    padding: 16px;
+  }
+  .glass-card {
+    padding: 32px 24px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .aurora-bg,
   .orb,

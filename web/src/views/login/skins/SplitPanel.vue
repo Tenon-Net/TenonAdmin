@@ -31,7 +31,8 @@ const vars = computed(() => ({
           <span>TenonAdmin</span>
         </div>
         <div class="bar" :style="{ background: app.accent }" />
-        <h1 class="headline">企业级<span :style="{ color: app.accent }">权限</span>管理后台</h1>
+        <!-- 标题拆 pre/accent/post 三段以支持 i18n,中间词染 accent 色(整句硬编码中文切不了英文) -->
+        <h1 class="headline">{{ t('login.headlinePre') }}<span :style="{ color: app.accent }">{{ t('login.headlineAccent') }}</span>{{ t('login.headlinePost') }}</h1>
         <p class="sub">{{ t('login.subtitle') }}</p>
         <ul class="points">
           <li v-for="p in points" :key="p">

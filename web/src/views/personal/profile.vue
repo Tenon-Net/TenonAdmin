@@ -50,7 +50,7 @@ async function save() {
         <n-form-item :label="t('profile.account')">
           <n-input :value="model.account" disabled />
         </n-form-item>
-        <n-form-item :label="t('profile.name')">
+        <n-form-item :label="t('profile.name')" required>
           <n-input v-model:value="model.name" :placeholder="t('profile.name')" />
         </n-form-item>
         <n-form-item :label="t('profile.org')">
@@ -60,7 +60,7 @@ async function save() {
           <n-input :value="model.position" disabled />
         </n-form-item>
         <n-form-item :label="' '">
-          <n-button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</n-button>
+          <n-button type="primary" :loading="saving" :disabled="!model.name.trim()" @click="save">{{ t('common.save') }}</n-button>
         </n-form-item>
       </n-form>
     </n-spin>

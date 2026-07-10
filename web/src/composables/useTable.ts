@@ -22,16 +22,23 @@ export function useTable<T>(
   const params = reactive<Record<string, unknown>>({ ...opts?.initParams })
   const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0 })
 
+  // 竞态守卫:快速翻页/改页码会并发多次 load,慢的旧请求可能后到并覆盖新数据。
+  // 只认最新一次请求的结果,过期响应直接丢弃(loading 也只由最新请求收尾)。
+  let reqSeq = 0
+
   async function load() {
+    const seq = ++reqSeq
     loading.value = true
     try {
       const { items, total } = await fetcher({ page: pagination.page, pageSize: pagination.pageSize, ...params })
+      if (seq !== reqSeq) return
       rows.value = items
       pagination.itemCount = total
     } catch (e) {
+      if (seq !== reqSeq) return
       opts?.onError?.(e)
     } finally {
-      loading.value = false
+      if (seq === reqSeq) loading.value = false
     }
   }
 

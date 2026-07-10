@@ -1,4 +1,7 @@
 <script setup lang="ts">
+// 侧栏薄壳:对 n-menu 的展示层封装,default.vue 复用于 4 处——完整树/二级子树/一级图标 rail/移动抽屉。
+// collapsed(用户折叠开关) 与 rail(一级细栏,恒图标态、固定窄宽、无品牌字) 是两条独立的"收窄"来源,
+// 二者任一为真都令 n-menu 进入 collapsed;rail 另用更窄的 collapsed-width。
 import { NMenu, NScrollbar, type MenuOption } from 'naive-ui'
 import TenonLogo from '@/components/TenonLogo.vue'
 

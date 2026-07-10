@@ -55,7 +55,7 @@ function reset() {
         </n-form-item-gi>
         <n-form-item-gi>
           <n-space>
-            <n-button type="primary" @click="search"><template #icon><Icon icon="ph:magnifying-glass" /></template>{{ t('common.search') }}</n-button>
+            <n-button type="primary" :loading="loading" @click="search"><template #icon><Icon icon="ph:magnifying-glass" /></template>{{ t('common.search') }}</n-button>
             <n-button @click="reset">{{ t('common.reset') }}</n-button>
           </n-space>
         </n-form-item-gi>

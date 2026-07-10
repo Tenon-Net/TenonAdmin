@@ -47,7 +47,17 @@ async function setDefault(id: number) {
     <n-spin :show="busy">
       <n-empty v-if="!auth.modules.length" :description="t('module.empty')" style="padding: 60px 0" />
       <div v-else class="grid">
-        <div v-for="m in auth.modules" :key="m.id" class="card" @click="pick(m.id, m.defaultRoute)">
+        <!-- 卡片是可点 div:补 role/tabindex/键盘激活,让键盘用户也能选应用(a11y) -->
+        <div
+          v-for="m in auth.modules"
+          :key="m.id"
+          class="card"
+          role="button"
+          tabindex="0"
+          @click="pick(m.id, m.defaultRoute)"
+          @keydown.enter="pick(m.id, m.defaultRoute)"
+          @keydown.space.prevent="pick(m.id, m.defaultRoute)"
+        >
           <div class="ico"><Icon :icon="m.icon || 'ph:app-window-duotone'" :width="28" /></div>
           <div class="body">
             <div class="name">{{ m.title }}</div>
@@ -104,6 +114,10 @@ async function setDefault(id: number) {
   transform: translateY(-3px);
   border-color: var(--color-primary);
   box-shadow: var(--shadow-2);
+}
+.card:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 .ico {
   color: var(--color-primary);

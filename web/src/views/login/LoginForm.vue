@@ -43,7 +43,7 @@ function onSso() {
 
 async function onSubmit() {
   if (!model.account || !model.password) {
-    message.warning(t('login.passwordPlaceholder'))
+    message.warning(t('login.required'))
     return
   }
   loading.value = true
@@ -87,7 +87,7 @@ async function onSubmit() {
       <div class="row">
         <n-checkbox v-model:checked="model.remember">{{ t('login.remember') }}</n-checkbox>
       </div>
-      <button class="hero-btn" :style="heroStyle" :disabled="loading" @click.prevent="onSubmit">
+      <button class="hero-btn" type="button" :style="heroStyle" :disabled="loading" @click.prevent="onSubmit">
         {{ loading ? t('common.loading') : t('login.submit') }}
       </button>
     </n-form>

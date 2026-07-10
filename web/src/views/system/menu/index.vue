@@ -223,7 +223,7 @@ const columns: DataTableColumns<MenuTreeNode> = [
         <n-form-item :label="t('menu.type')">
           <n-select v-model:value="form.type" :options="typeOptions" />
         </n-form-item>
-        <n-form-item :label="t('menu.title')">
+        <n-form-item :label="t('menu.title')" required>
           <n-input v-model:value="form.title" :placeholder="t('menu.title')" />
         </n-form-item>
         <n-form-item :label="t('menu.permission')">
@@ -259,7 +259,7 @@ const columns: DataTableColumns<MenuTreeNode> = [
       <template #footer>
         <n-space justify="end">
           <n-button @click="showModal = false">{{ t('common.cancel') }}</n-button>
-          <n-button type="primary" :loading="saving" @click="submit">{{ t('common.save') }}</n-button>
+          <n-button type="primary" :loading="saving" :disabled="!form.title.trim()" @click="submit">{{ t('common.save') }}</n-button>
         </n-space>
       </template>
     </n-modal>

@@ -71,12 +71,17 @@ watch(activePath, () => {
   <div class="tabsbar">
     <n-scrollbar x-scrollable>
       <div ref="stripRef" class="strip">
+        <!-- chip 与关闭 X 均为可点非按钮元素:补 role/tabindex/键盘激活,键盘用户也能切换/关闭标签(右键菜单是鼠标专属) -->
         <div
           v-for="item in tabs.tabs"
           :key="item.path"
           class="chip"
           :class="{ active: item.path === activePath }"
+          role="button"
+          tabindex="0"
           @click="onClick(item)"
+          @keydown.enter="onClick(item)"
+          @keydown.space.prevent="onClick(item)"
           @contextmenu="onContext($event, item)"
         >
           <Icon v-if="item.icon" :icon="item.icon" :width="15" class="chip-icon" />
@@ -86,7 +91,12 @@ watch(activePath, () => {
             icon="ph:x"
             :width="13"
             class="chip-close"
+            role="button"
+            tabindex="0"
+            :aria-label="t('tabs.close')"
             @click.stop="tabs.removeTab(item.path)"
+            @keydown.enter.stop="tabs.removeTab(item.path)"
+            @keydown.space.stop.prevent="tabs.removeTab(item.path)"
           />
         </div>
       </div>
@@ -145,6 +155,11 @@ watch(activePath, () => {
   background: var(--color-primary-light);
   border-color: var(--color-primary);
   color: var(--color-primary);
+}
+.chip:focus-visible,
+.chip-close:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 .chip-close {
   border-radius: 50%;

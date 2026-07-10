@@ -83,6 +83,16 @@ const vars = computed(() => ({
     transform: none;
   }
 }
+/* 窄屏:给卡片侧边留白 + 收紧内边距(默认 46px 在 ~360px 手机上挤压表单、卡片贴边) */
+@media (max-width: 480px) {
+  .spotlight {
+    padding: 0 16px;
+  }
+  .card {
+    padding: 32px 24px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spot {
     /* 光晕仍跟随指针(指针驱动的位移,非自发动画);仅去掉缓动过渡。

@@ -4,6 +4,7 @@ import { RouterView } from 'vue-router'
 import { NWatermark, NDrawer, NDrawerContent, NButton } from 'naive-ui'
 import { Icon } from '@iconify/vue'
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
+import { useI18n } from 'vue-i18n'
 import { useAppStore, type LayoutMode } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useLayoutMenu } from '@/composables/useLayoutMenu'
@@ -12,6 +13,7 @@ import AppHeader from './AppHeader.vue'
 import SideNav from './components/SideNav.vue'
 import TabsBar from './TabsBar.vue'
 
+const { t } = useI18n()
 const app = useAppStore()
 const user = useUserStore()
 const tabs = useTabsStore()
@@ -130,7 +132,7 @@ watch(
 
     <!-- 顶栏 -->
     <header class="header" :class="{ 'header--static': !app.fixedHeader }">
-      <n-button v-if="isMobile" quaternary circle class="hbg" @click="mobileOpen = true">
+      <n-button v-if="isMobile" quaternary circle class="hbg" :aria-label="t('app.openMenu')" @click="mobileOpen = true">
         <Icon icon="ph:list" :width="20" />
       </n-button>
       <div class="apph">

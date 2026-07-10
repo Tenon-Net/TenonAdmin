@@ -20,7 +20,7 @@ const saving = ref(false)
 
 async function submit() {
   if (!model.oldPassword || !model.newPassword) {
-    message.warning(t('changePassword.oldPassword'))
+    message.warning(t('changePassword.required'))
     return
   }
   if (model.newPassword !== model.confirmPassword) {
@@ -59,7 +59,13 @@ async function submit() {
       <n-form-item :label="t('changePassword.confirmPassword')">
         <n-input v-model:value="model.confirmPassword" type="password" show-password-on="click" @keyup.enter="submit" />
       </n-form-item>
-      <n-button type="primary" block :loading="saving" @click="submit">{{ t('common.submit') }}</n-button>
+      <n-button
+        type="primary"
+        block
+        :loading="saving"
+        :disabled="!model.oldPassword || !model.newPassword || !model.confirmPassword"
+        @click="submit"
+      >{{ t('common.submit') }}</n-button>
     </n-form>
   </n-card>
 </template>

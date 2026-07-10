@@ -142,10 +142,10 @@ const columns: DataTableColumns<ModuleRow> = [
       style="width: 520px"
     >
       <n-form :model="form" label-placement="left" :label-width="90">
-        <n-form-item :label="t('module.code')">
-          <n-input v-model:value="form.code" :placeholder="t('module.code')" />
+        <n-form-item :label="t('module.code')" required>
+          <n-input v-model:value="form.code" :placeholder="t('module.code')" :disabled="editingId !== null" />
         </n-form-item>
-        <n-form-item :label="t('module.name')">
+        <n-form-item :label="t('module.name')" required>
           <n-input v-model:value="form.title" :placeholder="t('module.name')" />
         </n-form-item>
         <n-form-item :label="t('module.icon')">
@@ -167,7 +167,7 @@ const columns: DataTableColumns<ModuleRow> = [
       <template #footer>
         <n-space justify="end">
           <n-button @click="showModal = false">{{ t('common.cancel') }}</n-button>
-          <n-button type="primary" :loading="saving" @click="submit">{{ t('common.save') }}</n-button>
+          <n-button type="primary" :loading="saving" :disabled="!form.code.trim() || !form.title.trim()" @click="submit">{{ t('common.save') }}</n-button>
         </n-space>
       </template>
     </n-modal>

@@ -20,6 +20,7 @@ function label(m: LayoutMode) {
         type="button"
         class="card"
         :class="{ on: app.layoutMode === m }"
+        :aria-label="label(m)"
         :aria-pressed="app.layoutMode === m"
       >
         <span class="inner" :class="m.includes('vertical') ? 'row' : 'col'">

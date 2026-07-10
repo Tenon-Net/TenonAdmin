@@ -67,6 +67,8 @@ const transitionOptions = computed(() => [
               class="dot"
               :class="{ on: app.accent === c }"
               :style="{ background: c }"
+              :aria-label="`${t('settings.themeColor')} ${c}`"
+              :aria-pressed="app.accent === c"
               @click="app.setAccent(c)"
             >
               <Icon v-if="app.accent === c" icon="ph:check-bold" class="tick" />

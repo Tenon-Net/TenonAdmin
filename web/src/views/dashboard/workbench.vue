@@ -31,7 +31,7 @@ const stats = computed(() => [
       </div>
       <div>
         <div class="hi">{{ t('workbench.welcome', { name: user.userInfo?.name ?? '' }) }}</div>
-        <div class="tip">TenonAdmin · 企业级权限管理后台</div>
+        <div class="tip">{{ t('workbench.subtitle') }}</div>
       </div>
     </div>
 
@@ -39,7 +39,7 @@ const stats = computed(() => [
       <n-gi v-for="s in stats" :key="s.key">
         <n-card :bordered="true">
           <div class="stat">
-            <div class="stat-ico" :style="{ color: s.color }"><Icon :icon="s.icon" :width="30" /></div>
+            <div class="stat-ico" :style="{ color: s.color }"><Icon :icon="s.icon" :width="28" /></div>
             <div>
               <div class="stat-val tabular">{{ s.value }}</div>
               <div class="stat-label">{{ t(`workbench.${s.key}`) }}</div>
@@ -86,6 +86,17 @@ const stats = computed(() => [
   display: flex;
   align-items: center;
   gap: 16px;
+}
+/* 图标底盘:取当前语义色 12% 作浅底圆角,呼应 banner 头像,避免图标"裸浮" */
+.stat-ico {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 .stat-val {
   font-size: 28px;
