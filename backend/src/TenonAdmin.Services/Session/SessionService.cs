@@ -19,6 +19,7 @@ public class SessionService(
     ICacheProvider cache,
     AdminSecurityOptions security,
     ISecurityPolicyProvider policy,
+    ICurrentUser currentUser,
     TimeProvider time) : ISessionService
 {
     // 同一用户的"淘汰旧会话 + 开新会话"串行化锁(单实例内)。避免并发登录各自读到同一活跃集合、
@@ -44,7 +45,16 @@ public class SessionService(
             // 会话行 + 刷新令牌成对写入包事务(P2-16):半写不留"在线却不可刷新"的僵尸会话
             var result = await sessions.Db.Ado.UseTranAsync(async () =>
             {
-                await sessions.InsertAsync(new SysSession { SessionId = sessionId, UserId = user.Id, Account = user.Account, ExpiresAt = expiresAt });
+                // IP/UA 取自当前登录请求(与 LogService 同款,登录前即可读到);会话行是登录时快照,刷新不重写
+                await sessions.InsertAsync(new SysSession
+                {
+                    SessionId = sessionId,
+                    UserId = user.Id,
+                    Account = user.Account,
+                    Ip = currentUser.IpAddress,
+                    UserAgent = currentUser.UserAgent,
+                    ExpiresAt = expiresAt,
+                });
                 await refreshTokens.InsertAsync(new SysRefreshToken
                 {
                     SessionId = sessionId,

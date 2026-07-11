@@ -22,11 +22,11 @@ public class SysSession : BaseEntity
     [SugarColumn(Length = 64, ColumnDescription = "登录账号")]
     public string Account { get; set; } = "";
 
-    /// <summary>登录 IP(原文);T6 登录日志接入时填充,当前留空</summary>
+    /// <summary>登录 IP(原文);登录开会话时由当前请求填充</summary>
     [SugarColumn(Length = 64, IsNullable = true, ColumnDescription = "登录 IP")]
     public string? Ip { get; set; }
 
-    /// <summary>User-Agent(原文);T6 接入时填充</summary>
+    /// <summary>User-Agent(原文);登录开会话时由当前请求填充,前端解析成浏览器/系统展示</summary>
     [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "User-Agent")]
     public string? UserAgent { get; set; }
 
