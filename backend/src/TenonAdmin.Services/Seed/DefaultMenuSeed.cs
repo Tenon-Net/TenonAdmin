@@ -66,6 +66,7 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 57, ParentId = 20, Type = MenuType.Button, Title = "配置-新增", Permission = "POST:/api/v1/sys/config", Sort = 3, Enabled = true },
         new SysMenu { Id = 58, ParentId = 20, Type = MenuType.Button, Title = "配置-更新", Permission = "PUT:/api/v1/sys/config/{id}", Sort = 4, Enabled = true },
         new SysMenu { Id = 59, ParentId = 20, Type = MenuType.Button, Title = "配置-删除", Permission = "DELETE:/api/v1/sys/config/{id}", Sort = 5, Enabled = true },
+        new SysMenu { Id = 97, ParentId = 20, Type = MenuType.Button, Title = "配置-批量存值", Permission = "PUT:/api/v1/sys/config/batch", Sort = 28, Enabled = true },
 
         // 字典管理页(R5:DictController 主从 CRUD)。类型分页 21、项查询 22、项新增 23;写端点码 61-65;82 管理端项分页。
         new SysMenu { Id = 60, ParentId = 20, Type = MenuType.Menu, Title = "字典管理", Permission = "", Path = "/system/dict", Component = "system/dict/index", Icon = "ph:book-open-text-duotone", Sort = 2, Enabled = true, Visible = true },

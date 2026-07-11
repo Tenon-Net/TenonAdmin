@@ -251,6 +251,8 @@ export default {
     deleteConfirm: '确定删除配置「{name}」?',
     saved: '保存成功',
     deleted: '已删除',
+    tab: { base: '系统基础', other: '其他配置' },
+    base: { siteTitle: '站点标题' },
   },
   // 字典管理(R5,主从:左类型 / 右字典项)
   dict: {

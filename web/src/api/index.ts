@@ -172,6 +172,17 @@ export const configApi = {
     client.PUT('/api/v1/sys/config/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   remove: (id: number) =>
     client.DELETE('/api/v1/sys/config/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** 取某分组下全部配置(完整行,含 id/key/value),供分类配置中心结构化表单回填。 */
+  listByGroup: (group: string) =>
+    client
+      .GET('/api/v1/sys/config/page', { params: { query: { Current: 1, Size: 200, GroupCode: group } } })
+      .then((r) => unwrap<PagedList<SysConfig>>(r))
+      .then((p) => p.items),
+  /** 批量按键回写配置值(结构化表单保存);仅更新已存在键,未知键后端忽略。 */
+  saveBatch: (items: { configKey: string; configValue?: string | null }[]) =>
+    client.PUT('/api/v1/sys/config/batch', { body: items }).then((r) => unwrap<boolean>(r)),
+  /** 站点信息(匿名可读:站点标题等展示白名单)。 */
+  siteInfo: () => client.GET('/api/v1/sys/config/site', {}).then((r) => unwrap<{ title?: string | null }>(r)),
 }
 
 export const logApi = {

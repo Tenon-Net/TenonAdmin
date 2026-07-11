@@ -250,6 +250,8 @@ export default {
     deleteConfirm: 'Delete config "{name}"?',
     saved: 'Saved',
     deleted: 'Deleted',
+    tab: { base: 'General', other: 'Other' },
+    base: { siteTitle: 'Site title' },
   },
   // Dict management (R5, master-detail: types on the left, items on the right)
   dict: {

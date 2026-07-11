@@ -49,6 +49,24 @@ public class ConfigService(
     }
 
     /// <inheritdoc />
+    public virtual async Task<SiteInfoOutput> GetSiteInfoAsync() =>
+        new() { Title = await GetValueByKeyAsync(ConfigSeed.SITE_TITLE_KEY) };
+
+    /// <inheritdoc />
+    // ponytail: 少量键逐条查改足够;键集变大再合并成 IN 查询 + 批量更新。
+    public virtual async Task SaveValuesAsync(IReadOnlyCollection<ConfigBatchItem> items)
+    {
+        foreach (var item in items)
+        {
+            var entity = await configs.GetFirstAsync(c => c.ConfigKey == item.ConfigKey);
+            if (entity is null) continue; // 只更新已存在(预置)键,未知键忽略
+            entity.ConfigValue = item.ConfigValue;
+            await configs.UpdateAsync(entity);
+            await InvalidateAsync(entity.ConfigKey);
+        }
+    }
+
+    /// <inheritdoc />
     public virtual async Task<long> AddAsync(ConfigInput input)
     {
         // 查重纳入软删行:唯一索引覆盖已软删行,漏检会撞库唯一约束抛原生 500(P1-10)。已软删的键视为永久保留。

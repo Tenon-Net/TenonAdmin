@@ -19,6 +19,15 @@ public interface IConfigService
     /// </summary>
     Task<string?> GetValueByKeyAsync(string key);
 
+    /// <summary>取站点信息(匿名展示白名单:仅站点标题等安全暴露的键,不泄露任意配置)。</summary>
+    Task<SiteInfoOutput> GetSiteInfoAsync();
+
+    /// <summary>
+    /// 批量按键回写配置<b>值</b>(分类配置中心结构化表单用):仅更新已存在的键,未知键忽略;
+    /// 不改 Name/GroupCode/Sort;逐键失效缓存并广播变更。
+    /// </summary>
+    Task SaveValuesAsync(IReadOnlyCollection<ConfigBatchItem> items);
+
     /// <summary>新增配置,键已存在抛 <see cref="ErrorCode.ConfigKeyExists"/>,返回新 Id。</summary>
     Task<long> AddAsync(ConfigInput input);
 

@@ -349,6 +349,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/config/site": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 站点信息(匿名可读:登录前/无配置权限的用户取站点标题等展示白名单,不暴露任意配置) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfSiteInfoOutput"];
+                        "application/json": components["schemas"]["ResultOfSiteInfoOutput"];
+                        "text/json": components["schemas"]["ResultOfSiteInfoOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/config/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 批量按键回写配置值(分类配置中心结构化表单保存) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ConfigBatchItem"][];
+                    "text/json": components["schemas"]["ConfigBatchItem"][];
+                    "application/*+json": components["schemas"]["ConfigBatchItem"][];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/config": {
         parameters: {
             query?: never;
@@ -3069,6 +3151,13 @@ export interface components {
             /** @description 新密码 */
             newPassword?: string;
         };
+        /** @description 批量存值入参项:分类配置中心的结构化表单按键回写<b>值</b>(不碰 Name/GroupCode/Sort)。 */
+        ConfigBatchItem: {
+            /** @description 配置键 */
+            configKey?: string;
+            /** @description 配置值 */
+            configValue?: null | string;
+        };
         /** @description 系统配置新增/编辑入参(增改共用同一份字段;`ConfigKey` 编辑时不生效,见 Task ConfigService.UpdateAsync(long id, ConfigInput input))。 */
         ConfigInput: {
             /** @description 配置键(唯一,创建后不可修改) */
@@ -4121,6 +4210,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfSiteInfoOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["SiteInfoOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfstring: {
             /**
              * Format: int32
@@ -4374,6 +4484,11 @@ export interface components {
             roleId?: number | string;
             /** @description 授予的菜单 Id 列表(全量替换该角色现有授权;空列表 = 收回全部) */
             menuIds?: (number | string)[];
+        };
+        /** @description 站点信息(匿名可读的展示类配置白名单;登录前/无配置读权限的用户也能取)。 */
+        SiteInfoOutput: {
+            /** @description 站点标题(浏览器标题/登录页展示名) */
+            title?: null | string;
         };
         /**
          * @description 系统配置表——键值对形式的全局配置项(如站点名称、默认密码策略等),支持按 string? SysConfig.GroupCode 分组管理。

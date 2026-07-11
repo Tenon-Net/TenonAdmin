@@ -36,3 +36,20 @@ public record ConfigPageInput : PageInputBase
     /// <summary>分组编码(精确匹配,可选)</summary>
     public string? GroupCode { get; init; }
 }
+
+/// <summary>批量存值入参项:分类配置中心的结构化表单按键回写<b>值</b>(不碰 Name/GroupCode/Sort)。</summary>
+public record ConfigBatchItem
+{
+    /// <summary>配置键</summary>
+    public string ConfigKey { get; init; } = "";
+
+    /// <summary>配置值</summary>
+    public string? ConfigValue { get; init; }
+}
+
+/// <summary>站点信息(匿名可读的展示类配置白名单;登录前/无配置读权限的用户也能取)。</summary>
+public record SiteInfoOutput
+{
+    /// <summary>站点标题(浏览器标题/登录页展示名)</summary>
+    public string? Title { get; init; }
+}

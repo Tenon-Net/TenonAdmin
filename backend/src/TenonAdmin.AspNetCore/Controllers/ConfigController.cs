@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
@@ -30,6 +31,21 @@ public class ConfigController(IConfigService configs) : ControllerBase
     [RolePermission]
     public async Task<Result<string?>> GetValue(string key) =>
         Result<string?>.Ok(await configs.GetValueByKeyAsync(key));
+
+    /// <summary>站点信息(匿名可读:登录前/无配置权限的用户取站点标题等展示白名单,不暴露任意配置)</summary>
+    [HttpGet("site")]
+    [AllowAnonymous]
+    public async Task<Result<SiteInfoOutput>> Site() =>
+        Result<SiteInfoOutput>.Ok(await configs.GetSiteInfoAsync());
+
+    /// <summary>批量按键回写配置值(分类配置中心结构化表单保存)</summary>
+    [HttpPut("batch")]
+    [RolePermission]
+    public async Task<Result<bool>> Batch([FromBody] IReadOnlyCollection<ConfigBatchItem> items)
+    {
+        await configs.SaveValuesAsync(items);
+        return Result<bool>.Ok(true);
+    }
 
     /// <summary>新增配置,返回新 Id</summary>
     [HttpPost]
