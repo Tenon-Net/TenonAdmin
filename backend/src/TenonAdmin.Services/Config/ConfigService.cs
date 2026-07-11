@@ -49,8 +49,12 @@ public class ConfigService(
     }
 
     /// <inheritdoc />
-    public virtual async Task<SiteInfoOutput> GetSiteInfoAsync() =>
-        new() { Title = await GetValueByKeyAsync(ConfigSeed.SITE_TITLE_KEY) };
+    public virtual async Task<SiteInfoOutput> GetSiteInfoAsync() => new()
+    {
+        Title = await GetValueByKeyAsync(ConfigSeed.SITE_TITLE_KEY),
+        // 匿名暴露验证码开关(不含类型等内部细节),供登录页决定是否渲染验证码;缺失即视为关。
+        CaptchaEnabled = bool.TryParse(await GetValueByKeyAsync(CaptchaService.KEY_ENABLED), out var e) && e,
+    };
 
     /// <inheritdoc />
     // ponytail: 少量键逐条查改足够;键集变大再合并成 IN 查询 + 批量更新。

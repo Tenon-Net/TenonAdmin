@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NForm, NFormItem, NInput, NCheckbox, useMessage } from 'naive-ui'
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
-import { authApi } from '@/api'
+import { authApi, configApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
 import { btnGrad, glowSh } from '@/theme/mix'
@@ -28,6 +28,34 @@ const model = reactive(
 )
 const loading = ref(false)
 
+// 验证码:是否启用由匿名站点信息(sys.security.captcha.enabled)运行时驱动;启用才拉取并展示。
+const captchaEnabled = ref(false)
+const captchaId = ref('')
+const captchaSvg = ref('')
+const captchaCode = ref('')
+
+async function loadCaptcha() {
+  try {
+    const c = await authApi.captcha()
+    captchaId.value = c.captchaId
+    captchaSvg.value = c.svg
+  } catch {
+    // 拉取失败不阻塞登录页渲染;点击图形可重试
+  }
+}
+
+onMounted(async () => {
+  try {
+    const site = await configApi.siteInfo()
+    if (site.captchaEnabled) {
+      captchaEnabled.value = true
+      await loadCaptcha()
+    }
+  } catch {
+    // 站点信息拉取失败时按未启用处理(后端仍会强制,失败信息在提交时反馈)
+  }
+})
+
 // 英雄按钮:accent 派生渐变 + 发光(仅登录页/英雄区)。
 const heroStyle = computed(() => ({ background: btnGrad(app.accent), boxShadow: glowSh(app.accent) }))
 
@@ -46,14 +74,27 @@ async function onSubmit() {
     message.warning(t('login.required'))
     return
   }
+  if (captchaEnabled.value && !captchaCode.value) {
+    message.warning(t('login.captchaRequired'))
+    return
+  }
   loading.value = true
   try {
-    const res = await authApi.login({ account: model.account, password: model.password })
+    const res = await authApi.login({
+      account: model.account,
+      password: model.password,
+      ...(captchaEnabled.value ? { captchaId: captchaId.value, captchaCode: captchaCode.value } : {}),
+    })
     user.setSession(res)
     message.success(t('login.success'))
     router.replace('/')
   } catch (e) {
     message.error(translateError(e))
+    // 验证码一次性消费:登录失败后必刷新,避免复用作废票据
+    if (captchaEnabled.value) {
+      captchaCode.value = ''
+      await loadCaptcha()
+    }
   } finally {
     loading.value = false
   }
@@ -83,6 +124,20 @@ async function onSubmit() {
         >
           <template #prefix><Icon icon="ph:lock" /></template>
         </n-input>
+      </n-form-item>
+      <n-form-item v-if="captchaEnabled" :label="t('login.captcha')" path="captcha">
+        <div class="lf-captcha">
+          <n-input
+            v-model:value="captchaCode"
+            :placeholder="t('login.captchaPlaceholder')"
+            size="large"
+            @keyup.enter="onSubmit"
+          >
+            <template #prefix><Icon icon="ph:shield-check" /></template>
+          </n-input>
+          <!-- SVG 来自本站后端;点击重取一张(一次性票据) -->
+          <button type="button" class="lf-captcha-img" :title="t('login.captchaPlaceholder')" @click="loadCaptcha" v-html="captchaSvg" />
+        </div>
       </n-form-item>
       <div class="row">
         <n-checkbox v-model:checked="model.remember">{{ t('login.remember') }}</n-checkbox>
@@ -127,6 +182,31 @@ async function onSubmit() {
 }
 .row {
   margin: 4px 0 20px;
+}
+/* 验证码:输入框 + 可点击刷新的 SVG 图形(等高对齐) */
+.lf-captcha {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  align-items: stretch;
+}
+.lf-captcha-img {
+  flex: 0 0 auto;
+  height: 40px;
+  min-width: 96px;
+  padding: 0;
+  border: 1px solid var(--lf-border, var(--color-border));
+  border-radius: var(--radius-md);
+  background: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lf-captcha-img :deep(svg) {
+  height: 100%;
+  width: auto;
 }
 .hero-btn {
   width: 100%;

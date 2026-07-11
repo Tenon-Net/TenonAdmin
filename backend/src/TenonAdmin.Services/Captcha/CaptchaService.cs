@@ -9,13 +9,14 @@ namespace TenonAdmin.Services;
 public class CaptchaService(
     ICaptchaProvider provider,
     ICacheProvider cache,
+    IConfigService config,
     AdminSecurityOptions security) : ICaptchaService
 {
+    /// <summary>验证码启用开关配置键(GroupCode=security;后端强制执行时读此键,改值即时生效)。</summary>
+    internal const string KEY_ENABLED = "sys.security.captcha.enabled";
+
     // ponytail: 票据有效期固定 2 分钟(够人看清并输入)。要可配再提到 AdminCaptchaOptions,当前无此需求。
     private static readonly TimeSpan TTL = TimeSpan.FromMinutes(2);
-
-    /// <inheritdoc />
-    public bool Enabled => security.Captcha.Enabled;
 
     /// <inheritdoc />
     public virtual async Task<CaptchaOutput> IssueAsync()
@@ -29,7 +30,9 @@ public class CaptchaService(
     /// <inheritdoc />
     public virtual async Task ValidateAsync(string? captchaId, string? code)
     {
-        if (!Enabled) return;   // 未启用:直通(登录不校验验证码)
+        // 是否强制校验先读 SysConfig(改值即时生效),缺失/解析失败回退 Options 默认。
+        var enabled = bool.TryParse(await config.GetValueByKeyAsync(KEY_ENABLED), out var e) ? e : security.Captcha.Enabled;
+        if (!enabled) return;   // 未启用:直通(登录不校验验证码)
 
         AdminException.ThrowIf(string.IsNullOrEmpty(captchaId) || string.IsNullOrEmpty(code), ErrorCode.CaptchaExpired);
 

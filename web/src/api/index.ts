@@ -51,6 +51,7 @@ export const authApi = {
   login: (body: { account: string; password: string; captchaId?: string; captchaCode?: string }) =>
     client.POST('/api/v1/auth/login', { body }).then((r) => unwrap<LoginOutput>(r)),
   logout: () => client.POST('/api/v1/auth/logout', {}).then((r) => unwrap<boolean>(r)),
+  captcha: () => client.GET('/api/v1/auth/captcha', {}).then((r) => unwrap<{ captchaId: string; svg: string }>(r)),
 }
 
 export const personalApi = {
@@ -185,7 +186,10 @@ export const configApi = {
   saveBatch: (items: { configKey: string; configValue?: string | null }[]) =>
     client.PUT('/api/v1/sys/config/batch', { body: items }).then((r) => unwrap<boolean>(r)),
   /** 站点信息(匿名可读:站点标题等展示白名单)。 */
-  siteInfo: () => client.GET('/api/v1/sys/config/site', {}).then((r) => unwrap<{ title?: string | null }>(r)),
+  siteInfo: () =>
+    client
+      .GET('/api/v1/sys/config/site', {})
+      .then((r) => unwrap<{ title?: string | null; captchaEnabled?: boolean }>(r)),
 }
 
 export const logApi = {

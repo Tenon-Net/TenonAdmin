@@ -27,6 +27,9 @@ const BOOL_FIELDS = [
   'sys.security.password.requireSpecial',
 ] as const
 
+// 验证码开关单独成节(与密码开关分区展示,故不并入 BOOL_FIELDS 的密码循环)
+const CAPTCHA_KEY = 'sys.security.captcha.enabled'
+
 const nums = reactive<Record<string, number>>({})
 const bools = reactive<Record<string, boolean>>({})
 const loading = ref(true)
@@ -41,6 +44,7 @@ onMounted(async () => {
     const map = new Map(rows.map((r) => [r.configKey, r.configValue ?? '']))
     for (const f of NUM_FIELDS) nums[f.key] = Number(map.get(f.key)) || f.min
     for (const k of BOOL_FIELDS) bools[k] = map.get(k) === 'true'
+    bools[CAPTCHA_KEY] = map.get(CAPTCHA_KEY) === 'true'
   } catch (e) {
     message.error(translateError(e))
   } finally {
@@ -55,6 +59,7 @@ async function save() {
     await configApi.saveBatch([
       ...NUM_FIELDS.map((f) => ({ configKey: f.key, configValue: String(nums[f.key]) })),
       ...BOOL_FIELDS.map((k) => ({ configKey: k, configValue: String(bools[k]) })),
+      { configKey: CAPTCHA_KEY, configValue: String(bools[CAPTCHA_KEY]) },
     ])
     message.success(t('config.saved'))
   } catch (e) {
@@ -90,6 +95,11 @@ async function save() {
       </n-form-item>
       <n-form-item :label="label('sys.security.session.refreshMinutes')">
         <n-input-number v-model:value="nums['sys.security.session.refreshMinutes']" :min="1" style="width: 160px" />
+      </n-form-item>
+
+      <n-divider title-placement="left">{{ t('config.security.captcha.title') }}</n-divider>
+      <n-form-item :label="label('sys.security.captcha.enabled')">
+        <n-switch v-model:value="bools[CAPTCHA_KEY]" />
       </n-form-item>
 
       <n-form-item :label="' '" :show-feedback="false">

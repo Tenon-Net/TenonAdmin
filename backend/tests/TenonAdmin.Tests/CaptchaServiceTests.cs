@@ -11,7 +11,21 @@ public class CaptchaServiceTests
     {
         var cache = new MemoryCacheProvider(new MemoryCache(new MemoryCacheOptions()), new AdminCacheOptions());
         var sec = new AdminSecurityOptions { Captcha = new AdminCaptchaOptions { Enabled = enabled } };
-        return new CaptchaService(p, cache, sec);
+        // 配置桩不含键 → GetValueByKeyAsync 返回 null → 启用与否回退到 Options,保留这些用例原意
+        return new CaptchaService(p, cache, new NullConfig(), sec);
+    }
+
+    // 只需 GetValueByKeyAsync 返回 null 的空配置桩;其余方法本测试不触及。
+    private sealed class NullConfig : IConfigService
+    {
+        public Task<string?> GetValueByKeyAsync(string key) => Task.FromResult<string?>(null);
+        public Task<PagedList<SysConfig>> PageAsync(ConfigPageInput input) => throw new NotImplementedException();
+        public Task<SysConfig> GetAsync(long id) => throw new NotImplementedException();
+        public Task<SiteInfoOutput> GetSiteInfoAsync() => throw new NotImplementedException();
+        public Task SaveValuesAsync(IReadOnlyCollection<ConfigBatchItem> items) => throw new NotImplementedException();
+        public Task<long> AddAsync(ConfigInput input) => throw new NotImplementedException();
+        public Task UpdateAsync(long id, ConfigInput input) => throw new NotImplementedException();
+        public Task DeleteAsync(long id) => throw new NotImplementedException();
     }
 
     private static async Task<ErrorCode?> ErrOf(Func<Task> a)
