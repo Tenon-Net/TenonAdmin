@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, ConfigInput, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, ChunkInitOutput, ConfigInput, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -302,6 +302,28 @@ export const fileApi = {
     client.DELETE('/api/v1/sys/file/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 批量软删除文件记录(物理文件保留)。 */
   batchRemove: (ids: number[]) => client.POST('/api/v1/sys/file/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
+  // ── 分片 / 断点续传上传 ──
+  /** 分片初始化:秒传探测 + 已收分片(断点续传)。 */
+  chunkInit: (body: { fileHash: string; fileName: string; totalSize: number; chunkCount: number }) =>
+    client.POST('/api/v1/sys/file/chunk/init', { body }).then((r) => unwrap<ChunkInitOutput>(r)),
+  /** 上传单个分片(multipart:uploadId + index + chunk),同 upload 用 bodySerializer 建 FormData。 */
+  chunkUpload: (uploadId: string, index: number, chunk: Blob) =>
+    client
+      .POST('/api/v1/sys/file/chunk', {
+        body: { uploadId, index, chunk: chunk as unknown as string },
+        bodySerializer: (body) => {
+          const b = body as unknown as { uploadId: string; index: number; chunk: Blob }
+          const fd = new FormData()
+          fd.append('uploadId', b.uploadId)
+          fd.append('index', String(b.index))
+          fd.append('chunk', b.chunk)
+          return fd
+        },
+      })
+      .then((r) => unwrap<boolean>(r)),
+  /** 完成:触发服务端合并 + 哈希校验 + 三道关 + 落库。 */
+  chunkComplete: (body: { uploadId: string; fileHash: string; fileName: string; chunkCount: number }) =>
+    client.POST('/api/v1/sys/file/chunk/complete', { body }).then((r) => unwrap<FileUploadOutput>(r)),
 }
 
 export const sessionApi = {

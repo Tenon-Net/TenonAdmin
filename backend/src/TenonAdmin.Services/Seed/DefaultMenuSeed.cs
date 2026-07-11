@@ -135,5 +135,9 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 79, ParentId = 30, Type = MenuType.Button, Title = "文件-下载", Permission = "GET:/api/v1/sys/file/{id}/download", Sort = 3, Enabled = true },
         new SysMenu { Id = 80, ParentId = 30, Type = MenuType.Button, Title = "文件-删除", Permission = "DELETE:/api/v1/sys/file/{id}", Sort = 4, Enabled = true },
         new SysMenu { Id = 86, ParentId = 30, Type = MenuType.Button, Title = "文件-批量删除", Permission = "POST:/api/v1/sys/file/batch-delete", Sort = 5, Enabled = true },
+        // 分片/断点续传上传(§4 分片上传):init 秒传探测 + chunk 传片 + complete 合并落库。
+        new SysMenu { Id = 104, ParentId = 30, Type = MenuType.Button, Title = "文件-分片初始化", Permission = "POST:/api/v1/sys/file/chunk/init", Sort = 6, Enabled = true },
+        new SysMenu { Id = 105, ParentId = 30, Type = MenuType.Button, Title = "文件-分片上传", Permission = "POST:/api/v1/sys/file/chunk", Sort = 7, Enabled = true },
+        new SysMenu { Id = 106, ParentId = 30, Type = MenuType.Button, Title = "文件-分片完成", Permission = "POST:/api/v1/sys/file/chunk/complete", Sort = 8, Enabled = true },
     ];
 }

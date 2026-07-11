@@ -164,6 +164,18 @@ export interface FileUploadOutput {
   sizeBytes: number
 }
 
+/** 分片上传初始化出参(后端 ChunkInitOutput)。 */
+export interface ChunkInitOutput {
+  /** 秒传命中(同内容哈希已存在,无需再传)。 */
+  uploaded: boolean
+  /** 秒传命中时的既有文件。 */
+  file?: FileUploadOutput | null
+  /** 上传会话 Id(= 文件哈希);非秒传时返回。 */
+  uploadId?: string | null
+  /** 服务端已收到的分片下标(断点续传:跳过已传)。 */
+  receivedIndexes: number[]
+}
+
 /** 在线会话行(后端 OnlineSessionItem;只读 + 强退按 sessionId)。int64 收敛为 number。 */
 export interface OnlineSessionItem {
   sessionId: string

@@ -67,4 +67,30 @@ public class SysFileController(IFileService files) : ControllerBase
         await files.DeleteBatchAsync(input.Ids);
         return Result<bool>.Ok(true);
     }
+
+    // ── 分片 / 断点续传上传(设计 §4 分片上传) ──────────────────────────
+
+    /// <summary>分片上传-初始化:秒传探测(同哈希已存在直接复用)+ 返回已收分片(断点续传)</summary>
+    [HttpPost("chunk/init")]
+    [RolePermission]
+    public async Task<Result<ChunkInitOutput>> ChunkInit(ChunkInitInput input) =>
+        Result<ChunkInitOutput>.Ok(await files.ChunkInitAsync(input));
+
+    /// <summary>分片上传-上传一个分片(multipart:uploadId + index + chunk 文件部件)</summary>
+    [HttpPost("chunk")]
+    [RolePermission]
+    public async Task<Result<bool>> Chunk([FromForm] string uploadId, [FromForm] int index, IFormFile chunk)
+    {
+        // 同 Upload:控制器把 IFormFile 拆成流喂服务,IFormFile 不入 Services 层。
+        await using var stream = chunk.OpenReadStream();
+        await files.SaveChunkAsync(new ChunkSaveInput { UploadId = uploadId, Index = index, Content = stream });
+        return Result<bool>.Ok(true);
+    }
+
+    /// <summary>分片上传-完成:合并 + 哈希校验 + 三道关 + 落库,返回文件记录</summary>
+    [HttpPost("chunk/complete")]
+    [RolePermission]
+    [OperationLog("分片上传")]
+    public async Task<Result<FileUploadOutput>> ChunkComplete(ChunkCompleteInput input) =>
+        Result<FileUploadOutput>.Ok(await files.ChunkCompleteAsync(input));
 }

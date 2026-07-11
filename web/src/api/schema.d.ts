@@ -2513,6 +2513,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/file/chunk/init": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 分片上传-初始化:秒传探测(同哈希已存在直接复用)+ 返回已收分片(断点续传) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChunkInitInput"];
+                    "text/json": components["schemas"]["ChunkInitInput"];
+                    "application/*+json": components["schemas"]["ChunkInitInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfChunkInitOutput"];
+                        "application/json": components["schemas"]["ResultOfChunkInitOutput"];
+                        "text/json": components["schemas"]["ResultOfChunkInitOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/file/chunk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 分片上传-上传一个分片(multipart:uploadId + index + chunk 文件部件) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        uploadId?: string;
+                    } & {
+                        /** Format: int32 */
+                        index?: number | string;
+                    } & {
+                        chunk?: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/file/chunk/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 分片上传-完成:合并 + 哈希校验 + 三道关 + 落库,返回文件记录 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChunkCompleteInput"];
+                    "text/json": components["schemas"]["ChunkCompleteInput"];
+                    "application/*+json": components["schemas"]["ChunkCompleteInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfFileUploadOutput"];
+                        "application/json": components["schemas"]["ResultOfFileUploadOutput"];
+                        "text/json": components["schemas"]["ResultOfFileUploadOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/log/op/page": {
         parameters: {
             query?: never;
@@ -3519,6 +3656,51 @@ export interface components {
             /** @description 新密码 */
             newPassword?: string;
         };
+        /** @description 分片上传完成入参:触发合并 + 完整性校验 + 三道关 + 落库。 */
+        ChunkCompleteInput: {
+            /** @description 上传会话 Id(= FileHash) */
+            uploadId: string;
+            /** @description 整文件 SHA-256(hex,小写);服务端合并后重算并比对 */
+            fileHash: string;
+            /** @description 原始文件名(含后缀) */
+            fileName: string;
+            /**
+             * Format: int32
+             * @description 分片总数(合并时校验 0..ChunkCount-1 齐全)
+             */
+            chunkCount?: number | string;
+            /** @description 声明的 Content-Type(仅记录) */
+            contentType?: null | string;
+        };
+        /** @description 分片上传初始化入参:客户端切片前先算整文件 SHA-256,携文件元信息问询秒传/断点。 */
+        ChunkInitInput: {
+            /** @description 整文件内容 SHA-256(hex,小写);兼作 uploadId 与秒传去重键 */
+            fileHash: string;
+            /** @description 原始文件名(含后缀) */
+            fileName: string;
+            /**
+             * Format: int64
+             * @description 整文件大小(字节;仅参考,最终以合并结果为准)
+             */
+            totalSize?: number | string;
+            /**
+             * Format: int32
+             * @description 分片总数
+             */
+            chunkCount?: number | string;
+            /** @description 声明的 Content-Type(仅记录) */
+            contentType?: null | string;
+        };
+        /** @description 分片上传初始化出参:秒传命中直接给文件,否则给 uploadId + 已收分片(断点续传)。 */
+        ChunkInitOutput: {
+            /** @description 是否秒传命中(同 hash 已存在,无需再传) */
+            uploaded?: boolean;
+            file?: null | components["schemas"]["FileUploadOutput"];
+            /** @description 上传会话 Id(= FileHash);后续传分片/完成时回传 */
+            uploadId?: null | string;
+            /** @description 服务端已收到的分片下标(断点续传:客户端据此跳过已传) */
+            receivedIndexes?: (number | string)[];
+        };
         /** @description 批量存值入参项:分类配置中心的结构化表单按键回写<b>值</b>(不碰 Name/GroupCode/Sort)。 */
         ConfigBatchItem: {
             /** @description 配置键 */
@@ -4204,6 +4386,27 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["CaptchaOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfChunkInitOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["ChunkInitOutput"];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -5154,6 +5357,8 @@ export interface components {
              * @description 文件大小(字节)
              */
             sizeBytes?: number | string;
+            /** @description 内容 SHA-256(hex,小写);分片上传落库,供「秒传」按内容去重。单文件上传暂不计算(留 null)。 */
+            hash?: null | string;
             /** Format: int64 */
             id?: number | string;
             /** Format: date-time */

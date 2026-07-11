@@ -25,6 +25,11 @@ const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   successMsg: t('file.deleted'),
 })
 
+function onUploaded() {
+  message.success(t('file.uploaded'))
+  tableRef.value?.refresh()
+}
+
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -98,9 +103,14 @@ const columns: ProTableColumn<SysFile>[] = [
     @error="(e) => message.error(translateError(e))"
   >
     <template #toolbar>
-      <FileUpload v-auth="'POST:/api/v1/sys/file/upload'" :show-file-list="false" @uploaded="() => tableRef?.refresh()">
+      <FileUpload v-auth="'POST:/api/v1/sys/file/upload'" :show-file-list="false" @uploaded="onUploaded">
         <n-button type="primary">
           <template #icon><AppIcon icon="ph:upload-simple" :size="16" /></template>{{ t('file.upload') }}
+        </n-button>
+      </FileUpload>
+      <FileUpload v-auth="'POST:/api/v1/sys/file/chunk/init'" chunked :show-file-list="false" @uploaded="onUploaded">
+        <n-button>
+          <template #icon><AppIcon icon="ph:stack" :size="16" /></template>{{ t('file.uploadChunked') }}
         </n-button>
       </FileUpload>
       <n-button

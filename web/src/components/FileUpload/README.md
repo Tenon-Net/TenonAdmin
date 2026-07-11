@@ -4,6 +4,12 @@
 
 `inheritAttrs:false` + `v-bind="$attrs"`:`accept`、`multiple`、`show-file-list`、`:max` 等一切透传给 `n-upload`,不重复声明。默认 slot 即触发器(通常放一颗按钮)。
 
+## Props
+
+| 属性 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `chunked` | `boolean` | `false` | 走分片 / 断点续传 / 秒传(`utils/chunkUpload`):切片 + 算整文件 SHA-256 → `chunk/init`(秒传探测 / 已收分片)→ 并发传缺失片 → `chunk/complete`(服务端合并 + 哈希校验 + 三道关);进度回传 n-upload 进度条。默认 `false` 走单次 `fileApi.upload`。 |
+
 ## Emits
 
 | 事件 | 载荷 | 说明 |

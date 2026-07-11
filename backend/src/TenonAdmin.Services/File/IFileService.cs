@@ -25,4 +25,21 @@ public interface IFileService
 
     /// <summary>批量软删除文件记录(物理文件同样保留);不存在的 Id 静默跳过。</summary>
     Task DeleteBatchAsync(IReadOnlyCollection<long> ids);
+
+    // ── 分片 / 断点续传上传(设计 §4 分片上传) ──────────────────────────
+
+    /// <summary>
+    /// 分片上传初始化:按内容哈希探测<b>秒传</b>(命中直接复用既有文件),否则返回 uploadId +
+    /// 已收分片下标(<b>断点续传</b>)。
+    /// </summary>
+    Task<ChunkInitOutput> ChunkInitAsync(ChunkInitInput input);
+
+    /// <summary>保存单个分片(幂等:重传覆盖)。</summary>
+    Task SaveChunkAsync(ChunkSaveInput input);
+
+    /// <summary>
+    /// 分片上传完成:按序合并 → 校验合并后哈希与声明一致 → 复用上传三道关(大小/后缀)→ 落存储 + 记账。
+    /// 缺片抛 <see cref="ErrorCode.ChunkMissing"/>,哈希不符抛 <see cref="ErrorCode.ChunkHashMismatch"/>。
+    /// </summary>
+    Task<FileUploadOutput> ChunkCompleteAsync(ChunkCompleteInput input);
 }

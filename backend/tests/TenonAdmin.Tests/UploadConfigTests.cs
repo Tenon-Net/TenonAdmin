@@ -22,8 +22,12 @@ public class UploadConfigTests
         public Task DeleteAsync(long id) => throw new NotImplementedException();
     }
 
-    private static FileService Make(Dictionary<string, string?> config, AdminUploadOptions? options = null) =>
-        new(null!, null!, options ?? new AdminUploadOptions(), new StubConfig(config), TimeProvider.System);
+    private static FileService Make(Dictionary<string, string?> config, AdminUploadOptions? options = null)
+    {
+        var opts = options ?? new AdminUploadOptions();
+        // 三例均在校验阶段(写盘/落库/分片之前)抛,故 repo/storage 传 null、chunks 传实例但不触及。
+        return new(null!, null!, new ChunkStorage(opts), opts, new StubConfig(config), TimeProvider.System);
+    }
 
     private static FileUploadInput Upload(string name, long size) =>
         new() { Content = Stream.Null, FileName = name, Size = size, ContentType = null };

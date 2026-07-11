@@ -348,6 +348,8 @@ export default {
     contentType: 'Type',
     uploadTime: 'Uploaded',
     upload: 'Upload',
+    uploadChunked: 'Chunked upload',
+    uploaded: 'Uploaded successfully',
     download: 'Download',
     deleteConfirm: 'Delete file "{name}"?',
     deleted: 'Deleted',
@@ -512,7 +514,7 @@ export default {
     dict: { typeNotFound: 'Dict type not found', typeCodeExists: 'Dict type code exists', itemNotFound: 'Dict item not found' },
     config: { notFound: 'Config not found', keyExists: 'Config key exists' },
     notice: { notFound: 'Notification not found' },
-    file: { empty: 'Empty file', tooLarge: 'File too large', extNotAllowed: 'File type not allowed', notFound: 'File not found' },
+    file: { empty: 'Empty file', tooLarge: 'File too large', extNotAllowed: 'File type not allowed', notFound: 'File not found', chunkMissing: 'Missing chunk, please retry upload', chunkHashMismatch: 'File integrity check failed, please re-upload' },
     system: { internal: 'Internal server error' },
   },
 }

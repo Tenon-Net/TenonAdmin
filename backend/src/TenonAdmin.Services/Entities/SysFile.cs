@@ -10,6 +10,7 @@ namespace TenonAdmin.Services;
 /// 软删只隐藏记录,物理文件的回收留给清理任务(v1.x),本任务不删盘(ponytail:先记账,清理后置)。</para>
 /// </summary>
 [SugarTable("sys_file", TableDescription = "文件记录")]
+[SugarIndex("idx_sys_file_hash", nameof(SysFile.Hash), OrderByType.Asc)]
 public class SysFile : BaseEntity
 {
     /// <summary>原始文件名(含后缀,仅展示与下载命名用)</summary>
@@ -31,4 +32,8 @@ public class SysFile : BaseEntity
     /// <summary>文件大小(字节)</summary>
     [SugarColumn(ColumnDescription = "文件大小(字节)")]
     public long SizeBytes { get; set; }
+
+    /// <summary>内容 SHA-256(hex,小写);分片上传落库,供「秒传」按内容去重。单文件上传暂不计算(留 null)。</summary>
+    [SugarColumn(Length = 64, IsNullable = true, ColumnDescription = "内容哈希(SHA-256)")]
+    public string? Hash { get; set; }
 }

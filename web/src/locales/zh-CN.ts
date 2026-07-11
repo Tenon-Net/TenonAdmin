@@ -349,6 +349,8 @@ export default {
     contentType: '类型',
     uploadTime: '上传时间',
     upload: '上传文件',
+    uploadChunked: '分片上传',
+    uploaded: '上传成功',
     download: '下载',
     deleteConfirm: '确定删除文件「{name}」?',
     deleted: '已删除',
@@ -516,7 +518,7 @@ export default {
     dict: { typeNotFound: '字典类型不存在', typeCodeExists: '字典类型编码已存在', itemNotFound: '字典项不存在' },
     config: { notFound: '配置不存在', keyExists: '配置键已存在' },
     notice: { notFound: '通知不存在' },
-    file: { empty: '文件为空', tooLarge: '文件超出大小限制', extNotAllowed: '不支持的文件类型', notFound: '文件不存在' },
+    file: { empty: '文件为空', tooLarge: '文件超出大小限制', extNotAllowed: '不支持的文件类型', notFound: '文件不存在', chunkMissing: '分片缺失,请重试上传', chunkHashMismatch: '文件校验失败,请重新上传' },
     system: { internal: '服务器内部错误' },
   },
 }

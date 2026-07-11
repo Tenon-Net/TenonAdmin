@@ -16,6 +16,7 @@ namespace TenonAdmin.Services;
 public class FileService(
     IRepository<SysFile> files,
     IFileStorage storage,
+    ChunkStorage chunks,
     AdminUploadOptions options,
     IConfigService config,
     TimeProvider timeProvider) : IFileService
@@ -28,44 +29,102 @@ public class FileService(
     /// <inheritdoc />
     public virtual async Task<FileUploadOutput> UploadAsync(FileUploadInput input)
     {
-        AdminException.ThrowIf(input.Size <= 0, ErrorCode.FileEmpty);
-
         var ext = Path.GetExtension(input.FileName).ToLowerInvariant();
-        // 大小上限/后缀白名单先读 SysConfig(改值即时生效),缺失或解析失败回退 Options 默认。
-        // 后缀按扩展名判定,不采信可伪造的 Content-Type(§14);空白名单表示不限。
+        await ValidateUploadAsync(ext, input.Size);
+        // 单文件上传不计算内容哈希(IFormFile 流单向不可回读);hash 留 null,秒传主要惠及分片(大)文件。
+        return await PersistAsync(input.Content, input.FileName, ext, input.ContentType, input.Size, hash: null);
+    }
+
+    /// <summary>
+    /// 上传三道关的前两关(设计 §14):空文件 + 后缀白名单(按扩展名,不信 Content-Type)+ 大小上限。
+    /// 单文件与分片完成共用同一处强制点。白名单/上限先读 SysConfig(改值即时生效),缺失回退 Options。
+    /// </summary>
+    protected virtual async Task ValidateUploadAsync(string ext, long size)
+    {
+        AdminException.ThrowIf(size <= 0, ErrorCode.FileEmpty);
+
         var allowed = ParseExts(await config.GetValueByKeyAsync(KEY_ALLOWED_EXTS)) ?? options.AllowedExtensions;
-        var extAllowed = allowed.Length == 0
-            || allowed.Contains(ext, StringComparer.OrdinalIgnoreCase);
+        var extAllowed = allowed.Length == 0 || allowed.Contains(ext, StringComparer.OrdinalIgnoreCase);
         AdminException.ThrowIf(!extAllowed, ErrorCode.FileExtNotAllowed,
             new Dictionary<string, object?> { ["ext"] = ext });
 
         var maxSizeMb = int.TryParse(await config.GetValueByKeyAsync(KEY_MAX_SIZE), out var mb) ? mb : options.MaxSizeMb;
-        var maxBytes = (long)maxSizeMb * 1024 * 1024;
-        AdminException.ThrowIf(input.Size > maxBytes, ErrorCode.FileTooLarge,
+        AdminException.ThrowIf(size > (long)maxSizeMb * 1024 * 1024, ErrorCode.FileTooLarge,
             new Dictionary<string, object?> { ["maxSizeMb"] = maxSizeMb });
+    }
 
-        // 重写存储名:按日期分目录(避免单目录文件过多)+ GUIDv7 唯一名(时间有序、不可猜、无原始名成分)
+    /// <summary>
+    /// 第三关 + 落存储 + 记账:重写成安全存储名(<c>{日期}/{GUIDv7}{后缀}</c>,原始名绝不进物理路径)→
+    /// 交 <see cref="IFileStorage"/> 落盘 → 写 <c>sys_file</c>。单文件与分片完成共用。
+    /// </summary>
+    protected virtual async Task<FileUploadOutput> PersistAsync(Stream content, string fileName, string ext, string? contentType, long size, string? hash)
+    {
         var date = timeProvider.GetUtcNow().ToString("yyyyMMdd");
         var storagePath = $"{date}/{Guid.CreateVersion7():N}{ext}";
-        await storage.SaveAsync(input.Content, storagePath);
+        await storage.SaveAsync(content, storagePath);
 
         var entity = new SysFile
         {
-            OriginalName = input.FileName,
+            OriginalName = fileName,
             StoragePath = storagePath,
             Extension = ext,
-            ContentType = input.ContentType,
-            SizeBytes = input.Size,
+            ContentType = contentType,
+            SizeBytes = size,
+            Hash = hash,
         };
         await files.InsertAsync(entity);   // 雪花 Id / 上传时间 / 上传人由 AOP 回填
 
-        return new FileUploadOutput
+        return ToOutput(entity);
+    }
+
+    private static FileUploadOutput ToOutput(SysFile f) => new()
+    {
+        Id = f.Id,
+        OriginalName = f.OriginalName,
+        StoragePath = f.StoragePath,
+        SizeBytes = f.SizeBytes,
+    };
+
+    /// <inheritdoc />
+    public virtual async Task<ChunkInitOutput> ChunkInitAsync(ChunkInitInput input)
+    {
+        // 秒传:同内容哈希已存在则直接复用,免传。
+        var existing = await files.GetFirstAsync(f => f.Hash == input.FileHash);
+        if (existing is not null)
+            return new ChunkInitOutput { Uploaded = true, File = ToOutput(existing) };
+
+        // uploadId 直接用 FileHash;返回已收分片供断点续传。
+        var received = await chunks.GetReceivedIndexesAsync(input.FileHash);
+        return new ChunkInitOutput { Uploaded = false, UploadId = input.FileHash, ReceivedIndexes = received };
+    }
+
+    /// <inheritdoc />
+    public virtual Task SaveChunkAsync(ChunkSaveInput input) =>
+        chunks.SaveChunkAsync(input.UploadId, input.Index, input.Content);
+
+    /// <inheritdoc />
+    public virtual async Task<FileUploadOutput> ChunkCompleteAsync(ChunkCompleteInput input)
+    {
+        // 秒传兜底:完成时再查一次(并发下他人可能刚传完同 hash),命中则弃分片、复用既有。
+        var existing = await files.GetFirstAsync(f => f.Hash == input.FileHash);
+        if (existing is not null)
         {
-            Id = entity.Id,
-            OriginalName = entity.OriginalName,
-            StoragePath = entity.StoragePath,
-            SizeBytes = entity.SizeBytes,
-        };
+            await chunks.DiscardAsync(input.UploadId);
+            return ToOutput(existing);
+        }
+
+        var ext = Path.GetExtension(input.FileName).ToLowerInvariant();
+        var merged = await chunks.MergeAsync(input.UploadId, input.ChunkCount);   // 缺片抛 ChunkMissing
+        await using var content = merged.Content;   // DeleteOnClose:用完即删合并临时文件
+
+        // 完整性:服务端单遍重算的 SHA-256 必须与客户端声明一致(防漏片/传输损坏)。
+        AdminException.ThrowIf(!string.Equals(merged.Sha256, input.FileHash, StringComparison.OrdinalIgnoreCase),
+            ErrorCode.ChunkHashMismatch);
+        await ValidateUploadAsync(ext, merged.Size);   // 复用三道关(大小/后缀)
+
+        var output = await PersistAsync(content, input.FileName, ext, input.ContentType, merged.Size, input.FileHash);
+        await chunks.DiscardAsync(input.UploadId);
+        return output;
     }
 
     /// <inheritdoc />

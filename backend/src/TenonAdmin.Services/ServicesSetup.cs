@@ -67,8 +67,9 @@ public static class ServicesSetup
         // 日志模块(§4,T6):操作日志(过滤器写)+ 登录日志(AuthService 写);写入尽力而为
         services.TryAddScoped<ILogService, LogService>();
 
-        // 文件模块(§4/§14,T7):本地存储(无状态,单例)+ 上传服务(校验/重写名/记账,Scoped)
+        // 文件模块(§4/§14,T7):本地存储(无状态,单例)+ 分片临时存储(无状态,单例)+ 上传服务(校验/重写名/记账,Scoped)
         services.TryAddSingleton<IFileStorage, LocalFileStorage>();
+        services.TryAddSingleton<ChunkStorage>();
         services.TryAddScoped<IFileService, FileService>();
 
         // 个人中心(§4,T8):当前用户对自己账号的读改(看/改资料、验旧改密)

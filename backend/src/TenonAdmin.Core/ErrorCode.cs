@@ -186,6 +186,14 @@ public enum ErrorCode
     [MsgKey("error.file.notFound")]
     FileNotFound = 44004,
 
+    /// <summary>分片上传缺少分片(合并时发现空缺);args 可携带 index</summary>
+    [MsgKey("error.file.chunkMissing")]
+    ChunkMissing = 44005,
+
+    /// <summary>分片合并后内容哈希与客户端声明不一致(传输损坏/漏片)</summary>
+    [MsgKey("error.file.chunkHashMismatch")]
+    ChunkHashMismatch = 44006,
+
     // ── 45xxx 消息通知 ───────────────────────────────────────────────
 
     /// <summary>通知不存在(或已被删除)</summary>
