@@ -27,7 +27,7 @@ const tableRef = ref<ProTableInst<SysPosition>>()
 const toInput = (r: SysPosition): PositionInput => ({ name: r.name, code: r.code, sort: r.sort, enabled: r.enabled })
 
 const columns: ProTableColumn<SysPosition>[] = [
-  { key: 'code', title: () => t('position.code'), search: true },
+  { key: 'code', title: () => t('position.code') },
   { key: 'name', title: () => t('position.name'), search: true },
   { key: 'sort', title: () => t('position.sort'), width: 80 },
   {
