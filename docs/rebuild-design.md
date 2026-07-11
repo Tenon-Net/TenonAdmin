@@ -260,7 +260,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
       }
     },
     "Id": {
-      "WorkerId": 0                     // 雪花机器号(0–1023);多实例水平扩展须为每实例配不同值
+      "WorkerId": 0                     // 雪花机器号(0–63);多实例水平扩展须为每实例配不同值
     },
     "Notify": {
       "Mode": "Polling",               // v1.0 仅 Polling;Mqtt 由 v1.x 可选包 TenonAdmin.Mqtt 提供,v1 不暴露
