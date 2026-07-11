@@ -49,6 +49,12 @@ export default {
     fullscreen: '全屏',
     exitFullscreen: '退出全屏',
     settings: '系统设置',
+    notice: {
+      title: '消息通知',
+      empty: '暂无通知',
+      markAllRead: '全部已读',
+      viewAll: '查看全部',
+    },
   },
   settings: {
     title: '系统设置',
@@ -347,6 +353,22 @@ export default {
     deleteConfirm: '确定删除文件「{name}」?',
     deleted: '已删除',
   },
+  // 消息通知(NoticeController 管理端:发布 / 列表 / 删除)
+  notice: {
+    title: '消息通知',
+    noticeTitle: '标题',
+    content: '内容',
+    type: '类型',
+    typeNotice: '通知',
+    typeAnnouncement: '公告',
+    publishTime: '发布时间',
+    publish: '发布通知',
+    publishTitle: '发布通知',
+    titleRequired: '请输入标题',
+    deleteConfirm: '确定删除通知「{title}」?',
+    published: '已发布',
+    deleted: '已删除',
+  },
   // 在线会话(R7,只读 + 踢人)
   session: {
     title: '在线会话',
@@ -493,6 +515,7 @@ export default {
     menu: { notFound: '菜单不存在', hasChildren: '存在子节点,不可删除', invalidParent: '上级菜单无效(不能指向自身或其子节点)' },
     dict: { typeNotFound: '字典类型不存在', typeCodeExists: '字典类型编码已存在', itemNotFound: '字典项不存在' },
     config: { notFound: '配置不存在', keyExists: '配置键已存在' },
+    notice: { notFound: '通知不存在' },
     file: { empty: '文件为空', tooLarge: '文件超出大小限制', extNotAllowed: '不支持的文件类型', notFound: '文件不存在' },
     system: { internal: '服务器内部错误' },
   },

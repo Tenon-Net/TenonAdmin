@@ -97,6 +97,12 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 48, ParentId = 20, Type = MenuType.Button, Title = "模块-更新", Permission = "PUT:/api/v1/sys/module/{id}", Sort = 21, Enabled = true },
         new SysMenu { Id = 49, ParentId = 20, Type = MenuType.Button, Title = "模块-删除", Permission = "DELETE:/api/v1/sys/module/{id}", Sort = 22, Enabled = true },
 
+        // 消息通知页(NoticeController:管理端发布/列表/删除)。用户端(我的/未读数/标记已读)走 [ActiveSession] 无需权限码,故不设按钮。
+        new SysMenu { Id = 100, ParentId = 20, Type = MenuType.Menu, Title = "消息通知", Permission = "", Path = "/system/notice", Component = "system/notice/index", Icon = "ph:bell-duotone", Sort = 5, Enabled = true, Visible = true },
+        new SysMenu { Id = 101, ParentId = 20, Type = MenuType.Button, Title = "通知-发布", Permission = "POST:/api/v1/sys/notice", Sort = 30, Enabled = true },
+        new SysMenu { Id = 102, ParentId = 20, Type = MenuType.Button, Title = "通知-分页", Permission = "GET:/api/v1/sys/notice/page", Sort = 31, Enabled = true },
+        new SysMenu { Id = 103, ParentId = 20, Type = MenuType.Button, Title = "通知-删除", Permission = "DELETE:/api/v1/sys/notice/{id}", Sort = 32, Enabled = true },
+
         // 权限码锚点(暂无独立页面):探针。挂靠系统运维目录,仅承载权限码。
         // (角色授权/数据范围锚点 Id 3/4 已挪到组织管理的角色管理页组,见上。)
         new SysMenu { Id = 2, ParentId = 20, Type = MenuType.Button, Title = "连通性探针", Permission = "GET:/api/v1/ping", Sort = 23, Enabled = true },

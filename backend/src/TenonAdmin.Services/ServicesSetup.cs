@@ -58,6 +58,9 @@ public static class ServicesSetup
         services.TryAddScoped<IDictService, DictService>();
         services.TryAddScoped<IConfigService, ConfigService>();
 
+        // 消息通知模块(§4 消息中心):管理员广播发布 + 用户端我的通知/未读数/标记已读(轮询模型)
+        services.TryAddScoped<INoticeService, NoticeService>();
+
         // 安全策略读取层(§14):DB(SysConfig)优先、Options 兜底,收口锁定/会话时长/密码复杂度的取值
         services.TryAddScoped<ISecurityPolicyProvider, SecurityPolicyProvider>();
 

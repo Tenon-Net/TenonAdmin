@@ -315,3 +315,35 @@ export interface UserDetail {
   roleIds: number[]
   createTime?: string
 }
+
+/** 通知类型(后端 NoticeType;存库 int,枚举值须与后端一致)。 */
+export enum NoticeType {
+  Notice = 1,
+  Announcement = 2,
+}
+
+/** 通知行(后端 SysNotice;管理端列表全字段,int64 收敛为 number)。 */
+export interface SysNotice {
+  id: number
+  title: string
+  content?: string | null
+  type: NoticeType
+  createTime?: string
+}
+
+/** 我的通知项(后端 NoticeMineItem;含当前用户已读标记)。 */
+export interface NoticeMineItem {
+  id: number
+  title: string
+  content?: string | null
+  type: NoticeType
+  publishTime: string
+  isRead: boolean
+}
+
+/** 发布通知入参(后端 NoticePublishInput)。 */
+export interface NoticePublishInput {
+  title: string
+  content?: string | null
+  type: NoticeType
+}

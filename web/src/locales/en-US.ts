@@ -48,6 +48,12 @@ export default {
     fullscreen: 'Fullscreen',
     exitFullscreen: 'Exit fullscreen',
     settings: 'Settings',
+    notice: {
+      title: 'Notifications',
+      empty: 'No notifications',
+      markAllRead: 'Mark all read',
+      viewAll: 'View all',
+    },
   },
   settings: {
     title: 'Settings',
@@ -346,6 +352,22 @@ export default {
     deleteConfirm: 'Delete file "{name}"?',
     deleted: 'Deleted',
   },
+  // Notifications (NoticeController admin side: publish / list / delete)
+  notice: {
+    title: 'Notifications',
+    noticeTitle: 'Title',
+    content: 'Content',
+    type: 'Type',
+    typeNotice: 'Notice',
+    typeAnnouncement: 'Announcement',
+    publishTime: 'Published at',
+    publish: 'Publish',
+    publishTitle: 'Publish notification',
+    titleRequired: 'Title is required',
+    deleteConfirm: 'Delete notification "{title}"?',
+    published: 'Published',
+    deleted: 'Deleted',
+  },
   // Online sessions (R7, read-only + force logout)
   session: {
     title: 'Online sessions',
@@ -489,6 +511,7 @@ export default {
     menu: { notFound: 'Menu not found', hasChildren: 'Menu has children and cannot be deleted', invalidParent: 'Invalid parent menu (cannot be itself or its descendant)' },
     dict: { typeNotFound: 'Dict type not found', typeCodeExists: 'Dict type code exists', itemNotFound: 'Dict item not found' },
     config: { notFound: 'Config not found', keyExists: 'Config key exists' },
+    notice: { notFound: 'Notification not found' },
     file: { empty: 'Empty file', tooLarge: 'File too large', extNotAllowed: 'File type not allowed', notFound: 'File not found' },
     system: { internal: 'Internal server error' },
   },

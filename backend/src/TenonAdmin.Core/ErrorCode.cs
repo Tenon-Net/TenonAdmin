@@ -18,6 +18,7 @@ namespace TenonAdmin.Core;
 ///   <item><term>42000–42999</term><description>用户 / 组织 / 角色 / 菜单</description></item>
 ///   <item><term>43000–43999</term><description>字典 / 配置</description></item>
 ///   <item><term>44000–44999</term><description>文件上传</description></item>
+///   <item><term>45000–45999</term><description>消息通知</description></item>
 ///   <item><term>50000–50999</term><description>系统内部错误</description></item>
 /// </list>
 /// </summary>
@@ -184,6 +185,12 @@ public enum ErrorCode
     /// <summary>文件记录不存在(或物理文件已丢失)</summary>
     [MsgKey("error.file.notFound")]
     FileNotFound = 44004,
+
+    // ── 45xxx 消息通知 ───────────────────────────────────────────────
+
+    /// <summary>通知不存在(或已被删除)</summary>
+    [MsgKey("error.notice.notFound")]
+    NoticeNotFound = 45001,
 
     // ── 50xxx 系统内部 ───────────────────────────────────────────────
 

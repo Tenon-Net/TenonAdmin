@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, ConfigInput, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, OnlineSessionItem, OrgInput, PagedList, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, ConfigInput, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -314,6 +314,31 @@ export const sessionApi = {
   /** 强制下线:按 sessionId 踢会话。 */
   kick: (sessionId: string) =>
     client.DELETE('/api/v1/sys/session/{sessionId}', { params: { path: { sessionId } } }).then((r) => unwrap<boolean>(r)),
+}
+
+export const noticeApi = {
+  // ── 管理端 ──
+  /** 管理端分页(全量);搜索键 title/type → PascalCase 查询参。 */
+  page: (params: { page: number; pageSize: number; title?: string; type?: number }) =>
+    client
+      .GET('/api/v1/sys/notice/page', {
+        params: { query: { Current: params.page, Size: params.pageSize, Title: params.title, Type: params.type } },
+      })
+      .then((r) => unwrap<PagedList<SysNotice>>(r))
+      .then((p) => ({ items: p.items, total: p.total })),
+  publish: (body: NoticePublishInput) => client.POST('/api/v1/sys/notice', { body }).then((r) => unwrap<number>(r)),
+  remove: (id: number) => client.DELETE('/api/v1/sys/notice/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  // ── 用户端(任何登录用户) ──
+  /** 我的通知分页(含已读标记)。 */
+  mine: (params: { page: number; pageSize: number }) =>
+    client
+      .GET('/api/v1/sys/notice/mine', { params: { query: { Current: params.page, Size: params.pageSize } } })
+      .then((r) => unwrap<PagedList<NoticeMineItem>>(r))
+      .then((p) => ({ items: p.items, total: p.total })),
+  /** 当前用户未读通知数(顶栏角标轮询)。 */
+  unreadCount: () => client.GET('/api/v1/sys/notice/unread-count', {}).then((r) => unwrap<number>(r)),
+  markRead: (id: number) => client.PUT('/api/v1/sys/notice/{id}/read', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  markAllRead: () => client.PUT('/api/v1/sys/notice/read-all', {}).then((r) => unwrap<boolean>(r)),
 }
 
 export const menuApi = {
