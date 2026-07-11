@@ -16,7 +16,8 @@ public class AuthService(
     ISessionService sessions,
     ILogService logService,
     ILoginLockService loginLock,
-    ICaptchaService captcha) : IAuthService
+    ICaptchaService captcha,
+    ISecurityPolicyProvider policy) : IAuthService
 {
     /// <summary>
     /// 防账号枚举的陪跑哈希:账号不存在时也执行一次真实代价的哈希校验,
@@ -86,7 +87,9 @@ public class AuthService(
     protected virtual async Task<TokenPair> CreateTokenAsync(SysUser user)
     {
         var sessionId = Guid.CreateVersion7().ToString("N");
-        var pair = tokens.Create(new TokenSubject(user.Id, user.Account, sessionId, user.IsSuperAdmin, user.OrgId));
+        var (accessMin, refreshMin) = await policy.GetSessionTtlAsync();   // 令牌时长运行时可配
+        var pair = tokens.Create(new TokenSubject(user.Id, user.Account, sessionId, user.IsSuperAdmin, user.OrgId),
+            TimeSpan.FromMinutes(accessMin), TimeSpan.FromMinutes(refreshMin));
         await sessions.OpenAsync(user, sessionId, pair);
         return pair;
     }

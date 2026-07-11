@@ -17,6 +17,7 @@ public class UserService(
     IPasswordHasher hasher,
     IRbacService rbac,
     ISessionService sessions,
+    ISecurityPolicyProvider policy,
     AdminSecurityOptions security) : IUserService
 {
     // 生成随机初始口令的字符集:去掉易混字符(0/O、1/l/I),含大小写+数字+符号。
@@ -112,6 +113,9 @@ public class UserService(
             await users.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(u => u.Account == input.Account),
             ErrorCode.AccountExists);
 
+        // 仅校验管理员显式提供的口令;未提供时走随机/默认强口令,不套策略(生成的随机口令无特殊字符,避免误伤)
+        if (!string.IsNullOrEmpty(input.Password)) await policy.ValidatePasswordAsync(input.Password);
+
         var user = new SysUser
         {
             Account = input.Account,
@@ -195,6 +199,9 @@ public class UserService(
     {
         var user = await users.GetByIdAsync(id);
         AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
+
+        // 仅校验显式提供的口令;未提供时走随机/默认强口令(同 AddAsync 约定)
+        if (!string.IsNullOrEmpty(newPassword)) await policy.ValidatePasswordAsync(newPassword);
 
         var password = ResolveInitialPassword(newPassword);
         user!.Password = hasher.Hash(password);

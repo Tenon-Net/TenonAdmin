@@ -10,8 +10,17 @@ public class LoginLockServiceTests
     private static LoginLockService Make(int maxFail)
     {
         var cache = new MemoryCacheProvider(new MemoryCache(new MemoryCacheOptions()), new AdminCacheOptions());
-        var security = new AdminSecurityOptions { LoginLock = new AdminLoginLockOptions { MaxFailCount = maxFail, LockMinutes = 10 } };
-        return new LoginLockService(cache, security);
+        // 单元测试聚焦锁定计数本身,用固定策略桩喂阈值/时长(不牵扯 SysConfig/Options 解析)
+        return new LoginLockService(cache, new FixedPolicy(maxFail, 10));
+    }
+
+    /// <summary>返回固定安全策略的极小桩(只喂 LoginLock 需要的阈值/时长)。</summary>
+    private sealed class FixedPolicy(int maxFail, int lockMinutes) : ISecurityPolicyProvider
+    {
+        public Task<(int MaxFailCount, int LockMinutes)> GetLoginLockAsync() => Task.FromResult((maxFail, lockMinutes));
+        public Task<(int AccessMinutes, int RefreshMinutes)> GetSessionTtlAsync() => Task.FromResult((120, 10080));
+        public Task<PasswordPolicy> GetPasswordPolicyAsync() => Task.FromResult(new PasswordPolicy(8, true, true, true, false));
+        public Task ValidatePasswordAsync(string password) => Task.CompletedTask;
     }
 
     private static async Task<bool> IsLocked(LoginLockService s, string account)

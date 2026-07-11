@@ -49,4 +49,11 @@ public interface ITokenProvider
 {
     /// <summary>为指定主体签发一对新令牌(过期时长由 Jwt 配置节决定)</summary>
     TokenPair Create(TokenSubject subject);
+
+    /// <summary>
+    /// 同上,但可覆盖访问/刷新令牌时长(会话超时运行时可配:调用方从 <c>ISecurityPolicyProvider</c> 取有效分钟数传入)。
+    /// 某一方传 <c>null</c> 则回退到 Jwt 配置默认。默认实现忽略覆盖、等价 <see cref="Create(TokenSubject)"/>——
+    /// 现有自定义令牌实现无需改动即可编译;要支持会话时长可配,覆写本方法即可。
+    /// </summary>
+    TokenPair Create(TokenSubject subject, TimeSpan? accessTtl, TimeSpan? refreshTtl) => Create(subject);
 }

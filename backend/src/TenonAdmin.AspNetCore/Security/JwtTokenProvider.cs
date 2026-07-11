@@ -19,10 +19,14 @@ public class JwtTokenProvider(AdminJwtOptions options, SymmetricSecurityKey sign
     private static readonly JsonWebTokenHandler HANDLER = new();
 
     /// <inheritdoc />
-    public virtual TokenPair Create(TokenSubject subject)
+    public virtual TokenPair Create(TokenSubject subject) => Create(subject, null, null);
+
+    /// <inheritdoc />
+    public virtual TokenPair Create(TokenSubject subject, TimeSpan? accessTtl, TimeSpan? refreshTtl)
     {
         var now = time.GetUtcNow();
-        var expiresAt = now.AddMinutes(options.ExpireMinutes);
+        // TTL 覆盖优先(会话超时运行时可配),缺省回退 Jwt 配置默认
+        var expiresAt = now.Add(accessTtl ?? TimeSpan.FromMinutes(options.ExpireMinutes));
 
         var descriptor = new SecurityTokenDescriptor
         {
@@ -38,7 +42,7 @@ public class JwtTokenProvider(AdminJwtOptions options, SymmetricSecurityKey sign
             AccessToken: HANDLER.CreateToken(descriptor),
             ExpiresAt: expiresAt,
             RefreshToken: CreateRefreshToken(),
-            RefreshExpiresAt: now.AddMinutes(options.RefreshExpireMinutes));
+            RefreshExpiresAt: now.Add(refreshTtl ?? TimeSpan.FromMinutes(options.RefreshExpireMinutes)));
     }
 
     /// <summary>访问令牌的 claim 集合(要附加自定义 claim,覆写这步)</summary>

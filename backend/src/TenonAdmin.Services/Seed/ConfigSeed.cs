@@ -14,5 +14,17 @@ internal sealed class ConfigSeed : ISeedData<SysConfig>
     public IEnumerable<SysConfig> HasData() =>
     [
         new SysConfig { Id = 1, ConfigKey = SITE_TITLE_KEY, ConfigValue = "TenonAdmin", Name = "站点标题", GroupCode = "sys", Sort = 1, Remark = "浏览器标题与登录页展示名" },
+
+        // 安全策略(GroupCode=security):后端强制执行时经 ISecurityPolicyProvider 读取,改值即时生效。
+        // 默认值须与 SecurityPolicyProvider 兜底一致(= 现 Options 默认)。
+        new SysConfig { Id = 2, ConfigKey = SecurityPolicyProvider.KEY_MAX_FAIL, ConfigValue = "5", Name = "登录失败锁定次数", GroupCode = SecurityPolicyProvider.GROUP, Sort = 10, Remark = "连续密码错误达此次数即锁定;≤0 关闭" },
+        new SysConfig { Id = 3, ConfigKey = SecurityPolicyProvider.KEY_LOCK_MIN, ConfigValue = "10", Name = "锁定时长(分钟)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 11, Remark = "锁定时长,也是失败计数的滑动过期窗口" },
+        new SysConfig { Id = 4, ConfigKey = SecurityPolicyProvider.KEY_MIN_LEN, ConfigValue = "8", Name = "密码最小长度", GroupCode = SecurityPolicyProvider.GROUP, Sort = 20, Remark = "新口令最小长度" },
+        new SysConfig { Id = 5, ConfigKey = SecurityPolicyProvider.KEY_REQ_UPPER, ConfigValue = "true", Name = "密码须含大写字母", GroupCode = SecurityPolicyProvider.GROUP, Sort = 21, Remark = null },
+        new SysConfig { Id = 6, ConfigKey = SecurityPolicyProvider.KEY_REQ_LOWER, ConfigValue = "true", Name = "密码须含小写字母", GroupCode = SecurityPolicyProvider.GROUP, Sort = 22, Remark = null },
+        new SysConfig { Id = 7, ConfigKey = SecurityPolicyProvider.KEY_REQ_DIGIT, ConfigValue = "true", Name = "密码须含数字", GroupCode = SecurityPolicyProvider.GROUP, Sort = 23, Remark = null },
+        new SysConfig { Id = 8, ConfigKey = SecurityPolicyProvider.KEY_REQ_SPECIAL, ConfigValue = "false", Name = "密码须含特殊字符", GroupCode = SecurityPolicyProvider.GROUP, Sort = 24, Remark = "特殊字符指非字母数字" },
+        new SysConfig { Id = 9, ConfigKey = SecurityPolicyProvider.KEY_ACCESS_MIN, ConfigValue = "120", Name = "访问令牌时长(分钟)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 30, Remark = "访问令牌有效期,到期需用刷新令牌换发" },
+        new SysConfig { Id = 10, ConfigKey = SecurityPolicyProvider.KEY_REFRESH_MIN, ConfigValue = "10080", Name = "刷新令牌时长(分钟)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 31, Remark = "刷新令牌有效期,决定最长免登录时长(默认 7 天)" },
     ];
 }

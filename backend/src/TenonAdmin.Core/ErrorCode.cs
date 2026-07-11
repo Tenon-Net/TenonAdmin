@@ -141,6 +141,10 @@ public enum ErrorCode
     [MsgKey("error.role.codeExists")]
     RoleCodeExists = 42018,
 
+    /// <summary>新口令不满足密码复杂度策略;args 携带 minLength/requireUpper/requireLower/requireDigit/requireSpecial</summary>
+    [MsgKey("error.user.passwordTooWeak")]
+    PasswordTooWeak = 42019,
+
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 
     /// <summary>字典类型不存在</summary>

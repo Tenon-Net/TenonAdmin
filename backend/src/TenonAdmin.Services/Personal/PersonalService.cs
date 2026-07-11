@@ -10,6 +10,7 @@ namespace TenonAdmin.Services;
 public class PersonalService(
     IRepository<SysUser> users,
     IPasswordHasher hasher,
+    ISecurityPolicyProvider policy,
     IMenuService menu) : IPersonalService
 {
     /// <inheritdoc />
@@ -46,7 +47,7 @@ public class PersonalService(
         // 验旧密码:错就按"密码错误"拒(与登录同码,不泄漏更多信息)
         AdminException.ThrowIf(!hasher.Verify(input.OldPassword, user!.Password), ErrorCode.PasswordWrong);
 
-        // ponytail: 新密码强度校验待 T8 密码策略子轮接入(PasswordPolicy:MinLength 等);此处只落新哈希。
+        await policy.ValidatePasswordAsync(input.NewPassword);   // 新口令须满足密码复杂度策略(运行时可配)
         user.Password = hasher.Hash(input.NewPassword);
         await users.UpdateAsync(user);
     }

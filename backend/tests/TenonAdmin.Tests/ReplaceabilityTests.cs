@@ -93,8 +93,8 @@ public class ReplaceabilityTests
     /// <summary>用户覆写登录出参组装步骤(模板方法覆写,§5.3)</summary>
     private sealed class OverridingAuthService(
         IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens, ISessionService sessions,
-        ILogService logService, ILoginLockService loginLock, ICaptchaService captcha)
-        : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha)
+        ILogService logService, ILoginLockService loginLock, ICaptchaService captcha, ISecurityPolicyProvider policy)
+        : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy)
     {
         protected override LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) =>
             base.BuildLoginOutput(user, pair) with { Name = "OVERRIDDEN" };

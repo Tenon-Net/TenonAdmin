@@ -58,6 +58,9 @@ public static class ServicesSetup
         services.TryAddScoped<IDictService, DictService>();
         services.TryAddScoped<IConfigService, ConfigService>();
 
+        // 安全策略读取层(§14):DB(SysConfig)优先、Options 兜底,收口锁定/会话时长/密码复杂度的取值
+        services.TryAddScoped<ISecurityPolicyProvider, SecurityPolicyProvider>();
+
         // 日志模块(§4,T6):操作日志(过滤器写)+ 登录日志(AuthService 写);写入尽力而为
         services.TryAddScoped<ILogService, LogService>();
 
