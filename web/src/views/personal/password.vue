@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
+import { NCard, NForm, NFormItem, NInput, NButton, NAlert, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import PasswordStrength from '@/components/PasswordStrength/index.vue'
 import { personalApi, authApi } from '@/api'
@@ -50,6 +50,9 @@ async function submit() {
 
 <template>
   <n-card :bordered="true" :title="t('changePassword.title')" style="max-width: 460px">
+    <n-alert v-if="user.userInfo?.mustChangePassword" type="warning" style="margin-bottom: 16px">
+      {{ t('changePassword.forcedHint') }}
+    </n-alert>
     <n-form :model="model" label-placement="top">
       <n-form-item :label="t('changePassword.oldPassword')">
         <n-input v-model:value="model.oldPassword" type="password" show-password-on="click" />

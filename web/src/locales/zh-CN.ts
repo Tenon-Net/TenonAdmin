@@ -470,6 +470,7 @@ export default {
     required: '请填写原密码和新密码',
     mismatch: '两次输入的新密码不一致',
     changed: '密码已修改,请重新登录',
+    forcedHint: '首次登录或密码被重置,请先修改密码后再使用系统。',
     strength: { label: '密码强度', weak: '弱', fair: '中', strong: '强' },
     rules: {
       minLength: '至少 {n} 位',

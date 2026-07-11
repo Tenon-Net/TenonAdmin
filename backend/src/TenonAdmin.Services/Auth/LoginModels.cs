@@ -33,4 +33,7 @@ public record LoginOutput
     public required long UserId { get; init; }
     public required string Account { get; init; }
     public required string Name { get; init; }
+
+    /// <summary>是否需强制修改密码(管理员建号/重置后首登为 true);前端据此强制跳转改密页,后端不拦登录。</summary>
+    public bool MustChangePassword { get; init; }
 }

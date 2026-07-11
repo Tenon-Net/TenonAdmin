@@ -136,5 +136,6 @@ public class AuthService(
         UserId = user.Id,
         Account = user.Account,
         Name = user.Name,
+        MustChangePassword = user.MustChangePassword,   // 不拦登录,仅透传给前端强制跳转改密
     };
 }

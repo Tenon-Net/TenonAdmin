@@ -43,4 +43,11 @@ public class SysUser : BaseEntity
     /// <summary>默认应用/模块 Id(多应用门户):登录后默认进入的应用;可空(未设=让用户选)。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "默认模块 Id")]
     public long? DefaultModuleId { get; set; }
+
+    /// <summary>
+    /// 是否需在下次登录后强制修改密码(设计 §14)。管理员建号/重置密码时置 true,
+    /// 用户自助改密成功后清 false。不拦登录,仅经登录出参透传给前端做强制跳转。
+    /// </summary>
+    [SugarColumn(ColumnDescription = "是否需强制改密")]
+    public bool MustChangePassword { get; set; }
 }

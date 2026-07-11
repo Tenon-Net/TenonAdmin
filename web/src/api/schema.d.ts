@@ -3797,6 +3797,8 @@ export interface components {
             userId: number | string;
             account: string;
             name: string;
+            /** @description 是否需强制修改密码(管理员建号/重置后首登为 true);前端据此强制跳转改密页,后端不拦登录。 */
+            mustChangePassword?: boolean;
         };
         /**
          * @description 菜单新增/编辑入参。long? MenuInput.ModuleId<b>仅顶级目录(ParentId==0)有效</b>,

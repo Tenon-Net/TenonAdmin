@@ -49,6 +49,7 @@ public class PersonalService(
 
         await policy.ValidatePasswordAsync(input.NewPassword);   // 新口令须满足密码复杂度策略(运行时可配)
         user.Password = hasher.Hash(input.NewPassword);
+        user.MustChangePassword = false;   // 自助改密成功即清除强制改密标志(§14)
         await users.UpdateAsync(user);
     }
 

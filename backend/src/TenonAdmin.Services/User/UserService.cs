@@ -125,6 +125,7 @@ public class UserService(
             PositionId = input.PositionId,
             Enabled = input.Enabled,
             IsSuperAdmin = false,       // 接口永不建超管(防提权);超管只能种子/手工建
+            MustChangePassword = true,  // 管理员建号:初始口令由管理员/系统设定,强制用户首登改密(§14)
         };
         // 用户 + 角色成对写入包事务:任一步失败整体回滚,不留"已提交但无角色"的幽灵用户(P2-18)
         await InTransactionAsync(async () =>
@@ -205,6 +206,7 @@ public class UserService(
 
         var password = ResolveInitialPassword(newPassword);
         user!.Password = hasher.Hash(password);
+        user.MustChangePassword = true;   // 管理员重置:强制用户下次登录后改密(§14)
         await users.UpdateAsync(user);
         return password;   // 返回明文仅供管理员当场转达;不落日志(调用方注意脱敏)
     }

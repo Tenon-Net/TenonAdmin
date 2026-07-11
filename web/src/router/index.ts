@@ -28,6 +28,13 @@ router.beforeEach(async (to) => {
 
   if (!user.isLoggedIn) return { path: '/login', replace: true }
 
+  // 强制改密守卫(§14):管理员建号/重置后首登,未改密前只允许停留在改密页,阻断其它一切导航
+  // (含应用选择/门户重建)。改密页是静态路由,无需动态路由就绪即可渲染,故放在 routesReady 重建之前,
+  // 直接放行改密页避免"重建→选应用→又被弹回"的循环。改密成功后现有流程强制登出重登,标志由后端清零。
+  if (user.userInfo?.mustChangePassword) {
+    return to.path === '/personal/password' ? true : { path: '/personal/password', replace: true }
+  }
+
   // 刷新白屏守卫:动态路由只活在内存,F5/深链时 routesReady=false → 重建后重解析。
   // 注意:不能用 to.meta.public 短路——未注册的动态路由会先命中 catch-all(404),
   // 若按 public 放行就会错显 404 而非重建。

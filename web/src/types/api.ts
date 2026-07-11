@@ -10,6 +10,8 @@ export interface LoginOutput {
   userId: number
   account: string
   name: string
+  /** 是否需强制改密(管理员建号/重置后首登为 true)。 */
+  mustChangePassword: boolean
 }
 
 /** 我的应用列表(后端 MyModulesOutput)。 */

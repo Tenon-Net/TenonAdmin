@@ -467,6 +467,7 @@ export default {
     required: 'Please enter the current and new password',
     mismatch: 'Passwords do not match',
     changed: 'Password changed, please sign in again',
+    forcedHint: 'First login or password reset — please change your password before using the system.',
     strength: { label: 'Password strength', weak: 'Weak', fair: 'Fair', strong: 'Strong' },
     rules: {
       minLength: 'At least {n} characters',

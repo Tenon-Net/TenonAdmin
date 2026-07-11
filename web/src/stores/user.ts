@@ -5,6 +5,8 @@ interface UserInfo {
   userId: number
   account: string
   name: string
+  /** 是否需强制改密(管理员建号/重置后首登为 true);路由守卫据此强制跳改密页。 */
+  mustChangePassword: boolean
 }
 
 /** 令牌 + 用户信息。持久化(localStorage)——刷新后仍登录。 */
@@ -22,7 +24,7 @@ export const useUserStore = defineStore('user', {
     setSession(data: LoginOutput) {
       this.accessToken = data.accessToken
       this.refreshToken = data.refreshToken
-      this.userInfo = { userId: data.userId, account: data.account, name: data.name }
+      this.userInfo = { userId: data.userId, account: data.account, name: data.name, mustChangePassword: data.mustChangePassword ?? false }
     },
     clear() {
       this.accessToken = ''
