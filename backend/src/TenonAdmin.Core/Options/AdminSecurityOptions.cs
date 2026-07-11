@@ -52,7 +52,16 @@ public class AdminLoginLockOptions
 /// </summary>
 public class AdminRateLimitOptions
 {
-    /// <summary>是否启用限流(默认启用;§14 安全基线)。</summary>
+    /// <summary>配置键(GroupCode=<c>security</c>,与其他安全策略同 Tab)。运行时经 <c>RuntimeRateLimit</c> 快照读取。</summary>
+    public const string KEY_ENABLED = "sys.security.rateLimit.enabled";
+    public const string KEY_WINDOW = "sys.security.rateLimit.windowSeconds";
+    public const string KEY_PERMIT = "sys.security.rateLimit.permitPerWindow";
+    public const string KEY_AUTH_PERMIT = "sys.security.rateLimit.authPermitPerWindow";
+
+    /// <summary>
+    /// 是否启用限流(默认启用;§14 安全基线)。<b>此项为部署期硬总开关</b>:为 <c>false</c> 时无论 DB 配置如何都不限流
+    /// (供消费方彻底关闭 / 测试隔离);为 <c>true</c>(默认)时,实际开关与阈值由 DB(<c>SysConfig</c>)运行时调控。
+    /// </summary>
     public bool Enabled { get; set; } = true;
 
     /// <summary>限流窗口(秒),全局与认证端点共用同一窗口长度。</summary>

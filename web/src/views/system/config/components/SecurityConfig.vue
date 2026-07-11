@@ -18,6 +18,9 @@ const NUM_FIELDS = [
   { key: 'sys.security.password.minLength', min: 1 },
   { key: 'sys.security.session.accessMinutes', min: 1 },
   { key: 'sys.security.session.refreshMinutes', min: 1 },
+  { key: 'sys.security.rateLimit.windowSeconds', min: 1 },
+  { key: 'sys.security.rateLimit.permitPerWindow', min: 0 },
+  { key: 'sys.security.rateLimit.authPermitPerWindow', min: 0 },
 ] as const
 
 const BOOL_FIELDS = [
@@ -29,6 +32,8 @@ const BOOL_FIELDS = [
 
 // 验证码开关单独成节(与密码开关分区展示,故不并入 BOOL_FIELDS 的密码循环)
 const CAPTCHA_KEY = 'sys.security.captcha.enabled'
+// 限流开关(单独成节;阈值走 NUM_FIELDS)
+const RATELIMIT_KEY = 'sys.security.rateLimit.enabled'
 
 const nums = reactive<Record<string, number>>({})
 const bools = reactive<Record<string, boolean>>({})
@@ -45,6 +50,7 @@ onMounted(async () => {
     for (const f of NUM_FIELDS) nums[f.key] = Number(map.get(f.key)) || f.min
     for (const k of BOOL_FIELDS) bools[k] = map.get(k) === 'true'
     bools[CAPTCHA_KEY] = map.get(CAPTCHA_KEY) === 'true'
+    bools[RATELIMIT_KEY] = map.get(RATELIMIT_KEY) === 'true'
   } catch (e) {
     message.error(translateError(e))
   } finally {
@@ -60,6 +66,7 @@ async function save() {
       ...NUM_FIELDS.map((f) => ({ configKey: f.key, configValue: String(nums[f.key]) })),
       ...BOOL_FIELDS.map((k) => ({ configKey: k, configValue: String(bools[k]) })),
       { configKey: CAPTCHA_KEY, configValue: String(bools[CAPTCHA_KEY]) },
+      { configKey: RATELIMIT_KEY, configValue: String(bools[RATELIMIT_KEY]) },
     ])
     message.success(t('config.saved'))
   } catch (e) {
@@ -100,6 +107,20 @@ async function save() {
       <n-divider title-placement="left">{{ t('config.security.captcha.title') }}</n-divider>
       <n-form-item :label="label('sys.security.captcha.enabled')">
         <n-switch v-model:value="bools[CAPTCHA_KEY]" />
+      </n-form-item>
+
+      <n-divider title-placement="left">{{ t('config.security.rateLimit.title') }}</n-divider>
+      <n-form-item :label="label('sys.security.rateLimit.enabled')">
+        <n-switch v-model:value="bools[RATELIMIT_KEY]" />
+      </n-form-item>
+      <n-form-item :label="label('sys.security.rateLimit.windowSeconds')">
+        <n-input-number v-model:value="nums['sys.security.rateLimit.windowSeconds']" :min="1" style="width: 160px" />
+      </n-form-item>
+      <n-form-item :label="label('sys.security.rateLimit.permitPerWindow')">
+        <n-input-number v-model:value="nums['sys.security.rateLimit.permitPerWindow']" :min="0" style="width: 160px" />
+      </n-form-item>
+      <n-form-item :label="label('sys.security.rateLimit.authPermitPerWindow')">
+        <n-input-number v-model:value="nums['sys.security.rateLimit.authPermitPerWindow']" :min="0" style="width: 160px" />
       </n-form-item>
 
       <n-form-item :label="' '" :show-feedback="false">

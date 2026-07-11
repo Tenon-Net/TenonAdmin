@@ -1,3 +1,4 @@
+using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Services;
@@ -27,6 +28,12 @@ internal sealed class ConfigSeed : ISeedData<SysConfig>
         new SysConfig { Id = 9, ConfigKey = SecurityPolicyProvider.KEY_ACCESS_MIN, ConfigValue = "120", Name = "访问令牌时长(分钟)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 30, Remark = "访问令牌有效期,到期需用刷新令牌换发" },
         new SysConfig { Id = 10, ConfigKey = SecurityPolicyProvider.KEY_REFRESH_MIN, ConfigValue = "10080", Name = "刷新令牌时长(分钟)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 31, Remark = "刷新令牌有效期,决定最长免登录时长(默认 7 天)" },
         new SysConfig { Id = 13, ConfigKey = CaptchaService.KEY_ENABLED, ConfigValue = "false", Name = "启用登录验证码", GroupCode = SecurityPolicyProvider.GROUP, Sort = 40, Remark = "开启后登录须过验证码;账号级锁定已挡爆破主向,此为浏览器侧加固" },
+
+        // 请求限流(GroupCode=security):RuntimeRateLimit 快照读取,改值经事件刷新即时生效。默认须与 AdminRateLimitOptions 默认一致。
+        new SysConfig { Id = 14, ConfigKey = AdminRateLimitOptions.KEY_ENABLED, ConfigValue = "true", Name = "启用请求限流", GroupCode = SecurityPolicyProvider.GROUP, Sort = 50, Remark = "按客户端 IP 固定窗口限流;Options 硬关时此项无效" },
+        new SysConfig { Id = 15, ConfigKey = AdminRateLimitOptions.KEY_WINDOW, ConfigValue = "60", Name = "限流窗口(秒)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 51, Remark = "全局与认证端点共用的窗口长度" },
+        new SysConfig { Id = 16, ConfigKey = AdminRateLimitOptions.KEY_PERMIT, ConfigValue = "300", Name = "全局每窗口请求数", GroupCode = SecurityPolicyProvider.GROUP, Sort = 52, Remark = "单 IP 每窗口允许的请求数;≤0 不限全局" },
+        new SysConfig { Id = 17, ConfigKey = AdminRateLimitOptions.KEY_AUTH_PERMIT, ConfigValue = "20", Name = "认证端点每窗口请求数", GroupCode = SecurityPolicyProvider.GROUP, Sort = 53, Remark = "/api/v1/auth/* 单 IP 每窗口允许数(更严);≤0 不限" },
 
         // 上传约束(GroupCode=upload):FileService.UploadAsync 强制执行,改值即时生效。默认须与 AdminUploadOptions 默认一致。
         new SysConfig { Id = 11, ConfigKey = FileService.KEY_MAX_SIZE, ConfigValue = "20", Name = "单文件大小上限(MB)", GroupCode = FileService.GROUP, Sort = 40, Remark = "超过即拒收上传" },

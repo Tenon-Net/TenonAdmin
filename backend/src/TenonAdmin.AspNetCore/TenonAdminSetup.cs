@@ -134,30 +134,36 @@ public static class TenonAdminSetup
 
         // ── 限流(§12/§14):按客户端 IP 固定窗口,认证端点(/api/v1/auth/*)更严;经上面的 IStartupFilter 挂 UseRateLimiter ──
         //   限流器在路由前运行,按 Request.Path 直接区分认证端点(不依赖端点元数据),命中即 429 + 统一信封(40008)。
-        var rl = options.Security.RateLimit;
+        //   开关与阈值运行时可改:GlobalLimiter 恒装,每请求同步读 RuntimeRateLimit.Current(启动载入 + 订阅配置变更刷新)。
+        services.TryAddSingleton<RuntimeRateLimit>();
+        services.AddHostedService(sp => sp.GetRequiredService<RuntimeRateLimit>());
         services.AddRateLimiter(o =>
         {
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             o.OnRejected = async (ctx, ct) =>
             {
-                var retryAfter = ctx.Lease.TryGetMetadata(MetadataName.RetryAfter, out var ra) ? (int)ra.TotalSeconds : rl.WindowSeconds;
+                var window = ctx.HttpContext.RequestServices.GetRequiredService<RuntimeRateLimit>().Current.WindowSeconds;
+                var retryAfter = ctx.Lease.TryGetMetadata(MetadataName.RetryAfter, out var ra) ? (int)ra.TotalSeconds : window;
                 ctx.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString();
                 ctx.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
                 ctx.HttpContext.Response.ContentType = "application/json";
                 await ctx.HttpContext.Response.WriteAsJsonAsync(
                     Result<object>.Fail(ErrorCode.TooManyRequests, new Dictionary<string, object?> { ["retryAfterSeconds"] = retryAfter }), ct);
             };
-            if (rl.Enabled)
-                o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
-                {
-                    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                    var isAuth = ctx.Request.Path.StartsWithSegments("/api/v1/auth");
-                    var permit = isAuth ? rl.AuthPermitPerWindow : rl.PermitPerWindow;
-                    if (permit <= 0) return RateLimitPartition.GetNoLimiter("nolimit");
-                    return RateLimitPartition.GetFixedWindowLimiter(
-                        (isAuth ? "auth:" : "all:") + ip,
-                        _ => new FixedWindowRateLimiterOptions { PermitLimit = permit, Window = TimeSpan.FromSeconds(rl.WindowSeconds), QueueLimit = 0 });
-                });
+            o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+            {
+                var s = ctx.RequestServices.GetRequiredService<RuntimeRateLimit>().Current;
+                if (!s.Enabled) return RateLimitPartition.GetNoLimiter("nolimit");
+                var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                var isAuth = ctx.Request.Path.StartsWithSegments("/api/v1/auth");
+                var permit = isAuth ? s.AuthPermitPerWindow : s.PermitPerWindow;
+                if (permit <= 0) return RateLimitPartition.GetNoLimiter("nolimit");
+                // 阈值/窗口编进分区键:改配置即换新分区键 → 新值立即生效(旧分区空闲后自动回收)。
+                var window = s.WindowSeconds > 0 ? s.WindowSeconds : 60;
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    $"{(isAuth ? "auth" : "all")}:{permit}:{window}:{ip}",
+                    _ => new FixedWindowRateLimiterOptions { PermitLimit = permit, Window = TimeSpan.FromSeconds(window), QueueLimit = 0 });
+            });
         });
 
         // ── 内置 OpenAPI 文档(§13.6 契约源)+ 健康检查(§12:/health 存活 + /health/ready 依赖就绪)──

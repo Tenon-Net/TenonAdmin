@@ -268,6 +268,13 @@ export default {
       },
       session: { title: 'Session lifetime', accessMinutes: 'Access token (min)', refreshMinutes: 'Refresh token (min)' },
       captcha: { title: 'Login captcha', enabled: 'Enable login captcha' },
+      rateLimit: {
+        title: 'Rate limiting',
+        enabled: 'Enable rate limiting',
+        windowSeconds: 'Window (seconds)',
+        permitPerWindow: 'Global requests / window',
+        authPermitPerWindow: 'Auth-endpoint requests / window',
+      },
     },
     upload: {
       title: 'Upload limits',

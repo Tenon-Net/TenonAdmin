@@ -269,6 +269,13 @@ export default {
       },
       session: { title: '会话时长', accessMinutes: '访问令牌(分钟)', refreshMinutes: '刷新令牌(分钟)' },
       captcha: { title: '登录验证码', enabled: '启用登录验证码' },
+      rateLimit: {
+        title: '请求限流',
+        enabled: '启用请求限流',
+        windowSeconds: '限流窗口(秒)',
+        permitPerWindow: '全局每窗口请求数',
+        authPermitPerWindow: '认证端点每窗口请求数',
+      },
     },
     upload: {
       title: '上传约束',
