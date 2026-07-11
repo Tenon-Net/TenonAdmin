@@ -23,6 +23,7 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 71, ParentId = 10, Type = MenuType.Button, Title = "机构-新增", Permission = "POST:/api/v1/sys/org/add", Sort = 2, Enabled = true },
         new SysMenu { Id = 72, ParentId = 10, Type = MenuType.Button, Title = "机构-更新", Permission = "PUT:/api/v1/sys/org/{id}", Sort = 3, Enabled = true },
         new SysMenu { Id = 73, ParentId = 10, Type = MenuType.Button, Title = "机构-删除", Permission = "DELETE:/api/v1/sys/org/{id}", Sort = 4, Enabled = true },
+        new SysMenu { Id = 98, ParentId = 10, Type = MenuType.Button, Title = "机构-复制", Permission = "POST:/api/v1/sys/org/{id}/copy", Sort = 29, Enabled = true },
 
         // 岗位管理页(R6:PositionController 普通 CRUD)。分页码 14、写端点码 75-77;详情 GET position/{id} 不放按钮。
         new SysMenu { Id = 74, ParentId = 10, Type = MenuType.Menu, Title = "岗位管理", Permission = "", Path = "/system/position", Component = "system/position/index", Icon = "ph:identification-badge-duotone", Sort = 2, Enabled = true, Visible = true },

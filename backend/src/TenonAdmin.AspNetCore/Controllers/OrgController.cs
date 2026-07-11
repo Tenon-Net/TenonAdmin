@@ -55,4 +55,13 @@ public class OrgController(IOrgService orgService) : ControllerBase
         await orgService.DeleteAsync(id);
         return Result<bool>.Ok(true);
     }
+
+    /// <summary>复制机构子树(整支克隆挂到源节点同级),返回新根 Id</summary>
+    [HttpPost("{id}/copy")]
+    [RolePermission]
+    public async Task<Result<long>> Copy(long id)
+    {
+        var newId = await orgService.CopyAsync(id);
+        return Result<long>.Ok(newId);
+    }
 }

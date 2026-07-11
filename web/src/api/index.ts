@@ -102,6 +102,9 @@ export const orgApi = {
     client.PUT('/api/v1/sys/org/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   remove: (id: number) =>
     client.DELETE('/api/v1/sys/org/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** 复制机构子树(整支克隆挂到源节点同级),返回新根 Id。 */
+  copy: (id: number) =>
+    client.POST('/api/v1/sys/org/{id}/copy', { params: { path: { id } } }).then((r) => unwrap<number>(r)),
 }
 
 export const positionApi = {

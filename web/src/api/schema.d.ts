@@ -1447,6 +1447,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/org/{id}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 复制机构子树(整支克隆挂到源节点同级),返回新根 Id */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOflong"];
+                        "application/json": components["schemas"]["ResultOflong"];
+                        "text/json": components["schemas"]["ResultOflong"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/personal/profile": {
         parameters: {
             query?: never;
@@ -3359,6 +3399,8 @@ export interface components {
             userId: number | string;
             account: string;
             ip?: null | string;
+            /** @description 登录时的 User-Agent 原串(前端解析成浏览器/系统展示,便于同一账号多端分辨) */
+            userAgent?: null | string;
             /** Format: date-time */
             loginTime?: string;
             /** Format: date-time */
@@ -4683,6 +4725,11 @@ export interface components {
             /** @description 是否成功(= ResultCode==0;冗余一列便于按成败直接筛选,免得每次算) */
             success?: boolean;
             /**
+             * @description 异常信息:仅动作抛异常时记(异常消息,截断)。业务码已由 ResultCode 表达,此列答"为什么失败";
+             *     成功/纯业务错误(未抛异常)恒 null。<b>只记异常消息不记响应体</b>——响应体可能含明文密码/令牌(设计 §14)。
+             */
+            exceptionMessage?: null | string;
+            /**
              * Format: int64
              * @description 接口耗时(毫秒)
              */
@@ -4692,6 +4739,8 @@ export interface components {
              * @description 操作人用户 Id(从当前登录态取;名称按 Id 关联 sys_user,不冗余存)
              */
             operatorId?: null | number | string;
+            /** @description 操作人姓名(不落库,分页时按 OperatorId 关联 sys_user 补;用户已删则为 null,前端回落 Id) */
+            operatorName?: null | string;
             ip?: null | string;
             userAgent?: null | string;
             /** Format: int64 */
@@ -4830,6 +4879,10 @@ export interface components {
             orgId?: null | number | string;
             /** Format: int64 */
             positionId?: null | number | string;
+            /** @description 机构名(不落 SysUser,分页时按 OrgId 关联 sys_org 补;仅列表展示用) */
+            orgName?: null | string;
+            /** @description 职位名(同上,按 PositionId 关联 sys_position 补) */
+            positionName?: null | string;
             enabled: boolean;
             isSuperAdmin: boolean;
             /** Format: date-time */
@@ -4845,6 +4898,10 @@ export interface components {
             orgId?: null | number | string;
             /** Format: int64 */
             positionId?: null | number | string;
+            /** @description 机构名(不落 SysUser,分页时按 OrgId 关联 sys_org 补;仅列表展示用) */
+            orgName?: null | string;
+            /** @description 职位名(同上,按 PositionId 关联 sys_position 补) */
+            positionName?: null | string;
             enabled: boolean;
             isSuperAdmin: boolean;
             /** Format: date-time */

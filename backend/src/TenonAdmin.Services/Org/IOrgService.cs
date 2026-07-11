@@ -21,4 +21,10 @@ public interface IOrgService
 
     /// <summary>删除机构(软删除);若仍有子机构挂靠则拒绝(需先移除或迁移子机构)</summary>
     Task DeleteAsync(long id);
+
+    /// <summary>
+    /// 复制机构子树(含目标节点及其全部后代),整支克隆挂到源节点的同级下,返回新根 Id。
+    /// 用于按既有结构快速搭建相似机构(如连锁网点)。克隆节点编码追加 <c>-copy</c> 后缀去重(编码唯一约束)。
+    /// </summary>
+    Task<long> CopyAsync(long id);
 }

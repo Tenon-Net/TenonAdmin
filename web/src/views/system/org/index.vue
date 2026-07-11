@@ -104,11 +104,24 @@ const columns: DataTableColumns<Tree<SysOrg>> = [
   {
     title: () => t('common.operation'),
     key: 'op',
-    width: 200,
+    width: 260,
     render: (r) =>
       h(NSpace, { size: 2, wrapItem: false }, () => [
         h(NButton, { size: 'small', quaternary: true, onClick: () => openAdd(r.id) }, () => t('org.addChild')),
         h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
+        h(
+          NPopconfirm,
+          {
+            onPositiveClick: () =>
+              run(() => orgApi.copy(r.id), t('org.copied')).then((ok) => {
+                if (ok) load()
+              }),
+          },
+          {
+            trigger: () => h(NButton, { size: 'small', quaternary: true }, () => t('org.copy')),
+            default: () => t('org.copyConfirm', { name: r.name }),
+          },
+        ),
         h(
           NPopconfirm,
           {
