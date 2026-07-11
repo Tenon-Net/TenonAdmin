@@ -10,6 +10,7 @@ import {
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
+import PasswordStrength from '@/components/PasswordStrength/index.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
@@ -285,7 +286,10 @@ async function copyResult() {
         <n-input v-model:value="form.account" :placeholder="t('user.account')" />
       </n-form-item>
       <n-form-item v-if="editingId === null" :label="t('user.password')">
-        <n-input v-model:value="form.password" type="password" show-password-on="click" :placeholder="t('user.passwordHint')" />
+        <div class="pw-field">
+          <n-input v-model:value="form.password" type="password" show-password-on="click" :placeholder="t('user.passwordHint')" />
+          <PasswordStrength :value="form.password" />
+        </div>
       </n-form-item>
       <n-form-item :label="t('user.name')" path="name">
         <n-input v-model:value="form.name" :placeholder="t('user.name')" />
@@ -338,6 +342,11 @@ async function copyResult() {
 </template>
 
 <style scoped>
+/* 密码框 + 强度条竖排(表单为 label-left 横排,此格内需纵向堆叠) */
+.pw-field {
+  flex: 1;
+  min-width: 0;
+}
 .reset-hint {
   margin: 0 0 12px;
   font-size: var(--font-size-sm, 13px);
