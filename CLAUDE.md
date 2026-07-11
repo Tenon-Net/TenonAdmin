@@ -93,3 +93,17 @@ Vue 3 `<script setup>` + Naive UI + Pinia (persisted) + vue-router + vue-i18n + 
 ## CI
 
 `.github/workflows/backend-ci.yml` runs build + test on a `[sqlite, mysql]` matrix (`fail-fast: false`) for pushes/PRs touching `backend/**`. `backend-release.yml` handles NuGet packaging. Keep the SQLite and MySQL test legs green — `TestDb.cs` derives isolated DBs per test from the DB-type env vars.
+
+## Agent skills
+
+### Issue tracker
+
+Issues/PRDs live as GitHub issues in `Tenon-Net/TenonAdmin` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five canonical roles, label string = role name (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — `CONTEXT.md` + `docs/adr/` at repo root, created lazily. See `docs/agents/domain.md`.
