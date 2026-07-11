@@ -190,6 +190,13 @@ export const configApi = {
     client
       .GET('/api/v1/sys/config/site', {})
       .then((r) => unwrap<{ title?: string | null; captchaEnabled?: boolean }>(r)),
+  /** 当前生效密码策略(任何登录用户可读);改密页据此展示真实规则清单,免配置读权限。 */
+  passwordPolicy: () =>
+    client
+      .GET('/api/v1/sys/config/password-policy', {})
+      .then((r) =>
+        unwrap<{ minLength: number; requireUpper: boolean; requireLower: boolean; requireDigit: boolean; requireSpecial: boolean }>(r),
+      ),
 }
 
 export const logApi = {

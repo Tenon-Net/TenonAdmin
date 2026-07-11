@@ -387,6 +387,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/config/password-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 当前生效的密码策略(任何登录用户可读:改密/建用户页据此展示规则清单,不需配置读权限) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPasswordPolicy"];
+                        "application/json": components["schemas"]["ResultOfPasswordPolicy"];
+                        "text/json": components["schemas"]["ResultOfPasswordPolicy"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/config/batch": {
         parameters: {
             query?: never;
@@ -3417,6 +3455,8 @@ export interface components {
             name?: string;
             /** @description 机构编码(唯一) */
             code?: string;
+            /** @description 机构分类(org_category 字典 value,可空) */
+            category?: null | string;
             /**
              * Format: int32
              * @description 排序(小在前)
@@ -3704,6 +3744,22 @@ export interface components {
             pages?: number | string;
             /** @description 当前页数据 */
             items?: components["schemas"]["UserItem"][];
+        };
+        /** @description 密码复杂度策略(运行时可配置,见 ISecurityPolicyProvider)。 */
+        PasswordPolicy: {
+            /**
+             * Format: int32
+             * @description 最小长度
+             */
+            minLength: number | string;
+            /** @description 须含大写字母 */
+            requireUpper: boolean;
+            /** @description 须含小写字母 */
+            requireLower: boolean;
+            /** @description 须含数字 */
+            requireDigit: boolean;
+            /** @description 须含特殊字符(非字母数字) */
+            requireSpecial: boolean;
         };
         /** @description 职位新增/编辑入参(增改共用同一份字段)。 */
         PositionInput: {
@@ -4252,6 +4308,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfPasswordPolicy: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PasswordPolicy"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfSiteInfoOutput: {
             /**
              * Format: int32
@@ -4531,6 +4608,8 @@ export interface components {
         SiteInfoOutput: {
             /** @description 站点标题(浏览器标题/登录页展示名) */
             title?: null | string;
+            /** @description 是否启用登录验证码(运行时配置驱动;前端据此决定登录页是否展示验证码)。 */
+            captchaEnabled?: boolean;
         };
         /**
          * @description 系统配置表——键值对形式的全局配置项(如站点名称、默认密码策略等),支持按 string? SysConfig.GroupCode 分组管理。
@@ -4663,6 +4742,8 @@ export interface components {
             userId?: null | number | string;
             ip?: null | string;
             userAgent?: null | string;
+            /** @description 用户姓名——非持久化,分页时按 long? SysLoginLog.UserId 批量回填(失败/账号不存在的行为 null,前端回落账号)。 */
+            name?: null | string;
             /** Format: int64 */
             id?: number | string;
             /** Format: date-time */
@@ -4768,6 +4849,8 @@ export interface components {
             name?: string;
             /** @description 机构编码(唯一,程序判机构用它而非名称) */
             code?: string;
+            /** @description 机构分类(存 org_category 字典 value,如 公司/部门/小组;可空) */
+            category?: null | string;
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;

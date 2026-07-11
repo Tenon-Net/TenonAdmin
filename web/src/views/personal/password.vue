@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NCard, NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
-import { personalApi, authApi } from '@/api'
+import { personalApi, authApi, configApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { resetRouter } from '@/router'
@@ -19,13 +19,19 @@ const auth = useAuthStore()
 const model = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 const saving = ref(false)
 
-// ponytail: 镜像后端默认密码策略(SecurityPolicyProvider 默认)。仅作输入提示;超管在「安全策略」改过策略时,
-// 以后端强制拒绝(passwordTooWeak)为准,此处不联网拉取有效策略。要精确同步再加一个鉴权策略端点。
-const MIN_LENGTH = 8
+// 有效密码策略:onMounted 拉后端当前生效值,精确跟随超管在「安全策略」的改动。
+// 默认 = 后端默认策略,作 fallback(拉取失败仍可用;后端始终强制,弱口令以 passwordTooWeak 兜底)。
+const policy = ref({ minLength: 8, requireUpper: true, requireLower: true, requireDigit: true, requireSpecial: false })
+onMounted(async () => {
+  try {
+    policy.value = await configApi.passwordPolicy()
+  } catch { /* 保留默认;后端仍强制 */ }
+})
+
 const checks = computed(() => {
   const p = model.newPassword
   return {
-    minLength: p.length >= MIN_LENGTH,
+    minLength: p.length >= policy.value.minLength,
     upper: /[A-Z]/.test(p),
     lower: /[a-z]/.test(p),
     digit: /\d/.test(p),
@@ -44,13 +50,22 @@ const strength = computed(() => {
 })
 const strengthText = computed(() => ['', t('changePassword.strength.weak'), t('changePassword.strength.fair'), t('changePassword.strength.strong')][strength.value])
 const strengthColor = computed(() => ['', '#e88080', '#e0a458', '#5aa86e'][strength.value])
-const ruleList = computed(() => [
-  { key: 'minLength', ok: checks.value.minLength, text: t('changePassword.rules.minLength', { n: MIN_LENGTH }) },
-  { key: 'upper', ok: checks.value.upper, text: t('changePassword.rules.upper') },
-  { key: 'lower', ok: checks.value.lower, text: t('changePassword.rules.lower') },
-  { key: 'digit', ok: checks.value.digit, text: t('changePassword.rules.digit') },
-  { key: 'special', ok: checks.value.special, text: t('changePassword.rules.special') },
-])
+// 规则清单按有效策略动态构建:恒显最小长度;大小写/数字仅在策略要求时作硬规则;
+// 特殊字符——策略要求时作硬规则,否则作可选提示。
+const ruleList = computed(() => {
+  const pol = policy.value
+  const c = checks.value
+  const rows = [{ key: 'minLength', ok: c.minLength, text: t('changePassword.rules.minLength', { n: pol.minLength }) }]
+  if (pol.requireUpper) rows.push({ key: 'upper', ok: c.upper, text: t('changePassword.rules.upper') })
+  if (pol.requireLower) rows.push({ key: 'lower', ok: c.lower, text: t('changePassword.rules.lower') })
+  if (pol.requireDigit) rows.push({ key: 'digit', ok: c.digit, text: t('changePassword.rules.digit') })
+  rows.push({
+    key: 'special',
+    ok: c.special,
+    text: pol.requireSpecial ? t('changePassword.rules.special') : t('changePassword.rules.specialOptional'),
+  })
+  return rows
+})
 
 async function submit() {
   if (!model.oldPassword || !model.newPassword) {

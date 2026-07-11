@@ -452,7 +452,8 @@ export default {
       upper: '包含大写字母',
       lower: '包含小写字母',
       digit: '包含数字',
-      special: '包含特殊字符(可选,更安全)',
+      special: '包含特殊字符',
+      specialOptional: '包含特殊字符(可选,更安全)',
     },
   },
   // ── 后端错误码 msgKey → 文案 ──────────────────────────────

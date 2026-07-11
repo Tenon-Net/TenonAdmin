@@ -449,7 +449,8 @@ export default {
       upper: 'Contains uppercase',
       lower: 'Contains lowercase',
       digit: 'Contains a digit',
-      special: 'Contains a special character (optional, stronger)',
+      special: 'Contains a special character',
+      specialOptional: 'Contains a special character (optional, stronger)',
     },
   },
   error: {
