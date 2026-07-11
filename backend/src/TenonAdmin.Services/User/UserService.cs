@@ -12,6 +12,8 @@ namespace TenonAdmin.Services;
 /// </summary>
 public class UserService(
     IRepository<SysUser> users,
+    IRepository<SysOrg> orgs,
+    IRepository<SysPosition> positions,
     IPasswordHasher hasher,
     IRbacService rbac,
     ISessionService sessions,
@@ -32,8 +34,9 @@ public class UserService(
     // ponytail(P2-19): .Contains 生成参数化 LIKE(无注入风险),但未转义 LIKE 元字符 % _——
     //   搜 "%"/"_" 会被当通配、命中面偏大。属功能精确性,后台搜索普遍接受此行为;要精确字面匹配
     //   再引 EscapeLike + ESCAPE 子句。全部 Page 方法同此约定。
-    public virtual Task<PagedList<UserItem>> PageAsync(UserPageInput input) =>
-        users.AsQueryable()
+    public virtual async Task<PagedList<UserItem>> PageAsync(UserPageInput input)
+    {
+        var page = await users.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Account), u => u.Account.Contains(input.Account!))
             .WhereIF(!string.IsNullOrEmpty(input.Name), u => u.Name.Contains(input.Name!))
             .WhereIF(input.OrgId.HasValue, u => u.OrgId == input.OrgId)
@@ -52,6 +55,34 @@ public class UserService(
                 CreateTime = u.CreateTime,
             })
             .ToPagedListAsync(input.Current, input.Size);
+        return new PagedList<UserItem>
+        {
+            Current = page.Current,
+            Size = page.Size,
+            Total = page.Total,
+            Items = await FillOrgPositionNamesAsync(page.Items),
+        };
+    }
+
+    /// <summary>按本页出现的机构/职位 Id 各去重批量查一次名称回填(避免逐行 N+1)。已删/未分配则名称留 null。</summary>
+    protected virtual async Task<IReadOnlyList<UserItem>> FillOrgPositionNamesAsync(IReadOnlyList<UserItem> items)
+    {
+        var orgIds = items.Where(x => x.OrgId.HasValue).Select(x => x.OrgId!.Value).Distinct().ToList();
+        var posIds = items.Where(x => x.PositionId.HasValue).Select(x => x.PositionId!.Value).Distinct().ToList();
+        var orgName = (orgIds.Count == 0
+            ? []
+            : await orgs.AsQueryable().Where(o => orgIds.Contains(o.Id)).Select(o => new { o.Id, o.Name }).ToListAsync())
+            .ToDictionary(o => o.Id, o => o.Name);
+        var posName = (posIds.Count == 0
+            ? []
+            : await positions.AsQueryable().Where(p => posIds.Contains(p.Id)).Select(p => new { p.Id, p.Name }).ToListAsync())
+            .ToDictionary(p => p.Id, p => p.Name);
+        return items.Select(u => u with
+        {
+            OrgName = u.OrgId is { } oid && orgName.TryGetValue(oid, out var on) ? on : null,
+            PositionName = u.PositionId is { } pid && posName.TryGetValue(pid, out var pn) ? pn : null,
+        }).ToList();
+    }
 
     /// <inheritdoc />
     public virtual async Task<UserDetail> GetAsync(long id)

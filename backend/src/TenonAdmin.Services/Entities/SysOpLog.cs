@@ -42,6 +42,10 @@ public class SysOpLog : BaseEntity
     [SugarColumn(IsNullable = true, ColumnDescription = "操作人用户 Id")]
     public long? OperatorId { get; set; }
 
+    /// <summary>操作人姓名(不落库,分页时按 OperatorId 关联 sys_user 补;用户已删则为 null,前端回落 Id)</summary>
+    [SugarColumn(IsIgnore = true)]
+    public string? OperatorName { get; set; }
+
     [SugarColumn(Length = 64, IsNullable = true, ColumnDescription = "来源 IP")]
     public string? Ip { get; set; }
 

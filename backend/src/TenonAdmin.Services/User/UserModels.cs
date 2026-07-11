@@ -28,6 +28,13 @@ public record UserItem
     public required string Name { get; init; }
     public long? OrgId { get; init; }
     public long? PositionId { get; init; }
+
+    /// <summary>机构名(不落 SysUser,分页时按 OrgId 关联 sys_org 补;仅列表展示用)</summary>
+    public string? OrgName { get; init; }
+
+    /// <summary>职位名(同上,按 PositionId 关联 sys_position 补)</summary>
+    public string? PositionName { get; init; }
+
     public required bool Enabled { get; init; }
     public required bool IsSuperAdmin { get; init; }
     public DateTime CreateTime { get; init; }

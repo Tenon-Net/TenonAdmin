@@ -44,6 +44,8 @@ export interface UserItem {
   name: string
   orgId?: number | null
   positionId?: number | null
+  orgName?: string | null
+  positionName?: string | null
   enabled: boolean
   isSuperAdmin: boolean
   createTime: string
@@ -195,6 +197,7 @@ export interface SysOpLog {
   success: boolean
   elapsedMs: number
   operatorId?: number | null
+  operatorName?: string | null
   ip?: string | null
   userAgent?: string | null
   createTime: string

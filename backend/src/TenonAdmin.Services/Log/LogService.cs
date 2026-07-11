@@ -13,6 +13,7 @@ namespace TenonAdmin.Services;
 public class LogService(
     IRepository<SysOpLog> opLogs,
     IRepository<SysLoginLog> loginLogs,
+    IRepository<SysUser> users,
     ICurrentUser currentUser,
     ILogger<LogService> logger) : ILogService
 {
@@ -65,12 +66,33 @@ public class LogService(
     }
 
     /// <inheritdoc />
-    public virtual Task<PagedList<SysOpLog>> PageOperationAsync(OpLogPageInput input) =>
-        opLogs.AsQueryable()
+    public virtual async Task<PagedList<SysOpLog>> PageOperationAsync(OpLogPageInput input)
+    {
+        var page = await opLogs.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Title), x => x.Title.Contains(input.Title!))
             .WhereIF(input.Success.HasValue, x => x.Success == input.Success!.Value)
             .OrderBy(x => x.Id, OrderByType.Desc)   // 雪花 Id 时间有序,降序 = 最新在前
             .ToPagedListAsync(input.Current, input.Size);
+        await FillOperatorNamesAsync(page.Items);
+        return page;
+    }
+
+    /// <summary>
+    /// 按本页出现的操作人 Id 去重批量查一次姓名回填(避免逐行 N+1)。用户已软删则查不到,OperatorName 留 null、前端回落 Id。
+    /// </summary>
+    protected virtual async Task FillOperatorNamesAsync(IReadOnlyList<SysOpLog> items)
+    {
+        var ids = items.Where(x => x.OperatorId.HasValue).Select(x => x.OperatorId!.Value).Distinct().ToList();
+        if (ids.Count == 0) return;
+        var rows = await users.AsQueryable()
+            .Where(u => ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.Name })
+            .ToListAsync();
+        var nameById = rows.ToDictionary(u => u.Id, u => u.Name);
+        foreach (var item in items)
+            if (item.OperatorId.HasValue && nameById.TryGetValue(item.OperatorId.Value, out var name))
+                item.OperatorName = name;
+    }
 
     /// <inheritdoc />
     public virtual Task<PagedList<SysLoginLog>> PageLoginAsync(LoginLogPageInput input) =>

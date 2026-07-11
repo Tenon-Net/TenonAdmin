@@ -54,6 +54,8 @@ const columns: ProTableColumn<UserItem>[] = [
   { type: 'selection', disabled: (r: UserItem) => r.isSuperAdmin },
   { key: 'account', title: () => t('user.account'), search: true },
   { key: 'name', title: () => t('user.name'), search: true },
+  { key: 'orgName', title: () => t('user.org'), render: (r) => r.orgName || '—' },
+  { key: 'positionName', title: () => t('user.position'), render: (r) => r.positionName || '—' },
   {
     key: 'enabled',
     title: () => t('user.status'),

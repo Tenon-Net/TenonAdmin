@@ -35,6 +35,7 @@ const columns: ProTableColumn<SysOpLog>[] = [
     ],
   },
   { key: 'resultCode', title: () => t('log.resultCode'), width: 100 },
+  { key: 'operator', title: () => t('log.operator'), width: 120, render: (r) => operatorText(r) },
   { key: 'elapsedMs', title: () => t('log.elapsed'), width: 100, render: (r) => `${r.elapsedMs} ms` },
   { key: 'ip', title: () => t('log.ip'), render: (r) => r.ip || '—' },
   { key: 'createTime', title: () => t('common.createTime'), format: 'datetime' },
@@ -54,6 +55,10 @@ const detailRow = ref<SysOpLog | null>(null)
 function openDetail(r: SysOpLog) {
   detailRow.value = r
   showDetail.value = true
+}
+/** 操作人展示:优先姓名,姓名缺失(用户已删/未解析)回落原始 Id,再无则占位。 */
+function operatorText(r: SysOpLog) {
+  return r.operatorName || (r.operatorId != null ? String(r.operatorId) : '—')
 }
 /** paramJson 美化:parse→stringify(2);非法 JSON 原样返回;空值占位。 */
 function prettyParam(json?: string | null) {
@@ -107,7 +112,7 @@ function clearLogs() {
         </n-descriptions-item>
         <n-descriptions-item :label="t('log.resultCode')">{{ detailRow.resultCode }}</n-descriptions-item>
         <n-descriptions-item :label="t('log.elapsed')">{{ detailRow.elapsedMs }} ms</n-descriptions-item>
-        <n-descriptions-item :label="t('log.operator')">{{ detailRow.operatorId ?? '—' }}</n-descriptions-item>
+        <n-descriptions-item :label="t('log.operator')">{{ operatorText(detailRow) }}</n-descriptions-item>
         <n-descriptions-item :label="t('log.ip')">{{ detailRow.ip || '—' }}</n-descriptions-item>
         <n-descriptions-item :label="t('log.userAgent')">{{ detailRow.userAgent || '—' }}</n-descriptions-item>
         <n-descriptions-item :label="t('common.createTime')">{{ detailRow.createTime }}</n-descriptions-item>
