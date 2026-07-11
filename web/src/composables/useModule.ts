@@ -26,8 +26,13 @@ export function useModule() {
   }
 
   async function enterInitial(): Promise<EnterResult> {
-    const { modules, defaultModuleId } = await personalApi.modules()
+    // 并行拉模块 + 当前用户权限码(权限码喂 v-auth;失败不阻断进门户,v-auth 退回 fail-open)。
+    const [{ modules, defaultModuleId }, codes] = await Promise.all([
+      personalApi.modules(),
+      personalApi.permissions().catch(() => [] as string[]),
+    ])
     auth.modules = modules
+    auth.permissionCodes = codes
     if (modules.length === 0) return { chooser: true } // 空态:选择器里提示未分配应用
     // F5/深链优先重建"上次所在应用"(持久化的 currentModuleId),让其动态路由复活,跨应用深链不落 404。
     const remembered = auth.currentModuleId

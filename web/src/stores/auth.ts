@@ -14,7 +14,7 @@ export const useAuthStore = defineStore('auth', {
     modules: [] as AppModule[],
     currentModuleId: null as number | null,
     menuTree: [] as MenuNode[],
-    // 后端暂无"返回按钮权限码"接口;留空 → v-auth fail-open,服务端 403 兜底。
+    // 登录进门户时由 useModule.enterInitial 填入(GET /personal/permissions);超管为空集 → v-auth fail-open,服务端 sadm 兜底。
     permissionCodes: [] as string[],
     routesReady: false,
   }),

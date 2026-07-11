@@ -40,6 +40,7 @@ public static class ServicesSetup
         // RBAC(§6):权限码提供者真实现(取代 AspNetCore 层的空占位)+ 角色菜单授权服务
         services.TryAddScoped<IPermissionProvider, RbacPermissionProvider>();
         services.TryAddScoped<IRbacService, RbacService>();
+        services.TryAddScoped<IRoleService, RoleService>();   // 角色生命周期 CRUD(授权/数据范围仍走 IRbacService)
 
         // 数据范围解析(§6 招牌能力,T3):合并用户多角色范围,结果按用户缓存
         services.TryAddScoped<IDataScopeProvider, DataScopeProvider>();

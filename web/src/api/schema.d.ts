@@ -1475,6 +1475,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/personal/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 取自己当前生效的权限码集合(= 规范化路由,如 `POST:/api/v1/sys/user`)。
+         *     前端 `v-auth` 据此做按钮级显隐;超管无角色故返回空集(前端 fail-open 显示全部,服务端 sadm 绕过兜底)。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyCollectionOfstring"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyCollectionOfstring"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyCollectionOfstring"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/personal/modules": {
         parameters: {
             query?: never;
@@ -2183,6 +2224,311 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/role/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询角色 */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 角色名称(模糊匹配,可选) */
+                    Name?: string;
+                    Current?: number | string;
+                    Size?: number | string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfSysRole"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfSysRole"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfSysRole"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/role/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 按 Id 取单条角色 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfSysRole"];
+                        "application/json": components["schemas"]["ResultOfSysRole"];
+                        "text/json": components["schemas"]["ResultOfSysRole"];
+                    };
+                };
+            };
+        };
+        /** 更新角色 */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RoleInput"];
+                    "text/json": components["schemas"]["RoleInput"];
+                    "application/*+json": components["schemas"]["RoleInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** 删除角色(级联清关联) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/role/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 新增角色 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RoleInput"];
+                    "text/json": components["schemas"]["RoleInput"];
+                    "application/*+json": components["schemas"]["RoleInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOflong"];
+                        "application/json": components["schemas"]["ResultOflong"];
+                        "text/json": components["schemas"]["ResultOflong"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/role/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量删除角色 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BatchDeleteInput"];
+                    "text/json": components["schemas"]["BatchDeleteInput"];
+                    "application/*+json": components["schemas"]["BatchDeleteInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/role/{id}/menus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 取某角色当前授予的菜单 Id 集合(授权抽屉回显用)。 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyCollectionOflong"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyCollectionOflong"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyCollectionOflong"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/role/{id}/datascope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 取某角色的数据范围配置(未配置返回 null;数据范围抽屉回显用)。 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfSysRoleDataScope"];
+                        "application/json": components["schemas"]["ResultOfSysRoleDataScope"];
+                        "text/json": components["schemas"]["ResultOfSysRoleDataScope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3176,6 +3522,34 @@ export interface components {
          * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
          *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
          */
+        PagedListOfSysRole: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["SysRole"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
         PagedListOfUserItem: {
             /**
              * Format: int32
@@ -3286,6 +3660,50 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["FileUploadOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyCollectionOflong: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | (number | string)[];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyCollectionOfstring: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | string[];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -3661,6 +4079,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfPagedListOfSysRole: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfSysRole"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfPagedListOfUserItem: {
             /**
              * Format: int32
@@ -3809,6 +4248,48 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfSysRole: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["SysRole"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfSysRoleDataScope: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["SysRoleDataScope"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfUserDetail: {
             /**
              * Format: int32
@@ -3843,6 +4324,22 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["UserProfile"];
+        };
+        /** @description 角色新增/编辑入参(增改共用同一份字段)。 */
+        RoleInput: {
+            /** @description 角色名称 */
+            name?: string;
+            /** @description 角色编码(唯一) */
+            code?: string;
+            /**
+             * Format: int32
+             * @description 排序(小在前)
+             */
+            sort?: number | string;
+            /** @description 是否启用 */
+            enabled?: boolean;
+            /** @description 备注 */
+            remark?: null | string;
         };
         /** @description 设默认应用入参(多应用门户)。 */
         SetDefaultModuleInput: {
@@ -4134,6 +4631,53 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: date-time */
+            createTime?: string;
+            /** Format: int64 */
+            createUserId?: null | number | string;
+            /** Format: date-time */
+            updateTime?: null | string;
+            /** Format: int64 */
+            updateUserId?: null | number | string;
+            isDelete?: boolean;
+        };
+        /**
+         * @description 角色表(设计 §16)。角色是"权限码集合"的载体:用户挂角色、角色挂菜单(路由权限码),
+         *     用户的权限 = 其全部角色所授菜单权限码的并集(聚合见 `RbacPermissionProvider`)。
+         *     数据范围(五种机构范围)在 T3 由独立表 sys_role_data_scope 承载,不揉进本表。
+         */
+        SysRole: {
+            name?: string;
+            /** @description 角色编码(唯一,程序判角色用它而非名称) */
+            code?: string;
+            /** Format: int32 */
+            sort?: number | string;
+            enabled?: boolean;
+            remark?: null | string;
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: date-time */
+            createTime?: string;
+            /** Format: int64 */
+            createUserId?: null | number | string;
+            /** Format: date-time */
+            updateTime?: null | string;
+            /** Format: int64 */
+            updateUserId?: null | number | string;
+            isDelete?: boolean;
+        };
+        /**
+         * @description 角色数据范围(设计 §16,T3)——每角色一条,描述该角色可见数据的机构维度(DataScopeType)。
+         *     用户的生效范围 = 其所有角色范围的合并(见 `DataScopeProvider`)。
+         */
+        SysRoleDataScope: {
+            /** Format: int64 */
+            roleId?: number | string;
+            scopeType?: components["schemas"]["DataScopeType"];
+            /** @description 自定义机构 Id 列表(逗号分隔),仅 DataScopeType.Custom 时使用。 */
+            customOrgIds?: string;
             /** Format: int64 */
             id?: number | string;
             /** Format: date-time */

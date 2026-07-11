@@ -238,6 +238,43 @@ export interface PositionInput {
   enabled: boolean
 }
 
+/** 角色行(后端 SysRole)。int64 收敛为 number。 */
+export interface SysRole {
+  id: number
+  name: string
+  code: string
+  sort: number
+  enabled: boolean
+  remark?: string | null
+  createTime?: string
+}
+
+/** 角色新增/编辑入参(后端 RoleInput;增改同一份字段,code 编辑禁用)。 */
+export interface RoleInput {
+  name: string
+  code: string
+  sort: number
+  enabled: boolean
+  remark?: string | null
+}
+
+/** 数据范围类型(后端 DataScopeType;存库为 int,枚举值须与后端一致)。 */
+export enum DataScopeType {
+  All = 1,
+  Org = 2,
+  OrgAndChildren = 3,
+  Self = 4,
+  Custom = 5,
+}
+
+/** 角色数据范围配置(后端 SysRoleDataScope;数据范围抽屉回显)。customOrgIds 逗号分隔。 */
+export interface SysRoleDataScope {
+  id: number
+  roleId: number
+  scopeType: DataScopeType
+  customOrgIds: string
+}
+
 /** 新增用户入参(后端 AddUserInput;account 建后不可改,password 留空=后端默认初始密码)。 */
 export interface AddUserInput {
   account: string

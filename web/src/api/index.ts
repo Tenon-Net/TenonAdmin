@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, ConfigInput, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, OnlineSessionItem, OrgInput, PagedList, PositionInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysOpLog, SysOrg, SysPosition, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, ConfigInput, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, OnlineSessionItem, OrgInput, PagedList, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -64,6 +64,8 @@ export const personalApi = {
     client.PUT('/api/v1/personal/profile', { body }).then((r) => unwrap<boolean>(r)),
   updatePassword: (body: { oldPassword: string; newPassword: string }) =>
     client.PUT('/api/v1/personal/password', { body }).then((r) => unwrap<boolean>(r)),
+  /** 当前用户权限码集合(= 规范化路由);喂给 authStore.permissionCodes 驱动 v-auth。超管返回空集。 */
+  permissions: () => client.GET('/api/v1/personal/permissions', {}).then((r) => unwrap<string[]>(r)),
 }
 
 export const userApi = {
@@ -116,6 +118,35 @@ export const positionApi = {
     client.PUT('/api/v1/sys/position/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   remove: (id: number) =>
     client.DELETE('/api/v1/sys/position/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+}
+
+export const roleApi = {
+  /** 角色分页;搜索键 name → PascalCase Name。列表用 + 用户/授权页拉一大页当下拉源。 */
+  page: (params: { page: number; pageSize: number; name?: string }) =>
+    client
+      .GET('/api/v1/sys/role/page', {
+        params: { query: { Current: params.page, Size: params.pageSize, Name: params.name } },
+      })
+      .then((r) => unwrap<PagedList<SysRole>>(r))
+      .then((p) => ({ items: p.items, total: p.total })),
+  add: (body: RoleInput) => client.POST('/api/v1/sys/role/add', { body }).then((r) => unwrap<number>(r)),
+  update: (id: number, body: RoleInput) =>
+    client.PUT('/api/v1/sys/role/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
+  remove: (id: number) =>
+    client.DELETE('/api/v1/sys/role/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** 批量删除角色(各自级联清关联)。 */
+  batchRemove: (ids: number[]) => client.POST('/api/v1/sys/role/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
+  /** 某角色当前授予的菜单 Id 集合(授权抽屉回显)。 */
+  getMenus: (id: number) => client.GET('/api/v1/sys/role/{id}/menus', { params: { path: { id } } }).then((r) => unwrap<number[]>(r)),
+  /** 全量设置角色授予的菜单(空数组 = 收回全部)。 */
+  setMenus: (roleId: number, menuIds: number[]) =>
+    client.PUT('/api/v1/sys/role/menu', { body: { roleId, menuIds } }).then((r) => unwrap<boolean>(r)),
+  /** 某角色的数据范围配置(未配置返回 null)。 */
+  getDataScope: (id: number) =>
+    client.GET('/api/v1/sys/role/{id}/datascope', { params: { path: { id } } }).then((r) => unwrap<SysRoleDataScope | null>(r)),
+  /** 设置角色数据范围;customOrgIds 仅 scopeType=Custom(5)时有意义。 */
+  setDataScope: (roleId: number, scopeType: DataScopeType, customOrgIds?: number[]) =>
+    client.PUT('/api/v1/sys/role/datascope', { body: { roleId, scopeType, customOrgIds } }).then((r) => unwrap<boolean>(r)),
 }
 
 export const moduleApi = {

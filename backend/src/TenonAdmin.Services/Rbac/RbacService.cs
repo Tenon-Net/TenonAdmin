@@ -105,6 +105,27 @@ public class RbacService(
         await InvalidateScopesAsync(allUserIds);
     }
 
+    /// <inheritdoc />
+    public virtual async Task OnRoleDeletedAsync(long roleId)
+    {
+        // 删前圈定受影响用户(下面要失效其权限/数据范围缓存);此刻关联行尚在。
+        var affectedUsers = await userRoles.AsQueryable().Where(x => x.RoleId == roleId).Select(x => x.UserId).ToListAsync();
+
+        // 事务内物理删三组关联(纯连接数据、无保留价值,走 Db.Deleteable 逃生舱口;同 ReplaceAsync 语义)。
+        var result = await roleMenus.Db.Ado.UseTranAsync(async () =>
+        {
+            await roleMenus.Db.Deleteable<SysUserRole>().Where(x => x.RoleId == roleId).ExecuteCommandAsync();
+            await roleMenus.Db.Deleteable<SysRoleMenu>().Where(x => x.RoleId == roleId).ExecuteCommandAsync();
+            await roleMenus.Db.Deleteable<SysRoleDataScope>().Where(x => x.RoleId == roleId).ExecuteCommandAsync();
+        });
+        if (!result.IsSuccess) throw result.ErrorException;
+
+        // 角色没了 → 挂它的用户权限与数据范围都可能变,两者缓存都失效;门户导航按代际整体失效。
+        await InvalidatePermissionsAsync(affectedUsers);
+        await InvalidateScopesAsync(affectedUsers);
+        await cache.IncrementAsync(CacheKeys.PortalGeneration);
+    }
+
     /// <summary>事务内"整删再插"。任一步失败整体回滚,关联不会处于半更新状态。</summary>
     private async Task ReplaceAsync<TLink>(Func<Task<int>> deleteExisting, List<TLink> insertNew) where TLink : BaseEntity, new()
     {

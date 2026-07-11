@@ -137,6 +137,10 @@ public enum ErrorCode
     [MsgKey("error.menu.invalidParent")]
     MenuInvalidParent = 42017,
 
+    /// <summary>角色编码已存在(编码唯一)</summary>
+    [MsgKey("error.role.codeExists")]
+    RoleCodeExists = 42018,
+
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 
     /// <summary>字典类型不存在</summary>

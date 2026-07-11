@@ -12,7 +12,7 @@ namespace TenonAdmin.AspNetCore;
 [ApiController]
 [Route("api/v1/personal")]
 [ActiveSession]
-public class PersonalController(IPersonalService personal, IMenuService menu, ICurrentUser currentUser) : ControllerBase
+public class PersonalController(IPersonalService personal, IMenuService menu, IPermissionProvider permissions, ICurrentUser currentUser) : ControllerBase
 {
     /// <summary>当前用户 Id;[Authorize] 已保证认证,理论上不为空,兜底当令牌异常处理。</summary>
     private long CurrentUserId => currentUser.UserId ?? throw new AdminException(ErrorCode.TokenInvalid);
@@ -39,6 +39,14 @@ public class PersonalController(IPersonalService personal, IMenuService menu, IC
         await personal.ChangePasswordAsync(CurrentUserId, input);
         return Result<bool>.Ok(true);
     }
+
+    /// <summary>
+    /// 取自己当前生效的权限码集合(= 规范化路由,如 <c>POST:/api/v1/sys/user</c>)。
+    /// 前端 <c>v-auth</c> 据此做按钮级显隐;超管无角色故返回空集(前端 fail-open 显示全部,服务端 sadm 绕过兜底)。
+    /// </summary>
+    [HttpGet("permissions")]
+    public async Task<Result<IReadOnlyCollection<string>>> GetPermissions() =>
+        Result<IReadOnlyCollection<string>>.Ok(await permissions.GetPermissionCodesAsync(CurrentUserId));
 
     /// <summary>取自己可访问的应用/模块列表 + 默认应用(多应用门户;登录后拉取以决定进哪个应用)</summary>
     [HttpGet("modules")]

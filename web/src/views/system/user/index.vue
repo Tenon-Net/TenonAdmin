@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 用户管理(写侧)= ProTable(列表/搜索/分页)+ 手写弹窗 CRUD + 重置密码 + 专用启停端点。
-// 关键约束:编辑不渲染角色多选(后端缺角色分页),但从 detail 取回 roleIds 原样带回提交,避免清空角色;
+// 角色多选:新增/编辑均可分配角色(选项来自 roleApi 拉一大页);编辑回显走 userApi.detail 的 roleIds。
 // 超管行(isSuperAdmin)删除/停用置灰防自锁;启停走专用 setEnabled(非全量 update)。
 import { h, onMounted, reactive, ref } from 'vue'
 import {
@@ -16,7 +16,7 @@ import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
 import { useProTableLabels } from '@/composables/useProTableLabels'
-import { userApi, positionApi } from '@/api'
+import { userApi, positionApi, roleApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { AddUserInput, UpdateUserInput, UserItem } from '@/types/api'
 
@@ -31,14 +31,21 @@ const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   successMsg: t('user.deleted'),
 })
 
-// 职位下拉:拉一页足量。ponytail: 200 覆盖绝大多数系统的职位数;真超再上分页搜索。
+// 职位/角色下拉:各拉一页足量。ponytail: 200 覆盖绝大多数系统;真超再上分页搜索。
 const positionOptions = ref<{ label: string; value: number }[]>([])
+const roleOptions = ref<{ label: string; value: number }[]>([])
 onMounted(async () => {
   try {
     const { items } = await positionApi.page({ page: 1, pageSize: 200 })
     positionOptions.value = items.map((p) => ({ label: p.name, value: p.id }))
   } catch {
     // 静默:职位是配角,不打断列表
+  }
+  try {
+    const { items } = await roleApi.page({ page: 1, pageSize: 200 })
+    roleOptions.value = items.map((r) => ({ label: r.name, value: r.id }))
+  } catch {
+    // 静默:角色下拉拉取失败不打断列表
   }
 })
 
@@ -103,8 +110,6 @@ const columns: ProTableColumn<UserItem>[] = [
 const show = ref(false)
 const formRef = ref<FormInst | null>(null)
 const editingId = ref<number | null>(null)
-// 编辑时从 detail 取回,提交原样回传 —— 后端无角色分配 UI,不带回等于清空用户角色。
-const editRoleIds = ref<number[]>([])
 const rules: FormRules = {
   account: { required: true, whitespace: true, message: () => t('user.accountRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('user.nameRequired'), trigger: ['input', 'blur'] },
@@ -116,13 +121,13 @@ interface UserForm {
   orgId: number | null
   positionId: number | null
   enabled: boolean
+  roleIds: number[]
 }
-const blank = (): UserForm => ({ account: '', password: '', name: '', orgId: null, positionId: null, enabled: true })
+const blank = (): UserForm => ({ account: '', password: '', name: '', orgId: null, positionId: null, enabled: true, roleIds: [] })
 const form = reactive<UserForm>(blank())
 
 function openAdd() {
   editingId.value = null
-  editRoleIds.value = []
   Object.assign(form, blank())
   show.value = true
 }
@@ -131,10 +136,10 @@ async function openEdit(r: UserItem) {
   try {
     const d = await userApi.detail(r.id)
     editingId.value = r.id
-    editRoleIds.value = d.roleIds ?? []
     Object.assign(form, {
       account: d.account, password: '', name: d.name,
       orgId: d.orgId ?? null, positionId: d.positionId ?? null, enabled: d.enabled,
+      roleIds: d.roleIds ?? [],
     })
     show.value = true
   } catch (e) {
@@ -150,13 +155,13 @@ async function save() {
         account: form.account,
         password: form.password || undefined, // 留空 → 省略字段 → 后端用默认初始密码
         name: form.name, orgId: form.orgId, positionId: form.positionId, enabled: form.enabled,
-        roleIds: [], // 本计划不含角色分配 UI(后端缺 role/page),新增不授角色
+        roleIds: form.roleIds,
       }
       await userApi.add(body)
     } else {
       const body: UpdateUserInput = {
         name: form.name, orgId: form.orgId, positionId: form.positionId, enabled: form.enabled,
-        roleIds: editRoleIds.value, // 原样带回,避免清空角色
+        roleIds: form.roleIds,
       }
       await userApi.update(editingId.value, body)
     }
@@ -250,6 +255,9 @@ async function copyResult() {
       </n-form-item>
       <n-form-item :label="t('user.position')">
         <n-select v-model:value="form.positionId" :options="positionOptions" clearable :placeholder="t('user.positionPlaceholder')" />
+      </n-form-item>
+      <n-form-item :label="t('user.roles')">
+        <n-select v-model:value="form.roleIds" :options="roleOptions" multiple clearable :placeholder="t('user.rolesPlaceholder')" />
       </n-form-item>
       <n-form-item :label="t('common.status')">
         <n-switch v-model:value="form.enabled" />

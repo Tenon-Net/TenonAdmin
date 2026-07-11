@@ -7,8 +7,10 @@ import { useAuthStore } from '@/stores/auth'
  *   v-auth="['a','b']"                   多码,默认 OR
  *   v-auth.and="['a','b']"               多码,AND
  *
- * ⚠ 后端暂无"返回按钮权限码"接口 → permissionCodes 恒空 → **fail-open**(不隐藏)。
- * 真正的强制在服务端(403 / code 41001)。等后端补 /personal/permissions 后此指令自动生效。
+ * 权限码由 useModule.enterInitial 经 GET /personal/permissions 填入 authStore。
+ * ⚠ 空集时 **fail-open**(不隐藏):超管无角色故码为空,靠此分支看到全部按钮(服务端 sadm 绕过兜底);
+ *   无权限的普通用户同样 fail-open(看得到、点了 403)——真正的强制在服务端(403 / code 41001)。
+ * // ponytail: 不为完美 UX 加客户端强隐藏,服务端才是权威。
  */
 export const vAuth: Directive<HTMLElement, string | string[]> = {
   mounted(el, binding) {

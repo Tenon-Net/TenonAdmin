@@ -42,6 +42,20 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 53, ParentId = 10, Type = MenuType.Button, Title = "用户-重置密码", Permission = "PUT:/api/v1/sys/user/{id}/password", Sort = 14, Enabled = true },
         new SysMenu { Id = 54, ParentId = 10, Type = MenuType.Button, Title = "用户-启停", Permission = "PUT:/api/v1/sys/user/{id}/enabled", Sort = 15, Enabled = true },
 
+        // 角色管理页(SysRoleController:CRUD + 授菜单权限 + 配数据范围)。
+        // 授权抽屉读菜单树复用系统运维「菜单-树」锚点(Id=41);授菜单/数据范围锚点 Id 3/4 从系统运维挪到此组。
+        new SysMenu { Id = 87, ParentId = 10, Type = MenuType.Menu, Title = "角色管理", Permission = "", Path = "/system/role", Component = "system/role/index", Icon = "ph:shield-check-duotone", Sort = 4, Enabled = true, Visible = true },
+        new SysMenu { Id = 88, ParentId = 10, Type = MenuType.Button, Title = "角色-分页", Permission = "GET:/api/v1/sys/role/page", Sort = 17, Enabled = true },
+        new SysMenu { Id = 89, ParentId = 10, Type = MenuType.Button, Title = "角色-详情", Permission = "GET:/api/v1/sys/role/{id}", Sort = 18, Enabled = true },
+        new SysMenu { Id = 91, ParentId = 10, Type = MenuType.Button, Title = "角色-新增", Permission = "POST:/api/v1/sys/role/add", Sort = 19, Enabled = true },
+        new SysMenu { Id = 92, ParentId = 10, Type = MenuType.Button, Title = "角色-更新", Permission = "PUT:/api/v1/sys/role/{id}", Sort = 20, Enabled = true },
+        new SysMenu { Id = 93, ParentId = 10, Type = MenuType.Button, Title = "角色-删除", Permission = "DELETE:/api/v1/sys/role/{id}", Sort = 21, Enabled = true },
+        new SysMenu { Id = 94, ParentId = 10, Type = MenuType.Button, Title = "角色-批量删除", Permission = "POST:/api/v1/sys/role/batch-delete", Sort = 22, Enabled = true },
+        new SysMenu { Id = 95, ParentId = 10, Type = MenuType.Button, Title = "角色-取菜单", Permission = "GET:/api/v1/sys/role/{id}/menus", Sort = 23, Enabled = true },
+        new SysMenu { Id = 96, ParentId = 10, Type = MenuType.Button, Title = "角色-取数据范围", Permission = "GET:/api/v1/sys/role/{id}/datascope", Sort = 24, Enabled = true },
+        new SysMenu { Id = 3, ParentId = 10, Type = MenuType.Button, Title = "角色-授权菜单", Permission = "PUT:/api/v1/sys/role/menu", Sort = 25, Enabled = true },
+        new SysMenu { Id = 4, ParentId = 10, Type = MenuType.Button, Title = "角色-数据范围", Permission = "PUT:/api/v1/sys/role/datascope", Sort = 26, Enabled = true },
+
         // ═══ 系统运维 ═══════════════════════════════════════════════
         new SysMenu { Id = 20, ParentId = 0, Type = MenuType.Catalog, Title = "系统运维", Permission = "", Icon = "ph:wrench-duotone", Sort = 2, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
 
@@ -81,10 +95,9 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 48, ParentId = 20, Type = MenuType.Button, Title = "模块-更新", Permission = "PUT:/api/v1/sys/module/{id}", Sort = 21, Enabled = true },
         new SysMenu { Id = 49, ParentId = 20, Type = MenuType.Button, Title = "模块-删除", Permission = "DELETE:/api/v1/sys/module/{id}", Sort = 22, Enabled = true },
 
-        // 权限码锚点(暂无独立页面):探针 + 角色授权/数据范围。挂靠系统运维目录,仅承载权限码。
+        // 权限码锚点(暂无独立页面):探针。挂靠系统运维目录,仅承载权限码。
+        // (角色授权/数据范围锚点 Id 3/4 已挪到组织管理的角色管理页组,见上。)
         new SysMenu { Id = 2, ParentId = 20, Type = MenuType.Button, Title = "连通性探针", Permission = "GET:/api/v1/ping", Sort = 23, Enabled = true },
-        new SysMenu { Id = 3, ParentId = 20, Type = MenuType.Button, Title = "角色授权", Permission = "PUT:/api/v1/sys/role/menu", Sort = 24, Enabled = true },
-        new SysMenu { Id = 4, ParentId = 20, Type = MenuType.Button, Title = "角色数据范围", Permission = "PUT:/api/v1/sys/role/datascope", Sort = 25, Enabled = true },
 
         // ═══ 日志审计 ═══════════════════════════════════════════════
         new SysMenu { Id = 90, ParentId = 0, Type = MenuType.Catalog, Title = "日志审计", Permission = "", Icon = "ph:clipboard-text-duotone", Sort = 3, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
