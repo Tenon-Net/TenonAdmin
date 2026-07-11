@@ -31,4 +31,8 @@ public class SysLoginLog : BaseEntity
 
     [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "User-Agent")]
     public string? UserAgent { get; set; }
+
+    /// <summary>用户姓名——非持久化,分页时按 <see cref="UserId"/> 批量回填(失败/账号不存在的行为 null,前端回落账号)。</summary>
+    [SugarColumn(IsIgnore = true)]
+    public string? Name { get; set; }
 }

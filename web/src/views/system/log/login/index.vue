@@ -32,7 +32,8 @@ const columns: ProTableColumn<SysLoginLog>[] = [
     ],
   },
   { key: 'resultCode', title: () => t('log.resultCode'), width: 100 },
-  { key: 'userId', title: () => t('log.userId'), render: (r) => r.userId ?? '—' },
+  // 姓名:后端按 userId 回填;登录失败/账号不存在的行无姓名 → 回落账号
+  { key: 'name', title: () => t('log.name'), render: (r) => r.name || r.account || '—' },
   { key: 'ip', title: () => t('log.ip'), render: (r) => r.ip || '—' },
   // 设备:UA 解析成「浏览器 · 系统」(全未识别回落原始串);过长截断 + tooltip
   { key: 'device', title: () => t('log.device'), ellipsis: { tooltip: true }, render: (r) => uaSummary(r.userAgent) },

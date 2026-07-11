@@ -96,12 +96,34 @@ public class LogService(
     }
 
     /// <inheritdoc />
-    public virtual Task<PagedList<SysLoginLog>> PageLoginAsync(LoginLogPageInput input) =>
-        loginLogs.AsQueryable()
+    public virtual async Task<PagedList<SysLoginLog>> PageLoginAsync(LoginLogPageInput input)
+    {
+        var page = await loginLogs.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Account), x => x.Account.Contains(input.Account!))
             .WhereIF(input.Success.HasValue, x => x.Success == input.Success!.Value)
             .OrderBy(x => x.Id, OrderByType.Desc)
             .ToPagedListAsync(input.Current, input.Size);
+        await FillUserNamesAsync(page.Items);
+        return page;
+    }
+
+    /// <summary>
+    /// 按本页出现的用户 Id 去重批量查一次姓名回填(避免逐行 N+1)。登录失败行 UserId 为 null → 跳过;
+    /// 用户已软删则查不到,Name 留 null、前端回落账号。
+    /// </summary>
+    protected virtual async Task FillUserNamesAsync(IReadOnlyList<SysLoginLog> items)
+    {
+        var ids = items.Where(x => x.UserId.HasValue).Select(x => x.UserId!.Value).Distinct().ToList();
+        if (ids.Count == 0) return;
+        var rows = await users.AsQueryable()
+            .Where(u => ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.Name })
+            .ToListAsync();
+        var nameById = rows.ToDictionary(u => u.Id, u => u.Name);
+        foreach (var item in items)
+            if (item.UserId.HasValue && nameById.TryGetValue(item.UserId.Value, out var name))
+                item.Name = name;
+    }
 
     /// <inheritdoc />
     // ponytail: 硬删清空(日志无软删语义,软删只会让表越堆越大)。数据量大时应改按时间分批/归档后再删。

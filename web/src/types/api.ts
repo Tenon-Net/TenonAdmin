@@ -182,6 +182,7 @@ export interface SysLoginLog {
   success: boolean
   resultCode: number
   userId?: number | null
+  name?: string | null
   ip?: string | null
   userAgent?: string | null
   createTime: string

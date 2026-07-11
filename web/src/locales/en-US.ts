@@ -401,7 +401,6 @@ export default {
     success: 'Success',
     failed: 'Failed',
     resultCode: 'Code',
-    userId: 'User ID',
     name: 'Name',
     ip: 'IP',
     userAgent: 'Client',

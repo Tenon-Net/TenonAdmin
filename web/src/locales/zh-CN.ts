@@ -404,7 +404,6 @@ export default {
     success: '成功',
     failed: '失败',
     resultCode: '结果码',
-    userId: '用户 ID',
     name: '姓名',
     ip: 'IP 地址',
     userAgent: '客户端',
