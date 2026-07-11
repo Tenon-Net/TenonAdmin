@@ -76,6 +76,20 @@ public class DictService(
     }
 
     /// <inheritdoc />
+    public virtual async Task DeleteTypesBatchAsync(IReadOnlyCollection<long> ids)
+    {
+        if (ids.Count == 0) return;
+        var idList = ids.ToList();
+        var targets = await types.AsQueryable().Where(t => idList.Contains(t.Id)).ToListAsync();
+        foreach (var t in targets)
+        {
+            await types.DeleteAsync(t.Id);
+            await items.Db.Deleteable<SysDictItem>().Where(i => i.DictTypeCode == t.Code).ExecuteCommandAsync();
+            await InvalidateAsync(t.Code);
+        }
+    }
+
+    /// <inheritdoc />
     public virtual async Task<IReadOnlyList<SysDictItem>> GetItemsByTypeAsync(string typeCode)
     {
         var key = CacheKeys.DictItems(typeCode);
@@ -142,6 +156,17 @@ public class DictService(
 
         await items.DeleteAsync(id);
         await InvalidateAsync(entity!.DictTypeCode);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task DeleteItemsBatchAsync(IReadOnlyCollection<long> ids)
+    {
+        if (ids.Count == 0) return;
+        var idList = ids.ToList();
+        var targets = await items.AsQueryable().Where(i => idList.Contains(i.Id)).ToListAsync();
+        foreach (var it in targets) await items.DeleteAsync(it.Id);
+        // 所涉类型去重后各失效一次(避免同类型重复失效)
+        foreach (var code in targets.Select(i => i.DictTypeCode).Distinct()) await InvalidateAsync(code);
     }
 
     /// <summary>失效某字典类型的项缓存,并广播变更事件供订阅者感知。</summary>

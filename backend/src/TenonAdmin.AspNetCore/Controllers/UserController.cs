@@ -49,6 +49,16 @@ public class UserController(IUserService users) : ControllerBase
         return Result<bool>.Ok(true);
     }
 
+    /// <summary>批量软删除用户(集合含超管则整体拒绝)</summary>
+    [HttpPost("batch-delete")]
+    [RolePermission]
+    [OperationLog("批量删除用户")]
+    public async Task<Result<bool>> BatchDelete(BatchDeleteInput input)
+    {
+        await users.DeleteBatchAsync(input.Ids);
+        return Result<bool>.Ok(true);
+    }
+
     /// <summary>重置密码;返回实际生效的初始密码(供管理员当场转达)</summary>
     [HttpPut("{id}/password")]
     [RolePermission]

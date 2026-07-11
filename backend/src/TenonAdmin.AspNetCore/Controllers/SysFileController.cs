@@ -57,4 +57,14 @@ public class SysFileController(IFileService files) : ControllerBase
         await files.DeleteAsync(id);
         return Result<bool>.Ok(true);
     }
+
+    /// <summary>批量软删除文件记录</summary>
+    [HttpPost("batch-delete")]
+    [RolePermission]
+    [OperationLog("批量删除文件")]
+    public async Task<Result<bool>> BatchDelete(BatchDeleteInput input)
+    {
+        await files.DeleteBatchAsync(input.Ids);
+        return Result<bool>.Ok(true);
+    }
 }

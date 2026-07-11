@@ -82,6 +82,8 @@ export const userApi = {
   update: (id: number, body: UpdateUserInput) =>
     client.PUT('/api/v1/sys/user/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   remove: (id: number) => client.DELETE('/api/v1/sys/user/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** 批量软删除;集合含超管后端整体拒绝(SuperAdminProtected)。 */
+  batchRemove: (ids: number[]) => client.POST('/api/v1/sys/user/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
   /** 重置密码;返回实际生效的初始密码(newPassword 留空 = 后端默认初始密码)。 */
   resetPassword: (id: number, newPassword?: string | null) =>
     client.PUT('/api/v1/sys/user/{id}/password', { params: { path: { id } }, body: { newPassword: newPassword || null } }).then((r) => unwrap<string>(r)),
@@ -196,6 +198,8 @@ export const dictAdminApi = {
     client.PUT('/api/v1/sys/dict/type/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   typeRemove: (id: number) =>
     client.DELETE('/api/v1/sys/dict/type/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** 批量删除字典类型(各自级联删项)。 */
+  typeBatchRemove: (ids: number[]) => client.POST('/api/v1/sys/dict/type/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
   /** 某类型下的字典项(管理端:含停用、带 id;非下拉缓存源)。ponytail: 拉一页 500,字典项数量小,真超再分页。 */
   items: (typeCode: string) =>
     client
@@ -207,6 +211,8 @@ export const dictAdminApi = {
     client.PUT('/api/v1/sys/dict/item/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   itemRemove: (id: number) =>
     client.DELETE('/api/v1/sys/dict/item/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** 批量删除字典项。 */
+  itemBatchRemove: (ids: number[]) => client.POST('/api/v1/sys/dict/item/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
 }
 
 export const fileApi = {
@@ -238,6 +244,8 @@ export const fileApi = {
     }),
   remove: (id: number) =>
     client.DELETE('/api/v1/sys/file/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** 批量软删除文件记录(物理文件保留)。 */
+  batchRemove: (ids: number[]) => client.POST('/api/v1/sys/file/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
 }
 
 export const sessionApi = {

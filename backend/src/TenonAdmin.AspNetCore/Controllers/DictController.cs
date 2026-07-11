@@ -49,6 +49,16 @@ public class DictController(IDictService dictService) : ControllerBase
         return Result<bool>.Ok(true);
     }
 
+    /// <summary>批量删除字典类型(各自级联删项)</summary>
+    [HttpPost("type/batch-delete")]
+    [RolePermission]
+    [OperationLog("批量删除字典类型")]
+    public async Task<Result<bool>> BatchDeleteTypes(BatchDeleteInput input)
+    {
+        await dictService.DeleteTypesBatchAsync(input.Ids);
+        return Result<bool>.Ok(true);
+    }
+
     /// <summary>按类型编码取启用中的字典项列表(前端下拉数据源,读穿透缓存)</summary>
     [HttpGet("items/{typeCode}")]
     [RolePermission]
@@ -82,6 +92,16 @@ public class DictController(IDictService dictService) : ControllerBase
     public async Task<Result<bool>> DeleteItem(long id)
     {
         await dictService.DeleteItemAsync(id);
+        return Result<bool>.Ok(true);
+    }
+
+    /// <summary>批量删除字典项</summary>
+    [HttpPost("item/batch-delete")]
+    [RolePermission]
+    [OperationLog("批量删除字典项")]
+    public async Task<Result<bool>> BatchDeleteItems(BatchDeleteInput input)
+    {
+        await dictService.DeleteItemsBatchAsync(input.Ids);
         return Result<bool>.Ok(true);
     }
 }

@@ -13,6 +13,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { useBatchDelete } from '@/composables/useBatchDelete'
 import { useProTableLabels } from '@/composables/useProTableLabels'
 import { dictAdminApi } from '@/api'
 import { useDictStore } from '@/stores/dict'
@@ -56,11 +57,32 @@ async function selectType(r: SysDictType) {
   await loadItems()
 }
 
+// 批量删除:类型批删后清空选中类型 + 全量失效下拉缓存;项批删后仅重载右栏 + 失效缓存。
+const { checkedKeys: typeCheckedKeys, hasSelection: typeHasSelection, run: typeBatchDelete } = useBatchDelete({
+  remove: dictAdminApi.typeBatchRemove,
+  refresh: () => {
+    selectedType.value = null
+    items.value = []
+    dictStore.invalidate()
+    typeTableRef.value?.refresh()
+  },
+  successMsg: t('dict.typeDeleted'),
+})
+const { checkedKeys: itemCheckedKeys, hasSelection: itemHasSelection, run: itemBatchDelete } = useBatchDelete({
+  remove: dictAdminApi.itemBatchRemove,
+  refresh: () => {
+    dictStore.invalidate()
+    loadItems()
+  },
+  successMsg: t('dict.itemDeleted'),
+})
+
 // ── 左:字典类型 ProTable ──
 const typeToInput = (r: SysDictType): DictTypeInput => ({
   code: r.code, name: r.name, sort: r.sort, enabled: r.enabled, remark: r.remark ?? '',
 })
 const typeColumns: ProTableColumn<SysDictType>[] = [
+  { type: 'selection' },
   { key: 'code', title: () => t('dict.code'), search: true },
   { key: 'name', title: () => t('dict.name'), search: true },
   { key: 'sort', title: () => t('dict.sort'), width: 70 },
@@ -155,6 +177,7 @@ const itemToInput = (r: SysDictItem): DictItemInput => ({
   dictTypeCode: r.dictTypeCode, label: r.label, value: r.value, sort: r.sort, enabled: r.enabled,
 })
 const itemColumns: DataTableColumns<SysDictItem> = [
+  { type: 'selection' },
   { title: () => t('dict.itemLabel'), key: 'label' },
   { title: () => t('dict.itemValue'), key: 'value' },
   { title: () => t('dict.sort'), key: 'sort', width: 70 },
@@ -250,11 +273,21 @@ async function saveItem() {
           class: row.id === selectedType?.id ? 'dict-row--active' : '',
           onClick: () => selectType(row),
         })"
+        :checked-row-keys="typeCheckedKeys"
+        @update:checked-row-keys="(keys: (string | number)[]) => (typeCheckedKeys = keys)"
         @error="(e) => message.error(translateError(e))"
       >
         <template #toolbar>
           <n-button v-auth="'POST:/api/v1/sys/dict/type'" type="primary" @click="openTypeAdd">
             <template #icon><AppIcon icon="ph:plus" :size="16" /></template>{{ t('common.add') }}
+          </n-button>
+          <n-button
+            v-auth="'POST:/api/v1/sys/dict/type/batch-delete'"
+            type="error"
+            :disabled="!typeHasSelection"
+            @click="typeBatchDelete"
+          >
+            <template #icon><AppIcon icon="ph:trash" :size="16" /></template>{{ t('common.batchDelete') }}
           </n-button>
         </template>
       </ProTable>
@@ -263,16 +296,29 @@ async function saveItem() {
     <div class="dict-pane">
       <n-card v-if="selectedType" :bordered="true" :title="t('dict.itemsOf', { name: selectedType.name })">
         <template #header-extra>
-          <n-button v-auth="'POST:/api/v1/sys/dict/item'" size="small" type="primary" @click="openItemAdd">
-            <template #icon><AppIcon icon="ph:plus" :size="15" /></template>{{ t('dict.addItem') }}
-          </n-button>
+          <n-space :size="8">
+            <n-button
+              v-auth="'POST:/api/v1/sys/dict/item/batch-delete'"
+              size="small"
+              type="error"
+              :disabled="!itemHasSelection"
+              @click="itemBatchDelete"
+            >
+              <template #icon><AppIcon icon="ph:trash" :size="15" /></template>{{ t('common.batchDelete') }}
+            </n-button>
+            <n-button v-auth="'POST:/api/v1/sys/dict/item'" size="small" type="primary" @click="openItemAdd">
+              <template #icon><AppIcon icon="ph:plus" :size="15" /></template>{{ t('dict.addItem') }}
+            </n-button>
+          </n-space>
         </template>
         <n-data-table
           :columns="itemColumns"
           :data="items"
           :loading="itemsLoading"
           :row-key="(r: SysDictItem) => r.id"
+          :checked-row-keys="itemCheckedKeys"
           size="small"
+          @update:checked-row-keys="(keys: (string | number)[]) => (itemCheckedKeys = keys)"
         />
       </n-card>
       <n-card v-else :bordered="true">

@@ -139,6 +139,27 @@ public class UserService(
     }
 
     /// <inheritdoc />
+    public virtual async Task DeleteBatchAsync(IReadOnlyCollection<long> ids)
+    {
+        if (ids.Count == 0) return;
+        var idList = ids.ToList();
+        var targets = await users.AsQueryable().Where(u => idList.Contains(u.Id)).ToListAsync();
+        // 超管护栏(与 DeleteAsync 同源):集合里只要含超管就整体拒绝,不做"删其余、跳超管"的部分成功(语义更明确)。
+        AdminException.ThrowIf(targets.Any(u => u.IsSuperAdmin), ErrorCode.SuperAdminProtected);
+
+        // 整批包一个事务:任一步失败全回滚,不留半删状态。逐个复用单删的三步(清角色→软删→下线会话)。
+        await InTransactionAsync(async () =>
+        {
+            foreach (var u in targets)
+            {
+                await rbac.SetUserRolesAsync(u.Id, []);
+                await users.DeleteAsync(u.Id);
+                await sessions.RevokeAllForUserAsync(u.Id);
+            }
+        });
+    }
+
+    /// <inheritdoc />
     public virtual async Task<string> ResetPasswordAsync(long id, string? newPassword)
     {
         var user = await users.GetByIdAsync(id);

@@ -23,6 +23,9 @@ public interface IDictService
     /// <summary>删除字典类型(级联软删该类型下全部字典项),不存在抛 <see cref="ErrorCode.DictTypeNotFound"/>。</summary>
     Task DeleteTypeAsync(long id);
 
+    /// <summary>批量删除字典类型(逐个级联删项 + 失效缓存);不存在的 Id 静默跳过。</summary>
+    Task DeleteTypesBatchAsync(IReadOnlyCollection<long> ids);
+
     /// <summary>按类型编码取启用中的字典项列表(读穿透缓存,前端下拉的数据源)。</summary>
     Task<IReadOnlyList<SysDictItem>> GetItemsByTypeAsync(string typeCode);
 
@@ -37,4 +40,7 @@ public interface IDictService
 
     /// <summary>删除字典项(软删),不存在抛 <see cref="ErrorCode.DictItemNotFound"/>。</summary>
     Task DeleteItemAsync(long id);
+
+    /// <summary>批量删除字典项(软删 + 失效所涉类型缓存);不存在的 Id 静默跳过。</summary>
+    Task DeleteItemsBatchAsync(IReadOnlyCollection<long> ids);
 }

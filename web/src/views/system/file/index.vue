@@ -8,6 +8,7 @@ import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pr
 import AppIcon from '@/components/AppIcon.vue'
 import FileUpload from '@/components/FileUpload/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { useBatchDelete } from '@/composables/useBatchDelete'
 import { useProTableLabels } from '@/composables/useProTableLabels'
 import { fileApi } from '@/api'
 import { translateError } from '@/utils/error'
@@ -18,11 +19,17 @@ const message = useMessage()
 const { run } = useConfirm()
 const labels = useProTableLabels()
 const tableRef = ref<ProTableInst<SysFile>>()
+const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
+  remove: fileApi.batchRemove,
+  refresh: () => tableRef.value?.refresh(),
+  successMsg: t('file.deleted'),
+})
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
 }
 
 async function download(r: SysFile) {
@@ -42,6 +49,7 @@ async function download(r: SysFile) {
 }
 
 const columns: ProTableColumn<SysFile>[] = [
+  { type: 'selection' },
   { key: 'originalName', title: () => t('file.name'), search: true, ellipsis: { tooltip: true } },
   { key: 'extension', title: () => t('file.extension'), width: 90, render: (r) => r.extension || '—' },
   { key: 'sizeBytes', title: () => t('file.size'), width: 110, render: (r) => formatSize(r.sizeBytes) },
@@ -85,6 +93,8 @@ const columns: ProTableColumn<SysFile>[] = [
     :title="t('file.title')"
     :labels="labels"
     storage-key="sys-file"
+    :checked-row-keys="checkedKeys"
+    @update:checked-row-keys="(keys: (string | number)[]) => (checkedKeys = keys)"
     @error="(e) => message.error(translateError(e))"
   >
     <template #toolbar>
@@ -93,6 +103,14 @@ const columns: ProTableColumn<SysFile>[] = [
           <template #icon><AppIcon icon="ph:upload-simple" :size="16" /></template>{{ t('file.upload') }}
         </n-button>
       </FileUpload>
+      <n-button
+        v-auth="'POST:/api/v1/sys/file/batch-delete'"
+        type="error"
+        :disabled="!hasSelection"
+        @click="batchDelete"
+      >
+        <template #icon><AppIcon icon="ph:trash" :size="16" /></template>{{ t('common.batchDelete') }}
+      </n-button>
     </template>
   </ProTable>
 </template>

@@ -21,6 +21,8 @@ export default {
     hidden: 'Hidden',
     operation: 'Actions',
     createTime: 'Created',
+    batchDelete: 'Batch delete',
+    batchDeleteConfirm: 'Delete the {count} selected item(s)? This cannot be undone.',
   },
   notFound: {
     desc: 'Page not found',
@@ -207,7 +209,6 @@ export default {
     disabled: 'Disabled',
     superAdmin: 'Super',
     createTime: 'Created',
-    keyword: 'Account / Name',
     // Write side (R4)
     password: 'Initial password',
     passwordHint: 'Leave blank to use the system default',

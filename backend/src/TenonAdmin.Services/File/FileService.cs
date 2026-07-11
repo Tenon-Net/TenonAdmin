@@ -90,4 +90,11 @@ public class FileService(
         AdminException.ThrowIf(file is null, ErrorCode.FileNotFound);
         await files.DeleteAsync(id);   // 软删记录;物理回收留清理任务(ponytail:v1 不删盘)
     }
+
+    /// <inheritdoc />
+    public virtual async Task DeleteBatchAsync(IReadOnlyCollection<long> ids)
+    {
+        // 逐个软删,复用仓储单删(不存在的 Id 影响 0 行,无害);物理文件同样保留(v1 不删盘)。
+        foreach (var id in ids) await files.DeleteAsync(id);
+    }
 }

@@ -14,6 +14,7 @@ import FormContainer from '@/components/FormContainer/index.vue'
 import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { useBatchDelete } from '@/composables/useBatchDelete'
 import { useProTableLabels } from '@/composables/useProTableLabels'
 import { userApi, positionApi } from '@/api'
 import { translateError } from '@/utils/error'
@@ -24,6 +25,11 @@ const message = useMessage()
 const { run } = useConfirm()
 const labels = useProTableLabels()
 const tableRef = ref<ProTableInst<UserItem>>()
+const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
+  remove: userApi.batchRemove,
+  refresh: () => tableRef.value?.refresh(),
+  successMsg: t('user.deleted'),
+})
 
 // 职位下拉:拉一页足量。ponytail: 200 覆盖绝大多数系统的职位数;真超再上分页搜索。
 const positionOptions = ref<{ label: string; value: number }[]>([])
@@ -37,6 +43,8 @@ onMounted(async () => {
 })
 
 const columns: ProTableColumn<UserItem>[] = [
+  // 超管行禁勾:批量删除同样不可含超管(后端也会整体拒绝)
+  { type: 'selection', disabled: (r: UserItem) => r.isSuperAdmin },
   { key: 'account', title: () => t('user.account'), search: true },
   { key: 'name', title: () => t('user.name'), search: true },
   {
@@ -200,11 +208,21 @@ async function copyResult() {
     :title="t('user.title')"
     :labels="labels"
     storage-key="sys-user"
+    :checked-row-keys="checkedKeys"
+    @update:checked-row-keys="(keys: (string | number)[]) => (checkedKeys = keys)"
     @error="(e) => message.error(translateError(e))"
   >
     <template #toolbar>
       <n-button v-auth="'POST:/api/v1/sys/user'" type="primary" @click="openAdd">
         <template #icon><AppIcon icon="ph:plus" :size="16" /></template>{{ t('common.add') }}
+      </n-button>
+      <n-button
+        v-auth="'POST:/api/v1/sys/user/batch-delete'"
+        type="error"
+        :disabled="!hasSelection"
+        @click="batchDelete"
+      >
+        <template #icon><AppIcon icon="ph:trash" :size="16" /></template>{{ t('common.batchDelete') }}
       </n-button>
     </template>
   </ProTable>

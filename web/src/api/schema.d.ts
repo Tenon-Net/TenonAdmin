@@ -576,6 +576,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/dict/type/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量删除字典类型(各自级联删项) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BatchDeleteInput"];
+                    "text/json": components["schemas"]["BatchDeleteInput"];
+                    "application/*+json": components["schemas"]["BatchDeleteInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/dict/items/{typeCode}": {
         parameters: {
             query?: never;
@@ -768,6 +812,50 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/dict/item/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量删除字典项 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BatchDeleteInput"];
+                    "text/json": components["schemas"]["BatchDeleteInput"];
+                    "application/*+json": components["schemas"]["BatchDeleteInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1890,6 +1978,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/file/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量软删除文件记录 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BatchDeleteInput"];
+                    "text/json": components["schemas"]["BatchDeleteInput"];
+                    "application/*+json": components["schemas"]["BatchDeleteInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/log/op/page": {
         parameters: {
             query?: never;
@@ -2414,6 +2546,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/user/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量软删除用户(集合含超管则整体拒绝) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BatchDeleteInput"];
+                    "text/json": components["schemas"]["BatchDeleteInput"];
+                    "application/*+json": components["schemas"]["BatchDeleteInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/user/{id}/password": {
         parameters: {
             query?: never;
@@ -2524,6 +2700,14 @@ export interface components {
             enabled?: boolean;
             /** @description 初始分配的角色 Id 集合 */
             roleIds?: (number | string)[];
+        };
+        /**
+         * @description 批量删除入参:目标 Id 集合。各模块的 `POST .../batch-delete` 端点统一收此形状,
+         *     服务层 `DeleteBatchAsync` 复用单删的守卫/软删/失效逻辑逐个处理。空集合视为无操作。
+         */
+        BatchDeleteInput: {
+            /** @description 要删除的记录 Id 集合。 */
+            ids?: (number | string)[];
         };
         /** @description 验证码下发出参:票据 Id + SVG 图。前端展示 SVG,登录时回传 string CaptchaOutput.CaptchaId + 用户输入的码。 */
         CaptchaOutput: {

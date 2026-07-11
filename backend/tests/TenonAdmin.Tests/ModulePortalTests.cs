@@ -44,7 +44,7 @@ public class ModulePortalTests
     [Fact]
     public async Task Module_access_is_derived_from_menu_grants()
     {
-        // 授菜单 Id 2 = "GET:/api/v1/ping",挂在顶级目录 1(系统管理)下 → 属内置 system 模块(Id 1)
+        // 授菜单 Id 2 = "GET:/api/v1/ping",挂在顶级目录 20(系统运维)下 → 属内置 system 模块(Id 1)
         using var f = new AdminAppFactory();
         var (account, password) = await SeedUser(f, menuId: 2);
 
@@ -122,7 +122,7 @@ public class ModulePortalTests
         var c = f.CreateClient();
         WithToken(c, await c.LoginToken("superAdmin", "Test@123456"));
 
-        // 内置 system 模块下有 4 个顶级目录(1/10/20/30);按钮不入导航,故为 4 个根节点
+        // 内置 system 模块下有 4 个顶级目录(10/20/30/90);按钮不入导航,故为 4 个根节点
         var tree = (await (await c.GetAsync("/api/v1/personal/menu?moduleId=1")).ReadEnvelope()).GetProperty("data");
         Assert.Equal(4, tree.GetArrayLength());
 

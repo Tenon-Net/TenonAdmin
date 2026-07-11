@@ -22,6 +22,8 @@ export default {
     hidden: '隐藏',
     operation: '操作',
     createTime: '创建时间',
+    batchDelete: '批量删除',
+    batchDeleteConfirm: '确认删除选中的 {count} 项?此操作不可恢复。',
   },
   notFound: {
     desc: '页面不存在',
@@ -208,7 +210,6 @@ export default {
     disabled: '停用',
     superAdmin: '超管',
     createTime: '创建时间',
-    keyword: '账号 / 姓名',
     // 写侧(R4)
     password: '初始密码',
     passwordHint: '留空则用系统默认初始密码',

@@ -22,4 +22,7 @@ public interface IFileService
 
     /// <summary>软删除文件记录(物理文件保留,回收留给清理任务);不存在抛 <see cref="ErrorCode.FileNotFound"/>。</summary>
     Task DeleteAsync(long id);
+
+    /// <summary>批量软删除文件记录(物理文件同样保留);不存在的 Id 静默跳过。</summary>
+    Task DeleteBatchAsync(IReadOnlyCollection<long> ids);
 }

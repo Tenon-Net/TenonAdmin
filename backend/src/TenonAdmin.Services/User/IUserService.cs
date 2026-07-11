@@ -24,6 +24,9 @@ public interface IUserService
     /// <summary>软删除用户(超管不可删)</summary>
     Task DeleteAsync(long id);
 
+    /// <summary>批量软删除用户(集合内含超管则整体拒绝,守超管不可删不变量);不存在的 Id 静默跳过。</summary>
+    Task DeleteBatchAsync(IReadOnlyCollection<long> ids);
+
     /// <summary>重置密码为指定值;留空则重置为默认初始密码。返回实际生效的初始密码明文(仅本次返回给管理员转达)。</summary>
     Task<string> ResetPasswordAsync(long id, string? newPassword);
 
