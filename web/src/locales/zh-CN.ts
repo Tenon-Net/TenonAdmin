@@ -214,6 +214,7 @@ export default {
     password: '初始密码',
     passwordHint: '留空则用系统默认初始密码',
     org: '归属机构',
+    allOrgs: '全部',
     orgPlaceholder: '选择机构(可空)',
     position: '职位',
     positionPlaceholder: '选择职位(可空)',

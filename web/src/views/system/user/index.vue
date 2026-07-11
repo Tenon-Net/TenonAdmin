@@ -2,9 +2,9 @@
 // 用户管理(写侧)= ProTable(列表/搜索/分页)+ 手写弹窗 CRUD + 重置密码 + 专用启停端点。
 // 角色多选:新增/编辑均可分配角色(选项来自 roleApi 拉一大页);编辑回显走 userApi.detail 的 roleIds。
 // 超管行(isSuperAdmin)删除/停用置灰防自锁;启停走专用 setEnabled(非全量 update)。
-import { h, onMounted, reactive, ref } from 'vue'
+import { computed, h, onMounted, reactive, ref } from 'vue'
 import {
-  NButton, NSpace, NTag, NInput, NForm, NFormItem, NSelect, NSwitch, NPopconfirm,
+  NButton, NCard, NTree, NSpace, NTag, NInput, NForm, NFormItem, NSelect, NSwitch, NPopconfirm,
   useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -16,9 +16,10 @@ import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
 import { useProTableLabels } from '@/composables/useProTableLabels'
-import { userApi, positionApi, roleApi } from '@/api'
+import { userApi, positionApi, roleApi, orgApi } from '@/api'
 import { translateError } from '@/utils/error'
-import type { AddUserInput, UpdateUserInput, UserItem } from '@/types/api'
+import { buildTree, type Tree } from '@/utils/tree'
+import type { AddUserInput, SysOrg, UpdateUserInput, UserItem } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -34,6 +35,14 @@ const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
 // 职位/角色下拉:各拉一页足量。ponytail: 200 覆盖绝大多数系统;真超再上分页搜索。
 const positionOptions = ref<{ label: string; value: number }[]>([])
 const roleOptions = ref<{ label: string; value: number }[]>([])
+// 左侧机构树筛选:选中节点即按其机构过滤用户;params 深监听联动 ProTable(回第 1 页重查)。
+const orgTree = ref<Tree<SysOrg>[]>([])
+const selectedOrgId = ref<number | null>(null)
+const tableParams = computed(() => (selectedOrgId.value == null ? {} : { orgId: selectedOrgId.value }))
+function onOrgSelect(keys: (string | number)[]) {
+  // 再点选中项 → 取消选中 → 恢复全部
+  selectedOrgId.value = keys.length ? Number(keys[0]) : null
+}
 onMounted(async () => {
   try {
     const { items } = await positionApi.page({ page: 1, pageSize: 200 })
@@ -46,6 +55,11 @@ onMounted(async () => {
     roleOptions.value = items.map((r) => ({ label: r.name, value: r.id }))
   } catch {
     // 静默:角色下拉拉取失败不打断列表
+  }
+  try {
+    orgTree.value = buildTree(await orgApi.list())
+  } catch {
+    // 静默:机构树是筛选辅助,拉取失败不打断列表
   }
 })
 
@@ -208,17 +222,40 @@ async function copyResult() {
 </script>
 
 <template>
-  <ProTable
-    ref="tableRef"
-    :columns="columns"
-    :fetcher="userApi.page"
-    :title="t('user.title')"
-    :labels="labels"
-    storage-key="sys-user"
-    :checked-row-keys="checkedKeys"
-    @update:checked-row-keys="(keys: (string | number)[]) => (checkedKeys = keys)"
-    @error="(e) => message.error(translateError(e))"
-  >
+  <div class="user-layout">
+    <!-- 左侧机构树筛选 -->
+    <n-card class="org-filter" :bordered="false" size="small">
+      <div class="org-filter-head">
+        <span class="org-filter-title">{{ t('user.org') }}</span>
+        <n-button v-if="selectedOrgId != null" text size="tiny" type="primary" @click="selectedOrgId = null">
+          {{ t('user.allOrgs') }}
+        </n-button>
+      </div>
+      <n-tree
+        block-line
+        selectable
+        :data="orgTree"
+        key-field="id"
+        label-field="name"
+        children-field="children"
+        :selected-keys="selectedOrgId == null ? [] : [selectedOrgId]"
+        @update:selected-keys="onOrgSelect"
+      />
+    </n-card>
+
+    <ProTable
+      ref="tableRef"
+      class="user-table"
+      :columns="columns"
+      :fetcher="userApi.page"
+      :params="tableParams"
+      :title="t('user.title')"
+      :labels="labels"
+      storage-key="sys-user"
+      :checked-row-keys="checkedKeys"
+      @update:checked-row-keys="(keys: (string | number)[]) => (checkedKeys = keys)"
+      @error="(e) => message.error(translateError(e))"
+    >
     <template #toolbar>
       <n-button v-auth="'POST:/api/v1/sys/user'" type="primary" @click="openAdd">
         <template #icon><AppIcon icon="ph:plus" :size="16" /></template>{{ t('common.add') }}
@@ -232,7 +269,8 @@ async function copyResult() {
         <template #icon><AppIcon icon="ph:trash" :size="16" /></template>{{ t('common.batchDelete') }}
       </n-button>
     </template>
-  </ProTable>
+    </ProTable>
+  </div>
 
   <!-- 新增/编辑 -->
   <FormContainer
@@ -304,5 +342,29 @@ async function copyResult() {
   margin: 0 0 12px;
   font-size: var(--font-size-sm, 13px);
   color: var(--color-text-secondary, #888);
+}
+/* 左树 + 右表:窄屏下机构树收窄,不换行(树本身可竖向滚动) */
+.user-layout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.org-filter {
+  flex: 0 0 220px;
+  align-self: stretch;
+}
+.org-filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.org-filter-title {
+  font-weight: 600;
+  font-size: var(--font-size-sm, 13px);
+}
+.user-table {
+  flex: 1;
+  min-width: 0;
 }
 </style>

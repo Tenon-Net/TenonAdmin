@@ -213,6 +213,7 @@ export default {
     password: 'Initial password',
     passwordHint: 'Leave blank to use the system default',
     org: 'Org',
+    allOrgs: 'All',
     orgPlaceholder: 'Select org (optional)',
     position: 'Position',
     positionPlaceholder: 'Select position (optional)',

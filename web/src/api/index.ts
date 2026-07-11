@@ -70,11 +70,11 @@ export const personalApi = {
 
 export const userApi = {
   /** 归一后端 PagedList<UserItem>({current,size,total,items}) → ProTable fetcher 契约的 {items,total}。 */
-  page: (params: { page: number; pageSize: number; account?: string; name?: string }) =>
+  page: (params: { page: number; pageSize: number; account?: string; name?: string; orgId?: number }) =>
     client
       .GET('/api/v1/sys/user/page', {
         // 查询参数名沿用后端 record 属性(PascalCase);ASP.NET 绑定大小写不敏感,类型要求 PascalCase。
-        params: { query: { Current: params.page, Size: params.pageSize, Account: params.account, Name: params.name } },
+        params: { query: { Current: params.page, Size: params.pageSize, Account: params.account, Name: params.name, OrgId: params.orgId } },
       })
       .then((r) => unwrap<PagedList<UserItem>>(r))
       .then((p) => ({ items: p.items, total: p.total })),
