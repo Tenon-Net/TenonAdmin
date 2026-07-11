@@ -212,6 +212,7 @@ export interface SysOrg {
   parentId: number
   name: string
   code: string
+  category?: string | null
   sort: number
   enabled: boolean
   createTime?: string
@@ -222,6 +223,7 @@ export interface OrgInput {
   parentId: number
   name: string
   code: string
+  category?: string | null
   sort: number
   enabled: boolean
 }

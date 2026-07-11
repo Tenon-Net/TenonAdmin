@@ -22,6 +22,10 @@ public class SysOrg : BaseEntity
     [SugarColumn(Length = 64, ColumnDescription = "机构编码(唯一)")]
     public string Code { get; set; } = "";
 
+    /// <summary>机构分类(存 org_category 字典 value,如 公司/部门/小组;可空)</summary>
+    [SugarColumn(Length = 64, IsNullable = true, ColumnDescription = "机构分类")]
+    public string? Category { get; set; }
+
     [SugarColumn(ColumnDescription = "排序(小在前)")]
     public int Sort { get; set; }
 

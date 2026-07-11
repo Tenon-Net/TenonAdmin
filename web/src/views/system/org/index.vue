@@ -9,6 +9,8 @@ import {
 } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
+import DictSelect from '@/components/DictSelect/index.vue'
+import DictTag from '@/components/DictTag/index.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
@@ -42,6 +44,7 @@ interface OrgForm {
   parentId: number | null
   name: string
   code: string
+  category: string | null
   sort: number
   enabled: boolean
 }
@@ -52,11 +55,11 @@ const rules: FormRules = {
   name: { required: true, whitespace: true, message: () => t('org.nameRequired'), trigger: ['input', 'blur'] },
   code: { required: true, whitespace: true, message: () => t('org.codeRequired'), trigger: ['input', 'blur'] },
 }
-const blank = (): OrgForm => ({ parentId: 0, name: '', code: '', sort: 0, enabled: true })
+const blank = (): OrgForm => ({ parentId: 0, name: '', code: '', category: null, sort: 0, enabled: true })
 const form = reactive<OrgForm>(blank())
 
 // 行数据 → 完整入参:openEdit 回填与 StatusSwitch 行内改状态共用(后端无独立启停端点,均走全量 update)。
-const toInput = (r: SysOrg): OrgInput => ({ parentId: r.parentId, name: r.name, code: r.code, sort: r.sort, enabled: r.enabled })
+const toInput = (r: SysOrg): OrgInput => ({ parentId: r.parentId, name: r.name, code: r.code, category: r.category ?? null, sort: r.sort, enabled: r.enabled })
 
 function openAdd(parentId = 0) {
   editingId.value = null
@@ -87,6 +90,7 @@ async function save() {
 const columns: DataTableColumns<Tree<SysOrg>> = [
   { title: () => t('org.name'), key: 'name' },
   { title: () => t('org.code'), key: 'code' },
+  { title: () => t('org.category'), key: 'category', width: 100, render: (r) => h(DictTag, { typeCode: 'org_category', value: r.category }) },
   { title: () => t('org.sort'), key: 'sort', width: 80 },
   {
     title: () => t('common.status'),
@@ -179,6 +183,9 @@ const columns: DataTableColumns<Tree<SysOrg>> = [
         </n-form-item>
         <n-form-item :label="t('org.code')" path="code">
           <n-input v-model:value="form.code" :placeholder="t('org.code')" :disabled="editingId !== null" />
+        </n-form-item>
+        <n-form-item :label="t('org.category')">
+          <DictSelect v-model:value="form.category" type-code="org_category" clearable :placeholder="t('org.categoryPlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('org.sort')">
           <n-input-number v-model:value="form.sort" :min="0" style="width: 160px" />

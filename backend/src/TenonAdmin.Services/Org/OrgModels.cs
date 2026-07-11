@@ -12,6 +12,9 @@ public record OrgInput
     /// <summary>机构编码(唯一)</summary>
     public string Code { get; init; } = "";
 
+    /// <summary>机构分类(org_category 字典 value,可空)</summary>
+    public string? Category { get; init; }
+
     /// <summary>排序(小在前)</summary>
     public int Sort { get; init; }
 

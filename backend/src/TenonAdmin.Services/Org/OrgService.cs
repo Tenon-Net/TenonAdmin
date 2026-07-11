@@ -36,6 +36,7 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
             ParentId = input.ParentId,
             Name = input.Name,
             Code = input.Code,
+            Category = input.Category,
             Sort = input.Sort,
             Enabled = input.Enabled,
         };
@@ -61,6 +62,7 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
         entity.ParentId = input.ParentId;
         entity.Name = input.Name;
         entity.Code = input.Code;
+        entity.Category = input.Category;
         entity.Sort = input.Sort;
         entity.Enabled = input.Enabled;
         await orgs.UpdateAsync(entity);
@@ -106,6 +108,7 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
                     ParentId = node.Id == id ? source!.ParentId : idMap[node.ParentId],
                     Name = node.Id == id ? node.Name + "-副本" : node.Name,
                     Code = NextUniqueCode(node.Code, usedCodes),
+                    Category = node.Category,
                     Sort = node.Sort,
                     Enabled = node.Enabled,
                 };
