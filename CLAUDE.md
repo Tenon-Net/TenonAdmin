@@ -10,7 +10,7 @@ The repo has two independent halves:
 - `backend/` — the .NET 10 kernel (the product) + sample host + tests.
 - `web/` — a Vue 3 + Naive UI admin template that consumes the kernel's API.
 
-Codebase comments and docs are in Chinese; design doc section refs like `§6` / `T3` point into `docs/rebuild-design.md` and `docs/dev-plan.md`.
+Codebase comments and docs are in Chinese; design doc section refs like `§6` / `T3` point into `docs/rebuild-design.md` and `docs/dev-plan.md`. **Git commit messages, however, are written in English** (conventional-commit format: `type(scope): subject`).
 
 ## Commands
 
