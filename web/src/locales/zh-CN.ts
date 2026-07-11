@@ -446,6 +446,14 @@ export default {
     required: '请填写原密码和新密码',
     mismatch: '两次输入的新密码不一致',
     changed: '密码已修改,请重新登录',
+    strength: { label: '密码强度', weak: '弱', fair: '中', strong: '强' },
+    rules: {
+      minLength: '至少 {n} 位',
+      upper: '包含大写字母',
+      lower: '包含小写字母',
+      digit: '包含数字',
+      special: '包含特殊字符(可选,更安全)',
+    },
   },
   // ── 后端错误码 msgKey → 文案 ──────────────────────────────
   error: {

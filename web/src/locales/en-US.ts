@@ -443,6 +443,14 @@ export default {
     required: 'Please enter the current and new password',
     mismatch: 'Passwords do not match',
     changed: 'Password changed, please sign in again',
+    strength: { label: 'Password strength', weak: 'Weak', fair: 'Fair', strong: 'Strong' },
+    rules: {
+      minLength: 'At least {n} characters',
+      upper: 'Contains uppercase',
+      lower: 'Contains lowercase',
+      digit: 'Contains a digit',
+      special: 'Contains a special character (optional, stronger)',
+    },
   },
   error: {
     _fallback: 'Operation failed, please try again',
