@@ -47,6 +47,9 @@ public static class SqlSugarSetup
                 DbType = Enum.Parse<DbType>(db.DbType, ignoreCase: true),
                 ConnectionString = db.ConnectionString,
                 IsAutoCloseConnection = true,
+                // SqlServer CodeFirst 默认把 string 建成 varchar,存中文丢成 "??"(其他方言用 Unicode 类型,无此坑)。
+                // 打开后 string 列建为 nvarchar,跨方言统一走 Unicode。ponytail: SqlSugar 内置开关,一行胜过逐实体标 [SugarColumn]。
+                MoreSettings = new ConnMoreSettings { SqlServerCodeFirstNvarchar = true },
             };
 
             var idGen = sp.GetRequiredService<IIdGenerator>();
