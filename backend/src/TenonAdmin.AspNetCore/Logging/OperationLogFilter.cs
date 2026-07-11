@@ -34,9 +34,14 @@ internal sealed class OperationLogFilter(ILogService logService, TimeProvider ti
             Path = context.HttpContext.Request.Path,
             ParamJson = paramJson,
             ResultCode = ResolveResultCode(executed),
+            ExceptionMessage = Truncate(executed.Exception?.Message),
             ElapsedMs = (long)timeProvider.GetElapsedTime(start).TotalMilliseconds,
         });   // 尽力而为:RecordOperationAsync 内部吞异常,不会影响已经产出的响应
     }
+
+    /// <summary>异常消息截断上限(防个别超长消息把日志表撑大)。</summary>
+    private static string? Truncate(string? msg) =>
+        msg is null || msg.Length <= 2000 ? msg : msg[..2000];
 
     /// <summary>
     /// 解析业务结果码:优先看异常(业务异常记其码、其他异常记系统错误码),

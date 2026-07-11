@@ -30,6 +30,7 @@ public class LogService(
                 ParamJson = entry.ParamJson,
                 ResultCode = entry.ResultCode,
                 Success = entry.ResultCode == 0,
+                ExceptionMessage = entry.ExceptionMessage,
                 ElapsedMs = entry.ElapsedMs,
                 OperatorId = currentUser.UserId,
                 Ip = currentUser.IpAddress,

@@ -34,6 +34,13 @@ public class SysOpLog : BaseEntity
     [SugarColumn(ColumnDescription = "是否成功")]
     public bool Success { get; set; }
 
+    /// <summary>
+    /// 异常信息:仅动作抛异常时记(异常消息,截断)。业务码已由 ResultCode 表达,此列答"为什么失败";
+    /// 成功/纯业务错误(未抛异常)恒 null。<b>只记异常消息不记响应体</b>——响应体可能含明文密码/令牌(设计 §14)。
+    /// </summary>
+    [SugarColumn(ColumnDataType = "text", IsNullable = true, ColumnDescription = "异常信息")]
+    public string? ExceptionMessage { get; set; }
+
     /// <summary>接口耗时(毫秒)</summary>
     [SugarColumn(ColumnDescription = "耗时(毫秒)")]
     public long ElapsedMs { get; set; }

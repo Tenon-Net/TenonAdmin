@@ -196,6 +196,7 @@ export interface SysOpLog {
   paramJson?: string | null
   resultCode: number
   success: boolean
+  exceptionMessage?: string | null
   elapsedMs: number
   operatorId?: number | null
   operatorName?: string | null

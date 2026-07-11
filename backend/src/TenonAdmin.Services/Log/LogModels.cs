@@ -15,6 +15,8 @@ public record OperationLogEntry
     /// <summary>脱敏后的入参 JSON</summary>
     public string? ParamJson { get; init; }
     public int ResultCode { get; init; }
+    /// <summary>动作抛异常时的异常消息(截断);无异常为 null。不含响应体。</summary>
+    public string? ExceptionMessage { get; init; }
     public long ElapsedMs { get; init; }
 }
 

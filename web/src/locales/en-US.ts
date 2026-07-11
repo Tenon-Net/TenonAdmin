@@ -250,8 +250,20 @@ export default {
     deleteConfirm: 'Delete config "{name}"?',
     saved: 'Saved',
     deleted: 'Deleted',
-    tab: { base: 'General', other: 'Other' },
+    tab: { base: 'General', security: 'Security', other: 'Other' },
     base: { siteTitle: 'Site title' },
+    security: {
+      loginLock: { title: 'Login lockout', maxFailCount: 'Max fail count', lockMinutes: 'Lock minutes' },
+      password: {
+        title: 'Password complexity',
+        minLength: 'Min length',
+        requireUpper: 'Require uppercase',
+        requireLower: 'Require lowercase',
+        requireDigit: 'Require digit',
+        requireSpecial: 'Require special char',
+      },
+      session: { title: 'Session lifetime', accessMinutes: 'Access token (min)', refreshMinutes: 'Refresh token (min)' },
+    },
   },
   // Dict management (R5, master-detail: types on the left, items on the right)
   dict: {
@@ -387,6 +399,7 @@ export default {
     elapsed: 'Elapsed',
     operator: 'Operator',
     param: 'Params',
+    exception: 'Exception',
     detail: 'Detail',
     clearOpConfirm: 'Clear all operation logs? This is a hard delete and cannot be undone.',
   },
@@ -424,6 +437,7 @@ export default {
       notFound: 'User not found',
       accountExists: 'Account already exists',
       superAdminProtected: 'Super admin is protected',
+      passwordTooWeak: 'New password does not meet the complexity policy',
     },
     role: { notFound: 'Role not found', codeExists: 'Role code already exists' },
     org: {

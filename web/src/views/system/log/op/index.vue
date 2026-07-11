@@ -111,6 +111,9 @@ function clearLogs() {
           </n-tag>
         </n-descriptions-item>
         <n-descriptions-item :label="t('log.resultCode')">{{ detailRow.resultCode }}</n-descriptions-item>
+        <n-descriptions-item v-if="detailRow.exceptionMessage" :label="t('log.exception')">
+          <pre class="param-json exception">{{ detailRow.exceptionMessage }}</pre>
+        </n-descriptions-item>
         <n-descriptions-item :label="t('log.elapsed')">{{ detailRow.elapsedMs }} ms</n-descriptions-item>
         <n-descriptions-item :label="t('log.operator')">{{ operatorText(detailRow) }}</n-descriptions-item>
         <n-descriptions-item :label="t('log.ip')">{{ detailRow.ip || '—' }}</n-descriptions-item>
@@ -132,5 +135,8 @@ function clearLogs() {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 12px;
   line-height: 1.5;
+}
+.exception {
+  color: var(--color-error, #d03050);
 }
 </style>

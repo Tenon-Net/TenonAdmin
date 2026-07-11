@@ -251,8 +251,20 @@ export default {
     deleteConfirm: '确定删除配置「{name}」?',
     saved: '保存成功',
     deleted: '已删除',
-    tab: { base: '系统基础', other: '其他配置' },
+    tab: { base: '系统基础', security: '安全策略', other: '其他配置' },
     base: { siteTitle: '站点标题' },
+    security: {
+      loginLock: { title: '登录失败锁定', maxFailCount: '锁定阈值(次)', lockMinutes: '锁定时长(分钟)' },
+      password: {
+        title: '密码复杂度',
+        minLength: '最小长度',
+        requireUpper: '须含大写字母',
+        requireLower: '须含小写字母',
+        requireDigit: '须含数字',
+        requireSpecial: '须含特殊字符',
+      },
+      session: { title: '会话时长', accessMinutes: '访问令牌(分钟)', refreshMinutes: '刷新令牌(分钟)' },
+    },
   },
   // 字典管理(R5,主从:左类型 / 右字典项)
   dict: {
@@ -390,6 +402,7 @@ export default {
     elapsed: '耗时',
     operator: '操作人',
     param: '入参',
+    exception: '异常信息',
     detail: '详情',
     clearOpConfirm: '确定清空全部操作日志?此为硬删除,不可恢复。',
   },
@@ -428,6 +441,7 @@ export default {
       notFound: '用户不存在',
       accountExists: '账号已存在',
       superAdminProtected: '超级管理员受保护,禁止此操作',
+      passwordTooWeak: '新密码不满足密码复杂度要求',
     },
     role: { notFound: '角色不存在', codeExists: '角色编码已存在' },
     org: {
