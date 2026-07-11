@@ -19,6 +19,10 @@ public record OnlineSessionItem
     public required long UserId { get; init; }
     public required string Account { get; init; }
     public string? Ip { get; init; }
+
+    /// <summary>登录时的 User-Agent 原串(前端解析成浏览器/系统展示,便于同一账号多端分辨)</summary>
+    public string? UserAgent { get; init; }
+
     public DateTime LoginTime { get; init; }
     public DateTime ExpiresAt { get; init; }
 }

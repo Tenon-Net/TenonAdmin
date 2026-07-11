@@ -170,6 +170,7 @@ export interface OnlineSessionItem {
   userId: number
   account: string
   ip?: string | null
+  userAgent?: string | null
   loginTime?: string
   expiresAt?: string
 }

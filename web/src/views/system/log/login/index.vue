@@ -10,6 +10,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { useProTableLabels } from '@/composables/useProTableLabels'
 import { logApi } from '@/api'
 import { translateError } from '@/utils/error'
+import { uaSummary } from '@/utils/ua'
 import type { SysLoginLog } from '@/types/api'
 
 const { t } = useI18n()
@@ -33,7 +34,8 @@ const columns: ProTableColumn<SysLoginLog>[] = [
   { key: 'resultCode', title: () => t('log.resultCode'), width: 100 },
   { key: 'userId', title: () => t('log.userId'), render: (r) => r.userId ?? '—' },
   { key: 'ip', title: () => t('log.ip'), render: (r) => r.ip || '—' },
-  { key: 'userAgent', title: () => t('log.userAgent'), ellipsis: { tooltip: true }, render: (r) => r.userAgent || '—' },
+  // 设备:UA 解析成「浏览器 · 系统」(全未识别回落原始串);过长截断 + tooltip
+  { key: 'device', title: () => t('log.device'), ellipsis: { tooltip: true }, render: (r) => uaSummary(r.userAgent) },
   { key: 'createTime', title: () => t('common.createTime'), format: 'datetime' },
 ]
 

@@ -10,6 +10,7 @@ import { useProTableLabels } from '@/composables/useProTableLabels'
 import { useUserStore } from '@/stores/user'
 import { sessionApi } from '@/api'
 import { translateError } from '@/utils/error'
+import { uaSummary } from '@/utils/ua'
 import type { OnlineSessionItem } from '@/types/api'
 
 const { t } = useI18n()
@@ -33,6 +34,8 @@ function kick(r: OnlineSessionItem) {
 const columns: ProTableColumn<OnlineSessionItem>[] = [
   { key: 'account', title: () => t('session.account') },
   { key: 'ip', title: () => t('session.ip'), render: (r) => r.ip || '—' },
+  // 设备:同一账号多端在线时靠它分辨要踢哪台(UA 解析成「浏览器 · 系统」)
+  { key: 'device', title: () => t('session.device'), ellipsis: { tooltip: true }, render: (r) => uaSummary(r.userAgent) },
   { key: 'loginTime', title: () => t('session.loginTime'), format: 'datetime' },
   { key: 'expiresAt', title: () => t('session.expiresAt'), format: 'datetime' },
   {

@@ -18,6 +18,7 @@ public class SessionService(
     ITokenProvider tokens,
     ICacheProvider cache,
     AdminSecurityOptions security,
+    ISecurityPolicyProvider policy,
     TimeProvider time) : ISessionService
 {
     // 同一用户的"淘汰旧会话 + 开新会话"串行化锁(单实例内)。避免并发登录各自读到同一活跃集合、
@@ -107,8 +108,10 @@ public class SessionService(
             .ExecuteCommandAsync();
         if (rotated == 0) throw new AdminException(ErrorCode.RefreshTokenInvalid);
 
-        // 用同一 SessionId 签发新令牌对(会话延续,不新建),存新刷新令牌哈希
-        var pair = tokens.Create(new TokenSubject(user.Id, user.Account, rt.SessionId, user.IsSuperAdmin, user.OrgId));
+        // 用同一 SessionId 签发新令牌对(会话延续,不新建),存新刷新令牌哈希;令牌时长运行时可配
+        var (accessMin, refreshMin) = await policy.GetSessionTtlAsync();
+        var pair = tokens.Create(new TokenSubject(user.Id, user.Account, rt.SessionId, user.IsSuperAdmin, user.OrgId),
+            TimeSpan.FromMinutes(accessMin), TimeSpan.FromMinutes(refreshMin));
         var expiresAt = pair.RefreshExpiresAt.UtcDateTime;
         await refreshTokens.InsertAsync(new SysRefreshToken
         {
@@ -166,6 +169,7 @@ public class SessionService(
                 UserId = s.UserId,
                 Account = s.Account,
                 Ip = s.Ip,
+                UserAgent = s.UserAgent,
                 LoginTime = s.CreateTime,
                 ExpiresAt = s.ExpiresAt,
             })
