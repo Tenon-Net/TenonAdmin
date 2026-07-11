@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        db: [sqlite, mysql, sqlserver]
+        db: [sqlite, mysql, sqlserver, postgres]
 
     # 服务容器(所有腿都起,用不到的腿忽略之;成本低、免去条件 service 的写法复杂度)。
     services:
@@ -39,6 +39,18 @@ jobs:
           MSSQL_PID: "Developer"
         ports:
           - 1433:1433
+      # PostgreSQL:官方镜像自带 pg_isready,健康探针直接用,无需额外等待步骤。
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     steps:
       - uses: actions/checkout@v4
@@ -74,8 +86,10 @@ jobs:
       #   含 §8 可替换性六件套 + 数据范围 + 认证/授权/限流回归。
       - name: Test (${{ matrix.db }})
         env:
-          TENON_TEST_DBTYPE: ${{ matrix.db == 'mysql' && 'MySql' || matrix.db == 'sqlserver' && 'SqlServer' || 'Sqlite' }}
+          TENON_TEST_DBTYPE: ${{ matrix.db == 'mysql' && 'MySql' || matrix.db == 'sqlserver' && 'SqlServer' || matrix.db == 'postgres' && 'PostgreSQL' || 'Sqlite' }}
           TENON_TEST_MYSQL: ${{ matrix.db == 'mysql' && 'Server=127.0.0.1;Port=3306;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;' || '' }}
           # SqlServer 连接串带 TrustServerCertificate/Encrypt=False:MDS 5.x 默认加密且 CI 无受信证书。基础串不含 Database,TestDb 建隔离库时再补。
           TENON_TEST_SQLSERVER: ${{ matrix.db == 'sqlserver' && 'Server=127.0.0.1;User ID=sa;Password=Tenon_Ci_2026;TrustServerCertificate=True;Encrypt=False;' || '' }}
+          # PostgreSQL 基础串不含 Database(连维护库 postgres 建隔离库,TestDb 建库后再补 Database)。
+          TENON_TEST_POSTGRESQL: ${{ matrix.db == 'postgres' && 'Server=127.0.0.1;Port=5432;User ID=postgres;Password=postgres;' || '' }}
         run: dotnet test backend/TenonAdmin.slnx -c Release --no-build

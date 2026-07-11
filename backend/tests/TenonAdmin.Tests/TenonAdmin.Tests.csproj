@@ -24,5 +24,7 @@
     <PackageReference Include="MySqlConnector" />
     <!-- SQL Server 矩阵腿的驱动;默认腿不用它,但引用无害(SqlSugar 按 DbType 选驱动) -->
     <PackageReference Include="Microsoft.Data.SqlClient" />
+    <!-- PostgreSQL 矩阵腿的驱动;默认腿不用它,但引用无害(SqlSugar 按 DbType 选驱动) -->
+    <PackageReference Include="Npgsql" />
   </ItemGroup>
 </Project>

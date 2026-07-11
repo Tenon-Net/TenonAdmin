@@ -33,5 +33,8 @@
     <!-- SQL Server 测试驱动(仅测试项目直接引用,用于建/删测试库);版本对齐 SqlSugarCore 5.1.4 传递的 5.2.2,不引入版本漂移。
          它是 Microsoft.*,不违反核心"运行时只依赖 SqlSugarCore + Microsoft.*";SqlServer 驱动本就随 SqlSugarCore 传递可用 -->
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+    <!-- PostgreSQL 测试驱动(仅测试项目直接引用,用于建/删测试库);版本对齐 SqlSugarCore 5.1.4 传递的 5.0.18,不引入版本漂移。
+         核心四包不直接引用它(保持"运行时只依赖 SqlSugarCore + Microsoft.*";PostgreSQL 驱动本就随 SqlSugarCore 传递可用) -->
+    <PackageVersion Include="Npgsql" Version="5.0.18" />
   </ItemGroup>
 </Project>

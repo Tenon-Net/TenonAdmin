@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.SqlClient;
 using MySqlConnector;
+using Npgsql;
 
 namespace TenonAdmin.Tests;
 
@@ -25,6 +26,9 @@ internal static class TestDb
     public static bool UseSqlServer =>
         string.Equals(Environment.GetEnvironmentVariable("TENON_TEST_DBTYPE"), "SqlServer", StringComparison.OrdinalIgnoreCase);
 
+    public static bool UsePostgreSql =>
+        string.Equals(Environment.GetEnvironmentVariable("TENON_TEST_DBTYPE"), "PostgreSQL", StringComparison.OrdinalIgnoreCase);
+
     private static string MySqlBase =>
         Environment.GetEnvironmentVariable("TENON_TEST_MYSQL")
         ?? "Server=127.0.0.1;Port=3306;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;";
@@ -33,8 +37,12 @@ internal static class TestDb
         Environment.GetEnvironmentVariable("TENON_TEST_SQLSERVER")
         ?? "Server=127.0.0.1;User ID=sa;Password=sa;TrustServerCertificate=True;Encrypt=False;";
 
+    private static string PostgreSqlBase =>
+        Environment.GetEnvironmentVariable("TENON_TEST_POSTGRESQL")
+        ?? "Server=127.0.0.1;Port=5432;User ID=postgres;Password=postgres;";
+
     /// <summary>当前腿的 DbType 字符串(直接喂给 <c>AdminDatabaseOptions.DbType</c> / 配置)。</summary>
-    public static string DbType => UseMySql ? "MySql" : UseSqlServer ? "SqlServer" : "Sqlite";
+    public static string DbType => UseMySql ? "MySql" : UseSqlServer ? "SqlServer" : UsePostgreSql ? "PostgreSQL" : "Sqlite";
 
     /// <summary>隔离库名(由 identity 派生,合法标识符、稳定;MySQL 与 SqlServer 共用规则)。</summary>
     private static string DbName(string identity) =>
@@ -56,6 +64,14 @@ internal static class TestDb
             ExecSqlServer($"IF DB_ID(N'{db}') IS NULL CREATE DATABASE [{db}];");
             return $"{SqlServerBase.TrimEnd(';')};Database={db};";
         }
+        if (UsePostgreSql)
+        {
+            var db = DbName(identity);
+            // PG 不支持 CREATE DATABASE IF NOT EXISTS(且 CREATE DATABASE 不能进事务/DO 块),先查 pg_database 再按需建(幂等)。
+            if (ExecPostgreSqlScalar($"SELECT 1 FROM pg_database WHERE datname = '{db}'") is null)
+                ExecPostgreSql($"CREATE DATABASE \"{db}\";");
+            return $"{PostgreSqlBase.TrimEnd(';')};Database={db};";
+        }
         return $"Data Source={sqliteFile}";
     }
 
@@ -71,6 +87,16 @@ internal static class TestDb
                 SqlConnection.ClearAllPools();
                 var db = DbName(identity);
                 ExecSqlServer($"IF DB_ID(N'{db}') IS NOT NULL BEGIN ALTER DATABASE [{db}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{db}]; END");
+            }
+            catch { /* 尽力而为 */ }
+        else if (UsePostgreSql)
+            try
+            {
+                NpgsqlConnection.ClearAllPools();
+                var db = DbName(identity);
+                // 先踢掉目标库上的其余会话(否则活动连接阻塞 DROP),再删;PG 支持 DROP DATABASE IF EXISTS。
+                ExecPostgreSql($"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db}' AND pid <> pg_backend_pid();");
+                ExecPostgreSql($"DROP DATABASE IF EXISTS \"{db}\";");
             }
             catch { /* 尽力而为 */ }
         else
@@ -93,5 +119,26 @@ internal static class TestDb
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
+    }
+
+    // PG 必须连到某个已存在的库才能建/删其它库,统一连维护库 postgres。
+    private static string PostgreSqlAdmin => $"{PostgreSqlBase.TrimEnd(';')};Database=postgres;";
+
+    private static void ExecPostgreSql(string sql)
+    {
+        using var conn = new NpgsqlConnection(PostgreSqlAdmin);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    private static object? ExecPostgreSqlScalar(string sql)
+    {
+        using var conn = new NpgsqlConnection(PostgreSqlAdmin);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        return cmd.ExecuteScalar();
     }
 }
