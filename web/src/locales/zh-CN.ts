@@ -252,7 +252,7 @@ export default {
     deleteConfirm: '确定删除配置「{name}」?',
     saved: '保存成功',
     deleted: '已删除',
-    tab: { base: '系统基础', security: '安全策略', other: '其他配置' },
+    tab: { base: '系统基础', security: '安全策略', upload: '上传策略', other: '其他配置' },
     base: { siteTitle: '站点标题' },
     security: {
       loginLock: { title: '登录失败锁定', maxFailCount: '锁定阈值(次)', lockMinutes: '锁定时长(分钟)' },
@@ -265,6 +265,13 @@ export default {
         requireSpecial: '须含特殊字符',
       },
       session: { title: '会话时长', accessMinutes: '访问令牌(分钟)', refreshMinutes: '刷新令牌(分钟)' },
+    },
+    upload: {
+      title: '上传约束',
+      maxSizeMb: '单文件上限(MB)',
+      allowedExtensions: '允许的后缀',
+      extPlaceholder: '输入后缀回车,如 .jpg',
+      extTip: '含点、小写;留空则回退到服务端默认',
     },
   },
   // 字典管理(R5,主从:左类型 / 右字典项)

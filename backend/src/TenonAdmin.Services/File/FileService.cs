@@ -17,23 +17,32 @@ public class FileService(
     IRepository<SysFile> files,
     IFileStorage storage,
     AdminUploadOptions options,
+    IConfigService config,
     TimeProvider timeProvider) : IFileService
 {
+    /// <summary>上传约束配置项分组编码(配置中心「上传策略」Tab 按此分组加载)</summary>
+    internal const string GROUP = "upload";
+    internal const string KEY_MAX_SIZE = "sys.upload.maxSizeMb";
+    internal const string KEY_ALLOWED_EXTS = "sys.upload.allowedExtensions";
+
     /// <inheritdoc />
     public virtual async Task<FileUploadOutput> UploadAsync(FileUploadInput input)
     {
         AdminException.ThrowIf(input.Size <= 0, ErrorCode.FileEmpty);
 
         var ext = Path.GetExtension(input.FileName).ToLowerInvariant();
-        // 后缀白名单:空白名单表示不限;否则后缀必须在册。按后缀判定,不采信可伪造的 Content-Type(§14)。
-        var extAllowed = options.AllowedExtensions.Length == 0
-            || options.AllowedExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase);
+        // 大小上限/后缀白名单先读 SysConfig(改值即时生效),缺失或解析失败回退 Options 默认。
+        // 后缀按扩展名判定,不采信可伪造的 Content-Type(§14);空白名单表示不限。
+        var allowed = ParseExts(await config.GetValueByKeyAsync(KEY_ALLOWED_EXTS)) ?? options.AllowedExtensions;
+        var extAllowed = allowed.Length == 0
+            || allowed.Contains(ext, StringComparer.OrdinalIgnoreCase);
         AdminException.ThrowIf(!extAllowed, ErrorCode.FileExtNotAllowed,
             new Dictionary<string, object?> { ["ext"] = ext });
 
-        var maxBytes = (long)options.MaxSizeMb * 1024 * 1024;
+        var maxSizeMb = int.TryParse(await config.GetValueByKeyAsync(KEY_MAX_SIZE), out var mb) ? mb : options.MaxSizeMb;
+        var maxBytes = (long)maxSizeMb * 1024 * 1024;
         AdminException.ThrowIf(input.Size > maxBytes, ErrorCode.FileTooLarge,
-            new Dictionary<string, object?> { ["maxSizeMb"] = options.MaxSizeMb });
+            new Dictionary<string, object?> { ["maxSizeMb"] = maxSizeMb });
 
         // 重写存储名:按日期分目录(避免单目录文件过多)+ GUIDv7 唯一名(时间有序、不可猜、无原始名成分)
         var date = timeProvider.GetUtcNow().ToString("yyyyMMdd");
@@ -96,5 +105,16 @@ public class FileService(
     {
         // 逐个软删,复用仓储单删(不存在的 Id 影响 0 行,无害);物理文件同样保留(v1 不删盘)。
         foreach (var id in ids) await files.DeleteAsync(id);
+    }
+
+    // 后缀白名单以逗号分隔字符串落库;规范化为「含点、小写」。空/全空白 → null(回退 Options 默认)。
+    // ponytail: 逐次解析足够——上传是低频写路径,不缓存解析结果。
+    private static string[]? ParseExts(string? csv)
+    {
+        if (string.IsNullOrWhiteSpace(csv)) return null;
+        var exts = csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(e => (e.StartsWith('.') ? e : "." + e).ToLowerInvariant())
+            .ToArray();
+        return exts.Length == 0 ? null : exts;
     }
 }

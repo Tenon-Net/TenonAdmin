@@ -26,5 +26,9 @@ internal sealed class ConfigSeed : ISeedData<SysConfig>
         new SysConfig { Id = 8, ConfigKey = SecurityPolicyProvider.KEY_REQ_SPECIAL, ConfigValue = "false", Name = "密码须含特殊字符", GroupCode = SecurityPolicyProvider.GROUP, Sort = 24, Remark = "特殊字符指非字母数字" },
         new SysConfig { Id = 9, ConfigKey = SecurityPolicyProvider.KEY_ACCESS_MIN, ConfigValue = "120", Name = "访问令牌时长(分钟)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 30, Remark = "访问令牌有效期,到期需用刷新令牌换发" },
         new SysConfig { Id = 10, ConfigKey = SecurityPolicyProvider.KEY_REFRESH_MIN, ConfigValue = "10080", Name = "刷新令牌时长(分钟)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 31, Remark = "刷新令牌有效期,决定最长免登录时长(默认 7 天)" },
+
+        // 上传约束(GroupCode=upload):FileService.UploadAsync 强制执行,改值即时生效。默认须与 AdminUploadOptions 默认一致。
+        new SysConfig { Id = 11, ConfigKey = FileService.KEY_MAX_SIZE, ConfigValue = "20", Name = "单文件大小上限(MB)", GroupCode = FileService.GROUP, Sort = 40, Remark = "超过即拒收上传" },
+        new SysConfig { Id = 12, ConfigKey = FileService.KEY_ALLOWED_EXTS, ConfigValue = ".jpg,.png,.pdf,.xlsx,.docx,.zip", Name = "允许的文件后缀", GroupCode = FileService.GROUP, Sort = 41, Remark = "逗号分隔的后缀白名单(含点);留空则回退到 Options 默认" },
     ];
 }

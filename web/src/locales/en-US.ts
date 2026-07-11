@@ -251,7 +251,7 @@ export default {
     deleteConfirm: 'Delete config "{name}"?',
     saved: 'Saved',
     deleted: 'Deleted',
-    tab: { base: 'General', security: 'Security', other: 'Other' },
+    tab: { base: 'General', security: 'Security', upload: 'Upload', other: 'Other' },
     base: { siteTitle: 'Site title' },
     security: {
       loginLock: { title: 'Login lockout', maxFailCount: 'Max fail count', lockMinutes: 'Lock minutes' },
@@ -264,6 +264,13 @@ export default {
         requireSpecial: 'Require special char',
       },
       session: { title: 'Session lifetime', accessMinutes: 'Access token (min)', refreshMinutes: 'Refresh token (min)' },
+    },
+    upload: {
+      title: 'Upload limits',
+      maxSizeMb: 'Max size (MB)',
+      allowedExtensions: 'Allowed extensions',
+      extPlaceholder: 'Type an extension, e.g. .jpg',
+      extTip: 'With leading dot, lowercase; empty falls back to server default',
     },
   },
   // Dict management (R5, master-detail: types on the left, items on the right)
