@@ -28,3 +28,6 @@ dist/
 .omc/
 .omx/
 .codegraph/
+
+## dev scripts (mac/linux) runtime
+.dev/

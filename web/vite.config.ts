@@ -2,7 +2,10 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-// CORS 默认 deny-all,浏览器只与 :5173 通信,/api 与 /openapi 由 dev proxy 反代到后端 :5000。
+// CORS 默认 deny-all,浏览器只与 :5173 通信,/api 与 /openapi 由 dev proxy 反代到后端。
+// 后端 dev 端口默认 5100(避开 macOS AirPlay 占的 5000);dev.sh 经 TENON_API_TARGET 覆盖。
+const apiTarget = process.env.TENON_API_TARGET ?? 'http://localhost:5100'
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -24,8 +27,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:5000', changeOrigin: true },
-      '/openapi': { target: 'http://localhost:5000', changeOrigin: true },
+      '/api': { target: apiTarget, changeOrigin: true },
+      '/openapi': { target: apiTarget, changeOrigin: true },
     },
   },
 })
