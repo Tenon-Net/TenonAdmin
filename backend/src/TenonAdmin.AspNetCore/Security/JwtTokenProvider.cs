@@ -11,7 +11,7 @@ namespace TenonAdmin.AspNetCore;
 /// <para>AccessToken 携带 sub(用户 Id)、unique_name(账号)、sid(会话)、sadm(超管)四个 claim,
 /// 短期有效、不落库;RefreshToken 是 64 字节加密随机串(不是 JWT——它只在换发接口出示一次,
 /// 无需自包含结构;服务端将只存其哈希,§15 会话模块接入时落库)。</para>
-/// <para>类 public、方法 virtual:要改 claim 集合/换签名算法,继承覆写 <see cref="Create"/> 即可(§5.3)。</para>
+/// <para>类 public、方法 virtual:要改 claim 集合/换签名算法,继承覆写 <see cref="Create(TokenSubject)"/> 即可(§5.3)。</para>
 /// </summary>
 public class JwtTokenProvider(AdminJwtOptions options, SymmetricSecurityKey signingKey, TimeProvider time) : ITokenProvider
 {
