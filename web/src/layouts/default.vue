@@ -102,6 +102,17 @@ watch(
     tabs.excludeName = ''
   },
 )
+
+// 看门狗:极少数情况下(异步页面组件 + out-in Transition 连续快切)Transition 自身的过渡状态机会卡死——
+// 卡死后子组件层面的 v-if 重挂(上面那段)救不了,因为坏的是 Transition 实例本身,不是子树。
+// 症状是路由已跳但 .page 下没有任何真实子节点。探测到就换 transitionEpoch 强制 Transition 整体重建,一次性自愈。
+const pageRef = ref<HTMLElement>()
+const transitionEpoch = ref(0)
+watch(activeKey, async () => {
+  await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 300)) // 给正常异步加载留够时间,避免把"还在加载"误判成"卡死"
+  if (pageRef.value && pageRef.value.children.length === 0) transitionEpoch.value++
+})
 </script>
 
 <template>
@@ -144,9 +155,9 @@ watch(
     <main class="content">
       <div v-if="app.showTabs" class="tabs"><TabsBar /></div>
       <!-- component :key=路由 path 给稳定身份:out-in 过渡才能正确区分进/出场,否则显示上一页缓存(按 path 各自成键,不塌缩缓存)。 -->
-      <div class="page">
+      <div class="page" ref="pageRef">
         <router-view v-slot="{ Component }">
-          <transition :name="transitionName" mode="out-in">
+          <transition :key="transitionEpoch" :name="transitionName" mode="out-in">
             <keep-alive :include="tabs.cachedNames" :exclude="tabs.excludeName">
               <component :is="Component" v-if="rvShow" :key="activeKey" />
             </keep-alive>

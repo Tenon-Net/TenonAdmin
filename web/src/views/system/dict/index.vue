@@ -4,7 +4,7 @@
 // 任何类型/项的增删改后调 useDictStore().invalidate(code) 失效下拉缓存,变更即时生效。
 import { h, reactive, ref } from 'vue'
 import {
-  NButton, NCard, NSpace, NInput, NInputNumber, NPopconfirm, NForm, NFormItem, NDataTable, NEmpty,
+  NButton, NCard, NSpace, NInput, NInputNumber, NPopconfirm, NForm, NFormItem, NDataTable, NEmpty, NSwitch,
   useMessage, type DataTableColumns, type FormInst, type FormRules,
 } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
