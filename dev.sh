@@ -18,7 +18,7 @@ fi
 mkdir -p .dev
 
 echo "[api] starting backend http://localhost:$API_PORT ..."
-# --no-launch-profile:跳过 Properties/launchSettings.json(其 applicationUrl 写死 5000,会盖掉下面的 URL)。
+# --no-launch-profile:跳过 Properties/launchSettings.json(避免其 applicationUrl 盖掉下面的 URL)。
 # 该 profile 顺带设的 Development 环境要手动补回(OpenAPI 是 dev-only)。
 ( cd backend && ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS="http://localhost:$API_PORT" \
     dotnet run --no-launch-profile --project samples/MinimalHost ) > .dev/api.log 2>&1 &

@@ -19,7 +19,7 @@ Backend (run from repo root; solution is `.slnx`, not `.sln`):
 dotnet build backend/TenonAdmin.slnx -c Release
 dotnet test  backend/TenonAdmin.slnx                       # xUnit + WebApplicationFactory, defaults to SQLite
 dotnet test  backend/TenonAdmin.slnx --filter "FullyQualifiedName~DataScopeTests"   # single test/class
-dotnet run   --project backend/samples/MinimalHost         # zero-config run on http://localhost:5000
+dotnet run   --project backend/samples/MinimalHost         # zero-config run on http://localhost:5100
 ```
 Tests against MySQL (matches the CI matrix leg) via env vars:
 ```bash
@@ -28,7 +28,7 @@ TENON_TEST_DBTYPE=MySql TENON_TEST_MYSQL="Server=127.0.0.1;Port=3306;User ID=roo
 
 Frontend (run from `web/`):
 ```bash
-npm run dev          # Vite on :5173, proxies /api and /openapi to backend :5000
+npm run dev          # Vite on :5173, proxies /api and /openapi to backend :5100 (override: TENON_API_TARGET)
 npm run build        # vue-tsc --noEmit && vite build
 npm run lint         # oxlint (lint:fix to autofix)
 npm run typecheck    # vue-tsc --noEmit

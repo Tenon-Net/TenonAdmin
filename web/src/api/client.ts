@@ -2,7 +2,7 @@ import createClient, { type Middleware } from 'openapi-fetch'
 import type { paths } from './schema'
 import { useUserStore } from '@/stores/user'
 
-// baseUrl 为空:schema 的 path 键已含 /api/v1,直接作用于当前源(:5173),由 Vite proxy 反代到 :5000。
+// baseUrl 为空:schema 的 path 键已含 /api/v1,直接作用于当前源(:5173),由 Vite proxy 反代到后端 dev 端口(默认 :5100)。
 export const client = createClient<paths>({ baseUrl: '' })
 // 刷新专用客户端:不挂刷新中间件,避免刷新自身 401 触发递归。
 const bare = createClient<paths>({ baseUrl: '' })

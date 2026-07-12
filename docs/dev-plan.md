@@ -162,7 +162,7 @@
 ### M2 · 工程脚手架首版 ✅ 完成(2026-07-07,待提交)
 计划见 `.claude/plans/docs-rebuild-design-md-...md`。**技术栈**:Vite 6 + Vue 3.5 + TS + **Naive UI 单套** + Pinia(+persist) + vue-router + **openapi-fetch/openapi-typescript**(弃 axios,依赖最轻)+ vue-i18n;显式 import(弃 unplugin,typecheck 洁净不依赖生成 dts);运行时图标统一 `@iconify/vue`。
 - **设计单源对齐(Phase 0)**:按新原型 `web/design-mockups/design_handoff_rbac_admin/` 改 `tokens.css`(圆角 6/10/12/16、shadow-2 更柔、`--color-header-bg`、border-strong #D3D6DB)+ `DESIGN.md`(6 主色候选、236↔76 侧栏、密度 58/48、§7.1 派生规则权威化)。
-- **请求层**:`api/client.ts`(openapi-fetch + Bearer 中间件 + 401 共享 Promise 刷新重放)+ `api/index.ts`(`unwrap()` 容忍 `Result<T>` 信封与 ProblemDetails 两形状 + `ApiError` 带 msgKey)+ `gen:api` 从 `/openapi/v1.json` 生成 `schema.d.ts`。CORS deny-all → **Vite dev proxy** `/api`+`/openapi`→:5000。
+- **请求层**:`api/client.ts`(openapi-fetch + Bearer 中间件 + 401 共享 Promise 刷新重放)+ `api/index.ts`(`unwrap()` 容忍 `Result<T>` 信封与 ProblemDetails 两形状 + `ApiError` 带 msgKey)+ `gen:api` 从 `/openapi/v1.json` 生成 `schema.d.ts`。CORS deny-all → **Vite dev proxy** `/api`+`/openapi`→后端 dev 端口(默认 :5100,`TENON_API_TARGET` 可覆盖)。
 - **菜单驱动动态路由**:`import.meta.glob` + 菜单树叶子(type=2)映射 `views/**` → `addRoute('layout')`;刷新白屏守卫(auth store 易失、F5 重建)。**修真 bug**:守卫原按 `to.meta.public` 短路,深链未注册路由先命中 public 404 → 错显 404;改为按登录态+`routesReady` 判定。
 - **门户(M1.5)**:`useModule` 单应用自动进/默认进/多应用选择器;顶栏切应用。
 - **运行时主题**:`theme/mix.ts`(派生规则纯函数 + 自检)+ `naive-theme.ts`(tokens→GlobalThemeOverrides)+ `useTheme`;**主色 6 候选运行时切换 + 舒适/紧凑密度 + 明暗**,均 `app` store 持久化。渐变/发光仅登录页/英雄区。

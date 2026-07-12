@@ -10,7 +10,7 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "typecheck": "vue-tsc --noEmit",
-    "gen:api": "openapi-typescript http://localhost:5000/openapi/v1.json -o src/api/schema.d.ts"
+    "gen:api": "openapi-typescript http://localhost:5100/openapi/v1.json -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@iconify/vue": "^4.3.0",

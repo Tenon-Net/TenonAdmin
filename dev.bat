@@ -1,11 +1,11 @@
 @echo off
 rem dev.bat - one-click start backend + frontend dev env
 rem usage: double-click, or run  dev.bat  in repo root
-rem backend http://localhost:5000 (MinimalHost)  frontend http://localhost:5173 (Vite)
+rem backend http://localhost:5100 (MinimalHost)  frontend http://localhost:5173 (Vite)
 setlocal
 cd /d "%~dp0"
 
-echo [api] starting backend http://localhost:5000 ...
+echo [api] starting backend http://localhost:5100 ...
 start "tenon-api" cmd /k "cd /d %~dp0backend && dotnet run --project samples/MinimalHost"
 
 echo [web] starting frontend http://localhost:5173 ...
