@@ -1,7 +1,7 @@
 # TenonAdmin 代码规范
 
 > 面向后续开发的落地规范。规则均从现有代码提炼，每条尽量给出参照文件，照抄即合规。
-> 配套文档：新建业务见 [`new-business-guide.md`](./new-business-guide.md)，当前质量现状见 [`code-quality-audit.md`](./code-quality-audit.md)。
+> 配套文档：新建业务见 [`new-business-guide.md`](./new-business-guide.md)。
 
 ---
 

@@ -31,3 +31,6 @@ dist/
 
 ## dev scripts (mac/linux) runtime
 .dev/
+
+## 同步工具冲突副本(Syncthing 等生成,本地垃圾文件)
+*.sync-conflict-*

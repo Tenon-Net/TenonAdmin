@@ -2,7 +2,8 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-07(**Phase 2 全部完成 + CI 首次真绿**——2a 自审:34 发现全处置(12 P1 全修 + 22 P2 收敛),报告 `docs/phase2-review.md`;2b 补做:RateLimiter + MySQL CI 矩阵。测试 37→65;**GitHub Actions 双腿(SQLite+MySQL)均 success**(`455f885`)——顺带修掉自 T9b 起潜伏的 Linux 路径穿越测试 bug,此前"CI 通过"实为 Windows 本地跑。下一阶段 M2 Vue 前端。**2026-07-07 追加 M1.5 多应用门户后端增量**:sys_module + 菜单 ModuleId + 门户接口 + 种子,测试 65→73 全绿,详见 §4 M1.5)
+> 最后更新:2026-07-12(**M3 前端管理页全量 + 配置中心上线**——`web/` 系统管理各页(配置/日志/字典/岗位/会话/文件/机构/用户/角色 RBAC 闭环)+ 通用组件套件 + 前端 CI 落地;「改配置不改代码」配置中心四类(基础/安全/上传/限流)+ 密码策略端点 + 密码强度共享组件全部 push origin/dev。详见 §4 M3。下一步候选见 §6 TDD 待开发清单)
+> 早期基线:2026-07-07 Phase 2(2a 自审 34 发现全处置 + 2b RateLimiter/MySQL CI)+ M1.5 多应用门户后端,详见 §4。
 
 ---
 
@@ -131,7 +132,7 @@
 
 ### Phase 2a 自审 ✅ 完成(`9dd4b8c`…`325b471`)
 7 维多代理全量审查(code-reviewer + security-reviewer,每条 3 反驳者对抗验证)产出 **34 条确认发现(0 P0 / 12 P1 / 22 P2)**,报告见 `docs/phase2-review.md`。**全部处置**:12 P1 全修(含并发变红、超管越权护栏、防爆破绕过、软删唯一键 500、JWT 生产 fail-fast、生产建表闸门、CreateOrgId 机构范围落地、CORS 缺失等);22 P2 中 18 修 + 3 文档化 + 1 记录为已知行为。测试 **37→62**,`dotnet build` 0 警告 / `dotnet test` 62/62,偶发变红消除。
-> **RoutePrefix/Version 明确维持 v1.x 后置**(纠正:phase2-plan.md §2.3 曾把它列入 Phase 2,与 T8d-ii『低频低价值、深耦合鉴权路径』的结论冲突,以 T8d-ii 为准)。
+> **RoutePrefix/Version 明确维持 v1.x 后置**(纠正:Phase 2 原计划曾把它列入本阶段,与 T8d-ii『低频低价值、深耦合鉴权路径』的结论冲突,以 T8d-ii 为准)。
 
 ### Phase 2b ✅ 完成(`4c26e07` + `8c80320`)
 - **RateLimiter**(`4c26e07`):`AdminSecurityOptions.RateLimit` 按客户端 IP 固定窗口——全局宽松档(默认 300/60s)+ 认证端点(`/api/v1/auth/*`)更严档(默认 20/60s),默认启用。经 Phase 2a 落地的 `TenonAdminMiddlewareStartupFilter` 挂 `UseRateLimiter`(CORS→RateLimiter→路由,均全局策略不依赖端点元数据,与自动插入的认证中间件次序不冲突);命中出 429 + 统一信封(`TooManyRequests=40008`)+ `Retry-After`。测试 62→65;MinimalHost 实跑验证(正常登录放行、认证端点洪泛 429 信封、`/health` 走宽松档不误伤)。
@@ -152,7 +153,7 @@
 > M2 前端补:app-switcher(登录选/切应用、拉 `/personal/menu` 重建动态路由)、模块管理页、菜单表单「所属应用」选择器(设计 §7.3/§7.4)。菜单授权 CRUD(`MenuController` create/update 带 `ModuleId`)属 M2 新建。旧 dev 库已有目录行不会被种子回填 `ModuleId`(种子只插不更)——dev 阶段重置库或手动 `UPDATE sys_menu SET ModuleId=1 WHERE Id IN (1,10,20,30)`。
 
 ### M2 · 设计首刀(DESIGN.md + tokens 单源)✅ 完成(2026-07-07)
-计划见 `docs/m2-frontend-plan.md`。视觉出自 **Claude Design** 工程「设计系统 Design Tokens」;因本地 CLI 无法 `/design-login`(DesignSync/WebFetch 均不通),改导出交接:导出稿留档 `web/design-mockups/design-tokens.dc.html`(JS-bundled),解码内嵌 `manifest`/`template` 拿到权威 token 定义后落地。
+视觉出自 **Claude Design** 工程「设计系统 Design Tokens」;因本地 CLI 无法 `/design-login`(DesignSync/WebFetch 均不通),改导出交接:导出稿留档 `web/design-mockups/design-tokens.dc.html`(JS-bundled),解码内嵌 `manifest`/`template` 拿到权威 token 定义后落地。
 - **`web/src/styles/tokens.css`**:tokens 唯一色源。中性 10 级灰阶 + 主色四档(`#646CFF` 系)+ 语义色 base+浅底;角色令牌层(`--color-bg/text/border/fill/mask`)亮色在 `:root`、暗色在 `[data-theme="dark"]` 整体翻转;字号 12/13/14/16/20/24(正文 14/22)、间距 4px 网格、圆角 4/6/8、阴影三级。
 - **`web/DESIGN.md`**:六节规范 + **token→Naive UI `GlobalThemeOverrides` 映射表**。
 - **验证**:CSS 结构良好(括号平衡、亮暗块齐全);WCAG 对比度实测——主文字 13–16:1、次文字 ~7:1 过 AA;占位文字/白字-主色按钮 ~3.2–4.1 属 AA-large(品牌靛蓝天花板,已在 DESIGN.md §6 标注)。
@@ -170,6 +171,20 @@
 - **验证**:`vue-tsc --noEmit` 0 错 + `vite build` 通过;后端 `MinimalHost` 起真库(超管 `superAdmin`/`Tenon@2026`),浏览器实跑闭环:登录→单应用自动进→动态路由→工作台;点/深链 `/system/user` 表格真拉数据;**F5 深链无白屏**(守卫重建);明暗切换实测 `data-theme` 翻转 + `--color-primary` 按 accent 派生(#10B981→暗 #3bc698);accent/密度/语言持久化生效;stale token→401→刷新失败→自动登出回登录。
 > 后续刀:后端补 `GET /personal/permissions`(暴露已有 `GetPermissionCodesAsync`)→ `v-auth` 真生效;fx 动画档 + 完整双布局 Dashboard(纯 SVG/CSS);§7.3 其余页(角色授权面板/菜单管理/字典/日志)+ 模块管理页 + 菜单「所属应用」选择器;前端 CI(lint+typecheck+build)。
 
+### M3 前端管理页全量 + 配置中心 ✅ 完成(2026-07-09~11,均 push origin/dev)
+
+M2 脚手架之后一次性把系统管理各页与「改配置不改代码」配置中心补齐,约 50 提交,按域归纳(逐提交见 `git log --since=2026-07-09`):
+
+- **前端管理页**:配置管理(`327de66`,确立 ProTable CRUD 范式)/登录日志/操作日志/字典主从/岗位/在线会话/文件/机构树表/用户写侧 CRUD/**角色 RBAC 闭环**(`582bffe`:角色 CRUD + 授权菜单/数据范围 + `v-auth` 真生效)+ 批量删除。图标选择器/pro-table 抽成 npm 包消费(`tenon-naive-iconify-picker` / `tenon-naive-pro-table`)。
+- **通用组件套件**(`61fa406` 起):FormContainer / useConfirm / StatusSwitch / 字典三件套(DictSelect/Radio/Tag)/ OrgTreeSelect / FileUpload / **PasswordStrength**(改密页 + 建用户页共用,`dd371b7`)。索引见 `web/COMPONENTS.md`。
+- **前端 CI**(`b8cccf8`):lint + build(内含 `vue-tsc` 类型检查)。
+- **配置中心**(`b932b3c` 分类 Tab 结构化表单起,GroupCode 组织,统一范式:参数存 `SysConfig`,后端强制点先读 DB 穿透缓存、`Options` 兜底,存值经 `saveBatch` 逐键即时失效):① 系统基础(站点标题)② **安全策略**(登录失败锁定 / 密码复杂度 / 会话令牌时长 / 登录验证码开关 `28a2db9`,经 `ISecurityPolicyProvider`)③ 上传限制(单文件大小 + 后缀白名单 `9a9136a`)④ **请求限流**(运行时可配 `1d12400`:单例快照 `RuntimeRateLimit` + 订阅 `ConfigChangedEvent` 刷新 + 阈值/窗口编进分区键即时生效)。
+- **密码策略贯通**:`GET /api/v1/sys/config/password-policy`(`2747084`,`[ActiveSession]` 免权限码,复用 `ISecurityPolicyProvider.GetPasswordPolicyAsync`)→ 前端 PasswordStrength 组件 `onMounted` 拉真实策略、规则清单按策略动态构建(超管改 minLength/require* 后精确同步不漂移)。
+- **安全加固**(`bf78b73`~`a02d771`):Redis 可选缓存包 / 门户菜单读缓存(代际计数失效)/ 权限码反向一致性锁(受权端点须有菜单节点)/ 三处缓存·会话失效兜底 / DataEntity 写路径数据范围守卫(默认安全)/ `ScanApplicationAssemblies` 退役 / 雪花 ID 低位 22→12bit(主键恒 < 2^53 JS-safe)。
+- **其他**:业务脚手架模板 `dotnet new tenon-app`(`761c2e7`)/ org 子树克隆 / 机构分类字段 / 登录日志解析用户名·设备 / 会话 IP·UA / op-log 异常消息 / **PostgreSQL CI 腿**(`7fd4d0b`)/ SqlServer 中文存 nvarchar 修复(`da015e2`)。
+
+> 提交语言约定改为**英文**(`9c2d320` 起,保留 conventional-commit)。配置中心进度另见项目记忆 `config-center-progress`。
+
 ## 5. 遗留小事(不阻塞,顺手处理)
 
 - [ ] `BaseEntity` 暂在 SqlSugar 层(带 Sugar 特性保 Core 零依赖)——待定是否 Core POCO 化(§5.6),代码已标 ponytail(Phase 2a 审查结论:不阻塞,POCO 化需拆特性映射层,收益低,维持现状)
@@ -180,4 +195,23 @@
 - [x] `OrgService.UpdateAsync` 父指向自己复用 `OrgNotFound`——Phase 2a 已改专用码 `OrgInvalidParent`(42008)
 - [x] `UserService` 默认初始密码固定常量——Phase 2a 已改可配置默认(`Security:DefaultInitialPassword`,默认 null→随机);首次登录强制改密仍留 v1.x
 - [ ] `.slnx` 是 .NET 10 新方案格式(非 .sln),IDE 兼容性关注一下
-- [ ] docker-compose / Dockerfile 未建(M3,§11)
+- [ ] docker-compose / Dockerfile 未建(见 §6 T-D6)
+
+## 6. TDD 待开发清单(下一批候选;红→绿→重构,每项先落失败测试再实现)
+
+按「价值 ÷ 成本」排序。每项标注**先写什么测试**——测试红了、且红得对(为正确的原因失败),再写最小实现。
+
+- [ ] **T-D1 首次登录强制改密**(安全,已确认未做)。`SysUser` 加 `MustChangePassword` 标志(重置密码/建号默认 true);登录成功返回需改密信号;改密后清标志。
+  - 先写:集成测试 `Login_WhenMustChangePassword_ReturnsMustChangeSignal` + `ChangePassword_ClearsMustChangeFlag_ThenLoginNormal`。前端改密页拦截跳转。
+- [ ] **T-D2 软删文件物理回收任务**(T7 遗留)。后台 hosted service 周期清理 `IsDelete=true` 的物理文件;存储根围栏不误删。
+  - 先写:`FileGc_RemovesSoftDeletedPhysicalFile_AndLeavesLiveFiles`;越界路径断言不触碰。
+- [ ] **T-D3 多副本分布式限流**(现 `RuntimeRateLimit` 为单实例进程内 `PartitionedRateLimiter`)。抽限流计数存储为扩展点,Redis 实现放 `TenonAdmin.Caching.Redis`。
+  - 先写:`TwoInstances_ShareRateCounter_HitSameThreshold`(用共享计数后端)。单实例默认行为不变的回归。
+- [ ] **T-D4 部署产物 docker-compose / Dockerfile**(M3,§11)。多阶段构建 + compose(app + mysql/pg)。
+  - 先写:烟测脚本 `compose up` → 轮询 `/health/ready` 绿 + CodeFirst 建表·种子跑通(非单元测试,CI job)。
+- [ ] **T-D5 RoutePrefix / Version 配置化**(v1.x 明确后置,深耦合鉴权路径)。引入 Core `PermissionCode` 规范化 helper 供过滤器 + 种子共用,逐控制器改相对路由。
+  - 先写:`PermissionCode_Normalization_MatchesFilterAndSeed`(改前缀后权限码两侧一致)+ 非超管授权全量回归。
+- [ ] **T-D6 验证码第二种类型**(YAGNI 未解除——`ICaptchaProvider` 扩展点已在,仅 SVG 一种实现)。**先确认真需要**行为/算术/滑块验证码再动;否则不做。
+  - 先写(动了才写):新 provider `Register_SecondCaptchaType_ReplacesSvg` 走扩展点。
+
+> 非 TDD 收尾项(打包/申请,无逻辑分支不留测试):`PackageIcon` 补图 + 稳定版发布;`TenonAdmin.*` NuGet ID 前缀 owner 手动申请;首次真推配 `NUGET_API_KEY` secret。
