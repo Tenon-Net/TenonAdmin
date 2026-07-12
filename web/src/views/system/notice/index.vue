@@ -3,13 +3,15 @@
 // 用户侧(未读角标/我的通知/标记已读)在顶栏铃铛(AppHeader.vue),不在本页。
 import { h, reactive, ref } from 'vue'
 import {
-  NButton, NInput, NPopconfirm, NForm, NFormItem, NSelect, NTag, NSpace,
+  NButton, NInput, NModal, NPopconfirm, NForm, NFormItem, NSelect, NTag, NSpace,
   useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
+import MarkdownEditor from '@/components/MarkdownEditor/index.vue'
+import MarkdownView from '@/components/MarkdownEditor/MarkdownView.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useProTableLabels } from '@/composables/useProTableLabels'
 import { noticeApi } from '@/api'
@@ -37,10 +39,11 @@ const columns: ProTableColumn<SysNotice>[] = [
   {
     key: 'op',
     title: () => t('common.operation'),
-    width: 90,
+    width: 140,
     hideInSetting: true,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
+        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openView(r) }, () => t('notice.view')),
         h(
           NPopconfirm,
           {
@@ -74,6 +77,14 @@ const typeOptions = [
 function openPublish() {
   Object.assign(form, blank())
   show.value = true
+}
+
+// ── 查看(只读渲染 Markdown 正文)──
+const showView = ref(false)
+const viewRow = ref<SysNotice | null>(null)
+function openView(r: SysNotice) {
+  viewRow.value = r
+  showView.value = true
 }
 async function savePublish() {
   await formRef.value?.validate()
@@ -121,9 +132,18 @@ async function savePublish() {
         <n-input v-model:value="form.title" :placeholder="t('notice.noticeTitle')" />
       </n-form-item>
       <n-form-item :label="t('notice.content')">
-        <n-input v-model:value="(form.content as string)" type="textarea" :autosize="{ minRows: 3, maxRows: 8 }" :placeholder="t('notice.content')" />
+        <MarkdownEditor v-model:value="form.content" />
       </n-form-item>
     </n-form>
     </FormContainer>
+
+    <n-modal
+      v-model:show="showView"
+      preset="card"
+      :title="viewRow?.title || t('notice.detailTitle')"
+      style="width: 720px; max-width: 92vw"
+    >
+      <MarkdownView :value="viewRow?.content" />
+    </n-modal>
   </div>
 </template>

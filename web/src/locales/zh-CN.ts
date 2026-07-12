@@ -12,6 +12,7 @@ export default {
     delete: '删除',
     save: '保存',
     submit: '提交',
+    format: '格式化',
     loading: '加载中…',
     yes: '是',
     no: '否',
@@ -209,6 +210,10 @@ export default {
     users: '授权用户',
     perms: '权限点',
     pending: '待审批',
+    trendTitle: '近 7 日活跃趋势',
+    distributionTitle: '资源分布',
+    trendLogins: '登录数',
+    trendActive: '活跃用户',
   },
   user: {
     title: '用户管理',
@@ -370,6 +375,8 @@ export default {
     deleteConfirm: '确定删除通知「{title}」?',
     published: '已发布',
     deleted: '已删除',
+    view: '查看',
+    detailTitle: '通知详情',
   },
   // 在线会话(R7,只读 + 踢人)
   session: {

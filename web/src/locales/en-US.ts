@@ -11,6 +11,7 @@ export default {
     delete: 'Delete',
     save: 'Save',
     submit: 'Submit',
+    format: 'Format',
     loading: 'Loading…',
     yes: 'Yes',
     no: 'No',
@@ -208,6 +209,10 @@ export default {
     users: 'Authorized users',
     perms: 'Permissions',
     pending: 'Pending',
+    trendTitle: 'Activity (last 7 days)',
+    distributionTitle: 'Resource distribution',
+    trendLogins: 'Logins',
+    trendActive: 'Active users',
   },
   user: {
     title: 'Users',
@@ -369,6 +374,8 @@ export default {
     deleteConfirm: 'Delete notification "{title}"?',
     published: 'Published',
     deleted: 'Deleted',
+    view: 'View',
+    detailTitle: 'Notification detail',
   },
   // Online sessions (R7, read-only + force logout)
   session: {
