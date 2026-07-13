@@ -35,7 +35,11 @@ playwright-report/
 # 若哪天要让全体协作者都吃到某条钩子(如"版本号只准写进 Directory.Packages.props"),
 # 就得 hooks/ + settings.json 成套提交,届时再解掉这行。
 .claude/hooks/
+.claude/launch.json
 .claude/settings.local.json
+
+## Backend 临时验证脚本
+backend/scratchpad/
 
 ## dev scripts (mac/linux) runtime
 .dev/
