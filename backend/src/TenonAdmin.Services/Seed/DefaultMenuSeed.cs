@@ -7,8 +7,9 @@ namespace TenonAdmin.Services;
 /// 不预埋尚不存在页面的菜单(避免种子超前于实现)。后续模块落地时同批增补自己的菜单节点。
 /// <para>权限码必须与 <c>[RolePermission]</c> 授权管道算出的规范化路由一字不差
 /// (大写 Method + 冒号 + 小写路由模板),否则授了也匹配不上。</para>
-/// <para>菜单树顶级节点:工作台(根级页面)+ 组织管理 / 系统运维 / 日志审计 / 文件管理四个目录。均挂内置 system 模块
-/// (ModuleId 仅顶级节点设)。节点 Id 手工分配、无分配器,新增节点接着当前最大值往后取(现已用到 108),避免覆盖历史 Id。</para>
+/// <para>菜单树顶级节点:system 模块下工作台(根级页面)+ 组织管理 / 系统运维 / 日志审计 / 文件管理四个目录;
+/// 另有示例 business 模块下一条工作台(ModuleId 仅顶级节点设)。节点 Id 手工分配、无分配器,新增节点接着当前
+/// 最大值往后取(现已用到 109),避免覆盖历史 Id。</para>
 /// </summary>
 internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
 {
@@ -148,5 +149,9 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 104, ParentId = 30, Type = MenuType.Button, Title = "文件-分片初始化", Permission = "POST:/api/v1/sys/file/chunk/init", Sort = 6, Enabled = true },
         new SysMenu { Id = 105, ParentId = 30, Type = MenuType.Button, Title = "文件-分片上传", Permission = "POST:/api/v1/sys/file/chunk", Sort = 7, Enabled = true },
         new SysMenu { Id = 106, ParentId = 30, Type = MenuType.Button, Title = "文件-分片完成", Permission = "POST:/api/v1/sys/file/chunk/complete", Sort = 8, Enabled = true },
+
+        // ═══ 业务中心(示例业务模块 Id=2)═══════════════════════════
+        // 复用现成的 dashboard/biz.vue;工作台是根级 Menu 节点(可挂 ModuleId),Path 与 system 工作台错开。
+        new SysMenu { Id = 109, ParentId = 0, Type = MenuType.Menu, Title = "工作台", Permission = "", Path = "/business/workbench", Component = "dashboard/biz", Icon = "ph:squares-four-duotone", Sort = 0, Enabled = true, Visible = true, ModuleId = DefaultModuleSeed.BUSINESS_MODULE_ID },
     ];
 }
