@@ -55,12 +55,10 @@ function useLayoutMenuImpl() {
   const auth = useAuthStore()
   const app = useAppStore()
 
+  // 工作台不再手工 prepend:它是每个应用菜单树里的一条(Sort=0 → 仍是第一项),跟着应用变。
   const menuOptions = computed<MenuOption[]>(() => {
-    void app.locale // 依赖:切换语言时工作台标签重算
-    return [
-      { label: t('menu.workbench'), key: '/workbench', icon: renderIcon('ph:squares-four-duotone') },
-      ...toOptions(auth.menuTree),
-    ]
+    void app.locale // 依赖:切换语言时 i18n key 标题重算
+    return toOptions(auth.menuTree)
   })
 
   // 一级(剥 children → n-menu 渲染为可选普通项,无展开箭头)。
@@ -76,7 +74,7 @@ function useLayoutMenuImpl() {
     return top ? String(top.key) : undefined
   }
 
-  // 路由 → 一级同步:命中才覆写(off-menu 路由如 /workbench、/personal/* 保留上次);首次 seed 头一项。
+  // 路由 → 一级同步:命中才覆写(off-menu 路由如 /personal/* 保留上次);首次 seed 头一项。
   watch(
     () => router.currentRoute.value.path,
     (path) => {

@@ -15,11 +15,11 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const busy = ref(false)
 
-async function pick(id: number, defaultRoute?: string) {
+async function pick(id: number) {
   busy.value = true
   try {
     await useModule().enter(id)
-    router.replace(defaultRoute || '/workbench')
+    router.replace(auth.homePath) // 进该应用自己的首页
   } catch (e) {
     message.error(translateError(e))
   } finally {
@@ -54,9 +54,9 @@ async function setDefault(id: number) {
           class="card"
           role="button"
           tabindex="0"
-          @click="pick(m.id, m.defaultRoute)"
-          @keydown.enter="pick(m.id, m.defaultRoute)"
-          @keydown.space.prevent="pick(m.id, m.defaultRoute)"
+          @click="pick(m.id)"
+          @keydown.enter="pick(m.id)"
+          @keydown.space.prevent="pick(m.id)"
         >
           <div class="ico"><Icon :icon="m.icon || 'ph:app-window-duotone'" :width="28" /></div>
           <div class="body">

@@ -3,18 +3,8 @@ import { useTabsStore } from '@/stores/tabs'
 import { personalApi } from '@/api'
 import { buildRoutesForModule } from './useAuthMenu'
 import { router } from '@/router'
-import type { MenuNode } from '@/types/menu'
 
 type EnterResult = { chooser: true } | { chooser: false; moduleId: number }
-
-function firstLeafPath(tree: MenuNode[]): string | undefined {
-  for (const n of tree) {
-    if (n.path && !n.children?.length) return n.path
-    const deeper = n.children?.length ? firstLeafPath(n.children) : undefined
-    if (deeper) return deeper
-  }
-  return undefined
-}
 
 /** 门户:登录后决定直接进 / 进默认 / 弹选择器,以及切换应用。逻辑与 Naive 无关。 */
 export function useModule() {
@@ -45,8 +35,7 @@ export function useModule() {
   async function switchModule(moduleId: number): Promise<void> {
     await enter(moduleId)
     useTabsStore().clearTabs() // 切应用 → 标签归零(新应用路由已重建)
-    const m = auth.modules.find((x) => x.id === moduleId)
-    router.replace(m?.defaultRoute || firstLeafPath(auth.menuTree) || '/workbench')
+    router.replace(auth.homePath) // 落到新应用自己的首页
   }
 
   async function setDefault(moduleId: number): Promise<void> {

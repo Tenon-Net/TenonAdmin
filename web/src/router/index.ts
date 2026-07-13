@@ -44,12 +44,19 @@ router.beforeEach(async (to) => {
       const res = await useModule().enterInitial()
       if (res.chooser) return to.name === 'module' ? true : { path: '/module', replace: true }
       if (to.name === 'module') return { path: '/', replace: true }
+      // 目标是 '/' 时不能 return to.fullPath——那是重定向到自身,'/' 已无静态 redirect,会被判成无限重定向。
+      // 此刻菜单树已就绪,直接给出首页。
+      if (to.path === '/') return { path: auth.homePath, replace: true }
       return to.fullPath // 重解析当前 URL(此时动态路由已就绪)
     } catch {
       user.clear()
       return { path: '/login', replace: true }
     }
   }
+
+  // '/' 落到当前应用自己的首页。放在守卫里(而非 layout 的 redirect)——redirect 在 resolve 阶段求值,
+  // 早于本守卫,那时 menuTree 还空、动态路由未建,算出的首页必然是错的。
+  if (to.path === '/') return { path: auth.homePath, replace: true }
 
   return true
 })

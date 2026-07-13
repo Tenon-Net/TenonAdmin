@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import type { RouteLocationNormalized } from 'vue-router'
 import { router } from '@/router'
+import { useAuthStore } from '@/stores/auth'
 
 export interface TabItem {
   path: string // 主键(与 keep-alive 单实例一致)
@@ -8,22 +9,16 @@ export interface TabItem {
   title: string // 原始 meta.title(可能是 i18n key)
   name: string // 路由名 → keep-alive include
   icon?: string
-  affix?: boolean // 固定标签(工作台),不可关闭
+  affix?: boolean // 固定标签(= 当前应用的首页),不可关闭
 }
 
-const HOME: TabItem = {
-  path: '/workbench',
-  fullPath: '/workbench',
-  title: 'menu.workbench',
-  name: 'workbench',
-  icon: 'ph:squares-four-duotone',
-  affix: true,
-}
-
-/** 多标签页会话:标签列表 + keep-alive 缓存名。sessionStorage 持久化(F5 恢复,新标签页从净态开始)。 */
+/**
+ * 多标签页会话:标签列表 + keep-alive 缓存名。sessionStorage 持久化(F5 恢复,新标签页从净态开始)。
+ * 首页标签不写死:每个应用首页不同(homePath()),故 affix 在 addTab 时按当前应用判定。
+ */
 export const useTabsStore = defineStore('tabs', {
   state: () => ({
-    tabs: [{ ...HOME }] as TabItem[],
+    tabs: [] as TabItem[],
     reloadKey: 0, // 变更 → 强制页面重挂(refreshTab)
     excludeName: '', // 临时逐出 keep-alive 实例(refreshTab)
   }),
@@ -46,7 +41,8 @@ export const useTabsStore = defineStore('tabs', {
         existing.title = title
         if (icon) existing.icon = icon
       } else {
-        this.tabs.push({ path, fullPath: route.fullPath, title, name, icon })
+        // 当前应用的首页 → 固定标签,不可关闭(每个应用各有一个)
+        this.tabs.push({ path, fullPath: route.fullPath, title, name, icon, affix: path === useAuthStore().homePath })
       }
     },
     removeTab(path: string) {
@@ -65,7 +61,7 @@ export const useTabsStore = defineStore('tabs', {
     },
     closeAll() {
       this.tabs = this.tabs.filter((t) => t.affix)
-      this._ensureActive('/workbench')
+      this._ensureActive(useAuthStore().homePath)
     },
     closeLeft(path: string) {
       const idx = this.tabs.findIndex((t) => t.path === path)
@@ -91,8 +87,9 @@ export const useTabsStore = defineStore('tabs', {
       this.excludeName = name
       this.reloadKey++
     },
+    // 切应用/登出:标签清空。新应用首页由 router.afterEach 的 addTab 自然补成第一个(affix)标签。
     clearTabs() {
-      this.tabs = [{ ...HOME }]
+      this.tabs = []
     },
   },
   persist: { storage: sessionStorage, pick: ['tabs'] },

@@ -11,16 +11,14 @@ export interface MenuLeaf {
   breadcrumb: string[] // 从根到叶的标题链
 }
 
-/** auth.menuTree 扁平为叶子(供面包屑与全局搜索共用),复刻 toOptions 的按钮/隐藏/排序规则 + 注入工作台。 */
+/** auth.menuTree 扁平为叶子(供面包屑与全局搜索共用),复刻 toOptions 的按钮/隐藏/排序规则。 */
 export function useMenuFlat() {
   const auth = useAuthStore()
   const app = useAppStore()
 
   return computed<MenuLeaf[]>(() => {
-    void app.locale // 依赖:切换语言时工作台标签重算
-    const out: MenuLeaf[] = [
-      { title: t('menu.workbench'), path: '/workbench', icon: 'ph:squares-four-duotone', breadcrumb: [t('menu.workbench')] },
-    ]
+    void app.locale // 依赖:切换语言时 i18n key 标题重算
+    const out: MenuLeaf[] = [] // 工作台已是菜单树里的一条,不再手工注入
     const tr = (s: string) => (s.includes('.') ? t(s) : s) // 标题可能是 i18n key,面包屑与 label()/title 一致翻译
     const walk = (nodes: MenuNode[], trail: string[]) => {
       for (const n of [...nodes].sort((a, b) => a.sort - b.sort)) {
