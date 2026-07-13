@@ -187,6 +187,8 @@ export interface paths {
                     GroupCode?: string;
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -513,6 +515,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboard/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 首页汇总:角色/用户/权限点/在线会话数 + 近 7 日登录趋势 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfDashboardSummaryOutput"];
+                        "application/json": components["schemas"]["ResultOfDashboardSummaryOutput"];
+                        "text/json": components["schemas"]["ResultOfDashboardSummaryOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/dict/type/page": {
         parameters: {
             query?: never;
@@ -530,6 +570,8 @@ export interface paths {
                     Name?: string;
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -795,6 +837,8 @@ export interface paths {
                     TypeCode?: string;
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -1416,6 +1460,8 @@ export interface paths {
                     Type?: components["schemas"]["NoticeType"];
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -1501,6 +1547,8 @@ export interface paths {
                     Type?: components["schemas"]["NoticeType"];
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -2186,6 +2234,8 @@ export interface paths {
                     Name?: string;
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -2352,6 +2402,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/position/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 行拖拽重排:按传入 Id 顺序重排 Sort */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PositionReorderInput"];
+                    "text/json": components["schemas"]["PositionReorderInput"];
+                    "application/*+json": components["schemas"]["PositionReorderInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/file/upload": {
         parameters: {
             query?: never;
@@ -2447,6 +2541,8 @@ export interface paths {
                     FileName?: string;
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -2721,6 +2817,8 @@ export interface paths {
                     EndTime?: string;
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -2808,6 +2906,8 @@ export interface paths {
                     EndTime?: string;
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -2889,6 +2989,8 @@ export interface paths {
                     Name?: string;
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -3282,6 +3384,8 @@ export interface paths {
                     UserId?: number | string;
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -3373,6 +3477,8 @@ export interface paths {
                     Enabled?: boolean;
                     Current?: number | string;
                     Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
                 };
                 header?: never;
                 path?: never;
@@ -3801,6 +3907,38 @@ export interface components {
             sort?: number | string;
             /** @description 备注 */
             remark?: null | string;
+        };
+        /**
+         * @description 工作台首页统计(设计 §4)。形状直接对齐前端图表组件:
+         *     折线图收 `categories: string[]` + 两条 `number[]`,饼图的"资源分布"就是前三个计数,前端自行拼装。
+         */
+        DashboardSummaryOutput: {
+            /**
+             * Format: int32
+             * @description 角色数
+             */
+            roles: number | string;
+            /**
+             * Format: int32
+             * @description 用户数
+             */
+            users: number | string;
+            /**
+             * Format: int32
+             * @description 权限点数(菜单里带权限码的节点:目录无权限码)
+             */
+            perms: number | string;
+            /**
+             * Format: int32
+             * @description 在线会话数(未吊销且未过期)
+             */
+            onlineSessions: number | string;
+            /** @description 近 7 日日期(MM-dd,含今天) */
+            trendDays: string[];
+            /** @description 近 7 日每天登录成功次数 */
+            trendLogins: (number | string)[];
+            /** @description 近 7 日每天登录成功的去重用户数 */
+            trendActiveUsers: (number | string)[];
         };
         /**
          * @description 数据范围类型(设计 §4 数据权限,招牌能力)——角色可见数据的机构维度。存库为 int。
@@ -4425,6 +4563,11 @@ export interface components {
             /** @description 是否启用 */
             enabled?: boolean;
         };
+        /** @description 行拖拽重排入参:Ids 即新顺序,后端据此赋 Sort。 */
+        PositionReorderInput: {
+            /** @description 按目标顺序排列的职位 Id 列表。 */
+            ids?: (number | string)[];
+        };
         /** @description 刷新令牌换发入参 */
         RefreshInput: {
             /** @description 登录时下发的刷新令牌明文(服务端比对其哈希) */
@@ -4518,6 +4661,27 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["ChunkInitOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfDashboardSummaryOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["DashboardSummaryOutput"];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -5389,6 +5553,12 @@ export interface components {
         SiteInfoOutput: {
             /** @description 站点标题(浏览器标题/登录页展示名) */
             title?: null | string;
+            /** @description 登录页副标题(留空则前端回退内置文案) */
+            subtitle?: null | string;
+            /** @description 版权信息(登录页页脚版权名;留空则前端回退站点标题) */
+            copyright?: null | string;
+            /** @description 版权链接(版权名的超链接;留空则纯文本) */
+            copyrightUrl?: null | string;
             /** @description 是否启用登录验证码(运行时配置驱动;前端据此决定登录页是否展示验证码)。 */
             captchaEnabled?: boolean;
         };
@@ -5803,6 +5973,10 @@ export interface components {
             orgId?: null | number | string;
             /** Format: int64 */
             positionId?: null | number | string;
+            /** @description 机构名称(已删/未分配则为 null)。前端只有 Id 的话就只能把雪花号原样甩给用户看。 */
+            orgName?: null | string;
+            /** @description 职位名称(已删/未分配则为 null) */
+            positionName?: null | string;
             isSuperAdmin: boolean;
         };
     };

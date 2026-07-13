@@ -17,7 +17,6 @@ import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
-import { useProTableLabels } from '@/composables/useProTableLabels'
 import { userApi, positionApi, roleApi, orgApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { buildTree, type Tree } from '@/utils/tree'
@@ -26,7 +25,6 @@ import type { AddUserInput, SysOrg, UpdateUserInput, UserItem } from '@/types/ap
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
-const labels = useProTableLabels()
 const tableRef = ref<ProTableInst<UserItem>>()
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   remove: userApi.batchRemove,
@@ -86,7 +84,7 @@ watch(
 const columns: ProTableColumn<UserItem>[] = [
   // 超管行禁勾:批量删除同样不可含超管(后端也会整体拒绝)
   { type: 'selection', disabled: (r: UserItem) => r.isSuperAdmin },
-  { key: 'account', title: () => t('user.account'), search: true },
+  { key: 'account', title: () => t('user.account'), search: true, sorter: true },
   { key: 'name', title: () => t('user.name'), search: true },
   // 只作搜索项,不进表格也不进列设置。options 直接吃编辑表单已拉好的 roleOptions(ProTable 支持 Ref 选项源),不额外发请求;
   // 列上有 options,搜索控件自动是 select。
@@ -122,7 +120,7 @@ const columns: ProTableColumn<UserItem>[] = [
     render: (r) =>
       r.isSuperAdmin ? h(NTag, { type: 'warning', size: 'small', bordered: false }, () => t('user.superAdmin')) : '—',
   },
-  { key: 'createTime', title: () => t('user.createTime'), format: 'datetime' },
+  { key: 'createTime', title: () => t('user.createTime'), format: 'datetime', sorter: true },
   {
     key: 'op',
     title: () => t('common.operation'),
@@ -289,7 +287,6 @@ async function copyResult() {
       :columns="columns"
       :fetcher="userApi.page"
       :params="tableParams"
-      :labels="labels"
       storage-key="sys-user"
       :checked-row-keys="checkedKeys"
       @update:checked-row-keys="(keys: (string | number)[]) => (checkedKeys = keys)"

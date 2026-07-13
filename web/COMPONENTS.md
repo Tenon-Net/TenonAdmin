@@ -10,13 +10,24 @@
 tenon 内接入约定:
 
 - **fetcher**:直接传 `xxxApi.page`,api 层负责把后端 `PagedList{current,size,total,items}` 归一成 `{items,total}`、把 `{page,pageSize}` 映射成 `{Current,Size}`(见 `src/api/index.ts` 的 `userApi.page`)。
-- **labels**:用 `useProTableLabels()`(`src/composables/useProTableLabels.ts`),查询/重置/密度复用 `common.*`/`app.*` 键,其余在 locale 的 `proTable.*`。
+- **labels**:**全局注入,页面不再手传**。`main.ts` 用 `app.provide(PRO_TABLE_DEFAULTS, createProTableDefaults({ labels: computed(...) }))` 一次接上 i18n(键仍在 locale 的 `common.*`/`app.*`/`proTable.*`),切语言即时生效。要覆盖单页文案才传 `:labels`。
 - **列标题必须函数形式** `title: () => t('...')`,切语言即时生效(教训:提交 308a361)。
 - **错误处理留在视图层**:`@error="(e) => message.error(translateError(e))"`,包内不弹 UI。
 - **storage-key 命名**:`{模块}-{页面}`,如 `sys-user`;列设置与密度按此键持久化到 localStorage(`protable:` 前缀)。
-- **本地联调**:`NPT_LOCAL=1 npm run dev` 直连兄弟仓库源码(见 vite.config.ts),回路同图标包(改 → 发补丁版 → bump)。
+- **树形页(org / menu)**:静态数据模式 —— `:data="tree"`(行带 `children`)+ `row-key="id"` + `:pagination="false"`,树列设 `align:'left'`;新增/筛选/搜索控件放 `#toolbar`。
+  - **搜索自己算**:静态 `:data` 模式下 ProTable **不做任何前端过滤**(列的 `search` 配置只渲染搜索表单 + emit),所以关键字过滤走 `computed` + `utils/tree.ts` 的 `filterTree`(命中节点保留整棵子树,未命中但有后代命中的节点作为祖先链保留)。关键字放 `#toolbar` 的 `n-input`,别用 `search` 列配置——树表没分页,搜索卡片白占一整块高度。
+  - **展开要受控**:`:expanded-row-keys` + `@update:expanded-row-keys`(不是 ProTable 的 prop,靠 `inheritAttrs:false + v-bind="attrs"` 透传给 `n-data-table`,和 `:loading` 同理)。**受控后必须删掉 `default-expand-all`** —— naive 里受控值优先,两者并存会让初始 `[]` 把"默认全展开"直接覆盖成全折叠;"全展开"改由 `expandableIds(tree)` 播种。data 变了受控 keys 不会自动跟着变,搜索后要重算,否则命中结果藏在折叠的祖先里。
+  - **行内写值的坑**:`filterTree` 剪枝时,"仅因后代命中而保留"的祖先是浅拷贝。搜索态下往行对象上写值(`r.enabled = v`)写的是副本,不回源树 → 开关会弹回去。行内变更后**重拉**(`load()`)而不是本地写回;`StatusSwitch` 是悲观更新(请求成功才 emit),重拉即最终态。
+- **主从选中(dict)**:`:active-row-key` + `@row-click` 做行高亮/选中(勿再 `:deep(> td)`);行内交互控件(开关/按钮)的 render 里要 `stopPropagation`,否则点它会冒泡触发 `@row-click`。
+- **窄栏搜索(dict)**:`:search="{ layout: 'inline' }"` 无卡片单行,配合列 `search: true`。
+- **排序(user)**:列写 `sorter: true` → 点表头把 `{ sortField, sortOrder }` 并进 fetcher;**api 层要把它们映射成后端 `SortField/SortOrder` query**(见 `userApi.page`/`positionApi.page`)。后端按实体列白名单安全排序(非法字段忽略回退默认,`PagedListExtensions.OrderBySafe`),字段名 = 实体属性名(大小写不敏感)。
+- **行拖拽(position)**:`row-draggable` + `drag-handle=".drag-handle"`(手柄列避开行内开关/按钮冲突)+ `@row-drag-sort="(e)=> positionApi.reorder(e.reordered.map(r=>r.id)).then(refresh)"`。后端 `POST /sys/position/reorder` 按序赋 Sort;sortablejs 懒加载(独立 chunk)。
+- **搜索折叠**:`:search="{ collapsible: true }"`(仅 grid 布局,搜索项多时才用)。
+- **逃生口 slot**:`#toolbar-right`(工具栏右侧)、`#header-{key}`、`#empty`、`#pagination-prefix`;全局默认(align/pageSizes/emptyText/tag 等)也走 `PRO_TABLE_DEFAULTS`,免为小调整发包。
+- **已能用(透传)**:列宽拖拽(列 `resizable`)、虚拟滚动(`:virtual-scroll`+`max-height`)、合计行(`:summary`)、合并单元格(列 `rowSpan/colSpan`)——经 attrs/列透传,无需新 API。
+- **本地联调**:`NPT_LOCAL=1 npm run dev` 直连兄弟仓库源码(见 vite.config.ts),回路同图标包(改 → 发补丁版 → bump)。排序/拖拽/折叠需 `^0.3.1`(0.3.0 的行拖拽在 fetcher 模式下**从不生效**:Sortable 只在 onMounted 绑一次,而空表时 naive 根本没渲染 tbody);排序/拖拽依赖后端(`SortField/SortOrder` + position `reorder`),改后端后 `npm run gen:api` 重生成 schema。
 
-范例页:`src/views/system/user/index.vue`。
+范例页:`src/views/system/user/index.vue`(标准列表 + 排序)、`position`(行拖拽)、`org`/`menu`(树)、`dict`(主从 + inline 搜索)。
 
 ## 自研通用组件索引
 

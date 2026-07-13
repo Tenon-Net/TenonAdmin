@@ -9,7 +9,6 @@ import AppIcon from '@/components/AppIcon.vue'
 import FileUpload from '@/components/FileUpload/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
-import { useProTableLabels } from '@/composables/useProTableLabels'
 import { fileApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { SysFile } from '@/types/api'
@@ -17,7 +16,6 @@ import type { SysFile } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
-const labels = useProTableLabels()
 const tableRef = ref<ProTableInst<SysFile>>()
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   remove: fileApi.batchRemove,
@@ -95,7 +93,6 @@ const columns: ProTableColumn<SysFile>[] = [
     ref="tableRef"
     :columns="columns"
     :fetcher="fileApi.page"
-    :labels="labels"
     storage-key="sys-file"
     :checked-row-keys="checkedKeys"
     @update:checked-row-keys="(keys: (string | number)[]) => (checkedKeys = keys)"

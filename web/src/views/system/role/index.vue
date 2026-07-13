@@ -2,7 +2,7 @@
 // 角色管理 = ProTable CRUD(照职位范式)+ 两个专属抽屉:授权菜单(勾选菜单树)、数据范围(选范围类型 + 自定义机构)。
 // 删角色会**物理**删掉用户↔角色关联(不可恢复)——所以删前先查一次持有人数当面告知,单删与批量删都盖到,
 // 只给行内按钮加警告的话,勾选 + 批量删就绕过去了。
-import { computed, h, reactive, ref } from 'vue'
+import { computed, h, onMounted, reactive, ref } from 'vue'
 import {
   NButton, NSpace, NInput, NInputNumber, NSwitch, NForm, NFormItem, NSelect, NTree,
   useMessage, type FormInst, type FormRules,
@@ -16,18 +16,30 @@ import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
-import { useProTableLabels } from '@/composables/useProTableLabels'
-import { roleApi, menuApi, userApi } from '@/api'
+import { roleApi, menuApi, moduleApi, userApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
-import { DataScopeType, type RoleInput, type SysRole } from '@/types/api'
+import { DataScopeType, type ModuleRow, type RoleInput, type SysRole } from '@/types/api'
 import type { MenuTreeNode } from '@/types/menu'
 
 const { t } = useI18n()
 const message = useMessage()
 const router = useRouter()
 const { confirm } = useConfirm()
-const labels = useProTableLabels()
+const auth = useAuthStore()
 const tableRef = ref<ProTableInst<SysRole>>()
+
+/** 「未分配」哨兵:雪花 id 无 0,用它表示 moduleId==null 的顶级目录分组。 */
+const UNASSIGNED = 0
+/** 授权抽屉的「所属应用」下拉数据源。 */
+const modules = ref<ModuleRow[]>([])
+onMounted(async () => {
+  try {
+    modules.value = await moduleApi.list()
+  } catch {
+    // 模块列表仅供授权抽屉的「所属应用」下拉;拉取失败不阻塞角色管理主流程。
+  }
+})
 
 /**
  * 持有该角色的用户数。复用用户分页端点(Size=1 只要 total),不新开接口。
@@ -151,14 +163,46 @@ async function save() {
 // (目录/页面节点权限码为空,勾了也不产生权限码,后端 RbacPermissionProvider 只取 Permission!="" 的行)。
 const showMenus = ref(false)
 const menuTree = ref<MenuTreeNode[]>([])
+// menuChecked 始终是**跨应用的完整授权集合**;抽屉只按应用过滤显示,保存全量替换,不可只留单应用。
 const menuChecked = ref<number[]>([])
 const menuRoleId = ref<number | null>(null)
+/** 抽屉内「所属应用」筛选:默认跟随当前进入的应用。 */
+const drawerModuleId = ref<number>(UNASSIGNED)
+const moduleFilterOptions = computed(() => [
+  ...modules.value.map((m) => ({ label: m.title, value: m.id })),
+  { label: t('menu.moduleUnassigned'), value: UNASSIGNED },
+])
+/** 只过滤顶级目录(moduleId 仅存于顶级),子树自动跟随;UNASSIGNED 归拢无模块的顶级目录。 */
+const drawerFiltered = computed(() =>
+  menuTree.value.filter((r) => (drawerModuleId.value === UNASSIGNED ? r.moduleId == null : r.moduleId === drawerModuleId.value)),
+)
+/** 当前应用可见子树的全部菜单 id(cascade=false,每节点独立)——用于回写时圈定「本应用」范围。 */
+const appIds = computed(() => {
+  const out = new Set<number>()
+  const collect = (n: MenuTreeNode) => {
+    out.add(n.id)
+    n.children.forEach(collect)
+  }
+  drawerFiltered.value.forEach(collect)
+  return out
+})
+/**
+ * n-tree 的勾选:只喂当前应用的勾选(避免 naive 对不在 data 里的 key 报警);
+ * 回写时先剔除本应用旧勾选、再并入新勾选,**其它应用的授权原样保留**——否则全量替换会误删。
+ */
+const drawerChecked = computed<number[]>({
+  get: () => menuChecked.value.filter((id) => appIds.value.has(id)),
+  set: (v) => {
+    menuChecked.value = [...menuChecked.value.filter((id) => !appIds.value.has(id)), ...v]
+  },
+})
 async function openMenus(r: SysRole) {
   menuRoleId.value = r.id
   try {
     const [tree, granted] = await Promise.all([menuApi.tree(), roleApi.getMenus(r.id)])
     menuTree.value = tree
     menuChecked.value = granted
+    drawerModuleId.value = auth.currentModuleId ?? modules.value[0]?.id ?? UNASSIGNED
     showMenus.value = true
   } catch (e) {
     message.error(translateError(e))
@@ -215,7 +259,6 @@ async function saveScope() {
     ref="tableRef"
     :columns="columns"
     :fetcher="roleApi.page"
-    :labels="labels"
     storage-key="sys-role"
     :checked-row-keys="checkedKeys"
     @update:checked-row-keys="(keys: (string | number)[]) => (checkedKeys = keys)"
@@ -271,9 +314,15 @@ async function saveScope() {
     :on-confirm="saveMenus"
     :confirm-text="t('common.save')"
   >
+    <n-select
+      v-model:value="drawerModuleId"
+      :options="moduleFilterOptions"
+      :placeholder="t('menu.module')"
+      style="margin-bottom: 12px"
+    />
     <n-tree
-      v-model:checked-keys="menuChecked"
-      :data="(menuTree as any)"
+      v-model:checked-keys="drawerChecked"
+      :data="(drawerFiltered as any)"
       key-field="id"
       label-field="title"
       children-field="children"

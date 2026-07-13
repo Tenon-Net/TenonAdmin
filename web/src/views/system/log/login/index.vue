@@ -7,7 +7,6 @@ import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { useProTableLabels } from '@/composables/useProTableLabels'
 import { logApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { uaSummary } from '@/utils/ua'
@@ -16,7 +15,6 @@ import type { SysLoginLog } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
-const labels = useProTableLabels()
 const tableRef = ref<ProTableInst<SysLoginLog>>()
 
 const columns: ProTableColumn<SysLoginLog>[] = [
@@ -74,7 +72,6 @@ function clearLogs() {
     ref="tableRef"
     :columns="columns"
     :fetcher="logApi.loginPage"
-    :labels="labels"
     storage-key="sys-log-login"
     @error="(e) => message.error(translateError(e))"
   >

@@ -1,12 +1,13 @@
 <script setup lang="ts">
-// 机构管理 = 树表(照 menu 页范式:裸 n-data-table 树 + FormContainer + StatusSwitch + useConfirm)。
-// ProTable 不支持树形行,故用裸 n-data-table。org list 平铺 → buildTree 拼树;上级机构用 OrgTreeSelect
-// (剪自身子树防成环);无独立启停端点,StatusSwitch 走全量 update;删除有子机构后端拒,前端照调由 translateError 弹码。
-import { h, onMounted, reactive, ref } from 'vue'
+// 机构管理 = 树表:ProTable 静态数据 + children 树模式(无分页)。
+// org list 平铺 → buildTree 拼 children;上级机构用 OrgTreeSelect(剪自身子树防成环);
+// 无独立启停端点,StatusSwitch 走全量 update;删除有子机构后端拒,前端照调由 translateError 弹码。
+import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import {
-  NCard, NButton, NSpace, NDataTable, NForm, NFormItem, NInput, NInputNumber, NSwitch,
-  NPopconfirm, useMessage, type DataTableColumns, type FormInst, type FormRules,
+  NButton, NSpace, NForm, NFormItem, NInput, NInputNumber, NSwitch,
+  NPopconfirm, useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
+import { ProTable, type ProTableColumn } from 'tenon-naive-pro-table'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
 import DictSelect from '@/components/DictSelect/index.vue'
@@ -17,7 +18,7 @@ import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { orgApi } from '@/api'
 import { translateError } from '@/utils/error'
-import { buildTree, type Tree } from '@/utils/tree'
+import { buildTree, expandableIds, filterTree, type Tree } from '@/utils/tree'
 import type { OrgInput, SysOrg } from '@/types/api'
 
 const { t } = useI18n()
@@ -38,6 +39,24 @@ async function load() {
   }
 }
 onMounted(load)
+
+// ── 搜索 + 展开控制 ───────────────────────────────────────────────
+// ProTable 静态 data 模式不做任何前端过滤(它只在 fetcher 模式下发请求),所以过滤得自己算。
+// 关键字放 #toolbar 而不是用列的 search 配置:树表没有分页,搜索卡片会白占一整块高度。
+const keyword = ref('')
+const filteredTree = computed(() => {
+  const kw = keyword.value.trim().toLowerCase()
+  if (!kw) return tree.value
+  return filterTree(tree.value, (n) => n.name.toLowerCase().includes(kw) || n.code.toLowerCase().includes(kw))
+})
+
+// 展开受控:一旦传了 expanded-row-keys,naive 就以它为准,default-expand-all 会被初始值直接覆盖成"全折叠",
+// 所以"默认全展开"得自己播种。data 变了受控 keys 也不会自动跟着变 —— 搜索后要重算,否则命中结果藏在折叠的祖先里看不见。
+const expandedKeys = ref<number[]>([])
+watch(filteredTree, (t) => (expandedKeys.value = expandableIds(t)), { immediate: true })
+
+const allExpanded = computed(() => expandedKeys.value.length > 0)
+const toggleExpandAll = () => (expandedKeys.value = allExpanded.value ? [] : expandableIds(filteredTree.value))
 
 // ── 弹窗表单(parentId 可空:OrgTreeSelect clearable → null,save 时归一为 0=根)──
 interface OrgForm {
@@ -87,8 +106,8 @@ async function save() {
   }
 }
 
-const columns: DataTableColumns<Tree<SysOrg>> = [
-  { title: () => t('org.name'), key: 'name' },
+const columns: ProTableColumn<Tree<SysOrg>>[] = [
+  { title: () => t('org.name'), key: 'name', align: 'left' }, // 树列左对齐,展开缩进才好读
   { title: () => t('org.code'), key: 'code' },
   { title: () => t('org.category'), key: 'category', width: 100, render: (r) => h(DictTag, { typeCode: 'org_category', value: r.category }) },
   { title: () => t('org.sort'), key: 'sort', width: 80 },
@@ -100,9 +119,9 @@ const columns: DataTableColumns<Tree<SysOrg>> = [
       h(StatusSwitch, {
         value: r.enabled,
         request: (next: boolean) => orgApi.update(r.id, { ...toInput(r), enabled: next }),
-        'onUpdate:value': (v: boolean) => {
-          r.enabled = v
-        },
+        // 重拉而非往行对象上写:搜索态下的祖先行是 filterTree 的浅拷贝,写它不会回到源树(开关会弹回去)。
+        // StatusSwitch 是悲观更新(请求成功才 emit),所以这里重拉一次就是最终态,和本页其余变更的做法一致。
+        'onUpdate:value': () => load(),
       }),
   },
   {
@@ -146,20 +165,33 @@ const columns: DataTableColumns<Tree<SysOrg>> = [
 
 <template>
   <div class="view">
-    <n-card :bordered="true">
-      <div class="bar">
+    <!-- expanded-row-keys / update:expanded-row-keys 不是 ProTable 的 prop —— 它 inheritAttrs:false + v-bind="attrs",
+         未声明的 attr 原样透传给内层 n-data-table(现有的 :loading、原来的 default-expand-all 走的都是这条路)。 -->
+    <ProTable
+      :columns="columns"
+      :data="filteredTree"
+      :loading="loading"
+      row-key="id"
+      :pagination="false"
+      storage-key="sys-org"
+      :expanded-row-keys="expandedKeys"
+      @update:expanded-row-keys="(keys: number[]) => (expandedKeys = keys)"
+    >
+      <template #toolbar>
+        <n-input v-model:value="keyword" clearable :placeholder="t('org.searchPlaceholder')" style="width: 220px">
+          <template #prefix><AppIcon icon="ph:magnifying-glass" :size="16" /></template>
+        </n-input>
+        <n-button quaternary @click="toggleExpandAll">
+          <template #icon>
+            <AppIcon :icon="allExpanded ? 'ph:arrows-in-line-vertical' : 'ph:arrows-out-line-vertical'" :size="16" />
+          </template>
+          {{ allExpanded ? t('common.collapseAll') : t('common.expandAll') }}
+        </n-button>
         <n-button type="primary" @click="openAdd(0)">
           <template #icon><AppIcon icon="ph:plus" :size="16" /></template>{{ t('common.add') }}
         </n-button>
-      </div>
-      <n-data-table
-        :columns="columns"
-        :data="tree"
-        :loading="loading"
-        :row-key="(r: Tree<SysOrg>) => r.id"
-        default-expand-all
-      />
-    </n-card>
+      </template>
+    </ProTable>
 
     <FormContainer
       v-model:show="show"
@@ -202,16 +234,5 @@ const columns: DataTableColumns<Tree<SysOrg>> = [
   display: flex;
   flex-direction: column;
   gap: var(--gap-card);
-}
-.bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-.bar h3 {
-  font-size: var(--font-size-md);
-  font-weight: 600;
-  color: var(--color-text-primary);
 }
 </style>

@@ -12,7 +12,6 @@ import AppIcon from '@/components/AppIcon.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { useProTableLabels } from '@/composables/useProTableLabels'
 import { positionApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { PositionInput, SysPosition } from '@/types/api'
@@ -20,13 +19,21 @@ import type { PositionInput, SysPosition } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
-const labels = useProTableLabels()
 const tableRef = ref<ProTableInst<SysPosition>>()
 
 // 行数据 → 完整入参:openEdit 回填与 StatusSwitch 行内改状态共用(后端无独立启停端点,均走全量 update)。
 const toInput = (r: SysPosition): PositionInput => ({ name: r.name, code: r.code, sort: r.sort, enabled: r.enabled })
 
 const columns: ProTableColumn<SysPosition>[] = [
+  // 拖拽手柄:只在手柄上起拖,避免与行内开关/按钮点击冲突(配 ProTable :drag-handle)
+  {
+    key: 'drag',
+    title: '',
+    width: 44,
+    align: 'center',
+    hideInSetting: true,
+    render: () => h('span', { class: 'drag-handle', style: 'cursor: grab; display: inline-flex' }, [h(AppIcon, { icon: 'ph:dots-six-vertical', size: 18 })]),
+  },
   { key: 'code', title: () => t('position.code') },
   { key: 'name', title: () => t('position.name'), search: true },
   { key: 'sort', title: () => t('position.sort'), width: 80 },
@@ -102,6 +109,17 @@ async function save() {
     return false
   }
 }
+
+// 行拖拽落库:按新顺序把 id 列表提交后端重排 Sort,再 refresh 以服务端结果为准。
+async function onDragSort(e: { reordered: SysPosition[] }) {
+  try {
+    await positionApi.reorder(e.reordered.map((r) => r.id))
+    await tableRef.value?.refresh()
+  } catch (err) {
+    message.error(translateError(err))
+    await tableRef.value?.refresh() // 失败也拉回服务端真实顺序
+  }
+}
 </script>
 
 <template>
@@ -109,8 +127,10 @@ async function save() {
     ref="tableRef"
     :columns="columns"
     :fetcher="positionApi.page"
-    :labels="labels"
     storage-key="sys-position"
+    row-draggable
+    drag-handle=".drag-handle"
+    @row-drag-sort="onDragSort"
     @error="(e) => message.error(translateError(e))"
   >
     <template #toolbar>

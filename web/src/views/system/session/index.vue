@@ -6,7 +6,6 @@ import { NButton, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import { useConfirm } from '@/composables/useConfirm'
-import { useProTableLabels } from '@/composables/useProTableLabels'
 import { useUserStore } from '@/stores/user'
 import { sessionApi } from '@/api'
 import { translateError } from '@/utils/error'
@@ -16,7 +15,6 @@ import type { OnlineSessionItem } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
-const labels = useProTableLabels()
 const userStore = useUserStore()
 const tableRef = ref<ProTableInst<OnlineSessionItem>>()
 
@@ -67,7 +65,6 @@ const columns: ProTableColumn<OnlineSessionItem>[] = [
     ref="tableRef"
     :columns="columns"
     :fetcher="sessionApi.online"
-    :labels="labels"
     storage-key="sys-session"
     @error="(e) => message.error(translateError(e))"
   />

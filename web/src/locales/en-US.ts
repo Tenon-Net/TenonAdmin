@@ -6,6 +6,8 @@ export default {
     cancel: 'Cancel',
     search: 'Search',
     reset: 'Reset',
+    expandAll: 'Expand all',
+    collapseAll: 'Collapse all',
     add: 'Add',
     edit: 'Edit',
     delete: 'Delete',
@@ -153,6 +155,7 @@ export default {
     deleted: 'Deleted',
   },
   menu: {
+    searchPlaceholder: 'Search title / route',
     workbench: 'Workbench',
     profile: 'Profile',
     password: 'Change password',
@@ -169,6 +172,7 @@ export default {
     permissionPlaceholder: 'GET:/api/v1/xxx (empty for catalog)',
     module: 'App',
     moduleHint: 'Top-level catalog only',
+    moduleUnassigned: 'Unassigned',
     path: 'Route path',
     component: 'Component',
     icon: 'Icon',
@@ -195,7 +199,7 @@ export default {
     empty: 'No matching icon',
     more: '{n} more — keep typing to narrow',
   },
-  // ProTable (tenon-naive-pro-table) chrome text; search/reset/density reuse common/app keys, see useProTableLabels
+  // ProTable (tenon-naive-pro-table) chrome text; search/reset/density reuse common/app keys, injected globally in main.ts
   proTable: {
     refresh: 'Refresh',
     columnSettings: 'Columns',
@@ -203,6 +207,8 @@ export default {
     fixedLeft: 'Pin left',
     fixedRight: 'Pin right',
     fixedNone: 'Unpin',
+    expand: 'Expand',
+    collapse: 'Collapse',
   },
   workbench: {
     welcome: 'Hello, {name}',
@@ -329,6 +335,7 @@ export default {
   // Org management (R9, tree table + parent-org tree select)
   org: {
     title: 'Organizations',
+    searchPlaceholder: 'Search name / code',
     name: 'Name',
     code: 'Code',
     category: 'Category',

@@ -11,7 +11,6 @@ import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pr
 import AppIcon from '@/components/AppIcon.vue'
 import UserSelect from '@/components/UserSelect/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { useProTableLabels } from '@/composables/useProTableLabels'
 import { logApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { SysOpLog } from '@/types/api'
@@ -19,7 +18,6 @@ import type { SysOpLog } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
-const labels = useProTableLabels()
 const tableRef = ref<ProTableInst<SysOpLog>>()
 
 const columns: ProTableColumn<SysOpLog>[] = [
@@ -111,7 +109,6 @@ function clearLogs() {
     ref="tableRef"
     :columns="columns"
     :fetcher="logApi.opPage"
-    :labels="labels"
     storage-key="sys-log-op"
     @error="(e) => message.error(translateError(e))"
   >

@@ -11,7 +11,6 @@ import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pr
 import AppIcon from '@/components/AppIcon.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { useProTableLabels } from '@/composables/useProTableLabels'
 import { configApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { ConfigInput, SysConfig } from '@/types/api'
@@ -19,7 +18,6 @@ import type { ConfigInput, SysConfig } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
-const labels = useProTableLabels()
 const tableRef = ref<ProTableInst<SysConfig>>()
 
 const columns: ProTableColumn<SysConfig>[] = [
@@ -100,7 +98,6 @@ async function save() {
     ref="tableRef"
     :columns="columns"
     :fetcher="configApi.page"
-    :labels="labels"
     storage-key="sys-config"
     @error="(e) => message.error(translateError(e))"
   >

@@ -16,13 +16,18 @@ const cache = new Map<string, { loader: AsyncComponentLoader; comp: Component }>
  * keep-alive 的 :include 按组件 name 匹配,而 <script setup> 的 __name 取自文件名
  * (众多 index.vue 会跨页冲突、且与路由名 menu-${id} 不符)。
  * inner 只建一次 → 身份稳定,keep-alive 缓存其子树;onActivated/onDeactivated 照常透传。
+ *
+ * 外面再套一层原生 <div.page-view>:default.vue 的 <transition mode="out-in"> 硬性要求子节点是
+ * 单个根元素,而不少页面模板是「主体 + 并排若干弹窗组件」的多根 Fragment(关着时渲染成注释节点)。
+ * out-in 遇到非元素/多根会走进"non-element root node"分支瞬时卡死。统一套一层 div,交给 transition
+ * 的永远是单元素根,任何页面(单根/多根/异步加载中)都能瞬时过渡,不再需要卡死自愈的看门狗。
  */
 export function namedPage(name: string, loader: AsyncComponentLoader) {
   const hit = cache.get(name)
   if (hit?.loader === loader) return hit.comp
 
   const inner = defineAsyncComponent({ loader, loadingComponent: LOADING, delay: 0 })
-  const comp = defineComponent({ name, render: () => h(inner) })
+  const comp = defineComponent({ name, render: () => h('div', { class: 'page-view' }, h(inner)) })
   cache.set(name, { loader, comp })
   return comp
 }

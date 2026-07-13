@@ -13,7 +13,6 @@ import FormContainer from '@/components/FormContainer/index.vue'
 import MarkdownEditor from '@/components/MarkdownEditor/index.vue'
 import MarkdownView from '@/components/MarkdownEditor/MarkdownView.vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { useProTableLabels } from '@/composables/useProTableLabels'
 import { noticeApi } from '@/api'
 import { NoticeType, type NoticePublishInput, type SysNotice } from '@/types/api'
 import { translateError } from '@/utils/error'
@@ -21,7 +20,6 @@ import { translateError } from '@/utils/error'
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
-const labels = useProTableLabels()
 const tableRef = ref<ProTableInst<SysNotice>>()
 
 const typeLabel = (ty: NoticeType) => (ty === NoticeType.Announcement ? t('notice.typeAnnouncement') : t('notice.typeNotice'))
@@ -105,7 +103,6 @@ async function savePublish() {
       ref="tableRef"
       :columns="columns"
       :fetcher="noticeApi.page"
-      :labels="labels"
       storage-key="sys-notice"
       @error="(e) => message.error(translateError(e))"
     >

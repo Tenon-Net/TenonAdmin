@@ -76,11 +76,12 @@ export const personalApi = {
 
 export const userApi = {
   /** 归一后端 PagedList<UserItem>({current,size,total,items}) → ProTable fetcher 契约的 {items,total}。 */
-  page: (params: { page: number; pageSize: number; account?: string; name?: string; orgId?: number; roleId?: number }) =>
+  page: (params: { page: number; pageSize: number; account?: string; name?: string; orgId?: number; roleId?: number; sortField?: string; sortOrder?: string }) =>
     client
       .GET('/api/v1/sys/user/page', {
         // 查询参数名沿用后端 record 属性(PascalCase);ASP.NET 绑定大小写不敏感,类型要求 PascalCase。
         // roleId:角色反查(「这个角色有哪些人」/ 删角色前报人数)复用本端点,不另开接口。
+        // sortField/sortOrder:ProTable 排序;后端按实体列白名单校验(非法忽略回退默认),见 PagedListExtensions.OrderBySafe。
         params: {
           query: {
             Current: params.page,
@@ -89,6 +90,8 @@ export const userApi = {
             Name: params.name,
             OrgId: params.orgId,
             RoleId: params.roleId,
+            SortField: params.sortField,
+            SortOrder: params.sortOrder,
           },
         },
       })
@@ -125,14 +128,25 @@ export const orgApi = {
 }
 
 export const positionApi = {
-  /** 职位分页;搜索键 name → PascalCase Name。R4 下拉(拉大页)/ R6 ProTable 复用。 */
-  page: (params: { page: number; pageSize: number; name?: string }) =>
+  /** 职位分页;搜索键 name → PascalCase Name;sortField/sortOrder → 后端安全排序。R4 下拉(拉大页)/ R6 ProTable 复用。 */
+  page: (params: { page: number; pageSize: number; name?: string; sortField?: string; sortOrder?: string }) =>
     client
       .GET('/api/v1/sys/position/page', {
-        params: { query: { Current: params.page, Size: params.pageSize, Name: params.name } },
+        params: {
+          query: {
+            Current: params.page,
+            Size: params.pageSize,
+            Name: params.name,
+            SortField: params.sortField,
+            SortOrder: params.sortOrder,
+          },
+        },
       })
       .then((r) => unwrap<PagedList<SysPosition>>(r))
       .then((p) => ({ items: p.items, total: p.total })),
+  /** 行拖拽重排:按新顺序传 id 列表,后端据此赋 Sort。 */
+  reorder: (ids: number[]) =>
+    client.POST('/api/v1/sys/position/reorder', { body: { ids } }).then((r) => unwrap<boolean>(r)),
   add: (body: PositionInput) => client.POST('/api/v1/sys/position/add', { body }).then((r) => unwrap<number>(r)),
   update: (id: number, body: PositionInput) =>
     client.PUT('/api/v1/sys/position/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
@@ -201,7 +215,7 @@ export const configApi = {
   /** 批量按键回写配置值(结构化表单保存);仅更新已存在键,未知键后端忽略。 */
   saveBatch: (items: { configKey: string; configValue?: string | null }[]) =>
     client.PUT('/api/v1/sys/config/batch', { body: items }).then((r) => unwrap<boolean>(r)),
-  /** 站点信息(匿名可读:站点标题等展示白名单)。 */
+  /** 站点信息(匿名可读:站点标题/副标题/版权等品牌展示白名单)。 */
   siteInfo: () =>
     client
       .GET('/api/v1/sys/config/site', {})

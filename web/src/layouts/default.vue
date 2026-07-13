@@ -145,7 +145,8 @@ watch(
     <!-- 内容 -->
     <main class="content">
       <div v-if="app.showTabs" class="tabs"><TabsBar /></div>
-      <!-- component :key=路由 path 给稳定身份:out-in 过渡才能正确区分进/出场,否则显示上一页缓存(按 path 各自成键,不塌缩缓存)。 -->
+      <!-- component :key=路由 path 给稳定身份:out-in 过渡才能正确区分进/出场,否则显示上一页缓存(按 path 各自成键,不塌缩缓存)。
+           每个页面经 namedPage 套了一层 <div.page-view> 单元素根,out-in 能瞬时过渡任何页,无需卡死自愈的看门狗。 -->
       <div class="page">
         <router-view v-slot="{ Component }">
           <transition :name="transitionName" mode="out-in">

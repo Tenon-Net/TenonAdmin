@@ -7,6 +7,8 @@ export default {
     cancel: '取消',
     search: '查询',
     reset: '重置',
+    expandAll: '展开全部',
+    collapseAll: '折叠全部',
     add: '新增',
     edit: '编辑',
     delete: '删除',
@@ -154,6 +156,7 @@ export default {
     deleted: '已删除',
   },
   menu: {
+    searchPlaceholder: '搜索菜单名称/路由',
     workbench: '工作台',
     profile: '个人资料',
     password: '修改密码',
@@ -170,6 +173,7 @@ export default {
     permissionPlaceholder: 'GET:/api/v1/xxx(目录留空)',
     module: '所属应用',
     moduleHint: '仅顶级目录可设',
+    moduleUnassigned: '未分配',
     path: '路由路径',
     component: '组件路径',
     icon: '图标',
@@ -196,7 +200,7 @@ export default {
     empty: '无匹配图标',
     more: '还有 {n} 个,继续输入以缩小范围',
   },
-  // ProTable(tenon-naive-pro-table)组件文案;查询/重置/密度复用 common/app 键,见 useProTableLabels
+  // ProTable(tenon-naive-pro-table)组件文案;查询/重置/密度复用 common/app 键,全局注入见 main.ts
   proTable: {
     refresh: '刷新',
     columnSettings: '列设置',
@@ -204,6 +208,8 @@ export default {
     fixedLeft: '固定到左侧',
     fixedRight: '固定到右侧',
     fixedNone: '取消固定',
+    expand: '展开',
+    collapse: '收起',
   },
   workbench: {
     welcome: '你好,{name}',
@@ -332,6 +338,7 @@ export default {
   // 机构管理(R9,树表 + 上级机构树选)
   org: {
     title: '机构管理',
+    searchPlaceholder: '搜索机构名称/编码',
     name: '机构名称',
     code: '机构编码',
     category: '分类',

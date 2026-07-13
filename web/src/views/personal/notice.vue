@@ -9,7 +9,6 @@ import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pr
 import AppIcon from '@/components/AppIcon.vue'
 import MarkdownView from '@/components/MarkdownEditor/MarkdownView.vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { useProTableLabels } from '@/composables/useProTableLabels'
 import { noticeApi } from '@/api'
 import { NoticeType, type NoticeMineItem } from '@/types/api'
 import { translateError } from '@/utils/error'
@@ -17,7 +16,6 @@ import { translateError } from '@/utils/error'
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
-const labels = useProTableLabels()
 const tableRef = ref<ProTableInst<NoticeMineItem>>()
 
 const columns: ProTableColumn<NoticeMineItem>[] = [
@@ -76,7 +74,6 @@ async function markAll() {
       ref="tableRef"
       :columns="columns"
       :fetcher="noticeApi.mine"
-      :labels="labels"
       storage-key="personal-notice"
       @error="(e) => message.error(translateError(e))"
     >
