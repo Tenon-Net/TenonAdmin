@@ -13,12 +13,12 @@
     <IsPackable>false</IsPackable>
     <Version>0.0.1-preview</Version>
     <Authors>huguodong</Authors>
-    <Company>DotNet-MoYu</Company>
+    <Company>Tenon-Net</Company>
     <Product>TenonAdmin</Product>
-    <Copyright>Copyright © DotNet-MoYu</Copyright>
+    <Copyright>Copyright © Tenon-Net</Copyright>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/DotNet-MoYu/TenonAdmin</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/DotNet-MoYu/TenonAdmin</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/Tenon-Net/TenonAdmin</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Tenon-Net/TenonAdmin</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>admin;rbac;sqlsugar;aspnetcore;scaffold;kernel</PackageTags>
