@@ -49,7 +49,8 @@ public class UserService(
             .WhereIF(input.OrgId.HasValue, u => u.OrgId == input.OrgId)
             .WhereIF(holders != null, u => holders!.Contains(u.Id))
             .WhereIF(input.Enabled.HasValue, u => u.Enabled == input.Enabled!.Value)
-            .OrderBy(u => u.Id)
+            // 客户端排序(按 SysUser 实体列安全校验)优先,否则默认按 Id;必须在 Select 投影前,按实体列排序
+            .OrderBySafe(input, q => q.OrderBy(u => u.Id))
             // 投影到 UserItem:SQL 层就不取 Password 列,哈希从不进内存/出接口
             .Select(u => new UserItem
             {

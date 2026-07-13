@@ -37,6 +37,7 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 75, ParentId = 10, Type = MenuType.Button, Title = "岗位-新增", Permission = "POST:/api/v1/sys/position/add", Sort = 6, Enabled = true },
         new SysMenu { Id = 76, ParentId = 10, Type = MenuType.Button, Title = "岗位-更新", Permission = "PUT:/api/v1/sys/position/{id}", Sort = 7, Enabled = true },
         new SysMenu { Id = 77, ParentId = 10, Type = MenuType.Button, Title = "岗位-删除", Permission = "DELETE:/api/v1/sys/position/{id}", Sort = 8, Enabled = true },
+        new SysMenu { Id = 99, ParentId = 10, Type = MenuType.Button, Title = "岗位-拖拽排序", Permission = "POST:/api/v1/sys/position/reorder", Sort = 9, Enabled = true },
 
         // 用户管理页(R4:UserController)。分页码 11、新增 12;写侧码 50-54。
         new SysMenu { Id = 15, ParentId = 10, Type = MenuType.Menu, Title = "用户管理", Permission = "", Path = "/system/user", Component = "system/user/index", Icon = "ph:users-duotone", Sort = 3, Enabled = true, Visible = true },
