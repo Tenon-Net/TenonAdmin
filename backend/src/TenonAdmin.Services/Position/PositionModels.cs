@@ -24,3 +24,10 @@ public record PositionPageInput : PageInputBase
     /// <summary>职位名称(模糊匹配,可选)</summary>
     public string? Name { get; init; }
 }
+
+/// <summary>行拖拽重排入参:Ids 即新顺序,后端据此赋 Sort。</summary>
+public record PositionReorderInput
+{
+    /// <summary>按目标顺序排列的职位 Id 列表。</summary>
+    public long[] Ids { get; init; } = [];
+}

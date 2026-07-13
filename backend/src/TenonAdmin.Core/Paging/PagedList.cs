@@ -33,4 +33,13 @@ public abstract record PageInputBase
 
     /// <summary>每页条数(≤0 归一为默认 20;上限由查询扩展约束防超大分页)</summary>
     public int Size { get; init; } = 20;
+
+    /// <summary>
+    /// 排序字段(实体属性名,大小写不敏感)。仅当匹配实体真实列时生效,否则忽略回退默认排序——
+    /// 绝不拼进 SQL,防注入(见 SqlSugar 侧 <c>ToPagedListAsync</c> 安全排序重载)。可空 = 不指定。
+    /// </summary>
+    public string? SortField { get; init; }
+
+    /// <summary>排序方向:<c>asc</c> / <c>desc</c>(大小写不敏感);缺省/非法视为 <c>asc</c>。仅 SortField 生效时有意义。</summary>
+    public string? SortOrder { get; init; }
 }

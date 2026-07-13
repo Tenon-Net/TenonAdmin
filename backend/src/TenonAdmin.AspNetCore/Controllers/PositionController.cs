@@ -44,4 +44,13 @@ public class PositionController(IPositionService positionService) : ControllerBa
         await positionService.DeleteAsync(id);
         return Result<bool>.Ok(true);
     }
+
+    /// <summary>行拖拽重排:按传入 Id 顺序重排 Sort</summary>
+    [HttpPost("reorder")]
+    [RolePermission]
+    public async Task<Result<bool>> Reorder(PositionReorderInput input)
+    {
+        await positionService.ReorderAsync(input.Ids);
+        return Result<bool>.Ok(true);
+    }
 }

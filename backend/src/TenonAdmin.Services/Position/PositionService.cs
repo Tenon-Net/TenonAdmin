@@ -13,8 +13,8 @@ public class PositionService(IRepository<SysPosition> positions) : IPositionServ
     public virtual async Task<PagedList<SysPosition>> PageAsync(PositionPageInput input) =>
         await positions.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Name), p => p.Name.Contains(input.Name!))
-            .OrderBy(p => p.Sort)
-            .ToPagedListAsync(input.Current, input.Size);
+            // 客户端排序优先(安全白名单),否则按 Sort 默认排序
+            .ToPagedListAsync(input, q => q.OrderBy(p => p.Sort));
 
     /// <inheritdoc />
     public virtual async Task<SysPosition> GetAsync(long id)
@@ -64,5 +64,21 @@ public class PositionService(IRepository<SysPosition> positions) : IPositionServ
     {
         await GetAsync(id);
         await positions.DeleteAsync(id);
+    }
+
+    /// <inheritdoc />
+    // ponytail:按传入顺序把 Sort 赋成 0..n-1,只重排传入行(拖拽仅作用当前页可见集);
+    // 跨页严格全序需前端带页偏移,当前后台职位量小不必要。条数小,逐条 update 走 AOP 审计填充。
+    public virtual async Task ReorderAsync(long[] orderedIds)
+    {
+        if (orderedIds is null || orderedIds.Length == 0) return;
+        var rows = await positions.AsQueryable().Where(p => orderedIds.Contains(p.Id)).ToListAsync();
+        var byId = rows.ToDictionary(r => r.Id);
+        for (var i = 0; i < orderedIds.Length; i++)
+            if (byId.TryGetValue(orderedIds[i], out var row))
+            {
+                row.Sort = i;
+                await positions.UpdateAsync(row);
+            }
     }
 }
