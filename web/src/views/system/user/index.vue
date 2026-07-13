@@ -261,7 +261,6 @@ async function copyResult() {
       :columns="columns"
       :fetcher="userApi.page"
       :params="tableParams"
-      :title="t('user.title')"
       :labels="labels"
       storage-key="sys-user"
       :checked-row-keys="checkedKeys"

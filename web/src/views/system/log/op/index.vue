@@ -111,7 +111,6 @@ function clearLogs() {
     ref="tableRef"
     :columns="columns"
     :fetcher="logApi.opPage"
-    :title="t('log.opTitle')"
     :labels="labels"
     storage-key="sys-log-op"
     @error="(e) => message.error(translateError(e))"

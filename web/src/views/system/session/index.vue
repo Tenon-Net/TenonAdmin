@@ -67,7 +67,6 @@ const columns: ProTableColumn<OnlineSessionItem>[] = [
     ref="tableRef"
     :columns="columns"
     :fetcher="sessionApi.online"
-    :title="t('session.title')"
     :labels="labels"
     storage-key="sys-session"
     @error="(e) => message.error(translateError(e))"

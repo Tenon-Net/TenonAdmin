@@ -74,7 +74,6 @@ function clearLogs() {
     ref="tableRef"
     :columns="columns"
     :fetcher="logApi.loginPage"
-    :title="t('log.loginTitle')"
     :labels="labels"
     storage-key="sys-log-login"
     @error="(e) => message.error(translateError(e))"

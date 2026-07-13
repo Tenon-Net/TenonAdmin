@@ -182,7 +182,6 @@ async function saveScope() {
     ref="tableRef"
     :columns="columns"
     :fetcher="roleApi.page"
-    :title="t('role.title')"
     :labels="labels"
     storage-key="sys-role"
     :checked-row-keys="checkedKeys"

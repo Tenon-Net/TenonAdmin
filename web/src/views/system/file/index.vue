@@ -95,7 +95,6 @@ const columns: ProTableColumn<SysFile>[] = [
     ref="tableRef"
     :columns="columns"
     :fetcher="fileApi.page"
-    :title="t('file.title')"
     :labels="labels"
     storage-key="sys-file"
     :checked-row-keys="checkedKeys"

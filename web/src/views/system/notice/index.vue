@@ -105,7 +105,6 @@ async function savePublish() {
       ref="tableRef"
       :columns="columns"
       :fetcher="noticeApi.page"
-      :title="t('notice.title')"
       :labels="labels"
       storage-key="sys-notice"
       @error="(e) => message.error(translateError(e))"

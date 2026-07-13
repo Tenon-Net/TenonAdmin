@@ -100,7 +100,6 @@ async function save() {
     ref="tableRef"
     :columns="columns"
     :fetcher="configApi.page"
-    :title="t('config.tab.other')"
     :labels="labels"
     storage-key="sys-config"
     @error="(e) => message.error(translateError(e))"

@@ -265,7 +265,6 @@ async function saveItem() {
         ref="typeTableRef"
         :columns="typeColumns"
         :fetcher="dictAdminApi.typePage"
-        :title="t('dict.title')"
         :labels="labels"
         storage-key="sys-dict-type"
         :row-props="(row: SysDictType) => ({

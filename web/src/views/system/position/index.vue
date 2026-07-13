@@ -109,7 +109,6 @@ async function save() {
     ref="tableRef"
     :columns="columns"
     :fetcher="positionApi.page"
-    :title="t('position.title')"
     :labels="labels"
     storage-key="sys-position"
     @error="(e) => message.error(translateError(e))"
