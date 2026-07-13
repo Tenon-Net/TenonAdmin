@@ -133,6 +133,8 @@ export default {
     choose: 'Choose app',
     empty: 'No accessible apps. Contact your administrator.',
     setDefault: 'Set default',
+    isDefault: 'Default',
+    back: 'Back',
     enter: 'Enter',
     manage: 'Modules',
     code: 'Code',

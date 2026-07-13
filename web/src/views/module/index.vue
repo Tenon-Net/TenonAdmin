@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NButton, NEmpty, NSpin, useMessage } from 'naive-ui'
+import { NButton, NEmpty, NSpin, NTag, useMessage } from 'naive-ui'
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -18,8 +18,8 @@ const busy = ref(false)
 async function pick(id: number) {
   busy.value = true
   try {
-    await useModule().enter(id)
-    router.replace(auth.homePath) // 进该应用自己的首页
+    // switchModule = 建路由 + 清标签 + 落新应用首页(旧应用的标签在新应用里都是死链)
+    await useModule().switchModule(id)
   } catch (e) {
     message.error(translateError(e))
   } finally {
@@ -42,6 +42,11 @@ async function setDefault(id: number) {
     <div class="head">
       <TenonLogo :size="34" />
       <h1>{{ t('module.choose') }}</h1>
+      <!-- 从应用内点九宫格进来的(路由已就绪)才给返回;登录直落选择页时无处可返。 -->
+      <n-button v-if="auth.routesReady" text size="small" class="back" @click="router.back()">
+        <Icon icon="ph:arrow-left" :width="16" />
+        <span style="margin-left: 4px">{{ t('module.back') }}</span>
+      </n-button>
     </div>
 
     <n-spin :show="busy">
@@ -52,6 +57,7 @@ async function setDefault(id: number) {
           v-for="m in auth.modules"
           :key="m.id"
           class="card"
+          :class="{ current: m.id === auth.currentModuleId }"
           role="button"
           tabindex="0"
           @click="pick(m.id)"
@@ -63,7 +69,12 @@ async function setDefault(id: number) {
             <div class="name">{{ m.title }}</div>
             <div class="code">{{ m.code }}</div>
           </div>
-          <n-button text size="tiny" class="def" @click.stop="setDefault(m.id)">{{ t('module.setDefault') }}</n-button>
+          <n-tag v-if="m.id === auth.defaultModuleId" size="small" type="primary" :bordered="false" class="def">
+            {{ t('module.isDefault') }}
+          </n-tag>
+          <n-button v-else text size="tiny" class="def" @click.stop="setDefault(m.id)">
+            {{ t('module.setDefault') }}
+          </n-button>
         </div>
       </div>
     </n-spin>
@@ -109,6 +120,9 @@ async function setDefault(id: number) {
   box-shadow: var(--shadow-1);
   cursor: pointer;
   transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+.card.current {
+  border-color: var(--color-primary);
 }
 .card:hover {
   transform: translateY(-3px);

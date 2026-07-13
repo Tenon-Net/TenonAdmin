@@ -43,7 +43,9 @@ router.beforeEach(async (to) => {
       const { useModule } = await import('@/composables/useModule')
       const res = await useModule().enterInitial()
       if (res.chooser) return to.name === 'module' ? true : { path: '/module', replace: true }
-      if (to.name === 'module') return { path: '/', replace: true }
+      // 选应用页放行:enterInitial 已填好 auth.modules,渲染所需数据齐备。
+      // 不能弹回 '/' —— 那样默认应用一旦设定就再无入口改它(右上角九宫格正是导航到这里)。
+      if (to.name === 'module') return true
       // 目标是 '/' 时不能 return to.fullPath——那是重定向到自身,'/' 已无静态 redirect,会被判成无限重定向。
       // 此刻菜单树已就绪,直接给出首页。
       if (to.path === '/') return { path: auth.homePath, replace: true }

@@ -22,6 +22,7 @@ export function useModule() {
       personalApi.permissions().catch(() => [] as string[]),
     ])
     auth.modules = modules
+    auth.defaultModuleId = defaultModuleId ?? null
     auth.permissionCodes = codes
     if (modules.length === 0) return { chooser: true } // 空态:选择器里提示未分配应用
     // F5/深链优先重建"上次所在应用"(持久化的 currentModuleId),让其动态路由复活,跨应用深链不落 404。
@@ -40,6 +41,7 @@ export function useModule() {
 
   async function setDefault(moduleId: number): Promise<void> {
     await personalApi.setDefaultModule(moduleId)
+    auth.defaultModuleId = moduleId // 本地同步,选择页角标立刻转移,不必重拉 /personal/modules
   }
 
   return { enter, enterInitial, switchModule, setDefault }

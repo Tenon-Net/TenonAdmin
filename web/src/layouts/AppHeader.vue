@@ -58,14 +58,6 @@ const title = computed(() => {
 })
 const crumbs = computed(() => flat.value.find((l) => l.path === route.path)?.breadcrumb ?? [])
 
-const moduleOptions = computed<DropdownOption[]>(() =>
-  auth.modules.map((m) => ({ label: m.title, key: String(m.id) })),
-)
-async function onSwitchModule(key: string) {
-  const { useModule } = await import('@/composables/useModule')
-  await useModule().switchModule(Number(key))
-}
-
 // 语言名按各自书写系统展示,不随当前 locale 翻译。
 const localeOptions: DropdownOption[] = [
   { label: '简体中文', key: 'zh-CN' },
@@ -253,11 +245,15 @@ fetchUnread()
         {{ t('app.settings') }}
       </n-tooltip>
 
-      <n-dropdown v-if="auth.modules.length > 1" :options="moduleOptions" @select="onSwitchModule">
-        <n-button quaternary circle :aria-label="t('app.switchModule')">
-          <Icon icon="ph:squares-four" :width="18" />
-        </n-button>
-      </n-dropdown>
+      <!-- 导航到应用选择页,而非下拉直切:应用一多下拉就难用,且"设为默认"只在选择页上。 -->
+      <n-tooltip v-if="auth.modules.length > 1">
+        <template #trigger>
+          <n-button quaternary circle :aria-label="t('app.switchModule')" @click="router.push('/module')">
+            <Icon icon="ph:squares-four" :width="18" />
+          </n-button>
+        </template>
+        {{ t('app.switchModule') }}
+      </n-tooltip>
 
       <n-dropdown trigger="click" :options="noticeOptions" @select="onNoticeSelect" @update:show="onBellShow">
         <n-badge :value="unread" :max="99" :show="unread > 0">

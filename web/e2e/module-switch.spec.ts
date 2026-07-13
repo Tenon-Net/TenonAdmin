@@ -26,23 +26,27 @@ async function login(page: Page) {
   await expect(page).not.toHaveURL(/\/login/, { timeout: 15_000 })
 }
 
-/** 顶栏九宫格 → 应用列表(下拉项文本)。n-dropdown 默认 hover 触发,不是 click。 */
-async function openModuleDropdown(page: Page) {
-  await page.mouse.move(0, 0) // 先移开:鼠标已停在按钮上时不会再有 mouseenter,下拉打不开
-  await page.getByRole('button', { name: /切换应用|switch app/i }).hover()
-  const options = page.locator('.n-dropdown-option')
-  await expect(options.first()).toBeVisible()
-  return options
+/** 顶栏九宫格 → 应用选择页 /module(不再是下拉直切:应用一多下拉就难用,且「设为默认」只在选择页上)。 */
+async function gotoModulePage(page: Page) {
+  await page.getByRole('button', { name: /切换应用|switch app/i }).click()
+  await expect(page).toHaveURL(/\/module/)
+  const cards = page.locator('.card')
+  await expect(cards.first()).toBeVisible()
+  return cards
 }
 
+/** 在选择页上点某个应用卡片。精确匹配 .name:子串匹配下「系统」会先命中「业务系统」,切成原地不动。 */
+async function pickCard(page: Page, title: string) {
+  const card = page.locator('.card').filter({ has: page.locator('.name', { hasText: new RegExp(`^${title}$`) }) })
+  await card.click()
+  // 进应用必然离开选择页(落到该应用首页);还停在 /module 就是没进去——别让后续断言在假现场上跑
+  await expect(page, `点了「${title}」但没进应用`).not.toHaveURL(/\/module/, { timeout: 10_000 })
+}
+
+/** 从应用内切到另一个应用:顶栏九宫格 → 选择页 → 点卡片。 */
 async function switchTo(page: Page, title: string) {
-  const before = page.url()
-  const options = await openModuleDropdown(page)
-  // 精确匹配:hasText 是子串匹配,「系统」会先命中「业务系统」,切成原地不动
-  await options.getByText(title, { exact: true }).first().click()
-  await expect(options.first()).toBeHidden() // 等下拉收起,别在动画里继续操作
-  // 切应用必然换页(落到该应用首页);URL 不变就是没切成——别让后续断言在假现场上跑
-  await expect(page, `点了「${title}」但没换页`).not.toHaveURL(before, { timeout: 10_000 })
+  await gotoModulePage(page)
+  await pickCard(page, title)
 }
 
 /** 内容区渲染出东西了没——白屏 bug 的判据就是这个 .page 下空空如也。 */
@@ -67,16 +71,14 @@ test('切换应用:首页跟着应用变,切回来后菜单还点得开', async 
   await login(page)
 
   // 门户里至少要有两个应用,否则这个测试没有意义(而不是假装通过)
-  const options = await openModuleDropdown(page)
-  const titles = (await options.allInnerTexts()).map((s) => s.trim()).filter(Boolean)
+  const cards = await gotoModulePage(page)
+  const titles = (await cards.locator('.name').allInnerTexts()).map((s) => s.trim()).filter(Boolean)
   expect(titles.length, '库里至少要有 2 个应用才能测切换').toBeGreaterThanOrEqual(2)
-  await page.keyboard.press('Escape')
-  await expect(options.first()).toBeHidden() // 等下拉真正收起,否则下一次点击会打在正在消失的菜单上
 
   const [first, second] = titles
 
-  // ① 进 A 应用,记下它的首页
-  await switchTo(page, first!)
+  // ① 进 A 应用,记下它的首页(此刻已在选择页上,直接点卡片)
+  await pickCard(page, first!)
   const homeA = new URL(page.url()).pathname
   await expectContentRendered(page, `${first} 首页`)
 
@@ -98,4 +100,31 @@ test('切换应用:首页跟着应用变,切回来后菜单还点得开', async 
     await page.locator('.n-menu-item-content').filter({ hasText: name }).first().click()
     await expectContentRendered(page, `切回 ${first} 后点击菜单「${name}」`)
   }
+})
+
+/**
+ * 默认应用可改:曾经的死局是「设了默认 → 登录直进默认 → 再也回不到选择页 → 默认永远改不掉」。
+ * 注意:本例会把超管的默认应用改掉(后端没有"取消默认"的接口),跑完不还原。
+ */
+test('默认应用:选择页能改默认,F5 也不会被弹回首页', async ({ page }) => {
+  await login(page)
+
+  const cards = await gotoModulePage(page)
+  expect(await cards.count(), '库里至少要有 2 个应用才能测改默认').toBeGreaterThanOrEqual(2)
+
+  const isDefault = /^默认$|^Default$/
+  // 非默认的卡才挂「设为默认」按钮;挑第一张来设,默认角标应当当场转移过来。
+  // 先把卡名取出来另行定位:locator 是惰性的,点完之后这张卡就不再"含设为默认按钮",按原表达式会匹配不到自己。
+  const settable = page.locator('.card').filter({ has: page.getByText(/设为默认|Set default/) }).first()
+  const name = (await settable.locator('.name').innerText()).trim()
+  await settable.getByText(/设为默认|Set default/).click()
+
+  const target = page.locator('.card').filter({ has: page.locator('.name', { hasText: new RegExp(`^${name}$`) }) })
+  await expect(target.getByText(isDefault), `设了「${name}」为默认,角标却没转过来`).toBeVisible({ timeout: 10_000 })
+  await expect(page.locator('.card').getByText(isDefault), '默认应用只能有一个').toHaveCount(1)
+
+  // F5 停在选择页:守卫从前会把 /module 弹回首页,那正是"默认改不掉"的根因
+  await page.reload()
+  await expect(page).toHaveURL(/\/module/)
+  await expect(page.locator('.card').first()).toBeVisible()
 })

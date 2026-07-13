@@ -22,6 +22,8 @@ export const useAuthStore = defineStore('auth', {
   state: () => ({
     modules: [] as AppModule[],
     currentModuleId: null as number | null,
+    // 用户的默认应用(后端 SysUser.DefaultModuleId),随 enterInitial 拉取;不持久化,仅供选择页标记。
+    defaultModuleId: null as number | null,
     menuTree: [] as MenuNode[],
     // 登录进门户时由 useModule.enterInitial 填入(GET /personal/permissions);超管为空集 → v-auth fail-open,服务端 sadm 兜底。
     permissionCodes: [] as string[],
@@ -43,6 +45,7 @@ export const useAuthStore = defineStore('auth', {
     reset() {
       this.modules = []
       this.currentModuleId = null
+      this.defaultModuleId = null
       this.menuTree = []
       this.permissionCodes = []
       this.routesReady = false

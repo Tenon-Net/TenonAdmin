@@ -134,6 +134,8 @@ export default {
     choose: '选择应用',
     empty: '暂无可访问的应用,请联系管理员分配',
     setDefault: '设为默认',
+    isDefault: '默认',
+    back: '返回',
     enter: '进入',
     manage: '模块管理',
     code: '编码',
