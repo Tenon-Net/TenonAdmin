@@ -31,6 +31,11 @@ playwright-report/
 .omc/
 .omx/
 .codegraph/
+# 本地 Claude Code 钩子脚本:只有被同样不入库的 .claude/settings.json 引用才生效,单独提交无意义。
+# 若哪天要让全体协作者都吃到某条钩子(如"版本号只准写进 Directory.Packages.props"),
+# 就得 hooks/ + settings.json 成套提交,届时再解掉这行。
+.claude/hooks/
+.claude/settings.local.json
 
 ## dev scripts (mac/linux) runtime
 .dev/
