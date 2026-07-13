@@ -115,9 +115,6 @@ const transitionOptions = computed(() => [
           <SettingRow :label="t('settings.grayscale')">
             <n-switch v-model:value="app.grayscale" size="small" />
           </SettingRow>
-          <SettingRow :label="t('settings.colorWeak')">
-            <n-switch v-model:value="app.colorWeak" size="small" />
-          </SettingRow>
           <SettingRow :label="t('app.collapse')">
             <n-switch v-model:value="app.collapsed" size="small" />
           </SettingRow>

@@ -39,7 +39,6 @@ const DEFAULTS = {
   fixedHeader: true,
   pageTransition: 'fade' as PageTransition,
   grayscale: false,
-  colorWeak: false,
   watermark: false,
   watermarkText: '',
   // FormContainer 的全局形态偏好(弹窗/抽屉);组件可 per-instance 覆盖。

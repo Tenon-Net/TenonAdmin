@@ -5,7 +5,7 @@ import { buildThemeOverrides } from '@/theme/naive-theme'
 import { mix } from '@/theme/mix'
 
 /**
- * 主题落地:随 app.isDark / app.accent / app.density / 灰阶色弱 变化,
+ * 主题落地:随 app.isDark / app.accent / app.density / app.grayscale 变化,
  *  1) 打 data-theme / data-density 到 <html>(裸 CSS 与 tokens 跟着翻);
  *  2) 把 accent 派生的 --color-primary* 写到 <html>(令消费 tokens 的裸 CSS 换色);
  *  3) 重建 Naive themeOverrides(新对象触发 n-config-provider 重渲染)。
@@ -30,17 +30,12 @@ export function useTheme() {
     el.setAttribute('data-theme', app.isDark ? 'dark' : '')
     el.setAttribute('data-density', app.density)
     el.toggleAttribute('data-gray', app.grayscale) // 灰阶滤镜(styles/index.css)
-    el.toggleAttribute('data-color-weak', app.colorWeak) // 色弱滤镜
     applyPrimaryVars()
     naiveTheme.value = app.isDark ? darkTheme : null
     overrides.value = buildThemeOverrides({ dark: app.isDark, accent: app.accent })
   }
 
-  watch(
-    [() => app.isDark, () => app.accent, () => app.density, () => app.grayscale, () => app.colorWeak],
-    apply,
-    { immediate: true },
-  )
+  watch([() => app.isDark, () => app.accent, () => app.density, () => app.grayscale], apply, { immediate: true })
 
   return { overrides, naiveTheme }
 }

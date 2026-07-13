@@ -46,15 +46,12 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
-/* 灰阶 / 色弱:整页 filter(随 app.grayscale / app.colorWeak 由 useTheme 打在 <html>)。 */
+/* 灰阶:整页 filter(随 app.grayscale 由 useTheme 打在 <html>)。用于哀悼日等场景。
+   这里曾有个「色弱模式」= filter: invert(0.8),已删:整页反色是照片负片,对色觉障碍毫无帮助
+   (红绿仍然分不开,只是全都变了色),声称提供无障碍却什么也没提供,比没有更糟。
+   真要做的话是 SVG feColorMatrix daltonization(按红绿/蓝黄型分别矫正),那是另一件事。 */
 html[data-gray] {
   filter: grayscale(1);
-}
-html[data-color-weak] {
-  filter: invert(0.8);
-}
-html[data-gray][data-color-weak] {
-  filter: grayscale(1) invert(0.8);
 }
 
 /* 页面切换动画(default.vue 的 <transition :name="app.pageTransition">)。 */

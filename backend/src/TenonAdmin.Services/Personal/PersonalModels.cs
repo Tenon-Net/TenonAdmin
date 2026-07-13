@@ -8,6 +8,13 @@ public record UserProfile
     public required string Name { get; init; }
     public long? OrgId { get; init; }
     public long? PositionId { get; init; }
+
+    /// <summary>机构名称(已删/未分配则为 null)。前端只有 Id 的话就只能把雪花号原样甩给用户看。</summary>
+    public string? OrgName { get; init; }
+
+    /// <summary>职位名称(已删/未分配则为 null)</summary>
+    public string? PositionName { get; init; }
+
     public required bool IsSuperAdmin { get; init; }
 }
 

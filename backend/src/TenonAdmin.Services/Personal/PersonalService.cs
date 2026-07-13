@@ -25,9 +25,25 @@ public class PersonalService(
             Name = user.Name,
             OrgId = user.OrgId,
             PositionId = user.PositionId,
+            OrgName = await OrgNameAsync(user.OrgId),
+            PositionName = await PositionNameAsync(user.PositionId),
             IsSuperAdmin = user.IsSuperAdmin,
         };
     }
+
+    /// <summary>
+    /// 取机构名称(未分配/已删则 null)。
+    /// <para>走 <c>users.Db</c> 逃生舱而非给主构造器加 <c>IRepository&lt;SysOrg&gt;</c>:加构造参数对<b>继承本类的消费者</b>
+    /// 是源码破坏性变更(替换性契约由 ReplaceabilityTests 守)。单用户查单行,不必抄 <c>UserService</c> 那套批量防 N+1。</para>
+    /// <para><c>SysOrg</c> 继承 <c>BaseEntity</c>(非 <c>DataEntity</c>),不带 <c>IOrgScoped</c> → 不受数据范围过滤器影响,
+    /// 数据范围再窄的用户也能读到自己机构的名字。</para>
+    /// </summary>
+    protected virtual async Task<string?> OrgNameAsync(long? orgId) =>
+        orgId is null ? null : await users.Db.Queryable<SysOrg>().Where(o => o.Id == orgId.Value).Select(o => o.Name).FirstAsync();
+
+    /// <summary>取职位名称(未分配/已删则 null)。同上,<c>SysPosition</c> 亦非机构范围实体。</summary>
+    protected virtual async Task<string?> PositionNameAsync(long? positionId) =>
+        positionId is null ? null : await users.Db.Queryable<SysPosition>().Where(p => p.Id == positionId.Value).Select(p => p.Name).FirstAsync();
 
     /// <inheritdoc />
     public virtual async Task UpdateProfileAsync(long userId, UpdateProfileInput input)

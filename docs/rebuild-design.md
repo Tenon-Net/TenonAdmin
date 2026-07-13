@@ -459,13 +459,19 @@ public class DeviceController : ControllerBase
     [HttpPost("add"), RolePermission, OperationLog("新增设备")] public Task Add(DeviceAddInput i) => _svc.AddAsync(i);
 }
 
-// 4) 种子(可选):实现 ISeedData,启动自动执行且幂等
-public class DeviceSeedData : ISeedData
+// 4) 种子(可选):实现泛型 ISeedData<T>,启动自动执行且幂等。
+//    非泛型 ISeedData 只是 DI 收集用的空标记 —— 直接实现它能编译,但启动时反推不出实体类型会崩。
+//    Id 必须显式给定且落在消费者保留区间 [TenonSeedIds.ConsumerMin, TenonSeedIds.ConsumerMax](见 Core/TenonSeedIds.cs)。
+public class DeviceSeedData : ISeedData<Device>
 {
-    public IEnumerable<Device> HasData() => new[] { new Device { Name = "示例设备", Sn = "SN-0001" } };
+    public IEnumerable<Device> HasData() =>
+        [new Device { Id = TenonSeedIds.ConsumerMin, Name = "示例设备", Sn = "SN-0001" }];
 }
 
-// 5) 用户项目 Program.cs 仍是那三行;框架扫描入口程序集及其引用即接管上述类型。
+// 5) 用户项目 Program.cs:AddTenonAdmin 那三行照旧,另加两处显式登记 ——
+//    业务程序集(实体建表 + 控制器挂载)与种子(内核不扫描程序集找种子,忘了注册就静默不执行)。
+builder.Services.AddTenonAdmin(builder.Configuration, o => o.ApplicationAssemblies.Add(typeof(Device).Assembly));
+builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DeviceSeedData>());
 ```
 
 **注册模型(双层,消除"显式 vs 扫描"的歧义)**:
@@ -473,8 +479,10 @@ public class DeviceSeedData : ISeedData
 - **用户外部模块**:经 `options.ApplicationAssemblies.Add(...)` **显式登记**业务程序集,其实体参与 CodeFirst 建表、控制器 AddApplicationPart 挂载。
   > 实现说明:原设计的"默认扫描入口程序集及引用"(`ScanApplicationAssemblies`)最终**未实现**——为守内核"显式、可预测、无魔法"的取向,只保留显式登记这一条真源;该开关已于 2026-07-09 标 `[Obsolete]`。
 
+- **种子**:内置与用户种子<b>都</b>要显式 `TryAddEnumerable` 注册 —— 内核<b>不扫描</b>程序集找种子(`ApplicationAssemblies` 只管实体建表与控制器挂载)。忘了注册的后果是种子**静默不执行**,没有任何报错。种子 Id 须落在保留区间(§5.7 代码注释与 `Core/TenonSeedIds.cs`)。
+
 要覆写**内置**服务/实体行为,回到 §5.1–5.4 四层覆写;要新增**自己**的东西,就是上面这套。
-两者对称:内置模块本身也是照这套写的(区别只是内置走显式注册、用户走扫描)。
+两者对称:内置模块本身也是照这套写的 —— 都走显式注册,全程无扫描、无魔法。
 
 ---
 

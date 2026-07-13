@@ -132,7 +132,23 @@ public class ProductController(IProductService svc) : ControllerBase
 
 ### A8. 种子（可选）　`Services/Seed/ProductSeed.cs`
 
-需要出厂默认数据时实现 `ISeedData<Product>`，**固定小整数 Id 保幂等**，并在 `ServicesSetup` 用 `TryAddEnumerable` 注册。蓝本 `Seed/DictSeed.cs`。
+需要出厂默认数据时实现 **`ISeedData<Product>`**（泛型版；非泛型 `ISeedData` 只是 DI 收集用的空标记，直接实现它能编译但启动会炸），固定 Id 保幂等。蓝本 `Seed/DictSeed.cs`，范例 `tests/TenonAdmin.TestHost/SampleWidgetSeed.cs`。
+
+**Id 必须落在消费者保留区间 `[1000, 4095]`**（`TenonSeedIds.ConsumerMin` ~ `ConsumerMax`）：
+
+| 区间 | 归谁 | 为什么 |
+|---|---|---|
+| `[1, 999]` | 内核内置种子 | 内核每加一个鉴权端点就多一行菜单，号段只会往上涨 |
+| `[1000, 4095]` | **你的种子** | |
+| `[4096, ...]` | 雪花运行时发号区 | `id = 毫秒 × 4096 + 低位`，种子占了它，将来某次插入必然主键冲突 |
+
+在这个区间外播种，**启动直接失败**并告诉你该用哪段。别沿用「随手挑个小整数」的老习惯——你和内核会往**同一批表**（`sys_menu` / `sys_config` …）里播种，今天不撞不代表升级内核包之后不撞，而那时你的库里已经有那行了，退不回去。
+
+注册在**你自己的 `Program.cs`** 里（内核不扫描程序集找种子；`ApplicationAssemblies` 只管实体建表和控制器挂载，**不管种子**，忘了注册就静默不执行）：
+
+```csharp
+builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, ProductSeed>());
+```
 
 ### A9. 菜单与授权（让接口“可被授权”）
 

@@ -27,6 +27,10 @@ export interface UserProfile {
   name: string
   orgId?: number | null
   positionId?: number | null
+  /** 机构名称(未分配/已删则 null) */
+  orgName?: string | null
+  /** 职位名称(未分配/已删则 null) */
+  positionName?: string | null
   isSuperAdmin: boolean
 }
 

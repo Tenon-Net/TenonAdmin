@@ -43,12 +43,16 @@ export const staticRoutes: RouteRecordRaw[] = [
         component: namedPage('personal-notice', () => import('@/views/personal/notice.vue')),
         meta: { title: 'menu.notice' },
       },
+      // 404 挂在壳内(而非顶级):打错一个 URL 不该把人甩出侧边栏、标签栏和退出按钮之外。
+      // 未登录者到不了这里——守卫先于 public 判定就把他弹去登录页;深链刷新也不会闪 404,
+      // 守卫在导航确认前先重建动态路由再重解析(见 router/index.ts)。
+      // afterEach 按 name 'not-found' 拦了 addTab,所以它不会在标签栏留下一条。
+      {
+        path: '/:pathMatch(.*)*',
+        name: 'not-found',
+        component: namedPage('not-found', () => import('@/views/error/404.vue')),
+        meta: { public: true },
+      },
     ],
-  },
-  {
-    path: '/:pathMatch(.*)*',
-    name: 'not-found',
-    component: () => import('@/views/error/404.vue'),
-    meta: { public: true },
   },
 ]

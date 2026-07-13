@@ -19,7 +19,9 @@ const { t } = useI18n()
 
 <style scoped>
 .nf {
-  height: 100vh;
+  /* 撑满 layout 的 .page 容器,而不是整个视口——404 现在住在外壳里 */
+  min-height: 60vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;

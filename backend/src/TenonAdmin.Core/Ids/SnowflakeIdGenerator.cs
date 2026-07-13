@@ -28,6 +28,13 @@ public class SnowflakeIdGenerator : IIdGenerator
     private const int WORKER_ID_SHIFT = SEQUENCE_BITS;               // 机器号左移 6
     private const int TIMESTAMP_SHIFT = SEQUENCE_BITS + WORKER_ID_BITS; // 时间戳左移 12
 
+    /// <summary>
+    /// 本布局能发出的<b>最小 ID</b> = 2^12 = 4096(纪元后第 1 毫秒、机器 0、序列 0)。
+    /// <para>由低位宽度直接派生,故改位宽它自动跟着变——<see cref="TenonSeedIds"/> 的种子保留区间以它为上界,
+    /// 靠这条派生关系保证「种子 Id 与运行时 ID 永不相撞」在位宽变动后依然成立(或当场编译/测试失败)。</para>
+    /// </summary>
+    public const long MinId = 1L << TIMESTAMP_SHIFT;
+
     /// <summary>时钟回拨的可容忍上限(毫秒)。NTP 微调通常在几毫秒内,超过视为异常环境。</summary>
     private const long MAX_CLOCK_DRIFT_MS = 5;
 

@@ -114,13 +114,32 @@ internal sealed class DatabaseInitializer(
         var rows = seed.HasData().ToList();
         if (rows.Count == 0) return 0;
 
-        // 保护性检查:Id=0 会被 AOP 填成新雪花号,导致每次启动都"判不存在"而重复插入
-        if (rows.Any(r => r.Id == 0))
-            throw new InvalidOperationException(
-                $"种子 {seed.GetType().Name} 存在 Id=0 的行:种子数据必须显式指定固定 Id(幂等判存依赖主键)。");
+        EnsureSeedIdsInReservedRange(seed, rows);
 
         var storage = await db.Storageable(rows).ToStorageAsync();
         return storage.InsertList.Count == 0 ? 0 : await storage.AsInsertable.ExecuteCommandAsync();
+    }
+
+    /// <summary>
+    /// 种子固定 Id 必须落在保留区间 <c>[1, <see cref="TenonSeedIds.ConsumerMax"/>]</c>(见 <see cref="TenonSeedIds"/>)。
+    /// <para>下界:Id=0 会被 AOP 当成"未指定"填上新雪花号,于是每次启动都判不存在 → 重复插入,幂等直接失效。</para>
+    /// <para>上界:4096 起是雪花运行时发号区,时间迟早推到那个号上 —— 种子占了它,将来某次插入就主键冲突。
+    /// 这一层是<b>唯一真正有牙的约束</b>:区间写在文档里没人读,写成启动异常才跑不掉。</para>
+    /// <para>这里只校验"所有种子都不得越界"这条通用规则;"内核自己不得超过 <see cref="TenonSeedIds.KernelMax"/>"
+    /// 是内核的自律,由 <c>SeedIdRangeTests</c> 守 —— 运行时不该去猜哪个种子是消费者的。</para>
+    /// </summary>
+    private static void EnsureSeedIdsInReservedRange<TEntity>(ISeedData<TEntity> seed, List<TEntity> rows)
+        where TEntity : BaseEntity, new()
+    {
+        var bad = rows.Where(r => r.Id is < 1 or > TenonSeedIds.ConsumerMax).Select(r => r.Id).Distinct().ToArray();
+        if (bad.Length == 0) return;
+
+        throw new InvalidOperationException(
+            $"种子 {seed.GetType().Name} 的固定 Id 越界:{string.Join(", ", bad)}。" +
+            $"种子数据必须显式指定固定 Id 且落在保留区间 [1, {TenonSeedIds.ConsumerMax}] 内" +
+            "(Id=0 会被审计 AOP 填成新雪花号,导致每次启动重复插入;" +
+            $"≥ {TenonSeedIds.SnowflakeFloor} 是雪花运行时发号区,迟早与新增数据主键冲突)。" +
+            $"内核内置种子用 [1, {TenonSeedIds.KernelMax}],消费者种子请从 {TenonSeedIds.ConsumerMin} 起取号。");
     }
 
     /// <summary>SQLite 只建文件不建目录,这里从连接串解析出目录并补建</summary>

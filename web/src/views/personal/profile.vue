@@ -19,9 +19,10 @@ onMounted(async () => {
     const p = await personalApi.profile()
     model.account = p.account
     model.name = p.name
-    // UserProfile 只返回 orgId/positionId、无名称字段,故直接展示 ID。
-    model.org = p.orgId ? String(p.orgId) : '—'
-    model.position = p.positionId ? String(p.positionId) : '—'
+    // 展示名称而非 Id:雪花主键是 14 位数字,甩给用户看没有任何意义。
+    // 名称由 /personal/profile 一并返回(该端点是 [ActiveSession],人人可读);机构/职位被删则回落占位符。
+    model.org = p.orgName ?? '—'
+    model.position = p.positionName ?? '—'
   } catch (e) {
     message.error(translateError(e))
   } finally {
