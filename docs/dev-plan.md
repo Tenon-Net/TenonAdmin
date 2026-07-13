@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-12(**M3 前端管理页全量 + 配置中心上线**——`web/` 系统管理各页(配置/日志/字典/岗位/会话/文件/机构/用户/角色 RBAC 闭环)+ 通用组件套件 + 前端 CI 落地;「改配置不改代码」配置中心四类(基础/安全/上传/限流)+ 密码策略端点 + 密码强度共享组件全部 push origin/dev。详见 §4 M3。下一步候选见 §6 TDD 待开发清单)
+> 最后更新:2026-07-14(**M4 清债四批**——种子主键保留区间、树表可用性、五条小债、**磁盘回收**(软删文件 + 弃单分片)、**签名直链**(通知里的图片终于不是坏链)、**容器化交付**(Dockerfile + compose + nginx + 冒烟 CI,已跑绿)。详见 §4 M4。下一步候选见 §6)
 > 早期基线:2026-07-07 Phase 2(2a 自审 34 发现全处置 + 2b RateLimiter/MySQL CI)+ M1.5 多应用门户后端,详见 §4。
 
 ---
@@ -185,6 +185,21 @@ M2 脚手架之后一次性把系统管理各页与「改配置不改代码」�
 
 > 提交语言约定改为**英文**(`9c2d320` 起,保留 conventional-commit)。配置中心进度另见项目记忆 `config-center-progress`。
 
+### M4 清债(2026-07-12~14,四批,均 push origin/dev)
+
+功能补齐之后专门清债。前两批是「已经在跑的系统正在坏的地方」,后两批是「发包/上线前的最后窗口」。
+
+- **第一~二批**(`5d01b62` / `24c2b5e` / `b7608f2`):操作日志 opt-out、重置密码吊销会话、日志三维筛选、菜单保存刷侧边栏、窄屏顶栏、部署文档、**生产首启崩溃修复**(空库 + Production + 未开建表闸门 → 现在给一条点名到表的错误而不是驱动层的 "no such table")、通知闭环、角色反查用户、**首次登录强制改密**(`8860d7e`,即原 §6 的 T-D1)、分片/断点续传上传 + 秒传(`e5f345c`)。
+- **第三批 · 种子主键保留区间**(`b7608f2`):`TenonSeedIds`(内核 `[1,999]` / 消费者 `[1000,4095]` / 雪花运行时 `[4096,…)`)+ 启动期越界断言 + `SeedIdRangeTests`(经 DI 扫全部种子,新加种子自动被覆盖)。**发首个 NuGet 包之后再钉就是破坏性变更**——内核以后加菜单涨进消费者号段,消费者升级即主键冲突、启动崩。顺带修了文档里"照抄即崩"的种子示例。
+- **第三批 · 树表可用性 + 五条小债**(`6c68bf3` 等):菜单/机构树表搜索 + 受控展开;404 进外壳、删掉假色弱模式(整页 `invert(0.8)` 与色弱辅助毫无关系)、个人中心显示机构/岗位名而非裸雪花 ID、配置中心切 Tab 不再静默丢改动、改密页改用表单校验。
+- **第四批 · 磁盘回收 + 附件可用性 + 容器化**(`601dd32`…`502b624`):
+  - `fix(sqlsugar)`:**软删不留痕**——仓储软删走 `SetColumns`,而审计 AOP 只挂 `UpdateByObject`,两条路不重合 → 删了之后"谁删的、什么时候删的"查不到。这既是审计漏洞,也是 GC 保留期的地基。
+  - `fix(upload)`:上传根改按 **ContentRoot** 解析(此前是 CWD 相对,而 SQLite 与 JWT 密钥都是 ContentRoot 相对)。容器里 `WORKDIR` 恰好把它盖住;k8s 覆写 `workingDir` 就会让数据卷和上传卷悄悄分家。
+  - **T-D2 磁盘回收** `feat(file)`:`FileGcService`(`BackgroundService` + `PeriodicTimer`,每 tick 开一个作用域)收两处只涨不消的地方——① 软删文件过保留期后删盘 + 硬删记录;② 弃单分片按 TTL 清扫(`.chunks/` 下按最后写入时间判定,续传中的会话不误伤)。删盘一律经 `IFileStorage`,天然继承存储根围栏;逐行 try/catch,一条畸形路径不掀翻整趟。同时补了个真漏:合并**之后**才做的哈希/大小/后缀校验,抛出去时分片留在盘上——**每一次被拒的上传都漏一份**。
+  - **签名直链** `feat(file)`:通知正文里插图片以前必然坏链(编辑器把 `storagePath` 当 URL,而后端默认不静态托管上传目录,文档里唯一的"托管"办法还被标注成鉴权绕过)。新增 `GET /sys/file/{id}/view?sig=`——匿名但不可伪造(文件 Id 的 HMAC,子密钥由 JWT 密钥派生),`<img>` 直接能加载。**不设过期**:URL 会被存进 Markdown 正文,30 分钟的链接等于"发布半小时后图全坏"。
+  - **T-D4 容器化交付** `feat(deploy)`:`Dockerfile`(MinimalHost,非 root,8080)+ `.dockerignore`(**安全项**:开发机 `data/` 里躺着真实 `admin.db` 和 `dev-jwt.key`,`COPY . .` 会把签名密钥烤进镜像层)+ `docker-compose.yml`(MySQL + 后端 + nginx)+ `web/nginx.conf`(部署文档里那段配置终于是个真文件)+ `docker-smoke.yml` CI。compose 刻意跑 **Production**,于是它同时是生产首启路径的活体测试:显式 JWT 密钥、空库显式允许建表、上传根在 `wwwroot` 之外,三条必须同时成立才起得来。**CI 冒烟已绿**(建表 + 种子 + 真发令牌 + SPA 托管 + `/api` 反代)。
+  - 为什么容器化的是 `MinimalHost` 而不是模板:模板引的是**还没发布的** NuGet 包,CI 里 restore 不出来。消费者那份可照抄的 Dockerfile 放在 `templates/content/tenon-app/`。
+
 ## 5. 遗留小事(不阻塞,顺手处理)
 
 - [ ] `BaseEntity` 暂在 SqlSugar 层(带 Sugar 特性保 Core 零依赖)——待定是否 Core POCO 化(§5.6),代码已标 ponytail(Phase 2a 审查结论:不阻塞,POCO 化需拆特性映射层,收益低,维持现状)
@@ -195,23 +210,23 @@ M2 脚手架之后一次性把系统管理各页与「改配置不改代码」�
 - [x] `OrgService.UpdateAsync` 父指向自己复用 `OrgNotFound`——Phase 2a 已改专用码 `OrgInvalidParent`(42008)
 - [x] `UserService` 默认初始密码固定常量——Phase 2a 已改可配置默认(`Security:DefaultInitialPassword`,默认 null→随机);首次登录强制改密仍留 v1.x
 - [ ] `.slnx` 是 .NET 10 新方案格式(非 .sln),IDE 兼容性关注一下
-- [ ] docker-compose / Dockerfile 未建(见 §6 T-D6)
+- [x] docker-compose / Dockerfile —— M4 第四批已落(见 §4 M4,CI 冒烟绿)
 
 ## 6. TDD 待开发清单(下一批候选;红→绿→重构,每项先落失败测试再实现)
 
 按「价值 ÷ 成本」排序。每项标注**先写什么测试**——测试红了、且红得对(为正确的原因失败),再写最小实现。
 
-- [ ] **T-D1 首次登录强制改密**(安全,已确认未做)。`SysUser` 加 `MustChangePassword` 标志(重置密码/建号默认 true);登录成功返回需改密信号;改密后清标志。
-  - 先写:集成测试 `Login_WhenMustChangePassword_ReturnsMustChangeSignal` + `ChangePassword_ClearsMustChangeFlag_ThenLoginNormal`。前端改密页拦截跳转。
-- [ ] **T-D2 软删文件物理回收任务**(T7 遗留)。后台 hosted service 周期清理 `IsDelete=true` 的物理文件;存储根围栏不误删。
-  - 先写:`FileGc_RemovesSoftDeletedPhysicalFile_AndLeavesLiveFiles`;越界路径断言不触碰。
-- [ ] **T-D3 多副本分布式限流**(现 `RuntimeRateLimit` 为单实例进程内 `PartitionedRateLimiter`)。抽限流计数存储为扩展点,Redis 实现放 `TenonAdmin.Caching.Redis`。
+- [x] **T-D1 首次登录强制改密** ✅ 完成(`8860d7e`)。`SysUser.MustChangePassword`(重置密码/建号置位)+ 登录返回改密信号 + 前端守卫钉在改密页。
+- [x] **T-D2 软删文件物理回收** ✅ 完成(M4 第四批)。`FileGcService` 收软删文件(过保留期)+ 弃单分片(TTL);删盘经 `IFileStorage` 继承存储根围栏。**实际是两个泄漏**——分片上传上线后又开了第二个洞,连"被拒绝的上传"都在漏。
+- [ ] **T-D3 多副本分布式限流**(现 `RuntimeRateLimit` 为单实例进程内 `PartitionedRateLimiter`;`SessionService` 的进程内锁字典、登录失败计数同理)。抽限流计数存储为扩展点,Redis 实现放 `TenonAdmin.Caching.Redis`。
   - 先写:`TwoInstances_ShareRateCounter_HitSameThreshold`(用共享计数后端)。单实例默认行为不变的回归。
-- [ ] **T-D4 部署产物 docker-compose / Dockerfile**(M3,§11)。多阶段构建 + compose(app + mysql/pg)。
-  - 先写:烟测脚本 `compose up` → 轮询 `/health/ready` 绿 + CodeFirst 建表·种子跑通(非单元测试,CI job)。
+  - **现在做正当时**:compose 已经在了,起两个副本真验证,而不是靠推理。
+- [x] **T-D4 部署产物 docker-compose / Dockerfile** ✅ 完成(M4 第四批,`docker-smoke` CI 绿)。
 - [ ] **T-D5 RoutePrefix / Version 配置化**(v1.x 明确后置,深耦合鉴权路径)。引入 Core `PermissionCode` 规范化 helper 供过滤器 + 种子共用,逐控制器改相对路由。
   - 先写:`PermissionCode_Normalization_MatchesFilterAndSeed`(改前缀后权限码两侧一致)+ 非超管授权全量回归。
 - [ ] **T-D6 验证码第二种类型**(YAGNI 未解除——`ICaptchaProvider` 扩展点已在,仅 SVG 一种实现)。**先确认真需要**行为/算术/滑块验证码再动;否则不做。
   - 先写(动了才写):新 provider `Register_SecondCaptchaType_ReplacesSvg` 走扩展点。
+- [ ] **T-D7 文件引用关系**(M4 记下的天花板)。「秒传」按内容哈希复用**同一条** `sys_file` 记录 → 同一个文件 Id 会被多个用户/多条业务记录引用,甲删掉"他的"文件,乙的引用就悬空。现在靠 GC 保留期(默认 7 天)兜底,不是真解。真解要么建文件引用表(消费者侧契约),要么让秒传插新行共享 `StoragePath`(那样 GC 必须先按 `StoragePath` 分组再删——已写进 `FileGcService` 注释)。**先确认真有消费者被这个咬到**再动。
+- [ ] **慢 SQL 日志 / 密码过期策略 / 登录日志失败码翻人话**(三件小的,单独一轮清掉)。
 
 > 非 TDD 收尾项(打包/申请,无逻辑分支不留测试):`PackageIcon` 补图 + 稳定版发布;`TenonAdmin.*` NuGet ID 前缀 owner 手动申请;首次真推配 `NUGET_API_KEY` secret。

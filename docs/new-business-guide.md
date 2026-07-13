@@ -55,7 +55,8 @@ public class Product : DataEntity   // 或 BaseEntity
 ### A2. DTO　`Services/Product/ProductModels.cs`
 
 ```csharp
-public record ProductPageInput : PageInput { public string? Name { get; init; } }
+// 基类是 PageInputBase(自带 Current/Size + SortField/SortOrder),不是 PageInput —— 后者不存在
+public record ProductPageInput : PageInputBase { public string? Name { get; init; } }
 public record ProductInput(string Code, string Name, bool Enabled);
 ```
 

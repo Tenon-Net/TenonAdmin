@@ -33,7 +33,7 @@
 | .NET 版本 | 单 TFM `net10.0`,跟随当前 .NET LTS 滚动升级 |
 | 包版本 | SemVer,**从 `0.0.1` 预发布起**,稳定后转 1.0.0;不与 .NET 主版本号绑定(见 §17) |
 | 前端 | 自研设计系统 + 自建;Vue 版**只做 Naive UI 一套**(逻辑/视图分离,Soybean 皮肤列 v1.x 可选),React 版 shadcn/ui |
-| 对象映射 | Riok.Mapperly(编译期源生成器,运行时零依赖);不用 Mapster/AutoMapper |
+| 对象映射 | **不引映射库**(不用 Mapster/AutoMapper,也没引 Mapperly):DTO↔实体手写赋值,少一个依赖、少一层"字段悄悄没映射到"的坑 |
 | 多语言 | 前后端 i18n,前端持有文案单源、后端只给错误码(见 §13) |
 | 多租户 | **不做**(不是 v1 推迟,是整体不做);实体不带租户维度,保持模型简单 |
 | 多应用门户 | **做**:独立 `sys_module` 表 + 菜单 `ModuleId`(仅顶级目录);登录选/切应用、每应用独立菜单树、一次加载一个、每用户默认应用。访问权由菜单授权**反推**(非独立权限轴);权限码保持**模块无关** |
@@ -98,7 +98,7 @@ TenonAdmin(元包,无代码)
  └─→ TenonAdmin.AspNetCore
       └─→ TenonAdmin.Services
            ├─→ TenonAdmin.SqlSugar ──→ SqlSugarCore(唯一重量级第三方)
-           └─→ TenonAdmin.Core(零运行时依赖;Mapperly 仅 analyzer,不进运行时)
+           └─→ TenonAdmin.Core(零第三方依赖:只有 Microsoft.* 扩展抽象)
 
 v1.0 只建这 5 个包。以下可选包"**已规划、按需再建**"(v1.0 不建空目录,不受"核心零依赖"约束):
 TenonAdmin.Caching.Redis ──→ SimpleRedis(你的库:高并发 + 内置 MQ 封装)   [v1.0/v1.1,默认内存能跑则后移]
@@ -108,17 +108,17 @@ TenonAdmin.Security.Gm   ──→ BouncyCastle(国密 SM2/3/4)                 
 ```
 
 > **核心四包(Core / SqlSugar / Services / AspNetCore)运行时依赖只允许 `SqlSugarCore` + `Microsoft.*`。**
-> "零运行时依赖"**不代表零 analyzer 依赖**:Mapperly 以源生成器方式引入,不进运行时程序集:
-> ```xml
-> <PackageReference Include="Riok.Mapperly" Version="..." PrivateAssets="all" OutputItemType="Analyzer" />
-> ```
-> 其余一切要么自写、要么拷源、要么下沉到可选包 —— 具体逐库处置见 §2.3。
+> 一切其余要么自写、要么拷源、要么下沉到可选包 —— 具体逐库处置见 §2.3。
+>
+> 原设计曾给对象映射留了个口子(以 analyzer 形式引 Riok.Mapperly,不进运行时程序集)。**最终没有引**:
+> 手写 `new Entity { … }` 赋值就够了,还少一层"新加的字段忘了映射"的静默故障。这条口子随之关闭 ——
+> 核心四包连 analyzer 级的第三方依赖也没有。
 
 ### 2.2 各包职责
 
 | 包 | 内容 | 依赖 |
 |---|---|---|
-| `TenonAdmin.Core` | 实体基类(`BaseEntity`/`DataEntity`)、`Result<T>` 统一返回模型、业务异常体系(`AdminException`)、全部扩展点接口(§5)、雪花 ID 实现、Channels 事件总线、分页模型、常用扩展方法 | 无(零运行时依赖;Mapperly 仅 analyzer) |
+| `TenonAdmin.Core` | 实体基类(`BaseEntity`/`DataEntity`)、`Result<T>` 统一返回模型、业务异常体系(`AdminException`)、全部扩展点接口(§5)、雪花 ID 实现、Channels 事件总线、分页模型、常用扩展方法 | 无第三方(只有 Microsoft.* 扩展抽象) |
 | `TenonAdmin.SqlSugar` | `SugarClient` 单例封装、`IRepository<T>` 仓储、CodeFirst 建表、种子数据机制(`ISeedData`)、多库/读写分离配置解析 | Core + SqlSugarCore |
 | `TenonAdmin.Services` | 全部领域服务及其 DTO:认证、RBAC、用户/机构/职位/角色/菜单、字典、系统配置、操作/登录日志、本地上传、在线用户;内置种子数据 | SqlSugar |
 | `TenonAdmin.AspNetCore` | 控制器(按模块)、`AddTenonAdmin()`/`MapTenonAdmin()`、JWT 接入、统一返回过滤器、全局异常处理、权限/数据范围过滤器、验证码端点、内置 OpenAPI 文档 | Services + ASP.NET Core 框架引用 |
@@ -141,7 +141,7 @@ TenonAdmin.Security.Gm   ──→ BouncyCastle(国密 SM2/3/4)                 
 | 定时任务插件 | `IHostedService` + 自写轻量 cron 解析 |
 | Yitter 雪花 ID | 自写雪花算法(单文件,`IIdGenerator` 可换) |
 | NewLife.Redis / 缓存 | 对外抽象 `ICacheProvider`,默认 `MemoryCacheProvider`(基于 `IMemoryCache`);Redis 可选包 `RedisCacheProvider` 用你的 **SimpleRedis**(含高并发 + MQ);HybridCache 仅作内部可选细节,不作为用户核心概念 |
-| Mapster 映射 | **Riok.Mapperly**(编译期源生成器,生成纯代码,运行时零依赖零反射) |
+| Mapster 映射 | **不替换,直接去掉**:DTO↔实体手写赋值(内核全部服务都这么写),不引任何映射库 |
 | BouncyCastle 国密 | v1 用 BCL AES/RSA/SHA;国密延后为 `TenonAdmin.Security.Gm` 可选包 |
 | Masuit.Tools / SimpleTool 等工具库 | 按需自写进 Core.Extension,用到哪个写哪个 |
 
@@ -155,7 +155,7 @@ TenonAdmin.Security.Gm   ──→ BouncyCastle(国密 SM2/3/4)                 
 | SqlSugarCore | ORM | **保留**(唯一重量级第三方) | ✅ 定 |
 | MoYu.Pure | 整个框架 | **移除** → ASP.NET Core 原生 | ✅ 定 |
 | MoYu.Extras.Authentication.JwtBearer | JWT | **替换** → `Microsoft.AspNetCore.Authentication.JwtBearer` | ✅ 定 |
-| MoYu.Extras.ObjectMapper.Mapster / Mapster | 映射 | **替换** → Riok.Mapperly(源生成) | ✅ 定 |
+| MoYu.Extras.ObjectMapper.Mapster / Mapster | 映射 | **移除**,不找替代 → 手写赋值(曾定 Riok.Mapperly,最终没引:一个依赖换不来几行赋值) | ✅ 定 |
 | Yitter.IdGenerator | 雪花 ID | **自写** → Core 单文件,`IIdGenerator` 可换 | ✅ 定 |
 | SharpZipLib | 压缩 | **替换** → BCL `System.IO.Compression` | ✅ 定 |
 | System.Drawing.Common | 验证码绘图 | **移除**(跨平台隐患)→ SVG 验证码 | ✅ 定 |
@@ -408,7 +408,7 @@ public class LdapAuthService : AuthService
 ### 5.7 完整走查:用户如何基于本系统开发自己的业务模块
 
 目标:用户在**自己的外部项目**里新增一个"设备台账"模块,不改框架源码,即可拥有增删改查 +
-审计 + 数据权限 + 种子。全流程五步,均在用户项目内:
+审计 + 数据权限 + 种子。全流程六步,均在用户项目内(照抄即可编译 —— 下面出现的每个类型仓库里都真实存在):
 
 ```csharp
 // 1) 实体:继承 DataEntity 即自动获得 Id/审计/软删除/机构数据范围字段
@@ -421,45 +421,49 @@ public class Device : DataEntity
 }
 // 首次启动 CodeFirst 自动建表(默认仅 Dev 环境,见 §12 生产建表安全)
 
-// 2) 服务接口 + 实现:继承标记接口即被自动扫描注册(见下"注册模型")
-public interface IDeviceService : ITransient
+// 2) 出入参:分页入参继承 PageInputBase(自带 Current/Size + SortField/SortOrder)
+public record DevicePageInput : PageInputBase { public string? Name { get; init; } }
+public record DeviceAddInput { public required string Name { get; init; } public required string Sn { get; init; } }
+
+// 3) 服务接口 + 实现:**就是普通接口 + 普通类** —— 没有标记接口、没有扫描,注册在第 6 步显式写一行
+public interface IDeviceService
 {
-    Task<SqlSugarPagedList<Device>> PageAsync(DevicePageInput input);
+    Task<PagedList<Device>> PageAsync(DevicePageInput input);
     Task AddAsync(DeviceAddInput input);
 }
-public class DeviceService : IDeviceService
+public class DeviceService(IRepository<Device> repo) : IDeviceService   // 泛型仓储直接注入
 {
-    private readonly IRepository<Device> _repo;      // 泛型仓储直接注入
-    public DeviceService(IRepository<Device> repo) => _repo = repo;
+    public virtual Task<PagedList<Device>> PageAsync(DevicePageInput input)
+        => repo.AsQueryable()                        // 数据权限过滤器已自动生效
+               .WhereIF(!string.IsNullOrEmpty(input.Name), d => d.Name.Contains(input.Name!))
+               // 这个重载先按实体列白名单校验 SortField(非法字段忽略、回退默认序),杜绝排序注入
+               .ToPagedListAsync(input, q => q.OrderBy(d => d.Id, OrderByType.Desc));
 
-    public virtual Task<SqlSugarPagedList<Device>> PageAsync(DevicePageInput input)
-        => _repo.AsQueryable()                       // 数据权限过滤器已自动生效
-                .WhereIF(!string.IsNullOrEmpty(input.Name), d => d.Name.Contains(input.Name))
-                .ToPagedListAsync(input.Current, input.Size);
-
-    public virtual async Task AddAsync(DeviceAddInput input)
-        => await _repo.InsertAsync(DeviceMapper.ToEntity(input));   // Mapperly 源生成的映射,非运行时反射
+    // 映射手写。内核不引任何映射库 —— 运行时依赖只有 SqlSugarCore + Microsoft.*(§2.3),
+    // Id / 审计字段 / CreateOrgId 由 AOP 回填,业务代码只管业务字段。
+    public virtual Task AddAsync(DeviceAddInput input)
+        => repo.InsertAsync(new Device { Name = input.Name, Sn = input.Sn });
 }
 
-// 2b) 映射:Mapperly 编译期生成实现,零运行时依赖
-[Mapper]
-public static partial class DeviceMapper
+// 4) 控制器:标准 [ApiController];挂 [RolePermission] 即纳入路由级权限校验。
+//    **权限码 = 规范化路由**(这里是 GET:/api/v1/biz/device/page),所以路由要带 api/v1 前缀 ——
+//    路由写错,授权界面上就找不到这个端点,给谁都授不了权。
+[ApiController, Route("api/v1/biz/device")]
+public class DeviceController(IDeviceService svc) : ControllerBase
 {
-    public static partial Device ToEntity(DeviceAddInput input);
+    [HttpGet("page"), RolePermission]
+    public async Task<Result<PagedList<Device>>> Page([FromQuery] DevicePageInput input)
+        => Result<PagedList<Device>>.Ok(await svc.PageAsync(input));
+
+    [HttpPost("add"), RolePermission, OperationLog("新增设备")]
+    public async Task<Result<bool>> Add(DeviceAddInput input)
+    {
+        await svc.AddAsync(input);
+        return Result<bool>.Ok(true);
+    }
 }
 
-// 3) 控制器:标准 [ApiController];挂 [RolePermission] 即纳入路由级权限校验
-[ApiController, Route("biz/device")]
-public class DeviceController : ControllerBase
-{
-    private readonly IDeviceService _svc;
-    public DeviceController(IDeviceService svc) => _svc = svc;
-
-    [HttpGet("page"), RolePermission] public Task<dynamic> Page([FromQuery] DevicePageInput i) => ...;
-    [HttpPost("add"), RolePermission, OperationLog("新增设备")] public Task Add(DeviceAddInput i) => _svc.AddAsync(i);
-}
-
-// 4) 种子(可选):实现泛型 ISeedData<T>,启动自动执行且幂等。
+// 5) 种子(可选):实现泛型 ISeedData<T>,启动自动执行且幂等。
 //    非泛型 ISeedData 只是 DI 收集用的空标记 —— 直接实现它能编译,但启动时反推不出实体类型会崩。
 //    Id 必须显式给定且落在消费者保留区间 [TenonSeedIds.ConsumerMin, TenonSeedIds.ConsumerMax](见 Core/TenonSeedIds.cs)。
 public class DeviceSeedData : ISeedData<Device>
@@ -468,10 +472,11 @@ public class DeviceSeedData : ISeedData<Device>
         [new Device { Id = TenonSeedIds.ConsumerMin, Name = "示例设备", Sn = "SN-0001" }];
 }
 
-// 5) 用户项目 Program.cs:AddTenonAdmin 那三行照旧,另加两处显式登记 ——
-//    业务程序集(实体建表 + 控制器挂载)与种子(内核不扫描程序集找种子,忘了注册就静默不执行)。
+// 6) 用户项目 Program.cs:AddTenonAdmin 那三行照旧,另加三处显式登记 ——
+//    业务程序集(实体建表 + 控制器挂载)、你自己的服务、以及种子。全是显式的:内核不扫描。
 builder.Services.AddTenonAdmin(builder.Configuration, o => o.ApplicationAssemblies.Add(typeof(Device).Assembly));
-builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DeviceSeedData>());
+builder.Services.TryAddScoped<IDeviceService, DeviceService>();   // 忘了这行 → 控制器注入不到服务,请求期才炸
+builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DeviceSeedData>());   // 忘了这行 → 种子静默不执行
 ```
 
 **注册模型(双层,消除"显式 vs 扫描"的歧义)**:
