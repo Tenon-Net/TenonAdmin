@@ -8,7 +8,11 @@ public class AdminUploadOptions
     /// <summary>提供者:<c>Local</c>(默认,本地磁盘)| OSS/Minio 等走 <c>IFileStorage</c> 扩展点(v1.x 可选包)</summary>
     public string Provider { get; set; } = "Local";
 
-    /// <summary>本地存储根目录(相对进程工作目录;正式部署声明为数据卷,§11)</summary>
+    /// <summary>
+    /// 本地存储根目录。相对路径<b>按 ContentRoot 解析</b>(与 SQLite 库文件、JWT 开发密钥同一基准,不随进程 CWD 漂移);
+    /// 绝对路径原样使用。正式部署声明为数据卷(§11);<b>用 <c>UseStaticFiles()</c> 托管前端产物时必须挪出 <c>wwwroot</c></b>,
+    /// 否则上传物会被静态中间件匿名直出,绕过鉴权下载(见 docs/deployment.md)。
+    /// </summary>
     public string RootPath { get; set; } = "./wwwroot/upload";
 
     /// <summary>单文件大小上限(MB);超过拒收(<see cref="ErrorCode.FileTooLarge"/>)</summary>

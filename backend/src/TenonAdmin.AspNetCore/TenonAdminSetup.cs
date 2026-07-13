@@ -44,7 +44,16 @@ public static class TenonAdminSetup
         services.AddSingleton(options.Cache);
         services.AddSingleton(options.Jwt);
         services.AddSingleton(options.Security);
-        services.AddSingleton(options.Upload);
+        // 上传根按 ContentRoot 解析(与 SQLite 库文件、JWT 开发密钥同一基准),不按进程 CWD。
+        // 三条可写路径若基准不一致,容器/服务托管里 CWD 一变(entrypoint 脚本 cd 过、k8s 覆写 workingDir、
+        // 从别处 `dotnet /app/App.dll`),数据卷和上传卷就悄悄分家:库还在,文件"消失"。绝对路径原样保留。
+        // 就地改写同一个 options.Upload 实例,故 TenonAdminOptions.Upload 读到的也是解析后的值。
+        services.AddSingleton(sp =>
+        {
+            var contentRoot = sp.GetRequiredService<IHostEnvironment>().ContentRootPath;
+            options.Upload.RootPath = Path.GetFullPath(Path.Combine(contentRoot, options.Upload.RootPath));
+            return options.Upload;
+        });
         services.AddSingleton(options.Api);
         services.AddSingleton(options.Id);
         services.TryAddSingleton(TimeProvider.System);          // 统一时间源(§12),测试可换 Fake
