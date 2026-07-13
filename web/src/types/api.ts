@@ -66,6 +66,17 @@ export interface ModuleRow {
   createTime?: string
 }
 
+/** 工作台首页统计(后端 DashboardSummaryOutput)。趋势三条数组等长(近 7 日,含今天,无登录的日子为 0)。 */
+export interface DashboardSummary {
+  roles: number
+  users: number
+  perms: number
+  onlineSessions: number
+  trendDays: string[]
+  trendLogins: number[]
+  trendActiveUsers: number[]
+}
+
 /** 字典项消费投影(后端 SysDictItem;sort 归一为 number,甩掉 int64 序列化的 number|string 噪音)。 */
 export interface DictItem {
   label: string

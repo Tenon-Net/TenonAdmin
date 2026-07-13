@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -52,6 +52,11 @@ export const authApi = {
     client.POST('/api/v1/auth/login', { body }).then((r) => unwrap<LoginOutput>(r)),
   logout: () => client.POST('/api/v1/auth/logout', {}).then((r) => unwrap<boolean>(r)),
   captcha: () => client.GET('/api/v1/auth/captcha', {}).then((r) => unwrap<{ captchaId: string; svg: string }>(r)),
+}
+
+export const dashboardApi = {
+  /** 工作台首页统计([ActiveSession]:任何登录用户可取,无需权限码)。 */
+  summary: () => client.GET('/api/v1/dashboard/summary', {}).then((r) => unwrap<DashboardSummary>(r)),
 }
 
 export const personalApi = {

@@ -75,6 +75,9 @@ public static class ServicesSetup
         // 个人中心(§4,T8):当前用户对自己账号的读改(看/改资料、验旧改密)
         services.TryAddScoped<IPersonalService, PersonalService>();
 
+        // 工作台首页统计(§4):四个计数 + 近 7 日登录趋势,每步一个 virtual 方法可单独覆写
+        services.TryAddScoped<IDashboardService, DashboardService>();
+
         // 种子:多实现集合,TryAddEnumerable 按实现类型防重
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SuperAdminSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultRoleSeed>());

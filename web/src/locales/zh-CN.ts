@@ -211,7 +211,7 @@ export default {
     roles: '角色总数',
     users: '授权用户',
     perms: '权限点',
-    pending: '待审批',
+    online: '在线会话',
     trendTitle: '近 7 日活跃趋势',
     distributionTitle: '资源分布',
     trendLogins: '登录数',

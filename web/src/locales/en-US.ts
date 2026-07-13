@@ -210,7 +210,7 @@ export default {
     roles: 'Roles',
     users: 'Authorized users',
     perms: 'Permissions',
-    pending: 'Pending',
+    online: 'Online sessions',
     trendTitle: 'Activity (last 7 days)',
     distributionTitle: 'Resource distribution',
     trendLogins: 'Logins',

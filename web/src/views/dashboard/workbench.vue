@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { NGrid, NGi, NCard } from 'naive-ui'
+import { computed, onMounted, ref } from 'vue'
+import { NGrid, NGi, NCard, NSpin } from 'naive-ui'
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
 import { btnGrad } from '@/theme/mix'
+import { dashboardApi } from '@/api'
+import type { DashboardSummary } from '@/types/api'
 import LineChart from '@/components/Chart/LineChart.vue'
 import PieChart from '@/components/Chart/PieChart.vue'
 
@@ -15,24 +17,41 @@ const app = useAppStore()
 
 const avatarStyle = computed(() => ({ background: btnGrad(app.accent) }))
 
-// 骨架期用占位统计;真实数值等后端接口/后续刀接入。
+const summary = ref<DashboardSummary | null>(null)
+const loading = ref(true)
+
+onMounted(async () => {
+  try {
+    summary.value = await dashboardApi.summary()
+  } catch {
+    // 首页不该因为一张统计图挂了就糊用户一脸红:统计取不到就显示 —,页面其余部分照常可用。
+  } finally {
+    loading.value = false
+  }
+})
+
+/** 计数未到位时显示 —,而不是先闪个 0 再跳到真值。 */
+function num(v: number | undefined) {
+  return v === undefined ? '—' : v
+}
+
 const stats = computed(() => [
-  { key: 'roles', icon: 'ph:shield-duotone', value: 24, color: 'var(--color-primary)' },
-  { key: 'users', icon: 'ph:users-duotone', value: 186, color: 'var(--color-success)' },
-  { key: 'perms', icon: 'ph:key-duotone', value: 312, color: 'var(--color-warning)' },
-  { key: 'pending', icon: 'ph:hourglass-duotone', value: 5, color: 'var(--color-danger)' },
+  { key: 'roles', icon: 'ph:shield-duotone', value: num(summary.value?.roles), color: 'var(--color-primary)' },
+  { key: 'users', icon: 'ph:users-duotone', value: num(summary.value?.users), color: 'var(--color-success)' },
+  { key: 'perms', icon: 'ph:key-duotone', value: num(summary.value?.perms), color: 'var(--color-warning)' },
+  { key: 'online', icon: 'ph:broadcast-duotone', value: num(summary.value?.onlineSessions), color: 'var(--color-danger)' },
 ])
 
-// ponytail: 占位数据,接后端统计接口后替换(与统计卡同调,骨架期不造后端接口)。
-const trendDays = ['07-05', '07-06', '07-07', '07-08', '07-09', '07-10', '07-11']
+const trendDays = computed(() => summary.value?.trendDays ?? [])
 const trendSeries = computed(() => [
-  { name: t('workbench.trendLogins'), data: [120, 132, 101, 134, 90, 160, 180] },
-  { name: t('workbench.trendActive'), data: [60, 72, 71, 74, 50, 90, 110] },
+  { name: t('workbench.trendLogins'), data: summary.value?.trendLogins ?? [] },
+  { name: t('workbench.trendActive'), data: summary.value?.trendActiveUsers ?? [] },
 ])
+// 资源分布就是前三个计数,不必让后端再返一份
 const distribution = computed(() => [
-  { name: t('workbench.roles'), value: 24 },
-  { name: t('workbench.users'), value: 186 },
-  { name: t('workbench.perms'), value: 312 },
+  { name: t('workbench.roles'), value: summary.value?.roles ?? 0 },
+  { name: t('workbench.users'), value: summary.value?.users ?? 0 },
+  { name: t('workbench.perms'), value: summary.value?.perms ?? 0 },
 ])
 </script>
 
@@ -66,12 +85,16 @@ const distribution = computed(() => [
     <n-grid :cols="'1 l:2'" responsive="screen" :x-gap="16" :y-gap="16">
       <n-gi>
         <n-card :title="t('workbench.trendTitle')" :bordered="true">
-          <LineChart :categories="trendDays" :series="trendSeries" />
+          <n-spin :show="loading">
+            <LineChart :categories="trendDays" :series="trendSeries" />
+          </n-spin>
         </n-card>
       </n-gi>
       <n-gi>
         <n-card :title="t('workbench.distributionTitle')" :bordered="true">
-          <PieChart :data="distribution" />
+          <n-spin :show="loading">
+            <PieChart :data="distribution" />
+          </n-spin>
         </n-card>
       </n-gi>
     </n-grid>
