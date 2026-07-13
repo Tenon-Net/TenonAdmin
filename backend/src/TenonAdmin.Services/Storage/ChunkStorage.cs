@@ -96,6 +96,58 @@ public sealed class ChunkStorage(AdminUploadOptions options)
         if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// 清扫超龄的分片临时物,返回清掉的项数(<see cref="FileGcService"/> 周期调用)。
+    /// <para>没有任何分片会话表可查——<c>ChunkStorage</c> 是无状态的,既不记开始时间也不记预期片数。
+    /// 所以判定只能靠<b>最后写入时间</b>:一个会话在 <paramref name="ttl"/> 内没有任何分片被写过,
+    /// 就认定客户端不会再回来了(关页面、断网、取消)。续传中的会话每收一片就刷新时间,不会被误扫。</para>
+    /// <para>两类残留都收:① 弃单的分片目录;② <c>.merged</c> 合并临时文件——它平时靠 <c>DeleteOnClose</c> 自清,
+    /// 但那只在进程活着时成立,进程被杀(OOM/kill -9)就会留下来。</para>
+    /// <para>只在 <c>.chunks</c> 临时根内操作。存储根下的正式文件区(<c>{日期}/</c>)绝不触碰——
+    /// 那需要的是"盘上有、库里无"的反向核对,不是超时清理。</para>
+    /// </summary>
+    public Task<int> SweepStaleAsync(TimeSpan ttl, DateTimeOffset now, CancellationToken cancellationToken = default)
+    {
+        if (!Directory.Exists(_tempRoot)) return Task.FromResult(0);
+
+        var cutoff = (now - ttl).UtcDateTime;
+        var swept = 0;
+
+        foreach (var dir in Directory.EnumerateDirectories(_tempRoot))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (LastTouchUtc(dir) > cutoff) continue;
+            Directory.Delete(dir, recursive: true);
+            swept++;
+        }
+
+        foreach (var merged in Directory.EnumerateFiles(_tempRoot, "*.merged"))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (File.GetLastWriteTimeUtc(merged) > cutoff) continue;
+            File.Delete(merged);
+            swept++;
+        }
+
+        return Task.FromResult(swept);
+    }
+
+    /// <summary>
+    /// 目录的"最后被碰过"时间 = 目录自身与其中分片文件的最晚写入时间。
+    /// <para>只看目录 mtime 不够:重传一个<b>已存在</b>的分片是覆盖写,只刷新文件 mtime、不刷新目录 mtime——
+    /// 那样一个正在续传的会话会被误判为弃单。</para>
+    /// </summary>
+    private static DateTime LastTouchUtc(string dir)
+    {
+        var newest = Directory.GetLastWriteTimeUtc(dir);
+        foreach (var file in Directory.EnumerateFiles(dir))
+        {
+            var touched = File.GetLastWriteTimeUtc(file);
+            if (touched > newest) newest = touched;
+        }
+        return newest;
+    }
 }
 
 /// <summary>合并结果:可读流(DeleteOnClose,调用方负责释放)+ 内容 SHA-256(hex)+ 字节数。</summary>

@@ -114,17 +114,30 @@ public class FileService(
         }
 
         var ext = Path.GetExtension(input.FileName).ToLowerInvariant();
-        var merged = await chunks.MergeAsync(input.UploadId, input.ChunkCount);   // 缺片抛 ChunkMissing
-        await using var content = merged.Content;   // DeleteOnClose:用完即删合并临时文件
+        // 缺片抛 ChunkMissing —— 这时<b>不能</b>清分片:会话还能续传,清了等于让客户端从头再传一遍。
+        var merged = await chunks.MergeAsync(input.UploadId, input.ChunkCount);
+        try
+        {
+            await using var content = merged.Content;   // DeleteOnClose:用完即删合并临时文件
 
-        // 完整性:服务端单遍重算的 SHA-256 必须与客户端声明一致(防漏片/传输损坏)。
-        AdminException.ThrowIf(!string.Equals(merged.Sha256, input.FileHash, StringComparison.OrdinalIgnoreCase),
-            ErrorCode.ChunkHashMismatch);
-        await ValidateUploadAsync(ext, merged.Size);   // 复用三道关(大小/后缀)
+            // 完整性:服务端单遍重算的 SHA-256 必须与客户端声明一致(防漏片/传输损坏)。
+            AdminException.ThrowIf(!string.Equals(merged.Sha256, input.FileHash, StringComparison.OrdinalIgnoreCase),
+                ErrorCode.ChunkHashMismatch);
+            await ValidateUploadAsync(ext, merged.Size);   // 复用三道关(大小/后缀)
 
-        var output = await PersistAsync(content, input.FileName, ext, input.ContentType, merged.Size, input.FileHash);
-        await chunks.DiscardAsync(input.UploadId);
-        return output;
+            var output = await PersistAsync(content, input.FileName, ext, input.ContentType, merged.Size, input.FileHash);
+            await chunks.DiscardAsync(input.UploadId);
+            return output;
+        }
+        catch (AdminException)
+        {
+            // 合并之后才做的三道校验(哈希不符/超大/后缀不许)属于<b>永久性拒绝</b>:同样的分片再传一次还是被拒,
+            // 留着它们就是纯粹的泄漏——每一次被拒的上传都漏一份。清掉。
+            // (只认 AdminException:落库失败之类的暂时性故障保留分片,客户端可以只重试 complete,不必重传整个文件;
+            //  就算它再也不回来,弃单清扫也会按 TTL 兜底。)
+            await chunks.DiscardAsync(input.UploadId);
+            throw;
+        }
     }
 
     /// <inheritdoc />

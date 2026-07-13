@@ -13,6 +13,9 @@ public static class ServicesSetup
 {
     public static IServiceCollection AddTenonAdminServices(this IServiceCollection services)
     {
+        // 统一时间源(§12):AspNetCore 层也 TryAdd 同一个,这里再兜一次,让本层单独装配也能自洽(测试可换 Fake)
+        services.TryAddSingleton(TimeProvider.System);
+
         // 密码哈希:PBKDF2 默认实现,无状态 → Singleton;用户可前置注册替换(§5.2)
         services.TryAddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
 
@@ -71,6 +74,10 @@ public static class ServicesSetup
         services.TryAddSingleton<IFileStorage, LocalFileStorage>();
         services.TryAddSingleton<ChunkStorage>();
         services.TryAddScoped<IFileService, FileService>();
+        // 磁盘回收(T-D2):软删文件过保留期后删盘 + 弃单分片按 TTL 清扫。双注册——单例可被覆写/直接调 SweepAsync,
+        // 同一实例再作为后台任务托管(同 RuntimeRateLimit 的成法),避免被实例化两份。
+        services.TryAddSingleton<FileGcService>();
+        services.AddHostedService(sp => sp.GetRequiredService<FileGcService>());
 
         // 个人中心(§4,T8):当前用户对自己账号的读改(看/改资料、验旧改密)
         services.TryAddScoped<IPersonalService, PersonalService>();

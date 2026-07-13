@@ -23,4 +23,25 @@ public class AdminUploadOptions
     /// 空数组表示不限(不建议)。
     /// </summary>
     public string[] AllowedExtensions { get; set; } = [".jpg", ".png", ".pdf", ".xlsx", ".docx", ".zip"];
+
+    /// <summary>是否启用后台磁盘回收(dev-plan T-D2)。关掉 = 删了的文件永远占着盘,只在你另有回收手段时才关。</summary>
+    public bool EnableGc { get; set; } = true;
+
+    /// <summary>回收任务的执行间隔(小时)。它是运维参数,不进配置中心——改它值得重启一次。</summary>
+    public int GcIntervalHours { get; set; } = 6;
+
+    /// <summary>
+    /// 软删文件的保留期(天):删除满这么久才真正删盘并抹掉记录。
+    /// <para><b>不要把它调成 0。</b>「秒传」按内容哈希复用<b>同一条</b> <c>sys_file</c> 记录,
+    /// 于是同一个文件 Id 可能被多个用户、多条业务记录引用——甲删掉"他的"文件,乙那边的引用也就跟着悬空了。
+    /// 内核里没有文件引用表(那是消费者侧的契约),引用计数无从算起,保留期是这里唯一的安全网:
+    /// 给人留出"删错了"的反应时间。</para>
+    /// </summary>
+    public int GcRetentionDays { get; set; } = 7;
+
+    /// <summary>
+    /// 分片上传会话的存活期(小时):这么久没有任何分片写入,视为客户端弃单(关页面/断网/取消),整个分片目录清掉。
+    /// 续传中的会话每收一片就刷新,不受影响。
+    /// </summary>
+    public int GcChunkTtlHours { get; set; } = 24;
 }
