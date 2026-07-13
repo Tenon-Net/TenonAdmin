@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using SqlSugar;
+using TenonAdmin.Core;
 
 namespace TenonAdmin.SqlSugar;
 
@@ -8,8 +9,12 @@ namespace TenonAdmin.SqlSugar;
 /// <para>以开放泛型注册(<c>IRepository&lt;&gt;</c> → <c>SqlSugarRepository&lt;&gt;</c>),
 /// 任意实体无需逐个注册即可注入。类 public、方法 virtual——遵循框架"继承覆写"承诺(设计 §5.3),
 /// 用户可继承本类只改想改的方法,再以 TryAdd 前置注册接管。</para>
+/// <para><paramref name="time"/> / <paramref name="currentUser"/> <b>必须保持可选参数</b>:本类是消费者可继承的
+/// public 类型(§8 六件套契约),加必需构造参数就是源码破坏性变更——现有 <c>: SqlSugarRepository&lt;T&gt;(db)</c>
+/// 的子类会编译不过。两者只在软删审计留痕时用到,缺省即回退系统时钟 / 无操作人。</para>
 /// </summary>
-public class SqlSugarRepository<TEntity>(ISqlSugarClient db) : IRepository<TEntity>
+public class SqlSugarRepository<TEntity>(ISqlSugarClient db, TimeProvider? time = null, ICurrentUser? currentUser = null)
+    : IRepository<TEntity>
     where TEntity : BaseEntity, new()
 {
     /// <inheritdoc />
@@ -62,11 +67,21 @@ public class SqlSugarRepository<TEntity>(ISqlSugarClient db) : IRepository<TEnti
     public virtual async Task<int> DeleteAsync(long id)
     {
         if (!await InScopeAsync(id)) return 0;   // 越权删防护(仅 IOrgScoped 实体触发实际检查)
+
         // 软删除:只置标记不删行(全局过滤器随即让该行对查询不可见)。
         // 需要物理删除的场景走 Db.Deleteable<T>() 逃生舱口,属于显式例外。
-        return await db.Updateable<TEntity>()
+        //
+        // 审计两列必须在这里显式置:删也是一次更新,"谁、什么时候删的"是审计的基本要求,
+        // 而按列更新(SetColumns)走的不是整对象更新路径,SqlSugarSetup 里那个只认 UpdateByObject 的
+        // 审计 AOP 根本不会触发 —— 不显式写,UpdateTime/UpdateUserId 就永远停在删除之前的值。
+        // 删除时间同时是文件回收任务的保留期锚点(设计 §12 / dev-plan T-D2),丢了它 GC 无从判断该不该收。
+        var now = (time ?? TimeProvider.System).GetLocalNow().DateTime;   // 与审计 AOP 同一时间口径
+        var update = db.Updateable<TEntity>()
           .SetColumns(e => e.IsDelete == true)
-          .Where(e => e.Id == id)
-          .ExecuteCommandAsync();
+          .SetColumns(e => e.UpdateTime == now);
+        if (currentUser?.UserId is { } uid)                               // 无登录上下文(系统/后台任务)则不硬塞操作人
+            update = update.SetColumns(e => e.UpdateUserId == uid);
+
+        return await update.Where(e => e.Id == id).ExecuteCommandAsync();
     }
 }
