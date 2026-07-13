@@ -122,9 +122,9 @@ public class ModulePortalTests
         var c = f.CreateClient();
         WithToken(c, await c.LoginToken("superAdmin", "Test@123456"));
 
-        // 内置 system 模块下有 4 个顶级目录(10/20/30/90);按钮不入导航,故为 4 个根节点
+        // 内置 system 模块下:工作台(108,根级页面)+ 4 个顶级目录(10/20/30/90);按钮不入导航,故为 5 个根节点
         var tree = (await (await c.GetAsync("/api/v1/personal/menu?moduleId=1")).ReadEnvelope()).GetProperty("data");
-        Assert.Equal(4, tree.GetArrayLength());
+        Assert.Equal(5, tree.GetArrayLength());
 
         // 不存在/无节点的模块 → 空树
         var empty = (await (await c.GetAsync("/api/v1/personal/menu?moduleId=999999")).ReadEnvelope()).GetProperty("data");

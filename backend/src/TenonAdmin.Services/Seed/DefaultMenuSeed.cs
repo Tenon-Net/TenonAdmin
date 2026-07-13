@@ -7,13 +7,19 @@ namespace TenonAdmin.Services;
 /// 不预埋尚不存在页面的菜单(避免种子超前于实现)。后续模块落地时同批增补自己的菜单节点。
 /// <para>权限码必须与 <c>[RolePermission]</c> 授权管道算出的规范化路由一字不差
 /// (大写 Method + 冒号 + 小写路由模板),否则授了也匹配不上。</para>
-/// <para>菜单树四个顶级目录:组织管理 / 系统运维 / 日志审计 / 文件管理。四个目录均挂内置 system 模块
-/// (ModuleId 仅顶级目录设)。节点 Id 手工分配、无分配器,新增节点从 90+ 取,避免覆盖历史 Id。</para>
+/// <para>菜单树顶级节点:工作台(根级页面)+ 组织管理 / 系统运维 / 日志审计 / 文件管理四个目录。均挂内置 system 模块
+/// (ModuleId 仅顶级节点设)。节点 Id 手工分配、无分配器,新增节点接着当前最大值往后取(现已用到 108),避免覆盖历史 Id。</para>
 /// </summary>
 internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
 {
     public IEnumerable<SysMenu> HasData() =>
     [
+        // ═══ 工作台 ═════════════════════════════════════════════════
+        // 每个应用有自己的首页:工作台是一条普通菜单(根级 Menu 节点,故可挂 ModuleId),不是全局静态页。
+        // Sort=0 → 排在所有目录前,也让它成为菜单树首个叶子(前端 homePath() 的兜底落点)。
+        // 该页不打任何后端接口,故 Permission 为空。
+        new SysMenu { Id = 108, ParentId = 0, Type = MenuType.Menu, Title = "工作台", Permission = "", Path = "/workbench", Component = "dashboard/workbench", Icon = "ph:squares-four-duotone", Sort = 0, Enabled = true, Visible = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
+
         // ═══ 组织管理 ═══════════════════════════════════════════════
         new SysMenu { Id = 10, ParentId = 0, Type = MenuType.Catalog, Title = "组织管理", Permission = "", Icon = "ph:buildings-duotone", Sort = 1, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
 
