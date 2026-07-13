@@ -269,7 +269,7 @@ export default {
     saved: 'Saved',
     deleted: 'Deleted',
     tab: { base: 'General', security: 'Security', upload: 'Upload', other: 'Other' },
-    base: { siteTitle: 'Site title' },
+    base: { siteTitle: 'Site title', siteSubtitle: 'Login subtitle', copyright: 'Copyright', copyrightUrl: 'Copyright link' },
     security: {
       loginLock: { title: 'Login lockout', maxFailCount: 'Max fail count', lockMinutes: 'Lock minutes' },
       password: {

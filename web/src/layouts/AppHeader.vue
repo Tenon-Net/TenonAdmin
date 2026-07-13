@@ -20,6 +20,7 @@ import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useLayoutMenu } from '@/composables/useLayoutMenu'
 import { useMenuFlat } from '@/composables/useMenuFlat'
+import { useSite } from '@/composables/useSite'
 import { authApi, noticeApi } from '@/api'
 import type { NoticeMineItem } from '@/types/api'
 import { resetRouter } from '@/router'
@@ -38,6 +39,7 @@ withDefaults(
 )
 
 const app = useAppStore()
+const { site } = useSite()
 const user = useUserStore()
 const auth = useAuthStore()
 const route = useRoute()
@@ -164,7 +166,7 @@ fetchUnread()
       </n-button>
       <div v-if="showBrand" class="brand">
         <TenonLogo :size="26" />
-        <span class="brand-name mobile-hide">TenonAdmin</span>
+        <span class="brand-name mobile-hide">{{ site.title }}</span>
       </div>
       <n-breadcrumb v-if="app.showBreadcrumb && crumbs.length">
         <n-breadcrumb-item v-for="(c, i) in crumbs" :key="i">{{ c }}</n-breadcrumb-item>

@@ -3,12 +3,14 @@ import { computed } from 'vue'
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { useSite } from '@/composables/useSite'
 import { mix, rgba } from '@/theme/mix'
 import TenonLogo from '@/components/TenonLogo.vue'
 import LoginForm from '../LoginForm.vue'
 
 const { t } = useI18n()
 const app = useAppStore()
+const { site, appVersion } = useSite()
 const year = new Date().getFullYear()
 
 // 卖点随语言切换(t 在 computed 内对 locale 响应)。
@@ -28,12 +30,12 @@ const vars = computed(() => ({
       <div class="panel-inner">
         <div class="logo">
           <TenonLogo :size="40" />
-          <span>TenonAdmin</span>
+          <span>{{ site.title }}</span>
         </div>
         <div class="bar" :style="{ background: app.accent }" />
         <!-- 标题拆 pre/accent/post 三段以支持 i18n,中间词染 accent 色(整句硬编码中文切不了英文) -->
         <h1 class="headline">{{ t('login.headlinePre') }}<span :style="{ color: app.accent }">{{ t('login.headlineAccent') }}</span>{{ t('login.headlinePost') }}</h1>
-        <p class="sub">{{ t('login.subtitle') }}</p>
+        <p class="sub">{{ site.subtitle || t('login.subtitle') }}</p>
         <ul class="points">
           <li v-for="p in points" :key="p">
             <Icon icon="ph:check-circle-duotone" :width="18" :style="{ color: app.accent }" />{{ p }}
@@ -48,11 +50,16 @@ const vars = computed(() => ({
         <div class="form-inner">
           <p class="greet">{{ t('login.welcome') }}</p>
           <p class="greet-sub">{{ t('login.welcomeSub') }}</p>
-          <LoginForm :show-logo="false" :show-title="false" />
+          <LoginForm :show-logo="false" :show-title="false" :show-footer="false" />
         </div>
       </div>
 
-      <p class="foot">© {{ year }} TenonAdmin</p>
+      <p class="foot">
+        © {{ year }}
+        <a v-if="site.copyrightUrl" :href="site.copyrightUrl" target="_blank" rel="noopener">{{ site.copyright || site.title }}</a>
+        <template v-else>{{ site.copyright || site.title }}</template>
+        <span v-if="appVersion" class="foot-ver">v{{ appVersion }}</span>
+      </p>
     </div>
   </div>
 </template>
@@ -187,6 +194,17 @@ const vars = computed(() => ({
   text-align: center;
   font-size: var(--font-size-sm);
   color: var(--color-text-tertiary);
+}
+.foot a {
+  color: inherit;
+  text-decoration: none;
+}
+.foot a:hover {
+  color: var(--color-primary);
+}
+.foot-ver {
+  margin-left: 8px;
+  opacity: 0.75;
 }
 @keyframes fade-up {
   from {

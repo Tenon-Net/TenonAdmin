@@ -52,6 +52,9 @@ public class ConfigService(
     public virtual async Task<SiteInfoOutput> GetSiteInfoAsync() => new()
     {
         Title = await GetValueByKeyAsync(ConfigSeed.SITE_TITLE_KEY),
+        Subtitle = await GetValueByKeyAsync(ConfigSeed.SITE_SUBTITLE_KEY),
+        Copyright = await GetValueByKeyAsync(ConfigSeed.SITE_COPYRIGHT_KEY),
+        CopyrightUrl = await GetValueByKeyAsync(ConfigSeed.SITE_COPYRIGHT_URL_KEY),
         // 匿名暴露验证码开关(不含类型等内部细节),供登录页决定是否渲染验证码;缺失即视为关。
         CaptchaEnabled = bool.TryParse(await GetValueByKeyAsync(CaptchaService.KEY_ENABLED), out var e) && e,
     };

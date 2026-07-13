@@ -27,7 +27,12 @@ public class ConfigCenterTests
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode); // 未被默认拒绝策略挡成 401
         var env = await resp.ReadEnvelope();
         Assert.Equal(0, env.GetProperty("code").GetInt32());
-        Assert.Equal("TenonAdmin", env.GetProperty("data").GetProperty("title").GetString()); // ConfigSeed 播的站点标题
+        var data = env.GetProperty("data");
+        Assert.Equal("TenonAdmin", data.GetProperty("title").GetString()); // ConfigSeed 播的站点标题
+        // 品牌文字套装随 site 端点匿名下发(登录页页脚/副标题消费)
+        Assert.Equal("TenonAdmin", data.GetProperty("copyright").GetString());
+        Assert.Equal("", data.GetProperty("subtitle").GetString());
+        Assert.Equal("", data.GetProperty("copyrightUrl").GetString());
     }
 
     [Fact]

@@ -6,13 +6,21 @@ import { NForm, NFormItem, NInput, NButton, NSpin, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
 import { configApi } from '@/api'
+import { useSite } from '@/composables/useSite'
 import { translateError } from '@/utils/error'
 
 const { t } = useI18n()
 const message = useMessage()
+const { loadSite } = useSite()
 
-// 结构化字段:key 绑定后端配置键(GroupCode='sys'),label 走 i18n。真实生效点见 App.vue 的 document.title。
-const FIELDS = [{ key: 'sys.site.title', label: () => t('config.base.siteTitle') }] as const
+// 结构化字段:key 绑定后端配置键(GroupCode='sys'),label 走 i18n。全部经匿名 siteInfo 下发,
+// 真实消费点在登录页/侧栏/顶栏/页脚(见 useSite)。加参数 = 加一个 FIELDS 项 + 一条 config.base i18n。
+const FIELDS = [
+  { key: 'sys.site.title', label: () => t('config.base.siteTitle') },
+  { key: 'sys.site.subtitle', label: () => t('config.base.siteSubtitle') },
+  { key: 'sys.site.copyright', label: () => t('config.base.copyright') },
+  { key: 'sys.site.copyrightUrl', label: () => t('config.base.copyrightUrl') },
+] as const
 
 const values = reactive<Record<string, string>>({})
 const loading = ref(true)
@@ -34,7 +42,8 @@ async function save() {
   try {
     await configApi.saveBatch(FIELDS.map((f) => ({ configKey: f.key, configValue: values[f.key] })))
     message.success(t('config.saved'))
-    // 站点标题即时生效:同步浏览器标题(App.vue 启动时也读同一来源)。
+    // 即时生效:重取全站共用的站点信息(侧栏/顶栏/登录页品牌随之更新)+ 同步浏览器标题。
+    await loadSite(true)
     if (values['sys.site.title']) document.title = values['sys.site.title']
   } catch (e) {
     message.error(translateError(e))

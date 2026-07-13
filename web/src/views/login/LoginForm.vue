@@ -4,21 +4,28 @@ import { useRouter } from 'vue-router'
 import { NForm, NFormItem, NInput, NCheckbox, useMessage } from 'naive-ui'
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
-import { authApi, configApi } from '@/api'
+import { authApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
+import { useSite } from '@/composables/useSite'
 import { btnGrad, glowSh } from '@/theme/mix'
 import { translateError } from '@/utils/error'
 import TenonLogo from '@/components/TenonLogo.vue'
 
-// 皮肤外壳自带品牌栏时(如双栏),不再在卡内重复 logo;自带问候语时(双栏右栏)也不重复标题。
-withDefaults(defineProps<{ showLogo?: boolean; showTitle?: boolean }>(), { showLogo: true, showTitle: true })
+// 皮肤外壳自带品牌栏时(如双栏),不再在卡内重复 logo/标题/页脚(showFooter=false 由外壳自绘版权)。
+withDefaults(defineProps<{ showLogo?: boolean; showTitle?: boolean; showFooter?: boolean }>(), {
+  showLogo: true,
+  showTitle: true,
+  showFooter: true,
+})
 
 const router = useRouter()
 const message = useMessage()
 const { t } = useI18n()
 const user = useUserStore()
 const app = useAppStore()
+const { site, appVersion, loadSite } = useSite()
+const year = new Date().getFullYear()
 
 // ponytail: 开发环境预填超管账号密码,免得每次手敲;生产(build)下 import.meta.env.DEV 为 false,留空
 const model = reactive(
@@ -45,14 +52,11 @@ async function loadCaptcha() {
 }
 
 onMounted(async () => {
-  try {
-    const site = await configApi.siteInfo()
-    if (site.captchaEnabled) {
-      captchaEnabled.value = true
-      await loadCaptcha()
-    }
-  } catch {
-    // 站点信息拉取失败时按未启用处理(后端仍会强制,失败信息在提交时反馈)
+  // 站点信息全站共用(useSite 去重);验证码开关据此运行时驱动,启用才拉图。
+  await loadSite()
+  if (site.captchaEnabled) {
+    captchaEnabled.value = true
+    await loadCaptcha()
   }
 })
 
@@ -105,7 +109,7 @@ async function onSubmit() {
   <div class="login-form">
     <div v-if="showLogo" class="lf-brand">
       <TenonLogo :size="34" />
-      <span class="lf-word">TenonAdmin</span>
+      <span class="lf-word">{{ site.title }}</span>
     </div>
     <h2 v-if="showTitle" class="lf-title">{{ t('login.title') }}</h2>
     <n-form :model="model" @keyup.enter="onSubmit">
@@ -154,6 +158,16 @@ async function onSubmit() {
         {{ t(s.label) }}
       </button>
     </div>
+
+    <!-- 页脚:版权(可选链接)+ 构建期版本号。皮肤自绘页脚时(如双栏)传 :show-footer="false" 关掉。 -->
+    <footer v-if="showFooter" class="lf-foot">
+      <span>
+        © {{ year }}
+        <a v-if="site.copyrightUrl" :href="site.copyrightUrl" target="_blank" rel="noopener">{{ site.copyright || site.title }}</a>
+        <template v-else>{{ site.copyright || site.title }}</template>
+      </span>
+      <span v-if="appVersion" class="lf-ver">v{{ appVersion }}</span>
+    </footer>
   </div>
 </template>
 
@@ -275,5 +289,25 @@ async function onSubmit() {
 .lf-sso-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+/* 页脚:版权 + 版本号,弱化色,与 SSO 区留白 */
+.lf-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 24px;
+  font-size: 12px;
+  color: var(--lf-hint, var(--color-text-tertiary));
+}
+.lf-foot a {
+  color: inherit;
+  text-decoration: none;
+}
+.lf-foot a:hover {
+  color: var(--color-primary);
+}
+.lf-ver {
+  opacity: 0.75;
 }
 </style>

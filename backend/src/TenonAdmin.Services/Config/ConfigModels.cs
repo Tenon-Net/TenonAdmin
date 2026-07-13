@@ -53,6 +53,15 @@ public record SiteInfoOutput
     /// <summary>站点标题(浏览器标题/登录页展示名)</summary>
     public string? Title { get; init; }
 
+    /// <summary>登录页副标题(留空则前端回退内置文案)</summary>
+    public string? Subtitle { get; init; }
+
+    /// <summary>版权信息(登录页页脚版权名;留空则前端回退站点标题)</summary>
+    public string? Copyright { get; init; }
+
+    /// <summary>版权链接(版权名的超链接;留空则纯文本)</summary>
+    public string? CopyrightUrl { get; init; }
+
     /// <summary>是否启用登录验证码(运行时配置驱动;前端据此决定登录页是否展示验证码)。</summary>
     public bool CaptchaEnabled { get; init; }
 }

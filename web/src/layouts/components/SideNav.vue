@@ -4,6 +4,9 @@
 // 二者任一为真都令 n-menu 进入 collapsed;rail 另用更窄的 collapsed-width。
 import { NMenu, NScrollbar, type MenuOption } from 'naive-ui'
 import TenonLogo from '@/components/TenonLogo.vue'
+import { useSite } from '@/composables/useSite'
+
+const { site } = useSite()
 
 const props = defineProps<{
   options: MenuOption[]
@@ -19,7 +22,7 @@ const emit = defineEmits<{ select: [key: string] }>()
   <div class="sidenav" :class="{ rail: props.rail }">
     <div v-if="props.showBrand" class="brand">
       <TenonLogo :size="28" />
-      <span v-show="!props.collapsed && !props.rail" class="brand-name">TenonAdmin</span>
+      <span v-show="!props.collapsed && !props.rail" class="brand-name">{{ site.title }}</span>
     </div>
     <n-scrollbar>
       <n-menu

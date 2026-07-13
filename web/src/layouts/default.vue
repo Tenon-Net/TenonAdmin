@@ -9,6 +9,7 @@ import { useAppStore, type LayoutMode } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useLayoutMenu } from '@/composables/useLayoutMenu'
 import { useTabsStore } from '@/stores/tabs'
+import { useSite } from '@/composables/useSite'
 import AppHeader from './AppHeader.vue'
 import SideNav from './components/SideNav.vue'
 import TabsBar from './TabsBar.vue'
@@ -17,6 +18,7 @@ const { t } = useI18n()
 const app = useAppStore()
 const user = useUserStore()
 const tabs = useTabsStore()
+const { site } = useSite()
 const { menuOptions, l1Options, l2Options, selectedL1, activeKey, onSelect, onSelectL1 } = useLayoutMenu()
 
 const isMobile = useBreakpoints(breakpointsTailwind).smaller('md')
@@ -81,7 +83,7 @@ const asideStyle = computed(() => {
 const transitionName = computed(() => (app.pageTransition === 'none' ? undefined : app.pageTransition))
 
 const watermarkContent = computed(
-  () => [user.userInfo?.name, app.watermarkText].filter(Boolean).join(' · ') || 'TenonAdmin',
+  () => [user.userInfo?.name, app.watermarkText].filter(Boolean).join(' · ') || site.title,
 )
 const watermarkColor = computed(() => (app.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)'))
 

@@ -9,12 +9,22 @@ namespace TenonAdmin.Services;
 /// </summary>
 internal sealed class ConfigSeed : ISeedData<SysConfig>
 {
-    /// <summary>站点标题配置键(前端标题/登录页文案取值)</summary>
+    /// <summary>站点标题配置键(浏览器标题 + 登录页/侧栏/顶栏/水印品牌词)</summary>
     internal const string SITE_TITLE_KEY = "sys.site.title";
+    /// <summary>登录页副标题配置键(留空回退前端内置文案)</summary>
+    internal const string SITE_SUBTITLE_KEY = "sys.site.subtitle";
+    /// <summary>版权信息配置键(登录页页脚版权名)</summary>
+    internal const string SITE_COPYRIGHT_KEY = "sys.site.copyright";
+    /// <summary>版权链接配置键(版权名的超链接;留空则纯文本)</summary>
+    internal const string SITE_COPYRIGHT_URL_KEY = "sys.site.copyrightUrl";
 
     public IEnumerable<SysConfig> HasData() =>
     [
-        new SysConfig { Id = 1, ConfigKey = SITE_TITLE_KEY, ConfigValue = "TenonAdmin", Name = "站点标题", GroupCode = "sys", Sort = 1, Remark = "浏览器标题与登录页展示名" },
+        // 基础/品牌(GroupCode=sys):经匿名白名单 GetSiteInfoAsync 下发,前端登录页/框架消费。
+        new SysConfig { Id = 1, ConfigKey = SITE_TITLE_KEY, ConfigValue = "TenonAdmin", Name = "站点标题", GroupCode = "sys", Sort = 1, Remark = "浏览器标题与登录页/侧栏/顶栏展示名" },
+        new SysConfig { Id = 18, ConfigKey = SITE_SUBTITLE_KEY, ConfigValue = "", Name = "登录副标题", GroupCode = "sys", Sort = 2, Remark = "登录页副标题;留空则用前端内置文案" },
+        new SysConfig { Id = 19, ConfigKey = SITE_COPYRIGHT_KEY, ConfigValue = "TenonAdmin", Name = "版权信息", GroupCode = "sys", Sort = 3, Remark = "登录页页脚版权名;留空则回退站点标题" },
+        new SysConfig { Id = 20, ConfigKey = SITE_COPYRIGHT_URL_KEY, ConfigValue = "", Name = "版权链接", GroupCode = "sys", Sort = 4, Remark = "版权名的超链接(http/https);留空则纯文本" },
 
         // 安全策略(GroupCode=security):后端强制执行时经 ISecurityPolicyProvider 读取,改值即时生效。
         // 默认值须与 SecurityPolicyProvider 兜底一致(= 现 Options 默认)。

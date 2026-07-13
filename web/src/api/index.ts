@@ -195,7 +195,15 @@ export const configApi = {
   siteInfo: () =>
     client
       .GET('/api/v1/sys/config/site', {})
-      .then((r) => unwrap<{ title?: string | null; captchaEnabled?: boolean }>(r)),
+      .then((r) =>
+        unwrap<{
+          title?: string | null
+          subtitle?: string | null
+          copyright?: string | null
+          copyrightUrl?: string | null
+          captchaEnabled?: boolean
+        }>(r),
+      ),
   /** 当前生效密码策略(任何登录用户可读);改密页据此展示真实规则清单,免配置读权限。 */
   passwordPolicy: () =>
     client

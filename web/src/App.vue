@@ -5,22 +5,19 @@ import { NConfigProvider, NMessageProvider, NDialogProvider, zhCN, enUS, dateZhC
 import { useTheme } from '@/composables/useTheme'
 import { useAppStore } from '@/stores/app'
 import { i18n } from '@/locales'
-import { configApi } from '@/api'
+import { useSite } from '@/composables/useSite'
 
 const app = useAppStore()
 const { overrides, naiveTheme } = useTheme()
+const { site, loadSite } = useSite()
 
 const naiveLocale = computed(() => (app.locale === 'en-US' ? enUS : zhCN))
 const naiveDateLocale = computed(() => (app.locale === 'en-US' ? dateEnUS : dateZhCN))
 
-// 站点标题真实生效:启动读匿名站点信息设浏览器标题(sys.site.title 的消费点;登录前也可读)。
+// 站点品牌真实生效:启动拉一次匿名站点信息(全站共用),并设浏览器标题(sys.site.title 消费点)。
 onMounted(async () => {
-  try {
-    const site = await configApi.siteInfo()
-    if (site.title) document.title = site.title
-  } catch {
-    // 站点信息拉取失败不影响应用,保留 index.html 静态标题
-  }
+  await loadSite()
+  if (site.title) document.title = site.title
 })
 
 // i18n 语言跟随 app.locale。
