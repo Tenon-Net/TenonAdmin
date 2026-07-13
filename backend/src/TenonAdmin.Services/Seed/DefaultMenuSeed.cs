@@ -89,6 +89,8 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 42, ParentId = 20, Type = MenuType.Button, Title = "菜单-新增", Permission = "POST:/api/v1/sys/menu/add", Sort = 16, Enabled = true },
         new SysMenu { Id = 43, ParentId = 20, Type = MenuType.Button, Title = "菜单-更新", Permission = "PUT:/api/v1/sys/menu/{id}", Sort = 17, Enabled = true },
         new SysMenu { Id = 44, ParentId = 20, Type = MenuType.Button, Title = "菜单-删除", Permission = "DELETE:/api/v1/sys/menu/{id}", Sort = 18, Enabled = true },
+        // 路由清单:菜单表单里"权限码"下拉的数据源(不给它就只能手敲权限码,错一个字符即静默 403)。
+        new SysMenu { Id = 107, ParentId = 20, Type = MenuType.Button, Title = "菜单-路由清单", Permission = "GET:/api/v1/sys/menu/routes", Sort = 19, Enabled = true },
 
         // 模块管理页(M2:ModuleController CRUD)。
         new SysMenu { Id = 45, ParentId = 20, Type = MenuType.Menu, Title = "模块管理", Permission = "", Path = "/system/module", Component = "system/module/index", Icon = "ph:squares-four-duotone", Sort = 4, Enabled = true, Visible = true },

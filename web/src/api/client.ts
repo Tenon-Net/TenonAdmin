@@ -2,10 +2,14 @@ import createClient, { type Middleware } from 'openapi-fetch'
 import type { paths } from './schema'
 import { useUserStore } from '@/stores/user'
 
-// baseUrl 为空:schema 的 path 键已含 /api/v1,直接作用于当前源(:5173),由 Vite proxy 反代到后端 dev 端口(默认 :5100)。
-export const client = createClient<paths>({ baseUrl: '' })
+// 默认空 baseUrl = 同源:schema 的 path 键已含 /api/v1,dev 下由 Vite proxy 反代到后端(默认 :5100),
+// 生产下由 nginx 反代或后端自己托管 dist(见 docs/deployment.md 路线 A/B)。
+// 只有前端与 API 真的不同源(CDN / 独立域名)时才需要构建期给 VITE_API_BASE=https://api.example.com,
+// 此时后端还必须配 TenonAdmin:Api:Cors:AllowedOrigins(默认 deny-all)。
+const baseUrl = import.meta.env.VITE_API_BASE ?? ''
+export const client = createClient<paths>({ baseUrl })
 // 刷新专用客户端:不挂刷新中间件,避免刷新自身 401 触发递归。
-const bare = createClient<paths>({ baseUrl: '' })
+const bare = createClient<paths>({ baseUrl })
 
 /** 请求前注入 Bearer(请求时读 store,始终拿最新令牌)。 */
 const authMiddleware: Middleware = {

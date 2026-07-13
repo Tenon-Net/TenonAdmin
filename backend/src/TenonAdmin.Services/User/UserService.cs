@@ -17,6 +17,7 @@ public class UserService(
     IPasswordHasher hasher,
     IRbacService rbac,
     ISessionService sessions,
+    ILoginLockService loginLock,
     ISecurityPolicyProvider policy,
     AdminSecurityOptions security) : IUserService
 {
@@ -106,7 +107,7 @@ public class UserService(
     }
 
     /// <inheritdoc />
-    public virtual async Task<long> AddAsync(AddUserInput input)
+    public virtual async Task<AddUserOutput> AddAsync(AddUserInput input)
     {
         // 查重把软删行也纳入:软删行仍占着唯一索引里的 Account,漏检会撞库唯一约束抛原生 500(P1-10)
         AdminException.ThrowIf(
@@ -116,10 +117,13 @@ public class UserService(
         // 仅校验管理员显式提供的口令;未提供时走随机/默认强口令,不套策略(生成的随机口令无特殊字符,避免误伤)
         if (!string.IsNullOrEmpty(input.Password)) await policy.ValidatePasswordAsync(input.Password);
 
+        // 先算出明文再哈希:留空时这是一个随机口令,不回传给管理员就没人知道它 → 建出来即死号
+        var initialPassword = ResolveInitialPassword(input.Password);
+
         var user = new SysUser
         {
             Account = input.Account,
-            Password = hasher.Hash(ResolveInitialPassword(input.Password)),
+            Password = hasher.Hash(initialPassword),
             Name = input.Name,
             OrgId = input.OrgId,
             PositionId = input.PositionId,
@@ -133,7 +137,7 @@ public class UserService(
             await users.InsertAsync(user);  // 插入后 AOP 已把雪花 Id 回填到 user.Id
             if (input.RoleIds.Count > 0) await rbac.SetUserRolesAsync(user.Id, input.RoleIds);
         });
-        return user.Id;
+        return new AddUserOutput { Id = user.Id, InitialPassword = initialPassword };
     }
 
     /// <inheritdoc />
@@ -208,6 +212,15 @@ public class UserService(
         user!.Password = hasher.Hash(password);
         user.MustChangePassword = true;   // 管理员重置:强制用户下次登录后改密(§14)
         await users.UpdateAsync(user);
+
+        // 重置密码的语义是"这个账号我不再信任现有持有者"——旧口令派生出的会话必须一并作废,
+        // 否则盗号者手里的 access/refresh 纹丝不动(refresh 不校验密码版本且滑动续期 → 可无限续命),
+        // 管理员按下的第一个按钮对攻击者实际影响为 0。与停用/删除/改角色三条 kill-switch 对齐。
+        await sessions.RevokeAllForUserAsync(id);
+        // 顺带解除登录失败锁定:锁定判定在账密校验之前(锁定期正确口令也进不来),
+        // 不清计数则"管理员重置了密码但用户仍登不上",管理员只能让用户干等锁定窗口过期。
+        await loginLock.ResetAsync(user.Account);
+
         return password;   // 返回明文仅供管理员当场转达;不落日志(调用方注意脱敏)
     }
 

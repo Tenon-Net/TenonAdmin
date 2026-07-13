@@ -72,6 +72,10 @@ public class LogService(
         var page = await opLogs.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Title), x => x.Title.Contains(input.Title!))
             .WhereIF(input.Success.HasValue, x => x.Success == input.Success!.Value)
+            .WhereIF(input.OperatorId.HasValue, x => x.OperatorId == input.OperatorId!.Value)
+            .WhereIF(!string.IsNullOrEmpty(input.Path), x => x.Path.Contains(input.Path!))
+            .WhereIF(input.StartTime.HasValue, x => x.CreateTime >= input.StartTime!.Value)
+            .WhereIF(input.EndTime.HasValue, x => x.CreateTime <= input.EndTime!.Value)
             .OrderBy(x => x.Id, OrderByType.Desc)   // 雪花 Id 时间有序,降序 = 最新在前
             .ToPagedListAsync(input.Current, input.Size);
         await FillOperatorNamesAsync(page.Items);
@@ -79,13 +83,17 @@ public class LogService(
     }
 
     /// <summary>
-    /// 按本页出现的操作人 Id 去重批量查一次姓名回填(避免逐行 N+1)。用户已软删则查不到,OperatorName 留 null、前端回落 Id。
+    /// 按本页出现的操作人 Id 去重批量查一次姓名回填(避免逐行 N+1)。
+    /// <para><b>必须 ClearFilter&lt;ISoftDelete&gt;</b>:用户是软删的,不清过滤器则"离职那个人走之前删了什么"这类审计查询里,
+    /// 操作人一栏会赫然是一串雪花 Id——恰恰是最需要看清是谁的时候看不见。日志是历史事实,不随人员在职状态消失。
+    /// 只取 Id+Name 两列,不泄漏其他字段(SysUser 继承 BaseEntity 非 IOrgScoped,不涉数据范围)。</para>
     /// </summary>
     protected virtual async Task FillOperatorNamesAsync(IReadOnlyList<SysOpLog> items)
     {
         var ids = items.Where(x => x.OperatorId.HasValue).Select(x => x.OperatorId!.Value).Distinct().ToList();
         if (ids.Count == 0) return;
         var rows = await users.AsQueryable()
+            .ClearFilter<ISoftDelete>()
             .Where(u => ids.Contains(u.Id))
             .Select(u => new { u.Id, u.Name })
             .ToListAsync();
@@ -101,6 +109,8 @@ public class LogService(
         var page = await loginLogs.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Account), x => x.Account.Contains(input.Account!))
             .WhereIF(input.Success.HasValue, x => x.Success == input.Success!.Value)
+            .WhereIF(input.StartTime.HasValue, x => x.CreateTime >= input.StartTime!.Value)
+            .WhereIF(input.EndTime.HasValue, x => x.CreateTime <= input.EndTime!.Value)
             .OrderBy(x => x.Id, OrderByType.Desc)
             .ToPagedListAsync(input.Current, input.Size);
         await FillUserNamesAsync(page.Items);
@@ -109,13 +119,14 @@ public class LogService(
 
     /// <summary>
     /// 按本页出现的用户 Id 去重批量查一次姓名回填(避免逐行 N+1)。登录失败行 UserId 为 null → 跳过;
-    /// 用户已软删则查不到,Name 留 null、前端回落账号。
+    /// 同 <see cref="FillOperatorNamesAsync"/>,清软删过滤器,已离职用户的历史登录记录仍显示姓名。
     /// </summary>
     protected virtual async Task FillUserNamesAsync(IReadOnlyList<SysLoginLog> items)
     {
         var ids = items.Where(x => x.UserId.HasValue).Select(x => x.UserId!.Value).Distinct().ToList();
         if (ids.Count == 0) return;
         var rows = await users.AsQueryable()
+            .ClearFilter<ISoftDelete>()
             .Where(u => ids.Contains(u.Id))
             .Select(u => new { u.Id, u.Name })
             .ToListAsync();

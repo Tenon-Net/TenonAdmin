@@ -10,18 +10,23 @@ import IconPicker from '@/components/IconPicker/index.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { viewComponentPaths, buildRoutesForModule } from '@/composables/useAuthMenu'
+import { useAuthStore } from '@/stores/auth'
 import { menuApi, moduleApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { MenuType, type MenuInput, type MenuTreeNode } from '@/types/menu'
-import type { ModuleRow } from '@/types/api'
+import type { ModuleRow, PermissionRouteItem } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
+const auth = useAuthStore()
 
 const loading = ref(false)
 const tree = ref<MenuTreeNode[]>([])
 const modules = ref<ModuleRow[]>([])
+/** 后端实时路由表(含消费方自建控制器)——权限码下拉的数据源,免手敲 `GET:/api/v1/...`。 */
+const routes = ref<PermissionRouteItem[]>([])
 
 async function load() {
   loading.value = true
@@ -33,12 +38,31 @@ async function load() {
     loading.value = false
   }
 }
+
+/**
+ * 菜单改完顺手重建当前应用的壳层(侧边栏 + 动态路由)——否则新建的菜单要 F5 才出现,
+ * 而这与「组件路径写错→菜单静默消失」是同一个症状,管理员无从分辨自己错在哪。
+ * 失败静默:菜单本身已存成功,壳层没刷新不该把成功报成失败,下次 F5 自愈。
+ */
+async function syncShell() {
+  if (!auth.currentModuleId) return
+  try {
+    await buildRoutesForModule(auth.currentModuleId)
+  } catch {
+    /* 见上 */
+  }
+}
 onMounted(async () => {
   await load()
   try {
     modules.value = await moduleApi.list()
   } catch {
     // 模块列表仅供「所属应用」下拉;拉取失败不阻塞菜单管理主流程。
+  }
+  try {
+    routes.value = await menuApi.routes()
+  } catch {
+    // 路由清单仅供「权限码」下拉;拉取失败(如未授该码)退化为手输,不阻塞菜单管理主流程。
   }
 })
 
@@ -70,6 +94,14 @@ const typeOptions = computed(() => [
   { label: t('menu.typeButton'), value: MenuType.Button },
 ])
 const moduleOptions = computed(() => modules.value.map((m) => ({ label: m.title, value: m.id })))
+
+// 权限码下拉:label 展示「METHOD /路径」便于人眼辨认,value 就是要写进菜单的权限码本身。
+// filterable + tag:可搜可选,也保留手敲逃生口(消费方端点尚未部署、或想先占位时)。
+const permissionOptions = computed(() =>
+  routes.value.map((r) => ({ label: `${r.method} ${r.path}`, value: r.code })),
+)
+// 组件路径下拉:取自 import.meta.glob 的真实文件表 —— 选得到的一定存在,不会再"填错→菜单静默消失"。
+const componentOptions = computed(() => viewComponentPaths.map((p) => ({ label: p, value: p })))
 
 /** 收集以 id 为根的子树全部 id(含自身)——编辑时排除,防止把节点挂到自己的子孙下形成环。 */
 function subtreeIds(nodes: MenuTreeNode[], id: number): Set<number> {
@@ -133,7 +165,7 @@ async function save() {
     if (editingId.value === null) await menuApi.add(payload)
     else await menuApi.update(editingId.value, payload)
     message.success(t('menu.saved'))
-    await load()
+    await Promise.all([load(), syncShell()])
   } catch (e) {
     message.error(translateError(e))
     return false
@@ -165,6 +197,7 @@ const columns: DataTableColumns<MenuTreeNode> = [
         request: (next: boolean) => menuApi.update(r.id, { ...toInput(r), enabled: next }),
         'onUpdate:value': (v: boolean) => {
           r.enabled = v
+          syncShell() // 停用/启用即刻反映到侧边栏
         },
       }),
   },
@@ -190,7 +223,7 @@ const columns: DataTableColumns<MenuTreeNode> = [
             // popconfirm 留在模板层当触发器,「执行→toast」后半段交给 useConfirm().run。
             onPositiveClick: () =>
               run(() => menuApi.remove(r.id), t('menu.deleted')).then((ok) => {
-                if (ok) load()
+                if (ok) Promise.all([load(), syncShell()])
               }),
           },
           {
@@ -237,8 +270,17 @@ const columns: DataTableColumns<MenuTreeNode> = [
         <n-form-item :label="t('menu.title')" path="title">
           <n-input v-model:value="form.title" :placeholder="t('menu.title')" />
         </n-form-item>
+        <!-- 权限码 = 规范化路由。从后端实时路由表里选,而不是手敲——大小写/{id}/斜杠错一个字符
+             就是"明明授权了却还是 403"且无任何报错(超管测试还一切正常)。tag 保留手敲逃生口。 -->
         <n-form-item :label="t('menu.permission')">
-          <n-input v-model:value="form.permission" :placeholder="t('menu.permissionPlaceholder')" />
+          <n-select
+            v-model:value="form.permission"
+            :options="permissionOptions"
+            filterable
+            tag
+            clearable
+            :placeholder="t('menu.permissionPlaceholder')"
+          />
         </n-form-item>
         <n-form-item v-if="isTopLevel" :label="t('menu.module')">
           <n-select
@@ -251,8 +293,17 @@ const columns: DataTableColumns<MenuTreeNode> = [
         <n-form-item :label="t('menu.path')">
           <n-input v-model:value="(form.path as string)" placeholder="/system/xxx" />
         </n-form-item>
+        <!-- 组件路径:选项来自 import.meta.glob 的真实文件表,选得到的一定能加载;
+             手敲错则该菜单只会 console.warn 后静默消失。tag 保留手敲(页面文件尚未创建时先占位)。 -->
         <n-form-item :label="t('menu.component')">
-          <n-input v-model:value="(form.component as string)" placeholder="system/xxx/index" />
+          <n-select
+            v-model:value="(form.component as string)"
+            :options="componentOptions"
+            filterable
+            tag
+            clearable
+            placeholder="system/xxx/index"
+          />
         </n-form-item>
         <n-form-item :label="t('menu.icon')">
           <IconPicker :model-value="form.icon ?? ''" @update:model-value="(v: string) => (form.icon = v)" />

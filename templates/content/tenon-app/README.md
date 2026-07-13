@@ -10,8 +10,13 @@ dotnet run
 
 - 零配置默认用 SQLite(相对路径落在 ContentRoot),自动建表 + 种子。
 - **首次启动控制台会打印随机超管密码**,用它登录。
-- 换数据库:在 `appsettings.json` 加 `TenonAdmin:Database` 节(DbType + 连接串),支持 SQLite / MySQL / SqlServer / PostgreSQL。
+- 换数据库:改 `appsettings.json` 的 `TenonAdmin:Database` 节(DbType + 连接串),支持 SQLite / MySQL / SqlServer / PostgreSQL。
 - 健康检查 `/health`、`/health/ready`;开发期 OpenAPI 契约 `/openapi/v1.json`。
+- 其余常用配置键(JWT 密钥、CORS、上传目录、WorkerId)在 `appsettings.json` 里以注释形态列好了。
+
+## 上线
+
+`npm run dev` 的 `/api` 代理只在开发期存在;部署要么让本 host 用 `UseStaticFiles()` 顺带托管前端产物(此时**必须**把 `TenonAdmin:Upload:RootPath` 挪出 `wwwroot`),要么交给 nginx 反代。生产还必须显式配 `TenonAdmin:Jwt:SecretKey`。完整步骤见内核仓库的 `docs/deployment.md`。
 
 ## 加一个业务模块
 

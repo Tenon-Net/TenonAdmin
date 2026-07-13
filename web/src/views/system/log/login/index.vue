@@ -31,13 +31,30 @@ const columns: ProTableColumn<SysLoginLog>[] = [
       { label: () => t('log.failed'), value: false, tagType: 'error' },
     ],
   },
-  { key: 'resultCode', title: () => t('log.resultCode'), width: 100 },
+  // 失败原因:裸渲染的 40004 对排查毫无用处——密码错/被锁/被停用三种情况的处置动作完全不同(改密/解锁/启用)。
+  // 复用同列的 tag+options 机制翻成人话,文案直接指向已有的 error.auth.* 键(与登录页弹的提示同源)。
+  // AuthService 实际只会落 0 与 40001–40005 这几个码;未命中的码由 ProTable 回落成原始数字。
+  {
+    key: 'resultCode',
+    title: () => t('log.resultCode'),
+    width: 150,
+    tag: true,
+    options: [
+      { label: () => t('log.success'), value: 0, tagType: 'success' },
+      { label: () => t('error.auth.passwordWrong'), value: 40001, tagType: 'error' },
+      { label: () => t('error.auth.captchaExpired'), value: 40002, tagType: 'error' },
+      { label: () => t('error.auth.captchaWrong'), value: 40003, tagType: 'error' },
+      { label: () => t('error.auth.accountLocked'), value: 40004, tagType: 'error' },
+      { label: () => t('error.auth.accountDisabled'), value: 40005, tagType: 'error' },
+    ],
+  },
   // 姓名:后端按 userId 回填;登录失败/账号不存在的行无姓名 → 回落账号
   { key: 'name', title: () => t('log.name'), render: (r) => r.name || r.account || '—' },
   { key: 'ip', title: () => t('log.ip'), render: (r) => r.ip || '—' },
   // 设备:UA 解析成「浏览器 · 系统」(全未识别回落原始串);过长截断 + tooltip
   { key: 'device', title: () => t('log.device'), ellipsis: { tooltip: true }, render: (r) => uaSummary(r.userAgent) },
-  { key: 'createTime', title: () => t('common.createTime'), format: 'datetime' },
+  // 时间范围:"上周谁登录失败了"是登录日志最主要的用法
+  { key: 'createTime', title: () => t('common.createTime'), format: 'datetime', search: { type: 'daterange' } },
 ]
 
 function clearLogs() {

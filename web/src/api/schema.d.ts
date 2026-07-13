@@ -1019,6 +1019,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/menu/routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 可授权路由清单——菜单表单里"权限码"字段的<b>下拉数据源</b>。
+         *     RolePermissionAttribute 的设计前提是"勾选路由即完成配权,代码里永远不出现魔法字符串",
+         *     但若不把路由清单暴露出来,魔法字符串只是从代码搬进了管理员手敲的文本框:大小写、{id} 占位符、
+         *     前导斜杠错一个字符,就是"明明授权了却还是 403",而且没有任何报错——超管测试时一切正常(sadm 放行),
+         *     交付给客户的普通账号才炸。这是内核对消费方最贵的一道坎。
+         *     数据取自 EndpointDataSource(运行时真实路由表),消费方自建的控制器自动出现在这里
+         *     (它们经 ApplicationParts 进同一张表);权限码由 PermissionCode 统一算,与授权比对天然一致。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfPermissionRouteItem"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfPermissionRouteItem"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfPermissionRouteItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/menu/add": {
         parameters: {
             query?: never;
@@ -2665,6 +2711,14 @@ export interface paths {
                     Title?: string;
                     /** @description 是否成功(可选,不传则不限) */
                     Success?: boolean;
+                    /** @description 操作人用户 Id(精确;日志只存 Id,姓名是读取时回填的,故不做姓名模糊) */
+                    OperatorId?: number | string;
+                    /** @description 接口路径(模糊,可选;如 `/api/v1/sys/role` 可捞出角色相关的全部动作) */
+                    Path?: string;
+                    /** @description 操作时间下界(含) */
+                    StartTime?: string;
+                    /** @description 操作时间上界(含) */
+                    EndTime?: string;
                     Current?: number | string;
                     Size?: number | string;
                 };
@@ -2748,6 +2802,10 @@ export interface paths {
                     Account?: string;
                     /** @description 是否成功(可选,不传则不限) */
                     Success?: boolean;
+                    /** @description 登录时间下界(含) */
+                    StartTime?: string;
+                    /** @description 登录时间上界(含) */
+                    EndTime?: string;
                     Current?: number | string;
                     Size?: number | string;
                 };
@@ -3444,7 +3502,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 新增用户,返回新用户 Id */
+        /** 新增用户,返回新用户 Id + 实际生效的初始口令(留空口令时由系统随机生成,不回传则无人知晓) */
         post: {
             parameters: {
                 query?: never;
@@ -3466,9 +3524,9 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "text/plain": components["schemas"]["ResultOflong"];
-                        "application/json": components["schemas"]["ResultOflong"];
-                        "text/json": components["schemas"]["ResultOflong"];
+                        "text/plain": components["schemas"]["ResultOfAddUserOutput"];
+                        "application/json": components["schemas"]["ResultOfAddUserOutput"];
+                        "text/json": components["schemas"]["ResultOfAddUserOutput"];
                     };
                 };
             };
@@ -3633,6 +3691,22 @@ export interface components {
             enabled?: boolean;
             /** @description 初始分配的角色 Id 集合 */
             roleIds?: (number | string)[];
+        };
+        /**
+         * @description 新增用户出参:新用户 Id + <b>实际生效的初始口令明文</b>。
+         *     为什么要返回明文:管理员留空 Password 时,系统会按
+         *     Security:DefaultInitialPassword(默认未配)回落到密码学随机强口令——不回传就谁也不知道这个号的密码,
+         *     建出来即死号,管理员只能再点一次"重置密码"才能拿到明文。与 ResetPasswordAsync 的出参语义一致:
+         *     仅本次返回给管理员当场转达,不落库、不落日志(操作日志只记入参)。
+         */
+        AddUserOutput: {
+            /**
+             * Format: int64
+             * @description 新用户 Id
+             */
+            id: number | string;
+            /** @description 实际生效的初始口令明文(管理员显式指定的、或系统生成的) */
+            initialPassword: string;
         };
         /**
          * @description 批量删除入参:目标 Id 集合。各模块的 `POST .../batch-delete` 端点统一收此形状,
@@ -4323,6 +4397,18 @@ export interface components {
             /** @description 须含特殊字符(非字母数字) */
             requireSpecial: boolean;
         };
+        /**
+         * @description 一条可授权路由(`MenuController.Routes` 的出参)——喂菜单表单里"权限码"字段的下拉。
+         *     `Method`/`Path` 只为让人看得懂选的是哪个接口;真正写进菜单的是 string PermissionRouteItem.Code。
+         */
+        PermissionRouteItem: {
+            /** @description 权限码(= 规范化路由,直接写进 `SysMenu.Permission`) */
+            code: string;
+            /** @description HTTP 方法(大写) */
+            method: string;
+            /** @description 路由模板(原样,含 `{id}` 占位符) */
+            path: string;
+        };
         /** @description 职位新增/编辑入参(增改共用同一份字段)。 */
         PositionInput: {
             /** @description 职位名称 */
@@ -4345,6 +4431,27 @@ export interface components {
         /** @description 重置密码入参。NewPassword 留空 = 重置为默认初始密码。 */
         ResetPasswordInput: {
             newPassword?: null | string;
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfAddUserOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["AddUserOutput"];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -4543,6 +4650,28 @@ export interface components {
             message?: null | string;
             /** @description 业务数据载荷 */
             data?: null | components["schemas"]["MenuTreeNode"][];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyListOfPermissionRouteItem: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | components["schemas"]["PermissionRouteItem"][];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -5492,7 +5621,7 @@ export interface components {
              * @description 操作人用户 Id(从当前登录态取;名称按 Id 关联 sys_user,不冗余存)
              */
             operatorId?: null | number | string;
-            /** @description 操作人姓名(不落库,分页时按 OperatorId 关联 sys_user 补;用户已删则为 null,前端回落 Id) */
+            /** @description 操作人姓名(不落库,分页时按 OperatorId 关联 sys_user 补;查询清软删过滤器,离职用户的历史记录仍显示姓名) */
             operatorName?: null | string;
             ip?: null | string;
             userAgent?: null | string;

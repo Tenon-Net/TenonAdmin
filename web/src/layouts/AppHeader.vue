@@ -172,7 +172,7 @@ fetchUnread()
       </n-button>
       <div v-if="showBrand" class="brand">
         <TenonLogo :size="26" />
-        <span class="brand-name">TenonAdmin</span>
+        <span class="brand-name mobile-hide">TenonAdmin</span>
       </div>
       <n-breadcrumb v-if="app.showBreadcrumb && crumbs.length">
         <n-breadcrumb-item v-for="(c, i) in crumbs" :key="i">{{ c }}</n-breadcrumb-item>
@@ -207,17 +207,22 @@ fetchUnread()
       />
     </div>
 
+    <!-- mobile-hide:窄屏(<768px)藏起来的次要项。顶栏总宽 > 屏宽时右端会被 layout 的 overflow:hidden 裁掉,
+         而全站唯一的登出入口就在最右边的用户下拉里 —— 手机上不能因为一排图标而退不出登录。
+         搜索有 Ctrl+K 兜底、全屏在手机上无意义、语言与设置属低频(设置抽屉本就是宽屏调布局用的)。 -->
     <div class="right">
       <n-tooltip>
         <template #trigger>
-          <n-button quaternary circle @click="searchOpen = true"><Icon icon="ph:magnifying-glass" :width="18" /></n-button>
+          <n-button quaternary circle class="mobile-hide" @click="searchOpen = true">
+            <Icon icon="ph:magnifying-glass" :width="18" />
+          </n-button>
         </template>
         {{ t('app.search') }} (Ctrl+K)
       </n-tooltip>
 
       <n-tooltip>
         <template #trigger>
-          <n-button quaternary circle @click="toggleFullscreen()">
+          <n-button quaternary circle class="mobile-hide" @click="toggleFullscreen()">
             <Icon :icon="isFullscreen ? 'ph:arrows-in' : 'ph:arrows-out'" :width="18" />
           </n-button>
         </template>
@@ -234,14 +239,16 @@ fetchUnread()
       </n-tooltip>
 
       <n-dropdown :options="localeOptions" @select="onLocale">
-        <n-button quaternary circle :aria-label="t('app.language')">
+        <n-button quaternary circle class="mobile-hide" :aria-label="t('app.language')">
           <Icon icon="ph:translate" :width="18" />
         </n-button>
       </n-dropdown>
 
       <n-tooltip>
         <template #trigger>
-          <n-button quaternary circle @click="settingsOpen = true"><Icon icon="ph:gear-six" :width="18" /></n-button>
+          <n-button quaternary circle class="mobile-hide" @click="settingsOpen = true">
+            <Icon icon="ph:gear-six" :width="18" />
+          </n-button>
         </template>
         {{ t('app.settings') }}
       </n-tooltip>
@@ -261,9 +268,9 @@ fetchUnread()
       </n-dropdown>
 
       <n-dropdown :options="userOptions" @select="onUser">
-        <n-button quaternary>
-          <Icon icon="ph:user-circle" :width="20" style="margin-right: 6px" />
-          {{ user.userInfo?.name ?? user.userInfo?.account ?? '' }}
+        <n-button quaternary :aria-label="t('app.profile')">
+          <Icon icon="ph:user-circle" :width="20" />
+          <span class="uname mobile-hide">{{ user.userInfo?.name ?? user.userInfo?.account ?? '' }}</span>
         </n-button>
       </n-dropdown>
     </div>
@@ -281,11 +288,13 @@ fetchUnread()
   gap: 12px;
   padding: 0 16px;
 }
+/* 可收缩(min-width:0 + overflow):右侧那组是刚需(含唯一的登出入口),要挤先挤左边的标题/面包屑。 */
 .left {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 .brand {
   display: flex;
@@ -293,6 +302,7 @@ fetchUnread()
   gap: 8px;
   color: var(--color-text-primary);
   font-weight: 600;
+  flex-shrink: 0;
 }
 .brand-name {
   font-size: var(--font-size-md);
@@ -301,6 +311,12 @@ fetchUnread()
   font-size: var(--font-size-md);
   font-weight: 500;
   color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uname {
+  margin-left: 6px;
 }
 .center {
   flex: 1;
@@ -313,5 +329,17 @@ fetchUnread()
   gap: 6px;
   margin-left: auto;
   flex-shrink: 0;
+}
+
+/* 窄屏(断点与 layouts/default.vue 的 breakpointsTailwind.smaller('md') 一致):
+   只留暗色/应用切换/铃铛/用户下拉,其余隐藏,保证最右的登出入口不被裁掉。 */
+@media (max-width: 767px) {
+  .bar {
+    gap: 8px;
+    padding: 0 8px;
+  }
+  .mobile-hide {
+    display: none;
+  }
 }
 </style>

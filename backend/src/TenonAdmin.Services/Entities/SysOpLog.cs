@@ -10,6 +10,9 @@ namespace TenonAdmin.Services;
 /// 继承 <see cref="BaseEntity"/> 只为复用雪花 Id + 自动填 <c>CreateTime</c>(= 操作时间);<c>IsDelete</c> 恒 false。</para>
 /// </summary>
 [SugarTable("sys_op_log", TableDescription = "操作日志")]
+// 同 SysLoginLog:时间倒序是日志的唯一天然查询轴(默认排序 + 时间范围筛 + 按天清理),且 DDL 只有一次机会。
+// 刻意不给 Title/Path 建索引——它们走 Contains(前导通配 LIKE '%x%'),索引用不上;Success 基数为 2,优化器会忽略。
+[SugarIndex("idx_sys_op_log_create", nameof(BaseEntity.CreateTime), OrderByType.Desc)]
 public class SysOpLog : BaseEntity
 {
     /// <summary>操作名(来自 <c>[OperationLog("新增用户")]</c> 的标题)</summary>
@@ -49,7 +52,7 @@ public class SysOpLog : BaseEntity
     [SugarColumn(IsNullable = true, ColumnDescription = "操作人用户 Id")]
     public long? OperatorId { get; set; }
 
-    /// <summary>操作人姓名(不落库,分页时按 OperatorId 关联 sys_user 补;用户已删则为 null,前端回落 Id)</summary>
+    /// <summary>操作人姓名(不落库,分页时按 OperatorId 关联 sys_user 补;查询清软删过滤器,离职用户的历史记录仍显示姓名)</summary>
     [SugarColumn(IsIgnore = true)]
     public string? OperatorName { get; set; }
 

@@ -64,6 +64,22 @@ public record AddUserInput
     public IReadOnlyCollection<long> RoleIds { get; init; } = [];
 }
 
+/// <summary>
+/// 新增用户出参:新用户 Id + <b>实际生效的初始口令明文</b>。
+/// <para>为什么要返回明文:管理员留空 <c>Password</c> 时,系统会按
+/// <c>Security:DefaultInitialPassword</c>(默认未配)回落到密码学随机强口令——不回传就<b>谁也不知道这个号的密码</b>,
+/// 建出来即死号,管理员只能再点一次"重置密码"才能拿到明文。与 <c>ResetPasswordAsync</c> 的出参语义一致:
+/// 仅本次返回给管理员当场转达,不落库、不落日志(操作日志只记入参)。</para>
+/// </summary>
+public record AddUserOutput
+{
+    /// <summary>新用户 Id</summary>
+    public required long Id { get; init; }
+
+    /// <summary>实际生效的初始口令明文(管理员显式指定的、或系统生成的)</summary>
+    public required string InitialPassword { get; init; }
+}
+
 /// <summary>重置密码入参。NewPassword 留空 = 重置为默认初始密码。</summary>
 public record ResetPasswordInput
 {

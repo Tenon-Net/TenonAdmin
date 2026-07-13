@@ -170,11 +170,18 @@ async function save() {
     if (editingId.value === null) {
       const body: AddUserInput = {
         account: form.account,
-        password: form.password || undefined, // 留空 → 省略字段 → 后端用默认初始密码
+        password: form.password || undefined, // 留空 → 省略字段 → 后端生成随机强口令(明文经出参回传)
         name: form.name, orgId: form.orgId, positionId: form.positionId, enabled: form.enabled,
         roleIds: form.roleIds,
       }
-      await userApi.add(body)
+      const out = await userApi.add(body)
+      // 管理员没自己指定口令时,系统生成的随机口令只有这一次机会展示——不弹出来这个号谁也登不进去。
+      // 复用重置密码那套只读+复制弹层(同一语义:明文仅供管理员当场转达)。
+      if (!form.password) {
+        resetResult.value = out.initialPassword
+        resultFromCreate.value = true
+        showResetResult.value = true
+      }
     } else {
       const body: UpdateUserInput = {
         name: form.name, orgId: form.orgId, positionId: form.positionId, enabled: form.enabled,
@@ -190,12 +197,15 @@ async function save() {
   }
 }
 
-// ── 重置密码(输入新密码 / 留空取默认)→ 成功后只读展示实际生效密码 ──
+// ── 重置密码(输入新密码 / 留空则系统随机生成)→ 成功后只读展示实际生效密码 ──
+// 同一个结果弹层也服务「留空口令建号」(见 save):两者语义相同——明文只此一次,管理员当场转达。
 const showReset = ref(false)
 const resetTarget = ref<UserItem | null>(null)
 const resetForm = reactive({ newPassword: '' })
 const showResetResult = ref(false)
 const resetResult = ref('')
+/** 结果弹层是"建号后"还是"重置后"打开的,只影响标题文案。 */
+const resultFromCreate = ref(false)
 
 function openReset(r: UserItem) {
   resetTarget.value = r
@@ -206,6 +216,7 @@ async function doReset() {
   if (!resetTarget.value) return
   try {
     resetResult.value = await userApi.resetPassword(resetTarget.value.id, resetForm.newPassword || null)
+    resultFromCreate.value = false
     showResetResult.value = true // 关闭输入弹层、弹出结果
   } catch (e) {
     message.error(translateError(e))
@@ -324,10 +335,10 @@ async function copyResult() {
     </n-form>
   </FormContainer>
 
-  <!-- 重置结果(只读,可复制)-->
+  <!-- 初始密码结果(只读,可复制):建号留空口令 / 重置密码 共用 -->
   <FormContainer
     v-model:show="showResetResult"
-    :title="t('user.resetDone')"
+    :title="resultFromCreate ? t('user.createDone') : t('user.resetDone')"
     :width="420"
     :on-confirm="() => {}"
     :confirm-text="t('common.confirm')"

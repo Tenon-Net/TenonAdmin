@@ -24,12 +24,12 @@ public class UserController(IUserService users) : ControllerBase
     public async Task<Result<UserDetail>> Get(long id) =>
         Result<UserDetail>.Ok(await users.GetAsync(id));
 
-    /// <summary>新增用户,返回新用户 Id</summary>
+    /// <summary>新增用户,返回新用户 Id + 实际生效的初始口令(留空口令时由系统随机生成,不回传则无人知晓)</summary>
     [HttpPost]
     [RolePermission]
-    [OperationLog("新增用户")]   // 入参含 Password,操作日志里会被脱敏为 ***
-    public async Task<Result<long>> Add(AddUserInput input) =>
-        Result<long>.Ok(await users.AddAsync(input));
+    [OperationLog("新增用户")]   // 入参含 Password,操作日志里会被脱敏为 ***;出参明文不进日志(过滤器只记入参)
+    public async Task<Result<AddUserOutput>> Add(AddUserInput input) =>
+        Result<AddUserOutput>.Ok(await users.AddAsync(input));
 
     /// <summary>更新用户资料与角色</summary>
     [HttpPut("{id}")]

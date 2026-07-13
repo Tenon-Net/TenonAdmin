@@ -25,7 +25,7 @@ dotnet run --project backend/samples/MinimalHost
 
 ```bash
 curl http://localhost:5xxx/health
-# {"status":"ok","app":"TenonAdmin"}
+# Healthy
 ```
 
 在你自己的项目里,`Program.cs` 只需三行:
@@ -37,6 +37,15 @@ var app = builder.Build();
 app.MapTenonAdmin();                                     // 2. 挂载端点
 app.Run();
 ```
+
+要在同一个项目里写自己的业务模块,还需**把本程序集登记为业务程序集**——它的 `[SugarTable]` 实体才会自动建表、`[ApiController]` 控制器才会挂上路由:
+
+```csharp
+builder.Services.AddTenonAdmin(builder.Configuration,
+    o => o.ApplicationAssemblies.Add(typeof(Program).Assembly));
+```
+
+漏掉这行不会报错,只会在第一次调用时得到「表不存在」或 404。完整写法见 [`docs/new-business-guide.md`](docs/new-business-guide.md)。
 
 ## 功能一览
 
@@ -69,6 +78,17 @@ app.Run();
 
 SQLite(默认,零配置)· MySQL · SqlServer · PostgreSQL。切换只需改连接字符串与数据库类型配置。
 
+## 部署
+
+`npm run dev` 时前端由 Vite dev server 把 `/api` 反代到后端 —— **这层代理只在开发期存在**。上线时二选一:
+
+- **单体**:把 `web/dist/*` 拷进后端的 `wwwroot/`,在你的 `Program.cs` 里加两行原生代码(`app.UseStaticFiles()` + `app.MapFallbackToFile("index.html")`)。同源,无需 CORS。⚠️ 但必须同时把 `TenonAdmin:Upload:RootPath` 挪出 `wwwroot`,否则上传的文件会被静态中间件匿名直出、绕过鉴权下载。
+- **nginx 反代**:nginx 托管 `web/dist`,`/api` 转给后端。同源,同样无需 CORS。
+
+前端在独立域名/CDN(真跨源)时才需要配 `TenonAdmin:Api:Cors:AllowedOrigins`(默认 deny-all)并给前端构建期传 `VITE_API_BASE`。
+
+上线前还要过一遍 `TenonAdmin:Jwt:SecretKey`(不配 = 开发密钥模式)与多实例的 `Id:WorkerId`。**完整步骤、可抄的 nginx 配置、自检命令见 [`docs/deployment.md`](docs/deployment.md)。**
+
 ## 项目状态
 
 当前处于 **M1 开发阶段**,认证最小闭环已跑通(三行启动 + 零配置 SQLite + CodeFirst 建表 + JWT 登录 + `[RolePermission]` 授权管道)。RBAC / 组织 / 数据权限等按计划推进中,开发在 `dev` 分支。
@@ -91,6 +111,8 @@ SQLite(默认,零配置)· MySQL · SqlServer · PostgreSQL。切换只需改连
 
 ## 文档
 
+- 新建业务模块(消费者最常看的一篇):[`docs/new-business-guide.md`](docs/new-business-guide.md)
+- 部署:[`docs/deployment.md`](docs/deployment.md)
 - 设计方案:[`docs/rebuild-design.md`](docs/rebuild-design.md)
 - 开发进度与任务队列:[`docs/dev-plan.md`](docs/dev-plan.md)
 

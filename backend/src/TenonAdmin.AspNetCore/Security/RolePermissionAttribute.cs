@@ -68,13 +68,9 @@ public class RolePermissionAttribute : Attribute, IAsyncAuthorizationFilter
             };
     }
 
-    /// <summary>
-    /// 规范化权限码:<c>{大写 Method}:/{小写路由模板}</c>。
-    /// 用路由模板而非实际路径——带参数的路由(<c>user/{id}</c>)权限码稳定,不随参数值变化。
-    /// </summary>
-    private static string BuildPermissionCode(AuthorizationFilterContext context)
-    {
-        var template = context.ActionDescriptor.AttributeRouteInfo?.Template ?? context.HttpContext.Request.Path.Value ?? "";
-        return $"{context.HttpContext.Request.Method.ToUpperInvariant()}:/{template.TrimStart('/').ToLowerInvariant()}";
-    }
+    /// <summary>本请求对应的权限码(规范化规则见 <see cref="PermissionCode"/>——授权、路由清单、日志三处共用同一真源)。</summary>
+    private static string BuildPermissionCode(AuthorizationFilterContext context) =>
+        PermissionCode.Build(
+            context.HttpContext.Request.Method,
+            context.ActionDescriptor.AttributeRouteInfo?.Template ?? context.HttpContext.Request.Path.Value);
 }

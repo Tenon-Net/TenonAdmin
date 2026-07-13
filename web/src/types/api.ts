@@ -297,7 +297,7 @@ export interface SysRoleDataScope {
   customOrgIds: string
 }
 
-/** 新增用户入参(后端 AddUserInput;account 建后不可改,password 留空=后端默认初始密码)。 */
+/** 新增用户入参(后端 AddUserInput;account 建后不可改,password 留空=系统生成随机强口令)。 */
 export interface AddUserInput {
   account: string
   password?: string | null
@@ -306,6 +306,19 @@ export interface AddUserInput {
   positionId?: number | null
   enabled: boolean
   roleIds: number[]
+}
+
+/** 新增用户出参(后端 AddUserOutput):新 Id + 实际生效的初始口令明文——留空口令时是随机生成的,不展示给管理员就没人知道。 */
+export interface AddUserOutput {
+  id: number
+  initialPassword: string
+}
+
+/** 一条可授权路由(后端 PermissionRouteItem);喂菜单表单权限码下拉,code 即写进 SysMenu.Permission 的值。 */
+export interface PermissionRouteItem {
+  code: string
+  method: string
+  path: string
 }
 
 /** 更新用户入参(后端 UpdateUserInput;无 account/password。roleIds 由 detail 原样带回避免清空)。 */

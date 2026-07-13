@@ -73,7 +73,7 @@ public class RoleCrudTests
         var roleId = (await (await c.PostJson("/api/v1/sys/role/add", new { name = "级联", code = "cascade", sort = 1, enabled = true })).ReadEnvelope()).GetProperty("data").GetInt64();
         await c.PutJson("/api/v1/sys/role/menu", new { roleId, menuIds = new[] { 10L } });
         await c.PutJson("/api/v1/sys/role/datascope", new { roleId, scopeType = 3 });  // OrgAndChildren
-        var userId = (await (await c.PostJson("/api/v1/sys/user", new { account = "role_cascade_u", password = "Test@123456", name = "级联用户", enabled = true, roleIds = new[] { roleId } })).ReadEnvelope()).GetProperty("data").GetInt64();
+        var userId = (await (await c.PostJson("/api/v1/sys/user", new { account = "role_cascade_u", password = "Test@123456", name = "级联用户", enabled = true, roleIds = new[] { roleId } })).ReadEnvelope()).GetProperty("data").GetProperty("id").GetInt64();
 
         // 前置:三组关联都在
         Assert.Contains(10L, (await (await c.GetAsync($"/api/v1/sys/role/{roleId}/menus")).ReadEnvelope()).GetProperty("data").EnumerateArray().Select(x => x.GetInt64()));

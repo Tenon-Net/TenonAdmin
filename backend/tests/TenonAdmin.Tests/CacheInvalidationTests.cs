@@ -99,8 +99,8 @@ public class CacheInvalidationTests
         var sp = scope.ServiceProvider;
 
         // 造普通用户并预热其数据范围缓存 scope:{uid}
-        var uid = await sp.GetRequiredService<IUserService>().AddAsync(
-            new AddUserInput { Account = "scope-" + Guid.CreateVersion7().ToString("N")[..8], Password = "Scope@123456", Name = "范围用户", Enabled = true });
+        var uid = (await sp.GetRequiredService<IUserService>().AddAsync(
+            new AddUserInput { Account = "scope-" + Guid.CreateVersion7().ToString("N")[..8], Password = "Scope@123456", Name = "范围用户", Enabled = true })).Id;
 
         var cache = sp.GetRequiredService<ICacheProvider>();   // Singleton:跨 scope 同一实例
         var key = CacheKeys.UserDataScope(uid);

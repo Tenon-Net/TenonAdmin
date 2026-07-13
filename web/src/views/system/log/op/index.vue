@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 操作日志 = 只读 ProTable(操作名/结果可搜)+ 详情抽屉。后端无 op/{id},分页项已含全字段 → 抽屉直接用行数据。
+// 操作日志 = 只读 ProTable + 详情抽屉。后端无 op/{id},分页项已含全字段 → 抽屉直接用行数据。
+// 搜索区要能答审计的三个问题:谁(操作人)、什么时候(时间范围)、干了什么(操作名/路径/成败)。
 // paramJson 走 <pre> 兜底美化(JSON.parse→stringify;失败原样);仅此一处 JSON 展示,不落地 CodeBlock(COMPONENTS.md 约定)。
 import { h, ref } from 'vue'
 import {
@@ -8,6 +9,7 @@ import {
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
+import UserSelect from '@/components/UserSelect/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useProTableLabels } from '@/composables/useProTableLabels'
 import { logApi } from '@/api'
@@ -23,7 +25,7 @@ const tableRef = ref<ProTableInst<SysOpLog>>()
 const columns: ProTableColumn<SysOpLog>[] = [
   { key: 'title', title: () => t('log.opName'), search: true },
   { key: 'httpMethod', title: () => t('log.method'), width: 90 },
-  { key: 'path', title: () => t('log.path'), ellipsis: { tooltip: true } },
+  { key: 'path', title: () => t('log.path'), ellipsis: { tooltip: true }, search: true },
   {
     key: 'success',
     title: () => t('log.result'),
@@ -35,10 +37,32 @@ const columns: ProTableColumn<SysOpLog>[] = [
     ],
   },
   { key: 'resultCode', title: () => t('log.resultCode'), width: 100 },
-  { key: 'operator', title: () => t('log.operator'), width: 120, render: (r) => operatorText(r) },
+  {
+    key: 'operator',
+    title: () => t('log.operator'),
+    width: 120,
+    render: (r) => operatorText(r),
+    // 日志只存 OperatorId(姓名是读取时回填的),故按人筛必须是精确 Id → 复用现成的人员选择器,搜索键改 operatorId。
+    search: {
+      key: 'operatorId',
+      label: () => t('log.operator'),
+      render: ({ value, setValue, search }) =>
+        h(UserSelect, {
+          value: value as number | null,
+          clearable: true,
+          placeholder: t('log.operatorPlaceholder'),
+          'onUpdate:value': (v: number | null) => {
+            setValue(v)
+            search()
+          },
+        }),
+    },
+  },
   { key: 'elapsedMs', title: () => t('log.elapsed'), width: 100, render: (r) => `${r.elapsedMs} ms` },
   { key: 'ip', title: () => t('log.ip'), render: (r) => r.ip || '—' },
-  { key: 'createTime', title: () => t('common.createTime'), format: 'datetime' },
+  // 时间范围是审计最常用的一刀("上周三下午谁删了那批数据");daterange 回传 ['YYYY-MM-DD','YYYY-MM-DD'],
+  // api 层拆成 StartTime/EndTime 并把结束日补到 23:59:59。
+  { key: 'createTime', title: () => t('common.createTime'), format: 'datetime', search: { type: 'daterange' } },
   {
     key: 'op',
     title: () => t('common.operation'),

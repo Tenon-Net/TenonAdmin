@@ -14,13 +14,14 @@ public class BatchDeleteTests
     private static async Task<long> AddUser(IServiceProvider sp, string suffix)
     {
         var users = sp.GetRequiredService<IUserService>();
-        return await users.AddAsync(new AddUserInput
+        var added = await users.AddAsync(new AddUserInput
         {
             Account = "batch-" + suffix,
             Password = "Batch@123456",
             Name = "批量用户" + suffix,
             Enabled = true,
         });
+        return added.Id;
     }
 
     [Fact]

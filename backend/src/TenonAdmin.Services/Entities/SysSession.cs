@@ -10,6 +10,9 @@ namespace TenonAdmin.Services;
 /// </summary>
 [SugarTable("sys_session", TableDescription = "会话")]
 [SugarIndex("idx_sys_session_sid", nameof(SessionId), OrderByType.Asc, IsUnique = true)]
+// 按 UserId 精确匹配是真实热路径(每次登录都走并发/单端策略;停用/删除/改密时的全量吊销也走它),
+// 而本表刻意"不物理删,便于审计"——即在一张只增不减的表上全表扫。索引只有建表这一次机会。
+[SugarIndex("idx_sys_session_user", nameof(UserId), OrderByType.Asc)]
 public class SysSession : BaseEntity
 {
     [SugarColumn(Length = 64, ColumnDescription = "会话标识(JWT sid)")]

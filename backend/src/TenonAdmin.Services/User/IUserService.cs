@@ -15,8 +15,11 @@ public interface IUserService
     /// <summary>取用户详情(含角色 Id 集合);不存在抛 <see cref="ErrorCode.UserNotFound"/></summary>
     Task<UserDetail> GetAsync(long id);
 
-    /// <summary>新增用户(账号唯一;分配初始角色)。返回新用户 Id。</summary>
-    Task<long> AddAsync(AddUserInput input);
+    /// <summary>
+    /// 新增用户(账号唯一;分配初始角色)。返回新用户 Id + <b>实际生效的初始口令明文</b>——
+    /// 口令留空时由系统随机生成,不回传就没人知道这个号的密码(见 <see cref="AddUserOutput"/>)。
+    /// </summary>
+    Task<AddUserOutput> AddAsync(AddUserInput input);
 
     /// <summary>更新用户资料与角色(不改账号/密码/超管标志)</summary>
     Task UpdateAsync(long id, UpdateUserInput input);

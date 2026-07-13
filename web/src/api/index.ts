@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, ChunkInitOutput, ConfigInput, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -81,7 +81,8 @@ export const userApi = {
       .then((p) => ({ items: p.items, total: p.total })),
   /** 用户详情(含 roleIds,编辑回显 + 提交时原样带回避免清空角色)。 */
   detail: (id: number) => client.GET('/api/v1/sys/user/{id}', { params: { path: { id } } }).then((r) => unwrap<UserDetail>(r)),
-  add: (body: AddUserInput) => client.POST('/api/v1/sys/user', { body }).then((r) => unwrap<number>(r)),
+  /** 新增用户;返回新 Id + 实际生效的初始口令(留空 password 时后端随机生成,不接住就没人知道这个号的密码)。 */
+  add: (body: AddUserInput) => client.POST('/api/v1/sys/user', { body }).then((r) => unwrap<AddUserOutput>(r)),
   update: (id: number, body: UpdateUserInput) =>
     client.PUT('/api/v1/sys/user/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   remove: (id: number) => client.DELETE('/api/v1/sys/user/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
@@ -199,22 +200,48 @@ export const configApi = {
       ),
 }
 
+/**
+ * ProTable 的 daterange 搜索控件回传 `[开始, 结束]` 两个日期串(YYYY-MM-DD),后端要的是 StartTime/EndTime 两个参数。
+ * 结束日拼上 23:59:59,否则"筛到今天"会把今天已经发生的操作全部漏掉(日期串等价于当天 00:00:00)。
+ */
+function splitRange(range?: [string, string] | null) {
+  if (!range || range.length !== 2) return { StartTime: undefined, EndTime: undefined }
+  return { StartTime: range[0] || undefined, EndTime: range[1] ? `${range[1]} 23:59:59` : undefined }
+}
+
 export const logApi = {
-  /** 登录日志分页;搜索键 account/success → PascalCase Account/Success 查询参。 */
-  loginPage: (params: { page: number; pageSize: number; account?: string; success?: boolean }) =>
+  /** 登录日志分页;账号模糊 + 成败 + 时间范围。 */
+  loginPage: (params: { page: number; pageSize: number; account?: string; success?: boolean; createTime?: [string, string] | null }) =>
     client
       .GET('/api/v1/sys/log/login/page', {
-        params: { query: { Current: params.page, Size: params.pageSize, Account: params.account, Success: params.success } },
+        params: {
+          query: {
+            Current: params.page, Size: params.pageSize,
+            Account: params.account, Success: params.success,
+            ...splitRange(params.createTime),
+          },
+        },
       })
       .then((r) => unwrap<PagedList<SysLoginLog>>(r))
       .then((p) => ({ items: p.items, total: p.total })),
   /** 清空登录日志(硬删,不可恢复)。 */
   loginClear: () => client.DELETE('/api/v1/sys/log/login', {}).then((r) => unwrap<boolean>(r)),
-  /** 操作日志分页;搜索键 title/success → PascalCase Title/Success 查询参。 */
-  opPage: (params: { page: number; pageSize: number; title?: string; success?: boolean }) =>
+  /** 操作日志分页;操作名模糊 + 成败 + 操作人(精确)+ 接口路径(模糊)+ 时间范围——审计要能答"谁在什么时候干了什么"。 */
+  opPage: (params: {
+    page: number; pageSize: number
+    title?: string; success?: boolean; operatorId?: number; path?: string
+    createTime?: [string, string] | null
+  }) =>
     client
       .GET('/api/v1/sys/log/op/page', {
-        params: { query: { Current: params.page, Size: params.pageSize, Title: params.title, Success: params.success } },
+        params: {
+          query: {
+            Current: params.page, Size: params.pageSize,
+            Title: params.title, Success: params.success,
+            OperatorId: params.operatorId, Path: params.path,
+            ...splitRange(params.createTime),
+          },
+        },
       })
       .then((r) => unwrap<PagedList<SysOpLog>>(r))
       .then((p) => ({ items: p.items, total: p.total })),
@@ -365,6 +392,8 @@ export const noticeApi = {
 
 export const menuApi = {
   tree: () => client.GET('/api/v1/sys/menu/tree', {}).then((r) => unwrap<MenuTreeNode[]>(r)),
+  /** 可授权路由清单(后端 EndpointDataSource 实时算出,含消费方自建控制器);喂菜单表单「权限码」下拉,免手敲。 */
+  routes: () => client.GET('/api/v1/sys/menu/routes', {}).then((r) => unwrap<PermissionRouteItem[]>(r)),
   add: (body: MenuInput) => client.POST('/api/v1/sys/menu/add', { body }).then((r) => unwrap<number>(r)),
   update: (id: number, body: MenuInput) =>
     client.PUT('/api/v1/sys/menu/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
