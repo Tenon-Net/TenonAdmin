@@ -18,6 +18,10 @@ dotnet run
 
 `npm run dev` 的 `/api` 代理只在开发期存在;部署要么让本 host 用 `UseStaticFiles()` 顺带托管前端产物(此时**必须**把 `TenonAdmin:Upload:RootPath` 挪出 `wwwroot`),要么交给 nginx 反代。生产还必须显式配 `TenonAdmin:Jwt:SecretKey`。完整步骤见内核仓库的 `docs/deployment.md`。
 
+### Docker
+
+本目录已带一份 `Dockerfile`(多阶段、非 root、8080),`docker build -t myapp .` 即可。要注入哪些环境变量,文件末尾列全了;一份可照抄的全栈编排(应用 + MySQL + nginx)见内核仓库的 `docker-compose.yml`。
+
 ## 加一个业务模块
 
 复制 `Modules/` 下的四件套改名即可(示例 `SampleDoc` 是机构隔离表,继承 `DataEntity`;不需机构隔离的表改继承 `BaseEntity`):

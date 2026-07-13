@@ -1,0 +1,43 @@
+# 这份清单首先是**安全**措施,其次才是体积。
+#
+# backend/samples/MinimalHost/data/ 里躺着开发期的真实 admin.db 和 dev-jwt.key(仓库根的 data/ 同理)。
+# 一个天真的 COPY . . 会把**签名密钥和一个开发数据库烤进镜像层** —— 镜像一推,谁都能扒出来伪造超管令牌。
+# 所以 data/ 与 *.db* 的排除不是可选项。
+
+.git/
+.github/
+.vscode/
+.idea/
+
+# 构建产物
+**/bin/
+**/obj/
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+artifacts/
+
+# 运行期数据(密钥 / 数据库 / 上传物 —— 绝不进镜像)
+**/data/
+**/*.db
+**/*.db-journal
+**/*.db-*
+**/wwwroot/upload/
+
+# 本地开发配置(含凭据)
+**/appsettings.Development.json
+.env.local
+
+# 工具与 agent 状态
+.omc/
+.omx/
+.codegraph/
+.claude/
+.dev/
+
+# 文档与脚本(镜像用不上)。README.md 不排除:backend/Directory.Build.props 用它作包说明页,
+# 排掉它等于给构建埋一个"文件不存在"的雷,省下的那几 KB 不值当。
+docs/
+dev.bat
+stop.bat

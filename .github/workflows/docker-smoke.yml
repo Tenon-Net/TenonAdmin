@@ -1,0 +1,80 @@
+# 容器交付物的冒烟测试(dev-plan T-D4 的验收线)。
+# 单元/集成测试证明代码对;这个 job 证明**镜像能起来**:生产环境 + 空库 + 具名卷 + 非 root 用户
+# 四个条件同时成立,还能建表、写种子、发令牌。少任何一条配置都会失败,那正是要验的。
+name: docker-smoke
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - 'web/Dockerfile'
+      - 'web/nginx.conf'
+      - 'backend/**'
+      - 'web/**'
+      - '.github/workflows/docker-smoke.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - 'web/Dockerfile'
+      - 'web/nginx.conf'
+      - 'backend/**'
+      - 'web/**'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TENON_ADMIN_PASSWORD: Smoke@123456
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start the stack
+        run: docker compose up -d --build
+
+      - name: Wait for the backend to report ready
+        # /health/ready 探的是依赖(DB + 缓存),不是"进程还活着"。它变绿 = 建表 + 种子都跑完了。
+        # 从宿主轮询而不是在镜像里放 HEALTHCHECK:aspnet 运行时镜像既没 curl 也没 wget。
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8081/health/ready > /dev/null; then
+              echo "backend ready after ${i}0s"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::backend never became ready"
+          docker compose logs app
+          exit 1
+
+      - name: Log in as the seeded super admin
+        # 真发一次令牌:同时证明库建好了、种子写进去了、JWT 密钥在容器里解析成功。
+        run: |
+          code=$(curl -s -X POST http://localhost:8081/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            -d "{\"account\":\"superAdmin\",\"password\":\"${TENON_ADMIN_PASSWORD}\"}" \
+            | tee /tmp/login.json | jq -r '.code')
+          cat /tmp/login.json
+          if [ "$code" != "0" ]; then echo "::error::login failed (code=$code)"; docker compose logs app; exit 1; fi
+          token=$(jq -r '.data.accessToken' /tmp/login.json)
+          if [ -z "$token" ] || [ "$token" = "null" ]; then echo "::error::no access token"; exit 1; fi
+
+      - name: Frontend is served and proxies /api
+        run: |
+          curl -sf http://localhost:8080/ | grep -qi '<div id="app"' \
+            || { echo "::error::SPA index not served"; docker compose logs web; exit 1; }
+          # 经 nginx 打受保护端点:401 = 反代通了(且默认拒绝仍然生效)
+          status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/ping)
+          [ "$status" = "401" ] || { echo "::error::/api proxy returned $status, expected 401"; exit 1; }
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

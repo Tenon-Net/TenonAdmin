@@ -4,7 +4,7 @@
 
 `npm run dev` 之所以一切正常,是因为 Vite dev server 把 `/api`、`/openapi` 反代到了后端(`web/vite.config.ts`)——**这层代理只在开发期存在**。构建产物 `web/dist` 是一堆静态文件,谁来托管它、它怎么找到后端,是部署时必须回答的两个问题。本文给三条路线,选一条即可。
 
-> Docker / docker-compose 不在本文范围(见 `docs/dev-plan.md` T-D4 与 `docs/rebuild-design.md` §11 的设计稿)。
+> 想直接上容器的看 **路线 D**(本文最后)——仓库根已有 `Dockerfile` + `docker-compose.yml`,一条命令起全栈。
 
 ---
 
@@ -140,6 +140,29 @@ VITE_API_BASE=https://api.example.com npm run build
 ```
 
 `AllowedOrigins` 为空 = 不放行任何跨源;`AllowCredentials` 只在 origins 非空时才生效(不存在 `AllowAnyOrigin + 凭证` 这种组合)。CORS 策略由内核的 `IStartupFilter` 自动挂载在管道前段,**不需要你手写 `UseCors`**。
+
+## 路线 D:Docker(容器化交付)
+
+仓库根的 `docker-compose.yml` 起三个服务:**MySQL + 后端 + nginx(托管 SPA 并反代 `/api`)**。
+
+```bash
+docker compose up -d --build
+# 前端 http://localhost:8080   后端直连 http://localhost:8081/health/ready
+docker compose logs app        # 首启的随机超管密码(没显式配 Seed:AdminPassword 时)在这里
+```
+
+它跑的是 **`ASPNETCORE_ENVIRONMENT=Production`** —— 这是刻意的:compose 因此顺带成了「生产首启路径」的活体测试,上面 §0 那三条硬要求(显式 JWT 密钥、空库要显式允许建表、上传根挪出 `wwwroot`)必须**同时**满足才起得来,少一条就是一条读得懂的启动错误。这三条在 compose 里都写成了环境变量,照着改成你自己的值即可。
+
+几个不写出来就会踩的点:
+
+| 点 | 为什么 |
+|---|---|
+| **具名卷,不要 bind mount** | 镜像里跑的是非 root 用户。具名卷首次挂载会从镜像目录带走属主,容器写得进去;bind mount 会用宿主属主覆盖,应用直接写不了 SQLite / 上传目录。 |
+| **镜像里没有 `HEALTHCHECK`** | `aspnet` 运行时镜像既没有 `curl` 也没有 `wget`,写了只会恒失败。健康检查交给编排层探 `/health`(存活)与 `/health/ready`(DB + 缓存)。 |
+| **`.dockerignore` 是安全项** | 开发机的 `data/` 里躺着真实的 `admin.db` 和 `dev-jwt.key`。没有它,一个 `COPY . .` 就把**签名密钥**烤进镜像层——镜像一推,谁都能伪造超管令牌。 |
+| **多副本改 `WorkerId`** | 每个实例 0–63 必须各不相同,否则同毫秒发号撞主键。 |
+
+**你自己的 host**:`dotnet new tenon-app` 生成的目录里已经带了一份 `Dockerfile`(从 NuGet 装内核,构建你的 host);仓库根那份是从源码构建样例宿主 `MinimalHost`,给内核 CI 用的,你不需要它。
 
 ---
 

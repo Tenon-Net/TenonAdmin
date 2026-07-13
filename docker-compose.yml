@@ -1,0 +1,68 @@
+# 一条 `docker compose up` 起全栈:MySQL + 后端(MinimalHost)+ 前端(nginx 托管 SPA,反代 /api)。
+#
+# 它同时是**生产首启路径的活体测试**。app 刻意跑 ASPNETCORE_ENVIRONMENT=Production,于是这几件事必须同时成立
+# 才起得来 —— 少任何一条都会以一条读得懂的错误失败,这本身就是要验的:
+#   · 显式配 Jwt:SecretKey(生产不给用自动生成的开发密钥,否则多副本各签各的 → 随机 401)
+#   · 空库首启显式允许建表(生产默认不自动 ALTER 库)
+#   · 上传根在 wwwroot 之外(否则谁给这个镜像加 UseStaticFiles(),上传目录就被匿名直出)
+#
+# 演示用的密钥/密码都写在下面的默认值里 —— **真上生产请从环境注入**(compose 会读同目录的 .env)。
+name: tenon-admin
+
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${TENON_DB_PASSWORD:-tenon-compose-demo}
+      MYSQL_DATABASE: tenon
+    healthcheck:
+      # app 靠它决定何时开始连库(depends_on: service_healthy),否则首启必然撞上"库还没起来"
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${TENON_DB_PASSWORD:-tenon-compose-demo}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - db-data:/var/lib/mysql
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # 配置全走双下划线环境变量(docs/deployment.md §0);镜像里不打包任何密钥
+      TenonAdmin__Jwt__SecretKey: ${TENON_JWT_SECRET:-tenon-compose-demo-signing-key-please-change-me}
+      TenonAdmin__Database__DbType: MySql
+      TenonAdmin__Database__ConnectionString: Server=db;Port=3306;Database=tenon;User ID=root;Password=${TENON_DB_PASSWORD:-tenon-compose-demo};AllowPublicKeyRetrieval=true;SSL Mode=None;
+      # 空库首启:让应用自己建表 + 写种子。生产库由 DBA 维护时改成 false,自行建好表再启动。
+      TenonAdmin__Database__EnableCodeFirstInProduction: "true"
+      # 上传根:必须在 wwwroot 之外(见文件头注释),且与 /app/data 分属两个卷
+      TenonAdmin__Upload__RootPath: /data/upload
+      # 首启的超管密码。不给就随机生成并打印到控制台(见 docker compose logs app)
+      TenonAdmin__Seed__AdminPassword: ${TENON_ADMIN_PASSWORD:-Tenon@123456}
+      # 水平扩展时**每个实例必须不同**(0-63),否则同毫秒发号会撞主键
+      TenonAdmin__Id__WorkerId: "0"
+    ports:
+      - "8081:8080"   # 后端直连(探针/调试);前端走 8080 那条
+    volumes:
+      - app-data:/app/data       # SQLite(本例没用)+ JWT 开发密钥
+      - upload-data:/data/upload # 上传物
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    depends_on:
+      - app
+    ports:
+      - "8080:80"
+
+# 具名卷,不是 bind mount:具名卷首次挂载会从镜像目录带走属主,容器里的非 root 用户才写得进去。
+# bind mount 会用宿主属主覆盖,非 root 直接写不了 —— 容器化 SQLite/上传目录最常见的翻车点。
+volumes:
+  db-data:
+  app-data:
+  upload-data:
