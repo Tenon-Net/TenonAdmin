@@ -143,7 +143,6 @@ const columns: DataTableColumns<ModuleRow> = [
   <div class="view">
     <n-card :bordered="true">
       <div class="bar">
-        <h3>{{ t('module.manage') }}</h3>
         <n-button type="primary" @click="openAdd">
           <template #icon><AppIcon icon="ph:plus" :size="16" /></template>{{ t('common.add') }}
         </n-button>

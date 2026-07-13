@@ -240,7 +240,6 @@ const columns: DataTableColumns<MenuTreeNode> = [
   <div class="view">
     <n-card :bordered="true">
       <div class="bar">
-        <h3>{{ t('menu.manage') }}</h3>
         <n-button type="primary" @click="openAdd(0)">
           <template #icon><AppIcon icon="ph:plus" :size="16" /></template>{{ t('common.add') }}
         </n-button>
