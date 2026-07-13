@@ -14,11 +14,11 @@ const app = useAppStore()
 const text = computed({ get: () => props.value ?? '', set: (v) => emit('update:value', v) })
 const theme = computed(() => (app.isDark ? 'dark' : 'light'))
 
-// ponytail: 图片走 fileApi.upload 回 storagePath 当 URL;能否显示取决于后端是否静态托管该路径
-//(本地存储默认多可直连)。后端不托管则仅影响"上传图片"子功能,不阻塞文字/链接编辑。
+// 图片插的是后端签发的**签名直链**(viewUrl),不是 storagePath —— 后端默认不静态托管上传目录
+//(那等于鉴权绕过),storagePath 当 src 必然是坏链。viewUrl 匿名可取但不可伪造,<img> 直接能加载。
 async function onUploadImg(files: File[], callback: (urls: string[]) => void) {
   const outs = await Promise.all(files.map((f) => fileApi.upload(f)))
-  callback(outs.map((o) => o.storagePath))
+  callback(outs.map((o) => o.viewUrl ?? ''))
 }
 </script>
 

@@ -79,6 +79,10 @@ public static class TenonAdminSetup
         services.TryAddSingleton<ITokenProvider>(sp => new JwtTokenProvider(
             options.Jwt, sp.GetRequiredService<SymmetricSecurityKey>(), sp.GetRequiredService<TimeProvider>()));
 
+        // 文件直链签名(§14):从 JWT 密钥派生子密钥,签出匿名可访问但不可伪造的 /view 链接
+        //(<img src> 带不了 Authorization 头 —— 通知正文里的图片全靠它)
+        services.TryAddSingleton<IFileUrlSigner>(sp => new FileUrlSigner(sp.GetRequiredService<SymmetricSecurityKey>()));
+
         // 权限码提供者由 Services 层的 RbacPermissionProvider 提供(RBAC 真实现,§6);
         // 用户前置注册同接口实现(如对接外部鉴权中心)即整体替换(§5.2)。
 

@@ -177,8 +177,11 @@ export interface SysFile {
 export interface FileUploadOutput {
   id: number
   originalName: string
+  /** 存储层相对路径。**别当 URL 用**:后端默认不静态托管上传目录,当 src 必然坏链。要展示图片用 viewUrl。 */
   storagePath: string
   sizeBytes: number
+  /** 签名直链(匿名可取、不可伪造),可直接塞进 `<img src>`;后端签发,前端不自己拼。 */
+  viewUrl?: string | null
 }
 
 /** 分片上传初始化出参(后端 ChunkInitOutput)。 */

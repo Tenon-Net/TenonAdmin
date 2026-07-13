@@ -153,7 +153,9 @@ public class FileService(
         {
             Content = stream!,
             OriginalName = file.OriginalName,
-            ContentType = file.ContentType ?? "application/octet-stream",
+            // 空白也要兜底,不只是 null:multipart 部件不带 Content-Type 头时 IFormFile.ContentType 是<b>空串</b>,
+            // 原样落库、原样回传,ASP.NET 解析媒体类型时会直接抛(500)。
+            ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
         };
     }
 

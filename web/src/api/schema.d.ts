@@ -2497,10 +2497,53 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 下载文件(按 Id;以原始文件名回传) */
+        /** 下载文件(按 Id;以原始文件名回传,浏览器另存) */
         get: {
             parameters: {
                 query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/file/{id}/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 签名直链(匿名,inline 展示)——给 `&lt;img src&gt;` 这类带不了 Authorization 头的场景用。
+         *     匿名是刻意的,但不可伪造:签名是文件 Id 的 HMAC(见 IFileUrlSigner)。
+         *     拿得到链接才拿得到文件,签名错一个字符就是 403。它的存在正是为了让人不必去
+         *     UseStaticFiles() 敞开整个上传目录——那才是真正的鉴权绕过。
+         */
+        get: {
+            parameters: {
+                query?: {
+                    sig?: string;
+                };
                 header?: never;
                 path: {
                     id: number | string;
@@ -3985,6 +4028,13 @@ export interface components {
             storagePath: string;
             /** Format: int64 */
             sizeBytes: number | string;
+            /**
+             * @description 签名直链(可直接塞进 `&lt;img src&gt;`)。由控制器用 IFileUrlSigner 填——
+             *     URL 是 HTTP 层的事,Services 层不该知道路由长什么样。
+             *     前端要用的是它,不是 string FileUploadOutput.StoragePath:后者是存储层的相对路径,
+             *     后端默认并不静态托管上传目录(那么做等于鉴权绕过),当 URL 用必然是坏链。
+             */
+            viewUrl?: null | string;
         };
         /** Format: binary */
         IFormFile: string;

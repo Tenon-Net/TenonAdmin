@@ -28,6 +28,14 @@ public record FileUploadOutput
     public required string OriginalName { get; init; }
     public required string StoragePath { get; init; }
     public required long SizeBytes { get; init; }
+
+    /// <summary>
+    /// 签名直链(可直接塞进 <c>&lt;img src&gt;</c>)。由控制器用 <see cref="IFileUrlSigner"/> 填——
+    /// URL 是 HTTP 层的事,Services 层不该知道路由长什么样。
+    /// <para><b>前端要用的是它,不是 <see cref="StoragePath"/></b>:后者是存储层的相对路径,
+    /// 后端默认并不静态托管上传目录(那么做等于鉴权绕过),当 URL 用必然是坏链。</para>
+    /// </summary>
+    public string? ViewUrl { get; init; }
 }
 
 /// <summary>下载载荷:读流 + 原始名 + Content-Type(控制器据此回传 File 结果)。</summary>
