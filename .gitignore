@@ -23,6 +23,9 @@ backend/**/appsettings.Development.json
 node_modules/
 dist/
 .env.local
+# Playwright 产物:web/.gitignore 已忽略 web/ 下的同名目录,但从仓库根跑会漏到这里
+test-results/
+playwright-report/
 
 ## Tooling / agent state (本地工具产物,不入库;无前导斜杠 → 匹配任意层级,含 backend/.omc)
 .omc/
