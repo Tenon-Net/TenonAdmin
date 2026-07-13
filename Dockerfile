@@ -12,8 +12,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# nuget.config 在仓库根(clear 掉私有源,只留 nuget.org);dotnet 会从项目目录向上找到它。
-COPY nuget.config ./
+# NuGet.config 在仓库根(clear 掉私有源,只留 nuget.org);dotnet 会从项目目录向上找到它。
+# 大小写照抄仓库里的真实文件名 —— Windows 上随便写都能过,Linux 的构建上下文里会直接 "not found"。
+COPY NuGet.config ./
 COPY backend/ backend/
 
 RUN dotnet publish backend/samples/MinimalHost/MinimalHost.csproj -c Release -o /app/publish
