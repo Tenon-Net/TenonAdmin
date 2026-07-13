@@ -2,7 +2,8 @@
 // 字典管理 = 主从:左=类型 ProTable(CRUD),点击行选中 → 右=该类型的字典项(裸 n-data-table + CRUD)。
 // 关键约束:右侧走管理端 dict/item/page(含停用项、带 id);下拉用的 dict/items/{code} 只回启用项且丢 id,不能复用。
 // 任何类型/项的增删改后调 useDictStore().invalidate(code) 失效下拉缓存,变更即时生效。
-import { h, reactive, ref } from 'vue'
+import { computed, h, reactive, ref } from 'vue'
+import { refDebounced } from '@vueuse/core'
 import {
   NButton, NCard, NSpace, NInput, NInputNumber, NPopconfirm, NForm, NFormItem, NDataTable, NEmpty, NSwitch,
   useMessage, type DataTableColumns, type FormInst, type FormRules,
@@ -78,13 +79,21 @@ const { checkedKeys: itemCheckedKeys, hasSelection: itemHasSelection, run: itemB
 })
 
 // ── 左:字典类型 ProTable ──
+// 主从窄栏放不下 ProTable 那套两字段搜索表单(全宽页面组件塞半宽栏会挤压变形),
+// 改成工具栏内嵌单框按名称过滤:防抖 300ms,params 变化 ProTable 自动回查(fetcher 深监听),无独立搜索卡片。
+const typeKeyword = ref('')
+const typeKeywordDebounced = refDebounced(typeKeyword, 300)
+const typeParams = computed(() => {
+  const kw = typeKeywordDebounced.value.trim()
+  return kw ? { name: kw } : {}
+})
 const typeToInput = (r: SysDictType): DictTypeInput => ({
   code: r.code, name: r.name, sort: r.sort, enabled: r.enabled, remark: r.remark ?? '',
 })
 const typeColumns: ProTableColumn<SysDictType>[] = [
   { type: 'selection' },
-  { key: 'code', title: () => t('dict.code'), search: true },
-  { key: 'name', title: () => t('dict.name'), search: true },
+  { key: 'code', title: () => t('dict.code') },
+  { key: 'name', title: () => t('dict.name') },
   { key: 'sort', title: () => t('dict.sort'), width: 70 },
   {
     key: 'enabled',
@@ -265,6 +274,7 @@ async function saveItem() {
         ref="typeTableRef"
         :columns="typeColumns"
         :fetcher="dictAdminApi.typePage"
+        :params="typeParams"
         :labels="labels"
         storage-key="sys-dict-type"
         :row-props="(row: SysDictType) => ({
@@ -288,6 +298,14 @@ async function saveItem() {
           >
             <template #icon><AppIcon icon="ph:trash" :size="16" /></template>{{ t('common.batchDelete') }}
           </n-button>
+          <n-input
+            v-model:value="typeKeyword"
+            :placeholder="t('dict.searchName')"
+            clearable
+            style="width: 200px"
+          >
+            <template #prefix><AppIcon icon="ph:magnifying-glass" :size="16" /></template>
+          </n-input>
         </template>
       </ProTable>
     </div>

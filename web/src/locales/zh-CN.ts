@@ -306,6 +306,7 @@ export default {
     title: '字典管理',
     code: '类型编码',
     name: '类型名称',
+    searchName: '搜索名称',
     sort: '排序',
     remark: '备注',
     codeRequired: '请输入类型编码',

@@ -303,6 +303,7 @@ export default {
     title: 'Dictionaries',
     code: 'Type code',
     name: 'Type name',
+    searchName: 'Search name',
     sort: 'Sort',
     remark: 'Remark',
     codeRequired: 'Enter a type code',
