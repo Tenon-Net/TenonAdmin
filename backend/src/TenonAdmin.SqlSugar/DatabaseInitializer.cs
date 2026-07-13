@@ -50,8 +50,12 @@ internal sealed class DatabaseInitializer(
         {
             // 种子实现可能有 Scoped 依赖(仓储/Options),开独立作用域解析
             await using var scope = scopeFactory.CreateAsyncScope();
+            var seeds = scope.ServiceProvider.GetServices<ISeedData>().ToArray();
+            // 建表被跳过时先探表:种子第一步就要读写表(SuperAdminSeed 在 HasData() 里就 SELECT sys_user),
+            // 空库上撞过去只会得到驱动层的 "no such table",无从反推真正原因。
+            if (!codeFirstAllowed) EnsureSeedTablesExist(seeds);
             var total = 0;
-            foreach (var seed in scope.ServiceProvider.GetServices<ISeedData>())
+            foreach (var seed in seeds)
                 total += await ExecuteSeedAsync(seed);
             logger.LogInformation("TenonAdmin: 种子执行完成(本次新插入 {Total} 行)", total);
         }
@@ -61,16 +65,45 @@ internal sealed class DatabaseInitializer(
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
+    /// <summary>
+    /// 建表被跳过(生产闸门关 / EnableCodeFirst=false)时的启动前置检查:种子要写的表必须已存在。
+    /// 缺表就抛出可行动的错误,而不是让种子去撞驱动层的"表不存在"。
+    /// <para>只探种子涉及的表,不探全部实体:全量探测会让今天能正常启动的配置(消费者自管部分表等)
+    /// 变成起不来 —— 那是新的失败面,而种子表恰好覆盖了真正会崩的那条路径。</para>
+    /// </summary>
+    private void EnsureSeedTablesExist(IReadOnlyCollection<ISeedData> seeds)
+    {
+        // 表名取自 ISeedData<T> 的泛型实参,不调 HasData()——SuperAdminSeed 在 HasData() 里就查库了。
+        var missing = seeds
+            .Select(SeedEntityType)
+            .Distinct()
+            .Select(db.EntityMaintenance.GetTableName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            // isCache:false —— 元数据缓存可能掩盖"表其实不存在";不 try/catch,连不上库应原样冒出而非误报为缺表
+            .Where(table => !db.DbMaintenance.IsAnyTable(table, false))
+            .ToArray();
+        if (missing.Length == 0) return;   // 表齐 → 种子照常执行(DBA 手工建表的库,超管与菜单树仍须写入)
+
+        throw new InvalidOperationException(
+            $"TenonAdmin 启动失败:CodeFirst 自动建表已跳过(EnableCodeFirst={options.EnableCodeFirst}," +
+            $"当前环境={env.EnvironmentName},EnableCodeFirstInProduction={options.EnableCodeFirstInProduction})," +
+            $"但种子要写的表在库中不存在:{string.Join(", ", missing)}。二选一:" +
+            "(1) 配置 TenonAdmin:Database:EnableCodeFirstInProduction=true,首启由应用建表;" +
+            "(2) 先由 DBA 建好表结构再启动。详见 docs/deployment.md。" +
+            "(若确实不需要内置种子——超管账号与菜单树——可配置 TenonAdmin:Database:EnableSeed=false。)");
+    }
+
+    /// <summary>种子的目标实体类型 = 其 <see cref="ISeedData{TEntity}"/> 的泛型实参</summary>
+    private static Type SeedEntityType(ISeedData seed) => seed.GetType().GetInterfaces()
+        .First(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ISeedData<>))
+        .GetGenericArguments()[0];
+
     /// <summary>执行单个种子:经泛型接口取实体类型,反射进入强类型管道(仅启动期一次,开销可忽略)</summary>
     private async Task<int> ExecuteSeedAsync(ISeedData seed)
     {
-        var entityType = seed.GetType().GetInterfaces()
-            .First(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ISeedData<>))
-            .GetGenericArguments()[0];
-
         var method = typeof(DatabaseInitializer)
             .GetMethod(nameof(ExecuteSeedCoreAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
-            .MakeGenericMethod(entityType);
+            .MakeGenericMethod(SeedEntityType(seed));
 
         return await (Task<int>)method.Invoke(this, [seed])!;
     }

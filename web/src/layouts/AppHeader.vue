@@ -7,6 +7,7 @@ import {
   NBadge,
   NTooltip,
   NMenu,
+  NModal,
   NBreadcrumb,
   NBreadcrumbItem,
   useMessage,
@@ -28,6 +29,7 @@ import { translateError } from '@/utils/error'
 import TenonLogo from '@/components/TenonLogo.vue'
 import SettingsDrawer from './SettingsDrawer.vue'
 import MenuSearch from '@/components/MenuSearch.vue'
+import MarkdownView from '@/components/MarkdownEditor/MarkdownView.vue'
 
 withDefaults(
   defineProps<{
@@ -129,9 +131,18 @@ const noticeOptions = computed<DropdownOption[]>(() => {
   return opts
 })
 
+// 点条目 = 看正文。正文随列表一起拿到了(NoticeMineItem.content),弹层直接渲染,不再发请求。
+const showNotice = ref(false)
+const viewNotice = ref<NoticeMineItem | null>(null)
+
 async function onNoticeSelect(key: string) {
   if (key.startsWith('n:')) {
     const id = Number(key.slice(2))
+    const item = recentNotices.value.find((n) => n.id === id)
+    if (!item) return
+    viewNotice.value = item
+    showNotice.value = true
+    if (item.isRead) return
     try {
       await noticeApi.markRead(id)
     } catch (e) {
@@ -146,7 +157,8 @@ async function onNoticeSelect(key: string) {
       message.error(translateError(e))
     }
   } else if (key === '__view') {
-    router.push('/system/notice')
+    // 不是 /system/notice —— 那是管理员菜单,普通用户既无路由(404)也无权限(403)
+    router.push('/personal/notice')
   }
 }
 function onBellShow(show: boolean) {
@@ -275,6 +287,16 @@ fetchUnread()
 
     <SettingsDrawer v-model:show="settingsOpen" />
     <MenuSearch v-model:show="searchOpen" />
+
+    <!-- 通知正文:内容随铃铛列表一并取回,这里只渲染(Markdown,不能当纯文本直出) -->
+    <n-modal
+      v-model:show="showNotice"
+      preset="card"
+      :title="viewNotice?.title || t('notice.detailTitle')"
+      style="width: 640px; max-width: 92vw"
+    >
+      <MarkdownView :value="viewNotice?.content" />
+    </n-modal>
   </div>
 </template>
 

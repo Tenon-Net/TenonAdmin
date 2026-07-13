@@ -26,9 +26,12 @@ public sealed class AdminAppFactory : WebApplicationFactory<Program>
     /// <summary>额外的配置项覆盖(在 AddTenonAdmin 绑定前生效,如 CORS 源、会话模式等)</summary>
     public IReadOnlyDictionary<string, string?>? Settings { get; init; }
 
+    /// <summary>宿主环境名(默认 Development;生产建表闸门用例传 "Production")</summary>
+    public string EnvironmentName { get; init; } = "Development";
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Development");
+        builder.UseEnvironment(EnvironmentName);
         // DB 选择走 TestDb:默认 SQLite(DbPath 文件);CI MySQL 腿按 DbPath 派生独立库(同 DbPath 共享库,幂等用例用)
         builder.UseSetting("TenonAdmin:Database:DbType", TestDb.DbType);
         builder.UseSetting("TenonAdmin:Database:ConnectionString", TestDb.ConnectionString(DbPath, DbPath));

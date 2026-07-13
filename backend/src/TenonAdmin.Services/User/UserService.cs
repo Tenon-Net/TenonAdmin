@@ -38,10 +38,16 @@ public class UserService(
     //   再引 EscapeLike + ESCAPE 子句。全部 Page 方法同此约定。
     public virtual async Task<PagedList<UserItem>> PageAsync(UserPageInput input)
     {
+        var holders = await ResolveRoleHolderIdsAsync(input.RoleId);
+        // 该角色一个人都没有:空 IN 列表在各方言下行为不一,显式短路,别把它交给 SQL
+        if (holders is { Count: 0 })
+            return new PagedList<UserItem> { Current = input.Current, Size = input.Size, Total = 0, Items = [] };
+
         var page = await users.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Account), u => u.Account.Contains(input.Account!))
             .WhereIF(!string.IsNullOrEmpty(input.Name), u => u.Name.Contains(input.Name!))
             .WhereIF(input.OrgId.HasValue, u => u.OrgId == input.OrgId)
+            .WhereIF(holders != null, u => holders!.Contains(u.Id))
             .WhereIF(input.Enabled.HasValue, u => u.Enabled == input.Enabled!.Value)
             .OrderBy(u => u.Id)
             // 投影到 UserItem:SQL 层就不取 Password 列,哈希从不进内存/出接口
@@ -65,6 +71,20 @@ public class UserService(
             Items = await FillOrgPositionNamesAsync(page.Items),
         };
     }
+
+    /// <summary>
+    /// 角色 → 持有者 Id 列表(未按角色筛选时返回 null,调用方据此跳过该条件)。
+    /// <para>刻意用"预取 Id + Contains"而不是 SqlFunc 子查询(EXISTS):内核对外承诺支持 4 种数据库,
+    /// 而 CI 只跑 SQLite / MySQL 两条腿,SqlServer 与 PostgreSQL 上的表达式翻译无人验证;
+    /// 这里只用到最朴素的 Where/Select,四方言必然可移植(同 <see cref="FillOrgPositionNamesAsync"/> 的跨表套路)。
+    /// 走 <c>users.Db</c> 逃生舱口而非注入 <c>IRepository&lt;SysUserRole&gt;</c>:给本类主构造器加参数
+    /// 对继承它的消费者是源码破坏性变更(替换性契约由 ReplaceabilityTests 守住)。</para>
+    /// ponytail: 持有者多时 IN 列表会很长;真撞上再换 EXISTS 子查询并补齐四方言测试。
+    /// </summary>
+    protected virtual async Task<List<long>?> ResolveRoleHolderIdsAsync(long? roleId) =>
+        roleId.HasValue
+            ? await users.Db.Queryable<SysUserRole>().Where(x => x.RoleId == roleId.Value).Select(x => x.UserId).ToListAsync()
+            : null;
 
     /// <summary>按本页出现的机构/职位 Id 各去重批量查一次名称回填(避免逐行 N+1)。已删/未分配则名称留 null。</summary>
     protected virtual async Task<IReadOnlyList<UserItem>> FillOrgPositionNamesAsync(IReadOnlyList<UserItem> items)

@@ -158,6 +158,7 @@ export default {
     workbench: '工作台',
     profile: '个人资料',
     password: '修改密码',
+    notice: '我的通知',
     manage: '菜单管理',
     parent: '上级菜单',
     parentRoot: '顶级(根目录)',
@@ -366,9 +367,14 @@ export default {
     deleteConfirm: '确定删除文件「{name}」?',
     deleted: '已删除',
   },
-  // 消息通知(NoticeController 管理端:发布 / 列表 / 删除)
+  // 消息通知(管理端发布/列表/删除 + 用户侧「我的通知」共用此命名空间)
   notice: {
     title: '消息通知',
+    mine: '我的通知',
+    status: '状态',
+    read: '已读',
+    unread: '未读',
+    allRead: '已全部标记为已读',
     noticeTitle: '标题',
     content: '内容',
     type: '类型',
@@ -422,7 +428,12 @@ export default {
     nameRequired: '请输入角色名称',
     addTitle: '新增角色',
     editTitle: '编辑角色',
+    // 删角色会物理删掉用户↔角色关联(不可恢复),故删前先查人数当面告知;查不到人数(无用户查询权限)才退回这条通用文案
     deleteConfirm: '确定删除角色「{name}」?其授权、数据范围及用户关联将一并清除。',
+    deleteConfirmNoUsers: '确定删除角色「{name}」?当前没有用户使用该角色。',
+    deleteConfirmWithUsers: '角色「{name}」当前有 {count} 个用户在用。删除后这些用户将立即失去该角色的全部权限,且关联无法恢复。确定删除?',
+    batchDeleteWithUsers: '确定删除所选 {count} 个角色?其中 {users} 个用户将立即失去相应权限,且关联无法恢复。',
+    viewUsers: '查看用户',
     saved: '保存成功',
     deleted: '已删除',
     grantMenus: '授权菜单',

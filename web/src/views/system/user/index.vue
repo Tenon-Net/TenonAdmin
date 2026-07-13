@@ -2,11 +2,12 @@
 // 用户管理(写侧)= ProTable(列表/搜索/分页)+ 手写弹窗 CRUD + 重置密码 + 专用启停端点。
 // 角色多选:新增/编辑均可分配角色(选项来自 roleApi 拉一大页);编辑回显走 userApi.detail 的 roleIds。
 // 超管行(isSuperAdmin)删除/停用置灰防自锁;启停走专用 setEnabled(非全量 update)。
-import { computed, h, onMounted, reactive, ref } from 'vue'
+import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import {
   NButton, NCard, NTree, NSpace, NTag, NInput, NForm, NFormItem, NSelect, NSwitch, NPopconfirm,
   useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
@@ -64,11 +65,38 @@ onMounted(async () => {
   }
 })
 
+// 角色反查:角色页「查看用户」跳这里并带 ?roleId=。
+// 必须 watch 而非 onMounted:标签页按 path 做主键且页面被 keep-alive,本页标签已开着时再跳一次只换 query,
+// 组件实例被复用、onMounted 不会再触发。
+// 同时把 tableRef 一起纳入监听源:immediate 在 setup 期求值,那时表格实例还没挂上(ref 为空),
+// 只听 query 的话冷启动这一路会静默失效——实例就绪时这条 watch 会再触发一次,把筛选补上。
+const route = useRoute()
+watch(
+  [tableRef, () => route.query.roleId],
+  ([inst, roleId]) => {
+    if (!inst) return
+    const next = roleId == null ? undefined : Number(roleId)
+    if (inst.params.roleId === next) return // 防抖:实例就绪与 query 变化可能各触发一次
+    inst.params.roleId = next
+    inst.search() // 回第 1 页重查
+  },
+  { immediate: true },
+)
+
 const columns: ProTableColumn<UserItem>[] = [
   // 超管行禁勾:批量删除同样不可含超管(后端也会整体拒绝)
   { type: 'selection', disabled: (r: UserItem) => r.isSuperAdmin },
   { key: 'account', title: () => t('user.account'), search: true },
   { key: 'name', title: () => t('user.name'), search: true },
+  // 只作搜索项,不进表格也不进列设置。options 直接吃编辑表单已拉好的 roleOptions(ProTable 支持 Ref 选项源),不额外发请求;
+  // 列上有 options,搜索控件自动是 select。
+  {
+    key: 'roleId',
+    title: () => t('user.roles'),
+    hideInTable: true,
+    options: roleOptions,
+    search: { props: { clearable: true } },
+  },
   { key: 'orgName', title: () => t('user.org'), render: (r) => r.orgName || '—' },
   { key: 'positionName', title: () => t('user.position'), render: (r) => r.positionName || '—' },
   {

@@ -35,6 +35,14 @@ export const staticRoutes: RouteRecordRaw[] = [
         component: namedPage('personal-password', () => import('@/views/personal/password.vue')),
         meta: { title: 'menu.password' },
       },
+      // 我的通知:走 [ActiveSession] 的 notice/mine,人人可读 —— 故是静态路由而非菜单
+      // (进菜单就得播种 + 给每个角色授权,那才是真正的多余功课)。入口在顶栏铃铛的「查看全部」。
+      {
+        path: '/personal/notice',
+        name: 'personal-notice',
+        component: namedPage('personal-notice', () => import('@/views/personal/notice.vue')),
+        meta: { title: 'menu.notice' },
+      },
     ],
   },
   {

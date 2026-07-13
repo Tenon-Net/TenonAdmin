@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // 角色管理 = ProTable CRUD(照职位范式)+ 两个专属抽屉:授权菜单(勾选菜单树)、数据范围(选范围类型 + 自定义机构)。
-// 与职位唯一不同:删角色后端会级联清关联(用户↔角色/角色↔菜单/角色数据范围),前端无需额外处理。
+// 删角色会**物理**删掉用户↔角色关联(不可恢复)——所以删前先查一次持有人数当面告知,单删与批量删都盖到,
+// 只给行内按钮加警告的话,勾选 + 批量删就绕过去了。
 import { computed, h, reactive, ref } from 'vue'
 import {
-  NButton, NSpace, NInput, NInputNumber, NSwitch, NPopconfirm, NForm, NFormItem, NSelect, NTree,
+  NButton, NSpace, NInput, NInputNumber, NSwitch, NForm, NFormItem, NSelect, NTree,
   useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
@@ -15,21 +17,57 @@ import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
 import { useProTableLabels } from '@/composables/useProTableLabels'
-import { roleApi, menuApi } from '@/api'
+import { roleApi, menuApi, userApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { DataScopeType, type RoleInput, type SysRole } from '@/types/api'
 import type { MenuTreeNode } from '@/types/menu'
 
 const { t } = useI18n()
 const message = useMessage()
-const { run } = useConfirm()
+const router = useRouter()
+const { confirm } = useConfirm()
 const labels = useProTableLabels()
 const tableRef = ref<ProTableInst<SysRole>>()
+
+/**
+ * 持有该角色的用户数。复用用户分页端点(Size=1 只要 total),不新开接口。
+ * 查不到(如只有角色 CRUD、没有用户查询权限的管理员会 403)返回 null → 退回通用文案,不阻断删除:
+ * 今天能删的人,改完照样能删,本次改动只加知情,不改变谁能删什么。
+ */
+async function countUsers(roleId: number): Promise<number | null> {
+  try {
+    const { total } = await userApi.page({ page: 1, pageSize: 1, roleId })
+    return total
+  } catch {
+    return null
+  }
+}
+
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   remove: roleApi.batchRemove,
   refresh: () => tableRef.value?.refresh(),
   successMsg: t('role.deleted'),
+  content: async (ids) => {
+    const counts = await Promise.all(ids.map(countUsers))
+    if (counts.some((n) => n === null)) return t('common.batchDeleteConfirm', { count: ids.length })
+    const users = counts.reduce<number>((sum, n) => sum + n!, 0)
+    return users === 0
+      ? t('common.batchDeleteConfirm', { count: ids.length })
+      : t('role.batchDeleteWithUsers', { count: ids.length, users })
+  },
 })
+
+async function askDelete(r: SysRole) {
+  const n = await countUsers(r.id)
+  const content =
+    n === null
+      ? t('role.deleteConfirm', { name: r.name })
+      : n === 0
+        ? t('role.deleteConfirmNoUsers', { name: r.name })
+        : t('role.deleteConfirmWithUsers', { name: r.name, count: n })
+  const ok = await confirm({ content, type: 'error', action: () => roleApi.remove(r.id), successMsg: t('role.deleted') })
+  if (ok) tableRef.value?.refresh()
+}
 
 const toInput = (r: SysRole): RoleInput => ({ name: r.name, code: r.code, sort: r.sort, enabled: r.enabled, remark: r.remark ?? '' })
 
@@ -55,26 +93,21 @@ const columns: ProTableColumn<SysRole>[] = [
   {
     key: 'op',
     title: () => t('common.operation'),
-    width: 260,
+    width: 360, // 5 个按钮(授权菜单/数据范围/查看用户/编辑/删除);再窄「删除」会换行
     hideInSetting: true,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
         h(NButton, { size: 'small', quaternary: true, onClick: () => openMenus(r) }, () => t('role.grantMenus')),
         h(NButton, { size: 'small', quaternary: true, onClick: () => openScope(r) }, () => t('role.dataScope')),
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
+        // 反向视图:带 ?roleId= 跳用户页,用户页 watch 到 query 变化即预筛选
         h(
-          NPopconfirm,
-          {
-            onPositiveClick: () =>
-              run(() => roleApi.remove(r.id), t('role.deleted')).then((ok) => {
-                if (ok) tableRef.value?.refresh()
-              }),
-          },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
-            default: () => t('role.deleteConfirm', { name: r.name }),
-          },
+          NButton,
+          { size: 'small', quaternary: true, onClick: () => router.push({ path: '/system/user', query: { roleId: String(r.id) } }) },
+          () => t('role.viewUsers'),
         ),
+        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
+        // 不用 n-popconfirm:它的文案是静态的,塞不进"这个角色有 N 个人在用"这种删前才查得到的数字
+        h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => askDelete(r) }, () => t('common.delete')),
       ]),
   },
 ]

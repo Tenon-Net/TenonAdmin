@@ -2,7 +2,7 @@ using TenonAdmin.Core;
 
 namespace TenonAdmin.Services;
 
-/// <summary>用户分页查询入参(账号/姓名模糊 + 机构/启用状态过滤)</summary>
+/// <summary>用户分页查询入参(账号/姓名模糊 + 机构/角色/启用状态过滤)</summary>
 public record UserPageInput : PageInputBase
 {
     /// <summary>账号(模糊)</summary>
@@ -13,6 +13,9 @@ public record UserPageInput : PageInputBase
 
     /// <summary>主属机构 Id(精确)</summary>
     public long? OrgId { get; init; }
+
+    /// <summary>角色 Id(精确):只返回持有该角色的用户。管理端"这个角色有哪些人"的反查即走此参。</summary>
+    public long? RoleId { get; init; }
 
     /// <summary>启用状态(null=全部)</summary>
     public bool? Enabled { get; init; }

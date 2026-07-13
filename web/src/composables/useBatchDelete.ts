@@ -12,6 +12,11 @@ export interface UseBatchDeleteOptions {
   refresh: () => void
   /** 成功 toast 文案;false = 不弹(另有提示)。缺省用 common.success。 */
   successMsg?: string | false
+  /**
+   * 自定义确认文案(可异步:删前要先查点东西才能把话说清楚时用,如"这些角色关联了 N 个用户")。
+   * 缺省是按条数的通用文案。有此需求的页面若只给行内单删加警告,勾选+批量删就能绕过去。
+   */
+  content?: (ids: number[]) => string | Promise<string>
 }
 
 export function useBatchDelete(opts: UseBatchDeleteOptions) {
@@ -25,7 +30,7 @@ export function useBatchDelete(opts: UseBatchDeleteOptions) {
     const ids = checkedKeys.value.map(Number)
     if (ids.length === 0) return
     const ok = await confirm({
-      content: t('common.batchDeleteConfirm', { count: ids.length }),
+      content: (await opts.content?.(ids)) ?? t('common.batchDeleteConfirm', { count: ids.length }),
       action: () => opts.remove(ids),
       successMsg: opts.successMsg,
     })

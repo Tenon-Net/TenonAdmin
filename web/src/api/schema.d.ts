@@ -3367,6 +3367,8 @@ export interface paths {
                     Name?: string;
                     /** @description 主属机构 Id(精确) */
                     OrgId?: number | string;
+                    /** @description 角色 Id(精确):只返回持有该角色的用户。管理端"这个角色有哪些人"的反查即走此参。 */
+                    RoleId?: number | string;
                     /** @description 启用状态(null=全部) */
                     Enabled?: boolean;
                     Current?: number | string;
