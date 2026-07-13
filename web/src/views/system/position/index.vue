@@ -3,7 +3,7 @@
 // 后端无独立启停端点 → StatusSwitch 走全量 update(同 module 页);code 编辑禁用。
 import { h, reactive, ref } from 'vue'
 import {
-  NButton, NSpace, NInput, NInputNumber, NPopconfirm, NForm, NFormItem,
+  NButton, NSpace, NInput, NInputNumber, NPopconfirm, NForm, NFormItem, NSwitch,
   useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
