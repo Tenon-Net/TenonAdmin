@@ -1,6 +1,6 @@
 {
   "$schema": "http://json.schemastore.org/template",
-  "author": "DotNet-MoYu",
+  "author": "Tenon-Net",
   "classifications": [ "Web", "Admin", "API", "TenonAdmin" ],
   "identity": "TenonAdmin.App.CSharp",
   "name": "TenonAdmin 后台 host",
@@ -16,9 +16,9 @@
     "TenonPkgVersion": {
       "type": "parameter",
       "datatype": "text",
-      "defaultValue": "0.0.1-preview",
+      "defaultValue": "PACK_VERSION_STAMP",
       "replaces": "TENON_PKG_VERSION",
-      "description": "生成物引用的 TenonAdmin NuGet 包版本(默认与当前内核对齐)。"
+      "description": "生成物引用的 TenonAdmin NuGet 包版本。默认值由打包时的 -p:Version 盖进来(见 TenonAdmin.Templates.csproj 的 StampTemplateVersion),因此始终与随同发布的内核版本一致;直接从源码目录安装模板时它仍是字面量 PACK_VERSION_STAMP —— 那种用法请显式传 --TenonPkgVersion。"
     },
     "skipRestore": {
       "type": "parameter",
