@@ -146,6 +146,18 @@ public enum ErrorCode
     [MsgKey("error.user.passwordTooWeak")]
     PasswordTooWeak = 42019,
 
+    /// <summary>回收站中未找到该已删记录</summary>
+    [MsgKey("error.recycle.notFound")]
+    RecycleNotFound = 42020,
+
+    /// <summary>恢复时唯一字段冲突(编码/账号已被新记录占用)</summary>
+    [MsgKey("error.recycle.uniqueConflict")]
+    RecycleUniqueConflict = 42021,
+
+    /// <summary>不支持的回收站实体类型</summary>
+    [MsgKey("error.recycle.invalidType")]
+    RecycleInvalidType = 42022,
+
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 
     /// <summary>字典类型不存在</summary>

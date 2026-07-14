@@ -123,8 +123,8 @@ export const orgApi = {
   remove: (id: number) =>
     client.DELETE('/api/v1/sys/org/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 复制机构子树(整支克隆挂到源节点同级),返回新根 Id。 */
-  copy: (id: number) =>
-    client.POST('/api/v1/sys/org/{id}/copy', { params: { path: { id } } }).then((r) => unwrap<number>(r)),
+  copy: (id: number, body?: { name?: string }) =>
+    client.POST('/api/v1/sys/org/{id}/copy', { params: { path: { id } }, body: body as any }).then((r) => unwrap<number>(r)),
 }
 
 export const positionApi = {
@@ -144,9 +144,6 @@ export const positionApi = {
       })
       .then((r) => unwrap<PagedList<SysPosition>>(r))
       .then((p) => ({ items: p.items, total: p.total })),
-  /** 行拖拽重排:按新顺序传 id 列表,后端据此赋 Sort。 */
-  reorder: (ids: number[]) =>
-    client.POST('/api/v1/sys/position/reorder', { body: { ids } }).then((r) => unwrap<boolean>(r)),
   add: (body: PositionInput) => client.POST('/api/v1/sys/position/add', { body }).then((r) => unwrap<number>(r)),
   update: (id: number, body: PositionInput) =>
     client.PUT('/api/v1/sys/position/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
@@ -436,4 +433,19 @@ export const menuApi = {
     client.PUT('/api/v1/sys/menu/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   remove: (id: number) =>
     client.DELETE('/api/v1/sys/menu/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+}
+
+// ── 回收站 ────────────────────────────────────────────────────────
+
+export interface RecycleBinItem { id: number; name: string; code: string | null; deletedAt: string | null; deletedBy: number | null }
+
+export const recycleApi = {
+  page: (type: string) => (params: { page: number; pageSize: number }) =>
+    client.GET('/api/v1/sys/recycle/{type}/page' as any, { params: { path: { type }, query: { Current: params.page, Size: params.pageSize } as any } })
+      .then((r) => unwrap<PagedList<RecycleBinItem>>(r))
+      .then((p) => ({ items: p.items, total: p.total })),
+  restore: (type: string, id: number) =>
+    client.POST('/api/v1/sys/recycle/{type}/{id}/restore' as any, { params: { path: { type, id } } }).then((r) => unwrap<boolean>(r)),
+  purge: (type: string, id: number) =>
+    client.DELETE('/api/v1/sys/recycle/{type}/{id}' as any, { params: { path: { type, id } } }).then((r) => unwrap<boolean>(r)),
 }

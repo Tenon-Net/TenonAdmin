@@ -5,7 +5,7 @@
 import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import {
   NButton, NSpace, NForm, NFormItem, NInput, NInputNumber, NSwitch,
-  NPopconfirm, useMessage, type FormInst, type FormRules,
+  NPopconfirm, NModal, NCard, useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
 import { ProTable, type ProTableColumn } from 'tenon-naive-pro-table'
 import { useI18n } from 'vue-i18n'
@@ -72,7 +72,6 @@ const formRef = ref<FormInst | null>(null)
 const editingId = ref<number | null>(null)
 const rules: FormRules = {
   name: { required: true, whitespace: true, message: () => t('org.nameRequired'), trigger: ['input', 'blur'] },
-  code: { required: true, whitespace: true, message: () => t('org.codeRequired'), trigger: ['input', 'blur'] },
 }
 const blank = (): OrgForm => ({ parentId: 0, name: '', code: '', category: null, sort: 0, enabled: true })
 const form = reactive<OrgForm>(blank())
@@ -106,6 +105,23 @@ async function save() {
   }
 }
 
+// ── 复制弹窗 ──────────────────────────────────────────────────────
+const copyShow = ref(false)
+const copyId = ref(0)
+const copySourceName = ref('')
+const copyName = ref('')
+
+function openCopy(r: SysOrg) {
+  copyId.value = r.id
+  copySourceName.value = r.name
+  copyName.value = r.name + '-副本'
+  copyShow.value = true
+}
+async function confirmCopy() {
+  const ok = await run(() => orgApi.copy(copyId.value, { name: copyName.value }), t('org.copied'))
+  if (ok) { copyShow.value = false; load() }
+}
+
 const columns: ProTableColumn<Tree<SysOrg>>[] = [
   { title: () => t('org.name'), key: 'name', align: 'left' }, // 树列左对齐,展开缩进才好读
   { title: () => t('org.code'), key: 'code' },
@@ -132,19 +148,7 @@ const columns: ProTableColumn<Tree<SysOrg>>[] = [
       h(NSpace, { size: 2, wrapItem: false }, () => [
         h(NButton, { size: 'small', quaternary: true, onClick: () => openAdd(r.id) }, () => t('org.addChild')),
         h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () =>
-              run(() => orgApi.copy(r.id), t('org.copied')).then((ok) => {
-                if (ok) load()
-              }),
-          },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true }, () => t('org.copy')),
-            default: () => t('org.copyConfirm', { name: r.name }),
-          },
-        ),
+        h(NButton, { size: 'small', quaternary: true, onClick: () => openCopy(r) }, () => t('org.copy')),
         h(
           NPopconfirm,
           {
@@ -173,6 +177,7 @@ const columns: ProTableColumn<Tree<SysOrg>>[] = [
       :loading="loading"
       row-key="id"
       :pagination="false"
+      :toolbar="{ refresh: false }"
       storage-key="sys-org"
       :expanded-row-keys="expandedKeys"
       @update:expanded-row-keys="(keys: number[]) => (expandedKeys = keys)"
@@ -181,6 +186,9 @@ const columns: ProTableColumn<Tree<SysOrg>>[] = [
         <n-input v-model:value="keyword" clearable :placeholder="t('org.searchPlaceholder')" style="width: 220px">
           <template #prefix><AppIcon icon="ph:magnifying-glass" :size="16" /></template>
         </n-input>
+        <n-button quaternary :loading="loading" @click="load">
+          <template #icon><AppIcon icon="ph:arrow-clockwise" :size="16" /></template>
+        </n-button>
         <n-button quaternary @click="toggleExpandAll">
           <template #icon>
             <AppIcon :icon="allExpanded ? 'ph:arrows-in-line-vertical' : 'ph:arrows-out-line-vertical'" :size="16" />
@@ -212,8 +220,8 @@ const columns: ProTableColumn<Tree<SysOrg>>[] = [
         <n-form-item :label="t('org.name')" path="name">
           <n-input v-model:value="form.name" :placeholder="t('org.name')" />
         </n-form-item>
-        <n-form-item :label="t('org.code')" path="code">
-          <n-input v-model:value="form.code" :placeholder="t('org.code')" :disabled="editingId !== null" />
+        <n-form-item :label="t('org.code')">
+          <n-input v-model:value="form.code" :placeholder="t('org.codePlaceholder')" :disabled="editingId !== null" />
         </n-form-item>
         <n-form-item :label="t('org.category')">
           <DictSelect v-model:value="form.category" type-code="org_category" clearable :placeholder="t('org.categoryPlaceholder')" />
@@ -226,6 +234,19 @@ const columns: ProTableColumn<Tree<SysOrg>>[] = [
         </n-form-item>
       </n-form>
     </FormContainer>
+
+    <n-modal v-model:show="copyShow" :mask-closable="false">
+      <n-card :title="t('org.copyTitle')" style="width: 420px" :bordered="false" closable @close="copyShow = false">
+        <p style="margin: 0 0 12px">{{ t('org.copyConfirm', { name: copySourceName }) }}</p>
+        <n-input v-model:value="copyName" :placeholder="t('org.copyNameLabel')" />
+        <template #action>
+          <n-space justify="end">
+            <n-button @click="copyShow = false">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="confirmCopy">{{ t('common.confirm') }}</n-button>
+          </n-space>
+        </template>
+      </n-card>
+    </n-modal>
   </div>
 </template>
 

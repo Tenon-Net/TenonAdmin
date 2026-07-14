@@ -59,9 +59,9 @@ public class OrgController(IOrgService orgService) : ControllerBase
     /// <summary>复制机构子树(整支克隆挂到源节点同级),返回新根 Id</summary>
     [HttpPost("{id}/copy")]
     [RolePermission]
-    public async Task<Result<long>> Copy(long id)
+    public async Task<Result<long>> Copy(long id, [FromBody] OrgCopyInput? input = null)
     {
-        var newId = await orgService.CopyAsync(id);
+        var newId = await orgService.CopyAsync(id, input?.Name);
         return Result<long>.Ok(newId);
     }
 }

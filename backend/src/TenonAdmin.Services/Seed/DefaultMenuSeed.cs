@@ -38,7 +38,6 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 75, ParentId = 10, Type = MenuType.Button, Title = "岗位-新增", Permission = "POST:/api/v1/sys/position/add", Sort = 6, Enabled = true },
         new SysMenu { Id = 76, ParentId = 10, Type = MenuType.Button, Title = "岗位-更新", Permission = "PUT:/api/v1/sys/position/{id}", Sort = 7, Enabled = true },
         new SysMenu { Id = 77, ParentId = 10, Type = MenuType.Button, Title = "岗位-删除", Permission = "DELETE:/api/v1/sys/position/{id}", Sort = 8, Enabled = true },
-        new SysMenu { Id = 99, ParentId = 10, Type = MenuType.Button, Title = "岗位-拖拽排序", Permission = "POST:/api/v1/sys/position/reorder", Sort = 9, Enabled = true },
 
         // 用户管理页(R4:UserController)。分页码 11、新增 12;写侧码 50-54。
         new SysMenu { Id = 15, ParentId = 10, Type = MenuType.Menu, Title = "用户管理", Permission = "", Path = "/system/user", Component = "system/user/index", Icon = "ph:users-duotone", Sort = 3, Enabled = true, Visible = true },
@@ -149,6 +148,12 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 104, ParentId = 30, Type = MenuType.Button, Title = "文件-分片初始化", Permission = "POST:/api/v1/sys/file/chunk/init", Sort = 6, Enabled = true },
         new SysMenu { Id = 105, ParentId = 30, Type = MenuType.Button, Title = "文件-分片上传", Permission = "POST:/api/v1/sys/file/chunk", Sort = 7, Enabled = true },
         new SysMenu { Id = 106, ParentId = 30, Type = MenuType.Button, Title = "文件-分片完成", Permission = "POST:/api/v1/sys/file/chunk/complete", Sort = 8, Enabled = true },
+
+        // 回收站页(全局软删数据恢复/彻底删除)。挂靠系统运维目录。
+        new SysMenu { Id = 110, ParentId = 20, Type = MenuType.Menu, Title = "回收站", Permission = "", Path = "/system/recycle", Component = "system/recycle/index", Icon = "ph:trash-duotone", Sort = 6, Enabled = true, Visible = true },
+        new SysMenu { Id = 111, ParentId = 20, Type = MenuType.Button, Title = "回收站-列表", Permission = "GET:/api/v1/sys/recycle/{type}/page", Sort = 33, Enabled = true },
+        new SysMenu { Id = 112, ParentId = 20, Type = MenuType.Button, Title = "回收站-恢复", Permission = "POST:/api/v1/sys/recycle/{type}/{id}/restore", Sort = 34, Enabled = true },
+        new SysMenu { Id = 113, ParentId = 20, Type = MenuType.Button, Title = "回收站-彻底删除", Permission = "DELETE:/api/v1/sys/recycle/{type}/{id}", Sort = 35, Enabled = true },
 
         // ═══ 业务中心(示例业务模块 Id=2)═══════════════════════════
         // 复用现成的 dashboard/biz.vue;工作台是根级 Menu 节点(可挂 ModuleId),Path 与 system 工作台错开。

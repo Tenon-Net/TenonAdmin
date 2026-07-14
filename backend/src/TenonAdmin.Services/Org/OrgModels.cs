@@ -9,8 +9,8 @@ public record OrgInput
     /// <summary>机构名称</summary>
     public string Name { get; init; } = "";
 
-    /// <summary>机构编码(唯一)</summary>
-    public string Code { get; init; } = "";
+    /// <summary>机构编码(唯一;新增时留空则后端自动生成)</summary>
+    public string? Code { get; init; }
 
     /// <summary>机构分类(org_category 字典 value,可空)</summary>
     public string? Category { get; init; }
@@ -20,4 +20,11 @@ public record OrgInput
 
     /// <summary>是否启用</summary>
     public bool Enabled { get; init; } = true;
+}
+
+/// <summary>复制机构入参</summary>
+public record OrgCopyInput
+{
+    /// <summary>克隆后根节点名称(留空则追加"-副本"后缀)</summary>
+    public string? Name { get; init; }
 }

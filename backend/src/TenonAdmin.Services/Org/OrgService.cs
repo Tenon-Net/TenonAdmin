@@ -26,16 +26,27 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
     {
         if (input.ParentId != 0)
             AdminException.ThrowIf(!await orgs.AnyAsync(o => o.Id == input.ParentId), ErrorCode.OrgNotFound);
-        // 编码唯一(库有 idx_sys_org_code 唯一索引):无前置查重会撞约束抛原生 500;查重纳入软删行(P1-10)
-        AdminException.ThrowIf(
-            await orgs.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(o => o.Code == input.Code),
-            ErrorCode.OrgCodeExists);
+
+        // 编码留空则自动生成 10 位随机字母数字串(参照 SimpleAdmin)
+        var code = input.Code;
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            do { code = GenerateRandomCode(10); }
+            while (await orgs.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(o => o.Code == code));
+        }
+        else
+        {
+            // 编码唯一(库有 idx_sys_org_code 唯一索引):无前置查重会撞约束抛原生 500;查重纳入软删行(P1-10)
+            AdminException.ThrowIf(
+                await orgs.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(o => o.Code == code),
+                ErrorCode.OrgCodeExists);
+        }
 
         var entity = new SysOrg
         {
             ParentId = input.ParentId,
             Name = input.Name,
-            Code = input.Code,
+            Code = code!,
             Category = input.Category,
             Sort = input.Sort,
             Enabled = input.Enabled,
@@ -80,7 +91,7 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
     }
 
     /// <inheritdoc />
-    public virtual async Task<long> CopyAsync(long id)
+    public virtual async Task<long> CopyAsync(long id, string? newName = null)
     {
         var all = await orgs.AsQueryable().ToListAsync();   // 平铺(软删已被全局过滤器排除)
         var source = all.FirstOrDefault(o => o.Id == id);
@@ -97,7 +108,7 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
         queue.Enqueue(source!);
 
         // 整支克隆包一个事务:任一步失败整体回滚,不留半棵克隆树
-        await orgs.Db.Ado.UseTranAsync(async () =>
+        var result = await orgs.Db.Ado.UseTranAsync(async () =>
         {
             while (queue.Count > 0)
             {
@@ -106,7 +117,7 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
                 {
                     // 根挂到源的同级(与源并列);其余重指到已克隆的新父
                     ParentId = node.Id == id ? source!.ParentId : idMap[node.ParentId],
-                    Name = node.Id == id ? node.Name + "-副本" : node.Name,
+                    Name = node.Id == id ? (newName ?? node.Name + "-副本") : node.Name,
                     Code = NextUniqueCode(node.Code, usedCodes),
                     Category = node.Category,
                     Sort = node.Sort,
@@ -118,6 +129,7 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
                     foreach (var kid in kids) queue.Enqueue(kid);
             }
         });
+        if (!result.IsSuccess) throw result.ErrorException;
         await rbac.InvalidateAllScopesAsync();   // 新增子树改变"本机构及以下"子孙集 → 失效全体 scope
         return idMap[id];
     }
@@ -129,5 +141,17 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
         for (var i = 2; used.Contains(candidate); i++) candidate = $"{baseCode}-copy{i}";
         used.Add(candidate);
         return candidate;
+    }
+
+    private const string CodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+
+    /// <summary>生成指定长度的随机字母数字编码(排除易混淆字符 0/O/1/I/l)</summary>
+    protected static string GenerateRandomCode(int length)
+    {
+        return string.Create(length, 0, static (span, _) =>
+        {
+            for (var i = 0; i < span.Length; i++)
+                span[i] = CodeChars[Random.Shared.Next(CodeChars.Length)];
+        });
     }
 }

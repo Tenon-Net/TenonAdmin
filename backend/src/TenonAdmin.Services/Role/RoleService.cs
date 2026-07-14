@@ -67,7 +67,7 @@ public class RoleService(IRepository<SysRole> roles, IRbacService rbac) : IRoleS
     public virtual async Task DeleteAsync(long id)
     {
         await GetAsync(id);
-        await roles.DeleteAsync(id);         // 软删角色本体
+        await roles.DeleteAsync(id);
         await rbac.OnRoleDeletedAsync(id);   // 级联清关联 + 失效受影响用户权限/数据范围缓存
     }
 

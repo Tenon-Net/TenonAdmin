@@ -57,8 +57,14 @@ public class UserService(
                 Id = u.Id,
                 Account = u.Account,
                 Name = u.Name,
+                Nickname = u.Nickname,
+                Phone = u.Phone,
+                Email = u.Email,
+                Gender = u.Gender,
+                Avatar = u.Avatar,
                 OrgId = u.OrgId,
                 PositionId = u.PositionId,
+                DirectorId = u.DirectorId,
                 Enabled = u.Enabled,
                 IsSuperAdmin = u.IsSuperAdmin,
                 CreateTime = u.CreateTime,
@@ -87,11 +93,12 @@ public class UserService(
             ? await users.Db.Queryable<SysUserRole>().Where(x => x.RoleId == roleId.Value).Select(x => x.UserId).ToListAsync()
             : null;
 
-    /// <summary>按本页出现的机构/职位 Id 各去重批量查一次名称回填(避免逐行 N+1)。已删/未分配则名称留 null。</summary>
+    /// <summary>按本页出现的机构/职位/主管 Id 各去重批量查一次名称回填(避免逐行 N+1)。已删/未分配则名称留 null。</summary>
     protected virtual async Task<IReadOnlyList<UserItem>> FillOrgPositionNamesAsync(IReadOnlyList<UserItem> items)
     {
         var orgIds = items.Where(x => x.OrgId.HasValue).Select(x => x.OrgId!.Value).Distinct().ToList();
         var posIds = items.Where(x => x.PositionId.HasValue).Select(x => x.PositionId!.Value).Distinct().ToList();
+        var dirIds = items.Where(x => x.DirectorId.HasValue).Select(x => x.DirectorId!.Value).Distinct().ToList();
         var orgName = (orgIds.Count == 0
             ? []
             : await orgs.AsQueryable().Where(o => orgIds.Contains(o.Id)).Select(o => new { o.Id, o.Name }).ToListAsync())
@@ -100,10 +107,16 @@ public class UserService(
             ? []
             : await positions.AsQueryable().Where(p => posIds.Contains(p.Id)).Select(p => new { p.Id, p.Name }).ToListAsync())
             .ToDictionary(p => p.Id, p => p.Name);
+        // 主管也是 sys_user 行:同表按 Id 批量取姓名(全局软删过滤器已排除已删主管 → 名称留 null)
+        var dirName = (dirIds.Count == 0
+            ? []
+            : await users.AsQueryable().Where(u => dirIds.Contains(u.Id)).Select(u => new { u.Id, u.Name }).ToListAsync())
+            .ToDictionary(u => u.Id, u => u.Name);
         return items.Select(u => u with
         {
             OrgName = u.OrgId is { } oid && orgName.TryGetValue(oid, out var on) ? on : null,
             PositionName = u.PositionId is { } pid && posName.TryGetValue(pid, out var pn) ? pn : null,
+            DirectorName = u.DirectorId is { } did && dirName.TryGetValue(did, out var dn) ? dn : null,
         }).ToList();
     }
 
@@ -118,8 +131,14 @@ public class UserService(
             Id = u!.Id,
             Account = u.Account,
             Name = u.Name,
+            Nickname = u.Nickname,
+            Phone = u.Phone,
+            Email = u.Email,
+            Gender = u.Gender,
+            Avatar = u.Avatar,
             OrgId = u.OrgId,
             PositionId = u.PositionId,
+            DirectorId = u.DirectorId,
             Enabled = u.Enabled,
             IsSuperAdmin = u.IsSuperAdmin,
             CreateTime = u.CreateTime,
@@ -146,8 +165,14 @@ public class UserService(
             Account = input.Account,
             Password = hasher.Hash(initialPassword),
             Name = input.Name,
+            Nickname = input.Nickname,
+            Phone = input.Phone,
+            Email = input.Email,
+            Gender = input.Gender,
+            Avatar = input.Avatar,
             OrgId = input.OrgId,
             PositionId = input.PositionId,
+            DirectorId = input.DirectorId,
             Enabled = input.Enabled,
             IsSuperAdmin = false,       // 接口永不建超管(防提权);超管只能种子/手工建
             MustChangePassword = true,  // 管理员建号:初始口令由管理员/系统设定,强制用户首登改密(§14)
@@ -172,8 +197,14 @@ public class UserService(
 
         // 只改资料字段;Account/Password/IsSuperAdmin 原样保留(整行更新时未改动即不变)
         user.Name = input.Name;
+        user.Nickname = input.Nickname;
+        user.Phone = input.Phone;
+        user.Email = input.Email;
+        user.Gender = input.Gender;
+        user.Avatar = input.Avatar;
         user.OrgId = input.OrgId;
         user.PositionId = input.PositionId;
+        user.DirectorId = input.DirectorId;
         user.Enabled = input.Enabled;
         await InTransactionAsync(async () =>
         {

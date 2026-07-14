@@ -40,4 +40,13 @@ public interface IRepository<TEntity> where TEntity : BaseEntity, new()
 
     /// <summary>按主键软删除(置 IsDelete 标记,物理数据保留、查询即不可见),返回受影响行数</summary>
     Task<int> DeleteAsync(long id);
+
+    /// <summary>按主键物理删除(行从数据库彻底移除)。用于 GDPR 清理、过期数据归档等确需真删的场景。</summary>
+    Task<int> HardDeleteAsync(long id);
+
+    /// <summary>
+    /// 恢复已软删除的记录(<see cref="DeleteAsync"/> 的逆操作)。自动逆转唯一索引列的 <c>_del_{id}</c> 后缀;
+    /// 若逆转后的值与现存记录冲突,抛 <c>RecycleUniqueConflict</c>。
+    /// </summary>
+    Task<int> RestoreAsync(long id);
 }

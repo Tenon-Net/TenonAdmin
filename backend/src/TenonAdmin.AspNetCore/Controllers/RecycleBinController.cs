@@ -1,0 +1,114 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using SqlSugar;
+using TenonAdmin.Core;
+using TenonAdmin.Services;
+using TenonAdmin.SqlSugar;
+
+namespace TenonAdmin.AspNetCore;
+
+/// <summary>回收站统一 DTO</summary>
+public record RecycleBinItem(long Id, string Name, string? Code, DateTime? DeletedAt, long? DeletedBy);
+
+/// <summary>回收站分页入参</summary>
+public record RecycleBinPageInput : PageInputBase;
+
+/// <summary>
+/// 全局回收站——按实体类型查看软删除数据、恢复或彻底删除。
+/// 路由 <c>/api/v1/sys/recycle/{type}/...</c>,type 值:user/role/org/position/module/config/dict/menu。
+/// </summary>
+[ApiController]
+[Route("api/v1/sys/recycle")]
+public class RecycleBinController(ISqlSugarClient db, IServiceProvider sp) : ControllerBase
+{
+    /// <summary>分页列出指定类型的已删记录</summary>
+    [HttpGet("{type}/page")]
+    [RolePermission]
+    public async Task<Result<PagedList<RecycleBinItem>>> Page(string type, [FromQuery] RecycleBinPageInput input)
+    {
+        var data = type switch
+        {
+            "user" => await ListAsync<SysUser>(input, e => e.Account + " / " + e.Name, null),
+            "role" => await ListAsync<SysRole>(input, e => e.Name, e => e.Code),
+            "org" => await ListAsync<SysOrg>(input, e => e.Name, e => e.Code),
+            "position" => await ListAsync<SysPosition>(input, e => e.Name, e => e.Code),
+            "module" => await ListAsync<SysModule>(input, e => e.Title, e => e.Code),
+            "config" => await ListAsync<SysConfig>(input, e => e.Name, e => e.ConfigKey),
+            "dict" => await ListAsync<SysDictType>(input, e => e.Name, e => e.Code),
+            "menu" => await ListAsync<SysMenu>(input, e => e.Title, e => e.Permission),
+            _ => throw new AdminException(ErrorCode.RecycleInvalidType),
+        };
+        return Result<PagedList<RecycleBinItem>>.Ok(data);
+    }
+
+    /// <summary>恢复已删记录</summary>
+    [HttpPost("{type}/{id}/restore")]
+    [RolePermission]
+    public async Task<Result<bool>> Restore(string type, long id)
+    {
+        var rows = type switch
+        {
+            "user" => await Repo<SysUser>().RestoreAsync(id),
+            "role" => await Repo<SysRole>().RestoreAsync(id),
+            "org" => await Repo<SysOrg>().RestoreAsync(id),
+            "position" => await Repo<SysPosition>().RestoreAsync(id),
+            "module" => await Repo<SysModule>().RestoreAsync(id),
+            "config" => await Repo<SysConfig>().RestoreAsync(id),
+            "dict" => await Repo<SysDictType>().RestoreAsync(id),
+            "menu" => await Repo<SysMenu>().RestoreAsync(id),
+            _ => throw new AdminException(ErrorCode.RecycleInvalidType),
+        };
+        AdminException.ThrowIf(rows == 0, ErrorCode.RecycleNotFound);
+        return Result<bool>.Ok(true);
+    }
+
+    /// <summary>彻底删除(物理删除,不可恢复)</summary>
+    [HttpDelete("{type}/{id}")]
+    [RolePermission]
+    public async Task<Result<bool>> Purge(string type, long id)
+    {
+        var rows = type switch
+        {
+            "user" => await Repo<SysUser>().HardDeleteAsync(id),
+            "role" => await Repo<SysRole>().HardDeleteAsync(id),
+            "org" => await Repo<SysOrg>().HardDeleteAsync(id),
+            "position" => await Repo<SysPosition>().HardDeleteAsync(id),
+            "module" => await Repo<SysModule>().HardDeleteAsync(id),
+            "config" => await Repo<SysConfig>().HardDeleteAsync(id),
+            "dict" => await Repo<SysDictType>().HardDeleteAsync(id),
+            "menu" => await Repo<SysMenu>().HardDeleteAsync(id),
+            _ => throw new AdminException(ErrorCode.RecycleInvalidType),
+        };
+        AdminException.ThrowIf(rows == 0, ErrorCode.RecycleNotFound);
+        return Result<bool>.Ok(true);
+    }
+
+    private IRepository<T> Repo<T>() where T : BaseEntity, new() =>
+        sp.GetRequiredService<IRepository<T>>();
+
+    private async Task<PagedList<RecycleBinItem>> ListAsync<T>(
+        RecycleBinPageInput input,
+        Func<T, string> nameSelector,
+        Func<T, string?>? codeSelector) where T : BaseEntity, new()
+    {
+        var query = db.Queryable<T>().ClearFilter<ISoftDelete>()
+            .Where(e => e.IsDelete == true)
+            .OrderByDescending(e => e.UpdateTime);
+
+        var paged = await query.ToPagedListAsync(input.Current, input.Size);
+
+        return new PagedList<RecycleBinItem>
+        {
+            Current = paged.Current,
+            Size = paged.Size,
+            Total = paged.Total,
+            Items = paged.Items.Select(e => new RecycleBinItem(
+                e.Id,
+                nameSelector(e),
+                codeSelector?.Invoke(e),
+                e.UpdateTime,
+                e.UpdateUserId
+            )).ToList(),
+        };
+    }
+}
