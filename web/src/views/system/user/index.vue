@@ -4,8 +4,8 @@
 // 超管行(isSuperAdmin)删除/停用置灰防自锁;启停走专用 setEnabled(非全量 update)。
 import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import {
-  NButton, NCard, NTree, NSpace, NTag, NInput, NForm, NFormItem, NSelect, NSwitch, NPopconfirm,
-  useMessage, type FormInst, type FormRules,
+  NButton, NCard, NTree, NSpace, NTag, NAvatar, NInput, NForm, NFormItem, NFormItemGi, NGrid,
+  NSelect, NSwitch, NPopconfirm, useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -15,6 +15,9 @@ import PasswordStrength from '@/components/PasswordStrength/index.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
+import DictSelect from '@/components/DictSelect/index.vue'
+import DictTag from '@/components/DictTag/index.vue'
+import FileUpload from '@/components/FileUpload/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
 import { userApi, positionApi, roleApi, orgApi } from '@/api'
@@ -32,9 +35,10 @@ const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   successMsg: t('user.deleted'),
 })
 
-// 职位/角色下拉:各拉一页足量。ponytail: 200 覆盖绝大多数系统;真超再上分页搜索。
+// 职位/角色/主管下拉:各拉一页足量。ponytail: 200 覆盖绝大多数系统;真超再上分页搜索。
 const positionOptions = ref<{ label: string; value: number }[]>([])
 const roleOptions = ref<{ label: string; value: number }[]>([])
+const directorOptions = ref<{ label: string; value: number }[]>([])
 // 左侧机构树筛选:选中节点即按其机构过滤用户;params 深监听联动 ProTable(回第 1 页重查)。
 const orgTree = ref<Tree<SysOrg>[]>([])
 const selectedOrgId = ref<number | null>(null)
@@ -55,6 +59,13 @@ onMounted(async () => {
     roleOptions.value = items.map((r) => ({ label: r.name, value: r.id }))
   } catch {
     // 静默:角色下拉拉取失败不打断列表
+  }
+  try {
+    // 主管候选就是用户自身;拉一页足量作下拉源(允许把某用户选为自己主管,后台系统无害,不加环检)
+    const { items } = await userApi.page({ page: 1, pageSize: 200 })
+    directorOptions.value = items.map((u) => ({ label: `${u.name}(${u.account})`, value: u.id }))
+  } catch {
+    // 静默:主管下拉是配角,拉取失败不打断列表
   }
   try {
     orgTree.value = buildTree(await orgApi.list())
@@ -81,11 +92,36 @@ watch(
   { immediate: true },
 )
 
+// 头像首字母兜底。NAvatar 的规矩:default 插槽一有内容就渲染它、彻底无视 src(见 naive Avatar.render)。
+// 所以有头像时 default 必须留空让 <img> 出来,首字母只放 #fallback(图挂了/链过期才兜底);无头像才用 default 当文字头像。
+const initial = (name?: string | null) => (name || '?').slice(0, 1)
+
 const columns: ProTableColumn<UserItem>[] = [
   // 超管行禁勾:批量删除同样不可含超管(后端也会整体拒绝)
   { type: 'selection', disabled: (r: UserItem) => r.isSuperAdmin },
+  {
+    key: 'avatar',
+    title: () => t('user.avatar'),
+    width: 64,
+    align: 'center',
+    hideInSetting: false,
+    render: (r) =>
+      h(
+        NAvatar,
+        { round: true, size: 'small', src: r.avatar || undefined },
+        r.avatar ? { fallback: () => initial(r.name) } : { default: () => initial(r.name) },
+      ),
+  },
   { key: 'account', title: () => t('user.account'), search: true, sorter: true },
   { key: 'name', title: () => t('user.name'), search: true },
+  { key: 'phone', title: () => t('user.phone'), render: (r) => r.phone || '—' },
+  {
+    key: 'gender',
+    title: () => t('user.gender'),
+    width: 80,
+    hideInTable: true, // 次要列:默认隐藏收窄整表,列设置抽屉可打开
+    render: (r) => (r.gender ? h(DictTag, { typeCode: 'gender', value: r.gender }) : '—'),
+  },
   // 只作搜索项,不进表格也不进列设置。options 直接吃编辑表单已拉好的 roleOptions(ProTable 支持 Ref 选项源),不额外发请求;
   // 列上有 options,搜索控件自动是 select。
   {
@@ -96,7 +132,7 @@ const columns: ProTableColumn<UserItem>[] = [
     search: { props: { clearable: true } },
   },
   { key: 'orgName', title: () => t('user.org'), render: (r) => r.orgName || '—' },
-  { key: 'positionName', title: () => t('user.position'), render: (r) => r.positionName || '—' },
+  { key: 'positionName', title: () => t('user.position'), hideInTable: true, render: (r) => r.positionName || '—' },
   {
     key: 'enabled',
     title: () => t('user.status'),
@@ -125,6 +161,7 @@ const columns: ProTableColumn<UserItem>[] = [
     key: 'op',
     title: () => t('common.operation'),
     width: 210,
+    fixed: 'right', // 钉右:横向滚动时操作列始终可见
     hideInSetting: true,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
@@ -156,18 +193,31 @@ const editingId = ref<number | null>(null)
 const rules: FormRules = {
   account: { required: true, whitespace: true, message: () => t('user.accountRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('user.nameRequired'), trigger: ['input', 'blur'] },
+  // 手机/邮箱选填,填了才校验格式(前端信任边界;后端存自由字符串)
+  phone: { validator: (_r, v: string) => !v || /^1[3-9]\d{9}$/.test(v), message: () => t('user.phoneInvalid'), trigger: ['input', 'blur'] },
+  email: { validator: (_r, v: string) => !v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), message: () => t('user.emailInvalid'), trigger: ['input', 'blur'] },
 }
 interface UserForm {
   account: string
   password: string
   name: string
+  nickname: string
+  phone: string
+  email: string
+  gender: string | null
+  avatar: string | null
   orgId: number | null
   positionId: number | null
+  directorId: number | null
   enabled: boolean
   roleIds: number[]
 }
-const blank = (): UserForm => ({ account: '', password: '', name: '', orgId: null, positionId: null, enabled: true, roleIds: [] })
+const blank = (): UserForm => ({
+  account: '', password: '', name: '', nickname: '', phone: '', email: '',
+  gender: null, avatar: null, orgId: null, positionId: null, directorId: null, enabled: true, roleIds: [],
+})
 const form = reactive<UserForm>(blank())
+const avatarUploading = ref(false) // 头像上传中:给上传按钮加 spinner,别让用户对着空白干等
 
 function openAdd() {
   editingId.value = null
@@ -181,8 +231,10 @@ async function openEdit(r: UserItem) {
     editingId.value = r.id
     Object.assign(form, {
       account: d.account, password: '', name: d.name,
-      orgId: d.orgId ?? null, positionId: d.positionId ?? null, enabled: d.enabled,
-      roleIds: d.roleIds ?? [],
+      nickname: d.nickname ?? '', phone: d.phone ?? '', email: d.email ?? '',
+      gender: d.gender ?? null, avatar: d.avatar ?? null,
+      orgId: d.orgId ?? null, positionId: d.positionId ?? null, directorId: d.directorId ?? null,
+      enabled: d.enabled, roleIds: d.roleIds ?? [],
     })
     show.value = true
   } catch (e) {
@@ -197,7 +249,10 @@ async function save() {
       const body: AddUserInput = {
         account: form.account,
         password: form.password || undefined, // 留空 → 省略字段 → 后端生成随机强口令(明文经出参回传)
-        name: form.name, orgId: form.orgId, positionId: form.positionId, enabled: form.enabled,
+        name: form.name,
+        nickname: form.nickname || null, phone: form.phone || null, email: form.email || null,
+        gender: form.gender, avatar: form.avatar,
+        orgId: form.orgId, positionId: form.positionId, directorId: form.directorId, enabled: form.enabled,
         roleIds: form.roleIds,
       }
       const out = await userApi.add(body)
@@ -210,7 +265,10 @@ async function save() {
       }
     } else {
       const body: UpdateUserInput = {
-        name: form.name, orgId: form.orgId, positionId: form.positionId, enabled: form.enabled,
+        name: form.name,
+        nickname: form.nickname || null, phone: form.phone || null, email: form.email || null,
+        gender: form.gender, avatar: form.avatar,
+        orgId: form.orgId, positionId: form.positionId, directorId: form.directorId, enabled: form.enabled,
         roleIds: form.roleIds,
       }
       await userApi.update(editingId.value, body)
@@ -312,35 +370,72 @@ async function copyResult() {
   <FormContainer
     v-model:show="show"
     :title="editingId === null ? t('user.addTitle') : t('user.editTitle')"
-    :width="520"
+    :width="640"
     :on-confirm="save"
     :confirm-text="t('common.save')"
   >
-    <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :label-width="90">
-      <n-form-item v-if="editingId === null" :label="t('user.account')" path="account">
-        <n-input v-model:value="form.account" :placeholder="t('user.account')" />
-      </n-form-item>
-      <n-form-item v-if="editingId === null" :label="t('user.password')">
-        <div class="pw-field">
-          <n-input v-model:value="form.password" type="password" show-password-on="click" :placeholder="t('user.passwordHint')" />
-          <PasswordStrength :value="form.password" />
-        </div>
-      </n-form-item>
-      <n-form-item :label="t('user.name')" path="name">
-        <n-input v-model:value="form.name" :placeholder="t('user.name')" />
-      </n-form-item>
-      <n-form-item :label="t('user.org')">
-        <OrgTreeSelect v-model:value="form.orgId" :placeholder="t('user.orgPlaceholder')" />
-      </n-form-item>
-      <n-form-item :label="t('user.position')">
-        <n-select v-model:value="form.positionId" :options="positionOptions" clearable :placeholder="t('user.positionPlaceholder')" />
-      </n-form-item>
-      <n-form-item :label="t('user.roles')">
-        <n-select v-model:value="form.roleIds" :options="roleOptions" multiple clearable :placeholder="t('user.rolesPlaceholder')" />
-      </n-form-item>
-      <n-form-item :label="t('common.status')">
-        <n-switch v-model:value="form.enabled" />
-      </n-form-item>
+    <!-- 两列栅格:相关字段成对排,头像整行(span 2);账号编辑时禁改并占整行 -->
+    <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :label-width="76">
+      <n-grid :cols="2" :x-gap="16">
+        <n-form-item-gi :span="editingId === null ? 1 : 2" :label="t('user.account')" path="account">
+          <n-input v-model:value="form.account" :disabled="editingId !== null" :placeholder="t('user.account')" />
+        </n-form-item-gi>
+        <n-form-item-gi v-if="editingId === null" :label="t('user.password')">
+          <div class="pw-field">
+            <n-input v-model:value="form.password" type="password" show-password-on="click" :placeholder="t('user.passwordHint')" />
+            <PasswordStrength :value="form.password" />
+          </div>
+        </n-form-item-gi>
+        <n-form-item-gi :label="t('user.name')" path="name">
+          <n-input v-model:value="form.name" :placeholder="t('user.name')" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="t('user.nickname')">
+          <n-input v-model:value="form.nickname" :placeholder="t('user.nicknamePlaceholder')" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="t('user.gender')">
+          <DictSelect v-model:value="form.gender" type-code="gender" clearable :placeholder="t('user.genderPlaceholder')" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="t('user.phone')" path="phone">
+          <n-input v-model:value="form.phone" :placeholder="t('user.phonePlaceholder')" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="t('user.email')" path="email">
+          <n-input v-model:value="form.email" :placeholder="t('user.emailPlaceholder')" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="t('user.org')">
+          <OrgTreeSelect v-model:value="form.orgId" :placeholder="t('user.orgPlaceholder')" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="t('user.position')">
+          <n-select v-model:value="form.positionId" :options="positionOptions" clearable :placeholder="t('user.positionPlaceholder')" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="t('user.director')">
+          <n-select v-model:value="form.directorId" :options="directorOptions" clearable filterable :placeholder="t('user.directorPlaceholder')" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="t('user.roles')">
+          <n-select v-model:value="form.roleIds" :options="roleOptions" multiple clearable :placeholder="t('user.rolesPlaceholder')" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="t('common.status')">
+          <n-switch v-model:value="form.enabled" />
+        </n-form-item-gi>
+        <n-form-item-gi :span="2" :label="t('user.avatar')">
+          <div class="avatar-field">
+            <n-avatar round :size="48" style="flex-shrink: 0" :src="form.avatar || undefined">
+              <template #fallback>{{ initial(form.name) }}</template>
+              <template v-if="!form.avatar">{{ initial(form.name) }}</template>
+            </n-avatar>
+            <FileUpload
+              accept="image/*"
+              :show-file-list="false"
+              @loading-change="(v) => (avatarUploading = v)"
+              @uploaded="(o) => (form.avatar = o.viewUrl ?? null)"
+            >
+              <n-button size="small" :loading="avatarUploading" :disabled="avatarUploading">
+                <template #icon><AppIcon icon="ph:upload-simple" :size="14" /></template>
+                {{ avatarUploading ? t('user.avatarUploading') : t('user.avatar') }}
+              </n-button>
+            </FileUpload>
+          </div>
+        </n-form-item-gi>
+      </n-grid>
     </n-form>
   </FormContainer>
 
@@ -382,6 +477,12 @@ async function copyResult() {
   flex: 1;
   min-width: 0;
 }
+/* 头像:当前预览 + 上传按钮横排 */
+.avatar-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .reset-hint {
   margin: 0 0 12px;
   font-size: var(--font-size-sm, 13px);
@@ -394,7 +495,7 @@ async function copyResult() {
   align-items: flex-start;
 }
 .org-filter {
-  flex: 0 0 220px;
+  flex: 0 0 200px;
   align-self: stretch;
 }
 .org-filter-head {

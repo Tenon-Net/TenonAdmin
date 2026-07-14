@@ -10,7 +10,8 @@ import type { FileUploadOutput } from '@/types/api'
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ chunked?: boolean }>()
-const emit = defineEmits<{ uploaded: [out: FileUploadOutput] }>()
+// loadingChange:上传真正开始/结束时各发一次(try/finally 兜住),给触发器加"上传中"反馈用。
+const emit = defineEmits<{ uploaded: [out: FileUploadOutput]; loadingChange: [loading: boolean] }>()
 const message = useMessage()
 
 // n-upload 每个文件回调一次;file.file 是原始 File。成/败调 onFinish/onError 让 n-upload 更新该项状态。
@@ -19,6 +20,7 @@ async function customRequest({ file, onFinish, onError, onProgress }: UploadCust
     onError()
     return
   }
+  emit('loadingChange', true)
   try {
     const out = props.chunked
       ? await uploadChunked(file.file, (percent) => onProgress({ percent }))
@@ -28,6 +30,8 @@ async function customRequest({ file, onFinish, onError, onProgress }: UploadCust
   } catch (e) {
     message.error(translateError(e))
     onError()
+  } finally {
+    emit('loadingChange', false)
   }
 }
 </script>

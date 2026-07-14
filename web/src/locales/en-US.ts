@@ -253,6 +253,7 @@ export default {
     gender: 'Gender',
     genderPlaceholder: 'Select gender (optional)',
     avatar: 'Avatar',
+    avatarUploading: 'Uploading…',
     roles: 'Roles',
     rolesPlaceholder: 'Assign roles (optional)',
     accountRequired: 'Enter an account',

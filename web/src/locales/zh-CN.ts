@@ -256,6 +256,7 @@ export default {
     gender: '性别',
     genderPlaceholder: '选择性别(可空)',
     avatar: '头像',
+    avatarUploading: '上传中…',
     roles: '角色',
     rolesPlaceholder: '分配角色(可空)',
     accountRequired: '请输入账号',

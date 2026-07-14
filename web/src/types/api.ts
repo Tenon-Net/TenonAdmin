@@ -48,10 +48,17 @@ export interface UserItem {
   id: number
   account: string
   name: string
+  nickname?: string | null
+  phone?: string | null
+  email?: string | null
+  gender?: string | null
+  avatar?: string | null
   orgId?: number | null
   positionId?: number | null
+  directorId?: number | null
   orgName?: string | null
   positionName?: string | null
+  directorName?: string | null
   enabled: boolean
   isSuperAdmin: boolean
   createTime: string
@@ -320,8 +327,14 @@ export interface AddUserInput {
   account: string
   password?: string | null
   name: string
+  nickname?: string | null
+  phone?: string | null
+  email?: string | null
+  gender?: string | null
+  avatar?: string | null
   orgId?: number | null
   positionId?: number | null
+  directorId?: number | null
   enabled: boolean
   roleIds: number[]
 }
@@ -342,8 +355,14 @@ export interface PermissionRouteItem {
 /** 更新用户入参(后端 UpdateUserInput;无 account/password。roleIds 由 detail 原样带回避免清空)。 */
 export interface UpdateUserInput {
   name: string
+  nickname?: string | null
+  phone?: string | null
+  email?: string | null
+  gender?: string | null
+  avatar?: string | null
   orgId?: number | null
   positionId?: number | null
+  directorId?: number | null
   enabled: boolean
   roleIds: number[]
 }
@@ -353,8 +372,14 @@ export interface UserDetail {
   id: number
   account: string
   name: string
+  nickname?: string | null
+  phone?: string | null
+  email?: string | null
+  gender?: string | null
+  avatar?: string | null
   orgId?: number | null
   positionId?: number | null
+  directorId?: number | null
   enabled: boolean
   isSuperAdmin: boolean
   roleIds: number[]
