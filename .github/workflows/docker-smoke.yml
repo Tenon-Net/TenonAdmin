@@ -1,17 +1,24 @@
-# 容器交付物的冒烟测试(dev-plan T-D4 的验收线)。
-# 单元/集成测试证明代码对;这个 job 证明**镜像能起来**:生产环境 + 空库 + 具名卷 + 非 root 用户
-# 四个条件同时成立,还能建表、写种子、发令牌。少任何一条配置都会失败,那正是要验的。
+# 容器交付物的冒烟测试(dev-plan T-D4 / T-D3 的验收线)。
+#
+# 两个 job:
+#   single —— 镜像能起来:生产环境 + 空库 + 具名卷 + 非 root 用户四个条件同时成立,还能建表、写种子、发令牌。
+#   multi  —— **多副本保证**:强退跨副本立即生效、锁定阈值不翻倍、限流阈值是集群级的、两副本机器号不同、
+#             反代之后取到真实客户端 IP。这些只在两个副本同时在线时才暴露,单副本跑一万遍也照不出来。
 name: docker-smoke
 
 on:
   push:
     branches: [main, dev]
+    # GitHub Actions 不支持 YAML 锚点,两处只能照抄一遍。
     paths:
       - 'Dockerfile'
       - '.dockerignore'
       - 'docker-compose.yml'
+      - 'docker-compose.scale.yml'
       - 'web/Dockerfile'
+      - 'web/Caddyfile'
       - 'web/nginx.conf'
+      - 'scripts/smoke-multi-replica.sh'
       - 'backend/**'
       - 'web/**'
       - '.github/workflows/docker-smoke.yml'
@@ -20,13 +27,17 @@ on:
       - 'Dockerfile'
       - '.dockerignore'
       - 'docker-compose.yml'
+      - 'docker-compose.scale.yml'
       - 'web/Dockerfile'
+      - 'web/Caddyfile'
       - 'web/nginx.conf'
+      - 'scripts/smoke-multi-replica.sh'
       - 'backend/**'
       - 'web/**'
+      - '.github/workflows/docker-smoke.yml'
 
 jobs:
-  smoke:
+  single:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -67,7 +78,9 @@ jobs:
         run: |
           curl -sf http://localhost:8080/ | grep -qi '<div id="app"' \
             || { echo "::error::SPA index not served"; docker compose logs web; exit 1; }
-          # 经 nginx 打受保护端点:401 = 反代通了(且默认拒绝仍然生效)
+          # 经 Caddy 打受保护端点:401 = 反代通了(且默认拒绝仍然生效)。
+          # 这一条同时钉住 Caddyfile 的 handle 块:平铺写法下 try_files 会抢在 reverse_proxy 之前
+          # 把 /api/... 改写成 /index.html,于是 API 请求拿到一张 HTML(状态 200)而不是 401。
           status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/ping)
           [ "$status" = "401" ] || { echo "::error::/api proxy returned $status, expected 401"; exit 1; }
 
@@ -78,3 +91,28 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+
+  multi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TENON_ADMIN_PASSWORD: Smoke@123456
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start two replicas behind Caddy
+        # 两个**显式的** app 服务(各自不同的 WorkerId),不是 --scale:compose 给不了 --scale 出来的
+        # 副本各自不同的环境变量,而机器号恰恰必须每副本不同 —— 同号即撞主键。
+        run: docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --build
+
+      - name: Prove the multi-replica guarantees
+        # 每条断言都对着本批修掉的一个具体 bug;脚本自己会打印"没修好之前会是什么样"。
+        run: bash scripts/smoke-multi-replica.sh http://localhost:8080
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.scale.yml logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.scale.yml down -v
