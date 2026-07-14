@@ -1,12 +1,12 @@
 name: backend-ci
 
-# 后端 CI(设计 §8):push / PR 触发 build + test。仅在改到 backend 时跑。
+# 后端 CI(设计 §8):push / PR 触发 build + test + 模板冒烟。仅在改到 backend / templates 时跑。
 on:
   push:
     branches: [main, dev]
-    paths: ['backend/**', '.github/workflows/backend-ci.yml']
+    paths: ['backend/**', 'templates/**', '.github/workflows/backend-ci.yml']
   pull_request:
-    paths: ['backend/**', '.github/workflows/backend-ci.yml']
+    paths: ['backend/**', 'templates/**', '.github/workflows/backend-ci.yml']
 
 jobs:
   build-test:
@@ -108,3 +108,20 @@ jobs:
           # Redis 契约测试的门控开关(所有腿都跑:它与 DB 无关,多跑几遍成本也就几秒)。
           TENON_TEST_REDIS: 127.0.0.1:6379
         run: dotnet test backend/TenonAdmin.slnx -c Release --no-build
+
+  # 消费者的第一条命令(dotnet new tenon-app → restore → build)。此前零自动化覆盖 ——
+  # 于是模板长期引用着一个 tag 从没发布过的包版本,谁也没发现:内核测试全绿,而消费者第一步就失败。
+  # 与 build-test 并行(它不依赖矩阵),脏活由 templates/smoke-test.ps1 干,与本地手跑同一个脚本。
+  template-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: dotnet new tenon-app must restore + build
+        shell: pwsh
+        run: templates/smoke-test.ps1

@@ -2,12 +2,40 @@ name: backend-release
 
 # 打 tag(如 v0.0.1-preview)即打包核心 NuGet 包 + dotnet new 模板包并推 nuget.org(设计 §T10)。
 # 需在仓库 Secrets 配 NUGET_API_KEY;版本从 tag 名推导(去掉前缀 v)。
+#
+# 推包是**不可撤销**的(nuget.org 只能 unlist,不能删),所以 push 之前必须先过闸门:
+# 构建 → 测试 → 模板冒烟(装消费者的第一条命令跑一遍)。三者任一红,就不发。
 on:
   push:
     tags: ['v*']
 
 jobs:
+  # 闸门。没有它的时候,"测试是红的"和"模板 restore 不了"都能一路发到 nuget.org。
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build backend/TenonAdmin.slnx -c Release
+
+      # SQLite 腿即可:多库矩阵由 backend-ci 在合入前守;这里守的是"发出去的东西自己能不能过"。
+      - name: Test
+        run: dotnet test backend/TenonAdmin.slnx -c Release --no-build
+
+      # 消费者的第一条命令:dotnet new tenon-app → restore → build。
+      # 它按 tag 版本打包并让模板引用同一版本,所以"模板引用了一个 tag 没发布的版本"这类错在这里当场暴露。
+      - name: Template smoke (dotnet new tenon-app must restore + build)
+        shell: pwsh
+        run: templates/smoke-test.ps1 -Version "${GITHUB_REF_NAME#v}"
+
   pack-push:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,8 +53,10 @@ jobs:
         run: dotnet pack backend/TenonAdmin.slnx -c Release -o artifacts -p:Version=${{ steps.ver.outputs.version }}
 
       # 模板包在 backend/ 之外(不继承 net10/中央版本管理),需单独 pack;落同一 artifacts 目录随下方一并推。
+      # 打包时会把这个版本号盖进模板的 TenonPkgVersion 默认值(见 TenonAdmin.Templates.csproj 的 StampTemplateVersion)。
       - name: Pack templates
         run: dotnet pack templates/TenonAdmin.Templates.csproj -c Release -o artifacts -p:Version=${{ steps.ver.outputs.version }}
 
+      # .snupkg 符号包与同名 .nupkg 一起自动推送,无需单列 glob。
       - name: Push to nuget.org
         run: dotnet nuget push "artifacts/*.nupkg" -k "${{ secrets.NUGET_API_KEY }}" -s https://api.nuget.org/v3/index.json --skip-duplicate
