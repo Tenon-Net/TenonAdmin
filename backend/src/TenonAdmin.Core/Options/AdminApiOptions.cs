@@ -16,6 +16,37 @@ public class AdminApiOptions
 
     /// <summary>CORS 跨源策略(前后端分离部署必配,见 <see cref="AdminCorsOptions"/>)</summary>
     public AdminCorsOptions Cors { get; set; } = new();
+
+    /// <summary>反向代理转发头(部署在 nginx/Caddy/网关之后必配,见 <see cref="AdminForwardedHeadersOptions"/>)</summary>
+    public AdminForwardedHeadersOptions ForwardedHeaders { get; set; } = new();
+}
+
+/// <summary>
+/// 反向代理转发头配置(对应 <c>TenonAdmin:Api:ForwardedHeaders</c>,设计 §14)。
+/// <para><b>为什么必须有</b>:反代之后,<c>Connection.RemoteIpAddress</c> 是<b>代理</b>的 IP 而非客户端的。
+/// 而限流分区、登录日志、爆破防护全挂在这一个值上——不解析 <c>X-Forwarded-For</c> 时,
+/// 全体用户共享同一个限流桶(一个人狂点登录就能把所有人限死),审计日志里的 IP 列也全是代理地址。</para>
+/// <para><b>默认关</b>,且开启后必须显式声明受信来源:无条件采信 <c>X-Forwarded-For</c> 比不解析<b>更糟</b>——
+/// 攻击者每个请求伪造一个不同的 IP,即可无限开新限流分区(限流被完全绕过),还能把爆破失败记到别人头上。
+/// 故 <see cref="Enabled"/> 为 true 却未给任何受信来源时<b>启动即抛</b>。</para>
+/// <para>代理无关:受信的是<b>来源地址/网段</b>,nginx / Caddy / Traefik / k8s ingress 一视同仁。</para>
+/// </summary>
+public class AdminForwardedHeadersOptions
+{
+    /// <summary>是否解析 <c>X-Forwarded-For</c> / <c>X-Forwarded-Proto</c>。默认 false(未在代理后面时开启 = 允许任何人伪造 IP)。</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>受信代理的 IP(如 <c>["10.0.0.8"]</c>)。只有来自这些地址的请求,其转发头才被采信。</summary>
+    public string[] KnownProxies { get; set; } = [];
+
+    /// <summary>受信代理所在网段,CIDR 形式(容器编排下代理 IP 不固定,用网段更实际;如 <c>["172.16.0.0/12"]</c>)。</summary>
+    public string[] KnownNetworks { get; set; } = [];
+
+    /// <summary>
+    /// 最多回溯几跳。默认 1 = 只信<b>最靠近本服务</b>的那一跳(即我们自己的代理写下的那个值)。
+    /// 调大意味着采信更外层代理写的值——只有当外层那些代理也全部受你控制时才可以。
+    /// </summary>
+    public int ForwardLimit { get; set; } = 1;
 }
 
 /// <summary>

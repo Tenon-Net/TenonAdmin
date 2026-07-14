@@ -1,3 +1,4 @@
+using System.Net;
 using System.Reflection;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -144,6 +145,31 @@ public static class TenonAdminSetup
             // 空源 → 空策略:不放行任何跨源(生产必须显式配置)
         }));
         services.TryAddEnumerable(ServiceDescriptor.Transient<IStartupFilter, TenonAdminMiddlewareStartupFilter>());
+
+        // ── 反向代理转发头(§14):反代之后 RemoteIpAddress 是代理的 IP,不解析 XFF 则限流按 IP 分区形同虚设 ──
+        //   安全红线:开了却不声明受信来源 = 采信任何人伪造的 X-Forwarded-For = 每个伪造 IP 开一个新分区 → 限流被完全绕过。
+        //   宁可启动就炸,也不静默留一个可绕过的限流器(同 JwtKeyResolver 生产缺密钥的 fail-fast 成法)。
+        var fwd = options.Api.ForwardedHeaders;
+        if (fwd.Enabled)
+        {
+            if (fwd.KnownProxies.Length == 0 && fwd.KnownNetworks.Length == 0)
+                throw new InvalidOperationException(
+                    "已启用 TenonAdmin:Api:ForwardedHeaders,但未声明任何受信来源。请配置 KnownProxies(代理 IP)" +
+                    "或 KnownNetworks(CIDR 网段,容器编排下更实际,如 172.16.0.0/12)。" +
+                    "无条件采信 X-Forwarded-For 会让攻击者用伪造 IP 绕过限流并污染审计日志。");
+
+            services.Configure<ForwardedHeadersOptions>(o =>
+            {
+                o.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+                                   | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+                o.ForwardLimit = fwd.ForwardLimit;
+                // 框架默认信回环(::1/127.0.0.1);容器里代理不是回环 → 清空后只信用户显式声明的来源。
+                o.KnownProxies.Clear();
+                o.KnownIPNetworks.Clear();
+                foreach (var ip in fwd.KnownProxies) o.KnownProxies.Add(IPAddress.Parse(ip));
+                foreach (var cidr in fwd.KnownNetworks) o.KnownIPNetworks.Add(IPNetwork.Parse(cidr));
+            });
+        }
 
         // ── 限流(§12/§14):按客户端 IP 固定窗口,认证端点(/api/v1/auth/*)更严;经上面的 IStartupFilter 挂 UseRateLimiter ──
         //   限流器在路由前运行,按 Request.Path 直接区分认证端点(不依赖端点元数据),命中即 429 + 统一信封(40008)。
