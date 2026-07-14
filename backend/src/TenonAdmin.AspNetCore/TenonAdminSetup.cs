@@ -54,6 +54,16 @@ public static class TenonAdminSetup
             return options.Upload;
         });
         services.AddSingleton(options.Api);
+
+        // ── 雪花机器号(§12):多副本同号 = 同毫秒发号撞主键。这是数据损坏级的问题,而它今天静默发生 ──
+        //   没有可靠的"我是不是多副本"信号,但选了 Redis 缓存基本等同于宣告多实例意图
+        //   (进程内缓存在多副本下根本不成立:强退失效、权限陈旧、锁定计数翻倍)。
+        //   故 Redis + 未显式给机器号 → 启动即抛。显式写 0 即视为知情,放行。
+        if (string.Equals(options.Cache.Provider, "Redis", StringComparison.OrdinalIgnoreCase) && options.Id.WorkerId is null)
+            throw new InvalidOperationException(
+                "已配置 Redis 缓存(多实例部署),但未显式设置 TenonAdmin:Id:WorkerId。" +
+                "水平扩展时每个实例必须配一个互不相同的机器号(0–63),否则不同实例同毫秒发号会撞主键。" +
+                "单实例请显式配 0 以示知情;k8s 可用 StatefulSet 的 Pod 序号注入。");
         services.AddSingleton(options.Id);
         services.TryAddSingleton(TimeProvider.System);          // 统一时间源(§12),测试可换 Fake
 
