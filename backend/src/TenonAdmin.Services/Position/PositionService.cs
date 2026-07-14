@@ -27,15 +27,20 @@ public class PositionService(IRepository<SysPosition> positions) : IPositionServ
     /// <inheritdoc />
     public virtual async Task<long> AddAsync(PositionInput input)
     {
-        // 编码唯一(库有 idx_sys_position_code 唯一索引):无前置查重会撞约束抛原生 500;查重纳入软删行(P1-10)
-        AdminException.ThrowIf(
-            await positions.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(p => p.Code == input.Code),
-            ErrorCode.PositionCodeExists);
+        var code = string.IsNullOrWhiteSpace(input.Code)
+            ? Guid.NewGuid().ToString("N")[..10]
+            : input.Code;
+
+        // 用户显式填了编码才做前置查重(纳入软删行);自动生成的靠 DB 唯一索引兜底
+        if (!string.IsNullOrWhiteSpace(input.Code))
+            AdminException.ThrowIf(
+                await positions.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(p => p.Code == code),
+                ErrorCode.PositionCodeExists);
 
         var position = new SysPosition
         {
             Name = input.Name,
-            Code = input.Code,
+            Code = code,
             Sort = input.Sort,
             Enabled = input.Enabled,
         };
@@ -66,19 +71,4 @@ public class PositionService(IRepository<SysPosition> positions) : IPositionServ
         await positions.DeleteAsync(id);
     }
 
-    /// <inheritdoc />
-    // ponytail:按传入顺序把 Sort 赋成 0..n-1,只重排传入行(拖拽仅作用当前页可见集);
-    // 跨页严格全序需前端带页偏移,当前后台职位量小不必要。条数小,逐条 update 走 AOP 审计填充。
-    public virtual async Task ReorderAsync(long[] orderedIds)
-    {
-        if (orderedIds is null || orderedIds.Length == 0) return;
-        var rows = await positions.AsQueryable().Where(p => orderedIds.Contains(p.Id)).ToListAsync();
-        var byId = rows.ToDictionary(r => r.Id);
-        for (var i = 0; i < orderedIds.Length; i++)
-            if (byId.TryGetValue(orderedIds[i], out var row))
-            {
-                row.Sort = i;
-                await positions.UpdateAsync(row);
-            }
-    }
 }

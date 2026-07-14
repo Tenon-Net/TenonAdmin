@@ -51,22 +51,4 @@ public class PositionSortReorderTests
         Assert.Equal(new[] { "ZSORT_A", "ZSORT_B", "ZSORT_C" }, names);
     }
 
-    [Fact]
-    public async Task Reorder_reassigns_sort_by_given_id_order()
-    {
-        using var f = new AdminAppFactory();
-        var c = await SuperAdminClient(f);
-
-        var idA = await AddPosition(c, "ZORD_A", "ZORD_A", 1);
-        var idB = await AddPosition(c, "ZORD_B", "ZORD_B", 2);
-        var idC = await AddPosition(c, "ZORD_C", "ZORD_C", 3);
-
-        // 拖成 C,A,B
-        var resp = await c.PostJson("/api/v1/sys/position/reorder", new { ids = new[] { idC, idA, idB } });
-        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-
-        // 默认按 Sort 升序 → 重排后 C,A,B
-        var names = await PageNames(c, "Name=ZORD&Size=50");
-        Assert.Equal(new[] { "ZORD_C", "ZORD_A", "ZORD_B" }, names);
-    }
 }

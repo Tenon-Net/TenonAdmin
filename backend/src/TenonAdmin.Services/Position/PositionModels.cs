@@ -25,9 +25,3 @@ public record PositionPageInput : PageInputBase
     public string? Name { get; init; }
 }
 
-/// <summary>行拖拽重排入参:Ids 即新顺序,后端据此赋 Sort。</summary>
-public record PositionReorderInput
-{
-    /// <summary>按目标顺序排列的职位 Id 列表。</summary>
-    public long[] Ids { get; init; } = [];
-}

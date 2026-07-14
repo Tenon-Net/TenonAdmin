@@ -25,17 +25,8 @@ const tableRef = ref<ProTableInst<SysPosition>>()
 const toInput = (r: SysPosition): PositionInput => ({ name: r.name, code: r.code, sort: r.sort, enabled: r.enabled })
 
 const columns: ProTableColumn<SysPosition>[] = [
-  // 拖拽手柄:只在手柄上起拖,避免与行内开关/按钮点击冲突(配 ProTable :drag-handle)
-  {
-    key: 'drag',
-    title: '',
-    width: 44,
-    align: 'center',
-    hideInSetting: true,
-    render: () => h('span', { class: 'drag-handle', style: 'cursor: grab; display: inline-flex' }, [h(AppIcon, { icon: 'ph:dots-six-vertical', size: 18 })]),
-  },
-  { key: 'code', title: () => t('position.code') },
   { key: 'name', title: () => t('position.name'), search: true },
+  { key: 'code', title: () => t('position.code') },
   { key: 'sort', title: () => t('position.sort'), width: 80 },
   {
     key: 'enabled',
@@ -81,7 +72,6 @@ const show = ref(false)
 const formRef = ref<FormInst | null>(null)
 const editingId = ref<number | null>(null)
 const rules: FormRules = {
-  code: { required: true, whitespace: true, message: () => t('position.codeRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('position.nameRequired'), trigger: ['input', 'blur'] },
 }
 const blank = (): PositionInput => ({ name: '', code: '', sort: 0, enabled: true })
@@ -109,17 +99,6 @@ async function save() {
     return false
   }
 }
-
-// 行拖拽落库:按新顺序把 id 列表提交后端重排 Sort,再 refresh 以服务端结果为准。
-async function onDragSort(e: { reordered: SysPosition[] }) {
-  try {
-    await positionApi.reorder(e.reordered.map((r) => r.id))
-    await tableRef.value?.refresh()
-  } catch (err) {
-    message.error(translateError(err))
-    await tableRef.value?.refresh() // 失败也拉回服务端真实顺序
-  }
-}
 </script>
 
 <template>
@@ -128,9 +107,6 @@ async function onDragSort(e: { reordered: SysPosition[] }) {
     :columns="columns"
     :fetcher="positionApi.page"
     storage-key="sys-position"
-    row-draggable
-    drag-handle=".drag-handle"
-    @row-drag-sort="onDragSort"
     @error="(e) => message.error(translateError(e))"
   >
     <template #toolbar>
@@ -148,11 +124,11 @@ async function onDragSort(e: { reordered: SysPosition[] }) {
     :confirm-text="t('common.save')"
   >
     <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :label-width="80">
-      <n-form-item :label="t('position.code')" path="code">
-        <n-input v-model:value="form.code" :placeholder="t('position.code')" :disabled="editingId !== null" />
-      </n-form-item>
       <n-form-item :label="t('position.name')" path="name">
         <n-input v-model:value="form.name" :placeholder="t('position.name')" />
+      </n-form-item>
+      <n-form-item :label="t('position.code')" path="code">
+        <n-input v-model:value="form.code" :placeholder="t('position.codePlaceholder')" :disabled="editingId !== null" />
       </n-form-item>
       <n-form-item :label="t('position.sort')">
         <n-input-number v-model:value="form.sort" :min="0" style="width: 160px" />

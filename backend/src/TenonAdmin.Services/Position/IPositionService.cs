@@ -21,7 +21,4 @@ public interface IPositionService
 
     /// <summary>删除职位(软删,不存在抛 <see cref="ErrorCode.PositionNotFound"/>)。</summary>
     Task DeleteAsync(long id);
-
-    /// <summary>按给定 Id 顺序重排 Sort(行拖拽落库);未知 Id 跳过。仅重排传入的行(当前页/可见集)。</summary>
-    Task ReorderAsync(long[] orderedIds);
 }
