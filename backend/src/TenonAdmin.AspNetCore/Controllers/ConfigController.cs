@@ -47,6 +47,7 @@ public class ConfigController(IConfigService configs, ISecurityPolicyProvider po
     /// <summary>批量按键回写配置值(分类配置中心结构化表单保存)</summary>
     [HttpPut("batch")]
     [RolePermission]
+    [OperationLog("批量修改配置")]   // 改的是密码策略/登录锁定/会话时长/限流等安全开关,必须留审计
     public async Task<Result<bool>> Batch([FromBody] IReadOnlyCollection<ConfigBatchItem> items)
     {
         await configs.SaveValuesAsync(items);
@@ -56,12 +57,14 @@ public class ConfigController(IConfigService configs, ISecurityPolicyProvider po
     /// <summary>新增配置,返回新 Id</summary>
     [HttpPost]
     [RolePermission]
+    [OperationLog("新增配置")]
     public async Task<Result<long>> Add(ConfigInput input) =>
         Result<long>.Ok(await configs.AddAsync(input));
 
     /// <summary>更新配置(不含配置键)</summary>
     [HttpPut("{id}")]
     [RolePermission]
+    [OperationLog("修改配置")]
     public async Task<Result<bool>> Update(long id, ConfigInput input)
     {
         await configs.UpdateAsync(id, input);
@@ -71,6 +74,7 @@ public class ConfigController(IConfigService configs, ISecurityPolicyProvider po
     /// <summary>软删除配置</summary>
     [HttpDelete("{id}")]
     [RolePermission]
+    [OperationLog("删除配置")]
     public async Task<Result<bool>> Delete(long id)
     {
         await configs.DeleteAsync(id);

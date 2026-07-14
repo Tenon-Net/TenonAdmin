@@ -44,6 +44,7 @@ public class RecycleBinController(ISqlSugarClient db, IServiceProvider sp) : Con
     /// <summary>恢复已删记录</summary>
     [HttpPost("{type}/{id}/restore")]
     [RolePermission]
+    [OperationLog("回收站-恢复")]
     public async Task<Result<bool>> Restore(string type, long id)
     {
         var rows = type switch
@@ -65,6 +66,7 @@ public class RecycleBinController(ISqlSugarClient db, IServiceProvider sp) : Con
     /// <summary>彻底删除(物理删除,不可恢复)</summary>
     [HttpDelete("{type}/{id}")]
     [RolePermission]
+    [OperationLog("回收站-彻底删除")]   // 不可逆硬删,必须留审计
     public async Task<Result<bool>> Purge(string type, long id)
     {
         var rows = type switch
