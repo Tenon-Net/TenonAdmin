@@ -45,7 +45,7 @@
 
 ## 4. 发 v1 之前必须做的(唯一优先级)
 
-功能没缺口。**缺的是"发得出去"和"升得上去"。** 下面两批做完即可发版。
+功能没缺口,缺的是"发得出去"和"升得上去"。**两批都已完成(2026-07-14)——现在可以发版了。**
 
 ### ~~第七批 · 发版链路~~ ✅ 已完成(2026-07-14)
 
@@ -66,21 +66,13 @@ R1–R6 全部处置。闸门先红后绿的证据在下面这张表里 —— *
 - **冒烟测试必须隔离 `NUGET_PACKAGES`**。第一次跑它是绿的 —— 因为本机全局缓存里躺着以前跑剩的 `TenonAdmin 0.0.1-preview`,restore 根本没出门。**不隔离,它测的就是机器脏不脏,不是发版产物**。
 - **断言必须钉"精确版本",不能只看 build 成不成功**。因为漂移的存在,"编译通过"完全不代表模板引对了版本 —— 加 `-warnaserror:NU1603` + 直接断言生成的 csproj 里是刚打的那个版本号,闸门才第一次真的红。
 
-### 第八批 · 上线之后活不活得下去(`fix(sqlsugar)` / `feat(sqlsugar)`)
+### ~~第八批 · 上线之后活不活得下去~~ ✅ 已完成(2026-07-14)
 
-这两条不是"少了个功能",是**发了 v1 之后会持续咬人**。
-
-- **O1 · 升级即炸(最要命的一条)**
-  启动守卫 `DatabaseInitializer.EnsureSeedTablesExist`(`DatabaseInitializer.cs:74-94`)只检查**表在不在**,**不检查列**。而生产环境按 `deployment.md` 是**关掉建表闸门**的。于是:消费者从 v1.0 升到 v1.1(内核加了一列)→ 表存在 → 守卫放行 → **启动成功** → 第一次查询炸在驱动层的 `no such column`。
-  这跟已经修过的「生产首启崩溃」是同一个病,只是发生在**升级**路径而非**首启**路径。**发了 v1 之后,内核每加一列都会咬到所有关闸门的用户。**
-  **修法**(复用现成机械):守卫从「表」扩到「列」—— 比对实体列 vs `DbMaintenance.GetColumnInfosByTableName`,缺列即 fail-fast,**并把要跑的 `ALTER TABLE` 直接打在异常里**。把一个驱动层的天书换成一条可执行的启动错误。
-  **先写测试**:建一张缺列的老表 + 关闸门 → 启动**必须抛**,且异常文本里**含缺失的列名**。它必须先红在「启动成功了,查询时才炸」。
-
-- **O2 · 线上一条 SQL 都打不出来**
-  `SqlSugarSetup.cs:78` 只挂了 `Aop.DataExecuting`(审计字段填充)。**`OnLogExecuted` / `OnError` 一个都没挂** —— 查询失败时只有驱动层异常,**没有 SQL、没有参数、没有耗时**。线上出问题,DBA 和开发都无从下手。慢查询同理:不知道慢在哪。
-  **修法**:挂 `OnError`(错误 SQL + 参数 → `ILogger.LogError`)+ `OnLogExecuted`(超过 `AdminDatabaseOptions` 里的阈值 → `LogWarning`)。
-  **天花板**:**绝不能写进 `SysOpLog`** —— 那条 INSERT 自己会再触发一次 `OnLogExecuted`,直接递归。输出只走 `ILogger`。
-  **先写测试**:故意跑一条会失败的 SQL → 断言 `ILogger` 收到的日志里**含 SQL 原文**。
+- **O1 · 升级即炸** —— 守卫从「表」扩到「列」(`EnsureExistingTablesHaveEntityColumns`)。缺列即启动失败,点名到 `sys_user(Avatar)` 并给出两条出路;`deployment.md` 补了「升级内核版本:补列」一节。
+  **测试先红得很诚实**:缺一列的库,宿主**根本没抛异常,正常启动了**(`No exception was thrown`)。这条 bug 的本体不是"报错难看",是"**根本不报**"。
+  **范围取舍**:只查**缺列**,不查类型/长度/可空性的漂移 —— DBA 把 `varchar` 放宽、加自己的列都**不算坏**,判死它们等于凭空造新的失败面;而缺列是**确定会崩**的(实体映射了它,查询必然 SELECT 它)。
+- **O2 · 线上一条 SQL 都打不出来** —— 挂上 `OnError`(失败 SQL + 参数 → `LogError`,不给关的开关)与 `OnLogExecuted`(≥ `Database:SlowSqlMillis`,默认 1000ms → `LogWarning`)。输出**只走 `ILogger`**;绝不能写进 `SysOpLog`(那条 INSERT 自己会再触发一次 `OnLogExecuted`,直接递归)。
+  **被测试套件抓到的一条**:`ILoggerFactory` 起初用了 `GetRequiredService` —— 而 `AddTenonAdminSqlSugar` 是**公开装配入口**,允许在裸容器上单独调用。公开入口不得凭空新增必需依赖,改回 `GetService` + `NullLoggerFactory`。
 
 ### 顺带(不单独占一批)
 

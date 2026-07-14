@@ -18,6 +18,7 @@
 | `TenonAdmin:Upload:RootPath` | 默认 `./wwwroot/upload`。声明为数据卷(否则重部署丢文件);**若走路线 A 还必须挪出 `wwwroot`**,见下方警告。 |
 | `TenonAdmin:Api:ForwardedHeaders` | **在任何反向代理/负载均衡之后都必须配**。不配的话后端看到的永远是代理那一个 IP:全体用户共享一个限流桶、按 IP 的爆破防护归零、审计日志的 IP 列作废。见「反向代理之后」。 |
 | `TenonAdmin:Cache:Provider` | 单实例可留 `Memory`。**多副本必须换 `Redis`** —— 否则强制下线、撤权、登录锁定全部会在副本之间失效(见「多副本部署」)。 |
+| `TenonAdmin:Database:SlowSqlMillis` | 慢 SQL 告警阈值,默认 `1000`(毫秒)。失败的 SQL **总是**打 `Error`(带语句与参数),不受本项控制。日志类别是 `TenonAdmin.Sql` —— 想单独调级别就调它。 |
 
 ### 首次部署到生产:必须显式允许建表
 

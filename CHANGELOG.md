@@ -7,17 +7,19 @@
 
 ## [未发布]
 
-首个正式版的准备工作。发版前的剩余阻塞项见 `docs/dev-plan.md` §4。
+首个正式版的准备工作(发版链路 + 升级路径)。
 
 ### 新增
 
 - 发版闸门:`backend-release` 在推包前跑构建、测试与模板冒烟。推包不可撤销(nuget.org 只能 unlist),红的东西不许发。
 - `dotnet new tenon-app` 的冒烟测试进 CI(`backend-ci` 的 `template-smoke` 腿),覆盖消费者的第一条命令。
 - NuGet 包带 SourceLink + 符号包(snupkg)与包图标 —— 消费者可直接步进内核源码,这是"继承并重写某一步"这个卖点的前提。
+- **SQL 诊断日志**:失败的 SQL 连语句与参数打 `Error`;耗时 ≥ `Database:SlowSqlMillis`(默认 1000ms,≤0 关闭)的语句打 `Warning`。此前 SqlSugar 一个日志钩子都没挂,线上查询失败只有驱动层异常 —— 没有 SQL、没有参数、没有耗时。日志只走 `ILogger`,不写 `sys_op_log`(那条 INSERT 会自触发,直接递归)。
 
 ### 修复
 
 - 模板不再引用一个从未发布的包版本:打包时把 `-p:Version` 盖进 `dotnet new` 模板的默认值。此前模板写死 `0.0.1-preview`,tag 从不改写它,生成的工程从第一天起就引用一个不存在的版本(restore 靠 NuGet 向上漂移勉强活着,并带 NU1603;开了 `TreatWarningsAsErrors` / 锁文件 / 精确版本策略的消费者直接失败)。
+- **升级时的库表漂移不再静默炸在查询里**:生产的建表闸门是关的,没人替库补列。此前启动守卫只查表在不在,于是内核加一列 → 老库照常启动 → 第一次查那张表才炸在驱动层的"列不存在"上。现在启动即失败,并点名到表和列(`sys_user(Avatar)`),给出补列的两条出路。只查缺列,不判类型/长度的变化。
 - 包署名的组织名修正为 `Tenon-Net`(此前模板包里是 `DotNet-MoYu`)。
 
 ### 移除
