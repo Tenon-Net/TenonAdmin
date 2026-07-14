@@ -29,6 +29,17 @@ export default {
     createTime: '创建时间',
     batchDelete: '批量删除',
     batchDeleteConfirm: '确认删除选中的 {count} 项?此操作不可恢复。',
+    all: '全部',
+    noData: '暂无数据',
+  },
+  userPicker: {
+    title: '选择用户',
+    available: '可选用户',
+    selected: '已选',
+    add: '添加',
+    added: '已选',
+    addChecked: '添加选中',
+    clear: '清空',
   },
   notFound: {
     desc: '页面不存在',

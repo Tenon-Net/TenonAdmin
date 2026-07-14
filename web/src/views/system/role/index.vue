@@ -13,7 +13,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
-import UserSelect from '@/components/UserSelect/index.vue'
+import UserPicker from '@/components/UserPicker/index.vue'
 import GrantMenuTable from './components/GrantMenuTable.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
@@ -194,28 +194,26 @@ async function saveMenus() {
   }
 }
 
-// ── 授权用户抽屉 ──
-const showUsers = ref(false)
+// ── 授权用户(UserPicker) ──
+const userPickerRef = ref<InstanceType<typeof UserPicker> | null>(null)
 const userRoleId = ref<number | null>(null)
-const grantedUserIds = ref<number[]>([])
 
 async function openUsers(r: SysRole) {
   userRoleId.value = r.id
   try {
-    grantedUserIds.value = await roleApi.getUsers(r.id)
-    showUsers.value = true
+    const ids = await roleApi.getUsers(r.id)
+    userPickerRef.value?.open(ids)
   } catch (e) {
     message.error(translateError(e))
   }
 }
-async function saveUsers() {
+async function onUserConfirm(ids: number[]) {
   if (userRoleId.value === null) return
   try {
-    await roleApi.setUsers(userRoleId.value, grantedUserIds.value)
+    await roleApi.setUsers(userRoleId.value, ids)
     message.success(t('role.grantUsersSaved'))
   } catch (e) {
     message.error(translateError(e))
-    return false
   }
 }
 
@@ -324,15 +322,7 @@ async function saveScope() {
   </FormContainer>
 
   <!-- 授权用户 -->
-  <FormContainer
-    v-model:show="showUsers"
-    :title="t('role.grantUsers')"
-    :width="480"
-    :on-confirm="saveUsers"
-    :confirm-text="t('common.save')"
-  >
-    <UserSelect v-model:value="grantedUserIds" multiple clearable :placeholder="t('role.grantUsers')" style="width: 100%" />
-  </FormContainer>
+  <UserPicker ref="userPickerRef" @confirm="onUserConfirm" />
 
   <!-- 数据范围 -->
   <FormContainer

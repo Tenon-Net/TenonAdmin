@@ -28,10 +28,21 @@ export default {
     createTime: 'Created',
     batchDelete: 'Batch delete',
     batchDeleteConfirm: 'Delete the {count} selected item(s)? This cannot be undone.',
+    all: 'All',
+    noData: 'No data',
   },
   notFound: {
     desc: 'Page not found',
     back: 'Back to workbench',
+  },
+  userPicker: {
+    title: 'Select users',
+    available: 'Available',
+    selected: 'Selected',
+    add: 'Add',
+    added: 'Added',
+    addChecked: 'Add checked',
+    clear: 'Clear',
   },
   app: {
     theme: 'Theme',

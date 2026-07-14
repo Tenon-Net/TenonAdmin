@@ -145,21 +145,23 @@ test.describe('RBAC 权限', () => {
     expect(menus.length, `未授权用户不应看到业务菜单,实际看到: [${menus.join(', ')}]`).toBeLessThanOrEqual(1)
   })
 
-  test('授权用户抽屉 → 种子关联正确回显', async ({ page }) => {
+  test('授权用户 → UserPicker 种子关联正确回显', async ({ page }) => {
     await loginAs(page, ADMIN_ACCOUNT, ADMIN_PASSWORD)
     await enterFirstModuleIfNeeded(page)
     await gotoRolePage(page)
 
     // 找"本机构数据"角色 → 授权用户
     await clickRoleMoreButton(page, '本机构数据')
-    await page.getByText(/授权用户|Grant users/i).click()
+    const item = page.locator('.n-dropdown-option').filter({ hasText: /授权用户|Grant users/ })
+    await expect(item).toBeVisible({ timeout: 3_000 })
+    await item.click()
 
-    const drawer = formContainer(page)
-    await expect(drawer).toBeVisible({ timeout: 5_000 })
+    const picker = formContainer(page)
+    await expect(picker).toBeVisible({ timeout: 5_000 })
 
-    // UserSelect 应已选中种子用户(1 个:scope_org)
-    const tags = drawer.locator('.n-base-selection-tag-wrapper .n-tag')
-    await expect(tags).toHaveCount(1, { timeout: 5_000 })
+    // 右面板"已选"区应有 1 个种子用户(scope_org)
+    const selectedItems = picker.locator('.selected-item')
+    await expect(selectedItems).toHaveCount(1, { timeout: 5_000 })
   })
 
   test('授权用户 → 添加用户 → 保存 → 回显 → 还原', async ({ page }) => {
@@ -167,58 +169,50 @@ test.describe('RBAC 权限', () => {
     await enterFirstModuleIfNeeded(page)
     await gotoRolePage(page)
 
-    // ① 打开"仅本人数据"角色的授权用户抽屉
+    // ① 打开"仅本人数据"角色的 UserPicker
     await clickRoleMoreButton(page, '仅本人数据')
-    const grantUsersItem = page.locator('.n-dropdown-option').filter({ hasText: /授权用户|Grant users/ })
-    await expect(grantUsersItem).toBeVisible({ timeout: 3_000 })
-    await grantUsersItem.click()
+    const item = page.locator('.n-dropdown-option').filter({ hasText: /授权用户|Grant users/ })
+    await expect(item).toBeVisible({ timeout: 3_000 })
+    await item.click()
 
-    const drawer = formContainer(page)
-    await expect(drawer).toBeVisible({ timeout: 5_000 })
-
-    // 记录初始标签数
+    const picker = formContainer(page)
+    await expect(picker).toBeVisible({ timeout: 5_000 })
     await page.waitForTimeout(500)
-    const initialTags = await drawer.locator('.n-base-selection-tag-wrapper .n-tag').count()
 
-    // ② 在 UserSelect 中搜索并添加"超级管理员"
-    const select = drawer.locator('.n-base-selection')
-    await select.click()
-    await page.keyboard.type('超级管理员')
-    const option = page.locator('.n-base-select-option').filter({ hasText: '超级管理员' })
-    await expect(option).toBeVisible({ timeout: 5_000 })
-    await option.click()
-    // 关闭下拉,避免遮挡保存按钮
-    await page.keyboard.press('Escape')
-    await page.waitForTimeout(300)
+    // 记录初始已选数
+    const initialCount = await picker.locator('.selected-item').count()
+
+    // ② 在中间面板找"超级管理员"行,点"添加"按钮
+    const adminRow = picker.locator('.n-data-table-tr').filter({ hasText: '超级管理员' })
+    await expect(adminRow).toBeVisible({ timeout: 5_000 })
+    await adminRow.locator('button').filter({ hasText: /添加|Add/ }).click()
+
+    // 右面板应多出一条
+    await expect(picker.locator('.selected-item')).toHaveCount(initialCount + 1, { timeout: 3_000 })
 
     // ③ 保存
-    const saveBtn = drawer.locator('button').filter({ hasText: /保存|Save/ })
-    await saveBtn.click()
+    const confirmBtn = picker.locator('button').filter({ hasText: /确定|Confirm/ })
+    await confirmBtn.click()
     await expect(page.locator('.n-message')).toBeVisible({ timeout: 5_000 })
     await page.waitForTimeout(1000)
 
-    // ④ 重新打开抽屉验证回显
+    // ④ 重新打开验证回显
     await clickRoleMoreButton(page, '仅本人数据')
-    const grantUsersItem2 = page.locator('.n-dropdown-option').filter({ hasText: /授权用户|Grant users/ })
-    await expect(grantUsersItem2).toBeVisible({ timeout: 3_000 })
-    await grantUsersItem2.click()
+    const item2 = page.locator('.n-dropdown-option').filter({ hasText: /授权用户|Grant users/ })
+    await expect(item2).toBeVisible({ timeout: 3_000 })
+    await item2.click()
 
-    const drawer2 = formContainer(page)
-    await expect(drawer2).toBeVisible({ timeout: 5_000 })
+    const picker2 = formContainer(page)
+    await expect(picker2).toBeVisible({ timeout: 5_000 })
     await page.waitForTimeout(500)
+    await expect(picker2.locator('.selected-item')).toHaveCount(initialCount + 1, { timeout: 5_000 })
 
-    const newTags = drawer2.locator('.n-base-selection-tag-wrapper .n-tag')
-    await expect(newTags).toHaveCount(initialTags + 1, { timeout: 5_000 })
-
-    // ⑤ 清理:移除刚加的用户,保存还原
-    // 点第一个关闭按钮(移除最后加的)
-    const closeButtons = drawer2.locator('.n-base-selection-tag-wrapper .n-tag .n-base-close')
-    const closeCount = await closeButtons.count()
-    if (closeCount > initialTags) {
-      await closeButtons.last().click()
-      const saveBtn2 = drawer2.locator('button').filter({ hasText: /保存|Save/ })
-      await saveBtn2.click()
-      await expect(page.locator('.n-message')).toBeVisible({ timeout: 5_000 })
-    }
+    // ⑤ 清理:移除刚加的"超级管理员",保存还原
+    const adminItem = picker2.locator('.selected-item').filter({ hasText: '超级管理员' })
+    await adminItem.locator('button').click()
+    await expect(picker2.locator('.selected-item')).toHaveCount(initialCount, { timeout: 3_000 })
+    const confirmBtn2 = picker2.locator('button').filter({ hasText: /确定|Confirm/ })
+    await confirmBtn2.click()
+    await expect(page.locator('.n-message')).toBeVisible({ timeout: 5_000 })
   })
 })
