@@ -10,6 +10,7 @@ public interface ISeedData;
 /// 种子数据契约(扩展点,设计 §5.5/§5.7/§12)。首次启动自动执行、重复启动幂等。
 /// <para><b>幂等规则:按主键判存,只插不存在的行、绝不更新已存在的行</b>——
 /// 用户在界面上改过的数据不会被下次重启覆盖回种子值。
+/// 唯一例外是 <see cref="ISeedData{TEntity}.SyncOnUpgrade"/>(默认 false,见其注释)。
 /// 因此种子实体<b>必须显式给定固定 Id</b>,且必须落在保留区间内(见 <see cref="TenonAdmin.Core.TenonSeedIds"/>:
 /// 内核占 <c>[1, 999]</c>,<b>消费者从 1000 起、不超过 4095</b>;4096 以上是雪花运行时发号区,占了迟早主键冲突)。
 /// 越界与 Id=0 都会被启动检查直接拒绝。</para>
@@ -32,4 +33,17 @@ public interface ISeedData<out TEntity> : ISeedData where TEntity : BaseEntity, 
 {
     /// <summary>返回应当存在的种子行(带固定 Id)。启动时与库中现状按主键比对,缺哪行插哪行。</summary>
     IEnumerable<TEntity> HasData();
+
+    /// <summary>
+    /// 结构性种子:内核种子版本(<see cref="SysSchemaVersion.Current"/>)变化时,把库中已有的同 Id 行
+    /// <b>覆盖回种子值</b>。默认 <c>false</c> = 只插不改(见上文幂等规则)。
+    /// <para>解决的问题:新增种子行会自然流到老库,但<b>改动已有行</b>(挪菜单挂载点、给模块补图标)不会——
+    /// 老库永远停在旧结构上。开了这个开关,内核升级那一次会把它们刷成新结构;平时重启仍然一行都不碰。</para>
+    /// <para><b>只有内核拥有的结构能开</b>(菜单树 <c>DefaultMenuSeed</c> / 模块 <c>DefaultModuleSeed</c>)。
+    /// 凡是用户会在界面上改的数据——配置中心(<c>sys_config</c>)、字典、用户(密码!)、角色(授权)——
+    /// <b>绝不能开</b>,否则用户存过的值会在升级时被静默回滚。这条边界是本机制的全部安全性所在。</para>
+    /// <para>代价:开了的种子,用户对<b>内置行</b>的界面改动(改内置菜单标题/排序)会在内核升级时丢失。
+    /// 这是"内核拥有这些行"的题中之义。审计字段与软删标记不受影响(覆盖时排除)。</para>
+    /// </summary>
+    bool SyncOnUpgrade => false;
 }

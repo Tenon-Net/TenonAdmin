@@ -15,6 +15,10 @@ namespace TenonAdmin.Services;
 /// </summary>
 internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
 {
+    /// <summary>菜单树是内核拥有的结构:内核升级时把已有节点刷回种子值(挪挂载点、改图标/路由都靠这个到老库)。
+    /// 代价是用户对<b>内置</b>菜单的界面改动会在升级时丢失——自建菜单不受影响。见 <see cref="ISeedData{T}.SyncOnUpgrade"/>。</summary>
+    public bool SyncOnUpgrade => true;
+
     public IEnumerable<SysMenu> HasData() =>
     [
         // ═══ 工作台 ═════════════════════════════════════════════════

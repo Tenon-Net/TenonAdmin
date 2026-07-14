@@ -59,10 +59,34 @@ internal sealed class DatabaseInitializer(
             // 建表被跳过时先探表:种子第一步就要读写表(SuperAdminSeed 在 HasData() 里就 SELECT sys_user),
             // 空库上撞过去只会得到驱动层的 "no such table",无从反推真正原因。
             if (!codeFirstAllowed) EnsureSeedTablesExist(seeds);
-            var total = 0;
+
+            // 升级闸门(见 ISeedData.SyncOnUpgrade):必须在跑种子**之前**读——SchemaVersionSeed 本身
+            // 会把版本行插成 Current,读晚了空库和老库就分不出来了。
+            // 空库:stored 为 null → upgrading=true,但空库上 UpdateList 本就是空,无副作用。
+            var stored = (await db.Queryable<SysSchemaVersion>().FirstAsync(x => x.Id == 1))?.Version;
+            var upgrading = stored != SysSchemaVersion.Current;
+
+            var (inserted, synced) = (0, 0);
             foreach (var seed in seeds)
-                total += await ExecuteSeedAsync(seed);
-            logger.LogInformation("TenonAdmin: 种子执行完成(本次新插入 {Total} 行)", total);
+            {
+                var (i, u) = await ExecuteSeedAsync(seed, upgrading);
+                inserted += i;
+                synced += u;
+            }
+
+            if (upgrading)
+            {
+                // 版本行落到 Current。SchemaVersionSeed 只在空库上插得进去(它自己不开 SyncOnUpgrade),
+                // 老库那行还停在旧版本,得在这儿显式写回,否则下次启动又当成一次升级。
+                await db.Updateable<SysSchemaVersion>()
+                    .SetColumns(x => new SysSchemaVersion { Version = SysSchemaVersion.Current, AppliedTime = DateTime.Now })
+                    .Where(x => x.Id == 1)
+                    .ExecuteCommandAsync();
+                logger.LogInformation("TenonAdmin: 种子版本 {From} → {To}(结构性种子已同步 {Synced} 行)",
+                    stored ?? "(空库)", SysSchemaVersion.Current, synced);
+            }
+
+            logger.LogInformation("TenonAdmin: 种子执行完成(新插入 {Inserted} 行,升级同步 {Synced} 行)", inserted, synced);
         }
 
         logger.LogInformation("TenonAdmin 数据库就绪:{DbType} / {Conn}", options.DbType, options.ConnectionString);
@@ -150,25 +174,53 @@ internal sealed class DatabaseInitializer(
         .GetGenericArguments()[0];
 
     /// <summary>执行单个种子:经泛型接口取实体类型,反射进入强类型管道(仅启动期一次,开销可忽略)</summary>
-    private async Task<int> ExecuteSeedAsync(ISeedData seed)
+    private async Task<(int Inserted, int Synced)> ExecuteSeedAsync(ISeedData seed, bool upgrading)
     {
         var method = typeof(DatabaseInitializer)
             .GetMethod(nameof(ExecuteSeedCoreAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
             .MakeGenericMethod(SeedEntityType(seed));
 
-        return await (Task<int>)method.Invoke(this, [seed])!;
+        return await (Task<(int, int)>)method.Invoke(this, [seed, upgrading])!;
     }
 
-    /// <summary>强类型种子管道:校验固定 Id → Storageable 按主键分流 → 只插不存在的行(幂等核心)</summary>
-    private async Task<int> ExecuteSeedCoreAsync<TEntity>(ISeedData<TEntity> seed) where TEntity : BaseEntity, new()
+    /// <summary>
+    /// 强类型种子管道:校验固定 Id → Storageable 按主键分流 → 插入缺失行(幂等核心);
+    /// 升级时对结构性种子(<see cref="ISeedData{TEntity}.SyncOnUpgrade"/>)额外覆盖已有行。
+    /// </summary>
+    private async Task<(int Inserted, int Synced)> ExecuteSeedCoreAsync<TEntity>(ISeedData<TEntity> seed, bool upgrading)
+        where TEntity : BaseEntity, new()
     {
         var rows = seed.HasData().ToList();
-        if (rows.Count == 0) return 0;
+        if (rows.Count == 0) return (0, 0);
 
         EnsureSeedIdsInReservedRange(seed, rows);
 
-        var storage = await db.Storageable(rows).ToStorageAsync();
-        return storage.InsertList.Count == 0 ? 0 : await storage.AsInsertable.ExecuteCommandAsync();
+        // 按主键分流。不用 Storageable 而是自己查:存在性判断必须看**物理**行,
+        // 而 ClearFilter 挂不到 Storageable 上 —— 全局软删过滤器会让用户软删掉的内置菜单查不到,
+        // 判成"不存在"→ 走 INSERT → 撞主键(软删一条内置菜单,应用就再也起不来)。
+        var ids = rows.Select(r => r.Id).ToList();
+        var existing = await db.Queryable<TEntity>().ClearFilter()
+            .Where(x => ids.Contains(x.Id)).Select(x => x.Id).ToListAsync();
+        var existingIds = existing.ToHashSet();
+
+        var toInsert = rows.Where(r => !existingIds.Contains(r.Id)).ToList();
+        var inserted = toInsert.Count == 0 ? 0 : await db.Insertable(toInsert).ExecuteCommandAsync();
+
+        var toUpdate = rows.Where(r => existingIds.Contains(r.Id)).ToList();
+        if (!upgrading || !seed.SyncOnUpgrade || toUpdate.Count == 0) return (inserted, 0);
+
+        // IgnoreColumns 不是防御性代码:AsUpdateable 默认刷全部映射列,而种子实例的 CreateTime 是
+        // default(DateTime)(0001-01-01)、CreateUserId 是 null —— 不排除就会把老库正确的审计字段刷成垃圾。
+        // IsDelete 同理:用户软删掉的内置菜单不该被升级复活。
+        // CreateOrgId(DataEntity 的数据范围锚点)只在消费者把开关开在 DataEntity 种子上时才存在;
+        // 刷成 null 会让那些行从所有机构范围查询里消失,一并排除。
+        string[] ignored = typeof(TEntity).IsAssignableTo(typeof(DataEntity))
+            ? [nameof(BaseEntity.CreateTime), nameof(BaseEntity.CreateUserId), nameof(BaseEntity.IsDelete), nameof(DataEntity.CreateOrgId)]
+            : [nameof(BaseEntity.CreateTime), nameof(BaseEntity.CreateUserId), nameof(BaseEntity.IsDelete)];
+
+        var synced = await db.Updateable(toUpdate).IgnoreColumns(ignored).ExecuteCommandAsync();
+
+        return (inserted, synced);
     }
 
     /// <summary>

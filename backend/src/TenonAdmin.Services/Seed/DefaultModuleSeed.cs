@@ -18,6 +18,9 @@ internal sealed class DefaultModuleSeed : ISeedData<SysModule>
     /// <summary>示例业务模块固定主键(挂工作台演示菜单,可删)</summary>
     internal const long BUSINESS_MODULE_ID = 2;
 
+    /// <summary>模块表是内核拥有的结构,随内核升级同步(见 <see cref="ISeedData{T}.SyncOnUpgrade"/>)。</summary>
+    public bool SyncOnUpgrade => true;
+
     public IEnumerable<SysModule> HasData() =>
     [
         new SysModule { Id = BUILTIN_MODULE_ID, Code = BUILTIN_MODULE_CODE, Title = "系统", Icon = "lucide:settings", DefaultRoute = "", Sort = 1, Enabled = true, Remark = "内置系统应用,不可删除" },

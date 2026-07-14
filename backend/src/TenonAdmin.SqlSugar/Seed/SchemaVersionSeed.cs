@@ -9,6 +9,6 @@ internal sealed class SchemaVersionSeed : ISeedData<SysSchemaVersion>
     public IEnumerable<SysSchemaVersion> HasData() =>
     [
         // Id 固定为 1:幂等判存靠主键(见 ISeedData 注释);CreateTime 留给 AOP 首插时填充
-        new() { Id = 1, Version = "0.0.1", AppliedTime = DateTime.Now },
+        new() { Id = 1, Version = SysSchemaVersion.Current, AppliedTime = DateTime.Now },
     ];
 }
