@@ -33,17 +33,22 @@ internal sealed class DatabaseInitializer(
         if (options.EnableCodeFirst && !codeFirstAllowed)
             logger.LogWarning("TenonAdmin: 生产环境未显式开启 EnableCodeFirstInProduction,已跳过 CodeFirst 自动建表(§12 建表安全)。");
 
+        // 扫描所有登记程序集中带 [SugarTable] 的非抽象类 —— 实体清单唯一来源
+        var entityTypes = sources.Assemblies
+            .SelectMany(a => a.GetTypes())
+            .Where(t => t is { IsClass: true, IsAbstract: false } && t.GetCustomAttribute<SugarTable>() is not null)
+            .ToArray();
+
         if (codeFirstAllowed)
         {
-            // 扫描所有登记程序集中带 [SugarTable] 的非抽象类 —— 实体清单唯一来源
-            var entityTypes = sources.Assemblies
-                .SelectMany(a => a.GetTypes())
-                .Where(t => t is { IsClass: true, IsAbstract: false } && t.GetCustomAttribute<SugarTable>() is not null)
-                .ToArray();
-
             db.CodeFirst.InitTables(entityTypes);
             logger.LogInformation("TenonAdmin: CodeFirst 建表完成({Count} 个实体:{Tables})",
                 entityTypes.Length, string.Join(", ", entityTypes.Select(t => t.Name)));
+        }
+        else
+        {
+            // 建表被跳过 ⇒ 没人替库补列。升级路径上这是最要命的一条,见方法注释。
+            EnsureExistingTablesHaveEntityColumns(entityTypes);
         }
 
         if (options.EnableSeed)
@@ -91,6 +96,52 @@ internal sealed class DatabaseInitializer(
             "(1) 配置 TenonAdmin:Database:EnableCodeFirstInProduction=true,首启由应用建表;" +
             "(2) 先由 DBA 建好表结构再启动。详见 docs/deployment.md。" +
             "(若确实不需要内置种子——超管账号与菜单树——可配置 TenonAdmin:Database:EnableSeed=false。)");
+    }
+
+    /// <summary>
+    /// 建表被跳过时的<b>升级</b>前置检查:已存在的表必须具备实体映射的全部列。
+    /// <para>老守卫 <see cref="EnsureSeedTablesExist"/> 只看<b>表在不在</b>。而生产按 deployment.md 是关着建表闸门的,
+    /// 于是消费者从 v1.0 升到 v1.1(内核新增一列)时:表在 → 守卫放行 → <b>启动成功</b> → 第一次查到那张表才炸在
+    /// 驱动层的 "no such column" 上。没有表名、没有列名、没人知道该 ALTER 什么。发了正式版之后,
+    /// <b>内核每加一列都会这样咬到所有关闸门的用户</b>。这里把它换成一条点名到列的启动错误。</para>
+    /// <para>只查<b>缺列</b>,不查类型/长度/可空性的变化:那些既难跨四种方言判准,又容易把今天能正常跑的库
+    /// (DBA 有意把 varchar 放宽、加了自己的列)判成起不来 —— 那是新的失败面。而缺列是<b>确定会崩</b>的那一类:
+    /// 实体映射了它,查询就一定会 SELECT 它。</para>
+    /// <para>ponytail: 表不存在的情况留给种子探表那条路(见 <see cref="EnsureSeedTablesExist"/>),这里跳过 —— 不重复报同一件事。</para>
+    /// </summary>
+    private void EnsureExistingTablesHaveEntityColumns(Type[] entityTypes)
+    {
+        var drift = new List<string>();
+
+        foreach (var type in entityTypes)
+        {
+            var table = db.EntityMaintenance.GetTableName(type);
+            if (!db.DbMaintenance.IsAnyTable(table, false)) continue;      // 缺表:另一条路径管
+
+            var actual = db.DbMaintenance.GetColumnInfosByTableName(table, false)
+                .Select(c => c.DbColumnName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var missing = db.EntityMaintenance.GetEntityInfo(type).Columns
+                .Where(c => !c.IsIgnore && !actual.Contains(c.DbColumnName))
+                .Select(c => c.DbColumnName)
+                .ToArray();
+
+            if (missing.Length > 0) drift.Add($"{table}({string.Join(", ", missing)})");
+        }
+
+        if (drift.Count == 0) return;
+
+        throw new InvalidOperationException(
+            $"TenonAdmin 启动失败:库表结构落后于当前实体,以下表缺少列:{string.Join("; ", drift)}。" +
+            $"(CodeFirst 自动建表已跳过:EnableCodeFirst={options.EnableCodeFirst},当前环境={env.EnvironmentName}," +
+            $"EnableCodeFirstInProduction={options.EnableCodeFirstInProduction} —— 于是没人替库补列。)" +
+            "这通常意味着内核升级新增了列而库还是老结构。二选一:" +
+            "(1) 本次启动配置 TenonAdmin:Database:EnableCodeFirstInProduction=true,由应用补列" +
+            "(CodeFirst 只加列,不删列、不改窄,对存量数据是安全的);" +
+            "(2) 由 DBA 对上述表执行 ALTER TABLE ... ADD COLUMN 补齐后再启动。" +
+            "详见 docs/deployment.md 的升级一节。" +
+            "现在拦下,是因为放行的话进程会正常启动,直到第一次查到这些表才炸在驱动层的\"列不存在\"上。");
     }
 
     /// <summary>种子的目标实体类型 = 其 <see cref="ISeedData{TEntity}"/> 的泛型实参</summary>

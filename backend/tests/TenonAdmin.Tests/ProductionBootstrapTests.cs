@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SqlSugar;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
 using TenonAdmin.SqlSugar;
@@ -48,5 +49,44 @@ public class ProductionBootstrapTests
         var users = scope.ServiceProvider.GetRequiredService<IRepository<SysUser>>();
 
         Assert.True(await users.AnyAsync(u => u.IsSuperAdmin));   // 超管种子确实写进了 DBA 建好的表
+    }
+
+    /// <summary>
+    /// 升级路径:内核加了一列,而消费者的生产库关着建表闸门。
+    /// <para>表在、列缺 —— 老的探表守卫只看表存不存在,于是<b>启动成功</b>,直到第一次查询才炸在驱动层的
+    /// "no such column" 上(没有上下文、没人知道该 ALTER 什么)。这跟已经修过的「生产首启崩溃」是同一个病,
+    /// 只是发生在<b>升级</b>而非<b>首启</b>。发了正式版之后,内核每加一列都会这样咬到所有关闸门的用户。</para>
+    /// <para>种子刻意关掉:那才是最坏的一种 —— 连种子都不会替你撞出错误,进程安安静静起来,然后在生产流量上炸。</para>
+    /// </summary>
+    [Fact]
+    public void Production_with_missing_column_fails_at_startup_naming_the_column()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"tenon-drift-{Guid.NewGuid():N}.db");
+        var noSeed = new Dictionary<string, string?> { ["TenonAdmin:Database:EnableSeed"] = "false" };
+
+        // 1) 老版本的库:表都建好了
+        using (var v1 = new AdminAppFactory { DbPath = dbPath, DeleteDbOnDispose = false, Settings = noSeed })
+        {
+            _ = v1.CreateClient();
+
+            // 2) 把它退化成"缺一列的老库" = 模拟内核在新版本里给 SysUser 加了一列
+            using var scope = v1.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            db.DbMaintenance.DropColumn("sys_user", "Avatar");
+        }
+
+        // 3) 新内核在这个库上启动,闸门关(生产默认):必须当场失败,而不是起来之后炸在查询里
+        using var f = new AdminAppFactory
+        {
+            DbPath = dbPath,
+            EnvironmentName = "Production",
+            Settings = noSeed,
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => f.CreateClient());
+
+        Assert.Contains("sys_user", ex.Message);                       // 哪张表
+        Assert.Contains("Avatar", ex.Message);                         // 哪一列 —— 驱动层错误给不了这个
+        Assert.Contains("EnableCodeFirstInProduction", ex.Message);    // 怎么办
     }
 }
