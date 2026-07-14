@@ -5,7 +5,7 @@
 import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import {
   NButton, NSpace, NForm, NFormItem, NInput, NInputNumber, NSwitch,
-  NPopconfirm, NModal, NCard, useMessage, type FormInst, type FormRules,
+  NDropdown, NModal, NCard, useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
 import { ProTable, type ProTableColumn } from 'tenon-naive-pro-table'
 import { useI18n } from 'vue-i18n'
@@ -23,7 +23,7 @@ import type { OrgInput, SysOrg } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
-const { run } = useConfirm()
+const { run, confirm } = useConfirm()
 
 const loading = ref(false)
 const tree = ref<Tree<SysOrg>[]>([])
@@ -122,9 +122,21 @@ async function confirmCopy() {
   if (ok) { copyShow.value = false; load() }
 }
 
+/** 删除:下拉菜单项不适合内联 popconfirm,走 useConfirm().confirm 的 dialog(它的设计用途)。 */
+const onDelete = (r: SysOrg) =>
+  confirm({
+    content: t('org.deleteConfirm', { name: r.name }),
+    type: 'error',
+    action: () => orgApi.remove(r.id),
+    successMsg: t('org.deleted'),
+  }).then((ok) => {
+    if (ok) load()
+  })
+
 const columns: ProTableColumn<Tree<SysOrg>>[] = [
-  { title: () => t('org.name'), key: 'name', align: 'left' }, // 树列左对齐,展开缩进才好读
-  { title: () => t('org.code'), key: 'code' },
+  // 树列左对齐,展开缩进才好读;fixed 是为了横向滚动时不丢失「这是哪一行」。
+  { title: () => t('org.name'), key: 'name', align: 'left', minWidth: 220, fixed: 'left', ellipsis: { tooltip: true } },
+  { title: () => t('org.code'), key: 'code', ellipsis: { tooltip: true } },
   { title: () => t('org.category'), key: 'category', width: 100, render: (r) => h(DictTag, { typeCode: 'org_category', value: r.category }) },
   { title: () => t('org.sort'), key: 'sort', width: 80 },
   {
@@ -140,27 +152,31 @@ const columns: ProTableColumn<Tree<SysOrg>>[] = [
         'onUpdate:value': () => load(),
       }),
   },
+  // 操作收敛成「编辑 + 更多▾」:4 个操作塞 260px 会换行、行高参差,且没 fixed 时横向滚动够不着。
   {
     title: () => t('common.operation'),
     key: 'op',
-    width: 260,
+    width: 150,
+    fixed: 'right',
     render: (r) =>
-      h(NSpace, { size: 2, wrapItem: false }, () => [
-        h(NButton, { size: 'small', quaternary: true, onClick: () => openAdd(r.id) }, () => t('org.addChild')),
+      h(NSpace, { size: 2, wrapItem: false, justify: 'center' }, () => [
         h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
-        h(NButton, { size: 'small', quaternary: true, onClick: () => openCopy(r) }, () => t('org.copy')),
         h(
-          NPopconfirm,
+          NDropdown,
           {
-            onPositiveClick: () =>
-              run(() => orgApi.remove(r.id), t('org.deleted')).then((ok) => {
-                if (ok) load()
-              }),
+            trigger: 'click',
+            options: [
+              { key: 'addChild', label: t('org.addChild') },
+              { key: 'copy', label: t('org.copy') },
+              { key: 'delete', label: t('common.delete') },
+            ],
+            onSelect: (key: string) => {
+              if (key === 'addChild') openAdd(r.id)
+              else if (key === 'copy') openCopy(r)
+              else onDelete(r)
+            },
           },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
-            default: () => t('org.deleteConfirm', { name: r.name }),
-          },
+          () => h(NButton, { size: 'small', quaternary: true }, () => t('common.more')),
         ),
       ]),
   },

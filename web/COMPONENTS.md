@@ -15,6 +15,8 @@ tenon 内接入约定:
 - **错误处理留在视图层**:`@error="(e) => message.error(translateError(e))"`,包内不弹 UI。
 - **storage-key 命名**:`{模块}-{页面}`,如 `sys-user`;列设置与密度按此键持久化到 localStorage(`protable:` 前缀)。
 - **树形页(org / menu)**:静态数据模式 —— `:data="tree"`(行带 `children`)+ `row-key="id"` + `:pagination="false"`,树列设 `align:'left'`;新增/筛选/搜索控件放 `#toolbar`。
+  - **列的取舍**:树列 `minWidth:220 + fixed:'left'`、操作列 `fixed:'right'`(`scrollX` 由包内按 `sum(width ?? minWidth ?? 120)` 自动算并绑给 `n-data-table`,无需手传 `scroll-x`);文本列一律 `ellipsis:{tooltip:true}`,否则长路径换行会把行撑高、行高参差。**操作最多留 2 个**(编辑 + `n-dropdown` 更多▾),4 个平铺在 260~300px 里必换行且横向滚动时够不着 —— 这是 org/menu 都踩过的坑。下拉项里的删除用 `useConfirm().confirm`(dialog),`n-popconfirm` 是内联触发器,塞不进 dropdown。
+  - **别加恒空列**:菜单树剥掉按钮后只剩目录/页面,而权限码只挂按钮 → 「权限码」列 100% 是「—」。同理关键字过滤跑在剥离后的树上,写 `n.permission` 永不命中,要按权限码搜得查节点的按钮子节点(见 `menu/index.vue` 的 `buttonInfoById`)。
   - **搜索自己算**:静态 `:data` 模式下 ProTable **不做任何前端过滤**(列的 `search` 配置只渲染搜索表单 + emit),所以关键字过滤走 `computed` + `utils/tree.ts` 的 `filterTree`(命中节点保留整棵子树,未命中但有后代命中的节点作为祖先链保留)。关键字放 `#toolbar` 的 `n-input`,别用 `search` 列配置——树表没分页,搜索卡片白占一整块高度。
   - **展开要受控**:`:expanded-row-keys` + `@update:expanded-row-keys`(不是 ProTable 的 prop,靠 `inheritAttrs:false + v-bind="attrs"` 透传给 `n-data-table`,和 `:loading` 同理)。**受控后必须删掉 `default-expand-all`** —— naive 里受控值优先,两者并存会让初始 `[]` 把"默认全展开"直接覆盖成全折叠;"全展开"改由 `expandableIds(tree)` 播种。data 变了受控 keys 不会自动跟着变,搜索后要重算,否则命中结果藏在折叠的祖先里。
   - **行内写值的坑**:`filterTree` 剪枝时,"仅因后代命中而保留"的祖先是浅拷贝。搜索态下往行对象上写值(`r.enabled = v`)写的是副本,不回源树 → 开关会弹回去。行内变更后**重拉**(`load()`)而不是本地写回;`StatusSwitch` 是悲观更新(请求成功才 emit),重拉即最终态。

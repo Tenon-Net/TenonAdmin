@@ -2,7 +2,7 @@
 import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import {
   NButton, NSpace, NTag, NForm, NInput, NInputNumber, NSwitch,
-  NSelect, NPopconfirm, NGrid, NFormItemGi, useMessage, type FormInst, type FormRules,
+  NSelect, NDropdown, NGrid, NFormItemGi, useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
 import { ProTable, type ProTableColumn } from 'tenon-naive-pro-table'
 import { useI18n } from 'vue-i18n'
@@ -10,6 +10,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import IconPicker from '@/components/IconPicker/index.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
+import ButtonManager from './components/ButtonManager.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { viewComponentPaths, buildRoutesForModule } from '@/composables/useAuthMenu'
 import { useAuthStore } from '@/stores/auth'
@@ -21,7 +22,7 @@ import type { ModuleRow, PermissionRouteItem } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
-const { run } = useConfirm()
+const { confirm } = useConfirm()
 const auth = useAuthStore()
 
 const loading = ref(false)
@@ -76,10 +77,12 @@ onMounted(async () => {
   }
 })
 
-const typeTag = (ty: MenuType) =>
-  ty === MenuType.Catalog ? { text: t('menu.typeCatalog'), type: 'info' as const }
-  : ty === MenuType.Menu ? { text: t('menu.typeMenu'), type: 'success' as const }
-  : { text: t('menu.typeButton'), type: 'warning' as const }
+// 统一淡 tag,不做三色区分:按钮已不在树里,只剩目录/页面两种,而这个区别树形缩进和
+// 「有没有路由路径」已经说清楚了;每行都顶一坨颜色反而是噪音(SimpleAdmin / XiHan 同样选了无色)。
+const typeText = (ty: MenuType) =>
+  ty === MenuType.Catalog ? t('menu.typeCatalog')
+  : ty === MenuType.Menu ? t('menu.typeMenu')
+  : t('menu.typeButton')
 
 // ── 弹窗表单(FormContainer:loading/底栏/关闭时机由容器按 onConfirm 协议接管)──
 const show = ref(false)
@@ -98,10 +101,10 @@ const form = reactive<MenuInput>(blank())
 /** 所属应用仅对顶级目录(parentId==0)有效——后端对子节点强制置空,前端据此隐藏字段。 */
 const isTopLevel = computed(() => form.parentId === 0)
 
+// 类型只留目录/页面:按钮统一走「权限按钮」弹窗建,主表单不再提供按钮选项。
 const typeOptions = computed(() => [
   { label: t('menu.typeCatalog'), value: MenuType.Catalog },
   { label: t('menu.typeMenu'), value: MenuType.Menu },
-  { label: t('menu.typeButton'), value: MenuType.Button },
 ])
 const moduleOptions = computed(() => modules.value.map((m) => ({ label: m.title, value: m.id })))
 
@@ -111,13 +114,41 @@ const filterOptions = computed(() => [
   { label: t('menu.moduleUnassigned'), value: UNASSIGNED },
 ])
 
+/** 递归剔除按钮节点 —— 按钮改由「权限按钮」弹窗单独管,不再进主树,树只剩目录/菜单。 */
+function stripButtons(nodes: MenuTreeNode[]): MenuTreeNode[] {
+  return nodes
+    .filter((n) => n.type !== MenuType.Button)
+    .map((n) => ({ ...n, children: stripButtons(n.children) }))
+}
+
 /**
  * 按所属应用过滤:moduleId 只存在顶级目录(parentId==0)上,子节点为 null 靠继承,
  * 所以只过滤顶级数组、子树自动跟随;UNASSIGNED 归拢 moduleId==null 的顶级目录。
+ * 再剥掉按钮节点后交给表格渲染。
  */
 const filteredTree = computed(() =>
-  tree.value.filter((r) => (moduleFilter.value === UNASSIGNED ? r.moduleId == null : r.moduleId === moduleFilter.value)),
+  stripButtons(
+    tree.value.filter((r) => (moduleFilter.value === UNASSIGNED ? r.moduleId == null : r.moduleId === moduleFilter.value)),
+  ),
 )
+
+/**
+ * 各节点直属按钮的数量 + 权限码拼串(取自未剥离的原树,无需额外请求)。
+ * count 给「权限按钮」列的徽标;perms 给关键字搜索 —— 按钮已不在树里,
+ * 「这个权限码归哪个页面」只能靠父页面命中来回答,否则藏起按钮就等于把它搜没了。
+ */
+const buttonInfoById = computed(() => {
+  const m = new Map<number, { count: number; perms: string }>()
+  const walk = (nodes: MenuTreeNode[]) => {
+    for (const n of nodes) {
+      const btns = n.children.filter((c) => c.type === MenuType.Button)
+      m.set(n.id, { count: btns.length, perms: btns.map((b) => b.permission).join(' ').toLowerCase() })
+      walk(n.children)
+    }
+  }
+  walk(tree.value)
+  return m
+})
 
 // ── 关键字搜索 + 展开控制 ─────────────────────────────────────────
 // 内核开箱就播了 90 行菜单,全展开、没搜索、没折叠 = 第一天打开就糊脸。
@@ -128,10 +159,12 @@ const keyword = ref('')
 const visibleTree = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return filteredTree.value
+  // 注意别写成 n.permission:过滤跑在已剥掉按钮的 filteredTree 上,而目录/页面的 permission 恒为空,
+  // 那样写等于永不命中。要按权限码搜,只能查该节点「按钮子节点」的码(见 buttonInfoById)。
   return filterTree(filteredTree.value, (n) =>
     n.title.toLowerCase().includes(kw) ||
     (n.path ?? '').toLowerCase().includes(kw) ||
-    (n.permission ?? '').toLowerCase().includes(kw),
+    (buttonInfoById.value.get(n.id)?.perms ?? '').includes(kw),
   )
 })
 
@@ -223,19 +256,72 @@ async function save() {
   }
 }
 
+// ── 权限按钮弹窗 ────────────────────────────────────────────────
+const buttonMgrRef = ref<InstanceType<typeof ButtonManager> | null>(null)
+const openButtons = (r: MenuTreeNode) => buttonMgrRef.value?.open({ id: r.id, title: r.title })
+/** 弹窗内增删改后:重拉树(刷新徽标)+ 重建壳层(即时反映授权变更)。 */
+const onButtonsChanged = () => Promise.all([load(), syncShell()])
+
+/** 删除:下拉菜单项不适合内联 popconfirm,走 useConfirm().confirm 的 dialog(它的设计用途)。 */
+const onDelete = (r: MenuTreeNode) =>
+  confirm({
+    content: t('menu.deleteConfirm', { title: r.title }),
+    type: 'error',
+    action: () => menuApi.remove(r.id),
+    successMsg: t('menu.deleted'),
+  }).then((ok) => {
+    if (ok) Promise.all([load(), syncShell()])
+  })
+
 const columns: ProTableColumn<MenuTreeNode>[] = [
   {
     title: () => t('menu.title'),
     key: 'title',
     align: 'left', // 树列左对齐,展开缩进才好读
+    minWidth: 220,
+    fixed: 'left', // 横向滚动时不能丢失「这是哪一行」
     render: (r) =>
       h(NSpace, { align: 'center', size: 6, wrapItem: false }, () => [
         r.icon ? h(AppIcon, { icon: r.icon, size: 18 }) : null,
         r.title,
-        h(NTag, { size: 'tiny', type: typeTag(r.type).type, bordered: false }, () => typeTag(r.type).text),
+        h(NTag, { size: 'tiny', bordered: false }, () => typeText(r.type)),
+        // 「隐藏」是罕见状态(种子里 20/20 都是显示),只在为真时才占视觉 —— 省掉一整列同一个词。
+        r.visible ? null : h(NTag, { size: 'tiny', bordered: false, type: 'warning' }, () => t('common.hidden')),
       ]),
   },
-  { title: () => t('menu.permission'), key: 'permission', render: (r) => r.permission || '—' },
+  // 路由/组件路径:管理员核对菜单时真正要看的东西,原先只能点开编辑弹窗才看得到。
+  // 权限码列已删 —— 树里只剩目录/页面,而它俩结构上永远没有权限码(种子 20/20 为空),
+  // 那一列 100% 是「—」。权限码的正主在「权限按钮」弹窗里。
+  {
+    title: () => t('menu.path'),
+    key: 'path',
+    align: 'left',
+    width: 200,
+    ellipsis: { tooltip: true },
+    render: (r) => r.path || '—',
+  },
+  {
+    title: () => t('menu.component'),
+    key: 'component',
+    align: 'left',
+    width: 220,
+    ellipsis: { tooltip: true },
+    render: (r) => r.component || '—',
+  },
+  {
+    title: () => t('menu.buttons'),
+    key: 'buttons',
+    width: 100,
+    render: (r) => {
+      const n = buttonInfoById.value.get(r.id)?.count ?? 0
+      // 0 也必须可点 —— 否则还没配按钮的页面永远加不了第一个。
+      return h(
+        NButton,
+        { size: 'small', text: true, type: n > 0 ? 'primary' : undefined, onClick: () => openButtons(r) },
+        () => String(n),
+      )
+    },
+  },
   { title: () => t('menu.sort'), key: 'sort', width: 70 },
   {
     title: () => t('common.status'),
@@ -255,35 +341,27 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
         },
       }),
   },
-  {
-    title: () => t('common.visible'),
-    key: 'visible',
-    width: 84,
-    render: (r) => (r.visible ? t('common.visible') : t('common.hidden')),
-  },
+  // 操作收敛成「编辑 + 更多▾」:原先 4 个操作塞 300px 会把「删除」挤到第二行,行高参差,
+  // 且没 fixed —— 横向滚动时整列被裁掉够不着。
   {
     title: () => t('common.operation'),
     key: 'op',
-    width: 200,
+    width: 150,
+    fixed: 'right',
     render: (r) =>
-      h(NSpace, { size: 2, wrapItem: false }, () => [
-        r.type !== MenuType.Button
-          ? h(NButton, { size: 'small', quaternary: true, onClick: () => openAdd(r.id) }, () => t('menu.addChild'))
-          : null,
+      h(NSpace, { size: 2, wrapItem: false, justify: 'center' }, () => [
         h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
         h(
-          NPopconfirm,
+          NDropdown,
           {
-            // popconfirm 留在模板层当触发器,「执行→toast」后半段交给 useConfirm().run。
-            onPositiveClick: () =>
-              run(() => menuApi.remove(r.id), t('menu.deleted')).then((ok) => {
-                if (ok) Promise.all([load(), syncShell()])
-              }),
+            trigger: 'click',
+            options: [
+              { key: 'addChild', label: t('menu.addChild') },
+              { key: 'delete', label: t('common.delete') },
+            ],
+            onSelect: (key: string) => (key === 'addChild' ? openAdd(r.id) : onDelete(r)),
           },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
-            default: () => t('menu.deleteConfirm', { title: r.title }),
-          },
+          () => h(NButton, { size: 'small', quaternary: true }, () => t('common.more')),
         ),
       ]),
   },
@@ -395,6 +473,8 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
         </n-grid>
       </n-form>
     </FormContainer>
+
+    <ButtonManager ref="buttonMgrRef" :tree="tree" :routes="routes" @changed="onButtonsChanged" />
   </div>
 </template>
 
