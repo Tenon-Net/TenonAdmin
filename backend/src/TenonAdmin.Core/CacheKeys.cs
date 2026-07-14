@@ -39,6 +39,13 @@ public static class CacheKeys
         $"rl:{bucket}:{clientIp}:{windowIndex}";
 
     /// <summary>
+    /// 磁盘回收某一轮的<b>租约</b>(<paramref name="tickBucket"/> = <c>unixSeconds / 回收间隔</c>)。
+    /// <para>GC 后台任务在每个副本上都注册着;拿这个键做一次原子自增,只有得到 1 的副本干活,
+    /// 其余跳过 —— 免得 N 个副本同时扫同一批文件(不会出错,但白白重复 I/O 并刷告警)。</para>
+    /// </summary>
+    public static string FileGcTick(long tickBucket) => $"filegc:tick:{tickBucket}";
+
+    /// <summary>
     /// 门户缓存<b>代际计数器</b>:菜单/模块 CRUD、角色-菜单、用户-角色变更时自增,令下方门户键整体惰性失效。
     /// <para>因 <see cref="ICacheProvider"/> 无前缀/批量删除,而门户结果受影响面是全局的、菜单树键又是二维,
     /// 用递增代际做 O(1) 失效(旧代际键不再被读到、由 TTL 回收)最简且正确。计数器本身不设过期(进程内重启即归零、

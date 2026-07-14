@@ -26,7 +26,8 @@ public class FileGcService(
     ChunkStorage chunks,
     AdminUploadOptions options,
     TimeProvider time,
-    ILogger<FileGcService> logger) : BackgroundService
+    ILogger<FileGcService> logger,
+    ICacheProvider? cache = null) : BackgroundService   // 可选参数:本类是 public 可继承,加必需参数即源码破坏性变更
 {
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -43,6 +44,8 @@ public class FileGcService(
         {
             try
             {
+                if (!await TryAcquireTickAsync(stoppingToken)) continue;   // 这一轮已被别的副本领走
+
                 var (files, sessions) = await SweepAsync(stoppingToken);
                 if (files > 0 || sessions > 0)
                     logger.LogInformation("TenonAdmin 磁盘回收:清理 {Files} 个软删文件、{Sessions} 个弃单分片会话。", files, sessions);
@@ -59,7 +62,29 @@ public class FileGcService(
         }
     }
 
-    /// <summary>跑一趟完整回收(软删文件 + 弃单分片),返回各自清掉的数量。测试与手动触发直接调它。</summary>
+    /// <summary>
+    /// 领这一轮的活:同一个时间桶内<b>只有一个副本</b>能领到。
+    /// <para>GC 注册在每个副本上,不设租约则 N 个副本同时扫同一批文件——逐行 try/catch + <c>File.Exists</c> 兜底
+    /// 使它<b>不会出错</b>,但会重复 I/O 并刷一堆"跳过文件"的告警。用一次原子自增当租约:
+    /// 时间桶做键,只有拿到 1 的那个副本干活。内存缓存(单实例)恒为 1 → 行为不变;Redis 下才真正互斥。</para>
+    /// <para>public virtual:消费者可换成自己的选主机制(如 k8s Lease)。</para>
+    /// <para>// ponytail: 各副本时钟若差到跨桶,两边可能都领到——GC 本来就是幂等的(删过的文件 File.Exists 为假、
+    /// 硬删按 Id 幂等),多跑一趟只是浪费 I/O,不值得为此上真正的分布式锁。</para>
+    /// </summary>
+    public virtual async Task<bool> TryAcquireTickAsync(CancellationToken cancellationToken = default)
+    {
+        if (cache is null) return true;   // 没有缓存实现(消费者自建实例)→ 退回"人人都扫",与旧行为一致
+
+        var intervalSeconds = (long)TimeSpan.FromHours(options.GcIntervalHours).TotalSeconds;
+        if (intervalSeconds <= 0) return true;
+
+        var bucket = time.GetUtcNow().ToUnixTimeSeconds() / intervalSeconds;
+        var claims = await cache.IncrementAsync(
+            CacheKeys.FileGcTick(bucket), TimeSpan.FromSeconds(intervalSeconds * 2), cancellationToken);
+        return claims == 1;   // 第一个 INCR 到 1 的副本领走这一轮
+    }
+
+    /// <summary>跑一趟完整回收(软删文件 + 弃单分片),返回各自清掉的数量。测试与手动触发直接调它(<b>不过租约</b>)。</summary>
     public virtual async Task<(int Files, int ChunkSessions)> SweepAsync(CancellationToken cancellationToken = default)
     {
         var files = await ReclaimDeletedFilesAsync(cancellationToken);
