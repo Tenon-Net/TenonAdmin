@@ -193,7 +193,7 @@ app.Run();
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration, options =>
 {
-    // 注:ScanApplicationAssemblies 从未实现,已标 [Obsolete](置任何值都无效);实际只有下面这行生效。
+    // 内核不扫描程序集:业务模块必须显式登记,否则实体不建表、控制器 404。
     options.ApplicationAssemblies.Add(typeof(DeviceService).Assembly);
 });
 ```
@@ -482,7 +482,7 @@ builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DeviceS
 **注册模型(双层,消除"显式 vs 扫描"的歧义)**:
 - **框架内置服务**:一律在各模块 `AddXxx()` 里**显式 `TryAdd`** 注册,不靠扫描 —— 可预测、可被用户 `Replace`(§5.2)。
 - **用户外部模块**:经 `options.ApplicationAssemblies.Add(...)` **显式登记**业务程序集,其实体参与 CodeFirst 建表、控制器 AddApplicationPart 挂载。
-  > 实现说明:原设计的"默认扫描入口程序集及引用"(`ScanApplicationAssemblies`)最终**未实现**——为守内核"显式、可预测、无魔法"的取向,只保留显式登记这一条真源;该开关已于 2026-07-09 标 `[Obsolete]`。
+  > 实现说明:原设计的"默认扫描入口程序集及引用"(`ScanApplicationAssemblies`)最终**未实现**——为守内核"显式、可预测、无魔法"的取向,只保留显式登记这一条真源;该开关已于 2026-07-14 在首个正式版发包前删除(发包后再删就是破坏性变更)。
 
 - **种子**:内置与用户种子<b>都</b>要显式 `TryAddEnumerable` 注册 —— 内核<b>不扫描</b>程序集找种子(`ApplicationAssemblies` 只管实体建表与控制器挂载)。忘了注册的后果是种子**静默不执行**,没有任何报错。种子 Id 须落在保留区间(§5.7 代码注释与 `Core/TenonSeedIds.cs`)。
 

@@ -186,7 +186,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 
 > 🚀 **不想手搭 host?** `dotnet new tenon-app` 直接生成已接好上面这段接线 + 一个 `DataEntity` 示例模块的可运行工程（见文首「快速开始」）。此后新增模块 = 复制生成物 `Modules/SampleDoc*` 四件套改名 + `Program.cs` 补一行 `TryAddScoped`。
 
-> ⚠️ **只有 `ApplicationAssemblies.Add(...)` 这条路生效**。`TenonAdminOptions.ScanApplicationAssemblies` 从未实现、代码里无一处读取，已于 2026-07-09 标记 `[Obsolete]`（置任何值都无效，将于后续大版本移除）。别指望它自动发现你的模块——必须显式 `Add` 程序集。
+> ⚠️ **只有 `ApplicationAssemblies.Add(...)` 这条路生效**。内核**不会自动发现**你的模块——必须显式 `Add` 程序集，否则实体不建表、控制器 404。（曾有个 `ScanApplicationAssemblies` 开关从未实现，已于 2026-07-14 在发包前删除。）
 
 ---
 
