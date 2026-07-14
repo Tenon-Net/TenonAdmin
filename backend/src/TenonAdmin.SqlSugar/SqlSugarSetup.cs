@@ -2,6 +2,8 @@ using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;
 using TenonAdmin.Core;
 
@@ -56,6 +58,10 @@ public static class SqlSugarSetup
             var time = sp.GetService<TimeProvider>() ?? TimeProvider.System; // 统一时间源,可测试(设计 §12)
             var scope = sp.GetRequiredService<IDataScopeContext>();          // 数据范围载体(单例,过滤器闭包捕获)
             var currentUser = sp.GetRequiredService<ICurrentUser>();         // 当前用户(单例,审计字段填充用)
+            // SQL 诊断日志。类别名固定,便于消费者单独调级别(Logging:LogLevel:TenonAdmin.Sql)。
+            // GetService 而非 GetRequiredService:本方法是公开装配入口,允许在裸容器上单独调用(测试与只要数据层的消费者
+            // 都这么用),不能凭空多出一个必需依赖 —— 没有日志就静默不打,不该因此起不来。
+            var sqlLog = (sp.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance).CreateLogger("TenonAdmin.Sql");
 
             // 第二参数对每个上下文生效(Scope 内部按线程建 Client,钩子逐个挂上)
             return new SqlSugarScope(config, client =>
@@ -105,6 +111,26 @@ public static class SqlSugarSetup
                             break;
                     }
                 };
+
+                // ── SQL 诊断日志 ──
+                // 输出只走 ILogger。**绝不能把这两条写进 SysOpLog**:那条 INSERT 自己又会触发一次
+                // OnLogExecuted / 可能再失败触发 OnError —— 直接递归。日志的归日志(诊断),审计的归审计(sys_op_log)。
+
+                // 失败的 SQL:没有这一条,线上查询一炸就只剩驱动层异常 —— 没有语句、没有参数,复现无从谈起。
+                // 不给关的开关:失败却打不出 SQL,等于没有可运维性。
+                client.Aop.OnError = ex =>
+                    sqlLog.LogError(ex, "SQL 执行失败: {Sql} | 参数: {Parameters}",
+                        ex.Sql, FormatSqlParameters(ex.Parametres));
+
+                // 慢 SQL:阈值内的语句一条都不打,否则日志被淹掉(每个请求都有若干条 SQL)。
+                if (db.SlowSqlMillis > 0)
+                    client.Aop.OnLogExecuted = (sql, pars) =>
+                    {
+                        var elapsed = client.Ado.SqlExecutionTime;
+                        if (elapsed.TotalMilliseconds < db.SlowSqlMillis) return;
+                        sqlLog.LogWarning("慢 SQL({Elapsed}ms ≥ {Threshold}ms): {Sql} | 参数: {Parameters}",
+                            (long)elapsed.TotalMilliseconds, db.SlowSqlMillis, sql, FormatSqlParameters(pars));
+                    };
             });
         });
 
@@ -117,6 +143,18 @@ public static class SqlSugarSetup
 
         return services;
     }
+
+    /// <summary>
+    /// SQL 参数渲染成 <c>@p0=1, @name=张三</c>。
+    /// <para>没有参数值,同一条失败的 SQL 就复现不出来 —— 只有语句是不够的。</para>
+    /// <para>ponytail: 明文打参数值。内核不会把口令原文交给 SQL(登录是取出用户再在代码里校验哈希),
+    /// 所以这里不做脱敏;消费者若把敏感值直接写进业务表,自行调 <c>TenonAdmin.Sql</c> 这个类别的日志级别。</para>
+    /// </summary>
+    private static string FormatSqlParameters(object? parameters) => parameters switch
+    {
+        SugarParameter[] ps when ps.Length > 0 => string.Join(", ", ps.Select(p => $"{p.ParameterName}={p.Value}")),
+        _ => "(无)",
+    };
 
     /// <summary>
     /// SQLite 连接串里的相对 <c>Data Source</c> 规整为相对 <paramref name="contentRoot"/> 的绝对路径。

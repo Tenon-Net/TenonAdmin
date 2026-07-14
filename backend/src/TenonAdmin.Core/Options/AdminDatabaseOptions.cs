@@ -20,4 +20,12 @@ public class AdminDatabaseOptions
 
     /// <summary>首启是否写种子</summary>
     public bool EnableSeed { get; set; } = true;
+
+    /// <summary>
+    /// 慢 SQL 告警阈值(毫秒):执行耗时 ≥ 本值的语句,连同 SQL 与参数打一条 <c>Warning</c>。
+    /// <para><b>≤ 0 = 关闭</b>(只保留失败 SQL 的 <c>Error</c> 日志,那条不受本项控制 —— 查询失败却打不出 SQL,
+    /// 线上就没法查了,不给关的开关)。</para>
+    /// <para>默认 1000ms:够慢才值得看。调小(如 1)可用来观察全部语句,但生产上会把日志淹掉。</para>
+    /// </summary>
+    public int SlowSqlMillis { get; set; } = 1000;
 }
