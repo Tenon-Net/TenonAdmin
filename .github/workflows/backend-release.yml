@@ -32,7 +32,7 @@ jobs:
       # 它按 tag 版本打包并让模板引用同一版本,所以"模板引用了一个 tag 没发布的版本"这类错在这里当场暴露。
       - name: Template smoke (dotnet new tenon-app must restore + build)
         shell: pwsh
-        run: templates/smoke-test.ps1 -Version "${GITHUB_REF_NAME#v}"
+        run: templates/smoke-test.ps1 -Version ($env:GITHUB_REF_NAME -replace '^v', '')
 
   pack-push:
     needs: verify

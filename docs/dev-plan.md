@@ -47,20 +47,24 @@
 
 功能没缺口。**缺的是"发得出去"和"升得上去"。** 下面两批做完即可发版。
 
-### 第七批 · 发版链路(`chore(release)` / `fix(template)`)
+### ~~第七批 · 发版链路~~ ✅ 已完成(2026-07-14)
 
-今天打一个 `v0.1.0` 的 tag,会发生什么:
+R1–R6 全部处置。闸门先红后绿的证据在下面这张表里 —— **这一批本身就是"没有闸门"的代价的教科书**:三个洞(R2 的真实行为、被污染的本地缓存、少一层的 `PackagePath`)都是在闸门真跑起来之后才现形的,靠读代码一个也发现不了。
 
-| # | 问题 | 证据 | 后果 |
-|---|---|---|---|
-| **R1** | **发版流水线没有任何 build / test 闸门** | `backend-release.yml:24-32` —— checkout → pack → push,中间什么都没有 | **测试是红的也照发**。发出去的包没人验证过 |
-| **R2** | **模板的包版本写死,不随 tag 替换** | `templates/content/tenon-app/.template.config/template.json:19` `"defaultValue": "0.0.1-preview"`,而 `TenonApp.csproj:11` 是 `Version="TENON_PKG_VERSION"` | 打 `v0.1.0` → 包以 0.1.0 发布,模板却仍默认引用 **0.0.1-preview(一个从未发布过的版本)** → 消费者 `dotnet new tenon-app && dotnet restore` **必失败**。发出去的模板是坏的 |
-| **R3** | **`smoke-test.ps1` 从没接进 CI** | 全仓 grep `smoke-test` 在 `.github/` 下**零命中** | 「消费者的第一步」零自动化覆盖 —— R2 正是这么漏出去的 |
-| **R4** | 组织名漂移 | `template.json:3` `"author": "DotNet-MoYu"`,而 `git remote` 是 **Tenon-Net** | 发出去的包署名是错的组织 |
-| **R5** | 包元数据缺 SourceLink / 符号包 / 图标 | `Directory.Build.props` 无 `PublishRepositoryUrl` / `IncludeSymbols` / `PackageIcon`(第 26 行自己标了 TODO) | 消费者**调试时步不进内核源码**;包在 nuget.org 上像半成品 |
-| **R6** | `ScanApplicationAssemblies` 是个 `[Obsolete]` 空开关 | `TenonAdminOptions.cs:33-37` —— 注释自己写着「全代码库无一处读取它」 | **现在删是清理,发包之后再删就是破坏性变更**。窗口就这一次 |
+| # | 做了什么 | 提交 |
+|---|---|---|
+| **R1** | 发版流水线加闸门:构建 + 测试 + 模板冒烟全绿才推 nuget.org(推包不可撤销,只能 unlist) | `test(release)` |
+| **R3** | `smoke-test.ps1` 接进 `backend-ci`(`template-smoke` 腿)与发版闸门;`templates/**` 的改动现在也会触发 CI(此前不会 —— 模板腐烂全程隐形) | `test(release)` |
+| **R2** | 打包时把 `-p:Version` 盖进模板默认值(`StampTemplateVersion`),生成物精确钉住随同发布的内核版本 | `fix(template)` |
+| **R4** | 包署名组织名 `DotNet-MoYu` → `Tenon-Net` | `fix(template)` |
+| **R5** | SourceLink + snupkg + 包图标 —— 消费者能步进内核源码(否则"继承并重写某一步"这个卖点根本没法用) | `chore(release)` |
+| **R6** | 删掉 `ScanApplicationAssemblies` 空开关(发包后再删就是破坏性变更) | `chore(core)!` |
 
-**先写什么测试**:把 R3 补成真闸门 —— `pack → 推本地 feed → dotnet new tenon-app → restore → build` 全绿才允许 push。这条流水线**必须先红**在 R2 上(restore 找不到 0.0.1-preview),修完 R2 才转绿。R1/R4/R5/R6 是配置改动,由这条闸门顺带守住。
+**R2 的真实严重性(修正)**:此前记的是"消费者 `dotnet new` + `restore` **必失败**"—— **这是错的**。`PackageReference` 的 `Version` 是**最低版本**,找不到就**向上漂移**到 feed 上最近的可用版本(NU1603 警告)。实测:模板默认 `0.0.1-preview`、feed 上只有 `9.9.9-smoke` → restore **成功**,只报一条警告。所以真实后果是:**发出去的模板引用一个从未发布的版本,靠漂移勉强活着**;真正被咬的是开了 `TreatWarningsAsErrors` / 用锁文件(`--locked-mode`)/ 走精确版本策略的消费者 —— 他们直接失败。
+
+**两个只有真跑才抓得到的坑**(记下来,别再踩):
+- **冒烟测试必须隔离 `NUGET_PACKAGES`**。第一次跑它是绿的 —— 因为本机全局缓存里躺着以前跑剩的 `TenonAdmin 0.0.1-preview`,restore 根本没出门。**不隔离,它测的就是机器脏不脏,不是发版产物**。
+- **断言必须钉"精确版本",不能只看 build 成不成功**。因为漂移的存在,"编译通过"完全不代表模板引对了版本 —— 加 `-warnaserror:NU1603` + 直接断言生成的 csproj 里是刚打的那个版本号,闸门才第一次真的红。
 
 ### 第八批 · 上线之后活不活得下去(`fix(sqlsugar)` / `feat(sqlsugar)`)
 
@@ -80,7 +84,7 @@
 
 ### 顺带(不单独占一批)
 
-- **`CHANGELOG.md` 缺**——发版前建,`0.1.0` 从 M0 到今天的能力做首条。
+- ~~**`CHANGELOG.md` 缺**~~ ✅ 已建(2026-07-14),`0.0.1-preview` 的能力清单 + 未发布段。
 - **升级指南缺**——和 O1 绑定:内核加列时消费者该做什么,写进 `deployment.md`。
 
 ## 5. v1 之后(不阻塞发版)

@@ -1,0 +1,42 @@
+# 更新日志
+
+本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
+
+发布节奏:打 `v*` tag 即触发 `backend-release` —— 它先跑构建 + 测试 + 模板冒烟(`dotnet new tenon-app` 必须 restore 并编译通过),全绿才推 nuget.org。
+
+## [未发布]
+
+首个正式版的准备工作。发版前的剩余阻塞项见 `docs/dev-plan.md` §4。
+
+### 新增
+
+- 发版闸门:`backend-release` 在推包前跑构建、测试与模板冒烟。推包不可撤销(nuget.org 只能 unlist),红的东西不许发。
+- `dotnet new tenon-app` 的冒烟测试进 CI(`backend-ci` 的 `template-smoke` 腿),覆盖消费者的第一条命令。
+- NuGet 包带 SourceLink + 符号包(snupkg)与包图标 —— 消费者可直接步进内核源码,这是"继承并重写某一步"这个卖点的前提。
+
+### 修复
+
+- 模板不再引用一个从未发布的包版本:打包时把 `-p:Version` 盖进 `dotnet new` 模板的默认值。此前模板写死 `0.0.1-preview`,tag 从不改写它,生成的工程从第一天起就引用一个不存在的版本(restore 靠 NuGet 向上漂移勉强活着,并带 NU1603;开了 `TreatWarningsAsErrors` / 锁文件 / 精确版本策略的消费者直接失败)。
+- 包署名的组织名修正为 `Tenon-Net`(此前模板包里是 `DotNet-MoYu`)。
+
+### 移除
+
+- **破坏性**:删除 `TenonAdminOptions.ScanApplicationAssemblies`。它从未实现、代码里无一处读取,置任何值都无效。业务程序集一直只有 `ApplicationAssemblies.Add()` 这一条生效路径。趁未发包删除;发包之后再删就是破坏性变更。
+
+---
+
+## 0.0.1-preview
+
+预览版,未推 nuget.org。内核能力(均有 CI 覆盖):
+
+- **认证**:账号密码 + 验证码、JWT + Refresh Token 轮换、登录锁定、在线会话与强制下线、首次登录强制改密
+- **RBAC**:角色、三级菜单(目录/页面/按钮)、按钮级权限、角色菜单授权。权限码即路由,代码里没有权限字符串
+- **多机构数据权限**:五种数据范围,经 ORM 全局过滤器在查询层自动生效
+- **多应用门户**:模块管理、独立菜单树、应用切换、用户默认应用
+- **字典与配置**:字典类型/字典项、键值配置(带缓存与事件驱动失效)、配置中心("改配置不改代码":基础/安全/上传/限流)
+- **日志**:操作日志(自动记录 + 入参脱敏)、登录日志
+- **文件**:本地上传下载、分片续传与秒传、签名直链、磁盘回收(`FileGcService`)
+- **可替换性**:接口 + `virtual` + `TryAdd`,四层覆盖(配置 → 换服务 → 继承重写 → 覆盖端点),由"六件套"测试锁死
+- **零配置启动**:默认 SQLite、CodeFirst 建表、幂等种子、首启打印随机超管密码
+- **交付**:容器化(Caddy + compose);多副本正确性(Redis 缓存、限流计数跨副本共享、每副本独立雪花机器号、反代后取真实客户端 IP)
