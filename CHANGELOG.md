@@ -3,7 +3,9 @@
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-发布节奏:打 `v*` tag 即触发 `backend-release` —— 它先跑构建 + 测试 + 模板冒烟(`dotnet new tenon-app` 必须 restore 并编译通过),全绿才推 nuget.org。
+发布节奏:**开发在 `dev`,发版走 `main`** —— 先把 `dev` 合进 `main`,再**在 `main` 上**打 `v*` tag。tag 是分支无关的,打在别处一样会触发发版工作流,所以那里有一道闸门:tag 的提交不在 `main` 上直接拒发。
+
+tag 触发 `backend-release` 后,它先跑构建 + 测试 + 模板冒烟(`dotnet new tenon-app` 必须 restore 并编译通过),全绿才推 nuget.org。
 
 > 发版时**两个半边的版本号要一起改**:后端由 tag 经 `-p:Version` 注入,而 `web/package.json` 的 `version` 是构建期常量、**会显示在登录页页脚**。忘了改,用户看到的界面版本就和装到的包对不上。
 

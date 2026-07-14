@@ -1,6 +1,7 @@
 name: backend-release
 
-# 打 tag(如 v0.1.0)即打包核心 NuGet 包 + dotnet new 模板包并推 nuget.org(设计 §T10)。
+# 在 **main** 上打 tag(如 v0.1.0)即打包核心 NuGet 包 + dotnet new 模板包并推 nuget.org(设计 §T10)。
+# 开发在 dev,发版走 main:先把 dev 合进 main,再在 main 上打 tag。tag 打在别处会被下面的闸门拒绝。
 # 需在仓库 Secrets 配 NUGET_API_KEY;版本从 tag 名推导(去掉前缀 v)。
 #
 # 推包是**不可撤销**的(nuget.org 只能 unlist,不能删),所以 push 之前必须先过闸门:
@@ -14,7 +15,20 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 —— 下一步要判断 tag 的 commit 在不在 main 上,浅克隆看不到历史。
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 发版分支是 main。tag 是分支无关的:在 dev(甚至任意分支)上打 v0.1.0 一样会触发这个工作流,
+      # 于是没进 main、没被审的代码可以直接推到 nuget.org —— 而推包不可撤销。
+      # 所以这里把"发版必须来自 main"从约定变成闸门。
+      - name: Tag must be on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::标签 $GITHUB_REF_NAME 指向的提交 $GITHUB_SHA 不在 main 上。先把 dev 合进 main,再在 main 上打 tag。"
+            exit 1
+          fi
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
