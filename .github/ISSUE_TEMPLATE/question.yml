@@ -1,0 +1,30 @@
+name: 使用问题 / Question
+description: 使用中的疑问 —— 不确定是不是 bug 也走这里 / Ask how to do something — also fine if you're not sure it's a bug
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: 你的问题 / Your question
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 相关部分 / Related part
+      options:
+        - 后端内核 / Backend kernel
+        - 前端模板 / Web template
+        - 两者 / Both
+        - 不确定 / Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 相关配置或代码 / Relevant config or code
+      description: |
+        选填 —— 贴上能帮我们答得准一点。记得抹掉密码。
+        Optional — helps us answer precisely. Redact credentials first.

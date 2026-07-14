@@ -1,0 +1,52 @@
+name: 功能建议 / Feature request
+description: 提一个需求或改进 / Suggest a feature or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你要解决什么问题 / What problem are you trying to solve
+      description: |
+        请描述你的场景和卡点,而不是直接描述你想要的功能 —— 前者才能让我们判断该不该进内核,以及有没有更好的解法。
+        Describe your situation and what blocks you, rather than the feature you already have in mind. That lets us judge whether it belongs in the kernel, and whether there's a better answer.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 受影响部分 / Affected part
+      options:
+        - 后端内核 / Backend kernel
+        - 前端模板 / Web template
+        - 两者 / Both
+    validations:
+      required: true
+
+  - type: textarea
+    id: replaceability
+    attributes:
+      label: 你试过自己重写实现吗 / Have you tried overriding it yourself
+      description: |
+        TenonAdmin 的设计前提是可替换:每个服务都用 TryAdd 注册,你在 AddTenonAdmin() 之前注册同接口的实现就会覆盖内置的;长方法都拆成了 virtual 步骤,子类重写其中一步即可,不必 fork。
+        请说明你试过哪条路、卡在哪。如果自己重写就能解决,那它多半不该进内核;而如果你发现某处**没法**重写,那本身就是个值得修的缺陷 —— 请直接说。
+
+        TenonAdmin is built to be replaced: every service is registered via TryAdd (register your own implementation before AddTenonAdmin() and yours wins), and long methods are split into virtual steps you can override in a subclass — no fork needed.
+        Tell us what you tried and where it broke down. If overriding solves it, it probably doesn't belong in the kernel. If you found something that *can't* be overridden, that's a defect worth fixing — say so.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的方案 / Proposed solution
+      description: |
+        选填。有具体想法就写,没有也没关系 —— 上面的问题描述比这里重要。
+        Optional. Write it if you have one; the problem statement above matters more.
+
+  - type: checkboxes
+    id: pr
+    attributes:
+      label: 参与意愿 / Willing to contribute
+      options:
+        - label: 我愿意为此提一个 PR / I'm willing to open a PR for this
