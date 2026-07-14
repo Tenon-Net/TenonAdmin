@@ -29,14 +29,28 @@ public record UserItem
     public required long Id { get; init; }
     public required string Account { get; init; }
     public required string Name { get; init; }
+    public string? Nickname { get; init; }
+    public string? Phone { get; init; }
+    public string? Email { get; init; }
+
+    /// <summary>性别字典值("1"男/"2"女/"0"未知);前端按字典 gender 翻译。</summary>
+    public string? Gender { get; init; }
+
+    /// <summary>头像签名直链。</summary>
+    public string? Avatar { get; init; }
+
     public long? OrgId { get; init; }
     public long? PositionId { get; init; }
+    public long? DirectorId { get; init; }
 
     /// <summary>机构名(不落 SysUser,分页时按 OrgId 关联 sys_org 补;仅列表展示用)</summary>
     public string? OrgName { get; init; }
 
     /// <summary>职位名(同上,按 PositionId 关联 sys_position 补)</summary>
     public string? PositionName { get; init; }
+
+    /// <summary>直属主管姓名(同上,按 DirectorId 关联 sys_user 补)</summary>
+    public string? DirectorName { get; init; }
 
     public required bool Enabled { get; init; }
     public required bool IsSuperAdmin { get; init; }
@@ -59,8 +73,14 @@ public record AddUserInput
     public string? Password { get; init; }
 
     public string Name { get; init; } = "";
+    public string? Nickname { get; init; }
+    public string? Phone { get; init; }
+    public string? Email { get; init; }
+    public string? Gender { get; init; }
+    public string? Avatar { get; init; }
     public long? OrgId { get; init; }
     public long? PositionId { get; init; }
+    public long? DirectorId { get; init; }
     public bool Enabled { get; init; } = true;
 
     /// <summary>初始分配的角色 Id 集合</summary>
@@ -99,8 +119,14 @@ public record SetEnabledInput
 public record UpdateUserInput
 {
     public string Name { get; init; } = "";
+    public string? Nickname { get; init; }
+    public string? Phone { get; init; }
+    public string? Email { get; init; }
+    public string? Gender { get; init; }
+    public string? Avatar { get; init; }
     public long? OrgId { get; init; }
     public long? PositionId { get; init; }
+    public long? DirectorId { get; init; }
     public bool Enabled { get; init; } = true;
     public IReadOnlyCollection<long> RoleIds { get; init; } = [];
 }

@@ -21,6 +21,27 @@ public class SysUser : BaseEntity
     [SugarColumn(Length = 64, ColumnDescription = "姓名/昵称")]
     public string Name { get; set; } = "";
 
+    [SugarColumn(Length = 64, ColumnDescription = "昵称", IsNullable = true)]
+    public string? Nickname { get; set; }
+
+    [SugarColumn(Length = 32, ColumnDescription = "手机号", IsNullable = true)]
+    public string? Phone { get; set; }
+
+    [SugarColumn(Length = 128, ColumnDescription = "邮箱", IsNullable = true)]
+    public string? Email { get; set; }
+
+    /// <summary>性别;字典 gender 驱动,存字典项 Value("1"男/"2"女/"0"未知)。</summary>
+    [SugarColumn(Length = 16, ColumnDescription = "性别", IsNullable = true)]
+    public string? Gender { get; set; }
+
+    /// <summary>
+    /// 头像。存文件签名直链 ViewUrl(见 SysFileController.View)。
+    /// ponytail: 存 ViewUrl 字符串直接进 &lt;img&gt;;签名密钥轮换后旧链失效、重传即修,够用。
+    ///   要稳定改存 fileId(long)再按 id 换签名链。
+    /// </summary>
+    [SugarColumn(Length = 512, ColumnDescription = "头像", IsNullable = true)]
+    public string? Avatar { get; set; }
+
     /// <summary>主属机构 Id(设计 §4"用户...主属机构");可空(超管/未分配)。数据范围以此为用户列表的机构维度(T3)。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "主属机构 Id")]
     public long? OrgId { get; set; }
@@ -28,6 +49,10 @@ public class SysUser : BaseEntity
     /// <summary>职位 Id;可空(未分配)。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "职位 Id")]
     public long? PositionId { get; set; }
+
+    /// <summary>直属主管的用户 Id;可空(无上级/未分配)。软引用 sys_user,无导航属性。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "直属主管 Id")]
+    public long? DirectorId { get; set; }
 
     /// <summary>停用后无法登录、已有会话由权限过滤器拦截(设计 §15)</summary>
     [SugarColumn(ColumnDescription = "是否启用")]
