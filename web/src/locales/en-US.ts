@@ -120,6 +120,7 @@ export default {
     required: 'Enter account and password',
     captcha: 'Captcha',
     captchaPlaceholder: 'Enter captcha',
+    captchaMathPlaceholder: 'Enter the result',
     captchaRequired: 'Enter the captcha',
     remember: 'Remember me',
     submit: 'Sign in',
@@ -287,7 +288,12 @@ export default {
         requireSpecial: 'Require special char',
       },
       session: { title: 'Session lifetime', accessMinutes: 'Access token (min)', refreshMinutes: 'Refresh token (min)' },
-      captcha: { title: 'Login captcha', enabled: 'Enable login captcha' },
+      captcha: {
+        title: 'Login captcha',
+        enabled: 'Enable login captcha',
+        type: 'Captcha type',
+        types: { char: 'Characters', path: 'Stroke (anti-scrape)', math: 'Arithmetic' },
+      },
       rateLimit: {
         title: 'Rate limiting',
         enabled: 'Enable rate limiting',

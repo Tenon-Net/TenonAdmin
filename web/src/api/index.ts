@@ -51,7 +51,7 @@ export const authApi = {
   login: (body: { account: string; password: string; captchaId?: string; captchaCode?: string }) =>
     client.POST('/api/v1/auth/login', { body }).then((r) => unwrap<LoginOutput>(r)),
   logout: () => client.POST('/api/v1/auth/logout', {}).then((r) => unwrap<boolean>(r)),
-  captcha: () => client.GET('/api/v1/auth/captcha', {}).then((r) => unwrap<{ captchaId: string; svg: string }>(r)),
+  captcha: () => client.GET('/api/v1/auth/captcha', {}).then((r) => unwrap<{ captchaId: string; svg: string; type?: string }>(r)),
 }
 
 export const dashboardApi = {

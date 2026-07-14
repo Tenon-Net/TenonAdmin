@@ -29,8 +29,12 @@ public class AdminCaptchaOptions
     /// </summary>
     public bool Enabled { get; set; }
 
-    /// <summary>验证码类型:<c>Svg</c>(默认,零绘图依赖);图片/滑块走 <c>ICaptchaProvider</c> 扩展点。</summary>
-    public string Type { get; set; } = "Svg";
+    /// <summary>
+    /// 验证码类型(<c>ICaptchaProvider.Type</c>,零绘图依赖内置三选):
+    /// <c>char</c>(字符 SVG,默认)| <c>path</c>(描边字形,明文不入标记、更抗爬)| <c>math</c>(算术)。
+    /// 运行时以 DB 键 <c>sys.security.captcha.type</c> 覆盖本默认;图片/滑块/行为验证码走 <c>ICaptchaProvider</c> 前置替换。
+    /// </summary>
+    public string Type { get; set; } = "char";
 }
 
 /// <summary>登录失败锁定配置(对应 <c>TenonAdmin:Security:LoginLock</c>,设计 §3.2/§14)。</summary>

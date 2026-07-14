@@ -8,4 +8,7 @@ public record CaptchaOutput
 
     /// <summary>SVG 图字符串(直接内联展示)</summary>
     public required string Svg { get; init; }
+
+    /// <summary>验证码类型(char/path/math…);前端据此调整输入提示(如 math 提示“输入计算结果”)。</summary>
+    public string Type { get; init; } = "char";
 }

@@ -121,6 +121,7 @@ export default {
     required: '请输入账号和密码',
     captcha: '验证码',
     captchaPlaceholder: '请输入验证码',
+    captchaMathPlaceholder: '请输入计算结果',
     captchaRequired: '请输入验证码',
     remember: '记住我',
     submit: '登 录',
@@ -290,7 +291,12 @@ export default {
         requireSpecial: '须含特殊字符',
       },
       session: { title: '会话时长', accessMinutes: '访问令牌(分钟)', refreshMinutes: '刷新令牌(分钟)' },
-      captcha: { title: '登录验证码', enabled: '启用登录验证码' },
+      captcha: {
+        title: '登录验证码',
+        enabled: '启用登录验证码',
+        type: '验证码类型',
+        types: { char: '字符', path: '描边(更抗爬)', math: '算术' },
+      },
       rateLimit: {
         title: '请求限流',
         enabled: '启用请求限流',

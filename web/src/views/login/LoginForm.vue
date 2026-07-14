@@ -40,12 +40,19 @@ const captchaEnabled = ref(false)
 const captchaId = ref('')
 const captchaSvg = ref('')
 const captchaCode = ref('')
+const captchaType = ref('char')
+
+// math 类型需算出结果再输入,提示语不同;其余类型统一“请输入验证码”。
+const captchaHint = computed(() =>
+  captchaType.value === 'math' ? t('login.captchaMathPlaceholder') : t('login.captchaPlaceholder'),
+)
 
 async function loadCaptcha() {
   try {
     const c = await authApi.captcha()
     captchaId.value = c.captchaId
     captchaSvg.value = c.svg
+    captchaType.value = c.type || 'char'
   } catch {
     // 拉取失败不阻塞登录页渲染;点击图形可重试
   }
@@ -133,7 +140,7 @@ async function onSubmit() {
         <div class="lf-captcha">
           <n-input
             v-model:value="captchaCode"
-            :placeholder="t('login.captchaPlaceholder')"
+            :placeholder="captchaHint"
             size="large"
             @keyup.enter="onSubmit"
           >

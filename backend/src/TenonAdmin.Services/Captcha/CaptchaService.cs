@@ -7,7 +7,7 @@ namespace TenonAdmin.Services;
 /// 无论对错该票据都作废,杜绝同一票据重放或多次猜测。
 /// </summary>
 public class CaptchaService(
-    ICaptchaProvider provider,
+    IEnumerable<ICaptchaProvider> providers,
     ICacheProvider cache,
     IConfigService config,
     AdminSecurityOptions security) : ICaptchaService
@@ -15,16 +15,32 @@ public class CaptchaService(
     /// <summary>验证码启用开关配置键(GroupCode=security;后端强制执行时读此键,改值即时生效)。</summary>
     internal const string KEY_ENABLED = "sys.security.captcha.enabled";
 
+    /// <summary>验证码类型配置键(char/path/math 或消费方自注册类型;改值即时生效,下一次签发即换)。</summary>
+    internal const string KEY_TYPE = "sys.security.captcha.type";
+
     // ponytail: 票据有效期固定 2 分钟(够人看清并输入)。要可配再提到 AdminCaptchaOptions,当前无此需求。
     private static readonly TimeSpan TTL = TimeSpan.FromMinutes(2);
 
     /// <inheritdoc />
     public virtual async Task<CaptchaOutput> IssueAsync()
     {
+        var provider = await ResolveProviderAsync();
         var captcha = provider.Generate();
         var id = Guid.CreateVersion7().ToString("N");   // 票据 Id:时间有序、不可猜
         await cache.SetAsync(CacheKeys.Captcha(id), captcha.Code, TTL);
-        return new CaptchaOutput { CaptchaId = id, Svg = captcha.Svg };
+        return new CaptchaOutput { CaptchaId = id, Svg = captcha.Svg, Type = provider.Type };
+    }
+
+    /// <summary>
+    /// 按配置 <c>sys.security.captcha.type</c> 选生成器(缺失回退 Options.Captcha.Type,再回退首个已注册)。
+    /// 校验与类型无关(各生成器答案均为字符串,一次性比对),故选型只影响签发。覆写本步可换选型策略(如按租户/IP)。
+    /// </summary>
+    protected virtual async Task<ICaptchaProvider> ResolveProviderAsync()
+    {
+        var type = await config.GetValueByKeyAsync(KEY_TYPE);
+        if (string.IsNullOrWhiteSpace(type)) type = security.Captcha.Type;
+        return providers.FirstOrDefault(p => string.Equals(p.Type, type, StringComparison.OrdinalIgnoreCase))
+            ?? providers.First();
     }
 
     /// <inheritdoc />

@@ -15,6 +15,9 @@ public sealed class SvgCaptchaProvider : ICaptchaProvider
     private const string CHARSET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // 去掉 0/O、1/I/L 等易混淆
     private const int LENGTH = 4;
 
+    /// <inheritdoc />
+    public string Type => "char";
+
     public Captcha Generate()
     {
         // 明文:加密安全随机(不用 Random,验证码强度相关)

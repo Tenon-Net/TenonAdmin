@@ -11,8 +11,8 @@ public class CaptchaServiceTests
     {
         var cache = new MemoryCacheProvider(new MemoryCache(new MemoryCacheOptions()), new AdminCacheOptions());
         var sec = new AdminSecurityOptions { Captcha = new AdminCaptchaOptions { Enabled = enabled } };
-        // 配置桩不含键 → GetValueByKeyAsync 返回 null → 启用与否回退到 Options,保留这些用例原意
-        return new CaptchaService(p, cache, new NullConfig(), sec);
+        // 配置桩不含键 → GetValueByKeyAsync 返回 null → 启用与否/类型均回退到 Options,保留这些用例原意
+        return new CaptchaService([p], cache, new NullConfig(), sec);
     }
 
     // 只需 GetValueByKeyAsync 返回 null 的空配置桩;其余方法本测试不触及。
@@ -38,10 +38,59 @@ public class CaptchaServiceTests
     public void Svg_provider_generates_code_embedded_in_svg()
     {
         var c = new SvgCaptchaProvider().Generate();
+        Assert.Equal("char", new SvgCaptchaProvider().Type);
         Assert.Equal(4, c.Code.Length);
         Assert.Contains("<svg", c.Svg);
         Assert.Contains("</svg>", c.Svg);
         Assert.All(c.Code, ch => Assert.Contains(ch.ToString(), c.Svg));
+    }
+
+    [Fact]
+    public void Path_provider_never_leaks_plaintext_into_markup()
+    {
+        // path 生成器的招牌安全属性:字符渲染成 <polyline> 笔画,不产生任何 <text> 节点 → 抠不出可读字符。
+        // (数字会出现在坐标/尺寸属性里,属噪声非答案;真正的保证是“无 text 元素”。)
+        var p = new PathCaptchaProvider();
+        Assert.Equal("path", p.Type);
+        for (var n = 0; n < 200; n++)   // 覆盖随机字符集,顺带压覆盖度
+        {
+            var c = p.Generate();
+            Assert.Equal(4, c.Code.Length);
+            Assert.Contains("<polyline", c.Svg);
+            Assert.DoesNotContain("<text", c.Svg);   // 明文绝不作为文本渲染
+        }
+    }
+
+    [Fact]
+    public void StrokeFont_covers_every_captcha_char()
+    {
+        // 去混淆字符集每个字符都要有“真字形”(非回退方框),否则 path 验证码会出方框
+        foreach (var ch in "ABCDEFGHJKMNPQRSTUVWXYZ23456789")
+            Assert.True(StrokeFont.HasGlyph(ch), $"missing glyph: {ch}");
+    }
+
+    [Fact]
+    public void Math_provider_answer_is_numeric_and_not_shown()
+    {
+        var p = new MathCaptchaProvider();
+        Assert.Equal("math", p.Type);
+        for (var n = 0; n < 100; n++)
+        {
+            var c = p.Generate();
+            Assert.True(int.TryParse(c.Code, out var v) && v >= 0);   // 明文是非负结果
+            Assert.Contains("= ?", c.Svg);                            // 只露算式,不露结果
+        }
+    }
+
+    [Fact]
+    public async Task Issue_selects_provider_by_configured_type()
+    {
+        // 多生成器注册时,签发按 sys.security.captcha.type 选型(此处经 Options 回退,配置桩返回 null)
+        var cache = new MemoryCacheProvider(new MemoryCache(new MemoryCacheOptions()), new AdminCacheOptions());
+        var sec = new AdminSecurityOptions { Captcha = new AdminCaptchaOptions { Enabled = true, Type = "path" } };
+        var svc = new CaptchaService([new SvgCaptchaProvider(), new PathCaptchaProvider()], cache, new NullConfig(), sec);
+        var c = await svc.IssueAsync();
+        Assert.Equal("path", c.Type);
     }
 
     [Fact]

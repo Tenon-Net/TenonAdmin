@@ -25,9 +25,12 @@ public static class ServicesSetup
         // 登录失败锁定(§14,T8b):失败计数进缓存,达阈值锁定窗口内拒登
         services.TryAddScoped<ILoginLockService, LoginLockService>();
 
-        // 验证码(§14,T8c):SVG 生成器(无状态,单例)+ 验证码服务(签发/一次性校验,Scoped)
-        services.TryAddSingleton<ICaptchaProvider, SvgCaptchaProvider>();
-        services.TryAddScoped<ICaptchaService, CaptchaService>();
+        // 验证码(§14,T8c):多生成器按类型可选——char 字符 / path 描边(明文不入标记、更抗爬)/ math 算术。
+        // TryAddEnumerable 按实现类型防重;消费方前置注册自有 ICaptchaProvider(如滑块)会一并入集、改配置类型即选中。
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ICaptchaProvider, SvgCaptchaProvider>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ICaptchaProvider, PathCaptchaProvider>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ICaptchaProvider, MathCaptchaProvider>());
+        services.TryAddScoped<ICaptchaService, CaptchaService>();   // 签发按配置选型 + 一次性校验
 
         // 会话与刷新令牌(§15):登录建会话、每请求校验、刷新轮换+复用检测、登出/强退
         services.TryAddScoped<ISessionService, SessionService>();

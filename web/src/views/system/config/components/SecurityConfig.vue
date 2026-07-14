@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // 安全策略 = 结构化表单范式(同 SysBaseConfig):字段绑定固定 config key(GroupCode='security')。
 // 后端经 ISecurityPolicyProvider 读这些键强制执行(登录锁定/密码复杂度/会话令牌时长),改值即时生效、无需重发。
-import { onMounted, reactive, ref } from 'vue'
-import { NForm, NFormItem, NInputNumber, NSwitch, NDivider, NButton, NSpin, useMessage } from 'naive-ui'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { NForm, NFormItem, NInputNumber, NSwitch, NSelect, NDivider, NButton, NSpin, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
 import { configApi } from '@/api'
@@ -32,11 +32,17 @@ const BOOL_FIELDS = [
 
 // 验证码开关单独成节(与密码开关分区展示,故不并入 BOOL_FIELDS 的密码循环)
 const CAPTCHA_KEY = 'sys.security.captcha.enabled'
+// 验证码类型(字符串枚举:char 字符 / path 描边更抗爬 / math 算术)
+const CAPTCHA_TYPE_KEY = 'sys.security.captcha.type'
 // 限流开关(单独成节;阈值走 NUM_FIELDS)
 const RATELIMIT_KEY = 'sys.security.rateLimit.enabled'
 
 const nums = reactive<Record<string, number>>({})
 const bools = reactive<Record<string, boolean>>({})
+const captchaType = ref('char')
+const captchaTypeOptions = computed(() =>
+  ['char', 'path', 'math'].map((v) => ({ label: t('config.security.captcha.types.' + v), value: v })),
+)
 const loading = ref(true)
 const saving = ref(false)
 
@@ -50,6 +56,7 @@ onMounted(async () => {
     for (const f of NUM_FIELDS) nums[f.key] = Number(map.get(f.key)) || f.min
     for (const k of BOOL_FIELDS) bools[k] = map.get(k) === 'true'
     bools[CAPTCHA_KEY] = map.get(CAPTCHA_KEY) === 'true'
+    captchaType.value = map.get(CAPTCHA_TYPE_KEY) || 'char'
     bools[RATELIMIT_KEY] = map.get(RATELIMIT_KEY) === 'true'
   } catch (e) {
     message.error(translateError(e))
@@ -66,6 +73,7 @@ async function save() {
       ...NUM_FIELDS.map((f) => ({ configKey: f.key, configValue: String(nums[f.key]) })),
       ...BOOL_FIELDS.map((k) => ({ configKey: k, configValue: String(bools[k]) })),
       { configKey: CAPTCHA_KEY, configValue: String(bools[CAPTCHA_KEY]) },
+      { configKey: CAPTCHA_TYPE_KEY, configValue: captchaType.value },
       { configKey: RATELIMIT_KEY, configValue: String(bools[RATELIMIT_KEY]) },
     ])
     message.success(t('config.saved'))
@@ -107,6 +115,9 @@ async function save() {
       <n-divider title-placement="left">{{ t('config.security.captcha.title') }}</n-divider>
       <n-form-item :label="label('sys.security.captcha.enabled')">
         <n-switch v-model:value="bools[CAPTCHA_KEY]" />
+      </n-form-item>
+      <n-form-item :label="t('config.security.captcha.type')">
+        <n-select v-model:value="captchaType" :options="captchaTypeOptions" style="width: 220px" />
       </n-form-item>
 
       <n-divider title-placement="left">{{ t('config.security.rateLimit.title') }}</n-divider>
