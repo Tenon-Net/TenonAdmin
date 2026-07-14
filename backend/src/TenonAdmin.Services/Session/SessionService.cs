@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using TenonAdmin.Core;
@@ -10,6 +9,10 @@ namespace TenonAdmin.Services;
 /// <see cref="ISessionService"/> 默认实现(设计 §15)。会话落库(源) + 落缓存(热路径),
 /// 刷新令牌只存哈希;轮换用条件更新(仅当仍 Active 才置 Used)兼作并发保护,复用即整会话吊销。
 /// 时间统一走 UTC(<see cref="TimeProvider"/>),避免本地/UTC 混用导致过期判断错乱。
+/// <para><b>无进程内锁</b>:单端/限并发的名额收敛采「先插入、再收敛」(见 <see cref="EnforceConcurrencyAsync"/>)——
+/// 并发登录都落库后各自重读、各自算出同一个"保留最新 N"的答案,天然收敛,不靠锁串行化。
+/// 原实现用一把 <c>static</c> 锁字典护住"读活跃集合 → 腾位 → 插入"这个读-改-写,但那把锁跨不了进程:
+/// 多副本下两个登录照样各读各的,单端踢不掉旧会话、并发上限被突破(换 Redis 也修不好,它不是缓存问题)。</para>
 /// </summary>
 public class SessionService(
     IRepository<SysSession> sessions,
@@ -22,10 +25,6 @@ public class SessionService(
     ICurrentUser currentUser,
     TimeProvider time) : ISessionService
 {
-    // 同一用户的"淘汰旧会话 + 开新会话"串行化锁(单实例内)。避免并发登录各自读到同一活跃集合、
-    // 各淘汰不足、最终活跃数超过单端/限并发上限(P2-15)。ponytail: 进程内锁字典;多实例需分布式锁,留待 Redis 包。
-    private static readonly ConcurrentDictionary<long, SemaphoreSlim> _openLocks = new();
-
     private DateTime Now => time.GetUtcNow().UtcDateTime;
 
     /// <summary>高熵随机串的哈希:SHA-256 十六进制(不是密码,无需 PBKDF2)。</summary>
@@ -35,42 +34,35 @@ public class SessionService(
     /// <inheritdoc />
     public virtual async Task OpenAsync(SysUser user, string sessionId, TokenPair pair)
     {
-        var gate = _openLocks.GetOrAdd(user.Id, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync();
-        try
+        var expiresAt = pair.RefreshExpiresAt.UtcDateTime;
+        // 会话行 + 刷新令牌成对写入包事务(P2-16):半写不留"在线却不可刷新"的僵尸会话
+        var result = await sessions.Db.Ado.UseTranAsync(async () =>
         {
-            await EnforceConcurrencyAsync(user.Id);   // 开新会话前按单端/限并发腾位(与开会话同锁串行,防越额)
-
-            var expiresAt = pair.RefreshExpiresAt.UtcDateTime;
-            // 会话行 + 刷新令牌成对写入包事务(P2-16):半写不留"在线却不可刷新"的僵尸会话
-            var result = await sessions.Db.Ado.UseTranAsync(async () =>
+            // IP/UA 取自当前登录请求(与 LogService 同款,登录前即可读到);会话行是登录时快照,刷新不重写
+            await sessions.InsertAsync(new SysSession
             {
-                // IP/UA 取自当前登录请求(与 LogService 同款,登录前即可读到);会话行是登录时快照,刷新不重写
-                await sessions.InsertAsync(new SysSession
-                {
-                    SessionId = sessionId,
-                    UserId = user.Id,
-                    Account = user.Account,
-                    Ip = currentUser.IpAddress,
-                    UserAgent = currentUser.UserAgent,
-                    ExpiresAt = expiresAt,
-                });
-                await refreshTokens.InsertAsync(new SysRefreshToken
-                {
-                    SessionId = sessionId,
-                    UserId = user.Id,
-                    TokenHash = Sha256Hex(pair.RefreshToken),
-                    ExpiresAt = expiresAt,
-                    Status = RefreshTokenStatus.Active,
-                });
+                SessionId = sessionId,
+                UserId = user.Id,
+                Account = user.Account,
+                Ip = currentUser.IpAddress,
+                UserAgent = currentUser.UserAgent,
+                ExpiresAt = expiresAt,
             });
-            if (!result.IsSuccess) throw result.ErrorException;
-            await CacheActiveAsync(sessionId, user.Id, expiresAt);   // 缓存写在事务提交之后
-        }
-        finally
-        {
-            gate.Release();
-        }
+            await refreshTokens.InsertAsync(new SysRefreshToken
+            {
+                SessionId = sessionId,
+                UserId = user.Id,
+                TokenHash = Sha256Hex(pair.RefreshToken),
+                ExpiresAt = expiresAt,
+                Status = RefreshTokenStatus.Active,
+            });
+        });
+        if (!result.IsSuccess) throw result.ErrorException;
+        await CacheActiveAsync(sessionId, user.Id, expiresAt);   // 缓存写在事务提交之后
+
+        // 先插入、再收敛(见类注释):插完才腾位,并发的两个登录都能看见对方的新行,于是都算出同一个
+        // "只保留最新 N 个"的答案 → 收敛到上限。不需要锁,因而也跨得了进程。
+        await EnforceConcurrencyAsync(user.Id);
     }
 
     /// <inheritdoc />
@@ -185,24 +177,29 @@ public class SessionService(
             })
             .ToPagedListAsync(input.Current, input.Size);
 
-    /// <summary>按单端/限并发策略吊销既有会话,给新会话腾位。</summary>
+    /// <summary>
+    /// 按单端/限并发策略收敛活跃会话:<b>只保留最新的 N 个,其余一律吊销</b>。
+    /// <para>在新会话<b>插入之后</b>调用(见 <see cref="OpenAsync"/>)。这是关键:并发的两个登录都已落库,
+    /// 于是都读得到对方的行、都算出同一个"保留最新 N"的答案 → 收敛到上限。吊销幂等(只写未吊销的行),
+    /// 重复吊销无害。因此<b>不需要任何锁</b>——原来那把进程内锁跨不了副本,换 Redis 也修不好。</para>
+    /// <para>排序以 <c>CreateTime</c> 为准,同毫秒用雪花 <c>Id</c> 决胜(单调递增),保证各副本算出的顺序一致。</para>
+    /// </summary>
     protected virtual async Task EnforceConcurrencyAsync(long userId)
     {
         var mode = security.Session.Mode;
         var max = security.Session.MaxConcurrent;
         if (mode != SessionMode.Single && max <= 0) return;   // 多端不限:无需处理
 
+        var keep = mode == SessionMode.Single ? 1 : max;      // 单端 = 只留最新一个
+
         var active = await sessions.AsQueryable()
             .Where(s => s.UserId == userId && s.RevokedAt == null && s.ExpiresAt > Now)
-            .OrderBy(s => s.CreateTime)     // 最早登录在前,优先踢旧
+            .OrderByDescending(s => s.CreateTime)             // 最新在前
+            .OrderByDescending(s => s.Id)                     // 同毫秒:雪花 Id 决胜(各副本口径一致)
             .ToListAsync();
 
-        // 单端:旧会话全踢;限并发:留 1 个名额给即将开的新会话,踢最旧的超额部分
-        var toRevoke = mode == SessionMode.Single
-            ? active
-            : active.Take(Math.Max(0, active.Count + 1 - max)).ToList();
-
-        foreach (var s in toRevoke) await RevokeAsync(s.SessionId);
+        foreach (var s in active.Skip(keep))                  // 超出名额的(最旧的那些)一律吊销
+            await RevokeAsync(s.SessionId);
     }
 
     private Task CacheActiveAsync(string sessionId, long userId, DateTime expiresAt)
