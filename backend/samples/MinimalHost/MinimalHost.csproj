@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <ItemGroup>
     <ProjectReference Include="..\..\src\TenonAdmin\TenonAdmin.csproj" />
+    <!-- 可选包:多副本部署的前置条件(见 Program.cs)。不配 Cache:Provider=Redis 时不生效。 -->
+    <ProjectReference Include="..\..\src\TenonAdmin.Caching.Redis\TenonAdmin.Caching.Redis.csproj" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,6 @@
-# 一条 `docker compose up` 起全栈:MySQL + 后端(MinimalHost)+ 前端(nginx 托管 SPA,反代 /api)。
+# 一条 `docker compose up` 起全栈:MySQL + Redis + 后端(MinimalHost)+ 前端(Caddy 托管 SPA,反代 /api)。
+#
+# 起两个副本真验多副本保证 → 见 docker-compose.scale.yml。
 #
 # 它同时是**生产首启路径的活体测试**。app 刻意跑 ASPNETCORE_ENVIRONMENT=Production,于是这几件事必须同时成立
 # 才起得来 —— 少任何一条都会以一条读得懂的错误失败,这本身就是要验的:
@@ -24,12 +26,24 @@ services:
     volumes:
       - db-data:/var/lib/mysql
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - redis-data:/data
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -43,10 +57,33 @@ services:
       TenonAdmin__Upload__RootPath: /data/upload
       # 首启的超管密码。不给就随机生成并打印到控制台(见 docker compose logs app)
       TenonAdmin__Seed__AdminPassword: ${TENON_ADMIN_PASSWORD:-Tenon@123456}
-      # 水平扩展时**每个实例必须不同**(0-63),否则同毫秒发号会撞主键
+
+      # 缓存走 Redis。多副本下这不是可选优化而是**前置条件**:进程内缓存意味着副本 A 的强退/权限失效
+      # 传不到副本 B,而会话缓存的 TTL 是刷新令牌寿命(天级)——强制下线会在半数请求上失效好几天。
+      # 单副本用它也划算:重启不丢缓存。
+      TenonAdmin__Cache__Provider: Redis
+      TenonAdmin__Cache__RedisConnectionString: redis:6379
+
+      # 雪花机器号:水平扩展时**每个实例必须不同**(0-63),否则同毫秒发号会撞主键。
+      # 配了 Redis 却不显式给这个值 → 内核直接拒绝启动(把静默的主键冲突换成可读的启动错误)。
+      # compose 没法给 `--scale` 出来的副本各自不同的值 —— 要起多副本请用 docker-compose.scale.yml
+      # 里那样**显式的多个 app 服务**,各配各的 WorkerId。
       TenonAdmin__Id__WorkerId: "0"
+
+      # 反向代理转发头:前面就是 Caddy(web 服务),不解析 X-Forwarded-For 的话后端看到的永远是
+      # 代理容器那一个 IP —— 全体用户共用一个限流桶(一个人狂点登录能把所有人限死),
+      # 登录日志记的也是代理 IP。受信的是**网段**(docker 桥网),代理换成 nginx/Traefik 一样成立。
+      TenonAdmin__Api__ForwardedHeaders__Enabled: "true"
+      TenonAdmin__Api__ForwardedHeaders__KnownNetworks__0: 172.16.0.0/12
     ports:
-      - "8081:8080"   # 后端直连(探针/调试);前端走 8080 那条
+      # 后端直连,**只绑回环**——调试用,正常访问走前端那条(Caddy 已反代 /api 与 /health)。
+      #
+      # 为什么必须绑 127.0.0.1:下面开了 ForwardedHeaders 并信任 docker 桥网段,而经端口映射进来的请求
+      # 在容器里看到的源地址正是网关(172.x.0.1)—— 也在受信网段里。于是**任何能直连这个端口的人都能伪造
+      # X-Forwarded-For**:换一个假 IP 就换一个限流分区(限流被完全绕过),还能把爆破失败记到别人头上。
+      # 绑 0.0.0.0 等于把这个能力开放给整个局域网。绑回环把它限制在宿主本机。
+      # 生产建议干脆删掉这段映射,只经反向代理进。
+      - "127.0.0.1:${TENON_API_PORT:-8081}:8080"
     volumes:
       - app-data:/app/data       # SQLite(本例没用)+ JWT 开发密钥
       - upload-data:/data/upload # 上传物
@@ -58,11 +95,12 @@ services:
     depends_on:
       - app
     ports:
-      - "8080:80"
+      - "${TENON_WEB_PORT:-8080}:80"
 
 # 具名卷,不是 bind mount:具名卷首次挂载会从镜像目录带走属主,容器里的非 root 用户才写得进去。
 # bind mount 会用宿主属主覆盖,非 root 直接写不了 —— 容器化 SQLite/上传目录最常见的翻车点。
 volumes:
   db-data:
+  redis-data:
   app-data:
   upload-data:

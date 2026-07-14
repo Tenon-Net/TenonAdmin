@@ -66,13 +66,28 @@ public class RedisCacheTests
 
     private static string? RedisConn => Environment.GetEnvironmentVariable("TENON_TEST_REDIS");
 
+    /// <summary>
+    /// 无 Redis 时本地跳过(开发机不该被强制装 Redis),<b>但在 CI 里缺 Redis 直接判红</b>。
+    /// <para>原来是无条件 <c>return</c> —— 于是这几条契约测试在 CI 里<b>一次都没真跑过</b>,却次次报绿:
+    /// 套件看着"覆盖了 Redis",实际一个断言都没执行。而多副本的整个逃生舱(强退、权限失效、锁定计数跨副本)
+    /// 全建立在这个包上。静默跳过 = 假绿,必须堵死。</para>
+    /// <para>xUnit 2.x 没有动态 Skip(要么加第三方包,要么这样)——CI 侧的 redis 服务容器见 backend-ci.yml。</para>
+    /// </summary>
+    private static bool SkipWithoutRedis()
+    {
+        if (RedisConn is not null) return false;
+        Assert.True(Environment.GetEnvironmentVariable("GITHUB_ACTIONS") is null,
+            "CI 必须提供 Redis(设 TENON_TEST_REDIS,见 backend-ci.yml 的 redis 服务容器):契约测试静默跳过等于没测。");
+        return true;
+    }
+
     private static RedisCacheProvider NewProvider() =>
         new(new AdminCacheOptions { Provider = "Redis", RedisConnectionString = RedisConn!, KeyPrefix = "tenontest:" });
 
     [Fact]
     public async Task SetGetRemove_RoundTrips()
     {
-        if (RedisConn is null) return;   // 门控:无 Redis 即跳过(见类注释)
+        if (SkipWithoutRedis()) return;
         using var cache = NewProvider();
         var key = "obj:" + Guid.NewGuid().ToString("N");
         var value = new[] { 1L, 2L, 3L };
@@ -87,7 +102,7 @@ public class RedisCacheTests
     [Fact]
     public async Task Increment_IsAtomicAndReadableAsLong()
     {
-        if (RedisConn is null) return;
+        if (SkipWithoutRedis()) return;
         using var cache = NewProvider();
         var key = "cnt:" + Guid.NewGuid().ToString("N");
         try
@@ -102,7 +117,7 @@ public class RedisCacheTests
     [Fact]
     public async Task GetAndRemove_ConsumesOnce()
     {
-        if (RedisConn is null) return;
+        if (SkipWithoutRedis()) return;
         using var cache = NewProvider();
         var key = "ticket:" + Guid.NewGuid().ToString("N");
         await cache.SetAsync(key, "code123", TimeSpan.FromMinutes(2));

@@ -51,6 +51,19 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+      # Redis:给 RedisCacheTests 的**契约集成**那一半用(set/get、原子自增、GETDEL)。
+      # 它由 TENON_TEST_REDIS 门控,而这个变量此前从没被设过 —— 也就是说这个可选包的真实行为
+      # 在 CI 里一次都没跑过。多副本的整个逃生舱(强退、权限失效、锁定计数跨副本)都建立在它身上,
+      # 必须被真跑,不能只靠离线的 DI 装配测试。
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     steps:
       - uses: actions/checkout@v4
@@ -92,4 +105,6 @@ jobs:
           TENON_TEST_SQLSERVER: ${{ matrix.db == 'sqlserver' && 'Server=127.0.0.1;User ID=sa;Password=Tenon_Ci_2026;TrustServerCertificate=True;Encrypt=False;' || '' }}
           # PostgreSQL 基础串不含 Database(连维护库 postgres 建隔离库,TestDb 建库后再补 Database)。
           TENON_TEST_POSTGRESQL: ${{ matrix.db == 'postgres' && 'Server=127.0.0.1;Port=5432;User ID=postgres;Password=postgres;' || '' }}
+          # Redis 契约测试的门控开关(所有腿都跑:它与 DB 无关,多跑几遍成本也就几秒)。
+          TENON_TEST_REDIS: 127.0.0.1:6379
         run: dotnet test backend/TenonAdmin.slnx -c Release --no-build
