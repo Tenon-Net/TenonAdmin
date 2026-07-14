@@ -13,6 +13,8 @@ artifacts/
 data/
 *.db
 *.db-journal
+# 文件日志(TenonAdmin:Logging:File,默认关);无前导斜杠 → 匹配任意宿主下的 logs/
+logs/
 # 带中间斜杠的模式会被锚定到仓库根;用 **/ 前缀才能匹配任意宿主(如 samples/*/wwwroot)下的上传目录
 **/wwwroot/upload/
 

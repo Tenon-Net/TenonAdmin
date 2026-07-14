@@ -67,6 +67,34 @@ public static class TenonAdminSetup
         services.AddSingleton(options.Id);
         services.TryAddSingleton(TimeProvider.System);          // 统一时间源(§12),测试可换 Fake
 
+        // ── 文件日志:默认关。开了才长出 logs/{级别}/{日期}.log ──────────────────
+        //   ILogger 默认只有 Console provider,进程一重启异常堆栈就没了;而运行时依赖红线(只准 SqlSugarCore + Microsoft.*)
+        //   把 Serilog 挡在外面,故内核自带一个(FileLoggerProvider)。它是加法不排他:消费者照常 AddSerilog(),两者并存。
+        services.AddSingleton(options.Logging);
+        if (options.Logging.File.Enabled)
+        {
+            // 两个泛型参数缺一不可:TryAddEnumerable 要从工厂的返回类型认出实现类型才能去重,
+            // 只写 <ILoggerProvider> 会因"与其他 ILoggerProvider 注册无从区分"在启动时抛。
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, FileLoggerProvider>(sp =>
+            {
+                var env = sp.GetRequiredService<IWebHostEnvironment>();
+                // 与上传根、SQLite 库文件同一基准:相对路径按 ContentRoot 解析,不随进程 CWD 漂移
+                var root = Path.GetFullPath(Path.Combine(env.ContentRootPath, options.Logging.File.Path));
+
+                // 红线:日志落在静态根下 = UseStaticFiles() 把异常堆栈、请求参数、内部路径匿名直出。
+                // 同 Upload.RootPath 的老坑,但那个至少还要猜文件名——日志的路径是可枚举的。宁可启动就炸。
+                var webRoot = env.WebRootPath;
+                if (!string.IsNullOrEmpty(webRoot)
+                    && root.StartsWith(Path.GetFullPath(webRoot) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException(
+                        $"TenonAdmin:Logging:File:Path 解析到 {root},位于 wwwroot 内。" +
+                        "宿主一旦 UseStaticFiles() 托管前端产物,整个日志目录就会被匿名直出(异常堆栈、请求参数、内部路径全在里面)。请把它挪出静态根。");
+
+                return new FileLoggerProvider(root, options.Logging.File, options.Id.WorkerId ?? 0,
+                    sp.GetRequiredService<TimeProvider>());
+            }));
+        }
+
         // ── 当前用户 + 数据范围环境(§6):HTTP 侧实现在此先注册,压过 SqlSugar 层的 AsyncLocal 兜底 ──
         services.AddHttpContextAccessor();
         services.TryAddSingleton<ICurrentUser, HttpContextCurrentUser>();

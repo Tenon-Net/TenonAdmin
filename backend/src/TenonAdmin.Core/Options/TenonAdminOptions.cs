@@ -28,6 +28,9 @@ public class TenonAdminOptions
     /// <summary>雪花 ID 配置(机器号,见 <see cref="AdminIdOptions"/>)</summary>
     public AdminIdOptions Id { get; set; } = new();
 
+    /// <summary>诊断日志配置(文件日志开关/路径/保留期,见 <see cref="AdminLoggingOptions"/>;默认不写盘)</summary>
+    public AdminLoggingOptions Logging { get; set; } = new();
+
     /// <summary>显式指定要并入的业务程序集(代码侧,不从配置绑定):其实体参与 CodeFirst 建表、控制器 AddApplicationPart 挂载。</summary>
     public List<Assembly> ApplicationAssemblies { get; set; } = new();
 }
