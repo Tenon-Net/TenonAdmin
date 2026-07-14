@@ -157,6 +157,6 @@ function clearLogs() {
   line-height: 1.5;
 }
 .exception {
-  color: var(--color-error, #d03050);
+  color: var(--color-danger);
 }
 </style>
