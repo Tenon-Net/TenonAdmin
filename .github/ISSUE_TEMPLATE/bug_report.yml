@@ -1,0 +1,97 @@
+name: Bug 报告 / Bug report
+description: 报告一个缺陷 / Report something that doesn't work
+labels: [bug]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: 受影响部分 / Affected part
+      description: |
+        不确定就选「不确定」,不要猜。
+        Pick "Not sure" rather than guessing.
+      options:
+        - 后端内核 / Backend kernel
+        - 前端模板 / Web template
+        - 两者 / Both
+        - 不确定 / Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / Version
+      description: |
+        NuGet 包版本号;从源码运行请给 git commit SHA。
+        NuGet package version, or the git commit SHA if you run from source.
+      placeholder: 0.1.0 或 / or bbb9803
+    validations:
+      required: true
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: 数据库 / Database
+      description: |
+        用哪个数据库跑出来的。与数据库无关的问题选「不涉及」。
+        Which database you hit this on. Pick "Not applicable" if it isn't database-related.
+      options:
+        - SQLite
+        - MySQL
+        - SqlServer
+        - PostgreSQL
+        - 不涉及 / Not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: |
+        请给出最小可复现步骤;能附一个最小复现仓库最好。
+        Minimal steps to reproduce. A minimal repro repo is ideal.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: 期望 vs 实际 / Expected vs actual
+      description: |
+        你以为会发生什么,实际发生了什么。
+        What you expected to happen, and what actually happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 报错栈 / Logs & stack trace
+      description: |
+        完整的异常栈或相关日志。会自动按代码块渲染,不用加反引号。
+        Full exception stack trace or relevant logs. Rendered as code, no backticks needed.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: 相关配置 / Relevant configuration
+      description: |
+        选填。appsettings.json 的相关片段等 —— 记得抹掉连接串里的密码。
+        Optional. Relevant appsettings.json snippets — redact credentials first.
+      render: json
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 截图或补充 / Screenshots or anything else
+      description: |
+        选填。
+        Optional.
