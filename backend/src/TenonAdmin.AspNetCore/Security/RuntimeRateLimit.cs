@@ -70,11 +70,22 @@ public sealed class RuntimeRateLimit(
         catch (OperationCanceledException) { /* 正常停机 */ }
     }
 
+    /// <summary>
+    /// 停机:退订配置变更、停掉定期重载循环。
+    /// <para><b>必须幂等</b>——宿主停机与容器释放会各调一次(<c>WebApplicationFactory.DisposeAsync</c> 就是这个次序),
+    /// 第二次若再去 Cancel 一个已释放的 <see cref="CancellationTokenSource"/> 就抛 <c>ObjectDisposedException</c>,
+    /// 而它是在 Dispose 路径上抛的 → <b>随便哪个用例都可能被带红</b>(排查起来像是随机 flaky)。
+    /// 用 <c>Interlocked.Exchange</c> 取出并置空,谁取到谁负责释放。</para>
+    /// </summary>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _sub?.Dispose();
-        if (_stopping is not null) await _stopping.CancelAsync();
-        _stopping?.Dispose();
+        _sub = null;
+
+        var cts = Interlocked.Exchange(ref _stopping, null);
+        if (cts is null) return;   // 已经停过了
+        await cts.CancelAsync();
+        cts.Dispose();
     }
 
     /// <summary>
