@@ -224,10 +224,16 @@ public class FileLoggerSetupTests
         Assert.DoesNotContain(f.Services.GetServices<ILoggerProvider>(), p => p is FileLoggerProvider);
     }
 
+    /// <summary>
+    /// UseStaticFiles() 会把整个日志目录匿名直出(异常堆栈、请求参数、内部路径)。宁可启动就炸。
+    /// <para><b>注意 TestHost 的 wwwroot 目录并不存在</b>(全新检出里没有,跑过上传用例才会长出来)——这正是要害:
+    /// 守卫一度直接信 <c>IWebHostEnvironment.WebRootPath</c>,而它在 wwwroot 目录不存在时是 <c>null</c>,
+    /// 于是守卫在<b>全新部署的机器上恰好失灵</b>(那儿 wwwroot 本来就还没有),等第一次上传把 wwwroot 建出来,
+    /// 日志目录就被静态中间件直出了。本用例当时的表现是"看别的测试跑没跑过上传"随机红绿。</para>
+    /// </summary>
     [Fact]
     public void 日志目录落在wwwroot下_启动即抛()
     {
-        // UseStaticFiles() 会把整个日志目录匿名直出(异常堆栈、请求参数、内部路径)。宁可启动就炸
         using var f = Factory(
             ("TenonAdmin:Logging:File:Enabled", "true"),
             ("TenonAdmin:Logging:File:Path", "wwwroot/logs"));

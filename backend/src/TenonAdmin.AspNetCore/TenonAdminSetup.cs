@@ -83,9 +83,15 @@ public static class TenonAdminSetup
 
                 // 红线:日志落在静态根下 = UseStaticFiles() 把异常堆栈、请求参数、内部路径匿名直出。
                 // 同 Upload.RootPath 的老坑,但那个至少还要猜文件名——日志的路径是可枚举的。宁可启动就炸。
-                var webRoot = env.WebRootPath;
-                if (!string.IsNullOrEmpty(webRoot)
-                    && root.StartsWith(Path.GetFullPath(webRoot) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                //
+                // WebRootPath 在 wwwroot **目录尚不存在**时是 null —— 直接信它,守卫就会在最该管用的时候失灵:
+                // 全新部署的机器上 wwwroot 往往还没有,于是守卫跳过、日志照写进 wwwroot/logs;等第一次上传时
+                // LocalFileStorage 把 wwwroot 建出来,静态中间件就开始把整个日志目录匿名直出。
+                // 所以判据是「这个路径会不会落进静态根」,而不是「静态根现在存不存在」:目录缺失时回退到默认的 wwwroot 名。
+                var webRoot = string.IsNullOrEmpty(env.WebRootPath)
+                    ? Path.Combine(env.ContentRootPath, "wwwroot")
+                    : env.WebRootPath;
+                if (root.StartsWith(Path.GetFullPath(webRoot) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException(
                         $"TenonAdmin:Logging:File:Path 解析到 {root},位于 wwwroot 内。" +
                         "宿主一旦 UseStaticFiles() 托管前端产物,整个日志目录就会被匿名直出(异常堆栈、请求参数、内部路径全在里面)。请把它挪出静态根。");

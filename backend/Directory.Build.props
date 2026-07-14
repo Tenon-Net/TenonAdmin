@@ -23,7 +23,9 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>tenon-icon.png</PackageIcon>
     <PackageTags>admin;rbac;sqlsugar;aspnetcore;scaffold;kernel</PackageTags>
-    <PackageReleaseNotes>0.0.1-preview:M1 认证 / RBAC / 多机构数据范围 / 字典配置 / 日志 / 上传 + 可替换扩展点(六件套测试锁)。预览版,API 可能变动。</PackageReleaseNotes>
+    <!-- 指向 CHANGELOG,不在这里写死某个版本的说明:版本号由 tag 经 -p:Version 覆盖,而这段文字不会 ——
+         写死就意味着发 0.2.0 时包说明页上仍挂着 0.0.1-preview 的内容,且没有任何东西会提醒你。 -->
+    <PackageReleaseNotes>更新日志:https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md</PackageReleaseNotes>
 
     <!-- ── 可调试性:内核是给人继承和重写的,消费者步不进源码就没法判断该重写哪一步 ──
          SourceLink 由 .NET SDK 内置(不引第三方包);符号走 snupkg,与 nupkg 同名一并推送。
