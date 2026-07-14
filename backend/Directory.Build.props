@@ -11,7 +11,7 @@
 
     <!-- ── NuGet 包元数据(T10;所有包共享)。默认不打包,src 各包显式开 IsPackable ── -->
     <IsPackable>false</IsPackable>
-    <Version>0.0.1-preview</Version>
+    <Version>0.1.0</Version>
     <Authors>huguodong</Authors>
     <Company>Tenon-Net</Company>
     <Product>TenonAdmin</Product>

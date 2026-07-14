@@ -1,6 +1,6 @@
 name: backend-release
 
-# 打 tag(如 v0.0.1-preview)即打包核心 NuGet 包 + dotnet new 模板包并推 nuget.org(设计 §T10)。
+# 打 tag(如 v0.1.0)即打包核心 NuGet 包 + dotnet new 模板包并推 nuget.org(设计 §T10)。
 # 需在仓库 Secrets 配 NUGET_API_KEY;版本从 tag 名推导(去掉前缀 v)。
 #
 # 推包是**不可撤销**的(nuget.org 只能 unlist,不能删),所以 push 之前必须先过闸门:

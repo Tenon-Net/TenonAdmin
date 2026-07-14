@@ -9,7 +9,7 @@
     <PackageId>TenonAdmin.Templates</PackageId>
     <Title>TenonAdmin 项目模板</Title>
     <Description>TenonAdmin 脚手架:dotnet new tenon-app 一键生成可运行的消费方后台 host(预接线一个机构隔离示例业务模块)。</Description>
-    <Version>0.0.1-preview</Version>
+    <Version>0.1.0</Version>
     <Authors>huguodong</Authors>
     <Company>Tenon-Net</Company>
     <Product>TenonAdmin</Product>

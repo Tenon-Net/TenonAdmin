@@ -121,9 +121,15 @@ TenonAdmin.Core → TenonAdmin.SqlSugar → TenonAdmin.Services → TenonAdmin.A
 
 ## 项目状态
 
-功能上已具备首个正式版的条件——后端内核、完整管理端页面、配置中心、容器化交付、多副本支持（Redis 缓存、限流计数跨副本共享、每副本独立雪花机器号）均已可用并有 CI 覆盖。当前版本 `0.0.1-preview`。
+当前版本 **`0.1.0`**，已发布到 nuget.org：
 
-尚未发布到 nuget.org，目前请从源码运行。1.0 之前 API 仍可能调整。开发在 `dev` 分支进行。
+```bash
+dotnet add package TenonAdmin
+```
+
+后端内核、完整管理端页面、配置中心、容器化交付、多副本支持（Redis 缓存、限流计数跨副本共享、每副本独立雪花机器号）均已可用并有 CI 覆盖。
+
+**1.0 之前 API 仍可能调整**，破坏性变更会在 [更新日志](CHANGELOG.md) 中明确标出。开发在 `dev` 分支进行。
 
 ## 项目结构
 

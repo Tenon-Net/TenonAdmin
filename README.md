@@ -110,9 +110,15 @@ Install `TenonAdmin` for the whole stack, or reference individual layers for fin
 
 ## Project Status
 
-Feature-complete for a first release — backend kernel, full admin UI, config center, containerized delivery, and multi-replica support (Redis-backed cache, shared rate-limit counters, per-replica snowflake worker ids) are all working and covered by CI. Current version: `0.0.1-preview`.
+Current version **`0.1.0`**, published on nuget.org:
 
-Not yet on nuget.org — run from source for now. API surface may change before 1.0. Development happens on the `dev` branch.
+```bash
+dotnet add package TenonAdmin
+```
+
+Backend kernel, full admin UI, config center, containerized delivery, and multi-replica support (Redis-backed cache, shared rate-limit counters, per-replica snowflake worker ids) are all working and covered by CI.
+
+**The API may still change before 1.0** — breaking changes are called out in the [changelog](CHANGELOG.md). Development happens on the `dev` branch.
 
 ## Project Structure
 
