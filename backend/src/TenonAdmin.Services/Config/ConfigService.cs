@@ -16,13 +16,23 @@ public class ConfigService(
     IEventBus events) : IConfigService
 {
     /// <inheritdoc />
-    public virtual async Task<PagedList<SysConfig>> PageAsync(ConfigPageInput input) =>
-        await configs.AsQueryable()
+    public virtual async Task<PagedList<SysConfig>> PageAsync(ConfigPageInput input)
+    {
+        var excludedGroups = input.ExcludedGroupCodes?
+            .Where(static group => !string.IsNullOrWhiteSpace(group))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray() ?? [];
+        var query = configs.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Name), c => c.Name.Contains(input.Name!))
             .WhereIF(!string.IsNullOrEmpty(input.ConfigKey), c => c.ConfigKey.Contains(input.ConfigKey!))
-            .WhereIF(!string.IsNullOrEmpty(input.GroupCode), c => c.GroupCode == input.GroupCode)
-            .OrderBy(c => c.Sort)
-            .ToPagedListAsync(input.Current, input.Size);
+            .WhereIF(!string.IsNullOrEmpty(input.GroupCode), c => c.GroupCode == input.GroupCode);
+
+        // 空分组也是消费方可管理的自定义配置,不能因 SQL 的 NULL NOT IN 语义被误滤掉。
+        if (excludedGroups.Length > 0)
+            query = query.Where(c => c.GroupCode == null || !excludedGroups.Contains(c.GroupCode!));
+
+        return await query.OrderBy(c => c.Sort).ToPagedListAsync(input.Current, input.Size);
+    }
 
     /// <inheritdoc />
     public virtual async Task<SysConfig> GetAsync(long id)

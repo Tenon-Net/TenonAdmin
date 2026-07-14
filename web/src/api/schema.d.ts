@@ -185,6 +185,8 @@ export interface paths {
                     Name?: string;
                     /** @description 分组编码(精确匹配,可选) */
                     GroupCode?: string;
+                    /** @description 排除的分组编码(可选;用于只列自定义配置等视图)。 */
+                    ExcludedGroupCodes?: string[];
                     Current?: number | string;
                     Size?: number | string;
                     SortField?: string;

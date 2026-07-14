@@ -24,7 +24,7 @@ public record ConfigInput
     public string? Remark { get; init; }
 }
 
-/// <summary>系统配置分页查询入参:在通用分页基础上加名称/键模糊过滤 + 分组精确过滤。</summary>
+/// <summary>系统配置分页查询入参:在通用分页基础上加名称/键模糊过滤 + 分组精确/排除过滤。</summary>
 public record ConfigPageInput : PageInputBase
 {
     /// <summary>配置键(模糊匹配,可选)</summary>
@@ -35,6 +35,9 @@ public record ConfigPageInput : PageInputBase
 
     /// <summary>分组编码(精确匹配,可选)</summary>
     public string? GroupCode { get; init; }
+
+    /// <summary>排除的分组编码(可选;用于只列自定义配置等视图)。</summary>
+    public string[]? ExcludedGroupCodes { get; init; }
 }
 
 /// <summary>批量存值入参项:分类配置中心的结构化表单按键回写<b>值</b>(不碰 Name/GroupCode/Sort)。</summary>

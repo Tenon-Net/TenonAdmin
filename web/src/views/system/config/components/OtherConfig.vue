@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 其他配置 = 分类配置中心的通用兜底:任意/未预置 key 的扁平 key-value 全量 CRUD(从原 config/index.vue 平移)。
+// 其他配置 = 分类配置中心的通用兜底:仅列非预置分组的自定义 key-value,避免与结构化 Tab 重复。
 // 列驱动搜索/分页/竞态交 ProTable,新增/编辑弹窗状态手写(与 module 页一致,好评审)。
 import { h, reactive, ref } from 'vue'
 import {
@@ -19,6 +19,11 @@ const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
 const tableRef = ref<ProTableInst<SysConfig>>()
+const STRUCTURED_GROUPS = ['sys', 'security', 'upload']
+
+// 内置分组有专属结构化表单;此处仍允许消费方自定义任意分组(含空分组),但不再重复展示内置项。
+const fetchOtherConfigs = (params: Parameters<typeof configApi.page>[0]) =>
+  configApi.page({ ...params, excludedGroupCodes: STRUCTURED_GROUPS })
 
 const columns: ProTableColumn<SysConfig>[] = [
   { key: 'configKey', title: () => t('config.key'), search: true },
@@ -97,7 +102,7 @@ async function save() {
   <ProTable
     ref="tableRef"
     :columns="columns"
-    :fetcher="configApi.page"
+    :fetcher="fetchOtherConfigs"
     storage-key="sys-config"
     @error="(e) => message.error(translateError(e))"
   >

@@ -8,7 +8,7 @@ namespace TenonAdmin.Services;
 /// </summary>
 public interface IConfigService
 {
-    /// <summary>分页查询配置,按名称/键模糊过滤 + 分组精确过滤,按排序升序返回。</summary>
+    /// <summary>分页查询配置,按名称/键模糊过滤 + 分组精确/排除过滤,按排序升序返回。</summary>
     Task<PagedList<SysConfig>> PageAsync(ConfigPageInput input);
 
     /// <summary>按 Id 取单条,不存在抛 <see cref="ErrorCode.ConfigNotFound"/>。</summary>

@@ -62,4 +62,26 @@ public class ConfigCenterTests
         var page = await (await c.GetAsync("/api/v1/sys/config/page?Current=1&Size=50&ConfigKey=does.not.exist")).ReadEnvelope();
         Assert.Empty(page.GetProperty("data").GetProperty("items").EnumerateArray());
     }
+
+    [Fact]
+    public async Task Page_excludes_structured_groups_without_hiding_custom_configs()
+    {
+        using var f = new AdminAppFactory();
+        var c = await SuperAdminClient(f);
+
+        var add = await c.PostJson("/api/v1/sys/config", new
+        {
+            configKey = "custom.feature.enabled", configValue = "true", name = "自定义功能开关",
+            groupCode = "custom", sort = 1,
+        });
+        Assert.Equal(0, (await add.ReadEnvelope()).GetProperty("code").GetInt32());
+
+        var page = await (await c.GetAsync(
+            "/api/v1/sys/config/page?Current=1&Size=50&ExcludedGroupCodes=sys&ExcludedGroupCodes=security&ExcludedGroupCodes=upload"))
+            .ReadEnvelope();
+        var items = page.GetProperty("data").GetProperty("items").EnumerateArray().ToArray();
+
+        Assert.Contains(items, item => item.GetProperty("configKey").GetString() == "custom.feature.enabled");
+        Assert.DoesNotContain(items, item => item.GetProperty("groupCode").GetString() is "sys" or "security" or "upload");
+    }
 }

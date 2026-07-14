@@ -191,10 +191,15 @@ export const moduleApi = {
 
 export const configApi = {
   /** 归一后端 PagedList<SysConfig> → ProTable {items,total};搜索键 configKey/name/groupCode → PascalCase 查询参。 */
-  page: (params: { page: number; pageSize: number; configKey?: string; name?: string; groupCode?: string }) =>
+  page: (params: { page: number; pageSize: number; configKey?: string; name?: string; groupCode?: string; excludedGroupCodes?: string[] }) =>
     client
       .GET('/api/v1/sys/config/page', {
-        params: { query: { Current: params.page, Size: params.pageSize, ConfigKey: params.configKey, Name: params.name, GroupCode: params.groupCode } },
+        params: {
+          query: {
+            Current: params.page, Size: params.pageSize, ConfigKey: params.configKey, Name: params.name,
+            GroupCode: params.groupCode, ExcludedGroupCodes: params.excludedGroupCodes,
+          },
+        },
       })
       .then((r) => unwrap<PagedList<SysConfig>>(r))
       .then((p) => ({ items: p.items, total: p.total })),
