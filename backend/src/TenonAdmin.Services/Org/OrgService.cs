@@ -62,6 +62,10 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
     {
         // 父指向自己是非法父级,用专用码 OrgInvalidParent(42008),不再复用语义不符的 OrgNotFound(P2-12)
         AdminException.ThrowIf(input.ParentId == id, ErrorCode.OrgInvalidParent);
+        // 父指向自己的后代 → 成环:整支子树脱离根、从机构树 UI 消失且无法在 UI 修复。只挡"父指向自己"不够,
+        // 得挡整条向下的路径(A→B→C,把 A 的父改成 C 同样成环)。仅在真的换父时才查树,避免每次改资料都拉全表。
+        if (input.ParentId != 0)
+            await EnsureNotDescendantAsync(id, input.ParentId);
 
         var entity = await GetAsync(id);
         // 改编码时排除自身查重(纳入软删行)
@@ -132,6 +136,25 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
         if (!result.IsSuccess) throw result.ErrorException;
         await rbac.InvalidateAllScopesAsync();   // 新增子树改变"本机构及以下"子孙集 → 失效全体 scope
         return idMap[id];
+    }
+
+    /// <summary>
+    /// 校验 <paramref name="candidateParent"/> 不是 <paramref name="id"/> 的后代(也不是它自己),否则改父会成环 →
+    /// 抛 <see cref="ErrorCode.OrgInvalidParent"/>。BFS 从 id 向下收后代集,带去重防坏数据里已有的环导致死循环。
+    /// </summary>
+    protected virtual async Task EnsureNotDescendantAsync(long id, long candidateParent)
+    {
+        var all = await orgs.AsQueryable().Select(o => new { o.Id, o.ParentId }).ToListAsync();
+        var descendants = new HashSet<long> { id };
+        var queue = new Queue<long>();
+        queue.Enqueue(id);
+        while (queue.Count > 0)
+        {
+            var parent = queue.Dequeue();
+            foreach (var child in all.Where(o => o.ParentId == parent))
+                if (descendants.Add(child.Id)) queue.Enqueue(child.Id);
+        }
+        AdminException.ThrowIf(descendants.Contains(candidateParent), ErrorCode.OrgInvalidParent);
     }
 
     /// <summary>给克隆节点造唯一编码:优先 <c>{code}-copy</c>,冲突则 <c>-copy2</c>、<c>-copy3</c>…;结果就地登记进 used。</summary>
