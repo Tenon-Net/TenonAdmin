@@ -4,7 +4,7 @@
 // 只给行内按钮加警告的话,勾选 + 批量删就绕过去了。
 import { computed, h, onMounted, reactive, ref } from 'vue'
 import {
-  NButton, NSpace, NInput, NInputNumber, NSwitch, NForm, NFormItem, NSelect, NTree,
+  NButton, NSpace, NInput, NInputNumber, NSwitch, NForm, NFormItem, NSelect, NDropdown,
   useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
 import { useRouter } from 'vue-router'
@@ -14,6 +14,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
+import GrantMenuTable from './components/GrantMenuTable.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
 import { roleApi, menuApi, moduleApi, userApi } from '@/api'
@@ -105,21 +106,24 @@ const columns: ProTableColumn<SysRole>[] = [
   {
     key: 'op',
     title: () => t('common.operation'),
-    width: 360, // 5 个按钮(授权菜单/数据范围/查看用户/编辑/删除);再窄「删除」会换行
+    width: 240,
     hideInSetting: true,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
-        h(NButton, { size: 'small', quaternary: true, onClick: () => openMenus(r) }, () => t('role.grantMenus')),
-        h(NButton, { size: 'small', quaternary: true, onClick: () => openScope(r) }, () => t('role.dataScope')),
-        // 反向视图:带 ?roleId= 跳用户页,用户页 watch 到 query 变化即预筛选
-        h(
-          NButton,
-          { size: 'small', quaternary: true, onClick: () => router.push({ path: '/system/user', query: { roleId: String(r.id) } }) },
-          () => t('role.viewUsers'),
-        ),
         h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
-        // 不用 n-popconfirm:它的文案是静态的,塞不进"这个角色有 N 个人在用"这种删前才查得到的数字
         h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => askDelete(r) }, () => t('common.delete')),
+        h(NDropdown, {
+          options: [
+            { label: t('role.grantMenus'), key: 'menus' },
+            { label: t('role.dataScope'), key: 'scope' },
+            { label: t('role.viewUsers'), key: 'users' },
+          ],
+          onSelect: (key: string) => {
+            if (key === 'menus') openMenus(r)
+            else if (key === 'scope') openScope(r)
+            else router.push({ path: '/system/user', query: { roleId: String(r.id) } })
+          },
+        }, () => h(NButton, { size: 'small', quaternary: true }, () => t('common.more'))),
       ]),
   },
 ]
@@ -158,60 +162,32 @@ async function save() {
   }
 }
 
-// ── 授权菜单抽屉(勾选菜单树 → 全量替换角色授权)──
-// cascade=false:每个节点独立勾选,checkedKeys 即要保存的菜单行集合,getMenus 回显 1:1 无歧义
-// (目录/页面节点权限码为空,勾了也不产生权限码,后端 RbacPermissionProvider 只取 Permission!="" 的行)。
+// ── 授权菜单抽屉(分组表格 → 全量替换角色授权)──
 const showMenus = ref(false)
 const menuTree = ref<MenuTreeNode[]>([])
-// menuChecked 始终是**跨应用的完整授权集合**;抽屉只按应用过滤显示,保存全量替换,不可只留单应用。
-const menuChecked = ref<number[]>([])
+const menuGranted = ref<number[]>([])
 const menuRoleId = ref<number | null>(null)
-/** 抽屉内「所属应用」筛选:默认跟随当前进入的应用。 */
-const drawerModuleId = ref<number>(UNASSIGNED)
-const moduleFilterOptions = computed(() => [
-  ...modules.value.map((m) => ({ label: m.title, value: m.id })),
-  { label: t('menu.moduleUnassigned'), value: UNASSIGNED },
-])
-/** 只过滤顶级目录(moduleId 仅存于顶级),子树自动跟随;UNASSIGNED 归拢无模块的顶级目录。 */
-const drawerFiltered = computed(() =>
-  menuTree.value.filter((r) => (drawerModuleId.value === UNASSIGNED ? r.moduleId == null : r.moduleId === drawerModuleId.value)),
-)
-/** 当前应用可见子树的全部菜单 id(cascade=false,每节点独立)——用于回写时圈定「本应用」范围。 */
-const appIds = computed(() => {
-  const out = new Set<number>()
-  const collect = (n: MenuTreeNode) => {
-    out.add(n.id)
-    n.children.forEach(collect)
-  }
-  drawerFiltered.value.forEach(collect)
-  return out
-})
-/**
- * n-tree 的勾选:只喂当前应用的勾选(避免 naive 对不在 data 里的 key 报警);
- * 回写时先剔除本应用旧勾选、再并入新勾选,**其它应用的授权原样保留**——否则全量替换会误删。
- */
-const drawerChecked = computed<number[]>({
-  get: () => menuChecked.value.filter((id) => appIds.value.has(id)),
-  set: (v) => {
-    menuChecked.value = [...menuChecked.value.filter((id) => !appIds.value.has(id)), ...v]
-  },
-})
+const defaultModuleId = ref(UNASSIGNED)
+
 async function openMenus(r: SysRole) {
   menuRoleId.value = r.id
   try {
     const [tree, granted] = await Promise.all([menuApi.tree(), roleApi.getMenus(r.id)])
     menuTree.value = tree
-    menuChecked.value = granted
-    drawerModuleId.value = auth.currentModuleId ?? modules.value[0]?.id ?? UNASSIGNED
+    menuGranted.value = granted
+    defaultModuleId.value = auth.currentModuleId ?? modules.value[0]?.id ?? UNASSIGNED
     showMenus.value = true
   } catch (e) {
     message.error(translateError(e))
   }
 }
+function onMenuCheckedUpdate(ids: number[]) {
+  menuGranted.value = ids
+}
 async function saveMenus() {
   if (menuRoleId.value === null) return
   try {
-    await roleApi.setMenus(menuRoleId.value, menuChecked.value)
+    await roleApi.setMenus(menuRoleId.value, menuGranted.value)
     message.success(t('role.grantSaved'))
   } catch (e) {
     message.error(translateError(e))
@@ -310,27 +286,16 @@ async function saveScope() {
   <FormContainer
     v-model:show="showMenus"
     :title="t('role.grantMenus')"
-    :width="420"
+    :width="820"
     :on-confirm="saveMenus"
     :confirm-text="t('common.save')"
   >
-    <n-select
-      v-model:value="drawerModuleId"
-      :options="moduleFilterOptions"
-      :placeholder="t('menu.module')"
-      style="margin-bottom: 12px"
-    />
-    <n-tree
-      v-model:checked-keys="drawerChecked"
-      :data="(drawerFiltered as any)"
-      key-field="id"
-      label-field="title"
-      children-field="children"
-      checkable
-      :cascade="false"
-      :selectable="false"
-      block-line
-      default-expand-all
+    <GrantMenuTable
+      :tree="menuTree"
+      :granted="menuGranted"
+      :modules="modules"
+      :default-module-id="defaultModuleId"
+      @update:checked="onMenuCheckedUpdate"
     />
   </FormContainer>
 

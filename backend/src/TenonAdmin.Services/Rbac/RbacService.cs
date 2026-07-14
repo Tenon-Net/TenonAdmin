@@ -106,6 +106,15 @@ public class RbacService(
     }
 
     /// <inheritdoc />
+    public virtual async Task InvalidateByRoleAsync(long roleId)
+    {
+        var affectedUsers = await userRoles.AsQueryable().Where(x => x.RoleId == roleId).Select(x => x.UserId).ToListAsync();
+        await InvalidatePermissionsAsync(affectedUsers);
+        await InvalidateScopesAsync(affectedUsers);
+        await cache.IncrementAsync(CacheKeys.PortalGeneration);
+    }
+
+    /// <inheritdoc />
     public virtual async Task OnRoleDeletedAsync(long roleId)
     {
         // 删前圈定受影响用户(下面要失效其权限/数据范围缓存);此刻关联行尚在。
@@ -120,7 +129,6 @@ public class RbacService(
         });
         if (!result.IsSuccess) throw result.ErrorException;
 
-        // 角色没了 → 挂它的用户权限与数据范围都可能变,两者缓存都失效;门户导航按代际整体失效。
         await InvalidatePermissionsAsync(affectedUsers);
         await InvalidateScopesAsync(affectedUsers);
         await cache.IncrementAsync(CacheKeys.PortalGeneration);

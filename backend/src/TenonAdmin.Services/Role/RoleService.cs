@@ -55,12 +55,16 @@ public class RoleService(IRepository<SysRole> roles, IRbacService rbac) : IRoleS
             await roles.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(r => r.Code == input.Code && r.Id != id),
             ErrorCode.RoleCodeExists);
 
+        var enabledChanged = input.Enabled != role.Enabled;
         role.Name = input.Name;
         role.Code = input.Code;
         role.Sort = input.Sort;
         role.Enabled = input.Enabled;
         role.Remark = input.Remark;
         await roles.UpdateAsync(role);
+
+        if (enabledChanged)
+            await rbac.InvalidateByRoleAsync(id);
     }
 
     /// <inheritdoc />
@@ -74,7 +78,12 @@ public class RoleService(IRepository<SysRole> roles, IRbacService rbac) : IRoleS
     /// <inheritdoc />
     public virtual async Task DeleteBatchAsync(IReadOnlyCollection<long> ids)
     {
-        foreach (var id in ids)
-            await DeleteAsync(id);
+        if (ids.Count == 0) return;
+        var result = await roles.Db.Ado.UseTranAsync(async () =>
+        {
+            foreach (var id in ids)
+                await DeleteAsync(id);
+        });
+        if (!result.IsSuccess) throw result.ErrorException;
     }
 }

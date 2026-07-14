@@ -34,6 +34,9 @@ public interface IRbacService
     /// <summary>机构树结构(增/改父/删)变更后,失效全体用户的数据范围缓存(受影响集难精确圈定,机构变更极低频)。</summary>
     Task InvalidateAllScopesAsync();
 
+    /// <summary>角色启用/禁用态变更后,失效挂该角色的所有用户的权限+数据范围缓存 + 门户代际(不删关联行)。</summary>
+    Task InvalidateByRoleAsync(long roleId);
+
     /// <summary>
     /// 角色被删除后的关联清理:物理删该角色的"用户↔角色/角色↔菜单/角色数据范围"关联行,
     /// 并失效受影响用户的权限/数据范围缓存 + 门户代际。由 <see cref="IRoleService.DeleteAsync"/> 在软删角色本体后调用。

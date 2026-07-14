@@ -36,7 +36,10 @@ public class RbacPermissionProvider(
     /// </summary>
     protected virtual async Task<string[]> LoadFromDatabaseAsync(long userId)
     {
-        var roleIds = await userRoles.AsQueryable().Where(x => x.UserId == userId).Select(x => x.RoleId).ToListAsync();
+        var roleIds = await userRoles.AsQueryable()
+            .InnerJoin<SysRole>((ur, r) => ur.RoleId == r.Id && r.Enabled)
+            .Where((ur, r) => ur.UserId == userId)
+            .Select((ur, r) => ur.RoleId).ToListAsync();
         if (roleIds.Count == 0) return [];
 
         var menuIds = await roleMenus.AsQueryable().Where(x => roleIds.Contains(x.RoleId)).Select(x => x.MenuId).ToListAsync();

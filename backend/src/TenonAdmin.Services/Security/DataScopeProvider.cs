@@ -34,8 +34,11 @@ public class DataScopeProvider(
     /// <summary>聚合查库计算生效范围(仅缓存未命中时执行)。</summary>
     protected virtual async Task<DataScopeResult> ComputeAsync(long userId)
     {
-        var roleIds = await userRoles.AsQueryable().Where(x => x.UserId == userId).Select(x => x.RoleId).ToListAsync();
-        if (roleIds.Count == 0) return DataScopeResult.Restricted([], includeSelf: true, userId); // 无角色 → 仅本人
+        var roleIds = await userRoles.AsQueryable()
+            .InnerJoin<SysRole>((ur, r) => ur.RoleId == r.Id && r.Enabled)
+            .Where((ur, r) => ur.UserId == userId)
+            .Select((ur, r) => ur.RoleId).ToListAsync();
+        if (roleIds.Count == 0) return DataScopeResult.Restricted([], includeSelf: true, userId); // 无角色/全禁用 → 仅本人
 
         var scopes = await roleScopes.AsQueryable().Where(x => roleIds.Contains(x.RoleId)).ToListAsync();
         if (scopes.Any(s => s.ScopeType == DataScopeType.All)) return DataScopeResult.Unrestricted;
