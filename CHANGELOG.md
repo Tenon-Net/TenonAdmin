@@ -5,6 +5,8 @@
 
 发布节奏:打 `v*` tag 即触发 `backend-release` —— 它先跑构建 + 测试 + 模板冒烟(`dotnet new tenon-app` 必须 restore 并编译通过),全绿才推 nuget.org。
 
+> 发版时**两个半边的版本号要一起改**:后端由 tag 经 `-p:Version` 注入,而 `web/package.json` 的 `version` 是构建期常量、**会显示在登录页页脚**。忘了改,用户看到的界面版本就和装到的包对不上。
+
 ## 0.1.0 - 2026-07-14
 
 **首个发布到 nuget.org 的版本**(此前的 `0.0.1-preview` 只存在于仓库,从未推包)。
