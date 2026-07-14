@@ -51,11 +51,15 @@
   <Target Name="StampTemplateVersion" BeforeTargets="Build;GenerateNuspec">
     <PropertyGroup>
       <_TemplateJsonText>$([System.IO.File]::ReadAllText('$(_TemplateJsonSrc)'))</_TemplateJsonText>
+      <!-- 结构匹配,不是"文件里有没有这个词":占位符若在别处(比如注释性的 description)也出现过,
+           光找词的守卫就会在 defaultValue 已被改坏时照样放行 —— 守着,但守了个寂寞。 -->
+      <_StampMarker>"defaultValue": "PACK_VERSION_STAMP"</_StampMarker>
+      <_StampValue>"defaultValue": "$(Version)"</_StampValue>
     </PropertyGroup>
-    <Error Condition="!$(_TemplateJsonText.Contains('PACK_VERSION_STAMP'))"
-           Text="template.json 里找不到 PACK_VERSION_STAMP 占位符:版本盖不进去,模板会带着错误的包版本发布。请把 TenonPkgVersion 的 defaultValue 改回 PACK_VERSION_STAMP。" />
+    <Error Condition="!$(_TemplateJsonText.Contains('$(_StampMarker)'))"
+           Text="template.json 里的 TenonPkgVersion.defaultValue 不是占位符 PACK_VERSION_STAMP:版本盖不进去,模板会带着错误的包版本发布。请改回 &quot;defaultValue&quot;: &quot;PACK_VERSION_STAMP&quot;。" />
     <PropertyGroup>
-      <_TemplateJsonOut>$(_TemplateJsonText.Replace('PACK_VERSION_STAMP', '$(Version)'))</_TemplateJsonOut>
+      <_TemplateJsonOut>$(_TemplateJsonText.Replace('$(_StampMarker)', '$(_StampValue)'))</_TemplateJsonOut>
     </PropertyGroup>
     <MakeDir Directories="$(IntermediateOutputPath)" />
     <!-- Escape:MSBuild 会把 Lines 当 item 列表按 ';' 切分,JSON 里将来若出现分号就会被劈开。 -->
