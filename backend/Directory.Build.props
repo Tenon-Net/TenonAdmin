@@ -21,13 +21,24 @@
     <RepositoryUrl>https://github.com/Tenon-Net/TenonAdmin</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>tenon-icon.png</PackageIcon>
     <PackageTags>admin;rbac;sqlsugar;aspnetcore;scaffold;kernel</PackageTags>
     <PackageReleaseNotes>0.0.1-preview:M1 认证 / RBAC / 多机构数据范围 / 字典配置 / 日志 / 上传 + 可替换扩展点(六件套测试锁)。预览版,API 可能变动。</PackageReleaseNotes>
-    <!-- icon:预览版暂缺,发稳定版前补 PackageIcon(§T10 follow-up) -->
+
+    <!-- ── 可调试性:内核是给人继承和重写的,消费者步不进源码就没法判断该重写哪一步 ──
+         SourceLink 由 .NET SDK 内置(不引第三方包);符号走 snupkg,与 nupkg 同名一并推送。
+         ContinuousIntegrationBuild 只在 CI 开:它把源码路径规范化,本地开着会打乱调试路径。 -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
-  <!-- 每个打包项目都带仓库根 README 作包说明页;非打包项目此 None 为空操作 -->
+  <!-- 每个打包项目都带仓库根 README 作包说明页 + 包图标;非打包项目此 None 为空操作。
+       图标源是 web/design-mockups/brand/tenon-logo.svg —— NuGet 只认 png/jpg,故这里放光栅化后的副本。 -->
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)tenon-icon.png" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 </Project>
