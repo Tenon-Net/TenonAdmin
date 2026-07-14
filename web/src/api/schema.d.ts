@@ -1890,7 +1890,13 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": null | components["schemas"]["OrgCopyInput"];
+                    "text/json": null | components["schemas"]["OrgCopyInput"];
+                    "application/*+json": null | components["schemas"]["OrgCopyInput"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
@@ -2404,7 +2410,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sys/position/reorder": {
+    "/api/v1/sys/recycle/{type}/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页列出指定类型的已删记录 */
+        get: {
+            parameters: {
+                query?: {
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path: {
+                    type: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfRecycleBinItem"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfRecycleBinItem"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfRecycleBinItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/recycle/{type}/{id}/restore": {
         parameters: {
             query?: never;
             header?: never;
@@ -2413,21 +2464,18 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 行拖拽重排:按传入 Id 顺序重排 Sort */
+        /** 恢复已删记录 */
         post: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    type: string;
+                    id: number | string;
+                };
                 cookie?: never;
             };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["PositionReorderInput"];
-                    "text/json": components["schemas"]["PositionReorderInput"];
-                    "application/*+json": components["schemas"]["PositionReorderInput"];
-                };
-            };
+            requestBody?: never;
             responses: {
                 /** @description OK */
                 200: {
@@ -2443,6 +2491,47 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/recycle/{type}/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 彻底删除(物理删除,不可恢复) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    type: string;
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -3326,6 +3415,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/role/{id}/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 取某角色当前关联的用户 Id 集合(授权用户抽屉回显用)。 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyCollectionOflong"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyCollectionOflong"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyCollectionOflong"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/role/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 全量设置某角色关联的用户;成功后受影响用户权限+数据范围缓存即时失效。 */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetRoleUsersInput"];
+                    "text/json": components["schemas"]["SetRoleUsersInput"];
+                    "application/*+json": components["schemas"]["SetRoleUsersInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/role/menu": {
         parameters: {
             query?: never;
@@ -3837,10 +4010,17 @@ export interface components {
             /** @description 初始密码;留空则用默认初始密码(见 `UserService`)。IsSuperAdmin 不在入参——接口永不建超管(防提权)。 */
             password?: null | string;
             name?: string;
+            nickname?: null | string;
+            phone?: null | string;
+            email?: null | string;
+            gender?: null | string;
+            avatar?: null | string;
             /** Format: int64 */
             orgId?: null | number | string;
             /** Format: int64 */
             positionId?: null | number | string;
+            /** Format: int64 */
+            directorId?: null | number | string;
             enabled?: boolean;
             /** @description 初始分配的角色 Id 集合 */
             roleIds?: (number | string)[];
@@ -3875,6 +4055,8 @@ export interface components {
             captchaId: string;
             /** @description SVG 图字符串(直接内联展示) */
             svg: string;
+            /** @description 验证码类型(char/path/math…);前端据此调整输入提示(如 math 提示“输入计算结果”)。 */
+            type?: string;
         };
         /** @description 改密码入参:须验旧密码(即便令牌未过期,也要证明你知道当前密码)。 */
         ChangePasswordInput: {
@@ -4216,6 +4398,11 @@ export interface components {
             /** Format: date-time */
             expiresAt?: string;
         };
+        /** @description 复制机构入参 */
+        OrgCopyInput: {
+            /** @description 克隆后根节点名称(留空则追加"-副本"后缀) */
+            name?: null | string;
+        };
         /** @description 机构新增/编辑入参 */
         OrgInput: {
             /**
@@ -4225,8 +4412,8 @@ export interface components {
             parentId?: number | string;
             /** @description 机构名称 */
             name?: string;
-            /** @description 机构编码(唯一) */
-            code?: string;
+            /** @description 机构编码(唯一;新增时留空则后端自动生成) */
+            code?: null | string;
             /** @description 机构分类(org_category 字典 value,可空) */
             category?: null | string;
             /**
@@ -4292,6 +4479,34 @@ export interface components {
             pages?: number | string;
             /** @description 当前页数据 */
             items?: components["schemas"]["OnlineSessionItem"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
+        PagedListOfRecycleBinItem: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["RecycleBinItem"][];
         };
         /**
          * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
@@ -4615,10 +4830,16 @@ export interface components {
             /** @description 是否启用 */
             enabled?: boolean;
         };
-        /** @description 行拖拽重排入参:Ids 即新顺序,后端据此赋 Sort。 */
-        PositionReorderInput: {
-            /** @description 按目标顺序排列的职位 Id 列表。 */
-            ids?: (number | string)[];
+        /** @description 回收站统一 DTO */
+        RecycleBinItem: {
+            /** Format: int64 */
+            id: number | string;
+            name: string;
+            code: null | string;
+            /** Format: date-time */
+            deletedAt: null | string;
+            /** Format: int64 */
+            deletedBy: null | number | string;
         };
         /** @description 刷新令牌换发入参 */
         RefreshInput: {
@@ -5087,6 +5308,27 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["PagedListOfOnlineSessionItem"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfPagedListOfRecycleBinItem: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfRecycleBinItem"];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -5601,6 +5843,16 @@ export interface components {
             /** @description 授予的菜单 Id 列表(全量替换该角色现有授权;空列表 = 收回全部) */
             menuIds?: (number | string)[];
         };
+        /** @description 角色授权用户入参:把一组用户全量关联到某角色 */
+        SetRoleUsersInput: {
+            /**
+             * Format: int64
+             * @description 目标角色 Id
+             */
+            roleId?: number | string;
+            /** @description 关联的用户 Id 列表(全量替换;空列表 = 收回全部) */
+            userIds?: (number | string)[];
+        };
         /** @description 站点信息(匿名可读的展示类配置白名单;登录前/无配置读权限的用户也能取)。 */
         SiteInfoOutput: {
             /** @description 站点标题(浏览器标题/登录页展示名) */
@@ -5969,10 +6221,17 @@ export interface components {
         /** @description 更新用户入参。不含 Account(不可改)、Password(走重置)、IsSuperAdmin(防提权)。 */
         UpdateUserInput: {
             name?: string;
+            nickname?: null | string;
+            phone?: null | string;
+            email?: null | string;
+            gender?: null | string;
+            avatar?: null | string;
             /** Format: int64 */
             orgId?: null | number | string;
             /** Format: int64 */
             positionId?: null | number | string;
+            /** Format: int64 */
+            directorId?: null | number | string;
             enabled?: boolean;
             roleIds?: (number | string)[];
         };
@@ -5983,14 +6242,25 @@ export interface components {
             id: number | string;
             account: string;
             name: string;
+            nickname?: null | string;
+            phone?: null | string;
+            email?: null | string;
+            /** @description 性别字典值("1"男/"2"女/"0"未知);前端按字典 gender 翻译。 */
+            gender?: null | string;
+            /** @description 头像签名直链。 */
+            avatar?: null | string;
             /** Format: int64 */
             orgId?: null | number | string;
             /** Format: int64 */
             positionId?: null | number | string;
+            /** Format: int64 */
+            directorId?: null | number | string;
             /** @description 机构名(不落 SysUser,分页时按 OrgId 关联 sys_org 补;仅列表展示用) */
             orgName?: null | string;
             /** @description 职位名(同上,按 PositionId 关联 sys_position 补) */
             positionName?: null | string;
+            /** @description 直属主管姓名(同上,按 DirectorId 关联 sys_user 补) */
+            directorName?: null | string;
             enabled: boolean;
             isSuperAdmin: boolean;
             /** Format: date-time */
@@ -6002,14 +6272,25 @@ export interface components {
             id: number | string;
             account: string;
             name: string;
+            nickname?: null | string;
+            phone?: null | string;
+            email?: null | string;
+            /** @description 性别字典值("1"男/"2"女/"0"未知);前端按字典 gender 翻译。 */
+            gender?: null | string;
+            /** @description 头像签名直链。 */
+            avatar?: null | string;
             /** Format: int64 */
             orgId?: null | number | string;
             /** Format: int64 */
             positionId?: null | number | string;
+            /** Format: int64 */
+            directorId?: null | number | string;
             /** @description 机构名(不落 SysUser,分页时按 OrgId 关联 sys_org 补;仅列表展示用) */
             orgName?: null | string;
             /** @description 职位名(同上,按 PositionId 关联 sys_position 补) */
             positionName?: null | string;
+            /** @description 直属主管姓名(同上,按 DirectorId 关联 sys_user 补) */
+            directorName?: null | string;
             enabled: boolean;
             isSuperAdmin: boolean;
             /** Format: date-time */
