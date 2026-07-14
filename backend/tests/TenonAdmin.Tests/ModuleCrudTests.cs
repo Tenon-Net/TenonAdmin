@@ -22,6 +22,26 @@ public class ModuleCrudTests
     }
 
     [Fact]
+    public async Task Builtin_modules_include_the_configured_portal_metadata()
+    {
+        using var f = new AdminAppFactory();
+        var c = await SuperAdminClient(f);
+
+        var modules = (await (await c.GetAsync("/api/v1/sys/module/list")).ReadEnvelope())
+            .GetProperty("data")
+            .EnumerateArray()
+            .ToDictionary(module => module.GetProperty("code").GetString()!);
+
+        var system = modules["system"];
+        Assert.Equal("lucide:settings", system.GetProperty("icon").GetString());
+        Assert.Equal("", system.GetProperty("defaultRoute").GetString());
+
+        var business = modules["business"];
+        Assert.Equal("lucide:briefcase-business", business.GetProperty("icon").GetString());
+        Assert.Equal("", business.GetProperty("defaultRoute").GetString());
+    }
+
+    [Fact]
     public async Task SuperAdmin_can_crud_module()
     {
         using var f = new AdminAppFactory();
