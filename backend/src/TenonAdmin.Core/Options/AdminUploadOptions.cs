@@ -22,7 +22,7 @@ public class AdminUploadOptions
     /// 允许的文件后缀白名单(含点、小写)。<b>按后缀而非 Content-Type 判定</b>(§14:不以 Content-Type 为唯一依据)。
     /// 空数组表示不限(不建议)。
     /// </summary>
-    public string[] AllowedExtensions { get; set; } = [".jpg", ".png", ".pdf", ".xlsx", ".docx", ".zip"];
+    public string[] AllowedExtensions { get; set; } = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".xlsx", ".docx", ".zip"];
 
     /// <summary>是否启用后台磁盘回收(dev-plan T-D2)。关掉 = 删了的文件永远占着盘,只在你另有回收手段时才关。</summary>
     public bool EnableGc { get; set; } = true;
