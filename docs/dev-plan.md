@@ -2,7 +2,7 @@
 
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件回答三个问题:**做到哪了、怎么干活、下一个任务是什么**。每完成一个任务更新一次。
-> 最后更新:2026-07-14(**M4 清债四批**——种子主键保留区间、树表可用性、五条小债、**磁盘回收**(软删文件 + 弃单分片)、**签名直链**(通知里的图片终于不是坏链)、**容器化交付**(Dockerfile + compose + nginx + 冒烟 CI,已跑绿)。详见 §4 M4。下一步候选见 §6)
+> 最后更新:2026-07-14(**M4 清债五批**——种子主键保留区间、树表可用性、五条小债、**磁盘回收**、**签名直链**、**容器化交付**、以及**多副本就绪**(T-D3:反代取真实 IP、限流计数跨副本、会话并发去锁、Redis 真接线、WorkerId 守卫;双副本 compose + 冒烟 CI 在**真实 docker 主机**上跑绿,反面对照如期变红)。详见 §4 M4。下一步候选见 §6)
 > 早期基线:2026-07-07 Phase 2(2a 自审 34 发现全处置 + 2b RateLimiter/MySQL CI)+ M1.5 多应用门户后端,详见 §4。
 
 ---
@@ -218,15 +218,22 @@ M2 脚手架之后一次性把系统管理各页与「改配置不改代码」�
 
 - [x] **T-D1 首次登录强制改密** ✅ 完成(`8860d7e`)。`SysUser.MustChangePassword`(重置密码/建号置位)+ 登录返回改密信号 + 前端守卫钉在改密页。
 - [x] **T-D2 软删文件物理回收** ✅ 完成(M4 第四批)。`FileGcService` 收软删文件(过保留期)+ 弃单分片(TTL);删盘经 `IFileStorage` 继承存储根围栏。**实际是两个泄漏**——分片上传上线后又开了第二个洞,连"被拒绝的上传"都在漏。
-- [ ] **T-D3 多副本分布式限流**(现 `RuntimeRateLimit` 为单实例进程内 `PartitionedRateLimiter`;`SessionService` 的进程内锁字典、登录失败计数同理)。抽限流计数存储为扩展点,Redis 实现放 `TenonAdmin.Caching.Redis`。
-  - 先写:`TwoInstances_ShareRateCounter_HitSameThreshold`(用共享计数后端)。单实例默认行为不变的回归。
-  - **现在做正当时**:compose 已经在了,起两个副本真验证,而不是靠推理。
+- [x] **T-D3 多副本就绪** ✅ 完成(M4 第五批)。范围比原计划大——真跑起来才发现"多副本安全"这个说法此前**没有一处被执行过**:
+  - **限流计数**改走 `ICacheProvider.IncrementAsync`(不新增抽象),换掉进程内 `PartitionedRateLimiter`;顺带删掉"把阈值编进分区键"的权宜之计。
+  - **会话并发**改「先插入、再收敛」,`SessionService` 的 `static` 锁字典整个删掉(锁跨不了进程,换 Redis 也修不好)。
+  - **`TenonAdmin.Caching.Redis` 早写好了却没接线**(compose 无 redis、MinimalHost 不引它)。接上之后**强退跨副本失效、撤权后仍有权限、锁定阈值翻倍、验证码必败**一次性全好——失效走缓存键空间,不走事件总线,业务代码零改动。它的契约测试还因 `TENON_TEST_REDIS` 从没被设过而**静默假绿**(早 return 不是 skip),已一并堵死。
+  - **`WorkerId` 同号撞主键**:配了 Redis 却不显式给机器号 → 启动即抛(把静默的数据损坏换成可读的启动错误)。
+  - **反代之后的真实客户端 IP**(`ForwardedHeaders`,默认关 + 未声明受信来源即 fail-fast)——上一批交付的 nginx 栈已经把按 IP 限流打成了"全体共用一个桶"。
+  - 验收:`docker-compose.scale.yml`(两个显式副本 + Caddy 轮询)+ `scripts/smoke-multi-replica.sh`,五条断言各对一个 bug,`docker-smoke` 的 multi 腿常驻 CI。反面对照(把缓存换回进程内)如期变红,证明断言真能抓 bug。
 - [x] **T-D4 部署产物 docker-compose / Dockerfile** ✅ 完成(M4 第四批,`docker-smoke` CI 绿)。
 - [ ] **T-D5 RoutePrefix / Version 配置化**(v1.x 明确后置,深耦合鉴权路径)。引入 Core `PermissionCode` 规范化 helper 供过滤器 + 种子共用,逐控制器改相对路由。
   - 先写:`PermissionCode_Normalization_MatchesFilterAndSeed`(改前缀后权限码两侧一致)+ 非超管授权全量回归。
 - [ ] **T-D6 验证码第二种类型**(YAGNI 未解除——`ICaptchaProvider` 扩展点已在,仅 SVG 一种实现)。**先确认真需要**行为/算术/滑块验证码再动;否则不做。
   - 先写(动了才写):新 provider `Register_SecondCaptchaType_ReplacesSvg` 走扩展点。
 - [ ] **T-D7 文件引用关系**(M4 记下的天花板)。「秒传」按内容哈希复用**同一条** `sys_file` 记录 → 同一个文件 Id 会被多个用户/多条业务记录引用,甲删掉"他的"文件,乙的引用就悬空。现在靠 GC 保留期(默认 7 天)兜底,不是真解。真解要么建文件引用表(消费者侧契约),要么让秒传插新行共享 `StoragePath`(那样 GC 必须先按 `StoragePath` 分组再删——已写进 `FileGcService` 注释)。**先确认真有消费者被这个咬到**再动。
-- [ ] **慢 SQL 日志 / 密码过期策略 / 登录日志失败码翻人话**(三件小的,单独一轮清掉)。
+- [ ] **慢 SQL 日志 / 密码过期策略**(两件小的,单独一轮清掉)。
+  - 慢 SQL:SqlSugar 今天**一个日志 AOP 钩子都没挂**(`OnLogExecuted`/`OnError` 全空)——失败的查询连 SQL 都打不出来。阈值放 `AdminDatabaseOptions`,输出走 `ILogger`(**别落 `SysOpLog`**:那条 INSERT 自己会再触发一次 `OnLogExecuted`,递归)。
+  - 密码过期:`SysUser` 缺 `LastPasswordChangeTime` 列(`BaseEntity.UpdateTime` 不能用——改个昵称都会刷新它)。真正的设计决策是 **null 回填策略**:天真实现会在上线当天把**全部存量用户**判成"已过期",整个用户群被钉在改密页。信号复用 `MustChangePassword`(`8860d7e` 建好的通道),前端零改动。
+  - ~~登录日志失败码翻人话~~ —— 排查后发现 **`5d01b62` 就做完了**(`web/src/views/system/log/login/index.vue` 已用 tag+options 把 40001–40005 翻成人话),本条作废。
 
 > 非 TDD 收尾项(打包/申请,无逻辑分支不留测试):`PackageIcon` 补图 + 稳定版发布;`TenonAdmin.*` NuGet ID 前缀 owner 手动申请;首次真推配 `NUGET_API_KEY` secret。
