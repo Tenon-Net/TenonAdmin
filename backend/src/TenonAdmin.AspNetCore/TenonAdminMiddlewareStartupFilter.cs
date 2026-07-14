@@ -24,7 +24,7 @@ internal sealed class TenonAdminMiddlewareStartupFilter(AdminApiOptions api) : I
         // 受信来源在 AddTenonAdmin 里绑进 ForwardedHeadersOptions(未声明受信来源时那里已 fail-fast)。
         if (api.ForwardedHeaders.Enabled) app.UseForwardedHeaders();
         app.UseCors(TenonAdminSetup.CorsPolicyName);
-        app.UseRateLimiter();
+        app.UseMiddleware<RateLimitMiddleware>();
         next(app);
     };
 }

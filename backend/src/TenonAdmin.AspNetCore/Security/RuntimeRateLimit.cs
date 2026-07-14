@@ -34,6 +34,16 @@ public sealed class RuntimeRateLimit(
         return new(rl.Enabled, rl.WindowSeconds, rl.PermitPerWindow, rl.AuthPermitPerWindow);
     }
 
+    /// <summary>
+    /// 定期重载间隔。<b>跨副本收敛靠它</b>:<c>ChannelEventBus</c> 是<b>进程内</b>的——副本 A 上改了限流配置,
+    /// 事件<b>永远传不到</b>副本 B,B 会一直用旧阈值直到重启(事故时把限流关掉,结果一半流量仍被限)。
+    /// 定期重载让所有副本在一个间隔内收敛,不必为这一个订阅者上跨进程事件总线。
+    /// <para>本副本自己的改动仍由事件订阅<b>即时</b>生效,这里只是兜别的副本。</para>
+    /// </summary>
+    private static readonly TimeSpan RELOAD_INTERVAL = TimeSpan.FromSeconds(30);
+
+    private CancellationTokenSource? _stopping;
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await RefreshAsync();
@@ -43,12 +53,28 @@ public sealed class RuntimeRateLimit(
             if (e.Key.StartsWith("sys.security.rateLimit.", StringComparison.Ordinal))
                 await RefreshAsync();
         });
+
+        _stopping = new CancellationTokenSource();
+        _ = ReloadLoopAsync(_stopping.Token);   // 后台定期重载,不阻塞启动
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
+    /// <summary>定期从 DB 重载,让<b>别的副本</b>改的配置在一个间隔内收敛过来(照 FileGcService 的 PeriodicTimer 成法)。</summary>
+    private async Task ReloadLoopAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(RELOAD_INTERVAL);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+                await RefreshAsync();   // RefreshAsync 自带 try/catch,单次失败不中断循环
+        }
+        catch (OperationCanceledException) { /* 正常停机 */ }
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
     {
         _sub?.Dispose();
-        return Task.CompletedTask;
+        if (_stopping is not null) await _stopping.CancelAsync();
+        _stopping?.Dispose();
     }
 
     /// <summary>

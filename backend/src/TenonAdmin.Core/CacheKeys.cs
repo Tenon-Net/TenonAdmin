@@ -29,6 +29,16 @@ public static class CacheKeys
     public static string Captcha(string captchaId) => $"captcha:{captchaId}";
 
     /// <summary>
+    /// 固定窗口限流计数(设计 §12/§14)。<paramref name="bucket"/> 为 <c>auth</c>(认证端点,更严)或 <c>all</c>;
+    /// <paramref name="windowIndex"/> 是<b>窗口序号</b>(<c>unixSeconds / windowSeconds</c>)。
+    /// <para>把窗口序号<b>编进键</b>:换窗口即换键,计数自然归零,无需任何清理逻辑(旧键靠 TTL 回收)。
+    /// 计数走 <see cref="ICacheProvider.IncrementAsync"/> ⇒ 装 Redis 即<b>跨副本共享</b>(否则 N 个副本 = N × 阈值);
+    /// 不装则退回进程内,与单实例行为一致。</para>
+    /// </summary>
+    public static string RateLimit(string bucket, string clientIp, long windowIndex) =>
+        $"rl:{bucket}:{clientIp}:{windowIndex}";
+
+    /// <summary>
     /// 门户缓存<b>代际计数器</b>:菜单/模块 CRUD、角色-菜单、用户-角色变更时自增,令下方门户键整体惰性失效。
     /// <para>因 <see cref="ICacheProvider"/> 无前缀/批量删除,而门户结果受影响面是全局的、菜单树键又是二维,
     /// 用递增代际做 O(1) 失效(旧代际键不再被读到、由 TTL 回收)最简且正确。计数器本身不设过期(进程内重启即归零、
