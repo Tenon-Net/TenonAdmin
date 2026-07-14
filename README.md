@@ -29,7 +29,7 @@ Most .NET admin frameworks give you a running app but lock you in. Fork the repo
 - **Three-line onboarding** — `AddTenonAdmin()` + `MapTenonAdmin()` and you have a full backend with auth, RBAC, and a management UI. No scaffolding to copy.
 - **Zero config to start** — Default SQLite, auto table creation, random superadmin password on first boot. `dotnet run` and log in.
 - **Everything is replaceable** — Services are interface-backed, methods are `virtual`, DI uses `TryAdd`. Override one step in a workflow without copying the whole method. Four layers: config → service replacement → inheritance → endpoint override.
-- **No dependency bloat** — Only SqlSugar + `Microsoft.*` at runtime. Redis, MQTT, SM2/SM3/SM4 crypto — all in optional packages you pull when you actually need them.
+- **No dependency bloat** — Only SqlSugar + `Microsoft.*` at runtime. Anything heavier lives in an optional package you pull when you actually need it — today that's `TenonAdmin.Caching.Redis` (required for multi-replica deployments).
 - **Multi-org data permissions** — The one most admin frameworks skip. Five scope types (all / this org / this org & children / self only / custom), configured per role, enforced automatically at the ORM query level via global filters.
 
 ## Quick Start
@@ -110,7 +110,7 @@ Install `TenonAdmin` for the whole stack, or reference individual layers for fin
 
 ## Project Status
 
-M3 complete — backend kernel, full frontend pages, and config center are working. Current version: `0.0.1-preview`.
+Feature-complete for a first release — backend kernel, full admin UI, config center, containerized delivery, and multi-replica support (Redis-backed cache, shared rate-limit counters, per-replica snowflake worker ids) are all working and covered by CI. Current version: `0.0.1-preview`.
 
 Not yet on nuget.org — run from source for now. API surface may change before 1.0. Development happens on the `dev` branch.
 

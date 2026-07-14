@@ -647,7 +647,7 @@ web/src/
 - [x] `AspNetCore`:AddTenonAdmin/MapTenonAdmin + JWT + 权限过滤器 + **统一返回(T8a)/ 数据范围(T3)/ 日志过滤器(T6)/ OpenAPI(T8d-i)/ 健康检查 / CORS / 限流(Phase 2b)**
 - [x] `samples/MinimalHost` 三行启动跑通(§3.1 即验收标准;实跑冒烟含登录/401/健康/限流)
 - [x] 测试:xunit 工程(`TenonAdmin.Tests`)+ 认证全流程 / 数据范围 / §8 可替换六件套 / 授权与限流回归;**CI 双腿(SQLite+MySQL)均绿**
-> Phase 2:7 维多代理自审 34 发现全处置(12 P1 全修 + 22 P2 收敛,报告 `docs/phase2-review.md`);测试 37→65。
+> Phase 2:7 维多代理自审 34 发现全处置(12 P1 全修 + 22 P2 收敛);测试 37→65。报告已消费,内容落进代码注释与回归测试,原文见 git 历史(`docs/phase2-review.md`,删于 2026-07-14)。
 
 ### M2 —— Vue 版(Naive UI 单套)
 - [ ] 工程搭建 + tokens 接入 + 布局/菜单/动态路由框架(§7.4)
