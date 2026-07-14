@@ -98,6 +98,9 @@ public static class ServicesSetup
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, ConfigSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultOrgSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultPositionSeed>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultUserSeed>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultUserRoleSeed>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, DefaultDataScopeSeed>());
 
         return services;
     }

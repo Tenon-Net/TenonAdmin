@@ -178,6 +178,13 @@ export const roleApi = {
   /** 设置角色数据范围;customOrgIds 仅 scopeType=Custom(5)时有意义。 */
   setDataScope: (roleId: number, scopeType: DataScopeType, customOrgIds?: number[]) =>
     client.PUT('/api/v1/sys/role/datascope', { body: { roleId, scopeType, customOrgIds } }).then((r) => unwrap<boolean>(r)),
+  /** 某角色当前关联的用户 Id 集合(授权用户抽屉回显)。 */
+  // ponytail: schema.d.ts 尚未包含新端点,gen:api 后去掉 as any
+  getUsers: (id: number) =>
+    client.GET('/api/v1/sys/role/{id}/users' as any, { params: { path: { id } } }).then((r) => unwrap<number[]>(r)),
+  /** 全量设置角色关联的用户(空数组 = 收回全部)。 */
+  setUsers: (roleId: number, userIds: number[]) =>
+    client.PUT('/api/v1/sys/role/users' as any, { body: { roleId, userIds } }).then((r) => unwrap<boolean>(r)),
 }
 
 export const moduleApi = {

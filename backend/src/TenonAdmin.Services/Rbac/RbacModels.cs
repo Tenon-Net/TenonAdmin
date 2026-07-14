@@ -12,6 +12,16 @@ public record SetRoleMenusInput
     public IReadOnlyCollection<long> MenuIds { get; init; } = [];
 }
 
+/// <summary>角色授权用户入参:把一组用户全量关联到某角色</summary>
+public record SetRoleUsersInput
+{
+    /// <summary>目标角色 Id</summary>
+    public long RoleId { get; init; }
+
+    /// <summary>关联的用户 Id 列表(全量替换;空列表 = 收回全部)</summary>
+    public IReadOnlyCollection<long> UserIds { get; init; } = [];
+}
+
 /// <summary>角色数据范围入参</summary>
 public record SetRoleDataScopeInput
 {

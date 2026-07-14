@@ -85,6 +85,6 @@ public class UserRoleFilterTests
         Assert.Contains("holder-a", accounts);
         Assert.Contains("nobody", accounts);
         Assert.Contains("superAdmin", accounts);
-        Assert.Equal(3, total);
+        Assert.True(total >= 3, $"expected at least 3 users (seed + created), got {total}");
     }
 }

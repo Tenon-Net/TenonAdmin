@@ -15,5 +15,10 @@ internal sealed class DefaultRoleSeed : ISeedData<SysRole>
     public IEnumerable<SysRole> HasData() =>
     [
         new SysRole { Id = DEFAULT_ROLE_ID, Name = "系统管理员", Code = "sys_admin", Sort = 1, Enabled = true, Remark = "内置默认角色,授权后分配给普通管理员" },
+        new SysRole { Id = 2, Name = "全部数据",   Code = "scope_all",          Sort = 2, Enabled = true, Remark = "数据范围:全部" },
+        new SysRole { Id = 3, Name = "本机构数据",  Code = "scope_org",          Sort = 3, Enabled = true, Remark = "数据范围:仅本机构" },
+        new SysRole { Id = 4, Name = "本机构及以下", Code = "scope_org_children", Sort = 4, Enabled = true, Remark = "数据范围:本机构及子机构" },
+        new SysRole { Id = 5, Name = "仅本人数据",  Code = "scope_self",         Sort = 5, Enabled = true, Remark = "数据范围:仅本人" },
+        new SysRole { Id = 6, Name = "自定义范围",  Code = "scope_custom",       Sort = 6, Enabled = true, Remark = "数据范围:自定义(总经办+产品部)" },
     ];
 }

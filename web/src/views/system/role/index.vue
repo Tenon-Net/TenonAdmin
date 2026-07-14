@@ -7,13 +7,13 @@ import {
   NButton, NSpace, NInput, NInputNumber, NSwitch, NForm, NFormItem, NSelect, NDropdown,
   useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
+import UserSelect from '@/components/UserSelect/index.vue'
 import GrantMenuTable from './components/GrantMenuTable.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
@@ -25,7 +25,6 @@ import type { MenuTreeNode } from '@/types/menu'
 
 const { t } = useI18n()
 const message = useMessage()
-const router = useRouter()
 const { confirm } = useConfirm()
 const auth = useAuthStore()
 const tableRef = ref<ProTableInst<SysRole>>()
@@ -116,12 +115,12 @@ const columns: ProTableColumn<SysRole>[] = [
           options: [
             { label: t('role.grantMenus'), key: 'menus' },
             { label: t('role.dataScope'), key: 'scope' },
-            { label: t('role.viewUsers'), key: 'users' },
+            { label: t('role.grantUsers'), key: 'users' },
           ],
           onSelect: (key: string) => {
             if (key === 'menus') openMenus(r)
             else if (key === 'scope') openScope(r)
-            else router.push({ path: '/system/user', query: { roleId: String(r.id) } })
+            else openUsers(r)
           },
         }, () => h(NButton, { size: 'small', quaternary: true }, () => t('common.more'))),
       ]),
@@ -189,6 +188,31 @@ async function saveMenus() {
   try {
     await roleApi.setMenus(menuRoleId.value, menuGranted.value)
     message.success(t('role.grantSaved'))
+  } catch (e) {
+    message.error(translateError(e))
+    return false
+  }
+}
+
+// ── 授权用户抽屉 ──
+const showUsers = ref(false)
+const userRoleId = ref<number | null>(null)
+const grantedUserIds = ref<number[]>([])
+
+async function openUsers(r: SysRole) {
+  userRoleId.value = r.id
+  try {
+    grantedUserIds.value = await roleApi.getUsers(r.id)
+    showUsers.value = true
+  } catch (e) {
+    message.error(translateError(e))
+  }
+}
+async function saveUsers() {
+  if (userRoleId.value === null) return
+  try {
+    await roleApi.setUsers(userRoleId.value, grantedUserIds.value)
+    message.success(t('role.grantUsersSaved'))
   } catch (e) {
     message.error(translateError(e))
     return false
@@ -297,6 +321,17 @@ async function saveScope() {
       :default-module-id="defaultModuleId"
       @update:checked="onMenuCheckedUpdate"
     />
+  </FormContainer>
+
+  <!-- 授权用户 -->
+  <FormContainer
+    v-model:show="showUsers"
+    :title="t('role.grantUsers')"
+    :width="480"
+    :on-confirm="saveUsers"
+    :confirm-text="t('common.save')"
+  >
+    <UserSelect v-model:value="grantedUserIds" multiple clearable :placeholder="t('role.grantUsers')" style="width: 100%" />
   </FormContainer>
 
   <!-- 数据范围 -->

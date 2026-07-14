@@ -21,6 +21,12 @@ public interface IRbacService
     /// <summary>取某用户当前拥有的角色 Id 集合</summary>
     Task<IReadOnlyCollection<long>> GetUserRoleIdsAsync(long userId);
 
+    /// <summary>取某角色当前关联的用户 Id 集合</summary>
+    Task<IReadOnlyCollection<long>> GetRoleUserIdsAsync(long roleId);
+
+    /// <summary>设置某角色关联的用户(全量替换)。之后失效所有受影响用户的权限+数据范围缓存。</summary>
+    Task SetRoleUsersAsync(long roleId, IReadOnlyCollection<long> userIds);
+
     /// <summary>设置某角色的数据范围(每角色一条,upsert)。自定义机构仅 <see cref="DataScopeType.Custom"/> 时有意义。
     /// 之后失效所有挂该角色用户的数据范围缓存。</summary>
     Task SetRoleDataScopeAsync(long roleId, DataScopeType scopeType, IReadOnlyCollection<long>? customOrgIds = null);

@@ -57,6 +57,28 @@ public class RbacService(
         await userRoles.AsQueryable().Where(x => x.UserId == userId).Select(x => x.RoleId).ToListAsync();
 
     /// <inheritdoc />
+    public virtual async Task<IReadOnlyCollection<long>> GetRoleUserIdsAsync(long roleId) =>
+        await userRoles.AsQueryable().Where(x => x.RoleId == roleId).Select(x => x.UserId).ToListAsync();
+
+    /// <inheritdoc />
+    public virtual async Task SetRoleUsersAsync(long roleId, IReadOnlyCollection<long> userIds)
+    {
+        AdminException.ThrowIf(!await roles.AnyAsync(r => r.Id == roleId), ErrorCode.RoleNotFound);
+
+        var oldUserIds = await userRoles.AsQueryable().Where(x => x.RoleId == roleId).Select(x => x.UserId).ToListAsync();
+
+        var links = userIds.Distinct().Select(uid => new SysUserRole { UserId = uid, RoleId = roleId }).ToList();
+        await ReplaceAsync(
+            deleteExisting: () => userRoles.Db.Deleteable<SysUserRole>().Where(x => x.RoleId == roleId).ExecuteCommandAsync(),
+            insertNew: links);
+
+        var affected = oldUserIds.Union(userIds).Distinct().ToList();
+        await InvalidatePermissionsAsync(affected);
+        await InvalidateScopesAsync(affected);
+        await cache.IncrementAsync(CacheKeys.PortalGeneration);
+    }
+
+    /// <inheritdoc />
     public virtual async Task SetRoleDataScopeAsync(long roleId, DataScopeType scopeType, IReadOnlyCollection<long>? customOrgIds = null)
     {
         AdminException.ThrowIf(!await roles.AnyAsync(r => r.Id == roleId), ErrorCode.RoleNotFound);

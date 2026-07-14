@@ -70,6 +70,21 @@ public class SysRoleController(IRoleService roleService, IRbacService rbac) : Co
     public async Task<Result<SysRoleDataScope?>> GetDataScope(long id) =>
         Result<SysRoleDataScope?>.Ok(await rbac.GetRoleDataScopeAsync(id));
 
+    /// <summary>取某角色当前关联的用户 Id 集合(授权用户抽屉回显用)。</summary>
+    [HttpGet("{id}/users")]
+    [RolePermission]
+    public async Task<Result<IReadOnlyCollection<long>>> GetUsers(long id) =>
+        Result<IReadOnlyCollection<long>>.Ok(await rbac.GetRoleUserIdsAsync(id));
+
+    /// <summary>全量设置某角色关联的用户;成功后受影响用户权限+数据范围缓存即时失效。</summary>
+    [HttpPut("users")]
+    [RolePermission]
+    public async Task<Result<bool>> SetUsers(SetRoleUsersInput input)
+    {
+        await rbac.SetRoleUsersAsync(input.RoleId, input.UserIds);
+        return Result<bool>.Ok(true);
+    }
+
     /// <summary>全量设置某角色授予的菜单;成功后受影响用户权限缓存即时失效(设计 §6)。</summary>
     [HttpPut("menu")]
     [RolePermission]
