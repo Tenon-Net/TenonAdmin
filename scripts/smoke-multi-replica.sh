@@ -57,11 +57,22 @@ PY
 }
 
 echo "== 0. 等待就绪 =="
-for i in $(seq 1 60); do
-  [ "$(curl -s "$BASE/health/ready" || true)" = "Healthy" ] && break
-  sleep 2
+# 必须等**两个副本都**就绪。/health 也是经 Caddy 轮询的,所以"探一次成功"什么都不说明:
+# 很可能只是轮到了先起来的那个副本。(CI 上就这么翻过车:第一次探测轮到已就绪的 app 于是 break,
+# 紧接着的复查轮到刚启动的 app2,直接判"栈没起来"。本地因为 app2 早跑热了,永远照不出来。)
+# 连续 STREAK 次都 Healthy 才算数 —— 轮询下这个次数足以覆盖到每个副本。
+STREAK_NEEDED=8
+STREAK=0
+for i in $(seq 1 120); do
+  if [ "$(curl -s "$BASE/health/ready" || true)" = "Healthy" ]; then
+    STREAK=$((STREAK + 1))
+    [ "$STREAK" -ge "$STREAK_NEEDED" ] && break
+  else
+    STREAK=0
+    sleep 2
+  fi
 done
-[ "$(curl -s "$BASE/health/ready" || true)" = "Healthy" ] || { echo "❌ 栈没起来"; exit 1; }
+[ "$STREAK" -ge "$STREAK_NEEDED" ] || { echo "❌ 两个副本没有同时就绪"; exit 1; }
 pass "两个副本经 Caddy 就绪"
 
 echo "== 1. 强制下线跨副本立即生效 =="
