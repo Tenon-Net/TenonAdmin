@@ -20,6 +20,12 @@ const authMiddleware: Middleware = {
   },
 }
 
+// 令牌过期重放:Request 的 body 是一次性流,首次 fetch 就被消费,直接重放会丢 body
+//(GET 无 body 不受影响,但令牌恰好在一次 POST/PUT 时过期就会丢请求体)。
+// 发出前克隆一份副本(clone 会 tee body 流,与原请求各读各的),重放时用这份未消费的副本。
+// 键是发出前的 Request 实例(openapi-fetch 把它一路带到 onResponse),WeakMap 随请求回收自动清理。
+const replayable = new WeakMap<Request, Request>()
+
 // 并发 401 合流到同一次刷新。
 let refreshing: Promise<boolean> | null = null
 function refreshOnce(): Promise<boolean> {
@@ -43,6 +49,11 @@ async function doRefresh(): Promise<boolean> {
 
 /** 401 → 刷新一次并重放原请求;刷新失败 → 清会话 + 跳登录。 */
 const refreshMiddleware: Middleware = {
+  onRequest({ request }) {
+    // 带 body 的写请求发出前存一份可重放副本(GET/HEAD 无 body,不必克隆)。
+    if (request.method !== 'GET' && request.method !== 'HEAD') replayable.set(request, request.clone())
+    return request
+  },
   async onResponse({ request, response }) {
     if (response.status !== 401) return response
     const url = request.url
@@ -55,8 +66,9 @@ const refreshMiddleware: Middleware = {
       if (router.currentRoute.value.path !== '/login') router.replace('/login')
       return response
     }
-    // 重放:原 Request 已消费,克隆一份;裸 fetch 绕过中间件,手动补新令牌。
-    const retry = new Request(request, { headers: new Headers(request.headers) })
+    // 重放:优先用发出前的克隆副本(body 未被消费),无副本的 GET 直接用原请求;裸 fetch 绕过中间件,手动补新令牌。
+    const base = replayable.get(request) ?? request
+    const retry = new Request(base, { headers: new Headers(base.headers) })
     retry.headers.set('Authorization', `Bearer ${useUserStore().accessToken}`)
     return fetch(retry)
   },
