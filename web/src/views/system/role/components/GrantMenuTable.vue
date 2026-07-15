@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { NCheckbox, NInput, NSelect } from 'naive-ui'
+import { NButton, NCheckbox, NInput, NSelect } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
+import AppIcon from '@/components/AppIcon.vue'
 import { MenuType, type MenuTreeNode } from '@/types/menu'
 import type { ModuleRow } from '@/types/api'
 
@@ -144,6 +145,21 @@ function emitChecked() {
   emit('update:checked', collectChecked())
 }
 
+// ── 折叠/展开 ──
+const collapsed = reactive(new Set<number>())
+const allCollapsed = computed(() => filteredGroups.value.length > 0 && filteredGroups.value.every((g) => collapsed.has(g.id)))
+
+function toggleCollapse(id: number) {
+  collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id)
+}
+function toggleCollapseAll() {
+  if (allCollapsed.value) {
+    collapsed.clear()
+  } else {
+    for (const g of filteredGroups.value) collapsed.add(g.id)
+  }
+}
+
 defineExpose({ collectChecked })
 </script>
 
@@ -152,6 +168,10 @@ defineExpose({ collectChecked })
     <div class="grant-toolbar">
       <n-select v-model:value="moduleId" :options="moduleOptions" :placeholder="t('menu.module')" size="small" style="width: 180px" />
       <n-input v-model:value="search" :placeholder="t('common.search')" clearable size="small" style="flex: 1" />
+      <n-button size="small" quaternary @click="toggleCollapseAll">
+        <template #icon><AppIcon :icon="allCollapsed ? 'ph:arrows-out-line-vertical' : 'ph:arrows-in-line-vertical'" :size="16" /></template>
+        {{ allCollapsed ? t('common.expandAll') : t('common.collapseAll') }}
+      </n-button>
     </div>
     <div class="grant-grid">
       <div class="grant-header">
@@ -161,12 +181,13 @@ defineExpose({ collectChecked })
       </div>
       <template v-for="group in filteredGroups" :key="group.id">
         <div class="grant-group" :style="{ '--rows': group.menus.length }">
-          <div class="col-catalog">
-            <n-checkbox :checked="group.checked" :indeterminate="group.indeterminate" @update:checked="toggleCatalog(group, $event)">
+          <div class="col-catalog" @click="toggleCollapse(group.id)">
+            <span class="collapse-arrow" :class="{ 'is-collapsed': collapsed.has(group.id) }">&#9662;</span>
+            <n-checkbox :checked="group.checked" :indeterminate="group.indeterminate" @click.stop @update:checked="toggleCatalog(group, $event)">
               {{ group.title }}
             </n-checkbox>
           </div>
-          <div class="group-rows">
+          <div v-show="!collapsed.has(group.id)" class="group-rows">
             <div v-for="menu in group.menus" :key="menu.id" class="grant-row">
               <div class="col-menu">
                 <n-checkbox :checked="menu.checked" @update:checked="toggleMenu(group, menu, $event)">
@@ -228,8 +249,20 @@ defineExpose({ collectChecked })
 .grant-group > .col-catalog {
   display: flex;
   align-items: center;
+  gap: 4px;
   padding: 8px 12px;
   border-right: 1px solid var(--n-border-color, #e0e0e6);
+  cursor: pointer;
+  user-select: none;
+}
+.collapse-arrow {
+  display: inline-block;
+  font-size: 10px;
+  transition: transform 0.2s;
+  color: var(--n-text-color-disabled, #999);
+}
+.collapse-arrow.is-collapsed {
+  transform: rotate(-90deg);
 }
 .group-rows {
   flex: 1;

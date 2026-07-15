@@ -105,8 +105,8 @@ async function open(ids?: number[]) {
 
   if (ids?.length) {
     try {
-      const { items } = await userApi.page({ page: 1, pageSize: ids.length, sortField: undefined, sortOrder: undefined })
-      // ponytail: 如果已选 id 不在第一页,逐个拉详情太重;用全量 page 拉一页足够大,靠 id 过滤
+      // ponytail: 拉一页足够大的列表,靠 id 过滤;admin 系统用户量有限,9999 够用
+      const { items } = await userApi.page({ page: 1, pageSize: 9999 })
       const all = items.filter((u) => ids.includes(u.id))
       // 没拉到的 id(翻页之外),退回只显示 id
       const found = new Set(all.map((u) => u.id))
@@ -132,7 +132,7 @@ defineExpose({ open })
   <FormContainer
     v-model:show="show"
     :title="t('userPicker.title')"
-    :width="960"
+    :width="1100"
     :on-confirm="handleConfirm"
     :confirm-text="t('common.confirm')"
   >
@@ -221,7 +221,7 @@ defineExpose({ open })
   margin-bottom: 8px;
 }
 .picker-tree {
-  width: 180px;
+  width: 160px;
   flex-shrink: 0;
   overflow: auto;
   border-right: 1px solid var(--n-border-color, #e0e0e6);
@@ -233,7 +233,7 @@ defineExpose({ open })
   overflow: hidden;
 }
 .picker-selected {
-  width: 220px;
+  width: 200px;
   flex-shrink: 0;
   border-left: 1px solid var(--n-border-color, #e0e0e6);
   padding-left: 12px;

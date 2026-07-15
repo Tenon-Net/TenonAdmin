@@ -123,7 +123,7 @@ test.describe('RBAC 权限', () => {
 
     // ③ 退出,以 scope_all 用户重新登录
     await logout(page)
-    await loginAs(page, 'scope_all', SEED_PASSWORD)
+    await loginAs(page, '全部数据', SEED_PASSWORD)
     await enterFirstModuleIfNeeded(page)
 
     // ④ 验证侧边菜单
@@ -137,7 +137,7 @@ test.describe('RBAC 权限', () => {
 
   test('未授权菜单的用户 → 侧边菜单为空或仅工作台', async ({ page }) => {
     // scope_self 角色未被授权任何菜单
-    await loginAs(page, 'scope_self', SEED_PASSWORD)
+    await loginAs(page, '仅本人数据', SEED_PASSWORD)
     await enterFirstModuleIfNeeded(page)
 
     const menus = await getSidebarMenuNames(page)

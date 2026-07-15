@@ -259,7 +259,7 @@ async function saveItem() {
 
 <template>
   <div class="dict-layout">
-    <div class="dict-pane">
+    <n-card class="dict-pane" :bordered="true">
       <ProTable
         ref="typeTableRef"
         :columns="typeColumns"
@@ -287,40 +287,38 @@ async function saveItem() {
           </n-button>
         </template>
       </ProTable>
-    </div>
+    </n-card>
 
-    <div class="dict-pane">
-      <n-card v-if="selectedType" :bordered="true" :title="t('dict.itemsOf', { name: selectedType.name })">
-        <template #header-extra>
-          <n-space :size="8">
-            <n-button
-              v-auth="'POST:/api/v1/sys/dict/item/batch-delete'"
-              size="small"
-              type="error"
-              :disabled="!itemHasSelection"
-              @click="itemBatchDelete"
-            >
-              <template #icon><AppIcon icon="ph:trash" :size="15" /></template>{{ t('common.batchDelete') }}
-            </n-button>
-            <n-button v-auth="'POST:/api/v1/sys/dict/item'" size="small" type="primary" @click="openItemAdd">
-              <template #icon><AppIcon icon="ph:plus" :size="15" /></template>{{ t('dict.addItem') }}
-            </n-button>
-          </n-space>
-        </template>
-        <n-data-table
-          :columns="itemColumns"
-          :data="items"
-          :loading="itemsLoading"
-          :row-key="(r: SysDictItem) => r.id"
-          :checked-row-keys="itemCheckedKeys"
-          size="small"
-          @update:checked-row-keys="(keys: (string | number)[]) => (itemCheckedKeys = keys)"
-        />
-      </n-card>
-      <n-card v-else :bordered="true">
-        <n-empty :description="t('dict.selectTypeHint')" style="padding: 48px 0" />
-      </n-card>
-    </div>
+    <n-card v-if="selectedType" class="dict-pane" :bordered="true" :title="t('dict.itemsOf', { name: selectedType.name })">
+      <template #header-extra>
+        <n-space :size="8">
+          <n-button
+            v-auth="'POST:/api/v1/sys/dict/item/batch-delete'"
+            size="small"
+            type="error"
+            :disabled="!itemHasSelection"
+            @click="itemBatchDelete"
+          >
+            <template #icon><AppIcon icon="ph:trash" :size="15" /></template>{{ t('common.batchDelete') }}
+          </n-button>
+          <n-button v-auth="'POST:/api/v1/sys/dict/item'" size="small" type="primary" @click="openItemAdd">
+            <template #icon><AppIcon icon="ph:plus" :size="15" /></template>{{ t('dict.addItem') }}
+          </n-button>
+        </n-space>
+      </template>
+      <n-data-table
+        :columns="itemColumns"
+        :data="items"
+        :loading="itemsLoading"
+        :row-key="(r: SysDictItem) => r.id"
+        :checked-row-keys="itemCheckedKeys"
+        size="small"
+        @update:checked-row-keys="(keys: (string | number)[]) => (itemCheckedKeys = keys)"
+      />
+    </n-card>
+    <n-card v-else class="dict-pane" :bordered="true">
+      <n-empty :description="t('dict.selectTypeHint')" style="padding: 48px 0" />
+    </n-card>
   </div>
 
   <FormContainer
@@ -378,11 +376,10 @@ async function saveItem() {
   display: flex;
   flex-wrap: wrap;
   gap: var(--gap-card);
-  align-items: flex-start;
+  align-items: stretch;
 }
 .dict-pane {
   flex: 1 1 380px;
   min-width: 0;
 }
-/* 选中行高亮由 ProTable active-row-key 内置负责(.pro-table-row--active)。 */
 </style>
