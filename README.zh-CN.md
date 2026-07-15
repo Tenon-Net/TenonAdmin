@@ -12,6 +12,10 @@
   <em>三行代码，为 ASP.NET Core 项目接入一套完整、可扩展的 RBAC 权限管理。</em>
 </p>
 
+<p align="center">
+  <a href="https://tenonadmin.52moyu.net/login"><strong>🔗 在线预览</strong></a>
+</p>
+
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="License"></a>
@@ -153,6 +157,7 @@ tenon-admin/
 ## 文档
 
 - [业务模块开发指南](docs/new-business-guide.md)
+- [AI 辅助开发 Skills](skills/README.md) — 实体创建、CRUD 搭建、服务替换等开发规范，供 AI 助手或开发者参考
 - [部署](docs/deployment.md)
 - [架构与设计](docs/rebuild-design.md)
 - [开发计划](docs/dev-plan.md)

@@ -13,6 +13,10 @@
 </p>
 
 <p align="center">
+  <a href="https://tenonadmin.52moyu.net/login"><strong>🔗 オンラインデモ</strong></a>
+</p>
+
+<p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="License"></a>
   <a href="https://github.com/Tenon-Net/TenonAdmin/stargazers"><img src="https://img.shields.io/github/stars/Tenon-Net/TenonAdmin" alt="Stars"></a>
   <a href="https://github.com/Tenon-Net/TenonAdmin/network/members"><img src="https://img.shields.io/github/forks/Tenon-Net/TenonAdmin" alt="Forks"></a>
@@ -151,6 +155,7 @@ tenon-admin/
 ## ドキュメント
 
 - [ビジネスモジュール開発ガイド](docs/new-business-guide.md)
+- [AI 支援開発スキル](skills/README.md) — エンティティ作成、CRUD 構築、サービス置換などの開発規約（AI アシスタントや開発者向け）
 - [デプロイ](docs/deployment.md)
 - [アーキテクチャと設計](docs/rebuild-design.md)
 - [ロードマップ](docs/dev-plan.md)

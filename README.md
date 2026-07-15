@@ -13,6 +13,10 @@ English | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 </p>
 
 <p align="center">
+  <a href="https://tenonadmin.52moyu.net/login"><strong>🔗 Live Demo</strong></a>
+</p>
+
+<p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="License"></a>
   <a href="https://github.com/Tenon-Net/TenonAdmin/stargazers"><img src="https://img.shields.io/github/stars/Tenon-Net/TenonAdmin" alt="Stars"></a>
   <a href="https://github.com/Tenon-Net/TenonAdmin/network/members"><img src="https://img.shields.io/github/forks/Tenon-Net/TenonAdmin" alt="Forks"></a>
@@ -151,6 +155,7 @@ tenon-admin/
 ## Documentation
 
 - [Business module guide](docs/new-business-guide.md)
+- [AI-assisted development skills](skills/README.md) — Entity creation, CRUD scaffolding, service replacement recipes for AI assistants or developers
 - [Deployment](docs/deployment.md)
 - [Architecture & design](docs/rebuild-design.md)
 - [Roadmap](docs/dev-plan.md)
