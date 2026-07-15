@@ -5,7 +5,7 @@ name: backend-release
 # 版本从 tag 名推导(去掉前缀 v)。
 #
 # 发布凭证走 nuget.org 的 **Trusted Publishing(OIDC)**,不用长期 API Key:
-#   - GitHub 用 id-token 换一个短期(约 15 分钟)的 nuget key,发完即失效 —— 无密钥可泄漏、无到期需轮换。
+#   - GitHub 用 id-token 换一个短期(约 1 小时)的 nuget key,发完即失效 —— 无密钥可泄漏、无到期需轮换。
 #   - 需在 nuget.org 建一条 Trusted Publishing 策略(Owner=Tenon-Net、Repo=TenonAdmin、
 #     Workflow=backend-release.yml),并把下方 NuGet/login 的 `user` 换成拥有这些包的 nuget.org 账号名。
 #
