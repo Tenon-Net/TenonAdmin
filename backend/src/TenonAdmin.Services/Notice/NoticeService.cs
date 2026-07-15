@@ -12,6 +12,8 @@ namespace TenonAdmin.Services;
 public class NoticeService(
     IRepository<SysNotice> notices,
     IRepository<SysNoticeRead> reads,
+    IRepository<SysNoticeReceiver> receivers,
+    IRbacService rbac,
     ICurrentUser currentUser) : INoticeService
 {
     /// <summary>当前登录用户 Id(用户端端点均 <c>[ActiveSession]</c> 保证已认证;缺失按令牌失效处理)。</summary>
@@ -24,11 +26,43 @@ public class NoticeService(
         }
     }
 
+    /// <summary>
+    /// "当前用户可见"的通知查询:全体广播 + 定向到我角色/我本人的。
+    /// <para>ICurrentUser 不带角色,角色经 <see cref="IRbacService.GetUserRoleIdsAsync"/>(已缓存)取;
+    /// 定向命中的 NoticeId 用一次 join 预载(ponytail: 全量载入,定向通知量巨大再改 exists 子查询)。</para>
+    /// </summary>
+    protected virtual async Task<ISugarQueryable<SysNotice>> VisibleToMeAsync(long me)
+    {
+        var myRoleIds = (await rbac.GetUserRoleIdsAsync(me)).ToList();
+        var targetedIds = await receivers.AsQueryable()
+            .InnerJoin<SysNotice>((r, n) => r.NoticeId == n.Id)
+            .Where((r, n) => (n.ReceiverType == ReceiverType.Role && myRoleIds.Contains(r.ReceiverId))
+                          || (n.ReceiverType == ReceiverType.User && r.ReceiverId == me))
+            .Select((r, n) => r.NoticeId)
+            .ToListAsync();
+        return notices.AsQueryable()
+            .Where(n => n.ReceiverType == ReceiverType.All || targetedIds.Contains(n.Id));
+    }
+
     /// <inheritdoc />
     public virtual async Task<long> PublishAsync(NoticePublishInput input)
     {
-        var entity = new SysNotice { Title = input.Title, Content = input.Content, Type = input.Type };
+        var entity = new SysNotice
+        {
+            Title = input.Title,
+            Content = input.Content,
+            Type = input.Type,
+            ReceiverType = input.ReceiverType,
+        };
         await notices.InsertAsync(entity);
+        // 定向发送:每个目标(角色 Id 或用户 Id)写一行接收目标;全体广播不写行。
+        if (input.ReceiverType != ReceiverType.All && input.ReceiverIds is { Count: > 0 })
+        {
+            var rows = input.ReceiverIds.Distinct()
+                .Select(rid => new SysNoticeReceiver { NoticeId = entity.Id, ReceiverId = rid })
+                .ToList();
+            await receivers.InsertRangeAsync(rows);
+        }
         return entity.Id;
     }
 
@@ -53,19 +87,17 @@ public class NoticeService(
     public virtual async Task<PagedList<NoticeMineItem>> PageMineAsync(NoticePageInput input)
     {
         var me = CurrentUserId;
-        var page = await notices.AsQueryable()
+        // 已读回执全量载入,既用于 OnlyUnread 过滤、也用于回填 IsRead。ponytail: 量大再改子查询。
+        var readIds = await reads.AsQueryable().Where(r => r.UserId == me).Select(r => r.NoticeId).ToListAsync();
+        var visible = await VisibleToMeAsync(me);
+        var page = await visible
             .WhereIF(!string.IsNullOrEmpty(input.Title), n => n.Title.Contains(input.Title!))
             .WhereIF(input.Type.HasValue, n => n.Type == input.Type!.Value)
+            .WhereIF(input.OnlyUnread == true && readIds.Count > 0, n => !readIds.Contains(n.Id))
             .OrderBy(n => n.CreateTime, OrderByType.Desc)
             .ToPagedListAsync(input.Current, input.Size);
 
-        var ids = page.Items.Select(n => n.Id).ToList();
-        var readIds = ids.Count == 0
-            ? []
-            : (await reads.AsQueryable()
-                .Where(r => r.UserId == me && ids.Contains(r.NoticeId))
-                .Select(r => r.NoticeId).ToListAsync()).ToHashSet();
-
+        var readSet = readIds.ToHashSet();
         return new PagedList<NoticeMineItem>
         {
             Current = page.Current,
@@ -78,7 +110,7 @@ public class NoticeService(
                 Content = n.Content,
                 Type = n.Type,
                 PublishTime = n.CreateTime,
-                IsRead = readIds.Contains(n.Id),
+                IsRead = readSet.Contains(n.Id),
             }).ToList(),
         };
     }
@@ -87,9 +119,10 @@ public class NoticeService(
     public virtual async Task<int> UnreadCountAsync()
     {
         var me = CurrentUserId;
-        // 未读 = 活通知里当前用户没有已读回执的。ponytail: readIds 全量载入,量大再改 NotExists 子查询。
+        // 未读 = 可见通知里当前用户没有已读回执的。ponytail: readIds 全量载入,量大再改 NotExists 子查询。
         var readIds = await reads.AsQueryable().Where(r => r.UserId == me).Select(r => r.NoticeId).ToListAsync();
-        return await notices.AsQueryable()
+        var visible = await VisibleToMeAsync(me);
+        return await visible
             .WhereIF(readIds.Count > 0, n => !readIds.Contains(n.Id))
             .CountAsync();
     }
@@ -108,7 +141,8 @@ public class NoticeService(
     {
         var me = CurrentUserId;
         var readIds = await reads.AsQueryable().Where(r => r.UserId == me).Select(r => r.NoticeId).ToListAsync();
-        var unreadIds = await notices.AsQueryable()
+        var visible = await VisibleToMeAsync(me);
+        var unreadIds = await visible
             .WhereIF(readIds.Count > 0, n => !readIds.Contains(n.Id))
             .Select(n => n.Id).ToListAsync();
         // ponytail: 逐条插入已读回执;未读量巨大再改批量插入。

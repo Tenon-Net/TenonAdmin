@@ -424,10 +424,10 @@ export const noticeApi = {
   publish: (body: NoticePublishInput) => client.POST('/api/v1/sys/notice', { body }).then((r) => unwrap<number>(r)),
   remove: (id: number) => client.DELETE('/api/v1/sys/notice/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   // ── 用户端(任何登录用户) ──
-  /** 我的通知分页(含已读标记)。 */
-  mine: (params: { page: number; pageSize: number }) =>
+  /** 我的通知分页(含已读标记);onlyUnread 供"未读"页签用。 */
+  mine: (params: { page: number; pageSize: number; onlyUnread?: boolean }) =>
     client
-      .GET('/api/v1/sys/notice/mine', { params: { query: pageParams(params) } })
+      .GET('/api/v1/sys/notice/mine', { params: { query: { ...pageParams(params), OnlyUnread: params.onlyUnread } } })
       .then((r) => toPage<NoticeMineItem>(r)),
   /** 当前用户未读通知数(顶栏角标轮询)。 */
   unreadCount: () => client.GET('/api/v1/sys/notice/unread-count', {}).then((r) => unwrap<number>(r)),

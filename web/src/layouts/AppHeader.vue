@@ -4,17 +4,15 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   NButton,
   NDropdown,
-  NBadge,
   NTooltip,
   NMenu,
-  NModal,
   NBreadcrumb,
   NBreadcrumbItem,
   useMessage,
   type DropdownOption,
 } from 'naive-ui'
 import { Icon } from '@iconify/vue'
-import { useFullscreen, useIntervalFn } from '@vueuse/core'
+import { useFullscreen } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, type Locale } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
@@ -22,14 +20,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useLayoutMenu } from '@/composables/useLayoutMenu'
 import { useMenuFlat } from '@/composables/useMenuFlat'
 import { useSite } from '@/composables/useSite'
-import { authApi, noticeApi } from '@/api'
-import type { NoticeMineItem } from '@/types/api'
+import { authApi } from '@/api'
 import { resetRouter } from '@/router'
 import { translateError } from '@/utils/error'
 import TenonLogo from '@/components/TenonLogo.vue'
 import SettingsDrawer from './SettingsDrawer.vue'
 import MenuSearch from '@/components/MenuSearch.vue'
-import MarkdownView from '@/components/MarkdownEditor/MarkdownView.vue'
+import NoticeBell from './NoticeBell.vue'
 
 withDefaults(
   defineProps<{
@@ -94,80 +91,6 @@ async function logout() {
   router.replace('/login')
 }
 
-// ── 消息通知铃铛 ──────────────────────────────────────────────
-// 未读数每 30s 轮询(设计 §4 消息中心轮询模型);下拉展开时拉最近若干条,点击标记已读。
-const unread = ref(0)
-const recentNotices = ref<NoticeMineItem[]>([])
-
-async function fetchUnread() {
-  try {
-    unread.value = await noticeApi.unreadCount()
-  } catch {
-    /* 轮询失败静默,不打扰用户;下次轮询自愈 */
-  }
-}
-async function fetchRecent() {
-  try {
-    const { items } = await noticeApi.mine({ page: 1, pageSize: 8 })
-    recentNotices.value = items
-  } catch {
-    /* 忽略 */
-  }
-}
-
-const noticeOptions = computed<DropdownOption[]>(() => {
-  const opts: DropdownOption[] = []
-  if (recentNotices.value.length === 0) {
-    opts.push({ key: '__empty', label: t('app.notice.empty'), disabled: true })
-  } else {
-    for (const n of recentNotices.value) {
-      // 未读加圆点前缀,一眼可辨
-      opts.push({ key: `n:${n.id}`, label: (n.isRead ? '' : '● ') + n.title })
-    }
-  }
-  opts.push({ type: 'divider', key: '__div' })
-  opts.push({ key: '__all', label: t('app.notice.markAllRead') })
-  opts.push({ key: '__view', label: t('app.notice.viewAll') })
-  return opts
-})
-
-// 点条目 = 看正文。正文随列表一起拿到了(NoticeMineItem.content),弹层直接渲染,不再发请求。
-const showNotice = ref(false)
-const viewNotice = ref<NoticeMineItem | null>(null)
-
-async function onNoticeSelect(key: string) {
-  if (key.startsWith('n:')) {
-    const id = Number(key.slice(2))
-    const item = recentNotices.value.find((n) => n.id === id)
-    if (!item) return
-    viewNotice.value = item
-    showNotice.value = true
-    if (item.isRead) return
-    try {
-      await noticeApi.markRead(id)
-    } catch (e) {
-      message.error(translateError(e))
-    }
-    await Promise.all([fetchUnread(), fetchRecent()])
-  } else if (key === '__all') {
-    try {
-      await noticeApi.markAllRead()
-      await Promise.all([fetchUnread(), fetchRecent()])
-    } catch (e) {
-      message.error(translateError(e))
-    }
-  } else if (key === '__view') {
-    // 不是 /system/notice —— 那是管理员菜单,普通用户既无路由(404)也无权限(403)
-    router.push('/personal/notice')
-  }
-}
-function onBellShow(show: boolean) {
-  if (show) fetchRecent()
-}
-
-// AppHeader 仅在登录后的布局内挂载,token 必在;useIntervalFn 随组件卸载(登出)自动停。
-useIntervalFn(fetchUnread, 30000)
-fetchUnread()
 </script>
 
 <template>
@@ -269,13 +192,7 @@ fetchUnread()
         {{ t('app.switchModule') }}
       </n-tooltip>
 
-      <n-dropdown trigger="click" :options="noticeOptions" @select="onNoticeSelect" @update:show="onBellShow">
-        <n-badge :value="unread" :max="99" :show="unread > 0">
-          <n-button quaternary circle :aria-label="t('app.notice.title')">
-            <Icon icon="ph:bell" :width="18" />
-          </n-button>
-        </n-badge>
-      </n-dropdown>
+      <NoticeBell />
 
       <n-dropdown :options="userOptions" @select="onUser">
         <n-button quaternary :aria-label="t('app.profile')">
@@ -287,16 +204,6 @@ fetchUnread()
 
     <SettingsDrawer v-model:show="settingsOpen" />
     <MenuSearch v-model:show="searchOpen" />
-
-    <!-- 通知正文:内容随铃铛列表一并取回,这里只渲染(Markdown,不能当纯文本直出) -->
-    <n-modal
-      v-model:show="showNotice"
-      preset="card"
-      :title="viewNotice?.title || t('notice.detailTitle')"
-      style="width: 640px; max-width: 92vw"
-    >
-      <MarkdownView :value="viewNotice?.content" />
-    </n-modal>
   </div>
 </template>
 

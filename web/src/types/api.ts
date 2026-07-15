@@ -393,6 +393,14 @@ export interface UserDetail {
 export enum NoticeType {
   Notice = 1,
   Announcement = 2,
+  Message = 3,
+}
+
+/** 接收范围(后端 ReceiverType;All=0 对全体广播,Role/User 定向)。 */
+export enum ReceiverType {
+  All = 0,
+  Role = 1,
+  User = 2,
 }
 
 /** 通知行(后端 SysNotice;管理端列表全字段,int64 收敛为 number)。 */
@@ -419,4 +427,8 @@ export interface NoticePublishInput {
   title: string
   content?: string | null
   type: NoticeType
+  /** 接收范围;缺省 All 广播全体。 */
+  receiverType: ReceiverType
+  /** 接收目标 Id(角色 Id 或用户 Id,取决于 receiverType);All 时忽略。 */
+  receiverIds?: number[]
 }

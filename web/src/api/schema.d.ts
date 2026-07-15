@@ -1460,6 +1460,8 @@ export interface paths {
                     Title?: string;
                     /** @description 类型(精确匹配,可选) */
                     Type?: components["schemas"]["NoticeType"];
+                    /** @description 仅未读(用户端"未读"页签用;管理端列表忽略) */
+                    OnlyUnread?: boolean;
                     Current?: number | string;
                     Size?: number | string;
                     SortField?: string;
@@ -1547,6 +1549,8 @@ export interface paths {
                     Title?: string;
                     /** @description 类型(精确匹配,可选) */
                     Type?: components["schemas"]["NoticeType"];
+                    /** @description 仅未读(用户端"未读"页签用;管理端列表忽略) */
+                    OnlyUnread?: boolean;
                     Current?: number | string;
                     Size?: number | string;
                     SortField?: string;
@@ -2629,6 +2633,10 @@ export interface paths {
          *     匿名是刻意的,但不可伪造:签名是文件 Id 的 HMAC(见 IFileUrlSigner)。
          *     拿得到链接才拿得到文件,签名错一个字符就是 403。它的存在正是为了让人不必去
          *     UseStaticFiles() 敞开整个上传目录——那才是真正的鉴权绕过。
+         *     不信客户端自报的 Content-Type:上传时那个值是攻击者可控的。匿名 + inline 若原样回吐
+         *     text/html / image/svg+xml,浏览器就按脚本渲染(后缀白名单拦不住——浏览器认 Content-Type 不认后缀),
+         *     与前端同源 → 存储型 XSS 偷令牌。这里改为按后缀解析安全媒体类型:是"可安全内联"的图片/PDF 才 inline,
+         *     其余一律 application/octet-stream + 强制另存(渲染不了就执行不了),再叠一层 nosniff 禁嗅探。
          */
         get: {
             parameters: {
@@ -4373,16 +4381,20 @@ export interface components {
             /** @description 当前用户是否已读 */
             isRead?: boolean;
         };
-        /** @description 发布通知入参(管理员)。发布即广播全体用户。 */
+        /** @description 发布通知入参(管理员)。可发给全体 / 指定角色 / 指定用户。 */
         NoticePublishInput: {
             /** @description 标题 */
             title?: string;
             /** @description 正文 */
             content?: null | string;
-            /** @description 类型(通知 / 公告) */
+            /** @description 类型(通知 / 公告 / 消息) */
             type?: components["schemas"]["NoticeType"];
+            /** @description 接收范围(全体 / 角色 / 用户) */
+            receiverType?: components["schemas"]["ReceiverType"];
+            /** @description 接收目标 Id 集合(角色 Id 或用户 Id,取决于 ReceiverType NoticePublishInput.ReceiverType);为 ReceiverType.All 时忽略。 */
+            receiverIds?: null | (number | string)[];
         };
-        /** @description 通知类型:普通通知 / 系统公告。前端按类型展示不同标签/图标。 */
+        /** @description 通知类型:普通通知 / 系统公告 / 站内消息。前端按类型展示不同标签/图标。 */
         NoticeType: number;
         /** @description 在线会话列表出参(强退按 SessionId) */
         OnlineSessionItem: {
@@ -4830,6 +4842,11 @@ export interface components {
             /** @description 是否启用 */
             enabled?: boolean;
         };
+        /**
+         * @description 接收范围:全体 / 指定角色 / 指定用户。<b>All = 0 是刻意的</b>——CodeFirst 给旧行补的默认值即 0,
+         *     历史广播通知自动读作 All,继续对全体可见,无需手写迁移。Role/User 时具体目标记在 SysNoticeReceiver。
+         */
+        ReceiverType: number;
         /** @description 回收站统一 DTO */
         RecycleBinItem: {
             /** Format: int64 */
@@ -6043,13 +6060,15 @@ export interface components {
             isDelete?: boolean;
         };
         /**
-         * @description 系统通知表(设计 §4 消息中心,轮询模型)——管理员发布的广播消息,发布即对全体用户可见。
-         *     每用户的已读状态单独记在 SysNoticeRead;发布时间即审计字段 CreateTime,不再另存。
+         * @description 系统通知表(设计 §4 消息中心,轮询模型)——管理员发布的消息,可发给全体 / 指定角色 / 指定用户。
+         *     每用户的已读状态单独记在 SysNoticeRead;定向目标记在 SysNoticeReceiver;
+         *     发布时间即审计字段 CreateTime,不再另存。
          */
         SysNotice: {
             title?: string;
             content?: null | string;
             type?: components["schemas"]["NoticeType"];
+            receiverType?: components["schemas"]["ReceiverType"];
             /** Format: int64 */
             id?: number | string;
             /** Format: date-time */

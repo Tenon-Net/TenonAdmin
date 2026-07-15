@@ -16,6 +16,33 @@ public class NoticeTests
         return c;
     }
 
+    private static async Task<HttpClient> ClientFor(AdminAppFactory f, string account, string pwd = "Test@123456")
+    {
+        var c = f.CreateClient();
+        c.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", await c.LoginToken(account, pwd));
+        return c;
+    }
+
+    private static async Task<long> AddRole(HttpClient c, string code) =>
+        (await (await c.PostJson("/api/v1/sys/role/add",
+            new { name = code, code, sort = 0, enabled = true, remark = "" })).ReadEnvelope())
+            .GetProperty("data").GetInt64();
+
+    private static async Task<long> AddUser(HttpClient c, string account, params long[] roleIds) =>
+        (await (await c.PostJson("/api/v1/sys/user",
+            new { account, password = "Test@123456", name = account, enabled = true, roleIds })).ReadEnvelope())
+            .GetProperty("data").GetProperty("id").GetInt64();
+
+    private static async Task<int> Unread(HttpClient c) =>
+        (await (await c.GetAsync("/api/v1/sys/notice/unread-count")).ReadEnvelope()).GetProperty("data").GetInt32();
+
+    private static async Task<List<string>> MineTitles(HttpClient c, string query = "Current=1&Size=50")
+    {
+        var data = (await (await c.GetAsync($"/api/v1/sys/notice/mine?{query}")).ReadEnvelope()).GetProperty("data");
+        return [.. data.GetProperty("items").EnumerateArray().Select(m => m.GetProperty("title").GetString()!)];
+    }
+
     [Fact]
     public async Task Publish_unread_read_delete_cycle()
     {
@@ -76,5 +103,59 @@ public class NoticeTests
             .GetProperty("code").GetInt32());
         Assert.Equal(0, (await (await c.GetAsync("/api/v1/sys/notice/unread-count")).ReadEnvelope())
             .GetProperty("data").GetInt32());
+    }
+
+    /// <summary>
+    /// 定向发送:发给指定用户 / 指定角色的通知只对目标可见;全体广播(receiverType 缺省=All)人人可见。
+    /// 证明 mine/unread 已按接收范围收敛,且发布者(超管)不因发布就自动可见非定向消息。
+    /// </summary>
+    [Fact]
+    public async Task Targeted_notice_visible_only_to_recipients()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+
+        var vip = await AddRole(admin, "vip");
+        var targetId = await AddUser(admin, "u-target", vip);
+        await AddUser(admin, "u-other");
+
+        await admin.PostJson("/api/v1/sys/notice", new { title = "给你", type = 1, receiverType = 2, receiverIds = new[] { targetId } });
+        await admin.PostJson("/api/v1/sys/notice", new { title = "给VIP", type = 1, receiverType = 1, receiverIds = new[] { vip } });
+        await admin.PostJson("/api/v1/sys/notice", new { title = "全体", type = 2 }); // receiverType 缺省 = All
+
+        // 目标用户:定向给我的 + vip 角色的 + 全体,共 3 条
+        var target = await ClientFor(f, "u-target");
+        var targetTitles = await MineTitles(target);
+        Assert.Equal(3, targetTitles.Count);
+        Assert.Contains("给你", targetTitles);
+        Assert.Contains("给VIP", targetTitles);
+        Assert.Contains("全体", targetTitles);
+        Assert.Equal(3, await Unread(target));
+
+        // 无关用户:只看到全体广播
+        var other = await ClientFor(f, "u-other");
+        Assert.Equal(["全体"], await MineTitles(other));
+        Assert.Equal(1, await Unread(other));
+
+        // 发布者(超管)不持 vip、非定向对象 → 也只看到全体广播
+        Assert.Equal(["全体"], await MineTitles(admin));
+        Assert.Equal(1, await Unread(admin));
+    }
+
+    /// <summary>OnlyUnread=true 只返回未读(读掉一条后它从"未读"页签消失,"全部"仍在)。</summary>
+    [Fact]
+    public async Task OnlyUnread_filters_out_read_items()
+    {
+        using var f = new AdminAppFactory();
+        var c = await SuperAdminClient(f);
+
+        var a = (await (await c.PostJson("/api/v1/sys/notice", new { title = "A", type = 1 })).ReadEnvelope())
+            .GetProperty("data").GetInt64();
+        await c.PostJson("/api/v1/sys/notice", new { title = "B", type = 1 });
+
+        await c.PutJson($"/api/v1/sys/notice/{a}/read", new { }); // 读掉 A
+
+        Assert.Equal(2, (await MineTitles(c)).Count);                                   // 全部:A、B
+        Assert.Equal(["B"], await MineTitles(c, "Current=1&Size=50&OnlyUnread=true")); // 仅未读:只剩 B
     }
 }
