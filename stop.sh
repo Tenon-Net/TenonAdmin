@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# stop.sh - 停掉 5100(api)/ 5173(web)端口上的开发服务(对应 stop.bat)
+# stop.sh - stop the dev services on ports 5100 (api) / 5173 (web) (counterpart to stop.bat)
 cd "$(dirname "$0")"
 
 for P in 5100 5173; do
@@ -12,7 +12,7 @@ for P in 5100 5173; do
     name=$(ps -p "$pid" -o comm= 2>/dev/null | xargs -0 basename 2>/dev/null || echo '?')
     echo "[stop] port $P -> killing pid $pid ($name)"
     kill "$pid" 2>/dev/null || true
-    # 还活着就强杀(等同 .bat 的 /F)。
+    # Force-kill if it's still alive (equivalent to .bat's /F).
     sleep 1
     kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
   done

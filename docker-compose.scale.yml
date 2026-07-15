@@ -1,28 +1,37 @@
-# 双副本叠加层。用法:
+# Two-replica overlay. Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --build
 #
-# 这不是"演示怎么扩容",而是**本批多副本保证的验收现场**。第六批修的每一条都只在两个副本
-# 同时在线时才暴露,单副本跑一万遍也照不出来:
-#   · 限流计数走 Redis  → 阈值是"整个集群 N 次",不是"每副本 N 次"
-#   · 会话缓存走 Redis  → 强退在两个副本上**立刻**生效(进程内缓存下 B 会继续放行好几天)
-#   · 登录失败计数走 Redis → 锁定阈值不翻倍
-#   · 每副本不同 WorkerId → 同毫秒发号不撞主键
-#   · X-Forwarded-For    → 两个副本都按真实客户端 IP 限流,而不是都看到 Caddy 那一个 IP
+# This isn't a "demo of how to scale out" —— it's the **acceptance test site for this batch's
+# multi-replica guarantees**. Every fix in batch six only surfaces when two replicas are online at the
+# same time; running a single replica ten thousand times would never reveal it:
+#   · rate-limit counting goes through Redis  → the threshold is "N times across the whole cluster", not
+#     "N times per replica"
+#   · session cache goes through Redis  → a forced logout takes effect **immediately** on both replicas
+#     (with an in-process cache, replica B would keep allowing the session for days)
+#   · login failure counting goes through Redis → the lockout threshold doesn't double
+#   · each replica has a different WorkerId → IDs generated in the same millisecond don't collide on the
+#     primary key
+#   · X-Forwarded-For    → both replicas rate-limit by the real client IP, instead of both seeing Caddy's
+#     single IP
 #
-# **为什么是两个显式的 app 服务,而不是 `--scale app=2`**:compose 给不了 `--scale` 出来的副本
-# 各自不同的环境变量,而 WorkerId 恰恰必须每副本不同 —— 同号即撞主键。k8s 侧用 StatefulSet 的
-# Pod 序号注入(app-0 / app-1),写进 docs/deployment.md。
+# **Why two explicit app services instead of `--scale app=2`**: compose can't give replicas spun up via
+# `--scale` their own distinct environment variables, and WorkerId specifically must differ per replica ——
+# the same number means a primary-key collision. On the k8s side this is done via StatefulSet's pod
+# ordinal injection (app-0 / app-1), documented in docs/deployment.md.
 
 services:
-  # 第二个副本。只覆盖必须不同的两处:机器号,以及不再对外映射端口(经 Caddy 进)。
+  # The second replica. Only overrides the two things that must differ: the worker ID, and no longer
+  # mapping a port externally (traffic comes in through Caddy).
   app2:
     build:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      # **串行启动**:冷启动时 CodeFirst 建表 + 写种子是"检查后插入"、并非原子,两个副本同时首启
-      # 会有一个撞唯一键崩掉。等第一个副本健康(表和种子都齐了)再起第二个,零代码即可绕开。
-      # k8s 侧对应的做法是 init job / migration job。
+      # **Serialized startup**: on cold start, CodeFirst table creation + seed writing is a "check then
+      # insert" that isn't atomic —— if both replicas boot for the first time simultaneously, one of them
+      # would crash on a unique-key collision. Waiting for the first replica to become healthy (tables and
+      # seed data both in place) before starting the second sidesteps this with zero code changes.
+      # The k8s-side equivalent is an init job / migration job.
       app:
         condition: service_healthy
     environment:
@@ -30,24 +39,27 @@ services:
       TenonAdmin__Jwt__SecretKey: ${TENON_JWT_SECRET:-tenon-compose-demo-signing-key-please-change-me}
       TenonAdmin__Database__DbType: MySql
       TenonAdmin__Database__ConnectionString: Server=db;Port=3306;Database=tenon;User ID=root;Password=${TENON_DB_PASSWORD:-tenon-compose-demo};AllowPublicKeyRetrieval=true;SSL Mode=None;
-      # 表和种子由第一个副本建好了,这里不必再建(也不该跟它抢)
+      # Tables and seed data are already created by the first replica, so this one doesn't need to create
+      # them again (and shouldn't race it either)
       TenonAdmin__Database__EnableCodeFirstInProduction: "false"
       TenonAdmin__Upload__RootPath: /data/upload
       TenonAdmin__Seed__AdminPassword: ${TENON_ADMIN_PASSWORD:-Tenon@123456}
       TenonAdmin__Cache__Provider: Redis
       TenonAdmin__Cache__RedisConnectionString: redis:6379
-      TenonAdmin__Id__WorkerId: "1"          # ← 与 app 的 0 不同,这是本文件存在的核心理由
+      TenonAdmin__Id__WorkerId: "1"          # ← differs from app's 0, this is the whole reason this file exists
       TenonAdmin__Api__ForwardedHeaders__Enabled: "true"
       TenonAdmin__Api__ForwardedHeaders__KnownNetworks__0: 172.16.0.0/12
     volumes:
       - app-data:/app/data
-      - upload-data:/data/upload   # 上传物必须是**共享卷**:否则 A 传的文件在 B 上 404、分片直接 ChunkMissing
+      - upload-data:/data/upload   # uploaded files must be on a **shared volume**: otherwise a file uploaded
+                                    # via A would 404 on B, and chunked uploads would fail with ChunkMissing
 
   app:
     healthcheck:
-      # app2 靠它决定何时启动(见上面的串行启动)。aspnet 运行时镜像里没有 curl/wget,
-      # 但 .NET SDK 之外还有个现成的可执行体:dotnet 自己。用它跑一段极小的探针不划算——
-      # 改用 Caddy 之外最省的办法:让健康检查走 TCP 端口探测。
+      # app2 relies on this to know when to start (see the serialized startup note above). The aspnet
+      # runtime image has no curl/wget, and beyond the .NET SDK the only executable readily available is
+      # dotnet itself. Running a tiny probe with it isn't worth it —— so instead we go with the cheapest
+      # option available outside Caddy: a TCP port probe for the health check.
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/8080' || exit 1"]
       interval: 5s
       timeout: 3s
@@ -59,5 +71,6 @@ services:
       - app
       - app2
     environment:
-      # Caddy 按空格分隔的多个 upstream 做轮询 → 它就是这套验收的负载均衡器
+      # Caddy round-robins across multiple space-separated upstreams → it is the load balancer for this
+      # acceptance setup
       TENON_UPSTREAMS: "app:8080 app2:8080"

@@ -1,14 +1,20 @@
-# 一条 `docker compose up` 起全栈:MySQL + Redis + 后端(MinimalHost)+ 前端(Caddy 托管 SPA,反代 /api)。
+# A single `docker compose up` brings up the whole stack: MySQL + Redis + backend (MinimalHost) + frontend
+# (Caddy serving the SPA, reverse-proxying /api).
 #
-# 起两个副本真验多副本保证 → 见 docker-compose.scale.yml。
+# For a real test of the multi-replica guarantees with two replicas → see docker-compose.scale.yml.
 #
-# 它同时是**生产首启路径的活体测试**。app 刻意跑 ASPNETCORE_ENVIRONMENT=Production,于是这几件事必须同时成立
-# 才起得来 —— 少任何一条都会以一条读得懂的错误失败,这本身就是要验的:
-#   · 显式配 Jwt:SecretKey(生产不给用自动生成的开发密钥,否则多副本各签各的 → 随机 401)
-#   · 空库首启显式允许建表(生产默认不自动 ALTER 库)
-#   · 上传根在 wwwroot 之外(否则谁给这个镜像加 UseStaticFiles(),上传目录就被匿名直出)
+# This is also a **live test of the production first-boot path**. The app is deliberately run with
+# ASPNETCORE_ENVIRONMENT=Production, so all of the following must hold simultaneously for it to come up ——
+# missing any one of them fails with a readable error, and that's exactly what's being verified:
+#   · Jwt:SecretKey must be set explicitly (production doesn't allow the auto-generated dev key, otherwise
+#     each replica signs with its own key → random 401s)
+#   · table creation on an empty database must be explicitly allowed on first boot (production doesn't
+#     auto-ALTER the database by default)
+#   · the upload root must sit outside wwwroot (otherwise adding UseStaticFiles() to this image would
+#     serve the upload directory anonymously)
 #
-# 演示用的密钥/密码都写在下面的默认值里 —— **真上生产请从环境注入**(compose 会读同目录的 .env)。
+# The demo secrets/passwords are written into the default values below —— **for a real production
+# deployment, inject them from the environment** (compose reads a .env file from the same directory).
 name: tenon-admin
 
 services:
@@ -18,7 +24,8 @@ services:
       MYSQL_ROOT_PASSWORD: ${TENON_DB_PASSWORD:-tenon-compose-demo}
       MYSQL_DATABASE: tenon
     healthcheck:
-      # app 靠它决定何时开始连库(depends_on: service_healthy),否则首启必然撞上"库还没起来"
+      # app relies on this to know when it can start connecting to the database (depends_on: service_healthy),
+      # otherwise first boot would always run into "database isn't up yet"
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${TENON_DB_PASSWORD:-tenon-compose-demo}"]
       interval: 5s
       timeout: 5s
@@ -47,46 +54,61 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      # 配置全走双下划线环境变量(docs/deployment.md §0);镜像里不打包任何密钥
+      # All config goes through double-underscore environment variables (docs/deployment.md §0); no
+      # secrets are baked into the image
       TenonAdmin__Jwt__SecretKey: ${TENON_JWT_SECRET:-tenon-compose-demo-signing-key-please-change-me}
       TenonAdmin__Database__DbType: MySql
       TenonAdmin__Database__ConnectionString: Server=db;Port=3306;Database=tenon;User ID=root;Password=${TENON_DB_PASSWORD:-tenon-compose-demo};AllowPublicKeyRetrieval=true;SSL Mode=None;
-      # 空库首启:让应用自己建表 + 写种子。生产库由 DBA 维护时改成 false,自行建好表再启动。
+      # Empty database first boot: let the app create its own tables + write seed data. When the production
+      # database is maintained by a DBA, switch this to false and create the tables yourself before starting.
       TenonAdmin__Database__EnableCodeFirstInProduction: "true"
-      # 上传根:必须在 wwwroot 之外(见文件头注释),且与 /app/data 分属两个卷
+      # Upload root: must be outside wwwroot (see the file header comment), and on a separate volume from /app/data
       TenonAdmin__Upload__RootPath: /data/upload
-      # 首启的超管密码。不给就随机生成并打印到控制台(见 docker compose logs app)
+      # The super-admin password for first boot. If not given, one is randomly generated and printed to
+      # the console (see docker compose logs app)
       TenonAdmin__Seed__AdminPassword: ${TENON_ADMIN_PASSWORD:-Tenon@123456}
 
-      # 缓存走 Redis。多副本下这不是可选优化而是**前置条件**:进程内缓存意味着副本 A 的强退/权限失效
-      # 传不到副本 B,而会话缓存的 TTL 是刷新令牌寿命(天级)——强制下线会在半数请求上失效好几天。
-      # 单副本用它也划算:重启不丢缓存。
+      # Caching goes through Redis. Under multiple replicas this isn't an optional optimization but a
+      # **prerequisite**: an in-process cache means a forced logout / permission revocation on replica A
+      # never reaches replica B, and the session cache TTL matches the refresh token's lifetime (days) ——
+      # a forced logout would fail to take effect on half the requests for days.
+      # It's worth it even with a single replica: the cache survives restarts.
       TenonAdmin__Cache__Provider: Redis
       TenonAdmin__Cache__RedisConnectionString: redis:6379
 
-      # 雪花机器号:水平扩展时**每个实例必须不同**(0-63),否则同毫秒发号会撞主键。
-      # 配了 Redis 却不显式给这个值 → 内核直接拒绝启动(把静默的主键冲突换成可读的启动错误)。
-      # compose 没法给 `--scale` 出来的副本各自不同的值 —— 要起多副本请用 docker-compose.scale.yml
-      # 里那样**显式的多个 app 服务**,各配各的 WorkerId。
+      # Snowflake worker ID: **must differ per instance** (0-63) when scaling horizontally, otherwise IDs
+      # generated in the same millisecond collide on the primary key.
+      # If Redis is configured but this value isn't set explicitly → the kernel refuses to start (turning
+      # a silent primary-key collision into a readable startup error).
+      # compose can't give replicas spun up via `--scale` their own distinct values —— to run multiple
+      # replicas use docker-compose.scale.yml's **explicit multiple app services** approach instead, each
+      # with its own WorkerId.
       TenonAdmin__Id__WorkerId: "0"
 
-      # 反向代理转发头:前面就是 Caddy(web 服务),不解析 X-Forwarded-For 的话后端看到的永远是
-      # 代理容器那一个 IP —— 全体用户共用一个限流桶(一个人狂点登录能把所有人限死),
-      # 登录日志记的也是代理 IP。受信的是**网段**(docker 桥网),代理换成 nginx/Traefik 一样成立。
+      # Reverse-proxy forwarded headers: Caddy (the web service) sits in front, and without parsing
+      # X-Forwarded-For the backend would always see the proxy container's single IP —— every user would
+      # share one rate-limit bucket (one person hammering login could lock everyone out), and login logs
+      # would record the proxy's IP too. What's trusted is a **network range** (the docker bridge network),
+      # so this still holds if the proxy is swapped for nginx/Traefik.
       TenonAdmin__Api__ForwardedHeaders__Enabled: "true"
       TenonAdmin__Api__ForwardedHeaders__KnownNetworks__0: 172.16.0.0/12
     ports:
-      # 后端直连,**只绑回环**——调试用,正常访问走前端那条(Caddy 已反代 /api 与 /health)。
+      # Direct backend access, **bound to loopback only** —— for debugging; normal access goes through the
+      # frontend (Caddy already reverse-proxies /api and /health).
       #
-      # 为什么必须绑 127.0.0.1:下面开了 ForwardedHeaders 并信任 docker 桥网段,而经端口映射进来的请求
-      # 在容器里看到的源地址正是网关(172.x.0.1)—— 也在受信网段里。于是**任何能直连这个端口的人都能伪造
-      # X-Forwarded-For**:换一个假 IP 就换一个限流分区(限流被完全绕过),还能把爆破失败记到别人头上。
-      # 绑 0.0.0.0 等于把这个能力开放给整个局域网。绑回环把它限制在宿主本机。
-      # 生产建议干脆删掉这段映射,只经反向代理进。
+      # Why it must bind to 127.0.0.1: ForwardedHeaders is enabled below and trusts the docker bridge
+      # network, and a request coming in through the port mapping shows up inside the container with the
+      # gateway as its source address (172.x.0.1) —— which is also in the trusted range. So **anyone who
+      # can reach this port directly can forge X-Forwarded-For**: switching the fake IP switches the
+      # rate-limit bucket (completely bypassing rate limiting), and can also pin failed brute-force
+      # attempts on someone else. Binding 0.0.0.0 would open this capability to the whole LAN. Binding
+      # loopback restricts it to the host machine itself.
+      # In production, consider simply removing this port mapping and only allowing access through the
+      # reverse proxy.
       - "127.0.0.1:${TENON_API_PORT:-8081}:8080"
     volumes:
-      - app-data:/app/data       # SQLite(本例没用)+ JWT 开发密钥
-      - upload-data:/data/upload # 上传物
+      - app-data:/app/data       # SQLite (unused in this example) + JWT dev signing key
+      - upload-data:/data/upload # uploaded files
 
   web:
     build:
@@ -97,8 +119,10 @@ services:
     ports:
       - "${TENON_WEB_PORT:-8080}:80"
 
-# 具名卷,不是 bind mount:具名卷首次挂载会从镜像目录带走属主,容器里的非 root 用户才写得进去。
-# bind mount 会用宿主属主覆盖,非 root 直接写不了 —— 容器化 SQLite/上传目录最常见的翻车点。
+# Named volumes, not bind mounts: a named volume's first mount carries over ownership from the image
+# directory, which is the only way the non-root user inside the container can write to it.
+# A bind mount would override ownership with the host's, leaving the non-root user unable to write ——
+# the most common pitfall when containerizing SQLite/upload directories.
 volumes:
   db-data:
   redis-data:

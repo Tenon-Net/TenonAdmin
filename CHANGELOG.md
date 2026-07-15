@@ -1,55 +1,55 @@
-# 更新日志
+# Changelog
 
-本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
-格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
+This project follows [Semantic Versioning](https://semver.org/).
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-发布节奏:**开发在 `dev`,发版走 `main`** —— 先把 `dev` 合进 `main`,再**在 `main` 上**打 `v*` tag。tag 是分支无关的,打在别处一样会触发发版工作流,所以那里有一道闸门:tag 的提交不在 `main` 上直接拒发。
+Release cadence: **development happens on `dev`, releases happen on `main`** — merge `dev` into `main` first, then tag `v*` **on `main`**. Tags are branch-independent, so tagging elsewhere would trigger the release workflow just the same; there's a gate for that: if the tagged commit isn't on `main`, the release is rejected.
 
-tag 触发 `backend-release` 后,它先跑构建 + 测试 + 模板冒烟(`dotnet new tenon-app` 必须 restore 并编译通过),全绿才推 nuget.org。
+Once a tag triggers `backend-release`, it first runs build + tests + template smoke test (`dotnet new tenon-app` must restore and compile successfully), and only pushes to nuget.org if everything is green.
 
-> 发版时**两个半边的版本号要一起改**:后端由 tag 经 `-p:Version` 注入,而 `web/package.json` 的 `version` 是构建期常量、**会显示在登录页页脚**。忘了改,用户看到的界面版本就和装到的包对不上。
+> When releasing, **both halves' version numbers must be updated together**: the backend version is injected from the tag via `-p:Version`, while `web/package.json`'s `version` is a build-time constant **shown in the login page footer**. Forget to update it, and the version the user sees in the UI won't match the package they installed.
 
 ## 0.1.0 - 2026-07-15
 
-**首个发布到 nuget.org 的版本**(此前的 `0.0.1-preview` 只存在于仓库,从未推包)。
+**First version published to nuget.org** (the earlier `0.0.1-preview` only ever existed in the repo and was never pushed as a package).
 
-内核能力基线见下方 `0.0.1-preview` 一节;本节记的是 preview 之后新增的功能,以及让它**发得出去、升得上去**的改动。
+The kernel capability baseline is listed below under `0.0.1-preview`; this section records what was added after preview, and the changes that made it **publishable and upgradable**.
 
-> 版本号 `0.x`:**1.0 之前 API 仍可能变动**。破坏性变更会在这里明确标出。
+> Version `0.x`: **the API may still change before 1.0**. Breaking changes will be called out explicitly here.
 
-### 新增
+### Added
 
-- **消息通知定向发送**:通知可发给 全体 / 指定角色 / 指定用户(此前仅能广播全体)。顶栏铃铛从纯文本下拉换成富面板(全部 / 未读 页签、类型标签、正文摘要、时间);发布弹窗加宽并新增接收人选择器;新增「站内消息」类型。
-- **菜单「权限码」路由选择器按所属应用过滤**,配合菜单管理的若干交互优化。
-- 角色管理与字典页面的交互优化。
-- 发版闸门:`backend-release` 在推包前跑构建、测试与模板冒烟。推包不可撤销(nuget.org 只能 unlist),红的东西不许发。
-- `dotnet new tenon-app` 的冒烟测试进 CI(`backend-ci` 的 `template-smoke` 腿),覆盖消费者的第一条命令。
-- NuGet 包带 SourceLink + 符号包(snupkg)与包图标 —— 消费者可直接步进内核源码,这是"继承并重写某一步"这个卖点的前提。
-- **SQL 诊断日志**:失败的 SQL 连语句与参数打 `Error`;耗时 ≥ `Database:SlowSqlMillis`(默认 1000ms,≤0 关闭)的语句打 `Warning`。此前 SqlSugar 一个日志钩子都没挂,线上查询失败只有驱动层异常 —— 没有 SQL、没有参数、没有耗时。日志只走 `ILogger`,不写 `sys_op_log`(那条 INSERT 会自触发,直接递归)。
+- **Targeted notification delivery**: notifications can now be sent to everyone / specific roles / specific users (previously broadcast-only). The top-bar bell dropdown was upgraded from plain text to a rich panel (All / Unread tabs, type tags, body preview, timestamps); the publish dialog was widened and gained a recipient picker; added an "in-app message" type.
+- **Menu "permission code" route picker now filters by owning app**, plus several interaction improvements in menu management.
+- Interaction improvements in role management and dictionary pages.
+- Release gate: `backend-release` runs build, tests, and a template smoke test before pushing the package. Publishing is irreversible (nuget.org can only unlist), so nothing red gets published.
+- Smoke test for `dotnet new tenon-app` added to CI (the `template-smoke` leg of `backend-ci`), covering a consumer's very first command.
+- NuGet packages now ship with SourceLink, a symbol package (snupkg), and a package icon — consumers can step directly into kernel source, which is the prerequisite for the "inherit and override a single step" selling point.
+- **SQL diagnostic logging**: failed SQL statements are logged at `Error` with the statement and parameters; statements taking ≥ `Database:SlowSqlMillis` (default 1000ms, disabled when ≤0) are logged at `Warning`. Previously SqlSugar had no logging hooks wired up at all, so a failed query in production surfaced only a driver-level exception — no SQL, no parameters, no timing. Logging goes through `ILogger` only and does not write to `sys_op_log` (that INSERT would self-trigger, causing direct recursion).
 
-### 修复
+### Fixed
 
-- 模板不再引用一个从未发布的包版本:打包时把 `-p:Version` 盖进 `dotnet new` 模板的默认值。此前模板写死 `0.0.1-preview`,tag 从不改写它,生成的工程从第一天起就引用一个不存在的版本(restore 靠 NuGet 向上漂移勉强活着,并带 NU1603;开了 `TreatWarningsAsErrors` / 锁文件 / 精确版本策略的消费者直接失败)。
-- **升级时的库表漂移不再静默炸在查询里**:生产的建表闸门是关的,没人替库补列。此前启动守卫只查表在不在,于是内核加一列 → 老库照常启动 → 第一次查那张表才炸在驱动层的"列不存在"上。现在启动即失败,并点名到表和列(`sys_user(Avatar)`),给出补列的两条出路。只查缺列,不判类型/长度的变化。
-- 包署名的组织名修正为 `Tenon-Net`(此前模板包里是 `DotNet-MoYu`)。
+- The template no longer references a package version that was never published: `-p:Version` is now stamped into the `dotnet new` template's default value at pack time. Previously the template hardcoded `0.0.1-preview`, which tags never rewrote, so generated projects referenced a nonexistent version from day one (restore barely survived on NuGet's floating-version resolution, with a NU1603 warning; consumers with `TreatWarningsAsErrors`, lock files, or exact-version policies failed outright).
+- **Schema drift on upgrade no longer fails silently mid-query**: the table-creation gate is off in production, so nothing backfills missing columns for existing databases. Previously the startup guard only checked whether a table existed, so: kernel adds a column → old database starts up fine → the first query against that table blows up on the driver's "column does not exist" error. Startup now fails immediately and names the exact table and column (`sys_user(Avatar)`), giving two ways to add the missing column. Only missing columns are checked — type/length changes are not.
+- Fixed the package author organization name to `Tenon-Net` (the template package previously had `DotNet-MoYu`).
 
-### 移除
+### Removed
 
-- **破坏性**:删除 `TenonAdminOptions.ScanApplicationAssemblies`。它从未实现、代码里无一处读取,置任何值都无效。业务程序集一直只有 `ApplicationAssemblies.Add()` 这一条生效路径。趁未发包删除;发包之后再删就是破坏性变更。
+- **Breaking**: removed `TenonAdminOptions.ScanApplicationAssemblies`. It was never implemented and never read anywhere in the code, so setting it had no effect. Business assemblies have always only worked via `ApplicationAssemblies.Add()`. Removed before the first package release; removing it after publishing would have been a breaking change.
 
 ---
 
 ## 0.0.1-preview
 
-预览版,未推 nuget.org。内核能力(均有 CI 覆盖):
+Preview release, never pushed to nuget.org. Kernel capabilities (all covered by CI):
 
-- **认证**:账号密码 + 验证码、JWT + Refresh Token 轮换、登录锁定、在线会话与强制下线、首次登录强制改密
-- **RBAC**:角色、三级菜单(目录/页面/按钮)、按钮级权限、角色菜单授权。权限码即路由,代码里没有权限字符串
-- **多机构数据权限**:五种数据范围,经 ORM 全局过滤器在查询层自动生效
-- **多应用门户**:模块管理、独立菜单树、应用切换、用户默认应用
-- **字典与配置**:字典类型/字典项、键值配置(带缓存与事件驱动失效)、配置中心("改配置不改代码":基础/安全/上传/限流)
-- **日志**:操作日志(自动记录 + 入参脱敏)、登录日志
-- **文件**:本地上传下载、分片续传与秒传、签名直链、磁盘回收(`FileGcService`)
-- **可替换性**:接口 + `virtual` + `TryAdd`,四层覆盖(配置 → 换服务 → 继承重写 → 覆盖端点),由"六件套"测试锁死
-- **零配置启动**:默认 SQLite、CodeFirst 建表、幂等种子、首启打印随机超管密码
-- **交付**:容器化(Caddy + compose);多副本正确性(Redis 缓存、限流计数跨副本共享、每副本独立雪花机器号、反代后取真实客户端 IP)
+- **Auth**: username/password + captcha, JWT + refresh token rotation, login lockout, online sessions with forced logout, mandatory password change on first login
+- **RBAC**: roles, three-level menus (directory/page/button), button-level permissions, role-menu authorization. Permission codes are routes — no permission strings in the codebase
+- **Multi-org data permissions**: five data scopes, automatically enforced at the query layer via ORM global filters
+- **Multi-app portal**: module management, independent menu trees, app switching, user default app
+- **Dictionaries and config**: dictionary types/items, key-value config (with caching and event-driven invalidation), config center ("change config without changing code": basic/security/upload/rate-limiting)
+- **Logging**: operation logs (auto-recorded with parameter masking), login logs
+- **Files**: local upload/download, chunked resumable upload with instant-transfer dedup, signed direct links, disk garbage collection (`FileGcService`)
+- **Replaceability**: interfaces + `virtual` + `TryAdd`, four layers of override (config → swap service → inherit and override → override endpoint), locked in by the "six-piece set" tests
+- **Zero-config startup**: SQLite by default, CodeFirst table creation, idempotent seeding, random super-admin password printed on first startup
+- **Delivery**: containerized (Caddy + compose); multi-replica correctness (Redis-backed cache, rate-limit counters shared across replicas, per-replica snowflake worker IDs, real client IP behind a reverse proxy)

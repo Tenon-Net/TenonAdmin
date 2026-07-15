@@ -1,15 +1,19 @@
-# 容器交付物的冒烟测试(dev-plan T-D4 / T-D3 的验收线)。
+# Smoke test for the container deliverable (the acceptance line for dev-plan T-D4 / T-D3).
 #
-# 两个 job:
-#   single —— 镜像能起来:生产环境 + 空库 + 具名卷 + 非 root 用户四个条件同时成立,还能建表、写种子、发令牌。
-#   multi  —— **多副本保证**:强退跨副本立即生效、锁定阈值不翻倍、限流阈值是集群级的、两副本机器号不同、
-#             反代之后取到真实客户端 IP。这些只在两个副本同时在线时才暴露,单副本跑一万遍也照不出来。
+# Two jobs:
+#   single —— the image can come up: production environment + empty DB + named volume + non-root user all hold
+#             at once, and it can still create tables, seed data, and issue tokens.
+#   multi  —— **multi-replica guarantees**: force-logout takes effect across replicas immediately, the lockout
+#             threshold doesn't double, the rate-limit threshold is cluster-wide, the two replicas get
+#             different machine IDs, and the real client IP is recovered behind the reverse proxy. These only
+#             surface when two replicas are online at once — running a single replica ten thousand times would
+#             never reveal them.
 name: docker-smoke
 
 on:
   push:
     branches: [main, dev]
-    # GitHub Actions 不支持 YAML 锚点,两处只能照抄一遍。
+    # GitHub Actions doesn't support YAML anchors, so this list has to be duplicated in both places.
     paths:
       - 'Dockerfile'
       - '.dockerignore'
@@ -49,8 +53,9 @@ jobs:
         run: docker compose up -d --build
 
       - name: Wait for the backend to report ready
-        # /health/ready 探的是依赖(DB + 缓存),不是"进程还活着"。它变绿 = 建表 + 种子都跑完了。
-        # 从宿主轮询而不是在镜像里放 HEALTHCHECK:aspnet 运行时镜像既没 curl 也没 wget。
+        # /health/ready probes dependencies (DB + cache), not just "is the process alive". It turning green
+        # means table creation + seeding have both finished. Poll from the host rather than adding a
+        # HEALTHCHECK to the image: the aspnet runtime image has neither curl nor wget.
         run: |
           for i in $(seq 1 60); do
             if curl -sf http://localhost:8081/health/ready > /dev/null; then
@@ -63,7 +68,8 @@ jobs:
           exit 1
 
       - name: Log in as the seeded super admin
-        # 真发一次令牌:同时证明库建好了、种子写进去了、JWT 密钥在容器里解析成功。
+        # Actually issue a token: this proves at once that the DB was created, seed data was written, and the
+        # JWT key resolves successfully inside the container.
         run: |
           code=$(curl -s -X POST http://localhost:8081/api/v1/auth/login \
             -H 'Content-Type: application/json' \
@@ -78,9 +84,10 @@ jobs:
         run: |
           curl -sf http://localhost:8080/ | grep -qi '<div id="app"' \
             || { echo "::error::SPA index not served"; docker compose logs web; exit 1; }
-          # 经 Caddy 打受保护端点:401 = 反代通了(且默认拒绝仍然生效)。
-          # 这一条同时钉住 Caddyfile 的 handle 块:平铺写法下 try_files 会抢在 reverse_proxy 之前
-          # 把 /api/... 改写成 /index.html,于是 API 请求拿到一张 HTML(状态 200)而不是 401。
+          # Hit a protected endpoint through Caddy: 401 = the reverse proxy works (and default-deny still
+          # holds). This also pins down the Caddyfile's handle block: with a flat layout, try_files would
+          # race ahead of reverse_proxy and rewrite /api/... to /index.html, so the API request would get
+          # back an HTML page (status 200) instead of 401.
           status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/ping)
           [ "$status" = "401" ] || { echo "::error::/api proxy returned $status, expected 401"; exit 1; }
 
@@ -101,12 +108,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build and start two replicas behind Caddy
-        # 两个**显式的** app 服务(各自不同的 WorkerId),不是 --scale:compose 给不了 --scale 出来的
-        # 副本各自不同的环境变量,而机器号恰恰必须每副本不同 —— 同号即撞主键。
+        # Two **explicit** app services (each with a different WorkerId), not --scale: compose can't give
+        # --scale-produced replicas their own distinct environment variables, and the machine ID must
+        # specifically differ per replica — the same ID means colliding primary keys.
         run: docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --build
 
       - name: Prove the multi-replica guarantees
-        # 每条断言都对着本批修掉的一个具体 bug;脚本自己会打印"没修好之前会是什么样"。
+        # Each assertion targets one specific bug fixed in this batch; the script itself prints "what it
+        # looked like before the fix".
         run: bash scripts/smoke-multi-replica.sh http://localhost:8080
 
       - name: Dump logs on failure

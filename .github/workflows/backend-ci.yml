@@ -1,6 +1,6 @@
 name: backend-ci
 
-# 后端 CI(设计 §8):push / PR 触发 build + test + 模板冒烟。仅在改到 backend / templates 时跑。
+# Backend CI (design §8): push / PR triggers build + test + template smoke test. Only runs when backend / templates are touched.
 on:
   push:
     branches: [main, dev]
@@ -11,13 +11,13 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
-    # 数据库矩阵(设计 §8「至少 SQLite + MySQL」,这里再加 SqlServer)。fail-fast=false:一条腿红不掩盖其它。
+    # Database matrix (design §8 "at least SQLite + MySQL", plus SqlServer here). fail-fast=false: one red leg won't mask the others.
     strategy:
       fail-fast: false
       matrix:
         db: [sqlite, mysql, sqlserver, postgres]
 
-    # 服务容器(所有腿都起,用不到的腿忽略之;成本低、免去条件 service 的写法复杂度)。
+    # Service containers (started for every leg; legs that don't need them just ignore them — cheap, and avoids the complexity of conditional services).
     services:
       mysql:
         image: mysql:8.0
@@ -30,7 +30,7 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
-      # SqlServer:不给 health-cmd —— 2022 镜像默认不带 sqlcmd,健康探针会挂;就绪由下方专门的等待步骤保证。
+      # SqlServer: no health-cmd — the 2022 image doesn't ship sqlcmd by default, so the health probe would hang; readiness is instead guaranteed by the dedicated wait step below.
       sqlserver:
         image: mcr.microsoft.com/mssql/server:2022-latest
         env:
@@ -39,7 +39,7 @@ jobs:
           MSSQL_PID: "Developer"
         ports:
           - 1433:1433
-      # PostgreSQL:官方镜像自带 pg_isready,健康探针直接用,无需额外等待步骤。
+      # PostgreSQL: the official image ships pg_isready, so the health probe can use it directly — no extra wait step needed.
       postgres:
         image: postgres:16
         env:
@@ -51,10 +51,11 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
-      # Redis:给 RedisCacheTests 的**契约集成**那一半用(set/get、原子自增、GETDEL)。
-      # 它由 TENON_TEST_REDIS 门控,而这个变量此前从没被设过 —— 也就是说这个可选包的真实行为
-      # 在 CI 里一次都没跑过。多副本的整个逃生舱(强退、权限失效、锁定计数跨副本)都建立在它身上,
-      # 必须被真跑,不能只靠离线的 DI 装配测试。
+      # Redis: used by the **contract integration** half of RedisCacheTests (set/get, atomic increment, GETDEL).
+      # It's gated by TENON_TEST_REDIS, which was never previously set — meaning this optional package's real
+      # behavior had never once run in CI. The entire multi-replica escape hatch (force-logout, permission
+      # invalidation, lockout counts across replicas) is built on top of it, so it must actually run, not just
+      # be covered by offline DI-wiring tests.
       redis:
         image: redis:7-alpine
         ports:
@@ -73,15 +74,16 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # NuGet.config 已 clear 到 nuget.org(消除私有源依赖),外部贡献者可直接还原
+      # NuGet.config has been cleared to nuget.org (removing the private-feed dependency), so external contributors can restore directly
       - name: Restore
         run: dotnet restore backend/TenonAdmin.slnx
 
       - name: Build
         run: dotnet build backend/TenonAdmin.slnx -c Release --no-restore
 
-      # 等 SqlServer 可登录(仅 sqlserver 腿)。端口先开、随后才接受登录,故用真实登录轮询,
-      # 不依赖 DB 镜像/宿主是否装了 sqlcmd:借官方 mssql-tools 镜像 + --network host 连宿主 :1433。
+      # Wait until SqlServer accepts logins (sqlserver leg only). The port opens before logins are accepted,
+      # so poll with a real login attempt instead — this doesn't depend on whether the DB image/host has sqlcmd
+      # installed: borrow the official mssql-tools image + --network host to reach the host's :1433.
       - name: Wait for SQL Server ready
         if: matrix.db == 'sqlserver'
         run: |
@@ -94,24 +96,27 @@ jobs:
           done
           echo "SQL Server did not become ready in time"; exit 1
 
-      # 单元 + 集成测试(WebApplicationFactory)。DB 由环境变量选择(见 tests/TestDb.cs):
-      #   sqlite 腿 → 各测试独立临时 .db 文件;mysql/sqlserver 腿 → 各测试独立库(按 DbPath 派生,自动建/删)。
-      #   含 §8 可替换性六件套 + 数据范围 + 认证/授权/限流回归。
+      # Unit + integration tests (WebApplicationFactory). The DB is selected via env vars (see tests/TestDb.cs):
+      #   sqlite leg → each test gets its own temp .db file; mysql/sqlserver legs → each test gets its own DB
+      #   (derived from DbPath, auto-created/dropped). Includes the §8 replaceability six-piece suite +
+      #   data-scope + auth/authorization/rate-limit regression tests.
       - name: Test (${{ matrix.db }})
         env:
           TENON_TEST_DBTYPE: ${{ matrix.db == 'mysql' && 'MySql' || matrix.db == 'sqlserver' && 'SqlServer' || matrix.db == 'postgres' && 'PostgreSQL' || 'Sqlite' }}
           TENON_TEST_MYSQL: ${{ matrix.db == 'mysql' && 'Server=127.0.0.1;Port=3306;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;' || '' }}
-          # SqlServer 连接串带 TrustServerCertificate/Encrypt=False:MDS 5.x 默认加密且 CI 无受信证书。基础串不含 Database,TestDb 建隔离库时再补。
+          # The SqlServer connection string carries TrustServerCertificate/Encrypt=False: MDS 5.x encrypts by default and CI has no trusted certificate. The base string omits Database; TestDb appends it when creating the isolated DB.
           TENON_TEST_SQLSERVER: ${{ matrix.db == 'sqlserver' && 'Server=127.0.0.1;User ID=sa;Password=Tenon_Ci_2026;TrustServerCertificate=True;Encrypt=False;' || '' }}
-          # PostgreSQL 基础串不含 Database(连维护库 postgres 建隔离库,TestDb 建库后再补 Database)。
+          # The PostgreSQL base string omits Database (connects to the maintenance DB postgres to create the isolated DB; TestDb appends Database after creating it).
           TENON_TEST_POSTGRESQL: ${{ matrix.db == 'postgres' && 'Server=127.0.0.1;Port=5432;User ID=postgres;Password=postgres;' || '' }}
-          # Redis 契约测试的门控开关(所有腿都跑:它与 DB 无关,多跑几遍成本也就几秒)。
+          # Gate switch for the Redis contract tests (runs on every leg: it's DB-independent, and running it a few extra times only costs a few seconds).
           TENON_TEST_REDIS: 127.0.0.1:6379
         run: dotnet test backend/TenonAdmin.slnx -c Release --no-build
 
-  # 消费者的第一条命令(dotnet new tenon-app → restore → build)。此前零自动化覆盖 ——
-  # 于是模板长期引用着一个 tag 从没发布过的包版本,谁也没发现:内核测试全绿,而消费者第一步就失败。
-  # 与 build-test 并行(它不依赖矩阵),脏活由 templates/smoke-test.ps1 干,与本地手跑同一个脚本。
+  # The consumer's first command (dotnet new tenon-app → restore → build). Previously had zero automated
+  # coverage — so the template kept referencing a package version whose tag was never published, and nobody
+  # noticed: kernel tests were all green while a consumer's very first step failed. Runs in parallel with
+  # build-test (it doesn't depend on the matrix); the grunt work is done by templates/smoke-test.ps1, the
+  # same script used for local manual runs.
   template-smoke:
     runs-on: ubuntu-latest
     steps:

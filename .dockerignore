@@ -1,15 +1,15 @@
-# 这份清单首先是**安全**措施,其次才是体积。
+# This list is first and foremost a **security** measure, and only secondarily about image size.
 #
-# backend/samples/MinimalHost/data/ 里躺着开发期的真实 admin.db 和 dev-jwt.key(仓库根的 data/ 同理)。
-# 一个天真的 COPY . . 会把**签名密钥和一个开发数据库烤进镜像层** —— 镜像一推,谁都能扒出来伪造超管令牌。
-# 所以 data/ 与 *.db* 的排除不是可选项。
+# backend/samples/MinimalHost/data/ holds a real dev-time admin.db and dev-jwt.key (same for the repo-root data/).
+# A naive COPY . . would **bake the signing key and a dev database into an image layer** — once the image is pushed,
+# anyone can extract it and forge a super-admin token. So excluding data/ and *.db* is not optional.
 
 .git/
 .github/
 .vscode/
 .idea/
 
-# 构建产物
+# Build artifacts
 **/bin/
 **/obj/
 web/node_modules/
@@ -18,26 +18,27 @@ web/test-results/
 web/playwright-report/
 artifacts/
 
-# 运行期数据(密钥 / 数据库 / 上传物 —— 绝不进镜像)
+# Runtime data (keys / databases / uploads — never goes into the image)
 **/data/
 **/*.db
 **/*.db-journal
 **/*.db-*
 **/wwwroot/upload/
 
-# 本地开发配置(含凭据)
+# Local dev config (contains credentials)
 **/appsettings.Development.json
 .env.local
 
-# 工具与 agent 状态
+# Tooling & agent state
 .omc/
 .omx/
 .codegraph/
 .claude/
 .dev/
 
-# 文档与脚本(镜像用不上)。README.md 不排除:backend/Directory.Build.props 用它作包说明页,
-# 排掉它等于给构建埋一个"文件不存在"的雷,省下的那几 KB 不值当。
+# Docs & scripts (not needed in the image). README.md is NOT excluded: backend/Directory.Build.props uses it
+# as the package description page — excluding it would plant a "file not found" landmine in the build, and the
+# few KB saved isn't worth it.
 docs/
 dev.bat
 stop.bat

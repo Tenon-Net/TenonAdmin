@@ -1,7 +1,7 @@
-# 统一行尾:仓库内一律 LF,检出时按平台自动转换
+# Normalize line endings: always LF in the repo, auto-converted per platform on checkout
 * text=auto eol=lf
 
-# 二进制/资源类明确标注,避免误改
+# Explicitly mark binary/asset types to avoid accidental modification
 *.png binary
 *.jpg binary
 *.ico binary

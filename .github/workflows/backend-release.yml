@@ -1,27 +1,27 @@
 name: backend-release
 
-# 在 **main** 上打 tag(如 v0.1.0)即打包核心 NuGet 包 + dotnet new 模板包并推 nuget.org(设计 §T10)。
-# 开发在 dev,发版走 main:先把 dev 合进 main,再在 main 上打 tag。tag 打在别处会被下面的闸门拒绝。
-# 版本从 tag 名推导(去掉前缀 v)。
+# Tagging on **main** (e.g. v0.1.0) packs the core NuGet packages + the `dotnet new` template package and pushes them to nuget.org (design §T10).
+# Development happens on dev, releases go through main: merge dev into main first, then tag on main. A tag placed anywhere else is rejected by the gate below.
+# The version is derived from the tag name (strip the leading v).
 #
-# 发布凭证走 nuget.org 的 **Trusted Publishing(OIDC)**,不用长期 API Key:
-#   - GitHub 用 id-token 换一个短期(约 1 小时)的 nuget key,发完即失效 —— 无密钥可泄漏、无到期需轮换。
-#   - 需在 nuget.org 建一条 Trusted Publishing 策略(Owner=Tenon-Net、Repo=TenonAdmin、
-#     Workflow=backend-release.yml),并把下方 NuGet/login 的 `user` 换成拥有这些包的 nuget.org 账号名。
+# Publishing credentials use nuget.org's **Trusted Publishing (OIDC)** instead of a long-lived API key:
+#   - GitHub exchanges an id-token for a short-lived (~1 hour) nuget key that expires right after use — nothing to leak, nothing to rotate.
+#   - Requires a Trusted Publishing policy on nuget.org (Owner=Tenon-Net, Repo=TenonAdmin,
+#     Workflow=backend-release.yml), and the `user` in NuGet/login below must be the nuget.org account name that owns these packages.
 #
-# 推包是**不可撤销**的(nuget.org 只能 unlist,不能删),所以 push 之前必须先过闸门:
-# 构建 → 测试 → 模板冒烟(装消费者的第一条命令跑一遍)。三者任一红,就不发。
+# Pushing a package is **irreversible** (nuget.org can only unlist, not delete), so the gate must pass before the push:
+# build → test → template smoke (run the consumer's very first command once). If any of the three is red, nothing ships.
 on:
   push:
     tags: ['v*']
 
 jobs:
-  # 闸门。没有它的时候,"测试是红的"和"模板 restore 不了"都能一路发到 nuget.org。
+  # The gate. Without it, both "the tests are red" and "the template won't restore" could ship straight to nuget.org.
   verify:
     runs-on: ubuntu-latest
-    # RedisCacheTests 的契约集成半在 CI 里缺 Redis 会**主动判红**(静默跳过=假绿,见测试注释),
-    # 由 TENON_TEST_REDIS 门控。backend-ci 的合入闸门配了这个服务;发布闸门跑同一套测试,必须同样提供,
-    # 否则这三条测试在这里必红、发版被误挡。SQLite 腿即可(多库矩阵由 backend-ci 守),但 Redis 与 DB 无关、要单独给。
+    # RedisCacheTests' integration half **actively fails** (does not skip) in CI when Redis is missing (a silent skip = fake green, see the test's comment),
+    # gated by TENON_TEST_REDIS. backend-ci's merge gate provides this service; the release gate runs the same suite, so it must provide it too,
+    # otherwise those three tests go red here and the release is wrongly blocked. The SQLite leg is enough (backend-ci guards the multi-DB matrix), but Redis is DB-independent and must be supplied separately.
     services:
       redis:
         image: redis:7-alpine
@@ -33,18 +33,18 @@ jobs:
           --health-timeout=5s
           --health-retries=10
     steps:
-      # fetch-depth: 0 —— 下一步要判断 tag 的 commit 在不在 main 上,浅克隆看不到历史。
+      # fetch-depth: 0 — the next step needs to tell whether the tag's commit is on main, and a shallow clone can't see the history.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 发版分支是 main。tag 是分支无关的:在 dev(甚至任意分支)上打 v0.1.0 一样会触发这个工作流,
-      # 于是没进 main、没被审的代码可以直接推到 nuget.org —— 而推包不可撤销。
-      # 所以这里把"发版必须来自 main"从约定变成闸门。
+      # The release branch is main. Tags are branch-independent: tagging v0.1.0 on dev (or any branch) triggers this workflow all the same,
+      # so code that never reached main and was never reviewed could be pushed straight to nuget.org — and a push is irreversible.
+      # So this turns "releases must come from main" from a convention into a gate.
       - name: Tag must be on main
         run: |
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::标签 $GITHUB_REF_NAME 指向的提交 $GITHUB_SHA 不在 main 上。先把 dev 合进 main,再在 main 上打 tag。"
+            echo "::error::Tag $GITHUB_REF_NAME points at commit $GITHUB_SHA, which is not on main. Merge dev into main first, then tag on main."
             exit 1
           fi
 
@@ -56,15 +56,15 @@ jobs:
       - name: Build
         run: dotnet build backend/TenonAdmin.slnx -c Release
 
-      # SQLite 腿即可:多库矩阵由 backend-ci 在合入前守;这里守的是"发出去的东西自己能不能过"。
-      # TENON_TEST_REDIS 指向上面的 redis 服务,让 RedisCacheTests 的契约集成半真跑(否则它在 CI 里判红)。
+      # The SQLite leg is enough: backend-ci guards the multi-DB matrix before merge; here we guard "can what we ship pass on its own".
+      # TENON_TEST_REDIS points at the redis service above so RedisCacheTests' integration half actually runs (otherwise it goes red in CI).
       - name: Test
         env:
           TENON_TEST_REDIS: 127.0.0.1:6379
         run: dotnet test backend/TenonAdmin.slnx -c Release --no-build
 
-      # 消费者的第一条命令:dotnet new tenon-app → restore → build。
-      # 它按 tag 版本打包并让模板引用同一版本,所以"模板引用了一个 tag 没发布的版本"这类错在这里当场暴露。
+      # The consumer's first command: dotnet new tenon-app → restore → build.
+      # It packs at the tag version and makes the template reference that same version, so an error like "the template references a version the tag never published" is exposed right here.
       - name: Template smoke (dotnet new tenon-app must restore + build)
         shell: pwsh
         run: templates/smoke-test.ps1 -Version ($env:GITHUB_REF_NAME -replace '^v', '')
@@ -72,7 +72,7 @@ jobs:
   pack-push:
     needs: verify
     runs-on: ubuntu-latest
-    # id-token: write —— Trusted Publishing 用它签发 OIDC 令牌换取短期 nuget key。缺了这行 NuGet/login 拿不到令牌。
+    # id-token: write — Trusted Publishing uses it to issue the OIDC token that is exchanged for the short-lived nuget key. Without this line, NuGet/login can't obtain a token.
     permissions:
       id-token: write
       contents: read
@@ -91,19 +91,19 @@ jobs:
       - name: Pack
         run: dotnet pack backend/TenonAdmin.slnx -c Release -o artifacts -p:Version=${{ steps.ver.outputs.version }}
 
-      # 模板包在 backend/ 之外(不继承 net10/中央版本管理),需单独 pack;落同一 artifacts 目录随下方一并推。
-      # 打包时会把这个版本号盖进模板的 TenonPkgVersion 默认值(见 TenonAdmin.Templates.csproj 的 StampTemplateVersion)。
+      # The template package lives outside backend/ (it doesn't inherit net10 / central version management), so it's packed separately; it lands in the same artifacts dir and is pushed together with the rest below.
+      # Packing stamps this version into the template's TenonPkgVersion default (see StampTemplateVersion in TenonAdmin.Templates.csproj).
       - name: Pack templates
         run: dotnet pack templates/TenonAdmin.Templates.csproj -c Release -o artifacts -p:Version=${{ steps.ver.outputs.version }}
 
-      # 用 GitHub 的 OIDC 令牌换一个短期 nuget key。`user` 必须是 nuget.org 上建了 Trusted Publishing 策略、
-      # 且拥有(或被授权 push)这些包的账号名。换来的 key 落在 NUGET_API_KEY 环境变量里,仅本次运行有效。
+      # Exchange GitHub's OIDC token for a short-lived nuget key. `user` must be the nuget.org account name that has a Trusted Publishing policy
+      # and owns (or is authorized to push) these packages. The returned key lands in the NUGET_API_KEY env var and is valid for this run only.
       - name: NuGet login (Trusted Publishing / OIDC)
         uses: NuGet/login@v1
         id: login
         with:
           user: hu53135580
 
-      # .snupkg 符号包与同名 .nupkg 一起自动推送,无需单列 glob。
+      # The .snupkg symbol packages are pushed automatically alongside the .nupkg of the same name, so no separate glob is needed.
       - name: Push to nuget.org
         run: dotnet nuget push "artifacts/*.nupkg" -k "${{ steps.login.outputs.NUGET_API_KEY }}" -s https://api.nuget.org/v3/index.json --skip-duplicate
