@@ -46,4 +46,15 @@ public interface ISeedData<out TEntity> : ISeedData where TEntity : BaseEntity, 
     /// 这是"内核拥有这些行"的题中之义。审计字段与软删标记不受影响(覆盖时排除)。</para>
     /// </summary>
     bool SyncOnUpgrade => false;
+
+    /// <summary>
+    /// 判存所依据的业务唯一键列(默认 <c>null</c> = 按主键 <c>Id</c> 判存)。
+    /// <para>用于<b>连接表</b>种子(如 <c>sys_user_role</c> / <c>sys_role_data_scope</c>):这类表的代理主键
+    /// 是运行时发的雪花号、会随「角色页增删授权」漂移,真正的身份是唯一索引列。若仍按主键 Id 判存,
+    /// 运行时改过授权后重启,种子会拿固定 Id 把同一个业务键再插一遍 → <b>撞唯一索引 → 启动失败</b>。
+    /// 声明业务键后,判存看的是业务键:该键已存在就跳过(无论它挂的是种子 Id 还是雪花 Id)。</para>
+    /// <para>列名用 <c>nameof</c> 给出以防重命名失配。声明了业务键的种子不参与 <see cref="SyncOnUpgrade"/>
+    /// (连接表没有可覆盖的业务字段,判存跳过即全部语义)。</para>
+    /// </summary>
+    string[]? DedupColumns => null;
 }

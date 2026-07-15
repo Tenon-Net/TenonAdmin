@@ -133,6 +133,38 @@ public class SeedUpgradeTests
     }
 
     /// <summary>
+    /// 连接表种子(sys_user_role)的代理主键被运行时授权改成雪花号后,重启不能崩。
+    /// <para>真实事故:管理员在角色页把某默认用户的角色删了又重授,重授走 AOP 拿到<b>雪花号</b>,
+    /// 于是同一 (UserId,RoleId) 在库里挂的不是种子的固定 Id。若种子仍按主键判存,会拿固定 Id 把这对
+    /// 业务键再插一遍 → 撞 (UserId,RoleId) 唯一索引 → 启动直接失败。按业务键判存(DedupColumns)才对。</para>
+    /// </summary>
+    [Fact]
+    public async Task Join_table_seed_dedups_by_business_key_not_drifted_surrogate_id()
+    {
+        const long UserId = 5, RoleId = 5;   // DefaultUserRoleSeed 里这对的固定 Id 是 4
+        const long SnowflakeId = 68860291608576;   // 模拟运行时授权发的雪花号
+
+        await RestartWithAsync(
+            async db =>
+            {
+                // 模拟角色页"删了又重授"(RbacService 语义:物理删除 + 重插,Id 走雪花号):
+                // 于是这对业务键在库里挂的不再是种子的固定 Id 4,而是雪花 Id。
+                await db.Deleteable<SysUserRole>()
+                    .Where(x => x.UserId == UserId && x.RoleId == RoleId).ExecuteCommandAsync();
+                await db.Insertable(new SysUserRole { Id = SnowflakeId, UserId = UserId, RoleId = RoleId })
+                    .ExecuteCommandAsync();
+            },
+            async db =>
+            {
+                // 起得来 = 没撞唯一索引(CreateClient 已在 RestartWithAsync 里跑过而未抛)
+                var rows = await db.Queryable<SysUserRole>()
+                    .Where(x => x.UserId == UserId && x.RoleId == RoleId).ToListAsync();
+                Assert.Single(rows);                     // 没被种子重复插入
+                Assert.Equal(SnowflakeId, rows[0].Id);   // 保留运行时那条,种子跳过
+            });
+    }
+
+    /// <summary>
     /// 用户软删掉一条内置菜单后,应用还得起得来。
     /// <para>存在性判断若走全局软删过滤器,这行就"查不到"→ 判成缺失 → 走 INSERT → <b>撞主键</b>,
     /// 应用再也起不来。种子的判存必须看<b>物理</b>行(ClearFilter),故有此用例。</para>

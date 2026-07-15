@@ -195,6 +195,17 @@ internal sealed class DatabaseInitializer(
 
         EnsureSeedIdsInReservedRange(seed, rows);
 
+        // 连接表:代理主键会漂(运行时授权发雪花号),按业务唯一键判存——该键已存在就跳过,
+        // 无论它挂的是种子 Id 还是雪花 Id。不这么做,种子会拿固定 Id 把同一业务键再插一遍 → 撞唯一索引 → 启动崩。
+        // WhereColumns 让 Storageable 按这些列(而非主键)分流;这类种子无业务字段可覆盖,故不参与 SyncOnUpgrade。
+        // (连接行按 RbacService 语义是物理删除,库里不存在软删行,故无需 ClearFilter。)
+        if (seed.DedupColumns is { Length: > 0 } dedup)
+        {
+            var joinStorage = await db.Storageable(rows).WhereColumns(dedup).ToStorageAsync();
+            var n = joinStorage.InsertList.Count == 0 ? 0 : await joinStorage.AsInsertable.ExecuteCommandAsync();
+            return (n, 0);
+        }
+
         // 按主键分流。不用 Storageable 而是自己查:存在性判断必须看**物理**行,
         // 而 ClearFilter 挂不到 Storageable 上 —— 全局软删过滤器会让用户软删掉的内置菜单查不到,
         // 判成"不存在"→ 走 INSERT → 撞主键(软删一条内置菜单,应用就再也起不来)。
