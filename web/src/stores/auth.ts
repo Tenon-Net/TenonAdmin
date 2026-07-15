@@ -27,6 +27,9 @@ export const useAuthStore = defineStore('auth', {
     menuTree: [] as MenuNode[],
     // 登录进门户时由 useModule.enterInitial 填入(GET /personal/permissions);超管为空集 → v-auth fail-open,服务端 sadm 兜底。
     permissionCodes: [] as string[],
+    // 权限码是否已成功拉取。区分两种"空":成功拉到空集(超管,fail-open)vs 请求失败被吞成空(未知,fail-closed)。
+    // 不持久化——F5 后由守卫重新拉取,持久化成 true 会让"取码失败"被误当"超管"而放行全部按钮。
+    permissionsLoaded: false,
     routesReady: false,
   }),
   getters: {
@@ -48,6 +51,7 @@ export const useAuthStore = defineStore('auth', {
       this.defaultModuleId = null
       this.menuTree = []
       this.permissionCodes = []
+      this.permissionsLoaded = false
       this.routesReady = false
       useTabsStore().clearTabs() // 登出销毁授权态时一并清标签(reset 仅登出路径调用,故不会在 F5 误清)
     },
