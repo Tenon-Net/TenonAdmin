@@ -19,6 +19,19 @@ jobs:
   # 闸门。没有它的时候,"测试是红的"和"模板 restore 不了"都能一路发到 nuget.org。
   verify:
     runs-on: ubuntu-latest
+    # RedisCacheTests 的契约集成半在 CI 里缺 Redis 会**主动判红**(静默跳过=假绿,见测试注释),
+    # 由 TENON_TEST_REDIS 门控。backend-ci 的合入闸门配了这个服务;发布闸门跑同一套测试,必须同样提供,
+    # 否则这三条测试在这里必红、发版被误挡。SQLite 腿即可(多库矩阵由 backend-ci 守),但 Redis 与 DB 无关、要单独给。
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       # fetch-depth: 0 —— 下一步要判断 tag 的 commit 在不在 main 上,浅克隆看不到历史。
       - uses: actions/checkout@v4
@@ -44,7 +57,10 @@ jobs:
         run: dotnet build backend/TenonAdmin.slnx -c Release
 
       # SQLite 腿即可:多库矩阵由 backend-ci 在合入前守;这里守的是"发出去的东西自己能不能过"。
+      # TENON_TEST_REDIS 指向上面的 redis 服务,让 RedisCacheTests 的契约集成半真跑(否则它在 CI 里判红)。
       - name: Test
+        env:
+          TENON_TEST_REDIS: 127.0.0.1:6379
         run: dotnet test backend/TenonAdmin.slnx -c Release --no-build
 
       # 消费者的第一条命令:dotnet new tenon-app → restore → build。
