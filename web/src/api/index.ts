@@ -47,6 +47,19 @@ export function unwrap<T>(res: { data?: unknown; error?: unknown; response: Resp
   return env.data as T
 }
 
+/**
+ * 分页三件套复用(每个列表端点都重复):
+ *   - 前端 {page,pageSize} → 后端 record 属性 {Current,Size}(PascalCase;ASP.NET 绑定大小写不敏感但类型要 Pascal)。
+ *     `...pageParams(p)` 展进各端点自己的 PascalCase 过滤条件,查询对象仍逐端点强类型校验(不走 any)。
+ *   - 后端 PagedList<T>({current,size,total,items}) → ProTable fetcher 契约的 {items,total}。
+ */
+const pageParams = (p: { page: number; pageSize: number }) => ({ Current: p.page, Size: p.pageSize })
+
+function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; total: number } {
+  const p = unwrap<PagedList<T>>(res)
+  return { items: p.items, total: p.total }
+}
+
 export const authApi = {
   login: (body: { account: string; password: string; captchaId?: string; captchaCode?: string }) =>
     client.POST('/api/v1/auth/login', { body }).then((r) => unwrap<LoginOutput>(r)),
@@ -84,8 +97,7 @@ export const userApi = {
         // sortField/sortOrder:ProTable 排序;后端按实体列白名单校验(非法忽略回退默认),见 PagedListExtensions.OrderBySafe。
         params: {
           query: {
-            Current: params.page,
-            Size: params.pageSize,
+            ...pageParams(params),
             Account: params.account,
             Name: params.name,
             OrgId: params.orgId,
@@ -95,8 +107,7 @@ export const userApi = {
           },
         },
       })
-      .then((r) => unwrap<PagedList<UserItem>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+      .then((r) => toPage<UserItem>(r)),
   /** 用户详情(含 roleIds,编辑回显 + 提交时原样带回避免清空角色)。 */
   detail: (id: number) => client.GET('/api/v1/sys/user/{id}', { params: { path: { id } } }).then((r) => unwrap<UserDetail>(r)),
   /** 新增用户;返回新 Id + 实际生效的初始口令(留空 password 时后端随机生成,不接住就没人知道这个号的密码)。 */
@@ -134,16 +145,14 @@ export const positionApi = {
       .GET('/api/v1/sys/position/page', {
         params: {
           query: {
-            Current: params.page,
-            Size: params.pageSize,
+            ...pageParams(params),
             Name: params.name,
             SortField: params.sortField,
             SortOrder: params.sortOrder,
           },
         },
       })
-      .then((r) => unwrap<PagedList<SysPosition>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+      .then((r) => toPage<SysPosition>(r)),
   add: (body: PositionInput) => client.POST('/api/v1/sys/position/add', { body }).then((r) => unwrap<number>(r)),
   update: (id: number, body: PositionInput) =>
     client.PUT('/api/v1/sys/position/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
@@ -156,10 +165,9 @@ export const roleApi = {
   page: (params: { page: number; pageSize: number; name?: string }) =>
     client
       .GET('/api/v1/sys/role/page', {
-        params: { query: { Current: params.page, Size: params.pageSize, Name: params.name } },
+        params: { query: { ...pageParams(params), Name: params.name } },
       })
-      .then((r) => unwrap<PagedList<SysRole>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+      .then((r) => toPage<SysRole>(r)),
   add: (body: RoleInput) => client.POST('/api/v1/sys/role/add', { body }).then((r) => unwrap<number>(r)),
   update: (id: number, body: RoleInput) =>
     client.PUT('/api/v1/sys/role/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
@@ -202,13 +210,12 @@ export const configApi = {
       .GET('/api/v1/sys/config/page', {
         params: {
           query: {
-            Current: params.page, Size: params.pageSize, ConfigKey: params.configKey, Name: params.name,
+            ...pageParams(params), ConfigKey: params.configKey, Name: params.name,
             GroupCode: params.groupCode, ExcludedGroupCodes: params.excludedGroupCodes,
           },
         },
       })
-      .then((r) => unwrap<PagedList<SysConfig>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+      .then((r) => toPage<SysConfig>(r)),
   add: (body: ConfigInput) => client.POST('/api/v1/sys/config', { body }).then((r) => unwrap<number>(r)),
   update: (id: number, body: ConfigInput) =>
     client.PUT('/api/v1/sys/config/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
@@ -261,14 +268,13 @@ export const logApi = {
       .GET('/api/v1/sys/log/login/page', {
         params: {
           query: {
-            Current: params.page, Size: params.pageSize,
+            ...pageParams(params),
             Account: params.account, Success: params.success,
             ...splitRange(params.createTime),
           },
         },
       })
-      .then((r) => unwrap<PagedList<SysLoginLog>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+      .then((r) => toPage<SysLoginLog>(r)),
   /** 清空登录日志(硬删,不可恢复)。 */
   loginClear: () => client.DELETE('/api/v1/sys/log/login', {}).then((r) => unwrap<boolean>(r)),
   /** 操作日志分页;操作名模糊 + 成败 + 操作人(精确)+ 接口路径(模糊)+ 时间范围——审计要能答"谁在什么时候干了什么"。 */
@@ -281,15 +287,14 @@ export const logApi = {
       .GET('/api/v1/sys/log/op/page', {
         params: {
           query: {
-            Current: params.page, Size: params.pageSize,
+            ...pageParams(params),
             Title: params.title, Success: params.success,
             OperatorId: params.operatorId, Path: params.path,
             ...splitRange(params.createTime),
           },
         },
       })
-      .then((r) => unwrap<PagedList<SysOpLog>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+      .then((r) => toPage<SysOpLog>(r)),
   /** 清空操作日志(硬删,不可恢复)。 */
   opClear: () => client.DELETE('/api/v1/sys/log/op', {}).then((r) => unwrap<boolean>(r)),
 }
@@ -317,10 +322,9 @@ export const dictAdminApi = {
   typePage: (params: { page: number; pageSize: number; code?: string; name?: string }) =>
     client
       .GET('/api/v1/sys/dict/type/page', {
-        params: { query: { Current: params.page, Size: params.pageSize, Code: params.code, Name: params.name } },
+        params: { query: { ...pageParams(params), Code: params.code, Name: params.name } },
       })
-      .then((r) => unwrap<PagedList<SysDictType>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+      .then((r) => toPage<SysDictType>(r)),
   typeAdd: (body: DictTypeInput) => client.POST('/api/v1/sys/dict/type', { body }).then((r) => unwrap<number>(r)),
   typeUpdate: (id: number, body: DictTypeInput) =>
     client.PUT('/api/v1/sys/dict/type/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
@@ -348,10 +352,9 @@ export const fileApi = {
   page: (params: { page: number; pageSize: number; originalName?: string }) =>
     client
       .GET('/api/v1/sys/file/page', {
-        params: { query: { Current: params.page, Size: params.pageSize, FileName: params.originalName } },
+        params: { query: { ...pageParams(params), FileName: params.originalName } },
       })
-      .then((r) => unwrap<PagedList<SysFile>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+      .then((r) => toPage<SysFile>(r)),
   /** 上传单个文件:bodySerializer 建 FormData(字段名 file),openapi-fetch 对 FormData 不注入 json header,浏览器自动补 boundary(client.ts 无需改)。 */
   upload: (file: File) =>
     client
@@ -402,9 +405,8 @@ export const sessionApi = {
   /** 在线会话分页(只读)。后端仅支持按 UserId 过滤,这里不带业务搜索。 */
   online: (params: { page: number; pageSize: number }) =>
     client
-      .GET('/api/v1/sys/session/online', { params: { query: { Current: params.page, Size: params.pageSize } } })
-      .then((r) => unwrap<PagedList<OnlineSessionItem>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+      .GET('/api/v1/sys/session/online', { params: { query: pageParams(params) } })
+      .then((r) => toPage<OnlineSessionItem>(r)),
   /** 强制下线:按 sessionId 踢会话。 */
   kick: (sessionId: string) =>
     client.DELETE('/api/v1/sys/session/{sessionId}', { params: { path: { sessionId } } }).then((r) => unwrap<boolean>(r)),
@@ -416,19 +418,17 @@ export const noticeApi = {
   page: (params: { page: number; pageSize: number; title?: string; type?: number }) =>
     client
       .GET('/api/v1/sys/notice/page', {
-        params: { query: { Current: params.page, Size: params.pageSize, Title: params.title, Type: params.type } },
+        params: { query: { ...pageParams(params), Title: params.title, Type: params.type } },
       })
-      .then((r) => unwrap<PagedList<SysNotice>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+      .then((r) => toPage<SysNotice>(r)),
   publish: (body: NoticePublishInput) => client.POST('/api/v1/sys/notice', { body }).then((r) => unwrap<number>(r)),
   remove: (id: number) => client.DELETE('/api/v1/sys/notice/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   // ── 用户端(任何登录用户) ──
   /** 我的通知分页(含已读标记)。 */
   mine: (params: { page: number; pageSize: number }) =>
     client
-      .GET('/api/v1/sys/notice/mine', { params: { query: { Current: params.page, Size: params.pageSize } } })
-      .then((r) => unwrap<PagedList<NoticeMineItem>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+      .GET('/api/v1/sys/notice/mine', { params: { query: pageParams(params) } })
+      .then((r) => toPage<NoticeMineItem>(r)),
   /** 当前用户未读通知数(顶栏角标轮询)。 */
   unreadCount: () => client.GET('/api/v1/sys/notice/unread-count', {}).then((r) => unwrap<number>(r)),
   markRead: (id: number) => client.PUT('/api/v1/sys/notice/{id}/read', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
@@ -452,9 +452,8 @@ export interface RecycleBinItem { id: number; name: string; code: string | null;
 
 export const recycleApi = {
   page: (type: string) => (params: { page: number; pageSize: number }) =>
-    client.GET('/api/v1/sys/recycle/{type}/page' as any, { params: { path: { type }, query: { Current: params.page, Size: params.pageSize } as any } })
-      .then((r) => unwrap<PagedList<RecycleBinItem>>(r))
-      .then((p) => ({ items: p.items, total: p.total })),
+    client.GET('/api/v1/sys/recycle/{type}/page' as any, { params: { path: { type }, query: pageParams(params) as any } })
+      .then((r) => toPage<RecycleBinItem>(r)),
   restore: (type: string, id: number) =>
     client.POST('/api/v1/sys/recycle/{type}/{id}/restore' as any, { params: { path: { type, id } } }).then((r) => unwrap<boolean>(r)),
   purge: (type: string, id: number) =>
