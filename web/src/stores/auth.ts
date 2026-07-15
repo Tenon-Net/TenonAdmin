@@ -46,6 +46,14 @@ export const useAuthStore = defineStore('auth', {
       const m = state.modules.find((x) => x.id === state.currentModuleId)
       return m?.defaultRoute || firstLeafPath(state.menuTree) || '/module'
     },
+    /**
+     * 按钮级权限判定(v-auth 指令与 render 函数内按钮共用同一套规则)。
+     * 超管 → 全放行;取码失败/未加载 → fail-closed(不谎报"有");否则精确命中权限码(= 规范化路由)。
+     * render 函数里 v-auth 指令用不了,按钮需调本 getter 做条件渲染,故显隐规则必须收敛到这一处。
+     */
+    hasPerm(state): (code: string) => boolean {
+      return (code) => (state.isSuperAdmin ? true : state.permissionsLoaded && state.permissionCodes.includes(code))
+    },
   },
   actions: {
     reset() {

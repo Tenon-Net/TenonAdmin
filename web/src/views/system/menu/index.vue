@@ -361,6 +361,7 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
     render: (r) =>
       h(StatusSwitch, {
         value: r.enabled,
+        disabled: !auth.hasPerm('PUT:/api/v1/sys/menu/{id}'), // 启停走全量 update,无更新权限则置灰
         // 停用是一键隐藏整棵子树的重操作,先确认;启用无副作用,跳过确认(返回 null)。
         confirm: (next: boolean) => (next ? null : t('menu.disableConfirm', { title: r.title })),
         request: (next: boolean) => menuApi.update(r.id, { ...toInput(r), enabled: next }),
@@ -380,21 +381,29 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
     width: 150,
     fixed: 'right',
     render: (r) =>
-      h(NSpace, { size: 2, wrapItem: false, justify: 'center' }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
-        h(
-          NDropdown,
-          {
-            trigger: 'click',
-            options: [
-              { key: 'addChild', label: t('menu.addChild') },
-              { key: 'delete', label: t('common.delete') },
-            ],
-            onSelect: (key: string) => (key === 'addChild' ? openAdd(r.id) : onDelete(r)),
-          },
-          () => h(NButton, { size: 'small', quaternary: true }, () => t('common.more')),
-        ),
-      ]),
+      h(NSpace, { size: 2, wrapItem: false, justify: 'center' }, () => {
+        // 「更多」里两项各自按权限码保留;都无权时整个下拉不渲染,避免空触发器。
+        const moreOptions = [
+          auth.hasPerm('POST:/api/v1/sys/menu/add') && { key: 'addChild', label: t('menu.addChild') },
+          auth.hasPerm('DELETE:/api/v1/sys/menu/{id}') && { key: 'delete', label: t('common.delete') },
+        ].filter(Boolean) as { key: string; label: string }[]
+        return [
+          auth.hasPerm('PUT:/api/v1/sys/menu/{id}')
+            ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit'))
+            : null,
+          moreOptions.length
+            ? h(
+                NDropdown,
+                {
+                  trigger: 'click',
+                  options: moreOptions,
+                  onSelect: (key: string) => (key === 'addChild' ? openAdd(r.id) : onDelete(r)),
+                },
+                () => h(NButton, { size: 'small', quaternary: true }, () => t('common.more')),
+              )
+            : null,
+        ]
+      }),
   },
 ]
 </script>
@@ -431,7 +440,7 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
           </template>
           {{ allExpanded ? t('common.collapseAll') : t('common.expandAll') }}
         </n-button>
-        <n-button type="primary" @click="openAdd(0)">
+        <n-button v-auth="'POST:/api/v1/sys/menu/add'" type="primary" @click="openAdd(0)">
           <template #icon><AppIcon icon="ph:plus" :size="16" /></template>{{ t('common.add') }}
         </n-button>
       </template>

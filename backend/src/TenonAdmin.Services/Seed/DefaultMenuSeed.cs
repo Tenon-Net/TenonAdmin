@@ -69,6 +69,8 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 96, ParentId = 87, Type = MenuType.Button, Title = "角色-取数据范围", Permission = "GET:/api/v1/sys/role/{id}/datascope", Sort = 24, Enabled = true },
         new SysMenu { Id = 3, ParentId = 87, Type = MenuType.Button, Title = "角色-授权菜单", Permission = "PUT:/api/v1/sys/role/menu", Sort = 25, Enabled = true },
         new SysMenu { Id = 4, ParentId = 87, Type = MenuType.Button, Title = "角色-数据范围", Permission = "PUT:/api/v1/sys/role/datascope", Sort = 26, Enabled = true },
+        new SysMenu { Id = 114, ParentId = 87, Type = MenuType.Button, Title = "角色-取用户", Permission = "GET:/api/v1/sys/role/{id}/users", Sort = 27, Enabled = true },
+        new SysMenu { Id = 115, ParentId = 87, Type = MenuType.Button, Title = "角色-授权用户", Permission = "PUT:/api/v1/sys/role/users", Sort = 28, Enabled = true },
 
         // ═══ 系统运维 ═══════════════════════════════════════════════
         new SysMenu { Id = 20, ParentId = 0, Type = MenuType.Catalog, Title = "系统运维", Permission = "", Icon = "ph:wrench-duotone", Sort = 2, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },

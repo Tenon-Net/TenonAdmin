@@ -4,12 +4,14 @@ import { NButton, NSpace, NTabs, NTabPane, NPopconfirm, useMessage } from 'naive
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import { useI18n } from 'vue-i18n'
 import { useConfirm } from '@/composables/useConfirm'
+import { useAuthStore } from '@/stores/auth'
 import { recycleApi, type RecycleBinItem } from '@/api'
 import { translateError } from '@/utils/error'
 
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
+const authStore = useAuthStore()
 
 const types = ['user', 'role', 'org', 'position', 'module', 'config', 'dict', 'menu'] as const
 type RecycleType = (typeof types)[number]
@@ -35,32 +37,36 @@ const columns: ProTableColumn<RecycleBinItem>[] = [
     hideInSetting: true,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () =>
-              run(() => recycleApi.restore(activeTab.value, r.id), t('recycle.restored')).then((ok) => {
-                if (ok) refreshTab(activeTab.value)
-              }),
-          },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'primary' }, () => t('recycle.restore')),
-            default: () => t('recycle.restoreConfirm', { name: r.name }),
-          },
-        ),
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () =>
-              run(() => recycleApi.purge(activeTab.value, r.id), t('recycle.purged')).then((ok) => {
-                if (ok) refreshTab(activeTab.value)
-              }),
-          },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('recycle.purge')),
-            default: () => t('recycle.purgeConfirm', { name: r.name }),
-          },
-        ),
+        authStore.hasPerm('POST:/api/v1/sys/recycle/{type}/{id}/restore')
+          ? h(
+              NPopconfirm,
+              {
+                onPositiveClick: () =>
+                  run(() => recycleApi.restore(activeTab.value, r.id), t('recycle.restored')).then((ok) => {
+                    if (ok) refreshTab(activeTab.value)
+                  }),
+              },
+              {
+                trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'primary' }, () => t('recycle.restore')),
+                default: () => t('recycle.restoreConfirm', { name: r.name }),
+              },
+            )
+          : null,
+        authStore.hasPerm('DELETE:/api/v1/sys/recycle/{type}/{id}')
+          ? h(
+              NPopconfirm,
+              {
+                onPositiveClick: () =>
+                  run(() => recycleApi.purge(activeTab.value, r.id), t('recycle.purged')).then((ok) => {
+                    if (ok) refreshTab(activeTab.value)
+                  }),
+              },
+              {
+                trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('recycle.purge')),
+                default: () => t('recycle.purgeConfirm', { name: r.name }),
+              },
+            )
+          : null,
       ]),
   },
 ]

@@ -21,6 +21,7 @@ import FileUpload from '@/components/FileUpload/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
 import { userApi, positionApi, roleApi, orgApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import { buildTree, type Tree } from '@/utils/tree'
 import type { AddUserInput, SysOrg, UpdateUserInput, UserItem } from '@/types/api'
@@ -28,6 +29,7 @@ import type { AddUserInput, SysOrg, UpdateUserInput, UserItem } from '@/types/ap
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
+const authStore = useAuthStore()
 const tableRef = ref<ProTableInst<UserItem>>()
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   remove: userApi.batchRemove,
@@ -140,8 +142,8 @@ const columns: ProTableColumn<UserItem>[] = [
     render: (r) =>
       h(StatusSwitch, {
         value: r.enabled,
-        // 超管不可停用(防自锁 —— 停了就没法从 UI 恢复;后端也保护)。
-        disabled: r.isSuperAdmin,
+        // 超管不可停用(防自锁 —— 停了就没法从 UI 恢复;后端也保护);无启停权限亦置灰。
+        disabled: r.isSuperAdmin || !authStore.hasPerm('PUT:/api/v1/sys/user/{id}/enabled'),
         confirm: (next: boolean) => (next ? null : t('user.disableConfirm', { name: r.name })),
         request: (next: boolean) => userApi.setEnabled(r.id, next),
         'onUpdate:value': (v: boolean) => {
@@ -165,9 +167,13 @@ const columns: ProTableColumn<UserItem>[] = [
     hideInSetting: true,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
-        h(NButton, { size: 'small', quaternary: true, onClick: () => openReset(r) }, () => t('user.resetPassword')),
-        r.isSuperAdmin
+        authStore.hasPerm('PUT:/api/v1/sys/user/{id}')
+          ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit'))
+          : null,
+        authStore.hasPerm('PUT:/api/v1/sys/user/{id}/password')
+          ? h(NButton, { size: 'small', quaternary: true, onClick: () => openReset(r) }, () => t('user.resetPassword'))
+          : null,
+        r.isSuperAdmin || !authStore.hasPerm('DELETE:/api/v1/sys/user/{id}')
           ? null
           : h(
               NPopconfirm,

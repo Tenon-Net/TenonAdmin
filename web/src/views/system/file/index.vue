@@ -9,6 +9,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import FileUpload from '@/components/FileUpload/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
+import { useAuthStore } from '@/stores/auth'
 import { fileApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { SysFile } from '@/types/api'
@@ -16,6 +17,7 @@ import type { SysFile } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
+const authStore = useAuthStore()
 const tableRef = ref<ProTableInst<SysFile>>()
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   remove: fileApi.batchRemove,
@@ -65,24 +67,28 @@ const columns: ProTableColumn<SysFile>[] = [
     hideInSetting: true,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
-        h(
-          NButton,
-          { size: 'small', quaternary: true, type: 'primary', onClick: () => download(r) },
-          { default: () => t('file.download'), icon: () => h(AppIcon, { icon: 'ph:download-simple', size: 15 }) },
-        ),
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () =>
-              run(() => fileApi.remove(r.id), t('file.deleted')).then((ok) => {
-                if (ok) tableRef.value?.refresh()
-              }),
-          },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
-            default: () => t('file.deleteConfirm', { name: r.originalName }),
-          },
-        ),
+        authStore.hasPerm('GET:/api/v1/sys/file/{id}/download')
+          ? h(
+              NButton,
+              { size: 'small', quaternary: true, type: 'primary', onClick: () => download(r) },
+              { default: () => t('file.download'), icon: () => h(AppIcon, { icon: 'ph:download-simple', size: 15 }) },
+            )
+          : null,
+        authStore.hasPerm('DELETE:/api/v1/sys/file/{id}')
+          ? h(
+              NPopconfirm,
+              {
+                onPositiveClick: () =>
+                  run(() => fileApi.remove(r.id), t('file.deleted')).then((ok) => {
+                    if (ok) tableRef.value?.refresh()
+                  }),
+              },
+              {
+                trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
+                default: () => t('file.deleteConfirm', { name: r.originalName }),
+              },
+            )
+          : null,
       ]),
   },
 ]

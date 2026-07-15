@@ -17,14 +17,9 @@ import { useAuthStore } from '@/stores/auth'
 export const vAuth: Directive<HTMLElement, string | string[]> = {
   mounted(el, binding) {
     const auth = useAuthStore()
-    if (auth.isSuperAdmin) return // 超管 → 显示全部
-    if (!auth.permissionsLoaded) return void el.remove() // 取码失败/未加载 → fail-closed
-    const codes = auth.permissionCodes
     const need = binding.value
     const mode = binding.modifiers.and ? 'every' : 'some'
-    const ok = Array.isArray(need)
-      ? need[mode]((c) => codes.includes(c))
-      : codes.includes(need)
-    if (!ok) el.remove()
+    const ok = Array.isArray(need) ? need[mode]((c) => auth.hasPerm(c)) : auth.hasPerm(need)
+    if (!ok) el.remove() // 判定规则(超管放行 / 未加载 fail-closed / 精确命中)收敛在 authStore.hasPerm
   },
 }

@@ -13,6 +13,7 @@ import FormContainer from '@/components/FormContainer/index.vue'
 import MarkdownEditor from '@/components/MarkdownEditor/index.vue'
 import MarkdownView from '@/components/MarkdownEditor/MarkdownView.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { useAuthStore } from '@/stores/auth'
 import { noticeApi, roleApi, userApi } from '@/api'
 import { NoticeType, ReceiverType, type NoticePublishInput, type SysNotice } from '@/types/api'
 import { translateError } from '@/utils/error'
@@ -20,6 +21,7 @@ import { translateError } from '@/utils/error'
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
+const authStore = useAuthStore()
 const tableRef = ref<ProTableInst<SysNotice>>()
 
 const typeLabel = (ty: NoticeType) =>
@@ -47,19 +49,21 @@ const columns: ProTableColumn<SysNotice>[] = [
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
         h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openView(r) }, () => t('notice.view')),
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () =>
-              run(() => noticeApi.remove(r.id), t('notice.deleted')).then((ok) => {
-                if (ok) tableRef.value?.refresh()
-              }),
-          },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
-            default: () => t('notice.deleteConfirm', { title: r.title }),
-          },
-        ),
+        authStore.hasPerm('DELETE:/api/v1/sys/notice/{id}')
+          ? h(
+              NPopconfirm,
+              {
+                onPositiveClick: () =>
+                  run(() => noticeApi.remove(r.id), t('notice.deleted')).then((ok) => {
+                    if (ok) tableRef.value?.refresh()
+                  }),
+              },
+              {
+                trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
+                default: () => t('notice.deleteConfirm', { title: r.title }),
+              },
+            )
+          : null,
       ]),
   },
 ]

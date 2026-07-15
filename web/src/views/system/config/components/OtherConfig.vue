@@ -11,6 +11,7 @@ import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pr
 import AppIcon from '@/components/AppIcon.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { useAuthStore } from '@/stores/auth'
 import { configApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { ConfigInput, SysConfig } from '@/types/api'
@@ -18,6 +19,7 @@ import type { ConfigInput, SysConfig } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
+const authStore = useAuthStore()
 const tableRef = ref<ProTableInst<SysConfig>>()
 const STRUCTURED_GROUPS = ['sys', 'security', 'upload']
 
@@ -39,21 +41,25 @@ const columns: ProTableColumn<SysConfig>[] = [
     hideInSetting: true,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
-        h(
-          NPopconfirm,
-          {
-            // popconfirm 当触发器,「执行→toast」交给 useConfirm().run(与 module 页一致)。
-            onPositiveClick: () =>
-              run(() => configApi.remove(r.id), t('config.deleted')).then((ok) => {
-                if (ok) tableRef.value?.refresh()
-              }),
-          },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
-            default: () => t('config.deleteConfirm', { name: r.name }),
-          },
-        ),
+        authStore.hasPerm('PUT:/api/v1/sys/config/{id}')
+          ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit'))
+          : null,
+        authStore.hasPerm('DELETE:/api/v1/sys/config/{id}')
+          ? h(
+              NPopconfirm,
+              {
+                // popconfirm 当触发器,「执行→toast」交给 useConfirm().run(与 module 页一致)。
+                onPositiveClick: () =>
+                  run(() => configApi.remove(r.id), t('config.deleted')).then((ok) => {
+                    if (ok) tableRef.value?.refresh()
+                  }),
+              },
+              {
+                trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
+                default: () => t('config.deleteConfirm', { name: r.name }),
+              },
+            )
+          : null,
       ]),
   },
 ]
