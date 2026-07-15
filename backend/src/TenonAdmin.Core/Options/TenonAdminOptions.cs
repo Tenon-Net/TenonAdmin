@@ -25,6 +25,9 @@ public class TenonAdminOptions
     /// <summary>API 配置(禁用模块等,见 <see cref="AdminApiOptions"/>)</summary>
     public AdminApiOptions Api { get; set; } = new();
 
+    /// <summary>演示模式:开启后仅允许 GET/HEAD/OPTIONS,其余写请求一律拒绝(41002)</summary>
+    public bool DemoMode { get; set; }
+
     /// <summary>雪花 ID 配置(机器号,见 <see cref="AdminIdOptions"/>)</summary>
     public AdminIdOptions Id { get; set; } = new();
 

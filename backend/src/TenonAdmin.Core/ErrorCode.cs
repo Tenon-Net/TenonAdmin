@@ -68,6 +68,10 @@ public enum ErrorCode
     [MsgKey("error.perm.denied")]
     NoPermission = 41001,
 
+    /// <summary>演示模式下禁止写操作</summary>
+    [MsgKey("error.perm.demoReadOnly")]
+    DemoModeReadOnly = 41002,
+
     // ── 42xxx 用户 / 组织 / 角色 / 菜单 ──────────────────────────────
 
     /// <summary>目标用户不存在;args 可携带 name</summary>

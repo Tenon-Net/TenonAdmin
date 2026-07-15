@@ -166,6 +166,8 @@ public static class TenonAdminSetup
         //   裸返回兜底包信封(用户控制器 return dto 即得 Result<T>,§12/T8)
         var mvc = services.AddControllers(o =>
             {
+                if (options.DemoMode)
+                    o.Filters.Add<DemoModeFilter>();
                 o.Filters.Add<AdminExceptionFilter>();
                 o.Filters.Add<OperationLogFilter>();
                 o.Filters.Add<ResultEnvelopeFilter>();
