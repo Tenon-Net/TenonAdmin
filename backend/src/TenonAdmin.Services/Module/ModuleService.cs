@@ -34,6 +34,7 @@ public class ModuleService(IRepository<SysModule> modules, ICacheProvider cache)
             Title = input.Title,
             Icon = input.Icon,
             DefaultRoute = input.DefaultRoute,
+            ApiPrefix = input.ApiPrefix,
             Sort = input.Sort,
             Enabled = input.Enabled,
             Remark = input.Remark,
@@ -56,6 +57,7 @@ public class ModuleService(IRepository<SysModule> modules, ICacheProvider cache)
         entity.Title = input.Title;
         entity.Icon = input.Icon;
         entity.DefaultRoute = input.DefaultRoute;
+        entity.ApiPrefix = input.ApiPrefix;
         entity.Sort = input.Sort;
         entity.Enabled = input.Enabled;
         entity.Remark = input.Remark;

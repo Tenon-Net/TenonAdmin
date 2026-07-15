@@ -45,13 +45,13 @@ const rules: FormRules = {
   title: { required: true, whitespace: true, message: () => t('module.nameRequired'), trigger: ['input', 'blur'] },
 }
 const editingId = ref<number | null>(null)
-const blank = (): ModuleInput => ({ code: '', title: '', icon: '', defaultRoute: '', sort: 0, enabled: true, remark: '' })
+const blank = (): ModuleInput => ({ code: '', title: '', icon: '', defaultRoute: '', apiPrefix: '', sort: 0, enabled: true, remark: '' })
 const form = reactive<ModuleInput>(blank())
 
 /** 行数据 → 完整入参:openEdit 回填与 StatusSwitch 行内改状态共用(后端无独立启停端点,均走全量 update)。 */
 const toInput = (r: ModuleRow): ModuleInput => ({
   code: r.code, title: r.title, icon: r.icon ?? '', defaultRoute: r.defaultRoute ?? '',
-  sort: r.sort, enabled: r.enabled, remark: r.remark ?? '',
+  apiPrefix: r.apiPrefix ?? '', sort: r.sort, enabled: r.enabled, remark: r.remark ?? '',
 })
 
 function openAdd() {
@@ -92,6 +92,7 @@ const columns: DataTableColumns<ModuleRow> = [
       ]),
   },
   { title: () => t('module.defaultRoute'), key: 'defaultRoute', render: (r) => r.defaultRoute || '—' },
+  { title: () => t('module.apiPrefix'), key: 'apiPrefix', width: 120, render: (r) => r.apiPrefix || '—' },
   { title: () => t('module.sort'), key: 'sort', width: 80 },
   {
     title: () => t('common.status'),
@@ -170,6 +171,12 @@ const columns: DataTableColumns<ModuleRow> = [
         <n-form-item :label="t('module.defaultRoute')">
           <n-input v-model:value="(form.defaultRoute as string)" placeholder="/system/user" />
         </n-form-item>
+        <n-form-item :label="t('module.apiPrefix')">
+          <n-space vertical :size="2" style="width: 100%">
+            <n-input v-model:value="(form.apiPrefix as string)" placeholder="sys" />
+            <span class="hint">{{ t('module.apiPrefixHint') }}</span>
+          </n-space>
+        </n-form-item>
         <n-form-item :label="t('module.sort')">
           <n-input-number v-model:value="form.sort" :min="0" style="width: 160px" />
         </n-form-item>
@@ -200,5 +207,9 @@ const columns: DataTableColumns<ModuleRow> = [
   font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--color-text-primary);
+}
+.hint {
+  font-size: 12px;
+  color: var(--color-text-secondary, #999);
 }
 </style>

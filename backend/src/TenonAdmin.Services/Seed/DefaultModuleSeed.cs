@@ -23,7 +23,7 @@ internal sealed class DefaultModuleSeed : ISeedData<SysModule>
 
     public IEnumerable<SysModule> HasData() =>
     [
-        new SysModule { Id = BUILTIN_MODULE_ID, Code = BUILTIN_MODULE_CODE, Title = "系统", Icon = "lucide:settings", DefaultRoute = "", Sort = 1, Enabled = true, Remark = "内置系统应用,不可删除" },
-        new SysModule { Id = BUSINESS_MODULE_ID, Code = "business", Title = "业务中心", Icon = "lucide:briefcase-business", DefaultRoute = "", Sort = 2, Enabled = true, Remark = "示例业务应用(可删除)" },
+        new SysModule { Id = BUILTIN_MODULE_ID, Code = BUILTIN_MODULE_CODE, Title = "系统", Icon = "lucide:settings", DefaultRoute = "", ApiPrefix = "sys", Sort = 1, Enabled = true, Remark = "内置系统应用,不可删除" },
+        new SysModule { Id = BUSINESS_MODULE_ID, Code = "business", Title = "业务中心", Icon = "lucide:briefcase-business", DefaultRoute = "", ApiPrefix = "biz", Sort = 2, Enabled = true, Remark = "示例业务应用(可删除)" },
     ];
 }

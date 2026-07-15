@@ -84,6 +84,9 @@ const typeText = (ty: MenuType) =>
   : ty === MenuType.Menu ? t('menu.typeMenu')
   : t('menu.typeButton')
 
+// 目录/页面用不同色系(蓝/绿)区分 —— 树里只有这两类,按钮不进树。
+const typeTagType = (ty: MenuType): 'info' | 'success' => (ty === MenuType.Catalog ? 'info' : 'success')
+
 // ── 弹窗表单(FormContainer:loading/底栏/关闭时机由容器按 onConfirm 协议接管)──
 const show = ref(false)
 const formRef = ref<FormInst | null>(null)
@@ -176,10 +179,10 @@ watch(visibleTree, (t) => (expandedKeys.value = expandableIds(t)), { immediate: 
 const allExpanded = computed(() => expandedKeys.value.length > 0)
 const toggleExpandAll = () => (expandedKeys.value = allExpanded.value ? [] : expandableIds(visibleTree.value))
 
-// 权限码下拉:label 展示「METHOD /路径」便于人眼辨认,value 就是要写进菜单的权限码本身。
-// filterable + tag:可搜可选,也保留手敲逃生口(消费方端点尚未部署、或想先占位时)。
-const permissionOptions = computed(() =>
-  routes.value.map((r) => ({ label: `${r.method} ${r.path}`, value: r.code })),
+// 当前所属应用的路由匹配前缀(sys/biz…):传给 ButtonManager,权限路由下拉据此按应用软过滤。
+// 「未分配」筛选或该应用未填 apiPrefix → undefined,ButtonManager 退化为不过滤。
+const currentAppPrefix = computed(() =>
+  moduleFilter.value === UNASSIGNED ? undefined : modules.value.find((m) => m.id === moduleFilter.value)?.apiPrefix ?? undefined,
 )
 // 组件路径下拉:取自 import.meta.glob 的真实文件表 —— 选得到的一定存在,不会再"填错→菜单静默消失"。
 const componentOptions = computed(() => viewComponentPaths.map((p) => ({ label: p, value: p })))
@@ -273,6 +276,15 @@ const onDelete = (r: MenuTreeNode) =>
     if (ok) Promise.all([load(), syncShell()])
   })
 
+// 展开图标:内核默认三角太淡、展开态朝下,辨识度低。统一成固定尺寸的「>」caret,展开时旋转 90°
+// —— 观感清晰(对齐 SimpleAdmin),尺寸恒定,行高不再因默认图标忽大忽小而参差。
+const renderExpandIcon = ({ expanded }: { expanded: boolean }) =>
+  h(
+    'span',
+    { style: `display:inline-flex;transition:transform .2s;transform:rotate(${expanded ? 90 : 0}deg)` },
+    h(AppIcon, { icon: 'ph:caret-right-bold', size: 13 }),
+  )
+
 const columns: ProTableColumn<MenuTreeNode>[] = [
   {
     title: () => t('menu.title'),
@@ -281,13 +293,27 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
     minWidth: 220,
     fixed: 'left', // 横向滚动时不能丢失「这是哪一行」
     render: (r) =>
-      h(NSpace, { align: 'center', size: 6, wrapItem: false }, () => [
-        r.icon ? h(AppIcon, { icon: r.icon, size: 18 }) : null,
+      // inline:必须行内 —— naive 的展开箭头是 inline-flex,默认块级 NSpace 会被挤到第二行。
+      h(NSpace, { inline: true, align: 'center', size: 6, wrapItem: false }, () => [
         r.title,
-        h(NTag, { size: 'tiny', bordered: false }, () => typeText(r.type)),
         // 「隐藏」是罕见状态(种子里 20/20 都是显示),只在为真时才占视觉 —— 省掉一整列同一个词。
         r.visible ? null : h(NTag, { size: 'tiny', bordered: false, type: 'warning' }, () => t('common.hidden')),
       ]),
+  },
+  // 图标独占一列(对齐 SimpleAdmin):留在标题列会和树形展开箭头 + 缩进挤在一起撑破首列换行。
+  {
+    title: () => t('menu.icon'),
+    key: 'icon',
+    width: 64,
+    align: 'center',
+    render: (r) => (r.icon ? h(AppIcon, { icon: r.icon, size: 18 }) : null),
+  },
+  // 类型独占一列(对齐 SimpleAdmin):不再塞在标题里。按类型着色,目录/页面一眼可辨。
+  {
+    title: () => t('menu.type'),
+    key: 'type',
+    width: 90,
+    render: (r) => h(NTag, { size: 'small', bordered: false, type: typeTagType(r.type) }, () => typeText(r.type)),
   },
   // 路由/组件路径:管理员核对菜单时真正要看的东西,原先只能点开编辑弹窗才看得到。
   // 权限码列已删 —— 树里只剩目录/页面,而它俩结构上永远没有权限码(种子 20/20 为空),
@@ -296,7 +322,7 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
     title: () => t('menu.path'),
     key: 'path',
     align: 'left',
-    width: 200,
+    width: 160,
     ellipsis: { tooltip: true },
     render: (r) => r.path || '—',
   },
@@ -304,21 +330,26 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
     title: () => t('menu.component'),
     key: 'component',
     align: 'left',
-    width: 220,
+    width: 180,
     ellipsis: { tooltip: true },
     render: (r) => r.component || '—',
   },
   {
     title: () => t('menu.buttons'),
     key: 'buttons',
-    width: 100,
+    width: 140,
     render: (r) => {
       const n = buttonInfoById.value.get(r.id)?.count ?? 0
-      // 0 也必须可点 —— 否则还没配按钮的页面永远加不了第一个。
+      // 权限按钮跟着页面走:只有页面才显示「配置权限」(含 0,可加首个);目录不显示 ——
+      // 唯一例外是已挂了按钮的目录(种子里仅系统运维/ping 这个无页面锚点),仍显示以便管理。
+      if (r.type !== MenuType.Menu && n === 0) return null
       return h(
         NButton,
-        { size: 'small', text: true, type: n > 0 ? 'primary' : undefined, onClick: () => openButtons(r) },
-        () => String(n),
+        { size: 'small', quaternary: true, type: n > 0 ? 'primary' : undefined, onClick: () => openButtons(r) },
+        {
+          icon: () => h(AppIcon, { icon: 'ph:shield-check', size: 15 }),
+          default: () => t('menu.configPerms', { n }),
+        },
       )
     },
   },
@@ -379,6 +410,8 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
       row-key="id"
       :pagination="false"
       storage-key="sys-menu"
+      :indent="26"
+      :render-expand-icon="renderExpandIcon"
       :expanded-row-keys="expandedKeys"
       @update:expanded-row-keys="(keys: number[]) => (expandedKeys = keys)"
     >
@@ -426,18 +459,8 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
           <n-form-item-gi :label="t('menu.sort')">
             <n-input-number v-model:value="form.sort" :min="0" style="width: 100%" />
           </n-form-item-gi>
-          <!-- 权限码 = 规范化路由。从后端实时路由表里选,而不是手敲——大小写/{id}/斜杠错一个字符
-               就是"明明授权了却还是 403"且无任何报错(超管测试还一切正常)。tag 保留手敲逃生口。 -->
-          <n-form-item-gi :span="2" :label="t('menu.permission')">
-            <n-select
-              v-model:value="form.permission"
-              :options="permissionOptions"
-              filterable
-              tag
-              clearable
-              :placeholder="t('menu.permissionPlaceholder')"
-            />
-          </n-form-item-gi>
+          <!-- 权限码字段已移除:目录/页面结构上永远无权限码(授权靠角色拥有菜单,页面是前端路由无后端端点),
+               真正的权限码只活在按钮上,统一走每行「配置权限」按钮里的 ButtonManager 配。 -->
           <n-form-item-gi v-if="isTopLevel" :span="2" :label="t('menu.module')">
             <n-select
               v-model:value="form.moduleId"
@@ -474,7 +497,7 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
       </n-form>
     </FormContainer>
 
-    <ButtonManager ref="buttonMgrRef" :tree="tree" :routes="routes" @changed="onButtonsChanged" />
+    <ButtonManager ref="buttonMgrRef" :tree="tree" :routes="routes" :app-prefix="currentAppPrefix" @changed="onButtonsChanged" />
   </div>
 </template>
 

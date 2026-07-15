@@ -160,6 +160,10 @@ builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, Product
 3. 进**角色管理**，给角色勾选该菜单/按钮 → 该角色用户即获得对应路由权限（授权变更即时失效缓存生效）。
 4. 也可用种子 `DefaultMenuSeed` 出厂预置菜单（蓝本 `Seed/DefaultMenuSeed.cs`）。
 
+> 💡 **让「配置权限」的路由下拉按应用过滤**：在**模块管理**里给你的业务应用填「路由前缀 `apiPrefix`」= 控制器的路由段（如 `biz`，对应 `/api/v1/biz/...`）。之后在菜单页给页面点「配置权限」建按钮时，路由下拉默认只列该应用的路由，勾「显示全部应用路由」才看其余应用。**填的是路由段 `biz`，不是模块编码 `business`**（二者不一致，内核系统模块 code=`system` 而路由段=`sys`）；留空 = 不过滤，退化为全量。此过滤只是 UI 降噪，非权限边界——模块不是权限轴，跨应用挂码仍会真实授权。
+
+> ⚠️ **改了已有种子行要 bump `SysSchemaVersion.Current`**：给内置模块新增 `ApiPrefix` 这类「同 Id 改字段」的种子改动，老库只有版本号变化时才会经 `SyncOnUpgrade` 回填（见 `SqlSugar/Entities/SysSchemaVersion.cs` 注释）。新增行不需要 bump。
+
 > 超管（`sadm`）自动见全部、放行全部，开发期无需配权。
 
 ### A10. 测试　`tests/TenonAdmin.Tests/`

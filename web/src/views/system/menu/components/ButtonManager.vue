@@ -23,6 +23,8 @@ import type { PermissionRouteItem } from '@/types/api'
 const props = defineProps<{
   tree: MenuTreeNode[]
   routes: PermissionRouteItem[]
+  /** 当前所属应用的路由匹配前缀(sys/biz…);空=不按应用过滤,全量显示。 */
+  appPrefix?: string
 }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
 
@@ -54,10 +56,33 @@ const buttons = computed<MenuTreeNode[]>(() => {
 /** 已占用的权限码,用于批量添加去重。 */
 const usedCodes = computed(() => new Set(buttons.value.map((b) => b.permission).filter(Boolean)))
 
+// ── 路由按应用软过滤 ────────────────────────────────────────────
+// route.path 形如 /api/v1/sys/...;appPrefix 是该应用的路由段(sys/biz)。空前缀=不过滤。
+// 软过滤:默认只列本应用路由,一键「显示全部」放开(业务页正当需要 /api/v1/sys/file 上传、/sys/dict 等共享系统路由)。
+const routeSeg = computed(() => (props.appPrefix ?? '').trim().replace(/^\/+|\/+$/g, ''))
+const belongsToApp = (path: string) => {
+  const seg = routeSeg.value
+  if (!seg) return true
+  return path.includes(`/${seg}/`) || path.endsWith(`/${seg}`)
+}
+/** 是否存在「非本应用」的路由 —— 决定要不要展示「显示全部」开关。 */
+const hasOtherRoutes = computed(() => routeSeg.value !== '' && props.routes.some((r) => !belongsToApp(r.path)))
+const showAllRoutes = ref(false)
+
 // 权限码下拉:label 展示「METHOD /路径」便于辨认,value 就是要写进 permission 的码本身。
-const permissionOptions = computed(() =>
-  props.routes.map((r) => ({ label: `${r.method} ${r.path}`, value: r.code })),
-)
+// 无前缀→平铺全量;有前缀且不显示全部→仅本应用;显示全部→按「本应用/其他应用」分组。
+const permissionOptions = computed(() => {
+  const toOpt = (r: PermissionRouteItem) => ({ label: `${r.method} ${r.path}`, value: r.code })
+  const seg = routeSeg.value
+  if (!seg) return props.routes.map(toOpt)
+  const inApp = props.routes.filter((r) => belongsToApp(r.path))
+  if (!showAllRoutes.value) return inApp.map(toOpt)
+  const other = props.routes.filter((r) => !belongsToApp(r.path))
+  return [
+    { type: 'group', key: '__inApp', label: t('menu.routesInApp'), children: inApp.map(toOpt) },
+    { type: 'group', key: '__other', label: t('menu.routesOther'), children: other.map(toOpt) },
+  ]
+})
 
 /**
  * 「所属页面」下拉:全部非按钮节点(目录 + 页面),缩进体现层级。
@@ -106,11 +131,13 @@ const toInput = (r: MenuTreeNode): MenuInput => ({
 
 function openAdd() {
   editingId.value = null
+  showAllRoutes.value = false // 新增默认只看本应用路由
   Object.assign(form, blank())
   editShow.value = true
 }
 function openEdit(r: MenuTreeNode) {
   editingId.value = r.id
+  showAllRoutes.value = true // 编辑时展开全部,保证已选的(可能跨应用的)权限码在下拉里可见
   Object.assign(form, toInput(r))
   editShow.value = true
 }
@@ -141,10 +168,12 @@ const batchKeyword = ref('')
  *  saveBatch 仍以全量 batchRows 的 checked 为准,不会漏掉被过滤隐藏的已勾选行。 */
 const filteredBatchRows = computed(() => {
   const kw = batchKeyword.value.trim().toLowerCase()
-  if (!kw) return batchRows.value
-  return batchRows.value.filter(
-    (r) => r.method.toLowerCase().includes(kw) || r.path.toLowerCase().includes(kw) || r.title.toLowerCase().includes(kw),
-  )
+  const seg = routeSeg.value
+  return batchRows.value.filter((r) => {
+    if (seg && !showAllRoutes.value && !belongsToApp(r.path)) return false // 按应用软过滤(可一键放开)
+    if (!kw) return true
+    return r.method.toLowerCase().includes(kw) || r.path.toLowerCase().includes(kw) || r.title.toLowerCase().includes(kw)
+  })
 })
 
 /** HTTP 方法 → 默认标题(可就地改)。 */
@@ -158,6 +187,7 @@ function defaultTitle(method: string): string {
 }
 function openBatch() {
   batchKeyword.value = ''
+  showAllRoutes.value = false // 批量默认只列本应用路由
   // 只列当前菜单还没建过的路由,避免重复。
   batchRows.value = props.routes
     .filter((r) => !usedCodes.value.has(r.code))
@@ -268,14 +298,19 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
           <n-select v-model:value="form.parentId" :options="parentOptions" filterable />
         </n-form-item-gi>
         <n-form-item-gi :label="t('menu.permission')">
-          <n-select
-            v-model:value="form.permission"
-            :options="permissionOptions"
-            filterable
-            tag
-            clearable
-            :placeholder="t('menu.permissionPlaceholder')"
-          />
+          <n-space vertical :size="4" style="width: 100%">
+            <n-select
+              v-model:value="form.permission"
+              :options="permissionOptions"
+              filterable
+              tag
+              clearable
+              :placeholder="t('menu.permissionPlaceholder')"
+            />
+            <n-checkbox v-if="hasOtherRoutes" v-model:checked="showAllRoutes" size="small">
+              {{ t('menu.showAllRoutes') }}
+            </n-checkbox>
+          </n-space>
         </n-form-item-gi>
         <n-form-item-gi :label="t('menu.sort')">
           <n-input-number v-model:value="form.sort" :min="0" style="width: 100%" />
@@ -297,9 +332,12 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
   >
     <n-empty v-if="!batchRows.length" :description="t('menu.noRoutesLeft')" style="padding: 24px 0" />
     <n-space v-else vertical :size="10">
-      <n-input v-model:value="batchKeyword" clearable :placeholder="t('menu.batchSearchPlaceholder')">
-        <template #prefix><AppIcon icon="ph:magnifying-glass" :size="16" /></template>
-      </n-input>
+      <n-space align="center" :size="12">
+        <n-input v-model:value="batchKeyword" clearable :placeholder="t('menu.batchSearchPlaceholder')" style="flex: 1">
+          <template #prefix><AppIcon icon="ph:magnifying-glass" :size="16" /></template>
+        </n-input>
+        <n-checkbox v-if="hasOtherRoutes" v-model:checked="showAllRoutes">{{ t('menu.showAllRoutes') }}</n-checkbox>
+      </n-space>
       <n-empty v-if="!filteredBatchRows.length" :description="t('menu.noRoutesLeft')" style="padding: 16px 0" />
       <n-space v-else vertical :size="6" style="max-height: 55vh; overflow: auto">
         <div v-for="r in filteredBatchRows" :key="r.code" style="display: flex; align-items: center; gap: 10px">

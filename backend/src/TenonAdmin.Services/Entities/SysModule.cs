@@ -28,6 +28,14 @@ public class SysModule : BaseEntity
     [SugarColumn(Length = 256, IsNullable = true, ColumnDescription = "默认落地路由")]
     public string? DefaultRoute { get; set; }
 
+    /// <summary>
+    /// 后端路由匹配前缀(如 <c>sys</c>/<c>biz</c>):菜单配权限按钮时,权限路由下拉据此按应用软过滤
+    /// (路由 <c>/api/v1/sys/...</c> ↔ 前缀 <c>sys</c>)。仅 UI 降噪,<b>非权限轴</b>;留空=不过滤。
+    /// 注意 <see cref="Code"/>(如 system)≠ 路由段(如 sys),故单列显式存前缀,不复用 Code。
+    /// </summary>
+    [SugarColumn(Length = 64, IsNullable = true, ColumnDescription = "后端路由匹配前缀(如 sys/biz)")]
+    public string? ApiPrefix { get; set; }
+
     [SugarColumn(ColumnDescription = "排序(小在前)")]
     public int Sort { get; set; }
 

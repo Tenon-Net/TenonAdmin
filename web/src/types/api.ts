@@ -71,6 +71,8 @@ export interface ModuleRow {
   title: string
   icon?: string | null
   defaultRoute?: string | null
+  /** 后端路由匹配前缀(如 sys/biz):菜单配按钮时权限路由下拉据此按应用软过滤;留空=不过滤。 */
+  apiPrefix?: string | null
   sort: number
   enabled: boolean
   remark?: string | null
@@ -102,6 +104,7 @@ export interface ModuleInput {
   title: string
   icon?: string | null
   defaultRoute?: string | null
+  apiPrefix?: string | null
   sort: number
   enabled: boolean
   remark?: string | null
