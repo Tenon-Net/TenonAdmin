@@ -341,7 +341,6 @@ async function copyResult() {
 
     <ProTable
       ref="tableRef"
-      class="user-table"
       :columns="columns"
       :fetcher="userApi.page"
       :params="tableParams"
@@ -508,7 +507,8 @@ async function copyResult() {
   font-weight: 600;
   font-size: var(--font-size-sm, 13px);
 }
-.user-table {
+/* ProTable 设了 inheritAttrs:false,class 会转发到内部 data-table,拿不到布局;需 :deep 命中真正根元素 .pro-table */
+.user-layout > :deep(.pro-table) {
   flex: 1;
   min-width: 0;
 }
