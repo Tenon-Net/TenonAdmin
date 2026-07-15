@@ -2,7 +2,12 @@ name: backend-release
 
 # 在 **main** 上打 tag(如 v0.1.0)即打包核心 NuGet 包 + dotnet new 模板包并推 nuget.org(设计 §T10)。
 # 开发在 dev,发版走 main:先把 dev 合进 main,再在 main 上打 tag。tag 打在别处会被下面的闸门拒绝。
-# 需在仓库 Secrets 配 NUGET_API_KEY;版本从 tag 名推导(去掉前缀 v)。
+# 版本从 tag 名推导(去掉前缀 v)。
+#
+# 发布凭证走 nuget.org 的 **Trusted Publishing(OIDC)**,不用长期 API Key:
+#   - GitHub 用 id-token 换一个短期(约 15 分钟)的 nuget key,发完即失效 —— 无密钥可泄漏、无到期需轮换。
+#   - 需在 nuget.org 建一条 Trusted Publishing 策略(Owner=Tenon-Net、Repo=TenonAdmin、
+#     Workflow=backend-release.yml),并把下方 NuGet/login 的 `user` 换成拥有这些包的 nuget.org 账号名。
 #
 # 推包是**不可撤销**的(nuget.org 只能 unlist,不能删),所以 push 之前必须先过闸门:
 # 构建 → 测试 → 模板冒烟(装消费者的第一条命令跑一遍)。三者任一红,就不发。
@@ -51,6 +56,10 @@ jobs:
   pack-push:
     needs: verify
     runs-on: ubuntu-latest
+    # id-token: write —— Trusted Publishing 用它签发 OIDC 令牌换取短期 nuget key。缺了这行 NuGet/login 拿不到令牌。
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +80,14 @@ jobs:
       - name: Pack templates
         run: dotnet pack templates/TenonAdmin.Templates.csproj -c Release -o artifacts -p:Version=${{ steps.ver.outputs.version }}
 
+      # 用 GitHub 的 OIDC 令牌换一个短期 nuget key。`user` 必须是 nuget.org 上建了 Trusted Publishing 策略、
+      # 且拥有(或被授权 push)这些包的账号名。换来的 key 落在 NUGET_API_KEY 环境变量里,仅本次运行有效。
+      - name: NuGet login (Trusted Publishing / OIDC)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: hu531035580
+
       # .snupkg 符号包与同名 .nupkg 一起自动推送,无需单列 glob。
       - name: Push to nuget.org
-        run: dotnet nuget push "artifacts/*.nupkg" -k "${{ secrets.NUGET_API_KEY }}" -s https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push "artifacts/*.nupkg" -k "${{ steps.login.outputs.NUGET_API_KEY }}" -s https://api.nuget.org/v3/index.json --skip-duplicate
