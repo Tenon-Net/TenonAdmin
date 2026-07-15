@@ -9,6 +9,18 @@ Once a tag triggers `backend-release`, it first runs build + tests + template sm
 
 > When releasing, **both halves' version numbers must be updated together**: the backend version is injected from the tag via `-p:Version`, while `web/package.json`'s `version` is a build-time constant **shown in the login page footer**. Forget to update it, and the version the user sees in the UI won't match the package they installed.
 
+## 0.1.1 - 2026-07-16
+
+Patch release: front-end button-level permission enforcement and a small role permission gap.
+
+### Fixed
+
+- **Action buttons are now hidden when the user's role lacks the permission** (create / edit / delete / copy / reset-password / force-logout / restore, plus status toggles). Previously many were shown regardless — notably **every row-action button** (built inside table `render()` functions, which the `v-auth` directive cannot reach) and **all buttons on the organization page** (which had no gating at all); clicking one then failed on the server with a 403. Gating is now centralized in a single `hasPerm(code)` check shared by the `v-auth` directive and render-function buttons, so the UI only offers what the role can actually do.
+- **Role "grant users" permission is now assignable.** `PUT /api/v1/sys/role/users` and `GET /api/v1/sys/role/{id}/users` were permission-gated but had no menu node, so the permission could never be granted to anyone but the super admin. The two menu nodes are now seeded (fresh databases pick them up automatically; existing databases need the two rows added manually, or a reseed).
+- **User management page now adapts to screen width** — it previously overflowed horizontally on narrow monitors and left a large blank area on wide ones, because the table's flex sizing never reached ProTable's root element.
+
+---
+
 ## 0.1.0 - 2026-07-15
 
 **First version published to nuget.org** (the earlier `0.0.1-preview` only ever existed in the repo and was never pushed as a package).
