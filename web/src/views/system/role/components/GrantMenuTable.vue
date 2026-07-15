@@ -150,7 +150,8 @@ const collapsed = reactive(new Set<number>())
 const allCollapsed = computed(() => filteredGroups.value.length > 0 && filteredGroups.value.every((g) => collapsed.has(g.id)))
 
 function toggleCollapse(id: number) {
-  collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id)
+  if (collapsed.has(id)) collapsed.delete(id)
+  else collapsed.add(id)
 }
 function toggleCollapseAll() {
   if (allCollapsed.value) {
