@@ -1,6 +1,6 @@
 # 认证与安全
 
-内核把登录、令牌、会话、防爆破、日志脱敏这些安全基线做成默认行为——三行 `Program.cs` 起的服务已经带上它们,不需要额外接线。本页逐项说明默认行为,以及对应的配置键与服务。多数策略既有部署期的 Options 默认,又能被运行时的 `SysConfig` 覆盖(改配置不改代码)。
+内核把登录、令牌、会话、防爆破、日志脱敏这些安全基线做成默认行为——三行 `Program.cs` 起的服务已经带上它们,不需要额外接线。多数策略分两层:部署期的 Options 默认,加上运行时能盖过它的 `SysConfig`(改配置不改代码、不重发)。这页讲每项策略的机制和配置键;至于上线前逐条核对哪些必须改、哪些能默认放行,交给 [部署指南的安全基线](/zh/guide/deployment/)——那边是核对清单,这边是机制。
 
 ## JWT 令牌
 
@@ -78,7 +78,7 @@ AdminException.ThrowIf(!string.Equals(stored, code, StringComparison.OrdinalIgno
 
 会话由 `SessionService` 管理(设计 §15):会话落库(源)+ 落缓存(热路径),刷新令牌只存 SHA-256 哈希,时间统一走 UTC。登录时用 GUID v7 生成 `sessionId`,写进令牌的 `sid` claim,作为在线用户列举与强退的稳定锚点。
 
-**强退即时生效**。授权管道每请求校验 `sid` 对应会话是否仍活跃(见 [请求管线](./request-pipeline.md) 第 ② 步)。管理员在「在线用户」里踢人时:
+**强退即时生效**。授权管道每请求校验 `sid` 对应会话是否仍活跃(见 [请求管线](/zh/backend/request-pipeline) 第 ② 步)。管理员在「在线用户」里踢人时:
 
 ```csharp
 public virtual async Task RevokeAsync(string sessionId)
@@ -116,6 +116,10 @@ public virtual async Task RevokeAsync(string sessionId)
 
 不满足时抛 `ErrorCode.PasswordTooWeak`,`args` 携带各项要求供前端提示。密码用 PBKDF2 哈希(`Pbkdf2PasswordHasher`)。
 
+**口令时效(默认关)**。复杂度之外还有一条运行时可配的过期策略:`sys.security.password.expireDays`(种子默认 `0` = 永不过期,>0 才启用)。登录第 4 步 `AuthService.CheckPasswordExpiryAsync` 拿 `SysUser.LastPasswordChangeTime` 加上有效天数比当前时间——**过期不拦登录**,只把该用户的 `MustChangePassword` 置真落库,并随登录出参回传前端,由前端强制跳改密页(和管理员重置密码是同一个信号)。自助改密成功会刷新 `LastPasswordChangeTime`、清掉标志,过期窗口从头计。
+
+`LastPasswordChangeTime` 是后加字段,存量用户可能为 null。真判过期前会先给 null 锚点回填当前时间,窗口从升级后首次登录起算——否则开启策略的当天,一批没有锚点的老用户会被一起判过期、集体卡在改密页。替换过 `ISecurityPolicyProvider` 的二开代码不受影响:新增的 `GetPasswordExpireDaysAsync` 带一个返回 0 的默认接口实现,旧实现不改也编得过、等同于关闭。
+
 **默认初始口令**(`TenonAdmin:Security:DefaultInitialPassword`):默认 `null` → 新建用户/重置密码时按账号生成密码学随机强口令,杜绝「随公开 NuGet 包分发的固定默认口令」这一已知凭据弱点。重置密码会把随机口令返回给管理员当场转达。
 
 ::: tip 首次启动的超管口令
@@ -138,6 +142,19 @@ public virtual async Task RevokeAsync(string sessionId)
 ::: warning 反向代理后取的是代理 IP
 上正式网关时需先接 `ForwardedHeaders` 中间件解析 `X-Forwarded-For`,否则同代理后所有客户端共用一个限流分区。
 :::
+
+## 演示模式(只读展示)
+
+想把系统挂成一个谁都能进来点、却改不动数据的对外演示站,打开 `TenonAdmin:DemoMode`(默认 `false`):
+
+```jsonc
+// appsettings.json —— 或环境变量 TenonAdmin__DemoMode=true
+{ "TenonAdmin": { "DemoMode": true } }
+```
+
+只有此时内核才注册全局授权过滤器 `DemoModeFilter`,按 HTTP 方法放行:GET/HEAD/OPTIONS 照常读;`/api/v1/auth/*`(登录、登出、刷新)也放行,否则连登录都做不了;其余 POST/PUT/PATCH/DELETE 一律回 HTTP 403,信封码 `41002`(`DemoModeReadOnly`),前端据码弹只读提示。
+
+它拦的是「写」这个动作本身,和角色权限无关——判断落在授权阶段、只看请求方法,所以超管进来照样改不动。要放行个别写接口(比如演示站自己的留言反馈),别用这个总开关,在业务侧单独处理。
 
 ## 日志脱敏
 

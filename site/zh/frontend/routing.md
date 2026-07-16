@@ -1,8 +1,6 @@
-# 路由与动态菜单(概览)
+# 路由与动态菜单
 
-前端的路由来自两个互不相干的源:构建期就定死的**静态壳**,和登录后按当前应用的菜单树在运行时重建出来的**动态路由**。本页依次讲清楚这两部分、多应用门户如何决定进哪个应用、把它们串起来的守卫,以及为什么每个页面都需要一个稳定身份,`keep-alive` 才认得出它。
-
-## 总览
+你在菜单管理里加一条菜单、填好组件路径、保存,它就成了一个能点进去的页面——这中间没有一张你手写的路由表。前端的路由来自两个互不相干的源:构建期就定死的**静态壳**,和登录后按当前应用的菜单树在运行时重建出来的**动态路由**。这页讲清楚这两侧怎么拼、菜单树怎么变成真实路由、以及为什么每个页面都得有个稳定身份 `keep-alive` 才认得出它。至于多应用门户怎么决定进哪个应用、把两侧缝在一起的守卫,拆在了[多应用门户与守卫](/zh/frontend/portal-guards);这页只管路由怎么建、页面怎么缓存。
 
 ```text
 staticRoutes(router/routes.ts)          buildRoutesForModule(useAuthMenu.ts)
@@ -19,21 +17,7 @@ staticRoutes(router/routes.ts)          buildRoutesForModule(useAuthMenu.ts)
 
 静态那一侧在两次部署之间从不变化。动态那一侧完全由当前选中的应用返回的菜单树决定——不同用户、不同角色、不同应用,挂在 `layout` 下的那批路由都各不相同。
 
-## 本节内容
-
-- [静态路由](/zh/frontend/routing)
-- [动态路由:菜单树→真实路由](/zh/frontend/routing)
-- [多应用门户](/zh/frontend/portal-guards)
-- [路由守卫](/zh/frontend/portal-guards)
-- [Keep-Alive 与具名组件](/zh/frontend/routing)
-
-
-
----
-
-<!-- TODO(rewrite): merged from static.md -->
-
-# 静态路由
+## 静态路由
 
 `router/routes.ts` 只定义一棵顶层树:
 
@@ -57,17 +41,11 @@ export const staticRoutes: RouteRecordRaw[] = [
 
 这里几处取舍都是刻意的:
 
-- **`/` 不设静态 `redirect`。** `redirect` 在路由 resolve 阶段就求值,早于全局守卫——那时菜单树很可能还没建好,算出来的落点必然是错的。`/` 真正落到哪由 `router.beforeEach` 里的守卫决定(见下文[守卫](/zh/frontend/portal-guards)一节)。
+- **`/` 不设静态 `redirect`。** `redirect` 在路由 resolve 阶段就求值,早于全局守卫——那时菜单树很可能还没建好,算出来的落点必然是错的。`/` 真正落到哪由 `router.beforeEach` 里的守卫决定(见[多应用门户与守卫](/zh/frontend/portal-guards))。
 - **404 挂在壳内,而非顶层。** 打错一个 URL 时侧边栏、标签栏、退出按钮照样在,不会把人甩到一个光秃秃的页面外面去。
 - **`/personal/notice` 是静态路由,不是菜单项。** 它在后端走 `[ActiveSession]`(任何登录用户都能读,不需要具体权限码)——做成菜单意味着要播种它、再给每个角色都授权一遍,纯属多余功课。它的入口在顶栏通知铃铛的「查看全部」链接上。
 
-
-
----
-
-<!-- TODO(rewrite): merged from dynamic.md -->
-
-# 动态路由:菜单树→真实路由
+## 动态路由:菜单树→真实路由
 
 `layout` 下除了那三个静态个人页和 404 兜底,其余全部来自 `useAuthMenu.ts` 的 `buildRoutesForModule`:
 
@@ -109,13 +87,7 @@ export async function buildRoutesForModule(moduleId: number): Promise<void> {
 
 每条注册出来的路由都带 `name: 'menu-{id}'` 和 `meta.keepAlive: true`,通过 `router.addRoute('layout', ...)` 挂在 `layout` 下。每个用这种方式加进去的路由名都会经 `registerDynamic(name)` 登记,好在登出或切应用时精确地把它们移除(见 `router/index.ts` 里的 `resetRouter`)。
 
-
-
----
-
-<!-- TODO(rewrite): merged from keep-alive.md -->
-
-# Keep-Alive 与具名组件
+## 页面缓存与具名组件
 
 `layouts/default.vue` 用这样的写法缓存页面:
 
@@ -147,9 +119,4 @@ export function namedPage(name: string, loader: AsyncComponentLoader) {
 路由链路里没有进度条(不用 NProgress 或类似的库)。文档标题也不是守卫设置的——它只在 `App.vue` 挂载时设一次,标题变化时由站点配置页再设一次,不会随每次导航联动。
 :::
 
-
-## 接下来看什么
-
-- [前端目录结构](/zh/frontend/structure)——views、components、stores 是怎么组织的。
-- [权限指令(`v-auth`)](/zh/frontend/permission)——按权限码控制按钮和元素的显隐。
-- [加一个前端页面](/zh/guide/frontend-page)——从零到有,完整走一遍加一个菜单驱动页面的过程。
+要从零把这套链路走一遍——建视图组件、种一条菜单、把组件路径填对——看[加一个前端页面](/zh/guide/frontend-page)。

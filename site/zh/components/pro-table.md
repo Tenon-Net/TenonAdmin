@@ -1,120 +1,143 @@
 # ProTable
 
-> `tenon-naive-pro-table` —— 面向 **Vue 3 + Naive UI** 的列驱动 Pro 表格。
+TenonAdmin 前端几乎每一张列表页都是同一张表：`tenon-naive-pro-table`（独立 npm 包，`^0.3.1`）。它的模型只有两件东西——一个 `columns` 数组同时驱动搜索表单、字典单元格和列设置面板，一个 `fetcher` 函数把任意后端接回来。这页只讲一件事：在 TenonAdmin 模板里怎么把它用对。逐个 prop 的完整清单在包的 README，这里不重复。
 
-一个 `columns` 数组同时驱动**搜索表单、字典单元格渲染和列设置面板**;一个 `fetcher` 函数适配任意后端。所有能力渐进可忽略——不用的功能不会碍事。零运行时依赖,peer 仅 `vue ^3.3` + `naive-ui ^2.34`,ESM only。
+## 一张列表页最少要写什么
 
-<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:1rem 0">
-  <a href="https://www.npmjs.com/package/tenon-naive-pro-table"><img src="https://img.shields.io/npm/v/tenon-naive-pro-table?color=cb3837&logo=npm" alt="npm"></a>
-  <a href="https://github.com/Tenon-Net/tenon-naive-pro-table"><img src="https://img.shields.io/github/stars/Tenon-Net/tenon-naive-pro-table?logo=github" alt="GitHub"></a>
-</div>
-
-## 特性
-
-- **列驱动一切** —— 列上声明 `search` 即成为搜索项;声明 `options` 后单元格翻译与搜索下拉共用同一份字典。
-- **单函数后端契约** —— `(params: {page, pageSize, ...搜索项}) => Promise<{items, total}>`,任何请求/响应结构都在 fetcher 里映射,无其他配置。
-- **列设置 + 持久化** —— 显隐、拖拽排序、左右固定;按 `storage-key` 存 localStorage,列定义演进时安全合并。
-- **密度切换** —— 舒适/紧凑,跟随宿主 Naive 主题(包内零 CSS)。
-- **请求竞态守卫** —— 快速翻页时乱序返回的过期响应直接丢弃。
-- **文案语言响应** —— 列标题/label 支持 `() => string`,切换语言即时更新。
-- **声明式格式化** —— `format: 'date' | 'datetime' | 'money'` 或自定义函数;**异步字典** `options: () => Promise<...>` 带 loading 与去重。
-- **`useProTable` / `useTableCrud`** —— UI 无关数据核与可选 CRUD 弹窗状态机,独立导出。
-
-## 安装
-
-```bash
-npm i tenon-naive-pro-table
-```
-
-## 快速开始
+拿岗位管理（`web/src/views/system/position/index.vue`）当骨架，删到只剩表格，它长这样：
 
 ```vue
 <script setup lang="ts">
 import { ProTable, type ProTableColumn } from 'tenon-naive-pro-table'
+import { positionApi } from '@/api'
+import { translateError } from '@/utils/error'
+import type { SysPosition } from '@/types/api'
 
-interface User { id: number; account: string; name: string; enabled: boolean; createTime: string }
-
-const columns: ProTableColumn<User>[] = [
-  { type: 'index' },
-  { key: 'account', title: '账号', search: true },
-  { key: 'name', title: '姓名', search: true },
-  {
-    key: 'enabled', title: '状态', tag: true, search: true,
-    options: [
-      { label: '启用', value: true, tagType: 'success' },
-      { label: '禁用', value: false },
-    ],
-  },
-  { key: 'createTime', title: '创建时间', format: 'datetime' },
+const columns: ProTableColumn<SysPosition>[] = [
+  { key: 'name', title: () => t('position.name'), search: true },
+  { key: 'code', title: () => t('position.code') },
+  { key: 'createTime', title: () => t('common.createTime'), format: 'datetime' },
 ]
-
-// 唯一的后端契约 —— 任意 API 在这里适配
-async function fetcher({ page, pageSize, ...query }) {
-  const res = await fetch(`/api/users?page=${page}&size=${pageSize}`).then(r => r.json())
-  return { items: res.list, total: res.total }
-}
 </script>
 
 <template>
-  <ProTable :columns="columns" :fetcher="fetcher" storage-key="users" />
+  <ProTable
+    :columns="columns"
+    :fetcher="positionApi.page"
+    storage-key="sys-position"
+    @error="(e) => message.error(translateError(e))"
+  />
 </template>
 ```
 
-必须渲染在宿主的 `<n-config-provider>` 内部——表格跟随其主题、locale 与密度。
+`name` 列写了 `search: true`，它就自动变成搜索表单里的一个输入框；`createTime` 写 `format: 'datetime'` 就按本地时间格式化。没写的东西不用管，表格不会替你臆造。四个约定藏在这段短代码里，下面逐个拆开。
 
-## 列定义
+## fetcher 是唯一要你适配的地方
 
-数据列继承 Naive UI 列属性(`width`、`fixed`、`align`、`ellipsis`、`sorter` 等全部透传),外加:
-
-| 字段 | 说明 |
-|---|---|
-| `key` | 行字段名;同时是搜索参数默认键、列设置 id、`#cell-{key}` 插槽名。必填。 |
-| `title` | `string \| () => VNodeChild`,函数形式渲染期求值——切语言即时生效。 |
-| `render` | `(row, rowIndex) => VNodeChild`,自定义单元格,优先级最高。 |
-| `format` | `'date' \| 'datetime' \| 'money' \| (value, row) => string`,声明式格式化。 |
-| `options` | 字典:一处声明,单元格翻译 + 搜索下拉两处使用。 |
-| `tag` | 翻译值渲染为 `NTag`(type 取命中项的 `tagType`)。 |
-| `search` | `boolean \| SearchConfig`,`true` = 有 `options` 用 select,否则 input。 |
-| `hide` / `hideInTable` / `hideInSetting` | 初始隐藏 / 仅作搜索项 / 不进列设置面板(典型:操作列)。 |
-
-特殊列:`{ type: 'selection' | 'expand' | 'index' }`;操作列 = 普通列 + `render` + `fixed: 'right'` + `hideInSetting: true`。
-
-单元格优先级:`render` → `#cell-{key}` 插槽 → `options` 翻译(+`tag`)→ `format` → 原始值。
-
-## 核心 Props
-
-| Prop | 说明 |
-|---|---|
-| `columns` | 必填 |
-| `fetcher` | `(params) => Promise<{items, total}>`,远程模式 |
-| `data` | 静态模式(客户端分页) |
-| `search` | `false` 隐藏搜索卡片;`layout: 'inline'` 无卡片单行,适配窄栏/主从栏 |
-| `storage-key` | 开启列设置 + 密度的 localStorage 持久化 |
-| `labels` | 传 `computed` 即随语言切换 |
-| `active-row-key` | 配合 `@row-click` 做主从选中高亮 |
-| `row-draggable` / `drag-handle` | 行拖拽排序(sortablejs 懒加载),落库由宿主 |
-
-其余属性(`striped`、`max-height`、`virtual-scroll`、`checked-row-keys` 等)原样透传给 `n-data-table`。
-
-**事件**:`search`、`reset`、`loaded`、`error`、`row-click`、`row-drag-sort`——组件自身不弹消息,宿主在 `@error` 里处理。
-
-## 全局默认(provide/inject)
-
-在宿主根组件 `provide` 一次,所有 ProTable 继承;优先级恒为 **实例 prop / 列显式值 > 全局默认 > 内置兜底**。
+ProTable 对后端只有一个假设：`fetcher(params) => Promise<{ items, total }>`。TenonAdmin 的后端返回的不是这个形状——它是 `PagedList<T>`（`{ current, size, total, items }`），翻页参数也叫 `Current`/`Size` 而不是 `page`/`pageSize`。这层差异不该散落在每个页面里，模板把它压在 `web/src/api/index.ts` 一处：
 
 ```ts
-// main.ts
-import { createProTableDefaults, PRO_TABLE_DEFAULTS } from 'tenon-naive-pro-table'
+// 前端 {page,pageSize} → 后端 record 属性 {Current,Size}(PascalCase)
+const pageParams = (p: { page: number; pageSize: number }) => ({ Current: p.page, Size: p.pageSize })
 
-app.provide(PRO_TABLE_DEFAULTS, createProTableDefaults({
-  align: 'left',
-  pageSizes: [10, 20, 50, 100],
-  labels: computed(() => ({ search: t('common.search'), reset: t('common.reset') })),
-}))
+// 后端 PagedList<T> → ProTable 契约的 {items,total}
+function toPage<T>(res): { items: T[]; total: number } {
+  const p = unwrap<PagedList<T>>(res)
+  return { items: p.items, total: p.total }
+}
+
+export const positionApi = {
+  page: (params: { page: number; pageSize: number; name?: string }) =>
+    client
+      .GET('/api/v1/sys/position/page', {
+        // 搜索键 name → 后端 PascalCase 的 Name;类型要求 Pascal,绑定本身大小写不敏感
+        params: { query: { ...pageParams(params), Name: params.name } },
+      })
+      .then((r) => toPage<SysPosition>(r)),
+}
 ```
 
-## 更多能力
+所以页面里 `:fetcher="positionApi.page"` 直接把 api 层的方法传进去就行，映射已经在那里做完了。加新列表页时，照着 `api/index.ts` 里现成的 `userApi.page`/`positionApi.page` 复制一份，改端点和搜索字段名——不要在组件里手动拼 `Current`/`Size`。
 
-树形/可展开行、服务端排序(`sorter: true`)、搜索折叠、虚拟滚动、合计行、合并单元格、跨页保持勾选等,均经 attrs / 列透传直接可用。
+搜索列的 `key` 就是搜出去的参数名（`name` 列会以 `name` 进 `fetcher`），要落到后端哪个字段，是 api 层那一步 `Name: params.name` 决定的。
 
-> 完整 API、行为约定与在 TenonAdmin 中的接入细节,见 [package README](https://github.com/Tenon-Net/tenon-naive-pro-table/blob/main/README.zh-CN.md) 与 [tenon COMPONENTS.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md)。
+## 模板里已经替你接好的三件事
+
+**labels 全局注入，页面不再手传。** ProTable 的“搜索/重置/刷新/列设置”这些按钮文案要跟 i18n 走，模板在 `web/src/main.ts` 一次性接上，之后每个页面都继承：
+
+```ts
+app.provide(
+  PRO_TABLE_DEFAULTS,
+  createProTableDefaults({
+    labels: computed(() => {
+      void i18n.global.locale.value // 触发 locale 依赖收集,切语言即时重算
+      const t = i18n.global.t
+      return { search: t('common.search'), reset: t('common.reset'), /* …列设置/密度等 */ }
+    }),
+  }),
+)
+```
+
+页面层因此不用写 `:labels`，只有要覆盖某一页的个别文案时才单独传。但列标题是个例外——它必须写成函数形式 `title: () => t('...')`，直接写 `title: t('...')` 只在建列那一刻求值，切语言不会更新（这条是提交 308a361 补的教训）。
+
+**错误留在视图层。** 包内不弹任何 UI，`fetcher` 抛错会 emit 到 `@error`，由页面决定怎么提示。全站统一写 `@error="(e) => message.error(translateError(e))"`：`translateError` 把后端的数字 `ErrorCode` 映射成当前语言的文案。
+
+**操作按钮按权限显隐。** 授权模型是“权限码即路由”，页面里对每个动作查一次 `authStore.hasPerm('{METHOD}:/{route}')`，无权就不渲染那个按钮：
+
+```ts
+// 操作列 render 里,逐个按钮门控
+authStore.hasPerm('PUT:/api/v1/sys/position/{id}')
+  ? h(NButton, { onClick: () => openEdit(r) }, () => t('common.edit'))
+  : null
+```
+
+工具栏上的新增/批量删除按钮同理，用 `v-auth` 指令：`v-auth="'POST:/api/v1/sys/position/add'"`。权限码字符串必须和后端路由模板逐字一致（含 `{id}` 这样的占位段），否则永远命中不到。
+
+`storage-key` 决定列设置和密度存到 localStorage 的哪个键（前缀 `protable:`），命名统一用 `{模块}-{页面}`，如 `sys-position`、`sys-user`。
+
+## 树表：静态数据模式，和它的四个坑
+
+先问自己一个问题：这张表是平铺分页的列表，还是机构、菜单那样带层级的树？平铺就用上面的 `fetcher` 模式，翻页搜索都交给它。树不一样——树没有分页，一次把整棵拉回来自己摆。机构页（`org/index.vue`）和菜单页（`menu/index.vue`）都走**静态 data 模式**：
+
+```vue
+<ProTable
+  :columns="columns"
+  :data="visibleTree"
+  row-key="id"
+  :pagination="false"
+  :expanded-row-keys="expandedKeys"
+  @update:expanded-row-keys="(keys) => (expandedKeys = keys)"
+/>
+```
+
+树列设 `minWidth: 220 + fixed: 'left'`，横向滚动时不会丢掉“这是哪一行”；文本列一律 `ellipsis: { tooltip: true }`，否则长路径换行会把行高撑得参差。操作最多留两个——编辑，加一个 `n-dropdown` 的“更多▾”。四个操作平铺在 260~300px 里必然换行，横向滚动时又够不着，org 和 menu 都栽过这一跤。下拉项里的删除用 `useConfirm().confirm`（dialog），`n-popconfirm` 是内联触发器，塞不进 dropdown。
+
+真正会让你调半天的是下面四个静默失败：
+
+**别加恒空列。** 菜单树剥掉按钮节点后只剩目录和页面，而权限码只挂在按钮上——于是“权限码”那一列 100% 是“—”。同理，关键字过滤跑在剥离后的树上，写 `n.permission` 永远命中不了，要按权限码搜得去查节点的按钮子节点（见 `menu/index.vue` 的 `buttonInfoById`）。菜单页干脆把权限码列整个删了。
+
+**搜索得自己算。** 静态 `:data` 模式下 ProTable 不做任何前端过滤——列上的 `search` 配置只负责渲染搜索控件和 emit，不会替你筛数据。所以关键字过滤走 `computed` + `utils/tree.ts` 的 `filterTree`（命中节点连整棵子树保留，未命中但有后代命中的作为祖先链保留）。关键字放 `#toolbar` 的 `n-input`，别用列的 `search`：树表没有分页，那张搜索卡片会白占一整块高度。
+
+**受控展开必须删掉 `default-expand-all`。** `:expanded-row-keys` 一旦传了，naive 就以它为准，初始的 `[]` 会把 `default-expand-all` 直接盖成“全折叠”。“默认全展开”得自己用 `expandableIds(tree)` 播种。还有一点：`data` 变了受控 keys 不会自动跟着变，搜索或切应用之后要重算，否则命中结果藏在折叠的祖先里看不见。
+
+::: warning 行内改状态后要重拉,不能往行对象上写值
+`filterTree` 剪枝时，“仅因后代命中而保留”的祖先是浅拷贝。搜索态下往行对象上写值（`r.enabled = v`）写的是这份副本，回不到源树——开关点完会自己弹回去。所以行内变更后调 `load()` 重拉，而不是本地写回。`StatusSwitch` 是悲观更新（请求成功才 emit），重拉一次就是最终态。
+:::
+
+## 排序、主从、窄栏搜索
+
+这些都在样例页里现成可抄，各占一句：
+
+- **列排序**（`user` 页）：列写 `sorter: true`，点表头把 `{ sortField, sortOrder }` 并进 `fetcher`；api 层要把它们映射成后端的 `SortField`/`SortOrder`（见 `userApi.page`）。后端按实体列白名单安全排序，非法字段忽略回退默认（`PagedListExtensions.OrderBySafe`），字段名就是实体属性名，大小写不敏感。
+- **主从选中**（`dict` 页）：`:active-row-key` + `@row-click` 做行高亮；行内的开关/按钮 render 里记得 `stopPropagation`，否则点它会冒泡触发 `@row-click`。
+- **窄栏搜索**（`dict` 页）：`:search="{ layout: 'inline' }"` 是无卡片单行版，配合列 `search: true`，适配主从右栏这类窄空间。
+
+列宽拖拽、虚拟滚动、合计行、合并单元格这类，全部经 attrs 或列属性透传给内层 `n-data-table`，不需要 ProTable 额外开 API——包里没拦的属性都原样往下传。
+
+## 版本与本地联调
+
+排序、搜索折叠这些依赖 `^0.3.1`；0.3.0 有个已知问题——`fetcher` 模式下的行拖拽从不生效（Sortable 只在 `onMounted` 绑一次，而空表时 naive 根本没渲染 tbody），所以模板锁的是 `^0.3.1`。改了后端的排序或分页契约后，记得 `npm run gen:api` 重新生成 schema（后端要在跑）。
+
+要连着包的源码调，`NPT_LOCAL=1 npm run dev` 直连兄弟仓库（见 `web/vite.config.ts`），回路和图标包一样：改源码 → 发补丁版 → bump。
+
+包的完整 prop、事件与逃生口 slot 以 [README](https://github.com/Tenon-Net/tenon-naive-pro-table/blob/main/README.zh-CN.md) 为准；本页只覆盖它在 TenonAdmin 模板里的接法。

@@ -1,6 +1,6 @@
 # HTTP 请求层
 
-前端每一次后端调用都走同一条流水线:后端 OpenAPI 生成的 schema 给客户端上类型,两个中间件分别管认证和令牌刷新,`unwrap` 把后端可能返回的两种响应形状都收拢成统一结果,视图层才拿到手。本页按顺序拆开每一环。
+前端每一次后端调用都走同一条链路:一个从后端 OpenAPI 契约推出类型的 openapi-fetch 客户端,加上两个中间件——一个负责在请求上挂令牌,一个在 401 时刷新令牌再把原请求重放一遍。这页讲这条链路怎么搭起来、两个中间件为什么写成现在这样,以及本地开发时请求为什么能不配 CORS 就打通后端。
 
 ## 全景
 
@@ -20,6 +20,8 @@ src/api/index.ts           按领域分组的 API 函数,统一形态:client.X(.
 views                       catch ApiError,经 translateError(err) 展示
 ```
 
+图里下面两格——`src/api/index.ts` 的 `unwrap`、视图层的 `translateError`——是响应回来之后的事:后端两种响应形状怎么收拢成一个结果、错误码怎么变成展示文案,拆在了[对接后端响应](/zh/frontend/api-contract)。这页只管到 `client.ts` 为止,也就是请求怎么带着类型和令牌发出去。
+
 ## 重新生成契约:`gen:api`
 
 ```bash
@@ -30,19 +32,7 @@ npm run gen:api   # openapi-typescript http://localhost:5100/openapi/v1.json -o 
 - `src/api/schema.d.ts` 是**生成产物**,禁止手改 —— 改后端的接口/DTO,重新生成即可;手改的内容下次生成会被无声覆盖。
 - `src/api/client.ts` 的 `createClient<paths>()` 就是拿这份文件当类型源,所以每一次 `client.GET/POST/PUT/DELETE` 调用从路径参数、查询参数、请求体到响应形状,全链路都是后端真实契约推出来的类型。
 
-## 本节内容
-
-- [类型化客户端与两个中间件](/zh/frontend/request) —— `client.ts` 的两个中间件:认证与 401 刷新
-- [开发代理与 CORS](/zh/frontend/request) —— 为什么请求层离不开 dev 代理
-- [对接后端响应](/zh/frontend/api-contract) —— `unwrap`、`ApiError`、分页助手与错误文案
-
-
-
----
-
-<!-- TODO(rewrite): merged from client.md -->
-
-# 类型化客户端与两个中间件
+## 类型化客户端与两个中间件
 
 ```ts
 const baseUrl = import.meta.env.VITE_API_BASE ?? ''
@@ -55,7 +45,7 @@ const bare = createClient<paths>({ baseUrl })
 
 两个中间件挂在 `client` 上(不挂在 `bare` 上,原因见下文):
 
-## 认证中间件
+### 认证中间件
 
 ```ts
 const authMiddleware: Middleware = {
@@ -69,7 +59,7 @@ const authMiddleware: Middleware = {
 
 请求发出时才去 store 读令牌(不是模块加载时读一次存住),所以每次都能拿到最新的令牌 —— 包括刚刚才刷新出来的那个。
 
-## 401 刷新中间件,以及为什么重放需要一份克隆
+### 401 刷新中间件,以及为什么重放需要一份克隆
 
 这是 `client.ts` 里最不直观的一段。问题在于:`Request` 的 body 是个流,只能被读一次。一个 POST/PUT 请求被判 401 后,流程要去刷新令牌、再拿同一个请求重放 —— 但等响应回来的时候,原始请求的 body 早就被 `fetch` 消费掉了,原样重放会把 body 发丢。
 
@@ -120,7 +110,7 @@ const refreshMiddleware: Middleware = {
 3. **刷新失败**(没有 refreshToken、网络错误、`code` 非零、或没有 `data`)—— 清空会话,跳转 `/login`(router 用惰性 import,避免与 `client.ts` 形成静态循环依赖)。
 4. **刷新成功** —— 用发出前存的克隆副本重建请求(GET/HEAD 本来就没克隆,直接用原始请求),补上刚刷新出来的新令牌,用**裸 `fetch()`** 重放 —— 而不是再走一次 `client.GET/POST(...)`。再走 `client` 会让两个中间件在这次重放上再跑一遍,万一新令牌也被拒(又是一次 401),就会递归进下一轮刷新。
 
-## 为什么 `doRefresh` 用 `bare` 而不是 `client`
+### 为什么 `doRefresh` 用 `bare` 而不是 `client`
 
 ```ts
 async function doRefresh(): Promise<boolean> {
@@ -138,13 +128,7 @@ async function doRefresh(): Promise<boolean> {
 
 `bare` 是用同一份 schema 建的第二个 `openapi-fetch` 客户端,但**不挂任何中间件**。刷新请求走 `bare`,意味着一次失败的刷新(比如 refreshToken 本身也过期了,接口照样答 401)根本不会再进 `refreshMiddleware.onResponse` —— `bare` 上没有中间件链可供递归。`onResponse` 里那道跳过 `/auth/refresh`/`/auth/login` 的 URL 判断是第二道保险,顺带也覆盖了经 `client` 调用登录失败的情况;刷新请求自身的防递归,根本上是靠它压根不在 `client` 的中间件链上。
 
-
-
----
-
-<!-- TODO(rewrite): merged from proxy.md -->
-
-# 开发代理与 CORS
+## 开发代理与 CORS
 
 类型化客户端(`src/api/client.ts`)和 `gen:api` 都默认浏览器是同源访问 `/api` 和 `/openapi` 的 —— `client` 的 `baseUrl` 默认为空,`gen:api` 拉取 `/openapi/v1.json` 时用的也是一个看起来相对的 URL,两者都没做任何跨域处理。本地开发时后端跑在 `:5100`,dev server 跑在 `:5173`,端口不一样,总得有个东西把这道缝补上,两边才能正常工作。
 
@@ -154,6 +138,7 @@ async function doRefresh(): Promise<boolean> {
 const apiTarget = process.env.TENON_API_TARGET ?? 'http://localhost:5100'
 
 server: {
+  port: 5173,
   proxy: {
     '/api': { target: apiTarget, changeOrigin: true },
     '/openapi': { target: apiTarget, changeOrigin: true },
@@ -161,9 +146,12 @@ server: {
 },
 ```
 
-它把 `:5173` 上的 `/api/*`、`/openapi/*` 请求转发给后端,浏览器自始至终只看到一个源。目标地址默认是 `http://localhost:5100`;后端跑在别处时,启动 Vite 前设置 `TENON_API_TARGET` 即可。
+它把 `:5173` 上的 `/api/*`、`/openapi/*` 请求转发给后端,浏览器自始至终只看到一个源(`:5173`),自然不存在跨域问题。目标地址默认是 `http://localhost:5100`;后端跑在别处时,启动 Vite 前设置 `TENON_API_TARGET` 即可。
 
-没有这层代理,类型化客户端的请求和 `gen:api` 的 schema 拉取都会直接打到后端的源上 —— 而后端 CORS 默认 deny-all,浏览器(或者 `gen:api` 的 fetch)会在响应传到 `unwrap` 或 `openapi-typescript` 之前就把它拒了。是这层代理让请求层"同源"这个前提在本地成立;生产环境下则是反向代理扮演同样的角色。
+没有这层代理,类型化客户端的请求和 `gen:api` 的 schema 拉取都会直接打到后端的源上 —— 而后端 CORS 默认 deny-all,浏览器(或者 `gen:api` 的 fetch)会在响应传到 `unwrap` 或 `openapi-typescript` 之前就把它拒了。是这层代理让请求层"同源"这个前提在本地成立。
+
+::: tip 生产环境没有这层代理
+`npm run dev` 的代理只在开发期存在。生产构建出的 `web/dist` 是纯静态文件,请求怎么到后端要在部署时自己解决:后端顺带托管前端产物、或 nginx/Caddy 反代,都是同源,不用配 CORS;只有前端和后端真跨源(前端上 CDN、后端独立域名)才需要动 `TenonAdmin:Api:Cors:AllowedOrigins`,方案见[部署路线 C:真跨源](/zh/guide/deployment/route-c)。
+:::
 
 完整代理配置与联调别名见[项目结构与启动](/zh/frontend/structure)。
-
