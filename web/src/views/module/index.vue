@@ -5,14 +5,18 @@ import { NButton, NEmpty, NSpin, NTag, useMessage } from 'naive-ui'
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useUserStore } from '@/stores/user'
 import { useModule } from '@/composables/useModule'
+import { resetRouter } from '@/router'
 import { translateError } from '@/utils/error'
+import { authApi } from '@/api'
 import TenonLogo from '@/components/TenonLogo.vue'
 
 const router = useRouter()
 const message = useMessage()
 const { t } = useI18n()
 const auth = useAuthStore()
+const user = useUserStore()
 const busy = ref(false)
 
 async function pick(id: number) {
@@ -25,6 +29,14 @@ async function pick(id: number) {
   } finally {
     busy.value = false
   }
+}
+
+async function handleLogout() {
+  try { await authApi.logout() } catch {}
+  resetRouter()
+  auth.reset()
+  user.clear()
+  router.replace('/login')
 }
 
 async function setDefault(id: number) {
@@ -50,7 +62,11 @@ async function setDefault(id: number) {
     </div>
 
     <n-spin :show="busy">
-      <n-empty v-if="!auth.modules.length" :description="t('module.empty')" style="padding: 60px 0" />
+      <n-empty v-if="!auth.modules.length" :description="t('module.empty')" style="padding: 60px 0">
+        <template #extra>
+          <n-button size="small" @click="handleLogout">{{ t('app.logout') }}</n-button>
+        </template>
+      </n-empty>
       <div v-else class="grid">
         <!-- 卡片是可点 div:补 role/tabindex/键盘激活,让键盘用户也能选应用(a11y) -->
         <div
