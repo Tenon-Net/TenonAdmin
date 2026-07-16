@@ -22,6 +22,7 @@ public class SecurityPolicyProvider(
     internal const string KEY_REQ_LOWER = "sys.security.password.requireLower";
     internal const string KEY_REQ_DIGIT = "sys.security.password.requireDigit";
     internal const string KEY_REQ_SPECIAL = "sys.security.password.requireSpecial";
+    internal const string KEY_EXPIRE_DAYS = "sys.security.password.expireDays";
     internal const string KEY_ACCESS_MIN = "sys.security.session.accessMinutes";
     internal const string KEY_REFRESH_MIN = "sys.security.session.refreshMinutes";
 
@@ -45,6 +46,9 @@ public class SecurityPolicyProvider(
         await BoolAsync(KEY_REQ_LOWER, true),
         await BoolAsync(KEY_REQ_DIGIT, true),
         await BoolAsync(KEY_REQ_SPECIAL, false));
+
+    /// <inheritdoc />
+    public virtual async Task<int> GetPasswordExpireDaysAsync() => await IntAsync(KEY_EXPIRE_DAYS, 0);
 
     /// <inheritdoc />
     public virtual async Task ValidatePasswordAsync(string password)

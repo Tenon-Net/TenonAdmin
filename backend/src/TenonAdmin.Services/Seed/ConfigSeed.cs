@@ -35,6 +35,7 @@ internal sealed class ConfigSeed : ISeedData<SysConfig>
         new SysConfig { Id = 6, ConfigKey = SecurityPolicyProvider.KEY_REQ_LOWER, ConfigValue = "true", Name = "密码须含小写字母", GroupCode = SecurityPolicyProvider.GROUP, Sort = 22, Remark = null },
         new SysConfig { Id = 7, ConfigKey = SecurityPolicyProvider.KEY_REQ_DIGIT, ConfigValue = "true", Name = "密码须含数字", GroupCode = SecurityPolicyProvider.GROUP, Sort = 23, Remark = null },
         new SysConfig { Id = 8, ConfigKey = SecurityPolicyProvider.KEY_REQ_SPECIAL, ConfigValue = "false", Name = "密码须含特殊字符", GroupCode = SecurityPolicyProvider.GROUP, Sort = 24, Remark = "特殊字符指非字母数字" },
+        new SysConfig { Id = 22, ConfigKey = SecurityPolicyProvider.KEY_EXPIRE_DAYS, ConfigValue = "0", Name = "密码有效天数", GroupCode = SecurityPolicyProvider.GROUP, Sort = 25, Remark = "超过天数后登录强制改密(不拦登录);≤0 永不过期" },
         new SysConfig { Id = 9, ConfigKey = SecurityPolicyProvider.KEY_ACCESS_MIN, ConfigValue = "120", Name = "访问令牌时长(分钟)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 30, Remark = "访问令牌有效期,到期需用刷新令牌换发" },
         new SysConfig { Id = 10, ConfigKey = SecurityPolicyProvider.KEY_REFRESH_MIN, ConfigValue = "10080", Name = "刷新令牌时长(分钟)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 31, Remark = "刷新令牌有效期,决定最长免登录时长(默认 7 天)" },
         new SysConfig { Id = 13, ConfigKey = CaptchaService.KEY_ENABLED, ConfigValue = "false", Name = "启用登录验证码", GroupCode = SecurityPolicyProvider.GROUP, Sort = 40, Remark = "开启后登录须过验证码;账号级锁定已挡爆破主向,此为浏览器侧加固" },

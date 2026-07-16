@@ -75,4 +75,12 @@ public class SysUser : BaseEntity
     /// </summary>
     [SugarColumn(ColumnDescription = "是否需强制改密")]
     public bool MustChangePassword { get; set; }
+
+    /// <summary>
+    /// 最后一次设置密码的时间(建号/管理员重置/自助改密均刷新)——密码过期判定的锚点(见 AuthService)。
+    /// null = 过期功能上线前的存量用户:首次登录时回填为当时时间,过期窗口从那一刻起算,
+    /// 避免功能启用当天全量老用户被一起判过期。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "最后改密时间")]
+    public DateTime? LastPasswordChangeTime { get; set; }
 }

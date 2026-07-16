@@ -16,6 +16,8 @@ const NUM_FIELDS = [
   { key: 'sys.security.loginLock.maxFailCount', min: 0 },
   { key: 'sys.security.loginLock.lockMinutes', min: 1 },
   { key: 'sys.security.password.minLength', min: 1 },
+  { key: 'sys.security.password.expireDays', min: 0 }, // 0 = 永不过期(合法值,不同于其余 min:1 项)
+
   { key: 'sys.security.session.accessMinutes', min: 1 },
   { key: 'sys.security.session.refreshMinutes', min: 1 },
   { key: 'sys.security.rateLimit.windowSeconds', min: 1 },
@@ -102,6 +104,9 @@ async function save() {
       <n-grid :cols="'1 s:2'" responsive="screen" :x-gap="32" :y-gap="0">
         <n-form-item-gi :label="label('sys.security.password.minLength')">
           <n-input-number v-model:value="nums['sys.security.password.minLength']" :min="1" style="width: 160px" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="label('sys.security.password.expireDays')">
+          <n-input-number v-model:value="nums['sys.security.password.expireDays']" :min="0" style="width: 160px" />
         </n-form-item-gi>
         <n-form-item-gi v-for="k in BOOL_FIELDS" :key="k" :label="label(k)">
           <n-switch v-model:value="bools[k]" />

@@ -333,6 +333,7 @@ export default {
         requireLower: 'Require lowercase',
         requireDigit: 'Require digit',
         requireSpecial: 'Require special char',
+        expireDays: 'Password max age (days, 0 = never)',
       },
       session: { title: 'Session lifetime', accessMinutes: 'Access token (min)', refreshMinutes: 'Refresh token (min)' },
       captcha: {

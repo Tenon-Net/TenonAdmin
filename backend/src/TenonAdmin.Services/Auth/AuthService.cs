@@ -35,9 +35,10 @@ public class AuthService(
             await ValidateCaptchaAsync(input);              // 1. 验证码(模块未接入时为直通)
             var user = await ValidateUserAsync(input);      // 2. 账密校验 —— 对接 LDAP/AD 覆写这步
             await CheckLoginPolicyAsync(user);              // 3. 策略检查(停用/锁定)
-            var pair = await CreateTokenAsync(user);        // 4. 签发令牌
-            await OnLoginSucceededAsync(user, pair);        // 5. 成功后置(登录日志/事件)
-            return BuildLoginOutput(user, pair);            // 6. 组装出参
+            await CheckPasswordExpiryAsync(user);           // 4. 密码过期检查(过期→置强制改密标志,不拦登录)
+            var pair = await CreateTokenAsync(user);        // 5. 签发令牌
+            await OnLoginSucceededAsync(user, pair);        // 6. 成功后置(登录日志/事件)
+            return BuildLoginOutput(user, pair);            // 7. 组装出参
         }
         catch (AdminException ex)
         {
@@ -78,6 +79,32 @@ public class AuthService(
     {
         AdminException.ThrowIf(!user.Enabled, ErrorCode.AccountDisabled);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 密码过期检查(§14,运行时可配 <c>sys.security.password.expireDays</c>,&lt;=0 关闭)。
+    /// 不拦登录:过期仅置 <see cref="SysUser.MustChangePassword"/> 并落库,前端据登录出参强制跳转改密
+    /// (与管理员重置密码同一信号,自助改密成功即清除并刷新 <see cref="SysUser.LastPasswordChangeTime"/>)。
+    /// <para><see cref="SysUser.LastPasswordChangeTime"/> 为 null 的存量用户在此回填为当前时间——
+    /// 过期窗口从升级后的首次登录起算,避免功能启用当天全量老用户被一起判过期。</para>
+    /// </summary>
+    protected virtual async Task CheckPasswordExpiryAsync(SysUser user)
+    {
+        var days = await policy.GetPasswordExpireDaysAsync();
+        if (days <= 0) return;
+
+        if (user.LastPasswordChangeTime is null)
+        {
+            user.LastPasswordChangeTime = DateTime.Now;
+            await users.UpdateAsync(user);
+            return;
+        }
+
+        if (!user.MustChangePassword && user.LastPasswordChangeTime.Value.AddDays(days) <= DateTime.Now)
+        {
+            user.MustChangePassword = true;
+            await users.UpdateAsync(user);
+        }
     }
 
     /// <summary>

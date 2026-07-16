@@ -28,4 +28,11 @@ public interface ISecurityPolicyProvider
 
     /// <summary>按当前策略校验口令;不满足抛 <see cref="ErrorCode.PasswordTooWeak"/>(args 携带策略明细供前端提示)。</summary>
     Task ValidatePasswordAsync(string password);
+
+    /// <summary>
+    /// 密码有效天数(&lt;=0 表示永不过期)。过期不拦登录,仅在登录时置 <c>MustChangePassword</c>
+    /// 让前端强制跳转改密(与管理员重置密码同一信号)。
+    /// 默认接口实现返回 0(关闭)——既有的自定义实现无需改动即可编译;内核默认实现从配置中心读取。
+    /// </summary>
+    Task<int> GetPasswordExpireDaysAsync() => Task.FromResult(0);
 }

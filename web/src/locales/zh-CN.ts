@@ -336,6 +336,7 @@ export default {
         requireLower: '须含小写字母',
         requireDigit: '须含数字',
         requireSpecial: '须含特殊字符',
+        expireDays: '密码有效天数(0=永不过期)',
       },
       session: { title: '会话时长', accessMinutes: '访问令牌(分钟)', refreshMinutes: '刷新令牌(分钟)' },
       captcha: {

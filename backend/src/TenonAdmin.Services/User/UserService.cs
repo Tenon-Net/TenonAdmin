@@ -176,6 +176,7 @@ public class UserService(
             Enabled = input.Enabled,
             IsSuperAdmin = false,       // 接口永不建超管(防提权);超管只能种子/手工建
             MustChangePassword = true,  // 管理员建号:初始口令由管理员/系统设定,强制用户首登改密(§14)
+            LastPasswordChangeTime = DateTime.Now,   // 密码过期窗口从建号起算
         };
         // 用户 + 角色成对写入包事务:任一步失败整体回滚,不留"已提交但无角色"的幽灵用户(P2-18)
         await InTransactionAsync(async () =>
@@ -263,6 +264,7 @@ public class UserService(
         var password = ResolveInitialPassword(newPassword);
         user!.Password = hasher.Hash(password);
         user.MustChangePassword = true;   // 管理员重置:强制用户下次登录后改密(§14)
+        user.LastPasswordChangeTime = DateTime.Now;   // 密码过期窗口从本次重置重新起算
         await users.UpdateAsync(user);
 
         // 重置密码的语义是"这个账号我不再信任现有持有者"——旧口令派生出的会话必须一并作废,
