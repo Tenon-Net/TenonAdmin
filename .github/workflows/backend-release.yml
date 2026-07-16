@@ -69,6 +69,43 @@ jobs:
         shell: pwsh
         run: templates/smoke-test.ps1 -Version ($env:GITHUB_REF_NAME -replace '^v', '')
 
+      # openapi.json is a release artifact (design §13.6/§17): capture and validate it inside the gate —
+      # if the contract can't be produced, the release must not ship, and it must go red *before* the irreversible nuget push.
+      # Capture takes the exact same path as dev.sh / the frontend's gen:api: boot MinimalHost and fetch /openapi/v1.json
+      # over HTTP (the endpoint is Development-only by design, see TenonAdminSetup.MapTenonAdmin / P2-8).
+      # The slnx was already built above, hence --no-build; zero-config SQLite cold start, /health/ready green = tables + seeds done.
+      - name: Generate openapi.json (boot MinimalHost, fetch the contract)
+        run: |
+          ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://127.0.0.1:5100 \
+            dotnet run --no-build --no-launch-profile -c Release \
+            --project backend/samples/MinimalHost > minimalhost.log 2>&1 &
+          APP_PID=$!
+          ready=0
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:5100/health/ready > /dev/null; then ready=1; break; fi
+            if ! kill -0 "$APP_PID" 2>/dev/null; then
+              echo "::error::MinimalHost exited before becoming ready"; cat minimalhost.log; exit 1
+            fi
+            sleep 2
+          done
+          [ "$ready" = "1" ] || { echo "::error::MinimalHost never became ready"; cat minimalhost.log; exit 1; }
+          curl -sf http://127.0.0.1:5100/openapi/v1.json -o openapi.json \
+            || { echo "::error::failed to fetch /openapi/v1.json"; cat minimalhost.log; exit 1; }
+          # A non-empty contract or nothing: a 0-path document means controllers didn't get scanned in — block the release just the same.
+          jq -e '.openapi and (.paths | length > 0)' openapi.json > /dev/null \
+            || { echo "::error::openapi.json is empty or not a valid OpenAPI document"; exit 1; }
+          kill "$APP_PID"
+          echo "openapi.json captured: $(jq -r '.paths | length' openapi.json) paths"
+
+      # Hand-off to the archive job (jobs don't share a filesystem). The artifact is just the courier;
+      # the outward-facing archive medium is the Release asset (actions artifacts expire after ~90 days).
+      - name: Upload openapi.json (hand-off to archive job)
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi
+          path: openapi.json
+          if-no-files-found: error
+
   pack-push:
     needs: verify
     runs-on: ubuntu-latest
@@ -107,3 +144,33 @@ jobs:
       # The .snupkg symbol packages are pushed automatically alongside the .nupkg of the same name, so no separate glob is needed.
       - name: Push to nuget.org
         run: dotnet nuget push "artifacts/*.nupkg" -k "${{ steps.login.outputs.NUGET_API_KEY }}" -s https://api.nuget.org/v3/index.json --skip-duplicate
+
+  # Archive the release artifact (design §13.6 contract discipline): attach openapi.json as a GitHub Release asset,
+  # so a future standalone frontend repo pins a backend tag and pulls releases/download/<tag>/openapi.json — never chases main.
+  # A separate job rather than part of pack-push: the publishing job holds OIDC credentials and keeps `contents: read`;
+  # `needs: pack-push` guarantees the Release only appears after the nuget push succeeded (Release exists = that version shipped).
+  archive-openapi:
+    needs: pack-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: openapi
+
+      # Idempotent: re-running a failed job may find the Release already created — fall back to upload --clobber.
+      # A version with '-' (e.g. 0.1.2-preview) is a SemVer prerelease; mark the Release accordingly.
+      - name: Create GitHub Release with openapi.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" openapi.json --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" openapi.json \
+              --verify-tag $prerelease --title "$GITHUB_REF_NAME" --generate-notes
+          fi
