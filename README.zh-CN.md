@@ -25,7 +25,7 @@
 TenonAdmin 不是一套需要复制再二开的后台模板——它把用户、角色、菜单、数据权限、日志等通用能力封装成 NuGet 包，三行代码接入已有项目，默认即跑，按需替换。
 
 <p align="center">
-  <img src="./assets/readme/dashboard.png" width="100%"
+  <img src="./assets/readme/zh-CN/dashboard.png" width="100%"
        alt="TenonAdmin 工作台界面 — 侧边菜单、统计卡片、活跃趋势图和资源分布图">
 </p>
 
