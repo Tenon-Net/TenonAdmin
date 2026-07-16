@@ -611,7 +611,7 @@ web/src/
 
 ## 8. 工程与开源基建
 
-- **CI(后端)**:GitHub Actions —— push: build + test;tag `v*`: pack + push nuget.org;附带产出 `openapi.json` artifact。
+- **CI(后端)**:GitHub Actions —— push: build + test;tag `v*`: pack + push nuget.org;`openapi.json` 挂为 GitHub Release asset(`releases/download/<tag>/openapi.json`,将来 React 独立仓固定拉 tag)。
 - **CI(前端)**:lint + type-check + build。
 - **测试**:`TenonAdmin.Tests`(xunit + `WebApplicationFactory` 集成测试),v1.0 至少覆盖:
   1. 认证全流程(登录/刷新/锁定);
@@ -654,12 +654,12 @@ web/src/
 - [x] `composables` 逻辑层 + `ProTable`/`SearchForm` 等通用组件;登录 → 动态路由 → `v-auth`
 - [x] §7.3 全部页面(Naive 地道写法);openapi-typescript 生成 API 层(§13.6);i18n(zh-CN/en-US)接入 —— 后端 17 个 Controller 每一个都有对应页面,zh-CN/en-US 各 497 键零缺口
 
-### M3 —— v1.0 发布准备(NuGet 打包提前落,其余待 M2 后)
+### M3 —— v1.0 发布准备 ✅ 完成(2026-07-16)
 - [x] 文档补全(快速开始/配置/覆写指南/自建模块走查 §5.7/i18n §13/安全 §14)—— 2026-07-16 落地:双语 VitePress 文档站(`site/`,commit `191913d`)
 - [x] Docker:后端多阶段镜像 + docker-compose demo(§11)—— `Dockerfile` + `docker-compose.yml`/`docker-compose.scale.yml` + `web/Dockerfile`,CI 见 `docker-smoke.yml`(single/multi 两腿)
-- [ ] `openapi.json` 归档为发布产物
-- [x] NuGet 预发布打包(T10):5 包 0.0.1-preview + tag→nuget.org 发布流水线 + 洁净消费者端到端验证(**首次真推待仓库 Secrets 配 `NUGET_API_KEY`**);Vue 前端 tag / README 宣传物料待 M2 后
-- [ ] 走一遍 §18 最小验收闭环
+- [x] `openapi.json` 归档为发布产物 —— 2026-07-16 落地:`backend-release.yml` verify 阶段起 MinimalHost 抓 `/openapi/v1.json` 并 jq 校验非空(契约发不出即拦发版,先于不可逆的 nuget push),nuget 推送成功后由 `archive-openapi` job 挂为 GitHub Release asset(`releases/download/<tag>/openapi.json`,React 独立仓固定拉 tag 即用);抓取段 shell 本地已验(85 paths 通过),端到端待下次真 tag
+- [x] NuGet 预发布打包(T10):5 包 0.0.1-preview + tag→nuget.org 发布流水线 + 洁净消费者端到端验证(发布走 nuget.org Trusted Publishing / OIDC,无长期密钥;v0.1.1 已真发);Vue 前端 tag / README 宣传物料待 M2 后
+- [x] 走一遍 §18 最小验收闭环 —— 2026-07-16 完成:16 步全过。API 半场由 76 个域测试对号(SQLite 本机全绿 267/267;MySQL/SqlServer/PostgreSQL 腿由 backend-ci 矩阵、容器链路由 docker-smoke 覆盖);消费者三行启动经模板冒烟 + 独立首启脚本验证(首启打印随机超管口令、二启静默、/health+/openapi 200);浏览器半场用 chrome-devtools 驱动走完(登录→建机构/角色/用户→授权菜单+数据范围→新用户首登强制改密→菜单权裁剪+数据范围隔离生效→操作日志→我的会话踢下线→F5 动态路由重建),验收数据已清理
 
 ### v1.x 路线(发布后按需)
 **拆出 `tenon-admin-web-react` 独立仓 + React 版模板** → **SoybeanUI 皮肤**(补视图层)→ **分片上传** → IP 地理/UA 精解 → 代码生成 → Excel 导入导出 →
