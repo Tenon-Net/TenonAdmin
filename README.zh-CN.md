@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://tenonadmin.52moyu.net/login"><strong>🔗 在线预览</strong></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://tenon.52moyu.net"><strong>📖 文档</strong></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="CHANGELOG.md"><strong>📋 更新日志</strong></a>
+  <a href="https://tenonadmin.52moyu.net/login"><strong>🔗 在线预览</strong></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://tenon.52moyu.net/zh/"><strong>📖 文档</strong></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="CHANGELOG.md"><strong>📋 更新日志</strong></a>
 </p>
 
 ---

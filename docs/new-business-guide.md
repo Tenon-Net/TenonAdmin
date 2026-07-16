@@ -2,6 +2,6 @@
 
 完整开发指南已迁到文档站,后续以站点为准(单一来源,持续更新):
 
-👉 **https://tenon.52moyu.net/zh/guide/new-business**
+👉 **https://tenon.52moyu.net/zh/guide/new-business/**
 
 涵盖:以字典模块为蓝本的端到端流程(实体 / DTO / 服务 / 控制器 / 错误码 / 缓存 / 种子 / 菜单授权 / 测试)、内核内加(路线 A)与消费方程序集挂载(路线 B)、前端契约生成到 CRUD 视图、以及端到端清单。

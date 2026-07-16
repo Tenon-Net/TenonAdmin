@@ -22,9 +22,12 @@ logs/
 ## 后端本地开发配置（包含种子凭据，不提交；使用 .example 模板 + dotnet user-secrets）
 backend/**/appsettings.Development.json
 
-## 前端（web/）
+## 前端（web/）与文档站（site/）
+# node_modules/ 与 dist/ 无前导斜杠 → 已覆盖 site/node_modules 和 site/.vitepress/dist
 node_modules/
 dist/
+# VitePress 构建缓存（含内部斜杠会锚定到根，需 **/ 前缀才能匹配 site/ 下）
+**/.vitepress/cache/
 .env.local
 # Playwright 产物：web/.gitignore 已忽略 web/ 下的同名目录，但从仓库根运行时会遗漏这些
 test-results/
@@ -51,3 +54,6 @@ backend/scratchpad/
 ## 同步工具冲突副本/传输临时文件（Syncthing 等生成的本地垃圾文件）
 *.sync-conflict-*
 ~syncthing~*
+
+## /loop 任务账本（跨轮记忆，操作态，不提交）
+.loop/

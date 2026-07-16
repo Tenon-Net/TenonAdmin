@@ -10,13 +10,35 @@ const enGuideSidebar = [
     items: [
       { text: 'Quick Start', link: '/guide/getting-started' },
       { text: 'Core Concepts', link: '/guide/concepts' },
+      { text: 'Syncing Your Fork', link: '/guide/sync-fork' },
     ],
   },
   {
     text: 'Advanced',
     items: [
-      { text: 'Deployment', link: '/guide/deployment' },
-      { text: 'New Business Module', link: '/guide/new-business' },
+      {
+        text: 'Deployment',
+        link: '/guide/deployment/',
+        items: [
+          { text: 'Overview', link: '/guide/deployment/' },
+          { text: 'Route A: Monolithic Deployment', link: '/guide/deployment/route-a' },
+          { text: 'Route B: Reverse Proxy (nginx or Caddy)', link: '/guide/deployment/route-b' },
+          { text: 'Route C: True Cross-Origin (CDN)', link: '/guide/deployment/route-c' },
+          { text: 'Route D: Docker', link: '/guide/deployment/route-d' },
+          { text: 'Multi-Replica Deployment', link: '/guide/deployment/multi-replica' },
+          { text: 'Post-Deploy Self-Check', link: '/guide/deployment/post-deploy-check' },
+        ],
+      },
+      {
+        text: 'New Business Module',
+        link: '/guide/new-business/',
+        items: [
+          { text: 'Overview', link: '/guide/new-business/' },
+          { text: 'A. Backend', link: '/guide/new-business/backend' },
+          { text: 'B. Frontend', link: '/guide/new-business/frontend' },
+          { text: 'C. End-to-End Checklist', link: '/guide/new-business/checklist' },
+        ],
+      },
     ],
   },
   {
@@ -30,9 +52,9 @@ const enGuideSidebar = [
 const enThemeConfig = {
   nav: [
     { text: 'Guide', link: '/guide/getting-started' },
-    { text: 'Internals', link: '/deep/architecture' },
-    { text: 'Tutorials', link: '/tutorial/quickstart' },
+    { text: 'Backend', link: '/backend/structure' },
     { text: 'Frontend', link: '/frontend/structure' },
+    { text: 'Tutorials', link: '/tutorial/quickstart' },
     { text: 'Standards', link: '/standard/backend' },
     { text: 'Components', link: '/components/' },
     { text: 'Community', link: '/community/contributing' },
@@ -42,16 +64,22 @@ const enThemeConfig = {
   sidebar: {
     '/guide/': enGuideSidebar,
     '/faq': enGuideSidebar,
-    '/deep/': [
+    '/backend/': [
       {
-        text: 'Internals',
+        text: 'Getting Started',
         items: [
-          { text: 'Architecture & Package Layering', link: '/deep/architecture' },
-          { text: 'Request Pipeline', link: '/deep/request-pipeline' },
-          { text: 'Multi-Org Data Permissions', link: '/deep/data-scope' },
-          { text: 'Auth & Security', link: '/deep/auth-security' },
-          { text: 'Replaceability Model', link: '/deep/replaceability' },
-          { text: 'Data Layer & Auditing', link: '/deep/data-layer' },
+          { text: 'Project Structure & Startup', link: '/backend/structure' },
+        ],
+      },
+      {
+        text: 'Core',
+        items: [
+          { text: 'Architecture & Package Layering', link: '/backend/architecture' },
+          { text: 'Request Pipeline', link: '/backend/request-pipeline' },
+          { text: 'Multi-Org Data Permissions', link: '/backend/data-scope' },
+          { text: 'Auth & Security', link: '/backend/auth-security' },
+          { text: 'Replaceability Model', link: '/backend/replaceability' },
+          { text: 'Data Layer & Auditing', link: '/backend/data-layer' },
         ],
       },
     ],
@@ -157,13 +185,35 @@ const zhGuideSidebar = [
     items: [
       { text: '快速开始', link: '/zh/guide/getting-started' },
       { text: '核心概念', link: '/zh/guide/concepts' },
+      { text: '同步你的 Fork', link: '/zh/guide/sync-fork' },
     ],
   },
   {
     text: '进阶',
     items: [
-      { text: '部署', link: '/zh/guide/deployment' },
-      { text: '新建业务模块', link: '/zh/guide/new-business' },
+      {
+        text: '部署',
+        link: '/zh/guide/deployment/',
+        items: [
+          { text: '概览', link: '/zh/guide/deployment/' },
+          { text: '路线 A:单体部署', link: '/zh/guide/deployment/route-a' },
+          { text: '路线 B:反向代理(nginx 或 Caddy)', link: '/zh/guide/deployment/route-b' },
+          { text: '路线 C:真跨源(CDN)', link: '/zh/guide/deployment/route-c' },
+          { text: '路线 D:Docker', link: '/zh/guide/deployment/route-d' },
+          { text: '多副本部署', link: '/zh/guide/deployment/multi-replica' },
+          { text: '部署后自检', link: '/zh/guide/deployment/post-deploy-check' },
+        ],
+      },
+      {
+        text: '新建业务模块',
+        link: '/zh/guide/new-business/',
+        items: [
+          { text: '概览', link: '/zh/guide/new-business/' },
+          { text: 'A. 后端', link: '/zh/guide/new-business/backend' },
+          { text: 'B. 前端', link: '/zh/guide/new-business/frontend' },
+          { text: 'C. 端到端清单', link: '/zh/guide/new-business/checklist' },
+        ],
+      },
     ],
   },
   {
@@ -177,9 +227,9 @@ const zhGuideSidebar = [
 const zhThemeConfig = {
   nav: [
     { text: '指南', link: '/zh/guide/getting-started' },
-    { text: '深入原理', link: '/zh/deep/architecture' },
-    { text: '实战教程', link: '/zh/tutorial/quickstart' },
+    { text: '后端', link: '/zh/backend/structure' },
     { text: '前端', link: '/zh/frontend/structure' },
+    { text: '实战教程', link: '/zh/tutorial/quickstart' },
     { text: '代码规范', link: '/zh/standard/backend' },
     { text: '组件生态', link: '/zh/components/' },
     { text: '参与', link: '/zh/community/contributing' },
@@ -189,16 +239,22 @@ const zhThemeConfig = {
   sidebar: {
     '/zh/guide/': zhGuideSidebar,
     '/zh/faq': zhGuideSidebar,
-    '/zh/deep/': [
+    '/zh/backend/': [
       {
-        text: '深入原理',
+        text: '入门',
         items: [
-          { text: '架构分层与包依赖', link: '/zh/deep/architecture' },
-          { text: '请求管线', link: '/zh/deep/request-pipeline' },
-          { text: '多组织数据权限', link: '/zh/deep/data-scope' },
-          { text: '认证与安全', link: '/zh/deep/auth-security' },
-          { text: '可替换性模型', link: '/zh/deep/replaceability' },
-          { text: '数据层与审计', link: '/zh/deep/data-layer' },
+          { text: '项目结构与启动', link: '/zh/backend/structure' },
+        ],
+      },
+      {
+        text: '核心',
+        items: [
+          { text: '架构分层与包依赖', link: '/zh/backend/architecture' },
+          { text: '请求管线', link: '/zh/backend/request-pipeline' },
+          { text: '多组织数据权限', link: '/zh/backend/data-scope' },
+          { text: '认证与安全', link: '/zh/backend/auth-security' },
+          { text: '可替换性模型', link: '/zh/backend/replaceability' },
+          { text: '数据层与审计', link: '/zh/backend/data-layer' },
         ],
       },
     ],
