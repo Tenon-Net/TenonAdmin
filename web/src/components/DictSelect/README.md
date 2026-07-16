@@ -29,4 +29,4 @@
 const options = useDictOptions('common_status')   // ComputedRef<DictItem[]>,自动触发加载
 ```
 
-同族组件:[DictRadio](../DictRadio/README.md)(单选按钮组)、[DictTag](../DictTag/README.md)(表格列翻译)。
+同族组件:[DictTag](../DictTag/README.md)(表格列翻译)。

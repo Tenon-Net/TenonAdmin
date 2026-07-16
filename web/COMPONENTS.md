@@ -40,18 +40,14 @@ tenon 内接入约定:
 | FormContainer | 弹窗/抽屉二合一表单容器;onConfirm 协议接管 loading/关闭,全局形态可在设置抽屉切换 | `src/components/FormContainer/README.md` |
 | StatusSwitch | 表格行内启停开关;悲观更新,失败自动回滚 | `src/components/StatusSwitch/README.md` |
 | DictSelect | 字典下拉,`$attrs` 全透传 n-select | `src/components/DictSelect/README.md` |
-| DictRadio | 字典单选按钮组(搜索栏互斥条件) | `src/components/DictRadio/README.md` |
 | DictTag | 表格列字典翻译 + 语义色标签 | `src/components/DictTag/README.md` |
 | OrgTreeSelect | 机构树下拉;拉 `org/list` 平铺 → `utils/tree.buildTree` 拼树,`$attrs` 透传 n-tree-select;`excludeSubtreeOf` 剪自身子树防成环 | `src/components/OrgTreeSelect/README.md` |
 | FileUpload | 封 n-upload `custom-request`;内部 `fileApi.upload` 自动带 Bearer,成功 `emit('uploaded', out)`,上传起止各 `emit('loadingChange', bool)`(try/finally 兜底,给触发器加"上传中"spinner);`$attrs` 透传(accept/multiple/show-file-list)。`chunked` 走分片/断点续传/秒传(`utils/chunkUpload`,进度回 n-upload) | `src/components/FileUpload/README.md` |
 | PasswordStrength | 密码强度条 + 规则清单;自包含,`:value` 传密码明文,内部拉当前生效密码策略动态构建规则(改密页 / 建用户页共用) | `src/components/PasswordStrength/README.md` |
 | ApiSelect | 通用远程分页下拉基座;`fetch(keyword)` 回归一选项,管加载/远程搜索防抖/竞态/loading,`$attrs` 透传 n-select | `src/components/ApiSelect/README.md` |
 | UserSelect | 人员选择器;基于 ApiSelect,`userApi.page` 搜索 + 可选 `orgId` 部门过滤,label 为「姓名(账号)」 | `src/components/UserSelect/README.md` |
-| RoleSelect | 角色选择器;基于 ApiSelect,`roleApi.page` 搜索,只列启用角色,多选常用 | `src/components/RoleSelect/README.md` |
-| DictCheckbox | 字典多选(复选框组);同 DictSelect/DictRadio 基座,`v-model:value` 为数组 | `src/components/DictCheckbox/README.md` |
-| JsonEditor | JSON 值编辑薄版(零依赖):textarea + 实时校验 + 格式化;仅用于约定为 JSON 的字段,`expose.valid()` 供提交前校验 | `src/components/JsonEditor/README.md` |
 | MarkdownEditor / MarkdownView | 通知公告 Markdown 编辑/只读渲染(封 md-editor-v3);存 Markdown 纯文本,跟随明暗主题;通知页已落地 | `src/components/MarkdownEditor/README.md` |
-| Chart(+ LineChart/BarChart/PieChart) | ECharts 封装(封 vue-echarts);自动跟随明暗主题/accent、按需注册图种、自带 autoresize;预设传 data、BaseChart 传 option;工作台已落地 | `src/components/Chart/README.md` |
+| Chart(+ LineChart/PieChart) | ECharts 封装(封 vue-echarts);自动跟随明暗主题/accent、按需注册图种、自带 autoresize;预设传 data、BaseChart 传 option;工作台已落地 | `src/components/Chart/README.md` |
 
 字典三件套的数据基座是 `src/stores/dict.ts`(按 typeCode 缓存 + 并发去重;字典管理操作后调 `invalidate()`),页面拿原始选项用 `useDictOptions(typeCode)`。范例页:`src/views/system/menu/index.vue`、`module/index.vue`(FormContainer + useConfirm + StatusSwitch 完整落地)。
 

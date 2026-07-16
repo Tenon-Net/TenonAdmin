@@ -37,16 +37,3 @@ export function btnGrad(accent: string): string {
 export function glowSh(accent: string): string {
   return `0 6px 20px ${rgba(accent, 0.42)}`
 }
-
-// ponytail: 主题派生是"钱路径"(视觉正确性),留一处可跑自检。浏览器控制台调用 window.__mixDemo?.()
-export function demo(): void {
-  const eq = (got: string, want: string) => {
-    if (got.toLowerCase() !== want.toLowerCase()) throw new Error(`mix 断言失败: ${got} !== ${want}`)
-  }
-  eq(mix('#000000', '#ffffff', 0.5), '#808080')
-  eq(mix('#000000', '#ffffff', 0), '#000000')
-  eq(mix('#000000', '#ffffff', 1), '#ffffff')
-  eq(mix('#646CFF', '#000000', 0.18), '#5259d1') // == tokens 的 --color-primary-pressed
-  // eslint-disable-next-line no-console
-  console.log('[theme/mix] demo OK')
-}

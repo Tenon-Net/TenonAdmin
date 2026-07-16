@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 通用远程下拉:parent 传 fetch(keyword) 回选项数组(已 {label,value})或 {items};本组件管
 // 初次加载 / 远程搜索(防抖)/ loading / 竞态,其余(v-model:value、multiple、clearable、
-// placeholder、size…)一切经 $attrs 透传 n-select。UserSelect/RoleSelect 皆基于此。
+// placeholder、size…)一切经 $attrs 透传 n-select。UserSelect 皆基于此。
 import { onMounted, ref, watch } from 'vue'
 import { NSelect, type SelectOption } from 'naive-ui'
 

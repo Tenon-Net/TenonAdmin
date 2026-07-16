@@ -1,11 +1,11 @@
 # Chart(ECharts 封装)
 
 封 [`vue-echarts`](https://github.com/ecomfe/vue-echarts) + ECharts,**自动跟随应用明暗主题 / accent 换色**、自带 `autoresize`。
-一个目录一族:`index.vue`(BaseChart 基座)+ `LineChart` / `BarChart` / `PieChart`(薄预设)。
+一个目录一族:`index.vue`(BaseChart 基座)+ `LineChart` / `PieChart`(薄预设)。
 
 ## 什么时候用哪个
 
-- **预设**(`LineChart` / `BarChart` / `PieChart`):常规折线 / 柱 / 饼,传 `data`,少写模板。
+- **预设**(`LineChart` / `PieChart`):常规折线 / 饼,传 `data`,少写模板。
 - **BaseChart**(`Chart/index.vue`):其余一切(仪表盘 / 雷达 / 散点 / 组合图 / 大屏),自己拼 `option` 传 `:option`。
 
 预设内部就是拼好 `option` 再套 BaseChart —— 主题联动只在 BaseChart 一处。
@@ -28,7 +28,6 @@ BaseChart 用 `computed` 依赖 `app.isDark` / `app.accent`,变化时**现读 `s
 <script setup lang="ts">
 import Chart from '@/components/Chart/index.vue'
 import LineChart from '@/components/Chart/LineChart.vue'
-import BarChart from '@/components/Chart/BarChart.vue'
 import PieChart from '@/components/Chart/PieChart.vue'
 </script>
 
@@ -53,5 +52,5 @@ import PieChart from '@/components/Chart/PieChart.vue'
 **BaseChart**:`option`(ECharts option 对象,必填)、`loading?`、`autoresize?=true`。其余属性 `$attrs` 透传 `<v-chart>`;
 高度默认 `320px`,用 `style="height: …"` 或 class 覆盖。
 
-**LineChart** / **BarChart**:`categories: string[]`、`series: { name; data: number[] }[]`、`title?`;LineChart 另有 `smooth?=true`。
+**LineChart**:`categories: string[]`、`series: { name; data: number[] }[]`、`title?`、`smooth?=true`。
 **PieChart**:`data: { name; value: number }[]`、`title?`、`ring?=true`(false 为实心饼)。

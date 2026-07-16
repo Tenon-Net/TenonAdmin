@@ -1,6 +1,6 @@
 # ApiSelect
 
-通用远程分页下拉,其余远程选择器(UserSelect/RoleSelect…)的基座。封 `n-select`,负责:初次加载、远程搜索(防抖)、loading、竞态守卫(只认最新一次)、选项归一。
+通用远程分页下拉,其余远程选择器(UserSelect…)的基座。封 `n-select`,负责:初次加载、远程搜索(防抖)、loading、竞态守卫(只认最新一次)、选项归一。
 `inheritAttrs:false` + `v-bind="$attrs"`:`v-model:value`、`multiple`、`placeholder`、`size`、`disabled` 等一切透传给 `n-select`。错误静默留空,不打断主流程(错误处理留视图层)。
 
 ## Props
@@ -23,4 +23,4 @@
 />
 ```
 
-多数场景直接用封装好的 `UserSelect` / `RoleSelect`。
+多数场景直接用封装好的 `UserSelect`。
