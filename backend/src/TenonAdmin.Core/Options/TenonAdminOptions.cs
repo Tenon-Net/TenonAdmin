@@ -5,6 +5,7 @@ namespace TenonAdmin.Core;
 /// <summary>TenonAdmin 顶层配置(对应 appsettings 的 TenonAdmin 节 + 代码侧开关)</summary>
 public class TenonAdminOptions
 {
+    /// <summary>数据库配置(类型/连接串,见 <see cref="AdminDatabaseOptions"/>)</summary>
     public AdminDatabaseOptions Database { get; set; } = new();
 
     /// <summary>缓存配置(提供者/前缀/权限缓存过期,见 <see cref="AdminCacheOptions"/>)</summary>
