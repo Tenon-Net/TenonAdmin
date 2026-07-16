@@ -8,6 +8,7 @@
 
 | 文件 | 用途 | 适用场景 |
 |---|---|---|
+| [new-module.md](new-module.md) | **新增模块全流程编排** | 从零加一个完整模块时的入口,串起下面各专项 skill |
 | [create-entity.md](create-entity.md) | 创建 SqlSugar 实体类 | 新建表、新建实体 |
 | [create-crud-backend.md](create-crud-backend.md) | 创建后端 CRUD 全套 | Models + Interface + Service + ErrorCode + DI + Controller |
 | [create-crud-frontend.md](create-crud-frontend.md) | 创建前端 CRUD 页面 | Types + API + Vue 页面（ProTable + FormContainer） |
@@ -18,9 +19,10 @@
 
 ### Claude Code
 
-项目已配置 `.claude/skills/` 斜杠命令包装，直接输入：
+项目已配置 `.claude/skills/` 包装（薄壳，单一真源仍是本目录的 md），直接输入：
 
 ```
+/new-module
 /create-entity
 /create-crud-backend
 /create-crud-frontend
@@ -28,7 +30,7 @@
 /create-page-variant
 ```
 
-也支持自动触发——对 Claude 说"帮我创建一个产品实体"即可匹配对应 skill。
+也支持自动触发——对 Claude 说"帮我加一个产品管理模块"即可匹配对应 skill。
 
 ### 其他 AI 工具
 
@@ -38,10 +40,6 @@
 
 ### 全栈 CRUD 完整流程
 
-新增一个完整的 CRUD 模块，按顺序使用三个 skill：
-
-1. `/create-entity` — 建实体
-2. `/create-crud-backend` — 建后端（含菜单种子数据）
-3. `/create-crud-frontend` — 建前端（含 i18n）
+新增一个完整模块，从 [new-module.md](new-module.md) 进入——它按顺序编排 实体 → 后端 → 测试 → `gen:api` → 前端 → i18n → 菜单/权限 → 验证，并列出步骤间最容易断的交接点（权限码四处一致、MsgKey 对 i18n 键、种子 Id 保留区间）。
 
 每个 skill 都会区分**系统模块**（内核维护者）和**业务模块**（消费者二开）两种模式。

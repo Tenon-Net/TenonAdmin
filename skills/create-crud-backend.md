@@ -184,9 +184,15 @@ PositionNotFound = 42005,
 PositionCodeExists = 42010,
 ```
 
-### 业务模块示例（消费者自建 ErrorCode）
+### 业务模块示例（消费者自选码段）
 
-业务模块可定义自己的 ErrorCode 枚举（从 60000 起步避免与系统码冲突），或直接复用 `AdminException` + 自定义 code 数字。
+`AdminException` 的构造函数只收内核的 `ErrorCode` 枚举类型——消费者**不能**定义一个新枚举类型传进去，而是把自选数字（从 60000 起步，避开内核 4xxxx/5xxxx 段）**强转**后使用：
+
+```csharp
+throw new AdminException((ErrorCode)60001);
+```
+
+未标注 `[MsgKey]` 的码，msgKey 自动回退为 `error.code.60001`——前端语言包加这个键即可翻译。建议把数字集中到一个常量类（如 `public static class BizErrorCode { public const int ProductNotFound = 60001; }`）防止散落漂移。
 
 ---
 
@@ -238,6 +244,7 @@ builder.Services.AddScoped<IProductService, ProductService>();
 | 更新 | `PUT` | `{id}` | `Result<bool>` |
 | 删除 | `DELETE` | `{id}` | `Result<bool>` |
 | 批量删除 | `POST` | `batch-delete` | `Result<bool>`（入参 `BatchDeleteInput`） |
+| 全量列表 | `GET` | `list` | `Result<IReadOnlyList<T>>`（树/下拉等不分页场景，替代 `page`，参照 `OrgController`） |
 
 ### 参考模板
 
@@ -298,6 +305,8 @@ public class PositionController(IPositionService positionService) : ControllerBa
 **这是最容易忘的步骤。** 不加菜单种子，页面不会出现在导航中，权限按钮也不存在。
 
 在 `backend/src/TenonAdmin.Services/Seed/DefaultMenuSeed.cs` 中追加。结构：一条 `MenuType.Menu`（页面节点）+ 若干条 `MenuType.Button`（权限按钮）。
+
+**取号规则**（见 `DefaultMenuSeed` 头部注释的 Id 登记）：新行一律取当前最大号 +1 继续编（历史号段散布在 2–115，**不要回填空洞**——空洞可能是被挪走的历史号，复用会撞老库存量行）。内核种子上限 999；撞号/越界会被启动检查与 `SeedIdRangeTests` 当场拒绝。
 
 ```csharp
 // 页面节点:Component 对应前端 views/ 下的路径

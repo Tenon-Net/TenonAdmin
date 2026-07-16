@@ -5,7 +5,7 @@
 ## 第一步：确定模式
 
 - **系统模块（内核维护者）**：文件放 `backend/src/TenonAdmin.Services/Entities/Sys{Name}.cs`，命名空间 `TenonAdmin.Services`，表名 `sys_xxx`
-- **业务模块（消费者二开）**：文件放消费者自己的 Assembly 中，命名空间自定，表名 `biz_xxx` 或自定前缀
+- **业务模块（消费者二开）**：文件放消费者自己的 Assembly 中，命名空间自定，表名 `biz_xxx` 或自定前缀。最简单的形态就是宿主项目本身（`Program.cs` 所在项目）——文件直接放进项目内的文件夹即可，SDK 项目默认收纳所有 `.cs`，不用改 csproj、不用单独建类库
 
 ## 第二步：选择基类
 

@@ -81,7 +81,7 @@ builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>()
 builder.Services.AddTenonAdmin(builder.Configuration, o =>
 {
     o.ApplicationAssemblies.Add(typeof(Program).Assembly);
-    o.DisabledModules = ["Dict"];  // 禁用内置字典模块
+    o.Api.DisabledModules = ["Dict"];  // 禁用内置字典模块(也可走配置 TenonAdmin:Api:DisabledModules)
 });
 ```
 
@@ -109,21 +109,21 @@ grep -r '\[Module(' backend/src/TenonAdmin.AspNetCore/Controllers/
 消费者可以为自己的实体提供种子数据（首次启动自动插入，幂等不重复）。
 
 ```csharp
-// 1. 实现 ISeedData<TEntity>
+// 1. 实现泛型版 ISeedData<TEntity>（非泛型 ISeedData 只是 DI 收集用的空标记，别直接实现它）
 public class ProductSeed : ISeedData<BizProduct>
 {
-    public IReadOnlyList<BizProduct> Data =>
+    public IEnumerable<BizProduct> HasData() =>
     [
-        new() { Id = 60001, Name = "默认产品", Code = "default", Sort = 0, Enabled = true },
+        new() { Id = TenonSeedIds.ConsumerMin, Name = "默认产品", Code = "default", Sort = 0, Enabled = true },
     ];
 }
 
-// 2. 注册（在 AddTenonAdmin 之后）
+// 2. 注册（在消费者自己的 Program.cs；内核不扫描程序集找种子，忘注册＝静默不执行）
 builder.Services.TryAddEnumerable(
     ServiceDescriptor.Transient<ISeedData, ProductSeed>());
 ```
 
-**Id 规则**：种子数据用固定小整数 Id。消费者 Id 从 `60001` 起步，避免与框架内置种子冲突（内置种子 Id 在 1–999 范围）。
+**Id 规则**：种子行的固定 Id 必须落在**消费者保留区间 `[1000, 4095]`**（常量见 `TenonAdmin.Core.TenonSeedIds`：`ConsumerMin`=1000、`ConsumerMax`=4095）。`[1, 999]` 归内核内置种子，`4096+` 是雪花运行时发号区——越界或与其他种子撞号都会被启动检查（`DatabaseInitializer`）当场拒绝，应用起不来，不会静默吞掉。
 
 ---
 
