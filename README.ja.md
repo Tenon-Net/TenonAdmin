@@ -25,11 +25,6 @@
 TenonAdmin はコピーして二次開発する管理画面テンプレートではありません。ユーザー・ロール・メニュー・データ権限・ログなどの共通機能を NuGet パッケージとして提供し、既存プロジェクトにコード 3 行で組み込めます。デフォルトで動作し、必要に応じて差し替え可能です。
 
 <p align="center">
-  <img src="./assets/readme/ja/dashboard.png" width="100%"
-       alt="TenonAdmin ダッシュボード — サイドメニュー、統計カード、アクティブトレンドチャート、リソース分布チャート">
-</p>
-
-<p align="center">
   <img src="./assets/readme/ja/section-quickstart.svg" width="100%"
        alt="02 クイックスタート — NuGet パッケージをインストール、コード 3 行、すぐに起動">
 </p>

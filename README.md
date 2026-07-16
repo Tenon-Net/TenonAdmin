@@ -25,11 +25,6 @@ English | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 TenonAdmin is not a copy-and-customize admin template — it packages users, roles, menus, data permissions, logging and more into NuGet packages you plug into an existing project with three lines of code. Works out of the box, replaceable on demand.
 
 <p align="center">
-  <img src="./assets/readme/en/dashboard.png" width="100%"
-       alt="TenonAdmin dashboard — sidebar menu, stat cards, activity trend chart and resource distribution chart">
-</p>
-
-<p align="center">
   <img src="./assets/readme/en/section-quickstart.svg" width="100%"
        alt="02 Quick Start — Install the NuGet package, three lines of code, and it just works">
 </p>
