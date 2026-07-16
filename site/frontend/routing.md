@@ -1,39 +1,24 @@
 # Routing & Dynamic Menus
 
-Routes in the frontend come from two independent sources: a small **static shell** defined at build time, and a much larger set of **dynamic routes** rebuilt at runtime from whichever app's menu tree the backend hands back after login. This page walks through both, how the multi-app portal decides which app to enter, the guards that stitch it together, and why pages need a stable identity for `keep-alive` to work.
-
-## Overview
+You add a menu in menu administration, fill in the component path, hit save — and it becomes a real, clickable page, with no routing table you wrote by hand anywhere in between. The frontend's routes come from two unrelated sources: a **static shell** frozen at build time, and **dynamic routes** rebuilt at runtime from the current app's menu tree after login. This page walks through how the two sides join up, how a menu tree turns into real routes, and why every page needs a stable identity for `keep-alive` to recognize it. How the multi-app portal decides *which* app to enter, and the guards that stitch the two sides together, are split off into [Multi-App Portal & Router Guards](/frontend/portal-guards); this page is only about how routes get built and how pages are cached.
 
 ```text
-staticRoutes (router/routes.ts)        buildRoutesForModule (useAuthMenu.ts)
-  ├─ /login                              fetches personalApi.menu(moduleId)
-  ├─ /module  (app chooser)              flattens the tree
-  └─ /  → layout (default.vue)           for each Menu node:
-        ├─ /personal/profile               component string → /src/views/**/*.vue
+staticRoutes (router/routes.ts)         buildRoutesForModule (useAuthMenu.ts)
+  ├─ /login                               fetch personalApi.menu(moduleId)
+  ├─ /module  (app chooser)               flatten the menu tree
+  └─ /  → layout (default.vue)            for each Menu-type node:
+        ├─ /personal/profile                component string → /src/views/**/*.vue
         ├─ /personal/password               router.addRoute('layout', { name: 'menu-{id}', ... })
         ├─ /personal/notice
         └─ /:pathMatch(.*)*  (404)
 
-Fixed at build time.                    Rebuilt on every login / app switch / hard refresh.
+Frozen at build time, unchanged          Rebuilt once each on login / app switch /
+between deploys.                          hard refresh.
 ```
 
-The static side never changes between deploys. The dynamic side is entirely driven by whatever menu tree the currently-selected app returns — different users, different roles, different apps all end up with a different set of routes registered under `layout`.
+The static side never changes between deploys. The dynamic side is driven entirely by the menu tree the currently-selected app returns — different users, different roles, different apps all end up with a different set of routes hanging off `layout`.
 
-## In this section
-
-- [Static Routes](/frontend/routing)
-- [Dynamic Routes: Menu Tree → Real Routes](/frontend/routing)
-- [Multi-App Portal](/frontend/portal-guards)
-- [Router Guards](/frontend/portal-guards)
-- [Keep-Alive & Named Pages](/frontend/routing)
-
-
-
----
-
-<!-- TODO(rewrite): merged from static.md -->
-
-# Static Routes
+## Static routes
 
 `router/routes.ts` defines exactly one top-level tree:
 
@@ -55,21 +40,15 @@ export const staticRoutes: RouteRecordRaw[] = [
 ]
 ```
 
-A few deliberate choices here:
+Several choices here are deliberate:
 
-- **`/` has no static `redirect`.** A `redirect` is resolved at route-resolve time, which runs *before* the global guard — at that point the menu tree may not be built yet, so any redirect computed there would be wrong. Where `/` actually lands is decided inside `router.beforeEach` instead (see [Guards](/frontend/portal-guards) below).
-- **The 404 route is nested inside the shell, not top-level.** Mistyping a URL keeps the sidebar, tabs, and logout button on screen instead of dropping the user onto a bare page.
-- **`/personal/notice` is a static route, not a menu item.** It's guarded by `[ActiveSession]` on the backend (any logged-in user can read it, no specific permission needed) — turning it into a menu would mean seeding it and granting it to every role for no reason. Its entry point is the "view all" link under the header's notification bell.
+- **`/` has no static `redirect`.** A `redirect` is evaluated at route-resolve time, which runs *before* the global guard — and at that point the menu tree usually isn't built yet, so any landing spot computed there is guaranteed wrong. Where `/` actually lands is decided by the guard in `router.beforeEach` (see [Multi-App Portal & Router Guards](/frontend/portal-guards)).
+- **The 404 is nested inside the shell, not at the top level.** Mistype a URL and the sidebar, tab bar, and logout button are all still there — the user isn't flung out onto a bare page.
+- **`/personal/notice` is a static route, not a menu item.** On the backend it's guarded by `[ActiveSession]` (any logged-in user can read it, no specific permission code needed) — making it a menu would mean seeding it and then granting it to every role, pure busywork. Its entry point is the "view all" link on the header's notification bell.
 
+## Dynamic routes: menu tree → real routes
 
-
----
-
-<!-- TODO(rewrite): merged from dynamic.md -->
-
-# Dynamic Routes: Menu Tree → Real Routes
-
-Everything under `layout` other than the three static personal pages and the 404 catch-all comes from `useAuthMenu.ts`'s `buildRoutesForModule`:
+Everything under `layout` other than those three static personal pages and the 404 fallback comes from `buildRoutesForModule` in `useAuthMenu.ts`:
 
 ```ts
 const views = import.meta.glob('/src/views/**/*.vue') as Record<string, () => Promise<Component>>
@@ -103,21 +82,15 @@ export async function buildRoutesForModule(moduleId: number): Promise<void> {
 }
 ```
 
-The pipeline: fetch the tree for the given app (`personalApi.menu(moduleId)`), flatten it, and for every node whose `type` is `MenuType.Menu` (catalogs and buttons are skipped — catalogs have no page, buttons aren't routes), resolve its `component` string against a `import.meta.glob('/src/views/**/*.vue')` map. The convention is direct: a menu's `component` field is the view path relative to `src/views`, minus the `.vue` extension — `system/user/index` resolves to `/src/views/system/user/index.vue`.
+The whole chain: fetch the current app's menu tree (`personalApi.menu(moduleId)`), flatten it into a one-dimensional array, and for every node whose `type` is `MenuType.Menu` (a `Catalog` has no page and a `Button` isn't a route — both are skipped) take its `component` string and look it up against the map built by `import.meta.glob('/src/views/**/*.vue')`. The convention is direct: a menu's `component` field is the file path relative to `src/views`, minus the `.vue` extension — so `system/user/index` maps to `/src/views/system/user/index.vue`.
 
-**A missing component doesn't break anything visibly — it just silently drops the menu item.** If `node.component` doesn't match any glob key, `buildRoutesForModule` logs a `console.warn` and skips the node entirely; no route is added, so the menu link (if it renders at all) would 404 or simply not appear, with no indication to the end user of what went wrong. To keep menu administrators from hitting this blind, `useAuthMenu.ts` also exports `viewComponentPaths` — every valid glob key, normalized to the same `component` string format — which feeds the component-path field in the menu-admin form as a dropdown instead of free text.
+**A missing component produces no conspicuous error at all — it just quietly drops the menu item from the routing table.** If `node.component` doesn't match any key in the glob map, `buildRoutesForModule` logs one `console.warn` and skips the node — no route is registered, so the menu link (even if it still renders) either 404s on click or simply doesn't appear, with no sign to the ordinary user of what went wrong. To keep menu administrators from stepping on this, `useAuthMenu.ts` also exports `viewComponentPaths` — every valid glob key converted back into that same `component` string format — which feeds the "component path" field in the menu-admin form as a dropdown, instead of leaving people to type it by hand.
 
-Each registered route gets `name: 'menu-{id}'` and `meta.keepAlive: true`, and is added under the `layout` parent with `router.addRoute('layout', ...)`. Every name added this way is tracked via `registerDynamic(name)` so it can be torn down precisely on logout or app switch (see `resetRouter` in `router/index.ts`).
+Each registered route carries `name: 'menu-{id}'` and `meta.keepAlive: true`, and is hung under the `layout` parent via `router.addRoute('layout', ...)`. Every name added this way is tracked through `registerDynamic(name)`, so it can be torn down precisely on logout or app switch (see `resetRouter` in `router/index.ts`).
 
+## Page caching & named components
 
-
----
-
-<!-- TODO(rewrite): merged from keep-alive.md -->
-
-# Keep-Alive & Named Pages
-
-`layouts/default.vue` caches pages with:
+`layouts/default.vue` caches pages like this:
 
 ```vue
 <keep-alive :include="tabs.cachedNames" :exclude="tabs.excludeName">
@@ -125,7 +98,7 @@ Each registered route gets `name: 'menu-{id}'` and `meta.keepAlive: true`, and i
 </keep-alive>
 ```
 
-`keep-alive`'s `:include` matches by the rendered component's **`name`**. For a `<script setup>` single-file component, Vue infers that name from the filename — and with dozens of `index.vue` files across `src/views/**`, those inferred names collide with each other and don't match the router's own name for the route (`menu-{id}`). `router/namedPage.ts` closes that gap:
+`keep-alive`'s `:include` matches by the rendered component's **`name`**. For a `<script setup>` single-file component, Vue infers that `name` from the filename — and with dozens of identically-named `index.vue` files across `src/views/**`, those inferred names collide with each other and don't line up with the route's own name (`menu-{id}`). `router/namedPage.ts` plugs that hole:
 
 ```ts
 export function namedPage(name: string, loader: AsyncComponentLoader) {
@@ -139,17 +112,12 @@ export function namedPage(name: string, loader: AsyncComponentLoader) {
 }
 ```
 
-Every static and dynamic route is wrapped through `namedPage`, giving its component an explicit `name` equal to the route name — so `:include="tabs.cachedNames"` (an array of `TabItem.name`, i.e. route names) can actually match it. The wrapper is memoized in a `Map` keyed by name and only rebuilt if the underlying **loader reference** changes: `import.meta.glob` returns a stable function per file, so editing an unrelated menu and triggering a full `buildRoutesForModule` rebuild reuses the same component object for routes whose `component` path didn't change — keeping their `keep-alive` cache entry intact instead of forcing a remount. It also wraps the lazy component in a single `<div class="page-view">` root, because `default.vue`'s `<transition mode="out-in">` requires a single element root and several page components render multiple sibling roots (a main body plus modal dialogs).
+Static or dynamic, every page component is wrapped through `namedPage`, giving it an explicit `name` equal to the route name — which is precisely what lets `:include="tabs.cachedNames"` (really an array of `TabItem.name`, i.e. route names) match it. The wrapper is memoized in a `Map` keyed by name and rebuilt only when the underlying **loader reference** changes: `import.meta.glob` returns the same stable function per file, so editing an unrelated menu and triggering a full `buildRoutesForModule` rebuild still reuses the same component object for routes whose `component` path didn't change — their `keep-alive` cache entries are left untouched, not forced to remount. It also wraps the lazy component in a single `<div class="page-view">` root node, because `default.vue`'s `<transition mode="out-in">` requires a single element root, while plenty of page templates are themselves multi-root (a main body plus a few side-by-side modals).
 
-`stores/tabs.ts` complements this: its `cachedNames` getter filters the tab list down to `router.hasRoute(n)`, so during the brief window after a menu rebuild but before a stale tab's route is re-registered, `keep-alive` isn't asked to match a name that doesn't exist yet. `refreshTab(name)` forces a genuine remount (bypassing the cache) by setting `excludeName` and bumping `reloadKey`, which `default.vue` watches to briefly `v-if`-unmount the router view before restoring it.
+`stores/tabs.ts` adds a safety net on top of this: its `cachedNames` getter filters the tab list down to those where `router.hasRoute(n)` is true, so during the brief window after a menu rebuild — when an old tab's route hasn't been re-registered yet — `keep-alive` is never asked to match a name that doesn't exist. `refreshTab(name)` forces a genuine remount (bypassing the cache) by setting `excludeName` and bumping `reloadKey`; `default.vue` watches `reloadKey` and briefly `v-if`-unmounts the router outlet before restoring it.
 
-::: tip Not here
-Two things you might expect to find in the router aren't there. There's no route-level progress bar (no NProgress or equivalent) anywhere in this pipeline. And the document title isn't set by a guard — it's set once in `App.vue` on mount and again by the site-config page when the title changes, not per-navigation.
+::: tip Two things you won't find here
+There's no progress bar anywhere in the routing pipeline (no NProgress or similar). And the document title isn't set by a guard — it's set once when `App.vue` mounts, and again by the site-config page when the title changes, never per-navigation.
 :::
 
-
-## Where to next
-
-- [Frontend Structure](/frontend/structure) — how views, components, and stores are laid out.
-- [Permission Directive (`v-auth`)](/frontend/permission) — gating buttons and elements by permission code.
-- [Add a Frontend Page](/guide/frontend-page) — a hands-on walkthrough of adding a new menu-backed page end to end.
+To walk this whole pipeline from scratch — create the view component, seed a menu, get the component path right — see [Add a Frontend Page](/guide/frontend-page).

@@ -68,8 +68,4 @@ Most merge friction comes from editing the same files upstream also touches. Two
 - [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md) — Keep a Changelog format, one entry per release, covers both halves and calls out breaking changes explicitly (the project is pre-1.0, so the API can still shift).
 - The login page footer shows `web/package.json`'s `version` — after merging, bump it to match the tag you merged so what your users see matches what's actually running.
 
-## Where to next
-
-- [Quick Start](/guide/getting-started) — if you haven't run the project yet.
-- [Adding a New Business Module](/guide/business-module) — building your own features on top of the kernel.
-- [Contributing](/community/contributing) — the *other* fork workflow: sending changes back to TenonAdmin instead of pulling changes in.
+This page is about pulling upstream changes into your fork. The reverse — contributing your own changes back to TenonAdmin — is the domain of the [Contributing Guide](/community/contributing).

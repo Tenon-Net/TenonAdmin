@@ -87,7 +87,4 @@ Everything binds from the `TenonAdmin` section of `appsettings.json` into `Tenon
 
 `ApplicationAssemblies` is the one exception — a `List<Assembly>` set in code (as shown in the sample host and `TestHost` snippets above), not bound from configuration, since assembly references can't come from JSON.
 
-## Where to next
-
-- CLI commands for building, testing, and running the backend → [Contributing](/community/contributing)
-- Package responsibilities and DI-wiring depth → [Architecture](/backend/architecture)
+With the structure mapped, the natural next step is to see how these packages assemble together — [Layered Architecture and Package Dependencies](/backend/architecture) starts from the dependency direction; the CLI commands for building and testing live in [Contributing](/community/contributing).

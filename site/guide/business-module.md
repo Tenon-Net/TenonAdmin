@@ -1,38 +1,33 @@
-# Add a Business Module End-to-End
+# Add a Business Module (Backend)
 
-Add a business table and a set of endpoints on top of TenonAdmin without changing a single line of kernel code. This guide walks through the full chain: entity → service → controller → mounting → authorization → callable from the frontend.
+Add a business table and a set of endpoints on top of TenonAdmin without changing a single line of kernel code. This page walks from choosing an entity base class all the way to an endpoint that can be authorized and called from the frontend.
 
-::: tip Two routes
-- **Route A** — modify this repo directly, adding inside the kernel.
-- **Route B** — a consumer (a project that has installed the `TenonAdmin` NuGet package) adds it in their own business assembly, mounted via `options.ApplicationAssemblies`, **without touching kernel source**.
+::: tip Two routes, differing only in "where the code lives"
+- **Route A** — modify this repo directly, adding inside the kernel; the new code goes into `TenonAdmin.Services` / `TenonAdmin.AspNetCore`.
+- **Route B** — your project has installed the `TenonAdmin` NuGet package, and you add it in your own business assembly, mounted via `options.ApplicationAssemblies`, without touching a line of kernel source.
 
-The two routes are identical except for "where the code lives." This guide follows Route B — the recommended route for consumers.
+Apart from "where," the two routes are identical. Below follows Route B — also the recommended route for consumers.
 :::
 
 ## Grounded in real code
 
-This isn't a made-up "product" example — it walks you through two places in the repo that **genuinely exist and run in CI**:
+Rather than inventing a "product" example, this page walks you through two places in the repo that genuinely exist and run in CI:
 
-- `backend/src/TenonAdmin.Services/Dict/` — the kernel's built-in dictionary module, a template for a plain table (one that doesn't need per-organization data isolation).
-- `backend/tests/TenonAdmin.TestHost/` — the consumer host used for integration tests, where `SampleDoc` is a genuine "org-isolated business module," following exactly Route B.
+- `backend/src/TenonAdmin.Services/Dict/` — the kernel's built-in dictionary module, a template for a plain table (not org-isolated).
+- `backend/tests/TenonAdmin.TestHost/` — the consumer host used for integration tests, where `SampleDoc` is a genuine org-isolated business module, following exactly Route B.
 
-Following the structure of this code, the module you add will naturally take the shape the kernel expects.
+Follow the structure of these two, and the module you add will naturally grow into the shape the kernel expects.
 
-## 1. Choosing an entity base class: `BaseEntity` or `DataEntity`
+## Choosing an entity base class: `BaseEntity` or `DataEntity`
 
-First ask yourself: does this table need per-organization data isolation?
+First ask yourself one question: does this table need per-organization data isolation?
 
-- **No** (globally shared data, e.g. dictionaries, config) → inherit `BaseEntity`. The dictionary type entity `SysDictType` is like this (`backend/src/TenonAdmin.SqlSugar/Entities/`).
-- **Yes** (users from different organizations should only see/modify their own organization's data) → inherit `DataEntity`. It comes with a `CreateOrgId` anchor, and queries are automatically trimmed by the global filter according to the current user's data scope.
+- **No** (globally shared, e.g. dictionaries, config) → inherit `BaseEntity`. The dictionary-type entity `SysDictType` (`backend/src/TenonAdmin.SqlSugar/Entities/`) is like this.
+- **Yes** (users in different orgs should only see and modify their own org's data) → inherit `DataEntity`. It carries a `CreateOrgId` anchor, and queries are automatically trimmed by the global filter according to the current user's data scope.
 
 `backend/tests/TenonAdmin.TestHost/SampleDoc.cs` is a real example of the latter:
 
 ```csharp
-using SqlSugar;
-using TenonAdmin.SqlSugar;
-
-namespace TenonAdmin.TestHost;
-
 [SugarTable("sample_doc", TableDescription = "Sample org-isolated business entity (integration test)")]
 public class SampleDoc : DataEntity
 {
@@ -41,25 +36,13 @@ public class SampleDoc : DataEntity
 }
 ```
 
-Audit fields (`Id`/`CreateTime`/`CreateUserId`/`CreateOrgId`/`UpdateTime`/`UpdateUserId`) are auto-filled by AOP — **business code should never set them by hand**, especially `CreateOrgId`, which is the anchor that makes data scoping work. Leaving it unset means org-scoped queries return zero rows.
+Audit fields (`Id` / `CreateTime` / `CreateUserId` / `CreateOrgId` / `UpdateTime` / `UpdateUserId`) are auto-filled by AOP — business code shouldn't write them by hand, especially `CreateOrgId`, the anchor that makes data scoping work: leave it unset and org-scoped queries return zero rows. When you have a unique column, add a unique index on the entity, e.g. `[SugarIndex("idx_sample_doc_title", nameof(Title), OrderByType.Asc, IsUnique = true)]`.
 
-Swap `SampleDoc` for your own entity name and fields, and put it in your consumer project's own assembly (Route A would put it in `TenonAdmin.Services` instead).
+Swap `SampleDoc` for your own entity name and fields, and drop it into your consumer project's own assembly (only Route A puts it in `TenonAdmin.Services`).
 
-## 2. Service interface + implementation
+## Service: reads go through the filter, writes check visibility first
 
-The contract, `ISampleDocService.cs`:
-
-```csharp
-public interface ISampleDocService
-{
-    Task<long> CreateAsync(string title);
-    Task<IReadOnlyList<SampleDoc>> ListAsync();
-    Task<bool> RenameAsync(long id, string title);
-    Task<bool> DeleteAsync(long id);
-}
-```
-
-The implementation, `SampleDocService.cs` — note the three key points about reading/writing with data scope:
+The full template for the contract and implementation is `backend/tests/TenonAdmin.TestHost/SampleDocService.cs`. Three read/write points decide whether it "holds up" as org-isolated:
 
 ```csharp
 public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
@@ -67,19 +50,19 @@ public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
     public virtual async Task<long> CreateAsync(string title)
     {
         var doc = new SampleDoc { Title = title };
-        await repo.InsertAsync(doc);   // CreateOrgId is auto-filled from the current user's org by the audit AOP
+        await repo.InsertAsync(doc);   // CreateOrgId is backfilled from the current user's org by the audit AOP
         return doc.Id;
     }
 
     public virtual async Task<IReadOnlyList<SampleDoc>> ListAsync() =>
-        await repo.AsQueryable().OrderBy(d => d.Id).ToListAsync();  // the global filter automatically trims by data scope
+        await repo.AsQueryable().OrderBy(d => d.Id).ToListAsync();  // the global filter trims by data scope
 
     public virtual async Task<bool> RenameAsync(long id, string title)
     {
-        var doc = await repo.GetByIdAsync(id);   // out-of-scope/nonexistent → null (also filtered by scope)
+        var doc = await repo.GetByIdAsync(id);   // out-of-scope / nonexistent → null (also passes through the scope filter)
         if (doc is null) return false;
         doc.Title = title;
-        return await repo.UpdateAsync(doc) > 0;  // the repository write path also guards against out-of-scope updates/deletes as a second line of defense
+        return await repo.UpdateAsync(doc) > 0;
     }
 
     public virtual async Task<bool> DeleteAsync(long id)
@@ -90,17 +73,19 @@ public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
 }
 ```
 
-- **Reads** go through `AsQueryable()`, and the global filter automatically trims by the current request's data scope — business code never writes `WHERE` clauses by hand.
-- **Updates/deletes check visibility with `GetByIdAsync` first** — if it can't be seen, treat it as "not found/no access"; the repository's `Update`/`Delete` for `DataEntity` also has a built-in write-path scope guard, so it's double-protected.
-- All methods are `virtual` — if a consumer needs to override a step in the flow, they just subclass and override that single method, without copying the whole thing.
+- **Reads** go through `AsQueryable()`; the global filter trims by the current request's data scope, and business code writes no `WHERE`.
+- **Updates/deletes check visibility with `GetByIdAsync` first**: if it can't be seen, treat it as "not found / no access" and return `false`. This isn't just politeness — the data-scope global filter only applies to queries (SELECT); the write path relies on `SqlSugarRepository`'s built-in scope guard on `Update`/`Delete` for `DataEntity`, which returns 0 for an out-of-scope attempt to modify or delete another org's row. It takes both layers stacked to be airtight. Note that writes bypassing the repository, straight through the `Db.Updateable` / `Db.Deleteable` escape hatch, are **not** covered by this guard — you have to check ownership yourself.
+- All methods are `virtual`. A consumer wanting to override one step just subclasses and overrides that single method, without copying the whole thing.
 
-::: tip Do you need caching?
-Not every query needs a cache. Only "high-frequency read + low-frequency change" hot spots (e.g. a dropdown data source) are worth caching — see the read-through cache pattern in `GetItemsByTypeAsync` in `backend/src/TenonAdmin.Services/Dict/DictService.cs` (`ICacheProvider` + explicit `RemoveAsync` invalidation). Cold paths like admin-panel pagination can just hit the database directly — neither `Dict`'s nor `SampleDoc`'s paging/list endpoints are cached.
-:::
+A real admin list usually needs paging, so swap `ListAsync` for `PageAsync`, with the input inheriting `PageInputBase` (which already carries `Current` / `Size` / `SortField` / `SortOrder` — there's no base class called `PageInput`, don't mix them up), build conditions with `WhereIF`, and page with `ToPagedListAsync`. `UserService.PageAsync` and `DictService.PageTypesAsync` in the kernel are ready-made blueprints.
 
-## 3. Controller
+With a unique column, the pre-insert duplicate check must include soft-deleted rows: `repo.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(x => x.Code == input.Code)`. Without clearing the soft-delete filter, a soft-deleted row with the same code slips past the application-layer check and collides on the database's unique index as a raw 500; on a duplicate, throw a business code with `AdminException.ThrowIf(dup, ErrorCode.XxxExists)`.
 
-`SampleDocController.cs` — every action has `[RolePermission]` attached, and **the permission code is the normalized route itself**, with no permission strings written anywhere:
+Caching isn't needed on every query. Cold paths like lists and pagination can just hit the database (neither the kernel's `Dict` nor `Config` pagination is cached); only "high-frequency read + low-frequency change" hot spots (say, a dropdown data source) are worth caching, following the read-through cache in `DictService.GetItemsByTypeAsync` (`ICacheProvider` + explicit `RemoveAsync` invalidation after writes) — see the [Backend Coding Standards](/standard/backend) for the finer rules.
+
+## Controller: the permission code is the route
+
+`backend/tests/TenonAdmin.TestHost/SampleDocController.cs` — every action carries `[RolePermission]`, the permission code is the normalized route itself, and no permission string is written anywhere in code:
 
 ```csharp
 [ApiController]
@@ -131,22 +116,24 @@ public class SampleDocController(ISampleDocService svc) : ControllerBase
 public record SampleDocInput(string Title);
 ```
 
-The permission code for the `GET /api/v1/sample/doc` action is `GET:/api/v1/sample/doc` — to grant it, an admin attaches this route to a menu item/button in menu management, then checks it for a role in role management, and users with that role gain the permission. The super admin (`sadm` claim) automatically bypasses this.
+The permission code for the `GET /api/v1/sample/doc` action is `GET:/api/v1/sample/doc`. To authorize, an admin attaches this route to a menu/button and then checks it for a role, and users in that role have the permission; the super admin (`sadm` claim) bypasses automatically. A controller may return `Result<T>` or `return dto` directly — the envelope is wrapped uniformly by `ResultEnvelopeFilter`.
 
-## 4. Register services + mount the assembly (the key step in Route B)
+Two optional attributes, added as needed: for a write that needs auditing, attach `[OperationLog("Create document")]` — sensitive fields in the input (a password, say) are automatically masked before being written to the operation log (blueprint: `UserController`); to let a consumer switch the whole module off in one move, attach `[Module("SampleDoc")]` to the controller, after which setting `Api:DisabledModules=["SampleDoc"]` skips registering its routes entirely (blueprint: `SysLogController`).
 
-Without touching the kernel, a consumer does two things in their own `Program.cs` — see `backend/tests/TenonAdmin.TestHost/Program.cs` for the full example:
+## Hand the service and assembly to the kernel
+
+Without touching the kernel, a consumer does two things in their own `Program.cs` — full template at `backend/tests/TenonAdmin.TestHost/Program.cs`:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddTenonAdmin(builder.Configuration, o =>
 {
-    // Hand your own assembly to the kernel: its entities join CodeFirst table creation, and its controllers are mounted via AddApplicationPart
+    // Hand your assembly to the kernel: its entities join CodeFirst table creation, its controllers are mounted via AddApplicationPart
     o.ApplicationAssemblies.Add(typeof(Program).Assembly);
 });
 
-// Your own services can be TryAdd'd before or after AddTenonAdmin() (for interfaces not already claimed by the kernel)
+// Register your own services with TryAdd (for interfaces the kernel hasn't claimed, before or after AddTenonAdmin is fine)
 builder.Services.TryAddScoped<ISampleDocService, SampleDocService>();
 
 var app = builder.Build();
@@ -154,247 +141,81 @@ app.MapTenonAdmin();
 app.Run();
 ```
 
-::: warning Only `ApplicationAssemblies.Add(...)` makes it work
-The kernel **does not auto-discover** your module. Forget this one line, and the `SampleDoc` entity won't get a table and `SampleDocController` won't register its routes — a plain 404, with no fallback switch.
+You must use `TryAdd`, not `Add`. That's what lets a consumer register a custom implementation of the same interface *before* `AddTenonAdmin()` to override the default behavior — the root rule behind the kernel's entire "replaceable" design, and how built-in services (like `Dict`) are registered in `ServicesSetup.cs` too. For your own service, if nobody's competing for the interface, `TryAdd` and `Add` behave the same; write `TryAdd` uniformly and you won't get bitten when something does come along to override it later.
+
+::: warning Forget `ApplicationAssemblies.Add(...)` and it's a silent 404
+The kernel **does not auto-discover** your module. Miss this one line and `SampleDoc` gets no table, `SampleDocController` registers no routes — a flat 404, with no fallback switch or hint. (There was once a `ScanApplicationAssemblies` auto-scan switch that was never implemented; it was removed before the packages shipped — don't go looking for it.)
 :::
 
-::: tip Must use `TryAdd`, not `Add`
-Keep registering services with `TryAddScoped` so consumers can register their own implementation of the same interface *before* `AddTenonAdmin()` to override the default behavior — this is the foundational rule behind the kernel's entire "replaceable" design. Built-in services (like `Dict`) are registered the same way in `ServicesSetup.cs`.
-:::
+## Error codes (optional)
 
-## 5. Error codes (optional)
+To distinguish "not found" from other failures precisely, the kernel's built-in modules add a numeric code to the `Core/ErrorCode.cs` enum — **codes only, no message text** — as with the dictionary module's `DictTypeNotFound = 43001` and `DictTypeCodeExists = 43002`; the text is translated by code on the frontend. A consumer is constrained by `ErrorCode` being a kernel enum that can't be extended, so they can express results directly through return values the way `SampleDocService` does (`false` meaning not found / no access), or fall back on a custom exception handled by their own exception filter.
 
-If you need to precisely distinguish "not found" from other failures, the kernel's built-in modules add a numeric code to the `Core/ErrorCode.cs` enum — codes only, no message text (the dictionary module's `DictTypeNotFound = 43001` and `DictTypeCodeExists = 43002` are examples); the message text is translated by code on the frontend. Since consumers can't extend `ErrorCode`, they can express results directly via return values as `SampleDocService` does (`false` meaning not found/no access), or use a custom exception handled by their own exception filter as a fallback.
+## Seed data (optional)
 
-## 6. Seed data (optional)
-
-When you need out-of-the-box default data, implement the generic `ISeedData<T>`, and **fixed Ids must fall within the consumer reserved range `[1000, 4095]`** (`TenonSeedIds.ConsumerMin` to `ConsumerMax`). Seeding outside this range fails startup immediately and tells you exactly which range to use — the kernel's own built-in seeds occupy `[1, 999]`, and snowflake ID issuance at runtime starts from `4096`; seeding into either range will eventually collide with a primary key.
-
-Seeds must be registered in **your own `Program.cs`** (the kernel doesn't scan assemblies for seeds — `ApplicationAssemblies` only handles entity table creation and controller mounting):
+When you need out-of-the-box default data, implement the **generic** `ISeedData<T>` (the non-generic `ISeedData` is just an empty marker for DI collection — implementing it directly compiles, but crashes at startup when the entity type can't be inferred), and give each row a fixed `Id` for idempotency. Blueprint: `Seed/DictSeed.cs`; consumer example: `backend/tests/TenonAdmin.TestHost/SampleWidgetSeed.cs`:
 
 ```csharp
-builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, YourSeed>());
+public sealed class SampleWidgetSeed : ISeedData<SampleWidget>
+{
+    public IEnumerable<SampleWidget> HasData() =>
+    [
+        new() { Id = TenonSeedIds.ConsumerMin,     Name = "widget-a" },
+        new() { Id = TenonSeedIds.ConsumerMin + 1, Name = "widget-b" },
+    ];
+}
 ```
 
-## 7. Attach a menu and grant access (making the endpoint "reachable")
+Seeds must be registered in **your own `Program.cs`** — the kernel doesn't scan assemblies for seeds (`ApplicationAssemblies` only handles entity table creation and controller mounting), and forgetting to register one means it silently never runs:
 
-Since the permission code equals the route, authorization works by checking routes on the menu tree — so for a new endpoint to be callable by a regular user, it needs a corresponding menu node first:
+```csharp
+builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleWidgetSeed>());
+```
 
-1. Start the system, go to the **Menu Management** page, and create a menu node: `Type=Menu`, `Path` set to the frontend route (e.g. `/sample/doc`), `Component` set to the corresponding `.vue` file path (without prefix/suffix), and `App` set to a top-level directory.
-2. If you need button-level permissions, create a `Type=Button` node with `Permission` set to the corresponding route code (e.g. `POST:/api/v1/sample/doc`).
-3. Go to **Role Management** and check this menu/button for a role — users with that role gain the corresponding route permission, and the authorization change takes effect immediately (the kernel invalidates the corresponding cache).
-4. During development the super admin doesn't need any permission configuration — all routes are allowed through automatically.
+The fixed `Id` must fall within the consumer-reserved range `[1000, 4095]` (the constants `TenonSeedIds.ConsumerMin` ~ `ConsumerMax`). Don't fall back on the old habit of "just grab a small integer" — you and the kernel seed into the same set of tables (`sys_menu` / `sys_config` …), and not colliding today doesn't mean you won't after a kernel-package upgrade — by which point that row is already in your database, with no way back:
 
-## 8. Testing
+| Range | Belongs to | Why |
+|---|---|---|
+| `[1, 999]` | Kernel built-in seeds | Every authenticated endpoint the kernel adds means one more menu row, so the range only ever climbs |
+| `[1000, 4095]` | **Your seeds** | Start from `ConsumerMin`, staying clear of the low range the kernel will use in future |
+| `[4096, …]` | Snowflake runtime ID range | `id = milliseconds × 4096 + low bits`; a seed occupying it means some future insert is bound to collide on the primary key |
 
-Write HTTP-level regression tests with `WebApplicationFactory` — use the existing tests under `backend/tests/TenonAdmin.Tests/` as a template: create a user/grant a menu → call the endpoint with a token → assert the envelope. Keep both the SQLite and MySQL legs green:
+Within one seed set you may lay down several rows at once (especially when copy-pasting); number each row the way the kernel's menu seeds do: remember the highest number in use, and **always take "highest + 1" for a new row, never backfilling a gap**. Gaps are usually numbers that were once moved or deleted, and reusing one collides with a leftover row in an older database.
+
+::: warning A seed Id that collides or goes out of range: startup now refuses, no longer silent
+A colliding fixed Id used to break **silently**: the idempotent existence check skips the later row as "already there" (a piece quietly missing from the menu tree), and a seed with `SyncOnUpgrade` on would even overwrite the other row on upgrade. Now `DatabaseInitializer` registers, per entity at startup, every fixed Id claimed by any seed (kernel + consumer), and the moment it finds one out of range or duplicated within an entity it **throws on the spot and the app won't start**, telling you which range to move to; `SeedIdRangeTests` carries the matching contract test, so CI goes red before any host even boots. This covers both the self-collision of "copied a row and forgot to change the Id" and cross-seed collisions.
+:::
+
+## Attach a menu, grant access
+
+The permission code equals the route, and authorization is granted by checking routes on the menu tree, so for a new endpoint to be callable by a regular user there has to be a matching menu node first. Configure it at runtime in the admin UI:
+
+1. Go to **Menu Management** and create a menu node: `Type=Menu`, `Path` set to the frontend route (e.g. `/sample/doc`), `Component` set to the corresponding `.vue` file's relative path (e.g. `sample/doc/index`), and `App` set to a top-level directory.
+2. For button-level permissions, create a `Type=Button` node with `Permission` set to the corresponding route code (e.g. `POST:/api/v1/sample/doc`) — the frontend's `v-auth` shows or hides the button by it.
+3. Go to **Role Management** and check the menu/button for a role; users in that role gain the corresponding route permission, and the authorization change takes effect immediately (the kernel invalidates the relevant cache).
+4. The super admin needs no permission setup during development — all routes are let through automatically.
+
+To ship menus preset out of the factory (instead of clicking through them in every environment), seed `SysMenu` rows in bulk the way `DefaultMenuSeed` does (both menu nodes and button nodes are `SysMenu`), numbering them per the previous section's convention. When you **change** an existing seed row for a built-in module (say, add a field under the same Id), remember to bump `SysSchemaVersion.Current` — an old database only backfills via `SyncOnUpgrade` once the version number changes (see the comment on `SqlSugar/Entities/SysSchemaVersion.cs`); a pure new-row addition needs no bump.
+
+In **Module Management**, filling a "route prefix `apiPrefix`" for a business app (= the controller's route segment, e.g. `sample`, matching `/api/v1/sample/...`) makes the "configure permissions" route dropdown on the menu page list only that app's routes by default — decluttering, not a permission boundary; leave it blank and there's no filtering. Note you fill in the route segment, not the module code, and the two need not match.
+
+## Testing
+
+Write HTTP-level regression tests with `WebApplicationFactory` (blueprint: `backend/tests/TenonAdmin.Tests/ModulePortalTests.cs`): create a user and grant a menu → call the endpoint with a token → assert the envelope. Both the SQLite and MySQL legs must be green (`TestDb.cs` derives an isolated database per environment variable):
 
 ```bash
 dotnet test backend/TenonAdmin.slnx --filter "FullyQualifiedName~SampleDoc"
 ```
 
-## 9. Frontend wiring
+Once this backend set works and the new endpoints show up in `/openapi/v1.json`, building an admin page for this table is the next chapter: [Add a Frontend Page](/guide/frontend-page).
 
-Once the backend is running, the full steps on the frontend side (regenerating types, wrapping the API, writing the CRUD page, attaching the menu) are covered in the next guide: [Add a Frontend Page](/guide/frontend-page).
+## Pre-commit checklist
 
-## End-to-end checklist
-
-**Backend**
-- [ ] Entity (choose `BaseEntity`/`DataEntity`) + Sugar attributes
-- [ ] `I*Service` + `*Service` (methods `virtual`, check visibility first on update/delete)
-- [ ] Consumer `Program.cs`: `ApplicationAssemblies.Add(...)` + `TryAddScoped` service registration
-- [ ] Controller (`[ApiController]`/`[Route]`, every action with `[RolePermission]`)
-- [ ] Error codes (optional)
-- [ ] Seeds (optional, fixed Ids within `[1000, 4095]`)
-- [ ] Tests (`WebApplicationFactory`, SQLite/MySQL both green)
-
-**Configure permissions (runtime)**
-- [ ] Create nodes in Menu Management (`Path`/`Component` matching the frontend route and file)
-- [ ] Check permissions in Role Management
-
-> For fuller specification details (paged DTO conventions, caching decisions, when to bump `SysSchemaVersion`, etc.), see [Business Module Development Guide: A. Backend](/guide/business-module).
-
-
----
-
-<!-- TODO(rewrite): merged from backend.md -->
-
-# A. Backend
-
-### A1. Entity: `Services/Entities/Product.cs`
-
-Template: `Entities/SysDictType.cs`. Pick a base class: plain tables inherit `BaseEntity`; business tables that **need org-based data isolation** inherit `DataEntity` (which automatically carries the `CreateOrgId` anchor + data-scope filtering).
-
-```csharp
-[SugarTable("biz_product", TableDescription = "Product")]
-[SugarIndex("idx_biz_product_code", nameof(Code), OrderByType.Asc, IsUnique = true)]
-public class Product : DataEntity   // or BaseEntity
-{
-    [SugarColumn(Length = 64, ColumnDescription = "Product code (unique)")]
-    public string Code { get; set; } = "";
-
-    [SugarColumn(Length = 128, ColumnDescription = "Name")]
-    public string Name { get; set; } = "";
-
-    [SugarColumn(ColumnDescription = "Whether it's listed")]
-    public bool Enabled { get; set; } = true;
-}
-```
-
-- Audit fields (Id/CreateTime/CreateUserId/CreateOrgId/UpdateTime/UpdateUserId) are auto-filled by AOP — **don't set them by hand**.
-- CodeFirst creates the table automatically: when added inside the kernel, the entity lives in the `TenonAdmin.Services` assembly, which is already scanned.
-
-::: tip DataEntity write paths are secure by default (P2-21)
-The data-scope global query filter only applies to reads (SELECT), but `SqlSugarRepository`'s `Update`/`Delete` for `IOrgScoped` entities **already has a built-in write-path scope guard** — it confirms the target row is within the current data scope before writing, and rejects (returning 0) any out-of-scope attempt to modify/delete another org's row. This is safe by default; no manual handling needed.
-
-**Still recommended**: call `GetByIdAsync` (which is scope-filtered) before an update/delete to confirm the row exists — if it's not visible, return an accurate "not found/no permission" instead of writing. For boilerplate to copy from, see the consumer example `backend/tests/TenonAdmin.TestHost/` (the full `SampleDoc` + `SampleDocService` + `SampleDocController` DataEntity CRUD set). Writes that bypass the repository via the `Db.Updateable/Deleteable` escape hatch aren't covered by the guard and need their own ownership checks.
-:::
-
-### A2. DTOs: `Services/Product/ProductModels.cs`
-
-```csharp
-// The base class is PageInputBase (which already has Current/Size + SortField/SortOrder) — not PageInput, which doesn't exist
-public record ProductPageInput : PageInputBase { public string? Name { get; init; } }
-public record ProductInput(string Code, string Name, bool Enabled);
-```
-
-### A3. Service interface + implementation: `Services/Product/IProductService.cs` + `ProductService.cs`
-
-Template: `Dict/IDictService.cs` + `DictService.cs`. Methods are `virtual`, validation uses `AdminException.ThrowIf`, writes are wrapped in transactions, and hot reads get cached (see A7).
-
-```csharp
-public class ProductService(IRepository<Product> repo) : IProductService
-{
-    public virtual async Task<PagedList<Product>> PageAsync(ProductPageInput input) =>
-        await repo.AsQueryable()
-            .WhereIF(!string.IsNullOrEmpty(input.Name), p => p.Name.Contains(input.Name!))
-            .OrderBy(p => p.Id)
-            .ToPagedListAsync(input.Current, input.Size);
-
-    public virtual async Task<long> AddAsync(ProductInput input)
-    {
-        // Include soft-deleted rows in the duplicate check, or a unique-index collision throws a raw 500
-        AdminException.ThrowIf(
-            await repo.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(p => p.Code == input.Code),
-            ErrorCode.ProductCodeExists);
-        var e = new Product { Code = input.Code, Name = input.Name, Enabled = input.Enabled };
-        await repo.InsertAsync(e);
-        return e.Id;
-    }
-    // Update/Delete follow the same style as DictService
-}
-```
-
-### A4. Registration: `Services/ServicesSetup.cs`
-
-```csharp
-services.TryAddScoped<IProductService, ProductService>();
-```
-
-> **Must use `TryAdd`** (not `Add`), so a consumer can replace it beforehand.
-
-### A5. Controller: `AspNetCore/Controllers/ProductController.cs`
-
-Template: `Controllers/DictController.cs`.
-
-```csharp
-[ApiController]
-[Route("api/v1/biz/product")]
-[Module("Product")]
-public class ProductController(IProductService svc) : ControllerBase
-{
-    [HttpGet("page")]
-    [RolePermission]
-    public async Task<Result<PagedList<Product>>> Page([FromQuery] ProductPageInput input) =>
-        Result<PagedList<Product>>.Ok(await svc.PageAsync(input));
-
-    [HttpPost]
-    [RolePermission]
-    public async Task<Result<long>> Add(ProductInput input) =>
-        Result<long>.Ok(await svc.AddAsync(input));
-    // Put/Delete follow the same pattern
-}
-```
-
-- Every action carries `[RolePermission]` — **the permission code automatically equals the route** (e.g. `GET:/api/v1/biz/product/page`), so no permission string needs to be written anywhere.
-- Add `[OperationLog(...)]` to writes that need auditing.
-
-### A6. Error codes: `Core/ErrorCode.cs`
-
-Add entries to the enum such as `ProductCodeExists`, `ProductNotFound`. **Only add the numeric codes, no message text** (message text lives in the frontend's `locales/*`, keyed by code).
-
-### A7. Caching decisions
-
-- **Not every query needs caching** — list pagination and admin-page queries can hit the database directly (even the existing Dict/Config pagination isn't cached).
-- **Only cache "hot read + rarely changes" hotspots**: e.g. a dropdown data source, global config. When you do, follow the caching template in the [Coding Standards](/standard/backend): add a logical key to `Core/CacheKeys.cs` → cache-aside inside the service → explicit `RemoveAsync` invalidation after writes (broadcast an event if needed).
-- Rule of thumb: will this read get hit on every request/every page load? Cache it. Only queried occasionally on an admin page? Don't.
-
-### A8. Seed data (optional): `Services/Seed/ProductSeed.cs`
-
-Implement the **generic `ISeedData<Product>`** if you need factory-default data (the non-generic `ISeedData` is just an empty marker used for DI collection — implementing it directly compiles but crashes at startup), and use a fixed Id for idempotency. Template: `Seed/DictSeed.cs`; example: `tests/TenonAdmin.TestHost/SampleWidgetSeed.cs`.
-
-**The Id must fall within the consumer-reserved range `[1000, 4095]`** (`TenonSeedIds.ConsumerMin` ~ `ConsumerMax`):
-
-| Range | Belongs to | Why |
-|---|---|---|
-| `[1, 999]` | Kernel built-in seeds | Every new authenticated endpoint the kernel adds means one more menu row, so the range only ever grows |
-| `[1000, 4095]` | **Your seeds** | |
-| `[4096, ...]` | Snowflake runtime ID range | `id = milliseconds × 4096 + low bits`; a seed using this range will eventually collide with a real insert's primary key |
-
-Seeding outside this range **fails startup outright** and tells you which range to use. Don't fall back on the old habit of "just pick a small integer" — you and the kernel are seeding into the **same tables** (`sys_menu` / `sys_config` …), and not colliding today doesn't mean you won't after the next kernel upgrade — by then the row is already in your database, with no way back.
-
-Register it in **your own `Program.cs`** (the kernel doesn't scan assemblies looking for seeds; `ApplicationAssemblies` only handles entity table creation and controller mounting — **not seeding** — forgetting to register it means it silently never runs):
-
-```csharp
-builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, ProductSeed>());
-```
-
-### A9. Menus and authorization (making the endpoint "authorizable")
-
-The permission code equals the route, and authorization is granted by checking routes on a menu. So for the new endpoint to be accessible to a regular user, it needs a corresponding menu node:
-
-1. Start the system and go to the **menu management** page.
-2. Create the menu node: `Type=Menu`, `Path=/biz/product`, `Component=biz/product/index`, and pick the top-level directory's module for `Application`. For button-level permissions, create `Type=Button` nodes with `Permission` set to the corresponding route code (e.g. `POST:/api/v1/biz/product`).
-3. Go to **role management** and check that menu/button for a role → users with that role get the corresponding route permission (authorization changes invalidate the cache immediately).
-4. You can also ship default menus via a seed, `DefaultMenuSeed` (template: `Seed/DefaultMenuSeed.cs`).
-
-::: tip Filtering the "configure permissions" route dropdown by application
-In **module management**, fill in a "route prefix `apiPrefix`" for your business app — the controller's route segment (e.g. `biz`, matching `/api/v1/biz/...`). Then, when creating a button and clicking "configure permissions" on the menu page, the route dropdown lists only that application's routes by default; check "show all application routes" to see the rest. **You fill in the route segment `biz`, not the module code `business`** (the two don't match — the kernel's system module has code=`system` but route segment=`sys`); leaving it blank = no filtering, falling back to showing everything. This filter is purely a UI decluttering aid, not a permission boundary — a module isn't a permission axis, and mounting a code under a different application still grants real authorization.
-:::
-
-::: warning Editing an existing seed row requires bumping `SysSchemaVersion.Current`
-For a "same Id, changed field" seed edit — like adding `ApiPrefix` to a built-in module — an existing database only gets that change backfilled via `SyncOnUpgrade` when the version number changes (see the comment on `SqlSugar/Entities/SysSchemaVersion.cs`). New rows don't need a version bump.
-:::
-
-> Super admin (`sadm`) automatically sees and can access everything, so no permission setup is needed during development.
-
-### A10. Tests: `tests/TenonAdmin.Tests/`
-
-Use `WebApplicationFactory` (template: `ModulePortalTests.cs`) to write HTTP-level regression tests: create a user/grant a menu → call the endpoint with a token → assert on the envelope. Both the SQLite and MySQL legs must pass (`TestDb.cs` derives an isolated database per environment variable).
-
-```bash
-dotnet test backend/TenonAdmin.slnx --filter "FullyQualifiedName~ProductTests"
-```
-
-### A11. Consumer route (Route B)
-
-A consumer doesn't touch the kernel — they place entities/services/controllers in their own business assembly, then:
-
-```csharp
-builder.Services.AddTenonAdmin(builder.Configuration, o =>
-{
-    o.ApplicationAssemblies.Add(typeof(Product).Assembly);   // entity table creation + controller mounting
-});
-// Register your own IProductService with TryAdd/Add before AddTenonAdmin()
-```
-
-The kernel merges that assembly's entities into CodeFirst table creation and `AddApplicationPart`s its controllers. Everything else (entities/services/controllers/caching/menus) is written exactly as in Route A.
-
-::: tip Don't want to wire up a host by hand?
-`dotnet new tenon-app` directly generates a runnable project with the above wiring already done, plus a `DataEntity` sample module (see [Quick Start](/guide/business-module)). After that, adding a new module = copy the generated `Modules/SampleDoc*` four-piece set, rename it, and add one `TryAddScoped` line to `Program.cs`.
-:::
-
-::: warning Only `ApplicationAssemblies.Add(...)` actually works
-The kernel **doesn't auto-discover** your modules — you must explicitly `Add` the assembly, or entities won't get tables and controllers will 404. (There used to be a `ScanApplicationAssemblies` switch that was never implemented; it was removed before release, on 2026-07-14.)
-:::
-
+- [ ] Entity base class chosen correctly (need org isolation → `DataEntity`); unique index added for unique columns; audit fields not set by hand
+- [ ] Service methods `virtual`; updates/deletes check visibility with `GetByIdAsync` first; duplicate check on unique columns carries `ClearFilter<ISoftDelete>`
+- [ ] Every controller action carries `[RolePermission]`; writes needing audit carry `[OperationLog(...)]`
+- [ ] `ApplicationAssemblies.Add(...)` and service `TryAdd` both in place in `Program.cs` (missing assembly = silent 404)
+- [ ] Seeds implement the generic `ISeedData<T>`, are registered in your own `Program.cs`, and use fixed Ids within `[1000, 4095]` with no collisions
+- [ ] Changed an existing built-in seed row → bumped `SysSchemaVersion.Current`
+- [ ] Tests green on both SQLite and MySQL
+- [ ] Runtime: menu node created in Menu Management, grant checked in Role Management

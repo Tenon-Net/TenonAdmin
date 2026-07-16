@@ -3,7 +3,7 @@
 The reverse proxy hosts the static build and forwards `/api` to the backend. The browser only ever sees one origin, so **CORS still isn't needed**. Below are two equivalent configs, nginx and Caddy — pick either.
 
 ::: tip Which one to pick
-If you already have an nginx gateway, just copy the nginx config as-is. **If you're spinning up a fresh box and want to skip manual TLS work, go with Caddy** — put your real domain in the site label and Caddy automatically obtains and renews a Let's Encrypt certificate. This is also why the repo's container delivery (Route D) defaults to Caddy.
+If you already have an nginx gateway, just copy the nginx config as-is. **If you're spinning up a fresh box and want to skip manual TLS work, go with Caddy** — put your real domain in the site label and Caddy automatically obtains and renews a Let's Encrypt certificate. This is also why the repo's [Containers & Multi-Replica](/guide/deployment/docker) delivery defaults to Caddy.
 :::
 
 ## nginx
@@ -36,7 +36,7 @@ server {
 
 ## Caddy
 
-Use a real domain as the site label and Caddy will auto-issue/renew a certificate; only use `:80` locally or when you have no domain. This is the **bare-metal install** version, using the same approach as the `web/Caddyfile` shipped in the Route D container.
+Use a real domain as the site label and Caddy will auto-issue/renew a certificate; only use `:80` locally or when you have no domain. This is the **bare-metal install** version, following the same approach as the `web/Caddyfile` inside the [Containers & Multi-Replica](/guide/deployment/docker) container.
 
 ```
 admin.example.com {
@@ -45,7 +45,7 @@ admin.example.com {
         max_size 32MB
     }
 
-    # ⚠️ Must use handle blocks — don't put reverse_proxy and try_files at the same top level:
+    # Must use handle blocks — don't put reverse_proxy and try_files at the same top level:
     # Caddy executes by built-in directive order (not the order you wrote them), and try_files
     # belongs to the rewrite phase, which runs before reverse_proxy.
     # Left flat, a path like /api/... that doesn't exist on disk gets rewritten to /index.html by

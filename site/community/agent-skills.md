@@ -58,15 +58,16 @@ This set of docs targets "building business features on top of TenonAdmin" — w
 
 | Skill | Purpose | Applicable scenario |
 |---|---|---|
+| `new-module` | End-to-end orchestration for adding a complete business module | Building a module from scratch (entity → backend → frontend → menu/permission) |
 | `create-entity` | Create a SqlSugar entity class | New table, new entity |
 | `create-crud-backend` | Create a full backend CRUD set | Models + Interface + Service + ErrorCode + DI + Controller |
 | `create-crud-frontend` | Create a frontend CRUD page | Types + API + Vue page (ProTable + FormContainer) |
 | `replace-service` | Replace/extend a built-in service | Customize login flow, swap password hashing, override service steps |
 | `create-page-variant` | Non-standard page templates | Tree tables, master-detail split, sidebar filters |
 
-Under **Claude Code**, these five skills are already wrapped as slash commands under `.claude/skills/` — just type `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/replace-service`, or `/create-page-variant`. They also support natural-language auto-triggering, e.g. just saying "help me create a Product entity." Other AI tools don't have a slash-command mechanism, so reference the file path directly in the conversation instead — e.g. "refer to skills/create-entity.md and help me create a BizProduct entity."
+Under **Claude Code**, these six skills are already wrapped as slash commands under `.claude/skills/` — just type `/new-module`, `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/replace-service`, or `/create-page-variant`. They also support natural-language auto-triggering, e.g. just saying "help me create a Product entity." Other AI tools don't have a slash-command mechanism, so reference the file path directly in the conversation instead — e.g. "refer to skills/create-entity.md and help me create a BizProduct entity."
 
-Standard order for adding a complete new CRUD module:
+Standard order for adding a complete new CRUD module (`/new-module` chains these three into a single run; call them individually if you want to go step by step):
 
 1. `/create-entity` — create the entity
 2. `/create-crud-backend` — build the backend (including menu seed data)
@@ -77,4 +78,5 @@ Each skill distinguishes between **system module** (kernel maintainer) and **bus
 ## Reference
 
 - The "Agent skills" section of the root [`CLAUDE.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/CLAUDE.md) is the index entry point for these conventions.
+- To walk through replacing/extending a built-in service by hand (rather than having an agent generate it via the `replace-service` skill), see [Replacing Built-in Services](/guide/replace-service).
 - For how to run tests and submit PRs, see the [Contributing Guide](./contributing).

@@ -45,9 +45,12 @@ Long service methods are broken into a series of `virtual` steps (the template-m
 Take `AuthService` as an example — "assembling the login output" is an independent `virtual` step in the login flow, which a consumer can override by subclassing:
 
 ```csharp
-// User overrides the login-output assembly step (template-method override)
-private sealed class OverridingAuthService(/* same constructor dependencies as the base class */)
-    : AuthService(/* pass-through dependencies */)
+// backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs
+// Override the login-output assembly step: the primary constructor passes the base class's 8 dependencies straight through, adding only this one overriding method
+private sealed class OverridingAuthService(
+    IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens, ISessionService sessions,
+    ILogService logService, ILoginLockService loginLock, ICaptchaService captcha, ISecurityPolicyProvider policy)
+    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy)
 {
     protected override LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) =>
         base.BuildLoginOutput(user, pair) with { Name = "OVERRIDDEN" };
@@ -85,6 +88,27 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 These test cases are the executable version of a product promise. Before modifying `TryAdd` registrations, `virtual` splits, or the assembly-mounting path, confirm they're still green — if they go red, some replacement point has been silently broken.
 :::
 
+## Two things the kernel won't let you touch
+
+The takeaway from the sections above is "almost anything can be swapped," but the portal's module management has two server-side gates that even direct calls to the admin API can't get around. First, distinguish the two senses of "module": `Api.DisabledModules` from constraint three is a startup-time switch that strips out built-in controllers so you can take over their routes; what's meant here is the application record (`SysModule`) in the multi-app portal, added, edited, and removed through runtime CRUD. The gates are drawn on the latter.
+
+**The built-in system module can't be disabled.** It carries every built-in admin page (org, ops, logs, files), so disabling it cuts the whole portal off — and there's no UI path to bring it back, which amounts to locking yourself out. The frontend's disabled-state interception is only a hint, not a line of defense; the real gate is server-side, keyed on a fixed Id (so it doesn't fall over when the Code changes) and rejecting any attempt to set `Enabled=false`.
+
+**A module with menus can't be deleted.** Delete a module that still has menus hanging off it and those menus' top-level directory `ModuleId` goes dangling, making the entire subtree vanish from the portal. Before deletion, the kernel checks whether any menu belongs to the module and refuses if so, forcing you to first move or delete the attached top-level directories before deleting the module.
+
+```csharp
+// backend/src/TenonAdmin.Services/Module/ModuleService.cs
+// Disabling a built-in module: judged by fixed Id (42013 ModuleProtected, the same code shared with "not deletable")
+AdminException.ThrowIf(id == DefaultModuleSeed.BUILTIN_MODULE_ID && !input.Enabled, ErrorCode.ModuleProtected);
+
+// Deleting a module with menus: query menus through the Db escape hatch (42023 ModuleHasMenus)
+AdminException.ThrowIf(
+    await modules.Db.Queryable<SysMenu>().AnyAsync(m => m.ModuleId == id),
+    ErrorCode.ModuleHasMenus);
+```
+
+That menu-checking query deliberately goes through the `modules.Db` escape hatch instead of adding an `IRepository<SysMenu>` to the constructor — adding a parameter to the primary constructor would break source compatibility for consumers who subclass this class. Refusing to change a subclass's signature even just to add a gate is the replaceability constraint constraining itself. Both are locked down by `ModuleProtectionTests`, which isn't part of the six-piece set above.
+
 ## The full pattern for a consumer replacing a service
 
 Take replacing the password-hashing algorithm as an example:
@@ -103,3 +127,5 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 ```
 
 The kernel registers `IPasswordHasher` with `TryAddSingleton`, so with your registration already in the container, the built-in `Pbkdf2PasswordHasher` never gets added. To swap the snowflake ID generator for a database auto-increment or GUID v7, implement `IIdGenerator` and register it up front the same way; to change just one step of a service rather than the whole thing, subclass it and override that one `virtual` step.
+
+The step-by-step moves and pitfalls for all four paths — wholesale replacement, overriding a single step, disable-and-take-over, and consumer seed data — are collected in [Replacing Built-in Services](/guide/replace-service); this page only explains why these replacement points hold up.

@@ -1,6 +1,6 @@
 # Authentication and Security
 
-The kernel turns login, tokens, sessions, brute-force protection, and log redaction into default behavior — the services started by three lines of `Program.cs` already come with all of these wired in, no extra plumbing needed. This page walks through each default behavior along with its configuration keys and services. Most policies have both a deployment-time Options default and a runtime override via `SysConfig` (change configuration, not code).
+The kernel turns login, tokens, sessions, brute-force protection, and log redaction into default behavior — the services started by three lines of `Program.cs` already come with all of these, no extra wiring needed. Most policies come in two layers: a deployment-time Options default, plus a `SysConfig` that can override it at runtime (change configuration, not code — and no redeploy). This page covers the mechanism and config keys of each policy; for the pre-launch, line-by-line check of which ones you must change and which can stay at their defaults, see the [security baseline in the deployment guide](/guide/deployment/) — that page is the checklist, this one is the mechanism.
 
 ## JWT tokens
 
@@ -117,6 +117,10 @@ Quota trimming uses "**insert first, then converge**": the new session is insert
 
 If unmet, throws `ErrorCode.PasswordTooWeak`, with `args` carrying the specific requirements for the frontend to display. Passwords are hashed with PBKDF2 (`Pbkdf2PasswordHasher`).
 
+**Password aging (off by default).** Beyond complexity, there's a runtime-configurable expiry policy: `sys.security.password.expireDays` (seeded to `0` = never expires; only enabled when >0). At login step 4, `AuthService.CheckPasswordExpiryAsync` takes `SysUser.LastPasswordChangeTime` plus the valid-days count and compares it against the current time — **expiry doesn't block login**; it only sets that user's `MustChangePassword` to true in the DB and returns it in the login response, so the frontend forces a redirect to the change-password page (the same signal as an admin password reset). A successful self-service password change refreshes `LastPasswordChangeTime`, clears the flag, and restarts the expiry window from zero.
+
+`LastPasswordChangeTime` is a field added later, so existing users may have it as null. Before actually judging expiry, a null anchor is backfilled with the current time first, so the window starts from the first login after the upgrade — otherwise, on the day the policy is switched on, a batch of old users with no anchor would all be judged expired at once and collectively stuck on the change-password page. Consumer code that has replaced `ISecurityPolicyProvider` isn't affected: the newly added `GetPasswordExpireDaysAsync` ships with a default interface implementation returning 0, so an old implementation still compiles unchanged and behaves as if the policy is off.
+
 **Default initial password** (`TenonAdmin:Security:DefaultInitialPassword`): defaults to `null` → when creating a user or resetting a password, a cryptographically random strong password is generated per account, closing off the known weakness of "a fixed default password shipped in a public NuGet package." A password reset returns the random password to the admin to relay on the spot.
 
 ::: tip Super-admin password on first startup
@@ -139,6 +143,19 @@ Rate-limited by **client IP** using a fixed window, mounted via a built-in `ISta
 ::: warning Behind a reverse proxy, the IP seen is the proxy's
 When deploying behind a proper gateway, wire up the `ForwardedHeaders` middleware to parse `X-Forwarded-For` first — otherwise all clients behind the same proxy share a single rate-limit partition.
 :::
+
+## Demo mode (read-only showcase)
+
+To stand the system up as a public demo site that anyone can come in and click around in but nobody can change data in, turn on `TenonAdmin:DemoMode` (default `false`):
+
+```jsonc
+// appsettings.json — or the environment variable TenonAdmin__DemoMode=true
+{ "TenonAdmin": { "DemoMode": true } }
+```
+
+Only then does the kernel register the global authorization filter `DemoModeFilter`, which allows requests by HTTP method: GET/HEAD/OPTIONS read as usual; `/api/v1/auth/*` (login, logout, refresh) is allowed through too, or you couldn't even log in; every other POST/PUT/PATCH/DELETE returns HTTP 403 with envelope code `41002` (`DemoModeReadOnly`), and the frontend pops a read-only notice keyed by that code.
+
+What it blocks is the write action itself, independent of role permissions — the decision falls in the authorization stage and looks only at the request method, so even a super admin can't change anything once inside. To let a specific write endpoint through (say the demo site's own feedback form), don't reach for this master switch; handle it separately on the business side.
 
 ## Log redaction
 

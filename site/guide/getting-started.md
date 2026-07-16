@@ -1,70 +1,85 @@
-# Get Your First Endpoint Running from Scratch
+# Quick Start
 
-This guide walks you through running the TenonAdmin kernel, getting a usable token, and calling your first protected endpoint. Everything is zero-config — no database installation required.
+This page takes you from a running TenonAdmin kernel to a working token and your first protected-endpoint call, then wires it into your own ASP.NET Core project, brings up the frontend template, and swaps out the default database. All zero-config — no database to install first.
 
 ::: tip Prerequisites
 - .NET 10 SDK
-- Node.js (20+ recommended) if you also want to run the frontend
+- Node.js (20+ recommended), if you also want to run the frontend
 :::
 
-## 1. Run the sample project bundled with the repo
+## Run the sample first
 
-After cloning the repo, just run `backend/samples/MinimalHost` — the minimal sample host in the repo, whose `Program.cs` is only a few lines of wiring:
+The repo ships a minimal sample host, `backend/samples/MinimalHost`, whose `Program.cs` is only a few lines of wiring. After cloning the repo, just run it:
 
 ```bash
 dotnet run --project backend/samples/MinimalHost
 ```
 
-On first startup it automatically:
+On first startup it does three things automatically: creates tables via the default SQLite (CodeFirst; the database file lands under `backend/samples/MinimalHost/data/`), writes seed data (menus, roles, the super-admin account), and then listens on `http://localhost:5100` (that port is hard-coded in `launchSettings.json`, dodging the 5000 that AirPlay squats on macOS).
 
-- Creates tables via the default SQLite (CodeFirst; the database file lands under `./data/` inside `backend/samples/MinimalHost`)
-- Writes seed data (menus, roles, the super-admin account, etc.)
-- **Prints a randomly generated super-admin password to the console** — printed only once, so copy it down
+To start backend and frontend together locally, use `dev.bat` at the repo root — it brings up MinimalHost and the frontend Vite in two separate windows (installing frontend dependencies on the first run); `stop.bat` stops them.
 
-The service listens on `http://localhost:5100` by default.
+## Verify the three probes
 
-::: warning The password is printed only once
-Don't panic if you missed it — just delete the database file under `backend/samples/MinimalHost/data` and `dotnet run` again to reseed (only do this in a local experimentation environment; never do this to a production database).
-:::
-
-## 2. Verify three endpoints
-
-Once the service is up, confirm these three probes respond:
+Once the service is up, confirm all three endpoints respond:
 
 ```bash
-# Liveness probe, runs no dependency checks
+# Liveness probe — only checks the process is up, touches no dependencies
 curl http://localhost:5100/health
 
-# Readiness probe: healthy only if both DB and cache are connected
+# Readiness probe: returns Healthy only if both DB and cache are reachable
 curl http://localhost:5100/health/ready
 
-# OpenAPI contract (mounted only in Development, the source for the frontend's gen:api)
+# OpenAPI contract, mounted only in Development, the source for the frontend's gen:api
 curl http://localhost:5100/openapi/v1.json
 ```
 
-The first two should both return `Healthy`. `/openapi/v1.json` returns a large blob of JSON — the contract source the frontend will later use to generate types.
+The first two should return `Healthy`. `/openapi/v1.json` returns a big blob of JSON that you'll use later to generate the frontend types; this endpoint isn't mounted in production, so a 404 against it there is expected behavior, not a missing setting.
 
-## 3. Log in to get a token
+## Log in and call your first endpoint
 
-`GET /api/v1/ping` is the smallest protected endpoint in the kernel — it only lets you through with a valid token. The captcha is disabled by default (`Security:Captcha:Enabled` defaults to off), so login only needs an account and password:
+`GET /api/v1/ping` is the smallest protected endpoint in the kernel — it only lets you through with a valid token. Before logging in, work out where the password comes from.
+
+The seed runs once, only when the `sys_user` table is empty. Running MinimalHost is a zero-config startup with no password configured, so the kernel generates a 16-character random password (from a cryptographically secure source, with easily-confused characters like `0/O` and `1/l/I` stripped out) and prints it inside a prominent box in the console log of the startup that **creates the account** — that once, and never again:
+
+```text
+╔══════════════════════════════════════════════════════╗
+║  TenonAdmin first run — super admin created            ║
+║  Account:  superAdmin
+║  Password: xxxxxxxxxxxxxxxx
+║  Shown only this once — change it right after login!   ║
+╚══════════════════════════════════════════════════════╝
+```
+
+The account is always `superAdmin`; copy that password string down.
+
+::: warning The random password is printed only once
+Didn't catch it? Don't panic — in a local experimentation environment, delete the database file under `backend/samples/MinimalHost/data` and `dotnet run` again; an empty database reseeds. You can't wipe a production database like that — there you either configure a fixed password up front (see below) or change the password immediately after logging in.
+:::
+
+Want a fixed password you control (shared across a team, CI, repeated wipe-and-reseed)? Copy `backend/samples/MinimalHost/appsettings.Development.json.example` to `appsettings.Development.json` and fill in `Seed:AdminPassword`:
+
+```json
+{ "TenonAdmin": { "Seed": { "AdminAccount": "superAdmin", "AdminPassword": "your-password" } } }
+```
+
+This file is excluded by `.gitignore` (it holds local credentials) and won't enter version control. With it set, the startup log no longer prints a random password, and you just log in with the account and password you chose. Note that the seed only recognizes an empty database: once any user exists, changing this won't overwrite the existing account — to reset, you have to wipe the database and start over.
+
+The image captcha is off by default (`Security:Captcha:Enabled` defaults to off), so login only needs an account and password:
 
 ```bash
 curl -X POST http://localhost:5100/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"account":"superAdmin","password":"<the password printed to the console>"}'
+  -d '{"account":"superAdmin","password":"<the password from above>"}'
 ```
 
 `data.accessToken` in the response envelope is your token:
 
 ```json
-{ "code": 0, "data": { "accessToken": "eyJ...", "expiresAt": "...", "refreshToken": "...", "mustChangePassword": true } }
+{ "code": 0, "data": { "accessToken": "eyJ...", "expiresAt": "...", "refreshToken": "...", "mustChangePassword": false } }
 ```
 
-`superAdmin` is the default super-admin account (the default value of `TenonAdmin:Seed:AdminAccount`). On first login `mustChangePassword` will be `true` — for now we're just getting the endpoint working, so ignore it.
-
-## 4. Call your first protected endpoint
-
-Attach the token you just obtained:
+The super-admin seed doesn't force a password change on first login, so `mustChangePassword` is `false` (only a regular user created by an admin, or whose password was reset, gets `true`, and the frontend uses that to force a redirect to the change-password page). Attach the token and call ping:
 
 ```bash
 curl http://localhost:5100/api/v1/ping \
@@ -77,15 +92,17 @@ Response:
 { "code": 0, "data": { "pong": true, "account": "superAdmin", "at": "2026-07-...T..." } }
 ```
 
-Without a token, or with an expired/revoked one, you get a `401` (standard envelope, `code=40006`). The super admin (the `sadm` claim) automatically bypasses the subsequent `[RolePermission]` permission-code check; a regular user first needs the corresponding route attached in menu management and granted in role management before they can call the same endpoint — the full write-up of this chain is in [Add a Business Module](/guide/business-module).
+Without a token — or with an expired or revoked one — you get a `401` (standard envelope, `code=40006`). The super admin (the `sadm` claim in the token) automatically bypasses the subsequent `[RolePermission]` permission-code check; a regular user first has to attach the matching route in menu management and grant it in role management before they can call the same endpoint — the full write-up of that chain is in [Add a Business Module](/guide/business-module).
 
-## 5. Integrate into an existing ASP.NET Core project in three lines
+## Integrate into your own project in three lines
 
-What you ran above is the sample host bundled with the repo. To actually wire the kernel into your own project, it comes down to three lines:
+What you ran above is the sample bundled with the repo. To actually wire the kernel into your own ASP.NET Core project, first install the meta-package:
 
 ```bash
 dotnet add package TenonAdmin
 ```
+
+The current version is `0.1.1`, published to nuget.org. The core integration is just three lines:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -97,89 +114,52 @@ app.MapTenonAdmin();
 app.Run();
 ```
 
-`AddTenonAdmin` binds configuration and registers all services — JWT, RBAC, data permissions, logging, and so on; `MapTenonAdmin` mounts routes, health checks, and (in dev) the OpenAPI docs. It runs zero-config with the default SQLite; to switch databases, just change `TenonAdmin:Database` in `appsettings.json`.
+`AddTenonAdmin` binds configuration and registers all the services — JWT, RBAC, data permissions, logging, and the rest; `MapTenonAdmin` mounts the routes, health checks, and (in dev) the OpenAPI docs. It runs on the default SQLite, zero-config.
 
-The current version is **`0.1.0`**, published to nuget.org; the API may still change before 1.0, and development happens on the `dev` branch.
+To share sessions and cache across replicas (multi-instance deployment), also install `TenonAdmin.Caching.Redis` and call `AddTenonAdminRedisCache(builder.Configuration)` **before** `AddTenonAdmin` — the kernel's replaceable services are registered with `TryAdd`, first registration wins, so anything after `AddTenonAdmin` can't outrun the built-in in-process cache. Without `Cache:Provider=Redis` configured, that line is a no-op, so single-instance development is unaffected.
 
-## 6. Also run the frontend
+If you need finer-grained control over dependencies, you can reference a single layer instead (`.AspNetCore` / `.Services` / `.SqlSugar` / `.Core`). Why the packages are layered this way, and what "replaceable" actually means in practice, are covered in full in [Core Concepts](/guide/concepts); this page is only about getting it running.
+
+> The API may still change before 1.0; breaking changes are marked clearly in the [Changelog](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md). Development happens on the `dev` branch.
+
+## Run the frontend while you're at it
 
 The frontend is the Vue 3 + Naive UI admin template in the repo's `web/` directory:
 
 ```bash
 cd web
 npm install
-npm run dev        # Vite runs on :5173, auto-proxying /api and /openapi to the backend on :5100 (override the target with TENON_API_TARGET)
+npm run dev
 ```
 
-Open `http://localhost:5173` in your browser and log in with the same super-admin account and password to see the full admin UI.
+Vite comes up on `http://localhost:5173`, with a built-in reverse proxy forwarding `/api` and `/openapi` verbatim to the backend on `:5100` (override the target with the `TENON_API_TARGET` environment variable), so as far as the browser is concerned there's a single origin and local development needs no CORS. Open `5173`, log in with the same super-admin account and password, and you'll see the full admin UI.
 
-::: tip One command to start everything
-`dev.bat` at the repo root starts the backend + frontend in two separate windows (installing frontend dependencies on first run); `stop.bat` stops them.
+When the frontend regenerates its API types (`npm run gen:api`), the backend must be running — it pulls the contract from a live `/openapi/v1.json`, not offline.
+
+## Swap out the default database
+
+Zero-config defaults to SQLite (`Data Source=./data/admin.db`, relative to the ContentRoot). Switching to a real database takes no code changes — the `TenonAdmin:Database` section decides it, and you change just two things, `DbType` and `ConnectionString` (`Sqlite` / `MySql` / `SqlServer` / `PostgreSQL` are all supported):
+
+```json
+{
+  "TenonAdmin": {
+    "Database": {
+      "DbType": "MySql",
+      "ConnectionString": "Server=127.0.0.1;Port=3306;Database=tenon;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;"
+    }
+  }
+}
+```
+
+Containerized deployment is smoother with environment variables (double underscores for nesting):
+
+```bash
+TenonAdmin__Database__DbType='MySql'
+TenonAdmin__Database__ConnectionString='Server=db;Port=3306;Database=tenon;User ID=...;Password=...'
+```
+
+::: warning Production won't auto-create tables
+When `ASPNETCORE_ENVIRONMENT=Production`, tables are **not** auto-created even with CodeFirst enabled — this is a safety gate against altering the schema by accident in production. For the first deploy against an empty database, either turn on `EnableCodeFirstInProduction: true` temporarily to let it build the schema once, or have a DBA create it by hand. See the [Deployment guide](/guide/deployment/) for details.
 :::
 
-## Next steps
-
-- Want to add your own business tables and endpoints on top of the kernel → [Add a Business Module End-to-End](/guide/business-module)
-- Want to add a real page to the frontend → [Add a Frontend Page](/guide/frontend-page)
-- Want to ship it to a server → [Full Container Deployment Walkthrough](/guide/deployment/docker)
-- Want to understand how "replaceability" actually works and why packages are layered this way → [Core Concepts](/guide/concepts)
-
-
----
-
-<!-- TODO(rewrite): merged from getting-started.md -->
-
-# Getting Started
-
-TenonAdmin is an admin/permission-management kernel built on ASP.NET Core, SqlSugar, Vue 3, Vite, and Naive UI. Instead of forking the whole project and building on top of it, it packages common capabilities — users, roles, menus, organizations, data permissions, logging — into modules that are **pluggable, replaceable, and extensible**.
-
-## Try the sample first
-
-The repo ships a minimal sample project. Clone it and run it directly:
-
-```bash
-dotnet run --project backend/samples/MinimalHost
-```
-
-On first startup it creates the database, seeds initial data, and prints a **randomly generated super-admin password** to the console — save it, since it's only printed once. It listens on `http://localhost:5100` by default.
-
-## Three lines to integrate into an existing project
-
-In an existing ASP.NET Core project, the core integration takes just three lines:
-
-```csharp
-builder.Services.AddTenonAdmin(builder.Configuration);
-var app = builder.Build();
-app.MapTenonAdmin();
-```
-
-Then call `app.Run()` as usual. On startup, automatic table creation, data seeding, JWT authentication, RBAC permissions, data scoping, and the admin API are all registered.
-
-## Installation
-
-The current version is **`0.1.0`**, published on nuget.org. In most cases, referencing the meta-package is enough to get the full backend:
-
-```bash
-dotnet add package TenonAdmin
-```
-
-If you need finer-grained control over dependencies, you can reference individual layers instead (see [Core Concepts · Package Layering](/guide/concepts#package-layering)).
-
-## Frontend
-
-The frontend is a Vue 3 + Naive UI admin template, located in the repo's `web/` directory:
-
-```bash
-cd web
-npm install
-npm run dev        # Vite runs on :5173, proxying /api and /openapi to the backend at :5100
-```
-
-## What's next
-
-- Want to understand what "replaceable" really means and why the packages are layered this way → [Core Concepts](/guide/concepts)
-- Want to deploy it to a server → [Deployment](/guide/deployment/)
-- Want to build your own business logic on top of the kernel → [Adding a New Business Module](/guide/business-module)
-- Forked the repo to build on `web/` and want to pull in upstream updates → [Syncing Your Fork](/guide/sync-fork)
-
-> The API may still change before 1.0; breaking changes are clearly marked in the [Changelog](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md). Development happens on the `dev` branch.
+With the kernel running and the database swapped, the next stop is adding your own business module on top of it, end to end — see [Add a Business Module](/guide/business-module).

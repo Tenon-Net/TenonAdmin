@@ -120,6 +120,8 @@ Primary key `Id` values are produced by `IIdGenerator`, whose default implementa
 
 The fixed 12 low-order bits (6 for machine + 6 for sequence) weren't chosen arbitrarily: 41+12=53, so every ID stays below 2^53, within JS's `Number.MAX_SAFE_INTEGER` — the frontend can parse a `long` primary key as a plain number without losing precision. Capacity: 64 machines, 64 IDs per machine per millisecond.
 
+Those same 12 bits also carve out the seeds' territory: `id = milliseconds-from-epoch × 4096 + low bits`, so a snowflake can never issue a number below 4096, which leaves `[1, 4095]` for seed data's fixed Ids (the kernel uses `[1, 999]`; consumers allocate their numbers from `1000` up). On startup, `DatabaseInitializer` verifies that every seed Id falls within this range and isn't reused within a single entity: an out-of-range Id (which a snowflake would sooner or later catch up to and collide with on the primary key) or a duplicate (whose idempotent existence check would silently skip the later row as "already present") both throw at startup, and CI carries cases that catch this class of error before the host even boots.
+
 The worker number comes from config `TenonAdmin:Id:WorkerId` (default 0, range 0–63):
 
 ```json
@@ -136,6 +138,4 @@ For a single-machine deployment, leaving it unset (falling back to 0) is fine. *
 The kernel provides one line of defense: if Redis caching is chosen (a clear sign of multi-instance intent) but `WorkerId` isn't set explicitly, startup throws immediately — turning a silent primary-key collision into a readable startup error. For a genuinely single-instance deployment, set it to `0` explicitly to signal intent; on k8s, a StatefulSet's pod ordinal can be injected.
 :::
 
-::: tip Clock safety
-`SnowflakeIdGenerator` takes an injected `TimeProvider` (testable). On detecting a clock rollback, it spin-waits briefly (≤5ms, NTP-adjustment scale) to catch back up; on a large rollback, it throws outright and refuses to issue an ID — it never issues an ID that might be a duplicate.
-:::
+On clock safety: `SnowflakeIdGenerator` takes an injected `TimeProvider` (testable). On detecting a clock rollback, it spin-waits briefly (≤5ms, NTP-adjustment scale) to catch back up; on a large rollback, it throws outright and refuses to issue an ID — it never issues an ID that might be a duplicate.

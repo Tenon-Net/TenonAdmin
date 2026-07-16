@@ -1,10 +1,10 @@
 # Core Concepts
 
-TenonAdmin is a **distributable admin kernel**, not an application. It ships as NuGet packages, letting consumers get a full enterprise back-office (auth, RBAC, multi-org data permissions, dict/config, logging, uploads) from three lines of `Program.cs`. The design constraint running through all of it is **replaceability**.
+TenonAdmin is a **distributable admin-system kernel**, not an application. It ships as NuGet packages, so a consumer gets a full enterprise back-office (auth, RBAC, multi-org data permissions, dict/config, logging, uploads) from three lines of `Program.cs`. And it doesn't stop there: targeted notice/announcement delivery with a rich notification bell, a read-only demo mode (every write request refused), a password-expiry policy, and more all come built in — each unpacked in its own backend deep-dive. The design constraint that runs through all of it is **replaceability**.
 
 ## Why not just another admin template
 
-Forking an admin template gets you started fast, but as business code grows, the project ends up deeply coupled to the template — upgrading base capabilities later, pulling in upstream changes, or swapping out just one piece all become painful.
+Forking an admin template gets you started fast, but as business code grows the project ends up deeply coupled to the template — and after that, upgrading base capabilities, pulling in upstream changes, or swapping out just one piece all become painful.
 
 TenonAdmin factors these common capabilities out of business code: you can use the default implementations as-is, integrate it fairly naturally into an existing project, or replace any single piece without forking.
 

@@ -28,7 +28,7 @@ features:
     details: Five built-in data scopes, enforced automatically via ORM global filters — business queries never need manual org-filter conditions.
   - icon: ⚡
     title: Zero-Config Startup
-    details: SQLite by default and ready to run — auto-creates tables, seeds data, and prints the super-admin password; switching databases is a single config change.
+    details: SQLite by default auto-creates tables and writes seed data, printing the super-admin password once on first startup; switching databases is a single config change.
   - icon: 📦
     title: Minimal Dependencies
     details: Runtime depends only on SqlSugar and Microsoft.* official libraries — Redis, object storage, etc. are opt-in.
@@ -37,7 +37,7 @@ features:
     details: JWT authentication, CAPTCHA, login lockout, forced logout, and log redaction all included — a secure baseline out of the box.
   - icon: 🖥️
     title: Full-Stack Delivery
-    details: Ships with a Vue 3 + Naive UI admin console — config center, containerized deployment, and horizontal scaling all ready to go.
+    details: Ships with a Vue 3 + Naive UI admin console, with containerized deployment and multi-replica horizontal scaling supported.
   - icon: 🧰
     title: Component Ecosystem
     details: Shared components like ProTable and IconPicker are published as standalone npm packages — install them individually into any Vue 3 + Naive UI project.
@@ -45,6 +45,6 @@ features:
     linkText: Browse the components
   - icon: 🤖
     title: Assisted-Development Skills
-    details: Workflows like adding entities, scaffolding CRUD, and swapping services are packaged as standard skills — AI assistants or developers can follow them to ship fast.
+    details: Workflows like adding entities, scaffolding CRUD, and swapping services are written up as standard skills — AI assistants or developers follow them to generate standards-compliant code.
     link: /community/agent-skills
     linkText: Browse the skills

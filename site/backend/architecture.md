@@ -37,9 +37,7 @@ Responsibilities and dependency direction per layer:
 | `TenonAdmin` (meta-package) | Aggregation entry point | AspNetCore | — |
 | `TenonAdmin.Caching.Redis` (optional) | `RedisCacheProvider` — Redis-backed `ICacheProvider` | Core only | StackExchange.Redis |
 
-::: tip Another example of the TryAdd replaceability pattern
 `TenonAdmin.Caching.Redis` doesn't introduce a new mechanism — it's the same `TryAdd` replaceability described throughout this page, applied to the cache provider. A consumer calls `AddTenonAdminRedisCache(configuration)` before `AddTenonAdmin()`, which `TryAddSingleton`s a `RedisCacheProvider` that wins the race and replaces the kernel's default in-process `MemoryCacheProvider`. Skip the call, or don't set `TenonAdmin:Cache:Provider=Redis`, and the kernel's in-process default keeps working unchanged.
-:::
 
 ::: tip Entities live in Services, not in SqlSugar
 The data layer only provides `IRepository<>` and entity base classes; the concrete `Sys*` business entities are defined in `TenonAdmin.Services`. This follows from the dependency direction: entities need to reference domain concepts, and the data layer cannot depend upward on the domain layer.
@@ -86,9 +84,7 @@ services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()
 services.AddTenonAdminServices();
 ```
 
-::: tip Each layer can be assembled independently
-`AddTenonAdminSqlSugar` is a public entry point, callable on its own against a bare container (used by tests, and by consumers who only need the data layer). Because of this, it resolves optional dependencies with `GetService` rather than `GetRequiredService` internally — no logger factory means it silently doesn't log, rather than turning into a required dependency that prevents startup.
-:::
+Incidentally, each layer can be assembled independently: `AddTenonAdminSqlSugar` is a public entry point, callable on its own against a bare container (used by tests, and by consumers who only need the data layer). Because of this, it resolves optional dependencies with `GetService` rather than `GetRequiredService` internally — no logger factory means it silently doesn't log, rather than turning into a required dependency that prevents startup.
 
 ## How a consumer's entities and controllers plug in
 

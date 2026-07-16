@@ -1,161 +1,49 @@
 # FAQ
 
-::: tip
-The questions below are grouped by topic and reflect the kernel's actual behavior. If you can't find an answer here, check the raw error message first (the kernel's errors for expected misconfigurations usually name the specific config item / table / column), then search the repo's [issues](https://github.com/Tenon-Net/TenonAdmin/issues) for keywords.
-:::
+This page collects the real "first questions" — the handful of things most likely to trip you up right after installing the package and running the kernel for the first time. Most other problems are hiding in the raw error text: for expected configuration mistakes (the table-creation gate, a missing `WorkerId`, and the like) the kernel names the specific config item / table / column rather than throwing a generic exception, and reading along with it is usually faster than digging through the docs. If you genuinely can't make it out, search the repo's [issues](https://github.com/Tenon-Net/TenonAdmin/issues) for keywords; when opening a new issue, include your .NET / Node version, `TenonAdmin:Database:DbType`, whether it's single-instance or multi-replica, and the full error stack trace — it saves a round trip.
 
-## Preface: how to troubleshoot
+## What account and password do I log in with on first startup?
 
-- Read the full error message first. For expected configuration errors (table-creation gates, missing `WorkerId`, etc.) the kernel names the specific config item involved, rather than throwing a generic exception.
-- Distinguish **kernel behavior** from **consumer code** issues: kernel-related symptoms can be checked against this page and the [Deployment Guide](/guide/deployment/); issues in consumer business code (your own controllers/services) are out of scope here.
-- When asking for help, include: .NET / Node version, `TenonAdmin:Database:DbType`, whether it's a single instance or multi-replica deployment, and the full error stack trace.
+The account is `superAdmin`, and the password depends on which path you took — the password comes from a completely different place in these three cases, and if you can't log in it's usually because you've mistaken which path you're on:
 
-## First Startup
-
-### Where do I find the super-admin password?
-
-**Symptom**: After first startup, you don't know which account/password to log in with.
-
-**Cause**: Seeding runs once, only when the `sys_user` table is empty. If no password is explicitly configured, the kernel generates a random 16-character password and prints it to the console log **on that one startup**, in a format like:
+- **Local clone running MinimalHost**: the repo only has the `appsettings.Development.json.example` template (the real file is gitignored, never committed), so **a fresh clone's first startup also takes the random-password path below**. For a fixed password, copy the template to `appsettings.Development.json` and fill in `Seed:AdminPassword` — the repo's dev convention value is `Aa123456` (what the frontend login form pre-fills in dev mode). Once set, no random password is printed, and the console just carries a plain "super admin created from configuration" log line.
+- **Zero-config / production (no `Seed:AdminPassword`)**: the kernel generates a 16-character random password (with easily-confused characters like `0/O` and `1/l/I` stripped out so you can copy it from the log), printed inside a prominent box in the startup log via `LogWarning`, **only once, on the startup that actually creates the account**:
 
 ```text
 ╔══════════════════════════════════════════════════════╗
-║  TenonAdmin first startup, super admin created          ║
-║  Account: superAdmin
+║  TenonAdmin first run — super admin created            ║
+║  Account:  superAdmin
 ║  Password: xxxxxxxxxxxxxxxx
-║  This password is shown only this once — change it right after logging in!  ║
+║  Shown only this once — change it right after login!   ║
 ╚══════════════════════════════════════════════════════╝
 ```
 
-**Fix**:
+- **Compose demo environment (repo-root `docker-compose.yml`)**: the password comes from the `TENON_ADMIN_PASSWORD` environment variable, default `Tenon@123456`. To change it, override it in the `.env` file in the same directory.
 
-- If you missed that one log line — the password is already stored (hashed) and cannot be recovered as plaintext; you'll need to edit the database directly or wipe it and reseed.
-- To pin a fixed password (e.g. for CI/automation), configure it before startup:
+To pin your own password (CI, automation), just configure `Seed:AdminPassword` before startup:
 
 ```json
 { "TenonAdmin": { "Seed": { "AdminAccount": "superAdmin", "AdminPassword": "your-password" } } }
 ```
 
-Only when `AdminPassword` is left empty (the default) does the kernel take the random-generate-and-print path; once the database already has any user, seeding won't run again, and changing the config won't overwrite an existing account.
+Only leaving it empty (the default) takes the random-generation path. The seed runs once, only when the `sys_user` table is empty: once any user exists, changing this config won't overwrite the existing account.
 
-### Where did `appsettings.Development.json` go — why can't I find it?
+## I missed the first-startup log — how do I recover the random password?
 
-**Symptom**: After cloning the repo, it won't run locally, or the file is missing.
+You can't. The password was hashed when it went into the database — there's no plaintext to recover. Either edit the password hash on that super-admin record directly, or clear `sys_user` (or drop the database) to let the seed run again — configure `Seed:AdminPassword` for the replay so this time it uses your chosen value instead of a random one.
 
-**Cause**: `appsettings.Development.json` is excluded via `.gitignore` — it's a local-dev credentials file (DB connection string, JWT secret, etc.) that shouldn't be committed.
+## Cloned locally but it won't run — where did `appsettings.Development.json` go?
 
-**Fix**: Copy the neighboring `appsettings.Development.json.example` file, rename it, and edit as needed. The sample lives in `backend/samples/MinimalHost/appsettings.Development.json.example`.
+It's excluded by `.gitignore` and not in version control — this file holds local credentials (the database connection string, the JWT secret) and shouldn't go into git. Just copy the neighboring `appsettings.Development.json.example` and rename it; for the sample host it's at `backend/samples/MinimalHost/appsettings.Development.json.example` — edit as needed.
 
-## Database
+## Where to find switching databases, gen:api, proxying, health checks
 
-### How do I switch the default SQLite to MySQL / SqlServer / PostgreSQL?
+Each of these has its own page with the full detail; here are just the symptoms and where to land:
 
-**Symptom**: Zero-config setup defaults to SQLite (`./data/admin.db`), and you want to switch to a production database.
-
-**Cause**: The database type and connection string are both driven by the `TenonAdmin:Database` config section — no code changes needed.
-
-**Fix**: Change the `DbType` and `ConnectionString` values (`Sqlite` / `MySql` / `SqlServer` / `PostgreSQL` are all supported):
-
-```json
-{
-  "TenonAdmin": {
-    "Database": {
-      "DbType": "MySql",
-      "ConnectionString": "Server=127.0.0.1;Port=3306;Database=tenon;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;"
-    }
-  }
-}
-```
-
-You can also use environment variables (double-underscore nesting, convenient for containerized deployments):
-
-```bash
-TenonAdmin__Database__DbType='MySql'
-TenonAdmin__Database__ConnectionString='Server=db;Port=3306;Database=tenon;User ID=...;Password=...'
-```
-
-::: warning Extra care in production
-When `ASPNETCORE_ENVIRONMENT=Production`, tables are **not** auto-created even if `EnableCodeFirst=true` — for a first deploy against an empty database, either temporarily set `EnableCodeFirstInProduction: true` to let it create the tables itself, or have a DBA create them manually. See [Deployment Guide §0](/guide/deployment/) for details.
-:::
-
-## Distributed IDs
-
-### Why does startup fail on a multi-replica deployment with a `WorkerId`-related error?
-
-**Symptom**: Runs fine as a single instance, but fails to start after adding Redis caching and spinning up a second replica.
-
-**Cause**: The snowflake algorithm's `WorkerId` (`TenonAdmin:Id:WorkerId`) determines the ID generator's machine bit. Leaving it unset is fine for a single instance (it falls back to 0). But once `Cache:Provider=Redis` is configured (a clear signal of multi-instance intent) without an **explicit** `WorkerId`, the kernel refuses to start outright — because silently allowing it would likely give both replicas `WorkerId=0`, and IDs generated in the same millisecond would collide on the primary key, silently.
-
-**Fix**: Explicitly configure a distinct `WorkerId` (range 0–63) for each replica:
-
-```bash
-# Replica 0
-TenonAdmin__Id__WorkerId=0
-# Replica 1
-TenonAdmin__Id__WorkerId=1
-```
-
-For Docker Compose, `--scale app=2` can't give each replica a different environment variable — split it into multiple explicit `app` services configured individually (see `docker-compose.scale.yml` at the repo root). For Kubernetes, use a StatefulSet and inject the value from the pod ordinal (`app-0`/`app-1`).
-
-## Frontend API Contract
-
-### `npm run gen:api` runs but errors out or generates the wrong content — what's going on?
-
-**Symptom**: Running `npm run gen:api` to regenerate `src/api/schema.d.ts`, but it can't fetch data.
-
-**Cause**: This command generates types by pulling the contract from a **running** backend instance's `/openapi/v1.json` — it's not offline generation. If the backend isn't running, that endpoint is unreachable.
-
-**Fix**: Start the backend in another terminal first (`dotnet run --project backend/samples/MinimalHost`, or use `dev.bat` to start both backend and frontend at once), confirm `http://localhost:5100/openapi/v1.json` is reachable, then run `npm run gen:api`.
-
-::: warning
-`src/api/schema.d.ts` is a generated artifact — **do not hand-edit it**, any edits will be overwritten the next time `gen:api` runs. To change the types, modify the backend's endpoints/DTOs and regenerate.
-:::
-
-### Why does `/openapi/v1.json` return 404 in production — did the deployment miss something?
-
-**Symptom**: Requesting `/openapi/v1.json` in production returns 404, making it look like the contract is missing.
-
-**Cause**: This endpoint is **only mounted in the Development environment** — it's the contract source for `npm run gen:api` during local frontend development, not a production-facing API. A 404 in production is expected behavior, not a bug.
-
-**Fix**: No action needed. To verify the backend itself is alive, use `/health` (liveness probe) or `/health/ready` (checks both database and cache connectivity).
-
-## CORS and Proxying
-
-### Why do frontend requests to `/api` work during local development — how is it proxied to the backend?
-
-**Symptom**: The frontend runs on `:5173` and the backend on `:5100`, yet pages issue relative-path requests to `/api/...` and get data back with no CORS configured.
-
-**Cause**: The Vite dev server used by `npm run dev` has a built-in reverse proxy (`web/vite.config.ts`) that forwards the `/api` and `/openapi` prefixes as-is to the backend address (defaults to `http://localhost:5100`, overridable via the `TENON_API_TARGET` environment variable). From the browser's perspective, there's only ever one origin (`:5173`), so CORS never comes into play.
-
-```ts
-// web/vite.config.ts
-server: {
-  port: 5173,
-  proxy: {
-    '/api': { target: apiTarget, changeOrigin: true },
-    '/openapi': { target: apiTarget, changeOrigin: true },
-  },
-}
-```
-
-**Note**: This proxy layer exists **only during development**. The production build (`web/dist`) is pure static files — who hosts it and how requests reach the backend is up to your deployment. Common approaches: have the backend also host the frontend build (same origin), or reverse-proxy through nginx/Caddy (still same origin) — neither requires CORS configuration. You only need to touch `TenonAdmin:Api:Cors:AllowedOrigins` if the frontend and backend are deployed on **different origins** (e.g. frontend on a CDN, backend on its own domain). See [Route C: True Cross-Origin](/guide/deployment/route-c) for the full setup.
-
-## Health Checks
-
-### What's the difference between `/health` and `/health/ready`, and which one should I probe?
-
-**Symptom**: Configuring health-check probes for a container orchestrator, unsure which endpoint to hit.
-
-**Cause**: The two have different semantics —
-
-| Endpoint | Semantics | Checks |
-|---|---|---|
-| `/health` | Liveness | Whether the process itself is still responding |
-| `/health/ready` | Readiness | Whether both database and cache connectivity are healthy |
-
-**Fix**: Use `/health` for process-level restart policies (e.g. Kubernetes' `livenessProbe`); use `/health/ready` for deciding whether to accept traffic (`readinessProbe`, load balancer node removal). After deployment, you can smoke-test both:
-
-```bash
-curl https://<your-domain>/health         # Healthy
-curl https://<your-domain>/health/ready   # Healthy
-```
+| What you want to do | Where to look |
+|---|---|
+| Switch the default SQLite to MySQL / SqlServer / PostgreSQL | The database-switching section of [Quick Start](/guide/getting-started) |
+| `npm run gen:api` errors / generates the wrong types (start the backend first) | [Frontend API Contract](/frontend/api-contract) |
+| Why `/api` works locally, and whether production needs CORS | [Request & Proxying](/frontend/request) |
+| What `/health` and `/health/ready` each probe, and whether a production 404 on `/openapi` means something's missing | The go-live self-check in the [Deployment guide](/guide/deployment/) |
+| A multi-replica startup errors with something about `WorkerId` | [Containers & Multi-Replica](/guide/deployment/docker) |

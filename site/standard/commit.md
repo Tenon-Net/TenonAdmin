@@ -67,8 +67,8 @@ The body isn't for restating the diff (the diff itself already shows what code c
 ## Common mistakes
 
 ::: warning Don't do this
-- ❌ Writing the commit message in Chinese (even though code comments are Chinese, commits must be English).
-- ❌ Capitalizing the first letter of `subject` or ending it with a period (follow conventional-commit convention: lowercase start, no period).
-- ❌ Cramming multiple unrelated changes into one commit and summarizing them with one vague `type` (e.g. mixing a `feat` and a `fix` in the same commit) — split them into separate commits by semantics.
-- ❌ Using a `type` that's never appeared in the repo's history (like `update` or `change`) — that semantics is already covered by `feat`/`fix`/`refactor`, and inventing new words only makes history inconsistent.
+- Writing the commit message in Chinese (even though code comments are Chinese, commits must be English).
+- Capitalizing the first letter of `subject` or ending it with a period (follow conventional-commit convention: lowercase start, no period).
+- Cramming multiple unrelated changes into one commit and summarizing them with one vague `type` (e.g. mixing a `feat` and a `fix` in the same commit) — split them into separate commits by semantics.
+- Using a `type` that's never appeared in the repo's history (like `update` or `change`) — that semantics is already covered by `feat`/`fix`/`refactor`, and inventing new words only makes history inconsistent.
 :::
