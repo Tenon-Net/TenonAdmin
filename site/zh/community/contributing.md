@@ -78,7 +78,7 @@ CI(`backend-ci.yml`)在 push / PR 触达 `backend/**` 时跑 build + test,数据
 
 ## 安全问题
 
-**不要通过公开 issue 报告安全漏洞。** TenonAdmin 以 NuGet 包分发,内置认证、RBAC 和多组织数据权限——公开报告等于在补丁出来之前就对所有下游消费者公布 0-day。
+**不要通过公开 issue 报告安全漏洞。** TenonAdmin 以 NuGet 包分发,内置认证、RBAC 和多组织数据权限——公开报告等于在补丁出来之前就对所有下游消费方公布 0-day。
 
 请走 [GitHub 私密漏洞报告](https://github.com/Tenon-Net/TenonAdmin/security/advisories/new)。维护者会在 **7 天内**响应,并与你协调修复和披露节奏。详见 [SECURITY.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/SECURITY.md)。
 

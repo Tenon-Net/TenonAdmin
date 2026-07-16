@@ -41,7 +41,7 @@
 | `...:Captcha:Enabled` | `false` | 是否启用登录验证码 |
 | `...:Captcha:Type` | `char` | `char`(字符 SVG)/ `path`(描边字形)/ `math`(算术) |
 
-**默认关**:三行零配置 API 登录开箱即用;账号级登录锁定已挡爆破主向,验证码作浏览器侧的 opt-in 加固,Web 模板/生产按需开。
+**默认关**:三行零配置 API 登录直接能用;账号级登录锁定已挡爆破主向,验证码作浏览器侧的 opt-in 加固,Web 模板/生产按需开。
 
 运行时可用 `SysConfig` 覆盖(改值即时生效):`sys.security.captcha.enabled`(是否强制校验)、`sys.security.captcha.type`(签发哪种)。缺失时回退 Options 默认。
 

@@ -8,7 +8,7 @@
 - **只改流程里的一步**(比如登录后多记一笔、账密校验改走 LDAP)→ 继承内置服务,覆写那一个 `virtual` 方法。
 - **整块内置模块都不要、想自己接管**(比如字典模块的接口完全不合用)→ 禁用它的控制器,用自己的控制器占同一条路由。
 
-还有一件相关的事:给你自己的业务表灌初始数据,走消费者种子。四种都在下面。
+还有一件相关的事:给你自己的业务表灌初始数据,走消费方种子。四种都在下面。
 
 这页讲"怎么换";这几条路为什么成立(`TryAdd` 先到者胜、`virtual` 拆步、程序集挂载三条约束,以及锁死它们的「六件套」测试),见[可替换性模型](/zh/backend/replaceability)。
 
@@ -98,7 +98,7 @@ public class CustomDictController : ControllerBase { /* 你的字典逻辑 */ }
 
 别把 `Api.DisabledModules` 和门户里的"应用/模块"(`SysModule` 那张表)搞混:前者是编译期的路由开关,后者是运行时数据。后者也有自己的护栏——内置的 `system` 应用承载全部管理页,通过管理接口把它停用会被拒(错误码 42013,门户失联且无 UI 恢复入口);还挂着菜单的应用不许删(42023,否则那些顶级目录的 `ModuleId` 会悬空、整棵子树从门户消失)。
 
-## 给自己的实体播种:消费者种子
+## 给自己的实体播种:消费方种子
 
 你的业务表也能带首次启动自动插入、重复启动幂等的初始数据。实现泛型版 `ISeedData<TEntity>`(非泛型 `ISeedData` 只是 DI 收集用的空标记,别直接实现它):
 
@@ -115,10 +115,10 @@ public class ProductSeed : ISeedData<BizProduct>
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, ProductSeed>());
 ```
 
-种子行的固定 Id 必须落在**消费者保留区间 `[1000, 4095]`**(常量 `TenonAdmin.Core.TenonSeedIds`:`ConsumerMin`=1000、`ConsumerMax`=4095)。`[1, 999]` 归内核内置种子,`4096` 往上是雪花运行时发号区——越界或撞号会被启动检查(`DatabaseInitializer`)当场拒绝,应用起不来,不会静默吞掉。
+种子行的固定 Id 必须落在**消费方保留区间 `[1000, 4095]`**(常量 `TenonAdmin.Core.TenonSeedIds`:`ConsumerMin`=1000、`ConsumerMax`=4095)。`[1, 999]` 归内核内置种子,`4096` 往上是雪花运行时发号区——越界或撞号会被启动检查(`DatabaseInitializer`)当场拒绝,应用起不来,不会静默吞掉。
 
 ::: warning 忘了注册是静默不执行
 内核不扫描程序集找种子(`options.ApplicationAssemblies` 只管实体建表和控制器挂载,不碰种子)。种子必须显式注册;漏了这行,种子不跑,也没有任何报错。
 :::
 
-`ApplicationAssemblies` 那行是消费者接入的总开关,它同时让你的实体加入 CodeFirst 建表、让你的控制器进同一 MVC 管道——完整链路见[端到端加一个业务模块](/zh/guide/business-module)。真要动手替换前,`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` 的五个用例把上面四种机制逐一验成了契约,照着它们的写法给自己的替换补一层回归测试,最稳。
+`ApplicationAssemblies` 那行是消费方接入的总开关,它同时让你的实体加入 CodeFirst 建表、让你的控制器进同一 MVC 管道——完整链路见[端到端加一个业务模块](/zh/guide/business-module)。真要动手替换前,`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` 的五个用例把上面四种机制逐一验成了契约,照着它们的写法给自己的替换补一层回归测试,最稳。

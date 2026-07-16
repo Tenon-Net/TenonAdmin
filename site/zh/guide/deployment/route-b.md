@@ -45,7 +45,7 @@ admin.example.com {
         max_size 32MB
     }
 
-    # ⚠️ 必须用 handle 块,别把 reverse_proxy 和 try_files 平铺在一起:
+    # 必须用 handle 块,别把 reverse_proxy 和 try_files 平铺在一起:
     # Caddy 按内置指令顺序执行(不按书写顺序),try_files 属 rewrite 阶段、早于 reverse_proxy。
     # 平铺时 /api/... 这种磁盘上找不到文件的路径会先被 try_files 改写成 /index.html,
     # 于是 API 请求拿到的是一张 HTML —— 前端整个连不上后端(实测:登录直接返回空)。

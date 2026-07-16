@@ -37,9 +37,7 @@ TenonAdmin.Core
 | `TenonAdmin`(元包) | 聚合入口 | AspNetCore | —— |
 | `TenonAdmin.Caching.Redis`(可选) | `RedisCacheProvider`——Redis 版 `ICacheProvider` | 仅 Core | StackExchange.Redis |
 
-::: tip 又一个 TryAdd 可替换性的例子
 `TenonAdmin.Caching.Redis` 没有引入新机制——它就是本页反复讲的那套 `TryAdd` 可替换性,套用在缓存提供者上。消费方在 `AddTenonAdmin()` 之前调用 `AddTenonAdminRedisCache(configuration)`,内部用 `TryAddSingleton` 注册 `RedisCacheProvider`,抢先赢下注册,替换掉内核默认的进程内 `MemoryCacheProvider`。不调用这个方法,或没把 `TenonAdmin:Cache:Provider` 配成 `Redis`,内核的进程内默认实现照常工作,不受影响。
-:::
 
 ::: tip 实体住在 Services,不在 SqlSugar
 数据层只提供 `IRepository<>` 和实体基类,具体的 `Sys*` 业务实体定义在 `TenonAdmin.Services`。原因是依赖方向:实体需要引用领域概念,而数据层不能反过来依赖领域层。
@@ -86,9 +84,7 @@ services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()
 services.AddTenonAdminServices();
 ```
 
-::: tip 每层能独立装配
-`AddTenonAdminSqlSugar` 是公开入口,允许在裸容器上单独调用(测试、以及只要数据层的消费方就这么用)。因此它内部对可选依赖用 `GetService` 而非 `GetRequiredService`——没有日志工厂就静默不打,不会凭空多出一个必需依赖导致起不来。
-:::
+顺带一提,每层都能独立装配:`AddTenonAdminSqlSugar` 是公开入口,允许在裸容器上单独调用(测试、以及只要数据层的消费方就这么用)。因此它内部对可选依赖用 `GetService` 而非 `GetRequiredService`——没有日志工厂就静默不打,不会凭空多出一个必需依赖导致起不来。
 
 ## 消费方的实体和控制器如何挂进来
 

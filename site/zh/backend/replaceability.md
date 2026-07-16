@@ -107,7 +107,7 @@ AdminException.ThrowIf(
     ErrorCode.ModuleHasMenus);
 ```
 
-删菜单这条查询特意走 `modules.Db` 逃生舱,而不在构造器里加 `IRepository<SysMenu>`——给主构造器加参数会破坏继承本类的消费者的源码兼容。连加一道闸都不肯改子类签名,这正是可替换性约束在自我约束。两处都由 `ModuleProtectionTests` 锁定,不在上面的六件套里。
+删菜单这条查询特意走 `modules.Db` 逃生舱,而不在构造器里加 `IRepository<SysMenu>`——给主构造器加参数会破坏继承本类的消费方的源码兼容。连加一道闸都不肯改子类签名,这正是可替换性约束在自我约束。两处都由 `ModuleProtectionTests` 锁定,不在上面的六件套里。
 
 ## 消费方替换一个服务的完整写法
 

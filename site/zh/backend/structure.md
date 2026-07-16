@@ -18,7 +18,7 @@
 | --- | --- |
 | `TenonAdmin.Core` | 核心契约,零运行时依赖:`Result<T>`、`ErrorCode`、雪花 ID、安全与扩展点接口 |
 | `TenonAdmin.SqlSugar` | 数据层:单一 SqlSugar 实例、CodeFirst 建表、幂等种子、审计/软删/数据范围全局过滤器、开放泛型仓储 |
-| `TenonAdmin.Services` | 领域服务:认证 / RBAC / 组织 / 数据范围 / 字典 / 配置 / 日志 / 上传等业务服务与实体 |
+| `TenonAdmin.Services` | 领域服务:认证 / RBAC / 机构 / 数据范围 / 字典 / 配置 / 日志 / 上传等业务服务与实体 |
 | `TenonAdmin.AspNetCore` | 宿主集成:一键装配的 `AddTenonAdmin`/`MapTenonAdmin`、JWT 认证、`[RolePermission]` 授权、内置控制器与过滤器 |
 | `TenonAdmin` | 元包:装这一个即拉起整条内核(AspNetCore + Services + SqlSugar + Core) |
 | `TenonAdmin.Caching.Redis` | 可选包:基于 `StackExchange.Redis` 的 `ICacheProvider` 实现,在 `AddTenonAdmin()` 之前调用即启用 |

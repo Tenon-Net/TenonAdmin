@@ -3,7 +3,7 @@
 本页只针对一种情况:你 fork/克隆了整个 `Tenon-Net/TenonAdmin` 仓库,把 `web/` 当作自己前端的起点做了二次开发,现在想把 TenonAdmin 上游的修复和改进拉进来,又不想丢自己的改动。
 
 ::: tip 先确认你属于哪种消费模式
-- **纯后端消费者**(在自己独立的仓库里 `dotnet add package TenonAdmin` 或 `dotnet new tenon-app`)→ 用不上本页任何内容。更新靠升级 NuGet 包版本号,升级前看一眼 [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md) 有没有破坏性变更。
+- **纯后端消费方**(在自己独立的仓库里 `dotnet add package TenonAdmin` 或 `dotnet new tenon-app`)→ 用不上本页任何内容。更新靠升级 NuGet 包版本号,升级前看一眼 [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md) 有没有破坏性变更。
 - **fork 了仓库、在 `web/` 上做二次开发**(最常见的情况——前端没有可 npm 安装的包,直接基于 `web/` 开发是官方支持的路径)→ 本页就是给你写的。
 :::
 

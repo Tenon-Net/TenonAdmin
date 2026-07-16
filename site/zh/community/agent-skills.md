@@ -3,7 +3,7 @@
 如果你用 Claude Code(或其它 AI agent)参与 TenonAdmin 的开发,仓库里有两类约定,对应两种不同场景:
 
 - **参与 TenonAdmin 本体开发**——docs/agents/ 下的一组文档,规定 agent 怎么读 issue、怎么打分诊标签、怎么读领域背景。
-- **在 TenonAdmin 之上开发业务模块**——`skills/` 下的一组开发规范文档,教 agent 按项目既定模式建实体、建 CRUD、替换服务,不管你是内核维护者加系统模块,还是消费者在自己项目里二开。
+- **在 TenonAdmin 之上开发业务模块**——`skills/` 下的一组开发规范文档,教 agent 按项目既定模式建实体、建 CRUD、替换服务,不管你是内核维护者加系统模块,还是消费方在自己项目里二开。
 
 两者都不是代码生成器,是「规则说明 + 参考模板」——agent 读完之后按你的需求生成符合规范的代码,而不是照抄一段样板。
 
@@ -54,7 +54,7 @@ TenonAdmin 现在还没有 `CONTEXT.md` 或 `docs/adr/`——按约定它们是�
 
 ## 业务开发 Skills(`skills/`)
 
-这组文档面向「在 TenonAdmin 上面接着写业务」的场景——无论是内核维护者加系统模块,还是消费者在自己项目里二开,都按同一套模式来(详见 [`skills/README.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/skills/README.md)):
+这组文档面向「在 TenonAdmin 上面接着写业务」的场景——无论是内核维护者加系统模块,还是消费方在自己项目里二开,都按同一套模式来(详见 [`skills/README.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/skills/README.md)):
 
 | Skill | 用途 | 适用场景 |
 |---|---|---|
@@ -73,7 +73,7 @@ TenonAdmin 现在还没有 `CONTEXT.md` 或 `docs/adr/`——按约定它们是�
 2. `/create-crud-backend` —— 建后端(含菜单种子数据)
 3. `/create-crud-frontend` —— 建前端(含 i18n)
 
-每个 skill 都会区分**系统模块**(内核维护者)和**业务模块**(消费者二开)两种模式,生成的代码位置和命名规则不一样,用之前先说清楚是哪种场景。
+每个 skill 都会区分**系统模块**(内核维护者)和**业务模块**(消费方二开)两种模式,生成的代码位置和命名规则不一样,用之前先说清楚是哪种场景。
 
 ## 参考
 

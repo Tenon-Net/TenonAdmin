@@ -6,7 +6,7 @@
 
 账号是 `superAdmin`,密码取决于你走的是哪条路径——这三种情况的密码来源完全不同,登不上多半是认错了路径:
 
-- **本地 clone 跑 MinimalHost**:样例的 `appsettings.Development.json` 已经显式配了 `superAdmin` / `Aa123456`,这就是本地开发的固定账号密码。这条路径**不会**打印随机密码,控制台只有一行"已按配置创建超级管理员"的普通日志。
+- **本地 clone 跑 MinimalHost**:仓库里只有 `appsettings.Development.json.example` 模板(真文件被 gitignore,不入库),所以**全新 clone 首启走的也是下面那条随机密码路径**。想要固定密码,把模板拷成 `appsettings.Development.json` 并给 `Seed:AdminPassword` 填上值——仓库的开发约定值是 `Aa123456`(前端登录表单在 dev 模式预填的就是它)。配好之后不再打印随机密码,控制台只有一行"已按配置创建超级管理员"的普通日志。
 - **零配置 / 生产(没配 `Seed:AdminPassword`)**:内核生成一个 16 位随机密码(剔除了 `0/O`、`1/l/I` 这类易混淆字符,方便你从日志里抄),用 `LogWarning` 在启动日志里打一个醒目的边框,**只在真正建号的那次启动打印一次**:
 
 ```text

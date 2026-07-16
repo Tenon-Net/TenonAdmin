@@ -6,7 +6,7 @@
 - **路线 A**——直接改本仓库,在内核内加,新代码进 `TenonAdmin.Services` / `TenonAdmin.AspNetCore`。
 - **路线 B**——你的项目装了 `TenonAdmin` NuGet 包,在自己的业务程序集里加,靠 `options.ApplicationAssemblies` 挂载,内核源码一行不碰。
 
-除了"放哪"之外两条路完全一样。下面走路线 B——这也是使用方的推荐路线。
+除了"放哪"之外两条路完全一样。下面走路线 B——这也是消费方的推荐路线。
 :::
 
 ## 用真实代码打底
@@ -172,7 +172,7 @@ public sealed class SampleWidgetSeed : ISeedData<SampleWidget>
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleWidgetSeed>());
 ```
 
-固定 `Id` 必须落在消费者保留区间 `[1000, 4095]`(常量 `TenonSeedIds.ConsumerMin` ~ `ConsumerMax`)。别沿用"随手挑个小整数"的老习惯——你和内核会往同一批表(`sys_menu` / `sys_config` …)里播种,今天不撞不代表升级内核包后不撞,而那时你库里已经有那行、退不回去了:
+固定 `Id` 必须落在消费方保留区间 `[1000, 4095]`(常量 `TenonSeedIds.ConsumerMin` ~ `ConsumerMax`)。别沿用"随手挑个小整数"的老习惯——你和内核会往同一批表(`sys_menu` / `sys_config` …)里播种,今天不撞不代表升级内核包后不撞,而那时你库里已经有那行、退不回去了:
 
 | 区间 | 归谁 | 为什么 |
 |---|---|---|
@@ -183,7 +183,7 @@ builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleW
 同一批种子里你可能连播好几行(尤其复制粘贴时),给每行取号沿用内核菜单种子的登记法:记住当前用到的最大号,**新行一律取"最大号 + 1",永不回填空洞**。空洞往往是历史上被挪走或删掉的号,复用会撞上老库里的存量行。
 
 ::: warning 种子 Id 撞号或越界:现在启动就拒,不再静默
-一个撞了号的固定 Id 过去是**悄无声息**地坏:幂等判存把后来那行当"已存在"跳过(菜单树无声缺一块),开了 `SyncOnUpgrade` 的种子升级时还会把别人那行覆盖掉。现在 `DatabaseInitializer` 会在启动时逐实体登记所有种子(内核 + 消费者)声领的固定 Id,一旦发现越界或同实体重复,**当场抛异常、应用起不来**,并告诉你该换哪段号;`SeedIdRangeTests` 里有对应契约测试,CI 会在任何宿主启动前先变红。既盖住"复制行忘改 Id"的自撞,也盖住跨种子撞号。
+一个撞了号的固定 Id 过去是**悄无声息**地坏:幂等判存把后来那行当"已存在"跳过(菜单树无声缺一块),开了 `SyncOnUpgrade` 的种子升级时还会把别人那行覆盖掉。现在 `DatabaseInitializer` 会在启动时逐实体登记所有种子(内核 + 消费方)声领的固定 Id,一旦发现越界或同实体重复,**当场抛异常、应用起不来**,并告诉你该换哪段号;`SeedIdRangeTests` 里有对应契约测试,CI 会在任何宿主启动前先变红。既盖住"复制行忘改 Id"的自撞,也盖住跨种子撞号。
 :::
 
 ## 挂菜单、授权

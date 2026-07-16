@@ -10,7 +10,7 @@
 
 - 依赖只能自上而下,越层禁止:`Core`(契约)← `SqlSugar`(数据)← `Services`(领域+实体)← `AspNetCore`(宿主)← `TenonAdmin`(元包)。新增代码先想清楚落哪层。全景见 [架构分层](/zh/backend/architecture)。
 - 运行时依赖**仅** SqlSugarCore + Microsoft.\*,核心包不引入其它第三方框架。
-- ★实体放 `Services` 层,不放 `SqlSugar` 层。
+- 实体放 `Services` 层,不放 `SqlSugar` 层。
 - 每层装配集中在一个 `*Setup.cs`(`SqlSugarSetup` → `ServicesSetup` → `TenonAdminSetup` 组合根),不散落注册。
 
 ## 可替换性(`ReplaceabilityTests` 锁死,当契约看)
@@ -75,7 +75,7 @@
 
 - 实现 `ISeedData<TEntity>`,`HasData()` 返默认行(返空集合合法=「库里已有就不播种」)。
 - **固定 Id 保幂等**:只在缺失时补,不回改已存在行——界面上的改动不会被重启覆盖。
-- **Id 必须落保留区间**(`Core/TenonSeedIds.cs`):内核 `[1, 999]`、消费者 `[1000, 4095]`、`4096+` 归雪花运行时;越界、`Id=0` 或与已有种子 Id 重复,启动即拒。
+- **Id 必须落保留区间**(`Core/TenonSeedIds.cs`):内核 `[1, 999]`、消费方 `[1000, 4095]`、`4096+` 归雪花运行时;越界、`Id=0` 或与已有种子 Id 重复,启动即拒。
 
 ## 命名 / 组织
 
