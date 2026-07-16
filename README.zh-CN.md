@@ -3,7 +3,7 @@
 [English](README.md) | 简体中文 | [日本語](README.ja.md)
 
 <p align="center">
-  <img src="./assets/readme/zh-CN/hero.svg" width="100%"
+  <img src="./assets/readme/zh-CN/hero.png" width="100%"
        alt="TenonAdmin — 三行代码为 ASP.NET Core 接入完整 RBAC 权限内核，NuGet 包五层架构">
 </p>
 
@@ -25,7 +25,7 @@
 TenonAdmin 不是一套需要复制再二开的后台模板——它把用户、角色、菜单、数据权限、日志等通用能力封装成 NuGet 包，三行代码接入已有项目，默认即跑，按需替换。
 
 <p align="center">
-  <img src="./assets/readme/zh-CN/section-quickstart.svg" width="100%"
+  <img src="./assets/readme/zh-CN/section-quickstart.png" width="100%"
        alt="02 快速开始 — 安装 NuGet 包，三行代码接入，启动即跑">
 </p>
 
@@ -54,7 +54,7 @@ app.MapTenonAdmin();
 启动后自动注册 JWT 认证、RBAC 权限、数据权限及全部管理端接口。
 
 <p align="center">
-  <img src="./assets/readme/zh-CN/section-features.svg" width="100%"
+  <img src="./assets/readme/zh-CN/section-features.png" width="100%"
        alt="01 主要功能 — 后端权限内核 + 前端管理界面">
 </p>
 

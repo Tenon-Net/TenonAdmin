@@ -3,7 +3,7 @@
 [English](README.md) | [简体中文](README.zh-CN.md) | 日本語
 
 <p align="center">
-  <img src="./assets/readme/ja/hero.svg" width="100%"
+  <img src="./assets/readme/ja/hero.png" width="100%"
        alt="TenonAdmin — コード 3 行で ASP.NET Core に完全な RBAC 権限カーネルを組み込み、5 層 NuGet パッケージアーキテクチャ">
 </p>
 
@@ -25,7 +25,7 @@
 TenonAdmin はコピーして二次開発する管理画面テンプレートではありません。ユーザー・ロール・メニュー・データ権限・ログなどの共通機能を NuGet パッケージとして提供し、既存プロジェクトにコード 3 行で組み込めます。デフォルトで動作し、必要に応じて差し替え可能です。
 
 <p align="center">
-  <img src="./assets/readme/ja/section-quickstart.svg" width="100%"
+  <img src="./assets/readme/ja/section-quickstart.png" width="100%"
        alt="02 クイックスタート — NuGet パッケージをインストール、コード 3 行、すぐに起動">
 </p>
 
@@ -54,7 +54,7 @@ app.MapTenonAdmin();
 起動後、JWT 認証・RBAC 権限・データ権限・全管理エンドポイントが自動的に登録されます。
 
 <p align="center">
-  <img src="./assets/readme/ja/section-features.svg" width="100%"
+  <img src="./assets/readme/ja/section-features.png" width="100%"
        alt="01 主な機能 — バックエンド権限カーネル + フロントエンド管理画面">
 </p>
 

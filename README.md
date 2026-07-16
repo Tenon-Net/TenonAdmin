@@ -3,7 +3,7 @@
 English | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
 <p align="center">
-  <img src="./assets/readme/en/hero.svg" width="100%"
+  <img src="./assets/readme/en/hero.png" width="100%"
        alt="TenonAdmin — Three lines of code to plug a complete RBAC kernel into any ASP.NET Core project, with five-layer NuGet package architecture">
 </p>
 
@@ -25,7 +25,7 @@ English | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 TenonAdmin is not a copy-and-customize admin template — it packages users, roles, menus, data permissions, logging and more into NuGet packages you plug into an existing project with three lines of code. Works out of the box, replaceable on demand.
 
 <p align="center">
-  <img src="./assets/readme/en/section-quickstart.svg" width="100%"
+  <img src="./assets/readme/en/section-quickstart.png" width="100%"
        alt="02 Quick Start — Install the NuGet package, three lines of code, and it just works">
 </p>
 
@@ -54,7 +54,7 @@ app.MapTenonAdmin();
 This registers JWT auth, RBAC, data permissions, and all management endpoints automatically.
 
 <p align="center">
-  <img src="./assets/readme/en/section-features.svg" width="100%"
+  <img src="./assets/readme/en/section-features.png" width="100%"
        alt="01 Features — Backend permission kernel + frontend management UI">
 </p>
 
