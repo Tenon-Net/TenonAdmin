@@ -3,61 +3,52 @@
 [English](README.md) | [简体中文](README.zh-CN.md) | 日本語
 
 <p align="center">
-  <img src="web/design-mockups/brand/icon-128.png" width="80" height="80" alt="TenonAdmin">
-</p>
-
-<h1 align="center">TenonAdmin</h1>
-
-<p align="center">
-  <em>コード 3 行で、ASP.NET Core プロジェクトに完全で拡張可能な RBAC 権限管理を組み込めます。</em>
-</p>
-
-<p align="center">
-  <a href="https://tenonadmin.52moyu.net/login"><strong>🔗 オンラインデモ</strong></a>
+  <img src="./assets/readme/ja/hero.svg" width="100%"
+       alt="TenonAdmin — コード 3 行で ASP.NET Core に完全な RBAC 権限カーネルを組み込み、5 層 NuGet パッケージアーキテクチャ">
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="License"></a>
   <a href="https://github.com/Tenon-Net/TenonAdmin/stargazers"><img src="https://img.shields.io/github/stars/Tenon-Net/TenonAdmin" alt="Stars"></a>
   <a href="https://github.com/Tenon-Net/TenonAdmin/network/members"><img src="https://img.shields.io/github/forks/Tenon-Net/TenonAdmin" alt="Forks"></a>
+  <a href="https://www.nuget.org/packages/TenonAdmin"><img src="https://img.shields.io/nuget/v/TenonAdmin" alt="NuGet"></a>
   <img src="https://img.shields.io/badge/.NET-10-512BD4" alt=".NET 10">
   <a href="https://github.com/Tenon-Net/TenonAdmin/actions"><img src="https://img.shields.io/github/actions/workflow/status/Tenon-Net/TenonAdmin/backend-ci.yml?branch=dev" alt="Build"></a>
 </p>
 
+<p align="center">
+  <a href="https://tenonadmin.52moyu.net/login"><strong>🔗 オンラインデモ</strong></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://tenon.52moyu.net"><strong>📖 ドキュメント</strong></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="CHANGELOG.md"><strong>📋 更新履歴</strong></a>
+</p>
+
 ---
 
-TenonAdmin は ASP.NET Core、SqlSugar、Vue 3、Vite、Naive UI で構築した管理画面向けの権限管理システムです。
+TenonAdmin はコピーして二次開発する管理画面テンプレートではありません。ユーザー・ロール・メニュー・データ権限・ログなどの共通機能を NuGet パッケージとして提供し、既存プロジェクトにコード 3 行で組み込めます。デフォルトで動作し、必要に応じて差し替え可能です。
 
-一般的な管理画面テンプレートとは少し違います。プロジェクト全体をコピーして二次開発するのではなく、ユーザー・ロール・メニュー・組織・データ権限・ログといった共通機能を、組み込み・差し替え・拡張が可能なモジュールとして提供します。
+<p align="center">
+  <img src="./assets/readme/dashboard.png" width="100%"
+       alt="TenonAdmin ダッシュボード — サイドメニュー、統計カード、アクティブトレンドチャート、リソース分布チャート">
+</p>
 
-既存の ASP.NET Core プロジェクトでは、サービス登録・アプリのビルド・エンドポイントのマッピングを行うだけで、ログイン認証・RBAC 権限・管理画面という基盤機能を組み込めます。デフォルト実装をそのまま使うことも、業務に合わせてサービスやフローを差し替えることもできます。
+<p align="center">
+  <img src="./assets/readme/ja/section-quickstart.svg" width="100%"
+       alt="02 クイックスタート — NuGet パッケージをインストール、コード 3 行、すぐに起動">
+</p>
 
-## なぜ TenonAdmin を作ったのか
+NuGet パッケージをインストール：
 
-実際に管理システムを開発すると、ユーザー・ロール・メニュー・権限・組織・ログといった機能を繰り返し実装することになりがちです。
+```bash
+dotnet add package TenonAdmin
+```
 
-管理画面テンプレートをそのままコピーすれば着手は速いものの、業務コードが増えるにつれてプロジェクトはテンプレート自体と密結合していきます。あとから基盤機能をアップグレードしたり、上流の変更を取り込んだり、一部だけを差し替えたりするのが面倒になっていきます。
-
-TenonAdmin は、こうした共通機能を具体的な業務から切り離し、権限管理の基盤をそのまま使えると同時に、既存プロジェクトにも自然に組み込めるようにすることを目指しています。
-
-- **3 行で導入** — 既存の ASP.NET Core プロジェクトで登録とマッピングを行うだけで、ログイン認証・RBAC 権限・管理 API が有効になります。
-- **デフォルトで起動** — 既定で SQLite を使い、起動時にテーブルを自動作成して初期データを投入します。
-- **必要に応じて差し替え可能** — 主要サービスはインターフェース経由で登録され、デフォルト実装の要所は継承とオーバーライドに対応します。
-- **依存は必要な分だけ** — ランタイムの依存は SqlSugar + `Microsoft.*` のみ。より重い機能は独立したオプションパッケージとして必要なときに追加します。
-- **データ権限を内蔵** — 全データ / 自組織 / 自組織および配下 / 本人のみ / カスタム組織の 5 種類のデータスコープに対応します。
-- **フロント・バック両方を提供** — バックエンドは権限と業務の基盤を、フロントエンドは Vue 3 と Naive UI ベースの管理画面を提供します。
-
-## クイックスタート
-
-リポジトリ同梱のサンプルを実行します:
+またはリポジトリ同梱のサンプルを実行：
 
 ```bash
 dotnet run --project backend/samples/MinimalHost
 ```
 
-初回起動時にデータベースの作成と初期データの投入を行い、ランダム生成された管理者パスワードをコンソールに出力します。必ず控えておいてください。
+初回起動時にデータベースを作成し初期データを投入、ランダム生成された管理者パスワードをコンソールに出力します。
 
-既存の ASP.NET Core プロジェクトでは、コアの導入はわずか 3 行です:
+既存プロジェクトへの導入はわずか 3 行：
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration);
@@ -65,101 +56,43 @@ var app = builder.Build();
 app.MapTenonAdmin();
 ```
 
-あとは通常の ASP.NET Core プロジェクトと同じく `app.Run()` でアプリを起動します。
+起動後、JWT 認証・RBAC 権限・データ権限・全管理エンドポイントが自動的に登録されます。
 
-起動後は、テーブルの自動作成・初期データ投入・JWT 認証・RBAC 権限・データ権限・管理 API がすべて登録されます。
-
-## 主な機能
-
-- **ログイン認証** — アカウント/パスワードログイン、画像キャプチャ、JWT、リフレッシュトークンローテーション、ログインロックアウト、オンラインセッションと強制ログアウト
-- **RBAC 権限** — ロール管理、ディレクトリ／ページ／ボタンの 3 階層メニュー、ボタンレベルの権限コード、ロール-メニュー認可
-- **マルチアプリポータル** — アプリ/モジュール管理、アプリごとのメニューツリー、アプリの選択と切り替え、ユーザーごとのデフォルトアプリ
-- **データ権限** — 5 種類のデータスコープに対応し、ORM のグローバルフィルタでクエリ時に自動適用
-- **組織** — ユーザー、組織ツリー、役職の管理。ユーザーは複数ロールを持ち、主所属組織を設定可能
-- **メッセージ通知** — アプリ内通知とお知らせを、全体 / 指定ロール / 指定ユーザーへ送信でき、ヘッダーのベルで未読通知とメッセージパネルを提供
-- **辞書と設定** — 辞書タイプ、辞書項目、キーバリュー設定。キャッシュとイベント駆動のキャッシュ無効化に対応
-- **ログ管理** — 操作ログを自動記録し機密入力をマスキング、ログインの IP・User-Agent・結果も保持
-- **ファイル管理** — ローカルファイルのアップロード/ダウンロード、サイズ制限、拡張子ホワイトリスト、パストラバーサル防御
-- **個人設定** — パスワード変更、プロフィール編集、アバター設定
-
-フロントエンドは Vue 3 と Naive UI を使用し、現在 3 種類の切り替え可能なログインページスキンを提供しています。
-
-## 拡張とカスタマイズ
-
-TenonAdmin は複数の階層の拡張手段を用意しており、変更範囲に応じて選べます:
-
-1. **設定の変更** — `appsettings.json` の `TenonAdmin` セクションを調整
-2. **サービスの置換** — カスタム実装を登録し、システムのデフォルト実装を置き換える
-3. **デフォルト実装の継承** — 既存サービスを継承し、調整が必要なフローステップだけをオーバーライド
-4. **エンドポイントの拡張** — デフォルトルートを置換、または独自の業務 API を追加
-
-エンティティ拡張とカスタム業務モジュールにも対応しており、既存の権限体系の上で実際の業務開発を続けられます。
-
-## 技術スタック
+<p align="center">
+  <img src="./assets/readme/ja/section-features.svg" width="100%"
+       alt="01 主な機能 — バックエンド権限カーネル + フロントエンド管理画面">
+</p>
 
 ### バックエンド
 
-- .NET 10（ASP.NET Core）
-- SqlSugar ORM
-- JWT Bearer 認証
-- SQLite（デフォルト）／MySQL／SQL Server／PostgreSQL
+- **認証** — アカウント/パスワード + キャプチャ、JWT + リフレッシュトークンローテーション、ログインロックアウト、オンラインセッションと強制ログアウト
+- **RBAC** — ロール管理、ディレクトリ／ページ／ボタンの 3 階層メニュー、ボタンレベル権限コード、ロール-メニュー認可
+- **データ権限** — 全データ / 自組織 / 自組織+配下 / 本人のみ / カスタム、ORM グローバルフィルタで自動適用
+- **マルチアプリポータル** — アプリ管理、独立メニューツリー、アプリ選択と切り替え
+- **組織** — 組織ツリー、役職、複数ロール対応ユーザーと主所属組織
+- **通知** — アプリ内通知・お知らせ、全体 / ロール / ユーザー指定で送信
+- **辞書と設定** — 辞書タイプ + 項目 + キーバリュー設定、キャッシュとイベント駆動キャッシュ無効化
+- **ログ** — 操作ログ自動記録、機密入力マスキング
+- **ファイル管理** — アップロード/ダウンロード、サイズ制限、拡張子ホワイトリスト、パストラバーサル防御
+- **差し替え可能** — `TryAdd` + インターフェース + `virtual` ステップで登録、フォークなしで置換
+- **マルチデータベース** — SQLite（デフォルト）/ MySQL / SQL Server / PostgreSQL
+- **マルチレプリカ** — オプション Redis キャッシュ、レプリカ間レート制限カウンタ共有、レプリカごとの Snowflake ワーカー ID
 
 ### フロントエンド
 
-- Vue 3.5 + TypeScript 5.7
-- Naive UI 2.41
-- Pinia 3（永続化対応）
-- Vue Router 4
-- Vue I18n
-- Vite 6
-- ECharts 5.6
-
-### NuGet パッケージ
-
-```text
-TenonAdmin.Core → TenonAdmin.SqlSugar → TenonAdmin.Services → TenonAdmin.AspNetCore → TenonAdmin
-```
-
-通常は `TenonAdmin` を参照すればバックエンドの全機能が手に入ります。より細かい依存制御が必要な場合は、個別のレイヤーを参照することもできます。
+- **契約生成 API** — OpenAPI → `schema.d.ts`、エンドツーエンドの型安全
+- **動的ルーティング** — バックエンドのメニューツリーがルート登録を駆動、マルチアプリポータルのシームレス切り替え
+- **ボタンレベル権限** — `v-auth` ディレクティブでルートベースの権限コードによりボタンの表示/非表示を制御
+- **ProTable（列駆動）** — 1 つの `columns` 配列で検索フォーム・辞書レンダリング・列設定を同時に駆動
+- **デザイントークン体系** — 4 層の CSS 変数トークン、ライト/ダーク両テーマ対等（システム追従 / 手動切替）
+- **i18n** — vue-i18n でランタイム言語切り替え
+- **3 種のログインページスキン** — すぐに使える切り替え式、スタイル分離
+- **自社開発コンポーネント** — FormContainer（モーダル/ドロワー統合）、StatusSwitch（悲観更新トグル）、辞書スイート、OrgTreeSelect、FileUpload（チャンク/リジューム/即時アップロード）、PasswordStrength、ECharts ラッパーなど
 
 ## プロジェクト状況
 
-現在のバージョンは **`0.1.0`**、nuget.org で公開しています:
-
-```bash
-dotnet add package TenonAdmin
-```
-
-バックエンドカーネル、完全な管理画面、設定センター、コンテナ配布、マルチレプリカ対応（Redis キャッシュ、レプリカ間で共有されるレート制限カウンタ、レプリカごとの Snowflake ワーカー ID）がいずれも動作し、CI でカバーされています。
-
-**1.0 までに API が変わる可能性があります** — 破壊的変更は [更新履歴](CHANGELOG.md) に明記します。開発は `dev` ブランチで行っています。
-
-## プロジェクト構成
-
-```text
-tenon-admin/
-├── backend/
-│   ├── src/
-│   │   ├── TenonAdmin.Core/            # 契約層：インターフェース、Options、ErrorCode
-│   │   ├── TenonAdmin.SqlSugar/        # データ層：ORM、リポジトリ、CodeFirst
-│   │   ├── TenonAdmin.Services/        # ドメイン層：エンティティ、サービス、RBAC
-│   │   ├── TenonAdmin.AspNetCore/      # ASP.NET Core 統合：コントローラ、フィルタ、JWT
-│   │   ├── TenonAdmin/                 # 完全なバックエンドメタパッケージ
-│   │   └── TenonAdmin.Caching.Redis/   # オプションの Redis キャッシュ実装
-│   ├── samples/MinimalHost/            # 最小サンプルプロジェクト
-│   └── tests/                          # xUnit テスト
-├── web/                                # Vue 管理画面フロントエンド
-└── docs/                               # ドキュメントと開発計画
-```
-
-## ドキュメント
-
-- [ビジネスモジュール開発ガイド](docs/new-business-guide.md)
-- [AI 支援開発スキル](skills/README.md) — エンティティ作成、CRUD 構築、サービス置換などの開発規約（AI アシスタントや開発者向け）
-- [デプロイ](docs/deployment.md)
-- [アーキテクチャと設計](docs/rebuild-design.md)
-- [ロードマップ](docs/dev-plan.md)
+**1.0 までに API が変わる可能性があります** — 破壊的変更は[更新履歴](CHANGELOG.md)に明記します。開発は `dev` ブランチで行っています。
 
 ## ライセンス
 
-本プロジェクトは [Apache License 2.0](LICENSE) の下で公開されています。
+[Apache License 2.0](LICENSE)

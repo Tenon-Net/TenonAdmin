@@ -16,7 +16,7 @@ dotnet run
 
 ## 上线
 
-`npm run dev` 的 `/api` 代理只在开发期存在;部署要么让本 host 用 `UseStaticFiles()` 顺带托管前端产物(此时**必须**把 `TenonAdmin:Upload:RootPath` 挪出 `wwwroot`),要么交给 nginx 反代。生产还必须显式配 `TenonAdmin:Jwt:SecretKey`。完整步骤见内核仓库的 `docs/deployment.md`。
+`npm run dev` 的 `/api` 代理只在开发期存在;部署要么让本 host 用 `UseStaticFiles()` 顺带托管前端产物(此时**必须**把 `TenonAdmin:Upload:RootPath` 挪出 `wwwroot`),要么交给 nginx 反代。生产还必须显式配 `TenonAdmin:Jwt:SecretKey`。完整步骤见[部署指南](https://tenon.52moyu.net/zh/guide/deployment)。
 
 ### Docker
 

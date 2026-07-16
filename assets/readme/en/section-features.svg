@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="120" viewBox="0 0 1200 120"
+     role="img" aria-labelledby="title">
+  <title id="title">Features</title>
+  <defs>
+    <linearGradient id="sec-bg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0F111A"/>
+      <stop offset="100%" stop-color="#121420"/>
+    </linearGradient>
+    <linearGradient id="sec-line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#646CFF" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#646CFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="120" rx="12" fill="url(#sec-bg)"/>
+  <text x="64" y="52" fill="#646CFF" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="32" font-weight="700" opacity="0.2">02</text>
+  <text x="120" y="52" fill="#E8EAED" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="22" font-weight="600">Features</text>
+  <text x="64" y="82" fill="#4E5969" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="14">Backend permission kernel + frontend management UI, enterprise-ready out of the box.</text>
+  <rect x="64" y="100" width="200" height="2" rx="1" fill="url(#sec-line)"/>
+  <g transform="translate(1100, 30)" opacity="0.08">
+    <rect x="16" y="27" width="88" height="26" rx="6" fill="#E8EAED"/>
+    <rect x="47" y="27" width="26" height="76" rx="6" fill="#E8EAED"/>
+  </g>
+</svg>
