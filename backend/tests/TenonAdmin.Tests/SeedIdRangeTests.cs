@@ -102,6 +102,37 @@ public class SeedIdRangeTests
             $"雪花发出的 ID {id} 低于声称的地板 {TenonSeedIds.SnowflakeFloor}。");
     }
 
+    /// <summary>
+    /// 同一实体上,全部种子(内核 + 消费者)的固定 Id 不得重复——撞号的破坏是静默的:
+    /// 幂等判存把后来的行当"已存在"跳过,SyncOnUpgrade 的种子升级时还会覆盖别人的行。
+    /// 运行时检查(DatabaseInitializer.EnsureSeedIdsUnique)会拦,这里让 CI 在宿主启动前就变红。
+    /// </summary>
+    [Fact]
+    public void Seeds_IdsAreUniquePerEntity()
+    {
+        using var factory = new AdminAppFactory();
+        using var scope = factory.Services.CreateScope();
+
+        var seen = new Dictionary<(Type Entity, long Id), string>();
+        var checkedRows = 0;
+        foreach (var seed in scope.ServiceProvider.GetServices<ISeedData>())
+        {
+            var entity = seed.GetType().GetInterfaces()
+                .First(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ISeedData<>))
+                .GetGenericArguments()[0];
+            foreach (var id in SeedIds(seed))
+            {
+                Assert.False(seen.TryGetValue((entity, id), out var owner),
+                    $"种子 Id 撞号:{seed.GetType().Name} 与 {owner} 都声领了 {entity.Name} 的 Id={id}。" +
+                    "固定 Id 在同一实体上必须全局唯一,请换一个未占用的号。");
+                seen[(entity, id)] = seed.GetType().Name;
+                checkedRows++;
+            }
+        }
+
+        Assert.True(checkedRows > 0, "一行种子都没扫到 —— 种子注册或反射取数坏了,这个测试正在空转。");
+    }
+
     /// <summary>反射取一个种子的全部固定 Id:经 <c>ISeedData&lt;T&gt;</c> 的泛型接口调 HasData()(与 DatabaseInitializer 同款)。</summary>
     private static IEnumerable<long> SeedIds(ISeedData seed)
     {

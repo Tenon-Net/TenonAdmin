@@ -12,6 +12,9 @@ namespace TenonAdmin.Services;
 /// 最大值往后取(现已用到 113),避免覆盖历史 Id。</para>
 /// <para>层级约定:目录 → 页面 → 按钮。<b>按钮挂在它所属的页面下</b>(而非目录),这样菜单管理页里
 /// 每个页面的权限按钮一目了然。唯一例外是无对应页面的权限码锚点(如 Id=2 探针),挂在目录下。</para>
+/// <para><b>Id 登记</b>:菜单种子的固定 Id 历史散布在 2–115(不连续),<b>新增行一律取当前最大号 +1(现为 116)</b>,
+/// 不要回填空洞——空洞可能是被挪走/删除的历史号,复用会撞上老库存量行。撞号/越界会被启动检查
+/// (<c>DatabaseInitializer</c>)与 <c>SeedIdRangeTests</c> 当场拒绝,不会静默吞掉。</para>
 /// </summary>
 internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
 {

@@ -194,6 +194,7 @@ internal sealed class DatabaseInitializer(
         if (rows.Count == 0) return (0, 0);
 
         EnsureSeedIdsInReservedRange(seed, rows);
+        EnsureSeedIdsUnique(seed, rows);
 
         // 连接表:代理主键会漂(运行时授权发雪花号),按业务唯一键判存——该键已存在就跳过,
         // 无论它挂的是种子 Id 还是雪花 Id。不这么做,种子会拿固定 Id 把同一业务键再插一遍 → 撞唯一索引 → 启动崩。
@@ -254,6 +255,31 @@ internal sealed class DatabaseInitializer(
             "(Id=0 会被审计 AOP 填成新雪花号,导致每次启动重复插入;" +
             $"≥ {TenonSeedIds.SnowflakeFloor} 是雪花运行时发号区,迟早与新增数据主键冲突)。" +
             $"内核内置种子用 [1, {TenonSeedIds.KernelMax}],消费者种子请从 {TenonSeedIds.ConsumerMin} 起取号。");
+    }
+
+    /// <summary>本次启动已见过的种子固定 Id(按实体类型分桶,值=声领它的种子类名)——供跨种子撞号检测。</summary>
+    private readonly Dictionary<Type, Dictionary<long, string>> _seenSeedIds = [];
+
+    /// <summary>
+    /// 种子固定 Id 不得重复:同种子内重复(复制行忘改 Id)与跨种子撞号(新种子挑了已占用的号)一律启动失败。
+    /// <para>撞号的破坏是<b>静默</b>的:幂等判存把后来的行当"已存在"跳过(菜单树无声缺一块),
+    /// 开了 <see cref="ISeedData{TEntity}.SyncOnUpgrade"/> 的种子升级时还会把别人的行覆盖掉——所以必须大声失败。</para>
+    /// </summary>
+    private void EnsureSeedIdsUnique<TEntity>(ISeedData<TEntity> seed, List<TEntity> rows)
+        where TEntity : BaseEntity, new()
+    {
+        if (!_seenSeedIds.TryGetValue(typeof(TEntity), out var seen))
+            _seenSeedIds[typeof(TEntity)] = seen = [];
+
+        foreach (var row in rows)
+        {
+            if (seen.TryGetValue(row.Id, out var owner))
+                throw new InvalidOperationException(
+                    $"种子 Id 撞号:{seed.GetType().Name} 与 {owner} 都声领了 {typeof(TEntity).Name} 的 Id={row.Id}。" +
+                    "固定 Id 在同一实体上必须全局唯一,请换一个未占用的号" +
+                    $"(内核用 [1, {TenonSeedIds.KernelMax}],消费者从 {TenonSeedIds.ConsumerMin} 起取号)。");
+            seen[row.Id] = seed.GetType().Name;
+        }
     }
 
     /// <summary>SQLite 只建文件不建目录,这里从连接串解析出目录并补建</summary>
