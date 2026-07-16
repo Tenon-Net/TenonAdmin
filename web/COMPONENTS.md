@@ -48,6 +48,7 @@ tenon 内接入约定:
 | UserSelect | 人员选择器;基于 ApiSelect,`userApi.page` 搜索 + 可选 `orgId` 部门过滤,label 为「姓名(账号)」 | `src/components/UserSelect/README.md` |
 | MarkdownEditor / MarkdownView | 通知公告 Markdown 编辑/只读渲染(封 md-editor-v3);存 Markdown 纯文本,跟随明暗主题;通知页已落地 | `src/components/MarkdownEditor/README.md` |
 | Chart(+ LineChart/PieChart) | ECharts 封装(封 vue-echarts);自动跟随明暗主题/accent、按需注册图种、自带 autoresize;预设传 data、BaseChart 传 option;工作台已落地 | `src/components/Chart/README.md` |
+| CodeBlock | 代码/JSON 只读展示;NCode + `hljs/lib/core` 按需注册(现仅 json),复制按钮 + 自动换行,配色随 Naive 主题;操作日志详情已落地 | `src/components/CodeBlock/README.md` |
 
 字典三件套的数据基座是 `src/stores/dict.ts`(按 typeCode 缓存 + 并发去重;字典管理操作后调 `invalidate()`),页面拿原始选项用 `useDictOptions(typeCode)`。范例页:`src/views/system/menu/index.vue`、`module/index.vue`(FormContainer + useConfirm + StatusSwitch 完整落地)。
 
@@ -69,7 +70,6 @@ tenon 内接入约定:
 
 ## 可加但先不加(设计已备案,别提前造)
 
-- **CodeBlock**(代码展示):Naive `NCode` + `highlight.js/lib/core` 按需注册语言(hljs 已是 naive-ui 传递依赖,显式声明零新下载),配色走 Naive 主题不引 hljs css;等出现日志详情/配置 JSON 页再落地。
 - FormContainer size 档位 / `onBeforeClose`;useConfirm 返回结果值版;StatusSwitch 泛型值/乐观模式;DictSelect 展示禁用项;dict 缓存 TTL/SWR;CountTo 自研包装(NNumberAnimation 不够用再说)。
 
 ## IconPicker / AppIcon(tenon-naive-iconify-picker)

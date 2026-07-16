@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 操作日志 = 只读 ProTable + 详情抽屉。后端无 op/{id},分页项已含全字段 → 抽屉直接用行数据。
 // 搜索区要能答审计的三个问题:谁(操作人)、什么时候(时间范围)、干了什么(操作名/路径/成败)。
-// paramJson 走 <pre> 兜底美化(JSON.parse→stringify;失败原样);仅此一处 JSON 展示,不落地 CodeBlock(COMPONENTS.md 约定)。
+// paramJson 走 CodeBlock(json 高亮 + 复制;美化仍是 parse→stringify,失败原样);异常堆栈保持危险色 <pre>——堆栈非代码,高亮无意义。
 import { h, ref } from 'vue'
 import {
   NButton, NTag, NDrawer, NDrawerContent, NDescriptions, NDescriptionsItem, useMessage,
@@ -9,6 +9,7 @@ import {
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
+import CodeBlock from '@/components/CodeBlock/index.vue'
 import UserSelect from '@/components/UserSelect/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { logApi } from '@/api'
@@ -82,9 +83,8 @@ function openDetail(r: SysOpLog) {
 function operatorText(r: SysOpLog) {
   return r.operatorName || (r.operatorId != null ? String(r.operatorId) : '—')
 }
-/** paramJson 美化:parse→stringify(2);非法 JSON 原样返回;空值占位。 */
-function prettyParam(json?: string | null) {
-  if (!json) return '—'
+/** paramJson 美化:parse→stringify(2);非法 JSON 原样返回。空值占位由模板判空。 */
+function prettyParam(json: string) {
   try {
     return JSON.stringify(JSON.parse(json), null, 2)
   } catch {
@@ -132,7 +132,7 @@ function clearLogs() {
         </n-descriptions-item>
         <n-descriptions-item :label="t('log.resultCode')">{{ detailRow.resultCode }}</n-descriptions-item>
         <n-descriptions-item v-if="detailRow.exceptionMessage" :label="t('log.exception')">
-          <pre class="param-json exception">{{ detailRow.exceptionMessage }}</pre>
+          <pre class="exception">{{ detailRow.exceptionMessage }}</pre>
         </n-descriptions-item>
         <n-descriptions-item :label="t('log.elapsed')">{{ detailRow.elapsedMs }} ms</n-descriptions-item>
         <n-descriptions-item :label="t('log.operator')">{{ operatorText(detailRow) }}</n-descriptions-item>
@@ -140,7 +140,8 @@ function clearLogs() {
         <n-descriptions-item :label="t('log.userAgent')">{{ detailRow.userAgent || '—' }}</n-descriptions-item>
         <n-descriptions-item :label="t('common.createTime')">{{ detailRow.createTime }}</n-descriptions-item>
         <n-descriptions-item :label="t('log.param')">
-          <pre class="param-json">{{ prettyParam(detailRow.paramJson) }}</pre>
+          <CodeBlock v-if="detailRow.paramJson" :code="prettyParam(detailRow.paramJson)" />
+          <span v-else>—</span>
         </n-descriptions-item>
       </n-descriptions>
     </n-drawer-content>
@@ -148,15 +149,13 @@ function clearLogs() {
 </template>
 
 <style scoped>
-.param-json {
+.exception {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-all;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 12px;
   line-height: 1.5;
-}
-.exception {
   color: var(--color-danger);
 }
 </style>

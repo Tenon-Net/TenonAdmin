@@ -10,12 +10,15 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "gen:api": "openapi-typescript http://localhost:5100/openapi/v1.json -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@iconify/vue": "^4.3.0",
     "@vueuse/core": "^14.3.0",
     "echarts": "^5.6.0",
+    "highlight.js": "^11.8.0",
     "md-editor-v3": "^6.5.3",
     "naive-ui": "^2.41.0",
     "openapi-fetch": "^0.13.5",
@@ -36,10 +39,12 @@
     "@playwright/test": "^1.61.1",
     "@types/node": "^22.13.0",
     "@vitejs/plugin-vue": "^5.2.1",
+    "happy-dom": "^20.10.6",
     "openapi-typescript": "^7.6.1",
     "oxlint": "^1.73.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.11",
+    "vitest": "^4.1.10",
     "vue-tsc": "^2.2.0"
   }
 }
