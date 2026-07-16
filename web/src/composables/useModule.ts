@@ -1,5 +1,6 @@
 import { useAuthStore } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
+import { useUserStore } from '@/stores/user'
 import { personalApi } from '@/api'
 import { buildRoutesForModule } from './useAuthMenu'
 import { router } from '@/router'
@@ -18,17 +19,20 @@ export function useModule() {
   async function enterInitial(): Promise<EnterResult> {
     // 并行拉模块 + 当前用户权限码。权限码喂 v-auth:成功(哪怕空集=超管)才标 loaded;
     // 失败不阻断进门户,但 permissionsLoaded 保持 false → v-auth fail-closed(藏按钮),不谎报"有权限"。
-    // profile 只为拿超管标记喂 v-auth(只对超管 fail-open,普通用户空集则隐藏);失败按普通用户处理(安全侧,不误放行)。
+    // profile 拿超管标记喂 v-auth(只对超管 fail-open,普通用户空集则隐藏)+ 顺手回填顶栏头像;失败按普通用户处理(安全侧,不误放行)。
     const [{ modules, defaultModuleId }, perm, profile] = await Promise.all([
       personalApi.modules(),
       personalApi.permissions().then((codes) => ({ ok: true, codes })).catch(() => ({ ok: false, codes: [] as string[] })),
-      personalApi.profile().then((p) => ({ sadm: p.isSuperAdmin })).catch(() => ({ sadm: false })),
+      personalApi.profile().then((p) => ({ sadm: p.isSuperAdmin, avatar: p.avatar ?? null })).catch(() => ({ sadm: false, avatar: null })),
     ])
     auth.modules = modules
     auth.defaultModuleId = defaultModuleId ?? null
     auth.permissionCodes = perm.codes
     auth.permissionsLoaded = perm.ok
     auth.isSuperAdmin = profile.sadm
+    // 顶栏头像:登录出参不含 avatar,这里回填(取不到按无头像处理,顶栏回落图标)
+    const user = useUserStore()
+    if (user.userInfo) user.userInfo.avatar = profile.avatar
     if (modules.length === 0) return { chooser: true } // 空态:选择器里提示未分配应用
     // F5/深链优先重建"上次所在应用"(持久化的 currentModuleId),让其动态路由复活,跨应用深链不落 404。
     const remembered = auth.currentModuleId

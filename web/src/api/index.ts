@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -52,10 +52,14 @@ export function unwrap<T>(res: { data?: unknown; error?: unknown; response: Resp
  *   - 前端 {page,pageSize} → 后端 record 属性 {Current,Size}(PascalCase;ASP.NET 绑定大小写不敏感但类型要 Pascal)。
  *     `...pageParams(p)` 展进各端点自己的 PascalCase 过滤条件,查询对象仍逐端点强类型校验(不走 any)。
  *   - 后端 PagedList<T>({current,size,total,items}) → ProTable fetcher 契约的 {items,total}。
+ *
+ * 二者连同 unwrap/ApiError 一起导出,是<b>消费者写自己 API 模块的接缝</b>:消费者新建 `api/<域>.ts`
+ * 从这里 import,就不必把自己的端点塞进本文件。本文件是上游自留地(改动频繁),消费者一旦编辑它,
+ * 每次 merge upstream 都冲突 —— 所以这两个 export 没有站内调用方也必须留着,别当未使用导出清掉。
  */
-const pageParams = (p: { page: number; pageSize: number }) => ({ Current: p.page, Size: p.pageSize })
+export const pageParams = (p: { page: number; pageSize: number }) => ({ Current: p.page, Size: p.pageSize })
 
-function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; total: number } {
+export function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; total: number } {
   const p = unwrap<PagedList<T>>(res)
   return { items: p.items, total: p.total }
 }
@@ -79,8 +83,14 @@ export const personalApi = {
   setDefaultModule: (moduleId: number) =>
     client.PUT('/api/v1/personal/default-module', { body: { moduleId } }).then((r) => unwrap<boolean>(r)),
   profile: () => client.GET('/api/v1/personal/profile', {}).then((r) => unwrap<UserProfile>(r)),
-  updateProfile: (body: { name: string }) =>
+  /** 改自己的资料(全量替换语义:缺字段即置空,前端整表单提交)。 */
+  updateProfile: (body: { name: string; nickname?: string | null; phone?: string | null; email?: string | null; gender?: string | null; avatar?: string | null }) =>
     client.PUT('/api/v1/personal/profile', { body }).then((r) => unwrap<boolean>(r)),
+  /** 我的活跃会话列表(个人视角;isCurrent = 本次请求所用会话)。 */
+  sessions: () => client.GET('/api/v1/personal/sessions', {}).then((r) => unwrap<MySessionItem[]>(r)),
+  /** 下线自己的某个会话;他人的/不存在的一律 42024(不区分,防探测)。 */
+  kickSession: (sessionId: string) =>
+    client.DELETE('/api/v1/personal/sessions/{sessionId}', { params: { path: { sessionId } } }).then((r) => unwrap<boolean>(r)),
   updatePassword: (body: { oldPassword: string; newPassword: string }) =>
     client.PUT('/api/v1/personal/password', { body }).then((r) => unwrap<boolean>(r)),
   /** 当前用户权限码集合(= 规范化路由);喂给 authStore.permissionCodes 驱动 v-auth。超管返回空集。 */

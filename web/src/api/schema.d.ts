@@ -2150,6 +2150,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/personal/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 看自己的活跃会话列表(个人视角"我的登录设备")。会话数受并发上限约束(个位数),单页 100 绰绰有余不分页;
+         *     IsCurrent 按令牌 sid 比对,标记本次请求所用会话。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfMySessionItem"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfMySessionItem"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfMySessionItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/personal/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 下线自己的某个会话(自助踢设备)。只能踢自己名下的活跃会话:先按 UserId=自己 校验归属,
+         *     不命中一律 42024——"存在但不是你的"与"不存在"不区分,防探测他人会话。
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/personal/default-module": {
         parameters: {
             query?: never;
@@ -4330,6 +4414,8 @@ export interface components {
             icon?: null | string;
             /** @description 默认落地路由 */
             defaultRoute?: null | string;
+            /** @description 后端路由匹配前缀(如 sys/biz),用于权限路由下拉按应用软过滤;留空=不过滤 */
+            apiPrefix?: null | string;
             /**
              * Format: int32
              * @description 排序(小在前)
@@ -4359,6 +4445,19 @@ export interface components {
              * @description 用户设置的默认应用 Id;可空(未设=前端让用户选)。
              */
             defaultModuleId?: null | number | string;
+        };
+        /** @description "我的会话"列表项(个人视角;不含 UserId/Account——都是自己的)。 */
+        MySessionItem: {
+            sessionId: string;
+            ip?: null | string;
+            /** @description 登录时的 User-Agent 原串(前端解析成浏览器/系统展示,分辨多端) */
+            userAgent?: null | string;
+            /** Format: date-time */
+            loginTime?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** @description 是否本次请求所用会话(踢当前会话等于自杀,前端据此置灰,让用户走退出登录)。 */
+            isCurrent: boolean;
         };
         /** @description "我的通知"列表项:通知内容 + 当前用户是否已读。 */
         NoticeMineItem: {
@@ -5106,6 +5205,28 @@ export interface components {
             message?: null | string;
             /** @description 业务数据载荷 */
             data?: null | components["schemas"]["MenuTreeNode"][];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyListOfMySessionItem: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | components["schemas"]["MySessionItem"][];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -6043,6 +6164,12 @@ export interface components {
             icon?: null | string;
             /** @description 切入该应用后的落地路由(前端用;为空则进该应用菜单首项) */
             defaultRoute?: null | string;
+            /**
+             * @description 后端路由匹配前缀(如 `sys`/`biz`):菜单配权限按钮时,权限路由下拉据此按应用软过滤
+             *     (路由 `/api/v1/sys/...` ↔ 前缀 `sys`)。仅 UI 降噪,<b>非权限轴</b>;留空=不过滤。
+             *     注意 string SysModule.Code(如 system)≠ 路由段(如 sys),故单列显式存前缀,不复用 Code。
+             */
+            apiPrefix?: null | string;
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
@@ -6233,9 +6360,18 @@ export interface components {
             updateUserId?: null | number | string;
             isDelete?: boolean;
         };
-        /** @description 改个人资料入参:只允许改自己能改的字段(姓名);机构/职位/角色由管理员维护,不在此。 */
+        /**
+         * @description 改个人资料入参:只允许改自己能改的字段(姓名/昵称/性别/手机/邮箱/头像);机构/职位/角色由管理员维护,不在此。
+         *     全量替换语义(与管理端 UpdateUserInput 一致):前端须整表单提交,缺字段即置空。
+         *     手机/邮箱不做二次验证——内核无短信/邮件通道,管理员本可在用户管理任改这两个字段,操作日志留痕。
+         */
         UpdateProfileInput: {
             name?: string;
+            nickname?: null | string;
+            phone?: null | string;
+            email?: null | string;
+            gender?: null | string;
+            avatar?: null | string;
         };
         /** @description 更新用户入参。不含 Account(不可改)、Password(走重置)、IsSuperAdmin(防提权)。 */
         UpdateUserInput: {
@@ -6329,6 +6465,13 @@ export interface components {
             orgName?: null | string;
             /** @description 职位名称(已删/未分配则为 null) */
             positionName?: null | string;
+            nickname?: null | string;
+            phone?: null | string;
+            email?: null | string;
+            /** @description 性别:字典 gender 的项 Value("1"男/"2"女/"0"未知),同 string? SysUser.Gender。 */
+            gender?: null | string;
+            /** @description 头像(文件签名直链 ViewUrl,直接进 img)。 */
+            avatar?: null | string;
             isSuperAdmin: boolean;
         };
     };

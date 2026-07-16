@@ -5,6 +5,8 @@ interface UserInfo {
   userId: number
   account: string
   name: string
+  /** 头像 ViewUrl;登录出参不含,由 useModule.enterInitial 经 /personal/profile 回填,profile 页保存时同步。 */
+  avatar?: string | null
   /** 是否需强制改密(管理员建号/重置后首登为 true);路由守卫据此强制跳改密页。 */
   mustChangePassword: boolean
 }

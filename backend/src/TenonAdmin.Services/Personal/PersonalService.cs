@@ -27,6 +27,11 @@ public class PersonalService(
             PositionId = user.PositionId,
             OrgName = await OrgNameAsync(user.OrgId),
             PositionName = await PositionNameAsync(user.PositionId),
+            Nickname = user.Nickname,
+            Phone = user.Phone,
+            Email = user.Email,
+            Gender = user.Gender,
+            Avatar = user.Avatar,
             IsSuperAdmin = user.IsSuperAdmin,
         };
     }
@@ -50,7 +55,13 @@ public class PersonalService(
     {
         var user = await users.GetByIdAsync(userId);
         AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
-        user!.Name = input.Name;   // 只改姓名;账号/机构/职位/超管标志一律不动
+        // 只改自己能改的字段;账号/机构/职位/超管标志一律不动(全量替换语义,见 UpdateProfileInput)
+        user!.Name = input.Name;
+        user.Nickname = input.Nickname;
+        user.Phone = input.Phone;
+        user.Email = input.Email;
+        user.Gender = input.Gender;
+        user.Avatar = input.Avatar;
         await users.UpdateAsync(user);
     }
 

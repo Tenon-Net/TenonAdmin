@@ -31,7 +31,24 @@ export interface UserProfile {
   orgName?: string | null
   /** 职位名称(未分配/已删则 null) */
   positionName?: string | null
+  nickname?: string | null
+  phone?: string | null
+  email?: string | null
+  /** 性别:字典 gender 的项 Value("1"男/"2"女/"0"未知) */
+  gender?: string | null
+  /** 头像(文件签名直链 ViewUrl,直接进 img) */
+  avatar?: string | null
   isSuperAdmin: boolean
+}
+
+/** 我的会话项(后端 MySessionItem;个人视角,isCurrent 标记本次请求所用会话)。 */
+export interface MySessionItem {
+  sessionId: string
+  ip?: string | null
+  userAgent?: string | null
+  loginTime: string
+  expiresAt: string
+  isCurrent: boolean
 }
 
 /** 后端统一分页结果 PagedList<T>。 */

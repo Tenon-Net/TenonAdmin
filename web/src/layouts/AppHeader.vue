@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  NAvatar,
   NButton,
   NDropdown,
   NTooltip,
@@ -71,12 +72,14 @@ function onLocale(key: string) {
 const userOptions = computed<DropdownOption[]>(() => [
   { label: t('app.profile'), key: 'profile' },
   { label: t('app.password'), key: 'password' },
+  { label: t('app.sessions'), key: 'sessions' },
   { type: 'divider', key: 'd1' },
   { label: t('app.logout'), key: 'logout' },
 ])
 async function onUser(key: string) {
   if (key === 'profile') router.push('/personal/profile')
   else if (key === 'password') router.push('/personal/password')
+  else if (key === 'sessions') router.push('/personal/sessions')
   else if (key === 'logout') await logout()
 }
 async function logout() {
@@ -196,7 +199,9 @@ async function logout() {
 
       <n-dropdown :options="userOptions" @select="onUser">
         <n-button quaternary :aria-label="t('app.profile')">
-          <Icon icon="ph:user-circle" :width="20" />
+          <!-- 有头像用头像(profile 页可传),没有回落原图标;头像来源见 stores/user.ts 的 avatar 注释 -->
+          <n-avatar v-if="user.userInfo?.avatar" round :size="22" :src="user.userInfo.avatar" />
+          <Icon v-else icon="ph:user-circle" :width="20" />
           <span class="uname mobile-hide">{{ user.userInfo?.name ?? user.userInfo?.account ?? '' }}</span>
         </n-button>
       </n-dropdown>

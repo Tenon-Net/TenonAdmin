@@ -43,6 +43,13 @@ export const staticRoutes: RouteRecordRaw[] = [
         component: namedPage('personal-notice', () => import('@/views/personal/notice.vue')),
         meta: { title: 'menu.notice' },
       },
+      // 我的会话:理由同上 —— [ActiveSession] 人人可用,静态路由不进菜单;入口在顶栏用户下拉。
+      {
+        path: '/personal/sessions',
+        name: 'personal-sessions',
+        component: namedPage('personal-sessions', () => import('@/views/personal/sessions.vue')),
+        meta: { title: 'menu.sessions' },
+      },
       // 404 挂在壳内(而非顶级):打错一个 URL 不该把人甩出侧边栏、标签栏和退出按钮之外。
       // 未登录者到不了这里——守卫先于 public 判定就把他弹去登录页;深链刷新也不会闪 404,
       // 守卫在导航确认前先重建动态路由再重解析(见 router/index.ts)。

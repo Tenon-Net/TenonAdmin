@@ -166,6 +166,10 @@ public enum ErrorCode
     [MsgKey("error.module.hasMenus")]
     ModuleHasMenus = 42023,
 
+    /// <summary>会话不存在或已下线("我的会话"自助下线;含"不是你的会话"——不区分,防探测他人会话)</summary>
+    [MsgKey("error.session.notFound")]
+    SessionNotFound = 42024,
+
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 
     /// <summary>字典类型不存在</summary>
