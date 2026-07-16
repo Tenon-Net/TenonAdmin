@@ -607,6 +607,7 @@ export default {
       codeExists: 'App code already exists',
       protected: 'Built-in app is protected',
       accessDenied: 'No access to this app',
+      hasMenus: 'App still has menus attached; move or delete them first',
     },
     menu: { notFound: 'Menu not found', hasChildren: 'Menu has children and cannot be deleted', invalidParent: 'Invalid parent menu (cannot be itself or its descendant)' },
     dict: { typeNotFound: 'Dict type not found', typeCodeExists: 'Dict type code exists', itemNotFound: 'Dict item not found' },

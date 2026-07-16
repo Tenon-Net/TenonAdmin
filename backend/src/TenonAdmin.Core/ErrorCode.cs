@@ -162,6 +162,10 @@ public enum ErrorCode
     [MsgKey("error.recycle.invalidType")]
     RecycleInvalidType = 42022,
 
+    /// <summary>模块下仍有挂靠菜单,不能删除(先迁移或删除其顶级目录)</summary>
+    [MsgKey("error.module.hasMenus")]
+    ModuleHasMenus = 42023,
+
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 
     /// <summary>字典类型不存在</summary>

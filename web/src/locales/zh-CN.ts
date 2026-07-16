@@ -614,6 +614,7 @@ export default {
       codeExists: '应用编码已存在',
       protected: '内置应用受保护,禁止此操作',
       accessDenied: '无该应用访问权限',
+      hasMenus: '应用下仍有挂靠菜单,请先迁移或删除后再删应用',
     },
     menu: { notFound: '菜单不存在', hasChildren: '存在子节点,不可删除', invalidParent: '上级菜单无效(不能指向自身或其子节点)' },
     dict: { typeNotFound: '字典类型不存在', typeCodeExists: '字典类型编码已存在', itemNotFound: '字典项不存在' },
