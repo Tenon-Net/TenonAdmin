@@ -1,6 +1,6 @@
 name: web-ci
 
-# Frontend CI (dev-plan "follow-up work"): push / PR triggers lint + build (build includes vue-tsc type checking). Only runs when web is touched.
+# Frontend CI (dev-plan "follow-up work"): push / PR triggers lint + unit test + build (build includes vue-tsc type checking). Only runs when web is touched.
 on:
   push:
     branches: [main, dev]
@@ -28,6 +28,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Unit test
+        run: npm test
 
       # build = vue-tsc --noEmit && vite build, type checking is already included, so typecheck isn't run separately
       - name: Build
