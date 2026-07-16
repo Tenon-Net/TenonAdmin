@@ -68,8 +68,4 @@ git merge v0.1.1
 - [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)——Keep a Changelog 格式,每次发布一条,前后端都覆盖,破坏性变更会明确标出(项目还在 0.x,接口仍可能变)。
 - 登录页底部显示的版本号取自 `web/package.json` 的 `version`——合并完之后记得把它改成你合入的那个 tag,不然用户看到的版本号和实际跑的代码对不上。
 
-## 接下来看什么
-
-- [快速开始](/zh/guide/getting-started)——还没跑起来的话先看这个。
-- [新建业务模块](/zh/guide/business-module)——在内核之上搭自己的功能。
-- [贡献指南](/zh/community/contributing)——**另一种** fork 用法:把改动反过来贡献回 TenonAdmin,而不是把上游改动拉进来。
+本页讲的是把上游改动拉进你的 fork。反过来的那种用法——把自己的改动贡献回 TenonAdmin——是[贡献指南](/zh/community/contributing)的事。

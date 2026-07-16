@@ -1,6 +1,6 @@
 # 项目结构与启动
 
-本页梳理 `web/` 的目录结构,说明 `main.ts`/`App.vue` 如何启动应用、dev 代理如何联通后端,以及日常会用到的脚本。架构设计的"为什么"(动态路由、数据权限、可替换性)见[核心概念](/zh/guide/concepts);更完整的目录职责与开发约定见[前端规范](/zh/standard/frontend)——本页讲结构与启动,那页是可执行清单。
+在 `web/` 里动手之前,先认清目录怎么分、应用从 `main.ts`/`App.vue` 怎么装配起来、dev 代理怎么连到后端。设计取舍(动态路由、数据权限、可替换性)背后的道理见[核心概念](/zh/guide/concepts);想要一份逐条可对照的目录职责与开发约定,去[前端规范](/zh/standard/frontend)。
 
 ## 目录结构
 
@@ -110,8 +110,4 @@ server: {
 | `dev.bat` | 开两个窗口:后端(`dotnet run --project samples/MinimalHost`,`:5100`)和前端(`npm install && npm run dev`,`:5173`) |
 | `stop.bat` | 结束占用 `5100`、`5173` 端口的进程 |
 
-## 接下来看什么
-
-- 路由是怎么从后端菜单树构建出来的 → [路由](/zh/frontend/routing)
-- 接口请求怎么经过类型化客户端流转 → [请求流程](/zh/frontend/request)
-- 更完整的目录/约定清单 → [前端规范](/zh/standard/frontend)
+这套结构跑通之后,路由是怎么从后端菜单树拼出来的见[路由](/zh/frontend/routing),一次接口请求怎么走过类型化客户端见[请求流程](/zh/frontend/request)。

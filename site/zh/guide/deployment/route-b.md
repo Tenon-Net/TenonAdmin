@@ -3,7 +3,7 @@
 反向代理托管静态产物,把 `/api` 转给后端。浏览器只看到一个源,所以**同样不需要 CORS**。下面给 nginx 和 Caddy 两份等价配置,任选其一。
 
 ::: tip 该选哪个
-已有 nginx 网关的照抄 nginx 那份。**新拉一台机器、想省掉 TLS 手工活的选 Caddy** —— 站点标签写真实域名(不是 `:80`),Caddy 会自动申请并续期 Let's Encrypt 证书。这也是仓库容器交付(路线 D)默认用 Caddy 的原因。
+已有 nginx 网关的照抄 nginx 那份。**新拉一台机器、想省掉 TLS 手工活的选 Caddy** —— 站点标签写真实域名(不是 `:80`),Caddy 会自动申请并续期 Let's Encrypt 证书。这也是仓库的[容器化与多副本](/zh/guide/deployment/docker)交付默认用 Caddy 的原因。
 :::
 
 ## nginx
@@ -36,7 +36,7 @@ server {
 
 ## Caddy
 
-用真实域名当站点标签,Caddy 自动签发/续期证书;本地或没域名时才用 `:80`。这份是**主机直装版**,和路线 D 容器里那份 `web/Caddyfile` 是同一套思路。
+用真实域名当站点标签,Caddy 自动签发/续期证书;本地或没域名时才用 `:80`。这份是**主机直装版**,和[容器化与多副本](/zh/guide/deployment/docker)容器里那份 `web/Caddyfile` 是同一套思路。
 
 ```
 admin.example.com {

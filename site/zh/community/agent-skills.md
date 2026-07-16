@@ -58,15 +58,16 @@ TenonAdmin 现在还没有 `CONTEXT.md` 或 `docs/adr/`——按约定它们是�
 
 | Skill | 用途 | 适用场景 |
 |---|---|---|
+| `new-module` | 新增完整业务模块的全流程编排 | 从零做一个模块(实体 → 后端 → 前端 → 菜单/权限) |
 | `create-entity` | 创建 SqlSugar 实体类 | 新建表、新建实体 |
 | `create-crud-backend` | 创建后端 CRUD 全套 | Models + Interface + Service + ErrorCode + DI + Controller |
 | `create-crud-frontend` | 创建前端 CRUD 页面 | Types + API + Vue 页面(ProTable + FormContainer) |
 | `replace-service` | 替换/扩展内置服务 | 定制登录流程、换密码哈希、覆写服务步骤 |
 | `create-page-variant` | 非标准页面模板 | 树表、主从分栏、侧栏筛选 |
 
-**Claude Code** 下这五个 skill 已经包装成 `.claude/skills/` 下的斜杠命令,直接输入 `/create-entity`、`/create-crud-backend`、`/create-crud-frontend`、`/replace-service`、`/create-page-variant` 即可;也支持自然语言自动触发,比如直接说「帮我创建一个产品实体」。其它 AI 工具没有斜杠命令机制,在对话里直接引用文件路径就行,比如「参考 skills/create-entity.md,帮我创建一个 BizProduct 实体」。
+**Claude Code** 下这六个 skill 已经包装成 `.claude/skills/` 下的斜杠命令,直接输入 `/new-module`、`/create-entity`、`/create-crud-backend`、`/create-crud-frontend`、`/replace-service`、`/create-page-variant` 即可;也支持自然语言自动触发,比如直接说「帮我创建一个产品实体」。其它 AI 工具没有斜杠命令机制,在对话里直接引用文件路径就行,比如「参考 skills/create-entity.md,帮我创建一个 BizProduct 实体」。
 
-新增一个完整 CRUD 模块的标准顺序:
+新增一个完整 CRUD 模块的标准顺序(`/new-module` 会把这三步串起来一次跑完,想分步来就单独调用):
 
 1. `/create-entity` —— 建实体
 2. `/create-crud-backend` —— 建后端(含菜单种子数据)
@@ -77,4 +78,5 @@ TenonAdmin 现在还没有 `CONTEXT.md` 或 `docs/adr/`——按约定它们是�
 ## 参考
 
 - 根目录 [`CLAUDE.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/CLAUDE.md) 的「Agent skills」一节是这些约定的索引入口。
+- 想自己手动走一遍替换/扩展内置服务的流程(而不是让 agent 按 `replace-service` skill 生成),见 [替换内置服务](/zh/guide/replace-service)。
 - 想了解怎么跑测试、怎么提 PR,见 [贡献指南](./contributing)。

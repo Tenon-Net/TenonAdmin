@@ -8,3 +8,5 @@
 | [`tenon-naive-iconify-picker`](/zh/components/icon-picker) | 离线优先图标选择器,基于 Iconify:多图标库、零网络请求、单字符串值 | [查看 →](/zh/components/icon-picker) |
 
 > 两个包均已发布到 npm,遵循各自仓库的 README 为权威文档;本站页面是精选速览。
+
+在本管理端模板里怎么接入、主题与图标怎么对齐,见 [主题与图标](/zh/frontend/appearance) 与上面两个包各自的文档页。
