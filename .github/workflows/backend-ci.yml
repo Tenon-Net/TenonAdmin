@@ -81,6 +81,14 @@ jobs:
       - name: Build
         run: dotnet build backend/TenonAdmin.slnx -c Release --no-restore
 
+      # mysql leg only: the suite creates an isolated DB per test class (unique connection string → its own ADO.NET pool),
+      # and idle pooled connections linger long after each test finishes. As the suite grew past ~70 test classes the
+      # accumulated idle connections blew MySQL's default max_connections=151 ("Too many connections", 2026-07-16 red runs).
+      # Two levers, both infra-side: raise the server ceiling here, and cap/reap pools via the connection string below.
+      - name: Raise MySQL connection ceiling
+        if: matrix.db == 'mysql'
+        run: docker exec ${{ job.services.mysql.id }} mysql -uroot -proot -e "SET GLOBAL max_connections = 1000;"
+
       # Wait until SqlServer accepts logins (sqlserver leg only). The port opens before logins are accepted,
       # so poll with a real login attempt instead — this doesn't depend on whether the DB image/host has sqlcmd
       # installed: borrow the official mssql-tools image + --network host to reach the host's :1433.
@@ -103,7 +111,9 @@ jobs:
       - name: Test (${{ matrix.db }})
         env:
           TENON_TEST_DBTYPE: ${{ matrix.db == 'mysql' && 'MySql' || matrix.db == 'sqlserver' && 'SqlServer' || matrix.db == 'postgres' && 'PostgreSQL' || 'Sqlite' }}
-          TENON_TEST_MYSQL: ${{ matrix.db == 'mysql' && 'Server=127.0.0.1;Port=3306;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;' || '' }}
+          # Maximum Pool Size / Connection Idle Timeout: hundreds of per-test pools accumulate idle connections
+          # (MySqlConnector default keeps them 180s); cap each pool and reap fast so the steady state stays low.
+          TENON_TEST_MYSQL: ${{ matrix.db == 'mysql' && 'Server=127.0.0.1;Port=3306;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;Maximum Pool Size=10;Connection Idle Timeout=30;' || '' }}
           # The SqlServer connection string carries TrustServerCertificate/Encrypt=False: MDS 5.x encrypts by default and CI has no trusted certificate. The base string omits Database; TestDb appends it when creating the isolated DB.
           TENON_TEST_SQLSERVER: ${{ matrix.db == 'sqlserver' && 'Server=127.0.0.1;User ID=sa;Password=Tenon_Ci_2026;TrustServerCertificate=True;Encrypt=False;' || '' }}
           # The PostgreSQL base string omits Database (connects to the maintenance DB postgres to create the isolated DB; TestDb appends Database after creating it).
