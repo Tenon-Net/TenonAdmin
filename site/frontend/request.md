@@ -1,3 +1,47 @@
+# HTTP Request Layer
+
+Every backend call in the frontend flows through one pipeline: a generated OpenAPI schema types the client, two middlewares handle auth and token refresh, and `unwrap` normalizes whatever shape the response comes back in before a view ever sees it. This page walks through each stage.
+
+## Overview
+
+```text
+backend OpenAPI (/openapi/v1.json)
+  │  npm run gen:api
+  ▼
+src/api/schema.d.ts        generated types (paths, do not hand-edit)
+  │
+  ▼
+src/api/client.ts          typed openapi-fetch client + auth/refresh middlewares
+  │
+  ▼
+src/api/index.ts           domain-grouped API functions, each: client.X(...).then(r => unwrap<T>(r))
+  │
+  ▼
+views                       catch ApiError, display via translateError(err)
+```
+
+## Regenerating the contract: `gen:api`
+
+```bash
+npm run gen:api   # openapi-typescript http://localhost:5100/openapi/v1.json -o src/api/schema.d.ts
+```
+
+- The backend must be running first — the script fetches `/openapi/v1.json` from a live server (`http://localhost:5100` by default; see `web/vite.config.ts`'s `TENON_API_TARGET` for the dev proxy target if the backend runs elsewhere).
+- `src/api/schema.d.ts` is a **generated artifact** — never hand-edit it. Change the backend endpoint/DTO and regenerate; hand edits are silently overwritten on the next run.
+- `src/api/client.ts` types its `createClient<paths>()` call against this file, so every `client.GET/POST/PUT/DELETE` call is fully typed end to end — path params, query params, request body, and response shape all come from the backend's actual contract.
+
+## In this section
+
+- [The Typed Client](/frontend/request) — `client.ts`'s two middlewares: auth and 401 refresh
+- [Dev Proxy & CORS](/frontend/request) — why the request layer needs the dev proxy
+- [Adapting to the Backend Response](/frontend/api-contract) — `unwrap`, `ApiError`, pagination helpers, and error text
+
+
+
+---
+
+<!-- TODO(rewrite): merged from client.md -->
+
 # The Typed Client
 
 ```ts
@@ -94,5 +138,32 @@ async function doRefresh(): Promise<boolean> {
 
 `bare` is a second `openapi-fetch` client built from the same schema but with **no middlewares attached**. Calling the refresh endpoint through it means a failing refresh (e.g. the refresh token is itself expired and the endpoint answers 401) never re-enters `refreshMiddleware.onResponse` at all — there's no middleware pipeline on `bare` to recurse into. The URL check in `onResponse` (skipping `/auth/refresh`/`/auth/login`) is a second line of defense that also covers login failures called through `client`; the refresh call's own recursion-safety comes from being on `bare` in the first place.
 
-**Previous:** [HTTP Request Layer](/frontend/request/)
-**Next:** [Dev Proxy & CORS](/frontend/request/proxy)
+
+
+---
+
+<!-- TODO(rewrite): merged from proxy.md -->
+
+# Dev Proxy & CORS
+
+The typed client (`src/api/client.ts`) and `gen:api` both assume the browser is talking same-origin to `/api` and `/openapi`. Neither makes any cross-origin allowance — `client`'s `baseUrl` defaults to empty, and `gen:api` fetches `/openapi/v1.json` as a plain relative-looking URL. Locally, the backend runs on a different port (`:5100`) than the dev server (`:5173`), so something has to bridge that gap before either can work.
+
+That something is `vite.config.ts`'s dev proxy:
+
+```ts
+const apiTarget = process.env.TENON_API_TARGET ?? 'http://localhost:5100'
+
+server: {
+  proxy: {
+    '/api': { target: apiTarget, changeOrigin: true },
+    '/openapi': { target: apiTarget, changeOrigin: true },
+  },
+},
+```
+
+It forwards `/api/*` and `/openapi/*` requests from `:5173` to the backend, so the browser only ever sees one origin. The target defaults to `http://localhost:5100`; set `TENON_API_TARGET` before starting Vite to point at a backend running elsewhere.
+
+Without this proxy, both the typed client's requests and `gen:api`'s schema fetch would go directly to the backend's origin — and the backend's CORS policy defaults to deny-all, so the browser (or `gen:api`'s fetch) would reject the response before it reached `unwrap` or `openapi-typescript`. The proxy is what makes the request layer's same-origin assumption true in dev; in production a reverse proxy plays the same role.
+
+See [Project Structure & Startup](/frontend/structure) for the full dev-proxy config and sibling-package aliases.
+

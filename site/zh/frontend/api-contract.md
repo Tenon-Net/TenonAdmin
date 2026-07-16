@@ -68,7 +68,6 @@ function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; total: numb
 
 `ApiError.msgKey` 是接到展示文案的那根线 —— `translateError`(`src/utils/error.ts`)拿它去查 i18n 词典,查不到退回 `.message`,再退回一个通用兜底文案。`msgKey` 的约定和后端错误码怎么映射成翻译文案,见 [i18n](/zh/frontend/i18n)。
 
-**上一节:** [开发代理与 CORS](/zh/frontend/request/proxy)
 
 ## 接下来看什么
 

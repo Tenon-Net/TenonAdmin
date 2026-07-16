@@ -91,6 +91,6 @@ A permission code is just a normalized route — `{METHOD}:/{route template}` (e
 
 ## Where to next
 
-- [Frontend Routing](/frontend/routing/)
+- [Frontend Routing](/frontend/routing)
 - [Request Pipeline](/backend/request-pipeline)
 - [Multi-Org Data Scope](/backend/data-scope)

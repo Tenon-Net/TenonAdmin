@@ -112,6 +112,6 @@ From the repo root, two batch scripts manage the whole stack at once:
 
 ## Where to next
 
-- How routes get built from the backend menu tree → [Routing](/frontend/routing/)
-- How API calls flow through the typed client → [Request Flow](/frontend/request/)
+- How routes get built from the backend menu tree → [Routing](/frontend/routing)
+- How API calls flow through the typed client → [Request Flow](/frontend/request)
 - The fuller directory/convention checklist → [Frontend Standards](/standard/frontend)

@@ -48,4 +48,3 @@ features:
     details: 将新增实体、搭建 CRUD、替换服务等流程沉淀为标准 skills,AI 助手或开发者可照此快速落地。
     link: /zh/community/agent-skills
     linkText: 看看 Skills
----

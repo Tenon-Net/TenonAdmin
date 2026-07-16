@@ -25,5 +25,3 @@ Backend — allow that origin (deny-all by default; leave it unconfigured and ev
 
 `AllowedOrigins` empty = no cross-origin requests are allowed; `AllowCredentials` only takes effect when origins is non-empty (there's no such thing as `AllowAnyOrigin` combined with credentials). The CORS policy is mounted automatically at the front of the pipeline by the kernel's `IStartupFilter` — **you don't need to write `UseCors` yourself**.
 
-**Previous:** [Route B: Reverse Proxy (nginx or Caddy)](/guide/deployment/route-b)
-**Next:** [Route D: Docker](/guide/deployment/route-d)

@@ -71,5 +71,5 @@ Most merge friction comes from editing the same files upstream also touches. Two
 ## Where to next
 
 - [Quick Start](/guide/getting-started) — if you haven't run the project yet.
-- [Adding a New Business Module](/guide/new-business/) — building your own features on top of the kernel.
+- [Adding a New Business Module](/guide/business-module) — building your own features on top of the kernel.
 - [Contributing](/community/contributing) — the *other* fork workflow: sending changes back to TenonAdmin instead of pulling changes in.

@@ -91,6 +91,6 @@ const columns: DataTableColumns<SampleDoc> = [
 
 ## 接下来看什么
 
-- [前端路由](/zh/frontend/routing/)
+- [前端路由](/zh/frontend/routing)
 - [请求管线](/zh/backend/request-pipeline)
 - [多组织数据权限](/zh/backend/data-scope)

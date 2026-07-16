@@ -6,39 +6,34 @@ import { defineConfig } from 'vitepress'
 // ── English (default locale, root path) ──
 const enGuideSidebar = [
   {
-    text: 'Getting Started',
+    text: 'Get Started',
     items: [
       { text: 'Quick Start', link: '/guide/getting-started' },
       { text: 'Core Concepts', link: '/guide/concepts' },
+    ],
+  },
+  {
+    text: 'Build a Business Module',
+    items: [
+      { text: 'Add a Business Module (Backend)', link: '/guide/business-module' },
+      { text: 'Add a Frontend Page', link: '/guide/frontend-page' },
+    ],
+  },
+  {
+    text: 'Customize the Kernel',
+    items: [
+      { text: 'Replace Built-in Services', link: '/guide/replace-service' },
       { text: 'Syncing Your Fork', link: '/guide/sync-fork' },
     ],
   },
   {
-    text: 'Advanced',
+    text: 'Go Live',
     items: [
-      {
-        text: 'Deployment',
-        link: '/guide/deployment/',
-        items: [
-          { text: 'Overview', link: '/guide/deployment/' },
-          { text: 'Route A: Monolithic Deployment', link: '/guide/deployment/route-a' },
-          { text: 'Route B: Reverse Proxy (nginx or Caddy)', link: '/guide/deployment/route-b' },
-          { text: 'Route C: True Cross-Origin (CDN)', link: '/guide/deployment/route-c' },
-          { text: 'Route D: Docker', link: '/guide/deployment/route-d' },
-          { text: 'Multi-Replica Deployment', link: '/guide/deployment/multi-replica' },
-          { text: 'Post-Deploy Self-Check', link: '/guide/deployment/post-deploy-check' },
-        ],
-      },
-      {
-        text: 'New Business Module',
-        link: '/guide/new-business/',
-        items: [
-          { text: 'Overview', link: '/guide/new-business/' },
-          { text: 'A. Backend', link: '/guide/new-business/backend' },
-          { text: 'B. Frontend', link: '/guide/new-business/frontend' },
-          { text: 'C. End-to-End Checklist', link: '/guide/new-business/checklist' },
-        ],
-      },
+      { text: 'Security Baseline & Choosing a Route', link: '/guide/deployment/' },
+      { text: 'Route A: Monolithic', link: '/guide/deployment/route-a' },
+      { text: 'Route B: Reverse Proxy (nginx or Caddy)', link: '/guide/deployment/route-b' },
+      { text: 'Route C: True Cross-Origin (CDN)', link: '/guide/deployment/route-c' },
+      { text: 'Containers & Multi-Replica', link: '/guide/deployment/docker' },
     ],
   },
   {
@@ -54,9 +49,8 @@ const enThemeConfig = {
     { text: 'Guide', link: '/guide/getting-started' },
     { text: 'Backend', link: '/backend/structure' },
     { text: 'Frontend', link: '/frontend/structure' },
-    { text: 'Tutorials', link: '/tutorial/quickstart' },
-    { text: 'Standards', link: '/standard/backend' },
     { text: 'Components', link: '/components/' },
+    { text: 'Standards', link: '/standard/backend' },
     { text: 'Community', link: '/community/contributing' },
     { text: 'Live Demo', link: 'https://tenonadmin.52moyu.net/login' },
     { text: '0.1.0', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
@@ -66,75 +60,60 @@ const enThemeConfig = {
     '/faq': enGuideSidebar,
     '/backend/': [
       {
-        text: 'Getting Started',
+        text: 'Get Started',
         items: [
           { text: 'Project Structure & Startup', link: '/backend/structure' },
         ],
       },
       {
-        text: 'Core',
+        text: 'Core Mechanisms',
         items: [
           { text: 'Architecture & Package Layering', link: '/backend/architecture' },
           { text: 'Request Pipeline', link: '/backend/request-pipeline' },
           { text: 'Multi-Org Data Permissions', link: '/backend/data-scope' },
           { text: 'Auth & Security', link: '/backend/auth-security' },
-          { text: 'Replaceability Model', link: '/backend/replaceability' },
           { text: 'Data Layer & Auditing', link: '/backend/data-layer' },
         ],
       },
-    ],
-    '/tutorial/': [
       {
-        text: 'Tutorials',
+        text: 'Extensibility',
         items: [
-          { text: 'Your First Endpoint', link: '/tutorial/quickstart' },
-          { text: 'Add a Business Module', link: '/tutorial/business-module' },
-          { text: 'Add a Frontend Page', link: '/tutorial/frontend-page' },
-          { text: 'Container Deployment', link: '/tutorial/docker-deploy' },
+          { text: 'Replaceability Model', link: '/backend/replaceability' },
         ],
       },
     ],
     '/frontend/': [
       {
-        text: 'Getting Started',
+        text: 'Get Started',
         items: [
           { text: 'Project Structure & Startup', link: '/frontend/structure' },
         ],
       },
       {
-        text: 'Core',
+        text: 'Routing & Menus',
         items: [
-          {
-            text: 'Routing & Dynamic Menus',
-            link: '/frontend/routing/',
-            items: [
-              { text: 'Overview', link: '/frontend/routing/' },
-              { text: 'Static Routes', link: '/frontend/routing/static' },
-              { text: 'Dynamic Routes', link: '/frontend/routing/dynamic' },
-              { text: 'Multi-App Portal', link: '/frontend/routing/portal' },
-              { text: 'Router Guards', link: '/frontend/routing/guards' },
-              { text: 'Keep-Alive & Named Pages', link: '/frontend/routing/keep-alive' },
-            ],
-          },
-          {
-            text: 'HTTP Request Layer',
-            link: '/frontend/request/',
-            items: [
-              { text: 'Overview', link: '/frontend/request/' },
-              { text: 'The Typed Client', link: '/frontend/request/client' },
-              { text: 'Dev Proxy & CORS', link: '/frontend/request/proxy' },
-              { text: 'Adapting to the Backend', link: '/frontend/request/backend' },
-            ],
-          },
-          { text: 'Internationalization & Error Codes', link: '/frontend/i18n' },
+          { text: 'Routing & Dynamic Menus', link: '/frontend/routing' },
+          { text: 'Multi-App Portal & Router Guards', link: '/frontend/portal-guards' },
+        ],
+      },
+      {
+        text: 'Requests & Contract',
+        items: [
+          { text: 'HTTP Request Layer', link: '/frontend/request' },
+          { text: 'Backend Contract & Error Codes', link: '/frontend/api-contract' },
+        ],
+      },
+      {
+        text: 'Features',
+        items: [
           { text: 'Frontend Permissions', link: '/frontend/permission' },
+          { text: 'Internationalization', link: '/frontend/i18n' },
         ],
       },
       {
         text: 'Appearance',
         items: [
-          { text: 'Theme & Design Tokens', link: '/frontend/theme' },
-          { text: 'Icons', link: '/frontend/icons' },
+          { text: 'Theme & Icons', link: '/frontend/appearance' },
         ],
       },
     ],
@@ -181,39 +160,34 @@ const enThemeConfig = {
 // ── 简体中文 (/zh/) ──
 const zhGuideSidebar = [
   {
-    text: '入门',
+    text: '上手',
     items: [
       { text: '快速开始', link: '/zh/guide/getting-started' },
       { text: '核心概念', link: '/zh/guide/concepts' },
-      { text: '同步你的 Fork', link: '/zh/guide/sync-fork' },
     ],
   },
   {
-    text: '进阶',
+    text: '开发业务模块',
     items: [
-      {
-        text: '部署',
-        link: '/zh/guide/deployment/',
-        items: [
-          { text: '概览', link: '/zh/guide/deployment/' },
-          { text: '路线 A:单体部署', link: '/zh/guide/deployment/route-a' },
-          { text: '路线 B:反向代理(nginx 或 Caddy)', link: '/zh/guide/deployment/route-b' },
-          { text: '路线 C:真跨源(CDN)', link: '/zh/guide/deployment/route-c' },
-          { text: '路线 D:Docker', link: '/zh/guide/deployment/route-d' },
-          { text: '多副本部署', link: '/zh/guide/deployment/multi-replica' },
-          { text: '部署后自检', link: '/zh/guide/deployment/post-deploy-check' },
-        ],
-      },
-      {
-        text: '新建业务模块',
-        link: '/zh/guide/new-business/',
-        items: [
-          { text: '概览', link: '/zh/guide/new-business/' },
-          { text: 'A. 后端', link: '/zh/guide/new-business/backend' },
-          { text: 'B. 前端', link: '/zh/guide/new-business/frontend' },
-          { text: 'C. 端到端清单', link: '/zh/guide/new-business/checklist' },
-        ],
-      },
+      { text: '加一个业务模块(后端)', link: '/zh/guide/business-module' },
+      { text: '加一个前端页面', link: '/zh/guide/frontend-page' },
+    ],
+  },
+  {
+    text: '定制内核',
+    items: [
+      { text: '替换内置服务', link: '/zh/guide/replace-service' },
+      { text: '同步上游 Fork', link: '/zh/guide/sync-fork' },
+    ],
+  },
+  {
+    text: '上线',
+    items: [
+      { text: '安全基线与选路线', link: '/zh/guide/deployment/' },
+      { text: '路线 A:单体部署', link: '/zh/guide/deployment/route-a' },
+      { text: '路线 B:反向代理(nginx 或 Caddy)', link: '/zh/guide/deployment/route-b' },
+      { text: '路线 C:真跨源(CDN)', link: '/zh/guide/deployment/route-c' },
+      { text: '容器化与多副本', link: '/zh/guide/deployment/docker' },
     ],
   },
   {
@@ -229,9 +203,8 @@ const zhThemeConfig = {
     { text: '指南', link: '/zh/guide/getting-started' },
     { text: '后端', link: '/zh/backend/structure' },
     { text: '前端', link: '/zh/frontend/structure' },
-    { text: '实战教程', link: '/zh/tutorial/quickstart' },
-    { text: '代码规范', link: '/zh/standard/backend' },
-    { text: '组件生态', link: '/zh/components/' },
+    { text: '组件', link: '/zh/components/' },
+    { text: '规范', link: '/zh/standard/backend' },
     { text: '参与', link: '/zh/community/contributing' },
     { text: '在线预览', link: 'https://tenonadmin.52moyu.net/login' },
     { text: '0.1.0', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
@@ -247,25 +220,19 @@ const zhThemeConfig = {
         ],
       },
       {
-        text: '核心',
+        text: '核心机制',
         items: [
           { text: '架构分层与包依赖', link: '/zh/backend/architecture' },
           { text: '请求管线', link: '/zh/backend/request-pipeline' },
           { text: '多组织数据权限', link: '/zh/backend/data-scope' },
           { text: '认证与安全', link: '/zh/backend/auth-security' },
-          { text: '可替换性模型', link: '/zh/backend/replaceability' },
           { text: '数据层与审计', link: '/zh/backend/data-layer' },
         ],
       },
-    ],
-    '/zh/tutorial/': [
       {
-        text: '实战教程',
+        text: '扩展',
         items: [
-          { text: '从零跑通第一个接口', link: '/zh/tutorial/quickstart' },
-          { text: '加一个业务模块', link: '/zh/tutorial/business-module' },
-          { text: '加一个前端页面', link: '/zh/tutorial/frontend-page' },
-          { text: '容器化部署', link: '/zh/tutorial/docker-deploy' },
+          { text: '可替换性模型', link: '/zh/backend/replaceability' },
         ],
       },
     ],
@@ -277,39 +244,30 @@ const zhThemeConfig = {
         ],
       },
       {
-        text: '核心',
+        text: '路由与菜单',
         items: [
-          {
-            text: '路由与动态菜单',
-            link: '/zh/frontend/routing/',
-            items: [
-              { text: '概览', link: '/zh/frontend/routing/' },
-              { text: '静态路由', link: '/zh/frontend/routing/static' },
-              { text: '动态路由', link: '/zh/frontend/routing/dynamic' },
-              { text: '多应用门户', link: '/zh/frontend/routing/portal' },
-              { text: '路由守卫', link: '/zh/frontend/routing/guards' },
-              { text: 'Keep-Alive 与具名组件', link: '/zh/frontend/routing/keep-alive' },
-            ],
-          },
-          {
-            text: 'HTTP 请求层',
-            link: '/zh/frontend/request/',
-            items: [
-              { text: '概览', link: '/zh/frontend/request/' },
-              { text: '类型化客户端', link: '/zh/frontend/request/client' },
-              { text: '开发代理与 CORS', link: '/zh/frontend/request/proxy' },
-              { text: '对接后端响应', link: '/zh/frontend/request/backend' },
-            ],
-          },
-          { text: '国际化与错误码', link: '/zh/frontend/i18n' },
+          { text: '路由与动态菜单', link: '/zh/frontend/routing' },
+          { text: '多应用门户与路由守卫', link: '/zh/frontend/portal-guards' },
+        ],
+      },
+      {
+        text: '请求与契约',
+        items: [
+          { text: 'HTTP 请求层', link: '/zh/frontend/request' },
+          { text: '对接后端:响应契约与错误码', link: '/zh/frontend/api-contract' },
+        ],
+      },
+      {
+        text: '功能',
+        items: [
           { text: '前端权限', link: '/zh/frontend/permission' },
+          { text: '国际化', link: '/zh/frontend/i18n' },
         ],
       },
       {
         text: '外观',
         items: [
-          { text: '主题与 tokens', link: '/zh/frontend/theme' },
-          { text: '图标', link: '/zh/frontend/icons' },
+          { text: '主题与图标', link: '/zh/frontend/appearance' },
         ],
       },
     ],
@@ -325,7 +283,7 @@ const zhThemeConfig = {
     ],
     '/zh/components/': [
       {
-        text: '组件生态',
+        text: '组件',
         items: [
           { text: '概览', link: '/zh/components/' },
           { text: 'ProTable — 列驱动表格', link: '/zh/components/pro-table' },

@@ -89,8 +89,25 @@ By default `web/dist` requests the backend **same-origin** (`baseUrl` in `src/ap
 - [Route A: Monolithic Deployment](/guide/deployment/route-a)
 - [Route B: Reverse Proxy (nginx or Caddy)](/guide/deployment/route-b)
 - [Route C: True Cross-Origin (CDN)](/guide/deployment/route-c)
-- [Route D: Docker](/guide/deployment/route-d)
-- [Multi-Replica Deployment](/guide/deployment/multi-replica)
-- [Post-Deploy Self-Check](/guide/deployment/post-deploy-check)
+- [Route D: Docker](/guide/deployment/docker)
+- [Multi-Replica Deployment](/guide/deployment/docker)
+- [Post-Deploy Self-Check](/guide/deployment/)
 
-**Next:** [Route A: Monolithic Deployment](/guide/deployment/route-a)
+
+
+---
+
+<!-- TODO(rewrite): merged from post-deploy-check.md -->
+
+# Post-Deploy Self-Check
+
+```bash
+curl https://<your-domain>/health         # Healthy (liveness)
+curl https://<your-domain>/health/ready   # Healthy (DB + cache both reachable)
+curl -i https://<your-domain>/api/v1/ping # 401 = API routing works (this endpoint requires login)
+```
+
+Then open the frontend and log in once, to confirm the menu loads (which means the JWT secret, database, and seed data are all correct).
+
+Note that `/openapi/v1.json` is **only mounted in the Development environment** — it's the contract source used by the frontend's `npm run gen:api`, not a production endpoint; a 404 in production is expected behavior.
+

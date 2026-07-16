@@ -112,6 +112,6 @@ server: {
 
 ## 接下来看什么
 
-- 路由是怎么从后端菜单树构建出来的 → [路由](/zh/frontend/routing/)
-- 接口请求怎么经过类型化客户端流转 → [请求流程](/zh/frontend/request/)
+- 路由是怎么从后端菜单树构建出来的 → [路由](/zh/frontend/routing)
+- 接口请求怎么经过类型化客户端流转 → [请求流程](/zh/frontend/request)
 - 更完整的目录/约定清单 → [前端规范](/zh/standard/frontend)

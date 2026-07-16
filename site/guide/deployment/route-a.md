@@ -29,5 +29,3 @@ If you only wanted to host this directory to make **images display**, you **don'
 
 Once running: `/` is the frontend, `/api/v1/**` is the backend, `/health` is the probe — same origin, no CORS.
 
-**Previous:** [Deployment](/guide/deployment/)
-**Next:** [Route B: Reverse Proxy (nginx or Caddy)](/guide/deployment/route-b)

@@ -89,8 +89,25 @@ npm run build     # 产物在 web/dist/
 - [路线 A:单体部署](/zh/guide/deployment/route-a)
 - [路线 B:反向代理(nginx 或 Caddy)](/zh/guide/deployment/route-b)
 - [路线 C:真跨源(CDN)](/zh/guide/deployment/route-c)
-- [路线 D:Docker](/zh/guide/deployment/route-d)
-- [多副本部署](/zh/guide/deployment/multi-replica)
-- [部署后自检](/zh/guide/deployment/post-deploy-check)
+- [路线 D:Docker](/zh/guide/deployment/docker)
+- [多副本部署](/zh/guide/deployment/docker)
+- [部署后自检](/zh/guide/deployment/)
 
-**下一节:** [路线 A:单体部署](/zh/guide/deployment/route-a)
+
+
+---
+
+<!-- TODO(rewrite): merged from post-deploy-check.md -->
+
+# 部署后自检
+
+```bash
+curl https://<你的域名>/health         # Healthy(存活)
+curl https://<你的域名>/health/ready   # Healthy(DB + 缓存都通)
+curl -i https://<你的域名>/api/v1/ping # 401 = API 路由通了(该端点需要登录)
+```
+
+再打开前端登录一次,确认能拿到菜单(说明 JWT 密钥、数据库、种子都对)。
+
+注意 `/openapi/v1.json` **只在 Development 环境挂载**——它是给前端 `npm run gen:api` 用的契约源,不是生产端点;生产下 404 是预期行为。
+

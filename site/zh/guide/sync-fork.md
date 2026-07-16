@@ -71,5 +71,5 @@ git merge v0.1.1
 ## 接下来看什么
 
 - [快速开始](/zh/guide/getting-started)——还没跑起来的话先看这个。
-- [新建业务模块](/zh/guide/new-business/)——在内核之上搭自己的功能。
+- [新建业务模块](/zh/guide/business-module)——在内核之上搭自己的功能。
 - [贡献指南](/zh/community/contributing)——**另一种** fork 用法:把改动反过来贡献回 TenonAdmin,而不是把上游改动拉进来。

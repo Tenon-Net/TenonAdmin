@@ -96,5 +96,3 @@ Behind any reverse proxy (nginx / Caddy / Traefik / a k8s ingress), this block i
 - **Turning it on requires declaring trusted sources** (`KnownProxies` for specific IPs, `KnownNetworks` for CIDR ranges — under container orchestration the proxy's IP isn't fixed, so a range is more practical). Give neither, and **startup fails outright**. This isn't pedantry: blindly trusting `X-Forwarded-For` is worse than not parsing it at all — an attacker can forge a different IP on every request to open unlimited rate-limit buckets (**completely bypassing rate limiting**), and pin brute-force failures on someone else.
 - What's trusted is the **source address**, so: **anyone who can connect directly to the backend port can forge an IP**. Once you're behind a reverse proxy, don't expose the backend port — that's why the debug port in the compose file is bound to `127.0.0.1` only.
 
-**Previous:** [Route A: Monolithic Deployment](/guide/deployment/route-a)
-**Next:** [Route C: True Cross-Origin (CDN)](/guide/deployment/route-c)

@@ -48,4 +48,3 @@ features:
     details: Workflows like adding entities, scaffolding CRUD, and swapping services are packaged as standard skills — AI assistants or developers can follow them to ship fast.
     link: /community/agent-skills
     linkText: Browse the skills
----

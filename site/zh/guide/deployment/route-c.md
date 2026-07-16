@@ -25,5 +25,3 @@ VITE_API_BASE=https://api.example.com npm run build
 
 `AllowedOrigins` 为空 = 不放行任何跨源;`AllowCredentials` 只在 origins 非空时才生效(不存在 `AllowAnyOrigin + 凭证` 这种组合)。CORS 策略由内核的 `IStartupFilter` 自动挂载在管道前段,**不需要你手写 `UseCors`**。
 
-**上一节:** [路线 B:反向代理(nginx 或 Caddy)](/zh/guide/deployment/route-b)
-**下一节:** [路线 D:Docker](/zh/guide/deployment/route-d)

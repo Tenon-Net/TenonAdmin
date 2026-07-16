@@ -68,7 +68,6 @@ function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; total: numb
 
 `ApiError.msgKey` is the link to display text — `translateError` (`src/utils/error.ts`) looks it up against the i18n catalog, falling back to `.message` and then to a generic fallback string. See [i18n](/frontend/i18n) for the `msgKey` convention and how backend codes map to translated copy.
 
-**Previous:** [Dev Proxy & CORS](/frontend/request/proxy)
 
 ## Where to next
 

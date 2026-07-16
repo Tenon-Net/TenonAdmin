@@ -118,3 +118,87 @@ curl -i https://<你的域名>/api/v1/ping # 401 = API 路由通了(该端点需
 ## 不用 Docker 的路线
 
 不想上容器的话,`docs/deployment.md` 还给了三条托管路线:单体部署(后端顺带托管前端)、nginx 反代(前后端分离但同源)、真跨源(前端在 CDN,需要处理 CORS)。完整的 nginx / Caddy 配置、`ForwardedHeaders` 配置细节见[路线 B:反向代理](/zh/guide/deployment/route-b);内核版本升级时的建表/补列/种子处理,见[部署指南概览](/zh/guide/deployment/)。
+
+
+---
+
+<!-- TODO(rewrite): merged from route-d.md -->
+
+# 路线 D:Docker
+
+容器化交付。仓库根的 `docker-compose.yml` 起四个服务:**MySQL + Redis + 后端 + Caddy(托管 SPA 并反代 `/api`)**。
+
+```bash
+docker compose up -d --build
+# 前端 http://localhost:8080   后端调试口 http://127.0.0.1:8081/health/ready(只绑回环)
+docker compose logs app        # 首启的随机超管密码(没显式配 Seed:AdminPassword 时)在这里
+```
+
+**为什么默认是 Caddy 而不是 nginx**:把 `web/Caddyfile` 里的站点标签 `:80` 换成你的域名、删掉 `auto_https off`,Caddy 就会**自动申请并续期 Let's Encrypt 证书** —— 自托管时省掉整套 TLS 手工活。仍想用 nginx 的:`web/nginx.conf` 还在仓库里(路线 B 那份的容器版),把 `web/Dockerfile` 的运行阶段换回 `nginx:alpine` 即可。
+
+> 路线 B 的 Caddy 是**主机直装**(自己在服务器上装 Caddy),路线 D 的 Caddy 是**容器内**(`web/Caddyfile` 打进镜像),两者是同一套反代思路,按你是否上容器二选一。
+
+它跑的是 **`ASPNETCORE_ENVIRONMENT=Production`** —— 这是刻意的:compose 因此顺带成了「生产首启路径」的活体测试,上面 §0 那三条硬要求(显式 JWT 密钥、空库要显式允许建表、上传根挪出 `wwwroot`)必须**同时**满足才起得来,少一条就是一条读得懂的启动错误。这三条在 compose 里都写成了环境变量,照着改成你自己的值即可。
+
+几个不写出来就会踩的点:
+
+| 点 | 为什么 |
+|---|---|
+| **具名卷,不要 bind mount** | 镜像里跑的是非 root 用户。具名卷首次挂载会从镜像目录带走属主,容器写得进去;bind mount 会用宿主属主覆盖,应用直接写不了 SQLite / 上传目录。 |
+| **镜像里没有 `HEALTHCHECK`** | `aspnet` 运行时镜像既没有 `curl` 也没有 `wget`,写了只会恒失败。健康检查交给编排层探 `/health`(存活)与 `/health/ready`(DB + 缓存)。 |
+| **`.dockerignore` 是安全项** | 开发机的 `data/` 里躺着真实的 `admin.db` 和 `dev-jwt.key`。没有它,一个 `COPY . .` 就把**签名密钥**烤进镜像层——镜像一推,谁都能伪造超管令牌。 |
+| **多副本改 `WorkerId`** | 每个实例 0–63 必须各不相同,否则同毫秒发号撞主键。见下一节。 |
+
+**你自己的 host**:`dotnet new tenon-app` 生成的目录里已经带了一份 `Dockerfile`(从 NuGet 装内核,构建你的 host);仓库根那份是从源码构建样例宿主 `MinimalHost`,给内核 CI 用的,你不需要它。
+
+
+
+---
+
+<!-- TODO(rewrite): merged from multi-replica.md -->
+
+# 多副本部署
+
+水平扩容。起第二个副本之前,下面**四条一条都不能少**。少任何一条,系统不会报错,只会开始悄悄做错事。
+
+```bash
+# 仓库里有现成的双副本叠加层,也是 CI 里真跑的那套
+docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --build
+bash scripts/smoke-multi-replica.sh http://localhost:8080   # 逐条验证下面这些保证
+```
+
+## ① Redis 是**前置条件**,不是可选优化
+
+进程内缓存意味着副本 A 的失效**永远传不到**副本 B。后果不是"慢一点",是安全功能直接失灵:
+
+| 表现 | 细节 |
+|---|---|
+| **强制下线失灵(最严重)** | 会话缓存的 TTL 是**刷新令牌寿命**(天级)。A 上强退 → DB 写了吊销、A 清了自己的内存;**B 的那份还在**,继续判定"活跃",于是经负载均衡时约一半请求照常放行,而且一放就是**好几天**。 |
+| **撤权后仍有权限** | 权限/数据范围缓存默认 20 分钟。被撤权的人在另一副本上照旧有权限;数据范围还喂着 SqlSugar 全局过滤器 —— 他**继续看得见别的机构的数据**。 |
+| **锁定/限流阈值翻 N 倍** | 登录失败计数、限流计数各副本各数各的:`MaxFailCount=5` 两副本就成了 10,认证桶 20/min 成了 40/min。 |
+| **验证码必失败** | 一次性票据发在 A、验在 B,B 上没有这个键。 |
+
+配上 `Cache:Provider=Redis` + `Cache:RedisConnectionString`,以上**全部自动修好**(失效走的是缓存键空间,不是事件总线),业务代码零改动。
+
+## ② 每个副本必须有**不同的 `WorkerId`**
+
+同号 = 同毫秒发号撞主键(数据损坏级)。内核对此**不再沉默**:配了 Redis(= 明显的多实例意图)却没显式给 `TenonAdmin:Id:WorkerId` → **启动直接报错**。
+
+- **compose**:`--scale app=2` 给不了各副本不同的环境变量,所以要写**多个显式的 app 服务**(见 `docker-compose.scale.yml`,各配各的 WorkerId)。
+- **k8s**:用 **StatefulSet**,从 Pod 名字的序号(`app-0`/`app-1`)注入 `WorkerId`。Deployment 的随机 Pod 名给不了稳定序号。
+
+## ③ 反向代理必须配 `ForwardedHeaders`
+
+见上面那一节。不配的话,两个副本都只看得见负载均衡器那一个 IP —— 按 IP 限流形同虚设,审计日志里的 IP 全是代理地址。
+
+## ④ 冷启动**先起一个副本**
+
+CodeFirst 建表 + 写种子是"检查后插入",**不是原子的**:两个副本同时首启,会有一个撞唯一键崩掉。
+
+- **compose**:第二个副本 `depends_on: app: condition: service_healthy`(`docker-compose.scale.yml` 就是这么写的),零代码解决。
+- **k8s**:用 init job / migration job 先把库建好,再放开副本。
+
+## 还没解决的:上传目录必须是**共享可写卷**
+
+`LocalFileStorage` / `ChunkStorage` 写的是**本地盘**。compose 用具名卷,两个副本天然共享;但 **k8s 上如果每个 Pod 一个独立 PVC,A 传的文件在 B 上就是 404**,分片上传更是直接 `ChunkMissing`(分片散落在不同 Pod 上,合并必然缺片)。多副本必须给上传根挂 **RWX(ReadWriteMany)** 的共享卷,或前置替换 `IFileStorage` 成对象存储(S3/OSS)。
+

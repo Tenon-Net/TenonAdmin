@@ -29,5 +29,3 @@ app.Run();
 
 跑起来后:`/` 是前端,`/api/v1/**` 是后端,`/health` 是探针,同源、无 CORS。
 
-**上一节:** [部署(概览)](/zh/guide/deployment/)
-**下一节:** [路线 B:反向代理(nginx 或 Caddy)](/zh/guide/deployment/route-b)
