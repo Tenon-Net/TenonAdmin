@@ -81,9 +81,9 @@ R1–R6 全部处置。闸门先红后绿的证据在下面这张表里 —— *
 
 ## 5. v1 之后(不阻塞发版)
 
-- **密码过期策略**。`SysUser` 缺 `LastPasswordChangeTime`(不能用 `BaseEntity.UpdateTime` —— 改个昵称都会刷新它)。真正的设计决策是 **null 回填策略**:天真实现会在上线当天把**全部存量用户**判成"已过期",整个用户群被钉在改密页。信号复用 `MustChangePassword`(现成通道),前端零改动。
+- ~~**密码过期策略**~~ —— **已实现(2026-07-16)**:`SysUser.LastPasswordChangeTime` + 运行时配置 `sys.security.password.expireDays`(默认 0=关闭);null 回填 = 存量用户首次登录时回填当时时间、过期窗口从那一刻起算(不会上线当天全员被判过期);过期仅置 `MustChangePassword`(现成通道,不拦登录),自助改密清标志并重置窗口。测试 `PasswordExpiryTests`。
 - **T-D5 RoutePrefix / Version 配置化**。深耦合鉴权路径(权限码 = 路由),需引入 Core 的 `PermissionCode` 规范化 helper 供过滤器与种子共用。低频低价值,明确后置。
-- **T-D6 验证码第二种类型**。`ICaptchaProvider` 扩展点已在,只有 SVG 一种实现。**YAGNI 未解除 —— 先确认真有人要**行为/算术/滑块,否则不做。
+- **T-D6 验证码更多类型**。`ICaptchaProvider` 已有 SVG / 算术(`MathCaptchaProvider`)/ 笔画拼图(`PathCaptchaProvider`)三种实现。滑块 / 行为码仍后置 —— **YAGNI 未解除,先确认真有人要**,否则不做。
 - **T-D7 文件引用关系**。「秒传」按内容哈希复用**同一条** `sys_file` 记录 → 同一文件 Id 被多方引用,甲删掉"他的"文件,乙的引用就悬空。现靠 GC 保留期(默认 7 天)兜底,不是真解。**先确认真有消费者被咬到**再动。
 - `BaseEntity` 是否 POCO 化进 Core(§5.6)—— Phase 2a 结论:收益低,维持现状。
 

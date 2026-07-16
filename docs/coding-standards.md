@@ -218,7 +218,7 @@ public virtual async Task<T> GetHotAsync(string k)
 ### 2.6 按钮级权限
 
 - `v-auth`（`directives/auth.ts`）：`v-auth="'POST:/api/v1/sys/user'"`（单码）/ 数组（默认 OR）/ `.and`（AND）；不命中移除 DOM。
-- ⚠ 现状 **fail-open**：后端暂无“返回按钮权限码”接口，`permissionCodes` 恒空 → 指令不隐藏，强制靠服务端 403。补 `/personal/permissions` 后自动生效（详见审查报告的待办项）。
+- 权限码来自 `GET /api/v1/personal/permissions`（登录后拉进 auth store）；仅取码**成功**时置 `permissionsLoaded`——未加载 fail-closed 隐藏、已加载且为空（超管无码）fail-open 显示，服务端 `[RolePermission]` 始终兜底 403。
 
 ### 2.7 i18n
 
