@@ -7,23 +7,19 @@ import { useAuthStore } from '@/stores/auth'
  *   v-auth="['a','b']"                   多码,默认 OR
  *   v-auth.and="['a','b']"               多码,AND
  *
- * 权限码由 useModule.enterInitial 经 GET /personal/permissions 填入 authStore。
- * 两种"空"要区分(服务端始终是权威,403/41001 兜底;这里只管 UED 不谎报):
+ * 权限码由 useModule.enterInitial 经 GET /personal/permissions 填入 authStore,超管标记经 /personal/profile 填入。
+ * 显隐规则(服务端始终是权威,403/41001 兜底;这里只管 UED 不谎报):
+ *   - **超管**(isSuperAdmin)→ **fail-open** 显示全部,服务端 sadm 绕过兜底。
  *   - 取码**失败/未加载**(permissionsLoaded=false)→ **fail-closed** 藏按钮:不知道有没有权限,谎报"有"比谎报"无"糟。
- *   - 已成功加载但**为空集**(超管无角色故无码)→ **fail-open** 显示全部,服务端 sadm 绕过兜底。
- * // ponytail: 不为完美 UX 加客户端强隐藏,服务端才是权威;这里只把"取码失败"从 fail-open 拨到 fail-closed。
+ *   - 已加载的普通用户 → 按码匹配;空集必然不命中 → 隐藏(修正过去"空集=超管"把无权用户也放行的 bug)。
+ * // ponytail: 不为完美 UX 加客户端强隐藏,服务端才是权威;这里只把显隐拨正。
  */
 export const vAuth: Directive<HTMLElement, string | string[]> = {
   mounted(el, binding) {
     const auth = useAuthStore()
-    if (!auth.permissionsLoaded) return void el.remove() // 取码失败/未加载 → fail-closed
-    const codes = auth.permissionCodes
-    if (!codes.length) return // 已加载且为空 = 超管 → fail-open
     const need = binding.value
     const mode = binding.modifiers.and ? 'every' : 'some'
-    const ok = Array.isArray(need)
-      ? need[mode]((c) => codes.includes(c))
-      : codes.includes(need)
-    if (!ok) el.remove()
+    const ok = Array.isArray(need) ? need[mode]((c) => auth.hasPerm(c)) : auth.hasPerm(need)
+    if (!ok) el.remove() // 判定规则(超管放行 / 未加载 fail-closed / 精确命中)收敛在 authStore.hasPerm
   },
 }

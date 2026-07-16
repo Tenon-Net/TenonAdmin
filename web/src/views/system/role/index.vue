@@ -95,6 +95,7 @@ const columns: ProTableColumn<SysRole>[] = [
     render: (r) =>
       h(StatusSwitch, {
         value: r.enabled,
+        disabled: !auth.hasPerm('PUT:/api/v1/sys/role/{id}'),
         request: (next: boolean) => roleApi.update(r.id, { ...toInput(r), enabled: next }),
         'onUpdate:value': (v: boolean) => {
           r.enabled = v
@@ -107,23 +108,32 @@ const columns: ProTableColumn<SysRole>[] = [
     title: () => t('common.operation'),
     width: 240,
     hideInSetting: true,
-    render: (r) =>
-      h(NSpace, { size: 4, wrapItem: false }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
-        h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => askDelete(r) }, () => t('common.delete')),
-        h(NDropdown, {
-          options: [
-            { label: t('role.grantMenus'), key: 'menus' },
-            { label: t('role.dataScope'), key: 'scope' },
-            { label: t('role.grantUsers'), key: 'users' },
-          ],
-          onSelect: (key: string) => {
-            if (key === 'menus') openMenus(r)
-            else if (key === 'scope') openScope(r)
-            else openUsers(r)
-          },
-        }, () => h(NButton, { size: 'small', quaternary: true }, () => t('common.more'))),
-      ]),
+    render: (r) => {
+      // 更多▾:授权菜单/数据范围/授权用户各按自己的权限码显隐。
+      const dropdownOptions = [
+        auth.hasPerm('PUT:/api/v1/sys/role/menu') ? { label: t('role.grantMenus'), key: 'menus' } : null,
+        auth.hasPerm('PUT:/api/v1/sys/role/datascope') ? { label: t('role.dataScope'), key: 'scope' } : null,
+        auth.hasPerm('PUT:/api/v1/sys/role/users') ? { label: t('role.grantUsers'), key: 'users' } : null,
+      ].filter((o): o is { label: string; key: string } => o !== null)
+      return h(NSpace, { size: 4, wrapItem: false }, () => [
+        auth.hasPerm('PUT:/api/v1/sys/role/{id}')
+          ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit'))
+          : null,
+        auth.hasPerm('DELETE:/api/v1/sys/role/{id}')
+          ? h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => askDelete(r) }, () => t('common.delete'))
+          : null,
+        dropdownOptions.length
+          ? h(NDropdown, {
+              options: dropdownOptions,
+              onSelect: (key: string) => {
+                if (key === 'menus') openMenus(r)
+                else if (key === 'scope') openScope(r)
+                else openUsers(r)
+              },
+            }, () => h(NButton, { size: 'small', quaternary: true }, () => t('common.more')))
+          : null,
+      ])
+    },
   },
 ]
 

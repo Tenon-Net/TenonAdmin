@@ -9,43 +9,51 @@ artifacts/
 *.nupkg
 *.snupkg
 
-## App runtime data
+## 应用运行时数据
 data/
 *.db
 *.db-journal
-# 文件日志(TenonAdmin:Logging:File,默认关);无前导斜杠 → 匹配任意宿主下的 logs/
+# 文件日志（TenonAdmin:Logging:File，默认关闭）；无前导斜杠 → 匹配任何宿主下的 logs/
 logs/
-# 带中间斜杠的模式会被锚定到仓库根;用 **/ 前缀才能匹配任意宿主(如 samples/*/wwwroot)下的上传目录
+# 含内部斜杠的模式会锚定到仓库根目录；只有 **/ 前缀才能匹配任何宿主下的上传目录
+# （如 samples/*/wwwroot）
 **/wwwroot/upload/
 
-## Backend 本地开发配置(含种子凭据,不入库;用 .example 模板 + dotnet user-secrets)
+## 后端本地开发配置（包含种子凭据，不提交；使用 .example 模板 + dotnet user-secrets）
 backend/**/appsettings.Development.json
 
-## Frontend (web/)
+## 前端（web/）与文档站（site/）
+# node_modules/ 与 dist/ 无前导斜杠 → 已覆盖 site/node_modules 和 site/.vitepress/dist
 node_modules/
 dist/
+# VitePress 构建缓存（含内部斜杠会锚定到根，需 **/ 前缀才能匹配 site/ 下）
+**/.vitepress/cache/
 .env.local
-# Playwright 产物:web/.gitignore 已忽略 web/ 下的同名目录,但从仓库根跑会漏到这里
+# Playwright 产物：web/.gitignore 已忽略 web/ 下的同名目录，但从仓库根运行时会遗漏这些
 test-results/
 playwright-report/
 
-## Tooling / agent state (本地工具产物,不入库;无前导斜杠 → 匹配任意层级,含 backend/.omc)
+## 工具/Agent 状态（本地工具产物，不提交；无前导斜杠 → 任意深度匹配，含 backend/.omc）
 .omc/
 .omx/
 .codegraph/
-# 本地 Claude Code 钩子脚本:只有被同样不入库的 .claude/settings.json 引用才生效,单独提交无意义。
-# 若哪天要让全体协作者都吃到某条钩子(如"版本号只准写进 Directory.Packages.props"),
-# 就得 hooks/ + settings.json 成套提交,届时再解掉这行。
+# 本地 Claude Code 钩子脚本：仅当被 .claude/settings.json 引用时才生效，而 settings.json 同样不提交，
+# 所以单独提交此目录毫无意义。
+# 如果将来需要所有协作者都获得某个钩子（如"版本号只能写入 Directory.Packages.props"），
+# 则需要同时提交 hooks/ 和 settings.json——届时取消忽略此行。
 .claude/hooks/
 .claude/launch.json
 .claude/settings.local.json
 
-## Backend 临时验证脚本
+## 后端临时/验证脚本
 backend/scratchpad/
 
-## dev scripts (mac/linux) runtime
+## 开发脚本（mac/linux）运行时目录
 .dev/
 
-## 同步工具冲突副本 / 传输临时文件(Syncthing 等生成,本地垃圾文件)
+## 同步工具冲突副本/传输临时文件（Syncthing 等生成的本地垃圾文件）
 *.sync-conflict-*
 ~syncthing~*
+
+## /loop 任务账本（跨轮记忆，操作态，不提交）
+.loop/

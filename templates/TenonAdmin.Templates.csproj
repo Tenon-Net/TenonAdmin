@@ -19,6 +19,10 @@
     <RepositoryUrl>https://github.com/Tenon-Net/TenonAdmin</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>tenonadmin;admin;scaffold;template;dotnet-new;templates</PackageTags>
+    <!-- 与 6 个核心包对齐图标 + 说明页(此包不继承 backend/Directory.Build.props,故显式补)。
+         图标/README 打进包根,不进 content/,不影响 dotnet new 生成物。 -->
+    <PackageIcon>tenon-icon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
 
     <TargetFramework>netstandard2.0</TargetFramework>
     <IncludeContentInPack>true</IncludeContentInPack>
@@ -40,6 +44,9 @@
          少写一层,盖过版本的 template.json 就落到另一个空模板根下 —— dotnet new 照样"成功",但一个文件都不生成。 -->
     <Content Include="content\**\*" Exclude="content\**\bin\**;content\**\obj\**;content\**\.template.config\template.json" />
     <Content Include="$(_TemplateJsonStamped)" PackagePath="content\content\tenon-app\.template.config\template.json" />
+    <!-- 图标 + 说明页放包根(PackagePath="\"),供 nuget.org 页面用;Pack=true 打进包但不参与 dotnet new。 -->
+    <None Include="$(MSBuildThisFileDirectory)..\backend\tenon-icon.png" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="\" Visible="false" />
     <Compile Remove="**\*" />
   </ItemGroup>
 

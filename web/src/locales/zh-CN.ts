@@ -593,7 +593,7 @@ export default {
       refreshTokenInvalid: '登录已过期,请重新登录',
       tooManyRequests: '操作过于频繁,请稍后再试',
     },
-    perm: { denied: '无权限访问' },
+    perm: { denied: '无权限访问', demoReadOnly: '当前为演示环境，禁止修改操作' },
     user: {
       notFound: '用户不存在',
       accountExists: '账号已存在',

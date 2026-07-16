@@ -10,6 +10,7 @@ import IconPicker from '@/components/IconPicker/index.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { useAuthStore } from '@/stores/auth'
 import { moduleApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { ModuleInput, ModuleRow } from '@/types/api'
@@ -17,6 +18,7 @@ import type { ModuleInput, ModuleRow } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const rows = ref<ModuleRow[]>([])
@@ -98,19 +100,24 @@ const columns: DataTableColumns<ModuleRow> = [
     title: () => t('common.status'),
     key: 'enabled',
     width: 90,
+    // 无启停(update)权限者不见开关,退化为只读状态标签,保留状态可见性。
     render: (r) =>
-      h(StatusSwitch, {
-        value: r.enabled,
-        // 内置 system 应用停用会让门户失联(模块/菜单管理页都在它下面,停了就没法从 UI 恢复)——
-        // 与「禁删」同级的前端保护;后端 UpdateAsync 暂未拦内置模块,只护删除(42013)。
-        disabled: isBuiltin(r),
-        // 停用会把应用从门户隐藏,先确认;启用无副作用,跳过确认(返回 null)。
-        confirm: (next: boolean) => (next ? null : t('module.disableConfirm', { title: r.title })),
-        request: (next: boolean) => moduleApi.update(r.id, { ...toInput(r), enabled: next }),
-        'onUpdate:value': (v: boolean) => {
-          r.enabled = v
-        },
-      }),
+      authStore.hasPerm('PUT:/api/v1/sys/module/{id}')
+        ? h(StatusSwitch, {
+            value: r.enabled,
+            // 内置 system 应用停用会让门户失联(模块/菜单管理页都在它下面,停了就没法从 UI 恢复)——
+            // 与「禁删」同级的前端保护;后端 UpdateAsync 暂未拦内置模块,只护删除(42013)。
+            disabled: isBuiltin(r),
+            // 停用会把应用从门户隐藏,先确认;启用无副作用,跳过确认(返回 null)。
+            confirm: (next: boolean) => (next ? null : t('module.disableConfirm', { title: r.title })),
+            request: (next: boolean) => moduleApi.update(r.id, { ...toInput(r), enabled: next }),
+            'onUpdate:value': (v: boolean) => {
+              r.enabled = v
+            },
+          })
+        : h(NTag, { size: 'small', bordered: false, type: r.enabled ? 'success' : 'default' }, () =>
+            t(r.enabled ? 'common.enabled' : 'common.disabled'),
+          ),
   },
   {
     title: () => t('common.operation'),
@@ -118,8 +125,10 @@ const columns: DataTableColumns<ModuleRow> = [
     width: 140,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
-        isBuiltin(r)
+        authStore.hasPerm('PUT:/api/v1/sys/module/{id}')
+          ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit'))
+          : null,
+        isBuiltin(r) || !authStore.hasPerm('DELETE:/api/v1/sys/module/{id}')
           ? null
           : h(
               NPopconfirm,
@@ -144,7 +153,7 @@ const columns: DataTableColumns<ModuleRow> = [
   <div class="view">
     <n-card :bordered="true">
       <div class="bar">
-        <n-button type="primary" @click="openAdd">
+        <n-button v-auth="'POST:/api/v1/sys/module/add'" type="primary" @click="openAdd">
           <template #icon><AppIcon icon="ph:plus" :size="16" /></template>{{ t('common.add') }}
         </n-button>
       </div>

@@ -15,6 +15,7 @@ import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
 import { dictAdminApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { useDictStore } from '@/stores/dict'
 import { translateError } from '@/utils/error'
 import type { DictItemInput, DictTypeInput, SysDictItem, SysDictType } from '@/types/api'
@@ -22,6 +23,7 @@ import type { DictItemInput, DictTypeInput, SysDictItem, SysDictType } from '@/t
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
+const authStore = useAuthStore()
 const dictStore = useDictStore()
 const typeTableRef = ref<ProTableInst<SysDictType>>()
 
@@ -110,26 +112,30 @@ const typeColumns: ProTableColumn<SysDictType>[] = [
     // stopPropagation:操作按钮点击不得冒泡到行 onClick(否则误切选中类型)
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false, onClick: (e: Event) => e.stopPropagation() }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openTypeEdit(r) }, () => t('common.edit')),
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () =>
-              run(() => dictAdminApi.typeRemove(r.id), t('dict.typeDeleted')).then((ok) => {
-                if (!ok) return
-                dictStore.invalidate(r.code)
-                if (selectedType.value?.id === r.id) {
-                  selectedType.value = null
-                  items.value = []
-                }
-                typeTableRef.value?.refresh()
-              }),
-          },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
-            default: () => t('dict.typeDeleteConfirm', { name: r.name }),
-          },
-        ),
+        authStore.hasPerm('PUT:/api/v1/sys/dict/type/{id}')
+          ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openTypeEdit(r) }, () => t('common.edit'))
+          : null,
+        authStore.hasPerm('DELETE:/api/v1/sys/dict/type/{id}')
+          ? h(
+              NPopconfirm,
+              {
+                onPositiveClick: () =>
+                  run(() => dictAdminApi.typeRemove(r.id), t('dict.typeDeleted')).then((ok) => {
+                    if (!ok) return
+                    dictStore.invalidate(r.code)
+                    if (selectedType.value?.id === r.id) {
+                      selectedType.value = null
+                      items.value = []
+                    }
+                    typeTableRef.value?.refresh()
+                  }),
+              },
+              {
+                trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
+                default: () => t('dict.typeDeleteConfirm', { name: r.name }),
+              },
+            )
+          : null,
       ]),
   },
 ]
@@ -200,22 +206,26 @@ const itemColumns: DataTableColumns<SysDictItem> = [
     width: 130,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openItemEdit(r) }, () => t('common.edit')),
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () =>
-              run(() => dictAdminApi.itemRemove(r.id), t('dict.itemDeleted')).then((ok) => {
-                if (!ok) return
-                dictStore.invalidate(r.dictTypeCode)
-                loadItems()
-              }),
-          },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
-            default: () => t('dict.itemDeleteConfirm', { label: r.label }),
-          },
-        ),
+        authStore.hasPerm('PUT:/api/v1/sys/dict/item/{id}')
+          ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openItemEdit(r) }, () => t('common.edit'))
+          : null,
+        authStore.hasPerm('DELETE:/api/v1/sys/dict/item/{id}')
+          ? h(
+              NPopconfirm,
+              {
+                onPositiveClick: () =>
+                  run(() => dictAdminApi.itemRemove(r.id), t('dict.itemDeleted')).then((ok) => {
+                    if (!ok) return
+                    dictStore.invalidate(r.dictTypeCode)
+                    loadItems()
+                  }),
+              },
+              {
+                trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
+                default: () => t('dict.itemDeleteConfirm', { label: r.label }),
+              },
+            )
+          : null,
       ]),
   },
 ]

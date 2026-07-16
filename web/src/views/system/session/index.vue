@@ -6,6 +6,7 @@ import { NButton, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import { useConfirm } from '@/composables/useConfirm'
+import { useAuthStore } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
 import { sessionApi } from '@/api'
 import { translateError } from '@/utils/error'
@@ -15,6 +16,7 @@ import type { OnlineSessionItem } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
+const authStore = useAuthStore()
 const userStore = useUserStore()
 const tableRef = ref<ProTableInst<OnlineSessionItem>>()
 
@@ -42,6 +44,7 @@ const columns: ProTableColumn<OnlineSessionItem>[] = [
     width: 120,
     hideInSetting: true,
     render: (r) => {
+      if (!authStore.hasPerm('DELETE:/api/v1/sys/session/{sessionid}')) return null
       const isSelf = r.userId === userStore.userInfo?.userId
       return h(
         NButton,

@@ -586,7 +586,7 @@ export default {
       refreshTokenInvalid: 'Session expired, please sign in again',
       tooManyRequests: 'Too many requests, slow down',
     },
-    perm: { denied: 'Access denied' },
+    perm: { denied: 'Access denied', demoReadOnly: 'Demo environment is read-only' },
     user: {
       notFound: 'User not found',
       accountExists: 'Account already exists',

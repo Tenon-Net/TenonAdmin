@@ -17,6 +17,7 @@ import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { orgApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import { buildTree, expandableIds, filterTree, type Tree } from '@/utils/tree'
 import type { OrgInput, SysOrg } from '@/types/api'
@@ -24,6 +25,7 @@ import type { OrgInput, SysOrg } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { run, confirm } = useConfirm()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const tree = ref<Tree<SysOrg>[]>([])
@@ -146,6 +148,7 @@ const columns: ProTableColumn<Tree<SysOrg>>[] = [
     render: (r) =>
       h(StatusSwitch, {
         value: r.enabled,
+        disabled: !authStore.hasPerm('PUT:/api/v1/sys/org/{id}'),
         request: (next: boolean) => orgApi.update(r.id, { ...toInput(r), enabled: next }),
         // 重拉而非往行对象上写:搜索态下的祖先行是 filterTree 的浅拷贝,写它不会回到源树(开关会弹回去)。
         // StatusSwitch 是悲观更新(请求成功才 emit),所以这里重拉一次就是最终态,和本页其余变更的做法一致。
@@ -158,27 +161,34 @@ const columns: ProTableColumn<Tree<SysOrg>>[] = [
     key: 'op',
     width: 150,
     fixed: 'right',
-    render: (r) =>
-      h(NSpace, { size: 2, wrapItem: false, justify: 'center' }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
-        h(
-          NDropdown,
-          {
-            trigger: 'click',
-            options: [
-              { key: 'addChild', label: t('org.addChild') },
-              { key: 'copy', label: t('org.copy') },
-              { key: 'delete', label: t('common.delete') },
-            ],
-            onSelect: (key: string) => {
-              if (key === 'addChild') openAdd(r.id)
-              else if (key === 'copy') openCopy(r)
-              else onDelete(r)
-            },
-          },
-          () => h(NButton, { size: 'small', quaternary: true }, () => t('common.more')),
-        ),
-      ]),
+    render: (r) => {
+      // 每个操作按各自权限码显隐;更多▾下拉只保留已授权项,全无则不出下拉。
+      const dropdownOptions = [
+        authStore.hasPerm('POST:/api/v1/sys/org/add') ? { key: 'addChild', label: t('org.addChild') } : null,
+        authStore.hasPerm('POST:/api/v1/sys/org/{id}/copy') ? { key: 'copy', label: t('org.copy') } : null,
+        authStore.hasPerm('DELETE:/api/v1/sys/org/{id}') ? { key: 'delete', label: t('common.delete') } : null,
+      ].filter((o): o is { key: string; label: string } => o !== null)
+      return h(NSpace, { size: 2, wrapItem: false, justify: 'center' }, () => [
+        authStore.hasPerm('PUT:/api/v1/sys/org/{id}')
+          ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit'))
+          : null,
+        dropdownOptions.length
+          ? h(
+              NDropdown,
+              {
+                trigger: 'click',
+                options: dropdownOptions,
+                onSelect: (key: string) => {
+                  if (key === 'addChild') openAdd(r.id)
+                  else if (key === 'copy') openCopy(r)
+                  else onDelete(r)
+                },
+              },
+              () => h(NButton, { size: 'small', quaternary: true }, () => t('common.more')),
+            )
+          : null,
+      ])
+    },
   },
 ]
 </script>
@@ -211,7 +221,7 @@ const columns: ProTableColumn<Tree<SysOrg>>[] = [
           </template>
           {{ allExpanded ? t('common.collapseAll') : t('common.expandAll') }}
         </n-button>
-        <n-button type="primary" @click="openAdd(0)">
+        <n-button v-auth="'POST:/api/v1/sys/org/add'" type="primary" @click="openAdd(0)">
           <template #icon><AppIcon icon="ph:plus" :size="16" /></template>{{ t('common.add') }}
         </n-button>
       </template>

@@ -13,12 +13,14 @@ import FormContainer from '@/components/FormContainer/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { positionApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import type { PositionInput, SysPosition } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
+const authStore = useAuthStore()
 const tableRef = ref<ProTableInst<SysPosition>>()
 
 // 行数据 → 完整入参:openEdit 回填与 StatusSwitch 行内改状态共用(后端无独立启停端点,均走全量 update)。
@@ -35,6 +37,7 @@ const columns: ProTableColumn<SysPosition>[] = [
     render: (r) =>
       h(StatusSwitch, {
         value: r.enabled,
+        disabled: !authStore.hasPerm('PUT:/api/v1/sys/position/{id}'),
         request: (next: boolean) => positionApi.update(r.id, { ...toInput(r), enabled: next }),
         'onUpdate:value': (v: boolean) => {
           r.enabled = v
@@ -49,20 +52,24 @@ const columns: ProTableColumn<SysPosition>[] = [
     hideInSetting: true,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () =>
-              run(() => positionApi.remove(r.id), t('position.deleted')).then((ok) => {
-                if (ok) tableRef.value?.refresh()
-              }),
-          },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
-            default: () => t('position.deleteConfirm', { name: r.name }),
-          },
-        ),
+        authStore.hasPerm('PUT:/api/v1/sys/position/{id}')
+          ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit'))
+          : null,
+        authStore.hasPerm('DELETE:/api/v1/sys/position/{id}')
+          ? h(
+              NPopconfirm,
+              {
+                onPositiveClick: () =>
+                  run(() => positionApi.remove(r.id), t('position.deleted')).then((ok) => {
+                    if (ok) tableRef.value?.refresh()
+                  }),
+              },
+              {
+                trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
+                default: () => t('position.deleteConfirm', { name: r.name }),
+              },
+            )
+          : null,
       ]),
   },
 ]

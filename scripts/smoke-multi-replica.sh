@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# 双副本冒烟:验的是第六批那几条**只在两个副本同时在线时才暴露**的保证。
-# 单副本跑一万遍也照不出这些问题,所以这个脚本是本批唯一的真实证据。
+# Dual-replica smoke test: verifies the batch-6 guarantees that **only surface when two
+# replicas are online at the same time**. Running a single replica ten thousand times would
+# never reveal these issues, so this script is the only real evidence for this batch.
 #
-# 用法(先把栈起起来):
+# Usage (bring the stack up first):
 #   docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --build
 #   scripts/smoke-multi-replica.sh [base-url]
 #
-# 每条断言都对着一个具体的 bug,失败信息里直说"没修好之前会是什么样"。
+# Every assertion targets a specific bug; failure messages spell out exactly "what it would
+# look like if this weren't fixed."
 set -uo pipefail
 
 BASE="${1:-http://localhost:8080}"
@@ -16,7 +18,8 @@ FAILURES=0
 pass() { echo "  ✅ $1"; }
 fail() { echo "  ❌ $1"; FAILURES=$((FAILURES + 1)); }
 
-# 注意别写成 ${3:+-d "$3"} —— 那种展开会把内层引号当字面量再按空格切词,JSON 会被切碎。
+# Note: don't write this as ${3:+-d "$3"} -- that expansion treats the inner quotes as
+# literal characters and word-splits on spaces, which would shred the JSON.
 api() {   # method path [body]
   if [ $# -ge 3 ]; then
     curl -s -X "$1" "$BASE$2" -H 'Content-Type: application/json' -d "$3"
@@ -24,7 +27,7 @@ api() {   # method path [body]
     curl -s -X "$1" "$BASE$2" -H 'Content-Type: application/json'
   fi
 }
-code() {  # method path [token] → 只回状态码
+code() {  # method path [token] -> returns only the status code
   if [ $# -ge 3 ]; then
     curl -s -o /dev/null -w '%{http_code}' -X "$1" "$BASE$2" -H "Authorization: Bearer $3"
   else
@@ -33,9 +36,10 @@ code() {  # method path [token] → 只回状态码
 }
 login() { api POST /api/v1/auth/login "{\"account\":\"$1\",\"password\":\"$2\"}"; }
 
-# 点分路径取值(数字段即下标):... | json data.accessToken / data.items.0.ip
-# 别用 eval('d$1') —— 传进去的 ['data'] 里的单引号会把 -c 的字符串提前截断,
-# Python 语法错误再被 2>/dev/null 吞掉,于是静默返回空(排查半天的那种)。
+# Dotted-path value lookup (numeric segments are indices): ... | json data.accessToken / data.items.0.ip
+# Don't use eval('d$1') -- the single quotes inside the passed-in ['data'] would prematurely
+# terminate the -c string, the resulting Python syntax error would get swallowed by 2>/dev/null,
+# and it would silently return empty (the kind of bug that takes forever to track down).
 json() {
   python3 -c '
 import sys, json
@@ -46,7 +50,7 @@ print(doc if doc is not None else "")
 ' "$1" 2>/dev/null
 }
 
-# JWT 的 sid claim(会话号):强退要用它。base64url 补齐后解 payload。
+# The JWT's sid claim (session id): needed for force-logout. Pad the base64url payload before decoding.
 jwt_sid() {
   python3 - "$1" <<'PY'
 import base64, json, sys
@@ -56,11 +60,15 @@ print(json.loads(base64.urlsafe_b64decode(payload))['sid'])
 PY
 }
 
-echo "== 0. 等待就绪 =="
-# 必须等**两个副本都**就绪。/health 也是经 Caddy 轮询的,所以"探一次成功"什么都不说明:
-# 很可能只是轮到了先起来的那个副本。(CI 上就这么翻过车:第一次探测轮到已就绪的 app 于是 break,
-# 紧接着的复查轮到刚启动的 app2,直接判"栈没起来"。本地因为 app2 早跑热了,永远照不出来。)
-# 连续 STREAK 次都 Healthy 才算数 —— 轮询下这个次数足以覆盖到每个副本。
+echo "== 0. wait for readiness =="
+# Must wait for **both** replicas to be ready. /health is also round-robined through Caddy,
+# so "one successful probe" proves nothing -- it likely just happened to hit whichever replica
+# came up first. (This is exactly how CI flipped over before: the first probe hit the
+# already-ready app and broke out, then the immediate re-check hit app2 which had just
+# started, and the run was declared "stack not up." Locally app2 always warms up early, so
+# this never showed up there.)
+# Only counts once STREAK consecutive checks come back Healthy -- under round-robin, this
+# count is enough to cover every replica.
 STREAK_NEEDED=8
 STREAK=0
 for i in $(seq 1 120); do
@@ -72,55 +80,61 @@ for i in $(seq 1 120); do
     sleep 2
   fi
 done
-[ "$STREAK" -ge "$STREAK_NEEDED" ] || { echo "❌ 两个副本没有同时就绪"; exit 1; }
-pass "两个副本经 Caddy 就绪"
+[ "$STREAK" -ge "$STREAK_NEEDED" ] || { echo "❌ Both replicas were not ready at the same time"; exit 1; }
+pass "Both replicas are ready via Caddy"
 
-echo "== 1. 强制下线跨副本立即生效 =="
-# 进程内缓存下这条会挂:副本 A 强退只清了 A 自己的内存,B 那份 session:{sid} 还在
-# (TTL = 刷新令牌寿命,天级)→ 经 LB 轮询时约一半请求仍然放行,而且一放就是好几天。
+echo "== 1. Force-logout takes effect immediately across replicas =="
+# This would fail with in-process caching: force-logout on replica A only clears A's own
+# memory, while B's session:{sid} entry is still there (TTL = refresh-token lifetime, on the
+# order of days) -> with LB round-robin, roughly half the requests would still be let through,
+# and they'd keep being let through for days.
 ADMIN_TOKEN=$(login superAdmin "$ADMIN_PASSWORD" | json data.accessToken)
 VICTIM_TOKEN=$(login superAdmin "$ADMIN_PASSWORD" | json data.accessToken)
-[ -n "$ADMIN_TOKEN" ] && [ -n "$VICTIM_TOKEN" ] || { echo "❌ 登录失败,后面没法测"; exit 1; }
+[ -n "$ADMIN_TOKEN" ] && [ -n "$VICTIM_TOKEN" ] || { echo "❌ Login failed, can't proceed with the rest of the test"; exit 1; }
 
 VICTIM_SID=$(jwt_sid "$VICTIM_TOKEN")
 
-# **先把两个副本都焐热**:会话缓存是读穿透的(未命中才查库并回填),受害会话若只被用过一次,
-# 就只有一个副本缓存了它 —— 另一个副本从没缓存过,强退后它一查库自然就 401 了。
-# 那样这条断言会**因为错误的理由通过**,进程内缓存的洞根本照不出来(实测踩过)。
-# 打满一轮让两个副本都把 session:{sid} 收进各自的缓存,强退才有东西可"漏"。
+# **Warm up both replicas first**: session caching is read-through (only queries the DB and
+# backfills on a miss), so if the victim session were only used once, just one replica would
+# have it cached -- the other replica, having never cached it, would naturally return 401 on
+# its own DB lookup after force-logout. That would make this assertion **pass for the wrong
+# reason**, completely missing the in-process-cache hole (this has actually happened in
+# practice). Run a full round so both replicas pick up session:{sid} into their own cache --
+# only then is there actually something to "leak" on force-logout.
 WARM_OK=0
 for i in $(seq 1 8); do
   [ "$(code GET "/api/v1/sys/user/page?Current=1&Size=1" "$VICTIM_TOKEN")" = "200" ] && WARM_OK=$((WARM_OK + 1))
 done
 [ "$WARM_OK" -eq 8 ] \
-  && pass "受害会话强退前在两个副本上均可用(缓存已焐热)" \
-  || fail "受害会话强退前就不稳定($WARM_OK/8)—— 前提不成立"
+  && pass "Victim session works on both replicas before force-logout (cache warmed up)" \
+  || fail "Victim session was already unstable before force-logout ($WARM_OK/8) -- precondition not met"
 
 curl -s -X DELETE "$BASE/api/v1/sys/session/$VICTIM_SID" -H "Authorization: Bearer $ADMIN_TOKEN" > /dev/null
 
 STILL_OK=0
-for i in $(seq 1 12); do   # 经 LB 轮询打到两个副本;只要有一个副本还认这个会话就会漏
+for i in $(seq 1 12); do   # round-robined across both replicas by the LB; leaks if even one replica still honors this session
   [ "$(code GET "/api/v1/sys/user/page?Current=1&Size=1" "$VICTIM_TOKEN")" = "200" ] && STILL_OK=$((STILL_OK + 1))
 done
 [ "$STILL_OK" -eq 0 ] \
-  && pass "强退后 12 次请求全部 401(两个副本都立刻失效)" \
-  || fail "强退后仍有 $STILL_OK/12 次请求被放行 —— 另一个副本还在拿旧缓存放人(进程内缓存的典型症状)"
+  && pass "All 12 requests got 401 after force-logout (both replicas invalidated immediately)" \
+  || fail "$STILL_OK/12 requests were still let through after force-logout -- the other replica is still admitting on a stale cache entry (classic symptom of in-process caching)"
 
 [ "$(code GET "/api/v1/sys/user/page?Current=1&Size=1" "$ADMIN_TOKEN")" = "200" ] \
-  && pass "只踢掉了目标会话,管理员会话不受影响" || fail "把不该踢的会话也踢了"
+  && pass "Only the target session was kicked; the admin's session was unaffected" || fail "A session that shouldn't have been kicked got kicked too"
 
-echo "== 2. 登录锁定阈值不随副本数翻倍 =="
-# 各副本各数各的话,阈值就成了 N × MaxFailCount(默认 5 → 两副本 10)。
+echo "== 2. Login lockout threshold doesn't double with replica count =="
+# If each replica counts independently, the threshold effectively becomes N x MaxFailCount (default 5 -> 10 with two replicas).
 LOCK_ACCOUNT="smoke-lock-$RANDOM"
 for i in $(seq 1 5); do login "$LOCK_ACCOUNT" "wrong-password-$i" > /dev/null; done
 LOCK_CODE=$(login "$LOCK_ACCOUNT" "wrong-password-6" | json code)
 [ "$LOCK_CODE" = "40004" ] \
-  && pass "5 次失败(轮询打到两个副本)后即锁定(40004)" \
-  || fail "第 6 次仍未锁定(拿到 $LOCK_CODE,期望 40004)—— 失败计数没跨副本共享,阈值被翻倍成 10"
+  && pass "Locked out after 5 failures (round-robined across both replicas) (40004)" \
+  || fail "Still not locked out on the 6th attempt (got $LOCK_CODE, expected 40004) -- failure count isn't shared across replicas, so the threshold was doubled to 10"
 
-echo "== 3. 两个副本用不同的雪花机器号 =="
-# 同号 = 同毫秒发号撞主键(数据损坏级,且今天是静默发生的)。
-# 从登录日志的行 Id 里把机器号解出来:workerId = (id >> 6) & 63(SnowflakeIdGenerator 的位布局)。
+echo "== 3. The two replicas use different snowflake worker ids =="
+# Same worker id = colliding primary keys when issued in the same millisecond (data-corruption
+# grade, and it happens silently). Decode the worker id out of the login log's row Id:
+# workerId = (id >> 6) & 63 (per SnowflakeIdGenerator's bit layout).
 WORKERS=$(curl -s "$BASE/api/v1/sys/log/login/page?Current=1&Size=50" -H "Authorization: Bearer $ADMIN_TOKEN" \
   | python3 -c "
 import sys,json
@@ -128,26 +142,28 @@ items = json.load(sys.stdin)['data']['items']
 print(' '.join(sorted({str((int(i['id']) >> 6) & 63) for i in items})))")
 WORKER_COUNT=$(echo "$WORKERS" | wc -w)
 [ "$WORKER_COUNT" -ge 2 ] \
-  && pass "登录日志的行 Id 里出现了 $WORKER_COUNT 个不同的机器号($WORKERS)—— 两个副本确实各发各的号" \
-  || fail "只出现了机器号 [$WORKERS] —— 两个副本共用同一个 WorkerId,同毫秒发号就会撞主键"
+  && pass "$WORKER_COUNT distinct worker ids showed up in the login log's row Ids ($WORKERS) -- the two replicas really are issuing IDs independently" \
+  || fail "Only worker id(s) [$WORKERS] showed up -- both replicas share the same WorkerId, so same-millisecond issuance would collide on the primary key"
 
-echo "== 4. 反向代理之后取到的是真实客户端 IP =="
-# 不解析 X-Forwarded-For 的话,所有请求看起来都来自 Caddy 容器那一个 IP:
-# 全体用户共享一个限流桶,登录日志里的 IP 列也全是代理地址(审计作废)。
+echo "== 4. The real client IP is captured after the reverse proxy =="
+# Without parsing X-Forwarded-For, every request appears to come from the Caddy container's
+# single IP: all users would share one rate-limit bucket, and the IP column in the login log
+# would be nothing but proxy addresses (audit trail voided).
 PROXY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q web)" 2>/dev/null)
 LOG_IP=$(curl -s "$BASE/api/v1/sys/log/login/page?Current=1&Size=1" -H "Authorization: Bearer $ADMIN_TOKEN" | json data.items.0.ip)
 if [ -z "$PROXY_IP" ]; then
-  echo "  ⚠️  拿不到 Caddy 容器 IP,跳过本条(不算通过)"
+  echo "  ⚠️  Could not get the Caddy container's IP, skipping this check (not counted as a pass)"
 elif [ "$LOG_IP" != "$PROXY_IP" ] && [ -n "$LOG_IP" ]; then
-  pass "登录日志记的是客户端 IP($LOG_IP),不是代理 IP($PROXY_IP)"
+  pass "The login log recorded the client IP ($LOG_IP), not the proxy IP ($PROXY_IP)"
 else
-  fail "登录日志记的是代理 IP($LOG_IP)—— X-Forwarded-For 没被采信,按 IP 限流形同虚设"
+  fail "The login log recorded the proxy IP ($LOG_IP) -- X-Forwarded-For was not honored, making IP-based rate limiting meaningless"
 fi
 
-echo "== 5. 限流阈值是整个集群的,不是每副本一份 =="
-# 计数留在进程内的话,N 个副本 = N × 阈值(认证桶默认 20/min,两副本就是 40/min),
-# §14 的爆破基线被静默削半。等窗口翻篇后再打,免得被上面那些认证请求污染计数。
-echo "  (等 61 秒让固定窗口翻篇…)"
+echo "== 5. The rate-limit threshold is cluster-wide, not per replica =="
+# If the count stays in-process, N replicas = N x the threshold (auth bucket defaults to
+# 20/min, so two replicas would allow 40/min), silently halving the §14 brute-force baseline.
+# Wait for the fixed window to roll over first, so it isn't polluted by the auth requests above.
+echo "  (waiting 61s for the fixed window to roll over...)"
 sleep 61
 OK_COUNT=0; LIMITED=0
 for i in $(seq 1 40); do
@@ -156,15 +172,15 @@ for i in $(seq 1 40); do
   [ "$C" = "429" ] && LIMITED=$((LIMITED + 1))
 done
 if [ "$OK_COUNT" -le 20 ] && [ "$LIMITED" -gt 0 ]; then
-  pass "40 次认证请求里只放行了 $OK_COUNT 次(≤20 的集群阈值),$LIMITED 次被限"
+  pass "Only $OK_COUNT of 40 auth requests were let through (<= the cluster threshold of 20), $LIMITED were rate-limited"
 else
-  fail "放行了 $OK_COUNT 次(期望 ≤20)、被限 $LIMITED 次 —— 计数没跨副本共享,阈值被翻倍成 40"
+  fail "$OK_COUNT requests were let through (expected <= 20), $LIMITED were rate-limited -- the count isn't shared across replicas, so the threshold was doubled to 40"
 fi
 
 echo
 if [ "$FAILURES" -eq 0 ]; then
-  echo "✅ 双副本冒烟全部通过"
+  echo "✅ Dual-replica smoke test: all checks passed"
 else
-  echo "❌ $FAILURES 条断言失败"
+  echo "❌ $FAILURES assertion(s) failed"
   exit 1
 fi
