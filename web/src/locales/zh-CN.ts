@@ -371,6 +371,12 @@ export default {
         type: '验证码类型',
         types: { char: '字符', path: '描边(更抗爬)', math: '算术' },
       },
+      sms: {
+        title: '短信验证',
+        hint: '二次验证仅对绑定了手机号的用户生效;开发环境验证码打印在后端日志,生产需注册真实短信通道(ISmsSender)。',
+      },
+      mfa: { enabled: '启用短信二次验证' },
+      smsLogin: { enabled: '启用短信验证码登录' },
       rateLimit: {
         title: '请求限流',
         enabled: '启用请求限流',

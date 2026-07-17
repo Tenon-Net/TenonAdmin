@@ -368,6 +368,12 @@ export default {
         type: 'Captcha type',
         types: { char: 'Characters', path: 'Stroke (anti-scrape)', math: 'Arithmetic' },
       },
+      sms: {
+        title: 'SMS verification',
+        hint: 'The second factor only applies to users with a bound phone; in development, codes are printed to the backend log — production requires a real SMS provider (ISmsSender).',
+      },
+      mfa: { enabled: 'Enable SMS second factor' },
+      smsLogin: { enabled: 'Enable SMS code sign-in' },
       rateLimit: {
         title: 'Rate limiting',
         enabled: 'Enable rate limiting',

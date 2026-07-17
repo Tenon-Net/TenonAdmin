@@ -36,6 +36,10 @@ const BOOL_FIELDS = [
 const CAPTCHA_KEY = 'sys.security.captcha.enabled'
 // 验证码类型(字符串枚举:char 字符 / path 描边更抗爬 / math 算术)
 const CAPTCHA_TYPE_KEY = 'sys.security.captcha.type'
+// 短信验证两开关(§14 登录加固):二次验证(密码后再验短信码)/ 免密登录(手机号+码)。
+// 发送经 ISmsSender,内核默认只写日志——生产须由消费方注册真实短信通道。
+const SMS_MFA_KEY = 'sys.security.mfa.enabled'
+const SMS_LOGIN_KEY = 'sys.security.smsLogin.enabled'
 // 限流开关(单独成节;阈值走 NUM_FIELDS)
 const RATELIMIT_KEY = 'sys.security.rateLimit.enabled'
 
@@ -59,6 +63,8 @@ onMounted(async () => {
     for (const k of BOOL_FIELDS) bools[k] = map.get(k) === 'true'
     bools[CAPTCHA_KEY] = map.get(CAPTCHA_KEY) === 'true'
     captchaType.value = map.get(CAPTCHA_TYPE_KEY) || 'char'
+    bools[SMS_MFA_KEY] = map.get(SMS_MFA_KEY) === 'true'
+    bools[SMS_LOGIN_KEY] = map.get(SMS_LOGIN_KEY) === 'true'
     bools[RATELIMIT_KEY] = map.get(RATELIMIT_KEY) === 'true'
   } catch (e) {
     message.error(translateError(e))
@@ -76,6 +82,8 @@ async function save() {
       ...BOOL_FIELDS.map((k) => ({ configKey: k, configValue: String(bools[k]) })),
       { configKey: CAPTCHA_KEY, configValue: String(bools[CAPTCHA_KEY]) },
       { configKey: CAPTCHA_TYPE_KEY, configValue: captchaType.value },
+      { configKey: SMS_MFA_KEY, configValue: String(bools[SMS_MFA_KEY]) },
+      { configKey: SMS_LOGIN_KEY, configValue: String(bools[SMS_LOGIN_KEY]) },
       { configKey: RATELIMIT_KEY, configValue: String(bools[RATELIMIT_KEY]) },
     ])
     message.success(t('config.saved'))
@@ -133,6 +141,18 @@ async function save() {
         </n-form-item-gi>
       </n-grid>
 
+      <n-divider title-placement="left">{{ t('config.security.sms.title') }}</n-divider>
+      <n-grid :cols="'1 s:2'" responsive="screen" :x-gap="32" :y-gap="0">
+        <n-form-item-gi :label="label('sys.security.mfa.enabled')">
+          <n-switch v-model:value="bools[SMS_MFA_KEY]" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="label('sys.security.smsLogin.enabled')">
+          <n-switch v-model:value="bools[SMS_LOGIN_KEY]" />
+        </n-form-item-gi>
+      </n-grid>
+      <!-- 短信通道提示:内核默认 LoggingSmsSender 只写日志,生产须注册真实 ISmsSender -->
+      <p class="sms-hint">{{ t('config.security.sms.hint') }}</p>
+
       <n-divider title-placement="left">{{ t('config.security.rateLimit.title') }}</n-divider>
       <n-grid :cols="'1 s:2'" responsive="screen" :x-gap="32" :y-gap="0">
         <n-form-item-gi :label="label('sys.security.rateLimit.enabled')">
@@ -157,3 +177,12 @@ async function save() {
     </n-form>
   </n-spin>
 </template>
+
+<style scoped>
+/* 短信节的通道提示:弱化色说明行,置于开关与下一分组之间 */
+.sms-hint {
+  margin: -6px 0 12px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+</style>
