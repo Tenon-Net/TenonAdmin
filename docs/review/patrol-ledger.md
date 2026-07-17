@@ -1,25 +1,13 @@
 # 巡检台账
 
-last-seen: f1a7e82
+last-seen: f77d687
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
 <!-- 后端已排空;以下为前端(§2.* + 契约轴) -->
-- web/src/components/Chart/BarChart.vue
-- web/src/components/Chart/README.md
-- web/src/components/CodeBlock/README.md
-- web/src/components/CodeBlock/index.vue
-- web/src/components/DictCheckbox/README.md
-- web/src/components/DictCheckbox/index.vue
-- web/src/components/DictRadio/README.md
-- web/src/components/DictRadio/index.vue
 - web/src/components/DictSelect/README.md
-- web/src/components/JsonEditor/README.md
-- web/src/components/JsonEditor/index.vue
-- web/src/components/RoleSelect/README.md
-- web/src/components/RoleSelect/index.vue
 - web/src/components/UserPicker/index.vue
 - web/src/composables/useModule.spec.ts
 - web/src/composables/useModule.ts
@@ -94,3 +82,5 @@ dry-streak: 0
 ### 第 6 轮 — 后端规范轴 · 扫了 DatabaseInitializer.cs / SysSchemaVersion.cs / ISeedData.cs(后端队列排空)· 两合规(SysSchemaVersion 置于 SqlSugar 层是被迫的正确——同层 DatabaseInitializer 需引用其 Current 做版本闸门,放 Services 会致 SqlSugar→Services 逆向依赖;ISeedData 契约文档详尽);DatabaseInitializer.cs:82 §1.11-DateTime.Now 并入 J1 覆盖(schema 版本审计戳,internal sealed 无子类顾虑)→ 记账轮不跑闸门。队列剩 59(纯前端)。NEXT: 后端已排空,轮到前端 §2.* + 契约轴,队首 5 个(api/index.spec.ts / api/index.ts / api/schema.d.ts / components/ApiSelect/README.md / components/ApiSelect/index.vue)。
 
 ### 第 7 轮 — 前端规范轴 + 契约轴 · 扫了 api/index.spec.ts / api/index.ts / api/schema.d.ts(6485 行生成物)/ ApiSelect/README.md / ApiSelect/index.vue · 全合规(api/index.ts §2.1 自留地接缝完整、§2.2 域分组 + toPage 归一 + PascalCase 查询参;ApiSelect 竞态守卫/防抖/无硬编码文案;契约轴:api↔schema 由 typecheck 兜住,抽查 password-policy/unread-count/read-all/role-users 4 最新端点均在 schema.d.ts,无漂移;recycle 的 as any 为动态 {type} 路由已知逃生)。无闸门。队列剩 54。NEXT: 前端队首 5 个(Chart/BarChart.vue / Chart/README.md / CodeBlock/README.md / CodeBlock/index.vue / DictCheckbox/README.md)。
+
+### 第 8 轮 — 前端规范轴 + 契约轴 · 批次 Chart/BarChart.vue(已删)/ Chart/README.md / CodeBlock/README.md / CodeBlock/index.vue / DictCheckbox/README.md(已删)· 3 存活全合规(CodeBlock §2.7 用 t('common.copy'/'common.copied') 且双语 en/zh 均在、§2.9 scoped + 主题变量;两 README 文档准确)。查明批次含 2 个 + 队列另 7 个同族零消费者组件(DictCheckbox/index、DictRadio×2、JsonEditor×2、RoleSelect×2、Chart/BarChart)已被 05d0a42「remove zero-consumer components」删除 → 一并清出队列(队列卫生,非扫描)。无闸门。队列剩 42。NEXT: 前端队首 5 个(DictSelect/README.md / UserPicker/index.vue / composables/useModule.spec.ts / composables/useModule.ts / directives/auth.ts)。
