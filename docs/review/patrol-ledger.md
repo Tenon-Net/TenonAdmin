@@ -1,12 +1,14 @@
 # 巡检台账
 
-last-seen: b322c10
-last-tree: c658ff1
-dry-streak: 2
+last-seen: 5273588
+last-tree: 1a5538c
+dry-streak: 0
 
 ## 待扫
 
-<!-- 空(第 21 轮空转):85cf36e..b322c10 三提交(round-20 台账 / 7b298cb 0.1.2 发版准备:changelog+web 版本号〔走 package.json 注入,非 web/src〕/ b322c10 发版 runbook)均不碰 backend/src·web/src,门控无入队。真实代码全扫完。等新代码提交(last-seen b322c10 之后)或新工作区变更(last-tree c658ff1 变化)入队。 -->
+- backend/src/TenonAdmin.Core/Security/ISmsSender.cs  <!-- 工作区·未跟踪·避让;第 22 轮入队 6 个后端文件、只取队首 5,此为余 1,下轮扫 -->
+
+<!-- 第 22 轮入队(b322c10..5273588 已提交 2 + 工作区 4):BaseEntity/SqlSugarSetup〔已提交,已扫〕、CacheKeys/ErrorCode/AdminSecurityOptions〔工作区避让,已扫〕、ISmsSender〔工作区避让,余 1 待扫〕。SMS/MFA 特性正在工作区长(见轮 22 WATCH)。 -->
 
 ## 待裁决
 
@@ -73,3 +75,9 @@ menu/index.vue 主表对每个动作严格 v-auth/hasPerm(增/改/删/启停,lin
 ### 第 20 轮 — 空转轮 · 门控:bb199f6..HEAD 对 backend/src·web/src 差异为空、工作区干净、哈希仍 c658ff1。区间内唯一新提交 85cf36e 为纯文档站(site/guide getting-started/sync-fork degit 快照上手方式),不碰代码故无入队。队列空 → dry-streak 0→1,last-seen→85cf36e、last-tree 保持 c658ff1。不扫代码、不跑闸门。退避 min(3600,900·2¹)=1800s。队列剩 0。NEXT: 1800s 后重跑门控;仍无 backend/src·web/src 新增则 dry-streak→2(退避 3600s 封顶);等真实代码提交或工作区变更破空转。
 
 ### 第 21 轮 — 空转轮 · 门控:85cf36e..HEAD(=b322c10)对 backend/src·web/src 差异为空、工作区干净、哈希仍 c658ff1。区间三提交均不碰代码:67741fe(round-20 台账)、7b298cb(chore(release) 0.1.2 发版准备——changelog + web 版本号,版本号走 package.json 经 Vite define 注入前端、非 web/src 源码)、b322c10(发版 runbook 文档)。队列空 → dry-streak 1→2,last-seen→b322c10、last-tree 保持 c658ff1。不扫代码、不跑闸门。退避 min(3600,900·2²)=3600s(已封顶)。队列剩 0。NEXT: 3600s 后重跑门控;dry-streak≥2 起退避恒封顶 3600s(streak 仍会 3、4… 递增,退避不变);等真实代码提交或工作区变更即归 0 破空转。注:0.1.2 已切版但零代码改动(纯文档 + 版本元数据),巡检面无新增。
+
+### 第 22 轮 — 后端规范轴 + ponytail · 扫了 BaseEntity.cs / SqlSugarSetup.cs〔已提交 5273588〕/ CacheKeys.cs / ErrorCode.cs / AdminSecurityOptions.cs〔工作区·避让记账〕· 全合规。门控破空转:b322c10..5273588 已提交 2(PrimaryId 特性)+ 工作区 4(SMS/MFA 半成品),dry-streak 2→0、last-seen→5273588、last-tree→1a5538c。
+  · 已提交 PrimaryId 基类(#8):抽出仅雪花主键基类给无审计明细/子表,BaseEntity:PrimaryId,AOP 匹配 BaseEntity.Id→PrimaryId.Id(同串 "Id",BaseEntity:PrimaryId 故老实体全覆盖 + 明细表插入自动填号,无回归);类级 XML + 取舍(IRepository/ISeedData 仍约束 BaseEntity、明细经 ISqlSugarClient 随主表读写)完整。PrimaryId.Id 无 XML summary 但沿本文件既有列注释惯例(全部列走 SugarColumn.ColumnDescription、零 XML summary)→ 与 5 兄弟列一致非 round-1 式孤例,合规不报。ponytail「暂放 SqlSugar 层待 Core POCO 化再迁」天花板本 diff 未触达、静默。
+  · 工作区(避让·不改):短信 OTP/MFA 登录加固半成品——CacheKeys 加 sms/mfa 键(冒号命名空间 + 日期编键自过期,合 §1.8)、ErrorCode 加 40009-40012(smsCodeRequired/Wrong/Expired/smsLoginDisabled 均带 [MsgKey])、AdminSecurityOptions 加 AdminSmsOtpOptions(DB 键 mfa.enabled/smsLogin.enabled 兜底 + 部署期数值,合验证码成法);孤立看均合规,但服务/控制器/前端 i18n 均未落。
+  · 无机械修、无新判断题 → 记账轮不跑闸门。队列剩 1(ISmsSender.cs 未扫,避让)。
+  · NEXT【契约轴 WATCH·SMS/MFA】特性一旦提交,复扫 ErrorCode/AdminSecurityOptions 时必验:① 4 个新错误码 error.auth.{smsCodeRequired,smsCodeWrong,smsCodeExpired,smsLoginDisabled} 的 zh-CN+en-US i18n 键补齐(ErrorCodeLocaleConsistencyTests 会当场红,漏则机械题);② 新 DB 配置键 sys.security.mfa.enabled / sys.security.smsLogin.enabled 若前端 SecurityConfig.vue 加了开关须字对齐(参轮 13 成法)。下轮:扫 ISmsSender.cs + 届时新提交入队的 SMS 服务/控制器文件。
