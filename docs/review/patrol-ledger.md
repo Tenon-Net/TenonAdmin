@@ -1,17 +1,12 @@
 # 巡检台账
 
-last-seen: 988dcd7
+last-seen: 8876dcd
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
 <!-- 后端已排空;以下为前端(§2.* + 契约轴) -->
-- web/src/views/system/module/index.vue
-- web/src/views/system/notice/index.vue
-- web/src/views/system/org/index.vue
-- web/src/views/system/position/index.vue
-- web/src/views/system/recycle/index.vue
 - web/src/views/system/role/components/GrantMenuTable.vue
 - web/src/views/system/role/index.vue
 - web/src/views/system/session/index.vue
@@ -72,3 +67,5 @@ menu/index.vue 主表对每个动作严格 v-auth/hasPerm(增/改/删/启停,lin
 ### 第 13 轮 — 前端规范轴 + 契约轴 · 扫了 module/index.vue / personal/profile.vue / personal/sessions.vue / config/OtherConfig.vue / config/SecurityConfig.vue · 全合规(文本走 t()、scoped+CSS 变量、module 卡片 role/tabindex/键盘激活 a11y、v-auth+hasPerm 双重门)。契约轴重点:SecurityConfig 硬编码 config key 逐一核对后端权威常量——rateLimit.* = AdminRateLimitOptions(AdminSecurityOptions.cs:60-63)、captcha.enabled/type = CaptchaService.cs:16/19、loginLock/password/session.* = SecurityPolicyProvider,全字匹配零漂移;动态构造 config.security.* 24 个 i18n 标签全在且 en==zh。无闸门。队列剩 17。NEXT: 前端队首 5 个(system/dict/index.vue / file/index.vue / log/op/index.vue / menu/ButtonManager.vue / menu/index.vue)。
 
 ### 第 14 轮 — 前端规范轴 + 契约轴 · 扫了 dict/index.vue / file/index.vue / log/op/index.vue / menu/ButtonManager.vue / menu/index.vue · 四合规(dict 主从竞态守卫 + dictStore.invalidate 全覆盖 + switch/按钮 stopPropagation;file blob 下载 createObjectURL+revoke;log/op UserSelect 精确筛 operatorId + CodeBlock + daterange;menu/index 每动作 v-auth/hasPerm 严格门、menu.* 全键在且 en==zh)。记 1 判断题(J4:ButtonManager 整链路无客户端权限门,与主表不一致,UX-only、服务端兜底)。无闸门。队列剩 12。NEXT: 前端队首 5 个(system/module/index.vue / notice/index.vue / org/index.vue / position/index.vue / recycle/index.vue)。
+
+### 第 15 轮 — 前端规范轴 + 契约轴 · 扫了 module/index.vue / notice/index.vue / org/index.vue / position/index.vue / recycle/index.vue · 全合规(每动作 v-auth/hasPerm 严格门:module 无权退化只读状态标签、org 每操作按码显隐 + OrgTreeSelect 剪子树防成环、recycle restore/purge 双确认;i18n:recycle.tabs.* 8 动态键全在、module/notice/org/position/recycle 命名空间齐备且 en==zh)。无闸门。队列剩 7。NEXT: 前端队首(role/GrantMenuTable.vue / role/index.vue / session/index.vue / user/index.vue + 工作区 locales/index.ts〔避让记账〕)。
