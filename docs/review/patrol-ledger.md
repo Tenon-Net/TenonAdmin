@@ -1,17 +1,12 @@
 # 巡检台账
 
-last-seen: 9519ebd
+last-seen: fe4e14b
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
 <!-- 后端队首(先排空后端,再轮到前端) -->
-- backend/src/TenonAdmin.Core/Security/ISecurityPolicyProvider.cs
-- backend/src/TenonAdmin.Services/Auth/AuthService.cs
-- backend/src/TenonAdmin.Services/Entities/SysModule.cs
-- backend/src/TenonAdmin.Services/Entities/SysNotice.cs
-- backend/src/TenonAdmin.Services/Entities/SysNoticeReceiver.cs
 - backend/src/TenonAdmin.Services/Entities/SysUser.cs
 - backend/src/TenonAdmin.Services/Module/ModuleModels.cs
 - backend/src/TenonAdmin.Services/Module/ModuleService.cs
@@ -94,8 +89,17 @@ dry-streak: 0
 
 ## 待裁决
 
-（暂无）
+### J1 · §1.11 · 密码过期特性用 `DateTime.Now` 裸调(未走注入的 TimeProvider)
+`LastPasswordChangeTime` 的读写在 5 处直接 `DateTime.Now`:AuthService.cs:98,103(本轮扫到)、UserService.cs:179,267、PersonalService.cs:80。§1.11 要求时间统一走注入的 `TimeProvider`。
+判断题(不擅改)理由:
+- **成系统、跨 3 文件 5 处**:只改 AuthService 两处=症状修,留下另两个服务不一致;根因修要一起动 UserService/PersonalService(不在本轮 5 文件内)。
+- **改扩展点构造签名**:AuthService 是 §5.3 子类化模板(主构造函数),加 `TimeProvider` 形参会 source-break 消费者子类(要补传基构造实参)。
+- **本地 vs UTC 决策**:SessionService.cs:11 明确"统一走 UTC";本特性用 `DateTime.Now`(本地)。收敛时须定夺存本地还是 UTC——影响过期窗口判断,非纯机械替换。
+建议方向:三文件一起改,注入 `TimeProvider`,并由维护者定夺 `GetUtcNow()`(与 SessionService 对齐)还是 `GetLocalNow()`(保现语义)后一次性收敛。
+> 覆盖 UserService.cs / PersonalService.cs 同规则,后续扫到这两文件的 §1.11-DateTime.Now 不再重报。
 
 ## 轮次日志
 
 ### 第 1 轮 — 后端规范轴 · 扫了 PersonalController.cs / DemoModeFilter.cs / TenonAdminSetup.cs / ErrorCode.cs / TenonAdminOptions.cs · 修 TenonAdminOptions.Database 缺失 `/// <summary>`(§0.2/§1.13,11 个同级属性唯一漏标)→ 后端闸门绿(build 0 err，test 267/0/0，commit 9519ebd)。队列剩 82。NEXT: 继续排后端队首 5 个(ISecurityPolicyProvider / AuthService / SysModule / SysNotice / SysNoticeReceiver)。
+
+### 第 2 轮 — 后端规范轴 · 扫了 ISecurityPolicyProvider.cs / AuthService.cs / SysModule.cs / SysNotice.cs / SysNoticeReceiver.cs · 四合规(SysNotice 的 ponytail 正文 2000 上限未被触达,静默);记 1 判断题(J1:密码过期特性 `DateTime.Now` 裸调 §1.11,跨 3 文件 5 处,涉改扩展点构造签名 + UTC/本地决策)→ 记账轮不跑闸门。队列剩 77。NEXT: 继续排后端队首 5 个(SysUser / ModuleModels / ModuleService / NoticeModels / NoticeService)。
