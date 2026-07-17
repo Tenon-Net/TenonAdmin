@@ -8,7 +8,7 @@
 
 ## 批次 A · 前端速赢
 
-- [ ] **A1 路由加载进度条** — `App.vue` 包 `n-loading-bar-provider` + 桥单例 `src/lib/loadingBar.ts`(内嵌 ~10 行桥组件存实例,不用 createDiscreteApi);`router/index.ts` 守卫 start/finish/error(enterInitial 重建菜单与懒加载 chunk 是最有价值时刻)。零依赖。验收:F5 深链/切页可见进度条,typecheck+lint 绿。
+- [x] **A1 路由加载进度条**(b8dfde6) — `App.vue` 包 `n-loading-bar-provider` + 桥单例 `src/lib/loadingBar.ts`(内嵌 ~10 行桥组件存实例,不用 createDiscreteApi);`router/index.ts` 守卫 start/finish/error(enterInitial 重建菜单与懒加载 chunk 是最有价值时刻)。零依赖。验收:F5 深链/切页可见进度条,typecheck+lint 绿。
 - [ ] **A2 Tab 中键关闭 + 用户固定** — `stores/tabs.ts` 加 `pinned?: boolean`,close 系列守卫统一 `affix || pinned`;`TabsBar.vue` 中键关闭(`@auxclick`)+ 右键菜单「固定/取消固定」(`ph:push-pin`),pinned 藏关闭 X;持久化白捡(persist.pick 已含 tabs)。**不做拖拽重排**(soybean 也没有)。⚠ 工作区有在途 `tabs.ts` 未提交改动(用户详情页特性),开工前与维护者确认处置。
 - [ ] **A3 设置抽屉「复制配置」** — `SettingsDrawer.vue` footer 按钮:app store 中 DEFAULTS 同名键当前值 JSON 进剪贴板(VueUse `useClipboard`)+ message 提示「粘贴到 stores/app.ts DEFAULTS 即为新默认」。正中消费者 fork 改默认的模式。**不做主题预设 JSON**(6 色色板+取色器+布局卡片已覆盖其实用面)。
 - [ ] **A4 版本更新通知** — 新建 `composables/useVersionCheck.ts`:`fetch('/index.html', {cache:'no-store'})` 抓 entry `assets/index-*.js` 哈希与当前 document 比对,不一致 → `useDialog` 提示刷新;`useIntervalFn`(5min)+ `useDocumentVisibility` 回前台触发;仅 PROD;「稍后」本轮不再弹;`layouts/default.vue` 挂载(登录页不查)。版本号仍是 Vite define 构建期常量,不能当更新信号——用产物哈希。
@@ -16,7 +16,7 @@
 
 ## 批次 B · 后端 S 级速赢
 
-- [ ] **B1 异常日志** — `ExceptionLogFilter : IExceptionFilter`(注册在 AdminExceptionFilter 之后):非 `AdminException` 落 `sys_exception_log`(Path/HttpMethod/TraceId/ExceptionType/Message 截 2000/StackTrace 截 8000,审计 AOP 补操作人时间),**不置 ExceptionHandled**,500 照旧大声(ErrorCode.cs 既定纪律不动);写入尽力而为。`LogService` + `SysLogController` 加 `exception/page`、`DELETE exception`;前端日志页第三个 tab。纯复制 op/login 三件套。
+- [~] **B1 异常日志**(B1a 后端已落 75becfc;B1b 菜单+前端页+locale 键待并发前端会话平息后补,补时从 KnownUnseededEndpoints 移除两个端点)— `ExceptionLogFilter : IExceptionFilter`(注册在 AdminExceptionFilter 之后):非 `AdminException` 落 `sys_exception_log`(Path/HttpMethod/TraceId/ExceptionType/Message 截 2000/StackTrace 截 8000,审计 AOP 补操作人时间),**不置 ExceptionHandled**,500 照旧大声(ErrorCode.cs 既定纪律不动);写入尽力而为。`LogService` + `SysLogController` 加 `exception/page`、`DELETE exception`;前端日志页第三个 tab。纯复制 op/login 三件套。
 - [ ] **B2 IEmailSender 邮件通道** — 严格镜像 ISmsSender:`Core/Security/IEmailSender`(`SendAsync(to, subject, htmlBody, ct)`);Services 层 `LoggingEmailSender`(默认)+ `SmtpEmailSender`(BCL SmtpClient,`TenonAdmin:Email` Options:Host/Port/From/User/Pass/Ssl;配了 Host 用 SMTP 否则日志)。零表零页面;要现代协议的消费者前置注册 MailKit 实现即接管。
 - [ ] **B3 密码历史防重用** — 表 `sys_password_history`(UserId, PasswordHash);`IPasswordHistoryService`(TryAdd):`EnsureNotReusedAsync`(取最近 N 条逐条 `IPasswordHasher.Verify`——盐不同只能验明文)+ `AppendAsync`(写入裁剪到 N)。开关 `sys.security.password.historyCount`(默认 0=关)走 SecurityPolicyProvider「DB 优先、Options 兜底」通道;挂点:`PersonalService.ChangePasswordAsync`、`UserService.ResetPasswordAsync`,建号初始密码只记录不校验。ErrorCode 42025 PasswordReused。
 - [ ] **B4 T-D7 文件引用根治(零 DDL)** — 秒传改「一引用一行」:`FileService.ChunkInitAsync/ChunkCompleteAsync` 命中同 hash 时不复用既有行,新插 `SysFile`(拷 StoragePath/Hash/Size),各引用方独立记录互删不影响;`FileGcService.ReclaimDeletedFilesAsync` 删盘前查同 StoragePath 是否仍有他行(ClearFilter 含未删),有则只硬删记录跳过 `storage.DeleteAsync`。幂等,与逐行 try/catch 兼容。
@@ -61,5 +61,9 @@
 - 多租户消费者侧 skill 文档(replace-service 姊妹篇):字段级 = 前置替换 IDataScopeProvider + DataEntity 子类基座;库级 = 多 ConfigId。
 
 ## 轮次日志
+
+### 第 2 轮 — B1a 异常日志(后端)· 新 `SysExceptionLog` 表 + `ExceptionLogFilter`(IAsyncExceptionFilter,注册在 AdminExceptionFilter 之后)· 未捕获异常落一行(path/trace/type/message 截2000/stack 截8000 + 操作人回填),显式判 `is AdminException` 跳过业务异常,不设 ExceptionHandled 故 500 照旧 · TestHost 加 DiagController 供集成测 · 3 新测试 + 全量 287/0/0 绿(commit 75becfc)。B1b(菜单种子 + `system/log/exception/index.vue` + locale 键 + 移除 KnownUnseededEndpoints 两端点)待并发前端会话平息。因并发会话正改前端 locale/tabs/useAuthMenu,批次 A 剩余件(A2/A3/A5)与 B1b 一并延后,先推纯后端 B2→B5。NEXT: B2 IEmailSender 邮件通道(纯后端,零前端)。
+
+### 第 1 轮 — A1 路由加载进度条 · `lib/loadingBar.ts` 桥单例(Provider 外守卫可用,未挂载前 no-op)+ App.vue 包 NLoadingBarProvider + router 三守卫 · typecheck/lint 绿,浏览器实测导航后 `.n-loading-bar-container` 入 DOM 带 fade-in(commit b8dfde6)。NEXT: A3 复制配置(A2 与在途 tabs.ts 改动重叠,待确认)。
 
 ### 第 0 轮 — 建账。三方盘点收敛为 A(5)/B(5)/C(2)/D(2)/E(1) 共 15 条;SMS/MFA 特性已落 cd88d78,非本台账范围。工作区另有在途未提交改动(用户详情页 DetailPage/useTabTitle/detailRoutes,涉 tabs.ts/useAuthMenu.ts/COMPONENTS.md)——与 A2/A5 重叠,开工前须确认处置。NEXT: A1 路由加载进度条。
