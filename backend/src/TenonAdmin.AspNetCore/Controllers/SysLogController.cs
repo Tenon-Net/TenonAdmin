@@ -44,4 +44,20 @@ public class SysLogController(ILogService logs) : ControllerBase
         await logs.ClearLoginAsync();
         return Result<bool>.Ok(true);
     }
+
+    /// <summary>分页查询异常日志(按时间倒序)</summary>
+    [HttpGet("exception/page")]
+    [RolePermission]
+    public async Task<Result<PagedList<SysExceptionLog>>> PageException([FromQuery] ExceptionLogPageInput input) =>
+        Result<PagedList<SysExceptionLog>>.Ok(await logs.PageExceptionAsync(input));
+
+    /// <summary>清空异常日志(硬删,不可恢复)</summary>
+    [HttpDelete("exception")]
+    [RolePermission]
+    [OperationLog("清空异常日志")]
+    public async Task<Result<bool>> ClearException()
+    {
+        await logs.ClearExceptionAsync();
+        return Result<bool>.Ok(true);
+    }
 }

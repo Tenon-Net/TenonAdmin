@@ -65,6 +65,9 @@ public class PermissionCodeConsistencyTests
         "GET:/api/v1/sys/org/{id}",
         // GET position/{id}(岗位详情):R6 同理不放详情按钮(编辑用行数据),保留登记。
         "GET:/api/v1/sys/position/{id}",
+        // 异常日志(B1):后端端点先落(仅超管经 API 可用),菜单节点 + 前端页 + i18n 键随 B1b 补齐后从本清单移除。
+        "GET:/api/v1/sys/log/exception/page",
+        "DELETE:/api/v1/sys/log/exception",
     ];
 
     /// <summary>反射内置控制器,按 {大写Method}:/{小写路由模板} 生成所有 [RolePermission] 端点的权限码。</summary>

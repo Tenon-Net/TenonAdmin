@@ -169,6 +169,7 @@ public static class TenonAdminSetup
                 if (options.DemoMode)
                     o.Filters.Add<DemoModeFilter>();
                 o.Filters.Add<AdminExceptionFilter>();
+                o.Filters.Add<ExceptionLogFilter>();   // 未捕获异常旁路留痕(不吞异常,500 照旧);业务异常显式跳过
                 o.Filters.Add<OperationLogFilter>();
                 o.Filters.Add<ResultEnvelopeFilter>();
                 o.Conventions.Add(new DisabledModuleConvention(options.Api));   // 按配置摘除禁用模块的控制器(§5.4)
