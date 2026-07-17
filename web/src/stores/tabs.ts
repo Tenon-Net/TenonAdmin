@@ -10,6 +10,7 @@ export interface TabItem {
   name: string // 路由名 → keep-alive include
   icon?: string
   affix?: boolean // 固定标签(= 当前应用的首页),不可关闭
+  pinned?: boolean // 用户手动固定(右键「固定」);与 affix 同样不可关闭,但可取消固定
   titleFixed?: boolean // setTitle 置真:动态标题(如记录名),addTab 复访不再用 meta.title 覆盖
   noCache?: boolean // meta.noCache:排除出 keep-alive(详情等瞬时页,复访本就该拉新数据)
 }
@@ -53,7 +54,7 @@ export const useTabsStore = defineStore('tabs', {
     },
     removeTab(path: string) {
       const idx = this.tabs.findIndex((t) => t.path === path)
-      if (idx === -1 || this.tabs[idx]!.affix) return
+      if (idx === -1 || this.tabs[idx]!.affix || this.tabs[idx]!.pinned) return
       const wasActive = router.currentRoute.value.path === path
       this.tabs.splice(idx, 1)
       if (wasActive) {
@@ -62,24 +63,29 @@ export const useTabsStore = defineStore('tabs', {
       }
     },
     closeOthers(path: string) {
-      this.tabs = this.tabs.filter((t) => t.affix || t.path === path)
+      this.tabs = this.tabs.filter((t) => t.affix || t.pinned || t.path === path)
       this._ensureActive(path)
     },
     closeAll() {
-      this.tabs = this.tabs.filter((t) => t.affix)
+      this.tabs = this.tabs.filter((t) => t.affix || t.pinned)
       this._ensureActive(useAuthStore().homePath)
     },
     closeLeft(path: string) {
       const idx = this.tabs.findIndex((t) => t.path === path)
       if (idx <= 0) return
-      this.tabs = this.tabs.filter((t, i) => t.affix || i >= idx)
+      this.tabs = this.tabs.filter((t, i) => t.affix || t.pinned || i >= idx)
       this._ensureActive(path)
     },
     closeRight(path: string) {
       const idx = this.tabs.findIndex((t) => t.path === path)
       if (idx === -1) return
-      this.tabs = this.tabs.filter((t, i) => t.affix || i <= idx)
+      this.tabs = this.tabs.filter((t, i) => t.affix || t.pinned || i <= idx)
       this._ensureActive(path)
+    },
+    // 用户手动固定/取消固定(右键菜单);应用首页 affix 恒固定,不受此影响。
+    togglePin(path: string) {
+      const tab = this.tabs.find((t) => t.path === path)
+      if (tab && !tab.affix) tab.pinned = !tab.pinned
     },
     // 当前激活标签被批量关闭后,导航到 preferPath(通常是右键的那个)或末尾标签。
     _ensureActive(preferPath: string) {

@@ -117,6 +117,8 @@ export default {
   },
   tabs: {
     refresh: '刷新',
+    pin: '固定',
+    unpin: '取消固定',
     close: '关闭',
     closeOthers: '关闭其他',
     closeLeft: '关闭左侧',

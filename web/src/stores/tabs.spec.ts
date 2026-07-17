@@ -41,3 +41,28 @@ describe('useTabsStore 动态标题 / noCache', () => {
     expect(tabs.cachedNames).not.toContain('detail-system-user')
   })
 })
+
+describe('useTabsStore 固定标签(pin)', () => {
+  it('togglePin 后不可关闭,批量关闭时保留,取消后可关闭', () => {
+    const tabs = useTabsStore()
+    tabs.addTab(routeLike('/a', 'menu-a'))
+    tabs.addTab(routeLike('/b', 'menu-b'))
+    tabs.addTab(routeLike('/c', 'menu-c'))
+
+    tabs.togglePin('/b')
+    expect(tabs.tabs.find((t) => t.path === '/b')!.pinned).toBe(true)
+
+    // 固定标签不可被 removeTab 关闭
+    tabs.removeTab('/b')
+    expect(tabs.tabs.some((t) => t.path === '/b')).toBe(true)
+
+    // closeOthers('/a') 仍保留固定的 /b
+    tabs.closeOthers('/a')
+    expect(tabs.tabs.map((t) => t.path).sort()).toEqual(['/a', '/b'])
+
+    // 取消固定后可正常关闭
+    tabs.togglePin('/b')
+    tabs.removeTab('/b')
+    expect(tabs.tabs.some((t) => t.path === '/b')).toBe(false)
+  })
+})

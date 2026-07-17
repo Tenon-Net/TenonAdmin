@@ -116,6 +116,8 @@ export default {
   },
   tabs: {
     refresh: 'Refresh',
+    pin: 'Pin',
+    unpin: 'Unpin',
     close: 'Close',
     closeOthers: 'Close others',
     closeLeft: 'Close left',

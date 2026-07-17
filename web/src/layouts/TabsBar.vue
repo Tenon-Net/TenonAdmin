@@ -31,7 +31,12 @@ const ctxY = ref(0)
 const ctxTab = ref<TabItem>()
 const ctxOptions = computed<DropdownOption[]>(() => [
   { label: t('tabs.refresh'), key: 'refresh', icon: renderIcon('ph:arrow-clockwise') },
-  { label: t('tabs.close'), key: 'close', icon: renderIcon('ph:x'), disabled: ctxTab.value?.affix },
+  // 应用首页(affix)恒固定,不提供固定/取消项;其余标签可用户手动固定。
+  {
+    label: ctxTab.value?.pinned ? t('tabs.unpin') : t('tabs.pin'),
+    key: 'pin', icon: renderIcon('ph:push-pin'), disabled: ctxTab.value?.affix,
+  },
+  { label: t('tabs.close'), key: 'close', icon: renderIcon('ph:x'), disabled: ctxTab.value?.affix || ctxTab.value?.pinned },
   { label: t('tabs.closeOthers'), key: 'others', icon: renderIcon('ph:arrows-in-line-horizontal') },
   { label: t('tabs.closeLeft'), key: 'left', icon: renderIcon('ph:arrow-line-left') },
   { label: t('tabs.closeRight'), key: 'right', icon: renderIcon('ph:arrow-line-right') },
@@ -54,6 +59,7 @@ function onCtxSelect(key: string) {
   const tab = ctxTab.value
   if (!tab) return
   if (key === 'refresh') tabs.refreshTab(tab.name)
+  else if (key === 'pin') tabs.togglePin(tab.path)
   else if (key === 'close') tabs.removeTab(tab.path)
   else if (key === 'others') tabs.closeOthers(tab.path)
   else if (key === 'left') tabs.closeLeft(tab.path)
@@ -83,11 +89,15 @@ watch(activePath, () => {
           @keydown.enter="onClick(item)"
           @keydown.space.prevent="onClick(item)"
           @contextmenu="onContext($event, item)"
+          @mousedown.middle.prevent
+          @auxclick.middle.prevent="tabs.removeTab(item.path)"
         >
           <Icon v-if="item.icon" :icon="item.icon" :width="15" class="chip-icon" />
           <span class="chip-label">{{ tabTitle(item) }}</span>
+          <!-- 固定标签(用户 pin)显示图钉、不显示关闭 X;应用首页 affix 两者都不显示 -->
+          <Icon v-if="item.pinned" icon="ph:push-pin-fill" :width="12" class="chip-pin" />
           <Icon
-            v-if="!item.affix"
+            v-else-if="!item.affix"
             icon="ph:x"
             :width="13"
             class="chip-close"
@@ -160,6 +170,9 @@ watch(activePath, () => {
 .chip-close:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
+}
+.chip-pin {
+  opacity: 0.7;
 }
 .chip-close {
   border-radius: 50%;
