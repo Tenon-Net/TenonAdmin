@@ -13,8 +13,24 @@ public interface ISoftDelete
     bool IsDelete { get; set; }
 }
 
-// ponytail: BaseEntity 暂放 SqlSugar 层(携带 SqlSugar 特性)。
+// ponytail: BaseEntity/PrimaryId 暂放 SqlSugar 层(携带 SqlSugar 特性)。
 // 设计 §5.6 归 Core;待 Core 改用无特性 POCO + 外部映射时再迁移。
+/// <summary>
+/// 仅主键基类(#8):只有雪花主键 <see cref="Id"/>,不带审计字段、不带软删除。
+/// <para>给<b>明细/子表</b>这类不需要审计四件套的实体用(如主从表的从表 <c>XxxDetail</c>)。继承本类即自动获得:</para>
+/// <list type="bullet">
+///   <item>插入时 Id==0 → 自动填雪花 ID(与 <see cref="BaseEntity"/> 共用 SqlSugarSetup 的审计 AOP,按 <c>PrimaryId</c> 匹配);显式给定的 Id 原样保留</item>
+/// </list>
+/// <para><b>与 <see cref="BaseEntity"/> 的取舍:</b>PrimaryId 更轻,但内置泛型仓储 <c>IRepository&lt;T&gt;</c> 与种子 <c>ISeedData&lt;T&gt;</c>
+/// 仍约束 <c>where T : BaseEntity</c> —— 故 PrimaryId-only 实体<b>用不了内置仓储、不能种子化</b>,通常经 <c>ISqlSugarClient</c>
+/// 随主表在同一事务里读写。需要审计留痕/软删/被仓储托管的表,继续用 <see cref="BaseEntity"/>。</para>
+/// </summary>
+public abstract class PrimaryId
+{
+    [SugarColumn(IsPrimaryKey = true, ColumnDescription = "主键(雪花 ID;种子数据用固定小整数)")]
+    public long Id { get; set; }
+}
+
 /// <summary>
 /// 实体基类(设计 §5.6/§12):主键 + 审计四件套 + 软删除。
 /// <para>继承本类即自动获得(由 SqlSugarSetup 的 AOP 钩子驱动,业务代码零感知):</para>
@@ -24,13 +40,10 @@ public interface ISoftDelete
 ///   <item>CreateUserId / UpdateUserId 由当前登录用户上下文填充(认证闭环接入后生效)</item>
 ///   <item>查询自动过滤 IsDelete == true 的行(全局软删过滤器)</item>
 /// </list>
-/// <para>带机构数据范围的业务实体应继承 <c>DataEntity</c>(随组织模块引入,含机构字段)。</para>
+/// <para>主键 <c>Id</c> 由 <see cref="PrimaryId"/> 提供;带机构数据范围的业务实体应继承 <c>DataEntity</c>(随组织模块引入,含机构字段)。</para>
 /// </summary>
-public abstract class BaseEntity : ISoftDelete
+public abstract class BaseEntity : PrimaryId, ISoftDelete
 {
-    [SugarColumn(IsPrimaryKey = true, ColumnDescription = "主键(雪花 ID;种子数据用固定小整数)")]
-    public long Id { get; set; }
-
     [SugarColumn(ColumnDescription = "创建时间")]
     public DateTime CreateTime { get; set; }
 
