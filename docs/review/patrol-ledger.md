@@ -1,17 +1,12 @@
 # 巡检台账
 
-last-seen: 1601072
+last-seen: ec998f0
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
 <!-- 后端已排空;以下为前端(§2.* + 契约轴) -->
-- web/src/theme/mix.ts
-- web/src/types/api.ts
-- web/src/utils/error.spec.ts
-- web/src/utils/tree.spec.ts
-- web/src/views/dashboard/biz.vue
 - web/src/views/module/index.vue
 - web/src/views/personal/profile.vue
 - web/src/views/personal/sessions.vue
@@ -78,3 +73,5 @@ dry-streak: 0
 ### 第 10 轮 — 前端规范轴 + 契约轴 · 扫了 AppHeader.vue / NoticeBell.vue / locales/en-US.ts / locales/zh-CN.ts / router/routes.ts · 契约轴亮点:脚本结构化比对两 locale → en/zh 各 606 键、双向零缺口、完全对齐无漂移;AppHeader/NoticeBell 合规(文本走 t()、aria-label a11y、ponytail 上限未触达、原生语言名故意不译)。记 1 判断题(J3:routes.ts:16 /module meta.title 硬编码 '选择应用',§2.7 潜在缺口,可见性/键名待定)→ 记账轮不跑闸门。队列剩 32。NEXT: 前端队首 5 个(stores/app.spec.ts / auth.spec.ts / auth.ts / dict.spec.ts / user.ts)。
 
 ### 第 11 轮 — 前端规范轴 + 契约轴 · 扫了 stores/app.spec.ts / auth.spec.ts / auth.ts / dict.spec.ts / user.ts · 全合规(auth.ts §2.4 仅持久化 currentModuleId、hasPerm 超管/未加载/命中三态合 D2、reset 连清 tabs;user.ts 全持久化保登录;三 spec 覆盖 homePath/hasPerm/isDark/afterHydrate 迁移/字典缓存并发去重与失效竞态)。无契约/i18n 触点,无闸门。队列剩 27。NEXT: 前端队首 5 个(theme/mix.ts / types/api.ts / utils/error.spec.ts / utils/tree.spec.ts / views/dashboard/biz.vue)。
+
+### 第 12 轮 — 前端规范轴 + 契约轴 · 扫了 theme/mix.ts / types/api.ts / utils/error.spec.ts / utils/tree.spec.ts / views/dashboard/biz.vue · 全合规(mix.ts 纯色值函数、findings 提的 demo() 已删;error/tree spec 覆盖到位;types/api.ts 手写 DTO 镜像抽查 UserProfile/MySessionItem/NoticePublishInput/AddUserInput 与后端一致无漂移;biz.vue 文本走 t()、biz.* 6 键在且 en==zh 全对齐、真数据无假数字)。无闸门。队列剩 22。NEXT: 前端队首 5 个(module/index.vue / personal/profile.vue / personal/sessions.vue / config/OtherConfig.vue / config/SecurityConfig.vue)。
