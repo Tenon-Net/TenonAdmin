@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
 
@@ -36,6 +37,16 @@ public static class ServicesSetup
         // 消费方前置注册真实 ISmsSender(阿里云/腾讯云等)即接管
         services.TryAddSingleton<ISmsSender, LoggingSmsSender>();
         services.TryAddScoped<ISmsOtpService, SmsOtpService>();
+
+        // 邮件通道(§14 投递通道,同 ISmsSender 成法):默认日志实现(开发期);配了 SMTP 主机则用内置 SmtpEmailSender;
+        // 消费方前置注册真实 IEmailSender(MailKit / 云厂商 API)即接管(TryAdd 前置替换)。为后续邮件 OTP/通知扇出铺路。
+        services.TryAddSingleton<IEmailSender>(sp =>
+        {
+            var email = sp.GetRequiredService<AdminEmailOptions>();
+            return string.IsNullOrWhiteSpace(email.Host)
+                ? new LoggingEmailSender(sp.GetRequiredService<ILogger<LoggingEmailSender>>())
+                : new SmtpEmailSender(email, sp.GetRequiredService<ILogger<SmtpEmailSender>>());
+        });
 
         // 会话与刷新令牌(§15):登录建会话、每请求校验、刷新轮换+复用检测、登出/强退
         services.TryAddScoped<ISessionService, SessionService>();

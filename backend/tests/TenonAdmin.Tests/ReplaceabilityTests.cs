@@ -36,6 +36,16 @@ public class ReplaceabilityTests
     }
 
     [Fact]
+    public void ReplaceEmailSender_ShouldUseUserImplementation()
+    {
+        using var f = new AdminAppFactory
+        {
+            Overrides = s => s.Replace(ServiceDescriptor.Singleton<IEmailSender, FakeEmailSender>()),
+        };
+        Assert.IsType<FakeEmailSender>(f.Services.GetRequiredService<IEmailSender>());
+    }
+
+    [Fact]
     public async Task OverrideAuthStep_ShouldAffectLoginFlow()
     {
         using var f = new AdminAppFactory
@@ -97,6 +107,13 @@ public class ReplaceabilityTests
     private sealed class FakeSmsSender : ISmsSender
     {
         public Task SendCodeAsync(string phone, string code, string purpose, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
+
+    /// <summary>用户自定义邮件通道(替换框架默认日志/SMTP 通道)</summary>
+    private sealed class FakeEmailSender : IEmailSender
+    {
+        public Task SendAsync(string to, string subject, string htmlBody, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 

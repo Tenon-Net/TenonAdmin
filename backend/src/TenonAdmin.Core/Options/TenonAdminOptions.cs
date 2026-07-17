@@ -23,6 +23,9 @@ public class TenonAdminOptions
     /// <summary>上传配置(存储根/大小上限/后缀白名单,见 <see cref="AdminUploadOptions"/>)</summary>
     public AdminUploadOptions Upload { get; set; } = new();
 
+    /// <summary>邮件通道配置(SMTP 主机/端口/凭据;空主机走日志实现,见 <see cref="AdminEmailOptions"/>)</summary>
+    public AdminEmailOptions Email { get; set; } = new();
+
     /// <summary>API 配置(禁用模块等,见 <see cref="AdminApiOptions"/>)</summary>
     public AdminApiOptions Api { get; set; } = new();
 
