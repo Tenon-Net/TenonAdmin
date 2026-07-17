@@ -53,15 +53,15 @@ The full list is every `TryAdd` line in `backend/src/TenonAdmin.Services/Service
 
 Replacing the whole service means re-injecting all of its dependencies, and most of the time you don't want to change that much. The kernel splits its long methods into a handful of small `protected virtual` steps (the template method); you subclass and override only the step you want to change, and the rest runs the base class as-is.
 
-`AuthService.LoginAsync` is the template (`backend/src/TenonAdmin.Services/Auth/AuthService.cs`): it just orchestrates seven or eight `virtual` steps — failed-attempt lockout check → captcha → `ValidateUserAsync` credential check → disabled/locked policy → password expiry → token issuance → `OnLoginSucceededAsync` success hook → `BuildLoginOutput` output assembly. To wire in LDAP, override only `ValidateUserAsync`; to add a field to the login response, override only `BuildLoginOutput`:
+`AuthService.LoginAsync` is the template (`backend/src/TenonAdmin.Services/Auth/AuthService.cs`): it just orchestrates a handful of `virtual` steps — failed-attempt lockout check → captcha → `ValidateUserAsync` credential check → disabled/locked policy → password expiry → `CheckSmsSecondFactorAsync` SMS second factor → token issuance → `OnLoginSucceededAsync` success hook → `BuildLoginOutput` output assembly. To wire in LDAP, override only `ValidateUserAsync`; to add a field to the login response, override only `BuildLoginOutput`; to make MFA mandatory even for phone-less users, override only `CheckSmsSecondFactorAsync` (the kernel default skips them — see [SMS verification](/backend/auth-security#sms-verification-second-factor-passwordless-sign-in)):
 
 ```csharp
 // Change only the output-assembly step; the rest of the login logic (captcha/lockout/credential check/token issuance) runs the base class as-is
 public sealed class MyAuthService(
     IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens,
     ISessionService sessions, ILogService logService, ILoginLockService loginLock,
-    ICaptchaService captcha, ISecurityPolicyProvider policy)
-    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy)
+    ICaptchaService captcha, ISecurityPolicyProvider policy, ISmsOtpService smsOtp)
+    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp)
 {
     protected override LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) =>
         base.BuildLoginOutput(user, pair) with { Name = $"{user.Name}({user.Account})" };

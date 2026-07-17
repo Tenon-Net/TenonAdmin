@@ -53,15 +53,15 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 
 整体替换要重新注入服务的全部依赖,大多数时候你并不想改那么多。内核把长方法拆成了若干 `protected virtual` 小步骤(模板方法),你继承后只覆写要改的那一步,其余原样走基类。
 
-`AuthService.LoginAsync` 就是范本(`backend/src/TenonAdmin.Services/Auth/AuthService.cs`),它只编排七八个 `virtual` 步骤:失败锁定检查 → 验证码 → `ValidateUserAsync` 账密校验 → 停用/锁定策略 → 密码过期 → 签发令牌 → `OnLoginSucceededAsync` 成功后置 → `BuildLoginOutput` 组装出参。想对接 LDAP 只覆写 `ValidateUserAsync`,想给登录返回值加字段只覆写 `BuildLoginOutput`:
+`AuthService.LoginAsync` 就是范本(`backend/src/TenonAdmin.Services/Auth/AuthService.cs`),它只编排一串 `virtual` 步骤:失败锁定检查 → 验证码 → `ValidateUserAsync` 账密校验 → 停用/锁定策略 → 密码过期 → `CheckSmsSecondFactorAsync` 短信二次验证 → 签发令牌 → `OnLoginSucceededAsync` 成功后置 → `BuildLoginOutput` 组装出参。想对接 LDAP 只覆写 `ValidateUserAsync`,想给登录返回值加字段只覆写 `BuildLoginOutput`;想让没绑手机号的用户也强制二次验证,只覆写 `CheckSmsSecondFactorAsync`(内核默认对其直通——见[短信验证](/zh/backend/auth-security#短信验证-二次验证与免密登录)):
 
 ```csharp
 // 只改出参组装这一步,其余登录逻辑(验证码/锁定/密码校验/签发令牌)全走基类原样
 public sealed class MyAuthService(
     IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens,
     ISessionService sessions, ILogService logService, ILoginLockService loginLock,
-    ICaptchaService captcha, ISecurityPolicyProvider policy)
-    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy)
+    ICaptchaService captcha, ISecurityPolicyProvider policy, ISmsOtpService smsOtp)
+    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp)
 {
     protected override LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) =>
         base.BuildLoginOutput(user, pair) with { Name = $"{user.Name}({user.Account})" };
