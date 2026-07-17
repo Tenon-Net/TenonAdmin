@@ -1,17 +1,12 @@
 # 巡检台账
 
-last-seen: fc6b997
-last-tree: 405a70b
+last-seen: 127412d
+last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
-<!-- 后端已排空;以下为前端(§2.* + 契约轴) -->
-<!-- 工作区:用户正在跑「消费者扩展接缝」验收测试,SCRATCH 文件(标注"测试后删除")在两次 git 调用间动态增删。全部避让·记账,非合入门控目标(不会被合入)。下轮扫到若已删→按幽灵移除(同第 8 轮)。 -->
-- web/src/api/sample.ts〔SCRATCH·可能已删〕
-- web/src/types/sample.ts〔SCRATCH·可能已删〕
-- web/src/views/sample/〔SCRATCH·可能已删〕
-- web/src/locales/ext.integration.spec.ts〔SCRATCH·可能已删〕
+<!-- 空:真实代码(后端 28 文件 + 整个 web/src)已全扫完;worktree 已退回已扫的稳定态(45c5d3f,= 轮 16/17 所扫内容,index.ts/ext//index.spec.ts 未变不重入队)。等新提交(last-seen 之后)或新工作区变更(last-tree 变化)入队。 -->
 
 ## 待裁决
 
@@ -70,3 +65,5 @@ menu/index.vue 主表对每个动作严格 v-auth/hasPerm(增/改/删/启停,lin
 ### 第 16 轮 — 前端规范轴 + 契约轴 · 扫了 role/GrantMenuTable.vue / role/index.vue / session/index.vue / user/index.vue / locales/index.ts〔工作区·避让记账〕· 全合规(role/index 每动作 + 更多下拉逐项 hasPerm、删角色前查持有人数警示;user/index 每动作门 + 超管删/停置灰自锁保护、findings 已记 515 行重构不重提;GrantMenuTable 三级勾选 indeterminate 逻辑;session 踢人二确认 + 自踢置灰;locales/index.ts ext 深合并接缝干净,工作区文件仅记账未改)。i18n:role.scope.* 5 动态键全在、role/user/session 命名空间齐备且 en==zh。无闸门。队列剩 2(均工作区:locales/ext/、locales/index.spec.ts)。NEXT: 扫最后两个工作区文件(避让记账),之后队列空→dry-streak 起。
 
 ### 第 17 轮 — 前端规范轴 + 契约轴 · 扫了 locales/ext/(README.md 真接缝文档 + zh/en sampleDoc.ts 样例)+ locales/index.spec.ts〔均工作区·避让记账〕· 全合规——消费者扩展接缝验证有效:ext/README 文档准、sampleDoc en/zh 键平行、index.spec.ts 覆盖 withExt 深合并 7 场景(新命名空间/错误码深合并/兄弟键不连坐/locale 隔离/不改入参)。发现工作区正在跑扩展接缝验收测试:api/sample.ts、types/sample.ts、views/sample/、ext.integration.spec.ts 等 SCRATCH 文件(标注"测试后删除")在两次 git 调用间漂移增删——入队但标注避让·可能已删,非合入门控目标。last-tree 推进 405a70b。无闸门。队列剩 4(全 SCRATCH 避让)。NEXT: SCRATCH 若已删按幽灵移除;worktree churn 属正常(用户测试中),真实代码已全扫完(后端 28 + 前端全部)。
+
+### 第 18 轮 — 工作区门控 · 用户扩展接缝验收测试已收尾:api/sample.ts、types/sample.ts、views/sample/、ext.integration.spec.ts 4 个 SCRATCH 全删 → 幽灵移除出队。worktree 退回原始已扫稳定态(hash 45c5d3f;index.ts/ext//index.spec.ts 已扫且未变,不重入队)。last-seen→127412d、last-tree→45c5d3f、dry-streak 保持 0(本轮队列非空、做了幽灵清理)。队列清空,无代码扫描、无闸门。NEXT: 队列空 → 下轮 dry-streak 起(退避 min(3600,900·2^n));真实代码零待扫,等新提交或新工作区变更。
