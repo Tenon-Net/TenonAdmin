@@ -14,7 +14,7 @@ Check your work against this list before writing a page or wiring up an API. The
 `src/api/schema.d.ts` is generated from the backend's OpenAPI (`npm run gen:api`, which needs **the backend running** to fetch `/openapi/v1.json`); hand-edits are overwritten the next time you generate — to change a type, change the backend endpoint/DTO and regenerate. This endpoint isn't mounted in production; see the [FAQ](/faq) for details.
 :::
 
-- API calls are centralized in `api/index.ts`, grouped by domain (`authApi`/`userApi`/`moduleApi`/`menuApi`…); each method is shaped like `client.X(...).then(r => unwrap<T>(r))` — never call `client` bare in a view.
+- API calls are centralized in the `api/` layer, grouped by domain (`authApi`/`userApi`/`moduleApi`/`menuApi`… in `api/index.ts`; your own modules in `api/<domain>.ts`, importing `unwrap`/`pageParams`/`toPage` from `./index`); each method is shaped like `client.X(...).then(r => unwrap<T>(r))` — never call `client` bare in a view.
 - `unwrap` unwraps the envelope uniformly; failures (`code≠0` or non-2xx) all normalize to `ApiError` (carrying `code`/`msgKey`), and the view `catch`es it and produces copy with `translateError(e)`.
 - Pagination is normalized at the API layer into `{ items, total }` to fit `useTable` (the backend returns `PagedList<T>{current,size,total,items}`).
 - Query parameter names use PascalCase (required by ASP.NET model binding).
@@ -57,7 +57,7 @@ Persisting them skips the refresh-rebuild flow and sends you straight to a 404 a
 ## i18n
 
 - All visible text in views goes through `t('...')` — hardcoded Chinese/English literals are forbidden.
-- Error copy is translated by code: the backend sends only `code`/`msgKey`, and the frontend produces copy via `translateError` + `locales/zh-CN.ts`/`en-US.ts`. See [i18n & error codes](/frontend/i18n) for the mechanism.
+- Error copy never comes from the backend: it sends `code` + `msgKey`, and `translateError` resolves the copy **by `msgKey` alone — it never reads `code`**, so a locale key must mirror the backend's `[MsgKey]` string exactly. Built-in copy lives in `locales/zh-CN.ts`/`en-US.ts`; your own goes in `locales/ext/<locale>/<module>.ts`. See [i18n & error codes](/frontend/i18n) for the mechanism.
 
 ## Design system
 

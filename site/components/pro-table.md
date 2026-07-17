@@ -57,7 +57,7 @@ export const positionApi = {
 }
 ```
 
-So in the page, `:fetcher="positionApi.page"` just hands the API-layer method straight in — the mapping is already done there. When you add a new list page, copy an existing `userApi.page`/`positionApi.page` from `api/index.ts`, change the endpoint and the search field names — don't hand-assemble `Current`/`Size` inside the component.
+So in the page, `:fetcher="positionApi.page"` just hands the API-layer method straight in — the mapping is already done there. When you add a new list page, copy the shape of an existing `userApi.page`/`positionApi.page` out of `api/index.ts` and change the endpoint and search field names — don't hand-assemble `Current`/`Size` inside the component. If you're building on a fork, paste it into your own `api/<domain>.ts` and import `pageParams`/`toPage`/`unwrap` from `./index` rather than growing `api/index.ts` (see [Syncing with Upstream](/guide/sync-fork)).
 
 A search column's `key` is the parameter name it searches by (the `name` column arrives in the `fetcher` as `name`); which backend field that lands on is decided by the `Name: params.name` step in the API layer.
 

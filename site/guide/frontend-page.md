@@ -20,7 +20,11 @@ How the contract flows from backend to frontend, and how `client.ts` builds type
 
 ## Add a domain type, wrap a layer of API
 
-Add a domain type in `web/src/types/api.ts` (aligned with the backend DTO fields; the backend serializes as camelCase):
+::: tip Your code goes in new files
+`types/api.ts`, `api/index.ts` and `locales/zh-CN.ts` belong to upstream — they change on nearly every release. Add your module's code *inside* them and every `git merge upstream` collides right there. Put your own code in **new files**; those never conflict. This chapter does that throughout. See [Syncing with Upstream](/guide/sync-fork).
+:::
+
+Create `web/src/types/sample.ts` with the domain type (aligned with the backend DTO fields; the backend serializes as camelCase):
 
 ```ts
 /** Sample org-isolated document (aligned with backend SampleDoc). */
@@ -30,10 +34,12 @@ export interface SampleDoc {
 }
 ```
 
-In `web/src/api/index.ts`, add a group per domain, built on the typed client exported from `client.ts`, unwrapping the standard envelope with `unwrap<T>`:
+Create `web/src/api/sample.ts` — one group per domain, built on the typed client from `client.ts` and unwrapping the standard envelope with `unwrap<T>`. `api/index.ts` exports the shared primitives for exactly this — `unwrap`, `ApiError`, and for paged lists `pageParams` / `toPage` — so your module never has to reach into that file:
 
 ```ts
-import type { SampleDoc } from '@/types/api'
+import { client } from './client'
+import { unwrap } from './index'
+import type { SampleDoc } from '@/types/sample'
 
 export const sampleDocApi = {
   list: () => client.GET('/api/v1/sample/doc', {}).then((r) => unwrap<SampleDoc[]>(r)),
@@ -48,7 +54,7 @@ export const sampleDocApi = {
 
 `unwrap` already handles both failure shapes (a business envelope with a `code`, and a `ProblemDetails` without one), so the view layer just `catch`es and hands the error to `translateError` — no need to duplicate that check here. For the details of envelope unwrapping and the two error shapes, see [Request & Error Handling](/frontend/request).
 
-The `sample/doc` `List` endpoint isn't paged — it returns an array directly, so there's no need for the `toPage` pagination normalization here (`{page,pageSize}` → the backend's `{Current,Size}`, `PagedList<T>` → `{items,total}`). That's for `PagedList<T>` endpoints; see `userApi.page` / `dictAdminApi.typePage` in the same file for the pattern.
+The `sample/doc` `List` endpoint isn't paged — it returns an array directly, so there's no need for the `toPage` pagination normalization here (`{page,pageSize}` → the backend's `{Current,Size}`, `PagedList<T>` → `{items,total}`). That's for `PagedList<T>` endpoints — `pageParams` and `toPage` are exported from `api/index.ts` for exactly this, so import them alongside `unwrap`; see `userApi.page` / `dictAdminApi.typePage` in `api/index.ts` for the pattern to copy into your own module.
 
 ## Write the list page
 
@@ -65,8 +71,8 @@ import FormContainer from '@/components/FormContainer/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
-import { sampleDocApi } from '@/api'
-import type { SampleDoc } from '@/types/api'
+import { sampleDocApi } from '@/api/sample'
+import type { SampleDoc } from '@/types/sample'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -195,19 +201,39 @@ After saving, log back in (or refresh to trigger a route rebuild) and the page s
 
 ## Fill in i18n text
 
-The page above uses a set of `sampleDoc.*` keys (the `common.*` keys are shared site-wide and already exist — no need to add them), so add them to both `web/src/locales/zh-CN.ts` and `en-US.ts`, following the shape of existing pages:
+The page above uses a set of `sampleDoc.*` keys (the `common.*` keys are shared site-wide and already exist — no need to add them). i18n keys all have to end up in one object per locale, so there's a dedicated extension seam for it: drop a file under `web/src/locales/ext/<locale>/`, default-export the keys, and `locales/index.ts` globs it in automatically. **The filename is the top-level namespace** (`sampleDoc.ts` → `t('sampleDoc.*')`), and you register nothing:
 
 ```ts
-sampleDoc: {
+// web/src/locales/ext/en-US/sampleDoc.ts
+export default {
   title: 'Title',
   titleRequired: 'Please enter a title',
   addTitle: 'Add Document',
   editTitle: 'Edit Document',
   deleteConfirm: 'Confirm deleting "{title}"?',
-},
+}
 ```
 
-In this example the backend expresses failure through a return value (`false`), so there's no new error code to translate. If your module added numeric codes to `ErrorCode` (as the dictionary module does), remember to add the matching text here too — `translateError` looks up the locale by `code`/`msgKey`, and a missing entry falls back to the generic catch-all message. Write column titles in the function form `title: () => t('...')` so switching language takes effect instantly.
+```ts
+// web/src/locales/ext/zh-CN/sampleDoc.ts
+export default {
+  title: '标题',
+  titleRequired: '请输入标题',
+  addTitle: '新增文档',
+  editTitle: '编辑文档',
+  deleteConfirm: '确认删除“{title}”?',
+}
+```
+
+In this example the backend expresses failure through a return value (`false`), so there's no new error code to translate. If your module added codes to `ErrorCode` (as the dictionary module does), add the matching text as `ext/<locale>/error.ts`. **The key must mirror the backend's `[MsgKey]` string exactly**, because `translateError` looks the locale up by `msgKey` alone — it never reads the numeric `code`. A flat `{ 50001: '...' }` compiles, resolves, and is never read by anything:
+
+```ts
+// backend: [MsgKey("error.doc.titleDuplicated")] → mirror it, nested, minus the `error.` prefix
+// web/src/locales/ext/zh-CN/error.ts
+export default { doc: { titleDuplicated: '文档标题重复' } }
+```
+
+The ext merge is a **deep** merge, so your keys join the built-in `error` namespace rather than replacing it — and overriding one built-in string (`{ auth: { passwordWrong: '...' } }`) leaves its siblings intact. If a code has no `[MsgKey]` annotation the backend emits `error.code.<number>`, and an entry missing from the locale falls back to the backend's own `message`, then to `error._fallback`. Write column titles in the function form `title: () => t('...')` so switching language takes effect instantly.
 
 ## Before committing
 
@@ -222,10 +248,11 @@ Every step is covered in the body above; this leaves just a one-line checklist t
 
 **Frontend**
 - [ ] `npm run gen:api` regenerates types (backend running)
-- [ ] Add a domain type in `types/api.ts` + wrap a group of API in `api/index.ts`
+- [ ] Domain type in a new `types/<module>.ts` + an API group in a new `api/<domain>.ts`
 - [ ] `views/<module>/<entity>/index.vue` (table + `FormContainer` form + permission gating)
-- [ ] Bilingual i18n text (add error-code translations too if there are new codes)
+- [ ] Bilingual i18n under `locales/ext/zh-CN/` + `ext/en-US/` (add error-code translations too if there are new codes)
 - [ ] `npm run lint` + `npm run typecheck` pass
+- [ ] `git status` — every file you touched is a **new** file. If `api/index.ts`, `types/api.ts` or `locales/zh-CN.ts` shows as modified, move that code into your own file; otherwise it becomes a merge conflict on every upstream sync.
 
 **Configure permissions (runtime)**
 - [ ] Create a node in Menu Management (`Path` / `Component` matching the file)

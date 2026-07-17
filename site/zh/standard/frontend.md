@@ -14,7 +14,7 @@
 `src/api/schema.d.ts` 由后端 OpenAPI 生成(`npm run gen:api`,**后端需正在运行**才能拉 `/openapi/v1.json`),手改下次一生成就被覆盖——要调类型只能改后端接口/DTO 再重新生成。生产不挂该端点,详见 [常见问题](/zh/faq)。
 :::
 
-- API 调用集中在 `api/index.ts` 按域分组(`authApi`/`userApi`/`moduleApi`/`menuApi` …),每个方法形如 `client.X(...).then(r => unwrap<T>(r))`,不在视图里裸调 `client`。
+- API 调用集中在 `api/` 层按域分组(内置的在 `api/index.ts`:`authApi`/`userApi`/`moduleApi`/`menuApi` …;你自己的模块新建 `api/<域>.ts`,从 `./index` 导入 `unwrap`/`pageParams`/`toPage`),每个方法形如 `client.X(...).then(r => unwrap<T>(r))`,不在视图里裸调 `client`。
 - `unwrap` 统一解信封,失败(`code≠0` 或非 2xx)都归一到 `ApiError`(带 `code`/`msgKey`);视图 `catch` 后用 `translateError(e)` 出文案。
 - 分页在 api 层归一为 `{ items, total }` 以适配 `useTable`(后端是 `PagedList<T>{current,size,total,items}`)。
 - 查询参数名用 PascalCase(ASP.NET 模型绑定要求)。
@@ -57,7 +57,7 @@
 ## i18n
 
 - 视图内所有可见文本走 `t('...')`,禁止硬编码中文 / 英文字面量。
-- 错误文案按 code 翻译:后端只给 `code`/`msgKey`,前端 `translateError` + `locales/zh-CN.ts`/`en-US.ts` 出文案。机制见 [国际化与错误码](/zh/frontend/i18n)。
+- 错误文案不出后端:后端给 `code` + `msgKey`,`translateError` **只按 `msgKey` 取字、从不读 `code`**,所以 locale 里的键必须和后端 `[MsgKey]` 字符串逐字对上。内置文案在 `locales/zh-CN.ts`/`en-US.ts`;你自己的放 `locales/ext/<locale>/<模块>.ts`。机制见 [国际化与错误码](/zh/frontend/i18n)。
 
 ## 设计系统
 

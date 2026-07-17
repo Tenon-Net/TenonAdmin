@@ -4,6 +4,25 @@
 
 产出共 3 处文件改动。
 
+## 第一步：确定模式
+
+**这一步决定后面每个产出写进哪个文件，选错会给消费者制造永久合并冲突。**
+
+消费者是 fork 本仓库、在 `web/` 上长自己的业务的（见文档站 `guide/sync-fork`）。冲突只在**双方都改同一个文件**时发生，而 `types/api.ts`(28 次改动)、`api/index.ts`(34)、`locales/zh-CN.ts`(52) 恰是 `web/src` 里 churn 最高的几个文件。所以：
+
+| 产出 | 系统模块（内核维护者） | 业务模块（消费者二开） |
+|---|---|---|
+| Types | 追加进 `web/src/types/api.ts` | **新建** `web/src/types/<模块>.ts` |
+| API | 追加进 `web/src/api/index.ts` | **新建** `web/src/api/<域>.ts`，从 `./index` 导入 `unwrap`/`pageParams`/`toPage`/`ApiError` |
+| i18n | 追加进 `web/src/locales/zh-CN.ts` + `en-US.ts` | **新建** `web/src/locales/ext/zh-CN/<模块>.ts` + `ext/en-US/<模块>.ts`（glob 自动并入，无需注册；见 `web/src/locales/ext/README.md`） |
+| 页面 | `web/src/views/<模块>/<实体>/index.vue` | 同左（本来就是新文件） |
+
+两种模式下页面代码本身完全一样，只是 import 来源不同（`@/api` → `@/api/<域>`，`@/types/api` → `@/types/<模块>`）。
+
+**业务模块模式的自检**：做完跑 `git status`，`api/index.ts`、`types/api.ts`、`locales/zh-CN.ts`、`locales/en-US.ts` **必须一个都没被修改**。有的话就是放错了文件。
+
+下面的模板按**系统模块**写。业务模块照上表换文件即可，代码形态不变。
+
 ## 前置步骤
 
 确保后端已启动，然后重新生成 API 类型：
@@ -18,7 +37,7 @@ cd web && npm run gen:api
 
 ## 产出 1：Types（类型定义）
 
-文件：`web/src/types/api.ts`，追加新类型。
+文件：系统模块 → 追加进 `web/src/types/api.ts`；**业务模块 → 新建 `web/src/types/<模块>.ts`**（见「第一步：确定模式」）。
 
 ### 规则
 
@@ -55,7 +74,7 @@ export interface PositionInput {
 
 ## 产出 2：API 函数
 
-文件：`web/src/api/index.ts`，追加 `{module}Api` 对象。
+文件：系统模块 → 追加进 `web/src/api/index.ts`；**业务模块 → 新建 `web/src/api/<域>.ts`**，顶部写 `import { client } from './client'` + `import { unwrap, pageParams, toPage } from './index'`（见「第一步：确定模式」）。
 
 ### 规则
 
@@ -391,7 +410,9 @@ import DictTag from '@/components/DictTag/index.vue'
 
 ## i18n（容易漏）
 
-文件：`web/src/locales/zh-CN.ts`（及 `en-US.ts`）。新模块需要三处 key：
+文件：系统模块 → `web/src/locales/zh-CN.ts`（及 `en-US.ts`）；**业务模块 → 新建 `web/src/locales/ext/zh-CN/<模块>.ts` + `ext/en-US/<模块>.ts`**，`export default { ... }` 直接写下面的键内容（文件名即顶层命名空间，glob 自动并入，无需注册）。见「第一步：确定模式」。
+
+新模块需要三处 key：
 
 ### 1. 模块自身（顶层 key）
 
@@ -443,7 +464,7 @@ MsgKey 与后端 `ErrorCode` 的 `[MsgKey("error.position.notFound")]` 严格对
 
 ## 容易忽略的点
 
-### 1. `api/index.ts` 顶部 import 行
+### 1. `api/index.ts` 顶部 import 行（**仅系统模块**）
 
 追加 API 对象后，别忘了在文件开头的 `import type { ... }` 中补上新类型：
 
@@ -452,6 +473,8 @@ import type { ..., SysPosition, PositionInput } from '@/types/api'
 ```
 
 这行很长，容易漏加，漏了 TypeScript 会报错但错误信息指向 API 函数而非 import。
+
+**业务模块不适用**——你的 API 在自己的 `api/<域>.ts` 里，类型从自己的 `@/types/<模块>` 导入，压根不碰 `api/index.ts`。
 
 ### 2. `v-auth` 权限码格式
 

@@ -58,10 +58,30 @@ git merge v0.1.1
 
 ## 4. Keep conflicts small
 
-Most merge friction comes from editing the same files upstream also touches. Two habits keep it manageable:
+Most merge friction comes from editing the same files upstream also touches. Three habits keep it manageable:
 
-- **Put your own pages/components/API modules in new files**, not inside existing ones — e.g. a new `web/src/views/your-module/` directory rather than adding routes into an existing view. New files never conflict; only shared ones do.
-- **If you must customize a shared file** (a layout, a store, `styles/tokens.css`), expect to resolve a conflict there each time upstream also changes it — that's normal, not a sign something's wrong.
+- **Put your own code in new files**, not inside existing ones. New files never conflict; only shared ones do. Every step of [Add a Frontend Page](/guide/frontend-page) is built around this, and there is a dedicated home for each kind of thing:
+
+  | Your code | Goes in | Not in |
+  |---|---|---|
+  | Domain types | a new `web/src/types/<module>.ts` | `types/api.ts` |
+  | API wrappers | a new `web/src/api/<domain>.ts` (import `unwrap` / `pageParams` / `toPage` from `./index`) | `api/index.ts` |
+  | i18n text | a new `web/src/locales/ext/<locale>/<module>.ts` (globbed in automatically — see the [README](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/src/locales/ext/README.md) there) | `locales/zh-CN.ts` / `en-US.ts` |
+  | Pages | a new `web/src/views/<module>/` directory | any existing view |
+
+  Those four upstream files are the highest-churn files in `web/src` — they change on nearly every release. That's exactly why your code shouldn't live in them. Conversely, files you own and upstream rarely touches (`styles/tokens.css`, your own views) are safe to edit freely: a conflict needs *both* sides to change the same file.
+
+- **If you must customize a shared file** (a layout, a store, a built-in page), expect to resolve a conflict there each time upstream also changes it — that's normal, not a sign something's wrong. Keep such edits few and small.
+
+- **`web/src/api/schema.d.ts` is a special case: never merge it, regenerate it.** It's a 6000-line generated artifact, and since your backend has your own controllers, your copy diverges from upstream's from day one — so upstream changes to it always land as a whole-file conflict. Don't try to resolve it by hand:
+
+  ```bash
+  git checkout --ours web/src/api/schema.d.ts   # keep yours, discard upstream's
+  npm run gen:api                               # then regenerate against YOUR running backend
+  git add web/src/api/schema.d.ts
+  ```
+
+  The conflict is doing you a favour: it's the signal that the backend contract moved and your types need regenerating. (This is why the repo deliberately does *not* ship a `merge=ours` gitattribute — silently keeping your copy would hide that signal, and leave you on a stale contract.)
 
 ## 5. Track what changed
 

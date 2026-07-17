@@ -58,10 +58,30 @@ git merge v0.1.1
 
 ## 4. 把冲突控制到最小
 
-大部分合并摩擦来自你和上游同时改了同一个文件。两个习惯能明显减少这种情况:
+大部分合并摩擦来自你和上游同时改了同一个文件。三个习惯能明显减少这种情况:
 
-- **自己的页面/组件/接口模块放进新文件**,不要往已有文件里加——比如新建一个 `web/src/views/your-module/` 目录,而不是往现有 view 里加路由。新文件永远不会冲突,只有共用文件才会。
-- **如果确实要改共用文件**(布局、store、`styles/tokens.css`)——上游改到同一处时冲突就会出现,这是正常现象,不代表哪里做错了。
+- **自己的代码放进新文件**,不要往已有文件里加。新文件永远不会冲突,只有共用文件才会。[加一个前端页面](/zh/guide/frontend-page)全程都是照这个来的,每类东西都有专门的去处:
+
+  | 你的代码 | 放这里 | 别放这里 |
+  |---|---|---|
+  | 领域类型 | 新建 `web/src/types/<模块>.ts` | `types/api.ts` |
+  | API 封装 | 新建 `web/src/api/<域>.ts`(从 `./index` 导入 `unwrap` / `pageParams` / `toPage`) | `api/index.ts` |
+  | i18n 文案 | 新建 `web/src/locales/ext/<locale>/<模块>.ts`(glob 自动并入,见那里的 [README](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/src/locales/ext/README.md)) | `locales/zh-CN.ts` / `en-US.ts` |
+  | 页面 | 新建 `web/src/views/<模块>/` 目录 | 任何现有 view |
+
+  上面这四个上游文件是 `web/src` 里改动最频繁的,几乎每次发版都在动——正因如此你的代码才不该住在里面。反过来,你拥有而上游极少碰的文件(`styles/tokens.css`、你自己的页面)可以随便改:冲突需要**双方**都改同一个文件才会发生。
+
+- **如果确实要改共用文件**(布局、store、内置页面)——上游改到同一处时冲突就会出现,这是正常现象,不代表哪里做错了。这类改动尽量少而小。
+
+- **`web/src/api/schema.d.ts` 是特例:永远不要合并它,重新生成它。** 它是 6000 行的生成物,而你的后端有你自己的控制器,所以你这份从第一天起就和上游 100% 分叉——上游一动它就是整文件冲突。别手动解:
+
+  ```bash
+  git checkout --ours web/src/api/schema.d.ts   # 保留你的,丢掉上游的
+  npm run gen:api                               # 然后对着「你自己的」运行中后端重新生成
+  git add web/src/api/schema.d.ts
+  ```
+
+  这个冲突其实是在帮你:它就是"后端契约变了,你的类型该重新生成了"的信号。(这也是本仓库**故意不**配 `merge=ours` gitattribute 的原因——静默保留你那份会把这个信号吞掉,让你拿着过期的契约继续跑。)
 
 ## 5. 跟踪版本变化
 

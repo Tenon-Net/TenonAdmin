@@ -57,7 +57,7 @@ export const positionApi = {
 }
 ```
 
-所以页面里 `:fetcher="positionApi.page"` 直接把 api 层的方法传进去就行，映射已经在那里做完了。加新列表页时，照着 `api/index.ts` 里现成的 `userApi.page`/`positionApi.page` 复制一份，改端点和搜索字段名——不要在组件里手动拼 `Current`/`Size`。
+所以页面里 `:fetcher="positionApi.page"` 直接把 api 层的方法传进去就行，映射已经在那里做完了。加新列表页时，照着 `api/index.ts` 里现成的 `userApi.page`/`positionApi.page` 复制一份形态，改端点和搜索字段名——不要在组件里手动拼 `Current`/`Size`。如果你是在 fork 上做业务，请粘进你自己的 `api/<域>.ts`、从 `./index` 导入 `pageParams`/`toPage`/`unwrap`，而不是把 `api/index.ts` 撑大（见[同步上游](/zh/guide/sync-fork)）。
 
 搜索列的 `key` 就是搜出去的参数名（`name` 列会以 `name` 进 `fetcher`），要落到后端哪个字段，是 api 层那一步 `Name: params.name` 决定的。
 

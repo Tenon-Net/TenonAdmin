@@ -13,6 +13,10 @@
 | ErrorCode | `ErrorCode.cs` 42xxx 段追加(看枚举头部分段表取下一个号) | 自建枚举,从 60000 起步 |
 | 菜单/权限 | `DefaultMenuSeed.cs` 追加种子,Id 按登记取号(勿回填空洞) | 后台「菜单管理」UI 添加;要预置则自注册 `ISeedData<T>`,Id ∈ [1000, 4095] |
 | 程序集挂载 | 内置 | `options.ApplicationAssemblies.Add(typeof(Program).Assembly)`(缺这行:表不建、Controller 404) |
+| 前端类型 / API | 追加进 `web/src/types/api.ts` / `api/index.ts` | **新建** `types/<模块>.ts` / `api/<域>.ts`(从 `api/index.ts` 导入 `unwrap`/`pageParams`/`toPage`) |
+| 前端 i18n | 追加进 `locales/zh-CN.ts` + `en-US.ts` | **新建** `locales/ext/zh-CN/<模块>.ts` + `ext/en-US/<模块>.ts`(glob 自动并入,无需注册) |
+
+> 前端那两行的理由和后端的可替换性同源:消费者 fork 整仓(见 `guide/sync-fork`),而 `locales/zh-CN.ts`(52 次改动)/`api/index.ts`(34)/`types/api.ts`(28) 是 `web/src` 里 churn 最高的文件。冲突只在双方都改同一文件时发生 —— 消费者的东西一律新建文件,就永远不冲突。
 
 ## 步骤
 
@@ -21,7 +25,7 @@
 3. **后端测试**:xUnit + `AdminAppFactory`(见 `backend/tests/TenonAdmin.Tests/` 现成写法);跑 `dotnet test backend/TenonAdmin.slnx`。
 4. **刷新 API 契约**:先把后端跑起来(`dotnet run --project backend/samples/MinimalHost` 或你的 host),再 `cd web && npm run gen:api`。**绝不手改 `schema.d.ts`**。
 5. **前端页面** → `create-crud-frontend.md`(平铺 CRUD);树表/主从分栏/侧栏筛选 → `create-page-variant.md`;组件契约总索引 → `web/COMPONENTS.md`,设计规范 → `web/DESIGN.md`。
-6. **i18n**:`web/src/locales/zh-CN.ts` **和** `en-US.ts` 两处都加(模块 key + `error.*` key),键结构见 `create-crud-frontend.md` 的「i18n」节。
+6. **i18n**:双语两处都要加(模块 key + `error.*` key),文件按第零步的模式选——系统模块进 `locales/zh-CN.ts`/`en-US.ts`,业务模块新建 `locales/ext/<locale>/<模块>.ts`。键结构见 `create-crud-frontend.md` 的「i18n」节。**`error.*` 的键必须和后端 `[MsgKey]` 字符串逐字对上(嵌套形态,去掉 `error.` 前缀)**——`translateError` 只按 `msgKey` 取字、从不读数字 `code`,写成 `{ 50001: '...' }` 是永远没人读的死文案。
 7. **菜单/权限接线**:
    - 系统模块:`DefaultMenuSeed` 加页面节点 + 权限按钮。
    - 消费者:菜单管理 UI 建节点,`component` 填 `views/` 相对路径(如 `biz/product/index`),动态路由自动注册,**不写任何路由代码**。

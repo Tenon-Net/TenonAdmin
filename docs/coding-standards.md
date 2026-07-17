@@ -188,11 +188,26 @@ public virtual async Task<T> GetHotAsync(string k)
 | `directives/` | `v-auth` 等 |
 | `types/` | 手写类型（`menu.ts`）与再导出 |
 
+#### 文件归属：内核自留地 vs 消费者扩展位
+
+消费者是 fork 本仓库、在 `web/` 上长自己的业务的（见文档站 `guide/sync-fork`）。冲突只在**双方都改同一个文件**时发生，所以下面这几个高频改动的内核文件必须保持单向：**上游写，消费者不写**。消费者的东西一律新建文件——新文件永不冲突。
+
+| 消费者的东西 | 新建 | 不要写进 |
+|---|---|---|
+| 领域类型 | `types/<模块>.ts` | `types/api.ts` |
+| API 封装 | `api/<域>.ts`（从 `api/index.ts` 导入原语） | `api/index.ts` |
+| i18n 文案 | `locales/ext/<locale>/<模块>.ts`（glob 自动并入，见 `locales/ext/README.md`） | `locales/zh-CN.ts` / `en-US.ts` |
+| 页面 | `views/<模块>/` | 任何现有 view |
+
+推论：`api/index.ts` 里 `unwrap`/`ApiError`/`pageParams`/`toPage` 的 `export`、以及 `locales/index.ts` 的 `ext/` glob，**是产品接缝而非普通导出**——站内没有调用方也必须留着，别当未使用代码清掉。改动这两处前先想清楚是否会把消费者重新逼回共享文件。
+
+`schema.d.ts` 是生成物，消费者那份从第一天起就和上游分叉：冲突时 `git checkout --ours` 后重跑 `gen:api`，不要手动合并，也不要配 `merge=ours`（会吞掉「契约变了」的信号）。
+
 ### 2.2 API 契约流
 
 - **`schema.d.ts` 由后端 OpenAPI 生成**（`npm run gen:api`，后端需运行），**禁止手改**，改了重新生成。
 - `api/client.ts` 是 `openapi-fetch` 针对 schema 的类型化封装。
-- `api/index.ts` 按域分组导出（`authApi`/`personalApi`/`userApi`/`moduleApi`/`menuApi`…），每个方法 `client.X(...).then(r => unwrap<T>(r))`。
+- `api/index.ts` 按域分组导出（`authApi`/`personalApi`/`userApi`/`moduleApi`/`menuApi`…），每个方法 `client.X(...).then(r => unwrap<T>(r))`。**这是内核自留地**：消费者的业务 API 新建 `api/<域>.ts`，从 `api/index.ts` 导入 `unwrap`/`ApiError`/`pageParams`/`toPage` 即可，不要往 `index.ts` 里塞（见 §2.1 的「文件归属」）。
 - **`unwrap`** 统一解信封：2xx 的 `Result<T>`（code≠0 抛 `ApiError`）、非 2xx 的信封/ProblemDetails 都归一到 `ApiError`（带 `code`/`msgKey`）。视图 `catch` 后 `translateError(e)` 展示。参照 `api/index.ts`。
 - 分页返回在 api 层归一为 `{ items, total }` 以适配 `useTable`（后端是 `PagedList<T>{current,size,total,items}`）。查询参数名用 PascalCase（ASP.NET 绑定要求）。
 
@@ -222,7 +237,9 @@ public virtual async Task<T> GetHotAsync(string k)
 
 ### 2.7 i18n
 
-- 文案按 code 翻译：后端只给 `code`/`msgKey`，前端 `translateError` + `locales/zh-CN.ts`/`en-US.ts` 出文案。
+- 错误文案不出后端：后端给 `code` + `msgKey`（`ErrorCode.GetMsgKey()`，标注了 `[MsgKey]` 就是语义键如 `error.dict.typeNotFound`，没标注则兜底 `error.code.{数值}`），前端 `translateError` 出文案。
+- **`translateError` 只按 `msgKey` 取字，从不读 `code`**——i18n 里的键必须和 `[MsgKey]` 字符串逐字对上（嵌套形态）。按数字码写 `error: { 50001: '...' }` 能编译能解析但永远没人读，是死文案。
+- 内置文案在 `locales/zh-CN.ts`/`en-US.ts`；消费者的（含自定义错误码）走 `locales/ext/<locale>/<模块>.ts`，深合并进内置，见「文件归属」。
 - 视图内所有可见文本走 `t('...')`，禁硬编码。
 
 ### 2.8 主题
@@ -256,7 +273,7 @@ npm run build       # 类型检查 + 构建
 | 你要改… | 后端 | 前端 |
 |---|---|---|
 | 加实体/表 | `Services/Entities/` | — |
-| 加接口/业务 | `Services/<域>/` + `ServicesSetup.cs` 注册 | `api/index.ts` |
+| 加接口/业务 | `Services/<域>/` + `ServicesSetup.cs` 注册 | `api/index.ts`（消费者：新建 `api/<域>.ts`） |
 | 加端点 | `AspNetCore/Controllers/` | — |
 | 加页面 | — | `views/<模块>/<实体>/index.vue` + 菜单管理挂载 |
 | 加缓存 | `Core/CacheKeys.cs` + 服务内 cache-aside | — |
