@@ -1,17 +1,12 @@
 # 巡检台账
 
-last-seen: 6013b02
+last-seen: 1601072
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
 <!-- 后端已排空;以下为前端(§2.* + 契约轴) -->
-- web/src/stores/app.spec.ts
-- web/src/stores/auth.spec.ts
-- web/src/stores/auth.ts
-- web/src/stores/dict.spec.ts
-- web/src/stores/user.ts
 - web/src/theme/mix.ts
 - web/src/types/api.ts
 - web/src/utils/error.spec.ts
@@ -81,3 +76,5 @@ dry-streak: 0
 ### 第 9 轮 — 前端规范轴 + 契约轴 · 扫了 DictSelect/README.md / UserPicker/index.vue / useModule.spec.ts / useModule.ts / directives/auth.ts · 全合规(UserPicker §2.7 文本全走 t()、userPicker.* 7 键 en/zh 完全对齐、§2.9 scoped + CSS 变量、9999 页 ponytail 上限未触达;useModule 门户逻辑 Naive 无关且失败安全默认;auth.ts v-auth fail-closed/open 收敛于 hasPerm,合 D2)。无闸门。队列剩 37。NEXT: 前端队首 5 个(AppHeader.vue / NoticeBell.vue / locales/en-US.ts / locales/zh-CN.ts / router/routes.ts)。
 
 ### 第 10 轮 — 前端规范轴 + 契约轴 · 扫了 AppHeader.vue / NoticeBell.vue / locales/en-US.ts / locales/zh-CN.ts / router/routes.ts · 契约轴亮点:脚本结构化比对两 locale → en/zh 各 606 键、双向零缺口、完全对齐无漂移;AppHeader/NoticeBell 合规(文本走 t()、aria-label a11y、ponytail 上限未触达、原生语言名故意不译)。记 1 判断题(J3:routes.ts:16 /module meta.title 硬编码 '选择应用',§2.7 潜在缺口,可见性/键名待定)→ 记账轮不跑闸门。队列剩 32。NEXT: 前端队首 5 个(stores/app.spec.ts / auth.spec.ts / auth.ts / dict.spec.ts / user.ts)。
+
+### 第 11 轮 — 前端规范轴 + 契约轴 · 扫了 stores/app.spec.ts / auth.spec.ts / auth.ts / dict.spec.ts / user.ts · 全合规(auth.ts §2.4 仅持久化 currentModuleId、hasPerm 超管/未加载/命中三态合 D2、reset 连清 tabs;user.ts 全持久化保登录;三 spec 覆盖 homePath/hasPerm/isDark/afterHydrate 迁移/字典缓存并发去重与失效竞态)。无契约/i18n 触点,无闸门。队列剩 27。NEXT: 前端队首 5 个(theme/mix.ts / types/api.ts / utils/error.spec.ts / utils/tree.spec.ts / views/dashboard/biz.vue)。
