@@ -1,17 +1,12 @@
 # 巡检台账
 
-last-seen: 48ce61f
+last-seen: f1a7e82
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
 <!-- 后端已排空;以下为前端(§2.* + 契约轴) -->
-- web/src/api/index.spec.ts
-- web/src/api/index.ts
-- web/src/api/schema.d.ts
-- web/src/components/ApiSelect/README.md
-- web/src/components/ApiSelect/index.vue
 - web/src/components/Chart/BarChart.vue
 - web/src/components/Chart/README.md
 - web/src/components/CodeBlock/README.md
@@ -97,3 +92,5 @@ dry-streak: 0
 ### 第 5 轮 — 后端规范轴 · 扫了 DefaultMenuSeed.cs / DefaultModuleSeed.cs / DefaultUserRoleSeed.cs / DefaultUserSeed.cs / UserService.cs · 四合规(权限码=规范化路由对齐;Id 全落 [1,999];UserService 三条安全不变量齐全、DateTime.Now×2 归 J1 不重报、LIKE 元字符/IN 列表两处 ponytail 上限未触达);记 1 判断题(J2:DefaultMenuSeed 取号台账注释 113 vs 116 自相矛盾、实际 max=115,文档准确性)→ 记账轮不跑闸门。队列剩 62。NEXT: 后端只剩 3 个(DatabaseInitializer / SysSchemaVersion / ISeedData),下轮扫完后端;之后轮到前端(§2.* + 契约轴)。
 
 ### 第 6 轮 — 后端规范轴 · 扫了 DatabaseInitializer.cs / SysSchemaVersion.cs / ISeedData.cs(后端队列排空)· 两合规(SysSchemaVersion 置于 SqlSugar 层是被迫的正确——同层 DatabaseInitializer 需引用其 Current 做版本闸门,放 Services 会致 SqlSugar→Services 逆向依赖;ISeedData 契约文档详尽);DatabaseInitializer.cs:82 §1.11-DateTime.Now 并入 J1 覆盖(schema 版本审计戳,internal sealed 无子类顾虑)→ 记账轮不跑闸门。队列剩 59(纯前端)。NEXT: 后端已排空,轮到前端 §2.* + 契约轴,队首 5 个(api/index.spec.ts / api/index.ts / api/schema.d.ts / components/ApiSelect/README.md / components/ApiSelect/index.vue)。
+
+### 第 7 轮 — 前端规范轴 + 契约轴 · 扫了 api/index.spec.ts / api/index.ts / api/schema.d.ts(6485 行生成物)/ ApiSelect/README.md / ApiSelect/index.vue · 全合规(api/index.ts §2.1 自留地接缝完整、§2.2 域分组 + toPage 归一 + PascalCase 查询参;ApiSelect 竞态守卫/防抖/无硬编码文案;契约轴:api↔schema 由 typecheck 兜住,抽查 password-policy/unread-count/read-all/role-users 4 最新端点均在 schema.d.ts,无漂移;recycle 的 as any 为动态 {type} 路由已知逃生)。无闸门。队列剩 54。NEXT: 前端队首 5 个(Chart/BarChart.vue / Chart/README.md / CodeBlock/README.md / CodeBlock/index.vue / DictCheckbox/README.md)。
