@@ -1,17 +1,12 @@
 # 巡检台账
 
-last-seen: 13c6944
+last-seen: 9bc694c
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
 <!-- 后端队首(先排空后端,再轮到前端) -->
-- backend/src/TenonAdmin.Services/Seed/DefaultMenuSeed.cs
-- backend/src/TenonAdmin.Services/Seed/DefaultModuleSeed.cs
-- backend/src/TenonAdmin.Services/Seed/DefaultUserRoleSeed.cs
-- backend/src/TenonAdmin.Services/Seed/DefaultUserSeed.cs
-- backend/src/TenonAdmin.Services/User/UserService.cs
 - backend/src/TenonAdmin.SqlSugar/DatabaseInitializer.cs
 - backend/src/TenonAdmin.SqlSugar/Entities/SysSchemaVersion.cs
 - backend/src/TenonAdmin.SqlSugar/Seed/ISeedData.cs
@@ -88,6 +83,10 @@ dry-streak: 0
 建议方向:三文件一起改,注入 `TimeProvider`,并由维护者定夺 `GetUtcNow()`(与 SessionService 对齐)还是 `GetLocalNow()`(保现语义)后一次性收敛。
 > 覆盖 UserService.cs / PersonalService.cs 同规则,后续扫到这两文件的 §1.11-DateTime.Now 不再重报。
 
+### J2 · 文档准确性 · DefaultMenuSeed.cs 取号台账注释自相矛盾
+类注释两处"当前最大 Id"打架:行 12「现已用到 113」vs 行 15「新增行取当前最大号 +1(现为 116)」;而 `HasData()` 实际最大 Id 已是 115(114 角色-取用户 / 115 角色-授权用户)。行 12 陈旧,行 15 正确。
+非机械修理由:非 §1.* 硬约束(仅取号台账注释陈旧),撞号会被 DatabaseInitializer/SeedIdRangeTests 当场拒(非静默);属文档准确性,建议下次动此文件时把行 12 一并改为「现已用到 115」批量收敛,不单独为一行注释跑后端闸门。
+
 ## 轮次日志
 
 ### 第 1 轮 — 后端规范轴 · 扫了 PersonalController.cs / DemoModeFilter.cs / TenonAdminSetup.cs / ErrorCode.cs / TenonAdminOptions.cs · 修 TenonAdminOptions.Database 缺失 `/// <summary>`(§0.2/§1.13,11 个同级属性唯一漏标)→ 后端闸门绿(build 0 err，test 267/0/0，commit 9519ebd)。队列剩 82。NEXT: 继续排后端队首 5 个(ISecurityPolicyProvider / AuthService / SysModule / SysNotice / SysNoticeReceiver)。
@@ -97,3 +96,5 @@ dry-streak: 0
 ### 第 3 轮 — 后端规范轴 · 扫了 SysUser.cs / ModuleModels.cs / ModuleService.cs / NoticeModels.cs / NoticeService.cs · 全合规(头像 ViewUrl + 通知未读实时/全量载入/逐条插入等多处 ponytail 上限本轮 diff 均未触达,静默;ModuleService 靠 PortalGeneration 计数器做跨节点缓存失效,coherent)。无发现,无闸门。队列剩 72。NEXT: 继续排后端队首 5 个(PersonalModels / PersonalService[J1 已覆盖其 §1.11-DateTime.Now] / SecurityPolicyProvider / ConfigSeed / DefaultDataScopeSeed)。
 
 ### 第 4 轮 — 后端规范轴 · 扫了 PersonalModels.cs / PersonalService.cs / SecurityPolicyProvider.cs / ConfigSeed.cs / DefaultDataScopeSeed.cs · 全合规(PersonalService.cs:80 §1.11-DateTime.Now 归 J1 不重报;SecurityPolicyProvider 逐键读 ponytail 上限未触达;ConfigSeed 22 行 Id 全落 [1,999] 无碰撞、默认值与 provider 兜底一致;DefaultDataScopeSeed 类摘要缺失但 internal、非 §0.2 公共成员硬约束,按噪声跳过)。无闸门。队列剩 67。NEXT: 继续排后端队首 5 个(DefaultMenuSeed / DefaultModuleSeed / DefaultUserRoleSeed / DefaultUserSeed / UserService[J1 已覆盖其 §1.11])。
+
+### 第 5 轮 — 后端规范轴 · 扫了 DefaultMenuSeed.cs / DefaultModuleSeed.cs / DefaultUserRoleSeed.cs / DefaultUserSeed.cs / UserService.cs · 四合规(权限码=规范化路由对齐;Id 全落 [1,999];UserService 三条安全不变量齐全、DateTime.Now×2 归 J1 不重报、LIKE 元字符/IN 列表两处 ponytail 上限未触达);记 1 判断题(J2:DefaultMenuSeed 取号台账注释 113 vs 116 自相矛盾、实际 max=115,文档准确性)→ 记账轮不跑闸门。队列剩 62。NEXT: 后端只剩 3 个(DatabaseInitializer / SysSchemaVersion / ISeedData),下轮扫完后端;之后轮到前端(§2.* + 契约轴)。
