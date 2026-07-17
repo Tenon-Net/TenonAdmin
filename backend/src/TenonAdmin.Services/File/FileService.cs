@@ -19,7 +19,8 @@ public class FileService(
     ChunkStorage chunks,
     AdminUploadOptions options,
     IConfigService config,
-    TimeProvider timeProvider) : IFileService
+    TimeProvider timeProvider,
+    ICurrentUser? currentUser = null) : IFileService   // 可选参数:默认 DI 注入;消费者子类省略也能编译(§5.3,同 FileGcService 成法)
 {
     /// <summary>上传约束配置项分组编码(配置中心「上传策略」Tab 按此分组加载)</summary>
     internal const string GROUP = "upload";
@@ -86,6 +87,24 @@ public class FileService(
     };
 
     /// <summary>
+    /// 秒传命中时取得<b>本引用方</b>(当前用户)对该内容的引用行:已有则复用、没有则新建。
+    /// <para><b>为什么要幂等</b>:ChunkInit 是可重复调用的探针(重选同一文件、组件重挂、重试都会再触发)。
+    /// 若每次命中都无条件新建行,未被业务引用的孤儿行(IsDelete=false)会无界堆积、永不进 GC 回收集,
+    /// 且让 <c>FileGcService</c> 的 StoragePath 共享判定<b>恒为真</b> → 物理文件永不删盘,击穿秒传去重的 GC 语义。
+    /// 故按 <c>(Hash, 当前用户)</c> 去重:同一用户对同一内容至多一行,跨用户仍各自独立(T-D7 隔离)。</para>
+    /// <para>取不到当前用户时(消费者子类未注入 <see cref="ICurrentUser"/>)退回直接新建,行为与幂等前一致。</para>
+    /// </summary>
+    protected virtual async Task<FileUploadOutput> ReferenceForCallerAsync(SysFile existing, string fileName, string? contentType)
+    {
+        if (currentUser?.UserId is long uid)
+        {
+            var mine = await files.GetFirstAsync(f => f.Hash == existing.Hash && f.CreateUserId == uid);
+            if (mine is not null) return ToOutput(mine);   // 幂等:本用户已有同内容引用行 → 复用,不再插
+        }
+        return await ReferenceExistingAsync(existing, fileName, contentType);
+    }
+
+    /// <summary>
     /// 秒传命中(T-D7):为新引用方插一条<b>独立</b>的 <c>sys_file</c> 记录(共享既有行的 <c>StoragePath</c>/大小/哈希),
     /// 而非复用既有行的 Id。这样各引用方各拥有独立记录——一方删除只软删自己那条,不牵连另一方;物理文件仅当无任何行
     /// 引用其 <c>StoragePath</c> 时才由 <c>FileGcService</c> 删除(见其 <c>ReclaimDeletedFilesAsync</c> 的共享判定)。
@@ -109,10 +128,11 @@ public class FileService(
     /// <inheritdoc />
     public virtual async Task<ChunkInitOutput> ChunkInitAsync(ChunkInitInput input)
     {
-        // 秒传:同内容哈希已存在则免传。为新引用方插独立记录(共享物理文件),不复用既有行的 Id(T-D7)。
+        // 秒传:同内容哈希已存在则免传。为本引用方取/建独立记录(共享物理文件,不复用他人行 Id,T-D7);
+        // 探针可重复调用,故按 (Hash, 当前用户) 幂等,避免重复探测泄漏孤儿行(见 ReferenceForCallerAsync)。
         var existing = await files.GetFirstAsync(f => f.Hash == input.FileHash);
         if (existing is not null)
-            return new ChunkInitOutput { Uploaded = true, File = await ReferenceExistingAsync(existing, input.FileName, input.ContentType) };
+            return new ChunkInitOutput { Uploaded = true, File = await ReferenceForCallerAsync(existing, input.FileName, input.ContentType) };
 
         // uploadId 直接用 FileHash;返回已收分片供断点续传。
         var received = await chunks.GetReceivedIndexesAsync(input.FileHash);
@@ -126,12 +146,12 @@ public class FileService(
     /// <inheritdoc />
     public virtual async Task<FileUploadOutput> ChunkCompleteAsync(ChunkCompleteInput input)
     {
-        // 秒传兜底:完成时再查一次(并发下他人可能刚传完同 hash),命中则弃分片、为新引用方插独立记录(T-D7)。
+        // 秒传兜底:完成时再查一次(并发下他人可能刚传完同 hash),命中则弃分片、为本引用方取/建独立记录(T-D7,幂等)。
         var existing = await files.GetFirstAsync(f => f.Hash == input.FileHash);
         if (existing is not null)
         {
             await chunks.DiscardAsync(input.UploadId);
-            return await ReferenceExistingAsync(existing, input.FileName, input.ContentType);
+            return await ReferenceForCallerAsync(existing, input.FileName, input.ContentType);
         }
 
         var ext = Path.GetExtension(input.FileName).ToLowerInvariant();
