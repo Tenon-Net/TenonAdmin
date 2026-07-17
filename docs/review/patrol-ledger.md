@@ -1,16 +1,12 @@
 # 巡检台账
 
-last-seen: 9bc694c
+last-seen: 48ce61f
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
-<!-- 后端队首(先排空后端,再轮到前端) -->
-- backend/src/TenonAdmin.SqlSugar/DatabaseInitializer.cs
-- backend/src/TenonAdmin.SqlSugar/Entities/SysSchemaVersion.cs
-- backend/src/TenonAdmin.SqlSugar/Seed/ISeedData.cs
-<!-- 前端(后端排空后轮到) -->
+<!-- 后端已排空;以下为前端(§2.* + 契约轴) -->
 - web/src/api/index.spec.ts
 - web/src/api/index.ts
 - web/src/api/schema.d.ts
@@ -82,6 +78,7 @@ dry-streak: 0
 - **本地 vs UTC 决策**:SessionService.cs:11 明确"统一走 UTC";本特性用 `DateTime.Now`(本地)。收敛时须定夺存本地还是 UTC——影响过期窗口判断,非纯机械替换。
 建议方向:三文件一起改,注入 `TimeProvider`,并由维护者定夺 `GetUtcNow()`(与 SessionService 对齐)还是 `GetLocalNow()`(保现语义)后一次性收敛。
 > 覆盖 UserService.cs / PersonalService.cs 同规则,后续扫到这两文件的 §1.11-DateTime.Now 不再重报。
+> 追加(第 6 轮):DatabaseInitializer.cs:82 `AppliedTime = DateTime.Now` 同属 §1.11,但为架构版本审计戳(非密码过期特性)、且该类 internal sealed 无子类破坏顾虑,仅剩 UTC/本地一处决策——并入本条随 J1 一起定夺,不单独重报。
 
 ### J2 · 文档准确性 · DefaultMenuSeed.cs 取号台账注释自相矛盾
 类注释两处"当前最大 Id"打架:行 12「现已用到 113」vs 行 15「新增行取当前最大号 +1(现为 116)」;而 `HasData()` 实际最大 Id 已是 115(114 角色-取用户 / 115 角色-授权用户)。行 12 陈旧,行 15 正确。
@@ -98,3 +95,5 @@ dry-streak: 0
 ### 第 4 轮 — 后端规范轴 · 扫了 PersonalModels.cs / PersonalService.cs / SecurityPolicyProvider.cs / ConfigSeed.cs / DefaultDataScopeSeed.cs · 全合规(PersonalService.cs:80 §1.11-DateTime.Now 归 J1 不重报;SecurityPolicyProvider 逐键读 ponytail 上限未触达;ConfigSeed 22 行 Id 全落 [1,999] 无碰撞、默认值与 provider 兜底一致;DefaultDataScopeSeed 类摘要缺失但 internal、非 §0.2 公共成员硬约束,按噪声跳过)。无闸门。队列剩 67。NEXT: 继续排后端队首 5 个(DefaultMenuSeed / DefaultModuleSeed / DefaultUserRoleSeed / DefaultUserSeed / UserService[J1 已覆盖其 §1.11])。
 
 ### 第 5 轮 — 后端规范轴 · 扫了 DefaultMenuSeed.cs / DefaultModuleSeed.cs / DefaultUserRoleSeed.cs / DefaultUserSeed.cs / UserService.cs · 四合规(权限码=规范化路由对齐;Id 全落 [1,999];UserService 三条安全不变量齐全、DateTime.Now×2 归 J1 不重报、LIKE 元字符/IN 列表两处 ponytail 上限未触达);记 1 判断题(J2:DefaultMenuSeed 取号台账注释 113 vs 116 自相矛盾、实际 max=115,文档准确性)→ 记账轮不跑闸门。队列剩 62。NEXT: 后端只剩 3 个(DatabaseInitializer / SysSchemaVersion / ISeedData),下轮扫完后端;之后轮到前端(§2.* + 契约轴)。
+
+### 第 6 轮 — 后端规范轴 · 扫了 DatabaseInitializer.cs / SysSchemaVersion.cs / ISeedData.cs(后端队列排空)· 两合规(SysSchemaVersion 置于 SqlSugar 层是被迫的正确——同层 DatabaseInitializer 需引用其 Current 做版本闸门,放 Services 会致 SqlSugar→Services 逆向依赖;ISeedData 契约文档详尽);DatabaseInitializer.cs:82 §1.11-DateTime.Now 并入 J1 覆盖(schema 版本审计戳,internal sealed 无子类顾虑)→ 记账轮不跑闸门。队列剩 59(纯前端)。NEXT: 后端已排空,轮到前端 §2.* + 契约轴,队首 5 个(api/index.spec.ts / api/index.ts / api/schema.d.ts / components/ApiSelect/README.md / components/ApiSelect/index.vue)。
