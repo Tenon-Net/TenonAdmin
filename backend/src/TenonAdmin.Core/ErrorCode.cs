@@ -190,6 +190,10 @@ public enum ErrorCode
     [MsgKey("error.session.notFound")]
     SessionNotFound = 42024,
 
+    /// <summary>新口令与当前或最近使用过的口令重复(密码历史防重用策略,开关 sys.security.password.historyCount)</summary>
+    [MsgKey("error.user.passwordReused")]
+    PasswordReused = 42025,
+
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 
     /// <summary>字典类型不存在</summary>

@@ -642,6 +642,7 @@ export default {
       accountExists: 'Account already exists',
       superAdminProtected: 'Super admin is protected',
       passwordTooWeak: 'New password does not meet the complexity policy',
+      passwordReused: 'New password must differ from your current and recently used passwords',
     },
     role: { notFound: 'Role not found', codeExists: 'Role code already exists' },
     org: {

@@ -67,6 +67,9 @@ public static class ServicesSetup
         // 数据范围解析(§6 招牌能力,T3):合并用户多角色范围,结果按用户缓存
         services.TryAddScoped<IDataScopeProvider, DataScopeProvider>();
 
+        // 密码历史防重用(§14):开关 sys.security.password.historyCount(默认 0=关);改密/重置挂点调用
+        services.TryAddScoped<IPasswordHistoryService, PasswordHistoryService>();
+
         // 组织模块(§4,T2):用户 / 机构(树)/ 职位 —— Scoped,与仓储一致
         services.TryAddScoped<IUserService, UserService>();
         services.TryAddScoped<IOrgService, OrgService>();

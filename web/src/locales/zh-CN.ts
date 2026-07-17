@@ -649,6 +649,7 @@ export default {
       accountExists: '账号已存在',
       superAdminProtected: '超级管理员受保护,禁止此操作',
       passwordTooWeak: '新密码不满足密码复杂度要求',
+      passwordReused: '新密码不能与当前或最近使用过的密码相同',
     },
     role: { notFound: '角色不存在', codeExists: '角色编码已存在' },
     org: {
