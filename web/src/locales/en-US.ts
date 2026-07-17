@@ -110,6 +110,8 @@ export default {
     formStyleModal: 'Modal',
     formStyleDrawer: 'Drawer',
     resetConfirm: 'Reset all settings to default?',
+    copyConfig: 'Copy config',
+    configCopied: 'Current config copied (paste into DEFAULTS in stores/app.ts to make it the new default)',
     searchPlaceholder: 'Search menu…',
     searchEmpty: 'No matching menu',
     searchHint: '↑↓ navigate · ↵ open · Esc close',

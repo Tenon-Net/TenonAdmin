@@ -17,7 +17,8 @@ import {
 import { computed } from 'vue'
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
-import { useWindowSize } from '@vueuse/core'
+import { useMessage } from 'naive-ui'
+import { useWindowSize, useClipboard } from '@vueuse/core'
 import { useAppStore } from '@/stores/app'
 import { ACCENTS } from '@/theme/accents'
 import SettingRow from './SettingRow.vue'
@@ -26,6 +27,14 @@ import LayoutModeCards from './LayoutModeCards.vue'
 const show = defineModel<boolean>('show', { default: false })
 const app = useAppStore()
 const { t } = useI18n()
+const message = useMessage()
+const { copy, isSupported } = useClipboard()
+
+// 复制当前外观配置(消费者 fork 后粘回 stores/app.ts 的 DEFAULTS 即为新默认)。
+async function copyConfig() {
+  await copy(JSON.stringify(app.exportSettings(), null, 2))
+  message.success(t('settings.configCopied'))
+}
 
 // 窄屏不溢出:抽屉宽度取 min(400, 90vw)。加宽给布局卡片两列留出余量。
 const { width } = useWindowSize()
@@ -145,14 +154,19 @@ const transitionOptions = computed(() => [
       </n-tabs>
 
       <template #footer>
-        <n-popconfirm @positive-click="app.resetSettings()">
-          <template #trigger>
-            <n-button block secondary>
-              <Icon icon="ph:arrow-counter-clockwise" class="ri" />{{ t('common.reset') }}
-            </n-button>
-          </template>
-          {{ t('settings.resetConfirm') }}
-        </n-popconfirm>
+        <div class="footer-actions">
+          <n-button v-if="isSupported" block tertiary @click="copyConfig">
+            <Icon icon="ph:clipboard-text" class="ri" />{{ t('settings.copyConfig') }}
+          </n-button>
+          <n-popconfirm @positive-click="app.resetSettings()">
+            <template #trigger>
+              <n-button block secondary>
+                <Icon icon="ph:arrow-counter-clockwise" class="ri" />{{ t('common.reset') }}
+              </n-button>
+            </template>
+            {{ t('settings.resetConfirm') }}
+          </n-popconfirm>
+        </div>
       </template>
     </n-drawer-content>
   </n-drawer>
@@ -161,6 +175,12 @@ const transitionOptions = computed(() => [
 <style scoped>
 .tabs {
   height: 100%;
+}
+.footer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
 }
 .ri {
   margin-right: 5px;

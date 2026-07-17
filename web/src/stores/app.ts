@@ -85,6 +85,11 @@ export const useAppStore = defineStore('app', {
     resetSettings() {
       Object.assign(this, DEFAULTS)
     },
+    // 导出当前外观配置(DEFAULTS 同名键的现值);抽屉「复制配置」用,粘回 app.ts DEFAULTS 即为新默认。
+    exportSettings(): Record<keyof typeof DEFAULTS, unknown> {
+      const keys = Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[]
+      return Object.fromEntries(keys.map((k) => [k, this[k]])) as Record<keyof typeof DEFAULTS, unknown>
+    },
   },
   persist: {
     // 迁移:localStorage 残留的旧模式(mixed-nav / full-content / header-mixed)不在新集合 → 回落 vertical。

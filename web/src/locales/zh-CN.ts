@@ -111,6 +111,8 @@ export default {
     formStyleModal: '弹窗',
     formStyleDrawer: '抽屉',
     resetConfirm: '确定恢复默认设置?',
+    copyConfig: '复制配置',
+    configCopied: '已复制当前配置(粘回 stores/app.ts 的 DEFAULTS 即为新默认)',
     searchPlaceholder: '搜索菜单…',
     searchEmpty: '无匹配菜单',
     searchHint: '↑↓ 导航 · ↵ 进入 · Esc 关闭',
