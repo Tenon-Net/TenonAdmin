@@ -20,7 +20,7 @@
 - [x] **B2 IEmailSender 邮件通道**(10ff869)— 严格镜像 ISmsSender:`Core/Security/IEmailSender`(`SendAsync(to, subject, htmlBody, ct)`);Services 层 `LoggingEmailSender`(默认)+ `SmtpEmailSender`(BCL SmtpClient,`TenonAdmin:Email` Options:Host/Port/From/User/Pass/Ssl;配了 Host 用 SMTP 否则日志)。零表零页面;要现代协议的消费者前置注册 MailKit 实现即接管。
 - [x] **B3 密码历史防重用**(cd6e534)— 表 `sys_password_history`(UserId, PasswordHash);`IPasswordHistoryService`(TryAdd):`EnsureNotReusedAsync`(取最近 N 条逐条 `IPasswordHasher.Verify`——盐不同只能验明文)+ `AppendAsync`(写入裁剪到 N)。开关 `sys.security.password.historyCount`(默认 0=关)走 SecurityPolicyProvider「DB 优先、Options 兜底」通道;挂点:`PersonalService.ChangePasswordAsync`、`UserService.ResetPasswordAsync`,建号初始密码只记录不校验。ErrorCode 42025 PasswordReused。
 - [x] **B4 T-D7 文件引用根治(零 DDL)**(3f4dd58)— 秒传改「一引用一行」:`FileService.ChunkInitAsync/ChunkCompleteAsync` 命中同 hash 时不复用既有行,新插 `SysFile`(拷 StoragePath/Hash/Size),各引用方独立记录互删不影响;`FileGcService.ReclaimDeletedFilesAsync` 删盘前查同 StoragePath 是否仍有他行(ClearFilter 含未删),有则只硬删记录跳过 `storage.DeleteAsync`。幂等,与逐行 try/catch 兼容。
-- [ ] **B5 服务器监控页** — `IMonitorService`/`MonitorService`(TryAddScoped):Environment / Process / GC.GetGCMemoryInfo / ThreadPool / DriveInfo,进程 CPU% 两次 `TotalProcessorTime` 采样(500ms);`MonitorController` + `[Module("Monitor")]`,`GET /api/v1/sys/monitor/server`;前端新页 + 菜单种子。只报进程与主机基础面,全量指标留给消费者观测栈(OTel 是既定可选包方向)。
+- [~] **B5 服务器监控页**(B5a 后端已落 9cfd38e;B5b 前端页+菜单+gen:api 待前端 pass,补时从 KnownUnseededEndpoints 移除)— `IMonitorService`/`MonitorService`(TryAddScoped):Environment / Process / GC.GetGCMemoryInfo / ThreadPool / DriveInfo,进程 CPU% 两次 `TotalProcessorTime` 采样(500ms);`MonitorController` + `[Module("Monitor")]`,`GET /api/v1/sys/monitor/server`;前端新页 + 菜单种子。只报进程与主机基础面,全量指标留给消费者观测栈(OTel 是既定可选包方向)。
 
 ## 批次 C · DiffLog + 缓存管理
 
@@ -61,6 +61,8 @@
 - 多租户消费者侧 skill 文档(replace-service 姊妹篇):字段级 = 前置替换 IDataScopeProvider + DataEntity 子类基座;库级 = 多 ConfigId。
 
 ## 轮次日志
+
+### 第 6 轮 — B5a 服务器监控(后端)· `IMonitorService`/`MonitorService`(纯 BCL:Environment/Process/GC/DriveInfo/RuntimeInformation,进程 CPU% 两次采样归一)+ `MonitorController` [Module("Monitor")] `GET /api/v1/sys/monitor/server` + KnownUnseededEndpoints 登记 · MonitorTests 验形状 + 全量 294/0/0(commit 9cfd38e)。**批次 B 后端全部完成**(B1a/B2/B3/B4/B5a)。剩余延后的前端件汇总成一个前端 pass:gen:api(一次吃 exception+monitor 端点)→ B1b 异常日志页+菜单 → B5b 监控页+菜单 →(移除两处 KnownUnseededEndpoints)→ A2 Tab 中键/固定 → A3 复制配置 → A4 版本通知 → A5 外链/iframe 菜单。NEXT: 前端 pass(需起 MinimalHost 跑 gen:api)。
 
 ### 第 5 轮 — B4 T-D7 文件引用根治(零 DDL)· 秒传命中改为 `ReferenceExistingAsync` 插独立 sys_file 行(共享 StoragePath),不再返回既有行 Id → 一方删除不牵连另一方;`FileGcService` 删盘前 ClearFilter 查同 StoragePath 是否仍有他行,有则只硬删记录、保留物理文件,末个引用回收时才删盘 · 改 ChunkUploadTests 秒传断言为新契约(不同 Id、下载同字节)+ 新增 GC 共享存储引用计数测试;全量 293/0/0(commit 3f4dd58)。踩坑:`dotnet test --no-build` 会跑旧产物,改测试后必须先 build。NEXT: B5 服务器监控页(纯后端 + 前端新页,前端已解锁)。
 
