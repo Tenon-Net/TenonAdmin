@@ -68,6 +68,13 @@ tenon 内接入约定:
 
 `src/composables/useTabTitle.ts`,**仅限 setup 中调用**。`const setTabTitle = useTabTitle()`,详情页数据加载后 `setTabTitle(记录名)` 把当前标签标题改成记录名(如「张三」);内部走 `tabsStore.setTitle` → 置 `titleFixed`,`addTab` 复访不再用静态 `meta.title` 覆盖,标题随 tab 持久化、F5 无闪复原。**就地态(列表页内切换详情)别调用**——那时 `route.path` 是列表标签,会改错标签。
 
+## 外链 / iframe 菜单(约定式,零后端字段新增)
+
+菜单节点(`Type=Menu`)复用现有 `path`/`component` 字段承载,判据是 `isHttpUrl`(`src/utils/url.ts`):
+- **外链**:`path` 填 `http(s)://…`、`component` 留空 → 不建路由(`useAuthMenu.buildRoutesForModule` 跳过),点击时 `window.open` 新窗口(`useLayoutMenu.onSelect/onSelectL1` + `MenuSearch.go` 各有 `isHttpUrl` 分支)。
+- **内嵌 iframe**:`path` 填内部路径(如 `/embed/docs`)、`component` 填 `http(s)://…` → 注册通用视图 `views/embed/iframe.vue`,URL 进 `meta.iframeSrc`,keep-alive 顺带保住 iframe 状态。
+- 菜单管理表单在页面类型下给出 `menu.linkHint` 说明;seed 里同理(`path`/`component` 填 URL 即可)。后端实体/枚举/种子结构一概未动。
+
 ## 数字动画 / 水印(用 Naive 内建,不自研)
 
 - 数字动画:`<span class="tabular"><n-number-animation :from="0" :to="n" show-separator /></span>`;`.tabular` 防滚动抖宽(styles/index.css),前后缀直接写旁边。

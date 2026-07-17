@@ -479,10 +479,11 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
             />
           </n-form-item-gi>
           <n-form-item-gi :label="t('menu.path')">
-            <n-input v-model:value="(form.path as string)" placeholder="/system/xxx" />
+            <n-input v-model:value="(form.path as string)" placeholder="/system/xxx | https://..." />
           </n-form-item-gi>
           <!-- 组件路径:选项来自 import.meta.glob 的真实文件表,选得到的一定能加载;
-               手敲错则该菜单只会 console.warn 后静默消失。tag 保留手敲(页面文件尚未创建时先占位)。 -->
+               手敲错则该菜单只会 console.warn 后静默消失。tag 保留手敲(页面文件尚未创建时先占位)。
+               外链/iframe 约定见下方 linkHint:路径填 URL = 外链新窗口打开;组件填 URL = 内嵌 iframe。 -->
           <n-form-item-gi :label="t('menu.component')">
             <n-select
               v-model:value="(form.component as string)"
@@ -490,8 +491,11 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
               filterable
               tag
               clearable
-              placeholder="system/xxx/index"
+              placeholder="system/xxx/index | https://..."
             />
+          </n-form-item-gi>
+          <n-form-item-gi v-if="form.type === MenuType.Menu" :span="2" :show-label="false">
+            <span class="link-hint">{{ t('menu.linkHint') }}</span>
           </n-form-item-gi>
           <n-form-item-gi :span="2" :label="t('menu.icon')">
             <IconPicker :model-value="form.icon ?? ''" @update:model-value="(v: string) => (form.icon = v)" />
@@ -511,6 +515,11 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
 </template>
 
 <style scoped>
+.link-hint {
+  font-size: 12px;
+  color: var(--color-text-tertiary, #999);
+  line-height: 1.5;
+}
 .view {
   display: flex;
   flex-direction: column;

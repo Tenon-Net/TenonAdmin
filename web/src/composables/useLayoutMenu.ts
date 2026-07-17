@@ -6,7 +6,15 @@ import { router } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { t } from '@/locales'
+import { isHttpUrl } from '@/utils/url'
 import { MenuType, type MenuNode } from '@/types/menu'
+
+/** 外链 key(菜单 path 为 URL)→ 新标签页打开;返回是否已处理。 */
+function openIfExternal(key: string): boolean {
+  if (!isHttpUrl(key)) return false
+  window.open(key, '_blank', 'noopener,noreferrer')
+  return true
+}
 
 // 无图标兜底:rail/折叠态的 n-menu 只画图标,缺图标会渲染成空槽“消失”(§组织管理),故永不返回 undefined。
 function renderIcon(name: string | undefined, fallback = 'ph:dot-outline-duotone') {
@@ -97,9 +105,11 @@ function useLayoutMenuImpl() {
   })
 
   function onSelect(key: string) {
+    if (openIfExternal(key)) return
     if (key.startsWith('/')) router.push(key)
   }
   function onSelectL1(key: string) {
+    if (openIfExternal(key)) return
     selectedL1.value = key // 先设,L2 列立即刷新,不等导航
     const top = menuOptions.value.find((o) => o.key === key)
     const target = key.startsWith('/') ? key : top ? firstLeafKey(top) : undefined
