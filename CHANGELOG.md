@@ -11,6 +11,22 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 > When releasing, **both halves' version numbers must be updated together**: the backend version is injected from the tag via `-p:Version`, while `web/package.json`'s `version` is a build-time constant **shown in the login page footer**. Forget to update it, and the version the user sees in the UI won't match the package they installed.
 
+## Unreleased
+
+### Added
+
+- **SMS login hardening** (referencing XiHan.BasicApp's second-factor design): two independently-toggleable features, both **off by default** and runtime-configurable from the config center's security tab —
+  - **SMS second factor** (`sys.security.mfa.enabled`): after the password (and captcha/lockout) checks pass, users with a bound phone must confirm an SMS code. The login endpoint signals this with new error code `SmsCodeRequired` (40009) carrying a challenge id; `POST /api/v1/auth/login/sms` (+ `/resend`) completes the login. Users without a phone log in as before, so flipping the switch can never lock anyone out (the seeded super admin has no phone).
+  - **Passwordless SMS sign-in** (`sys.security.smsLogin.enabled`): `POST /api/v1/auth/sms/send` + `POST /api/v1/auth/sms/login`; the login page shows an SMS tab when enabled (surfaced via the anonymous site-info endpoint).
+  - Server-side abuse controls throughout (XiHan's visible gap): per-phone resend cooldown (60s) and daily cap (10) enforced in the backend, codes are single-use with 5 attempts / 5-minute TTL, the send endpoint honors the image-captcha toggle, and unknown/duplicate/disabled phones get an indistinguishable success-shaped response (anti-enumeration). Codes live only in cache — **no schema change**.
+  - **`ISmsSender` abstraction** with a dev-friendly `LoggingSmsSender` default (codes go to the backend log; no vendor SDK enters the kernel). Consumers register a real provider before `AddTenonAdmin()`: `services.AddSingleton<ISmsSender, AliyunSmsSender>();` — locked by a new `ReplaceabilityTests` case.
+
+### Changed
+
+- **Breaking (source)**: `IAuthService` gained four members (`LoginBySmsChallengeAsync` / `ResendSmsChallengeAsync` / `SendSmsLoginCodeAsync` / `LoginByPhoneAsync`) and `AuthService`'s constructor takes an `ISmsOtpService`. Consumers **subclassing `AuthService`** (the documented path) only add the new constructor parameter; consumers implementing `IAuthService` from scratch must add the four methods. New auth error codes 40009–40012; SMS send throttling reuses `TooManyRequests` (40008).
+
+---
+
 ## 0.1.2 - 2026-07-16
 
 Consumer-seam release: a business module now lives entirely in new files — zero edits to the upstream-churning shared files, so `git merge upstream` stays conflict-free — plus a password-expiry policy, a fuller personal center, a real-data workbench, and a bilingual documentation site.

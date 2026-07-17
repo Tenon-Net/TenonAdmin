@@ -32,6 +32,11 @@ public static class ServicesSetup
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ICaptchaProvider, MathCaptchaProvider>());
         services.TryAddScoped<ICaptchaService, CaptchaService>();   // 签发按配置选型 + 一次性校验
 
+        // 短信验证码(§14 登录加固):OTP 签发/校验 + MFA 挑战;发送通道默认日志实现(内核零厂商 SDK),
+        // 消费方前置注册真实 ISmsSender(阿里云/腾讯云等)即接管
+        services.TryAddSingleton<ISmsSender, LoggingSmsSender>();
+        services.TryAddScoped<ISmsOtpService, SmsOtpService>();
+
         // 会话与刷新令牌(§15):登录建会话、每请求校验、刷新轮换+复用检测、登出/强退
         services.TryAddScoped<ISessionService, SessionService>();
 

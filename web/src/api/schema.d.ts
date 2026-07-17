@@ -86,6 +86,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/sms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 短信二次验证完成登录:凭挑战 Id(登录 40009 信令下发)+ 短信码换令牌。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SmsChallengeLoginInput"];
+                    "text/json": components["schemas"]["SmsChallengeLoginInput"];
+                    "application/*+json": components["schemas"]["SmsChallengeLoginInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfLoginOutput"];
+                        "application/json": components["schemas"]["ResultOfLoginOutput"];
+                        "text/json": components["schemas"]["ResultOfLoginOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/sms/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 短信二次验证重发验证码(冷却/日上限由服务端强制)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SmsResendInput"];
+                    "text/json": components["schemas"]["SmsResendInput"];
+                    "application/*+json": components["schemas"]["SmsResendInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfSmsSendOutput"];
+                        "application/json": components["schemas"]["ResultOfSmsSendOutput"];
+                        "text/json": components["schemas"]["ResultOfSmsSendOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sms/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 免密登录发码(开关 `sys.security.smsLogin.enabled`;图形验证码启用时须携带;响应不区分手机号是否存在)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhoneCodeInput"];
+                    "text/json": components["schemas"]["PhoneCodeInput"];
+                    "application/*+json": components["schemas"]["PhoneCodeInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfSmsSendOutput"];
+                        "application/json": components["schemas"]["ResultOfSmsSendOutput"];
+                        "text/json": components["schemas"]["ResultOfSmsSendOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sms/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 免密登录:手机号 + 短信码换令牌。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhoneLoginInput"];
+                    "text/json": components["schemas"]["PhoneLoginInput"];
+                    "application/*+json": components["schemas"]["PhoneLoginInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfLoginOutput"];
+                        "application/json": components["schemas"]["ResultOfLoginOutput"];
+                        "text/json": components["schemas"]["ResultOfLoginOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/refresh": {
         parameters: {
             query?: never;
@@ -4927,6 +5103,22 @@ export interface components {
             /** @description 路由模板(原样,含 `{id}` 占位符) */
             path: string;
         };
+        /** @description 免密登录发码入参。图形验证码启用时必传(发码端点防脚本滥用)。 */
+        PhoneCodeInput: {
+            /** @description 手机号 */
+            phone?: string;
+            /** @description 验证码票据 Id(图形验证码启用时必传) */
+            captchaId?: null | string;
+            /** @description 用户输入的图形验证码(启用时必传) */
+            captchaCode?: null | string;
+        };
+        /** @description 免密登录入参(手机号 + 短信码直接换令牌) */
+        PhoneLoginInput: {
+            /** @description 手机号(与发码时一致) */
+            phone?: string;
+            /** @description 用户收到的短信验证码 */
+            code?: string;
+        };
         /** @description 职位新增/编辑入参(增改共用同一份字段)。 */
         PositionInput: {
             /** @description 职位名称 */
@@ -5727,6 +5919,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfSmsSendOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["SmsSendOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfstring: {
             /**
              * Format: int32
@@ -6003,6 +6216,33 @@ export interface components {
             copyrightUrl?: null | string;
             /** @description 是否启用登录验证码(运行时配置驱动;前端据此决定登录页是否展示验证码)。 */
             captchaEnabled?: boolean;
+            /** @description 是否启用短信验证码免密登录(运行时配置驱动;前端据此决定登录页是否展示短信登录入口)。 */
+            smsLoginEnabled?: boolean;
+        };
+        /** @description 短信二次验证完成登录入参(密码登录抛 40009 信令后,凭挑战 Id + 短信码换令牌) */
+        SmsChallengeLoginInput: {
+            /** @description 挑战票据 Id(取自 40009 信令的 args.challengeId) */
+            challengeId?: string;
+            /** @description 用户收到的短信验证码 */
+            code?: string;
+        };
+        /** @description 短信二次验证重发入参(持有活挑战即已过密码校验,无需图形验证码) */
+        SmsResendInput: {
+            /** @description 挑战票据 Id */
+            challengeId?: string;
+        };
+        /** @description 发码出参:有效期与重发间隔(驱动前端倒计时;刻意不含任何用户信息,防枚举) */
+        SmsSendOutput: {
+            /**
+             * Format: int32
+             * @description 验证码有效期(秒)
+             */
+            expiresSeconds?: number | string;
+            /**
+             * Format: int32
+             * @description 重发最小间隔(秒)
+             */
+            resendSeconds?: number | string;
         };
         /**
          * @description 系统配置表——键值对形式的全局配置项(如站点名称、默认密码策略等),支持按 string? SysConfig.GroupCode 分组管理。
@@ -6019,8 +6259,6 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             remark?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6030,6 +6268,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 字典项表(设计 §5.7 字典模块)。按 string SysDictItem.DictTypeCode 关联所属 SysDictType——
@@ -6044,8 +6284,6 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6055,6 +6293,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 字典类型表(设计 §5.7 字典模块)。一个类型下挂若干 SysDictItem(通过
@@ -6070,8 +6310,6 @@ export interface components {
             sort?: number | string;
             enabled?: boolean;
             remark?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6081,6 +6319,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 文件记录(设计 §4/§14)。存<b>元数据 + 重写后的存储相对路径</b>,原始文件名仅作展示/下载命名,
@@ -6104,8 +6344,6 @@ export interface components {
             sizeBytes?: number | string;
             /** @description 内容 SHA-256(hex,小写);分片上传落库,供「秒传」按内容去重。单文件上传暂不计算(留 null)。 */
             hash?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6115,6 +6353,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 登录日志(设计 §4)——由 `AuthService` 在登录成功/失败路径写入(§14 安全审计:失败也必须留痕)。
@@ -6139,8 +6379,6 @@ export interface components {
             userAgent?: null | string;
             /** @description 用户姓名——非持久化,分页时按 long? SysLoginLog.UserId 批量回填(失败/账号不存在的行为 null,前端回落账号)。 */
             name?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6150,6 +6388,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 模块/应用表(多应用门户)——一套登录体系下的多个独立子系统。菜单树按模块分区
@@ -6174,8 +6414,6 @@ export interface components {
             sort?: number | string;
             enabled?: boolean;
             remark?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6185,6 +6423,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 系统通知表(设计 §4 消息中心,轮询模型)——管理员发布的消息,可发给全体 / 指定角色 / 指定用户。
@@ -6196,8 +6436,6 @@ export interface components {
             content?: null | string;
             type?: components["schemas"]["NoticeType"];
             receiverType?: components["schemas"]["ReceiverType"];
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6207,6 +6445,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 操作日志(设计 §4)——由 `[OperationLog]` 特性 + 过滤器自动写入,业务代码零感知。
@@ -6247,8 +6487,6 @@ export interface components {
             operatorName?: null | string;
             ip?: null | string;
             userAgent?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6258,6 +6496,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 机构表——组织架构树。前端拿平铺列表自行拼树(`ParentId` 挂靠),
@@ -6277,8 +6517,6 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6288,6 +6526,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 职位表——组织内岗位/职务的字典项(如"经理""专员"),供用户维度的职位归属使用。
@@ -6301,8 +6541,6 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6312,6 +6550,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 角色表(设计 §16)。角色是"权限码集合"的载体:用户挂角色、角色挂菜单(路由权限码),
@@ -6326,8 +6566,6 @@ export interface components {
             sort?: number | string;
             enabled?: boolean;
             remark?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6337,6 +6575,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 角色数据范围(设计 §16,T3)——每角色一条,描述该角色可见数据的机构维度(DataScopeType)。
@@ -6348,8 +6588,6 @@ export interface components {
             scopeType?: components["schemas"]["DataScopeType"];
             /** @description 自定义机构 Id 列表(逗号分隔),仅 DataScopeType.Custom 时使用。 */
             customOrgIds?: string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6359,6 +6597,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 改个人资料入参:只允许改自己能改的字段(姓名/昵称/性别/手机/邮箱/头像);机构/职位/角色由管理员维护,不在此。

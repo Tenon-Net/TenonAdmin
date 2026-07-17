@@ -23,6 +23,56 @@ public record RefreshInput
     public string RefreshToken { get; init; } = "";
 }
 
+/// <summary>短信二次验证完成登录入参(密码登录抛 40009 信令后,凭挑战 Id + 短信码换令牌)</summary>
+public record SmsChallengeLoginInput
+{
+    /// <summary>挑战票据 Id(取自 40009 信令的 args.challengeId)</summary>
+    public string ChallengeId { get; init; } = "";
+
+    /// <summary>用户收到的短信验证码</summary>
+    public string Code { get; init; } = "";
+}
+
+/// <summary>短信二次验证重发入参(持有活挑战即已过密码校验,无需图形验证码)</summary>
+public record SmsResendInput
+{
+    /// <summary>挑战票据 Id</summary>
+    public string ChallengeId { get; init; } = "";
+}
+
+/// <summary>免密登录发码入参。图形验证码启用时必传(发码端点防脚本滥用)。</summary>
+public record PhoneCodeInput
+{
+    /// <summary>手机号</summary>
+    public string Phone { get; init; } = "";
+
+    /// <summary>验证码票据 Id(图形验证码启用时必传)</summary>
+    public string? CaptchaId { get; init; }
+
+    /// <summary>用户输入的图形验证码(启用时必传)</summary>
+    public string? CaptchaCode { get; init; }
+}
+
+/// <summary>免密登录入参(手机号 + 短信码直接换令牌)</summary>
+public record PhoneLoginInput
+{
+    /// <summary>手机号(与发码时一致)</summary>
+    public string Phone { get; init; } = "";
+
+    /// <summary>用户收到的短信验证码</summary>
+    public string Code { get; init; } = "";
+}
+
+/// <summary>发码出参:有效期与重发间隔(驱动前端倒计时;刻意不含任何用户信息,防枚举)</summary>
+public record SmsSendOutput
+{
+    /// <summary>验证码有效期(秒)</summary>
+    public int ExpiresSeconds { get; init; }
+
+    /// <summary>重发最小间隔(秒)</summary>
+    public int ResendSeconds { get; init; }
+}
+
 /// <summary>登录出参:令牌对 + 基础用户信息(前端存令牌、显示用户名所需的最小集)</summary>
 public record LoginOutput
 {

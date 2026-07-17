@@ -17,7 +17,8 @@ public class AuthService(
     ILogService logService,
     ILoginLockService loginLock,
     ICaptchaService captcha,
-    ISecurityPolicyProvider policy) : IAuthService
+    ISecurityPolicyProvider policy,
+    ISmsOtpService smsOtp) : IAuthService
 {
     /// <summary>
     /// 防账号枚举的陪跑哈希:账号不存在时也执行一次真实代价的哈希校验,
@@ -36,6 +37,7 @@ public class AuthService(
             var user = await ValidateUserAsync(input);      // 2. 账密校验 —— 对接 LDAP/AD 覆写这步
             await CheckLoginPolicyAsync(user);              // 3. 策略检查(停用/锁定)
             await CheckPasswordExpiryAsync(user);           // 4. 密码过期检查(过期→置强制改密标志,不拦登录)
+            await CheckSmsSecondFactorAsync(user);          // 4.5 短信二次验证(开且绑手机→发码抛 40009 信令)
             var pair = await CreateTokenAsync(user);        // 5. 签发令牌
             await OnLoginSucceededAsync(user, pair);        // 6. 成功后置(登录日志/事件)
             return BuildLoginOutput(user, pair);            // 7. 组装出参
@@ -106,6 +108,115 @@ public class AuthService(
             await users.UpdateAsync(user);
         }
     }
+
+    /// <summary>
+    /// 短信二次验证检查(§14 登录加固):全局开关(<c>sys.security.mfa.enabled</c>)开且用户绑了手机号时,
+    /// 创建挑战票据(绑定该 userId)并发码,抛 <see cref="ErrorCode.SmsCodeRequired"/>(40009)<b>信令</b>——
+    /// 前端据 args 切验证码页,凭 <see cref="LoginBySmsChallengeAsync"/> 完成下半场。
+    /// <para>无手机号的用户直通(全局开关不能锁死任何人——种子超管没有手机号);要强制全员 MFA 的消费方
+    /// 覆写本步即可。40009 会被外层 catch 记为登录日志(审计"密码已过、待短信"),但不计失败锁定。</para>
+    /// </summary>
+    protected virtual async Task CheckSmsSecondFactorAsync(SysUser user)
+    {
+        if (string.IsNullOrWhiteSpace(user.Phone) || !await smsOtp.IsMfaEnabledAsync()) return;
+
+        var challengeId = await smsOtp.CreateMfaChallengeAsync(user.Id);
+        var sent = await smsOtp.IssueAsync(ISmsOtpService.PURPOSE_MFA, challengeId, user.Phone);
+        throw new AdminException(ErrorCode.SmsCodeRequired, new Dictionary<string, object?>
+        {
+            ["challengeId"] = challengeId,
+            ["phoneMask"] = MaskPhone(user.Phone),
+            ["expiresSeconds"] = sent.ExpiresSeconds,
+            ["resendSeconds"] = sent.ResendSeconds,
+        });
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<LoginOutput> LoginBySmsChallengeAsync(SmsChallengeLoginInput input)
+    {
+        SysUser? user = null;
+        try
+        {
+            // 先验挑战再验码:码存在的前提是挑战曾存在,统一 40011 不泄露哪一环失效
+            var userId = await smsOtp.GetMfaChallengeAsync(input.ChallengeId);
+            AdminException.ThrowIf(userId == 0, ErrorCode.SmsCodeExpired);
+            await smsOtp.VerifyAsync(ISmsOtpService.PURPOSE_MFA, input.ChallengeId, input.Code);
+
+            // 码对才消费挑战(原子取删防并发重放);用户在挑战期间被删/停用则拒
+            userId = await smsOtp.ConsumeMfaChallengeAsync(input.ChallengeId);
+            AdminException.ThrowIf(userId == 0, ErrorCode.SmsCodeExpired);
+            user = await users.GetByIdAsync(userId);
+            AdminException.ThrowIf(user is null, ErrorCode.SmsCodeExpired);
+
+            await CheckLoginPolicyAsync(user!);
+            var pair = await CreateTokenAsync(user!);
+            await OnLoginSucceededAsync(user!, pair);
+            return BuildLoginOutput(user!, pair);
+        }
+        catch (AdminException ex)
+        {
+            await OnLoginFailedAsync(new LoginInput { Account = user?.Account ?? "" }, ex.Code);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<SmsSendOutput> ResendSmsChallengeAsync(SmsResendInput input)
+    {
+        // 持有活挑战即已过密码校验,无需图形验证码;冷却/日上限在 IssueAsync 内强制
+        var userId = await smsOtp.GetMfaChallengeAsync(input.ChallengeId);
+        AdminException.ThrowIf(userId == 0, ErrorCode.SmsCodeExpired);
+        var user = await users.GetByIdAsync(userId);
+        AdminException.ThrowIf(user is null || string.IsNullOrWhiteSpace(user!.Phone), ErrorCode.SmsCodeExpired);
+        return await smsOtp.IssueAsync(ISmsOtpService.PURPOSE_MFA, input.ChallengeId, user!.Phone!);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<SmsSendOutput> SendSmsLoginCodeAsync(PhoneCodeInput input)
+    {
+        AdminException.ThrowIf(!await smsOtp.IsLoginEnabledAsync(), ErrorCode.SmsLoginDisabled);
+        await ValidateCaptchaAsync(new LoginInput { CaptchaId = input.CaptchaId, CaptchaCode = input.CaptchaCode });
+
+        // 防枚举(§14):未命中"恰一个启用用户"(不存在/重复/停用)也走同闸门、同冷却、同出参,只是不发码。
+        // 重复手机号因此静默不可用免密登录——防枚举优先,消费方需在录入侧保证手机号唯一。
+        var phone = input.Phone.Trim();
+        var matches = await users.AsQueryable().Where(u => u.Phone == phone && u.Enabled).Take(2).ToListAsync();
+        return matches.Count == 1
+            ? await smsOtp.IssueAsync(ISmsOtpService.PURPOSE_LOGIN, phone, phone)
+            : await smsOtp.PretendIssueAsync(phone);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<LoginOutput> LoginByPhoneAsync(PhoneLoginInput input)
+    {
+        var phone = input.Phone.Trim();
+        try
+        {
+            AdminException.ThrowIf(!await smsOtp.IsLoginEnabledAsync(), ErrorCode.SmsLoginDisabled);
+            // 未知/重复手机号从未存过码 → VerifyAsync 统一抛 40011,与"码过期"不可区分(防枚举)
+            await smsOtp.VerifyAsync(ISmsOtpService.PURPOSE_LOGIN, phone, input.Code);
+
+            var matches = await users.AsQueryable().Where(u => u.Phone == phone && u.Enabled).Take(2).ToListAsync();
+            AdminException.ThrowIf(matches.Count != 1, ErrorCode.SmsCodeExpired);   // 发码后用户被停用/删除的窗口期防御
+            var user = matches[0];
+
+            await CheckLoginPolicyAsync(user);
+            await CheckPasswordExpiryAsync(user);
+            var pair = await CreateTokenAsync(user);
+            await OnLoginSucceededAsync(user, pair);
+            return BuildLoginOutput(user, pair);
+        }
+        catch (AdminException ex)
+        {
+            // 账号栏记手机号(免密流程没有账号输入);永不等于 PasswordWrong,不会误触失败锁定
+            await OnLoginFailedAsync(new LoginInput { Account = phone }, ex.Code);
+            throw;
+        }
+    }
+
+    /// <summary>手机号打码(40009 信令给前端展示"码已发至 138****1234");过短的号只留尾 2 位。</summary>
+    protected virtual string MaskPhone(string phone) =>
+        phone.Length >= 8 ? $"{phone[..3]}****{phone[^4..]}" : $"****{phone[^Math.Min(2, phone.Length)..]}";
 
     /// <summary>
     /// 签发令牌 + 开会话(设计 §15)。SessionId 用 GUID v7(时间有序,BCL 内置)——在线用户与强退的稳定锚点;

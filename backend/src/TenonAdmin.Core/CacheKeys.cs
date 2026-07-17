@@ -28,6 +28,21 @@ public static class CacheKeys
     /// <summary>某验证码票据对应的明文(登录时一次性校验并消费,短 TTL 过期,设计 §14)</summary>
     public static string Captcha(string captchaId) => $"captcha:{captchaId}";
 
+    /// <summary>某短信验证码明文(§14 登录加固)。<paramref name="purpose"/>=<c>mfa</c> 时 key 为挑战 Id(码绑定已过密码的用户)、<c>login</c> 时为规范化手机号;一次性消费,TTL 过期。</summary>
+    public static string SmsCode(string purpose, string key) => $"sms:code:{purpose}:{key}";
+
+    /// <summary>某短信验证码的错误尝试计数(达上限即作废该码,与码同 TTL)</summary>
+    public static string SmsCodeAttempts(string purpose, string key) => $"sms:try:{purpose}:{key}";
+
+    /// <summary>某手机号的发送冷却标记(存在即冷却中,TTL = 重发间隔;防高频骚扰发码)</summary>
+    public static string SmsCooldown(string phone) => $"sms:cd:{phone}";
+
+    /// <summary>某手机号当日发送计数(日期编进键:换天即换键自动归零,同 <see cref="RateLimit"/> 的成法;TTL 24h 回收)</summary>
+    public static string SmsDailyCount(string phone, string day) => $"sms:day:{phone}:{day}";
+
+    /// <summary>MFA 挑战票据 → 已过密码校验的 userId(短信码必须绑定该用户而非仅手机号;一次性消费,TTL 同码)</summary>
+    public static string MfaChallenge(string challengeId) => $"mfa:{challengeId}";
+
     /// <summary>
     /// 固定窗口限流计数(设计 §12/§14)。<paramref name="bucket"/> 为 <c>auth</c>(认证端点,更严)或 <c>all</c>;
     /// <paramref name="windowIndex"/> 是<b>窗口序号</b>(<c>unixSeconds / windowSeconds</c>)。

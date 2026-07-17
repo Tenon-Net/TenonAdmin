@@ -26,6 +26,16 @@ public class ReplaceabilityTests
     }
 
     [Fact]
+    public void ReplaceSmsSender_ShouldUseUserImplementation()
+    {
+        using var f = new AdminAppFactory
+        {
+            Overrides = s => s.Replace(ServiceDescriptor.Singleton<ISmsSender, FakeSmsSender>()),
+        };
+        Assert.IsType<FakeSmsSender>(f.Services.GetRequiredService<ISmsSender>());
+    }
+
+    [Fact]
     public async Task OverrideAuthStep_ShouldAffectLoginFlow()
     {
         using var f = new AdminAppFactory
@@ -83,6 +93,13 @@ public class ReplaceabilityTests
         return await scope.ServiceProvider.GetRequiredService<IRepository<SampleWidget>>().AsQueryable().CountAsync();
     }
 
+    /// <summary>用户自定义短信通道(替换框架默认日志通道)</summary>
+    private sealed class FakeSmsSender : ISmsSender
+    {
+        public Task SendCodeAsync(string phone, string code, string purpose, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
+
     /// <summary>用户自定义密码哈希(替换框架默认 PBKDF2)</summary>
     private sealed class FakeHasher : IPasswordHasher
     {
@@ -93,8 +110,9 @@ public class ReplaceabilityTests
     /// <summary>用户覆写登录出参组装步骤(模板方法覆写,§5.3)</summary>
     private sealed class OverridingAuthService(
         IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens, ISessionService sessions,
-        ILogService logService, ILoginLockService loginLock, ICaptchaService captcha, ISecurityPolicyProvider policy)
-        : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy)
+        ILogService logService, ILoginLockService loginLock, ICaptchaService captcha, ISecurityPolicyProvider policy,
+        ISmsOtpService smsOtp)
+        : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp)
     {
         protected override LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) =>
             base.BuildLoginOutput(user, pair) with { Name = "OVERRIDDEN" };

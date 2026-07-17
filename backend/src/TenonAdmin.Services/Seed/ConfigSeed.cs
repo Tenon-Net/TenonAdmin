@@ -40,6 +40,8 @@ internal sealed class ConfigSeed : ISeedData<SysConfig>
         new SysConfig { Id = 10, ConfigKey = SecurityPolicyProvider.KEY_REFRESH_MIN, ConfigValue = "10080", Name = "刷新令牌时长(分钟)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 31, Remark = "刷新令牌有效期,决定最长免登录时长(默认 7 天)" },
         new SysConfig { Id = 13, ConfigKey = CaptchaService.KEY_ENABLED, ConfigValue = "false", Name = "启用登录验证码", GroupCode = SecurityPolicyProvider.GROUP, Sort = 40, Remark = "开启后登录须过验证码;账号级锁定已挡爆破主向,此为浏览器侧加固" },
         new SysConfig { Id = 21, ConfigKey = CaptchaService.KEY_TYPE, ConfigValue = "char", Name = "验证码类型", GroupCode = SecurityPolicyProvider.GROUP, Sort = 41, Remark = "char 字符 / path 描边(明文不入标记、更抗爬)/ math 算术;或消费方自注册的类型" },
+        new SysConfig { Id = 23, ConfigKey = SmsOtpService.KEY_MFA_ENABLED, ConfigValue = "false", Name = "启用短信二次验证", GroupCode = SecurityPolicyProvider.GROUP, Sort = 42, Remark = "开启后绑定了手机号的用户密码登录须再验短信码;未绑手机号的用户不受影响。需接入真实短信通道(ISmsSender)" },
+        new SysConfig { Id = 24, ConfigKey = SmsOtpService.KEY_LOGIN_ENABLED, ConfigValue = "false", Name = "启用短信验证码登录", GroupCode = SecurityPolicyProvider.GROUP, Sort = 43, Remark = "开启后登录页出现短信登录入口(手机号+验证码免密)。需接入真实短信通道(ISmsSender)" },
 
         // 请求限流(GroupCode=security):RuntimeRateLimit 快照读取,改值经事件刷新即时生效。默认须与 AdminRateLimitOptions 默认一致。
         new SysConfig { Id = 14, ConfigKey = AdminRateLimitOptions.KEY_ENABLED, ConfigValue = "true", Name = "启用请求限流", GroupCode = SecurityPolicyProvider.GROUP, Sort = 50, Remark = "按客户端 IP 固定窗口限流;Options 硬关时此项无效" },

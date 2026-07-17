@@ -58,9 +58,29 @@ public enum ErrorCode
     [MsgKey("error.auth.refreshTokenInvalid")]
     RefreshTokenInvalid = 40007,
 
-    /// <summary>请求过于频繁,已触发限流(RateLimiter,§12/§14);args 可携带 retryAfterSeconds</summary>
+    /// <summary>请求过于频繁,已触发限流(RateLimiter,§12/§14);args 可携带 retryAfterSeconds。短信发送冷却/日上限也复用此码。</summary>
     [MsgKey("error.auth.tooManyRequests")]
     TooManyRequests = 40008,
+
+    /// <summary>
+    /// 密码校验已通过,需短信二次验证(全局 MFA 开且用户绑了手机号)。
+    /// <b>信令而非失败</b>:args 携带 challengeId/phoneMask/expiresSeconds/resendSeconds,
+    /// 前端据此切到验证码输入页,凭 challengeId + 短信码调 <c>POST /auth/login/sms</c> 完成登录。
+    /// </summary>
+    [MsgKey("error.auth.smsCodeRequired")]
+    SmsCodeRequired = 40009,
+
+    /// <summary>短信验证码不正确;args 携带 attemptsLeft(剩余尝试次数)</summary>
+    [MsgKey("error.auth.smsCodeWrong")]
+    SmsCodeWrong = 40010,
+
+    /// <summary>短信验证码已失效(缺失/过期/已消费/尝试次数耗尽/挑战无效统一归此,防探测)</summary>
+    [MsgKey("error.auth.smsCodeExpired")]
+    SmsCodeExpired = 40011,
+
+    /// <summary>短信验证码登录未启用(全局开关 <c>sys.security.smsLogin.enabled</c> 关闭)</summary>
+    [MsgKey("error.auth.smsLoginDisabled")]
+    SmsLoginDisabled = 40012,
 
     // ── 41xxx 权限与数据范围 ─────────────────────────────────────────
 

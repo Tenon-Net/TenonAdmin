@@ -69,6 +69,18 @@ export const authApi = {
     client.POST('/api/v1/auth/login', { body }).then((r) => unwrap<LoginOutput>(r)),
   logout: () => client.POST('/api/v1/auth/logout', {}).then((r) => unwrap<boolean>(r)),
   captcha: () => client.GET('/api/v1/auth/captcha', {}).then((r) => unwrap<{ captchaId: string; svg: string; type?: string }>(r)),
+  /** 短信二次验证:凭密码登录 40009 信令下发的挑战 Id + 短信码完成登录。 */
+  smsChallengeLogin: (body: { challengeId: string; code: string }) =>
+    client.POST('/api/v1/auth/login/sms', { body }).then((r) => unwrap<LoginOutput>(r)),
+  /** 短信二次验证:重发验证码(服务端冷却/日上限,过频抛 40008)。 */
+  smsChallengeResend: (body: { challengeId: string }) =>
+    client.POST('/api/v1/auth/login/sms/resend', { body }).then((r) => unwrap<{ expiresSeconds: number; resendSeconds: number }>(r)),
+  /** 免密登录发码(图形验证码启用时须携带;响应不区分手机号是否存在,防枚举)。 */
+  smsLoginSend: (body: { phone: string; captchaId?: string; captchaCode?: string }) =>
+    client.POST('/api/v1/auth/sms/send', { body }).then((r) => unwrap<{ expiresSeconds: number; resendSeconds: number }>(r)),
+  /** 免密登录:手机号 + 短信码换令牌。 */
+  smsLogin: (body: { phone: string; code: string }) =>
+    client.POST('/api/v1/auth/sms/login', { body }).then((r) => unwrap<LoginOutput>(r)),
 }
 
 export const dashboardApi = {
@@ -251,6 +263,7 @@ export const configApi = {
           copyright?: string | null
           copyrightUrl?: string | null
           captchaEnabled?: boolean
+          smsLoginEnabled?: boolean
         }>(r),
       ),
   /** 当前生效密码策略(任何登录用户可读);改密页据此展示真实规则清单,免配置读权限。 */
