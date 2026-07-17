@@ -96,8 +96,8 @@ function usageStatus(p: number): 'success' | 'warning' | 'error' {
           </n-card>
         </n-gi>
 
-        <!-- 磁盘 -->
-        <n-gi v-for="disk in info.disks" :key="disk.name" span="1 s:2 l:1">
+        <!-- 磁盘(过滤掉容量为 0 的未就绪/映射盘,免渲染一张全 0 卡片) -->
+        <n-gi v-for="disk in info.disks.filter((d) => d.totalBytes > 0)" :key="disk.name" span="1 s:2 l:1">
           <n-card :title="`${t('monitor.disk')} ${disk.name}`" size="small">
             <div class="metric small">{{ fmtBytes(disk.totalBytes - disk.freeBytes) }} / {{ fmtBytes(disk.totalBytes) }}</div>
             <n-progress

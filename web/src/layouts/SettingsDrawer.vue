@@ -29,6 +29,8 @@ const app = useAppStore()
 const { t } = useI18n()
 const message = useMessage()
 const { copy, isSupported } = useClipboard()
+// 「复制配置」是给消费者 fork 后改 DEFAULTS 用的开发期动作,不该出现在终端管理员的设置里——仅 DEV 显示。
+const showCopyConfig = isSupported && import.meta.env.DEV
 
 // 复制当前外观配置(消费者 fork 后粘回 stores/app.ts 的 DEFAULTS 即为新默认)。
 async function copyConfig() {
@@ -155,7 +157,7 @@ const transitionOptions = computed(() => [
 
       <template #footer>
         <div class="footer-actions">
-          <n-button v-if="isSupported" block tertiary @click="copyConfig">
+          <n-button v-if="showCopyConfig" block tertiary @click="copyConfig">
             <Icon icon="ph:clipboard-text" class="ri" />{{ t('settings.copyConfig') }}
           </n-button>
           <n-popconfirm @positive-click="app.resetSettings()">

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // 内嵌外部页面:URL 由菜单约定放进 route.meta.iframeSrc(component 字段为 URL 时,见 useAuthMenu)。
-// keep-alive 缓存本页 → 切走再回来 iframe 状态(滚动/表单)得以保留。
-import { computed } from 'vue'
+// 每个内嵌菜单经 namedPage 有独立组件身份、meta 恒定 → src 取一次快照即可,**不能**跟全局当前路由响应式:
+// 否则被 keep-alive 缓存的实例会在切到别的路由时把 src 重算成 undefined(卸载 iframe → 回访白重载)
+// 或另一内嵌页的 URL(后台悄悄加载对方站点)。setup 只跑一次,快照天然正确。
 import { useRoute } from 'vue-router'
 
-const route = useRoute()
-const src = computed(() => route.meta.iframeSrc as string | undefined)
+const src = useRoute().meta.iframeSrc as string | undefined
 </script>
 
 <template>
