@@ -9,6 +9,32 @@ Once a tag triggers `backend-release`, it first runs build + tests + template sm
 
 > When releasing, **both halves' version numbers must be updated together**: the backend version is injected from the tag via `-p:Version`, while `web/package.json`'s `version` is a build-time constant **shown in the login page footer**. Forget to update it, and the version the user sees in the UI won't match the package they installed.
 
+## 0.1.2 - 2026-07-16
+
+Consumer-seam release: a business module now lives entirely in new files — zero edits to the upstream-churning shared files, so `git merge upstream` stays conflict-free — plus a password-expiry policy, a fuller personal center, a real-data workbench, and a bilingual documentation site.
+
+### Added
+
+- **Consumers can now add a whole business module without editing any shared frontend file** — the mechanism that keeps `git merge upstream` conflict-free. i18n text goes in a new `locales/ext/<locale>/<module>.ts` (globbed in and **deep-merged**, so adding a key can't clobber a sibling in the same namespace); API modules go in a new `api/<domain>.ts` importing the now-exported `unwrap` / `pageParams` / `toPage`; types and pages get their own files too. The frontend guide, the module skills, and the fork-sync doc were rewritten to teach this new-file placement — they previously told consumers to append to `api/index.ts`, `types/api.ts`, and `locales/zh-CN.ts`, the four highest-churn files, which guaranteed a conflict on every upstream merge. An `npx degit Tenon-Net/TenonAdmin/web` snapshot on-ramp is also documented as a third consumption model, for consumers who don't want to track upstream at all.
+- **Password expiry policy** with a runtime-configurable max age (`sys.security.password.expireDays`, seeded, default `0` = never expires). Login is never blocked: an expired password sets the existing `MustChangePassword` flag, and legacy users with no change-time anchor get it backfilled on first login, so enabling the policy never flags the whole user base at once. Create / reset / self-change all stamp the anchor, and self-change resets the window. `ISecurityPolicyProvider` gained a default interface method so existing custom implementations keep compiling, and the config UI exposes the field under the security tab.
+- **Personal center fleshed out**: the profile page now surfaces all of avatar / nickname / gender / phone / email (previously only name + password), and users can list and revoke their **own** online sessions (`GET` / `DELETE /api/v1/personal/sessions`) — revoking a session that isn't yours returns `SessionNotFound` (42024) rather than leaking its existence.
+- **Business workbench now runs on real data**: it replaced its hardcoded placeholder stats with the signed-in user, the current app's menu leaves as a quick-access grid, and that user's notices — all from APIs that already exist, so no backend change.
+- **CodeBlock JSON viewer component**, used to render operation-log request params (previously a raw `<pre>`). Built on Naive's `NCode` + highlight.js with only `json` registered — highlight.js is already a Naive dependency, so it adds no new download — and themed from the Naive palette. Documented in `web/COMPONENTS.md`.
+- **Duplicate fixed seed ids are now rejected at startup and in CI.** A colliding id used to fail silently — the second row skipped by the idempotent existence check, or overwritten on upgrade by a `SyncOnUpgrade` seed. `DatabaseInitializer` now tracks claimed ids per entity across all seeds (consumer seeds included) and fails loudly on a collision, and a `SeedIdRangeTests` uniqueness contract turns CI red before any host boots.
+- **A bilingual (English / 简体中文) VitePress documentation site**, covering the getting-started journey, core concepts, frontend/backend standards, and component references.
+- **A frontend unit-test suite (Vitest)** now runs in `web/` (`npm test`), starting with the i18n merge seam and the Pinia stores.
+
+### Fixed
+
+- **The built-in system module can no longer be disabled, and a module with menus attached can no longer be deleted.** Disabling the system module through the API directly used to leave the portal unreachable with no UI recovery path — the frontend disabled-row guard was never a server-side defense. Both are now enforced server-side (`ModuleProtected` 42013 / new `ModuleHasMenus` 42023).
+- **A user with no assigned modules can now log out** from the empty module-picker screen, instead of being stranded at `/module` with no way out.
+
+### Removed
+
+- **Removed unused template components** — `RoleSelect`, `DictRadio`, `DictCheckbox`, `JsonEditor`, and the `BarChart` chart preset — plus a dead theme self-check. Every removal was reference-checked across `web/src`, and `COMPONENTS.md` and the sibling READMEs were updated so no dead links remain. (`LineChart` / `PieChart` stay — the workbench uses them.)
+
+---
+
 ## 0.1.1 - 2026-07-16
 
 Patch release: front-end button-level permission enforcement and a small role permission gap.
