@@ -12,7 +12,7 @@
 - [ ] **A2 Tab 中键关闭 + 用户固定** — `stores/tabs.ts` 加 `pinned?: boolean`,close 系列守卫统一 `affix || pinned`;`TabsBar.vue` 中键关闭(`@auxclick`)+ 右键菜单「固定/取消固定」(`ph:push-pin`),pinned 藏关闭 X;持久化白捡(persist.pick 已含 tabs)。**不做拖拽重排**(soybean 也没有)。⚠ 工作区有在途 `tabs.ts` 未提交改动(用户详情页特性),开工前与维护者确认处置。
 - [ ] **A3 设置抽屉「复制配置」** — `SettingsDrawer.vue` footer 按钮:app store 中 DEFAULTS 同名键当前值 JSON 进剪贴板(VueUse `useClipboard`)+ message 提示「粘贴到 stores/app.ts DEFAULTS 即为新默认」。正中消费者 fork 改默认的模式。**不做主题预设 JSON**(6 色色板+取色器+布局卡片已覆盖其实用面)。
 - [~] **A4 版本更新通知** — **用户裁定不做**(2026-07-16),从前端 pass 移除。— 新建 `composables/useVersionCheck.ts`:`fetch('/index.html', {cache:'no-store'})` 抓 entry `assets/index-*.js` 哈希与当前 document 比对,不一致 → `useDialog` 提示刷新;`useIntervalFn`(5min)+ `useDocumentVisibility` 回前台触发;仅 PROD;「稍后」本轮不再弹;`layouts/default.vue` 挂载(登录页不查)。版本号仍是 Vite define 构建期常量,不能当更新信号——用产物哈希。
-- [ ] **A5 外链 / iframe 菜单**(唯一 M 级)— 零后端改动约定式:**外链** = Menu 节点 `path` 为 URL、component 空(`buildRoutesForModule` 现有 `!component` 分支天然跳过;`useLayoutMenu.onSelect`/`onSelectL1` + `MenuSearch` 回车各加 `window.open` 分支;兜底图标 `ph:arrow-square-out`);**iframe** = `path` 为内部路径、`component` 为 URL(`buildRoutesForModule` 检测 URL 时注册 `namedPage(() => import('@/views/embed/iframe.vue'))`,URL 进 `meta.iframeSrc`,keep-alive 顺带保住 iframe 状态);菜单表单加「链接类型」radio 展示糖。完成后约定写进 `COMPONENTS.md`。⚠ `useAuthMenu.ts`/`COMPONENTS.md` 有在途未提交改动,开工前确认。
+- [x] **A5 外链 / iframe 菜单**(57f8c69;`isHttpUrl` 约定 + iframe 视图 + 点击/搜索外链分支 + 菜单表单 linkHint;**radio 展示糖延后**——用占位提示 + linkHint + COMPONENTS.md 承载约定,radio 属可选 UX,未做)— 零后端改动约定式:**外链** = Menu 节点 `path` 为 URL、component 空(`buildRoutesForModule` 现有 `!component` 分支天然跳过;`useLayoutMenu.onSelect`/`onSelectL1` + `MenuSearch` 回车各加 `window.open` 分支;兜底图标 `ph:arrow-square-out`);**iframe** = `path` 为内部路径、`component` 为 URL(`buildRoutesForModule` 检测 URL 时注册 `namedPage(() => import('@/views/embed/iframe.vue'))`,URL 进 `meta.iframeSrc`,keep-alive 顺带保住 iframe 状态);菜单表单加「链接类型」radio 展示糖。完成后约定写进 `COMPONENTS.md`。⚠ `useAuthMenu.ts`/`COMPONENTS.md` 有在途未提交改动,开工前确认。
 
 ## 批次 B · 后端 S 级速赢
 
@@ -61,6 +61,8 @@
 - 多租户消费者侧 skill 文档(replace-service 姊妹篇):字段级 = 前置替换 IDataScopeProvider + DataEntity 子类基座;库级 = 多 ConfigId。
 
 ## 轮次日志
+
+### 第 8 轮 — 前端 pass 后半 · **A2 Tab 中键关闭 + 用户固定**(tabs.ts 加 pinned + togglePin,close 系列守卫 affix||pinned;TabsBar 中键 auxclick 关闭 + 右键固定/取消项 + pinned 显图钉藏 X;tabs.spec 加 pin 测试,commit 45224e5)· **A3 复制配置**(app.ts exportSettings 用 Object.keys(DEFAULTS);SettingsDrawer footer 复制按钮 useClipboard;中英键,commit 9e629c6)· **A5 外链/iframe**(见上,commit 57f8c69)· **浏览器冒烟**:起 MinimalHost(已知密码+干净库)+ dev 5174,登录→进系统模块→监控页真数据渲染(CPU 7.5%/内存/.NET 10.0.9/磁盘,控制台净)、异常日志页 ProTable+菜单归位(日志审计→异常日志)渲染正常,后端 API 直打 monitor/exception 端点均 code 0、菜单树含两页路径。**前端 pass 完成,精致化 A+B 全部落地**。遗留:E1 岗位拖拽漂移(批次 E)、C/D 批次未开工、A5 菜单表单 radio 展示糖(可选)。
 
 ### 第 7 轮 — 前端 pass 前半 · gen:api 重生成 schema(吃 exception+monitor 端点,提交)· **B1b 异常日志前端**(SysExceptionLog 类型 + logApi.exception* + `views/system/log/exception/index.vue` 镜像 op 页 + 中英键 + DefaultMenuSeed 116–118 挂日志审计 + 移除 KnownUnseededEndpoints 两端点 + 修 J2 注释,commit 3f5c56f)· **B5b 监控前端**(ServerInfoOutput/DiskInfo 类型 + monitorApi + `views/system/monitor/index.vue` 卡片+手动刷新 + 中英 monitor 命名空间 + DefaultMenuSeed 119–120 挂系统运维 + 清空 KnownUnseededEndpoints,commit c2d52a9)· 后端 seed/permission/typecheck/lint 全绿。踩坑:MinimalHost 未杀会锁 DLL 致 build 失败;Bash cwd 停在 web/ 要回根。**A4 版本更新通知按用户裁定不做**。NEXT: A2 Tab 中键/固定 → A3 复制配置 → A5 外链/iframe 菜单 → 浏览器冒烟(exception/monitor/新交互一起点)。
 
