@@ -19,7 +19,7 @@
 - [~] **B1 异常日志**(B1a 后端已落 75becfc;B1b 菜单+前端页+locale 键待并发前端会话平息后补,补时从 KnownUnseededEndpoints 移除两个端点)— `ExceptionLogFilter : IExceptionFilter`(注册在 AdminExceptionFilter 之后):非 `AdminException` 落 `sys_exception_log`(Path/HttpMethod/TraceId/ExceptionType/Message 截 2000/StackTrace 截 8000,审计 AOP 补操作人时间),**不置 ExceptionHandled**,500 照旧大声(ErrorCode.cs 既定纪律不动);写入尽力而为。`LogService` + `SysLogController` 加 `exception/page`、`DELETE exception`;前端日志页第三个 tab。纯复制 op/login 三件套。
 - [x] **B2 IEmailSender 邮件通道**(10ff869)— 严格镜像 ISmsSender:`Core/Security/IEmailSender`(`SendAsync(to, subject, htmlBody, ct)`);Services 层 `LoggingEmailSender`(默认)+ `SmtpEmailSender`(BCL SmtpClient,`TenonAdmin:Email` Options:Host/Port/From/User/Pass/Ssl;配了 Host 用 SMTP 否则日志)。零表零页面;要现代协议的消费者前置注册 MailKit 实现即接管。
 - [x] **B3 密码历史防重用**(cd6e534)— 表 `sys_password_history`(UserId, PasswordHash);`IPasswordHistoryService`(TryAdd):`EnsureNotReusedAsync`(取最近 N 条逐条 `IPasswordHasher.Verify`——盐不同只能验明文)+ `AppendAsync`(写入裁剪到 N)。开关 `sys.security.password.historyCount`(默认 0=关)走 SecurityPolicyProvider「DB 优先、Options 兜底」通道;挂点:`PersonalService.ChangePasswordAsync`、`UserService.ResetPasswordAsync`,建号初始密码只记录不校验。ErrorCode 42025 PasswordReused。
-- [ ] **B4 T-D7 文件引用根治(零 DDL)** — 秒传改「一引用一行」:`FileService.ChunkInitAsync/ChunkCompleteAsync` 命中同 hash 时不复用既有行,新插 `SysFile`(拷 StoragePath/Hash/Size),各引用方独立记录互删不影响;`FileGcService.ReclaimDeletedFilesAsync` 删盘前查同 StoragePath 是否仍有他行(ClearFilter 含未删),有则只硬删记录跳过 `storage.DeleteAsync`。幂等,与逐行 try/catch 兼容。
+- [x] **B4 T-D7 文件引用根治(零 DDL)**(3f4dd58)— 秒传改「一引用一行」:`FileService.ChunkInitAsync/ChunkCompleteAsync` 命中同 hash 时不复用既有行,新插 `SysFile`(拷 StoragePath/Hash/Size),各引用方独立记录互删不影响;`FileGcService.ReclaimDeletedFilesAsync` 删盘前查同 StoragePath 是否仍有他行(ClearFilter 含未删),有则只硬删记录跳过 `storage.DeleteAsync`。幂等,与逐行 try/catch 兼容。
 - [ ] **B5 服务器监控页** — `IMonitorService`/`MonitorService`(TryAddScoped):Environment / Process / GC.GetGCMemoryInfo / ThreadPool / DriveInfo,进程 CPU% 两次 `TotalProcessorTime` 采样(500ms);`MonitorController` + `[Module("Monitor")]`,`GET /api/v1/sys/monitor/server`;前端新页 + 菜单种子。只报进程与主机基础面,全量指标留给消费者观测栈(OTel 是既定可选包方向)。
 
 ## 批次 C · DiffLog + 缓存管理
@@ -61,6 +61,8 @@
 - 多租户消费者侧 skill 文档(replace-service 姊妹篇):字段级 = 前置替换 IDataScopeProvider + DataEntity 子类基座;库级 = 多 ConfigId。
 
 ## 轮次日志
+
+### 第 5 轮 — B4 T-D7 文件引用根治(零 DDL)· 秒传命中改为 `ReferenceExistingAsync` 插独立 sys_file 行(共享 StoragePath),不再返回既有行 Id → 一方删除不牵连另一方;`FileGcService` 删盘前 ClearFilter 查同 StoragePath 是否仍有他行,有则只硬删记录、保留物理文件,末个引用回收时才删盘 · 改 ChunkUploadTests 秒传断言为新契约(不同 Id、下载同字节)+ 新增 GC 共享存储引用计数测试;全量 293/0/0(commit 3f4dd58)。踩坑:`dotnet test --no-build` 会跑旧产物,改测试后必须先 build。NEXT: B5 服务器监控页(纯后端 + 前端新页,前端已解锁)。
 
 ### 第 4 轮 — B3 密码历史防重用 · 新 `sys_password_history` 表 + `IPasswordHistoryService`(TryAdd,方法 virtual);开关 `sys.security.password.historyCount`(默认 0=关)走 SecurityPolicyProvider DIM `GetPasswordHistoryCountAsync`;改密挂 EnsureNotReused(查当前口令 + 最近 N 条历史,盐不同验明文)+ Append;重置/建号只 Append(记录不校验);ConfigSeed Id=25 播种;ErrorCode 42025 PasswordReused + 中英 locale · 2 集成测试(启用后拦当前/最近重用、按 N 裁剪后可复用;默认关允许)+ 全量 292/0/0(commit cd6e534)。**并发前端会话已收尾提交(0bb1c9e detail-page 等),前端 locale/tabs/useAuthMenu 碰撞解除**——A2/A3/A5 + B1b 可安全排期;先做完 B4/B5 收尾后端批次。NEXT: B4 T-D7 文件引用根治(纯后端,零 DDL)。
 
