@@ -1,17 +1,12 @@
 # 巡检台账
 
-last-seen: ec998f0
+last-seen: b5d3159
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
 <!-- 后端已排空;以下为前端(§2.* + 契约轴) -->
-- web/src/views/module/index.vue
-- web/src/views/personal/profile.vue
-- web/src/views/personal/sessions.vue
-- web/src/views/system/config/components/OtherConfig.vue
-- web/src/views/system/config/components/SecurityConfig.vue
 - web/src/views/system/dict/index.vue
 - web/src/views/system/file/index.vue
 - web/src/views/system/log/op/index.vue
@@ -75,3 +70,5 @@ dry-streak: 0
 ### 第 11 轮 — 前端规范轴 + 契约轴 · 扫了 stores/app.spec.ts / auth.spec.ts / auth.ts / dict.spec.ts / user.ts · 全合规(auth.ts §2.4 仅持久化 currentModuleId、hasPerm 超管/未加载/命中三态合 D2、reset 连清 tabs;user.ts 全持久化保登录;三 spec 覆盖 homePath/hasPerm/isDark/afterHydrate 迁移/字典缓存并发去重与失效竞态)。无契约/i18n 触点,无闸门。队列剩 27。NEXT: 前端队首 5 个(theme/mix.ts / types/api.ts / utils/error.spec.ts / utils/tree.spec.ts / views/dashboard/biz.vue)。
 
 ### 第 12 轮 — 前端规范轴 + 契约轴 · 扫了 theme/mix.ts / types/api.ts / utils/error.spec.ts / utils/tree.spec.ts / views/dashboard/biz.vue · 全合规(mix.ts 纯色值函数、findings 提的 demo() 已删;error/tree spec 覆盖到位;types/api.ts 手写 DTO 镜像抽查 UserProfile/MySessionItem/NoticePublishInput/AddUserInput 与后端一致无漂移;biz.vue 文本走 t()、biz.* 6 键在且 en==zh 全对齐、真数据无假数字)。无闸门。队列剩 22。NEXT: 前端队首 5 个(module/index.vue / personal/profile.vue / personal/sessions.vue / config/OtherConfig.vue / config/SecurityConfig.vue)。
+
+### 第 13 轮 — 前端规范轴 + 契约轴 · 扫了 module/index.vue / personal/profile.vue / personal/sessions.vue / config/OtherConfig.vue / config/SecurityConfig.vue · 全合规(文本走 t()、scoped+CSS 变量、module 卡片 role/tabindex/键盘激活 a11y、v-auth+hasPerm 双重门)。契约轴重点:SecurityConfig 硬编码 config key 逐一核对后端权威常量——rateLimit.* = AdminRateLimitOptions(AdminSecurityOptions.cs:60-63)、captcha.enabled/type = CaptchaService.cs:16/19、loginLock/password/session.* = SecurityPolicyProvider,全字匹配零漂移;动态构造 config.security.* 24 个 i18n 标签全在且 en==zh。无闸门。队列剩 17。NEXT: 前端队首 5 个(system/dict/index.vue / file/index.vue / log/op/index.vue / menu/ButtonManager.vue / menu/index.vue)。
