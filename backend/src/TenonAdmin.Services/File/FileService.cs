@@ -85,13 +85,34 @@ public class FileService(
         SizeBytes = f.SizeBytes,
     };
 
+    /// <summary>
+    /// 秒传命中(T-D7):为新引用方插一条<b>独立</b>的 <c>sys_file</c> 记录(共享既有行的 <c>StoragePath</c>/大小/哈希),
+    /// 而非复用既有行的 Id。这样各引用方各拥有独立记录——一方删除只软删自己那条,不牵连另一方;物理文件仅当无任何行
+    /// 引用其 <c>StoragePath</c> 时才由 <c>FileGcService</c> 删除(见其 <c>ReclaimDeletedFilesAsync</c> 的共享判定)。
+    /// <para>原实现直接返回既有行,两个引用方共享同一 Id/记录,一方删除即让另一方的引用悬空、GC 到期删盘后彻底丢失。</para>
+    /// </summary>
+    protected virtual async Task<FileUploadOutput> ReferenceExistingAsync(SysFile existing, string fileName, string? contentType)
+    {
+        var entity = new SysFile
+        {
+            OriginalName = fileName,                       // 引用方各自的原始名
+            StoragePath = existing.StoragePath,            // 共享同一物理文件
+            Extension = existing.Extension,
+            ContentType = contentType ?? existing.ContentType,
+            SizeBytes = existing.SizeBytes,
+            Hash = existing.Hash,
+        };
+        await files.InsertAsync(entity);   // 新雪花 Id / 上传时间 / 上传人(= 当前引用方)由 AOP 回填
+        return ToOutput(entity);
+    }
+
     /// <inheritdoc />
     public virtual async Task<ChunkInitOutput> ChunkInitAsync(ChunkInitInput input)
     {
-        // 秒传:同内容哈希已存在则直接复用,免传。
+        // 秒传:同内容哈希已存在则免传。为新引用方插独立记录(共享物理文件),不复用既有行的 Id(T-D7)。
         var existing = await files.GetFirstAsync(f => f.Hash == input.FileHash);
         if (existing is not null)
-            return new ChunkInitOutput { Uploaded = true, File = ToOutput(existing) };
+            return new ChunkInitOutput { Uploaded = true, File = await ReferenceExistingAsync(existing, input.FileName, input.ContentType) };
 
         // uploadId 直接用 FileHash;返回已收分片供断点续传。
         var received = await chunks.GetReceivedIndexesAsync(input.FileHash);
@@ -105,12 +126,12 @@ public class FileService(
     /// <inheritdoc />
     public virtual async Task<FileUploadOutput> ChunkCompleteAsync(ChunkCompleteInput input)
     {
-        // 秒传兜底:完成时再查一次(并发下他人可能刚传完同 hash),命中则弃分片、复用既有。
+        // 秒传兜底:完成时再查一次(并发下他人可能刚传完同 hash),命中则弃分片、为新引用方插独立记录(T-D7)。
         var existing = await files.GetFirstAsync(f => f.Hash == input.FileHash);
         if (existing is not null)
         {
             await chunks.DiscardAsync(input.UploadId);
-            return ToOutput(existing);
+            return await ReferenceExistingAsync(existing, input.FileName, input.ContentType);
         }
 
         var ext = Path.GetExtension(input.FileName).ToLowerInvariant();

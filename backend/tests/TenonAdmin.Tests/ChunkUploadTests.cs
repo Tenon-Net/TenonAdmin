@@ -71,10 +71,13 @@ public class ChunkUploadTests
         var bytes = await c.GetByteArrayAsync($"/api/v1/sys/file/{fileId}/download");
         Assert.Equal(full, bytes);
 
-        // 秒传:同 hash 再 init → uploaded=true,复用同一文件
+        // 秒传(T-D7):同 hash 再 init → uploaded=true,但返回一条<b>独立</b>记录(不同 Id、共享物理文件),
+        // 各引用方独立删除互不牵连。下载新 Id 得到同样的字节(证明确实指向同一内容)。
         var init3 = (await (await c.PostJson("/api/v1/sys/file/chunk/init", initBody)).ReadEnvelope()).GetProperty("data");
         Assert.True(init3.GetProperty("uploaded").GetBoolean());
-        Assert.Equal(fileId, init3.GetProperty("file").GetProperty("id").GetInt64());
+        var refId = init3.GetProperty("file").GetProperty("id").GetInt64();
+        Assert.NotEqual(fileId, refId);
+        Assert.Equal(full, await c.GetByteArrayAsync($"/api/v1/sys/file/{refId}/download"));
     }
 
     [Fact]

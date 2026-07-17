@@ -65,7 +65,10 @@ public class FileGcTests : IAsyncLifetime
             SizeBytes = 1,
         };
         await files.InsertAsync(row);
-        return (await files.AsQueryable().Where(f => f.StoragePath == storagePath).FirstAsync()).Id;
+        // 取该 StoragePath 下最新一行(= 刚插入的这条);雪花 Id 时间有序,故按 Id 降序取首行,
+        // 在共享 StoragePath(秒传去重)下也能无歧义拿到本次插入的记录。
+        return (await files.AsQueryable().Where(f => f.StoragePath == storagePath)
+            .OrderBy(f => f.Id, OrderByType.Desc).FirstAsync()).Id;
     }
 
     private async Task SoftDeleteAsync(long id)
@@ -100,6 +103,32 @@ public class FileGcTests : IAsyncLifetime
         Assert.Null(await FindRowAsync(dead));       // 记录也硬删了(没有字节的记录留着只会让表越堆越大)
         Assert.True(OnDisk("20260101/live.txt"));    // 没删的文件纹丝不动
         Assert.NotNull(await FindRowAsync(live));
+    }
+
+    [Fact]
+    public async Task FileGc_SharedStorage_KeepsPhysicalFileUntilLastReferenceReclaimed()
+    {
+        // 秒传去重(T-D7):两条独立记录共享同一物理文件(a 落盘,b 只是引用同一 StoragePath)
+        const string path = "20260101/shared.txt";
+        var a = await PutFileAsync(path, "shared-bytes");
+        var b = await InsertRowAsync(path);
+
+        // 删 A 越过保留期 → 回收 A 记录,但物理文件因 B 仍引用而保留
+        await SoftDeleteAsync(a);
+        _clock.Now = _clock.Now.AddDays(8);
+        var (files1, _) = await Gc.SweepAsync();
+        Assert.Equal(1, files1);
+        Assert.Null(await FindRowAsync(a));       // A 记录硬删
+        Assert.True(OnDisk(path));                // 物理文件还在:B 仍引用
+        Assert.NotNull(await FindRowAsync(b));     // B 记录完好
+
+        // 再删 B 越过保留期 → 最后一个引用,物理文件此时才删
+        await SoftDeleteAsync(b);
+        _clock.Now = _clock.Now.AddDays(8);
+        var (files2, _) = await Gc.SweepAsync();
+        Assert.Equal(1, files2);
+        Assert.Null(await FindRowAsync(b));
+        Assert.False(OnDisk(path));               // 无引用了 → 字节回收
     }
 
     [Fact]
