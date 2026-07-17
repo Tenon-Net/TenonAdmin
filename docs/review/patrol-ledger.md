@@ -1,12 +1,12 @@
 # 巡检台账
 
-last-seen: bb199f6
+last-seen: 85cf36e
 last-tree: c658ff1
-dry-streak: 0
+dry-streak: 1
 
 ## 待扫
 
-<!-- 空:i18n 扩展接缝(locales/index.ts + ext/README.md + index.spec.ts)已于 a87da64/bb199f6 提交,本轮(19)以已提交态复核合规、出队。真实代码全扫完。等新提交(last-seen bb199f6 之后)或新工作区变更(last-tree c658ff1 变化)入队。 -->
+<!-- 空(第 20 轮空转):85cf36e 为纯文档站提交(site/guide/*),不碰 backend/src·web/src,门控无入队。真实代码全扫完。等新代码提交(last-seen 85cf36e 之后)或新工作区变更(last-tree c658ff1 变化)入队。 -->
 
 ## 待裁决
 
@@ -69,3 +69,5 @@ menu/index.vue 主表对每个动作严格 v-auth/hasPerm(增/改/删/启停,lin
 ### 第 18 轮 — 工作区门控 · 用户扩展接缝验收测试已收尾:api/sample.ts、types/sample.ts、views/sample/、ext.integration.spec.ts 4 个 SCRATCH 全删 → 幽灵移除出队。worktree 退回原始已扫稳定态(hash 45c5d3f;index.ts/ext//index.spec.ts 已扫且未变,不重入队)。last-seen→127412d、last-tree→45c5d3f、dry-streak 保持 0(本轮队列非空、做了幽灵清理)。队列清空,无代码扫描、无闸门。NEXT: 队列空 → 下轮 dry-streak 起(退避 min(3600,900·2^n));真实代码零待扫,等新提交或新工作区变更。
 
 ### 第 19 轮 — 前端规范轴 + 契约轴 · 扫了 locales/index.ts / locales/index.spec.ts / locales/ext/README.md(i18n 扩展接缝,第 17 轮曾以工作区避让态验过,现于 a87da64 提交后以已提交态复核)· 全合规(index.ts:withExt/deepMerge glob 接缝——§2.1 上游自留地基础设施、导出 withExt 有站内调用方非死代码、深合并 spread 不改入参;§2.7 无可见文本;契约轴:接缝只合并不新增键、ext/ 现仅 README〔sampleDoc 已删〕→ glob 空、withExt 原样返回、606 键零漂移;index.spec.ts 8 例覆盖已绿;ext/README `[MsgKey]` 去前缀对齐指引准确)。触发源:用户令我先提交工作区那批避让文件(feat a87da64 前端接缝 + docs bb199f6 文件归属文档),门控把其中 3 个 web/src 文件入队。全合规无发现、无机械修。闸门:提交前已跑 npm test 39/39 + typecheck 无错(绿)。last-seen→bb199f6、last-tree→c658ff1、dry-streak 归 0(本轮队列非空、扫了真实代码)。队列出清。NEXT: 队列空 → 下轮 dry-streak 起(退避 min(3600,900·2^n));真实代码零待扫,等新提交或新工作区变更。
+
+### 第 20 轮 — 空转轮 · 门控:bb199f6..HEAD 对 backend/src·web/src 差异为空、工作区干净、哈希仍 c658ff1。区间内唯一新提交 85cf36e 为纯文档站(site/guide getting-started/sync-fork degit 快照上手方式),不碰代码故无入队。队列空 → dry-streak 0→1,last-seen→85cf36e、last-tree 保持 c658ff1。不扫代码、不跑闸门。退避 min(3600,900·2¹)=1800s。队列剩 0。NEXT: 1800s 后重跑门控;仍无 backend/src·web/src 新增则 dry-streak→2(退避 3600s 封顶);等真实代码提交或工作区变更破空转。
