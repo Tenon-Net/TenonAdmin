@@ -19,8 +19,8 @@ public class UserService(
     ISessionService sessions,
     ILoginLockService loginLock,
     ISecurityPolicyProvider policy,
-    IPasswordHistoryService passwordHistory,
-    AdminSecurityOptions security) : IUserService
+    AdminSecurityOptions security,
+    IPasswordHistoryService? passwordHistory = null) : IUserService   // 可选参数:默认 DI 注入;消费者子类省略也能编译(§5.3)
 {
     // 生成随机初始口令的字符集:去掉易混字符(0/O、1/l/I),含大小写+数字+符号。
     private const string PASSWORD_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*";
@@ -185,7 +185,7 @@ public class UserService(
             await users.InsertAsync(user);  // 插入后 AOP 已把雪花 Id 回填到 user.Id
             if (input.RoleIds.Count > 0) await rbac.SetUserRolesAsync(user.Id, input.RoleIds);
         });
-        await passwordHistory.AppendAsync(user.Id, user.Password);   // 记录初始口令(建号只记录不校验;策略关时空操作)
+        await (passwordHistory?.AppendAsync(user.Id, user.Password) ?? Task.CompletedTask);   // 记录初始口令(建号只记录不校验;策略关/未注入时空操作)
         return new AddUserOutput { Id = user.Id, InitialPassword = initialPassword };
     }
 
@@ -268,7 +268,7 @@ public class UserService(
         user.MustChangePassword = true;   // 管理员重置:强制用户下次登录后改密(§14)
         user.LastPasswordChangeTime = DateTime.Now;   // 密码过期窗口从本次重置重新起算
         await users.UpdateAsync(user);
-        await passwordHistory.AppendAsync(id, user.Password);   // 记录重置口令(策略关时空操作),使用户不能改回此口令
+        await (passwordHistory?.AppendAsync(id, user.Password) ?? Task.CompletedTask);   // 记录重置口令(策略关/未注入时空操作),使用户不能改回此口令
 
         // 重置密码的语义是"这个账号我不再信任现有持有者"——旧口令派生出的会话必须一并作废,
         // 否则盗号者手里的 access/refresh 纹丝不动(refresh 不校验密码版本且滑动续期 → 可无限续命),

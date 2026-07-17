@@ -11,8 +11,8 @@ public class PersonalService(
     IRepository<SysUser> users,
     IPasswordHasher hasher,
     ISecurityPolicyProvider policy,
-    IPasswordHistoryService passwordHistory,
-    IMenuService menu) : IPersonalService
+    IMenuService menu,
+    IPasswordHistoryService? passwordHistory = null) : IPersonalService   // 可选参数:默认 DI 注入;消费者子类省略也能编译(§5.3,同 FileGcService 成法)
 {
     /// <inheritdoc />
     public virtual async Task<UserProfile> GetProfileAsync(long userId)
@@ -76,12 +76,12 @@ public class PersonalService(
         AdminException.ThrowIf(!hasher.Verify(input.OldPassword, user!.Password), ErrorCode.PasswordWrong);
 
         await policy.ValidatePasswordAsync(input.NewPassword);   // 新口令须满足密码复杂度策略(运行时可配)
-        await passwordHistory.EnsureNotReusedAsync(userId, input.NewPassword);   // 防重用(策略开时;关时空操作)
+        await (passwordHistory?.EnsureNotReusedAsync(userId, input.NewPassword) ?? Task.CompletedTask);   // 防重用(策略开时;关/未注入时空操作)
         user.Password = hasher.Hash(input.NewPassword);
         user.MustChangePassword = false;   // 自助改密成功即清除强制改密标志(§14)
         user.LastPasswordChangeTime = DateTime.Now;   // 密码过期窗口从本次改密重新起算
         await users.UpdateAsync(user);
-        await passwordHistory.AppendAsync(userId, user.Password);   // 记录新口令哈希,供后续防重用
+        await (passwordHistory?.AppendAsync(userId, user.Password) ?? Task.CompletedTask);   // 记录新口令哈希,供后续防重用
     }
 
     /// <inheritdoc />
