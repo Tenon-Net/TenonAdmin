@@ -1,17 +1,12 @@
 # 巡检台账
 
-last-seen: b5d3159
+last-seen: 988dcd7
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
 <!-- 后端已排空;以下为前端(§2.* + 契约轴) -->
-- web/src/views/system/dict/index.vue
-- web/src/views/system/file/index.vue
-- web/src/views/system/log/op/index.vue
-- web/src/views/system/menu/components/ButtonManager.vue
-- web/src/views/system/menu/index.vue
 - web/src/views/system/module/index.vue
 - web/src/views/system/notice/index.vue
 - web/src/views/system/org/index.vue
@@ -40,6 +35,9 @@ dry-streak: 0
 
 ### J3 · §2.7 · router/routes.ts:16 `/module` 路由 meta.title 硬编码 '选择应用'
 兄弟静态路由都用 i18n 键(menu.profile/password/notice/sessions),唯 `/module` 硬编码中文 '选择应用';英文环境该串不翻译。判断题(不擅改)理由:该路由为顶层(不在 layout 壳内),meta.title 可见性取决于 document.title 如何取用(未核实),修法要定键名 + 双语各加一行(触碰 606 键的共享 locale 大文件)。建议:确认 document.title 消费后改用 menu.* 键并双语补齐。
+
+### J4 · §2.6 · 权限按钮弹窗(ButtonManager)整链路无客户端权限门
+menu/index.vue 主表对每个动作严格 v-auth/hasPerm(增/改/删/启停,line 364/387-391/443),但:①打开 ButtonManager 的「配置权限」入口按钮(menu/index.vue:348)无门;②ButtonManager 内「新增按钮/编辑/删除/批量从路由添加」(ButtonManager.vue:243/253/271/272)全无 hasPerm。→ 只读用户(仅 GET menu/tree)能看到这些写按钮,点击才被服务端 403;仅 UX 不一致、非越权([RolePermission] 兜底)。判断题(不擅改)理由:修法要为每按钮定权限码映射(入口/新增→POST menu/add、编辑/删除→PUT/DELETE menu/{id}),跨 menu/index.vue + ButtonManager.vue 两文件,属 UX 设计取舍;建议与主表对齐后统一加门。
 
 ### J2 · 文档准确性 · DefaultMenuSeed.cs 取号台账注释自相矛盾
 类注释两处"当前最大 Id"打架:行 12「现已用到 113」vs 行 15「新增行取当前最大号 +1(现为 116)」;而 `HasData()` 实际最大 Id 已是 115(114 角色-取用户 / 115 角色-授权用户)。行 12 陈旧,行 15 正确。
@@ -72,3 +70,5 @@ dry-streak: 0
 ### 第 12 轮 — 前端规范轴 + 契约轴 · 扫了 theme/mix.ts / types/api.ts / utils/error.spec.ts / utils/tree.spec.ts / views/dashboard/biz.vue · 全合规(mix.ts 纯色值函数、findings 提的 demo() 已删;error/tree spec 覆盖到位;types/api.ts 手写 DTO 镜像抽查 UserProfile/MySessionItem/NoticePublishInput/AddUserInput 与后端一致无漂移;biz.vue 文本走 t()、biz.* 6 键在且 en==zh 全对齐、真数据无假数字)。无闸门。队列剩 22。NEXT: 前端队首 5 个(module/index.vue / personal/profile.vue / personal/sessions.vue / config/OtherConfig.vue / config/SecurityConfig.vue)。
 
 ### 第 13 轮 — 前端规范轴 + 契约轴 · 扫了 module/index.vue / personal/profile.vue / personal/sessions.vue / config/OtherConfig.vue / config/SecurityConfig.vue · 全合规(文本走 t()、scoped+CSS 变量、module 卡片 role/tabindex/键盘激活 a11y、v-auth+hasPerm 双重门)。契约轴重点:SecurityConfig 硬编码 config key 逐一核对后端权威常量——rateLimit.* = AdminRateLimitOptions(AdminSecurityOptions.cs:60-63)、captcha.enabled/type = CaptchaService.cs:16/19、loginLock/password/session.* = SecurityPolicyProvider,全字匹配零漂移;动态构造 config.security.* 24 个 i18n 标签全在且 en==zh。无闸门。队列剩 17。NEXT: 前端队首 5 个(system/dict/index.vue / file/index.vue / log/op/index.vue / menu/ButtonManager.vue / menu/index.vue)。
+
+### 第 14 轮 — 前端规范轴 + 契约轴 · 扫了 dict/index.vue / file/index.vue / log/op/index.vue / menu/ButtonManager.vue / menu/index.vue · 四合规(dict 主从竞态守卫 + dictStore.invalidate 全覆盖 + switch/按钮 stopPropagation;file blob 下载 createObjectURL+revoke;log/op UserSelect 精确筛 operatorId + CodeBlock + daterange;menu/index 每动作 v-auth/hasPerm 严格门、menu.* 全键在且 en==zh)。记 1 判断题(J4:ButtonManager 整链路无客户端权限门,与主表不一致,UX-only、服务端兜底)。无闸门。队列剩 12。NEXT: 前端队首 5 个(system/module/index.vue / notice/index.vue / org/index.vue / position/index.vue / recycle/index.vue)。
