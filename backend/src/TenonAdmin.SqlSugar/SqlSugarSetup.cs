@@ -86,8 +86,10 @@ public static class SqlSugarSetup
                     switch (info.OperationType)
                     {
                         case DataFilterType.InsertByObject:
-                            // Id 未指定(=0)→ 填雪花号;种子等显式指定的 Id 原样保留
-                            if (info is { PropertyName: nameof(BaseEntity.Id), EntityValue: BaseEntity { Id: 0 } })
+                            // Id 未指定(=0)→ 填雪花号;种子等显式指定的 Id 原样保留。
+                            // 按 PrimaryId 匹配(而非 BaseEntity):BaseEntity : PrimaryId,故老实体一并覆盖,
+                            // 且明细/子表(仅继承 PrimaryId,无审计字段,#8)插入时同样自动获得雪花 Id。
+                            if (info is { PropertyName: nameof(PrimaryId.Id), EntityValue: PrimaryId { Id: 0 } })
                                 info.SetValue(idGen.NextId());
                             // CreateTime 未指定 → 填当前时间
                             else if (info is { PropertyName: nameof(BaseEntity.CreateTime), EntityValue: BaseEntity { CreateTime: var ct } } && ct == default)

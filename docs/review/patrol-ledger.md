@@ -1,12 +1,12 @@
 # 巡检台账
 
-last-seen: 85cf36e
+last-seen: b322c10
 last-tree: c658ff1
-dry-streak: 1
+dry-streak: 2
 
 ## 待扫
 
-<!-- 空(第 20 轮空转):85cf36e 为纯文档站提交(site/guide/*),不碰 backend/src·web/src,门控无入队。真实代码全扫完。等新代码提交(last-seen 85cf36e 之后)或新工作区变更(last-tree c658ff1 变化)入队。 -->
+<!-- 空(第 21 轮空转):85cf36e..b322c10 三提交(round-20 台账 / 7b298cb 0.1.2 发版准备:changelog+web 版本号〔走 package.json 注入,非 web/src〕/ b322c10 发版 runbook)均不碰 backend/src·web/src,门控无入队。真实代码全扫完。等新代码提交(last-seen b322c10 之后)或新工作区变更(last-tree c658ff1 变化)入队。 -->
 
 ## 待裁决
 
@@ -71,3 +71,5 @@ menu/index.vue 主表对每个动作严格 v-auth/hasPerm(增/改/删/启停,lin
 ### 第 19 轮 — 前端规范轴 + 契约轴 · 扫了 locales/index.ts / locales/index.spec.ts / locales/ext/README.md(i18n 扩展接缝,第 17 轮曾以工作区避让态验过,现于 a87da64 提交后以已提交态复核)· 全合规(index.ts:withExt/deepMerge glob 接缝——§2.1 上游自留地基础设施、导出 withExt 有站内调用方非死代码、深合并 spread 不改入参;§2.7 无可见文本;契约轴:接缝只合并不新增键、ext/ 现仅 README〔sampleDoc 已删〕→ glob 空、withExt 原样返回、606 键零漂移;index.spec.ts 8 例覆盖已绿;ext/README `[MsgKey]` 去前缀对齐指引准确)。触发源:用户令我先提交工作区那批避让文件(feat a87da64 前端接缝 + docs bb199f6 文件归属文档),门控把其中 3 个 web/src 文件入队。全合规无发现、无机械修。闸门:提交前已跑 npm test 39/39 + typecheck 无错(绿)。last-seen→bb199f6、last-tree→c658ff1、dry-streak 归 0(本轮队列非空、扫了真实代码)。队列出清。NEXT: 队列空 → 下轮 dry-streak 起(退避 min(3600,900·2^n));真实代码零待扫,等新提交或新工作区变更。
 
 ### 第 20 轮 — 空转轮 · 门控:bb199f6..HEAD 对 backend/src·web/src 差异为空、工作区干净、哈希仍 c658ff1。区间内唯一新提交 85cf36e 为纯文档站(site/guide getting-started/sync-fork degit 快照上手方式),不碰代码故无入队。队列空 → dry-streak 0→1,last-seen→85cf36e、last-tree 保持 c658ff1。不扫代码、不跑闸门。退避 min(3600,900·2¹)=1800s。队列剩 0。NEXT: 1800s 后重跑门控;仍无 backend/src·web/src 新增则 dry-streak→2(退避 3600s 封顶);等真实代码提交或工作区变更破空转。
+
+### 第 21 轮 — 空转轮 · 门控:85cf36e..HEAD(=b322c10)对 backend/src·web/src 差异为空、工作区干净、哈希仍 c658ff1。区间三提交均不碰代码:67741fe(round-20 台账)、7b298cb(chore(release) 0.1.2 发版准备——changelog + web 版本号,版本号走 package.json 经 Vite define 注入前端、非 web/src 源码)、b322c10(发版 runbook 文档)。队列空 → dry-streak 1→2,last-seen→b322c10、last-tree 保持 c658ff1。不扫代码、不跑闸门。退避 min(3600,900·2²)=3600s(已封顶)。队列剩 0。NEXT: 3600s 后重跑门控;dry-streak≥2 起退避恒封顶 3600s(streak 仍会 3、4… 递增,退避不变);等真实代码提交或工作区变更即归 0 破空转。注:0.1.2 已切版但零代码改动(纯文档 + 版本元数据),巡检面无新增。
