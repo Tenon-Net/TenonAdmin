@@ -1,17 +1,12 @@
 # 巡检台账
 
-last-seen: fe4e14b
+last-seen: effe2c7
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
 <!-- 后端队首(先排空后端,再轮到前端) -->
-- backend/src/TenonAdmin.Services/Entities/SysUser.cs
-- backend/src/TenonAdmin.Services/Module/ModuleModels.cs
-- backend/src/TenonAdmin.Services/Module/ModuleService.cs
-- backend/src/TenonAdmin.Services/Notice/NoticeModels.cs
-- backend/src/TenonAdmin.Services/Notice/NoticeService.cs
 - backend/src/TenonAdmin.Services/Personal/PersonalModels.cs
 - backend/src/TenonAdmin.Services/Personal/PersonalService.cs
 - backend/src/TenonAdmin.Services/Security/SecurityPolicyProvider.cs
@@ -103,3 +98,5 @@ dry-streak: 0
 ### 第 1 轮 — 后端规范轴 · 扫了 PersonalController.cs / DemoModeFilter.cs / TenonAdminSetup.cs / ErrorCode.cs / TenonAdminOptions.cs · 修 TenonAdminOptions.Database 缺失 `/// <summary>`(§0.2/§1.13,11 个同级属性唯一漏标)→ 后端闸门绿(build 0 err，test 267/0/0，commit 9519ebd)。队列剩 82。NEXT: 继续排后端队首 5 个(ISecurityPolicyProvider / AuthService / SysModule / SysNotice / SysNoticeReceiver)。
 
 ### 第 2 轮 — 后端规范轴 · 扫了 ISecurityPolicyProvider.cs / AuthService.cs / SysModule.cs / SysNotice.cs / SysNoticeReceiver.cs · 四合规(SysNotice 的 ponytail 正文 2000 上限未被触达,静默);记 1 判断题(J1:密码过期特性 `DateTime.Now` 裸调 §1.11,跨 3 文件 5 处,涉改扩展点构造签名 + UTC/本地决策)→ 记账轮不跑闸门。队列剩 77。NEXT: 继续排后端队首 5 个(SysUser / ModuleModels / ModuleService / NoticeModels / NoticeService)。
+
+### 第 3 轮 — 后端规范轴 · 扫了 SysUser.cs / ModuleModels.cs / ModuleService.cs / NoticeModels.cs / NoticeService.cs · 全合规(头像 ViewUrl + 通知未读实时/全量载入/逐条插入等多处 ponytail 上限本轮 diff 均未触达,静默;ModuleService 靠 PortalGeneration 计数器做跨节点缓存失效,coherent)。无发现,无闸门。队列剩 72。NEXT: 继续排后端队首 5 个(PersonalModels / PersonalService[J1 已覆盖其 §1.11-DateTime.Now] / SecurityPolicyProvider / ConfigSeed / DefaultDataScopeSeed)。
