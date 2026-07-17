@@ -7,6 +7,8 @@ Release cadence: **development happens on `dev`, releases happen on `main`** —
 
 Once a tag triggers `backend-release`, it first runs build + tests + template smoke test (`dotnet new tenon-app` must restore and compile successfully), and only pushes to nuget.org if everything is green.
 
+The step-by-step release runbook (version bump, verify, merge to `main`, tag) lives in [`docs/releasing.md`](docs/releasing.md).
+
 > When releasing, **both halves' version numbers must be updated together**: the backend version is injected from the tag via `-p:Version`, while `web/package.json`'s `version` is a build-time constant **shown in the login page footer**. Forget to update it, and the version the user sees in the UI won't match the package they installed.
 
 ## 0.1.2 - 2026-07-16
