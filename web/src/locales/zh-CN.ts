@@ -588,6 +588,13 @@ export default {
     exception: '异常信息',
     detail: '详情',
     clearOpConfirm: '确定清空全部操作日志?此为硬删除,不可恢复。',
+    // 异常日志(B1)
+    exceptionTitle: '异常日志',
+    exceptionType: '异常类型',
+    exceptionMessage: '异常消息',
+    stackTrace: '异常堆栈',
+    traceId: '追踪号',
+    clearExceptionConfirm: '确定清空全部异常日志?此为硬删除,不可恢复。',
   },
   profile: {
     title: '个人资料',

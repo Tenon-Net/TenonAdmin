@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysExceptionLog, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -320,6 +320,21 @@ export const logApi = {
       .then((r) => toPage<SysOpLog>(r)),
   /** 清空操作日志(硬删,不可恢复)。 */
   opClear: () => client.DELETE('/api/v1/sys/log/op', {}).then((r) => unwrap<boolean>(r)),
+  /** 异常日志分页;接口路径模糊 + 异常类型模糊 + 时间范围。 */
+  exceptionPage: (params: { page: number; pageSize: number; path?: string; exceptionType?: string; createTime?: [string, string] | null }) =>
+    client
+      .GET('/api/v1/sys/log/exception/page', {
+        params: {
+          query: {
+            ...pageParams(params),
+            Path: params.path, ExceptionType: params.exceptionType,
+            ...splitRange(params.createTime),
+          },
+        },
+      })
+      .then((r) => toPage<SysExceptionLog>(r)),
+  /** 清空异常日志(硬删,不可恢复)。 */
+  exceptionClear: () => client.DELETE('/api/v1/sys/log/exception', {}).then((r) => unwrap<boolean>(r)),
 }
 
 export const dictApi = {

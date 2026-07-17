@@ -582,6 +582,13 @@ export default {
     exception: 'Exception',
     detail: 'Detail',
     clearOpConfirm: 'Clear all operation logs? This is a hard delete and cannot be undone.',
+    // Exception logs (B1)
+    exceptionTitle: 'Exception logs',
+    exceptionType: 'Exception type',
+    exceptionMessage: 'Message',
+    stackTrace: 'Stack trace',
+    traceId: 'Trace ID',
+    clearExceptionConfirm: 'Clear all exception logs? This is a hard delete and cannot be undone.',
   },
   profile: {
     title: 'Profile',
