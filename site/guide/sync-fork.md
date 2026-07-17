@@ -5,6 +5,7 @@ This page is for one specific situation: you forked or cloned the whole `Tenon-N
 ::: tip Check which consumption model you're actually in first
 - **Backend-only consumer** (you run `dotnet add package TenonAdmin` or `dotnet new tenon-app` in your own separate repo) → you don't need any of this. Updates arrive by bumping the NuGet package version; see [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md) for what changed and any breaking changes before bumping.
 - **You forked the repo to build on `web/`** (the common case — there's no npm-installable frontend package, so building on `web/` directly is the supported path) → this page is for you.
+- **One-off snapshot consumer** (`npx degit Tenon-Net/TenonAdmin/web` for a copy you own and maintain yourself, the soybean / vite scaffold model) → you've opted out of the upgrade channel, so this page's merge flow doesn't apply; upstream fixes are yours to read off the diff and reapply by hand, and the frontend drifts from the NuGet-versioned backend contract. To keep pulling upstream fixes, don't take this path — use the fork model above.
 :::
 
 ## 1. Fork and clone

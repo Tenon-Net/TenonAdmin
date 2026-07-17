@@ -136,6 +136,16 @@ Vite 起在 `http://localhost:5173`,内置反向代理把 `/api` 和 `/openapi` 
 
 前端要重新生成 API 类型(`npm run gen:api`)时后端必须在跑——它是从运行中的 `/openapi/v1.json` 抓契约,不是离线生成。
 
+::: tip 想拿它当一次性脚手架(soybean / vite 那种)?
+上面 `cd web` 是「克隆仓库、跟着上游升级」的路子——推荐,因为前端会和走 NuGet 升级的后端契约同步演化。如果你只想要一份拷贝、之后完全自己维护,用 degit 拉一份无 `.git` 历史的快照当起点:
+
+```bash
+npx degit Tenon-Net/TenonAdmin/web my-web
+```
+
+代价明确:**没有升级通道**。上游修了 bug 得自己读 diff 手动搬,且快照会与走 NuGet 升级的后端契约漂移。想持续吃上游修复,别走快照,走[同步 Fork 与上游](/zh/guide/sync-fork)——那套接缝就是为把这条路的合并冲突压到近乎为零而做的。
+:::
+
 ## 换掉默认数据库
 
 零配置默认用 SQLite(`Data Source=./data/admin.db`,相对 ContentRoot)。换正式数据库不用改代码,`TenonAdmin:Database` 一段配置说了算,改 `DbType` + `ConnectionString` 两项即可(`Sqlite` / `MySql` / `SqlServer` / `PostgreSQL` 都支持):

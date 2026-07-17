@@ -136,6 +136,16 @@ Vite comes up on `http://localhost:5173`, with a built-in reverse proxy forwardi
 
 When the frontend regenerates its API types (`npm run gen:api`), the backend must be running — it pulls the contract from a live `/openapi/v1.json`, not offline.
 
+::: tip Want it as a one-off scaffold (the soybean / vite kind)?
+The `cd web` above is the "clone the repo, track upstream" path — recommended, since the frontend then evolves in lockstep with the NuGet-versioned backend contract. If you just want a copy to own and maintain yourself, degit a snapshot with no `.git` history as your starting point:
+
+```bash
+npx degit Tenon-Net/TenonAdmin/web my-web
+```
+
+The trade-off is explicit: **no upgrade channel**. Upstream fixes are yours to read off the diff and reapply by hand, and the snapshot drifts from the NuGet-versioned backend contract. To keep pulling upstream fixes, don't snapshot — follow [Syncing Your Fork](/guide/sync-fork), whose seams exist precisely to keep that path's merge conflicts near zero.
+:::
+
 ## Swap out the default database
 
 Zero-config defaults to SQLite (`Data Source=./data/admin.db`, relative to the ContentRoot). Switching to a real database takes no code changes — the `TenonAdmin:Database` section decides it, and you change just two things, `DbType` and `ConnectionString` (`Sqlite` / `MySql` / `SqlServer` / `PostgreSQL` are all supported):
