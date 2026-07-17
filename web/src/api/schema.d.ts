@@ -1577,6 +1577,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/monitor/server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 取服务器运行快照(CPU/内存/磁盘/运行时;含一次约 500ms 的 CPU 采样) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfServerInfoOutput"];
+                        "application/json": components["schemas"]["ResultOfServerInfoOutput"];
+                        "text/json": components["schemas"]["ResultOfServerInfoOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/notice": {
         parameters: {
             query?: never;
@@ -3376,6 +3414,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/log/exception/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询异常日志(按时间倒序) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 接口路径(模糊,可选) */
+                    Path?: string;
+                    /** @description 异常类型(模糊,可选;如 `NullReference` 可捞出全部空引用异常) */
+                    ExceptionType?: string;
+                    /** @description 发生时间下界(含) */
+                    StartTime?: string;
+                    /** @description 发生时间上界(含) */
+                    EndTime?: string;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfSysExceptionLog"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfSysExceptionLog"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfSysExceptionLog"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/log/exception": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 清空异常日志(硬删,不可恢复) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/role/page": {
         parameters: {
             query?: never;
@@ -4472,6 +4599,21 @@ export interface components {
             /** @description 备注 */
             remark?: null | string;
         };
+        /** @description 磁盘分区容量。 */
+        DiskInfo: {
+            /** @description 分区名/挂载点(如 `C:\` 或 `/`) */
+            name?: string;
+            /**
+             * Format: int64
+             * @description 总容量(字节)
+             */
+            totalBytes?: number | string;
+            /**
+             * Format: int64
+             * @description 可用容量(字节)
+             */
+            freeBytes?: number | string;
+        };
         /** @description 上传出参:新文件 Id + 展示信息。 */
         FileUploadOutput: {
             /** Format: int64 */
@@ -4878,6 +5020,34 @@ export interface components {
             pages?: number | string;
             /** @description 当前页数据 */
             items?: components["schemas"]["SysDictType"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
+        PagedListOfSysExceptionLog: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["SysExceptionLog"][];
         };
         /**
          * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
@@ -5730,6 +5900,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfPagedListOfSysExceptionLog: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfSysExceptionLog"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfPagedListOfSysFile: {
             /**
              * Format: int32
@@ -5890,6 +6081,27 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["PasswordPolicy"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfServerInfoOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["ServerInfoOutput"];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -6160,6 +6372,57 @@ export interface components {
             /** @description 备注 */
             remark?: null | string;
         };
+        /**
+         * @description 服务器监控快照(设计 §4 运维)。只报<b>进程与主机基础面</b>——系统级全量指标(APM/链路/告警)
+         *     留给消费方的观测栈(OpenTelemetry 等可选包方向),内核不越位。
+         */
+        ServerInfoOutput: {
+            /** @description 主机名 */
+            machineName?: string;
+            /** @description 操作系统描述(如 `Microsoft Windows 10.0.20348`) */
+            osDescription?: string;
+            /** @description 运行时框架描述(如 `.NET 10.0.0`) */
+            frameworkDescription?: string;
+            /** @description 进程架构(如 `X64` / `Arm64`) */
+            processArchitecture?: string;
+            /**
+             * Format: int32
+             * @description 逻辑处理器数
+             */
+            processorCount?: number | string;
+            /**
+             * Format: int64
+             * @description 进程已运行秒数
+             */
+            processUptimeSeconds?: number | string;
+            /**
+             * Format: double
+             * @description 进程 CPU 占用百分比(0–100,对全部逻辑核归一;两次采样估算)
+             */
+            processCpuPercent?: number | string;
+            /**
+             * Format: int64
+             * @description 进程工作集(物理内存占用,字节)
+             */
+            processWorkingSetBytes?: number | string;
+            /**
+             * Format: int64
+             * @description 托管堆已用字节(GC)
+             */
+            gcHeapBytes?: number | string;
+            /**
+             * Format: int64
+             * @description GC 可用内存上界(字节;进程/容器 cgroup 限额视角)
+             */
+            totalAvailableMemoryBytes?: number | string;
+            /**
+             * Format: int32
+             * @description 进程线程数
+             */
+            threadCount?: number | string;
+            /** @description 磁盘分区列表(就绪分区) */
+            disks?: components["schemas"]["DiskInfo"][];
+        };
         /** @description 设默认应用入参(多应用门户)。 */
         SetDefaultModuleInput: {
             /**
@@ -6310,6 +6573,45 @@ export interface components {
             sort?: number | string;
             enabled?: boolean;
             remark?: null | string;
+            /** Format: date-time */
+            createTime?: string;
+            /** Format: int64 */
+            createUserId?: null | number | string;
+            /** Format: date-time */
+            updateTime?: null | string;
+            /** Format: int64 */
+            updateUserId?: null | number | string;
+            isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
+        };
+        /**
+         * @description 异常日志(设计 §4)——由 `ExceptionLogFilter` 在未捕获异常(非 `AdminException` 业务异常)冒泡时自动写入。
+         *     记录"哪个接口、什么方法、追踪号、异常类型、消息、堆栈、谁触发的、从哪来"。
+         *     与 SysOpLog/SysLoginLog 一样只增不改、无软删语义,"清空"走硬删。
+         *     只落异常本身(类型/消息/堆栈),绝不落请求响应体——响应体可能含明文口令/令牌(设计 §14)。
+         *     业务失败(AdminException)不进本表——那是可预期的分支,由操作日志的 ResultCode 表达。
+         */
+        SysExceptionLog: {
+            httpMethod?: string;
+            path?: string;
+            /** @description 请求追踪号(`HttpContext.TraceIdentifier`);串起同一请求的诊断日志与本条异常记录 */
+            traceId?: null | string;
+            /** @description 异常类型全名(如 `System.NullReferenceException`);便于按类型统计与筛选 */
+            exceptionType?: string;
+            /** @description 异常消息(截断)。只记消息文本,不含请求/响应体。 */
+            message?: null | string;
+            /** @description 异常堆栈(截断);排障主依据 */
+            stackTrace?: null | string;
+            /**
+             * Format: int64
+             * @description 触发人用户 Id(从当前登录态取,匿名端点为 null;名称按 Id 关联 sys_user,不冗余存)
+             */
+            operatorId?: null | number | string;
+            /** @description 触发人姓名(不落库,分页时按 OperatorId 关联 sys_user 补;查询清软删过滤器,离职用户历史记录仍显示姓名) */
+            operatorName?: null | string;
+            ip?: null | string;
+            userAgent?: null | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
