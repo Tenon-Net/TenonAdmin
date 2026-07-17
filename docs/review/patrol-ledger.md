@@ -1,12 +1,12 @@
 # 巡检台账
 
-last-seen: 127412d
-last-tree: 45c5d3f
+last-seen: bb199f6
+last-tree: c658ff1
 dry-streak: 0
 
 ## 待扫
 
-<!-- 空:真实代码(后端 28 文件 + 整个 web/src)已全扫完;worktree 已退回已扫的稳定态(45c5d3f,= 轮 16/17 所扫内容,index.ts/ext//index.spec.ts 未变不重入队)。等新提交(last-seen 之后)或新工作区变更(last-tree 变化)入队。 -->
+<!-- 空:i18n 扩展接缝(locales/index.ts + ext/README.md + index.spec.ts)已于 a87da64/bb199f6 提交,本轮(19)以已提交态复核合规、出队。真实代码全扫完。等新提交(last-seen bb199f6 之后)或新工作区变更(last-tree c658ff1 变化)入队。 -->
 
 ## 待裁决
 
@@ -67,3 +67,5 @@ menu/index.vue 主表对每个动作严格 v-auth/hasPerm(增/改/删/启停,lin
 ### 第 17 轮 — 前端规范轴 + 契约轴 · 扫了 locales/ext/(README.md 真接缝文档 + zh/en sampleDoc.ts 样例)+ locales/index.spec.ts〔均工作区·避让记账〕· 全合规——消费者扩展接缝验证有效:ext/README 文档准、sampleDoc en/zh 键平行、index.spec.ts 覆盖 withExt 深合并 7 场景(新命名空间/错误码深合并/兄弟键不连坐/locale 隔离/不改入参)。发现工作区正在跑扩展接缝验收测试:api/sample.ts、types/sample.ts、views/sample/、ext.integration.spec.ts 等 SCRATCH 文件(标注"测试后删除")在两次 git 调用间漂移增删——入队但标注避让·可能已删,非合入门控目标。last-tree 推进 405a70b。无闸门。队列剩 4(全 SCRATCH 避让)。NEXT: SCRATCH 若已删按幽灵移除;worktree churn 属正常(用户测试中),真实代码已全扫完(后端 28 + 前端全部)。
 
 ### 第 18 轮 — 工作区门控 · 用户扩展接缝验收测试已收尾:api/sample.ts、types/sample.ts、views/sample/、ext.integration.spec.ts 4 个 SCRATCH 全删 → 幽灵移除出队。worktree 退回原始已扫稳定态(hash 45c5d3f;index.ts/ext//index.spec.ts 已扫且未变,不重入队)。last-seen→127412d、last-tree→45c5d3f、dry-streak 保持 0(本轮队列非空、做了幽灵清理)。队列清空,无代码扫描、无闸门。NEXT: 队列空 → 下轮 dry-streak 起(退避 min(3600,900·2^n));真实代码零待扫,等新提交或新工作区变更。
+
+### 第 19 轮 — 前端规范轴 + 契约轴 · 扫了 locales/index.ts / locales/index.spec.ts / locales/ext/README.md(i18n 扩展接缝,第 17 轮曾以工作区避让态验过,现于 a87da64 提交后以已提交态复核)· 全合规(index.ts:withExt/deepMerge glob 接缝——§2.1 上游自留地基础设施、导出 withExt 有站内调用方非死代码、深合并 spread 不改入参;§2.7 无可见文本;契约轴:接缝只合并不新增键、ext/ 现仅 README〔sampleDoc 已删〕→ glob 空、withExt 原样返回、606 键零漂移;index.spec.ts 8 例覆盖已绿;ext/README `[MsgKey]` 去前缀对齐指引准确)。触发源:用户令我先提交工作区那批避让文件(feat a87da64 前端接缝 + docs bb199f6 文件归属文档),门控把其中 3 个 web/src 文件入队。全合规无发现、无机械修。闸门:提交前已跑 npm test 39/39 + typecheck 无错(绿)。last-seen→bb199f6、last-tree→c658ff1、dry-streak 归 0(本轮队列非空、扫了真实代码)。队列出清。NEXT: 队列空 → 下轮 dry-streak 起(退避 min(3600,900·2^n));真实代码零待扫,等新提交或新工作区变更。
