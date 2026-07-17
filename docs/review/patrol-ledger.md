@@ -1,17 +1,12 @@
 # 巡检台账
 
-last-seen: ac98934
+last-seen: 6013b02
 last-tree: 45c5d3f
 dry-streak: 0
 
 ## 待扫
 
 <!-- 后端已排空;以下为前端(§2.* + 契约轴) -->
-- web/src/layouts/AppHeader.vue
-- web/src/layouts/NoticeBell.vue
-- web/src/locales/en-US.ts
-- web/src/locales/zh-CN.ts
-- web/src/router/routes.ts
 - web/src/stores/app.spec.ts
 - web/src/stores/auth.spec.ts
 - web/src/stores/auth.ts
@@ -58,6 +53,9 @@ dry-streak: 0
 > 覆盖 UserService.cs / PersonalService.cs 同规则,后续扫到这两文件的 §1.11-DateTime.Now 不再重报。
 > 追加(第 6 轮):DatabaseInitializer.cs:82 `AppliedTime = DateTime.Now` 同属 §1.11,但为架构版本审计戳(非密码过期特性)、且该类 internal sealed 无子类破坏顾虑,仅剩 UTC/本地一处决策——并入本条随 J1 一起定夺,不单独重报。
 
+### J3 · §2.7 · router/routes.ts:16 `/module` 路由 meta.title 硬编码 '选择应用'
+兄弟静态路由都用 i18n 键(menu.profile/password/notice/sessions),唯 `/module` 硬编码中文 '选择应用';英文环境该串不翻译。判断题(不擅改)理由:该路由为顶层(不在 layout 壳内),meta.title 可见性取决于 document.title 如何取用(未核实),修法要定键名 + 双语各加一行(触碰 606 键的共享 locale 大文件)。建议:确认 document.title 消费后改用 menu.* 键并双语补齐。
+
 ### J2 · 文档准确性 · DefaultMenuSeed.cs 取号台账注释自相矛盾
 类注释两处"当前最大 Id"打架:行 12「现已用到 113」vs 行 15「新增行取当前最大号 +1(现为 116)」;而 `HasData()` 实际最大 Id 已是 115(114 角色-取用户 / 115 角色-授权用户)。行 12 陈旧,行 15 正确。
 非机械修理由:非 §1.* 硬约束(仅取号台账注释陈旧),撞号会被 DatabaseInitializer/SeedIdRangeTests 当场拒(非静默);属文档准确性,建议下次动此文件时把行 12 一并改为「现已用到 115」批量收敛,不单独为一行注释跑后端闸门。
@@ -81,3 +79,5 @@ dry-streak: 0
 ### 第 8 轮 — 前端规范轴 + 契约轴 · 批次 Chart/BarChart.vue(已删)/ Chart/README.md / CodeBlock/README.md / CodeBlock/index.vue / DictCheckbox/README.md(已删)· 3 存活全合规(CodeBlock §2.7 用 t('common.copy'/'common.copied') 且双语 en/zh 均在、§2.9 scoped + 主题变量;两 README 文档准确)。查明批次含 2 个 + 队列另 7 个同族零消费者组件(DictCheckbox/index、DictRadio×2、JsonEditor×2、RoleSelect×2、Chart/BarChart)已被 05d0a42「remove zero-consumer components」删除 → 一并清出队列(队列卫生,非扫描)。无闸门。队列剩 42。NEXT: 前端队首 5 个(DictSelect/README.md / UserPicker/index.vue / composables/useModule.spec.ts / composables/useModule.ts / directives/auth.ts)。
 
 ### 第 9 轮 — 前端规范轴 + 契约轴 · 扫了 DictSelect/README.md / UserPicker/index.vue / useModule.spec.ts / useModule.ts / directives/auth.ts · 全合规(UserPicker §2.7 文本全走 t()、userPicker.* 7 键 en/zh 完全对齐、§2.9 scoped + CSS 变量、9999 页 ponytail 上限未触达;useModule 门户逻辑 Naive 无关且失败安全默认;auth.ts v-auth fail-closed/open 收敛于 hasPerm,合 D2)。无闸门。队列剩 37。NEXT: 前端队首 5 个(AppHeader.vue / NoticeBell.vue / locales/en-US.ts / locales/zh-CN.ts / router/routes.ts)。
+
+### 第 10 轮 — 前端规范轴 + 契约轴 · 扫了 AppHeader.vue / NoticeBell.vue / locales/en-US.ts / locales/zh-CN.ts / router/routes.ts · 契约轴亮点:脚本结构化比对两 locale → en/zh 各 606 键、双向零缺口、完全对齐无漂移;AppHeader/NoticeBell 合规(文本走 t()、aria-label a11y、ponytail 上限未触达、原生语言名故意不译)。记 1 判断题(J3:routes.ts:16 /module meta.title 硬编码 '选择应用',§2.7 潜在缺口,可见性/键名待定)→ 记账轮不跑闸门。队列剩 32。NEXT: 前端队首 5 个(stores/app.spec.ts / auth.spec.ts / auth.ts / dict.spec.ts / user.ts)。
