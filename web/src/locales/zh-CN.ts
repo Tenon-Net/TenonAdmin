@@ -33,6 +33,8 @@ export default {
     batchDeleteConfirm: '确认删除选中的 {count} 项?此操作不可恢复。',
     all: '全部',
     noData: '暂无数据',
+    back: '返回',
+    detail: '详情',
   },
   userPicker: {
     title: '选择用户',

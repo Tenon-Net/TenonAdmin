@@ -32,6 +32,8 @@ export default {
     batchDeleteConfirm: 'Delete the {count} selected item(s)? This cannot be undone.',
     all: 'All',
     noData: 'No data',
+    back: 'Back',
+    detail: 'Detail',
   },
   notFound: {
     desc: 'Page not found',

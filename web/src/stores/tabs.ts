@@ -10,6 +10,8 @@ export interface TabItem {
   name: string // 路由名 → keep-alive include
   icon?: string
   affix?: boolean // 固定标签(= 当前应用的首页),不可关闭
+  titleFixed?: boolean // setTitle 置真:动态标题(如记录名),addTab 复访不再用 meta.title 覆盖
+  noCache?: boolean // meta.noCache:排除出 keep-alive(详情等瞬时页,复访本就该拉新数据)
 }
 
 /**
@@ -23,9 +25,9 @@ export const useTabsStore = defineStore('tabs', {
     excludeName: '', // 临时逐出 keep-alive 实例(refreshTab)
   }),
   getters: {
-    // 只保留已注册路由名(F5 重建期间剪除失效名),供 keep-alive :include。
+    // 供 keep-alive :include。noCache 标签(详情等瞬时页)排除出缓存;再剪掉 F5 重建期失效的名。
     cachedNames(state): string[] {
-      return state.tabs.map((t) => t.name).filter((n) => router.hasRoute(n))
+      return state.tabs.filter((t) => !t.noCache).map((t) => t.name).filter((n) => router.hasRoute(n))
     },
   },
   actions: {
@@ -38,11 +40,15 @@ export const useTabsStore = defineStore('tabs', {
       const existing = this.tabs.find((t) => t.path === path)
       if (existing) {
         existing.fullPath = route.fullPath
-        existing.title = title
+        if (!existing.titleFixed) existing.title = title // 动态标题(setTitle 设过)不被 meta.title 复访覆盖
         if (icon) existing.icon = icon
       } else {
         // 当前应用的首页 → 固定标签,不可关闭(每个应用各有一个)
-        this.tabs.push({ path, fullPath: route.fullPath, title, name, icon, affix: path === useAuthStore().homePath })
+        this.tabs.push({
+          path, fullPath: route.fullPath, title, name, icon,
+          affix: path === useAuthStore().homePath,
+          noCache: route.meta.noCache === true, // 详情等瞬时页不进 keep-alive
+        })
       }
     },
     removeTab(path: string) {
@@ -86,6 +92,13 @@ export const useTabsStore = defineStore('tabs', {
     refreshTab(name: string) {
       this.excludeName = name
       this.reloadKey++
+    },
+    // 详情页数据加载后设置动态标签标题(如记录名);titleFixed 防 addTab 复访用 meta.title 覆盖回去。
+    setTitle(path: string, title: string) {
+      const tab = this.tabs.find((t) => t.path === path)
+      if (!tab) return
+      tab.title = title
+      tab.titleFixed = true
     },
     // 切应用/登出:标签清空。新应用首页由 router.afterEach 的 addTab 自然补成第一个(affix)标签。
     clearTabs() {

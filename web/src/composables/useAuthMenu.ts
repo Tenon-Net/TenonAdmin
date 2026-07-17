@@ -1,6 +1,7 @@
 import type { Component } from 'vue'
 import { router, resetRouter, registerDynamic } from '@/router'
 import { namedPage } from '@/router/namedPage'
+import { registerDetailRoutes } from '@/router/detailRoutes'
 import { useAuthStore } from '@/stores/auth'
 import { personalApi } from '@/api'
 import { MenuType, type MenuNode } from '@/types/menu'
@@ -48,5 +49,8 @@ export async function buildRoutesForModule(moduleId: number): Promise<void> {
     })
     registerDynamic(name)
   }
+  // 约定式详情路由(views/**/detail.vue → /<路径>/:id/detail)随菜单路由一并注册,
+  // 故 F5/深链走守卫重建时详情路由也复活(见 router/detailRoutes.ts)。
+  registerDetailRoutes()
   auth.routesReady = true
 }
