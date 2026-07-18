@@ -163,6 +163,9 @@ public static class TenonAdminSetup
         // 尊重 [AllowAnonymous],且不影响未匹配路由的 404(FallbackPolicy 会把 404 劫持成 401,故不用它)。
         services.AddAuthorization();
 
+        // ── 外部登录 / SSO(批次 D):按 appsettings 装内置 OIDC provider(零新包);未配则整段跳过 ──
+        services.AddExternalAuthProviders(options.ExternalAuth);
+
         // ── MVC 控制器:本程序集作为 ApplicationPart 挂入宿主 ──
         //   全局过滤器:业务异常 → 统一信封;操作日志(默认记一切写操作,读操作/匿名端点除外,§4/T6);
         //   裸返回兜底包信封(用户控制器 return dto 即得 Result<T>,§12/T8)
