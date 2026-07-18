@@ -1,13 +1,15 @@
 # IconPicker
 
-> `tenon-naive-iconify-picker`——面向 Vue 3 + Naive UI 的离线优先图标选择器与渲染器，基于 [Iconify](https://iconify.design)。tenon 把它作为独立 npm 包发布，模板里只留三层薄封装来消费（当前版本 `^0.1.3`）。
+> `tenon-naive-iconify-picker`：面向 Vue 3 + Naive UI 的离线优先图标选择器与渲染器，基于 [Iconify](https://iconify.design)。tenon 把它作为独立 npm 包发布，模板里只留三层薄封装来消费（当前版本 `^0.1.3`）。
 
 <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:1rem 0">
   <a href="https://www.npmjs.com/package/tenon-naive-iconify-picker"><img src="https://img.shields.io/npm/v/tenon-naive-iconify-picker?color=cb3837&logo=npm" alt="npm"></a>
   <a href="https://github.com/Tenon-Net/tenon-naive-iconify-picker"><img src="https://img.shields.io/github/stars/Tenon-Net/tenon-naive-iconify-picker?logo=github" alt="GitHub"></a>
 </div>
 
-菜单表有个 `icon` 字段，填一个字符串，侧栏、面包屑、按钮就能把对应图标画出来。挑图标、存图标、渲染图标这三件事，tenon 都交给这个包完成——它离线优先，图标从打进应用的本地数据渲染，不向 Iconify 的在线 API 发请求。这页讲包本身：它的取值契约、怎么加图标集、怎么塞本地 SVG、文案怎么翻。图标在 tenon 应用里怎么统一注册、`AppIcon` 怎么在全站渲染，归 [外观与图标](/zh/frontend/appearance) 那页;这里不重复讲接入约定。
+菜单表的 `icon` 字段里只存一个字符串，侧栏、面包屑、按钮照着它把对应图标画出来。挑图标、存图标、渲染图标这三件事，tenon 都交给这个包完成，而它渲染时只读打进应用的本地数据，从不向 Iconify 的在线 API 发请求。
+
+图标在 tenon 应用里怎么统一注册、`AppIcon` 怎么在全站渲染，归 [外观与图标](/zh/frontend/appearance) 那页;这里不重复讲接入约定。
 
 ## 在菜单管理里选一个图标
 
@@ -27,15 +29,15 @@
 <AppIcon :icon="row.icon" :size="18" />
 ```
 
-`v-model`（这里写成 `model-value`）的值就是**一个字符串**，形如 `ph:house-duotone`——即 `前缀:图标名`;本地 SVG 是 `local:图标名`。这个字符串原样进数据库的 `icon` 字段，读出来交给 `AppIcon` 就能渲染。整个契约只有这一条：一个字段存一个字符串，选择器和渲染器两头都认它。
+`v-model`（这里写成 `model-value`）的值就是**一个字符串**，形如 `ph:house-duotone`，也就是 `前缀:图标名`;本地 SVG 是 `local:图标名`。这个字符串原样进数据库的 `icon` 字段，读出来交给 `AppIcon` 就能渲染。整个契约只有这一条：一个字段存一个字符串，选择器和渲染器两头都认它。
 
-tenon 的选择器封装没有再传 `collections`——因为 `setupIcons()` 已经全局注册过了，复用即可;它只做一件包本身不管的事：把 vue-i18n 的文案算成 `labels` 注进去（见下文）。
+`setupIcons()` 已经全局注册过一遍，所以 tenon 的选择器封装没有再传 `collections`，直接复用。它只做一件包本身不管的事：把 vue-i18n 的文案算成 `labels` 注进去（见下文）。
 
 ## 离线优先意味着什么
 
 "离线优先"不是说组件能离线跑，而是说**你注册进来的图标集，渲染时只读打进包里的本地数据，永远不碰 `api.iconify.design`**。每一套图标（`@iconify-json/<prefix>`）在你的构建里是一个独立的懒加载 chunk，第一次点开它的 Tab、或第一次渲染这套里的图标时才拉进来。
 
-代价是体积：每注册一套就多一个 chunk，大集不便宜（Phosphor 约 946 KB gz,Lucide 约 85 KB gz），所以按需注册，别一口气全塞进去。换来的是部署环境不联网、或出口被限的情况下，图标表现和联网时完全一致。包还留了一条在线兜底：你手输一个没注册过的 Iconify 名字，联网时会临时在线加载——那是应急，不是常态。
+代价是体积：每注册一套就多一个 chunk，大集不便宜（Phosphor 约 946 KB gz,Lucide 约 85 KB gz），所以按需注册，别一口气全塞进去。换来的是部署环境不联网、或出口被限的情况下，图标表现和联网时完全一致。包还留了一条在线兜底：你手输一个没注册过的 Iconify 名字，联网时会临时在线加载。那是应急，不是常态。
 
 ## 注册更多图标集
 
@@ -71,7 +73,7 @@ registerLocalIcons(
 // src/assets/svg/star.svg  ->  存成 local:star
 ```
 
-tenon 把这一步并进了 `setupIcons()` 的 `localIcons` 选项，扫的就是 `web/src/assets/svg/*.svg`——往那个目录丢 SVG，重启 dev 就能在选择器的"本地"页看到它。
+tenon 把这一步并进了 `setupIcons()` 的 `localIcons` 选项，扫的就是 `web/src/assets/svg/*.svg`。往那个目录丢 SVG，重启 dev 就能在选择器的"本地"页看到它。
 
 ## 文案与多语言
 

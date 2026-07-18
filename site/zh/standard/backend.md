@@ -3,13 +3,13 @@
 改后端代码前后对着这份清单核一遍，每条都是内核里已落地的硬规则。想知道某条为什么这么定，顺着链接去对应深读篇;更完整的正反例见仓库 [`docs/coding-standards.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/coding-standards.md)。
 
 ::: tip 第一原则
-内核以 NuGet 分发，消费方不改源码就能替换任一部件。凡新增可替换服务，一律 `TryAdd*` 注册、接口背书、方法拆 `virtual` 步——这是硬约束，不是建议。机制见 [可替换性模型](/zh/backend/replaceability)。
+内核以 NuGet 分发，消费方不改源码就能替换任一部件。凡新增可替换服务，一律 `TryAdd*` 注册、接口背书、方法拆 `virtual` 步。这三条没有例外。机制见 [可替换性模型](/zh/backend/replaceability)。
 :::
 
 ## 分层落点
 
-- 依赖只能自上而下，越层禁止：`Core`（契约）← `SqlSugar`（数据）← `Services`（领域+实体）← `AspNetCore`（宿主）← `TenonAdmin`（元包）。新增代码先想清楚落哪层。全景见 [架构分层](/zh/backend/architecture)。
-- 运行时依赖**仅** SqlSugarCore + Microsoft.\*，核心包不引入其它第三方框架。
+- 依赖只能自上而下，越层禁止：`Core`（契约）← `SqlSugar`（数据）← `Services`（领域+实体）← `AspNetCore`（宿主）← `TenonAdmin`（元包）。新增代码先想清楚落哪层;拿不准就回 [架构分层](/zh/backend/architecture) 看全景。
+- 运行时依赖只有 SqlSugarCore + Microsoft.\*，核心包不引入其它第三方框架。
 - 实体放 `Services` 层，不放 `SqlSugar` 层。
 - 每层装配集中在一个 `*Setup.cs`（`SqlSugarSetup` → `ServicesSetup` → `TenonAdminSetup` 组合根），不散落注册。
 
@@ -18,7 +18,7 @@
 - 内置可替换服务全部 `TryAdd*`,**严禁**裸 `Add*`;消费方在 `AddTenonAdmin()` 之前注册同接口即胜出。
 - 长方法拆成小 `virtual` 步（如 `SessionService.EnforceConcurrencyAsync`），消费方覆写一步而非抄整方法。
 - 每个服务先有 `I*Service`，实现类 `virtual`。
-- 改实体扫描/控制器注册时，务必保留 `options.ApplicationAssemblies` 挂载路径（业务实体建表、控制器 `AddApplicationPart`），否则消费方模块静默失效。写法见 [可替换性模型](/zh/backend/replaceability)。
+- 改实体扫描/控制器注册时，务必保留 `options.ApplicationAssemblies` 挂载路径（业务实体建表、控制器 `AddApplicationPart`），否则消费方模块静默失效。
 
 ## 实体
 
@@ -38,33 +38,33 @@
 
 ## 控制器
 
-- `[RolePermission]` 无参：权限码就是 `{METHOD}:/{路由模板}`（如 `GET:/api/v1/sys/dict/type/page`）。**代码里永不写 `"sys:user:add"` 之类魔法串**，权限在角色-菜单界面勾路由即配;超管（`sadm`）放行。
+- `[RolePermission]` 无参：权限码就是 `{METHOD}:/{路由模板}`（如 `GET:/api/v1/sys/dict/type/page`）。代码里永不写 `"sys:user:add"` 之类魔法串，权限在角色-菜单界面勾路由即配;超管（`sadm`）放行。
 - 无需特定权限的登录态端点用 `[ActiveSession]`;匿名端点显式 `[AllowAnonymous]`（全局 `RequireAuthorization()` 兜底，漏挂不会静默公开）。
 - 需审计的写操作挂 `[OperationLog(...)]`;整模块可关停加 `[Module("X")]`（经 `Api:DisabledModules` 摘除，但带菜单的内置模块禁止删）。
-- 控制器可直接 `return dto`（`ResultEnvelopeFilter` 兜底包信封）;内置控制器为契约清晰显式 `Result<T>.Ok(...)`。范例 `Controllers/DictController.cs`，管线见 [请求管线](/zh/backend/request-pipeline)。
+- 控制器可直接 `return dto`（`ResultEnvelopeFilter` 兜底包信封）;内置控制器为契约清晰显式 `Result<T>.Ok(...)`。范例照 `Controllers/DictController.cs`;信封在管线哪一步套上，[请求管线](/zh/backend/request-pipeline) 里有全程。
 
 ## 错误处理
 
 - 业务错误抛 `AdminException(ErrorCode)` 或返回 `ErrorCode`，由 `AdminExceptionFilter` 统一转信封。
-- `ErrorCode` 是数字枚举，**永不带本地化文案**(`Core/ErrorCode.cs`),i18n 全在前端按码翻译;新增错误码往枚举里加即可。
+- `ErrorCode` 是数字枚举，永不带本地化文案（`Core/ErrorCode.cs`）,i18n 全在前端按码翻译;新增错误码往枚举里加即可。
 
 ## 数据访问
 
 - 注入 `IRepository<T>`;复杂查询走 `.AsQueryable()`，逃生走 `.Db`(`Db.Deleteable<>()` / `Db.Ado.UseTranAsync`)。
-- 软删与数据范围是**全局过滤器**，业务代码不重复写过滤条件。
+- 软删与数据范围是全局过滤器，业务代码不重复写过滤条件。
 - 唯一性查重要带上软删行：`.ClearFilter<ISoftDelete>().AnyAsync(...)`，否则会撞库唯一索引抛原生 500。
-- 多写操作包事务 `Db.Ado.UseTranAsync`，失败整体回滚;**缓存失效放事务提交之后**。
+- 多写操作包事务 `Db.Ado.UseTranAsync`，失败整体回滚;缓存失效放事务提交之后，提前清了而事务回滚，缓存和库就对不上。
 - 审计字段（`Id` 雪花、`CreateTime`/`User`/`Org`、`UpdateTime`/`User`）由 AOP 填，只设业务字段。
 
 ::: danger CreateOrgId 是数据范围锚点
-`DataEntity` 行的 `CreateOrgId` 不填，机构范围查询里恒为 0 行——它由 AOP 自动填，绝不手动绕过赋值。原理见 [多组织数据权限](/zh/backend/data-scope)。
+`DataEntity` 行的 `CreateOrgId` 不填，机构范围查询里恒为 0 行。它由 AOP 自动填，绝不手动绕过赋值。原理见 [多组织数据权限](/zh/backend/data-scope)。
 :::
 
 ## 缓存
 
 - 模型是 cache-aside（读穿透）+ 显式失效，不是每次查库;增删改后既 `RemoveAsync` 失效缓存，也广播事件（如 `DictService.InvalidateAsync` → `DictChangedEvent`）供跨节点失效/审计/推送订阅。
 - 逻辑键集中在 `Core/CacheKeys.cs`，禁散落魔法串;前缀 `Cache:KeyPrefix`（默认 `tenon:`）由 provider 统一追加。
-- 默认进程内 `MemoryCacheProvider`;多实例共享装可选包 `TenonAdmin.Caching.Redis`,`AddTenonAdminRedisCache` 须在 `AddTenonAdmin` **之前**注册才能赢过 `TryAdd`（业务代码零改动）。模板见 [数据层与审计](/zh/backend/data-layer)。
+- 默认进程内 `MemoryCacheProvider`;多实例共享装可选包 `TenonAdmin.Caching.Redis`,`AddTenonAdminRedisCache` 须在 `AddTenonAdmin` **之前**注册才能赢过 `TryAdd`（业务代码零改动）。
 
 ## DI 装配
 
@@ -74,7 +74,7 @@
 ## 种子数据
 
 - 实现 `ISeedData<TEntity>`,`HasData()` 返默认行（返空集合合法=「库里已有就不播种」）。
-- **固定 Id 保幂等**：只在缺失时补，不回改已存在行——界面上的改动不会被重启覆盖。
+- **固定 Id 保幂等**：只在缺失时补，不回改已存在行。所以界面上的改动不会被重启覆盖。
 - **Id 必须落保留区间**(`Core/TenonSeedIds.cs`)：内核 `[1, 999]`、消费方 `[1000, 4095]`、`4096+` 归雪花运行时;越界、`Id=0` 或与已有种子 Id 重复，启动即拒。
 
 ## 命名 / 组织
@@ -84,7 +84,7 @@
 
 ## 包管理
 
-- 增/改依赖在 `backend/Directory.Packages.props` 的 `<PackageVersion>` 里，**不在各 `.csproj` 写版本号**;共享构建/NuGet 元数据在 `backend/Directory.Build.props`。
+- 增/改依赖在 `backend/Directory.Packages.props` 的 `<PackageVersion>` 里，不在各 `.csproj` 写版本号;共享构建/NuGet 元数据在 `backend/Directory.Build.props`。
 
 ## 注释
 

@@ -33,10 +33,10 @@ npm run build     # 产物在 web/dist/
 
 | 配置项 | 为什么必须处理 |
 |---|---|
-| `TenonAdmin:Jwt:SecretKey` | 不配 = 开发密钥模式：内核自动生成一把密钥落到 `./data/dev-jwt.key` 并打印警告。生产必须显式配置（≥32 字节随机串），且不要进版本库——用环境变量或密钥管理服务。 |
+| `TenonAdmin:Jwt:SecretKey` | 不配 = 开发密钥模式：内核自动生成一把密钥落到 `./data/dev-jwt.key` 并打印警告。生产必须显式配置（≥32 字节随机串），且不要进版本库，改用环境变量或密钥管理服务。 |
 | `TenonAdmin:Database` | 默认 SQLite `./data/admin.db`（相对 ContentRoot）。多实例、或有并发写，就换 MySQL / SqlServer / PostgreSQL（改 `DbType` + `ConnectionString` 两项）。 |
-| `TenonAdmin:Id:WorkerId` | 雪花发号器的机器位。单实例不配即可（回落 0）;水平扩展时每个副本必须各不相同（0–63），否则同毫秒发号会撞主键。配了 Redis 却不显式给它会直接拒绝启动——详解见[容器化与多副本](/zh/guide/deployment/docker)。 |
-| `TenonAdmin:Upload:RootPath` | 默认 `./wwwroot/upload`。声明成数据卷，否则重部署丢文件;走路线 A（后端顺带托管前端）还必须把它挪出 `wwwroot`，否则上传文件会被静态中间件匿名直出——见[路线 A 的鉴权绕过警告](/zh/guide/deployment/route-a)。 |
+| `TenonAdmin:Id:WorkerId` | 雪花发号器的机器位。单实例不配即可（回落 0）;水平扩展时每个副本必须各不相同（0–63），否则同毫秒发号会撞主键。配了 Redis 却不显式给它会直接拒绝启动。详解见[容器化与多副本](/zh/guide/deployment/docker)。 |
+| `TenonAdmin:Upload:RootPath` | 默认 `./wwwroot/upload`。声明成数据卷，否则重部署丢文件;走路线 A（后端顺带托管前端）还必须把它挪出 `wwwroot`，否则上传文件会被静态中间件匿名直出。见[路线 A 的鉴权绕过警告](/zh/guide/deployment/route-a)。 |
 | `TenonAdmin:Api:ForwardedHeaders` | 在任何反向代理 / 负载均衡之后都必须配。不配的话后端看到的永远是代理那一个 IP：全体用户共享一个限流桶、按 IP 的爆破防护归零、审计日志的 IP 列作废。配置细节见[路线 B](/zh/guide/deployment/route-b)。 |
 | `TenonAdmin:Cache:Provider` | 单实例可留 `Memory`。多副本必须换 `Redis`，否则强制下线、撤权、登录锁定会在副本之间失效，而且一失效就是好几天。详解见[容器化与多副本](/zh/guide/deployment/docker)。 |
 
@@ -53,7 +53,7 @@ TenonAdmin__Upload__RootPath='/data/upload'
 
 ## 生产建表闸门：首次建表与升级补列
 
-生产环境有一道建表安全闸门：`ASPNETCORE_ENVIRONMENT=Production` 时，即便 `EnableCodeFirst=true`（默认就是 true）也不会自动建表 / 改表——生产库通常 DBA 手工维护，应用不该擅自 `ALTER`。要放行，显式打开这一项：
+生产环境有一道建表安全闸门：`ASPNETCORE_ENVIRONMENT=Production` 时，即便 `EnableCodeFirst=true`（默认就是 true）也不会自动建表 / 改表。生产库通常 DBA 手工维护，应用不该擅自 `ALTER`。要放行，显式打开这一项：
 
 ```json
 { "TenonAdmin": { "Database": { "EnableCodeFirstInProduction": true } } }
@@ -64,7 +64,7 @@ TenonAdmin__Upload__RootPath='/data/upload'
 - **空库首次上生产**：表还没建，种子无处可写。要么临时打开这项让它自己建表 + 写种子（建成之后可以再关掉），要么 DBA 按启动错误里点名的表先建好再启动。
 - **升级内核版本补列**：新版内核可能给自己的表加列（加字段是常态，删列 / 改窄不会做）。要么本次启动打开这项让它补（CodeFirst 只加列、不删列、不改窄，对存量数据是安全的），要么 DBA 按错误里点名的表和列手工 `ALTER TABLE ... ADD COLUMN`。
 
-::: warning 没放行会在启动时点名报错——这是故意的
+::: warning 没放行会在启动时点名报错，这是故意的
 两种场景都不会带病启动：空库缺表抛点名到表的错误（`...种子要写的表在库中不存在:sys_schema_version, ...`），升级缺列抛点名到列的错误（`库表结构落后于当前实体,以下表缺少列:sys_user(Avatar)`），照它说的二选一即可。之所以宁可启动就炸，是因为放行的话进程会正常起来，直到第一次查到那张表才炸在驱动层的「列不存在」上——那种错误没有表名、没有列名，谁也不知道该 ALTER 什么。守卫只查缺列，不查类型 / 长度 / 可空性的变化：DBA 有意把 `varchar` 放宽、或加了自己的列，都不会被判死。
 :::
 

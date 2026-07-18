@@ -1,6 +1,6 @@
 # 替换内置服务
 
-你想改内核的某个行为——换掉密码哈希算法、给登录流程插一步、把内置字典模块整块换成自己的。这页告诉你有哪几条路，以及每条路具体怎么动手。不用 fork，也不用复制内核代码。
+你想改内核的某个行为：换掉密码哈希算法、给登录流程插一步、把内置字典模块整块换成自己的。不用 fork，也不用复制内核代码。
 
 先问自己一个问题：你要动的范围有多大?
 
@@ -10,11 +10,11 @@
 
 还有一件相关的事：给你自己的业务表灌初始数据，走消费方种子。四种都在下面。
 
-这页讲"怎么换";这几条路为什么成立（`TryAdd` 先到者胜、`virtual` 拆步、程序集挂载三条约束，以及锁死它们的「六件套」测试），见[可替换性模型](/zh/backend/replaceability)。
+这几条路为什么成立（`TryAdd` 先到者胜、`virtual` 拆步、程序集挂载三条约束，以及锁死它们的「六件套」测试），见[可替换性模型](/zh/backend/replaceability)。
 
 ## 换掉整个服务：抢在 AddTenonAdmin 之前注册
 
-内核所有内置服务都用 `TryAdd*` 注册——语义是"容器里已有同接口就不再添加"。所以你只要在 `AddTenonAdmin()` **之前**把自己的实现注册进去，内核那行 `TryAdd` 检测到坑已被占，就自动让位。
+内核所有内置服务都用 `TryAdd*` 注册，语义是"容器里已有同接口就不再添加"。所以你只要在 `AddTenonAdmin()` **之前**把自己的实现注册进去，内核那行 `TryAdd` 检测到坑已被占，就自动让位。
 
 以换密码哈希算法为例：
 
@@ -33,7 +33,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 ```
 
 ::: warning 顺序反了会静默失效
-写在 `AddTenonAdmin()` **后面**，内置实现已经占了坑，你的 `TryAdd` 会被跳过——不报错，但替换没生效。要不受顺序影响，用 `builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>())`，它是"覆盖已有注册"，写在 `AddTenonAdmin()` 之后也照样赢。
+写在 `AddTenonAdmin()` **后面**，内置实现已经占了坑，你的 `TryAdd` 会被跳过。它不报错，替换却没生效。要不受顺序影响，用 `builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>())`，它是"覆盖已有注册"，写在 `AddTenonAdmin()` 之后也照样赢。
 :::
 
 常见的替换点：
@@ -47,7 +47,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 | `IDataScopeProvider` | `DataScopeProvider` | 定制数据范围规则 |
 | `IIdGenerator` | `SnowflakeIdGenerator` | 换数据库自增 / GUID v7 |
 
-完整清单就是 `backend/src/TenonAdmin.Services/ServicesSetup.cs` 里每一行 `TryAdd`——那里注册的每个接口都是可替换点。
+完整清单就是 `backend/src/TenonAdmin.Services/ServicesSetup.cs` 里每一行 `TryAdd`。那里注册的每个接口都是可替换点。
 
 ## 只改一步：子类覆写 virtual
 
@@ -72,7 +72,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>());
 ```
 
-找可覆写的步骤，就是打开目标服务源码，搜 `protected virtual`——那几个方法就是给你留的口子。覆写时先调 `base.Xxx()` 保留原逻辑，再追加自己的。继承一步而不是复制整段的好处：升级内核时，基类那步的上游修复你会自动吃到，不会因为抄了旧版方法体而错过。
+找可覆写的步骤，就是打开目标服务源码，搜 `protected virtual`。那几个方法就是给你留的口子。覆写时先调 `base.Xxx()` 保留原逻辑，再追加自己的。继承一步而不是复制整段的好处：升级内核时，基类那步的上游修复你会自动吃到，不会因为抄了旧版方法体而错过。
 
 ## 整块模块不要：禁用 + 接管路由
 
@@ -94,9 +94,9 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 public class CustomDictController : ControllerBase { /* 你的字典逻辑 */ }
 ```
 
-能被禁的只有带 `[Module("Name")]` 标注的控制器，目前是这六个：`Dict`、`Upload`（字面上禁的是文件控制器 `/api/v1/sys/file`，模块名不等于路由）、`Notice`、`Log`、`Config`、`Dashboard`。身份认证、用户、机构、角色、菜单、门户这些控制器没有这个标注——没有开关能把它们关掉，关了整个系统就登不进去了。
+能被禁的只有带 `[Module("Name")]` 标注的控制器，目前是这六个：`Dict`、`Upload`（字面上禁的是文件控制器 `/api/v1/sys/file`，模块名不等于路由）、`Notice`、`Log`、`Config`、`Dashboard`。身份认证、用户、机构、角色、菜单、门户这些控制器没有这个标注。没有开关能把它们关掉，因为关了整个系统就登不进去了。
 
-别把 `Api.DisabledModules` 和门户里的"应用/模块"（`SysModule` 那张表）搞混：前者是编译期的路由开关，后者是运行时数据。后者也有自己的护栏——内置的 `system` 应用承载全部管理页，通过管理接口把它停用会被拒（错误码 42013，门户失联且无 UI 恢复入口）;还挂着菜单的应用不许删（42023，否则那些顶级目录的 `ModuleId` 会悬空、整棵子树从门户消失）。
+别把 `Api.DisabledModules` 和门户里的"应用/模块"（`SysModule` 那张表）搞混：前者是编译期的路由开关，后者是运行时数据。后者也有自己的护栏。内置的 `system` 应用承载全部管理页，通过管理接口把它停用会被拒（错误码 42013，门户失联且无 UI 恢复入口）;还挂着菜单的应用不许删（42023，否则那些顶级目录的 `ModuleId` 会悬空、整棵子树从门户消失）。
 
 ## 给自己的实体播种：消费方种子
 
@@ -121,4 +121,4 @@ builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, Product
 内核不扫描程序集找种子（`options.ApplicationAssemblies` 只管实体建表和控制器挂载，不碰种子）。种子必须显式注册;漏了这行，种子不跑，也没有任何报错。
 :::
 
-`ApplicationAssemblies` 那行是消费方接入的总开关，它同时让你的实体加入 CodeFirst 建表、让你的控制器进同一 MVC 管道——完整链路见[端到端加一个业务模块](/zh/guide/business-module)。真要动手替换前，`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` 的五个用例把上面四种机制逐一验成了契约，照着它们的写法给自己的替换补一层回归测试，最稳。
+`ApplicationAssemblies` 那行是消费方接入的总开关，它同时让你的实体加入 CodeFirst 建表、让你的控制器进同一 MVC 管道。完整链路见[端到端加一个业务模块](/zh/guide/business-module)。真要动手替换前，`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` 的五个用例把上面四种机制逐一验成了契约，照着它们的写法给自己的替换补一层回归测试，最稳。

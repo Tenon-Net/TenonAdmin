@@ -1,6 +1,6 @@
 # 容器化与多副本
 
-这页帮你把 TenonAdmin 完整跑成容器——一条 `docker compose up` 起 MySQL + Redis + 后端 + 前端——再往上安全地扩到多副本。
+同一份代码，`dotnet run` 跑得好好的，进了容器为什么处处要重配？因为 compose 里的后端直接跑 `ASPNETCORE_ENVIRONMENT=Production`，开发期默默替你兜底的那几项，到这里全部要求显式给出。一条 `docker compose up` 于是等于把上线首启预演了一遍。
 
 ::: tip 这套 compose 是给谁用的
 仓库根的 `Dockerfile` 是从**源码**构建示例宿主 `MinimalHost`，给内核自己的 CI 用。如果你是 NuGet 消费方，`dotnet new tenon-app` 生成的目录里已经带了一份「从 NuGet 装内核、构建你自己 host」的 `Dockerfile`，直接用那份即可，下面的步骤同样适用。
@@ -20,7 +20,7 @@ curl http://127.0.0.1:8081/health/ready    # 后端调试口,只绑回环,原因
 docker compose logs app                    # 首启信息
 ```
 
-`app` 跑的是 `ASPNETCORE_ENVIRONMENT=Production`——这是刻意的：这条命令因此顺带成了「生产首启路径」的活体测试。生产有三道硬门槛：JWT 密钥必须显式给（不给就是开发密钥模式，每个副本各签各的会随机 401）、空库首次上生产必须显式允许建表（默认不自动 ALTER 生产库）、上传根必须挪出 `wwwroot`。`docker-compose.yml` 把这三项都写成了环境变量，照抄改成你自己的值即可;少配一条会得到一条点名到配置项的、读得懂的启动错误，比"进程照常起、直到第一次写库才炸在驱动层"好排查得多。这三道门槛连同升级时的建表 / 补列细节，[部署概览](/zh/guide/deployment/)里讲全。
+`app` 跑的是 `ASPNETCORE_ENVIRONMENT=Production`，这是刻意的。生产有三道硬门槛：JWT 密钥必须显式给（不给就是开发密钥模式，每个副本各签各的会随机 401）、空库首次上生产必须显式允许建表（默认不自动 ALTER 生产库）、上传根必须挪出 `wwwroot`。`docker-compose.yml` 把这三项都写成了环境变量，照抄改成你自己的值即可;少配一条会得到一条点名到配置项的、读得懂的启动错误，比"进程照常起、直到第一次写库才炸在驱动层"好排查得多。这三道门槛连同升级时的建表 / 补列细节，[部署概览](/zh/guide/deployment/)里讲全。
 
 首次登录的超管账号是 `superAdmin`。密码上，compose 通过 `TENON_ADMIN_PASSWORD` 的 `:-` 默认值配了个演示值 `Tenon@123456`，所以这次登录用的是它，不是随机密码。把这个默认删掉（让 `Seed:AdminPassword` 真的不配），才回到零配置那条路径：内核随机生成一个 16 位密码，在建号那一次启动打印到控制台（`docker compose logs app`），仅此一次。
 
@@ -36,12 +36,12 @@ docker compose logs app                    # 首启信息
 |---|---|
 | **具名卷，不要 bind mount** | 镜像里跑的是非 root 用户。具名卷首次挂载会从镜像目录继承属主，容器写得进去;bind mount 会用宿主属主覆盖，应用直接写不了 SQLite / 上传目录。`docker-compose.yml` 里 `app-data`、`upload-data` 都是具名卷。 |
 | **镜像里没有 `HEALTHCHECK`** | `aspnet` 运行时镜像既没有 `curl` 也没有 `wget`，写了健康检查指令只会恒失败。健康检查交给编排层探 `/health`（存活）与 `/health/ready`（DB + 缓存）。 |
-| **`.dockerignore` 是安全项** | 开发机的 `data/` 里可能躺着真实的 `admin.db` 和开发期自动生成的 JWT 签名密钥（`dev-jwt.key`）。仓库根的 `.dockerignore` 把它排除掉——没有它，一次 `COPY . .` 就能把签名密钥烤进镜像层，镜像一推，谁都能伪造超管令牌。 |
+| **`.dockerignore` 是安全项** | 开发机的 `data/` 里可能躺着真实的 `admin.db` 和开发期自动生成的 JWT 签名密钥（`dev-jwt.key`）。仓库根的 `.dockerignore` 把它排除掉。没有它，一次 `COPY . .` 就能把签名密钥烤进镜像层，镜像一推，谁都能伪造超管令牌。 |
 | **多副本改 `WorkerId`** | 每实例 0–63 必须各不相同，否则同毫秒发号撞主键;配了 Redis 却没显式给还会当场拒绝启动。详见下面「多副本与 WorkerId」。 |
 
 ## 多副本与 WorkerId
 
-起第二个副本之前，下面几条一条都不能少——少了大多不会报错，只会开始悄悄做错事（WorkerId 是唯一会当场拦你的例外）。仓库里有现成的双副本叠加层，也是 CI 里真跑的那套：
+起第二个副本之前，下面几条一条都不能少。少了大多不会报错，只会开始悄悄做错事（WorkerId 是唯一会当场拦你的例外）。仓库里有现成的双副本叠加层，也是 CI 里真跑的那套：
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --build
@@ -61,13 +61,13 @@ bash scripts/smoke-multi-replica.sh http://localhost:8080   # 逐条验证下面
 | **锁定 / 限流阈值翻倍** | 登录失败计数、限流计数各副本各数各的：`MaxFailCount=5` 两副本就成了 10，认证桶 20/min 成了 40/min。 |
 | **验证码必失败** | 一次性票据发在 A、验在 B,B 上没有这个键。 |
 
-配上 `TenonAdmin:Cache:Provider=Redis` + `Cache:RedisConnectionString`，以上全部自动修好——失效走的是共享缓存键空间，不是事件总线，业务代码零改动。
+配上 `TenonAdmin:Cache:Provider=Redis` + `Cache:RedisConnectionString`，以上全部自动修好。失效走的是共享缓存键空间，不是事件总线，业务代码零改动。
 
 ### 每个副本一个不同的 `WorkerId`
 
 雪花发号器的机器位来自 `TenonAdmin:Id:WorkerId`(0–63)。单实例不配也没事（回落 0）;但两个副本都拿 0，同一毫秒各自发号就会撞主键——数据损坏级，而且悄无声息。内核对这一条不再沉默：一旦配了 `Cache:Provider=Redis`（明显的多实例意图）却没有**显式**给出 `WorkerId`，启动直接抛错，点名到 `TenonAdmin:Id:WorkerId` 和 0–63 范围。显式写 `0` 视为你知情，放行。
 
-- **compose**:`--scale app=2` 给不了各副本不同的环境变量，所以拆成多个显式的 `app` 服务各配各的——`docker-compose.scale.yml` 里 `app2` 就显式给了 `TenonAdmin__Id__WorkerId: "1"`，与 `app` 的 `0` 不同。
+- **compose**:`--scale app=2` 给不了各副本不同的环境变量，所以拆成多个显式的 `app` 服务各配各的。`docker-compose.scale.yml` 里 `app2` 就显式给了 `TenonAdmin__Id__WorkerId: "1"`，与 `app` 的 `0` 不同。
 - **k8s**：用 StatefulSet，从 Pod 名字的序号（`app-0`/`app-1`）注入;Deployment 的随机 Pod 名给不了稳定序号。
 
 ### 反代之后必须配 `ForwardedHeaders`
@@ -79,7 +79,7 @@ TenonAdmin__Api__ForwardedHeaders__Enabled: "true"
 TenonAdmin__Api__ForwardedHeaders__KnownNetworks__0: 172.16.0.0/12
 ```
 
-Caddy 在前面挡着，不解析 `X-Forwarded-For` 的话，后端看到的永远是 Caddy 那一个 IP——全体用户共享一个限流桶（一人爆破登录能锁死所有人），登录日志里的 IP 全是代理地址。多副本更是每个副本都要配，否则都只看得见负载均衡器那一个 IP。打开这项**必须同时声明受信来源**（这里是 Docker 桥接网段）;受信的是"来源地址"，所以任何能直连后端端口的人都能伪造 IP——这正是 `app` 的端口映射只绑 `127.0.0.1` 的原因：
+Caddy 在前面挡着，不解析 `X-Forwarded-For` 的话，后端看到的永远是 Caddy 那一个 IP。于是全体用户共享一个限流桶（一人爆破登录能锁死所有人），登录日志里的 IP 全是代理地址。多副本更是每个副本都要配，否则都只看得见负载均衡器那一个 IP。打开这项**必须同时声明受信来源**（这里是 Docker 桥接网段）;受信的是"来源地址"，所以任何能直连后端端口的人都能伪造 IP。`app` 的端口映射只绑 `127.0.0.1`，正是为了这个：
 
 ```yaml
 ports:

@@ -1,10 +1,10 @@
 # 可替换性模型
 
-可替换性是整个内核的重点：每个服务都接口背书、方法拆成 `virtual` 小步骤、用 `TryAdd` 注册，消费方不 fork 就能替换任意一环。这体现为三条约束，由 `ReplaceabilityTests`「六件套」测试锁定成契约。
+内核注册内置服务时不写 `Add*`，一律写 `TryAdd*`。就靠这一个前缀，你不必 fork 也能换掉密码哈希、缓存、登录流程里的某一步。做法是抢在 `AddTenonAdmin()` 前面注册自己的实现。
 
 ## 约束一：`TryAdd` 注册，先到者胜
 
-内置服务一律用 `TryAdd*` 注册，不用 `Add*`。`TryAdd` 的语义是「容器里已有同接口注册就不再添加」——所以消费方在 `AddTenonAdmin()` **之前**注册同一个接口，自己的实现就胜出，内置实现被跳过。
+内置服务一律用 `TryAdd*` 注册，不用 `Add*`。`TryAdd` 的语义是「容器里已有同接口注册就不再添加」。所以消费方在 `AddTenonAdmin()` **之前**注册同一个接口，自己的实现就胜出，内置实现被跳过。
 
 `ServicesSetup` 里全是这个写法：
 
@@ -27,7 +27,7 @@ services.TryAdd(ServiceDescriptor.Scoped(typeof(IRepository<>), typeof(SqlSugarR
 ```
 
 ::: warning `TryAdd` 依赖注册顺序
-消费方必须在 `AddTenonAdmin()` **之前**注册才能赢。写在后面，内置服务已经占了坑，`TryAdd` 会跳过消费方注册——不报错，但替换悄悄没生效。
+消费方必须在 `AddTenonAdmin()` **之前**注册才能赢。写在后面，内置服务已经占了坑，`TryAdd` 会跳过消费方注册。整个过程一声不响，替换却没生效。
 :::
 
 可选包 `TenonAdmin.Caching.Redis` 就是标准范例：它在 `AddTenonAdmin()` 之前把 `ICacheProvider` 的 Redis 实现 `TryAdd` 进去，压过内核默认的进程内 `MemoryCacheProvider`。
@@ -42,7 +42,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 
 长服务方法被拆成若干 `virtual` 小步骤（模板方法模式）。消费方想改行为时，继承内置服务、只重写**其中一步**，而不是整段复制方法。
 
-以 `AuthService` 为例——登录流程里「组装登录出参」是一个独立的 `virtual` 步骤，消费方继承后只重写它：
+以 `AuthService` 为例。登录流程里「组装登录出参」是一个独立的 `virtual` 步骤，消费方继承后只重写它：
 
 ```csharp
 // backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs
@@ -74,7 +74,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 
 ## 「六件套」把这些锁成契约
 
-`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` 是可替换机制的回归锁——用例名照设计写死，把上面三条约束当契约验证，不是普通测试：
+`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` 是可替换机制的回归锁。用例名照设计写死，把上面三条约束当契约验证，不是普通测试：
 
 | 测试 | 锁定什么 |
 | --- | --- |
@@ -85,14 +85,14 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 | `CustomSeedData_ShouldRunOnceAndBeIdempotent` | 消费方种子首启插入、二启幂等不重复 |
 
 ::: tip 改内核前先看它们
-这几个用例是产品承诺的可执行版本。改动 `TryAdd` 注册、`virtual` 拆分、或程序集挂载路径前，先确认它们仍绿——它们红了，意味着某个替换点被悄悄破坏了。
+这几个用例是产品承诺的可执行版本。改动 `TryAdd` 注册、`virtual` 拆分、或程序集挂载路径前，先确认它们仍绿。它们红了，就意味着某个替换点被悄悄破坏了。
 :::
 
 ## 有两样东西内核不让你动
 
 前面几节的结论是「几乎什么都能换」，但门户的模块管理上有两道服务端闸门，直接调管理 API 也绕不过。先分清两个「模块」：约束三里的 `Api.DisabledModules` 是启动期开关，摘掉内置控制器好让你接管路由;这里说的是多应用门户里的应用记录（`SysModule`），经运行时 CRUD 增删改。闸门画在后者上。
 
-**内置 system 模块不能停用。** 它承载全部内置管理页（组织、运维、日志、文件），停用即门户整体失联，而且没有 UI 恢复入口——等于把自己锁在门外。前端那行禁用态拦截只是提示，不是防线;真正的闸在服务端，按固定 Id（不随 Code 改动失守）判 `Enabled=false` 就拒。
+**内置 system 模块不能停用。** 它承载全部内置管理页（组织、运维、日志、文件），停用即门户整体失联，而且没有 UI 恢复入口。停用它，等于把自己锁在门外。前端那行禁用态拦截只是提示，不是防线;真正的闸在服务端，按固定 Id（不随 Code 改动失守）判 `Enabled=false` 就拒。
 
 **带菜单的模块不能删。** 删掉一个还挂着菜单的模块，这些菜单的顶级目录 `ModuleId` 会悬空、整棵子树从门户消失。删除前会查一遍它名下有没有菜单，有就拒，逼你先把挂靠的顶级目录迁走或删掉再删模块。
 
@@ -107,7 +107,7 @@ AdminException.ThrowIf(
     ErrorCode.ModuleHasMenus);
 ```
 
-删菜单这条查询特意走 `modules.Db` 逃生舱，而不在构造器里加 `IRepository<SysMenu>`——给主构造器加参数会破坏继承本类的消费方的源码兼容。连加一道闸都不肯改子类签名，这正是可替换性约束在自我约束。两处都由 `ModuleProtectionTests` 锁定，不在上面的六件套里。
+删菜单这条查询特意走 `modules.Db` 逃生舱，不在构造器里加 `IRepository<SysMenu>`。给主构造器加参数，会破坏继承本类的消费方的源码兼容。连加一道闸都不肯改子类签名，这正是可替换性约束在自我约束。两处都由 `ModuleProtectionTests` 锁定，不在上面的六件套里。
 
 ## 消费方替换一个服务的完整写法
 

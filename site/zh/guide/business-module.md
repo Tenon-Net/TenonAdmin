@@ -3,18 +3,18 @@
 在 TenonAdmin 之上加一张业务表、一套接口，不改内核一行代码。这页从选实体基类一路走到接口能被授权、能被前端调通。
 
 ::: tip 两条路线，只差"代码放哪"
-- **路线 A**——直接改本仓库，在内核内加，新代码进 `TenonAdmin.Services` / `TenonAdmin.AspNetCore`。
-- **路线 B**——你的项目装了 `TenonAdmin` NuGet 包，在自己的业务程序集里加，靠 `options.ApplicationAssemblies` 挂载，内核源码一行不碰。
+- **路线 A**：直接改本仓库，在内核内加，新代码进 `TenonAdmin.Services` / `TenonAdmin.AspNetCore`。
+- **路线 B**：你的项目装了 `TenonAdmin` NuGet 包，在自己的业务程序集里加，靠 `options.ApplicationAssemblies` 挂载，内核源码一行不碰。
 
-除了"放哪"之外两条路完全一样。下面走路线 B——这也是消费方的推荐路线。
+除了"放哪"之外两条路完全一样。下面走路线 B。它也是消费方的推荐路线。
 :::
 
 ## 用真实代码打底
 
 这页不编"商品"示例，而是带你读仓库里两处真实存在、CI 里跑着的代码：
 
-- `backend/src/TenonAdmin.Services/Dict/`——内核内置字典模块，普通表（不按机构隔离）的范本。
-- `backend/tests/TenonAdmin.TestHost/`——集成测试用的消费方宿主，里面的 `SampleDoc` 是一个货真价实的机构隔离业务模块，走的正是路线 B。
+- `backend/src/TenonAdmin.Services/Dict/`：内核内置字典模块，普通表（不按机构隔离）的范本。
+- `backend/tests/TenonAdmin.TestHost/`：集成测试用的消费方宿主，里面的 `SampleDoc` 是一个货真价实的机构隔离业务模块，走的正是路线 B。
 
 照着这两处的结构走，你加的模块会自然长成内核期望的样子。
 
@@ -36,7 +36,7 @@ public class SampleDoc : DataEntity
 }
 ```
 
-审计字段（`Id` / `CreateTime` / `CreateUserId` / `CreateOrgId` / `UpdateTime` / `UpdateUserId`）由 AOP 自动填，业务代码不要手写——尤其是 `CreateOrgId`，它是数据范围能生效的锚点，漏填的话按机构查询会查出 0 行。有唯一列时在实体上补一个唯一索引，比如 `[SugarIndex("idx_sample_doc_title", nameof(Title), OrderByType.Asc, IsUnique = true)]`。
+审计字段（`Id` / `CreateTime` / `CreateUserId` / `CreateOrgId` / `UpdateTime` / `UpdateUserId`）由 AOP 自动填，业务代码不要手写。尤其是 `CreateOrgId`，它是数据范围能生效的锚点，漏填的话按机构查询会查出 0 行。有唯一列时在实体上补一个唯一索引，比如 `[SugarIndex("idx_sample_doc_title", nameof(Title), OrderByType.Asc, IsUnique = true)]`。
 
 把 `SampleDoc` 换成你自己的实体名和字段，放进消费方项目自己的程序集就行（路线 A 才放进 `TenonAdmin.Services`）。
 
@@ -74,10 +74,10 @@ public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
 ```
 
 - **读**走 `AsQueryable()`，全局过滤器按当前请求的数据范围裁剪，业务代码不写 `WHERE`。
-- **改/删先 `GetByIdAsync` 校验可见性**：看不到就当"不存在/无权"返回 `false`。这不只是礼貌——数据范围全局过滤器只作用于查询（SELECT）;写路径靠的是 `SqlSugarRepository` 对 `DataEntity` 的 `Update`/`Delete` 内置的范围守卫，越权改删他机构的行返回 0。两层叠起来才严丝合缝。要注意的是，绕过仓储、直接走 `Db.Updateable`/`Db.Deleteable` 逃生舱口的写**不受**这层守卫，得自己校验归属。
+- **改/删先 `GetByIdAsync` 校验可见性**：看不到就当"不存在/无权"返回 `false`。这不只是礼貌。数据范围全局过滤器只作用于查询（SELECT）;写路径靠的是 `SqlSugarRepository` 对 `DataEntity` 的 `Update`/`Delete` 内置的范围守卫，越权改删他机构的行返回 0。两层叠起来才严丝合缝。要注意的是，绕过仓储、直接走 `Db.Updateable`/`Db.Deleteable` 逃生舱口的写**不受**这层守卫，得自己校验归属。
 - 方法都是 `virtual`。消费方想重写某一步，继承后 override 单个方法即可，不必整份复制。
 
-真实的管理列表通常要分页，那就把 `ListAsync` 换成 `PageAsync`，入参继承 `PageInputBase`（自带 `Current`/`Size`/`SortField`/`SortOrder`——没有叫 `PageInput` 的基类，别记混），用 `WhereIF` 拼条件、`ToPagedListAsync` 出分页。内核里 `UserService.PageAsync`、`DictService.PageTypesAsync` 是现成蓝本。
+真实的管理列表通常要分页，那就把 `ListAsync` 换成 `PageAsync`，入参继承 `PageInputBase`，它自带 `Current`/`Size`/`SortField`/`SortOrder`。没有叫 `PageInput` 的基类，别记混。条件用 `WhereIF` 拼，分页用 `ToPagedListAsync` 出。内核里 `UserService.PageAsync`、`DictService.PageTypesAsync` 是现成蓝本。
 
 有唯一列时，新增前的查重要带上软删行：`repo.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(x => x.Code == input.Code)`。不清软删过滤器的话，一条已软删的同码行会绕过应用层查重、在数据库唯一索引上撞出一个原生 500;查到重复就 `AdminException.ThrowIf(dup, ErrorCode.XxxExists)` 抛业务码。
 
@@ -85,7 +85,7 @@ public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
 
 ## 控制器：权限码就是路由
 
-`backend/tests/TenonAdmin.TestHost/SampleDocController.cs`——每个动作挂 `[RolePermission]`，权限码就是规范化后的路由本身，代码里不写任何权限字符串：
+范本是 `backend/tests/TenonAdmin.TestHost/SampleDocController.cs`。每个动作挂 `[RolePermission]`，权限码就是规范化后的路由本身，代码里不写任何权限字符串：
 
 ```csharp
 [ApiController]
@@ -122,7 +122,7 @@ public record SampleDocInput(string Title);
 
 ## 把服务和程序集交给内核
 
-消费方不改内核，在自己的 `Program.cs` 里做两件事——完整范本 `backend/tests/TenonAdmin.TestHost/Program.cs`:
+消费方不改内核，在自己的 `Program.cs` 里做两件事。完整范本是 `backend/tests/TenonAdmin.TestHost/Program.cs`:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -141,7 +141,7 @@ app.MapTenonAdmin();
 app.Run();
 ```
 
-必须用 `TryAdd`，不是 `Add`。这样消费方才能在 `AddTenonAdmin()` **之前**注册同接口的自定义实现来覆盖默认行为——这是整个内核"可替换"设计的根规则，内置服务（比如 `Dict`）在 `ServicesSetup.cs` 里也是这么注册的。你自己的服务如果没人跟你抢接口，`TryAdd` 和 `Add` 效果一样，统一写 `TryAdd` 省得日后被覆盖时踩坑。
+必须用 `TryAdd`，不是 `Add`。这样消费方才能在 `AddTenonAdmin()` **之前**注册同接口的自定义实现来覆盖默认行为。这是整个内核"可替换"设计的根规则，内置服务（比如 `Dict`）在 `ServicesSetup.cs` 里也是这么注册的。你自己的服务如果没人跟你抢接口，`TryAdd` 和 `Add` 效果一样，统一写 `TryAdd` 省得日后被覆盖时踩坑。
 
 ::: warning 忘了 `ApplicationAssemblies.Add(...)` 就静默 404
 内核**不会自动扫描发现**你的模块。漏了这一行，`SampleDoc` 不会建表、`SampleDocController` 不会注册路由，直接 404，没有任何兜底开关或提示。（曾有个 `ScanApplicationAssemblies` 自动扫描开关从未实现，已于发包前删除，别去找它。）
@@ -149,7 +149,7 @@ app.Run();
 
 ## 错误码（可选）
 
-要精确区分"不存在"和其他失败，内核内置模块的做法是往 `Core/ErrorCode.cs` 枚举里加数字码，**只加码，不写文案**——字典模块的 `DictTypeNotFound = 43001`、`DictTypeCodeExists = 43002` 就是例子，文案由前端按码翻译。消费方受限于 `ErrorCode` 是内核枚举、不可扩展，可以像 `SampleDocService` 那样直接用返回值（`false` 表示不存在/无权）表达结果，或者自定义异常经自己的异常过滤器兜底。
+要精确区分"不存在"和其他失败，内核内置模块的做法是往 `Core/ErrorCode.cs` 枚举里加数字码，**只加码，不写文案**。字典模块的 `DictTypeNotFound = 43001`、`DictTypeCodeExists = 43002` 就是例子，文案由前端按码翻译。消费方受限于 `ErrorCode` 是内核枚举、不可扩展，可以像 `SampleDocService` 那样直接用返回值（`false` 表示不存在/无权）表达结果，或者自定义异常经自己的异常过滤器兜底。
 
 ## 种子数据（可选）
 
@@ -166,13 +166,13 @@ public sealed class SampleWidgetSeed : ISeedData<SampleWidget>
 }
 ```
 
-种子要注册在**你自己的 `Program.cs`** 里——内核不扫描程序集找种子（`ApplicationAssemblies` 只管实体建表和控制器挂载），忘了注册就静默不执行：
+种子要注册在**你自己的 `Program.cs`** 里。内核不扫描程序集找种子（`ApplicationAssemblies` 只管实体建表和控制器挂载），忘了注册就静默不执行：
 
 ```csharp
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleWidgetSeed>());
 ```
 
-固定 `Id` 必须落在消费方保留区间 `[1000, 4095]`（常量 `TenonSeedIds.ConsumerMin` ~ `ConsumerMax`）。别沿用"随手挑个小整数"的老习惯——你和内核会往同一批表（`sys_menu` / `sys_config` …）里播种，今天不撞不代表升级内核包后不撞，而那时你库里已经有那行、退不回去了：
+固定 `Id` 必须落在消费方保留区间 `[1000, 4095]`（常量 `TenonSeedIds.ConsumerMin` ~ `ConsumerMax`）。别沿用"随手挑个小整数"的老习惯。你和内核会往同一批表（`sys_menu` / `sys_config` …）里播种，今天不撞不代表升级内核包后不撞，而那时你库里已经有那行、退不回去了：
 
 | 区间 | 归谁 | 为什么 |
 |---|---|---|
@@ -191,13 +191,13 @@ builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleW
 权限码等于路由，授权靠在菜单树上勾路由，所以新接口要能被普通用户调通，得先有对应的菜单节点。运行时在后台配：
 
 1. 进**菜单管理**，建菜单节点：`Type=菜单`、`Path` 填前端路由地址（如 `/sample/doc`）、`Component` 填对应 `.vue` 文件相对路径（如 `sample/doc/index`）、`所属应用`选一个顶级目录。
-2. 需要按钮级权限就建 `Type=按钮` 节点，`Permission` 填对应路由码（如 `POST:/api/v1/sample/doc`）——前端 `v-auth` 按它显隐按钮。
+2. 需要按钮级权限就建 `Type=按钮` 节点，`Permission` 填对应路由码（如 `POST:/api/v1/sample/doc`）。前端 `v-auth` 按它显隐按钮。
 3. 进**角色管理**，给角色勾选该菜单/按钮，该角色下的用户即获得对应路由权限，授权变更即时生效（内核会失效对应缓存）。
 4. 超管开发期不用配权，自动放行全部路由。
 
-想让菜单出厂就预置（而不是每套环境手点），用种子 `DefaultMenuSeed` 那套写法批量播 `SysMenu` 行（菜单节点、按钮节点都是 `SysMenu`），取号照上一节的登记法。给内置模块**改**已有种子行（比如同 Id 补一个字段）时要记得 bump `SysSchemaVersion.Current`——老库只有版本号变了才会经 `SyncOnUpgrade` 回填（见 `SqlSugar/Entities/SysSchemaVersion.cs` 注释）;纯新增行不需要 bump。
+想让菜单出厂就预置（而不是每套环境手点），用种子 `DefaultMenuSeed` 那套写法批量播 `SysMenu` 行（菜单节点、按钮节点都是 `SysMenu`），取号照上一节的登记法。给内置模块**改**已有种子行（比如同 Id 补一个字段）时要记得 bump `SysSchemaVersion.Current`。老库只有版本号变了才会经 `SyncOnUpgrade` 回填（见 `SqlSugar/Entities/SysSchemaVersion.cs` 注释）;纯新增行不需要 bump。
 
-在**模块管理**里给业务应用填"路由前缀 `apiPrefix`"（= 控制器的路由段，如 `sample`，对应 `/api/v1/sample/...`），能让菜单页"配置权限"的路由下拉默认只列本应用的路由，降噪而已，不是权限边界——留空则不过滤。注意填的是路由段，不是模块编码，二者可以不一致。
+在**模块管理**里给业务应用填"路由前缀 `apiPrefix`"（= 控制器的路由段，如 `sample`，对应 `/api/v1/sample/...`），能让菜单页"配置权限"的路由下拉默认只列本应用的路由，降噪而已，不是权限边界。留空则不过滤。注意填的是路由段，不是模块编码，二者可以不一致。
 
 ## 测试
 
