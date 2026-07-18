@@ -58,6 +58,17 @@ public class ReplaceabilityTests
     }
 
     [Fact]
+    public void ExternalAuthProvider_ShouldBePluggable()
+    {
+        using var f = new AdminAppFactory
+        {
+            Overrides = s => s.AddSingleton<IExternalAuthProvider>(new FakeExternalAuthProvider()),
+        };
+        // provider 是加法式扩展(TryAddEnumerable/AddSingleton 多实现按 Code 选型),消费者前置注册即并入集合
+        Assert.Contains(f.Services.GetServices<IExternalAuthProvider>(), p => p.Code == "fake");
+    }
+
+    [Fact]
     public async Task DisabledModule_ShouldRemoveBuiltInController()
     {
         using var f = new AdminAppFactory { DisabledModules = ["Dict", "Upload"] };
@@ -115,6 +126,18 @@ public class ReplaceabilityTests
     {
         public Task SendAsync(string to, string subject, string htmlBody, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+    }
+
+    /// <summary>用户自定义外部登录 provider(接自有 IdP,按 Code 并入 provider 集合)</summary>
+    private sealed class FakeExternalAuthProvider : IExternalAuthProvider
+    {
+        public string Code => "fake";
+        public string DisplayName => "Fake";
+        public string? Icon => null;
+        public Task<string> BuildAuthorizeUrlAsync(ExternalAuthorizeRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult("https://idp.test/authorize");
+        public Task<ExternalIdentity> ExchangeAsync(ExternalExchangeRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(new ExternalIdentity("fake", "sub"));
     }
 
     /// <summary>用户自定义密码哈希(替换框架默认 PBKDF2)</summary>
