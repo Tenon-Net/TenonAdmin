@@ -35,4 +35,6 @@
 - **回调路由约定**:前端固定 `/oauth/callback`(公开路由),与后端 `TenonAdmin:ExternalAuth:FrontendResultPath` 默认值对齐;后端回调机密客户端换会话后 302 回该页,**令牌不进 URL**,只带一次性 `ticket`(或 `bind` / `error` 码),前端 `POST /auth/external/exchange` 换令牌对。前后端分离(dev)时把 `FrontendResultPath` 配成前端完整 URL、`CallbackBaseUrl` 配成后端公网基址。
 - **个人中心绑定** 走 `[ActiveSession]`,免菜单/权限种子;入口在顶栏用户下拉。
 - **卫星包待真机验证**:WeCom/DingTalk 的 token 交换/取用户逻辑按厂商文档实现,但未对真实企业应用联调过;`BuildAuthorizeUrlAsync` 纯字符串,`ExchangeAsync` 的网络+解析部分需接真实厂商应用验证。内置 OIDC 已用配置化 provider + 假 provider 单测覆盖闭环(未绑定拒绝/开户/已绑复用/未知 provider/绑定唯一)。
+- **企业微信 `corpsecret` 走 query**:`gettoken` 是企业微信的 GET API 契约(secret 进请求行),非本设计选择;走 TLS 到 `qyapi.weixin.qq.com` 传输中不可截,风险仅在 URL 易被沿途代理/访问日志记全。卫星包自身日志只记 status+body(不落 URL);部署侧勿对该域记完整请求行。无代码可改。
+- **复查加固(第 12 轮)**:双 reviewer 对抗审后,补两处 Medium——① 删用户连带清外部绑定(否则孤儿绑定占唯一位使外部身份永久锁死);② login 模式 `state` 用 `HttpOnly;SameSite=Lax` binder cookie 绑定发起浏览器,防登录 CSRF(bind 模式已由 `[ActiveSession]` UserId 兜住)。另 fail-closed 收口:生产强制 OIDC https 元数据、生产必配 `CallbackBaseUrl`(不回退请求 Host)。核心令牌/身份校验面审后无改。
 - 内核认证能力 = 账密 + 短信免密 + 短信 MFA + **外部登录 / SSO**;字段级审计仍交消费者按需扩展([[ADR-0001]] 决策一)。

@@ -67,6 +67,9 @@ public class WeComExternalAuthProvider(WeComAuthOptions options, ILogger<WeComEx
         try
         {
             if (_cachedToken is not null && DateTimeOffset.UtcNow < _tokenExpiry) return _cachedToken;
+            // ponytail: corpsecret 走 query 是企业微信 gettoken 的 GET API 契约,非本处设计;走 TLS 到 qyapi.weixin.qq.com
+            //   传输中不可截。风险仅在于 URL 易被沿途正向代理/访问日志记全 —— 本类日志只记 status+body(见 GetJsonAsync/EnsureOk),
+            //   不落 URL;部署侧勿对 qyapi.weixin.qq.com 记完整请求行。无代码可改(厂商协议),记此备查。
             var url = $"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={Uri.EscapeDataString(options.CorpId)}&corpsecret={Uri.EscapeDataString(options.CorpSecret)}";
             using var doc = await GetJsonAsync(url, cancellationToken);
             var root = doc.RootElement;
