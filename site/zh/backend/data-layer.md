@@ -1,10 +1,10 @@
 # 数据层与审计
 
-数据层的约定全部在 `SqlSugarSetup` 里全局收口：一个 `SqlSugarScope` 单例、两条全局查询过滤器、一套审计字段自动填充。业务代码只写业务字段，软删除、机构隔离、审计四件套都由框架兜底。
+业务代码里查订单的那一行，既不写 `IsDelete == false`，也不写机构条件，可这两个条件都进了最终的 SQL。填进去的是 `SqlSugarSetup`：整个进程只有一个 `SqlSugarScope`，过滤器和审计 AOP 在它构造时一次挂上，此后无处可漏。
 
 ## 一个 `SqlSugarScope` 单例
 
-`ISqlSugarClient` 以 `SqlSugarScope` 形态注册为单例——这是 SqlSugar 官方推荐的线程安全形态（内部按线程建 Client）。构造时一次性挂上全局过滤器、审计 AOP、SQL 诊断日志三组钩子。
+`ISqlSugarClient` 以 `SqlSugarScope` 形态注册为单例，这是 SqlSugar 官方推荐的线程安全形态，它内部按线程建 Client。构造时一次性挂上全局过滤器、审计 AOP、SQL 诊断日志三组钩子。
 
 ```csharp
 // backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs
@@ -39,7 +39,7 @@ client.QueryFilter.AddTableFilter<ISoftDelete>(e => e.IsDelete == false);
 
 ### 数据范围
 
-这是内核的招牌能力。对 `IOrgScoped` 实体（即 `DataEntity` 及其子类），按当前请求解析出的有效机构集过滤：
+对 `IOrgScoped` 实体（即 `DataEntity` 及其子类），按当前请求解析出的有效机构集过滤：
 
 ```csharp
 client.QueryFilter.AddTableFilter<IOrgScoped>(e =>
@@ -85,15 +85,15 @@ client.Aop.DataExecuting = (_, info) =>
 ```
 
 ::: warning `CreateOrgId` 是数据范围锚点
-`CreateOrgId` = 创建者当时所属机构，插入时由 AOP 从 `ICurrentUser.OrgId`（令牌 org claim）自动填充。数据范围过滤器正是按它决定行可见性。**若这个字段没被填上，按机构维度的数据范围查询会对业务表恒返回 0 行**——数据在库里，却查不出来。为 null 表示不受机构范围约束（系统内建数据、或创建者无归属机构）。
+`CreateOrgId` = 创建者当时所属机构，插入时由 AOP 从 `ICurrentUser.OrgId`（令牌 org claim）自动填充。数据范围过滤器正是按它决定行可见性。**若这个字段没被填上，按机构维度的数据范围查询会对业务表恒返回 0 行**。数据在库里，却查不出来。为 null 表示不受机构范围约束（系统内建数据、或创建者无归属机构）。
 :::
 
 ## 实体基类
 
 业务实体二选一继承：
 
-- `BaseEntity`——主键 `Id` + 审计四件套（`CreateTime` / `CreateUserId` / `UpdateTime` / `UpdateUserId`）+ 软删除 `IsDelete`。实现 `ISoftDelete`。不需要机构隔离的表（全局字典、机构树自身）用它。
-- `DataEntity`——继承 `BaseEntity`，额外带数据范围锚点 `CreateOrgId`，实现 `IOrgScoped`。需要「本机构/本机构及以下/仅本人/自定义」隔离的业务表用它。
+- `BaseEntity`：主键 `Id` + 审计四件套（`CreateTime` / `CreateUserId` / `UpdateTime` / `UpdateUserId`）+ 软删除 `IsDelete`。实现 `ISoftDelete`。不需要机构隔离的表（全局字典、机构树自身）用它。
+- `DataEntity`：继承 `BaseEntity`，额外带数据范围锚点 `CreateOrgId`，实现 `IOrgScoped`。需要「本机构/本机构及以下/仅本人/自定义」隔离的业务表用它。
 
 ## 泛型仓储 `IRepository<>`
 
@@ -106,7 +106,7 @@ public class DeviceService(IRepository<Device> repo) : IDeviceService
 }
 ```
 
-所有查询自动带全局过滤器。仓储覆盖不了的复杂操作（联表、事务、批量）直接用 `repo.Db` 上的 SqlSugar 原生能力——仓储是便捷层，不是把 ORM 关进笼子的抽象层。常用方法：`AsQueryable` / `GetByIdAsync` / `GetFirstAsync` / `AnyAsync` / `InsertAsync` / `InsertRangeAsync` / `UpdateAsync` / `DeleteAsync`（软删）/ `HardDeleteAsync`（物删）/ `RestoreAsync`（恢复）。
+所有查询自动带全局过滤器。仓储覆盖不了的复杂操作（联表、事务、批量）直接用 `repo.Db` 上的 SqlSugar 原生能力。仓储是便捷层，不是把 ORM 关进笼子的抽象层。常用方法：`AsQueryable` / `GetByIdAsync` / `GetFirstAsync` / `AnyAsync` / `InsertAsync` / `InsertRangeAsync` / `UpdateAsync` / `DeleteAsync`（软删）/ `HardDeleteAsync`（物删）/ `RestoreAsync`（恢复）。
 
 ## 雪花 `WorkerId`
 
@@ -133,9 +133,9 @@ public class DeviceService(IRepository<Device> repo) : IDeviceService
 ```
 
 ::: danger 水平扩展每实例必须不同
-单机部署不配即可（回落 0）。**多实例水平扩展时必须为每个实例配置不同的 `WorkerId`**，否则不同实例同毫秒发号会撞主键——这是数据损坏级的问题，且默认静默发生。
+单机部署不配即可（回落 0）。**多实例水平扩展时必须为每个实例配置不同的 `WorkerId`**，否则不同实例同毫秒发号会撞主键。这是数据损坏级的问题，且默认静默发生。
 
 内核给了一道防线：选了 Redis 缓存（明显的多实例意图）却没显式设置 `WorkerId` 时，启动即抛，把一个静默的主键冲突换成一条可读的启动错误。单实例请显式配 `0` 以示知情;k8s 可用 StatefulSet 的 Pod 序号注入。
 :::
 
-时钟安全上，`SnowflakeIdGenerator` 注入 `TimeProvider`（可测试）。检测到时钟回拨时，小幅（≤5ms,NTP 微调级）自旋等待追平，大幅回拨直接抛异常拒绝发号——绝不发出可能重复的 ID。
+时钟安全上，`SnowflakeIdGenerator` 注入 `TimeProvider`（可测试）。检测到时钟回拨时，小幅（≤5ms,NTP 微调级）自旋等待追平，大幅回拨直接抛异常拒绝发号：宁可不发，也绝不发出可能重复的 ID。

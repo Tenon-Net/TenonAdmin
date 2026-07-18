@@ -15,7 +15,7 @@
 | `TenonAdmin:Jwt:ExpireMinutes` | `120` | 访问令牌有效期（分钟） |
 | `TenonAdmin:Jwt:RefreshExpireMinutes` | `10080` | 刷新令牌有效期（分钟，7 天） |
 
-**签名密钥有三条路径**(`JwtKeyResolver.cs`):
+**签名密钥有三条路径**（`JwtKeyResolver.cs`）：
 
 - **已配置 `SecretKey`**（生产要求）：直接用;长度不足 32 字节立即抛错拒绝启动。弱密钥可被暴力破解，进而伪造超管令牌。
 - **未配置 + 生产环境**：直接抛错、拒绝启动（fail-fast）。生产缺密钥若静默用自动生成的开发密钥，多副本各签各的密钥会导致随机 401，且密钥泄露即可伪造任意令牌。
@@ -25,7 +25,7 @@
 这是安全基线，不是建议。生产环境不显式配置 `TenonAdmin:Jwt:SecretKey` 直接起不来。
 :::
 
-**验证参数**(`TenonAdminSetup.cs`):`MapInboundClaims = false`（保留 `sub`/`sid`/`sadm`/`org` 原始 claim 名）;`ValidateAudience = false`（单体后台不启用 audience）;`ValidateLifetime = true`;`ClockSkew` 收紧为 30 秒（默认 5 分钟，贴合短命令牌）;`NameClaimType = unique_name`（`User.Identity.Name` = 登录账号）。
+**验证参数**（`TenonAdminSetup.cs`）：`MapInboundClaims = false`（保留 `sub`/`sid`/`sadm`/`org` 原始 claim 名）;`ValidateAudience = false`（单体后台不启用 audience）;`ValidateLifetime = true`;`ClockSkew` 收紧为 30 秒（默认 5 分钟，贴合短命令牌）;`NameClaimType = unique_name`（`User.Identity.Name` = 登录账号）。
 
 **访问 / 刷新令牌时长运行时可配**。签发时从 `ISecurityPolicyProvider.GetSessionTtlAsync()` 取有效分钟数，先读 `SysConfig` 再回退 Jwt 默认：
 
@@ -47,7 +47,7 @@
 
 运行时可用 `SysConfig` 覆盖（改值即时生效）:`sys.security.captcha.enabled`（是否强制校验）、`sys.security.captcha.type`（签发哪种）。缺失时回退 Options 默认。
 
-**一次性票据**(`CaptchaService.cs`)：明文进缓存（2 分钟 TTL），签发时用 GUID v7 作票据 Id;校验时**原子取删**：
+**一次性票据**（`CaptchaService.cs`）：明文进缓存（2 分钟 TTL），签发时用 GUID v7 作票据 Id;校验时**原子取删**：
 
 ```csharp
 // 并发携同一 captchaId 时只有一个调用取到非空值,杜绝单张验证码放大成 N 次猜测
@@ -74,11 +74,11 @@ AdminException.ThrowIf(!string.Equals(stored, code, StringComparison.OrdinalIgno
 锁定计数的 key 先做规范化（去首尾空白 + 转小写），等价类必须 ≥ 数据库匹配的等价类。否则大小写/尾空白变体（MySQL `utf8mb4_0900_ai_ci` / PAD SPACE 命中同一行）会拆成独立计数器，让攻击者绕过锁定无限猜测。
 :::
 
-**堵死账号枚举**(`AuthService.ValidateUserAsync`):「账号不存在」与「密码错误」统一抛 `ErrorCode.PasswordWrong`（响应不可区分），且账号不存在时也执行一次等价代价的陪跑哈希，于是响应耗时也不可区分，双通道一起堵。
+**堵死账号枚举**（`AuthService.ValidateUserAsync`）：「账号不存在」与「密码错误」统一抛 `ErrorCode.PasswordWrong`（响应不可区分），且账号不存在时也执行一次等价代价的陪跑哈希，于是响应耗时也不可区分，双通道一起堵。
 
 ## 会话与强制下线
 
-会话由 `SessionService` 管理（设计 §15）：会话落库（源）+ 落缓存（热路径），刷新令牌只存 SHA-256 哈希，时间统一走 UTC。登录时用 GUID v7 生成 `sessionId`，写进令牌的 `sid` claim，作为在线用户列举与强退的稳定锚点。
+会话由 `SessionService` 管理：库里存的那份是源，缓存里那份只为省掉热路径上的一次查询。刷新令牌只存 SHA-256 哈希，时间统一走 UTC。登录时用 GUID v7 生成 `sessionId`，写进令牌的 `sid` claim，作为在线用户列举与强退的稳定锚点。
 
 **强退即时生效**。授权管道每请求校验 `sid` 对应会话是否仍活跃（见 [请求管线](/zh/backend/request-pipeline) 第 ② 步）。管理员在「在线用户」里踢人时：
 
@@ -93,7 +93,7 @@ public virtual async Task RevokeAsync(string sessionId)
 
 被踢用户手里的 access token 哪怕未到期，下一个请求就会 401。停用/删除用户走 `RevokeAllForUserAsync`，下线其全部会话。
 
-**并发策略**(`TenonAdmin:Security:Session`,`AdminSessionOptions`):
+**并发策略**（`TenonAdmin:Security:Session`、`AdminSessionOptions`）：
 
 | 配置键 | 默认 | 说明 |
 | --- | --- | --- |
@@ -102,7 +102,7 @@ public virtual async Task RevokeAsync(string sessionId)
 
 名额收敛采「**先插入、再收敛**」：新会话插库后才收敛，并发的两个登录都看得见对方的行、都算出同一个「只保留最新 N 个」的答案，天然收敛。它不靠进程内锁，因而跨得了多副本；换成进程内锁，多副本下单端就踢不掉旧会话。
 
-**刷新令牌复用检测**(`SessionService.RefreshAsync`)：已轮换令牌再现 = 重放，吊销整个会话（攻击者与真用户一起下线，安全优先）;轮换用条件更新（仅当仍 `Active` 才置 `Used`）兼作并发保护。
+**刷新令牌复用检测**（`SessionService.RefreshAsync`）：已轮换令牌再现 = 重放，吊销整个会话（攻击者与真用户一起下线，安全优先）;轮换用条件更新（仅当仍 `Active` 才置 `Used`）兼作并发保护。
 
 ## 密码策略
 
@@ -122,7 +122,7 @@ public virtual async Task RevokeAsync(string sessionId)
 
 `LastPasswordChangeTime` 是后加字段，存量用户可能为 null。真判过期前会先给 null 锚点回填当前时间，窗口从升级后首次登录起算。不这样做，开启策略的当天就会有一批没有锚点的老用户被一起判过期、集体卡在改密页。替换过 `ISecurityPolicyProvider` 的二开代码不受影响：新增的 `GetPasswordExpireDaysAsync` 带一个返回 0 的默认接口实现，旧实现不改也编得过、等同于关闭。
 
-**默认初始口令**(`TenonAdmin:Security:DefaultInitialPassword`)：默认 `null` → 新建用户/重置密码时按账号生成密码学随机强口令，杜绝「随公开 NuGet 包分发的固定默认口令」这一已知凭据弱点。重置密码会把随机口令返回给管理员当场转达。
+**默认初始口令**（`TenonAdmin:Security:DefaultInitialPassword`）：默认 `null` → 新建用户/重置密码时按账号生成密码学随机强口令，杜绝「随公开 NuGet 包分发的固定默认口令」这一已知凭据弱点。重置密码会把随机口令返回给管理员当场转达。
 
 ::: tip 首次启动的超管口令
 配了 `TenonAdmin:Seed:AdminPassword` 用配置值;没配（默认）则随机生成并**在启动日志醒目打印一次**。也就是说，只有真正建号的那次启动会打印，后续启动不再打印（打印一个已失效的随机密码只会误导人）。

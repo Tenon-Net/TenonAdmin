@@ -1,6 +1,6 @@
 # 请求管线
 
-一个已认证请求从进入到返回，依次流经四道关卡：认证、`[RolePermission]` 授权、数据范围解析、结果信封。每一道都由内核内置，业务代码无需感知——下面按顺序拆开每一步做了什么、由哪个类型承担。
+后台把一个人从「在线用户」里踢下线，他手里的 JWT 还没到期，下一个请求却已经 401 了。令牌本身不知道自己被吊销，是授权关卡每请求都回头核了一次会话。整条管线都是这个分工：业务代码不感知，行为由内核在固定位置一次定好。
 
 ## 全景
 
@@ -75,7 +75,7 @@ OnChallenge = async ctx =>
 
 ## ② `[RolePermission]`：权限码就是路由
 
-授权由 `RolePermissionAttribute`（实现 `IAsyncAuthorizationFilter`）承担。它**无参数、无权限字符串**——这是内核刻意的设计：代码里永远不出现 `"sys:user:add"` 之类的魔法串，授权靠在角色-菜单界面上勾选路由完成。
+授权由 `RolePermissionAttribute`（实现 `IAsyncAuthorizationFilter`）承担。它**无参数、无权限字符串**。代码里永远不出现 `"sys:user:add"` 之类的魔法串，授权靠在角色-菜单界面上勾选路由完成。
 
 过滤器内部按固定顺序执行：
 
@@ -110,12 +110,12 @@ public static string Build(string httpMethod, string? routeTemplate) =>
 // 例:GET:/api/v1/ping
 ```
 
-用**路由模板**而非实际路径，带参数的路由（`user/{id}`）权限码稳定，不随参数值变化。同一个 `Build` 函数被三处共用——授权比对、`MenuController.Routes` 路由清单（喂菜单表单的权限码下拉）、操作日志的缺省操作名——防止「授权时算的码」与「菜单里存的码」因大小写、斜杠差一个字符而静默对不上。
+用**路由模板**而非实际路径，带参数的路由（`user/{id}`）权限码稳定，不随参数值变化。同一个 `Build` 函数被三处共用：授权比对、`MenuController.Routes` 路由清单（喂菜单表单的权限码下拉）、操作日志的缺省操作名。三处共用一个函数，「授权时算的码」与「菜单里存的码」才不会因大小写、斜杠差一个字符而静默对不上。
 
 **会话活性校验让强制下线立即生效**。第 2 步每请求都调 `ISessionService.IsActiveAsync(sid)`。管理员在「在线用户」里踢人后，该会话的缓存被移除、库里标记吊销，被踢用户手里的 access token 哪怕未到期，下一个请求就会 401。超管也不例外。
 
 ::: tip `[ActiveSession]`：任意登录用户端点
-个人中心、登出这类「任何已登录用户可用、但不需要具体权限码」的端点，挂 `ActiveSessionAttribute`。它只做上面的第 1、2 步（认证 + 会话活性），跳过权限码比对。若只挂 `[Authorize]` 而不挂它，会话被强退后未过期的令牌仍能继续调用——所以需要强退即时生效的端点必须挂 `[ActiveSession]`。
+个人中心、登出这类「任何已登录用户可用、但不需要具体权限码」的端点，挂 `ActiveSessionAttribute`。它只做上面的第 1、2 步（认证 + 会话活性），跳过权限码比对。若只挂 `[Authorize]` 而不挂它，会话被强退后未过期的令牌仍能继续调用。所以需要强退即时生效的端点必须挂 `[ActiveSession]`。
 :::
 
 ## ③ 数据范围：解析并注入 `IDataScopeContext`
@@ -169,7 +169,7 @@ public void OnException(ExceptionContext context)
 }
 ```
 
-业务失败记 **Information** 级日志（不是错误，不打扰告警）。其他异常不在这里拦——让框架默认 500 流程处理，保留完整堆栈，程序缺陷该大声失败。
+业务失败记 **Information** 级日志（不是错误，不打扰告警）。其他异常不在这里拦。框架默认的 500 流程会处理它们、保留完整堆栈，程序缺陷该大声失败。
 
 **错误是数字码，从不下发本地化文案**。信封携带 `{ code, msgKey, args, message }`,`code` 是 `ErrorCode` 枚举的数字值。i18n 由前端按码翻译，后端不返回中文/英文错误文案。
 
@@ -177,7 +177,7 @@ public void OnException(ExceptionContext context)
 
 以「删除某角色」为例：
 
-1. **认证**——校验 JWT 签名与有效期，读出 `sub` / `sid` / `sadm`。
-2. **`[RolePermission]`**——会话 `sid` 仍活跃;非超管;权限码 `DELETE:/api/v1/sys/role/{id}` 在用户权限码集合里 → 放行。同时把该用户的数据范围写入 `IDataScopeContext`。
-3. **数据范围**——仓储的写路径守卫先经带范围过滤器的查询确认目标行在范围内，越权改删他机构行返回 0 行被拒。
-4. **结果信封**——控制器 `return` 的结果被包成 `Result<T>`;若中途抛 `AdminException`，转成业务码信封返回。
+1. **认证**：校验 JWT 签名与有效期，读出 `sub` / `sid` / `sadm`。
+2. **`[RolePermission]`**：会话 `sid` 仍活跃;非超管;权限码 `DELETE:/api/v1/sys/role/{id}` 在用户权限码集合里 → 放行。同时把该用户的数据范围写入 `IDataScopeContext`。
+3. **数据范围**：仓储的写路径守卫先经带范围过滤器的查询确认目标行在范围内，越权改删他机构行返回 0 行被拒。
+4. **结果信封**：控制器 `return` 的结果被包成 `Result<T>`;若中途抛 `AdminException`，转成业务码信封返回。

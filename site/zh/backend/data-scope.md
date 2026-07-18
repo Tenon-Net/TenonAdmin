@@ -1,6 +1,6 @@
 # 多组织数据权限
 
-数据范围是内核的招牌特性。它回答一个问题：同样的接口、同样的 SQL，不同用户看到的行为什么不同?答案是——业务代码不写任何机构过滤条件，内核在全局查询过滤器里按当前请求的**生效机构集**自动裁剪结果。
+数据范围替业务代码扛下了全部机构过滤，内核的招牌就在这里。它回答一个问题：同样的接口、同样的 SQL，不同用户看到的行为什么不同？答案在全局查询过滤器：内核按当前请求解析出的**生效机构集**自动裁剪结果。
 
 ## 五种数据范围
 
@@ -14,7 +14,7 @@
 | 4 | `Self` | 仅本人，只看自己创建的数据 |
 | 5 | `Custom` | 自定义机构，显式指定的机构集合 |
 
-范围挂在**角色**上（`sys_role_data_scope`），一个用户可有多个角色。合并规则是**取最宽**:
+范围挂在**角色**上（`sys_role_data_scope`），一个用户可有多个角色。合并规则是**取最宽**：
 
 - 任一角色为 `All` → 整体不受限，看全部;
 - 否则并集各角色的机构集合（本机构 = 主属机构;本机构及以下 = 主属机构 + 子孙;自定义 = 指定集合）;
@@ -41,7 +41,7 @@ protected virtual async Task<DataScopeResult> ComputeAsync(long userId)
 ```
 
 ::: tip 安全默认
-无角色、或有角色但没配任何范围，都收敛为「仅本人」——不放大可见面。两者皆空（机构集空 + 不含本人）即「看不到任何数据」，是默认拒绝而非默认放行。
+无角色、或有角色但没配任何范围，都收敛为「仅本人」，为的是不放大可见面。两者皆空（机构集空 + 不含本人）即「看不到任何数据」，是默认拒绝而非默认放行。
 :::
 
 `DataScopeResult`（`Core/Security/DataScopeResult.cs`）是不可变值对象，可安全放进缓存跨请求复用：
@@ -59,11 +59,11 @@ public sealed record DataScopeResult
 }
 ```
 
-它用 `record` + `init` 属性且参数名与属性名对齐，是为了能被 `System.Text.Json` 正常往返——换 Redis 缓存做多实例部署时，这个结果要能序列化进缓存再反序列化回来。
+它用 `record` + `init` 属性且参数名与属性名对齐，是为了能被 `System.Text.Json` 正常往返。换 Redis 缓存做多实例部署时，这个结果要能序列化进缓存再反序列化回来。
 
 ## 锚点字段：`CreateOrgId`
 
-数据范围过滤的锚点是实体上的 `CreateOrgId`——**创建者当时所属的机构**。业务表继承 `DataEntity`（`SqlSugar/Entities/DataEntity.cs`）即获得这个字段：
+数据范围过滤挂在实体的 `CreateOrgId` 上，也就是**创建者当时所属的机构**。业务表继承 `DataEntity`（`SqlSugar/Entities/DataEntity.cs`）即获得这个字段：
 
 ```csharp
 public abstract class DataEntity : BaseEntity, IOrgScoped
@@ -86,7 +86,7 @@ else if (info is { PropertyName: nameof(DataEntity.CreateOrgId),
 ```
 
 ::: warning 锚点不填 = 查不到自己刚插的行
-若 `CreateOrgId` 没被填（例如绕过内核令牌流程、用户无 org claim），这行数据的机构维度可见性就空了——机构范围的用户查不到它。这也是为什么审计 AOP 的自动填充是数据范围能工作的前提。
+若 `CreateOrgId` 没被填（例如绕过内核令牌流程、用户无 org claim），这行数据的机构维度可见性就空了，机构范围的用户于是查不到它。这也是为什么审计 AOP 的自动填充是数据范围能工作的前提。
 :::
 
 ## 全局过滤器：业务代码零过滤条件
@@ -103,7 +103,7 @@ client.QueryFilter.AddTableFilter<IOrgScoped>(e =>
 三个分支对应三种可见性：不受限则整体恒真（不过滤）;否则 `CreateOrgId ∈ 机构集`，或（启用「仅本人」时）`CreateUserId == 当前用户`。
 
 ::: details 两个实现细节
-**按接口匹配，不按基类**:SqlSugar 的 `AddTableFilter<T>` 匹配接口或精确类型，不匹配基类，所以锚点字段经 `IOrgScoped` 接口暴露。软删过滤器 `AddTableFilter<ISoftDelete>` 同理。
+**按接口匹配，不按基类**：SqlSugar 的 `AddTableFilter<T>` 匹配接口或精确类型，不匹配基类，所以锚点字段经 `IOrgScoped` 接口暴露。软删过滤器 `AddTableFilter<ISoftDelete>` 同理。
 
 **布尔标记写成 `== true`**：表达式里 `scope.Current` 的三个属性都与实体参数无关，SqlSugar 先本地求值成常量（机构集 → SQL 的 `IN`），再拼进 `WHERE`。两个布尔写成 `== true` 而非裸布尔，是因为 SqlServer 的谓词上下文不接受裸标量，必须是比较式。
 :::
@@ -118,7 +118,7 @@ var orders = await orderRepo.AsQueryable()
 // 实际执行的 SQL 已自动追加:AND (CreateOrgId IN (...) OR CreateUserId = ...)
 ```
 
-同一段代码，`All` 范围的用户看到全部待处理订单，`Org` 范围的用户只看到本机构的，`Self` 用户只看到自己建的——差异全部来自请求早期解析出的 `DataScopeResult`，业务逻辑一个字都不改。
+同一段代码，`All` 范围的用户看到全部待处理订单，`Org` 范围的用户只看到本机构的，`Self` 用户只看到自己建的。差异全部来自请求早期解析出的 `DataScopeResult`，业务逻辑一个字都不改。
 
 ::: warning 写路径守卫
 全局过滤器只作用于**查询（SELECT）**，不作用于按主键的 `Updateable` / `Deleteable`。为此仓储 `SqlSugarRepository` 对 `IOrgScoped` 实体的 `UpdateAsync` / `DeleteAsync` 内置了写路径守卫：写前经带范围过滤器的查询确认目标行在当前范围内，越权改删他机构行会被拒（返回 0 行）。绕过仓储直接走 `Db.Updateable/Deleteable` 逃生舱口的写不受此守卫，需自行校验归属。
@@ -126,7 +126,7 @@ var orders = await orderRepo.AsQueryable()
 
 ## 上下文载体：为什么不是 `AsyncLocal`
 
-生效范围通过 `IDataScopeContext` 在请求内传递。`Current` 恒非 null——**未显式设置即不受限**（系统/可信上下文，如启动、种子、自检），因此认证请求必须在查询前显式解析写入，这一步由授权管道保证。
+生效范围通过 `IDataScopeContext` 在请求内传递。`Current` 恒非 null——**未显式设置即不受限**。留这个口子是为了系统与可信上下文（启动、种子、自检），认证请求则必须在查询前显式解析写入，这一步由授权管道保证。
 
 内核为它提供了两个实现，取决于是否有 HTTP 上下文：
 

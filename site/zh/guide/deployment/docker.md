@@ -12,7 +12,7 @@
 docker compose up -d --build
 ```
 
-这一条命令拉起四个服务（定义在仓库根 `docker-compose.yml`）:`db`(MySQL 8.0)、`redis`(Redis 7)、`app`（后端）、`web`（Caddy，托管前端静态产物并反代 `/api`）。起来后：
+这一条命令拉起四个服务（定义在仓库根 `docker-compose.yml`）:`db`（MySQL 8.0）、`redis`（Redis 7）、`app`（后端）、`web`（Caddy，托管前端静态产物并反代 `/api`）。起来后：
 
 ```bash
 open http://localhost:8080                 # 前端

@@ -184,7 +184,7 @@ async function save() {
 - **`FormContainer` 用 `onConfirm` 协议接管 loading/关闭**：`save()` 里把 `validate()` 放第一行，校验失败 reject 挡住关闭;接口失败 `return false`（或抛出）弹窗也不关，方便用户改后重试。业务代码不用自己管 `saving` 和底栏。
 - **`useConfirm().run` 配 `n-popconfirm`**:popconfirm 当触发器，确认后的动作与成/败 toast 交给 `run`,`run` 回一个 `ok` 布尔，真删掉了再 `load()`。
 - **按钮级权限，双重收口在同一份权限码上**：模板里的按钮用 `v-auth` 指令（值就是路由权限码 `POST:/api/v1/sample/doc`，不命中直接把 DOM 节点移除）;操作列里的编辑/删除按钮走的是 `h()` 渲染函数，指令用不了，改用 `authStore.hasPerm(...)` 判断要不要渲染。两条路判定规则同一套：超管全放行，权限码没拉到时藏按钮，普通用户按码精确匹配。**这只是界面降噪，服务端始终是权威**。真正的拦截在后端 `[RolePermission]`，越权请求照样 403。规则细节见[前端权限模型](/zh/frontend/permission)。
-- **错误处理留在视图层**:`catch (e) { message.error(translateError(e)) }`，不在 API 层弹 UI。`translateError` 按错误的 `code`/`msgKey` 到 locale 里取字。
+- **错误处理留在视图层**：`catch (e) { message.error(translateError(e)) }`，不在 API 层弹 UI。`translateError` 按错误的 `code`/`msgKey` 到 locale 里取字。
 
 ## 挂进菜单，页面才可见
 
@@ -201,7 +201,7 @@ async function save() {
 
 ## 补 i18n 文案
 
-上面的页面用了一组 `sampleDoc.*` key（`common.*` 是全站共用的现成键，不用新加）。i18n 的键最终必须并进每个 locale 的同一个对象里，所以这里专门开了个扩展位：往 `web/src/locales/ext/<locale>/` 丢一个文件、默认导出你的键，`locales/index.ts` 会用 glob 自动并入。**文件名就是顶层命名空间**(`sampleDoc.ts` → `t('sampleDoc.*')`)，你什么都不用注册：
+上面的页面用了一组 `sampleDoc.*` key（`common.*` 是全站共用的现成键，不用新加）。i18n 的键最终必须并进每个 locale 的同一个对象里，所以这里专门开了个扩展位：往 `web/src/locales/ext/<locale>/` 丢一个文件、默认导出你的键，`locales/index.ts` 会用 glob 自动并入。**文件名就是顶层命名空间**（`sampleDoc.ts` → `t('sampleDoc.*')`），你什么都不用注册：
 
 ```ts
 // web/src/locales/ext/zh-CN/sampleDoc.ts

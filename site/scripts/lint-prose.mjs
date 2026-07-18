@@ -26,9 +26,18 @@ function stripFences(src) {
   return src.replace(/^```[\s\S]*?^```/gm, blank)
 }
 
+// 强调标记把中文和它后面的标点隔开，三条「紧贴中文」的规则就全看不见了：
+// `**验证参数**(TenonAdminSetup.cs)`、`**两端都要配**:` 里的半角，读者看得见，规则看不见。
+// 抹成等长空白不行——那要给逗号、冒号、括号三条规则各加空白容差，
+// 而容差会顺带把 `` `Result<T>`: 说明 `` 这类几百处一起卷进来，那是另一个决定，不该由这个补丁夹带。
+// 所以把标记【挪到前面】而不是原地抹掉：长度不变、行号不变，被强调的文字与后一个字符恢复相邻。
+function shiftEmphasis(src) {
+  return src.replace(/(\*\*|__)([^*_\n]+)\1/g, (_, mark, inner) => '    ' + inner)
+}
+
 // 剥掉不该被判标点的部分，用等长空白占位以保住行号与列号。
 function stripCode(src) {
-  return stripFences(src)
+  return shiftEmphasis(stripFences(src))
     .replace(/`[^`\n]*`/g, blank) // 行内代码
     .replace(/\]\([^)\n]*\)/g, blank) // markdown 链接目标（含其中的半角括号）
     .replace(/<!--[\s\S]*?-->/g, blank) // HTML 注释
@@ -126,6 +135,16 @@ const RULES = [
     msg: '中文语境里的半角括号，应为全角 （）',
   },
   {
+    id: 'halfwidth-sentence-end',
+    zhOnly: true,
+    // 只判「汉字后面紧跟」这一个方向。逗号冒号要判两侧，是因为它们也做分隔符；
+    // 问号叹号只收句，句子收在汉字上就该用全角。剥掉代码与链接目标后，`站点?q=1` 这类不会来。
+    // 不含分号：半角 ; 全站 137 处、27 页，而规范「分号焊接」那条要求的是【拆句】而不是换标点，
+    // 一条把它们就地全角化的硬拦，会把本该拆开的句子焊得更死。那批单独决定。
+    re: /[一-鿿][?!]/g,
+    msg: '半角问号/叹号收在中文句尾，应为全角 ？！',
+  },
+  {
     id: 'mixed-paren',
     zhOnly: true,
     // 全角开、半角闭（或反之）。全站 5 处，4 处在 permission.md——批量改动只改了一半的残骸。
@@ -168,21 +187,42 @@ if (process.argv[2] === '--selftest') {
   // 半角判据：紧贴中文才算，代码里的半角放过
   // 必须重置 lastIndex：这些正则带 /g，test() 会推进游标，
   // 上一个断言匹配成功后，下一个断言就从中间开始扫，白白判假。
+  // 按 id 取规则，不按下标：插一条新规则就会让所有下标位移，
+  // 断言却照样跑绿——那正是规范说的「跑一遍绿灯、带着违规发车」。
+  const R = (id) => RULES.find((r) => r.id === id).re
   const has = (re, s) => { re.lastIndex = 0; return re.test(stripCode(s)) }
-  eq(has(RULES[0].re, '内核,不是应用'), true, '半角逗号紧贴中文 → 拦')
-  eq(has(RULES[0].re, '`foo, bar` 是合法的'), false, '行内代码里的半角逗号 → 放过')
-  eq(has(RULES[1].re, '::: tip 提示'), false, 'VitePress 容器标记 → 放过')
-  eq(has(RULES[2].re, '内核(元包)'), true, '半角括号裹中文 → 拦')
-  eq(has(RULES[2].re, '超管(`sadm`)放行'), true, '中文语境、括号裹代码 → 拦')
-  eq(has(RULES[2].re, '前端规范(Vue 3 + Naive UI)'), true, '中文语境、括号裹西文 → 拦')
-  eq(has(RULES[2].re, 'see release notes (v1.2) for details'), false, '纯西文语境 → 放过')
-  eq(has(RULES[2].re, '调用 AddTenonAdmin() 之后'), false, '真·空括号（裸函数调用）→ 放过')
-  eq(has(RULES[3].re, '判定在服务端（后端的过滤器才是权威)'), true, '括号混配 → 拦')
-  eq(has(RULES[3].re, '判定在服务端（后端的过滤器才是权威）'), false, '括号成对全角 → 放过')
+  eq(has(R('halfwidth-comma'), '内核,不是应用'), true, '半角逗号紧贴中文 → 拦')
+  eq(has(R('halfwidth-comma'), '`foo, bar` 是合法的'), false, '行内代码里的半角逗号 → 放过')
+  eq(has(R('halfwidth-colon'), '::: tip 提示'), false, 'VitePress 容器标记 → 放过')
+  eq(has(R('halfwidth-paren'), '内核(元包)'), true, '半角括号裹中文 → 拦')
+  eq(has(R('halfwidth-paren'), '超管(`sadm`)放行'), true, '中文语境、括号裹代码 → 拦')
+  eq(has(R('halfwidth-paren'), '前端规范(Vue 3 + Naive UI)'), true, '中文语境、括号裹西文 → 拦')
+  eq(has(R('halfwidth-paren'), 'see release notes (v1.2) for details'), false, '纯西文语境 → 放过')
+  eq(has(R('halfwidth-paren'), '调用 AddTenonAdmin() 之后'), false, '真·空括号（裸函数调用）→ 放过')
+  eq(has(R('mixed-paren'), '判定在服务端（后端的过滤器才是权威)'), true, '括号混配 → 拦')
+  eq(has(R('mixed-paren'), '判定在服务端（后端的过滤器才是权威）'), false, '括号成对全角 → 放过')
+  eq(has(R('halfwidth-sentence-end'), '不同用户看到的行为什么不同?'), true, '半角问号收在中文句尾 → 拦')
+  eq(has(R('halfwidth-sentence-end'), '不同用户看到的行为什么不同？'), false, '全角问号 → 放过')
+  eq(has(R('halfwidth-sentence-end'), '构建期给出 `VITE_API_BASE=x?y` 即可'), false, '行内代码里的问号 → 放过')
+  eq(has(R('halfwidth-sentence-end'), '详见 [说明](https://x.dev/a?b=1) 一节'), false, '链接目标里的问号 → 放过')
+  eq(has(R('halfwidth-sentence-end'), 'Which route? See below.'), false, '西文句尾 → 放过')
+
+  // 强调标记不得成为半角标点的藏身处（shiftEmphasis）
+  eq(has(R('halfwidth-paren'), '**验证参数**(`TenonAdminSetup.cs`)'), true, '粗体中文 + 半角括号 → 拦')
+  eq(has(R('halfwidth-comma'), '**错误是数字，从不下发文案**,后端只给码'), true, '粗体中文 + 半角逗号 → 拦')
+  eq(has(R('halfwidth-colon'), '**两端都要配**:'), true, '粗体中文 + 半角冒号 → 拦')
+  eq(has(R('halfwidth-paren'), '**验证参数**（`TenonAdminSetup.cs`）'), false, '粗体中文 + 全角括号 → 放过')
+  eq(has(R('halfwidth-paren'), '`lucide`(Lucide) 是图标集'), true, '括号两端都是代码/西文，但后面跟着中文 → 拦')
+  eq(has(R('halfwidth-paren'), '`lucide`(Lucide)、`ep`(Element Plus)。'), false,
+    '同上但邻居全是全角标点 → 放过。判据只认汉字，不认全角标点：'
+    + '把全角标点也算中文语境，会连带拦下三行纯代码的表格单元格，'
+    + '4 真 5 误的准确率不配当硬拦。那几处手工修，见 appearance.md:45。')
+  eq(has(R('halfwidth-paren'), 'see the **release notes** (v1.2)'), false, '纯西文语境的粗体 → 放过')
+  eq(stripCode('**验证参数**(x)').length, '**验证参数**(x)'.length, '挪动标记不改变长度，行列号不漂')
   const hasKeep = (re, s) => { re.lastIndex = 0; return re.test(stripFences(s)) }
-  eq(hasKeep(RULES[4].re, '一个进程 —— 内部系统首选'), true, '破折号带空格 → 拦')
-  eq(hasKeep(RULES[4].re, '一个进程——内部系统首选'), false, '破折号无空格 → 放过')
-  eq(hasKeep(RULES[4].re, '就两个文件——`locales/zh-CN.ts` 与它'), false, '破折号紧跟行内代码 → 放过（剥了行内代码会误报成「—— 」）')
+  eq(hasKeep(R('spaced-emdash'), '一个进程 —— 内部系统首选'), true, '破折号带空格 → 拦')
+  eq(hasKeep(R('spaced-emdash'), '一个进程——内部系统首选'), false, '破折号无空格 → 放过')
+  eq(hasKeep(R('spaced-emdash'), '就两个文件——`locales/zh-CN.ts` 与它'), false, '破折号紧跟行内代码 → 放过（剥了行内代码会误报成「—— 」）')
 
   // 自称词全列
   for (const w of ['这页', '本页', '这一页', '这篇', '本篇', '本文', '本节', '本指南']) {

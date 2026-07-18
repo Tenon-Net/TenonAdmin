@@ -5,8 +5,8 @@ TenonAdmin 分两半：`backend/`（.NET 10 内核 + 示例宿主 + 测试）和
 ## 开始之前
 
 - Fork 仓库，clone 到本地。
-- **开发在 `dev` 分支进行，`main` 只接收发版合并**——提 PR 请对准 `dev`，不要对准 `main`。发版时才会把 `dev` 合入 `main` 再打 tag（见 [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)）。
-- 报 bug / 提需求走 GitHub Issues 的三个模板（Bug report / Feature request / Question），仓库关闭了空白 issue。安全漏洞**不要**开公开 issue，见下文「安全问题」。
+- **开发在 `dev` 分支进行，`main` 只接收发版合并**：提 PR 请对准 `dev`，不要对准 `main`。发版时才会把 `dev` 合入 `main` 再打 tag（见 [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)）。
+- 报 bug / 提需求走 GitHub Issues 的三个模板（Bug report / Feature request / Question），仓库关闭了空白 issue。安全漏洞不要开公开 issue，见下文「安全问题」。
 
 ## 本地开发环境
 
@@ -60,7 +60,7 @@ refactor(services): split login flow into virtual steps
 
 ## 跑测试：两条腿都要绿
 
-CI（`backend-ci.yml`）在 push / PR 触达 `backend/**` 时跑 build + test，数据库矩阵是 `[sqlite, mysql, sqlserver, postgres]`（`fail-fast: false`，一条腿红不会掩盖其它腿），外加一个 Redis 服务容器（跑 `RedisCacheTests` 的契约测试部分）和一个 `template-smoke` 任务（验证 `dotnet new tenon-app` 能顺利 restore + build，即消费方拿到包后的第一条命令）。改动 `backend/**` 之前，至少本地把 SQLite 默认腿和 MySQL 腿跑绿——`TestDb.cs` 按 `TENON_TEST_DBTYPE` 等环境变量给每个测试派生独立数据库，互不干扰。
+CI（`backend-ci.yml`）在 push / PR 触达 `backend/**` 时跑 build + test，数据库矩阵是 `[sqlite, mysql, sqlserver, postgres]`。矩阵设了 `fail-fast: false`，所以一条腿红不会掩盖其它腿。矩阵之外还挂着一个 Redis 服务容器，跑 `RedisCacheTests` 的契约测试部分。另有一个 `template-smoke` 任务，验证 `dotnet new tenon-app` 能顺利 restore + build，也就是消费方拿到包后的第一条命令。改动 `backend/**` 之前，至少本地把 SQLite 默认腿和 MySQL 腿跑绿。`TestDb.cs` 按 `TENON_TEST_DBTYPE` 等环境变量给每个测试派生独立数据库，互不干扰。
 
 前端 CI（`web-ci.yml`）在 push / PR 触达 `web/**` 时跑 `npm ci` → `npm run lint` → `npm run build`（build 已包含 `vue-tsc` 类型检查，不用单独再跑 `typecheck`）。
 
@@ -78,9 +78,9 @@ CI（`backend-ci.yml`）在 push / PR 触达 `backend/**` 时跑 build + test，
 
 ## 安全问题
 
-**不要通过公开 issue 报告安全漏洞。** TenonAdmin 以 NuGet 包分发，内置认证、RBAC 和多组织数据权限——公开报告等于在补丁出来之前就对所有下游消费方公布 0-day。
+**不要通过公开 issue 报告安全漏洞。** TenonAdmin 以 NuGet 包分发，内置认证、RBAC 和多组织数据权限。公开报告等于在补丁出来之前就对所有下游消费方公布 0-day。
 
-请走 [GitHub 私密漏洞报告](https://github.com/Tenon-Net/TenonAdmin/security/advisories/new)。维护者会在 **7 天内**响应，并与你协调修复和披露节奏。详见 [SECURITY.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/SECURITY.md)。
+请走 [GitHub 私密漏洞报告](https://github.com/Tenon-Net/TenonAdmin/security/advisories/new)。维护者会在 7 天内响应，并与你协调修复和披露节奏。详见 [SECURITY.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/SECURITY.md)。
 
 ## 许可证
 

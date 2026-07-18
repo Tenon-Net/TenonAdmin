@@ -1,6 +1,6 @@
 # 架构分层与包依赖
 
-TenonAdmin 由六个 NuGet 包组成，其中构成核心链条的五个包依赖只能自上而下。这个次序不是分类习惯，而是承重约束：上层能引下层，下层永远看不见上层。抽掉任何一层的方向反转，可替换性和依赖红线就同时垮掉。第六个包 `TenonAdmin.Caching.Redis` 是挂在 `Core` 旁边的一条可选支线，不在这条主链之内——见下文。
+TenonAdmin 由六个 NuGet 包组成，其中构成核心链条的五个包依赖只能自上而下。这个次序不是分类习惯，而是承重约束：上层能引下层，下层永远看不见上层。第六个包 `TenonAdmin.Caching.Redis` 是挂在 `Core` 旁边的一条可选支线，不在这条主链之内，下文单说。
 
 ## 核心链条：五个包
 
@@ -17,7 +17,7 @@ TenonAdmin.AspNetCore  宿主集成:AddTenonAdmin / MapTenonAdmin、JWT、[RoleP
 TenonAdmin             元包:只引用 AspNetCore。消费方装这一个,即传递引入整条栈。
 ```
 
-旁支的 `TenonAdmin.Caching.Redis` 只依赖 `Core`——Core/SqlSugar/Services/AspNetCore 都不会反过来引用它：
+旁支的 `TenonAdmin.Caching.Redis` 只依赖 `Core`，而 Core/SqlSugar/Services/AspNetCore 都不会反过来引用它：
 
 ```text
 TenonAdmin.Caching.Redis   可选包:RedisCacheProvider(基于 StackExchange.Redis 的 ICacheProvider 实现),
@@ -35,9 +35,9 @@ TenonAdmin.Core
 | `TenonAdmin.Services` | `Sys*` 实体、服务实现、RBAC、数据范围、事件总线 | SqlSugar、Core | SqlSugarCore |
 | `TenonAdmin.AspNetCore` | JWT、授权过滤器、内置控制器、全局过滤器、`AddTenonAdmin` | Services、SqlSugar、Core | Microsoft.AspNetCore.* |
 | `TenonAdmin`（元包） | 聚合入口 | AspNetCore |——|
-| `TenonAdmin.Caching.Redis`（可选） | `RedisCacheProvider`——Redis 版 `ICacheProvider` | 仅 Core | StackExchange.Redis |
+| `TenonAdmin.Caching.Redis`（可选） | `RedisCacheProvider`：Redis 版 `ICacheProvider` | 仅 Core | StackExchange.Redis |
 
-`TenonAdmin.Caching.Redis` 没有引入新机制——它就是本页反复讲的那套 `TryAdd` 可替换性，套用在缓存提供者上。消费方在 `AddTenonAdmin()` 之前调用 `AddTenonAdminRedisCache(configuration)`，内部用 `TryAddSingleton` 注册 `RedisCacheProvider`，抢先赢下注册，替换掉内核默认的进程内 `MemoryCacheProvider`。不调用这个方法，或没把 `TenonAdmin:Cache:Provider` 配成 `Redis`，内核的进程内默认实现照常工作，不受影响。
+`TenonAdmin.Caching.Redis` 没有引入新机制，它就是上面那套 `TryAdd` 可替换性套用在缓存提供者上。消费方在 `AddTenonAdmin()` 之前调用 `AddTenonAdminRedisCache(configuration)`，内部用 `TryAddSingleton` 注册 `RedisCacheProvider`，抢先赢下注册，替换掉内核默认的进程内 `MemoryCacheProvider`。不调用这个方法，或没把 `TenonAdmin:Cache:Provider` 配成 `Redis`，内核的进程内默认实现照常工作，不受影响。
 
 ::: tip 实体住在 Services，不在 SqlSugar
 数据层只提供 `IRepository<>` 和实体基类，具体的 `Sys*` 业务实体定义在 `TenonAdmin.Services`。原因是依赖方向：实体需要引用领域概念，而数据层不能反过来依赖领域层。
@@ -51,9 +51,9 @@ TenonAdmin.Core
 
 每层的 DI 装配是一个静态扩展方法，命名一一对应：
 
-- `SqlSugarSetup.AddTenonAdminSqlSugar()`——`backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs`
-- `ServicesSetup.AddTenonAdminServices()`——`backend/src/TenonAdmin.Services/ServicesSetup.cs`
-- `TenonAdminSetup.AddTenonAdmin()`——`backend/src/TenonAdmin.AspNetCore/TenonAdminSetup.cs`
+- `SqlSugarSetup.AddTenonAdminSqlSugar()`：`backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs`
+- `ServicesSetup.AddTenonAdminServices()`：`backend/src/TenonAdmin.Services/ServicesSetup.cs`
+- `TenonAdminSetup.AddTenonAdmin()`：`backend/src/TenonAdmin.AspNetCore/TenonAdminSetup.cs`
 
 `AddTenonAdmin` 是组合根：它先绑定配置，再逐层向下调用。消费方看到的只有它。
 
@@ -71,7 +71,7 @@ app.Run();
 `AddTenonAdmin` 的装配次序（见 `TenonAdminSetup.cs`）:
 
 1. **绑定配置**。`configuration.GetSection("TenonAdmin").Bind(options)`，再执行可选的 `configure` 回调覆写，最后把 `TenonAdminOptions` 及其各子节（`Database` / `Cache` / `Jwt` / `Security` / `Upload` / `Api` / `Id` / `Logging`）作为单例入容器。缺省即默认值，所以零配置可跑。
-2. **雪花机器号校验**。选了 Redis 缓存（多实例意图）却没显式给 `TenonAdmin:Id:WorkerId` 时，启动即抛——把一个静默的主键冲突换成一条可读的启动错误。
+2. **雪花机器号校验**。选了 Redis 缓存（多实例意图）却没显式给 `TenonAdmin:Id:WorkerId` 时，启动即抛，借此把一个静默的主键冲突换成一条可读的启动错误。
 3. **当前用户 + 数据范围环境**。HTTP 侧实现 `HttpContextCurrentUser`、`HttpContextDataScopeContext` 在此先 `TryAdd` 注册，压过 SqlSugar 层的 `AsyncLocal` 兜底实现。
 4. **调用下层**。`AddTenonAdminSqlSugar(options.Database, entityAssemblies)` 装数据层，`AddTenonAdminServices()` 装领域服务。
 5. **宿主集成**。JWT 密钥解析、认证/授权、MVC 控制器 + 全局过滤器、CORS、限流、OpenAPI、健康检查。
@@ -84,7 +84,7 @@ services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()
 services.AddTenonAdminServices();
 ```
 
-顺带一提，每层都能独立装配：`AddTenonAdminSqlSugar` 是公开入口，允许在裸容器上单独调用（测试、以及只要数据层的消费方就这么用）。因此它内部对可选依赖用 `GetService` 而非 `GetRequiredService`——没有日志工厂就静默不打，不会凭空多出一个必需依赖导致起不来。
+顺带一提，每层都能独立装配：`AddTenonAdminSqlSugar` 是公开入口，允许在裸容器上单独调用（测试、以及只要数据层的消费方就这么用）。因此它内部对可选依赖用 `GetService` 而非 `GetRequiredService`。没有日志工厂就静默不打，不会凭空多出一个必需依赖导致起不来。
 
 ## 消费方的实体和控制器如何挂进来
 

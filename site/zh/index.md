@@ -28,7 +28,7 @@ features:
     details: 内置五种数据范围，基于 ORM 全局过滤器自动隔离，业务查询无需手写机构过滤条件。
   - icon: ⚡
     title: 零配置启动
-    details: 默认 SQLite 自动建表、写种子，首次启动打印一次超管密码;换数据库只改一处配置。
+    details: 默认 SQLite 自动建表、写种子，首次启动打印一次超管密码；换数据库只改一处配置。
   - icon: 📦
     title: 极简依赖
     details: 运行时仅依赖 SqlSugar 与 Microsoft.* 官方库，Redis、对象存储等按需引入。
@@ -45,6 +45,6 @@ features:
     linkText: 看看组件生态
   - icon: 🤖
     title: 辅助开发 Skills
-    details: 把新增实体、搭 CRUD、替换服务的流程写成标准 skills,AI 助手或开发者照此生成符合规范的代码。
+    details: 把新增实体、搭 CRUD、替换服务的流程写成标准 skills，AI 助手或开发者照此生成符合规范的代码。
     link: /zh/community/agent-skills
     linkText: 看看 Skills

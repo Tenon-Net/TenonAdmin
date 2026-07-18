@@ -42,7 +42,7 @@ TenonAdmin 的外观由 CSS 自定义属性驱动，不是组件 props。`web/sr
 
 `setupIcons()`（`web/src/lib/icons.ts`）在 `main.ts` 里只调一次，通过 `tenon-naive-iconify-picker` 的 `setupIconPicker` 注册两类来源：
 
-- **离线 Iconify 集**：`ph`（Phosphor，默认集，启动时预热）、`lucide`(Lucide)、`ep`(Element Plus)、`ant-design`(Ant Design)。每套是独立的懒加载 `@iconify-json/<prefix>` chunk，第一次用到才加载。
+- **离线 Iconify 集**：`ph`（Phosphor，默认集，启动时预热）、`lucide`（Lucide）、`ep`（Element Plus）、`ant-design`（Ant Design）。每套是独立的懒加载 `@iconify-json/<prefix>` chunk，第一次用到才加载。
 - **本地 SVG**：`src/assets/svg/*.svg` 下的所有文件，以原始字符串 glob 导入：
 
 ```ts
