@@ -37,6 +37,10 @@
 
 - [x] **E1 岗位行拖拽漂移 → 修文档对齐现实(第 13 轮)** — 核后发现价值很低:岗位排序早已可用(`Sort` 字段可编辑、列表默认 `OrderBy(Sort)`、用户表单岗位下拉继承此序),拖拽只是"改 Sort 值"的顺手糖,对一个种子 6 条、极少改动的小列表不值一个新 `reorder` 端点 + 整表重编号事务。缺陷实为**文档漂移**:`COMPONENTS.md` 吹了不存在的 `row-draggable` + `positionApi.reorder` + `POST /sys/position/reorder`。改文档:三处(行排序说明/^0.3.1 能力注/范例页标注)对齐——岗位排序 = 可编辑 Sort;`row-draggable` 是 pro-table 的纯前端能力但本项目未接线,要拖拽需自行补端点。零代码面。
 
+## 批次 F · 实时通知(SignalR,原第二批之一)
+
+- [x] **F1 SignalR 实时通知(完成,第 14 轮)** — 把两处"实时性"从惰性/轮询提为即时推送:公告发布即时推 `notice-changed`(前端各端立刻自查未读,替代 30s 轮询)、会话吊销即时推 `force-logout`(被踢用户立刻登出,替代惰性 401)。**后端零新包**(SignalR 属共享框架)。Core `IRealtimePublisher`(三推送:按用户/全体/按会话)+ `AdminRealtimeOptions`(Enabled 默认关 + HubPath);Services `NoopRealtimePublisher`(默认空实现,TryAdd)+ 两处触发接线(`SessionService.RevokeAsync` 唯一汇聚点推 force-logout、`NoticeService.PublishAsync` 广播 notice-changed,均可选依赖注入源码兼容);AspNetCore `TenonHub`(纯推送,连接入 `user-{sub}`/`session-{sid}` 两组)+ `SignalRRealtimePublisher`(IHubContext)+ JwtBearer 补 `OnMessageReceived`(query access_token,仅 Hub 路径)+ 条件 `MapHub`/`AddSignalR`(开启时真实现前置压过 Noop)。前端 `@microsoft/signalr` + `useRealtime` composable(default.vue 挂载即连、初次失败静默退回轮询)+ NoticeBell 订阅刷新(保留 30s 兜底)+ 中英 `realtime.forcedLogout`;dev Vite `/hub` 代理(ws)。MinimalHost 样例开启演示。**决策存档 ADR-0003**(默认关纯增强 / 进程内无 backplane / 按会话精确 force-logout)。**验**:后端 **315/0/0**(RealtimeTests 5 例:默认 Noop、RevokeAsync 触发、PublishAsync 触发、开启→真实现+Hub 401、关闭→404;六件套补 `IRealtimePublisher`)+ typecheck/lint 绿 + **推送全链路 Node 冒烟通过**(前端同款客户端直连 MinimalHost:发公告收 notice-changed、踢会话收 force-logout,negotiate 无令牌 401/真令牌 200)。ponytail:未在测试工程引 SignalR.Client 跑真连接(避免测试专用包 + TestServer 传输易碎),接线由单测锁、全链路由 Node 冒烟证。
+
 ## 不做清单(有依据,防反复)
 
 | 项 | 理由 |
@@ -58,11 +62,13 @@
 ## 未排期备忘
 
 - 定时任务调度中心:自写 5 段 cron(~100 行,不做秒级/L/W/#)+ `IAdminJob` TryAddEnumerable + `JobSchedulerService : BackgroundService`(复用 FileGcService 骨架与 ICacheProvider.IncrementAsync 多副本租约);表 sys_job / sys_job_log;ErrorCode 46xxx 段。设计已成稿,待排期。
-- SignalR 实时通知:共享框架零依赖;Core `IRealtimePublisher` + Services no-op 默认(照 LoggingSmsSender),AspNetCore 层 `options.Realtime.Enabled` 时 MapHub + JwtBearer OnMessageReceived 读 query token;notice-changed / force-logout 推送,30s 轮询保留兜底;进程内事件总线跨副本推不到 → 轮询兜底退化为最终一致,backplane 留消费者。
+- ~~SignalR 实时通知~~ → **已做(批次 F,第 14 轮)**,见上。
 - `TenonAdmin.Excel` 卫星包(Magicodes.IE,`rebuild-design.md:165` 已定稿方向):用户导入 + 同步导出,经 ApplicationAssemblies 通路挂入,内核零改动。
 - 多租户消费者侧 skill 文档(replace-service 姊妹篇):字段级 = 前置替换 IDataScopeProvider + DataEntity 子类基座;库级 = 多 ConfigId。
 
 ## 轮次日志
+
+### 第 14 轮 — 批次 F(SignalR 实时通知,原第二批之一)· 从"未排期备忘"排下一步:四项(定时任务/SignalR/Excel/多租户文档)经三路只读探查核准落点后,用户选定先做 **SignalR**(用户可感价值最高、后端零新包、不碰正被另一会话重构的实体基类零冲突)。分 6 个文件原子 commit 落地:①Core `IRealtimePublisher`+`AdminRealtimeOptions`(e3e6ceb)②Services `NoopRealtimePublisher`+`RevokeAsync`/`PublishAsync` 触发接线(18dde1e)③AspNetCore `TenonHub`+`SignalRRealtimePublisher`+JWT query-token+条件 MapHub(625a425)④测试:默认 Noop/触发锁/Hub 401·404/六件套(a737efb)⑤前端 `@microsoft/signalr`+`useRealtime`+NoticeBell 订阅+i18n+vite `/hub` 代理(53e9d48)⑥文档+样例开关(本轮)。**验**:后端 **315/0/0**、typecheck/lint 绿、**推送全链路 Node 冒烟通过**(前端同款客户端直连 MinimalHost:发公告收 notice-changed、踢会话收 force-logout;negotiate 无令牌 401/真令牌 200)。三决策存档 `docs/adr/0003`。全程未触碰另一会话在途的 7 个 SqlSugar 文件(`AuditEntity`/#10)+ `OrgAuditEntityTests.cs`。**未排期余三项**:定时任务调度中心(须等实体基类重构落地)、Excel 卫星包、多租户 skill 文档。
 
 ### 第 13 轮 — 批次 E(E1 岗位拖拽)· 核实后裁定**不实现,改文档对齐现实**。岗位排序早已能用(可编辑 `Sort` + 列表 `OrderBy(Sort)` + 用户表单下拉继承此序),拖拽只是改 Sort 值的顺手糖,对种子 6 条的小列表不值一个 `reorder` 端点 + 重编号事务;真缺陷是 `COMPONENTS.md` 吹了不存在的 `row-draggable`/`positionApi.reorder`/后端端点(文档漂移)。修 `web/COMPONENTS.md` 三处(行排序说明改为可编辑 Sort、`^0.3.1` 能力注去掉 position reorder、范例页标注改"可编辑 Sort 排序"),并注明 pro-table 的 `row-draggable` 是未接线的纯前端能力。零代码面,纯文档。**精致化台账 A/B/C/D/E 全部收口。**
 
