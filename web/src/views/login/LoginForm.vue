@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { NForm, NFormItem, NInput, NCheckbox, useMessage } from 'naive-ui'
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
-import { authApi, ApiError } from '@/api'
+import { authApi, externalAuthApi, ApiError } from '@/api'
 import type { LoginOutput } from '@/types/api'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
@@ -96,19 +96,23 @@ onMounted(async () => {
     captchaEnabled.value = true
     await loadCaptcha()
   }
+  void loadSsoProviders()
 })
 
 // 英雄按钮:accent 派生渐变 + 发光(仅登录页/英雄区)。
 const heroStyle = computed(() => ({ background: btnGrad(app.accent), boxShadow: glowSh(app.accent) }))
 
-// 第三方登录:设计稿定义为 企业微信 / 钉钉 / SSO。功能待接入,先占位显示。
-const ssoList = [
-  { key: 'wecom', label: 'login.ssoWecom' },
-  { key: 'dingtalk', label: 'login.ssoDingtalk' },
-  { key: 'sso', label: 'login.sso' },
-]
-function onSso() {
-  message.info(t('login.ssoComingSoon'))
+// 第三方登录:后端 GET providers 驱动(仅点亮已启用的)。点击顶层导航到 authorize,后端 302 跳 IdP。
+const ssoProviders = ref<{ code: string; displayName: string; icon?: string | null }[]>([])
+async function loadSsoProviders() {
+  try {
+    ssoProviders.value = await externalAuthApi.providers()
+  } catch {
+    // 未配置外部登录或拉取失败:整段 SSO 区不显
+  }
+}
+function onSso(code: string) {
+  window.location.href = externalAuthApi.authorizeUrl(code)
 }
 
 function finishLogin(res: LoginOutput) {
@@ -318,13 +322,16 @@ async function onSmsSubmit() {
         </button>
       </n-form>
 
-      <!-- 第三方登录(占位:先放按钮,不接功能)。文案/顺序依设计稿:企业微信 / 钉钉 / SSO。 -->
-      <div class="lf-divider"><span>{{ t('login.otherMethods') }}</span></div>
-      <div class="lf-sso">
-        <button v-for="s in ssoList" :key="s.key" class="lf-sso-btn" type="button" @click="onSso">
-          {{ t(s.label) }}
-        </button>
-      </div>
+      <!-- 第三方登录:后端 providers 驱动;无启用项则整段不显。点击顶层跳转到 IdP(OAuth2 授权码往返)。 -->
+      <template v-if="ssoProviders.length">
+        <div class="lf-divider"><span>{{ t('login.otherMethods') }}</span></div>
+        <div class="lf-sso">
+          <button v-for="p in ssoProviders" :key="p.code" class="lf-sso-btn" type="button" @click="onSso(p.code)">
+            <Icon v-if="p.icon" :icon="p.icon" class="lf-sso-icon" />
+            {{ p.displayName }}
+          </button>
+        </div>
+      </template>
     </template>
 
     <!-- 页脚:版权(可选链接)+ 构建期版本号。皮肤自绘页脚时(如双栏)传 :show-footer="false" 关掉。 -->
@@ -488,6 +495,10 @@ async function onSmsSubmit() {
 .lf-sso-btn {
   flex: 1;
   height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: 1.5px solid var(--lf-border, var(--color-border));
   border-radius: 11px;
   background: var(--color-fill);

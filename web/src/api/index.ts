@@ -83,6 +83,43 @@ export const authApi = {
     client.POST('/api/v1/auth/sms/login', { body }).then((r) => unwrap<LoginOutput>(r)),
 }
 
+export interface ExternalProvider {
+  code: string
+  displayName: string
+  icon?: string | null
+}
+
+export interface ExternalBinding {
+  provider: string
+  displayName?: string | null
+  boundAt: string
+}
+
+// 外部登录 / SSO(批次 D)。登录:providers 点亮按钮 → 顶层导航到 authorizeUrl(后端 302 跳 IdP)→ 回调页 exchange 换令牌。
+// 绑定(个人中心):bindStart 拿授权 URL 跳转 → 同一回调把外部身份绑到当前用户;bindings 查、unbind 解绑。
+export const externalAuthApi = {
+  /** 登录页可用的外部登录方式(启用的);空数组 = 不显 SSO 区。 */
+  providers: () => client.GET('/api/v1/auth/external/providers', {}).then((r) => unwrap<ExternalProvider[]>(r)),
+  /** 发起某 provider 登录的 URL(顶层浏览器导航,不走 fetch —— 后端 302 跳 IdP)。 */
+  authorizeUrl: (code: string) =>
+    `${import.meta.env.VITE_API_BASE ?? ''}/api/v1/auth/external/${encodeURIComponent(code)}/authorize`,
+  /** 一次性票据换令牌(登录回调后);票据无效/过期/已用抛 40014。 */
+  exchange: (ticket: string) =>
+    client.POST('/api/v1/auth/external/exchange', { body: { ticket } }).then((r) => unwrap<LoginOutput>(r)),
+  /** 我的外部账号绑定列表(个人中心)。 */
+  bindings: () => client.GET('/api/v1/auth/external/bindings', {}).then((r) => unwrap<ExternalBinding[]>(r)),
+  /** 发起绑定:返回授权 URL,前端跳转开始 OAuth 往返(回调把身份绑到当前用户)。 */
+  bindStart: (code: string) =>
+    client
+      .POST('/api/v1/auth/external/{provider}/bind', { params: { path: { provider: code } } })
+      .then((r) => unwrap<{ authorizeUrl: string }>(r)),
+  /** 解绑某 provider 的外部账号。 */
+  unbind: (code: string) =>
+    client
+      .DELETE('/api/v1/auth/external/{provider}/binding', { params: { path: { provider: code } } })
+      .then((r) => unwrap<boolean>(r)),
+}
+
 export const dashboardApi = {
   /** 工作台首页统计([ActiveSession]:任何登录用户可取,无需权限码)。 */
   summary: () => client.GET('/api/v1/dashboard/summary', {}).then((r) => unwrap<DashboardSummary>(r)),

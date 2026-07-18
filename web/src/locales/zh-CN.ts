@@ -66,6 +66,7 @@ export default {
     profile: '个人资料',
     password: '修改密码',
     sessions: '我的会话',
+    bindings: '账号绑定',
     search: '搜索菜单',
     fullscreen: '全屏',
     exitFullscreen: '退出全屏',
@@ -202,6 +203,7 @@ export default {
     password: '修改密码',
     notice: '我的通知',
     sessions: '我的会话',
+    bindings: '账号绑定',
     manage: '菜单管理',
     parent: '上级菜单',
     parentRoot: '顶级(根目录)',
@@ -513,6 +515,22 @@ export default {
     mineTitle: '我的会话',
     current: '当前设备',
     kickMineConfirm: '确定下线该设备上的会话?其登录状态将立即失效。',
+  },
+  // 外部登录 / SSO(批次 D):回调结果页 + 个人中心账号绑定
+  oauth: {
+    processing: '正在处理登录…',
+    backToLogin: '即将返回登录页',
+    failed: '第三方登录失败,请重试',
+    bindingsTitle: '账号绑定',
+    bindingsHint: '把第三方账号绑定到本账号后,即可用它一键登录。绑定需跳转到对应平台完成一次授权。',
+    noProviders: '当前未启用任何第三方登录方式',
+    bind: '绑定',
+    unbind: '解绑',
+    bound: '已绑定',
+    notBound: '未绑定',
+    boundAt: '已绑定 · {time}',
+    unbound: '已解绑',
+    unbindConfirm: '确定解绑「{name}」?解绑后将不能再用它登录本账号。',
   },
   // 岗位管理(R6,普通 CRUD;岗位与机构无关联)
   position: {

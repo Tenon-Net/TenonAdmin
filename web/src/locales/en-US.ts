@@ -65,6 +65,7 @@ export default {
     profile: 'Profile',
     password: 'Change password',
     sessions: 'My sessions',
+    bindings: 'Account bindings',
     search: 'Search',
     fullscreen: 'Fullscreen',
     exitFullscreen: 'Exit fullscreen',
@@ -201,6 +202,7 @@ export default {
     password: 'Change password',
     notice: 'My notifications',
     sessions: 'My sessions',
+    bindings: 'Account bindings',
     manage: 'Menus',
     parent: 'Parent',
     parentRoot: 'Top level (root)',
@@ -510,6 +512,22 @@ export default {
     mineTitle: 'My sessions',
     current: 'This device',
     kickMineConfirm: 'Sign out the session on this device? It will be invalidated immediately.',
+  },
+  // External login / SSO (batch D): callback result page + personal-center account bindings
+  oauth: {
+    processing: 'Signing you in…',
+    backToLogin: 'Returning to the sign-in page',
+    failed: 'Third-party sign-in failed, please try again',
+    bindingsTitle: 'Account bindings',
+    bindingsHint: 'Bind a third-party account to sign in with one click. Binding redirects you to that provider to authorize once.',
+    noProviders: 'No third-party sign-in methods are enabled',
+    bind: 'Bind',
+    unbind: 'Unbind',
+    bound: 'Bound',
+    notBound: 'Not bound',
+    boundAt: 'Bound · {time}',
+    unbound: 'Unbound',
+    unbindConfirm: 'Unbind "{name}"? You will no longer be able to sign in with it.',
   },
   // Position management (R6, plain CRUD; positions are not linked to orgs)
   position: {

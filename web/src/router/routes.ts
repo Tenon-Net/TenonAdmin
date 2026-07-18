@@ -9,6 +9,14 @@ export const staticRoutes: RouteRecordRaw[] = [
     component: () => import('@/views/login/index.vue'),
     meta: { public: true },
   },
+  // 外部登录 / SSO 回调结果页(批次 D):IdP → 后端回调 → 302 到此,凭票据换令牌或提示错误。
+  // 公开路由(登录前也要能到);不进壳,独立整屏处理。
+  {
+    path: '/oauth/callback',
+    name: 'oauth-callback',
+    component: () => import('@/views/oauth/callback.vue'),
+    meta: { public: true },
+  },
   {
     path: '/module',
     name: 'module',
@@ -49,6 +57,13 @@ export const staticRoutes: RouteRecordRaw[] = [
         name: 'personal-sessions',
         component: namedPage('personal-sessions', () => import('@/views/personal/sessions.vue')),
         meta: { title: 'menu.sessions' },
+      },
+      // 账号绑定(外部登录 / SSO,批次 D):[ActiveSession] 人人可用,静态路由不进菜单;入口在顶栏用户下拉。
+      {
+        path: '/personal/bindings',
+        name: 'personal-bindings',
+        component: namedPage('personal-bindings', () => import('@/views/personal/bindings.vue')),
+        meta: { title: 'menu.bindings' },
       },
       // 404 挂在壳内(而非顶级):打错一个 URL 不该把人甩出侧边栏、标签栏和退出按钮之外。
       // 未登录者到不了这里——守卫先于 public 判定就把他弹去登录页;深链刷新也不会闪 404,
