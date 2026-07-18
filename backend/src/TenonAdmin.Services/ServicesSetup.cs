@@ -48,6 +48,10 @@ public static class ServicesSetup
                 : new SmtpEmailSender(email, sp.GetRequiredService<ILogger<SmtpEmailSender>>());
         });
 
+        // 实时推送通道(§14 实时通知):默认空操作实现(关闭实时时业务照调不误)。开启 TenonAdmin:Realtime:Enabled 后
+        // AspNetCore 层前置注册基于 SignalR 的真实现即接管(零新增 NuGet,SignalR 属共享框架);消费方可注册自有通道整体替换。
+        services.TryAddSingleton<IRealtimePublisher, NoopRealtimePublisher>();
+
         // 会话与刷新令牌(§15):登录建会话、每请求校验、刷新轮换+复用检测、登出/强退
         services.TryAddScoped<ISessionService, SessionService>();
 

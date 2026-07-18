@@ -23,7 +23,8 @@ public class SessionService(
     AdminSecurityOptions security,
     ISecurityPolicyProvider policy,
     ICurrentUser currentUser,
-    TimeProvider time) : ISessionService
+    TimeProvider time,
+    IRealtimePublisher? realtime = null) : ISessionService
 {
     private DateTime Now => time.GetUtcNow().UtcDateTime;
 
@@ -146,6 +147,10 @@ public class SessionService(
             .Where(t => t.SessionId == sessionId && t.Status == RefreshTokenStatus.Active)
             .ExecuteCommandAsync();
         await cache.RemoveAsync(CacheKeys.Session(sessionId));   // 缓存移除 → 下次校验查库得吊销 → 401
+        // 实时推送(开启时):即时把该会话的在线连接踢下线,不必等它下次请求才吃 401。
+        // 所有下线路径(强退/超并发收敛/刷新复用/停用删号)都汇聚到此,一处接线全覆盖。
+        if (realtime is not null)
+            await realtime.NotifySessionAsync(sessionId, "force-logout");
     }
 
     /// <inheritdoc />
