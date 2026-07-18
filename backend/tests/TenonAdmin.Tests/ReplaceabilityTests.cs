@@ -46,6 +46,16 @@ public class ReplaceabilityTests
     }
 
     [Fact]
+    public void ReplaceRealtimePublisher_ShouldUseUserImplementation()
+    {
+        using var f = new AdminAppFactory
+        {
+            Overrides = s => s.Replace(ServiceDescriptor.Singleton<IRealtimePublisher, FakeRealtimePublisher>()),
+        };
+        Assert.IsType<FakeRealtimePublisher>(f.Services.GetRequiredService<IRealtimePublisher>());
+    }
+
+    [Fact]
     public async Task OverrideAuthStep_ShouldAffectLoginFlow()
     {
         using var f = new AdminAppFactory
@@ -125,6 +135,17 @@ public class ReplaceabilityTests
     private sealed class FakeEmailSender : IEmailSender
     {
         public Task SendAsync(string to, string subject, string htmlBody, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
+
+    /// <summary>用户自定义实时推送通道(替换框架默认空实现 / 内置 SignalR)</summary>
+    private sealed class FakeRealtimePublisher : IRealtimePublisher
+    {
+        public Task NotifyUserAsync(long userId, string @event, object? data = null, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+        public Task NotifyAllAsync(string @event, object? data = null, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+        public Task NotifySessionAsync(string sessionId, string @event, object? data = null, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 
