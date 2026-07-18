@@ -73,6 +73,9 @@ public static class ServicesSetup
         // 服务器监控(§4 运维):进程/主机基础指标,纯 BCL 无依赖
         services.TryAddScoped<IMonitorService, MonitorService>();
 
+        // 缓存管理(§4 运维):管理员定向失效动作(清授权/字典/配置缓存、重建门户代际);只清不看(缓存含明文 OTP、键含 PII)
+        services.TryAddScoped<ICacheAdminService, CacheAdminService>();
+
         // 组织模块(§4,T2):用户 / 机构(树)/ 职位 —— Scoped,与仓储一致
         services.TryAddScoped<IUserService, UserService>();
         services.TryAddScoped<IOrgService, OrgService>();

@@ -342,6 +342,18 @@ export const monitorApi = {
   server: () => client.GET('/api/v1/sys/monitor/server', {}).then((r) => unwrap<ServerInfoOutput>(r)),
 }
 
+// 缓存管理:定向失效动作(只清不看——缓存含明文 OTP、键含 PII,故后端无键浏览/取值端点)。flush* 返回被清条数。
+export const cacheApi = {
+  /** 清全部用户的权限/数据范围缓存(返回被清用户数)。 */
+  flushAuth: () => client.POST('/api/v1/sys/cache/flush-auth', {}).then((r) => unwrap<number>(r)),
+  /** 清全部字典项缓存(返回被清字典类型数)。 */
+  flushDict: () => client.POST('/api/v1/sys/cache/flush-dict', {}).then((r) => unwrap<number>(r)),
+  /** 清全部系统配置缓存(返回被清配置项数)。 */
+  flushConfig: () => client.POST('/api/v1/sys/cache/flush-config', {}).then((r) => unwrap<number>(r)),
+  /** 递增门户代际,令所有用户的门户菜单/模块缓存整体失效(返回新代际值)。 */
+  rebuildPortal: () => client.POST('/api/v1/sys/cache/rebuild-portal', {}).then((r) => unwrap<number>(r)),
+}
+
 export const dictApi = {
   /** 按类型编码取字典项(服务端已按 sort 排序)。归一 int64 序列化噪音 → DictItem 投影,供 stores/dict 缓存消费。 */
   items: (typeCode: string) =>

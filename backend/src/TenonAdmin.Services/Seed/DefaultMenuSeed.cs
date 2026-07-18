@@ -9,10 +9,10 @@ namespace TenonAdmin.Services;
 /// (大写 Method + 冒号 + 小写路由模板),否则授了也匹配不上。</para>
 /// <para>菜单树顶级节点:system 模块下工作台(根级页面)+ 组织管理 / 系统运维 / 日志审计 / 文件管理四个目录;
 /// 另有示例 business 模块下一条工作台(ModuleId 仅顶级节点设)。节点 Id 手工分配、无分配器,新增节点接着当前
-/// 最大值往后取(现已用到 120:异常日志 116–118 + 服务器监控 119–120),避免覆盖历史 Id。</para>
+/// 最大值往后取(现已用到 125:异常日志 116–118 + 服务器监控 119–120 + 缓存管理 121–125),避免覆盖历史 Id。</para>
 /// <para>层级约定:目录 → 页面 → 按钮。<b>按钮挂在它所属的页面下</b>(而非目录),这样菜单管理页里
 /// 每个页面的权限按钮一目了然。唯一例外是无对应页面的权限码锚点(如 Id=2 探针),挂在目录下。</para>
-/// <para><b>Id 登记</b>:菜单种子的固定 Id 历史散布在 2–120(不连续),<b>新增行一律取当前最大号 +1(现为 121)</b>,
+/// <para><b>Id 登记</b>:菜单种子的固定 Id 历史散布在 2–125(不连续),<b>新增行一律取当前最大号 +1(现为 126)</b>,
 /// 不要回填空洞——空洞可能是被挪走/删除的历史号,复用会撞上老库存量行。撞号/越界会被启动检查
 /// (<c>DatabaseInitializer</c>)与 <c>SeedIdRangeTests</c> 当场拒绝,不会静默吞掉。</para>
 /// </summary>
@@ -174,6 +174,13 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         // 服务器监控页(B5:MonitorController 只读快照)。挂靠系统运维目录。
         new SysMenu { Id = 119, ParentId = 20, Type = MenuType.Menu, Title = "服务器监控", Permission = "", Path = "/system/monitor", Component = "system/monitor/index", Icon = "ph:pulse-duotone", Sort = 7, Enabled = true, Visible = true },
         new SysMenu { Id = 120, ParentId = 119, Type = MenuType.Button, Title = "服务器监控-查询", Permission = "GET:/api/v1/sys/monitor/server", Sort = 1, Enabled = true },
+
+        // 缓存管理页(C2:CacheController 定向失效动作)。挂靠系统运维目录。只清不看(缓存含明文 OTP、键含 PII,故无键浏览端点)。
+        new SysMenu { Id = 121, ParentId = 20, Type = MenuType.Menu, Title = "缓存管理", Permission = "", Path = "/system/cache", Component = "system/cache/index", Icon = "ph:database-duotone", Sort = 8, Enabled = true, Visible = true },
+        new SysMenu { Id = 122, ParentId = 121, Type = MenuType.Button, Title = "缓存-清授权", Permission = "POST:/api/v1/sys/cache/flush-auth", Sort = 1, Enabled = true },
+        new SysMenu { Id = 123, ParentId = 121, Type = MenuType.Button, Title = "缓存-清字典", Permission = "POST:/api/v1/sys/cache/flush-dict", Sort = 2, Enabled = true },
+        new SysMenu { Id = 124, ParentId = 121, Type = MenuType.Button, Title = "缓存-清配置", Permission = "POST:/api/v1/sys/cache/flush-config", Sort = 3, Enabled = true },
+        new SysMenu { Id = 125, ParentId = 121, Type = MenuType.Button, Title = "缓存-重建门户菜单", Permission = "POST:/api/v1/sys/cache/rebuild-portal", Sort = 4, Enabled = true },
 
         // ═══ 业务中心(示例业务模块 Id=2)═══════════════════════════
         // 复用现成的 dashboard/biz.vue;工作台是根级 Menu 节点(可挂 ModuleId),Path 与 system 工作台错开。
