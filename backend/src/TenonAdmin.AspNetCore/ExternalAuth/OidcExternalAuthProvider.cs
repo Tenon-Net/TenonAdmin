@@ -30,18 +30,20 @@ public class OidcExternalAuthProvider : IExternalAuthProvider
     // 每实例一个 ConfigurationManager:自动拉取 + 缓存发现文档/JWKS,签名密钥轮换时自愈(设计文档核对确认)
     private readonly ConfigurationManager<OpenIdConnectConfiguration> _configManager;
 
-    public OidcExternalAuthProvider(OidcProviderOptions options, IHttpClientFactory httpFactory, ILogger<OidcExternalAuthProvider> logger)
+    public OidcExternalAuthProvider(OidcProviderOptions options, IHttpClientFactory httpFactory, ILogger<OidcExternalAuthProvider> logger, bool allowHttpMetadata = false)
     {
         Options = options;
         _httpFactory = httpFactory;
         _logger = logger;
 
         var metadataAddress = options.Authority.TrimEnd('/') + "/.well-known/openid-configuration";
+        // 生产强制 https 元数据(fail-closed):allowHttpMetadata 仅开发环境为 true,才放行 http 本地 IdP。
+        // 生产即便误配 http authority 也拒明文发现文档 —— 否则 MITM 可伪造 JWKS → 伪造 id_token 冒充任意账号。
+        var requireHttps = !allowHttpMetadata || metadataAddress.StartsWith("https", StringComparison.OrdinalIgnoreCase);
         _configManager = new ConfigurationManager<OpenIdConnectConfiguration>(
             metadataAddress,
             new OpenIdConnectConfigurationRetriever(),
-            // 生产 authority 应为 https;仅当显式配了 http(本地 dev IdP)才放行明文,避免开发期卡壳
-            new HttpDocumentRetriever { RequireHttps = metadataAddress.StartsWith("https", StringComparison.OrdinalIgnoreCase) });
+            new HttpDocumentRetriever { RequireHttps = requireHttps });
     }
 
     /// <inheritdoc />

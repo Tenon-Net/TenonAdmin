@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TenonAdmin.Core;
 
@@ -22,7 +23,11 @@ public static class ExternalAuthSetup
 
         foreach (var oidc in options.Oidc)
             services.AddSingleton<IExternalAuthProvider>(sp => new OidcExternalAuthProvider(
-                oidc, sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<ILogger<OidcExternalAuthProvider>>()));
+                oidc,
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<ILogger<OidcExternalAuthProvider>>(),
+                // 仅开发环境放行 http 元数据;生产强制 https(fail-closed,见 OidcExternalAuthProvider 构造)
+                allowHttpMetadata: sp.GetRequiredService<IHostEnvironment>().IsDevelopment()));
 
         return services;
     }
