@@ -497,6 +497,10 @@ export default {
     view: 'View',
     detailTitle: 'Notification detail',
   },
+  // Realtime (SignalR; instant push when TenonAdmin:Realtime:Enabled, else polling / lazy 401)
+  realtime: {
+    forcedLogout: 'You have been signed out by an administrator',
+  },
   // Online sessions (R7, read-only + force logout)
   session: {
     title: 'Online sessions',

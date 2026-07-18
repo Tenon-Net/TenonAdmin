@@ -500,6 +500,10 @@ export default {
     view: '查看',
     detailTitle: '通知详情',
   },
+  // 实时通知(SignalR;后端 TenonAdmin:Realtime:Enabled 开启后即时推送,否则退回轮询/惰性 401)
+  realtime: {
+    forcedLogout: '您已被强制下线',
+  },
   // 在线会话(R7,只读 + 踢人)
   session: {
     title: '在线会话',
