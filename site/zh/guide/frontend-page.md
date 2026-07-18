@@ -16,7 +16,7 @@ npm run gen:api
 它是生成产物，后端接口一变就重跑 `gen:api`，手改的内容下次生成整体覆盖。
 :::
 
-契约怎么从后端流到前端、`client.ts` 如何据它做出带类型的请求，是[前端契约生成](/zh/frontend/api-contract)那篇讲的原理;这一篇只管拿来用。
+契约怎么从后端流到前端、`client.ts` 如何据它做出带类型的请求，是[前端契约生成](/zh/frontend/api-contract)那篇讲的原理；这一篇只管拿来用。
 
 ## 加领域类型、封一层 API
 
@@ -24,7 +24,7 @@ npm run gen:api
 `types/api.ts`、`api/index.ts`、`locales/zh-CN.ts` 是上游的文件，几乎每次发版都在改。你把自己模块的代码写进去，每次 `git merge upstream` 就在那里撞冲突。自己的代码一律放**新文件**，新文件永远不冲突。本章全程都这么做。详见[同步上游](/zh/guide/sync-fork)。
 :::
 
-新建 `web/src/types/sample.ts` 放领域类型（与后端 DTO 字段对齐，后端是驼峰序列化）:
+新建 `web/src/types/sample.ts` 放领域类型（与后端 DTO 字段对齐，后端是驼峰序列化）：
 
 ```ts
 /** 示例机构隔离文档(对齐后端 SampleDoc)。 */
@@ -54,13 +54,13 @@ export const sampleDocApi = {
 
 `unwrap` 已经处理了两种失败形状（带 `code` 的业务信封、不带 `code` 的 `ProblemDetails`），视图层直接 `catch` 后丢给 `translateError` 就行，不用在这里重复判断。信封解包与两种错误形状的细节见[请求与错误处理](/zh/frontend/request)。
 
-`sample/doc` 的 `List` 接口不分页，直接返回数组，所以这里不用 `toPage` 那套分页归一（`{page,pageSize}` → 后端 `{Current,Size}`、`PagedList<T>` → `{items,total}`）。那套是给 `PagedList<T>` 端点用的：`pageParams` 和 `toPage` 正是为此从 `api/index.ts` 导出的，连同 `unwrap` 一起 import 即可;写法参考 `api/index.ts` 里的 `userApi.page` / `dictAdminApi.typePage`，照着抄进你自己的模块。
+`sample/doc` 的 `List` 接口不分页，直接返回数组，所以这里不用 `toPage` 那套分页归一（`{page,pageSize}` → 后端 `{Current,Size}`、`PagedList<T>` → `{items,total}`）。那套是给 `PagedList<T>` 端点用的：`pageParams` 和 `toPage` 正是为此从 `api/index.ts` 导出的，连同 `unwrap` 一起 import 即可；写法参考 `api/index.ts` 里的 `userApi.page` / `dictAdminApi.typePage`，照着抄进你自己的模块。
 
 ## 写列表页
 
 先看 `web/COMPONENTS.md`。它是前端共享组件的索引，写页面前必读：页面用到的 `FormContainer`（弹窗/抽屉二合一表单容器）、`useConfirm`（二次确认 + 结果 toast）在这里都有约定和范例页指路。
 
-`sample/doc` 是不分页的平铺列表，不需要 `ProTable`，用裸 `NDataTable` 就够。照 `web/src/views/system/dict/index.vue` 右侧字典项面板的写法来（那也是一张裸 `n-data-table` + 增删改）。新建 `web/src/views/sample/doc/index.vue`:
+`sample/doc` 是不分页的平铺列表，不需要 `ProTable`，用裸 `NDataTable` 就够。照 `web/src/views/system/dict/index.vue` 右侧字典项面板的写法来（那也是一张裸 `n-data-table` + 增删改）。新建 `web/src/views/sample/doc/index.vue`：
 
 ```vue
 <script setup lang="ts">
@@ -181,9 +181,9 @@ async function save() {
 
 几处约定，都来自 `web/COMPONENTS.md`，不是这里现造的：
 
-- **`FormContainer` 用 `onConfirm` 协议接管 loading/关闭**：`save()` 里把 `validate()` 放第一行，校验失败 reject 挡住关闭;接口失败 `return false`（或抛出）弹窗也不关，方便用户改后重试。业务代码不用自己管 `saving` 和底栏。
-- **`useConfirm().run` 配 `n-popconfirm`**:popconfirm 当触发器，确认后的动作与成/败 toast 交给 `run`,`run` 回一个 `ok` 布尔，真删掉了再 `load()`。
-- **按钮级权限，双重收口在同一份权限码上**：模板里的按钮用 `v-auth` 指令（值就是路由权限码 `POST:/api/v1/sample/doc`，不命中直接把 DOM 节点移除）;操作列里的编辑/删除按钮走的是 `h()` 渲染函数，指令用不了，改用 `authStore.hasPerm(...)` 判断要不要渲染。两条路判定规则同一套：超管全放行，权限码没拉到时藏按钮，普通用户按码精确匹配。**这只是界面降噪，服务端始终是权威**。真正的拦截在后端 `[RolePermission]`，越权请求照样 403。规则细节见[前端权限模型](/zh/frontend/permission)。
+- **`FormContainer` 用 `onConfirm` 协议接管 loading/关闭**：`save()` 里把 `validate()` 放第一行，校验失败 reject 挡住关闭；接口失败 `return false`（或抛出）弹窗也不关，方便用户改后重试。业务代码不用自己管 `saving` 和底栏。
+- **`useConfirm().run` 配 `n-popconfirm`**:popconfirm 当触发器，确认后的动作与成/败 toast 交给 `run`，`run` 回一个 `ok` 布尔，真删掉了再 `load()`。
+- **按钮级权限，双重收口在同一份权限码上**：模板里的按钮用 `v-auth` 指令（值就是路由权限码 `POST:/api/v1/sample/doc`，不命中直接把 DOM 节点移除）；操作列里的编辑/删除按钮走的是 `h()` 渲染函数，指令用不了，改用 `authStore.hasPerm(...)` 判断要不要渲染。两条路判定规则同一套：超管全放行，权限码没拉到时藏按钮，普通用户按码精确匹配。**这只是界面降噪，服务端始终是权威**。真正的拦截在后端 `[RolePermission]`，越权请求照样 403。规则细节见[前端权限模型](/zh/frontend/permission)。
 - **错误处理留在视图层**：`catch (e) { message.error(translateError(e)) }`，不在 API 层弹 UI。`translateError` 按错误的 `code`/`msgKey` 到 locale 里取字。
 
 ## 挂进菜单，页面才可见
@@ -233,7 +233,7 @@ export default {
 export default { doc: { titleDuplicated: '文档标题重复' } }
 ```
 
-ext 是**深合并**，你的键是并进内置 `error` 命名空间而不是把它顶掉;想改写某一条内置文案（`{ auth: { passwordWrong: '...' } }`）也不会连坐同子树的兄弟键。错误码没标 `[MsgKey]` 时后端发的是 `error.code.<数字>`;locale 里缺这条则退回后端自己的 `message`，再退回 `error._fallback`。列标题写成 `title: () => t('...')` 的函数形式，切语言才即时生效。
+ext 是**深合并**，你的键是并进内置 `error` 命名空间而不是把它顶掉；想改写某一条内置文案（`{ auth: { passwordWrong: '...' } }`）也不会连坐同子树的兄弟键。错误码没标 `[MsgKey]` 时后端发的是 `error.code.<数字>`;locale 里缺这条则退回后端自己的 `message`，再退回 `error._fallback`。列标题写成 `title: () => t('...')` 的函数形式，切语言才即时生效。
 
 ## 提交前
 

@@ -109,7 +109,7 @@ server: {
 
 | 脚本 | 作用 |
 |---|---|
-| `dev.bat` | 开两个窗口：后端（`dotnet run --project samples/MinimalHost`,`:5100`）和前端（`npm install && npm run dev`,`:5173`） |
+| `dev.bat` | 开两个窗口：后端（`dotnet run --project samples/MinimalHost`，`:5100`）和前端（`npm install && npm run dev`，`:5173`） |
 | `stop.bat` | 结束占用 `5100`、`5173` 端口的进程 |
 
 这套结构跑通之后，往下一页是[路由](/zh/frontend/routing)：后端菜单树怎么拼成路由表。再往后是[请求流程](/zh/frontend/request)，一次接口请求怎么走过类型化客户端。

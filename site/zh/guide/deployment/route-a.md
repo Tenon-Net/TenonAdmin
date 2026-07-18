@@ -15,14 +15,14 @@ app.MapFallbackToFile("index.html"); // 前端 history 路由回退:未匹配到
 app.Run();
 ```
 
-3. **必须同时把上传目录挪出 `wwwroot`**:
+3. **必须同时把上传目录挪出 `wwwroot`**：
 
 ```json
 { "TenonAdmin": { "Upload": { "RootPath": "./storage/upload" } } }
 ```
 
 ::: danger 不挪就是一个鉴权绕过
-上传根目录默认是 `./wwwroot/upload`，而上传的文件平时是通过**要鉴权**的 `GET /api/v1/sys/file/{id}/download` 取的。一旦开了 `UseStaticFiles()`,`wwwroot/upload/**` 会被静态中间件**匿名**直出。也就是说，任何人猜到或拿到路径就能下载，鉴权形同虚设。
+上传根目录默认是 `./wwwroot/upload`，而上传的文件平时是通过**要鉴权**的 `GET /api/v1/sys/file/{id}/download` 取的。一旦开了 `UseStaticFiles()`，`wwwroot/upload/**` 会被静态中间件**匿名**直出。也就是说，任何人猜到或拿到路径就能下载，鉴权形同虚设。
 
 如果你原本是为了"让图片能显示"才想托管这个目录：不需要。内核有签名直链 `GET /api/v1/sys/file/{id}/view?sig=…`，上传接口在 `viewUrl` 字段里直接给你。它匿名可取，签名却不可伪造。于是 `<img src>` 能用，整个上传目录仍然锁着。
 :::

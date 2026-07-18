@@ -51,7 +51,7 @@ export const staticRoutes: RouteRecordRaw[] = [
 
 ## 动态路由：菜单树→真实路由
 
-`layout` 下除了那四个静态个人页和 404 兜底，其余全部来自 `useAuthMenu.ts` 的 `buildRoutesForModule`:
+`layout` 下除了那四个静态个人页和 404 兜底，其余全部来自 `useAuthMenu.ts` 的 `buildRoutesForModule`：
 
 ```ts
 const views = import.meta.glob('/src/views/**/*.vue') as Record<string, () => Promise<Component>>
@@ -117,7 +117,7 @@ export function namedPage(name: string, loader: AsyncComponentLoader) {
 
 不管静态还是动态路由，每个页面组件都经过 `namedPage` 包一层，给它一个显式的 `name`，恰好等于路由名。这样 `:include="tabs.cachedNames"`（其实是一串 `TabItem.name`，也就是路由名）才真能匹配上它。这层包装按 `name` 缓存在一个 `Map` 里，只有底层的 **loader 引用**变了才会重建：`import.meta.glob` 给每个文件返回的是同一个稳定函数，所以改一个不相关的菜单、触发一次完整的 `buildRoutesForModule` 重建，那些 `component` 路径没变的路由照样复用同一个组件对象。也就是说，`keep-alive` 的缓存条目原封不动，不会被逼着重新挂载。它还把懒加载组件包进单独一层 `<div class="page-view">` 根节点，因为 `default.vue` 的 `<transition mode="out-in">` 要求子节点是单一元素根，而不少页面模板本身是「主体 + 若干并排弹窗」的多根结构。
 
-`stores/tabs.ts` 在这基础上补了一道保险：它的 `cachedNames` getter 会把标签列表过滤到 `router.hasRoute(n)` 为真的那些，这样在菜单重建之后、某个旧标签对应的路由还没被重新注册的那一小段窗口期里，不会让 `keep-alive` 去匹配一个还不存在的名字。`refreshTab(name)` 通过设置 `excludeName` 并递增 `reloadKey` 强制来一次真实的重挂载（绕开缓存）,`default.vue` 监听 `reloadKey` 短暂地 `v-if` 卸载再恢复路由出口来实现这一点。
+`stores/tabs.ts` 在这基础上补了一道保险：它的 `cachedNames` getter 会把标签列表过滤到 `router.hasRoute(n)` 为真的那些，这样在菜单重建之后、某个旧标签对应的路由还没被重新注册的那一小段窗口期里，不会让 `keep-alive` 去匹配一个还不存在的名字。`refreshTab(name)` 通过设置 `excludeName` 并递增 `reloadKey` 强制来一次真实的重挂载（绕开缓存），`default.vue` 监听 `reloadKey` 短暂地 `v-if` 卸载再恢复路由出口来实现这一点。
 
 ::: tip 这两样东西不在这里
 路由链路里没有进度条（不用 NProgress 或类似的库）。文档标题也不是守卫设置的。它只在 `App.vue` 挂载时设一次，标题变化时由站点配置页再设一次，不会随每次导航联动。

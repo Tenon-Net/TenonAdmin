@@ -139,10 +139,32 @@ const RULES = [
     zhOnly: true,
     // 只判「汉字后面紧跟」这一个方向。逗号冒号要判两侧，是因为它们也做分隔符；
     // 问号叹号只收句，句子收在汉字上就该用全角。剥掉代码与链接目标后，`站点?q=1` 这类不会来。
-    // 不含分号：半角 ; 全站 137 处、27 页，而规范「分号焊接」那条要求的是【拆句】而不是换标点，
-    // 一条把它们就地全角化的硬拦，会把本该拆开的句子焊得更死。那批单独决定。
     re: /[一-鿿][?!]/g,
     msg: '半角问号/叹号收在中文句尾，应为全角 ？！',
+  },
+  {
+    id: 'halfwidth-semicolon',
+    zhOnly: true,
+    // 实测这 136 处几乎全是并列/对照分句对（「配了 X 用配置值;没配则随机生成」），
+    // 分号用得对，只是字宽错了。别把它跟[八、手感项]的「分号焊接」混成一件事：
+    // 那条问的是【这句该不该拆】，由人逐页判；换字宽不会让将来拆句变难，
+    // 留着却实打实是混血——同一个分句里全角逗号紧挨半角分号。
+    re: new RegExp(`[${CJK}];|;[${CJK}]`, 'g'),
+    msg: '半角分号紧贴中文，应为全角 ；',
+  },
+  {
+    id: 'halfwidth-between-code',
+    zhOnly: true,
+    zhLine: true,
+    // 上面三条逐字符判「紧贴汉字」，够不着这一类：半角标点两侧是行内代码或全角标点，
+    // 可整句是中文。全站最重复的形状是 `（见 X.cs）:` 这种引出代码块的行尾冒号。
+    //
+    // 这条和当初【否掉】的括号扩判据不是一回事，区别是实测准确率：
+    // 那次把全角标点算进语境，会连带拦下纯代码的表格单元格，4 真 5 误；
+    // 这条要求两侧【都】是全角标点或被剥掉的代码，实测 77 真 0 误。
+    // 加规则前先量准确率，别凭「看着像违规」。
+    re: /(?:^|[，。：；（）？！、「」\s])[,;:](?=$|[，。：；（）？！、「」\s])/g,
+    msg: '中文语境里的半角标点，应为全角（并列的代码标识符之间用 、，不是 ，）',
   },
   {
     id: 'mixed-paren',
@@ -206,6 +228,19 @@ if (process.argv[2] === '--selftest') {
   eq(has(R('halfwidth-sentence-end'), '构建期给出 `VITE_API_BASE=x?y` 即可'), false, '行内代码里的问号 → 放过')
   eq(has(R('halfwidth-sentence-end'), '详见 [说明](https://x.dev/a?b=1) 一节'), false, '链接目标里的问号 → 放过')
   eq(has(R('halfwidth-sentence-end'), 'Which route? See below.'), false, '西文句尾 → 放过')
+  eq(has(R('halfwidth-semicolon'), '配了用配置值;没配则随机生成'), true, '半角分号紧贴中文 → 拦')
+  eq(has(R('halfwidth-semicolon'), '配了用配置值；没配则随机生成'), false, '全角分号 → 放过')
+  eq(has(R('halfwidth-semicolon'), '标签 `admin;rbac;sqlsugar` 用分号分隔'), false, '行内代码里的分号 → 放过')
+  eq(has(R('halfwidth-semicolon'), 'Server=127.0.0.1;Port=3306; 是连接串'), false, '连接串在西文语境 → 放过')
+
+  // 两侧是代码或全角标点、整行却是中文（halfwidth-between-code）
+  eq(has(R('halfwidth-between-code'), '装配次序（见 `TenonAdminSetup.cs`）:'), true, '全角括号后的行尾半角冒号 → 拦')
+  eq(has(R('halfwidth-between-code'), '装配次序（见 `TenonAdminSetup.cs`）：'), false, '同上但用全角 → 放过')
+  eq(has(R('halfwidth-between-code'), '存库为 `int`:'), true, '行内代码后的行尾半角冒号 → 拦')
+  eq(has(R('halfwidth-between-code'), '抛 `A`,`args` 携带要求'), true, '两个行内代码之间的半角逗号 → 拦')
+  eq(has(R('halfwidth-between-code'), '连接串写成 `Server=x;Port=3306` 即可'), false, '半角全在行内代码里 → 放过')
+  eq(has(R('halfwidth-between-code'), '比例是 1:2，不是 1:3'), false, '数字之间的冒号 → 放过')
+  eq(has(R('halfwidth-between-code'), '默认 `false`, 见下表'), true, '代码后半角逗号接空格 → 拦')
 
   // 强调标记不得成为半角标点的藏身处（shiftEmphasis）
   eq(has(R('halfwidth-paren'), '**验证参数**(`TenonAdminSetup.cs`)'), true, '粗体中文 + 半角括号 → 拦')
@@ -255,6 +290,9 @@ for (const file of files.sort()) {
     const target = rule.keepInlineCode ? fenced : clean
     for (const line of target.split('\n').entries()) {
       const [i, text] = line
+      // zhLine：判据要靠「这一行是不是中文」，而不是「这个字符旁边是不是汉字」。
+      // 剥掉行内代码后，`（见 X.cs）:` 的冒号两侧只剩全角括号和空白，逐字符的判据够不着它。
+      if (rule.zhLine && !/[一-鿿]/.test(text)) continue
       rule.re.lastIndex = 0
       let m
       while ((m = rule.re.exec(text)) !== null) {

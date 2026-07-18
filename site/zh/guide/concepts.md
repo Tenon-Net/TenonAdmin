@@ -37,15 +37,15 @@ TenonAdmin             元包:只引用 AspNetCore,消费方装它一个即可�
 一个已认证请求依次流经：
 
 1. **认证**：Microsoft JWT Bearer，框架 401 被重塑成标准信封（code 40006）。
-2. **`[RolePermission]`**：权限码就是规范化路由（`{METHOD}:/{route}`）,**代码里没有权限字符串**，授权靠在角色菜单 UI 里勾路由。超管（`sadm`）直接放行，同时校验会话是否仍有效（强制下线立即生效）。
+2. **`[RolePermission]`**：权限码就是规范化路由（`{METHOD}:/{route}`），**代码里没有权限字符串**，授权靠在角色菜单 UI 里勾路由。超管（`sadm`）直接放行，同时校验会话是否仍有效（强制下线立即生效）。
 3. **数据范围**：授权阶段解析出当前用户的有效机构数据范围，注入 `IDataScopeContext`。
-4. **结果信封**：控制器可直接 `return dto`，过滤器统一包成 `Result<T>`;业务错误抛 `AdminException` / 返回 `ErrorCode`，转成信封。**错误是数字 `ErrorCode`，从不下发本地化文案**，i18n 由前端按码翻译。
+4. **结果信封**：控制器可直接 `return dto`，过滤器统一包成 `Result<T>`；业务错误抛 `AdminException` / 返回 `ErrorCode`，转成信封。**错误是数字 `ErrorCode`，从不下发本地化文案**，i18n 由前端按码翻译。
 
 ## 数据层约定
 
 - 一个 `SqlSugarScope` 单例。全局查询过滤器自动做**软删除**（`ISoftDelete`）和**数据范围**（`IOrgScoped` / `DataEntity` 按当前请求解析的机构集过滤）。
 - AOP 在插入/更新时自动填审计字段：雪花 `Id`、`CreateTime`、`CreateUserId`、`CreateOrgId`（数据范围锚点）、`UpdateTime`、`UpdateUserId`。业务代码只管业务字段。
-- 雪花 `WorkerId` 来自 `TenonAdmin:Id:WorkerId`（默认 0）,**水平扩展时每实例必须不同**，否则同毫秒发号会撞主键。
+- 雪花 `WorkerId` 来自 `TenonAdmin:Id:WorkerId`（默认 0），**水平扩展时每实例必须不同**，否则同毫秒发号会撞主键。
 
 ---
 

@@ -4,7 +4,7 @@
 
 ## `unwrap` 与 `ApiError`
 
-每个生成出来的 API 函数最后都落在 `.then(r => unwrap<T>(r))` 上。`unwrap` 是唯一容忍后端两种响应形状的地方，把两种情况都收拢成一个 `T` 或者一个抛出的 `ApiError`:
+每个生成出来的 API 函数最后都落在 `.then(r => unwrap<T>(r))` 上。`unwrap` 是唯一容忍后端两种响应形状的地方，把两种情况都收拢成一个 `T` 或者一个抛出的 `ApiError`：
 
 ```ts
 export function unwrap<T>(res: { data?: unknown; error?: unknown; response: Response }): T {
@@ -119,7 +119,7 @@ export function translateError(err: unknown): string {
 错误键本身怎么加、命名空间怎么组织，和普通文案键没区别，那是 [国际化](/zh/frontend/i18n) 的事。
 
 ::: warning 加错误码是一次改动的两半
-后端新加一个错误码 `[MsgKey("error.file.duplicateHash")] FileDuplicateHash = 44007`，但没人在 `zh-CN.ts` / `en-US.ts` 补上 `error.file.duplicateHash`。会发生什么：`i18n.global.te(...)` 返回 `false`,`translateError` 退到 `err.message`（后端那段非本地化的调试文案），连它也是空就再退到 `error._fallback`。不崩溃，但用户看到的是一句通用或语气不对的提示，而不是本该显示的那句。**加一个后端 `ErrorCode` 和加对应的前端 `error.xxx.yyy` 键，是同一次改动的两半**。只做前一半的 PR 不完整。
+后端新加一个错误码 `[MsgKey("error.file.duplicateHash")] FileDuplicateHash = 44007`，但没人在 `zh-CN.ts` / `en-US.ts` 补上 `error.file.duplicateHash`。会发生什么：`i18n.global.te(...)` 返回 `false`，`translateError` 退到 `err.message`（后端那段非本地化的调试文案），连它也是空就再退到 `error._fallback`。不崩溃，但用户看到的是一句通用或语气不对的提示，而不是本该显示的那句。**加一个后端 `ErrorCode` 和加对应的前端 `error.xxx.yyy` 键，是同一次改动的两半**。只做前一半的 PR 不完整。
 :::
 
 ## 重新生成契约

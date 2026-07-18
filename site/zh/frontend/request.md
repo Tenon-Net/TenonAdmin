@@ -28,7 +28,7 @@ views                       catch ApiError,经 translateError(err) 展示
 npm run gen:api   # openapi-typescript http://localhost:5100/openapi/v1.json -o src/api/schema.d.ts
 ```
 
-- 后端必须先跑起来，因为脚本要向一个真实运行中的服务器拉 `/openapi/v1.json`（默认 `http://localhost:5100`;后端跑在别处时看 `web/vite.config.ts` 的 `TENON_API_TARGET` 对应的 dev 代理目标）。
+- 后端必须先跑起来，因为脚本要向一个真实运行中的服务器拉 `/openapi/v1.json`（默认 `http://localhost:5100`；后端跑在别处时看 `web/vite.config.ts` 的 `TENON_API_TARGET` 对应的 dev 代理目标）。
 - `src/api/schema.d.ts` 是**生成产物**，禁止手改。改后端的接口/DTO 重新生成即可，手改的内容下次生成会被无声覆盖。
 - `src/api/client.ts` 的 `createClient<paths>()` 就是拿这份文件当类型源，所以每一次 `client.GET/POST/PUT/DELETE` 调用从路径参数、查询参数、请求体到响应形状，全链路都是后端真实契约推出来的类型。
 
@@ -41,9 +41,9 @@ export const client = createClient<paths>({ baseUrl })
 const bare = createClient<paths>({ baseUrl })
 ```
 
-`baseUrl` 默认为空，因为 schema 的 path 键本身已经带 `/api/v1`,`/api` 走同源（dev 下由 Vite 代理到后端，生产下由反代或后端自托管）。只有前端和 API 真的跨域时才需要设 `VITE_API_BASE`。
+`baseUrl` 默认为空，因为 schema 的 path 键本身已经带 `/api/v1`，`/api` 走同源（dev 下由 Vite 代理到后端，生产下由反代或后端自托管）。只有前端和 API 真的跨域时才需要设 `VITE_API_BASE`。
 
-两个中间件挂在 `client` 上（不挂在 `bare` 上，原因见下文）:
+两个中间件挂在 `client` 上（不挂在 `bare` 上，原因见下文）：
 
 ### 认证中间件
 
@@ -94,11 +94,11 @@ const refreshMiddleware: Middleware = {
 }
 ```
 
-`Request.clone()` 会把底层的 body 流一分为二，各自独立可读。原始请求照常发出去，没被动过的克隆存进一个以原始 `Request` 实例为键的 `WeakMap`（openapi-fetch 会把这同一个实例一路带到 `onResponse`;请求结束后这个 `WeakMap` 条目自动被回收，不用手动清理）。
+`Request.clone()` 会把底层的 body 流一分为二，各自独立可读。原始请求照常发出去，没被动过的克隆存进一个以原始 `Request` 实例为键的 `WeakMap`（openapi-fetch 会把这同一个实例一路带到 `onResponse`；请求结束后这个 `WeakMap` 条目自动被回收，不用手动清理）。
 
 遇到 401，依次发生：
 
-1. **跳过刷新/登录接口自身**：`/auth/refresh` 或 `/auth/login` 返回的 401 是真实的凭证失败，不是令牌过期;把它也塞进刷新流程会死循环。
+1. **跳过刷新/登录接口自身**：`/auth/refresh` 或 `/auth/login` 返回的 401 是真实的凭证失败，不是令牌过期；把它也塞进刷新流程会死循环。
 2. **`refreshOnce()`**：并发合流。如果同一时刻有好几个请求同时 401，只发一次 `/auth/refresh`，大家都等同一个 promise:
    ```ts
    let refreshing: Promise<boolean> | null = null
@@ -126,7 +126,7 @@ async function doRefresh(): Promise<boolean> {
 }
 ```
 
-`bare` 是用同一份 schema 建的第二个 `openapi-fetch` 客户端，但**不挂任何中间件**。刷新请求走 `bare`，意味着一次失败的刷新（比如 refreshToken 本身也过期了，接口照样答 401）根本不会再进 `refreshMiddleware.onResponse`，因为 `bare` 上没有中间件链可供递归。`onResponse` 里那道跳过 `/auth/refresh`/`/auth/login` 的 URL 判断是第二道保险，顺带也覆盖了经 `client` 调用登录失败的情况;刷新请求自身的防递归，根本上是靠它压根不在 `client` 的中间件链上。
+`bare` 是用同一份 schema 建的第二个 `openapi-fetch` 客户端，但**不挂任何中间件**。刷新请求走 `bare`，意味着一次失败的刷新（比如 refreshToken 本身也过期了，接口照样答 401）根本不会再进 `refreshMiddleware.onResponse`，因为 `bare` 上没有中间件链可供递归。`onResponse` 里那道跳过 `/auth/refresh`/`/auth/login` 的 URL 判断是第二道保险，顺带也覆盖了经 `client` 调用登录失败的情况；刷新请求自身的防递归，根本上是靠它压根不在 `client` 的中间件链上。
 
 ## 开发代理与 CORS
 
@@ -146,12 +146,12 @@ server: {
 },
 ```
 
-它把 `:5173` 上的 `/api/*`、`/openapi/*` 请求转发给后端，浏览器自始至终只看到一个源（`:5173`），自然不存在跨域问题。目标地址默认是 `http://localhost:5100`;后端跑在别处时，启动 Vite 前设置 `TENON_API_TARGET` 即可。
+它把 `:5173` 上的 `/api/*`、`/openapi/*` 请求转发给后端，浏览器自始至终只看到一个源（`:5173`），自然不存在跨域问题。目标地址默认是 `http://localhost:5100`；后端跑在别处时，启动 Vite 前设置 `TENON_API_TARGET` 即可。
 
 没有这层代理，类型化客户端的请求和 `gen:api` 的 schema 拉取都会直接打到后端的源上。而后端 CORS 默认 deny-all，浏览器（或者 `gen:api` 的 fetch）会在响应传到 `unwrap` 或 `openapi-typescript` 之前就把它拒了。是这层代理让请求层"同源"这个前提在本地成立。
 
 ::: tip 生产环境没有这层代理
-`npm run dev` 的代理只在开发期存在。生产构建出的 `web/dist` 是纯静态文件，请求怎么到后端要在部署时自己解决：后端顺带托管前端产物、或 nginx/Caddy 反代，都是同源，不用配 CORS;只有前端和后端真跨源（前端上 CDN、后端独立域名）才需要动 `TenonAdmin:Api:Cors:AllowedOrigins`，方案见[部署路线 C：真跨源](/zh/guide/deployment/route-c)。
+`npm run dev` 的代理只在开发期存在。生产构建出的 `web/dist` 是纯静态文件，请求怎么到后端要在部署时自己解决：后端顺带托管前端产物、或 nginx/Caddy 反代，都是同源，不用配 CORS；只有前端和后端真跨源（前端上 CDN、后端独立域名）才需要动 `TenonAdmin:Api:Cors:AllowedOrigins`，方案见[部署路线 C：真跨源](/zh/guide/deployment/route-c)。
 :::
 
 完整代理配置与联调别名见[项目结构与启动](/zh/frontend/structure)。

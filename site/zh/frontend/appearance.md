@@ -28,7 +28,7 @@ TenonAdmin 的外观由 CSS 自定义属性驱动，不是组件 props。`web/sr
 
 手写 CSS 直接读 tokens，但 Naive UI 组件不认 CSS 变量。它要一个 JS 对象（`GlobalThemeOverrides`）。`buildThemeOverrides()`（`web/src/theme/naive-theme.ts`）用 `getComputedStyle` 把同一批 CSS 变量读出来，映到 Naive 的 `common.*`（`primaryColor`←`--color-primary`、`bodyColor`←`--color-bg-body`、`borderRadius`←`--radius-md`，依此类推）。两边读的是同一份值，所以手写样式和 Naive 组件永远不会各显各的色。
 
-主色是唯一不直接读、而是算出来的一档。6 个候选主色不可能每个都在 `tokens.css` 里预写 hover/pressed/light 四态，所以只存一个 `accent`，其余态由 `mix(a, b, t)`（`web/src/theme/mix.ts`，两色按 `t∈[0,1]` 线性插值）派生：亮色 `hover = mix(primary, #FFF, .16)`、`pressed = mix(primary, #000, .18)`;暗色先把 accent 往白里提亮一档（`mix(accent, #FFF, .18)`）再派生，免得靛蓝压在深底上发闷。
+主色是唯一不直接读、而是算出来的一档。6 个候选主色不可能每个都在 `tokens.css` 里预写 hover/pressed/light 四态，所以只存一个 `accent`，其余态由 `mix(a, b, t)`（`web/src/theme/mix.ts`，两色按 `t∈[0,1]` 线性插值）派生：亮色 `hover = mix(primary, #FFF, .16)`、`pressed = mix(primary, #000, .18)`；暗色先把 accent 往白里提亮一档（`mix(accent, #FFF, .18)`）再派生，免得靛蓝压在深底上发闷。
 
 落地在 `useTheme()`(`web/src/composables/useTheme.ts`)：它盯着 `app.isDark` / `accent` / `density`，一变就往 `<html>` 打 `data-theme` / `data-density`，把派生出的 `--color-primary*` 写进 `document.documentElement`（让消费 token 的手写 CSS 立即换色），再重建 Naive 的 `themeOverrides`。`App.vue` 把结果接到 `<n-config-provider :theme-overrides>`，包住整个应用。
 

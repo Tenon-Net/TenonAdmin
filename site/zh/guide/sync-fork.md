@@ -7,19 +7,19 @@
 ::: tip 先确认你属于哪种消费模式
 - **纯后端消费方**（在自己独立的仓库里 `dotnet add package TenonAdmin` 或 `dotnet new tenon-app`）→ 用不上本页任何内容。更新靠升级 NuGet 包版本号，升级前看一眼 [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md) 有没有破坏性变更。
 - **fork 了仓库、在 `web/` 上做二次开发**（最常见的情况）→ 下面这套流程就是给你写的。
-- **一次性快照消费方**（`npx degit Tenon-Net/TenonAdmin/web` 拉一份拷贝、完全自己维护，像 soybean / vite 脚手架那样）→ 你主动放弃了升级通道，本页的合并流程用不上;上游修复要自己读 diff 手动搬，前端也会与走 NuGet 升级的后端契约漂移。想持续吃上游修复就别走这条，回到上一条 fork 模式。
+- **一次性快照消费方**（`npx degit Tenon-Net/TenonAdmin/web` 拉一份拷贝、完全自己维护，像 soybean / vite 脚手架那样）→ 你主动放弃了升级通道，本页的合并流程用不上；上游修复要自己读 diff 手动搬，前端也会与走 NuGet 升级的后端契约漂移。想持续吃上游修复就别走这条，回到上一条 fork 模式。
 :::
 
 ## 1. Fork 并克隆
 
-在 GitHub 上 fork [`Tenon-Net/TenonAdmin`](https://github.com/Tenon-Net/TenonAdmin)，然后克隆**你自己的 fork**:
+在 GitHub 上 fork [`Tenon-Net/TenonAdmin`](https://github.com/Tenon-Net/TenonAdmin)，然后克隆**你自己的 fork**：
 
 ```bash
 git clone https://github.com/<你的用户名>/TenonAdmin.git
 cd TenonAdmin
 ```
 
-把原仓库加成第二个远程，按惯例叫 `upstream`:
+把原仓库加成第二个远程，按惯例叫 `upstream`：
 
 ```bash
 git remote add upstream https://github.com/Tenon-Net/TenonAdmin.git
@@ -43,14 +43,14 @@ git checkout -b my-product main
 
 ## 3. 拉取上游更新
 
-隔一段时间（比如开始新一轮开发前，或看到 [CHANGELOG](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md) 里出了新 tag 时）:
+隔一段时间（比如开始新一轮开发前，或看到 [CHANGELOG](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md) 里出了新 tag 时）：
 
 ```bash
 git fetch upstream
 git merge upstream/main        # 或者用 rebase: git rebase upstream/main
 ```
 
-两种都行：如果这条分支上的成果已经在别处发布过，merge 更省心;如果还没有，rebase 能保持历史线性。解决完冲突照常推到自己的 fork。
+两种都行：如果这条分支上的成果已经在别处发布过，merge 更省心；如果还没有，rebase 能保持历史线性。解决完冲突照常推到自己的 fork。
 
 只想拉某个具体版本、而不是"main 上最新的一切":
 

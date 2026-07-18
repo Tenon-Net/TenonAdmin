@@ -4,7 +4,7 @@
 
 ## 五种数据范围
 
-数据范围类型定义在 `Core/Security/DataScopeType.cs`，是角色可见数据的机构维度，存库为 `int`:
+数据范围类型定义在 `Core/Security/DataScopeType.cs`，是角色可见数据的机构维度，存库为 `int`：
 
 | 值 | 类型 | 含义 |
 | --- | --- | --- |
@@ -16,8 +16,8 @@
 
 范围挂在**角色**上（`sys_role_data_scope`），一个用户可有多个角色。合并规则是**取最宽**：
 
-- 任一角色为 `All` → 整体不受限，看全部;
-- 否则并集各角色的机构集合（本机构 = 主属机构;本机构及以下 = 主属机构 + 子孙;自定义 = 指定集合）;
+- 任一角色为 `All` → 整体不受限，看全部；
+- 否则并集各角色的机构集合（本机构 = 主属机构；本机构及以下 = 主属机构 + 子孙；自定义 = 指定集合）；
 - 任一角色为 `Self` → 附加「仅本人」维度，与机构集合取并集（也能看自己创建的）。
 
 ## 解析：多角色合并成一个结果
@@ -75,7 +75,7 @@ public abstract class DataEntity : BaseEntity, IOrgScoped
 
 不需要机构隔离的表（全局字典、机构树自身）继续用 `BaseEntity`，不带这个字段、不被数据范围过滤。
 
-`CreateOrgId` **不由业务代码赋值**，由审计 AOP 在插入时从当前用户的 `org` claim 自动填充（`SqlSugarSetup.cs`）:
+`CreateOrgId` **不由业务代码赋值**，由审计 AOP 在插入时从当前用户的 `org` claim 自动填充（`SqlSugarSetup.cs`）：
 
 ```csharp
 // CreateOrgId 未指定 → 填当前用户归属机构(数据范围锚点)
@@ -100,7 +100,7 @@ client.QueryFilter.AddTableFilter<IOrgScoped>(e =>
     || (scope.Current.IncludeSelf == true && e.CreateUserId == scope.Current.UserId));
 ```
 
-三个分支对应三种可见性：不受限则整体恒真（不过滤）;否则 `CreateOrgId ∈ 机构集`，或（启用「仅本人」时）`CreateUserId == 当前用户`。
+三个分支对应三种可见性：不受限则整体恒真（不过滤）；否则 `CreateOrgId ∈ 机构集`，或（启用「仅本人」时）`CreateUserId == 当前用户`。
 
 ::: details 两个实现细节
 **按接口匹配，不按基类**：SqlSugar 的 `AddTableFilter<T>` 匹配接口或精确类型，不匹配基类，所以锚点字段经 `IOrgScoped` 接口暴露。软删过滤器 `AddTableFilter<ISoftDelete>` 同理。
@@ -133,12 +133,12 @@ var orders = await orderRepo.AsQueryable()
 - **`HttpContextDataScopeContext`**（AspNetCore 层，HTTP 路径）：用 `HttpContext.Items` 存当前请求的范围。
 - **`DataScopeContext`**（SqlSugar 层，非 HTTP 回退）：基于 `AsyncLocal`，供后台/自检等无 HTTP 的场景使用。
 
-HTTP 路径**刻意不用 `AsyncLocal`**，原因写在 `HttpContextDataScopeContext.cs`:
+HTTP 路径**刻意不用 `AsyncLocal`**，原因写在 `HttpContextDataScopeContext.cs`：
 
 > 授权过滤器是 MVC 管道的被调用方，其内部 `await` 之后设置的 `AsyncLocal` 不会回流到管道上游（经典陷阱），动作里的查询将读不到。`HttpContext.Items` 挂在请求对象上、全管道稳定可见，无此问题。
 
-也就是说，范围是在**授权过滤器**里写入的，而查询发生在**更上层的动作**里。`AsyncLocal` 的值只会随执行流向下流，写在下游的过滤器里、上游的动作读不到;而 `HttpContext.Items` 挂在请求对象上，整条管道都能稳定读到同一份。这正是必须选 `Items` 而非 `AsyncLocal` 的原因。
+也就是说，范围是在**授权过滤器**里写入的，而查询发生在**更上层的动作**里。`AsyncLocal` 的值只会随执行流向下流，写在下游的过滤器里、上游的动作读不到；而 `HttpContext.Items` 挂在请求对象上，整条管道都能稳定读到同一份。这正是必须选 `Items` 而非 `AsyncLocal` 的原因。
 
 ## 扩展点
 
-`IDataScopeProvider` 是替换点。默认实现聚合 `sys_role_data_scope`;典型替换是换一个隔离维度（如按租户）。`ResolveAsync` 与内部的 `ComputeAsync` 都是 `virtual`，可只覆写其中一步。按内核的可替换性约定，消费方在 `AddTenonAdmin()` 之前注册自己的 `IDataScopeProvider` 即接管，不必 fork。
+`IDataScopeProvider` 是替换点。默认实现聚合 `sys_role_data_scope`；典型替换是换一个隔离维度（如按租户）。`ResolveAsync` 与内部的 `ComputeAsync` 都是 `virtual`，可只覆写其中一步。按内核的可替换性约定，消费方在 `AddTenonAdmin()` 之前注册自己的 `IDataScopeProvider` 即接管，不必 fork。

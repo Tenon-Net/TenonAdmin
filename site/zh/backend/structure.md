@@ -30,18 +30,18 @@
 `Directory.Packages.props` 开启了 `ManagePackageVersionsCentrally=true`。各 `.csproj` 因此只写包名（`<PackageReference Include="..." />`），版本号统一在这一份文件里锁定。其中几处版本号的注释直接写明了 CVE 缘由，而不只是跟随上游：
 
 - `SQLitePCLRaw.bundle_e_sqlite3` 显式抬到 `3.0.3`:Microsoft.Data.Sqlite 传递依赖的 2.1.10/2.1.11 命中 SQLite 的一个 CVE(NU1903 GHSA-2m69-gcr7-jv3q),3.0.x 起已修补。
-- `Microsoft.OpenApi` 显式抬到 `2.7.5`:`Microsoft.AspNetCore.OpenApi` 10.0.9 传递依赖的 2.0.0 命中一个高危 CVE（NU1903 GHSA-v5pm-xwqc-g5wc，影响范围 2.0.0-preview.11 至 2.7.4）,2.7.5 起修补。
-- `Microsoft.Extensions.DependencyInjection.Abstractions` 抬到 `10.0.5`:`StackExchange.Redis` 3.0.11 传递依赖的 `Logging.Abstractions` 10.0.5 要求 `DI.Abstractions` ≥10.0.5，不抬版本的话集中管理的 10.0.0 会跟它冲突，报 NU1605 降级错误。
+- `Microsoft.OpenApi` 显式抬到 `2.7.5`：`Microsoft.AspNetCore.OpenApi` 10.0.9 传递依赖的 2.0.0 命中一个高危 CVE（NU1903 GHSA-v5pm-xwqc-g5wc，影响范围 2.0.0-preview.11 至 2.7.4）,2.7.5 起修补。
+- `Microsoft.Extensions.DependencyInjection.Abstractions` 抬到 `10.0.5`：`StackExchange.Redis` 3.0.11 传递依赖的 `Logging.Abstractions` 10.0.5 要求 `DI.Abstractions` ≥10.0.5，不抬版本的话集中管理的 10.0.0 会跟它冲突，报 NU1605 降级错误。
 
 `Directory.Build.props` 为所有项目统一设置构建与包元数据：
 
-- `TargetFramework` 是 `net10.0`,`Nullable` 与 `ImplicitUsings` 都已开启。
+- `TargetFramework` 是 `net10.0`，`Nullable` 与 `ImplicitUsings` 都已开启。
 - `GenerateDocumentationFile` 开着，同时用 `NoWarn` 压掉 `CS1591`。发布的包因此带 XML 注释，消费方步进源码时看得懂在改哪一步。但不强制每个 public 成员都写注释，免得警告刷屏。
 - NuGet 元数据也统一在这里：`Version`（`0.1.1`，发版时经 `-p:Version` 由 tag 覆盖）、`PackageLicenseExpression`(`Apache-2.0`)、`PackageTags`(`admin;rbac;sqlsugar;aspnetcore;scaffold;kernel`)。
 - SourceLink 靠 `PublishRepositoryUrl`/`EmbedUntrackedSources`/`IncludeSymbols`（符号包用 `snupkg` 格式）接好，消费方调试时能直接步进内核源码。`ContinuousIntegrationBuild` 只在 `GITHUB_ACTIONS` 环境变量存在时才开，因为它会把内嵌源码路径规范化，本地开着反而会打乱调试路径。
 
 ::: tip `IsPackable` 默认是 false
-`Directory.Build.props` 把 `IsPackable` 默认设为 `false`,`src/` 下每个正式包再显式打开。示例与测试项目沿用默认值，永远不会被打包。
+`Directory.Build.props` 把 `IsPackable` 默认设为 `false`，`src/` 下每个正式包再显式打开。示例与测试项目沿用默认值，永远不会被打包。
 :::
 
 ## 示例宿主
@@ -84,9 +84,9 @@ app.Run();
 | `Upload` | `AdminUploadOptions` | 存储根目录、大小上限、后缀白名单 |
 | `Api` | `AdminApiOptions` | 禁用模块列表 |
 | `DemoMode` | `bool` | `false`：为 `true` 时仅放行 GET/HEAD/OPTIONS，其余写请求一律以错误码 `41002` 拒绝 |
-| `Id` | `AdminIdOptions` | `WorkerId`：默认为 `null`（回落为 0）;多实例水平扩展时必须为每个实例显式配置 |
+| `Id` | `AdminIdOptions` | `WorkerId`：默认为 `null`（回落为 0）；多实例水平扩展时必须为每个实例显式配置 |
 | `Logging` | `AdminLoggingOptions` | 文件日志诊断，默认关闭 |
 
 `ApplicationAssemblies` 是个例外。它是代码侧设置的 `List<Assembly>`（如上面示例宿主与 `TestHost` 的代码片段所示），不从配置绑定，因为程序集引用没法从 JSON 里来。
 
-摸清了结构，下一步自然是看这几个包如何装配到一起。[架构分层与包依赖](/zh/backend/architecture)从依赖方向讲起;构建、测试的 CLI 命令则在[贡献指南](/zh/community/contributing)里。
+摸清了结构，下一步自然是看这几个包如何装配到一起。[架构分层与包依赖](/zh/backend/architecture)从依赖方向讲起；构建、测试的 CLI 命令则在[贡献指南](/zh/community/contributing)里。

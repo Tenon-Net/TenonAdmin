@@ -9,14 +9,14 @@
 
 菜单表的 `icon` 字段里只存一个字符串，侧栏、面包屑、按钮照着它把对应图标画出来。挑图标、存图标、渲染图标这三件事，tenon 都交给这个包完成，而它渲染时只读打进应用的本地数据，从不向 Iconify 的在线 API 发请求。
 
-图标在 tenon 应用里怎么统一注册、`AppIcon` 怎么在全站渲染，归 [外观与图标](/zh/frontend/appearance) 那页;这里不重复讲接入约定。
+图标在 tenon 应用里怎么统一注册、`AppIcon` 怎么在全站渲染，归 [外观与图标](/zh/frontend/appearance) 那页；这里不重复讲接入约定。
 
 ## 在菜单管理里选一个图标
 
 模板里只有三个文件碰这个包，都在 `web/src` 下：
 
-- `lib/icons.ts` 的 `setupIcons()` 在 `main.ts` 里调一次，把离线图标集和本地 SVG 全局注册好;
-- `components/IconPicker/index.vue` 是选择器，用在**系统管理 → 菜单管理**的菜单 `icon` 字段上;
+- `lib/icons.ts` 的 `setupIcons()` 在 `main.ts` 里调一次，把离线图标集和本地 SVG 全局注册好；
+- `components/IconPicker/index.vue` 是选择器，用在**系统管理 → 菜单管理**的菜单 `icon` 字段上；
 - `components/AppIcon.vue` 是渲染器，全站画图标都走它。
 
 菜单管理页（`web/src/views/system/menu/index.vue`）把这两头串起来：表单里用选择器挑，表格列里用渲染器显示。
@@ -29,7 +29,7 @@
 <AppIcon :icon="row.icon" :size="18" />
 ```
 
-`v-model`（这里写成 `model-value`）的值就是**一个字符串**，形如 `ph:house-duotone`，也就是 `前缀:图标名`;本地 SVG 是 `local:图标名`。这个字符串原样进数据库的 `icon` 字段，读出来交给 `AppIcon` 就能渲染。整个契约只有这一条：一个字段存一个字符串，选择器和渲染器两头都认它。
+`v-model`（这里写成 `model-value`）的值就是**一个字符串**，形如 `ph:house-duotone`，也就是 `前缀:图标名`；本地 SVG 是 `local:图标名`。这个字符串原样进数据库的 `icon` 字段，读出来交给 `AppIcon` 就能渲染。整个契约只有这一条：一个字段存一个字符串，选择器和渲染器两头都认它。
 
 `setupIcons()` 已经全局注册过一遍，所以 tenon 的选择器封装没有再传 `collections`，直接复用。它只做一件包本身不管的事：把 vue-i18n 的文案算成 `labels` 注进去（见下文）。
 
@@ -41,7 +41,7 @@
 
 ## 注册更多图标集
 
-`setupIconPicker` 是包的唯一配置入口，一次配好所有集。tenon 的 `setupIcons()` 就是它的一层封装（`web/src/lib/icons.ts`）:
+`setupIconPicker` 是包的唯一配置入口，一次配好所有集。tenon 的 `setupIcons()` 就是它的一层封装（`web/src/lib/icons.ts`）：
 
 ```ts
 import { setupIconPicker } from 'tenon-naive-iconify-picker'
@@ -87,7 +87,7 @@ tenon 把这一步并进了 `setupIcons()` 的 `localIcons` 选项，扫的就�
 
 ## 在 tenon 之外用它
 
-这是个独立包，也能装进别的 Vue 3 + Naive UI 项目。它不打包 Vue 和 Naive UI，以 peer 依赖提供：`vue ^3.3`、`naive-ui ^2.34`、`@iconify/vue ^4 || ^5`;样式由组件自动注入，不用单独 import CSS。仅限浏览器（用到 `navigator.onLine` 和 `v-html`），且选择器必须放在应用的 `<n-config-provider>` 内，主题变量才能解析。
+这是个独立包，也能装进别的 Vue 3 + Naive UI 项目。它不打包 Vue 和 Naive UI，以 peer 依赖提供：`vue ^3.3`、`naive-ui ^2.34`、`@iconify/vue ^4 || ^5`；样式由组件自动注入，不用单独 import CSS。仅限浏览器（用到 `navigator.onLine` 和 `v-html`），且选择器必须放在应用的 `<n-config-provider>` 内，主题变量才能解析。
 
 ```bash
 npm i tenon-naive-iconify-picker

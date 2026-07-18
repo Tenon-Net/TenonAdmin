@@ -60,9 +60,9 @@ client.QueryFilter.AddTableFilter<IOrgScoped>(e =>
 
 | 字段 | 时机 | 填充规则 |
 | --- | --- | --- |
-| `Id` | 插入 | `Id == 0` 时填雪花号;显式给定（如种子数据）原样保留 |
+| `Id` | 插入 | `Id == 0` 时填雪花号；显式给定（如种子数据）原样保留 |
 | `CreateTime` | 插入 | 未设置时填当前时间 |
-| `CreateUserId` | 插入 | 从当前登录用户填;系统上下文为 null 则留空 |
+| `CreateUserId` | 插入 | 从当前登录用户填；系统上下文为 null 则留空 |
 | `CreateOrgId` | 插入 | 从当前用户归属机构填（仅 `DataEntity` 有此列） |
 | `UpdateTime` | 更新 | 每次整行更新都刷新 |
 | `UpdateUserId` | 更新 | 有登录上下文时记录操作人 |
@@ -122,7 +122,7 @@ public class DeviceService(IRepository<Device> repo) : IDeviceService
 
 这 12 bit 也划出了种子的地盘：`id = 相对纪元毫秒数 × 4096 + 低位`，雪花永远发不出小于 4096 的号，`[1, 4095]` 便留给种子的固定 Id（内核用 `[1, 999]`，消费方从 `1000` 起取号）。`DatabaseInitializer` 启动时校验每个种子 Id 都在这个区间内、且同一实体上不重复：越界（迟早被雪花号追上撞主键）或撞号（幂等判存把后来那行当"已存在"静默跳过）一律启动即抛，CI 也有对应用例把这类错误拦在宿主启动之前。
 
-机器号从配置 `TenonAdmin:Id:WorkerId` 注入（默认 0，范围 0–63）:
+机器号从配置 `TenonAdmin:Id:WorkerId` 注入（默认 0，范围 0–63）：
 
 ```json
 {
@@ -135,7 +135,7 @@ public class DeviceService(IRepository<Device> repo) : IDeviceService
 ::: danger 水平扩展每实例必须不同
 单机部署不配即可（回落 0）。**多实例水平扩展时必须为每个实例配置不同的 `WorkerId`**，否则不同实例同毫秒发号会撞主键。这是数据损坏级的问题，且默认静默发生。
 
-内核给了一道防线：选了 Redis 缓存（明显的多实例意图）却没显式设置 `WorkerId` 时，启动即抛，把一个静默的主键冲突换成一条可读的启动错误。单实例请显式配 `0` 以示知情;k8s 可用 StatefulSet 的 Pod 序号注入。
+内核给了一道防线：选了 Redis 缓存（明显的多实例意图）却没显式设置 `WorkerId` 时，启动即抛，把一个静默的主键冲突换成一条可读的启动错误。单实例请显式配 `0` 以示知情；k8s 可用 StatefulSet 的 Pod 序号注入。
 :::
 
 时钟安全上，`SnowflakeIdGenerator` 注入 `TimeProvider`（可测试）。检测到时钟回拨时，小幅（≤5ms,NTP 微调级）自旋等待追平，大幅回拨直接抛异常拒绝发号：宁可不发，也绝不发出可能重复的 ID。

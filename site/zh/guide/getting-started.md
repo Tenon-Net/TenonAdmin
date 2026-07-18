@@ -34,7 +34,7 @@ curl http://localhost:5100/health/ready
 curl http://localhost:5100/openapi/v1.json
 ```
 
-前两个应返回 `Healthy`。`/openapi/v1.json` 返回一大坨 JSON，后面生成前端类型要用它;这个端点生产环境不挂载，线上请求它得到 404 是预期行为，不是漏配。
+前两个应返回 `Healthy`。`/openapi/v1.json` 返回一大坨 JSON，后面生成前端类型要用它；这个端点生产环境不挂载，线上请求它得到 404 是预期行为，不是漏配。
 
 ## 登录，调第一个接口
 
@@ -57,7 +57,7 @@ curl http://localhost:5100/openapi/v1.json
 没记下来也别慌：本地实验环境删掉 `backend/samples/MinimalHost/data` 下的数据库文件重新 `dotnet run`，空库会重新播种。生产库不能这么清。那边要么先配好固定密码（见下），要么登录后立刻改密。
 :::
 
-想要一个自己说了算的固定密码（团队共享、CI、反复删库重来），把 `backend/samples/MinimalHost/appsettings.Development.json.example` 拷成 `appsettings.Development.json`，填上 `Seed:AdminPassword`:
+想要一个自己说了算的固定密码（团队共享、CI、反复删库重来），把 `backend/samples/MinimalHost/appsettings.Development.json.example` 拷成 `appsettings.Development.json`，填上 `Seed:AdminPassword`：
 
 ```json
 { "TenonAdmin": { "Seed": { "AdminAccount": "superAdmin", "AdminPassword": "你的密码" } } }
@@ -92,7 +92,7 @@ curl http://localhost:5100/api/v1/ping \
 { "code": 0, "data": { "pong": true, "account": "superAdmin", "at": "2026-07-...T..." } }
 ```
 
-不带令牌，或令牌过期/被吊销，拿到的是 `401`（标准信封，`code=40006`）。超管（令牌里的 `sadm` 声明）自动绕过后续的 `[RolePermission]` 权限码校验;普通用户要先在菜单管理里挂上对应路由、在角色管理里授权，才调得通同一个接口。这条链路的完整写法见[新建业务模块](/zh/guide/business-module)。
+不带令牌，或令牌过期/被吊销，拿到的是 `401`（标准信封，`code=40006`）。超管（令牌里的 `sadm` 声明）自动绕过后续的 `[RolePermission]` 权限码校验；普通用户要先在菜单管理里挂上对应路由、在角色管理里授权，才调得通同一个接口。这条链路的完整写法见[新建业务模块](/zh/guide/business-module)。
 
 ## 三行代码接进你自己的项目
 
@@ -114,11 +114,11 @@ app.MapTenonAdmin();
 app.Run();
 ```
 
-`AddTenonAdmin` 绑配置、注册 JWT/RBAC/数据权限/日志等全部服务;`MapTenonAdmin` 挂路由、健康检查和（dev 下的）OpenAPI 文档。默认 SQLite、零配置即可跑。
+`AddTenonAdmin` 绑配置、注册 JWT/RBAC/数据权限/日志等全部服务；`MapTenonAdmin` 挂路由、健康检查和（dev 下的）OpenAPI 文档。默认 SQLite、零配置即可跑。
 
 要跨副本共享会话和缓存（多实例部署），额外装 `TenonAdmin.Caching.Redis`，并在 `AddTenonAdmin` **之前**调 `AddTenonAdminRedisCache(builder.Configuration)`。因为内核的可替换服务都用 `TryAdd` 注册，谁先注册谁赢，晚于 `AddTenonAdmin` 就抢不过内置的进程内缓存了。没配 `Cache:Provider=Redis` 时这行是空操作，单实例开发不受影响。
 
-需要更细粒度的依赖控制，可以只引某一层（`.AspNetCore` / `.Services` / `.SqlSugar` / `.Core`）。这些包为什么这么分层、"可替换"到底怎么替，归[核心概念](/zh/guide/concepts)讲透;本页只管把它跑起来。
+需要更细粒度的依赖控制，可以只引某一层（`.AspNetCore` / `.Services` / `.SqlSugar` / `.Core`）。这些包为什么这么分层、"可替换"到底怎么替，归[核心概念](/zh/guide/concepts)讲透；本页只管把它跑起来。
 
 > 1.0 之前 API 仍可能调整，破坏性变更会在[更新日志](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)里明确标出。开发在 `dev` 分支进行。
 
@@ -148,7 +148,7 @@ npx degit Tenon-Net/TenonAdmin/web my-web
 
 ## 换掉默认数据库
 
-零配置默认用 SQLite（`Data Source=./data/admin.db`，相对 ContentRoot）。换正式数据库不用改代码，`TenonAdmin:Database` 一段配置说了算，改 `DbType` + `ConnectionString` 两项即可（`Sqlite` / `MySql` / `SqlServer` / `PostgreSQL` 都支持）:
+零配置默认用 SQLite（`Data Source=./data/admin.db`，相对 ContentRoot）。换正式数据库不用改代码，`TenonAdmin:Database` 一段配置说了算，改 `DbType` + `ConnectionString` 两项即可（`Sqlite` / `MySql` / `SqlServer` / `PostgreSQL` 都支持）：
 
 ```json
 {
@@ -161,7 +161,7 @@ npx degit Tenon-Net/TenonAdmin/web my-web
 }
 ```
 
-容器化部署走环境变量更顺手（双下划线分层）:
+容器化部署走环境变量更顺手（双下划线分层）：
 
 ```bash
 TenonAdmin__Database__DbType='MySql'

@@ -90,9 +90,9 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 
 ## 有两样东西内核不让你动
 
-前面几节的结论是「几乎什么都能换」，但门户的模块管理上有两道服务端闸门，直接调管理 API 也绕不过。先分清两个「模块」：约束三里的 `Api.DisabledModules` 是启动期开关，摘掉内置控制器好让你接管路由;这里说的是多应用门户里的应用记录（`SysModule`），经运行时 CRUD 增删改。闸门画在后者上。
+前面几节的结论是「几乎什么都能换」，但门户的模块管理上有两道服务端闸门，直接调管理 API 也绕不过。先分清两个「模块」：约束三里的 `Api.DisabledModules` 是启动期开关，摘掉内置控制器好让你接管路由；这里说的是多应用门户里的应用记录（`SysModule`），经运行时 CRUD 增删改。闸门画在后者上。
 
-**内置 system 模块不能停用。** 它承载全部内置管理页（组织、运维、日志、文件），停用即门户整体失联，而且没有 UI 恢复入口。停用它，等于把自己锁在门外。前端那行禁用态拦截只是提示，不是防线;真正的闸在服务端，按固定 Id（不随 Code 改动失守）判 `Enabled=false` 就拒。
+**内置 system 模块不能停用。** 它承载全部内置管理页（组织、运维、日志、文件），停用即门户整体失联，而且没有 UI 恢复入口。停用它，等于把自己锁在门外。前端那行禁用态拦截只是提示，不是防线；真正的闸在服务端，按固定 Id（不随 Code 改动失守）判 `Enabled=false` 就拒。
 
 **带菜单的模块不能删。** 删掉一个还挂着菜单的模块，这些菜单的顶级目录 `ModuleId` 会悬空、整棵子树从门户消失。删除前会查一遍它名下有没有菜单，有就拒，逼你先把挂靠的顶级目录迁走或删掉再删模块。
 
@@ -126,6 +126,6 @@ builder.Services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
 builder.Services.AddTenonAdmin(builder.Configuration);
 ```
 
-内核对 `IPasswordHasher` 用的是 `TryAddSingleton`，所以容器里已有你的注册，内置的 `Pbkdf2PasswordHasher` 就不会再进来。要换雪花 ID 为数据库自增或 GUID v7，同样实现 `IIdGenerator` 并前置注册即可;要改某个服务的一个环节而非整体，就继承它、重写那个 `virtual` 步骤。
+内核对 `IPasswordHasher` 用的是 `TryAddSingleton`，所以容器里已有你的注册，内置的 `Pbkdf2PasswordHasher` 就不会再进来。要换雪花 ID 为数据库自增或 GUID v7，同样实现 `IIdGenerator` 并前置注册即可；要改某个服务的一个环节而非整体，就继承它、重写那个 `virtual` 步骤。
 
-整体替换、覆写单步、禁用接管、消费方种子这四条路的分步操作和踩坑，收在[替换内置服务](/zh/guide/replace-service);本页只解释这些替换点为什么立得住。
+整体替换、覆写单步、禁用接管、消费方种子这四条路的分步操作和踩坑，收在[替换内置服务](/zh/guide/replace-service)；本页只解释这些替换点为什么立得住。

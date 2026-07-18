@@ -10,7 +10,7 @@ TenonAdmin 分两半：`backend/`（.NET 10 内核 + 示例宿主 + 测试）和
 
 ## 本地开发环境
 
-后端（仓库根目录跑;解决方案文件是 `.slnx`，不是 `.sln`）:
+后端（仓库根目录跑；解决方案文件是 `.slnx`，不是 `.sln`）：
 
 ```bash
 dotnet build backend/TenonAdmin.slnx -c Release
@@ -19,13 +19,13 @@ dotnet test  backend/TenonAdmin.slnx --filter "FullyQualifiedName~DataScopeTests
 dotnet run   --project backend/samples/MinimalHost         # 零配置起服,http://localhost:5100
 ```
 
-针对 MySQL 跑测试（对应 CI 矩阵里的一条腿）:
+针对 MySQL 跑测试（对应 CI 矩阵里的一条腿）：
 
 ```bash
 TENON_TEST_DBTYPE=MySql TENON_TEST_MYSQL="Server=127.0.0.1;Port=3306;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;" dotnet test backend/TenonAdmin.slnx
 ```
 
-前端（`web/` 目录下跑）:
+前端（`web/` 目录下跑）：
 
 ```bash
 npm run dev          # Vite,:5173,代理 /api 和 /openapi 到后端 :5100(可用 TENON_API_TARGET 覆盖)
@@ -35,7 +35,7 @@ npm run typecheck     # vue-tsc --noEmit
 npm run gen:api       # 从一个正在运行的后端的 /openapi/v1.json 重新生成 src/api/schema.d.ts
 ```
 
-嫌两边分开开麻烦，根目录的 `dev.bat` 会在两个独立窗口里同时拉起后端 + 前端（首次运行顺带装好 `web/` 依赖）,`stop.bat` 停止它们。
+嫌两边分开开麻烦，根目录的 `dev.bat` 会在两个独立窗口里同时拉起后端 + 前端（首次运行顺带装好 `web/` 依赖），`stop.bat` 停止它们。
 
 ::: warning 别手改 schema.d.ts
 `web/src/api/schema.d.ts` 是从后端 OpenAPI 生成的契约文件，改了接口先跑 `npm run gen:api`（需要后端在跑），不要手写这个文件。
@@ -47,7 +47,7 @@ npm run gen:api       # 从一个正在运行的后端的 /openapi/v1.json 重�
 
 ## 提交信息：英文 Conventional Commits
 
-仓库代码注释和文档是中文，但 **git commit 一律用英文**，格式是 `type(scope): subject`:
+仓库代码注释和文档是中文，但 **git commit 一律用英文**，格式是 `type(scope): subject`：
 
 ```text
 fix(web): hide permission-gated buttons for users without access
@@ -56,7 +56,7 @@ docs: translate comments in root config and script files
 refactor(services): split login flow into virtual steps
 ```
 
-常见 `type`:`feat` / `fix` / `docs` / `refactor` / `test` / `chore`。`scope` 一般是 `web` / `backend`，或更具体的模块名。
+常见 `type`：`feat` / `fix` / `docs` / `refactor` / `test` / `chore`。`scope` 一般是 `web` / `backend`，或更具体的模块名。
 
 ## 跑测试：两条腿都要绿
 

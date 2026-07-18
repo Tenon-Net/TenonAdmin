@@ -24,7 +24,7 @@ HTTP 请求
 
 ## ① 认证：Microsoft JWT Bearer
 
-内核直接用 `Microsoft.AspNetCore.Authentication.JwtBearer`，不自造认证栈。装配在 `TenonAdminSetup.cs`:
+内核直接用 `Microsoft.AspNetCore.Authentication.JwtBearer`，不自造认证栈。装配在 `TenonAdminSetup.cs`：
 
 ```csharp
 services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
@@ -55,7 +55,7 @@ services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
 | `org` | `TokenClaimNames.ORG_ID` | 归属机构 Id（数据范围锚点） |
 | `unique_name` | `JwtRegisteredClaimNames.UniqueName` | 登录账号，映射为 `User.Identity.Name` |
 
-**框架 401 被重塑为统一信封**。默认情况下，令牌缺失或过期时 JwtBearer 会返回一个空的 401，响应体不是内核的信封格式。`OnChallenge` 把它接管，改写成与业务出口一致的 `Result<T>`:
+**框架 401 被重塑为统一信封**。默认情况下，令牌缺失或过期时 JwtBearer 会返回一个空的 401，响应体不是内核的信封格式。`OnChallenge` 把它接管，改写成与业务出口一致的 `Result<T>`：
 
 ```csharp
 OnChallenge = async ctx =>
@@ -120,7 +120,7 @@ public static string Build(string httpMethod, string? routeTemplate) =>
 
 ## ③ 数据范围：解析并注入 `IDataScopeContext`
 
-授权阶段（第 3、4 步）顺带把当前用户的**生效数据范围**解析出来，写进 `IDataScopeContext`:
+授权阶段（第 3、4 步）顺带把当前用户的**生效数据范围**解析出来，写进 `IDataScopeContext`：
 
 ```csharp
 // 超管
@@ -137,7 +137,7 @@ scopeContext.Current = await dataScopeProvider.ResolveAsync(userId, abort);
 
 到了返回阶段，内核统一把出参包成信封 `Result<T>`，把业务错误转成信封。
 
-**成功：裸 `return dto` 自动包壳**。`ResultEnvelopeFilter`（`IAsyncResultFilter`）让业务控制器直接 `return dto;` 也得到统一信封，不必每处手写 `Result.Ok(...)`:
+**成功：裸 `return dto` 自动包壳**。`ResultEnvelopeFilter`（`IAsyncResultFilter`）让业务控制器直接 `return dto;` 也得到统一信封，不必每处手写 `Result.Ok(...)`：
 
 ```csharp
 public static bool TryWrap(IActionResult result, out ObjectResult wrapped)
@@ -171,13 +171,13 @@ public void OnException(ExceptionContext context)
 
 业务失败记 **Information** 级日志（不是错误，不打扰告警）。其他异常不在这里拦。框架默认的 500 流程会处理它们、保留完整堆栈，程序缺陷该大声失败。
 
-**错误是数字码，从不下发本地化文案**。信封携带 `{ code, msgKey, args, message }`,`code` 是 `ErrorCode` 枚举的数字值。i18n 由前端按码翻译，后端不返回中文/英文错误文案。
+**错误是数字码，从不下发本地化文案**。信封携带 `{ code, msgKey, args, message }`，`code` 是 `ErrorCode` 枚举的数字值。i18n 由前端按码翻译，后端不返回中文/英文错误文案。
 
 ## 一次调用回顾
 
 以「删除某角色」为例：
 
 1. **认证**：校验 JWT 签名与有效期，读出 `sub` / `sid` / `sadm`。
-2. **`[RolePermission]`**：会话 `sid` 仍活跃;非超管;权限码 `DELETE:/api/v1/sys/role/{id}` 在用户权限码集合里 → 放行。同时把该用户的数据范围写入 `IDataScopeContext`。
+2. **`[RolePermission]`**：会话 `sid` 仍活跃；非超管；权限码 `DELETE:/api/v1/sys/role/{id}` 在用户权限码集合里 → 放行。同时把该用户的数据范围写入 `IDataScopeContext`。
 3. **数据范围**：仓储的写路径守卫先经带范围过滤器的查询确认目标行在范围内，越权改删他机构行返回 0 行被拒。
-4. **结果信封**：控制器 `return` 的结果被包成 `Result<T>`;若中途抛 `AdminException`，转成业务码信封返回。
+4. **结果信封**：控制器 `return` 的结果被包成 `Result<T>`；若中途抛 `AdminException`，转成业务码信封返回。

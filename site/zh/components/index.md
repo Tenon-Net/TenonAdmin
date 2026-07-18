@@ -4,7 +4,7 @@
 
 | 包 | 定位 | 文档 |
 |---|---|---|
-| [`tenon-naive-pro-table`](/zh/components/pro-table) | 列驱动 Pro 表格：一个 `columns` 同时驱动搜索表单、字典渲染、列设置;一个 `fetcher` 适配任意后端 | [查看 →](/zh/components/pro-table) |
+| [`tenon-naive-pro-table`](/zh/components/pro-table) | 列驱动 Pro 表格：一个 `columns` 同时驱动搜索表单、字典渲染、列设置；一个 `fetcher` 适配任意后端 | [查看 →](/zh/components/pro-table) |
 | [`tenon-naive-iconify-picker`](/zh/components/icon-picker) | 离线优先图标选择器，基于 Iconify：多图标库、零网络请求、单字符串值 | [查看 →](/zh/components/icon-picker) |
 
 > 两个包均已发布到 npm。站上这两页给的是选型判断和接入边界，逐个 API 的权威说明在各自仓库的 README。

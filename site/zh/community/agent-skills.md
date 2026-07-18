@@ -9,7 +9,7 @@
 
 ## Issue / PRD：走 GitHub Issues
 
-仓库的 issue 和 PRD 都是 GitHub issue，统一用 `gh` CLI 操作（约定详见 [`docs/agents/issue-tracker.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/issue-tracker.md)）:
+仓库的 issue 和 PRD 都是 GitHub issue，统一用 `gh` CLI 操作（约定详见 [`docs/agents/issue-tracker.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/issue-tracker.md)）：
 
 ```bash
 gh issue create --title "..." --body "..."          # 建 issue,多行 body 用 heredoc
@@ -22,12 +22,12 @@ gh issue close <number> --comment "..."                # 关闭
 `gh` 在 clone 出来的仓库里跑会自动从 `git remote -v` 识别仓库，不用额外指定 `--repo`。
 
 ::: details PR 目前不当作请求入口
-`issue-tracker.md` 里这条开关当前是「否」：外部 PR 不会走和 issue 一样的标签流程。如果哪天改成「是」,`gh pr` 系列命令（`gh pr view`、`gh pr diff`、`gh pr comment`、`gh pr edit --add-label`）才会启用，并且只挑 `authorAssociation` 为 `CONTRIBUTOR` / `FIRST_TIME_CONTRIBUTOR` / `NONE` 的外部 PR 参与分诊。
+`issue-tracker.md` 里这条开关当前是「否」：外部 PR 不会走和 issue 一样的标签流程。如果哪天改成「是」，`gh pr` 系列命令（`gh pr view`、`gh pr diff`、`gh pr comment`、`gh pr edit --add-label`）才会启用，并且只挑 `authorAssociation` 为 `CONTRIBUTOR` / `FIRST_TIME_CONTRIBUTOR` / `NONE` 的外部 PR 参与分诊。
 :::
 
 ## Triage 标签
 
-Issue 分诊用五个规范化标签，标签串就是角色名本身（详见 [`docs/agents/triage-labels.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/triage-labels.md)）:
+Issue 分诊用五个规范化标签，标签串就是角色名本身（详见 [`docs/agents/triage-labels.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/triage-labels.md)）：
 
 | 标签 | 含义 |
 |---|---|
@@ -41,7 +41,7 @@ Issue 分诊用五个规范化标签，标签串就是角色名本身（详见 [
 
 ## 领域文档：CONTEXT.md + docs/adr
 
-开始探索代码前，agent 应该先看（详见 [`docs/agents/domain.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/domain.md)）:
+开始探索代码前，agent 应该先看（详见 [`docs/agents/domain.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/domain.md)）：
 
 - 仓库根目录的 `CONTEXT.md`。多上下文场景下换成 `CONTEXT-MAP.md`，它指向各上下文各自的 `CONTEXT.md`。
 - `docs/adr/` 下和当前改动区域相关的 ADR。
@@ -54,7 +54,7 @@ TenonAdmin 现在还没有 `CONTEXT.md` 或 `docs/adr/`，因为按约定它们�
 
 ## 业务开发 Skills(`skills/`)
 
-这组文档面向「在 TenonAdmin 上面接着写业务」的场景。内核维护者加系统模块，消费方在自己项目里二开，走的是同一套模式，索引在 [`skills/README.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/skills/README.md):
+这组文档面向「在 TenonAdmin 上面接着写业务」的场景。内核维护者加系统模块，消费方在自己项目里二开，走的是同一套模式，索引在 [`skills/README.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/skills/README.md)：
 
 | Skill | 用途 | 适用场景 |
 |---|---|---|
@@ -67,7 +67,7 @@ TenonAdmin 现在还没有 `CONTEXT.md` 或 `docs/adr/`，因为按约定它们�
 
 **Claude Code** 下这六个 skill 已经包装成 `.claude/skills/` 下的斜杠命令，直接输入 `/new-module`、`/create-entity`、`/create-crud-backend`、`/create-crud-frontend`、`/replace-service`、`/create-page-variant` 即可。也支持自然语言自动触发，比如直接说「帮我创建一个产品实体」。其它 AI 工具没有斜杠命令机制，在对话里直接引用文件路径就行，比如「参考 skills/create-entity.md，帮我创建一个 BizProduct 实体」。
 
-新增一个完整 CRUD 模块的标准顺序（`/new-module` 会把这三步串起来一次跑完，想分步来就单独调用）:
+新增一个完整 CRUD 模块的标准顺序（`/new-module` 会把这三步串起来一次跑完，想分步来就单独调用）：
 
 1. `/create-entity`：建实体
 2. `/create-crud-backend`：建后端（含菜单种子数据）

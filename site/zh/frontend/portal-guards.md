@@ -4,7 +4,7 @@
 
 ## 登录之后进哪个应用：enterInitial
 
-TenonAdmin 的外壳是个多应用门户：每个用户被授权若干个应用，右上角有个九宫格选择器随时切换。登录后或硬刷新后，决定"直接进某个应用"还是"弹选择器"的，是 `composables/useModule.ts` 里的 `enterInitial()`:
+TenonAdmin 的外壳是个多应用门户：每个用户被授权若干个应用，右上角有个九宫格选择器随时切换。登录后或硬刷新后，决定"直接进某个应用"还是"弹选择器"的，是 `composables/useModule.ts` 里的 `enterInitial()`：
 
 ```ts
 async function enterInitial(): Promise<EnterResult> {
@@ -27,7 +27,7 @@ async function enterInitial(): Promise<EnterResult> {
 }
 ```
 
-模块列表、权限码、超管标记三者并行拉取。后两者都是失败即收紧：`personalApi.permissions()` 一旦失败，`permissionsLoaded` 就留在 `false`,`v-auth` 指令把它当成「藏起来」，而不是在拿不准的情况下放行;`profile` 拉不到就按普通用户处理，不会把谁误当成超管。这一步不阻断进门户。权限拿不到你照样能进，只是所有按钮先按"没权限"处理。
+模块列表、权限码、超管标记三者并行拉取。后两者都是失败即收紧：`personalApi.permissions()` 一旦失败，`permissionsLoaded` 就留在 `false`，`v-auth` 指令把它当成「藏起来」，而不是在拿不准的情况下放行；`profile` 拉不到就按普通用户处理，不会把谁误当成超管。这一步不阻断进门户。权限拿不到你照样能进，只是所有按钮先按"没权限"处理。
 
 拉完这些数据，`enterInitial` 走一个"进哪个应用"的判定阶梯，自上而下，第一个命中的赢：
 
@@ -76,17 +76,17 @@ router.beforeEach(async (to) => {
 
 它按顺序把四件事料理掉：
 
-**登录跳转。** 已登录的人再访问 `/login` 会被弹回 `/`;未登录的人访问除 `/login` 外的任何地方，都会被送去 `/login`。`/login` 是唯一免认证页。
+**登录跳转。** 已登录的人再访问 `/login` 会被弹回 `/`；未登录的人访问除 `/login` 外的任何地方，都会被送去 `/login`。`/login` 是唯一免认证页。
 
 **强制改密。** `mustChangePassword` 一旦为真（管理员建号或重置密码后首登会带上它），除了 `/personal/password` 本身，任何导航都被拦下重定向到那里。这一判定刻意放在下面的动态路由重建**之前**：改密页是静态路由，不依赖菜单树就能渲染，先放行它，避免"重建 → 选应用 → 又被弹回改密页"这种绕圈。改密成功后现有流程会强制登出重登，标志由后端清零。
 
-**刷新 / 深链的重建。** 动态路由只活在 router 的内存路由表里，不持久化。硬刷新或直接打开一条深链时，`auth.routesReady` 必然是 `false`，任何 `menu-{id}` 路由都还没注册。守卫检测到这一点，`enterInitial()` 就在这里被调进来。它既重建路由，又填好 `auth.modules`，门户的判定和守卫的重建其实共用同一次调用。拿到结果后守卫再决定去向：结果是选择器 → 去 `/module`（本来就去 `/module` 就直接放行，因为渲染选择页要的数据这时已经齐了，不能弹回 `/`，否则默认应用一旦设定就再没入口去改它）;目标是 `/` → 直接给出 `auth.homePath`;其余情况 → 重新返回 `to.fullPath`，让同一个 URL 在路由建好之后再解析一次。要是 `enterInitial()` 抛错，直接清空登录态送回 `/login`，不把用户晾在一个搭了一半的页面上。
+**刷新 / 深链的重建。** 动态路由只活在 router 的内存路由表里，不持久化。硬刷新或直接打开一条深链时，`auth.routesReady` 必然是 `false`，任何 `menu-{id}` 路由都还没注册。守卫检测到这一点，`enterInitial()` 就在这里被调进来。它既重建路由，又填好 `auth.modules`，门户的判定和守卫的重建其实共用同一次调用。拿到结果后守卫再决定去向：结果是选择器 → 去 `/module`（本来就去 `/module` 就直接放行，因为渲染选择页要的数据这时已经齐了，不能弹回 `/`，否则默认应用一旦设定就再没入口去改它）；目标是 `/` → 直接给出 `auth.homePath`；其余情况 → 重新返回 `to.fullPath`，让同一个 URL 在路由建好之后再解析一次。要是 `enterInitial()` 抛错，直接清空登录态送回 `/login`，不把用户晾在一个搭了一半的页面上。
 
 这里有两个不返回 `to.fullPath` 的位置值得留意。目标是 `/` 时不能返回 `to.fullPath`，因为那等于重定向到自身。`/` 已经没有静态 `redirect` 了，Vue Router 会判成无限重定向。另一个坑更隐蔽：这段重建逻辑不能用 `to.meta.public` 提前短路，因为一条还没注册的动态路由会先命中 catch-all(404)，它带着 `public` 标记。真按 `public` 放行，用户看到的就是一个错误的 404，而不是重建后的正确页面。
 
 **`/` 永远落到 `auth.homePath`。** 路由已经就绪的正常导航里，访问 `/` 同样交给守卫算首页。这条判断出于和上面一样的原因不能写成 `layout` 路由上的静态 `redirect`。`redirect` 在 resolve 阶段求值，早于这个守卫，那时菜单树（进而 `homePath`）还没准备好，算出来的落点必然是错的。
 
-导航确认之后，`afterEach` 把访问过的页面记成标签，但跳过三类：标了 `meta.public` 的页面、`login`/`module`/`not-found` 这三个固定名字，以及没挂在 `layout` 下的路由（它们不属于任何应用的工作区，不该在标签栏留痕）:
+导航确认之后，`afterEach` 把访问过的页面记成标签，但跳过三类：标了 `meta.public` 的页面、`login`/`module`/`not-found` 这三个固定名字，以及没挂在 `layout` 下的路由（它们不属于任何应用的工作区，不该在标签栏留痕）：
 
 ```ts
 router.afterEach((to) => {

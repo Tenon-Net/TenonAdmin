@@ -68,7 +68,7 @@ app.Run();
 
 ## 组合根如何逐层向下
 
-`AddTenonAdmin` 的装配次序（见 `TenonAdminSetup.cs`）:
+`AddTenonAdmin` 的装配次序（见 `TenonAdminSetup.cs`）：
 
 1. **绑定配置**。`configuration.GetSection("TenonAdmin").Bind(options)`，再执行可选的 `configure` 回调覆写，最后把 `TenonAdminOptions` 及其各子节（`Database` / `Cache` / `Jwt` / `Security` / `Upload` / `Api` / `Id` / `Logging`）作为单例入容器。缺省即默认值，所以零配置可跑。
 2. **雪花机器号校验**。选了 Redis 缓存（多实例意图）却没显式给 `TenonAdmin:Id:WorkerId` 时，启动即抛，借此把一个静默的主键冲突换成一条可读的启动错误。
@@ -88,7 +88,7 @@ services.AddTenonAdminServices();
 
 ## 消费方的实体和控制器如何挂进来
 
-消费方的业务程序集经 `options.ApplicationAssemblies` 登记（代码侧设置，不从配置绑定）:
+消费方的业务程序集经 `options.ApplicationAssemblies` 登记（代码侧设置，不从配置绑定）：
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration, options =>

@@ -1,7 +1,7 @@
 # 提交规范
 
 ::: tip 一句话版
-代码、注释、文档统一中文;**Git commit 信息一律用英文**，遵循 conventional-commit 格式：`type(scope): subject`。
+代码、注释、文档统一中文；**Git commit 信息一律用英文**，遵循 conventional-commit 格式：`type(scope): subject`。
 :::
 
 ## 为什么提交信息要用英文，代码注释却用中文
