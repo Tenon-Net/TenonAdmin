@@ -226,6 +226,9 @@ public class AuthService(
     /// <inheritdoc />
     public virtual async Task<LoginOutput> LoginByExternalAsync(ExternalLoginInput input)
     {
+        // 外部登录依赖三件可选注入(provider 集合 / 绑定服务 / RBAC);DI 下必然齐备,但手工构造 AuthService 且
+        // 省略了这些参数的消费者子类会走到这——给出明确"该能力未接线"信号(40013),而非后续裸 NRE。
+        AdminException.ThrowIf(externalProviders is null || externalBindings is null || rbac is null, ErrorCode.OAuthProviderDisabled);
         SysUser? user = null;
         try
         {
@@ -295,7 +298,15 @@ public class AuthService(
             if (roleIds.Count > 0) await rbac!.SetUserRolesAsync(user.Id, roleIds);
             await externalBindings!.BindAsync(user.Id, identity);
         });
-        if (!tran.IsSuccess) throw tran.ErrorException;
+        if (!tran.IsSuccess)
+        {
+            // 并发首登竞态:另一路已抢先给同一外部身份开好户并绑定,本路事务撞唯一约束整体回滚(无孤儿用户)。
+            // 改用对方已建的账号 → 让并发首登幂等,而非把裸库唯一约束异常甩成 500(批次 D 复查 L1)。
+            var raced = await externalBindings!.FindByExternalAsync(identity.Provider, identity.Subject);
+            if (raced is not null && await users.GetByIdAsync(raced.UserId) is { } winner)
+                return winner;
+            throw tran.ErrorException;   // 非竞态的真失败(rbac/DB 等):原样抛,交由外层记日志 + 500
+        }
         return user;
     }
 
@@ -311,7 +322,9 @@ public class AuthService(
         var account = baseAccount;
         for (var i = 0; i < 5; i++)
         {
-            // 查重把软删行也纳入(软删行仍占唯一索引里的 Account),漏检会撞库唯一约束抛原生 500
+            // 查重把软删行也纳入(ClearFilter<ISoftDelete>)——防御性:软删走 repo.DeleteAsync 时 Account 已被
+            // 追加 _del_{id} 后缀释放唯一位(见 SqlSugarRepository.DeleteAsync),精确等值本不会命中软删行;
+            // 保留此过滤只为兜住"绕过回收直接置 IsDelete"的边角软删,避免撞库唯一约束抛原生 500。
             if (!await users.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(u => u.Account == account))
                 return account;
             account = $"{baseAccount}_{RandomNumberGenerator.GetString(PROVISION_PWD_CHARS, 4)}";
