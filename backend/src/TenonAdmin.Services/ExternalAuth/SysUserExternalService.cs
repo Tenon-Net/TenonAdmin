@@ -50,6 +50,16 @@ public class SysUserExternalService(IRepository<SysUserExternal> repo, IConfigSe
     }
 
     /// <inheritdoc />
+    public virtual async Task UnbindAllAsync(long userId)
+    {
+        var rows = await repo.AsQueryable().Where(x => x.UserId == userId).ToListAsync();
+        // 逐行走 repo.DeleteAsync:软删时唯一列(Provider/Subject)追加 _del_{id} 后缀释放唯一位,该外部身份日后可被重绑。
+        // 批量 Deleteable().Where() 不触发回收 AOP,会把唯一位一直占住 → 故意逐行(一个用户的绑定数极少)。
+        foreach (var row in rows)
+            await repo.DeleteAsync(row.Id);
+    }
+
+    /// <inheritdoc />
     public virtual async Task<bool> IsEnabledAsync(string provider)
     {
         var v = await config.GetValueByKeyAsync(EnabledKey(provider));

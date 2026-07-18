@@ -20,7 +20,9 @@ public class UserService(
     ILoginLockService loginLock,
     ISecurityPolicyProvider policy,
     AdminSecurityOptions security,
-    IPasswordHistoryService? passwordHistory = null) : IUserService   // 可选参数:默认 DI 注入;消费者子类省略也能编译(§5.3)
+    // 可选参数:默认 DI 注入;消费者子类省略也能编译(§5.3)。externalBindings 用于删用户时连带清其外部身份绑定。
+    IPasswordHistoryService? passwordHistory = null,
+    ISysUserExternalService? externalBindings = null) : IUserService
 {
     // 生成随机初始口令的字符集:去掉易混字符(0/O、1/l/I),含大小写+数字+符号。
     private const string PASSWORD_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*";
@@ -230,6 +232,9 @@ public class UserService(
             await rbac.SetUserRolesAsync(id, []);   // 先清角色(顺带失效缓存),再软删——避免残留孤儿关联
             await users.DeleteAsync(id);
             await sessions.RevokeAllForUserAsync(id);   // 删除用户即下线其全部会话(原令牌不再可用)
+            // 连带清外部身份绑定:否则绑定行残留占着 (Provider,Subject) 唯一位,该外部身份既登不进(悬挂绑定)
+            // 也绑不到新账号 → 永久锁死(批次 D 复查 M1)。externalBindings 未接线(消费者精简)时跳过。
+            if (externalBindings is not null) await externalBindings.UnbindAllAsync(id);
         });
     }
 
@@ -250,6 +255,7 @@ public class UserService(
                 await rbac.SetUserRolesAsync(u.Id, []);
                 await users.DeleteAsync(u.Id);
                 await sessions.RevokeAllForUserAsync(u.Id);
+                if (externalBindings is not null) await externalBindings.UnbindAllAsync(u.Id);   // 同单删:连带清外部绑定(批次 D 复查 M1)
             }
         });
     }

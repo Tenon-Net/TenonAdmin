@@ -1,7 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
@@ -24,10 +27,12 @@ public class ExternalAuthController(
     IAuthService auth,
     ICacheProvider cache,
     ICurrentUser currentUser,
-    AdminExternalAuthOptions options) : ControllerBase
+    AdminExternalAuthOptions options,
+    IWebHostEnvironment env) : ControllerBase
 {
     private static readonly TimeSpan STATE_TTL = TimeSpan.FromMinutes(5);      // 授权→回调往返窗口
     private static readonly TimeSpan TICKET_TTL = TimeSpan.FromSeconds(120);   // 回调→前端换令牌窗口
+    private const string STATE_COOKIE = "tn_oauth_state";                      // 登录态 binder cookie(防登录 CSRF)
 
     private long CurrentUserId => currentUser.UserId ?? throw new AdminException(ErrorCode.TokenInvalid);
 
@@ -65,6 +70,17 @@ public class ExternalAuthController(
         var st = await cache.GetAndRemoveAsync<ExternalOAuthState>(CacheKeys.OAuthState(state), cancellationToken);
         if (st is null || st.ProviderCode != provider)
             return Redirect(FrontendResultUrl($"error={(int)ErrorCode.OAuthStateInvalid}"));
+
+        // 登录 CSRF 防御:state 必须由发起 /authorize 的<b>同一浏览器</b>回调——比对授权阶段下发的 binder cookie。
+        // 缺 cookie / 不匹配 = 疑似他人预先拼好的 (code,state) 诱导受害者登入攻击者账号 → 拒。
+        // bind 模式豁免:目标账号已由 [ActiveSession] 的 st.UserId 服务端锁定,不吃回调 CSRF。
+        if (st.Mode != "bind")
+        {
+            var binder = Request.Cookies[STATE_COOKIE];
+            Response.Cookies.Delete(STATE_COOKIE, new CookieOptions { Path = "/api/v1/auth/external" });
+            if (string.IsNullOrEmpty(binder) || !FixedTimeEquals(binder, st.Binder))
+                return Redirect(FrontendResultUrl($"error={(int)ErrorCode.OAuthStateInvalid}"));
+        }
 
         try
         {
@@ -157,6 +173,22 @@ public class ExternalAuthController(
         var verifier = RandomToken();
         var redirectUri = CallbackUri(provider.Code);
 
+        // 登录 CSRF 防御:把 state 绑定到发起浏览器——下发仅本浏览器持有的 binder cookie,回调时比对。
+        // bind 模式免此(目标用户已由 [ActiveSession] 锁定)。ponytail: 同源同名 cookie,多标签并发 SSO 登录后发起者会互相覆盖,末发起者胜;可接受。
+        var binder = "";
+        if (mode != "bind")
+        {
+            binder = RandomToken();
+            Response.Cookies.Append(STATE_COOKIE, binder, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = Request.IsHttps,        // 生产 https 加 Secure;dev http(localhost)放行,否则本地登不了
+                SameSite = SameSiteMode.Lax,     // Lax:放行 IdP 跨站顶层导航回调携带(Strict 会拦掉 → 登录必失败)
+                MaxAge = STATE_TTL,
+                Path = "/api/v1/auth/external",
+            });
+        }
+
         await cache.SetAsync(CacheKeys.OAuthState(state), new ExternalOAuthState
         {
             Mode = mode,
@@ -165,6 +197,7 @@ public class ExternalAuthController(
             CodeVerifier = verifier,
             RedirectUri = redirectUri,
             UserId = userId,
+            Binder = binder,
         }, STATE_TTL, cancellationToken);
 
         return await provider.BuildAuthorizeUrlAsync(
@@ -174,20 +207,27 @@ public class ExternalAuthController(
     /// <summary>绑定回调:换外部身份 → 绑到 state 记录的当前用户(已被他人占用抛 40017)。</summary>
     protected virtual async Task HandleBindCallbackAsync(ExternalOAuthState st, string code, CancellationToken cancellationToken)
     {
-        var provider = externalProviders.FirstOrDefault(x => x.Code == st.ProviderCode);
-        AdminException.ThrowIf(provider is null, ErrorCode.OAuthProviderDisabled);
-        var identity = await provider!.ExchangeAsync(
+        // 复用登录同款"存在+启用"校验(provider 在 5min 授权窗口内被运营 kill-switch 关掉则拒,与登录路一致)
+        var provider = await ResolveEnabledProviderAsync(st.ProviderCode);
+        var identity = await provider.ExchangeAsync(
             new ExternalExchangeRequest(code, st.CodeVerifier, st.Nonce, st.RedirectUri), cancellationToken);
         await externalBindings.BindAsync(st.UserId!.Value, identity);
     }
 
-    /// <summary>回调地址:配了 <c>CallbackBaseUrl</c> 用之(代理下务必配),否则从请求推断。</summary>
+    /// <summary>回调地址:配了 <c>CallbackBaseUrl</c> 用之(生产必配),否则仅开发环境回退到请求主机。</summary>
     protected virtual string CallbackUri(string provider)
     {
-        var baseUrl = string.IsNullOrWhiteSpace(options.CallbackBaseUrl)
-            ? $"{Request.Scheme}://{Request.Host}"
-            : options.CallbackBaseUrl!.TrimEnd('/');
-        return $"{baseUrl}/api/v1/auth/external/{provider}/callback";
+        if (string.IsNullOrWhiteSpace(options.CallbackBaseUrl))
+        {
+            // 生产必须显式配 CallbackBaseUrl:靠请求 Host 头推 redirect_uri 可被伪造带偏(OAuth mix-up 面)。
+            // 开发环境放行回退到请求主机,免本地配置负担(同 JWT 开发密钥:dev 宽松、prod fail-fast)。
+            if (!env.IsDevelopment())
+                throw new InvalidOperationException(
+                    "外部登录已启用,但生产环境未配置 TenonAdmin:ExternalAuth:CallbackBaseUrl。" +
+                    "回调基址(redirect_uri 来源)必须是稳定的后端公网地址,不能从请求 Host 头推断(可伪造)。");
+            return $"{Request.Scheme}://{Request.Host}/api/v1/auth/external/{provider}/callback";
+        }
+        return $"{options.CallbackBaseUrl!.TrimEnd('/')}/api/v1/auth/external/{provider}/callback";
     }
 
     /// <summary>前端结果页 URL(相对路径=同源部署,绝对 URL=前后端分离 dev);追加查询参数。</summary>
@@ -198,8 +238,12 @@ public class ExternalAuthController(
         return $"{basePath}{sep}{query}";
     }
 
-    /// <summary>256 位加密随机 → base64url(state/nonce/PKCE verifier/票据通用)。</summary>
+    /// <summary>256 位加密随机 → base64url(state/nonce/PKCE verifier/票据/binder 通用)。</summary>
     protected static string RandomToken() => Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
+
+    /// <summary>定长防时序侧信道比较 binder(等长即比对内容,不等长直接 false;base64url 为 ASCII)。</summary>
+    private static bool FixedTimeEquals(string a, string b) =>
+        CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(a), Encoding.ASCII.GetBytes(b));
 
     /// <summary>PKCE code_challenge = base64url(SHA256(verifier))(S256)。</summary>
     protected static string CodeChallenge(string verifier) =>

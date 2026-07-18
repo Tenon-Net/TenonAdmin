@@ -23,6 +23,12 @@ public class ExternalOAuthState
 
     /// <summary>绑定模式下的当前登录用户 Id(登录模式为 null)</summary>
     public long? UserId { get; set; }
+
+    /// <summary>
+    /// 登录模式下绑定发起浏览器的随机 binder:授权阶段下发同值的 HttpOnly cookie,回调阶段比对,
+    /// 防登录 CSRF(他人拼接的 code/state 诱导受害者登入攻击者账号)。bind 模式为空(已由 UserId 兜住)。
+    /// </summary>
+    public string Binder { get; set; } = "";
 }
 
 /// <summary>登录页可用的外部登录方式(仅非密钥字段;点亮 SSO 按钮用)。</summary>

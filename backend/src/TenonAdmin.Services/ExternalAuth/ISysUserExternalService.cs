@@ -32,6 +32,9 @@ public interface ISysUserExternalService
     /// <summary>解绑某用户在某 provider 下的绑定(不存在则静默返回)。</summary>
     Task UnbindAsync(long userId, string provider);
 
+    /// <summary>解绑某用户的<b>全部</b>外部绑定(用户删除时调用,释放其占用的 <c>(Provider, Subject)</c> 唯一位,防孤儿身份永久锁死)。</summary>
+    Task UnbindAllAsync(long userId);
+
     /// <summary>该 provider 是否启用(键 <c>sys.externalauth.{code}.enabled</c>,缺省 true = 配了连接即可用,此键作运行时 kill-switch)。</summary>
     Task<bool> IsEnabledAsync(string provider);
 
