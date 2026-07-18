@@ -43,6 +43,12 @@ public static class CacheKeys
     /// <summary>MFA 挑战票据 → 已过密码校验的 userId(短信码必须绑定该用户而非仅手机号;一次性消费,TTL 同码)</summary>
     public static string MfaChallenge(string challengeId) => $"mfa:{challengeId}";
 
+    /// <summary>外部登录授权态(<c>state</c>)→ {providerCode, nonce, codeVerifier, redirectUri}(设计批次 D)。防 CSRF 兼承载 PKCE/nonce;回调时按 <c>state</c> 一次性消费,短 TTL 过期。</summary>
+    public static string OAuthState(string state) => $"oauth:state:{state}";
+
+    /// <summary>外部登录成功后令牌对的一次性交付票据 → LoginOutput(设计批次 D)。令牌<b>不进</b>重定向 URL,前端凭票据换取;一次性消费(<see cref="ICacheProvider.GetAndRemoveAsync{T}"/>),短 TTL 过期。</summary>
+    public static string OAuthTicket(string ticket) => $"oauth:ticket:{ticket}";
+
     /// <summary>
     /// 固定窗口限流计数(设计 §12/§14)。<paramref name="bucket"/> 为 <c>auth</c>(认证端点,更严)或 <c>all</c>;
     /// <paramref name="windowIndex"/> 是<b>窗口序号</b>(<c>unixSeconds / windowSeconds</c>)。

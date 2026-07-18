@@ -686,6 +686,11 @@ export default {
       smsCodeWrong: 'Incorrect SMS verification code',
       smsCodeExpired: 'SMS verification code expired, please request a new one',
       smsLoginDisabled: 'SMS code sign-in is not enabled',
+      oauthProviderDisabled: 'This third-party sign-in method is not enabled or does not exist',
+      oauthStateInvalid: 'Sign-in session expired, please start the third-party sign-in again',
+      oauthExchangeFailed: 'Third-party sign-in failed to resolve identity, please try again',
+      oauthAccountNotBound: 'This third-party account is not bound to a system account yet; sign in with an account first, then bind it in your profile',
+      oauthAlreadyBound: 'This third-party account is already bound, or the current account is already bound to the same provider',
     },
     perm: { denied: 'Access denied', demoReadOnly: 'Demo environment is read-only' },
     user: {

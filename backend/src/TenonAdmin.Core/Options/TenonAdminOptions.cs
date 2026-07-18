@@ -26,6 +26,9 @@ public class TenonAdminOptions
     /// <summary>邮件通道配置(SMTP 主机/端口/凭据;空主机走日志实现,见 <see cref="AdminEmailOptions"/>)</summary>
     public AdminEmailOptions Email { get; set; } = new();
 
+    /// <summary>外部登录 / SSO 配置(内置 OIDC provider 列表 + 回调基址;连接与密钥走此,运营开关走 sys_config,见 <see cref="AdminExternalAuthOptions"/>)</summary>
+    public AdminExternalAuthOptions ExternalAuth { get; set; } = new();
+
     /// <summary>API 配置(禁用模块等,见 <see cref="AdminApiOptions"/>)</summary>
     public AdminApiOptions Api { get; set; } = new();
 

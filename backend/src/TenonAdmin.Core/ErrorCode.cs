@@ -82,6 +82,26 @@ public enum ErrorCode
     [MsgKey("error.auth.smsLoginDisabled")]
     SmsLoginDisabled = 40012,
 
+    /// <summary>外部登录 provider 未启用或不存在(code 未配置 / 运营开关 <c>sys.externalauth.{code}.enabled</c> 关闭)</summary>
+    [MsgKey("error.auth.oauthProviderDisabled")]
+    OAuthProviderDisabled = 40013,
+
+    /// <summary>外部登录回调 state 无效(缺失 / 过期 / 已消费——CSRF 防护;统一归此,防探测)</summary>
+    [MsgKey("error.auth.oauthStateInvalid")]
+    OAuthStateInvalid = 40014,
+
+    /// <summary>外部登录令牌交换失败(授权码无效 / IdP 拒绝 / id_token 签名或声明校验不过)</summary>
+    [MsgKey("error.auth.oauthExchangeFailed")]
+    OAuthExchangeFailed = 40015,
+
+    /// <summary>该外部身份尚未绑定任何本地账号(默认未绑定策略=拒绝;需先登录后在个人中心绑定,或该 provider 开启自动开户)</summary>
+    [MsgKey("error.auth.oauthAccountNotBound")]
+    OAuthAccountNotBound = 40016,
+
+    /// <summary>外部身份绑定冲突:该外部身份已绑定其他账号,或当前账号已绑定同一 provider(绑定唯一)</summary>
+    [MsgKey("error.auth.oauthAlreadyBound")]
+    OAuthAlreadyBound = 40017,
+
     // ── 41xxx 权限与数据范围 ─────────────────────────────────────────
 
     /// <summary>无接口访问权限(权限码不在当前用户 PermissionCodeList 内)</summary>

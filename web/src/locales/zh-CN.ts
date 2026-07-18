@@ -693,6 +693,11 @@ export default {
       smsCodeWrong: '短信验证码错误',
       smsCodeExpired: '短信验证码已失效,请重新获取',
       smsLoginDisabled: '短信验证码登录未启用',
+      oauthProviderDisabled: '该第三方登录方式未启用或不存在',
+      oauthStateInvalid: '登录会话已失效，请重新发起第三方登录',
+      oauthExchangeFailed: '第三方登录换取身份失败，请重试',
+      oauthAccountNotBound: '该第三方账号尚未绑定系统账号，请先用账号登录后在个人中心绑定',
+      oauthAlreadyBound: '该第三方账号已被绑定，或当前账号已绑定同一登录方式',
     },
     perm: { denied: '无权限访问', demoReadOnly: '当前为演示环境，禁止修改操作' },
     user: {
