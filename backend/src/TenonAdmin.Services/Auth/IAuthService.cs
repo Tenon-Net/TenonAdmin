@@ -26,6 +26,12 @@ public interface IAuthService
     /// <summary>免密登录:手机号 + 短信码换令牌(开关关抛 40012;码错/失效抛 40010/40011)。</summary>
     Task<LoginOutput> LoginByPhoneAsync(PhoneLoginInput input);
 
+    /// <summary>
+    /// 外部登录(OAuth/SSO 回调,批次 D):用授权码换外部身份 → 找绑定 →(未绑定按 provider 策略 拒绝/开户)→
+    /// 复用建会话发令牌那一步。无此 provider / 被运营关掉抛 40013,换取失败抛 40015,未绑定且策略=拒绝抛 40016。
+    /// </summary>
+    Task<LoginOutput> LoginByExternalAsync(ExternalLoginInput input);
+
     /// <summary>用刷新令牌换发新令牌对(轮换 + 复用检测,设计 §15);失败抛 40007。</summary>
     Task<LoginOutput> RefreshAsync(RefreshInput input);
 

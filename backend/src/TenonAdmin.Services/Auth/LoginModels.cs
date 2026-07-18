@@ -63,6 +63,28 @@ public record PhoneLoginInput
     public string Code { get; init; } = "";
 }
 
+/// <summary>
+/// 外部登录(OAuth/SSO 回调)入参:回调阶段已由 state 从缓存还原的换取参数 + provider 码。
+/// 控制器构造,<see cref="IAuthService.LoginByExternalAsync"/> 消费(令牌不进重定向 URL,故这里是服务端内部传参)。
+/// </summary>
+public record ExternalLoginInput
+{
+    /// <summary>provider 码(选中哪个 <c>IExternalAuthProvider</c>)</summary>
+    public string ProviderCode { get; init; } = "";
+
+    /// <summary>IdP 回调带回的授权码</summary>
+    public string Code { get; init; } = "";
+
+    /// <summary>PKCE 校验器(授权阶段留存;非 PKCE provider 忽略)</summary>
+    public string CodeVerifier { get; init; } = "";
+
+    /// <summary>授权阶段的 nonce(供 OIDC 校验 id_token 的 nonce 声明)</summary>
+    public string Nonce { get; init; } = "";
+
+    /// <summary>回调地址(须与授权阶段一致)</summary>
+    public string RedirectUri { get; init; } = "";
+}
+
 /// <summary>发码出参:有效期与重发间隔(驱动前端倒计时;刻意不含任何用户信息,防枚举)</summary>
 public record SmsSendOutput
 {

@@ -76,6 +76,9 @@ public static class ServicesSetup
         // 缓存管理(§4 运维):管理员定向失效动作(清授权/字典/配置缓存、重建门户代际);只清不看(缓存含明文 OTP、键含 PII)
         services.TryAddScoped<ICacheAdminService, CacheAdminService>();
 
+        // 外部登录 / SSO 绑定(批次 D):sys_user_external 增删查 + 运营配置读取(启用/未绑定策略/开户默认角色·机构)
+        services.TryAddScoped<ISysUserExternalService, SysUserExternalService>();
+
         // 组织模块(§4,T2):用户 / 机构(树)/ 职位 —— Scoped,与仓储一致
         services.TryAddScoped<IUserService, UserService>();
         services.TryAddScoped<IOrgService, OrgService>();

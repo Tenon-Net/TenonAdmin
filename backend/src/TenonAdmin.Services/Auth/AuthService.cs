@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
 
@@ -18,7 +19,11 @@ public class AuthService(
     ILoginLockService loginLock,
     ICaptchaService captcha,
     ISecurityPolicyProvider policy,
-    ISmsOtpService smsOtp) : IAuthService
+    ISmsOtpService smsOtp,
+    // 外部登录 / SSO(批次 D):可选参数,DI 正常注入;消费者子类省略也能编译(§5.3,同 UserService 的 passwordHistory)
+    IEnumerable<IExternalAuthProvider>? externalProviders = null,
+    ISysUserExternalService? externalBindings = null,
+    IRbacService? rbac = null) : IAuthService
 {
     /// <summary>
     /// 防账号枚举的陪跑哈希:账号不存在时也执行一次真实代价的哈希校验,
@@ -212,6 +217,106 @@ public class AuthService(
             await OnLoginFailedAsync(new LoginInput { Account = phone }, ex.Code);
             throw;
         }
+    }
+
+    // ── 外部登录 / SSO(批次 D):模板方法,每步 protected virtual,消费者覆写解析/开户/绑定策略 ──
+
+    private const string PROVISION_PWD_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+
+    /// <inheritdoc />
+    public virtual async Task<LoginOutput> LoginByExternalAsync(ExternalLoginInput input)
+    {
+        SysUser? user = null;
+        try
+        {
+            var identity = await ResolveExternalIdentityAsync(input);   // 1. provider 换外部身份(含存在/启用校验)
+            user = await ResolveExternalUserAsync(identity);            // 2. 找绑定 / 按策略开户 or 拒绝
+            await CheckLoginPolicyAsync(user);                          // 3. 停用检查(复用)
+            var pair = await CreateTokenAsync(user);                    // 4. 签发令牌 + 开会话(复用)
+            await OnLoginSucceededAsync(user, pair);                    // 5. 成功后置(复用)
+            return BuildLoginOutput(user, pair);                        // 6. 出参(复用)
+        }
+        catch (AdminException ex)
+        {
+            // 账号栏记已解析账号或 external:{provider}(尚未解析时);永不等于 PasswordWrong,不触发失败锁定
+            await OnLoginFailedAsync(new LoginInput { Account = user?.Account ?? $"external:{input.ProviderCode}" }, ex.Code);
+            throw;
+        }
+    }
+
+    /// <summary>解析外部身份:按 code 选 provider(不存在/被运营关掉抛 40013),调其 ExchangeAsync 换身份。</summary>
+    protected virtual async Task<ExternalIdentity> ResolveExternalIdentityAsync(ExternalLoginInput input)
+    {
+        var provider = externalProviders?.FirstOrDefault(p => p.Code == input.ProviderCode);
+        AdminException.ThrowIf(provider is null, ErrorCode.OAuthProviderDisabled);
+        AdminException.ThrowIf(!await externalBindings!.IsEnabledAsync(input.ProviderCode), ErrorCode.OAuthProviderDisabled);
+        return await provider!.ExchangeAsync(new ExternalExchangeRequest(input.Code, input.CodeVerifier, input.Nonce, input.RedirectUri));
+    }
+
+    /// <summary>外部身份 → 本地用户:有绑定取之;无绑定按 provider 运营策略(默认拒绝抛 40016,或自动开户)。</summary>
+    protected virtual async Task<SysUser> ResolveExternalUserAsync(ExternalIdentity identity)
+    {
+        var binding = await externalBindings!.FindByExternalAsync(identity.Provider, identity.Subject);
+        if (binding is not null)
+        {
+            var bound = await users.GetByIdAsync(binding.UserId);
+            AdminException.ThrowIf(bound is null, ErrorCode.OAuthAccountNotBound);   // 悬挂绑定(用户已删)→ 当未绑定拒绝
+            return bound!;
+        }
+
+        var unbound = await externalBindings!.GetUnboundPolicyAsync(identity.Provider);
+        if (unbound != ExternalUnboundPolicy.Provision)
+            throw new AdminException(ErrorCode.OAuthAccountNotBound);
+        return await ProvisionExternalUserAsync(identity);
+    }
+
+    /// <summary>自动开户:建本地账号(随机口令占位、免改密)+ 落默认角色/机构 + 写绑定,同事务;失败整体回滚。</summary>
+    protected virtual async Task<SysUser> ProvisionExternalUserAsync(ExternalIdentity identity)
+    {
+        var (roleIds, orgId) = await externalBindings!.GetProvisionDefaultsAsync(identity.Provider);
+        var user = new SysUser
+        {
+            Account = await GenerateProvisionAccountAsync(identity),
+            // 占位强随机口令:外部登录不走密码,但库不允空密码(与 SMS-only 用户同口径)
+            Password = hasher.Hash(RandomNumberGenerator.GetString(PROVISION_PWD_CHARS, 24)),
+            Name = identity.DisplayName ?? identity.Subject,
+            Email = identity.Email,
+            Phone = identity.Phone,
+            Enabled = true,
+            IsSuperAdmin = false,
+            MustChangePassword = false,          // 外部登录用户不需改密
+            LastPasswordChangeTime = DateTime.Now,
+            OrgId = orgId,
+        };
+
+        var tran = await users.Db.Ado.UseTranAsync(async () =>
+        {
+            await users.InsertAsync(user);       // AOP 回填雪花 Id
+            if (roleIds.Count > 0) await rbac!.SetUserRolesAsync(user.Id, roleIds);
+            await externalBindings!.BindAsync(user.Id, identity);
+        });
+        if (!tran.IsSuccess) throw tran.ErrorException;
+        return user;
+    }
+
+    /// <summary>为自动开户生成本地账号:优先取邮箱前缀/显示名清洗为 slug,回退 subject;含软删查重,撞名追加随机后缀。</summary>
+    protected virtual async Task<string> GenerateProvisionAccountAsync(ExternalIdentity identity)
+    {
+        var seed = identity.Email?.Split('@')[0] ?? identity.DisplayName ?? identity.Subject;
+        var slug = new string((seed ?? "user").Where(c => char.IsLetterOrDigit(c) || c is '_' or '-' or '.').ToArray());
+        if (slug.Length == 0) slug = "user";
+        var baseAccount = $"{identity.Provider}_{slug}";
+        if (baseAccount.Length > 50) baseAccount = baseAccount[..50];
+
+        var account = baseAccount;
+        for (var i = 0; i < 5; i++)
+        {
+            // 查重把软删行也纳入(软删行仍占唯一索引里的 Account),漏检会撞库唯一约束抛原生 500
+            if (!await users.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(u => u.Account == account))
+                return account;
+            account = $"{baseAccount}_{RandomNumberGenerator.GetString(PROVISION_PWD_CHARS, 4)}";
+        }
+        return account;   // 5 次仍撞(近乎不可能):交由库唯一约束兜底
     }
 
     /// <summary>手机号打码(40009 信令给前端展示"码已发至 138****1234");过短的号只留尾 2 位。</summary>
