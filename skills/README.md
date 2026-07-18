@@ -14,6 +14,7 @@
 | [create-crud-frontend.md](create-crud-frontend.md) | 创建前端 CRUD 页面 | Types + API + Vue 页面（ProTable + FormContainer） |
 | [replace-service.md](replace-service.md) | 替换/扩展内置服务 | 定制登录流程、换密码哈希、覆写服务步骤 |
 | [create-page-variant.md](create-page-variant.md) | 非标准页面模板 | 树表、主从分栏、侧栏筛选 |
+| [write-docs.md](write-docs.md) | **文档写作规范** | 写或改 `site/` 下任何一页；中英双语的口吻、标点、开头、破折号 + 闸门 |
 
 ## 使用方式
 
@@ -28,6 +29,7 @@
 /create-crud-frontend
 /replace-service
 /create-page-variant
+/write-docs
 ```
 
 也支持自动触发——对 Claude 说"帮我加一个产品管理模块"即可匹配对应 skill。

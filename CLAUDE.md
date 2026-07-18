@@ -100,6 +100,10 @@ Vue 3 `<script setup>` + Naive UI + Pinia (persisted) + vue-router + vue-i18n + 
 
 Building a new module (entity / backend CRUD / frontend page / service replacement)? Start from `skills/README.md` — `skills/new-module.md` orchestrates the full flow (entity → backend → tests → `gen:api` → frontend → i18n → menu/permission wiring). Also exposed as slash commands (`/new-module`, `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/replace-service`, `/create-page-variant`) via thin wrappers in `.claude/skills/`; the markdown files in `skills/` are the single source of truth.
 
+### Writing docs
+
+Writing or editing any page under `site/`? Read `skills/write-docs.md` first (`/write-docs`) — voice, punctuation, openings, em-dash budget, and the zh-is-source/en-is-translation contract. Its machine-checkable half is enforced by `site/scripts/lint-prose.mjs` (`cd site && npm run lint:prose -- <page>`).
+
 ### Issue tracker
 
 Issues/PRDs live as GitHub issues in `Tenon-Net/TenonAdmin` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
