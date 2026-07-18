@@ -120,7 +120,7 @@ authStore.hasPerm('PUT:/api/v1/sys/position/{id}')
 
 **受控展开必须删掉 `default-expand-all`。** `:expanded-row-keys` 一旦传了，naive 就以它为准，初始的 `[]` 会把 `default-expand-all` 直接盖成“全折叠”。“默认全展开”得自己用 `expandableIds(tree)` 播种。还有一点：`data` 变了受控 keys 不会自动跟着变，搜索或切应用之后要重算，否则命中结果藏在折叠的祖先里看不见。
 
-::: warning 行内改状态后要重拉,不能往行对象上写值
+::: warning 行内改状态后要重拉，不能往行对象上写值
 `filterTree` 剪枝时，“仅因后代命中而保留”的祖先是浅拷贝。搜索态下往行对象上写值（`r.enabled = v`）写的是这份副本，回不到源树——开关点完会自己弹回去。所以行内变更后调 `load()` 重拉，而不是本地写回。`StatusSwitch` 是悲观更新（请求成功才 emit），重拉一次就是最终态。
 :::
 
