@@ -1,6 +1,6 @@
 # Route A: Monolithic Deployment
 
-Backend also hosts the frontend. One process, one port, same origin — the go-to choice for internal systems.
+One process, one port, frontend and backend on the same origin. That is the whole of Route A, and everything else follows from it: no CORS to think about, no reverse proxy to stand up. For an internal system this is usually far enough, and only two things need wiring — the two lines that serve the static build, and where the upload directory lives.
 
 1. Copy `web/dist/*` into the host project's `wwwroot/`.
 2. Add two lines of **plain ASP.NET Core** code to your own `Program.cs` (the kernel doesn't manage frontend hosting, so there's no `MapTenonAdminSpa`-style wrapper):

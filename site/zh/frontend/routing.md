@@ -12,6 +12,7 @@ staticRoutes(router/routes.ts)          buildRoutesForModule(useAuthMenu.ts)
         ├─ /personal/profile                 component 字符串 → /src/views/**/*.vue
         ├─ /personal/password                 router.addRoute('layout', { name: 'menu-{id}', ... })
         ├─ /personal/notice
+        ├─ /personal/sessions
         └─ /:pathMatch(.*)*(404)
 
 构建期定死,部署间不变。                   登录 / 切应用 / 硬刷新时各重建一次。
@@ -35,6 +36,7 @@ export const staticRoutes: RouteRecordRaw[] = [
       { path: '/personal/profile', name: 'personal-profile', component: namedPage('personal-profile', () => import('@/views/personal/profile.vue')) },
       { path: '/personal/password', name: 'personal-password', component: namedPage('personal-password', () => import('@/views/personal/password.vue')) },
       { path: '/personal/notice', name: 'personal-notice', component: namedPage('personal-notice', () => import('@/views/personal/notice.vue')) },
+      { path: '/personal/sessions', name: 'personal-sessions', component: namedPage('personal-sessions', () => import('@/views/personal/sessions.vue')) },
       { path: '/:pathMatch(.*)*', name: 'not-found', component: namedPage('not-found', () => import('@/views/error/404.vue')), meta: { public: true } },
     ],
   },
@@ -45,11 +47,11 @@ export const staticRoutes: RouteRecordRaw[] = [
 
 - **`/` 不设静态 `redirect`。** `redirect` 在路由 resolve 阶段就求值，早于全局守卫。那时菜单树很可能还没建好，算出来的落点必然是错的。`/` 真正落到哪由 `router.beforeEach` 里的守卫决定（见[多应用门户与守卫](/zh/frontend/portal-guards)）。
 - **404 挂在壳内，而非顶层。** 打错一个 URL 时侧边栏、标签栏、退出按钮照样在，不会把人甩到一个光秃秃的页面外面去。
-- **`/personal/notice` 是静态路由，不是菜单项。** 它在后端走 `[ActiveSession]`（任何登录用户都能读，不需要具体权限码）。做成菜单反而意味着要播种它、再给每个角色都授权一遍，纯属多余功课。它的入口在顶栏通知铃铛的「查看全部」链接上。
+- **`/personal/notice` 和 `/personal/sessions` 是静态路由，不是菜单项。** 两者在后端都走 `[ActiveSession]`（任何登录用户都能读，不需要具体权限码）。做成菜单反而意味着要播种它、再给每个角色都授权一遍，纯属多余功课。入口分别在顶栏通知铃铛的「查看全部」链接和顶栏用户下拉里。
 
 ## 动态路由：菜单树→真实路由
 
-`layout` 下除了那三个静态个人页和 404 兜底，其余全部来自 `useAuthMenu.ts` 的 `buildRoutesForModule`:
+`layout` 下除了那四个静态个人页和 404 兜底，其余全部来自 `useAuthMenu.ts` 的 `buildRoutesForModule`:
 
 ```ts
 const views = import.meta.glob('/src/views/**/*.vue') as Record<string, () => Promise<Component>>

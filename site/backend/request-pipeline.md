@@ -1,6 +1,6 @@
 # Request Pipeline
 
-An authenticated request passes through four gates, in order, from entry to response: authentication, `[RolePermission]` authorization, data-scope resolution, and result-envelope wrapping. Every gate is built into the kernel — business code doesn't need to know about any of them. This page walks through what each step does and which type is responsible for it.
+An admin kicks someone out of the Online Users list. That user's JWT hasn't expired, and their very next request comes back 401 anyway. The token has no idea it was revoked — the authorization gate re-checks the session on every request. The whole pipeline divides its labor this way: business code stays unaware, and the behavior is settled once by the kernel, at a fixed spot.
 
 ## Overview
 
@@ -75,7 +75,7 @@ Controller endpoints require authentication by default via `MapControllers().Req
 
 ## ② `[RolePermission]`: the permission code IS the route
 
-Authorization is handled by `RolePermissionAttribute` (implementing `IAsyncAuthorizationFilter`). It **takes no parameters and no permission strings** — a deliberate design choice: strings like `"sys:user:add"` never appear in code. Authorization is granted by checking routes in the role-menu UI.
+Authorization is handled by `RolePermissionAttribute` (implementing `IAsyncAuthorizationFilter`). It **takes no parameters and no permission strings**. Magic strings like `"sys:user:add"` never appear in code. Authorization is granted by checking routes in the role-menu UI.
 
 The filter runs in a fixed order internally:
 
@@ -163,7 +163,7 @@ The filter wraps the envelope at result-execution time, which is invisible to Ap
 public void OnException(ExceptionContext context)
 {
     if (context.Exception is not AdminException ex) return;
-    logger.LogInformation("Business failure {Code}({MsgKey}):{Path}", (int)ex.Code, ex.MsgKey, ...);
+    logger.LogInformation("业务失败 {Code}({MsgKey}):{Path}", (int)ex.Code, ex.MsgKey, ...);
     context.Result = new ObjectResult(Result<object>.From(ex));
     context.ExceptionHandled = true;
 }

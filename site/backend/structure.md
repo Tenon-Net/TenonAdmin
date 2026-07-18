@@ -1,6 +1,8 @@
 # Project Structure & Startup
 
-This page maps `backend/`'s solution layout, the six packages under `src/`, how the sample host boots, and how the test suite verifies both a bare kernel and a consumer with its own business module. For the *why* behind the architecture (dependency direction, replaceability, request pipeline), see [Architecture](/backend/architecture) — this page is about structure and startup, that one is the deep dive.
+`backend/TenonAdmin.slnx` lists nine projects, and only six of them ever reach NuGet. The other three are never packed: one sample host and two test projects, there to run the kernel for real. Know which three don't ship and you won't go looking for contracts inside them.
+
+The design *why* — dependency direction, replaceability, the request pipeline — is unpacked on the [Architecture](/backend/architecture) page.
 
 ## Solution layout
 

@@ -1,6 +1,6 @@
 # Quick Start
 
-This page takes you from a running TenonAdmin kernel to a working token and your first protected-endpoint call, then wires it into your own ASP.NET Core project, brings up the frontend template, and swaps out the default database. All zero-config — no database to install first.
+That database you were about to go install: you don't need it. Clone the repo, `dotnet run`, and the console prints a super-admin password you can log straight in with. The SQLite file, the tables, and the seed data all get created on the kernel's first startup, with not a line of configuration written.
 
 ::: tip Prerequisites
 - .NET 10 SDK
@@ -38,16 +38,16 @@ The first two should return `Healthy`. `/openapi/v1.json` returns a big blob of 
 
 ## Log in and call your first endpoint
 
-`GET /api/v1/ping` is the smallest protected endpoint in the kernel — it only lets you through with a valid token. Before logging in, work out where the password comes from.
+`GET /api/v1/ping` is the smallest protected endpoint in the kernel — it only lets you through with a valid token. Which raises the first question: where does that password come from?
 
-The seed runs once, only when the `sys_user` table is empty. Running MinimalHost is a zero-config startup with no password configured, so the kernel generates a 16-character random password (from a cryptographically secure source, with easily-confused characters like `0/O` and `1/l/I` stripped out) and prints it inside a prominent box in the console log of the startup that **creates the account** — that once, and never again:
+The seed runs once, only when the `sys_user` table is empty. Running MinimalHost is a zero-config startup with no password configured, so the kernel generates a 16-character random password (from a cryptographically secure source, with easily-confused characters like `0/O` and `1/l/I` stripped out) and prints it inside a prominent box in the console log of the startup that **creates the account** — that once, and never again. The banner itself is hard-coded Chinese in the kernel:
 
 ```text
 ╔══════════════════════════════════════════════════════╗
-║  TenonAdmin first run — super admin created            ║
-║  Account:  superAdmin
-║  Password: xxxxxxxxxxxxxxxx
-║  Shown only this once — change it right after login!   ║
+║  TenonAdmin 首次启动,已创建超级管理员                  ║
+║  账号: superAdmin
+║  密码: xxxxxxxxxxxxxxxx
+║  此密码仅本次显示,请登录后立即修改!                    ║
 ╚══════════════════════════════════════════════════════╝
 ```
 

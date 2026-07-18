@@ -1,6 +1,8 @@
 # Routing & Dynamic Menus
 
-You add a menu in menu administration, fill in the component path, hit save — and it becomes a real, clickable page, with no routing table you wrote by hand anywhere in between. The frontend's routes come from two unrelated sources: a **static shell** frozen at build time, and **dynamic routes** rebuilt at runtime from the current app's menu tree after login. This page walks through how the two sides join up, how a menu tree turns into real routes, and why every page needs a stable identity for `keep-alive` to recognize it. How the multi-app portal decides *which* app to enter, and the guards that stitch the two sides together, are split off into [Multi-App Portal & Router Guards](/frontend/portal-guards); this page is only about how routes get built and how pages are cached.
+You add a menu in menu administration, fill in the component path, hit save — and it becomes a real, clickable page, with no routing table you wrote by hand anywhere in between. The frontend's routes come from two unrelated sources: a **static shell** frozen at build time, and **dynamic routes** rebuilt at runtime from the current app's menu tree after login.
+
+How the portal decides which app to enter, and how the guards stitch the two sides together, aren't covered here — that's the job of [Multi-App Portal & Router Guards](/frontend/portal-guards).
 
 ```text
 staticRoutes (router/routes.ts)         buildRoutesForModule (useAuthMenu.ts)
@@ -10,6 +12,7 @@ staticRoutes (router/routes.ts)         buildRoutesForModule (useAuthMenu.ts)
         ├─ /personal/profile                component string → /src/views/**/*.vue
         ├─ /personal/password               router.addRoute('layout', { name: 'menu-{id}', ... })
         ├─ /personal/notice
+        ├─ /personal/sessions
         └─ /:pathMatch(.*)*  (404)
 
 Frozen at build time, unchanged          Rebuilt once each on login / app switch /
@@ -34,6 +37,7 @@ export const staticRoutes: RouteRecordRaw[] = [
       { path: '/personal/profile', name: 'personal-profile', component: namedPage('personal-profile', () => import('@/views/personal/profile.vue')) },
       { path: '/personal/password', name: 'personal-password', component: namedPage('personal-password', () => import('@/views/personal/password.vue')) },
       { path: '/personal/notice', name: 'personal-notice', component: namedPage('personal-notice', () => import('@/views/personal/notice.vue')) },
+      { path: '/personal/sessions', name: 'personal-sessions', component: namedPage('personal-sessions', () => import('@/views/personal/sessions.vue')) },
       { path: '/:pathMatch(.*)*', name: 'not-found', component: namedPage('not-found', () => import('@/views/error/404.vue')), meta: { public: true } },
     ],
   },
@@ -44,11 +48,11 @@ Several choices here are deliberate:
 
 - **`/` has no static `redirect`.** A `redirect` is evaluated at route-resolve time, which runs *before* the global guard — and at that point the menu tree usually isn't built yet, so any landing spot computed there is guaranteed wrong. Where `/` actually lands is decided by the guard in `router.beforeEach` (see [Multi-App Portal & Router Guards](/frontend/portal-guards)).
 - **The 404 is nested inside the shell, not at the top level.** Mistype a URL and the sidebar, tab bar, and logout button are all still there — the user isn't flung out onto a bare page.
-- **`/personal/notice` is a static route, not a menu item.** On the backend it's guarded by `[ActiveSession]` (any logged-in user can read it, no specific permission code needed) — making it a menu would mean seeding it and then granting it to every role, pure busywork. Its entry point is the "view all" link on the header's notification bell.
+- **`/personal/notice` and `/personal/sessions` are static routes, not menu items.** Both are guarded on the backend by `[ActiveSession]` (any logged-in user can read them, no specific permission code needed) — making them menus would mean seeding them and then granting them to every role, pure busywork. Their entry points are the "view all" link on the header's notification bell and the header user dropdown.
 
 ## Dynamic routes: menu tree → real routes
 
-Everything under `layout` other than those three static personal pages and the 404 fallback comes from `buildRoutesForModule` in `useAuthMenu.ts`:
+Everything under `layout` other than those four static personal pages and the 404 fallback comes from `buildRoutesForModule` in `useAuthMenu.ts`:
 
 ```ts
 const views = import.meta.glob('/src/views/**/*.vue') as Record<string, () => Promise<Component>>

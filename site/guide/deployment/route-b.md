@@ -1,9 +1,9 @@
 # Route B: Reverse Proxy (nginx or Caddy)
 
-The reverse proxy hosts the static build and forwards `/api` to the backend. The browser only ever sees one origin, so **CORS still isn't needed**. Below are two equivalent configs, nginx and Caddy — pick either.
+The reverse proxy hosts the static build and forwards `/api` to the backend. The browser only ever sees one origin, so **CORS still isn't needed**. The nginx and Caddy configs are equivalent; pick one and copy it.
 
 ::: tip Which one to pick
-If you already have an nginx gateway, just copy the nginx config as-is. **If you're spinning up a fresh box and want to skip manual TLS work, go with Caddy** — put your real domain in the site label and Caddy automatically obtains and renews a Let's Encrypt certificate. This is also why the repo's [Containers & Multi-Replica](/guide/deployment/docker) delivery defaults to Caddy.
+If you already have an nginx gateway, just copy the nginx config as-is. **If you're spinning up a fresh box and want to skip manual TLS work, go with Caddy** — put your real domain in the site label (not `:80`) and Caddy automatically obtains and renews a Let's Encrypt certificate. This is also why the repo's [Containers & Multi-Replica](/guide/deployment/docker) delivery defaults to Caddy.
 :::
 
 ## nginx

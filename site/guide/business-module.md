@@ -28,10 +28,10 @@ First ask yourself one question: does this table need per-organization data isol
 `backend/tests/TenonAdmin.TestHost/SampleDoc.cs` is a real example of the latter:
 
 ```csharp
-[SugarTable("sample_doc", TableDescription = "Sample org-isolated business entity (integration test)")]
+[SugarTable("sample_doc", TableDescription = "示例机构隔离业务实体(集成测试)")]
 public class SampleDoc : DataEntity
 {
-    [SugarColumn(Length = 128, ColumnDescription = "Title")]
+    [SugarColumn(Length = 128, ColumnDescription = "标题")]
     public string Title { get; set; } = "";
 }
 ```

@@ -1,6 +1,6 @@
 # Data Layer and Auditing
 
-All data-layer conventions are centralized in `SqlSugarSetup`: one `SqlSugarScope` singleton, two global query filters, and one set of auto-filled audit fields. Business code writes only business fields — soft delete, org isolation, and the full audit-field set are all backstopped by the framework.
+The line of business code that queries orders writes neither `IsDelete == false` nor any org condition, yet both conditions reach the final SQL. `SqlSugarSetup` put them there: the whole process holds a single `SqlSugarScope`, and its query filters and audit AOP are attached once when it's constructed, so from then on nothing slips past them.
 
 ## One `SqlSugarScope` singleton
 
@@ -39,7 +39,7 @@ Deleted data is naturally invisible to every query. To query deleted data when g
 
 ### Data scope
 
-This is the kernel's signature capability. For `IOrgScoped` entities (i.e. `DataEntity` and its subclasses), results are filtered by the effective org set resolved for the current request:
+For `IOrgScoped` entities (i.e. `DataEntity` and its subclasses), results are filtered by the effective org set resolved for the current request:
 
 ```csharp
 client.QueryFilter.AddTableFilter<IOrgScoped>(e =>

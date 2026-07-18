@@ -60,9 +60,9 @@ Common `type` values: `feat` / `fix` / `docs` / `refactor` / `test` / `chore`. `
 
 ## Running tests: both legs need to be green
 
-CI (`backend-ci.yml`) runs build + test on push/PR touching `backend/**`, across a database matrix of `[sqlite, mysql, sqlserver, postgres]` (`fail-fast: false`, so one red leg doesn't hide the others), plus a Redis service container (for the contract-test portion of `RedisCacheTests`) and a `template-smoke` job (verifying `dotnet new tenon-app` can restore + build cleanly — the first command a consumer runs after getting the package). Before touching `backend/**`, at minimum get the default SQLite leg and the MySQL leg green locally — `TestDb.cs` derives an isolated database per test from env vars like `TENON_TEST_DBTYPE`, so tests don't interfere with each other.
+CI (`backend-ci.yml`) runs build + test on push/PR touching `backend/**`, across a database matrix of `[sqlite, mysql, sqlserver, postgres]`. The matrix sets `fail-fast: false`, so one red leg never hides the others. Alongside it runs a Redis service container, covering the contract-test portion of `RedisCacheTests`, and a `template-smoke` job that verifies `dotnet new tenon-app` can restore + build cleanly — the first command a consumer runs after getting the package. Before touching `backend/**`, at minimum get the default SQLite leg and the MySQL leg green locally. `TestDb.cs` derives an isolated database per test from env vars like `TENON_TEST_DBTYPE`, so tests don't interfere with each other.
 
-Frontend CI (`web-ci.yml`) runs `npm ci` → `npm run lint` → `npm run build` on push/PR touching `web/**` (build already includes `vue-tsc` type checking, so there's no need to run `typecheck` separately).
+Frontend CI (`web-ci.yml`) runs `npm ci` → `npm run lint` → `npm test` (vitest) → `npm run build` on push/PR touching `web/**` (build already includes `vue-tsc` type checking, so there's no need to run `typecheck` separately).
 
 ::: tip The six-piece test suite is a contract, not an ordinary test
 `ReplaceabilityTests` (the "six-piece set" from the design doc) locks in the replaceability guarantees around TryAdd coverage, virtual-method overriding, and business-assembly mounting. When you change DI registration or `TenonAdminSetup`-related code and this suite goes red, it usually means you've broken a consumer's replacement path — don't bypass or delete the tests; figure out which guarantee got broken first.
@@ -80,7 +80,7 @@ Frontend CI (`web-ci.yml`) runs `npm ci` → `npm run lint` → `npm run build` 
 
 **Do not report security vulnerabilities through a public issue.** TenonAdmin distributes as a NuGet package with built-in auth, RBAC, and multi-org data permissions — a public report would disclose a 0-day to every downstream consumer before a patch exists.
 
-Please use [GitHub private vulnerability reporting](https://github.com/Tenon-Net/TenonAdmin/security/advisories/new) instead. Maintainers will respond within **7 days** and coordinate the fix and disclosure timeline with you. See [SECURITY.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/SECURITY.md) for details.
+Please use [GitHub private vulnerability reporting](https://github.com/Tenon-Net/TenonAdmin/security/advisories/new) instead. Maintainers will respond within 7 days and coordinate the fix and disclosure timeline with you. See [SECURITY.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/SECURITY.md) for details.
 
 ## License
 

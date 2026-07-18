@@ -1,6 +1,6 @@
 # Layered Architecture and Package Dependencies
 
-TenonAdmin is composed of six NuGet packages, and the five that form the core chain have dependencies flowing strictly top-down. This ordering isn't a matter of taste — it's a load-bearing constraint: upper layers may reference lower layers, but lower layers can never see upper ones. Reverse the direction of even one layer and both replaceability and the dependency boundary collapse together. The sixth package, `TenonAdmin.Caching.Redis`, is an optional side-branch off `Core` rather than part of that downward chain — see below.
+TenonAdmin is composed of six NuGet packages, and the five that form the core chain have dependencies flowing strictly top-down. This ordering isn't a matter of taste — it's a load-bearing constraint: upper layers may reference lower layers, but lower layers can never see upper ones. The sixth package, `TenonAdmin.Caching.Redis`, is an optional side-branch off `Core` rather than part of that downward chain — see below.
 
 ## The core chain — five packages
 

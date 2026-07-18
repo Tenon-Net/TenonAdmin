@@ -1,11 +1,11 @@
 # Agent Skills and AI-Assisted Development
 
-If you use Claude Code (or another AI agent) to help develop TenonAdmin, the repo has two sets of conventions, for two different scenarios:
+The gap is never correctness. Ask an agent for a CRUD module and you will usually get something that runs; what you won't get is something shaped like the rest of this repo. Two sets of conventions close that gap, and which one applies depends on whose code the agent is touching:
 
 - **Contributing to TenonAdmin itself** — a set of docs under `docs/agents/` specifying how agents should read issues, apply triage labels, and read domain background.
 - **Building business modules on top of TenonAdmin** — a set of development-standard docs under `skills/` that teach an agent to create entities, build CRUD, and replace services following the project's established patterns, whether you're a kernel maintainer adding a system module or a consumer building on top of it in your own project.
 
-Neither is a code generator — they're "rules + reference templates": the agent reads them and then generates code matching the conventions for your actual requirement, rather than copying a boilerplate verbatim.
+Neither set is a code generator. Both are rules plus reference templates: the agent reads them, then writes the code your requirement calls for, and the conventions only govern what that code looks like.
 
 ## Issues / PRDs: via GitHub Issues
 

@@ -62,7 +62,7 @@ refactor(services): split login flow into virtual steps
 
 CI（`backend-ci.yml`）在 push / PR 触达 `backend/**` 时跑 build + test，数据库矩阵是 `[sqlite, mysql, sqlserver, postgres]`。矩阵设了 `fail-fast: false`，所以一条腿红不会掩盖其它腿。矩阵之外还挂着一个 Redis 服务容器，跑 `RedisCacheTests` 的契约测试部分。另有一个 `template-smoke` 任务，验证 `dotnet new tenon-app` 能顺利 restore + build，也就是消费方拿到包后的第一条命令。改动 `backend/**` 之前，至少本地把 SQLite 默认腿和 MySQL 腿跑绿。`TestDb.cs` 按 `TENON_TEST_DBTYPE` 等环境变量给每个测试派生独立数据库，互不干扰。
 
-前端 CI（`web-ci.yml`）在 push / PR 触达 `web/**` 时跑 `npm ci` → `npm run lint` → `npm run build`（build 已包含 `vue-tsc` 类型检查，不用单独再跑 `typecheck`）。
+前端 CI（`web-ci.yml`）在 push / PR 触达 `web/**` 时跑 `npm ci` → `npm run lint` → `npm test`（vitest）→ `npm run build`（build 已包含 `vue-tsc` 类型检查，不用单独再跑 `typecheck`）。
 
 ::: tip 六件套测试是契约，不是普通测试
 `ReplaceabilityTests`（设计文档里的「六件套」）锁定了 TryAdd 覆盖、虚方法重写、业务程序集挂载这几条可替换性保证。改动 DI 注册或 `TenonAdminSetup` 相关代码时，这组测试红了通常意味着破坏了消费方的替换路径，不要绕过或删测试，先看清楚破坏的是哪条保证。
