@@ -4,6 +4,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/TenonAdmin.AspNetCore/TenonAdmin.AspNetCore.csproj" />
+    <Project Path="src/TenonAdmin.Auth.DingTalk/TenonAdmin.Auth.DingTalk.csproj" />
     <Project Path="src/TenonAdmin.Auth.WeCom/TenonAdmin.Auth.WeCom.csproj" />
     <Project Path="src/TenonAdmin.Caching.Redis/TenonAdmin.Caching.Redis.csproj" />
     <Project Path="src/TenonAdmin.Core/TenonAdmin.Core.csproj" />
