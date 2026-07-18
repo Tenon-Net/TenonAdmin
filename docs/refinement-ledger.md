@@ -22,10 +22,10 @@
 - [x] **B4 T-D7 文件引用根治(零 DDL)**(3f4dd58)— 秒传改「一引用一行」:`FileService.ChunkInitAsync/ChunkCompleteAsync` 命中同 hash 时不复用既有行,新插 `SysFile`(拷 StoragePath/Hash/Size),各引用方独立记录互删不影响;`FileGcService.ReclaimDeletedFilesAsync` 删盘前查同 StoragePath 是否仍有他行(ClearFilter 含未删),有则只硬删记录跳过 `storage.DeleteAsync`。幂等,与逐行 try/catch 兼容。
 - [x] **B5 服务器监控页**(B5a 后端 9cfd38e + B5b 前端页/菜单 c2d52a9,卡片+手动刷新)— `IMonitorService`/`MonitorService`(TryAddScoped):Environment / Process / GC.GetGCMemoryInfo / ThreadPool / DriveInfo,进程 CPU% 两次 `TotalProcessorTime` 采样(500ms);`MonitorController` + `[Module("Monitor")]`,`GET /api/v1/sys/monitor/server`;前端新页 + 菜单种子。只报进程与主机基础面,全量指标留给消费者观测栈(OTel 是既定可选包方向)。
 
-## 批次 C · DiffLog + 缓存管理
+## 批次 C · 缓存管理(C2-lite);DiffLog 裁定不做(ADR-0001)
 
-- [ ] **C1 实体变更差异日志** — 已核验 SqlSugar 5.1.4.198:有 `EnableDiffLogEvent`/`OnDiffLogEvent`、**无**全局自动开关 → 只能在 `SqlSugarRepository<>` 咽喉逐命令启用。`IDiffLogged` 空接口(放 SqlSugar 层实体标记处,与 ISoftDelete 同处)按实体 opt-in(update/delete 需反查前像有性能成本,不能全量默认开);内核给 SysUser/SysRole/SysMenu/SysOrg/SysConfig 打标;`SqlSugarSetup` 挂 `Aop.OnDiffLogEvent` 落 `sys_diff_log`(TableName/DiffType/BeforeJson/AfterJson,写入 try/catch 吞——同 op log 纪律;落库 insert 不启用 DiffLog,无递归);页面挂日志页新 tab(`SysLogController` diff/page + DELETE diff)。
-- [ ] **C2 缓存管理页** — `ICacheProvider` 加默认接口方法 `SearchKeysAsync(prefix, limit)` 默认空(DIM 先例:IncrementAsync,不破第三方实现);Memory 用 `MemoryCache.Keys` 覆写、Redis 用 SCAN 覆写;`CacheController` + `[Module("Cache")]`:按前缀列键 + 逐键清除。**明确不做取值查看**——缓存里有 SMS OTP/MFA 挑战,看值端点 = 给管理员开旁路读 OTP 的口子(XiHan 的展示值做法在这里是安全洞)。
+- [~] **C1 实体变更差异日志** — **grilling 后裁定不做**(2026-07-18,ADR-0001)。与 op-log 重叠(已记写请求参数 JSON+操作人+时间)、顶架构(仓储无咽喉需动 6 方法、AOP 跨层写表、软删是列更新捕获不干净、update 前像多一次 SELECT),增量仅"字段级前像+非 HTTP 写入"面窄。扩展点保留:消费者子类化 `SqlSugarRepository<>` 或自挂 `client.Aop.OnDiffLogEvent`(SqlSugar 原生 `.EnableDiffLogEvent` 逐命令 + `StaticConfig.CompleteUpdateableFunc` 全局 marker opt-in,后者进程全局静态内核刻意不碰)。→ 见不做清单。
+- [x] **C2 缓存管理页 → C2-lite 失效操作页**(907a44e)— **改键浏览器为定向失效**(grilling + 代码核对:默认 `MemoryCacheProvider` 包 `IMemoryCache` 无法枚举键;键内嵌手机号/IP、值含明文 OTP/验证码,列键即泄 PII、读值即旁路读 OTP)。故 `ICacheProvider` **零改动**(不加 `SearchKeysAsync`);`ICacheAdminService`/`CacheAdminService`(TryAddScoped,virtual,镜像 IMonitorService 成法)4 个无参全局动作:flush-auth(遍历 sys_user 逐键清 perm/scope)、flush-dict(遍历 SysDictType.Code)、flush-config(遍历 SysConfig.ConfigKey)、rebuild-portal(自增 PortalGeneration,O(1))——全单键 RemoveAsync/Increment、DB 已知 ID 驱动、零缓存枚举、内存/Redis 皆可用。`CacheController` [Module("Cache")] 每端点 `[RolePermission]`+`[OperationLog]`;菜单 121–125 挂系统运维;前端动作卡片页 + 中英键 + gen:api。用途:补自动失效(RbacService 授权变更已自动 bump 代际+清 per-user 键)盖不到的"直接改库致陈旧"运维逃生舱。验:后端 296/0/0(含 CacheAdminTests 端到端)、typecheck/lint 绿、4 端点真 Kestrel 401 信封。
 
 ## 批次 D · OAuth/SSO(L 级,最后)
 
@@ -50,7 +50,8 @@
 | 页面动画更多模式 | 过渡脆弱性刚由 .page-view 单元素根根治,到此为止 |
 | 面包屑下拉子菜单 | 导航冗余度已够(侧栏+Ctrl+K+页签),撑不起结构改动 |
 | 灵动岛全局任务反馈 | 内核无长任务面,为不存在的任务建通道是库存 |
-| 缓存取值查看 | 安全洞(见 C2) |
+| 缓存取值查看 / 键浏览 | 安全洞:值含明文 OTP、键含 PII;默认内存 provider 也无法枚举键(见 C2 / ADR-0001) |
+| 实体变更差异日志(内核内 DiffLog) | 与 op-log 重叠 + 顶架构;字段级审计交消费者按替换点自建(见 C1 / ADR-0001) |
 | 演示模式写保护 | **已存在**(DemoModeFilter + 41002),勿重复造 |
 
 ## 未排期备忘
@@ -61,6 +62,8 @@
 - 多租户消费者侧 skill 文档(replace-service 姊妹篇):字段级 = 前置替换 IDataScopeProvider + DataEntity 子类基座;库级 = 多 ConfigId。
 
 ## 轮次日志
+
+### 第 10 轮 — 批次 C(/grill-with-docs 收敛)· 一轮设计审问 + 双 Explore 探查 + SqlSugar 官方 DiffLog 文档核对后,两项与原设想差距大:**C1 DiffLog 裁定不做**(与 op-log 重叠 + 顶架构:仓储无咽喉、AOP 跨层写表、软删列更新捕获不干净;扩展点保留给消费者),**C2 改键浏览器为 C2-lite 失效操作页**(默认内存 provider 无法枚举键、键含 PII/值含明文 OTP → 键浏览既不可用又泄密)。落地 C2-lite(907a44e):`ICacheAdminService`/`CacheAdminService`(TryAddScoped)4 无参全局失效(flush auth/dict/config + rebuild-portal,全单键 Remove/Increment、DB 已知 ID 驱动、零缓存枚举、`ICacheProvider` 零改动)+ `CacheController` [Module("Cache")] + 菜单 121–125 + 前端动作卡片页 + 中英键 + gen:api;新 CacheAdminTests 端到端锁 flush-config。两条决策存档 `docs/adr/0001`。验:后端 296/0/0、typecheck/lint 绿、4 端点真 Kestrel 401 信封。NEXT:批次 D(OAuth/SSO,开工前先定"未绑定账号默认策略 + OIDC 配置形态")/ E(岗位拖拽)按需。
 
 ### 第 9 轮 — 自查 + 双 code-reviewer 对抗审 + 修复 · 查出 2 真 bug + 2 非必要项。**修**:① B4 秒传探针每次命中都插行→孤儿泄漏 + 物理文件永不删盘(击穿 GC),改为按 (Hash, 当前用户) 幂等(FileService 加可选 ICurrentUser),加"重复探测不泄漏行"回归测试(commit 922c42a);② A5 iframe src 原为 computed(全局路由)→ keep-alive 回访重载/双页串源,改为 setup 一次性快照(f6ed470)。**取舍处理**:A3 复制配置按钮改 `import.meta.env.DEV` 门控(fork 开发动作不给管理员看)、密码历史构造参改可选(对齐 FileGcService 先例,d43c262)、监控页过滤 0 容量盘;IEmailSender 按用户意见保留。**已核验正确未动**:异常过滤器不吞 500、FileGc 单趟多引用判定、密码 trim、监控 CPU 采样。全量后端 295/0/0 + 前端 typecheck/lint/5 spec 绿。NEXT:批次 C(DiffLog+缓存)/ D(OAuth,需先定方案)/ E(岗位拖拽)按需推进。
 
