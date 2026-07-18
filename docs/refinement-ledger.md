@@ -35,7 +35,7 @@
 
 ## 批次 E · 杂项修缮(可选随手带)
 
-- [ ] **E1 岗位行拖拽漂移** — `COMPONENTS.md` 记载了 `row-draggable` + `POST /sys/position/reorder` 全套,但当前岗位页无拖拽、后端无端点(双向漂移)。倾向补实现(后端 reorder 按序赋 Sort + 前端 row-draggable,pro-table ^0.3.1 已支持);或退而修正文档。
+- [x] **E1 岗位行拖拽漂移 → 修文档对齐现实(第 13 轮)** — 核后发现价值很低:岗位排序早已可用(`Sort` 字段可编辑、列表默认 `OrderBy(Sort)`、用户表单岗位下拉继承此序),拖拽只是"改 Sort 值"的顺手糖,对一个种子 6 条、极少改动的小列表不值一个新 `reorder` 端点 + 整表重编号事务。缺陷实为**文档漂移**:`COMPONENTS.md` 吹了不存在的 `row-draggable` + `positionApi.reorder` + `POST /sys/position/reorder`。改文档:三处(行排序说明/^0.3.1 能力注/范例页标注)对齐——岗位排序 = 可编辑 Sort;`row-draggable` 是 pro-table 的纯前端能力但本项目未接线,要拖拽需自行补端点。零代码面。
 
 ## 不做清单(有依据,防反复)
 
@@ -63,6 +63,8 @@
 - 多租户消费者侧 skill 文档(replace-service 姊妹篇):字段级 = 前置替换 IDataScopeProvider + DataEntity 子类基座;库级 = 多 ConfigId。
 
 ## 轮次日志
+
+### 第 13 轮 — 批次 E(E1 岗位拖拽)· 核实后裁定**不实现,改文档对齐现实**。岗位排序早已能用(可编辑 `Sort` + 列表 `OrderBy(Sort)` + 用户表单下拉继承此序),拖拽只是改 Sort 值的顺手糖,对种子 6 条的小列表不值一个 `reorder` 端点 + 重编号事务;真缺陷是 `COMPONENTS.md` 吹了不存在的 `row-draggable`/`positionApi.reorder`/后端端点(文档漂移)。修 `web/COMPONENTS.md` 三处(行排序说明改为可编辑 Sort、`^0.3.1` 能力注去掉 position reorder、范例页标注改"可编辑 Sort 排序"),并注明 pro-table 的 `row-draggable` 是未接线的纯前端能力。零代码面,纯文档。**精致化台账 A/B/C/D/E 全部收口。**
 
 ### 第 12 轮 — 批次 D 复查 · 双 reviewer(code-reviewer + security-reviewer,均 opus)对 `478e308..d08951f` 对抗审 + 逐条修。**0 Critical / 0 High**;核心安全面(PKCE S256、id_token 全量验签含 nonce、state/票据原子单消费、令牌不进 URL、开户事务原子、分层、替换性契约、`(Provider,Subject)` 唯一非邮箱、未绑定默认拒绝、绑定越权已挡)双方独立判 SAFE。**修 2 Medium**:① 删用户未清 `sys_user_external` → 绑定行悬挂占唯一位,该外部身份既登不进也绑不到新号 = 永久锁死;`UserService.Delete/DeleteBatch` 事务内加 `ISysUserExternalService.UnbindAllAsync`(可选依赖注入,逐行软删走 `_del_{id}` 回收释放唯一位)+ 回归测试。② login 模式 `state` 仅存服务端缓存、未绑发起浏览器 → 登录 CSRF(他人拼 (code,state) 诱受害者登入攻击者账号);`/authorize` 下发 `HttpOnly;SameSite=Lax` binder cookie,回调 `FixedTimeEquals` 比对(bind 模式已由 `[ActiveSession]` UserId 兜住,豁免)+ HTTP 级测试(无 cookie→40014、带 cookie→越门到 40016)。**修 6 Low**:并发首登开户竞态回滚后 re-resolve 复用赢家账号(幂等,不甩裸 500);bind 回调改用 `ResolveEnabledProviderAsync` 补 IsEnabled 复检;`LoginByExternalAsync` 顶部 guard 三可选依赖(未接线给 40013 而非裸 NRE);`OidcExternalAuthProvider` 加 `allowHttpMetadata`(仅 Dev true,生产强制 https 元数据 fail-closed);`CallbackUri` 生产未配 `CallbackBaseUrl` 即抛(不回退请求 Host);企业微信 `corpsecret` 走 query 记 `ponytail` 文档注记(厂商 GET 契约,无代码可改,日志已不落 URL);开户查重 `ClearFilter` 注释纠偏为防御性(软删经回收已释放 Account)。验:后端 **304/0/0**(+2 测试),纯后端零前端改动。ADR-0002 补 L6 注记。
 

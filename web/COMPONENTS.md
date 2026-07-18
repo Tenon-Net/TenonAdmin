@@ -23,13 +23,13 @@ tenon 内接入约定:
 - **主从选中(dict)**:`:active-row-key` + `@row-click` 做行高亮/选中(勿再 `:deep(> td)`);行内交互控件(开关/按钮)的 render 里要 `stopPropagation`,否则点它会冒泡触发 `@row-click`。
 - **窄栏搜索(dict)**:`:search="{ layout: 'inline' }"` 无卡片单行,配合列 `search: true`。
 - **排序(user)**:列写 `sorter: true` → 点表头把 `{ sortField, sortOrder }` 并进 fetcher;**api 层要把它们映射成后端 `SortField/SortOrder` query**(见 `userApi.page`/`positionApi.page`)。后端按实体列白名单安全排序(非法字段忽略回退默认,`PagedListExtensions.OrderBySafe`),字段名 = 实体属性名(大小写不敏感)。
-- **行拖拽(position)**:`row-draggable` + `drag-handle=".drag-handle"`(手柄列避开行内开关/按钮冲突)+ `@row-drag-sort="(e)=> positionApi.reorder(e.reordered.map(r=>r.id)).then(refresh)"`。后端 `POST /sys/position/reorder` 按序赋 Sort;sortablejs 懒加载(独立 chunk)。
+- **行排序(position)**:岗位顺序用**可编辑 `Sort` 字段**——编辑弹窗一个 `n-input-number`,列表默认 `OrderBy(Sort)`,用户表单的岗位下拉也继承此序。ProTable 本身有 `row-draggable`(`drag-handle` + `@row-drag-sort`,sortablejs 懒加载)这个能力,但本项目**未接线**:没有 `positionApi.reorder`,后端也无 `POST /sys/position/reorder` 端点。要真拖拽排序,需先补该端点(按序赋 Sort)再启用手柄——对一个极少改动的小列表,数字框已够,故未做(见 `docs/refinement-ledger.md` E1)。
 - **搜索折叠**:`:search="{ collapsible: true }"`(仅 grid 布局,搜索项多时才用)。
 - **逃生口 slot**:`#toolbar-right`(工具栏右侧)、`#header-{key}`、`#empty`、`#pagination-prefix`;全局默认(align/pageSizes/emptyText/tag 等)也走 `PRO_TABLE_DEFAULTS`,免为小调整发包。
 - **已能用(透传)**:列宽拖拽(列 `resizable`)、虚拟滚动(`:virtual-scroll`+`max-height`)、合计行(`:summary`)、合并单元格(列 `rowSpan/colSpan`)——经 attrs/列透传,无需新 API。
-- **本地联调**:`NPT_LOCAL=1 npm run dev` 直连兄弟仓库源码(见 vite.config.ts),回路同图标包(改 → 发补丁版 → bump)。排序/拖拽/折叠需 `^0.3.1`(0.3.0 的行拖拽在 fetcher 模式下**从不生效**:Sortable 只在 onMounted 绑一次,而空表时 naive 根本没渲染 tbody);排序/拖拽依赖后端(`SortField/SortOrder` + position `reorder`),改后端后 `npm run gen:api` 重生成 schema。
+- **本地联调**:`NPT_LOCAL=1 npm run dev` 直连兄弟仓库源码(见 vite.config.ts),回路同图标包(改 → 发补丁版 → bump)。排序/拖拽/折叠这些能力需 `^0.3.1`(0.3.0 的行拖拽在 fetcher 模式下**从不生效**:Sortable 只在 onMounted 绑一次,而空表时 naive 根本没渲染 tbody);列排序依赖后端 `SortField/SortOrder`(行拖拽是纯前端能力,本项目未接线,见上),改后端后 `npm run gen:api` 重生成 schema。
 
-范例页:`src/views/system/user/index.vue`(标准列表 + 排序)、`position`(行拖拽)、`org`/`menu`(树)、`dict`(主从 + inline 搜索)。
+范例页:`src/views/system/user/index.vue`(标准列表 + 排序)、`position`(可编辑 Sort 排序)、`org`/`menu`(树)、`dict`(主从 + inline 搜索)。
 
 ## 自研通用组件索引
 
