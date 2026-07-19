@@ -4,7 +4,7 @@ Every generated API function has to end by turning the backend's response into e
 
 ## `unwrap` and `ApiError`
 
-Every generated API function lands on `.then(r => unwrap<T>(r))`. `unwrap` is the single place that tolerates the backend's two response shapes, collapsing both into a plain `T` or a thrown `ApiError`:
+Most of the hand-written functions in `src/api/index.ts` land on `.then(r => unwrap<T>(r))` (`gen:api` only generates `schema.d.ts`'s types — the functions themselves are hand-written). Paged endpoints land on `toPage`, which calls `unwrap` internally; the one exception is file downloads, which use `parseAs: 'blob'` — the response isn't an envelope at all, so they check `response.ok` directly instead. `unwrap` is the place that tolerates the backend's two response shapes, collapsing both into a plain `T` or a thrown `ApiError`:
 
 ```ts
 export function unwrap<T>(res: { data?: unknown; error?: unknown; response: Response }): T {
@@ -57,9 +57,9 @@ How `translateError` turns `err` into that Chinese/English message is the subjec
 Every list endpoint repeats the same two conversions, so they're factored out:
 
 ```ts
-const pageParams = (p: { page: number; pageSize: number }) => ({ Current: p.page, Size: p.pageSize })
+export const pageParams = (p: { page: number; pageSize: number }) => ({ Current: p.page, Size: p.pageSize })
 
-function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; total: number } {
+export function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; total: number } {
   const p = unwrap<PagedList<T>>(res)
   return { items: p.items, total: p.total }
 }
@@ -119,7 +119,7 @@ export function translateError(err: unknown): string {
 How error keys themselves get added, and how the namespaces are organized, is no different from ordinary copy keys and belongs to [Internationalization](/frontend/i18n); this page is only about the code-to-key half of the mapping.
 
 ::: warning Adding an error code is two halves of one change
-Suppose you add a new backend error code — `[MsgKey("error.file.duplicateHash")] FileDuplicateHash = 44007` — but nobody adds `error.file.duplicateHash` to `zh-CN.ts` / `en-US.ts`. Here's what happens: `i18n.global.te(...)` returns `false`, `translateError` falls through to `err.message` (the backend's raw, non-localized debug string), and if that's empty too, on to `error._fallback`. Nothing crashes, but the user sees a generic or off-tone message instead of the one they should. **Adding a backend `ErrorCode` and adding the matching frontend `error.xxx.yyy` key are two halves of one change** — a PR that does only the first is incomplete.
+Suppose you add a new backend error code — `[MsgKey("error.file.duplicateHash")] FileDuplicateHash = 44007` — but nobody adds `error.file.duplicateHash` to `zh-CN.ts` / `en-US.ts`. Here's what happens: `i18n.global.te(...)` returns `false`, and `translateError` falls through to `err.message`. But `err.message` defaults to the msgKey itself (`Result.Message = message ?? code.GetMsgKey()`), so what actually lands in the UI is the raw string `error.file.duplicateHash`, verbatim. **Adding a backend `ErrorCode` and adding the matching frontend `error.xxx.yyy` key are two halves of one change** — and this isn't only a runtime embarrassment: `ErrorCodeLocaleConsistencyTests` checks that every `[MsgKey]`'s leaf segment exists in both language packs, so a missing entry turns a **backend** test red — while the person debugging it is usually looking on the frontend.
 :::
 
 ## Regenerating the contract

@@ -4,8 +4,8 @@ Check your work against this list before writing a page or wiring up an API. The
 
 ## Where things go
 
-- Pages are organized by module/entity: `views/<module>/<entity>/index.vue`; follow `views/system/menu/index.vue` for a full CRUD example (`NDataTable` + `NModal` form + `NPopconfirm`).
-- `composables/` (`use*`) holds the single source of UI-library-agnostic logic; Naive message callbacks are injected by the view, not written into the composable.
+- Pages are organized by module/entity: `views/<module>/<entity>/index.vue`; follow `views/system/menu/index.vue` for a full CRUD example (`ProTable` + a `FormContainer` modal form + `useConfirm` confirmation).
+- `composables/` (`use*`) holds the single source of logic, decoupled from the UI library by default, with error and message callbacks injected by the view. The explicit exceptions are ones that genuinely need a Naive provider in context: `useConfirm` calls `useDialog`/`useMessage` directly, `useTheme` calls `darkTheme` directly, and both can only be called from inside `setup`.
 - `api/` has three pieces: `client.ts` (openapi-fetch) + `index.ts` (grouped by domain) + the generated `schema.d.ts`. See [project structure](/frontend/structure) for the other directories' responsibilities.
 
 ## API contract
@@ -16,7 +16,7 @@ Check your work against this list before writing a page or wiring up an API. The
 
 - API calls are centralized in the `api/` layer, grouped by domain (`authApi`/`userApi`/`moduleApi`/`menuApi`… in `api/index.ts`; your own modules in `api/<domain>.ts`, importing `unwrap`/`pageParams`/`toPage` from `./index`); each method is shaped like `client.X(...).then(r => unwrap<T>(r))` — never call `client` bare in a view.
 - `unwrap` unwraps the envelope uniformly; failures (`code≠0` or non-2xx) all normalize to `ApiError` (carrying `code`/`msgKey`), and the view `catch`es it and produces copy with `translateError(e)`.
-- Pagination is normalized at the API layer into `{ items, total }` to fit `useTable` (the backend returns `PagedList<T>{current,size,total,items}`).
+- Pagination is normalized at the API layer into `{ items, total }` to fit ProTable's `fetcher` (the backend returns `PagedList<T>{current,size,total,items}`).
 - Query parameter names use PascalCase (required by ASP.NET model binding).
 - Set `VITE_API_BASE` at build time only when the frontend and backend are genuinely cross-origin (CDN / separate domain), and the backend must then explicitly configure `TenonAdmin:Api:Cors:AllowedOrigins` (deny-all by default). See [the HTTP request layer](/frontend/request) for the auth / 401-refresh middleware and [consuming backend responses](/frontend/api-contract) for the envelope-unwrapping details.
 
@@ -32,13 +32,13 @@ Persisting them skips the refresh-rebuild flow and sends you straight to a 404 a
 
 ## State (Pinia)
 
-- `defineStore` + `actions`; **persist selectively** with `persist: { pick: [...] }`, not the whole store (e.g. `auth` persists only `currentModuleId`).
-- Existing stores: `auth` (module/menu/permission codes/`routesReady`), `user` (token/login state), `app` (theme/preferences), `tabs` (tab pages). Logout goes through `reset()` to clear the auth state and the tabs.
+- `defineStore` + `actions`; **persist selectively** with `pick` — don't blindly persist a whole store in full. `auth` persists only `currentModuleId`; `tabs` persists only `tabs`, to `sessionStorage`. The exception is a store whose entire state is genuinely needed across a session: `user`'s three fields would log you out on a refresh if any one were missing, so it's declared `persist: true` wholesale.
+- Existing stores: `auth` (module/menu/permission codes/`routesReady`), `user` (token/login state), `app` (theme/preferences), `tabs` (tab pages), `dict` (dictionary cache, session-scoped memory only, never persisted, invalidated via `invalidate` after any create/update/delete). Logout goes through `reset()` to clear the auth state and the tabs.
 
 ## Composables
 
-- Named `use*`, returning reactive refs and methods, **Naive-agnostic** (error / message callbacks are injected by the view — see `useTable`'s `onError`).
-- List pages use `composables/useTable.ts` uniformly: pass a `fetcher(({page,pageSize,...params})=>Promise<{items,total}>)` and get back `loading/rows/pagination/load/search/onPage/onPageSize`.
+- Named `use*`, returning reactive refs and methods.
+- List pages uniformly use `tenon-naive-pro-table`'s `ProTable` in remote mode: pass it `:fetcher` with the signature `(p: { page, pageSize, ...params }) => Promise<{ items, total }>`, and ProTable manages pagination and loading itself.
 
 ## Button-level permissions
 
@@ -52,7 +52,7 @@ Persisting them skips the refresh-rebuild flow and sends you straight to a 404 a
 ## Shared components
 
 - The admin backend has **no component-demo menu**; component usage is consolidated in [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md) — read it before writing a page to avoid reinventing the wheel, and update it when you add a new general-purpose component.
-- Existing ones include ProTable / FormContainer / `useConfirm` / StatusSwitch / the dict suite (DictSelect/DictRadio/DictTag/DictCheckbox) / OrgTreeSelect / FileUpload (chunked resumable) / ApiSelect (from which UserSelect/RoleSelect derive); see each component's `README.md` in its own directory for the detailed API.
+- Existing ones include ProTable / FormContainer / `useConfirm` / StatusSwitch / the dict components (DictSelect, DictTag) / OrgTreeSelect / FileUpload (`chunked` for resumable upload) / ApiSelect (from which UserSelect derives) / UserPicker / PasswordStrength / Chart / CodeBlock / MarkdownEditor / IconPicker, and more — treat `web/COMPONENTS.md` as the authoritative full list, and see each component's own `README.md` for its detailed API.
 
 ## i18n
 

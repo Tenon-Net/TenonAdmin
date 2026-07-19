@@ -11,7 +11,7 @@ The design *why* — dependency direction, replaceability, the request pipeline 
 | Folder | Contents |
 | --- | --- |
 | `samples/` | `MinimalHost` — the zero-config sample host used for local dev and manual verification |
-| `src/` | The six shipped packages |
+| `src/` | The eight shipped packages |
 | `tests/` | `TenonAdmin.Tests` (the test suite) and `TenonAdmin.TestHost` (a minimal consumer host) |
 
 `src/` holds the packages described in depth on the [Architecture](/backend/architecture) page — here's just enough to orient you:

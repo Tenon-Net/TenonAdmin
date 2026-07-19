@@ -4,7 +4,7 @@ Replaceability is the kernel's central concern: every service is interface-backe
 
 ## Constraint one: `TryAdd` registration, first registrant wins
 
-Built-in services are registered exclusively with `TryAdd*`, never `Add*`. `TryAdd`'s semantics are "if the container already has a registration for this interface, don't add another" — so if a consumer registers the same interface **before** `AddTenonAdmin()`, their implementation wins and the built-in one is skipped.
+Built-in services are registered exclusively with `TryAdd*`, never `Add*`. `TryAdd`'s semantics are "if the container already has a registration for this interface, don't add another" — so if a consumer registers the same interface **before** `AddTenonAdmin()`, their implementation wins and the built-in one is skipped. That only holds for single-implementation interfaces, though. `ICaptchaProvider` and `ISeedData` go through `TryAddEnumerable` instead, deduplicated by implementation type — the semantics there are "join the set," not "replace." A consumer's pre-registered slider-captcha provider ends up sitting alongside the three built-in ones rather than displacing them; which one actually gets used is decided separately, by `TenonAdmin:Security:Captcha:Type`.
 
 `ServicesSetup` is full of this pattern:
 
@@ -63,12 +63,13 @@ The rest of the login flow (captcha validation, failure lockout, password verifi
 
 A consumer's entities and controllers are mounted into the kernel via `options.ApplicationAssemblies`, extending it without modifying the kernel: entities join CodeFirst table creation, and controllers get `AddApplicationPart`-ed into the same MVC pipeline. See [Layered Architecture](./architecture.md#how-a-consumers-entities-and-controllers-plug-in) for details.
 
-Combined with module disabling, a consumer can even **take over** the routes of a built-in module: after disabling the built-in `Dict` module, their own `CustomDictController` can claim the `/api/v1/sys/dict/*` route.
+Combined with module disabling, a consumer can even **take over** the routes of a built-in module: after disabling the built-in `Dict` module, their own `CustomDictController` can claim the `/api/v1/sys/dict/*` route. The disable step isn't optional — skip it and both controllers end up registered on the same route, which throws an `AmbiguousMatchException` on the first request that hits it. Nothing catches this at startup; it only surfaces the moment a request lands there.
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration, options =>
 {
     options.ApplicationAssemblies.Add(typeof(MyModule).Assembly);
+    options.Api.DisabledModules = ["Dict"];   // skip this line and it's a route conflict, not a takeover
 });
 ```
 

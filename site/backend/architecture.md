@@ -1,6 +1,6 @@
 # Layered Architecture and Package Dependencies
 
-TenonAdmin is composed of six NuGet packages; the five forming the core chain may only depend downward — upper layers can reference lower ones, never the reverse. Reverse that direction in any one layer and both replaceability and the dependency boundary collapse together. The sixth package, `TenonAdmin.Caching.Redis`, hangs off `Core` as an optional side-branch outside that chain.
+TenonAdmin is composed of eight NuGet packages; the five forming the core chain may only depend downward — upper layers can reference lower ones, never the reverse. Reverse that direction in any one layer and both replaceability and the dependency boundary collapse together. The other three all hang off `Core` as optional side-branches outside that chain.
 
 ## The core chain — five packages
 
@@ -17,14 +17,18 @@ TenonAdmin.AspNetCore  Host integration: AddTenonAdmin / MapTenonAdmin, JWT, [Ro
 TenonAdmin             Meta-package: references AspNetCore only. Consumers install this one package and transitively pull in the whole stack.
 ```
 
-Off to the side, `TenonAdmin.Caching.Redis` depends only on `Core` — none of Core/SqlSugar/Services/AspNetCore reference it back:
+Off to the side, all three optional packages depend only on `Core` — none of Core/SqlSugar/Services/AspNetCore reference any of them back:
 
 ```text
 TenonAdmin.Caching.Redis   Optional: RedisCacheProvider (StackExchange.Redis-backed ICacheProvider), opt-in via
                             AddTenonAdminRedisCache(configuration) called *before* AddTenonAdmin().
+TenonAdmin.Auth.WeCom      Optional: an IExternalLoginProvider implementation for WeCom QR-code login.
+TenonAdmin.Auth.DingTalk   Optional: an IExternalLoginProvider implementation for DingTalk QR-code login.
    ↑
 TenonAdmin.Core
 ```
+
+Neither login satellite package carries a single third-party runtime dependency beyond Microsoft.* — the dependency red line holds for optional packages too, not just the core chain.
 
 Responsibilities and dependency direction per layer:
 
@@ -36,6 +40,8 @@ Responsibilities and dependency direction per layer:
 | `TenonAdmin.AspNetCore` | JWT, authorization filters, built-in controllers, global filters, `AddTenonAdmin` | Services, SqlSugar, Core | Microsoft.AspNetCore.* |
 | `TenonAdmin` (meta-package) | Aggregation entry point | AspNetCore | — |
 | `TenonAdmin.Caching.Redis` (optional) | `RedisCacheProvider` — Redis-backed `ICacheProvider` | Core only | StackExchange.Redis |
+| `TenonAdmin.Auth.WeCom` (optional) | `IExternalLoginProvider` for WeCom QR-code login | Core only | Microsoft.* only |
+| `TenonAdmin.Auth.DingTalk` (optional) | `IExternalLoginProvider` for DingTalk QR-code login | Core only | Microsoft.* only |
 
 `TenonAdmin.Caching.Redis` doesn't introduce a new mechanism — it's the kernel's `TryAdd` replaceability, applied to the cache provider. A consumer calls `AddTenonAdminRedisCache(configuration)` before `AddTenonAdmin()`, which `TryAddSingleton`s a `RedisCacheProvider` that wins the race and replaces the kernel's default in-process `MemoryCacheProvider`. Skip the call, or don't set `TenonAdmin:Cache:Provider=Redis`, and the kernel's in-process default keeps working unchanged.
 

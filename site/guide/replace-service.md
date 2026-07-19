@@ -47,7 +47,7 @@ Common replacement points:
 | `IDataScopeProvider` | `DataScopeProvider` | To customize data-scope rules |
 | `IIdGenerator` | `SnowflakeIdGenerator` | For DB auto-increment / GUID v7 |
 
-The full list is every `TryAdd` line in `backend/src/TenonAdmin.Services/ServicesSetup.cs` — every interface registered there is a replacement point.
+Most replacement points are every `TryAdd` line in `backend/src/TenonAdmin.Services/ServicesSetup.cs`. The data layer and host layer each have their own batch too — `IIdGenerator`, for instance, is registered in `backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs`. Every interface registered in any of these is a replacement point.
 
 ## Change just one step: subclass and override a virtual
 
@@ -115,7 +115,7 @@ public class ProductSeed : ISeedData<BizProduct>
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, ProductSeed>());
 ```
 
-A seed row's fixed Id must fall within the **consumer-reserved range `[1000, 4095]`** (constants in `TenonAdmin.Core.TenonSeedIds`: `ConsumerMin`=1000, `ConsumerMax`=4095). `[1, 999]` belongs to the kernel's built-in seeds, and `4096` upward is the snowflake runtime ID range — going out of range or colliding is rejected on the spot by the startup check (`DatabaseInitializer`), and the app won't start rather than swallowing it silently.
+A seed row's fixed Id must fall within the **consumer-reserved range `[1000, 4095]`** (constants in `TenonAdmin.Core.TenonSeedIds`: `ConsumerMin`=1000, `ConsumerMax`=4095). `[1, 999]` belongs to the kernel's built-in seeds, and `4096` upward is the snowflake runtime ID range. `Id = 0` or `≥ 4096` is rejected on the spot by the startup check (`DatabaseInitializer`), and the app won't start rather than swallowing it silently. Landing inside the kernel's own `[1, 999]` range, though, doesn't throw — the runtime has no way to tell a consumer's seed from the kernel's, so that lower bound is on the honor system alone. Always pick numbers starting from `TenonSeedIds.ConsumerMin`; collide with a number the kernel claims later and the cost is a primary-key conflict on upgrade, with no way back.
 
 ::: warning Forgetting to register means it silently never runs
 The kernel doesn't scan assemblies for seeds (`options.ApplicationAssemblies` only handles entity table creation and controller mounting — it doesn't touch seeds). Seeds must be registered explicitly; miss this line and the seed doesn't run, with no error either.

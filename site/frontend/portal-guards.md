@@ -27,7 +27,7 @@ async function enterInitial(): Promise<EnterResult> {
 }
 ```
 
-The module list, permission codes, and super-admin flag are fetched in parallel. The latter two fail closed: the moment `personalApi.permissions()` fails, `permissionsLoaded` stays `false`, and the `v-auth` directive treats that as "hide it" rather than granting access it can't be sure of; if `profile` can't be fetched, the user is treated as ordinary, so nobody gets mistaken for a super admin. This step doesn't block entry to the portal — you can still get in without permissions, every button is just treated as "no access" for now.
+The module list, permission codes, and super-admin flag are fetched in parallel. The latter two fail closed: the moment `personalApi.permissions()` fails, `permissionsLoaded` stays `false`, and the `v-auth` directive treats that as "hide it" rather than granting access it can't be sure of; if `profile` can't be fetched, the user is treated as ordinary, so nobody gets mistaken for a super admin. This step doesn't block entry to the portal — you can still get in without permissions, every button except a super admin's is just treated as "no access" for now. A super admin goes through the separate fail-open branch in `hasPerm` keyed on `isSuperAdmin`, so their buttons still show even when the permission-code fetch failed — the server-side `sadm` claim backstops it either way.
 
 Once that data is in, `enterInitial` runs an "which app to enter" ladder, top to bottom, first hit wins:
 

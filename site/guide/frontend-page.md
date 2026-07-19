@@ -109,7 +109,7 @@ const columns: DataTableColumns<SampleDoc> = [
               NPopconfirm,
               {
                 onPositiveClick: () =>
-                  run(() => sampleDocApi.remove(r.id), t('common.deleted')).then((ok) => { if (ok) load() }),
+                  run(() => sampleDocApi.remove(r.id), t('sampleDoc.deleted')).then((ok) => { if (ok) load() }),
               },
               {
                 trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
@@ -184,7 +184,7 @@ A few conventions, all from `web/COMPONENTS.md`, not invented here:
 - **`FormContainer` takes over loading/close via the `onConfirm` protocol** — put `validate()` as the first line of `save()`, and a validation failure rejects and blocks the close; on an API failure, `return false` (or throw) keeps the modal open so the user can fix and retry. Business code doesn't manage `saving` or the footer bar itself.
 - **`useConfirm().run` paired with `n-popconfirm`**: the popconfirm is the trigger, the post-confirm action and its success/failure toast go to `run`, and `run` returns an `ok` boolean — only reload with `load()` once something was actually deleted.
 - **Button-level permissions, both converging on the same permission code**: buttons in the template use the `v-auth` directive (its value is the route permission code `POST:/api/v1/sample/doc`; a non-match removes the DOM node outright); the edit/delete buttons in the operation column go through an `h()` render function where the directive can't be used, so they switch to `authStore.hasPerm(...)` to decide whether to render. Both paths share one ruling: the super admin is let through everything, buttons hide when the permission code isn't present, and a regular user is matched exactly by code. **This is only UI decluttering — the server is always the authority**: the real interception is the backend's `[RolePermission]`, and an over-privileged request still gets a 403. For the rule details, see [Frontend Permission Model](/frontend/permission).
-- **Error handling stays in the view layer**: `catch (e) { message.error(translateError(e)) }` — no UI popups in the API layer. `translateError` looks up text in the locale by the error's `code`/`msgKey`.
+- **Error handling stays in the view layer**: `catch (e) { message.error(translateError(e)) }` — no UI popups in the API layer. `translateError` looks up text in the locale by the error's `msgKey` alone; it never reads the numeric `code`.
 
 ## Attach it to the menu so the page becomes visible
 
@@ -211,6 +211,7 @@ export default {
   addTitle: 'Add Document',
   editTitle: 'Edit Document',
   deleteConfirm: 'Confirm deleting "{title}"?',
+  deleted: 'Deleted',
 }
 ```
 
@@ -221,7 +222,8 @@ export default {
   titleRequired: '请输入标题',
   addTitle: '新增文档',
   editTitle: '编辑文档',
-  deleteConfirm: '确认删除“{title}”?',
+  deleteConfirm: '确认删除「{title}」?',
+  deleted: '已删除',
 }
 ```
 

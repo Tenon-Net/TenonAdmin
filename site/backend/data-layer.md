@@ -90,10 +90,27 @@ client.Aop.DataExecuting = (_, info) =>
 
 ## Entity base classes
 
-Business entities choose one of two base classes:
+Business entities pick a base class by **which capabilities they need**. Five base classes form a chain, each level adding one more:
 
-- `BaseEntity` — primary key `Id` + the audit quartet (`CreateTime` / `CreateUserId` / `UpdateTime` / `UpdateUserId`) + soft delete `IsDelete`. Implements `ISoftDelete`. Used by tables that don't need org isolation (global dictionaries, the org tree itself).
-- `DataEntity` — inherits `BaseEntity`, adds the data-scope anchor `CreateOrgId`, implements `IOrgScoped`. Used by business tables that need "current org / current org and below / self only / custom" isolation.
+```text
+PrimaryId          primary key Id only
+  └─ AuditEntity   + the audit quartet (CreateTime / CreateUserId / UpdateTime / UpdateUserId)
+       ├─ BaseEntity      + soft delete IsDelete         implements ISoftDelete
+       │    └─ DataEntity      + org anchor CreateOrgId  implements IOrgScoped
+       └─ OrgAuditEntity  + org anchor CreateOrgId        implements IOrgScoped
+```
+
+| Base class | Audit | Soft delete | Org isolation | Used for |
+| --- | --- | --- | --- | --- |
+| `PrimaryId` | No | No | No | Detail/child tables. **Can't use the built-in repository or be seeded** (`IRepository<T>` is constrained to `where T : BaseEntity`) — typically read/written alongside the parent table in the same transaction via `ISqlSugarClient` |
+| `AuditEntity` | Yes | No | No | Tables that genuinely need real deletes but still want a paper trail: hard-deletable join tables, append-only log tables |
+| `BaseEntity` | Yes | Yes | No | Globally shared tables: dictionaries, config, the org tree itself |
+| `DataEntity` | Yes | Yes | Yes | Business tables needing "current org / current org and below / self only / custom" isolation |
+| `OrgAuditEntity` | Yes | No | Yes | Tables that need org isolation but also genuinely need real deletes |
+
+**For the two without soft delete, the repository's `DeleteAsync` is a physical delete** — the row is removed from the database, no recycle bin, no `RestoreAsync`. Ask whether a table needs a recycle bin before picking its base class.
+
+Both org-isolated base classes (`DataEntity` / `OrgAuditEntity`) get the write-path guard: the repository's `UpdateAsync`/`DeleteAsync` has a built-in scope check for `IOrgScoped` entities, and modifying/deleting a row from another org is rejected, returning 0 rows.
 
 ## Generic repository `IRepository<>`
 

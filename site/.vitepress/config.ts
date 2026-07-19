@@ -72,6 +72,8 @@ const enThemeConfig = {
           { text: 'Request Pipeline', link: '/backend/request-pipeline' },
           { text: 'Multi-Org Data Permissions', link: '/backend/data-scope' },
           { text: 'Auth & Security', link: '/backend/auth-security' },
+          { text: 'External Login (SSO)', link: '/backend/external-login' },
+          { text: 'Realtime Notifications', link: '/backend/realtime' },
           { text: 'Data Layer & Auditing', link: '/backend/data-layer' },
         ],
       },
