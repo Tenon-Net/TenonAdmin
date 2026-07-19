@@ -30,7 +30,7 @@ TenonAdmin 的外观由 CSS 自定义属性驱动，不是组件 props。`web/sr
 
 主色是唯一不直接读、而是算出来的一档。6 个候选主色，不可能每个都在 `tokens.css` 里预写 hover/pressed/light 四态。所以只存一个 `accent`，其余状态由 `mix(a, b, t)` 派生。`mix` 在 `web/src/theme/mix.ts`，把两色按 `t∈[0,1]` 线性插值。亮色这样算：`hover = mix(primary, #FFF, .16)`、`pressed = mix(primary, #000, .18)`。暗色不一样，先把 accent 往白里提亮一档 `mix(accent, #FFF, .18)`，再往下派生，免得靛蓝压在深底上发闷。
 
-这些都落地在 `useTheme()`，它在 `web/src/composables/useTheme.ts`。它盯着 `app.isDark`、`accent`、`density` 三样，任意一个变就动手。往 `<html>` 打 `data-theme` 和 `data-density`，把派生出的 `--color-primary*` 写进 `document.documentElement`，让消费 token 的手写 CSS 立即换色，再重建 Naive 的 `themeOverrides`。`App.vue` 把结果接到 `<n-config-provider :theme-overrides>`，包住整个应用。
+这些都落地在 `web/src/composables/useTheme.ts` 的 `useTheme()` 里，盯着 `app.isDark`、`accent`、`density` 三样，任意一个变就动手。往 `<html>` 打 `data-theme` 和 `data-density`，把派生出的 `--color-primary*` 写进 `document.documentElement`，让消费 token 的手写 CSS 立即换色，再重建 Naive 的 `themeOverrides`。`App.vue` 把结果接到 `<n-config-provider :theme-overrides>`，包住整个应用。
 
 ::: tip 完整 token 表
 上面够你换主色、加暗色、判断该改哪一层。完整的令牌清单、语义徽章派生、`token → Naive` 全映射表，见 [`web/DESIGN.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/DESIGN.md)。
@@ -40,7 +40,7 @@ TenonAdmin 的外观由 CSS 自定义属性驱动，不是组件 props。`web/sr
 
 图标是**离线渲染**的。几套 Iconify 图标集，加上你自己的本地 SVG，启动时统一注册一次。之后在任意组件里，通过薄封装 `AppIcon` 使用，也可以在菜单管理里用 `IconPicker` 交互式挑选。
 
-`setupIcons()` 在 `main.ts` 里只调一次，它在 `web/src/lib/icons.ts`。它通过 `tenon-naive-iconify-picker` 的 `setupIconPicker` 注册两类来源：
+`setupIcons()`（`web/src/lib/icons.ts`）在 `main.ts` 里只调一次，靠 `tenon-naive-iconify-picker` 的 `setupIconPicker` 注册两类来源：
 
 - **离线 Iconify 集**：`ph`（Phosphor，默认集，启动时预热）、`lucide`（Lucide）、`ep`（Element Plus）、`ant-design`（Ant Design）。每套是独立的懒加载 `@iconify-json/<prefix>` chunk，第一次用到才加载。
 - **本地 SVG**：`src/assets/svg/*.svg` 下的所有文件，以原始字符串 glob 导入：
@@ -72,7 +72,7 @@ import AppIcon from '@/components/AppIcon.vue'
 
 ## 在菜单管理里选图标
 
-`IconPicker` 是应用里的选择器，用在**系统管理 → 菜单管理**的菜单 `icon` 字段上，它在 `web/src/components/IconPicker/index.vue`。它封装了 npm 包的 `IconPicker`，注入 tenon 自己的 vue-i18n 文案，还复用 `setupIcons()` 已经全局注册好的图标集。所以 `ph` 成了首个、也是默认的 Tab，调用处不用再配置。
+`IconPicker` 是应用里的选择器，用在**系统管理 → 菜单管理**的菜单 `icon` 字段上：封装了 npm 包的 `IconPicker`，注入 tenon 自己的 vue-i18n 文案，还复用 `setupIcons()` 已经全局注册好的图标集，源码在 `web/src/components/IconPicker/index.vue`。所以 `ph` 成了首个、也是默认的 Tab，调用处不用再配置。
 
 ::: tip 选择器完整 API
 这里只讲图标在应用里怎么接入。选择器组件本身由独立包提供。多图标库 Tab、注册本地 SVG、`labels`/i18n、`v-model` 约定，这些完整 API 见 [IconPicker](/zh/components/icon-picker)。

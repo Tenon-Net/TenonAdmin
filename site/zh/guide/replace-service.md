@@ -53,7 +53,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 
 整体替换要重新注入服务的全部依赖，大多数时候你并不想改那么多。内核把长方法拆成了若干 `protected virtual` 小步骤（模板方法），你继承后只覆写要改的那一步，其余原样走基类。
 
-`AuthService.LoginAsync` 就是范本，源码在 `backend/src/TenonAdmin.Services/Auth/AuthService.cs`。它只编排一串 `virtual` 步骤：失败锁定检查 → 验证码 → `ValidateUserAsync` 账密校验 → 停用/锁定策略 → 密码过期 → `CheckSmsSecondFactorAsync` 短信二次验证 → 签发令牌 → `OnLoginSucceededAsync` 成功后置 → `BuildLoginOutput` 组装出参。
+`AuthService.LoginAsync`（`backend/src/TenonAdmin.Services/Auth/AuthService.cs`）就是范本，通篇只编排一串 `virtual` 步骤：失败锁定检查 → 验证码 → `ValidateUserAsync` 账密校验 → 停用/锁定策略 → 密码过期 → `CheckSmsSecondFactorAsync` 短信二次验证 → 签发令牌 → `OnLoginSucceededAsync` 成功后置 → `BuildLoginOutput` 组装出参。
 
 想对接 LDAP，只覆写 `ValidateUserAsync`。想给登录返回值加字段，只覆写 `BuildLoginOutput`。想让没绑手机号的用户也强制走二次验证，只覆写 `CheckSmsSecondFactorAsync`。内核默认对这种用户直通，原因见[短信验证](/zh/backend/auth-security#短信验证-二次验证与免密登录)：
 

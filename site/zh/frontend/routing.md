@@ -120,7 +120,7 @@ export async function buildRoutesForModule(moduleId: number): Promise<void> {
 
 ## 详情页的约定路由
 
-`views/**/detail.vue` 是另一条约定，不用碰 `routes.ts` 就能生效。任何模块下丢一个 `detail.vue`，就会多出一条 `/<模块路径>/:id/detail` 的路由。`registerDetailRoutes()` 扫描 `import.meta.glob('/src/views/**/detail.vue')`，它在 `router/detailRoutes.ts`。它和 `buildRoutesForModule` 里的菜单路由**在同一处一并注册**，就是上面代码块末尾那行。所以登录、切应用、F5 深链重建时，详情路由跟着菜单路由一起复活，不会出现「菜单能进，详情页刷新就 404」的情况。
+`views/**/detail.vue` 是另一条约定，不用碰 `routes.ts` 就能生效。任何模块下丢一个 `detail.vue`，就会多出一条 `/<模块路径>/:id/detail` 的路由。`registerDetailRoutes()`（`router/detailRoutes.ts`）扫描 `import.meta.glob('/src/views/**/detail.vue')`，和 `buildRoutesForModule` 里的菜单路由**在同一处一并注册**，就是上面代码块末尾那行。所以登录、切应用、F5 深链重建时，详情路由跟着菜单路由一起复活，不会出现「菜单能进，详情页刷新就 404」的情况。
 
 详情页默认不进 `keep-alive`（`meta.noCache: true`），标题先顶一个通用的「详情」占位，数据加载完成后用 `useTabTitle()` 把当前标签标题换成具体记录名（比如「张三」「工单 #123」）。这个 setter 只应该在「详情页是当前独立标签」时调用；如果详情是在列表页内就地展开（同一个标签里切换），调用它反而会把列表标签的标题改错。参数名固定是 `:id`，需要多参数或非 `id` 命名时这条约定就不够用了，退回显式静态路由。
 
