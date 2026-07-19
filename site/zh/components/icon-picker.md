@@ -1,6 +1,6 @@
 # IconPicker
 
-> `tenon-naive-iconify-picker`：面向 Vue 3 + Naive UI 的离线优先图标选择器与渲染器，基于 [Iconify](https://iconify.design)。tenon 把它作为独立 npm 包发布，模板里只留三层薄封装来消费（当前版本 `^0.1.3`）。
+> `tenon-naive-iconify-picker`：面向 Vue 3 + Naive UI 的离线优先图标选择器与渲染器，基于 [Iconify](https://iconify.design)。tenon 把它作为独立 npm 包发布，模板里只留三层薄封装来接它（当前版本 `^0.1.3`）。
 
 <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:1rem 0">
   <a href="https://www.npmjs.com/package/tenon-naive-iconify-picker"><img src="https://img.shields.io/npm/v/tenon-naive-iconify-picker?color=cb3837&logo=npm" alt="npm"></a>

@@ -1,6 +1,6 @@
 # 前端规范（Vue 3 + Naive UI）
 
-写页面、调接口前对着这份清单核一遍。栈是 `<script setup>` + Naive UI + Pinia（持久化）+ vue-router + vue-i18n + VueUse，路径别名 `@` → `src`。整体架构见 [核心概念](/zh/guide/concepts)。组件用法与设计系统分别归仓库的 [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md) 和 [`web/DESIGN.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/DESIGN.md)。
+写页面、调接口前对着这份清单核一遍。栈是 `<script setup>` + Naive UI + Pinia（持久化）+ vue-router + vue-i18n + VueUse，路径别名 `@` → `src`。整体架构翻 [核心概念](/zh/guide/concepts)；组件怎么用、设计系统长什么样，去仓库的 [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md) 和 [`web/DESIGN.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/DESIGN.md) 找。
 
 ## 目录落点
 
@@ -11,7 +11,7 @@
 ## API 契约
 
 ::: warning schema.d.ts 是生成产物，禁手改
-`src/api/schema.d.ts` 由后端 OpenAPI 生成，命令是 `npm run gen:api`。生成时**后端必须正在运行**，不然拉不到 `/openapi/v1.json`。手改它，下次一生成就被覆盖。要调类型，只能改后端接口或 DTO，再重新生成。生产不挂该端点，为什么见 [常见问题](/zh/faq)。
+`src/api/schema.d.ts` 由后端 OpenAPI 生成，命令是 `npm run gen:api`。生成时**后端必须正在运行**，不然拉不到 `/openapi/v1.json`。手改它，下次一生成就被覆盖。要调类型，只能改后端接口或 DTO，再重新生成。生产环境为什么不挂这个端点，见 [常见问题](/zh/faq)。
 :::
 
 - API 调用集中在 `api/` 层按域分组（内置的在 `api/index.ts`：`authApi`/`userApi`/`moduleApi`/`menuApi` …；你自己的模块新建 `api/<域>.ts`，从 `./index` 导入 `unwrap`/`pageParams`/`toPage`），每个方法形如 `client.X(...).then(r => unwrap<T>(r))`，不在视图里裸调 `client`。

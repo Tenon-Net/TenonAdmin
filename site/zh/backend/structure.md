@@ -37,7 +37,7 @@
 
 - `TargetFramework` 是 `net10.0`，`Nullable` 与 `ImplicitUsings` 都已开启。
 - `GenerateDocumentationFile` 开着，同时用 `NoWarn` 压掉 `CS1591`。发布的包因此带 XML 注释，消费方步进源码时看得懂在改哪一步。但不强制每个 public 成员都写注释，免得警告刷屏。
-- NuGet 元数据也统一在这里：`Version`（`0.1.1`，发版时经 `-p:Version` 由 tag 覆盖）、`PackageLicenseExpression`(`Apache-2.0`)、`PackageTags`(`admin;rbac;sqlsugar;aspnetcore;scaffold;kernel`)。
+- NuGet 元数据也统一在这里：`PackageLicenseExpression`(`Apache-2.0`)、`PackageTags`(`admin;rbac;sqlsugar;aspnetcore;scaffold;kernel`)。`Version` 默认写的是 `0.1.1`，发版时经 `-p:Version` 由 tag 覆盖。
 - SourceLink 靠 `PublishRepositoryUrl`/`EmbedUntrackedSources`/`IncludeSymbols`（符号包用 `snupkg` 格式）接好，消费方调试时能直接步进内核源码。`ContinuousIntegrationBuild` 只在 `GITHUB_ACTIONS` 环境变量存在时才开，因为它会把内嵌源码路径规范化，本地开着反而会打乱调试路径。
 
 ::: tip `IsPackable` 默认是 false

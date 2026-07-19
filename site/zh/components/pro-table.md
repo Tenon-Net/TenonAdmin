@@ -30,7 +30,7 @@ const columns: ProTableColumn<SysPosition>[] = [
 </template>
 ```
 
-`name` 列写了 `search: true`，它就自动变成搜索表单里的一个输入框。`createTime` 写 `format: 'datetime'`，就按本地时间格式化。`storage-key` 记住这张表列设置存在 localStorage 的哪个键，取名规则见下文。没写的东西不用管，表格不会替你臆造。四个约定就藏在这段短代码里，下面逐个拆开。
+`name` 列写了 `search: true`，它就自动变成搜索表单里的一个输入框。`createTime` 写 `format: 'datetime'`，就按本地时间格式化。`storage-key` 记住这张表列设置存在 localStorage 的哪个键，取名规则见下文。没写的东西不用管，表格不会替你臆造。这段短代码已经把下面要讲的几条约定都用上了，逐个拆开看。
 
 ## fetcher 是唯一要你适配的地方
 
@@ -95,7 +95,7 @@ authStore.hasPerm('PUT:/api/v1/sys/position/{id}')
 
 `storage-key` 决定列设置和密度存到 localStorage 的哪个键（前缀 `protable:`），命名统一用 `{模块}-{页面}`，如 `sys-position`、`sys-user`。
 
-## 树表：静态数据模式，和它的四个坑
+## 树表：静态数据模式，坑不少
 
 先问自己一个问题：这张表是平铺分页的列表，还是机构、菜单那样带层级的树？平铺就用上面的 `fetcher` 模式，翻页搜索都交给它。树不一样。它没有分页，一次把整棵拉回来自己摆。机构页和菜单页都走**静态 data 模式**，对应 `org/index.vue` 和 `menu/index.vue`：
 
@@ -112,7 +112,7 @@ authStore.hasPerm('PUT:/api/v1/sys/position/{id}')
 
 树列设 `minWidth: 220 + fixed: 'left'`，横向滚动时不会丢掉“这是哪一行”。文本列一律 `ellipsis: { tooltip: true }`，否则长路径换行会把行高撑得参差。操作最多留两个：编辑，加一个 `n-dropdown` 的“更多▾”。四个操作平铺在 260~300px 里必然换行，横向滚动时又够不着，org 和 menu 都栽过这一跤。下拉项里的删除用 `useConfirm().confirm`（dialog），`n-popconfirm` 是内联触发器，塞不进 dropdown。
 
-真正会让你调半天的是下面四个静默失败：
+真正让人栽跟头的是下面四个静默失败：
 
 **别加恒空列。** 菜单树剥掉按钮节点后只剩目录和页面，而权限码只挂在按钮上。于是“权限码”那一列 100% 是“—”。同理，关键字过滤跑在剥离后的树上，写 `n.permission` 永远命中不了。要按权限码搜，得去查节点的按钮子节点，参考 `menu/index.vue` 的 `buttonInfoById`。菜单页干脆把权限码列整个删了。
 

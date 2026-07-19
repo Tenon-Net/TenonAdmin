@@ -5,7 +5,7 @@
 ## 开始之前
 
 - Fork 仓库，clone 到本地。
-- **开发在 `dev` 分支进行，`main` 只接收发版合并**：提 PR 请对准 `dev`，不要对准 `main`。发版时才会把 `dev` 合入 `main` 再打 tag（见 [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)）。
+- **提 PR 请对准 `dev`，不要对准 `main`**：日常开发都在 `dev` 上进行，发版时才会把它合进 `main` 再打 tag（见 [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)）。
 - 报 bug / 提需求走 GitHub Issues 的三个模板（Bug report / Feature request / Question），仓库关闭了空白 issue。安全漏洞不要开公开 issue。
 
 ## 本地开发环境

@@ -90,7 +90,7 @@ services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()
 services.AddTenonAdminServices();
 ```
 
-每层其实都能独立装配。`AddTenonAdminSqlSugar` 是公开入口，可以在裸容器上单独调用。测试用得上，只要数据层的消费方也这么接。所以它内部对可选依赖用的是 `GetService`，不是 `GetRequiredService`。没有日志工厂就静默不打，不会凭空多出一个必需依赖把服务卡在起不来。
+每层其实都能独立装配。`AddTenonAdminSqlSugar` 是公开入口，不必等 `AddTenonAdmin` 整体登场，在裸容器上单独调用也行；测试用的就是这条路径，只装数据层，不带 JWT、控制器这些用不上的宿主集成。正因为调用方可能只是这样一个裸容器，它内部对可选依赖用的是 `GetService`，不是 `GetRequiredService`：没有日志工厂就静默不打，不会凭空多出一个必需依赖，把本该独立跑起来的数据层卡在起不来。
 
 ## 消费方的实体和控制器如何挂进来
 

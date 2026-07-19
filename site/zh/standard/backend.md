@@ -1,6 +1,6 @@
 # 后端规范（.NET 10 内核）
 
-改后端代码前后对着这份清单核一遍，每条都是内核里已落地的硬规则。想知道某条为什么这么定，顺着链接去对应深读篇。更完整的正反例见仓库 [`docs/coding-standards.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/coding-standards.md)。
+改后端代码前后对着这份清单核一遍，每条都是内核里已落地的硬规则。想知道某条为什么这么定，点链接看对应那页的详解。更完整的正反例见仓库 [`docs/coding-standards.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/coding-standards.md)。
 
 ::: tip 第一原则
 内核以 NuGet 分发，消费方不改源码就能替换任一部件。凡新增可替换服务，一律 `TryAdd*` 注册、接口背书、方法拆 `virtual` 步。这三条没有例外。机制见 [可替换性模型](/zh/backend/replaceability)。

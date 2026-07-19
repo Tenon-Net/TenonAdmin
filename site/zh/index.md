@@ -4,7 +4,7 @@ layout: home
 hero:
   name: TenonAdmin
   text: 三行代码接入完整 RBAC
-  tagline: 一个零配置、可扩展的 ASP.NET Core 后台管理系统，内置 RBAC 权限管理、数据权限
+  tagline: 零配置起步，RBAC、数据权限内置，架构还能按需替换扩展
   image:
     src: /icon-128.png
     alt: TenonAdmin
