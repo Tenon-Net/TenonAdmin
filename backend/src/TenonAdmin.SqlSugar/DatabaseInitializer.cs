@@ -20,7 +20,8 @@ internal sealed class DatabaseInitializer(
     TenonEntitySources sources,
     IServiceScopeFactory scopeFactory,
     IHostEnvironment env,
-    ILogger<DatabaseInitializer> logger) : IHostedService
+    ILogger<DatabaseInitializer> logger,
+    TimeProvider? time = null) : IHostedService   // 统一时间源(§1.11);SqlSugar 层惯用 ?? TimeProvider.System 兜底
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -79,7 +80,7 @@ internal sealed class DatabaseInitializer(
                 // 版本行落到 Current。SchemaVersionSeed 只在空库上插得进去(它自己不开 SyncOnUpgrade),
                 // 老库那行还停在旧版本,得在这儿显式写回,否则下次启动又当成一次升级。
                 await db.Updateable<SysSchemaVersion>()
-                    .SetColumns(x => new SysSchemaVersion { Version = SysSchemaVersion.Current, AppliedTime = DateTime.Now })
+                    .SetColumns(x => new SysSchemaVersion { Version = SysSchemaVersion.Current, AppliedTime = (time ?? TimeProvider.System).GetLocalNow().DateTime })
                     .Where(x => x.Id == 1)
                     .ExecuteCommandAsync();
                 logger.LogInformation("TenonAdmin: 种子版本 {From} → {To}(结构性种子已同步 {Synced} 行)",

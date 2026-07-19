@@ -12,7 +12,9 @@ public class SmsOtpService(
     ISmsSender smsSender,
     ICacheProvider cache,
     IConfigService config,
-    AdminSecurityOptions security) : ISmsOtpService
+    AdminSecurityOptions security,
+    // 统一时间源(§1.11):尾随可选参数,DI 正常注入;消费者子类省略也能编译(§5.3)
+    TimeProvider? time = null) : ISmsOtpService
 {
     /// <summary>短信二次验证开关配置键(GroupCode=security;改值即时生效)</summary>
     internal const string KEY_MFA_ENABLED = "sys.security.mfa.enabled";
@@ -105,7 +107,7 @@ public class SmsOtpService(
 
         if (Opt.DailySendLimitPerPhone > 0)
         {
-            var day = DateTime.Now.ToString("yyyyMMdd");
+            var day = (time ?? TimeProvider.System).GetLocalNow().ToString("yyyyMMdd");   // 本地日桶(§1.11 走注入时钟)
             var count = await cache.IncrementAsync(CacheKeys.SmsDailyCount(phone, day), TimeSpan.FromHours(24));
             AdminException.ThrowIf(count > Opt.DailySendLimitPerPhone, ErrorCode.TooManyRequests);
         }
