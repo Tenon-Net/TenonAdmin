@@ -12,8 +12,13 @@ public class PersonalService(
     IPasswordHasher hasher,
     ISecurityPolicyProvider policy,
     IMenuService menu,
-    IPasswordHistoryService? passwordHistory = null) : IPersonalService   // 可选参数:默认 DI 注入;消费者子类省略也能编译(§5.3,同 FileGcService 成法)
+    IPasswordHistoryService? passwordHistory = null,
+    // 统一时间源(§1.11):尾随可选参数,DI 正常注入;消费者子类省略也能编译(§5.3,同 FileGcService 成法)
+    TimeProvider? time = null) : IPersonalService
 {
+    // LastPasswordChangeTime 是与审计字段同类的持久化业务时间戳,走本地时钟(与 SqlSugarSetup 的 GetLocalNow 审计口径一致)
+    private DateTime Now => (time ?? TimeProvider.System).GetLocalNow().DateTime;
+
     /// <inheritdoc />
     public virtual async Task<UserProfile> GetProfileAsync(long userId)
     {
@@ -79,7 +84,7 @@ public class PersonalService(
         await (passwordHistory?.EnsureNotReusedAsync(userId, input.NewPassword) ?? Task.CompletedTask);   // 防重用(策略开时;关/未注入时空操作)
         user.Password = hasher.Hash(input.NewPassword);
         user.MustChangePassword = false;   // 自助改密成功即清除强制改密标志(§14)
-        user.LastPasswordChangeTime = DateTime.Now;   // 密码过期窗口从本次改密重新起算
+        user.LastPasswordChangeTime = Now;   // 密码过期窗口从本次改密重新起算
         await users.UpdateAsync(user);
         await (passwordHistory?.AppendAsync(userId, user.Password) ?? Task.CompletedTask);   // 记录新口令哈希,供后续防重用
     }

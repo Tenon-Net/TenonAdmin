@@ -343,6 +343,8 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
       // 权限按钮跟着页面走:只有页面才显示「配置权限」(含 0,可加首个);目录不显示 ——
       // 唯一例外是已挂了按钮的目录(种子里仅系统运维/ping 这个无页面锚点),仍显示以便管理。
       if (r.type !== MenuType.Menu && n === 0) return null
+      // 无菜单新增权限则不显示「配置权限」入口(只读用户不该看到写入口;弹窗内写按钮亦各自设门,服务端兜底)
+      if (!auth.hasPerm('POST:/api/v1/sys/menu/add')) return null
       return h(
         NButton,
         { size: 'small', quaternary: true, type: n > 0 ? 'primary' : undefined, onClick: () => openButtons(r) },

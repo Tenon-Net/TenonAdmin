@@ -21,7 +21,7 @@ export const staticRoutes: RouteRecordRaw[] = [
     path: '/module',
     name: 'module',
     component: () => import('@/views/module/index.vue'),
-    meta: { title: '选择应用' },
+    meta: { title: 'module.choose' },   // i18n 键(与兄弟静态路由 menu.* 同法),不硬编码中文
   },
   {
     path: '/',

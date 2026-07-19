@@ -111,4 +111,31 @@ public class PasswordExpiryTests
 
         Assert.False(await LoginAsync(client, "exp-cycle", NewPassword));   // 改密后窗口重新起算,标志已清
     }
+
+    /// <summary>
+    /// 过期判定读的是<b>注入的 TimeProvider</b>而非挂钟(§1.11,J1 收敛后的接缝证明)。
+    /// 把时钟钉在 2030、锚点摆在 2029-11(距注入时钟已过 60 天,但相对真实"现在"却在未来):
+    /// 唯有读注入时钟才判过期;若仍读 <c>DateTime.Now</c>,锚点在未来、绝不会过期——本用例即为该退化的探针。
+    /// </summary>
+    [Fact]
+    public async Task Expiry_decision_follows_injected_clock_not_wallclock()
+    {
+        var clock = new FixedTimeProvider(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        using var factory = new AdminAppFactory { Overrides = s => s.AddSingleton<TimeProvider>(clock) };
+        using var scope = factory.Services.CreateScope();
+        await SetExpireDaysAsync(scope.ServiceProvider, 30);
+        var id = await CreateUserAsync(scope.ServiceProvider, "exp-clock", new DateTime(2029, 11, 2));
+
+        Assert.True(await LoginAsync(factory.CreateClient(), "exp-clock"));   // 注入时钟看来已过期 → 置强制改密
+
+        var repo = scope.ServiceProvider.GetRequiredService<IRepository<SysUser>>();
+        Assert.True((await repo.GetByIdAsync(id))!.MustChangePassword);
+    }
+}
+
+/// <summary>固定时钟(本地时区=UTC,免 TZ 偏移),只为证明过期判定走注入时钟。仓库约定不引 FakeTimeProvider 包,自写最小实现。</summary>
+file sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+{
+    public override DateTimeOffset GetUtcNow() => now;
+    public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
 }

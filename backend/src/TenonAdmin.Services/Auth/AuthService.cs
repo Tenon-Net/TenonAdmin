@@ -23,8 +23,13 @@ public class AuthService(
     // 外部登录 / SSO(批次 D):可选参数,DI 正常注入;消费者子类省略也能编译(§5.3,同 UserService 的 passwordHistory)
     IEnumerable<IExternalAuthProvider>? externalProviders = null,
     ISysUserExternalService? externalBindings = null,
-    IRbacService? rbac = null) : IAuthService
+    IRbacService? rbac = null,
+    // 统一时间源(§1.11):尾随可选参数,DI 正常注入;消费者子类省略也能编译(§5.3,同上面 rbac 成法)
+    TimeProvider? time = null) : IAuthService
 {
+    // LastPasswordChangeTime 是与审计字段同类的持久化业务时间戳,走本地时钟(与 SqlSugarSetup 的 GetLocalNow 审计口径一致)
+    private DateTime Now => (time ?? TimeProvider.System).GetLocalNow().DateTime;
+
     /// <summary>
     /// 防账号枚举的陪跑哈希:账号不存在时也执行一次真实代价的哈希校验,
     /// 使"账号不存在"与"密码错误"的响应耗时不可区分(否则攻击者可按耗时探测有效账号)。
@@ -102,12 +107,12 @@ public class AuthService(
 
         if (user.LastPasswordChangeTime is null)
         {
-            user.LastPasswordChangeTime = DateTime.Now;
+            user.LastPasswordChangeTime = Now;
             await users.UpdateAsync(user);
             return;
         }
 
-        if (!user.MustChangePassword && user.LastPasswordChangeTime.Value.AddDays(days) <= DateTime.Now)
+        if (!user.MustChangePassword && user.LastPasswordChangeTime.Value.AddDays(days) <= Now)
         {
             user.MustChangePassword = true;
             await users.UpdateAsync(user);
@@ -288,7 +293,7 @@ public class AuthService(
             Enabled = true,
             IsSuperAdmin = false,
             MustChangePassword = false,          // 外部登录用户不需改密
-            LastPasswordChangeTime = DateTime.Now,
+            LastPasswordChangeTime = Now,
             OrgId = orgId,
         };
 
