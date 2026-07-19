@@ -35,7 +35,7 @@
 
 ## 离线优先意味着什么
 
-"离线优先"不是说组件能离线跑，而是说**你注册进来的图标集，渲染时只读打进包里的本地数据，永远不碰 `api.iconify.design`**。每一套图标（`@iconify-json/<prefix>`）在你的构建里是一个独立的懒加载 chunk，第一次点开它的 Tab、或第一次渲染这套里的图标时才拉进来。
+「离线优先」不是说组件能离线跑，而是说**你注册进来的图标集，渲染时只读打进包里的本地数据，永远不碰 `api.iconify.design`**。每一套图标（`@iconify-json/<prefix>`）在你的构建里是一个独立的懒加载 chunk，第一次点开它的 Tab、或第一次渲染这套里的图标时才拉进来。
 
 代价是体积：每注册一套就多一个 chunk，大集不便宜（Phosphor 约 946 KB gz,Lucide 约 85 KB gz），所以按需注册，别一口气全塞进去。换来的是部署环境不联网、或出口被限的情况下，图标表现和联网时完全一致。包还留了一条在线兜底：你手输一个没注册过的 Iconify 名字，联网时会临时在线加载。那是应急，不是常态。
 
@@ -73,7 +73,7 @@ registerLocalIcons(
 // src/assets/svg/star.svg  ->  存成 local:star
 ```
 
-tenon 把这一步并进了 `setupIcons()` 的 `localIcons` 选项，扫的就是 `web/src/assets/svg/*.svg`。往那个目录丢 SVG，重启 dev 就能在选择器的"本地"页看到它。
+tenon 把这一步并进了 `setupIcons()` 的 `localIcons` 选项，扫的就是 `web/src/assets/svg/*.svg`。往那个目录丢 SVG，重启 dev 就能在选择器的「本地」页看到它。
 
 ## 文案与多语言
 

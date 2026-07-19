@@ -7,7 +7,7 @@
 - **`user` store**（`src/stores/user.ts`）：`accessToken`、`refreshToken`、`userInfo`（`userId`、`account`、`name`、`mustChangePassword`），以及 `isLoggedIn` getter 和 `setSession`/`clear` action。声明为 `persist: true`，所以**整个 store** 都落 `localStorage`，刷新页面还能保持登录。
 - **`auth` store**（`src/stores/auth.ts`）：`modules`、`currentModuleId`、`defaultModuleId`、`menuTree`、`permissionCodes`、`permissionsLoaded`、`isSuperAdmin`、`routesReady`，以及 `homePath` 和 `hasPerm` 两个 getter。声明为 `persist: { pick: ['currentModuleId'] }`，持久化的**只有 `currentModuleId` 一项**。
 
-这么拆是因为两边的生命周期不一样。令牌和用户资料要扛得住刷新（不然"保持登录"就无从谈起）。权限码、菜单树、`routesReady` 则相反，每次应用启动都要重新拉：动态路由只活在 router 的内存里，`routesReady` 一旦被持久化成 `true`，刷新就会跳过路由重建，导致每条动态路由都 404。`currentModuleId` 是唯一的例外。持久化它是为了让 F5 或深链能先恢复"上次在哪个应用"，再由守卫经 `useModule().enterInitial()` 重新拉取其余一切。
+这么拆是因为两边的生命周期不一样。令牌和用户资料要扛得住刷新（不然「保持登录」就无从谈起）。权限码、菜单树、`routesReady` 则相反，每次应用启动都要重新拉：动态路由只活在 router 的内存里，`routesReady` 一旦被持久化成 `true`，刷新就会跳过路由重建，导致每条动态路由都 404。`currentModuleId` 是唯一的例外。持久化它是为了让 F5 或深链能先恢复「上次在哪个应用」，再由守卫经 `useModule().enterInitial()` 重新拉取其余一切。
 
 ## `v-auth`：模板里的按钮级指令
 
@@ -56,7 +56,7 @@ export const vAuth: Directive<HTMLElement, string | string[]> = {
 }
 ```
 
-**它是物理移除 DOM 节点**，而不是 `display: none`，也不是 `v-if` 条件渲染那种可以被重新触发的隐藏。没权限的按钮压根不存在于 DOM 里，没法靠改客户端状态或开发者工具把它"变出来"。但别把这当成安全边界：真正的授权判定始终在服务端完成（后端的 `[RolePermission]` 过滤器才是权威），这个指令只管 UX，把用户用不了的按钮挡在视线之外。
+**它是物理移除 DOM 节点**，而不是 `display: none`，也不是 `v-if` 条件渲染那种可以被重新触发的隐藏。没权限的按钮压根不存在于 DOM 里，没法靠改客户端状态或开发者工具把它「变出来」。但别把这当成安全边界：真正的授权判定始终在服务端完成（后端的 `[RolePermission]` 过滤器才是权威），这个指令只管 UX，把用户用不了的按钮挡在视线之外。
 
 ## `hasPerm`：超管放行 / 未加载藏起来 / 精确匹配
 
@@ -71,8 +71,8 @@ hasPerm(state): (code: string) => boolean {
 三种状态：
 
 1. **超管（`isSuperAdmin`）→ fail-open。** 全部放行，和后端 `[RolePermission]` 里 `sadm` claim 的绕过逻辑呼应。
-2. **权限码还没加载完（`permissionsLoaded === false`）→ fail-closed。** 所有受权限控制的按钮都藏起来。这不是可以忽略的边角情况。登录成功后、`GET /personal/permissions` 还没返回之前，每个页面都会短暂处于这个状态。如果把"未加载"当成"有权限"处理，所有受控按钮（包括用户根本没权限的那些）都会先闪一下再消失。fail-closed 保证用户看到的永远只有自己能用的按钮，不会有一闪而过的越权 UI。
-3. **已加载的普通用户 → 按 `permissionCodes` 精确匹配。** 空的 `permissionCodes`（没有任何授权的用户）必然匹配不上任何码，受控按钮全部保持隐藏。这也堵上了历史上一个 bug 的口子。曾经"空集合"被误当成"超管"处理；现在两者由完全独立的字段（`isSuperAdmin` 和 `permissionCodes`）分别承载，空权限集不可能意外解锁一切。
+2. **权限码还没加载完（`permissionsLoaded === false`）→ fail-closed。** 所有受权限控制的按钮都藏起来。这不是可以忽略的边角情况。登录成功后、`GET /personal/permissions` 还没返回之前，每个页面都会短暂处于这个状态。如果把「未加载」当成「有权限」处理，所有受控按钮（包括用户根本没权限的那些）都会先闪一下再消失。fail-closed 保证用户看到的永远只有自己能用的按钮，不会有一闪而过的越权 UI。
+3. **已加载的普通用户 → 按 `permissionCodes` 精确匹配。** 空的 `permissionCodes`（没有任何授权的用户）必然匹配不上任何码，受控按钮全部保持隐藏。这也堵上了历史上一个 bug 的口子。曾经「空集合」被误当成「超管」处理；现在两者由完全独立的字段（`isSuperAdmin` 和 `permissionCodes`）分别承载，空权限集不可能意外解锁一切。
 
 ## 把门控铺到每个操作按钮
 
@@ -113,7 +113,7 @@ const dropdownOptions = [
 dropdownOptions.length ? h(NDropdown, { options: dropdownOptions }) : null
 ```
 
-不是所有门控都靠隐藏。启停开关这类按钮更适合置灰而非藏起来。藏了用户会以为功能不存在，置灰则告诉他"这里有个开关，只是你动不了"。所以状态列的 `StatusSwitch` 是把权限接到 `disabled` 上：
+不是所有门控都靠隐藏。启停开关这类按钮更适合置灰而非藏起来。藏了用户会以为功能不存在，置灰则告诉他「这里有个开关，只是你动不了」。所以状态列的 `StatusSwitch` 是把权限接到 `disabled` 上：
 
 ```ts
 // web/src/views/system/user/index.vue —— 状态列

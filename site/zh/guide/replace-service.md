@@ -14,7 +14,7 @@
 
 ## 换掉整个服务：抢在 AddTenonAdmin 之前注册
 
-内核所有内置服务都用 `TryAdd*` 注册，语义是"容器里已有同接口就不再添加"。所以你只要在 `AddTenonAdmin()` **之前**把自己的实现注册进去，内核那行 `TryAdd` 检测到坑已被占，就自动让位。
+内核所有内置服务都用 `TryAdd*` 注册，语义是「容器里已有同接口就不再添加」。所以你只要在 `AddTenonAdmin()` **之前**把自己的实现注册进去，内核那行 `TryAdd` 检测到坑已被占，就自动让位。
 
 以换密码哈希算法为例：
 
@@ -33,7 +33,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 ```
 
 ::: warning 顺序反了会静默失效
-写在 `AddTenonAdmin()` **后面**，内置实现已经占了坑，你的 `TryAdd` 会被跳过。它不报错，替换却没生效。要不受顺序影响，用 `builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>())`，它是"覆盖已有注册"，写在 `AddTenonAdmin()` 之后也照样赢。
+写在 `AddTenonAdmin()` **后面**，内置实现已经占了坑，你的 `TryAdd` 会被跳过。它不报错，替换却没生效。要不受顺序影响，用 `builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>())`，它是「覆盖已有注册」，写在 `AddTenonAdmin()` 之后也照样赢。
 :::
 
 常见的替换点：
@@ -96,7 +96,7 @@ public class CustomDictController : ControllerBase { /* 你的字典逻辑 */ }
 
 能被禁的只有带 `[Module("Name")]` 标注的控制器，目前是这六个：`Dict`、`Upload`（字面上禁的是文件控制器 `/api/v1/sys/file`，模块名不等于路由）、`Notice`、`Log`、`Config`、`Dashboard`。身份认证、用户、机构、角色、菜单、门户这些控制器没有这个标注。没有开关能把它们关掉，因为关了整个系统就登不进去了。
 
-别把 `Api.DisabledModules` 和门户里的"应用/模块"（`SysModule` 那张表）搞混：前者是编译期的路由开关，后者是运行时数据。后者也有自己的护栏。内置的 `system` 应用承载全部管理页，通过管理接口把它停用会被拒（错误码 42013，门户失联且无 UI 恢复入口）；还挂着菜单的应用不许删（42023，否则那些顶级目录的 `ModuleId` 会悬空、整棵子树从门户消失）。
+别把 `Api.DisabledModules` 和门户里的「应用/模块」（`SysModule` 那张表）搞混：前者是编译期的路由开关，后者是运行时数据。后者也有自己的护栏。内置的 `system` 应用承载全部管理页，通过管理接口把它停用会被拒（错误码 42013，门户失联且无 UI 恢复入口）；还挂着菜单的应用不许删（42023，否则那些顶级目录的 `ModuleId` 会悬空、整棵子树从门户消失）。
 
 ## 给自己的实体播种：消费方种子
 

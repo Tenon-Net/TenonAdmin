@@ -167,6 +167,15 @@ const RULES = [
     msg: '中文语境里的半角标点，应为全角（并列的代码标识符之间用 、，不是 ，）',
   },
   {
+    id: 'halfwidth-quote',
+    zhOnly: true,
+    // 规范七、标点铁律的表格里一直列着 `" "` → `「 」`，却没人给它写规则，
+    // 于是全站 45 处活到了最后一轮。选 `「」` 的理由也在规范里：它和 `""` 视觉上不会混。
+    // 只判【引号里裹着中文】，纯西文引文（"pull request" 之类）放过。
+    re: /"[^"\n]*[一-鿿][^"\n]*"/g,
+    msg: '半角双引号裹中文，应为 「 」（嵌套用 『 』）',
+  },
+  {
     id: 'mixed-paren',
     zhOnly: true,
     // 全角开、半角闭（或反之）。全站 5 处，4 处在 permission.md——批量改动只改了一半的残骸。
@@ -232,6 +241,10 @@ if (process.argv[2] === '--selftest') {
   eq(has(R('halfwidth-semicolon'), '配了用配置值；没配则随机生成'), false, '全角分号 → 放过')
   eq(has(R('halfwidth-semicolon'), '标签 `admin;rbac;sqlsugar` 用分号分隔'), false, '行内代码里的分号 → 放过')
   eq(has(R('halfwidth-semicolon'), 'Server=127.0.0.1;Port=3306; 是连接串'), false, '连接串在西文语境 → 放过')
+  eq(has(R('halfwidth-quote'), '控制台只打一行"已存在"的日志'), true, '半角双引号裹中文 → 拦')
+  eq(has(R('halfwidth-quote'), '控制台只打一行「已存在」的日志'), false, '直角引号 → 放过')
+  eq(has(R('halfwidth-quote'), '提 PR 时写清楚 "breaking change" 四个字'), false, '引号里是纯西文 → 放过')
+  eq(has(R('halfwidth-quote'), '配置写成 `{ "Seed": { "AdminPassword": "你的密码" } }` 即可'), false, '行内代码里的 JSON → 放过')
 
   // 两侧是代码或全角标点、整行却是中文（halfwidth-between-code）
   eq(has(R('halfwidth-between-code'), '装配次序（见 `TenonAdminSetup.cs`）:'), true, '全角括号后的行尾半角冒号 → 拦')

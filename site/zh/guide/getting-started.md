@@ -118,7 +118,7 @@ app.Run();
 
 要跨副本共享会话和缓存（多实例部署），额外装 `TenonAdmin.Caching.Redis`，并在 `AddTenonAdmin` **之前**调 `AddTenonAdminRedisCache(builder.Configuration)`。因为内核的可替换服务都用 `TryAdd` 注册，谁先注册谁赢，晚于 `AddTenonAdmin` 就抢不过内置的进程内缓存了。没配 `Cache:Provider=Redis` 时这行是空操作，单实例开发不受影响。
 
-需要更细粒度的依赖控制，可以只引某一层（`.AspNetCore` / `.Services` / `.SqlSugar` / `.Core`）。这些包为什么这么分层、"可替换"到底怎么替，归[核心概念](/zh/guide/concepts)讲透；本页只管把它跑起来。
+需要更细粒度的依赖控制，可以只引某一层（`.AspNetCore` / `.Services` / `.SqlSugar` / `.Core`）。这些包为什么这么分层、「可替换」到底怎么替，归[核心概念](/zh/guide/concepts)讲透；本页只管把它跑起来。
 
 > 1.0 之前 API 仍可能调整，破坏性变更会在[更新日志](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)里明确标出。开发在 `dev` 分支进行。
 
