@@ -31,6 +31,14 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+
+    # Health probe: orchestrators and load balancers hit this directly.
+    # Leave it out and /health falls into try_files above, gets an index.html,
+    # and the probe keeps returning 200 long after the backend has died.
+    location /health {
+        proxy_pass http://127.0.0.1:5000;
+        access_log off;
+    }
 }
 ```
 

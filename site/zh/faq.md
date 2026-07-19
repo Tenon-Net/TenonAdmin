@@ -6,8 +6,8 @@
 
 账号是 `superAdmin`，密码取决于你走的是哪条路径。三种情况的密码来源完全不同，登不上多半是认错了路径：
 
-- **本地 clone 跑 MinimalHost**：仓库里只有 `appsettings.Development.json.example` 模板（真文件被 gitignore，不入库），所以**全新 clone 首启走的也是下面那条随机密码路径**。想要固定密码，把模板拷成 `appsettings.Development.json` 并给 `Seed:AdminPassword` 填上值。仓库的开发约定值是 `Aa123456`，前端登录表单在 dev 模式预填的就是它。配好之后不再打印随机密码，控制台只有一行"已按配置创建超级管理员"的普通日志。
-- **零配置 / 生产（没配 `Seed:AdminPassword`）**：内核生成一个 16 位随机密码（剔除了 `0/O`、`1/l/I` 这类易混淆字符，方便你从日志里抄），用 `LogWarning` 在启动日志里打一个醒目的边框，**只在真正建号的那次启动打印一次**：
+- **本地 clone 跑 MinimalHost**：仓库里只有 `appsettings.Development.json.example` 模板（真文件被 gitignore，不入库），所以**全新 clone 首启走的也是下面那条随机密码路径**。想要固定密码，把模板拷成 `appsettings.Development.json` 并给 `Seed:AdminPassword` 填上值。仓库的开发约定值是 `Aa123456`，前端登录表单在 dev 模式预填的就是它。配好之后不再打印随机密码，控制台只有一行「已按配置创建超级管理员」的普通日志。
+- **零配置 / 生产（没配 `Seed:AdminPassword`）**：内核生成一个 16 位随机密码，字符集剔除了 `0/O`、`1/l/I` 这类易混淆字符，好让你从日志里照抄。密码用 `LogWarning` 在启动日志里打一个醒目的边框，**只在真正建号的那次启动打印一次**：
 
 ```text
 ╔══════════════════════════════════════════════════════╗
@@ -32,9 +32,9 @@
 
 找不回。密码写进库时就已经哈希，没有明文可捞。要么直接改库里那条超管记录的密码哈希，要么清掉 `sys_user`（或直接删库）让种子重新播一次。重播时配好 `Seed:AdminPassword`，这次就用你指定的值，不再随机。
 
-## 本地 clone 下来跑不起来，`appsettings.Development.json` 去哪了？
+## `appsettings.Development.json` 为什么不在仓库里？
 
-它被 `.gitignore` 排除了，不在版本库里。里面放的是数据库连接串、JWT 密钥这类本地凭证，不该进 git。从旁边的 `appsettings.Development.json.example` 拷一份改名即可，样例宿主在 `backend/samples/MinimalHost/appsettings.Development.json.example`，按需改。
+它被 `.gitignore` 排除了，不在版本库里。缺它不影响启动：默认 SQLite + CodeFirst 会自己把库和表长出来。里面放的是数据库连接串、JWT 密钥这类本地凭证，不该进 git。要固定超管密码或者落别的本地凭证，从 `backend/samples/MinimalHost/appsettings.Development.json.example` 拷一份改名即可。
 
 ## 换库、gen:api、代理、健康检查这些去哪找
 

@@ -34,7 +34,7 @@ features:
     details: 运行时仅依赖 SqlSugar 与 Microsoft.* 官方库，Redis、对象存储等按需引入。
   - icon: 🔐
     title: 认证与安全
-    details: JWT 鉴权、图形验证码、登录锁定、强制下线、日志脱敏都在内置里，安全基线默认到位。
+    details: JWT 鉴权、登录锁定、请求限流、强制下线、日志脱敏默认就在，图形验证码内置三种、按需开启。
   - icon: 🖥️
     title: 全栈交付
     details: 配套 Vue 3 + Naive UI 管理端，支持容器化部署与多副本水平扩展。

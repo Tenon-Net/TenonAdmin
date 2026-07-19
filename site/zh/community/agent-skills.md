@@ -2,10 +2,8 @@
 
 让 agent 写一个 CRUD 模块，代码多半能跑，却不太像这个仓库里其它模块的写法。两组约定就是拿来消这个差的，分界线是你要它改谁的代码：
 
-- **参与 TenonAdmin 本体开发**：docs/agents/ 下的一组文档，规定 agent 怎么读 issue、怎么打分诊标签、怎么读领域背景。
-- **在 TenonAdmin 之上开发业务模块**：`skills/` 下的一组开发规范文档，教 agent 按项目既定模式建实体、建 CRUD、替换服务，不管你是内核维护者加系统模块，还是消费方在自己项目里二开。
-
-两者都不是代码生成器，是「规则说明 + 参考模板」。agent 读完之后按你的需求生成代码，规范只管住它长什么样。
+- **参与 TenonAdmin 本体开发**：docs/agents/ 下的一组文档。
+- **在 TenonAdmin 之上开发业务模块**：`skills/` 下的一组开发规范文档，教 agent 按项目既定模式建实体、建 CRUD、替换服务。
 
 ## Issue / PRD：走 GitHub Issues
 
@@ -27,7 +25,7 @@ gh issue close <number> --comment "..."                # 关闭
 
 ## Triage 标签
 
-Issue 分诊用五个规范化标签，标签串就是角色名本身（详见 [`docs/agents/triage-labels.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/triage-labels.md)）：
+Issue 分诊用五个规范化标签，标签串就是角色名本身，取值和用法在 [`docs/agents/triage-labels.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/triage-labels.md) 定死：
 
 | 标签 | 含义 |
 |---|---|
@@ -41,7 +39,7 @@ Issue 分诊用五个规范化标签，标签串就是角色名本身（详见 [
 
 ## 领域文档：CONTEXT.md + docs/adr
 
-开始探索代码前，agent 应该先看（详见 [`docs/agents/domain.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/domain.md)）：
+[`docs/agents/domain.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/domain.md) 要求 agent 动代码之前先看两样：
 
 - 仓库根目录的 `CONTEXT.md`。多上下文场景下换成 `CONTEXT-MAP.md`，它指向各上下文各自的 `CONTEXT.md`。
 - `docs/adr/` 下和当前改动区域相关的 ADR。
@@ -73,7 +71,7 @@ TenonAdmin 现在还没有 `CONTEXT.md` 或 `docs/adr/`，因为按约定它们�
 2. `/create-crud-backend`：建后端（含菜单种子数据）
 3. `/create-crud-frontend`：建前端（含 i18n）
 
-每个 skill 都会区分**系统模块**（内核维护者）和**业务模块**（消费方二开）两种模式，生成的代码位置和命名规则不一样，用之前先说清楚是哪种场景。
+上面这三步连同 `new-module` 都会区分**系统模块**（内核维护者）和**业务模块**（消费方二开）两种模式，生成的代码位置和命名规则不一样，用之前先说清楚是哪种场景。`replace-service` 只面向消费方，`create-page-variant` 只按页面形态分变体，都没有这条分叉。
 
 ## 参考
 

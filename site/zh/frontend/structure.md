@@ -2,7 +2,7 @@
 
 `app.use(pinia)` 一旦排到 `app.use(router)` 后面，路由守卫就读不到 store。`web/` 这一侧的规矩多半藏在这种顺序里，不在额外的约定层里。想知道什么在哪、什么时候跑，翻文件就能得到答案。
 
-设计上为什么这么取舍（动态路由、数据权限、可替换性），见[核心概念](/zh/guide/concepts)。逐条可对照的目录职责与开发约定在[前端规范](/zh/standard/frontend)。
+设计上为什么这么取舍（数据权限、可替换性），见[核心概念](/zh/guide/concepts)。写页面时的具体约定（API 调用、权限、状态、i18n）在[前端规范](/zh/standard/frontend)。
 
 ## 目录结构
 
@@ -26,7 +26,7 @@
 | `utils/` | 工具函数（`error.ts`、`chunkUpload.ts`、`tree.ts`、`ua.ts`） |
 | `views/` | 页面，按模块组织 |
 
-`src/` 之上还有两个文件：入口 `main.ts` 和根组件 `App.vue`，下面展开说。
+`src/` 之上还有两个文件：入口 `main.ts` 和根组件 `App.vue`。
 
 ## 启动流程
 

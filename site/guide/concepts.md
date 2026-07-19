@@ -25,7 +25,7 @@ TenonAdmin.Core        Pure contracts: interfaces, Options, Result<T>, ErrorCode
    ↑
 TenonAdmin.SqlSugar    Data layer: ISqlSugarClient singleton, IRepository<>, entity base classes, CodeFirst, seeding.
    ↑
-TenonAdmin.Services    Domain layer: entities (Sys*), service implementations, RBAC / data scope, event bus.
+TenonAdmin.Services    Domain layer: entities (Sys*), service implementations, RBAC / data scope.
    ↑
 TenonAdmin.AspNetCore  Host integration: AddTenonAdmin / MapTenonAdmin, JWT, permission/session filters, built-in controllers.
 

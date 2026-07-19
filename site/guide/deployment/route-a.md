@@ -9,7 +9,7 @@ One process, one port, frontend and backend on the same origin. That is the whol
 var app = builder.Build();
 
 app.UseStaticFiles();               // serve the frontend build under wwwroot
-app.MapTenonAdmin();                // API (must come before the fallback)
+app.MapTenonAdmin();                // API endpoints (the fallback always matches last, whatever the order)
 app.MapFallbackToFile("index.html"); // SPA history-mode fallback: unmatched paths go to the frontend
 
 app.Run();

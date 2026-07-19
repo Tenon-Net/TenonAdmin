@@ -25,7 +25,7 @@ TenonAdmin.Core        纯契约:接口、Options、Result<T>、ErrorCode。无 
    ↑
 TenonAdmin.SqlSugar    数据层:ISqlSugarClient 单例、IRepository<>、实体基类、CodeFirst、种子。
    ↑
-TenonAdmin.Services    领域层:实体(Sys*)、服务实现、RBAC / 数据范围、事件总线。
+TenonAdmin.Services    领域层:实体(Sys*)、服务实现、RBAC / 数据范围。
    ↑
 TenonAdmin.AspNetCore  宿主集成:AddTenonAdmin / MapTenonAdmin、JWT、权限/会话过滤器、内置控制器。
 
@@ -44,7 +44,7 @@ TenonAdmin             元包:只引用 AspNetCore,消费方装它一个即可�
 ## 数据层约定
 
 - 一个 `SqlSugarScope` 单例。全局查询过滤器自动做**软删除**（`ISoftDelete`）和**数据范围**（`IOrgScoped` / `DataEntity` 按当前请求解析的机构集过滤）。
-- AOP 在插入/更新时自动填审计字段：雪花 `Id`、`CreateTime`、`CreateUserId`、`CreateOrgId`（数据范围锚点）、`UpdateTime`、`UpdateUserId`。业务代码只管业务字段。
+- AOP 在插入/更新时自动填审计字段：雪花 `Id`、`CreateTime`、`CreateUserId`、`CreateOrgId`、`UpdateTime`、`UpdateUserId`。其中 `CreateOrgId` 是数据范围的锚点。业务代码只管业务字段。
 - 雪花 `WorkerId` 来自 `TenonAdmin:Id:WorkerId`（默认 0），**水平扩展时每实例必须不同**，否则同毫秒发号会撞主键。
 
 ---

@@ -73,7 +73,7 @@ Standard order for adding a complete new CRUD module (`/new-module` chains these
 2. `/create-crud-backend` — build the backend (including menu seed data)
 3. `/create-crud-frontend` — build the frontend (including i18n)
 
-Each skill distinguishes between **system module** (kernel maintainer) and **business module** (consumer extension) modes, with different generated code locations and naming rules — be clear about which scenario applies before using it.
+Those three steps and `new-module` all distinguish between **system module** (kernel maintainer) and **business module** (consumer extension) modes, with different generated code locations and naming rules, so be clear about which scenario applies before using them. `replace-service` targets consumers only, and `create-page-variant` splits by page shape, so neither has that fork.
 
 ## Reference
 

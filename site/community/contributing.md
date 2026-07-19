@@ -1,6 +1,8 @@
 # Contributing Guide
 
-TenonAdmin has two halves: `backend/` (.NET 10 kernel + sample host + tests) and `web/` (Vue 3 + Naive UI admin template). You can change either independently, or both together.
+A PR opened against `main` gets sent back: `main` only receives release merges, and day-to-day work goes to `dev`. There are a few rules like that one — none of them live in the code, and you meet them by tripping over them.
+
+TenonAdmin has two halves: `backend/` (.NET 10 kernel + sample host + tests) and `web/` (Vue 3 + Naive UI admin template), and you can change either independently or both together.
 
 ## Before you start
 
@@ -64,6 +66,8 @@ CI (`backend-ci.yml`) runs build + test on push/PR touching `backend/**`, across
 
 Frontend CI (`web-ci.yml`) runs `npm ci` → `npm run lint` → `npm test` (vitest) → `npm run build` on push/PR touching `web/**` (build already includes `vue-tsc` type checking, so there's no need to run `typecheck` separately).
 
+A third one is `docker-smoke.yml`, and its path filter overlaps both of the above, so whichever half you touch will pull it in. The `single` job brings up one container and checks that an empty database gets its tables, seed data lands, tokens are issued, and the reverse proxy holds. The `multi` job brings up two replicas and checks what only two replicas can reveal: force-logout crossing replicas, lockout and rate-limit thresholds not doubling, machine IDs not colliding, and the real client IP still recoverable.
+
 ::: tip The six-piece test suite is a contract, not an ordinary test
 `ReplaceabilityTests` (the "six-piece set" from the design doc) locks in the replaceability guarantees around TryAdd coverage, virtual-method overriding, and business-assembly mounting. When you change DI registration or `TenonAdminSetup`-related code and this suite goes red, it usually means you've broken a consumer's replacement path — don't bypass or delete the tests; figure out which guarantee got broken first.
 :::
@@ -73,7 +77,7 @@ Frontend CI (`web-ci.yml`) runs `npm ci` → `npm run lint` → `npm test` (vite
 1. Branch off `dev` for your feature.
 2. Keep each change focused on one thing; follow the commit conventions above.
 3. Run the build/test/lint for the relevant side locally.
-4. Open a PR targeting `dev`; CI (`backend-ci` / `web-ci`, depending on which side changed) must be fully green.
+4. Open a PR targeting `dev`. CI must be fully green: `backend-ci` / `web-ci` fire based on which half changed, and `docker-smoke` fires for both.
 5. If you're using Claude Code or another AI agent to help develop, the repo has conventions for issue triage, domain docs, and business-development skills — see [Agent Skills and AI-Assisted Development](./agent-skills).
 
 ## Security issues

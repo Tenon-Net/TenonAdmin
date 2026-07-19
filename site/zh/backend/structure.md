@@ -1,6 +1,6 @@
 # 项目结构与启动
 
-`tests/` 下摆着两个项目，跑测试的只有一个。另一个 `TenonAdmin.TestHost` 是个假扮的消费方：它把自己登记进 `options.ApplicationAssemblies`，让实体、种子、控制器都走一遍消费方的挂载路径。内核到底能不能被外部消费，就靠它验。
+`TenonAdmin.TestHost` 里一个断言都没有，它的活是假扮消费方：把自己登记进 `options.ApplicationAssemblies`，让实体、种子、控制器全走一遍外部工程的挂载路径。`src/` 之外的项目都是这个路数，示例宿主也一样，读它们就是读别人怎么用这套内核。
 
 至于依赖方向、可替换性、请求管道这些设计上的「为什么」，在[架构](/zh/backend/architecture)一页展开。
 

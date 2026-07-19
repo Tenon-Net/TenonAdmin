@@ -31,6 +31,13 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+
+    # 探针:编排层/负载均衡直接探这里
+    # 漏掉这段,/health 会落进上面的 try_files 拿到一张 index.html,后端挂了探针照样返回 200。
+    location /health {
+        proxy_pass http://127.0.0.1:5000;
+        access_log off;
+    }
 }
 ```
 
@@ -68,7 +75,7 @@ admin.example.com {
 ```
 
 ::: warning 两份配置都还差一步
-代理里写了 `X-Forwarded-For`（nginx）或让 `reverse_proxy` 自动带（Caddy），都还不够。内核那边也得采信它，做法见下面的「反向代理之后：让内核取到真实客户端 IP」。不配的话，后端看到的永远是代理那一个 IP:**全体用户共享同一个限流桶**，一个人狂点登录就能把所有人的登录限死。按 IP 的爆破防护也归零，登录日志里的 IP 列全是代理地址。
+代理里写了 `X-Forwarded-For`（nginx）或让 `reverse_proxy` 自动带（Caddy），都还不够。内核那边也得采信它，做法见下面的「反向代理之后：让内核取到真实客户端 IP」。不配的话，后端看到的永远是代理那一个 IP。于是**全体用户共享同一个限流桶**，一个人狂点登录就能把所有人的登录限死。按 IP 的爆破防护也归零，登录日志里的 IP 列全是代理地址。
 :::
 
 ## 反向代理之后：让内核取到真实客户端 IP

@@ -32,9 +32,9 @@ Only leaving it empty (the default) takes the random-generation path. The seed r
 
 You can't. It was hashed on the way into the database; there is no plaintext to recover. Either edit the password hash on that super-admin record directly, or clear `sys_user` (or drop the database) and let the seed run again. Set `Seed:AdminPassword` before that replay and it uses your value instead of a random one.
 
-## Cloned locally but it won't run — where did `appsettings.Development.json` go?
+## Why isn't `appsettings.Development.json` in the repo?
 
-It's excluded by `.gitignore`, so it isn't in version control. What it holds is local credentials — the database connection string, the JWT secret — which shouldn't go into git. Copy the neighboring `appsettings.Development.json.example` and rename it; for the sample host that's `backend/samples/MinimalHost/appsettings.Development.json.example`, edit as needed.
+It's excluded by `.gitignore`, so it isn't in version control. Its absence doesn't stop anything: the default SQLite database and its tables are created for you on first run. What the file holds is local credentials — the database connection string, the JWT secret — which shouldn't go into git. To pin the super-admin password, or to keep any other local credential, copy `backend/samples/MinimalHost/appsettings.Development.json.example` and rename it.
 
 ## Where to find switching databases, gen:api, proxying, health checks
 

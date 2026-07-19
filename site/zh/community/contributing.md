@@ -1,14 +1,16 @@
 # 贡献指南
 
-TenonAdmin 分两半：`backend/`（.NET 10 内核 + 示例宿主 + 测试）和 `web/`（Vue 3 + Naive UI 管理端模板）。两半可以独立改动，也可以一起改。
+对着 `main` 开的 PR 会被请回去重开：`main` 只接收发版合并，日常开发一律进 `dev`。这类约束还有几条，都不写在代码里，撞上了才知道。
 
 ## 开始之前
 
 - Fork 仓库，clone 到本地。
 - **开发在 `dev` 分支进行，`main` 只接收发版合并**：提 PR 请对准 `dev`，不要对准 `main`。发版时才会把 `dev` 合入 `main` 再打 tag（见 [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)）。
-- 报 bug / 提需求走 GitHub Issues 的三个模板（Bug report / Feature request / Question），仓库关闭了空白 issue。安全漏洞不要开公开 issue，见下文「安全问题」。
+- 报 bug / 提需求走 GitHub Issues 的三个模板（Bug report / Feature request / Question），仓库关闭了空白 issue。安全漏洞不要开公开 issue。
 
 ## 本地开发环境
+
+TenonAdmin 分两半：`backend/`（.NET 10 内核 + 示例宿主 + 测试）和 `web/`（Vue 3 + Naive UI 管理端模板），两半可以独立改动，也可以一起改。
 
 后端（仓库根目录跑；解决方案文件是 `.slnx`，不是 `.sln`）：
 
@@ -64,6 +66,8 @@ CI（`backend-ci.yml`）在 push / PR 触达 `backend/**` 时跑 build + test，
 
 前端 CI（`web-ci.yml`）在 push / PR 触达 `web/**` 时跑 `npm ci` → `npm run lint` → `npm test`（vitest）→ `npm run build`（build 已包含 `vue-tsc` 类型检查，不用单独再跑 `typecheck`）。
 
+第三条是 `docker-smoke.yml`，它监听的路径和上面两条重合，改哪半边都会把它带起来。single 任务起一套容器，验证空库建表、种子写入、发令牌和反代都成立。multi 任务起两个副本，验的是两副本同时在线才暴露的那批问题。强制下线跨副本生效、锁定与限流不翻倍、机器 ID 不重、真实 IP 取得到。
+
 ::: tip 六件套测试是契约，不是普通测试
 `ReplaceabilityTests`（设计文档里的「六件套」）锁定了 TryAdd 覆盖、虚方法重写、业务程序集挂载这几条可替换性保证。改动 DI 注册或 `TenonAdminSetup` 相关代码时，这组测试红了通常意味着破坏了消费方的替换路径，不要绕过或删测试，先看清楚破坏的是哪条保证。
 :::
@@ -73,7 +77,7 @@ CI（`backend-ci.yml`）在 push / PR 触达 `backend/**` 时跑 build + test，
 1. 从 `dev` 切一个功能分支。
 2. 改动尽量聚焦一件事，commit 信息按上面的规范来。
 3. 本地跑通对应半边的 build/test/lint。
-4. 提 PR，目标分支是 `dev`,CI（`backend-ci` / `web-ci`，看改了哪半边）必须全绿。
+4. 提 PR，目标分支是 `dev`。CI 必须全绿：`backend-ci` / `web-ci` 按改动半边触发，`docker-smoke` 两侧都会触发。
 5. 如果你在用 Claude Code 或其它 AI agent 参与开发，仓库对 Issue 分诊、领域文档、业务开发 skills 有一套约定，见 [Agent Skills 与 AI 辅助开发](./agent-skills)。
 
 ## 安全问题
