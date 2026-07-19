@@ -1,6 +1,6 @@
 # 架构分层与包依赖
 
-TenonAdmin 由六个 NuGet 包组成，其中构成核心链条的五个包依赖只能自上而下。这个次序不是分类习惯，而是承重约束：上层能引下层，下层永远看不见上层。第六个包 `TenonAdmin.Caching.Redis` 是挂在 `Core` 旁边的一条可选支线，不在这条主链之内，下文单说。
+TenonAdmin 由六个 NuGet 包组成，构成核心链条的五个只能自上而下依赖：上层能引下层，下层永远看不见上层。哪一层把这个方向反转，可替换性和依赖红线就同时垮掉。第六个包 `TenonAdmin.Caching.Redis` 挂在 `Core` 旁边，是主链之外的可选支线。
 
 ## 核心链条：五个包
 
@@ -37,7 +37,7 @@ TenonAdmin.Core
 | `TenonAdmin`（元包） | 聚合入口 | AspNetCore |——|
 | `TenonAdmin.Caching.Redis`（可选） | `RedisCacheProvider`：Redis 版 `ICacheProvider` | 仅 Core | StackExchange.Redis |
 
-`TenonAdmin.Caching.Redis` 没有引入新机制，它就是上面那套 `TryAdd` 可替换性套用在缓存提供者上。消费方在 `AddTenonAdmin()` 之前调用 `AddTenonAdminRedisCache(configuration)`，内部用 `TryAddSingleton` 注册 `RedisCacheProvider`，抢先赢下注册，替换掉内核默认的进程内 `MemoryCacheProvider`。不调用这个方法，或没把 `TenonAdmin:Cache:Provider` 配成 `Redis`，内核的进程内默认实现照常工作，不受影响。
+`TenonAdmin.Caching.Redis` 没有引入新机制，它就是内核那套 `TryAdd` 可替换性套用在缓存提供者上。消费方在 `AddTenonAdmin()` 之前调用 `AddTenonAdminRedisCache(configuration)`，内部用 `TryAddSingleton` 注册 `RedisCacheProvider`，抢先赢下注册，替换掉内核默认的进程内 `MemoryCacheProvider`。不调用这个方法，或没把 `TenonAdmin:Cache:Provider` 配成 `Redis`，内核的进程内默认实现照常工作，不受影响。
 
 ::: tip 实体住在 Services，不在 SqlSugar
 数据层只提供 `IRepository<>` 和实体基类，具体的 `Sys*` 业务实体定义在 `TenonAdmin.Services`。原因是依赖方向：实体需要引用领域概念，而数据层不能反过来依赖领域层。

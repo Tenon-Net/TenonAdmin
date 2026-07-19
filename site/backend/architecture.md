@@ -1,6 +1,6 @@
 # Layered Architecture and Package Dependencies
 
-TenonAdmin is composed of six NuGet packages, and the five that form the core chain have dependencies flowing strictly top-down. This ordering isn't a matter of taste — it's a load-bearing constraint: upper layers may reference lower layers, but lower layers can never see upper ones. The sixth package, `TenonAdmin.Caching.Redis`, is an optional side-branch off `Core` rather than part of that downward chain — see below.
+TenonAdmin is composed of six NuGet packages; the five forming the core chain may only depend downward — upper layers can reference lower ones, never the reverse. Reverse that direction in any one layer and both replaceability and the dependency boundary collapse together. The sixth package, `TenonAdmin.Caching.Redis`, hangs off `Core` as an optional side-branch outside that chain.
 
 ## The core chain — five packages
 
@@ -37,7 +37,7 @@ Responsibilities and dependency direction per layer:
 | `TenonAdmin` (meta-package) | Aggregation entry point | AspNetCore | — |
 | `TenonAdmin.Caching.Redis` (optional) | `RedisCacheProvider` — Redis-backed `ICacheProvider` | Core only | StackExchange.Redis |
 
-`TenonAdmin.Caching.Redis` doesn't introduce a new mechanism — it's the same `TryAdd` replaceability described throughout this page, applied to the cache provider. A consumer calls `AddTenonAdminRedisCache(configuration)` before `AddTenonAdmin()`, which `TryAddSingleton`s a `RedisCacheProvider` that wins the race and replaces the kernel's default in-process `MemoryCacheProvider`. Skip the call, or don't set `TenonAdmin:Cache:Provider=Redis`, and the kernel's in-process default keeps working unchanged.
+`TenonAdmin.Caching.Redis` doesn't introduce a new mechanism — it's the kernel's `TryAdd` replaceability, applied to the cache provider. A consumer calls `AddTenonAdminRedisCache(configuration)` before `AddTenonAdmin()`, which `TryAddSingleton`s a `RedisCacheProvider` that wins the race and replaces the kernel's default in-process `MemoryCacheProvider`. Skip the call, or don't set `TenonAdmin:Cache:Provider=Redis`, and the kernel's in-process default keeps working unchanged.
 
 ::: tip Entities live in Services, not in SqlSugar
 The data layer only provides `IRepository<>` and entity base classes; the concrete `Sys*` business entities are defined in `TenonAdmin.Services`. This follows from the dependency direction: entities need to reference domain concepts, and the data layer cannot depend upward on the domain layer.

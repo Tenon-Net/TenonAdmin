@@ -1,6 +1,6 @@
 # Project Structure & Startup
 
-`backend/TenonAdmin.slnx` lists nine projects, and only six of them ever reach NuGet. The other three are never packed: one sample host and two test projects, there to run the kernel for real. Know which three don't ship and you won't go looking for contracts inside them.
+There are two projects under `tests/`, and only one of them runs tests. The other, `TenonAdmin.TestHost`, is a consumer in disguise: it registers itself into `options.ApplicationAssemblies` so that its entities, seeds and controllers all travel the consumer mounting path. Whether the kernel can really be consumed from outside is what it exists to prove.
 
 The design *why* — dependency direction, replaceability, the request pipeline — is unpacked on the [Architecture](/backend/architecture) page.
 
