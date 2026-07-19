@@ -22,7 +22,13 @@ docker compose logs app                    # 首启信息
 
 `app` 跑的是 `ASPNETCORE_ENVIRONMENT=Production`，这是刻意的。生产有三道硬门槛。JWT 密钥必须显式给，不给就落进开发密钥模式，每个副本各签各的，随机 401。空库首次上生产必须显式允许建表，因为内核默认不自动 ALTER 生产库。上传根必须挪出 `wwwroot`。`docker-compose.yml` 把这三项都写成了环境变量，照抄改成你自己的值就行。少配一条会怎样？你会拿到一条点名到配置项的启动错误，读得懂。这比「进程照常起、直到第一次写库才炸在驱动层」好排查得多。这三道门槛，连同升级时的建表、补列细节，[部署概览](/zh/guide/deployment/)里讲全。
 
-首次登录的超管账号是 `superAdmin`。密码呢？compose 通过 `TENON_ADMIN_PASSWORD` 的 `:-` 默认值，配了个演示值 `Tenon@123456`，所以这次登录用的是它，不是随机密码。想回到零配置那条路径，把这个默认删掉，让 `Seed:AdminPassword` 真的不配。那时内核会随机生成一个 16 位密码，在建号那一次启动打印到控制台，仅此一次。日志在 `docker compose logs app`。
+首次登录的超管账号是 `superAdmin`。密码呢？compose 里这一行给了答案：
+
+```yaml
+TenonAdmin__Seed__AdminPassword: ${TENON_ADMIN_PASSWORD:-Tenon@123456}
+```
+
+`:-` 是 shell 的默认值写法：环境变量 `TENON_ADMIN_PASSWORD` 没设，就取冒号后面的 `Tenon@123456`。所以这次登录用的是它，不是随机密码。想回到零配置那条路径，把这个默认删掉，让 `Seed:AdminPassword` 真的不配。那时内核会随机生成一个 16 位密码，在建号那一次启动打印到控制台，仅此一次。日志在 `docker compose logs app`。
 
 ::: warning 演示密钥只是让你先跑起来
 `docker-compose.yml` 里 `TENON_JWT_SECRET`、`TENON_DB_PASSWORD`、`TENON_ADMIN_PASSWORD` 都带了 `:-` 默认值，方便你直接上手。正式部署前得换成真实值，通过同目录下的 `.env` 文件注入，或者用部署平台的密钥管理。别沿用默认串，也别让它进版本库。

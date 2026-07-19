@@ -16,6 +16,8 @@ TenonAdmin 把这些通用功能从业务里拆了出来。你可以直接用默
 2. **模板方法拆分**：长方法被拆成若干 `virtual` 小步骤。消费方继承之后只重写**其中一步**，不用整段复制。
 3. **业务程序集挂载**：消费方的实体经 `options.ApplicationAssemblies` 加入 CodeFirst 建表，控制器也自动 `AddApplicationPart`。不改内核就能扩展。
 
+这三条落到代码里具体怎么写，见[替换内置服务](/zh/guide/replace-service)。
+
 ## 包分层
 
 依赖只能自上而下，这个次序在整套设计里承重：
@@ -37,7 +39,7 @@ TenonAdmin             元包:只引用 AspNetCore,消费方装它一个即可�
 一个已认证请求依次流经：
 
 1. **认证**：Microsoft JWT Bearer，框架 401 被重塑成标准信封（code 40006）。
-2. **`[RolePermission]`**：权限码就是规范化路由（`{METHOD}:/{route}`）。**代码里没有权限字符串**，授权靠在角色菜单 UI 里勾路由。超管（`sadm`）直接放行。它还会校验会话是否仍有效，所以强制下线立即生效。
+2. **`[RolePermission]`**：权限码就是规范化路由（`{METHOD}:/{route}`，比如你在上一页调过的 `GET:/api/v1/ping`）。**代码里没有权限字符串**，授权靠在角色菜单 UI 里勾路由。超管（`sadm`）直接放行。它还会校验会话是否仍有效，所以强制下线立即生效。
 3. **数据范围**：授权阶段解析出当前用户的有效机构数据范围，注入 `IDataScopeContext`。
 4. **结果信封**：控制器可以直接 `return dto`，过滤器统一包成 `Result<T>`。业务错误则抛 `AdminException` 或返回 `ErrorCode`，同样转成信封。**错误是数字 `ErrorCode`，从不下发本地化文案**，i18n 交给前端按码翻译。
 

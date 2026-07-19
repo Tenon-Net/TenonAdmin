@@ -75,12 +75,16 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 
 ## 「六件套」把这些锁成契约
 
-`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` 是可替换机制的回归锁。用例名照设计写死，把上面三条约束当契约来验证，不是普通测试：
+`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` 是可替换机制的回归锁。「六件套」这名字定在最初那六个用例上，后来可替换的点变多了，短信、邮件、实时推送、外部登录先后长出各自的用例，现在这份回归锁一共锁着九条。用例名照设计写死，把上面三条约束当契约来验证，不是普通测试：
 
 | 测试 | 锁定什么 |
 | --- | --- |
 | `ReplaceService_ShouldUseUserImplementation` | 消费方 `Replace` 掉 `IPasswordHasher`，容器解析出的是消费方实现 |
+| `ReplaceSmsSender_ShouldUseUserImplementation` | 消费方 `Replace` 掉 `ISmsSender`，容器解析出的是消费方实现 |
+| `ReplaceEmailSender_ShouldUseUserImplementation` | 消费方 `Replace` 掉 `IEmailSender`，容器解析出的是消费方实现 |
+| `ReplaceRealtimePublisher_ShouldUseUserImplementation` | 消费方 `Replace` 掉 `IRealtimePublisher`，容器解析出的是消费方实现 |
 | `OverrideAuthStep_ShouldAffectLoginFlow` | 重写 `AuthService` 的一个 `virtual` 步骤，登录流程返回被改写的结果 |
+| `ExternalAuthProvider_ShouldBePluggable` | 消费方前置注册的外部登录 provider，最终出现在容器解析出的 provider 集合里（加法式，不覆盖内置的） |
 | `DisabledModule_ShouldRemoveBuiltInController` | 禁用的模块内置控制器被摘除（404），未禁的仍在 |
 | `CustomController_ShouldOwnSameRouteAfterModuleDisabled` | 禁掉内置模块后，消费方控制器接管同一路由 |
 | `CustomSeedData_ShouldRunOnceAndBeIdempotent` | 消费方种子首启插入、二启幂等不重复 |

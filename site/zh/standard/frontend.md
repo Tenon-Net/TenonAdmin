@@ -59,7 +59,7 @@
 ## i18n
 
 - 视图内所有可见文本走 `t('...')`，禁止硬编码中文 / 英文字面量。
-- 错误文案不出后端：后端给 `code` + `msgKey`，`translateError` **只按 `msgKey` 取字、从不读 `code`**，所以 locale 里的键必须和后端 `[MsgKey]` 字符串逐字对上。内置文案在 `locales/zh-CN.ts`/`en-US.ts`；你自己的放 `locales/ext/<locale>/<模块>.ts`。机制见 [国际化与错误码](/zh/frontend/i18n)。
+- 错误文案不出后端：后端给 `code` + `msgKey`，`translateError` **只按 `msgKey` 取字、从不读 `code`**，所以 locale 里的键必须和后端 `[MsgKey]` 字符串逐字对上，比如后端标 `error.dict.typeNotFound`，前端词典里就要有同名的键。内置文案在 `locales/zh-CN.ts`/`en-US.ts`；你自己的放 `locales/ext/<locale>/<模块>.ts`。机制见 [国际化与错误码](/zh/frontend/i18n)。
 
 ## 设计系统
 

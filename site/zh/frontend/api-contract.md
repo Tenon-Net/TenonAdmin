@@ -4,7 +4,7 @@
 
 ## `unwrap` 与 `ApiError`
 
-`src/api/index.ts` 里的 API 函数是手写的。`gen:api` 只生成 `schema.d.ts` 的类型，函数得自己写。它们绝大多数最后落在 `.then(r => unwrap<T>(r))` 上。分页端点落在 `toPage`，但它内部仍旧调 `unwrap`。只有文件下载不一样，它走 `parseAs: 'blob'`，响应根本不是信封，自己判 `response.ok` 就行。`unwrap` 就是容忍后端两种响应形状的那个地方。它把两种情况都收拢成一个 `T`，或者一个抛出的 `ApiError`：
+`src/api/index.ts` 里的 API 函数是手写的。`gen:api` 只生成 `schema.d.ts` 的类型，函数得自己写。它们绝大多数最后落在 `.then(r => unwrap<T>(r))` 上。这里的 `r` 就是 `client.GET/POST(...)` 直接 resolve 出来的原始结果，形状固定是 `{ data, error, response }`，这是 openapi-fetch 自己的约定，不是 TenonAdmin 发明的。分页端点落在 `toPage`，但它内部仍旧调 `unwrap`。只有文件下载不一样，它走 `parseAs: 'blob'`，响应根本不是信封，自己判 `response.ok` 就行。`unwrap` 就是容忍后端两种响应形状的那个地方。它把两种情况都收拢成一个 `T`，或者一个抛出的 `ApiError`：
 
 ```ts
 export function unwrap<T>(res: { data?: unknown; error?: unknown; response: Response }): T {

@@ -34,7 +34,7 @@
 
 ## `appsettings.Development.json` 为什么不在仓库里？
 
-它被 `.gitignore` 排除了，不在版本库里。缺它不影响启动：默认 SQLite + CodeFirst 会自己把库和表长出来。里面放的是数据库连接串、JWT 密钥这类本地凭证，不该进 git。要固定超管密码或者落别的本地凭证，从 `backend/samples/MinimalHost/appsettings.Development.json.example` 拷一份改名即可。
+它被 `.gitignore` 排除了，不在版本库里。缺它不影响启动：默认 SQLite + CodeFirst（启动时按实体类自动建表，不用手写建表 SQL）会自己把库和表长出来。里面放的是数据库连接串、JWT 密钥这类本地凭证，不该进 git。要固定超管密码或者落别的本地凭证，从 `backend/samples/MinimalHost/appsettings.Development.json.example` 拷一份改名即可。
 
 ## 换库、gen:api、代理、健康检查这些去哪找
 

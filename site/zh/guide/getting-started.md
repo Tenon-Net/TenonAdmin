@@ -15,7 +15,7 @@
 dotnet run --project backend/samples/MinimalHost
 ```
 
-首次启动会自动做三件事。先用默认 SQLite 建表，走 CodeFirst，库文件落在 `backend/samples/MinimalHost/data/` 下。再写入种子数据，也就是菜单、角色和超级管理员账号。最后监听 `http://localhost:5100`。这个端口在 `launchSettings.json` 里写死，为的是避开 macOS 上 AirPlay 占用的 5000。
+首次启动会自动做三件事。先用默认 SQLite 建表，走 CodeFirst（按实体类自动建表，不用手写建表 SQL），库文件落在 `backend/samples/MinimalHost/data/` 下。再写入种子数据，也就是菜单、角色和超级管理员账号。最后监听 `http://localhost:5100`。这个端口在 `launchSettings.json` 里写死，为的是避开 macOS 上 AirPlay 占用的 5000。
 
 本地想一键起前后端，用仓库根的 `dev.bat`。它会在两个窗口里分别拉起 MinimalHost 和前端 Vite，首次运行还会顺带装好前端依赖。停的时候用 `stop.bat`。
 

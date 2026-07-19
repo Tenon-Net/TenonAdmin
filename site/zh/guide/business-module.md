@@ -77,7 +77,7 @@ public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
 - **改/删先 `GetByIdAsync` 校验可见性**：看不到就当「不存在/无权」返回 `false`。这不只是礼貌。数据范围全局过滤器只作用于查询（SELECT）。写路径靠的是另一层：`SqlSugarRepository` 对 `DataEntity` 的 `Update`/`Delete` 内置了范围守卫，越权改删他机构的行会返回 0。两层叠起来才严丝合缝。但绕过仓储、直接走 `Db.Updateable`/`Db.Deleteable` 这类逃生舱口的写，不受这层守卫保护，得自己校验归属。
 - 方法都是 `virtual`。消费方想重写某一步，继承后 override 单个方法即可，不必整份复制。
 
-真实的管理列表通常要分页。这时候把 `ListAsync` 换成 `PageAsync`，入参继承 `PageInputBase`，它自带 `Current`/`Size`/`SortField`/`SortOrder`。没有叫 `PageInput` 的基类，别记混。条件用 `WhereIF` 拼，分页用 `ToPagedListAsync` 出。内核里 `UserService.PageAsync`、`DictService.PageTypesAsync` 是现成蓝本。
+真实的管理列表通常要分页。这时候把 `ListAsync` 换成 `PageAsync`，入参继承 `PageInputBase`，它自带 `Current`/`Size`/`SortField`/`SortOrder`。没有叫 `PageInput` 的基类，别记混。条件按需拼装用 `WhereIF(条件, 表达式)`：条件为真才拼这一段 `Where`，为假就跳过，不用手写一串 `if`。分页直接 `.ToPagedListAsync(input.Current, input.Size)` 出，页码、页大小两个参数喂进去，返回值已经是切好的这一页外加总数。内核里 `UserService.PageAsync`、`DictService.PageTypesAsync` 是现成蓝本。
 
 有唯一列时，新增前的查重要带上软删行：`repo.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(x => x.Code == input.Code)`。不清软删过滤器的话，一条已软删的同码行会绕过应用层查重，在数据库唯一索引上撞出一个原生 500。查到真的重复，就 `AdminException.ThrowIf(dup, ErrorCode.XxxExists)` 抛业务码。
 

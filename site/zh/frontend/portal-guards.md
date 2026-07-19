@@ -37,7 +37,7 @@ async function enterInitial(): Promise<EnterResult> {
 - **配了默认应用**（`defaultModuleId`，可在选择页用 `setDefault` 设定）且它在列表里 → 直接进。
 - **以上都不满足** → 弹选择器。
 
-切换应用走的是另一条路。`switchModule(moduleId)` 先重新 `enter()` 一次，重建那个应用的动态路由。接着清空标签页 store，换了应用，标签栏理应从零开始。最后把当前路由替换成新应用自己的 `homePath`。`homePath` 是 auth store 的一个 getter。它优先取模块自己的 `defaultRoute`，没有就退到菜单树的第一个叶子，再没有就兜底回 `/module`。一个菜单都没配的应用根本没有首页可言。这种时候把人送回选择器，好过让他撞上一个不属于本应用的路径吃 404。
+切换应用走的是另一条路。`switchModule(moduleId)` 先重新 `enter()` 一次，重建那个应用的动态路由。`enter()` 内部就是调一次[路由与动态菜单](/zh/frontend/routing)那页讲过的 `buildRoutesForModule(moduleId)`。接着清空标签页 store，换了应用，标签栏理应从零开始。最后把当前路由替换成新应用自己的 `homePath`。`homePath` 是 auth store 的一个 getter。它优先取模块自己的 `defaultRoute`，没有就退到菜单树的第一个叶子，再没有就兜底回 `/module`。一个菜单都没配的应用根本没有首页可言。这种时候把人送回选择器，好过让他撞上一个不属于本应用的路径吃 404。
 
 ## 守卫：每次导航都要过一遍 beforeEach
 

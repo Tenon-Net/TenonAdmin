@@ -30,7 +30,7 @@ const columns: ProTableColumn<SysPosition>[] = [
 </template>
 ```
 
-`name` 列写了 `search: true`，它就自动变成搜索表单里的一个输入框。`createTime` 写 `format: 'datetime'`，就按本地时间格式化。没写的东西不用管，表格不会替你臆造。四个约定就藏在这段短代码里，下面逐个拆开。
+`name` 列写了 `search: true`，它就自动变成搜索表单里的一个输入框。`createTime` 写 `format: 'datetime'`，就按本地时间格式化。`storage-key` 记住这张表列设置存在 localStorage 的哪个键，取名规则见下文。没写的东西不用管，表格不会替你臆造。四个约定就藏在这段短代码里，下面逐个拆开。
 
 ## fetcher 是唯一要你适配的地方
 

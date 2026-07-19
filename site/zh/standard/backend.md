@@ -23,7 +23,7 @@
 ## 实体
 
 - 定义在 `Services/Entities/`，系统内核表命名 `Sys*`。
-- 选基类：普通表继承 `BaseEntity`（主键+审计四件套+软删）；需按机构隔离的继承 `DataEntity`（多带 `CreateOrgId` 锚点）。
+- 选基类：普通表继承 `BaseEntity`（主键+审计四件套+软删）；需按机构隔离的继承 `DataEntity`（多带 `CreateOrgId` 锚点，见下文「数据访问」）。
 - 主键统一 `Id`（雪花，AOP 填，不手赋）。软删统一 `IsDelete`，查已删数据要显式 `.ClearFilter<ISoftDelete>()`。
 - 表结构没预留的额外信息塞 `ExtJson`，不新开列。
 - 特性照 `Entities/SysDictType.cs`：`[SugarTable]` / 唯一索引 `[SugarIndex(IsUnique=true)]` / `[SugarColumn(Length, ColumnDescription, IsNullable)]`。
@@ -40,13 +40,13 @@
 
 - `[RolePermission]` 无参：权限码就是 `{METHOD}:/{路由模板}`（如 `GET:/api/v1/sys/dict/type/page`）。代码里永不写 `"sys:user:add"` 之类魔法串，权限在角色-菜单界面勾路由即配；超管（`sadm`）放行。
 - 无需特定权限的登录态端点用 `[ActiveSession]`；匿名端点显式 `[AllowAnonymous]`（全局 `RequireAuthorization()` 兜底，漏挂不会静默公开）。
-- 需审计的写操作挂 `[OperationLog(...)]`。整模块可关停加 `[Module("X")]`，经 `Api:DisabledModules` 摘除控制器路由，返 404，不动数据。模块行本身另有两条删除守卫：下挂菜单的一律拒删（`ModuleHasMenus`，自建模块同样适用），内置 system 模块按固定 Id 永久保护（`ModuleProtected`）。
+- 需审计的写操作挂 `[OperationLog(...)]`。整模块可关停加 `[Module("X")]`，经 `Api:DisabledModules` 摘除控制器路由，返 404，不动数据。模块行本身另有两条删除守卫：下挂菜单的一律拒删（`ErrorCode.ModuleHasMenus`，自建模块同样适用），内置 system 模块按固定 Id 永久保护（`ErrorCode.ModuleProtected`）。
 - 控制器可直接 `return dto`（`ResultEnvelopeFilter` 兜底包信封）；内置控制器为契约清晰显式 `Result<T>.Ok(...)`。范例照 `Controllers/DictController.cs`；信封在管线哪一步套上，[请求管线](/zh/backend/request-pipeline) 里有全程。
 
 ## 错误处理
 
 - 业务错误抛 `AdminException(ErrorCode)` 或返回 `ErrorCode`，由 `AdminExceptionFilter` 统一转信封。
-- `ErrorCode` 是数字枚举，永不带本地化文案（`Core/ErrorCode.cs`），i18n 全在前端按 msgKey 翻译。新增错误码要同时加 `[MsgKey("error.<模块>.<语义>")]` 并补前端两份语言包：漏标会回退成 `error.code.{数值}` 原样弹给用户，且 `ErrorCodeLocaleConsistencyTests` 会让后端测试变红。
+- `ErrorCode` 是数字枚举，永不带本地化文案（`Core/ErrorCode.cs`），i18n 全在前端按 msgKey 翻译。新增错误码要同时加 `[MsgKey("error.<模块>.<语义>")]`（如 `error.dict.typeNotFound`）并补前端两份语言包：漏标会回退成 `error.code.{数值}` 原样弹给用户，且 `ErrorCodeLocaleConsistencyTests` 会让后端测试变红。
 
 ## 数据访问
 
@@ -80,7 +80,7 @@
 ## 命名 / 组织
 
 - 命名空间随目录；一类型一文件；后缀 `Sys*` 实体、`I*` 接口、`*Service`/`*Provider`/`*Filter`/`*Attribute`。
-- 启用可空引用类型。新代码的时间统一走注入的 `TimeProvider`（可测试），不用 `DateTime.Now` 裸调。内核还有 9 处历史裸调没收口，全在密码过期窗口那条路径上，别照抄。参考写法去看 `SessionService`。
+- 启用可空引用类型。新代码的时间统一走注入的 `TimeProvider`（可测试），不用 `DateTime.Now` 裸调。密码过期路径（`AuthService`/`UserService`/`PersonalService`）、短信验证码的每日计数分桶、还有建库时的 schema 版本戳，现在也都收口到这条路上了。`SessionService` 一直是参考写法，其余几处只是跟上了它。还剩一处裸调是故意留的：`SchemaVersionSeed` 的首次建库时间戳是条静态种子行，没有 DI 时钟可注入。
 
 ## 包管理
 
