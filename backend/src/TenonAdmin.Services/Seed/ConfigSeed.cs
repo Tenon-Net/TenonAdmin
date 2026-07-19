@@ -17,6 +17,8 @@ internal sealed class ConfigSeed : ISeedData<SysConfig>
     internal const string SITE_COPYRIGHT_KEY = "sys.site.copyright";
     /// <summary>版权链接配置键(版权名的超链接;留空则纯文本)</summary>
     internal const string SITE_COPYRIGHT_URL_KEY = "sys.site.copyrightUrl";
+    /// <summary>站点 Logo 图片地址配置键(登录页品牌 logo;留空则回退前端内置矢量 logo)</summary>
+    internal const string SITE_LOGO_KEY = "sys.site.logo";
 
     public IEnumerable<SysConfig> HasData() =>
     [
@@ -25,6 +27,7 @@ internal sealed class ConfigSeed : ISeedData<SysConfig>
         new SysConfig { Id = 18, ConfigKey = SITE_SUBTITLE_KEY, ConfigValue = "", Name = "登录副标题", GroupCode = "sys", Sort = 2, Remark = "登录页副标题;留空则用前端内置文案" },
         new SysConfig { Id = 19, ConfigKey = SITE_COPYRIGHT_KEY, ConfigValue = "TenonAdmin", Name = "版权信息", GroupCode = "sys", Sort = 3, Remark = "登录页页脚版权名;留空则回退站点标题" },
         new SysConfig { Id = 20, ConfigKey = SITE_COPYRIGHT_URL_KEY, ConfigValue = "", Name = "版权链接", GroupCode = "sys", Sort = 4, Remark = "版权名的超链接(http/https);留空则纯文本" },
+        new SysConfig { Id = 26, ConfigKey = SITE_LOGO_KEY, ConfigValue = "", Name = "站点 Logo", GroupCode = "sys", Sort = 5, Remark = "登录页品牌 logo 图片地址(URL);留空则回退前端内置矢量 logo" },
 
         // 安全策略(GroupCode=security):后端强制执行时经 ISecurityPolicyProvider 读取,改值即时生效。
         // 默认值须与 SecurityPolicyProvider 兜底一致(= 现 Options 默认)。

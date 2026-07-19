@@ -65,6 +65,7 @@ public class ConfigService(
         Subtitle = await GetValueByKeyAsync(ConfigSeed.SITE_SUBTITLE_KEY),
         Copyright = await GetValueByKeyAsync(ConfigSeed.SITE_COPYRIGHT_KEY),
         CopyrightUrl = await GetValueByKeyAsync(ConfigSeed.SITE_COPYRIGHT_URL_KEY),
+        Logo = await GetValueByKeyAsync(ConfigSeed.SITE_LOGO_KEY),
         // 匿名暴露验证码开关(不含类型等内部细节),供登录页决定是否渲染验证码;缺失即视为关。
         CaptchaEnabled = bool.TryParse(await GetValueByKeyAsync(CaptchaService.KEY_ENABLED), out var e) && e,
         // 匿名暴露短信免密登录开关,供登录页决定是否渲染短信登录入口;缺失即视为关。MFA 不在此暴露(由登录 40009 信令带内下发)。
