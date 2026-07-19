@@ -68,7 +68,7 @@ app.Run();
 - **`TenonAdmin.TestHost`** 是一个最小化的*消费方*宿主，不属于自动化测试套件本身。它把自己登记进 `options.ApplicationAssemblies.Add(typeof(Program).Assembly)`，让自己的实体、种子数据、控制器（`SampleWidget`、`SampleDoc`、`CustomDictController`）走一遍消费方挂载路径，供基于 `WebApplicationFactory<Program>` 的测试驱动。它演示的内容详见[搭建业务模块](/zh/guide/business-module)。
 - **`TenonAdmin.Tests`** 才是真正的 xUnit 测试套件，靠 `dotnet test` 跑。
 
-多数据库矩阵机制在 `TenonAdmin.Tests/TestDb.cs` 里。它读 `TENON_TEST_DBTYPE`（`MySql` / `SqlServer` / `PostgreSQL`，不设则默认走 SQLite），以及各数据库对应的连接串环境变量（`TENON_TEST_MYSQL`、`TENON_TEST_SQLSERVER`、`TENON_TEST_POSTGRESQL`）。对非 SQLite 的引擎，每次测试运行的库名由一个 `identity` 字符串经 SHA-256 哈希确定性派生（`tenon_it_` 前缀 + 哈希前 16 位十六进制），同一个 identity 永远对应同一个库，于是「对同一个库二次启动」这类幂等测试用例才跑得起来。因为 SqlSugar 的 CodeFirst 只建表、不建库，`TestDb` 在 SqlSugar 接手之前，自己经原始的 `MySqlConnection`/`SqlConnection`/`NpgsqlConnection` 直连服务器完成建库和删库。
+多数据库矩阵机制在 `TenonAdmin.Tests/TestDb.cs` 里。它读 `TENON_TEST_DBTYPE`（`MySql` / `SqlServer` / `PostgreSQL`，不设则默认走 SQLite），以及各数据库对应的连接串环境变量（`TENON_TEST_MYSQL`、`TENON_TEST_SQLSERVER`、`TENON_TEST_POSTGRESQL`）。对非 SQLite 的引擎，每次测试运行的库名由一个 `identity` 字符串经 SHA-256 哈希确定性派生，格式是 `tenon_it_` 前缀加哈希前 16 位十六进制。同一个 identity 永远对应同一个库，于是「对同一个库二次启动」这类幂等用例才跑得起来。因为 SqlSugar 的 CodeFirst 只建表、不建库，`TestDb` 在 SqlSugar 接手之前，自己经原始的 `MySqlConnection`/`SqlConnection`/`NpgsqlConnection` 直连服务器完成建库和删库。
 
 ## 配置节总览
 

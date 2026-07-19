@@ -81,7 +81,7 @@ public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
 
 有唯一列时，新增前的查重要带上软删行：`repo.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(x => x.Code == input.Code)`。不清软删过滤器的话，一条已软删的同码行会绕过应用层查重、在数据库唯一索引上撞出一个原生 500；查到重复就 `AdminException.ThrowIf(dup, ErrorCode.XxxExists)` 抛业务码。
 
-缓存不是每个查询都要加。列表、分页这类冷路径直接查库就行（内核的 `Dict`/`Config` 分页都没缓存）；只有「高频读 + 低频变」的热点（比如某类下拉数据源）才值得加，写法参考 `DictService.GetItemsByTypeAsync` 的读穿透缓存（`ICacheProvider` + 增删改后显式 `RemoveAsync` 失效），规范细则见[后端代码规范](/zh/standard/backend)。
+缓存不是每个查询都要加。列表、分页这类冷路径直接查库就行，内核的 `Dict`/`Config` 分页都没缓存。值得加的只有「高频读 + 低频变」的热点，比如某类下拉数据源。写法参考 `DictService.GetItemsByTypeAsync` 的读穿透缓存：`ICacheProvider` 取，增删改之后显式 `RemoveAsync` 失效。规范细则见[后端代码规范](/zh/standard/backend)。
 
 ## 控制器：权限码就是路由
 
@@ -118,7 +118,7 @@ public record SampleDocInput(string Title);
 
 `GET /api/v1/sample/doc` 这个动作的权限码就是 `GET:/api/v1/sample/doc`。授权时管理员把这条路由挂到某个菜单/按钮上、再勾给某个角色，该角色的用户就有了权限；超管（`sadm` 声明）自动绕过。控制器返回 `Result<T>` 或直接 `return dto` 都行，信封由 `ResultEnvelopeFilter` 统一包。
 
-两个可选特性按需加：需要审计的写操作挂 `[OperationLog("新增文档")]`，入参里的敏感字段（如密码）会被自动脱敏后写进操作日志（蓝本 `UserController`）；想让整块模块能被消费方一键关掉，给控制器挂 `[Module("SampleDoc")]`，之后配 `Api:DisabledModules=["SampleDoc"]` 就整体不注册路由（蓝本 `SysLogController`）。
+两个可选特性按需加。需要审计的写操作挂 `[OperationLog("新增文档")]`，入参里的敏感字段（比如密码）会自动脱敏后再写进操作日志，蓝本是 `UserController`。想让整块模块能被消费方一键关掉，给控制器挂 `[Module("SampleDoc")]`。之后配上 `Api:DisabledModules=["SampleDoc"]`，这个模块就整体不注册路由，蓝本是 `SysLogController`。
 
 ## 把服务和程序集交给内核
 
@@ -180,10 +180,10 @@ builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleW
 | `[1000, 4095]` | **你的种子** | 从 `ConsumerMin` 起取，避开内核未来会用到的低号段 |
 | `[4096, …]` | 雪花运行时发号区 | `id = 毫秒 × 4096 + 低位`，种子占了它，将来某次插入必然主键冲突 |
 
-同一批种子里你可能连播好几行（尤其复制粘贴时），给每行取号沿用内核菜单种子的登记法：记住当前用到的最大号，**新行一律取「最大号 + 1」，永不回填空洞**。空洞往往是历史上被挪走或删掉的号，复用会撞上老库里的存量行。
+同一批种子里你可能连播好几行，尤其是复制粘贴的时候。给每行取号沿用内核菜单种子的登记法：记住当前用到的最大号，**新行一律取「最大号 + 1」，永不回填空洞**。空洞往往是历史上被挪走或删掉的号，复用会撞上老库里的存量行。
 
 ::: warning 种子 Id 撞号或越界：现在启动就拒，不再静默
-一个撞了号的固定 Id 过去是**悄无声息**地坏：幂等判存把后来那行当「已存在」跳过（菜单树无声缺一块），开了 `SyncOnUpgrade` 的种子升级时还会把别人那行覆盖掉。现在 `DatabaseInitializer` 会在启动时逐实体登记所有种子（内核 + 消费方）声领的固定 Id，一旦发现越界或同实体重复，**当场抛异常、应用起不来**，并告诉你该换哪段号；`SeedIdRangeTests` 里有对应契约测试，CI 会在任何宿主启动前先变红。既盖住「复制行忘改 Id」的自撞，也盖住跨种子撞号。
+一个撞了号的固定 Id 过去是**悄无声息**地坏：幂等判存把后来那行当「已存在」跳过（菜单树无声缺一块），开了 `SyncOnUpgrade` 的种子升级时还会把别人那行覆盖掉。现在 `DatabaseInitializer` 会在启动时逐实体登记所有种子声领的固定 Id，内核和消费方的都登记。一旦发现越界或同实体重复，**当场抛异常、应用起不来**，并告诉你该换哪段号。`SeedIdRangeTests` 里有对应契约测试，CI 会在任何宿主启动前先变红。既盖住「复制行忘改 Id」的自撞，也盖住跨种子撞号。
 :::
 
 ## 挂菜单、授权

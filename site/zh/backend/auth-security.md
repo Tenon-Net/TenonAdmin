@@ -74,7 +74,7 @@ AdminException.ThrowIf(!string.Equals(stored, code, StringComparison.OrdinalIgno
 锁定计数的 key 先做规范化（去首尾空白 + 转小写），等价类必须 ≥ 数据库匹配的等价类。否则大小写/尾空白变体（MySQL `utf8mb4_0900_ai_ci` / PAD SPACE 命中同一行）会拆成独立计数器，让攻击者绕过锁定无限猜测。
 :::
 
-**堵死账号枚举**（`AuthService.ValidateUserAsync`）：「账号不存在」与「密码错误」统一抛 `ErrorCode.PasswordWrong`（响应不可区分），且账号不存在时也执行一次等价代价的陪跑哈希，于是响应耗时也不可区分，双通道一起堵。
+**堵死账号枚举**（`AuthService.ValidateUserAsync`）：「账号不存在」与「密码错误」统一抛 `ErrorCode.PasswordWrong`，响应内容因此不可区分。账号不存在时还会执行一次等价代价的陪跑哈希，响应耗时于是也不可区分，两条通道一起堵。
 
 ## 会话与强制下线
 
@@ -118,7 +118,7 @@ public virtual async Task RevokeAsync(string sessionId)
 
 不满足时抛 `ErrorCode.PasswordTooWeak`，`args` 携带各项要求供前端提示。密码用 PBKDF2 哈希（`Pbkdf2PasswordHasher`）。
 
-**口令时效（默认关）**。复杂度之外还有一条运行时可配的过期策略：`sys.security.password.expireDays`（种子默认 `0` = 永不过期，>0 才启用）。登录第 4 步 `AuthService.CheckPasswordExpiryAsync` 拿 `SysUser.LastPasswordChangeTime` 加上有效天数比当前时间——**过期不拦登录**，只把该用户的 `MustChangePassword` 置真落库，并随登录出参回传前端，由前端强制跳改密页（和管理员重置密码是同一个信号）。自助改密成功会刷新 `LastPasswordChangeTime`、清掉标志，过期窗口从头计。
+**口令时效（默认关）**。复杂度之外还有一条运行时可配的过期策略：`sys.security.password.expireDays`（种子默认 `0` = 永不过期，>0 才启用）。登录第 4 步 `AuthService.CheckPasswordExpiryAsync` 拿 `SysUser.LastPasswordChangeTime` 加上有效天数比当前时间。**过期不拦登录**：只把该用户的 `MustChangePassword` 置真落库，并随登录出参回传前端，由前端强制跳改密页。这和管理员重置密码是同一个信号。自助改密成功会刷新 `LastPasswordChangeTime`、清掉标志，过期窗口从头计。
 
 `LastPasswordChangeTime` 是后加字段，存量用户可能为 null。真判过期前会先给 null 锚点回填当前时间，窗口从升级后首次登录起算。不这样做，开启策略的当天就会有一批没有锚点的老用户被一起判过期、集体卡在改密页。替换过 `ISecurityPolicyProvider` 的二开代码不受影响：新增的 `GetPasswordExpireDaysAsync` 带一个返回 0 的默认接口实现，旧实现不改也编得过、等同于关闭。
 

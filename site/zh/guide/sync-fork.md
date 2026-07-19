@@ -7,7 +7,7 @@
 ::: tip 先确认你属于哪种消费模式
 - **纯后端消费方**（在自己独立的仓库里 `dotnet add package TenonAdmin` 或 `dotnet new tenon-app`）→ 用不上本页任何内容。更新靠升级 NuGet 包版本号，升级前看一眼 [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md) 有没有破坏性变更。
 - **fork 了仓库、在 `web/` 上做二次开发**（最常见的情况）→ 下面这套流程就是给你写的。
-- **一次性快照消费方**（`npx degit Tenon-Net/TenonAdmin/web` 拉一份拷贝、完全自己维护，像 soybean / vite 脚手架那样）→ 你主动放弃了升级通道，本页的合并流程用不上；上游修复要自己读 diff 手动搬，前端也会与走 NuGet 升级的后端契约漂移。想持续吃上游修复就别走这条，回到上一条 fork 模式。
+- **一次性快照消费方**（`npx degit Tenon-Net/TenonAdmin/web` 拉一份拷贝、完全自己维护，像 soybean / vite 脚手架那样）→ 你主动放弃了升级通道，本页的合并流程用不上。上游修复要自己读 diff 手动搬，前端也会与走 NuGet 升级的后端契约漂移。想持续吃上游修复就别走这条，回到上一条 fork 模式。
 :::
 
 ## 1. Fork 并克隆
