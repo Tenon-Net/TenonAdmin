@@ -226,6 +226,8 @@ const zhThemeConfig = {
           { text: '请求管线', link: '/zh/backend/request-pipeline' },
           { text: '多组织数据权限', link: '/zh/backend/data-scope' },
           { text: '认证与安全', link: '/zh/backend/auth-security' },
+          { text: '外部登录（SSO）', link: '/zh/backend/external-login' },
+          { text: '实时通知', link: '/zh/backend/realtime' },
           { text: '数据层与审计', link: '/zh/backend/data-layer' },
         ],
       },
