@@ -29,50 +29,53 @@ const active = computed(() => LOGIN_SKINS.find((s) => s.id === skin.value) ?? LO
   <div class="login-shell">
     <component :is="active.component" />
 
-    <!-- 全局工具:主题 + 语言。深色磨砂药丸,在明/暗/极光三种底色上都可读,三种皮肤通用。 -->
-    <div class="login-tools">
-      <n-tooltip>
-        <template #trigger>
-          <button
-            class="tool-btn"
-            type="button"
-            :aria-label="app.isDark ? t('app.light') : t('app.dark')"
-            @click="app.toggleDark()"
-          >
-            <Icon :icon="app.isDark ? 'ph:moon-stars' : 'ph:sun'" :width="18" />
-          </button>
-        </template>
-        {{ app.isDark ? t('app.light') : t('app.dark') }}
-      </n-tooltip>
-      <n-tooltip>
-        <template #trigger>
-          <button
-            class="tool-btn tool-lang"
-            type="button"
-            :aria-label="t('app.language')"
-            @click="app.setLocale(app.locale === 'zh-CN' ? 'en-US' : 'zh-CN')"
-          >
-            {{ app.locale === 'zh-CN' ? '中' : 'EN' }}
-          </button>
-        </template>
-        {{ t('app.language') }}
-      </n-tooltip>
-    </div>
+    <!-- 右上角工具栏:皮肤切换 + 主题/语言,三枚磨砂药丸并排(主题/语言贴最右角)。 -->
+    <div class="login-topbar">
+      <!-- 皮肤切换器:深色磨砂药丸,在明/暗/极光三种底色上都可读 -->
+      <div class="skin-switch" role="tablist" :aria-label="t('app.loginStyle')">
+        <button
+          v-for="s in LOGIN_SKINS"
+          :key="s.id"
+          class="skin-seg"
+          :class="{ active: s.id === skin }"
+          type="button"
+          role="tab"
+          :aria-selected="s.id === skin"
+          @click="skin = s.id"
+        >
+          {{ s.label }}
+        </button>
+      </div>
 
-    <!-- 皮肤切换器:深色磨砂药丸,在明/暗/极光三种底色上都可读 -->
-    <div class="skin-switch" role="tablist" :aria-label="t('app.loginStyle')">
-      <button
-        v-for="s in LOGIN_SKINS"
-        :key="s.id"
-        class="skin-seg"
-        :class="{ active: s.id === skin }"
-        type="button"
-        role="tab"
-        :aria-selected="s.id === skin"
-        @click="skin = s.id"
-      >
-        {{ s.label }}
-      </button>
+      <!-- 全局工具:主题 + 语言。深色磨砂药丸,在明/暗/极光三种底色上都可读,三种皮肤通用。 -->
+      <div class="login-tools">
+        <n-tooltip>
+          <template #trigger>
+            <button
+              class="tool-btn"
+              type="button"
+              :aria-label="app.isDark ? t('app.light') : t('app.dark')"
+              @click="app.toggleDark()"
+            >
+              <Icon :icon="app.isDark ? 'ph:moon-stars' : 'ph:sun'" :width="18" />
+            </button>
+          </template>
+          {{ app.isDark ? t('app.light') : t('app.dark') }}
+        </n-tooltip>
+        <n-tooltip>
+          <template #trigger>
+            <button
+              class="tool-btn tool-lang"
+              type="button"
+              :aria-label="t('app.language')"
+              @click="app.setLocale(app.locale === 'zh-CN' ? 'en-US' : 'zh-CN')"
+            >
+              {{ app.locale === 'zh-CN' ? '中' : 'EN' }}
+            </button>
+          </template>
+          {{ t('app.language') }}
+        </n-tooltip>
+      </div>
     </div>
   </div>
 </template>
@@ -83,12 +86,20 @@ const active = computed(() => LOGIN_SKINS.find((s) => s.id === skin.value) ?? LO
   height: 100vh;
   overflow: hidden;
 }
-/* 全局工具药丸(右上),与底部皮肤切换器同款磨砂,自带对比,三底色皆可读 */
-.login-tools {
+/* 右上角工具栏:皮肤切换 + 主题/语言并排靠右;窄屏放不下时换行仍右对齐,不横向溢出。 */
+.login-topbar {
   position: fixed;
   top: 20px;
   right: 24px;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+/* 全局工具药丸,与皮肤切换器同款磨砂,自带对比,三底色皆可读 */
+.login-tools {
   display: flex;
   gap: 2px;
   padding: 4px;
@@ -124,13 +135,8 @@ const active = computed(() => LOGIN_SKINS.find((s) => s.id === skin.value) ?? LO
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
-/* ponytail: 固定深色药丸自带对比,纯白 spotlight 底部也够读;若极端不够再补浅色 scrim */
+/* ponytail: 固定深色药丸自带对比,纯白 spotlight 右上角也够读;若极端不够再补浅色 scrim */
 .skin-switch {
-  position: fixed;
-  left: 50%;
-  bottom: 24px;
-  transform: translateX(-50%);
-  z-index: 10;
   display: flex;
   gap: 2px;
   padding: 4px;

@@ -8,6 +8,7 @@ export interface SiteInfo {
   subtitle: string
   copyright: string
   copyrightUrl: string
+  logo: string
   captchaEnabled: boolean
   smsLoginEnabled: boolean
 }
@@ -22,6 +23,7 @@ const site = reactive<SiteInfo>({
   subtitle: '',
   copyright: '',
   copyrightUrl: '',
+  logo: '',
   captchaEnabled: false,
   smsLoginEnabled: false,
 })
@@ -37,6 +39,7 @@ export function loadSite(force = false): Promise<void> {
       site.subtitle = s.subtitle ?? ''
       site.copyright = s.copyright ?? ''
       site.copyrightUrl = s.copyrightUrl ?? ''
+      site.logo = s.logo ?? ''
       site.captchaEnabled = !!s.captchaEnabled
       site.smsLoginEnabled = !!s.smsLoginEnabled
     })

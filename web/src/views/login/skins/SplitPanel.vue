@@ -29,7 +29,9 @@ const vars = computed(() => ({
       <div class="panel-aurora" />
       <div class="panel-inner">
         <div class="logo">
-          <TenonLogo :size="40" />
+          <!-- 站点 logo:后台配了图片地址用 <img>,否则回退内置矢量 logo(与登录卡品牌行一致) -->
+          <img v-if="site.logo" :src="site.logo" :alt="site.title" class="logo-img" />
+          <TenonLogo v-else :size="40" />
           <span>{{ site.title }}</span>
         </div>
         <div class="bar" :style="{ background: app.accent }" />
@@ -124,6 +126,13 @@ const vars = computed(() => ({
   font-size: 22px;
   font-weight: 700;
   color: var(--color-text-primary);
+}
+/* 后台配置的品牌 logo:限高与内置矢量 logo(size=40)齐平,宽度自适应不变形 */
+.logo-img {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 .bar {
   width: 40px;
