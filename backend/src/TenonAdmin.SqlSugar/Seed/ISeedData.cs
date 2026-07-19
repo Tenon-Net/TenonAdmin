@@ -29,7 +29,7 @@ public interface ISeedData;
 /// <b>内核不扫描程序集找种子</b>——框架种子与用户种子都得显式注册(<c>options.ApplicationAssemblies</c> 只管实体建表与控制器挂载,
 /// 不管种子)。忘了注册的后果是种子<b>静默不执行</b>,没有任何报错。</para>
 /// </summary>
-public interface ISeedData<out TEntity> : ISeedData where TEntity : BaseEntity, new()
+public interface ISeedData<out TEntity> : ISeedData where TEntity : AuditEntity, new()
 {
     /// <summary>返回应当存在的种子行(带固定 Id)。启动时与库中现状按主键比对,缺哪行插哪行。</summary>
     IEnumerable<TEntity> HasData();

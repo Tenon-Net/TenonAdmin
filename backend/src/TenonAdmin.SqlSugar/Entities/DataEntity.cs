@@ -38,3 +38,21 @@ public abstract class DataEntity : BaseEntity, IOrgScoped
     [SugarColumn(IsNullable = true, ColumnDescription = "归属机构 Id(数据范围锚点)")]
     public long? CreateOrgId { get; set; }
 }
+
+/// <summary>
+/// 带机构数据范围的<b>审计实体</b>(#10):<see cref="AuditEntity"/> + <see cref="IOrgScoped"/>,<b>不含软删除</b>——
+/// <see cref="DataEntity"/> 的“物理删版”。业务表继承它即获得数据范围锚点 <see cref="CreateOrgId"/>(同 <c>DataEntity</c>,
+/// 全局过滤器与写路径守卫都按 <see cref="IOrgScoped"/> 接口生效),但仓储 <c>DeleteAsync</c> 是<b>物理删除</b>、无回收站。
+/// <para>适用于确需真删、又要机构隔离 + 审计的业务表。需要软删除/回收站的机构表继续用 <see cref="DataEntity"/>。</para>
+/// <para><b>写路径守卫(P2-21)</b>同 <see cref="DataEntity"/>:<see cref="SqlSugarRepository{TEntity}"/> 对 <see cref="IOrgScoped"/>
+/// 实体的 <c>UpdateAsync</c>/<c>DeleteAsync</c> 已内置范围守卫,越权改删他机构行被拒(返回 0 行)。</para>
+/// </summary>
+public abstract class OrgAuditEntity : AuditEntity, IOrgScoped
+{
+    /// <summary>
+    /// 归属机构 Id(数据范围锚点)= 创建者当时所属机构。插入时由审计 AOP 从 <c>ICurrentUser.OrgId</c> 自动填充(按 <see cref="IOrgScoped"/> 匹配),
+    /// 数据范围过滤器据它决定行可见性。为 null 表示不受机构范围约束。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "归属机构 Id(数据范围锚点)")]
+    public long? CreateOrgId { get; set; }
+}

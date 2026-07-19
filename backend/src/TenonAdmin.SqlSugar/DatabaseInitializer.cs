@@ -188,7 +188,7 @@ internal sealed class DatabaseInitializer(
     /// 升级时对结构性种子(<see cref="ISeedData{TEntity}.SyncOnUpgrade"/>)额外覆盖已有行。
     /// </summary>
     private async Task<(int Inserted, int Synced)> ExecuteSeedCoreAsync<TEntity>(ISeedData<TEntity> seed, bool upgrading)
-        where TEntity : BaseEntity, new()
+        where TEntity : AuditEntity, new()
     {
         var rows = seed.HasData().ToList();
         if (rows.Count == 0) return (0, 0);
@@ -224,11 +224,12 @@ internal sealed class DatabaseInitializer(
         // IgnoreColumns 不是防御性代码:AsUpdateable 默认刷全部映射列,而种子实例的 CreateTime 是
         // default(DateTime)(0001-01-01)、CreateUserId 是 null —— 不排除就会把老库正确的审计字段刷成垃圾。
         // IsDelete 同理:用户软删掉的内置菜单不该被升级复活。
-        // CreateOrgId(DataEntity 的数据范围锚点)只在消费者把开关开在 DataEntity 种子上时才存在;
-        // 刷成 null 会让那些行从所有机构范围查询里消失,一并排除。
-        string[] ignored = typeof(TEntity).IsAssignableTo(typeof(DataEntity))
-            ? [nameof(BaseEntity.CreateTime), nameof(BaseEntity.CreateUserId), nameof(BaseEntity.IsDelete), nameof(DataEntity.CreateOrgId)]
-            : [nameof(BaseEntity.CreateTime), nameof(BaseEntity.CreateUserId), nameof(BaseEntity.IsDelete)];
+        // CreateOrgId(数据范围锚点)只在 IOrgScoped 实体(DataEntity / OrgAuditEntity)上存在;
+        // 刷成 null 会让那些行从所有机构范围查询里消失,一并排除。按接口而非 DataEntity 基类判定,覆盖不软删的机构实体。
+        // IsDelete 仅 BaseEntity 系有此列;AuditEntity 系无该列时 IgnoreColumns 找不到即跳过,无害,故无条件列入。
+        string[] ignored = typeof(TEntity).IsAssignableTo(typeof(IOrgScoped))
+            ? [nameof(AuditEntity.CreateTime), nameof(AuditEntity.CreateUserId), nameof(BaseEntity.IsDelete), nameof(IOrgScoped.CreateOrgId)]
+            : [nameof(AuditEntity.CreateTime), nameof(AuditEntity.CreateUserId), nameof(BaseEntity.IsDelete)];
 
         var synced = await db.Updateable(toUpdate).IgnoreColumns(ignored).ExecuteCommandAsync();
 
@@ -244,7 +245,7 @@ internal sealed class DatabaseInitializer(
     /// 是内核的自律,由 <c>SeedIdRangeTests</c> 守 —— 运行时不该去猜哪个种子是消费者的。</para>
     /// </summary>
     private static void EnsureSeedIdsInReservedRange<TEntity>(ISeedData<TEntity> seed, List<TEntity> rows)
-        where TEntity : BaseEntity, new()
+        where TEntity : AuditEntity, new()
     {
         var bad = rows.Where(r => r.Id is < 1 or > TenonSeedIds.ConsumerMax).Select(r => r.Id).Distinct().ToArray();
         if (bad.Length == 0) return;
@@ -266,7 +267,7 @@ internal sealed class DatabaseInitializer(
     /// 开了 <see cref="ISeedData{TEntity}.SyncOnUpgrade"/> 的种子升级时还会把别人的行覆盖掉——所以必须大声失败。</para>
     /// </summary>
     private void EnsureSeedIdsUnique<TEntity>(ISeedData<TEntity> seed, List<TEntity> rows)
-        where TEntity : BaseEntity, new()
+        where TEntity : AuditEntity, new()
     {
         if (!_seenSeedIds.TryGetValue(typeof(TEntity), out var seen))
             _seenSeedIds[typeof(TEntity)] = seen = [];

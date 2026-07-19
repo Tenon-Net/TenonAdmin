@@ -17,14 +17,18 @@ namespace TenonAdmin.SqlSugar;
 /// </summary>
 public class SqlSugarRepository<TEntity>(ISqlSugarClient db, TimeProvider? time = null, ICurrentUser? currentUser = null)
     : IRepository<TEntity>
-    where TEntity : BaseEntity, new()
+    where TEntity : AuditEntity, new()
 {
     /// <inheritdoc />
     public ISqlSugarClient Db => db;
 
-    // 编译期判定实体是否受机构数据范围约束(实现 IOrgScoped,即 DataEntity 子类)。
+    // 编译期判定实体是否受机构数据范围约束(实现 IOrgScoped,即 DataEntity / OrgAuditEntity 子类)。
     // 用于写路径越权兜底:全局范围过滤器只作用于查询(SELECT),不作用于按主键的 Update/Delete。
     private static readonly bool IsOrgScoped = typeof(IOrgScoped).IsAssignableFrom(typeof(TEntity));
+
+    // 编译期判定实体是否软删除(实现 ISoftDelete,即 BaseEntity 子类)。DeleteAsync 据此分流软删/物理删,
+    // RestoreAsync 据此拒绝非软删实体。用反射而非 `default(TEntity) is ISoftDelete`——引用类型 default 为 null,恒 false。
+    private static readonly bool IsSoftDelete = typeof(ISoftDelete).IsAssignableFrom(typeof(TEntity));
 
     // 每个实体类型的唯一索引字符串列(运行时从 SugarIndex 元数据解析,缓存一次)
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> UniqueStringColumnsCache = new();
@@ -73,6 +77,11 @@ public class SqlSugarRepository<TEntity>(ISqlSugarClient db, TimeProvider? time 
     {
         if (!await InScopeAsync(id)) return 0;   // 越权删防护(仅 IOrgScoped 实体触发实际检查)
 
+        // 非软删实体(AuditEntity 系,如 OrgAuditEntity)→ 物理删除。已过 InScope 守卫,不再走 HardDeleteAsync 二次查询。
+        // 物理删后行消失,唯一约束自然释放,无需软删那套 _del_{id} 占位释放。
+        if (!IsSoftDelete)
+            return await db.Deleteable<TEntity>().In(id).ExecuteCommandAsync();
+
         var uniqueCols = GetUniqueStringColumns();
         if (uniqueCols.Length > 0)
         {
@@ -98,9 +107,16 @@ public class SqlSugarRepository<TEntity>(ISqlSugarClient db, TimeProvider? time 
     /// <inheritdoc />
     public virtual async Task<int> RestoreAsync(long id)
     {
+        // 非软删实体(AuditEntity 系)物理删不可逆,无回收站可恢复 —— 显式报错而非静默返 0。
+        if (!IsSoftDelete)
+            throw new NotSupportedException($"{typeof(TEntity).Name} 非软删实体(未实现 ISoftDelete),物理删除不可恢复,无 RestoreAsync 语义。");
+
+        // 按 Id 取回(清掉软删过滤器才能看到已删行),再在内存里经 ISoftDelete 判是否确为已软删行。
+        // TEntity 仅约束 AuditEntity,编译期无 e.IsDelete 成员 → 不写进 SQL 谓词(裸标识符在 PG 会大小写折叠);
+        // 上面的 guard 已确保运行时 entity 必是 ISoftDelete。
         var entity = await db.Queryable<TEntity>().ClearFilter<ISoftDelete>()
-            .Where(e => e.Id == id && e.IsDelete == true).FirstAsync();
-        if (entity is null) return 0;
+            .Where(e => e.Id == id).FirstAsync();
+        if (entity is not ISoftDelete { IsDelete: true }) return 0;   // 不存在 / 未删 → 无可恢复
 
         var uniqueCols = GetUniqueStringColumns();
         var suffix = $"_del_{id}";
@@ -134,7 +150,7 @@ public class SqlSugarRepository<TEntity>(ISqlSugarClient db, TimeProvider? time 
                     .Where(e => e.Id == id)
                     .ExecuteCommandAsync();
                 await db.Updateable<TEntity>()
-                    .SetColumns(e => e.IsDelete == false)
+                    .SetColumns(nameof(ISoftDelete.IsDelete), false)
                     .Where(e => e.Id == id)
                     .ExecuteCommandAsync();
             });
@@ -143,7 +159,7 @@ public class SqlSugarRepository<TEntity>(ISqlSugarClient db, TimeProvider? time 
         }
 
         return await db.Updateable<TEntity>()
-            .SetColumns(e => e.IsDelete == false)
+            .SetColumns(nameof(ISoftDelete.IsDelete), false)
             .Where(e => e.Id == id)
             .ExecuteCommandAsync();
     }
@@ -159,8 +175,9 @@ public class SqlSugarRepository<TEntity>(ISqlSugarClient db, TimeProvider? time 
         // 审计 AOP 根本不会触发 —— 不显式写,UpdateTime/UpdateUserId 就永远停在删除之前的值。
         // 删除时间同时是文件回收任务的保留期锚点(设计 §12 / dev-plan T-D2),丢了它 GC 无从判断该不该收。
         var now = (time ?? TimeProvider.System).GetLocalNow().DateTime;   // 与审计 AOP 同一时间口径
+        // IsDelete 按列名写:TEntity 仅约束 AuditEntity,编译期无 e.IsDelete 成员;SoftDeleteCoreAsync 仅在 IsSoftDelete 分支被调,运行时实体确有此列。
         var update = db.Updateable<TEntity>()
-          .SetColumns(e => e.IsDelete == true)
+          .SetColumns(nameof(ISoftDelete.IsDelete), true)
           .SetColumns(e => e.UpdateTime == now);
         if (currentUser?.UserId is { } uid)                               // 无登录上下文(系统/后台任务)则不硬塞操作人
             update = update.SetColumns(e => e.UpdateUserId == uid);
