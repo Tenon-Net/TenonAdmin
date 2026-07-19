@@ -80,7 +80,7 @@
 ## 命名 / 组织
 
 - 命名空间随目录；一类型一文件；后缀 `Sys*` 实体、`I*` 接口、`*Service`/`*Provider`/`*Filter`/`*Attribute`。
-- 启用可空引用类型；新代码的时间统一走注入的 `TimeProvider`（可测试），不用 `DateTime.Now` 裸调。内核还有 7 处历史裸调没收口，全在密码过期窗口那条路径上，别照抄——参考写法看 `SessionService`。
+- 启用可空引用类型；新代码的时间统一走注入的 `TimeProvider`（可测试），不用 `DateTime.Now` 裸调。内核还有 9 处历史裸调没收口，全在密码过期窗口那条路径上，别照抄——参考写法看 `SessionService`。
 
 ## 包管理
 

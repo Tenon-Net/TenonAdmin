@@ -11,7 +11,7 @@
 | 文件夹 | 内容 |
 | --- | --- |
 | `samples/` | `MinimalHost`：零配置示例宿主，用于本地开发与手工验证 |
-| `src/` | 六个正式发版的包 |
+| `src/` | 八个正式发版的包 |
 | `tests/` | `TenonAdmin.Tests`（测试套件）与 `TenonAdmin.TestHost`（一个最小化的消费方宿主） |
 
 `src/` 下的包在[架构](/zh/backend/architecture)页有详细展开，这里只做定位：

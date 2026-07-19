@@ -1,6 +1,6 @@
 # 架构分层与包依赖
 
-TenonAdmin 由六个 NuGet 包组成，构成核心链条的五个只能自上而下依赖：上层能引下层，下层永远看不见上层。哪一层把这个方向反转，可替换性和依赖红线就同时垮掉。第六个包 `TenonAdmin.Caching.Redis` 挂在 `Core` 旁边，是主链之外的可选支线。
+TenonAdmin 由八个 NuGet 包组成，构成核心链条的五个只能自上而下依赖：上层能引下层，下层永远看不见上层。哪一层把这个方向反转，可替换性和依赖红线就同时垮掉。另外三个都只挂在 `Core` 旁边，是主链之外的可选支线。
 
 ## 核心链条：五个包
 
@@ -17,14 +17,18 @@ TenonAdmin.AspNetCore  宿主集成:AddTenonAdmin / MapTenonAdmin、JWT、[RoleP
 TenonAdmin             元包:只引用 AspNetCore。消费方装这一个,即传递引入整条栈。
 ```
 
-旁支的 `TenonAdmin.Caching.Redis` 只依赖 `Core`，而 Core/SqlSugar/Services/AspNetCore 都不会反过来引用它：
+三个旁支都只依赖 `Core`，而 Core/SqlSugar/Services/AspNetCore 都不会反过来引用它们：
 
 ```text
 TenonAdmin.Caching.Redis   可选包:RedisCacheProvider(基于 StackExchange.Redis 的 ICacheProvider 实现),
                             消费方在 AddTenonAdmin() *之前* 调用 AddTenonAdminRedisCache(configuration) 即可启用。
+TenonAdmin.Auth.WeCom      可选包:企业微信扫码登录的 IExternalLoginProvider 实现。
+TenonAdmin.Auth.DingTalk   可选包:钉钉扫码登录的 IExternalLoginProvider 实现。
    ↑
 TenonAdmin.Core
 ```
+
+两个登录卫星包连第三方运行时依赖都没有，只引 Microsoft.*——依赖红线对可选包同样成立。
 
 各层职责与依赖方向：
 
@@ -36,6 +40,8 @@ TenonAdmin.Core
 | `TenonAdmin.AspNetCore` | JWT、授权过滤器、内置控制器、全局过滤器、`AddTenonAdmin` | Services、SqlSugar、Core | Microsoft.AspNetCore.* |
 | `TenonAdmin`（元包） | 聚合入口 | AspNetCore |——|
 | `TenonAdmin.Caching.Redis`（可选） | `RedisCacheProvider`：Redis 版 `ICacheProvider` | 仅 Core | StackExchange.Redis |
+| `TenonAdmin.Auth.WeCom`（可选） | 企业微信扫码登录的 `IExternalLoginProvider` | 仅 Core | 仅 Microsoft.* |
+| `TenonAdmin.Auth.DingTalk`（可选） | 钉钉扫码登录的 `IExternalLoginProvider` | 仅 Core | 仅 Microsoft.* |
 
 `TenonAdmin.Caching.Redis` 没有引入新机制，它就是内核那套 `TryAdd` 可替换性套用在缓存提供者上。消费方在 `AddTenonAdmin()` 之前调用 `AddTenonAdminRedisCache(configuration)`，内部用 `TryAddSingleton` 注册 `RedisCacheProvider`，抢先赢下注册，替换掉内核默认的进程内 `MemoryCacheProvider`。不调用这个方法，或没把 `TenonAdmin:Cache:Provider` 配成 `Redis`，内核的进程内默认实现照常工作，不受影响。
 

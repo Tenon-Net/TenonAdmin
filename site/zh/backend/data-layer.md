@@ -90,10 +90,27 @@ client.Aop.DataExecuting = (_, info) =>
 
 ## 实体基类
 
-业务实体二选一继承：
+业务实体按**要哪几样能力**挑基类。五个基类叠成一条链，每往下一层多一样：
 
-- `BaseEntity`：主键 `Id` + 审计四件套（`CreateTime` / `CreateUserId` / `UpdateTime` / `UpdateUserId`）+ 软删除 `IsDelete`。实现 `ISoftDelete`。不需要机构隔离的表（全局字典、机构树自身）用它。
-- `DataEntity`：继承 `BaseEntity`，额外带数据范围锚点 `CreateOrgId`，实现 `IOrgScoped`。需要「本机构/本机构及以下/仅本人/自定义」隔离的业务表用它。
+```text
+PrimaryId          只有主键 Id
+  └─ AuditEntity   + 审计四件套(CreateTime / CreateUserId / UpdateTime / UpdateUserId)
+       ├─ BaseEntity     + 软删除 IsDelete            实现 ISoftDelete
+       │    └─ DataEntity     + 机构锚点 CreateOrgId  实现 IOrgScoped
+       └─ OrgAuditEntity + 机构锚点 CreateOrgId       实现 IOrgScoped
+```
+
+| 基类 | 审计 | 软删除 | 机构隔离 | 用在哪 |
+| --- | --- | --- | --- | --- |
+| `PrimaryId` | 无 | 无 | 无 | 明细/子表。**用不了内置仓储、不能种子化**（`IRepository<T>` 约束 `where T : BaseEntity`），通常经 `ISqlSugarClient` 随主表在同一事务里读写 |
+| `AuditEntity` | 有 | 无 | 无 | 确需真删又要留痕的表：可真删的关联表、只增日志表 |
+| `BaseEntity` | 有 | 有 | 无 | 全局共享表：字典、配置、机构树自身 |
+| `DataEntity` | 有 | 有 | 有 | 需要「本机构 / 本机构及以下 / 仅本人 / 自定义」隔离的业务表 |
+| `OrgAuditEntity` | 有 | 无 | 有 | 要机构隔离、又确需真删的表 |
+
+**没有软删除的那两个，仓储 `DeleteAsync` 是物理删除**，行从库里移除，没有回收站，也没有 `RestoreAsync`。挑基类前先问这张表要不要回收站。
+
+机构隔离的两个（`DataEntity` / `OrgAuditEntity`）都吃写路径守卫：仓储的 `UpdateAsync`/`DeleteAsync` 对 `IOrgScoped` 实体内置范围检查，越权改删他机构的行会被拒，返回 0 行。
 
 ## 泛型仓储 `IRepository<>`
 
