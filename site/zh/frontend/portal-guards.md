@@ -27,7 +27,7 @@ async function enterInitial(): Promise<EnterResult> {
 }
 ```
 
-模块列表、权限码、超管标记三者并行拉取。后两者都是失败即收紧：`personalApi.permissions()` 一旦失败，`permissionsLoaded` 就留在 `false`，`v-auth` 指令把它当成「藏起来」，而不是在拿不准的情况下放行；`profile` 拉不到就按普通用户处理，不会把谁误当成超管。这一步不阻断进门户。权限拿不到你照样能进，只是所有按钮先按「没权限」处理。
+模块列表、权限码、超管标记三者并行拉取。后两者都是失败即收紧：`personalApi.permissions()` 一旦失败，`permissionsLoaded` 就留在 `false`，`v-auth` 指令把它当成「藏起来」，而不是在拿不准的情况下放行；`profile` 拉不到就按普通用户处理，不会把谁误当成超管。这一步不阻断进门户。权限拿不到你照样能进，只是除超管外的所有按钮先按「没权限」处理。超管走的是 `hasPerm` 里 `isSuperAdmin` 那条 fail-open 分支，权限码拉不到也照显，服务端的 `sadm` 兜底。
 
 拉完这些数据，`enterInitial` 走一个「进哪个应用」的判定阶梯，自上而下，第一个命中的赢：
 

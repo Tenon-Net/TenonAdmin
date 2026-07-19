@@ -33,12 +33,12 @@ npm run build     # 产物在 web/dist/
 
 | 配置项 | 为什么必须处理 |
 |---|---|
-| `TenonAdmin:Jwt:SecretKey` | 不配 = 开发密钥模式：内核自动生成一把密钥落到 `./data/dev-jwt.key` 并打印警告。生产必须显式配置（≥32 字节随机串），且不要进版本库，改用环境变量或密钥管理服务。 |
+| `TenonAdmin:Jwt:SecretKey` | 生产（任何非 Development 环境）不配就**拒绝启动**，直接抛异常。只有 Development 下才会自动生成一把密钥落到 `./data/dev-jwt.key` 并打印警告。生产必须显式配置（≥32 字节随机串），且不要进版本库，改用环境变量或密钥管理服务。 |
 | `TenonAdmin:Database` | 默认 SQLite `./data/admin.db`（相对 ContentRoot）。多实例、或有并发写，就换 MySQL / SqlServer / PostgreSQL（改 `DbType` + `ConnectionString` 两项）。 |
 | `TenonAdmin:Id:WorkerId` | 雪花发号器的机器位。单实例不配即可（回落 0）；水平扩展时每个副本必须各不相同（0–63），否则同毫秒发号会撞主键。配了 Redis 却不显式给它会直接拒绝启动。详解见[容器化与多副本](/zh/guide/deployment/docker)。 |
 | `TenonAdmin:Upload:RootPath` | 默认 `./wwwroot/upload`。声明成数据卷，否则重部署丢文件；走路线 A（后端顺带托管前端）还必须把它挪出 `wwwroot`，否则上传文件会被静态中间件匿名直出。见[路线 A 的鉴权绕过警告](/zh/guide/deployment/route-a)。 |
 | `TenonAdmin:Api:ForwardedHeaders` | 在任何反向代理 / 负载均衡之后都必须配。不配的话后端看到的永远是代理那一个 IP：全体用户共享一个限流桶、按 IP 的爆破防护归零、审计日志的 IP 列作废。配置细节见[路线 B](/zh/guide/deployment/route-b)。 |
-| `TenonAdmin:Cache:Provider` | 单实例可留 `Memory`。多副本必须换 `Redis`，否则强制下线、撤权、登录锁定会在副本之间失效，而且一失效就是好几天。详解见[容器化与多副本](/zh/guide/deployment/docker)。 |
+| `TenonAdmin:Cache:Provider` | 单实例可留 `Memory`。多副本必须换 `Redis`，否则强制下线、撤权、登录锁定会在副本之间失效，而且一失效就是好几天。改这一项还不够：宿主项目要装 `TenonAdmin.Caching.Redis` 包，并在 `AddTenonAdmin()` **之前**调用 `AddTenonAdminRedisCache(builder.Configuration)`，两个条件缺一个就静默退回内存缓存。详解见[容器化与多副本](/zh/guide/deployment/docker)。 |
 
 上面这些都能走环境变量，层级用双下划线（容器化部署常用）：
 

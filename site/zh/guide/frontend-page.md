@@ -109,7 +109,7 @@ const columns: DataTableColumns<SampleDoc> = [
               NPopconfirm,
               {
                 onPositiveClick: () =>
-                  run(() => sampleDocApi.remove(r.id), t('common.deleted')).then((ok) => { if (ok) load() }),
+                  run(() => sampleDocApi.remove(r.id), t('sampleDoc.deleted')).then((ok) => { if (ok) load() }),
               },
               {
                 trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
@@ -184,7 +184,7 @@ async function save() {
 - **`FormContainer` 用 `onConfirm` 协议接管 loading/关闭**：`save()` 里把 `validate()` 放第一行，校验失败 reject 挡住关闭；接口失败 `return false`（或抛出）弹窗也不关，方便用户改后重试。业务代码不用自己管 `saving` 和底栏。
 - **`useConfirm().run` 配 `n-popconfirm`**:popconfirm 当触发器，确认后的动作与成/败 toast 交给 `run`，`run` 回一个 `ok` 布尔，真删掉了再 `load()`。
 - **按钮级权限，双重收口在同一份权限码上**：模板里的按钮用 `v-auth` 指令（值就是路由权限码 `POST:/api/v1/sample/doc`，不命中直接把 DOM 节点移除）；操作列里的编辑/删除按钮走的是 `h()` 渲染函数，指令用不了，改用 `authStore.hasPerm(...)` 判断要不要渲染。两条路判定规则同一套：超管全放行，权限码没拉到时藏按钮，普通用户按码精确匹配。**这只是界面降噪，服务端始终是权威**。真正的拦截在后端 `[RolePermission]`，越权请求照样 403。规则细节见[前端权限模型](/zh/frontend/permission)。
-- **错误处理留在视图层**：`catch (e) { message.error(translateError(e)) }`，不在 API 层弹 UI。`translateError` 按错误的 `code`/`msgKey` 到 locale 里取字。
+- **错误处理留在视图层**：`catch (e) { message.error(translateError(e)) }`，不在 API 层弹 UI。`translateError` 按错误的 `msgKey` 到 locale 里取字，不读数字 `code`。
 
 ## 挂进菜单，页面才可见
 
@@ -211,6 +211,7 @@ export default {
   addTitle: '新增文档',
   editTitle: '编辑文档',
   deleteConfirm: '确认删除「{title}」?',
+  deleted: '已删除',
 }
 ```
 
@@ -222,6 +223,7 @@ export default {
   addTitle: 'Add Document',
   editTitle: 'Edit Document',
   deleteConfirm: 'Confirm deleting "{title}"?',
+  deleted: 'Deleted',
 }
 ```
 

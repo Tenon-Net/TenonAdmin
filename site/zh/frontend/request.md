@@ -130,7 +130,7 @@ async function doRefresh(): Promise<boolean> {
 
 ## 开发代理与 CORS
 
-类型化客户端（`src/api/client.ts`）和 `gen:api` 都默认浏览器是同源访问 `/api` 和 `/openapi` 的：`client` 的 `baseUrl` 默认为空，`gen:api` 拉取 `/openapi/v1.json` 时用的也是一个看起来相对的 URL，两者都没做任何跨域处理。本地开发时后端跑在 `:5100`,dev server 跑在 `:5173`，端口不一样，总得有个东西把这道缝补上，两边才能正常工作。
+类型化客户端（`src/api/client.ts`）默认浏览器是同源访问 `/api` 的（`gen:api` 不在此列：它由 Node 直连写死的 `http://localhost:5100/openapi/v1.json`，不走 dev proxy，也不受 CORS 约束；后端不在 5100 就得改 `package.json` 里那行脚本，`TENON_API_TARGET` 对它无效）：`client` 的 `baseUrl` 默认为空，`gen:api` 拉取 `/openapi/v1.json` 时用的也是一个看起来相对的 URL，两者都没做任何跨域处理。本地开发时后端跑在 `:5100`,dev server 跑在 `:5173`，端口不一样，总得有个东西把这道缝补上，两边才能正常工作。
 
 补这道缝的就是 `vite.config.ts` 里的 dev 代理：
 

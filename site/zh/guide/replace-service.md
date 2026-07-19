@@ -47,7 +47,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 | `IDataScopeProvider` | `DataScopeProvider` | 定制数据范围规则 |
 | `IIdGenerator` | `SnowflakeIdGenerator` | 换数据库自增 / GUID v7 |
 
-完整清单就是 `backend/src/TenonAdmin.Services/ServicesSetup.cs` 里每一行 `TryAdd`。那里注册的每个接口都是可替换点。
+大部分替换点就是 `backend/src/TenonAdmin.Services/ServicesSetup.cs` 里每一行 `TryAdd`。数据层与宿主层还各有一批，比如 `IIdGenerator` 注册在 `backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs`。那里注册的每个接口都是可替换点。
 
 ## 只改一步：子类覆写 virtual
 
@@ -115,7 +115,7 @@ public class ProductSeed : ISeedData<BizProduct>
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, ProductSeed>());
 ```
 
-种子行的固定 Id 必须落在**消费方保留区间 `[1000, 4095]`**（常量 `TenonAdmin.Core.TenonSeedIds`：`ConsumerMin`=1000、`ConsumerMax`=4095）。`[1, 999]` 归内核内置种子，`4096` 往上是雪花运行时发号区——越界或撞号会被启动检查（`DatabaseInitializer`）当场拒绝，应用起不来，不会静默吞掉。
+种子行的固定 Id 必须落在**消费方保留区间 `[1000, 4095]`**（常量 `TenonAdmin.Core.TenonSeedIds`：`ConsumerMin`=1000、`ConsumerMax`=4095）。`[1, 999]` 归内核内置种子，`4096` 往上是雪花运行时发号区。`Id = 0` 或 `≥ 4096` 会被启动检查（`DatabaseInitializer`）当场拒绝，应用起不来，不会静默吞掉。但落进内核段 `[1, 999]` 不会报错——运行时不区分谁是消费方，这条下界只能靠自觉。挑号务必从 `TenonSeedIds.ConsumerMin` 起，撞了内核将来的号，代价是升级时主键冲突且无法回退。
 
 ::: warning 忘了注册是静默不执行
 内核不扫描程序集找种子（`options.ApplicationAssemblies` 只管实体建表和控制器挂载，不碰种子）。种子必须显式注册；漏了这行，种子不跑，也没有任何报错。

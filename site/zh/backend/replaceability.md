@@ -4,7 +4,7 @@
 
 ## 约束一：`TryAdd` 注册，先到者胜
 
-内置服务一律用 `TryAdd*` 注册，不用 `Add*`。`TryAdd` 的语义是「容器里已有同接口注册就不再添加」。所以消费方在 `AddTenonAdmin()` **之前**注册同一个接口，自己的实现就胜出，内置实现被跳过。
+内置服务一律用 `TryAdd*` 注册，不用 `Add*`。`TryAdd` 的语义是「容器里已有同接口注册就不再添加」。所以消费方在 `AddTenonAdmin()` **之前**注册同一个接口，自己的实现就胜出，内置实现被跳过。这条只适用于单实现接口。`ICaptchaProvider`、`ISeedData` 这类走的是 `TryAddEnumerable`，按实现类型防重，语义是「入集」而不是「替换」：你前置注册的滑块验证码会和内置那三种一并入集，选中哪一个另由 `TenonAdmin:Security:Captcha:Type` 决定。
 
 `ServicesSetup` 里全是这个写法：
 
@@ -63,12 +63,13 @@ private sealed class OverridingAuthService(
 
 消费方的实体和控制器经 `options.ApplicationAssemblies` 挂进内核，不改内核就能扩展：实体加入 CodeFirst 建表，控制器 `AddApplicationPart` 进同一 MVC 管道。细节见[架构分层](./architecture.md#消费方的实体和控制器如何挂进来)。
 
-配合模块禁用，消费方还能**接管**内置模块的路由：禁掉内置 `Dict` 模块后，自己的 `CustomDictController` 就能占用 `/api/v1/sys/dict/*` 这条路由。
+配合模块禁用，消费方还能**接管**内置模块的路由：禁掉内置 `Dict` 模块后，自己的 `CustomDictController` 就能占用 `/api/v1/sys/dict/*` 这条路由。禁用那一步不能省——两个控制器同时注册在这条路由上，请求打过来是 `AmbiguousMatchException`，而且启动期不报，只在命中时才炸。
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration, options =>
 {
     options.ApplicationAssemblies.Add(typeof(MyModule).Assembly);
+    options.Api.DisabledModules = ["Dict"];   // 少这行就是路由冲突,不是接管
 });
 ```
 

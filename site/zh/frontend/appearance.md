@@ -51,7 +51,7 @@ import.meta.glob('/src/assets/svg/*.svg', { query: '?raw', import: 'default', ea
 
   例如 `src/assets/svg/star.svg` 成为可选的 `local:star`。
 
-Iconify 数据和 SVG 都打进应用本身，图标渲染从不请求外部 CDN（如 `api.iconify.design`）。所以离线或网络受限的部署环境里，表现和联网时一致。
+四套内置图标集和本地 SVG 都打进应用本身，渲染它们不请求外部 CDN（如 `api.iconify.design`）。前提是图标只从 `ph`/`lucide`/`ep`/`ant-design`/`local:` 里选：IconPicker 的「在线」页能输入任意 Iconify 名，那些没打进包，离线环境里出不来。
 
 ## 在组件里用图标
 
@@ -68,7 +68,7 @@ import AppIcon from '@/components/AppIcon.vue'
 </template>
 ```
 
-`icon` 是 `prefix:name` 字符串（本地 SVG 用 `local:name`），默认大小 `18`。`icon` 为空或找不到时，`AppIcon` 兜底为 `ph:dot-outline-duotone`，和侧栏菜单在 rail/折叠态下、条目未设图标时的兜底一致。
+`icon` 是 `prefix:name` 字符串（本地 SVG 用 `local:name`），默认大小 `18`。`icon` 为空或找不到时，`AppIcon` 兜底为 `ph:dot-outline-duotone`，与侧栏菜单**页面叶子**未设图标时一致；目录节点另有兜底 `ph:folder-duotone`（`web/src/composables/useLayoutMenu.ts`）。
 
 ## 在菜单管理里选图标
 

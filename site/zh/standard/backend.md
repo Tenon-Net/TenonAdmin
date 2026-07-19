@@ -40,13 +40,13 @@
 
 - `[RolePermission]` 无参：权限码就是 `{METHOD}:/{路由模板}`（如 `GET:/api/v1/sys/dict/type/page`）。代码里永不写 `"sys:user:add"` 之类魔法串，权限在角色-菜单界面勾路由即配；超管（`sadm`）放行。
 - 无需特定权限的登录态端点用 `[ActiveSession]`；匿名端点显式 `[AllowAnonymous]`（全局 `RequireAuthorization()` 兜底，漏挂不会静默公开）。
-- 需审计的写操作挂 `[OperationLog(...)]`；整模块可关停加 `[Module("X")]`（经 `Api:DisabledModules` 摘除，但带菜单的内置模块禁止删）。
+- 需审计的写操作挂 `[OperationLog(...)]`；整模块可关停加 `[Module("X")]`，经 `Api:DisabledModules` 摘除控制器路由，返 404，不动数据。模块行本身另有两条删除守卫：下挂菜单的一律拒删（`ModuleHasMenus`，自建模块同样适用），内置 system 模块按固定 Id 永久保护（`ModuleProtected`）。
 - 控制器可直接 `return dto`（`ResultEnvelopeFilter` 兜底包信封）；内置控制器为契约清晰显式 `Result<T>.Ok(...)`。范例照 `Controllers/DictController.cs`；信封在管线哪一步套上，[请求管线](/zh/backend/request-pipeline) 里有全程。
 
 ## 错误处理
 
 - 业务错误抛 `AdminException(ErrorCode)` 或返回 `ErrorCode`，由 `AdminExceptionFilter` 统一转信封。
-- `ErrorCode` 是数字枚举，永不带本地化文案（`Core/ErrorCode.cs`）,i18n 全在前端按码翻译；新增错误码往枚举里加即可。
+- `ErrorCode` 是数字枚举，永不带本地化文案（`Core/ErrorCode.cs`），i18n 全在前端按 msgKey 翻译。新增错误码要同时加 `[MsgKey("error.<模块>.<语义>")]` 并补前端两份语言包：漏标会回退成 `error.code.{数值}` 原样弹给用户，且 `ErrorCodeLocaleConsistencyTests` 会让后端测试变红。
 
 ## 数据访问
 
@@ -62,9 +62,9 @@
 
 ## 缓存
 
-- 模型是 cache-aside（读穿透）+ 显式失效，不是每次查库；增删改后既 `RemoveAsync` 失效缓存，也广播事件（如 `DictService.InvalidateAsync` → `DictChangedEvent`）供跨节点失效/审计/推送订阅。
+- 模型是 cache-aside（读穿透）+ 显式失效，不是每次查库；增删改后既 `RemoveAsync` 失效缓存，也广播事件（如 `DictService.InvalidateAsync` → `DictChangedEvent`）供审计、推送等订阅。但默认的 `ChannelEventBus` 是进程内的，事件不跨副本——跨节点失效靠共享缓存或自换 `IEventBus` 接 MQ。
 - 逻辑键集中在 `Core/CacheKeys.cs`，禁散落魔法串；前缀 `Cache:KeyPrefix`（默认 `tenon:`）由 provider 统一追加。
-- 默认进程内 `MemoryCacheProvider`；多实例共享装可选包 `TenonAdmin.Caching.Redis`，`AddTenonAdminRedisCache` 须在 `AddTenonAdmin` **之前**注册才能赢过 `TryAdd`（业务代码零改动）。
+- 默认进程内 `MemoryCacheProvider`；多实例共享装可选包 `TenonAdmin.Caching.Redis`，`AddTenonAdminRedisCache` 须在 `AddTenonAdmin` **之前**注册才能赢过 `TryAdd`（业务代码零改动）。顺序之外还有一道配置开关：吃 `IConfiguration` 的重载只在 `Cache:Provider=Redis` 时接管，否则静默退回内存缓存；用 `AddTenonAdminRedisCache(connectionString)` 则调用即启用。
 
 ## DI 装配
 
@@ -74,13 +74,13 @@
 ## 种子数据
 
 - 实现 `ISeedData<TEntity>`，`HasData()` 返默认行（返空集合合法=「库里已有就不播种」）。
-- **固定 Id 保幂等**：只在缺失时补，不回改已存在行。所以界面上的改动不会被重启覆盖。
+- **固定 Id 保幂等**：只在缺失时补，不回改已存在行，所以界面上的改动不会被重启覆盖。唯一例外是 `SyncOnUpgrade`（默认 `false`）：内核的 `DefaultMenuSeed`、`DefaultModuleSeed` 开着它，种子版本一变就覆盖同 Id 行，所以对**内置**菜单和模块的界面改动会在升级时丢失（自建的不受影响）。用户会在界面改的数据绝不能开它。
 - **Id 必须落保留区间**（`Core/TenonSeedIds.cs`）：内核 `[1, 999]`、消费方 `[1000, 4095]`、`4096+` 归雪花运行时；越界、`Id=0` 或与已有种子 Id 重复，启动即拒。
 
 ## 命名 / 组织
 
 - 命名空间随目录；一类型一文件；后缀 `Sys*` 实体、`I*` 接口、`*Service`/`*Provider`/`*Filter`/`*Attribute`。
-- 启用可空引用类型；时间统一走注入的 `TimeProvider`（可测试），不用 `DateTime.Now` 裸调。
+- 启用可空引用类型；新代码的时间统一走注入的 `TimeProvider`（可测试），不用 `DateTime.Now` 裸调。内核还有 7 处历史裸调没收口，全在密码过期窗口那条路径上，别照抄——参考写法看 `SessionService`。
 
 ## 包管理
 

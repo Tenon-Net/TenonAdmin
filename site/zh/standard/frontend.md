@@ -4,8 +4,8 @@
 
 ## 目录落点
 
-- 页面按模块/实体分：`views/<模块>/<实体>/index.vue`；完整 CRUD 范例照 `views/system/menu/index.vue`（`NDataTable` + `NModal` 表单 + `NPopconfirm`）。
-- `composables/`（`use*`）放与 UI 库无关的逻辑单源，Naive 消息回调由视图注入，不写进 composable。
+- 页面按模块/实体分：`views/<模块>/<实体>/index.vue`；完整 CRUD 范例照 `views/system/menu/index.vue`（`ProTable` + `FormContainer` 弹窗表单 + `useConfirm` 二次确认）。
+- `composables/`（`use*`）放逻辑单源，默认与 UI 库解耦，错误与消息回调由视图注入。确需 Naive Provider 的交互样板是明确例外：`useConfirm` 内部直接用 `useDialog`/`useMessage`，`useTheme` 直接用 `darkTheme`，这类只能在 setup 里调用。
 - `api/` 三件：`client.ts`(openapi-fetch)+ `index.ts`（按域分组）+ 生成的 `schema.d.ts`。其余目录职责见 [项目结构](/zh/frontend/structure)。
 
 ## API 契约
@@ -16,7 +16,7 @@
 
 - API 调用集中在 `api/` 层按域分组（内置的在 `api/index.ts`：`authApi`/`userApi`/`moduleApi`/`menuApi` …；你自己的模块新建 `api/<域>.ts`，从 `./index` 导入 `unwrap`/`pageParams`/`toPage`），每个方法形如 `client.X(...).then(r => unwrap<T>(r))`，不在视图里裸调 `client`。
 - `unwrap` 统一解信封，失败（`code≠0` 或非 2xx）都归一到 `ApiError`（带 `code`/`msgKey`）；视图 `catch` 后用 `translateError(e)` 出文案。
-- 分页在 api 层归一为 `{ items, total }` 以适配 `useTable`（后端是 `PagedList<T>{current,size,total,items}`）。
+- 分页在 api 层归一为 `{ items, total }` 以适配 ProTable 的 `fetcher`（后端是 `PagedList<T>{current,size,total,items}`）。
 - 查询参数名用 PascalCase（ASP.NET 模型绑定要求）。
 - 只有前后端真不同源（CDN / 独立域名）才构建期给 `VITE_API_BASE`，且后端要显式配 `TenonAdmin:Api:Cors:AllowedOrigins`（默认 deny-all）。鉴权与 401 刷新中间件在 [HTTP 请求层](/zh/frontend/request)，解信封细节在 [对接后端响应](/zh/frontend/api-contract)。
 
@@ -32,13 +32,13 @@
 
 ## 状态（Pinia）
 
-- `defineStore` + `actions`；按需持久化 `persist: { pick: [...] }`，不是整个 store 全量存（如 `auth` 只存 `currentModuleId`）。
-- 现有 store:`auth`（模块/菜单/权限码/`routesReady`）、`user`（令牌/登录态）、`app`（主题/偏好）、`tabs`（标签页）。登出走 `reset()` 清授权态并清标签。
+- `defineStore` + `actions`；持久化按需 `pick`，别把整个 store 无脑全量存：`auth` 只存 `currentModuleId`，`tabs` 只存 `tabs` 且落 sessionStorage。state 本身整体都是会话必需的除外，`user` 那三个字段少一个刷新就掉登录，所以是 `persist: true`。
+- 现有 store：`auth`（模块/菜单/权限码/`routesReady`）、`user`（令牌/登录态）、`app`（主题/偏好）、`tabs`（标签页）、`dict`（字典缓存，会话级内存、不持久化，增删改后 `invalidate` 失效）。登出走 `reset()` 清授权态并清标签。
 
 ## 组合式函数
 
-- `use*` 命名，返回响应式引用与方法，**与 Naive 无关**（错误 / 消息回调由视图注入，参照 `useTable` 的 `onError`）。
-- 列表页统一用 `composables/useTable.ts`：传 `fetcher(({page,pageSize,...params})=>Promise<{items,total}>)`，得 `loading/rows/pagination/load/search/onPage/onPageSize`。
+- `use*` 命名，返回响应式引用与方法。
+- 列表页统一用 `tenon-naive-pro-table` 的 `ProTable` 远程模式：传 `:fetcher`，签名是 `(p: { page, pageSize, ...params }) => Promise<{ items, total }>`，分页与 loading 由 ProTable 自己管。
 
 ## 按钮级权限
 
@@ -52,7 +52,7 @@
 ## 共享组件
 
 - 后台不设组件演示菜单，组件用法统一沉在 [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md)；写页面前先看一遍避免重复造轮子，加了新的通用组件也同步更新它。
-- 已有 ProTable / FormContainer / `useConfirm` / StatusSwitch / 字典套件（DictSelect/DictRadio/DictTag/DictCheckbox）/ OrgTreeSelect / FileUpload（分片续传）/ ApiSelect（派生 UserSelect/RoleSelect）等，每个组件的详细 API 见其目录下 `README.md`。
+- 已有 ProTable / FormContainer / `useConfirm` / StatusSwitch / 字典组件（DictSelect、DictTag）/ OrgTreeSelect / FileUpload（`chunked` 走分片续传）/ ApiSelect（派生 UserSelect）/ UserPicker / PasswordStrength / Chart / CodeBlock / MarkdownEditor / IconPicker 等，完整清单以 `web/COMPONENTS.md` 为准，每个组件的详细 API 见其目录下 `README.md`。
 
 ## i18n
 
