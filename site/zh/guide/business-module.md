@@ -74,14 +74,14 @@ public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
 ```
 
 - **读**走 `AsQueryable()`，全局过滤器按当前请求的数据范围裁剪，业务代码不写 `WHERE`。
-- **改/删先 `GetByIdAsync` 校验可见性**：看不到就当「不存在/无权」返回 `false`。这不只是礼貌。数据范围全局过滤器只作用于查询（SELECT）；写路径靠的是 `SqlSugarRepository` 对 `DataEntity` 的 `Update`/`Delete` 内置的范围守卫，越权改删他机构的行返回 0。两层叠起来才严丝合缝。要注意的是，绕过仓储、直接走 `Db.Updateable`/`Db.Deleteable` 逃生舱口的写**不受**这层守卫，得自己校验归属。
+- **改/删先 `GetByIdAsync` 校验可见性**：看不到就当「不存在/无权」返回 `false`。这不只是礼貌。数据范围全局过滤器只作用于查询（SELECT）。写路径靠的是另一层：`SqlSugarRepository` 对 `DataEntity` 的 `Update`/`Delete` 内置了范围守卫，越权改删他机构的行会返回 0。两层叠起来才严丝合缝。但绕过仓储、直接走 `Db.Updateable`/`Db.Deleteable` 这类逃生舱口的写，不受这层守卫保护，得自己校验归属。
 - 方法都是 `virtual`。消费方想重写某一步，继承后 override 单个方法即可，不必整份复制。
 
-真实的管理列表通常要分页，那就把 `ListAsync` 换成 `PageAsync`，入参继承 `PageInputBase`，它自带 `Current`/`Size`/`SortField`/`SortOrder`。没有叫 `PageInput` 的基类，别记混。条件用 `WhereIF` 拼，分页用 `ToPagedListAsync` 出。内核里 `UserService.PageAsync`、`DictService.PageTypesAsync` 是现成蓝本。
+真实的管理列表通常要分页。这时候把 `ListAsync` 换成 `PageAsync`，入参继承 `PageInputBase`，它自带 `Current`/`Size`/`SortField`/`SortOrder`。没有叫 `PageInput` 的基类，别记混。条件用 `WhereIF` 拼，分页用 `ToPagedListAsync` 出。内核里 `UserService.PageAsync`、`DictService.PageTypesAsync` 是现成蓝本。
 
-有唯一列时，新增前的查重要带上软删行：`repo.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(x => x.Code == input.Code)`。不清软删过滤器的话，一条已软删的同码行会绕过应用层查重、在数据库唯一索引上撞出一个原生 500；查到重复就 `AdminException.ThrowIf(dup, ErrorCode.XxxExists)` 抛业务码。
+有唯一列时，新增前的查重要带上软删行：`repo.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(x => x.Code == input.Code)`。不清软删过滤器的话，一条已软删的同码行会绕过应用层查重，在数据库唯一索引上撞出一个原生 500。查到真的重复，就 `AdminException.ThrowIf(dup, ErrorCode.XxxExists)` 抛业务码。
 
-缓存不是每个查询都要加。列表、分页这类冷路径直接查库就行，内核的 `Dict`/`Config` 分页都没缓存。值得加的只有「高频读 + 低频变」的热点，比如某类下拉数据源。写法参考 `DictService.GetItemsByTypeAsync` 的读穿透缓存：`ICacheProvider` 取，增删改之后显式 `RemoveAsync` 失效。规范细则见[后端代码规范](/zh/standard/backend)。
+缓存不是每个查询都要加。列表、分页这类冷路径直接查库就行，内核的 `Dict`/`Config` 分页都没缓存。值得加的只有「高频读 + 低频变」的热点，比如某类下拉数据源。写法参考 `DictService.GetItemsByTypeAsync` 的读穿透缓存：先从 `ICacheProvider` 取，增删改之后再显式 `RemoveAsync` 失效。规范细则见[后端代码规范](/zh/standard/backend)。
 
 ## 控制器：权限码就是路由
 
@@ -116,9 +116,9 @@ public class SampleDocController(ISampleDocService svc) : ControllerBase
 public record SampleDocInput(string Title);
 ```
 
-`GET /api/v1/sample/doc` 这个动作的权限码就是 `GET:/api/v1/sample/doc`。授权时管理员把这条路由挂到某个菜单/按钮上、再勾给某个角色，该角色的用户就有了权限；超管（`sadm` 声明）自动绕过。控制器返回 `Result<T>` 或直接 `return dto` 都行，信封由 `ResultEnvelopeFilter` 统一包。
+`GET /api/v1/sample/doc` 这个动作的权限码就是 `GET:/api/v1/sample/doc`。授权时管理员把这条路由挂到某个菜单/按钮上，再勾给某个角色，该角色的用户就有了权限。超管（`sadm` 声明）自动绕过这层检查。控制器返回 `Result<T>` 或直接 `return dto` 都行，信封由 `ResultEnvelopeFilter` 统一包。
 
-两个可选特性按需加。需要审计的写操作挂 `[OperationLog("新增文档")]`，入参里的敏感字段（比如密码）会自动脱敏后再写进操作日志，蓝本是 `UserController`。想让整块模块能被消费方一键关掉，给控制器挂 `[Module("SampleDoc")]`。之后配上 `Api:DisabledModules=["SampleDoc"]`，这个模块就整体不注册路由，蓝本是 `SysLogController`。
+两个可选特性按需加。需要审计的写操作挂 `[OperationLog("新增文档")]`。入参里的敏感字段（比如密码）会自动脱敏后再写进操作日志，蓝本是 `UserController`。想让整块模块能被消费方一键关掉，给控制器挂 `[Module("SampleDoc")]`。之后配上 `Api:DisabledModules=["SampleDoc"]`，这个模块就整体不注册路由了，蓝本是 `SysLogController`。
 
 ## 把服务和程序集交给内核
 
@@ -141,19 +141,19 @@ app.MapTenonAdmin();
 app.Run();
 ```
 
-必须用 `TryAdd`，不是 `Add`。这样消费方才能在 `AddTenonAdmin()` **之前**注册同接口的自定义实现来覆盖默认行为。这是整个内核「可替换」设计的根规则，内置服务（比如 `Dict`）在 `ServicesSetup.cs` 里也是这么注册的。你自己的服务如果没人跟你抢接口，`TryAdd` 和 `Add` 效果一样，统一写 `TryAdd` 省得日后被覆盖时踩坑。
+必须用 `TryAdd`，不是 `Add`。这样消费方才能在 `AddTenonAdmin()` **之前**注册同接口的自定义实现来覆盖默认行为。这是整个内核「可替换」设计的根规则。内置服务（比如 `Dict`）在 `ServicesSetup.cs` 里也是这么注册的。你自己的服务如果没人跟你抢接口，`TryAdd` 和 `Add` 效果一样。统一写 `TryAdd`，省得日后被覆盖时踩坑。
 
 ::: warning 忘了 `ApplicationAssemblies.Add(...)` 就静默 404
-内核**不会自动扫描发现**你的模块。漏了这一行，`SampleDoc` 不会建表、`SampleDocController` 不会注册路由，直接 404，没有任何兜底开关或提示。（曾有个 `ScanApplicationAssemblies` 自动扫描开关从未实现，已于发包前删除，别去找它。）
+内核**不会自动扫描发现**你的模块。漏了这一行，`SampleDoc` 不会建表，`SampleDocController` 也不会注册路由。直接 404，没有任何兜底开关或提示。（曾有个 `ScanApplicationAssemblies` 自动扫描开关从未实现，已于发包前删除，别去找它。）
 :::
 
 ## 错误码（可选）
 
-要精确区分「不存在」和其他失败，内核内置模块的做法是往 `Core/ErrorCode.cs` 枚举里加数字码，**只加码，不写文案**。字典模块的 `DictTypeNotFound = 43001`、`DictTypeCodeExists = 43002` 就是例子，文案由前端按码翻译。消费方受限于 `ErrorCode` 是内核枚举、不可扩展，可以像 `SampleDocService` 那样直接用返回值（`false` 表示不存在/无权）表达结果，或者自定义异常经自己的异常过滤器兜底。
+要精确区分「不存在」和其他失败，内核内置模块的做法是往 `Core/ErrorCode.cs` 枚举里加数字码，**只加码，不写文案**。字典模块的 `DictTypeNotFound = 43001`、`DictTypeCodeExists = 43002` 就是例子，文案由前端按码翻译。但 `ErrorCode` 是内核枚举，消费方不能扩展它，可以像 `SampleDocService` 那样直接用返回值表达结果（`false` 表示不存在/无权），或者自定义异常，经自己的异常过滤器兜底。
 
 ## 种子数据（可选）
 
-需要出厂默认数据时，实现**泛型** `ISeedData<T>`（非泛型 `ISeedData` 只是 DI 收集用的空标记，直接实现它能编译，但启动时反推不出实体类型会崩），给每行一个固定 `Id` 保幂等。蓝本 `Seed/DictSeed.cs`，消费方范例 `backend/tests/TenonAdmin.TestHost/SampleWidgetSeed.cs`：
+需要出厂默认数据时，实现泛型 `ISeedData<T>`，给每行一个固定 `Id` 保幂等。注意别直接实现非泛型 `ISeedData`：它只是 DI 收集用的空标记，直接实现虽然能编译，但启动时反推不出实体类型会崩。蓝本是 `Seed/DictSeed.cs`，消费方范例是 `backend/tests/TenonAdmin.TestHost/SampleWidgetSeed.cs`：
 
 ```csharp
 public sealed class SampleWidgetSeed : ISeedData<SampleWidget>
@@ -166,13 +166,13 @@ public sealed class SampleWidgetSeed : ISeedData<SampleWidget>
 }
 ```
 
-种子要注册在**你自己的 `Program.cs`** 里。内核不扫描程序集找种子（`ApplicationAssemblies` 只管实体建表和控制器挂载），忘了注册就静默不执行：
+种子要注册在**你自己的 `Program.cs`** 里。内核不扫描程序集找种子，`ApplicationAssemblies` 只管实体建表和控制器挂载。忘了注册，种子就静默不执行：
 
 ```csharp
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleWidgetSeed>());
 ```
 
-固定 `Id` 必须落在消费方保留区间 `[1000, 4095]`（常量 `TenonSeedIds.ConsumerMin` ~ `ConsumerMax`）。别沿用「随手挑个小整数」的老习惯。你和内核会往同一批表（`sys_menu` / `sys_config` …）里播种，今天不撞不代表升级内核包后不撞，而那时你库里已经有那行、退不回去了：
+固定 `Id` 必须落在消费方保留区间 `[1000, 4095]`（常量 `TenonSeedIds.ConsumerMin` ~ `ConsumerMax`）。别沿用「随手挑个小整数」的老习惯。你和内核会往同一批表里播种，比如 `sys_menu`、`sys_config`。今天不撞，不代表升级内核包后也不撞。到那时你库里已经有那行，退不回去了：
 
 | 区间 | 归谁 | 为什么 |
 |---|---|---|
@@ -183,7 +183,7 @@ builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleW
 同一批种子里你可能连播好几行，尤其是复制粘贴的时候。给每行取号沿用内核菜单种子的登记法：记住当前用到的最大号，**新行一律取「最大号 + 1」，永不回填空洞**。空洞往往是历史上被挪走或删掉的号，复用会撞上老库里的存量行。
 
 ::: warning 种子 Id 撞号或越界：现在启动就拒，不再静默
-一个撞了号的固定 Id 过去是**悄无声息**地坏：幂等判存把后来那行当「已存在」跳过（菜单树无声缺一块），开了 `SyncOnUpgrade` 的种子升级时还会把别人那行覆盖掉。现在 `DatabaseInitializer` 会在启动时逐实体登记所有种子声领的固定 Id，内核和消费方的都登记。一旦发现越界或同实体重复，**当场抛异常、应用起不来**，并告诉你该换哪段号。`SeedIdRangeTests` 里有对应契约测试，CI 会在任何宿主启动前先变红。既盖住「复制行忘改 Id」的自撞，也盖住跨种子撞号。
+一个撞了号的固定 Id，过去是悄无声息地坏掉的。幂等判存会把后来那行当「已存在」跳过，菜单树因此无声缺一块。要是种子升级开了 `SyncOnUpgrade`，还会把别人那行直接覆盖掉。现在 `DatabaseInitializer` 会在启动时逐实体登记所有种子声领的固定 Id，内核和消费方的都登记。一旦发现越界或同实体重复，就当场抛异常，应用直接起不来，并告诉你该换哪段号。`SeedIdRangeTests` 里有对应的契约测试，CI 会在任何宿主启动前先变红。它既盖住「复制行忘改 Id」的自撞，也盖住跨种子撞号。
 :::
 
 ## 挂菜单、授权

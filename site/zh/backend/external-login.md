@@ -1,18 +1,18 @@
 # 外部登录（SSO）
 
-第一次用企业微信扫码进来的人会被拒绝，报 `OAuthAccountNotBound`。这是默认策略，不是配错了：内核一贯的立场是账号只由管理员开，没有自注册，外部身份也照这条办。要让 SSO 自己开户，得按 provider 显式打开那个开关。
+第一次用企业微信扫码进来的人会被拒绝，报 `OAuthAccountNotBound`。这是默认策略，不是配错了。内核一贯的立场是账号只由管理员开，没有自注册，外部身份也照这条办。要让 SSO 自己开户，得按 provider 显式打开那个开关。
 
 ## 三个 provider，两种打包方式
 
 | provider | 装在哪 | 对接方式 |
 | --- | --- | --- |
 | `oidc` | 内核内置（AspNetCore 层） | 标准 OIDC，通吃 Keycloak、Entra、Authing、Auth0 |
-| `wecom` | 卫星包 `TenonAdmin.Auth.WeCom` | 企业微信 PC 扫码 / 网页授权 |
-| `dingtalk` | 卫星包 `TenonAdmin.Auth.DingTalk` | 钉钉 PC 扫码 / 网页授权 |
+| `wecom` | 可选包 `TenonAdmin.Auth.WeCom` | 企业微信 PC 扫码 / 网页授权 |
+| `dingtalk` | 可选包 `TenonAdmin.Auth.DingTalk` | 钉钉 PC 扫码 / 网页授权 |
 
-内置 OIDC 零新增依赖：发现文档、JWKS、`id_token` 验签全用 JwtBearer 已经传递进来的 `Microsoft.IdentityModel.*`。两个厂商包各自只引 `Core` 加 Microsoft.\*，裸 `HttpClient` 对接厂商 API，所以它们能独立发版，也不把厂商 SDK 拖进内核。
+内置 OIDC 零新增依赖：发现文档、JWKS、`id_token` 验签全用 JwtBearer 已经传递进来的 `Microsoft.IdentityModel.*`。两个厂商包各自只引 `Core` 加 Microsoft.\*，用裸 `HttpClient` 对接厂商 API。所以它们能独立发版，也不会把厂商 SDK 拖进内核。
 
-卫星包按 `AddTenonAdmin()` 之前前置注册的老规矩接进来，按 `Code` 与内置的并存：
+两个可选包还是老规矩，在 `AddTenonAdmin()` 之前注册。它们按 `Code` 和内置 provider 并存：
 
 ```csharp
 builder.Services.AddTenonAdminWeComAuth(builder.Configuration);
@@ -47,7 +47,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 | `sys.externalauth.{code}.defaultRoleIds` | 空 | 自动开户时给什么角色 |
 | `sys.externalauth.{code}.defaultOrgId` | 空 | 自动开户时落哪个机构 |
 
-一个键都不配，行为就是**启用 + 拒绝开户**：只碰 `appsettings` 就能跑起绑定优先的 SSO。
+一个键都不配，默认行为就是**启用 + 拒绝开户**。只动 `appsettings`，就能跑起一套绑定优先的 SSO。
 
 这几个键的读取收口在 `ISysUserExternalService`，控制器和 `AuthService` 都只调它，不各自散读配置键。
 
@@ -79,7 +79,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 
 `state` 和一次性票据都复用短信验证码那套成法：进缓存、`GetAndRemoveAsync` 原子取删，单次有效。
 
-外部登录解析出 `SysUser` 之后，接的是 `AuthService.CreateTokenAsync`——建会话、发令牌这段尾链和账密登录、短信登录完全共用，所以会话并发策略、强退、刷新令牌轮换对它一视同仁。
+外部登录解析出 `SysUser` 之后，接的是 `AuthService.CreateTokenAsync`。建会话、发令牌这段尾链，和账密登录、短信登录完全共用。所以会话并发策略、强退、刷新令牌轮换，对它一视同仁。
 
 ## 错误码
 
@@ -91,4 +91,4 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 | 40016 | `OAuthAccountNotBound` | 没绑定，且这个 provider 不许自动开户 |
 | 40017 | `OAuthAlreadyBound` | 这个外部身份已经绑在别的账号上 |
 
-按[前后端契约](/zh/frontend/api-contract)的规矩，这几个码在两份语言包里都要有对应的 `msgKey` 文案，漏配会让后端的一致性测试直接变红。
+按[前后端契约](/zh/frontend/api-contract)的规矩，这几个码在两份语言包里都要配上对应的 `msgKey` 文案。漏一个，后端的一致性测试就直接变红。

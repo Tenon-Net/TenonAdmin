@@ -62,7 +62,7 @@ refactor(services): split login flow into virtual steps
 
 ## 跑测试：两条腿都要绿
 
-CI（`backend-ci.yml`）在 push / PR 触达 `backend/**` 时跑 build + test，数据库矩阵是 `[sqlite, mysql, sqlserver, postgres]`。矩阵设了 `fail-fast: false`，所以一条腿红不会掩盖其它腿。矩阵之外还挂着一个 Redis 服务容器，跑 `RedisCacheTests` 的契约测试部分。另有一个 `template-smoke` 任务，验证 `dotnet new tenon-app` 能顺利 restore + build，也就是消费方拿到包后的第一条命令。改动 `backend/**` 之前，至少本地把 SQLite 默认腿和 MySQL 腿跑绿。`TestDb.cs` 按 `TENON_TEST_DBTYPE` 等环境变量给每个测试派生独立数据库，互不干扰。
+CI 在 push / PR 触达 `backend/**` 时跑 build + test，配置在 `backend-ci.yml`。数据库矩阵是 `[sqlite, mysql, sqlserver, postgres]`。矩阵设了 `fail-fast: false`，所以一条腿红不会掩盖其它腿。矩阵之外还挂着一个 Redis 服务容器，跑 `RedisCacheTests` 的契约测试部分。另有一个 `template-smoke` 任务，验证 `dotnet new tenon-app` 能顺利 restore + build，也就是消费方拿到包后的第一条命令。改动 `backend/**` 之前，至少本地把 SQLite 默认腿和 MySQL 腿跑绿。`TestDb.cs` 按 `TENON_TEST_DBTYPE` 等环境变量给每个测试派生独立数据库，互不干扰。
 
 前端 CI（`web-ci.yml`）在 push / PR 触达 `web/**` 时跑 `npm ci` → `npm run lint` → `npm test`（vitest）→ `npm run build`（build 已包含 `vue-tsc` 类型检查，不用单独再跑 `typecheck`）。
 

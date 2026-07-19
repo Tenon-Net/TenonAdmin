@@ -30,7 +30,7 @@ git remote -v
 
 仓库有两条长期分支，用途不同：
 
-- **`main`**：发版分支。每次发布把 `dev` 合进来再打 tag（`v0.1.0`、`v0.1.1` ……），两个 tag 之间偶尔也会落一些修补。默认跟踪它，稳定；要严格对齐某个已发布版本，就直接跟 tag（见下一节的 `git merge v0.1.1`）。
+- **`main`**：发版分支。每次发布，把 `dev` 合进来再打 tag，比如 `v0.1.0`、`v0.1.1`。两个 tag 之间偶尔也会落一些修补。默认跟踪它就行，够稳定。要是想严格对齐某个已发布版本，就直接跟 tag，写法见下一节的 `git merge v0.1.1`。
 - **`dev`**：日常开发分支，PR 都合到这里。更新更快，但可能包含两个发布之间的半成品。
 
 除非你确实想要还没发布的最新改动，否则基于 `main` 建自己的分支：
@@ -39,7 +39,7 @@ git remote -v
 git checkout -b my-product main
 ```
 
-自己的二次开发放在 `my-product`（或它下面再分的分支）上。**不要直接在你还要拿来拉上游的 `main`/`dev` 同名分支上写自己的代码**，这样合并出问题时，不用从自己的提交历史里把它摘出来。
+自己的二次开发放在 `my-product` 上，或者它下面再分的分支。**不要直接在 `main`、`dev` 这些还要拿来拉上游的同名分支上写自己的代码**。分开放，将来合并出问题时，你不用再从自己的提交历史里把它摘出来。
 
 ## 3. 拉取上游更新
 
@@ -50,7 +50,7 @@ git fetch upstream
 git merge upstream/main        # 或者用 rebase: git rebase upstream/main
 ```
 
-两种都行：如果这条分支上的成果已经在别处发布过，merge 更省心；如果还没有，rebase 能保持历史线性。解决完冲突照常推到自己的 fork。
+两种都行。如果这条分支上的成果已经在别处发布过，merge 更省心。如果还没发布，rebase 能保持历史线性。解决完冲突，照常推到自己的 fork。
 
 只想拉某个具体版本，而不是「main 上最新的一切」：
 
@@ -72,11 +72,11 @@ git merge v0.1.1
   | i18n 文案 | 新建 `web/src/locales/ext/<locale>/<模块>.ts`（glob 自动并入，见那里的 [README](https://github.com/Tenon-Net/TenonAdmin/blob/dev/web/src/locales/ext/README.md)） | `locales/zh-CN.ts` / `en-US.ts` |
   | 页面 | 新建 `web/src/views/<模块>/` 目录 | 任何现有 view |
 
-  表里两处接缝目前只在 `dev` 上，`v0.1.1` 还没有：`locales/ext/` 这个扩展位，以及 `api/index.ts` 里 `pageParams` / `toPage` 的 `export`。跟 `main` 的话，文案暂时只能落进 `zh-CN.ts` / `en-US.ts`，分页参数照 `api/index.ts` 里 `userApi.page` 的写法复制一份到自己文件里。
+  表里有两处接缝目前只在 `dev` 上，`v0.1.1` 还没有。一处是 `locales/ext/` 这个扩展位，另一处是 `api/index.ts` 里 `pageParams`、`toPage` 的 `export`。如果你跟的是 `main`，文案暂时只能落进 `zh-CN.ts`、`en-US.ts`。分页参数则照 `api/index.ts` 里 `userApi.page` 的写法，复制一份到自己文件里。
 
-  上面这四个上游文件是 `web/src` 里改动最频繁的，几乎每次发版都在动。正因如此，你的代码才不该住在里面。反过来，你拥有而上游极少碰的文件（`styles/tokens.css`、你自己的页面）可以随便改：冲突需要**双方**都改同一个文件才会发生。
+  上面这四个上游文件是 `web/src` 里改动最频繁的，几乎每次发版都在动。正因如此，你的代码才不该住在里面。反过来，有些文件你拥有、上游极少碰，比如 `styles/tokens.css` 和你自己的页面，那些可以随便改。冲突要**双方**都改同一个文件才会发生。
 
-- **如果确实要改共用文件**（布局、store、内置页面），那么上游改到同一处时就会冲突。这是正常现象，不代表哪里做错了。这类改动尽量少而小。
+- **如果确实要改共用文件**，比如布局、store、内置页面，那上游改到同一处时就会冲突。这是正常现象，不代表你哪里做错了。这类改动尽量少、尽量小。
 
 - **`web/src/api/schema.d.ts` 是特例：永远不要合并它，重新生成它。** 它是 6000 行的生成物，而你的后端有你自己的控制器，所以你这份从第一天起就和上游 100% 分叉。上游一动，它就是整文件冲突。别手动解：
 
@@ -86,11 +86,11 @@ git merge v0.1.1
   git add web/src/api/schema.d.ts
   ```
 
-  这个冲突其实是在帮你：它就是「后端契约变了，你的类型该重新生成了」的信号。本仓库**故意不**配 `merge=ours` gitattribute，正是为了不让这个信号被静默吞掉，害你拿着过期的契约继续跑。
+  这个冲突其实是在帮你。它就是一个信号，告诉你「后端契约变了，你的类型该重新生成了」。本仓库**故意不**配 `merge=ours` gitattribute，就是不想让这个信号被静默吞掉，害你拿着过期的契约继续跑。
 
 ## 5. 跟踪版本变化
 
-- [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)：Keep a Changelog 格式，每次发布一条，前后端都覆盖，破坏性变更会明确标出（项目还在 0.x，接口仍可能变）。
+- [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)：Keep a Changelog 格式，每次发布一条，前后端都覆盖，破坏性变更会明确标出。项目还在 0.x，接口仍可能变。
 - 登录页底部显示的版本号取自 `web/package.json` 的 `version`。合并完之后记得把它改成你合入的那个 tag，不然用户看到的版本号和实际跑的代码对不上。
 
 以上讲的是把上游改动拉进你的 fork。反过来那件事，也就是把自己的改动贡献回 TenonAdmin，归[贡献指南](/zh/community/contributing)管。

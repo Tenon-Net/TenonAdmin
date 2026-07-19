@@ -1,6 +1,6 @@
 # 后端规范（.NET 10 内核）
 
-改后端代码前后对着这份清单核一遍，每条都是内核里已落地的硬规则。想知道某条为什么这么定，顺着链接去对应深读篇；更完整的正反例见仓库 [`docs/coding-standards.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/coding-standards.md)。
+改后端代码前后对着这份清单核一遍，每条都是内核里已落地的硬规则。想知道某条为什么这么定，顺着链接去对应深读篇。更完整的正反例见仓库 [`docs/coding-standards.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/coding-standards.md)。
 
 ::: tip 第一原则
 内核以 NuGet 分发，消费方不改源码就能替换任一部件。凡新增可替换服务，一律 `TryAdd*` 注册、接口背书、方法拆 `virtual` 步。这三条没有例外。机制见 [可替换性模型](/zh/backend/replaceability)。
@@ -24,7 +24,7 @@
 
 - 定义在 `Services/Entities/`，系统内核表命名 `Sys*`。
 - 选基类：普通表继承 `BaseEntity`（主键+审计四件套+软删）；需按机构隔离的继承 `DataEntity`（多带 `CreateOrgId` 锚点）。
-- 主键统一 `Id`（雪花，AOP 填，不手赋）；软删统一 `IsDelete`，查已删数据要显式 `.ClearFilter<ISoftDelete>()`。
+- 主键统一 `Id`（雪花，AOP 填，不手赋）。软删统一 `IsDelete`，查已删数据要显式 `.ClearFilter<ISoftDelete>()`。
 - 表结构没预留的额外信息塞 `ExtJson`，不新开列。
 - 特性照 `Entities/SysDictType.cs`：`[SugarTable]` / 唯一索引 `[SugarIndex(IsUnique=true)]` / `[SugarColumn(Length, ColumnDescription, IsNullable)]`。
 - 不可变约定（如「Code 创建后不可变」）写进注释，并在 Service 的 Update 里落实（不改该字段）。字段与审计机制见 [数据层与审计](/zh/backend/data-layer)。
@@ -40,7 +40,7 @@
 
 - `[RolePermission]` 无参：权限码就是 `{METHOD}:/{路由模板}`（如 `GET:/api/v1/sys/dict/type/page`）。代码里永不写 `"sys:user:add"` 之类魔法串，权限在角色-菜单界面勾路由即配；超管（`sadm`）放行。
 - 无需特定权限的登录态端点用 `[ActiveSession]`；匿名端点显式 `[AllowAnonymous]`（全局 `RequireAuthorization()` 兜底，漏挂不会静默公开）。
-- 需审计的写操作挂 `[OperationLog(...)]`；整模块可关停加 `[Module("X")]`，经 `Api:DisabledModules` 摘除控制器路由，返 404，不动数据。模块行本身另有两条删除守卫：下挂菜单的一律拒删（`ModuleHasMenus`，自建模块同样适用），内置 system 模块按固定 Id 永久保护（`ModuleProtected`）。
+- 需审计的写操作挂 `[OperationLog(...)]`。整模块可关停加 `[Module("X")]`，经 `Api:DisabledModules` 摘除控制器路由，返 404，不动数据。模块行本身另有两条删除守卫：下挂菜单的一律拒删（`ModuleHasMenus`，自建模块同样适用），内置 system 模块按固定 Id 永久保护（`ModuleProtected`）。
 - 控制器可直接 `return dto`（`ResultEnvelopeFilter` 兜底包信封）；内置控制器为契约清晰显式 `Result<T>.Ok(...)`。范例照 `Controllers/DictController.cs`；信封在管线哪一步套上，[请求管线](/zh/backend/request-pipeline) 里有全程。
 
 ## 错误处理
@@ -62,7 +62,7 @@
 
 ## 缓存
 
-- 模型是 cache-aside（读穿透）+ 显式失效，不是每次查库；增删改后既 `RemoveAsync` 失效缓存，也广播事件（如 `DictService.InvalidateAsync` → `DictChangedEvent`）供审计、推送等订阅。但默认的 `ChannelEventBus` 是进程内的，事件不跨副本——跨节点失效靠共享缓存或自换 `IEventBus` 接 MQ。
+- 模型是 cache-aside（读穿透）+ 显式失效，不是每次查库。增删改后既 `RemoveAsync` 失效缓存，也广播事件供审计、推送等订阅，例子是 `DictService.InvalidateAsync` → `DictChangedEvent`。但默认的 `ChannelEventBus` 是进程内的，事件不跨副本。跨节点失效要靠共享缓存，或者自己换 `IEventBus` 接 MQ。
 - 逻辑键集中在 `Core/CacheKeys.cs`，禁散落魔法串；前缀 `Cache:KeyPrefix`（默认 `tenon:`）由 provider 统一追加。
 - 默认进程内 `MemoryCacheProvider`；多实例共享装可选包 `TenonAdmin.Caching.Redis`，`AddTenonAdminRedisCache` 须在 `AddTenonAdmin` **之前**注册才能赢过 `TryAdd`（业务代码零改动）。顺序之外还有一道配置开关：吃 `IConfiguration` 的重载只在 `Cache:Provider=Redis` 时接管，否则静默退回内存缓存；用 `AddTenonAdminRedisCache(connectionString)` 则调用即启用。
 
@@ -80,7 +80,7 @@
 ## 命名 / 组织
 
 - 命名空间随目录；一类型一文件；后缀 `Sys*` 实体、`I*` 接口、`*Service`/`*Provider`/`*Filter`/`*Attribute`。
-- 启用可空引用类型；新代码的时间统一走注入的 `TimeProvider`（可测试），不用 `DateTime.Now` 裸调。内核还有 9 处历史裸调没收口，全在密码过期窗口那条路径上，别照抄——参考写法看 `SessionService`。
+- 启用可空引用类型。新代码的时间统一走注入的 `TimeProvider`（可测试），不用 `DateTime.Now` 裸调。内核还有 9 处历史裸调没收口，全在密码过期窗口那条路径上，别照抄。参考写法去看 `SessionService`。
 
 ## 包管理
 

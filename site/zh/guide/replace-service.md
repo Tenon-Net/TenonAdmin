@@ -10,7 +10,7 @@
 
 还有一件相关的事：给你自己的业务表灌初始数据，走消费方种子。四种都在下面。
 
-这几条路为什么成立（`TryAdd` 先到者胜、`virtual` 拆步、程序集挂载三条约束，以及锁死它们的「六件套」测试），见[可替换性模型](/zh/backend/replaceability)。
+这几条路为什么成立？靠的是三条约束：`TryAdd` 先到者胜、`virtual` 拆步、程序集挂载，外加锁死它们的「六件套」测试。原理见[可替换性模型](/zh/backend/replaceability)。
 
 ## 换掉整个服务：抢在 AddTenonAdmin 之前注册
 
@@ -53,7 +53,9 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 
 整体替换要重新注入服务的全部依赖，大多数时候你并不想改那么多。内核把长方法拆成了若干 `protected virtual` 小步骤（模板方法），你继承后只覆写要改的那一步，其余原样走基类。
 
-`AuthService.LoginAsync` 就是范本（`backend/src/TenonAdmin.Services/Auth/AuthService.cs`），它只编排一串 `virtual` 步骤：失败锁定检查 → 验证码 → `ValidateUserAsync` 账密校验 → 停用/锁定策略 → 密码过期 → `CheckSmsSecondFactorAsync` 短信二次验证 → 签发令牌 → `OnLoginSucceededAsync` 成功后置 → `BuildLoginOutput` 组装出参。想对接 LDAP 只覆写 `ValidateUserAsync`，想给登录返回值加字段只覆写 `BuildLoginOutput`；想让没绑手机号的用户也强制二次验证，只覆写 `CheckSmsSecondFactorAsync`（内核默认对其直通——见[短信验证](/zh/backend/auth-security#短信验证-二次验证与免密登录)）：
+`AuthService.LoginAsync` 就是范本，源码在 `backend/src/TenonAdmin.Services/Auth/AuthService.cs`。它只编排一串 `virtual` 步骤：失败锁定检查 → 验证码 → `ValidateUserAsync` 账密校验 → 停用/锁定策略 → 密码过期 → `CheckSmsSecondFactorAsync` 短信二次验证 → 签发令牌 → `OnLoginSucceededAsync` 成功后置 → `BuildLoginOutput` 组装出参。
+
+想对接 LDAP，只覆写 `ValidateUserAsync`。想给登录返回值加字段，只覆写 `BuildLoginOutput`。想让没绑手机号的用户也强制走二次验证，只覆写 `CheckSmsSecondFactorAsync`。内核默认对这种用户直通，原因见[短信验证](/zh/backend/auth-security#短信验证-二次验证与免密登录)：
 
 ```csharp
 // 只改出参组装这一步,其余登录逻辑(验证码/锁定/密码校验/签发令牌)全走基类原样
@@ -72,7 +74,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>());
 ```
 
-找可覆写的步骤，就是打开目标服务源码，搜 `protected virtual`。那几个方法就是给你留的口子。覆写时先调 `base.Xxx()` 保留原逻辑，再追加自己的。继承一步而不是复制整段的好处：升级内核时，基类那步的上游修复你会自动吃到，不会因为抄了旧版方法体而错过。
+找可覆写的步骤，就是打开目标服务源码，搜 `protected virtual`。那几个方法就是给你留的口子。覆写时先调 `base.Xxx()` 保留原逻辑，再追加自己的。继承一步而不是复制整段，好处很直接：升级内核时，基类那步的上游修复你会自动吃到。不会因为抄了旧版方法体而错过它。
 
 ## 整块模块不要：禁用 + 接管路由
 
@@ -86,7 +88,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 });
 ```
 
-被禁的控制器路由不再注册，原接口返回 404，你的同路由控制器就能接管：
+被禁的控制器，路由不再注册，原接口会返回 404。这时你的同路由控制器就能接管：
 
 ```csharp
 [ApiController]
@@ -94,13 +96,13 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 public class CustomDictController : ControllerBase { /* 你的字典逻辑 */ }
 ```
 
-能被禁的只有带 `[Module("Name")]` 标注的控制器，目前是这六个：`Dict`、`Upload`（字面上禁的是文件控制器 `/api/v1/sys/file`，模块名不等于路由）、`Notice`、`Log`、`Config`、`Dashboard`。身份认证、用户、机构、角色、菜单、门户这些控制器没有这个标注。没有开关能把它们关掉，因为关了整个系统就登不进去了。
+能被禁的只有带 `[Module("Name")]` 标注的控制器，目前是这六个：`Dict`、`Upload`、`Notice`、`Log`、`Config`、`Dashboard`。`Upload` 稍微特殊：字面上禁的是文件控制器 `/api/v1/sys/file`，模块名和路由并不一致。身份认证、用户、机构、角色、菜单、门户这些控制器没有这个标注。没有开关能把它们关掉，因为关了整个系统就登不进去了。
 
-别把 `Api.DisabledModules` 和门户里的「应用/模块」（`SysModule` 那张表）搞混：前者是编译期的路由开关，后者是运行时数据。后者也有自己的护栏。内置的 `system` 应用承载全部管理页，通过管理接口把它停用会被拒（错误码 42013，门户失联且无 UI 恢复入口）；还挂着菜单的应用不许删（42023，否则那些顶级目录的 `ModuleId` 会悬空、整棵子树从门户消失）。
+别把 `Api.DisabledModules` 和门户里的「应用/模块」搞混，后者对应的是 `SysModule` 那张表。前者是编译期的路由开关，后者是运行时数据，也有自己的护栏。内置的 `system` 应用承载着全部管理页，想通过管理接口停用它会被拒，错误码 42013。原因很直接：门户会因此失联，且没有 UI 恢复入口。还挂着菜单的应用也不许删，错误码 42023。删了的话，那些顶级目录的 `ModuleId` 会悬空，整棵子树从门户消失。
 
 ## 给自己的实体播种：消费方种子
 
-你的业务表也能带首次启动自动插入、重复启动幂等的初始数据。实现泛型版 `ISeedData<TEntity>`（非泛型 `ISeedData` 只是 DI 收集用的空标记，别直接实现它）：
+你的业务表也能带首次启动自动插入、重复启动幂等的初始数据，实现泛型版 `ISeedData<TEntity>` 就行。注意别直接实现非泛型 `ISeedData`，它只是 DI 收集用的空标记：
 
 ```csharp
 public class ProductSeed : ISeedData<BizProduct>
@@ -115,10 +117,10 @@ public class ProductSeed : ISeedData<BizProduct>
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, ProductSeed>());
 ```
 
-种子行的固定 Id 必须落在**消费方保留区间 `[1000, 4095]`**（常量 `TenonAdmin.Core.TenonSeedIds`：`ConsumerMin`=1000、`ConsumerMax`=4095）。`[1, 999]` 归内核内置种子，`4096` 往上是雪花运行时发号区。`Id = 0` 或 `≥ 4096` 会被启动检查（`DatabaseInitializer`）当场拒绝，应用起不来，不会静默吞掉。但落进内核段 `[1, 999]` 不会报错——运行时不区分谁是消费方，这条下界只能靠自觉。挑号务必从 `TenonSeedIds.ConsumerMin` 起，撞了内核将来的号，代价是升级时主键冲突且无法回退。
+种子行的固定 Id 必须落在消费方保留区间 `[1000, 4095]`。常量在 `TenonAdmin.Core.TenonSeedIds` 里：`ConsumerMin`=1000、`ConsumerMax`=4095。`[1, 999]` 归内核内置种子，`4096` 往上是雪花运行时发号区。`Id = 0` 或 `≥ 4096` 会被启动检查当场拒绝，应用直接起不来，不会静默吞掉，这个检查在 `DatabaseInitializer` 里。但落进内核段 `[1, 999]` 不会报错。运行时不区分谁是消费方，这条下界只能靠自觉。挑号务必从 `TenonSeedIds.ConsumerMin` 起，撞了内核将来的号，代价是升级时主键冲突，而且无法回退。
 
 ::: warning 忘了注册是静默不执行
-内核不扫描程序集找种子（`options.ApplicationAssemblies` 只管实体建表和控制器挂载，不碰种子）。种子必须显式注册；漏了这行，种子不跑，也没有任何报错。
+内核不扫描程序集找种子。`options.ApplicationAssemblies` 只管实体建表和控制器挂载，不碰种子。种子必须显式注册，漏了这行，种子就不跑，也没有任何报错。
 :::
 
-`ApplicationAssemblies` 那行是消费方接入的总开关，它同时让你的实体加入 CodeFirst 建表、让你的控制器进同一 MVC 管道。完整链路见[端到端加一个业务模块](/zh/guide/business-module)。真要动手替换前，`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` 的五个用例把上面四种机制逐一验成了契约，照着它们的写法给自己的替换补一层回归测试，最稳。
+`ApplicationAssemblies` 那行是消费方接入的总开关，它同时让你的实体加入 CodeFirst 建表、让你的控制器进同一 MVC 管道。完整链路见[端到端加一个业务模块](/zh/guide/business-module)。真要动手替换前，看一眼 `backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs`。它的五个用例把上面四种机制逐一验成了契约。照着它们的写法，给自己的替换补一层回归测试，最稳。

@@ -1,6 +1,6 @@
 # 前端规范（Vue 3 + Naive UI）
 
-写页面、调接口前对着这份清单核一遍。栈是 `<script setup>` + Naive UI + Pinia（持久化）+ vue-router + vue-i18n + VueUse，路径别名 `@` → `src`；整体架构见 [核心概念](/zh/guide/concepts)；组件用法与设计系统分别归仓库的 [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md) 和 [`web/DESIGN.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/DESIGN.md)。
+写页面、调接口前对着这份清单核一遍。栈是 `<script setup>` + Naive UI + Pinia（持久化）+ vue-router + vue-i18n + VueUse，路径别名 `@` → `src`。整体架构见 [核心概念](/zh/guide/concepts)。组件用法与设计系统分别归仓库的 [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md) 和 [`web/DESIGN.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/DESIGN.md)。
 
 ## 目录落点
 
@@ -11,7 +11,7 @@
 ## API 契约
 
 ::: warning schema.d.ts 是生成产物，禁手改
-`src/api/schema.d.ts` 由后端 OpenAPI 生成（`npm run gen:api`，**后端需正在运行**才能拉 `/openapi/v1.json`），手改下次一生成就被覆盖。要调类型，只能改后端接口/DTO 再重新生成。生产不挂该端点，[常见问题](/zh/faq) 里有为什么。
+`src/api/schema.d.ts` 由后端 OpenAPI 生成，命令是 `npm run gen:api`。生成时**后端必须正在运行**，不然拉不到 `/openapi/v1.json`。手改它，下次一生成就被覆盖。要调类型，只能改后端接口或 DTO，再重新生成。生产不挂该端点，为什么见 [常见问题](/zh/faq)。
 :::
 
 - API 调用集中在 `api/` 层按域分组（内置的在 `api/index.ts`：`authApi`/`userApi`/`moduleApi`/`menuApi` …；你自己的模块新建 `api/<域>.ts`，从 `./index` 导入 `unwrap`/`pageParams`/`toPage`），每个方法形如 `client.X(...).then(r => unwrap<T>(r))`，不在视图里裸调 `client`。
@@ -25,6 +25,7 @@
 - `router/routes.ts` 只放静态路由（login、error、shell/layout）；真实菜单树登录后从后端拉取，注入为动态路由（只活内存，不落盘）。
 - 菜单节点的 `component` 串（如 `system/user/index`）映射到 `/src/views/system/user/index.vue`；路由 `name = menu-${id}`，挂在 `layout` 下。
 - 登出 / 切应用用 `registerDynamic` / `resetRouter` 精确增删动态路由，不整体重置整棵路由树。
+- 外链菜单（`path` 填 URL、`component` 留空）与内嵌 iframe 菜单（`component` 填 URL）复用现有字段，不新增菜单类型；`views/**/detail.vue` 是约定式详情路由（`/<模块>/:id/detail`），配 `DetailPage` 组件与 `useTabTitle()`。两条约定的机制见 [路由与动态菜单](/zh/frontend/routing)。
 
 ::: danger 不要持久化 routesReady / menuTree
 持久化会跳过刷新重建流程，刷新后直接导向 404。这两个状态必须只活在内存里。重建机制见 [路由与动态菜单](/zh/frontend/routing)。
@@ -39,6 +40,7 @@
 
 - `use*` 命名，返回响应式引用与方法。
 - 列表页统一用 `tenon-naive-pro-table` 的 `ProTable` 远程模式：传 `:fetcher`，签名是 `(p: { page, pageSize, ...params }) => Promise<{ items, total }>`，分页与 loading 由 ProTable 自己管。
+- 已有 `useConfirm`（二次确认）、`useTabTitle`（详情页动态标签标题）、`useRealtime`（SignalR 实时推送客户端，鉴权外壳挂载时 `start`）等，用法见各自源码头注释与 `web/COMPONENTS.md`。
 
 ## 按钮级权限
 
@@ -52,7 +54,7 @@
 ## 共享组件
 
 - 后台不设组件演示菜单，组件用法统一沉在 [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md)；写页面前先看一遍避免重复造轮子，加了新的通用组件也同步更新它。
-- 已有 ProTable / FormContainer / `useConfirm` / StatusSwitch / 字典组件（DictSelect、DictTag）/ OrgTreeSelect / FileUpload（`chunked` 走分片续传）/ ApiSelect（派生 UserSelect）/ UserPicker / PasswordStrength / Chart / CodeBlock / MarkdownEditor / IconPicker 等，完整清单以 `web/COMPONENTS.md` 为准，每个组件的详细 API 见其目录下 `README.md`。
+- 已有 ProTable / FormContainer / `useConfirm` / StatusSwitch / 字典组件（DictSelect、DictTag）/ OrgTreeSelect / FileUpload（`chunked` 走分片续传）/ ApiSelect（派生 UserSelect）/ UserPicker / PasswordStrength / Chart / CodeBlock / MarkdownEditor / DetailPage（详情页外壳，配 `useTabTitle`）/ IconPicker 等，完整清单以 `web/COMPONENTS.md` 为准，每个组件的详细 API 见其目录下 `README.md`。
 
 ## i18n
 

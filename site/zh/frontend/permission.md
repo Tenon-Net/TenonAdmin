@@ -1,13 +1,13 @@
 # 前端权限
 
-每个操作按钮都想按权限显隐：有权限的人看得到，没权限的人这个按钮压根不出现，点不到也就不会点了再吃一个 403。前端把这条规则收敛成一个判定，再用两种写法把它落到页面上：模板里的 `v-auth` 指令，和 render 函数里直接调的 `hasPerm` getter。要看清它怎么串起来，先从授权状态存在哪儿说起：两个 Pinia store，按各自的持久化需求拆开。
+每个操作按钮都想按权限显隐。有权限的人看得到，没权限的人这个按钮压根不出现。按钮都不在了，自然点不到，也就不会点一下再白吃一个 403。前端把这条规则收敛成一个判定，落到页面上有两种写法。一种是模板里的 `v-auth` 指令，另一种是 render 函数里直接调的 `hasPerm` getter。想看清它怎么串起来，先得知道授权状态存在哪儿。就存在两个 Pinia store 里，按各自的持久化需求拆开。
 
 ## 全景：两个 store，按持久化需求拆分
 
 - **`user` store**（`src/stores/user.ts`）：`accessToken`、`refreshToken`、`userInfo`（`userId`、`account`、`name`、`mustChangePassword`），以及 `isLoggedIn` getter 和 `setSession`/`clear` action。声明为 `persist: true`，所以**整个 store** 都落 `localStorage`，刷新页面还能保持登录。
 - **`auth` store**（`src/stores/auth.ts`）：`modules`、`currentModuleId`、`defaultModuleId`、`menuTree`、`permissionCodes`、`permissionsLoaded`、`isSuperAdmin`、`routesReady`，以及 `homePath` 和 `hasPerm` 两个 getter。声明为 `persist: { pick: ['currentModuleId'] }`，持久化的**只有 `currentModuleId` 一项**。
 
-这么拆是因为两边的生命周期不一样。令牌和用户资料要扛得住刷新（不然「保持登录」就无从谈起）。权限码、菜单树、`routesReady` 则相反，每次应用启动都要重新拉：动态路由只活在 router 的内存里，`routesReady` 一旦被持久化成 `true`，刷新就会跳过路由重建，导致每条动态路由都 404。`currentModuleId` 是唯一的例外。持久化它是为了让 F5 或深链能先恢复「上次在哪个应用」，再由守卫经 `useModule().enterInitial()` 重新拉取其余一切。
+这么拆是因为两边的生命周期不一样。令牌和用户资料要扛得住刷新，不然「保持登录」就无从谈起。权限码、菜单树、`routesReady` 正相反，每次应用启动都得重新拉。为什么不能持久化 `routesReady`？动态路由只活在 router 的内存里。`routesReady` 一旦被存成 `true`，刷新就会跳过路由重建，每条动态路由都变成 404。`currentModuleId` 是唯一的例外。持久化它，是为了让 F5 或深链能先恢复「上次在哪个应用」，剩下的一切再由守卫调 `useModule().enterInitial()` 重新拉。
 
 ## `v-auth`：模板里的按钮级指令
 
@@ -56,7 +56,7 @@ export const vAuth: Directive<HTMLElement, string | string[]> = {
 }
 ```
 
-**它是物理移除 DOM 节点**，而不是 `display: none`，也不是 `v-if` 条件渲染那种可以被重新触发的隐藏。没权限的按钮压根不存在于 DOM 里，没法靠改客户端状态或开发者工具把它「变出来」。但别把这当成安全边界：真正的授权判定始终在服务端完成（后端的 `[RolePermission]` 过滤器才是权威），这个指令只管 UX，把用户用不了的按钮挡在视线之外。
+**它是物理移除 DOM 节点**，不是 `display: none`，也不是 `v-if` 那种能被重新触发的隐藏。没权限的按钮压根不在 DOM 里，靠改客户端状态或者开发者工具都「变」不出来。但别把这当成安全边界。真正的授权判定始终在服务端做，后端的 `[RolePermission]` 过滤器才是权威。这个指令只管 UX，把用户用不了的按钮挡在视线之外。
 
 ## `hasPerm`：超管放行 / 未加载藏起来 / 精确匹配
 
@@ -71,12 +71,12 @@ hasPerm(state): (code: string) => boolean {
 三种状态：
 
 1. **超管（`isSuperAdmin`）→ fail-open。** 全部放行，和后端 `[RolePermission]` 里 `sadm` claim 的绕过逻辑呼应。
-2. **权限码还没加载完（`permissionsLoaded === false`）→ fail-closed。** 所有受权限控制的按钮都藏起来。这不是可以忽略的边角情况。守卫会 await 住 `enterInitial`，所以正常登录并不存在权限码没到位的闪烁窗口；fail-closed 真正兜的是 `/personal/permissions` 取码失败——不知道有没有权限时，谎报「有」比谎报「无」糟得多。如果把「未加载」当成「有权限」处理，所有受控按钮（包括用户根本没权限的那些）都会先闪一下再消失。fail-closed 保证用户看到的永远只有自己能用的按钮，不会有一闪而过的越权 UI。
+2. **权限码还没加载完（`permissionsLoaded === false`）→ fail-closed。** 所有受权限控制的按钮都藏起来。这不是可以忽略的边角情况。守卫会 await 住 `enterInitial`，所以正常登录不会出现权限码没到位的闪烁窗口。fail-closed 真正兜的是另一种情况，`/personal/permissions` 取码失败。这时候不知道用户到底有没有权限，谎报「有」比谎报「无」糟得多。要是把「未加载」当成「有权限」，所有受控按钮都会先闪一下再消失，包括用户根本没权限的那些。fail-closed 保证用户看到的永远只有自己能用的按钮，不会有一闪而过的越权 UI。
 3. **已加载的普通用户 → 按 `permissionCodes` 精确匹配。** 空的 `permissionCodes`（没有任何授权的用户）必然匹配不上任何码，受控按钮全部保持隐藏。这也堵上了历史上一个 bug 的口子。曾经「空集合」被误当成「超管」处理；现在两者由完全独立的字段（`isSuperAdmin` 和 `permissionCodes`）分别承载，空权限集不可能意外解锁一切。
 
 ## 把门控铺到每个操作按钮
 
-`v-auth` 是模板语法，只在 `<template>` 里生效。可列表页的行内操作按钮它够不着：编辑、删除、复制、重置密码、强制下线、还原，都是在列的 `render` 函数里用 `h()` 拼出来的。这些按钮曾经对没权限的人照样显示，点下去才在服务端吃 403；组织机构页更是一处门控都没有。列表页与树表页的操作列已经按同一套判定铺开：render 里直接调 `authStore.hasPerm(code)`，命中才 `h()` 出按钮，不命中就返回 `null`。（菜单管理的 `ButtonManager.vue` 还没跟上，它的操作列目前没有门控。）判定规则和指令背后是同一套，只是从声明式换成命令式。
+`v-auth` 是模板语法，只在 `<template>` 里生效。可列表页的行内操作按钮它够不着。编辑、删除、复制、重置密码、强制下线、还原，这些都是在列的 `render` 函数里用 `h()` 拼出来的。它们曾经对没权限的人照样显示，点下去才在服务端吃 403。组织机构页更狠，一处门控都没有。现在列表页和树表页的操作列已经按同一套判定铺开。render 里直接调 `authStore.hasPerm(code)`，命中才 `h()` 出按钮，不命中就返回 `null`。判定规则和指令背后是同一套，只是从声明式换成了命令式。菜单管理的 `ButtonManager.vue` 还没跟上，它的操作列目前没有门控。
 
 用户管理页的操作列就是最典型的写法：
 
@@ -127,6 +127,6 @@ h(StatusSwitch, {
 
 ## 权限码约定
 
-权限码就是规范化后的路由本身，形如 `{METHOD}:/{路由模板}`（例如 `GET:/api/v1/ping`）。也就是说，不存在一套独立的字符串词汇需要另外对齐。前端登录进门户时，`useModule().enterInitial()` 并行调 `GET /personal/permissions` 拉当前用户的权限码集合（存进 `authStore.permissionCodes`）和 `GET /personal/profile` 拿超管标记（存进 `authStore.isSuperAdmin`）；两个请求成功才把 `permissionsLoaded` 置真，任何一个失败都按普通用户、按 fail-closed 处理，不往越权那一侧倒。
+权限码就是规范化后的路由本身，形如 `{METHOD}:/{路由模板}`，例如 `GET:/api/v1/ping`。也就是说，没有另一套独立的字符串词汇要你去对齐。前端登录进门户时，`useModule().enterInitial()` 会并行发两个请求。一个是 `GET /personal/permissions`，拉当前用户的权限码集合，存进 `authStore.permissionCodes`。另一个是 `GET /personal/profile`，拿超管标记，存进 `authStore.isSuperAdmin`。两个都成功，才把 `permissionsLoaded` 置真。只要有一个失败，就按普通用户、按 fail-closed 处理，绝不往越权那一侧倒。
 
-既然权限码就是路由本身，前端也就没必要自造一套权限词汇。这也划清了两端的分工：前端只按码决定按钮的显隐与禁用，后端才计算并强制同一个码。它怎么把路由归一化成权限码、`[RolePermission]` 又怎么校验会话与授权，见[请求管线](/zh/backend/request-pipeline)；围绕授权环节做替换（换权限计算、换会话校验）的那部分设计，见[可替换性模型](/zh/backend/replaceability)。
+既然权限码就是路由本身，前端也就没必要自造一套权限词汇。两端的分工也就清楚了。前端只按码决定按钮的显隐与禁用，后端才计算并强制同一个码。后端怎么把路由归一化成权限码、`[RolePermission]` 又怎么校验会话与授权，见[请求管线](/zh/backend/request-pipeline)。想围绕授权环节做替换，比如换权限计算、换会话校验，那部分设计见[可替换性模型](/zh/backend/replaceability)。

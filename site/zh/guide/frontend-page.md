@@ -1,6 +1,6 @@
 # 前端加一个页面
 
-上一篇[端到端加一个业务模块](/zh/guide/business-module)已经把后端跑了起来，`GET/POST/PUT/DELETE /api/v1/sample/doc` 这组接口现在可调了。这一篇把它落成一个能点、能增删改的管理页面。
+上一篇[端到端加一个业务模块](/zh/guide/business-module)已经把后端跑了起来。`GET/POST/PUT/DELETE /api/v1/sample/doc` 这组接口现在可调了。这一篇把它落成一个能点、能增删改的管理页面。
 
 ## 从 OpenAPI 契约重生成类型
 
@@ -16,7 +16,7 @@ npm run gen:api
 它是生成产物，后端接口一变就重跑 `gen:api`，手改的内容下次生成整体覆盖。
 :::
 
-契约怎么从后端流到前端、`client.ts` 如何据它做出带类型的请求，是[前端契约生成](/zh/frontend/api-contract)那篇讲的原理；这一篇只管拿来用。
+契约怎么从后端流到前端、`client.ts` 又是怎么据它做出带类型的请求，这些原理在[前端契约生成](/zh/frontend/api-contract)那篇讲过。这一篇只管拿来用。
 
 ## 加领域类型、封一层 API
 
@@ -34,7 +34,7 @@ export interface SampleDoc {
 }
 ```
 
-新建 `web/src/api/sample.ts`，按域封一组，基于 `client.ts` 导出的 typed client、用 `unwrap<T>` 解包统一信封。`api/index.ts` 导出的共用原语就是给这个用的：`unwrap`、`ApiError`，分页列表还有 `pageParams` / `toPage`。所以你的模块不必伸手去改那个文件：
+新建 `web/src/api/sample.ts`，按域封一组 API。基于 `client.ts` 导出的 typed client，用 `unwrap<T>` 解包统一信封。`api/index.ts` 导出的共用原语就是给这个用的：`unwrap`、`ApiError`，分页列表还有 `pageParams` / `toPage`。所以你的模块不必伸手去改那个文件：
 
 ```ts
 import { client } from './client'
@@ -52,9 +52,9 @@ export const sampleDocApi = {
 }
 ```
 
-`unwrap` 已经处理了两种失败形状（带 `code` 的业务信封、不带 `code` 的 `ProblemDetails`），视图层直接 `catch` 后丢给 `translateError` 就行，不用在这里重复判断。信封解包与两种错误形状的细节见[请求与错误处理](/zh/frontend/request)。
+`unwrap` 已经处理了两种失败形状：带 `code` 的业务信封，和不带 `code` 的 `ProblemDetails`。视图层直接 `catch` 后丢给 `translateError` 就行，不用在这里重复判断。信封解包与两种错误形状的细节见[请求与错误处理](/zh/frontend/request)。
 
-`sample/doc` 的 `List` 接口不分页，直接返回数组，所以这里不用 `toPage` 那套分页归一（`{page,pageSize}` → 后端 `{Current,Size}`、`PagedList<T>` → `{items,total}`）。那套是给 `PagedList<T>` 端点用的：`pageParams` 和 `toPage` 正是为此从 `api/index.ts` 导出的，连同 `unwrap` 一起 import 即可；写法参考 `api/index.ts` 里的 `userApi.page` / `dictAdminApi.typePage`，照着抄进你自己的模块。
+`sample/doc` 的 `List` 接口不分页，直接返回数组。所以这里用不上 `toPage` 那套分页归一：把 `{page,pageSize}` 映射成后端的 `{Current,Size}`，把 `PagedList<T>` 映射成 `{items,total}`。那套是给真正分页的 `PagedList<T>` 端点用的。`pageParams` 和 `toPage` 正是为此从 `api/index.ts` 导出的，连同 `unwrap` 一起 import 即可。写法参考 `api/index.ts` 里的 `userApi.page` / `dictAdminApi.typePage`，照着抄进你自己的模块就行。
 
 ## 写列表页
 
@@ -183,7 +183,7 @@ async function save() {
 
 - **`FormContainer` 用 `onConfirm` 协议接管 loading/关闭**：`save()` 里把 `validate()` 放第一行，校验失败 reject 挡住关闭；接口失败 `return false`（或抛出）弹窗也不关，方便用户改后重试。业务代码不用自己管 `saving` 和底栏。
 - **`useConfirm().run` 配 `n-popconfirm`**:popconfirm 当触发器，确认后的动作与成/败 toast 交给 `run`，`run` 回一个 `ok` 布尔，真删掉了再 `load()`。
-- **按钮级权限，双重收口在同一份权限码上**：模板里的按钮用 `v-auth` 指令（值就是路由权限码 `POST:/api/v1/sample/doc`，不命中直接把 DOM 节点移除）；操作列里的编辑/删除按钮走的是 `h()` 渲染函数，指令用不了，改用 `authStore.hasPerm(...)` 判断要不要渲染。两条路判定规则同一套：超管全放行，权限码没拉到时藏按钮，普通用户按码精确匹配。**这只是界面降噪，服务端始终是权威**。真正的拦截在后端 `[RolePermission]`，越权请求照样 403。规则细节见[前端权限模型](/zh/frontend/permission)。
+- **按钮级权限，双重收口在同一份权限码上**：模板里的按钮用 `v-auth` 指令，值就是路由权限码 `POST:/api/v1/sample/doc`，不命中直接把 DOM 节点移除。操作列里的编辑/删除按钮走的是 `h()` 渲染函数，指令用不了，改用 `authStore.hasPerm(...)` 判断要不要渲染。两条路判定规则同一套：超管全放行，权限码没拉到时藏按钮，普通用户按码精确匹配。**这只是界面降噪，服务端始终是权威**。真正的拦截在后端 `[RolePermission]`，越权请求照样 403。规则细节见[前端权限模型](/zh/frontend/permission)。
 - **错误处理留在视图层**：`catch (e) { message.error(translateError(e)) }`，不在 API 层弹 UI。`translateError` 按错误的 `msgKey` 到 locale 里取字，不读数字 `code`。
 
 ## 挂进菜单，页面才可见
@@ -197,7 +197,7 @@ async function save() {
 | Component | `sample/doc/index` | → `/src/views/sample/doc/index.vue`（不带前后缀） |
 | 所属应用 | 选一个应用 | 仅顶级目录有效 |
 
-保存后重新登录（或刷新触发路由重建），菜单里就能看到这个页面了。要是控制台报 `[menu] 缺少视图组件`，就是 `Component` 字符串跟文件路径没对上。`useAuthMenu` 匹配不到组件时会 `console.warn` 然后跳过，表现是这个菜单项静默消失。刷新/深链时守卫如何重建这些内存里的动态路由，见[动态路由与门户守卫](/zh/frontend/routing)。
+保存后重新登录（或刷新触发路由重建），菜单里就能看到这个页面了。要是控制台报 `[menu] 缺少视图组件`，就是 `Component` 字符串跟文件路径没对上。`useAuthMenu` 匹配不到组件时会 `console.warn` 然后跳过，表现是这个菜单项静默消失。刷新或深链时，守卫怎么重建这些内存里的动态路由？见[动态路由与门户守卫](/zh/frontend/routing)。
 
 ## 补 i18n 文案
 
@@ -235,7 +235,7 @@ export default {
 export default { doc: { titleDuplicated: '文档标题重复' } }
 ```
 
-ext 是**深合并**，你的键是并进内置 `error` 命名空间而不是把它顶掉；想改写某一条内置文案（`{ auth: { passwordWrong: '...' } }`）也不会连坐同子树的兄弟键。错误码没标 `[MsgKey]` 时后端发的是 `error.code.<数字>`;locale 里缺这条则退回后端自己的 `message`，再退回 `error._fallback`。列标题写成 `title: () => t('...')` 的函数形式，切语言才即时生效。
+ext 是**深合并**：你的键是并进内置 `error` 命名空间，而不是把它整个顶掉。想改写某一条内置文案，比如 `{ auth: { passwordWrong: '...' } }`，也不会连坐同子树的兄弟键。错误码没标 `[MsgKey]` 时，后端发的是 `error.code.<数字>`。locale 里缺这条，就退回后端自己的 `message`，再退回 `error._fallback`。列标题写成 `title: () => t('...')` 的函数形式，切语言才即时生效。
 
 ## 提交前
 

@@ -1,8 +1,8 @@
 # 项目结构与启动
 
-`TenonAdmin.TestHost` 里一个断言都没有，它的活是假扮消费方：把自己登记进 `options.ApplicationAssemblies`，让实体、种子、控制器全走一遍外部工程的挂载路径。`src/` 之外的项目都是这个路数，示例宿主也一样，读它们就是读别人怎么用这套内核。
+`TenonAdmin.TestHost` 里一个断言都没有，它的活是假扮消费方。它把自己登记进 `options.ApplicationAssemblies`，让实体、种子、控制器全走一遍外部工程的挂载路径。`src/` 之外的项目都是这个路数，示例宿主也一样。读它们，就是读别人怎么用这套内核。
 
-至于依赖方向、可替换性、请求管道这些设计上的「为什么」，在[架构](/zh/backend/architecture)一页展开。
+至于依赖方向、可替换性、请求管道这些设计上的「为什么」，都放在[架构](/zh/backend/architecture)一页展开。
 
 ## 解决方案结构
 
@@ -27,11 +27,11 @@
 
 ## 中心化包版本管理
 
-`Directory.Packages.props` 开启了 `ManagePackageVersionsCentrally=true`。各 `.csproj` 因此只写包名（`<PackageReference Include="..." />`），版本号统一在这一份文件里锁定。其中几处版本号的注释直接写明了 CVE 缘由，而不只是跟随上游：
+`Directory.Packages.props` 开启了 `ManagePackageVersionsCentrally=true`。所以各个 `.csproj` 只写包名，版本号统一锁在这一份文件里，写法是 `<PackageReference Include="..." />`。其中几处版本号的注释直接写明了 CVE 缘由，不只是跟着上游走：
 
-- `SQLitePCLRaw.bundle_e_sqlite3` 显式抬到 `3.0.3`:Microsoft.Data.Sqlite 传递依赖的 2.1.10/2.1.11 命中 SQLite 的一个 CVE(NU1903 GHSA-2m69-gcr7-jv3q),3.0.x 起已修补。
-- `Microsoft.OpenApi` 显式抬到 `2.7.5`：`Microsoft.AspNetCore.OpenApi` 10.0.9 传递依赖的 2.0.0 命中一个高危 CVE（NU1903 GHSA-v5pm-xwqc-g5wc，影响范围 2.0.0-preview.11 至 2.7.4）,2.7.5 起修补。
-- `Microsoft.Extensions.DependencyInjection.Abstractions` 抬到 `10.0.5`：`StackExchange.Redis` 3.0.11 传递依赖的 `Logging.Abstractions` 10.0.5 要求 `DI.Abstractions` ≥10.0.5，不抬版本的话集中管理的 10.0.0 会跟它冲突，报 NU1605 降级错误。
+- `SQLitePCLRaw.bundle_e_sqlite3` 显式抬到 `3.0.3`。Microsoft.Data.Sqlite 传递依赖的 2.1.10/2.1.11 命中了 SQLite 的一个 CVE（NU1903 GHSA-2m69-gcr7-jv3q），3.0.x 起已经修补。
+- `Microsoft.OpenApi` 显式抬到 `2.7.5`。`Microsoft.AspNetCore.OpenApi` 10.0.9 传递依赖的 2.0.0 命中一个高危 CVE（NU1903 GHSA-v5pm-xwqc-g5wc，影响范围 2.0.0-preview.11 至 2.7.4），2.7.5 起修补。
+- `Microsoft.Extensions.DependencyInjection.Abstractions` 抬到 `10.0.5`。`StackExchange.Redis` 3.0.11 传递依赖的 `Logging.Abstractions` 10.0.5 要求 `DI.Abstractions` ≥10.0.5。不抬版本的话，集中管理的 10.0.0 会跟它冲突，报 NU1605 降级错误。
 
 `Directory.Build.props` 为所有项目统一设置构建与包元数据：
 

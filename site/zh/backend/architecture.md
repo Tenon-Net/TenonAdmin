@@ -1,6 +1,6 @@
 # 架构分层与包依赖
 
-TenonAdmin 由八个 NuGet 包组成，构成核心链条的五个只能自上而下依赖：上层能引下层，下层永远看不见上层。哪一层把这个方向反转，可替换性和依赖红线就同时垮掉。另外三个都只挂在 `Core` 旁边，是主链之外的可选支线。
+TenonAdmin 一共八个 NuGet 包。其中五个构成核心链条，依赖方向只能自上而下：上层能引下层，下层永远看不见上层。哪一层把这个方向反转，可替换性和依赖红线就一起垮掉。剩下三个只挂在 `Core` 旁边，是主链之外的可选支线。
 
 ## 核心链条：五个包
 
@@ -28,7 +28,7 @@ TenonAdmin.Auth.DingTalk   可选包:钉钉扫码登录的 IExternalAuthProvider
 TenonAdmin.Core
 ```
 
-两个登录卫星包连第三方运行时依赖都没有，只引 Microsoft.*——依赖红线对可选包同样成立。
+两个登录可选包连第三方运行时依赖都没有，只引 Microsoft.*。依赖红线对可选包同样成立。
 
 各层职责与依赖方向：
 
@@ -43,7 +43,7 @@ TenonAdmin.Core
 | `TenonAdmin.Auth.WeCom`（可选） | 企业微信扫码登录的 `IExternalAuthProvider` | 仅 Core | 仅 Microsoft.* |
 | `TenonAdmin.Auth.DingTalk`（可选） | 钉钉扫码登录的 `IExternalAuthProvider` | 仅 Core | 仅 Microsoft.* |
 
-`TenonAdmin.Caching.Redis` 没有引入新机制，它就是内核那套 `TryAdd` 可替换性套用在缓存提供者上。消费方在 `AddTenonAdmin()` 之前调用 `AddTenonAdminRedisCache(configuration)`，内部用 `TryAddSingleton` 注册 `RedisCacheProvider`，抢先赢下注册，替换掉内核默认的进程内 `MemoryCacheProvider`。不调用这个方法，或没把 `TenonAdmin:Cache:Provider` 配成 `Redis`，内核的进程内默认实现照常工作，不受影响。
+`TenonAdmin.Caching.Redis` 没有引入新机制，就是把内核那套 `TryAdd` 可替换性套用在缓存提供者上。消费方在 `AddTenonAdmin()` 之前调用 `AddTenonAdminRedisCache(configuration)`。它内部用 `TryAddSingleton` 注册 `RedisCacheProvider`，抢先赢下注册，替换掉内核默认的进程内 `MemoryCacheProvider`。不调用这个方法，或者没把 `TenonAdmin:Cache:Provider` 配成 `Redis`，内核的进程内默认实现照常工作，不受影响。
 
 ::: tip 实体住在 Services，不在 SqlSugar
 数据层只提供 `IRepository<>` 和实体基类，具体的 `Sys*` 业务实体定义在 `TenonAdmin.Services`。原因是依赖方向：实体需要引用领域概念，而数据层不能反过来依赖领域层。
@@ -76,8 +76,8 @@ app.Run();
 
 `AddTenonAdmin` 的装配次序（见 `TenonAdminSetup.cs`）：
 
-1. **绑定配置**。`configuration.GetSection("TenonAdmin").Bind(options)`，再执行可选的 `configure` 回调覆写，最后把 `TenonAdminOptions` 及其各子节（`Database` / `Cache` / `Jwt` / `Security` / `Upload` / `Api` / `Id` / `Logging`）作为单例入容器。缺省即默认值，所以零配置可跑。
-2. **雪花机器号校验**。选了 Redis 缓存（多实例意图）却没显式给 `TenonAdmin:Id:WorkerId` 时，启动即抛，借此把一个静默的主键冲突换成一条可读的启动错误。
+1. **绑定配置**。先 `configuration.GetSection("TenonAdmin").Bind(options)`，再跑一遍可选的 `configure` 回调做覆写。最后把 `TenonAdminOptions` 及其各子节（`Database` / `Cache` / `Jwt` / `Security` / `Upload` / `Api` / `Id` / `Logging`）作为单例入容器。缺省即默认值，所以零配置可跑。
+2. **雪花机器号校验**。选了 Redis 缓存却没显式给 `TenonAdmin:Id:WorkerId`，启动就直接抛错。选 Redis 通常意味着要跑多实例，这一抛，把一个静默的主键冲突换成了一条看得懂的启动错误。
 3. **当前用户 + 数据范围环境**。HTTP 侧实现 `HttpContextCurrentUser`、`HttpContextDataScopeContext` 在此先 `TryAdd` 注册，压过 SqlSugar 层的 `AsyncLocal` 兜底实现。
 4. **调用下层**。`AddTenonAdminSqlSugar(options.Database, entityAssemblies)` 装数据层，`AddTenonAdminServices()` 装领域服务。
 5. **宿主集成**。JWT 密钥解析、认证/授权、MVC 控制器 + 全局过滤器、CORS、限流、OpenAPI、健康检查。
@@ -90,11 +90,11 @@ services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()
 services.AddTenonAdminServices();
 ```
 
-顺带一提，每层都能独立装配：`AddTenonAdminSqlSugar` 是公开入口，允许在裸容器上单独调用（测试、以及只要数据层的消费方就这么用）。因此它内部对可选依赖用 `GetService` 而非 `GetRequiredService`。没有日志工厂就静默不打，不会凭空多出一个必需依赖导致起不来。
+每层其实都能独立装配。`AddTenonAdminSqlSugar` 是公开入口，可以在裸容器上单独调用。测试用得上，只要数据层的消费方也这么接。所以它内部对可选依赖用的是 `GetService`，不是 `GetRequiredService`。没有日志工厂就静默不打，不会凭空多出一个必需依赖把服务卡在起不来。
 
 ## 消费方的实体和控制器如何挂进来
 
-消费方的业务程序集经 `options.ApplicationAssemblies` 登记（代码侧设置，不从配置绑定）：
+消费方的业务程序集通过 `options.ApplicationAssemblies` 登记。这是代码侧设置，不从配置绑定：
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration, options =>
@@ -105,7 +105,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 
 登记后，这个程序集在组合根里走两条路：
 
-- **实体参与 CodeFirst 建表**。组合根把内置 Services 程序集和消费方程序集合并成实体扫描源传给 `AddTenonAdminSqlSugar`，消费方实体因此一并被 `DatabaseInitializer` 建表。
+- **实体参与 CodeFirst 建表**。组合根把内置 Services 程序集和消费方程序集合并成一份实体扫描源，传给 `AddTenonAdminSqlSugar`。消费方实体因此一并被 `DatabaseInitializer` 建表。
 - **控制器挂入同一 MVC 管道**。组合根对每个消费方程序集做 `mvc.AddApplicationPart(assembly)`，消费方控制器与内置控制器走同一套过滤器（异常信封、操作日志、裸返回包装）、同一套认证授权。
 
 ```csharp
@@ -122,4 +122,4 @@ foreach (var assembly in options.ApplicationAssemblies.Distinct())
 
 ## 元包只是一个聚合入口
 
-`TenonAdmin.csproj` 本身没有代码，只有一条 `ProjectReference` 指向 `TenonAdmin.AspNetCore`。消费方装元包一个，即通过依赖传递拉起 AspNetCore → Services → SqlSugar → Core 整条栈。要更细粒度控制（比如只要数据层），也可以直接装下层包。
+`TenonAdmin.csproj` 本身没有代码，只有一条 `ProjectReference` 指向 `TenonAdmin.AspNetCore`。消费方只装元包这一个，依赖传递就会拉起 AspNetCore → Services → SqlSugar → Core 整条栈。想要更细粒度的控制，比如只要数据层，直接装下层包也行。

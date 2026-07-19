@@ -4,7 +4,7 @@
 
 ## 一个 `SqlSugarScope` 单例
 
-`ISqlSugarClient` 以 `SqlSugarScope` 形态注册为单例，这是 SqlSugar 官方推荐的线程安全形态，它内部按线程建 Client。构造时一次性挂上全局过滤器、审计 AOP、SQL 诊断日志三组钩子。
+`ISqlSugarClient` 以 `SqlSugarScope` 形态注册为单例。这是 SqlSugar 官方推荐的线程安全形态，内部按线程建 Client。构造时一次性挂上全局过滤器、审计 AOP、SQL 诊断日志三组钩子。
 
 ```csharp
 // backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs
@@ -25,7 +25,7 @@ services.TryAddSingleton<ISqlSugarClient>(sp =>
 
 ## 全局查询过滤器
 
-两条过滤器按**接口**匹配实体注册。SqlSugar 的 `AddTableFilter<T>` 只认接口或精确类型，不匹配基类，所以标记走接口 `ISoftDelete` / `IOrgScoped`，而不是基类 `BaseEntity` / `DataEntity`。
+两条过滤器按**接口**匹配实体注册。SqlSugar 的 `AddTableFilter<T>` 只认接口或精确类型，不匹配基类。所以这里的标记走的是接口 `ISoftDelete` / `IOrgScoped`，而不是基类 `BaseEntity` / `DataEntity`。
 
 ### 软删除
 
@@ -48,10 +48,10 @@ client.QueryFilter.AddTableFilter<IOrgScoped>(e =>
     || (scope.Current.IncludeSelf == true && e.CreateUserId == scope.Current.UserId));
 ```
 
-`scope.Current` 的三个属性都与实体参数无关，SqlSugar 先本地求值成常量（机构集合渲染成 SQL `IN`），再拼进 WHERE。`IsUnrestricted` 时整体恒真、不过滤。
+`scope.Current` 的三个属性都与实体参数无关，SqlSugar 会先把它们在本地求值成常量，再拼进 WHERE。机构集合会被渲染成 SQL 的 `IN`。`IsUnrestricted` 为真时整体恒真，不过滤。
 
 ::: warning 数据范围只作用于查询
-全局数据范围过滤器只作用于 SELECT，不作用于按主键的 `Updateable` / `Deleteable`。为此 `SqlSugarRepository<TEntity>` 对 `IOrgScoped` 实体的 `UpdateAsync` / `DeleteAsync` 内置了写路径范围守卫：写前经带范围过滤器的查询确认目标行在当前数据范围内，越权改删他机构行返回 0 行，默认安全。绕过仓储直接走 `Db.Updateable` / `Deleteable` 逃生舱口的写不受此守卫，需自行校验归属。
+全局数据范围过滤器只作用于 SELECT，不作用于按主键的 `Updateable` / `Deleteable`。为此，`SqlSugarRepository<TEntity>` 对 `IOrgScoped` 实体的 `UpdateAsync` / `DeleteAsync` 内置了写路径范围守卫。写之前，会先经过带范围过滤器的查询，确认目标行在当前数据范围内。越权改删他机构的行，返回 0 行，默认就是安全的。绕过仓储、直接走 `Db.Updateable` / `Deleteable` 这类逃生舱口的写，不受此守卫保护，需要自行校验归属。
 :::
 
 ## AOP 自动填审计字段
@@ -85,7 +85,7 @@ client.Aop.DataExecuting = (_, info) =>
 ```
 
 ::: warning `CreateOrgId` 是数据范围锚点
-`CreateOrgId` = 创建者当时所属机构，插入时由 AOP 从 `ICurrentUser.OrgId`（令牌 org claim）自动填充。数据范围过滤器正是按它决定行可见性。**若这个字段没被填上，按机构维度的数据范围查询会对业务表恒返回 0 行**。数据在库里，却查不出来。为 null 表示不受机构范围约束（系统内建数据、或创建者无归属机构）。
+`CreateOrgId` 就是创建者当时所属的机构。插入时由 AOP 从 `ICurrentUser.OrgId` 自动填充，这个值来自令牌里的 org claim。数据范围过滤器正是按它决定行可见性。**若这个字段没被填上，按机构维度的数据范围查询会对业务表恒返回 0 行**。数据在库里，却查不出来。为 null 表示不受机构范围约束（系统内建数据、或创建者无归属机构）。
 :::
 
 ## 实体基类
@@ -110,7 +110,7 @@ PrimaryId          只有主键 Id
 
 **没有软删除的那两个，仓储 `DeleteAsync` 是物理删除**，行从库里移除，没有回收站，也没有 `RestoreAsync`。挑基类前先问这张表要不要回收站。
 
-机构隔离的两个（`DataEntity` / `OrgAuditEntity`）都吃写路径守卫：仓储的 `UpdateAsync`/`DeleteAsync` 对 `IOrgScoped` 实体内置范围检查，越权改删他机构的行会被拒，返回 0 行。
+机构隔离的两个基类（`DataEntity` / `OrgAuditEntity`）都吃写路径守卫。仓储的 `UpdateAsync`/`DeleteAsync` 对 `IOrgScoped` 实体内置了范围检查，越权改删他机构的行会被拒，返回 0 行。
 
 ## 泛型仓储 `IRepository<>`
 
@@ -135,9 +135,9 @@ public class DeviceService(IRepository<Device> repo) : IDeviceService
 └───────┴──────────────────────┴───────────┴───────────┘
 ```
 
-低位固定 12 bit（机器 6 + 序列 6）不是随手选的：41+12=53,ID 恒小于 2^53，落在 JS `Number.MAX_SAFE_INTEGER` 内，前端按数字解析 long 主键不丢精度。容量为 64 台机器、单机单毫秒 64 个 ID。
+低位固定 12 bit（机器 6 位 + 序列 6 位）不是随手选的。41+12=53，ID 恒小于 2^53，落在 JS 的 `Number.MAX_SAFE_INTEGER` 内。前端按数字解析 long 型主键，不会丢精度。容量是 64 台机器、单机单毫秒 64 个 ID。
 
-这 12 bit 也划出了种子的地盘：`id = 相对纪元毫秒数 × 4096 + 低位`，雪花永远发不出小于 4096 的号，`[1, 4095]` 便留给种子的固定 Id（内核用 `[1, 999]`，消费方从 `1000` 起取号）。`DatabaseInitializer` 启动时校验两件事：每个种子 Id 都落在这个区间内，同一实体上不重复。越界的号迟早被雪花追上撞主键，撞号的行会被幂等判存当「已存在」静默跳过。两种情况一律启动即抛，CI 也有对应用例把它们拦在宿主启动之前。
+这 12 bit 也划出了种子的地盘。`id = 相对纪元毫秒数 × 4096 + 低位`，雪花永远发不出小于 4096 的号。`[1, 4095]` 便留给种子的固定 Id：内核用 `[1, 999]`，消费方从 `1000` 起取号。`DatabaseInitializer` 启动时校验两件事：每个种子 Id 都落在这个区间内，同一实体上不重复。越界的号迟早被雪花追上撞主键，撞号的行会被幂等判存当「已存在」静默跳过。两种情况一律启动即抛，CI 也有对应用例把它们拦在宿主启动之前。
 
 机器号从配置 `TenonAdmin:Id:WorkerId` 注入（默认 0，范围 0–63）：
 
@@ -152,7 +152,7 @@ public class DeviceService(IRepository<Device> repo) : IDeviceService
 ::: danger 水平扩展每实例必须不同
 单机部署不配即可（回落 0）。**多实例水平扩展时必须为每个实例配置不同的 `WorkerId`**，否则不同实例同毫秒发号会撞主键。这是数据损坏级的问题，且默认静默发生。
 
-内核给了一道防线：选了 Redis 缓存（明显的多实例意图）却没显式设置 `WorkerId` 时，启动即抛，把一个静默的主键冲突换成一条可读的启动错误。单实例请显式配 `0` 以示知情；k8s 可用 StatefulSet 的 Pod 序号注入。
+内核给了一道防线：选了 Redis 缓存（明显的多实例意图）却没显式设置 `WorkerId` 时，启动即抛，把一个静默的主键冲突换成一条可读的启动错误。单实例请显式配 `0` 以示知情。k8s 场景可用 StatefulSet 的 Pod 序号注入。
 :::
 
-时钟安全上，`SnowflakeIdGenerator` 注入 `TimeProvider`（可测试）。检测到时钟回拨时，小幅（≤5ms,NTP 微调级）自旋等待追平，大幅回拨直接抛异常拒绝发号：宁可不发，也绝不发出可能重复的 ID。
+时钟安全上，`SnowflakeIdGenerator` 注入了 `TimeProvider`，这样可以测试。检测到时钟回拨时，小幅回拨（≤5ms，属于 NTP 微调级别）会自旋等待追平；大幅回拨则直接抛异常，拒绝发号。宁可不发，也绝不发出可能重复的 ID。
