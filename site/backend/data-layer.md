@@ -150,7 +150,7 @@ The worker number comes from config `TenonAdmin:Id:WorkerId` (default 0, range 0
 ```
 
 ::: danger Every instance must differ under horizontal scaling
-For a single-machine deployment, leaving it unset (falling back to 0) is fine. **When scaling horizontally across multiple instances, each instance must be configured with a different `WorkerId`** — otherwise two instances issuing IDs in the same millisecond will collide on the primary key. This is a data-corruption-class problem, and it happens silently by default.
+For a single-machine deployment, leaving it unset (falling back to 0) is fine. **When scaling horizontally across multiple instances, each instance must be configured with a different `WorkerId`** — otherwise two instances issuing IDs in the same millisecond will collide on the primary key. If two machines share the same `WorkerId`, the 6 bits that encode the machine number in the ID are identical on both. If the sequence bits also happen to start from the same count within that same millisecond, the two resulting 64-bit numbers come out byte-for-byte identical. This is a data-corruption-class problem, and it happens silently by default.
 
 The kernel provides one line of defense: if Redis caching is chosen (a clear sign of multi-instance intent) but `WorkerId` isn't set explicitly, startup throws immediately — turning a silent primary-key collision into a readable startup error. For a genuinely single-instance deployment, set it to `0` explicitly to signal intent; on k8s, a StatefulSet's pod ordinal can be injected.
 :::

@@ -30,7 +30,7 @@ const columns: ProTableColumn<SysPosition>[] = [
 </template>
 ```
 
-The `name` column has `search: true`, so it automatically becomes an input in the search form; `createTime` has `format: 'datetime'`, so it's formatted in local time. Whatever you don't declare, you can ignore — the table won't invent behavior for you. Four conventions hide in that short snippet; the rest of this page unpacks them one by one.
+The `name` column has `search: true`, so it automatically becomes an input in the search form; `createTime` has `format: 'datetime'`, so it's formatted in local time; `storage-key` remembers which localStorage key this table's column settings live under, and the naming convention for it is below. Whatever you don't declare, you can ignore — the table won't invent behavior for you. Four conventions hide in that short snippet; the rest of this page unpacks them one by one.
 
 ## The fetcher is the only thing you have to adapt
 

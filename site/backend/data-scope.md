@@ -20,6 +20,8 @@ Scope is attached to **roles** (`sys_role_data_scope`); a user can hold multiple
 - Otherwise, union the org sets across roles (current org = primary org; current org and below = primary org + descendants; custom = the specified set);
 - If any role is `Self` → an additional "self only" dimension is unioned in (can also see data they created themselves).
 
+Say a user holds two roles: one `Org` role whose primary org is "East China Branch," and one `Custom` role scoped to "South China Branch" and "North China Branch." Neither role is `All`, so the merge is the union of all three orgs — queries filter to just those three. Neither role is `Self`, so this user doesn't see the extra "created by me" layer on top.
+
 ## Resolution: merging multiple roles into one result
 
 `IDataScopeProvider.ResolveAsync(userId)` merges a user's multi-role scopes into a single immutable `DataScopeResult`. The default implementation, `DataScopeProvider`, caches results per user (invalidated on permission/org changes), only aggregating from the DB on a cache miss:

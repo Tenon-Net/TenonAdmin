@@ -22,7 +22,13 @@ docker compose logs app                    # First-startup info
 
 `app` runs `ASPNETCORE_ENVIRONMENT=Production`, and that is deliberate. Production has three hard gates: the JWT secret must be given explicitly (leave it out and you're in dev-key mode, each replica signing its own, giving random 401s); a first production deploy against an empty database must explicitly permit table creation (a production database isn't ALTERed automatically); and the upload root must be moved out of `wwwroot`. `docker-compose.yml` writes all three as environment variables — copy them and swap in your own values; miss one and you get a readable startup error naming the config item, far easier to debug than "the process comes up fine and only blows up at the driver layer on the first write." These three gates, plus the table-creation / column-adding details on upgrade, are covered in full in the [Deployment Overview](/guide/deployment/).
 
-The first-login super-admin account is `superAdmin`. For the password, compose sets a demo value `Tenon@123456` via the `:-` default on `TENON_ADMIN_PASSWORD`, so that's what you log in with this time, not a random password. Remove that default (so `Seed:AdminPassword` really is unset) to get back to the zero-config path: the kernel generates a random 16-character password and prints it to the console (`docker compose logs app`) on the startup that creates the account, just that once.
+The first-login super-admin account is `superAdmin`. For the password, this line in compose has the answer:
+
+```yaml
+TenonAdmin__Seed__AdminPassword: ${TENON_ADMIN_PASSWORD:-Tenon@123456}
+```
+
+`:-` is shell syntax for a default value: if the `TENON_ADMIN_PASSWORD` environment variable isn't set, it falls back to `Tenon@123456` after the colon. So that's what you log in with this time, not a random password. Remove that default (so `Seed:AdminPassword` really is unset) to get back to the zero-config path: the kernel generates a random 16-character password and prints it to the console (`docker compose logs app`) on the startup that creates the account, just that once.
 
 ::: warning The demo secrets are only there to get you running
 In `docker-compose.yml`, `TENON_JWT_SECRET`, `TENON_DB_PASSWORD`, and `TENON_ADMIN_PASSWORD` all carry `:-` defaults so you can try it out right away. Before a real deployment, inject real values through the `.env` file in the same directory or your deployment platform's secret management — don't keep the default strings, and don't let them into version control.

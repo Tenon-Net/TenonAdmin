@@ -76,7 +76,7 @@ Three states:
 
 ## Spreading the gate across every action button
 
-`v-auth` is template syntax — it only works inside `<template>`. But a list page's inline row actions — edit, delete, copy, reset password, force-logout, restore — are assembled with `h()` inside a column's `render` function, out of the directive's reach. These buttons used to show up for users without permission too, only eating a 403 server-side once clicked; the org page had no gating at all. List pages and tree-table pages have both had their operation columns spread with the same decision: render calls `authStore.hasPerm(code)` directly, `h()`-ing the button on a hit and returning `null` on a miss. (Menu management's `ButtonManager.vue` hasn't caught up yet — its operation column currently has no gating at all.) Same rule behind it as the directive, just imperative instead of declarative.
+`v-auth` is template syntax — it only works inside `<template>`. But a list page's inline row actions — edit, delete, copy, reset password, force-logout, restore — are assembled with `h()` inside a column's `render` function, out of the directive's reach. These buttons used to show up for users without permission too, only eating a 403 server-side once clicked; the org page had no gating at all. List pages, tree-table pages, and menu management's own button editor (`ButtonManager.vue`) have all had their operation columns spread with the same decision: render calls `authStore.hasPerm(code)` directly, `h()`-ing the button on a hit and returning `null` on a miss. Same rule behind it as the directive, just imperative instead of declarative.
 
 The user-management page's operations column is the canonical form:
 

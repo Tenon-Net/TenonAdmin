@@ -23,7 +23,7 @@ The kernel ships as NuGet packages, so a consumer can replace any part without t
 ## Entities
 
 - Defined under `Services/Entities/`; kernel system tables are named `Sys*`.
-- Pick a base class: ordinary tables inherit `BaseEntity` (primary key + the four audit fields + soft delete); tables that need org-level isolation inherit `DataEntity` (which also carries the `CreateOrgId` anchor).
+- Pick a base class: ordinary tables inherit `BaseEntity` (primary key + the four audit fields + soft delete); tables that need org-level isolation inherit `DataEntity` (which also carries the `CreateOrgId` anchor — see "Data access" below for what that means).
 - The primary key is always `Id` (snowflake, filled by AOP, never assigned by hand); soft delete is always `IsDelete`, and querying deleted rows needs an explicit `.ClearFilter<ISoftDelete>()`.
 - Extra information not reserved in the table schema goes into `ExtJson` — don't add a new column.
 - Follow `Entities/SysDictType.cs` for attributes: `[SugarTable]` / unique index `[SugarIndex(IsUnique=true)]` / `[SugarColumn(Length, ColumnDescription, IsNullable)]`.
@@ -40,13 +40,13 @@ The kernel ships as NuGet packages, so a consumer can replace any part without t
 
 - `[RolePermission]` takes no argument: the permission code IS `{METHOD}:/{route template}` (e.g. `GET:/api/v1/sys/dict/type/page`). **Never write magic strings like `"sys:user:add"` in code** — permissions are granted by checking routes in the role-menu UI; super admin (`sadm`) is let through.
 - Use `[ActiveSession]` for logged-in-only endpoints that need no specific permission; mark anonymous endpoints with an explicit `[AllowAnonymous]` (the global `RequireAuthorization()` is the fallback, so a forgotten attribute never silently exposes an endpoint).
-- Attach `[OperationLog(...)]` to write operations that need auditing; add `[Module("X")]` to make a whole module switchable off — `Api:DisabledModules` strips the controller's routes (404, data untouched). The module *record* itself carries two separate delete guards: one with menus attached is always refused (`ModuleHasMenus`, applies to self-built modules too), and the built-in `system` module is permanently protected by a fixed Id (`ModuleProtected`).
+- Attach `[OperationLog(...)]` to write operations that need auditing; add `[Module("X")]` to make a whole module switchable off — `Api:DisabledModules` strips the controller's routes (404, data untouched). The module *record* itself carries two separate delete guards: one with menus attached is always refused (`ErrorCode.ModuleHasMenus`, applies to self-built modules too), and the built-in `system` module is permanently protected by a fixed Id (`ErrorCode.ModuleProtected`).
 - Controllers may `return dto` directly (`ResultEnvelopeFilter` wraps the envelope as a fallback); built-in controllers return `Result<T>.Ok(...)` explicitly for a clear contract. See `Controllers/DictController.cs` for reference and the [request pipeline](/backend/request-pipeline) for the flow.
 
 ## Error handling
 
 - Business errors are thrown as `AdminException(ErrorCode)` or returned as an `ErrorCode`, uniformly converted into an envelope by `AdminExceptionFilter`.
-- `ErrorCode` is a numeric enum that **never carries localized text** (`Core/ErrorCode.cs`); i18n happens entirely on the frontend, keyed by `msgKey`. Adding an error code means adding both an `[MsgKey("error.<module>.<meaning>")]` attribute and the matching entry in both frontend language packs — miss it, and it falls back to showing the user the raw `error.code.{number}` string, and `ErrorCodeLocaleConsistencyTests` turns a backend test red.
+- `ErrorCode` is a numeric enum that **never carries localized text** (`Core/ErrorCode.cs`); i18n happens entirely on the frontend, keyed by `msgKey`. Adding an error code means adding both an `[MsgKey("error.<module>.<meaning>")]` attribute (e.g. `error.dict.typeNotFound`) and the matching entry in both frontend language packs — miss it, and it falls back to showing the user the raw `error.code.{number}` string, and `ErrorCodeLocaleConsistencyTests` turns a backend test red.
 
 ## Data access
 
@@ -80,7 +80,7 @@ If a `DataEntity` row's `CreateOrgId` isn't set, org-scoped queries always retur
 ## Naming / organization
 
 - Namespaces follow directories; one type per file; suffixes `Sys*` for entities, `I*` for interfaces, `*Service`/`*Provider`/`*Filter`/`*Attribute`.
-- Nullable reference types enabled; new code's time access goes through the injected `TimeProvider` (testable), never a bare `DateTime.Now`. The kernel still has 9 historical bare calls left unclosed, all on the password-expiry path — don't copy them; `SessionService` is the pattern to follow instead.
+- Nullable reference types enabled; new code's time access goes through the injected `TimeProvider` (testable), never a bare `DateTime.Now`. The password-expiry path (`AuthService`/`UserService`/`PersonalService`), the SMS daily-cap day bucket, and the schema-version stamp all route through it now too — `SessionService` was always the pattern to follow, the rest have caught up. One bare call is left on purpose: `SchemaVersionSeed`'s first-install timestamp is a static seed row with no DI clock to inject.
 
 ## Package management
 

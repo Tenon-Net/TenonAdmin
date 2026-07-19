@@ -69,7 +69,7 @@ Frontend CI (`web-ci.yml`) runs `npm ci` → `npm run lint` → `npm test` (vite
 A third one is `docker-smoke.yml`, and its path filter overlaps both of the above, so whichever half you touch will pull it in. The `single` job brings up one container and checks that an empty database gets its tables, seed data lands, tokens are issued, and the reverse proxy holds. The `multi` job brings up two replicas and checks what only two replicas can reveal: force-logout crossing replicas, lockout and rate-limit thresholds not doubling, machine IDs not colliding, and the real client IP still recoverable.
 
 ::: tip The six-piece test suite is a contract, not an ordinary test
-`ReplaceabilityTests` (the "six-piece set" from the design doc) locks in the replaceability guarantees around TryAdd coverage, virtual-method overriding, and business-assembly mounting. When you change DI registration or `TenonAdminSetup`-related code and this suite goes red, it usually means you've broken a consumer's replacement path — don't bypass or delete the tests; figure out which guarantee got broken first.
+`ReplaceabilityTests` (the "six-piece set" from the design doc) locks in the replaceability guarantees around TryAdd coverage, virtual-method overriding, and business-assembly mounting. For the full, current list of exactly what the six-piece set guarantees, see [The Replaceability Model](/backend/replaceability). When you change DI registration or `TenonAdminSetup`-related code and this suite goes red, it usually means you've broken a consumer's replacement path — don't bypass or delete the tests; figure out which guarantee got broken first.
 :::
 
 ## PR workflow

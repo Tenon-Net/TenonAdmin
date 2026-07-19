@@ -75,12 +75,16 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 
 ## The "six-piece set" locks these down as a contract
 
-`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` is the regression lock for the replaceability mechanism — the test names are deliberately fixed by design, verifying the three constraints above as a contract, not as ordinary tests:
+`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` is the regression lock for the replaceability mechanism. The "six-piece set" name dates back to the original six cases — since then, SMS, email, realtime push, and external login each grew their own replaceable surface and picked up a matching test, so the file locks down nine cases today. The test names are deliberately fixed by design, verifying the three constraints above as a contract, not as ordinary tests:
 
 | Test | What it locks down |
 | --- | --- |
 | `ReplaceService_ShouldUseUserImplementation` | Consumer `Replace`s `IPasswordHasher`; the container resolves the consumer's implementation |
+| `ReplaceSmsSender_ShouldUseUserImplementation` | Consumer `Replace`s `ISmsSender`; the container resolves the consumer's implementation |
+| `ReplaceEmailSender_ShouldUseUserImplementation` | Consumer `Replace`s `IEmailSender`; the container resolves the consumer's implementation |
+| `ReplaceRealtimePublisher_ShouldUseUserImplementation` | Consumer `Replace`s `IRealtimePublisher`; the container resolves the consumer's implementation |
 | `OverrideAuthStep_ShouldAffectLoginFlow` | Overriding one `virtual` step of `AuthService` changes the login flow's result |
+| `ExternalAuthProvider_ShouldBePluggable` | A consumer's pre-registered external-login provider shows up in the resolved provider set (additive, doesn't displace the built-in ones) |
 | `DisabledModule_ShouldRemoveBuiltInController` | A disabled module's built-in controller is removed (404); non-disabled ones remain |
 | `CustomController_ShouldOwnSameRouteAfterModuleDisabled` | After disabling a built-in module, a consumer controller takes over the same route |
 | `CustomSeedData_ShouldRunOnceAndBeIdempotent` | Consumer seed data inserts once on first startup and is idempotent on subsequent startups |

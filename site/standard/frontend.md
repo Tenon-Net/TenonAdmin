@@ -57,7 +57,7 @@ Persisting them skips the refresh-rebuild flow and sends you straight to a 404 a
 ## i18n
 
 - All visible text in views goes through `t('...')` — hardcoded Chinese/English literals are forbidden.
-- Error copy never comes from the backend: it sends `code` + `msgKey`, and `translateError` resolves the copy **by `msgKey` alone — it never reads `code`**, so a locale key must mirror the backend's `[MsgKey]` string exactly. Built-in copy lives in `locales/zh-CN.ts`/`en-US.ts`; your own goes in `locales/ext/<locale>/<module>.ts`. See [i18n & error codes](/frontend/i18n) for the mechanism.
+- Error copy never comes from the backend: it sends `code` + `msgKey`, and `translateError` resolves the copy **by `msgKey` alone — it never reads `code`**, so a locale key must mirror the backend's `[MsgKey]` string exactly — a backend tagging `error.dict.typeNotFound` needs a frontend dictionary entry of the same name. Built-in copy lives in `locales/zh-CN.ts`/`en-US.ts`; your own goes in `locales/ext/<locale>/<module>.ts`. See [i18n & error codes](/frontend/i18n) for the mechanism.
 
 ## Design system
 

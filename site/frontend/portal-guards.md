@@ -37,7 +37,7 @@ Once that data is in, `enterInitial` runs an "which app to enter" ladder, top to
 - **A default app is configured** (`defaultModuleId`, settable on the chooser page via `setDefault`) and it's in the list → go straight in.
 - **None of the above** → show the chooser.
 
-Switching apps takes a different path. `switchModule(moduleId)` re-runs `enter()` (rebuilding that app's dynamic routes), clears the tabs store (a new app means the tab bar should start from scratch), and replaces the current route with the new app's `homePath`. `homePath` is an auth-store getter: it prefers the module's own `defaultRoute`, falls back to the first leaf of the menu tree, and failing that lands back on `/module` — an app with no menus configured has no home page to speak of, and sending the user back to the chooser beats crashing them into a path that doesn't belong to this app with a 404.
+Switching apps takes a different path. `switchModule(moduleId)` re-runs `enter()` (rebuilding that app's dynamic routes — internally it's the same `buildRoutesForModule(moduleId)` covered on the [Routing & Dynamic Menus](/frontend/routing) page), clears the tabs store (a new app means the tab bar should start from scratch), and replaces the current route with the new app's `homePath`. `homePath` is an auth-store getter: it prefers the module's own `defaultRoute`, falls back to the first leaf of the menu tree, and failing that lands back on `/module` — an app with no menus configured has no home page to speak of, and sending the user back to the chooser beats crashing them into a path that doesn't belong to this app with a 404.
 
 ## The guard: every navigation runs through beforeEach
 

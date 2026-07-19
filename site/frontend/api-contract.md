@@ -4,7 +4,7 @@ Every generated API function has to end by turning the backend's response into e
 
 ## `unwrap` and `ApiError`
 
-Most of the hand-written functions in `src/api/index.ts` land on `.then(r => unwrap<T>(r))` (`gen:api` only generates `schema.d.ts`'s types — the functions themselves are hand-written). Paged endpoints land on `toPage`, which calls `unwrap` internally; the one exception is file downloads, which use `parseAs: 'blob'` — the response isn't an envelope at all, so they check `response.ok` directly instead. `unwrap` is the place that tolerates the backend's two response shapes, collapsing both into a plain `T` or a thrown `ApiError`:
+Most of the hand-written functions in `src/api/index.ts` land on `.then(r => unwrap<T>(r))` (`gen:api` only generates `schema.d.ts`'s types — the functions themselves are hand-written). That `r` is the raw result resolved straight from `client.GET/POST(...)`, always shaped `{ data, error, response }` — that's openapi-fetch's own convention, not something TenonAdmin invented. Paged endpoints land on `toPage`, which calls `unwrap` internally; the one exception is file downloads, which use `parseAs: 'blob'` — the response isn't an envelope at all, so they check `response.ok` directly instead. `unwrap` is the place that tolerates the backend's two response shapes, collapsing both into a plain `T` or a thrown `ApiError`:
 
 ```ts
 export function unwrap<T>(res: { data?: unknown; error?: unknown; response: Response }): T {

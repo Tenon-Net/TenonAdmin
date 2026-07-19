@@ -15,7 +15,7 @@ The repo ships a minimal sample host, `backend/samples/MinimalHost`, whose `Prog
 dotnet run --project backend/samples/MinimalHost
 ```
 
-On first startup it does three things automatically: creates tables via the default SQLite (CodeFirst; the database file lands under `backend/samples/MinimalHost/data/`), writes seed data (menus, roles, the super-admin account), and then listens on `http://localhost:5100` (that port is hard-coded in `launchSettings.json`, dodging the 5000 that AirPlay squats on macOS).
+On first startup it does three things automatically: creates tables via the default SQLite (CodeFirst — tables are generated from the entity classes, no hand-written DDL; the database file lands under `backend/samples/MinimalHost/data/`), writes seed data (menus, roles, the super-admin account), and then listens on `http://localhost:5100` (that port is hard-coded in `launchSettings.json`, dodging the 5000 that AirPlay squats on macOS).
 
 To start backend and frontend together locally, use `dev.bat` at the repo root — it brings up MinimalHost and the frontend Vite in two separate windows (installing frontend dependencies on the first run); `stop.bat` stops them.
 
