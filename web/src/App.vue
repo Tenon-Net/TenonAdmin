@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
 import { RouterView } from 'vue-router'
-import { NConfigProvider, NMessageProvider, NDialogProvider, zhCN, enUS, dateZhCN, dateEnUS } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NDialogProvider, NLoadingBarProvider, zhCN, enUS, dateZhCN, dateEnUS } from 'naive-ui'
+import { LoadingBarBridge } from '@/lib/loadingBar'
 import { useTheme } from '@/composables/useTheme'
 import { useAppStore } from '@/stores/app'
 import { i18n } from '@/locales'
@@ -37,10 +38,13 @@ watch(
     :locale="naiveLocale"
     :date-locale="naiveDateLocale"
   >
-    <n-message-provider>
-      <n-dialog-provider>
-        <router-view />
-      </n-dialog-provider>
-    </n-message-provider>
+    <n-loading-bar-provider>
+      <LoadingBarBridge />
+      <n-message-provider>
+        <n-dialog-provider>
+          <router-view />
+        </n-dialog-provider>
+      </n-message-provider>
+    </n-loading-bar-provider>
   </n-config-provider>
 </template>

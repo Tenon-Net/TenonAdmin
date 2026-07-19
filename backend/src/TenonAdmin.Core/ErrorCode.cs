@@ -58,9 +58,49 @@ public enum ErrorCode
     [MsgKey("error.auth.refreshTokenInvalid")]
     RefreshTokenInvalid = 40007,
 
-    /// <summary>请求过于频繁,已触发限流(RateLimiter,§12/§14);args 可携带 retryAfterSeconds</summary>
+    /// <summary>请求过于频繁,已触发限流(RateLimiter,§12/§14);args 可携带 retryAfterSeconds。短信发送冷却/日上限也复用此码。</summary>
     [MsgKey("error.auth.tooManyRequests")]
     TooManyRequests = 40008,
+
+    /// <summary>
+    /// 密码校验已通过,需短信二次验证(全局 MFA 开且用户绑了手机号)。
+    /// <b>信令而非失败</b>:args 携带 challengeId/phoneMask/expiresSeconds/resendSeconds,
+    /// 前端据此切到验证码输入页,凭 challengeId + 短信码调 <c>POST /auth/login/sms</c> 完成登录。
+    /// </summary>
+    [MsgKey("error.auth.smsCodeRequired")]
+    SmsCodeRequired = 40009,
+
+    /// <summary>短信验证码不正确;args 携带 attemptsLeft(剩余尝试次数)</summary>
+    [MsgKey("error.auth.smsCodeWrong")]
+    SmsCodeWrong = 40010,
+
+    /// <summary>短信验证码已失效(缺失/过期/已消费/尝试次数耗尽/挑战无效统一归此,防探测)</summary>
+    [MsgKey("error.auth.smsCodeExpired")]
+    SmsCodeExpired = 40011,
+
+    /// <summary>短信验证码登录未启用(全局开关 <c>sys.security.smsLogin.enabled</c> 关闭)</summary>
+    [MsgKey("error.auth.smsLoginDisabled")]
+    SmsLoginDisabled = 40012,
+
+    /// <summary>外部登录 provider 未启用或不存在(code 未配置 / 运营开关 <c>sys.externalauth.{code}.enabled</c> 关闭)</summary>
+    [MsgKey("error.auth.oauthProviderDisabled")]
+    OAuthProviderDisabled = 40013,
+
+    /// <summary>外部登录回调 state 无效(缺失 / 过期 / 已消费——CSRF 防护;统一归此,防探测)</summary>
+    [MsgKey("error.auth.oauthStateInvalid")]
+    OAuthStateInvalid = 40014,
+
+    /// <summary>外部登录令牌交换失败(授权码无效 / IdP 拒绝 / id_token 签名或声明校验不过)</summary>
+    [MsgKey("error.auth.oauthExchangeFailed")]
+    OAuthExchangeFailed = 40015,
+
+    /// <summary>该外部身份尚未绑定任何本地账号(默认未绑定策略=拒绝;需先登录后在个人中心绑定,或该 provider 开启自动开户)</summary>
+    [MsgKey("error.auth.oauthAccountNotBound")]
+    OAuthAccountNotBound = 40016,
+
+    /// <summary>外部身份绑定冲突:该外部身份已绑定其他账号,或当前账号已绑定同一 provider(绑定唯一)</summary>
+    [MsgKey("error.auth.oauthAlreadyBound")]
+    OAuthAlreadyBound = 40017,
 
     // ── 41xxx 权限与数据范围 ─────────────────────────────────────────
 
@@ -169,6 +209,10 @@ public enum ErrorCode
     /// <summary>会话不存在或已下线("我的会话"自助下线;含"不是你的会话"——不区分,防探测他人会话)</summary>
     [MsgKey("error.session.notFound")]
     SessionNotFound = 42024,
+
+    /// <summary>新口令与当前或最近使用过的口令重复(密码历史防重用策略,开关 sys.security.password.historyCount)</summary>
+    [MsgKey("error.user.passwordReused")]
+    PasswordReused = 42025,
 
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 

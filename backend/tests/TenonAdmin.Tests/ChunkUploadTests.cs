@@ -1,6 +1,10 @@
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using Microsoft.Extensions.DependencyInjection;
+using SqlSugar;
 using TenonAdmin.Core;
+using TenonAdmin.Services;
+using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Tests;
 
@@ -71,10 +75,39 @@ public class ChunkUploadTests
         var bytes = await c.GetByteArrayAsync($"/api/v1/sys/file/{fileId}/download");
         Assert.Equal(full, bytes);
 
-        // 秒传:同 hash 再 init → uploaded=true,复用同一文件
+        // 秒传:同一用户同 hash 再 init → uploaded=true,幂等返回<b>同一条</b>引用行(探针可重复调用不泄漏孤儿行)。
+        // 跨用户才各自独立(T-D7 隔离,由 FileGcTests 的共享存储用例验证删除互不牵连)。
         var init3 = (await (await c.PostJson("/api/v1/sys/file/chunk/init", initBody)).ReadEnvelope()).GetProperty("data");
         Assert.True(init3.GetProperty("uploaded").GetBoolean());
         Assert.Equal(fileId, init3.GetProperty("file").GetProperty("id").GetInt64());
+        Assert.Equal(full, await c.GetByteArrayAsync($"/api/v1/sys/file/{fileId}/download"));
+    }
+
+    [Fact]
+    public async Task Instant_upload_by_same_user_is_idempotent_and_does_not_leak_rows()
+    {
+        using var f = new AdminAppFactory();
+        var c = await SuperAdminClient(f);
+
+        var data = Bytes(0, 800);
+        var hash = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
+        object initBody = new { fileHash = hash, fileName = "dup.png", totalSize = data.Length, chunkCount = 1 };
+
+        // 真上传一次
+        var uploadId = (await (await c.PostJson("/api/v1/sys/file/chunk/init", initBody)).ReadEnvelope())
+            .GetProperty("data").GetProperty("uploadId").GetString()!;
+        await PostChunk(c, uploadId, 0, data);
+        await c.PostJson("/api/v1/sys/file/chunk/complete", new { uploadId, fileHash = hash, fileName = "dup.png", chunkCount = 1 });
+
+        // 同一用户重复探测 5 次(模拟组件重挂 / 重试 / 重选同一文件)
+        for (var i = 0; i < 5; i++)
+            await c.PostJson("/api/v1/sys/file/chunk/init", initBody);
+
+        // sys_file 中该 hash 仍只有 1 行——幂等,无孤儿泄漏(否则孤儿行会让 GC 的共享判定恒真、物理文件永不删盘)
+        using var scope = f.Services.CreateScope();
+        var count = await scope.ServiceProvider.GetRequiredService<IRepository<SysFile>>()
+            .AsQueryable().Where(x => x.Hash == hash).CountAsync();
+        Assert.Equal(1, count);
     }
 
     [Fact]

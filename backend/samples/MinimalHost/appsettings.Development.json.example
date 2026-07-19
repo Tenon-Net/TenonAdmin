@@ -3,6 +3,36 @@
     "Seed": {
       "AdminAccount": "superAdmin",
       "AdminPassword": ""
+    },
+
+    "//ExternalAuth": "外部登录 / SSO(批次 D)。连接与密钥走这里(不进库);运营开关(启用/未绑定策略/开户默认角色·机构)走 sys_config 键 sys.externalauth.{code}.*。下方 _* 键仅为形态示例,binder 忽略;把要用的搬进 Oidc/WeCom/DingTalk 并填真实值即启用。",
+    "ExternalAuth": {
+      "CallbackBaseUrl": "https://admin.example.com",
+      "FrontendResultPath": "/oauth/callback",
+
+      "Oidc": [],
+      "_OidcExample": {
+        "Code": "keycloak",
+        "DisplayName": "Keycloak SSO",
+        "Icon": "ph:key-duotone",
+        "Authority": "https://keycloak.example.com/realms/master",
+        "ClientId": "tenon-admin",
+        "ClientSecret": "<client-secret>",
+        "Scopes": "openid profile email",
+        "UsePkce": true
+      },
+
+      "WeCom": {
+        "_note": "企业微信扫码登录;填 CorpId + CorpSecret 即启用(空则不点亮按钮)",
+        "CorpId": "",
+        "AgentId": "",
+        "CorpSecret": ""
+      },
+      "DingTalk": {
+        "_note": "钉钉扫码登录;填 AppKey + AppSecret 即启用(空则不点亮按钮)",
+        "AppKey": "",
+        "AppSecret": ""
+      }
     }
   }
 }

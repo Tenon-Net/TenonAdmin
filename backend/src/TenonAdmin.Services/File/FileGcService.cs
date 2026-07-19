@@ -120,7 +120,14 @@ public class FileGcService(
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                await storage.DeleteAsync(file.StoragePath, cancellationToken);   // 越界路径在此被存储根围栏拦下
+                // 共享判定(T-D7):秒传去重下多条独立记录可共享同一物理文件。删盘前查是否仍有他行(含未删/软删,
+                // 故 ClearFilter)引用同一 StoragePath——有则只硬删本记录、保留物理文件,由最后一个引用方回收时删盘。
+                var sharedByOthers = await files.AsQueryable()
+                    .ClearFilter<ISoftDelete>()
+                    .Where(f => f.StoragePath == file.StoragePath && f.Id != file.Id)
+                    .AnyAsync();
+                if (!sharedByOthers)
+                    await storage.DeleteAsync(file.StoragePath, cancellationToken);   // 最后一个引用 → 删盘;越界路径在此被存储根围栏拦下
                 await files.Db.Deleteable<SysFile>().Where(f => f.Id == file.Id).ExecuteCommandAsync();
                 removed++;
             }

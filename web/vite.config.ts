@@ -35,6 +35,7 @@ export default defineConfig({
     proxy: {
       '/api': { target: apiTarget, changeOrigin: true },
       '/openapi': { target: apiTarget, changeOrigin: true },
+      '/hub': { target: apiTarget, changeOrigin: true, ws: true }, // SignalR 实时通知 Hub;ws:true 反代 WebSocket 升级
     },
   },
   test: {

@@ -12,7 +12,7 @@ namespace TenonAdmin.SqlSugar;
 /// 仓储覆盖不了的复杂操作(联表/事务/批量)直接用 <see cref="Db"/> 上的 SqlSugar 原生能力——
 /// 仓储是便捷层,不是把 ORM 关进笼子的抽象层。</para>
 /// </summary>
-public interface IRepository<TEntity> where TEntity : BaseEntity, new()
+public interface IRepository<TEntity> where TEntity : AuditEntity, new()
 {
     /// <summary>底层 SqlSugar 客户端(逃生舱口:联表、事务、Storageable 等原生能力)</summary>
     ISqlSugarClient Db { get; }
@@ -38,7 +38,11 @@ public interface IRepository<TEntity> where TEntity : BaseEntity, new()
     /// <summary>整行更新(UpdateTime 由 AOP 自动刷新),返回受影响行数</summary>
     Task<int> UpdateAsync(TEntity entity);
 
-    /// <summary>按主键软删除(置 IsDelete 标记,物理数据保留、查询即不可见),返回受影响行数</summary>
+    /// <summary>
+    /// 按主键删除,返回受影响行数。<b>按实体能力分流</b>:实体实现 <see cref="ISoftDelete"/>(<see cref="BaseEntity"/> 系)时
+    /// 为软删除(置 IsDelete 标记,物理数据保留、查询即不可见,可 <see cref="RestoreAsync"/> 恢复);否则(<see cref="AuditEntity"/> 系,如 <c>OrgAuditEntity</c>)
+    /// 为物理删除(行从库中移除)。
+    /// </summary>
     Task<int> DeleteAsync(long id);
 
     /// <summary>按主键物理删除(行从数据库彻底移除)。用于 GDPR 清理、过期数据归档等确需真删的场景。</summary>
@@ -47,6 +51,7 @@ public interface IRepository<TEntity> where TEntity : BaseEntity, new()
     /// <summary>
     /// 恢复已软删除的记录(<see cref="DeleteAsync"/> 的逆操作)。自动逆转唯一索引列的 <c>_del_{id}</c> 后缀;
     /// 若逆转后的值与现存记录冲突,抛 <c>RecycleUniqueConflict</c>。
+    /// <para>仅对实现 <see cref="ISoftDelete"/> 的实体有意义;对非软删实体(<see cref="AuditEntity"/> 系)抛 <see cref="NotSupportedException"/>(物理删无从恢复)。</para>
     /// </summary>
     Task<int> RestoreAsync(long id);
 }

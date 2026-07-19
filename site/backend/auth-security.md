@@ -58,6 +58,63 @@ AdminException.ThrowIf(!string.Equals(stored, code, StringComparison.OrdinalIgno
 
 The ticket is invalidated regardless of whether the check succeeds or fails — the same captcha can never be replayed or guessed multiple times. Image/slider/behavioral captchas can be swapped in ahead of time by self-registering `ICaptchaProvider`.
 
+## SMS verification (second factor & passwordless sign-in)
+
+Two independent features, both **off by default**, toggleable at runtime from the config center's security tab (changes take effect immediately, no restart):
+
+| Runtime config key | Options fallback | Default | Feature |
+| --- | --- | --- | --- |
+| `sys.security.mfa.enabled` | `...:SmsOtp:MfaEnabled` | `false` | SMS second factor: after the password passes, confirm an SMS code |
+| `sys.security.smsLogin.enabled` | `...:SmsOtp:LoginEnabled` | `false` | Passwordless sign-in: phone number + SMS code |
+
+**Second-factor flow**: after every password-side check passes (lockout → captcha → credentials → policy), `AuthService.CheckSmsSecondFactorAsync` creates a cache-backed challenge **bound to the verified user's id** (not just the phone), sends a code, and signals the frontend with `SmsCodeRequired` (40009) whose `args` carry `challengeId` / `phoneMask` / countdown parameters; `POST /api/v1/auth/login/sms` (plus `/resend`) completes the login. The `/login` request/response contract never changes shape — 40009 is a signal, not a failure, and it doesn't count toward login lockout.
+
+::: warning The second factor only applies to users with a bound phone
+A user **without a phone number signs in with password alone even when the switch is on**. This is deliberate, not a bug: flipping a global switch must never be able to lock anyone out of the system — the seeded super admin has no phone, and neither may existing users. To enforce MFA for an account, bind a phone number to it (profile page or user management).
+
+Consumers who want the strict interpretation ("no phone = no login") override exactly one step:
+
+```csharp
+public sealed class StrictAuthService(
+    IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens,
+    ISessionService sessions, ILogService logService, ILoginLockService loginLock,
+    ICaptchaService captcha, ISecurityPolicyProvider policy, ISmsOtpService smsOtp)
+    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp)
+{
+    protected override async Task CheckSmsSecondFactorAsync(SysUser user)
+    {
+        // Kernel default lets phone-less users through; strict mode rejects them instead
+        if (await smsOtp.IsMfaEnabledAsync() && string.IsNullOrWhiteSpace(user.Phone))
+            throw new AdminException(ErrorCode.AccountDisabled);
+        await base.CheckSmsSecondFactorAsync(user);
+    }
+}
+```
+:::
+
+**Passwordless sign-in**: `POST /api/v1/auth/sms/send` issues the code (honors the image-captcha toggle, so enabling captcha also guards this endpoint), `POST /api/v1/auth/sms/login` exchanges phone + code for tokens. **Anti-enumeration**: an unknown, duplicate, or disabled phone number gets the exact same success-shaped response — cooldown included — it just never sends anything; verification then fails with the generic `SmsCodeExpired`. A side effect worth knowing: **users sharing a duplicate phone number are silently excluded from passwordless sign-in** (resolution requires exactly one enabled match); the kernel doesn't unique-index `Phone` (existing data may hold duplicates), so keep phone numbers unique at entry time if you rely on this feature.
+
+**Abuse controls** are server-side (`TenonAdmin:Security:SmsOtp`, `AdminSmsOtpOptions` — deployment-time, only the two switches are runtime keys):
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `CodeLength` | `6` | Code digits (cryptographically random) |
+| `TtlSeconds` | `300` | Code (and MFA challenge) lifetime |
+| `ResendSeconds` | `60` | Per-phone resend cooldown — shared across MFA and passwordless sends |
+| `MaxAttempts` | `5` | Wrong tries before the code is invalidated |
+| `DailySendLimitPerPhone` | `10` | Per-phone daily send cap (SMS-bombing / cost control) |
+
+Codes are consumed with the same atomic get-and-remove as captcha tickets (single-use, replay-safe) and live **only in cache** — no schema change. Cooldown/daily counters have the same per-instance ceiling as login lockout under the default in-memory cache; the Redis package makes them global.
+
+**The sending channel is an abstraction**: the kernel ships only `ISmsSender` with a `LoggingSmsSender` default that writes the code to the backend log (`[SMS:mfa] …` / `[SMS:login] …`) — good for development, useless in production. Register a real provider **before** `AddTenonAdmin()` (the `purpose` argument, `mfa` / `login`, maps to your vendor's template ids):
+
+```csharp
+builder.Services.AddSingleton<ISmsSender, AliyunSmsSender>();   // yours
+builder.Services.AddTenonAdmin(builder.Configuration);          // TryAdd yields
+```
+
+Error codes: `SmsCodeRequired` 40009 (signal), `SmsCodeWrong` 40010 (carries `attemptsLeft`), `SmsCodeExpired` 40011 (missing/expired/consumed/exhausted — deliberately indistinguishable), `SmsLoginDisabled` 40012; send throttling reuses `TooManyRequests` 40008.
+
 ## Login lockout (brute-force protection)
 
 `LoginLockService` is invoked at the **very front of login**, before credential validation — during a lockout, even the correct password is rejected. Configured under `TenonAdmin:Security:LoginLock` (`AdminLoginLockOptions`):

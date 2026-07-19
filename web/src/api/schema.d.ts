@@ -86,6 +86,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/sms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 短信二次验证完成登录:凭挑战 Id(登录 40009 信令下发)+ 短信码换令牌。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SmsChallengeLoginInput"];
+                    "text/json": components["schemas"]["SmsChallengeLoginInput"];
+                    "application/*+json": components["schemas"]["SmsChallengeLoginInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfLoginOutput"];
+                        "application/json": components["schemas"]["ResultOfLoginOutput"];
+                        "text/json": components["schemas"]["ResultOfLoginOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/sms/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 短信二次验证重发验证码(冷却/日上限由服务端强制)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SmsResendInput"];
+                    "text/json": components["schemas"]["SmsResendInput"];
+                    "application/*+json": components["schemas"]["SmsResendInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfSmsSendOutput"];
+                        "application/json": components["schemas"]["ResultOfSmsSendOutput"];
+                        "text/json": components["schemas"]["ResultOfSmsSendOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sms/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 免密登录发码(开关 `sys.security.smsLogin.enabled`;图形验证码启用时须携带;响应不区分手机号是否存在)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhoneCodeInput"];
+                    "text/json": components["schemas"]["PhoneCodeInput"];
+                    "application/*+json": components["schemas"]["PhoneCodeInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfSmsSendOutput"];
+                        "application/json": components["schemas"]["ResultOfSmsSendOutput"];
+                        "text/json": components["schemas"]["ResultOfSmsSendOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sms/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 免密登录:手机号 + 短信码换令牌。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhoneLoginInput"];
+                    "text/json": components["schemas"]["PhoneLoginInput"];
+                    "application/*+json": components["schemas"]["PhoneLoginInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfLoginOutput"];
+                        "application/json": components["schemas"]["ResultOfLoginOutput"];
+                        "text/json": components["schemas"]["ResultOfLoginOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/refresh": {
         parameters: {
             query?: never;
@@ -158,6 +334,158 @@ export interface paths {
                         "text/plain": components["schemas"]["ResultOfboolean"];
                         "application/json": components["schemas"]["ResultOfboolean"];
                         "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/cache/flush-auth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 清全部用户的权限 / 数据范围缓存(返回被清理的用户数) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfint"];
+                        "application/json": components["schemas"]["ResultOfint"];
+                        "text/json": components["schemas"]["ResultOfint"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/cache/flush-dict": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 清全部字典项缓存(返回被清理的字典类型数) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfint"];
+                        "application/json": components["schemas"]["ResultOfint"];
+                        "text/json": components["schemas"]["ResultOfint"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/cache/flush-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 清全部系统配置缓存(返回被清理的配置项数) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfint"];
+                        "application/json": components["schemas"]["ResultOfint"];
+                        "text/json": components["schemas"]["ResultOfint"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/cache/rebuild-portal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 递增门户代际,令所有用户的门户菜单 / 模块缓存整体失效(返回新代际值) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOflong"];
+                        "application/json": components["schemas"]["ResultOflong"];
+                        "text/json": components["schemas"]["ResultOflong"];
                     };
                 };
             };
@@ -1027,6 +1355,282 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/external/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 登录页可用的外部登录方式(仅回 code/名称/图标;读运营启用开关过滤)。 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfExternalProviderItem"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfExternalProviderItem"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfExternalProviderItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/external/{provider}/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 发起登录:生成 state/nonce/PKCE 存缓存,302 跳转到 IdP 授权端点(顶层浏览器导航)。 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/external/{provider}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** IdP 回调:验 state(CSRF)→ 按模式 登录/绑定 → 302 回前端结果页(带 ticket / bind / error)。 */
+        get: {
+            parameters: {
+                query?: {
+                    code?: string;
+                    state?: string;
+                    error?: string;
+                };
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/external/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 一次性票据换令牌(登录回调后前端调用;票据无效/过期/已用抛 40014)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExternalExchangeInput"];
+                    "text/json": components["schemas"]["ExternalExchangeInput"];
+                    "application/*+json": components["schemas"]["ExternalExchangeInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfLoginOutput"];
+                        "application/json": components["schemas"]["ResultOfLoginOutput"];
+                        "text/json": components["schemas"]["ResultOfLoginOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/external/bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 【个人中心】看自己已绑定的外部账号。 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfExternalBindingItem"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfExternalBindingItem"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfExternalBindingItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/external/{provider}/bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 【个人中心】发起绑定:走一次 OAuth 往返证明当前用户拥有该外部身份;返回授权 URL 由前端跳转。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfExternalBindStartOutput"];
+                        "application/json": components["schemas"]["ResultOfExternalBindStartOutput"];
+                        "text/json": components["schemas"]["ResultOfExternalBindStartOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/external/{provider}/binding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 【个人中心】解绑某 provider 的外部账号。 */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/menu/tree": {
         parameters: {
             query?: never;
@@ -1395,6 +1999,44 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/monitor/server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 取服务器运行快照(CPU/内存/磁盘/运行时;含一次约 500ms 的 CPU 采样) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfServerInfoOutput"];
+                        "application/json": components["schemas"]["ResultOfServerInfoOutput"];
+                        "text/json": components["schemas"]["ResultOfServerInfoOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3200,6 +3842,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/log/exception/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询异常日志(按时间倒序) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 接口路径(模糊,可选) */
+                    Path?: string;
+                    /** @description 异常类型(模糊,可选;如 `NullReference` 可捞出全部空引用异常) */
+                    ExceptionType?: string;
+                    /** @description 发生时间下界(含) */
+                    StartTime?: string;
+                    /** @description 发生时间上界(含) */
+                    EndTime?: string;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfSysExceptionLog"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfSysExceptionLog"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfSysExceptionLog"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/log/exception": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 清空异常日志(硬删,不可恢复) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/role/page": {
         parameters: {
             query?: never;
@@ -4296,6 +5027,42 @@ export interface components {
             /** @description 备注 */
             remark?: null | string;
         };
+        /** @description 磁盘分区容量。 */
+        DiskInfo: {
+            /** @description 分区名/挂载点(如 `C:\` 或 `/`) */
+            name?: string;
+            /**
+             * Format: int64
+             * @description 总容量(字节)
+             */
+            totalBytes?: number | string;
+            /**
+             * Format: int64
+             * @description 可用容量(字节)
+             */
+            freeBytes?: number | string;
+        };
+        /** @description 个人中心"账号绑定"列表项(只回展示所需,不回 Subject 等原始标识)。 */
+        ExternalBindingItem: {
+            provider: string;
+            displayName?: null | string;
+            /** Format: date-time */
+            boundAt?: string;
+        };
+        /** @description 发起绑定的出参:前端拿到授权 URL 后自行跳转开始 OAuth 往返。 */
+        ExternalBindStartOutput: {
+            authorizeUrl: string;
+        };
+        /** @description 一次性票据换令牌入参(登录回调后前端凭票据拉取真正的令牌对)。 */
+        ExternalExchangeInput: {
+            ticket?: string;
+        };
+        /** @description 登录页可用的外部登录方式(仅非密钥字段;点亮 SSO 按钮用)。 */
+        ExternalProviderItem: {
+            code: string;
+            displayName: string;
+            icon?: null | string;
+        };
         /** @description 上传出参:新文件 Id + 展示信息。 */
         FileUploadOutput: {
             /** Format: int64 */
@@ -4707,6 +5474,34 @@ export interface components {
          * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
          *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
          */
+        PagedListOfSysExceptionLog: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["SysExceptionLog"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
         PagedListOfSysFile: {
             /**
              * Format: int32
@@ -4927,6 +5722,22 @@ export interface components {
             /** @description 路由模板(原样,含 `{id}` 占位符) */
             path: string;
         };
+        /** @description 免密登录发码入参。图形验证码启用时必传(发码端点防脚本滥用)。 */
+        PhoneCodeInput: {
+            /** @description 手机号 */
+            phone?: string;
+            /** @description 验证码票据 Id(图形验证码启用时必传) */
+            captchaId?: null | string;
+            /** @description 用户输入的图形验证码(启用时必传) */
+            captchaCode?: null | string;
+        };
+        /** @description 免密登录入参(手机号 + 短信码直接换令牌) */
+        PhoneLoginInput: {
+            /** @description 手机号(与发码时一致) */
+            phone?: string;
+            /** @description 用户收到的短信验证码 */
+            code?: string;
+        };
         /** @description 职位新增/编辑入参(增改共用同一份字段)。 */
         PositionInput: {
             /** @description 职位名称 */
@@ -5079,6 +5890,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfExternalBindStartOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["ExternalBindStartOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfFileUploadOutput: {
             /**
              * Format: int32
@@ -5161,6 +5993,50 @@ export interface components {
             message?: null | string;
             /** @description 业务数据载荷 */
             data?: null | string[];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyListOfExternalBindingItem: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | components["schemas"]["ExternalBindingItem"][];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyListOfExternalProviderItem: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | components["schemas"]["ExternalProviderItem"][];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -5538,6 +6414,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfPagedListOfSysExceptionLog: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfSysExceptionLog"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfPagedListOfSysFile: {
             /**
              * Format: int32
@@ -5706,6 +6603,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfServerInfoOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["ServerInfoOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfSiteInfoOutput: {
             /**
              * Format: int32
@@ -5719,6 +6637,27 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["SiteInfoOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfSmsSendOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["SmsSendOutput"];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -5947,6 +6886,57 @@ export interface components {
             /** @description 备注 */
             remark?: null | string;
         };
+        /**
+         * @description 服务器监控快照(设计 §4 运维)。只报<b>进程与主机基础面</b>——系统级全量指标(APM/链路/告警)
+         *     留给消费方的观测栈(OpenTelemetry 等可选包方向),内核不越位。
+         */
+        ServerInfoOutput: {
+            /** @description 主机名 */
+            machineName?: string;
+            /** @description 操作系统描述(如 `Microsoft Windows 10.0.20348`) */
+            osDescription?: string;
+            /** @description 运行时框架描述(如 `.NET 10.0.0`) */
+            frameworkDescription?: string;
+            /** @description 进程架构(如 `X64` / `Arm64`) */
+            processArchitecture?: string;
+            /**
+             * Format: int32
+             * @description 逻辑处理器数
+             */
+            processorCount?: number | string;
+            /**
+             * Format: int64
+             * @description 进程已运行秒数
+             */
+            processUptimeSeconds?: number | string;
+            /**
+             * Format: double
+             * @description 进程 CPU 占用百分比(0–100,对全部逻辑核归一;两次采样估算)
+             */
+            processCpuPercent?: number | string;
+            /**
+             * Format: int64
+             * @description 进程工作集(物理内存占用,字节)
+             */
+            processWorkingSetBytes?: number | string;
+            /**
+             * Format: int64
+             * @description 托管堆已用字节(GC)
+             */
+            gcHeapBytes?: number | string;
+            /**
+             * Format: int64
+             * @description GC 可用内存上界(字节;进程/容器 cgroup 限额视角)
+             */
+            totalAvailableMemoryBytes?: number | string;
+            /**
+             * Format: int32
+             * @description 进程线程数
+             */
+            threadCount?: number | string;
+            /** @description 磁盘分区列表(就绪分区) */
+            disks?: components["schemas"]["DiskInfo"][];
+        };
         /** @description 设默认应用入参(多应用门户)。 */
         SetDefaultModuleInput: {
             /**
@@ -6003,6 +6993,33 @@ export interface components {
             copyrightUrl?: null | string;
             /** @description 是否启用登录验证码(运行时配置驱动;前端据此决定登录页是否展示验证码)。 */
             captchaEnabled?: boolean;
+            /** @description 是否启用短信验证码免密登录(运行时配置驱动;前端据此决定登录页是否展示短信登录入口)。 */
+            smsLoginEnabled?: boolean;
+        };
+        /** @description 短信二次验证完成登录入参(密码登录抛 40009 信令后,凭挑战 Id + 短信码换令牌) */
+        SmsChallengeLoginInput: {
+            /** @description 挑战票据 Id(取自 40009 信令的 args.challengeId) */
+            challengeId?: string;
+            /** @description 用户收到的短信验证码 */
+            code?: string;
+        };
+        /** @description 短信二次验证重发入参(持有活挑战即已过密码校验,无需图形验证码) */
+        SmsResendInput: {
+            /** @description 挑战票据 Id */
+            challengeId?: string;
+        };
+        /** @description 发码出参:有效期与重发间隔(驱动前端倒计时;刻意不含任何用户信息,防枚举) */
+        SmsSendOutput: {
+            /**
+             * Format: int32
+             * @description 验证码有效期(秒)
+             */
+            expiresSeconds?: number | string;
+            /**
+             * Format: int32
+             * @description 重发最小间隔(秒)
+             */
+            resendSeconds?: number | string;
         };
         /**
          * @description 系统配置表——键值对形式的全局配置项(如站点名称、默认密码策略等),支持按 string? SysConfig.GroupCode 分组管理。
@@ -6019,8 +7036,6 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             remark?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6030,6 +7045,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 字典项表(设计 §5.7 字典模块)。按 string SysDictItem.DictTypeCode 关联所属 SysDictType——
@@ -6044,8 +7061,6 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6055,6 +7070,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 字典类型表(设计 §5.7 字典模块)。一个类型下挂若干 SysDictItem(通过
@@ -6070,8 +7087,6 @@ export interface components {
             sort?: number | string;
             enabled?: boolean;
             remark?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6081,6 +7096,47 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
+        };
+        /**
+         * @description 异常日志(设计 §4)——由 `ExceptionLogFilter` 在未捕获异常(非 `AdminException` 业务异常)冒泡时自动写入。
+         *     记录"哪个接口、什么方法、追踪号、异常类型、消息、堆栈、谁触发的、从哪来"。
+         *     与 SysOpLog/SysLoginLog 一样只增不改、无软删语义,"清空"走硬删。
+         *     只落异常本身(类型/消息/堆栈),绝不落请求响应体——响应体可能含明文口令/令牌(设计 §14)。
+         *     业务失败(AdminException)不进本表——那是可预期的分支,由操作日志的 ResultCode 表达。
+         */
+        SysExceptionLog: {
+            httpMethod?: string;
+            path?: string;
+            /** @description 请求追踪号(`HttpContext.TraceIdentifier`);串起同一请求的诊断日志与本条异常记录 */
+            traceId?: null | string;
+            /** @description 异常类型全名(如 `System.NullReferenceException`);便于按类型统计与筛选 */
+            exceptionType?: string;
+            /** @description 异常消息(截断)。只记消息文本,不含请求/响应体。 */
+            message?: null | string;
+            /** @description 异常堆栈(截断);排障主依据 */
+            stackTrace?: null | string;
+            /**
+             * Format: int64
+             * @description 触发人用户 Id(从当前登录态取,匿名端点为 null;名称按 Id 关联 sys_user,不冗余存)
+             */
+            operatorId?: null | number | string;
+            /** @description 触发人姓名(不落库,分页时按 OperatorId 关联 sys_user 补;查询清软删过滤器,离职用户历史记录仍显示姓名) */
+            operatorName?: null | string;
+            ip?: null | string;
+            userAgent?: null | string;
+            /** Format: date-time */
+            createTime?: string;
+            /** Format: int64 */
+            createUserId?: null | number | string;
+            /** Format: date-time */
+            updateTime?: null | string;
+            /** Format: int64 */
+            updateUserId?: null | number | string;
+            isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 文件记录(设计 §4/§14)。存<b>元数据 + 重写后的存储相对路径</b>,原始文件名仅作展示/下载命名,
@@ -6104,8 +7160,6 @@ export interface components {
             sizeBytes?: number | string;
             /** @description 内容 SHA-256(hex,小写);分片上传落库,供「秒传」按内容去重。单文件上传暂不计算(留 null)。 */
             hash?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6115,6 +7169,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 登录日志(设计 §4)——由 `AuthService` 在登录成功/失败路径写入(§14 安全审计:失败也必须留痕)。
@@ -6139,8 +7195,6 @@ export interface components {
             userAgent?: null | string;
             /** @description 用户姓名——非持久化,分页时按 long? SysLoginLog.UserId 批量回填(失败/账号不存在的行为 null,前端回落账号)。 */
             name?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6150,6 +7204,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 模块/应用表(多应用门户)——一套登录体系下的多个独立子系统。菜单树按模块分区
@@ -6174,8 +7230,6 @@ export interface components {
             sort?: number | string;
             enabled?: boolean;
             remark?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6185,6 +7239,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 系统通知表(设计 §4 消息中心,轮询模型)——管理员发布的消息,可发给全体 / 指定角色 / 指定用户。
@@ -6196,8 +7252,6 @@ export interface components {
             content?: null | string;
             type?: components["schemas"]["NoticeType"];
             receiverType?: components["schemas"]["ReceiverType"];
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6207,6 +7261,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 操作日志(设计 §4)——由 `[OperationLog]` 特性 + 过滤器自动写入,业务代码零感知。
@@ -6247,8 +7303,6 @@ export interface components {
             operatorName?: null | string;
             ip?: null | string;
             userAgent?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6258,6 +7312,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 机构表——组织架构树。前端拿平铺列表自行拼树(`ParentId` 挂靠),
@@ -6277,8 +7333,6 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6288,6 +7342,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 职位表——组织内岗位/职务的字典项(如"经理""专员"),供用户维度的职位归属使用。
@@ -6301,8 +7357,6 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6312,6 +7366,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 角色表(设计 §16)。角色是"权限码集合"的载体:用户挂角色、角色挂菜单(路由权限码),
@@ -6326,8 +7382,6 @@ export interface components {
             sort?: number | string;
             enabled?: boolean;
             remark?: null | string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6337,6 +7391,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 角色数据范围(设计 §16,T3)——每角色一条,描述该角色可见数据的机构维度(DataScopeType)。
@@ -6348,8 +7404,6 @@ export interface components {
             scopeType?: components["schemas"]["DataScopeType"];
             /** @description 自定义机构 Id 列表(逗号分隔),仅 DataScopeType.Custom 时使用。 */
             customOrgIds?: string;
-            /** Format: int64 */
-            id?: number | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -6359,6 +7413,8 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             isDelete?: boolean;
+            /** Format: int64 */
+            id?: number | string;
         };
         /**
          * @description 改个人资料入参:只允许改自己能改的字段(姓名/昵称/性别/手机/邮箱/头像);机构/职位/角色由管理员维护,不在此。

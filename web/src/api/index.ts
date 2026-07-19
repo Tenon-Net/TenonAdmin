@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, SysConfig, SysDictItem, SysDictType, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, ServerInfoOutput, SysConfig, SysDictItem, SysDictType, SysExceptionLog, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -69,6 +69,55 @@ export const authApi = {
     client.POST('/api/v1/auth/login', { body }).then((r) => unwrap<LoginOutput>(r)),
   logout: () => client.POST('/api/v1/auth/logout', {}).then((r) => unwrap<boolean>(r)),
   captcha: () => client.GET('/api/v1/auth/captcha', {}).then((r) => unwrap<{ captchaId: string; svg: string; type?: string }>(r)),
+  /** 短信二次验证:凭密码登录 40009 信令下发的挑战 Id + 短信码完成登录。 */
+  smsChallengeLogin: (body: { challengeId: string; code: string }) =>
+    client.POST('/api/v1/auth/login/sms', { body }).then((r) => unwrap<LoginOutput>(r)),
+  /** 短信二次验证:重发验证码(服务端冷却/日上限,过频抛 40008)。 */
+  smsChallengeResend: (body: { challengeId: string }) =>
+    client.POST('/api/v1/auth/login/sms/resend', { body }).then((r) => unwrap<{ expiresSeconds: number; resendSeconds: number }>(r)),
+  /** 免密登录发码(图形验证码启用时须携带;响应不区分手机号是否存在,防枚举)。 */
+  smsLoginSend: (body: { phone: string; captchaId?: string; captchaCode?: string }) =>
+    client.POST('/api/v1/auth/sms/send', { body }).then((r) => unwrap<{ expiresSeconds: number; resendSeconds: number }>(r)),
+  /** 免密登录:手机号 + 短信码换令牌。 */
+  smsLogin: (body: { phone: string; code: string }) =>
+    client.POST('/api/v1/auth/sms/login', { body }).then((r) => unwrap<LoginOutput>(r)),
+}
+
+export interface ExternalProvider {
+  code: string
+  displayName: string
+  icon?: string | null
+}
+
+export interface ExternalBinding {
+  provider: string
+  displayName?: string | null
+  boundAt: string
+}
+
+// 外部登录 / SSO(批次 D)。登录:providers 点亮按钮 → 顶层导航到 authorizeUrl(后端 302 跳 IdP)→ 回调页 exchange 换令牌。
+// 绑定(个人中心):bindStart 拿授权 URL 跳转 → 同一回调把外部身份绑到当前用户;bindings 查、unbind 解绑。
+export const externalAuthApi = {
+  /** 登录页可用的外部登录方式(启用的);空数组 = 不显 SSO 区。 */
+  providers: () => client.GET('/api/v1/auth/external/providers', {}).then((r) => unwrap<ExternalProvider[]>(r)),
+  /** 发起某 provider 登录的 URL(顶层浏览器导航,不走 fetch —— 后端 302 跳 IdP)。 */
+  authorizeUrl: (code: string) =>
+    `${import.meta.env.VITE_API_BASE ?? ''}/api/v1/auth/external/${encodeURIComponent(code)}/authorize`,
+  /** 一次性票据换令牌(登录回调后);票据无效/过期/已用抛 40014。 */
+  exchange: (ticket: string) =>
+    client.POST('/api/v1/auth/external/exchange', { body: { ticket } }).then((r) => unwrap<LoginOutput>(r)),
+  /** 我的外部账号绑定列表(个人中心)。 */
+  bindings: () => client.GET('/api/v1/auth/external/bindings', {}).then((r) => unwrap<ExternalBinding[]>(r)),
+  /** 发起绑定:返回授权 URL,前端跳转开始 OAuth 往返(回调把身份绑到当前用户)。 */
+  bindStart: (code: string) =>
+    client
+      .POST('/api/v1/auth/external/{provider}/bind', { params: { path: { provider: code } } })
+      .then((r) => unwrap<{ authorizeUrl: string }>(r)),
+  /** 解绑某 provider 的外部账号。 */
+  unbind: (code: string) =>
+    client
+      .DELETE('/api/v1/auth/external/{provider}/binding', { params: { path: { provider: code } } })
+      .then((r) => unwrap<boolean>(r)),
 }
 
 export const dashboardApi = {
@@ -251,6 +300,7 @@ export const configApi = {
           copyright?: string | null
           copyrightUrl?: string | null
           captchaEnabled?: boolean
+          smsLoginEnabled?: boolean
         }>(r),
       ),
   /** 当前生效密码策略(任何登录用户可读);改密页据此展示真实规则清单,免配置读权限。 */
@@ -307,6 +357,38 @@ export const logApi = {
       .then((r) => toPage<SysOpLog>(r)),
   /** 清空操作日志(硬删,不可恢复)。 */
   opClear: () => client.DELETE('/api/v1/sys/log/op', {}).then((r) => unwrap<boolean>(r)),
+  /** 异常日志分页;接口路径模糊 + 异常类型模糊 + 时间范围。 */
+  exceptionPage: (params: { page: number; pageSize: number; path?: string; exceptionType?: string; createTime?: [string, string] | null }) =>
+    client
+      .GET('/api/v1/sys/log/exception/page', {
+        params: {
+          query: {
+            ...pageParams(params),
+            Path: params.path, ExceptionType: params.exceptionType,
+            ...splitRange(params.createTime),
+          },
+        },
+      })
+      .then((r) => toPage<SysExceptionLog>(r)),
+  /** 清空异常日志(硬删,不可恢复)。 */
+  exceptionClear: () => client.DELETE('/api/v1/sys/log/exception', {}).then((r) => unwrap<boolean>(r)),
+}
+
+export const monitorApi = {
+  /** 服务器运行快照(CPU/内存/磁盘/运行时;后端含一次约 500ms 的 CPU 采样)。 */
+  server: () => client.GET('/api/v1/sys/monitor/server', {}).then((r) => unwrap<ServerInfoOutput>(r)),
+}
+
+// 缓存管理:定向失效动作(只清不看——缓存含明文 OTP、键含 PII,故后端无键浏览/取值端点)。flush* 返回被清条数。
+export const cacheApi = {
+  /** 清全部用户的权限/数据范围缓存(返回被清用户数)。 */
+  flushAuth: () => client.POST('/api/v1/sys/cache/flush-auth', {}).then((r) => unwrap<number>(r)),
+  /** 清全部字典项缓存(返回被清字典类型数)。 */
+  flushDict: () => client.POST('/api/v1/sys/cache/flush-dict', {}).then((r) => unwrap<number>(r)),
+  /** 清全部系统配置缓存(返回被清配置项数)。 */
+  flushConfig: () => client.POST('/api/v1/sys/cache/flush-config', {}).then((r) => unwrap<number>(r)),
+  /** 递增门户代际,令所有用户的门户菜单/模块缓存整体失效(返回新代际值)。 */
+  rebuildPortal: () => client.POST('/api/v1/sys/cache/rebuild-portal', {}).then((r) => unwrap<number>(r)),
 }
 
 export const dictApi = {

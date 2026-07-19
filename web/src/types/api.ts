@@ -265,6 +265,45 @@ export interface SysOpLog {
   createTime: string
 }
 
+/** 磁盘分区容量(后端 DiskInfo)。 */
+export interface DiskInfo {
+  name: string
+  totalBytes: number
+  freeBytes: number
+}
+
+/** 服务器运行快照(后端 ServerInfoOutput;进程/主机基础指标)。 */
+export interface ServerInfoOutput {
+  machineName: string
+  osDescription: string
+  frameworkDescription: string
+  processArchitecture: string
+  processorCount: number
+  processUptimeSeconds: number
+  processCpuPercent: number
+  processWorkingSetBytes: number
+  gcHeapBytes: number
+  totalAvailableMemoryBytes: number
+  threadCount: number
+  disks: DiskInfo[]
+}
+
+/** 异常日志行(后端 SysExceptionLog;未捕获异常留痕,只读,分页项已含全字段)。 */
+export interface SysExceptionLog {
+  id: number
+  httpMethod: string
+  path: string
+  traceId?: string | null
+  exceptionType: string
+  message?: string | null
+  stackTrace?: string | null
+  operatorId?: number | null
+  operatorName?: string | null
+  ip?: string | null
+  userAgent?: string | null
+  createTime: string
+}
+
 /** 机构行(后端 SysOrg;平铺,前端 buildTree)。int64 收敛为 number。 */
 export interface SysOrg {
   id: number

@@ -79,8 +79,37 @@ public class AdminRateLimitOptions
 }
 
 /// <summary>
+/// 短信验证码配置(对应 <c>TenonAdmin:Security:SmsOtp</c>,设计 §14 登录加固)。
+/// <para>两个开关是 DB 键(<c>sys.security.mfa.enabled</c> / <c>sys.security.smsLogin.enabled</c>)缺失时的兜底,
+/// 运行时以 DB 配置为准(同验证码开关成法);数值参数为部署期配置(同验证码 TTL 成法)。</para>
+/// </summary>
+public class AdminSmsOtpOptions
+{
+    /// <summary>短信二次验证兜底开关(密码过后再验短信码;仅对绑定了手机号的用户生效,默认关)</summary>
+    public bool MfaEnabled { get; set; }
+
+    /// <summary>短信验证码免密登录兜底开关(手机号+码直接登录,默认关)</summary>
+    public bool LoginEnabled { get; set; }
+
+    /// <summary>验证码位数(纯数字)</summary>
+    public int CodeLength { get; set; } = 6;
+
+    /// <summary>验证码有效期(秒);也是 MFA 挑战票据的有效期</summary>
+    public int TtlSeconds { get; set; } = 300;
+
+    /// <summary>同一手机号两次发送的最小间隔(秒)</summary>
+    public int ResendSeconds { get; set; } = 60;
+
+    /// <summary>单个验证码允许的错误尝试次数,达到即作废该码</summary>
+    public int MaxAttempts { get; set; } = 5;
+
+    /// <summary>单个手机号每日发送上限(防短信轰炸与费用失控)</summary>
+    public int DailySendLimitPerPhone { get; set; } = 10;
+}
+
+/// <summary>
 /// 安全配置(对应 <c>TenonAdmin:Security</c> 节,设计 §3.2/§14)。
-/// v1 落 <see cref="Session"/> + <see cref="LoginLock"/> + <see cref="Captcha"/> + <see cref="RateLimit"/>。
+/// v1 落 <see cref="Session"/> + <see cref="LoginLock"/> + <see cref="Captcha"/> + <see cref="RateLimit"/> + <see cref="SmsOtp"/>。
 /// </summary>
 public class AdminSecurityOptions
 {
@@ -95,6 +124,9 @@ public class AdminSecurityOptions
 
     /// <summary>请求限流策略(按 IP,认证端点更严,见 <see cref="AdminRateLimitOptions"/>)</summary>
     public AdminRateLimitOptions RateLimit { get; set; } = new();
+
+    /// <summary>短信验证码策略(二次验证/免密登录,默认全关,见 <see cref="AdminSmsOtpOptions"/>)</summary>
+    public AdminSmsOtpOptions SmsOtp { get; set; } = new();
 
     /// <summary>
     /// 新建用户 / 重置密码时未显式给定密码的默认初始口令(对应 <c>TenonAdmin:Security:DefaultInitialPassword</c>)。

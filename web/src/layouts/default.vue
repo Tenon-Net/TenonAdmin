@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterView } from 'vue-router'
 import { NWatermark, NDrawer, NDrawerContent, NButton } from 'naive-ui'
 import { Icon } from '@iconify/vue'
@@ -10,6 +10,7 @@ import { useUserStore } from '@/stores/user'
 import { useLayoutMenu } from '@/composables/useLayoutMenu'
 import { useTabsStore } from '@/stores/tabs'
 import { useSite } from '@/composables/useSite'
+import { useRealtime } from '@/composables/useRealtime'
 import AppHeader from './AppHeader.vue'
 import SideNav from './components/SideNav.vue'
 import TabsBar from './TabsBar.vue'
@@ -20,6 +21,11 @@ const user = useUserStore()
 const tabs = useTabsStore()
 const { site } = useSite()
 const { menuOptions, l1Options, l2Options, selectedL1, activeKey, onSelect, onSelectL1 } = useLayoutMenu()
+
+// 实时通知(SignalR):鉴权外壳挂载即连、卸载即断。后端未开启实时时连接静默失败,退回轮询/惰性 401(纯增强)。
+const { start: startRealtime, stop: stopRealtime } = useRealtime()
+onMounted(startRealtime)
+onUnmounted(stopRealtime)
 
 const isMobile = useBreakpoints(breakpointsTailwind).smaller('md')
 const mobileOpen = ref(false)

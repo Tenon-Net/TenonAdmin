@@ -3,5 +3,8 @@
     <ProjectReference Include="..\..\src\TenonAdmin\TenonAdmin.csproj" />
     <!-- 可选包:多副本部署的前置条件(见 Program.cs)。不配 Cache:Provider=Redis 时不生效。 -->
     <ProjectReference Include="..\..\src\TenonAdmin.Caching.Redis\TenonAdmin.Caching.Redis.csproj" />
+    <!-- 可选卫星包:外部登录 / SSO(企业微信 / 钉钉)。不配对应配置节时是空操作,不点亮按钮(见 Program.cs)。 -->
+    <ProjectReference Include="..\..\src\TenonAdmin.Auth.WeCom\TenonAdmin.Auth.WeCom.csproj" />
+    <ProjectReference Include="..\..\src\TenonAdmin.Auth.DingTalk\TenonAdmin.Auth.DingTalk.csproj" />
   </ItemGroup>
 </Project>

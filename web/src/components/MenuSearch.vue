@@ -6,6 +6,7 @@ import { Icon } from '@iconify/vue'
 import { onKeyStroke } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useMenuFlat, type MenuLeaf } from '@/composables/useMenuFlat'
+import { isHttpUrl } from '@/utils/url'
 
 type Hit = MenuLeaf & { display: string }
 
@@ -40,7 +41,10 @@ watch(show, (v) => {
 })
 
 function go(item?: Hit) {
-  if (item) router.push(item.path)
+  if (item) {
+    if (isHttpUrl(item.path)) window.open(item.path, '_blank', 'noopener,noreferrer')
+    else router.push(item.path)
+  }
   show.value = false
 }
 

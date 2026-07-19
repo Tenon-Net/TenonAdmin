@@ -25,6 +25,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 |---|---|---|
 | `IPasswordHasher` | `Pbkdf2PasswordHasher` | 换 bcrypt/argon2 |
 | `ICacheProvider` | `MemoryCacheProvider` | 已有 Redis 包可直接用 |
+| `ISmsSender` | `LoggingSmsSender`(码写日志) | 接真实短信厂商(阿里云/腾讯云),按 purpose 映射模板 |
 | `IFileStorage` | `LocalFileStorage` | 换 OSS/S3 |
 | `IAuthService` | `AuthService` | 定制登录流程 |
 | `IDataScopeProvider` | `DataScopeProvider` | 定制数据范围规则 |
@@ -43,8 +44,8 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 public class MyAuthService(
     IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens,
     ISessionService sessions, ILogService logService, ILoginLockService loginLock,
-    ICaptchaService captcha, ISecurityPolicyProvider policy)
-    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy)
+    ICaptchaService captcha, ISecurityPolicyProvider policy, ISmsOtpService smsOtp)
+    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp)
 {
     protected override LoginOutput BuildLoginOutput(SysUser user, TokenPair pair)
     {
@@ -151,6 +152,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 | 测试 | 验证的机制 |
 |---|---|
 | `ReplaceService_ShouldUseUserImplementation` | DI 替换 |
+| `ReplaceSmsSender_ShouldUseUserImplementation` | DI 替换(短信通道) |
 | `OverrideAuthStep_ShouldAffectLoginFlow` | 子类覆写 |
 | `DisabledModule_ShouldRemoveBuiltInController` | 模块禁用 |
 | `CustomController_ShouldOwnSameRouteAfterModuleDisabled` | 路由接管 |

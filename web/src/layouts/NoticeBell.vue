@@ -11,6 +11,7 @@ import { Icon } from '@iconify/vue'
 import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { noticeApi } from '@/api'
+import { noticeBus } from '@/composables/useRealtime'
 import { NoticeType, type NoticeMineItem } from '@/types/api'
 import MarkdownView from '@/components/MarkdownEditor/MarkdownView.vue'
 import { translateError } from '@/utils/error'
@@ -99,6 +100,9 @@ function snippet(md?: string | null) {
 // 短时间戳(本地,YYYY-MM-DD HH:mm)。ponytail: 够看,要"3 分钟前"再引 formatTimeAgo。
 const shortTime = (iso: string) => (iso ?? '').replace('T', ' ').slice(0, 16)
 
+// 双腿:实时推送到达即刷新未读(SignalR 开启时,即时);30s 轮询兜底(实时关闭/连接掉线时)。
+// VueUse 的 useEventBus.on 在组件卸载时自动退订。
+noticeBus.on(() => { fetchUnread() })
 useIntervalFn(fetchUnread, 30000)
 fetchUnread()
 </script>

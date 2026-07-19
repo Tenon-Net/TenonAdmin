@@ -9,6 +9,7 @@ export interface SiteInfo {
   copyright: string
   copyrightUrl: string
   captchaEnabled: boolean
+  smsLoginEnabled: boolean
 }
 
 // 版本号是构建期常量(vite.config 的 define 注入 package.json 的 version),不走后端配置。
@@ -22,6 +23,7 @@ const site = reactive<SiteInfo>({
   copyright: '',
   copyrightUrl: '',
   captchaEnabled: false,
+  smsLoginEnabled: false,
 })
 
 let inflight: Promise<void> | null = null
@@ -36,6 +38,7 @@ export function loadSite(force = false): Promise<void> {
       site.copyright = s.copyright ?? ''
       site.copyrightUrl = s.copyrightUrl ?? ''
       site.captchaEnabled = !!s.captchaEnabled
+      site.smsLoginEnabled = !!s.smsLoginEnabled
     })
     .catch(() => {
       // 拉取失败保留内置默认(title=TenonAdmin),不阻塞登录/渲染

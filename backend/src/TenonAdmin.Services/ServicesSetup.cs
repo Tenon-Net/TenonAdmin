@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
 
@@ -32,6 +33,25 @@ public static class ServicesSetup
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ICaptchaProvider, MathCaptchaProvider>());
         services.TryAddScoped<ICaptchaService, CaptchaService>();   // 签发按配置选型 + 一次性校验
 
+        // 短信验证码(§14 登录加固):OTP 签发/校验 + MFA 挑战;发送通道默认日志实现(内核零厂商 SDK),
+        // 消费方前置注册真实 ISmsSender(阿里云/腾讯云等)即接管
+        services.TryAddSingleton<ISmsSender, LoggingSmsSender>();
+        services.TryAddScoped<ISmsOtpService, SmsOtpService>();
+
+        // 邮件通道(§14 投递通道,同 ISmsSender 成法):默认日志实现(开发期);配了 SMTP 主机则用内置 SmtpEmailSender;
+        // 消费方前置注册真实 IEmailSender(MailKit / 云厂商 API)即接管(TryAdd 前置替换)。为后续邮件 OTP/通知扇出铺路。
+        services.TryAddSingleton<IEmailSender>(sp =>
+        {
+            var email = sp.GetRequiredService<AdminEmailOptions>();
+            return string.IsNullOrWhiteSpace(email.Host)
+                ? new LoggingEmailSender(sp.GetRequiredService<ILogger<LoggingEmailSender>>())
+                : new SmtpEmailSender(email, sp.GetRequiredService<ILogger<SmtpEmailSender>>());
+        });
+
+        // 实时推送通道(§14 实时通知):默认空操作实现(关闭实时时业务照调不误)。开启 TenonAdmin:Realtime:Enabled 后
+        // AspNetCore 层前置注册基于 SignalR 的真实现即接管(零新增 NuGet,SignalR 属共享框架);消费方可注册自有通道整体替换。
+        services.TryAddSingleton<IRealtimePublisher, NoopRealtimePublisher>();
+
         // 会话与刷新令牌(§15):登录建会话、每请求校验、刷新轮换+复用检测、登出/强退
         services.TryAddScoped<ISessionService, SessionService>();
 
@@ -50,6 +70,18 @@ public static class ServicesSetup
 
         // 数据范围解析(§6 招牌能力,T3):合并用户多角色范围,结果按用户缓存
         services.TryAddScoped<IDataScopeProvider, DataScopeProvider>();
+
+        // 密码历史防重用(§14):开关 sys.security.password.historyCount(默认 0=关);改密/重置挂点调用
+        services.TryAddScoped<IPasswordHistoryService, PasswordHistoryService>();
+
+        // 服务器监控(§4 运维):进程/主机基础指标,纯 BCL 无依赖
+        services.TryAddScoped<IMonitorService, MonitorService>();
+
+        // 缓存管理(§4 运维):管理员定向失效动作(清授权/字典/配置缓存、重建门户代际);只清不看(缓存含明文 OTP、键含 PII)
+        services.TryAddScoped<ICacheAdminService, CacheAdminService>();
+
+        // 外部登录 / SSO 绑定(批次 D):sys_user_external 增删查 + 运营配置读取(启用/未绑定策略/开户默认角色·机构)
+        services.TryAddScoped<ISysUserExternalService, SysUserExternalService>();
 
         // 组织模块(§4,T2):用户 / 机构(树)/ 职位 —— Scoped,与仓储一致
         services.TryAddScoped<IUserService, UserService>();

@@ -67,4 +67,7 @@ public record SiteInfoOutput
 
     /// <summary>是否启用登录验证码(运行时配置驱动;前端据此决定登录页是否展示验证码)。</summary>
     public bool CaptchaEnabled { get; init; }
+
+    /// <summary>是否启用短信验证码免密登录(运行时配置驱动;前端据此决定登录页是否展示短信登录入口)。</summary>
+    public bool SmsLoginEnabled { get; init; }
 }

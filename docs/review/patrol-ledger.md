@@ -1,12 +1,32 @@
 # 巡检台账
 
-last-seen: bb199f6
-last-tree: c658ff1
+last-seen: c32d29c
+last-tree: 021743c
 dry-streak: 0
+
+<!-- last-tree 哈希法第 23 轮修正:旧法 `git ls-files -s <paths>|hash-object` 只反映索引/HEAD 树、对未暂存工作区改动不敏感(纯 worktree 改动会被误判无变更而漏扫)。新法内容敏感:`{ git status --porcelain=v1 -- P; git diff HEAD -- P; git ls-files -o --exclude-standard -- P|xargs git hash-object; }|git hash-object --stdin`(P=backend/src web/src)。021743c 为新法值,与旧法 1a5538c 不可比。 -->
 
 ## 待扫
 
-<!-- 空:i18n 扩展接缝(locales/index.ts + ext/README.md + index.spec.ts)已于 a87da64/bb199f6 提交,本轮(19)以已提交态复核合规、出队。真实代码全扫完。等新提交(last-seen bb199f6 之后)或新工作区变更(last-tree c658ff1 变化)入队。 -->
+<!-- 第 23 轮:SMS OTP/MFA 全栈特性在工作区落地(porcelain 21 文件,全未提交·全避让)。入队全部,本轮取后端队首 5(ISmsSender/AuthController/CacheKeys/ErrorCode/AdminSecurityOptions)扫毕移除,余 16 如下(仍全避让;真正扫描待其提交后由 committed 门控重入队)。 -->
+后端(10,避让):
+- backend/src/TenonAdmin.Services/Auth/AuthService.cs
+- backend/src/TenonAdmin.Services/Auth/IAuthService.cs
+- backend/src/TenonAdmin.Services/Auth/LoginModels.cs
+- backend/src/TenonAdmin.Services/Config/ConfigModels.cs
+- backend/src/TenonAdmin.Services/Config/ConfigService.cs
+- backend/src/TenonAdmin.Services/Seed/ConfigSeed.cs
+- backend/src/TenonAdmin.Services/ServicesSetup.cs
+- backend/src/TenonAdmin.Services/Sms/ISmsOtpService.cs
+- backend/src/TenonAdmin.Services/Sms/LoggingSmsSender.cs
+- backend/src/TenonAdmin.Services/Sms/SmsOtpService.cs
+前端(6,避让):
+- web/src/api/index.ts
+- web/src/api/schema.d.ts
+- web/src/composables/useSite.ts
+- web/src/locales/en-US.ts
+- web/src/locales/zh-CN.ts
+- web/src/views/login/LoginForm.vue
 
 ## 待裁决
 
@@ -69,3 +89,24 @@ menu/index.vue 主表对每个动作严格 v-auth/hasPerm(增/改/删/启停,lin
 ### 第 18 轮 — 工作区门控 · 用户扩展接缝验收测试已收尾:api/sample.ts、types/sample.ts、views/sample/、ext.integration.spec.ts 4 个 SCRATCH 全删 → 幽灵移除出队。worktree 退回原始已扫稳定态(hash 45c5d3f;index.ts/ext//index.spec.ts 已扫且未变,不重入队)。last-seen→127412d、last-tree→45c5d3f、dry-streak 保持 0(本轮队列非空、做了幽灵清理)。队列清空,无代码扫描、无闸门。NEXT: 队列空 → 下轮 dry-streak 起(退避 min(3600,900·2^n));真实代码零待扫,等新提交或新工作区变更。
 
 ### 第 19 轮 — 前端规范轴 + 契约轴 · 扫了 locales/index.ts / locales/index.spec.ts / locales/ext/README.md(i18n 扩展接缝,第 17 轮曾以工作区避让态验过,现于 a87da64 提交后以已提交态复核)· 全合规(index.ts:withExt/deepMerge glob 接缝——§2.1 上游自留地基础设施、导出 withExt 有站内调用方非死代码、深合并 spread 不改入参;§2.7 无可见文本;契约轴:接缝只合并不新增键、ext/ 现仅 README〔sampleDoc 已删〕→ glob 空、withExt 原样返回、606 键零漂移;index.spec.ts 8 例覆盖已绿;ext/README `[MsgKey]` 去前缀对齐指引准确)。触发源:用户令我先提交工作区那批避让文件(feat a87da64 前端接缝 + docs bb199f6 文件归属文档),门控把其中 3 个 web/src 文件入队。全合规无发现、无机械修。闸门:提交前已跑 npm test 39/39 + typecheck 无错(绿)。last-seen→bb199f6、last-tree→c658ff1、dry-streak 归 0(本轮队列非空、扫了真实代码)。队列出清。NEXT: 队列空 → 下轮 dry-streak 起(退避 min(3600,900·2^n));真实代码零待扫,等新提交或新工作区变更。
+
+### 第 20 轮 — 空转轮 · 门控:bb199f6..HEAD 对 backend/src·web/src 差异为空、工作区干净、哈希仍 c658ff1。区间内唯一新提交 85cf36e 为纯文档站(site/guide getting-started/sync-fork degit 快照上手方式),不碰代码故无入队。队列空 → dry-streak 0→1,last-seen→85cf36e、last-tree 保持 c658ff1。不扫代码、不跑闸门。退避 min(3600,900·2¹)=1800s。队列剩 0。NEXT: 1800s 后重跑门控;仍无 backend/src·web/src 新增则 dry-streak→2(退避 3600s 封顶);等真实代码提交或工作区变更破空转。
+
+### 第 21 轮 — 空转轮 · 门控:85cf36e..HEAD(=b322c10)对 backend/src·web/src 差异为空、工作区干净、哈希仍 c658ff1。区间三提交均不碰代码:67741fe(round-20 台账)、7b298cb(chore(release) 0.1.2 发版准备——changelog + web 版本号,版本号走 package.json 经 Vite define 注入前端、非 web/src 源码)、b322c10(发版 runbook 文档)。队列空 → dry-streak 1→2,last-seen→b322c10、last-tree 保持 c658ff1。不扫代码、不跑闸门。退避 min(3600,900·2²)=3600s(已封顶)。队列剩 0。NEXT: 3600s 后重跑门控;dry-streak≥2 起退避恒封顶 3600s(streak 仍会 3、4… 递增,退避不变);等真实代码提交或工作区变更即归 0 破空转。注:0.1.2 已切版但零代码改动(纯文档 + 版本元数据),巡检面无新增。
+
+### 第 22 轮 — 后端规范轴 + ponytail · 扫了 BaseEntity.cs / SqlSugarSetup.cs〔已提交 5273588〕/ CacheKeys.cs / ErrorCode.cs / AdminSecurityOptions.cs〔工作区·避让记账〕· 全合规。门控破空转:b322c10..5273588 已提交 2(PrimaryId 特性)+ 工作区 4(SMS/MFA 半成品),dry-streak 2→0、last-seen→5273588、last-tree→1a5538c。
+  · 已提交 PrimaryId 基类(#8):抽出仅雪花主键基类给无审计明细/子表,BaseEntity:PrimaryId,AOP 匹配 BaseEntity.Id→PrimaryId.Id(同串 "Id",BaseEntity:PrimaryId 故老实体全覆盖 + 明细表插入自动填号,无回归);类级 XML + 取舍(IRepository/ISeedData 仍约束 BaseEntity、明细经 ISqlSugarClient 随主表读写)完整。PrimaryId.Id 无 XML summary 但沿本文件既有列注释惯例(全部列走 SugarColumn.ColumnDescription、零 XML summary)→ 与 5 兄弟列一致非 round-1 式孤例,合规不报。ponytail「暂放 SqlSugar 层待 Core POCO 化再迁」天花板本 diff 未触达、静默。
+  · 工作区(避让·不改):短信 OTP/MFA 登录加固半成品——CacheKeys 加 sms/mfa 键(冒号命名空间 + 日期编键自过期,合 §1.8)、ErrorCode 加 40009-40012(smsCodeRequired/Wrong/Expired/smsLoginDisabled 均带 [MsgKey])、AdminSecurityOptions 加 AdminSmsOtpOptions(DB 键 mfa.enabled/smsLogin.enabled 兜底 + 部署期数值,合验证码成法);孤立看均合规,但服务/控制器/前端 i18n 均未落。
+  · 无机械修、无新判断题 → 记账轮不跑闸门。队列剩 1(ISmsSender.cs 未扫,避让)。
+  · NEXT【契约轴 WATCH·SMS/MFA】特性一旦提交,复扫 ErrorCode/AdminSecurityOptions 时必验:① 4 个新错误码 error.auth.{smsCodeRequired,smsCodeWrong,smsCodeExpired,smsLoginDisabled} 的 zh-CN+en-US i18n 键补齐(ErrorCodeLocaleConsistencyTests 会当场红,漏则机械题);② 新 DB 配置键 sys.security.mfa.enabled / sys.security.smsLogin.enabled 若前端 SecurityConfig.vue 加了开关须字对齐(参轮 13 成法)。下轮:扫 ISmsSender.cs + 届时新提交入队的 SMS 服务/控制器文件。
+
+### 第 23 轮 — 后端规范轴 + ponytail(全避让·记账轮)· 扫了 ISmsSender.cs / AuthController.cs / CacheKeys.cs / ErrorCode.cs / AdminSecurityOptions.cs〔全工作区·避让〕· SMS OTP/MFA 全栈特性在工作区落地(porcelain 21 文件全未提交)。
+  · **哈希法修正**(重要):发现旧 last-tree 法 `git ls-files -s|hash-object` 只反映索引/HEAD 树、对未暂存工作区改动不敏感——本轮正是纯 worktree 变更(自 5273588 无新代码提交、仅台账提交 c32d29c),旧法读数不变(1a5538c)会把整个 SMS 特性误判为「无变更」而漏扫。改用内容敏感法(见头部注释),新值 last-tree→021743c。以 porcelain 文件清单为权威入队(规则原文「把结果里的文件路径追加进待扫」),规避该盲区。
+  · **门控**:committed 5273588..c32d29c 对代码空(仅台账);worktree porcelain 21 文件全入队。last-seen→c32d29c、last-tree→021743c、dry-streak 保持 0。
+  · **本轮 5 文件(避让·记账)**:ISmsSender.cs = 教科书可替换性(抽象在 Core、零厂商 SDK 守运行时依赖纪律、TryAdd 前置替换有文档、LoggingSmsSender 兜底),合规;AuthController 加 4 个 [AllowAnonymous] 端点(login/sms、login/sms/resend、sms/send、sms/login);CacheKeys/ErrorCode/AdminSecurityOptions 见轮 22 已录(sms/mfa 键、40009-40012、AdminSmsOtpOptions)。均合规但半成品。
+  · **WATCH 收敛/新增**(供提交后 committed 复扫):
+     - [已判 N/A] 4 端点全 [AllowAnonymous] → 绕过 [RolePermission],无需菜单种子权限码(同现有 /auth/login)。
+     - [新] ConfigSeed 加种子 Id 23/24(sys.security.mfa.enabled / smsLogin.enabled,Security 组默认 false)→ 验无撞号(SeedIdRangeTests 兜底)。
+     - [进行中] i18n:zh-CN 已加 login.{smsLogin,smsCode,smsCodePlaceholder,smsRequired,smsSent,mfaTitle,mfaSub} + error.auth.{smsCodeRequired,smsCodeWrong,smsCodeExpired,smsLoginDisabled}。committed 复扫验 en-US 双语对齐 + error 键与 [MsgKey] 字面一致。
+     - [新] 4 匿名发信端点是费用/滥用面 → 验 SmsCooldown/SmsDailyCount/MaxAttempts/RateLimit 守卫齐全(CacheKeys 已备键)。
+  · 无机械修、无新判断题 → 记账轮不跑闸门。队列剩 16(后端 10 + 前端 6,全避让)。NEXT: 特性仍在工作区churn,继续按边扫队首后端 5(全避让·记账);待作者提交后 committed 门控自动重入队做真正扫描 + 逐条核 WATCH。

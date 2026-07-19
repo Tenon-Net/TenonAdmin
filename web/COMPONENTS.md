@@ -23,13 +23,13 @@ tenon 内接入约定:
 - **主从选中(dict)**:`:active-row-key` + `@row-click` 做行高亮/选中(勿再 `:deep(> td)`);行内交互控件(开关/按钮)的 render 里要 `stopPropagation`,否则点它会冒泡触发 `@row-click`。
 - **窄栏搜索(dict)**:`:search="{ layout: 'inline' }"` 无卡片单行,配合列 `search: true`。
 - **排序(user)**:列写 `sorter: true` → 点表头把 `{ sortField, sortOrder }` 并进 fetcher;**api 层要把它们映射成后端 `SortField/SortOrder` query**(见 `userApi.page`/`positionApi.page`)。后端按实体列白名单安全排序(非法字段忽略回退默认,`PagedListExtensions.OrderBySafe`),字段名 = 实体属性名(大小写不敏感)。
-- **行拖拽(position)**:`row-draggable` + `drag-handle=".drag-handle"`(手柄列避开行内开关/按钮冲突)+ `@row-drag-sort="(e)=> positionApi.reorder(e.reordered.map(r=>r.id)).then(refresh)"`。后端 `POST /sys/position/reorder` 按序赋 Sort;sortablejs 懒加载(独立 chunk)。
+- **行排序(position)**:岗位顺序用**可编辑 `Sort` 字段**——编辑弹窗一个 `n-input-number`,列表默认 `OrderBy(Sort)`,用户表单的岗位下拉也继承此序。ProTable 本身有 `row-draggable`(`drag-handle` + `@row-drag-sort`,sortablejs 懒加载)这个能力,但本项目**未接线**:没有 `positionApi.reorder`,后端也无 `POST /sys/position/reorder` 端点。要真拖拽排序,需先补该端点(按序赋 Sort)再启用手柄——对一个极少改动的小列表,数字框已够,故未做(见 `docs/refinement-ledger.md` E1)。
 - **搜索折叠**:`:search="{ collapsible: true }"`(仅 grid 布局,搜索项多时才用)。
 - **逃生口 slot**:`#toolbar-right`(工具栏右侧)、`#header-{key}`、`#empty`、`#pagination-prefix`;全局默认(align/pageSizes/emptyText/tag 等)也走 `PRO_TABLE_DEFAULTS`,免为小调整发包。
 - **已能用(透传)**:列宽拖拽(列 `resizable`)、虚拟滚动(`:virtual-scroll`+`max-height`)、合计行(`:summary`)、合并单元格(列 `rowSpan/colSpan`)——经 attrs/列透传,无需新 API。
-- **本地联调**:`NPT_LOCAL=1 npm run dev` 直连兄弟仓库源码(见 vite.config.ts),回路同图标包(改 → 发补丁版 → bump)。排序/拖拽/折叠需 `^0.3.1`(0.3.0 的行拖拽在 fetcher 模式下**从不生效**:Sortable 只在 onMounted 绑一次,而空表时 naive 根本没渲染 tbody);排序/拖拽依赖后端(`SortField/SortOrder` + position `reorder`),改后端后 `npm run gen:api` 重生成 schema。
+- **本地联调**:`NPT_LOCAL=1 npm run dev` 直连兄弟仓库源码(见 vite.config.ts),回路同图标包(改 → 发补丁版 → bump)。排序/拖拽/折叠这些能力需 `^0.3.1`(0.3.0 的行拖拽在 fetcher 模式下**从不生效**:Sortable 只在 onMounted 绑一次,而空表时 naive 根本没渲染 tbody);列排序依赖后端 `SortField/SortOrder`(行拖拽是纯前端能力,本项目未接线,见上),改后端后 `npm run gen:api` 重生成 schema。
 
-范例页:`src/views/system/user/index.vue`(标准列表 + 排序)、`position`(行拖拽)、`org`/`menu`(树)、`dict`(主从 + inline 搜索)。
+范例页:`src/views/system/user/index.vue`(标准列表 + 排序)、`position`(可编辑 Sort 排序)、`org`/`menu`(树)、`dict`(主从 + inline 搜索)。
 
 ## 自研通用组件索引
 
@@ -49,6 +49,7 @@ tenon 内接入约定:
 | MarkdownEditor / MarkdownView | 通知公告 Markdown 编辑/只读渲染(封 md-editor-v3);存 Markdown 纯文本,跟随明暗主题;通知页已落地 | `src/components/MarkdownEditor/README.md` |
 | Chart(+ LineChart/PieChart) | ECharts 封装(封 vue-echarts);自动跟随明暗主题/accent、按需注册图种、自带 autoresize;预设传 data、BaseChart 传 option;工作台已落地 | `src/components/Chart/README.md` |
 | CodeBlock | 代码/JSON 只读展示;NCode + `hljs/lib/core` 按需注册(现仅 json),复制按钮 + 自动换行,配色随 Naive 主题;操作日志详情已落地 | `src/components/CodeBlock/README.md` |
+| DetailPage | 详情页外壳:返回 + 标题 + actions/body 插槽;`@back` 交父级(路由态关标签回列表 / 就地态清状态),补偿非菜单详情路由的空面包屑;配 `useTabTitle` 设动态标签标题。用法/骨架见 `skills/create-page-variant.md` 变体四 | `src/components/DetailPage/README.md` |
 
 字典三件套的数据基座是 `src/stores/dict.ts`(按 typeCode 缓存 + 并发去重;字典管理操作后调 `invalidate()`),页面拿原始选项用 `useDictOptions(typeCode)`。范例页:`src/views/system/menu/index.vue`、`module/index.vue`(FormContainer + useConfirm + StatusSwitch 完整落地)。
 
@@ -62,6 +63,17 @@ tenon 内接入约定:
   ```
 - `confirm({ content, title?, type?, action, successMsg? }) => Promise<boolean>`:先弹 dialog、**action 在 dialog 挂起期间执行**(确认钮 loading,执行中锁死取消/Esc/遮罩,防连点重复执行);给不适合内联的重操作(批量删除等)。取消/关闭/Esc/失败均 false;`successMsg: false` 关掉成功 toast。
 - `ask({ content, title?, type? }) => Promise<boolean>`:仅确认不执行,给需要自管后续流程的组件用(StatusSwitch 即基于它)。Esc/遮罩/取消均 false。
+
+## useTabTitle(详情页动态标签标题,composable)
+
+`src/composables/useTabTitle.ts`,**仅限 setup 中调用**。`const setTabTitle = useTabTitle()`,详情页数据加载后 `setTabTitle(记录名)` 把当前标签标题改成记录名(如「张三」);内部走 `tabsStore.setTitle` → 置 `titleFixed`,`addTab` 复访不再用静态 `meta.title` 覆盖,标题随 tab 持久化、F5 无闪复原。**就地态(列表页内切换详情)别调用**——那时 `route.path` 是列表标签,会改错标签。
+
+## 外链 / iframe 菜单(约定式,零后端字段新增)
+
+菜单节点(`Type=Menu`)复用现有 `path`/`component` 字段承载,判据是 `isHttpUrl`(`src/utils/url.ts`):
+- **外链**:`path` 填 `http(s)://…`、`component` 留空 → 不建路由(`useAuthMenu.buildRoutesForModule` 跳过),点击时 `window.open` 新窗口(`useLayoutMenu.onSelect/onSelectL1` + `MenuSearch.go` 各有 `isHttpUrl` 分支)。
+- **内嵌 iframe**:`path` 填内部路径(如 `/embed/docs`)、`component` 填 `http(s)://…` → 注册通用视图 `views/embed/iframe.vue`,URL 进 `meta.iframeSrc`,keep-alive 顺带保住 iframe 状态。
+- 菜单管理表单在页面类型下给出 `menu.linkHint` 说明;seed 里同理(`path`/`component` 填 URL 即可)。后端实体/枚举/种子结构一概未动。
 
 ## 数字动画 / 水印(用 Naive 内建,不自研)
 

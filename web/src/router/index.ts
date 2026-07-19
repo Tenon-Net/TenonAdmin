@@ -3,10 +3,22 @@ import { staticRoutes } from './routes'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
+import { loadingBar } from '@/lib/loadingBar'
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: staticRoutes,
+})
+
+// 路由加载进度条:懒加载 chunk 与 F5 重建菜单(enterInitial)期间给出反馈。
+router.beforeEach(() => {
+  loadingBar.start()
+})
+router.afterEach(() => {
+  loadingBar.finish()
+})
+router.onError(() => {
+  loadingBar.error()
 })
 
 // 动态路由名登记,用于登出/切应用时精确移除。

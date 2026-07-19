@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 可选卫星包:企业微信扫码授权登录。装它并在 AddTenonAdmin() 前调 AddTenonAdminWeComAuth 即点亮登录页企业微信入口。
+       只引用 Core 契约层 + Microsoft.*(裸 HttpClient 对接厂商 API);核心四包不反向引用本包,独立发包节奏。 -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>TenonAdmin 企业微信登录可选包:实现 IExternalAuthProvider(企业微信扫码授权登录),裸 HttpClient 对接企业微信 API。仅依赖 Core 契约层 + Microsoft.*。</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TenonAdmin.Core\TenonAdmin.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+</Project>

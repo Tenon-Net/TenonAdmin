@@ -86,27 +86,30 @@ public static class SqlSugarSetup
                     switch (info.OperationType)
                     {
                         case DataFilterType.InsertByObject:
-                            // Id 未指定(=0)→ 填雪花号;种子等显式指定的 Id 原样保留
-                            if (info is { PropertyName: nameof(BaseEntity.Id), EntityValue: BaseEntity { Id: 0 } })
+                            // Id 未指定(=0)→ 填雪花号;种子等显式指定的 Id 原样保留。
+                            // 按 PrimaryId 匹配(而非 BaseEntity):BaseEntity : PrimaryId,故老实体一并覆盖,
+                            // 且明细/子表(仅继承 PrimaryId,无审计字段,#8)插入时同样自动获得雪花 Id。
+                            if (info is { PropertyName: nameof(PrimaryId.Id), EntityValue: PrimaryId { Id: 0 } })
                                 info.SetValue(idGen.NextId());
                             // CreateTime 未指定 → 填当前时间
-                            else if (info is { PropertyName: nameof(BaseEntity.CreateTime), EntityValue: BaseEntity { CreateTime: var ct } } && ct == default)
+                            else if (info is { PropertyName: nameof(AuditEntity.CreateTime), EntityValue: AuditEntity { CreateTime: var ct } } && ct == default)
                                 info.SetValue(time.GetLocalNow().DateTime);
                             // CreateUserId 未指定 → 填当前登录用户(系统上下文为 null 则留空,不硬塞)
-                            else if (info is { PropertyName: nameof(BaseEntity.CreateUserId), EntityValue: BaseEntity { CreateUserId: null } } && currentUser.UserId is { } insUid)
+                            else if (info is { PropertyName: nameof(AuditEntity.CreateUserId), EntityValue: AuditEntity { CreateUserId: null } } && currentUser.UserId is { } insUid)
                                 info.SetValue(insUid);
-                            // CreateOrgId 未指定(仅 DataEntity 有此列)→ 填当前用户归属机构(数据范围锚点,§6);
+                            // CreateOrgId 未指定(实现 IOrgScoped 的实体有此列:DataEntity / OrgAuditEntity)→ 填当前用户归属机构(数据范围锚点,§6);
                             // 无机构上下文(系统/无 org 用户)则留空。缺此填充则机构维度数据范围对业务表恒 0 行。
-                            else if (info is { PropertyName: nameof(DataEntity.CreateOrgId), EntityValue: DataEntity { CreateOrgId: null } } && currentUser.OrgId is { } insOrgId)
+                            // 按接口而非 DataEntity 基类匹配,故不软删的机构实体(OrgAuditEntity)同样自动填充。
+                            else if (info is { PropertyName: nameof(IOrgScoped.CreateOrgId), EntityValue: IOrgScoped { CreateOrgId: null } } && currentUser.OrgId is { } insOrgId)
                                 info.SetValue(insOrgId);
                             break;
 
                         case DataFilterType.UpdateByObject:
                             // 每次整行更新都刷新 UpdateTime
-                            if (info is { PropertyName: nameof(BaseEntity.UpdateTime), EntityValue: BaseEntity })
+                            if (info is { PropertyName: nameof(AuditEntity.UpdateTime), EntityValue: AuditEntity })
                                 info.SetValue(time.GetLocalNow().DateTime);
                             // 每次整行更新记录操作人(有登录上下文时)
-                            else if (info is { PropertyName: nameof(BaseEntity.UpdateUserId), EntityValue: BaseEntity } && currentUser.UserId is { } updUid)
+                            else if (info is { PropertyName: nameof(AuditEntity.UpdateUserId), EntityValue: AuditEntity } && currentUser.UserId is { } updUid)
                                 info.SetValue(updUid);
                             break;
                     }

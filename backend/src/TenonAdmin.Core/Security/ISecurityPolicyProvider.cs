@@ -35,4 +35,10 @@ public interface ISecurityPolicyProvider
     /// 默认接口实现返回 0(关闭)——既有的自定义实现无需改动即可编译;内核默认实现从配置中心读取。
     /// </summary>
     Task<int> GetPasswordExpireDaysAsync() => Task.FromResult(0);
+
+    /// <summary>
+    /// 密码历史防重用条数(&lt;=0 表示关闭)。开启后改密/重置的新口令不得与当前或最近 N 个用过的口令相同。
+    /// 默认接口实现返回 0(关闭)——既有的自定义实现无需改动即可编译;内核默认实现从配置中心读取。
+    /// </summary>
+    Task<int> GetPasswordHistoryCountAsync() => Task.FromResult(0);
 }

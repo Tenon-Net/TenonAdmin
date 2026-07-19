@@ -13,6 +13,7 @@ namespace TenonAdmin.Services;
 public class LogService(
     IRepository<SysOpLog> opLogs,
     IRepository<SysLoginLog> loginLogs,
+    IRepository<SysExceptionLog> exceptionLogs,
     IRepository<SysUser> users,
     ICurrentUser currentUser,
     ILogger<LogService> logger) : ILogService
@@ -63,6 +64,31 @@ public class LogService(
         {
             // ponytail: 同上,登录日志尽力而为——写不上也不能让用户登不进来。
             logger.LogWarning(ex, "登录日志写入失败:{Account}", entry.Account);
+        }
+    }
+
+    /// <inheritdoc />
+    public virtual async Task RecordExceptionAsync(ExceptionLogEntry entry)
+    {
+        try
+        {
+            await exceptionLogs.InsertAsync(new SysExceptionLog
+            {
+                HttpMethod = entry.HttpMethod,
+                Path = entry.Path,
+                TraceId = entry.TraceId,
+                ExceptionType = entry.ExceptionType,
+                Message = entry.Message,
+                StackTrace = entry.StackTrace,
+                OperatorId = currentUser.UserId,
+                Ip = currentUser.IpAddress,
+                UserAgent = currentUser.UserAgent,
+            });
+        }
+        catch (Exception ex)
+        {
+            // ponytail: 同操作/登录日志——异常日志写入失败只告警,绝不在"处理崩溃"的路径上再抛一次盖掉原始异常。
+            logger.LogWarning(ex, "异常日志写入失败:{Path}", entry.Path);
         }
     }
 
@@ -137,6 +163,39 @@ public class LogService(
     }
 
     /// <inheritdoc />
+    public virtual async Task<PagedList<SysExceptionLog>> PageExceptionAsync(ExceptionLogPageInput input)
+    {
+        var page = await exceptionLogs.AsQueryable()
+            .WhereIF(!string.IsNullOrEmpty(input.Path), x => x.Path.Contains(input.Path!))
+            .WhereIF(!string.IsNullOrEmpty(input.ExceptionType), x => x.ExceptionType.Contains(input.ExceptionType!))
+            .WhereIF(input.StartTime.HasValue, x => x.CreateTime >= input.StartTime!.Value)
+            .WhereIF(input.EndTime.HasValue, x => x.CreateTime <= input.EndTime!.Value)
+            .OrderBy(x => x.Id, OrderByType.Desc)
+            .ToPagedListAsync(input.Current, input.Size);
+        await FillExceptionOperatorNamesAsync(page.Items);
+        return page;
+    }
+
+    /// <summary>
+    /// 按本页出现的触发人 Id 去重批量查一次姓名回填(避免逐行 N+1)。匿名端点异常 OperatorId 为 null → 跳过;
+    /// 同 <see cref="FillOperatorNamesAsync"/>,清软删过滤器,离职用户触发的历史异常仍显示姓名。
+    /// </summary>
+    protected virtual async Task FillExceptionOperatorNamesAsync(IReadOnlyList<SysExceptionLog> items)
+    {
+        var ids = items.Where(x => x.OperatorId.HasValue).Select(x => x.OperatorId!.Value).Distinct().ToList();
+        if (ids.Count == 0) return;
+        var rows = await users.AsQueryable()
+            .ClearFilter<ISoftDelete>()
+            .Where(u => ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.Name })
+            .ToListAsync();
+        var nameById = rows.ToDictionary(u => u.Id, u => u.Name);
+        foreach (var item in items)
+            if (item.OperatorId.HasValue && nameById.TryGetValue(item.OperatorId.Value, out var name))
+                item.OperatorName = name;
+    }
+
+    /// <inheritdoc />
     // ponytail: 硬删清空(日志无软删语义,软删只会让表越堆越大)。数据量大时应改按时间分批/归档后再删。
     //           走 Db 逃生舱口而非仓储 DeleteAsync(后者是软删);Where 恒真以满足 SqlSugar 的防误删全表保护。
     public virtual Task ClearOperationAsync() =>
@@ -145,4 +204,8 @@ public class LogService(
     /// <inheritdoc />
     public virtual Task ClearLoginAsync() =>
         loginLogs.Db.Deleteable<SysLoginLog>().Where(x => x.Id > 0).ExecuteCommandAsync();
+
+    /// <inheritdoc />
+    public virtual Task ClearExceptionAsync() =>
+        exceptionLogs.Db.Deleteable<SysExceptionLog>().Where(x => x.Id > 0).ExecuteCommandAsync();
 }

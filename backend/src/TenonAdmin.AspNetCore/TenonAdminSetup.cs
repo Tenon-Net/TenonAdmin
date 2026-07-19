@@ -54,6 +54,9 @@ public static class TenonAdminSetup
             return options.Upload;
         });
         services.AddSingleton(options.Api);
+        services.AddSingleton(options.Email);   // 邮件通道配置(SMTP 主机为空则走日志实现,见 ServicesSetup 的 IEmailSender 工厂)
+        services.AddSingleton(options.ExternalAuth);   // 外部登录 / SSO 配置(内置 OIDC provider 列表 + 回调基址,见批次 D)
+        services.AddSingleton(options.Realtime);   // 实时通知配置(SignalR 开关/Hub 路径;MapTenonAdmin 读它决定是否 MapHub)
 
         // ── 雪花机器号(§12):多副本同号 = 同毫秒发号撞主键。这是数据损坏级的问题,而它今天静默发生 ──
         //   没有可靠的"我是不是多副本"信号,但选了 Redis 缓存基本等同于宣告多实例意图
@@ -112,6 +115,15 @@ public static class TenonAdminSetup
         var entityAssemblies = new List<Assembly> { typeof(ServicesSetup).Assembly };
         entityAssemblies.AddRange(options.ApplicationAssemblies);
         services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()]);
+
+        // ── 实时通知(§14):开启时挂 SignalR + 注册真实现,压过 Services 的 Noop(TryAdd 先到者胜,故须在 AddTenonAdminServices 之前)──
+        //   SignalR 属 ASP.NET Core 共享框架,零新增 NuGet。关闭时不挂 Hub、不建长连接,Noop 生效 = 维持既有轮询/惰性 401(纯增强)。
+        if (options.Realtime.Enabled)
+        {
+            services.AddSignalR();
+            services.TryAddSingleton<IRealtimePublisher, SignalRRealtimePublisher>();
+        }
+
         services.AddTenonAdminServices();
 
         // ── JWT:签名密钥惰性解析一次(生产缺配 fail-fast;开发密钥持久化 + 警告),签发与验证共用同一实例 ──
@@ -148,6 +160,16 @@ public static class TenonAdminSetup
                 // 未认证/令牌过期的框架 401 challenge 也套统一信封(40006),与 [RolePermission]/[ActiveSession] 一致(P1-2)
                 o.Events = new JwtBearerEvents
                 {
+                    // SignalR 的浏览器客户端(WebSocket)带不了 Authorization 头,令牌走 query(access_token);
+                    // 仅在实时 Hub 路径上采信该 query 令牌,不放宽普通 API 端点的取令牌方式。
+                    OnMessageReceived = ctx =>
+                    {
+                        var accessToken = ctx.Request.Query["access_token"];
+                        if (!string.IsNullOrEmpty(accessToken) &&
+                            ctx.HttpContext.Request.Path.StartsWithSegments(options.Realtime.HubPath))
+                            ctx.Token = accessToken;
+                        return Task.CompletedTask;
+                    },
                     OnChallenge = async ctx =>
                     {
                         ctx.HandleResponse();
@@ -161,6 +183,9 @@ public static class TenonAdminSetup
         // 尊重 [AllowAnonymous],且不影响未匹配路由的 404(FallbackPolicy 会把 404 劫持成 401,故不用它)。
         services.AddAuthorization();
 
+        // ── 外部登录 / SSO(批次 D):按 appsettings 装内置 OIDC provider(零新包);未配则整段跳过 ──
+        services.AddExternalAuthProviders(options.ExternalAuth);
+
         // ── MVC 控制器:本程序集作为 ApplicationPart 挂入宿主 ──
         //   全局过滤器:业务异常 → 统一信封;操作日志(默认记一切写操作,读操作/匿名端点除外,§4/T6);
         //   裸返回兜底包信封(用户控制器 return dto 即得 Result<T>,§12/T8)
@@ -169,6 +194,7 @@ public static class TenonAdminSetup
                 if (options.DemoMode)
                     o.Filters.Add<DemoModeFilter>();
                 o.Filters.Add<AdminExceptionFilter>();
+                o.Filters.Add<ExceptionLogFilter>();   // 未捕获异常旁路留痕(不吞异常,500 照旧);业务异常显式跳过
                 o.Filters.Add<OperationLogFilter>();
                 o.Filters.Add<ResultEnvelopeFilter>();
                 o.Conventions.Add(new DisabledModuleConvention(options.Api));   // 按配置摘除禁用模块的控制器(§5.4)
@@ -236,6 +262,12 @@ public static class TenonAdminSetup
         // 默认拒绝(§14/P2-6):所有控制器端点强制认证,[AllowAnonymous](登录/刷新/验证码/自定义匿名控制器)显式豁免;
         // 漏挂 [RolePermission] 的 action 也不再静默公开。只作用于真实端点,不劫持未匹配路由的 404。
         endpoints.MapControllers().RequireAuthorization();
+
+        // 实时通知 Hub(§14):仅在开启时映射。Hub 自带 [Authorize],不受上面 MapControllers 的 RequireAuthorization 影响;
+        // JWT 走 query access_token(见 AddTenonAdmin 的 OnMessageReceived)。关闭时不映射,前端连接失败即退回轮询兜底。
+        var realtime = endpoints.ServiceProvider.GetService<AdminRealtimeOptions>();
+        if (realtime?.Enabled == true)
+            endpoints.MapHub<TenonHub>(realtime.HubPath);
 
         // OpenAPI 文档:仅开发环境暴露(生产匿名开放会泄露完整 API 契约作侦察面,P2-8);
         // 匿名可访问(否则被上面的 FallbackPolicy 挡成 401)。§13.6 契约源本就是开发期前端代码生成用。

@@ -59,6 +59,65 @@ AdminException.ThrowIf(!string.Equals(stored, code, StringComparison.OrdinalIgno
 
 无论对错该票据都作废，同一张验证码不能重放或多次猜测。图片/滑块/行为验证码可自注册 `ICaptchaProvider` 前置替换。
 
+## 短信验证（二次验证与免密登录）
+
+两个相互独立的功能，**默认全关**，配置中心「安全策略」页运行时开关（改值即时生效，无需重启）：
+
+| 运行时配置键 | Options 兜底 | 默认 | 功能 |
+| --- | --- | --- | --- |
+| `sys.security.mfa.enabled` | `...:SmsOtp:MfaEnabled` | `false` | 短信二次验证：密码通过后再验一次短信码 |
+| `sys.security.smsLogin.enabled` | `...:SmsOtp:LoginEnabled` | `false` | 免密登录：手机号 + 短信验证码 |
+
+**二次验证流程**：密码侧全部校验通过后（锁定 → 验证码 → 账密 → 策略），`AuthService.CheckSmsSecondFactorAsync` 创建一张**绑定该用户 id**（而非仅手机号）的缓存挑战票据、发码，并以 `SmsCodeRequired`（40009）信令通知前端，`args` 携带 `challengeId` / `phoneMask` / 倒计时参数；`POST /api/v1/auth/login/sms`（及 `/resend`）完成下半场。`/login` 的请求/响应契约形状不变——40009 是信令而非失败，也不计入登录锁定。
+
+::: warning 二次验证只对绑定了手机号的用户生效
+**没绑手机号的用户即使开关开着也凭密码直登**。这是刻意设计，不是缺陷：全局开关打开时绝不能把任何人锁死在系统外——种子超管没有手机号，存量用户也可能没有。要让某个账号强制二次验证，给它绑上手机号即可（个人资料页或用户管理）。
+
+二开想要严格语义（「没手机号 = 不让登」），只需覆写一步：
+
+```csharp
+public sealed class StrictAuthService(
+    IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens,
+    ISessionService sessions, ILogService logService, ILoginLockService loginLock,
+    ICaptchaService captcha, ISecurityPolicyProvider policy, ISmsOtpService smsOtp)
+    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp)
+{
+    protected override async Task CheckSmsSecondFactorAsync(SysUser user)
+    {
+        // 内核默认对无手机号用户直通;严格模式改为拒登
+        if (await smsOtp.IsMfaEnabledAsync() && string.IsNullOrWhiteSpace(user.Phone))
+            throw new AdminException(ErrorCode.AccountDisabled);
+        await base.CheckSmsSecondFactorAsync(user);
+    }
+}
+```
+:::
+
+**免密登录**：`POST /api/v1/auth/sms/send` 发码（联动图形验证码开关——验证码开着时发码端点同样受保护），`POST /api/v1/auth/sms/login` 用手机号 + 码换令牌。**防枚举**：未知/重复/停用的手机号得到与真实路径完全一致的成功外形响应（冷却也照设），只是从不真正发码；后续校验统一报 `SmsCodeExpired`。一个需要知道的副作用：**手机号重复的用户会被静默排除在免密登录之外**（解析要求恰好命中一个启用用户）；内核不给 `Phone` 加唯一索引（存量数据可能已有重复），依赖此功能时请在录入侧保证手机号唯一。
+
+**防滥用全部在服务端强制**（`TenonAdmin:Security:SmsOtp`，`AdminSmsOtpOptions`——部署期配置，只有两个开关是运行时键）：
+
+| 配置项 | 默认 | 说明 |
+| --- | --- | --- |
+| `CodeLength` | `6` | 验证码位数（密码学随机） |
+| `TtlSeconds` | `300` | 码（及 MFA 挑战）有效期 |
+| `ResendSeconds` | `60` | 同号重发冷却——二次验证与免密发码共享 |
+| `MaxAttempts` | `5` | 错码次数上限，达到即作废该码 |
+| `DailySendLimitPerPhone` | `10` | 同号每日发送上限（防短信轰炸/费用失控） |
+
+码与验证码票据同款**原子取删**消费（单次有效、防重放），且**只存缓存**——零 DDL。冷却/日计数在默认内存缓存下与登录锁定同款按实例各算；装 Redis 包即全局共享。
+
+**发送通道只是抽象**：内核只带 `ISmsSender` 接口，默认实现 `LoggingSmsSender` 把码写进后端日志（`[SMS:mfa] …` / `[SMS:login] …`）——开发够用，生产没用。在 `AddTenonAdmin()` **之前**注册真实厂商实现即接管（`purpose` 参数为 `mfa` / `login`，映射到厂商模板 id）：
+
+```csharp
+builder.Services.AddSingleton<ISmsSender, AliyunSmsSender>();   // 你的实现
+builder.Services.AddTenonAdmin(builder.Configuration);          // TryAdd 让位
+```
+
+错误码：`SmsCodeRequired` 40009（信令）、`SmsCodeWrong` 40010（args 带 `attemptsLeft`）、`SmsCodeExpired` 40011（缺失/过期/已消费/次数耗尽——刻意不可区分）、`SmsLoginDisabled` 40012；发送过频复用 `TooManyRequests` 40008。
+
+## 登录锁定（防爆破）
+
 ## 登录锁定（防爆破）
 
 `LoginLockService` 在**登录最前置**调用，先于账密校验，所以锁定期间正确密码也进不来。配置在 `TenonAdmin:Security:LoginLock`(`AdminLoginLockOptions`):
