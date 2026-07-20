@@ -104,6 +104,22 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · B10 review 处置(review-b10 lane 隔离:APPROVE + 5 LOW)
+
+lane 在干净环境**独立确认了 pro-components/vitest 债是真的**:它试了**四个**配置杠杆(默认 externalize / `server.deps.inline` / `deps.optimizer.ssr` / `server.deps.fallbackCJS`)**全失败** —— `.ssr`(我没试过的那个)还撞更深的墙(`@ant-design/icons` no known conditions for "." specifier)。**mock 不是漏了简单解法,是确实无解**;止损决定得到外部背书。lane 还对着真 `.d.ts` 核了所有 prop 名(`persistenceKey`/`ActionType.reload`/request 签名/`current`)全对,并指出 **DataTable.tsx 导真 ProTable → tsc 独立守 prop 名**,mock 不构成盲区。9 变异独立全 kill,M8 的 `{字段:null}` 判别力独立复现。
+
+**5 LOW,处置 3:**
+- **[LOW-3 已改] `...filters` 前置**:分页/排序是算出来的、必须权威;搜索表单万一有字段叫 `page` 就不会覆盖(16 页都没有,消除未来 footgun)。
+- **[LOW-1/2 已注释] 列级 filter 不支持 + 多列排序只取首列**:有意的天花板(筛选走搜索表单;后端 OrderBySafe 单字段),注释写清免得后人以为是遗漏。
+- **[LOW-4 defer] `rowKey` 窄于 ProTable 的 `string|GetRowKey`**:YAGNI,等有页需要函数键再放宽。
+- **[LOW-5 out-of-scope] 927kB 单 chunk**:antd+pro 既有体积,非 B10 引入。
+
+**[开放问题] 真 ProTable 运行时未验(mock 掩盖):** request 挂载即调、列持久化到 `localStorage['protable:{key}']`、工具栏 locale 跟 ConfigProvider —— 类型 + build 使其"很可能对",但**真正未证实**。这是披露的债,**B11 的 dev 实点 + E2 的 CI 冒烟必须对真组件验列持久化 + 中英切换**(wrong-at-runtime-but-right-at-type 的 bug 只会在那露头)。
+
+四件套仍绿(toProTable 8/8,tc/lint 0)。
+
+下一条:**B11 system/user 页** —— 落地时**对真 ProTable 验**上面那三条运行时行为(dev 实点),把 B10 的开放问题结掉。
+
 ### 2026-07-20 · B10 DataTable 薄封装
 
 `eb3de2f`。两半:`toProTable` 纯适配(可测)+ `<DataTable>` 组件(隔离 pro-components)。
