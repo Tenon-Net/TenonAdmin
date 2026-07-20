@@ -35,7 +35,7 @@
 - [x] **R2 把唯一一条真 bug 修复带回**(abd9d1e) — `archive` 的 `f1f579e` 与抽取无关:`57bde5e` 给后端 site-info DTO 加了 `Logo` 但没重跑 `gen:api`,`schema.d.ts` 从那时起就缺这个字段,**而且没人发现**——`configApi.siteInfo()` 走手写 `unwrap<{...}>` 内联类型,`paths` 里少个字段不会让任何东西编译失败。`git show archive/web-shared-extract:web-shared/api/schema.d.ts > web/src/api/schema.d.ts`(生成物与路径无关)。验:**起 MinimalHost 真跑一次 `npm run gen:api`,确认 diff 为空**——不要相信这次搬运。单独 `fix(web):` 提交。~~这是整个重构里唯一一处动 `web/`。~~ **这句断言已被 R1 review 证伪**(2026-07-20):`archive` 上另有 A5/A6 两个 commit 改了 `web/e2e/`,与共享层无关,见新增的 R2b。写这条时我是凭抽取的**意图**("抽取只该动 web-shared/")推断的,而不是跑 `git log --stat` 逐个 commit 看**实际**改了什么——意图与事实之间那道缝,正好够沉掉三个 commit。
 - [x] **R2b 把 e2e 的两条测试质量修复带回**(8b52f71)(R1 review 补记) — `archive` 的 `f3e70ba`(A5)与 `4ea84ec`(A6)只碰 `web/e2e/*` 与 `web/playwright.config.ts`,**e2e 目录从未被抽取搬动过**,所以与共享层无关,不带回就是白丢。内容:①用例互相污染全局状态(默认 app)导致假红/假绿,各用例改为自建前置;`fullyParallel:false` 没达到注释声称的效果、`workers:1` 缺失;②菜单叶子按名字二次查找会命中**同名目录节点**("文件管理"目录 Id 30 vs 叶子 Id 78);③RBAC 那条 `<=1` 断言在零菜单场景下**恒真**——又一个假断言。已实测 `git cherry-pick -n f3e70ba` 五个 `web/` 文件全部干净落地,唯一冲突是新分支上不存在的旧台账 `docs/react-port-ledger.md`(丢弃即可)。**验:光 cherry-pick 不算数——e2e 要真跑一遍**(需后端 + web dev server),并对着 ③ 做变异:把 RBAC 断言恢复成 `<=1`,零菜单场景必须仍绿(证明它当初确实恒真),换成新断言后必须红。单独 `test(web):` 提交。
 - [x] **R3 `web-react/` 脚手架(自包含)**(414a2e4) — 从 `archive` 取 B1 的配置,**删光共享层接线**:`vite.config.ts` 去 `@shared` alias、去 `openapi-fetch` alias、`server.fs.allow` 整条删除(回默认);`tsconfig.json` 的 `paths` 只留 `@/*`、去 `../web-shared/**` 的 include;`package.json` 的 lint 去掉 `cd ..`、**补自己的 `gen:api`**(输出 `src/api/schema.d.ts`)。保留 `port: 5174`、proxy、`define.__APP_VERSION__`、`test.include: ['src/**/*.spec.{ts,tsx}']`(**`.tsx` 不能少**:React 组件测试必须带 JSX,漏掉时 vitest 不报错、CI 全绿、那些用例从来没执行过)、串行 pool 设置。**`types` 不加 `"node"`**——它是项目级的,会让 `process.env` 在浏览器源码里静默通过 typecheck,而 `web/` 那边没有这条,同一行代码会在**另一个模板**里炸;改为在需要 `node:fs` 的那一个 spec 顶部写 `/// <reference types="node" />`。验:四件套绿。
-- [ ] **R4 框架无关文件落进 `web-react/src/`** — 从 `archive` 的 `web-shared/` 复制,导入一律改 `@/*`:`types/{api,menu}.ts`→`src/types/`;`locales/{zh-CN,en-US}.ts`→`src/locales/`;`styles/tokens.css`→`src/styles/`;`theme/{mix,accents}.ts`→`src/theme/`;`utils/{tree,url}.ts`→`src/utils/`;`api/{index,schema.d}.ts`→`src/api/`。`locales/ext.ts` **内联进 `src/locales/index.ts`**(只剩一个消费者,与 `dev` 上 `web/src/locales/index.ts` 形状一致)。**暂不搬** `utils/{ua,chunkUpload}.ts`(当前无调用方,等批次 C 用到它们的页面再搬)。验:**只看 import,不看注释** —— `grep -rnE "from ['\"](@shared|\.\./web)" web-react/src` 为空(原判据 `grep '@shared\|web-shared' web-react/` 在 R3 落地时就已必然误报:配置文件里那几条"这里没有它"的说明注释会命中。一个必然误报的检查下次只会被划掉,不会被当真);四件套绿。
+- [x] **R4 框架无关文件落进 `web-react/src/`**(fbac63a) — 从 `archive` 的 `web-shared/` 复制,导入一律改 `@/*`:`types/{api,menu}.ts`→`src/types/`;`locales/{zh-CN,en-US}.ts`→`src/locales/`;`styles/tokens.css`→`src/styles/`;`theme/{mix,accents}.ts`→`src/theme/`;`utils/{tree,url}.ts`→`src/utils/`;`api/{index,schema.d}.ts`→`src/api/`。`locales/ext.ts` **内联进 `src/locales/index.ts`**(只剩一个消费者,与 `dev` 上 `web/src/locales/index.ts` 形状一致)。**暂不搬** `utils/{ua,chunkUpload}.ts`(当前无调用方,等批次 C 用到它们的页面再搬)。验:**只看 import,不看注释** —— `grep -rnE "from ['\"](@shared|\.\./web)" web-react/src` 为空(原判据 `grep '@shared\|web-shared' web-react/` 在 R3 落地时就已必然误报:配置文件里那几条"这里没有它"的说明注释会命中。一个必然误报的检查下次只会被划掉,不会被当真);四件套绿。
 
 ## 批次 B · React 模板阶段一
 
@@ -100,6 +100,29 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · R4 框架无关层落进 src/
+
+`fbac63a`。types / locales / tokens.css / theme / utils / schema.d.ts 全部落地。**一处也不用改写导入** —— 这批文件之间的相对导入本来就都在同目录内(只有 `types/api.ts` 引 `./menu`),`@/*` 改写是我预想中的工作量,实际为零。
+
+**台账这条与 B5 冲突,已按 B5 处置**:R4 原文写 `api/{index,schema.d}.ts` 一起搬,但 `api/index.ts` 第一行就是 `import { client } from './client'`,而 B5 明文规定**不搬 archive 那版 client**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),要以 `dev` 上 `web/src/api/client.ts` 为蓝本重写。所以 R4 只带纯生成物 `schema.d.ts`,**`api/index.ts` 随 client 一起走 B5**。
+
+`locales/ext.ts` 按台账内联进 `src/locales/index.ts`。顺手改了 `ext/README.md` 里两处**已经不成立**的措辞:它还写着"那两个文件只是转口桶,真源在 `web-shared/locales/`,两个官方模板共用"和"文案与 Vue 模板共用同一份真源" —— 共享层没了,在本模板里它们就是真源。这类过时文档不会让任何检查变红,只会误导消费者。
+
+**四件套绿,但这批文件四件套证明不了什么** —— 它们还没有消费者,typecheck 只看类型、build 会把没人用的摇掉。所以另外查了两件实事:①`tokens.css` 真进了产物(dist 里 2925B 的 CSS,抽查 `--color-primary`/`--color-bg-container`/`--color-fill` 都在);②`messages` 确实被摇掉了(产物里 0 命中,符合"没人消费"的预期)。
+
+**合并逻辑补了 spec,因为它是这批里唯一的非平凡逻辑,而且在 archive 上也没有直接测过** —— archive 那份 `index.spec.ts` 九条用例**全是 i18next 的**,一条都没测 `withExt`/`deepMerge`。四处变异,预测先写,全中且判别干净:
+
+| 变异 | 红了哪条 |
+|---|---|
+| `deepMerge` 改成浅合并 | 只红「深合并不顶掉兄弟键」 |
+| 去掉 locale 前缀过滤 | 只红「中文扩展不漏进英文」 |
+| `isPlainObject` 允许数组 | 只红「数组不往下钻」 |
+| `deepMerge` 就地改 base | 红「不改动入参」**外加**「新命名空间」—— 共享的 BASE 被前一条用例改过,污染串到后面。这正是那条不变性用例存在的理由 |
+
+**已知判据缺口原样带过来,没堵上**:`ext/` 目录按设计是空的(那是消费者的地盘),所以**没有任何常驻用例能证明 `import.meta.glob('./ext/*/*.ts')` 这个路径打得中** —— 把它写错成 `'./extt/...'`,上面六条用例一条都不会红。已在 spec 顶部注明。
+
+下一条:**B2**(主题桥 + review 处置,含那条 `--color-shadow` 亮色回归)。
 
 ### 2026-07-20 · R3 脚手架(自包含)
 
