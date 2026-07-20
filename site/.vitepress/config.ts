@@ -40,6 +40,7 @@ const enGuideSidebar = [
     text: 'Help',
     items: [
       { text: 'FAQ', link: '/faq' },
+      { text: 'Changelog', link: '/changelog' },
     ],
   },
 ]
@@ -53,11 +54,12 @@ const enThemeConfig = {
     { text: 'Standards', link: '/standard/backend' },
     { text: 'Community', link: '/community/contributing' },
     { text: 'Live Demo', link: 'https://tenonadmin.52moyu.net/login' },
-    { text: '0.1.0', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
+    { text: '0.2.0', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
   ],
   sidebar: {
     '/guide/': enGuideSidebar,
     '/faq': enGuideSidebar,
+    '/changelog': enGuideSidebar,
     '/backend/': [
       {
         text: 'Get Started',
@@ -74,7 +76,14 @@ const enThemeConfig = {
           { text: 'Auth & Security', link: '/backend/auth-security' },
           { text: 'External Login (SSO)', link: '/backend/external-login' },
           { text: 'Realtime Notifications', link: '/backend/realtime' },
+          { text: 'Event Bus', link: '/backend/event-bus' },
           { text: 'Data Layer & Auditing', link: '/backend/data-layer' },
+        ],
+      },
+      {
+        text: 'Ops',
+        items: [
+          { text: 'Ops Endpoints', link: '/backend/ops' },
         ],
       },
       {
@@ -196,6 +205,7 @@ const zhGuideSidebar = [
     text: '帮助',
     items: [
       { text: '常见问题', link: '/zh/faq' },
+      { text: '更新日志', link: '/zh/changelog' },
     ],
   },
 ]
@@ -209,11 +219,12 @@ const zhThemeConfig = {
     { text: '规范', link: '/zh/standard/backend' },
     { text: '参与', link: '/zh/community/contributing' },
     { text: '在线预览', link: 'https://tenonadmin.52moyu.net/login' },
-    { text: '0.1.0', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
+    { text: '0.2.0', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
   ],
   sidebar: {
     '/zh/guide/': zhGuideSidebar,
     '/zh/faq': zhGuideSidebar,
+    '/zh/changelog': zhGuideSidebar,
     '/zh/backend/': [
       {
         text: '入门',
@@ -230,7 +241,14 @@ const zhThemeConfig = {
           { text: '认证与安全', link: '/zh/backend/auth-security' },
           { text: '外部登录（SSO）', link: '/zh/backend/external-login' },
           { text: '实时通知', link: '/zh/backend/realtime' },
+          { text: '事件总线', link: '/zh/backend/event-bus' },
           { text: '数据层与审计', link: '/zh/backend/data-layer' },
+        ],
+      },
+      {
+        text: '运维',
+        items: [
+          { text: '运维端点', link: '/zh/backend/ops' },
         ],
       },
       {

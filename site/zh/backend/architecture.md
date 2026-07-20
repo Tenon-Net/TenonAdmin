@@ -36,7 +36,7 @@ TenonAdmin.Core
 | --- | --- | --- | --- |
 | `TenonAdmin.Core` | 契约、Options、`Result<T>`、`ErrorCode`、`AdminException`、`IIdGenerator` | 无 | 仅 Microsoft.* |
 | `TenonAdmin.SqlSugar` | `SqlSugarScope` 单例、`IRepository<>`、`BaseEntity`/`DataEntity`、CodeFirst、种子 | Core | SqlSugarCore |
-| `TenonAdmin.Services` | `Sys*` 实体、服务实现、RBAC、数据范围、事件总线 | SqlSugar、Core | SqlSugarCore |
+| `TenonAdmin.Services` | `Sys*` 实体、服务实现、RBAC、数据范围、[事件总线](/zh/backend/event-bus) | SqlSugar、Core | SqlSugarCore |
 | `TenonAdmin.AspNetCore` | JWT、授权过滤器、内置控制器、全局过滤器、`AddTenonAdmin` | Services、SqlSugar、Core | Microsoft.AspNetCore.* |
 | `TenonAdmin`（元包） | 聚合入口 | AspNetCore |——|
 | `TenonAdmin.Caching.Redis`（可选） | `RedisCacheProvider`：Redis 版 `ICacheProvider` | 仅 Core | StackExchange.Redis |

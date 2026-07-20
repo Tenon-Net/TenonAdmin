@@ -62,7 +62,7 @@
 
 ## 缓存
 
-- 模型是 cache-aside（读穿透）+ 显式失效，不是每次查库。增删改后既 `RemoveAsync` 失效缓存，也广播事件供审计、推送等订阅，例子是 `DictService.InvalidateAsync` → `DictChangedEvent`。但默认的 `ChannelEventBus` 是进程内的，事件不跨副本。跨节点失效要靠共享缓存，或者自己换 `IEventBus` 接 MQ。
+- 模型是 cache-aside（读穿透）+ 显式失效，不是每次查库。增删改后既 `RemoveAsync` 失效缓存，也广播事件供审计、推送等订阅，例子是 `DictService.InvalidateAsync` → `DictChangedEvent`。但默认的 `ChannelEventBus` 是进程内的，事件不跨副本。跨节点失效要靠共享缓存，或者自己换 [`IEventBus`](/zh/backend/event-bus) 接 MQ。
 - 逻辑键集中在 `Core/CacheKeys.cs`，禁散落魔法串；前缀 `Cache:KeyPrefix`（默认 `tenon:`）由 provider 统一追加。
 - 默认进程内 `MemoryCacheProvider`；多实例共享装可选包 `TenonAdmin.Caching.Redis`，`AddTenonAdminRedisCache` 须在 `AddTenonAdmin` **之前**注册才能赢过 `TryAdd`（业务代码零改动）。顺序之外还有一道配置开关：吃 `IConfiguration` 的重载只在 `Cache:Provider=Redis` 时接管，否则静默退回内存缓存；用 `AddTenonAdminRedisCache(connectionString)` 则调用即启用。
 

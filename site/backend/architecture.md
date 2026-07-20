@@ -36,7 +36,7 @@ Responsibilities and dependency direction per layer:
 | --- | --- | --- | --- |
 | `TenonAdmin.Core` | Contracts, Options, `Result<T>`, `ErrorCode`, `AdminException`, `IIdGenerator` | None | Microsoft.* only |
 | `TenonAdmin.SqlSugar` | `SqlSugarScope` singleton, `IRepository<>`, `BaseEntity`/`DataEntity`, CodeFirst, seeding | Core | SqlSugarCore |
-| `TenonAdmin.Services` | `Sys*` entities, service implementations, RBAC, data scope, event bus | SqlSugar, Core | SqlSugarCore |
+| `TenonAdmin.Services` | `Sys*` entities, service implementations, RBAC, data scope, [event bus](/backend/event-bus) | SqlSugar, Core | SqlSugarCore |
 | `TenonAdmin.AspNetCore` | JWT, authorization filters, built-in controllers, global filters, `AddTenonAdmin` | Services, SqlSugar, Core | Microsoft.AspNetCore.* |
 | `TenonAdmin` (meta-package) | Aggregation entry point | AspNetCore | — |
 | `TenonAdmin.Caching.Redis` (optional) | `RedisCacheProvider` — Redis-backed `ICacheProvider` | Core only | StackExchange.Redis |

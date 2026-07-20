@@ -81,6 +81,31 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 
 外部登录解析出 `SysUser` 之后，接的是 `AuthService.CreateTokenAsync`。建会话、发令牌这段尾链，和账密登录、短信登录完全共用。所以会话并发策略、强退、刷新令牌轮换，对它一视同仁。
 
+## 回调换令牌示例
+
+`authorize` 和 `callback` 都是浏览器整页跳转，不是前端能 `fetch` 的 JSON 接口。`authorize` 302 到 IdP 的授权页；IdP 验证完用户后回跳 `callback`，`callback` 再 302 回前端结果页（默认 `FrontendResultPath`，即 `/oauth/callback`），查询串上带着下一步要用的东西：
+
+```
+成功：GET /oauth/callback?ticket=<一次性票据>
+失败：GET /oauth/callback?error=40015
+```
+
+前端在结果页里认到 `ticket`，拿它去换令牌，这一步才是真正能 `fetch` 的接口：
+
+```bash
+curl -X POST http://localhost:5100/api/v1/auth/external/exchange \
+  -H "Content-Type: application/json" \
+  -d '{"ticket":"<回调带回来的一次性票据>"}'
+```
+
+响应信封和[账密登录](/zh/guide/getting-started)同一个形状：
+
+```json
+{ "code": 0, "data": { "accessToken": "eyJ...", "expiresAt": "...", "refreshToken": "...", "mustChangePassword": false } }
+```
+
+票据一次性：`exchange` 内部用 `GetAndRemoveAsync` 原子取删，重复换第二次会拿到 `OAuthStateInvalid`（40014）。
+
 ## 错误码
 
 | 码 | 名 | 什么时候 |

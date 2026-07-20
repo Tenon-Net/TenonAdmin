@@ -81,6 +81,31 @@ Both `state` and the one-time ticket reuse the same pattern as SMS verification 
 
 Once external login resolves a `SysUser`, it hands off to `AuthService.CreateTokenAsync` — the same tail end used by password login and SMS login: session creation, token issuance, all of it shared. So session concurrency policy, force-logout, and refresh-token rotation apply to it identically.
 
+## Callback and token-exchange example
+
+`authorize` and `callback` are both full-page browser redirects, not JSON endpoints a frontend can `fetch`. `authorize` sends a 302 to the IdP's authorization page; once the IdP has authenticated the user, it redirects back to `callback`, which 302s again to the frontend's result page (`FrontendResultPath`, `/oauth/callback` by default) with whatever the next step needs, in the query string:
+
+```
+Success: GET /oauth/callback?ticket=<one-time ticket>
+Failure: GET /oauth/callback?error=40015
+```
+
+The frontend reads `ticket` off that result page and exchanges it for a token — this is the step that's actually a `fetch`-able endpoint:
+
+```bash
+curl -X POST http://localhost:5100/api/v1/auth/external/exchange \
+  -H "Content-Type: application/json" \
+  -d '{"ticket":"<ticket from the callback redirect>"}'
+```
+
+The response envelope has the same shape as [password login](/guide/getting-started):
+
+```json
+{ "code": 0, "data": { "accessToken": "eyJ...", "expiresAt": "...", "refreshToken": "...", "mustChangePassword": false } }
+```
+
+The ticket is single-use — `exchange` consumes it via an atomic `GetAndRemoveAsync`, and a second exchange attempt gets `OAuthStateInvalid` (40014).
+
 ## Error codes
 
 | Code | Name | When |

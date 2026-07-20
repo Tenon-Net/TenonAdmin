@@ -93,3 +93,9 @@ curl -i https://<your-domain>/api/v1/ping # 401: API routing works (this endpoin
 Then open the frontend and log in once; getting a menu back means the JWT secret, database, and seed data all line up.
 
 One last easy false alarm: a 404 on `/openapi/v1.json` in production is expected behavior, not something missing from the deployment. It's only mounted in the Development environment as the contract source for the frontend's `npm run gen:api`, not a production endpoint.
+
+## Rolling back
+
+There's no dedicated rollback script — rolling back means redeploying the previous version. A NuGet consumer points the package reference back at the previous version number; a Docker deployment switches the image tag back and runs `docker compose up -d`. The database doesn't need to roll back with it: CodeFirst only adds columns, never drops or narrows them, so a column the older code doesn't know about just sits there unused.
+
+What you genuinely can't undo is the publish step itself. Once a tag is pushed, it has already triggered `backend-release` to push a package to nuget.org — a package can be unlisted, never deleted. The full cadence is in the [changelog](/changelog) and the [release runbook](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/releasing.md). Rolling back rewinds the instance you deployed, not a package that's already out the door.

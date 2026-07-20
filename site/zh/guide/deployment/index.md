@@ -93,3 +93,9 @@ curl -i https://<你的域名>/api/v1/ping # 401:API 路由通了(该端点需�
 再打开前端登录一次，能拿到菜单就说明 JWT 密钥、数据库、种子数据全对上了。
 
 最后提一个容易误报的点。`/openapi/v1.json` 在生产返回 404 是预期行为，不是部署漏了什么。它只在 Development 环境挂载，是给前端 `npm run gen:api` 用的契约源，不是生产端点。
+
+## 版本回滚
+
+回滚没有专门脚本，就是把上一个版本重新部署一遍。NuGet 消费方把包引用退回上一个版本号，Docker 部署把镜像 tag 换回上一个，`docker compose up -d` 即可。数据库不用跟着退：CodeFirst 只加列，从不删列或改窄，旧代码不认识的新列留在原地，不影响它照常跑。
+
+真正回不去的是发布这一步本身。tag 一推送就已经触发 `backend-release` 往 nuget.org 发包，包只能 unlist，不能删除。完整节奏写在[更新日志](/zh/changelog)和[发布流程](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/releasing.md)里。回滚退的是你自己部署的那个实例，退不掉已经发出去的包。
