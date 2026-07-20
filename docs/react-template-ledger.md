@@ -62,7 +62,7 @@
 - [x] **B5a api client + endpoint wrappers**(6989f1e) — 见轮次日志。`api/index.ts` 逐字复制;spec 跑 node 环境(happy-dom 没实现请求体一次性流);`bare` 与 URL 短路是**两道冗余闸**,已各自补判据。
 - [x] **B5b 登录页 + dict store**(dict store 604955c / site+error 46feef6 / 登录页 2213a87) — 只做账号密码路径;SMS/MFA/SSO 暂缓。见轮次日志。
 - [x] **B5 review lane** — **B5a + B5b 双 APPROVE 无阻断**(见轮次日志)。B5a 那条偶发红定性为跨进程污染、非文件内通道;B5b 三条 LOW 已处置。原 review-b5a lane 卡住已停,并入 review-b5b。 `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
-- [ ] **B6 动态路由** — `useRoutes(routes)`,routes 从 `auth.menuTree` 派生的普通数组。**Vue 版 `router/index.ts` 那个 `return to.fullPath` 重解析 trick 不需要存在**。`buildRoutesForModule` 逻辑逐条搬:flatten → 跳过非 Menu/无 path → 跳过 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe 视图 + `meta.iframeSrc` → 否则查 `import.meta.glob('/src/pages/**/*.tsx')`,缺失 `console.warn` 跳过;`viewComponentPaths` 由同一张 glob 表反推(**防手敲错致菜单静默消失,原样保留**)。`<RequireAuth>` 三条守卫按 Vue 版顺序:未登录→`/login`、`mustChangePassword`→锁死改密页、`!routesReady`→loading + `enterInitial()`。验:F5 深链能重建路由、无权限路径 404。
+- [ ] **B6 动态路由**(a 决策逻辑已完成:3877df4) — `useRoutes(routes)`,routes 从 `auth.menuTree` 派生的普通数组。**Vue 版 `router/index.ts` 那个 `return to.fullPath` 重解析 trick 不需要存在**。`buildRoutesForModule` 逻辑逐条搬:flatten → 跳过非 Menu/无 path → 跳过 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe 视图 + `meta.iframeSrc` → 否则查 `import.meta.glob('/src/pages/**/*.tsx')`,缺失 `console.warn` 跳过;`viewComponentPaths` 由同一张 glob 表反推(**防手敲错致菜单静默消失,原样保留**)。`<RequireAuth>` 三条守卫按 Vue 版顺序:未登录→`/login`、`mustChangePassword`→锁死改密页、`!routesReady`→loading + `enterInitial()`。验:F5 深链能重建路由、无权限路径 404。
 - [ ] **B7 模块选择页 + useModule** — 决策阶梯逐字搬(0 模块→选择器 / 记住的仍有效→进 / 单个→进 / 有默认→进 / 否则选择器);`switchModule` 清 tabs + 跳 `homePath`;`setDefault` 同步。验:多应用切换 + 设默认后仍能从右上角九宫格回选择器。
 - [ ] **B8 布局壳** — antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
 - [ ] **B9 权限 + 消息 + 确认基建** — `<Can code="VERB:/path">`(替代 `v-auth`);`App.useApp().message` 承接 Vue 侧 74 处 `useMessage`;`useConfirm` 三 API 用 `Modal.useModal()` 重写(`modal.confirm({onOk:async})` 返 promise 时按钮自动 loading 且不关窗,正是现有语义,**代码会比 93 行更短**)。验:无权限按钮不渲染;确认框执行中不可重复点/不可 Esc 关。
@@ -103,6 +103,24 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B6a 菜单树 → 路由描述符(动态路由的决策半)
+
+`3877df4`。**B6 拆子步**(仿 B5):a 是「哪些菜单节点建路由、建成什么」的纯决策逻辑,b 是 react-router 的 materialization(React.lazy/Suspense/RouteObject)+ `<RequireAuth>` 守卫。把决策剥出来单独测,不必拉进 Suspense。
+
+**目录约定**:用 `src/views/`(登录页已在那,且对齐 Vue 侧 `views/`),glob 将是 `/src/views/**/*.tsx`。台账原文里 `/src/pages/**/*.tsx` 只是随口一提,以 `views/` 为准。
+
+规则逐条对齐 Vue `useAuthMenu.buildRoutesForModule`:flatten → 跳非 Menu/无 path → 跳 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe → 无 component 跳 → `hasView` 缺失 warn+跳 → 否则 view 描述符。**`hasView` 与 `warn` 注入**,不在函数里直接摸 glob/console —— 前者让"组件存不存在"可控,后者让那条 warn 分支**测得到**(否则永远命中不了)。
+
+**九条变异,预测先写,一条揪出判据缺口(与 B4/B5 同源):**
+
+M4(去掉 `isHttpUrl(path)` 外链跳过)**预测红、实测绿**。原因:我那条外链测试用了 `component: ''`,去掉外链跳过后节点照样被下面的 `!component` 跳过 —— **外链跳过与无组件跳过对这个输入互为冗余**,测试没隔离外链规则。这已经是本项目第 N 次同一形状:**判据的输入要让被测规则成为唯一起作用的闸**,否则别的规则替它兜了底,变异照样绿。修法:外链节点带一个**存在的** component,外链跳过就成了唯一能拦下它的闸。补完重跑 M4 如期红。
+
+其余八条如预测。M7(不查 hasView)双断言都红 —— warn 未被调 + 描述符多一条,两个断言缺一这条变异就可能溜过去(预测里写了这是重点)。M5(iframe 判据反相)红 7 条,全是真受影响(都断 component/iframe 形状),非噪声。
+
+`lint=0` / `typecheck=0` / 目标 spec 14 passed。**未跑全量**(避免与刚结束的 review lane 的残留状态混淆,且这条纯逻辑无跨文件耦合);下条落地前会全量确认。
+
+下一条:**B6b**(materialization + `<RequireAuth>` + `useModule` 决策阶梯 + 接进 App.tsx 替换探针兜底)。需要至少一个占位页做 glob 落点。
 
 ### 2026-07-20 · B5a review 处置 + 那条偶发红的最终定性(review-b5b lane:APPROVE 无阻断)
 
