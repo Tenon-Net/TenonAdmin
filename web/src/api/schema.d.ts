@@ -6991,6 +6991,8 @@ export interface components {
             copyright?: null | string;
             /** @description 版权链接(版权名的超链接;留空则纯文本) */
             copyrightUrl?: null | string;
+            /** @description 站点 Logo 图片地址(登录页品牌 logo;留空则前端回退内置矢量 logo) */
+            logo?: null | string;
             /** @description 是否启用登录验证码(运行时配置驱动;前端据此决定登录页是否展示验证码)。 */
             captchaEnabled?: boolean;
             /** @description 是否启用短信验证码免密登录(运行时配置驱动;前端据此决定登录页是否展示短信登录入口)。 */
@@ -7036,6 +7038,7 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             remark?: null | string;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7044,7 +7047,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7061,6 +7063,7 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7069,7 +7072,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7087,6 +7089,7 @@ export interface components {
             sort?: number | string;
             enabled?: boolean;
             remark?: null | string;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7095,7 +7098,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7126,6 +7128,7 @@ export interface components {
             operatorName?: null | string;
             ip?: null | string;
             userAgent?: null | string;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7134,7 +7137,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7160,6 +7162,7 @@ export interface components {
             sizeBytes?: number | string;
             /** @description 内容 SHA-256(hex,小写);分片上传落库,供「秒传」按内容去重。单文件上传暂不计算(留 null)。 */
             hash?: null | string;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7168,7 +7171,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7195,6 +7197,7 @@ export interface components {
             userAgent?: null | string;
             /** @description 用户姓名——非持久化,分页时按 long? SysLoginLog.UserId 批量回填(失败/账号不存在的行为 null,前端回落账号)。 */
             name?: null | string;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7203,7 +7206,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7230,6 +7232,7 @@ export interface components {
             sort?: number | string;
             enabled?: boolean;
             remark?: null | string;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7238,7 +7241,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7252,6 +7254,7 @@ export interface components {
             content?: null | string;
             type?: components["schemas"]["NoticeType"];
             receiverType?: components["schemas"]["ReceiverType"];
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7260,7 +7263,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7303,6 +7305,7 @@ export interface components {
             operatorName?: null | string;
             ip?: null | string;
             userAgent?: null | string;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7311,7 +7314,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7333,6 +7335,7 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7341,7 +7344,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7357,6 +7359,7 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7365,7 +7368,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7382,6 +7384,7 @@ export interface components {
             sort?: number | string;
             enabled?: boolean;
             remark?: null | string;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7390,7 +7393,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
@@ -7404,6 +7406,7 @@ export interface components {
             scopeType?: components["schemas"]["DataScopeType"];
             /** @description 自定义机构 Id 列表(逗号分隔),仅 DataScopeType.Custom 时使用。 */
             customOrgIds?: string;
+            isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */
@@ -7412,7 +7415,6 @@ export interface components {
             updateTime?: null | string;
             /** Format: int64 */
             updateUserId?: null | number | string;
-            isDelete?: boolean;
             /** Format: int64 */
             id?: number | string;
         };
