@@ -133,6 +133,27 @@
 
 探针页(`App.tsx`)换成 B2 版:本地 `useState` 驱动明暗/accent/密度,把阴影量级、恒等抽样、NaN 尺寸、tokens 是否进文档逐条渲染成肉眼可见的红绿。**B3 落 store 后把本地 state 换成 store**,`useAntdTheme` 入参形状不变。`Density` 暂定义在 `antd-theme.ts`,**B3 移进 app store** 后这里改成转口。
 
+**B2 review 处置**(`6254b35`;3 HIGH / 3 MEDIUM / 3 LOW,全部处置)。
+
+**[HIGH]三个具名阴影是角色名,不是序数阶梯 —— 我按 1/2/3 装反了。**逐个 grep `token.xxx` 的消费者核实:`boxShadow` **只有 Modal** 用、`boxShadowSecondary` 是 Dropdown/Select/Tabs/FloatButton、`boxShadowTertiary` 是 message 与 **Segmented 选中滑块**;antd 原档里 `boxShadow` 与 `boxShadowSecondary` **值完全相同**(都是 6/16 大浮层),`Tertiary` 才是 1px/2px 的微阴影。而 Naive 的 `boxShadow1/2/3` 是由小到大 —— 照序号搬,Modal 拿到卡片微阴影,**一个 24px 高的 Segmented 滑块下面挂 48px 模糊、0.18 alpha**。已对调。
+
+  **最该记的不是这个错,是它怎么活过验收的**:那个缺陷在 24 轮探针里**每轮都在屏幕上**(探针页顶部正好三个 Segmented),而我报了"全绿"——因为探针只读 `boxShadowDrawerLeft` 的 alpha,**三个具名阴影一个都没探**。"24 种组合全绿"这句话的强度完全取决于探针集覆盖了什么,而我当时没有问这个问题。现在探针断模糊半径的单调性,装回去会在 24 组合里逐个红出 `Modal 6px > 弹层 30px > 滑块 48px`。
+
+**[HIGH]探针页那条"tokens.css 进了文档"恒真。**它断的是 `colorBgContainer !== '#000000' && !!colorPrimary` —— 两句都永真(`colorPrimary` 必有值,`bgContainer` 明暗两种 algorithm 下都不可能是纯黑),**在它自己声称检测的失败模式下照样绿**。这正是本条 commit 花大力气消灭的那类断言,在探针页原地复活了一个。改成直接问文档要 `--color-shadow`。
+
+**[HIGH]`colorFill` 漏了,而闸门结构性看不见它。**填充阶覆盖了 Alter/Quaternary/Tertiary/Secondary,唯独漏掉顶端的 `colorFill`,于是文字按钮 **hover 是不透明 `#EBEDF0`、pressed(走 `colorBgTextActive ← colorFill`)却是半透明黑** —— 不是深浅差一档,是**种类**差异,落在有色或图案底上露馅。闸门看不见的原因是结构性的:`colorBgTextActive|colorFill` 两侧**都不在**我们的覆盖集里,`touched` 直接把这对滤掉了。已补,并加了一条"填充阶没有成员停在半透明默认上"的性质断言。
+
+**[MEDIUM]M3 那个我记为"要堵得抄实现"的缺口,其实堵得上,而且不用抄。**review 给的办法是**让豁免双向生效**:登记了"有意打破"的每一对,今天必须**真的还是断开的**。把 `colorFillTertiary` 退回 hover 色之后,`controlItemBgHover` 与它反而又相等了 —— 那条豁免静默变成多余,而"你声称打破了但其实没打破"是**可观测的结构事实**,不需要任何令牌字面量进测试。变异证实:上一轮这个变异**一条都不红**,现在红两条。
+
+**[MEDIUM]map 层还漏了两对(都在暗色)**:`getSolidColor(bgBase,26)` 在暗色下是**三路**恒等(`colorBorder`/`colorBorderDisabled`/**`colorBgSpotlight`**),`getAlphaColor(textBase,0.04)` → `colorFillQuaternary`/**`colorBgBlur`**。已加 `MAP_PAIRS_DARK_ONLY` 并把两对登记进 EXEMPT 带理由(Tooltip 是**反色**浮层、毛玻璃染色,本就不该跟随我们的表面阶)。
+
+**[MEDIUM]阴影用例在"tokens.css 没加载"下三条断言全绿** —— 亮色会回落 antd 默认 `#000`,那也是不透明、派生 alpha 也正好是 0.08/0.12/0.05,于是这一轮**无法区分"令牌对"和"令牌根本没到"**。恒等用例本来就有自检行,这里没有,标准不一致。已补。
+
+**[LOW]** `ALIAS_PAIRS` 从 `> 30` 改成 `toBe(51)`:地板只抓得住归零,抓不住"51 掉到 31"(antd 一次 minor 重排就可能少查 20 对而全绿)。**[LOW]** `afterAll` 那句"同一个 happy-dom 环境"是错的 —— vitest 默认 `isolate: true`,跨 spec 文件不会串;复位该做,但理由是同文件内后续 describe。**[LOW]** 暗色派生阴影的天花板已写进 `tokens.css`:基色 alpha 已是 1,派生只能到 0.08/0.12/0.05,而手写三档是 0.30/0.44/0.52(**重 3-6 倍**),所以暗色下 Modal/Dropdown 会明显重于 Drawer —— 这是 antd 的结构约束,`colorShadow` 修不了,**别再有人把 alpha 加回去**。
+
+review 同时确认了几件我拿不准的:亮色 `#141B2D` 比纯黑淡 1-2 级、方向对且不会过重;暗色纯黑已是 `colorShadow` 这个杠杆的**最大值**,比原来的 `rgba(0,0,0,0.45)` 严格更好;`ALIAS_PAIRS` 正则今天**零遗漏**(51 对,其余 12 处提到 `mergedToken` 的全是算术/合成,非恒等);`strictPort` 不妨碍 E2(CLI 的 `--port` 优先级高于配置)。
+
+
 下一条:**B3**(四个 Zustand store)。
 
 ### 2026-07-20 · R4 框架无关层落进 src/
