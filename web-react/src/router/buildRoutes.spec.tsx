@@ -77,9 +77,14 @@ describe('真实 glob(不注入)——堵住"假 glob 掩盖真 glob 失效"的�
 })
 
 describe('viewKeysFrom(菜单管理的组件下拉真相源)', () => {
-  it('glob 键 → component 值(剥前缀后缀),排除登录页,排序', () => {
-    expect(viewKeysFrom(glob)).toEqual(['dashboard/index', 'system/user/index'])
-    // login/LoginPage 被排除:它是静态路由,不是菜单能配的落点。
-    expect(viewKeysFrom(glob)).not.toContain('login/LoginPage')
+  it('glob 键 → component 值(剥前缀后缀),排除非页面目录,排序', () => {
+    const withInternals: ViewGlob = {
+      ...glob,
+      '/src/views/embed/iframe.tsx': async () => ({ default: () => null }),
+      '/src/views/_placeholder/UnderConstruction.tsx': async () => ({ default: () => null }),
+    }
+    // login/LoginPage(静态路由)、embed/iframe(静态 import 的 iframe 视图)、_placeholder(内部占位)
+    // 都不是菜单能配的落点,必须挡在下拉外 —— 选到它们会渲染坏页/占位页。
+    expect(viewKeysFrom(withInternals)).toEqual(['dashboard/index', 'system/user/index'])
   })
 })

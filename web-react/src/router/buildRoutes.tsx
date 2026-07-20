@@ -20,11 +20,26 @@ export interface RouteHandle {
   icon?: string
 }
 
-// 所有页面组件:`/src/views/**/*.tsx` → loader。**排除 `.spec.tsx`**(测试文件不是页面,
-// 混进来会让 `hasView` 对一个 `xxx.spec` 键返回真、也污染菜单管理的组件下拉)。
+// 菜单可落地的页面组件:`/src/views/**/*.tsx`,减去几类**不是菜单落点**的文件:
+//   `.spec.tsx`      —— 测试文件(否则 `hasView('x.spec')` 返真、也污染菜单管理下拉)。
+//   `login/**`       —— 登录页是**静态路由**(App 直接 import),不是菜单能配的组件。
+//   `embed/**`       —— iframe 视图由 buildRoutes **静态 import**,菜单走的是 component=URL 那条 iframe 分支。
+//   `_placeholder/**`—— 内部共用占位实现,不是独立页面。
+// 后三类若留在 glob 里,既会同时被静态 + 动态 import 而**永远无法 code-split**(build 三条告警的来源),
+// 又会让管理员在下拉里选到一个坏页(embed/iframe 无 src、_placeholder 占位)。
 type ViewModule = { default: ComponentType }
 export type ViewGlob = Record<string, () => Promise<ViewModule>>
-const views = import.meta.glob<ViewModule>(['/src/views/**/*.tsx', '!/src/views/**/*.spec.tsx']) as ViewGlob
+const views = import.meta.glob<ViewModule>([
+  '/src/views/**/*.tsx',
+  '!/src/views/**/*.spec.tsx',
+  '!/src/views/login/**',
+  '!/src/views/embed/**',
+  '!/src/views/_placeholder/**',
+]) as ViewGlob
+
+// 上面 glob 已排除的目录前缀 —— `viewKeysFrom` 也照它过滤,好让**注入假表**的测试与真实 glob 结论一致
+// (假表不经 glob 的负模式,只能靠这里的显式过滤把内部组件挡在下拉外)。
+const NON_PAGE_PREFIXES = ['login/', 'embed/', '_placeholder/']
 
 /**
  * glob 键(`/src/views/system/user/index.tsx`)→ 菜单 component 值(`system/user/index`)。
@@ -35,7 +50,7 @@ const views = import.meta.glob<ViewModule>(['/src/views/**/*.tsx', '!/src/views/
 export function viewKeysFrom(glob: ViewGlob): string[] {
   return Object.keys(glob)
     .map((k) => k.replace(/^\/src\/views\//, '').replace(/\.tsx$/, ''))
-    .filter((k) => !k.startsWith('login/'))
+    .filter((k) => !NON_PAGE_PREFIXES.some((p) => k.startsWith(p)))
     .sort()
 }
 

@@ -20,14 +20,27 @@ export async function enter(moduleId: number): Promise<EnterResult> {
   return { chooser: false, moduleId }
 }
 
+// 在途去重:模块级。**StrictMode 下守卫的 effect 会挂载两次**(mount→unmount→remount),
+// booted 在 remount 时仍是 false,于是 enterInitial 被调两次;此外多个组件同时触发也会并发。
+// 缓存在途 Promise 让这些调用合流到同一次门户拉取,settle 后清空 → 下次 F5 照常重拉。
+// 与 `stores/dict.ts` / `stores/site.ts` 同一个模式。
+let inflight: Promise<EnterResult> | null = null
+
 /**
- * 登录进门户 / F5 深链重建:并行拉模块 + 权限码 + 资料,按阶梯决定落点。
+ * 登录进门户 / F5 深链重建:并行拉模块 + 权限码 + 资料,按阶梯决定落点。**在途去重**(见上)。
  *
  * 权限码喂 `hasPerm`:成功(哪怕空集=超管)才标 `permissionsLoaded`;失败不阻断进门户,
  * 但 `permissionsLoaded` 保持 false → `hasPerm` fail-closed(藏按钮),不谎报"有权限"。
  * profile 拿超管标记(只对超管 fail-open)+ 顺手回填头像;**失败按普通用户处理(安全侧,不误放行)**。
  */
-export async function enterInitial(): Promise<EnterResult> {
+export function enterInitial(): Promise<EnterResult> {
+  inflight ??= doEnterInitial().finally(() => {
+    inflight = null
+  })
+  return inflight
+}
+
+async function doEnterInitial(): Promise<EnterResult> {
   const [{ modules, defaultModuleId }, perm, profile] = await Promise.all([
     personalApi.modules(),
     personalApi

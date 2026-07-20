@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { StrictMode } from 'react'
 import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import { App as AntdApp } from 'antd'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
@@ -106,5 +107,28 @@ describe('守卫③:F5 深链 → enterInitial 重建后渲染目标页', () => 
     mountAt('/system/user')
     expect(await screen.findByText('LOGIN PAGE')).toBeTruthy()
     expect(useUserStore.getState().accessToken).toBe('') // 会话被清
+  })
+
+  it('StrictMode 下 enterInitial 只真拉一次门户(在途去重)', async () => {
+    // StrictMode 会 mount→unmount→remount,守卫的 effect 因此跑两次,booted 在 remount 时仍 false。
+    // 没有 `enterInitial` 的在途去重,modules/permissions/profile/menu 会各拉两次。
+    // 这条**真的套 StrictMode**——上面那条深链测试的 `toHaveBeenCalledOnce` 只因 harness 没套
+    // StrictMode 才成立,不代表运行时(main.tsx 用了 StrictMode)。去重让两处一致。
+    login()
+    render(
+      <StrictMode>
+        <AntdApp>
+          <MemoryRouter initialEntries={['/system/user']}>
+            <Routes>
+              <Route path="/login" element={<div>LOGIN PAGE</div>} />
+              <Route path="/*" element={<Protected />} />
+            </Routes>
+          </MemoryRouter>
+        </AntdApp>
+      </StrictMode>,
+    )
+    expect(await screen.findByText('USER PAGE')).toBeTruthy()
+    expect(modulesMock).toHaveBeenCalledOnce() // 双跑合流到一次
+    expect(menuMock).toHaveBeenCalledOnce()
   })
 })
