@@ -62,7 +62,7 @@
 - [x] **B5a api client + endpoint wrappers**(6989f1e) — 见轮次日志。`api/index.ts` 逐字复制;spec 跑 node 环境(happy-dom 没实现请求体一次性流);`bare` 与 URL 短路是**两道冗余闸**,已各自补判据。
 - [x] **B5b 登录页 + dict store**(dict store 604955c / site+error 46feef6 / 登录页 2213a87) — 只做账号密码路径;SMS/MFA/SSO 暂缓。见轮次日志。
 - [x] **B5 review lane** — **B5a + B5b 双 APPROVE 无阻断**(见轮次日志)。B5a 那条偶发红定性为跨进程污染、非文件内通道;B5b 三条 LOW 已处置。原 review-b5a lane 卡住已停,并入 review-b5b。 `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
-- [ ] **B6 动态路由**(a 决策逻辑已完成:3877df4) — `useRoutes(routes)`,routes 从 `auth.menuTree` 派生的普通数组。**Vue 版 `router/index.ts` 那个 `return to.fullPath` 重解析 trick 不需要存在**。`buildRoutesForModule` 逻辑逐条搬:flatten → 跳过非 Menu/无 path → 跳过 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe 视图 + `meta.iframeSrc` → 否则查 `import.meta.glob('/src/pages/**/*.tsx')`,缺失 `console.warn` 跳过;`viewComponentPaths` 由同一张 glob 表反推(**防手敲错致菜单静默消失,原样保留**)。`<RequireAuth>` 三条守卫按 Vue 版顺序:未登录→`/login`、`mustChangePassword`→锁死改密页、`!routesReady`→loading + `enterInitial()`。验:F5 深链能重建路由、无权限路径 404。
+- [x] **B6 动态路由**(a 决策 3877df4 / b-1 materialization a417a70 / b-2 守卫+接线 5af2763) — F5 深链重建、无权限 404、chooser 落选择器均通;探针降为 /_probe(B8 删)。见轮次日志。 `useRoutes(routes)`,routes 从 `auth.menuTree` 派生的普通数组。**Vue 版 `router/index.ts` 那个 `return to.fullPath` 重解析 trick 不需要存在**。`buildRoutesForModule` 逻辑逐条搬:flatten → 跳过非 Menu/无 path → 跳过 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe 视图 + `meta.iframeSrc` → 否则查 `import.meta.glob('/src/pages/**/*.tsx')`,缺失 `console.warn` 跳过;`viewComponentPaths` 由同一张 glob 表反推(**防手敲错致菜单静默消失,原样保留**)。`<RequireAuth>` 三条守卫按 Vue 版顺序:未登录→`/login`、`mustChangePassword`→锁死改密页、`!routesReady`→loading + `enterInitial()`。验:F5 深链能重建路由、无权限路径 404。
 - [ ] **B7 模块选择页 + useModule** — 决策阶梯逐字搬(0 模块→选择器 / 记住的仍有效→进 / 单个→进 / 有默认→进 / 否则选择器);`switchModule` 清 tabs + 跳 `homePath`;`setDefault` 同步。验:多应用切换 + 设默认后仍能从右上角九宫格回选择器。
 - [ ] **B8 布局壳** — antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
 - [ ] **B9 权限 + 消息 + 确认基建** — `<Can code="VERB:/path">`(替代 `v-auth`);`App.useApp().message` 承接 Vue 侧 74 处 `useMessage`;`useConfirm` 三 API 用 `Modal.useModal()` 重写(`modal.confirm({onOk:async})` 返 promise 时按钮自动 loading 且不关窗,正是现有语义,**代码会比 93 行更短**)。验:无权限按钮不渲染;确认框执行中不可重复点/不可 Esc 关。
@@ -103,6 +103,28 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B6b-2 守卫 + 门户接线(B6 完成)
+
+`5af2763`。B6 有决策风险的另一半:`useModule.enterInitial` 阶梯 + `<Protected>` 三守卫 + 接进 App。
+
+**`enterInitial` 阶梯逐字对齐 Vue**:空→chooser / 记住且有效→enter / 单个→enter / 默认且有效→enter / 否则 chooser;权限码 fail-closed、超管 fail-safe、头像回填。React 关键差异:`enter` 只把 `menuTree` 写 store,路由经 `useRoutes` 派生,**不需要 Vue 的 `return to.fullPath` 重解析**。chooser 态**不需要单独分支**:未 enter → menuTree 空 → 动态路由空 + homePath 回落 /module。
+
+**`<Protected>` 三守卫按 Vue 顺序**:未登录→/login、强制改密→锁死改密页(在门户重建**之前**)、routesReady 未就绪→跑一次 enterInitial 转圈。本地 `booted` 标志只跑一次(routesReady 在 chooser 态永远 false,拿它做重跑判据会打点风暴)。
+
+**阶梯变异:10 条预测先写,9 kill。** M1(空 modules 早返回)**不可 kill——与最后那句 chooser 兜底冗余**,行为仍被兜底钉住(空→chooser,且都不调 menu)。这是本项目又一个"分支被后续兜底替代"样本(同 B6a 的 M4)。M6(阶梯顺序:default 判在 remembered 前)红在"记住优先于默认"那条——顺序被钉住。M2/M4/M5/M7/M8/M9/M10 全红如预测。
+
+**两个变异脚本/类型的假绿,顺带记:**
+1. **匹配串缩进对不上(4 空格 vs 文件 2 空格)→ 四条替换 no-op,输出照样全绿**,与"判据没抓住"无法区分。脚本里的 `assert s.count==1` 是必要护栏(它 traceback 挡下了),读输出要先看 traceback 不能只看 passed。**"变异全绿"的第四种家:变异根本没应用。**
+2. 测试里 `as never` 上做 spread → typecheck 炸(`Spread types may only be created from object types`)。拿 `as never` 抹类型的反噬,typecheck 兜住了。改回正经 `UserProfile` 类型。
+
+**守卫 6 条行为测试**(渲染进真 router):三守卫 + F5 重建目标页 + chooser 落 /module + enterInitial 失败清会话跳登录。
+
+**堵上 B6b-1 记的缺口**:加一条**不注入 glob、指向真页面文件**的 buildRoutes 测试。上面所有路由测试都注入假 glob,真实 `import.meta.glob(['...','!...spec'])` 若因语法/版本匹配为空,一条都不红而 app 零动态路由。这条证明那条数组负模式在本 Vite 版本确实解析到文件。(顺带:build 仍 1 个 chunk,是 Vite 把"只 re-export UnderConstruction 的小占位页"内联了,功能无碍,B11 真页有内容自会拆——`建设中` 文案在主包里,页面可达。)
+
+四件套:`lint=0` / `typecheck=0` / `vitest=0`(166 passed / 21 files) / `build=0`。
+
+下一条:**B7**(模块选择页 + `switchModule`/`setDefault`——enterInitial 已就位,补切换与设默认那两支,把 /module 占位换成真选择器)。
 
 ### 2026-07-20 · B6b-1 materialization(描述符 → RouteObject)
 
