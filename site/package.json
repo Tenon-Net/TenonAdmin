@@ -7,7 +7,9 @@
   "scripts": {
     "docs:dev": "vitepress dev",
     "docs:build": "vitepress build",
-    "docs:preview": "vitepress preview"
+    "docs:preview": "vitepress preview",
+    "lint:prose": "node scripts/lint-prose.mjs",
+    "lint:prose:selftest": "node scripts/lint-prose.mjs --selftest"
   },
   "devDependencies": {
     "vitepress": "^1.6.3"

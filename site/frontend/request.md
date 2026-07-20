@@ -130,7 +130,7 @@ async function doRefresh(): Promise<boolean> {
 
 ## Dev proxy & CORS
 
-Both the typed client (`src/api/client.ts`) and `gen:api` assume the browser is talking same-origin to `/api` and `/openapi` — `client`'s `baseUrl` defaults to empty, and `gen:api` fetches `/openapi/v1.json` via a URL that looks relative too; neither does any cross-origin handling. In local dev the backend runs on `:5100` and the dev server on `:5173`, different ports, so something has to bridge that gap before either can work.
+The typed client (`src/api/client.ts`) assumes the browser is talking same-origin to `/api` — `client`'s `baseUrl` defaults to empty, and it does no cross-origin handling of its own. `gen:api` is a different story: it's a Node script that connects directly to a hardcoded `http://localhost:5100/openapi/v1.json`, doesn't go through the dev proxy, and isn't subject to CORS at all — if the backend isn't running on `:5100`, you have to edit that line in `package.json`'s script directly, and `TENON_API_TARGET` has no effect on it. In local dev the backend runs on `:5100` and the dev server on `:5173`, different ports, so something has to bridge that gap before the typed client can work.
 
 That something is the dev proxy in `vite.config.ts`:
 

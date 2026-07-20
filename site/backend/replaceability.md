@@ -4,7 +4,7 @@ Replaceability is the kernel's central concern: every service is interface-backe
 
 ## Constraint one: `TryAdd` registration, first registrant wins
 
-Built-in services are registered exclusively with `TryAdd*`, never `Add*`. `TryAdd`'s semantics are "if the container already has a registration for this interface, don't add another" — so if a consumer registers the same interface **before** `AddTenonAdmin()`, their implementation wins and the built-in one is skipped.
+Built-in services are registered exclusively with `TryAdd*`, never `Add*`. `TryAdd`'s semantics are "if the container already has a registration for this interface, don't add another" — so if a consumer registers the same interface **before** `AddTenonAdmin()`, their implementation wins and the built-in one is skipped. That only holds for single-implementation interfaces, though. `ICaptchaProvider` and `ISeedData` go through `TryAddEnumerable` instead, deduplicated by implementation type — the semantics there are "join the set," not "replace." A consumer's pre-registered slider-captcha provider ends up sitting alongside the three built-in ones rather than displacing them; which one actually gets used is decided separately, by `TenonAdmin:Security:Captcha:Type`.
 
 `ServicesSetup` is full of this pattern:
 
@@ -63,23 +63,28 @@ The rest of the login flow (captcha validation, failure lockout, password verifi
 
 A consumer's entities and controllers are mounted into the kernel via `options.ApplicationAssemblies`, extending it without modifying the kernel: entities join CodeFirst table creation, and controllers get `AddApplicationPart`-ed into the same MVC pipeline. See [Layered Architecture](./architecture.md#how-a-consumers-entities-and-controllers-plug-in) for details.
 
-Combined with module disabling, a consumer can even **take over** the routes of a built-in module: after disabling the built-in `Dict` module, their own `CustomDictController` can claim the `/api/v1/sys/dict/*` route.
+Combined with module disabling, a consumer can even **take over** the routes of a built-in module: after disabling the built-in `Dict` module, their own `CustomDictController` can claim the `/api/v1/sys/dict/*` route. The disable step isn't optional — skip it and both controllers end up registered on the same route, which throws an `AmbiguousMatchException` on the first request that hits it. Nothing catches this at startup; it only surfaces the moment a request lands there.
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration, options =>
 {
     options.ApplicationAssemblies.Add(typeof(MyModule).Assembly);
+    options.Api.DisabledModules = ["Dict"];   // skip this line and it's a route conflict, not a takeover
 });
 ```
 
 ## The "six-piece set" locks these down as a contract
 
-`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` is the regression lock for the replaceability mechanism — the test names are deliberately fixed by design, verifying the three constraints above as a contract, not as ordinary tests:
+`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` is the regression lock for the replaceability mechanism. The "six-piece set" name dates back to the original six cases — since then, SMS, email, realtime push, and external login each grew their own replaceable surface and picked up a matching test, so the file locks down nine cases today. The test names are deliberately fixed by design, verifying the three constraints above as a contract, not as ordinary tests:
 
 | Test | What it locks down |
 | --- | --- |
 | `ReplaceService_ShouldUseUserImplementation` | Consumer `Replace`s `IPasswordHasher`; the container resolves the consumer's implementation |
+| `ReplaceSmsSender_ShouldUseUserImplementation` | Consumer `Replace`s `ISmsSender`; the container resolves the consumer's implementation |
+| `ReplaceEmailSender_ShouldUseUserImplementation` | Consumer `Replace`s `IEmailSender`; the container resolves the consumer's implementation |
+| `ReplaceRealtimePublisher_ShouldUseUserImplementation` | Consumer `Replace`s `IRealtimePublisher`; the container resolves the consumer's implementation |
 | `OverrideAuthStep_ShouldAffectLoginFlow` | Overriding one `virtual` step of `AuthService` changes the login flow's result |
+| `ExternalAuthProvider_ShouldBePluggable` | A consumer's pre-registered external-login provider shows up in the resolved provider set (additive, doesn't displace the built-in ones) |
 | `DisabledModule_ShouldRemoveBuiltInController` | A disabled module's built-in controller is removed (404); non-disabled ones remain |
 | `CustomController_ShouldOwnSameRouteAfterModuleDisabled` | After disabling a built-in module, a consumer controller takes over the same route |
 | `CustomSeedData_ShouldRunOnceAndBeIdempotent` | Consumer seed data inserts once on first startup and is idempotent on subsequent startups |

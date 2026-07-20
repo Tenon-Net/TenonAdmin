@@ -34,7 +34,7 @@ features:
     details: Runtime depends only on SqlSugar and Microsoft.* official libraries — Redis, object storage, etc. are opt-in.
   - icon: 🔐
     title: Auth & Security
-    details: JWT authentication, CAPTCHA, login lockout, forced logout, and log redaction all included — a secure baseline out of the box.
+    details: JWT auth, login lockout, rate limiting, forced logout, and log redaction are on by default; three CAPTCHA styles ship built in and switch on when you want them.
   - icon: 🖥️
     title: Full-Stack Delivery
     details: Ships with a Vue 3 + Naive UI admin console, with containerized deployment and multi-replica horizontal scaling supported.

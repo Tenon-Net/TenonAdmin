@@ -33,12 +33,12 @@ Whichever route you pick, none of the following can be dodged in production. For
 
 | Setting | Why it must be dealt with |
 |---|---|
-| `TenonAdmin:Jwt:SecretKey` | Unset = dev-key mode: the kernel auto-generates a key to `./data/dev-jwt.key` and prints a warning. Production must configure it explicitly (a random string ≥32 bytes), and it must not enter version control — use an environment variable or a secrets manager. |
+| `TenonAdmin:Jwt:SecretKey` | Unset in production (any non-Development environment) **refuses to start** — it throws outright. Only the Development environment auto-generates a key to `./data/dev-jwt.key` and prints a warning. Production must configure it explicitly (a random string ≥32 bytes), and it must not enter version control — use an environment variable or a secrets manager. |
 | `TenonAdmin:Database` | Defaults to SQLite `./data/admin.db` (relative to the ContentRoot). For multiple instances or concurrent writes, switch to MySQL / SqlServer / PostgreSQL (change the two items `DbType` + `ConnectionString`). |
 | `TenonAdmin:Id:WorkerId` | The snowflake generator's machine bit. A single instance can leave it unset (falls back to 0); when scaling horizontally every replica must differ (0–63), or same-millisecond issuance collides on the primary key. Configuring Redis without giving it explicitly refuses startup outright — see [Containers & Multi-Replica](/guide/deployment/docker) for the details. |
 | `TenonAdmin:Upload:RootPath` | Defaults to `./wwwroot/upload`. Declare it as a data volume, or files are lost on redeploy; on Route A (backend also hosting the frontend) you must also move it out of `wwwroot`, or uploaded files get served anonymously by the static middleware — see [Route A's auth-bypass warning](/guide/deployment/route-a). |
 | `TenonAdmin:Api:ForwardedHeaders` | Required behind any reverse proxy / load balancer. Without it the backend always sees the proxy's single IP: every user shares one rate-limit bucket, per-IP brute-force protection drops to zero, and the audit log's IP column is void. For config details see [Route B](/guide/deployment/route-b). |
-| `TenonAdmin:Cache:Provider` | A single instance can leave it `Memory`. Multiple replicas must switch to `Redis`, or forced logout, permission revocation, and login lockouts fail to propagate between replicas — and once they fail, they fail for days. See [Containers & Multi-Replica](/guide/deployment/docker) for the details. |
+| `TenonAdmin:Cache:Provider` | A single instance can leave it `Memory`. Multiple replicas must switch to `Redis`, or forced logout, permission revocation, and login lockouts fail to propagate between replicas — and once they fail, they fail for days. Changing this setting alone isn't enough: the host project also needs the `TenonAdmin.Caching.Redis` package installed, and a call to `AddTenonAdminRedisCache(builder.Configuration)` **before** `AddTenonAdmin()`. Miss either condition and it silently falls back to the in-process cache. See [Containers & Multi-Replica](/guide/deployment/docker) for the details. |
 
 All of the above can go through environment variables, with double underscores for nesting (common in containerized deployments):
 
@@ -93,3 +93,9 @@ curl -i https://<your-domain>/api/v1/ping # 401: API routing works (this endpoin
 Then open the frontend and log in once; getting a menu back means the JWT secret, database, and seed data all line up.
 
 One last easy false alarm: a 404 on `/openapi/v1.json` in production is expected behavior, not something missing from the deployment. It's only mounted in the Development environment as the contract source for the frontend's `npm run gen:api`, not a production endpoint.
+
+## Rolling back
+
+There's no dedicated rollback script — rolling back means redeploying the previous version. A NuGet consumer points the package reference back at the previous version number; a Docker deployment switches the image tag back and runs `docker compose up -d`. The database doesn't need to roll back with it: CodeFirst only adds columns, never drops or narrows them, so a column the older code doesn't know about just sits there unused.
+
+What you genuinely can't undo is the publish step itself. Once a tag is pushed, it has already triggered `backend-release` to push a package to nuget.org — a package can be unlisted, never deleted. The full cadence is in the [changelog](/changelog) and the [release runbook](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/releasing.md). Rolling back rewinds the instance you deployed, not a package that's already out the door.

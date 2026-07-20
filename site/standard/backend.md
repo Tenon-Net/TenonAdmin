@@ -23,7 +23,7 @@ The kernel ships as NuGet packages, so a consumer can replace any part without t
 ## Entities
 
 - Defined under `Services/Entities/`; kernel system tables are named `Sys*`.
-- Pick a base class: ordinary tables inherit `BaseEntity` (primary key + the four audit fields + soft delete); tables that need org-level isolation inherit `DataEntity` (which also carries the `CreateOrgId` anchor).
+- Pick a base class: ordinary tables inherit `BaseEntity` (primary key + the four audit fields + soft delete); tables that need org-level isolation inherit `DataEntity` (which also carries the `CreateOrgId` anchor — see "Data access" below for what that means).
 - The primary key is always `Id` (snowflake, filled by AOP, never assigned by hand); soft delete is always `IsDelete`, and querying deleted rows needs an explicit `.ClearFilter<ISoftDelete>()`.
 - Extra information not reserved in the table schema goes into `ExtJson` — don't add a new column.
 - Follow `Entities/SysDictType.cs` for attributes: `[SugarTable]` / unique index `[SugarIndex(IsUnique=true)]` / `[SugarColumn(Length, ColumnDescription, IsNullable)]`.
@@ -40,13 +40,13 @@ The kernel ships as NuGet packages, so a consumer can replace any part without t
 
 - `[RolePermission]` takes no argument: the permission code IS `{METHOD}:/{route template}` (e.g. `GET:/api/v1/sys/dict/type/page`). **Never write magic strings like `"sys:user:add"` in code** — permissions are granted by checking routes in the role-menu UI; super admin (`sadm`) is let through.
 - Use `[ActiveSession]` for logged-in-only endpoints that need no specific permission; mark anonymous endpoints with an explicit `[AllowAnonymous]` (the global `RequireAuthorization()` is the fallback, so a forgotten attribute never silently exposes an endpoint).
-- Attach `[OperationLog(...)]` to write operations that need auditing; add `[Module("X")]` to make a whole module switchable off (removed via `Api:DisabledModules`, though built-in modules that carry a menu must not be dropped).
+- Attach `[OperationLog(...)]` to write operations that need auditing; add `[Module("X")]` to make a whole module switchable off — `Api:DisabledModules` strips the controller's routes (404, data untouched). The module *record* itself carries two separate delete guards: one with menus attached is always refused (`ErrorCode.ModuleHasMenus`, applies to self-built modules too), and the built-in `system` module is permanently protected by a fixed Id (`ErrorCode.ModuleProtected`).
 - Controllers may `return dto` directly (`ResultEnvelopeFilter` wraps the envelope as a fallback); built-in controllers return `Result<T>.Ok(...)` explicitly for a clear contract. See `Controllers/DictController.cs` for reference and the [request pipeline](/backend/request-pipeline) for the flow.
 
 ## Error handling
 
 - Business errors are thrown as `AdminException(ErrorCode)` or returned as an `ErrorCode`, uniformly converted into an envelope by `AdminExceptionFilter`.
-- `ErrorCode` is a numeric enum that **never carries localized text** (`Core/ErrorCode.cs`); i18n happens entirely on the frontend by code. Adding an error code is just adding an enum entry.
+- `ErrorCode` is a numeric enum that **never carries localized text** (`Core/ErrorCode.cs`); i18n happens entirely on the frontend, keyed by `msgKey`. Adding an error code means adding both an `[MsgKey("error.<module>.<meaning>")]` attribute (e.g. `error.dict.typeNotFound`) and the matching entry in both frontend language packs — miss it, and it falls back to showing the user the raw `error.code.{number}` string, and `ErrorCodeLocaleConsistencyTests` turns a backend test red.
 
 ## Data access
 
@@ -62,9 +62,9 @@ If a `DataEntity` row's `CreateOrgId` isn't set, org-scoped queries always retur
 
 ## Caching
 
-- The model is cache-aside (read-through) + explicit invalidation, not query-every-time; after a create/update/delete, both `RemoveAsync` the cache and broadcast an event (e.g. `DictService.InvalidateAsync` → `DictChangedEvent`) for cross-node invalidation / audit / push subscribers.
+- The model is cache-aside (read-through) + explicit invalidation, not query-every-time; after a create/update/delete, both `RemoveAsync` the cache and broadcast an event (e.g. `DictService.InvalidateAsync` → `DictChangedEvent`) for audit / push subscribers. The default `ChannelEventBus` is in-process, though — events don't cross replicas. Cross-node invalidation needs either a shared cache or your own [`IEventBus`](/backend/event-bus) wired to an MQ.
 - Logical keys are centralized in `Core/CacheKeys.cs` — no scattered magic strings; the prefix `Cache:KeyPrefix` (default `tenon:`) is appended uniformly by the provider.
-- Default is the in-process `MemoryCacheProvider`; for multi-instance sharing install the optional `TenonAdmin.Caching.Redis` package, and `AddTenonAdminRedisCache` must be registered **before** `AddTenonAdmin` to win over `TryAdd` (zero business-code changes). See [data layer & auditing](/backend/data-layer) for the template.
+- Default is the in-process `MemoryCacheProvider`; for multi-instance sharing install the optional `TenonAdmin.Caching.Redis` package, and `AddTenonAdminRedisCache` must be registered **before** `AddTenonAdmin` to win over `TryAdd` (zero business-code changes). Order isn't the only gate: the overload taking `IConfiguration` only actually takes over when `Cache:Provider=Redis`, otherwise it silently falls back to the in-process cache — the `AddTenonAdminRedisCache(connectionString)` overload, by contrast, enables unconditionally the moment it's called. See [data layer & auditing](/backend/data-layer) for the template.
 
 ## DI wiring
 
@@ -74,13 +74,13 @@ If a `DataEntity` row's `CreateOrgId` isn't set, org-scoped queries always retur
 ## Seed data
 
 - Implement `ISeedData<TEntity>`; `HasData()` returns the default rows (an empty collection is valid = "don't seed if the DB already has data").
-- **Fixed IDs keep it idempotent**: fill in only what's missing, never overwrite existing rows — UI changes aren't clobbered by a restart.
+- **Fixed IDs keep it idempotent**: fill in only what's missing, never overwrite existing rows — UI changes aren't clobbered by a restart. The one exception is `SyncOnUpgrade` (default `false`): the kernel's own `DefaultMenuSeed` and `DefaultModuleSeed` turn it on, so a seed-version bump overwrites same-Id rows, meaning UI edits to **built-in** menus and modules get lost on a kernel upgrade (self-built seeds are unaffected). Never turn this on for a seed whose rows users edit through the UI.
 - **IDs must fall within a reserved range** (`Core/TenonSeedIds.cs`): kernel `[1, 999]`, consumers `[1000, 4095]`, `4096+` belongs to the snowflake runtime; out-of-range, `Id=0`, or a duplicate of an existing seed ID is rejected at startup.
 
 ## Naming / organization
 
 - Namespaces follow directories; one type per file; suffixes `Sys*` for entities, `I*` for interfaces, `*Service`/`*Provider`/`*Filter`/`*Attribute`.
-- Nullable reference types enabled; all time access goes through the injected `TimeProvider` (testable), never a bare `DateTime.Now`.
+- Nullable reference types enabled; new code's time access goes through the injected `TimeProvider` (testable), never a bare `DateTime.Now`. The password-expiry path (`AuthService`/`UserService`/`PersonalService`), the SMS daily-cap day bucket, and the schema-version stamp all route through it now too — `SessionService` was always the pattern to follow, the rest have caught up. One bare call is left on purpose: `SchemaVersionSeed`'s first-install timestamp is a static seed row with no DI clock to inject.
 
 ## Package management
 

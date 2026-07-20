@@ -1,6 +1,6 @@
 # Data Layer and Auditing
 
-All data-layer conventions are centralized in `SqlSugarSetup`: one `SqlSugarScope` singleton, two global query filters, and one set of auto-filled audit fields. Business code writes only business fields — soft delete, org isolation, and the full audit-field set are all backstopped by the framework.
+The line of business code that queries orders writes neither `IsDelete == false` nor any org condition, yet both conditions reach the final SQL. `SqlSugarSetup` put them there: the whole process holds a single `SqlSugarScope`, and its query filters and audit AOP are attached once when it's constructed, so from then on nothing slips past them.
 
 ## One `SqlSugarScope` singleton
 
@@ -39,7 +39,7 @@ Deleted data is naturally invisible to every query. To query deleted data when g
 
 ### Data scope
 
-This is the kernel's signature capability. For `IOrgScoped` entities (i.e. `DataEntity` and its subclasses), results are filtered by the effective org set resolved for the current request:
+For `IOrgScoped` entities (i.e. `DataEntity` and its subclasses), results are filtered by the effective org set resolved for the current request:
 
 ```csharp
 client.QueryFilter.AddTableFilter<IOrgScoped>(e =>
@@ -90,10 +90,27 @@ client.Aop.DataExecuting = (_, info) =>
 
 ## Entity base classes
 
-Business entities choose one of two base classes:
+Business entities pick a base class by **which capabilities they need**. Five base classes form a chain, each level adding one more:
 
-- `BaseEntity` — primary key `Id` + the audit quartet (`CreateTime` / `CreateUserId` / `UpdateTime` / `UpdateUserId`) + soft delete `IsDelete`. Implements `ISoftDelete`. Used by tables that don't need org isolation (global dictionaries, the org tree itself).
-- `DataEntity` — inherits `BaseEntity`, adds the data-scope anchor `CreateOrgId`, implements `IOrgScoped`. Used by business tables that need "current org / current org and below / self only / custom" isolation.
+```text
+PrimaryId          primary key Id only
+  └─ AuditEntity   + the audit quartet (CreateTime / CreateUserId / UpdateTime / UpdateUserId)
+       ├─ BaseEntity      + soft delete IsDelete         implements ISoftDelete
+       │    └─ DataEntity      + org anchor CreateOrgId  implements IOrgScoped
+       └─ OrgAuditEntity  + org anchor CreateOrgId        implements IOrgScoped
+```
+
+| Base class | Audit | Soft delete | Org isolation | Used for |
+| --- | --- | --- | --- | --- |
+| `PrimaryId` | No | No | No | Detail/child tables. **Can't use the built-in repository or be seeded** (`IRepository<T>` is constrained to `where T : BaseEntity`) — typically read/written alongside the parent table in the same transaction via `ISqlSugarClient` |
+| `AuditEntity` | Yes | No | No | Tables that genuinely need real deletes but still want a paper trail: hard-deletable join tables, append-only log tables |
+| `BaseEntity` | Yes | Yes | No | Globally shared tables: dictionaries, config, the org tree itself |
+| `DataEntity` | Yes | Yes | Yes | Business tables needing "current org / current org and below / self only / custom" isolation |
+| `OrgAuditEntity` | Yes | No | Yes | Tables that need org isolation but also genuinely need real deletes |
+
+**For the two without soft delete, the repository's `DeleteAsync` is a physical delete** — the row is removed from the database, no recycle bin, no `RestoreAsync`. Ask whether a table needs a recycle bin before picking its base class.
+
+Both org-isolated base classes (`DataEntity` / `OrgAuditEntity`) get the write-path guard: the repository's `UpdateAsync`/`DeleteAsync` has a built-in scope check for `IOrgScoped` entities, and modifying/deleting a row from another org is rejected, returning 0 rows.
 
 ## Generic repository `IRepository<>`
 
@@ -133,7 +150,7 @@ The worker number comes from config `TenonAdmin:Id:WorkerId` (default 0, range 0
 ```
 
 ::: danger Every instance must differ under horizontal scaling
-For a single-machine deployment, leaving it unset (falling back to 0) is fine. **When scaling horizontally across multiple instances, each instance must be configured with a different `WorkerId`** — otherwise two instances issuing IDs in the same millisecond will collide on the primary key. This is a data-corruption-class problem, and it happens silently by default.
+For a single-machine deployment, leaving it unset (falling back to 0) is fine. **When scaling horizontally across multiple instances, each instance must be configured with a different `WorkerId`** — otherwise two instances issuing IDs in the same millisecond will collide on the primary key. If two machines share the same `WorkerId`, the 6 bits that encode the machine number in the ID are identical on both. If the sequence bits also happen to start from the same count within that same millisecond, the two resulting 64-bit numbers come out byte-for-byte identical. This is a data-corruption-class problem, and it happens silently by default.
 
 The kernel provides one line of defense: if Redis caching is chosen (a clear sign of multi-instance intent) but `WorkerId` isn't set explicitly, startup throws immediately — turning a silent primary-key collision into a readable startup error. For a genuinely single-instance deployment, set it to `0` explicitly to signal intent; on k8s, a StatefulSet's pod ordinal can be injected.
 :::

@@ -1,6 +1,8 @@
 # Project Structure & Startup
 
-This page maps `backend/`'s solution layout, the six packages under `src/`, how the sample host boots, and how the test suite verifies both a bare kernel and a consumer with its own business module. For the *why* behind the architecture (dependency direction, replaceability, request pipeline), see [Architecture](/backend/architecture) — this page is about structure and startup, that one is the deep dive.
+There are two projects under `tests/`, and only one of them runs tests. The other, `TenonAdmin.TestHost`, is a consumer in disguise: it registers itself into `options.ApplicationAssemblies` so that its entities, seeds and controllers all travel the consumer mounting path. Whether the kernel can really be consumed from outside is what it exists to prove.
+
+The design *why* — dependency direction, replaceability, the request pipeline — is unpacked on the [Architecture](/backend/architecture) page.
 
 ## Solution layout
 
@@ -9,7 +11,7 @@ This page maps `backend/`'s solution layout, the six packages under `src/`, how 
 | Folder | Contents |
 | --- | --- |
 | `samples/` | `MinimalHost` — the zero-config sample host used for local dev and manual verification |
-| `src/` | The six shipped packages |
+| `src/` | The eight shipped packages |
 | `tests/` | `TenonAdmin.Tests` (the test suite) and `TenonAdmin.TestHost` (a minimal consumer host) |
 
 `src/` holds the packages described in depth on the [Architecture](/backend/architecture) page — here's just enough to orient you:

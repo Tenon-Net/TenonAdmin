@@ -51,7 +51,7 @@ import.meta.glob('/src/assets/svg/*.svg', { query: '?raw', import: 'default', ea
 
   A file like `src/assets/svg/star.svg` becomes selectable as `local:star`.
 
-Both the Iconify data and the SVGs are bundled into the app itself, so icon rendering never reaches out to an external CDN (such as `api.iconify.design`) — in an offline or network-restricted deployment it behaves exactly as it does online.
+The four built-in icon collections and the local SVGs are all bundled into the app itself, so rendering them never reaches out to an external CDN (such as `api.iconify.design`). That only holds as long as an icon is picked from `ph`/`lucide`/`ep`/`ant-design`/`local:` — the picker's "online" tab accepts any Iconify name at all, and names outside those five aren't part of the bundle, so they simply don't render in an offline deployment.
 
 ## Using an icon in a component
 
@@ -68,7 +68,7 @@ import AppIcon from '@/components/AppIcon.vue'
 </template>
 ```
 
-`icon` is a `prefix:name` string (`local:name` for a local SVG), default size `18`. When `icon` is empty or can't be resolved, `AppIcon` falls back to `ph:dot-outline-duotone` — the same fallback the sidebar menu uses for an item with no icon in the rail/collapsed state.
+`icon` is a `prefix:name` string (`local:name` for a local SVG), default size `18`. When `icon` is empty or can't be resolved, `AppIcon` falls back to `ph:dot-outline-duotone` — the same fallback the sidebar menu uses for a **page leaf** with no icon set. Directory nodes have their own separate fallback, `ph:folder-duotone` (`web/src/composables/useLayoutMenu.ts`).
 
 ## Picking an icon in menu admin
 

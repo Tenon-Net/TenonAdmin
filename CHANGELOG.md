@@ -7,9 +7,26 @@ Release cadence: **development happens on `dev`, releases happen on `main`** —
 
 Once a tag triggers `backend-release`, it first runs build + tests + template smoke test (`dotnet new tenon-app` must restore and compile successfully), and only pushes to nuget.org if everything is green.
 
-The step-by-step release runbook (version bump, verify, merge to `main`, tag) lives in [`docs/releasing.md`](docs/releasing.md).
+The step-by-step release runbook (version bump, verify, merge to `main`, tag) lives in [`docs/releasing.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/releasing.md).
 
 > When releasing, **both halves' version numbers must be updated together**: the backend version is injected from the tag via `-p:Version`, while `web/package.json`'s `version` is a build-time constant **shown in the login page footer**. Forget to update it, and the version the user sees in the UI won't match the package they installed.
+
+## 0.2.1 - 2026-07-19
+
+A small polish + quality release: the login page's brand logo is now operator-configurable, and the three quality-audit judgment items left after 0.2.0 are closed.
+
+### Added
+
+- **Backend-configurable login logo**: a new `sys.site.logo` config key (GroupCode `sys`, seeded empty) is exposed through the anonymous site-info whitelist, so a consumer can point the login page at their own brand logo without editing code. The login page renders an `<img>` when a URL is set and falls back to the built-in vector logo when empty — across all three skins. Edited in the existing "系统基础配置" structured form (plain URL field); saving takes effect immediately. The login skin stays a deploy-time frontend constant (`DEFAULT_SKIN`), per the "deploy-time-fixed → constant, not backend config" convention; the skin switcher moved from bottom-center to the top-right, beside the theme/language pills (still per-browser remembered). (#11)
+
+### Fixed
+
+- **Menu button-permission UI gate**: the "配置权限" entry and the add/edit/delete/batch actions inside the button manager now honor the same client-side `hasPerm` gates as the main menu table, so a read-only user no longer sees write affordances they can't use. Server-side `[RolePermission]` was (and remains) the actual enforcement — this only aligns the UI.
+- **`/module` route title i18n**: the app-picker route title now uses the existing `module.choose` i18n key instead of a hardcoded Chinese string, so it renders correctly under English.
+
+### Changed
+
+- **Internal**: password-expiry and schema-version audit timestamps now read the injected `TimeProvider` (`GetLocalNow()`) instead of `DateTime.Now` directly, aligning with the audit-field time convention and making the expiry decision unit-testable with a fake clock. Runtime behavior is unchanged. The new `TimeProvider` parameters are trailing and optional, so consumers subclassing `AuthService`/`UserService`/`PersonalService` are unaffected.
 
 ## 0.2.0 - 2026-07-18
 

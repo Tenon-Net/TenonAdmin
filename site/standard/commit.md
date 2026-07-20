@@ -33,6 +33,7 @@ Distilled from the repo's actual commit history — pick the closest semantic ma
 | `test` | Adding or adjusting tests |
 | `build` | Build artifacts, packaging metadata (e.g. template package icon/README) |
 | `ci` | CI/CD pipeline, release process |
+| `chore` | Maintenance chores: dependency bumps, ignore-rule tweaks, regenerating artifacts — nothing that changes behavior |
 
 ## Real examples (from this repo's history)
 

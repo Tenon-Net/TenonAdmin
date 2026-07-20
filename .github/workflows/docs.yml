@@ -9,6 +9,12 @@ on:
     paths:
       - 'site/**'
       - '.github/workflows/docs.yml'
+  # PR 只跑闸门与构建，不部署。贡献指南要求 PR 对准 dev，所以两个分支都收。
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'site/**'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
@@ -22,7 +28,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 散文闸门。规矩的真相源是 skills/write-docs.md，脚本只实现其中机器判得准的部分。
+  # 先跑 selftest：闸门自己坏掉时会静默放行一切，那比没有闸门更糟——
+  # 你跑一遍绿灯，带着违规发车。
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+      - run: npm run lint:prose:selftest
+      - run: npm run lint:prose
+
   build:
+    needs: lint
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,12 +63,15 @@ jobs:
       - run: npm ci
       - run: npm run docs:build
       - uses: actions/configure-pages@v5
+        if: github.event_name != 'pull_request'
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: site/.vitepress/dist
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
