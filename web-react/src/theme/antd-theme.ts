@@ -1,11 +1,11 @@
 import { theme, type ThemeConfig } from 'antd'
 import { derivePrimary } from '@/theme/mix'
 
-/**
- * 密度档位。**B3 落 app store 时把它移过去**(与 Vue 侧一致:类型跟着它的持久化字段走,不跟着消费方走),
- * 这里改成 `import type { Density } from '@/stores/app'` + 转口。暂定义在这里只因为 B2 时点还没有 store。
- */
-export type Density = 'comfortable' | 'compact'
+// `Density` 归 app store(与 Vue 侧一致:类型跟着它的持久化字段走,不跟着消费方走)。
+// 这里转口一下,免得主题桥的使用者为了一个类型去 import store。
+import type { Density } from '@/stores/app'
+
+export type { Density }
 
 /** 读当前主题下的 token 值。`getComputedStyle` 同步反映最新的 `data-theme`,所以**必须先翻属性再读**。 */
 const v = (name: string): string =>

@@ -1,8 +1,7 @@
-import { useState } from 'react'
 import { Alert, Button, Card, ConfigProvider, Empty, Input, Segmented, Space, Table, Tag, Typography, theme } from 'antd'
 import { ACCENTS } from '@/theme/accents'
 import { useAntdTheme } from '@/theme/useAntdTheme'
-import type { Density } from '@/theme/antd-theme'
+import { useAppStore, isDark, type Density } from '@/stores/app'
 
 /**
  * B2 的主题桥探针页。**故意不是 hello world**:只渲染文字的壳在下面任何一条假设坏掉时照样绿。
@@ -11,9 +10,15 @@ import type { Density } from '@/theme/antd-theme'
  * 到 B8 布局壳落地时整页删掉。
  */
 export default function App() {
-  const [dark, setDark] = useState(false)
-  const [accent, setAccent] = useState<string>(ACCENTS[0])
-  const [density, setDensity] = useState<Density>('comfortable')
+  // B3:改从 app store 取(原先是本地 useState)。三条**细粒度**订阅而不是整体订阅 —— 后者任何
+  // 无关字段(collapsed / locale / 界面开关)变动都会重建整棵 ConfigProvider。
+  const dark = useAppStore(isDark)
+  const accent = useAppStore((s) => s.accent)
+  const density = useAppStore((s) => s.density)
+  const setThemeScheme = useAppStore((s) => s.setThemeScheme)
+  const setAccent = useAppStore((s) => s.setAccent)
+  const setDensity = useAppStore((s) => s.setDensity)
+  const setDark = (v: boolean) => setThemeScheme(v ? 'dark' : 'light')
 
   const themeConfig = useAntdTheme({ dark, accent, density })
 
