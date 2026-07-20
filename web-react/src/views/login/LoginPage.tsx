@@ -123,9 +123,21 @@ export default function LoginPage() {
                   />
                 </Form.Item>
                 {/* 后端下发的是 SVG 源码。这是本模板唯一一处 dangerouslySetInnerHTML,来源是自家后端的
-                    验证码端点(与 Vue 侧 `v-html` 同一处理);**别把这个先例扩大到任何用户输入上**。 */}
+                    验证码端点(与 Vue 侧 `v-html` 同一处理);**别把这个先例扩大到任何用户输入上**。
+                    内置三个 provider 的 SVG 全服务端自生成、零请求输入入串,可信;但 ICaptchaProvider
+                    是可替换扩展点,契约见后端 `ICaptchaProvider` 注释(Svg 不得嵌入不可信输入)。 */}
+                {/* 键盘可达:验证码看不清要能换一张,不能只有鼠标能点。role+tabIndex+Enter/Space+aria-label。 */}
                 <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label={t('login.captcha')}
                   onClick={() => void loadCaptcha()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      void loadCaptcha()
+                    }
+                  }}
                   title={t('login.captcha')}
                   style={{ cursor: 'pointer', display: 'grid', placeItems: 'center', minWidth: 110 }}
                   data-testid="captcha-img"

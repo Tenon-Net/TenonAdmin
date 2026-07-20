@@ -36,10 +36,12 @@ describe('translateError', () => {
     expect(translateError(err)).not.toContain('returned an object')
   })
 
-  it('msgKey 是子树路径且没有 message → 通用兜底(仍然不是 debug 文本)', () => {
+  it('msgKey 是子树路径且没有 message → 退回 msgKey 本身(ApiError 构造把它当 message)', () => {
     const err = new ApiError(50000, 'error.auth')
-    // ApiError 的构造在没有 message 时把 msgKey 当 message 用,所以这里落到 message 分支。
-    // 断言的重点是**不含 debug 文本**;具体落哪个分支是实现细节。
-    expect(translateError(err)).not.toContain('returned an object')
+    // `not.toContain('returned an object')` 太弱:它耦合 i18next 那句英文 debug 文案的**确切措辞**,
+    // 且放过了别的错误输出(回落成空、回落成 debug 变体)。直接钉死落点更结实 ——
+    // ApiError 无 message 时把 msgKey 当 message,`te('error.auth')` 为假 → 走 message 分支 → 'error.auth'。
+    // 这不是自指:期望值 'error.auth' 是我按构造函数的已知行为写死的字面量,不取自被测代码。
+    expect(translateError(err)).toBe('error.auth')
   })
 })
