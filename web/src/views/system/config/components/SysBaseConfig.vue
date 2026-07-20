@@ -17,6 +17,7 @@ const { loadSite } = useSite()
 // 真实消费点在登录页/侧栏/顶栏/页脚(见 useSite)。加参数 = 加一个 FIELDS 项 + 一条 config.base i18n。
 const FIELDS = [
   { key: 'sys.site.title', label: () => t('config.base.siteTitle') },
+  { key: 'sys.site.logo', label: () => t('config.base.logo') },
   { key: 'sys.site.subtitle', label: () => t('config.base.siteSubtitle') },
   { key: 'sys.site.copyright', label: () => t('config.base.copyright') },
   { key: 'sys.site.copyrightUrl', label: () => t('config.base.copyrightUrl') },

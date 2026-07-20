@@ -13,6 +13,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { useAuthStore } from '@/stores/auth'
 import { menuApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { MenuType, type MenuInput, type MenuTreeNode } from '@/types/menu'
@@ -31,6 +32,13 @@ const emit = defineEmits<{ (e: 'changed'): void }>()
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
+const auth = useAuthStore()
+
+// 客户端权限门,与主表 menu/index.vue 对齐(按钮就是 type=Button 的 SysMenu 行,复用菜单 CRUD 路由权限码);
+// 服务端 [RolePermission] 始终兜底,这里只为不给无权用户显示写入口。
+const canAdd = computed(() => auth.hasPerm('POST:/api/v1/sys/menu/add'))
+const canEdit = computed(() => auth.hasPerm('PUT:/api/v1/sys/menu/{id}'))
+const canDelete = computed(() => auth.hasPerm('DELETE:/api/v1/sys/menu/{id}'))
 
 const show = ref(false)
 const menuId = ref<number | null>(null)
@@ -240,20 +248,24 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
     width: 130,
     render: (r) =>
       h(NSpace, { size: 2, wrapItem: false }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit')),
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () =>
-              run(() => menuApi.remove(r.id), t('menu.deleted')).then((ok) => {
-                if (ok) emit('changed')
-              }),
-          },
-          {
-            trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
-            default: () => t('menu.deleteConfirm', { title: r.title }),
-          },
-        ),
+        canEdit.value
+          ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit'))
+          : null,
+        canDelete.value
+          ? h(
+              NPopconfirm,
+              {
+                onPositiveClick: () =>
+                  run(() => menuApi.remove(r.id), t('menu.deleted')).then((ok) => {
+                    if (ok) emit('changed')
+                  }),
+              },
+              {
+                trigger: () => h(NButton, { size: 'small', quaternary: true, type: 'error' }, () => t('common.delete')),
+                default: () => t('menu.deleteConfirm', { title: r.title }),
+              },
+            )
+          : null,
       ]),
   },
 ]
@@ -268,8 +280,8 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
   >
     <n-space vertical :size="12">
       <n-space>
-        <n-button type="primary" size="small" @click="openAdd">{{ t('menu.addButton') }}</n-button>
-        <n-button size="small" @click="openBatch">{{ t('menu.batchFromRoutes') }}</n-button>
+        <n-button v-if="canAdd" type="primary" size="small" @click="openAdd">{{ t('menu.addButton') }}</n-button>
+        <n-button v-if="canAdd" size="small" @click="openBatch">{{ t('menu.batchFromRoutes') }}</n-button>
       </n-space>
       <ProTable :columns="columns" :data="buttons" :pagination="false" row-key="id" storage-key="sys-menu-buttons" />
     </n-space>

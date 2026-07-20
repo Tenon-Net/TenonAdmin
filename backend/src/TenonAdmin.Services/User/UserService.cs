@@ -22,10 +22,15 @@ public class UserService(
     AdminSecurityOptions security,
     // 可选参数:默认 DI 注入;消费者子类省略也能编译(§5.3)。externalBindings 用于删用户时连带清其外部身份绑定。
     IPasswordHistoryService? passwordHistory = null,
-    ISysUserExternalService? externalBindings = null) : IUserService
+    ISysUserExternalService? externalBindings = null,
+    // 统一时间源(§1.11):尾随可选参数,DI 正常注入;消费者子类省略也能编译(§5.3)
+    TimeProvider? time = null) : IUserService
 {
     // 生成随机初始口令的字符集:去掉易混字符(0/O、1/l/I),含大小写+数字+符号。
     private const string PASSWORD_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*";
+
+    // LastPasswordChangeTime 是与审计字段同类的持久化业务时间戳,走本地时钟(与 SqlSugarSetup 的 GetLocalNow 审计口径一致)
+    private DateTime Now => (time ?? TimeProvider.System).GetLocalNow().DateTime;
 
     /// <summary>
     /// 解析初始口令:显式给定 → 用之;否则用配置的默认口令;都没有 → 密码学随机强口令(安全默认,不落公开常量)。
@@ -179,7 +184,7 @@ public class UserService(
             Enabled = input.Enabled,
             IsSuperAdmin = false,       // 接口永不建超管(防提权);超管只能种子/手工建
             MustChangePassword = true,  // 管理员建号:初始口令由管理员/系统设定,强制用户首登改密(§14)
-            LastPasswordChangeTime = DateTime.Now,   // 密码过期窗口从建号起算
+            LastPasswordChangeTime = Now,   // 密码过期窗口从建号起算
         };
         // 用户 + 角色成对写入包事务:任一步失败整体回滚,不留"已提交但无角色"的幽灵用户(P2-18)
         await InTransactionAsync(async () =>
@@ -272,7 +277,7 @@ public class UserService(
         var password = ResolveInitialPassword(newPassword);
         user!.Password = hasher.Hash(password);
         user.MustChangePassword = true;   // 管理员重置:强制用户下次登录后改密(§14)
-        user.LastPasswordChangeTime = DateTime.Now;   // 密码过期窗口从本次重置重新起算
+        user.LastPasswordChangeTime = Now;   // 密码过期窗口从本次重置重新起算
         await users.UpdateAsync(user);
         await (passwordHistory?.AppendAsync(id, user.Password) ?? Task.CompletedTask);   // 记录重置口令(策略关/未注入时空操作),使用户不能改回此口令
 

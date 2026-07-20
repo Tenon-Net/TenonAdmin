@@ -361,7 +361,7 @@ export default {
     saved: '保存成功',
     deleted: '已删除',
     tab: { base: '系统基础', security: '安全策略', upload: '上传策略', other: '其他配置' },
-    base: { siteTitle: '站点标题', siteSubtitle: '登录副标题', copyright: '版权信息', copyrightUrl: '版权链接' },
+    base: { siteTitle: '站点标题', logo: 'Logo 地址', siteSubtitle: '登录副标题', copyright: '版权信息', copyrightUrl: '版权链接' },
     security: {
       loginLock: { title: '登录失败锁定', maxFailCount: '锁定阈值(次)', lockMinutes: '锁定时长(分钟)' },
       password: {

@@ -232,7 +232,9 @@ async function onSmsSubmit() {
 <template>
   <div class="login-form">
     <div v-if="showLogo" class="lf-brand">
-      <TenonLogo :size="34" />
+      <!-- 站点 logo:后台配了图片地址用 <img>,否则回退内置矢量 logo(留空即回退) -->
+      <img v-if="site.logo" :src="site.logo" :alt="site.title" class="lf-logo" />
+      <TenonLogo v-else :size="34" />
       <span class="lf-word">{{ site.title }}</span>
     </div>
 
@@ -356,6 +358,13 @@ async function onSmsSubmit() {
   align-items: center;
   gap: 10px;
   margin-bottom: 18px;
+}
+/* 后台配置的品牌 logo:限高与内置矢量 logo 齐平,宽度自适应不变形 */
+.lf-logo {
+  height: 34px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 .lf-word {
   font-size: 18px;

@@ -299,6 +299,7 @@ export const configApi = {
           subtitle?: string | null
           copyright?: string | null
           copyrightUrl?: string | null
+          logo?: string | null
           captchaEnabled?: boolean
           smsLoginEnabled?: boolean
         }>(r),

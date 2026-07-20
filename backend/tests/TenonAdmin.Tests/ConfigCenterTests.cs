@@ -33,6 +33,25 @@ public class ConfigCenterTests
         Assert.Equal("TenonAdmin", data.GetProperty("copyright").GetString());
         Assert.Equal("", data.GetProperty("subtitle").GetString());
         Assert.Equal("", data.GetProperty("copyrightUrl").GetString());
+        Assert.Equal("", data.GetProperty("logo").GetString()); // logo 默认空串 → 前端回退内置矢量 logo
+    }
+
+    [Fact]
+    public async Task Site_info_exposes_configured_logo()
+    {
+        using var f = new AdminAppFactory();
+        var c = await SuperAdminClient(f);
+        var anon = f.CreateClient();
+
+        // 配置站点 logo 图片地址,匿名站点信息端点即时透出(登录页据此渲染品牌 logo)
+        var batch = await c.PutJson("/api/v1/sys/config/batch", new object[]
+        {
+            new { configKey = "sys.site.logo", configValue = "https://cdn.example.com/brand.svg" },
+        });
+        Assert.Equal(0, (await batch.ReadEnvelope()).GetProperty("code").GetInt32());
+
+        var site = await (await anon.GetAsync("/api/v1/sys/config/site")).ReadEnvelope();
+        Assert.Equal("https://cdn.example.com/brand.svg", site.GetProperty("data").GetProperty("logo").GetString());
     }
 
     [Fact]

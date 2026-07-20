@@ -14,6 +14,7 @@
 | [create-crud-frontend.md](create-crud-frontend.md) | 创建前端 CRUD 页面 | Types + API + Vue 页面（ProTable + FormContainer） |
 | [replace-service.md](replace-service.md) | 替换/扩展内置服务 | 定制登录流程、换密码哈希、覆写服务步骤 |
 | [create-page-variant.md](create-page-variant.md) | 非标准页面模板 | 树表、主从分栏、侧栏筛选 |
+| [write-docs.md](write-docs.md) | **文档写作规范** | 写或改 `site/` 下任何一页；中英双语的口吻、标点、开头、破折号 + 闸门 |
 
 ## 使用方式
 
@@ -28,6 +29,7 @@
 /create-crud-frontend
 /replace-service
 /create-page-variant
+/write-docs
 ```
 
 也支持自动触发——对 Claude 说"帮我加一个产品管理模块"即可匹配对应 skill。
@@ -42,4 +44,4 @@
 
 新增一个完整模块，从 [new-module.md](new-module.md) 进入——它按顺序编排 实体 → 后端 → 测试 → `gen:api` → 前端 → i18n → 菜单/权限 → 验证，并列出步骤间最容易断的交接点（权限码四处一致、MsgKey 对 i18n 键、种子 Id 保留区间）。
 
-每个 skill 都会区分**系统模块**（内核维护者）和**业务模块**（消费者二开）两种模式。
+建实体、建后端、建前端这三个 skill 连同 `new-module` 都会区分**系统模块**（内核维护者）和**业务模块**（消费者二开）两种模式；`replace-service` 只面向消费者，`create-page-variant` 只按页面形态分变体，都没有这条分叉。
