@@ -58,11 +58,20 @@ async function setup(handler: (c: Call, n: number) => Response | Promise<Respons
   // node 环境没有文档源,相对 URL 无法解析(生产里 baseUrl 为空 = 同源,靠的正是浏览器那个源)。
   // 给一个绝对源只为让 URL 解析得动,被测的路径部分原样保留。
   vi.stubEnv('VITE_API_BASE', 'http://api.test')
+  // 记账数组**每次 setup 新建、由桩闭包持有**,不是往模块级的 `calls` 上推。
+  //
+  // 这是踩出来的:原先桩里写 `calls.push(...)`,而 `calls` 是模块级变量、`resetModules` 不碰它,
+  // 上一个 setup 建的 fetch 桩又仍被上一个 client 模块闭包持有 —— 它的**迟到回调会推进新数组**。
+  // 症状是全量跑时偶发一条红(实测 5 次全量里中过 1 次:「没有 refreshToken 时连刷新都不发」
+  // 数到了 1 次刷新,而那条用例自己只发一个 GET),单跑那个文件永远绿。
+  // 每个 setup 各持一份,迟到回调就只会推进自己那个已经没人看的数组。
+  const mine: Call[] = []
+  calls = mine
   vi.stubGlobal('fetch', async (req: Request) => {
     const body = req.method === 'GET' || req.method === 'HEAD' ? null : await req.text()
     const c: Call = { url: req.url, method: req.method, body, auth: req.headers.get('Authorization') }
-    calls.push(c)
-    return handler(c, calls.length - 1)
+    mine.push(c)
+    return handler(c, mine.length - 1)
   })
   vi.resetModules()
   ;({ client } = await import('./client'))
@@ -71,8 +80,7 @@ async function setup(handler: (c: Call, n: number) => Response | Promise<Respons
 }
 
 beforeEach(() => {
-  calls = []
-  assigned = []
+  calls = [] // setup() 会换成它自己那份;这里只保证「没调 setup 的用例」也有个空数组可读
   localStorage.clear() // persist 会在每次重新求值时水合,不清就跨用例串味
   // node 环境没有 `window`。被测代码用 `window.location` 是对的(它是浏览器专属模块),
   // 所以桩要按浏览器的形状给,而不是把生产代码改成裸 `location` 去迁就测试环境。
@@ -80,9 +88,11 @@ beforeEach(() => {
   // `localStorage` 必须一并挂上:zustand 的 persist 是按 `typeof window !== 'undefined'` 判断有没有
   // 浏览器存储的,一旦定义了 `window` 它就会去拿 `window.localStorage` —— 桩里没有的话报的是
   // `Cannot read properties of undefined (reading 'setItem')`,和 location 毫无关系。
+  const mineAssigned: string[] = []
+  assigned = mineAssigned
   vi.stubGlobal('window', {
     localStorage: globalThis.localStorage,
-    location: { pathname: '/system/user', assign: (u: string) => assigned.push(u) },
+    location: { pathname: '/system/user', assign: (u: string) => mineAssigned.push(u) },
   })
 })
 
@@ -190,9 +200,11 @@ describe('③ 刷新失败:清会话 + 跳登录,且不递归', () => {
   })
 
   it('已经在登录页时不再跳转(否则是刷新循环)', async () => {
+    const mineAssigned: string[] = []
+    assigned = mineAssigned
     vi.stubGlobal('window', {
       localStorage: globalThis.localStorage,
-      location: { pathname: '/login', assign: (u: string) => assigned.push(u) },
+      location: { pathname: '/login', assign: (u: string) => mineAssigned.push(u) },
     })
     await setup(() => json({}, 401))
     useUserStore.setState({ refreshToken: '' })
