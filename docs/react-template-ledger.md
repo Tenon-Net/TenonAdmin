@@ -104,6 +104,19 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · B7 review 处置(review-b7 lane 隔离 worktree:APPROVE + 1 MEDIUM)
+
+`325d7b6`。lane 在隔离 worktree 里独立复现了 4 变异全 kill、三处承重守卫(鼠标 stopPropagation / 登出 try-catch / glob 排除),并抓到一个**我引入的真 MEDIUM**。
+
+**[MEDIUM 已修] 键盘按 Enter 激活"设为默认"会进应用、且设不了默认。** 卡片 `role="button"` + `onKeyDown(pick)`,内层「设为默认」按钮是它的 DOM 后代,keydown 冒泡到卡片 → 卡片 `preventDefault` 把按钮原生的 Enter→click 压掉 + 调 `pick` 把人带进应用。**我的 `stopPropagation` 只挡鼠标路径,键盘路径没等价物** —— 而 commit 里恰恰写了"stopPropagation 保证设默认不进应用",那句只对鼠标成立。**先独立复现(键盘回归测试红:`setDefault` 0 次调用)再修**:卡片 `onKeyDown` 加 `if (e.target !== e.currentTarget) return`,只认自己被聚焦时的按键。去掉守卫回归测试即红。
+
+**一条判据教训**:回归测试最初我断"`setDefault` 被调",实测环境**观测不到** —— `fireEvent.keyDown` 不像真浏览器那样把按钮上的 Enter 翻译成原生 click(那是浏览器行为,jsdom/happy-dom 不复刻)。改断**bug 的真实症状「有没有被带进应用」**(`switchMock` 不被调),那个测得到、也正是要守住的。**"断言要挑测试环境真能观测的症状,不是理论正确但环境测不到的那个"** —— 与 B6 的 StrictMode、B5 的 happy-dom 一次性流同源:**环境决定了哪些断言有意义**。
+
+**顺带落实 review 的 LOW**:补 `pick`/`setDefault` 失败路径测试(LOW-1,原来只测鼠标成功路径给了假信心);`pick`/`setDefault`/`logout` 共用 `busy` 门防快连点双发 + 给设默认也上 Spin(LOW-4)。**LOW-3(`<Button>` 嵌在 `role="button"` 卡片里的 ARIA 嵌套,是 MEDIUM 的结构根因)只治了行为,更彻底的重构(整卡不做 role=button)留后续 —— 标清,不假装做全。**
+
+四件套:`lint=0` / `typecheck=0` / `vitest=0`(182 passed / 22 files,+4) / `build=0`。
+
+**方法论累积到此(都在本台账各处)**:「跑绿/跑红都可能骗人」现已见过这些家 —— 判据没判别力(回声/自指)、分支被兜底替代不可 kill、变异根本没应用(缩进对不上)、**环境没实现失败模式**(happy-dom 一次性流)、**环境缺运行时那半**(StrictMode)、**断言挑了环境观测不到的症状**(键盘→click)。共同根:**判据的有效性取决于测试环境到底跑了什么**,写断言前先问"这个环境真会产生我要断的那个现象吗"。
 ### 2026-07-20 · B7 模块选择页 + switchModule/setDefault
 
 `628d1c5`。在 B6 的 `enterInitial` 之上补齐 useModule 剩两支 + 把 /module 占位换真选择器。
