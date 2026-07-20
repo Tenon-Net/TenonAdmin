@@ -33,8 +33,8 @@ public class SnowflakeIdGeneratorTests
     [Fact]
     public void Ids_stay_js_safe_at_end_of_epoch_lifetime()
     {
-        // 纪元 2026-01-01 + ~69 年,接近 41 位毫秒上限;此处 ID 最接近 2^53,是最严苛的边界
-        var nearEnd = new DateTimeOffset(2095, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        // 纪元 2020-02-20 + ~69 年,接近 41 位毫秒上限(约 2089-10 到顶);此处 ID 最接近 2^53,是最严苛的边界
+        var nearEnd = new DateTimeOffset(2089, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var gen = new SnowflakeIdGenerator(workerId: 63, timeProvider: new FixedTime(nearEnd));
         var id = gen.NextId();
         Assert.True(id < JsMaxSafeInteger, $"纪元末 ID {id} 越过 2^53——低位被加宽了?");
