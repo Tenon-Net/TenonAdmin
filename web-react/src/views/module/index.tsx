@@ -26,7 +26,10 @@ export default function ModuleChooser() {
   const routesReady = useAuthStore((s) => s.routesReady)
   const [busy, setBusy] = useState(false)
 
+  // 三个异步动作共用 `busy` 门:任一进行中就不接第二次点击(快连点、进应用途中又点设默认…),
+  // 并统一驱动 `Spin`。设默认/登出以前没这道门,rapid click 会重复发。
   async function pick(id: number) {
+    if (busy) return
     setBusy(true)
     try {
       // switchModule = 建路由 + (D1)清标签 + 返回新应用首页,这里负责导航(useModule 无 router 上下文)。
@@ -40,15 +43,21 @@ export default function ModuleChooser() {
   }
 
   async function onSetDefault(id: number) {
+    if (busy) return
+    setBusy(true)
     try {
       await setDefault(id)
       message.success(t('common.success'))
     } catch (e) {
       message.error(translateError(e))
+    } finally {
+      setBusy(false)
     }
   }
 
   async function logout() {
+    if (busy) return
+    setBusy(true)
     try {
       await authApi.logout()
     } catch {
@@ -57,6 +66,7 @@ export default function ModuleChooser() {
     useAuthStore.getState().reset()
     useUserStore.getState().clear()
     navigate('/login', { replace: true })
+    // 不 setBusy(false):已经跳走,组件即将卸载。
   }
 
   return (
@@ -95,6 +105,10 @@ export default function ModuleChooser() {
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
+                  // 只认卡片**自己**被聚焦时的按键。内层「设为默认」按钮的 keydown 会冒泡到这里,
+                  // 若不挡,卡片的 preventDefault 会压掉按钮原生的 Enter→click → 键盘用户设不了默认、反被带进应用。
+                  // (鼠标路径靠按钮的 stopPropagation;键盘路径靠这条 target 守卫,两条各管一半。)
+                  if (e.target !== e.currentTarget) return
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
                     void pick(m.id)
