@@ -65,7 +65,8 @@ function DynamicRoutes() {
   const home = useAuthStore(homePath)
   const routes = useMemo(
     () => [
-      // 选择页全屏,不进布局壳(对齐 Vue:它不是 layout 的子路由)。放在最前,静态段优先于壳内 `*`。
+      // 选择页全屏,不进布局壳(对齐 Vue:它不是 layout 的子路由)。静态段 `/module` 优先于壳内的 `*`
+      // —— **react-router 按路由特异性排名裁决,与数组顺序无关**(实测挪到末位仍赢);写在最前只是可读性。
       { path: '/module', element: <ModuleChooser /> },
       // 布局壳:菜单派生的动态路由、个人页、根重定向、404 都在壳内,渲染进 Sider+Header 的内容区。
       {

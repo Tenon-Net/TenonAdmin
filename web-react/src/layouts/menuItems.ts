@@ -52,6 +52,9 @@ export function openIfExternal(key: string): boolean {
  * 当前路径命中的叶子,其所有祖先目录 key(`cat-${id}`)—— 喂给 antd `Menu` 的 `openKeys`,
  * 让选中项所在的子菜单**跟着路由自动展开**(inline 模式下否则可能是收起的、看不到选中项)。
  * 纯函数,便于单测。命中不了返回空数组(off-menu 路由如 /personal/*,不强行展开谁)。
+ *
+ * **同一 path 挂在多个目录下时,只展开第一处命中的祖先链**(`for` 首个命中即 return)。真实菜单不会把
+ * 同一路由挂两处,故不为这个不会发生的情形收集全部分支;真遇到了,展开与高亮(两处都亮)会不一致。
  */
 export function openKeysFor(items: MenuItem[], path: string): string[] {
   for (const it of items) {

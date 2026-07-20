@@ -71,7 +71,9 @@ export function LayoutShell() {
             display: 'flex',
             alignItems: 'center',
             padding: '0 16px',
-            background: 'var(--color-header-bg, rgba(255,255,255,0.72))',
+            // tokens.css 恒先于 chrome.css 加载,`--color-header-bg` 必有定义,兜底其实是死分支;
+            // 对齐 token 的亮色实际值只为读起来不误导(暗色由 useAntdTheme 打的 data-theme 切走)。
+            background: 'var(--color-header-bg, rgba(255,255,255,0.82))',
             backdropFilter: 'blur(12px)',
             borderBottom: '1px solid var(--color-border, rgba(0,0,0,0.06))',
           }}

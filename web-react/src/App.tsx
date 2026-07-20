@@ -1,9 +1,9 @@
-import { useLayoutEffect } from 'react'
 import { App as AntdApp, ConfigProvider } from 'antd'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import antdZhCN from 'antd/locale/zh_CN'
 import antdEnUS from 'antd/locale/en_US'
 import { useAntdTheme } from '@/theme/useAntdTheme'
+import { useDocumentGrayscale } from '@/theme/useDocumentGrayscale'
 import { useAppStore, isDark } from '@/stores/app'
 import LoginPage from '@/views/login/LoginPage'
 import { Protected } from '@/router/Protected'
@@ -18,15 +18,10 @@ export default function App() {
   const accent = useAppStore((s) => s.accent)
   const density = useAppStore((s) => s.density)
   const locale = useAppStore((s) => s.locale)
-  const grayscale = useAppStore((s) => s.grayscale)
 
   const themeConfig = useAntdTheme({ dark, accent, density })
-
-  // 灰阶只是 <html> 上的一个 CSS filter,不进 antd 主题 —— 单独一条 effect,不塞进 useAntdTheme 的
-  // 依赖数组(否则只切灰阶也会白重建整棵 antd 主题)。data-theme/data-density 由 useAntdTheme 打。
-  useLayoutEffect(() => {
-    document.documentElement.toggleAttribute('data-gray', grayscale)
-  }, [grayscale])
+  // data-theme/data-density 由 useAntdTheme 打;灰阶单独一条(不进 antd 主题依赖)。见该 hook 注释。
+  useDocumentGrayscale()
 
   return (
     // antd 自带文案(空态/分页/日期)是**另一套 locale**,与我们的 i18n 无关,必须一起切 ——

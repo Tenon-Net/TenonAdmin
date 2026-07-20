@@ -2,9 +2,10 @@ import { useLayoutEffect, useState } from 'react'
 import { theme, type ThemeConfig } from 'antd'
 import { buildAntdTheme, type ThemeOpts } from './antd-theme'
 
-// 注:Vue 版还有个 `grayscale`(哀悼模式)。这里**故意不带** —— 消费它的 `[data-gray]` 规则在
-// `web/src/styles/index.css`,还没搬过来,现在加只是 toggle 一个无人消费的属性、白占一条 effect 依赖。
-// B8 布局壳把那份样式搬过来时(或把 `[data-gray]`/`[data-density]` 下沉到 web-shared/styles/)再补。
+// 注:Vue 版还有个 `grayscale`(哀悼模式)。这里**故意不带** —— 灰阶只是 `<html>` 上的一个 CSS filter,
+// 不改 antd 主题,混进本 hook 的依赖数组只会让"切灰阶"白重建整棵 ConfigProvider。
+// B8 已把它落到独立的 `theme/useDocumentGrayscale.ts`(App 里调),消费它的 `[data-gray]` 规则在
+// `styles/chrome.css`。**别在这里重复实现。**
 
 /**
  * 主题落地。对应 Vue 版的 `composables/useTheme.ts`,三件事同源:
