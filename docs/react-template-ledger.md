@@ -51,7 +51,7 @@
   - **[LOW]** `afterAll` 复位 `data-theme`;`--color-shadow` 记进 `web-react/` 侧的设计文档。
   - 验:浏览器探针明暗 × 6 accent × 密度全绿零控制台错误;**变异**——把 `--color-shadow` 改回 `rgba(20,27,45,0.16)`,新的量级断言必须变红(旧的色相断言不会)。
 - [x] **B3 三个 Zustand store**(8d0bf45;dict 随 B5,见轮次日志) — 搬 `user`/`auth`/`app`/`dict`(逻辑逐字对齐 Vue 侧:`hasPerm` 三条规则、`homePath` 阶梯、dict 的 typeCode 缓存 + 并发去重 + `invalidate` 竞态守卫;`usePreferredDark` 换裸 `matchMedia`;persist 白名单与 Vue 侧一致)。**决策记录**:`hasPerm`/`homePath`/`isDark` 一律写成**纯函数 + 细粒度 hook**,不做"返回闭包的选择器"——zustand 每次渲染都跑选择器并与上次结果 `Object.is` 比对,返回新建函数 = 每次都"变了" = 无限重渲染。补一条 review LOW:`auth-hooks.spec.tsx` 第三个用例名称声称"随 store 写入",而用例体里**根本没有 store 写入**,改名或补上写入。**tabs store 推迟到 D1**(它真正难的部分条条要导航,B3 时点既无路由也无容器);`auth.reset()` 里那句 `clearTabs()` 与 `useModule` 切应用那一处,两处都要在 D1 补回。验:单测 + 变异逐批证伪。
-- [ ] **B4 i18n + review 处置** — 搬 react-i18next 接线,三处默认值改写(**坏了都不抛错**):`interpolation.prefix/suffix`(默认 `{{name}}`,文案是 `{name}`,不改则取字照常成功、页面上永远挂着花括号)、`escapeValue: false`(默认转义,React 本来就转义,再来一遍把 `&` 显示成 `&amp;`)、`nsSeparator: false`(默认 `:` 会把含冒号的键切成两半,**权限码 `GET:/api/v1/x` 正是这个形状**)。antd 自带文案是**另一套 locale**,ConfigProvider 接 `antd/locale/*` 一起切,否则是「中文界面 + No data」。落实 review:
+- [x] **B4 i18n + review 处置**(14b9f8f) — 搬 react-i18next 接线,三处默认值改写(**坏了都不抛错**):`interpolation.prefix/suffix`(默认 `{{name}}`,文案是 `{name}`,不改则取字照常成功、页面上永远挂着花括号)、`escapeValue: false`(默认转义,React 本来就转义,再来一遍把 `&` 显示成 `&amp;`)、`nsSeparator: false`(默认 `:` 会把含冒号的键切成两半,**权限码 `GET:/api/v1/x` 正是这个形状**)。antd 自带文案是**另一套 locale**,ConfigProvider 接 `antd/locale/*` 一起切,否则是「中文界面 + No data」。落实 review:
   - **[MEDIUM]** 子树键上 `exists()` 与 `t()` 不一致(`exists('error.auth')` 为真而 `t()` 返回一句英文 debug 文本),与 Vue 侧 `te()` 行为**相反** → B5 的 `translateError` 会把 debug 文本弹给用户。**先写判别值再验证**,确认后加 `te()` 辅助 + 用例。
   - **[MEDIUM]** 模块级 `useAppStore.subscribe` 补 `import.meta.hot.dispose`(`stores/app.ts` 里 40 行外就有这个模式);`i18n.init()` 前加 `void`。
   - **[MEDIUM]** 副作用导入从 `App.tsx` 移到 `main.tsx`(与 `tokens.css` 并列,理由相同),删掉那条把顺序保证归因于 import 位置的**错注释**——真正的保证是模块求值早于渲染。
@@ -100,6 +100,24 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B4 i18n 接线
+
+`14b9f8f`。合并规则 R4 已落地并测过,这一条只往上接 i18next。三处默认值改写各自变异证伪过(去掉单花括号红 2、去掉 `escapeValue:false` 红 1、去掉 `nsSeparator:false` 红 1)。
+
+**那条 MEDIUM 属实,而且判别值很刺眼。**`i18n.exists('error.auth')` 是 **true**,而 `t('error.auth')` 返回 `"key 'error.auth (zh-CN)' returned an object instead of string."` —— 一句英文 debug 文本。消费者是错误提示那条路径(Vue 侧 `utils/error.ts:11` 的 `te(msgKey) ? t(msgKey) : message`),所以后端只要发来一个恰好是子树路径的 msgKey,用 `exists()` 就会把那句话弹给用户。
+
+  **"与 Vue 侧行为相反"这句我去源码验了,没照抄。**`@intlify/core-base` 的 `te`:只在解析结果是 string / message AST / message function 时返回 true,子树解析成普通对象 → false。所以补的 `te()` 写成 `exists(key) && typeof t(key, {returnObjects:true}) === 'string'`,三态与 Vue 一致,而且**恰恰在子树这一格与 `exists()` 分道**(变异:换回 `exists()` 红那一条)。
+
+**七处变异,预测先写,全部命中** —— 包括 **M7 如预测全绿**:把 `lng: useAppStore.getState().locale` 整句删掉,单测一条都不红,因为所有用例都显式 `changeLanguage`。首帧语言是浏览器侧的事,归探针管。
+
+**探针 14 条断言,而第 5 步是特意设计的。**前四步(初始中文 → 切英文 → 刷新 → 切回中文)看着已经很全,但**只在英文下刷新是没有判别力的** —— EN 恰好等于 `fallbackLng`,把 `lng` 初值删掉,那一步照样绿。第 5 步在**中文**下再刷一次才有判别力:删掉的话 i18n 回落 en-US(英文问候)而 antd 跟着 store 走(中文空态),一页两种语言。
+
+**修正后的 Vite 诊断第一次经受独立检验,通过了。**探针首跑又报 3 条 `Invalid hook call` —— 而这次日志写的是 `new dependencies optimized: antd/locale/zh_CN, antd/locale/en_US, react-i18next, i18next`,与 B3 那次(zustand)是**完全不同的依赖集**,现场却一模一样:dev server 活着时新增裸包。删掉 `node_modules/.vite` 真冷启动:**零错误、零 re-optimize 行、14 条断言全过**。B3 若没改那条 E2,它现在已经错第二次了。
+
+其余 review 处置:`resources` 不导出(spec 一律断 `t()` 的行为,不断资源对象 —— 后者是把喂进去的东西再读一遍);`fallbackLng` 换成行为断言(切到没有资源的语言,取到英文而非键名);store 订阅补 `import.meta.hot.dispose`(与 `stores/app.ts` 的 matchMedia 监听同一个模式);`init` 前加 `void`;副作用导入移到 `main.tsx` 与 `tokens.css` 并列,并删掉那条把顺序保证归因于 import 位置的错注释 —— 真正的保证是模块求值整体早于渲染。`ext/README.md` 补了两条约束:键名别用冒号(`nsSeparator:false` 是为了让后端 msgKey 取得到字,不是鼓励用冒号分层)、键名必须指向文案而非子树(`te()` 在错误路径上挡住了它,但你自己写 `t()` 时挡不住)。
+
+下一条:**B5**(api client + 登录页 + dict store)。那是台账里点名"唯一一处重复有真实技术风险的代码",三个中间件机制要逐字保留,值得单独一轮变异。
 
 ### 2026-07-20 · B3 三个 Zustand store
 
