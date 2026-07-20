@@ -22,6 +22,9 @@ export type PageFetcher<T> = (q: PageQuery & Record<string, unknown>) => Promise
  *   - 搜索:params 里除 current/pageSize 外的字段(搜索表单值)原样 `...` 透传给 fetcher,由各页 api 映 PascalCase。
  */
 export function toProTable<T>(fetcher: PageFetcher<T>) {
+  // ProTable 的 request 是 `(params, sort, filter)`;本适配**有意只接前两个**:
+  // 列级筛选(filter)不支持,筛选一律走搜索表单(16 个页都如此)。多列排序也不接 —— 后端 OrderBySafe
+  // 是单字段,`Object.entries(sort)[0]` 只取第一列即够,这是有意的天花板不是遗漏。
   return async (
     params: { current?: number; pageSize?: number } & Record<string, unknown>,
     sort: Record<string, SortOrder>,
@@ -29,12 +32,14 @@ export function toProTable<T>(fetcher: PageFetcher<T>) {
     const { current, pageSize, ...filters } = params
     const [field, order] = Object.entries(sort ?? {})[0] ?? []
     const { items, total } = await fetcher({
+      // `...filters` **摆在最前**:分页/排序是算出来的、必须权威。搜索表单万一有字段恰好叫 `page`/
+      // `sortField` 之类(16 个页目前都没有),前置就不会覆盖掉算出的分页值。
+      ...filters,
       page: current ?? 1,
       pageSize: pageSize ?? 10,
       // sortField 只在真有排序方向时给 —— order 为空(取消排序)时连字段也不传,回后端默认排序。
       sortField: order ? field : undefined,
       sortOrder: order === 'descend' ? 'desc' : order === 'ascend' ? 'asc' : undefined,
-      ...filters,
     })
     return { data: items, total, success: true }
   }
