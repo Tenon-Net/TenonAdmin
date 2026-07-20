@@ -8,7 +8,7 @@ namespace TenonAdmin.Core;
 /// │ 符号 0 │ 相对纪元的毫秒时间戳    │  机器号    │  毫秒内序列  │
 /// └───────┴──────────────────────┴───────────┴───────────┘
 /// </code>
-/// <para>容量:41 位毫秒 ≈ 69.7 年(纪元 2026-01-01 起可用到约 2095);
+/// <para>容量:41 位毫秒 ≈ 69.7 年(纪元 2020-02-20 起可用到约 2089-10);
 /// 64 台机器;单机单毫秒 64 个 ID(≈ 6.4 万/秒),超出则自旋等待下一毫秒。</para>
 /// <para><b>低位固定为 12 bit(机器 6 + 序列 6),这不是随手选的——41+12=53,ID 恒 &lt; 2^53,
 /// 落在 JS <c>Number.MAX_SAFE_INTEGER</c> 内,前端按数字解析 long 主键不丢精度(对齐 Yitter 默认布局)。
@@ -38,8 +38,14 @@ public class SnowflakeIdGenerator : IIdGenerator
     /// <summary>时钟回拨的可容忍上限(毫秒)。NTP 微调通常在几毫秒内,超过视为异常环境。</summary>
     private const long MAX_CLOCK_DRIFT_MS = 5;
 
-    /// <summary>自定义纪元:2026-01-01 UTC(项目立项年)。固定死——改动会导致新旧 ID 重叠,永远不要改。</summary>
-    private static readonly DateTimeOffset EPOCH = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    /// <summary>
+    /// 自定义纪元:2020-02-20 02:20:02 UTC,对齐 Yitter.IdGenerator 的默认纪元(issue #13)。
+    /// <para>对齐的意义:从 Yitter 迁过来的老数据与本实现新发的 ID 落在同一量级(当前均为 15 位),
+    /// 混在一张表里按 Id 排序仍是时间序;若纪元晚于 Yitter,新 ID 会比老 ID 小一个数量级,排序即错乱。</para>
+    /// <para><b>只能往更早挪,永远不要往后挪。</b>往前挪时间戳偏移变大,新 ID 恒大于所有已发出的 ID,
+    /// 不撞号也不乱序;往后挪则会与历史 ID 重叠。</para>
+    /// </summary>
+    private static readonly DateTimeOffset EPOCH = new(2020, 2, 20, 2, 20, 2, TimeSpan.Zero);
 
     private readonly long _workerId;
     private readonly TimeProvider _time;
