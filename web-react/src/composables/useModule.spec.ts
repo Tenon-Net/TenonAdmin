@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import type { AppModule } from '@/types/menu'
+import type { AppModule, MenuNode } from '@/types/menu'
 import type { UserProfile } from '@/types/api'
 
 vi.mock('@/api', () => ({
-  personalApi: { modules: vi.fn(), menu: vi.fn(), permissions: vi.fn(), profile: vi.fn() },
+  personalApi: { modules: vi.fn(), menu: vi.fn(), permissions: vi.fn(), profile: vi.fn(), setDefaultModule: vi.fn() },
 }))
 
 import { personalApi } from '@/api'
-import { enterInitial, enter } from './useModule'
+import { enterInitial, enter, switchModule, setDefault } from './useModule'
 import { useAuthStore } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
 
@@ -15,6 +15,7 @@ const modulesMock = vi.mocked(personalApi.modules)
 const menuMock = vi.mocked(personalApi.menu)
 const permsMock = vi.mocked(personalApi.permissions)
 const profileMock = vi.mocked(personalApi.profile)
+const setDefaultMock = vi.mocked(personalApi.setDefaultModule)
 
 const mod = (id: number): AppModule => ({ id, code: `m${id}`, title: `M${id}`, sort: 0 })
 const PROFILE: UserProfile = { id: 1, account: 'a', name: 'n', isSuperAdmin: false, avatar: null }
@@ -122,5 +123,42 @@ describe('enter', () => {
     expect(s.currentModuleId).toBe(4)
     expect(s.routesReady).toBe(true)
     expect(s.menuTree).toHaveLength(1)
+  })
+})
+
+describe('switchModule', () => {
+  const LEAF: MenuNode[] = [{ id: 1, parentId: 0, type: 2, title: '页', path: '/leaf', sort: 0, visible: true, children: [] }]
+
+  it('进目标应用并返回它的首页(模块自带 defaultRoute 优先)', async () => {
+    // homePath 要在 modules 里找到该模块读 defaultRoute,所以先把 modules 放进 store。
+    useAuthStore.setState({ modules: [{ id: 5, code: 'm5', title: 'M5', sort: 0, defaultRoute: '/dash' }] })
+    menuMock.mockResolvedValue(LEAF)
+    const home = await switchModule(5)
+    expect(home).toBe('/dash') // 模块的 defaultRoute 优先于菜单首叶
+    expect(useAuthStore.getState().currentModuleId).toBe(5)
+    expect(useAuthStore.getState().routesReady).toBe(true)
+  })
+
+  it('模块无 defaultRoute → 回落菜单树第一个叶子', async () => {
+    useAuthStore.setState({ modules: [{ id: 5, code: 'm5', title: 'M5', sort: 0 }] })
+    menuMock.mockResolvedValue(LEAF)
+    expect(await switchModule(5)).toBe('/leaf')
+  })
+})
+
+describe('setDefault', () => {
+  it('调后端设默认 + 本地同步 defaultModuleId(角标立刻转移,不重拉)', async () => {
+    setDefaultMock.mockResolvedValue(true)
+    useAuthStore.setState({ defaultModuleId: 1 })
+    await setDefault(7)
+    expect(setDefaultMock).toHaveBeenCalledWith(7)
+    expect(useAuthStore.getState().defaultModuleId).toBe(7)
+  })
+
+  it('后端失败则抛出(页面 catch 提示),本地不改', async () => {
+    setDefaultMock.mockRejectedValue(new Error('boom'))
+    useAuthStore.setState({ defaultModuleId: 1 })
+    await expect(setDefault(7)).rejects.toThrow('boom')
+    expect(useAuthStore.getState().defaultModuleId).toBe(1) // 没被改
   })
 })

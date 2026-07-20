@@ -6,6 +6,7 @@ import { useAuthStore, homePath } from '@/stores/auth'
 import { enterInitial } from '@/composables/useModule'
 import { buildRoutes } from './buildRoutes'
 import UnderConstruction from '@/views/_placeholder/UnderConstruction'
+import ModuleChooser from '@/views/module'
 
 /**
  * 受保护区的守卫,三条按 Vue 侧 `router/index.ts` 的顺序:
@@ -64,7 +65,7 @@ function DynamicRoutes() {
   const routes = useMemo(
     () => [
       ...buildRoutes(menuTree),
-      { path: '/module', element: <UnderConstruction /> }, // B7 换真选择器
+      { path: '/module', element: <ModuleChooser /> },
       { path: '/personal/password', element: <UnderConstruction /> },
       // '/' 落到当前应用首页;chooser 态 homePath 回落 /module。
       { path: '/', element: <Navigate to={home} replace /> },

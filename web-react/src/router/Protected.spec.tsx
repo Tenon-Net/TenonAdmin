@@ -96,8 +96,8 @@ describe('守卫③:F5 深链 → enterInitial 重建后渲染目标页', () => 
     login()
     modulesMock.mockResolvedValue({ modules: [{ id: 3, code: 'a', title: 'A', sort: 0 }, { id: 8, code: 'b', title: 'B', sort: 0 }], defaultModuleId: null })
     mountAt('/')
-    // chooser:menuTree 空 → homePath 回落 /module → /module 渲染占位选择器
-    await waitFor(() => expect(screen.getByText('/module')).toBeTruthy())
+    // chooser:menuTree 空 → homePath 回落 /module → /module 渲染真选择器(标题"选择应用")
+    await waitFor(() => expect(screen.getByText('选择应用')).toBeTruthy())
     expect(menuMock).not.toHaveBeenCalled() // chooser 态没进任何应用
   })
 

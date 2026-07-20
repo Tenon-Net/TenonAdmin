@@ -1,4 +1,4 @@
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, homePath } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
 import { personalApi } from '@/api'
 
@@ -18,6 +18,23 @@ export async function enter(moduleId: number): Promise<EnterResult> {
   const tree = await personalApi.menu(moduleId)
   useAuthStore.setState({ menuTree: tree, currentModuleId: moduleId, routesReady: true })
   return { chooser: false, moduleId }
+}
+
+/**
+ * 切换应用:重建路由 + (D1)清标签 + 落新应用首页。
+ * 返回目标首页字符串,由**有 router 上下文的调用方**(选择页组件)导航 —— useModule 保持 router-free,可测。
+ */
+export async function switchModule(moduleId: number): Promise<string> {
+  await enter(moduleId)
+  // TODO(D1):tabs store 落地后在此 `clearTabs()` —— 旧应用的标签在新应用里都是死链。
+  // 与 `stores/auth.ts` reset() 里那处 clearTabs 一样,是 D1 必须补回的**两处之一**(见该文件注释)。
+  return homePath(useAuthStore.getState())
+}
+
+/** 设默认应用:调 API + 本地同步 `defaultModuleId`(选择页角标立刻转移,不必重拉 /personal/modules)。 */
+export async function setDefault(moduleId: number): Promise<void> {
+  await personalApi.setDefaultModule(moduleId)
+  useAuthStore.setState({ defaultModuleId: moduleId })
 }
 
 // 在途去重:模块级。**StrictMode 下守卫的 effect 会挂载两次**(mount→unmount→remount),
