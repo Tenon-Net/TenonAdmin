@@ -32,8 +32,8 @@
 ## 批次 R · 重置与自包含化
 
 - [x] **R1 保存与重置**(2026-07-20,本文件首次提交) — `git branch -m feat/web-shared-extract archive/web-shared-extract`(留本地,**不推远端**);`git switch -c feat/web-react-template dev`。存档分支是后续所有"从旧分支取内容"的来源,也保存着两份 review 的结论与变异证据;新分支站稳前不删。验:`git ls-tree dev -- web-shared web-react` 为空(确认抽取从未进 dev),新分支 `git status` 干净。
-- [ ] **R2 把唯一一条真 bug 修复带回** — `archive` 的 `f1f579e` 与抽取无关:`57bde5e` 给后端 site-info DTO 加了 `Logo` 但没重跑 `gen:api`,`schema.d.ts` 从那时起就缺这个字段,**而且没人发现**——`configApi.siteInfo()` 走手写 `unwrap<{...}>` 内联类型,`paths` 里少个字段不会让任何东西编译失败。`git show archive/web-shared-extract:web-shared/api/schema.d.ts > web/src/api/schema.d.ts`(生成物与路径无关)。验:**起 MinimalHost 真跑一次 `npm run gen:api`,确认 diff 为空**——不要相信这次搬运。单独 `fix(web):` 提交。~~这是整个重构里唯一一处动 `web/`。~~ **这句断言已被 R1 review 证伪**(2026-07-20):`archive` 上另有 A5/A6 两个 commit 改了 `web/e2e/`,与共享层无关,见新增的 R2b。写这条时我是凭抽取的**意图**("抽取只该动 web-shared/")推断的,而不是跑 `git log --stat` 逐个 commit 看**实际**改了什么——意图与事实之间那道缝,正好够沉掉三个 commit。
-- [ ] **R2b 把 e2e 的两条测试质量修复带回**(R1 review 补记) — `archive` 的 `f3e70ba`(A5)与 `4ea84ec`(A6)只碰 `web/e2e/*` 与 `web/playwright.config.ts`,**e2e 目录从未被抽取搬动过**,所以与共享层无关,不带回就是白丢。内容:①用例互相污染全局状态(默认 app)导致假红/假绿,各用例改为自建前置;`fullyParallel:false` 没达到注释声称的效果、`workers:1` 缺失;②菜单叶子按名字二次查找会命中**同名目录节点**("文件管理"目录 Id 30 vs 叶子 Id 78);③RBAC 那条 `<=1` 断言在零菜单场景下**恒真**——又一个假断言。已实测 `git cherry-pick -n f3e70ba` 五个 `web/` 文件全部干净落地,唯一冲突是新分支上不存在的旧台账 `docs/react-port-ledger.md`(丢弃即可)。**验:光 cherry-pick 不算数——e2e 要真跑一遍**(需后端 + web dev server),并对着 ③ 做变异:把 RBAC 断言恢复成 `<=1`,零菜单场景必须仍绿(证明它当初确实恒真),换成新断言后必须红。单独 `test(web):` 提交。
+- [x] **R2 把唯一一条真 bug 修复带回**(abd9d1e) — `archive` 的 `f1f579e` 与抽取无关:`57bde5e` 给后端 site-info DTO 加了 `Logo` 但没重跑 `gen:api`,`schema.d.ts` 从那时起就缺这个字段,**而且没人发现**——`configApi.siteInfo()` 走手写 `unwrap<{...}>` 内联类型,`paths` 里少个字段不会让任何东西编译失败。`git show archive/web-shared-extract:web-shared/api/schema.d.ts > web/src/api/schema.d.ts`(生成物与路径无关)。验:**起 MinimalHost 真跑一次 `npm run gen:api`,确认 diff 为空**——不要相信这次搬运。单独 `fix(web):` 提交。~~这是整个重构里唯一一处动 `web/`。~~ **这句断言已被 R1 review 证伪**(2026-07-20):`archive` 上另有 A5/A6 两个 commit 改了 `web/e2e/`,与共享层无关,见新增的 R2b。写这条时我是凭抽取的**意图**("抽取只该动 web-shared/")推断的,而不是跑 `git log --stat` 逐个 commit 看**实际**改了什么——意图与事实之间那道缝,正好够沉掉三个 commit。
+- [x] **R2b 把 e2e 的两条测试质量修复带回**(8b52f71)(R1 review 补记) — `archive` 的 `f3e70ba`(A5)与 `4ea84ec`(A6)只碰 `web/e2e/*` 与 `web/playwright.config.ts`,**e2e 目录从未被抽取搬动过**,所以与共享层无关,不带回就是白丢。内容:①用例互相污染全局状态(默认 app)导致假红/假绿,各用例改为自建前置;`fullyParallel:false` 没达到注释声称的效果、`workers:1` 缺失;②菜单叶子按名字二次查找会命中**同名目录节点**("文件管理"目录 Id 30 vs 叶子 Id 78);③RBAC 那条 `<=1` 断言在零菜单场景下**恒真**——又一个假断言。已实测 `git cherry-pick -n f3e70ba` 五个 `web/` 文件全部干净落地,唯一冲突是新分支上不存在的旧台账 `docs/react-port-ledger.md`(丢弃即可)。**验:光 cherry-pick 不算数——e2e 要真跑一遍**(需后端 + web dev server),并对着 ③ 做变异:把 RBAC 断言恢复成 `<=1`,零菜单场景必须仍绿(证明它当初确实恒真),换成新断言后必须红。单独 `test(web):` 提交。
 - [ ] **R3 `web-react/` 脚手架(自包含)** — 从 `archive` 取 B1 的配置,**删光共享层接线**:`vite.config.ts` 去 `@shared` alias、去 `openapi-fetch` alias、`server.fs.allow` 整条删除(回默认);`tsconfig.json` 的 `paths` 只留 `@/*`、去 `../web-shared/**` 的 include;`package.json` 的 lint 去掉 `cd ..`、**补自己的 `gen:api`**(输出 `src/api/schema.d.ts`)。保留 `port: 5174`、proxy、`define.__APP_VERSION__`、`test.include: ['src/**/*.spec.{ts,tsx}']`(**`.tsx` 不能少**:React 组件测试必须带 JSX,漏掉时 vitest 不报错、CI 全绿、那些用例从来没执行过)、串行 pool 设置。**`types` 不加 `"node"`**——它是项目级的,会让 `process.env` 在浏览器源码里静默通过 typecheck,而 `web/` 那边没有这条,同一行代码会在**另一个模板**里炸;改为在需要 `node:fs` 的那一个 spec 顶部写 `/// <reference types="node" />`。验:四件套绿。
 - [ ] **R4 框架无关文件落进 `web-react/src/`** — 从 `archive` 的 `web-shared/` 复制,导入一律改 `@/*`:`types/{api,menu}.ts`→`src/types/`;`locales/{zh-CN,en-US}.ts`→`src/locales/`;`styles/tokens.css`→`src/styles/`;`theme/{mix,accents}.ts`→`src/theme/`;`utils/{tree,url}.ts`→`src/utils/`;`api/{index,schema.d}.ts`→`src/api/`。`locales/ext.ts` **内联进 `src/locales/index.ts`**(只剩一个消费者,与 `dev` 上 `web/src/locales/index.ts` 形状一致)。**暂不搬** `utils/{ua,chunkUpload}.ts`(当前无调用方,等批次 C 用到它们的页面再搬)。验:`grep -rn '@shared\|web-shared' web-react/` 为空;四件套绿。
 
@@ -86,6 +86,8 @@
 - [ ] **E3 `dev.bat`/`dev.sh` 带上 web-react** — 目前只起 backend + web。
 - [ ] **E4 文档** — 根 `CLAUDE.md` 加 `web-react/` 段落,写明两个模板各自自包含、零共享,**且这是刻意选择**;**不要**出现任何"必须一起带上"的措辞。site/ 加一页 React 模板上手(degit 一条命令)。
 
+- [ ] **E5 `gen:api` 漂移闸门**(R2 现场发现) — R2 修的那个字段缺了几个月没人发现,根因比台账原先写的更糟:`unwrap<T>(res: { data?: unknown }): T` **把响应体类型整个丢成 `unknown` 再按调用方的断言强转**,97 处 `unwrap<...>` 里具名的 90 处和内联的 7 处**一样是断言**——`schema.d.ts` 陈旧时,**任何**端点的 typecheck 都不会红,不是只有那个内联类型。也就是说今天守着这条契约的只有"人记得跑 `gen:api`"。CI 加一步:起 MinimalHost、跑 `gen:api`、`git diff --exit-code web/src/api/schema.d.ts`(以及 R3 之后的 `web-react/src/api/schema.d.ts`)。配方现成——`backend-release.yml:77` 已经在做"起 MinimalHost 抓 openapi"这件事,照抄即可。**不做**把 97 处响应类型改成 schema 派生:仓库里零先例,手写 DTO 是有意的可读性选择,那是另一场重构。
+
 ## 不做清单（有依据,防反复）
 
 - [~] **`web-shared/` 共享层** — 2026-07-20 推翻,理由见本文件开头四条证据。不要再抽第二次。
@@ -96,6 +98,28 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · R2 + R2b 带回 `web/` 的三条修复
+
+**R2**(`abd9d1e`)。搬 `schema.d.ts` 后起 MinimalHost 真跑了一次 `gen:api`,生成结果与搬过来的那份**逐字相同**——搬运可信。`vue-tsc` 绿。
+
+**R2 现场发现,已开 E5**:台账原先把"字段缺了几个月没人发现"归因于 `configApi.siteInfo()` 那个手写内联类型。**归因错了,而且方向是往轻里错的。**`unwrap<T>(res: { data?: unknown }): T` 把响应体丢成 `unknown` 再按调用方断言强转,所以 97 处 `unwrap<...>` 里**具名的那 90 处一样是断言**——`schema.d.ts` 陈旧时任何端点都不会红。照原归因去"修好那个内联类型"会让人以为这类漂移关上了,其实一点没关。CI 里也确实没有 `gen:api` 闸门(查过 `.github/workflows/*`)。
+
+**R2b**(`8b52f71`)。cherry-pick 后五个文件与 archive 逐字一致,e2e 7/7 绿。但绿不算数,做了五处变异,**预测先写进文件再跑**(`r2b-predictions.md`),四条命中、一条如实落空:
+
+| 变异 | 预测 | 实测 | 说明 |
+|---|---|---|---|
+| M1 恢复 `menus.length <= 1` | 绿 | **绿** | 恒真坐实:零授权用户停在 `/module`,根本没有侧边栏,`sidebarLeaves` 返回 `[]`,菜单过滤坏成任何样子都不红 |
+| M3 新断言的 URL 改成 `/workbench` | 红 | **红** | 报出真实观察值 `/module`,证明新断言在对真实状态求值,没被跳过 |
+| M2a 退回按名字查找、**保留**选中态守卫 | 红 | **红** | 失败点正是「文件管理」,收到的 class 里没有 `--selected` —— 与 A6 描述的目录 Id 30 遮蔽叶子 Id 78 完全对上 |
+| M2b 退回按名字查找、**删掉**守卫(A6 之前原貌) | 绿 | **绿** | 假通过本身:点开的是目录、页面没换,`expectContentRendered` 断的是上一页 |
+| M4 删掉展开动画的钉子 | 不确定 | 绿 3/3 | 见下 |
+
+M2a/M2b 这一对是本轮最有价值的产出:**A6 的价值不在「下标 vs 名字」,而在那句"先断它真的成了选中态"的守卫**。没有守卫,换成下标也只是把一个假通过换成另一个假通过;有了守卫,连老的按名字写法都能被抓住。修复的着力点和它表面改的东西不是一回事。
+
+M4 是唯一一处**无法证伪**的:删掉展开钉子跑 3 次全绿。预测里写的就是"不确定,倾向偶发红",实测偏向绿的一端。它治的是竞态(读到高度为 0 的首帧误判成"没展开"、再点一下其实是**收起**),本机时序碰不上。**如实记成:这条修复在本机只能靠推理成立,没有证据。**别把它写成"已验证"。
+
+下一条:**R3**(`web-react/` 脚手架,自包含)。
 
 ### 2026-07-20 · R1 保存与重置
 
