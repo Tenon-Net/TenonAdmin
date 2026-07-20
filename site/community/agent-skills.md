@@ -1,11 +1,11 @@
 # Agent Skills and AI-Assisted Development
 
-If you use Claude Code (or another AI agent) to help develop TenonAdmin, the repo has two sets of conventions, for two different scenarios:
+The gap is never correctness. Ask an agent for a CRUD module and you will usually get something that runs; what you won't get is something shaped like the rest of this repo. Two sets of conventions close that gap, and which one applies depends on whose code the agent is touching:
 
 - **Contributing to TenonAdmin itself** — a set of docs under `docs/agents/` specifying how agents should read issues, apply triage labels, and read domain background.
 - **Building business modules on top of TenonAdmin** — a set of development-standard docs under `skills/` that teach an agent to create entities, build CRUD, and replace services following the project's established patterns, whether you're a kernel maintainer adding a system module or a consumer building on top of it in your own project.
 
-Neither is a code generator — they're "rules + reference templates": the agent reads them and then generates code matching the conventions for your actual requirement, rather than copying a boilerplate verbatim.
+Neither set is a code generator. Both are rules plus reference templates: the agent reads them, then writes the code your requirement calls for, and the conventions only govern what that code looks like.
 
 ## Issues / PRDs: via GitHub Issues
 
@@ -73,7 +73,7 @@ Standard order for adding a complete new CRUD module (`/new-module` chains these
 2. `/create-crud-backend` — build the backend (including menu seed data)
 3. `/create-crud-frontend` — build the frontend (including i18n)
 
-Each skill distinguishes between **system module** (kernel maintainer) and **business module** (consumer extension) modes, with different generated code locations and naming rules — be clear about which scenario applies before using it.
+Those three steps and `new-module` all distinguish between **system module** (kernel maintainer) and **business module** (consumer extension) modes, with different generated code locations and naming rules, so be clear about which scenario applies before using them. `replace-service` targets consumers only, and `create-page-variant` splits by page shape, so neither has that fork.
 
 ## Reference
 

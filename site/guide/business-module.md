@@ -28,10 +28,10 @@ First ask yourself one question: does this table need per-organization data isol
 `backend/tests/TenonAdmin.TestHost/SampleDoc.cs` is a real example of the latter:
 
 ```csharp
-[SugarTable("sample_doc", TableDescription = "Sample org-isolated business entity (integration test)")]
+[SugarTable("sample_doc", TableDescription = "示例机构隔离业务实体(集成测试)")]
 public class SampleDoc : DataEntity
 {
-    [SugarColumn(Length = 128, ColumnDescription = "Title")]
+    [SugarColumn(Length = 128, ColumnDescription = "标题")]
     public string Title { get; set; } = "";
 }
 ```
@@ -77,7 +77,7 @@ public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
 - **Updates/deletes check visibility with `GetByIdAsync` first**: if it can't be seen, treat it as "not found / no access" and return `false`. This isn't just politeness — the data-scope global filter only applies to queries (SELECT); the write path relies on `SqlSugarRepository`'s built-in scope guard on `Update`/`Delete` for `DataEntity`, which returns 0 for an out-of-scope attempt to modify or delete another org's row. It takes both layers stacked to be airtight. Note that writes bypassing the repository, straight through the `Db.Updateable` / `Db.Deleteable` escape hatch, are **not** covered by this guard — you have to check ownership yourself.
 - All methods are `virtual`. A consumer wanting to override one step just subclasses and overrides that single method, without copying the whole thing.
 
-A real admin list usually needs paging, so swap `ListAsync` for `PageAsync`, with the input inheriting `PageInputBase` (which already carries `Current` / `Size` / `SortField` / `SortOrder` — there's no base class called `PageInput`, don't mix them up), build conditions with `WhereIF`, and page with `ToPagedListAsync`. `UserService.PageAsync` and `DictService.PageTypesAsync` in the kernel are ready-made blueprints.
+A real admin list usually needs paging, so swap `ListAsync` for `PageAsync`, with the input inheriting `PageInputBase` (which already carries `Current` / `Size` / `SortField` / `SortOrder` — there's no base class called `PageInput`, don't mix them up). Build conditions with `WhereIF(condition, expression)`: it splices in that `Where` clause only when `condition` is true, skips it otherwise, so you're not hand-rolling a chain of `if`s. Page with `.ToPagedListAsync(input.Current, input.Size)` directly — feed it the page number and page size, and it hands back the already-sliced page plus the total count. `UserService.PageAsync` and `DictService.PageTypesAsync` in the kernel are ready-made blueprints.
 
 With a unique column, the pre-insert duplicate check must include soft-deleted rows: `repo.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(x => x.Code == input.Code)`. Without clearing the soft-delete filter, a soft-deleted row with the same code slips past the application-layer check and collides on the database's unique index as a raw 500; on a duplicate, throw a business code with `AdminException.ThrowIf(dup, ErrorCode.XxxExists)`.
 

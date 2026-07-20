@@ -128,13 +128,15 @@ The failure count is stored in cache, incremented atomically with its TTL refres
 
 ::: tip Account normalization must match the database
 The lockout counter's key is normalized first (trim whitespace + lowercase); its equivalence class must be at least as coarse as the database's matching equivalence class. Otherwise case/trailing-space variants (which MySQL's `utf8mb4_0900_ai_ci` / PAD SPACE collation would treat as the same row) split into separate counters, letting an attacker bypass lockout and guess indefinitely.
+
+For example, `Admin`, `ADMIN`, and `admin ` (trailing space) all resolve to the same user row under that collation. The normalization function collapses all three into the same cache key first, so three failed attempts stack onto one counter instead of splitting into three — which would otherwise hand an attacker double the guesses for free.
 :::
 
 **Blocking account enumeration** (`AuthService.ValidateUserAsync`): "account doesn't exist" and "wrong password" both throw `ErrorCode.PasswordWrong` (indistinguishable in the response), and when the account doesn't exist, an equivalent-cost dummy hash still runs — making response timing indistinguishable too, closing both side channels at once.
 
 ## Sessions and force-logout
 
-Sessions are managed by `SessionService` (design §15): sessions are persisted to the DB (source of truth) plus cached (hot path); the refresh token is stored only as a SHA-256 hash; all timestamps are UTC. At login, a GUID v7 is generated as the `sessionId`, written into the token's `sid` claim, and used as the stable anchor for listing online users and for force-logout.
+Sessions are managed by `SessionService`: the copy in the database is the source of truth, and the cached copy exists only to spare the hot path one query. Refresh tokens are stored as a SHA-256 hash and nothing else, and every timestamp is UTC. At login, a GUID v7 is generated as the `sessionId`, written into the token's `sid` claim, and used as the stable anchor for listing online users and for force-logout.
 
 **Force-logout takes effect immediately.** The authorization pipeline checks whether the session behind `sid` is still active on every request (see [Request Pipeline](./request-pipeline.md), step ②). When an admin kicks a user from "Online Users":
 

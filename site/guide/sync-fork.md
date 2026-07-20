@@ -1,10 +1,12 @@
 # Syncing Your Fork with Upstream
 
-This page is for one specific situation: you forked or cloned the whole `Tenon-Net/TenonAdmin` repository to use `web/` as the starting point for your own frontend, made your own changes on top of it, and now want to pull in TenonAdmin's upstream fixes and improvements without losing your work.
+The frontend ships no npm package, so forking the whole repository and making `web/` your own starting point is the supported path. That trades a version bump for a git merge: upstream fixes land in the same files that hold months of your own changes.
+
+The procedure below is written for that collision, and it is built to keep both sides.
 
 ::: tip Check which consumption model you're actually in first
 - **Backend-only consumer** (you run `dotnet add package TenonAdmin` or `dotnet new tenon-app` in your own separate repo) → you don't need any of this. Updates arrive by bumping the NuGet package version; see [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md) for what changed and any breaking changes before bumping.
-- **You forked the repo to build on `web/`** (the common case — there's no npm-installable frontend package, so building on `web/` directly is the supported path) → this page is for you.
+- **You forked the repo to build on `web/`** (the common case) → the procedure below was written for you.
 - **One-off snapshot consumer** (`npx degit Tenon-Net/TenonAdmin/web` for a copy you own and maintain yourself, the soybean / vite scaffold model) → you've opted out of the upgrade channel, so this page's merge flow doesn't apply; upstream fixes are yours to read off the diff and reapply by hand, and the frontend drifts from the NuGet-versioned backend contract. To keep pulling upstream fixes, don't take this path — use the fork model above.
 :::
 
@@ -28,7 +30,7 @@ git remote -v
 
 The repo has two long-lived branches with different purposes:
 
-- **`main`** — release-only. Every commit on `main` corresponds to a tagged, published release (`v0.1.0`, `v0.1.1`, ...). Stable, good default to track.
+- **`main`** — the release branch. Each release merges `dev` in and then gets tagged (`v0.1.0`, `v0.1.1`, ...), and the odd fix does land between tags. To stay exactly on a published version, track the tags instead — see the `git merge v0.1.1` in step 3.
 - **`dev`** — active development, the target branch for incoming PRs. Newer, but may contain work in progress between releases.
 
 Unless you specifically want to track unreleased work, base your fork on `main`:
@@ -66,8 +68,8 @@ Most merge friction comes from editing the same files upstream also touches. Thr
   | Your code | Goes in | Not in |
   |---|---|---|
   | Domain types | a new `web/src/types/<module>.ts` | `types/api.ts` |
-  | API wrappers | a new `web/src/api/<domain>.ts` (import `unwrap` / `pageParams` / `toPage` from `./index`) | `api/index.ts` |
-  | i18n text | a new `web/src/locales/ext/<locale>/<module>.ts` (globbed in automatically — see the [README](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/src/locales/ext/README.md) there) | `locales/zh-CN.ts` / `en-US.ts` |
+  | API wrappers | a new `web/src/api/<domain>.ts` (import `unwrap` from `./index`) | `api/index.ts` |
+  | i18n text | edit `locales/zh-CN.ts` / `en-US.ts` directly and take the conflicts | `locales/zh-CN.ts` / `en-US.ts` |
   | Pages | a new `web/src/views/<module>/` directory | any existing view |
 
   Those four upstream files are the highest-churn files in `web/src` — they change on nearly every release. That's exactly why your code shouldn't live in them. Conversely, files you own and upstream rarely touches (`styles/tokens.css`, your own views) are safe to edit freely: a conflict needs *both* sides to change the same file.
@@ -77,7 +79,7 @@ Most merge friction comes from editing the same files upstream also touches. Thr
 - **`web/src/api/schema.d.ts` is a special case: never merge it, regenerate it.** It's a 6000-line generated artifact, and since your backend has your own controllers, your copy diverges from upstream's from day one — so upstream changes to it always land as a whole-file conflict. Don't try to resolve it by hand:
 
   ```bash
-  git checkout --ours web/src/api/schema.d.ts   # keep yours, discard upstream's
+  git checkout --ours web/src/api/schema.d.ts   # under merge, --ours is yours; under rebase it is upstream's
   npm run gen:api                               # then regenerate against YOUR running backend
   git add web/src/api/schema.d.ts
   ```
@@ -89,4 +91,4 @@ Most merge friction comes from editing the same files upstream also touches. Thr
 - [CHANGELOG.md](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md) — Keep a Changelog format, one entry per release, covers both halves and calls out breaking changes explicitly (the project is pre-1.0, so the API can still shift).
 - The login page footer shows `web/package.json`'s `version` — after merging, bump it to match the tag you merged so what your users see matches what's actually running.
 
-This page is about pulling upstream changes into your fork. The reverse — contributing your own changes back to TenonAdmin — is the domain of the [Contributing Guide](/community/contributing).
+Everything above is about pulling upstream changes into your fork. The reverse — contributing your own changes back to TenonAdmin — is the domain of the [Contributing Guide](/community/contributing).

@@ -1,6 +1,6 @@
 # Multi-Org Data Scope
 
-Data scope is the kernel's signature feature. It answers one question: given the same endpoint and the same SQL, why do different users see different rows? The answer — business code writes no org-filtering condition at all; the kernel automatically trims results by the current request's **effective org set** inside a global query filter. This page breaks down the five data-scope types, how the filter works, what the anchor field is, and why the context carrier isn't `AsyncLocal`.
+Data scope carries the whole org-filtering burden on behalf of business code, and that is where the kernel makes its name. It answers one question: given the same endpoint and the same SQL, why do different users see different rows? The answer sits in a global query filter, which trims results automatically by the **effective org set** resolved for the current request.
 
 ## Five data-scope types
 
@@ -19,6 +19,8 @@ Scope is attached to **roles** (`sys_role_data_scope`); a user can hold multiple
 - If any role is `All` → unrestricted overall, sees everything;
 - Otherwise, union the org sets across roles (current org = primary org; current org and below = primary org + descendants; custom = the specified set);
 - If any role is `Self` → an additional "self only" dimension is unioned in (can also see data they created themselves).
+
+Say a user holds two roles: one `Org` role whose primary org is "East China Branch," and one `Custom` role scoped to "South China Branch" and "North China Branch." Neither role is `All`, so the merge is the union of all three orgs — queries filter to just those three. Neither role is `Self`, so this user doesn't see the extra "created by me" layer on top.
 
 ## Resolution: merging multiple roles into one result
 
@@ -68,7 +70,7 @@ The anchor for data-scope filtering is the `CreateOrgId` field on the entity —
 ```csharp
 public abstract class DataEntity : BaseEntity, IOrgScoped
 {
-    [SugarColumn(IsNullable = true, ColumnDescription = "Owning org Id (data-scope anchor)")]
+    [SugarColumn(IsNullable = true, ColumnDescription = "归属机构 Id(数据范围锚点)")]
     public long? CreateOrgId { get; set; }
 }
 ```

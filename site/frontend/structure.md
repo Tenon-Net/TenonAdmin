@@ -1,6 +1,8 @@
 # Project Structure & Startup
 
-Before you touch anything in `web/`, get your bearings: how the directories divide up, how the app assembles itself from `main.ts`/`App.vue`, and how the dev proxy reaches the backend. The reasoning behind the design choices (dynamic routing, data scope, replaceability) lives in [Core Concepts](/guide/concepts); for a line-by-line reference of directory responsibilities and development conventions, see [Frontend Standards](/standard/frontend).
+Move `app.use(pinia)` below `app.use(router)` and the route guard can no longer read the store. Most of what governs the `web/` side lives in orderings like that one, not in some extra layer of convention on top. What sits where, and what runs when, is answered by opening the file.
+
+The reasoning behind the design choices (dynamic routing, data scope, replaceability) lives in [Core Concepts](/guide/concepts). A point-by-point reference of directory responsibilities and development conventions is in [Frontend Standards](/standard/frontend).
 
 ## Directory layout
 
