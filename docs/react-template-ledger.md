@@ -50,7 +50,7 @@
   - ~~**[MEDIUM] `MAP_PAIRS` 补 `colorBgContainer|colorBgElevated`**~~ —— **照字面写会红在非缺陷上**:这对**只有亮色**恒等(antd 亮色 `getSolidColor(bgBase, 0)` 两者相同,暗色是 8 与 12),而 `MAP_PAIRS` 原本不分明暗一起比。已改成按模式拆两组,该对只进 light-only。变异证实:放进 BOTH 则暗色红在 `colorBgContainer(#1F2229) ≠ colorBgElevated(#262A31)`。
   - **[LOW]** `afterAll` 复位 `data-theme`;`--color-shadow` 记进 `web-react/` 侧的设计文档。
   - 验:浏览器探针明暗 × 6 accent × 密度全绿零控制台错误;**变异**——把 `--color-shadow` 改回 `rgba(20,27,45,0.16)`,新的量级断言必须变红(旧的色相断言不会)。
-- [ ] **B3 四个 Zustand store** — 搬 `user`/`auth`/`app`/`dict`(逻辑逐字对齐 Vue 侧:`hasPerm` 三条规则、`homePath` 阶梯、dict 的 typeCode 缓存 + 并发去重 + `invalidate` 竞态守卫;`usePreferredDark` 换裸 `matchMedia`;persist 白名单与 Vue 侧一致)。**决策记录**:`hasPerm`/`homePath`/`isDark` 一律写成**纯函数 + 细粒度 hook**,不做"返回闭包的选择器"——zustand 每次渲染都跑选择器并与上次结果 `Object.is` 比对,返回新建函数 = 每次都"变了" = 无限重渲染。补一条 review LOW:`auth-hooks.spec.tsx` 第三个用例名称声称"随 store 写入",而用例体里**根本没有 store 写入**,改名或补上写入。**tabs store 推迟到 D1**(它真正难的部分条条要导航,B3 时点既无路由也无容器);`auth.reset()` 里那句 `clearTabs()` 与 `useModule` 切应用那一处,两处都要在 D1 补回。验:单测 + 变异逐批证伪。
+- [x] **B3 三个 Zustand store**(8d0bf45;dict 随 B5,见轮次日志) — 搬 `user`/`auth`/`app`/`dict`(逻辑逐字对齐 Vue 侧:`hasPerm` 三条规则、`homePath` 阶梯、dict 的 typeCode 缓存 + 并发去重 + `invalidate` 竞态守卫;`usePreferredDark` 换裸 `matchMedia`;persist 白名单与 Vue 侧一致)。**决策记录**:`hasPerm`/`homePath`/`isDark` 一律写成**纯函数 + 细粒度 hook**,不做"返回闭包的选择器"——zustand 每次渲染都跑选择器并与上次结果 `Object.is` 比对,返回新建函数 = 每次都"变了" = 无限重渲染。补一条 review LOW:`auth-hooks.spec.tsx` 第三个用例名称声称"随 store 写入",而用例体里**根本没有 store 写入**,改名或补上写入。**tabs store 推迟到 D1**(它真正难的部分条条要导航,B3 时点既无路由也无容器);`auth.reset()` 里那句 `clearTabs()` 与 `useModule` 切应用那一处,两处都要在 D1 补回。验:单测 + 变异逐批证伪。
 - [ ] **B4 i18n + review 处置** — 搬 react-i18next 接线,三处默认值改写(**坏了都不抛错**):`interpolation.prefix/suffix`(默认 `{{name}}`,文案是 `{name}`,不改则取字照常成功、页面上永远挂着花括号)、`escapeValue: false`(默认转义,React 本来就转义,再来一遍把 `&` 显示成 `&amp;`)、`nsSeparator: false`(默认 `:` 会把含冒号的键切成两半,**权限码 `GET:/api/v1/x` 正是这个形状**)。antd 自带文案是**另一套 locale**,ConfigProvider 接 `antd/locale/*` 一起切,否则是「中文界面 + No data」。落实 review:
   - **[MEDIUM]** 子树键上 `exists()` 与 `t()` 不一致(`exists('error.auth')` 为真而 `t()` 返回一句英文 debug 文本),与 Vue 侧 `te()` 行为**相反** → B5 的 `translateError` 会把 debug 文本弹给用户。**先写判别值再验证**,确认后加 `te()` 辅助 + 用例。
   - **[MEDIUM]** 模块级 `useAppStore.subscribe` 补 `import.meta.hot.dispose`(`stores/app.ts` 里 40 行外就有这个模式);`i18n.init()` 前加 `void`。
@@ -82,7 +82,7 @@
 ## 批次 E · 工程化
 
 - [ ] **E1 `web-react/Dockerfile` + compose 服务** — 照 `web/Dockerfile`,但**构建上下文可以是 `./web-react` 自己**(不再需要仓库根,这正是自包含买到的)。
-- [ ] **E2 `web-react-ci.yml`** — lint → test → build → dev server 冒烟(5175,`--strictPort`,**断言内容而非状态码**——未知路径命中 SPA fallback 返 200 + index.html,只查状态码的检查会在什么都没证明的情况下通过;并断言仓库根 403)。**不带**任何共享层闸门与 `/@fs` 断言。paths 只有 `web-react/**`。
+- [ ] **E2 `web-react-ci.yml`**(⚠ 冒烟若断言"零控制台错误",**必须丢弃第一次加载** —— Vite 冷启动遇到新依赖会重新预打包并强制刷新,那个窗口真的会抛 `Invalid hook call`,与代码无关,B3 踩过) — lint → test → build → dev server 冒烟(5175,`--strictPort`,**断言内容而非状态码**——未知路径命中 SPA fallback 返 200 + index.html,只查状态码的检查会在什么都没证明的情况下通过;并断言仓库根 403)。**不带**任何共享层闸门与 `/@fs` 断言。paths 只有 `web-react/**`。
 - [ ] **E3 `dev.bat`/`dev.sh` 带上 web-react** — 目前只起 backend + web。
 - [ ] **E4 文档** — 根 `CLAUDE.md` 加 `web-react/` 段落,写明两个模板各自自包含、零共享,**且这是刻意选择**;**不要**出现任何"必须一起带上"的措辞。site/ 加一页 React 模板上手(degit 一条命令)。
 
@@ -100,6 +100,24 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B3 三个 Zustand store
+
+`8d0bf45`。**是三个不是四个**:`dict.ts` 第 6 行 `import { dictApi } from '@shared/api'` 是**运行时**依赖,而 `api/index.ts` 随 B5 的 client 一起走 —— 与 R4 撞到的是同一条边界。其余三个只引类型与常量,R4 都已落地。`Density` 按台账从 `antd-theme.ts` 移进 app store,桥改成转口。探针页从本地 `useState` 改成三条**细粒度**订阅。
+
+**台账记的那条 review LOW 属实,而且比记的更糟**:`auth-hooks.spec.tsx` 有条用例叫「渲染次数不随 store 写入无限增长」,而体内**一次 store 写入都没有** —— 只有一次手动 `rerender()`。它声称守的失败模式(选择器返回新建函数 → 无限重渲染)走的是 store **订阅通知**那条路径,手动 rerender 根本碰不到。改成三次真写入 + 各断一次重渲染,另补一条「同引用写回不重渲染」。
+
+**那条决策现在有实证了。**把 `useHasPerm` 改成台账警告的危险写法(`useAuthStore((st) => (code) => hasPerm(st, code))`),四条用例全红,React 自己报出 `The result of getSnapshot should be cached to avoid an infinite loop`。此前"纯函数 + 细粒度 hook"只是个断言,现在是可复现的事实。
+
+**六处变异,预测先写,全部命中**:M1 `isDark` auto 恒 false → 红 2;M2 `hasPerm` 去掉 `permissionsLoaded` 守卫 → 红 1;M3 `homePath` 去掉 `/module` 兜底 → 红 2;M5 `partialize` 混入 `systemDark` → 红 2;M6 `merge` 去掉 `LAYOUT_MODES` 校验 → 红 1。
+
+**M4 如预测全绿,已补上**:`EMPTY` 从工厂改成常量,一条都不红 —— 而这个危险是**代码注释里自己写明的**(常量的话三个数组在初始态与每次 reset 之间是同一个实例,谁就地 `sort()`/`push()` 一下就永久污染净态)。补了一条"就地改过数组之后再 reset 仍然干净"的用例,变异证实会红。**自己写明的隐患没有守卫,等于只是记了个愿望。**
+
+**浏览器探针**:偏好扛过 F5(明暗/主色/密度全留存)、`systemDark` 确认未入库、`--color-primary` 已写回。
+
+**踩到一个会误导人的陷阱,已写进 E2**:首次冷启动时探针报了 `Invalid hook call` 和 `Cannot read properties of null (reading 'useCallback')`,看着像 React 双实例的严重缺陷。实际是 **Vite 首次遇到新依赖(zustand)重新预打包并强制刷新**(`optimized dependencies changed. reloading`),那个窗口里模块图短暂不一致。dev server 预热后不再复现,四件套也一直是绿的。**任何断言"零控制台错误"的 CI 冒烟都必须丢弃第一次加载**,否则每次依赖变动都会假红一次。
+
+下一条:**B4**(i18n + review 处置)。
 
 ### 2026-07-20 · B2 主题桥(含那条我自己引入的亮色回归)
 
