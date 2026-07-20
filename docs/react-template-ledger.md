@@ -104,6 +104,21 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · B8 review 处置(review-b8 lane 隔离 worktree:APPROVE + 5 LOW)
+
+`183bec7`。lane 在隔离 worktree 里对 `menuItems`/`useLayoutMenu` 逐条打变异(8+3 全 kill 独立复现)、写 4 个 scratch spec、四件套真跑。**无 CRITICAL/HIGH/MEDIUM,5 LOW,全部处置。**
+
+- **[LOW-3 已修,最实的一条] `data-gray` effect 零测试覆盖 + `useAntdTheme` 注释过时。** 删探针那批里,`data-gray` 是**唯一新搬入、却没判据钉**的行为——我当时笼统说"探针检查已被 theme/i18n/app spec 覆盖"就把它漏了。**教训:删旧代码时若同时搬入新行为,那句"已覆盖"不成立,新行为要单独补判据。** 抽成 `theme/useDocumentGrayscale.ts`(hook,可 renderHook 测)+ 2 条 DOM 断言(切灰阶翻 `data-gray`、初值 true 挂载即打),去掉 toggle 即红。`useAntdTheme` 那段"grayscale 还没搬"的过时注释改成指向新 hook、别重复实现。
+- **[LOW-2 已修] `/module` 优先的注释归因不准。** 我写"放在最前,静态段优先",暗示数组位置起作用;实际是 **react-router 按特异性排名裁决,与顺序无关**(lane 挪到末位仍赢)。**注释里的因果归因也要能被证伪** —— 改成"react-router 按特异性排名,与数组顺序无关;写最前只是可读性"。
+- **[LOW-1 已注明] `openKeysFor` 同一 path 挂多目录只展开第一处祖先。** 真实菜单不会同一路由挂两处,不改代码,注释点明。
+- **[LOW-4/5 已修] `useLayoutMenu` 重复 `react` import 合并;`header-bg` 兜底值 `0.72`→对齐 token 的 `0.82`**(死分支,但值读起来误导)。
+
+lane 自己也踩了个环境坑并讲清了:junction 主 worktree 的 node_modules 跑全量 → `antd-theme.spec` 的 `?raw` 撞 `server.fs.allow` 边界报红;物理 `npm install` 后 203/24 全绿。**这正是"环境的红"** —— 与我这一路记的 StrictMode / i18n 未初始化 / happy-dom 一次性流同族,只不过发生在 reviewer 的 harness 上。
+
+四件套:`lint=0` / `typecheck=0` / `vitest=0`(205 passed / 25 files,+2 灰阶) / `build=0`。
+
+下一条:**B9 权限 + 消息 + 确认基建**(`<Can code>` 替 v-auth、`App.useApp().message` 承接 Vue 侧 74 处 useMessage、`useConfirm` 用 `Modal.useModal()` 重写)。
+
 ### 2026-07-20 · B8 布局壳(拆两步)
 
 `cb62290`(菜单派生)+ `cac1efc`(壳 + 接线 + 删探针)。**只做 vertical** —— Vue 的 7 种布局模式、mix rail、移动抽屉、水印、realtime、tabs(D1)、设置抽屉全是后续或不做,台账明确"暂不带 tabs"。
