@@ -41,6 +41,15 @@ export function withExt(base: Messages, mods: Record<string, ExtModule>, locale:
   const merged: Messages = { ...base }
   for (const [path, mod] of Object.entries(mods)) {
     if (!path.startsWith(prefix)) continue
+    // 这是本文件唯一面向**外部输入**的地方(`ext/` 是消费者的地盘),所以类型说什么不算数。
+    // 消费者把 `export default {...}` 写成 `export const foo = {...}` 时 `mod.default` 是 undefined,
+    // 而 glob 是 eager 的、在模块顶层求值 —— 不加这道守卫就是 `deepMerge` 当场抛
+    // `Cannot convert undefined or null to object`,表现为**整站白屏**,控制台那句话还完全指不到
+    // 是哪个文件写错了。所以点名路径再跳过,别静默。
+    if (!isPlainObject(mod?.default)) {
+      console.warn(`[i18n] 跳过 ${path}:扩展文案必须写成 \`export default { ... }\`(拿到的是 ${typeof mod?.default})`)
+      continue
+    }
     const ns = path.slice(prefix.length, -'.ts'.length)
     merged[ns] = deepMerge(merged[ns] ?? {}, mod.default)
   }
@@ -50,8 +59,15 @@ export function withExt(base: Messages, mods: Record<string, ExtModule>, locale:
 // glob 模式必须是字面量(Vite 要静态分析),所以一次抓全部 locale 再按前缀分组。
 const extMods = import.meta.glob<ExtModule>('./ext/*/*.ts', { eager: true })
 
-/** 并入消费者扩展后的最终文案。B4 把它接到 i18next 上。 */
-export const messages = {
-  'zh-CN': withExt(zhCN, extMods, 'zh-CN'),
-  'en-US': withExt(enUS, extMods, 'en-US'),
+/**
+ * 并入消费者扩展后的最终文案,**已经是 i18next 的 `resources` 形状**,B4 直接 `init({ resources })`。
+ *
+ * 那一层 `translation` 不能省。i18next 把 `resources` 的第二层当**命名空间**:少了它,`error`/`common`
+ * 会被当成 ns,而默认 ns(`translation`)不存在 —— i18next 对缺键的处理是**返回键名本身**,于是
+ * `t('error.auth.passwordWrong')` 原样吐出这串点分英文。不抛错、不告警、四件套全绿,整站文案变成键名。
+ * 本模板只有一个 ns,所以整份文案挂在 `translation` 下。
+ */
+export const resources = {
+  'zh-CN': { translation: withExt(zhCN, extMods, 'zh-CN') },
+  'en-US': { translation: withExt(enUS, extMods, 'en-US') },
 }
