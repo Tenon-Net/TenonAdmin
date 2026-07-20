@@ -112,7 +112,11 @@ export function buildAntdTheme(opts: ThemeOpts): ThemeConfig {
       // colorFillContentHover,不给的话文字按钮 hover 是不透明 #EBEDF0、pressed 却是半透明黑,
       // 落在有色或图案底上当场露馅。而恒等闸门**结构性看不见它** —— 那两对的两侧都不在我们的
       // 覆盖集里,`touched` 直接把它们滤掉了。
-      colorFill: v('--color-fill-hover'),
+      // **按下**态,必须与 hover 档不同色。filled 按钮与 Input.Search 把三态接到
+      // colorFillTertiary(静息) / colorFillSecondary(hover) / colorFill(active),
+      // 把后两个给同一个变量的话按下去毫无视觉反馈 —— 而恒等闸门看不见(这对不是 antd 的恒等),
+      // 半透明检查也看不见(两个值都不透明)。下面有一条专门断三态互不相同的用例。
+      colorFill: v('--color-fill-active'),
       colorFillAlter: v('--color-fill'),
       colorFillQuaternary: v('--color-fill'),
       // `colorFillTertiary` 是**静息**填充,不是 hover:它驱动 Tag / filled Button / Slider 轨道 / Empty,

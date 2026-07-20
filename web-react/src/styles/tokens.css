@@ -54,6 +54,10 @@
   --color-border-strong:  #D3D6DB;  /* 强调边框 / 输入描边 */
   --color-fill:           #F2F3F5;  /* 填充 / 表头 / hover 底 */
   --color-fill-hover:     #EBEDF0;  /* 行 hover / 悬浮填充 */
+  /* 第三档:**按下**态。antd 的填充阶是四级,而 filled 按钮/搜索框把 rest/hover/active 三态分别接到
+     colorFillTertiary / colorFillSecondary / colorFill —— 只有两档的话 hover 与 active 同色,
+     按下去毫无反馈。Naive 侧不需要这一档,所以这是两个模板**有意分叉**的一处。 */
+  --color-fill-active:    #E4E6EA;
   --color-mask:           rgba(20, 27, 45, 0.45);  /* 遮罩 / 弹窗背景 */
   --color-header-bg:      rgba(255, 255, 255, 0.82);  /* 顶栏底(配 backdrop-filter: blur(12px)) */
   /* 阴影**基色**(区别于下方三级完整 box-shadow):UI 库靠它自己派生抽屉/气泡/标签溢出等十来个阴影。
@@ -136,6 +140,7 @@
   --color-border-strong:   #4A4F58;
   --color-fill:            #262A31;
   --color-fill-hover:      #2E333B;
+  --color-fill-active:     #363B44;  /* 按下态,理由见亮色处 */
   --color-mask:            rgba(0, 0, 0, 0.65);
   --color-header-bg:       rgba(31, 34, 41, 0.82);  /* 顶栏底(配 blur) */
   /* 同样不透明,理由见亮色处;不给会被 antd 回落成白色发光。

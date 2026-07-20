@@ -197,6 +197,27 @@ describe('不抢 antd 的色阶派生(alias 恒等对全量比对)', () => {
   })
 
   /**
+   * filled 按钮的三态必须**互不相同**。
+   *
+   * `button/style/variant.js:176-178` 与 `input/style/search.js` 把 rest / hover / active 分别接到
+   * `colorFillTertiary` / `colorFillSecondary` / `colorFill`。我们的令牌原本只有两档不透明填充,
+   * 后两个槽位拿到同一个变量 —— **按下去毫无视觉反馈**,而两道现成的闸门都看不见它:
+   * 恒等闸门看不见(这三个之间不是 antd 声明的恒等),半透明检查也看不见(三个值都不透明)。
+   * 这类"给了值但给错"只能靠这种针对具体交互语义的性质断言。
+   */
+  it.each([
+    ['亮色', false],
+    ['暗色', true],
+  ])('%s:filled 控件的静息/hover/按下三态互不同色', (_name, dark) => {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : '')
+    const t = theme.getDesignToken(
+      buildAntdTheme({ dark, accent: '#646CFF', density: 'comfortable' }),
+    ) as unknown as Record<string, string>
+    const states = { 静息: t.colorFillTertiary, hover: t.colorFillSecondary, 按下: t.colorFill }
+    expect(new Set(Object.values(states)).size, `三态里有同色的:${JSON.stringify(states)}`).toBe(3)
+  })
+
+  /**
    * 三个具名阴影的**角色**没有被按序号错配。
    *
    * antd 这三个不是序数阶梯:`boxShadow` 只有 Modal 用、`boxShadowSecondary` 是 Dropdown/Select/Tabs、
@@ -209,6 +230,9 @@ describe('不抢 antd 的色阶派生(alias 恒等对全量比对)', () => {
     const t = theme.getDesignToken(
       buildAntdTheme({ dark: false, accent: '#646CFF', density: 'comfortable' }),
     ) as unknown as Record<string, string>
+    // 取最大的 px 数当模糊半径。**这只对本仓库当前的阴影值成立** —— 我们的 --shadow-* 都是
+    // 「偏移 + 模糊」两段、无扩散、无负偏移,模糊恒为较大者。哪天某档用上扩散半径或偏移 ≥ 模糊,
+    // 这个提取会静默报错值。真到那天改成按位置取第三个数,别继续用 max。
     const maxBlur = (sh: string) => Math.max(...[...sh.matchAll(/(\d+)px/g)].map((m) => Number(m[1])))
     expect(maxBlur(t.boxShadow!), 'Modal 的阴影不该比弹层轻').toBeGreaterThan(maxBlur(t.boxShadowSecondary!))
     expect(maxBlur(t.boxShadowSecondary!), '弹层阴影不该比 Segmented 滑块轻').toBeGreaterThan(maxBlur(t.boxShadowTertiary!))
