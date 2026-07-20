@@ -6,6 +6,8 @@ import { createRoot } from 'react-dom/client'
 // 期间任何**模块求值期**的 getComputedStyle 都读到空值。而空值喂给 antd ConfigProvider 的
 // 失败方式是颜色悄悄退回 antd 默认,不抛错。顺带让令牌在 CSS 级联里先于任何组件样式。
 import '@/styles/tokens.css'
+// 布局壳裸 CSS:基础 reset + [data-density]/[data-gray](B8 从 Vue 侧 styles/index.css 搬来)。
+import '@/styles/chrome.css'
 // 副作用:建 i18next 实例并接上 store 订阅。与 tokens.css 并列放在这里,理由相同 ——
 // **不是**因为"写在 import App 之前所以先执行"(那只是顺带),而是模块求值整体早于渲染,
 // 且这两件事都是全局单例的初始化,归属 main 而不是某个组件。

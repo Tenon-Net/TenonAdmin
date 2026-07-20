@@ -1,0 +1,121 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { render, screen, cleanup, waitFor, fireEvent, within } from '@testing-library/react'
+import { App as AntdApp } from 'antd'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import type { MenuNode } from '@/types/menu'
+
+const navigate = vi.fn()
+vi.mock('react-router-dom', async (orig) => ({
+  ...(await orig<typeof import('react-router-dom')>()),
+  useNavigate: () => navigate,
+}))
+vi.mock('@/api', async (orig) => ({ ...(await orig<typeof import('@/api')>()), authApi: { logout: vi.fn() } }))
+
+import '@/locales' // 副作用:初始化 i18n,否则 t('app.collapse') 返回 key 'app.collapse' 而非"折叠菜单"
+import { authApi } from '@/api'
+import { LayoutShell } from './LayoutShell'
+import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
+import { useUserStore } from '@/stores/user'
+
+const logoutMock = vi.mocked(authApi.logout)
+
+const TREE: MenuNode[] = [
+  { id: 1, parentId: 0, type: 2, title: '工作台', path: '/dashboard', sort: 0, visible: true, children: [] },
+  {
+    id: 2, parentId: 0, type: 1, title: '系统', path: '', sort: 1, visible: true,
+    children: [{ id: 3, parentId: 2, type: 2, title: '用户', path: '/system/user', sort: 0, visible: true, children: [] }],
+  },
+  { id: 4, parentId: 0, type: 2, title: '外部文档', path: 'https://ex.com/docs', sort: 2, visible: true, children: [] },
+]
+
+function mountAt(path: string) {
+  render(
+    <AntdApp>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/login" element={<div>LOGIN PAGE</div>} />
+          <Route element={<LayoutShell />}>
+            <Route path="/dashboard" element={<div>DASH PAGE</div>} />
+            <Route path="/system/user" element={<div>USER PAGE</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </AntdApp>,
+  )
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  useAppStore.setState({ collapsed: false, themeScheme: 'light', systemDark: false })
+  useAuthStore.getState().reset()
+  useAuthStore.setState({ menuTree: TREE, routesReady: true })
+  useUserStore.setState({ accessToken: 't', refreshToken: 'r', userInfo: { userId: 1, account: 'a', name: 'n', mustChangePassword: false } })
+  logoutMock.mockResolvedValue(true)
+})
+
+afterEach(cleanup)
+
+const sider = () => document.querySelector('.ant-layout-sider') as HTMLElement
+
+describe('LayoutShell 菜单', () => {
+  it('渲染菜单项(含目录),内容区渲染当前页', async () => {
+    mountAt('/dashboard')
+    expect(await screen.findByText('DASH PAGE')).toBeTruthy() // Outlet 渲染
+    expect(within(sider()).getByText('工作台')).toBeTruthy()
+    expect(within(sider()).getByText('系统')).toBeTruthy() // 目录
+    expect(within(sider()).getByText('外部文档')).toBeTruthy() // 外链也在菜单里
+  })
+
+  it('选中态跟随路由:在 /system/user 时该项高亮', async () => {
+    mountAt('/system/user')
+    await screen.findByText('USER PAGE')
+    // antd 选中项带 ant-menu-item-selected;它的文本是"用户"
+    const selected = sider().querySelector('.ant-menu-item-selected')
+    expect(selected?.textContent).toContain('用户')
+  })
+
+  it('点内部菜单项 → navigate 到它的 path', async () => {
+    mountAt('/dashboard')
+    await screen.findByText('DASH PAGE')
+    fireEvent.click(within(sider()).getByText('工作台'))
+    expect(navigate).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('点外链菜单项 → window.open,不 navigate', async () => {
+    const open = vi.fn()
+    vi.stubGlobal('open', open) // window.open
+    mountAt('/dashboard')
+    await screen.findByText('DASH PAGE')
+    fireEvent.click(within(sider()).getByText('外部文档'))
+    expect(open).toHaveBeenCalledWith('https://ex.com/docs', '_blank', 'noopener,noreferrer')
+    expect(navigate).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('LayoutShell 顶栏', () => {
+  it('点折叠按钮 → 翻转 app.collapsed', async () => {
+    mountAt('/dashboard')
+    await screen.findByText('DASH PAGE')
+    expect(useAppStore.getState().collapsed).toBe(false)
+    fireEvent.click(screen.getByLabelText('折叠菜单'))
+    expect(useAppStore.getState().collapsed).toBe(true)
+  })
+
+  it('点主题按钮 → 翻明暗', async () => {
+    mountAt('/dashboard')
+    await screen.findByText('DASH PAGE')
+    fireEvent.click(screen.getByLabelText('主题'))
+    expect(useAppStore.getState().themeScheme).toBe('dark')
+  })
+
+  it('点登出 → 调后端登出 + 清会话 + 跳登录(后端失败也照跳)', async () => {
+    logoutMock.mockRejectedValue(new Error('500'))
+    mountAt('/dashboard')
+    await screen.findByText('DASH PAGE')
+    fireEvent.click(screen.getByLabelText('退出登录'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/login', { replace: true }))
+    expect(useUserStore.getState().accessToken).toBe('')
+  })
+})

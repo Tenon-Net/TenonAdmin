@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { menuToItems, openIfExternal, type MenuItem } from './menuItems'
+import { menuToItems, openIfExternal, openKeysFor, type MenuItem } from './menuItems'
 import { MenuType, type MenuNode } from '@/types/menu'
 
 function node(p: Partial<MenuNode> & { id: number }): MenuNode {
@@ -63,6 +63,32 @@ describe('menuToItems', () => {
     // 外链在路由表里被跳过(buildRoutes),但在菜单里要出现、点得动 —— 这里 key 就是那个 URL。
     const r = build([node({ id: 1, path: 'https://ex.com/docs', title: '文档' })])
     expect(r).toEqual<MenuItem[]>([{ key: 'https://ex.com/docs', label: '文档', icon: 'icon:_:leaf' }])
+  })
+})
+
+describe('openKeysFor(子菜单跟随路由展开)', () => {
+  const items: MenuItem[] = [
+    { key: 'cat-1', label: '系统', children: [
+      { key: '/system/user', label: 'u' },
+      { key: 'cat-2', label: '子', children: [{ key: '/system/sub/x', label: 'x' }] },
+    ] },
+    { key: '/dashboard', label: 'd' },
+  ]
+
+  it('叶子在一级目录下 → 展开那个目录', () => {
+    expect(openKeysFor(items, '/system/user')).toEqual(['cat-1'])
+  })
+
+  it('叶子在嵌套目录下 → 展开整条祖先链', () => {
+    expect(openKeysFor(items, '/system/sub/x')).toEqual(['cat-1', 'cat-2'])
+  })
+
+  it('顶层叶子(无祖先目录)→ 空', () => {
+    expect(openKeysFor(items, '/dashboard')).toEqual([])
+  })
+
+  it('off-menu 路由(不在菜单里)→ 空,不强行展开', () => {
+    expect(openKeysFor(items, '/personal/profile')).toEqual([])
   })
 })
 

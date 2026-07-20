@@ -7,6 +7,7 @@ import { enterInitial } from '@/composables/useModule'
 import { buildRoutes } from './buildRoutes'
 import UnderConstruction from '@/views/_placeholder/UnderConstruction'
 import ModuleChooser from '@/views/module'
+import { LayoutShell } from '@/layouts/LayoutShell'
 
 /**
  * 受保护区的守卫,三条按 Vue 侧 `router/index.ts` 的顺序:
@@ -58,18 +59,25 @@ export function Protected() {
   return <DynamicRoutes />
 }
 
-/** routesReady(或 chooser 引导完)后的路由表:菜单派生的动态路由 + 几条静态路由。 */
+/** routesReady(或 chooser 引导完)后的路由表:菜单页在**布局壳**内,选择页/门户级页在壳外(全屏)。 */
 function DynamicRoutes() {
   const menuTree = useAuthStore((s) => s.menuTree)
   const home = useAuthStore(homePath)
   const routes = useMemo(
     () => [
-      ...buildRoutes(menuTree),
+      // 选择页全屏,不进布局壳(对齐 Vue:它不是 layout 的子路由)。放在最前,静态段优先于壳内 `*`。
       { path: '/module', element: <ModuleChooser /> },
-      { path: '/personal/password', element: <UnderConstruction /> },
-      // '/' 落到当前应用首页;chooser 态 homePath 回落 /module。
-      { path: '/', element: <Navigate to={home} replace /> },
-      { path: '*', element: <NotFound /> },
+      // 布局壳:菜单派生的动态路由、个人页、根重定向、404 都在壳内,渲染进 Sider+Header 的内容区。
+      {
+        element: <LayoutShell />,
+        children: [
+          ...buildRoutes(menuTree),
+          { path: '/personal/password', element: <UnderConstruction /> },
+          // '/' 落到当前应用首页;chooser 态 homePath 回落 /module。
+          { path: '/', element: <Navigate to={home} replace /> },
+          { path: '*', element: <NotFound /> },
+        ],
+      },
     ],
     [menuTree, home],
   )
