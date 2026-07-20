@@ -42,12 +42,12 @@
 前四条是从 `archive` 搬运 + 落实两份 review 的结论。**不要把已知缺陷重新发一遍。**
 
 - [ ] **B1 空壳能起** — 已含在 R3/R4。探针页(`App.tsx`)一并搬:它**故意不是 hello world**——只渲染文字的壳在下面任何一条假设坏掉时照样绿,所以把它们逐条渲染成肉眼可见的红字。到 B8 布局壳落地时删掉。
-- [ ] **B2 主题桥 + review 处置** — 搬 `theme/{antd-theme,useAntdTheme}.ts` 与 `antd-theme.spec.ts`,并修:
+- [x] **B2 主题桥 + review 处置**(5bd7ada) — 搬 `theme/{antd-theme,useAntdTheme}.ts` 与 `antd-theme.spec.ts`,并修:
   - **[HIGH] `--color-shadow` 必须是不透明色**:`#141B2D`(亮)/ `#000000`(暗)。antd 拿它当**基色**、把它自己的 alpha 乘进每一层。令牌旁注明"这是基色,antd 会按自己的档位乘 alpha,**别直接写进 `box-shadow`**"。
   - **[HIGH] 测试断量级,不断色相**:现有 `not.toMatch(/255,255,255/)` 在坏与好两种状态下都绿。改为断言明暗两色下派生阴影的 alpha 与 antd 默认档位一致。
   - **[HIGH] 删掉假注释**:`antd-theme.ts` 声称 `boxShadow`/`boxShadowSecondary` "已登记豁免",而 `EXEMPT` 里只有 `colorTextDisabled|colorTextQuaternary` 一条,且那对根本不是转发赋值、闸门从不评估它。
   - **[MEDIUM] 填充阶要成套**(已核对 `alias.js`:`colorBgContainerDisabled = colorFillTertiary`、`colorBgTextHover = colorFillSecondary`、`controlItemBgHover = colorFillTertiary`、`colorFillAlter = colorFillQuaternary`):`colorFillTertiary` 改回**静息**色 `--color-fill`(它驱动 Tag / filled Button / Slider / Empty 与**禁用输入框底色**,现在错用了 hover 色),`colorFillSecondary` 给 `--color-fill-hover`(让文字按钮 hover 与行 hover 同色)。`controlItemBgHover|colorFillTertiary` 是有意打破的恒等,**登记进 `EXEMPT` 带理由**——豁免必须显式,否则它和"忘了"长得一模一样。
-  - **[MEDIUM] `MAP_PAIRS` 补 `colorBgContainer|colorBgElevated`**(亮色下 antd map 层是同一表达式;今天两边都是 `#FFFFFF`,无人钉住)。
+  - ~~**[MEDIUM] `MAP_PAIRS` 补 `colorBgContainer|colorBgElevated`**~~ —— **照字面写会红在非缺陷上**:这对**只有亮色**恒等(antd 亮色 `getSolidColor(bgBase, 0)` 两者相同,暗色是 8 与 12),而 `MAP_PAIRS` 原本不分明暗一起比。已改成按模式拆两组,该对只进 light-only。变异证实:放进 BOTH 则暗色红在 `colorBgContainer(#1F2229) ≠ colorBgElevated(#262A31)`。
   - **[LOW]** `afterAll` 复位 `data-theme`;`--color-shadow` 记进 `web-react/` 侧的设计文档。
   - 验:浏览器探针明暗 × 6 accent × 密度全绿零控制台错误;**变异**——把 `--color-shadow` 改回 `rgba(20,27,45,0.16)`,新的量级断言必须变红(旧的色相断言不会)。
 - [ ] **B3 四个 Zustand store** — 搬 `user`/`auth`/`app`/`dict`(逻辑逐字对齐 Vue 侧:`hasPerm` 三条规则、`homePath` 阶梯、dict 的 typeCode 缓存 + 并发去重 + `invalidate` 竞态守卫;`usePreferredDark` 换裸 `matchMedia`;persist 白名单与 Vue 侧一致)。**决策记录**:`hasPerm`/`homePath`/`isDark` 一律写成**纯函数 + 细粒度 hook**,不做"返回闭包的选择器"——zustand 每次渲染都跑选择器并与上次结果 `Object.is` 比对,返回新建函数 = 每次都"变了" = 无限重渲染。补一条 review LOW:`auth-hooks.spec.tsx` 第三个用例名称声称"随 store 写入",而用例体里**根本没有 store 写入**,改名或补上写入。**tabs store 推迟到 D1**(它真正难的部分条条要导航,B3 时点既无路由也无容器);`auth.reset()` 里那句 `clearTabs()` 与 `useModule` 切应用那一处,两处都要在 D1 补回。验:单测 + 变异逐批证伪。
@@ -100,6 +100,40 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B2 主题桥(含那条我自己引入的亮色回归)
+
+`5bd7ada`。搬 `theme/{antd-theme,useAntdTheme}.ts` + spec,导入改 `@/*`,六条 review 处置全部落实。
+
+**回归的机理已在 antd 源码层面坐实,数字全对上。**`alias.js:24-26`:`shadowBaseColor = new FastColor(colorShadow); shadowBaseAlpha = shadowBaseColor.a; getShadowColor = a => base.clone().setA(shadowBaseAlpha * a)` —— **基色的 alpha 被乘进每一层**。而 antd 自己的默认值:亮色 `#000`(**不透明**)、暗色 `rgba(255,255,255,0.2)`(就是注释里说的"抽屉白色发光")。所以我给的 `rgba(20,27,45,0.16)` 让 `boxShadowDrawerLeft` 三档从 `0.08/0.12/0.05` 塌成 `0.0128/0.0192/0.008`,**淡 6.25 倍**。两处改为不透明:亮 `#141B2D`、暗 `#000000`。令牌旁写明"这是基色、别加 alpha、别直接写进 box-shadow"。
+
+**旧断言的无效性也当场证明了**:M1(退回 `rgba(...,0.16)`)只红新的量级断言,而旧那句 `not.toMatch(/255,255,255/)` **在这个变异下是绿的** —— 两种写法都不含白色。一条在坏与好两种状态下都绿的断言,不是断言。
+
+**台账那条 MEDIUM 是错的,已改**:`MAP_PAIRS` 补 `colorBgContainer|colorBgElevated` 照字面做会让**暗色**红在非缺陷上 —— 这对只有亮色恒等(antd 亮色两者同为 `getSolidColor(bgBase, 0)`,暗色是 8 与 12),而我们的令牌恰好镜像了这个结构(亮色同为 `#FFFFFF`,暗色 `#1F2229`/`#262A31`)。`MAP_PAIRS` 已按模式拆成 BOTH / LIGHT_ONLY 两组。
+
+**六处变异,预测先写,全部命中**:
+
+| 变异 | 预测 | 实测 |
+|---|---|---|
+| M1 亮色退回 `rgba(...,0.16)` | 只红亮色量级 | ✅(旧色相断言不红,正是要点) |
+| M2 暗色退回 `rgba(0,0,0,0.45)` | 只红暗色量级 | ✅ |
+| M3 `colorFillTertiary` 退回 hover 色 | **绿,一条不红** | ✅ —— **判据缺口,见下** |
+| M4 删掉 `controlItemBgHover` 的 EXEMPT | 明暗两条恒等都红 | ✅(`#EBEDF0 ≠ #F2F3F5` / `#2E333B ≠ #262A31`) |
+| M5 按台账字面把那对放进 BOTH | 只红暗色恒等 | ✅ —— 证明偏离台账是必要的 |
+| M6 antd 源码 `?raw` 读成空串 | 明暗两条红在自检行 | ✅ |
+
+**判据缺口(如实记,没堵)**:M3 全绿说明**填充阶归位这件事没有任何自动检查守着**。恒等闸门只查"成对的两个值是否相等",不查"值是否符合设计意图" —— 退回 hover 色之后 `controlItemBgHover` 与 `colorFillTertiary` 反而又相等了,EXEMPT 变成多余但不报错。要堵得断到具体令牌值(如 `colorFillTertiary === v('--color-fill')`),那等于把实现抄进测试;暂不做,记在这。
+
+**`node:fs` 换成 `?raw`**(R3 review 的结论:`@types/node` 无法限制在单文件)。踩到一个前提:**vitest 默认 `css: false` 会把 CSS 导入桩成空串,连 `?raw` 也是空**,不报错 —— 那样 `v()` 全空、`defined()` 滤光所有键,spec 里每条恒等断言都变成恒真。已开 `test.css: true` 并写明理由。
+
+**浏览器探针 24 种组合(明暗 × 6 accent × 2 密度)全绿、零控制台错误**,但过程里踩到两件 spec 证明不了的事:
+
+1. **端口静默漂移。**首跑探针"什么都没渲染"—— 因为 5174 被前几轮残留的 dev server 占着(`TaskStop` 停掉了 npm 包装进程,**vite 子进程活了下来**),Vite 默认行为是**静默挪到下一个可用端口**,我的 server 去了 5175,而探针连上 5174 拿到的是 **Vue 模板的页面**。已加 `server.strictPort: true`:宁可起不来,也不要连上另一个应用还以为是自己坏了。**这条要记住:`TaskStop` 一个 `npm run dev` 不保证 vite 子进程也死。**
+2. **两条 antd v6 改名,`tsc` 一条都不红**:`Space.direction → orientation`、`Alert.message → title`。正是台账「参考项目」段落里点名的那类地雷。按约定查了离线 CLI 而不是凭记忆改(`antd info Space/Alert --version 6.5.1`,两个新名都确认存在),并全仓扫了 `bodyStyle`/`iconPosition`/`Card.bordered`,无其他残留。
+
+探针页(`App.tsx`)换成 B2 版:本地 `useState` 驱动明暗/accent/密度,把阴影量级、恒等抽样、NaN 尺寸、tokens 是否进文档逐条渲染成肉眼可见的红绿。**B3 落 store 后把本地 state 换成 store**,`useAntdTheme` 入参形状不变。`Density` 暂定义在 `antd-theme.ts`,**B3 移进 app store** 后这里改成转口。
+
+下一条:**B3**(四个 Zustand store)。
 
 ### 2026-07-20 · R4 框架无关层落进 src/
 
