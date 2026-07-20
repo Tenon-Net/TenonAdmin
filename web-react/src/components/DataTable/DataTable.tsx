@@ -11,7 +11,9 @@ import { toProTable, type PageFetcher } from './toProTable'
  * `ConfigProvider locale` 自动切中英 —— 所以**不新增 `proTable.*` i18n 键**(Vue 侧那 8 个是 Naive
  * ProTable 的自留文案,antd ProTable 用不上)。列标题等业务文案由各页 `columns` 的 `title` 自己 `t()`。
  */
-export interface DataTableProps<T extends Record<string, unknown>> {
+// 约束用 `Record<string, any>` 而非 `unknown`:业务实体是 interface(如 `UserItem`),**接口没有隐式索引签名**,
+// `Record<string, unknown>` 会拒收(B11 第一个真消费者踩到);`Record<string, any>` 才收接口,ProTable 自身也是 `<T = any>`。
+export interface DataTableProps<T extends Record<string, any>> {
   columns: ProColumns<T>[]
   /** `(params)=>{items,total}`;经 `toProTable` 适配成 ProTable 的 request 契约。 */
   fetcher: PageFetcher<T>
@@ -28,7 +30,7 @@ export interface DataTableHandle {
   reload: () => void
 }
 
-function DataTableInner<T extends Record<string, unknown>>(
+function DataTableInner<T extends Record<string, any>>(
   { columns, fetcher, persistKey, rowKey = 'id', toolbar, headerTitle }: DataTableProps<T>,
   ref: React.ForwardedRef<DataTableHandle>,
 ) {
@@ -52,6 +54,6 @@ function DataTableInner<T extends Record<string, unknown>>(
 }
 
 // forwardRef + 泛型:cast 回带泛型的签名(forwardRef 会擦掉泛型)。这是 React 泛型 forwardRef 的标准写法,不是抹类型。
-export const DataTable = forwardRef(DataTableInner) as <T extends Record<string, unknown>>(
+export const DataTable = forwardRef(DataTableInner) as <T extends Record<string, any>>(
   props: DataTableProps<T> & { ref?: React.ForwardedRef<DataTableHandle> },
 ) => ReturnType<typeof DataTableInner>
