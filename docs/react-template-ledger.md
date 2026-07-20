@@ -65,7 +65,7 @@
 - [x] **B6 动态路由**(a 决策 3877df4 / b-1 materialization a417a70 / b-2 守卫+接线 5af2763) — F5 深链重建、无权限 404、chooser 落选择器均通;探针降为 /_probe(B8 删)。见轮次日志。 `useRoutes(routes)`,routes 从 `auth.menuTree` 派生的普通数组。**Vue 版 `router/index.ts` 那个 `return to.fullPath` 重解析 trick 不需要存在**。`buildRoutesForModule` 逻辑逐条搬:flatten → 跳过非 Menu/无 path → 跳过 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe 视图 + `meta.iframeSrc` → 否则查 `import.meta.glob('/src/pages/**/*.tsx')`,缺失 `console.warn` 跳过;`viewComponentPaths` 由同一张 glob 表反推(**防手敲错致菜单静默消失,原样保留**)。`<RequireAuth>` 三条守卫按 Vue 版顺序:未登录→`/login`、`mustChangePassword`→锁死改密页、`!routesReady`→loading + `enterInitial()`。验:F5 深链能重建路由、无权限路径 404。
 - [x] **B7 模块选择页 + useModule**(628d1c5) — switchModule/setDefault 补齐(4 变异全 kill)、/module 换真选择器;module/** 加入 glob 排除。见轮次日志。 决策阶梯逐字搬(0 模块→选择器 / 记住的仍有效→进 / 单个→进 / 有默认→进 / 否则选择器);`switchModule` 清 tabs + 跳 `homePath`;`setDefault` 同步。验:多应用切换 + 设默认后仍能从右上角九宫格回选择器。
 - [x] **B8 布局壳**(cb62290 派生 / cac1efc 壳+接线+删探针) — antd 原生 Layout 自建、Sider 236/76、Header 62 blur、菜单树派生、选中/展开跟随路由、明暗、灰度/密度样式;探针删除。见轮次日志。 antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
-- [ ] **B9 权限 + 消息 + 确认基建** — `<Can code="VERB:/path">`(替代 `v-auth`);`App.useApp().message` 承接 Vue 侧 74 处 `useMessage`;`useConfirm` 三 API 用 `Modal.useModal()` 重写(`modal.confirm({onOk:async})` 返 promise 时按钮自动 loading 且不关窗,正是现有语义,**代码会比 93 行更短**)。验:无权限按钮不渲染;确认框执行中不可重复点/不可 Esc 关。
+- [x] **B9 权限 + 消息 + 确认基建**(63e071f) — `<Can code>` 替 v-auth(判定收敛 hasPerm)、`useConfirm` 用 Modal.useModal 重写(busy 守卫内置);message 无需新建。见轮次日志。 `<Can code="VERB:/path">`(替代 `v-auth`);`App.useApp().message` 承接 Vue 侧 74 处 `useMessage`;`useConfirm` 三 API 用 `Modal.useModal()` 重写(`modal.confirm({onOk:async})` 返 promise 时按钮自动 loading 且不关窗,正是现有语义,**代码会比 93 行更短**)。验:无权限按钮不渲染;确认框执行中不可重复点/不可 Esc 关。
 - [ ] **B10 `<DataTable>` 薄封装** — 隔离 `pro-components` beta,16 个 CRUD 页只依赖它。含 `toProTable()` 适配器(`toPage()` 的 `{items,total}` → `{data,success,total}`)、排序映射到后端 `SortField`/`SortOrder`、`columnsState` 持久化沿用 `protable:{module}-{page}` 命名、labels 由 i18n 驱动。**`proTable` 那批 UI 键此时才定**:现有的 8 个键是 Naive 那个 ProTable 的文案,antd 的 ProTable 自带 locale,要不要加、加什么在这一条决定,别提前猜。验:契约单测 + 一页实跑。
 - [ ] **B11 system/user 页** — 标准列表原型(搜索 + 工具栏 + 表格 + 分页 + 服务端排序 + 列设置)。验:增删改查全通、列设置刷新后保留。
 - [ ] **B12 阶段一验收** — 手动对照 Vue 版走 10 条链路:登录 / token 过期刷新重放 / 强制改密 / 多应用切换 / F5 深链重建路由 / user 页增删改查 / 搜索排序分页 / 列设置持久化 / 明暗+中英切换 / 无权限按钮不渲染。
@@ -103,6 +103,22 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B9 权限门 + 确认/消息基建
+
+`63e071f`。三件里实际两个新实体:`<Can>` + `useConfirm`;message "承接"无需新建 —— antd 内置、已在 LoginPage/ModuleChooser/LayoutShell 用 `App.useApp().message`。
+
+**`<Can code>`** 替 Vue 的 `v-auth` 指令(React 无指令,用组件包裹)。判定(超管 fail-open / 未加载 fail-closed / 精确命中)**收敛在 `auth.hasPerm`**(B3 已变异钉死),Can 只接规则 + 数组 OR/`every` AND,不重写——与 v-auth 同一个 hasPerm,两模板判定一致。8 用例(命中/不命中/超管/未加载/OR/AND 各态)。
+
+**`useConfirm`** 三 API(ask/confirm/run)搬到 `App.useApp().modal + message`。**比 Vue 93 行短**:Naive 要手写 busy 守卫防连点/执行中关窗,antd 的 `modal.confirm` onOk 返 Promise 时**自动 loading OK 钮 + 期间锁关闭**,守卫内置。补一条测试钉住这条依赖(挂起的 onOk 期间弹窗不关、action 只跑一次)——它验的是 **antd 契约**(我据此不写守卫),antd 改行为这条会红。run 吞异常并 toast,故 onOk 必 resolve、弹窗必关;失败经 translateError toast 且 resolve(false)。7 用例。
+
+**两个 course-correct:**
+1. **antd 对两个中文字的按钮自动插空格**(autoInsertSpace),可及名是「确 定」不是「确定」→ `getByRole('button',{name:'确定'})` 找不到。用容忍空格的正则 `/确\s*定/`。**又一个「库渲染得和字面量不一样」** —— 与 StrictMode / i18n 未初始化 / 键盘→click 同族:断言要对准**环境/库真正产出的东西**,不是我以为的字面量。
+2. **`modal.confirm` 返回 `{destroy,update}&thenable`,不是真 Promise** —— `as Promise<boolean>` 抹类型被 typecheck 兜住。`ask` 改用 onOk/onCancel 显式 resolve,类型天然对,不 cast。
+
+四件套:`lint=0` / `typecheck=0` / `vitest=0`(220 passed / 27 files) / `build=0`。
+
+下一条:**B10 `<DataTable>` 薄封装**(隔离 pro-components beta、`toProTable` 适配 `toPage` 契约、排序映射后端、`columnsState` 持久化、labels i18n 驱动)。**proTable 那批 UI 键此时才定**(antd ProTable 自带 locale,要不要加、加什么在这条决定,别提前猜)。
 
 ### 2026-07-20 · B8 review 处置(review-b8 lane 隔离 worktree:APPROVE + 5 LOW)
 
