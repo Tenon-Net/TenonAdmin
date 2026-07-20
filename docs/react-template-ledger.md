@@ -138,7 +138,7 @@ B5a 的独立 review lane(review-b5a)卡住不出结论、已 TaskStop,B5a 并�
 
 **这轮把"偶发红"这类问题的处置补全了一条方法**:偶发红有三种可能的家 —— 文件内共享状态(我原来的假设)、跨文件/跨进程全局污染(实际的家)、或者根本不是代码而是**并发进程改了同一棵树**(这次的元凶)。前两种要在**隔离**环境里分辨;而第三种是这次全程的背景噪声(两个 review lane 都往共享树里留过东西),它会把前两种的证据全部污染。**教训升级**:review lane 与主线共用工作树时,主线在 lane 活跃期跑测试套件拿到的任何"复现/不复现"都不可信 —— 我这轮就吃了一次(bug 版留在树里时我跑出 3/6"复现",实为撞上 lane 的 mid-toggle)。以后要么等 lane 空闲、要么给 lane worktree 隔离。
 
-**一条 LOW(不改,记下)**:`url.includes('/api/v1/auth/login')` 子串守卫也会误伤一个**恰好含该子串**的消费者路径 —— 理论问题,与 Vue 侧对等,不值当改。
+**两条 LOW(都不改,记下,均与 Vue 侧对等)**:①`url.includes('/api/v1/auth/login')` 子串守卫也会误伤一个**恰好含该子串**的消费者路径(如 `/api/v1/tenant/auth/login-audit`)—— 理论问题。②`api/index.ts` 的 `recycleApi` 用 `as any` 兜运行时选定的 `{type}` 路径参(openapi-fetch 无法为运行时决定的 path 定型)—— 而 `api/index.ts` 是从 `dev` **逐字复制**的,这个 cast Vue 侧本就有、是继承来的,pragmatic 且局部,acceptable。两条都不值当改。
 
 **B5 至此全部 review 完:B5a + B5b 双 APPROVE。**
 
