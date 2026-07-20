@@ -104,6 +104,21 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · B6 review 处置(review-b6 lane:APPROVE 无阻断,首次用 worktree 隔离)
+
+`b21ef37`。**这次 review lane 用 `isolation: "worktree"` 跑**——它在自己的 worktree 里跑了 12 变异 + 4 probe、每处 `git diff` 确认变异真落地,全程碰不到主线树。**前两个 lane 的共享树污染问题就此根治**,这是把台账那条教训("给 lane worktree 隔离")落成实际做法。lane 独立复现坐实:M1 确实冗余、阶梯顺序被钉死、remembered/default 有效性检查互不替代、真实 glob 测试确会在 glob 失效时红、外链兜底缺口已真修。**无 CRITICAL/HIGH/MEDIUM,5 条 LOW。**
+
+- **[LOW-1 已修] StrictMode 下 `enterInitial` 双调。** `main.tsx` 用 `<StrictMode>`,守卫 effect mount→unmount→remount,`booted` 在 remount 仍 false → modules/permissions/profile/menu 各拉两次(仅 dev,幂等无损)。**但 reviewer 点出:`Protected.spec` 的 `toHaveBeenCalledOnce` 只因 harness 没套 StrictMode 才成立,不代表运行时。** 加在途去重(同 dict/site store 模式),让 dev 与 prod 一致;补一条**真套 StrictMode** 的渲染测试,去掉去重它红(2 次≠1)。**这条是"绿得没判别力"的另一面:断言本身对,但它绿是因为测试环境缺了运行时的那一半。**
+- **[LOW-2 已修] iframe/login 永久无法 code-split。** `embed/iframe`(buildRoutes 静态 import)与 `login/LoginPage`(App 静态路由)同时被 glob 动态匹配 → 静态+动态双 import → 永远不拆(build 三条告警的来源)。glob 负模式加排 `login/**`、`embed/**`、`_placeholder/**`。修后 **build 那三条双-import 告警消失**。(占位页仍 1 chunk 是小 re-export 被内联,B11 真页有内容自会拆。)
+- **[LOW-3 已修] `viewComponentPaths` 下拉暴露内部组件。** `embed/iframe`(选它渲染无 src 空 iframe)、`_placeholder/UnderConstruction`(占位页)本不该做菜单落点。`viewKeysFrom` 过滤前缀从只 `login/` 扩到 `login/`+`embed/`+`_placeholder/`,与 glob 排除对齐;更新其用例断言内部组件被挡在下拉外。
+- **[LOW-4 接受,记下] iframe 行为测试在 happy-dom 里触发真实 fetch。** 渲染真 `<iframe src="https://...">`,happy-dom 会去 fetch → 未处理拒绝噪声。测试只断 `src` 属性、仍绿且判别力不受影响。不改:iframe 分支只对 http(s) URL 触发(`isHttpUrl`),换 `data:` 就不走那条分支了,为消噪声反而弱化判据不划算。噪声无害。
+- **[LOW-5 已改台账] `.spec` 排除可测性,我原记悲观。** 见上方 B6b-1 条的更正。
+
+四件套:`lint=0` / `typecheck=0` / `vitest=0`(167 passed / 21 files,+1 是 StrictMode 那条) / `build=0`(双-import 告警清零)。
+
+**工程结论进台账**:review lane 一律走 `isolation: "worktree"`。共享树的三桩事故(zzflake 注入、未复原的变异、我撞 mid-toggle 的假复现)全部源于共享工作树,隔离后一次没再发生。
+
+### 2026-07-20 · B6b-2 守卫 + 门户接线(B6 完成)
 ### 2026-07-20 · B6b-2 守卫 + 门户接线(B6 完成)
 
 `5af2763`。B6 有决策风险的另一半:`useModule.enterInitial` 阶梯 + `<Protected>` 三守卫 + 接进 App。
@@ -136,7 +151,7 @@
 
 **两个如实记的点:**
 1. **页面这次没被 code-split**(build 只 1 个 JS chunk)。因为 `buildRoutes` 还没被入口 import(App 仍用探针兜底),整个模块连同 glob 被 tree-shake。这是 B6b-2 接线**之前的预期态**,接线后页面才拆包 —— 留作 B6b-2 的验证点。build 成功本身证明那条 `import.meta.glob(['/src/views/**/*.tsx','!...spec.tsx'])` 数组负模式能编译。
-2. **`.spec.tsx` 排除的判据缺口**:它只活在 glob 负模式(构建期)那层,**单测够不到**(和 `ext/` glob 同类的结构性不可钉)。`viewKeysFrom` 的 `login/` 过滤是可测的(已测);`.spec` 排除只能靠那条模式 + 全量 build 不炸间接保。
+2. **`.spec.tsx` 排除**:它活在 glob 负模式(构建期)那层。~~单测够不到~~ —— **这句我记悲观了,B6 review(LOW-5)反证:** 因 `src/views/**` 下真有 `.spec` 文件,可用「让菜单指向一个真实 `.spec` 组件键 → 断言不建路由(带排除)vs 建路由(去排除)」的 probe 直接判别,排除是 load-bearing 且**可测**的。方向本就安全(低估可测性,不是虚报覆盖),已在 B6b-2 用「不注入 glob、指真页面文件」的正向测试把 glob 匹配那半钉住。
 
 四件套:`lint=0` / `typecheck=0` / `vitest=0`(145 passed / 19 files) / `build=0`。
 
