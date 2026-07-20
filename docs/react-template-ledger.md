@@ -59,7 +59,8 @@
   - **[LOW]** `RESOURCES` 不导出(spec 改用 `i18n.getResourceBundle`);`fallbackLng` 的回声断言换成**行为**断言;删 `afterAll` 空操作;`ext/README.md` 补冒号键约束。
   - **已知判据缺口(如实记下,别假装堵上了)**:①深合并的保证**只靠一条用例**撑着——浅/深之别只在 ext 键与内置键**碰撞**时才可观测,"新增命名空间"两种实现结果相同;②`ext/` 目录按设计是空的,**没有常驻用例能证明那个 glob 打不打得中**(把路径写错,一条测试都不红)。已用临时 fixture 当场验过一次接缝确实生效,验完删除。
   - 验:中英实点 + **两次刷新,中文下也要刷一次**——EN 恰好等于 `fallbackLng`,只在 EN 下刷新的话把 `lng` 初值整句删掉照样绿。
-- [ ] **B5 api client + 登录页** — `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
+- [x] **B5a api client + endpoint wrappers**(6989f1e) — 见轮次日志。`api/index.ts` 逐字复制;spec 跑 node 环境(happy-dom 没实现请求体一次性流);`bare` 与 URL 短路是**两道冗余闸**,已各自补判据。
+- [ ] **B5b 登录页 + dict store** — `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
 - [ ] **B6 动态路由** — `useRoutes(routes)`,routes 从 `auth.menuTree` 派生的普通数组。**Vue 版 `router/index.ts` 那个 `return to.fullPath` 重解析 trick 不需要存在**。`buildRoutesForModule` 逻辑逐条搬:flatten → 跳过非 Menu/无 path → 跳过 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe 视图 + `meta.iframeSrc` → 否则查 `import.meta.glob('/src/pages/**/*.tsx')`,缺失 `console.warn` 跳过;`viewComponentPaths` 由同一张 glob 表反推(**防手敲错致菜单静默消失,原样保留**)。`<RequireAuth>` 三条守卫按 Vue 版顺序:未登录→`/login`、`mustChangePassword`→锁死改密页、`!routesReady`→loading + `enterInitial()`。验:F5 深链能重建路由、无权限路径 404。
 - [ ] **B7 模块选择页 + useModule** — 决策阶梯逐字搬(0 模块→选择器 / 记住的仍有效→进 / 单个→进 / 有默认→进 / 否则选择器);`switchModule` 清 tabs + 跳 `homePath`;`setDefault` 同步。验:多应用切换 + 设默认后仍能从右上角九宫格回选择器。
 - [ ] **B8 布局壳** — antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
@@ -101,6 +102,51 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B5a api client + endpoint wrappers
+
+`6989f1e`。**B5 拆成 a/b 两半**:a 是 api client + `api/index.ts`(台账点名"唯一一处重复有真实技术风险的代码",值得独占一轮变异),b 是登录页 + dict store。拆的理由是变异预算——把 UI 和这三个中间件机制塞进同一轮,变异集合会大到没人认真跑。
+
+`api/index.ts` 是**逐字复制**(`diff` 与 `dev:web/src/api/index.ts` 为空):它零框架耦合(唯一一处 `.value` 是数据字段不是 ref),`@/*` 下导入路径完全相同。
+
+**跳登录改成整页导航,是有意的行为分叉。** Vue 侧 `router.replace('/login')`;这里 `window.location.assign`。B6 的动态路由走 `useRoutes`(组件 API),模块级拿不到 router 实例,软跳要额外接缝;而会话死亡这条路上整页重载反而更干净(动态路由、字典缓存、标签页一次清空,不必指望每个 store 的 reset 都写全)。两边都不带 redirect 参数,用户侧无差异。
+
+#### 判据环境:这份 spec 跑 node,不跑 happy-dom
+
+**happy-dom 没实现「请求体是一次性流」。** 这是本轮最贵的一个发现,过程值得记全:
+
+1. 第一版桩里 body 用 `req.clone().text()` 读。M1(`replayable.set(request, request.clone())` → 存原请求)与 M2(整行删掉)**双双全绿**。
+2. 第一次归因:桩用 clone 读,原始流从没被消费,「一次性」这个前提在测试世界里不存在。改成 `req.text()` 直接读。**M1/M2 仍然全绿。**
+3. 只好上探针,直接观测三件事,结果是:`WeakMap` **命中 = true**(接线没问题)、原请求 `bodyUsed` **= true**(桩确实消费了)、而 **`new Request(已消费的请求)` 照样吐得出原 body**。
+4. 换 undici(Node 原生 fetch)同样步骤:抛 `TypeError: Cannot construct a Request with a Request object that has already been used.`,克隆则正常。
+
+**结论:不是桩的问题,是环境的问题 —— happy-dom 把 body 缓冲了,那个陷阱在它里面根本不存在,再怎么调桩也造不出来。** 整份 spec 加 `// @vitest-environment node`,连带三处环境适配(`VITE_API_BASE` 给绝对源、`window` 桩、以及 `window.localStorage` —— zustand 的 persist 按 `typeof window !== 'undefined'` 判断浏览器存储,一旦定义了 `window` 就去拿 `window.localStorage`,桩里漏了报的是 `Cannot read properties of undefined (reading 'setItem')`,和 location 毫无关系)。
+
+**这条要一般化:「用例绿」有三种可能 —— 代码对、判据没判别力、或者环境里根本没有那个失败模式。前两种已经吃过亏,第三种是新的。** 凡是判据依赖**平台语义**(流的一次性、事件循环时序、存储配额、CSP)的,先问一句:测试环境实现了那条语义吗?
+
+#### 变异:9 条,预测先写
+
+| # | 变异 | 预测 | 实测 |
+|---|---|---|---|
+| M1 | 存原请求而不是克隆 | 请求体那条红 | ❌→✅ happy-dom 下**全绿**;换 node 后如预测红 |
+| M2 | 整行删掉克隆 | 同 M1 | ❌→✅ 同上 |
+| M3 | `refreshing ??=` → 直接 `return doRefresh()` | 并发那条红 | ✅ |
+| M4 | `.finally(() => refreshing = null)` 删掉 | 归位那条红 | ✅ |
+| M5 | `bare` → `client` | **可能仍绿**(URL 短路也挡) | ✅ 全绿 —— 预测对了 |
+| M6 | 删 `/auth/refresh` URL 短路 | 若 M5 绿则也绿 | ✅ 全绿 |
+| M7 | M5 + M6 同时 | 递归那条红 | ✅ 红,且是 **5 秒超时**(真无限递归) |
+| M8 | 刷新失败不清会话 | 清会话那条红 | ✅ |
+| M9 | 重放不补新令牌 | 令牌那条红 | ✅ 红 3 条(重放后仍带旧令牌 → 后两条连带) |
+
+**M5/M6/M7 那组推翻了台账自己的说法。** 台账把 `bare` 列为「防刷新递归」的机制之一,实测是:**防递归有两道冗余的闸,拆掉任何一道单独都测不出来**。将来谁把 `bare` 整个删掉,原来那八条用例一条都不红。已补一条属于 `bare` 自己的判据 —— 不测「会不会递归」(测不出),改测它的直接可观测后果:**`bare` 没挂 authMiddleware,所以刷新请求不带 `Authorization` 头**。补完重跑 M5,如期红在这条新用例上。顺带说清了 `bare` 真正的第二个价值:刷新用的是 refreshToken,本就不该把一个已经过期的 accessToken 捎上去。
+
+M9 预测不完整(只列了令牌那条,实际连带并发那条也红,因为重放仍带旧令牌就还是 401)——和 B4 的 M3 同一个毛病:**顺着「这条变异针对哪条用例」想,没反过来枚举「哪些用例会碰这段代码」。**
+
+`pageParams`/`toPage` 补了 3 条用例。它们是**消费者接缝、站内无调用方**,坏了不会有任何东西变红(Vue 侧同样没测,是共同缺口,已记 `docs/refinement-ledger.md` 待办候选)。
+
+四件套真绿:`lint=0` / `typecheck=0` / `vitest=0`(88 passed / 12 files,原 72/10) / `build=0`。
+
+下一条:**B5b**(登录页 + dict store)。dict store 的 typeCode 缓存 + 并发去重 + `invalidate` 竞态守卫是 B3 推迟下来的,那三件事的变异要单独跑。
 
 ### 2026-07-20 · B4 review 处置
 
