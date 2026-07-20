@@ -5,6 +5,7 @@
 > 执行协议:**每次只做一条**;开工前有设计取舍/命名/行为边界疑问先向维护者确认;做完跑验证、勾选本文件、单独提交。**每条完成后另起 review lane**(`code-reviewer` / `verifier`),不在同一上下文自审。
 > 验证纪律:每个模板各自跑四件套——`npm run lint` / `npm test` / `npx tsc --noEmit`(Vue 侧 `vue-tsc`) / `npm run build`。**本机内存紧张,一次只跑一个重进程,绝不与 `dotnet test` 并发。**涉端点跑 MinimalHost 实打 + `npm run gen:api`;体验件 `npm run dev` 实点。
 > 判据纪律:**跑绿的用例什么都不证明,直到它被变异证伪。**凡要写下"没有 X"/"唯一的 X"这类否定或全称断言,**先跑一条能打自己脸的枚举命令**(`git log --stat`、`git grep -l`…),把命令与结论一起记下来 —— 否则那只是印象。这条是被同一类错误坑了两次之后加的(R2 的"唯一一处动 web/"、R4 的"archive 上没测过")。每条改动过的断言都要证明它还会红:预期失败集合**先写后跑**,预测与实测不符要记进轮次日志(这是最有价值的一类记录)。
+> **写每条断言时问一句:期望值是从哪来的?** 它若和实际值出自同一个变量,这条就是回声,恒真。B4 那句 `greeting === (i18n.language === 'en-US' ? … : …)` 正是如此 —— 删掉 `lng` 初值后 `i18n.language` 不是 undefined 而是被 `fallbackLng` 顶成 `'en-US'`,期望值跟着一起挪,中文下也照样绿。**期望值要取自被测链路之外**(那条改成比 store 就红了)。这是被"跑绿的用例什么都不证明"咬的第三次,而且咬的正是为防它而特意加的那一步。
 > 横切纪律:两个模板**零共享、各自自包含**。`web-react/` 里不得出现 `@shared`、`web-shared`、`../web` 任何形式的跨模板引用。
 
 ## 为什么推翻共享层（防反复,别再抽一次）
@@ -51,7 +52,7 @@
   - **[LOW]** `afterAll` 复位 `data-theme`;`--color-shadow` 记进 `web-react/` 侧的设计文档。
   - 验:浏览器探针明暗 × 6 accent × 密度全绿零控制台错误;**变异**——把 `--color-shadow` 改回 `rgba(20,27,45,0.16)`,新的量级断言必须变红(旧的色相断言不会)。
 - [x] **B3 三个 Zustand store**(8d0bf45;dict 随 B5,见轮次日志) — 搬 `user`/`auth`/`app`/`dict`(逻辑逐字对齐 Vue 侧:`hasPerm` 三条规则、`homePath` 阶梯、dict 的 typeCode 缓存 + 并发去重 + `invalidate` 竞态守卫;`usePreferredDark` 换裸 `matchMedia`;persist 白名单与 Vue 侧一致)。**决策记录**:`hasPerm`/`homePath`/`isDark` 一律写成**纯函数 + 细粒度 hook**,不做"返回闭包的选择器"——zustand 每次渲染都跑选择器并与上次结果 `Object.is` 比对,返回新建函数 = 每次都"变了" = 无限重渲染。补一条 review LOW:`auth-hooks.spec.tsx` 第三个用例名称声称"随 store 写入",而用例体里**根本没有 store 写入**,改名或补上写入。**tabs store 推迟到 D1**(它真正难的部分条条要导航,B3 时点既无路由也无容器);`auth.reset()` 里那句 `clearTabs()` 与 `useModule` 切应用那一处,两处都要在 D1 补回。验:单测 + 变异逐批证伪。
-- [x] **B4 i18n + review 处置**(14b9f8f) — 搬 react-i18next 接线,三处默认值改写(**坏了都不抛错**):`interpolation.prefix/suffix`(默认 `{{name}}`,文案是 `{name}`,不改则取字照常成功、页面上永远挂着花括号)、`escapeValue: false`(默认转义,React 本来就转义,再来一遍把 `&` 显示成 `&amp;`)、`nsSeparator: false`(默认 `:` 会把含冒号的键切成两半,**权限码 `GET:/api/v1/x` 正是这个形状**)。antd 自带文案是**另一套 locale**,ConfigProvider 接 `antd/locale/*` 一起切,否则是「中文界面 + No data」。落实 review:
+- [x] **B4 i18n + review 处置**(14b9f8f + review 处置 b4757d3) — 搬 react-i18next 接线,三处默认值改写(**坏了都不抛错**):`interpolation.prefix/suffix`(默认 `{{name}}`,文案是 `{name}`,不改则取字照常成功、页面上永远挂着花括号)、`escapeValue: false`(默认转义,React 本来就转义,再来一遍把 `&` 显示成 `&amp;`)、`nsSeparator: false`(默认 `:` 会把含冒号的键切成两半,**权限码 `GET:/api/v1/x` 正是这个形状**)。antd 自带文案是**另一套 locale**,ConfigProvider 接 `antd/locale/*` 一起切,否则是「中文界面 + No data」。落实 review:
   - **[MEDIUM]** 子树键上 `exists()` 与 `t()` 不一致(`exists('error.auth')` 为真而 `t()` 返回一句英文 debug 文本),与 Vue 侧 `te()` 行为**相反** → B5 的 `translateError` 会把 debug 文本弹给用户。**先写判别值再验证**,确认后加 `te()` 辅助 + 用例。
   - **[MEDIUM]** 模块级 `useAppStore.subscribe` 补 `import.meta.hot.dispose`(`stores/app.ts` 里 40 行外就有这个模式);`i18n.init()` 前加 `void`。
   - **[MEDIUM]** 副作用导入从 `App.tsx` 移到 `main.tsx`(与 `tokens.css` 并列,理由相同),删掉那条把顺序保证归因于 import 位置的**错注释**——真正的保证是模块求值早于渲染。
@@ -101,7 +102,61 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · B4 review 处置
+
+`b4757d3`。review lane 报 2 HIGH / 2 MEDIUM / 4 LOW,两条 HIGH 都独立复现过才动手。
+
+**[HIGH-1] DatePicker 面板在中文下是英文的,而这件事上一轮被当成"antd 文案跟着切"的**正面证据**写进了 commit message 和台账。** `ConfigProvider locale` 只切 antd 自己的 chrome 文案;面板里的**月份名 / 星期缩写 / 周起始日**归 dayjs 管——`@rc-component/picker/generate/dayjs.js:157-162` 拿 `DatePicker.lang.locale`(`'zh_CN'`)去调 `dayjs().locale('zh-cn').localeData()`,而 antd **一行 dayjs locale 都不 import**(`grep -rln "dayjs/locale" node_modules/antd` 零命中),dayjs 对未注册的 locale 名**静默回落 en**。实测:
+
+```
+未注册: monthsShort=Jan Feb Mar | weekdaysMin=Su Mo Tu | firstDayOfWeek=0
+已注册: monthsShort=1月 2月 3月 | weekdaysMin=日 一 二 | firstDayOfWeek=1
+```
+
+即中文界面 + `Jan/Feb` + 周从**周日**起,而 tsc / lint / 全部用例全绿、控制台一声不吭。修:`locales/index.ts` 里 `import 'dayjs/locale/zh-cn'`,`dayjs` 从 antd 的传递依赖提升为显式 dependency。
+
+两个次级判断也验了,都成立:**只需注册、不需要全局 `dayjs.locale()`**(picker 每次都显式 `.locale(...)`,探针全程没调过 setter);**`en` 是 dayjs 内置的**,不用导。
+
+放在 `locales/index.ts` 而不是 review 建议的 `main.tsx`:那样 spec 就测不到(spec 只 import `@/locales`)。
+
+**判据本身走的是 antd 自己那条路** —— 它自己的 generate config、它自己的 dayjs 实例、从 antd locale 对象里取的标识符。直接断 `dayjs().locale('zh-cn')` 的话,`node_modules` 里有两份 dayjs 时(我们注册进 A、antd 用 B)**照样绿**而面板依旧英文。这条用例要能区分那两个世界。
+
+**[HIGH-2] 探针那句断言是自指的 —— 这条我完全没看见,是本轮最有价值的产出。**
+
+```js
+const greetingOk = greeting === (i18n.language === 'en-US' ? 'Hello, 张三' : '你好,张三')
+```
+
+期望值从 `i18n.language` 推导,而它正是被测变量,两边同步移动,等式恒成立。关键机制是我上一轮想错的那一步:删掉 `lng: useAppStore.getState().locale` 后 **`i18n.language` 不是 undefined,而是被 `fallbackLng` 顶成 `'en-US'`**,所以自指等式在中文下也照样成立。
+
+于是上一轮台账里"第 5 步在中文下再刷一次才有判别力"这句话**只有前半句是真的**:一页两种语言确实肉眼可见,但**没有任何断言会红**,判别力全靠人盯屏幕。按本台账自己的纪律,那就是一个不可能失败的检查。已改成比 `p.locale`(store),让"i18n 说英文而 store 说中文"这件事本身变红。
+
+**这是"跑绿的用例什么都不证明"第三次咬到我,而且这次咬的是我为了防它而特意设计的第 5 步。**共同形状:判据的期望值与被测值**共用同一个源**。前两次是"从我恰好看过的地方推全称结论",这次是"从被测变量推期望值"。下次写断言时的自检问句:**期望值是从哪来的?如果它和实际值来自同一个变量,这条就是回声。**
+
+**[MEDIUM-1] `te()` 与 vue-i18n 在 message function 上相反,上一轮"三态与 Vue 一致"不属实。** 实测 vue-i18n `te(fn)=true`、`t(fn)="函数文案"`;本模板 `te(fn)=false`。**有意不对齐**(方向安全:挡住把函数塞进 React 渲染;仓库里不存在函数值形状),但已从"声称一致"改成一条**记录当前契约的用例** —— 让"有意"和"忘了"长得不一样。八种形状(string / 子树 / 缺失 / 数组 / 数组下标 / 纯数字键 / 空串 / 结尾点键)+ 回退链两边一致,唯此一格分道。
+
+**[MEDIUM-2] `te` 的源码位置记错了包。** 在 `vue-i18n/dist/vue-i18n.mjs:628`,**不在 `@intlify/core-base`**(那边只出三个 helper)。我自己 grep core-base 时也是零命中,当时没深究。这句话的全部价值就是"可复现",指错包等于没验。已改。
+
+**回退链那一格上一轮没钉住(我自查发现的)。** 两边隔离实测(只调 `te` 不调 `t`,免得分不清谁在回落):键只存在于 fallback locale 时,vue-i18n 与本模板**都返回 true**。已补用例,键是当场 `addResource` 注入的而不是从 `en-US.ts` 里挑一个"恰好 zh-CN 没有"的 —— 两份文案本就该是镜像,哪天有人补齐缺口,挑出来的键就两边都有了,那条用例会**静默失去判别力而依旧全绿**。
+
+LOW 三条一并落实:嵌套键用例自己设语言(原先吃上一个用例 `afterEach` 的残留,单跑就没这个前提);`ext/README.md` 补 `escapeValue:false` 的代价(插值结果不得进 `dangerouslySetInnerHTML` / `<Trans shouldUnescape>`)、花括号解析不出值时原样保留、键值不能是函数。LOW-1(探针脚本不在仓库、不可复现)**不修,记账**:一次性探针就是一次性的,但 HIGH-2 证明了"只有探针能覆盖"的断言本身就是风险信号 —— 该进 spec 的就该进 spec。
+
+**四条变异,预测先写,方向全中,一处预测不完整:**
+
+| # | 变异 | 预测 | 实测 |
+|---|---|---|---|
+| M1 | 删 `import 'dayjs/locale/zh-cn'` | 中文那条红,其余绿 | ✅ 1 failed / 71 passed |
+| M2 | `te()` 只查当前 locale | 回退链用例红,子树绿 | ✅ 1 failed / 71 passed |
+| M3 | `te()` 退回裸 `exists()` | 子树红,**回退链仍绿** | ⚠️ 子树红 **+ 函数值那条也红**(2 failed) |
+| M4 | `fallbackLng: false` | 回落用例 + 回退链用例都红 | ✅ 2 failed / 70 passed |
+
+M3 的重点预测——**回退链用例在这条变异下必须仍绿**——命中了,证实那两条用例互不覆盖(`exists` 本来就跨 locale)。漏预测的是函数值那条也会红(裸 `exists` 对函数返回 true)。方向没错,但说明我列预期失败集合时只顺着"这条变异针对哪条用例"想,没反过来枚举"哪些用例碰这段代码"。
+
+四件套真绿:`lint=0` / `typecheck=0` / `vitest=0`(72 passed / 10 files,原 68/9) / `build=0`,逐个跑、不并发。
+
 ### 2026-07-20 · B4 i18n 接线
+
+> **本条有三处已被下一轮 review 证伪,更正见上面「B4 review 处置」**:①「三态与 Vue 一致」实为 2/3(message function 那格相反);②`te` 在 `vue-i18n.mjs` 不在 `@intlify/core-base`;③「第 5 步才有判别力」——那句断言是自指的,任何变异下都不会红。原文保留不改,更正在后。
 
 `14b9f8f`。合并规则 R4 已落地并测过,这一条只往上接 i18next。三处默认值改写各自变异证伪过(去掉单花括号红 2、去掉 `escapeValue:false` 红 1、去掉 `nsSeparator:false` 红 1)。
 
