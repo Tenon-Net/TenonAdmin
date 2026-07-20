@@ -56,9 +56,16 @@
   --color-fill-hover:     #EBEDF0;  /* 行 hover / 悬浮填充 */
   --color-mask:           rgba(20, 27, 45, 0.45);  /* 遮罩 / 弹窗背景 */
   --color-header-bg:      rgba(255, 255, 255, 0.82);  /* 顶栏底(配 backdrop-filter: blur(12px)) */
-  /* 阴影**颜色**(区别于下方三级完整 box-shadow):UI 库要靠它自己派生抽屉/气泡/标签溢出等阴影。
-     不给的话 antd 暗色下回落 rgba(255,255,255,0.2),抽屉阴影会变成白色发光。 */
-  --color-shadow:         rgba(20, 27, 45, 0.16);
+  /* 阴影**基色**(区别于下方三级完整 box-shadow):UI 库靠它自己派生抽屉/气泡/标签溢出等十来个阴影。
+     不给的话 antd 暗色下回落 rgba(255,255,255,0.2),抽屉阴影会变成白色发光。
+
+     **必须不透明,别在这里带 alpha。**antd 把这个值当基色,再把**它的 alpha 乘进每一层派生阴影**
+     (`theme/util/alias.js`:`getShadowColor = a => base.clone().setA(base.a * a)`)。
+     这里曾经写的是 `rgba(20,27,45,0.16)`,于是 `boxShadowDrawerLeft` 的三档从 antd 原本的
+     0.08/0.12/0.05 塌成 0.0128/0.0192/0.008 —— **淡了 6.25 倍,几乎看不见**。
+     antd 自己的亮色默认就是不透明的 `#000`。要调深浅请改这个颜色本身,或改下面的 --shadow-1/2/3,
+     **不要给它加 alpha**;也别把它直接写进 `box-shadow`(它不是一个能用的阴影值)。 */
+  --color-shadow:         #141B2D;
 
   /* ── 字体 ──────────────────────────────────────────────── */
   --font-family-base: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -131,7 +138,7 @@
   --color-fill-hover:      #2E333B;
   --color-mask:            rgba(0, 0, 0, 0.65);
   --color-header-bg:       rgba(31, 34, 41, 0.82);  /* 顶栏底(配 blur) */
-  --color-shadow:          rgba(0, 0, 0, 0.45);  /* 暗底阴影更重;不给会被 antd 回落成白色发光 */
+  --color-shadow:          #000000;  /* 同样不透明,理由见亮色处;不给会被 antd 回落成白色发光 */
 
   /* 阴影(暗底需更重) */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 2px 8px rgba(0, 0, 0, 0.35);

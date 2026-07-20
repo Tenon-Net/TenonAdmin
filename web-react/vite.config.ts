@@ -23,6 +23,11 @@ export default defineConfig({
     // 5174 而不是 5173:两个模板要能同时跑。B12 的验收就是拿 React 版逐条对照 Vue 版,
     // 端口撞车的话每次对照都得先停一个。
     port: 5174,
+    // **必须 strictPort**。默认行为是端口被占就静默挪到下一个可用端口 —— 而本仓库同时跑两个模板,
+    // 5173/5174 相邻,残留的 dev server 很容易占位。挪走之后:脚本、探针、文档里写死的 5174 会连上
+    // **另一个应用**,拿到的不是错误而是别人的页面。真踩过一次(探针连到 Vue 模板,报"什么都没渲染")。
+    // 宁可起不来。
+    strictPort: true,
     // 这里**故意没有 `fs.allow`**。共享层时期它是必需的(源码在项目根之外),而那一条设置
     // 会**整个替换**默认白名单,写漏一项就是 dev server 连 `GET /` 都 403,且 lint/typecheck/build
     // 一个都发现不了(真踩过)。自包含之后不需要它,实测三个敏感路径(后端 appsettings.Development.json、
@@ -42,6 +47,10 @@ export default defineConfig({
   },
   test: {
     environment: 'happy-dom',
+    // 主题桥的 spec 靠 `getComputedStyle` 读回 tokens.css 的变量,所以 CSS 必须真处理。
+    // 默认 `css: false` 会把 CSS 导入桩成空 —— **连 `?raw` 也是空串**,不报错。
+    // 那样的话 `v()` 全返回空串、`defined()` 把键全滤掉,spec 里每条恒等断言都变成恒真。
+    css: true,
     // 限定 src:将来 web-react/e2e 落地时 Playwright 用例也会叫 *.spec.ts,默认 glob 会误吞(web/ 已踩过)。
     // `.tsx` 不能少:组件测试必须带 JSX 才写得了,而漏掉的失败模式是**彻底静默** ——
     // 文件不匹配 glob,vitest 不报错(别的文件还在跑),CI 全绿,那些用例从来没执行过。
