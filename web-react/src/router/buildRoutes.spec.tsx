@@ -60,6 +60,22 @@ describe('buildRoutes 落地', () => {
   })
 })
 
+describe('真实 glob(不注入)——堵住"假 glob 掩盖真 glob 失效"的缺口', () => {
+  it('buildRoutes 用默认 glob 时,能解析到仓库里真实存在的页面文件', () => {
+    // 上面所有用例都注入假 glob,真实 `import.meta.glob(['/src/views/**/*.tsx','!...spec'])` 若因
+    // 语法/版本问题匹配为空,一条测试都不会红,而真实 app 会**零动态路由**。这条特意不传 glob,
+    // 用一条指向真文件(`src/views/system/user/index.tsx`,B6b-1 建的占位页)的菜单,证明那条负模式
+    // 数组 glob 在本 Vite 版本下确实解析到了文件、建出了路由。
+    const routes = buildRoutes([node({ id: 1, path: 'system/user', component: 'system/user/index' })])
+    expect(routes.map((r) => r.path)).toEqual(['/system/user'])
+  })
+
+  it('buildRoutes 用默认 glob 时,不存在的组件不建路由(反面对照,排除"恒建")', () => {
+    const routes = buildRoutes([node({ id: 1, path: 'x', component: '压根不存在/index' })])
+    expect(routes).toEqual([])
+  })
+})
+
 describe('viewKeysFrom(菜单管理的组件下拉真相源)', () => {
   it('glob 键 → component 值(剥前缀后缀),排除登录页,排序', () => {
     expect(viewKeysFrom(glob)).toEqual(['dashboard/index', 'system/user/index'])

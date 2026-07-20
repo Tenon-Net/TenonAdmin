@@ -8,6 +8,7 @@ import { ACCENTS } from '@/theme/accents'
 import { useAntdTheme } from '@/theme/useAntdTheme'
 import { useAppStore, isDark, type Density } from '@/stores/app'
 import LoginPage from '@/views/login/LoginPage'
+import { Protected } from '@/router/Protected'
 
 /**
  * B2 的主题桥探针页。**故意不是 hello world**:只渲染文字的壳在下面任何一条假设坏掉时照样绿。
@@ -46,8 +47,11 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
-            {/* B2/B3/B4 的探针页暂居兜底路由;B6 落动态路由、B8 落布局壳时整个删掉。 */}
-            <Route path="*" element={<Probe locale={locale} setLocale={setLocale} dark={dark} themeScheme={themeScheme} setScheme={setScheme} accent={accent} setAccent={setAccent} density={density} setDensity={setDensity} />} />
+            {/* B2/B3/B4 的主题/i18n 探针,现降为开发期自检路由(检查项已被 antd-theme/i18n/app spec 覆盖);
+                B8 布局壳落地时连同 Probe 组件一起删。静态段 `/_probe` 排序高于下面的 `/*`。 */}
+            <Route path="/_probe" element={<Probe locale={locale} setLocale={setLocale} dark={dark} themeScheme={themeScheme} setScheme={setScheme} accent={accent} setAccent={setAccent} density={density} setDensity={setDensity} />} />
+            {/* 受保护区:登录守卫 + 强制改密守卫 + F5 深链重建 + 菜单派生的动态路由(见 router/Protected)。 */}
+            <Route path="/*" element={<Protected />} />
           </Routes>
         </BrowserRouter>
       </AntdApp>
