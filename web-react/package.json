@@ -18,6 +18,7 @@
     "@ant-design/icons": "^6.3.2",
     "@ant-design/pro-components": "^3.1.14-2",
     "antd": "^6.5.1",
+    "dayjs": "^1.11.11",
     "i18next": "^25.10.10",
     "openapi-fetch": "^0.13.5",
     "react": "^19.2.0",

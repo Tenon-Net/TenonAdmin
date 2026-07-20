@@ -71,7 +71,11 @@ function Probe(p: {
 
   // 单花括号插值坏掉的话这里会原样吐出「你好,{name}」—— 不抛错,只是页面上挂个花括号。
   const greeting = tr('workbench.welcome', { name: '张三' })
-  const greetingOk = greeting === (i18n.language === 'en-US' ? 'Hello, 张三' : '你好,张三')
+  // 期望值取自 **store**,不取自 `i18n.language`。后者正是被测变量,拿它推期望值 = 自指等式恒成立:
+  // 删掉 init 里的 `lng: useAppStore.getState().locale`,`i18n.language` 并不是 undefined 而是被
+  // `fallbackLng` 顶成 `'en-US'`,于是期望值跟着一起挪,中文下也照样绿。改比 store 之后,
+  // 「i18n 说英文而 store 说中文」这件事本身就是红的 —— 那正是那次变异的真实症状。
+  const greetingOk = greeting === (p.locale === 'en-US' ? 'Hello, 张三' : '你好,张三')
 
   const probes = [
     { ok: shadowOk, title: '派生阴影量级', desc: `boxShadowDrawerLeft alpha = [${alphas.join(', ')}],应为 [0.08, 0.12, 0.05]` },
@@ -84,7 +88,8 @@ function Probe(p: {
     { ok: cssVar('--color-shadow') !== '', title: 'tokens.css 进了文档', desc: `--color-shadow=${cssVar('--color-shadow') || '(读不到)'} bgContainer=${t.colorBgContainer}` },
     // 三个具名阴影是**角色名不是序数**:boxShadow→Modal(最重)、Secondary→弹层、Tertiary→message/
     // Segmented 滑块(最轻)。按 1/2/3 序号搬过来会把它们装反,而那个缺陷就长在本页顶部三个 Segmented 上。
-    { ok: greetingOk, title: '共享文案 + 单花括号插值', desc: `${i18n.language} → ${greeting}` },
+    // desc 里两个都列出来:红的时候要一眼看出是插值坏了,还是 i18n 与 store 脱钩了。
+    { ok: greetingOk, title: '共享文案 + 单花括号插值', desc: `store=${p.locale} i18n=${i18n.language} → ${greeting}` },
     { ok: blur(t.boxShadow) > blur(t.boxShadowSecondary) && blur(t.boxShadowSecondary) > blur(t.boxShadowTertiary), title: '具名阴影按角色由重到轻', desc: `Modal ${blur(t.boxShadow)}px > 弹层 ${blur(t.boxShadowSecondary)}px > 滑块 ${blur(t.boxShadowTertiary)}px` },
   ]
 

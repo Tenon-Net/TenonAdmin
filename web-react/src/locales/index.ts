@@ -1,5 +1,14 @@
 import i18next from 'i18next'
 import { initReactI18next } from 'react-i18next'
+// DatePicker/Calendar 面板里的**月份名、星期缩写、周起始日**归 dayjs 管,不归 antd 的 locale 管:
+// `@rc-component/picker/generate/dayjs.js` 拿 antd locale 对象的 `locale` 字段(`'zh_CN'`)去调
+// `dayjs().locale('zh-cn').localeData()`。而 antd 自己**一行 dayjs locale 都不 import**
+// (`grep -rln "dayjs/locale" node_modules/antd` 零命中),dayjs 对未注册的 locale 名是**静默回落 en**。
+// 漏掉这行的症状:中文界面下按钮/占位符是中文(来自 antd locale 对象),而面板里是 Jan/Feb、Su~Sa、
+// 周从**周日**起 —— 一页两种语言,tsc/lint/测试全绿、控制台一声不吭。
+// 只需**注册**,不需要全局 `dayjs.locale()`:picker 每次都显式 `.locale(...)`。`en` 是 dayjs 内置的。
+// 放在这里而不是 `main.tsx`:注册是 locale 关切,且写在这里才**测得到**(spec 只 import `@/locales`)。
+import 'dayjs/locale/zh-cn'
 import { useAppStore } from '@/stores/app'
 import zhCN from './zh-CN'
 import enUS from './en-US'
@@ -118,7 +127,15 @@ export const t = i18n.t.bind(i18n)
  *   `i18n.exists('error.auth')`  → **true**(子树存在)
  *   `t('error.auth')`            → `"key 'error.auth (zh-CN)' returned an object instead of string."`
  * 而 vue-i18n 的 `te` 只在解析结果是 string / message AST / message function 时才为真
- * (`@intlify/core-base` 的 `te`:子树解析成普通对象,三者都不是 → false)。
+ * (`vue-i18n/dist/vue-i18n.mjs:628` 的 `te`;**不在 `@intlify/core-base`**,那边只出
+ * `isMessageAST`/`isMessageFunction`/`fallbackWithLocaleChain` 三个 helper——记错包等于不可复现)。
+ *
+ * 对齐程度:**string / 子树 / 缺失 / 数组 / 数组下标 / 纯数字键 / 空串 / 结尾点键**八种形状两边一致,
+ * **回退链**也一致(键只存在于 fallback locale 时两边都为 true;vue-i18n 的 te 不传 locale 就走
+ * `fallbackWithLocaleChain`,i18next 的 `exists` 走 `resolve` 遍历 `this.languages`)。
+ * **唯一分道的是 message function**:vue-i18n 为 true,这里为 false。这是**有意不对齐**——
+ * 本仓库文案里不存在函数值,而 false 的方向是安全的(挡住把函数塞进 React 渲染),
+ * 消费者真写了函数值就退回后端原文。为一个不存在的形状加分支不划算。
  *
  * 消费者是错误提示那条路径(Vue 侧 `utils/error.ts:11` 的 `te(msgKey) ? t(msgKey) : message`)。
  * 后端 msgKey 只要恰好是个子树路径,用 `exists()` 的话就会把上面那句**英文 debug 文本**当成文案弹给用户。

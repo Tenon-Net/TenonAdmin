@@ -34,6 +34,16 @@ export default {
 
 插值占位符是**单花括号** `{name}`（`t('workbench.welcome', { name })`）——文案沿用 Vue 模板的写法（vue-i18n 风格），`locales/index.ts` 里已把 i18next 的默认 `{{name}}` 改过来了。两个模板各自自包含，这份文案是本模板自己的真源。
 
+解析不出值的花括号会**原样留着**，不会变空——`{0-9}`、`{}`、`.cls { color: red }` 都安全，只有能对上传入变量名的才被替换。
+
+### 插值结果不要进 `dangerouslySetInnerHTML`
+
+`locales/index.ts` 设了 `escapeValue: false`（i18next 默认转义是给 `innerHTML` 用的；React 自己已经转义，再来一遍会把用户名里的 `&` 显示成 `&amp;`）。代价是**插值结果本身不带任何转义**，所以它只能进 JSX 文本位置（`{t(...)}`）。别把它塞进 `dangerouslySetInnerHTML`，也别配 `<Trans shouldUnescape>`——那两条路上它就是一个 XSS 入口。
+
+### 键值必须是字符串，不能是函数
+
+i18next 支持函数值，但 `te()` 对函数一律返回 false（见 `locales/index.ts` 里 `te` 的注释：这是与 Vue 侧唯一有意不对齐的一格）。写成函数的话，错误提示那条路径会当作「没有文案」退回后端原文。
+
 ## 为什么不直接写进 `zh-CN.ts`
 
 那两个文件是**上游自留地**（本模板自包含，它们就在 `src/locales/` 下，是真源）。你写进去 = 每次同步上游都在同一个文件里撞冲突。放这里 = 零冲突。同理你自己的 API 模块放 `api/<域>.ts`，自己的类型放 `types/<模块>.ts`。
