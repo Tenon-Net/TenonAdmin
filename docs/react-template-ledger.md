@@ -32,7 +32,8 @@
 ## 批次 R · 重置与自包含化
 
 - [x] **R1 保存与重置**(2026-07-20,本文件首次提交) — `git branch -m feat/web-shared-extract archive/web-shared-extract`(留本地,**不推远端**);`git switch -c feat/web-react-template dev`。存档分支是后续所有"从旧分支取内容"的来源,也保存着两份 review 的结论与变异证据;新分支站稳前不删。验:`git ls-tree dev -- web-shared web-react` 为空(确认抽取从未进 dev),新分支 `git status` 干净。
-- [ ] **R2 把唯一一条真 bug 修复带回** — `archive` 的 `f1f579e` 与抽取无关:`57bde5e` 给后端 site-info DTO 加了 `Logo` 但没重跑 `gen:api`,`schema.d.ts` 从那时起就缺这个字段,**而且没人发现**——`configApi.siteInfo()` 走手写 `unwrap<{...}>` 内联类型,`paths` 里少个字段不会让任何东西编译失败。`git show archive/web-shared-extract:web-shared/api/schema.d.ts > web/src/api/schema.d.ts`(生成物与路径无关)。验:**起 MinimalHost 真跑一次 `npm run gen:api`,确认 diff 为空**——不要相信这次搬运。单独 `fix(web):` 提交。**这是整个重构里唯一一处动 `web/`。**
+- [ ] **R2 把唯一一条真 bug 修复带回** — `archive` 的 `f1f579e` 与抽取无关:`57bde5e` 给后端 site-info DTO 加了 `Logo` 但没重跑 `gen:api`,`schema.d.ts` 从那时起就缺这个字段,**而且没人发现**——`configApi.siteInfo()` 走手写 `unwrap<{...}>` 内联类型,`paths` 里少个字段不会让任何东西编译失败。`git show archive/web-shared-extract:web-shared/api/schema.d.ts > web/src/api/schema.d.ts`(生成物与路径无关)。验:**起 MinimalHost 真跑一次 `npm run gen:api`,确认 diff 为空**——不要相信这次搬运。单独 `fix(web):` 提交。~~这是整个重构里唯一一处动 `web/`。~~ **这句断言已被 R1 review 证伪**(2026-07-20):`archive` 上另有 A5/A6 两个 commit 改了 `web/e2e/`,与共享层无关,见新增的 R2b。写这条时我是凭抽取的**意图**("抽取只该动 web-shared/")推断的,而不是跑 `git log --stat` 逐个 commit 看**实际**改了什么——意图与事实之间那道缝,正好够沉掉三个 commit。
+- [ ] **R2b 把 e2e 的两条测试质量修复带回**(R1 review 补记) — `archive` 的 `f3e70ba`(A5)与 `4ea84ec`(A6)只碰 `web/e2e/*` 与 `web/playwright.config.ts`,**e2e 目录从未被抽取搬动过**,所以与共享层无关,不带回就是白丢。内容:①用例互相污染全局状态(默认 app)导致假红/假绿,各用例改为自建前置;`fullyParallel:false` 没达到注释声称的效果、`workers:1` 缺失;②菜单叶子按名字二次查找会命中**同名目录节点**("文件管理"目录 Id 30 vs 叶子 Id 78);③RBAC 那条 `<=1` 断言在零菜单场景下**恒真**——又一个假断言。已实测 `git cherry-pick -n f3e70ba` 五个 `web/` 文件全部干净落地,唯一冲突是新分支上不存在的旧台账 `docs/react-port-ledger.md`(丢弃即可)。**验:光 cherry-pick 不算数——e2e 要真跑一遍**(需后端 + web dev server),并对着 ③ 做变异:把 RBAC 断言恢复成 `<=1`,零菜单场景必须仍绿(证明它当初确实恒真),换成新断言后必须红。单独 `test(web):` 提交。
 - [ ] **R3 `web-react/` 脚手架(自包含)** — 从 `archive` 取 B1 的配置,**删光共享层接线**:`vite.config.ts` 去 `@shared` alias、去 `openapi-fetch` alias、`server.fs.allow` 整条删除(回默认);`tsconfig.json` 的 `paths` 只留 `@/*`、去 `../web-shared/**` 的 include;`package.json` 的 lint 去掉 `cd ..`、**补自己的 `gen:api`**(输出 `src/api/schema.d.ts`)。保留 `port: 5174`、proxy、`define.__APP_VERSION__`、`test.include: ['src/**/*.spec.{ts,tsx}']`(**`.tsx` 不能少**:React 组件测试必须带 JSX,漏掉时 vitest 不报错、CI 全绿、那些用例从来没执行过)、串行 pool 设置。**`types` 不加 `"node"`**——它是项目级的,会让 `process.env` 在浏览器源码里静默通过 typecheck,而 `web/` 那边没有这条,同一行代码会在**另一个模板**里炸;改为在需要 `node:fs` 的那一个 spec 顶部写 `/// <reference types="node" />`。验:四件套绿。
 - [ ] **R4 框架无关文件落进 `web-react/src/`** — 从 `archive` 的 `web-shared/` 复制,导入一律改 `@/*`:`types/{api,menu}.ts`→`src/types/`;`locales/{zh-CN,en-US}.ts`→`src/locales/`;`styles/tokens.css`→`src/styles/`;`theme/{mix,accents}.ts`→`src/theme/`;`utils/{tree,url}.ts`→`src/utils/`;`api/{index,schema.d}.ts`→`src/api/`。`locales/ext.ts` **内联进 `src/locales/index.ts`**(只剩一个消费者,与 `dev` 上 `web/src/locales/index.ts` 形状一致)。**暂不搬** `utils/{ua,chunkUpload}.ts`(当前无调用方,等批次 C 用到它们的页面再搬)。验:`grep -rn '@shared\|web-shared' web-react/` 为空;四件套绿。
 
@@ -112,4 +113,15 @@
 
 `grep -rn '@shared\|web-shared' web/src web/vite.config.ts web/tsconfig.json` 为空,确认 `dev` 上的 `web/` 本就自包含,R2 之外无需再动它。
 
-下一条:**R2**(把 `f1f579e` 那条真 bug 修复带回 `web/src/api/schema.d.ts`)。注意它要起 MinimalHost 真跑 `gen:api` 复核,**不与任何重进程并发**。
+**R1 review 结果(verifier lane,只读)**:四点里三点成立——`archive` 的 19 个 commit 完好、新分支确实等于 `dev` + 一个文档提交、`f1f579e` 那份 `schema.d.ts` 与 `dev` 版的全量 diff 只有 `logo` 字段新增 + 十余处 `isDelete` 声明顺序抖动(codegen 排序差异,TS 结构化类型不看声明顺序),**没有任何为共享层做的形状改动**,R2 那句 `git show ... > web/src/api/schema.d.ts` 成立。
+
+**第四点不成立,是本轮最有价值的产出**:R2 里"这是整个重构里唯一一处动 `web/`"被证伪。`archive` 上还有三个 commit 碰了 `web/`:
+
+- `f3e70ba`(A5)、`4ea84ec`(A6)—— 只改 `web/e2e/*` 与 `playwright.config.ts`,**与共享层完全无关**,是独立的测试质量修复(含一条恒真的 RBAC 断言)。已开 **R2b** 带回。
+- `371a07a`(B2 review)—— 新增的 `web/src/theme/mix.spec.ts` 测的是 `derivePrimary`,而那个函数只存在于 archive 的共享层,`dev:web/src/theme/mix.ts` 里根本没有,**不能照搬**。但它背后的发现是真的:`dev` 上 `naive-theme.ts:9` 与 `useTheme.ts:18` 各写了一遍同样三个魔数。已记进 `docs/refinement-ledger.md` 的 **A6**(那里才是 `web/` 打磨件的家),并写明**今天观察不到 case 不一致**——两个消费端都不区分大小写,这条的价值在消重不在修 bug,别把它写成 bug 骗自己。
+
+另外确认 `backend/` 零改动(`git log --name-only dev..archive -- backend/` 为空),`.github/` 的改动全是围绕共享层闸门与 `server.fs.allow` 收窄——而 `dev:web/vite.config.ts` 本就没有 `server.fs.allow: ['..']`,**那个安全洞是抽取自己开的又自己补的,`dev` 从未暴露**,随重置一起作废。
+
+教训按最一般的形式记下来:**台账条目里凡是"唯一/仅此一处/其余都是"这类全称断言,写的时候都是从意图推出来的,必须当场用 `git log --stat`(或等价的全量枚举)验一遍再写进去。**这次是我自己写的台账,一轮之后自己已经不记得推断和事实的分界了。
+
+下一条:**R2**(把 `f1f579e` 带回 `web/src/api/schema.d.ts`)。注意它要起 MinimalHost 真跑 `gen:api` 复核,**不与任何重进程并发**。R2 之后接 R2b。
