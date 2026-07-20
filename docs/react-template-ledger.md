@@ -35,7 +35,7 @@
 - [x] **R2 把唯一一条真 bug 修复带回**(abd9d1e) — `archive` 的 `f1f579e` 与抽取无关:`57bde5e` 给后端 site-info DTO 加了 `Logo` 但没重跑 `gen:api`,`schema.d.ts` 从那时起就缺这个字段,**而且没人发现**——`configApi.siteInfo()` 走手写 `unwrap<{...}>` 内联类型,`paths` 里少个字段不会让任何东西编译失败。`git show archive/web-shared-extract:web-shared/api/schema.d.ts > web/src/api/schema.d.ts`(生成物与路径无关)。验:**起 MinimalHost 真跑一次 `npm run gen:api`,确认 diff 为空**——不要相信这次搬运。单独 `fix(web):` 提交。~~这是整个重构里唯一一处动 `web/`。~~ **这句断言已被 R1 review 证伪**(2026-07-20):`archive` 上另有 A5/A6 两个 commit 改了 `web/e2e/`,与共享层无关,见新增的 R2b。写这条时我是凭抽取的**意图**("抽取只该动 web-shared/")推断的,而不是跑 `git log --stat` 逐个 commit 看**实际**改了什么——意图与事实之间那道缝,正好够沉掉三个 commit。
 - [x] **R2b 把 e2e 的两条测试质量修复带回**(8b52f71)(R1 review 补记) — `archive` 的 `f3e70ba`(A5)与 `4ea84ec`(A6)只碰 `web/e2e/*` 与 `web/playwright.config.ts`,**e2e 目录从未被抽取搬动过**,所以与共享层无关,不带回就是白丢。内容:①用例互相污染全局状态(默认 app)导致假红/假绿,各用例改为自建前置;`fullyParallel:false` 没达到注释声称的效果、`workers:1` 缺失;②菜单叶子按名字二次查找会命中**同名目录节点**("文件管理"目录 Id 30 vs 叶子 Id 78);③RBAC 那条 `<=1` 断言在零菜单场景下**恒真**——又一个假断言。已实测 `git cherry-pick -n f3e70ba` 五个 `web/` 文件全部干净落地,唯一冲突是新分支上不存在的旧台账 `docs/react-port-ledger.md`(丢弃即可)。**验:光 cherry-pick 不算数——e2e 要真跑一遍**(需后端 + web dev server),并对着 ③ 做变异:把 RBAC 断言恢复成 `<=1`,零菜单场景必须仍绿(证明它当初确实恒真),换成新断言后必须红。单独 `test(web):` 提交。
 - [x] **R3 `web-react/` 脚手架(自包含)**(414a2e4) — 从 `archive` 取 B1 的配置,**删光共享层接线**:`vite.config.ts` 去 `@shared` alias、去 `openapi-fetch` alias、`server.fs.allow` 整条删除(回默认);`tsconfig.json` 的 `paths` 只留 `@/*`、去 `../web-shared/**` 的 include;`package.json` 的 lint 去掉 `cd ..`、**补自己的 `gen:api`**(输出 `src/api/schema.d.ts`)。保留 `port: 5174`、proxy、`define.__APP_VERSION__`、`test.include: ['src/**/*.spec.{ts,tsx}']`(**`.tsx` 不能少**:React 组件测试必须带 JSX,漏掉时 vitest 不报错、CI 全绿、那些用例从来没执行过)、串行 pool 设置。**`types` 不加 `"node"`**——它是项目级的,会让 `process.env` 在浏览器源码里静默通过 typecheck,而 `web/` 那边没有这条,同一行代码会在**另一个模板**里炸;改为在需要 `node:fs` 的那一个 spec 顶部写 `/// <reference types="node" />`。验:四件套绿。
-- [ ] **R4 框架无关文件落进 `web-react/src/`** — 从 `archive` 的 `web-shared/` 复制,导入一律改 `@/*`:`types/{api,menu}.ts`→`src/types/`;`locales/{zh-CN,en-US}.ts`→`src/locales/`;`styles/tokens.css`→`src/styles/`;`theme/{mix,accents}.ts`→`src/theme/`;`utils/{tree,url}.ts`→`src/utils/`;`api/{index,schema.d}.ts`→`src/api/`。`locales/ext.ts` **内联进 `src/locales/index.ts`**(只剩一个消费者,与 `dev` 上 `web/src/locales/index.ts` 形状一致)。**暂不搬** `utils/{ua,chunkUpload}.ts`(当前无调用方,等批次 C 用到它们的页面再搬)。验:`grep -rn '@shared\|web-shared' web-react/` 为空;四件套绿。
+- [ ] **R4 框架无关文件落进 `web-react/src/`** — 从 `archive` 的 `web-shared/` 复制,导入一律改 `@/*`:`types/{api,menu}.ts`→`src/types/`;`locales/{zh-CN,en-US}.ts`→`src/locales/`;`styles/tokens.css`→`src/styles/`;`theme/{mix,accents}.ts`→`src/theme/`;`utils/{tree,url}.ts`→`src/utils/`;`api/{index,schema.d}.ts`→`src/api/`。`locales/ext.ts` **内联进 `src/locales/index.ts`**(只剩一个消费者,与 `dev` 上 `web/src/locales/index.ts` 形状一致)。**暂不搬** `utils/{ua,chunkUpload}.ts`(当前无调用方,等批次 C 用到它们的页面再搬)。验:**只看 import,不看注释** —— `grep -rnE "from ['\"](@shared|\.\./web)" web-react/src` 为空(原判据 `grep '@shared\|web-shared' web-react/` 在 R3 落地时就已必然误报:配置文件里那几条"这里没有它"的说明注释会命中。一个必然误报的检查下次只会被划掉,不会被当真);四件套绿。
 
 ## 批次 B · React 模板阶段一
 
@@ -112,6 +112,24 @@
 **顺带验了 `test.include` 里的 `.tsx`,因为它的失败模式是彻底静默。**预测先写:两个临时 spec(`.ts` + `.tsx`)都会跑;把 glob 改成只 `.ts`,`.tsx` 那个会消失且 vitest 一声不吭。实测完全命中——现状 `Test Files 2 passed (2)`,变异后 `1 passed (1)`,**没有警告、没有报错、依然是绿的**。B3 的 `auth-hooks.spec.tsx` 正是这个形状,这条要是漏了它会一直"通过"到没人发现。验完删除探针。
 
 **一处自打脸**:我第一次查 `npm test` 退出码时写的是 `npm test 2>&1 | tail -8; echo $?`,报出来 `0`——那取的是 `tail` 的状态不是 `npm` 的。本轮反复在说"检查要能失败",而我自己这条检查报了个假绿。改成先重定向再取 `$?`,真实退出码是 1。
+
+**R3 review 处置**(打回 1 HIGH / 3 MEDIUM / 5 LOW,代码可发,阻断项只有那条书面保证)。
+
+**[HIGH,已改]`/// <reference types="node" />` 不是文件级豁免 —— 我写反了,而且写进了 tsconfig 注释、commit message、本台账三处。**自己复验了三段 tsc:①只有一个用 `process.env` 的浏览器文件 → `TS2591` 报错(守卫在);②只有一个带三重斜线的 spec → 通过(三重斜线确实管用);③**两个同时存在 → 报错消失**。原因是模块 import 是文件级的而**全局声明不是**:`@types/node` 只要被任何一个文件拉进 program,`process`/`__dirname`/`Buffer` 就进了全局作用域,对同一 program 里所有文件生效。也就是说这条守卫会在 **R4/B2 第一次照我写的那句话行事时静默自我关闭**,四件套全绿。**这是"不可能失败的检查"的镜像版:一个在被使用的瞬间关掉自己的检查。**
+
+  处置:tsconfig 注释改成事实,并钉死替代方案 —— **spec 要读文件就别走 node**,用 `import css from '@/styles/tokens.css?raw'`(`vite/client` 已声明 `?raw` 模块),零 tsconfig 手术,且 spec 与浏览器走同一套解析。真到非 node 不可那天,单开 `tsconfig.spec.json` + `references`,而且**必须真的挂上** —— `web/tsconfig.node.json` 就是个没人引用的死配置(review 实测 `vue-tsc --listFiles` 里 `@types/node` 命中 0),别重蹈。**B2 写主题桥 spec 时按这条来。**
+
+**[MEDIUM,已改]`fs.allow` 的默认值不是"项目根"。**结论(删除正确)成立 —— review 实起 dev server 实测:后端 `appsettings.Development.json`、`dev-jwt.key`、仓库根 `CLAUDE.md` 经 `/@fs/` 全 403,白名单只有 `web-react/` 一项,比原先的 `['.', '../web-shared']` 严格更紧。但**理由错了**:Vite 的默认是 `searchForWorkspaceRoot()`,逐级上溯找 `pnpm-workspace.yaml`/`lerna.json`/带 `workspaces` 的 `package.json`。今天解析到 `web-react/` 自己,**仅仅因为仓库根还没有 package.json**。哪天一仓两模板顺手在根上加了 workspaces,白名单会**静默扩张到仓库根**,那三个路径立刻可读而四件套一个都不响。注释已改成这个事实,并写明届时必须显式写回 `fs: { allow: ['.'] }`。
+
+**[MEDIUM,已改]`test-setup.ts` 是 R3 唯一有逻辑的文件,却一次都没被执行过。**补了 `test-setup.spec.ts`,顺带把 `npm test` 从退出 1 变成真绿 —— 比"记录一条偏离等 R4"便宜。两处变异都先写预测再跑,全中:①`length` 恒返回 0 → 红(`expected +0 to be 1`);②摘掉 `setupFiles` → 红,而且报的**逐字就是**该文件注释里警告的那句 `Cannot read properties of undefined (reading 'setItem')` —— 证明这个 shim 在当前 Node 上仍在承重,不是抄来的老配置。
+
+**[LOW,已改]**`setupFiles` 的隔离粒度是**每 spec 文件一次**,不是每 test 一次;原注释写的"测试之间互不串味"过强。已改成文件级,并写明要 test 级隔离的 spec 自己写 `beforeEach` —— 不在 setup 里统一加,是因为 R4 要搬的那批 store spec 是照现在这个语义写的。
+
+**[LOW,记下不改]**`vite.config.ts` 处在所有检查的盲区:不在 `tsc` 的 `include`、oxlint 的 `env` 没有 `node`、运行时走 esbuild 不做类型检查,所以里面 `process.env`/`readFileSync`/`fileURLToPath` 三处 node 用法**一个都没被校验过**。archive 上同样如此(那边的 `types:["node"]` 也覆盖不到它,同样不在 include 里),**不是本次引入的回归**,`web/` 那边也是同样的空档。不为它加一套 project references,记着。
+
+**[LOW]**`414a2e4` 的 commit message 通篇讲"删",没提这次还**新增**了 `gen:api` 与 `openapi-typescript` 依赖。已提交不改写,记在这。
+
+四件套复测(不走管道、取真实退出码):lint / typecheck / test / build 全部 0。
 
 下一条:**R4**(框架无关文件落进 `web-react/src/`)。
 

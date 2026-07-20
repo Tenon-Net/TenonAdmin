@@ -25,7 +25,15 @@ export default defineConfig({
     port: 5174,
     // 这里**故意没有 `fs.allow`**。共享层时期它是必需的(源码在项目根之外),而那一条设置
     // 会**整个替换**默认白名单,写漏一项就是 dev server 连 `GET /` 都 403,且 lint/typecheck/build
-    // 一个都发现不了(真踩过)。自包含之后源码全在项目根内,默认值即最紧,别再加回来。
+    // 一个都发现不了(真踩过)。自包含之后不需要它,实测三个敏感路径(后端 appsettings.Development.json、
+    // dev-jwt.key、仓库根 CLAUDE.md)经 `/@fs/` 全部 403,比原先的 `['.', '../web-shared']` 严格更紧。
+    //
+    // 但**默认值不是"项目根"**(这一点我原先写错了,R3 review 纠正):Vite 的默认是
+    // `searchForWorkspaceRoot()` —— 逐级上溯找 `pnpm-workspace.yaml` / `lerna.json` / 带 `workspaces`
+    // 字段的 `package.json`,找不到才退回起点。今天解析到 `web-react/` 自己,**仅仅因为仓库根还没有
+    // package.json**。哪天仓库根引入 workspaces 或 pnpm-workspace.yaml(一仓两模板,这是很自然的下一步),
+    // 白名单会**静默扩张到仓库根**,上面那三个路径立刻可读,而四件套一个都不会响。
+    // 到那时必须在这里显式写回 `fs: { allow: ['.'] }`。
     proxy: {
       '/api': { target: apiTarget, changeOrigin: true },
       '/openapi': { target: apiTarget, changeOrigin: true },

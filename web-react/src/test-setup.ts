@@ -4,7 +4,10 @@
 // `Cannot read properties of undefined (reading 'setItem')`,而报错栈指向业务 action,和存储八竿子打不着。
 //
 // 所以桩必须在**任何 store 模块被 import 之前**装好,这正是 setupFiles 的位置;写在 spec 顶部来不及。
-// 用内存实现而不是修 happy-dom:测试之间要互不串味,Node 那个跨进程持久化的 localStorage 反而是负担。
+// 用内存实现而不是修 happy-dom:Node 那个跨进程持久化的 localStorage 会让 spec 文件之间互相串味。
+// 注意粒度:`setupFiles` 每个 spec **文件**执行一次,所以隔离是**文件级**的 —— 同一文件里的多个
+// `test` 共享同一个 Map。要 test 级隔离的 spec 自己写 `beforeEach(() => localStorage.clear())`,
+// 别指望这里给。(不在这里统一加,是因为 R4 要搬的那批 store spec 是照现在这个语义写的。)
 function memoryStorage(): Storage {
   const data = new Map<string, string>()
   return {
