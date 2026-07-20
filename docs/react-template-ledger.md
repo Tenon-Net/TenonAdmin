@@ -60,7 +60,8 @@
   - **已知判据缺口(如实记下,别假装堵上了)**:①深合并的保证**只靠一条用例**撑着——浅/深之别只在 ext 键与内置键**碰撞**时才可观测,"新增命名空间"两种实现结果相同;②`ext/` 目录按设计是空的,**没有常驻用例能证明那个 glob 打不打得中**(把路径写错,一条测试都不红)。已用临时 fixture 当场验过一次接缝确实生效,验完删除。
   - 验:中英实点 + **两次刷新,中文下也要刷一次**——EN 恰好等于 `fallbackLng`,只在 EN 下刷新的话把 `lng` 初值整句删掉照样绿。
 - [x] **B5a api client + endpoint wrappers**(6989f1e) — 见轮次日志。`api/index.ts` 逐字复制;spec 跑 node 环境(happy-dom 没实现请求体一次性流);`bare` 与 URL 短路是**两道冗余闸**,已各自补判据。
-- [ ] **B5b 登录页 + dict store**(dict store 已完成:604955c) — `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
+- [x] **B5b 登录页 + dict store**(dict store 604955c / site+error 46feef6 / 登录页 2213a87) — 只做账号密码路径;SMS/MFA/SSO 暂缓。见轮次日志。
+- [ ] **B5 review lane** — a(6989f1e)已发出待回;b(46feef6+2213a87)待发。 `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
 - [ ] **B6 动态路由** — `useRoutes(routes)`,routes 从 `auth.menuTree` 派生的普通数组。**Vue 版 `router/index.ts` 那个 `return to.fullPath` 重解析 trick 不需要存在**。`buildRoutesForModule` 逻辑逐条搬:flatten → 跳过非 Menu/无 path → 跳过 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe 视图 + `meta.iframeSrc` → 否则查 `import.meta.glob('/src/pages/**/*.tsx')`,缺失 `console.warn` 跳过;`viewComponentPaths` 由同一张 glob 表反推(**防手敲错致菜单静默消失,原样保留**)。`<RequireAuth>` 三条守卫按 Vue 版顺序:未登录→`/login`、`mustChangePassword`→锁死改密页、`!routesReady`→loading + `enterInitial()`。验:F5 深链能重建路由、无权限路径 404。
 - [ ] **B7 模块选择页 + useModule** — 决策阶梯逐字搬(0 模块→选择器 / 记住的仍有效→进 / 单个→进 / 有默认→进 / 否则选择器);`switchModule` 清 tabs + 跳 `homePath`;`setDefault` 同步。验:多应用切换 + 设默认后仍能从右上角九宫格回选择器。
 - [ ] **B8 布局壳** — antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
@@ -102,6 +103,40 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B5b 下半 · site store + translateError + 登录页
+
+三个提交:`46feef6`(site store + translateError)、`2213a87`(登录页 + 路由)。
+
+**B5 至此收尾**(拆成 a/b 两半,见上)。b 这半又拆了三步落地:site store 与 translateError 是纯逻辑、可先各自钉死;登录页要路由才跳得动,单独一步。
+
+#### site store(`46feef6`)
+
+`useSite` 从 Vue 的 `reactive` + 模块级变量改成 zustand store,在途缓存照旧模块级。**一处与 dict store 相反的语义特意留着并加了用例**:site 拉取**失败不自动重试**(`inflight` 不清),只 `load(true)` 或整页重载能救回。这是 Vue 侧的有意选择(站点信息是纯装饰,每个消费者都调 load(),自动重试会在后端持续不可用时反复打点),用例名里写了"与 dict store 语义相反,已知且有意",改语义时它会红,提醒两个模板一起改。
+
+一处**与 Vue 的行为微分叉**:title 用 `s.title || DEFAULTS.title`(空串回落内置名),Vue 是 `if (s.title) site.title = s.title`(空串留住上一次的值)。差别只在"已成功拉过、再 force 却拿到空 title"时可观测。取这边写法是因为结果只取决于本次响应、不取决于调用历史。已在注释里写清这个分叉。
+
+变异 S1–S6,预测先写,**六条全中**(在途缓存、force、空串回落、字段兜底 ×2、catch)。
+
+#### translateError(`46feef6`)—— B4 那条 `te()` 判据终于接到真实消费者
+
+`te()` 在 B4 落地时只有单元层用例守着;`translateError` 是它**唯一的消费者**,这一步把两者接上。补了一条走真实消费路径的判据:msgKey 恰好是**子树路径**时,`te()` 退回后端原文,不把 i18next 那句 `"key 'error.auth' returned an object instead of string."` 当文案弹给用户。变异(把 `te()` 换回裸 `i18n.exists()`)——那句 debug 文本原样进了用户可见字符串,两条新用例都红。Vue 侧没有对应用例(那边 `te` 是 vue-i18n 自带的,没人需要证明它);这边手写,所以必须有。
+
+#### 登录页(`2213a87`)
+
+只做**账号密码**这一条路径。短信免密 / 短信二次验证 / 外部 SSO **暂不做**——Vue 侧那三块占了 `LoginForm.vue` 一半篇幅,各要后端端点与倒计时状态机,一次压上四条链路不值当。`react-router-dom` 这一步落地(不推到 B6):跳不动的登录页是假完成,而 B6 反正要用。`App.tsx` 加 `BrowserRouter` + antd 的 `<App>`(在 ConfigProvider 之内,`message`/`modal` 才拿得到主题与 locale)。
+
+验证码票据一次性,失败后自动换图——这是判据钉得最紧的一条(不换的话用户照旧图再输必再失败,且第二次错误码与第一次不同,极难归因)。变异 L1–L5 各命中目标用例。
+
+**两条判据脆弱性,都在这一步现形,记进纪律:**
+
+1. **`resetModules` 造出的是并行模块图,跨图读写永远对不上。** 「成功:落会话」首次红在 `expected '' to be 'A'`:断言读的是文件顶部静态导入的 user store,而页面写的是 `import('./LoginPage')` 连带新建的那一份。`mount()` 改成返回新图里的 store。与 `api/client.spec.ts` 那个偶发红同源。
+
+2. **`vi.clearAllMocks()` 只清调用记录、留着实现。** `mockResolvedValueOnce` 链没消费完的返回值会泄漏到下一条用例。症状最阴:L1 变异(失败后不换图)让**"math 提示语"那条无关用例连带红**,而单跑那条在 L1 下是绿的。也就是说**"一条变异让 N 条用例红"不等于"N 条用例都覆盖了这个缺陷"——其中可能有纯噪声**。改成 `beforeEach` 里 `mockReset`(清实现)+ 泄漏修掉后重跑 L1,只红目标那一条。这是判别力的另一面:不只要问"改坏了它会不会红",还要问"红的这些是不是都真的在测它"。
+
+四件套真绿:`lint=0` / `typecheck=0` / `vitest=0`(126 passed / 17 files) / `build=0`。
+
+下一条:**B5 的 review lane**(a 已发出,b 待发)。之后 **B6 动态路由**。
 
 ### 2026-07-20 · B5b 上半 · dict store + useDictOptions
 
