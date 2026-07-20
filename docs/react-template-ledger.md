@@ -104,6 +104,24 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · B9 review 处置(review-b9 lane 隔离:REQUEST CHANGES → 1 HIGH 已修)
+
+`f8a1f1b`。**这轮是评审 + 变异纪律最实的一次兑现:review 抓到一个我引入的真回归,而我自己的绿测试放过了它。**
+
+**[HIGH 已修] `confirm` 执行期间取消/Esc 未拦 → 动作成功但外层拿到 false(Vue 原版的回归)。** 我声称"antd 的 busy 守卫内置故不必手写",**只对一半**:onOk 返 Promise 时 antd 只锁 OK 钮(loading)+ mask,**取消钮与 Esc 不锁**。后果:用户点确定删除、请求在途时点取消/按 Esc → onCancel → `resolve(false)` → 调用方跳过成功分支(表格不刷新),而 action 后台照样成功 + 迟到的成功 toast —— 正是 Vue 版 busy 守卫点名要防的"已删成功但表格没刷新",而我把那层整段删了。**先独立复现**(取消/Esc 挂起期各一条测试,当前红:`expected false to be undefined`),再修:onOk 启动即 `instance.update` 禁用取消钮 + 关 keyboard,从根上让 onCancel 不再触发。
+
+**[MEDIUM 已修] 我那条 busy 守卫测试无判别力(空测试)。** 它断"body 含『删?』+ 二次不触发",**区分不出「锁住未关」与「正在关(离场动画)」**——`void run().then(resolve)` 变异(去掉返回 Promise、antd 不锁关)照样 7/7 绿。唯一能判别的观测量是 **OK 钮的 loading 类**,我没断。已补断 loading 类 + 取消/Esc 挂起路径。**这正是我一路记的"跑绿的用例什么都不证明"—— 我写了条空测试当"比 Vue 短"的唯一依据,是 review 的独立变异把它戳穿的。**
+
+**修复途中又踩 + 纠正一次冗余闸(B5a 教训重演):** 第一版修复同时加了 `instance.update` 和 onCancel 里的 `started` 逻辑门——两道冗余,**去掉任一单独都不红**(update 禁按钮 / started 挡 resolve,各自兜底),单点变异测不出;且 `started` 返回 undefined 会让 antd 在取消时关掉弹窗而 action 仍在途。**收敛成单一机制**(只留 `instance.update`):去掉它现在取消/Esc 两条都红,可被钉住。
+
+三个机制(OK loading / 取消守卫 / Esc 守卫)现各有变异钉死。台账更正:上条"busy 守卫内置故不必手写"**不实**——antd 只兜一半,"短"来自删掉了仍在干活的守卫。
+
+lane 另三条 LOW(Can 空数组无测试、ask 的 Esc 路径无测试、台账未勾)均属实,前两条是覆盖缺口不阻断,后一条此条即补。
+
+四件套:`lint=0` / `typecheck=0` / `vitest=0`(222 passed / 27 files,+2 取消/Esc) / `build=0`。
+
+下一条:**B10 `<DataTable>` 薄封装**(隔离 pro-components beta、toProTable 适配 toPage 契约、排序映射后端、columnsState 持久化、proTable UI 键此时定)。
+
 ### 2026-07-20 · B9 权限门 + 确认/消息基建
 
 `63e071f`。三件里实际两个新实体:`<Can>` + `useConfirm`;message "承接"无需新建 —— antd 内置、已在 LoginPage/ModuleChooser/LayoutShell 用 `App.useApp().message`。
