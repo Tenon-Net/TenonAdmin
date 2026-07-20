@@ -1,4 +1,5 @@
-import { Alert, Button, Card, ConfigProvider, DatePicker, Empty, Input, Segmented, Space, Table, Tag, Typography, theme } from 'antd'
+import { Alert, App as AntdApp, Button, Card, ConfigProvider, DatePicker, Empty, Input, Segmented, Space, Table, Tag, Typography, theme } from 'antd'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import antdZhCN from 'antd/locale/zh_CN'
 import antdEnUS from 'antd/locale/en_US'
 import { useTranslation } from 'react-i18next'
@@ -6,6 +7,7 @@ import { i18n } from '@/locales'
 import { ACCENTS } from '@/theme/accents'
 import { useAntdTheme } from '@/theme/useAntdTheme'
 import { useAppStore, isDark, type Density } from '@/stores/app'
+import LoginPage from '@/views/login/LoginPage'
 
 /**
  * B2 的主题桥探针页。**故意不是 hello world**:只渲染文字的壳在下面任何一条假设坏掉时照样绿。
@@ -37,7 +39,18 @@ export default function App() {
     // antd 自带文案(空态/分页/日期)是**另一套 locale**,与我们的 i18n 无关,必须一起切 ——
     // 否则是「中文界面 + No data」。
     <ConfigProvider theme={themeConfig} locale={locale === 'en-US' ? antdEnUS : antdZhCN}>
-      <Probe locale={locale} setLocale={setLocale} dark={dark} themeScheme={themeScheme} setScheme={setScheme} accent={accent} setAccent={setAccent} density={density} setDensity={setDensity} />
+      {/* antd 的 `App` 提供 `message`/`modal`/`notification` 的**上下文实例** —— 静态的
+          `message.success()` 拿不到 ConfigProvider 的主题与 locale(v5 起就会告警),
+          所以全站统一走 `App.useApp()`,这层壳必须在 ConfigProvider 之内。 */}
+      <AntdApp>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            {/* B2/B3/B4 的探针页暂居兜底路由;B6 落动态路由、B8 落布局壳时整个删掉。 */}
+            <Route path="*" element={<Probe locale={locale} setLocale={setLocale} dark={dark} themeScheme={themeScheme} setScheme={setScheme} accent={accent} setAccent={setAccent} density={density} setDensity={setDensity} />} />
+          </Routes>
+        </BrowserRouter>
+      </AntdApp>
     </ConfigProvider>
   )
 }
