@@ -104,6 +104,22 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · B6b-1 materialization(描述符 → RouteObject)
+
+`a417a70`。B6b 的机械半:B6a 的描述符 → react-router `RouteObject[]`。view 描述符 → `React.lazy`+`Suspense`,iframe → `IframeView`,`name`/`title`/`icon` 进 `handle` 留给 B8 布局壳。**glob 注入**,用假表渲染进真 router 来测映射;`hasView` 与取 loader 用**同一张 glob**,"存在"与"能加载"不会打架。**不需要 Vue 的 `return to.fullPath` 重解析**:路由从 `menuTree` 派生,menuTree 一变 React 自然重渲染重匹配。
+
+占位页(dashboard/system/user/system/role)re-export 共用的 `UnderConstruction`,显示当前路径 —— 联调时能一眼分清"路由对了只是页没实现"vs"路由错了"。B11 逐个替换成真页。
+
+5 条行为测试(渲染进真 router 断页面文字/iframe src/handle/同源真相源)。**没做变异**:决策逻辑(有分支的那部分)全在 B6a 已变异钉死,这里是机械映射,行为测足够。
+
+**两个如实记的点:**
+1. **页面这次没被 code-split**(build 只 1 个 JS chunk)。因为 `buildRoutes` 还没被入口 import(App 仍用探针兜底),整个模块连同 glob 被 tree-shake。这是 B6b-2 接线**之前的预期态**,接线后页面才拆包 —— 留作 B6b-2 的验证点。build 成功本身证明那条 `import.meta.glob(['/src/views/**/*.tsx','!...spec.tsx'])` 数组负模式能编译。
+2. **`.spec.tsx` 排除的判据缺口**:它只活在 glob 负模式(构建期)那层,**单测够不到**(和 `ext/` glob 同类的结构性不可钉)。`viewKeysFrom` 的 `login/` 过滤是可测的(已测);`.spec` 排除只能靠那条模式 + 全量 build 不炸间接保。
+
+四件套:`lint=0` / `typecheck=0` / `vitest=0`(145 passed / 19 files) / `build=0`。
+
+下一条:**B6b-2**(`useModule` 决策阶梯 + `<RequireAuth>` 三守卫 + 接进 App.tsx 替换探针兜底)。那是 B6 有决策风险的另一半,配自己的变异回合;接线后验证页面 code-split。
+
 ### 2026-07-20 · B6a 菜单树 → 路由描述符(动态路由的决策半)
 
 `3877df4`。**B6 拆子步**(仿 B5):a 是「哪些菜单节点建路由、建成什么」的纯决策逻辑,b 是 react-router 的 materialization(React.lazy/Suspense/RouteObject)+ `<RequireAuth>` 守卫。把决策剥出来单独测,不必拉进 Suspense。
