@@ -24,6 +24,14 @@ export default {
 
 页面里照常 `const { t } = useTranslation()` 后 `t('sample.title')`。`locales/index.ts` 用 `import.meta.glob` 自动并入，**你不需要注册，也不需要改任何现成文件**。
 
+### 键名里不要有冒号
+
+`locales/index.ts` 里设了 `nsSeparator: false`，所以含冒号的键**不会**被切成「命名空间:键」两半——权限码正是 `GET:/api/v1/x` 这个形状。但请不要依赖这一点去设计键名：这是为了让后端 msgKey 无论什么形状都取得到字，不是鼓励你用冒号分层。分层用 `.`。
+
+### 键名指向的必须是**文案**，不能是子树
+
+`t('error.auth')` 这种指向一整棵子树的键，i18next 会返回一句英文 debug 文本（`key 'error.auth' returned an object instead of string.`）而不是报错。错误提示那条路径用 `te()` 挡住了它（`te()` 对子树返回 false，语义对齐 Vue 侧），但你自己在页面里写 `t()` 时它挡不住你。
+
 插值占位符是**单花括号** `{name}`（`t('workbench.welcome', { name })`）——文案沿用 Vue 模板的写法（vue-i18n 风格），`locales/index.ts` 里已把 i18next 的默认 `{{name}}` 改过来了。两个模板各自自包含，这份文案是本模板自己的真源。
 
 ## 为什么不直接写进 `zh-CN.ts`

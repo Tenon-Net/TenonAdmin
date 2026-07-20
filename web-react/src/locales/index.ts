@@ -1,3 +1,6 @@
+import i18next from 'i18next'
+import { initReactI18next } from 'react-i18next'
+import { useAppStore } from '@/stores/app'
 import zhCN from './zh-CN'
 import enUS from './en-US'
 
@@ -67,7 +70,60 @@ const extMods = import.meta.glob<ExtModule>('./ext/*/*.ts', { eager: true })
  * `t('error.auth.passwordWrong')` 原样吐出这串点分英文。不抛错、不告警、四件套全绿,整站文案变成键名。
  * 本模板只有一个 ns,所以整份文案挂在 `translation` 下。
  */
-export const resources = {
+// **不导出**:唯一的消费者就是下面那行 init。导出它只会诱使 spec 去断言"资源对象里有这个键",
+// 而那是在回声 —— 该断的是 `t()` 取不取得到字,那才是使用者会遇到的东西。
+const resources = {
   'zh-CN': { translation: withExt(zhCN, extMods, 'zh-CN') },
   'en-US': { translation: withExt(enUS, extMods, 'en-US') },
+}
+
+/**
+ * i18next 的三处默认值都与本仓库的文案不兼容,且**失败方式都很安静**,所以逐条写死在这里:
+ *
+ * 1. `interpolation.prefix/suffix` —— i18next 默认占位符是 `{{name}}`,而文案是照 vue-i18n 的
+ *    `{name}` 写的。不改的话 `t('workbench.welcome')` 原样吐出 `你好,{name}` ——
+ *    不抛错、不告警,只是页面上永远挂着一个花括号。
+ * 2. `escapeValue: false` —— i18next 默认把插值 HTML 转义(它面向 innerHTML);React 本来就转义,
+ *    再来一遍会把用户名里的 `&`/`<` 变成 `&amp;`/`&lt;` 显示出来。
+ * 3. `nsSeparator: false` —— 只有一个命名空间。留着默认的 `:` 的话,任何含冒号的键会被切成
+ *    「命名空间:键」两半而查不到 —— 而**权限码正是 `GET:/api/v1/x` 这个形状**。
+ */
+export const i18n = i18next.use(initReactI18next)
+// `void`:init 返回 Promise,同步资源下它已经完成,但不加 void 的话 lint 会当成漏 await 的浮动 Promise。
+void i18n.init({
+  resources,
+  // 首帧就用持久化下来的语言,不要「先中文再跳成英文」。persist 在建 store 时同步水合,这里读得到。
+  lng: useAppStore.getState().locale,
+  fallbackLng: 'en-US',
+  nsSeparator: false,
+  interpolation: { prefix: '{', suffix: '}', escapeValue: false },
+})
+
+// 语言跟随 app store。写在模块级而不是组件的 useEffect 里:i18next 实例本就是模块级单例,
+// 且非组件上下文(工具函数里的 `t`)也要跟着切。
+const unsubscribe = useAppStore.subscribe((s, prev) => {
+  if (s.locale !== prev.locale) void i18n.changeLanguage(s.locale)
+})
+// dev 下 Vite 每次热更新都重跑本模块、再挂一条订阅,旧的指向旧闭包且无人摘除,随编辑次数线性累积。
+// (`stores/app.ts` 的 matchMedia 监听是同一个模式。)生产构建里这段被摇掉。
+if (import.meta.hot) import.meta.hot.dispose(() => unsubscribe())
+
+/** 供非组件上下文(工具函数)使用的翻译器。 */
+export const t = i18n.t.bind(i18n)
+
+/**
+ * 「这个键有没有对应的**文案**」—— 语义对齐 Vue 侧的 `i18n.global.te()`,**不是** `i18n.exists()`。
+ *
+ * 两者在**子树键**上结论相反,而这个差别会直接烧到用户脸上:
+ *   `i18n.exists('error.auth')`  → **true**(子树存在)
+ *   `t('error.auth')`            → `"key 'error.auth (zh-CN)' returned an object instead of string."`
+ * 而 vue-i18n 的 `te` 只在解析结果是 string / message AST / message function 时才为真
+ * (`@intlify/core-base` 的 `te`:子树解析成普通对象,三者都不是 → false)。
+ *
+ * 消费者是错误提示那条路径(Vue 侧 `utils/error.ts:11` 的 `te(msgKey) ? t(msgKey) : message`)。
+ * 后端 msgKey 只要恰好是个子树路径,用 `exists()` 的话就会把上面那句**英文 debug 文本**当成文案弹给用户。
+ * 后端今天不会发这种 key,但那不是我们能约束的东西 —— 判据按"能不能被打穿"写,不按"今天会不会"。
+ */
+export function te(key: string): boolean {
+  return i18n.exists(key) && typeof i18n.t(key, { returnObjects: true }) === 'string'
 }

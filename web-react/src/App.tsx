@@ -1,4 +1,8 @@
-import { Alert, Button, Card, ConfigProvider, Empty, Input, Segmented, Space, Table, Tag, Typography, theme } from 'antd'
+import { Alert, Button, Card, ConfigProvider, DatePicker, Empty, Input, Segmented, Space, Table, Tag, Typography, theme } from 'antd'
+import antdZhCN from 'antd/locale/zh_CN'
+import antdEnUS from 'antd/locale/en_US'
+import { useTranslation } from 'react-i18next'
+import { i18n } from '@/locales'
 import { ACCENTS } from '@/theme/accents'
 import { useAntdTheme } from '@/theme/useAntdTheme'
 import { useAppStore, isDark, type Density } from '@/stores/app'
@@ -24,12 +28,16 @@ export default function App() {
   // 带上 auto 档。B3 起 `themeScheme: 'auto'` 是**持久化的默认值**,只给 light/dark 两个按钮的话
   // 谁点一下就把 auto 永久换掉了(还会落盘)。
   const setScheme = (v: string) => setThemeScheme(v as 'light' | 'dark' | 'auto')
+  const locale = useAppStore((s) => s.locale)
+  const setLocale = useAppStore((s) => s.setLocale)
 
   const themeConfig = useAntdTheme({ dark, accent, density })
 
   return (
-    <ConfigProvider theme={themeConfig}>
-      <Probe dark={dark} themeScheme={themeScheme} setScheme={setScheme} accent={accent} setAccent={setAccent} density={density} setDensity={setDensity} />
+    // antd 自带文案(空态/分页/日期)是**另一套 locale**,与我们的 i18n 无关,必须一起切 ——
+    // 否则是「中文界面 + No data」。
+    <ConfigProvider theme={themeConfig} locale={locale === 'en-US' ? antdEnUS : antdZhCN}>
+      <Probe locale={locale} setLocale={setLocale} dark={dark} themeScheme={themeScheme} setScheme={setScheme} accent={accent} setAccent={setAccent} density={density} setDensity={setDensity} />
     </ConfigProvider>
   )
 }
@@ -37,9 +45,11 @@ export default function App() {
 /** 必须是 ConfigProvider 的**子组件** —— `theme.useToken()` 读的是最近的 Provider,同层读不到。 */
 function Probe(p: {
   dark: boolean; themeScheme: string; setScheme: (v: string) => void
+  locale: string; setLocale: (v: 'zh-CN' | 'en-US') => void
   accent: string; setAccent: (v: string) => void
   density: Density; setDensity: (v: Density) => void
 }) {
+  const { t: tr } = useTranslation()
   const { token } = theme.useToken()
   const t = token as unknown as Record<string, string>
   const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim()
@@ -59,6 +69,10 @@ function Probe(p: {
   ]
   const brokenIds = identities.filter(([a, b]) => String(t[a]) !== String(t[b]))
 
+  // 单花括号插值坏掉的话这里会原样吐出「你好,{name}」—— 不抛错,只是页面上挂个花括号。
+  const greeting = tr('workbench.welcome', { name: '张三' })
+  const greetingOk = greeting === (i18n.language === 'en-US' ? 'Hello, 张三' : '你好,张三')
+
   const probes = [
     { ok: shadowOk, title: '派生阴影量级', desc: `boxShadowDrawerLeft alpha = [${alphas.join(', ')}],应为 [0.08, 0.12, 0.05]` },
     { ok: !/255,\s*255,\s*255/.test(t.boxShadowDrawerLeft ?? ''), title: '阴影不是白色发光', desc: t.colorShadow ?? '(空)' },
@@ -70,6 +84,7 @@ function Probe(p: {
     { ok: cssVar('--color-shadow') !== '', title: 'tokens.css 进了文档', desc: `--color-shadow=${cssVar('--color-shadow') || '(读不到)'} bgContainer=${t.colorBgContainer}` },
     // 三个具名阴影是**角色名不是序数**:boxShadow→Modal(最重)、Secondary→弹层、Tertiary→message/
     // Segmented 滑块(最轻)。按 1/2/3 序号搬过来会把它们装反,而那个缺陷就长在本页顶部三个 Segmented 上。
+    { ok: greetingOk, title: '共享文案 + 单花括号插值', desc: `${i18n.language} → ${greeting}` },
     { ok: blur(t.boxShadow) > blur(t.boxShadowSecondary) && blur(t.boxShadowSecondary) > blur(t.boxShadowTertiary), title: '具名阴影按角色由重到轻', desc: `Modal ${blur(t.boxShadow)}px > 弹层 ${blur(t.boxShadowSecondary)}px > 滑块 ${blur(t.boxShadowTertiary)}px` },
   ]
 
@@ -78,6 +93,7 @@ function Probe(p: {
       <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Space wrap data-testid="controls">
           <Segmented value={p.themeScheme} onChange={(v) => p.setScheme(String(v))} options={['auto', 'light', 'dark']} data-testid="seg-theme" />
+          <Segmented value={p.locale} onChange={(v) => p.setLocale(v as 'zh-CN' | 'en-US')} options={[{ label: '中文', value: 'zh-CN' }, { label: 'EN', value: 'en-US' }]} data-testid="seg-locale" />
           <Segmented value={p.density} onChange={(v) => p.setDensity(v as Density)} options={['comfortable', 'compact']} data-testid="seg-density" />
           <Segmented value={p.accent} onChange={(v) => p.setAccent(String(v))} options={ACCENTS.map((a) => ({ label: a.replace('#', ''), value: a }))} data-testid="seg-accent" />
         </Space>
@@ -104,7 +120,9 @@ function Probe(p: {
             columns={[{ title: '名称', dataIndex: 'a' }, { title: '值', dataIndex: 'b' }]}
             pagination={false}
           />
+          {/* antd 自带文案的可见证据:空态与日期选择器都归 ConfigProvider 的 locale 管,不归我们的 i18n。 */}
           <div style={{ marginTop: 12 }}><Empty /></div>
+          <DatePicker style={{ marginTop: 8 }} />
         </Card>
 
         <Typography.Paragraph type="secondary">v{__APP_VERSION__}</Typography.Paragraph>
