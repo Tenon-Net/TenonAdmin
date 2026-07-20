@@ -65,6 +65,8 @@ export interface AppState extends AppSettings {
   setLayoutMode: (m: LayoutMode) => void
   toggleCollapsed: () => void
   resetSettings: () => void
+  /** 导出当前外观配置(DEFAULTS 同名键的现值);设置抽屉「复制配置」用,粘回 DEFAULTS 即为新默认。 */
+  exportSettings: () => Record<keyof AppSettings, unknown>
 }
 
 /** auto 时按系统深浅色解析。写成纯选择器,组件内 `useAppStore(isDark)`、组件外 `isDark(useAppStore.getState())`。 */
@@ -74,7 +76,7 @@ export const isDark = (s: Pick<AppState, 'themeScheme' | 'systemDark'>): boolean
 /** UI 偏好:主题模式 / 主色 / 密度 / 布局 / 界面开关 / 折叠 / 语言。持久化(localStorage key "app")。 */
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...DEFAULTS,
       collapsed: false,
       locale: 'zh-CN' as Locale,
@@ -89,6 +91,13 @@ export const useAppStore = create<AppState>()(
       toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed })),
       // 抽屉"恢复默认":还原外观项,保留 locale / collapsed(zustand 的 set 是浅合并,未列出的键原样保留)。
       resetSettings: () => set({ ...DEFAULTS }),
+      // Vue 侧有而移植时漏掉的一个 action(`web/src/stores/app.ts:89`)。台账从 B 到 E 没有任何一条
+      // 会碰到设置抽屉,所以它不会被后面的批次自动带出来 —— 现在补,不然就静默丢了。
+      exportSettings: () => {
+        const keys = Object.keys(DEFAULTS) as (keyof AppSettings)[]
+        const s = get()
+        return Object.fromEntries(keys.map((k) => [k, s[k]])) as Record<keyof AppSettings, unknown>
+      },
     }),
     {
       name: 'app',

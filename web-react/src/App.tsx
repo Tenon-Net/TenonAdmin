@@ -10,28 +10,33 @@ import { useAppStore, isDark, type Density } from '@/stores/app'
  * 到 B8 布局壳落地时整页删掉。
  */
 export default function App() {
-  // B3:改从 app store 取(原先是本地 useState)。三条**细粒度**订阅而不是整体订阅 —— 后者任何
-  // 无关字段(collapsed / locale / 界面开关)变动都会重建整棵 ConfigProvider。
+  // B3:改从 app store 取(原先是本地 useState)。**三条状态订阅 + 三条 action 选择器**
+  //(action 的引用建店时定死、此后永不替换,那三条永远不会触发渲染)。
+  // 分开订阅而不是整体订阅 —— 后者任何无关字段(collapsed / locale / 界面开关)变动
+  // 都会重建整棵 ConfigProvider。
   const dark = useAppStore(isDark)
   const accent = useAppStore((s) => s.accent)
   const density = useAppStore((s) => s.density)
   const setThemeScheme = useAppStore((s) => s.setThemeScheme)
   const setAccent = useAppStore((s) => s.setAccent)
   const setDensity = useAppStore((s) => s.setDensity)
-  const setDark = (v: boolean) => setThemeScheme(v ? 'dark' : 'light')
+  const themeScheme = useAppStore((s) => s.themeScheme)
+  // 带上 auto 档。B3 起 `themeScheme: 'auto'` 是**持久化的默认值**,只给 light/dark 两个按钮的话
+  // 谁点一下就把 auto 永久换掉了(还会落盘)。
+  const setScheme = (v: string) => setThemeScheme(v as 'light' | 'dark' | 'auto')
 
   const themeConfig = useAntdTheme({ dark, accent, density })
 
   return (
     <ConfigProvider theme={themeConfig}>
-      <Probe dark={dark} setDark={setDark} accent={accent} setAccent={setAccent} density={density} setDensity={setDensity} />
+      <Probe dark={dark} themeScheme={themeScheme} setScheme={setScheme} accent={accent} setAccent={setAccent} density={density} setDensity={setDensity} />
     </ConfigProvider>
   )
 }
 
 /** 必须是 ConfigProvider 的**子组件** —— `theme.useToken()` 读的是最近的 Provider,同层读不到。 */
 function Probe(p: {
-  dark: boolean; setDark: (v: boolean) => void
+  dark: boolean; themeScheme: string; setScheme: (v: string) => void
   accent: string; setAccent: (v: string) => void
   density: Density; setDensity: (v: Density) => void
 }) {
@@ -72,7 +77,7 @@ function Probe(p: {
     <div style={{ padding: 24, minHeight: '100vh', background: token.colorBgLayout }}>
       <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Space wrap data-testid="controls">
-          <Segmented value={p.dark ? 'dark' : 'light'} onChange={(v) => p.setDark(v === 'dark')} options={['light', 'dark']} data-testid="seg-theme" />
+          <Segmented value={p.themeScheme} onChange={(v) => p.setScheme(String(v))} options={['auto', 'light', 'dark']} data-testid="seg-theme" />
           <Segmented value={p.density} onChange={(v) => p.setDensity(v as Density)} options={['comfortable', 'compact']} data-testid="seg-density" />
           <Segmented value={p.accent} onChange={(v) => p.setAccent(String(v))} options={ACCENTS.map((a) => ({ label: a.replace('#', ''), value: a }))} data-testid="seg-accent" />
         </Space>

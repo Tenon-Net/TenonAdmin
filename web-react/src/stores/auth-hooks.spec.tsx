@@ -70,6 +70,8 @@ describe('useHasPerm', () => {
     for (const codes of [['A'], ['A', 'B'], ['A', 'B', 'C']]) {
       act(() => useAuthStore.setState({ permissionCodes: codes }))
     }
+    // 计数假定**没有 StrictMode wrapper**(实测 StrictMode 下 mount 2 / updates 6)。
+    // 哪天有人给 spec 套上贴合生产的 StrictMode,这条会假红成 6 —— 那时改成断"有界"而不是"恰好"。
     expect(renders - afterMount).toBe(3)
   })
 

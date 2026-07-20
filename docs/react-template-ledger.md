@@ -72,7 +72,7 @@
 先补组件再批量做页。**`web/COMPONENTS.md` 记录的每个坑要在 antd 侧逐条重验,不能假设同样成立**(静态模式无客户端筛选、受控 `expandedRowKeys` 与 `defaultExpandAll` 互斥、过滤树浅拷贝写回不生效必须 reload)。
 
 - [ ] **C0 从存档搬运剩余条目** — 批次 C 及之后的细目在 `archive/web-shared-extract` 的 `docs/react-port-ledger.md` 里,逐条搬进本文件(结构不变,去掉 `@shared` 相关措辞)。**先做这一条**,别凭记忆重写。
-- [ ] **C1 字典三件套 + 表单容器** — `DictSelect`/`DictTag`/`useDictOptions`(数据基座是 B3 的 dict store)、`FormContainer`(Modal+Drawer 双形态,`onConfirm` owns loading+close)、`StatusSwitch`(悲观 + 自动回滚,建在 useConfirm 的 `ask` 上)。
+- [ ] **C1 字典三件套 + 表单容器** — `DictSelect`/`DictTag`/`useDictOptions`(数据基座是 **B5** 的 dict store —— B3 只落了三个,dict 随 API 层走)、`FormContainer`(Modal+Drawer 双形态,`onConfirm` owns loading+close)、`StatusSwitch`(悲观 + 自动回滚,建在 useConfirm 的 `ask` 上)。
 - [ ] **C2 选择器族** — `ApiSelect`(远程分页 + 防抖 + 竞态守卫)、`UserSelect`、`OrgTreeSelect`(扁平→树用 `utils/tree`,含子树排除)、`UserPicker` 弹窗。
 
 ## 批次 D · 容器与标签页
@@ -82,7 +82,7 @@
 ## 批次 E · 工程化
 
 - [ ] **E1 `web-react/Dockerfile` + compose 服务** — 照 `web/Dockerfile`,但**构建上下文可以是 `./web-react` 自己**(不再需要仓库根,这正是自包含买到的)。
-- [ ] **E2 `web-react-ci.yml`**(⚠ 冒烟若断言"零控制台错误",**必须丢弃第一次加载** —— Vite 冷启动遇到新依赖会重新预打包并强制刷新,那个窗口真的会抛 `Invalid hook call`,与代码无关,B3 踩过) — lint → test → build → dev server 冒烟(5175,`--strictPort`,**断言内容而非状态码**——未知路径命中 SPA fallback 返 200 + index.html,只查状态码的检查会在什么都没证明的情况下通过;并断言仓库根 403)。**不带**任何共享层闸门与 `/@fs` 断言。paths 只有 `web-react/**`。
+- [ ] **E2 `web-react-ci.yml`**(⚠ 冒烟断言"零控制台错误"时**不要丢弃第一次加载** —— 我最初写的是"必须丢弃",归因错了,见 B3 轮次日志。CI 里 `npm ci` 之后根本没有 `.vite` 缓存,实测真冷启动零错误。真实风险窄得多:**只经动态 `import()` 可达的裸包**会被首轮依赖扫描漏掉、即使冷缓存也会触发 re-optimize + 强制刷新 —— B6 的 `import.meta.glob('/src/pages/**/*.tsx')` 是这条路上最可能的下一个。对症办法是给那些包写 `optimizeDeps.include`,**不是放宽断言**) — lint → test → build → dev server 冒烟(5175,`--strictPort`,**断言内容而非状态码**——未知路径命中 SPA fallback 返 200 + index.html,只查状态码的检查会在什么都没证明的情况下通过;并断言仓库根 403)。**不带**任何共享层闸门与 `/@fs` 断言。paths 只有 `web-react/**`。
 - [ ] **E3 `dev.bat`/`dev.sh` 带上 web-react** — 目前只起 backend + web。
 - [ ] **E4 文档** — 根 `CLAUDE.md` 加 `web-react/` 段落,写明两个模板各自自包含、零共享,**且这是刻意选择**;**不要**出现任何"必须一起带上"的措辞。site/ 加一页 React 模板上手(degit 一条命令)。
 
@@ -115,7 +115,13 @@
 
 **浏览器探针**:偏好扛过 F5(明暗/主色/密度全留存)、`systemDark` 确认未入库、`--color-primary` 已写回。
 
-**踩到一个会误导人的陷阱,已写进 E2**:首次冷启动时探针报了 `Invalid hook call` 和 `Cannot read properties of null (reading 'useCallback')`,看着像 React 双实例的严重缺陷。实际是 **Vite 首次遇到新依赖(zustand)重新预打包并强制刷新**(`optimized dependencies changed. reloading`),那个窗口里模块图短暂不一致。dev server 预热后不再复现,四件套也一直是绿的。**任何断言"零控制台错误"的 CI 冒烟都必须丢弃第一次加载**,否则每次依赖变动都会假红一次。
+**踩到一个会误导人的陷阱 —— 而我给它开的药方是错的,已改。**探针报了 `Invalid hook call` 和 `Cannot read properties of null (reading 'useCallback')`,看着像 React 双实例。**机制我判对了**:Vite 重新预打包新依赖(zustand)并强制刷新(`optimized dependencies changed. reloading`),那个窗口模块图短暂不一致,不是代码缺陷。
+
+**但触发条件判错了,而错误的那一半被我写成了 E2 的验收要求。**我写的是"冷启动会触发,所以 CI 冒烟必须丢弃第一次加载"。review 让我实测:`rm -rf node_modules/.vite` 之后真冷启动 —— **零错误、server 日志里零 re-optimize**。原因是 esbuild 的依赖扫描沿 `index.html → main.tsx → App.tsx → stores/app.ts` 走,**在响应第一个请求之前**就发现了 zustand。真正会触发的是**陈旧缓存**:dev server 活着的时候往模块图里加一个新裸包 —— 正是我当时的现场。
+
+**而 CI 里 `npm ci` 之后根本没有 `.vite` 缓存**,落的就是刚才那种真冷启动。所以我那条警告防的是不可能发生的事,却顺手给了 CI **一张丢弃真实首屏错误的许可证** —— 一个不可能失败的检查,正是这本台账存在的意义所要禁止的东西。E2 已改成相反的措辞,并把真实风险窄化到"只经动态 `import()` 可达的包"(B6 的 `import.meta.glob` 是下一个候选),对症办法是 `optimizeDeps.include`。
+
+**教训**:这次不是"没验证就写断言",我确实观察到了现象;错在**把一次观察的伴随条件当成了因果条件**。观察到"第一次加载报错"就写下"冷启动会报错",而没问一句"是冷启动本身,还是那次恰好还带着别的东西"。判据纪律里"先跑一条能打自己脸的命令"这条,对因果归因同样适用 —— `rm -rf .vite` 就是那条命令。
 
 下一条:**B4**(i18n + review 处置)。
 

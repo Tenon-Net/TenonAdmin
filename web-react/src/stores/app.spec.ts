@@ -100,5 +100,12 @@ describe('持久化白名单', () => {
       'accent', 'collapsed', 'density', 'fixedHeader', 'formStyle', 'grayscale', 'layoutMode',
       'locale', 'pageTransition', 'showBreadcrumb', 'showTabs', 'themeScheme', 'watermark', 'watermarkText',
     ])
+
+    // **漂移守卫**:Vue 的 `persist: true` 自动覆盖任何新增 state 字段,而这里的 partialize 是手写字面量。
+    // 往 DEFAULTS 加一项而忘了加进 partialize,症状是"抽屉里改了、看着生效、F5 消失",四件套全绿。
+    // 上面那条硬编码了键名清单,会和 partialize 一起变陈旧,所以抓不住这个漂移;这条从 DEFAULTS 反推。
+    // 真源用 `exportSettings()` —— 它就是"DEFAULTS 同名键的现值",加字段时自动跟进,不用再维护一份清单。
+    const missing = Object.keys(useAppStore.getState().exportSettings()).filter((k) => !(k in saved))
+    expect(missing, `这些 DEFAULTS 字段没进 partialize:${missing.join(', ')}`).toEqual([])
   })
 })
