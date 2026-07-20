@@ -67,7 +67,7 @@
 - [x] **B8 布局壳**(cb62290 派生 / cac1efc 壳+接线+删探针) — antd 原生 Layout 自建、Sider 236/76、Header 62 blur、菜单树派生、选中/展开跟随路由、明暗、灰度/密度样式;探针删除。见轮次日志。 antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
 - [x] **B9 权限 + 消息 + 确认基建**(63e071f) — `<Can code>` 替 v-auth(判定收敛 hasPerm)、`useConfirm` 用 Modal.useModal 重写(busy 守卫内置);message 无需新建。见轮次日志。 `<Can code="VERB:/path">`(替代 `v-auth`);`App.useApp().message` 承接 Vue 侧 74 处 `useMessage`;`useConfirm` 三 API 用 `Modal.useModal()` 重写(`modal.confirm({onOk:async})` 返 promise 时按钮自动 loading 且不关窗,正是现有语义,**代码会比 93 行更短**)。验:无权限按钮不渲染;确认框执行中不可重复点/不可 Esc 关。
 - [x] **B10 `<DataTable>` 薄封装**(eb3de2f) — toProTable 适配(9 变异)、隔离 pro-components、columnsState 持久化、reload 句柄;proTable UI 键**不加**(antd ProTable 自带 intl 跟 ConfigProvider)。见轮次日志。 隔离 `pro-components` beta,16 个 CRUD 页只依赖它。含 `toProTable()` 适配器(`toPage()` 的 `{items,total}` → `{data,success,total}`)、排序映射到后端 `SortField`/`SortOrder`、`columnsState` 持久化沿用 `protable:{module}-{page}` 命名、labels 由 i18n 驱动。**`proTable` 那批 UI 键此时才定**:现有的 8 个键是 Naive 那个 ProTable 的文案,antd 的 ProTable 自带 locale,要不要加、加什么在这一条决定,别提前猜。验:契约单测 + 一页实跑。
-- [ ] **B11 system/user 页** — 标准列表原型(搜索 + 工具栏 + 表格 + 分页 + 服务端排序 + 列设置)。验:增删改查全通、列设置刷新后保留。
+- [x] **B11 system/user 页** — 标准列表原型(搜索 + 工具栏 + 表格 + 分页 + 服务端排序 + 列设置)落地(`8eea775`)。写侧 antd 原生 Modal+Form;机构树筛选/头像/字典选择器/批量删除属批次 C,原型有意不带。**代码验四件套 + 变异全绿;但"增删改查全通、列设置刷新后保留"是浏览器行为,本 SSH 会话无浏览器可驱动 → 该项验收随 B12(手动)+ E2(Playwright 冒烟),未在此假称已验。**
 - [ ] **B12 阶段一验收** — 手动对照 Vue 版走 10 条链路:登录 / token 过期刷新重放 / 强制改密 / 多应用切换 / F5 深链重建路由 / user 页增删改查 / 搜索排序分页 / 列设置持久化 / 明暗+中英切换 / 无权限按钮不渲染。
 
 ## 批次 C · 共享组件层 + 剩余 22 页
@@ -103,6 +103,39 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B11 system/user 标准列表原型(`8eea775`)
+
+第一条真 CRUD 页,踩着真 ProTable(经 `<DataTable>`)。写侧用 antd 原生 `Modal`+`Form`;机构树筛选/头像上传/字典选择器/`useBatchDelete` 属批次 C,原型有意不带(各处 ponytail 注)。真 API 用 `@ant-design/pro-components` 3.1.14-2 + antd 6.5.1 + React 19.2。
+
+**对着真 `.d.ts` 核过的 pro-components 3.x(antd v6 线)与经典版差异,别凭记忆:**
+- 列排除搜索表单是 **`search: false`**,这版**没有 `hideInSearch`**(经典版有)。默认每列都进搜索表单 → 非搜索列一律 `search: false`。
+- 行选择是 ProTable 的 `rowSelection` **prop**,不是 Naive 那种 `type:'selection'` 列 —— 当前 `<DataTable>` 没暴露它,故**批量删除连同 `rowSelection` 一起推到批次 C**,原型只做行内单删(单删已覆盖"删")。
+- `request` 签名 `(params & {current,pageSize}, sort, filter) => Promise<Partial<RequestData>>`;`columnsState` 键就是 `{persistenceKey, persistenceType}`;`hideInSetting`/`hideInTable`/`valueEnum`/`sorter`/`fixed` 都在。
+- Modal 的 `destroyOnClose` 在 v6 已更名 **`destroyOnHidden`**(两者都在,用新名)。
+
+**纯逻辑抽 `userForm.ts`(空值语义 + 超管自锁判据),`userForm.spec` + `index.spec` 变异钉死。6 处点变异打不相交断言,预测先写进 `$CLAUDE_JOB_DIR/tmp/b11-mutation-predictions.md` 再跑,预测 6 红/10 绿,实测逐条命中:**
+
+| 变异 | 预测 | 实测 |
+|---|---|---|
+| M1 toAddInput `password \|\| undefined`→`\|\| null` | 红「password 留空→undefined 非 null」 | **红** |
+| M2 toUpdateInput orgId 透传→null | 红「orgId… 原样回送」 | **红** |
+| M3 canDelete 去超管守卫 | 红「canDelete 超管一律 false」 | **红** |
+| M4 detailToForm `password:''`→`'x'` | 红「password 永远空串」 | **红** |
+| M5 fetchUsers `page:q.page`→`q.pageSize` | 红 index 用例1(page 期望2得20) | **红** |
+| M6 fetchUsers account 守卫去掉 | 红 index 用例2(account 期望 undefined 得 123) | **红** |
+
+预测保绿的 10 条全绿,无预测不符。**这轮无"预测与实测不符"。**
+
+**发现一条真数据丢失陷阱(已防):** `UpdateUserInput` 是**全量替换**,编辑弹窗没有 org/职位/头像控件,若不把 `orgId/positionId/directorId/avatar` 从 detail 原样带回,save 就把这些字段**置空** —— 即"编辑一下用户名就清了他的机构/头像"。用 `extraRef` 暂存透传字段、save 合回,并在 `userForm.spec` 单钉(M2)。
+
+**一处 B10 文件的必要放宽(第一个真消费者逼出来的):** `<DataTable>` 泛型约束 `Record<string, unknown>` **拒收业务实体 interface**(`UserItem` 没有隐式索引签名)。改 `Record<string, any>`(ProTable 自身也是 `<T = any>`),`unknown` 那版严格但对**生成的实体类型**根本不可用。四件套复跑全绿。
+
+**B10 开放问题的处置(不假称结掉):** request 挂载即调 / 列持久化到 `localStorage['protable:sys-user']` / 工具栏 locale 跟 ConfigProvider —— 这三条是**活浏览器**行为(要登录 + 后端 + 真 DOM)。`vite build`(rollup 6050 模块含真 ProTable 全量转译)证明**编译打包层无问题、pro-components 的坑确系 vitest 独有**;但运行时三条**本 SSH 会话无浏览器可驱动**,按"禁止假完成"如实**仍记开放**,重指派到 **B12 手动验收 + E2 Playwright 冒烟**(那才是台账给"对真组件验列持久化 + 中英切换"划的家)。页面 spec 的 vitest 债照 B10 预案解决:**mock `@/components/DataTable`**(比 mock pro-components 更干净,把坑挡在 wrapper 边界外),核心逻辑走 `userForm.spec` 纯函数变异网。
+
+四件套:tsc 0 / oxlint 0 / vitest 252 通过(新增 16,含 6 变异钉) / vite build 绿。
+
+下一条:**B12 阶段一验收**(手动对照 Vue 版 10 链路,含 B11 遗留的浏览器验收:user 增删改查 / 搜索排序分页 / 列设置持久化 / 中英切换)。**这条本就是人工步骤**,由维护者在 RDP/本机实点;E2 落地后其中可自动化的部分(列持久化、locale)转 CI 冒烟。
 
 ### 2026-07-20 · B10 review 处置(review-b10 lane 隔离:APPROVE + 5 LOW)
 
