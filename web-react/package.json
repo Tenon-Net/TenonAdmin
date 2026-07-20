@@ -1,0 +1,41 @@
+{
+  "name": "tenon-admin-web-react",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "typecheck": "tsc --noEmit",
+    "gen:api": "openapi-typescript http://localhost:5100/openapi/v1.json -o src/api/schema.d.ts"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.3.2",
+    "@ant-design/pro-components": "^3.1.14-2",
+    "antd": "^6.5.1",
+    "i18next": "^25.10.10",
+    "openapi-fetch": "^0.13.5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-i18next": "^16.6.6",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "happy-dom": "^20.11.0",
+    "openapi-typescript": "^7.6.1",
+    "oxlint": "^1.73.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11",
+    "vitest": "^4.1.10"
+  }
+}
