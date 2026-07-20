@@ -64,7 +64,7 @@
 - [x] **B5 review lane** — **B5a + B5b 双 APPROVE 无阻断**(见轮次日志)。B5a 那条偶发红定性为跨进程污染、非文件内通道;B5b 三条 LOW 已处置。原 review-b5a lane 卡住已停,并入 review-b5b。 `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
 - [x] **B6 动态路由**(a 决策 3877df4 / b-1 materialization a417a70 / b-2 守卫+接线 5af2763) — F5 深链重建、无权限 404、chooser 落选择器均通;探针降为 /_probe(B8 删)。见轮次日志。 `useRoutes(routes)`,routes 从 `auth.menuTree` 派生的普通数组。**Vue 版 `router/index.ts` 那个 `return to.fullPath` 重解析 trick 不需要存在**。`buildRoutesForModule` 逻辑逐条搬:flatten → 跳过非 Menu/无 path → 跳过 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe 视图 + `meta.iframeSrc` → 否则查 `import.meta.glob('/src/pages/**/*.tsx')`,缺失 `console.warn` 跳过;`viewComponentPaths` 由同一张 glob 表反推(**防手敲错致菜单静默消失,原样保留**)。`<RequireAuth>` 三条守卫按 Vue 版顺序:未登录→`/login`、`mustChangePassword`→锁死改密页、`!routesReady`→loading + `enterInitial()`。验:F5 深链能重建路由、无权限路径 404。
 - [x] **B7 模块选择页 + useModule**(628d1c5) — switchModule/setDefault 补齐(4 变异全 kill)、/module 换真选择器;module/** 加入 glob 排除。见轮次日志。 决策阶梯逐字搬(0 模块→选择器 / 记住的仍有效→进 / 单个→进 / 有默认→进 / 否则选择器);`switchModule` 清 tabs + 跳 `homePath`;`setDefault` 同步。验:多应用切换 + 设默认后仍能从右上角九宫格回选择器。
-- [ ] **B8 布局壳** — antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
+- [x] **B8 布局壳**(cb62290 派生 / cac1efc 壳+接线+删探针) — antd 原生 Layout 自建、Sider 236/76、Header 62 blur、菜单树派生、选中/展开跟随路由、明暗、灰度/密度样式;探针删除。见轮次日志。 antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
 - [ ] **B9 权限 + 消息 + 确认基建** — `<Can code="VERB:/path">`(替代 `v-auth`);`App.useApp().message` 承接 Vue 侧 74 处 `useMessage`;`useConfirm` 三 API 用 `Modal.useModal()` 重写(`modal.confirm({onOk:async})` 返 promise 时按钮自动 loading 且不关窗,正是现有语义,**代码会比 93 行更短**)。验:无权限按钮不渲染;确认框执行中不可重复点/不可 Esc 关。
 - [ ] **B10 `<DataTable>` 薄封装** — 隔离 `pro-components` beta,16 个 CRUD 页只依赖它。含 `toProTable()` 适配器(`toPage()` 的 `{items,total}` → `{data,success,total}`)、排序映射到后端 `SortField`/`SortOrder`、`columnsState` 持久化沿用 `protable:{module}-{page}` 命名、labels 由 i18n 驱动。**`proTable` 那批 UI 键此时才定**:现有的 8 个键是 Naive 那个 ProTable 的文案,antd 的 ProTable 自带 locale,要不要加、加什么在这一条决定,别提前猜。验:契约单测 + 一页实跑。
 - [ ] **B11 system/user 页** — 标准列表原型(搜索 + 工具栏 + 表格 + 分页 + 服务端排序 + 列设置)。验:增删改查全通、列设置刷新后保留。
@@ -103,6 +103,22 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B8 布局壳(拆两步)
+
+`cb62290`(菜单派生)+ `cac1efc`(壳 + 接线 + 删探针)。**只做 vertical** —— Vue 的 7 种布局模式、mix rail、移动抽屉、水印、realtime、tabs(D1)、设置抽屉全是后续或不做,台账明确"暂不带 tabs"。
+
+**B8-1 `menuToItems`**(`cb62290`):菜单树 → antd items,规则对齐 Vue `toOptions`(sort / 剥 Button+隐藏 / Catalog 空则丢 / 叶子 key=path / 标题含 `.` 走 i18n)。**外链叶子照常入菜单**(key=URL),点击 window.open —— 与 buildRoutes **跳过**外链相反(M8 专钉这半)。`tr`/`iconFor` 注入,纯逻辑可测。**8 变异全 kill**;`openKeysFor`(子菜单跟随路由展开)4 例。
+
+**B8-2 壳 + 接线**(`cac1efc`):`useLayoutMenu` 接反应式(menuTree + 路由)→ selectedKeys/openKeys 跟随路由、内部导航/外链 open;`LayoutShell` = Sider(236/76 折叠)+ Header(62 blur:折叠钮/明暗/登出)+ Content(Outlet)。Protected 路由表**把动态路由嵌进壳**(菜单页在壳内,/module 选择页全屏在壳外,对齐 Vue layout-children vs top-level)。`[data-density]`/`[data-gray]` 搬进 `styles/chrome.css`,灰阶用 App 里单独 effect toggle(不塞 useAntdTheme 依赖,免得只切灰阶白重建 antd 主题);Content padding 用 `var(--pad-page)` 让密度也到手写壳。**探针页连路由 + 组件 + 那批 import 一起删干净**(检查项已被 theme/i18n/app spec 覆盖)。壳行为测试 7 条(菜单渲染/选中跟路由/内部导航 vs 外链 open/折叠/明暗/登出即使 500)。
+
+**两个 course-correct,记下:**
+1. **`app.collapse` 等文案我又凭印象**(本轮第二次栽文案上)——但这次真源恰好对上,红的真因是 **LayoutShell.spec 没 import `@/locales`**,i18n 未初始化 → `t('app.collapse')` 返回 key `'app.collapse'` 而非"折叠菜单"。菜单那 4 条没暴露是因为 TREE 标题走字面量、不经 `t()`。**用 `t()` 的行为测试必须 import `@/locales`。** 又一个「环境决定断言」样本:i18n 初没初始化决定 t() 产出 key 还是文案。
+2. **antd `Menu` 的 `items` 类型**:我的 `MenuItem[]` 结构一致但 antd `ItemType` 是带 null 的递归联合,TS 不直接认 —— 精确到 `MenuProps['items']` 的结构转换,**不是 `as any` 抹类型**(注释写清)。
+
+四件套:`lint=0` / `typecheck=0` / `vitest=0`(203 passed / 24 files) / `build=0`(无双-import 告警)。
+
+下一条:**B9 权限 + 消息 + 确认基建**(`<Can code>` 替 v-auth、`App.useApp().message` 承接、`useConfirm` 用 `Modal.useModal()` 重写)。
 
 ### 2026-07-20 · B7 review 处置(review-b7 lane 隔离 worktree:APPROVE + 1 MEDIUM)
 
