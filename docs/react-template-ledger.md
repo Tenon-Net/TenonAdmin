@@ -104,6 +104,24 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · B5b review 处置(review-b5b lane:APPROVE 无阻断)
+
+`84dc3e3`(前端)+ `36b34c1`(后端 core)。review lane 独立复现了关键变异(它自己重跑,不信我的记录),四件套自跑退出码全 0,台账逐条核实无不实。**四条 LOW 全是 advisory,无阻断**,处置了三条:
+
+- **[LOW-1 已改] 子树无 message 那条断言太弱。** 原来是 `not.toContain('returned an object')` —— 耦合 i18next 那句英文 debug 文案的**确切措辞**,且放过别的错误输出(回落成空、别的 debug 变体也能过)。改成 `toBe('error.auth')`(ApiError 无 message 时把 msgKey 当 message → 走 message 分支)。**不是自指**:期望值是按构造函数已知行为写死的字面量。重跑 te()→裸 exists 变异,仍如期红。**这条本身是"N 条红 ≠ N 条覆盖"的镜像:一条断言红了,也可能红得不对地方(耦合了无关的措辞)。**
+- **[LOW-4 已改] 验证码刷新是 click-only 的 `<div>`。** 看不清要换一张却只有鼠标能点。补 `role="button"` + `tabIndex` + Enter/Space + `aria-label`。可访问性是不砍的那一类,虽小必做。
+- **[LOW-2 已改,跨到后端] `dangerouslySetInnerHTML` 的信任边界只写在前端注释里,面向的是前端开发者。** 而内核的整个前提是 `ICaptchaProvider` 可替换 —— 消费者写一个把请求参数拼进 SVG 的 provider,验证码端点又是**登录前匿名**可达,就是 pre-auth XSS,而前端零净化。lane 独立查了后端三个内置 provider,确认 SVG 全服务端自生成、零请求输入入串(可信)。**契约补写到后端 `Captcha.Svg` 参数注释上**,provider 作者看得到的地方,不只是前端注释。**不加 DOMPurify**:自生成验证码上是过度设计,且破坏零额外依赖目标 —— 与 Vue 侧 `v-html` 完全对等,不是回归。
+- **[LOW-3 不改] 登录后 `navigate('/')` 落到探针页、无鉴权守卫。** 是 B6(动态路由 + 守卫)、B8(布局壳)之前的**预期临时态**,lane 明确标了"别把 Probe-after-login 当成走通的流程"。
+- **[INFO 不改] `remember` 复选框两个模板都是装饰性的**(Vue 侧也只绑不接线,token 无条件落 localStorage)。不是 B5b 回归。
+
+lane 还替我把那条最关键的**跨模块图 `instanceof`** 查实了(我标"务必动手"的 Experiment E):`resetModules` 后 mocked `@/api` 跨代复用,`ApiError` 是**同一个类对象**,`translateError` 的 `instanceof` 按构造成立、不靠运气,`...actual` spread 是 load-bearing。台账 note #1(并行模块图咬 unmocked user store 而不咬 mocked ApiError)由此坐实。
+
+后端只改 XML 注释,单独过 `dotnet build TenonAdmin.Core`(0 警告 0 错误)确认注释语法没写坏;未跑 dotnet test(注释改动不涉逻辑),也未与 vitest 并发。
+
+**B5a 的独立 review lane(review-b5a)卡住了不出结论,已 TaskStop,B5a 并入 review-b5b 重审**(见下一条待办)。B5a 的 client.ts 正是登录页依赖的,同一个 lane 审最自然,不另开第三个。
+
+下一条:等 **review-b5b 出 B5a 结论**(尤其那个泄漏通道能否确定性复现),处置后接 **B6 动态路由**。
+
 ### 2026-07-20 · B5b 下半 · site store + translateError + 登录页
 
 三个提交:`46feef6`(site store + translateError)、`2213a87`(登录页 + 路由)。
