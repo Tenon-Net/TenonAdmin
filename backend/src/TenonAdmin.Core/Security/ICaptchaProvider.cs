@@ -2,7 +2,13 @@ namespace TenonAdmin.Core;
 
 /// <summary>生成的验证码:服务端保存 <see cref="Code"/> 校验、只把 <see cref="Svg"/> 发给前端。</summary>
 /// <param name="Code">验证码明文(存服务端缓存,不下发)</param>
-/// <param name="Svg">渲染后的 SVG 图(下发前端展示)</param>
+/// <param name="Svg">
+/// 渲染后的 SVG 图(下发前端展示)。前端直接以 <c>dangerouslySetInnerHTML</c> / <c>v-html</c> 注入 DOM,
+/// <b>不做任何净化</b> —— 所以 <b>SVG 内容不得嵌入任何不可信输入</b>(请求参数、用户资料等)。
+/// 验证码端点是**登录前匿名**可达的,一旦把外部输入拼进这里就是 pre-auth XSS。
+/// 内置三个 provider 的 SVG 全由固定字符集 + 服务端 RNG / 算式自生成,零请求输入入串;
+/// 自定义 <see cref="ICaptchaProvider"/> 必须守住这条契约。
+/// </param>
 public record Captcha(string Code, string Svg);
 
 /// <summary>
