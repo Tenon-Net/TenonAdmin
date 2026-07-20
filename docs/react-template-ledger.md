@@ -66,7 +66,7 @@
 - [x] **B7 模块选择页 + useModule**(628d1c5) — switchModule/setDefault 补齐(4 变异全 kill)、/module 换真选择器;module/** 加入 glob 排除。见轮次日志。 决策阶梯逐字搬(0 模块→选择器 / 记住的仍有效→进 / 单个→进 / 有默认→进 / 否则选择器);`switchModule` 清 tabs + 跳 `homePath`;`setDefault` 同步。验:多应用切换 + 设默认后仍能从右上角九宫格回选择器。
 - [x] **B8 布局壳**(cb62290 派生 / cac1efc 壳+接线+删探针) — antd 原生 Layout 自建、Sider 236/76、Header 62 blur、菜单树派生、选中/展开跟随路由、明暗、灰度/密度样式;探针删除。见轮次日志。 antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
 - [x] **B9 权限 + 消息 + 确认基建**(63e071f) — `<Can code>` 替 v-auth(判定收敛 hasPerm)、`useConfirm` 用 Modal.useModal 重写(busy 守卫内置);message 无需新建。见轮次日志。 `<Can code="VERB:/path">`(替代 `v-auth`);`App.useApp().message` 承接 Vue 侧 74 处 `useMessage`;`useConfirm` 三 API 用 `Modal.useModal()` 重写(`modal.confirm({onOk:async})` 返 promise 时按钮自动 loading 且不关窗,正是现有语义,**代码会比 93 行更短**)。验:无权限按钮不渲染;确认框执行中不可重复点/不可 Esc 关。
-- [ ] **B10 `<DataTable>` 薄封装** — 隔离 `pro-components` beta,16 个 CRUD 页只依赖它。含 `toProTable()` 适配器(`toPage()` 的 `{items,total}` → `{data,success,total}`)、排序映射到后端 `SortField`/`SortOrder`、`columnsState` 持久化沿用 `protable:{module}-{page}` 命名、labels 由 i18n 驱动。**`proTable` 那批 UI 键此时才定**:现有的 8 个键是 Naive 那个 ProTable 的文案,antd 的 ProTable 自带 locale,要不要加、加什么在这一条决定,别提前猜。验:契约单测 + 一页实跑。
+- [x] **B10 `<DataTable>` 薄封装**(eb3de2f) — toProTable 适配(9 变异)、隔离 pro-components、columnsState 持久化、reload 句柄;proTable UI 键**不加**(antd ProTable 自带 intl 跟 ConfigProvider)。见轮次日志。 隔离 `pro-components` beta,16 个 CRUD 页只依赖它。含 `toProTable()` 适配器(`toPage()` 的 `{items,total}` → `{data,success,total}`)、排序映射到后端 `SortField`/`SortOrder`、`columnsState` 持久化沿用 `protable:{module}-{page}` 命名、labels 由 i18n 驱动。**`proTable` 那批 UI 键此时才定**:现有的 8 个键是 Naive 那个 ProTable 的文案,antd 的 ProTable 自带 locale,要不要加、加什么在这一条决定,别提前猜。验:契约单测 + 一页实跑。
 - [ ] **B11 system/user 页** — 标准列表原型(搜索 + 工具栏 + 表格 + 分页 + 服务端排序 + 列设置)。验:增删改查全通、列设置刷新后保留。
 - [ ] **B12 阶段一验收** — 手动对照 Vue 版走 10 条链路:登录 / token 过期刷新重放 / 强制改密 / 多应用切换 / F5 深链重建路由 / user 页增删改查 / 搜索排序分页 / 列设置持久化 / 明暗+中英切换 / 无权限按钮不渲染。
 
@@ -103,6 +103,24 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B10 DataTable 薄封装
+
+`eb3de2f`。两半:`toProTable` 纯适配(可测)+ `<DataTable>` 组件(隔离 pro-components)。
+
+**`toProTable`**:`(params)=>{items,total}` fetcher → ProTable 的 `{data,success,total}` request。三处映射:current→page、`{字段:'ascend'|'descend'}`→`{sortField,sortOrder:'asc'|'desc'}`(后端 `OrderBySafe` 只认 "desc",但仍映成 'asc' 免得后端将来严格校验时"排序不生效")、搜索表单字段透传。**9 变异全 kill,一处缺口(同 B6a 形状)**:M8(sortField 无 order 也给)最初**绿**——空 sort `{}` 时字段名本就 undefined,`order ? field` 那道守卫被短路。补一条**清空排序 `{字段:null}`**(antd 清排序的真实形状)才隔离它,重跑红。
+
+**`<DataTable>`**:薄封装 ProTable,16 个 CRUD 页只依赖它、不碰 ProTable API;columnsState 持久化到 `protable:{key}`;reload 用 forwardRef 暴露干净句柄(不外泄 pro-components 的 `ActionType`)。
+
+**proTable UI 键:不加。** 台账点名"此时才定"——antd ProTable 的工具栏文案(列设置/密度/刷新)由 pro-components 自带 intl 提供、跟 `ConfigProvider locale` 自动切,不需要新键。Vue 侧那 8 个是它 Naive ProTable 的自留文案,用不上。
+
+**一处环境技术债(如实记):`@ant-design/pro-components` 在 vitest 里导不进来。** 它传递依赖的 `antd/es/locale/zh_CN.js` 用了**无扩展名 deep import**(`import '../calendar/locale/zh_CN'`),vitest 的 SSR-externalize 解析器不补 `.js` → `Cannot find module`。试过 `server.deps.inline`、`deps.optimizer.web.include`(含 antd)、清 `.vite` 缓存 —— **都没解决**。**build(rollup)与 dev(Vite)正常,本条 build=0 即证明生产可用**,只有 vitest 的 externalize 路径缺这一步。打了 5 轮配置无果,**止损**:DataTable.spec **mock 掉 ProTable**,测 wrapper 真正的职责(prop 接线:request 用 toProTable、columnsState 键、rowKey、reload 转发、toolbar),真 ProTable 渲染/本地化留 **B11(dev 实点)+ E2(CI 冒烟)**验;核心的 toProTable 已 9 变异钉死。**B11 的页面 spec 会撞同一个坑,记为债,B11 时正式解**(要么 mock 模式沉淀成 helper、要么深挖 vitest 配置)。
+
+**顺带一个 React 19 版本差异**:`useRef<ActionType>()` 要初值 → `useRef<ActionType|undefined>(undefined)`,typecheck 兜住。
+
+四件套:`lint=0` / `typecheck=0` / `vitest=0`(236 passed / 29 files) / `build=0`。
+
+下一条:**B11 system/user 页**(标准列表原型:搜索+工具栏+表格+分页+服务端排序+列设置;增删改查全通、列设置刷新保留)。**先解 B10 记的 pro-components vitest 债**。
 
 ### 2026-07-20 · B9 review 处置(review-b9 lane 隔离:REQUEST CHANGES → 1 HIGH 已修)
 
