@@ -34,7 +34,7 @@
 - [x] **R1 保存与重置**(2026-07-20,本文件首次提交) — `git branch -m feat/web-shared-extract archive/web-shared-extract`(留本地,**不推远端**);`git switch -c feat/web-react-template dev`。存档分支是后续所有"从旧分支取内容"的来源,也保存着两份 review 的结论与变异证据;新分支站稳前不删。验:`git ls-tree dev -- web-shared web-react` 为空(确认抽取从未进 dev),新分支 `git status` 干净。
 - [x] **R2 把唯一一条真 bug 修复带回**(abd9d1e) — `archive` 的 `f1f579e` 与抽取无关:`57bde5e` 给后端 site-info DTO 加了 `Logo` 但没重跑 `gen:api`,`schema.d.ts` 从那时起就缺这个字段,**而且没人发现**——`configApi.siteInfo()` 走手写 `unwrap<{...}>` 内联类型,`paths` 里少个字段不会让任何东西编译失败。`git show archive/web-shared-extract:web-shared/api/schema.d.ts > web/src/api/schema.d.ts`(生成物与路径无关)。验:**起 MinimalHost 真跑一次 `npm run gen:api`,确认 diff 为空**——不要相信这次搬运。单独 `fix(web):` 提交。~~这是整个重构里唯一一处动 `web/`。~~ **这句断言已被 R1 review 证伪**(2026-07-20):`archive` 上另有 A5/A6 两个 commit 改了 `web/e2e/`,与共享层无关,见新增的 R2b。写这条时我是凭抽取的**意图**("抽取只该动 web-shared/")推断的,而不是跑 `git log --stat` 逐个 commit 看**实际**改了什么——意图与事实之间那道缝,正好够沉掉三个 commit。
 - [x] **R2b 把 e2e 的两条测试质量修复带回**(8b52f71)(R1 review 补记) — `archive` 的 `f3e70ba`(A5)与 `4ea84ec`(A6)只碰 `web/e2e/*` 与 `web/playwright.config.ts`,**e2e 目录从未被抽取搬动过**,所以与共享层无关,不带回就是白丢。内容:①用例互相污染全局状态(默认 app)导致假红/假绿,各用例改为自建前置;`fullyParallel:false` 没达到注释声称的效果、`workers:1` 缺失;②菜单叶子按名字二次查找会命中**同名目录节点**("文件管理"目录 Id 30 vs 叶子 Id 78);③RBAC 那条 `<=1` 断言在零菜单场景下**恒真**——又一个假断言。已实测 `git cherry-pick -n f3e70ba` 五个 `web/` 文件全部干净落地,唯一冲突是新分支上不存在的旧台账 `docs/react-port-ledger.md`(丢弃即可)。**验:光 cherry-pick 不算数——e2e 要真跑一遍**(需后端 + web dev server),并对着 ③ 做变异:把 RBAC 断言恢复成 `<=1`,零菜单场景必须仍绿(证明它当初确实恒真),换成新断言后必须红。单独 `test(web):` 提交。
-- [ ] **R3 `web-react/` 脚手架(自包含)** — 从 `archive` 取 B1 的配置,**删光共享层接线**:`vite.config.ts` 去 `@shared` alias、去 `openapi-fetch` alias、`server.fs.allow` 整条删除(回默认);`tsconfig.json` 的 `paths` 只留 `@/*`、去 `../web-shared/**` 的 include;`package.json` 的 lint 去掉 `cd ..`、**补自己的 `gen:api`**(输出 `src/api/schema.d.ts`)。保留 `port: 5174`、proxy、`define.__APP_VERSION__`、`test.include: ['src/**/*.spec.{ts,tsx}']`(**`.tsx` 不能少**:React 组件测试必须带 JSX,漏掉时 vitest 不报错、CI 全绿、那些用例从来没执行过)、串行 pool 设置。**`types` 不加 `"node"`**——它是项目级的,会让 `process.env` 在浏览器源码里静默通过 typecheck,而 `web/` 那边没有这条,同一行代码会在**另一个模板**里炸;改为在需要 `node:fs` 的那一个 spec 顶部写 `/// <reference types="node" />`。验:四件套绿。
+- [x] **R3 `web-react/` 脚手架(自包含)**(414a2e4) — 从 `archive` 取 B1 的配置,**删光共享层接线**:`vite.config.ts` 去 `@shared` alias、去 `openapi-fetch` alias、`server.fs.allow` 整条删除(回默认);`tsconfig.json` 的 `paths` 只留 `@/*`、去 `../web-shared/**` 的 include;`package.json` 的 lint 去掉 `cd ..`、**补自己的 `gen:api`**(输出 `src/api/schema.d.ts`)。保留 `port: 5174`、proxy、`define.__APP_VERSION__`、`test.include: ['src/**/*.spec.{ts,tsx}']`(**`.tsx` 不能少**:React 组件测试必须带 JSX,漏掉时 vitest 不报错、CI 全绿、那些用例从来没执行过)、串行 pool 设置。**`types` 不加 `"node"`**——它是项目级的,会让 `process.env` 在浏览器源码里静默通过 typecheck,而 `web/` 那边没有这条,同一行代码会在**另一个模板**里炸;改为在需要 `node:fs` 的那一个 spec 顶部写 `/// <reference types="node" />`。验:四件套绿。
 - [ ] **R4 框架无关文件落进 `web-react/src/`** — 从 `archive` 的 `web-shared/` 复制,导入一律改 `@/*`:`types/{api,menu}.ts`→`src/types/`;`locales/{zh-CN,en-US}.ts`→`src/locales/`;`styles/tokens.css`→`src/styles/`;`theme/{mix,accents}.ts`→`src/theme/`;`utils/{tree,url}.ts`→`src/utils/`;`api/{index,schema.d}.ts`→`src/api/`。`locales/ext.ts` **内联进 `src/locales/index.ts`**(只剩一个消费者,与 `dev` 上 `web/src/locales/index.ts` 形状一致)。**暂不搬** `utils/{ua,chunkUpload}.ts`(当前无调用方,等批次 C 用到它们的页面再搬)。验:`grep -rn '@shared\|web-shared' web-react/` 为空;四件套绿。
 
 ## 批次 B · React 模板阶段一
@@ -100,6 +100,20 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · R3 脚手架(自包含)
+
+`414a2e4`。三处共享层接线删干净:`@shared` alias、`openapi-fetch` alias、`server.fs.allow` **整条删除**(不是收窄)。删而不是改,是因为那一项设置会**整个替换**默认白名单,写漏一项就是 dev server 连 `GET /` 都 403,而 lint/typecheck/build 一个都发现不了;自包含之后源码全在项目根内,默认值即最紧。`tsconfig` 的 `paths` 只剩 `@/*`,`include` 去掉 `../web-shared/**`,`lint` 从 `cd .. && oxlint --config …` 简化成裸 `oxlint`(与 `web/` 一致,配置自动发现),补了自己的 `gen:api` 与 `openapi-typescript` 依赖。
+
+`types` 按台账**不加 `"node"`**。它是项目级的,加上之后 `process.env` 在浏览器源码里也能静默通过 typecheck 而运行时是 undefined,且 `web/` 那边没有这条——同一行代码搬过去会红,两个模板的判据必须一样紧。确认 `vite.config.ts` 不在 `include` 里,所以它自己用 `node:fs`/`node:url` 不受影响。
+
+**验:lint / typecheck / build 三件绿。第四件 `npm test` 退出码 1** —— 还没有任何 spec。**不加 `passWithNoTests` 去糊掉它**,那只会把"一个 spec 都没跑"和"跑过且通过"混成同一个绿。第一批 spec 在 R4 落地时再验这一件。
+
+**顺带验了 `test.include` 里的 `.tsx`,因为它的失败模式是彻底静默。**预测先写:两个临时 spec(`.ts` + `.tsx`)都会跑;把 glob 改成只 `.ts`,`.tsx` 那个会消失且 vitest 一声不吭。实测完全命中——现状 `Test Files 2 passed (2)`,变异后 `1 passed (1)`,**没有警告、没有报错、依然是绿的**。B3 的 `auth-hooks.spec.tsx` 正是这个形状,这条要是漏了它会一直"通过"到没人发现。验完删除探针。
+
+**一处自打脸**:我第一次查 `npm test` 退出码时写的是 `npm test 2>&1 | tail -8; echo $?`,报出来 `0`——那取的是 `tail` 的状态不是 `npm` 的。本轮反复在说"检查要能失败",而我自己这条检查报了个假绿。改成先重定向再取 `$?`,真实退出码是 1。
+
+下一条:**R4**(框架无关文件落进 `web-react/src/`)。
 
 ### 2026-07-20 · R2 + R2b 带回 `web/` 的三条修复
 
