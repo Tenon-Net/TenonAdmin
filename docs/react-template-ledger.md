@@ -61,7 +61,7 @@
   - 验:中英实点 + **两次刷新,中文下也要刷一次**——EN 恰好等于 `fallbackLng`,只在 EN 下刷新的话把 `lng` 初值整句删掉照样绿。
 - [x] **B5a api client + endpoint wrappers**(6989f1e) — 见轮次日志。`api/index.ts` 逐字复制;spec 跑 node 环境(happy-dom 没实现请求体一次性流);`bare` 与 URL 短路是**两道冗余闸**,已各自补判据。
 - [x] **B5b 登录页 + dict store**(dict store 604955c / site+error 46feef6 / 登录页 2213a87) — 只做账号密码路径;SMS/MFA/SSO 暂缓。见轮次日志。
-- [ ] **B5 review lane** — a(6989f1e)已发出待回;b(46feef6+2213a87)待发。 `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
+- [x] **B5 review lane** — **B5a + B5b 双 APPROVE 无阻断**(见轮次日志)。B5a 那条偶发红定性为跨进程污染、非文件内通道;B5b 三条 LOW 已处置。原 review-b5a lane 卡住已停,并入 review-b5b。 `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
 - [ ] **B6 动态路由** — `useRoutes(routes)`,routes 从 `auth.menuTree` 派生的普通数组。**Vue 版 `router/index.ts` 那个 `return to.fullPath` 重解析 trick 不需要存在**。`buildRoutesForModule` 逻辑逐条搬:flatten → 跳过非 Menu/无 path → 跳过 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe 视图 + `meta.iframeSrc` → 否则查 `import.meta.glob('/src/pages/**/*.tsx')`,缺失 `console.warn` 跳过;`viewComponentPaths` 由同一张 glob 表反推(**防手敲错致菜单静默消失,原样保留**)。`<RequireAuth>` 三条守卫按 Vue 版顺序:未登录→`/login`、`mustChangePassword`→锁死改密页、`!routesReady`→loading + `enterInitial()`。验:F5 深链能重建路由、无权限路径 404。
 - [ ] **B7 模块选择页 + useModule** — 决策阶梯逐字搬(0 模块→选择器 / 记住的仍有效→进 / 单个→进 / 有默认→进 / 否则选择器);`switchModule` 清 tabs + 跳 `homePath`;`setDefault` 同步。验:多应用切换 + 设默认后仍能从右上角九宫格回选择器。
 - [ ] **B8 布局壳** — antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
@@ -103,6 +103,26 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B5a review 处置 + 那条偶发红的最终定性(review-b5b lane:APPROVE 无阻断)
+
+B5a 的独立 review lane(review-b5a)卡住不出结论、已 TaskStop,B5a 并入 review-b5b 重审(它审的登录页正依赖 client.ts,同一个 lane 最自然)。结论 **APPROVE 无阻断**:三机制逐字对齐 Vue、宿主替换如预期、specs 有判别力。lane 独立抽查了机制①的判别力(把 `request.clone()` 改成存原请求,POST 重放用例红在**真的 undici 错误** `Cannot construct a Request with a Request object that has already been used.`——正是 spec 头部声称 happy-dom 会掩盖的那个),坐实 `@vitest-environment node` 那步值回票价。
+
+**那条"未证实的偶发红"现在定性了——比我原来记的精确得多。原诊断是"识别对了一个真实通道,但归错了因"。**
+
+我原来的假设:`calls` 模块级 + 旧 setup 的桩迟到回调 push 进新数组。lane 三条证据把它拆开:
+
+1. **结构性(决定性)**:桩在 `mine.push(c)` 是**发起 fetch 时**记账,不是 Response settle 时。要 push 落到下一条用例,fetch **调用本身**必须晚于发起它的用例结束 —— 那需要 client.ts 里有**未 await 的 fetch 路径**。而三条路径(openapi-fetch 初始请求、`await bare.POST` 刷新、`return fetch(retry)` 重放,openapi-fetch 会 await 它)全在 await 链里。**每条请求都被 await 到底,没有 fetch 调用能活过它的用例。**延迟某个 handler 的 Response 也没用 —— push 在调用时已经发生了。
+2. **实证**:回退成 bug 版,6 次单文件绿 + 1 次全量绿(126/17)。无污染时连全量都不 flake。
+3. **对抗构造**:lane 照我的建议造了 fire-and-forget 请求 + 门控延迟刷新,想让重放 fetch 在数组换掉之后才发。**没干净泄漏,反而把整个文件生命周期搞崩**(`beforeEach` 的 `localStorage.clear()` 对所有用例抛错)。根因:`test-setup.ts` 直接赋值 `globalThis.localStorage`,而配置的 `unstubGlobals`/`afterEach` 在用例间拆全局 —— 未 await 的请求活过用例后撞上被拆掉的全局**直接炸**,而不是静默 push 进下一个数组。**punchline:测试套件主动拒绝未 await 的活,你连一个 fire-and-forget 都塞不进去而不让文件崩。"每条请求都 await"这条纪律正是泄漏够不到的原因。**
+
+**定性**:通道**原理上真实**(bug 版的桩确实闭包在模块级 `calls` 上,一个 post-swap 的 fetch 调用会 push 错数组),但**从这个套件够不到**。那次历史偶发红,最可能是并发 review lane 在那个窗口往共享工作树注入了 `zzflake.spec.ts`(client.spec.ts 旧版逐字副本)造成的**跨文件/跨进程全局桩串味** —— 正是我当时记下的第二个候选解释,现在被 lane 的结构分析扶正。per-setup 数组修复**按构造安全、零成本**,关掉了那个理论通道,保留。
+
+**这轮把"偶发红"这类问题的处置补全了一条方法**:偶发红有三种可能的家 —— 文件内共享状态(我原来的假设)、跨文件/跨进程全局污染(实际的家)、或者根本不是代码而是**并发进程改了同一棵树**(这次的元凶)。前两种要在**隔离**环境里分辨;而第三种是这次全程的背景噪声(两个 review lane 都往共享树里留过东西),它会把前两种的证据全部污染。**教训升级**:review lane 与主线共用工作树时,主线在 lane 活跃期跑测试套件拿到的任何"复现/不复现"都不可信 —— 我这轮就吃了一次(bug 版留在树里时我跑出 3/6"复现",实为撞上 lane 的 mid-toggle)。以后要么等 lane 空闲、要么给 lane worktree 隔离。
+
+**一条 LOW(不改,记下)**:`url.includes('/api/v1/auth/login')` 子串守卫也会误伤一个**恰好含该子串**的消费者路径 —— 理论问题,与 Vue 侧对等,不值当改。
+
+**B5 至此全部 review 完:B5a + B5b 双 APPROVE。**
 
 ### 2026-07-20 · B5b review 处置(review-b5b lane:APPROVE 无阻断)
 
@@ -182,6 +202,8 @@ D1/D2/D3/D6/D8 均如预测(缓存命中、并发去重、`.then` 守卫、inval
 **但这个假设没被证实,而且出现了第二个候选解释:** 排查中发现工作树里多了一个 `src/api/zzflake.spec.ts` —— 是 `client.spec.ts` **改动前那一版**的逐字副本,时间戳晚于我的改动,不是我建的。本 session **不隔离 worktree**,而 B5a 的 review lane 正在同一棵树里跑变异,基本可以确定是它留下的复现脚本(测试数从 101 跳到 110 就是它带进来的 9 条)。也就是说那次偶发红发生在"另一个进程正在改同目录文件"的窗口里。
 
 **所以:改动是对的(那个泄漏通道在代码上确实存在),但"改动修好了那次红"是未证实的。**已请 review lane 判定该通道能否被确定性复现;构造不出来就按未证实结案。
+
+> **【后续已定性,见上方「B5a review 处置」条】** review 用结构分析 + 对抗构造把这条查透了:那个"文件内通道"**原理真实但从这个套件够不到**(每条请求都被 await,没有 fetch 调用能活过它的用例;硬造 fire-and-forget 会撞上被拆的全局直接崩,而非静默 push)。上面"第二个候选解释"(并发 lane 注入 `zzflake.spec.ts` 造成跨进程全局桩串味)才是那次红的元凶。**per-setup 修复按构造安全,保留;偶发红归因于跨进程污染,不是文件内通道。**
 
 **顺带一条工程教训:并行 review lane 与主线共用工作树时,lane 在 `src/**` 下留的临时 spec 会被主线的 `npm test` 收进去,污染计数、也污染对偶发失败的归因。**以后给 lane 的提示词里要写明:复现脚本放 `$CLAUDE_JOB_DIR/tmp`,别落在 `src/` 下。
 
