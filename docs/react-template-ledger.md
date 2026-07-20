@@ -60,7 +60,7 @@
   - **已知判据缺口(如实记下,别假装堵上了)**:①深合并的保证**只靠一条用例**撑着——浅/深之别只在 ext 键与内置键**碰撞**时才可观测,"新增命名空间"两种实现结果相同;②`ext/` 目录按设计是空的,**没有常驻用例能证明那个 glob 打不打得中**(把路径写错,一条测试都不红)。已用临时 fixture 当场验过一次接缝确实生效,验完删除。
   - 验:中英实点 + **两次刷新,中文下也要刷一次**——EN 恰好等于 `fallbackLng`,只在 EN 下刷新的话把 `lng` 初值整句删掉照样绿。
 - [x] **B5a api client + endpoint wrappers**(6989f1e) — 见轮次日志。`api/index.ts` 逐字复制;spec 跑 node 环境(happy-dom 没实现请求体一次性流);`bare` 与 URL 短路是**两道冗余闸**,已各自补判据。
-- [ ] **B5b 登录页 + dict store** — `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
+- [ ] **B5b 登录页 + dict store**(dict store 已完成:604955c) — `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
 - [ ] **B6 动态路由** — `useRoutes(routes)`,routes 从 `auth.menuTree` 派生的普通数组。**Vue 版 `router/index.ts` 那个 `return to.fullPath` 重解析 trick 不需要存在**。`buildRoutesForModule` 逻辑逐条搬:flatten → 跳过非 Menu/无 path → 跳过 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe 视图 + `meta.iframeSrc` → 否则查 `import.meta.glob('/src/pages/**/*.tsx')`,缺失 `console.warn` 跳过;`viewComponentPaths` 由同一张 glob 表反推(**防手敲错致菜单静默消失,原样保留**)。`<RequireAuth>` 三条守卫按 Vue 版顺序:未登录→`/login`、`mustChangePassword`→锁死改密页、`!routesReady`→loading + `enterInitial()`。验:F5 深链能重建路由、无权限路径 404。
 - [ ] **B7 模块选择页 + useModule** — 决策阶梯逐字搬(0 模块→选择器 / 记住的仍有效→进 / 单个→进 / 有默认→进 / 否则选择器);`switchModule` 清 tabs + 跳 `homePath`;`setDefault` 同步。验:多应用切换 + 设默认后仍能从右上角九宫格回选择器。
 - [ ] **B8 布局壳** — antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
@@ -102,6 +102,39 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B5b 上半 · dict store + useDictOptions
+
+`604955c`。三条规则(缓存命中 / 并发去重 / invalidate 竞态守卫)逐字对齐 Vue 侧;Vue 那边 4 条用例,这边 13 条(多出来的是下面两个发现,加上 `useDictOptions` 的 hook 行为)。
+
+**发现一:`.finally` 里那半个竞态守卫此前没有任何判据。** D4(删成无条件 `pending.delete`)——**其余 12 条全绿**,与预测一致(预测里写了"若真绿,要么补更窄时序的用例,要么如实记为缺口")。它保的时序比 `.then` 那半窄:`load → invalidate → 再 load`(pending 里已是 req2)→ **req1 这时才 settle**,无条件 delete 会把 req2 的登记一起抹掉,第三次 load 于是另起请求。后果不是脏数据(那归 `.then` 那半守着),而是**去重悄悄失效**——一屏 N 个下拉就是 N 次请求。已补,补完重跑 D4 如期红在新用例上。
+
+**发现二:`EMPTY` 常量不干它注释里声称的那件事。** 这条是我自己写的注释被自己的变异打脸:
+
+- D7b:`?? EMPTY` → `?? []`(兜底仍在选择器外)→ **全绿**。因为它本来就是对的。
+- D7a:把兜底挪进选择器(`useDictStore((s) => s.cache[code] ?? [])`)→ **四条全红**,React 原话 "The result of getSnapshot should be cached to avoid an infinite loop"。
+
+**起作用的是兜底的位置,不是用不用常量。**原注释把功劳记在常量上,已改。`EMPTY` 留着的真实理由另有其二:空态时引用跨渲染稳定(下游 `memo` 不被白白叫醒),以及 `Object.freeze` 挡住「谁在返回数组上原地 push」——那会污染所有空态消费者,与 `stores/auth.ts` 里 `EMPTY()` 写成工厂防的是同一件事。返回类型随之改成 `readonly DictItem[]`,那是意图的类型表达,不是为迁就 freeze 加的 cast。
+
+D1/D2/D3/D6/D8 均如预测(缓存命中、并发去重、`.then` 守卫、invalidate 连带清 pending、`useEffect` 依赖数组)。D6 连带红了 3 条并有一条 5 秒超时。
+
+顺带:这是本模板**第一个真正跑起来的 `.tsx` spec**。R3 曾把 `test.include` 里的 `.tsx` 标为"漏掉时 vitest 不报错、CI 全绿、那些用例从来没执行过"的静默风险——现在它由一个实际执行的 tsx 用例证实,不再是声称。另外 `globals: false` 下 **testing-library 的自动 cleanup 不会注册**(它挂在全局 `afterEach` 上),要自己调 `cleanup()`,否则第二条用例起 `getByTestId` 报 "Found multiple elements"。
+
+#### 一次未能定论的偶发红(如实记,别当已修)
+
+一次全量 `npm test` 里 `client.spec.ts` 的「没有 refreshToken 时连刷新都不发」红了:`refreshCount()` 实测 1,而那条用例自身只发一个 GET。单跑该文件、以及随后 4 次全量都绿。
+
+**假设**:`calls` 是 spec 的模块级变量、`vi.resetModules()` 不碰它;而上一个 `setup()` 建的 fetch 桩仍被上一个 client 模块闭包持有,它的迟到回调会 push 进**新一轮**的数组。已改成每次 `setup()` 新建数组、由桩闭包直接持有。
+
+**但这个假设没被证实,而且出现了第二个候选解释:** 排查中发现工作树里多了一个 `src/api/zzflake.spec.ts` —— 是 `client.spec.ts` **改动前那一版**的逐字副本,时间戳晚于我的改动,不是我建的。本 session **不隔离 worktree**,而 B5a 的 review lane 正在同一棵树里跑变异,基本可以确定是它留下的复现脚本(测试数从 101 跳到 110 就是它带进来的 9 条)。也就是说那次偶发红发生在"另一个进程正在改同目录文件"的窗口里。
+
+**所以:改动是对的(那个泄漏通道在代码上确实存在),但"改动修好了那次红"是未证实的。**已请 review lane 判定该通道能否被确定性复现;构造不出来就按未证实结案。
+
+**顺带一条工程教训:并行 review lane 与主线共用工作树时,lane 在 `src/**` 下留的临时 spec 会被主线的 `npm test` 收进去,污染计数、也污染对偶发失败的归因。**以后给 lane 的提示词里要写明:复现脚本放 `$CLAUDE_JOB_DIR/tmp`,别落在 `src/` 下。
+
+四件套:`lint=0` / `typecheck=0` / `build=0` / 目标三个 spec 22 passed(全量计数因上述临时文件不可信,待它清掉后重取)。
+
+下一条:**B5b 下半**(登录页 + 后端可配 logo 的 `useSite`)。
 
 ### 2026-07-20 · B5a api client + endpoint wrappers
 
