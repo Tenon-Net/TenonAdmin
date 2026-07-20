@@ -108,6 +108,11 @@ export function buildAntdTheme(opts: ThemeOpts): ThemeConfig {
       // 填充阶:每个都要连同 antd 的 alias 伙伴一起给,否则又是「同一页两种灰」。
       // `colorFillAlter = colorFillQuaternary`、`controlItemBgHover = colorFillTertiary`(alias.js),
       // 只覆盖前者时后者仍是 antd 的半透明 rgba(0,0,0,0.02) —— 我们的填充是不透明色,差得很明显。
+      // 阶梯顶端。漏掉它的后果不是深浅差一档,是**种类**差异:它驱动 colorBgTextActive /
+      // colorFillContentHover,不给的话文字按钮 hover 是不透明 #EBEDF0、pressed 却是半透明黑,
+      // 落在有色或图案底上当场露馅。而恒等闸门**结构性看不见它** —— 那两对的两侧都不在我们的
+      // 覆盖集里,`touched` 直接把它们滤掉了。
+      colorFill: v('--color-fill-hover'),
       colorFillAlter: v('--color-fill'),
       colorFillQuaternary: v('--color-fill'),
       // `colorFillTertiary` 是**静息**填充,不是 hover:它驱动 Tag / filled Button / Slider 轨道 / Empty,
@@ -138,9 +143,17 @@ export function buildAntdTheme(opts: ThemeOpts): ThemeConfig {
       //(设计系统就是三级)。**这里原先写着"已登记豁免"——那是假的**:EXEMPT 里从来只有
       // colorTextDisabled|colorTextQuaternary 一条,而且这两个键根本不是 `x: mergedToken.y` 形式的
       // 转发赋值,恒等闸门压根不评估它们,没有需要豁免的东西。假注释比没注释坏:它让人以为有守卫。
-      boxShadow: v('--shadow-1'),
+      // **注意这三个不是序数阶梯,是角色名 —— 别按 1/2/3 对号入座。**Naive 的 boxShadow1/2/3 是
+      // 由小到大,而 antd 这三个的实际用法是(逐个 grep `token.xxx` 的消费者核过):
+      //   boxShadow          → 仅 Modal          → 给最重的 --shadow-3(浮层/抽屉档)
+      //   boxShadowSecondary → Dropdown/Select/Tabs/FloatButton → --shadow-2(弹层档)
+      //   boxShadowTertiary  → message / Segmented 选中滑块     → 最轻的 --shadow-1(卡片档)
+      // antd 原档也印证:boxShadow 与 boxShadowSecondary **值完全相同**(都是 6/16 大浮层),
+      // 而 Tertiary 是 1px/2px 的微阴影。按序号映射的话,Modal 会挂上卡片级微阴影,
+      // 而一个 24px 高的 Segmented 滑块下面挂 48px 模糊、0.18 alpha —— 比原档重约一个数量级。
+      boxShadow: v('--shadow-3'),
       boxShadowSecondary: v('--shadow-2'),
-      boxShadowTertiary: v('--shadow-3'),
+      boxShadowTertiary: v('--shadow-1'),
       // 阴影**颜色**。上面三条只覆盖了三个具名阴影,而抽屉 / 气泡箭头 / 标签溢出等十来个阴影是 antd
       // 拿 `colorShadow` 自派生的。不给的话暗色下它回落 `rgba(255,255,255,0.2)` —— 抽屉是**白色发光**。
       // 基色,不是阴影值 —— antd 会把它的 alpha 乘进每一层派生阴影,所以令牌那边必须是不透明色。

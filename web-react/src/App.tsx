@@ -32,6 +32,8 @@ function Probe(p: {
 }) {
   const { token } = theme.useToken()
   const t = token as unknown as Record<string, string>
+  const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim()
+  const blur = (sh?: string) => Math.max(0, ...[...(sh ?? '').matchAll(/(\d+)px/g)].map((m) => Number(m[1])))
 
   // 派生阴影的 alpha。基色带 alpha 时 antd 会把它乘进每一层,三档会整体塌下去。
   const alphas = [...(t.boxShadowDrawerLeft ?? '').matchAll(/rgba?\([^)]*?,\s*([\d.]+)\s*\)/g)].map((m) => Number(m[1]))
@@ -52,7 +54,13 @@ function Probe(p: {
     { ok: !/255,\s*255,\s*255/.test(t.boxShadowDrawerLeft ?? ''), title: '阴影不是白色发光', desc: t.colorShadow ?? '(空)' },
     { ok: brokenIds.length === 0, title: 'alias 恒等未被单边掰断', desc: brokenIds.length ? brokenIds.map(([a, b]) => `${a}(${t[a]}) ≠ ${b}(${t[b]})`).join(' | ') : `${identities.length} 对全相等` },
     { ok: Number.isFinite(token.borderRadius) && Number.isFinite(token.fontSizeLG), title: '尺寸不是 NaN', desc: `borderRadius=${token.borderRadius} fontSizeLG=${token.fontSizeLG}` },
-    { ok: t.colorBgContainer !== '#000000' && !!t.colorPrimary, title: 'tokens.css 进了文档', desc: `bgContainer=${t.colorBgContainer} primary=${t.colorPrimary}` },
+    // 这条以前断的是 `colorBgContainer !== '#000000' && !!colorPrimary` —— 两句都**恒真**:
+    // colorPrimary 必有值(defined 必留它),而 bgContainer 在明暗两种 algorithm 下都不可能是纯黑。
+    // 也就是说它在自己声称检测的失败模式(tokens.css 没加载)下照样绿。直接问文档要变量才有判别力。
+    { ok: cssVar('--color-shadow') !== '', title: 'tokens.css 进了文档', desc: `--color-shadow=${cssVar('--color-shadow') || '(读不到)'} bgContainer=${t.colorBgContainer}` },
+    // 三个具名阴影是**角色名不是序数**:boxShadow→Modal(最重)、Secondary→弹层、Tertiary→message/
+    // Segmented 滑块(最轻)。按 1/2/3 序号搬过来会把它们装反,而那个缺陷就长在本页顶部三个 Segmented 上。
+    { ok: blur(t.boxShadow) > blur(t.boxShadowSecondary) && blur(t.boxShadowSecondary) > blur(t.boxShadowTertiary), title: '具名阴影按角色由重到轻', desc: `Modal ${blur(t.boxShadow)}px > 弹层 ${blur(t.boxShadowSecondary)}px > 滑块 ${blur(t.boxShadowTertiary)}px` },
   ]
 
   return (

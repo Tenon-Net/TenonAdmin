@@ -81,7 +81,9 @@ describe('不抢 antd 的色阶派生(alias 恒等对全量比对)', () => {
   })
   afterAll(() => {
     style.remove()
-    // 复位:这个属性是打在共享的 <html> 上的,留着会串到后面的 spec 文件(同一个 happy-dom 环境)。
+    // 复位:属性打在共享的 <html> 上,留着会串到**同文件内后面的 describe**。
+    // (跨 spec 文件不会串 —— vitest 默认 `isolate: true`,每个文件拿到全新环境。
+    //  原先这里写的理由「同一个 happy-dom 环境」是错的:复位该做,但不是为了这个。)
     document.documentElement.removeAttribute('data-theme')
   })
 
@@ -96,6 +98,12 @@ describe('不抢 antd 的色阶派生(alias 恒等对全量比对)', () => {
     // 亮 15/15、暗 26/26,两种主题都恒等。
     ['colorBorder', 'colorBorderDisabled'],
   ]
+  const MAP_PAIRS_DARK_ONLY: [string, string][] = [
+    // 暗色下 `getSolidColor(bgBase, 26)` 是**三路**恒等:colorBorder / colorBorderDisabled / colorBgSpotlight。
+    ['colorBorder', 'colorBgSpotlight'],
+    // 暗色下 `getAlphaColor(textBase, 0.04)` → colorFillQuaternary / colorBgBlur。
+    ['colorFillQuaternary', 'colorBgBlur'],
+  ]
   const MAP_PAIRS_LIGHT_ONLY: [string, string][] = [
     // **只有亮色恒等**:亮色两者都是 `getSolidColor(colorBgBase, 0)`,暗色是 8 与 12(容器比弹层低一档)。
     // 我们的令牌恰好镜像了这个结构(亮色两者同为 #FFFFFF,暗色 #1F2229 / #262A31),
@@ -107,6 +115,10 @@ describe('不抢 antd 的色阶派生(alias 恒等对全量比对)', () => {
   const EXEMPT: Record<string, string> = {
     'colorTextDisabled|colorTextQuaternary':
       'antd 把「占位」与「禁用」并成一个 colorTextQuaternary;我们的设计系统分两个色阶,占位对齐 quaternary、禁用独立。',
+    'colorBorder|colorBgSpotlight':
+      'colorBgSpotlight 是 Tooltip 的**反色**浮层底(亮色下 rgba(0,0,0,0.85),深底浅字),本就不该跟随我们的表面阶。',
+    'colorFillQuaternary|colorBgBlur':
+      'colorBgBlur 是毛玻璃层的染色(亮色下 transparent),与填充阶不同源。',
     'controlItemBgHover|colorFillTertiary':
       'colorFillTertiary 归**静息**填充(Tag / filled Button / Slider / 禁用输入框底),而下拉与菜单项的 hover 该用 hover 色,故有意分开。',
   }
@@ -120,14 +132,16 @@ describe('不抢 antd 的色阶派生(alias 恒等对全量比对)', () => {
     const ours = cfg.token as Record<string, unknown>
     const t = theme.getDesignToken(cfg) as unknown as Record<string, unknown>
 
-    const pairs = [...ALIAS_PAIRS, ...MAP_PAIRS_BOTH, ...(dark ? [] : MAP_PAIRS_LIGHT_ONLY)]
+    const pairs = [...ALIAS_PAIRS, ...MAP_PAIRS_BOTH, ...(dark ? MAP_PAIRS_DARK_ONLY : MAP_PAIRS_LIGHT_ONLY)]
     const touched = pairs.filter(([a, b]) => a in ours || b in ours)
 
     // **自检**:tokens.css 没注进来时 `ours` 只剩 colorPrimary,touched 会塌成个位数,
     // 下面的断言就成了摆设。先证明这一轮确实检查了东西。
     expect(Object.keys(ours).length, 'tokens.css 没被解析 —— 本条断言会恒真').toBeGreaterThan(15)
     expect(touched.length).toBeGreaterThan(5)
-    expect(ALIAS_PAIRS.length, 'antd 源码没读到 —— 恒等对是空的').toBeGreaterThan(30)
+    // 钉死而不是给地板:`> 30` 只抓得住归零,抓不住「51 掉到 31」—— antd 一次 minor 重排,
+    // 闸门可以少查 20 对而全绿。数值变了说明 alias 面变了,先看 diff 再改这个数(当前 antd 6.5.1)。
+    expect(ALIAS_PAIRS.length, 'antd 的 alias 面变了 —— 先看 diff 再改这个数').toBe(51)
 
     const broken = touched
       .filter(([a, b]) => !(`${a}|${b}` in EXEMPT) && !(`${b}|${a}` in EXEMPT))
@@ -135,6 +149,69 @@ describe('不抢 antd 的色阶派生(alias 恒等对全量比对)', () => {
       .map(([a, b]) => `${a}(${String(t[a])}) ≠ ${b}(${String(t[b])})`)
 
     expect(broken, `单边覆盖掰断了 antd 的恒等,同一页会出现两种颜色`).toEqual([])
+  })
+
+  /**
+   * 豁免必须**双向**成立:登记了"有意打破"的那几对,今天必须真的还是断开的。
+   *
+   * 这条堵的是一个真实缺口:把 `colorFillTertiary` 从静息色改回 hover 色(一个真回归),
+   * 恒等闸门**一条都不红** —— 因为改完之后 `controlItemBgHover` 与它反而又相等了,
+   * 于是那条豁免静默变成多余。闸门只查"成对的值是否相等",不查"值是否符合设计意图"。
+   * 而"你声称打破了但其实没打破"是可观测的结构事实,**不需要把任何令牌字面量抄进测试**。
+   */
+  it.each([
+    ['亮色', false],
+    ['暗色', true],
+  ])('%s:每条 EXEMPT 登记的恒等,今天必须仍然是被打破的', (_name, dark) => {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : '')
+    const t = theme.getDesignToken(
+      buildAntdTheme({ dark, accent: '#646CFF', density: 'comfortable' }),
+    ) as unknown as Record<string, unknown>
+    const stale = Object.keys(EXEMPT)
+      .map((k) => k.split('|') as [string, string])
+      .filter(([a, b]) => String(t[a]) === String(t[b]))
+      .map(([a, b]) => `${a} 与 ${b} 又相等了(${String(t[a])})`)
+    expect(stale, '豁免已过期:要么删掉它,要么那处"有意打破"根本没生效').toEqual([])
+  })
+
+  /**
+   * 填充阶要**整阶同源**。
+   *
+   * 我们的填充令牌全是不透明色,而 antd 的默认填充是半透明黑/白。漏掉阶梯里任何一个成员,
+   * 后果不是深浅差一档而是**种类**差异 —— 例如漏掉 `colorFill` 时,文字按钮 hover 是不透明 #EBEDF0、
+   * pressed(走 colorBgTextActive ← colorFill)却是半透明黑,落在有色或图案底上当场露馅。
+   * 恒等闸门**结构性看不见这个**:那几对的两侧都不在我们的覆盖集里,`touched` 直接滤掉了。
+   * 断"没有半透明残留"这个性质,不抄任何具体色值。
+   */
+  it.each([
+    ['亮色', false],
+    ['暗色', true],
+  ])('%s:填充阶没有成员停在 antd 的半透明默认上', (_name, dark) => {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : '')
+    const t = theme.getDesignToken(
+      buildAntdTheme({ dark, accent: '#646CFF', density: 'comfortable' }),
+    ) as unknown as Record<string, string>
+    const LADDER = ['colorFill', 'colorFillSecondary', 'colorFillTertiary', 'colorFillQuaternary']
+    const translucent = LADDER.filter((k) => /rgba?\([^)]*,\s*0?\.\d+\s*\)/.test(t[k] ?? ''))
+    expect(translucent, '这几个还停在 antd 的半透明默认上,与不透明的兄弟档不同种').toEqual([])
+  })
+
+  /**
+   * 三个具名阴影的**角色**没有被按序号错配。
+   *
+   * antd 这三个不是序数阶梯:`boxShadow` 只有 Modal 用、`boxShadowSecondary` 是 Dropdown/Select/Tabs、
+   * `boxShadowTertiary` 是 message 与 Segmented 选中滑块(最小的那个)。而 Naive 的 boxShadow1/2/3
+   * 是由小到大 —— 照序号搬过来,Modal 会挂卡片微阴影,Segmented 滑块会挂 48px 抽屉阴影。
+   * 断的是**模糊半径的单调性**这个结构性质,不抄任何具体值。
+   */
+  it('具名阴影按角色由重到轻,没有按序号错配', () => {
+    document.documentElement.setAttribute('data-theme', '')
+    const t = theme.getDesignToken(
+      buildAntdTheme({ dark: false, accent: '#646CFF', density: 'comfortable' }),
+    ) as unknown as Record<string, string>
+    const maxBlur = (sh: string) => Math.max(...[...sh.matchAll(/(\d+)px/g)].map((m) => Number(m[1])))
+    expect(maxBlur(t.boxShadow!), 'Modal 的阴影不该比弹层轻').toBeGreaterThan(maxBlur(t.boxShadowSecondary!))
+    expect(maxBlur(t.boxShadowSecondary!), '弹层阴影不该比 Segmented 滑块轻').toBeGreaterThan(maxBlur(t.boxShadowTertiary!))
   })
 
   /**
@@ -158,6 +235,14 @@ describe('不抢 antd 的色阶派生(alias 恒等对全量比对)', () => {
     const t = theme.getDesignToken(
       buildAntdTheme({ dark, accent: '#646CFF', density: 'comfortable' }),
     ) as unknown as Record<string, string>
+
+    // 自检:tokens.css 没进文档时亮色会回落 antd 默认 `#000` —— 那也是不透明、派生 alpha 也正好是
+    // 0.08/0.12/0.05,于是下面三条**全绿**,这一轮无法区分「我们的令牌对」和「令牌根本没到」。
+    // 恒等用例有自检行,这里原先没有,标准不一致。
+    expect(
+      getComputedStyle(document.documentElement).getPropertyValue('--color-shadow').trim(),
+      'tokens.css 没进文档 —— 本条会退回 antd 默认而恒真',
+    ).not.toBe('')
 
     // 基色本身必须不透明。写成 rgba(...,1) 也算,所以断的是解析出来的 alpha 而不是字面量形状。
     expect(alphasOf(t.colorShadow!), `--color-shadow 带了 alpha,antd 会把它乘进每一层`).toEqual([])
