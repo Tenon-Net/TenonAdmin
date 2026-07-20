@@ -63,7 +63,7 @@
 - [x] **B5b 登录页 + dict store**(dict store 604955c / site+error 46feef6 / 登录页 2213a87) — 只做账号密码路径;SMS/MFA/SSO 暂缓。见轮次日志。
 - [x] **B5 review lane** — **B5a + B5b 双 APPROVE 无阻断**(见轮次日志)。B5a 那条偶发红定性为跨进程污染、非文件内通道;B5b 三条 LOW 已处置。原 review-b5a lane 卡住已停,并入 review-b5b。 `api/client.ts` **不搬 archive 版本**(那版为服务两个模板抽了 `ApiAdapter`/`createApiClient` 工厂,现在只有一个宿主,工厂没有存在理由),改以 `dev` 上 `web/src/api/client.ts` 为蓝本重写:宿主耦合直接写死(zustand + react-router)。中间件三个机制**逐字保留**——`WeakMap` 请求克隆重放(Request 的 body 是一次性流,首次 fetch 就被消费,令牌恰好在一次 POST 时过期就会丢请求体)、`refreshOnce` 并发 401 合流、`bare` 客户端不挂刷新中间件(避免刷新自身 401 递归)。**这是唯一一处重复有真实技术风险的代码**,值得单独一轮变异。登录页先做一套皮肤 + 后端可配 logo(`useSite` 换成 zustand)。验:登录拿到令牌对、**token 过期自动刷新重放**(要真造过期,不是 mock)。
 - [x] **B6 动态路由**(a 决策 3877df4 / b-1 materialization a417a70 / b-2 守卫+接线 5af2763) — F5 深链重建、无权限 404、chooser 落选择器均通;探针降为 /_probe(B8 删)。见轮次日志。 `useRoutes(routes)`,routes 从 `auth.menuTree` 派生的普通数组。**Vue 版 `router/index.ts` 那个 `return to.fullPath` 重解析 trick 不需要存在**。`buildRoutesForModule` 逻辑逐条搬:flatten → 跳过非 Menu/无 path → 跳过 `isHttpUrl(path)` 外链 → `isHttpUrl(component)` 走 iframe 视图 + `meta.iframeSrc` → 否则查 `import.meta.glob('/src/pages/**/*.tsx')`,缺失 `console.warn` 跳过;`viewComponentPaths` 由同一张 glob 表反推(**防手敲错致菜单静默消失,原样保留**)。`<RequireAuth>` 三条守卫按 Vue 版顺序:未登录→`/login`、`mustChangePassword`→锁死改密页、`!routesReady`→loading + `enterInitial()`。验:F5 深链能重建路由、无权限路径 404。
-- [ ] **B7 模块选择页 + useModule** — 决策阶梯逐字搬(0 模块→选择器 / 记住的仍有效→进 / 单个→进 / 有默认→进 / 否则选择器);`switchModule` 清 tabs + 跳 `homePath`;`setDefault` 同步。验:多应用切换 + 设默认后仍能从右上角九宫格回选择器。
+- [x] **B7 模块选择页 + useModule**(628d1c5) — switchModule/setDefault 补齐(4 变异全 kill)、/module 换真选择器;module/** 加入 glob 排除。见轮次日志。 决策阶梯逐字搬(0 模块→选择器 / 记住的仍有效→进 / 单个→进 / 有默认→进 / 否则选择器);`switchModule` 清 tabs + 跳 `homePath`;`setDefault` 同步。验:多应用切换 + 设默认后仍能从右上角九宫格回选择器。
 - [ ] **B8 布局壳** — antd 原生 `Layout` 自建(**不用 ProLayout**):侧边栏 236/76 + header 62 + blur(12px),菜单树由 `menuTree` 派生,外链走 `window.open`。暂不带 tabs。`[data-gray]`/`[data-density]` 那批样式此时搬进 `web-react/src/styles/`。验:折叠/展开、明暗、菜单选中态跟随路由。
 - [ ] **B9 权限 + 消息 + 确认基建** — `<Can code="VERB:/path">`(替代 `v-auth`);`App.useApp().message` 承接 Vue 侧 74 处 `useMessage`;`useConfirm` 三 API 用 `Modal.useModal()` 重写(`modal.confirm({onOk:async})` 返 promise 时按钮自动 loading 且不关窗,正是现有语义,**代码会比 93 行更短**)。验:无权限按钮不渲染;确认框执行中不可重复点/不可 Esc 关。
 - [ ] **B10 `<DataTable>` 薄封装** — 隔离 `pro-components` beta,16 个 CRUD 页只依赖它。含 `toProTable()` 适配器(`toPage()` 的 `{items,total}` → `{data,success,total}`)、排序映射到后端 `SortField`/`SortOrder`、`columnsState` 持久化沿用 `protable:{module}-{page}` 命名、labels 由 i18n 驱动。**`proTable` 那批 UI 键此时才定**:现有的 8 个键是 Naive 那个 ProTable 的文案,antd 的 ProTable 自带 locale,要不要加、加什么在这一条决定,别提前猜。验:契约单测 + 一页实跑。
@@ -103,6 +103,26 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · B7 模块选择页 + switchModule/setDefault
+
+`628d1c5`。在 B6 的 `enterInitial` 之上补齐 useModule 剩两支 + 把 /module 占位换真选择器。
+
+**`switchModule`** = enter + (D1)清标签 + **返回**新应用首页,由调用方(选择页组件,有 router 上下文)导航——useModule 保持 router-free,阶梯与这两支都留在可单测层。**`setDefault`** = 调后端 + 本地同步 `defaultModuleId`(角标立刻转移,不重拉)。4 变异(不 enter / 返回定值 / 不调 API / 不同步本地)全 kill。
+
+**选择页**:应用卡片网格、当前应用描边、默认角标 / 设默认动作(`stopPropagation` —— 设默认不该顺带把人带进应用,专门一条用例钉住)、卡片键盘可激活、空态登出(后端 500 也照清会话跳登录)。7 条行为测试;switchModule/setDefault 在页面里 mock 掉(它们自己已变异),只验接线。
+
+**`views/module/**` 加进 glob 排除 + `NON_PAGE_PREFIXES`**:选择页是 Protected 里的静态路由,留在路由 glob 里会**复发** B6 LOW-2 修的静态+动态拆包冲突。已加注释"静态路由页都要排出 glob",防再犯。build 确认双-import 告警仍为零。
+
+**两个 course-correct,记下:**
+1. **`module.empty` 文案凭印象写错**(`当前无…` vs 真源 `暂无…`)——面向用户的文案不能凭记忆,要从真源核对。测试当场抓住,但本可先 Read。
+2. **换掉 /module 占位后,Protected.spec 断 UnderConstruction 的 `/module` 文本那条红了**——改占位页要同步改断言它内容的测试。全量跑抓住(单跑 chooser spec 不会露)。
+
+图标:`module.icon` 是 iconify 字符串,本模板未引 iconify,卡片统一用 `AppstoreOutlined` 占位;**图标映射留后续,不算做完**(页面注释 + 此处都标了)。
+
+四件套:`lint=0` / `typecheck=0` / `vitest=0`(178 passed / 22 files) / `build=0`。
+
+下一条:**B8 布局壳**(antd 原生 `Layout` 自建,不用 ProLayout):侧栏 + header + 菜单树派生 + 明暗 + 选中态跟随路由;`[data-gray]`/`[data-density]` 样式搬进 `styles/`;删探针页(连 /_probe + Probe 组件)。
 
 ### 2026-07-20 · B6 review 处置(review-b6 lane:APPROVE 无阻断,首次用 worktree 隔离)
 
