@@ -67,8 +67,14 @@ export async function enterApp(page: Page, title: RegExp) {
  * 侧边栏叶子的选择器。目录和叶子共用 `.n-menu-item-content`,**只有目录带展开箭头**(纵向菜单下成立:
  * `Submenu` 传 `showArrow: !isHorizontal`)。把目录当叶子的后果不是多几条文字,是调用方**点到目录**——
  * 那会把子菜单收起来,同一批里后面那些项当场从 DOM 上脱离,报成"元素 detached"。
+ *
+ * **必须限定在 `.sidenav` 内**:上面那个「只有目录带箭头」的判据只在纵向菜单下成立,而
+ * `layouts/AppHeader.vue` 里有三个 `mode="horizontal"` 的 `n-menu`——横向菜单的目录**不带箭头**,
+ * 不限定范围就会被当成叶子点。今天不发作只是因为 Playwright 每个用例新开 context、布局偏好为空 →
+ * 默认侧栏布局 → 那三个菜单根本不渲染;顶栏布局一旦成为默认(或用例开始持久化偏好)就会静默变坏。
  */
-const LEAF = '.n-menu-item-content:not(:has(.n-menu-item-content__arrow))'
+const SIDE = '.sidenav'
+const LEAF = `${SIDE} .n-menu-item-content:not(:has(.n-menu-item-content__arrow))`
 
 /**
  * 展开侧边栏所有目录,返回每个叶子的文字**和它的 locator**。
@@ -87,7 +93,7 @@ export async function sidebarLeaves(page: Page): Promise<{ name: string; item: L
   // 展开一层会露出下一层目录,重复到没有可展开的为止(种子菜单树只有 2 层,给个上限防死循环;
   // 真超过 3 层会静默漏掉更深的,当前数据到不了那儿)
   for (let pass = 0; pass < 3; pass++) {
-    const subs = page.locator('.n-submenu')
+    const subs = page.locator(`${SIDE} .n-submenu`)
     let clicked = false
     for (let i = 0; i < (await subs.count()); i++) {
       const sub = subs.nth(i)

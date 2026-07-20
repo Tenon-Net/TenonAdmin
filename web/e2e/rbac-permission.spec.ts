@@ -105,7 +105,9 @@ test.describe('RBAC 权限', () => {
     await expect(page, '零授权用户不应进入任何应用').toHaveURL(/\/module/)
     await expect(page.locator('.n-empty')).toBeVisible()
     await expect(page.locator('.n-empty')).toContainText(/暂无可访问的应用|No accessible/)
-    await expect(page.locator('.card'), '零授权用户不该看到任何应用卡片').toHaveCount(0)
+    // 这里原本还数了一句 `.card` 为 0。删掉:空态与卡片网格在 `views/module/index.vue` 里是
+    // `v-if/v-else` 两个互斥分支,断到空态可见就已经蕴含零卡片;而按类名数「不存在」是典型的空转候选
+    // ——`.card` 改个名或门户换个容器,它就永远绿。留强的那条正向断言即可。
   })
 
   test('授权用户 → UserPicker 种子关联正确回显', async ({ page }) => {
