@@ -85,7 +85,7 @@ public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
 
 ## 控制器：权限码就是路由
 
-范本是 `backend/tests/TenonAdmin.TestHost/SampleDocController.cs`。每个动作挂 `[RolePermission]`，权限码就是规范化后的路由本身，代码里不写任何权限字符串：
+每个动作挂 `[RolePermission]`，权限码就是规范化后的路由本身，代码里不写任何权限字符串，完整代码在 `backend/tests/TenonAdmin.TestHost/SampleDocController.cs`：
 
 ```csharp
 [ApiController]
@@ -122,7 +122,7 @@ public record SampleDocInput(string Title);
 
 ## 把服务和程序集交给内核
 
-消费方不改内核，在自己的 `Program.cs` 里做两件事。完整范本是 `backend/tests/TenonAdmin.TestHost/Program.cs`：
+消费方不改内核，在自己的 `Program.cs` 里做两件事（完整代码见 `backend/tests/TenonAdmin.TestHost/Program.cs`）：
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -144,7 +144,7 @@ app.Run();
 必须用 `TryAdd`，不是 `Add`。这样消费方才能在 `AddTenonAdmin()` **之前**注册同接口的自定义实现来覆盖默认行为。这是整个内核「可替换」设计的根规则。内置服务（比如 `Dict`）在 `ServicesSetup.cs` 里也是这么注册的。你自己的服务如果没人跟你抢接口，`TryAdd` 和 `Add` 效果一样。统一写 `TryAdd`，省得日后被覆盖时踩坑。
 
 ::: warning 忘了 `ApplicationAssemblies.Add(...)` 就静默 404
-内核**不会自动扫描发现**你的模块。漏了这一行，`SampleDoc` 不会建表，`SampleDocController` 也不会注册路由。直接 404，没有任何兜底开关或提示。（曾有个 `ScanApplicationAssemblies` 自动扫描开关从未实现，已于发包前删除，别去找它。）
+内核不会自动扫描发现你的模块。漏了这一行，`SampleDoc` 不会建表，`SampleDocController` 也不会注册路由。直接 404，没有任何兜底开关或提示。（曾有个 `ScanApplicationAssemblies` 自动扫描开关从未实现，已于发包前删除，别去找它。）
 :::
 
 ## 错误码（可选）
@@ -153,7 +153,7 @@ app.Run();
 
 ## 种子数据（可选）
 
-需要出厂默认数据时，实现泛型 `ISeedData<T>`，给每行一个固定 `Id` 保幂等。注意别直接实现非泛型 `ISeedData`：它只是 DI 收集用的空标记，直接实现虽然能编译，但启动时反推不出实体类型会崩。蓝本是 `Seed/DictSeed.cs`，消费方范例是 `backend/tests/TenonAdmin.TestHost/SampleWidgetSeed.cs`：
+需要出厂默认数据时，实现泛型 `ISeedData<T>`，给每行一个固定 `Id` 保幂等。注意别直接实现非泛型 `ISeedData`：它只是 DI 收集用的空标记，直接实现虽然能编译，但启动时反推不出实体类型会崩。内核自己的写法在 `Seed/DictSeed.cs`，消费方范例是 `backend/tests/TenonAdmin.TestHost/SampleWidgetSeed.cs`：
 
 ```csharp
 public sealed class SampleWidgetSeed : ISeedData<SampleWidget>

@@ -2,7 +2,7 @@
 
 `app.use(pinia)` 一旦排到 `app.use(router)` 后面，路由守卫就读不到 store。`web/` 这一侧的规矩多半藏在这种顺序里，不在额外的约定层里。想知道什么在哪、什么时候跑，翻文件就能得到答案。
 
-设计上为什么这么取舍（数据权限、可替换性），见[核心概念](/zh/guide/concepts)。写页面时的具体约定（API 调用、权限、状态、i18n）在[前端规范](/zh/standard/frontend)。
+数据权限、可替换性这类设计取舍见[核心概念](/zh/guide/concepts)；API 调用、权限、状态、i18n 这类写页面的具体约定见[前端规范](/zh/standard/frontend)。
 
 ## 目录结构
 
@@ -50,7 +50,7 @@ app.mount('#app')
 1. **Pinia**（装了 `pinia-plugin-persistedstate`），必须注册在 router 之前，因为路由守卫要读 store 状态。
 2. 然后是 **router**、**i18n**。
 3. 全局注册 **`v-auth` 指令**（`directives/auth.ts`），它按权限码控制元素显隐。
-4. **ProTable 默认配置**：给 `PRO_TABLE_DEFAULTS` 提供一份 `computed` 的 labels（搜索/重置/刷新/密度/列设置等），内部读 `i18n.global.t`。因为是 `computed` 且订阅了当前语言，切换语言时所有表格的文案会立即更新。各页面于是不用手动传 `:labels`。
+4. **ProTable 默认配置**：给 `PRO_TABLE_DEFAULTS` 提供一份 `computed` 的 labels（搜索、重置、刷新、密度、列设置等），内部读 `i18n.global.t`。因为是 `computed` 且订阅了当前语言，切换语言时所有表格的文案会立即更新。各页面于是不用手动传 `:labels`。
 5. **`setupIcons()`** 注册离线图标集与本地 SVG，并预热 `ph` 图标集。这一步是非阻塞的：注册完成后 `<Icon>` 从本地数据渲染，不会命中外部 CDN。
 6. **挂载**到 `#app`。
 

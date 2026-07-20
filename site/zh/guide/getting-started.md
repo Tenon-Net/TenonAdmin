@@ -17,7 +17,7 @@ dotnet run --project backend/samples/MinimalHost
 
 首次启动会自动做三件事。先用默认 SQLite 建表，走 CodeFirst（按实体类自动建表，不用手写建表 SQL），库文件落在 `backend/samples/MinimalHost/data/` 下。再写入种子数据，也就是菜单、角色和超级管理员账号。最后监听 `http://localhost:5100`。这个端口在 `launchSettings.json` 里写死，为的是避开 macOS 上 AirPlay 占用的 5000。
 
-本地想一键起前后端，用仓库根的 `dev.bat`。它会在两个窗口里分别拉起 MinimalHost 和前端 Vite，首次运行还会顺带装好前端依赖。停的时候用 `stop.bat`。
+本地想一键起前后端，仓库根的 `dev.bat` 会分两个窗口拉起 MinimalHost 和前端 Vite，首次运行还顺带装好前端依赖。停的时候用 `stop.bat`。
 
 ## 确认三个探针
 
@@ -92,7 +92,7 @@ curl http://localhost:5100/api/v1/ping \
 { "code": 0, "data": { "pong": true, "account": "superAdmin", "at": "2026-07-...T..." } }
 ```
 
-不带令牌，或者令牌过期、被吊销，拿到的都是 `401`，用的是标准信封，`code=40006`。超管带着令牌里的 `sadm` 声明，自动绕过后续的 `[RolePermission]` 权限码校验。普通用户就没这待遇，得先在菜单管理里挂上对应路由，再到角色管理里授权，才调得通同一个接口。这条链路的完整写法见[新建业务模块](/zh/guide/business-module)。
+不带令牌，或者令牌过期、被吊销，拿到的都是 `401`，用的是标准信封，`code=40006`。超管带着令牌里的 `sadm` 声明，自动绕过后续的 `[RolePermission]` 权限码校验。普通用户就没这待遇，得先在菜单管理里挂上对应路由，再到角色管理里授权，才调得通同一个接口，挂路由、授权这一整套流程在[新建业务模块](/zh/guide/business-module)里有完整示范。
 
 ## 三行代码接进你自己的项目
 
@@ -118,7 +118,7 @@ app.Run();
 
 想跨副本共享会话和缓存，也就是多实例部署，得额外装 `TenonAdmin.Caching.Redis`，并且在 `AddTenonAdmin` **之前**调 `AddTenonAdminRedisCache(builder.Configuration)`。为什么要抢在前面？内核的可替换服务都用 `TryAdd` 注册，谁先注册谁赢。晚于 `AddTenonAdmin`，就抢不过内置的进程内缓存了。没配 `Cache:Provider=Redis` 的时候这行是空操作，单实例开发不受影响。
 
-想要更细粒度的依赖控制，可以只引某一层，比如 `.AspNetCore`、`.Services`、`.SqlSugar`、`.Core`。这些包为什么这么分层、「可替换」到底怎么替，归[核心概念](/zh/guide/concepts)讲透。本页只管把它跑起来。
+想要更细粒度的依赖控制，可以只引某一层，比如 `.AspNetCore`、`.Services`、`.SqlSugar`、`.Core`。这些包为什么这么分层、「可替换」到底怎么替，归[核心概念](/zh/guide/concepts)讲透，这里先把它跑起来就够。
 
 > 1.0 之前 API 仍可能调整，破坏性变更会在[更新日志](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)里明确标出。开发在 `dev` 分支进行。
 
@@ -134,7 +134,7 @@ npm run dev
 
 Vite 起在 `http://localhost:5173`，内置的反向代理会把 `/api` 和 `/openapi` 原样转发到后端 `:5100`。想换转发目标，用环境变量 `TENON_API_TARGET` 覆盖。这么一来浏览器眼里只有一个源，本地开发不用配跨域。打开 `5173`，用同一个超管账号密码登录，就能看到完整后台。
 
-前端重新生成 API 类型的时候，后端必须在跑，命令是 `npm run gen:api`。它从运行中的 `/openapi/v1.json` 抓契约，不是离线生成。
+前端重新生成 API 类型用 `npm run gen:api`，这条命令要求后端正在跑，因为它是从运行中的 `/openapi/v1.json` 抓契约，不是离线生成。
 
 ::: tip 想拿它当一次性脚手架（soybean / vite 那种）？
 上面的 `cd web` 是「克隆仓库、跟着上游升级」的路子，也是推荐路径。这样前端会跟着走 NuGet 升级的后端契约同步演化。如果你只想要一份拷贝、之后完全自己维护，那就用 degit 拉一份无 `.git` 历史的快照当起点：
