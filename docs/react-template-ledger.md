@@ -130,7 +130,13 @@
 - i18n position 块(增改共用 code 禁改、codePlaceholder 等)两侧本就齐全,无新增键。路由 glob `/src/views/**/*.tsx` 覆盖,菜单指到即可达。
 - 判据:`tsc` 0 / `oxlint` 0 / `antd lint` 6.5.1 net 0 / 全量 `vitest` **386/386**(+6)/ `build` OK。
 
-**下一条 C6b**:`notice`(复用 C5 的 `MarkdownEditor`/`MarkdownView`)+ `file`(复用 C5 的 `FileUpload`/分片)。之后 C6c:`session`/`recycle`/`cache`/`monitor`(读/操作型)。C6 全批落完再开一条 review lane(base `dev`、隔离 worktree)。
+**下一条 C6b**:`notice`(复用 C5 的 `MarkdownEditor`/`MarkdownView`)+ `file`(复用 C5 的 `FileUpload`/分片)。**已盘前置件**(下轮直接开工):
+- FileUpload 齐(`chunked`/`onUploaded`/继承 UploadProps 的 `showFileList`、支持 children 触发器);NoticeType/ReceiverType enum、NoticePublishInput/SysNotice/SysFile、noticeApi(page/publish/remove)、fileApi(page/upload/download/remove/batchRemove/chunk*)全齐。
+- **缺件要先补**:①`useBatchDelete` hook(web-react 无,file 批删要用 —— `{checkedKeys,hasSelection,run}` 包 remove+confirm+refresh);②`DataTable` 未暴露 rowSelection(file 选择列要,需扩 B10 薄封装,加受控 `rowSelection` 透传)。故 C6b 宜再拆 **C6b-notice / C6b-file**。
+- notice 可抽的纯逻辑:`blank` 默认、`typeLabel`/`tagType`(enum→文案/色)、receiver 校验(`receiverType===All || receiverIds.length>0`);file 可抽:`formatSize`(字节→人类可读)、download blob 流。这些是变异钉的落点。
+- **注**:notice 列表页 Markdown 正文只在「查看」modal 里渲染(MarkdownView),发布走 MarkdownEditor —— C5 的 XSS 兜底(`setupMarkdown` 全局)已覆盖二者。
+
+之后 C6c:`session`/`recycle`/`cache`/`monitor`(读/操作型)。C6 全批落完再开一条 review lane(base `dev`、隔离 worktree)。
 
 ### 2026-07-20 · C5 review 处置(review-c5 lane:REQUEST-CHANGES → 1 HIGH 已修 + MED-1 + LOW-1;另发现 1 条自包含硬伤)
 
