@@ -120,6 +120,16 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · C2 review 处置(review-c2 lane:REQUEST-CHANGES → 1 HIGH 已修)
+
+opus 独立 lane 审 C2a+C2b(隔离 worktree、junction 复用 node_modules、实验后还原);我另核 `git diff` 只含本次修复、无泄漏,并移除遗留 worktree。lane 实测:vitest 30/30、`antd lint` 四文件全净、`tsc` 净;并逐一坐实竞态守卫非空转(拆掉即翻结果)、fetch-in-ref 无多余/漏加载、orgId→reload 时序无陈旧闭包、v6 showSearch 对象/fieldNames cast 正确、纯逻辑全对、`open(ids)→confirm` 全链路真。
+
+- **[HIGH 已修 `49d672b`] UserPicker 中间面板搜索静默失效 —— 且是我自己没抓到的绿谎** —— account 列可搜(未设 `search:false`),antd ProTable 按 `dataIndex` 发 `q.account`,而 `fetchUsers` 只读 `q.name` → 输入账号搜索 → 参数被丢 → 返回**全量未过滤**列表(比缺搜索更糟,用户以为"搜到了全部")。**10/10 变异门没抓到,因为 fetcher 测试手喂了 `{ name: '张' }` —— 一个 UI 根本产生不了的 key(name 列 search:false),把错误契约钉死了**。改 `fetchUsers` 读 `q.account`(对齐可见的 account 搜索框 + Vue 原版),spec 改喂 `{ account }`;**变异复核**:把 fetcher 改回读 name → 该用例立刻转红(证明新测试真抓得住)。教训:**mock 掉 ProTable 后,喂给 fetcher 的搜索 key 必须是"可搜列的 dataIndex 真会发出的那个",否则测试测的是一条 UI 不可达的死分支**——sibling user 页两列都可搜、读 `q.account`+`q.name`,是这条的反证。
+- **[LOW 未采纳] reopen 后可能双取**(orgId 7→undefined 过渡 + ProTable 自身初取,各一次;同 orgId=undefined,纯 perf nit)——不阻断,真在网络面板看到再修(YAGNI)。
+- **[LOW 未采纳] `orgTreeData(flat, 0)` 会过度剪枝**——但 `excludeSubtreeOf` 是编辑机构 id(雪花,永不 0),不可达;防御性备注,不改。
+
+**下一条 C3**(按台账顺序):进批次 C 剩余展示组件/页。
+
 ### 2026-07-20 · C2b UserPicker(选择器族下半,C2 完结)
 
 `9798216`。三面板弹窗:左机构树 / 中可选用户 DataTable / 右已选列表。命令式 `open(ids)` 经 `forwardRef`+`useImperativeHandle` 暴露,`onConfirm(ids)` 回调;固定 modal 形态。
