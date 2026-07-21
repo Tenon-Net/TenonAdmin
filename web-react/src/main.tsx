@@ -12,7 +12,11 @@ import '@/styles/chrome.css'
 // **不是**因为"写在 import App 之前所以先执行"(那只是顺带),而是模块求值整体早于渲染,
 // 且这两件事都是全局单例的初始化,归属 main 而不是某个组件。
 import '@/locales'
+import { setupIcons } from '@/lib/icons'
 import App from './App'
+
+// 首屏注册 4 套离线图标集(非阻塞;菜单/AppIcon 在集合就绪后自动重渲染)。
+setupIcons()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

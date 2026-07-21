@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { App, Button, Card, Empty, Spin, Tag, Typography } from 'antd'
-import { AppstoreOutlined, ArrowLeftOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
 import { switchModule, setDefault } from '@/composables/useModule'
+import { AppIcon } from '@/components/AppIcon'
 import { authApi } from '@/api'
 import { translateError } from '@/utils/error'
 
@@ -13,8 +14,7 @@ import { translateError } from '@/utils/error'
  * 应用选择页(门户)。决策阶梯(直接进/进默认/弹这里)在 `useModule.enterInitial`,这里只管**呈现与切换**。
  * 对应 Vue 侧 `views/module/index.vue`。
  *
- * 图标:`module.icon` 是 iconify 字符串(Vue 用 @iconify)。本模板暂未引 iconify,统一用通用图标占位;
- * 图标映射(iconify → 组件)留后续批次,别当已做完。
+ * 图标:`module.icon` 是 iconify 字符串,经 AppIcon 离线渲染;兜底 `ph:app-window-duotone`(与 Vue 版一致)。
  */
 export default function ModuleChooser() {
   const { t } = useTranslation()
@@ -116,7 +116,7 @@ export default function ModuleChooser() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <AppstoreOutlined style={{ fontSize: 28, color: 'var(--color-primary)' }} />
+                  <AppIcon icon={m.icon} size={28} fallback="ph:app-window-duotone" style={{ color: 'var(--color-primary)' }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600 }}>{m.title}</div>
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -124,7 +124,7 @@ export default function ModuleChooser() {
                     </Typography.Text>
                   </div>
                   {m.id === defaultModuleId ? (
-                    <Tag color="blue" bordered={false}>
+                    <Tag color="blue">
                       {t('module.isDefault')}
                     </Tag>
                   ) : (

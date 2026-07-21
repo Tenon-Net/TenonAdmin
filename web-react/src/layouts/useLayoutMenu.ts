@@ -1,14 +1,15 @@
 import { createElement, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { FolderOutlined, AppstoreOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth'
+import { AppIcon } from '@/components/AppIcon'
 import { menuToItems, openIfExternal, openKeysFor, type MenuItem } from './menuItems'
 
-// 图标:`menu.icon` 是 iconify 字符串,本模板未引 iconify —— 目录/叶子各用一个通用图标占位。
-// 图标映射(iconify → 组件)留后续批次,别当已做完(与选择页 AppstoreOutlined 占位同一笔待办)。
-function iconFor(_name: string | undefined, isCatalog: boolean): ReactNode {
-  return createElement(isCatalog ? FolderOutlined : AppstoreOutlined)
+// 图标:`menu.icon` 是 iconify 字符串,经 AppIcon 离线渲染。兜底与 Vue 侧 useLayoutMenu.renderIcon 一致:
+// 目录 `ph:folder-duotone`、叶子 `ph:dot-outline-duotone`,尺寸 18。
+// 本文件保持 .ts(非 .tsx),故用 createElement 而非 JSX(沿用原作者选型)。
+function iconFor(name: string | undefined, isCatalog: boolean): ReactNode {
+  return createElement(AppIcon, { icon: name, size: 18, fallback: isCatalog ? 'ph:folder-duotone' : 'ph:dot-outline-duotone' })
 }
 
 /**

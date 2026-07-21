@@ -17,6 +17,7 @@
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
     "@ant-design/pro-components": "^3.1.14-2",
+    "@iconify/react": "^6.0.2",
     "antd": "^6.5.1",
     "dayjs": "^1.11.11",
     "i18next": "^25.10.10",
@@ -28,6 +29,10 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@iconify-json/ant-design": "^1.2.8",
+    "@iconify-json/ep": "^1.2.4",
+    "@iconify-json/lucide": "^1.2.118",
+    "@iconify-json/ph": "^1.2.2",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^22.13.0",
     "@types/react": "^19.2.17",
