@@ -50,6 +50,10 @@ export function IconPicker({ value, onChange, placeholder, clearable = true }: I
       .then((list) => {
         if (alive) setNames(list)
       })
+      .catch(() => {
+        // chunk 加载失败(理论上离线内置集不该)→ 清空该 Tab,不留上一个 Tab 的陈旧列表 + 吞未处理拒绝。
+        if (alive) setNames([])
+      })
       .finally(() => {
         if (alive) setLoading(false)
       })
@@ -90,10 +94,19 @@ export function IconPicker({ value, onChange, placeholder, clearable = true }: I
           <span
             className="icon-picker-clear"
             role="button"
+            tabIndex={0}
             aria-label={t('common.clear')}
             onClick={(e) => {
               e.stopPropagation() // 触发器本身可点(开弹窗),清空不该顺带开弹窗
               onChange('')
+            }}
+            onKeyDown={(e) => {
+              // 键盘可达:清空自己接 Enter/Space,并 stop 冒泡免触发外层触发器的开弹窗。
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                e.stopPropagation()
+                onChange('')
+              }
             }}
           >
             <AppIcon icon="ph:x" size={13} />

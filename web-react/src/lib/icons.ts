@@ -34,6 +34,12 @@ const loaders: Record<string, () => Promise<IconifyJSON>> = {
 
 const nameCache: Record<string, string[]> = {}
 
+/** 该前缀是否为内置离线集(对齐 Vue 包的 isBundled)。COLLECTIONS ↔ loaders 一致性靠它可测:
+ *  某 Tab 前缀若无对应 loader,其网格会静默空,靠 `COLLECTIONS.every(isBundled)` 钉住。 */
+export function isBundled(prefix: string): boolean {
+  return prefix in loaders
+}
+
 /**
  * 懒加载某内置集:`addCollection`(供渲染)+ 返回**排序后**的图标名(供选择器网格),按前缀缓存。
  * 未知前缀返回空数组。与 setupIcons 的 addCollection 幂等叠加(import() 走同一缓存,JSON 只下一次)。
@@ -54,14 +60,15 @@ export function sortedIconNames(data: IconifyJSON): string[] {
   return Object.keys(data.icons ?? {}).sort()
 }
 
-/** 原始 `<svg>` 串 → iconify 图标数据:取 viewBox 的宽高 + 剥掉外层 `<svg>` 的内容体。 */
+/** 原始 `<svg>` 串 → iconify 图标数据:取 viewBox 的原点+宽高 + 剥掉外层 `<svg>` 的内容体。 */
 export function svgToIcon(raw: string): IconifyIcon {
   const vb = raw.match(/viewBox=["']([\d.\s-]+)["']/)?.[1]?.trim().split(/\s+/).map(Number)
   const ok = vb?.length === 4 && vb.every((n) => !Number.isNaN(n))
-  const width = ok ? vb![2] : 24
-  const height = ok ? vb![3] : 24
+  // viewBox 四段 = [min-x, min-y, width, height];left/top 承接非零原点(iconify 支持,默认 0),
+  // 否则 viewBox="-2 -2 24 24" 这类会渲染偏移/裁切(C4 review LOW)。
+  const [left, top, width, height] = ok ? (vb as number[]) : [0, 0, 24, 24]
   const body = raw.replace(/<svg[^>]*>/i, '').replace(/<\/svg>\s*$/i, '').trim()
-  return { body, width, height }
+  return { body, left, top, width, height }
 }
 
 // 本地 svg:src/assets/svg/*.svg,eager raw 导入 → 模块级注册成 `local:<名字>`(供 AppIcon 渲染 + 选择器 local tab)。
