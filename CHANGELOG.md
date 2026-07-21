@@ -11,6 +11,8 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 > When releasing, **both halves' version numbers must be updated together**: the backend version is injected from the tag via `-p:Version`, while `web/package.json`'s `version` is a build-time constant **shown in the login page footer**. Forget to update it, and the version the user sees in the UI won't match the package they installed.
 
+> **This file is the source of truth for what shipped**, not the GitHub Release page: `backend-release` creates that page with `gh release create --generate-notes`, which drafts "What's Changed" from merged PRs only. Feature commits pushed straight to `dev` (common in this repo) never show up there, while unrelated PRs (docs, CI) do — so the release page can look complete while missing the actual content. The runbook's post-release step now replaces that draft with the matching section of this file.
+
 ## 0.2.1 - 2026-07-19
 
 A small polish + quality release: the login page's brand logo is now operator-configurable, and the three quality-audit judgment items left after 0.2.0 are closed.

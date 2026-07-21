@@ -65,6 +65,12 @@ git push origin vX.Y.Z
   git push origin :refs/tags/vX.Y.Z
   ```
 
+- **核对 GitHub Release 说明文字**:`archive-openapi` job 用 `gh release create --generate-notes` 起草说明,这是 GitHub 按**已合并 PR** 拼的"What's Changed",不读 CHANGELOG.md——功能提交若是直接推 `dev`(这仓库常见),说明里就会漏掉,只剩 docs/CI 这类无关 PR。去 https://github.com/Tenon-Net/TenonAdmin/releases 核对一遍,对不上就用 CHANGELOG.md 对应版本段落替换掉:
+
+  ```bash
+  gh release edit vX.Y.Z --notes-file <(awk '/^## X\.Y\.Z - /{f=1;next} /^## /{f=0} f' CHANGELOG.md)
+  ```
+
 - 发布成功后,`web/package.json` 已是新版本,`dev` 继续开发,下一版从新的 `## Unreleased` 攒起。
 
 > 发布节奏与闸门的**为什么**在 [CHANGELOG.md](../CHANGELOG.md) 顶部;本页是**怎么做**的操作清单。
