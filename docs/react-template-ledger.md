@@ -122,6 +122,16 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-21 · C8b review lane(独立 opus,隔离 worktree)→ APPROVE(2 LOW,均修)
+
+独立 lane 审 C8b(七探针 + 判别力质疑),裁定 **APPROVE**:0 CRITICAL/HIGH/MEDIUM,2 LOW。
+- **深度兑现**:reviewer 追到 **installed antd 6.5.1 / rc-select 1.8.2 源码**逐链验三处「tsc/lint 不红但运行时可死」的绑定——①AutoComplete `showSearch.filterOption`(v6 从顶层移入 showSearch)经 AutoComplete→Select(combobox)→ rc-select `useSearchConfig` **真过滤**;②`Form.useWatch` 在 destroyOnHidden 里读 form store 不依赖挂载,`setFieldsValue` 先于 `setOpen` 故取值准;③IconPicker 可选化后 Form.Item 注入链成立。权限码对后端 `PermissionCode.Build`(路径全小写规范化)+ `DefaultMenuSeed.cs` **逐字节**核过。syncShell 门户树≠管理树、失败静默不误报、saveBatch 以全量 checked 保存(不漏隐藏勾选行)全部确认。
+- **LOW-1(修 `84750e9`)**:ButtonManager 单条编辑表单只注册 5 字段,`validateFields()` 只回收已注册 → add/update 漏带 visible/path/component/icon,违反 menuForm 明写的全量 update 契约(按钮场景当前惰性,但表单复用即抹空的 latent trap)。**修**:`getFieldsValue(true)` 取全量(含 setFieldsValue 注入但未渲染的字段)。变异钉:改回 `getFieldsValue()` → 单增测试红 1。
+- **LOW-2(修 `84750e9`)**:saveBatch 逐个 add 中途失败 → 前 k-1 已建但 onChanged 未触发、batchRows 未更新 → 重试重复创建。**修**:记已成功 code,失败时从 batchRows 剔除 + onChanged(让已成功项从 usedCodes 消失)。新增中途失败测试;变异钉:去掉剔除+onChanged → 该测试红 1。
+- 判据(修后):`tsc` 0 / `antd lint` 6.5.1 net 0 / `oxlint` 0 / `vitest` **28/28**(ButtonManager 6→7)/ `build` OK(51.45s)。收口:主树干净,review 隔离 worktree 只读未改 → 自动清理。
+
+**下一条**:C8 全批收口(C8a/C8b + 双 review APPROVE),进 **C9 主从分栏(dict)**。
+
 ### 2026-07-21 · C8b 菜单树表 + ButtonManager(`b28817d`)
 
 C8 后半、全港最大项(menu ~325 + ButtonManager ~307 React 行)。按 org 范式:纯逻辑抽 `menuForm.ts`(变异钉),两组件接线。
