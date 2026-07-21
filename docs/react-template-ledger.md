@@ -77,8 +77,8 @@
 - [x] **C0 从存档搬运剩余条目** — 完成:C3–C12、D2–D5、E6 已从 `archive/web-shared-extract` 的 `docs/react-port-ledger.md` 搬入,**去掉共享层措辞**(`共享 utils/tree`→`utils/tree`;`共享 mix.ts/tokens.css`→本模板 `src/theme`/`src/styles`;`共享 chunkUpload.ts`→`src/utils/chunkUpload.ts`,该 util R4 推迟未搬,C5 时一并补)。**对账**:原 C-list 不含 `user`(=B11 原型)/`login`(=B5)/门户选择页(=B7);C10 的 `module` 是**管理页**(moduleApi CRUD),≠ B7 的门户选择器。已落地页(user)不再重复列。
 - [x] **C1 字典三件套 + 表单容器** — 完成(`804b3db` 组件 + `b826df7` 页改造)。`DictSelect`/`DictTag`(数据基座 B5b 的 `useDictOptions`;antd Tag 用预设语义色串,naive 的 `info`→`processing`)、`FormContainer`(Modal/Drawer 双形态,`onConfirm` owns loading+close,返 false/抛错留窗)、`StatusSwitch`(悲观 + 自动回滚,建在 useConfirm 的 `ask` 上)。纯逻辑 `toDictOptions`/`resolveDictTag`/`shouldCloseAfterConfirm` 抽出变异钉死(**17 处全致死**;1 处空断言 M-SS5 存活→已修)。user 页手写 Modal+Form / 内联 EnabledSwitch / 性别 Select+文案 全部退成共享组件。**antd v6 改名坑**(`tsc` 不红):`maskClosable`→`mask.closable`、Drawer `width`→`size`、`destroyOnClose`→`destroyOnHidden`,已过 `antd lint` 零 deprecated。**推迟**:`web-react/COMPONENTS.md` 留到 E4 文档批(眼下组件靠文件头注自述,现建属过早脚手架);`FormContainer` 用 `destroyOnHidden` + 页里 `setFieldsValue` 先于开弹的时序(与 B11 同,若有 antd 未挂载告警留 B12 实点)。
 - [x] **C2 选择器族** — 完成(C2a `71e0bc5`:ApiSelect/UserSelect/OrgTreeSelect;C2b `9798216`:UserPicker)。`ApiSelect`(远程分页 + 防抖 + 竞态守卫,逻辑抽 `useRemoteOptions` hook)、`UserSelect`、`OrgTreeSelect`(扁平→树用 `utils/tree`,含子树排除)、`UserPicker` 三面板弹窗(命令式 `open(ids)`)。变异门 C2a 13/13 + C2b 10/10 全致死;四件套 + `antd lint` 全绿。**有意裁剪**:UserPicker 只做每行「添加」,批量勾选待 DataTable 支持 rowSelection 时补。review lane 待开。
-- [ ] **C3 展示件** — `DetailPage`、`CodeBlock`、`PasswordStrength`(拉实时密码策略 `configApi.passwordPolicy`)、`AppIcon`、`TenonLogo`。
-- [ ] **C4 IconPicker(内联)** — **不发第三个 npm 包**(`tenon-naive-iconify-picker` 是 Naive 专属)。`@iconify/react` + 现有 4 个离线集合(`ph`/`lucide`/`ep`/`ant-design`)+ `src/assets/svg` glob。
+- [x] **C3 展示件** — 完成(C3a `98968b9`:图标基建 + AppIcon + TenonLogo;C3b `dc01107`:DetailPage + CodeBlock + PasswordStrength)。`AppIcon`(@iconify/react 薄封装 + 4 离线集合基建 `lib/icons.setupIcons`,菜单/模块页占位改真渲染)、`TenonLogo`(内联 SVG 明暗)、`DetailPage`(返回+标题+actions+body)、`CodeBlock`(highlight.js json,维护者裁定引;未注册语言 escapeHtml 降级防 XSS)、`PasswordStrength`(拉 `configApi.passwordPolicy` + 默认兜底)。纯逻辑 `iconName`/`logoColors`/`escapeHtml`/`highlightCode`/`computeChecks`/`computeStrength`/`buildRules` 抽出。**变异 C3a 6/6 + C3b 16/16 全致死**;四件套 + `antd lint` 全绿。**边界裁定**(维护者 Q&A):渲染器基建(@iconify/react + 4 集合)前移进 C3(AppIcon 必需,否则菜单只能占位);C4 缩为**轻量内联 IconPicker**(搜索+网格,不发包)+ 本地 svg glob。**顺带修**:module 页 B7 遗留的废弃 `Tag bordered`(lint 全部改动文件逮到,全库仅此一处)。review lane 待开。
+- [ ] **C4 IconPicker(轻量内联)** — **不发第三个 npm 包**(`tenon-naive-iconify-picker` 是 Naive 专属)。**渲染器基建已在 C3 落地**(`@iconify/react` + 4 离线集合 `ph`/`lucide`/`ep`/`ant-design` 经 `lib/icons.setupIcons` 注册);本条只做**选择器 UI**:搜索框 + 分页/窗口化图标网格 + 本地 `src/assets/svg` glob 注册,消费者是 C8 菜单 / C10 模块编辑表单。**维护者裁定轻量内联**(2026-07-20 Q&A),不做重虚拟化完整移植。
 - [ ] **C5 上传 + 富文本 + 图表** — `FileUpload`(antd `Upload customRequest` + `src/utils/chunkUpload.ts` 分片/秒传/续传 —— 该 util R4 推迟,本条一并搬进 `web-react/src/utils/`)、`MarkdownEditor`(`md-editor-rt`)、`Chart`(直接 `echarts.init`+`useEffect`,跟随主题重绘,不加 wrapper 依赖)。
 - [ ] **C6 标准列表页批** — `position`(可编辑 Sort 排序原型)、`notice`、`session`、`file`、`recycle`、`cache`、`monitor`。**照 B11 的 `<DataTable>` + `userForm.ts` 拆分范式**(纯逻辑抽出变异钉、页面只接线)。
 - [ ] **C7 日志三页** — `log/op` `log/login` `log/exception`。时间范围筛选用 `search:{transform: v => ({startTime:v?.[0], endTime:v?.[1]})}`。
@@ -119,6 +119,36 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · C3 展示件(拆 C3a 图标基建 / C3b 展示件两轮提交)
+
+C3 五件里 AppIcon 牵出一个真实边界问题,开工前经维护者 Q&A 定案(见下),再动手。
+
+**开工前决策(维护者 Q&A)**:
+- **AppIcon 的 iconify 基建前移进 C3**:AppIcon 的职责就是渲染后端配的任意 iconify 串,离线集合基建(`@iconify/react` + 4 集合)本是 C4 名下,但 AppIcon 必需它、否则菜单只能占位。裁定:渲染器地基进 C3(`lib/icons.setupIcons`,镜像 Vue 的 `web/src/lib/icons.ts`),C4 缩为**轻量内联选择器**(搜索+网格,不发包)+ 本地 svg glob。
+- **CodeBlock 引 highlight.js 对齐 Vue**(而非退成纯 `<pre>`)。
+- **IconPicker 做轻量内联版**,非纯文本框、也非重虚拟化完整移植。
+
+**C3a `98968b9`**(图标基建 + AppIcon + TenonLogo):
+- `lib/icons.ts`:`setupIcons()` 用 `addCollection` 异步注册 4 个离线集(懒 chunk,非阻塞);main.tsx 首屏调一次。本地 svg + 选择器网格留 C4。
+- `AppIcon`:`<Icon>` 薄封装 + `iconName(icon, fallback)` 纯逻辑(`|| fallback`,空串也兜)。`fallback` prop 让菜单目录用 `ph:folder-duotone`、叶子 `ph:dot-outline-duotone`(对齐 Vue `renderIcon`)。
+- `TenonLogo`:内联品牌 SVG,`logoColors(dark)` 纯逻辑。
+- 接线:`useLayoutMenu.iconFor`(`.ts` 文件,用 `createElement` 非 JSX)+ 模块选择页占位 → AppIcon 真渲染。
+- **变异 6/6 全致死**,预测逐条吻合(M-AI3 恒兜底连带红 AppIcon 冒烟,如预测)。
+- **顺带修** module 页 B7 遗留的废弃 `Tag bordered={false}`(v6;`antd lint` 扫全部改动文件逮到)——`git grep` 证全库仅此一处,DictTag 那处 C1 已修。
+
+**C3b `dc01107`**(DetailPage + CodeBlock + PasswordStrength):
+- `DetailPage`:Vue `@back`→`onBack` 回调、`#actions` 插槽→`actions` prop、`n-spin`→antd `Spin`。
+- `CodeBlock`:highlight.js core + json,`highlightCode`/`escapeHtml` 纯逻辑;**未注册语言降级走 `escapeHtml`——因经 `dangerouslySetInnerHTML`,转义是安全边界(防 XSS)**;配色 `styles/code.css` 明暗两版(不引 hljs 自带主题);`navigator.clipboard` 复制。
+- `PasswordStrength`:`computeChecks`/`computeStrength`/`buildRules` 纯逻辑逐字对齐 Vue,effect 拉 `configApi.passwordPolicy` + 默认策略兜底;勾选图标用 C3a 的 AppIcon(`ph:check-circle-fill`/`ph:circle`)。
+- **变异 16/16 全致死**(DP 3 / CB 5 / PS 8)。一处预测≠实测:
+  - **M-PS6 多杀一条**(预测 1、实测 2):`p.length >= min`→`>` 不光红「边界 len==min」,连带红「达标但短→2」——后者密码 `Abc12345` 恰 len8==min,边界 bug 把它 minLength 翻假 → 强度掉 1 档。变紧非漏网。
+
+**判据全绿**:C3a/C3b 各自 `tsc` 0、`oxlint` 0、`antd lint` 0 deprecated;全量 `vitest` 344/344(320→326→344)、`vite build` OK。
+
+**取舍/如实记**:①`@iconify/react` 对未注册前缀的图标会打在线 API——但选择器只提供已注册的 4 集合 + 本地 svg,配出来的图标必离线可解,唯手敲未知串才触网(与 Vue 同款特性,记之,非本轮堵)。②图标集合 build 后是大 chunk(4 个 `icons-*.js`,gzip 合计 ~1.2MB),`setupIcons` 首屏并发拉全部 4 个以保任意前缀离线可渲染;首屏非阻塞。按前缀懒加载需自定义 @iconify provider,YAGNI 到带宽有抱怨再说。③`web-react/COMPONENTS.md` 仍留 E4。
+
+**下一条**:开 review lane 审整个 C3(C3a + C3b),base `dev`、隔离 worktree;之后进 C4。
 
 ### 2026-07-20 · C2 review 处置(review-c2 lane:REQUEST-CHANGES → 1 HIGH 已修)
 
