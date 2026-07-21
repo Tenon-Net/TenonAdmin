@@ -51,11 +51,12 @@ export default function OpLogPage() {
       // 日志只存 OperatorId(姓名读取时回填),按人筛必须精确 id → 复用 UserSelect,搜索键 operatorId。
       title: t('log.operator'), dataIndex: 'operatorId', width: 120,
       render: (_, r) => operatorText(r),
-      // v6 pro-components(beta)把 `renderFormItem` 改名为 `formItemRender`(tsc 不红那类改名);
-      // config 里拿 value/onChange 绑到搜索表单的 operatorId 字段(UserSelect 的 onChange 只取值)。
-      formItemRender: (_, { value, onChange }) => (
-        <UserSelect allowClear placeholder={t('log.operatorPlaceholder')} value={value as number | null} onChange={(v) => onChange?.(v)} />
-      ),
+      // v6 pro-components(beta)把 `renderFormItem` 改名为 `formItemRender`(tsc 不红那类改名)。
+      // **不要**在返回节点上显式写 value/onChange:pro-components 用 cloneElement 注入真正的
+      // value/onChangeCallBack,且把 `newDom.props` 放在**最后**展开 —— 显式写的会盖掉注入的,
+      // 令 operatorId 永远收不到选择、「谁」这条审计筛选静默失效(C7 review HIGH-1)。
+      // 裸返 UserSelect:注入的 value/onChange 经 ApiSelect 的 ...rest 直达 antd Select。
+      formItemRender: () => <UserSelect allowClear placeholder={t('log.operatorPlaceholder')} />,
     },
     { title: t('log.elapsed'), dataIndex: 'elapsedMs', width: 100, search: false, render: (_, r) => `${r.elapsedMs} ms` },
     { title: t('log.ip'), dataIndex: 'ip', search: false, render: (_, r) => r.ip || '—' },

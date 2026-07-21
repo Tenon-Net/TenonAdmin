@@ -5,6 +5,7 @@ import { App as AntdApp } from 'antd'
 import type { ProColumns } from '@ant-design/pro-components'
 import '@/locales'
 import { logApi } from '@/api'
+import { UserSelect } from '@/components/UserSelect'
 import { useAuthStore } from '@/stores/auth'
 
 const { reloadSpy, confirmMock } = vi.hoisted(() => ({ reloadSpy: vi.fn(), confirmMock: vi.fn() }))
@@ -68,6 +69,17 @@ describe('OpLogPage 接线', () => {
     mount()
     render(<AntdApp>{captured.toolbar}</AntdApp>)
     expect(screen.queryByRole('button', { name: /清\s*空/ })).toBeNull()
+  })
+
+  it('operatorId 搜索项:formItemRender 裸返 UserSelect,不显式写 value/onChange(否则盖掉 pro-components cloneElement 注入的绑定 → 筛选静默失效,C7 HIGH-1)', () => {
+    useAuthStore.setState({ isSuperAdmin: true, permissionsLoaded: true, permissionCodes: [] })
+    mount()
+    const col = captured.columns!.find((c) => c.dataIndex === 'operatorId')!
+    const el = (col.formItemRender as (...a: unknown[]) => React.ReactElement<{ value?: unknown; onChange?: unknown }>)({}, {}, {})
+    expect(el.type).toBe(UserSelect)
+    // 注入靠 cloneElement,`newDom.props` 最后展开会盖掉注入 —— 显式写任一个都会重新引入 HIGH-1。
+    expect(el.props.onChange).toBeUndefined()
+    expect(el.props.value).toBeUndefined()
   })
 
   it('详情抽屉:点详情 → 展示操作名与操作人', async () => {
