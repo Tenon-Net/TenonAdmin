@@ -122,6 +122,16 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · C6 标准列表页批(进行中:C6a position 已落)
+
+**C6a `ad5d849`**(position 岗位管理):标准列表 CRUD —— 名称搜索 + 工具栏 + 表格 + 行内启停 + 新增/编辑弹窗。照 B11 范式:纯逻辑抽 `positionForm.ts`(`blankForm` + `rowToInput`),页面 `index.tsx` 只接线(DataTable 列 / StatusSwitch / FormContainer / Can / useConfirm)。
+- **唯一会静默出错的接缝 = `rowToInput`**:岗位无独立启停端点,行内 StatusSwitch 与编辑回填都走**全量 update**,全量替换语义下漏一个字段就抹空该行 → 单测断四字段全映射且不漏带 id/createTime。`blankForm` 默认值(启用/sort 0)与 fetcher 非串搜索过滤一并钉。
+- **变异 5/5 全致死,预测=实测无缺口**:M-PF1/2/3(rowToInput 逐字段)、M-PF4(blankForm 默认)、M-IX1(fetcher 去类型守卫)。
+- i18n position 块(增改共用 code 禁改、codePlaceholder 等)两侧本就齐全,无新增键。路由 glob `/src/views/**/*.tsx` 覆盖,菜单指到即可达。
+- 判据:`tsc` 0 / `oxlint` 0 / `antd lint` 6.5.1 net 0 / 全量 `vitest` **386/386**(+6)/ `build` OK。
+
+**下一条 C6b**:`notice`(复用 C5 的 `MarkdownEditor`/`MarkdownView`)+ `file`(复用 C5 的 `FileUpload`/分片)。之后 C6c:`session`/`recycle`/`cache`/`monitor`(读/操作型)。C6 全批落完再开一条 review lane(base `dev`、隔离 worktree)。
+
 ### 2026-07-20 · C5 review 处置(review-c5 lane:REQUEST-CHANGES → 1 HIGH 已修 + MED-1 + LOW-1;另发现 1 条自包含硬伤)
 
 **REQUEST-CHANGES,0 CRIT,1 HIGH + 1 MED + 3 LOW。**opus 独立 lane 在隔离 worktree 审 C5a `3eb0feb` + C5b `5822ae3`(base `dev`):**逐字搬两处 `diff` EXIT 0 坐实**(chunkUpload.ts、lib/echarts.ts 与 `dev:web/` 字节一致,无静默漂移),并**独立复现变异**(min(99)→min(100) 杀进度封顶、去 resume 守卫杀双续传、max(1,ceil)→ceil 杀空文件片)证判据非回声;worker 池领片 `pending[cursor++]` 先占后 await 无竞态、off-by-one 干净、Chart 生命周期(dispose+重 init 配对、resize 必清、optionRef 避陈旧)、echarts 正确 tree-shake 均获独立背书。修复提交 `e6e7e97`:
