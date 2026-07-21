@@ -134,7 +134,14 @@
 
 **下一条**:回到 C6b(先补 `useBatchDelete` + DataTable rowSelection,再 notice/file)。
 
-### 2026-07-20 · C6 标准列表页批(进行中:C6a position、C6b-notice 已落)
+### 2026-07-20 · C6 标准列表页批(进行中:C6a position、C6b-notice、C6b-file 已落)
+
+**C6b-file `082db2c`**(文件管理):只读列表(按文件名搜)+ 工具栏上传(整传/分片)+ 行内下载/删除 + 批量删除。**顺带补齐 Vue 侧有、web-react 缺的两件基建**:
+- **`useBatchDelete` hook**(React 版,镜像 Vue composable):受控勾选态 `{selectedKeys,setSelectedKeys,hasSelection,run}` + 二次确认(useConfirm 挂起守卫防连点)+ **仅成功才清选刷新**(失败保留勾选可重试)。有意不 memo `run`(每渲染重建以闭最新 selectedKeys,避 stale-closure)。
+- **`DataTable` 加受控 `rowSelection` 透传**:类型走 `TableProps<T>['rowSelection']`(不深导、不抹类型),转发给内层 ProTable —— **了结 `UserPicker.tsx:78` 当初记的 ponytail 延后项**(勾选依赖 DataTable 尚未支持的 rowSelection)。
+- **纯逻辑抽 `fileFormat.ts`**:`formatSize`(字节→B/KB/MB/GB,1024 进制)+ `triggerBlobDownload`(createObjectURL→`<a download>`→点击→移除并 revoke)。下载走 blob(Bearer 自动带);单删/批删走 useConfirm/useBatchDelete。页面 `index.tsx` 只接线。
+- **变异 11/11 全致死,预测=实测零缺口**:M-FF1/2(formatSize 两处 `<1024` 边界)、M-FF3(toFixed(1))、M-FF4(download 名)、M-FF5(revoke 释放)、M-BD1(空选守卫)、M-BD2(map(Number))、M-BD3(仅成功分支)、M-BD4(清选)、M-BD5(刷新)、M-DT1(rowSelection 透传)。
+- i18n file 块两侧本就齐全,无新增键。判据:`tsc` 0 / `oxlint` 0 / `antd lint` 6.5.1 net 0(DataTable + file/index)/ 全量 `vitest` **408/408**(+11)/ `build` OK(53s)。
 
 **C6b-notice `5373528`**(消息通知管理):发布广播/定向通知 + 分页列表 + 只读 Markdown 查看 + 删除。照 B11 范式:纯逻辑抽 `noticeForm.ts`(`blank` 默认表单、`typeLabelKey`/`typeTagColor` 枚举→文案/色、`receiverValid` 接收范围条件必填),页面 `index.tsx` 只接线(FormContainer 发布弹窗、`Form.useWatch` 驱动的条件 receiverIds 字段带 validator、MarkdownEditor 正文、MarkdownView 查看 modal、Can/useHasPerm 权限门)。
 - **会静默出错的核心 = `receiverValid`**:全体广播(All)免选,定向(Role/User)必须≥1;写反会放行「定向空发」或挡住正常广播。变异钉死其两个分支 + `typeLabelKey`/`typeTagColor` 映射 + `blank` 默认 receiverType。
@@ -148,13 +155,7 @@
 - i18n position 块(增改共用 code 禁改、codePlaceholder 等)两侧本就齐全,无新增键。路由 glob `/src/views/**/*.tsx` 覆盖,菜单指到即可达。
 - 判据:`tsc` 0 / `oxlint` 0 / `antd lint` 6.5.1 net 0 / 全量 `vitest` **386/386**(+6)/ `build` OK。
 
-**下一条 C6b-file**(notice 已落 → 见上):`file`(复用 C5 的 `FileUpload`/分片)。**已盘前置件**(下轮直接开工):
-- FileUpload 齐(`chunked`/`onUploaded`/继承 UploadProps 的 `showFileList`、支持 children 触发器);NoticeType/ReceiverType enum、NoticePublishInput/SysNotice/SysFile、noticeApi(page/publish/remove)、fileApi(page/upload/download/remove/batchRemove/chunk*)全齐。
-- **缺件要先补**:①`useBatchDelete` hook(web-react 无,file 批删要用 —— `{checkedKeys,hasSelection,run}` 包 remove+confirm+refresh);②`DataTable` 未暴露 rowSelection(file 选择列要,需扩 B10 薄封装,加受控 `rowSelection` 透传)。故 C6b 宜再拆 **C6b-notice / C6b-file**。
-- notice 可抽的纯逻辑:`blank` 默认、`typeLabel`/`tagType`(enum→文案/色)、receiver 校验(`receiverType===All || receiverIds.length>0`);file 可抽:`formatSize`(字节→人类可读)、download blob 流。这些是变异钉的落点。
-- **注**:notice 列表页 Markdown 正文只在「查看」modal 里渲染(MarkdownView),发布走 MarkdownEditor —— C5 的 XSS 兜底(`setupMarkdown` 全局)已覆盖二者。
-
-之后 C6c:`session`/`recycle`/`cache`/`monitor`(读/操作型)。C6 全批落完再开一条 review lane(base `dev`、隔离 worktree)。
+**下一条 C6c**:`session`/`recycle`/`cache`/`monitor`(读/操作型,非标准 CRUD —— 在线会话强制下线、回收站还原/彻底删、缓存查看/清除、系统监控只读盘)。先勘四页各自的 api/端点与交互形态,再逐页定纯逻辑抽点。**C6 全批(position/notice/file + session/recycle/cache/monitor)落完再开一条 review lane**(base `dev`、隔离 worktree),不在本上下文自审。
 
 ### 2026-07-20 · C5 review 处置(review-c5 lane:REQUEST-CHANGES → 1 HIGH 已修 + MED-1 + LOW-1;另发现 1 条自包含硬伤)
 
