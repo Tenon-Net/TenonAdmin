@@ -39,7 +39,9 @@ describe('MonitorPage', () => {
     mount()
     await screen.findByText('CPU 占用')
     fireEvent.click(screen.getByRole('button', { name: /刷\s*新/ })) // antd 两汉字按钮插空格:'刷新'→'刷 新'
-    await waitFor(() => expect(monitorApi.server).toHaveBeenCalledTimes(2))
+    // timeout 放宽到 5s:默认 1000ms 在全量重载 + 本机内存紧张(GC 停顿)下会偶发超时;
+    // 断言不变(仍是精确调 2 次),只增时序容差,治全量 gate 的间歇性 flake。
+    await waitFor(() => expect(monitorApi.server).toHaveBeenCalledTimes(2), { timeout: 5000 })
   })
 
   it('容量为 0 的盘不渲染卡片', async () => {
