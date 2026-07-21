@@ -75,7 +75,7 @@
 先补组件再批量做页。**`web/COMPONENTS.md` 记录的每个坑要在 antd 侧逐条重验,不能假设同样成立**(静态模式无客户端筛选、受控 `expandedRowKeys` 与 `defaultExpandAll` 互斥、过滤树浅拷贝写回不生效必须 reload)。
 
 - [x] **C0 从存档搬运剩余条目** — 完成:C3–C12、D2–D5、E6 已从 `archive/web-shared-extract` 的 `docs/react-port-ledger.md` 搬入,**去掉共享层措辞**(`共享 utils/tree`→`utils/tree`;`共享 mix.ts/tokens.css`→本模板 `src/theme`/`src/styles`;`共享 chunkUpload.ts`→`src/utils/chunkUpload.ts`,该 util R4 推迟未搬,C5 时一并补)。**对账**:原 C-list 不含 `user`(=B11 原型)/`login`(=B5)/门户选择页(=B7);C10 的 `module` 是**管理页**(moduleApi CRUD),≠ B7 的门户选择器。已落地页(user)不再重复列。
-- [ ] **C1 字典三件套 + 表单容器** — `DictSelect`/`DictTag`/`useDictOptions`(数据基座是 **B5** 的 dict store —— B3 只落了三个,dict 随 API 层走;`useDictOptions` B11 已用,C1 补 `DictSelect`/`DictTag`)、`FormContainer`(Modal+Drawer 双形态,`onConfirm` owns loading+close —— 替换 B11 页里手写的 antd `Modal`+`Form`)、`StatusSwitch`(悲观 + 自动回滚,建在 useConfirm 的 `ask` 上 —— 替换 B11 页里的内联 `EnabledSwitch`)。
+- [x] **C1 字典三件套 + 表单容器** — 完成(`804b3db` 组件 + `b826df7` 页改造)。`DictSelect`/`DictTag`(数据基座 B5b 的 `useDictOptions`;antd Tag 用预设语义色串,naive 的 `info`→`processing`)、`FormContainer`(Modal/Drawer 双形态,`onConfirm` owns loading+close,返 false/抛错留窗)、`StatusSwitch`(悲观 + 自动回滚,建在 useConfirm 的 `ask` 上)。纯逻辑 `toDictOptions`/`resolveDictTag`/`shouldCloseAfterConfirm` 抽出变异钉死(**17 处全致死**;1 处空断言 M-SS5 存活→已修)。user 页手写 Modal+Form / 内联 EnabledSwitch / 性别 Select+文案 全部退成共享组件。**antd v6 改名坑**(`tsc` 不红):`maskClosable`→`mask.closable`、Drawer `width`→`size`、`destroyOnClose`→`destroyOnHidden`,已过 `antd lint` 零 deprecated。**推迟**:`web-react/COMPONENTS.md` 留到 E4 文档批(眼下组件靠文件头注自述,现建属过早脚手架);`FormContainer` 用 `destroyOnHidden` + 页里 `setFieldsValue` 先于开弹的时序(与 B11 同,若有 antd 未挂载告警留 B12 实点)。
 - [ ] **C2 选择器族** — `ApiSelect`(远程分页 + 防抖 + 竞态守卫)、`UserSelect`、`OrgTreeSelect`(扁平→树用 `utils/tree`,含子树排除)、`UserPicker` 弹窗。
 - [ ] **C3 展示件** — `DetailPage`、`CodeBlock`、`PasswordStrength`(拉实时密码策略 `configApi.passwordPolicy`)、`AppIcon`、`TenonLogo`。
 - [ ] **C4 IconPicker(内联)** — **不发第三个 npm 包**(`tenon-naive-iconify-picker` 是 Naive 专属)。`@iconify/react` + 现有 4 个离线集合(`ph`/`lucide`/`ep`/`ant-design`)+ `src/assets/svg` glob。
@@ -119,6 +119,24 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · C1 字典三件套 + 表单容器(共享组件层第一批）
+
+四个组件 + 各自 spec，纯逻辑抽出变异钉死。`804b3db`（组件）+ `b826df7`（user 页退成共享组件）。
+
+**判据（四件套 + antd lint 全绿）**:`tsc` 0、`oxlint` 0、`vitest` 284/284（+32：DictSelect 4 / DictTag 9 / FormContainer 11 / StatusSwitch 8）、`vite build` OK、`antd lint` 0 deprecated。
+
+**变异 17 处，全部致死**（预测先写在 `$JOB/tmp/c1-mutation-predictions.md`）。三条预测≠实测,按价值记:
+- **M-SS5 存活（真 green-lie，最值钱的一条）**:`if (successMsg !== false)`→`if (true)` 后走 `message.success(false ?? …)`=`message.success(false)`,弹的是**空内容** toast;原断言只查 `queryByText('操作成功')` 为 null——空 toast 里当然没这四个字,断言照过。根因是**断言选错观测量**(查特定文案 ≠ 查"弹没弹")。改数 `.ant-message-notice` 节点=0;复跑 clean 8 绿、施 M-SS5 转红。教训:`x ?? default` 传 `false` 不兜底(`??` 只兜 null/undefined),"不弹 toast" 一律断 notice 节点数,别断某句文案。
+- **M-DT4 / M-FC1 少算**（预测 2/3、实测 3/5):都是漏了"组件 render/behavior 用例也压着同一分支"——M-DT4 的 miss→原始值 也被 DictTag render smoke 覆盖;M-FC1 破坏"成功即关"连带红了 `确认成功` 与 `提交中`(两者都 await 那次关闭)。方向是变**紧**不是漏网,记之。
+
+**antd v6 改名坑（`tsc` 一个不红,靠 `antd lint` 逮）**:`Modal/Drawer maskClosable`→`mask={{ closable }}`、`Drawer width`→`size`(v6 的 `size` 收 number,非只预设)、`Drawer destroyOnClose`→`destroyOnHidden`(5.25.0 起,与 Modal 一致)。先按记忆写了旧名,`antd info --detail` 逐个核过替换名才改——CLI 是这批坑唯一的探照灯。
+
+**发现/取舍**:①FormContainer 的关窗判定抽成 `shouldCloseAfterConfirm`(`!== false` + catch→false),`onConfirm` 返 false 或抛错留窗、其余关——save/doReset 因此改成 API 失败 `return false`(B11 里是手写 setOpen);②happy-dom 不跑 CSS 过渡,antd 关闭动画 transitionend 永不触发、弹层子节点不卸载——断"关没关"改断 `onOpenChange(false)` 回调,不断 DOM 消失(useConfirm.spec 同理断 promise 结果);③DictSelect 省了 Vue 版的 loading 圈(`useDictOptions` 不暴露在途态,字典小且缓存命中,ponytail)。
+
+**推迟(如实记,别假装做了)**:`web-react/COMPONENTS.md` 到 E4(现靠文件头注自述);FormContainer `destroyOnHidden` + 页里 `setFieldsValue` 先于开弹的时序(与 B11 同款,潜在 antd 未挂载告警)留 B12 实点。
+
+**下一条 C2**:选择器族(`ApiSelect` 远程分页+防抖+竞态守卫、`UserSelect`、`OrgTreeSelect` 扁平→树含子树排除、`UserPicker` 弹窗)。开工前先另起 review lane 审 C1。
 
 ### 2026-07-20 · B11 review 处置(review-b11 lane:APPROVE + 3 LOW)
 
