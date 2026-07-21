@@ -21,6 +21,7 @@ A small polish + quality release: the login page's brand logo is now operator-co
 
 ### Fixed
 
+- **Snowflake ID epoch alignment** (#13): the built-in snowflake generator's epoch moved from 2026-01-01 UTC to 2020-02-20 02:20:02 UTC, `Yitter.IdGenerator`'s default. Projects migrating legacy Yitter data used to get new IDs an order of magnitude smaller than the old ones, so sorting a mixed table by `Id` no longer matched insertion order; same epoch keeps both generators in lockstep. Moving the epoch earlier is safe in both directions that matter — every new ID stays strictly larger than any already-issued one, no collision or reordering.
 - **Menu button-permission UI gate**: the "配置权限" entry and the add/edit/delete/batch actions inside the button manager now honor the same client-side `hasPerm` gates as the main menu table, so a read-only user no longer sees write affordances they can't use. Server-side `[RolePermission]` was (and remains) the actual enforcement — this only aligns the UI.
 - **`/module` route title i18n**: the app-picker route title now uses the existing `module.choose` i18n key instead of a hardcoded Chinese string, so it renders correctly under English.
 
