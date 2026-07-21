@@ -35,6 +35,7 @@ export default {
     noData: '暂无数据',
     back: '返回',
     detail: '详情',
+    clear: '清空',
   },
   userPicker: {
     title: '选择用户',

@@ -34,6 +34,7 @@ export default {
     noData: 'No data',
     back: 'Back',
     detail: 'Detail',
+    clear: 'Clear',
   },
   notFound: {
     desc: 'Page not found',

@@ -1,0 +1,85 @@
+/* IconPicker 触发器 + 网格样式(逐字对齐 Vue 版视觉,令牌换 tenon 的 CSS 变量)。 */
+.icon-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 6px);
+  background: var(--color-bg-container, #fff);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.icon-picker-trigger:hover {
+  border-color: var(--color-primary);
+}
+.icon-picker-trigger.empty .icon-picker-val {
+  color: var(--color-text-tertiary, #999);
+}
+.icon-picker-val {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon-picker-clear {
+  display: inline-flex;
+  color: var(--color-text-tertiary, #999);
+}
+.icon-picker-clear:hover {
+  color: var(--color-text-primary);
+}
+
+.icon-picker-scroll {
+  max-height: min(340px, 50vh);
+  overflow: auto;
+}
+.icon-picker-state {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--color-text-tertiary, #999);
+}
+.icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+  padding: 8px 4px;
+}
+.icon-picker-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 6px);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.icon-picker-cell:hover {
+  background: var(--color-fill-hover, rgba(0, 0, 0, 0.04));
+  color: var(--color-text-primary);
+}
+.icon-picker-cell.sel {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.icon-picker-name {
+  max-width: 100%;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon-picker-more {
+  padding: 4px 0 8px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-tertiary, #999);
+}
