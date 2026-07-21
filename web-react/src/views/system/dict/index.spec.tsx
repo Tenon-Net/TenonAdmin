@@ -150,4 +150,29 @@ describe('DictPage 主从接线', () => {
     const batch = screen.getByText('批量删除').closest('button')!
     expect(batch.disabled).toBe(true) // 未勾选 → 禁用
   })
+
+  // ── 弹窗 save 路径(C9 review 补:HIGH 缺陷正藏在这条未测接缝里)──
+  it('新增字典项:提交带上隐藏 FK dictTypeCode(漏则建孤儿项 / 编辑摘除)', async () => {
+    vi.spyOn(dictAdminApi, 'itemAdd').mockResolvedValue(99)
+    mount()
+    await act(async () => { dt.onRowClick!(TYPES[0]) }) // 选中 sex
+    await waitFor(() => expect(screen.getByText('男')).toBeTruthy())
+    fireEvent.click(screen.getByText('新增字典项'))
+    fireEvent.change(await screen.findByPlaceholderText('显示文本'), { target: { value: '未知' } })
+    fireEvent.change(screen.getByPlaceholderText('值'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
+    await waitFor(() => expect(dictAdminApi.itemAdd).toHaveBeenCalledWith(expect.objectContaining({
+      dictTypeCode: 'sex', label: '未知', value: '0', sort: 0, enabled: true,
+    })))
+  })
+
+  it('新增字典类型:提交全部字段(code/name/sort/enabled/remark)', async () => {
+    vi.spyOn(dictAdminApi, 'typeAdd').mockResolvedValue(88)
+    mount()
+    fireEvent.click(screen.getByRole('button', { name: /新\s*增/ })) // 类型工具栏新增(未选类型 → 无「新增字典项」歧义)
+    fireEvent.change(await screen.findByPlaceholderText('类型编码'), { target: { value: 'lang' } })
+    fireEvent.change(screen.getByPlaceholderText('类型名称'), { target: { value: '语言' } })
+    fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
+    await waitFor(() => expect(dictAdminApi.typeAdd).toHaveBeenCalledWith({ code: 'lang', name: '语言', sort: 0, enabled: true, remark: '' }))
+  })
 })

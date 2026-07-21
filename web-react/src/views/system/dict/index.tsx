@@ -109,7 +109,10 @@ export default function DictPage() {
   }, [selectedType, itemForm])
   const openItemEdit = useCallback((r: SysDictItem) => { setItemEditingId(r.id); itemForm.setFieldsValue(itemToInput(r)); setItemOpen(true) }, [itemForm])
   const saveItem = async () => {
-    const v = await itemForm.validateFields()
+    await itemForm.validateFields() // 校验(label/value 必填)
+    // getFieldsValue(true) 取全量:dictTypeCode 是隐藏 FK,由 openItemAdd/Edit 经 setFieldsValue 注入但表单不渲染。
+    // validateFields() 只回收已注册字段会漏掉它 → add 建孤儿项(DictTypeCode="")、update 把项从类型摘除(与 C8b LOW-1 同类)。
+    const v = itemForm.getFieldsValue(true)
     try {
       if (itemEditingId === null) await dictAdminApi.itemAdd(v)
       else await dictAdminApi.itemUpdate(itemEditingId, v)
