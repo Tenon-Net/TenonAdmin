@@ -83,7 +83,7 @@
 - [x] **C6 标准列表页批**(全 7 页落完:position `ad5d849` / notice `5373528` / file `082db2c` / session `985f223` / recycle `9ddaf71` / cache `bdb0b76` / monitor `732d1fe`) — 照 B11 的 `<DataTable>` + `userForm.ts` 拆分范式(纯逻辑抽出变异钉、页面只接线)。**review lane → APPROVE**(独立上下文,六接缝对后端 seed 核过;4 LOW:LOW-1 recycle 判别力缺口已补测加固、其余 3 接受;见轮次日志)。收口,进 C7。
 - [x] **C7 日志三页**(`169493a`) — `log/op` `log/login` `log/exception`,只读 DataTable + 列驱动搜索 + 时间范围 + 清空(硬删)。共享纯逻辑抽 `log/logFormat.ts`(operatorText/loginNameText/prettyParam/loginResultKey,变异钉),三页只接线。时间范围**没用**台账原设想的 `search.transform`,改 `valueType:'dateRange'` 直喂 `logApi.*Page` 的 `[start,end]` 元组(api 层 splitRange 已补 23:59:59,与 Vue 一致——API 早于本条落地,transform 反而多此一举)。**review lane → REQUEST-CHANGES(1 HIGH:op 操作人搜索 `formItemRender` 显式 onChange 被 pro-components cloneElement 末位展开盖掉、筛选死 no-op)→ 修复 `4c850c5` + 回归测试 + 复核 APPROVE**;顺带去一条 monitor waitFor flake(`0305bd1`)。见轮次日志。
 - [x] **C8 树表原型**(**C8a `a5f9775` + C8b `b28817d`**) — `org` + `menu`(含 `ButtonManager` 子组件,写操作要 `hasPerm` 门 —— 沿用 dev 上 J4 的对齐)。**已 scope(读完 Vue 三源,别凭记忆重写)**:org ~250 行、menu ~530 行、ButtonManager ~360 行,全港最大项。**两点定案**:①**建独立 `TreeTable` 薄封装**(ProTable `dataSource`+`pagination:false`+`expandable:{expandedRowKeys,onExpandedRowKeysChange}`,续隔离 pro-components beta)——DataTable 是 fetcher 专用,树表是静态 data + 受控展开 + 客户端 `filterTree` + 无搜索表单,两模式塞一个组件会堆条件复杂度,故并列而非扩展;树页也不得直接碰 ProTable。②**拆 C8a(`TreeTable` + org)/ C8b(menu + ButtonManager)**,各自四件套+变异+原子提交(照 C2/C3/C5 a/b 先例)。**关键接缝**(移植时逐条对):受控 `expandedRowKeys` 默认全展开要自己播种(`expandableIds`)、搜索后重算(否则命中藏在折叠祖先里);`filterTree` 是浅拷贝故 StatusSwitch 成功后**重拉整树**而非写行;org 上级用 `OrgTreeSelect`(剪自身子树防成环)、menu 父级下拉排除自身子树;menu 按 `moduleId`(仅顶级)过滤 + `stripButtons`(按钮不进主树,只在 ButtonManager 里管)+ 关键字要搜到按钮权限码(`buttonInfoById`);menu 增删改后 `syncShell`(复用 B6 `buildRoutesForModule` 重建当前应用侧边栏+动态路由,失败静默);组件路径下拉取自 `viewComponentPaths`(glob 真实文件表);ButtonManager 权限码下拉取自 `menuApi.routes()` 实时路由表 + 按 `appPrefix` 软过滤 + 从路由批量添加。写操作全程 `useHasPerm` 门(服务端 [RolePermission] 兜底)。
-- [ ] **C9 主从分栏原型** — `dict`(`activeRowKey` + 行点击,内联控件要 `stopPropagation`)。
+- [x] **C9 主从分栏原型**(`d43cc47`) — `dict`(`activeRowKey` + 行点击,内联控件要 `stopPropagation`)。
 - [ ] **C10 角色 + 模块** — `role`(含 `GrantMenuTable` 三级可勾选菜单树 + 数据范围单选 + 自定义组织多选)、`module`(管理页,moduleApi CRUD;≠ B7 门户选择器)。
 - [ ] **C11 config 四标签页** — `SysBaseConfig`/`SecurityConfig`/`UploadConfig`/`OtherConfig`。
 - [ ] **C12 dashboard + personal 七页** — `workbench`/`biz` + `profile`/`bindings`/`notice`/`password`/`sessions`(`password` 若早期已落占位,落地时核对)。
@@ -121,6 +121,16 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · C9 字典主从分栏(`d43cc47`)
+
+主从原型:左=类型 DataTable(CRUD + 点击选中 + active 高亮 + 批删),右=该类型的项(裸 antd Table + CRUD)或空态。任何类型/项增删改后 `invalidate(code)` 失效下拉缓存。按 org 范式:纯逻辑抽 `dictForm.ts`(变异钉),本页接线。
+- **扩展 DataTable(非新组件)**:加可选 `onRowClick` + `activeRowKey`,经 `onRow`(点击 + 指针手型)/ `rowClassName`(命中行套 `.data-table-active-row`,DataTable.css 用 `--color-primary-light`,theme-aware)透传——主从左栏两者都要,忠对 Vue ProTable 的 active-row-key/row-click;**向后兼容**(现有页两者都不传)。续守 pro-components 隔离(树表用 TreeTable、fetcher 表用 DataTable)。
+- **承重接缝**:①`loadItems` 请求序号竞态守卫(await 期间切类型 → 过期响应不覆盖新选中);②左栏行内 switch/op 单元套 `<div onClick={stopPropagation}>`(否则点开关/按钮冒泡到行 → 误切选中类型);③类型状态开关成功后**重载 fetcher**(ProTable 缓存不自更新,不重载 switch 弹回旧值),项状态则本地 setItems 更新(裸 Table,轻量);④管理端 `items`(含停用 + id)≠下拉投影,不复用。
+- **变异 24/24 全致死,预测=实测零缺口**:M-DF1–8(type/itemToInput 全量每字段 + remark 归一 + blankType/Item)、M-IX1–13(类型状态全量/stopProp×2/invalidate/reload/置灰/删除、项状态全量/invalidate/删除、activeRowKey、selectType 断链 [M-IX13 连带红 行点击+竞态+字典项=3])、M-DT1–4(onRow onClick/cursor、rowClassName 命中/类名)。三文件残留 clean。
+- 判据:`tsc` 0 / `antd lint` 6.5.1 net 0 / `oxlint` 0 / `vitest` **22/22**(dictForm 6 + 页 8 + DataTable 6→8)/ `build` OK(49.59s)。dict/common i18n 键 C0 已全量预置;权限码与后端 dict CRUD 路由对齐。
+
+**下一条**:开 **C9 review lane**(独立 opus、隔离 worktree、不自审);通过后进 **C10 角色 + 模块**。
 
 ### 2026-07-21 · C8b review lane(独立 opus,隔离 worktree)→ APPROVE(2 LOW,均修)
 
