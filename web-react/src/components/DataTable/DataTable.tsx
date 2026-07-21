@@ -1,8 +1,9 @@
-import { forwardRef, useImperativeHandle, useRef, type ReactNode } from 'react'
+import { forwardRef, useImperativeHandle, useRef, type Key, type ReactNode } from 'react'
 import type { TableProps } from 'antd'
 import { ProTable } from '@ant-design/pro-components'
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
 import { toProTable, type PageFetcher } from './toProTable'
+import './DataTable.css'
 
 /**
  * CRUD 列表页的薄封装。**隔离 `@ant-design/pro-components`(beta)**:16 个 CRUD 页只依赖本组件 +
@@ -29,6 +30,10 @@ export interface DataTableProps<T extends Record<string, any>> {
    * `rowSelection={{ selectedRowKeys, onChange }}`。不给则不显示勾选列(默认无选择)。
    */
   rowSelection?: TableProps<T>['rowSelection']
+  /** 行点击(主从页左栏选中一行 → 加载右栏)。给了才有指针手型 + onClick;行内控件须自行 stopPropagation 防冒泡。 */
+  onRowClick?: (record: T) => void
+  /** 选中行高亮:rowKey 命中此值的行套 `.data-table-active-row`(见 DataTable.css)。主从页配 onRowClick 用。 */
+  activeRowKey?: Key | null
 }
 
 /** 暴露给调用方的句柄(增删改后刷新)——只给 `reload`,不外泄 pro-components 的 `ActionType`。 */
@@ -37,7 +42,7 @@ export interface DataTableHandle {
 }
 
 function DataTableInner<T extends Record<string, any>>(
-  { columns, fetcher, persistKey, rowKey = 'id', toolbar, headerTitle, rowSelection }: DataTableProps<T>,
+  { columns, fetcher, persistKey, rowKey = 'id', toolbar, headerTitle, rowSelection, onRowClick, activeRowKey }: DataTableProps<T>,
   ref: React.ForwardedRef<DataTableHandle>,
 ) {
   const actionRef = useRef<ActionType | undefined>(undefined)
@@ -50,6 +55,8 @@ function DataTableInner<T extends Record<string, any>>(
       request={toProTable(fetcher)}
       rowKey={rowKey}
       rowSelection={rowSelection}
+      onRow={onRowClick ? (record) => ({ onClick: () => onRowClick(record), style: { cursor: 'pointer' } }) : undefined}
+      rowClassName={activeRowKey == null ? undefined : (record) => (record[rowKey] === activeRowKey ? 'data-table-active-row' : '')}
       columnsState={persistKey ? { persistenceKey: `protable:${persistKey}`, persistenceType: 'localStorage' } : undefined}
       search={{ labelWidth: 'auto' }}
       pagination={{ showSizeChanger: true, defaultPageSize: 10 }}

@@ -1,0 +1,5 @@
+/* 主从表选中行高亮:activeRowKey 命中的行套 .data-table-active-row。
+   !important 硬压 antd 行底色(含 hover),否则选中态会被 hover 覆盖、看不出当前选了哪行。 */
+.data-table-active-row > .ant-table-cell {
+  background: var(--color-primary-light) !important;
+}

@@ -19,6 +19,8 @@ let captured: {
   rowKey?: string
   toolBarRender?: () => React.ReactNode[]
   rowSelection?: unknown
+  onRow?: (record: Row) => { onClick?: () => void; style?: Record<string, unknown> }
+  rowClassName?: (record: Row) => string
 } = {}
 
 // 假 ProTable:挂载即调 request(证明 fetcher 接对)、渲染返回的行、把 reload 挂到 actionRef。
@@ -115,5 +117,26 @@ describe('DataTable 接线', () => {
     cleanup()
     mount()
     expect(captured.rowSelection).toBeUndefined()
+  })
+
+  it('onRowClick → onRow 提供 onClick(record) + 指针手型;不给则 onRow undefined', () => {
+    const onRowClick = vi.fn()
+    mount({ onRowClick })
+    const rowProps = captured.onRow!({ id: 7, name: 'x' })
+    rowProps.onClick!()
+    expect(onRowClick).toHaveBeenCalledWith({ id: 7, name: 'x' })
+    expect(rowProps.style).toMatchObject({ cursor: 'pointer' })
+    cleanup()
+    mount()
+    expect(captured.onRow).toBeUndefined()
+  })
+
+  it('activeRowKey → rowClassName 命中行套 .data-table-active-row;不给则 undefined', () => {
+    mount({ activeRowKey: 7 })
+    expect(captured.rowClassName!({ id: 7, name: 'x' })).toBe('data-table-active-row')
+    expect(captured.rowClassName!({ id: 8, name: 'y' })).toBe('')
+    cleanup()
+    mount()
+    expect(captured.rowClassName).toBeUndefined()
   })
 })
