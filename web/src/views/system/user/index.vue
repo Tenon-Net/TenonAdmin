@@ -1,30 +1,23 @@
 <script setup lang="ts">
-// 用户管理(写侧)= ProTable(列表/搜索/分页)+ 手写弹窗 CRUD + 重置密码 + 专用启停端点。
-// 角色多选:新增/编辑均可分配角色(选项来自 roleApi 拉一大页);编辑回显走 userApi.detail 的 roleIds。
+// 用户管理(写侧)= ProTable(列表/搜索/分页)+ UserFormModal(新增/编辑)+ ResetPasswordModal(重置/初始口令展示)+ 专用启停端点。
 // 超管行(isSuperAdmin)删除/停用置灰防自锁;启停走专用 setEnabled(非全量 update)。
-import { computed, h, onMounted, reactive, ref, watch } from 'vue'
-import {
-  NButton, NCard, NTree, NSpace, NTag, NAvatar, NInput, NForm, NFormItem, NFormItemGi, NGrid,
-  NSelect, NSwitch, NPopconfirm, useMessage, type FormInst, type FormRules,
-} from 'naive-ui'
+import { computed, h, onMounted, ref, watch } from 'vue'
+import { NButton, NCard, NTree, NSpace, NTag, NAvatar, NPopconfirm, useMessage } from 'naive-ui'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
-import PasswordStrength from '@/components/PasswordStrength/index.vue'
-import FormContainer from '@/components/FormContainer/index.vue'
-import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
-import DictSelect from '@/components/DictSelect/index.vue'
 import DictTag from '@/components/DictTag/index.vue'
-import FileUpload from '@/components/FileUpload/index.vue'
+import UserFormModal from './components/UserFormModal.vue'
+import ResetPasswordModal from './components/ResetPasswordModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
 import { userApi, positionApi, roleApi, orgApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import { buildTree, type Tree } from '@/utils/tree'
-import type { AddUserInput, SysOrg, UpdateUserInput, UserItem } from '@/types/api'
+import type { SysOrg, UserItem } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -37,7 +30,12 @@ const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   successMsg: t('user.deleted'),
 })
 
+// 新增/编辑弹窗 + 重置密码弹窗(表单/校验/保存均在各自组件内,父页只传下拉选项 + 收 saved/passwordGenerated)。
+const userFormRef = ref<InstanceType<typeof UserFormModal> | null>(null)
+const resetModalRef = ref<InstanceType<typeof ResetPasswordModal> | null>(null)
+
 // 职位/角色/主管下拉:各拉一页足量。ponytail: 200 覆盖绝大多数系统;真超再上分页搜索。
+// roleOptions 一份两用:既喂编辑弹窗,也当列表页「角色」搜索项的选项源(ProTable 支持 Ref 选项源)。
 const positionOptions = ref<{ label: string; value: number }[]>([])
 const roleOptions = ref<{ label: string; value: number }[]>([])
 const directorOptions = ref<{ label: string; value: number }[]>([])
@@ -168,10 +166,10 @@ const columns: ProTableColumn<UserItem>[] = [
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
         authStore.hasPerm('PUT:/api/v1/sys/user/{id}')
-          ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit'))
+          ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => userFormRef.value?.openEdit(r) }, () => t('common.edit'))
           : null,
         authStore.hasPerm('PUT:/api/v1/sys/user/{id}/password')
-          ? h(NButton, { size: 'small', quaternary: true, onClick: () => openReset(r) }, () => t('user.resetPassword'))
+          ? h(NButton, { size: 'small', quaternary: true, onClick: () => resetModalRef.value?.openReset(r) }, () => t('user.resetPassword'))
           : null,
         r.isSuperAdmin || !authStore.hasPerm('DELETE:/api/v1/sys/user/{id}')
           ? null
@@ -191,136 +189,6 @@ const columns: ProTableColumn<UserItem>[] = [
       ]),
   },
 ]
-
-// ── 新增/编辑弹窗 ──
-const show = ref(false)
-const formRef = ref<FormInst | null>(null)
-const editingId = ref<number | null>(null)
-const rules: FormRules = {
-  account: { required: true, whitespace: true, message: () => t('user.accountRequired'), trigger: ['input', 'blur'] },
-  name: { required: true, whitespace: true, message: () => t('user.nameRequired'), trigger: ['input', 'blur'] },
-  // 手机/邮箱选填,填了才校验格式(前端信任边界;后端存自由字符串)
-  phone: { validator: (_r, v: string) => !v || /^1[3-9]\d{9}$/.test(v), message: () => t('user.phoneInvalid'), trigger: ['input', 'blur'] },
-  email: { validator: (_r, v: string) => !v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), message: () => t('user.emailInvalid'), trigger: ['input', 'blur'] },
-}
-interface UserForm {
-  account: string
-  password: string
-  name: string
-  nickname: string
-  phone: string
-  email: string
-  gender: string | null
-  avatar: string | null
-  orgId: number | null
-  positionId: number | null
-  directorId: number | null
-  enabled: boolean
-  roleIds: number[]
-}
-const blank = (): UserForm => ({
-  account: '', password: '', name: '', nickname: '', phone: '', email: '',
-  gender: null, avatar: null, orgId: null, positionId: null, directorId: null, enabled: true, roleIds: [],
-})
-const form = reactive<UserForm>(blank())
-const avatarUploading = ref(false) // 头像上传中:给上传按钮加 spinner,别让用户对着空白干等
-
-function openAdd() {
-  editingId.value = null
-  Object.assign(form, blank())
-  show.value = true
-}
-/** 编辑:先取 detail(拿 roleIds + 回显),成功再开弹层;失败弹码不开。 */
-async function openEdit(r: UserItem) {
-  try {
-    const d = await userApi.detail(r.id)
-    editingId.value = r.id
-    Object.assign(form, {
-      account: d.account, password: '', name: d.name,
-      nickname: d.nickname ?? '', phone: d.phone ?? '', email: d.email ?? '',
-      gender: d.gender ?? null, avatar: d.avatar ?? null,
-      orgId: d.orgId ?? null, positionId: d.positionId ?? null, directorId: d.directorId ?? null,
-      enabled: d.enabled, roleIds: d.roleIds ?? [],
-    })
-    show.value = true
-  } catch (e) {
-    message.error(translateError(e))
-  }
-}
-
-async function save() {
-  await formRef.value?.validate()
-  try {
-    if (editingId.value === null) {
-      const body: AddUserInput = {
-        account: form.account,
-        password: form.password || undefined, // 留空 → 省略字段 → 后端生成随机强口令(明文经出参回传)
-        name: form.name,
-        nickname: form.nickname || null, phone: form.phone || null, email: form.email || null,
-        gender: form.gender, avatar: form.avatar,
-        orgId: form.orgId, positionId: form.positionId, directorId: form.directorId, enabled: form.enabled,
-        roleIds: form.roleIds,
-      }
-      const out = await userApi.add(body)
-      // 管理员没自己指定口令时,系统生成的随机口令只有这一次机会展示——不弹出来这个号谁也登不进去。
-      // 复用重置密码那套只读+复制弹层(同一语义:明文仅供管理员当场转达)。
-      if (!form.password) {
-        resetResult.value = out.initialPassword
-        resultFromCreate.value = true
-        showResetResult.value = true
-      }
-    } else {
-      const body: UpdateUserInput = {
-        name: form.name,
-        nickname: form.nickname || null, phone: form.phone || null, email: form.email || null,
-        gender: form.gender, avatar: form.avatar,
-        orgId: form.orgId, positionId: form.positionId, directorId: form.directorId, enabled: form.enabled,
-        roleIds: form.roleIds,
-      }
-      await userApi.update(editingId.value, body)
-    }
-    message.success(t('user.saved'))
-    await tableRef.value?.refresh()
-  } catch (e) {
-    message.error(translateError(e))
-    return false
-  }
-}
-
-// ── 重置密码(输入新密码 / 留空则系统随机生成)→ 成功后只读展示实际生效密码 ──
-// 同一个结果弹层也服务「留空口令建号」(见 save):两者语义相同——明文只此一次,管理员当场转达。
-const showReset = ref(false)
-const resetTarget = ref<UserItem | null>(null)
-const resetForm = reactive({ newPassword: '' })
-const showResetResult = ref(false)
-const resetResult = ref('')
-/** 结果弹层是"建号后"还是"重置后"打开的,只影响标题文案。 */
-const resultFromCreate = ref(false)
-
-function openReset(r: UserItem) {
-  resetTarget.value = r
-  resetForm.newPassword = ''
-  showReset.value = true
-}
-async function doReset() {
-  if (!resetTarget.value) return
-  try {
-    resetResult.value = await userApi.resetPassword(resetTarget.value.id, resetForm.newPassword || null)
-    resultFromCreate.value = false
-    showResetResult.value = true // 关闭输入弹层、弹出结果
-  } catch (e) {
-    message.error(translateError(e))
-    return false
-  }
-}
-async function copyResult() {
-  try {
-    await navigator.clipboard.writeText(resetResult.value)
-    message.success(t('user.copied'))
-  } catch {
-    message.error(t('user.copyFailed'))
-  }
-}
 </script>
 
 <template>
@@ -356,7 +224,7 @@ async function copyResult() {
       @error="(e) => message.error(translateError(e))"
     >
     <template #toolbar>
-      <n-button v-auth="'POST:/api/v1/sys/user'" type="primary" @click="openAdd">
+      <n-button v-auth="'POST:/api/v1/sys/user'" type="primary" @click="userFormRef?.openAdd()">
         <template #icon><AppIcon icon="ph:plus" :size="16" /></template>{{ t('common.add') }}
       </n-button>
       <n-button
@@ -371,128 +239,19 @@ async function copyResult() {
     </ProTable>
   </div>
 
-  <!-- 新增/编辑 -->
-  <FormContainer
-    v-model:show="show"
-    :title="editingId === null ? t('user.addTitle') : t('user.editTitle')"
-    :width="640"
-    :on-confirm="save"
-    :confirm-text="t('common.save')"
-  >
-    <!-- 两列栅格:相关字段成对排,头像整行(span 2);账号编辑时禁改并占整行 -->
-    <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :label-width="76">
-      <n-grid :cols="2" :x-gap="16">
-        <n-form-item-gi :span="editingId === null ? 1 : 2" :label="t('user.account')" path="account">
-          <n-input v-model:value="form.account" :disabled="editingId !== null" :placeholder="t('user.account')" />
-        </n-form-item-gi>
-        <n-form-item-gi v-if="editingId === null" :label="t('user.password')">
-          <div class="pw-field">
-            <n-input v-model:value="form.password" type="password" show-password-on="click" :placeholder="t('user.passwordHint')" />
-            <PasswordStrength :value="form.password" />
-          </div>
-        </n-form-item-gi>
-        <n-form-item-gi :label="t('user.name')" path="name">
-          <n-input v-model:value="form.name" :placeholder="t('user.name')" />
-        </n-form-item-gi>
-        <n-form-item-gi :label="t('user.nickname')">
-          <n-input v-model:value="form.nickname" :placeholder="t('user.nicknamePlaceholder')" />
-        </n-form-item-gi>
-        <n-form-item-gi :label="t('user.gender')">
-          <DictSelect v-model:value="form.gender" type-code="gender" clearable :placeholder="t('user.genderPlaceholder')" />
-        </n-form-item-gi>
-        <n-form-item-gi :label="t('user.phone')" path="phone">
-          <n-input v-model:value="form.phone" :placeholder="t('user.phonePlaceholder')" />
-        </n-form-item-gi>
-        <n-form-item-gi :label="t('user.email')" path="email">
-          <n-input v-model:value="form.email" :placeholder="t('user.emailPlaceholder')" />
-        </n-form-item-gi>
-        <n-form-item-gi :label="t('user.org')">
-          <OrgTreeSelect v-model:value="form.orgId" :placeholder="t('user.orgPlaceholder')" />
-        </n-form-item-gi>
-        <n-form-item-gi :label="t('user.position')">
-          <n-select v-model:value="form.positionId" :options="positionOptions" clearable :placeholder="t('user.positionPlaceholder')" />
-        </n-form-item-gi>
-        <n-form-item-gi :label="t('user.director')">
-          <n-select v-model:value="form.directorId" :options="directorOptions" clearable filterable :placeholder="t('user.directorPlaceholder')" />
-        </n-form-item-gi>
-        <n-form-item-gi :label="t('user.roles')">
-          <n-select v-model:value="form.roleIds" :options="roleOptions" multiple clearable :placeholder="t('user.rolesPlaceholder')" />
-        </n-form-item-gi>
-        <n-form-item-gi :label="t('common.status')">
-          <n-switch v-model:value="form.enabled" />
-        </n-form-item-gi>
-        <n-form-item-gi :span="2" :label="t('user.avatar')">
-          <div class="avatar-field">
-            <n-avatar round :size="48" style="flex-shrink: 0" :src="form.avatar || undefined">
-              <template #fallback>{{ initial(form.name) }}</template>
-              <template v-if="!form.avatar">{{ initial(form.name) }}</template>
-            </n-avatar>
-            <FileUpload
-              accept="image/*"
-              :show-file-list="false"
-              @loading-change="(v) => (avatarUploading = v)"
-              @uploaded="(o) => (form.avatar = o.viewUrl ?? null)"
-            >
-              <n-button size="small" :loading="avatarUploading" :disabled="avatarUploading">
-                <template #icon><AppIcon icon="ph:upload-simple" :size="14" /></template>
-                {{ avatarUploading ? t('user.avatarUploading') : t('user.avatar') }}
-              </n-button>
-            </FileUpload>
-          </div>
-        </n-form-item-gi>
-      </n-grid>
-    </n-form>
-  </FormContainer>
+  <UserFormModal
+    ref="userFormRef"
+    :position-options="positionOptions"
+    :role-options="roleOptions"
+    :director-options="directorOptions"
+    @saved="() => tableRef?.refresh()"
+    @password-generated="(p) => resetModalRef?.showResult(p, true)"
+  />
 
-  <!-- 重置密码输入 -->
-  <FormContainer
-    v-model:show="showReset"
-    :title="t('user.resetPassword')"
-    :width="420"
-    :on-confirm="doReset"
-    :confirm-text="t('common.confirm')"
-  >
-    <n-form :model="resetForm" label-placement="left" :label-width="90">
-      <n-form-item :label="t('user.newPassword')">
-        <n-input v-model:value="resetForm.newPassword" type="password" show-password-on="click" :placeholder="t('user.newPasswordHint')" />
-      </n-form-item>
-    </n-form>
-  </FormContainer>
-
-  <!-- 初始密码结果(只读,可复制):建号留空口令 / 重置密码 共用 -->
-  <FormContainer
-    v-model:show="showResetResult"
-    :title="resultFromCreate ? t('user.createDone') : t('user.resetDone')"
-    :width="420"
-    :on-confirm="() => {}"
-    :confirm-text="t('common.confirm')"
-  >
-    <p class="reset-hint">{{ t('user.resetDoneHint') }}</p>
-    <n-input :value="resetResult" readonly>
-      <template #suffix>
-        <n-button text type="primary" @click="copyResult">{{ t('user.copy') }}</n-button>
-      </template>
-    </n-input>
-  </FormContainer>
+  <ResetPasswordModal ref="resetModalRef" />
 </template>
 
 <style scoped>
-/* 密码框 + 强度条竖排(表单为 label-left 横排,此格内需纵向堆叠) */
-.pw-field {
-  flex: 1;
-  min-width: 0;
-}
-/* 头像:当前预览 + 上传按钮横排 */
-.avatar-field {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.reset-hint {
-  margin: 0 0 12px;
-  font-size: var(--font-size-sm, 13px);
-  color: var(--color-text-secondary, #888);
-}
 /* 左树 + 右表:窄屏下机构树收窄,不换行(树本身可竖向滚动) */
 .user-layout {
   display: flex;

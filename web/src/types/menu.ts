@@ -63,3 +63,10 @@ export interface MenuInput {
   icon?: string | null
   visible: boolean
 }
+
+/** 菜单树节点 → 全量入参:菜单页 StatusSwitch 行内改状态与编辑弹窗回显共用(后端无独立启停端点,均走全量 update)。 */
+export const toMenuInput = (r: MenuTreeNode): MenuInput => ({
+  parentId: r.parentId, type: r.type, title: r.title, permission: r.permission, sort: r.sort,
+  enabled: r.enabled, moduleId: r.moduleId ?? null,
+  path: r.path ?? '', component: r.component ?? '', icon: r.icon ?? '', visible: r.visible,
+})
