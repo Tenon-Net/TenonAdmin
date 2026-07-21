@@ -9,5 +9,7 @@ import { useAppStore, isDark } from '@/stores/app'
  */
 export function MarkdownView({ value }: { value?: string | null }) {
   const dark = useAppStore(isDark)
-  return <MdPreview modelValue={value ?? ''} theme={dark ? 'dark' : 'light'} />
+  // no{Katex,Mermaid,Highlight}:md-editor-rt 默认挂载即从 unpkg 懒加载这些扩展的 JS/CSS —— 破坏气隙自包含
+  // (E7)。通知正文用不到公式/图表,代码高亮设为可选(消费者要则经 editorExtensions 喂本地 hljs 实例)。全关 = 零触网。
+  return <MdPreview modelValue={value ?? ''} theme={dark ? 'dark' : 'light'} noKatex noMermaid noHighlight />
 }

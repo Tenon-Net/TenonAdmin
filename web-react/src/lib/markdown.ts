@@ -16,9 +16,19 @@ export function withXssPlugin(plugins: MarkdownItConfigPlugin[]): MarkdownItConf
 }
 
 let done = false
-/** 幂等:全局登记 XSS 过滤。在 main.tsx 渲染前调用一次。 */
+/**
+ * 幂等:全局配置 md-editor-rt。在 main.tsx 渲染前调用一次。做两件事:
+ *   1. markdownItPlugins:挂 XSS 过滤(见上)。
+ *   2. editorExtensions.echarts:给个**空 no-op instance**。echarts 是唯一没有 `no*` 旗标的懒加载扩展
+ *      (katex/mermaid/highlight/prettier 都在组件上用 `no*` 关了),不给 instance 它就挂载即从 unpkg 拉
+ *      echarts.min.js —— 破坏气隙(E7)。给空对象:md-editor 视作「已提供」而不再触网;且顺带避开它默认
+ *      `parseOption` 用 `new Function` 对(管理员可写的)通知正文求值的隐患 —— 通知本就用不到 echarts 代码块。
+ */
 export function setupMarkdown(): void {
   if (done) return
   done = true
-  config({ markdownItPlugins: (plugins) => withXssPlugin(plugins) })
+  config({
+    markdownItPlugins: (plugins) => withXssPlugin(plugins),
+    editorExtensions: { echarts: { instance: {} } },
+  })
 }

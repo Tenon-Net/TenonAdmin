@@ -41,3 +41,20 @@ describe('setupMarkdown 端到端过滤', () => {
     expect(img.getAttribute('onerror')).toBeNull() // 危险事件属性被 XSS 过滤剥掉
   })
 })
+
+// ── 自包含守卫(E7):MarkdownView/Editor 关掉 katex/mermaid/highlight/prettier 后,挂载不得注入任何指向
+// 外网 CDN 的 <link>/<script>。happy-dom 禁了外部资源**加载**但仍会**注入 DOM 标签**,故可查。摘掉任一 no* 旗标
+// → 对应扩展的 unpkg 标签重现 → 本用例转红(见 c7 变异)。──
+describe('MarkdownView 气隙自包含', () => {
+  const externalResources = () =>
+    [...document.querySelectorAll('link[href], script[src]')]
+      .map((el) => el.getAttribute('href') || el.getAttribute('src') || '')
+      .filter((u) => /^https?:\/\//i.test(u))
+
+  it('挂载后不注入任何指向外网 CDN 的 link/script', async () => {
+    const { MarkdownView } = await import('@/components/MarkdownView')
+    render(<MarkdownView value={'# 标题\n\n```ts\nconst a = 1\n```'} />)
+    await new Promise((r) => setTimeout(r, 0)) // 放过 md-editor 挂载副作用(它注入 CDN 标签的时机)
+    expect(externalResources()).toEqual([])
+  })
+})

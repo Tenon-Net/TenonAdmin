@@ -24,5 +24,17 @@ export interface MarkdownEditorProps {
  */
 export function MarkdownEditor({ value, onChange }: MarkdownEditorProps) {
   const dark = useAppStore(isDark)
-  return <MdEditor modelValue={value ?? ''} onChange={(v) => onChange?.(v)} theme={dark ? 'dark' : 'light'} onUploadImg={uploadImages} />
+  // no{Katex,Mermaid,Highlight,Prettier}:同 MarkdownView —— 关掉会从 unpkg 懒加载的扩展,气隙下零触网(E7)。
+  return (
+    <MdEditor
+      modelValue={value ?? ''}
+      onChange={(v) => onChange?.(v)}
+      theme={dark ? 'dark' : 'light'}
+      onUploadImg={uploadImages}
+      noKatex
+      noMermaid
+      noHighlight
+      noPrettier
+    />
+  )
 }
