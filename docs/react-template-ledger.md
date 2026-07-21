@@ -74,13 +74,27 @@
 
 先补组件再批量做页。**`web/COMPONENTS.md` 记录的每个坑要在 antd 侧逐条重验,不能假设同样成立**(静态模式无客户端筛选、受控 `expandedRowKeys` 与 `defaultExpandAll` 互斥、过滤树浅拷贝写回不生效必须 reload)。
 
-- [ ] **C0 从存档搬运剩余条目** — 批次 C 及之后的细目在 `archive/web-shared-extract` 的 `docs/react-port-ledger.md` 里,逐条搬进本文件(结构不变,去掉 `@shared` 相关措辞)。**先做这一条**,别凭记忆重写。
-- [ ] **C1 字典三件套 + 表单容器** — `DictSelect`/`DictTag`/`useDictOptions`(数据基座是 **B5** 的 dict store —— B3 只落了三个,dict 随 API 层走)、`FormContainer`(Modal+Drawer 双形态,`onConfirm` owns loading+close)、`StatusSwitch`(悲观 + 自动回滚,建在 useConfirm 的 `ask` 上)。
+- [x] **C0 从存档搬运剩余条目** — 完成:C3–C12、D2–D5、E6 已从 `archive/web-shared-extract` 的 `docs/react-port-ledger.md` 搬入,**去掉共享层措辞**(`共享 utils/tree`→`utils/tree`;`共享 mix.ts/tokens.css`→本模板 `src/theme`/`src/styles`;`共享 chunkUpload.ts`→`src/utils/chunkUpload.ts`,该 util R4 推迟未搬,C5 时一并补)。**对账**:原 C-list 不含 `user`(=B11 原型)/`login`(=B5)/门户选择页(=B7);C10 的 `module` 是**管理页**(moduleApi CRUD),≠ B7 的门户选择器。已落地页(user)不再重复列。
+- [ ] **C1 字典三件套 + 表单容器** — `DictSelect`/`DictTag`/`useDictOptions`(数据基座是 **B5** 的 dict store —— B3 只落了三个,dict 随 API 层走;`useDictOptions` B11 已用,C1 补 `DictSelect`/`DictTag`)、`FormContainer`(Modal+Drawer 双形态,`onConfirm` owns loading+close —— 替换 B11 页里手写的 antd `Modal`+`Form`)、`StatusSwitch`(悲观 + 自动回滚,建在 useConfirm 的 `ask` 上 —— 替换 B11 页里的内联 `EnabledSwitch`)。
 - [ ] **C2 选择器族** — `ApiSelect`(远程分页 + 防抖 + 竞态守卫)、`UserSelect`、`OrgTreeSelect`(扁平→树用 `utils/tree`,含子树排除)、`UserPicker` 弹窗。
+- [ ] **C3 展示件** — `DetailPage`、`CodeBlock`、`PasswordStrength`(拉实时密码策略 `configApi.passwordPolicy`)、`AppIcon`、`TenonLogo`。
+- [ ] **C4 IconPicker(内联)** — **不发第三个 npm 包**(`tenon-naive-iconify-picker` 是 Naive 专属)。`@iconify/react` + 现有 4 个离线集合(`ph`/`lucide`/`ep`/`ant-design`)+ `src/assets/svg` glob。
+- [ ] **C5 上传 + 富文本 + 图表** — `FileUpload`(antd `Upload customRequest` + `src/utils/chunkUpload.ts` 分片/秒传/续传 —— 该 util R4 推迟,本条一并搬进 `web-react/src/utils/`)、`MarkdownEditor`(`md-editor-rt`)、`Chart`(直接 `echarts.init`+`useEffect`,跟随主题重绘,不加 wrapper 依赖)。
+- [ ] **C6 标准列表页批** — `position`(可编辑 Sort 排序原型)、`notice`、`session`、`file`、`recycle`、`cache`、`monitor`。**照 B11 的 `<DataTable>` + `userForm.ts` 拆分范式**(纯逻辑抽出变异钉、页面只接线)。
+- [ ] **C7 日志三页** — `log/op` `log/login` `log/exception`。时间范围筛选用 `search:{transform: v => ({startTime:v?.[0], endTime:v?.[1]})}`。
+- [ ] **C8 树表原型** — `org` + `menu`(含 `ButtonManager` 子组件,写操作要 `hasPerm` 门 —— 沿用 dev 上 J4 的对齐)。
+- [ ] **C9 主从分栏原型** — `dict`(`activeRowKey` + 行点击,内联控件要 `stopPropagation`)。
+- [ ] **C10 角色 + 模块** — `role`(含 `GrantMenuTable` 三级可勾选菜单树 + 数据范围单选 + 自定义组织多选)、`module`(管理页,moduleApi CRUD;≠ B7 门户选择器)。
+- [ ] **C11 config 四标签页** — `SysBaseConfig`/`SecurityConfig`/`UploadConfig`/`OtherConfig`。
+- [ ] **C12 dashboard + personal 七页** — `workbench`/`biz` + `profile`/`bindings`/`notice`/`password`/`sessions`(`password` 若早期已落占位,落地时核对)。
 
 ## 批次 D · 容器与标签页
 
-- [ ] **D1 tabs store + 标签栏容器** — B3 推迟的那件。`removeTab` 的邻居选择、`_ensureActive`、`cachedNames` 依赖 `hasRoute`,都要有路由和容器才写得了。落地时**必须**把 `auth.reset()` 与 `useModule` 切应用两处的 `clearTabs()` 补回。
+- [ ] **D1 tabs store + 标签栏容器 + 页面缓存** — B3 推迟的那件,**整个移植第二难的东西**。①store:`removeTab` 的邻居选择、`_ensureActive`、`cachedNames` 依赖 `hasRoute`,都要有路由和容器才写得了;落地时**必须**把 `auth.reset()` 与 `useModule` 切应用两处的 `clearTabs()` 补回。②缓存:React 无 `keep-alive` 对等物 —— `<KeepAlive>` 容器维护 `Map<path, ReactNode>`,已开 tab 常驻挂载、非活动 `display:none`。`// ponytail: 不做 activated/deactivated 钩子,页面若需感知激活再加 useTabActive()`。代价是隐藏页的 effect/定时器仍在跑。验:切走切回状态保留、隐藏页定时器行为、内存随开 tab 是否线性增长。
+- [ ] **D2 设置抽屉** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。派生逻辑由 `src/theme/mix.ts` + `src/styles/tokens.css` 现成给出,成本在 `SettingsDrawer`(239) + `LayoutModeCards`(180) 的 UI 重写。
+- [ ] **D3 SignalR 实时** — `@microsoft/signalr` 框架无关(需加此依赖),只重写 `useRealtime.ts`(68)外层包装:`force-logout` / `notice-changed` + 初次失败静默退回 30s 轮询。
+- [ ] **D4 MenuSearch 全局命令面板** — 建在 `useMenuFlat` 的纯逻辑扫描上,外链项走 `window.open`。
+- [ ] **D5 登录页另两套皮肤** — B5 已落一套;补 `AuroraGlass`(363)、`SplitPanel`(242)、`Spotlight`(107)+ 皮肤切换。**后两者在 Vue 版就是 Naive-free 的、主要是 CSS,几乎直接搬**。
 
 ## 批次 E · 工程化
 
@@ -92,6 +106,8 @@
 - [ ] **E5 `gen:api` 漂移闸门**(R2 现场发现) — R2 修的那个字段缺了几个月没人发现,根因**不是** `unwrap`(这一点我第一版写错了,见轮次日志):typecheck 永远比的是**代码 ↔ schema**,从不比 **schema ↔ 后端**。schema 陈旧 = 两边一起冻住 = 恒绿。**推论:就算把 97 处响应类型全改成 schema 派生,陈旧照样一点都不红。**今天守着这条契约的只有"人记得跑 `gen:api`"。
 
   附带两条事实,别再搞混:①`unwrap<T>(res: { data?: unknown }): T` 确实把响应体丢成 `unknown` 再按调用方断言强转,97 处全是断言——但那治的是"手写类型与 schema 不一致",与陈旧是两回事;②openapi-fetch **在请求侧是真约束的**(`createClient<paths>` 让路径字面量 / `params.path` / `params.query` / `body` 全部受 `schema.d.ts` 管;例外是 `index.ts:548/551/553` 回收站三个端点用 `as any` 把这层绕过了)。**由此产生一个不对称,这才是闸门的真实能力边界:重新生成后请求侧的漂移会红,响应侧不会——闸门只能告诉你"schema 变了",告诉不了你"哪儿坏了"。**CI 加一步:起 MinimalHost、跑 `gen:api`、`git diff --exit-code web/src/api/schema.d.ts`(以及 R3 之后的 `web-react/src/api/schema.d.ts`)。配方现成——`backend-release.yml:77` 已经在做"起 MinimalHost 抓 openapi"这件事,照抄即可。**不做**把 97 处响应类型改成 schema 派生:**首要理由是它根本不治陈旧**(见上),其次才是仓库里零先例、手写 DTO 是有意的可读性选择。
+
+- [ ] **E6 pro-components 转正跟进** — beta(`3.1.14-2`)→ stable 后立刻升版并跑全量验收;**尤其 B10 记的 vitest 导入坑(无扩展名 deep-import)与 B11 遗留的真 ProTable 运行时开放问题(列持久化/挂载即调/工具栏 locale),stable 后重验能否解**。**这条不封口,长期挂着**。
 
 ## 不做清单（有依据,防反复）
 
