@@ -127,8 +127,10 @@ export const UserPicker = forwardRef<UserPickerHandle, UserPickerProps>(function
     [orgFlat, t],
   )
 
+  // 中间表搜索:account 列可搜(未设 search:false)→ ProTable 按 dataIndex 发 `q.account`,故读 account 而非 name。
+  // name 列 search:false 不入搜索表单;两者对齐才不至于「搜索框静默返回全量」。
   const fetchUsers: PageFetcher<UserItem> = (q) =>
-    userApi.page({ page: q.page, pageSize: q.pageSize, name: typeof q.name === 'string' ? q.name : undefined, orgId })
+    userApi.page({ page: q.page, pageSize: q.pageSize, account: typeof q.account === 'string' ? q.account : undefined, orgId })
 
   const columns = useMemo<ProColumns<UserItem>[]>(
     () => [

@@ -119,11 +119,13 @@ describe('UserPicker 接线', () => {
     await waitFor(() => expect(onConfirm).toHaveBeenCalledWith([2, 9]))
   })
 
-  it('中间表 fetcher:透传分页/搜索,orgId 初始 undefined', async () => {
+  it('中间表 fetcher:透传 account 搜索(可搜列是 account)+ orgId 初始 undefined', async () => {
+    // 喂 q.account —— 这正是 account 列可搜时 ProTable 真会发的 key;若 fetcher 读成 name,这里就抓不到,
+    // 曾经的绿谎正因喂了 UI 产生不了的 q.name。fetcher 必须读 account 才能把搜索真正透传下去。
     const ref = mount({ onConfirm: vi.fn() })
     await act(async () => { ref.current!.open() })
-    await captured.fetcher!({ page: 1, pageSize: 10, name: '张' })
-    expect(userApi.page).toHaveBeenCalledWith({ page: 1, pageSize: 10, name: '张', orgId: undefined })
+    await captured.fetcher!({ page: 1, pageSize: 10, account: '张' })
+    expect(userApi.page).toHaveBeenCalledWith({ page: 1, pageSize: 10, account: '张', orgId: undefined })
   })
 
   it('exclude 的行「添加」置灰,普通行可点', async () => {
