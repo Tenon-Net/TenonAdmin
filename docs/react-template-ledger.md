@@ -84,7 +84,7 @@
 - [x] **C7 日志三页**(`169493a`) — `log/op` `log/login` `log/exception`,只读 DataTable + 列驱动搜索 + 时间范围 + 清空(硬删)。共享纯逻辑抽 `log/logFormat.ts`(operatorText/loginNameText/prettyParam/loginResultKey,变异钉),三页只接线。时间范围**没用**台账原设想的 `search.transform`,改 `valueType:'dateRange'` 直喂 `logApi.*Page` 的 `[start,end]` 元组(api 层 splitRange 已补 23:59:59,与 Vue 一致——API 早于本条落地,transform 反而多此一举)。**review lane → REQUEST-CHANGES(1 HIGH:op 操作人搜索 `formItemRender` 显式 onChange 被 pro-components cloneElement 末位展开盖掉、筛选死 no-op)→ 修复 `4c850c5` + 回归测试 + 复核 APPROVE**;顺带去一条 monitor waitFor flake(`0305bd1`)。见轮次日志。
 - [x] **C8 树表原型**(**C8a `a5f9775` + C8b `b28817d`**) — `org` + `menu`(含 `ButtonManager` 子组件,写操作要 `hasPerm` 门 —— 沿用 dev 上 J4 的对齐)。**已 scope(读完 Vue 三源,别凭记忆重写)**:org ~250 行、menu ~530 行、ButtonManager ~360 行,全港最大项。**两点定案**:①**建独立 `TreeTable` 薄封装**(ProTable `dataSource`+`pagination:false`+`expandable:{expandedRowKeys,onExpandedRowKeysChange}`,续隔离 pro-components beta)——DataTable 是 fetcher 专用,树表是静态 data + 受控展开 + 客户端 `filterTree` + 无搜索表单,两模式塞一个组件会堆条件复杂度,故并列而非扩展;树页也不得直接碰 ProTable。②**拆 C8a(`TreeTable` + org)/ C8b(menu + ButtonManager)**,各自四件套+变异+原子提交(照 C2/C3/C5 a/b 先例)。**关键接缝**(移植时逐条对):受控 `expandedRowKeys` 默认全展开要自己播种(`expandableIds`)、搜索后重算(否则命中藏在折叠祖先里);`filterTree` 是浅拷贝故 StatusSwitch 成功后**重拉整树**而非写行;org 上级用 `OrgTreeSelect`(剪自身子树防成环)、menu 父级下拉排除自身子树;menu 按 `moduleId`(仅顶级)过滤 + `stripButtons`(按钮不进主树,只在 ButtonManager 里管)+ 关键字要搜到按钮权限码(`buttonInfoById`);menu 增删改后 `syncShell`(复用 B6 `buildRoutesForModule` 重建当前应用侧边栏+动态路由,失败静默);组件路径下拉取自 `viewComponentPaths`(glob 真实文件表);ButtonManager 权限码下拉取自 `menuApi.routes()` 实时路由表 + 按 `appPrefix` 软过滤 + 从路由批量添加。写操作全程 `useHasPerm` 门(服务端 [RolePermission] 兜底)。
 - [x] **C9 主从分栏原型**(`d43cc47`) — `dict`(`activeRowKey` + 行点击,内联控件要 `stopPropagation`)。
-- [ ] **C10 角色 + 模块**(**C10b module `6f12b57` done;C10a role 待做**) — `role`(含 `GrantMenuTable` 三级可勾选菜单树 + 数据范围单选 + 自定义组织多选)、`module`(管理页,moduleApi CRUD;≠ B7 门户选择器)。**C10a scope(已读 Vue 三源)**:role 页 = ProTable CRUD + 3 抽屉(授权菜单 GrantMenuTable / 数据范围 scopeType 单选+自定义组织多选 / 授权用户 UserPicker)+ 批删带持有人数警告(countUsers 复用 userApi.page roleId);GrantMenuTable = 自定义三列网格(目录|菜单|按钮)+ 三态复选(buildGroups/recomputeGroup/toggleCatalog|Menu|Button/collectChecked 是纯逻辑变异钉,抽 grantMenu.ts);roleApi 全套齐(getMenus/setMenus/getDataScope/setDataScope/getUsers/setUsers);**唯一缺口:`OrgTreeSelect` 无 `multiple`**(数据范围自定义组织多选需要)→ 按 DataTable 先例扩展可选 multiple。权限码:role add/PUT/DELETE/batch-delete + PUT role/menu、role/datascope、role/users。
+- [x] **C10 角色 + 模块**(**C10b module `6f12b57` + C10a role `26609da`**) — `role`(含 `GrantMenuTable` 三级可勾选菜单树 + 数据范围单选 + 自定义组织多选)、`module`(管理页,moduleApi CRUD;≠ B7 门户选择器)。**C10a scope(已读 Vue 三源)**:role 页 = ProTable CRUD + 3 抽屉(授权菜单 GrantMenuTable / 数据范围 scopeType 单选+自定义组织多选 / 授权用户 UserPicker)+ 批删带持有人数警告(countUsers 复用 userApi.page roleId);GrantMenuTable = 自定义三列网格(目录|菜单|按钮)+ 三态复选(buildGroups/recomputeGroup/toggleCatalog|Menu|Button/collectChecked 是纯逻辑变异钉,抽 grantMenu.ts);roleApi 全套齐(getMenus/setMenus/getDataScope/setDataScope/getUsers/setUsers);**唯一缺口:`OrgTreeSelect` 无 `multiple`**(数据范围自定义组织多选需要)→ 按 DataTable 先例扩展可选 multiple。权限码:role add/PUT/DELETE/batch-delete + PUT role/menu、role/datascope、role/users。
 - [ ] **C11 config 四标签页** — `SysBaseConfig`/`SecurityConfig`/`UploadConfig`/`OtherConfig`。
 - [ ] **C12 dashboard + personal 七页** — `workbench`/`biz` + `profile`/`bindings`/`notice`/`password`/`sessions`(`password` 若早期已落占位,落地时核对)。
 
@@ -121,6 +121,16 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · C10a 角色 + GrantMenuTable(`26609da`)
+
+C10 后半、全港最大项。role 页 = DataTable CRUD + 3 抽屉(授权菜单 / 数据范围 / 授权用户)+ 批删带持有人数警告。三态勾选纯逻辑全抽 grantMenu.ts(变异钉)。
+- **GrantMenuTable 三态**:自定义三列网格(目录|菜单|按钮)+ antd Checkbox indeterminate;`buildGroups`(顶级 Catalog 取菜单子 / 顶级 Menu 自成行)、`groupState`(全勾=checked / 部分=indeterminate)、`withCatalog/Menu/ButtonChecked`(不可变切换——**按钮全勾连带菜单勾、取消按钮不取消菜单**,对齐 Vue)、`collectChecked`(目录勾或半勾 + 菜单勾 + 按钮勾)、`filterByModule/BySearch`。React 走不可变更新 + 受控上抛(≠ Vue 就地改 reactive)。
+- **接线**:OrgTreeSelect `multiple` **免扩展**(rest 已透传给 antd TreeSelect,scope 时的顾虑作废);UserPicker 命令式 ref `open(ids)`/`onConfirm`;数据范围 customOrgIds 逗号串↔数组;批删 content 异步查各角色 countUsers(复用 userApi.page roleId,403 退通用文案不阻断);role 表单 5 字段全注册 validateFields 即全量(无 C9 漏字段)。
+- **变异 32/32 全致死,残留 clean**(4 文件);4 处安全过杀(M-GM1/3/4/5 预测 1 实测 2–6):`groupState`/`toMenuRow`/`buildGroups` 是地基助手,几乎每个 grantMenu 测试都用 buildGroups 造 fixture,动地基则连带红多条——非漏杀。判据:tsc0/antd-lint net0/oxlint0/vitest **27/27**(grantMenu 9 + roleForm 3 + GrantMenuTable 5 + 页 10)/build OK(47.12s)。role/module i18n 键 C0 已全量预置;权限码(role add/PUT/DELETE/batch-delete + role/menu、datascope、users)与后端 seed 对齐。
+- **踩坑**:占位符 role/index.tsx(早期 UnderConstruction 落点)须先读再覆盖;buildGroups 里 `checked/indeterminate` 显式设又被 `...groupState` 覆盖触 TS2783(删冗余);toggleCollapse 三元当语句触 oxlint no-unused-expressions(改 if/else);GrantMenuTable spec 搜索占位是 `common.search='查询'` 非「搜索」。
+
+**下一条**:开 **C10 review lane(role + module 一并独立审)**;通过后进 **C11 config 四标签页**。
 
 ### 2026-07-21 · C10b 应用(模块)管理页(`6f12b57`)
 
