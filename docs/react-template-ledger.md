@@ -78,7 +78,7 @@
 - [x] **C1 字典三件套 + 表单容器** — 完成(`804b3db` 组件 + `b826df7` 页改造)。`DictSelect`/`DictTag`(数据基座 B5b 的 `useDictOptions`;antd Tag 用预设语义色串,naive 的 `info`→`processing`)、`FormContainer`(Modal/Drawer 双形态,`onConfirm` owns loading+close,返 false/抛错留窗)、`StatusSwitch`(悲观 + 自动回滚,建在 useConfirm 的 `ask` 上)。纯逻辑 `toDictOptions`/`resolveDictTag`/`shouldCloseAfterConfirm` 抽出变异钉死(**17 处全致死**;1 处空断言 M-SS5 存活→已修)。user 页手写 Modal+Form / 内联 EnabledSwitch / 性别 Select+文案 全部退成共享组件。**antd v6 改名坑**(`tsc` 不红):`maskClosable`→`mask.closable`、Drawer `width`→`size`、`destroyOnClose`→`destroyOnHidden`,已过 `antd lint` 零 deprecated。**推迟**:`web-react/COMPONENTS.md` 留到 E4 文档批(眼下组件靠文件头注自述,现建属过早脚手架);`FormContainer` 用 `destroyOnHidden` + 页里 `setFieldsValue` 先于开弹的时序(与 B11 同,若有 antd 未挂载告警留 B12 实点)。
 - [x] **C2 选择器族** — 完成(C2a `71e0bc5`:ApiSelect/UserSelect/OrgTreeSelect;C2b `9798216`:UserPicker)。`ApiSelect`(远程分页 + 防抖 + 竞态守卫,逻辑抽 `useRemoteOptions` hook)、`UserSelect`、`OrgTreeSelect`(扁平→树用 `utils/tree`,含子树排除)、`UserPicker` 三面板弹窗(命令式 `open(ids)`)。变异门 C2a 13/13 + C2b 10/10 全致死;四件套 + `antd lint` 全绿。**有意裁剪**:UserPicker 只做每行「添加」,批量勾选待 DataTable 支持 rowSelection 时补。review lane 待开。
 - [x] **C3 展示件** — 完成(C3a `98968b9`:图标基建 + AppIcon + TenonLogo;C3b `dc01107`:DetailPage + CodeBlock + PasswordStrength)。`AppIcon`(@iconify/react 薄封装 + 4 离线集合基建 `lib/icons.setupIcons`,菜单/模块页占位改真渲染)、`TenonLogo`(内联 SVG 明暗)、`DetailPage`(返回+标题+actions+body)、`CodeBlock`(highlight.js json,维护者裁定引;未注册语言 escapeHtml 降级防 XSS)、`PasswordStrength`(拉 `configApi.passwordPolicy` + 默认兜底)。纯逻辑 `iconName`/`logoColors`/`escapeHtml`/`highlightCode`/`computeChecks`/`computeStrength`/`buildRules` 抽出。**变异 C3a 6/6 + C3b 16/16 全致死**;四件套 + `antd lint` 全绿。**边界裁定**(维护者 Q&A):渲染器基建(@iconify/react + 4 集合)前移进 C3(AppIcon 必需,否则菜单只能占位);C4 缩为**轻量内联 IconPicker**(搜索+网格,不发包)+ 本地 svg glob。**顺带修**:module 页 B7 遗留的废弃 `Tag bordered`(lint 全部改动文件逮到,全库仅此一处)。review lane 待开。
-- [ ] **C4 IconPicker(轻量内联)** — **不发第三个 npm 包**(`tenon-naive-iconify-picker` 是 Naive 专属)。**渲染器基建已在 C3 落地**(`@iconify/react` + 4 离线集合 `ph`/`lucide`/`ep`/`ant-design` 经 `lib/icons.setupIcons` 注册);本条只做**选择器 UI**:搜索框 + 分页/窗口化图标网格 + 本地 `src/assets/svg` glob 注册,消费者是 C8 菜单 / C10 模块编辑表单。**维护者裁定轻量内联**(2026-07-20 Q&A),不做重虚拟化完整移植。
+- [x] **C4 IconPicker(轻量内联)** — 完成(`da7db2c`)。触发器 + 弹窗(搜索 + 集合 Tab + 本地 Tab + cap 300 网格 + "还有 N 个"提示),值契约 `prefix:name`/`local:name`。**去在线 tab**(气隙,对齐 C3 的 `/offline`;Vue 版有在线 iconify 名输入 tab,本版有意砍)。`lib/icons` 扩:`COLLECTIONS`(Tab 列表)、`loadIconNames`(懒加载+addCollection+排序名,按前缀缓存)、`sortedIconNames`/`svgToIcon` 纯逻辑、本地 svg 模块级注册(`src/assets/svg/*.svg` eager glob → `addIcon 'local:<name>'`,star.svg 从 web/ 拷来)。补 `common.clear`(zh+en)。**消费者是 C8 菜单 / C10 模块编辑表单(尚未建),组件先行**。**变异 14/14 全致死**;四件套 + `antd lint` 全绿,vitest 361/361。review lane 待开。
 - [ ] **C5 上传 + 富文本 + 图表** — `FileUpload`(antd `Upload customRequest` + `src/utils/chunkUpload.ts` 分片/秒传/续传 —— 该 util R4 推迟,本条一并搬进 `web-react/src/utils/`)、`MarkdownEditor`(`md-editor-rt`)、`Chart`(直接 `echarts.init`+`useEffect`,跟随主题重绘,不加 wrapper 依赖)。
 - [ ] **C6 标准列表页批** — `position`(可编辑 Sort 排序原型)、`notice`、`session`、`file`、`recycle`、`cache`、`monitor`。**照 B11 的 `<DataTable>` + `userForm.ts` 拆分范式**(纯逻辑抽出变异钉、页面只接线)。
 - [ ] **C7 日志三页** — `log/op` `log/login` `log/exception`。时间范围筛选用 `search:{transform: v => ({startTime:v?.[0], endTime:v?.[1]})}`。
@@ -119,6 +119,24 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · C4 轻量内联 IconPicker(`da7db2c`)
+
+建在 C3 的 `@iconify/react/offline` + 4 集合基建上。**去在线 tab**:Vue 版有个"在线"tab(自由输入任意 iconify 名、`navigator.onLine` 提示),对气隙自包含模板是反模式,砍掉——本版只离线集合 + 本地 svg。
+
+- **`lib/icons` 扩展**:`COLLECTIONS`(Tab 元数据)、`loadIconNames(prefix)`(懒加载 JSON + `addCollection` + `sortedIconNames`,按前缀缓存;与 setupIcons 幂等叠加,import() 同缓存 JSON 只下一次)、`sortedIconNames`/`svgToIcon` 抽纯逻辑、本地 svg 模块级注册(`import.meta.glob('/src/assets/svg/*.svg', {?raw,eager}')` → `svgToIcon` → `addIcon 'local:<name>'`)。`star.svg` 从 web/ 拷入。
+- **`IconPicker`**:触发器(AppIcon 当前图标 + 值 + 清空)开 antd Modal,内 Input 搜索 + Tabs(4 集合 + 本地)+ `filterNames` 过滤 + cap 300 网格 + overflow "还有 N 个"。受控 `value`/`onChange`,值 `prefix:name`/`local:name`。
+- **`common.clear`**(zh+en)补齐——清空按钮 aria-label 要它,原来 `clear` 只在 `userPicker`/`log` 下,`common.clear` 不存在(spec 里 aria-label 渲成字面量 `common.clear` 才发现,先写断言逼出的缺键)。
+
+**判据全绿**:`tsc` 0、`oxlint` 0、`antd lint` 0(IconPicker 的 Modal `width`/`destroyOnHidden`、Tabs `items`/`type`/`size`、Input `allowClear`/`prefix` 均 v6 无废弃)、全量 `vitest` 361/361(345→361,+16)、`vite build` OK。
+
+**变异 14/14 全致死**(lib/icons 6 + IconPicker 8;预测 `$JOB/tmp/c4-mutation-predictions.md`)。两处预测≠实测:
+- **M-IP3 多杀 5 条**(预测 1、实测 6):`filterNames` 空 keyword 分支 `: names`→`: []` 后,**所有**用空 keyword 渲染网格的组件用例(开弹窗/点选/搜索/本地/cap)全红——它们都靠 `filterNames(names,'')` 返全量。变紧非漏网。
+- M-IP4/IP5 预测按"断言数"、电池按"失败用例数"计,非真差异。
+
+**取舍/如实记**:①IconPicker 组件测 mock 掉 `@/lib/icons`(避在测试里加载真实大 icons.json),`lib/icons.spec` 另测真 lib(svgToIcon/sortedIconNames/getLocalIconNames→star/loadIconNames 未知前缀→[]/AppIcon 渲 local:star 端到端);真集合加载+cap 在 dev/build 与 B12 实点。②pick 关窗断回调契约不断 DOM(happy-dom 无过渡,同 C1 FormContainer)。③Vue 侧 `iconPicker.online`/`onlinePlaceholder`/`offlineHint`/`use` 键在 React 版无消费者,留着不删(两模板本可分叉;删了徒增 en 镜像 churn)。
+
+**下一条**:开 review lane 审 C4(base `dev`、隔离 worktree);之后进 C5(上传 + 富文本 + 图表)。
 
 ### 2026-07-20 · C3 review 处置(review-c3 lane:REQUEST-CHANGES → 1 HIGH 已修 + 1 LOW 采纳)
 
