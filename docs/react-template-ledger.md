@@ -120,6 +120,21 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · C2a 选择器族上半(ApiSelect / UserSelect / OrgTreeSelect)
+
+`71e0bc5`。C2 拆两轮:本轮三个 select 组件,`UserPicker`(三面板弹窗,依赖 DataTable)留 C2b。C2 复选框待 C2b + review 后再勾。
+
+**判据全绿**:`tsc` 0、`oxlint` 0、`antd lint` 三文件全 0 deprecated、`vitest` 301/301(+17)、`vite build` OK。
+
+**变异 13 处,全部致死,无存活**(预测 `$JOB/tmp/c2a-mutation-predictions.md`)。一处预测≠实测:
+- **M-AS4 少算**(预测 1、实测 3):把 `if (immediate) void load('')` 改成"总是加载",连带红了**所有** `immediate:false` 用例(防抖、非 remote 两条也用 immediate:false 起手)——变紧不是漏网。
+
+**设计**:①`ApiSelect` 把 load/竞态/防抖/immediate 逻辑抽成 `useRemoteOptions` hook,renderHook 直接测——竞态守卫用"两次 load 交错落地、旧的晚到不覆盖新的"确定性钉死,不趟 antd Select DOM;②`fetch` 存 ref:父常传内联 fetch(每渲染新引用),进 effect 依赖会让 immediate 反复触发,ref 化只读最新;③reloadOn 值不进 load、只作 effect 触发依赖。
+
+**antd v6 坑(这次上来就 lint 全部文件,C1 教训生效,当场逮住)**:Select 的 `filterOption`/`optionFilterProp`/`onSearch` 顶层属性 v6 废弃,收进 `showSearch` **对象**(`showSearch={{ filterOption, optionFilterProp, onSearch }}`);TreeSelect `treeNodeFilterProp` 同废——OrgTreeSelect 本就没默认开搜索(对齐 Vue),索性删掉该 prop,消费者要搜自己经 rest 传 v6 的 `showSearch` 对象。
+
+**下一条 C2b**:`UserPicker`(机构树 + 可选用户 DataTable + 已选列表 三面板,`open(ids)` 命令式;spec 需 mock DataTable 绕 pro-components vitest 墙)。C2b 落地后开 review lane 审整个 C2。
+
 ### 2026-07-20 · C1 review 处置(review-c1 lane:APPROVE + 1 LOW)
 
 **APPROVE,0 CRIT/HIGH/MED,1 LOW。**opus 独立 lane 在隔离 worktree 里评审 + 实测(检出 c727934、junction 复用 primary node_modules、实验后还原);我另核 `git diff` 只含本次修复、无泄漏,并移除遗留 worktree(`git worktree remove`,B11 那次泄漏教训的复查)。lane 跑过的对抗性验证:①`antd info --detail` 逐条坐实三处 v6 替换名正确且语义等价(`size` 收 number、`mask.closable`、`destroyOnHidden`);②变异掉 `toDictOptions` 的 enabled 过滤 → DictSelect render 测试真转红(非空转);③隔离复现 `setFieldsValue` 先于开弹 + `destroyOnHidden` 时序 → add/edit 回显正常,B12 延期成立;④`extraRef` 透传护栏重构后存活;⑤`shouldCloseAfterConfirm` 六路 + loading 四条关闭途径逐一核对无误。
