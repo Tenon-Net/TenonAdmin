@@ -104,7 +104,25 @@ describe('ButtonManager', () => {
     fireEvent.change(titleInput, { target: { value: '导出' } })
     fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
     await waitFor(() => expect(menuApi.add).toHaveBeenCalledWith(expect.objectContaining({
-      parentId: 2, type: MenuType.Button, title: '导出', moduleId: null,
+      // 全量:含表单未渲染但 setFieldsValue 注入的 path/component/icon/visible(LOW-1 修复,不抹空)
+      parentId: 2, type: MenuType.Button, title: '导出', moduleId: null, path: '', component: '', icon: '', visible: true,
     })))
+  })
+
+  it('批量中途失败:已成功的从待建列表剔除 + onChanged,重试不重复', async () => {
+    vi.mocked(menuApi.add).mockResolvedValueOnce(88).mockRejectedValueOnce(new Error('dup')) // 第 2 条失败
+    renderBM() // 无 appPrefix → 未用路由 = [DELETE sys/user/1, POST biz/order]
+    await screen.findByText('GET:/api/v1/sys/user')
+    fireEvent.click(screen.getByText('从路由批量添加'))
+    await waitFor(() => expect(screen.getByText('DELETE /api/v1/sys/user/1')).toBeTruthy())
+    const boxes = screen.getAllByRole('checkbox')
+    fireEvent.click(boxes[0]) // DELETE(先建、成功)
+    fireEvent.click(boxes[1]) // POST biz(后建、失败)
+    fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
+    await waitFor(() => expect(menuApi.add).toHaveBeenCalledTimes(2))
+    expect(onChanged).toHaveBeenCalled() // 失败也刷新父树(让已成功项从 usedCodes 消失)
+    // 已成功的 DELETE 从待建列表剔除、失败的 POST 保留 → 重试不会重复创建 DELETE
+    await waitFor(() => expect(screen.queryByText('DELETE /api/v1/sys/user/1')).toBeNull())
+    expect(screen.getByText('POST /api/v1/biz/order')).toBeTruthy()
   })
 })

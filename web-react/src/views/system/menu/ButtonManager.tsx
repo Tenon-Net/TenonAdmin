@@ -108,7 +108,10 @@ export function ButtonManager({ menu, tree, routes, appPrefix, onClose, onChange
     setEditOpen(true)
   }
   const save = async () => {
-    const v = await form.validateFields() // 校验失败抛 → FormContainer 不关
+    await form.validateFields() // 校验(title 必填)失败抛 → FormContainer 不关
+    // 用 getFieldsValue(true) 取全量:表单只渲染 5 个字段,但 openAdd/openEdit 经 setFieldsValue 注入了
+    // path/component/icon/visible(未渲染)。只回收已注册字段会漏带这四项 → 后端按默认落库抹空(违反全量 update 契约)。
+    const v = form.getFieldsValue(true)
     try {
       // parentId 取表单值(而非当前弹窗 menuId)——「所属页面」改了就是移动:保存后本列表少一条、目标页面徽标 +1。
       await (editingId === null
@@ -157,6 +160,7 @@ export function ButtonManager({ menu, tree, routes, appPrefix, onClose, onChange
   const saveBatch = async () => {
     const picked = batchRows.filter((r) => r.checked)
     if (!picked.length) return false // 未选任何路由,别关弹窗
+    const saved: string[] = []
     try {
       // ponytail: 逐个 add,量级大到卡顿再考虑后端批量端点
       for (const r of picked) {
@@ -164,10 +168,13 @@ export function ButtonManager({ menu, tree, routes, appPrefix, onClose, onChange
           parentId: menu?.id ?? 0, type: MenuType.Button, title: r.title.trim() || r.method,
           permission: r.code, sort: 0, enabled: true, moduleId: null, path: '', component: '', icon: '', visible: true,
         })
+        saved.push(r.code)
       }
       message.success(t('menu.saved'))
       onChanged()
     } catch (e) {
+      // 中途失败:把已建的从待建列表剔除并刷新父树,免用户重试时把已成功的行重复创建。
+      if (saved.length) { setBatchRows((rows) => rows.filter((r) => !saved.includes(r.code))); onChanged() }
       message.error(translateError(e))
       return false
     }
