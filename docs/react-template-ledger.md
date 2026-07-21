@@ -120,6 +120,13 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · C1 review 处置(review-c1 lane:APPROVE + 1 LOW)
+
+**APPROVE,0 CRIT/HIGH/MED,1 LOW。**opus 独立 lane 在隔离 worktree 里评审 + 实测(检出 c727934、junction 复用 primary node_modules、实验后还原);我另核 `git diff` 只含本次修复、无泄漏,并移除遗留 worktree(`git worktree remove`,B11 那次泄漏教训的复查)。lane 跑过的对抗性验证:①`antd info --detail` 逐条坐实三处 v6 替换名正确且语义等价(`size` 收 number、`mask.closable`、`destroyOnHidden`);②变异掉 `toDictOptions` 的 enabled 过滤 → DictSelect render 测试真转红(非空转);③隔离复现 `setFieldsValue` 先于开弹 + `destroyOnHidden` 时序 → add/edit 回显正常,B12 延期成立;④`extraRef` 透传护栏重构后存活;⑤`shouldCloseAfterConfirm` 六路 + loading 四条关闭途径逐一核对无误。
+
+- **[LOW 已修 `70071ff`] DictTag 用了废弃的 Tag `bordered`** —— v6.5.1 `bordered` 废弃、`variant="filled"`(默认)即无边框,`bordered={false}` 是只打告警的 no-op。根因是**流程漏**:清 v6 废弃时我只 `antd lint` 了 FormContainer 一个文件,漏扫 DictTag。已删,并**补扫全部 5 个 C1 文件 → 零 deprecated**。教训:`antd lint` 要扫本轮**所有**改动文件,别只扫"我觉得有风险的那个"。
+- **[LOW 未采纳] `handleConfirm`/`onSwitch` 无 `if (loading) return` 前置闸** —— lane 自评低置信、实测经真实 DOM 事件**不可达**(两次 click 是独立 tick,React 事件间会刷新 disabled),且与 B11 同款。加一道不可达的冗余闸属 YAGNI + 会引入无测试覆盖的逻辑,**有意不加**;真观察到双提交再补。
+
 ### 2026-07-20 · C1 字典三件套 + 表单容器(共享组件层第一批）
 
 四个组件 + 各自 spec，纯逻辑抽出变异钉死。`804b3db`（组件）+ `b826df7`（user 页退成共享组件）。
