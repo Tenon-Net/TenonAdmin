@@ -15,9 +15,10 @@ export function filterNames(names: string[], keyword: string): string[] {
 }
 
 export interface IconPickerProps {
-  /** 值契约:`prefix:name`(如 `ph:folder`)或 `local:name`;空串 = 未选。受控。 */
-  value: string
-  onChange: (v: string) => void
+  /** 值契约:`prefix:name`(如 `ph:folder`)或 `local:name`;空串 = 未选。受控。
+   *  value/onChange 声明为可选,以便直接放进 antd `Form.Item`(由 Form 运行时注入)。 */
+  value?: string
+  onChange?: (v: string) => void
   placeholder?: string
   clearable?: boolean
 }
@@ -68,7 +69,7 @@ export function IconPicker({ value, onChange, placeholder, clearable = true }: I
   const iconId = (name: string) => `${active}:${name}`
 
   function pick(name: string) {
-    onChange(iconId(name))
+    onChange?.(iconId(name))
     setOpen(false)
   }
 
@@ -98,14 +99,14 @@ export function IconPicker({ value, onChange, placeholder, clearable = true }: I
             aria-label={t('common.clear')}
             onClick={(e) => {
               e.stopPropagation() // 触发器本身可点(开弹窗),清空不该顺带开弹窗
-              onChange('')
+              onChange?.('')
             }}
             onKeyDown={(e) => {
               // 键盘可达:清空自己接 Enter/Space,并 stop 冒泡免触发外层触发器的开弹窗。
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
                 e.stopPropagation()
-                onChange('')
+                onChange?.('')
               }
             }}
           >
