@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { App as AntdApp } from 'antd'
 import '@/locales' // t() 要真文案
-import { userApi, roleApi } from '@/api'
+import { userApi, roleApi, dictApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
 /**
@@ -31,9 +31,11 @@ function mount() {
 
 beforeEach(() => {
   captured = {}
-  // 角色下拉在 mount 时拉取:桩掉,免未处理 rejection 噪音。
+  // mount 时的三处副作用取数全桩掉,免真发 openapi-fetch 请求打出 ECONNREFUSED 噪音
+  // (被各自 .catch 吞掉、测试仍绿,但噪音会盖住真错,且将来 vitest 收紧未处理错误就会红)。
   vi.spyOn(roleApi, 'page').mockResolvedValue({ items: [], total: 0 })
   vi.spyOn(userApi, 'page').mockResolvedValue({ items: [], total: 0 })
+  vi.spyOn(dictApi, 'items').mockResolvedValue([]) // useDictOptions('gender')
 })
 afterEach(() => {
   cleanup()

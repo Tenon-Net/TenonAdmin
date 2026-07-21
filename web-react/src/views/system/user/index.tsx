@@ -63,6 +63,8 @@ export default function UserPage() {
 
   // ── 分页取数:ProTable 搜索表单值(unknown)→ userApi.page 的强类型入参 ──
   // account/name 来自搜索表单(列未设 search:false);sortField/sortOrder 来自列排序(toProTable 已映)。
+  // 有意**不 memo**:pro-table 经 useRefFunction 读 request,父组件重渲染(开弹窗/saving/roleOptions)不会触发重取;
+  // 反倒是给它加 useCallback + 错误的依赖数组才会变成真 footgun。别"顺手优化"成 memo。
   const fetchUsers: PageFetcher<UserItem> = (q) =>
     userApi.page({
       page: q.page,
