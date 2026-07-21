@@ -92,7 +92,23 @@ Vue 3 `<script setup>` + Naive UI + Pinia (persisted) + vue-router + vue-i18n + 
 
 ## CI
 
-`.github/workflows/backend-ci.yml` runs build + test on a `[sqlite, mysql]` matrix (`fail-fast: false`) for pushes/PRs touching `backend/**`. `backend-release.yml` handles NuGet packaging. Keep the SQLite and MySQL test legs green — `TestDb.cs` derives isolated DBs per test from the DB-type env vars.
+`.github/workflows/backend-ci.yml` runs on pushes/PRs touching `backend/**`, `templates/**`, or the workflow itself, with two jobs:
+- **`build-test`** — build + test on a `[sqlite, mysql, sqlserver, postgres]` matrix (`fail-fast: false`, so one red leg doesn't mask the others). MySQL/SqlServer/PostgreSQL/Redis service containers start on *every* leg; `TestDb.cs` derives an isolated DB per test from the DB-type env vars. `TENON_TEST_REDIS` is set on all legs, so the Redis contract tests actually run instead of silently skipping. **On push/PR the SqlServer leg runs only a dialect-sensitive subset** (`TEST_FILTER` in the Test step) — the other three legs run the full suite; see the SqlServer subsection below.
+- **`template-smoke`** — `dotnet new tenon-app` → restore → build, via `templates/smoke-test.ps1` (the same script used for local manual runs). Catches the consumer's very first command breaking while kernel tests are all green.
+
+`docker-smoke.yml` also fires on `backend/**` (and `web/**`), so a backend PR shows two more checks: **`single`** (image comes up, creates tables, seeds, issues a token) and **`multi`** (two replicas behind Caddy — cross-replica force-logout, lockout threshold, cluster-wide rate limit, distinct `WorkerId`, real client IP). Those guarantees only surface with two replicas online, so don't collapse `multi` into `single`.
+
+`backend-release.yml` handles NuGet packaging. Expect **7 checks** on a backend-only PR; keep all of them green.
+
+### The sqlserver leg: dialect-sensitive subset on push/PR, full nightly
+
+The full SqlServer suite ran **40–60 min** (measured 2026-07-20: 2302 / 2466 / 2748 / 3000 / 3124 / 3277 / 3335 / 3514s, all green) vs 3–5 min for the other three legs. It was never hung — just slow — so don't add a short `timeout-minutes` (under ~90 would turn a green leg red), and don't cancel a nightly SqlServer run for "looking stuck".
+
+**Why it's slow (diagnosed, not guessed).** `TestDb` gives every test its own database — near-free on SQLite (a file), MySQL (a directory), PostgreSQL (a `template1` copy), brutal on SQL Server. A micro-benchmark against a real SqlServer (network latency 1.5 ms, so not a network artifact) put **85% of the per-database cost in `CodeFirst.InitTables`**: ~20 s/db, of which ~17.6 s is the 23 `CREATE TABLE`/`CREATE INDEX` statements themselves (each auto-committed → its own transaction-log flush), only ~2.4 s is existence-check round-trips, and `CREATE DATABASE`/`DROP` are rounding error. ×~200 databases ≈ the whole leg.
+
+**What was tried and rejected** (don't re-attempt without new evidence): tmpfs on `/var/opt/mssql` and a targeted `ClearPool` — both *measured as no-ops*. Building the schema once and cloning per test — `DBCC CLONEDATABASE` is fragile under repeated cloning of one source (transient "database may be offline"), and `BACKUP`/`RESTORE` per test was ruinously slow on the test instrument. The schema DDL is disk-bound and there's no cheap per-database shortcut.
+
+**The resolution** is to stop rebuilding ~200 SqlServer schemas on every PR. On push/PR the SqlServer leg runs only the SqlServer-*specific* surface (nvarchar Chinese, boolean-predicate global filters, T-SQL DDL/bootstrap, Storageable seed SQL) via `TEST_FILTER` — DB-agnostic business logic is already exercised by the full sqlite/mysql/postgres legs on the same PR. The **full** SqlServer suite runs nightly (the `schedule` trigger), so nothing is permanently uncovered — a test outside the subset regresses into the nightly run, not into a blind spot. Measurement discipline that cost real time to learn: the baseline's own spread (2302–3514s, 1.5×) means **a single CI run cannot resolve anything smaller than a ~50% change** — repeat runs or measure locally.
 
 ## Agent skills
 

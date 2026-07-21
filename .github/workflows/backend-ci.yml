@@ -7,6 +7,11 @@ on:
     paths: ['backend/**', 'templates/**', '.github/workflows/backend-ci.yml']
   pull_request:
     paths: ['backend/**', 'templates/**', '.github/workflows/backend-ci.yml']
+  # Nightly full run: every DB leg runs the WHOLE suite, including the slow SqlServer full pass (40-60 min)
+  # that push/PR deliberately skips (see the SqlServer filter in the Test step). schedule ignores `paths`,
+  # so this always fires — the safety net that catches anything the PR-time SqlServer subset doesn't cover.
+  schedule:
+    - cron: '0 18 * * *'   # 02:00 Asia/Shanghai
 
 jobs:
   build-test:
@@ -120,7 +125,21 @@ jobs:
           TENON_TEST_POSTGRESQL: ${{ matrix.db == 'postgres' && 'Server=127.0.0.1;Port=5432;User ID=postgres;Password=postgres;' || '' }}
           # Gate switch for the Redis contract tests (runs on every leg: it's DB-independent, and running it a few extra times only costs a few seconds).
           TENON_TEST_REDIS: 127.0.0.1:6379
-        run: dotnet test backend/TenonAdmin.slnx -c Release --no-build
+          # SqlServer full suite builds ~200 isolated databases, each replaying 23 CREATE TABLE whose per-statement
+          # log flush dominates — 40-60 min on every push/PR (measured 2026-07-20; see CLAUDE.md "CI"). On push/PR the
+          # SqlServer leg runs only the dialect-sensitive subset: the SqlServer-SPECIFIC surface (nvarchar Chinese,
+          # boolean-predicate global filters, T-SQL DDL/bootstrap, Storageable seed SQL). DB-agnostic business logic is
+          # already covered by the full sqlite/mysql/postgres legs on the same PR; the full SqlServer suite runs nightly
+          # (schedule) as the net. Rename a class out of this list and it silently drops to nightly-only — not a coverage
+          # hole, just delayed signal. Other legs and the nightly run are unfiltered.
+          TEST_FILTER: ${{ (matrix.db == 'sqlserver' && github.event_name != 'schedule') && 'FullyQualifiedName~DataScopeTests|FullyQualifiedName~SoftDeleteAuditTests|FullyQualifiedName~OrgAuditEntityTests|FullyQualifiedName~SeedUpgradeTests|FullyQualifiedName~RecycleBinTests|FullyQualifiedName~UserCrudTests|FullyQualifiedName~DictCrudTests|FullyQualifiedName~ReplaceabilityTests|FullyQualifiedName~ProductionBootstrapTests' || '' }}
+        run: |
+          if [ -n "$TEST_FILTER" ]; then
+            echo "SqlServer push/PR leg: dialect-sensitive subset only (full SqlServer suite runs nightly)"
+            dotnet test backend/TenonAdmin.slnx -c Release --no-build --filter "$TEST_FILTER"
+          else
+            dotnet test backend/TenonAdmin.slnx -c Release --no-build
+          fi
 
   # The consumer's first command (dotnet new tenon-app → restore → build). Previously had zero automated
   # coverage — so the template kept referencing a package version whose tag was never published, and nobody
@@ -140,3 +159,31 @@ jobs:
       - name: dotnet new tenon-app must restore + build
         shell: pwsh
         run: templates/smoke-test.ps1
+
+  # Nightly safety net has teeth only if someone sees it go red. The push/PR SqlServer leg runs a subset;
+  # the full SqlServer suite runs only in the nightly (schedule) run, so a regression that lands outside the
+  # subset surfaces there — but a scheduled run has no PR author watching it. This job turns a red nightly
+  # into a tracked issue (deduped, so a multi-night outage bumps one issue rather than spamming a new one).
+  # Only fires on scheduled runs: push/PR failures already sit in front of their author.
+  nightly-alert:
+    needs: [build-test, template-smoke]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or bump the nightly-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create nightly-failure --repo "$REPO" --color B60205 \
+            --description "backend-ci nightly full run failed" 2>/dev/null || true
+          body="Nightly \`backend-ci\` failed — this run includes the **full SqlServer suite** that push/PR deliberately skips (see the \`TEST_FILTER\` note in the workflow / CLAUDE.md CI section). A regression may live outside the push/PR SqlServer subset. Run: $RUN_URL"
+          existing=$(gh issue list --repo "$REPO" --state open --label nightly-failure --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$REPO" --body "$body"
+          else
+            gh issue create --repo "$REPO" --title "Nightly backend-ci failed" --label nightly-failure --body "$body"
+          fi
