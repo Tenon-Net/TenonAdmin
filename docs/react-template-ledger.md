@@ -76,7 +76,7 @@
 
 - [x] **C0 从存档搬运剩余条目** — 完成:C3–C12、D2–D5、E6 已从 `archive/web-shared-extract` 的 `docs/react-port-ledger.md` 搬入,**去掉共享层措辞**(`共享 utils/tree`→`utils/tree`;`共享 mix.ts/tokens.css`→本模板 `src/theme`/`src/styles`;`共享 chunkUpload.ts`→`src/utils/chunkUpload.ts`,该 util R4 推迟未搬,C5 时一并补)。**对账**:原 C-list 不含 `user`(=B11 原型)/`login`(=B5)/门户选择页(=B7);C10 的 `module` 是**管理页**(moduleApi CRUD),≠ B7 的门户选择器。已落地页(user)不再重复列。
 - [x] **C1 字典三件套 + 表单容器** — 完成(`804b3db` 组件 + `b826df7` 页改造)。`DictSelect`/`DictTag`(数据基座 B5b 的 `useDictOptions`;antd Tag 用预设语义色串,naive 的 `info`→`processing`)、`FormContainer`(Modal/Drawer 双形态,`onConfirm` owns loading+close,返 false/抛错留窗)、`StatusSwitch`(悲观 + 自动回滚,建在 useConfirm 的 `ask` 上)。纯逻辑 `toDictOptions`/`resolveDictTag`/`shouldCloseAfterConfirm` 抽出变异钉死(**17 处全致死**;1 处空断言 M-SS5 存活→已修)。user 页手写 Modal+Form / 内联 EnabledSwitch / 性别 Select+文案 全部退成共享组件。**antd v6 改名坑**(`tsc` 不红):`maskClosable`→`mask.closable`、Drawer `width`→`size`、`destroyOnClose`→`destroyOnHidden`,已过 `antd lint` 零 deprecated。**推迟**:`web-react/COMPONENTS.md` 留到 E4 文档批(眼下组件靠文件头注自述,现建属过早脚手架);`FormContainer` 用 `destroyOnHidden` + 页里 `setFieldsValue` 先于开弹的时序(与 B11 同,若有 antd 未挂载告警留 B12 实点)。
-- [ ] **C2 选择器族** — `ApiSelect`(远程分页 + 防抖 + 竞态守卫)、`UserSelect`、`OrgTreeSelect`(扁平→树用 `utils/tree`,含子树排除)、`UserPicker` 弹窗。
+- [x] **C2 选择器族** — 完成(C2a `71e0bc5`:ApiSelect/UserSelect/OrgTreeSelect;C2b `9798216`:UserPicker)。`ApiSelect`(远程分页 + 防抖 + 竞态守卫,逻辑抽 `useRemoteOptions` hook)、`UserSelect`、`OrgTreeSelect`(扁平→树用 `utils/tree`,含子树排除)、`UserPicker` 三面板弹窗(命令式 `open(ids)`)。变异门 C2a 13/13 + C2b 10/10 全致死;四件套 + `antd lint` 全绿。**有意裁剪**:UserPicker 只做每行「添加」,批量勾选待 DataTable 支持 rowSelection 时补。review lane 待开。
 - [ ] **C3 展示件** — `DetailPage`、`CodeBlock`、`PasswordStrength`(拉实时密码策略 `configApi.passwordPolicy`)、`AppIcon`、`TenonLogo`。
 - [ ] **C4 IconPicker(内联)** — **不发第三个 npm 包**(`tenon-naive-iconify-picker` 是 Naive 专属)。`@iconify/react` + 现有 4 个离线集合(`ph`/`lucide`/`ep`/`ant-design`)+ `src/assets/svg` glob。
 - [ ] **C5 上传 + 富文本 + 图表** — `FileUpload`(antd `Upload customRequest` + `src/utils/chunkUpload.ts` 分片/秒传/续传 —— 该 util R4 推迟,本条一并搬进 `web-react/src/utils/`)、`MarkdownEditor`(`md-editor-rt`)、`Chart`(直接 `echarts.init`+`useEffect`,跟随主题重绘,不加 wrapper 依赖)。
@@ -119,6 +119,19 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · C2b UserPicker(选择器族下半,C2 完结)
+
+`9798216`。三面板弹窗:左机构树 / 中可选用户 DataTable / 右已选列表。命令式 `open(ids)` 经 `forwardRef`+`useImperativeHandle` 暴露,`onConfirm(ids)` 回调;固定 modal 形态。
+
+**判据全绿**:`tsc` 0、`oxlint` 0、`antd lint` 0 deprecated、`vitest` 314/314(+13)、`vite build` OK。
+
+**变异 10 处(8 纯逻辑 + 2 接线),全部致死**(预测 `$JOB/tmp/c2b-mutation-predictions.md`)。一处预测≠实测:
+- **M-UP8 少算**(预测 1、实测 2):去掉 `hydrateSelected` 的占位兜底(`map.get(id) ?? {占位}` → `map.get(id)`),不光纯逻辑测红,`open([2,9])→confirm` 组件测也红(selected 里混进 undefined,confirm 出 `[2, undefined]`)——变紧不是漏网。
+
+**设计/取舍**:①纯逻辑(orgIdFromKey/addUsers/removeUser/filterSelected/hydrateSelected)与组件同文件导出(避 Windows 大小写文件名冲突 `UserPicker.tsx` vs `userPicker.ts`;与 C1 `resolveDictTag` 同款),spec 一文件测纯逻辑 + 接线;②组件测 mock 掉 `@/components/DataTable` 绕 pro-components vitest 墙,命令式 `open` 经 ref 驱动,`open(ids)→confirm` 走全链路验 hydrate;③`orgIdFromKey` 把 Vue 版 `key && key !== 0` 的冗余(`key` 为 0 已 falsy)简化成 `key || undefined`,并注明**别写 `?? undefined`**(会把「全部」根 key 0 当有效部门下传)——变异 `||`→`??` 正好钉住这条。④**有意不做批量勾选**:依赖 DataTable 尚未有的 rowSelection + 当前页数据,如实记入代码注释与 commit,待批量删除页需要时统一给 DataTable 加。
+
+**下一条**:开 review lane 审整个 C2(C2a + C2b),base dev、隔离 worktree;之后进 C3。
 
 ### 2026-07-20 · C2a 选择器族上半(ApiSelect / UserSelect / OrgTreeSelect)
 
