@@ -8,14 +8,14 @@ import { menuApi, moduleApi, roleApi, userApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { DataScopeType, type SysRole } from '@/types/api'
 
-const { confirmMock, gmtOnChange, upOpen, upConfirmRef } = vi.hoisted(() => ({ confirmMock: vi.fn(), gmtOnChange: { fn: null as null | ((ids: number[]) => void) }, upOpen: vi.fn(), upConfirmRef: { fn: null as null | ((ids: number[]) => void) } }))
+const { confirmMock, gmtOnChange, upOpen, upConfirmRef, reloadMock } = vi.hoisted(() => ({ confirmMock: vi.fn(), gmtOnChange: { fn: null as null | ((ids: number[]) => void) }, upOpen: vi.fn(), upConfirmRef: { fn: null as null | ((ids: number[]) => void) }, reloadMock: vi.fn() }))
 vi.mock('@/hooks/useConfirm', () => ({ useConfirm: () => ({ confirm: confirmMock, run: vi.fn(), ask: vi.fn() }) }))
 
 // mock DataTable(撞 pro-components 墙):捕 columns/toolbar/rowSelection。
 let dt: { columns?: ProColumns<SysRole>[]; toolbar?: ReactNode } = {}
 vi.mock('@/components/DataTable', async () => {
   const { forwardRef: fr, useImperativeHandle: ui } = await import('react')
-  return { DataTable: fr(function MockDT(props: typeof dt, ref: React.Ref<{ reload: () => void }>) { dt = props; ui(ref, () => ({ reload: vi.fn() })); return <div>{props.toolbar}</div> }) }
+  return { DataTable: fr(function MockDT(props: typeof dt, ref: React.Ref<{ reload: () => void }>) { dt = props; ui(ref, () => ({ reload: reloadMock })); return <div>{props.toolbar}</div> }) }
 })
 // mock 重子件:GrantMenuTable(捕 onCheckedChange 供触发 saveMenus)、UserPicker(捕 open/onConfirm)、OrgTreeSelect。
 vi.mock('./GrantMenuTable', () => ({ GrantMenuTable: (p: { onCheckedChange: (ids: number[]) => void }) => { gmtOnChange.fn = p.onCheckedChange; return <div data-testid="gmt" /> } }))
@@ -39,7 +39,7 @@ const callRender = (c: ProColumns<SysRole>, r: SysRole): AnyEl => (c.render as (
 
 beforeEach(() => {
   dt = {}; gmtOnChange.fn = null; upConfirmRef.fn = null
-  confirmMock.mockReset(); upOpen.mockReset()
+  confirmMock.mockReset(); upOpen.mockReset(); reloadMock.mockClear()
   confirmMock.mockImplementation(async (o: { action: () => Promise<unknown> }) => { await o.action(); return true })
   vi.spyOn(roleApi, 'update').mockResolvedValue(true)
   vi.spyOn(roleApi, 'add').mockResolvedValue(88)
@@ -67,6 +67,16 @@ describe('RolePage 接线', () => {
     await waitFor(() => expect(dt.columns).toBeTruthy())
     await callRender(col('enabled'), ROLES[0]).props.request(false)
     expect(roleApi.update).toHaveBeenCalledWith(1, { code: 'admin', name: '管理员', sort: 0, enabled: false, remark: '内置' })
+  })
+
+  it('状态列:切换成功回调必须重拉表格(悲观开关回显真实态)', async () => {
+    // 漏 onChange={reload} 时:sw.props.onChange 为 undefined → toBeTruthy 红;调用 undefined 亦红。
+    mount()
+    await waitFor(() => expect(dt.columns).toBeTruthy())
+    const sw = callRender(col('enabled'), ROLES[1]) // 访客 enabled=false
+    expect(sw.props.onChange).toBeTruthy()
+    sw.props.onChange(true)
+    expect(reloadMock).toHaveBeenCalled()
   })
 
   it('状态列:无 PUT 权限置灰', async () => {

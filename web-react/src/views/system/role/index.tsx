@@ -178,8 +178,9 @@ export default function RolePage() {
     { title: t('role.sort'), dataIndex: 'sort', search: false, width: 80 },
     {
       title: t('common.status'), dataIndex: 'enabled', search: false, width: 90,
+      // StatusSwitch 悲观受控(checked 绑 value):成功后必须 onChange={reload} 重拉,否则行数据不变、开关视觉回弹误导管理员。对齐 module 页。
       render: (_, r) => (
-        <StatusSwitch value={r.enabled} disabled={!has('PUT:/api/v1/sys/role/{id}')} request={(next) => roleApi.update(r.id, { ...roleToInput(r), enabled: next })} />
+        <StatusSwitch value={r.enabled} disabled={!has('PUT:/api/v1/sys/role/{id}')} request={(next) => roleApi.update(r.id, { ...roleToInput(r), enabled: next })} onChange={reload} />
       ),
     },
     { title: t('role.remark'), dataIndex: 'remark', search: false, ellipsis: true, render: (_, r) => r.remark || '—' },
@@ -205,7 +206,7 @@ export default function RolePage() {
         )
       },
     },
-  ], [t, has, openEdit, askDelete, openMenus, openScope, openUsers])
+  ], [t, has, reload, openEdit, askDelete, openMenus, openScope, openUsers])
 
   return (
     <>
@@ -255,7 +256,7 @@ export default function RolePage() {
           </Form.Item>
           {isCustom && (
             <Form.Item label={t('role.customOrgs')}>
-              <OrgTreeSelect multiple value={customOrgIds} onChange={(v) => setCustomOrgIds(v as number[])} placeholder={t('role.customOrgsHint')} style={{ width: '100%' }} />
+              <OrgTreeSelect multiple value={customOrgIds} onChange={(v) => setCustomOrgIds((v as number[]) ?? [])} placeholder={t('role.customOrgsHint')} style={{ width: '100%' }} />
             </Form.Item>
           )}
         </Form>
