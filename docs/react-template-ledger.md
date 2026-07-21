@@ -122,6 +122,17 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-21 · C9 review lane(独立 opus,隔离 worktree)→ REQUEST-CHANGES(1 HIGH)→ 修复 `632f9ed` → 复核 APPROVE
+
+**独立 lane 价值再兑现**:抓到一个我在 C8b 修过的同类缺陷,这次是 HIGH。
+- **HIGH:`saveItem` 漏带隐藏 FK `dictTypeCode`**。item 弹窗只注册 label/value/sort/enabled,`validateFields()` 只回收已注册字段 → 丢掉 openItemAdd/Edit 经 setFieldsValue 注入的 `dictTypeCode`。reviewer 追 `@rc-component/form`(validateFields 只解析已注册 field entities)+ 对后端 `DictService.cs` 核实:**新增** → 后端拿 record 默认 `""` 建**孤儿项** + `loadItems(undefined)` 右栏空白 + 假成功 toast;**编辑** → `entity.DictTypeCode = ""` 把项从类型**摘除(数据损坏)**。tsc/lint 全绿(`v` 类型 DictItemInput,`v.dictTypeCode` 编译过但运行时 undefined)。
+- **MEDIUM(HIGH 溜过之因)**:index.spec 无用例开弹窗调 saveType/saveItem → 变异 24/24 全杀却漏这条(「绿证明不了未被执行的代码」的活教材)。
+- **修复 `632f9ed`**:`getFieldsValue(true)` 取全量(与 C8b LOW-1 同法,统一表单-save 取值范式),dictTypeCode 不再漏;补 saveItem/saveType 弹窗 save 测试。变异证伪:退回 `validateFields()` → saveItem 测试精准红(failed=1)。
+- **复核 APPROVE**:reviewer 追 `@rc-component/form useForm.js` 源码证实 getFieldsValue(true) 取 setFieldsValue 注入的整个 store(add/edit 两路 dictTypeCode 均带回)、saveType 未动且本就完整、按引用返回无别名风险、无 stale-key 泄漏、校验失败仍留弹层。判据(修后):tsc 0 / oxlint 0 / dict index spec **10/10** / build OK。
+- reviewer 首轮核过无恙的接缝:onRow/rowClassName 经 pro-components `...rest` 真透传(读库源码,非 C7 死接缝)、竞态守卫(reqIdRef 比 Vue code-compare 更稳,handles A→B→A)、stopPropagation 冒泡序、权限码逐字节、StatusSwitch 悲观 + type reload/item 本地更新。收口:主树 632f9ed 干净,review 隔离 worktree 只读 → 自动清理。
+
+**下一条**:C9 收口,进 **C10 角色 + 模块**。
+
 ### 2026-07-21 · C9 字典主从分栏(`d43cc47`)
 
 主从原型:左=类型 DataTable(CRUD + 点击选中 + active 高亮 + 批删),右=该类型的项(裸 antd Table + CRUD)或空态。任何类型/项增删改后 `invalidate(code)` 失效下拉缓存。按 org 范式:纯逻辑抽 `dictForm.ts`(变异钉),本页接线。
