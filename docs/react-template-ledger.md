@@ -134,7 +134,13 @@
 
 **下一条**:回到 C6b(先补 `useBatchDelete` + DataTable rowSelection,再 notice/file)。
 
-### 2026-07-20 · C6 标准列表页批(进行中:C6a position 已落)
+### 2026-07-20 · C6 标准列表页批(进行中:C6a position、C6b-notice 已落)
+
+**C6b-notice `5373528`**(消息通知管理):发布广播/定向通知 + 分页列表 + 只读 Markdown 查看 + 删除。照 B11 范式:纯逻辑抽 `noticeForm.ts`(`blank` 默认表单、`typeLabelKey`/`typeTagColor` 枚举→文案/色、`receiverValid` 接收范围条件必填),页面 `index.tsx` 只接线(FormContainer 发布弹窗、`Form.useWatch` 驱动的条件 receiverIds 字段带 validator、MarkdownEditor 正文、MarkdownView 查看 modal、Can/useHasPerm 权限门)。
+- **会静默出错的核心 = `receiverValid`**:全体广播(All)免选,定向(Role/User)必须≥1;写反会放行「定向空发」或挡住正常广播。变异钉死其两个分支 + `typeLabelKey`/`typeTagColor` 映射 + `blank` 默认 receiverType。
+- **v6.5.1 坑**:`Select optionFilterProp` 已废,`antd lint` 抓到(tsc 不红),改 `showSearch={{ optionFilterProp: 'label' }}` 对象形。查看走原生 Modal `footer={null}`(信息展示非表单);正文渲染复用 C5 `MarkdownEditor`/`MarkdownView`,XSS 兜底(`setupMarkdown` 全局)已覆盖。
+- **变异 5/5 全致死,预测=实测无缺口**:M-NF1/2(receiverValid 两分支)、M-NF3(typeLabelKey)、M-NF4(typeTagColor)、M-NF5(blank 默认 receiverType)。
+- i18n notice 块两侧本就齐全,无新增键。判据:`tsc` 0 / `oxlint` 0 / `antd lint` 6.5.1 net 0 / 全量 `vitest` **397/397**(+10:noticeForm 6 + index 4)/ `build` OK(53.6s)。happy-dom teardown 中止 XSS 集成测试那次 `https://ex.com/r` fetch 打出 AbortError/NetworkError 栈是 hermetic 配置的正常噪声,非失败(套件 exit 0)。
 
 **C6a `ad5d849`**(position 岗位管理):标准列表 CRUD —— 名称搜索 + 工具栏 + 表格 + 行内启停 + 新增/编辑弹窗。照 B11 范式:纯逻辑抽 `positionForm.ts`(`blankForm` + `rowToInput`),页面 `index.tsx` 只接线(DataTable 列 / StatusSwitch / FormContainer / Can / useConfirm)。
 - **唯一会静默出错的接缝 = `rowToInput`**:岗位无独立启停端点,行内 StatusSwitch 与编辑回填都走**全量 update**,全量替换语义下漏一个字段就抹空该行 → 单测断四字段全映射且不漏带 id/createTime。`blankForm` 默认值(启用/sort 0)与 fetcher 非串搜索过滤一并钉。
@@ -142,7 +148,7 @@
 - i18n position 块(增改共用 code 禁改、codePlaceholder 等)两侧本就齐全,无新增键。路由 glob `/src/views/**/*.tsx` 覆盖,菜单指到即可达。
 - 判据:`tsc` 0 / `oxlint` 0 / `antd lint` 6.5.1 net 0 / 全量 `vitest` **386/386**(+6)/ `build` OK。
 
-**下一条 C6b**:`notice`(复用 C5 的 `MarkdownEditor`/`MarkdownView`)+ `file`(复用 C5 的 `FileUpload`/分片)。**已盘前置件**(下轮直接开工):
+**下一条 C6b-file**(notice 已落 → 见上):`file`(复用 C5 的 `FileUpload`/分片)。**已盘前置件**(下轮直接开工):
 - FileUpload 齐(`chunked`/`onUploaded`/继承 UploadProps 的 `showFileList`、支持 children 触发器);NoticeType/ReceiverType enum、NoticePublishInput/SysNotice/SysFile、noticeApi(page/publish/remove)、fileApi(page/upload/download/remove/batchRemove/chunk*)全齐。
 - **缺件要先补**:①`useBatchDelete` hook(web-react 无,file 批删要用 —— `{checkedKeys,hasSelection,run}` 包 remove+confirm+refresh);②`DataTable` 未暴露 rowSelection(file 选择列要,需扩 B10 薄封装,加受控 `rowSelection` 透传)。故 C6b 宜再拆 **C6b-notice / C6b-file**。
 - notice 可抽的纯逻辑:`blank` 默认、`typeLabel`/`tagType`(enum→文案/色)、receiver 校验(`receiverType===All || receiverIds.length>0`);file 可抽:`formatSize`(字节→人类可读)、download blob 流。这些是变异钉的落点。
