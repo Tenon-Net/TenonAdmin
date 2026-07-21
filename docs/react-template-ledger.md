@@ -120,6 +120,16 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · C3 review 处置(review-c3 lane:REQUEST-CHANGES → 1 HIGH 已修 + 1 LOW 采纳)
+
+opus 独立 lane 在隔离 worktree(junction 复用 primary node_modules)审 C3a+C3b;我另核主树 C3 三提交完好、移除遗留 worktree。lane 实测全绿(`tsc`/`oxlint`/`antd lint` v6.5.1 四文件/`vitest` 30/30/`build`),并**独立复现 3 处变异**坐实判据非回声(`iconName` `||`→`??`、`highlightCode` 丢转义、`computeStrength` `<=1`→`<1` 各自红对的用例),另逐一核对 CodeBlock XSS 边界、PasswordStrength 与 Vue 逐字对齐、`code.css` 暗色选择器与 `useAntdTheme` 打的 `data-theme` 一致、`.ts`+createElement 选型合理、零跨模板引用。
+
+- **[HIGH 已修 `bea1b59`] 图标走了 `@iconify/react` 在线默认入口 → 未注册图标 phone home 到 `api.iconify.design`,破坏气隙保证** —— lane 静态证实默认入口打包 `sendAPIQuery`、`/offline` 入口零 API 且导出同名符号;运行时证据:PasswordStrength.spec 渲染未注册的 `ph:` 图标时 happy-dom 抛 fetch `AbortError`(在线构建真发了请求),DetailPage.spec(纯 antd 图标)不抛。**根因是移植时把 Vue 的 `OfflineIcon`(离线渲染器)降成了裸在线 `<Icon>`**。触发面:①`setupIcons` fire-and-forget 的启动竞态(集合 chunk 未就绪前渲染的 Icon 触发 API 首拉);②菜单/模块自由填的前缀在 4 集合之外;③手敲拼错。修:`AppIcon.tsx` + `lib/icons.ts` + `AppIcon.spec.tsx` 三处导入换 `@iconify/react/offline`(drop-in,同符号、零 API 面)。**离线入口下未就绪只出占位、绝不触网**——一改同时堵死上面三条触发面,并静默了那条测试 AbortError。改后复验:tsc 0 / vitest 345/345 / build OK / PasswordStrength.spec 无 AbortError。**这点我实现时自己标注过("未注册前缀会触网")却选择"记录延后"——review 正确升级为 HIGH:自包含保证是二元的,而修复只是换个子路径入口。教训:气隙/安全类的"已知特性"别当可延后项,尤其当堵它是 drop-in 时。**
+- **[LOW 采纳] CodeBlock 已注册语言路径的转义只靠 hljs 库保证、无本地断言** —— 补一条 `highlightCode('{"x":"<b>"}','json')` 不含原始 `<b>` 的断言,把"注册路径也不放原始 HTML 进 `dangerouslySetInnerHTML`"钉成回归守卫(hljs 哪天回退转义即红)。安全边界防呆,采纳。
+- **[LOW 未采纳] PasswordStrength effect 在 StrictMode dev 下双拉策略** —— 幂等 GET、dev 限定、与 Vue 同源,无害;不加去重(YAGNI)。
+
+**C3 收口。下一条 C4**:轻量内联 IconPicker(搜索+网格,建在 C3 已落的 `@iconify/react/offline` + 4 集合基建上,加本地 svg glob 注册)。
+
 ### 2026-07-20 · C3 展示件(拆 C3a 图标基建 / C3b 展示件两轮提交)
 
 C3 五件里 AppIcon 牵出一个真实边界问题,开工前经维护者 Q&A 定案(见下),再动手。
