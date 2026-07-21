@@ -18,6 +18,7 @@ let captured: {
   columnsState?: { persistenceKey?: string; persistenceType?: string }
   rowKey?: string
   toolBarRender?: () => React.ReactNode[]
+  rowSelection?: unknown
 } = {}
 
 // 假 ProTable:挂载即调 request(证明 fetcher 接对)、渲染返回的行、把 reload 挂到 actionRef。
@@ -105,5 +106,14 @@ describe('DataTable 接线', () => {
   it('toolbar 传入的按钮渲染到工具栏', async () => {
     mount({ toolbar: <button>新增</button> })
     expect(await screen.findByText('新增')).toBeTruthy()
+  })
+
+  it('rowSelection 透传给内层 ProTable(受控批删勾选列;不给则 undefined)', () => {
+    const onChange = vi.fn()
+    mount({ rowSelection: { selectedRowKeys: [1], onChange } })
+    expect(captured.rowSelection).toEqual({ selectedRowKeys: [1], onChange })
+    cleanup()
+    mount()
+    expect(captured.rowSelection).toBeUndefined()
   })
 })

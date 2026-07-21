@@ -1,4 +1,5 @@
 import { forwardRef, useImperativeHandle, useRef, type ReactNode } from 'react'
+import type { TableProps } from 'antd'
 import { ProTable } from '@ant-design/pro-components'
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
 import { toProTable, type PageFetcher } from './toProTable'
@@ -23,6 +24,11 @@ export interface DataTableProps<T extends Record<string, any>> {
   /** 工具栏右侧按钮(新增 / 批量删除等)。 */
   toolbar?: ReactNode
   headerTitle?: ReactNode
+  /**
+   * 受控行选择(勾选列 + 选中态)。透传给内层 ProTable —— 批量删除页配 useBatchDelete 用:
+   * `rowSelection={{ selectedRowKeys, onChange }}`。不给则不显示勾选列(默认无选择)。
+   */
+  rowSelection?: TableProps<T>['rowSelection']
 }
 
 /** 暴露给调用方的句柄(增删改后刷新)——只给 `reload`,不外泄 pro-components 的 `ActionType`。 */
@@ -31,7 +37,7 @@ export interface DataTableHandle {
 }
 
 function DataTableInner<T extends Record<string, any>>(
-  { columns, fetcher, persistKey, rowKey = 'id', toolbar, headerTitle }: DataTableProps<T>,
+  { columns, fetcher, persistKey, rowKey = 'id', toolbar, headerTitle, rowSelection }: DataTableProps<T>,
   ref: React.ForwardedRef<DataTableHandle>,
 ) {
   const actionRef = useRef<ActionType | undefined>(undefined)
@@ -43,6 +49,7 @@ function DataTableInner<T extends Record<string, any>>(
       columns={columns}
       request={toProTable(fetcher)}
       rowKey={rowKey}
+      rowSelection={rowSelection}
       columnsState={persistKey ? { persistenceKey: `protable:${persistKey}`, persistenceType: 'localStorage' } : undefined}
       search={{ labelWidth: 'auto' }}
       pagination={{ showSizeChanger: true, defaultPageSize: 10 }}
