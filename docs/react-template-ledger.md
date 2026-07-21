@@ -79,7 +79,7 @@
 - [x] **C2 选择器族** — 完成(C2a `71e0bc5`:ApiSelect/UserSelect/OrgTreeSelect;C2b `9798216`:UserPicker)。`ApiSelect`(远程分页 + 防抖 + 竞态守卫,逻辑抽 `useRemoteOptions` hook)、`UserSelect`、`OrgTreeSelect`(扁平→树用 `utils/tree`,含子树排除)、`UserPicker` 三面板弹窗(命令式 `open(ids)`)。变异门 C2a 13/13 + C2b 10/10 全致死;四件套 + `antd lint` 全绿。**有意裁剪**:UserPicker 只做每行「添加」,批量勾选待 DataTable 支持 rowSelection 时补。review lane 待开。
 - [x] **C3 展示件** — 完成(C3a `98968b9`:图标基建 + AppIcon + TenonLogo;C3b `dc01107`:DetailPage + CodeBlock + PasswordStrength)。`AppIcon`(@iconify/react 薄封装 + 4 离线集合基建 `lib/icons.setupIcons`,菜单/模块页占位改真渲染)、`TenonLogo`(内联 SVG 明暗)、`DetailPage`(返回+标题+actions+body)、`CodeBlock`(highlight.js json,维护者裁定引;未注册语言 escapeHtml 降级防 XSS)、`PasswordStrength`(拉 `configApi.passwordPolicy` + 默认兜底)。纯逻辑 `iconName`/`logoColors`/`escapeHtml`/`highlightCode`/`computeChecks`/`computeStrength`/`buildRules` 抽出。**变异 C3a 6/6 + C3b 16/16 全致死**;四件套 + `antd lint` 全绿。**边界裁定**(维护者 Q&A):渲染器基建(@iconify/react + 4 集合)前移进 C3(AppIcon 必需,否则菜单只能占位);C4 缩为**轻量内联 IconPicker**(搜索+网格,不发包)+ 本地 svg glob。**顺带修**:module 页 B7 遗留的废弃 `Tag bordered`(lint 全部改动文件逮到,全库仅此一处)。review lane 待开。
 - [x] **C4 IconPicker(轻量内联)** — 完成(`da7db2c`)。触发器 + 弹窗(搜索 + 集合 Tab + 本地 Tab + cap 300 网格 + "还有 N 个"提示),值契约 `prefix:name`/`local:name`。**去在线 tab**(气隙,对齐 C3 的 `/offline`;Vue 版有在线 iconify 名输入 tab,本版有意砍)。`lib/icons` 扩:`COLLECTIONS`(Tab 列表)、`loadIconNames`(懒加载+addCollection+排序名,按前缀缓存)、`sortedIconNames`/`svgToIcon` 纯逻辑、本地 svg 模块级注册(`src/assets/svg/*.svg` eager glob → `addIcon 'local:<name>'`,star.svg 从 web/ 拷来)。补 `common.clear`(zh+en)。**消费者是 C8 菜单 / C10 模块编辑表单(尚未建),组件先行**。**变异 14/14 全致死**;四件套 + `antd lint` 全绿,vitest 361/361。review lane 待开。
-- [x] **C5 上传 + 富文本 + 图表** — 完成(C5a `3eb0feb`:chunkUpload + FileUpload;C5b `5822ae3`:MarkdownEditor/View + Chart)。`chunkUpload.ts`(R4 推迟的 util,框架无关**逐字搬**,`@/api`+`@/types` 1:1)、`FileUpload`(antd `Upload customRequest`;编排抽 `performUpload`)、`MarkdownEditor`/`MarkdownView`(md-editor-rt,存纯 Markdown 无 XSS 面)、`Chart`(**裸 echarts.init** 不加 wrapper;`lib/echarts.ts` = 按需注册 + `buildEChartsTheme` 逐字搬)。新依赖 md-editor-rt + echarts。**变异 C5a 11/11 + C5b 8/8 全致死**;四件套 + `antd lint` 全绿,vitest 376/376。**如实记**:Chart 命令式 canvas 渲染 happy-dom 不可单测,判据落 `buildEChartsTheme` 纯逻辑 + dev/B12 实点(同 B10 posture)。review lane 待开。
+- [x] **C5 上传 + 富文本 + 图表** — 完成(C5a `3eb0feb`:chunkUpload + FileUpload;C5b `5822ae3`:MarkdownEditor/View + Chart)。`chunkUpload.ts`(R4 推迟的 util,框架无关**逐字搬**,`@/api`+`@/types` 1:1)、`FileUpload`(antd `Upload customRequest`;编排抽 `performUpload`)、`MarkdownEditor`/`MarkdownView`(md-editor-rt,存 Markdown 源文本 —— ~~无 XSS 面~~ **误,见 C5 review 处置:Markdown 天然放行 HTML,已补全局 XSSPlugin**)、`Chart`(**裸 echarts.init** 不加 wrapper;`lib/echarts.ts` = 按需注册 + `buildEChartsTheme` 逐字搬)。新依赖 md-editor-rt + echarts。**变异 C5a 11/11 + C5b 8/8 全致死**;四件套 + `antd lint` 全绿,vitest 376/376。**如实记**:Chart 命令式 canvas 渲染 happy-dom 不可单测,判据落 `buildEChartsTheme` 纯逻辑 + dev/B12 实点(同 B10 posture)。**review 处置 REQUEST-CHANGES → 已收口**(1 HIGH XSS 已修 + MED-1 + LOW-1;见轮次日志)。
 - [ ] **C6 标准列表页批** — `position`(可编辑 Sort 排序原型)、`notice`、`session`、`file`、`recycle`、`cache`、`monitor`。**照 B11 的 `<DataTable>` + `userForm.ts` 拆分范式**(纯逻辑抽出变异钉、页面只接线)。
 - [ ] **C7 日志三页** — `log/op` `log/login` `log/exception`。时间范围筛选用 `search:{transform: v => ({startTime:v?.[0], endTime:v?.[1]})}`。
 - [ ] **C8 树表原型** — `org` + `menu`(含 `ButtonManager` 子组件,写操作要 `hasPerm` 门 —— 沿用 dev 上 J4 的对齐)。
@@ -109,6 +109,8 @@
 
 - [ ] **E6 pro-components 转正跟进** — beta(`3.1.14-2`)→ stable 后立刻升版并跑全量验收;**尤其 B10 记的 vitest 导入坑(无扩展名 deep-import)与 B11 遗留的真 ProTable 运行时开放问题(列持久化/挂载即调/工具栏 locale),stable 后重验能否解**。**这条不封口,长期挂着**。
 
+- [ ] **E7 md-editor 运行时 CDN 资产本地化(自包含硬伤,C5 review 处置时发现)** — md-editor-rt(以及 Vue 侧 md-editor-v3)默认在 `MdPreview`/`MdEditor` 挂载时向 **unpkg** 懒加载 highlight/katex/mermaid/prettier/cropper 的 JS/CSS。**气隙部署下通知预览会拉外网**(拉不到则代码块无高亮、katex 不渲染),破坏「离线自包含」这一立身卖点 —— 与 C3 把 iconify 换 `/offline` 同源。**两个模板都有**(继承自 Vue 原版,非 C5 回归)。测试侧已在 `web-react/vite.config.ts` 用 happyDOM 禁外部加载堵死(套件 hermetic);**产品侧待决策**:①通知用不到的 `noKatex`/`noMermaid`/`noPrettier` 直接关(零产品损失、灭大半 CDN);②代码高亮要保则经 `config({editorExtensions:{highlight:{instance: hljs}}})` 喂本模板已装的 `highlight.js` 本地实例(web-react 的 CodeBlock 已在用);③是否顺带修 `web/`(=R2 之后第二处动 web/,需维护者点头)。**需维护者定方向再动手。**
+
 ## 不做清单（有依据,防反复）
 
 - [~] **`web-shared/` 共享层** — 2026-07-20 推翻,理由见本文件开头四条证据。不要再抽第二次。
@@ -119,6 +121,21 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-20 · C5 review 处置(review-c5 lane:REQUEST-CHANGES → 1 HIGH 已修 + MED-1 + LOW-1;另发现 1 条自包含硬伤)
+
+**REQUEST-CHANGES,0 CRIT,1 HIGH + 1 MED + 3 LOW。**opus 独立 lane 在隔离 worktree 审 C5a `3eb0feb` + C5b `5822ae3`(base `dev`):**逐字搬两处 `diff` EXIT 0 坐实**(chunkUpload.ts、lib/echarts.ts 与 `dev:web/` 字节一致,无静默漂移),并**独立复现变异**(min(99)→min(100) 杀进度封顶、去 resume 守卫杀双续传、max(1,ceil)→ceil 杀空文件片)证判据非回声;worker 池领片 `pending[cursor++]` 先占后 await 无竞态、off-by-one 干净、Chart 生命周期(dispose+重 init 配对、resize 必清、optionRef 避陈旧)、echarts 正确 tree-shake 均获独立背书。修复提交 `e6e7e97`:
+
+- **[HIGH 已修] 通知 Markdown 存储型 XSS —— C5b「无 XSS 面」的说法是错的** —— Markdown **天然放行内联 HTML**,而 md-editor-rt 默认 `html:true` + `sanitize` 恒等空操作 + 预设链**不含** XSS 过滤(lane 在 `node_modules` 逐层 trace 坐实)。通知作者(带权限即可,未必超管)存 `<img src=x onerror="...localStorage.getItem('tenon-auth')...">`,任意查看者(含读通知的超管)打开即执行 → JWT 外泄账号接管。**修**:新 `lib/markdown.ts` —— `withXssPlugin`(纯函数接缝)把库自带 `XSSPlugin`(基于已随 md-editor-rt 打进来的 js-xss,**零新依赖**)追加进 markdown-it 链;`setupMarkdown()` 幂等,`main.tsx` 渲染前全局注册。判据:**M-MD1/2/3 钉接线**(丢追加/改 type/挂错插件)+ **一条端到端集成测试**(`setupMarkdown()` 后渲 `MarkdownView` 传 `<img onerror>`,断渲染后 img 无 onerror —— 这是真行为判据,非回声)。更正了 C5b 提交与两组件注释的误述。**继承自 Vue 侧**(web/ md-editor-v3 同缺口)—— 非 C5 回归,但 web/ 该同修,列 E7 决策。
+- **[MED 已修] chunkUpload spec 假 File 的 slice 忽略入参 → 字节偏移零覆盖** —— lane 探到 `file.slice(i*CHUNK,…)`→`slice(0,0)` **存活**(4 passed):唯一可能悄悄发错/空字节的路径没测。**修**:补一条**真实 11MB `File`** 多片用例,断上传各片 blob.size 多重集 =[1MB,5MB,5MB]。**M-CU1**(即 review 那条 `slice(0,0)`)现被钉死。
+- **[LOW 已修] Chart 加载中切主题丢 loading 遮罩** —— 主题 effect dispose+重 init 出新实例却没补 `showLoading()`。**修**:`loadingRef` + init 后 `if(loadingRef.current) chart.showLoading()`。命令式 canvas 无单测(同 Chart 其余生命周期),dev/B12 实点,**如实记为已知判据缺口**。
+- **[LOW 记录不改] `uploadId!` 非空断言 / uploadImages 空图链 + `Promise.all` 全败** —— 均 `chunkUpload.ts`/`MarkdownEditor.tsx` **逐字搬**;为守「diff EXIT 0」的逐字契约不在 web-react 单侧改;契约违例响应本就走后端重算报错、空图链是极小 UX。记录不动。
+
+**另:我实现 HIGH 的集成测试时发现一条 review 没探到的自包含硬伤 →** md-editor-rt 的 `MdPreview`/`MdEditor` 挂载即往 DOM 注入指向 **unpkg CDN** 的 `<link>/<script>`(highlight/katex/mermaid 懒加载资产),happy-dom 真去 fetch(联网机拖慢套件、离线 CI 网络噪声)。**测试侧根因堵死**:`vite.config.ts` 加 `happyDOM.settings.disable{JavaScript,CSS}FileLoading + handleDisabledFileLoadingAsSuccess`(一处令全套件 hermetic 不触网;不影响主题桥读内联 tokens.css)。**产品侧**(应用运行时同样拉 unpkg,**两模板都有**)是更大的自包含缺口,列 **E7** 待决策(本地化 highlight 实例 vs 关掉通知用不到的 katex/mermaid vs 接受 CDN;是否顺带修 web/),**不塞进本次处置**(一次只闭一条)。
+
+**判据全绿**:`tsc` 0、`oxlint` 0(改动 8 文件)、全量 `vitest` **380/380**(376→380:+2 XSS 接线 +1 XSS 集成 +1 真实切片)、`vite build` 待跑。本批无 antd 组件改动免 antd lint。**预测≠实测**:M-MD1(丢追加)预测红 1、实测 3 条全红(含集成;NORUN 是「全红无 passed 段」正则伪影,redNames 三条俱在已致死);M-MD3(挂错插件)预测红 1、实测红 2(集成测试也抓「挂了空插件」)——两处都比预测更强。主树验字节一致 + 移除 `agent-aa58538a473ffddec` worktree。
+
+**下一条 C6**(标准列表页批):`position`(可编辑 Sort)、`notice`、`session`、`file`、`recycle`、`cache`、`monitor`,照 B11 `<DataTable>` + `userForm.ts` 拆分范式。
 
 ### 2026-07-20 · C5 上传 + 富文本 + 图表(拆 C5a 上传 / C5b 编辑器+图表两轮)
 
@@ -131,7 +148,7 @@
 **C5b `5822ae3`**(MarkdownEditor/View + Chart):
 - `lib/echarts.ts` **逐字搬**:tree-shaken `use([...])` 注册 + `buildEChartsTheme()` 现读 CSS token 变量(单一色源=tokens,随明暗/accent)。
 - `Chart`:**裸 echarts.init**(不引 vue-echarts 那类 wrapper)。主题(明暗/accent)变 → dispose+以新主题 init(echarts 主题 init 时固化)+ 种当前 option(option 存 ref,不进重建依赖,避 exhaustive-deps 又不漏最新);option 变 → `setOption(notMerge)`;window resize;卸载 dispose。
-- `MarkdownEditor`/`MarkdownView`:md-editor-rt `MdEditor`/`MdPreview`(`modelValue`/`onChange`/`theme`/`onUploadImg`),随明暗;存纯 Markdown(前台库自渲染,无 XSS 面)。`uploadImages` 抽出(传签名直链 viewUrl,非 storagePath)。
+- `MarkdownEditor`/`MarkdownView`:md-editor-rt `MdEditor`/`MdPreview`(`modelValue`/`onChange`/`theme`/`onUploadImg`),随明暗;存 Markdown 源文本(~~前台库自渲染,无 XSS 面~~ **—— 这句错了,见 C5 review 处置**)。`uploadImages` 抽出(传签名直链 viewUrl,非 storagePath)。
 - **变异 8/8 全致死**(buildEChartsTheme 色板/文字/轴线/背景 6 + uploadImages 2)。**发现**:happy-dom **能**经 `getComputedStyle(root)` 解析 inline 设的 CSS 自定义属性 → buildEChartsTheme 可直接单测(在 root 上 setProperty 一套已知值断主题对象)。M-ME2 电池显 `NORUN` 是脚本正则局限(该文件两用例全红时 vitest 摘要无 "passed" 段),redNames 双红证实已杀,非存活。
 - **如实记**:Chart 命令式 canvas 在 happy-dom 不可单测(无 canvas 尺寸),判据落 buildEChartsTheme + dev/B12 实点(同 B10 DataTable/ProTable posture)。
 
