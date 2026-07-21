@@ -81,7 +81,7 @@
 - [x] **C4 IconPicker(轻量内联)** — 完成(`da7db2c`)。触发器 + 弹窗(搜索 + 集合 Tab + 本地 Tab + cap 300 网格 + "还有 N 个"提示),值契约 `prefix:name`/`local:name`。**去在线 tab**(气隙,对齐 C3 的 `/offline`;Vue 版有在线 iconify 名输入 tab,本版有意砍)。`lib/icons` 扩:`COLLECTIONS`(Tab 列表)、`loadIconNames`(懒加载+addCollection+排序名,按前缀缓存)、`sortedIconNames`/`svgToIcon` 纯逻辑、本地 svg 模块级注册(`src/assets/svg/*.svg` eager glob → `addIcon 'local:<name>'`,star.svg 从 web/ 拷来)。补 `common.clear`(zh+en)。**消费者是 C8 菜单 / C10 模块编辑表单(尚未建),组件先行**。**变异 14/14 全致死**;四件套 + `antd lint` 全绿,vitest 361/361。review lane 待开。
 - [x] **C5 上传 + 富文本 + 图表** — 完成(C5a `3eb0feb`:chunkUpload + FileUpload;C5b `5822ae3`:MarkdownEditor/View + Chart)。`chunkUpload.ts`(R4 推迟的 util,框架无关**逐字搬**,`@/api`+`@/types` 1:1)、`FileUpload`(antd `Upload customRequest`;编排抽 `performUpload`)、`MarkdownEditor`/`MarkdownView`(md-editor-rt,存 Markdown 源文本 —— ~~无 XSS 面~~ **误,见 C5 review 处置:Markdown 天然放行 HTML,已补全局 XSSPlugin**)、`Chart`(**裸 echarts.init** 不加 wrapper;`lib/echarts.ts` = 按需注册 + `buildEChartsTheme` 逐字搬)。新依赖 md-editor-rt + echarts。**变异 C5a 11/11 + C5b 8/8 全致死**;四件套 + `antd lint` 全绿,vitest 376/376。**如实记**:Chart 命令式 canvas 渲染 happy-dom 不可单测,判据落 `buildEChartsTheme` 纯逻辑 + dev/B12 实点(同 B10 posture)。**review 处置 REQUEST-CHANGES → 已收口**(1 HIGH XSS 已修 + MED-1 + LOW-1;见轮次日志)。
 - [x] **C6 标准列表页批**(全 7 页落完:position `ad5d849` / notice `5373528` / file `082db2c` / session `985f223` / recycle `9ddaf71` / cache `bdb0b76` / monitor `732d1fe`) — 照 B11 的 `<DataTable>` + `userForm.ts` 拆分范式(纯逻辑抽出变异钉、页面只接线)。**review lane → APPROVE**(独立上下文,六接缝对后端 seed 核过;4 LOW:LOW-1 recycle 判别力缺口已补测加固、其余 3 接受;见轮次日志)。收口,进 C7。
-- [ ] **C7 日志三页** — `log/op` `log/login` `log/exception`。时间范围筛选用 `search:{transform: v => ({startTime:v?.[0], endTime:v?.[1]})}`。
+- [x] **C7 日志三页**(`169493a`) — `log/op` `log/login` `log/exception`,只读 DataTable + 列驱动搜索 + 时间范围 + 清空(硬删)。共享纯逻辑抽 `log/logFormat.ts`(operatorText/loginNameText/prettyParam/loginResultKey,变异钉),三页只接线。时间范围**没用**台账原设想的 `search.transform`,改 `valueType:'dateRange'` 直喂 `logApi.*Page` 的 `[start,end]` 元组(api 层 splitRange 已补 23:59:59,与 Vue 一致——API 早于本条落地,transform 反而多此一举)。见轮次日志。
 - [ ] **C8 树表原型** — `org` + `menu`(含 `ButtonManager` 子组件,写操作要 `hasPerm` 门 —— 沿用 dev 上 J4 的对齐)。
 - [ ] **C9 主从分栏原型** — `dict`(`activeRowKey` + 行点击,内联控件要 `stopPropagation`)。
 - [ ] **C10 角色 + 模块** — `role`(含 `GrantMenuTable` 三级可勾选菜单树 + 数据范围单选 + 自定义组织多选)、`module`(管理页,moduleApi CRUD;≠ B7 门户选择器)。
@@ -121,6 +121,19 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · C7 日志三页(`169493a`:op/login/exception)
+
+只读列表批,照 B11 范式:共享纯逻辑抽 `log/logFormat.ts`,三页 `index.tsx` 只接线。这三页共享一个逻辑模块、是一条台账项,故**单条 commit**(非 C6 那种逐页)。
+- **op**(操作日志):审计三问「谁/何时/干了什么」——操作人按 id 精确筛(UserSelect 进 `formItemRender` 搜索项)、时间范围、操作名/路径/成败;paramJson 走 json CodeBlock、异常信息危险色 `<pre>`;详情抽屉直填行数据(后端无 op/{id})。
+- **login**(登录日志):resultCode 把 AuthService 的 40001–40005 翻成 `error.auth.*` 人话(裸 40004 对排查无用);设备列 `uaSummary`;姓名缺失回落账号。无抽屉(字段少)。
+- **exception**(异常日志):exceptionType/path 搜索;traceId + 堆栈进详情抽屉。
+- **首次用 ProTable 内建搜索表单**(C6 全 `search:false`),踩到两处 **v6 改名坑(tsc 不红、`antd lint` 逮到)**:①`renderFormItem`→**`formItemRender`**(beta 版 ProColumns 只认后者,前者 TS2353);②Drawer `width` 弃用→**`size`**(v6.5.1 的 `size` 接受 `number`,故 `size={560}` 既保精确宽度又不弃用,不必退成 default/large 档)。
+- **变异 20/20 全致死,预测=实测零缺口**:M-LF1–7(operatorText id 串/loginNameText 账号回落/prettyParam 缩进+catch/loginResultKey 三码+null 回落)、M-OP1–6(fetcher title/operatorId/createTime 映射、reload、perm 门、detail)、M-LG1–4(account 映射、resultCode 文案分支、name 回落、reload)、M-EX1–3(exceptionType 映射、detail、reload);四文件残留 clean。
+- log/error.auth i18n 键两侧本就齐全,无新增键。菜单 component 路径 `system/log/{login,op,exception}/index` 与后端 seed(DefaultMenuSeed.cs:134/139/144)对齐。判据:`tsc` 0 / `oxlint` 0 / `antd lint` 6.5.1 net 0 / 全量 `vitest` **458/458**(+25:logFormat 12 + op 5 + login 4 + exception 4)/ `build` OK(50.7s)。
+- **如实记**:操作人 UserSelect 走 `formItemRender` 的搜索表单**运行时绑定**(value/onChange 注入)happy-dom 里没实测——spec 只钉 fetcher 的 operatorId 映射 + 列形状,活表单绑定留 dev/B12 实点(同 B10/B11 对 ProTable 运行时行为的 posture)。
+
+**下一条 C8**:树表原型 `org` + `menu`(含 `ButtonManager` 子组件,写操作要 `hasPerm` 门,沿用 dev 上 J4 的对齐)。
 
 ### 2026-07-21 · C6 review lane(独立上下文 code-reviewer/opus,隔离 worktree base HEAD)→ **APPROVE**
 
