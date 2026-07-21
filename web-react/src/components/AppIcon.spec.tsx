@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
-import { addIcon } from '@iconify/react'
+import { addIcon } from '@iconify/react/offline'
 import { iconName, AppIcon } from './AppIcon'
 
 afterEach(cleanup)

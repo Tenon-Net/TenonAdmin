@@ -1,4 +1,6 @@
-import { Icon } from '@iconify/react'
+// **/offline 入口**:零 iconify 在线 API(不请求 api.iconify.design)——本模板可气隙部署,
+// 未注册图标只出占位、绝不触网(在线默认入口会 phone home,C3 review HIGH)。symbols 与默认入口一致。
+import { Icon } from '@iconify/react/offline'
 import type { CSSProperties } from 'react'
 
 /**

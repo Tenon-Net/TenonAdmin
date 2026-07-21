@@ -5,7 +5,8 @@
 // 每套 icons.json 是独立懒加载 chunk;addCollection 后 <Icon>(AppIcon / 菜单)即可离线解析该 prefix
 // 的图标,无需 iconify 在线 API。本地 svg(src/assets/svg)+ 选择器网格留 C4;此处只装菜单/AppIcon
 // 渲染所需的 4 个前缀集(ph/lucide/ep/ant-design),与 web/ 一致。
-import { addCollection } from '@iconify/react'
+// **/offline 入口**:零在线 API(见 AppIcon.tsx 注释;C3 review HIGH)。addCollection 语义不变。
+import { addCollection } from '@iconify/react/offline'
 
 // addCollection 的入参类型即 IconifyJSON;经 Parameters 取,免去猜它 re-export 在哪个子包。
 type IconifyJSON = Parameters<typeof addCollection>[0]

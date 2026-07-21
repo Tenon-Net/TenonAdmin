@@ -17,6 +17,11 @@ describe('highlightCode', () => {
     // if(false) 分支会退成 escapeHtml,产不出 hljs- 类 → 断言即红。
     expect(highlightCode('{"a":1}', 'json')).toContain('hljs-')
   })
+  it('已注册路径也不透传原始 HTML(hljs 转义字符串值,XSS 自守)', () => {
+    // 走 dangerouslySetInnerHTML,注册语言的安全性靠 hljs 输出已转义这条库保证;这里钉住它,
+    // 哪天 hljs 升级/换语言配置回退了转义,本条即红(注册路径也不放原始 <b> 进 DOM)。
+    expect(highlightCode('{"x":"<b>"}', 'json')).not.toContain('<b>')
+  })
   it('未注册语言降级为转义纯文本(安全:防 dangerouslySetInnerHTML XSS)', () => {
     // 钉两件事:① if(true) 会让 hljs.highlight 收未知语言抛错 → 用例炸红;
     // ② 把 escapeHtml(code) 改成 code(丢转义)→ 返回 '<b>' ≠ 期望 → 红。
