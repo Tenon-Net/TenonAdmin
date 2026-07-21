@@ -15,10 +15,13 @@ import '@/styles/code.css'
 // 且这两件事都是全局单例的初始化,归属 main 而不是某个组件。
 import '@/locales'
 import { setupIcons } from '@/lib/icons'
+import { setupMarkdown } from '@/lib/markdown'
 import App from './App'
 
 // 首屏注册 4 套离线图标集(非阻塞;菜单/AppIcon 在集合就绪后自动重渲染)。
 setupIcons()
+// 全局给 md-editor-rt 挂上 XSS 过滤(通知正文是富文本,默认放行内联 HTML —— C5 review HIGH-1)。
+setupMarkdown()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

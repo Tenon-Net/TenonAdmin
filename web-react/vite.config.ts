@@ -47,6 +47,15 @@ export default defineConfig({
   },
   test: {
     environment: 'happy-dom',
+    // 气隙自包含硬约束:**任何测试都不得触网**。md-editor-rt 的 MdPreview/MdEditor 挂载时会往 DOM 注入
+    // 指向 unpkg 的 <link>/<script>(highlight/katex/mermaid 等懒加载资产),happy-dom 会真去 fetch ——
+    // 联网机上 TLS 超时拖慢整套件、离线 CI 里则是网络失败噪声。这里从根上关掉外部资源加载(一处堵住所有测试),
+    // 并把「已禁用的加载」当成功返回,消掉 teardown 期的 AbortError/NetworkError 噪声。
+    // 注:tokens.css 是 Vite `css:true` 内联进 <style> 的,不是外部 link,不受影响(主题桥 spec 照常读得到)。
+    // (应用运行时同样会拉 unpkg —— 那是**产品级**自包含缺口,两模板都有,单列 backlog,不在此处解决。)
+    environmentOptions: {
+      happyDOM: { settings: { disableJavaScriptFileLoading: true, disableCSSFileLoading: true, handleDisabledFileLoadingAsSuccess: true } },
+    },
     // 主题桥的 spec 靠 `getComputedStyle` 读回 tokens.css 的变量,所以 CSS 必须真处理。
     // 默认 `css: false` 会把 CSS 导入桩成空 —— **连 `?raw` 也是空串**,不报错。
     // 那样的话 `v()` 全返回空串、`defined()` 把键全滤掉,spec 里每条恒等断言都变成恒真。

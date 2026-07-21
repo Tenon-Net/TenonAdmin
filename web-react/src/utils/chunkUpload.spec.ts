@@ -53,6 +53,17 @@ describe('uploadChunked', () => {
     expect(fileApi.chunkComplete).toHaveBeenCalledOnce()
   })
 
+  it('分片按真实字节偏移切(11MB → 5+5+1),不发空块', async () => {
+    // 用**真实 File**(fakeFile 的 slice 忽略入参、发不出空块的假象)。11MB → 3 片:[0,5MB) [5MB,10MB) [10MB,11MB)。
+    // 钉住 review 探到存活的变异:把 file.slice(i*CHUNK, …) 改成 slice(0,0) 会让每片都变 0 字节,本用例即红。
+    const real = new File([new Uint8Array(11 * 1024 * 1024)], 'real.bin')
+    vi.mocked(fileApi.chunkInit).mockResolvedValue({ uploaded: false, uploadId: 'u1', receivedIndexes: [] } as never)
+    vi.mocked(fileApi.chunkComplete).mockResolvedValue({} as never)
+    await uploadChunked(real)
+    const sizes = vi.mocked(fileApi.chunkUpload).mock.calls.map((c) => (c[2] as Blob).size).sort((a, b) => a - b)
+    expect(sizes).toEqual([1 * 1024 * 1024, CHUNK, CHUNK]) // 末片 1MB + 两满片 5MB
+  })
+
   it('空文件也至少 1 片(Math.max(1, ceil))', async () => {
     vi.mocked(fileApi.chunkInit).mockResolvedValue({ uploaded: false, uploadId: 'u1', receivedIndexes: [] } as never)
     vi.mocked(fileApi.chunkComplete).mockResolvedValue({} as never)
