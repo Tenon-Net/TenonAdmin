@@ -80,7 +80,7 @@
 - [x] **C3 展示件** — 完成(C3a `98968b9`:图标基建 + AppIcon + TenonLogo;C3b `dc01107`:DetailPage + CodeBlock + PasswordStrength)。`AppIcon`(@iconify/react 薄封装 + 4 离线集合基建 `lib/icons.setupIcons`,菜单/模块页占位改真渲染)、`TenonLogo`(内联 SVG 明暗)、`DetailPage`(返回+标题+actions+body)、`CodeBlock`(highlight.js json,维护者裁定引;未注册语言 escapeHtml 降级防 XSS)、`PasswordStrength`(拉 `configApi.passwordPolicy` + 默认兜底)。纯逻辑 `iconName`/`logoColors`/`escapeHtml`/`highlightCode`/`computeChecks`/`computeStrength`/`buildRules` 抽出。**变异 C3a 6/6 + C3b 16/16 全致死**;四件套 + `antd lint` 全绿。**边界裁定**(维护者 Q&A):渲染器基建(@iconify/react + 4 集合)前移进 C3(AppIcon 必需,否则菜单只能占位);C4 缩为**轻量内联 IconPicker**(搜索+网格,不发包)+ 本地 svg glob。**顺带修**:module 页 B7 遗留的废弃 `Tag bordered`(lint 全部改动文件逮到,全库仅此一处)。review lane 待开。
 - [x] **C4 IconPicker(轻量内联)** — 完成(`da7db2c`)。触发器 + 弹窗(搜索 + 集合 Tab + 本地 Tab + cap 300 网格 + "还有 N 个"提示),值契约 `prefix:name`/`local:name`。**去在线 tab**(气隙,对齐 C3 的 `/offline`;Vue 版有在线 iconify 名输入 tab,本版有意砍)。`lib/icons` 扩:`COLLECTIONS`(Tab 列表)、`loadIconNames`(懒加载+addCollection+排序名,按前缀缓存)、`sortedIconNames`/`svgToIcon` 纯逻辑、本地 svg 模块级注册(`src/assets/svg/*.svg` eager glob → `addIcon 'local:<name>'`,star.svg 从 web/ 拷来)。补 `common.clear`(zh+en)。**消费者是 C8 菜单 / C10 模块编辑表单(尚未建),组件先行**。**变异 14/14 全致死**;四件套 + `antd lint` 全绿,vitest 361/361。review lane 待开。
 - [x] **C5 上传 + 富文本 + 图表** — 完成(C5a `3eb0feb`:chunkUpload + FileUpload;C5b `5822ae3`:MarkdownEditor/View + Chart)。`chunkUpload.ts`(R4 推迟的 util,框架无关**逐字搬**,`@/api`+`@/types` 1:1)、`FileUpload`(antd `Upload customRequest`;编排抽 `performUpload`)、`MarkdownEditor`/`MarkdownView`(md-editor-rt,存 Markdown 源文本 —— ~~无 XSS 面~~ **误,见 C5 review 处置:Markdown 天然放行 HTML,已补全局 XSSPlugin**)、`Chart`(**裸 echarts.init** 不加 wrapper;`lib/echarts.ts` = 按需注册 + `buildEChartsTheme` 逐字搬)。新依赖 md-editor-rt + echarts。**变异 C5a 11/11 + C5b 8/8 全致死**;四件套 + `antd lint` 全绿,vitest 376/376。**如实记**:Chart 命令式 canvas 渲染 happy-dom 不可单测,判据落 `buildEChartsTheme` 纯逻辑 + dev/B12 实点(同 B10 posture)。**review 处置 REQUEST-CHANGES → 已收口**(1 HIGH XSS 已修 + MED-1 + LOW-1;见轮次日志)。
-- [ ] **C6 标准列表页批** — `position`(可编辑 Sort 排序原型)、`notice`、`session`、`file`、`recycle`、`cache`、`monitor`。**照 B11 的 `<DataTable>` + `userForm.ts` 拆分范式**(纯逻辑抽出变异钉、页面只接线)。
+- [x] **C6 标准列表页批**(全 7 页落完:position `ad5d849` / notice `5373528` / file `082db2c` / session `985f223` / recycle `9ddaf71` / cache `bdb0b76` / monitor `732d1fe`) — 照 B11 的 `<DataTable>` + `userForm.ts` 拆分范式(纯逻辑抽出变异钉、页面只接线)。**下一条:开一条 review lane 审整个 C6 全批**(base `dev`、隔离 worktree),不在本上下文自审。
 - [ ] **C7 日志三页** — `log/op` `log/login` `log/exception`。时间范围筛选用 `search:{transform: v => ({startTime:v?.[0], endTime:v?.[1]})}`。
 - [ ] **C8 树表原型** — `org` + `menu`(含 `ButtonManager` 子组件,写操作要 `hasPerm` 门 —— 沿用 dev 上 J4 的对齐)。
 - [ ] **C9 主从分栏原型** — `dict`(`activeRowKey` + 行点击,内联控件要 `stopPropagation`)。
@@ -134,7 +134,14 @@
 
 **下一条**:回到 C6b(先补 `useBatchDelete` + DataTable rowSelection,再 notice/file)。
 
-### 2026-07-20 · C6 标准列表页批(进行中:C6a position、C6b-notice、C6b-file、C6c-session 已落)
+### 2026-07-20 · C6 标准列表页批(**全 7 页落完**:position、notice、file、session、recycle、cache、monitor)
+
+**C6c 剩余三页 `9ddaf71`/`bdb0b76`/`732d1fe`**(recycle / cache / monitor):三页各自新文件、互不改动既有文件,共用一次全量 `vitest`+`build` 闸门(省本机重进程),但逐页原子提交。判据一次覆盖三页:`tsc` 0 / `oxlint` 0 / `antd lint` 6.5.1 net 0 / 全量 `vitest` **433/433**(+15:recycle 4 + cache 4 + monitor 3 + monitorFormat 4)/ `build` OK(58.8s)。**变异共 21/21 全致死**,3 处预测≠实测(均比预测更强)+ 1 处 NORUN 伪影已辨明:
+- **recycle**(M-RC1..5):切页签换类型、恢复/彻底删按 `activeTab`+行 id 定位、两道权限门。**M-RC4/RC5(权限门 `has`→`!has`):预测红 1、实测红 2** —— 反转后「恢复/彻底删」定位测试因按钮消失一并塌。
+- **cache**(M-CA1..4):`ask` 二确守卫、portal 代际 vs 清除条数文案分支、`rebuild` 标志、权限门。**M-CA1(去 `ask` 取反守卫):预测红 1、实测红 3** —— 未确认路径放行后,三条 trigger 断言(不执行/清条数文案/portalDone 文案)连带红。
+- **monitor 页**(M-MO1..3):0 容量盘过滤、手动刷新再拉、挂载即拉。**M-MO3(`void load()`→`void 0`):`failed=NORUN`** —— monitor 三条用例全红时 vitest 不打印 "passed" 段,正则取不到计数;经 redNames 列出三条(挂载拉快照/手动刷新/0 盘过滤)确认为**全红伪影而非未跑**。
+- **monitorFormat**(M-MF1..9):`fmtBytes` 三档 + 边界(0→'0 B'、非 B 档 2 位、超 TB 封顶)、`uptimeParts` 天/时分解、`pct` 四舍五入 + 防除零、`usageColor` 90/75 阈值。全部预测=实测。
+- i18n recycle/cache/monitor 块两侧本就齐全,无新增键。happy-dom teardown 那次 `https://ex.com/r` 的 AbortError/NetworkError 栈仍是 hermetic 噪声(套件 exit 0)。
 
 **C6c-session `985f223`**(在线会话):只读列表 + 行内强制下线,踢自己置灰(防误把自己下线),设备列 `uaSummary` 解析 UA 成「浏览器 · 系统」。
 - **顺带把框架无关的 `utils/ua.ts` verbatim 搬来**(与 `web/` 字节一致,`diff` EXIT 0;R4 当初记的"暂不搬、等用到的页面再搬"到此兑现)。
@@ -160,7 +167,7 @@
 - i18n position 块(增改共用 code 禁改、codePlaceholder 等)两侧本就齐全,无新增键。路由 glob `/src/views/**/*.tsx` 覆盖,菜单指到即可达。
 - 判据:`tsc` 0 / `oxlint` 0 / `antd lint` 6.5.1 net 0 / 全量 `vitest` **386/386**(+6)/ `build` OK。
 
-**下一条 C6c 剩余**:`recycle`(8 类页签 + 还原/彻底删,antd `Tabs` items API + 单 DataTable `key={activeTab}` 重挂)、`cache`(4 张定向失效动作卡,`ask` 二确 + portal 代际 vs 清除条数文案分支)、`monitor`(卡片 + 手动刷新不轮询,`monitorFormat.ts` 抽 fmtBytes/uptimeParts/pct/usageColor 变异钉;进度条走 `strokeColor` 避 antd status 枚举差异)。这三页各自新文件、互不改动既有文件,故拟共用一次全量 `vitest`+`build` 闸门(跑一次覆盖三页,省本机重进程),但**逐页原子提交**。**C6 全批(position/notice/file/session + recycle/cache/monitor)落完再开一条 review lane**(base `dev`、隔离 worktree),不在本上下文自审。
+**下一条:开 review lane 审整个 C6 全批**(position/notice/file/session/recycle/cache/monitor 七页),base `dev`、隔离 worktree,不在本上下文自审。通过后进 C7。
 
 ### 2026-07-20 · C5 review 处置(review-c5 lane:REQUEST-CHANGES → 1 HIGH 已修 + MED-1 + LOW-1;另发现 1 条自包含硬伤)
 
