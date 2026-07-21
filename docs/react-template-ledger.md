@@ -122,6 +122,16 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-21 · C10 review lane(独立 opus,隔离 worktree)→ REQUEST-CHANGES(1 HIGH + 1 LOW)→ 修复 `7b68e8b`
+
+审 role(`26609da`)重、module(`6f12b57`)轻。lane 无法在本 worktree 重跑判据(web-react 不在其 base HEAD、无 node_modules)→ 改类型级推理 + 后端源码核验(已标注)。抓一处真实运行时接线缺陷:
+- **HIGH:role 状态列 `StatusSwitch` 漏 `onChange`/reload**(`index.tsx` enabled 列)。`StatusSwitch` 是悲观受控(`<Switch checked={value}>`,value 恒等父传 `r.enabled`),成功仅靠 `onChange?.(next)` 通知父层重拉。role 列没传 `onChange`、页也不重拉 → 切换成功弹「成功」toast 但**开关视觉停在原位**(checked 未变),管理员见「绿提示+开关没动」矛盾反馈极可能二次点击 → 后端被回切。RBAC 屏高风险。tsc/antd-lint/现有测试**结构上都测不到**:index.spec 的状态列用例直接取 `props.request(false)` 调,从不渲染/触发 `onChange`,正落 mock 边界外。对照证据:module 页做对了(`onChange={() => void load()}`),Vue 参照 `role/index.vue` 用 `'onUpdate:value'` 就地改行。
+- **LOW:数据范围 `OrgTreeSelect` 清空 → `customOrgIds` 变 undefined**(`as number[]` 掩盖类型)。功能安全(后端 `SetRoleDataScopeAsync` 用 `customOrgIds is { Count: > 0 }` 兜底,null/空落 `csv=""`),仅类型不严谨。
+- **修复 `7b68e8b`**:①状态列补 `onChange={reload}`(照抄 module 页范式,`reload` 已在组件内 `useCallback(()=>tableRef.current?.reload(),[])`;加进 columns 依赖),②`setCustomOrgIds((v as number[]) ?? [])`。**加回归钉**:新用例「状态列:切换成功回调必须重拉表格」断言 `sw.props.onChange` 真存在 + 触发它调 `reloadMock`(DataTable mock 经 imperative handle 暴露 `reload: reloadMock`,逐测 mockClear)。**变异证伪(预测先行)**:预测抹掉 `onChange={reload}` → 新用例红、其余 10 不动 → `1 failed | 10 passed`;**实测精确命中**(唯一红的正是新钉,零 mismatch)。判据(修后):**tsc 0 / antd-lint 6.5.1 net 0 / oxlint 0 / vitest 11/11(原 10 + 回归 1)/ build ✓ 49.29s**。
+- **lane 首轮核过为正确的接缝(采信)**:grantMenu 三态纯逻辑全对(buildGroups/groupState/withXxxChecked/collectChecked/filter*);**round-trip 稳定性逐态验证**(父 granted 变→子 useEffect 重建 groups 不上抛无死循环、`buildGroups(tree, collectChecked(next)) === next`、「取消单按钮不取消菜单」能存活 round-trip);collectChecked 对顶级 Menu 收两次 id → 后端 `SetRoleMenusAsync` 做 `.Distinct()` 无害(且与 Vue 同构);权限码逐字节对齐后端(role/module 全套);**无 C9 式漏字段**(roleToInput 5 字段/5 Form.Item、moduleToInput 8/8,validateFields 即全量);数据范围回填/保存、`OrgTreeSelect multiple` 经 rest 透传真多选;删除警示三档;FormContainer `destroyOnHidden` 隔离角色间状态泄漏;module 内置保护(禁删/禁停/只读 Tag)。
+
+**下一条**:复审 lane(审 `7b68e8b`,独立 opus、隔离 worktree)裁定 → APPROVE 则 C10 收口、进 **C11 config 四标签页**;REQUEST-CHANGES 则再修再核(照 C9 先例)。
+
 ### 2026-07-21 · C10a 角色 + GrantMenuTable(`26609da`)
 
 C10 后半、全港最大项。role 页 = DataTable CRUD + 3 抽屉(授权菜单 / 数据范围 / 授权用户)+ 批删带持有人数警告。三态勾选纯逻辑全抽 grantMenu.ts(变异钉)。
