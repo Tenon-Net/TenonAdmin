@@ -109,7 +109,7 @@
 
 - [ ] **E6 pro-components 转正跟进** — beta(`3.1.14-2`)→ stable 后立刻升版并跑全量验收;**尤其 B10 记的 vitest 导入坑(无扩展名 deep-import)与 B11 遗留的真 ProTable 运行时开放问题(列持久化/挂载即调/工具栏 locale),stable 后重验能否解**。**这条不封口,长期挂着**。
 
-- [ ] **E7 md-editor 运行时 CDN 资产本地化(自包含硬伤,C5 review 处置时发现)** — md-editor-rt(以及 Vue 侧 md-editor-v3)默认在 `MdPreview`/`MdEditor` 挂载时向 **unpkg** 懒加载 highlight/katex/mermaid/prettier/cropper 的 JS/CSS。**气隙部署下通知预览会拉外网**(拉不到则代码块无高亮、katex 不渲染),破坏「离线自包含」这一立身卖点 —— 与 C3 把 iconify 换 `/offline` 同源。**两个模板都有**(继承自 Vue 原版,非 C5 回归)。测试侧已在 `web-react/vite.config.ts` 用 happyDOM 禁外部加载堵死(套件 hermetic);**产品侧待决策**:①通知用不到的 `noKatex`/`noMermaid`/`noPrettier` 直接关(零产品损失、灭大半 CDN);②代码高亮要保则经 `config({editorExtensions:{highlight:{instance: hljs}}})` 喂本模板已装的 `highlight.js` 本地实例(web-react 的 CodeBlock 已在用);③是否顺带修 `web/`(=R2 之后第二处动 web/,需维护者点头)。**需维护者定方向再动手。**
+- [x] **E7 md-editor 运行时 CDN 资产 → 全离线(自包含硬伤,C5 review 处置时发现)** — 维护者裁定「你决定吧」→ 决定**两模板都改成完全离线,不引新依赖、不做本地化管线**(web-react `ca3910a` + web/ `fda311f`)。md-editor(rt/v3)默认挂载即从 unpkg 懒加载 highlight/katex/mermaid/prettier/**echarts**。修:①组件上 `no-{katex,mermaid,highlight,prettier}` 关掉前四个(通知用不到公式/图表,代码高亮设为可选、消费者要则经 `editorExtensions.highlight.instance` 自行本地化);②echarts **无 `no*` 旗标**,`config({editorExtensions:{echarts:{instance:{}}}})` 给空 no-op —— 既断 CDN,又避开其默认 `parseOption` 用 `new Function` 对(管理员可写的)通知正文求值。**证据驱动**:先加自包含守卫测试(挂载后不得注入指向外网的 link/script),它先因剩下的 echarts 而红,补 no-op 后转绿;掉任一 no* 或 echarts instance 都重红(happy-dom 禁加载但仍注入 DOM 标签,故可查、非空)。**顺带一并修 web/**(md-editor-v3 同 API):这是 R2 之后**刻意、经授权的第二处动 web/** —— 已发布模板里的真 XSS(C5 review 延后的 HIGH)+ 自包含洞,值得修透,非迁移漂移。**残留(已知、记下)**:cropper/screenfull 是编辑器按需(点全屏/裁剪才拉,非挂载预载),公开的 MdPreview 无工具栏故完全离线;管理端编辑器这两项极少用,消费者要绝对气隙可自行裁 `toolbars`。判据:web-react tsc/oxlint/vitest 387/387/build 全绿;web/ oxlint/vue-tsc/vitest 46/46/build 全绿。
 
 ## 不做清单（有依据,防反复）
 
@@ -121,6 +121,18 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · E7 md-editor 全离线(维护者授权「你决定吧」→ 两模板都修 + 顺带修 web/)
+
+**决定**:md-editor 改成完全离线,不引新依赖、不做本地化管线(理由:通知系统用不到 katex/mermaid;代码高亮是可选增强;本地化 highlight 要喂 hljs 实例 + 主题 CSS,对公告编辑器过度工程)。
+
+- **web-react `ca3910a`**:组件加 `no-{katex,mermaid,highlight,prettier}`;`setupMarkdown` 的 `config` 补 `editorExtensions.echarts.instance:{}`(echarts 唯一无 `no*` 旗标者,空 no-op 既断 unpkg 又杜绝其 `parseOption` 对正文 `new Function`)。
+- **web/ `fda311f`**(md-editor-v3 同 API):镜像 `lib/markdown.ts`(`withXssPlugin` + `setupMarkdown`)、两组件加 `no-*`、main.ts 调用。**这一并把 C5 review 延后的 web/ HIGH XSS 也修了** —— R2 后刻意、经授权的第二处动 web/。
+- **证据驱动(而非假设)**:先写自包含守卫「MarkdownView 挂载后不得注入指向外网的 link/script」,它先因 echarts 而**红**(暴露了 no* 关不掉的 echarts),补 no-op instance 后**转绿**;再变异证非空 —— 掉 `noHighlight`→红、echarts instance 置 null→红,基线复绿 4/4。**预测≠实测的收获**:原以为 4 个 `no*` 就够,实测 happy-dom 抓到 echarts 仍被注入,才发现 echarts 无 `no*`、必须走 instance —— 守卫测试当场把这个盲点逼了出来。
+- **残留(如实记)**:cropper/screenfull 是编辑器按需加载(点全屏/裁剪),非挂载预载;公开 MdPreview 无工具栏=完全离线,管理端编辑器这两项极少用,要绝对气隙可裁 `toolbars`。
+- 判据:web-react tsc0/oxlint0/vitest **387/387**(+1 守卫)/build;web/ oxlint0/vue-tsc0/vitest **46/46**(+2)/build。
+
+**下一条**:回到 C6b(先补 `useBatchDelete` + DataTable rowSelection,再 notice/file)。
 
 ### 2026-07-20 · C6 标准列表页批(进行中:C6a position 已落)
 
