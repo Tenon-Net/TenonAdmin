@@ -130,7 +130,9 @@
 - **修复 `7b68e8b`**:①状态列补 `onChange={reload}`(照抄 module 页范式,`reload` 已在组件内 `useCallback(()=>tableRef.current?.reload(),[])`;加进 columns 依赖),②`setCustomOrgIds((v as number[]) ?? [])`。**加回归钉**:新用例「状态列:切换成功回调必须重拉表格」断言 `sw.props.onChange` 真存在 + 触发它调 `reloadMock`(DataTable mock 经 imperative handle 暴露 `reload: reloadMock`,逐测 mockClear)。**变异证伪(预测先行)**:预测抹掉 `onChange={reload}` → 新用例红、其余 10 不动 → `1 failed | 10 passed`;**实测精确命中**(唯一红的正是新钉,零 mismatch)。判据(修后):**tsc 0 / antd-lint 6.5.1 net 0 / oxlint 0 / vitest 11/11(原 10 + 回归 1)/ build ✓ 49.29s**。
 - **lane 首轮核过为正确的接缝(采信)**:grantMenu 三态纯逻辑全对(buildGroups/groupState/withXxxChecked/collectChecked/filter*);**round-trip 稳定性逐态验证**(父 granted 变→子 useEffect 重建 groups 不上抛无死循环、`buildGroups(tree, collectChecked(next)) === next`、「取消单按钮不取消菜单」能存活 round-trip);collectChecked 对顶级 Menu 收两次 id → 后端 `SetRoleMenusAsync` 做 `.Distinct()` 无害(且与 Vue 同构);权限码逐字节对齐后端(role/module 全套);**无 C9 式漏字段**(roleToInput 5 字段/5 Form.Item、moduleToInput 8/8,validateFields 即全量);数据范围回填/保存、`OrgTreeSelect multiple` 经 rest 透传真多选;删除警示三档;FormContainer `destroyOnHidden` 隔离角色间状态泄漏;module 内置保护(禁删/禁停/只读 Tag)。
 
-**下一条**:复审 lane(审 `7b68e8b`,独立 opus、隔离 worktree)裁定 → APPROVE 则 C10 收口、进 **C11 config 四标签页**;REQUEST-CHANGES 则再修再核(照 C9 先例)。
+**复审 lane(独立 opus、隔离 worktree)→ APPROVE(0 阻断)**:7 探针逐条确认——HIGH 修复链路完整(StatusSwitch 成功→onChange→reload→ProTable 重取→回显真实态,悲观模型下无「先翻再回弹」)、`() => void` 对 `(next:boolean)=>void` 结构性可赋值、与 module 语义等价(enabled 非过滤列切换后不掉出当前页)、`reload` 入依赖无害必要(空依赖 useCallback 身份稳)、LOW `?? []` 仅兜 null/undefined 不动正常数组路径、**回归钉真会红不空过**(mockClear 隔离、断言前计数 0、onChange 就是 reload 本体经 mock 句柄落 reloadMock)、无兄弟路径遗漏(单删/批删/save 三写路径本已 reload,三授权抽屉存的是非表列关联数据无需 reload)。lane 提示门禁未在 base-ref worktree 重跑——已在主树跑绿(tsc0/antd-lint0/oxlint0/vitest 11/11/build✓)为最终放行证据。主树干净、复审 worktree 自清、无游离。**C10 收口。**
+
+**下一条**:进 **C11 config 四标签页**(SysBaseConfig / SecurityConfig / UploadConfig / OtherConfig)。已只读扫过 Vue 源:tab 容器 `index.vue`(39)+ 4 tab 面板(SysBase 70 / Upload 76 / Other 150 / Security 188),各按 groupCode 拉配置、`saveBatch` 存;web-react `configApi` 已有 saveBatch/siteInfo/passwordPolicy/flushConfig,开工先核「按 group 拉」方法齐否。
 
 ### 2026-07-21 · C10a 角色 + GrantMenuTable(`26609da`)
 
