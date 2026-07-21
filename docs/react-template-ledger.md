@@ -84,7 +84,7 @@
 - [x] **C7 日志三页**(`169493a`) — `log/op` `log/login` `log/exception`,只读 DataTable + 列驱动搜索 + 时间范围 + 清空(硬删)。共享纯逻辑抽 `log/logFormat.ts`(operatorText/loginNameText/prettyParam/loginResultKey,变异钉),三页只接线。时间范围**没用**台账原设想的 `search.transform`,改 `valueType:'dateRange'` 直喂 `logApi.*Page` 的 `[start,end]` 元组(api 层 splitRange 已补 23:59:59,与 Vue 一致——API 早于本条落地,transform 反而多此一举)。**review lane → REQUEST-CHANGES(1 HIGH:op 操作人搜索 `formItemRender` 显式 onChange 被 pro-components cloneElement 末位展开盖掉、筛选死 no-op)→ 修复 `4c850c5` + 回归测试 + 复核 APPROVE**;顺带去一条 monitor waitFor flake(`0305bd1`)。见轮次日志。
 - [x] **C8 树表原型**(**C8a `a5f9775` + C8b `b28817d`**) — `org` + `menu`(含 `ButtonManager` 子组件,写操作要 `hasPerm` 门 —— 沿用 dev 上 J4 的对齐)。**已 scope(读完 Vue 三源,别凭记忆重写)**:org ~250 行、menu ~530 行、ButtonManager ~360 行,全港最大项。**两点定案**:①**建独立 `TreeTable` 薄封装**(ProTable `dataSource`+`pagination:false`+`expandable:{expandedRowKeys,onExpandedRowKeysChange}`,续隔离 pro-components beta)——DataTable 是 fetcher 专用,树表是静态 data + 受控展开 + 客户端 `filterTree` + 无搜索表单,两模式塞一个组件会堆条件复杂度,故并列而非扩展;树页也不得直接碰 ProTable。②**拆 C8a(`TreeTable` + org)/ C8b(menu + ButtonManager)**,各自四件套+变异+原子提交(照 C2/C3/C5 a/b 先例)。**关键接缝**(移植时逐条对):受控 `expandedRowKeys` 默认全展开要自己播种(`expandableIds`)、搜索后重算(否则命中藏在折叠祖先里);`filterTree` 是浅拷贝故 StatusSwitch 成功后**重拉整树**而非写行;org 上级用 `OrgTreeSelect`(剪自身子树防成环)、menu 父级下拉排除自身子树;menu 按 `moduleId`(仅顶级)过滤 + `stripButtons`(按钮不进主树,只在 ButtonManager 里管)+ 关键字要搜到按钮权限码(`buttonInfoById`);menu 增删改后 `syncShell`(复用 B6 `buildRoutesForModule` 重建当前应用侧边栏+动态路由,失败静默);组件路径下拉取自 `viewComponentPaths`(glob 真实文件表);ButtonManager 权限码下拉取自 `menuApi.routes()` 实时路由表 + 按 `appPrefix` 软过滤 + 从路由批量添加。写操作全程 `useHasPerm` 门(服务端 [RolePermission] 兜底)。
 - [x] **C9 主从分栏原型**(`d43cc47`) — `dict`(`activeRowKey` + 行点击,内联控件要 `stopPropagation`)。
-- [ ] **C10 角色 + 模块** — `role`(含 `GrantMenuTable` 三级可勾选菜单树 + 数据范围单选 + 自定义组织多选)、`module`(管理页,moduleApi CRUD;≠ B7 门户选择器)。
+- [ ] **C10 角色 + 模块**(**C10b module `6f12b57` done;C10a role 待做**) — `role`(含 `GrantMenuTable` 三级可勾选菜单树 + 数据范围单选 + 自定义组织多选)、`module`(管理页,moduleApi CRUD;≠ B7 门户选择器)。**C10a scope(已读 Vue 三源)**:role 页 = ProTable CRUD + 3 抽屉(授权菜单 GrantMenuTable / 数据范围 scopeType 单选+自定义组织多选 / 授权用户 UserPicker)+ 批删带持有人数警告(countUsers 复用 userApi.page roleId);GrantMenuTable = 自定义三列网格(目录|菜单|按钮)+ 三态复选(buildGroups/recomputeGroup/toggleCatalog|Menu|Button/collectChecked 是纯逻辑变异钉,抽 grantMenu.ts);roleApi 全套齐(getMenus/setMenus/getDataScope/setDataScope/getUsers/setUsers);**唯一缺口:`OrgTreeSelect` 无 `multiple`**(数据范围自定义组织多选需要)→ 按 DataTable 先例扩展可选 multiple。权限码:role add/PUT/DELETE/batch-delete + PUT role/menu、role/datascope、role/users。
 - [ ] **C11 config 四标签页** — `SysBaseConfig`/`SecurityConfig`/`UploadConfig`/`OtherConfig`。
 - [ ] **C12 dashboard + personal 七页** — `workbench`/`biz` + `profile`/`bindings`/`notice`/`password`/`sessions`(`password` 若早期已落占位,落地时核对)。
 
@@ -121,6 +121,16 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · C10b 应用(模块)管理页(`6f12b57`)
+
+C10 拆分前半:标准 CRUD(moduleApi.list 静态表 + 表单弹窗)。纯逻辑抽 moduleForm.ts(变异钉),本页接线。
+- **内置保护**:`isBuiltin` = code==='system';内置应用禁删 + 禁停(停了门户失联,模块/菜单管理页都在它下面);无 PUT 权限退化只读状态标签(保留可见性);停用先确认。
+- **全量 update**:StatusSwitch 与编辑共用 moduleToInput(可空归一空串);表单渲染全部 8 字段 → validateFields 即全量(**无 C9 那种未注册漏字段——已警惕**)。
+- **变异 15/15 全致死,残留 clean**;2 处安全过杀(M-IX6/IX7 预测 1 实测 2):删除按钮可见性被「内置计数」+「删除查找」两测同时断言,任一删除门变异连带红 2。判据:tsc0/antd-lint net0/oxlint0/vitest **10/10**(moduleForm 4 + 页 6)/build OK(51.15s;**首跑因 cwd 漂到仓库根 ENOENT 未真跑,已从 web-react 重跑绿**——git 要仓库根、npm 要 web-react,cd 别混)。
+- **module 不单开 review**:标准 CRUD、无新组件/新接缝(同 C6 那批),其 review 并入 C10a(role)的 C10 review lane 一并审(照 C6 批量审先例)。
+
+**下一条**:C10a role + GrantMenuTable(含 `OrgTreeSelect` multiple 扩展)。
 
 ### 2026-07-21 · C9 review lane(独立 opus,隔离 worktree)→ REQUEST-CHANGES(1 HIGH)→ 修复 `632f9ed` → 复核 APPROVE
 
