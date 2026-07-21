@@ -120,6 +120,21 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · C4 review 处置(review-c4 lane:APPROVE + 1 MED + 5 LOW → 采纳 MED + 4 LOW)
+
+**APPROVE,0 CRIT/HIGH。**opus 独立 lane 在隔离 worktree(junction 复用 node_modules)审 C4;我另核主树 C4 两提交完好、移除遗留 worktree。lane 实测全绿(`tsc`/`oxlint`/`vitest` 16/16/`build`/`antd lint` v6.5.1 net 0),并**独立复现 3 变异**(svgToIcon `vb![2]`→`vb![0]` 杀 2 条、filterNames 去 trim 杀同引用条、overflow→0 杀 cap 条)证判据非回声,另 grep 坐实零 `@iconify/react` 默认入口 / 零 `fetch`/`navigator.onLine` / 零跨模板引用、`addCollection` 幂等、body 正则跨行正确、i18n 嵌套正确。修复提交 `2f5348e`:
+
+- **[MED 已修] 真 `loadIconNames` 全链路无集成测试,mock 掩盖接线** —— IconPicker.spec mock 掉 `@/lib/icons`,而 lib/icons.spec 只测了 loadIconNames 的**未知前缀**分支。若 `COLLECTIONS` 前缀与 `loaders` 键分叉、或漏 `addCollection`,运行时网格空、**零红测试**。修:导出 `isBundled`(对齐 Vue 包)+ lib/icons.spec 加①`COLLECTIONS.every(isBundled)` 结构性钉、②真加载最小集 `ep` 端到端(非空 + 已排序,钉 load→addCollection→sortedIconNames 链路)。教训:**mock 掉数据源的组件测,必须另有一条不 mock 的集成测兜真接线**(与 B11/C2 "mock ProTable 要另验真映射"同源)。
+- **[LOW 已修] svgToIcon 丢了 viewBox 原点** —— 只取 `vb[2]/[3]`(宽高),弃 `vb[0]/[1]`(min-x/min-y)。今仅 star.svg(原点 0 0)无碍,但 `viewBox="-2 -2 24 24"` 类未来 svg 会偏移/裁切。修:承接 `left/top`(iconify 支持,默认 0)+ 非零原点用例。
+- **[LOW 已修] IconPicker effect 无 `.catch`** —— chunk import 拒绝时留陈旧列表 + 未处理拒绝。修:`.catch` 清空该 Tab。
+- **[LOW 已修] 清空按钮键盘不可达** —— `role="button"` 无 `tabIndex`/`onKeyDown`,键盘用户点不了清空。修:补 `tabIndex={0}` + Enter/Space(嵌套 role=button 的 ARIA 纯度纳为已知小瑕,普遍如此,不过度重构)。
+- **[LOW 已修] 在线 tab 的 4 个死 i18n 键** —— `online`/`onlinePlaceholder`/`use`/`offlineHint`(在线 tab 已砍,`grep` 证零引用)。删(zh+en)。**推翻 C4 那轮"留着不删"的判断**:两模板可分叉指的是键**可以**不同,不是保留**确定死**的键;在线 tab 是永久性砍除,这 4 键无未来消费者 → 删是对的(ponytail 删优于留)。
+- **[LOW 未采纳] 网格无虚拟化 / 启动 eager 加载全部集合** —— cap 300 下无碍,lane 亦言无需动作;C3 已记的既有权衡,不改。
+
+改后复验:`tsc` 0 / `oxlint` 0 / `antd lint` 0 / 全量 `vitest` 364/364 / `build` OK;主树净、worktree 已移除。
+
+**C4 收口。下一条 C5**:上传 + 富文本 + 图表(`FileUpload` 分片/秒传/续传 + `MarkdownEditor` + `Chart`)。
+
 ### 2026-07-20 · C4 轻量内联 IconPicker(`da7db2c`)
 
 建在 C3 的 `@iconify/react/offline` + 4 集合基建上。**去在线 tab**:Vue 版有个"在线"tab(自由输入任意 iconify 名、`navigator.onLine` 提示),对气隙自包含模板是反模式,砍掉——本版只离线集合 + 本地 svg。
