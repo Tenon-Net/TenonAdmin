@@ -134,7 +134,12 @@
 
 **下一条**:回到 C6b(先补 `useBatchDelete` + DataTable rowSelection,再 notice/file)。
 
-### 2026-07-20 · C6 标准列表页批(进行中:C6a position、C6b-notice、C6b-file 已落)
+### 2026-07-20 · C6 标准列表页批(进行中:C6a position、C6b-notice、C6b-file、C6c-session 已落)
+
+**C6c-session `985f223`**(在线会话):只读列表 + 行内强制下线,踢自己置灰(防误把自己下线),设备列 `uaSummary` 解析 UA 成「浏览器 · 系统」。
+- **顺带把框架无关的 `utils/ua.ts` verbatim 搬来**(与 `web/` 字节一致,`diff` EXIT 0;R4 当初记的"暂不搬、等用到的页面再搬"到此兑现)。
+- **变异 9/9 全致死,含 2 处预测≠实测(均比预测更强)**:M-UA1(join ` · `)、M-UA2(未识别回落原始串)、M-UA3(Edge 排序:正则打歪则 Edge UA 误判 Chrome)、M-UA4(Windows NT 10 标签)、**M-UA5(去 `filter(Boolean)`:预测红 1、实测红 3 —— 未识别回落与空回落连带,因 `['','']` join 成 ` · `)**、M-SS1(`=== currentUserId` 自踢判定)、**M-SS2(权限门 `!has`→`has`:预测红 1、实测红 2 —— 超管下反向返 null,自踢测试也塌)**、M-SS3(`disabled={isSelf}`)、M-SS4(设备列 `uaSummary` 不解析)。
+- session i18n 键两侧本就齐全,无新增键。判据:`tsc` 0 / `oxlint` 0 / `antd lint` 6.5.1 net 0 / 全量 `vitest` **418/418**(+10:ua 6 + session 4)/ `build` OK(55s)。
 
 **C6b-file `082db2c`**(文件管理):只读列表(按文件名搜)+ 工具栏上传(整传/分片)+ 行内下载/删除 + 批量删除。**顺带补齐 Vue 侧有、web-react 缺的两件基建**:
 - **`useBatchDelete` hook**(React 版,镜像 Vue composable):受控勾选态 `{selectedKeys,setSelectedKeys,hasSelection,run}` + 二次确认(useConfirm 挂起守卫防连点)+ **仅成功才清选刷新**(失败保留勾选可重试)。有意不 memo `run`(每渲染重建以闭最新 selectedKeys,避 stale-closure)。
@@ -155,7 +160,7 @@
 - i18n position 块(增改共用 code 禁改、codePlaceholder 等)两侧本就齐全,无新增键。路由 glob `/src/views/**/*.tsx` 覆盖,菜单指到即可达。
 - 判据:`tsc` 0 / `oxlint` 0 / `antd lint` 6.5.1 net 0 / 全量 `vitest` **386/386**(+6)/ `build` OK。
 
-**下一条 C6c**:`session`/`recycle`/`cache`/`monitor`(读/操作型,非标准 CRUD —— 在线会话强制下线、回收站还原/彻底删、缓存查看/清除、系统监控只读盘)。先勘四页各自的 api/端点与交互形态,再逐页定纯逻辑抽点。**C6 全批(position/notice/file + session/recycle/cache/monitor)落完再开一条 review lane**(base `dev`、隔离 worktree),不在本上下文自审。
+**下一条 C6c 剩余**:`recycle`(8 类页签 + 还原/彻底删,antd `Tabs` items API + 单 DataTable `key={activeTab}` 重挂)、`cache`(4 张定向失效动作卡,`ask` 二确 + portal 代际 vs 清除条数文案分支)、`monitor`(卡片 + 手动刷新不轮询,`monitorFormat.ts` 抽 fmtBytes/uptimeParts/pct/usageColor 变异钉;进度条走 `strokeColor` 避 antd status 枚举差异)。这三页各自新文件、互不改动既有文件,故拟共用一次全量 `vitest`+`build` 闸门(跑一次覆盖三页,省本机重进程),但**逐页原子提交**。**C6 全批(position/notice/file/session + recycle/cache/monitor)落完再开一条 review lane**(base `dev`、隔离 worktree),不在本上下文自审。
 
 ### 2026-07-20 · C5 review 处置(review-c5 lane:REQUEST-CHANGES → 1 HIGH 已修 + MED-1 + LOW-1;另发现 1 条自包含硬伤)
 
