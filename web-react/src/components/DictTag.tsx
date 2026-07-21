@@ -39,9 +39,5 @@ export function DictTag({ typeCode, value, typeMap }: {
   const items = useDictOptions(typeCode)
   const hit = resolveDictTag(items, value, typeMap)
   if (!hit) return <span>—</span>
-  return (
-    <Tag color={hit.color} bordered={false}>
-      {hit.label}
-    </Tag>
-  )
+  return <Tag color={hit.color}>{hit.label}</Tag> // v6 默认 variant="filled" 即无边框;不写废弃的 bordered
 }
