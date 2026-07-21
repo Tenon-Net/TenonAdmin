@@ -104,6 +104,21 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-20 · B11 review 处置(review-b11 lane:APPROVE + 3 LOW)
+
+**APPROVE,0 CRIT/HIGH/MED。**lane 没只读走过场,做了独立验证:①**独立复现两处变异**(`password || undefined`→`|| null` 红在 spec:17;`toUpdateInput` orgId→null 红在 spec:41),坐实这两条判据有真判别力、非回声;②**对着真 `.d.ts` 核 API**(pro-components 3.1.14-2):`ProColumns.search?: boolean` 确认默认列都进搜索表单、`search:false` 才排除(我的假设成立),`hideInSetting`/`columnStateType`/`destroyOnHidden` 全对,`sorter:true`(布尔非比较器)= 服务端排序;③**权限码与后端路由 + Vue 版逐一对平**(`{METHOD}:/{小写路由}`,UserController 四条全对);④独立追 `openEdit→save`,确认 `extraRef` 后展开压过默认与表单值,**数据丢失守卫在任何 validateFields 行为下都稳**;⑤确认 `Record<string,any>` 放宽不破 `DataTable.spec`(unknown 可赋给 any)。
+
+**3 LOW 处置:**
+- **[LOW-1 已修] `index.spec` 未桩 `dictApi.items`** → mount 触发 `useDictOptions('gender')` 真发请求打 `ECONNREFUSED`(被 `.catch` 吞、测试仍绿,但噪音盖真错、且 vitest 收紧未处理错误就会红)。补 `vi.spyOn(dictApi,'items').mockResolvedValue([])`,与另两处桩一致;实测噪音消失。
+- **[LOW-2 不改代码、加注防呆] `fetchUsers` 未 memo**:lane 独立确认无害(pro-table 经 `useRefFunction` 读 request,父重渲染不重取);反倒 memo 配错依赖才是真 footgun。加一行注释钉住"有意不 memo,别顺手优化"。
+- **[LOW-3 信息项] 原型建号无 org/职位/头像**:`extraRef` 从 `blankForm()` 种(全 null),是批次 C 的编辑器缺席所致,非数据丢失(新记录)。已在码注写明。
+
+**[开放问题仍开]** lane 确认**浏览器外无廉价路径**验真 ProTable 运行时(vitest externalize 卡 antd 无扩展名 deep-import;`@vitest/browser`/Playwright 都要浏览器二进制,本机没有)。mock 测的是**接缝**(DataTable prop 接线 + fetcher 映射),ProTable→localStorage 写是上游职责。**B10 开放问题维持指派 B12 手动 + E2 冒烟,判定为合理而非缺口。**
+
+**[进程教训,记下防复发] review lane 的 `isolation:worktree` 这次没真隔离** —— lane 把两处变异**打在主 checkout**(`web-react/` 本体)再撤,不是它自己的 worktree。这正是 B5 zzflake 污染那类风险。**本次已独立核 `git diff HEAD` 为空、无残留、无游离 worktree,无损**;但今后发 review lane 必须要么在 prompt 里**钉死"只在你自己的 worktree 里改,绝不碰主 checkout"**,要么收到 APPROVE 后**先验主树干净再信结论**(本轮已这么做)。
+
+四件套复跑:tsc 0 / vitest scoped 16/16(噪音清)。full suite 复核中。
+
 ### 2026-07-20 · B11 system/user 标准列表原型(`8eea775`)
 
 第一条真 CRUD 页,踩着真 ProTable(经 `<DataTable>`)。写侧用 antd 原生 `Modal`+`Form`;机构树筛选/头像上传/字典选择器/`useBatchDelete` 属批次 C,原型有意不带(各处 ponytail 注)。真 API 用 `@ant-design/pro-components` 3.1.14-2 + antd 6.5.1 + React 19.2。
