@@ -80,7 +80,7 @@
 - [x] **C3 展示件** — 完成(C3a `98968b9`:图标基建 + AppIcon + TenonLogo;C3b `dc01107`:DetailPage + CodeBlock + PasswordStrength)。`AppIcon`(@iconify/react 薄封装 + 4 离线集合基建 `lib/icons.setupIcons`,菜单/模块页占位改真渲染)、`TenonLogo`(内联 SVG 明暗)、`DetailPage`(返回+标题+actions+body)、`CodeBlock`(highlight.js json,维护者裁定引;未注册语言 escapeHtml 降级防 XSS)、`PasswordStrength`(拉 `configApi.passwordPolicy` + 默认兜底)。纯逻辑 `iconName`/`logoColors`/`escapeHtml`/`highlightCode`/`computeChecks`/`computeStrength`/`buildRules` 抽出。**变异 C3a 6/6 + C3b 16/16 全致死**;四件套 + `antd lint` 全绿。**边界裁定**(维护者 Q&A):渲染器基建(@iconify/react + 4 集合)前移进 C3(AppIcon 必需,否则菜单只能占位);C4 缩为**轻量内联 IconPicker**(搜索+网格,不发包)+ 本地 svg glob。**顺带修**:module 页 B7 遗留的废弃 `Tag bordered`(lint 全部改动文件逮到,全库仅此一处)。review lane 待开。
 - [x] **C4 IconPicker(轻量内联)** — 完成(`da7db2c`)。触发器 + 弹窗(搜索 + 集合 Tab + 本地 Tab + cap 300 网格 + "还有 N 个"提示),值契约 `prefix:name`/`local:name`。**去在线 tab**(气隙,对齐 C3 的 `/offline`;Vue 版有在线 iconify 名输入 tab,本版有意砍)。`lib/icons` 扩:`COLLECTIONS`(Tab 列表)、`loadIconNames`(懒加载+addCollection+排序名,按前缀缓存)、`sortedIconNames`/`svgToIcon` 纯逻辑、本地 svg 模块级注册(`src/assets/svg/*.svg` eager glob → `addIcon 'local:<name>'`,star.svg 从 web/ 拷来)。补 `common.clear`(zh+en)。**消费者是 C8 菜单 / C10 模块编辑表单(尚未建),组件先行**。**变异 14/14 全致死**;四件套 + `antd lint` 全绿,vitest 361/361。review lane 待开。
 - [x] **C5 上传 + 富文本 + 图表** — 完成(C5a `3eb0feb`:chunkUpload + FileUpload;C5b `5822ae3`:MarkdownEditor/View + Chart)。`chunkUpload.ts`(R4 推迟的 util,框架无关**逐字搬**,`@/api`+`@/types` 1:1)、`FileUpload`(antd `Upload customRequest`;编排抽 `performUpload`)、`MarkdownEditor`/`MarkdownView`(md-editor-rt,存 Markdown 源文本 —— ~~无 XSS 面~~ **误,见 C5 review 处置:Markdown 天然放行 HTML,已补全局 XSSPlugin**)、`Chart`(**裸 echarts.init** 不加 wrapper;`lib/echarts.ts` = 按需注册 + `buildEChartsTheme` 逐字搬)。新依赖 md-editor-rt + echarts。**变异 C5a 11/11 + C5b 8/8 全致死**;四件套 + `antd lint` 全绿,vitest 376/376。**如实记**:Chart 命令式 canvas 渲染 happy-dom 不可单测,判据落 `buildEChartsTheme` 纯逻辑 + dev/B12 实点(同 B10 posture)。**review 处置 REQUEST-CHANGES → 已收口**(1 HIGH XSS 已修 + MED-1 + LOW-1;见轮次日志)。
-- [x] **C6 标准列表页批**(全 7 页落完:position `ad5d849` / notice `5373528` / file `082db2c` / session `985f223` / recycle `9ddaf71` / cache `bdb0b76` / monitor `732d1fe`) — 照 B11 的 `<DataTable>` + `userForm.ts` 拆分范式(纯逻辑抽出变异钉、页面只接线)。**下一条:开一条 review lane 审整个 C6 全批**(base `dev`、隔离 worktree),不在本上下文自审。
+- [x] **C6 标准列表页批**(全 7 页落完:position `ad5d849` / notice `5373528` / file `082db2c` / session `985f223` / recycle `9ddaf71` / cache `bdb0b76` / monitor `732d1fe`) — 照 B11 的 `<DataTable>` + `userForm.ts` 拆分范式(纯逻辑抽出变异钉、页面只接线)。**review lane → APPROVE**(独立上下文,六接缝对后端 seed 核过;4 LOW:LOW-1 recycle 判别力缺口已补测加固、其余 3 接受;见轮次日志)。收口,进 C7。
 - [ ] **C7 日志三页** — `log/op` `log/login` `log/exception`。时间范围筛选用 `search:{transform: v => ({startTime:v?.[0], endTime:v?.[1]})}`。
 - [ ] **C8 树表原型** — `org` + `menu`(含 `ButtonManager` 子组件,写操作要 `hasPerm` 门 —— 沿用 dev 上 J4 的对齐)。
 - [ ] **C9 主从分栏原型** — `dict`(`activeRowKey` + 行点击,内联控件要 `stopPropagation`)。
@@ -121,6 +121,24 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · C6 review lane(独立上下文 code-reviewer/opus,隔离 worktree base HEAD)→ **APPROVE**
+
+审 C6 全批七页 + 三件 C6 引入共享物(useBatchDelete / utils/ua / DataTable rowSelection),范围精确排除夹在提交序列里的 **E7** markdown 提交(`fda311f`/`ca3910a`,不属 C6)。**无 HIGH、无涉数据/安全 MEDIUM**。六处「静默出错接缝」逐一对着**类型定义 + 后端 seed** 核过并全部判正确:
+- **session `{sessionid}` 小写**确认是**有意**:`PermissionCode.cs:15` 对整条 route template `ToLowerInvariant()`,故后端 `{sessionId}` 归一成 `{sessionid}`,`DefaultMenuSeed.cs:151` 正是这形状,页面串匹配。
+- recycle(seed 171-172)、cache(122-125)、position(75-77)、notice(101/103)权限码逐一对上后端 seed。
+- position `rowToInput` 核到 `PositionInput` 恰 `{name,code,sort,enabled}` 四字段无隐藏字段;notice `receiverValid` 用 `?? ReceiverType.All`(nullish 保住 0 值)且校验器只挂条件渲染的 receiverIds 字段;cache thunk 晚绑定 + ask 取消真拦截;file 仅成功清选刷新;session 自踢守卫渲染路径不可绕。
+- antd v6.5.1 用法离线 CLI 复核全对(Select `showSearch` 对象形 optionFilterProp、Progress strokeColor 免 status 枚举、Tabs items、Card size、`<Can>` 返 Fragment 不破 Row/Col gutter context)。
+
+**4 条 LOW 处置**:
+- **LOW-1(recycle 判别力缺口)已堵**:原 seam 测试只在默认 `user` 页签断言 `restore('user',5)`,故「把 restore/purge 的 `activeTab` 硬编码成 'user'」的变异能存活 —— 而这正是本页最高危接缝(选错类型静默还原错实体),我原变异只钉了 id(RC2/RC3)没钉类型参数。改测试**先切到角色页签**再渲染操作列、断言 `restore('role',5)`/`purge('role',5)`。补测变异 **2/2 全致死,预测=实测**:M-RC-A(restore 硬编码 user)红 1、M-RC-B(purge 硬编码 user)红 1,均红在切角色页签那条;基线 4/4 绿,残留 clean。
+- LOW-2(session 自踢在 `userInfo` 未载时 `isSelf` 全 false):**接受** —— userInfo 在路由守卫先于本路由载入,且纯 UX(踢自己=登出),后端权威 authz。
+- LOW-3(cache `busy` 单键,兄弟卡按钮不禁用):**接受** —— 各卡 ask 二确 + 幂等,无害。
+- LOW-4(monitor memPct 可 >100,working set vs GC 可用内存不同分母):**接受** —— antd Progress 视觉裁剪,纯 cosmetic。
+
+review 后按纪律核对主树字节一致(HEAD 未变、工作树干净)、移除隔离 worktree。
+
+**下一条:C6 全批收口,进 C7。**
 
 ### 2026-07-21 · E7 md-editor 全离线(维护者授权「你决定吧」→ 两模板都修 + 顺带修 web/)
 
