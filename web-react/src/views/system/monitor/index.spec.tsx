@@ -38,11 +38,15 @@ describe('MonitorPage', () => {
   it('手动刷新再拉一次(不轮询)', async () => {
     mount()
     await screen.findByText('CPU 占用')
-    fireEvent.click(screen.getByRole('button', { name: /刷\s*新/ })) // antd 两汉字按钮插空格:'刷新'→'刷 新'
-    // timeout 放宽到 5s:默认 1000ms 在全量重载 + 本机内存紧张(GC 停顿)下会偶发超时;
-    // 断言不变(仍是精确调 2 次),只增时序容差,治全量 gate 的间歇性 flake。
+    // 关键:antd Button 在 loading 态会吞掉 onClick(handleClick 里 innerLoading 直接 return)。
+    // 满载 + GC 停顿下,首拉的 CPU 卡可能先于 setLoading(false) 的渲染出现,此刻点刷新会被吞、第二次永不发生
+    // → 故点击前先等按钮退出 loading。这才是 flake 根因(非单纯超时),消除后再断言精确调 2 次。
+    const btnName = { name: /刷\s*新/ } // antd 两汉字按钮插空格:'刷新'→'刷 新'
+    await waitFor(() => expect(screen.getByRole('button', btnName).className).not.toContain('loading'))
+    fireEvent.click(screen.getByRole('button', btnName))
+    // waitFor 上限 5s(命中即返回);per-test 超时抬到 15s(第三个入参)给渲染滞后留头寸。断言不变。
     await waitFor(() => expect(monitorApi.server).toHaveBeenCalledTimes(2), { timeout: 5000 })
-  })
+  }, 15000)
 
   it('容量为 0 的盘不渲染卡片', async () => {
     mount()
