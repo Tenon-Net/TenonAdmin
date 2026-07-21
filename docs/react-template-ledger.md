@@ -122,6 +122,16 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-21 · C8a review lane(独立 opus,隔离 worktree)→ APPROVE
+
+独立 lane 对**主树 b247fc2 的真 C8a 代码**审(七探针 + 判据复跑),裁定 **APPROVE**:0 CRITICAL/HIGH/MEDIUM,1 LOW。
+- **最有价值处**:reviewer 不停在"看着对",而**逐层追 installed antd 6.5.1 / pro-components 3.1.14-2 源码**证实 TreeTable 的 `expandable` 绑定**活着**——它是普通 config 对象经 `pro-components/lib/table/Table.js:706-723` 的 `...rest` 直透 antd Table,**无** C7 HIGH-1 那种 `cloneElement` 末位展开覆盖;`onExpandedRowsChange` 收 key 数组与 `@rc-component/table` interface(179/186)一致,`childrenColumnName` 默认 `'children'` 与 `buildTree` 嵌套对齐。**这批不是 C7 那种死接缝。**
+- 其余六探针全核过:`rowToInput` 全量六字段(漏字段 → org spec 的 `toHaveBeenCalledWith` 精确断言会红,有判别力)、filterTree 浅拷贝→重拉推理成立、受控展开播种/手动折叠不被重置推理成立、四权限码与 `DefaultMenuSeed.cs`(Id 71/72/73/98)+ `OrgController.cs` **逐字节一致**、`excludeSubtreeOf` 剪自身子树防成环、save `parentId ?? 0` 归一 + validateFields 在 try 外故校验失败留弹层。
+- **LOW-1(接受,记档)**:TreeTable.spec 与 org.spec 都 mock 掉真 ProTable,故**升级期**若 antd 改名 `onExpandedRowsChange`/停透传 `expandable`,两 spec 仍全绿而运行时展开已死(「测了自己的 mock」的固有缺口)。**为何不补**:①只有渲染真库才逮得到,而真库撞 vitest 深导入墙(全模板 mock ProTable 的既定原因);②不像 C7 HIGH-1 有可钉的元素形状,此处无廉价确定性钉;③全模板 ProTable 运行时一贯 dev/E2E 保(B10/B11/C 批同 posture)。为一个升级接缝现搭 E2E 属越界。留 B12 实点 + E 批 E2E 兜。**如实记录的已知缺口,非假装堵上。**
+- reviewer 复跑判据(主树):`tsc` 0 / `antd lint` 6.5.1 net 0 / 三 spec `vitest` 16/16;StatusSwitch 另有 7 例独立覆盖真 click→request→悲观回滚。收口:核主树 b247fc2 字节一致、移除隔离 worktree。
+
+**下一条:C8b**(menu ~530 + ButtonManager ~360,全港最大项)。
+
 ### 2026-07-21 · C8a 机构树表 + `TreeTable` 薄封装(`a5f9775`)
 
 C8 拆分前半:静态树表原型,把 pro-components(beta)的**另一形态**(静态 `dataSource` + 受控展开)隔离进新 `TreeTable`,与 `DataTable`(fetcher 模式)并列——两模式塞一个组件会堆条件复杂度,故并列而非扩展(C8 scope 定案兑现)。
