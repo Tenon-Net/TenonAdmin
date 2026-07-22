@@ -1,0 +1,68 @@
+/* 登录外壳:右上角工具栏(皮肤切换 + 主题/语言)。移植 Vue index.vue 的 scoped 样式。 */
+.login-shell {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+}
+/* 右上角工具栏:皮肤切换 + 主题/语言并排靠右;窄屏放不下时换行仍右对齐,不横向溢出。 */
+.login-topbar {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+/* 皮肤切换器 + 全局工具药丸:同款深色磨砂,自带对比,在明/暗/极光三底色皆可读 */
+.skin-switch,
+.login-tools {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(18, 20, 28, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+}
+.skin-seg,
+.tool-btn {
+  border: none;
+  cursor: pointer;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.62);
+  transition:
+    color 0.2s,
+    background 0.2s;
+}
+.skin-seg {
+  padding: 6px 16px;
+}
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 10px;
+}
+.skin-seg:hover,
+.tool-btn:hover {
+  color: #fff;
+}
+.tool-btn:focus-visible,
+.skin-seg:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.skin-seg.active {
+  background: var(--color-primary);
+  color: #fff;
+}

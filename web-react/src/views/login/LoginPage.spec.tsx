@@ -18,6 +18,15 @@ vi.mock('react-router-dom', async (orig) => ({
   useNavigate: () => navigate,
 }))
 
+// D5 后登录壳/皮肤从 `@ant-design/icons` **barrel** 具名导入(壳 Moon/Sun、双栏 CheckCircle);而 `mount()`
+// 的 `vi.resetModules()` 会强制重估整个 barrel(数千图标 > 5s)→ 动态 import 超时。antd 组件内部走深导入
+// (`.../es/icons/*`)不碰 barrel,故只 stub 本图用到的这三个具名图标即可解挂,不影响 antd 自身图标。
+vi.mock('@ant-design/icons', () => ({
+  MoonOutlined: () => null,
+  SunOutlined: () => null,
+  CheckCircleFilled: () => null,
+}))
+
 import { authApi, configApi, ApiError } from '@/api'
 
 const loginMock = vi.mocked(authApi.login)
