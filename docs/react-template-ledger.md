@@ -98,7 +98,7 @@
 
 - [x] **D1 tabs store + 标签栏容器 + 页面缓存** — B3 推迟的那件,**整个移植第二难的东西**。**拆两半:D1a store `34306f2`**(store 纯化 + 两处 clearTabs 接回 + spec/变异)+ **D1b 容器/标签栏/tab-sync `0082a86`**(KeepAliveOutlet/TabsBar/useTabSync + LayoutShell 接线 + 7 例 spec),均见轮次日志。①store:`removeTab` 的邻居选择、`_ensureActive`、`cachedNames` 依赖 `hasRoute`,都要有路由和容器才写得了;落地时**必须**把 `auth.reset()` 与 `useModule` 切应用两处的 `clearTabs()` 补回。②缓存:React 无 `keep-alive` 对等物 —— `<KeepAlive>` 容器维护 `Map<path, ReactNode>`,已开 tab 常驻挂载、非活动 `display:none`。`// ponytail: 不做 activated/deactivated 钩子,页面若需感知激活再加 useTabActive()`。代价是隐藏页的 effect/定时器仍在跑。验:切走切回状态保留、隐藏页定时器行为、内存随开 tab 是否线性增长。
 - [x] **D2 设置抽屉 + 多布局壳** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。**2026-07-21 维护者裁定选 B**:不只做抽屉 UI,连 **LayoutShell 重排支持全部 6 布局模式**一起做(否则布局卡片是点了不生效的死控件)。拆两半:**D2a 多模式壳 `73452da`**(CSS-grid `grid-template-areas` 按 mode 重排 + `SideNav` 薄封装 + `useLayoutMenu` 一/二级联动 + CSS 变量)+ **D2b 抽屉 + 卡片 `71c0e14`**(`SettingsDrawer` 三 tab + `LayoutModeCards` 六卡片 + 内联 SettingRow + 原生 Watermark/fixedHeader/pageTransition/breadcrumb 全接线 + 齿轮入口 + `exportSettings` 复制配置 DEV + `setSetting` action),均见轮次日志。B 的所有控件皆当场生效、无死控件。
-- [ ] **D3 SignalR 实时** — `@microsoft/signalr` 框架无关(需加此依赖),只重写 `useRealtime.ts`(68)外层包装:`force-logout` / `notice-changed` + 初次失败静默退回 30s 轮询。
+- [x] **D3 SignalR 实时**(`87949bd`) — `useRealtime.ts` + 内联 noticeBus + LayoutShell 接线 + `@microsoft/signalr ^10.0.0`。noticeBus **不单开文件**(唯一消费者是 LayoutShell 未读 effect,内联进 useRealtime.ts 与 web 一致);`start()` 整段包 try/catch(比 Vue 版更稳:`build()` 可同步抛,实时是纯增强绝不拖垮壳)。见轮次日志。原文:`@microsoft/signalr` 框架无关(需加此依赖),只重写 `useRealtime.ts`(68)外层包装:`force-logout` / `notice-changed` + 初次失败静默退回 30s 轮询。
 - [ ] **D4 MenuSearch 全局命令面板** — 建在 `useMenuFlat` 的纯逻辑扫描上,外链项走 `window.open`。
 - [ ] **D5 登录页另两套皮肤** — B5 已落一套;补 `AuroraGlass`(363)、`SplitPanel`(242)、`Spotlight`(107)+ 皮肤切换。**后两者在 Vue 版就是 Naive-free 的、主要是 CSS,几乎直接搬**。
 
@@ -127,6 +127,17 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · D3 SignalR 实时(`87949bd`)
+
+移植 web `useRealtime.ts`(68 行)到 React,只重写外层壳、连接语义逐字保留。
+- **useRealtime.ts**:进程内单例 `HubConnection` → `/hub/realtime`(令牌走 `accessTokenFactory` query,`withAutomaticReconnect`,`LogLevel.Warning`)。两路推送:`force-logout`(停连 + `authStore.reset()`+`userStore.clear()` + `message.warning(realtime.forcedLogout)` + 跳 `/login`,即本地登出同款收尾少一次 `authApi.logout` —— 服务端已强制)、`notice-changed`(emit noticeBus)。React 适配:Vue 的 `useRouter/useMessage/useI18n` → `useNavigate`/`App.useApp().message`/`useTranslation`;`useUserStore().accessToken` → `useUserStore.getState().accessToken`(每次取最新);生命周期用 `useEffect(()=>{start(); return stop},[])` 一次性捕获(鉴权外壳整会话只挂一次,与 Vue setup 同款);当前路径守卫用 `window.location.pathname`(BrowserRouter,免 useLocation 依赖)。
+- **noticeBus 内联(偏离台账原计划的独立 `noticeBus.ts`)**:模块级 `Set<Listener>` + `on`(返回退订)/`emit`,替 VueUse `useEventBus`。**ponytail**:唯一消费者是 LayoutShell 未读 effect,与 web 一样内联进 useRealtime.ts,不单开文件(无循环:LayoutShell→useRealtime 单向)。
+- **健壮性超出 Vue 原版(有意)**:`start()` 整段(build+connect)包 try/catch,不止 `conn.start().catch()`。`HubConnectionBuilder.build()` **可同步抛**(URL 无法解析等环境)—— 实测 happy-dom 里正是它同步抛 `Cannot resolve '/hub/realtime'` 穿透 useEffect、拖垮整个壳(13 例全红)。实时是纯增强,任何失败必须静默退回轮询兜底 + 惰性 401,绝不拖垮鉴权外壳。web 的 Vue 版把 build 放 try 外是潜在脆弱点,此处修正。
+- **LayoutShell 接线**:`useRealtime()`(挂载起停);未读 effect 加 `noticeBus.on(()=>poll())`(推送即刻重拉,免最长 30s 延迟)+ 退订。
+- **判据**:tsc 0 / antd-lint(LayoutShell+useRealtime)0 / oxlint 0 / **全量 vitest 97 文件 673/673(分片跑)**。noticeBus **变异证伪**:退订函数改空操作 → 恰好「退订后不再调用」1 条红(预测=实测)。
+- **本机 OOM + 分片(如实记,后续验证照此)**:单进程跑全量 97 文件 vitest **必 OOM**(`FATAL ERROR: process out of memory`,V_EXIT=127;`src/views` 42 文件带 echarts/md-editor/pro-components 是主因)。**taskkill 清 MCP 被分类器拦截**(不能杀进程),改**按目录分三片单跑**:①核心+改动(stores/layouts/utils/router/locales/lib/theme/hooks/composables/api,35 文件 272)②components(20 文件 137)③views(42 文件 264)。三片皆绿零 OOM。**结论:web-react 全量验证今后一律分片,别再单进程跑全量。**
+- **下一条**:**D4 命令面板**(MenuSearch,`Ctrl/Cmd+K` 全局菜单搜索跳转)。之后 D5(登录皮肤),再 E 批工程化(E1 Dockerfile/compose、E2 web-react-ci、E3 dev.bat、E4 文档、E5 gen:api 漂移闸、E6 pro-components 稳定版跟进)。
 
 ### 2026-07-21 · D2 合并 review lane 处置(修 `3b1d76d`)
 
