@@ -97,7 +97,7 @@
 ## 批次 D · 容器与标签页
 
 - [x] **D1 tabs store + 标签栏容器 + 页面缓存** — B3 推迟的那件,**整个移植第二难的东西**。**拆两半:D1a store `34306f2`**(store 纯化 + 两处 clearTabs 接回 + spec/变异)+ **D1b 容器/标签栏/tab-sync `0082a86`**(KeepAliveOutlet/TabsBar/useTabSync + LayoutShell 接线 + 7 例 spec),均见轮次日志。①store:`removeTab` 的邻居选择、`_ensureActive`、`cachedNames` 依赖 `hasRoute`,都要有路由和容器才写得了;落地时**必须**把 `auth.reset()` 与 `useModule` 切应用两处的 `clearTabs()` 补回。②缓存:React 无 `keep-alive` 对等物 —— `<KeepAlive>` 容器维护 `Map<path, ReactNode>`,已开 tab 常驻挂载、非活动 `display:none`。`// ponytail: 不做 activated/deactivated 钩子,页面若需感知激活再加 useTabActive()`。代价是隐藏页的 effect/定时器仍在跑。验:切走切回状态保留、隐藏页定时器行为、内存随开 tab 是否线性增长。
-- [ ] **D2 设置抽屉** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。派生逻辑由 `src/theme/mix.ts` + `src/styles/tokens.css` 现成给出,成本在 `SettingsDrawer`(239) + `LayoutModeCards`(180) 的 UI 重写。
+- [~] **D2 设置抽屉 + 多布局壳** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。**2026-07-21 维护者裁定选 B**:不只做抽屉 UI,连 **LayoutShell 重排支持全部 6 布局模式**一起做(否则布局卡片是点了不生效的死控件)。拆两半:**D2a 多模式壳**(CSS-grid `grid-template-areas` 按 mode 重排 + `SideNav` 薄封装 rail/full/collapsed/brand + `useLayoutMenu` 补一/二级联动 selectedL1/l1Items/l2Items/onSelectL1 + 补 `--rail-w`/`--sidebar-w` 等 CSS 变量);**D2b 抽屉 + 卡片**(`SettingsDrawer` + `LayoutModeCards` + `SettingRow` + 原生 antd `Watermark` 接线 + 顶栏齿轮入口 + `exportSettings` 复制配置 DEV 项)。派生逻辑由 `src/theme/mix.ts` + `src/styles/tokens.css` 现成给出。
 - [ ] **D3 SignalR 实时** — `@microsoft/signalr` 框架无关(需加此依赖),只重写 `useRealtime.ts`(68)外层包装:`force-logout` / `notice-changed` + 初次失败静默退回 30s 轮询。
 - [ ] **D4 MenuSearch 全局命令面板** — 建在 `useMenuFlat` 的纯逻辑扫描上,外链项走 `window.open`。
 - [ ] **D5 登录页另两套皮肤** — B5 已落一套;补 `AuroraGlass`(363)、`SplitPanel`(242)、`Spotlight`(107)+ 皮肤切换。**后两者在 Vue 版就是 Naive-free 的、主要是 CSS,几乎直接搬**。
@@ -127,6 +127,19 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · D1 合并 review lane(独立 opus,隔离 worktree)→ APPROVE(2 潜伏 MEDIUM + 6 LOW)→ 修复 `c02ee41`
+
+审 D1a `34306f2` + D1b `0082a86`(store×3 + layouts×5 + spec×3,并比对 Vue 源 4 份)。worktree 从 main 新建、树内无 web-react/,故按提交 blob 做静态审 + 类型逐一核对(vitest/vue-tsc 需检出+装依赖+内存,未在 worktree 跑;合并树这边已跑)。九个重点逐条**通过**:零共享、选择器纯度(全字段级 + 模块级纯函数)、导航型 action 解耦(返 nextPath、store 零 router)、clearTabs 两处接回、affix/pinned 边界五处自洽、tabs↔auth 循环引用安全(交叉引用全在函数体内)、persist 白名单、KeepAlive 语义、测试用可观测状态断言。**0 HIGH/CRITICAL**。
+- **修掉(follow-up `c02ee41`)**:
+  - **[MEDIUM-1] refreshTab 对 noCache 当前页是静默 no-op** —— 版本号 bump 只作用于缓存条目的 div key,noCache 当前页走的是**无键** live 块,reloadKey/bump 触不到。对齐 Vue `default.vue` 的 `rvShow` 统一重挂当前页:给 live 块加同一套 `${path}:live:${bump}` 版本键。**当前潜伏**(useTabSync 恒喂 `noCache:false`,无页是 noCache),但 noCache 页一落地即浮现。补 spec 并**变异证实**:退回无键 live 块 → 恰好只有 noCache-刷新那条红、其余 3 条绿(预测=实测)。
+  - **[LOW-3] 中键关闭缺 mousedown preventDefault** —— 补 `onMouseDown` 压掉中键自动滚动圆标(对齐 Vue `@mousedown.middle.prevent`)。
+  - **[LOW-6] bumps 只增不减** —— 缓存条目逐出时连版本号一并回收。
+  - **[LOW-7] closeLeft 正向路径未测** —— 补 `idx>0 删左侧 + 当前在左被删导航到 path`,杀掉 `i>=idx` 过滤器变异(旧套只测了 idx<=0 的 null 分支)。
+- **登记延后(不在本轮修)**:
+  - **[MEDIUM-2] noCache 全链路已通但恒 inert** —— store/KeepAlive 完整支持 noCache,但 `useTabSync` 写死 `noCache:false` 且 `MenuNode` 无该字段来源、route meta 也无。激活它要**后端 MenuNode 加 noCache 字段(契约改动)**+ useTabSync 透传,超出前端模板移植范围 → 排到后续(菜单/路由 meta 引入 noCache 时一并接)。当前后果仅「详情页复访看到上次状态」,与 Vue 靠 `route.meta.noCache` 排除的差异**潜伏不可达**。
+  - 其余 LOW(tabTitle 含点判 i18n key=与 Vue 等价、render 期改 ref=keep-alive 通病已注、flatten 防御性风格)均**移植等价**,不动。
+- **下一条**:D2(维护者裁定选 **B**:设置抽屉 + LayoutModeCards + **LayoutShell 重排支持全部 6 布局模式**,卡片当场生效)。拆 D2a(多模式壳:CSS-grid + SideNav + useLayoutMenu 一/二级联动)/ D2b(抽屉 + 卡片 + 水印接线 + 顶栏入口)。
 
 ### 2026-07-21 · D1b 标签栏 + KeepAlive 容器(`0082a86`)
 
