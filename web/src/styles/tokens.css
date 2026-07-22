@@ -20,7 +20,7 @@
   --color-gray-800: #2F313F;  /* 正文加强 */
   --color-gray-700: #5D5F6A;  /* 次级文字 */
   --color-gray-600: #7B7C85;  /* 辅助文字 / 图标 */
-  --color-gray-500: #97989F;  /* 占位 / 说明文字 */
+  --color-gray-500: #85868E;  /* 占位 / 说明文字(对比度加深档,≥3:1) */
   --color-gray-400: #BABABF;  /* 禁用文字 */
   --color-gray-300: #D1D1D1;  /* 重边框 / 分隔线(corporate base-300) */
   --color-gray-200: #E3E3E3;  /* 常规边框 */
@@ -38,7 +38,7 @@
         warning/error 原值偏浅、按正文可读加深一档)─────────────── */
   --color-success:        #00A43B;
   --color-success-bg:     #E0F4E7;
-  --color-warning:        #C59B00;
+  --color-warning:        #A88400;
   --color-warning-bg:     #FFF8E0;
   --color-danger:         #D15054;
   --color-danger-bg:      #FFECED;
@@ -51,7 +51,7 @@
   --color-bg-elevated:    #FFFFFF;  /* 弹层 / 下拉 / 抽屉 */
   --color-text-primary:   #181A2A;  /* 主文字 / 标题 */
   --color-text-secondary: #5D5F6A;  /* 次级文字 */
-  --color-text-tertiary:  #97989F;  /* 占位 / 辅助文字 */
+  --color-text-tertiary:  #85868E;  /* 占位 / 辅助文字(白底 3.6:1,AA-large) */
   --color-text-disabled:  #BABABF;  /* 禁用文字 */
   --color-border:         #E3E3E3;  /* 常规边框 / 分隔 */
   --color-border-strong:  #D1D1D1;  /* 强调边框 / 输入描边 */
