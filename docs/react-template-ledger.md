@@ -128,6 +128,16 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-21 · D2 合并 review lane 处置(修 `3b1d76d`)
+
+D2a+D2b 合并 review(独立 opus + 隔离 worktree,逐模式对照 Vue 源)结论 **REQUEST-CHANGES**,唯一阻断项 1 条 MEDIUM,其余 4 LOW + 4 覆盖缺口 + 1 Open Question 不阻断。CRITICAL/HIGH 各 0。
+- **[MEDIUM] 已修(`3b1d76d`)**:`LayoutShell.tsx` header-left 原是三路**互斥**三元 `headerShowBrand ? 品牌 : showBreadcrumb ? 面包屑 : 标题`。凡 `headerShowBrand` 为真的 4 模式(horizontal / vertical-hybrid-header-first / top-hybrid-sidebar-first / top-hybrid-header-first,及 mobile)只出品牌,面包屑/标题分支永不进 → `showBreadcrumb` 在这些模式成**死控件**,违背 D2「无死控件」裁定且偏离 Vue 源(`AppHeader.vue:107-114` 里品牌与面包屑/标题是**两段独立兄弟 `v-if`**、并存)。修法:拆成两段独立块镜像 Vue —— 品牌一段(`headerShowBrand ? … : null`)、面包屑/标题另一段。`.shell-header-left` 已有 `gap:10px`、`.shell-brand` 有 `flex-shrink:0`,并存无需改 CSS。
+- **回归测试 + 变异证伪**:新增 `LayoutShell.spec` 「header-brand 模式(horizontal)开 showBreadcrumb:品牌与面包屑并存」。**预测=实测**:退回三路互斥三元 → 恰好这 1 条红(vertical 那条仍绿,12 passed),恢复即绿。判据:tsc 0 / antd-lint(LayoutShell)0 / oxlint 0 / **全量 vitest 96 文件 671/671**(670→671)。
+- **4 LOW 全部接受(有意/parity,不改)**:①SideNav.openKeys 只增不减 —— 注释已表明「不覆盖用户手动展开」是有意,陈旧 cat key 惰性无害(antd 只渲染当前 items 存在项);可选加固=并集前与当前 items 取交集。②页切换只进场无离场 —— React 全挂载 keep-alive 无 `out-in` 对等物,可接受简化。③Watermark 仅覆盖内容区(非 Vue 的 fullscreen 整窗)—— 为「切水印不 remount 掉 KeepAlive 缓存」刻意包在 `.shell-content` 上的取舍。④copyConfig 无 catch —— DEV-only 且 Vue 版同样无 catch(parity)。
+- **4 覆盖缺口(LOW,择机补)**:两个 header-first 模式无 shell 测(本次新增的 horizontal 回归已顺带覆盖 header-brand 分支);selectedL1 off-menu 保留无 hook 级测;pageTransition animClass 接线无测。留待 D 批收尾或 B12 验收补。
+- **Open Question(低置信)**:Watermark `content=''` 是否真不绘,依赖 antd v6 空 content 短路行为,tsc 过但未浏览器目视;B12/RDP 实点时确认(倾向没问题)。
+- **下一条**:**D3 SignalR 实时** —— 加 `@microsoft/signalr` 依赖 + `npm install`,建 `useRealtime.ts`(移植 web 版 68 行外层:`force-logout`/`notice-changed` + 初次失败静默退 30s 轮询)+ `noticeBus.ts`(模块级 pub/sub 替 VueUse `useEventBus`),在 LayoutShell 挂载起停 + 订阅 bus 刷未读角标。
+
 ### 2026-07-21 · D2b 设置抽屉 + 布局卡片 + breadcrumb(`71c0e14`)
 
 D2 后半:抽屉 UI + 把 D2a 未接的开关全接上,坐实维护者 B「所有控件皆当场生效」。
