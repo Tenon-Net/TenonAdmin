@@ -97,7 +97,7 @@
 ## 批次 D · 容器与标签页
 
 - [x] **D1 tabs store + 标签栏容器 + 页面缓存** — B3 推迟的那件,**整个移植第二难的东西**。**拆两半:D1a store `34306f2`**(store 纯化 + 两处 clearTabs 接回 + spec/变异)+ **D1b 容器/标签栏/tab-sync `0082a86`**(KeepAliveOutlet/TabsBar/useTabSync + LayoutShell 接线 + 7 例 spec),均见轮次日志。①store:`removeTab` 的邻居选择、`_ensureActive`、`cachedNames` 依赖 `hasRoute`,都要有路由和容器才写得了;落地时**必须**把 `auth.reset()` 与 `useModule` 切应用两处的 `clearTabs()` 补回。②缓存:React 无 `keep-alive` 对等物 —— `<KeepAlive>` 容器维护 `Map<path, ReactNode>`,已开 tab 常驻挂载、非活动 `display:none`。`// ponytail: 不做 activated/deactivated 钩子,页面若需感知激活再加 useTabActive()`。代价是隐藏页的 effect/定时器仍在跑。验:切走切回状态保留、隐藏页定时器行为、内存随开 tab 是否线性增长。
-- [~] **D2 设置抽屉 + 多布局壳** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。**2026-07-21 维护者裁定选 B**:不只做抽屉 UI,连 **LayoutShell 重排支持全部 6 布局模式**一起做(否则布局卡片是点了不生效的死控件)。拆两半:**D2a 多模式壳**(CSS-grid `grid-template-areas` 按 mode 重排 + `SideNav` 薄封装 rail/full/collapsed/brand + `useLayoutMenu` 补一/二级联动 selectedL1/l1Items/l2Items/onSelectL1 + 补 `--rail-w`/`--sidebar-w` 等 CSS 变量);**D2b 抽屉 + 卡片**(`SettingsDrawer` + `LayoutModeCards` + `SettingRow` + 原生 antd `Watermark` 接线 + 顶栏齿轮入口 + `exportSettings` 复制配置 DEV 项)。派生逻辑由 `src/theme/mix.ts` + `src/styles/tokens.css` 现成给出。
+- [x] **D2 设置抽屉 + 多布局壳** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。**2026-07-21 维护者裁定选 B**:不只做抽屉 UI,连 **LayoutShell 重排支持全部 6 布局模式**一起做(否则布局卡片是点了不生效的死控件)。拆两半:**D2a 多模式壳 `73452da`**(CSS-grid `grid-template-areas` 按 mode 重排 + `SideNav` 薄封装 + `useLayoutMenu` 一/二级联动 + CSS 变量)+ **D2b 抽屉 + 卡片 `71c0e14`**(`SettingsDrawer` 三 tab + `LayoutModeCards` 六卡片 + 内联 SettingRow + 原生 Watermark/fixedHeader/pageTransition/breadcrumb 全接线 + 齿轮入口 + `exportSettings` 复制配置 DEV + `setSetting` action),均见轮次日志。B 的所有控件皆当场生效、无死控件。
 - [ ] **D3 SignalR 实时** — `@microsoft/signalr` 框架无关(需加此依赖),只重写 `useRealtime.ts`(68)外层包装:`force-logout` / `notice-changed` + 初次失败静默退回 30s 轮询。
 - [ ] **D4 MenuSearch 全局命令面板** — 建在 `useMenuFlat` 的纯逻辑扫描上,外链项走 `window.open`。
 - [ ] **D5 登录页另两套皮肤** — B5 已落一套;补 `AuroraGlass`(363)、`SplitPanel`(242)、`Spotlight`(107)+ 皮肤切换。**后两者在 Vue 版就是 Naive-free 的、主要是 CSS,几乎直接搬**。
@@ -127,6 +127,19 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · D2b 设置抽屉 + 布局卡片 + breadcrumb(`71c0e14`)
+
+D2 后半:抽屉 UI + 把 D2a 未接的开关全接上,坐实维护者 B「所有控件皆当场生效」。
+- **SettingsDrawer.tsx**:三 tab(外观/布局/通用),移植 Vue SettingsDrawer.vue。外观=主题模式 Segmented + 主色(色点 + antd ColorPicker)+ 密度;布局=LayoutModeCards + 界面开关;通用=水印开关/文案 + 表单形态。SettingRow 单一使用者按 ponytail 内联(不单开文件)。「复制配置」仅 DEV 显示(导出当前外观值,粘回 DEFAULTS 即新默认)。
+- **LayoutModeCards.tsx**:6 张彩色线框卡片(逐模式移植 Vue,三档主色跟随实时 `--color-primary`)。背靠 D2a 壳,点选即重排。
+- **breadcrumb**:`breadcrumbFor(items, path)`(纯函数、已单测)喂 antd `Breadcrumb`,顶栏按 `app.showBreadcrumb` 显示(vertical 等无顶栏品牌的模式)。
+- **pageTransition**:在 KeepAliveOutlet 接线 —— 只给当前可见页挂 CSS **animation** 类(非 transition:页 div 由 `display:none→block` 时 animation 会重跑,故切走切回即入场,不 remount、不动缓存语义)。三档 none/fade/fade-slide。
+- **app store**:加泛型 `setSetting(key,value)` 作为抽屉界面开关(showBreadcrumb/showTabs/fixedHeader/pageTransition/grayscale/watermark/watermarkText/formStyle)的统一写入口(B3 时抽屉未建、这些字段没 setter)。顶栏齿轮开抽屉。
+- **判据**:tsc 0 / antd-lint(layouts,14 文件)0 / oxlint 0 / **全量 vitest 96 文件 670/670**。新 spec:app setSetting 1 + menuItems breadcrumbFor 3(深层链/顶层/off-menu)+ SettingsDrawer 4(三 tab / 开关→store / 卡片→layoutMode / 重置入口)+ LayoutShell D2b 2(齿轮开抽屉 / breadcrumb 链 系统›用户)。
+- **两处 antd v6 改名(tsc/antd-lint 逮到,凭记忆写必踩)**:Divider `orientation`(v6 指方向 horizontal/vertical)→ 文字位置改 `titlePlacement="start"`;Drawer `width` 已废 → 自定义宽走 `styles.section`。
+- **一处测试环境限制(如实记)**:Popconfirm 弹层在 happy-dom + rc-trigger 下不稳定打开,故「重置」用例只断言入口渲染(resetSettings 的实际重置逻辑由 app.spec 充分覆盖),不硬碰 antd 门户行为。
+- **下一条**:起 **D2 合并 review lane**(D2a `73452da` + D2b `71c0e14`,独立 opus + 隔离 worktree,照先例批量审)。之后 D3(SignalR 实时)/D4(命令面板)/D5(登录皮肤),再 E 批工程化。
 
 ### 2026-07-21 · D2a 多布局壳(6 模式 CSS-grid)(`73452da`)
 
