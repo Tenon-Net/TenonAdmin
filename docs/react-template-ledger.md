@@ -131,7 +131,13 @@
 - **变异 16/16 全致死,残留 clean**(快照逐字节比对——config 文件未跟踪,git diff 验不了残留,改快照法);**1 处安全过杀**:M-CF12(parseUpload 去 `.filter(Boolean)`)预测 1 实测 2 —— 漏算了 `parseUpload([])` 里 `''.split(',')===['']`,filter 一箭双雕(既去 `,,` 中段空、又去空输入的 `['']`),两个 parseUpload 用例都钉住。判据:tsc 0 / antd-lint 6.5.1 净 0 / oxlint 0 / vitest **25/25**(configForm 18 + OtherConfig 4 + 结构化面板 3)/ build ✓(47.12s)。config i18n 键 C0 已全量预置;权限码(config add/PUT/DELETE/batch)对齐后端。
 - **踩坑**:后缀 Select 初版误加 `open={false}`(会阻断回车添加,与「输入后缀回车」占位矛盾)→ 去掉;Divider v6 是 `titlePlacement`(非旧 `orientation="left"`);spec 里手滑写了条件类型标注 `SysConfig['configKey'] extends string ? ...` → 改回普通数组类型。
 
-**下一条**:开 **C11 review lane**(独立 opus、隔离 worktree、不自审);通过后进 **C12 dashboard + personal 七页**。
+**C11 review lane(独立 opus、隔离 worktree)→ APPROVE(0 阻断)**:10/10 探针全过——键/权限码/normalizeExt 对后端 `SecurityPolicyProvider`/`FileService.ParseExts`/`ConfigSeed` 逐字节核(25 个被写键全已播种,无静默空写)、min:0/min:1 兜底语义正确(`0 || 0=0` 保留、`0 || 1=1` 拒 0)、Tabs 懒挂保活断言经 rc-tabs 行为坐实、无 C9 漏字段、无 C10 式 toast-不刷新。处置:
+- **LOW-1 采纳(`fd056e1`)**:OtherConfig 补 edit(update)端到端测试,断言 update 带全 6 字段(含禁用 configKey 仍随 validateFields 返回)。变异证伪:把 update 分支改成 add → 唯该 edit 用例红(`1 failed | 4 passed`,预测命中)。判据:tsc 0 / oxlint 0 / vitest **26/26**。
+- **LOW-2 不改(记录)**:`sys.security.password.historyCount` 后端播种(ConfigSeed Id 25)+ 强制(GetPasswordHistoryCountAsync),但安全面板不暴露——**与 Vue 源完全一致**(Vue 的 NUM_FIELDS 同样省略),属合规移植非回归。**两模板当前要互为忠实镜像,单给 web-react 补 UI 会制造分叉** → 列为跨模板后续产品项(补则前后端 + 两模板一致地补),非本批范围。
+- **TRIVIAL 不动**:setFieldsValue 早于 destroyOnHidden 挂载的 dev-only 告警,功能正确、与 module 页同模式。
+- 主树干净、review 隔离 worktree 只读 → 自动清理。**C11 收口。**
+
+**下一条**:进 **C12 dashboard + personal 七页**(dashboard: workbench 161 / biz 159;personal: profile 157 / bindings 99 / notice 96 / sessions 86 / password 86)。已只读扫过 Vue 源;**web-react 已有 `dashboard/index.tsx` 与 `personal/password.tsx`**(开工先核对是占位还是已落,password 台账早标注过可能已落),避免重复/覆盖。
 
 ### 2026-07-21 · C10 review lane(独立 opus,隔离 worktree)→ REQUEST-CHANGES(1 HIGH + 1 LOW)→ 修复 `7b68e8b`
 
