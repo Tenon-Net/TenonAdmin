@@ -2,20 +2,24 @@
 // loading+close),行内启停走 <StatusSwitch>(悲观 + 自动回滚),性别下拉/列翻译走 <DictSelect>/<DictTag>。
 // 机构树选择 / 头像上传 / 批量删除等仍属后续批次(orgId 等四字段在本页仍只透传,防全量替换清空)。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Form, Input, Modal, Select, Space, Switch, Tag } from 'antd'
+import { App, Avatar, Button, Card, Form, Input, Modal, Select, Space, Switch, Tag, Tree } from 'antd'
+import type { TreeDataNode } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type DataTableHandle, type PageFetcher } from '@/components/DataTable'
 import type { ProColumns } from '@ant-design/pro-components'
 import { Can } from '@/components/Can'
 import { FormContainer } from '@/components/FormContainer'
+import { FileUpload } from '@/components/FileUpload'
 import { StatusSwitch } from '@/components/StatusSwitch'
 import { DictSelect } from '@/components/DictSelect'
 import { DictTag } from '@/components/DictTag'
 import { useConfirm } from '@/hooks/useConfirm'
+import { useBatchDelete } from '@/hooks/useBatchDelete'
 import { useHasPerm } from '@/stores/auth'
-import { roleApi, userApi } from '@/api'
+import { orgApi, roleApi, userApi } from '@/api'
+import { buildTree, type Tree as TreeNode } from '@/utils/tree'
 import { translateError } from '@/utils/error'
-import type { UserItem } from '@/types/api'
+import type { SysOrg, UserItem } from '@/types/api'
 import {
   blankForm, canDelete, canEdit, canReset, canToggleEnabled, detailToForm, toAddInput, toUpdateInput,
   type UserForm,
@@ -32,6 +36,16 @@ export default function UserPage() {
 
   const tableRef = useRef<DataTableHandle>(null)
   const reload = useCallback(() => tableRef.current?.reload(), [])
+
+  // ── 左侧机构树筛选:选中机构 → 作为 params.orgId 传给表格,变了自动回第 1 页(对齐 Vue 用户页左树)──
+  const [orgTree, setOrgTree] = useState<TreeNode<SysOrg>[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
+  useEffect(() => {
+    orgApi.list().then((flat) => setOrgTree(buildTree(flat))).catch(() => {})
+  }, [])
+
+  // ── 批量删除(复用 hook + userApi.batchRemove;超管行禁勾见下方 rowSelection.getCheckboxProps)──
+  const batch = useBatchDelete({ remove: userApi.batchRemove, refresh: reload, successMsg: t('user.deleted') })
 
   // 角色下拉源:拉一页足量(ponytail: 200 覆盖绝大多数系统,真超再上分页搜索)。失败静默不打断列表。
   const [roleOptions, setRoleOptions] = useState<{ label: string; value: number }[]>([])
@@ -52,6 +66,8 @@ export default function UserPage() {
       pageSize: q.pageSize,
       account: typeof q.account === 'string' ? q.account : undefined,
       name: typeof q.name === 'string' ? q.name : undefined,
+      // orgId 来自左侧机构树(经 DataTable 的 params 透传),非搜索表单。
+      orgId: typeof q.orgId === 'number' ? q.orgId : undefined,
       sortField: q.sortField,
       sortOrder: q.sortOrder,
     })
@@ -60,15 +76,20 @@ export default function UserPage() {
   const [form] = Form.useForm<EditableFields>()
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
-  // 无编辑控件、仅透传的字段(orgId/positionId/directorId/avatar):开弹窗时暂存,save 时合回,防全量替换清空。
-  const extraRef = useRef<Pick<UserForm, 'orgId' | 'positionId' | 'directorId' | 'avatar'>>({
-    orgId: null, positionId: null, directorId: null, avatar: null,
+  // 无编辑控件、仅透传的字段(orgId/positionId/directorId):开弹窗时暂存,save 时合回,防全量替换清空。
+  const extraRef = useRef<Pick<UserForm, 'orgId' | 'positionId' | 'directorId'>>({
+    orgId: null, positionId: null, directorId: null,
   })
+  // 头像现有上传控件,升级为受控 state(开弹窗同步、上传写回、save 并入 full)。存 viewUrl 签名直链,不存 id/storagePath。
+  const [avatar, setAvatar] = useState<string | null>(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const watchedName = Form.useWatch('name', form) // 头像占位字母跟随姓名
 
   const openAdd = () => {
     setEditingId(null)
     const b = blankForm()
-    extraRef.current = { orgId: b.orgId, positionId: b.positionId, directorId: b.directorId, avatar: b.avatar }
+    extraRef.current = { orgId: b.orgId, positionId: b.positionId, directorId: b.directorId }
+    setAvatar(b.avatar)
     form.setFieldsValue(b)
     setOpen(true)
   }
@@ -77,7 +98,8 @@ export default function UserPage() {
     async (r: UserItem) => {
       try {
         const f = detailToForm(await userApi.detail(r.id))
-        extraRef.current = { orgId: f.orgId, positionId: f.positionId, directorId: f.directorId, avatar: f.avatar }
+        extraRef.current = { orgId: f.orgId, positionId: f.positionId, directorId: f.directorId }
+        setAvatar(f.avatar)
         form.setFieldsValue(f)
         setEditingId(r.id)
         setOpen(true)
@@ -94,8 +116,8 @@ export default function UserPage() {
    */
   const save = async () => {
     const v = await form.validateFields() // 校验失败抛 → FormContainer 不关
-    // v 只含可编辑字段;blankForm 补默认、extraRef 补透传,合成完整 UserForm 再映射入参。
-    const full: UserForm = { ...blankForm(), ...v, ...extraRef.current }
+    // v 只含可编辑字段;blankForm 补默认、extraRef 补透传、avatar 受控值最后并入,合成完整 UserForm 再映射入参。
+    const full: UserForm = { ...blankForm(), ...v, ...extraRef.current, avatar }
     try {
       if (editingId === null) {
         const out = await userApi.add(toAddInput(full))
@@ -193,18 +215,53 @@ export default function UserPage() {
 
   return (
     <>
-      <DataTable<UserItem>
-        ref={tableRef}
-        columns={columns}
-        fetcher={fetchUsers}
-        persistKey="sys-user"
-        headerTitle={t('user.title')}
-        toolbar={
-          <Can code="POST:/api/v1/sys/user">
-            <Button type="primary" onClick={openAdd}>{t('common.add')}</Button>
-          </Can>
-        }
-      />
+      {/* 左机构树侧栏(固定 200px)+ 右用户表(占满剩余);点机构过滤右表。对齐 Vue 用户页 .user-layout。 */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <Card
+          size="small"
+          title={t('user.org')}
+          extra={
+            selectedOrgId != null ? (
+              <Button type="link" size="small" onClick={() => setSelectedOrgId(null)}>{t('user.allOrgs')}</Button>
+            ) : null
+          }
+          style={{ flex: '0 0 200px', alignSelf: 'stretch' }}
+        >
+          <Tree
+            blockNode
+            treeData={orgTree as unknown as TreeDataNode[]}
+            fieldNames={{ title: 'name', key: 'id', children: 'children' }}
+            selectedKeys={selectedOrgId == null ? [] : [selectedOrgId]}
+            onSelect={(keys) => setSelectedOrgId(keys.length ? Number(keys[0]) : null)}
+          />
+        </Card>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <DataTable<UserItem>
+            ref={tableRef}
+            columns={columns}
+            fetcher={fetchUsers}
+            persistKey="sys-user"
+            headerTitle={t('user.title')}
+            params={{ orgId: selectedOrgId ?? undefined }}
+            rowSelection={{
+              selectedRowKeys: batch.selectedKeys,
+              onChange: batch.setSelectedKeys,
+              getCheckboxProps: (r) => ({ disabled: r.isSuperAdmin }), // 超管禁勾(自锁保护,对齐行内禁删)
+            }}
+            toolbar={
+              <Space>
+                <Can code="POST:/api/v1/sys/user">
+                  <Button type="primary" onClick={openAdd}>{t('common.add')}</Button>
+                </Can>
+                <Can code="POST:/api/v1/sys/user/batch-delete">
+                  <Button danger disabled={!batch.hasSelection} onClick={batch.run}>{t('common.batchDelete')}</Button>
+                </Can>
+              </Space>
+            }
+          />
+        </div>
+      </div>
 
       {/* 新增 / 编辑 */}
       <FormContainer
@@ -247,6 +304,24 @@ export default function UserPage() {
             rules={[{ validator: (_, v: string) => (!v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? Promise.resolve() : Promise.reject(new Error(t('user.emailInvalid')))) }]}
           >
             <Input placeholder={t('user.emailPlaceholder')} />
+          </Form.Item>
+          {/* 头像:非表单字段,受控 state。预览用 Avatar(有图显图、无图显姓名首字母);上传走共享 FileUpload。 */}
+          <Form.Item label={t('user.avatar')}>
+            <Space>
+              <Avatar shape="circle" size={48} src={avatar || undefined}>
+                {watchedName?.trim()?.[0]?.toUpperCase()}
+              </Avatar>
+              <FileUpload
+                accept="image/*"
+                showUploadList={false}
+                onLoadingChange={setAvatarUploading}
+                onUploaded={(o) => setAvatar(o.viewUrl ?? null)}
+              >
+                <Button size="small" loading={avatarUploading}>
+                  {avatarUploading ? t('user.avatarUploading') : t('user.avatar')}
+                </Button>
+              </FileUpload>
+            </Space>
           </Form.Item>
           <Form.Item name="gender" label={t('user.gender')}>
             <DictSelect typeCode="gender" allowClear placeholder={t('user.genderPlaceholder')} />

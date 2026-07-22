@@ -136,6 +136,18 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-22 · 用户页对齐 Vue:机构树 + 两卡视觉 + 批删/头像(DataTable `7f93df5` / 用户页本条)
+
+维护者浏览器实看两模板,报 web-react 用户页三处不如 Vue:①列表页搜索区与表格「挤一起」;②缺左侧机构树;③欠批量删除、头像上传。探查确认**基础设施(api/组件/hook/类型)React 侧全在**,三项都是接线非新建。
+
+- **两卡视觉(全局,DataTable 一处)**:根因是 antd `ProTable` 默认把搜索区与表格渲染成两张**无边框** ProCard,浮在页面底色上连成一片;Vue 侧 `tenon-naive-pro-table` 两张卡都 `bordered:!0`。修:DataTable 加 `cardBordered` → 全站列表页变两张有边框卡。顺带加 `params` 透传(变化即 reload 回第 1 页)。
+- **左机构树(用户页)**:flex 两栏 —— 左 antd `<Card size="small">`(固定 200px,标题机构 + 选中时「全部」清除)内嵌裸 `<Tree>`(`orgApi.list()`→`buildTree`),右 `<DataTable>` flex:1。选中机构 id → `params={{ orgId }}` → `fetchUsers` 读 `q.orgId` → `userApi.page`(**后端/api 早就接受 `orgId` 并映射 `OrgId`,只是没接线**)。对齐 Vue `.user-layout`。
+- **批删**:复用 `useBatchDelete` + `userApi.batchRemove`,照角色页范式;`rowSelection.getCheckboxProps` 禁勾超管(自锁保护,对齐行内禁删)。
+- **头像**:`avatar` 从 `extraRef` 透传升级为受控 state,编辑表单加 `<Avatar>` 预览 + 共享 `<FileUpload accept="image/*">`,存 `viewUrl` 签名直链(非 id/storagePath,后端不静态托管当 URL 必坏链)。i18n 键(`user.org/allOrgs/avatar/avatarUploading`、`common.batchDelete*`)**盘点发现全已存在**,无需补。
+- **判据**:typecheck ✓ / oxlint ✓ / `antd lint` 两文件 0 issue / build ✓(本机内存紧,build 两次被 esbuild link 阶段 OOM——GOMAXPROCS=1 削峰值内存后过;OOM 顺带把我起的后端进程也带崩了,已重启)。测试:改动相关 4 spec(DataTable/toProTable/user index/userForm)33/33 绿;全量跑 573 passed **0 断言失败**,唯 `app-media.spec`(与本改无关)遇 Windows `spawn UNKNOWN` 资源耗尽没起、单跑 3/3 绿。
+- **预测与实测不符**:原以为要补 i18n 键,实测四键已在;原以为头像/批删要新建组件,实测 `FileUpload`/`useBatchDelete`/`fileApi.upload`/`userApi.batchRemove` 全现成,零新建。
+- **下一条**:维护者浏览器验四条链路(两卡视觉、机构树过滤、批删禁勾超管、头像传+回显)。
+
 ### 2026-07-22 · F2 全量收口 + 气隙泄漏修复(`2563520`)
 
 批次 F 收口。F2 本是「滚动登记的推迟测试 + 全量 vitest 收口」,但盘点后无「补齐」项(E 批多为基础设施/CI/文档/shell,无 unit 债;D1–D4 变异网不回溯;D5 login 债 F1 已清),故实质只剩全量收口。
