@@ -105,7 +105,7 @@
 ## 批次 E · 工程化
 
 - [x] **E1 `web-react/Dockerfile` + compose 服务**(`42b2a84`) — 照 `web/Dockerfile`(node build → Caddy runtime),但**构建上下文是 `./web-react` 自己**(不再需要仓库根,这正是自包含买到的:`cd web-react && docker build .`)。含 `Caddyfile`(默认,SPA + `/api`/`/health`/**`/hub`** 反代)+ `nginx.conf`(备选)+ `.dockerignore` + compose `web-react` 服务(ctx `./web-react`、端口 8082、与 web 各占一口都反代同一 app)。**`/hub` 是 web-react 特有**(D3 SignalR;Caddy 自动升级 WS、nginx 需显式 Upgrade 头)。**docker 本机不可用未 build 验证**;镜像 web 的已验证配置 + `npm run build` 已绿 + compose YAML 已解析校验。见轮次日志。
-- [ ] **E2 `web-react-ci.yml`**(⚠ 冒烟断言"零控制台错误"时**不要丢弃第一次加载** —— 我最初写的是"必须丢弃",归因错了,见 B3 轮次日志。CI 里 `npm ci` 之后根本没有 `.vite` 缓存,实测真冷启动零错误。真实风险窄得多:**只经动态 `import()` 可达的裸包**会被首轮依赖扫描漏掉、即使冷缓存也会触发 re-optimize + 强制刷新 —— B6 的 `import.meta.glob('/src/pages/**/*.tsx')` 是这条路上最可能的下一个。对症办法是给那些包写 `optimizeDeps.include`,**不是放宽断言**) — lint → test → build → dev server 冒烟(5175,`--strictPort`,**断言内容而非状态码**——未知路径命中 SPA fallback 返 200 + index.html,只查状态码的检查会在什么都没证明的情况下通过;并断言仓库根 403)。**不带**任何共享层闸门与 `/@fs` 断言。paths 只有 `web-react/**`。
+- [x] **E2 `web-react-ci.yml`**(`2e036e2` + compose profile 解耦 `3e744e7`)(⚠ 冒烟断言"零控制台错误"时**不要丢弃第一次加载** —— 我最初写的是"必须丢弃",归因错了,见 B3 轮次日志。CI 里 `npm ci` 之后根本没有 `.vite` 缓存,实测真冷启动零错误。真实风险窄得多:**只经动态 `import()` 可达的裸包**会被首轮依赖扫描漏掉、即使冷缓存也会触发 re-optimize + 强制刷新 —— B6 的 `import.meta.glob('/src/pages/**/*.tsx')` 是这条路上最可能的下一个。对症办法是给那些包写 `optimizeDeps.include`,**不是放宽断言**) — lint → test → build → dev server 冒烟(5175,`--strictPort`,**断言内容而非状态码**——未知路径命中 SPA fallback 返 200 + index.html,只查状态码的检查会在什么都没证明的情况下通过;并断言仓库根 403)。**不带**任何共享层闸门与 `/@fs` 断言。paths 只有 `web-react/**`。
 - [ ] **E3 `dev.bat`/`dev.sh` 带上 web-react** — 目前只起 backend + web。
 - [ ] **E4 文档** — 根 `CLAUDE.md` 加 `web-react/` 段落,写明两个模板各自自包含、零共享,**且这是刻意选择**;**不要**出现任何"必须一起带上"的措辞。site/ 加一页 React 模板上手(degit 一条命令)。
 
@@ -134,6 +134,16 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-22 · E2 web-react-ci + compose profile 解耦(`2e036e2` / `3e744e7`)
+
+E2(`web-react-ci.yml`,与 web-ci 各自独立、paths 只 `web-react/**`):
+- **lint-build job**:`npm ci` → lint → build(build 含 `tsc --noEmit`)→ **dev server 冒烟**:断言**内容而非状态码**——① 根路径吐 SPA 外壳(grep `id="root"`);② 未知深链经 history fallback 仍吐 index.html(只查状态码会在 200 fallback 白过);③ 仓库根文件经 `/@fs` 返 **403**(守 vite.config 警告的 fs.allow 静默扩张)。「零控制台错误 / 动态 import re-optimize」要浏览器才看得到,curl 冒烟覆盖不到,对症是 `optimizeDeps.include`(非放宽断言),浏览器级冒烟留后续。
+- **test job**:matrix 3 个 `vitest --shard`(各独立进程)。web-react 串行(pool:forks/maxWorkers:1/fileParallelism:false)全量单跑会 OOM;`--shard` 拆进程 + **自动覆盖全部 spec**(不像手列目录会漏列致静默不跑)。
+- **本地验证**:`python yaml` 解析 workflow 良构(jobs lint-build/test、matrix shard[1,2,3]);`--shard=1/12` 实跑 9 文件/80 用例**全绿、无 OOM、无 ECONNREFUSED**;`--shard=1/3` 起跑未 OOM(工具 2min 上限 SIGTERM 非崩溃,CI 无此限)——**推理坐实**:文档 ③=src/views 42 重文件单进程已过 > 任何 1/3 子集;冒烟三项(内容/fallback/@fs-403)**本地启 dev + curl 全过**(@fs 仓库根实得 403)。
+- **compose profile 解耦(`3e744e7`)**:E1 把 web-react 加进主 compose 后,`docker compose up --build`(docker-smoke 那条容器验收用它)会顺带构建 web-react → 一处构建问题会拖垮无关的 backend/web smoke,正是零共享要避的跨模板耦合。给 web-react 服务加 `profiles:["react"]`:默认 stack(含 docker-smoke)不碰它,`docker compose --profile react up` 才起两套前端。
+- **docker build 的 CI 验证**:docker 本机不可用未本地 build;**留作后续**(可在 web-react-ci 加一个 docker build job,或让 docker-smoke 带 `--profile react` 加 web-react 8082 serve 冒烟)。当前 web-react 的 Dockerfile 镜像 web/ 的已验证结构 + `npm run build` 已绿。
+- **下一条**:**E3 `dev.bat`/`dev.sh` 带上 web-react**(目前只起 backend + web;web-react dev 在 5174)。之后 E4 文档、E5 gen:api 漂移闸、E6 pro-components 转正,最后批次 F 测试硬化。
 
 ### 2026-07-22 · E1 Docker/compose + 发现 web/ 生产 bug(`42b2a84`)
 
