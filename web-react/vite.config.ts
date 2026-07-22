@@ -53,8 +53,13 @@ export default defineConfig({
     // 并把「已禁用的加载」当成功返回,消掉 teardown 期的 AbortError/NetworkError 噪声。
     // 注:tokens.css 是 Vite `css:true` 内联进 <style> 的,不是外部 link,不受影响(主题桥 spec 照常读得到)。
     // (应用运行时同样会拉 unpkg —— 那是**产品级**自包含缺口,两模板都有,单列 backlog,不在此处解决。)
+    // 同理 iframe(disableIframePageLoading):iframe 视图(router/buildRoutes 的 IframeView)测试里
+    // <iframe src=外链>(buildRoutes.spec 的 https://ex.com/r)会被 happy-dom 真去 fetch 那个 URL —— 触网。
+    // 关掉它从根上掐断这次请求(src 属性仍在,断言不受影响)。注:handleDisabledFileLoadingAsSuccess 只管
+    // JS/CSS 文件、不覆盖 iframe,故 happy-dom 会改打一条「iframe 加载已禁用」的 NotSupportedError 日志 ——
+    // 那是护栏生效的证据、非失败(用例照常绿),关键是**不再有真实网络请求**。
     environmentOptions: {
-      happyDOM: { settings: { disableJavaScriptFileLoading: true, disableCSSFileLoading: true, handleDisabledFileLoadingAsSuccess: true } },
+      happyDOM: { settings: { disableJavaScriptFileLoading: true, disableCSSFileLoading: true, disableIframePageLoading: true, handleDisabledFileLoadingAsSuccess: true } },
     },
     // 主题桥的 spec 靠 `getComputedStyle` 读回 tokens.css 的变量,所以 CSS 必须真处理。
     // 默认 `css: false` 会把 CSS 导入桩成空 —— **连 `?raw` 也是空串**,不报错。
