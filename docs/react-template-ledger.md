@@ -99,7 +99,7 @@
 - [x] **D1 tabs store + 标签栏容器 + 页面缓存** — B3 推迟的那件,**整个移植第二难的东西**。**拆两半:D1a store `34306f2`**(store 纯化 + 两处 clearTabs 接回 + spec/变异)+ **D1b 容器/标签栏/tab-sync `0082a86`**(KeepAliveOutlet/TabsBar/useTabSync + LayoutShell 接线 + 7 例 spec),均见轮次日志。①store:`removeTab` 的邻居选择、`_ensureActive`、`cachedNames` 依赖 `hasRoute`,都要有路由和容器才写得了;落地时**必须**把 `auth.reset()` 与 `useModule` 切应用两处的 `clearTabs()` 补回。②缓存:React 无 `keep-alive` 对等物 —— `<KeepAlive>` 容器维护 `Map<path, ReactNode>`,已开 tab 常驻挂载、非活动 `display:none`。`// ponytail: 不做 activated/deactivated 钩子,页面若需感知激活再加 useTabActive()`。代价是隐藏页的 effect/定时器仍在跑。验:切走切回状态保留、隐藏页定时器行为、内存随开 tab 是否线性增长。
 - [x] **D2 设置抽屉 + 多布局壳** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。**2026-07-21 维护者裁定选 B**:不只做抽屉 UI,连 **LayoutShell 重排支持全部 6 布局模式**一起做(否则布局卡片是点了不生效的死控件)。拆两半:**D2a 多模式壳 `73452da`**(CSS-grid `grid-template-areas` 按 mode 重排 + `SideNav` 薄封装 + `useLayoutMenu` 一/二级联动 + CSS 变量)+ **D2b 抽屉 + 卡片 `71c0e14`**(`SettingsDrawer` 三 tab + `LayoutModeCards` 六卡片 + 内联 SettingRow + 原生 Watermark/fixedHeader/pageTransition/breadcrumb 全接线 + 齿轮入口 + `exportSettings` 复制配置 DEV + `setSetting` action),均见轮次日志。B 的所有控件皆当场生效、无死控件。
 - [x] **D3 SignalR 实时**(`87949bd`) — `useRealtime.ts` + 内联 noticeBus + LayoutShell 接线 + `@microsoft/signalr ^10.0.0`。noticeBus **不单开文件**(唯一消费者是 LayoutShell 未读 effect,内联进 useRealtime.ts 与 web 一致);`start()` 整段包 try/catch(比 Vue 版更稳:`build()` 可同步抛,实时是纯增强绝不拖垮壳)。见轮次日志。原文:`@microsoft/signalr` 框架无关(需加此依赖),只重写 `useRealtime.ts`(68)外层包装:`force-logout` / `notice-changed` + 初次失败静默退回 30s 轮询。
-- [ ] **D4 MenuSearch 全局命令面板** — 建在 `useMenuFlat` 的纯逻辑扫描上,外链项走 `window.open`。
+- [x] **D4 MenuSearch 全局命令面板**(`27e88f8`) — antd Modal + Ctrl/Cmd+K + 上下/回车键导航 + 顶栏搜索按钮;内部 navigate / 外链 window.open。**扫描基座不是 `useMenuFlat`**(web-react 无此 composable):新增纯函数 `flatLeaves(items)` 到 `menuItems.ts`(与其它纯菜单函数同处),吃已翻译的 `MenuItem` 树、产 叶子+面包屑。高亮用 `<mark>` JSX 免 v-html(消掉 Vue 版 XSS 面)。见轮次日志。
 - [ ] **D5 登录页另两套皮肤** — B5 已落一套;补 `AuroraGlass`(363)、`SplitPanel`(242)、`Spotlight`(107)+ 皮肤切换。**后两者在 Vue 版就是 Naive-free 的、主要是 CSS,几乎直接搬**。
 
 ## 批次 E · 工程化
@@ -127,6 +127,18 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-22 · D4 命令面板 MenuSearch(`27e88f8`)
+
+移植 Vue `components/MenuSearch.vue` 到 React。
+- **MenuSearch.tsx**:antd Modal(`styles.container` 归零 padding,自建 palette 排版)+ `Input variant="borderless"` + 列表。Ctrl/Cmd+K 全局开合(监听放 LayoutShell、状态所在处)、顶栏搜索按钮开、↑↓ 移高亮、↵ 进当前项、Esc 由 Modal `keyboard` 关。命中 `openIfExternal` → 外链 window.open / 否则 navigate。
+- **flatLeaves(items)**(新增到 `menuItems.ts`,与其它纯菜单函数同处):web-react **无 `useMenuFlat` 对等**,故新写。吃已翻译的 `MenuItem` 树,产 叶子(页面/外链)+ 从根到叶的 label 链(含自身);目录只递归不入。比 Vue `useMenuFlat` 简单——label 已翻译、Button/隐藏/排序已在 `menuToItems` 处理。
+- **高亮 `<mark>` JSX 片段**:React 天然转义文本,直接免掉 Vue 版的 `v-html` + 手写 `esc()`——**那处 XSS 面在 React 侧不存在**,无需守。
+- **判据**:tsc 0 / antd-lint(MenuSearch+LayoutShell)0 / oxlint 0 / 受影响 3 spec **50 passed**、**ECONNREFUSED 0**(MenuSearch 不挂壳、无 noticeApi 轮询;D3 的气隙修复也在 LayoutShell.spec 生效)。新 spec:menuItems flatLeaves 3(只收叶子/面包屑链/外链)+ MenuSearch 8(空查/label 过滤/key 过滤/空态/内部 navigate/外链 open/键盘/高亮)。
+- **变异证伪(两处承重逻辑,预测=实测)**:①flatLeaves 去 `else`(目录也 push)→ 恰好「只收叶子」+「外链照收」两条红;②过滤去掉 `|| key.includes` → 恰好「按 key 过滤」+「键盘」两条红(二者都靠 key 命中)。
+- **一处 antd v6 改名(tsc 逮到,凭记忆必踩)**:Modal `styles` **无 `content` 键**,带 padding 的白盒语义键是 `container`(`antd semantic Modal` 查得),故 `styles.container:{padding:0}`。
+- **一处测试选择器教训**:顶层叶子的面包屑含自身 → `.palette-title` 与 `.palette-path` 同文本,`getByText` 命中 2 个报错;改按 `.palette-title` 精确取。代码本身正确(与 web 一致),是测试写法问题。
+- **下一条**:起 **D4 review lane**(`27e88f8`,独立 opus + 隔离 worktree,**必须告知气隙+分片约束**)。之后 D5(登录页另两套皮肤 AuroraGlass/SplitPanel/Spotlight + 切换),再 E 批工程化。
 
 ### 2026-07-21 · D3 review lane 处置(修 `4351283`)
 
