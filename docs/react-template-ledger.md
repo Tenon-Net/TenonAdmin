@@ -100,7 +100,7 @@
 - [x] **D2 设置抽屉 + 多布局壳** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。**2026-07-21 维护者裁定选 B**:不只做抽屉 UI,连 **LayoutShell 重排支持全部 6 布局模式**一起做(否则布局卡片是点了不生效的死控件)。拆两半:**D2a 多模式壳 `73452da`**(CSS-grid `grid-template-areas` 按 mode 重排 + `SideNav` 薄封装 + `useLayoutMenu` 一/二级联动 + CSS 变量)+ **D2b 抽屉 + 卡片 `71c0e14`**(`SettingsDrawer` 三 tab + `LayoutModeCards` 六卡片 + 内联 SettingRow + 原生 Watermark/fixedHeader/pageTransition/breadcrumb 全接线 + 齿轮入口 + `exportSettings` 复制配置 DEV + `setSetting` action),均见轮次日志。B 的所有控件皆当场生效、无死控件。
 - [x] **D3 SignalR 实时**(`87949bd`) — `useRealtime.ts` + 内联 noticeBus + LayoutShell 接线 + `@microsoft/signalr ^10.0.0`。noticeBus **不单开文件**(唯一消费者是 LayoutShell 未读 effect,内联进 useRealtime.ts 与 web 一致);`start()` 整段包 try/catch(比 Vue 版更稳:`build()` 可同步抛,实时是纯增强绝不拖垮壳)。见轮次日志。原文:`@microsoft/signalr` 框架无关(需加此依赖),只重写 `useRealtime.ts`(68)外层包装:`force-logout` / `notice-changed` + 初次失败静默退回 30s 轮询。
 - [x] **D4 MenuSearch 全局命令面板**(`27e88f8`;review 处置 `000a186`) — antd Modal + Ctrl/Cmd+K + 上下/回车键导航 + 顶栏搜索按钮;内部 navigate / 外链 window.open。**扫描基座不是 `useMenuFlat`**(web-react 无此 composable):新增纯函数 `flatLeaves(items)` 到 `menuItems.ts`(与其它纯菜单函数同处),吃已翻译的 `MenuItem` 树、产 叶子+面包屑。高亮用 `<mark>` JSX 免 v-html(消掉 Vue 版 XSS 面)。**review lane → APPROVE 无阻断**(2 MEDIUM 变异网缺口 + 1 LOW 假注释,`000a186` 收口:清空从 `afterOpenChange(false)` 改「依赖 open 的 effect 打开即清」对齐 Vue、连带修 LOW-2 快切残留 + 让重开可确定性单测;补 3 条变异证伪测试[上/下钳位 + 重开清空];CSS 注释 `content`→`container`。LOW-1 空结果 cursor=-1 接受为无害)。见轮次日志。
-- [x] **D5 登录页三皮肤 + 皮肤切换**(`546609e`) — B5 只落了单文件 LoginPage(非皮肤之一);D5 照 Vue 结构重构:抽共享 `LoginForm`(账号密码路径,`showBrand`/`showFooter` props + `--lf-*` 变量色)+ 三皮肤 `AuroraGlass`(默认,极光动画 + 玻璃卡)/`SplitPanel`(左品牌右表单)/`Spotlight`(指针跟随聚光)各自内嵌它 + 壳 `LoginPage`(皮肤阶梯 `?skin=`→localStorage→默认 + 顶栏皮肤切换/主题/语言)+ `skins.ts` 注册表。**合并单条落地**(TDD 已推迟,不必拆 a/b)。i18n 键 R4 已 1:1 带入,零新增。**AuroraGlass 输入框 ponytail 简化**:用默认 antd 输入框(随应用明暗、玻璃卡同信号两态皆可读),不做 Vue 那层半透明玻璃输入框覆写(升级路径记在组件注释)。见轮次日志。测试见批次 F1。
+- [x] **D5 登录页三皮肤 + 皮肤切换**(`546609e`) — B5 只落了单文件 LoginPage(非皮肤之一);D5 照 Vue 结构重构:抽共享 `LoginForm`(账号密码路径,`showBrand`/`showFooter` props + `--lf-*` 变量色)+ 三皮肤 `AuroraGlass`(默认,极光动画 + 玻璃卡)/`SplitPanel`(左品牌右表单)/`Spotlight`(指针跟随聚光)各自内嵌它 + 壳 `LoginPage`(皮肤阶梯 `?skin=`→localStorage→默认 + 顶栏皮肤切换/主题/语言)+ `skins.ts` 注册表。**合并单条落地**(TDD 已推迟,不必拆 a/b)。i18n 键 R4 已 1:1 带入,零新增。**AuroraGlass 输入框 ponytail 简化**:用默认 antd 输入框(随应用明暗、玻璃卡同信号两态皆可读),不做 Vue 那层半透明玻璃输入框覆写(升级路径记在组件注释)。**review lane → APPROVE 无阻断**(1 MEDIUM + 3 LOW,`f5454d6` 收口:MED 皮肤 `?skin=` 预览被挂载 effect 永久写盘 → 改点击处写、对齐 Vue watch 非 immediate;LOW-1 页脚门改 copyrightUrl 对齐 SplitPanel;LOW-2 Spotlight 改 ref 直写 CSS 变量免整表单重渲染;LOW-3 tablist a11y 不完整属 Vue 原样移植、接受为 parity)。见轮次日志。测试见批次 F1。
 
 ## 批次 E · 工程化
 
@@ -134,6 +134,17 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-22 · D5 review lane 处置(`f5454d6`)
+
+D5 review lane(独立 opus + 隔离 worktree)结论 **APPROVE,0 CRITICAL/HIGH**;独立复验 tsc 0 / antd-lint(login)0 / oxlint 0 / 11 用例绿(无 ECONNREFUSED)/ 零跨模板引用 / 类名无外泄 / i18n zh+en 齐全。4 问题(1 MEDIUM + 3 LOW),按先例逐条处置:
+- **MEDIUM 皮肤预览被永久写盘**:`LoginPage.tsx` 原 `useEffect(…, [skin])` **挂载时也写 localStorage** → 打开他人分享的 `/login?skin=spotlight` 预览链接会把用户记忆的皮肤永久改掉(违背「一次性预览」注释 + 破坏 Vue `watch(skin)` 非 immediate parity)。→ 去 effect,写盘移到点击 `pick()`;`initSkin` 仍读 `?skin=` 只影响本次。
+- **LOW-1 页脚链接门**:LoginForm 以 `copyright` 为门,漏了「配了 `copyrightUrl` 但 `copyright` 空」的情形 → 改以 `copyrightUrl` 为门、文案 `copyright||title`,对齐 Vue 与兄弟皮肤 SplitPanel。
+- **LOW-2 Spotlight 重渲染**:mousemove 经 React state 重渲染整棵登录表单 → 改 `ref` 直写根元素 `--mx`/`--my`(初始位置移进 `.spotlight` CSS),对齐 Vue ref 驱动,表单不再随鼠标重渲染。
+- **LOW-3 tablist a11y 不完整**(无 roving tabindex/方向键/tabpanel):Vue 原样移植、非本次回归,**接受为 parity**(真 `<button>` 键盘可聚焦、Enter/Space 可激活,基本可用)。
+- **判据(快闸)**:tsc 0 / antd-lint 0 / oxlint 0 / LoginPage.spec 11/11。**未变异**(推迟 F1)。
+- **review 正面记录**:CSS 防撞移植正确(通用类名全重锚根类,无外泄)、ponytail 简化经核实两态可读非缺陷、zustand 选择器纪律干净、验证码 XSS 面收敛全仓仅一处、spec 防挂 mock 的三个具名图标恰为 login 图从 barrel 具名导入的全部。
+- **下一条**:**E 批工程化** —— E1 web-react/Dockerfile(Caddy runtime,构建上下文可 `./web-react` 自包含)+ nginx.conf 备选 + .dockerignore + compose 服务;E2 web-react-ci.yml;E3 dev.bat 带上 web-react;E4 文档(根 CLAUDE.md + site 上手页);E5 gen:api 漂移闸;E6 pro-components 转正跟进。最后批次 F 统一测试硬化。
 
 ### 2026-07-22 · 工作方式变更 + D5 登录三皮肤(`546609e`)
 
