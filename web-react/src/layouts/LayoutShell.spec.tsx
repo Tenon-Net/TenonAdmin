@@ -143,6 +143,19 @@ describe('LayoutShell 设置抽屉 + 面包屑(D2b)', () => {
     expect(within(bc).getByText('系统')).toBeTruthy()
     expect(within(bc).getByText('用户')).toBeTruthy()
   })
+
+  // 回归:header-brand 模式(horizontal 等)下,品牌与面包屑是两段独立兄弟块,面包屑不能被品牌抢占。
+  // 旧的三路互斥三元会让这些模式里 showBreadcrumb 成死控件 —— 此断言在那种写法下必红。
+  it('header-brand 模式(horizontal)开 showBreadcrumb:品牌与面包屑并存', async () => {
+    useAppStore.setState({ showBreadcrumb: true, layoutMode: 'horizontal' })
+    mountAt('/system/user')
+    await screen.findByText('USER PAGE')
+    expect(document.querySelector('.shell-header .shell-brand')).toBeTruthy() // 品牌在
+    const bc = document.querySelector('.shell-header .ant-breadcrumb') as HTMLElement
+    expect(bc).toBeTruthy() // 面包屑也在(并存,非互斥)
+    expect(within(bc).getByText('系统')).toBeTruthy()
+    expect(within(bc).getByText('用户')).toBeTruthy()
+  })
 })
 
 describe('LayoutShell 顶栏', () => {

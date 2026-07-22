@@ -157,6 +157,8 @@ export function LayoutShell() {
                 onClick={toggleCollapsed}
               />
             ) : null}
+            {/* 品牌与「面包屑/标题」是两段独立块(镜像 Vue AppHeader):品牌模式下二者并存,
+                否则只出面包屑/标题。别合成互斥三元,否则 header-brand 模式下 showBreadcrumb 成死控件。 */}
             {headerShowBrand ? (
               <div className="shell-brand">
                 {site.logo ? <img src={site.logo} alt="" style={{ height: 26 }} /> : <AppstoreOutlined style={{ fontSize: 20 }} />}
@@ -164,7 +166,8 @@ export function LayoutShell() {
                   {site.title}
                 </Typography.Text>
               </div>
-            ) : showBreadcrumb && crumbs.length ? (
+            ) : null}
+            {showBreadcrumb && crumbs.length ? (
               <Breadcrumb items={crumbs.map((c, i) => ({ key: i, title: c }))} />
             ) : (
               <span className="shell-title">{pageTitle}</span>
