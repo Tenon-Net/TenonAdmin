@@ -18,6 +18,7 @@ import { SettingsDrawer } from './SettingsDrawer'
 import { TabsBar } from './TabsBar'
 import { KeepAliveOutlet } from './KeepAliveOutlet'
 import { useTabSync } from './useTabSync'
+import { useRealtime, noticeBus } from '@/composables/useRealtime'
 import { breadcrumbFor, type MenuItem } from './menuItems'
 import './shell.css'
 
@@ -62,20 +63,23 @@ export function LayoutShell() {
   const currentTab = useTabsStore((s) => s.tabs.find((tt) => tt.path === pathname))
   const { items, l1Items, l2Items, selectedL1, activeKey, onSelect, onSelectL1 } = useLayoutMenu()
   useTabSync() // 路由 → 标签同步(当前页进标签栏 + KeepAlive)
+  useRealtime() // 实时通知(SignalR):挂载即连、卸载即断;后端未开启实时时静默退回下方轮询兜底
 
   const [mobileOpen, setMobileOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  // 通知未读角标:30s 轮询(个人页读通知后由此自愈);失败静默不糊顶栏。
+  // 通知未读角标:30s 轮询兜底(个人页读通知后由此自愈)+ 订阅 noticeBus(SignalR 推送 `notice-changed` 即刻重拉,免最长 30s 延迟);失败静默不糊顶栏。
   const [unread, setUnread] = useState(0)
   useEffect(() => {
     let alive = true
     const poll = () => noticeApi.unreadCount().then((n) => alive && setUnread(n)).catch(() => {})
     void poll()
     const id = setInterval(() => void poll(), 30000)
+    const off = noticeBus.on(() => void poll())
     return () => {
       alive = false
       clearInterval(id)
+      off()
     }
   }, [])
 

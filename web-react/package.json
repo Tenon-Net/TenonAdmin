@@ -18,6 +18,7 @@
     "@ant-design/icons": "^6.3.2",
     "@ant-design/pro-components": "^3.1.14-2",
     "@iconify/react": "^6.0.2",
+    "@microsoft/signalr": "^10.0.0",
     "antd": "^6.5.1",
     "dayjs": "^1.11.11",
     "echarts": "^5.6.0",
