@@ -85,7 +85,7 @@
 - [x] **C8 树表原型**(**C8a `a5f9775` + C8b `b28817d`**) — `org` + `menu`(含 `ButtonManager` 子组件,写操作要 `hasPerm` 门 —— 沿用 dev 上 J4 的对齐)。**已 scope(读完 Vue 三源,别凭记忆重写)**:org ~250 行、menu ~530 行、ButtonManager ~360 行,全港最大项。**两点定案**:①**建独立 `TreeTable` 薄封装**(ProTable `dataSource`+`pagination:false`+`expandable:{expandedRowKeys,onExpandedRowKeysChange}`,续隔离 pro-components beta)——DataTable 是 fetcher 专用,树表是静态 data + 受控展开 + 客户端 `filterTree` + 无搜索表单,两模式塞一个组件会堆条件复杂度,故并列而非扩展;树页也不得直接碰 ProTable。②**拆 C8a(`TreeTable` + org)/ C8b(menu + ButtonManager)**,各自四件套+变异+原子提交(照 C2/C3/C5 a/b 先例)。**关键接缝**(移植时逐条对):受控 `expandedRowKeys` 默认全展开要自己播种(`expandableIds`)、搜索后重算(否则命中藏在折叠祖先里);`filterTree` 是浅拷贝故 StatusSwitch 成功后**重拉整树**而非写行;org 上级用 `OrgTreeSelect`(剪自身子树防成环)、menu 父级下拉排除自身子树;menu 按 `moduleId`(仅顶级)过滤 + `stripButtons`(按钮不进主树,只在 ButtonManager 里管)+ 关键字要搜到按钮权限码(`buttonInfoById`);menu 增删改后 `syncShell`(复用 B6 `buildRoutesForModule` 重建当前应用侧边栏+动态路由,失败静默);组件路径下拉取自 `viewComponentPaths`(glob 真实文件表);ButtonManager 权限码下拉取自 `menuApi.routes()` 实时路由表 + 按 `appPrefix` 软过滤 + 从路由批量添加。写操作全程 `useHasPerm` 门(服务端 [RolePermission] 兜底)。
 - [x] **C9 主从分栏原型**(`d43cc47`) — `dict`(`activeRowKey` + 行点击,内联控件要 `stopPropagation`)。
 - [x] **C10 角色 + 模块**(**C10b module `6f12b57` + C10a role `26609da`**) — `role`(含 `GrantMenuTable` 三级可勾选菜单树 + 数据范围单选 + 自定义组织多选)、`module`(管理页,moduleApi CRUD;≠ B7 门户选择器)。**C10a scope(已读 Vue 三源)**:role 页 = ProTable CRUD + 3 抽屉(授权菜单 GrantMenuTable / 数据范围 scopeType 单选+自定义组织多选 / 授权用户 UserPicker)+ 批删带持有人数警告(countUsers 复用 userApi.page roleId);GrantMenuTable = 自定义三列网格(目录|菜单|按钮)+ 三态复选(buildGroups/recomputeGroup/toggleCatalog|Menu|Button/collectChecked 是纯逻辑变异钉,抽 grantMenu.ts);roleApi 全套齐(getMenus/setMenus/getDataScope/setDataScope/getUsers/setUsers);**唯一缺口:`OrgTreeSelect` 无 `multiple`**(数据范围自定义组织多选需要)→ 按 DataTable 先例扩展可选 multiple。权限码:role add/PUT/DELETE/batch-delete + PUT role/menu、role/datascope、role/users。
-- [ ] **C11 config 四标签页** — `SysBaseConfig`/`SecurityConfig`/`UploadConfig`/`OtherConfig`。
+- [x] **C11 config 四标签页**(`565dee1`) — `SysBaseConfig`/`SecurityConfig`/`UploadConfig`/`OtherConfig`,Tabs 容器 + 纯逻辑抽 `configForm.ts`(变异钉)。见轮次日志。
 - [ ] **C12 dashboard + personal 七页** — `workbench`/`biz` + `profile`/`bindings`/`notice`/`password`/`sessions`(`password` 若早期已落占位,落地时核对)。
 
 ## 批次 D · 容器与标签页
@@ -121,6 +121,17 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · C11 config 四标签页(`565dee1`)
+
+分类配置中心:Tabs 容器 + 四面板。base/security/upload = 结构化表单(字段绑固定 config key,运维不需知道 key),other = 任意 key 扁平 CRUD 兜底。纯逻辑全抽 `configForm.ts`(变异钉),UI 接线在各 *.tsx。
+- **结构化三面板**:各 `listByGroup(group)` 回填 → 表单编辑 → `saveBatch` 仅回写值。SysBase 保存后 `loadSite(true)` 即时生效(品牌词随更新)+ 同步 `document.title`;Upload 后缀白名单用 `Select mode="tags"`(NDynamicTags 的 antd 等价,保存时 normalizeExt 补点转小写);Security 九数值 + 八布尔 + 验证码类型分六节,`Divider titlePlacement="start"` 分隔。
+- **OtherConfig**:DataTable CRUD,`configApi.page` 带 `excludedGroupCodes=[sys,security,upload]` 避免与结构化 Tab 重复;表单六字段全注册 → validateFields 即全量(**无 C9 漏字段**)。
+- **Tabs 懒挂 + 保活**:靠 antd 默认 `destroyOnHidden=false` —— 面板首访才 mount(才拉数据)、切走只隐藏不销毁,各面板未保存改动跨 Tab 切换存活,正合 Vue `display-directive="show:lazy"`。**有意精简**:面板内不再套「与 Tab 标签同名」的 Card 标题(Vue 那层 n-card 标题与 tab 名重复),页级一个 Card 收边。
+- **变异 16/16 全致死,残留 clean**(快照逐字节比对——config 文件未跟踪,git diff 验不了残留,改快照法);**1 处安全过杀**:M-CF12(parseUpload 去 `.filter(Boolean)`)预测 1 实测 2 —— 漏算了 `parseUpload([])` 里 `''.split(',')===['']`,filter 一箭双雕(既去 `,,` 中段空、又去空输入的 `['']`),两个 parseUpload 用例都钉住。判据:tsc 0 / antd-lint 6.5.1 净 0 / oxlint 0 / vitest **25/25**(configForm 18 + OtherConfig 4 + 结构化面板 3)/ build ✓(47.12s)。config i18n 键 C0 已全量预置;权限码(config add/PUT/DELETE/batch)对齐后端。
+- **踩坑**:后缀 Select 初版误加 `open={false}`(会阻断回车添加,与「输入后缀回车」占位矛盾)→ 去掉;Divider v6 是 `titlePlacement`(非旧 `orientation="left"`);spec 里手滑写了条件类型标注 `SysConfig['configKey'] extends string ? ...` → 改回普通数组类型。
+
+**下一条**:开 **C11 review lane**(独立 opus、隔离 worktree、不自审);通过后进 **C12 dashboard + personal 七页**。
 
 ### 2026-07-21 · C10 review lane(独立 opus,隔离 worktree)→ REQUEST-CHANGES(1 HIGH + 1 LOW)→ 修复 `7b68e8b`
 
