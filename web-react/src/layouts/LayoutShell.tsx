@@ -4,7 +4,7 @@ import {
   AppstoreOutlined, BellOutlined, DesktopOutlined, KeyOutlined, LinkOutlined, LogoutOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined, UserOutlined,
 } from '@ant-design/icons'
-import { Outlet, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAppStore, isDark } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -12,6 +12,9 @@ import { useUserStore } from '@/stores/user'
 import { useSiteStore } from '@/stores/site'
 import { authApi, noticeApi } from '@/api'
 import { useLayoutMenu } from './useLayoutMenu'
+import { TabsBar } from './TabsBar'
+import { KeepAliveOutlet } from './KeepAliveOutlet'
+import { useTabSync } from './useTabSync'
 
 const { Sider, Header, Content } = Layout
 
@@ -29,7 +32,9 @@ export function LayoutShell() {
   const dark = useAppStore(isDark)
   const site = useSiteStore((s) => s.site)
   const userInfo = useUserStore((s) => s.userInfo)
+  const showTabs = useAppStore((s) => s.showTabs)
   const { items, selectedKeys, openKeys, setOpenKeys, onClick } = useLayoutMenu()
+  useTabSync() // 路由 → 标签同步(当前页进标签栏 + KeepAlive)
 
   // 通知未读角标:30s 轮询(个人页读通知后由此自愈);失败静默不糊顶栏。
   const [unread, setUnread] = useState(0)
@@ -133,8 +138,9 @@ export function LayoutShell() {
           </Space>
         </Header>
 
+        {showTabs ? <TabsBar /> : null}
         <Content style={{ overflow: 'auto', padding: 'var(--pad-page)' }}>
-          <Outlet />
+          <KeepAliveOutlet />
         </Content>
       </Layout>
     </Layout>
