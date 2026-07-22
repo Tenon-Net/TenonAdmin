@@ -79,5 +79,10 @@ export function buildThemeOverrides(opts: { dark: boolean; accent: string }): Gl
     },
     // 卡片圆角走 lg(12);常规控件走 common.borderRadius(md=10)。
     Card: { borderRadius: v('--radius-lg') },
+    // 表头质感(corporate 风):次级色 + 半粗字重,与数据行拉开层次。
+    DataTable: {
+      thTextColor: v('--color-text-secondary'),
+      thFontWeight: '600',
+    },
   }
 }

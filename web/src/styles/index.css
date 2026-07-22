@@ -46,6 +46,30 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── 质感层(spike/theme-refresh,手法源自 XiHan/soybean 调研)─────────
+   容器走描边不走阴影:shadow-sm 亮色几乎隐形、暗色彻底失效;
+   1px 边框 + 圆角在亮暗两态都有清晰轮廓(XiHan .pane 派)。
+   Naive bordered 卡片自带同值边框(themeOverrides borderColor),此规则只补 bordered=false 的。 */
+.n-card {
+  border: 1px solid var(--color-border);
+}
+
+/* 6px 半透明圆角滚动条,track 透明(XiHan design/scrollbar.css 同款)。 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(144, 147, 153, 0.4);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(144, 147, 153, 0.7);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* 灰阶:整页 filter(随 app.grayscale 由 useTheme 打在 <html>)。用于哀悼日等场景。
    这里曾有个「色弱模式」= filter: invert(0.8),已删:整页反色是照片负片,对色觉障碍毫无帮助
    (红绿仍然分不开,只是全都变了色),声称提供无障碍却什么也没提供,比没有更糟。
