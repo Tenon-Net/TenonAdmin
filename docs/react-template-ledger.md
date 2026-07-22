@@ -108,7 +108,7 @@
 - [x] **E2 `web-react-ci.yml`**(`2e036e2` + compose profile 解耦 `3e744e7`)(⚠ 冒烟断言"零控制台错误"时**不要丢弃第一次加载** —— 我最初写的是"必须丢弃",归因错了,见 B3 轮次日志。CI 里 `npm ci` 之后根本没有 `.vite` 缓存,实测真冷启动零错误。真实风险窄得多:**只经动态 `import()` 可达的裸包**会被首轮依赖扫描漏掉、即使冷缓存也会触发 re-optimize + 强制刷新 —— B6 的 `import.meta.glob('/src/pages/**/*.tsx')` 是这条路上最可能的下一个。对症办法是给那些包写 `optimizeDeps.include`,**不是放宽断言**) — lint → test → build → dev server 冒烟(5175,`--strictPort`,**断言内容而非状态码**——未知路径命中 SPA fallback 返 200 + index.html,只查状态码的检查会在什么都没证明的情况下通过;并断言仓库根 403)。**不带**任何共享层闸门与 `/@fs` 断言。paths 只有 `web-react/**`。
 - [x] **E3 `dev.bat`/`dev.sh` 带上 web-react**(`e4272e8`) — 四脚本(dev.bat/dev.sh/stop.bat/stop.sh)都加 web-react(Vite 5174):dev.bat 第三个窗口、dev.sh 后台 job(日志 `.dev/web-react.log`);两前端都读 `TENON_API_TARGET` 反代同一后端;stop.* 加放 5174 端口 + 清 web-react.pid。`bash -n` 语法校验过。
 - [x] **E4a 根 `CLAUDE.md` web-react 段**(`7819624`) — 引子改「后端内核 + 两个各自自包含、零共享的前端模板」;加「Frontend architecture (`web-react/`)」段:栈、**自包含/零共享承重约束**(别抽共享层、别写"必须一起带"、文案/令牌有意维护两遍)、契约生成 API、动态路由/`<Can>`、zustand 选择器纪律、antd v6≠v5 坑、指向本台账。agent 面向文档。
-- [ ] **E4b site 上手页** — `site/` 加一页 React 模板上手(degit 一条命令),双语镜像。**必须先读 `skills/write-docs.md`**(voice/标点/开场/em-dash 预算/zh-源 en-译),写完 `cd site && npm run lint:prose -- <page>`。**不要**出现"必须一起带上"措辞。
+- [x] **E4b site 前端模板选择页**(`4a51466`) — 维护者中途把「加一页 React 上手」升级为「前端做成 Vue/React 二选一」。新建双语 `guide/frontend-templates`(同契约对比表 + 按团队栈选型 + 每模板一条 degit;写明两模板自包含零共享、degit 只带走一个,**全程无"必须一起带上"措辞**);getting-started「起前端」段与 degit 提示改 code-group 二选一(5173/5174,各自 `gen:api`);两侧 sidebar 上手区加条目。中文母版 + 英文镜像,H2/表格/code-group 逐字对齐。严格走 `skills/write-docs.md`。验:prose 闸门 selftest + 四页全绿、`vitepress build` exit 0(无死链、code-group 渲染正常)。
 
 - [ ] **E5 `gen:api` 漂移闸门**(R2 现场发现) — R2 修的那个字段缺了几个月没人发现,根因**不是** `unwrap`(这一点我第一版写错了,见轮次日志):typecheck 永远比的是**代码 ↔ schema**,从不比 **schema ↔ 后端**。schema 陈旧 = 两边一起冻住 = 恒绿。**推论:就算把 97 处响应类型全改成 schema 派生,陈旧照样一点都不红。**今天守着这条契约的只有"人记得跑 `gen:api`"。
 
@@ -135,6 +135,15 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-22 · E4b site 前端模板选择页(`4a51466`)
+
+维护者中途改范围:「site 加一页 React 上手」→「前端在文档里做成 Vue/React 二选一」(AskUserQuestion 确认落点:上手页二选一 + 新建模板选择页;`/frontend/` 深入章暂保持 Vue —— React 无对应深入内容,写全属批次 C 级工作)。
+- **新页 `guide/frontend-templates`(双语)**:开头「后端一个、前端两套、按栈选」;三 H2 —— ①一样的后端两种前端(对比表:目录/栈/状态/表格封装/端口)、②怎么选(团队栈;无偏好用 Vue 默认;两模板自包含零共享、degit 只带走一个)、③degit 一份归你自己(每模板一条命令 + 指向 sync-fork)。**反面写「另一套不会跟着来」,全程无"必须一起带上"措辞。**
+- **getting-started 二选一**:起前端 `cd web`/`cd web-react` 收进 code-group(5173/5174);degit 提示改两条命令 + 指向新页与 sync-fork。中英同改。
+- **判据(严格走 `skills/write-docs.md`)**:开头段 3 句 / ~56 CJK,交付实质主张而非 B 类朗读目录;散文位破折号 0;最长句已拆(各 <45 字)避单句过载;`消费方` 未用(你 / 维护者 指代清);中英事实、H2、表格、code-group 逐字对齐。**code-group 站内首次使用**:先核 `lint-prose.mjs` 的 `stripFences` 会把 code-group 里带标签的围栏整块剥掉(标签内半角括号不误报)、`:::` 行无 CJK 不触发任何规则,确认后再落笔。
+- **验**:`lint-prose --selftest` 绿 → 四页 `lint-prose` 0 违规;`docs:build` exit 0(vitepress 默认死链即失败 → 无死链;code-group + 新导航渲染通过)。本台账在 `docs/` 不受 prose 闸门(cwd 为 `site/`)约束。
+- **下一条**:E5 gen:api 漂移闸门(起 MinimalHost、`gen:api`、对两个 `schema.d.ts` 跑 `git diff --exit-code`;配方照 `backend-release.yml:77`)。之后 E6 pro-components 转正(长期挂),再开 **E 批合并 review lane**(E1–E5,base dev、隔离 worktree、不自审),最后 **批次 F 测试硬化**。
 
 ### 2026-07-22 · E4a 根 CLAUDE.md web-react 段(`7819624`)
 
