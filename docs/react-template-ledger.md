@@ -99,7 +99,7 @@
 - [x] **D1 tabs store + 标签栏容器 + 页面缓存** — B3 推迟的那件,**整个移植第二难的东西**。**拆两半:D1a store `34306f2`**(store 纯化 + 两处 clearTabs 接回 + spec/变异)+ **D1b 容器/标签栏/tab-sync `0082a86`**(KeepAliveOutlet/TabsBar/useTabSync + LayoutShell 接线 + 7 例 spec),均见轮次日志。①store:`removeTab` 的邻居选择、`_ensureActive`、`cachedNames` 依赖 `hasRoute`,都要有路由和容器才写得了;落地时**必须**把 `auth.reset()` 与 `useModule` 切应用两处的 `clearTabs()` 补回。②缓存:React 无 `keep-alive` 对等物 —— `<KeepAlive>` 容器维护 `Map<path, ReactNode>`,已开 tab 常驻挂载、非活动 `display:none`。`// ponytail: 不做 activated/deactivated 钩子,页面若需感知激活再加 useTabActive()`。代价是隐藏页的 effect/定时器仍在跑。验:切走切回状态保留、隐藏页定时器行为、内存随开 tab 是否线性增长。
 - [x] **D2 设置抽屉 + 多布局壳** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。**2026-07-21 维护者裁定选 B**:不只做抽屉 UI,连 **LayoutShell 重排支持全部 6 布局模式**一起做(否则布局卡片是点了不生效的死控件)。拆两半:**D2a 多模式壳 `73452da`**(CSS-grid `grid-template-areas` 按 mode 重排 + `SideNav` 薄封装 + `useLayoutMenu` 一/二级联动 + CSS 变量)+ **D2b 抽屉 + 卡片 `71c0e14`**(`SettingsDrawer` 三 tab + `LayoutModeCards` 六卡片 + 内联 SettingRow + 原生 Watermark/fixedHeader/pageTransition/breadcrumb 全接线 + 齿轮入口 + `exportSettings` 复制配置 DEV + `setSetting` action),均见轮次日志。B 的所有控件皆当场生效、无死控件。
 - [x] **D3 SignalR 实时**(`87949bd`) — `useRealtime.ts` + 内联 noticeBus + LayoutShell 接线 + `@microsoft/signalr ^10.0.0`。noticeBus **不单开文件**(唯一消费者是 LayoutShell 未读 effect,内联进 useRealtime.ts 与 web 一致);`start()` 整段包 try/catch(比 Vue 版更稳:`build()` 可同步抛,实时是纯增强绝不拖垮壳)。见轮次日志。原文:`@microsoft/signalr` 框架无关(需加此依赖),只重写 `useRealtime.ts`(68)外层包装:`force-logout` / `notice-changed` + 初次失败静默退回 30s 轮询。
-- [x] **D4 MenuSearch 全局命令面板**(`27e88f8`) — antd Modal + Ctrl/Cmd+K + 上下/回车键导航 + 顶栏搜索按钮;内部 navigate / 外链 window.open。**扫描基座不是 `useMenuFlat`**(web-react 无此 composable):新增纯函数 `flatLeaves(items)` 到 `menuItems.ts`(与其它纯菜单函数同处),吃已翻译的 `MenuItem` 树、产 叶子+面包屑。高亮用 `<mark>` JSX 免 v-html(消掉 Vue 版 XSS 面)。见轮次日志。
+- [x] **D4 MenuSearch 全局命令面板**(`27e88f8`;review 处置 `000a186`) — antd Modal + Ctrl/Cmd+K + 上下/回车键导航 + 顶栏搜索按钮;内部 navigate / 外链 window.open。**扫描基座不是 `useMenuFlat`**(web-react 无此 composable):新增纯函数 `flatLeaves(items)` 到 `menuItems.ts`(与其它纯菜单函数同处),吃已翻译的 `MenuItem` 树、产 叶子+面包屑。高亮用 `<mark>` JSX 免 v-html(消掉 Vue 版 XSS 面)。**review lane → APPROVE 无阻断**(2 MEDIUM 变异网缺口 + 1 LOW 假注释,`000a186` 收口:清空从 `afterOpenChange(false)` 改「依赖 open 的 effect 打开即清」对齐 Vue、连带修 LOW-2 快切残留 + 让重开可确定性单测;补 3 条变异证伪测试[上/下钳位 + 重开清空];CSS 注释 `content`→`container`。LOW-1 空结果 cursor=-1 接受为无害)。见轮次日志。
 - [ ] **D5 登录页另两套皮肤** — B5 已落一套;补 `AuroraGlass`(363)、`SplitPanel`(242)、`Spotlight`(107)+ 皮肤切换。**后两者在 Vue 版就是 Naive-free 的、主要是 CSS,几乎直接搬**。
 
 ## 批次 E · 工程化
@@ -127,6 +127,17 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-22 · D4 review lane 处置(`000a186`)
+
+D4 review lane(独立 opus + 隔离 worktree)结论 **APPROVE,0 阻断**;独立复验 tsc 0 / 受影响 50 用例绿 / `ECONNREFUSED` 0 / 零跨模板引用 / `antd semantic Modal` 证 `styles.container` 合法。5 问题(0 CRIT/HIGH,2 MEDIUM 测试补强,3 LOW 打磨),按先例逐条处置:
+- **MEDIUM-1 键盘钳位边界无变异网**:`↓` 那条既有测试的关键词恰好命中 2 项、cursor 0→1 就到末项,删掉 `Math.min` 上钳位仍绿;`Math.max` 下钳位则完全无测试。→ 补两条:`↓` 到末项再按仍进末项、`↑` 到首项再按仍进首项。
+- **MEDIUM-2 重开清空无回归网**:「开→改词→关→再开是否干净」无覆盖。**关键发现**:原实现把清空放在 `afterOpenChange(false)`,而**该回调在 happy-dom 无真实过渡根本不触发**(先写的重开测试如实红了)——所以这条清空路径**无法被单测网住**。不糊脆测试,改代码:清空移到**依赖 `open` prop 的 effect**(打开即清),一处同时(a)对齐 Vue `watch(show)`、(b)修 review LOW-2 快切残留旧词、(c)让重开清空可确定性单测。
+- **变异证伪(预测=实测)**:同时删两处钳位 + 停用 open-effect → **恰好新增 3 条红**(上钳位/下钳位/重开清空)、其余 8 条绿,`3 failed | 8 passed`。
+- **LOW-3 假注释**:`menusearch.css` 注释沿用 v5 「content」措辞,实为 v6 `container` → 改正。
+- **LOW-1 空结果 cursor=-1**:接受为无害(空态不渲染列表,`go(results[-1])` 是安全 no-op);**LOW-2 已由上面代码改动一并消除**。
+- **判据**:MenuSearch.spec 11/11、tsc 0、antd-lint 0、oxlint 0、气隙 `ECONNREFUSED` 0(逐个重进程,未触发 OOM)。
+- **下一条**:**D5 登录页另两套皮肤** —— B5 已落一套(现 `views/login/` 仅 `LoginPage.tsx`+spec,无皮肤系统);补 `AuroraGlass`/`SplitPanel`/`Spotlight` + 皮肤切换。**后两者 Vue 版本就 Naive-free、主要是 CSS,近乎直搬**;先读三个 `.vue` 皮肤 + 现 `LoginPage.tsx` 定皮肤切换的落法。之后 E 批工程化。
 
 ### 2026-07-22 · D4 命令面板 MenuSearch(`27e88f8`)
 
