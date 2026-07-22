@@ -128,6 +128,17 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-21 · D2a 多布局壳(6 模式 CSS-grid)(`73452da`)
+
+维护者裁定 D2 选 **B**(见 D2 清单行):不只做抽屉,连 LayoutShell 重排支持全部 6 布局模式一起做,否则布局卡片是死控件。D2a 落壳,D2b 落抽屉+卡片。
+- **shell.css**:`.shell.mode-*` 用 `grid-template-areas` 按 mode 重排 aside/header/content(逐字移植 Vue `default.vue`):竖向壳 `'aside header'/'aside content'`、顶栏壳 `'header header'/'aside content'`、无侧栏 `'header'/'content'`。窄屏(<md)统一 mobile:单列 + 抽屉侧栏。
+- **SideNav.tsx**:antd `<Menu>` 薄封装,复用 4 处(完整树/L2 子树/L1 icon rail/移动抽屉)。`rail`|`collapsed` 任一为真进 `inlineCollapsed`;openKeys **本地自管**(路由祖先并入,不覆盖用户手动展开;图标态不控 openKeys 走悬浮子菜单)。
+- **useLayoutMenu.ts**:补一/二级联动 —— `selectedL1` 跟随路由、off-menu 保留上次、菜单晚到/失效补种;`onSelectL1` 导航到一级下首个内部叶子。纯派生 `l1Of/l2Of/findActiveL1/firstLeafKey` 抽进 **menuItems.ts** 单测(不摸 React/i18n)。openKeys 从本 hook 移除(下放 SideNav)。
+- **LayoutShell.tsx**:CSS-grid 自建替代 antd `Layout/Sider`。按 mode 派生 showSider/sideShowBrand/headerShowBrand/showCollapse/topMenu/asideItems/asideWidth;顶栏按 mode 出 品牌/页标题/顶栏菜单(full/l1/l2);折叠按钮仅在有可折叠侧栏的模式出。**水印**(原生 antd `Watermark`)与 **fixedHeader 毛玻璃**在此接线,让 D2b 开关即时生效;水印恒挂、关时 content='',切换不 remount 掉 KeepAlive 缓存。移动端 Drawer 侧栏(v6 自定义宽走 `styles.section`,`width` 已废)。`isMobile = screens.md === false`(首帧未测出按桌面,避免 mobile 闪帧)。
+- **判据**:tsc 0 / antd-lint(layouts,11 文件)0(修 Drawer `width`→`styles.section` 一处 v6 弃用)/ oxlint 0 / **全量 vitest 95 文件 660/660**。新 spec:menuItems L1/L2 派生 9 例(l1Of 剥 children / l2Of 选中子树 / findActiveL1 深层归属 + off-menu / firstLeafKey 深度优先 + 外链不算)+ LayoutShell 布局模式 3 例(horizontal 无 aside、vertical-mix rail+L2 出"用户"、top-hybrid-sidebar-first rail+顶栏)。更新 LayoutShell.spec 的 `sider()` 选择器(`.ant-layout-sider`→`.shell-aside`)+ beforeEach 固定 layoutMode。
+- **本轮延续 D1 的 noCache 延后**:壳里 KeepAlive 语义未变;D2 只加布局重排,不碰 noCache。
+- **下一条**:D2b(SettingsDrawer + LayoutModeCards + SettingRow + 顶栏齿轮入口 + exportSettings 复制配置 DEV 项 + breadcrumb/pageTransition 这两个 D2a 未接的开关)。之后起 D2 合并 review lane(D2a + D2b)。
+
 ### 2026-07-21 · D1 合并 review lane(独立 opus,隔离 worktree)→ APPROVE(2 潜伏 MEDIUM + 6 LOW)→ 修复 `c02ee41`
 
 审 D1a `34306f2` + D1b `0082a86`(store×3 + layouts×5 + spec×3,并比对 Vue 源 4 份)。worktree 从 main 新建、树内无 web-react/,故按提交 blob 做静态审 + 类型逐一核对(vitest/vue-tsc 需检出+装依赖+内存,未在 worktree 跑;合并树这边已跑)。九个重点逐条**通过**:零共享、选择器纯度(全字段级 + 模块级纯函数)、导航型 action 解耦(返 nextPath、store 零 router)、clearTabs 两处接回、affix/pinned 边界五处自洽、tabs↔auth 循环引用安全(交叉引用全在函数体内)、persist 白名单、KeepAlive 语义、测试用可观测状态断言。**0 HIGH/CRITICAL**。
