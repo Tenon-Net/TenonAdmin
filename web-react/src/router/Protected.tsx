@@ -1,13 +1,25 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, type ComponentType } from 'react'
 import { Spin } from 'antd'
 import { Navigate, useLocation, useRoutes } from 'react-router-dom'
 import { useUserStore, isLoggedIn } from '@/stores/user'
 import { useAuthStore, homePath } from '@/stores/auth'
 import { enterInitial } from '@/composables/useModule'
 import { buildRoutes } from './buildRoutes'
-import UnderConstruction from '@/views/_placeholder/UnderConstruction'
 import ModuleChooser from '@/views/module'
 import { LayoutShell } from '@/layouts/LayoutShell'
+
+// 个人中心五页 = 静态路由(不进后端菜单,经顶栏下拉/铃铛入口);lazy 以 code-split(notice 拉 pro-components,别进主 chunk)。
+// **已在 buildRoutes 的 glob 排除 `personal/**`**,否则静态+动态双 import 无法 code-split。
+const ProfilePage = lazy(() => import('@/views/personal/profile'))
+const PasswordPage = lazy(() => import('@/views/personal/password'))
+const NoticePage = lazy(() => import('@/views/personal/notice'))
+const SessionsPage = lazy(() => import('@/views/personal/sessions'))
+const BindingsPage = lazy(() => import('@/views/personal/bindings'))
+const lazyEl = (El: ComponentType) => (
+  <Suspense fallback={null}>
+    <El />
+  </Suspense>
+)
 
 /**
  * 受保护区的守卫,三条按 Vue 侧 `router/index.ts` 的顺序:
@@ -47,7 +59,7 @@ export function Protected() {
   // 强制改密:只允许停在改密页。放在 routesReady 之前 —— 改密页是静态路由,不需要门户重建即可渲染,
   // 避免"重建→选应用→又被弹回"的循环。
   if (mustChange) {
-    return location.pathname === '/personal/password' ? <UnderConstruction /> : <Navigate to="/personal/password" replace />
+    return location.pathname === '/personal/password' ? lazyEl(PasswordPage) : <Navigate to="/personal/password" replace />
   }
   if (!routesReady && !booted) {
     return (
@@ -73,7 +85,12 @@ function DynamicRoutes() {
         element: <LayoutShell />,
         children: [
           ...buildRoutes(menuTree),
-          { path: '/personal/password', element: <UnderConstruction /> },
+          // 个人中心五页(静态路由,壳内渲染;入口在顶栏用户下拉 / 铃铛)。
+          { path: '/personal/profile', element: lazyEl(ProfilePage) },
+          { path: '/personal/password', element: lazyEl(PasswordPage) },
+          { path: '/personal/notice', element: lazyEl(NoticePage) },
+          { path: '/personal/sessions', element: lazyEl(SessionsPage) },
+          { path: '/personal/bindings', element: lazyEl(BindingsPage) },
           // '/' 落到当前应用首页;chooser 态 homePath 回落 /module。
           { path: '/', element: <Navigate to={home} replace /> },
           { path: '*', element: <NotFound /> },

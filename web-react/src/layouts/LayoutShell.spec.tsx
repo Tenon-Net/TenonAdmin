@@ -114,7 +114,9 @@ describe('LayoutShell 顶栏', () => {
     logoutMock.mockRejectedValue(new Error('500'))
     mountAt('/dashboard')
     await screen.findByText('DASH PAGE')
-    fireEvent.click(screen.getByLabelText('退出登录'))
+    // 登出已并入用户下拉:点头像区(用户名 n)展开 → 点「退出登录」项
+    fireEvent.click(screen.getByText('n'))
+    fireEvent.click(await screen.findByText('退出登录'))
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/login', { replace: true }))
     expect(useUserStore.getState().accessToken).toBe('')
   })

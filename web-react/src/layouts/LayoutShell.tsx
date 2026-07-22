@@ -1,12 +1,16 @@
-import { Button, Layout, Menu, Space, Tooltip, Typography, type MenuProps } from 'antd'
-import { AppstoreOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons'
+import { useEffect, useState } from 'react'
+import { Avatar, Badge, Button, Dropdown, Layout, Menu, Space, Tooltip, Typography, type MenuProps } from 'antd'
+import {
+  AppstoreOutlined, BellOutlined, DesktopOutlined, KeyOutlined, LinkOutlined, LogoutOutlined,
+  MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined, UserOutlined,
+} from '@ant-design/icons'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAppStore, isDark } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
 import { useSiteStore } from '@/stores/site'
-import { authApi } from '@/api'
+import { authApi, noticeApi } from '@/api'
 import { useLayoutMenu } from './useLayoutMenu'
 
 const { Sider, Header, Content } = Layout
@@ -24,7 +28,33 @@ export function LayoutShell() {
   const toggleDark = useAppStore((s) => s.toggleDark)
   const dark = useAppStore(isDark)
   const site = useSiteStore((s) => s.site)
+  const userInfo = useUserStore((s) => s.userInfo)
   const { items, selectedKeys, openKeys, setOpenKeys, onClick } = useLayoutMenu()
+
+  // 通知未读角标:30s 轮询(个人页读通知后由此自愈);失败静默不糊顶栏。
+  const [unread, setUnread] = useState(0)
+  useEffect(() => {
+    let alive = true
+    const poll = () => noticeApi.unreadCount().then((n) => alive && setUnread(n)).catch(() => {})
+    void poll()
+    const id = setInterval(() => void poll(), 30000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [])
+
+  // 用户下拉:个人中心四页 + 登出。key=personal 段名,logout 单独处理。
+  const userMenu: MenuProps['items'] = [
+    { key: 'profile', label: t('menu.profile'), icon: <UserOutlined /> },
+    { key: 'password', label: t('menu.password'), icon: <KeyOutlined /> },
+    { key: 'sessions', label: t('menu.sessions'), icon: <DesktopOutlined /> },
+    { key: 'bindings', label: t('menu.bindings'), icon: <LinkOutlined /> },
+    { type: 'divider' },
+    { key: 'logout', label: t('app.logout'), icon: <LogoutOutlined />, danger: true },
+  ]
+  const onUserMenu: MenuProps['onClick'] = ({ key }) => (key === 'logout' ? void logout() : navigate(`/personal/${key}`))
+  const avatarChar = (userInfo?.name ?? '').trim().charAt(0).toUpperCase() || '?'
 
   async function logout() {
     try {
@@ -85,13 +115,21 @@ export function LayoutShell() {
             onClick={toggleCollapsed}
           />
           <div style={{ flex: 1 }} />
-          <Space size="small">
+          <Space size="middle">
             <Tooltip title={t('app.theme')}>
               <Button type="text" aria-label={t('app.theme')} icon={dark ? <SunOutlined /> : <MoonOutlined />} onClick={toggleDark} />
             </Tooltip>
-            <Tooltip title={t('app.logout')}>
-              <Button type="text" aria-label={t('app.logout')} icon={<LogoutOutlined />} onClick={() => void logout()} />
+            <Tooltip title={t('menu.notice')}>
+              <Badge count={unread} size="small" offset={[-2, 4]}>
+                <Button type="text" aria-label={t('menu.notice')} icon={<BellOutlined />} onClick={() => navigate('/personal/notice')} />
+              </Badge>
             </Tooltip>
+            <Dropdown menu={{ items: userMenu, onClick: onUserMenu }} trigger={['click']}>
+              <Space size={8} style={{ cursor: 'pointer', padding: '0 4px' }}>
+                <Avatar size="small" src={userInfo?.avatar || undefined}>{avatarChar}</Avatar>
+                <Typography.Text>{userInfo?.name}</Typography.Text>
+              </Space>
+            </Dropdown>
           </Space>
         </Header>
 

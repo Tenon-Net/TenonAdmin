@@ -7,7 +7,11 @@ import type { MenuNode } from '@/types/menu'
 
 vi.mock('@/api', () => ({
   personalApi: { modules: vi.fn(), menu: vi.fn(), permissions: vi.fn(), profile: vi.fn() },
+  // LayoutShell(壳内页面渲染它)挂载即轮询未读角标;不给会同步抛 undefined。
+  noticeApi: { unreadCount: () => Promise.resolve(0) },
 }))
+// 改密页是 lazy 静态路由 + 拉 PasswordStrength/configApi,mock 成 stub 只验守卫接线(渲染改密页而非放行全站)。
+vi.mock('@/views/personal/password', () => ({ default: () => <div>改密页</div> }))
 // 动态路由的 glob 换成假表,让 system/user 有落点。
 vi.mock('./buildRoutes', async (orig) => {
   const actual = await orig<typeof import('./buildRoutes')>()
@@ -70,8 +74,8 @@ describe('守卫②:强制改密', () => {
   it('mustChangePassword → 锁死改密页,访问别处也被弹过去', async () => {
     useUserStore.setState({ accessToken: 't', refreshToken: 'r', userInfo: { userId: 1, account: 'a', name: 'n', mustChangePassword: true } })
     mountAt('/system/user')
-    // UnderConstruction 显示当前路径,应是 /personal/password
-    await waitFor(() => expect(screen.getByText('/personal/password')).toBeTruthy())
+    // 被弹到改密页并渲染它(mock stub),而非放行 /system/user
+    await waitFor(() => expect(screen.getByText('改密页')).toBeTruthy())
     expect(modulesMock).not.toHaveBeenCalled() // 改密守卫在门户重建之前,不拉门户
   })
 })

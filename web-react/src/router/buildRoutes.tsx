@@ -37,12 +37,13 @@ const views = import.meta.glob<ViewModule>([
   '!/src/views/login/**',
   '!/src/views/module/**',
   '!/src/views/embed/**',
+  '!/src/views/personal/**',
   '!/src/views/_placeholder/**',
 ]) as ViewGlob
 
 // 上面 glob 已排除的目录前缀 —— `viewKeysFrom` 也照它过滤,好让**注入假表**的测试与真实 glob 结论一致
 // (假表不经 glob 的负模式,只能靠这里的显式过滤把内部组件挡在下拉外)。
-const NON_PAGE_PREFIXES = ['login/', 'module/', 'embed/', '_placeholder/']
+const NON_PAGE_PREFIXES = ['login/', 'module/', 'embed/', 'personal/', '_placeholder/']
 
 /**
  * glob 键(`/src/views/system/user/index.tsx`)→ 菜单 component 值(`system/user/index`)。
