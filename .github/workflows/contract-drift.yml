@@ -1,0 +1,88 @@
+name: contract-drift
+
+# 契约漂移闸门。守的是一个 typecheck 永远看不见的缺口:tsc 比的是「前端代码 ↔ schema.d.ts」,
+# 从不比「schema.d.ts ↔ 后端真实契约」。后端 DTO 改了却没重跑 gen:api,schema 就整体陈旧、
+# 两侧一起冻住 = 恒绿(R2 那个丢了几个月没人发现的 Logo 字段正是这么漏的)。
+#
+# 做法:起 MinimalHost、对两套模板各跑一次 gen:api、对两个 schema.d.ts 跑 git diff --exit-code。
+# 重新生成后与提交不一致 = 有人改了契约没重生成 → 红。
+# 触发放在 backend/**:漂移的根因在后端契约变化,而 web*/** 的 CI(paths 不含 backend)此时根本不跑。
+# 顺带也盯两个 schema 文件本身,挡手改 schema.d.ts 让它偏离生成物的情况。
+#
+# 能力边界(别误解):它只回答「schema 变了没重生成」,不回答「哪儿坏了」。openapi-fetch 在请求侧
+# 受 schema 约束、响应侧走手写 unwrap 断言,所以 tsc 对响应侧漂移天然沉默——但本闸门比的是 schema
+# 文件本身,请求侧、响应侧的任何契约变化都会让重生成结果变化、一律翻红。
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'backend/**'
+      - 'web/src/api/schema.d.ts'
+      - 'web-react/src/api/schema.d.ts'
+      - '.github/workflows/contract-drift.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'web/src/api/schema.d.ts'
+      - 'web-react/src/api/schema.d.ts'
+      - '.github/workflows/contract-drift.yml'
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # 一个 job 里装两套 lockfile 的 npm 缓存:setup-node 用两份 lockfile 的哈希当 key,
+      # 恢复到共享的 ~/.npm,两次 npm ci 都吃得到。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web-react/package-lock.json
+
+      # gen:api 用的 openapi-typescript 是各自的 devDependency,必须按 lockfile 精确安装 ——
+      # 版本一漂,生成格式就可能变,本闸门会因工具而非契约翻红。npm ci 锁死版本正是避这个。
+      - name: Install web deps
+        working-directory: web
+        run: npm ci
+
+      - name: Install web-react deps
+        working-directory: web-react
+        run: npm ci
+
+      # 起 MinimalHost 抓契约,走的正是 dev.sh / 前端 gen:api 的同一条路(/openapi/v1.json 仅 Development 挂载)。
+      # 配方照 backend-release.yml 的健康轮询:zero-config SQLite 冷启,/health/ready 绿 = 建表 + 播种完成。
+      - name: Check contract drift (boot MinimalHost, regenerate, diff)
+        run: |
+          ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://127.0.0.1:5100 \
+            dotnet run --no-launch-profile -c Release \
+            --project backend/samples/MinimalHost > minimalhost.log 2>&1 &
+          APP_PID=$!
+          ready=0
+          for i in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:5100/health/ready > /dev/null; then ready=1; break; fi
+            if ! kill -0 "$APP_PID" 2>/dev/null; then
+              echo "::error::MinimalHost exited before becoming ready"; cat minimalhost.log; exit 1
+            fi
+            sleep 2
+          done
+          [ "$ready" = "1" ] || { echo "::error::MinimalHost never became ready"; cat minimalhost.log; exit 1; }
+
+          ( cd web && npm run gen:api )
+          ( cd web-react && npm run gen:api )
+          kill "$APP_PID" 2>/dev/null || true
+
+          # git diff --exit-code 会把 diff 打进日志并以非零退出 —— 漂移内容直接可见。
+          if ! git diff --exit-code -- web/src/api/schema.d.ts web-react/src/api/schema.d.ts; then
+            echo "::error::schema.d.ts is stale — the backend OpenAPI contract changed but the committed types weren't regenerated. Run 'npm run gen:api' in web/ and web-react/ (with the backend running on :5100) and commit the result."
+            exit 1
+          fi
+          echo "contract in sync"
