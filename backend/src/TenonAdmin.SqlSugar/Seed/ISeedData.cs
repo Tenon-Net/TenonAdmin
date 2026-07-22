@@ -12,7 +12,8 @@ public interface ISeedData;
 /// 用户在界面上改过的数据不会被下次重启覆盖回种子值。
 /// 唯一例外是 <see cref="ISeedData{TEntity}.SyncOnUpgrade"/>(默认 false,见其注释)。
 /// 因此种子实体<b>必须显式给定固定 Id</b>,且必须落在保留区间内(见 <see cref="TenonAdmin.Core.TenonSeedIds"/>:
-/// 内核占 <c>[1, 999]</c>,<b>消费者从 1000 起、不超过 4095</b>;4096 以上是雪花运行时发号区,占了迟早主键冲突)。
+/// 内核占 <c>[1, 999]</c>,<b>消费者从 1000 起</b>;上限不是写死的数字,而是启动时刻动态算出的雪花地板——
+/// 严格小于它就永远不会被此后真实产生的雪花号撞上,详见 <see cref="TenonAdmin.Core.SnowflakeIdGenerator.CurrentFloor"/>)。
 /// 越界与 Id=0 都会被启动检查直接拒绝。</para>
 /// <para>返回空集合是合法的:据此可实现"库里已有数据就不播种"(内置 <c>SuperAdminSeed</c> 正是这么做的)。</para>
 /// <para>用法(用户侧一样,见设计 §5.7)——注意必须实现<b>泛型</b>版,非泛型 <see cref="ISeedData"/> 只是 DI 收集用的空标记:</para>

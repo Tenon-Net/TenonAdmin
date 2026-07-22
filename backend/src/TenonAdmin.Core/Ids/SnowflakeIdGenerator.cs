@@ -30,10 +30,20 @@ public class SnowflakeIdGenerator : IIdGenerator
 
     /// <summary>
     /// 本布局能发出的<b>最小 ID</b> = 2^12 = 4096(纪元后第 1 毫秒、机器 0、序列 0)。
-    /// <para>由低位宽度直接派生,故改位宽它自动跟着变——<see cref="TenonSeedIds"/> 的种子保留区间以它为上界,
-    /// 靠这条派生关系保证「种子 Id 与运行时 ID 永不相撞」在位宽变动后依然成立(或当场编译/测试失败)。</para>
+    /// <para>由低位宽度直接派生,故改位宽它自动跟着变——这是"任何时刻都不可能更小"的结构性下界,
+    /// 与 <see cref="CurrentFloor"/>(此刻起才成立的动态下界)是两个不同的保证。</para>
     /// </summary>
     public const long MinId = 1L << TIMESTAMP_SHIFT;
+
+    /// <summary>
+    /// <b>此刻起</b>雪花号今后必然 &gt;= 的动态下界(= 当前相对纪元毫秒数 &lt;&lt; 12,机器 0、序列 0 时的最小值)。
+    /// <para>用途:种子固定 Id 只要在启动时严格小于这个值,就必然小于本次启动往后(时钟单调前进)产生的
+    /// 任何运行时 Id,不会被未来插入撞上——用于替代写死的 <see cref="TenonSeedIds.ConsumerMax"/> 式静态上限。
+    /// 不保证历史上某个更早的部署是否恰好用过这个号,但那本就是静态上限方案同样承担的风险(见 <see cref="MinId"/>)。</para>
+    /// <para>纯函数,不消耗序列号、不影响生成器实例状态,可独立于 <see cref="NextId"/> 调用。</para>
+    /// </summary>
+    public static long CurrentFloor(TimeProvider? time = null) =>
+        ((long)((time ?? TimeProvider.System).GetUtcNow() - EPOCH).TotalMilliseconds) << TIMESTAMP_SHIFT;
 
     /// <summary>时钟回拨的可容忍上限(毫秒)。NTP 微调通常在几毫秒内,超过视为异常环境。</summary>
     private const long MAX_CLOCK_DRIFT_MS = 5;
