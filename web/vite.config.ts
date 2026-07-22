@@ -38,6 +38,15 @@ export default defineConfig({
       '/hub': { target: apiTarget, changeOrigin: true, ws: true }, // SignalR 实时通知 Hub;ws:true 反代 WebSocket 升级
     },
   },
+  // vite preview(产物预览)不继承 server.proxy,这里配同一套;低内存机上用 build+preview 代替 dev 跑整站。
+  preview: {
+    port: 5173,
+    proxy: {
+      '/api': { target: apiTarget, changeOrigin: true },
+      '/openapi': { target: apiTarget, changeOrigin: true },
+      '/hub': { target: apiTarget, changeOrigin: true, ws: true },
+    },
+  },
   test: {
     environment: 'happy-dom',
     include: ['src/**/*.spec.ts'], // 必须限定 src:web/e2e 的 Playwright 用例也叫 *.spec.ts,默认 glob 会误吞

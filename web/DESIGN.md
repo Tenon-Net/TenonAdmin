@@ -1,13 +1,14 @@
 # TenonAdmin 设计系统规范(DESIGN.md)
 
 > 设计单源:`../docs/rebuild-design.md` §7。**tokens 单源:[`src/styles/tokens.css`](src/styles/tokens.css)** —— 一切颜色/字号/间距/圆角/阴影都从那里的 CSS 变量取,本文件只做规范说明与「token → Naive UI」映射。
-> 视觉来源(**已改版**):RBAC 后台原型 [`design-mockups/design_handoff_rbac_admin/`](design-mockups/design_handoff_rbac_admin/README.md)(权威说明 = 其 `README.md`);旧稿 `design-mockups/design-tokens.dc.html` 留档。核心调色板(主色 #646CFF / Arco 灰阶 / 四语义色 / 亮暗角色令牌)与旧稿一致;本版细化**圆角(更圆)/ 阴影 / 顶栏毛玻璃 / 侧栏配色 / 主色派生规则 / 6 主色候选 / 密度档**。
+> 视觉来源(**已改版**):RBAC 后台原型 [`design-mockups/design_handoff_rbac_admin/`](design-mockups/design_handoff_rbac_admin/README.md)(权威说明 = 其 `README.md`);旧稿 `design-mockups/design-tokens.dc.html` 留档。本版细化**圆角(更圆)/ 阴影 / 顶栏毛玻璃 / 侧栏配色 / 主色派生规则 / 6 主色候选 / 密度档**。
+> **色板已换(theme-refresh,2026-07)**:调色板整层采 daisyUI(MIT)企业向主题——亮色 corporate、暗色 business(OKLCH 原值转 sRGB hex,warning/error/三级文字按可读性加深);主色 #0082CE。**靛蓝 #646CFF 仅保留为品牌色**(logo / manifest theme-color,不随 accent 变);圆角/字号/间距/阴影体系不变(daisyUI 的 radius 4px/depth 0 未采用)。手法补充:卡片 1px 描边(styles/index.css 质感层)、表头次级色+600 字重(naive-theme.ts)。
 
 ---
 
 ## 1. 设计基调
 
-企业级、精简、留白充分、克制。低饱和主色(明快现代靛蓝 `#646CFF`)+ Arco 系微冷中性灰阶。信息密度按后台管理(正文 14/22,表格可紧凑),明暗双主题对等。参考观感:Soybean / Naive UI Admin。
+企业级、精简、留白充分、克制。corporate 蓝主色(`#0082CE`)+ 纯中性灰阶(深端带藏蓝墨色),暗色为 business 灰。信息密度按后台管理(正文 14/22,表格可紧凑),明暗双主题对等。参考观感:daisyUI corporate/business 色系 + Soybean / Naive UI Admin 的质感手法。
 
 ## 2. Design Tokens(概览,权威值见 `tokens.css`)
 
@@ -46,12 +47,12 @@
 - **按钮层级**:主 `--color-primary`(hover→`-hover`,pressed→`-pressed`)/ 次要(描边 `--color-border` + 文字 `--color-text-secondary`)/ 文本 / 危险(`--color-danger`)/ 禁用(`--color-fill` + `--color-text-disabled`)。高 34,圆角 `--radius-md`。
 - **表格密度**:舒适(行高 58)/ 紧凑(行高 48)两档(运行时可切,存 `app.density`;联动页内边距 24/18、卡片间距 16/12、卡片内边距 20×22/16×18);数值列 `tabular-nums`。
 - **状态反馈**:标签 = 语义 base 文字 + `-bg` 底 + 圆点;空/加载/错误态统一走 Naive 内建占位。
-- **主色可换(运行时)**:6 候选 `#646CFF`(默认)/ `#7C5CFF` / `#0EA5E9` / `#EC4899` / `#F97316` / `#10B981`;切主色 = 按 §7 派生规则从 accent 重算 `--color-primary*`(写到 `document.documentElement`)+ 重建 Naive `themeOverrides`,存 `app.accent`。
+- **主色可换(运行时)**:6 候选 `#0082CE`(默认,corporate 蓝)/ `#7C5CFF` / `#0EA5E9` / `#EC4899` / `#F97316` / `#10B981`;切主色 = 按 §7 派生规则从 accent 重算 `--color-primary*`(写到 `document.documentElement`)+ 重建 Naive `themeOverrides`,存 `app.accent`(旧候选残留由 afterHydrate 回落默认)。
 - **英雄元素(仅登录页/欢迎横幅/头像)**:主按钮渐变 `btnGrad` + 发光 `glowSh` + hover 上浮 `translateY(-2px)`;**应用内常规按钮走 Naive 平面主色**,不满屏渐变。环境动画(柔光/扫光)默认关(沉稳档)。
 
 ## 6. 可访问性
 
-实测对比度(WCAG,两主题):**主文字**(`--color-text-primary`)on 页底/容器 ≈ 13–16:1、**次文字**(`--color-text-secondary`)≈ 7:1 —— 均过 AA(≥4.5)。**占位/辅助文字**(`--color-text-tertiary` #86909C / 暗 #6E7681)≈ 3.2–3.5:1、**白字 on 主色按钮**(#646CFF)≈ 4.1:1 —— 属 AA-large 档,是品牌主色(Claude 靛蓝)自带的天花板;这些仅用于非正文的提示/大字/按钮场景可接受,若某处放 14px 正文级用途需改用 `--color-text-secondary`。焦点态保留可见描边;交互控件键盘可达;语义色不作唯一区分手段(配文字/图标)。
+实测对比度(WCAG,theme-refresh 色板,两主题):**主文字** on 页底/容器 亮 15.1–17.2:1 / 暗 10.3–10.7:1、**次文字** 亮 6.3:1 / 暗 5.7:1 —— 均过 AA(≥4.5)。**占位/辅助文字**(`--color-text-tertiary` #85868E / 暗 #6E6E6E)亮 3.6:1 / 暗 3.2:1、**白字 on 主色按钮** 亮(#0082CE)4.1:1 / 暗(#2E99D7)3.2:1、**语义色文字** on 容器 亮 3.3–4.2:1(warning 已从 daisyUI 原值加深至 #A88400 保 3.5:1)/ 暗 4.4–7.9:1 —— AA-large 档,仅用于非正文的提示/大字/按钮/标签场景可接受,若某处放 14px 正文级用途需改用 `--color-text-secondary`。焦点态保留可见描边;交互控件键盘可达;语义色不作唯一区分手段(配文字/图标)。
 
 ---
 
