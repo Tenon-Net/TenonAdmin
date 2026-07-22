@@ -34,6 +34,11 @@ export interface DataTableProps<T extends Record<string, any>> {
   onRowClick?: (record: T) => void
   /** 选中行高亮:rowKey 命中此值的行套 `.data-table-active-row`(见 DataTable.css)。主从页配 onRowClick 用。 */
   activeRowKey?: Key | null
+  /**
+   * 透传给 ProTable 的 `params`:变化即自动 reload 回第 1 页。侧栏/主从筛选用
+   * (如用户页左机构树 → `params={{ orgId }}`)。ProTable 深比较,传新对象字面量不会自旋。
+   */
+  params?: Record<string, unknown>
 }
 
 /** 暴露给调用方的句柄(增删改后刷新)——只给 `reload`,不外泄 pro-components 的 `ActionType`。 */
@@ -42,7 +47,7 @@ export interface DataTableHandle {
 }
 
 function DataTableInner<T extends Record<string, any>>(
-  { columns, fetcher, persistKey, rowKey = 'id', toolbar, headerTitle, rowSelection, onRowClick, activeRowKey }: DataTableProps<T>,
+  { columns, fetcher, persistKey, rowKey = 'id', toolbar, headerTitle, rowSelection, onRowClick, activeRowKey, params }: DataTableProps<T>,
   ref: React.ForwardedRef<DataTableHandle>,
 ) {
   const actionRef = useRef<ActionType | undefined>(undefined)
@@ -58,7 +63,11 @@ function DataTableInner<T extends Record<string, any>>(
       onRow={onRowClick ? (record) => ({ onClick: () => onRowClick(record), style: { cursor: 'pointer' } }) : undefined}
       rowClassName={activeRowKey == null ? undefined : (record) => (record[rowKey] === activeRowKey ? 'data-table-active-row' : '')}
       columnsState={persistKey ? { persistenceKey: `protable:${persistKey}`, persistenceType: 'localStorage' } : undefined}
+      params={params}
       search={{ labelWidth: 'auto' }}
+      // 搜索区与表格分成两张有边框卡(对齐 Vue ProTable 的 .pro-table-search / .pro-table-card);
+      // 不开则两块无边框区浮在页面底色上、视觉连成一片。
+      cardBordered
       pagination={{ showSizeChanger: true, defaultPageSize: 10 }}
       headerTitle={headerTitle}
       toolBarRender={() => (toolbar ? [toolbar] : [])}
