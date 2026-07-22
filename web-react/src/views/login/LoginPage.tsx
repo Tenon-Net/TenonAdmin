@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Tooltip } from 'antd'
 import { MoonOutlined, SunOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -30,9 +30,12 @@ export default function LoginPage() {
   const locale = useAppStore((s) => s.locale)
   const setLocale = useAppStore((s) => s.setLocale)
 
-  useEffect(() => {
-    localStorage.setItem(KEY, skin)
-  }, [skin])
+  // 切换即写盘;`?skin=` 预览只影响本次(initSkin 读它),不落库 —— 对齐 Vue `watch(skin)`(非 immediate)。
+  // **别放 useEffect([skin])**:那会在挂载时也写,把预览链接永久改掉用户记忆的皮肤。
+  function pick(id: string) {
+    setSkin(id)
+    localStorage.setItem(KEY, id)
+  }
 
   const active = LOGIN_SKINS.find((s) => s.id === skin) ?? LOGIN_SKINS[0]!
   const Skin = active.component
@@ -51,7 +54,7 @@ export default function LoginPage() {
               type="button"
               role="tab"
               aria-selected={s.id === skin}
-              onClick={() => setSkin(s.id)}
+              onClick={() => pick(s.id)}
             >
               {s.label}
             </button>

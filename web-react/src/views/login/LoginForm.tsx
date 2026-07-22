@@ -161,18 +161,15 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
 
       {showFooter ? (
         <footer className="lf-foot">
+          {/* 以 copyrightUrl 为门(对齐 Vue LoginForm.vue 与兄弟皮肤 SplitPanel):配了链接就带链接,文案回退 title。 */}
           <span>
             © {year}{' '}
-            {site.copyright ? (
-              site.copyrightUrl ? (
-                <a href={site.copyrightUrl} target="_blank" rel="noreferrer">
-                  {site.copyright}
-                </a>
-              ) : (
-                site.copyright
-              )
+            {site.copyrightUrl ? (
+              <a href={site.copyrightUrl} target="_blank" rel="noreferrer">
+                {site.copyright || site.title}
+              </a>
             ) : (
-              site.title
+              site.copyright || site.title
             )}
           </span>
           {appVersion ? <span className="lf-ver">v{appVersion}</span> : null}
