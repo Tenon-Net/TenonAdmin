@@ -146,7 +146,7 @@ public virtual async Task<T> GetHotAsync(string k)
 
 - 实现 **`ISeedData<TEntity>`**（泛型版），`HasData()` 返回默认行（`Seed/DictSeed.cs`）。返回空集合合法（"库里已有就不播种"，见 `SuperAdminSeed`）。
 - **固定 Id 保幂等**：种子只在缺失时补，不回改已存在行——界面上的改动不会被重启覆盖。
-- **Id 必须落在保留区间**（`Core/TenonSeedIds.cs`）：内核 `[1, 999]`、消费者 `[1000, 4095]`、`4096+` 归雪花运行时。越界或 Id=0 启动即拒。内核新增种子行别越过 999——`SeedIdRangeTests` 会拦。
+- **Id 必须落在保留区间**（`Core/TenonSeedIds.cs`）：内核 `[1, 999]`、消费者 `>= 1000`。上限不是写死的数字，而是启动时刻动态算出的雪花地板（`SnowflakeIdGenerator.CurrentFloor()`）——严格小于它就永远不会被此后真实产生的雪花号撞上。越界或 Id=0 启动即拒。内核新增种子行别越过 999——`SeedIdRangeTests` 会拦。
 - 内置种子在 `ServicesSetup`/`SqlSugarSetup` 用 `TryAddEnumerable` 注册；**消费者在自己的 `Program.cs` 注册**（内核不扫描程序集找种子，忘注册＝静默不执行）。
 
 ### 1.11 命名 / 组织 / 其它

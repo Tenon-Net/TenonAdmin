@@ -32,7 +32,7 @@
    - 核心四包运行时依赖只允许 `SqlSugarCore` + `Microsoft.*`(§2.3);
    - 框架服务显式 `TryAdd`(消费者前置注册即替换),服务 public、方法 virtual、长流程拆小步(§5);
    - 禁硬编码字符串:错误走 `ErrorCode` 枚举,claim 名走 `TokenClaimNames`,**后端不写死中文业务文案**(i18n 在前端按码翻译,§13);
-   - 种子必须固定 Id,且落在 `TenonSeedIds` 的号段内(内核 `[1,999]` / 消费者 `[1000,4095]`);
+   - 种子必须固定 Id,且落在 `TenonSeedIds` 的号段内(内核 `[1,999]` / 消费者 `>=1000`,上限为启动时动态雪花地板);
    - 安全默认拒绝:新接口默认挂 `[RolePermission]`,放行是显式例外(§14)。
 5. **公开 API 一旦发包就锁死**。可订阅类型(`FileGcService`、`SqlSugarRepository<>` 等)**不得新增必填构造参数**,新参数一律给默认值。
 

@@ -67,10 +67,14 @@ internal sealed class DatabaseInitializer(
             var stored = (await db.Queryable<SysSchemaVersion>().FirstAsync(x => x.Id == 1))?.Version;
             var upgrading = stored != SysSchemaVersion.Current;
 
+            // 本次启动共用同一个动态雪花地板(见 EnsureSeedIdsInReservedRange),避免种子循环跑久了
+            // 跨毫秒导致同一次启动内前后判据不一致。
+            var liveFloor = SnowflakeIdGenerator.CurrentFloor(time);
+
             var (inserted, synced) = (0, 0);
             foreach (var seed in seeds)
             {
-                var (i, u) = await ExecuteSeedAsync(seed, upgrading);
+                var (i, u) = await ExecuteSeedAsync(seed, upgrading, liveFloor);
                 inserted += i;
                 synced += u;
             }
@@ -175,26 +179,26 @@ internal sealed class DatabaseInitializer(
         .GetGenericArguments()[0];
 
     /// <summary>执行单个种子:经泛型接口取实体类型,反射进入强类型管道(仅启动期一次,开销可忽略)</summary>
-    private async Task<(int Inserted, int Synced)> ExecuteSeedAsync(ISeedData seed, bool upgrading)
+    private async Task<(int Inserted, int Synced)> ExecuteSeedAsync(ISeedData seed, bool upgrading, long liveFloor)
     {
         var method = typeof(DatabaseInitializer)
             .GetMethod(nameof(ExecuteSeedCoreAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
             .MakeGenericMethod(SeedEntityType(seed));
 
-        return await (Task<(int, int)>)method.Invoke(this, [seed, upgrading])!;
+        return await (Task<(int, int)>)method.Invoke(this, [seed, upgrading, liveFloor])!;
     }
 
     /// <summary>
     /// 强类型种子管道:校验固定 Id → Storageable 按主键分流 → 插入缺失行(幂等核心);
     /// 升级时对结构性种子(<see cref="ISeedData{TEntity}.SyncOnUpgrade"/>)额外覆盖已有行。
     /// </summary>
-    private async Task<(int Inserted, int Synced)> ExecuteSeedCoreAsync<TEntity>(ISeedData<TEntity> seed, bool upgrading)
+    private async Task<(int Inserted, int Synced)> ExecuteSeedCoreAsync<TEntity>(ISeedData<TEntity> seed, bool upgrading, long liveFloor)
         where TEntity : AuditEntity, new()
     {
         var rows = seed.HasData().ToList();
         if (rows.Count == 0) return (0, 0);
 
-        EnsureSeedIdsInReservedRange(seed, rows);
+        EnsureSeedIdsInReservedRange(seed, rows, liveFloor);
         EnsureSeedIdsUnique(seed, rows);
 
         // 连接表:代理主键会漂(运行时授权发雪花号),按业务唯一键判存——该键已存在就跳过,
@@ -238,24 +242,25 @@ internal sealed class DatabaseInitializer(
     }
 
     /// <summary>
-    /// 种子固定 Id 必须落在保留区间 <c>[1, <see cref="TenonSeedIds.ConsumerMax"/>]</c>(见 <see cref="TenonSeedIds"/>)。
+    /// 种子固定 Id 必须严格小于 <paramref name="liveFloor"/>(启动时刻的动态雪花地板,
+    /// 见 <see cref="SnowflakeIdGenerator.CurrentFloor"/>)。
     /// <para>下界:Id=0 会被 AOP 当成"未指定"填上新雪花号,于是每次启动都判不存在 → 重复插入,幂等直接失效。</para>
-    /// <para>上界:4096 起是雪花运行时发号区,时间迟早推到那个号上 —— 种子占了它,将来某次插入就主键冲突。
-    /// 这一层是<b>唯一真正有牙的约束</b>:区间写在文档里没人读,写成启动异常才跑不掉。</para>
+    /// <para>上界:雪花号只会随时间单调增长,严格小于启动那一刻算出的地板值,就永远不会被本实例此后
+    /// 真实产生的雪花号撞上。这一层是<b>唯一真正有牙的约束</b>:区间写在文档里没人读,写成启动异常才跑不掉。</para>
     /// <para>这里只校验"所有种子都不得越界"这条通用规则;"内核自己不得超过 <see cref="TenonSeedIds.KernelMax"/>"
     /// 是内核的自律,由 <c>SeedIdRangeTests</c> 守 —— 运行时不该去猜哪个种子是消费者的。</para>
     /// </summary>
-    private static void EnsureSeedIdsInReservedRange<TEntity>(ISeedData<TEntity> seed, List<TEntity> rows)
+    private static void EnsureSeedIdsInReservedRange<TEntity>(ISeedData<TEntity> seed, List<TEntity> rows, long liveFloor)
         where TEntity : AuditEntity, new()
     {
-        var bad = rows.Where(r => r.Id is < 1 or > TenonSeedIds.ConsumerMax).Select(r => r.Id).Distinct().ToArray();
+        var bad = rows.Where(r => r.Id < 1 || r.Id >= liveFloor).Select(r => r.Id).Distinct().ToArray();
         if (bad.Length == 0) return;
 
         throw new InvalidOperationException(
             $"种子 {seed.GetType().Name} 的固定 Id 越界:{string.Join(", ", bad)}。" +
-            $"种子数据必须显式指定固定 Id 且落在保留区间 [1, {TenonSeedIds.ConsumerMax}] 内" +
+            $"种子数据必须显式指定固定 Id 且严格小于当前雪花地板 {liveFloor}" +
             "(Id=0 会被审计 AOP 填成新雪花号,导致每次启动重复插入;" +
-            $"≥ {TenonSeedIds.SnowflakeFloor} 是雪花运行时发号区,迟早与新增数据主键冲突)。" +
+            $"≥ {liveFloor} 是雪花号从此刻起会真实产生的号段,迟早与新增数据主键冲突)。" +
             $"内核内置种子用 [1, {TenonSeedIds.KernelMax}],消费者种子请从 {TenonSeedIds.ConsumerMin} 起取号。");
     }
 
