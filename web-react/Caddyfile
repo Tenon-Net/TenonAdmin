@@ -30,7 +30,7 @@
 		reverse_proxy {$TENON_UPSTREAMS:app:8080}
 	}
 
-	# SignalR 实时通知 Hub(web-react 特有,D3):Caddy 的 reverse_proxy **自动处理 WebSocket 升级**,
+	# SignalR 实时通知 Hub(强制下线、未读刷新):Caddy 的 reverse_proxy **自动处理 WebSocket 升级**,
 	# 无需像 nginx 那样手写 Upgrade/Connection 头。漏掉这块,实时通知会静默退化成 30s 轮询。
 	handle /hub/* {
 		reverse_proxy {$TENON_UPSTREAMS:app:8080}
