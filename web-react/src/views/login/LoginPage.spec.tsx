@@ -187,3 +187,124 @@ describe('提交', () => {
     expect(loginMock).not.toHaveBeenCalled()
   })
 })
+
+// ── F1 登录皮肤外壳:皮肤选择阶梯 / 切换持久化 / showBrand·showFooter / SplitPanel i18n / Spotlight 指针 ──
+// 三套皮肤根元素类名互斥(aurora / split / spotlight 各是独立 class token,子元素如 split-panel、
+// aurora-bg、spot 都是别的 token),据此判定当前渲染的是哪套。皮肤由 LoginPage.initSkin 选中
+// (`?skin=` → localStorage → 默认),故用例在 mount() 前布置 location.search / localStorage。
+describe('登录皮肤外壳(F1)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    window.history.replaceState(null, '', '/')
+  })
+  afterEach(() => {
+    localStorage.clear()
+    window.history.replaceState(null, '', '/')
+  })
+
+  const activeSkin = () =>
+    document.querySelector('.spotlight')
+      ? 'spotlight'
+      : document.querySelector('.split')
+        ? 'split'
+        : document.querySelector('.aurora')
+          ? 'aurora'
+          : null
+
+  describe('皮肤选择阶梯', () => {
+    it('默认(无 query、无记忆):渲染默认皮肤 aurora', async () => {
+      await mount()
+      expect(activeSkin()).toBe('aurora')
+    })
+
+    it('?skin= 一次性覆盖:渲染指定皮肤,且不写记忆(预览不落库)', async () => {
+      window.history.replaceState(null, '', '/login?skin=split')
+      await mount()
+      expect(activeSkin()).toBe('split')
+      expect(localStorage.getItem('login-skin')).toBeNull()
+    })
+
+    it('?skin= 非法值:回退到默认', async () => {
+      window.history.replaceState(null, '', '/login?skin=nope')
+      await mount()
+      expect(activeSkin()).toBe('aurora')
+    })
+
+    it('记忆命中(localStorage):无 query 时渲染记住的皮肤', async () => {
+      localStorage.setItem('login-skin', 'spotlight')
+      await mount()
+      expect(activeSkin()).toBe('spotlight')
+    })
+
+    it('?skin= 优先于记忆', async () => {
+      localStorage.setItem('login-skin', 'spotlight')
+      window.history.replaceState(null, '', '/login?skin=split')
+      await mount()
+      expect(activeSkin()).toBe('split')
+    })
+  })
+
+  describe('切换 UI + 持久化', () => {
+    it('点击皮肤段:切换激活皮肤并写盘', async () => {
+      await mount()
+      expect(activeSkin()).toBe('aurora')
+      fireEvent.click(screen.getByRole('tab', { name: '双栏' }))
+      await waitFor(() => expect(activeSkin()).toBe('split'))
+      expect(localStorage.getItem('login-skin')).toBe('split')
+    })
+
+    it('激活段 aria-selected=true,其余 false', async () => {
+      await mount()
+      fireEvent.click(screen.getByRole('tab', { name: '聚光' }))
+      await waitFor(() => expect(activeSkin()).toBe('spotlight'))
+      expect(screen.getByRole('tab', { name: '聚光' }).getAttribute('aria-selected')).toBe('true')
+      expect(screen.getByRole('tab', { name: '极光' }).getAttribute('aria-selected')).toBe('false')
+    })
+  })
+
+  describe('showBrand / showFooter', () => {
+    it('双栏皮肤:卡内表单关掉品牌与页脚(左栏自绘,免卡内重复)', async () => {
+      localStorage.setItem('login-skin', 'split')
+      await mount()
+      const card = screen.getByTestId('login-card')
+      expect(card.querySelector('.lf-brand')).toBeNull()
+      expect(card.querySelector('.lf-foot')).toBeNull()
+    })
+
+    it('极光皮肤:卡内表单默认渲染品牌与页脚', async () => {
+      await mount()
+      const card = screen.getByTestId('login-card')
+      expect(card.querySelector('.lf-brand')).not.toBeNull()
+      expect(card.querySelector('.lf-foot')).not.toBeNull()
+    })
+  })
+
+  describe('SplitPanel i18n', () => {
+    it('卖点与 headline 走 i18n 真串', async () => {
+      localStorage.setItem('login-skin', 'split')
+      await mount()
+      expect(screen.getByText('RBAC 角色授权')).toBeTruthy()
+      expect(screen.getByText('多机构数据范围')).toBeTruthy()
+      expect(screen.getByText('多应用门户')).toBeTruthy()
+      // headline 三段(pre/accent/post),accent 段独立 span 染色;整段拼齐才对
+      expect(screen.getByText('权限')).toBeTruthy()
+      expect(document.querySelector('.split-headline')?.textContent).toBe('企业级权限管理后台')
+      expect(screen.getByText('欢迎回来')).toBeTruthy()
+    })
+  })
+
+  describe('Spotlight 指针映射', () => {
+    it('指针移动映射到根元素 --mx/--my 百分比(非对称值以防 x/y 互换)', async () => {
+      localStorage.setItem('login-skin', 'spotlight')
+      await mount()
+      const root = document.querySelector('.spotlight') as HTMLElement
+      window.innerWidth = 800
+      window.innerHeight = 400
+      const w = window.innerWidth
+      const h = window.innerHeight
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: w * 0.25, clientY: h * 0.75 }))
+      expect(root.style.getPropertyValue('--mx')).toBe('25%')
+      expect(root.style.getPropertyValue('--my')).toBe('75%')
+    })
+  })
+})
