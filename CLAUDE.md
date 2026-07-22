@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TenonAdmin (榫卯) is a **distributable admin-system kernel**, not an application. It ships as NuGet packages so a consumer gets a full enterprise back-office (auth, RBAC, multi-org data permissions, dict/config, logging, uploads) from three lines of `Program.cs`. The overriding design constraint is **replaceability**: every service is interface-backed, `virtual`, and registered via `TryAdd` so a consumer can swap any piece without forking. Runtime deps are **only SqlSugarCore + Microsoft.\*** — no other third-party frameworks in the core packages.
 
-The repo has two independent halves:
+The repo is a backend kernel plus **two independent, self-contained frontend templates** that never share code — a consumer picks whichever stack they want and owns it:
 - `backend/` — the .NET 10 kernel (the product) + sample host + tests.
 - `web/` — a Vue 3 + Naive UI admin template that consumes the kernel's API.
+- `web-react/` — a React 19 + Ant Design admin template consuming the **same** API. **Zero-shared with `web/` by design** (each is `degit`-able on its own); the duplication is deliberate — a shared layer was tried and overturned (`docs/react-template-ledger.md`). **Never factor a shared layer out of the two, and never write any "must bundle both" coupling.**
 
 Codebase comments and docs are in Chinese; design doc section refs like `§6` / `T3` point into `docs/rebuild-design.md` and `docs/dev-plan.md`. **Git commit messages, however, are written in English** (conventional-commit format: `type(scope): subject`).
 
@@ -89,6 +90,17 @@ Vue 3 `<script setup>` + Naive UI + Pinia (persisted) + vue-router + vue-i18n + 
 - **Stores**: `auth` (token/session, routesReady), `user` (profile/login state), `app` (theme/prefs). First visit follows system dark/light (VueUse `usePreferredDark`); after a manual toggle, persistence takes over.
 - Login page ships three swappable skins (`views/login/skins/`); theming via `styles/tokens.css` + `theme/`. Design system spec is `web/DESIGN.md`.
 - **Shared components live in `web/COMPONENTS.md`** — read it before writing a page (FormContainer, useConfirm, StatusSwitch, dict suite, ProTable, icons); no component-demo menu by design. Update it when adding a shared component.
+
+## Frontend architecture (`web-react/`)
+
+React 19 + Ant Design (antd 6) + `@ant-design/pro-components` + zustand (persisted) + react-router-dom 7 + react-i18next. Path alias `@` → `src`. A second official template that ports `web/` feature-for-feature against the same backend contract — **a parallel template, not a shared library**. Commands run from `web-react/` (`npm run dev` on **5174**, plus `build`/`lint`/`typecheck`/`gen:api`, each its own script); `dev.bat`/`dev.sh` start it next to `web`.
+
+- **Self-contained, zero-shared — the load-bearing constraint**: `web-react/` never imports from `web/`, `web-shared`, or `@shared`. This is a deliberate product decision (fork-and-own: a consumer degits one template), documented with its rationale in `docs/react-template-ledger.md`. **Don't factor common code out of the two templates, don't add a "must bundle both" note anywhere, and expect text/design-tokens to be maintained twice on purpose.**
+- **Contract-generated API** (same shape as `web/`): `src/api/schema.d.ts` from the backend OpenAPI (`npm run gen:api`, its own script); `src/api/client.ts` wraps `openapi-fetch`. Don't hand-edit `schema.d.ts`.
+- **Dynamic routing**: `useRoutes` over routes derived from the backend menu tree; `<RequireAuth>` guards (login / must-change-password / routes-ready); `<Can code="VERB:/path">` gates buttons by permission (antd's answer to `v-auth`).
+- **Stores** (zustand): `user`/`auth`/`app`/`dict`/`tabs`. Selectors must return **primitives or stable references** — a selector returning a new object/closure re-runs every render and loops forever.
+- **antd v6, not v5**: renamed props (`variant` not `bordered`, `styles.body` not `bodyStyle`, `styles.container` for Modal padding, …) are silent under `tsc`. Query the offline CLI before writing a component — `antd info/demo/semantic <C> --version 6.x` — and `antd lint <file>` after.
+- Login ships the same three swappable skins (`views/login/skins/`); the `<DataTable>` wrapper isolates `pro-components` so CRUD pages depend only on it. The driving log for the whole port is `docs/react-template-ledger.md`.
 
 ## CI
 
