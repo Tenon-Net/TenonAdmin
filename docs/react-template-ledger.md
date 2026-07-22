@@ -107,7 +107,8 @@
 - [x] **E1 `web-react/Dockerfile` + compose 服务**(`42b2a84`) — 照 `web/Dockerfile`(node build → Caddy runtime),但**构建上下文是 `./web-react` 自己**(不再需要仓库根,这正是自包含买到的:`cd web-react && docker build .`)。含 `Caddyfile`(默认,SPA + `/api`/`/health`/**`/hub`** 反代)+ `nginx.conf`(备选)+ `.dockerignore` + compose `web-react` 服务(ctx `./web-react`、端口 8082、与 web 各占一口都反代同一 app)。**`/hub` 是 web-react 特有**(D3 SignalR;Caddy 自动升级 WS、nginx 需显式 Upgrade 头)。**docker 本机不可用未 build 验证**;镜像 web 的已验证配置 + `npm run build` 已绿 + compose YAML 已解析校验。见轮次日志。
 - [x] **E2 `web-react-ci.yml`**(`2e036e2` + compose profile 解耦 `3e744e7`)(⚠ 冒烟断言"零控制台错误"时**不要丢弃第一次加载** —— 我最初写的是"必须丢弃",归因错了,见 B3 轮次日志。CI 里 `npm ci` 之后根本没有 `.vite` 缓存,实测真冷启动零错误。真实风险窄得多:**只经动态 `import()` 可达的裸包**会被首轮依赖扫描漏掉、即使冷缓存也会触发 re-optimize + 强制刷新 —— B6 的 `import.meta.glob('/src/pages/**/*.tsx')` 是这条路上最可能的下一个。对症办法是给那些包写 `optimizeDeps.include`,**不是放宽断言**) — lint → test → build → dev server 冒烟(5175,`--strictPort`,**断言内容而非状态码**——未知路径命中 SPA fallback 返 200 + index.html,只查状态码的检查会在什么都没证明的情况下通过;并断言仓库根 403)。**不带**任何共享层闸门与 `/@fs` 断言。paths 只有 `web-react/**`。
 - [x] **E3 `dev.bat`/`dev.sh` 带上 web-react**(`e4272e8`) — 四脚本(dev.bat/dev.sh/stop.bat/stop.sh)都加 web-react(Vite 5174):dev.bat 第三个窗口、dev.sh 后台 job(日志 `.dev/web-react.log`);两前端都读 `TENON_API_TARGET` 反代同一后端;stop.* 加放 5174 端口 + 清 web-react.pid。`bash -n` 语法校验过。
-- [ ] **E4 文档** — 根 `CLAUDE.md` 加 `web-react/` 段落,写明两个模板各自自包含、零共享,**且这是刻意选择**;**不要**出现任何"必须一起带上"的措辞。site/ 加一页 React 模板上手(degit 一条命令)。
+- [x] **E4a 根 `CLAUDE.md` web-react 段**(`7819624`) — 引子改「后端内核 + 两个各自自包含、零共享的前端模板」;加「Frontend architecture (`web-react/`)」段:栈、**自包含/零共享承重约束**(别抽共享层、别写"必须一起带"、文案/令牌有意维护两遍)、契约生成 API、动态路由/`<Can>`、zustand 选择器纪律、antd v6≠v5 坑、指向本台账。agent 面向文档。
+- [ ] **E4b site 上手页** — `site/` 加一页 React 模板上手(degit 一条命令),双语镜像。**必须先读 `skills/write-docs.md`**(voice/标点/开场/em-dash 预算/zh-源 en-译),写完 `cd site && npm run lint:prose -- <page>`。**不要**出现"必须一起带上"措辞。
 
 - [ ] **E5 `gen:api` 漂移闸门**(R2 现场发现) — R2 修的那个字段缺了几个月没人发现,根因**不是** `unwrap`(这一点我第一版写错了,见轮次日志):typecheck 永远比的是**代码 ↔ schema**,从不比 **schema ↔ 后端**。schema 陈旧 = 两边一起冻住 = 恒绿。**推论:就算把 97 处响应类型全改成 schema 派生,陈旧照样一点都不红。**今天守着这条契约的只有"人记得跑 `gen:api`"。
 
@@ -134,6 +135,10 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-22 · E4a 根 CLAUDE.md web-react 段(`7819624`)
+
+拆 E4:E4a(根 CLAUDE.md,agent 面向、承重)先落,E4b(site 双语上手页,需 write-docs skill + prose linter)另做。E4a:引子改「后端内核 + 两个各自自包含、零共享的前端模板」;新增「Frontend architecture (`web-react/`)」段(栈 / 自包含零共享承重约束 / 契约 API / 动态路由 `<Can>` / zustand 选择器纪律 / antd v6≠v5 / 指向本台账)。CLAUDE.md 直接写(OMC 允许)。**下一条**:E4b site 上手页(degit 一条命令,双语,先读 write-docs)。之后 E5 gen:api 漂移闸、E6 pro-components 转正,最后 E 批合并 review + 批次 F。
 
 ### 2026-07-22 · E3 dev/stop 脚本带上 web-react(`e4272e8`)
 
