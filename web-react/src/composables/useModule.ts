@@ -1,5 +1,6 @@
 import { useAuthStore, homePath } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
+import { useTabsStore } from '@/stores/tabs'
 import { personalApi } from '@/api'
 
 export type EnterResult = { chooser: true } | { chooser: false; moduleId: number }
@@ -26,8 +27,8 @@ export async function enter(moduleId: number): Promise<EnterResult> {
  */
 export async function switchModule(moduleId: number): Promise<string> {
   await enter(moduleId)
-  // TODO(D1):tabs store 落地后在此 `clearTabs()` —— 旧应用的标签在新应用里都是死链。
-  // 与 `stores/auth.ts` reset() 里那处 clearTabs 一样,是 D1 必须补回的**两处之一**(见该文件注释)。
+  // 切应用清标签:旧应用的标签在新应用里都是死链。D1 补回的两处之一(另一处在 stores/auth.ts reset)。
+  useTabsStore.getState().clearTabs()
   return homePath(useAuthStore.getState())
 }
 

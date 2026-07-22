@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { AppModule, MenuNode } from '@/types/menu'
+import { useTabsStore } from '@/stores/tabs'
 
 function firstLeafPath(tree: MenuNode[]): string | undefined {
   for (const n of tree) {
@@ -87,10 +88,12 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       ...EMPTY(),
-      // Vue 侧此处还连带 `useTabsStore().clearTabs()`。tabs 整体推迟到 D1(见 docs/react-template-ledger.md B3 记录),
-      // 那条 store 落地时**必须**把清标签补回这里 —— 以及 `useModule` 切应用那一处(Vue 侧 useModule.ts:47),
-      // 两处都要,否则登出换号 / 切应用会看见上一批标签。
-      reset: () => set(EMPTY()),
+      // 登出/换号:清授权态 + 清标签(D1 补回的两处之一,另一处在 useModule.switchModule)。
+      // clearTabs 放 set 外,保持 set 的 updater 纯;循环 import(tabs↔auth)安全——两边交叉引用全在函数体内,非顶层求值。
+      reset: () => {
+        set(EMPTY())
+        useTabsStore.getState().clearTabs()
+      },
     }),
     { name: 'auth', partialize: (s) => ({ currentModuleId: s.currentModuleId }) },
   ),
