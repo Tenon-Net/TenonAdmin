@@ -96,7 +96,7 @@
 
 ## 批次 D · 容器与标签页
 
-- [ ] **D1 tabs store + 标签栏容器 + 页面缓存** — B3 推迟的那件,**整个移植第二难的东西**。①store:`removeTab` 的邻居选择、`_ensureActive`、`cachedNames` 依赖 `hasRoute`,都要有路由和容器才写得了;落地时**必须**把 `auth.reset()` 与 `useModule` 切应用两处的 `clearTabs()` 补回。②缓存:React 无 `keep-alive` 对等物 —— `<KeepAlive>` 容器维护 `Map<path, ReactNode>`,已开 tab 常驻挂载、非活动 `display:none`。`// ponytail: 不做 activated/deactivated 钩子,页面若需感知激活再加 useTabActive()`。代价是隐藏页的 effect/定时器仍在跑。验:切走切回状态保留、隐藏页定时器行为、内存随开 tab 是否线性增长。
+- [~] **D1 tabs store + 标签栏容器 + 页面缓存** — B3 推迟的那件,**整个移植第二难的东西**。**拆两半:D1a store `34306f2` 已落**(store 纯化 + 两处 clearTabs 接回 + spec/变异,见轮次日志);**D1b 容器/标签栏/tab-sync 待落**。①store:`removeTab` 的邻居选择、`_ensureActive`、`cachedNames` 依赖 `hasRoute`,都要有路由和容器才写得了;落地时**必须**把 `auth.reset()` 与 `useModule` 切应用两处的 `clearTabs()` 补回。②缓存:React 无 `keep-alive` 对等物 —— `<KeepAlive>` 容器维护 `Map<path, ReactNode>`,已开 tab 常驻挂载、非活动 `display:none`。`// ponytail: 不做 activated/deactivated 钩子,页面若需感知激活再加 useTabActive()`。代价是隐藏页的 effect/定时器仍在跑。验:切走切回状态保留、隐藏页定时器行为、内存随开 tab 是否线性增长。
 - [ ] **D2 设置抽屉** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。派生逻辑由 `src/theme/mix.ts` + `src/styles/tokens.css` 现成给出,成本在 `SettingsDrawer`(239) + `LayoutModeCards`(180) 的 UI 重写。
 - [ ] **D3 SignalR 实时** — `@microsoft/signalr` 框架无关(需加此依赖),只重写 `useRealtime.ts`(68)外层包装:`force-logout` / `notice-changed` + 初次失败静默退回 30s 轮询。
 - [ ] **D4 MenuSearch 全局命令面板** — 建在 `useMenuFlat` 的纯逻辑扫描上,外链项走 `window.open`。
@@ -127,6 +127,16 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · D1a tabs store + clearTabs 接线(`34306f2`)
+
+D1 拆两半(照 C10/C12 先例)。前半:多标签会话 store 移植到 zustand,是 D1b 标签栏 + KeepAlive 的地基。
+- **router-free 纯化**(关键差异):Vue store 顶层 `import { router }` 直接 hasRoute/currentRoute/push;React 无全局 router 单例,导航是 hook 作用域的。故导航型 action(removeTab/closeOthers/closeAll/closeLeft/closeRight)**改成:改 tabs + 返回应导航到的 nextPath(或 null)**,导航留给有 useNavigate 的组件——对齐 `useModule.switchModule` 已确立的约定。store 全程可单测,不需 mock router。
+- **主键 = path**(React 路由无 name,KeepAlive 按 path 缓存,丢掉 Vue 的 `name` 字段);`cachedNames`→纯函数 `aliveKeys(tabs)` 导出(仿 auth.ts homePath/hasPerm),无需 `hasRoute`(失效 path 自然不在 DOM)。
+- **两处 clearTabs 补回**(B3/auth/useModule 三处 TODO 兑现):`auth.reset()`(登出/换号)+ `useModule.switchModule()`(切应用);否则上一批标签在新会话/应用里是死链。`tabs↔auth` 循环 import 安全——交叉引用全在函数体内、非顶层求值。
+- **判据**:tsc 0 / oxlint 0 / **全量 vitest 93 文件 638/638**(circular import 被 vitest 正确解析、reset() 改动无回归)。tabs.spec 15 例(端口 Vue 契约 + 导航型 action 的 nextPath 断言 + affix + affix 不可 pin)。
+- **变异**:tabs.ts 10 条**全数证伪,0 survivor,residue clean**;**预测全对**(含 M7 去当前守卫 `!==`→`===` 挂 3、M9 closeOthers 去保留当前挂 2),本轮无 pred≠actual。跳过 closeLeft `<=0`→`<0`:idx=0 时"关首个左侧"两条路径同为 no-op,是 equivalent mutant,不算漏杀。
+- **下一条**:**D1b** —— `TabsBar.tsx`(antd Dropdown `trigger=['contextMenu']` 右键菜单 + 中键关 + 横滚 chip)+ `KeepAliveOutlet.tsx`(`useOutlet()` 存 `Map<path,node>`,hidden 页保留上次捕获元素以留存 fiber 状态,noCache 页走 live 不入缓存,refreshTab 经 reloadKey 逐出 excludeKey 重挂)+ `LayoutShell` 接线(showTabs 门控 TabsBar、`<Outlet>`→`<KeepAliveOutlet>`、tab-sync hook 从 menuTree 取 title/icon)。
 
 ### 2026-07-21 · C12 review lane(独立 opus,隔离 worktree)→ APPROVE(2 LOW)→ 采纳 LOW-1(`4b4d0c1`)
 
