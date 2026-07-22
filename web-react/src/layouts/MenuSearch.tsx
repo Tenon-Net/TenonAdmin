@@ -47,6 +47,15 @@ export function MenuSearch({ open, onClose, items }: Props) {
   // 结果集变化(改关键词)→ 高亮光标回首项。
   useEffect(() => setCursor(0), [results])
 
+  // 每次打开重置为干净态(对齐 Vue watch(show):打开即清空关键词+光标)。依赖 open prop 而非 Modal
+  // 过渡回调,故快速开关也稳、且可确定性单测(afterOpenChange 在测试环境无真实过渡不触发)。
+  useEffect(() => {
+    if (open) {
+      setQ('')
+      setCursor(0)
+    }
+  }, [open])
+
   function go(item?: MenuLeaf) {
     if (item && !openIfExternal(item.key)) navigate(item.key)
     onClose()
@@ -75,13 +84,9 @@ export function MenuSearch({ open, onClose, items }: Props) {
       closable={false}
       width={560}
       styles={{ container: { padding: 0 } }}
-      // 开时聚焦输入框;关时清空,下次打开是干净态。
+      // 过渡结束后聚焦输入框(此时它已可见)。清空放在依赖 open 的 effect 里,不走此回调。
       afterOpenChange={(o) => {
         if (o) inputRef.current?.focus()
-        else {
-          setQ('')
-          setCursor(0)
-        }
       }}
     >
       {/* onKeyDown 挂在容器:输入框的方向键/回车冒泡上来统一处理(Esc 由 Modal keyboard 关闭)。 */}

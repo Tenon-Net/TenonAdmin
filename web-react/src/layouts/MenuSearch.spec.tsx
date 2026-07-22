@@ -102,6 +102,39 @@ describe('MenuSearch 命令面板', () => {
     expect(navigate).toHaveBeenCalledWith('/system/role')
   })
 
+  it('键盘:↓ 到末项后再按不越界(上钳位)', () => {
+    mount()
+    fireEvent.change(input(), { target: { value: 'system' } }) // 2 项:/system/user(0)、/system/role(1)
+    fireEvent.keyDown(input(), { key: 'ArrowDown' }) // 0→1(末项)
+    fireEvent.keyDown(input(), { key: 'ArrowDown' }) // 越界一次:Math.min 钳回 1
+    fireEvent.keyDown(input(), { key: 'Enter' })
+    expect(navigate).toHaveBeenCalledWith('/system/role') // 仍是末项;去掉 Math.min 则 cursor=2 → go(undefined) 不 navigate
+  })
+
+  it('键盘:↑ 到首项后再按不越界(下钳位)', () => {
+    mount()
+    fireEvent.change(input(), { target: { value: 'system' } }) // 2 项,光标起于首项 0
+    fireEvent.keyDown(input(), { key: 'ArrowUp' }) // 越界一次:Math.max 钳回 0
+    fireEvent.keyDown(input(), { key: 'Enter' })
+    expect(navigate).toHaveBeenCalledWith('/system/user') // 仍是首项;去掉 Math.max 则 cursor=-1 → go(undefined) 不 navigate
+  })
+
+  it('关闭后重开是干净态:清空关键词 + 光标复位', () => {
+    const shell = (o: boolean) => (
+      <AntdApp>
+        <MemoryRouter>
+          <MenuSearch open={o} onClose={onClose} items={ITEMS} />
+        </MemoryRouter>
+      </AntdApp>
+    )
+    const { rerender } = render(shell(true))
+    fireEvent.change(input(), { target: { value: '用户' } })
+    expect((input() as HTMLInputElement).value).toBe('用户')
+    rerender(shell(false)) // 关
+    rerender(shell(true)) // 再开:依赖 open 的 effect 清空 q/cursor(不走 Modal 过渡回调)
+    expect((input() as HTMLInputElement).value).toBe('') // 残留旧词则此断言红(网住"打开不清空"的改动)
+  })
+
   it('命中片段用 <mark> 高亮(不走 v-html,天然转义)', () => {
     mount()
     fireEvent.change(input(), { target: { value: '工作' } })

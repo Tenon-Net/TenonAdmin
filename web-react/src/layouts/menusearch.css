@@ -1,4 +1,4 @@
-/* 命令面板(MenuSearch):容器/阴影由 antd Modal 提供(content padding 归零),这里只排版内部三段:输入 / 列表 / 提示。 */
+/* 命令面板(MenuSearch):容器/阴影由 antd Modal 提供(v6 语义槽 container 的 padding 归零),这里只排版内部三段:输入 / 列表 / 提示。 */
 .palette-input {
   padding: 12px 16px;
   border-bottom: 1px solid var(--color-border);
