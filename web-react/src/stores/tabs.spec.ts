@@ -123,6 +123,15 @@ describe('useTabsStore 批量关闭导航意图', () => {
     expect(s().tabs).toHaveLength(2)
   })
 
+  it('closeLeft:idx>0 删左侧(无 affix/pinned 全删),当前在左被删 → 导航到 path', () => {
+    s().addTab(tab('/a'))
+    s().addTab(tab('/b'))
+    s().addTab(tab('/c'))
+    // 关 /c 左侧:/a /b 被删、/c 保留(过滤器 i >= idx);当前在 /a(将被删)→ 导航到 /c
+    expect(s().closeLeft('/c', '/a')).toBe('/c')
+    expect(s().tabs.map((t) => t.path)).toEqual(['/c'])
+  })
+
   it('closeAll:保留 affix/pinned,当前被关 → 导航到首页', () => {
     // homePath 无模块时回落 '/module';把它做成 affix 首页
     s().addTab(tab('/module'))

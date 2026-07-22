@@ -71,6 +71,10 @@ export function TabsBar() {
                   goTab(tab)
                 }
               }}
+              onMouseDown={(e) => {
+                // 压掉中键按下触发的浏览器自动滚动圆标(对齐 Vue @mousedown.middle.prevent);关闭本体在 onAuxClick。
+                if (e.button === 1) e.preventDefault()
+              }}
               onAuxClick={(e) => {
                 if (e.button === 1) {
                   e.preventDefault()

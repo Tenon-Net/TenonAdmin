@@ -37,7 +37,10 @@ export function KeepAliveOutlet() {
   // 逐出已不在 tab 列表(被关)或转 noCache 的缓存条目。
   // 直接遍历 Map.keys() 边删安全:JS 规范保证删当前项迭代器正常前进、删未访问项即跳过(正是要逐出的)。
   for (const key of cache.current.keys()) {
-    if (!alive.includes(key)) cache.current.delete(key)
+    if (!alive.includes(key)) {
+      cache.current.delete(key)
+      bumps.current.delete(key) // 逐出时连版本号一并回收,免得 bumps 随开关标签只增不减
+    }
   }
 
   return (
@@ -47,8 +50,14 @@ export function KeepAliveOutlet() {
           {node}
         </div>
       ))}
-      {/* noCache / 尚未入缓存的当前页:live 渲染(离开即卸载,复访重挂拉新) */}
-      {outlet && !cache.current.has(pathname) && <div style={{ height: '100%' }}>{outlet}</div>}
+      {/* noCache / 尚未入缓存的当前页:live 渲染(离开即卸载,复访重挂拉新)。
+          带同一套版本键 → refreshTab 对 noCache 当前页也能重挂(对齐 Vue 靠 rvShow 统一重挂当前页;
+          缓存页走上面的 key 分支,noCache 页缓存里没有、只能靠这里的 key 才刷得动)。 */}
+      {outlet && !cache.current.has(pathname) && (
+        <div key={`${pathname}:live:${bumps.current.get(pathname) ?? 0}`} style={{ height: '100%' }}>
+          {outlet}
+        </div>
+      )}
     </>
   )
 }

@@ -74,6 +74,14 @@ describe('KeepAliveOutlet', () => {
     expect(screen.queryByDisplayValue('临时')).toBeNull() // 未留存 = 未缓存
   })
 
+  it('refreshTab:noCache 当前页也重挂,状态清空(live 块带版本键)', () => {
+    mount('/c') // /c 是 noCache,走 live 渲染分支(不入缓存)
+    fireEvent.change(screen.getByLabelText('C-input'), { target: { value: '待刷新' } })
+    // 若 live 块无版本键,refreshTab 对 noCache 当前页会是静默 no-op(状态残留)。
+    act(() => useTabsStore.getState().refreshTab('/c'))
+    expect(screen.queryByDisplayValue('待刷新')).toBeNull() // 重挂 → 状态清空
+  })
+
   it('refreshTab:递增 reloadKey 令当前页重挂,状态清空', () => {
     mount('/a')
     fireEvent.change(screen.getByLabelText('A-input'), { target: { value: '要被刷掉' } })
