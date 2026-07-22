@@ -9,6 +9,7 @@ const enGuideSidebar = [
     text: 'Get Started',
     items: [
       { text: 'Quick Start', link: '/guide/getting-started' },
+      { text: 'Choosing a Frontend Template', link: '/guide/frontend-templates' },
       { text: 'Core Concepts', link: '/guide/concepts' },
     ],
   },
@@ -174,6 +175,7 @@ const zhGuideSidebar = [
     text: '上手',
     items: [
       { text: '快速开始', link: '/zh/guide/getting-started' },
+      { text: '选择前端模板', link: '/zh/guide/frontend-templates' },
       { text: '核心概念', link: '/zh/guide/concepts' },
     ],
   },
