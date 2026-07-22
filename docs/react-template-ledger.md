@@ -104,7 +104,7 @@
 
 ## 批次 E · 工程化
 
-- [ ] **E1 `web-react/Dockerfile` + compose 服务** — 照 `web/Dockerfile`,但**构建上下文可以是 `./web-react` 自己**(不再需要仓库根,这正是自包含买到的)。
+- [x] **E1 `web-react/Dockerfile` + compose 服务**(`42b2a84`) — 照 `web/Dockerfile`(node build → Caddy runtime),但**构建上下文是 `./web-react` 自己**(不再需要仓库根,这正是自包含买到的:`cd web-react && docker build .`)。含 `Caddyfile`(默认,SPA + `/api`/`/health`/**`/hub`** 反代)+ `nginx.conf`(备选)+ `.dockerignore` + compose `web-react` 服务(ctx `./web-react`、端口 8082、与 web 各占一口都反代同一 app)。**`/hub` 是 web-react 特有**(D3 SignalR;Caddy 自动升级 WS、nginx 需显式 Upgrade 头)。**docker 本机不可用未 build 验证**;镜像 web 的已验证配置 + `npm run build` 已绿 + compose YAML 已解析校验。见轮次日志。
 - [ ] **E2 `web-react-ci.yml`**(⚠ 冒烟断言"零控制台错误"时**不要丢弃第一次加载** —— 我最初写的是"必须丢弃",归因错了,见 B3 轮次日志。CI 里 `npm ci` 之后根本没有 `.vite` 缓存,实测真冷启动零错误。真实风险窄得多:**只经动态 `import()` 可达的裸包**会被首轮依赖扫描漏掉、即使冷缓存也会触发 re-optimize + 强制刷新 —— B6 的 `import.meta.glob('/src/pages/**/*.tsx')` 是这条路上最可能的下一个。对症办法是给那些包写 `optimizeDeps.include`,**不是放宽断言**) — lint → test → build → dev server 冒烟(5175,`--strictPort`,**断言内容而非状态码**——未知路径命中 SPA fallback 返 200 + index.html,只查状态码的检查会在什么都没证明的情况下通过;并断言仓库根 403)。**不带**任何共享层闸门与 `/@fs` 断言。paths 只有 `web-react/**`。
 - [ ] **E3 `dev.bat`/`dev.sh` 带上 web-react** — 目前只起 backend + web。
 - [ ] **E4 文档** — 根 `CLAUDE.md` 加 `web-react/` 段落,写明两个模板各自自包含、零共享,**且这是刻意选择**;**不要**出现任何"必须一起带上"的措辞。site/ 加一页 React 模板上手(degit 一条命令)。
@@ -134,6 +134,20 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-22 · E1 Docker/compose + 发现 web/ 生产 bug(`42b2a84`)
+
+E1(web-react 工程化第一件):
+- `web-react/Dockerfile`(node build → Caddy runtime)+ `Caddyfile`(默认)+ `nginx.conf`(备选)+ `.dockerignore` + `docker-compose.yml` 加 `web-react` 服务。**构建上下文 `./web-react` 自己**(自包含买到的,COPY 不带前缀,对照 web/ 那份上下文是仓库根)。端口 8082(web 8080、后端调试 8081)。
+- **`/hub` 反代**:web-react D3 用 SignalR 连 `/hub/realtime`,故 Caddyfile/nginx 都加了 `/hub`(Caddy 自动升级 WebSocket、nginx 需显式 `Upgrade`/`Connection` 头)。
+- **判据(受限)**:docker 本机不可用 → 未 `docker build`;镜像 web/ 的已验证 Dockerfile 结构 + `npm run build` 已绿 + `python yaml` 解析 compose 确认良构(services 含 web-react、ctx/端口/依赖正确)。**docker build 的实测留待有 docker 的环境**(记入 E2 CI 或部署时)。
+
+**⚠ 发现:web/(Vue,已发布默认交付物)存在潜伏生产 bug —— 待授权修**:
+- web 也用 SignalR(`web/src/composables/useRealtime.ts` 连 `/hub/realtime`、`layouts/default.vue` 起、`NoticeBell.vue` 订阅),`web/vite.config.ts` dev proxy 有 `/hub` `ws:true`。**但 `web/Caddyfile` 与 `web/nginx.conf` 都没有 `/hub` 反代**(只有 `/api`+`/health`)。
+- 后果:**dev 正常,Docker/Caddy 生产部署下 `/hub/*` 命中 SPA fallback(`try_files`)→ SignalR 握手失败 → 实时(强制登出、未读角标刷新)静默退化成 30s 轮询**。强制登出因此在生产延迟最多 30s、且依赖轮询端点存在。
+- 修法极小(web/Caddyfile 加一个 `handle /hub/*` 块、web/nginx.conf 加一个带 Upgrade 头的 `location /hub/`)。**但动 web/ 需维护者授权**(同 R2/E7 纪律),故本轮不擅动,登记于此 + 已向维护者上报。等授权即修(参照 web-react 这两份)。
+
+- **下一条**:**E2 `web-react-ci.yml`**(lint→test→build→dev server 冒烟,断言内容非状态码 + 仓库根 403;paths 只 `web-react/**`;冒烟「零控制台错误」不丢第一次加载,真实风险是动态 import 裸包 re-optimize——见 B3 轮次日志/台账 E2 注)。之后 E3 dev.bat、E4 文档、E5 gen:api 漂移闸、E6 pro-components 转正,最后批次 F 测试硬化。
 
 ### 2026-07-22 · D5 review lane 处置(`f5454d6`)
 
