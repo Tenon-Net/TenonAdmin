@@ -96,7 +96,7 @@
 
 ## 批次 D · 容器与标签页
 
-- [~] **D1 tabs store + 标签栏容器 + 页面缓存** — B3 推迟的那件,**整个移植第二难的东西**。**拆两半:D1a store `34306f2` 已落**(store 纯化 + 两处 clearTabs 接回 + spec/变异,见轮次日志);**D1b 容器/标签栏/tab-sync 待落**。①store:`removeTab` 的邻居选择、`_ensureActive`、`cachedNames` 依赖 `hasRoute`,都要有路由和容器才写得了;落地时**必须**把 `auth.reset()` 与 `useModule` 切应用两处的 `clearTabs()` 补回。②缓存:React 无 `keep-alive` 对等物 —— `<KeepAlive>` 容器维护 `Map<path, ReactNode>`,已开 tab 常驻挂载、非活动 `display:none`。`// ponytail: 不做 activated/deactivated 钩子,页面若需感知激活再加 useTabActive()`。代价是隐藏页的 effect/定时器仍在跑。验:切走切回状态保留、隐藏页定时器行为、内存随开 tab 是否线性增长。
+- [x] **D1 tabs store + 标签栏容器 + 页面缓存** — B3 推迟的那件,**整个移植第二难的东西**。**拆两半:D1a store `34306f2`**(store 纯化 + 两处 clearTabs 接回 + spec/变异)+ **D1b 容器/标签栏/tab-sync `0082a86`**(KeepAliveOutlet/TabsBar/useTabSync + LayoutShell 接线 + 7 例 spec),均见轮次日志。①store:`removeTab` 的邻居选择、`_ensureActive`、`cachedNames` 依赖 `hasRoute`,都要有路由和容器才写得了;落地时**必须**把 `auth.reset()` 与 `useModule` 切应用两处的 `clearTabs()` 补回。②缓存:React 无 `keep-alive` 对等物 —— `<KeepAlive>` 容器维护 `Map<path, ReactNode>`,已开 tab 常驻挂载、非活动 `display:none`。`// ponytail: 不做 activated/deactivated 钩子,页面若需感知激活再加 useTabActive()`。代价是隐藏页的 effect/定时器仍在跑。验:切走切回状态保留、隐藏页定时器行为、内存随开 tab 是否线性增长。
 - [ ] **D2 设置抽屉** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。派生逻辑由 `src/theme/mix.ts` + `src/styles/tokens.css` 现成给出,成本在 `SettingsDrawer`(239) + `LayoutModeCards`(180) 的 UI 重写。
 - [ ] **D3 SignalR 实时** — `@microsoft/signalr` 框架无关(需加此依赖),只重写 `useRealtime.ts`(68)外层包装:`force-logout` / `notice-changed` + 初次失败静默退回 30s 轮询。
 - [ ] **D4 MenuSearch 全局命令面板** — 建在 `useMenuFlat` 的纯逻辑扫描上,外链项走 `window.open`。
@@ -127,6 +127,17 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · D1b 标签栏 + KeepAlive 容器(`0082a86`)
+
+D1 后半:把 D1a 的 store 接进壳,补上"需要路由和容器才写得了"的两件(B3 推迟)。
+- **TabsBar.tsx**:横滚 chip 条。右键(antd Dropdown `trigger=['contextMenu']`)出 refresh/pin/close/others/left/right/all;中键关;chip 补 role/tabindex/键盘激活。store 的导航型 action 返回 nextPath、由 TabsBar(有 useNavigate)导航。affix(应用首页)/pinned 不显示关闭 X。
+- **KeepAliveOutlet.tsx**:React 无 keep-alive 对等物 → 维护 `Map<path, 元素>`,应缓存(非 noCache)的已开 tab 全常驻挂载、非活动页 `display:none`,故切走切回组件状态留存;noCache 页走 live 渲染(离开卸载、复访重挂)。**refreshTab** 靠本地 per-path 版本号:reloadKey 变 → effect bump 版本 + 删缓存 → div `key` 变 → React 重挂(**单删缓存不够,同 key 会复用 fiber、状态不清**)。`// ponytail: 不做 activated/deactivated 钩子`。
+- **useTabSync.ts**:pathname 变 → 从 menuTree 扁平查 title/icon(个人页用静态 i18n 映射)→ addTab。`/module`(壳外)与未知路径不建标签。
+- **LayoutShell**:showTabs 门控 TabsBar(Header 与 Content 间)、`<Outlet>`→`<KeepAliveOutlet>`、调 useTabSync。
+- **判据**:tsc 0 / antd-lint(layouts)0/0 / oxlint 0(修 KeepAliveOutlet 遍历删 Map 的多余 spread —— JS 规范保证直接遍历 keys() 边删安全)/ **全量 vitest 95 文件 646/646**。新 spec:KeepAliveOutlet.spec 3 例(缓存页状态留存 / noCache 不留存 / refreshTab 重挂清空)+ TabsBar.spec 4 例(渲染 / 点击导航 / 关闭移除 / 中键关)。**两处测试坑**:refreshTab 直接调 store 在 React 批处理外,须 `act()` 包裹才 flush 重渲染+effect;RTL 无 `fireEvent.auxClick`,中键用 `fireEvent(el, new MouseEvent('auxclick',{button:1,bubbles:true}))`。
+- **本轮内存排障(记录,memory 已沉)**:tsc 反复 `Zone Allocation failed`(exit 134),根因是**累积的僵尸 MCP 实例**(context7 ×12/chrome-devtools ×9/codegraph ×15)+ **系统无页文件** → commit 打满 98%;物理 free 5GB 是假象。精确杀掉本任务用不到的 context7/chrome-devtools/mssql(排除 claude/relay/codegraph)释放 ~1.75GB(→88%),tsc 遂过。判据改为**逐个 run_in_background**,不再打包并发块。
+- **下一条**:起 **D1 合并 review lane**(D1a `34306f2` + D1b `0082a86`,独立 opus + 隔离 worktree,照 C10/C12 批量审先例)。之后 D2(设置抽屉)/D3(SignalR)/D4(命令面板)/D5(登录皮肤),再 E 批工程化。
 
 ### 2026-07-21 · D1a tabs store + clearTabs 接线(`34306f2`)
 
