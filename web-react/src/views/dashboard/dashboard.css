@@ -1,0 +1,93 @@
+/* dashboard 两页共用:欢迎横幅 + 统计卡 + 快捷/通知。对齐 Vue workbench.vue / biz.vue 的 scoped 样式。 */
+.dash-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-card, 16px);
+}
+.dash-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  border-radius: var(--radius-lg, 12px);
+  background: var(--color-primary-light);
+}
+.dash-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.dash-hi {
+  font-size: var(--font-size-lg, 18px);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.dash-tip {
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+.dash-stat {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+/* 图标底盘:取当前语义色 12% 作浅底圆角,避免图标"裸浮" */
+.dash-stat-ico {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md, 8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.dash-stat-val {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+}
+.dash-stat-label {
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+.dash-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.dash-notice-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.dash-notice-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+}
+.dash-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+.dash-notice-time {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
