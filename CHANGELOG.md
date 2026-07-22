@@ -13,6 +13,20 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 > **This file is the source of truth for what shipped**, not the GitHub Release page: `backend-release` creates that page with `gh release create --generate-notes`, which drafts "What's Changed" from merged PRs only. Feature commits pushed straight to `dev` (common in this repo) never show up there, while unrelated PRs (docs, CI) do — so the release page can look complete while missing the actual content. The runbook's post-release step now replaces that draft with the matching section of this file.
 
+## 0.2.2 - 2026-07-22
+
+A small fix-and-polish release: consumer seed Ids are no longer capped at a tiny fixed range, and the web UI gets a new enterprise color palette with a supporting texture pass.
+
+### Fixed
+
+- **Consumer seed Id ceiling is now dynamic, not a hardcoded 4095** (#21): the fixed range consumer seeds could use for their own menus/dictionaries was `[1000, 4095]` — only ~3096 slots, too tight for systems with many menus that want semantically meaningful numbering. `DatabaseInitializer` now computes the ceiling at startup (`SnowflakeIdGenerator.CurrentFloor()`, the smallest snowflake Id the instance could produce *right now*) instead of a static constant — any fixed seed Id below that value can never collide with an Id this instance generates from now on, since the clock only moves forward. This gives consumers effectively unlimited room for semantic Id schemes while keeping the startup check that rejects genuinely dangerous (future-colliding) values.
+
+### Changed
+
+- **New default color palette** (light: daisyUI *corporate*, dark: *business*): replaces the previous gray/indigo palette, converted from daisyUI's OKLCH values to sRGB hex with the same interpolation used elsewhere in the token pipeline. Radius/typography/shadows keep the existing rounder in-house scale. Warning and tertiary-text colors were deepened beyond daisyUI's raw values (2.5:1 / 2.9:1) to clear the documented AA-large contrast floor (3.5:1 / 3.6:1). A previously persisted custom accent that's no longer in the palette is migrated automatically on first load. Brand identity (logo, indigo `#646CFF`) is unchanged — brand color and UI accent are deliberately independent.
+- **Texture pass**: cards now have a 1px border (reads clearly in dark mode, where shadows don't), table headers use a heavier secondary-color weight, and scrollbars are slimmer with translucent thumbs.
+- `vite preview` now proxies `/api`, `/openapi`, and `/hub` the same way the dev server does, so a built-and-previewed frontend can talk to a local backend on memory-constrained machines.
+
 ## 0.2.1 - 2026-07-19
 
 A small polish + quality release: the login page's brand logo is now operator-configurable, and the three quality-audit judgment items left after 0.2.0 are closed.
