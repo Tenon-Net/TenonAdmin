@@ -172,13 +172,13 @@ Seeds must be registered in **your own `Program.cs`** — the kernel doesn't sca
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleWidgetSeed>());
 ```
 
-The fixed `Id` must fall within the consumer-reserved range `[1000, 4095]` (the constants `TenonSeedIds.ConsumerMin` ~ `ConsumerMax`). Don't fall back on the old habit of "just grab a small integer" — you and the kernel seed into the same set of tables (`sys_menu` / `sys_config` …), and not colliding today doesn't mean you won't after a kernel-package upgrade — by which point that row is already in your database, with no way back:
+The fixed `Id` must fall within the consumer-reserved range `Id >= 1000` (the constant `TenonSeedIds.ConsumerMin`); the ceiling isn't a hardcoded number — it's the live snowflake floor computed at startup. Don't fall back on the old habit of "just grab a small integer" — you and the kernel seed into the same set of tables (`sys_menu` / `sys_config` …), and not colliding today doesn't mean you won't after a kernel-package upgrade — by which point that row is already in your database, with no way back:
 
 | Range | Belongs to | Why |
 |---|---|---|
 | `[1, 999]` | Kernel built-in seeds | Every authenticated endpoint the kernel adds means one more menu row, so the range only ever climbs |
-| `[1000, 4095]` | **Your seeds** | Start from `ConsumerMin`, staying clear of the low range the kernel will use in future |
-| `[4096, …]` | Snowflake runtime ID range | `id = milliseconds × 4096 + low bits`; a seed occupying it means some future insert is bound to collide on the primary key |
+| `[1000, live floor)` | **Your seeds** | Start from `ConsumerMin`; the ceiling is the snowflake floor computed at startup (`SnowflakeIdGenerator.CurrentFloor()`), already a 15-digit number today |
+| `[live floor, …)` | Snowflake runtime ID range | A seed occupying it means some future insert by this instance is bound to collide on the primary key |
 
 Within one seed set you may lay down several rows at once (especially when copy-pasting); number each row the way the kernel's menu seeds do: remember the highest number in use, and **always take "highest + 1" for a new row, never backfilling a gap**. Gaps are usually numbers that were once moved or deleted, and reusing one collides with a leftover row in an older database.
 
@@ -215,7 +215,7 @@ Once this backend set works and the new endpoints show up in `/openapi/v1.json`,
 - [ ] Service methods `virtual`; updates/deletes check visibility with `GetByIdAsync` first; duplicate check on unique columns carries `ClearFilter<ISoftDelete>`
 - [ ] Every controller action carries `[RolePermission]`; writes needing audit carry `[OperationLog(...)]`
 - [ ] `ApplicationAssemblies.Add(...)` and service `TryAdd` both in place in `Program.cs` (missing assembly = silent 404)
-- [ ] Seeds implement the generic `ISeedData<T>`, are registered in your own `Program.cs`, and use fixed Ids within `[1000, 4095]` with no collisions
+- [ ] Seeds implement the generic `ISeedData<T>`, are registered in your own `Program.cs`, and use fixed Ids `>= 1000` with no collisions
 - [ ] Changed an existing built-in seed row → bumped `SysSchemaVersion.Current`
 - [ ] Tests green on both SQLite and MySQL
 - [ ] Runtime: menu node created in Menu Management, grant checked in Role Management

@@ -117,7 +117,7 @@ public class ProductSeed : ISeedData<BizProduct>
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, ProductSeed>());
 ```
 
-种子行的固定 Id 必须落在消费方保留区间 `[1000, 4095]`。常量在 `TenonAdmin.Core.TenonSeedIds` 里：`ConsumerMin`=1000、`ConsumerMax`=4095。`[1, 999]` 归内核内置种子，`4096` 往上是雪花运行时发号区。`Id = 0` 或 `≥ 4096` 会被启动检查当场拒绝，应用直接起不来，不会静默吞掉，这个检查在 `DatabaseInitializer` 里。但落进内核段 `[1, 999]` 不会报错。运行时不区分谁是消费方，这条下界只能靠自觉。挑号务必从 `TenonSeedIds.ConsumerMin` 起，撞了内核将来的号，代价是升级时主键冲突，而且无法回退。
+种子行的固定 Id 必须落在消费方保留区间 `Id ≥ 1000`。下界常量是 `TenonAdmin.Core.TenonSeedIds.ConsumerMin`（=1000），`[1, 999]` 归内核内置种子。上限不是写死的数字，而是启动时刻算出的雪花地板（`SnowflakeIdGenerator.CurrentFloor()`）：严格小于它，就永远不会被此后真实产生的雪花号撞上，今天这个地板已经是 15 位数量级，足够编任意语义化的号段。`Id = 0`，或不低于这个地板，都会被启动检查当场拒绝，应用直接起不来，不会静默吞掉，这个检查在 `DatabaseInitializer` 里。但落进内核段 `[1, 999]` 不会报错。运行时不区分谁是消费方，这条下界只能靠自觉。挑号务必从 `TenonSeedIds.ConsumerMin` 起，撞了内核将来的号，代价是升级时主键冲突，而且无法回退。
 
 ::: warning 忘了注册是静默不执行
 内核不扫描程序集找种子。`options.ApplicationAssemblies` 只管实体建表和控制器挂载，不碰种子。种子必须显式注册，漏了这行，种子就不跑，也没有任何报错。

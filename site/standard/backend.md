@@ -75,7 +75,7 @@ If a `DataEntity` row's `CreateOrgId` isn't set, org-scoped queries always retur
 
 - Implement `ISeedData<TEntity>`; `HasData()` returns the default rows (an empty collection is valid = "don't seed if the DB already has data").
 - **Fixed IDs keep it idempotent**: fill in only what's missing, never overwrite existing rows — UI changes aren't clobbered by a restart. The one exception is `SyncOnUpgrade` (default `false`): the kernel's own `DefaultMenuSeed` and `DefaultModuleSeed` turn it on, so a seed-version bump overwrites same-Id rows, meaning UI edits to **built-in** menus and modules get lost on a kernel upgrade (self-built seeds are unaffected). Never turn this on for a seed whose rows users edit through the UI.
-- **IDs must fall within a reserved range** (`Core/TenonSeedIds.cs`): kernel `[1, 999]`, consumers `[1000, 4095]`, `4096+` belongs to the snowflake runtime; out-of-range, `Id=0`, or a duplicate of an existing seed ID is rejected at startup.
+- **IDs must fall within a reserved range** (`Core/TenonSeedIds.cs`): kernel `[1, 999]`, consumers `1000` and up, with the ceiling computed at startup from the live snowflake floor; out-of-range, `Id=0`, or a duplicate of an existing seed ID is rejected at startup.
 
 ## Naming / organization
 

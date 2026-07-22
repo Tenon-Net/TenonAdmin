@@ -172,13 +172,13 @@ public sealed class SampleWidgetSeed : ISeedData<SampleWidget>
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleWidgetSeed>());
 ```
 
-固定 `Id` 必须落在消费方保留区间 `[1000, 4095]`（常量 `TenonSeedIds.ConsumerMin` ~ `ConsumerMax`）。别沿用「随手挑个小整数」的老习惯。你和内核会往同一批表里播种，比如 `sys_menu`、`sys_config`。今天不撞，不代表升级内核包后也不撞。到那时你库里已经有那行，退不回去了：
+固定 `Id` 必须落在消费方保留区间 `Id ≥ 1000`（常量 `TenonSeedIds.ConsumerMin`），上限不是写死的数字，而是启动时刻算出的雪花地板。别沿用「随手挑个小整数」的老习惯。你和内核会往同一批表里播种，比如 `sys_menu`、`sys_config`。今天不撞，不代表升级内核包后也不撞。到那时你库里已经有那行，退不回去了：
 
 | 区间 | 归谁 | 为什么 |
 |---|---|---|
 | `[1, 999]` | 内核内置种子 | 内核每加一个鉴权端点就多一行菜单，号段只会往上涨 |
-| `[1000, 4095]` | **你的种子** | 从 `ConsumerMin` 起取，避开内核未来会用到的低号段 |
-| `[4096, …]` | 雪花运行时发号区 | `id = 毫秒 × 4096 + 低位`，种子占了它，将来某次插入必然主键冲突 |
+| `[1000, 动态地板)` | **你的种子** | 从 `ConsumerMin` 起取，上限是启动时算出的雪花地板（`SnowflakeIdGenerator.CurrentFloor()`），今天已是 15 位数量级 |
+| `[动态地板, …)` | 雪花运行时发号区 | 种子占了它，早晚会被这台实例真实发出的雪花号追上撞主键 |
 
 同一批种子里你可能连播好几行，尤其是复制粘贴的时候。给每行取号沿用内核菜单种子的登记法：记住当前用到的最大号，**新行一律取「最大号 + 1」，永不回填空洞**。空洞往往是历史上被挪走或删掉的号，复用会撞上老库里的存量行。
 
@@ -215,7 +215,7 @@ dotnet test backend/TenonAdmin.slnx --filter "FullyQualifiedName~SampleDoc"
 - [ ] 服务方法 `virtual`；改/删先 `GetByIdAsync` 校验可见性；唯一列查重带 `ClearFilter<ISoftDelete>`
 - [ ] 控制器每个动作挂 `[RolePermission]`；需审计的写挂 `[OperationLog(...)]`
 - [ ] `Program.cs` 里 `ApplicationAssemblies.Add(...)` + 服务 `TryAdd` 都到位（漏程序集 = 静默 404）
-- [ ] 种子实现的是泛型 `ISeedData<T>`、注册在自己的 `Program.cs`、固定 Id 落在 `[1000, 4095]` 且不撞号
+- [ ] 种子实现的是泛型 `ISeedData<T>`、注册在自己的 `Program.cs`、固定 Id `≥ 1000` 且不撞号
 - [ ] 改了内置种子的已有行 → bump 了 `SysSchemaVersion.Current`
 - [ ] 测试 SQLite/MySQL 双绿
 - [ ] 运行时：菜单管理建了节点、角色管理勾了授权
