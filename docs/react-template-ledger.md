@@ -123,7 +123,7 @@
 > **2026-07-22 维护者裁定:取消逐条 TDD/变异闸,推迟到最后一期集中做。** 逐条预测先行变异 + 逐条写 spec + 逐条跑 vitest 太慢(本机内存紧 + views 分片),吞吐瓶颈。**D5 起**每条只跑快正确性闸(tsc + oxlint + antd-lint + build),不逐条写 spec/变异/跑 vitest;已有 spec 只保证**能编译**(别让 tsc/build 红),运行期对齐与变异网整批攒到这里。**D1–D4 已有变异网,不回溯。** 仍保留:英文 commit、独立 review lane(review≠TDD)、零跨模板引用、antd 先查后写。见记忆 `feedback-defer-tdd-final-phase`。
 
 - [x] **F1 登录页测试补强(D5)**(`7e6ec1b`) — D5 已落时 `LoginPage.spec.tsx` 原 11 条表单用例(品牌/验证码/提交)**运行期已核对仍全绿**(打在「壳渲染默认皮肤 aurora 内嵌的 LoginForm」链上),覆盖未丢。**已就地修一处防挂**:`mount()` 的 `vi.resetModules()` + D5 首次从 `@ant-design/icons` **barrel** 具名导入(antd 自身走深导入)→ 重估整包超时;spec 里 stub 三个具名图标解挂(记 `546609e` commit body)。**F1 只需新增**(非修复):皮肤选择阶梯(`?skin=`/localStorage/默认)、切换 UI + localStorage 持久化、`showBrand/showFooter` 关闭时不渲染品牌/页脚、Spotlight 指针→CSS 变量映射、SplitPanel 卖点/headline i18n——**预测先行变异**。
-- [ ] **F2 其余推迟条目滚动登记** — D5b 起每条落地时在此追加「欠哪些测试 + 变异钉在哪」,最后一期照单补齐,按 3 分片(见记忆 `reference-machine-memory-tight`)跑全量 vitest 收口。
+- [x] **F2 其余推迟条目滚动登记 + 全量收口**(`2563520`) — D5b 起每条落地时在此追加「欠哪些测试 + 变异钉在哪」,最后一期照单补齐,按 3 分片(见记忆 `reference-machine-memory-tight`)跑全量 vitest 收口。**实况**:E 批全是基础设施/CI/文档/shell,无可单测的 unit 债;D1–D4 变异网不回溯、D5 login 债 F1 已清 —— 故 F2 无「补齐」项,只剩 3 分片全量收口。**结果 699/699 全绿(98 文件),并照出一处预存气隙泄漏(iframe src 触网),已修。**
 
 ## 不做清单（有依据,防反复）
 
@@ -135,6 +135,15 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-22 · F2 全量收口 + 气隙泄漏修复(`2563520`)
+
+批次 F 收口。F2 本是「滚动登记的推迟测试 + 全量 vitest 收口」,但盘点后无「补齐」项(E 批多为基础设施/CI/文档/shell,无 unit 债;D1–D4 变异网不回溯;D5 login 债 F1 已清),故实质只剩全量收口。
+
+- **3 分片全量 vitest**(串行、单进程、不与 dotnet 并发,守内存纪律):shard1 33 文件/217、shard2 33/260、shard3 32/222 —— **合计 98 文件 / 699 tests 全绿**。
+- **收口照出一处预存气隙泄漏(非 F 引入)**:`router/buildRoutes.spec` 渲染 `<iframe src="https://ex.com/r">`,happy-dom 默认加载 iframe 页 → **对 ex.com 发真实 fetch**(teardown abort,即 shard3 那条 AbortError/NetworkError),违反「任何测试不得触网」硬约束。根因是 vite.config 的 `disableJavaScriptFileLoading`/`disableCSSFileLoading` 只堵 md-editor 的 unpkg link/script,**不覆盖 iframe 页加载**(另一个开关)。修:补 `disableIframePageLoading: true`。src 属性仍在、断言不受影响;happy-dom 改打一条「iframe 加载已禁用」NotSupportedError(护栏生效证据、非失败),**不再触网**。已复跑 buildRoutes.spec 7/7 绿、无网络请求。
+- **判据**:全量 699/699;气隙修复经 buildRoutes.spec 复跑确认(设置生效 = 从加载改为阻断)。
+- **下一条**:批次 F 完结 → **react 模板移植主体完成**。仅剩 **E6 pro-components 转正**长期挂(beta `3.1.14-2` → stable 后升版重验 B10 vitest 深导入坑 + B11 ProTable 运行时开放项),不阻塞。分支 `feat/web-react-template` 可进合并流程(维护者裁定何时并入 `dev`)。
 
 ### 2026-07-22 · F1 登录皮肤外壳测试(`7e6ec1b`)
 
