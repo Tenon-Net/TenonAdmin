@@ -86,7 +86,7 @@
 - [x] **C9 主从分栏原型**(`d43cc47`) — `dict`(`activeRowKey` + 行点击,内联控件要 `stopPropagation`)。
 - [x] **C10 角色 + 模块**(**C10b module `6f12b57` + C10a role `26609da`**) — `role`(含 `GrantMenuTable` 三级可勾选菜单树 + 数据范围单选 + 自定义组织多选)、`module`(管理页,moduleApi CRUD;≠ B7 门户选择器)。**C10a scope(已读 Vue 三源)**:role 页 = ProTable CRUD + 3 抽屉(授权菜单 GrantMenuTable / 数据范围 scopeType 单选+自定义组织多选 / 授权用户 UserPicker)+ 批删带持有人数警告(countUsers 复用 userApi.page roleId);GrantMenuTable = 自定义三列网格(目录|菜单|按钮)+ 三态复选(buildGroups/recomputeGroup/toggleCatalog|Menu|Button/collectChecked 是纯逻辑变异钉,抽 grantMenu.ts);roleApi 全套齐(getMenus/setMenus/getDataScope/setDataScope/getUsers/setUsers);**唯一缺口:`OrgTreeSelect` 无 `multiple`**(数据范围自定义组织多选需要)→ 按 DataTable 先例扩展可选 multiple。权限码:role add/PUT/DELETE/batch-delete + PUT role/menu、role/datascope、role/users。
 - [x] **C11 config 四标签页**(`565dee1`) — `SysBaseConfig`/`SecurityConfig`/`UploadConfig`/`OtherConfig`,Tabs 容器 + 纯逻辑抽 `configForm.ts`(变异钉)。见轮次日志。
-- [~] **C12 dashboard + personal 七页** — 拆两半。**C12a dashboard `624de58` 已落**(workbench/biz,菜单驱动,见轮次日志)。**C12b personal 五页待落**(scope 已全核,下条即做):
+- [x] **C12 dashboard + personal 七页** — 拆两半。**C12a dashboard `624de58` 已落**(workbench/biz,菜单驱动,见轮次日志)。**C12b personal 五页待落**(scope 已全核,下条即做):
   - **五页**(全 Vue 源已读):`profile`(资料表单:account/org/position 只读,name/nickname/gender[DictSelect gender]/phone/email[选填带格式校验]/avatar[FileUpload];load personalApi.profile、save updateProfile + 同步 userInfo.name/avatar)、`password`(改密:old/new/confirm + PasswordStrength + confirm 匹配校验;成功后 authApi.logout→auth.reset→user.clear→/login 强制重登;mustChangePassword 时显 forcedHint alert)、`notice`(我的通知:DataTable fetcher=noticeApi.mine,isRead/type Tag、view→MarkdownView 弹窗 + markRead、markAll 工具栏)、`sessions`(我的会话:**静态 antd Table 非 DataTable**,数据个位数;personalApi.sessions、uaSummary 设备摘要、kick 当前置灰)、`bindings`(OAuth:externalAuthApi.providers/bindings/bindStart/unbind,bind 顶层跳 authorizeUrl)。
   - **依赖全部就绪**(已核 web-react 侧):personalApi(profile/updateProfile/updatePassword/sessions/kickSession)、authApi.logout、noticeApi(mine/markRead/markAllRead)、externalAuthApi(全套)+ ExternalProvider/ExternalBinding、组件 DictSelect/FileUpload/MarkdownView/PasswordStrength、utils/ua uaSummary、类型 UserProfile/MySessionItem/NoticeType、store auth.reset/user.clear、i18n changePassword.*/profile.*/oauth.*/session.mine*/menu.* 全 C0 预置。
   - **路由接线**(静态路由,**不进后端菜单**;后端 seed 无 personal 项):`Protected.tsx` 的 `DynamicRoutes` LayoutShell children 加 5 条 `/personal/*`,并把两处 password 占位(mustChange 分支 line~50 全屏 + children line~76 壳内)换成真 `password` 页。**mustChange 强改后经 logout→/login 释放,无需专门解锁逻辑。**
@@ -127,6 +127,19 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-21 · C12b personal 中心五页(静态路由)(`b8ea947`)
+
+C12 后半:profile/password/notice/sessions/bindings 五页 + 顶栏接线。**静态路由**——后端 seed 无 personal 项,不进菜单/权限,经顶栏用户下拉 + 通知铃铛进入。纯逻辑抽 `personalForms.ts`(变异钉),UI 在各 tsx。
+- **五页**:profile(资料表单,6 字段全注册防 C9 漏字段,avatar 隐藏 Form.Item + FileUpload;save 同步 userInfo.name/avatar 顶栏即时刷新)、password(改密→logout→auth.reset→user.clear→/login 强制重登;mustChange 显 forcedHint)、notice(DataTable=noticeApi.mine,行内已带 content 故查看不再请求 + 顺手 markRead)、sessions(**静态 antd Table 非 DataTable**,数据个位数;踢当前置灰)、bindings(externalAuthApi,bind 顶层跳 authorizeUrl)。
+- **路由接线**:`buildRoutes.tsx` glob 加 `!/src/views/personal/**` 排除 + `NON_PAGE_PREFIXES` 加 `personal/`(静态路由页不进 import.meta.glob,防双导入不可拆分 + 误入菜单组件下拉);`Protected.tsx` DynamicRoutes 加 5 条 `/personal/*` lazy 路由,mustChange 全屏分支换真 password 页。
+- **顶栏接线**:LayoutShell 加用户下拉(头像+名 → profile/password/sessions/bindings/登出,替换裸登出钮)+ 通知铃铛(unreadCount 30s 轮询角标 → /personal/notice)。
+- **判据**:tsc 0 / antd-lint 0(修 Alert `message`→`title` 的 v6 改名)/ oxlint 0(修 bindings List.Item actions 缺 `key`)/ **vitest 全量 91 文件 622/622** / **build ✓ 1m3s**。personal 22/22(personalForms 19 + password 2 + profile 1)。
+- **全量闸抓出真缺陷(判据纪律实证:跑绿的用例什么都不证明)**:personal 22/22 全过、但 `npx vitest run` **exit 1** —— password 的「两次不一致」用例点提交时 `onClick={submit}` 里 `await form.validateFields()` 校验失败 reject,onClick 不 await → **unhandled promise rejection**(vitest「caught 1 unhandled error」,进程非零退出、CI 会挂,而用例本身照过掩盖了它)。修:password/profile 两处 submit/save 把 validateFields 套 try/catch,失败静默返回(antd 已在字段标红)。profile 同款潜在漏洞(其 spec 只测 happy path 未触发)一并修。
+- **变异**:personalForms.ts 12 条**全数证伪,0 survivor,residue clean**。
+  - **预测≠实测(1 条,记档)**:M-P1(删 initial 的 toUpperCase)预测挂 1、实测挂 2 —— `initial('alice')→'a'≠'A'` 与 `initial('  bob')→'b'≠'B'` 两条小写输入用例都翻(空名/中文不受 toUpperCase 影响,我漏数了第二条)。**pred<actual**:用例比预测更严(好事),非覆盖缺口,不改测试。
+- **有意的覆盖缺口(如实记下,交 review 复核)**:notice/sessions/bindings 三页的**组件动作路径**(notice view→markRead→reload / markAll、sessions kick 确认→reload、bindings bind 顶层跳转 / unbind 确认→reload)**未写 spec** —— 机械的 confirm→api→reload 模式,写 spec 需精确匹配 i18n 文案值;逻辑核心已由 personalForms 变异钉守住,接线部分留 C12 合并 review 判定是否补。
+- **下一条**:开**合并 C12 review lane**(dashboard `624de58` + personal 一并审,照 C10 批量审先例,独立 opus + 隔离 worktree)。
 
 ### 2026-07-21 · C12a dashboard(workbench + biz)(`624de58`)
 
