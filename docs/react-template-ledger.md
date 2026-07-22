@@ -136,6 +136,17 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-22 · E 批合并 review lane 处置(`306a790`)
+
+E1–E5 的合并 review(base `dev`,范围 `f5454d6..HEAD` 19 个基础设施/CI/文档/配置文件,无应用 TS/TSX——那些在 B/C/D 已各自审)。
+
+- **执行方式偏差,如实记**:先按纪律起独立 opus code-reviewer(隔离上下文、不自审),但它两次只回 `idle_notification`、始终没产出结论报告(追问后仍空闲)。**改由主上下文自审全量 diff** 兜底——非理想(同上下文,失了独立性),但不能无限干等;下次这类 lane 优先用同步 `run_in_background:false` 直接拿返回值,别靠 teammate 消息回传。
+- **HIGH/MEDIUM:无。** 逐项核实:零共享纪律干净(compose `profiles:["react"]` 真解耦、Dockerfile 上下文 `./web-react` 自包含、文档全程无"必须一起带"、反面写"另一套不会跟着来");CI 断言真伪过(web-react-ci 冒烟断内容非状态码、`/@fs` 仓库根 403、paths 只 `web-react/**`);contract-drift 逻辑稳(`set -eo pipefail` 下后台 `dotnet run &` 与 `if ! git diff` 守卫都对、不误杀;CRLF 假红已由根 `.gitattributes eol=lf` 排除)。
+- **LOW-1(已修 `306a790`)**:`web-react/Caddyfile`、`web-react/nginx.conf` 把 /hub 块注释成「web-react 特有,D3」——但 E5 已给 web/ 补同款块、实时本就 web/ 也有,是**误导性注释**(realtime 从来不是 web-react 独有,web/ 的代理配置当初漏了才是 bug)。改成与 web/ 一致的功能描述,四份代理配置注释齐平。
+- **LOW-2(接受)**:contract-drift 用 `dotnet run` 隐式构建(每次重编)而非预构建 + `--no-build`。取舍已记,正确性无碍。
+- **Verdict:APPROVE-WITH-NITS。** E1–E5 收口。
+- **下一条**:E6 pro-components 转正长期挂(beta→stable 才动),**批次 F 测试硬化**是最后实质项(F1 login 变异 + F2 滚存延迟测试)。
+
 ### 2026-07-22 · E5 gen:api 漂移闸门(`7d82447`)+ web/ /hub 授权修复(`908858e`)
 
 - **闸门 `.github/workflows/contract-drift.yml`**:单 job 装 .NET 10 + Node 22(两 lockfile 共享 npm 缓存)→ `npm ci`×2 → 起一次 MinimalHost(照 `backend-release.yml` 健康轮询)→ `web/`、`web-react/` 各 `npm run gen:api` → 对两个 `schema.d.ts` 跑 `git diff --exit-code`。触发 `backend/**`(漂移根因在后端契约,web*/** 的 CI paths 不含 backend、此时根本不跑),外加两个 schema 文件本身(挡手改让它偏离生成物)。
