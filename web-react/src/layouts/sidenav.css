@@ -1,0 +1,35 @@
+/* 侧栏薄壳样式(对齐 Vue components/SideNav.vue)。分隔线由布局壳画(aside/header 的 border),
+   故去掉 antd inline Menu 自带的右边框免得双线;Menu 背景透明,底色走 .sidenav。 */
+.sidenav {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-container);
+  overflow: hidden;
+}
+.sidenav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--header-h);
+  padding: 0 20px;
+  color: var(--color-text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.sidenav.rail .sidenav-brand {
+  padding: 0;
+  justify-content: center;
+}
+.sidenav-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.sidenav .ant-menu {
+  border-inline-end: none;
+  background: transparent;
+}

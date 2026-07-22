@@ -1,0 +1,143 @@
+/* 多布局壳(D2a,移植 Vue layouts/default.vue 的 grid)。6 种模式靠 grid-template-areas 重排 aside/header/content;
+   窄屏统一走 mobile(单列 + 抽屉侧栏)。类名加 shell- 前缀(React 全局 CSS,无 scoped)。 */
+.shell {
+  display: grid;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--color-bg-body);
+}
+/* 竖向壳:侧栏满高在左,顶栏缩进到内容列上方 */
+.shell.mode-vertical,
+.shell.mode-vertical-mix,
+.shell.mode-vertical-hybrid-header-first {
+  grid-template-columns: auto 1fr;
+  grid-template-rows: var(--header-h) 1fr;
+  grid-template-areas: 'aside header' 'aside content';
+}
+/* 顶栏壳:顶栏通栏,侧栏在其下方左侧 */
+.shell.mode-top-hybrid-sidebar-first,
+.shell.mode-top-hybrid-header-first {
+  grid-template-columns: auto 1fr;
+  grid-template-rows: var(--header-h) 1fr;
+  grid-template-areas: 'header header' 'aside content';
+}
+/* 无侧栏(顶部菜单 / 移动端) */
+.shell.mode-horizontal,
+.shell.mode-mobile {
+  grid-template-columns: 1fr;
+  grid-template-rows: var(--header-h) 1fr;
+  grid-template-areas: 'header' 'content';
+}
+
+.shell-aside {
+  grid-area: aside;
+  height: 100%;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg-container);
+  transition: width 0.2s ease;
+}
+/* 左侧混合:一级 rail 固定窄 + 二级列铺满 */
+.shell-aside--mix {
+  display: flex;
+}
+.shell-aside--mix > .sidenav.rail {
+  width: var(--rail-w);
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border);
+}
+.shell-aside--mix > .sidenav:not(.rail) {
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-header {
+  grid-area: header;
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-header-bg);
+  backdrop-filter: blur(12px);
+  z-index: 10;
+}
+/* fixedHeader=false:去掉毛玻璃(内容仍随各自区域滚动,grid 里顶栏本就不随内容滚) */
+.shell-header--static {
+  backdrop-filter: none;
+}
+.shell-hamburger {
+  align-self: center;
+  margin-left: 8px;
+}
+.shell-headerbar {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+}
+.shell-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-primary);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.shell-title {
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shell-header-center {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+/* 顶栏 horizontal 菜单去掉底边,底色透明,融进毛玻璃顶栏 */
+.shell-header-center .ant-menu {
+  border-bottom: none;
+  background: transparent;
+}
+.shell-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.shell-content {
+  grid-area: content;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.shell-contentbody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.shell-tabs {
+  flex-shrink: 0;
+}
+.shell-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--pad-page);
+}

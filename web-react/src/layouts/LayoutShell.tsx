@@ -1,40 +1,67 @@
-import { useEffect, useState } from 'react'
-import { Avatar, Badge, Button, Dropdown, Layout, Menu, Space, Tooltip, Typography, type MenuProps } from 'antd'
+import { useEffect, useState, type CSSProperties } from 'react'
+import { Avatar, Badge, Button, Drawer, Dropdown, Grid, Menu, Space, Tooltip, Typography, Watermark, type MenuProps } from 'antd'
 import {
   AppstoreOutlined, BellOutlined, DesktopOutlined, KeyOutlined, LinkOutlined, LogoutOutlined,
-  MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined, UserOutlined,
+  MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined, UserOutlined,
 } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useAppStore, isDark } from '@/stores/app'
+import { useAppStore, isDark, type LayoutMode } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
 import { useSiteStore } from '@/stores/site'
+import { useTabsStore } from '@/stores/tabs'
 import { authApi, noticeApi } from '@/api'
 import { useLayoutMenu } from './useLayoutMenu'
+import { SideNav } from './SideNav'
 import { TabsBar } from './TabsBar'
 import { KeepAliveOutlet } from './KeepAliveOutlet'
 import { useTabSync } from './useTabSync'
+import { type MenuItem } from './menuItems'
+import './shell.css'
 
-const { Sider, Header, Content } = Layout
+// 模式集合(对齐 Vue layouts/default.vue)。窄屏统一走 mobile(抽屉侧栏),不吃 layoutMode。
+const WITH_SIDER = new Set<LayoutMode>(['vertical', 'vertical-mix', 'vertical-hybrid-header-first', 'top-hybrid-sidebar-first', 'top-hybrid-header-first'])
+const HEADER_BRAND = new Set<LayoutMode>(['horizontal', 'vertical-hybrid-header-first', 'top-hybrid-sidebar-first', 'top-hybrid-header-first'])
+const COLLAPSIBLE = new Set<LayoutMode>(['vertical', 'vertical-mix', 'vertical-hybrid-header-first', 'top-hybrid-header-first'])
+
+type TopMenu = 'full' | 'l1' | 'l2' | null
+// 顶栏菜单:horizontal=完整树;两个 header-first=一级;侧边优先=二级(选中一级的子菜单)。
+function topMenuFor(mode: LayoutMode): TopMenu {
+  if (mode === 'horizontal') return 'full'
+  if (mode === 'vertical-hybrid-header-first' || mode === 'top-hybrid-header-first') return 'l1'
+  if (mode === 'top-hybrid-sidebar-first') return 'l2'
+  return null
+}
 
 /**
- * 布局壳:antd 原生 `Layout` 自建(**不用 ProLayout**)。Sider 236/76 折叠 + Header 62 + Content。
- * 只做 vertical —— 多布局模式(mix/horizontal)、tabs(D1)、设置抽屉、水印都是后续批次。
- * 菜单派生与选中/展开态在 `useLayoutMenu`;这里只搭骨架。菜单页经 `<Outlet/>` 渲染在内容区。
+ * 布局壳:CSS-grid 自建(**不用 ProLayout**),按 `app.layoutMode` 在 6 种模式间重排 aside/header/content(见 shell.css)。
+ * 侧栏/顶栏菜单的一/二级派生在 `useLayoutMenu`,展示层在 `SideNav`。窄屏(<md)走 mobile:单列 + 抽屉侧栏。
+ * 水印(app.watermark,原生 antd Watermark)与毛玻璃(app.fixedHeader)在此接线;tabs(D1)在内容区上方。
  */
 export function LayoutShell() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const screens = Grid.useBreakpoint()
+  // 仅"明确测到 < md"才 mobile;首帧 breakpoint 尚未测出(md===undefined)按桌面渲染,避免 mobile 闪一帧。
+  const isMobile = screens.md === false
+  const layoutMode = useAppStore((s) => s.layoutMode)
   const collapsed = useAppStore((s) => s.collapsed)
   const toggleCollapsed = useAppStore((s) => s.toggleCollapsed)
   const toggleDark = useAppStore((s) => s.toggleDark)
   const dark = useAppStore(isDark)
+  const showTabs = useAppStore((s) => s.showTabs)
+  const fixedHeader = useAppStore((s) => s.fixedHeader)
+  const watermark = useAppStore((s) => s.watermark)
+  const watermarkText = useAppStore((s) => s.watermarkText)
   const site = useSiteStore((s) => s.site)
   const userInfo = useUserStore((s) => s.userInfo)
-  const showTabs = useAppStore((s) => s.showTabs)
-  const { items, selectedKeys, openKeys, setOpenKeys, onClick } = useLayoutMenu()
+  const currentTab = useTabsStore((s) => s.tabs.find((tt) => tt.path === pathname))
+  const { items, l1Items, l2Items, selectedL1, activeKey, onSelect, onSelectL1 } = useLayoutMenu()
   useTabSync() // 路由 → 标签同步(当前页进标签栏 + KeepAlive)
+
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   // 通知未读角标:30s 轮询(个人页读通知后由此自愈);失败静默不糊顶栏。
   const [unread, setUnread] = useState(0)
@@ -72,55 +99,85 @@ export function LayoutShell() {
     navigate('/login', { replace: true })
   }
 
-  const menuTheme = dark ? 'dark' : 'light'
+  // 模式派生(!isMobile 时 mode===layoutMode;isMobile 走单列 + 抽屉)。
+  const mode = isMobile ? 'mobile' : layoutMode
+  const showSider = !isMobile && WITH_SIDER.has(layoutMode)
+  const sideShowBrand = !isMobile && (layoutMode === 'vertical' || layoutMode === 'vertical-mix')
+  const headerShowBrand = isMobile || (!isMobile && HEADER_BRAND.has(layoutMode))
+  const showCollapse = !isMobile && COLLAPSIBLE.has(layoutMode)
+  const topMenu = isMobile ? null : topMenuFor(layoutMode)
+  // 非特殊侧栏内容:vertical=完整树;两个 header-first hybrid=二级子菜单树。
+  const asideItems = layoutMode === 'vertical' ? items : l2Items
+  const asideStyle: CSSProperties =
+    layoutMode === 'vertical-mix'
+      ? { width: collapsed ? 'var(--rail-w)' : 'calc(var(--rail-w) + var(--sidebar-w))' }
+      : layoutMode === 'top-hybrid-sidebar-first'
+        ? { width: 'var(--rail-w)' }
+        : { width: collapsed ? 'var(--sidebar-w-collapsed)' : 'var(--sidebar-w)' }
+
+  const topMenuItems: MenuItem[] = topMenu === 'full' ? items : topMenu === 'l1' ? l1Items : l2Items
+  const pageTitle = currentTab ? (currentTab.title.includes('.') ? t(currentTab.title) : currentTab.title) : ''
+  const wmContent = [userInfo?.name, watermarkText].filter(Boolean).join(' · ') || site.title
+  const wmColor = dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)'
 
   return (
-    <Layout style={{ height: '100vh' }}>
-      <Sider theme={menuTheme} collapsible collapsed={collapsed} trigger={null} width={236} collapsedWidth={76} style={{ overflow: 'auto' }}>
-        {/* 品牌:折叠时只留 logo/首字,展开显全名。侧栏顶部是本模板品牌唯一出处(vertical)。 */}
-        <div style={{ height: 62, display: 'flex', alignItems: 'center', gap: 10, padding: '0 20px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-          {site.logo ? <img src={site.logo} alt="" style={{ height: 28 }} /> : <AppstoreOutlined style={{ fontSize: 22 }} />}
-          {!collapsed ? (
-            <Typography.Text strong style={{ fontSize: 16, color: dark ? '#fff' : undefined }}>
-              {site.title}
-            </Typography.Text>
-          ) : null}
-        </div>
-        <Menu
-          theme={menuTheme}
-          mode="inline"
-          // 我们的 MenuItem 结构与 antd 的 ItemType 一致(key/label/icon/children),但 antd 的联合类型
-          // 带 null 等成员,递归结构 TS 不直接认;精确到 MenuProps['items'] 的结构转换,非 any。
-          items={items as MenuProps['items']}
-          selectedKeys={selectedKeys}
-          openKeys={openKeys}
-          onOpenChange={(keys) => setOpenKeys(keys as string[])}
-          onClick={({ key }) => onClick(key)}
-        />
-      </Sider>
+    <div className={`shell mode-${mode}`}>
+      {showSider ? (
+        <aside className={`shell-aside${layoutMode === 'vertical-mix' ? ' shell-aside--mix' : ''}`} style={asideStyle}>
+          {layoutMode === 'vertical-mix' ? (
+            <>
+              {/* 左侧混合:一级 icon rail(带品牌) + 二级列(折叠时隐藏,只留 rail) */}
+              <SideNav rail showBrand items={l1Items} value={selectedL1} onSelect={onSelectL1} />
+              {!collapsed ? <SideNav items={l2Items} value={activeKey} onSelect={onSelect} /> : null}
+            </>
+          ) : layoutMode === 'top-hybrid-sidebar-first' ? (
+            // 顶部混合-侧边优先:侧栏只放一级 icon rail(二级在顶栏),固定宽、不折叠、不显品牌(品牌在顶栏)
+            <SideNav rail items={l1Items} value={selectedL1} onSelect={onSelectL1} />
+          ) : (
+            <SideNav items={asideItems} value={activeKey} collapsed={collapsed} showBrand={sideShowBrand} onSelect={onSelect} />
+          )}
+        </aside>
+      ) : null}
 
-      <Layout>
-        <Header
-          style={{
-            height: 62,
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 16px',
-            // tokens.css 恒先于 chrome.css 加载,`--color-header-bg` 必有定义,兜底其实是死分支;
-            // 对齐 token 的亮色实际值只为读起来不误导(暗色由 useAntdTheme 打的 data-theme 切走)。
-            background: 'var(--color-header-bg, rgba(255,255,255,0.82))',
-            backdropFilter: 'blur(12px)',
-            borderBottom: '1px solid var(--color-border, rgba(0,0,0,0.06))',
-          }}
-        >
-          <Button
-            type="text"
-            aria-label={collapsed ? t('app.openMenu') : t('app.collapse')}
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={toggleCollapsed}
-          />
-          <div style={{ flex: 1 }} />
-          <Space size="middle">
+      <header className={`shell-header${fixedHeader ? '' : ' shell-header--static'}`}>
+        {isMobile ? (
+          <Button className="shell-hamburger" type="text" aria-label={t('app.openMenu')} icon={<MenuOutlined />} onClick={() => setMobileOpen(true)} />
+        ) : null}
+        <div className="shell-headerbar">
+          <div className="shell-header-left">
+            {showCollapse ? (
+              <Button
+                type="text"
+                aria-label={collapsed ? t('app.openMenu') : t('app.collapse')}
+                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={toggleCollapsed}
+              />
+            ) : null}
+            {headerShowBrand ? (
+              <div className="shell-brand">
+                {site.logo ? <img src={site.logo} alt="" style={{ height: 26 }} /> : <AppstoreOutlined style={{ fontSize: 20 }} />}
+                <Typography.Text strong style={{ color: dark ? '#fff' : undefined, whiteSpace: 'nowrap' }}>
+                  {site.title}
+                </Typography.Text>
+              </div>
+            ) : (
+              <span className="shell-title">{pageTitle}</span>
+            )}
+          </div>
+
+          {topMenu ? (
+            <div className="shell-header-center">
+              <Menu
+                theme={dark ? 'dark' : 'light'}
+                mode="horizontal"
+                items={topMenuItems as MenuProps['items']}
+                selectedKeys={topMenu === 'l1' ? (selectedL1 ? [selectedL1] : []) : [activeKey]}
+                onClick={({ key }) => (topMenu === 'l1' ? onSelectL1(key) : onSelect(key))}
+              />
+            </div>
+          ) : null}
+
+          <div className="shell-header-right">
             <Tooltip title={t('app.theme')}>
               <Button type="text" aria-label={t('app.theme')} icon={dark ? <SunOutlined /> : <MoonOutlined />} onClick={toggleDark} />
             </Tooltip>
@@ -135,14 +192,29 @@ export function LayoutShell() {
                 <Typography.Text>{userInfo?.name}</Typography.Text>
               </Space>
             </Dropdown>
-          </Space>
-        </Header>
+          </div>
+        </div>
+      </header>
 
-        {showTabs ? <TabsBar /> : null}
-        <Content style={{ overflow: 'auto', padding: 'var(--pad-page)' }}>
-          <KeepAliveOutlet />
-        </Content>
-      </Layout>
-    </Layout>
+      <main className="shell-content">
+        {/* 水印恒挂、content 空则不绘 —— 切换水印开关不 remount 内容区(否则 KeepAlive 缓存全丢)。 */}
+        <Watermark
+          content={watermark ? wmContent : ''}
+          font={{ color: wmColor }}
+          rotate={-16}
+          gap={[192, 128]}
+          style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        >
+          {showTabs ? <div className="shell-tabs"><TabsBar /></div> : null}
+          <div className="shell-page"><KeepAliveOutlet /></div>
+        </Watermark>
+      </main>
+
+      {/* 移动端抽屉侧栏:完整树,选中即关。 */}
+      {/* v6:自定义面板宽走 styles.section(`width` 已废、`size` 只有 378/736 两档,对移动菜单太宽)。 */}
+      <Drawer placement="left" open={mobileOpen} onClose={() => setMobileOpen(false)} closable={false} styles={{ section: { width: 236 }, body: { padding: 0 } }}>
+        <SideNav showBrand items={items} value={activeKey} onSelect={(k) => { onSelect(k); setMobileOpen(false) }} />
+      </Drawer>
+    </div>
   )
 }

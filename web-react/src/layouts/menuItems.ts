@@ -66,3 +66,31 @@ export function openKeysFor(items: MenuItem[], path: string): string[] {
   }
   return []
 }
+
+// ── 多布局模式(D2a)的一/二级派生。对齐 Vue `useLayoutMenu` 的 l1Options/l2Options/findActiveL1/firstLeafKey。 ──
+
+/** 一级项:剥掉 children,渲染为可选的普通项(rail / 顶栏 horizontal 的一级菜单)。 */
+export function l1Of(items: MenuItem[]): MenuItem[] {
+  return items.map(({ key, label, icon }) => ({ key, label, icon }))
+}
+
+/** 选中一级下的二级子树(混合布局的侧栏/顶栏 L2)。选不中或无子项 → 空数组。 */
+export function l2Of(items: MenuItem[], l1Key: string | undefined): MenuItem[] {
+  return items.find((i) => i.key === l1Key)?.children ?? []
+}
+
+/** path 命中的叶子所属的一级项 key。命中不了返回 undefined(off-menu 路由如 /personal/*)。 */
+export function findActiveL1(items: MenuItem[], path: string): string | undefined {
+  const contains = (it: MenuItem): boolean => it.key === path || (it.children ?? []).some(contains)
+  return items.find(contains)?.key
+}
+
+/** 一级项下第一个内部叶子(key 以 '/' 开头)——选一级时的导航目标。无内部叶子返回 undefined。 */
+export function firstLeafKey(item: MenuItem): string | undefined {
+  if (item.key.startsWith('/')) return item.key
+  for (const c of item.children ?? []) {
+    const k = firstLeafKey(c)
+    if (k) return k
+  }
+  return undefined
+}

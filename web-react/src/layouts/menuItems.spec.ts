@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { menuToItems, openIfExternal, openKeysFor, type MenuItem } from './menuItems'
+import { menuToItems, openIfExternal, openKeysFor, l1Of, l2Of, findActiveL1, firstLeafKey, type MenuItem } from './menuItems'
 import { MenuType, type MenuNode } from '@/types/menu'
 
 function node(p: Partial<MenuNode> & { id: number }): MenuNode {
@@ -107,5 +107,57 @@ describe('openIfExternal', () => {
     vi.stubGlobal('window', { open })
     expect(openIfExternal('/system/user')).toBe(false)
     expect(open).not.toHaveBeenCalled()
+  })
+})
+
+// 多布局模式的一/二级派生。用已构建的 MenuItem 树(catalog "系统" 含两个页面叶子 + 一个顶层叶子)。
+const L1TREE: MenuItem[] = [
+  { key: '/dashboard', label: '工作台' },
+  { key: 'cat-2', label: '系统', children: [
+    { key: '/system/user', label: '用户' },
+    { key: 'cat-3', label: '权限', children: [{ key: '/system/role', label: '角色' }] },
+  ] },
+]
+
+describe('l1Of', () => {
+  it('剥掉 children,只留顶层项(rail / 顶栏一级)', () => {
+    const r = l1Of(L1TREE)
+    expect(r.map((i) => i.key)).toEqual(['/dashboard', 'cat-2'])
+    expect(r.every((i) => i.children === undefined)).toBe(true) // 无 children,不出展开箭头
+  })
+})
+
+describe('l2Of', () => {
+  it('返回选中一级的子树', () => {
+    expect(l2Of(L1TREE, 'cat-2').map((i) => i.key)).toEqual(['/system/user', 'cat-3'])
+  })
+  it('选不中 / 一级无子项 → 空数组', () => {
+    expect(l2Of(L1TREE, '/dashboard')).toEqual([]) // 叶子无 children
+    expect(l2Of(L1TREE, 'nope')).toEqual([])
+  })
+})
+
+describe('findActiveL1', () => {
+  it('顶层叶子命中自身', () => {
+    expect(findActiveL1(L1TREE, '/dashboard')).toBe('/dashboard')
+  })
+  it('深层叶子命中其所属一级(含跨目录嵌套)', () => {
+    expect(findActiveL1(L1TREE, '/system/user')).toBe('cat-2')
+    expect(findActiveL1(L1TREE, '/system/role')).toBe('cat-2') // 二级目录下的叶子仍归一级 cat-2
+  })
+  it('off-menu 路由 → undefined', () => {
+    expect(findActiveL1(L1TREE, '/personal/profile')).toBeUndefined()
+  })
+})
+
+describe('firstLeafKey', () => {
+  it('自身是内部叶子 → 返回自身', () => {
+    expect(firstLeafKey({ key: '/dashboard', label: 'x' })).toBe('/dashboard')
+  })
+  it('目录 → 深度优先第一个内部叶子', () => {
+    expect(firstLeafKey(L1TREE[1]!)).toBe('/system/user')
+  })
+  it('只含外链叶子的目录 → undefined(外链 key 不以 / 开头)', () => {
+    expect(firstLeafKey({ key: 'cat-x', label: 'x', children: [{ key: 'https://ex.com', label: 'e' }] })).toBeUndefined()
   })
 })

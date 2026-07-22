@@ -6,6 +6,12 @@
 :root {
   --pad-page: 16px;
   --gap-card: 16px;
+  /* 布局壳尺寸(对齐 Vue web/src/styles/index.css):侧栏 / 折叠侧栏 / 一级 icon rail / 顶栏高。
+     多布局模式(D2a)的 grid 列宽与 SideNav 都引这几个,单一来源。 */
+  --sidebar-w: 236px;
+  --sidebar-w-collapsed: 76px;
+  --rail-w: 64px;
+  --header-h: 62px;
 }
 
 /* 紧凑档:页内边距 / 卡片间距收紧(随 app.density 由 useAntdTheme 打 data-density)。 */

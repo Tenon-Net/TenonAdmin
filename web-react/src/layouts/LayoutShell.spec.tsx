@@ -47,7 +47,7 @@ function mountAt(path: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  useAppStore.setState({ collapsed: false, themeScheme: 'light', systemDark: false })
+  useAppStore.setState({ collapsed: false, themeScheme: 'light', systemDark: false, layoutMode: 'vertical' })
   useAuthStore.getState().reset()
   useAuthStore.setState({ menuTree: TREE, routesReady: true })
   useUserStore.setState({ accessToken: 't', refreshToken: 'r', userInfo: { userId: 1, account: 'a', name: 'n', mustChangePassword: false } })
@@ -56,7 +56,8 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
-const sider = () => document.querySelector('.ant-layout-sider') as HTMLElement
+// 布局壳已从 antd Layout/Sider 改为 CSS-grid 自建(D2a):vertical 模式侧栏是 .shell-aside(内含 SideNav→Menu)。
+const sider = () => document.querySelector('.shell-aside') as HTMLElement
 
 describe('LayoutShell 菜单', () => {
   it('渲染菜单项(含目录),内容区渲染当前页', async () => {
@@ -91,6 +92,37 @@ describe('LayoutShell 菜单', () => {
     expect(open).toHaveBeenCalledWith('https://ex.com/docs', '_blank', 'noopener,noreferrer')
     expect(navigate).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
+  })
+})
+
+describe('LayoutShell 布局模式(D2a)', () => {
+  it('horizontal:无侧栏,壳带 mode-horizontal,顶栏出菜单容器', async () => {
+    useAppStore.setState({ layoutMode: 'horizontal' })
+    mountAt('/dashboard')
+    await screen.findByText('DASH PAGE')
+    expect(document.querySelector('.shell.mode-horizontal')).toBeTruthy()
+    expect(document.querySelector('.shell-aside')).toBeNull() // horizontal 无静态侧栏
+    expect(document.querySelector('.shell-header-center')).toBeTruthy() // 顶栏菜单容器在
+  })
+
+  it('vertical-mix:侧栏是 rail + 二级列,二级列随选中一级出子菜单', async () => {
+    useAppStore.setState({ layoutMode: 'vertical-mix' })
+    mountAt('/system/user')
+    await screen.findByText('USER PAGE')
+    const aside = document.querySelector('.shell-aside--mix')
+    expect(aside).toBeTruthy()
+    expect(aside!.querySelector('.sidenav.rail')).toBeTruthy() // 一级 icon rail
+    const l2 = aside!.querySelector('.sidenav:not(.rail)') as HTMLElement // 二级列
+    expect(within(l2).getByText('用户')).toBeTruthy() // selectedL1=系统 → 二级出"用户"
+  })
+
+  it('top-hybrid-sidebar-first:侧栏只放一级 rail,顶栏出二级菜单', async () => {
+    useAppStore.setState({ layoutMode: 'top-hybrid-sidebar-first' })
+    mountAt('/system/user')
+    await screen.findByText('USER PAGE')
+    expect(document.querySelector('.shell.mode-top-hybrid-sidebar-first')).toBeTruthy()
+    expect(document.querySelector('.shell-aside .sidenav.rail')).toBeTruthy() // 侧栏是一级 rail
+    expect(document.querySelector('.shell-header-center')).toBeTruthy() // 二级在顶栏
   })
 })
 
