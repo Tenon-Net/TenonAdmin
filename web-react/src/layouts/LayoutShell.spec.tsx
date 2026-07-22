@@ -9,7 +9,18 @@ vi.mock('react-router-dom', async (orig) => ({
   ...(await orig<typeof import('react-router-dom')>()),
   useNavigate: () => navigate,
 }))
-vi.mock('@/api', async (orig) => ({ ...(await orig<typeof import('@/api')>()), authApi: { logout: vi.fn() } }))
+// 气隙:壳登出走 authApi.logout;未读角标 effect 走 noticeApi.unreadCount —— 两者都桩掉,别真发 fetch(:3000 ECONNREFUSED 噪声)。
+vi.mock('@/api', async (orig) => ({ ...(await orig<typeof import('@/api')>()), authApi: { logout: vi.fn() }, noticeApi: { unreadCount: vi.fn(() => Promise.resolve(0)) } }))
+// 气隙(vite.config test 硬约束:任何测试都不得触网):mock 掉 SignalR,壳挂载时不真发 /hub/realtime 协商。
+vi.mock('@microsoft/signalr', () => ({
+  HubConnectionBuilder: class {
+    withUrl() { return this }
+    withAutomaticReconnect() { return this }
+    configureLogging() { return this }
+    build() { return { on: vi.fn(), start: () => Promise.resolve(), stop: () => Promise.resolve() } }
+  },
+  LogLevel: { Warning: 3 },
+}))
 
 import '@/locales' // 副作用:初始化 i18n,否则 t('app.collapse') 返回 key 'app.collapse' 而非"折叠菜单"
 import { authApi } from '@/api'

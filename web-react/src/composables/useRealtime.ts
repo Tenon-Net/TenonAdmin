@@ -45,7 +45,8 @@ function start(onForceLogout: Listener, onNoticeChanged: Listener): void {
     conn.start().catch(() => {
       // 初次连接失败(后端未开启实时 → Hub 404):静默退回未读轮询兜底 + 下次请求 401 惰性登出,不重试刷屏。
       // withAutomaticReconnect 只在「连过又断」后重连,不重试初次 start,故不会对已关实时的后端反复叩门。
-      connection = null
+      // 归属判断:仅当单例仍指向本连接才置空 —— StrictMode 双挂载下,本连接被 stop 中止后的 reject 不能抹掉后一次挂载已建的活连接。
+      if (connection === conn) connection = null
     })
   } catch {
     // build()/withUrl() 可同步抛(URL 无法解析等):实时是纯增强,静默退回轮询兜底,绝不拖垮鉴权外壳。
