@@ -122,7 +122,7 @@
 
 > **2026-07-22 维护者裁定:取消逐条 TDD/变异闸,推迟到最后一期集中做。** 逐条预测先行变异 + 逐条写 spec + 逐条跑 vitest 太慢(本机内存紧 + views 分片),吞吐瓶颈。**D5 起**每条只跑快正确性闸(tsc + oxlint + antd-lint + build),不逐条写 spec/变异/跑 vitest;已有 spec 只保证**能编译**(别让 tsc/build 红),运行期对齐与变异网整批攒到这里。**D1–D4 已有变异网,不回溯。** 仍保留:英文 commit、独立 review lane(review≠TDD)、零跨模板引用、antd 先查后写。见记忆 `feedback-defer-tdd-final-phase`。
 
-- [ ] **F1 登录页测试补强(D5)** — D5 已落时 `LoginPage.spec.tsx` 原 11 条表单用例(品牌/验证码/提交)**运行期已核对仍全绿**(打在「壳渲染默认皮肤 aurora 内嵌的 LoginForm」链上),覆盖未丢。**已就地修一处防挂**:`mount()` 的 `vi.resetModules()` + D5 首次从 `@ant-design/icons` **barrel** 具名导入(antd 自身走深导入)→ 重估整包超时;spec 里 stub 三个具名图标解挂(记 `546609e` commit body)。**F1 只需新增**(非修复):皮肤选择阶梯(`?skin=`/localStorage/默认)、切换 UI + localStorage 持久化、`showBrand/showFooter` 关闭时不渲染品牌/页脚、Spotlight 指针→CSS 变量映射、SplitPanel 卖点/headline i18n——**预测先行变异**。
+- [x] **F1 登录页测试补强(D5)**(`7e6ec1b`) — D5 已落时 `LoginPage.spec.tsx` 原 11 条表单用例(品牌/验证码/提交)**运行期已核对仍全绿**(打在「壳渲染默认皮肤 aurora 内嵌的 LoginForm」链上),覆盖未丢。**已就地修一处防挂**:`mount()` 的 `vi.resetModules()` + D5 首次从 `@ant-design/icons` **barrel** 具名导入(antd 自身走深导入)→ 重估整包超时;spec 里 stub 三个具名图标解挂(记 `546609e` commit body)。**F1 只需新增**(非修复):皮肤选择阶梯(`?skin=`/localStorage/默认)、切换 UI + localStorage 持久化、`showBrand/showFooter` 关闭时不渲染品牌/页脚、Spotlight 指针→CSS 变量映射、SplitPanel 卖点/headline i18n——**预测先行变异**。
 - [ ] **F2 其余推迟条目滚动登记** — D5b 起每条落地时在此追加「欠哪些测试 + 变异钉在哪」,最后一期照单补齐,按 3 分片(见记忆 `reference-machine-memory-tight`)跑全量 vitest 收口。
 
 ## 不做清单（有依据,防反复）
@@ -135,6 +135,20 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-22 · F1 登录皮肤外壳测试(`7e6ec1b`)
+
+批次 F 首条。现有 11 条只覆盖品牌/验证码/提交,皮肤外壳零覆盖。新增 11 条(复用现有 `mount()`,皮肤在 mount 前经 `?skin=`/localStorage 布置,根类名 `.aurora`/`.split`/`.spotlight` 互斥判定当前皮肤),分五块:
+
+- **皮肤选择阶梯**(`?skin=` → localStorage → 默认):默认 aurora、`?skin=` 覆盖且不落库、非法值回退、记忆命中、`?skin=` 优先于记忆。**顺带证实 happy-dom 认 `history.replaceState` 的 `location.search`**(否则这些在清源就红)。
+- **切换 + 持久化**:点击段切皮肤并写盘、`aria-selected` 跟随激活段。
+- **showBrand/showFooter**:双栏关掉卡内品牌/页脚(左栏自绘免重复)、极光默认保留。
+- **SplitPanel i18n**:卖点三条 + headline 三段(`.split-headline.textContent === '企业级权限管理后台'`)+ welcome 走真串。
+- **Spotlight 指针**:mousemove 映射到 `--mx`/`--my`,用非对称 25%/75% 以能抓 x/y 互换。
+
+- **判据**:tsc 0 / oxlint 0 / **22 passed**(11 旧 + 11 新)。
+- **变异(预测先行,`tmp/f1-predictions.md` 先写后跑)**:7 个变异 **全部预测=实测,零偏差**——M1 禁 `?skin=`→2 红;M2 忽略 localStorage→4 红(记忆命中 + 三条靠 ls 选皮肤的);M3 `pick` 删写盘→1 红(渲染仍绿);M4 `pick` 删 `setSkin`→2 红;M5 双栏传 `showBrand/Footer={true}`→1 红;M6 Spotlight `--mx` 写常量→1 红;M7 headline 中段替空→1 红。
+- **下一条**:F2 —— E 批多为基础设施/CI/文档/shell(无可单测的 unit 债),D1–D4 已有变异网不回溯,D5 login 债本条已清。F2 的实质剩「**按 3 分片跑全量 vitest 收口**」这一步(本机内存紧,见 `reference-machine-memory-tight`,3 分片串行、不与 dotnet 并发)。之后 E6 长期挂,港移植主体即完成。
 
 ### 2026-07-22 · E 批合并 review lane 处置(`306a790`)
 
