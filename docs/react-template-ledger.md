@@ -128,6 +128,17 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-21 · D3 review lane 处置(修 `4351283`)
+
+D3 独立 review(opus + 隔离 worktree)结论 **REQUEST-CHANGES**,HIGH 1 + MEDIUM 2 + LOW 2。逐条处置:
+- **[HIGH] 已修 —— 测试气隙破了**:`useRealtime()` 进 LayoutShell 挂载路径后,既存 LayoutShell spec 每例都真发网络 I/O,喷 `ECONNREFUSED :3000`,违反 `vite.config.ts` 明文「任何测试都不得触网」硬约束。**排查纠偏**:reviewer 归因于 SignalR negotiate,实测那 65 条 ECONNREFUSED **主要来自 D3 之前就存在的** `noticeApi.unreadCount()` 轮询(LayoutShell.spec 的 `@/api` mock 只桩了 authApi、noticeApi 是真的)——D2 时的 LayoutShell 跑就有。**完整修复**:LayoutShell.spec 同时 mock `@microsoft/signalr`(no-op)+ `noticeApi.unreadCount`→resolve 0。**ECONNREFUSED 归零**(65→0)。
+- **[MEDIUM] 已修 —— force-logout 收尾零单测**(唯一带安全语义的路径)。mock signalr 后**捕获注册进 `conn.on` 的 force-logout 回调**直接调用,断言彻底清会话:`userStore.clear`(accessToken='')+ `authStore.reset`(menuTree 清 + 连带 clearTabs 清非固定标签)+ `navigate('/login')`。**变异证伪**:删 `authStore.reset()` → 恰好 tabs 断言红(`length 0 期待→1`,预测=实测),reviewer「误删 reset 测试不变红」的顾虑现已被网住。
+- **[MEDIUM] 已修 —— 单例孤儿连接**:`start().catch` 无归属判断置空单例,StrictMode 双挂载下被 stop 中止的旧连接 reject 会抹掉后一次挂载的活连接。加 `if (connection === conn) connection = null`。**dev-only + 需模拟双挂载+延迟 reject,确定性单测脆弱**,按 ponytail 只落一行守卫(机理清晰)不硬测。
+- **[LOW] try/catch 理由与实测不符(保留加固)**:commit 称 happy-dom 里 `build()` 同步抛,但**我这边首次实测确实见到** `build()` 同步抛 `Cannot resolve '/hub/realtime'`(13 例全红),而 reviewer 的 worktree 里 `build()` 解析到 :3000 后走**异步** ECONNREFUSED——两种行为都真,取决于 happy-dom base 解析。外层 try/catch 作为「真畸形 URL」纵深防御保留,注释「可同步抛」仍准。
+- **[LOW] useEffect([]) 文案语言 stale**:有意/parity,不改。
+- **判据**:tsc 0 / antd-lint 0 / oxlint 0 / 受影响两 spec **16 passed**(15→16,+force-logout)、**ECONNREFUSED 0**。本回生产变更仅 useRealtime.ts 一行守卫 + 测试文件,零跨文件波及(vi.mock 文件作用域),故不跑全量分片。
+- **下一条**:**D4 命令面板**(MenuSearch,Ctrl/Cmd+K)。调研已就绪:移植 web `MenuSearch.vue` —— Modal+Input+列表 + 上下/回车键导航 + `isHttpUrl→window.open/navigate`;**React 天然改进**:高亮用 `<mark>` JSX 片段免 `v-html`+手写 esc,直接消掉 Vue 版那处 XSS 面;需查 web-react 有无 `useMenuFlat` 对等(菜单树→叶子+面包屑)与 `settings.search*` i18n 键。
+
 ### 2026-07-21 · D3 SignalR 实时(`87949bd`)
 
 移植 web `useRealtime.ts`(68 行)到 React,只重写外层壳、连接语义逐字保留。
