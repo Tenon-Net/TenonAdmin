@@ -128,6 +128,18 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-21 · C12 review lane(独立 opus,隔离 worktree)→ APPROVE(2 LOW)→ 采纳 LOW-1(`4b4d0c1`)
+
+dashboard `624de58` + personal `b8ea947` 一并审(照 C10 批量审先例)。**0 CRITICAL/HIGH/MEDIUM,2 LOW**;8 个重点核查项逐条追证全过:
+- 铃铛 30s 轮询 `useEffect` 返回 `() => { alive=false; clearInterval(id) }`,卸载清定时器 + stale-setUnread guard,无泄漏、登出后不再 fire(**最高疑点,已排除**)。
+- `.then()`-only 调用点(sessions.kick / bindings.unbind)安全:`useConfirm().confirm()` 是手搓的**只 resolve 从不 reject** 的 promise(onOk 经 run() 内吞错、onCancel resolve(false)),correct-by-construction 而非侥幸。
+- 漏字段陷阱已治(avatar 隐藏 Form.Item + spec 钉);静态路由双 guard 齐(glob 排除 + NON_PAGE_PREFIXES);i18n **695==695 零分歧**;`app.notice.markAllRead` vs `notice.allRead` 有意异义、两 locale 皆在。
+- antd v6:reviewer 用 `antd info Alert --version 6.5.1` **推翻自己初判**——v6.5.1 里 `title` 才是 Alert 正内容属性、`message` 是 v5 遗留别名,`password.tsx` 用法正确;`antd lint` 全 8 文件 0。
+- **LOW-1(采纳 `4b4d0c1`)**:notice.openView 的 `if(r.isRead) return` 是延后集里**唯一未测的非声明式分支**,反转则未读不再标已读 + 角标不清零。补 2 条组件测试(未读→markRead(id) / 已读→不调),照 system 页 DataTable-mock 捕获范式。personal 22→24。
+- **LOW-2(记档接受,不改)**:submit 双绑(onFinish + onClick)有微任务级双提交窗;Button 默认 `htmlType=button` 不会双触发,antd loading 实际挡住、第二次调用落卸载后,reviewer 判 negligible/not-blocking。
+- **延后覆盖缺口 verdict**:除 LOW-1 外**可接受延后**——机械 confirm/reload/redirect 全走 B9/B10/B5a 已测原语,纯逻辑由 personalForms/chartOptions 变异钉守住。
+- **下一条**:进 **D1**(tabs store + 标签栏容器 + KeepAlive,移植第二难;落地必须补回 `auth.reset`/`useModule` 切应用两处 `clearTabs()`)。
+
 ### 2026-07-21 · C12b personal 中心五页(静态路由)(`b8ea947`)
 
 C12 后半:profile/password/notice/sessions/bindings 五页 + 顶栏接线。**静态路由**——后端 seed 无 personal 项,不进菜单/权限,经顶栏用户下拉 + 通知铃铛进入。纯逻辑抽 `personalForms.ts`(变异钉),UI 在各 tsx。
