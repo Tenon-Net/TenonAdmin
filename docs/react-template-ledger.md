@@ -110,7 +110,7 @@
 - [x] **E4a 根 `CLAUDE.md` web-react 段**(`7819624`) — 引子改「后端内核 + 两个各自自包含、零共享的前端模板」;加「Frontend architecture (`web-react/`)」段:栈、**自包含/零共享承重约束**(别抽共享层、别写"必须一起带"、文案/令牌有意维护两遍)、契约生成 API、动态路由/`<Can>`、zustand 选择器纪律、antd v6≠v5 坑、指向本台账。agent 面向文档。
 - [x] **E4b site 前端模板选择页**(`4a51466`) — 维护者中途把「加一页 React 上手」升级为「前端做成 Vue/React 二选一」。新建双语 `guide/frontend-templates`(同契约对比表 + 按团队栈选型 + 每模板一条 degit;写明两模板自包含零共享、degit 只带走一个,**全程无"必须一起带上"措辞**);getting-started「起前端」段与 degit 提示改 code-group 二选一(5173/5174,各自 `gen:api`);两侧 sidebar 上手区加条目。中文母版 + 英文镜像,H2/表格/code-group 逐字对齐。严格走 `skills/write-docs.md`。验:prose 闸门 selftest + 四页全绿、`vitepress build` exit 0(无死链、code-group 渲染正常)。
 
-- [ ] **E5 `gen:api` 漂移闸门**(R2 现场发现) — R2 修的那个字段缺了几个月没人发现,根因**不是** `unwrap`(这一点我第一版写错了,见轮次日志):typecheck 永远比的是**代码 ↔ schema**,从不比 **schema ↔ 后端**。schema 陈旧 = 两边一起冻住 = 恒绿。**推论:就算把 97 处响应类型全改成 schema 派生,陈旧照样一点都不红。**今天守着这条契约的只有"人记得跑 `gen:api`"。
+- [x] **E5 `gen:api` 漂移闸门**(`7d82447`,R2 现场发现) — R2 修的那个字段缺了几个月没人发现,根因**不是** `unwrap`(这一点我第一版写错了,见轮次日志):typecheck 永远比的是**代码 ↔ schema**,从不比 **schema ↔ 后端**。schema 陈旧 = 两边一起冻住 = 恒绿。**推论:就算把 97 处响应类型全改成 schema 派生,陈旧照样一点都不红。**今天守着这条契约的只有"人记得跑 `gen:api`"。
 
   附带两条事实,别再搞混:①`unwrap<T>(res: { data?: unknown }): T` 确实把响应体丢成 `unknown` 再按调用方断言强转,97 处全是断言——但那治的是"手写类型与 schema 不一致",与陈旧是两回事;②openapi-fetch **在请求侧是真约束的**(`createClient<paths>` 让路径字面量 / `params.path` / `params.query` / `body` 全部受 `schema.d.ts` 管;例外是 `index.ts:548/551/553` 回收站三个端点用 `as any` 把这层绕过了)。**由此产生一个不对称,这才是闸门的真实能力边界:重新生成后请求侧的漂移会红,响应侧不会——闸门只能告诉你"schema 变了",告诉不了你"哪儿坏了"。**CI 加一步:起 MinimalHost、跑 `gen:api`、`git diff --exit-code web/src/api/schema.d.ts`(以及 R3 之后的 `web-react/src/api/schema.d.ts`)。配方现成——`backend-release.yml:77` 已经在做"起 MinimalHost 抓 openapi"这件事,照抄即可。**不做**把 97 处响应类型改成 schema 派生:**首要理由是它根本不治陈旧**(见上),其次才是仓库里零先例、手写 DTO 是有意的可读性选择。
 
@@ -135,6 +135,16 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-22 · E5 gen:api 漂移闸门(`7d82447`)+ web/ /hub 授权修复(`908858e`)
+
+- **闸门 `.github/workflows/contract-drift.yml`**:单 job 装 .NET 10 + Node 22(两 lockfile 共享 npm 缓存)→ `npm ci`×2 → 起一次 MinimalHost(照 `backend-release.yml` 健康轮询)→ `web/`、`web-react/` 各 `npm run gen:api` → 对两个 `schema.d.ts` 跑 `git diff --exit-code`。触发 `backend/**`(漂移根因在后端契约,web*/** 的 CI paths 不含 backend、此时根本不跑),外加两个 schema 文件本身(挡手改让它偏离生成物)。
+- **纠正台账早先一处措辞**:闸门能力不是「只有请求侧会红」——那是 **tsc** 的不对称(请求侧受 openapi-fetch 约束、响应侧走手写 `unwrap` 断言)。**本闸门比的是 schema 文件本身**,请求/响应任一契约变化都会让重生成结果变、一律翻红;它只回答「schema 变了没重生成」,不回答「哪儿坏了」。
+- **CRLF 假红陷阱先排掉**:根 `.gitattributes` 有 `* text=auto eol=lf`,两个 schema 实测 0 个 CR;ubuntu CI 上 openapi-typescript 写 LF,`git diff` 不会因行尾假红。
+- **不做**:把 97 处响应类型改 schema 派生(首要理由——根本不治陈旧;其次手写 DTO 是有意可读性选择)。
+- **验**:YAML `yaml.safe_load` 良构(job=drift、6 步顺序对、paths 对)。**本地实跑闸门机理**:起 MinimalHost → 两模板 `gen:api`(openapi-typescript 7.13.0)→ `git diff` → **两个 schema 均 IN SYNC**,闸门一上来是绿的、配方跑通。CI 无 ubuntu/act 未整跑,靠此本地等价验证 + 照抄已验证的 release 配方兜底。
+- **web/ /hub 授权修复(`908858e`)**:E1 现场发现的生产 bug(`web/Caddyfile`/`nginx.conf` 缺 `/hub` 反代 → 生产下 SignalR 握手失败、静默退化 30s 轮询),本轮维护者授权后修:照 web-react 两份逐字镜像(Caddy 的 `reverse_proxy` 自动升级 WS;nginx 显式转发 Upgrade/Connection),仅注释改 web/ 语境。核对后端挂 `/hub/realtime`、web/ 客户端连 `${baseUrl}/hub/realtime`,`/hub` 前缀命中正确。
+- **下一条**:E6 pro-components 转正(长期挂,beta→stable 才动),然后开 **E 批合并 review lane**(E1–E5,base `dev`、隔离 worktree、不自审、告知气隙),最后 **批次 F 测试硬化**。
 
 ### 2026-07-22 · E4b site 前端模板选择页(`4a51466`)
 
@@ -173,7 +183,7 @@ E1(web-react 工程化第一件):
 **⚠ 发现:web/(Vue,已发布默认交付物)存在潜伏生产 bug —— 待授权修**:
 - web 也用 SignalR(`web/src/composables/useRealtime.ts` 连 `/hub/realtime`、`layouts/default.vue` 起、`NoticeBell.vue` 订阅),`web/vite.config.ts` dev proxy 有 `/hub` `ws:true`。**但 `web/Caddyfile` 与 `web/nginx.conf` 都没有 `/hub` 反代**(只有 `/api`+`/health`)。
 - 后果:**dev 正常,Docker/Caddy 生产部署下 `/hub/*` 命中 SPA fallback(`try_files`)→ SignalR 握手失败 → 实时(强制登出、未读角标刷新)静默退化成 30s 轮询**。强制登出因此在生产延迟最多 30s、且依赖轮询端点存在。
-- 修法极小(web/Caddyfile 加一个 `handle /hub/*` 块、web/nginx.conf 加一个带 Upgrade 头的 `location /hub/`)。**但动 web/ 需维护者授权**(同 R2/E7 纪律),故本轮不擅动,登记于此 + 已向维护者上报。等授权即修(参照 web-react 这两份)。
+- 修法极小(web/Caddyfile 加一个 `handle /hub/*` 块、web/nginx.conf 加一个带 Upgrade 头的 `location /hub/`)。当时**动 web/ 需维护者授权**(同 R2/E7 纪律)故不擅动,先登记 + 上报。**已于 E5 轮次维护者授权后修复(`908858e`)**,照 web-react 两份逐字镜像。
 
 - **下一条**:**E2 `web-react-ci.yml`**(lint→test→build→dev server 冒烟,断言内容非状态码 + 仓库根 403;paths 只 `web-react/**`;冒烟「零控制台错误」不丢第一次加载,真实风险是动态 import 裸包 re-optimize——见 B3 轮次日志/台账 E2 注)。之后 E3 dev.bat、E4 文档、E5 gen:api 漂移闸、E6 pro-components 转正,最后批次 F 测试硬化。
 
