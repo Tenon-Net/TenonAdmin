@@ -100,7 +100,7 @@
 - [x] **D2 设置抽屉 + 多布局壳** — 6 accent / 密度两档 / 布局模式 / 水印 / 灰度。**2026-07-21 维护者裁定选 B**:不只做抽屉 UI,连 **LayoutShell 重排支持全部 6 布局模式**一起做(否则布局卡片是点了不生效的死控件)。拆两半:**D2a 多模式壳 `73452da`**(CSS-grid `grid-template-areas` 按 mode 重排 + `SideNav` 薄封装 + `useLayoutMenu` 一/二级联动 + CSS 变量)+ **D2b 抽屉 + 卡片 `71c0e14`**(`SettingsDrawer` 三 tab + `LayoutModeCards` 六卡片 + 内联 SettingRow + 原生 Watermark/fixedHeader/pageTransition/breadcrumb 全接线 + 齿轮入口 + `exportSettings` 复制配置 DEV + `setSetting` action),均见轮次日志。B 的所有控件皆当场生效、无死控件。
 - [x] **D3 SignalR 实时**(`87949bd`) — `useRealtime.ts` + 内联 noticeBus + LayoutShell 接线 + `@microsoft/signalr ^10.0.0`。noticeBus **不单开文件**(唯一消费者是 LayoutShell 未读 effect,内联进 useRealtime.ts 与 web 一致);`start()` 整段包 try/catch(比 Vue 版更稳:`build()` 可同步抛,实时是纯增强绝不拖垮壳)。见轮次日志。原文:`@microsoft/signalr` 框架无关(需加此依赖),只重写 `useRealtime.ts`(68)外层包装:`force-logout` / `notice-changed` + 初次失败静默退回 30s 轮询。
 - [x] **D4 MenuSearch 全局命令面板**(`27e88f8`;review 处置 `000a186`) — antd Modal + Ctrl/Cmd+K + 上下/回车键导航 + 顶栏搜索按钮;内部 navigate / 外链 window.open。**扫描基座不是 `useMenuFlat`**(web-react 无此 composable):新增纯函数 `flatLeaves(items)` 到 `menuItems.ts`(与其它纯菜单函数同处),吃已翻译的 `MenuItem` 树、产 叶子+面包屑。高亮用 `<mark>` JSX 免 v-html(消掉 Vue 版 XSS 面)。**review lane → APPROVE 无阻断**(2 MEDIUM 变异网缺口 + 1 LOW 假注释,`000a186` 收口:清空从 `afterOpenChange(false)` 改「依赖 open 的 effect 打开即清」对齐 Vue、连带修 LOW-2 快切残留 + 让重开可确定性单测;补 3 条变异证伪测试[上/下钳位 + 重开清空];CSS 注释 `content`→`container`。LOW-1 空结果 cursor=-1 接受为无害)。见轮次日志。
-- [ ] **D5 登录页另两套皮肤** — B5 已落一套;补 `AuroraGlass`(363)、`SplitPanel`(242)、`Spotlight`(107)+ 皮肤切换。**后两者在 Vue 版就是 Naive-free 的、主要是 CSS,几乎直接搬**。
+- [x] **D5 登录页三皮肤 + 皮肤切换**(`546609e`) — B5 只落了单文件 LoginPage(非皮肤之一);D5 照 Vue 结构重构:抽共享 `LoginForm`(账号密码路径,`showBrand`/`showFooter` props + `--lf-*` 变量色)+ 三皮肤 `AuroraGlass`(默认,极光动画 + 玻璃卡)/`SplitPanel`(左品牌右表单)/`Spotlight`(指针跟随聚光)各自内嵌它 + 壳 `LoginPage`(皮肤阶梯 `?skin=`→localStorage→默认 + 顶栏皮肤切换/主题/语言)+ `skins.ts` 注册表。**合并单条落地**(TDD 已推迟,不必拆 a/b)。i18n 键 R4 已 1:1 带入,零新增。**AuroraGlass 输入框 ponytail 简化**:用默认 antd 输入框(随应用明暗、玻璃卡同信号两态皆可读),不做 Vue 那层半透明玻璃输入框覆写(升级路径记在组件注释)。见轮次日志。测试见批次 F1。
 
 ## 批次 E · 工程化
 
@@ -117,6 +117,13 @@
 
 - [x] **E7 md-editor 运行时 CDN 资产 → 全离线(自包含硬伤,C5 review 处置时发现)** — 维护者裁定「你决定吧」→ 决定**两模板都改成完全离线,不引新依赖、不做本地化管线**(web-react `ca3910a` + web/ `fda311f`)。md-editor(rt/v3)默认挂载即从 unpkg 懒加载 highlight/katex/mermaid/prettier/**echarts**。修:①组件上 `no-{katex,mermaid,highlight,prettier}` 关掉前四个(通知用不到公式/图表,代码高亮设为可选、消费者要则经 `editorExtensions.highlight.instance` 自行本地化);②echarts **无 `no*` 旗标**,`config({editorExtensions:{echarts:{instance:{}}}})` 给空 no-op —— 既断 CDN,又避开其默认 `parseOption` 用 `new Function` 对(管理员可写的)通知正文求值。**证据驱动**:先加自包含守卫测试(挂载后不得注入指向外网的 link/script),它先因剩下的 echarts 而红,补 no-op 后转绿;掉任一 no* 或 echarts instance 都重红(happy-dom 禁加载但仍注入 DOM 标签,故可查、非空)。**顺带一并修 web/**(md-editor-v3 同 API):这是 R2 之后**刻意、经授权的第二处动 web/** —— 已发布模板里的真 XSS(C5 review 延后的 HIGH)+ 自包含洞,值得修透,非迁移漂移。**残留(已知、记下)**:cropper/screenfull 是编辑器按需(点全屏/裁剪才拉,非挂载预载),公开的 MdPreview 无工具栏故完全离线;管理端编辑器这两项极少用,消费者要绝对气隙可自行裁 `toolbars`。判据:web-react tsc/oxlint/vitest 387/387/build 全绿;web/ oxlint/vue-tsc/vitest 46/46/build 全绿。
 
+## 批次 F · 测试硬化（最后一期 TDD）
+
+> **2026-07-22 维护者裁定:取消逐条 TDD/变异闸,推迟到最后一期集中做。** 逐条预测先行变异 + 逐条写 spec + 逐条跑 vitest 太慢(本机内存紧 + views 分片),吞吐瓶颈。**D5 起**每条只跑快正确性闸(tsc + oxlint + antd-lint + build),不逐条写 spec/变异/跑 vitest;已有 spec 只保证**能编译**(别让 tsc/build 红),运行期对齐与变异网整批攒到这里。**D1–D4 已有变异网,不回溯。** 仍保留:英文 commit、独立 review lane(review≠TDD)、零跨模板引用、antd 先查后写。见记忆 `feedback-defer-tdd-final-phase`。
+
+- [ ] **F1 登录页测试补强(D5)** — D5 已落时 `LoginPage.spec.tsx` 原 11 条表单用例(品牌/验证码/提交)**运行期已核对仍全绿**(打在「壳渲染默认皮肤 aurora 内嵌的 LoginForm」链上),覆盖未丢。**已就地修一处防挂**:`mount()` 的 `vi.resetModules()` + D5 首次从 `@ant-design/icons` **barrel** 具名导入(antd 自身走深导入)→ 重估整包超时;spec 里 stub 三个具名图标解挂(记 `546609e` commit body)。**F1 只需新增**(非修复):皮肤选择阶梯(`?skin=`/localStorage/默认)、切换 UI + localStorage 持久化、`showBrand/showFooter` 关闭时不渲染品牌/页脚、Spotlight 指针→CSS 变量映射、SplitPanel 卖点/headline i18n——**预测先行变异**。
+- [ ] **F2 其余推迟条目滚动登记** — D5b 起每条落地时在此追加「欠哪些测试 + 变异钉在哪」,最后一期照单补齐,按 3 分片(见记忆 `reference-machine-memory-tight`)跑全量 vitest 收口。
+
 ## 不做清单（有依据,防反复）
 
 - [~] **`web-shared/` 共享层** — 2026-07-20 推翻,理由见本文件开头四条证据。不要再抽第二次。
@@ -127,6 +134,19 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-22 · 工作方式变更 + D5 登录三皮肤(`546609e`)
+
+**维护者裁定:取消逐条 TDD/变异闸,推迟到最后一期(批次 F)。** 记忆 `feedback-defer-tdd-final-phase`。D5 起每条只跑 tsc + oxlint + antd-lint + build,不逐条写 spec/变异/跑 vitest;已有 spec 保能编译,运行期对齐与变异网攒到批次 F。仍保留:英文 commit、独立 review lane、零跨模板引用、antd 先查后写。
+
+D5(合并单条,不拆 a/b):
+- **结构对齐 Vue**:壳 `LoginPage`(皮肤阶梯 `?skin=`→localStorage→默认 aurora + 顶栏皮肤切换/主题/语言磨砂药丸)+ 共享 `LoginForm`(从旧单文件 LoginPage 抽出,`showBrand`/`showFooter` props + `--lf-*` 变量色 + 去 100vh/Card 外壳)+ 三皮肤各自内嵌 `LoginForm` + `skins.ts` 注册表。
+- **三皮肤**:AuroraGlass(默认,极光动画 + 星点/光球/光环 + 玻璃卡,`.aurora.light` 浅色变体)、SplitPanel(左品牌右表单,传 `showBrand/showFooter={false}` 自绘品牌+页脚)、Spotlight(指针跟随聚光,`useState`+window mousemove→CSS 变量)。CSS 各皮肤选择器锚在根类下(`.aurora`/`.spotlight`/`.split-*`)防撞。
+- **基础设施 R4 已备**:`theme/mix`(mix/rgba)、`TenonLogo`、全部 `login.*`/`app.*` i18n 键(zh+en)均已 1:1 在位,**零新增**。
+- **ponytail 简化(记注释)**:AuroraGlass 输入框用默认 antd(随应用明暗、玻璃卡同信号两态皆可读),不做 Vue 那层半透明玻璃输入框 ConfigProvider 覆写;升级路径在组件注释里。
+- **判据(快闸)**:tsc 0 / antd-lint(login 目录)0 / oxlint 0 / vite build 绿(1m3s)。**未逐条变异**(推迟 F1)。
+- **一处 spec 防挂(非新覆盖)**:`LoginPage.spec` 原 11 用例运行期核对仍全绿,但 `mount()` 的 `vi.resetModules()` 撞上 D5 首次从 `@ant-design/icons` **barrel** 具名导入(壳 Moon/Sun、双栏 CheckCircle;antd 自身走 `.../es/icons/*` 深导入不碰 barrel)→ 重估整包 >5s、动态 import 超时。**诊断过程记下防重查**:静态 import 渲染正常(app 无死循环)、隔离首条仍超时、`console.error` 证明挂在 import 前 → 定位 barrel。修:stub 三个具名图标(纯对象,非 Proxy——Proxy 作模块命名空间对符号键 interop 会炸)。
+- **下一条**:起 **D5 review lane**(`546609e`,独立 opus + 隔离 worktree,**必须告知气隙 + 分片 + 已推迟 TDD 只审代码/parity/antd v6/零共享**)。之后 E 批工程化(E1 Dockerfile/compose、E2 web-react-ci、E3 dev.bat、E4 文档、E5 gen:api 漂移闸、E6 pro-components 转正),最后批次 F 统一测试硬化。
 
 ### 2026-07-22 · D4 review lane 处置(`000a186`)
 
