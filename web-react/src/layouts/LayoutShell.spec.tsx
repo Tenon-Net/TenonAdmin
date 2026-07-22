@@ -126,6 +126,25 @@ describe('LayoutShell 布局模式(D2a)', () => {
   })
 })
 
+describe('LayoutShell 设置抽屉 + 面包屑(D2b)', () => {
+  it('点齿轮 → 打开设置抽屉(出现外观 tab)', async () => {
+    mountAt('/dashboard')
+    await screen.findByText('DASH PAGE')
+    fireEvent.click(screen.getByLabelText('系统设置')) // 顶栏齿轮
+    expect(await screen.findByText('外观')).toBeTruthy() // 抽屉里的外观 tab
+  })
+
+  it('showBreadcrumb 时顶栏出面包屑(vertical),链路 = 系统 › 用户', async () => {
+    useAppStore.setState({ showBreadcrumb: true, layoutMode: 'vertical' })
+    mountAt('/system/user')
+    await screen.findByText('USER PAGE')
+    const bc = document.querySelector('.shell-header .ant-breadcrumb') as HTMLElement
+    expect(bc).toBeTruthy()
+    expect(within(bc).getByText('系统')).toBeTruthy()
+    expect(within(bc).getByText('用户')).toBeTruthy()
+  })
+})
+
 describe('LayoutShell 顶栏', () => {
   it('点折叠按钮 → 翻转 app.collapsed', async () => {
     mountAt('/dashboard')

@@ -1,8 +1,8 @@
-import { useEffect, useState, type CSSProperties } from 'react'
-import { Avatar, Badge, Button, Drawer, Dropdown, Grid, Menu, Space, Tooltip, Typography, Watermark, type MenuProps } from 'antd'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { Avatar, Badge, Breadcrumb, Button, Drawer, Dropdown, Grid, Menu, Space, Tooltip, Typography, Watermark, type MenuProps } from 'antd'
 import {
   AppstoreOutlined, BellOutlined, DesktopOutlined, KeyOutlined, LinkOutlined, LogoutOutlined,
-  MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined, UserOutlined,
+  MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, MoonOutlined, SettingOutlined, SunOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -14,10 +14,11 @@ import { useTabsStore } from '@/stores/tabs'
 import { authApi, noticeApi } from '@/api'
 import { useLayoutMenu } from './useLayoutMenu'
 import { SideNav } from './SideNav'
+import { SettingsDrawer } from './SettingsDrawer'
 import { TabsBar } from './TabsBar'
 import { KeepAliveOutlet } from './KeepAliveOutlet'
 import { useTabSync } from './useTabSync'
-import { type MenuItem } from './menuItems'
+import { breadcrumbFor, type MenuItem } from './menuItems'
 import './shell.css'
 
 // 模式集合(对齐 Vue layouts/default.vue)。窄屏统一走 mobile(抽屉侧栏),不吃 layoutMode。
@@ -52,6 +53,7 @@ export function LayoutShell() {
   const toggleDark = useAppStore((s) => s.toggleDark)
   const dark = useAppStore(isDark)
   const showTabs = useAppStore((s) => s.showTabs)
+  const showBreadcrumb = useAppStore((s) => s.showBreadcrumb)
   const fixedHeader = useAppStore((s) => s.fixedHeader)
   const watermark = useAppStore((s) => s.watermark)
   const watermarkText = useAppStore((s) => s.watermarkText)
@@ -62,6 +64,7 @@ export function LayoutShell() {
   useTabSync() // 路由 → 标签同步(当前页进标签栏 + KeepAlive)
 
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // 通知未读角标:30s 轮询(个人页读通知后由此自愈);失败静默不糊顶栏。
   const [unread, setUnread] = useState(0)
@@ -117,6 +120,7 @@ export function LayoutShell() {
 
   const topMenuItems: MenuItem[] = topMenu === 'full' ? items : topMenu === 'l1' ? l1Items : l2Items
   const pageTitle = currentTab ? (currentTab.title.includes('.') ? t(currentTab.title) : currentTab.title) : ''
+  const crumbs = useMemo(() => breadcrumbFor(items, pathname), [items, pathname])
   const wmContent = [userInfo?.name, watermarkText].filter(Boolean).join(' · ') || site.title
   const wmColor = dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)'
 
@@ -160,6 +164,8 @@ export function LayoutShell() {
                   {site.title}
                 </Typography.Text>
               </div>
+            ) : showBreadcrumb && crumbs.length ? (
+              <Breadcrumb items={crumbs.map((c, i) => ({ key: i, title: c }))} />
             ) : (
               <span className="shell-title">{pageTitle}</span>
             )}
@@ -178,6 +184,9 @@ export function LayoutShell() {
           ) : null}
 
           <div className="shell-header-right">
+            <Tooltip title={t('app.settings')}>
+              <Button type="text" aria-label={t('app.settings')} icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)} />
+            </Tooltip>
             <Tooltip title={t('app.theme')}>
               <Button type="text" aria-label={t('app.theme')} icon={dark ? <SunOutlined /> : <MoonOutlined />} onClick={toggleDark} />
             </Tooltip>
@@ -215,6 +224,8 @@ export function LayoutShell() {
       <Drawer placement="left" open={mobileOpen} onClose={() => setMobileOpen(false)} closable={false} styles={{ section: { width: 236 }, body: { padding: 0 } }}>
         <SideNav showBrand items={items} value={activeKey} onSelect={(k) => { onSelect(k); setMobileOpen(false) }} />
       </Drawer>
+
+      <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

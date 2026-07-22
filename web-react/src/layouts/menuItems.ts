@@ -94,3 +94,16 @@ export function firstLeafKey(item: MenuItem): string | undefined {
   }
   return undefined
 }
+
+/**
+ * path 命中的叶子,从根到它的标题链(面包屑)。MenuItem 的 label 已翻译,故直接产出可显示文案。
+ * 命中不了返回空数组(off-menu 路由如 /personal/*,不显示面包屑)。
+ */
+export function breadcrumbFor(items: MenuItem[], path: string): string[] {
+  for (const it of items) {
+    if (it.key === path) return [it.label]
+    const deeper = breadcrumbFor(it.children ?? [], path)
+    if (deeper.length) return [it.label, ...deeper]
+  }
+  return []
+}

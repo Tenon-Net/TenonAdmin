@@ -141,3 +141,20 @@
   overflow: auto;
   padding: var(--pad-page);
 }
+
+/* 页面切换动画(app.pageTransition):只作用于当前可见页(KeepAliveOutlet 挂类)。
+   用 animation —— 页 div 由 display:none→block 时会重跑,切走切回也能入场。 */
+.page-anim-fade {
+  animation: shell-page-fade 0.18s ease;
+}
+.page-anim-fade-slide {
+  animation: shell-page-fade-slide 0.22s ease;
+}
+@keyframes shell-page-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes shell-page-fade-slide {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}

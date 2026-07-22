@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { menuToItems, openIfExternal, openKeysFor, l1Of, l2Of, findActiveL1, firstLeafKey, type MenuItem } from './menuItems'
+import { menuToItems, openIfExternal, openKeysFor, l1Of, l2Of, findActiveL1, firstLeafKey, breadcrumbFor, type MenuItem } from './menuItems'
 import { MenuType, type MenuNode } from '@/types/menu'
 
 function node(p: Partial<MenuNode> & { id: number }): MenuNode {
@@ -159,5 +159,17 @@ describe('firstLeafKey', () => {
   })
   it('只含外链叶子的目录 → undefined(外链 key 不以 / 开头)', () => {
     expect(firstLeafKey({ key: 'cat-x', label: 'x', children: [{ key: 'https://ex.com', label: 'e' }] })).toBeUndefined()
+  })
+})
+
+describe('breadcrumbFor', () => {
+  it('深层叶子 → 从根到它的标题链', () => {
+    expect(breadcrumbFor(L1TREE, '/system/role')).toEqual(['系统', '权限', '角色'])
+  })
+  it('顶层叶子 → 单元素链', () => {
+    expect(breadcrumbFor(L1TREE, '/dashboard')).toEqual(['工作台'])
+  })
+  it('off-menu 路由 → 空链(不显示面包屑)', () => {
+    expect(breadcrumbFor(L1TREE, '/personal/profile')).toEqual([])
   })
 })

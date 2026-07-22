@@ -54,6 +54,19 @@ describe('resetSettings', () => {
   })
 })
 
+describe('setSetting', () => {
+  it('按 key 写界面开关,值即时生效', () => {
+    const s = useAppStore.getState()
+    expect(s.showBreadcrumb).toBe(true) // 默认
+    s.setSetting('showBreadcrumb', false)
+    expect(useAppStore.getState().showBreadcrumb).toBe(false)
+    s.setSetting('pageTransition', 'fade-slide')
+    expect(useAppStore.getState().pageTransition).toBe('fade-slide')
+    s.setSetting('watermarkText', '内部')
+    expect(useAppStore.getState().watermarkText).toBe('内部')
+  })
+})
+
 describe('persist merge 迁移', () => {
   it('localStorage 里的旧 layoutMode 不在合法集合内 → 回落 vertical;合法值不动', async () => {
     localStorage.setItem('app', JSON.stringify({ state: { layoutMode: 'mixed-nav' }, version: 0 }))

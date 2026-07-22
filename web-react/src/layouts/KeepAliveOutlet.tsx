@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useLocation, useOutlet } from 'react-router-dom'
 import { useTabsStore, aliveKeys } from '@/stores/tabs'
+import { useAppStore } from '@/stores/app'
 
 /**
  * 页面缓存容器(替代 Vue `<keep-alive>`,React 无对等物)。
@@ -19,9 +20,13 @@ export function KeepAliveOutlet() {
   const tabs = useTabsStore((s) => s.tabs)
   const reloadKey = useTabsStore((s) => s.reloadKey)
   const excludeKey = useTabsStore((s) => s.excludeKey)
+  const transition = useAppStore((s) => s.pageTransition)
   const cache = useRef(new Map<string, ReactNode>())
   const bumps = useRef(new Map<string, number>()) // path → 版本号,刷新时 +1 换 div key 强制重挂
   const alive = aliveKeys(tabs)
+  // 页面切换动画:只给"当前可见"页挂 CSS animation 类。用 animation 而非 transition ——
+  // 页 div 由 display:none→block 时 CSS animation 会重跑(transition 跨 display 不触发),故切走切回即入场,不 remount、不动缓存。
+  const animClass = transition === 'none' ? undefined : `page-anim-${transition}`
 
   // refreshTab:换版本号 + 删缓存 → 触发重挂;随后复位 excludeKey。
   useEffect(() => {
@@ -46,7 +51,11 @@ export function KeepAliveOutlet() {
   return (
     <>
       {[...cache.current.entries()].map(([key, node]) => (
-        <div key={`${key}:${bumps.current.get(key) ?? 0}`} style={{ height: '100%', display: key === pathname ? undefined : 'none' }}>
+        <div
+          key={`${key}:${bumps.current.get(key) ?? 0}`}
+          className={key === pathname ? animClass : undefined}
+          style={{ height: '100%', display: key === pathname ? undefined : 'none' }}
+        >
           {node}
         </div>
       ))}
@@ -54,7 +63,7 @@ export function KeepAliveOutlet() {
           带同一套版本键 → refreshTab 对 noCache 当前页也能重挂(对齐 Vue 靠 rvShow 统一重挂当前页;
           缓存页走上面的 key 分支,noCache 页缓存里没有、只能靠这里的 key 才刷得动)。 */}
       {outlet && !cache.current.has(pathname) && (
-        <div key={`${pathname}:live:${bumps.current.get(pathname) ?? 0}`} style={{ height: '100%' }}>
+        <div key={`${pathname}:live:${bumps.current.get(pathname) ?? 0}`} className={animClass} style={{ height: '100%' }}>
           {outlet}
         </div>
       )}

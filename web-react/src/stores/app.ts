@@ -63,6 +63,8 @@ export interface AppState extends AppSettings {
   setDensity: (d: Density) => void
   setLocale: (l: Locale) => void
   setLayoutMode: (m: LayoutMode) => void
+  /** 设置抽屉里各界面开关(showBreadcrumb/showTabs/fixedHeader/pageTransition/grayscale/watermark/watermarkText/formStyle)的统一写入口。 */
+  setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void
   toggleCollapsed: () => void
   resetSettings: () => void
   /** 导出当前外观配置(DEFAULTS 同名键的现值);设置抽屉「复制配置」用,粘回 DEFAULTS 即为新默认。 */
@@ -88,6 +90,8 @@ export const useAppStore = create<AppState>()(
       setDensity: (d) => set({ density: d }),
       setLocale: (l) => set({ locale: l }),
       setLayoutMode: (m) => set({ layoutMode: m }),
+      // 计算键的对象 TS 只能推成 { [x: string]: 值联合 },与 Partial<AppState> 不重叠 —— 经 unknown 收窄(值已由签名约束)。
+      setSetting: (key, value) => set({ [key]: value } as unknown as Partial<AppState>),
       toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed })),
       // 抽屉"恢复默认":还原外观项,保留 locale / collapsed(zustand 的 set 是浅合并,未列出的键原样保留)。
       resetSettings: () => set({ ...DEFAULTS }),
