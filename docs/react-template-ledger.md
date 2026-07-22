@@ -122,6 +122,17 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-21 · C12a dashboard(workbench + biz)(`624de58`)
+
+C12 拆两半(照 C10 先例)。前半:两张工作台首页,**菜单驱动**(seed 组件路径 `dashboard/workbench` Id108 builtin / `dashboard/biz` Id109 business;每应用一条工作台菜单指向各自首页,切应用即换首页)。纯逻辑抽 `chartOptions.ts`(变异钉),UI 接线在 tsx。
+- **workbench(系统首页)**:欢迎横幅 + 4 统计卡(roles/users/perms/online 取 `dashboardApi.summary`)+ 趋势折线 + 资源分布环形饼。summary 失败静默(catch)→ 计数显 —、图空,不因一张图挂了糊全屏。
+- **biz(业务应用首页)**:欢迎横幅 + 快捷入口(当前应用菜单**可见叶子**,排除本页)+ 我的通知(`noticeApi.mine` 前 5)。查看全部 → `/personal/notice`(**C12b 落地静态路由;届时贯通**)。
+- **图**:构造 `EChartsOption` 传既有 `<Chart>` wrapper,**不新增 LineChart/PieChart 预设组件**(仅 dashboard 用,YAGNI;纯 option builder 比 SFC 更可单测)。echarts line/pie 已在 `@/lib/echarts` 注册,`<Chart>` 挂载即触发。`dashboard/index.tsx` 旧占位无真菜单指向(seed 用 workbench/biz),留着无害。
+- **变异 15/15 全致死**(整目录含组件 spec 扇出),残留 clean。**1 幸存者暴露真实缺口(最有价值的一类记录)**:M-D11 去 `n.path &&` 真值守卫——我的 '无 path 叶子跳过' 测试没传 excludePath,`undefined !== undefined` 恒假故测不出;但 **biz 里 excludePath 恒有值**(当前路由),无 path 叶子会 `undefined !== '/route'` 为真而漏进,成 `navigate(undefined)` 崩的快捷入口。加强 excludePath 用例(加一个无 path 叶子 + excludePath 有值)→ 复跑该变异转红,killed。判据:tsc0/antd-lint 净0/oxlint0/vitest **16/16**(chartOptions 11 + workbench 2 + biz 3)/build ✓(57.30s)。workbench/biz i18n 键 C0 已预置。
+- **组件 spec(守 tsc 看不见的字段映射)**:workbench 钉 4 卡按 summary 字段映射(不串字段)+ 趋势/分布图取值(Chart mock 掉,canvas 不可单测,捕 option 断言);biz 钉快捷入口=可见叶子排自身 + 点击导航 + 通知渲染 + 查看全部跳转。
+
+**下一条**:**C12b personal 中心五页**(profile/password/notice/sessions/bindings)—— **静态路由**(不进后端菜单,经顶栏下拉/铃铛入口),落 Protected.tsx 路由表 + 顶栏/铃铛接线 + password 强改守卫整合。C12b 完再开**合并 C12 review lane**(dashboard + personal 一并审,照 C10 批量审先例)。
+
 ### 2026-07-21 · C11 config 四标签页(`565dee1`)
 
 分类配置中心:Tabs 容器 + 四面板。base/security/upload = 结构化表单(字段绑固定 config key,运维不需知道 key),other = 任意 key 扁平 CRUD 兜底。纯逻辑全抽 `configForm.ts`(变异钉),UI 接线在各 *.tsx。
