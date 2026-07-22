@@ -107,3 +107,25 @@ export function breadcrumbFor(items: MenuItem[], path: string): string[] {
   }
   return []
 }
+
+/** 命令面板全局搜索用的叶子:key(内部 path 或外链 URL)+ 已翻译 label + 图标 + 从根到叶的 label 链(含自身)。 */
+export interface MenuLeaf {
+  key: string
+  label: string
+  icon?: ReactNode
+  breadcrumb: string[]
+}
+
+/**
+ * 全部叶子(页面 / 外链)+ 面包屑链,供命令面板搜索。目录不入(只递归)。对齐 Vue `useMenuFlat`,
+ * 但 MenuItem 的 label 已翻译、Button/隐藏/排序已在 `menuToItems` 处理,故这里只需按有无 children 分叶子/目录。
+ */
+export function flatLeaves(items: MenuItem[], trail: string[] = []): MenuLeaf[] {
+  const out: MenuLeaf[] = []
+  for (const it of items) {
+    const here = [...trail, it.label]
+    if (it.children?.length) out.push(...flatLeaves(it.children, here))
+    else out.push({ key: it.key, label: it.label, icon: it.icon, breadcrumb: here })
+  }
+  return out
+}

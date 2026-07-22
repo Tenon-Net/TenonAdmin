@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Avatar, Badge, Breadcrumb, Button, Drawer, Dropdown, Grid, Menu, Space, Tooltip, Typography, Watermark, type MenuProps } from 'antd'
 import {
   AppstoreOutlined, BellOutlined, DesktopOutlined, KeyOutlined, LinkOutlined, LogoutOutlined,
-  MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, MoonOutlined, SettingOutlined, SunOutlined, UserOutlined,
+  MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SettingOutlined, SunOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -15,6 +15,7 @@ import { authApi, noticeApi } from '@/api'
 import { useLayoutMenu } from './useLayoutMenu'
 import { SideNav } from './SideNav'
 import { SettingsDrawer } from './SettingsDrawer'
+import { MenuSearch } from './MenuSearch'
 import { TabsBar } from './TabsBar'
 import { KeepAliveOutlet } from './KeepAliveOutlet'
 import { useTabSync } from './useTabSync'
@@ -67,6 +68,19 @@ export function LayoutShell() {
 
   const [mobileOpen, setMobileOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  // 全局 Ctrl/Cmd+K:开合命令面板(菜单搜索)。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        setSearchOpen((o) => !o)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // 通知未读角标:30s 轮询兜底(个人页读通知后由此自愈)+ 订阅 noticeBus(SignalR 推送 `notice-changed` 即刻重拉,免最长 30s 延迟);失败静默不糊顶栏。
   const [unread, setUnread] = useState(0)
@@ -191,6 +205,9 @@ export function LayoutShell() {
           ) : null}
 
           <div className="shell-header-right">
+            <Tooltip title={`${t('app.search')} (Ctrl+K)`}>
+              <Button type="text" aria-label={t('app.search')} icon={<SearchOutlined />} onClick={() => setSearchOpen(true)} />
+            </Tooltip>
             <Tooltip title={t('app.settings')}>
               <Button type="text" aria-label={t('app.settings')} icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)} />
             </Tooltip>
@@ -233,6 +250,7 @@ export function LayoutShell() {
       </Drawer>
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <MenuSearch open={searchOpen} onClose={() => setSearchOpen(false)} items={items} />
     </div>
   )
 }

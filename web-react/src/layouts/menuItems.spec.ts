@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { menuToItems, openIfExternal, openKeysFor, l1Of, l2Of, findActiveL1, firstLeafKey, breadcrumbFor, type MenuItem } from './menuItems'
+import { menuToItems, openIfExternal, openKeysFor, l1Of, l2Of, findActiveL1, firstLeafKey, breadcrumbFor, flatLeaves, type MenuItem } from './menuItems'
 import { MenuType, type MenuNode } from '@/types/menu'
 
 function node(p: Partial<MenuNode> & { id: number }): MenuNode {
@@ -171,5 +171,21 @@ describe('breadcrumbFor', () => {
   })
   it('off-menu 路由 → 空链(不显示面包屑)', () => {
     expect(breadcrumbFor(L1TREE, '/personal/profile')).toEqual([])
+  })
+})
+
+describe('flatLeaves(命令面板搜索)', () => {
+  it('只收叶子(页面/外链)、目录不入,深度优先顺序', () => {
+    expect(flatLeaves(L1TREE).map((l) => l.key)).toEqual(['/dashboard', '/system/user', '/system/role'])
+  })
+  it('每个叶子带从根到自身的 label 链(含自身)', () => {
+    const byKey = Object.fromEntries(flatLeaves(L1TREE).map((l) => [l.key, l.breadcrumb]))
+    expect(byKey['/dashboard']).toEqual(['工作台']) // 顶层叶子:单元素含自身
+    expect(byKey['/system/user']).toEqual(['系统', '用户'])
+    expect(byKey['/system/role']).toEqual(['系统', '权限', '角色']) // 嵌套目录链累积
+  })
+  it('外链叶子照收(key=URL)', () => {
+    const r = flatLeaves([{ key: 'cat-x', label: '外部', children: [{ key: 'https://ex.com/docs', label: '文档' }] }])
+    expect(r).toEqual([{ key: 'https://ex.com/docs', label: '文档', icon: undefined, breadcrumb: ['外部', '文档'] }])
   })
 })
