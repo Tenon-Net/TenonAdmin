@@ -60,6 +60,16 @@ describe('OtherConfig 接线', () => {
     await waitFor(() => expect(configApi.add).toHaveBeenCalledWith({ configKey: 'biz.x', name: '开关', configValue: '', groupCode: '', sort: 0, remark: '' }))
   })
 
+  it('编辑:提交全部 6 字段(禁用的 configKey 仍随 validateFields 返回)', async () => {
+    mount()
+    await waitFor(() => expect(dt.columns).toBeTruthy())
+    const edit = callRender(col('op'), ROWS[0]).props.children[0] as AnyEl // 编辑按钮
+    edit.props.onClick() // openEdit(ROWS[0]) → 表单回填 configToInput
+    fireEvent.change(await screen.findByDisplayValue('业务开关'), { target: { value: '业务开关改' } })
+    fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
+    await waitFor(() => expect(configApi.update).toHaveBeenCalledWith(1, { configKey: 'biz.flag', configValue: 'on', name: '业务开关改', groupCode: 'biz', sort: 0, remark: '' }))
+  })
+
   it('删除:confirm → remove → reload', async () => {
     mount()
     await waitFor(() => expect(dt.columns).toBeTruthy())
