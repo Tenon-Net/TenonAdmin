@@ -73,7 +73,7 @@
 - [x] **B9 权限 + 消息 + 确认基建**(63e071f) — `<Can code>` 替 v-auth(判定收敛 hasPerm)、`useConfirm` 用 Modal.useModal 重写(busy 守卫内置);message 无需新建。见轮次日志。 `<Can code="VERB:/path">`(替代 `v-auth`);`App.useApp().message` 承接 Vue 侧 74 处 `useMessage`;`useConfirm` 三 API 用 `Modal.useModal()` 重写(`modal.confirm({onOk:async})` 返 promise 时按钮自动 loading 且不关窗,正是现有语义,**代码会比 93 行更短**)。验:无权限按钮不渲染;确认框执行中不可重复点/不可 Esc 关。
 - [x] **B10 `<DataTable>` 薄封装**(eb3de2f) — toProTable 适配(9 变异)、隔离 pro-components、columnsState 持久化、reload 句柄;proTable UI 键**不加**(antd ProTable 自带 intl 跟 ConfigProvider)。见轮次日志。 隔离 `pro-components` beta,16 个 CRUD 页只依赖它。含 `toProTable()` 适配器(`toPage()` 的 `{items,total}` → `{data,success,total}`)、排序映射到后端 `SortField`/`SortOrder`、`columnsState` 持久化沿用 `protable:{module}-{page}` 命名、labels 由 i18n 驱动。**`proTable` 那批 UI 键此时才定**:现有的 8 个键是 Naive 那个 ProTable 的文案,antd 的 ProTable 自带 locale,要不要加、加什么在这一条决定,别提前猜。验:契约单测 + 一页实跑。
 - [x] **B11 system/user 页** — 标准列表原型(搜索 + 工具栏 + 表格 + 分页 + 服务端排序 + 列设置)落地(`8eea775`)。写侧 antd 原生 Modal+Form;机构树筛选/头像/字典选择器/批量删除属批次 C,原型有意不带。**代码验四件套 + 变异全绿;但"增删改查全通、列设置刷新后保留"是浏览器行为,本 SSH 会话无浏览器可驱动 → 该项验收随 B12(手动)+ E2(Playwright 冒烟),未在此假称已验。**
-- [ ] **B12 阶段一验收** — 手动对照 Vue 版走 10 条链路:登录 / token 过期刷新重放 / 强制改密 / 多应用切换 / F5 深链重建路由 / user 页增删改查 / 搜索排序分页 / 列设置持久化 / 明暗+中英切换 / 无权限按钮不渲染。
+- [x] **B12 阶段一验收**(`chrome-devtools` 浏览器实测)— 10 条链路全过,零代码缺陷,详见轮次日志。`sys.security.smsLogin.enabled`/占位 SSO 等历史遗留配置沿用不动。
 
 ## 批次 C · 共享组件层 + 剩余 22 页
 
@@ -147,6 +147,27 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-23 · B12 阶段一验收(chrome-devtools 浏览器实测,`main` 分支)
+
+对照台账 10 条链路逐条浏览器实测(superAdmin,后端 :5100 / 前端 :5174),全过,零代码缺陷:
+
+- **登录**:错密码触发人话提示(`error.auth.passwordWrong`→中文;连续 5 次触发防爆破锁定并弹"账号已锁定,请稍后再试",锁定机制本身按设计工作);正确密码进工作台。
+- **token 过期重放**:改坏 `localStorage.user.accessToken` 后刷新页面,`personal/modules`\`permissions`\`profile` 三个请求全 401 → `POST /auth/refresh` 200 → 三个 401 请求原样重放全部 200,全程停在原页无感知,未见登录页闪现。
+- **强制改密**:新建用户首登被拦到 `/personal/password`;改密前手改 URL 到 `/workbench` 仍被拦回;改密成功后跳登录页要求重新登录(设计如此)。
+- **多应用切换**:九宫格→模块选择页(系统/业务中心)→切换即时生效(菜单/页签/落点全刷新)→"设为默认"生效后退出重登直接落默认应用首页→九宫格仍能返回选择器。
+- **F5 深链**:`/system/user` 按 F5 后路由/面包屑/数据原样重建。
+- **user 增删改查**:两列表单字段齐全(账号/密码/姓名/昵称/性别/手机号/邮箱/归属机构/职位/直属主管/角色/状态/头像);编辑仅改姓名保存后机构/角色/头像原样保留(全量替换陷阱未复现);新增(建号密码弹层)、单删(二次确认)均正常。
+- **搜索排序分页**:`Account=` 参数化查询、`SortField=createTime&SortOrder=asc` 排序均为服务端请求,非本地过滤。
+- **列设置持久化**:隐藏手机号列后 F5,列状态保留(localStorage `protable:sys-user`)。
+- **明暗 + 中英切换**:暗色主题当场全站生效;英文切换后所有静态 UI 文案(按钮/表头/分页器)即时切换;菜单名/角色名等业务数据不跟随语言切换,核对 Vue 侧同源同构,判定设计如此非缺口。
+- **无权限按钮**:新建角色仅授权"组织管理→用户管理→用户-分页",绑定新用户登录后:侧栏只剩"用户管理"一项、工具栏"新增/批量删除"消失、行内操作列(编辑/重置密码/删除)全部不渲染、状态开关变禁用态,`<Can>` 门控与 Vue 侧 `v-auth` 同构生效。
+
+**插曲(非缺陷,记录过程)**:测试中连续提交错误密码触发了 superAdmin 自身的登录失败锁定(默认阈值 5 次/10 分钟窗口,计数是进程内存态,非持久化),经用户选择后精确重启本地 MininalHost 进程(`Stop-Process -Id` 单 PID,非批杀)清零解锁,数据库数据不受影响。另有一处"英文切换后表格挤压成竖排文字"的视觉异常经核实为**当前浏览器标签页宽度(1028px)过窄的通病**,切回中文在同宽度下同样复现,与语言切换无关,非回归。
+
+判据:10/10 链路通过,过程中新建的测试角色`b12_readonly`/测试用户`b12readonly`均已清理,用户列表/角色列表恢复到测试前的 6/6 条基线。
+
+**下一条**:台账里散落的历史"留 B12 实点"小项(FormContainer 时序、水印空文案、图表加载中切主题、操作日志搜索表单运行时绑定、布局模式切换)可择机点检,或转 E2 Playwright 冒烟自动化;批次 G 收口。
 
 ### 2026-07-23 · G2 短信登录移植(`7aae7ab`)
 
