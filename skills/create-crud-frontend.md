@@ -2,6 +2,8 @@
 
 为一个已有后端 API 创建完整的前端 CRUD 页面。前提：后端 CRUD 已完成（参考 `create-crud-backend.md`）。
 
+> **本文是 `web/`（Vue 3 + Naive UI）版**；`web-react/`（React 19 + antd 6）用 `create-crud-frontend-react.md`。两套模板零共享、各自维护是产品决定（`docs/react-template-ledger.md`），别把一边的写法搬到另一边。
+
 产出共 3 处文件改动。
 
 ## 第一步：确定模式

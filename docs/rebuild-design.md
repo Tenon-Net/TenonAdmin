@@ -44,7 +44,7 @@
 | 国密 SM2/3/4 | 不进核心;做成 v1.x 可选包 `TenonAdmin.Security.Gm`(核心只用 BCL AES/RSA/SHA) |
 | 支持数据库 | 官方支持 SQLite/MySQL/SqlServer/PostgreSQL;CI 至少测 SQLite + MySQL |
 | 自有 Simple* 包 | SimpleTool 常用件**拷进 Core**;SimpleRedis / SimpleMQTT 作**可选包依赖**保留(仅可选层,不进核心) |
-| 仓库 | **v1 合一仓**(monorepo:后端 5 包 + `web/` Vue 前端同仓);React 模板 v1.x 再拆独立仓 `tenon-admin-web-react` |
+| 仓库 | **v1 合一仓**(monorepo:后端 5 包 + `web/` Vue 前端同仓);React 模板后来的实际决定是**同仓 `web-react/`**、不拆独立仓(自包含双模板,零共享,见 `docs/react-template-ledger.md`) |
 | v1.0 范围 | 核心子集(见 §4),其余以 v1.x 可选包补齐 |
 | License | **纯 Apache-2.0**(去除旧版限制性附加条款,标准 OSI 开源) |
 | uniapp 移动端 | 不进 v1,旧版继续可用 |
@@ -56,9 +56,9 @@
 | 仓库 | 内容 | 发布物 |
 |---|---|---|
 | `DotNet-MoYu/tenon-admin`(**v1 单仓 monorepo**) | 后端 5 包源码 + `web/`(Vue 前端)+ `samples/` + `docs/` + `tests/` + `docker-compose.yml` | NuGet 包(nuget.org)+ 前端模板(同仓 `web/`) |
-| `DotNet-MoYu/tenon-admin-web-react`(**v1.x 再建**) | React 管理端模板 | 独立模板仓库 |
+| ~~`tenon-admin-web-react` 独立仓~~(原计划 v1.x 再建) | React 管理端模板——实际落地为**同仓 `web-react/` 目录**,与 `web/` 零共享、各自 degit(`docs/react-template-ledger.md`) | 同仓模板目录 |
 
-选合一仓的理由:一次 clone 跑全栈、`docker compose up` 即起 demo、openapi 契约本地生成不跨仓、前后端同步演进、早期少维护一堆仓。React 到 v1.x 观感/逻辑分离成熟后再拆独立仓。
+选合一仓的理由:一次 clone 跑全栈、`docker compose up` 即起 demo、openapi 契约本地生成不跨仓、前后端同步演进、早期少维护一堆仓。React 模板最终也留在了同仓(`web-react/`)——同样吃到这些好处,且两模板对同一份 openapi 契约演进时不用跨仓同步。
 
 v1 monorepo 目录草案(**后端 v1.0 只建这 5 个包**;可选包按需再建,不先建空目录):
 
@@ -79,12 +79,13 @@ tenon-admin/                       # v1 单仓
 │  ├─ Directory.Packages.props    # 统一依赖版本(中央包管理)
 │  └─ TenonAdmin.slnx             # .NET 10 方案格式(等价旧 .sln)
 ├─ web/                           # Vue 3 + Naive UI 前端模板(openapi 本地生成)
+├─ web-react/                     # React 19 + antd 6 前端模板(后来落地,与 web/ 零共享)
 ├─ docs/
 ├─ docker-compose.yml             # 后端 + web(nginx)+ 可选 Redis/MySQL,一键起 demo
 ├─ .gitattributes                 # 统一行尾(LF)
 └─ README.md
 # 可选包(TenonAdmin.Caching.Redis / .Mqtt / .Scalar / .Security.Gm)按需在 backend/src 下再建,见 §2.1
-# React 模板 v1.x 拆出为独立仓 tenon-admin-web-react
+# React 模板原计划 v1.x 拆独立仓,实际落地为同仓 web-react/(自包含,不拆)
 ```
 
 ---
@@ -662,7 +663,7 @@ web/src/
 - [x] 走一遍 §18 最小验收闭环 —— 2026-07-16 完成:16 步全过。API 半场由 76 个域测试对号(SQLite 本机全绿 267/267;MySQL/SqlServer/PostgreSQL 腿由 backend-ci 矩阵、容器链路由 docker-smoke 覆盖);消费者三行启动经模板冒烟 + 独立首启脚本验证(首启打印随机超管口令、二启静默、/health+/openapi 200);浏览器半场用 chrome-devtools 驱动走完(登录→建机构/角色/用户→授权菜单+数据范围→新用户首登强制改密→菜单权裁剪+数据范围隔离生效→操作日志→我的会话踢下线→F5 动态路由重建),验收数据已清理
 
 ### v1.x 路线(发布后按需)
-**拆出 `tenon-admin-web-react` 独立仓 + React 版模板** → **SoybeanUI 皮肤**(补视图层)→ **分片上传** → IP 地理/UA 精解 → 代码生成 → Excel 导入导出 →
+**React 版模板 ✅ 完成(改为同仓 `web-react/`,不拆独立仓;`docs/react-template-ledger.md`)** → **SoybeanUI 皮肤**(补视图层)→ **分片上传** → IP 地理/UA 精解 → 代码生成 → Excel 导入导出 →
 任务调度 → 消息中心 → OSS 存储 → 国密 → MQTT → 可观测性
 
 ### 9.1 优先级(P0/P1/P2)

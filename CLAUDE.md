@@ -101,6 +101,7 @@ React 19 + Ant Design (antd 6) + `@ant-design/pro-components` + zustand (persist
 - **Stores** (zustand): `user`/`auth`/`app`/`dict`/`tabs`. Selectors must return **primitives or stable references** — a selector returning a new object/closure re-runs every render and loops forever.
 - **antd v6, not v5**: renamed props (`variant` not `bordered`, `styles.body` not `bodyStyle`, `styles.container` for Modal padding, …) are silent under `tsc`. Query the offline CLI before writing a component — `antd info/demo/semantic <C> --version 6.x` — and `antd lint <file>` after.
 - Login ships the same three swappable skins (`views/login/skins/`); the `<DataTable>` wrapper isolates `pro-components` so CRUD pages depend only on it. The driving log for the whole port is `docs/react-template-ledger.md`.
+- **Shared components live in `web-react/COMPONENTS.md`** (self-contained, contracts inline — no per-component README tree) — read it before writing a page; update it when adding a shared component.
 
 ## CI
 
@@ -126,7 +127,7 @@ The full SqlServer suite ran **40–60 min** (measured 2026-07-20: 2302 / 2466 /
 
 ### Module scaffolding
 
-Building a new module (entity / backend CRUD / frontend page / service replacement)? Start from `skills/README.md` — `skills/new-module.md` orchestrates the full flow (entity → backend → tests → `gen:api` → frontend → i18n → menu/permission wiring). Also exposed as slash commands (`/new-module`, `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/replace-service`, `/create-page-variant`) via thin wrappers in `.claude/skills/`; the markdown files in `skills/` are the single source of truth.
+Building a new module (entity / backend CRUD / frontend page / service replacement)? Start from `skills/README.md` — `skills/new-module.md` orchestrates the full flow (entity → backend → tests → `gen:api` → frontend → i18n → menu/permission wiring). Also exposed as slash commands (`/new-module`, `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/create-crud-frontend-react`, `/replace-service`, `/create-page-variant`) via thin wrappers in `.claude/skills/`; the markdown files in `skills/` are the single source of truth. The frontend CRUD skill is per-template: `create-crud-frontend.md` for `web/` (Vue), `create-crud-frontend-react.md` for `web-react/`.
 
 ### Writing docs
 

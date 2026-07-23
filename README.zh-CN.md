@@ -1,11 +1,10 @@
 <!-- 本文件为 README 的中文基准版；README.md、README.ja.md 以本文件为准同步 -->
 
+# TenonAdmin
+
 [English](README.md) | 简体中文 | [日本語](README.ja.md)
 
-<p align="center">
-  <img src="./assets/readme/zh-CN/hero.png" width="100%"
-       alt="TenonAdmin — 三行代码为 ASP.NET Core 接入完整 RBAC 权限内核，NuGet 包五层架构">
-</p>
+榫卯（TenonAdmin）——像榫卯一样，不打一颗钉子，把整套后台严丝合缝地拼进你的 ASP.NET Core 项目。
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="License"></a>
@@ -22,28 +21,11 @@
 
 ---
 
-TenonAdmin 不是一套需要复制再二开的后台模板——它把用户、角色、菜单、数据权限、日志等通用能力封装成 NuGet 包，三行代码接入已有项目，默认即跑，按需替换。
+## 🎨 这是什么？
 
-<p align="center">
-  <img src="./assets/readme/zh-CN/section-quickstart.png" width="100%"
-       alt="02 快速开始 — 安装 NuGet 包，三行代码接入，启动即跑">
-</p>
+传统后台框架的玩法大家都熟：克隆一个模板仓库，几百个文件从此都归你养。业务代码和框架代码搅在一起，框架发了新版也只能眼馋——手动对 diff 合并的痛，合过的都懂。
 
-安装 NuGet 包：
-
-```bash
-dotnet add package TenonAdmin
-```
-
-或者直接运行仓库自带的示例项目：
-
-```bash
-dotnet run --project backend/samples/MinimalHost
-```
-
-首次启动自动建表、初始化数据，超级管理员密码随机生成并输出到控制台。
-
-接入已有项目只需三行：
+TenonAdmin 换了个思路：**把后台的通用能力打成 NuGet 包**。用户、角色、菜单、多机构数据权限、字典配置、操作日志、文件上传……这些每个后台都要再写一遍的东西，`dotnet add package` 装进来，`Program.cs` 加三行，启动就是一套完整的后台接口：
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration);
@@ -51,43 +33,119 @@ var app = builder.Build();
 app.MapTenonAdmin();
 ```
 
-启动后自动注册 JWT 认证、RBAC 权限、数据权限及全部管理端接口。
+- **默认即跑**——零配置起步：自动建表、种子数据、SQLite 兜底，第一次跑连数据库都不用装；
+- **按需替换**——内置服务全部走接口 + `TryAdd` 注册，哪块不合口味就注册你自己的实现把它顶掉，不用 fork 源码；
+- **升级 = 升包**——框架修 bug、出新功能，升个包版本号的事，你的业务代码一行不用动。
 
-<p align="center">
-  <img src="./assets/readme/zh-CN/section-features.png" width="100%"
-       alt="01 主要功能 — 后端权限内核 + 前端管理界面">
-</p>
+后台的"脸面"也备好了：**两套功能对等的前端模板**（Vue 和 React），挑顺手的那套拿走，当你自己项目的起点。
 
-### 后端
+## ✨ 后端功能
 
 - **认证** — 账号密码 + 图形验证码、JWT + Refresh Token 轮换、登录锁定、在线会话与强制退出
 - **RBAC** — 角色管理、目录／页面／按钮三级菜单、按钮级权限码、角色菜单授权
-- **数据权限** — 全部 / 本机构 / 本机构及下级 / 仅本人 / 自定义，ORM 全局过滤器自动生效
+- **数据权限** — 全部 / 本机构 / 本机构及下级 / 仅本人 / 自定义，ORM 全局过滤器自动生效，业务代码不用写一行过滤
 - **多应用门户** — 应用管理、独立菜单树、应用选择与切换
 - **组织机构** — 机构树、职位、用户多角色与主属机构
 - **消息通知** — 站内通知与公告，可按全体 / 角色 / 用户发送
 - **字典与配置** — 字典类型 + 字典项 + 键值配置，缓存 + 事件驱动失效
 - **日志** — 操作日志自动记录、敏感输入脱敏
 - **文件管理** — 上传下载、大小限制、扩展名白名单、路径穿越防护
-- **可替换** — 主要服务 `TryAdd` + 接口注册 + 关键步骤 `virtual`，不 fork 即可替换
-- **多数据库** — SQLite（默认）/ MySQL / SQL Server / PostgreSQL
-- **多副本** — 可选 Redis 缓存、跨副本限流计数、每副本独立雪花机器号
+- **多数据库** — SQLite（默认）/ MySQL / SQL Server / PostgreSQL，改一段配置就切
+- **多副本** — 可选 Redis 缓存、跨副本限流计数、每副本独立雪花机器号，横向扩容不踩坑
+- **克制的依赖** — 核心包运行时只依赖 SqlSugarCore + Microsoft.*，不往你的项目里塞一堆第三方框架
 
-### 前端
+## 🖥️ 前端：两套官方模板，选一套就够
 
-- **合约生成 API** — OpenAPI → `schema.d.ts`，全链路类型安全
+同一个后端契约，配了两套完全独立的前端模板，哪个框架顺手就拿哪套：
+
+| | `web/` | `web-react/` |
+|---|---|---|
+| 框架 | Vue 3 + Naive UI | React 19 + Ant Design 6 |
+| 状态 / 路由 | Pinia + vue-router | zustand + react-router |
+| 多语言 | vue-i18n | react-i18next |
+| 开发端口 | :5173 | :5174 |
+
+零共享是刻意的：两套模板互不引用，连一个工具函数都不共用。你拿哪套走就只背哪套的依赖，删掉另一套什么都不会发生。功能是逐页对齐移植的，两边都有：
+
+- **合约生成 API** — OpenAPI → `schema.d.ts`，全链路类型安全，后端改了接口前端编译就报错
 - **动态路由** — 后端菜单树驱动路由注册，多应用门户无缝切换
-- **按钮级权限** — `v-auth` 指令，按路由权限码控制按钮显隐
-- **ProTable 列驱动** — 一个 `columns` 数组同时驱动搜索表单、字典渲染与列设置
-- **设计令牌体系** — CSS 变量四层令牌，亮暗双主题对等（跟随系统 / 手动切换）
-- **i18n 多语言** — vue-i18n，运行时切换
-- **三套登录页皮肤** — 开箱可选，样式隔离
-- **自研组件库** — FormContainer（弹窗/抽屉二合一）、StatusSwitch（悲观更新开关）、字典三件套、OrgTreeSelect、FileUpload（分片/断点续传/秒传）、PasswordStrength、ECharts 封装等
+- **按钮级权限** — Vue 用 `v-auth` 指令、React 用 `<Can>` 组件，权限码同一套
+- **列驱动表格** — 一个 `columns` 数组同时驱动搜索表单、字典渲染与列设置
+- **设计令牌 + 亮暗双主题** — CSS 变量四层令牌，跟随系统 / 手动切换
+- **三套登录页皮肤** — 开箱可选，样式隔离，不喜欢就换
+- **自研组件库** — FormContainer（弹窗/抽屉二合一）、StatusSwitch（悲观更新开关）、字典三件套、OrgTreeSelect、FileUpload（分片/断点续传/秒传）、PasswordStrength、图表封装等，两边各自实现一份
 
-## 项目状态
+## 🚀 快速开始
 
-**1.0 之前 API 仍可能调整**，破坏性变更会在[更新日志](CHANGELOG.md)中标出。开发在 `dev` 分支进行。
+### 环境要求
 
-## 许可证
+- .NET 10 SDK
+- Node.js 20+（跑前端模板才需要）
+
+### 先跑起来看看
+
+克隆仓库，后端一条命令：
+
+```bash
+dotnet run --project backend/samples/MinimalHost
+```
+
+首次启动自动建库建表、写入种子数据，并把随机生成的超管密码打印在控制台（账号 `superAdmin`）。API 就绪：http://localhost:5100
+
+前端挑一套（或两套都起，端口不冲突）：
+
+```bash
+cd web && npm install && npm run dev            # Vue 版 → http://localhost:5173
+cd web-react && npm install && npm run dev      # React 版 → http://localhost:5174
+```
+
+浏览器打开，用控制台里那对账号密码登录，完整的后台就在眼前了。Windows 用户更省事：仓库根目录双击 `dev.bat`，后端 + 两套前端一次全起。
+
+### 接进你自己的项目
+
+```bash
+dotnet add package TenonAdmin
+```
+
+`Program.cs` 加上面那三行，启动后 JWT 认证、RBAC、数据权限、全部管理端接口自动就位。想换数据库？改一段配置：
+
+```jsonc
+// appsettings.json
+"TenonAdmin": {
+  "Database": {
+    "DbType": "MySql",          // Sqlite / MySql / SqlServer / PostgreSQL
+    "ConnectionString": "..."
+  }
+}
+```
+
+### 内置实现不合口味？换掉它
+
+所有内置服务都是接口 + `TryAdd` 注册——你先注册，内置的就自动让位：
+
+```csharp
+// 比如换掉密码哈希算法:在 AddTenonAdmin 之前注册你自己的实现
+builder.Services.AddSingleton<IPasswordHasher, MyPasswordHasher>();
+builder.Services.AddTenonAdmin(builder.Configuration);
+```
+
+粒度还可以更细：服务方法拆成了一个个 `virtual` 小步骤，继承内置服务、只覆写你关心的那一步就行，不用整个方法抄一遍。这套可替换性不是口号——仓库里有一组专门的契约测试锁着它，谁改坏谁知道。
+
+## 🧩 仓库结构
+
+| 目录 | 是什么 |
+|---|---|
+| `backend/` | .NET 10 内核（5 个 NuGet 包）+ 示例宿主 + 测试 |
+| `web/` | Vue 3 + Naive UI 前端模板，自包含 |
+| `web-react/` | React 19 + Ant Design 6 前端模板，自包含 |
+| `templates/` | `dotnet new tenon-app` 项目模板 |
+| `site/` | 文档站源码（VitePress，中英双语） |
+| `docs/` | 设计文档与开发记录 |
+
+## 📋 项目状态
+
+**1.0 之前 API 仍可能调整**，破坏性变更会在[更新日志](CHANGELOG.md)中标出。开发在 `dev` 分支进行，欢迎 issue 和 PR。
+
+## 📄 许可证
 
 [Apache License 2.0](LICENSE)

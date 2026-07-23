@@ -329,7 +329,7 @@ new SysMenu { Id = .., ParentId = <页面Id>, Type = MenuType.Button,
     Title = "岗位-删除",   Permission = "DELETE:/api/v1/sys/position/{id}",   Sort = 4, Enabled = true },
 ```
 
-**Permission 格式 = `METHOD:/路由模板`**，与 Controller 路由严格一致。前端 `v-auth` 指令的值也用这个。
+**Permission 格式 = `METHOD:/路由模板`**，与 Controller 路由严格一致。前端按钮门控的值也用这个（`web/` 是 `v-auth` 指令，`web-react/` 是 `<Can code>` 组件）。
 
 业务模块通常通过后台「菜单管理」UI 添加，而不是写种子数据。
 
@@ -399,4 +399,4 @@ dotnet build backend/TenonAdmin.slnx -c Release
 dotnet test backend/TenonAdmin.slnx
 ```
 
-后端启动后，用 `/openapi/v1.json` 确认新端点已暴露，然后前端执行 `npm run gen:api` 重新生成 `schema.d.ts`。
+后端启动后，用 `/openapi/v1.json` 确认新端点已暴露，然后在所用的前端模板里执行 `npm run gen:api` 重新生成 `schema.d.ts`（`web/` 与 `web-react/` 各有同名脚本，刷你在用的那套即可）。

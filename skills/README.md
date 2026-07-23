@@ -11,7 +11,8 @@
 | [new-module.md](new-module.md) | **新增模块全流程编排** | 从零加一个完整模块时的入口,串起下面各专项 skill |
 | [create-entity.md](create-entity.md) | 创建 SqlSugar 实体类 | 新建表、新建实体 |
 | [create-crud-backend.md](create-crud-backend.md) | 创建后端 CRUD 全套 | Models + Interface + Service + ErrorCode + DI + Controller |
-| [create-crud-frontend.md](create-crud-frontend.md) | 创建前端 CRUD 页面 | Types + API + Vue 页面（ProTable + FormContainer） |
+| [create-crud-frontend.md](create-crud-frontend.md) | 创建前端 CRUD 页面（Vue 版，`web/`） | Types + API + Vue 页面（ProTable + FormContainer） |
+| [create-crud-frontend-react.md](create-crud-frontend-react.md) | 创建前端 CRUD 页面（React 版，`web-react/`） | Types + API + React 页面（DataTable + FormContainer + `<Can>`） |
 | [replace-service.md](replace-service.md) | 替换/扩展内置服务 | 定制登录流程、换密码哈希、覆写服务步骤 |
 | [create-page-variant.md](create-page-variant.md) | 非标准页面模板 | 树表、主从分栏、侧栏筛选 |
 | [write-docs.md](write-docs.md) | **文档写作规范** | 写或改 `site/` 下任何一页；中英双语的口吻、标点、开头、破折号 + 闸门 |
@@ -27,6 +28,7 @@
 /create-entity
 /create-crud-backend
 /create-crud-frontend
+/create-crud-frontend-react
 /replace-service
 /create-page-variant
 /write-docs
@@ -42,6 +44,6 @@
 
 ### 全栈 CRUD 完整流程
 
-新增一个完整模块，从 [new-module.md](new-module.md) 进入——它按顺序编排 实体 → 后端 → 测试 → `gen:api` → 前端 → i18n → 菜单/权限 → 验证，并列出步骤间最容易断的交接点（权限码四处一致、MsgKey 对 i18n 键、种子 Id 保留区间）。
+新增一个完整模块，从 [new-module.md](new-module.md) 进入——它按顺序编排 实体 → 后端 → 测试 → `gen:api` → 前端 → i18n → 菜单/权限 → 验证，并列出步骤间最容易断的交接点（权限码四处一致、MsgKey 对 i18n 键、种子 Id 保留区间）。前端有两套官方模板（`web/` Vue 与 `web-react/` React，零共享、各自维护），前端那一步按消费者选的模板走对应 skill，不用两边都做。
 
 建实体、建后端、建前端这三个 skill 连同 `new-module` 都会区分**系统模块**（内核维护者）和**业务模块**（消费者二开）两种模式；`replace-service` 只面向消费者，`create-page-variant` 只按页面形态分变体，都没有这条分叉。
