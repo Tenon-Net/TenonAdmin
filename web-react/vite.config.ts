@@ -73,8 +73,6 @@ export default defineConfig({
     setupFiles: ['src/test-setup.ts'],
     globals: false,
     pool: 'forks',
-    maxWorkers: 1,
-    fileParallelism: false, // 本机 node 堆 ~3GB,串行保内存曲线可预测;CI 不分叉同配置
     restoreMocks: true,
     unstubGlobals: true,
   },

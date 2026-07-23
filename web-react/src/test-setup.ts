@@ -24,3 +24,8 @@ function memoryStorage(): Storage {
 
 globalThis.localStorage = memoryStorage()
 globalThis.sessionStorage = memoryStorage()
+
+// vitest 并行(8 核跑满)时 worker 被挤慢,testing-library `findBy*`/`waitFor` 默认 1s 上限会偶发
+// 超时(单跑同一用例秒绿)。放宽到 3s —— 这只是等待上限,元素一出现立即返回,不拖慢绿色用例。
+import { configure } from '@testing-library/react'
+configure({ asyncUtilTimeout: 3000 })
