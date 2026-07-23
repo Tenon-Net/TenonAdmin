@@ -1,10 +1,16 @@
 <!-- README.zh-CN.md（正本）に合わせて同期してください -->
 
-# TenonAdmin
-
 [English](README.md) | [简体中文](README.zh-CN.md) | 日本語
 
-名前の由来は木組みの「榫卯（ほぞ継ぎ）」——釘を一本も使わず、ぴったり組み合う。TenonAdmin も同じように、フォークも接着コードもなしで、完全な管理バックエンドを ASP.NET Core プロジェクトに組み込みます。
+<p align="center">
+  <img src="web/design-mockups/brand/icon-128.png" width="80" height="80" alt="TenonAdmin">
+</p>
+
+<h1 align="center">TenonAdmin</h1>
+
+<p align="center">
+  <em>コード 3 行で、ASP.NET Core プロジェクトに完全で拡張可能な RBAC 権限管理を組み込めます。</em>
+</p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="License"></a>

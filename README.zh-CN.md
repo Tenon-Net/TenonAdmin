@@ -1,10 +1,16 @@
 <!-- 本文件为 README 的中文基准版；README.md、README.ja.md 以本文件为准同步 -->
 
-# TenonAdmin
-
 [English](README.md) | 简体中文 | [日本語](README.ja.md)
 
-榫卯（TenonAdmin）——像榫卯一样，不打一颗钉子，把整套后台严丝合缝地拼进你的 ASP.NET Core 项目。
+<p align="center">
+  <img src="web/design-mockups/brand/icon-128.png" width="80" height="80" alt="TenonAdmin">
+</p>
+
+<h1 align="center">TenonAdmin</h1>
+
+<p align="center">
+  <em>三行代码，为 ASP.NET Core 项目接入一套完整、可扩展的 RBAC 权限管理。</em>
+</p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="License"></a>
