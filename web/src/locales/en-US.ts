@@ -75,8 +75,6 @@ export default {
       empty: 'No notifications',
       markAllRead: 'Mark all read',
       viewAll: 'View all',
-      tabAll: 'All',
-      tabUnread: 'Unread',
     },
   },
   settings: {

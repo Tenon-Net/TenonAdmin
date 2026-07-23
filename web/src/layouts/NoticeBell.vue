@@ -1,10 +1,11 @@
 <script setup lang="ts">
-// 顶栏消息通知铃铛。富面板(n-popover):全部/未读 页签 + 可滚动富列表 + 正文弹层。
-// 未读数每 30s 轮询(设计 §4 消息中心轮询模型);面板展开 / 切页签时拉取对应列表。
+// 顶栏消息通知铃铛。富面板(n-popover):无页签单列表 + 正文弹层。
+// 未读=圆点+加粗+淡主色底,已读=整行变淡;"读没读"是过滤器不是分类,不做成页签(筛选在个人通知页)。
+// 未读数每 30s 轮询(设计 §4 消息中心轮询模型);面板展开时拉取列表。
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NPopover, NBadge, NButton, NTabs, NTabPane, NTag, NEllipsis, NScrollbar, NText, NEmpty, NModal, NSpin,
+  NPopover, NBadge, NButton, NTag, NEllipsis, NScrollbar, NText, NEmpty, NModal, NSpin,
   useMessage,
 } from 'naive-ui'
 import { Icon } from '@iconify/vue'
@@ -23,7 +24,6 @@ const message = useMessage()
 const unread = ref(0)
 const items = ref<NoticeMineItem[]>([])
 const loading = ref(false)
-const tab = ref<'all' | 'unread'>('all')
 
 async function fetchUnread() {
   try {
@@ -32,10 +32,11 @@ async function fetchUnread() {
     /* 轮询失败静默,下次自愈 */
   }
 }
+// 无页签单列表:恒拉最近一页混排,未读靠条目样式强调;筛选能力在"查看全部"的个人通知页。
 async function fetchList() {
   loading.value = true
   try {
-    const { items: list } = await noticeApi.mine({ page: 1, pageSize: 10, onlyUnread: tab.value === 'unread' })
+    const { items: list } = await noticeApi.mine({ page: 1, pageSize: 10 })
     items.value = list
   } catch {
     items.value = []
@@ -45,10 +46,6 @@ async function fetchList() {
 }
 function onShow(show: boolean) {
   if (show) fetchList()
-}
-function onTab(name: 'all' | 'unread') {
-  tab.value = name
-  fetchList()
 }
 
 // 正文弹层:内容随列表取回,直接渲染(Markdown,不能纯文本直出);点条目即标记已读。
@@ -61,7 +58,7 @@ async function openNotice(item: NoticeMineItem) {
   try {
     await noticeApi.markRead(item.id)
     item.isRead = true
-    await Promise.all([fetchUnread(), tab.value === 'unread' ? fetchList() : Promise.resolve()])
+    await fetchUnread()
   } catch (e) {
     message.error(translateError(e))
   }
@@ -126,18 +123,13 @@ fetchUnread()
         </n-button>
       </div>
 
-      <n-tabs :value="tab" size="small" justify-content="space-evenly" @update:value="onTab">
-        <n-tab-pane name="all" :tab="t('app.notice.tabAll')" />
-        <n-tab-pane name="unread" :tab="`${t('app.notice.tabUnread')}${unread > 0 ? ` (${unread})` : ''}`" />
-      </n-tabs>
-
       <n-spin :show="loading">
         <n-scrollbar style="max-height: 360px">
           <div v-if="items.length === 0" class="notice-empty">
             <n-empty :description="t('app.notice.empty')" size="small" />
           </div>
           <ul v-else class="notice-list">
-            <li v-for="n in items" :key="n.id" class="notice-item" @click="openNotice(n)">
+            <li v-for="n in items" :key="n.id" :class="['notice-item', n.isRead ? 'read' : 'unread']" @click="openNotice(n)">
               <span v-if="!n.isRead" class="dot" />
               <div class="notice-body">
                 <div class="line1">
@@ -205,6 +197,16 @@ fetchUnread()
 }
 .notice-item:hover {
   background-color: rgba(128, 128, 128, 0.08);
+}
+/* 未读:整行淡主色底(明暗主题都成立);已读:整行变淡 */
+.notice-item.unread {
+  background-color: color-mix(in srgb, var(--color-primary) 4%, transparent);
+}
+.notice-item.unread:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 9%, transparent);
+}
+.notice-item.read {
+  opacity: 0.55;
 }
 .dot {
   position: absolute;
