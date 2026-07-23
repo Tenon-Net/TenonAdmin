@@ -135,7 +135,7 @@
 > 来源:2026-07-22/23 维护者把两模板并排实测,报出的差异逐条修。G1 已随 `1579aa6` 并 dev——**首次把 web-react 整棵带上 dev**,push 触发的四条 CI(web-ci / web-react-ci / contract-drift / docker-smoke)全绿。
 
 - [x] **G1 对齐批次(三提交)**(`0e0cedb` / `5e16aa2` / `8a4568b`) — ①vitest 并行解锁(两模板);②web-react 对齐 web:登录页 SSO 按钮、壳层 TenonLogo + favicon 全套 + document.title、头部补全屏/语言并对齐按钮序、NoticeBell 富面板、去页内 headerTitle、用户表单两列 + 机构/职位/主管、全局 border-box、Menu 右边线令牌灭除、机构页刷新钮 icon-only;③两侧通知面板重设计为无页签单列表。详见轮次日志 2026-07-23。
-- [ ] **G2 短信登录移植** — LoginForm 三模式(`account/sms/mfa`):短信免密登录 + 密码后短信二次验证,对照 Vue `LoginForm.vue` 的 mode 切换/倒计时/挑战往返;React 侧 authApi 端点与 i18n 键先盘点(按 G1 经验大概率已在)。这是登录页与 Vue 的最后一块功能缺口(组件注释里挂着"留给后续批次")。
+- [x] **G2 短信登录移植**(`7aae7ab`) — LoginForm 三模式(`account/sms/mfa`)与 Vue 同构:短信免密(smsLoginEnabled 驱动切换链接、发码共用倒计时、验证码护发码不护提交)+ 密码后 40009 信令进挑战页(掩码手机号/重发/返回)。盘点证实 authApi 四端点、`ApiError.args`、双语键**全部已在**,纯 UI 接线。新增 6 条 spec;真全链路实测(日志通道取码登录成功)。详见轮次日志 2026-07-23。
 
 ## 不做清单（有依据,防反复）
 
@@ -147,6 +147,17 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-23 · G2 短信登录移植(`7aae7ab`)
+
+对照 Vue `LoginForm.vue` 把 sms/mfa 两条路径搬进 React LoginForm,逐字对齐行为语义:
+
+- **三模式**:`account`(原有)/ `sms`(免密:手机号 + 发码 + 短信码;切换链接由 `site.smsLoginEnabled` 驱动,后端关则整链不显)/ `mfa`(密码校验过后后端抛 **40009 信令**——是信令不是失败,`ApiError.args` 带 `challengeId/phoneMask/resendSeconds`,前端切挑战页并起倒计时)。
+- **语义细节照 Vue**:发码与重发共用一个倒计时(同一时刻只有一个发码入口可见);验证码在账号态护登录、在短信态护**发码**(`onSendSmsCode` 前置校验 + 消费后 `refreshCaptchaAfterUse` 清字段,故 captchaCode 的 required 规则只挂账号态,否则发完码提交必被空字段拦住);mfa 码是单字段小表单,走受控 state 不进 antd Form。
+- **盘点结果(G1 经验复现)**:authApi 四端点(`smsLoginSend/smsLogin/smsChallengeLogin/smsChallengeResend`)、`ApiError.args`、全部 `login.sms*`/`mfa*` 双语键、i18next 单花括号插值(B4)**全部已在**——G2 是纯 UI 接线,零新键零新端点。
+- **判据**:`antd lint` 0 / tsc / oxlint / login spec 30(含新增 6:切换链接门控、发码+登录全流、空手机号拦截、40009 挑战全流、返回密码登录、信令不落会话)/ build 全绿。**真全链路实测**:系统配置开 `sys.security.smsLogin.enabled` → 用户管理给 superAdmin 绑手机号(顺带验了 G1 两列表单)→ 登录页切短信态 → 发码 → 后端 `LoggingSmsSender` 日志取码 → 提交 → 会话落地进工作台。
+- **预测与实测不符**:无(盘点先行,全部命中"已在")。**插曲**:5174 dev 服务器因早前分支切换(文件树整删整还)留了脏解析缓存,`@/styles/tokens.css` 假性 resolve 失败,重启即愈——分支上做整树增删后别信存活的 vite。
+- **下一条**:B12 阶段一验收(人工),或维护者指定。
 
 ### 2026-07-23 · G1 对齐批次三提交(`0e0cedb`/`5e16aa2`/`8a4568b`)+ 并 dev(`1579aa6`)
 
