@@ -7,6 +7,7 @@ import { router } from './router'
 import { i18n } from './locales'
 import { vAuth } from './directives/auth'
 import { setupIcons } from './lib/icons'
+import { setupMarkdown } from './lib/markdown'
 import './styles/tokens.css'
 import './styles/index.css'
 
@@ -46,4 +47,5 @@ app.provide(
   }),
 )
 setupIcons() // 注册离线图标集 + 本地 SVG,预热 ph(非阻塞:注册后 <Icon> 从本地渲染,不命中外部 CDN)
+setupMarkdown() // 全局给 md-editor-v3 挂 XSS 过滤 + echarts 空 instance(通知正文富文本,默认放行内联 HTML 且会拉 unpkg)
 app.mount('#app')

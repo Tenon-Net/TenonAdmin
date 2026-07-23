@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// 通知公告 Markdown 编辑器:封 md-editor-v3,跟随应用明暗主题。存 Markdown 纯文本
-//(不存 HTML → 前台 MarkdownView 用库自带渲染器展示,无 v-html XSS 面)。
+// 通知公告 Markdown 编辑器:封 md-editor-v3,跟随应用明暗主题。存 Markdown 源文本 —— 注意 Markdown
+// **天然放行内联 HTML**,不等于无 XSS 面;渲染安全由 main.ts 的 setupMarkdown() 全局挂的 XSSPlugin 兜底
+//(见 @/lib/markdown)。no-* 关掉会从 unpkg 懒加载的扩展(见 lib/markdown),气隙下零触网。
 import { computed } from 'vue'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
@@ -23,5 +24,5 @@ async function onUploadImg(files: File[], callback: (urls: string[]) => void) {
 </script>
 
 <template>
-  <MdEditor v-model="text" :theme="theme" @on-upload-img="onUploadImg" />
+  <MdEditor v-model="text" :theme="theme" no-katex no-mermaid no-highlight no-prettier @on-upload-img="onUploadImg" />
 </template>

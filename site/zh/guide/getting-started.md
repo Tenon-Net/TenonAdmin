@@ -124,26 +124,37 @@ app.Run();
 
 ## 顺手起前端
 
-前端是仓库 `web/` 目录下的 Vue 3 + Naive UI 管理端模板：
+前端有两套官方模板，都连同一个后端：`web/` 是 Vue 3 加 Naive UI，`web-react/` 是 React 19 加 Ant Design，功能对齐，挑顺手的栈就行。`web/` 起在 `5173`，`web-react/` 起在 `5174`：
 
-```bash
+::: code-group
+
+```bash [Vue (web/)]
 cd web
 npm install
 npm run dev
 ```
 
-Vite 起在 `http://localhost:5173`，内置的反向代理会把 `/api` 和 `/openapi` 原样转发到后端 `:5100`。想换转发目标，用环境变量 `TENON_API_TARGET` 覆盖。这么一来浏览器眼里只有一个源，本地开发不用配跨域。打开 `5173`，用同一个超管账号密码登录，就能看到完整后台。
-
-前端重新生成 API 类型用 `npm run gen:api`，这条命令要求后端正在跑，因为它是从运行中的 `/openapi/v1.json` 抓契约，不是离线生成。
-
-::: tip 想拿它当一次性脚手架（soybean / vite 那种）？
-上面的 `cd web` 是「克隆仓库、跟着上游升级」的路子，也是推荐路径。这样前端会跟着走 NuGet 升级的后端契约同步演化。如果你只想要一份拷贝、之后完全自己维护，那就用 degit 拉一份无 `.git` 历史的快照当起点：
-
-```bash
-npx degit Tenon-Net/TenonAdmin/web my-web
+```bash [React (web-react/)]
+cd web-react
+npm install
+npm run dev
 ```
 
-代价明确：**没有升级通道**。上游修了 bug，你得自己读 diff 手动搬。而且快照会跟走 NuGet 升级的后端契约越漂越远。想持续吃上游修复，别走快照，走[同步 Fork 与上游](/zh/guide/sync-fork)。那套接缝就是为把这条路的合并冲突压到近乎为零而做的。
+:::
+
+内置的反向代理会把 `/api` 和 `/openapi` 原样转发到后端 `:5100`，想换转发目标用环境变量 `TENON_API_TARGET` 覆盖。这么一来浏览器眼里只有一个源，本地开发不用配跨域。打开对应端口，用同一个超管账号密码登录，就能看到完整后台。
+
+前端重新生成 API 类型用 `npm run gen:api`，这条命令要求后端正在跑，因为它是从运行中的 `/openapi/v1.json` 抓契约，不是离线生成。两套模板各在自己目录下跑 `gen:api`。
+
+::: tip 想拿它当一次性脚手架（soybean / vite 那种）？
+上面 `cd` 进目录是「克隆仓库、跟着上游升级」的路子，也是推荐路径，前端会跟着走 NuGet 升级的后端契约同步演化。只想要一份拷贝、完全自己维护，就用 degit 拉一份无 `.git` 历史的快照当起点，选哪套拉哪套：
+
+```bash
+npx degit Tenon-Net/TenonAdmin/web my-web        # Vue 模板
+npx degit Tenon-Net/TenonAdmin/web-react my-web  # React 模板
+```
+
+代价明确：**没有升级通道**。上游修了 bug，得自己读 diff 手动搬，快照也会跟走 NuGet 升级的后端契约越漂越远。想持续吃上游修复，别走快照，走[同步 Fork 与上游](/zh/guide/sync-fork)；两套模板的区别与选型见[选择前端模板](/zh/guide/frontend-templates)。
 :::
 
 ## 换掉默认数据库

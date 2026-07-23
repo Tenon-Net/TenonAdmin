@@ -1,8 +1,8 @@
 @echo off
-rem stop.bat - stop dev servers on ports 5100 (api) and 5173 (web)
+rem stop.bat - stop dev servers on ports 5100 (api), 5173 (web), 5174 (web-react)
 setlocal enabledelayedexpansion
 
-for %%P in (5100 5173) do (
+for %%P in (5100 5173 5174) do (
     set "found="
     for /f "tokens=5" %%I in ('netstat -ano ^| findstr ":%%P " ^| findstr LISTENING') do (
         set "found=1"

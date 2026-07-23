@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "useDefineForClassFields": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
+    // **不要在这里加 "node"**。它是项目级的:加上之后 `process.env`、`__dirname` 这类东西在
+    // **浏览器源码**里也能静默通过 typecheck,而运行时是 undefined。`web/` 那边没有这一条,
+    // 同一行代码搬过去就会红 —— 两个模板的判据必须一样紧。
+    //
+    // **`/// <reference types="node" />` 不能当作"文件级豁免",这一点我原先写反了**(R3 review 证伪,
+    // 三段 tsc 实验:单独的浏览器文件报 TS2591;单独的 spec 通过;两个同时存在时**报错消失**)。
+    // 模块 import 是文件级的,**全局声明不是** —— `@types/node` 只要被任何一个文件拉进 program,
+    // `process`/`__dirname`/`Buffer` 就进了全局作用域,对同一 program 里所有文件生效,上面那条守卫当场失效,
+    // 且不报错、不警告,四件套全绿。
+    //
+    // 所以 spec 要读文件时**别走 node**:用 Vite 自己的 `import css from '@/styles/tokens.css?raw'`
+    // (`vite/client` 已声明 `?raw` 模块),零 tsconfig 手术、且 spec 与浏览器走同一套解析。
+    // 真到了非 node 不可的那天,得单开 `tsconfig.spec.json` + `references` 把 spec 隔成另一个 program,
+    // 并且**必须真的挂上**(`web/tsconfig.node.json` 就是个没人引用的死配置,别重蹈)。
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    // 自包含:只有 `@/*`。既没有 `@shared/*`,也不需要给裸包指路 —— 依赖都在自己的 node_modules 里。
+    "paths": { "@/*": ["src/*"] }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts", "env.d.ts"]
+}

@@ -1,0 +1,275 @@
+/* 极光皮肤:所有内部选择器锚在 .aurora 下(替代 Vue scoped,防与其它皮肤类名相撞)。移植 skins/AuroraGlass.vue。 */
+.aurora {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(140% 120% at 50% 0%, #12162b 0%, #0a0b12 55%, #06060c 100%);
+}
+/* 细网格,中心遮罩淡出 */
+.aurora::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 46px 46px;
+  -webkit-mask-image: radial-gradient(circle at 50% 45%, #000 0%, transparent 72%);
+  mask-image: radial-gradient(circle at 50% 45%, #000 0%, transparent 72%);
+}
+/* 暗角,聚焦中心 */
+.aurora::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(120% 120% at 50% 42%, transparent 52%, rgba(0, 0, 0, 0.6) 100%);
+}
+.aurora .aurora-bg {
+  position: absolute;
+  inset: -20%;
+  z-index: 0;
+  background:
+    radial-gradient(38% 38% at 18% 22%, var(--a1), transparent 68%),
+    radial-gradient(42% 42% at 82% 18%, var(--a2), transparent 70%),
+    radial-gradient(48% 48% at 60% 88%, var(--a3), transparent 72%),
+    radial-gradient(34% 34% at 88% 68%, var(--a4), transparent 66%);
+  filter: blur(28px);
+  animation: aurora-move 18s ease-in-out infinite alternate;
+}
+@keyframes aurora-move {
+  0% {
+    transform: translate3d(-3%, -2%, 0) rotate(0deg) scale(1.05);
+  }
+  50% {
+    transform: translate3d(3%, 2%, 0) rotate(4deg) scale(1.16);
+  }
+  100% {
+    transform: translate3d(-2%, 3%, 0) rotate(-3deg) scale(1.08);
+  }
+}
+/* 星点微闪 */
+.aurora .stars {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 20% 30%, rgba(255, 255, 255, 0.7), transparent 60%),
+    radial-gradient(1px 1px at 70% 62%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(1.5px 1.5px at 42% 82%, rgba(255, 255, 255, 0.6), transparent 60%),
+    radial-gradient(1px 1px at 85% 22%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 55% 14%, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(1.5px 1.5px at 12% 66%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 92% 48%, rgba(255, 255, 255, 0.45), transparent 60%);
+  animation: aurora-twinkle 5s ease-in-out infinite;
+}
+@keyframes aurora-twinkle {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+.aurora .orb {
+  position: absolute;
+  z-index: 0;
+  border-radius: 50%;
+  filter: blur(55px);
+  opacity: 0.55;
+}
+.aurora .orb-1 {
+  width: 340px;
+  height: 340px;
+  background: var(--a1);
+  top: -60px;
+  left: -40px;
+  animation: aurora-float-y 14s ease-in-out infinite;
+}
+.aurora .orb-2 {
+  width: 280px;
+  height: 280px;
+  background: var(--a4);
+  bottom: -80px;
+  right: -40px;
+  animation: aurora-float-y 16s ease-in-out infinite reverse;
+}
+.aurora .orb-3 {
+  width: 200px;
+  height: 200px;
+  background: var(--a3);
+  top: 38%;
+  right: 18%;
+  animation: aurora-float-y 20s ease-in-out infinite;
+}
+@keyframes aurora-float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-30px);
+  }
+}
+.aurora .aurora-content {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  max-width: 520px;
+  padding: 24px;
+}
+/* 卡后旋转极光光环(略大于卡片,溢出成辉光环) */
+.aurora .halo {
+  position: absolute;
+  z-index: 0;
+  inset: 8px;
+  border-radius: 36px;
+  background: conic-gradient(from 0deg, var(--a1), var(--a2), var(--a3), var(--a4), var(--a1));
+  filter: blur(48px);
+  opacity: 0.6;
+  animation: aurora-spin 16s linear infinite;
+}
+@keyframes aurora-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.aurora .glass-card {
+  /* 覆盖共享表单文字色为浅色(玻璃是深的) */
+  --lf-title: #fff;
+  --lf-hint: rgba(255, 255, 255, 0.5);
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding: 46px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.55),
+    0 0 60px -12px var(--a2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+/* accent 渐变发光边框 */
+.aurora .glass-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--a1), transparent 45%, var(--a2));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.9;
+}
+/* 玻璃表面缓慢流光 */
+.aurora .glass-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(120deg, transparent 36%, rgba(255, 255, 255, 0.1) 48%, transparent 60%);
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: aurora-sheen 8s ease-in-out infinite;
+}
+@keyframes aurora-sheen {
+  0% {
+    background-position: 180% 0;
+  }
+  55%,
+  100% {
+    background-position: -60% 0;
+  }
+}
+/* 表单在玻璃上要浮在流光/边框之上 */
+.aurora .glass-card .login-form {
+  position: relative;
+  z-index: 3;
+}
+/* 胶片颗粒,消除色带 + 质感 */
+.aurora .grain {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+/* ── 浅色变体(应用浅色主题时)──────────────────────── */
+.aurora.light {
+  background: radial-gradient(140% 120% at 50% 0%, #eef1fb 0%, #f6f7fc 55%, #ffffff 100%);
+}
+/* 网格线改深(浅底上可见) */
+.aurora.light::before {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+}
+/* 暗角柔化为冷色微晕(黑暗角在浅底像脏) */
+.aurora.light::after {
+  background: radial-gradient(120% 120% at 50% 42%, transparent 55%, rgba(120, 130, 180, 0.12) 100%);
+}
+/* 白星点在浅底不可见,隐藏 */
+.aurora.light .stars {
+  display: none;
+}
+/* 光环稍收敛 */
+.aurora.light .halo {
+  opacity: 0.5;
+}
+/* 玻璃卡:浅色玻璃 + 深色文字 */
+.aurora.light .glass-card {
+  --lf-title: var(--color-text-primary);
+  --lf-hint: var(--color-text-tertiary);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(214, 218, 235, 0.9);
+  box-shadow:
+    0 30px 80px rgba(80, 90, 160, 0.18),
+    0 0 60px -12px var(--a2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+/* 浅色下关掉 accent 遮罩渐变环:mask-composite 在圆角处有细毛边,深色靠辉光盖住、浅色会暴露 */
+.aurora.light .glass-card::before {
+  display: none;
+}
+/* 白色流光在浅玻璃上几乎不可见,浅色下关掉 */
+.aurora.light .glass-card::after {
+  display: none;
+}
+/* 窄屏收紧内边距:默认 46px 卡内边距在 ~360px 手机上会挤压表单 */
+@media (max-width: 480px) {
+  .aurora .aurora-content {
+    padding: 16px;
+  }
+  .aurora .glass-card {
+    padding: 32px 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora .aurora-bg,
+  .aurora .orb,
+  .aurora .stars,
+  .aurora .halo,
+  .aurora .glass-card::after {
+    animation: none;
+  }
+  .aurora .glass-card::after {
+    display: none;
+  }
+}

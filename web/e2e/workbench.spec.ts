@@ -1,31 +1,21 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
+import { login, enterApp, SYSTEM_APP } from './helpers'
 
 /**
  * 工作台首页统计:数字必须来自后端,而不是当年那批写死的常量(24/186/312/5)。
  * 前置:后端在跑(默认 :5100),超管账号可登录。
  */
 
-const ACCOUNT = process.env.TENON_E2E_ACCOUNT ?? 'superAdmin'
-const PASSWORD = process.env.TENON_E2E_PASSWORD ?? 'Aa123456'
-
-async function login(page: Page) {
-  await page.goto('/login')
-  await page.getByPlaceholder(/账号|account/i).fill(ACCOUNT)
-  await page.getByPlaceholder(/密码|password/i).first().fill(PASSWORD)
-  const captchaSvg = page.locator('.lf-captcha-img svg')
-  if (await captchaSvg.isVisible().catch(() => false)) {
-    const code = (await captchaSvg.locator('text').allInnerTexts()).join('')
-    await page.getByPlaceholder(/验证码|captcha/i).fill(code)
-  }
-  await page.locator('button.hero-btn').click()
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 15_000 })
-}
-
 test('工作台:四个数字来自接口,趋势图横轴是最近 7 天真实日期', async ({ page }) => {
+  // /workbench 只挂在「系统」应用下:登录落在哪个应用取决于用户的默认应用(全局可变状态,
+  // module-switch 那条用例会改它),所以这里显式进「系统」,不靠登录后碰巧落对地方。
+  await login(page)
+  await enterApp(page, SYSTEM_APP)
+
   // 接口的真值先抓在手里,再拿去和页面上渲染出来的比对
   const [res] = await Promise.all([
     page.waitForResponse((r) => r.url().includes('/api/v1/dashboard/summary') && r.status() === 200),
-    login(page).then(() => page.goto('/workbench')),
+    page.goto('/workbench'),
   ])
   const data = (await res.json()).data
 

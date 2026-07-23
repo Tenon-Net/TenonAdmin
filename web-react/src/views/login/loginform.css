@@ -1,0 +1,123 @@
+/* 共享登录表单排版。文字色默认跟随应用令牌,皮肤可经 --lf-title / --lf-hint / --lf-border 覆写
+   (如极光深色玻璃皮肤强制浅色文字)。移植 Vue `LoginForm.vue` 的 .lf-* 样式(账号密码路径子集)。 */
+.login-form {
+  width: 100%;
+}
+.lf-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+/* 后台配置的品牌 logo:限高与内置矢量 logo 齐平,宽度自适应不变形 */
+.lf-logo {
+  height: 34px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+.lf-word {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--lf-title, var(--color-text-primary));
+}
+.lf-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin: 0 0 22px;
+  color: var(--lf-title, var(--color-text-primary));
+}
+/* 验证码:输入框 + 可点击刷新的 SVG 图形(等高对齐) */
+.lf-captcha {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  align-items: stretch;
+}
+.lf-captcha-img {
+  flex: 0 0 auto;
+  height: 40px;
+  min-width: 96px;
+  padding: 0;
+  border: 1px solid var(--lf-border, var(--color-border));
+  border-radius: var(--radius-md);
+  background: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.lf-captcha-img svg {
+  height: 100%;
+  width: auto;
+}
+/* 第三方登录:分隔线 + 等宽按钮(设计稿 §Variant A) */
+.lf-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 24px 0 16px;
+}
+.lf-divider::before,
+.lf-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--lf-border, var(--color-border));
+}
+.lf-divider span {
+  font-size: 12px;
+  color: var(--lf-hint, var(--color-text-tertiary));
+}
+.lf-sso {
+  display: flex;
+  gap: 12px;
+}
+.lf-sso-btn {
+  flex: 1;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1.5px solid var(--lf-border, var(--color-border));
+  border-radius: 11px;
+  background: var(--color-fill);
+  font-size: 13px;
+  color: var(--lf-title, var(--color-text-secondary));
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+.lf-sso-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+.lf-sso-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+/* 页脚:版权(可选链接)+ 构建期版本号 */
+.lf-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 18px;
+  font-size: var(--font-size-sm);
+  color: var(--lf-hint, var(--color-text-tertiary));
+}
+.lf-foot a {
+  color: inherit;
+  text-decoration: none;
+}
+.lf-foot a:hover {
+  color: var(--color-primary);
+}
+.lf-ver {
+  opacity: 0.75;
+}

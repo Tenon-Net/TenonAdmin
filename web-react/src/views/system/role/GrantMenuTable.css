@@ -1,0 +1,23 @@
+/* 授权菜单三列网格样式(移植 Vue GrantMenuTable,令牌换 tenon CSS 变量)。 */
+.grant-menu-table { display: flex; flex-direction: column; gap: 10px; }
+.grant-toolbar { display: flex; gap: 8px; align-items: center; }
+.grant-grid { border: 1px solid var(--color-border, #e0e0e6); border-radius: 4px; font-size: 13px; overflow: hidden; }
+.grant-header { display: flex; background: var(--color-fill, #fafafc); font-weight: 600; font-size: 12px; border-bottom: 1px solid var(--color-border, #e0e0e6); }
+.grant-header > div { padding: 8px 12px; }
+
+.grant-group { display: flex; border-bottom: 1px solid var(--color-border, #e0e0e6); }
+.grant-group:last-child { border-bottom: none; }
+.grant-group > .col-catalog { display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-right: 1px solid var(--color-border, #e0e0e6); cursor: pointer; user-select: none; }
+
+.collapse-arrow { display: inline-block; font-size: 10px; transition: transform 0.2s; color: var(--color-text-tertiary, #999); }
+.collapse-arrow.is-collapsed { transform: rotate(-90deg); }
+
+.group-rows { flex: 1; min-width: 0; }
+.grant-row { display: flex; border-bottom: 1px solid var(--color-border, #e0e0e6); }
+.grant-row:last-child { border-bottom: none; }
+
+.col-catalog { width: 130px; flex-shrink: 0; }
+.col-menu { width: 140px; flex-shrink: 0; display: flex; align-items: center; padding: 6px 12px; border-right: 1px solid var(--color-border, #e0e0e6); }
+.col-buttons { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 12px; min-width: 0; }
+.no-buttons { color: var(--color-text-tertiary, #c0c0c0); }
+.grant-empty { text-align: center; padding: 24px; color: var(--color-text-tertiary, #c0c0c0); }

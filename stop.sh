@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# stop.sh - 停止端口 5100（api）/ 5173（web）上的开发服务（对应 Windows 的 stop.bat）
+# stop.sh - 停止端口 5100（api）/ 5173（web）/ 5174（web-react）上的开发服务（对应 Windows 的 stop.bat）
 cd "$(dirname "$0")"
 
-for P in 5100 5173; do
+for P in 5100 5173 5174; do
   pids=$(lsof -tiTCP:"$P" -sTCP:LISTEN -n -P 2>/dev/null || true)
   if [ -z "$pids" ]; then
     echo "[stop] 端口 $P 未运行"
@@ -18,5 +18,5 @@ for P in 5100 5173; do
   done
 done
 
-rm -f .dev/api.pid .dev/web.pid 2>/dev/null || true
+rm -f .dev/api.pid .dev/web.pid .dev/web-react.pid 2>/dev/null || true
 echo 完成。

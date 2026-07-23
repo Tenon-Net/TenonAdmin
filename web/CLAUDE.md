@@ -8,4 +8,4 @@ Vue 3 `<script setup>` + Naive UI + Pinia (persisted) + vue-router + vue-i18n + 
 - **Stores**: `auth` (token/session, routesReady), `user` (profile/login state), `app` (theme/prefs). First visit follows system dark/light (VueUse `usePreferredDark`); after a manual toggle, persistence takes over.
 - Login page ships three swappable skins (`views/login/skins/`); theming via `styles/tokens.css` + `theme/`. Design system spec is `web/DESIGN.md`.
 - **Shared components live in `web/COMPONENTS.md`** — read it before writing a page (FormContainer, useConfirm, StatusSwitch, dict suite, ProTable, icons); no component-demo menu by design. Update it when adding a shared component.
-- **Tests**: unit tests are colocated `src/**/*.spec.ts` (Vitest + happy-dom, `npm test`;本机内存紧张,`maxWorkers`/`fileParallelism` 已锁到串行,别跟 vue-tsc/dotnet test 并发跑). e2e 在 `web/e2e`(Playwright,需真后端 :5100,不进 CI)。
+- **Tests**: unit tests are colocated `src/**/*.spec.ts` (Vitest + happy-dom, `npm test`,默认并行). e2e 在 `web/e2e`(Playwright,需真后端 :5100,不进 CI)。

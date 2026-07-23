@@ -1,0 +1,48 @@
+/* 布局壳的裸 CSS(B8):基础 reset + 密度间距 + 灰阶滤镜。
+   密度已通过 useAntdTheme 的 compactAlgorithm 作用到 antd 组件;这里的 --pad-page 是给**手写壳**
+   (LayoutShell 的内容内边距)用的,让密度也影响非 antd 的手写部分。
+   对应 Vue 侧 `styles/index.css` 里的 [data-density] / [data-gray] 那两段。 */
+
+:root {
+  --pad-page: 16px;
+  --gap-card: 16px;
+  /* 布局壳尺寸(对齐 Vue web/src/styles/index.css):侧栏 / 折叠侧栏 / 一级 icon rail / 顶栏高。
+     多布局模式(D2a)的 grid 列宽与 SideNav 都引这几个,单一来源。 */
+  --sidebar-w: 236px;
+  --sidebar-w-collapsed: 76px;
+  --rail-w: 64px;
+  --header-h: 62px;
+}
+
+/* 紧凑档:页内边距 / 卡片间距收紧(随 app.density 由 useAntdTheme 打 data-density)。 */
+:root[data-density='compact'] {
+  --pad-page: 12px;
+  --gap-card: 12px;
+}
+
+/* 全局 border-box(镜像 Vue styles/index.css):所有移植 CSS 的宽高/内边距数值都按 border-box 设计,
+   缺了它手写容器全按 content-box 膨胀(登录卡宽 +90px、tabsbar 43px、aside 237px 等一票 1px~百px 偏移)。 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  color: var(--color-text-primary);
+  background: var(--color-bg-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 灰阶:整页 filter(哀悼日等场景;随 app.grayscale 由 App 打 data-gray 到 <html>)。
+   Vue 侧曾有个「色弱模式」=invert,已删——整页反色对色觉障碍毫无帮助,声称无障碍却什么也没给。 */
+html[data-gray] {
+  filter: grayscale(1);
+}

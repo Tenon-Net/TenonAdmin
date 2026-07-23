@@ -1,0 +1,12 @@
+# 构建上下文是 web-react/ 自己(见 Dockerfile 头注释),故这份也在 web-react/ 里、路径相对本目录。
+# 主要是让镜像上下文瘦身、别把宿主机的 node_modules/构建产物拷进构建层(npm ci 会在镜像里重装)。
+.git/
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+
+# 本地开发覆盖(若有)
+.env.local
+*.local

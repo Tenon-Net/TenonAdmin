@@ -124,26 +124,37 @@ If you need finer-grained control over dependencies, you can reference a single 
 
 ## Run the frontend while you're at it
 
-The frontend is the Vue 3 + Naive UI admin template in the repo's `web/` directory:
+There are two official frontend templates, both against the same backend: `web/` is Vue 3 with Naive UI, `web-react/` is React 19 with Ant Design. They're feature-aligned, so pick whichever stack suits you — `web/` runs on `5173`, `web-react/` on `5174`:
 
-```bash
+::: code-group
+
+```bash [Vue (web/)]
 cd web
 npm install
 npm run dev
 ```
 
-Vite comes up on `http://localhost:5173`, with a built-in reverse proxy forwarding `/api` and `/openapi` verbatim to the backend on `:5100` (override the target with the `TENON_API_TARGET` environment variable), so as far as the browser is concerned there's a single origin and local development needs no CORS. Open `5173`, log in with the same super-admin account and password, and you'll see the full admin UI.
-
-When the frontend regenerates its API types (`npm run gen:api`), the backend must be running — it pulls the contract from a live `/openapi/v1.json`, not offline.
-
-::: tip Want it as a one-off scaffold (the soybean / vite kind)?
-The `cd web` above is the "clone the repo, track upstream" path — recommended, since the frontend then evolves in lockstep with the NuGet-versioned backend contract. If you just want a copy to own and maintain yourself, degit a snapshot with no `.git` history as your starting point:
-
-```bash
-npx degit Tenon-Net/TenonAdmin/web my-web
+```bash [React (web-react/)]
+cd web-react
+npm install
+npm run dev
 ```
 
-The trade-off is explicit: **no upgrade channel**. Upstream fixes are yours to read off the diff and reapply by hand, and the snapshot drifts from the NuGet-versioned backend contract. To keep pulling upstream fixes, don't snapshot — follow [Syncing Your Fork](/guide/sync-fork), whose seams exist precisely to keep that path's merge conflicts near zero.
+:::
+
+The built-in reverse proxy forwards `/api` and `/openapi` verbatim to the backend on `:5100` (override the target with the `TENON_API_TARGET` environment variable), so as far as the browser is concerned there's a single origin and local development needs no CORS. Open the matching port, log in with the same super-admin account and password, and you'll see the full admin UI.
+
+When the frontend regenerates its API types (`npm run gen:api`), the backend must be running — it pulls the contract from a live `/openapi/v1.json`, not offline. Each template has its own `gen:api`, run from its own directory.
+
+::: tip Want it as a one-off scaffold (the soybean / vite kind)?
+The `cd` into a directory above is the "clone the repo, track upstream" path — recommended, since the frontend then evolves in lockstep with the NuGet-versioned backend contract. If you just want a copy to own and maintain yourself, degit a snapshot with no `.git` history as your starting point, whichever template you chose:
+
+```bash
+npx degit Tenon-Net/TenonAdmin/web my-web        # Vue template
+npx degit Tenon-Net/TenonAdmin/web-react my-web  # React template
+```
+
+The trade-off is explicit: **no upgrade channel**. Upstream fixes are yours to read off the diff and reapply by hand, and the snapshot drifts from the NuGet-versioned backend contract. To keep pulling upstream fixes, don't snapshot — follow [Syncing Your Fork](/guide/sync-fork); for how the two templates differ and which to pick, see [Choosing a Frontend Template](/guide/frontend-templates).
 :::
 
 ## Swap out the default database

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { login as loginAs, enterApp, enterFirstAppIfNeeded, sidebarLeafNames, SYSTEM_APP, ADMIN_ACCOUNT, ADMIN_PASSWORD } from './helpers'
 
 /**
  * RBAC 权限端到端测试:验证角色-菜单授权 + 角色-用户授权的完整流程。
@@ -11,58 +12,14 @@ import { test, expect, type Page } from '@playwright/test'
  * 注意:测试会修改数据库(给角色授权菜单/用户),适合在开发库上跑。
  */
 
-const ADMIN_ACCOUNT = process.env.TENON_E2E_ACCOUNT ?? 'superAdmin'
-const ADMIN_PASSWORD = process.env.TENON_E2E_PASSWORD ?? 'Aa123456'
 const SEED_PASSWORD = '123456'
 
 // ── helpers ──────────────────────────────────────────────────────
-
-async function loginAs(page: Page, account: string, password: string) {
-  await page.goto('/login')
-  await page.waitForLoadState('networkidle')
-
-  const accountInput = page.getByPlaceholder(/账号|account/i)
-  await accountInput.fill(account)
-  await page.getByPlaceholder(/密码|password/i).first().fill(password)
-
-  const captchaSvg = page.locator('.lf-captcha-img svg')
-  if (await captchaSvg.isVisible().catch(() => false)) {
-    const code = (await captchaSvg.locator('text').allInnerTexts()).join('')
-    await page.getByPlaceholder(/验证码|captcha/i).fill(code)
-  }
-
-  await page.locator('button.hero-btn').click()
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 15_000 })
-}
 
 async function logout(page: Page) {
   await page.evaluate(() => localStorage.clear())
   await page.goto('/login')
   await expect(page).toHaveURL(/\/login/, { timeout: 5_000 })
-}
-
-/** 如果落在模块选择页 /module,选第一个应用进去。 */
-async function enterFirstModuleIfNeeded(page: Page) {
-  if (page.url().includes('/module')) {
-    const cards = page.locator('.card')
-    if ((await cards.count()) > 0) {
-      await cards.first().click()
-      await expect(page).not.toHaveURL(/\/module/, { timeout: 10_000 })
-    }
-  }
-}
-
-/** 展开所有侧边目录,收集菜单叶子文字。 */
-async function getSidebarMenuNames(page: Page): Promise<string[]> {
-  await page.waitForLoadState('networkidle')
-  const submenus = page.locator('.n-submenu > .n-menu-item > .n-menu-item-content')
-  for (let i = 0; i < (await submenus.count()); i++) {
-    await submenus.nth(i).click()
-  }
-  const leaves = page.locator('.n-menu-item-content:not(.n-menu-item-content--collapsed)')
-  const count = await leaves.count()
-  if (count === 0) return []
-  return (await leaves.allInnerTexts()).map((s) => s.trim()).filter(Boolean)
 }
 
 /** 导航到角色管理页。 */
@@ -93,7 +50,8 @@ test.describe('RBAC 权限', () => {
   test('超管给角色授权菜单 → 该用户登录后只看到被授权的菜单', async ({ page }) => {
     // ① 超管登录,进角色管理
     await loginAs(page, ADMIN_ACCOUNT, ADMIN_PASSWORD)
-    await enterFirstModuleIfNeeded(page)
+    // /system/* 只挂在「系统」应用下,不能指望登录后碰巧落在那儿(默认应用是全局可变状态)
+    await enterApp(page, SYSTEM_APP)
     await gotoRolePage(page)
 
     // ② 给"全部数据"角色授权菜单
@@ -124,10 +82,10 @@ test.describe('RBAC 权限', () => {
     // ③ 退出,以 scope_all 用户重新登录
     await logout(page)
     await loginAs(page, '全部数据', SEED_PASSWORD)
-    await enterFirstModuleIfNeeded(page)
+    await enterFirstAppIfNeeded(page)
 
     // ④ 验证侧边菜单
-    const menus = await getSidebarMenuNames(page)
+    const menus = await sidebarLeafNames(page)
     expect(menus.length, '应至少看到组织管理下的菜单').toBeGreaterThan(0)
 
     // 组织管理下的菜单应当可见
@@ -135,19 +93,27 @@ test.describe('RBAC 权限', () => {
     expect(hasOrgMenu, `菜单列表 [${menus.join(', ')}] 应包含组织管理下的子菜单`).toBe(true)
   })
 
-  test('未授权菜单的用户 → 侧边菜单为空或仅工作台', async ({ page }) => {
-    // scope_self 角色未被授权任何菜单
+  test('未授权菜单的用户 → 连应用都进不去,停在门户空态', async ({ page }) => {
+    // scope_self 角色未被授权任何菜单。
+    //
+    // 这条原本断的是「侧边菜单 <= 1 项」,而那是一句**恒真**的话:零授权用户在
+    // `MenuService.ComputeMyModulesAsync` 里因 grantedMenuIds 为空直接拿到 0 个应用,
+    // 于是 `useModule().enterInitial()` 走 chooser 分支,人停在 /module ——**根本没有侧边栏**,
+    // 数出来永远是 0。菜单过滤坏成什么样它都绿。改成断言它实际发生的事。
     await loginAs(page, '仅本人数据', SEED_PASSWORD)
-    await enterFirstModuleIfNeeded(page)
 
-    const menus = await getSidebarMenuNames(page)
-    // 最多只有工作台(Permission="" 的顶级菜单,不受权限控制)
-    expect(menus.length, `未授权用户不应看到业务菜单,实际看到: [${menus.join(', ')}]`).toBeLessThanOrEqual(1)
+    await expect(page, '零授权用户不应进入任何应用').toHaveURL(/\/module/)
+    await expect(page.locator('.n-empty')).toBeVisible()
+    await expect(page.locator('.n-empty')).toContainText(/暂无可访问的应用|No accessible/)
+    // 这里原本还数了一句 `.card` 为 0。删掉:空态与卡片网格在 `views/module/index.vue` 里是
+    // `v-if/v-else` 两个互斥分支,断到空态可见就已经蕴含零卡片;而按类名数「不存在」是典型的空转候选
+    // ——`.card` 改个名或门户换个容器,它就永远绿。留强的那条正向断言即可。
   })
 
   test('授权用户 → UserPicker 种子关联正确回显', async ({ page }) => {
     await loginAs(page, ADMIN_ACCOUNT, ADMIN_PASSWORD)
-    await enterFirstModuleIfNeeded(page)
+    // /system/* 只挂在「系统」应用下,不能指望登录后碰巧落在那儿(默认应用是全局可变状态)
+    await enterApp(page, SYSTEM_APP)
     await gotoRolePage(page)
 
     // 找"本机构数据"角色 → 授权用户
@@ -166,7 +132,8 @@ test.describe('RBAC 权限', () => {
 
   test('授权用户 → 添加用户 → 保存 → 回显 → 还原', async ({ page }) => {
     await loginAs(page, ADMIN_ACCOUNT, ADMIN_PASSWORD)
-    await enterFirstModuleIfNeeded(page)
+    // /system/* 只挂在「系统」应用下,不能指望登录后碰巧落在那儿(默认应用是全局可变状态)
+    await enterApp(page, SYSTEM_APP)
     await gotoRolePage(page)
 
     // ① 打开"仅本人数据"角色的 UserPicker

@@ -1,0 +1,38 @@
+/* highlight.js 词法配色(CodeBlock 用)。不引 hljs 自带主题,按 tenon 令牌手配一套明暗两版。
+   只覆盖当前注册的 json 会用到的 token(attr/string/number/literal);后续注册别的语言再补。 */
+.hljs {
+  color: var(--color-text-primary, #1f2229);
+  background: transparent;
+}
+.hljs-attr,
+.hljs-attribute {
+  color: #2f6fb3;
+} /* JSON 键:蓝 */
+.hljs-string {
+  color: #3a8a4e;
+} /* 字符串:绿 */
+.hljs-number {
+  color: #b5651d;
+} /* 数字:橙棕 */
+.hljs-literal,
+.hljs-keyword {
+  color: #8250df;
+} /* true/false/null:紫 */
+.hljs-punctuation {
+  color: var(--color-text-tertiary, #999);
+}
+
+:root[data-theme='dark'] .hljs-attr,
+:root[data-theme='dark'] .hljs-attribute {
+  color: #6cb6ff;
+}
+:root[data-theme='dark'] .hljs-string {
+  color: #7ec699;
+}
+:root[data-theme='dark'] .hljs-number {
+  color: #e0a458;
+}
+:root[data-theme='dark'] .hljs-literal,
+:root[data-theme='dark'] .hljs-keyword {
+  color: #c093fb;
+}

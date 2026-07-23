@@ -1,0 +1,100 @@
+/* 通知面板(移植 Vue NoticeBell.vue scoped 样式;分隔线/主色走应用令牌) */
+.notice-panel {
+  width: 360px;
+  max-width: 92vw;
+}
+.notice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 4px;
+}
+.notice-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.notice-scroll {
+  max-height: 360px;
+  overflow-y: auto;
+}
+.notice-empty {
+  padding: 32px 0;
+}
+.notice-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.notice-item {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  border-top: 1px solid var(--color-border);
+  transition: background-color 0.2s;
+}
+.notice-item:hover {
+  background-color: rgba(128, 128, 128, 0.08);
+}
+/* 未读:整行淡主色底(明暗主题都成立);已读:整行变淡 */
+.notice-item.unread {
+  background-color: color-mix(in srgb, var(--color-primary) 4%, transparent);
+}
+.notice-item.unread:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 9%, transparent);
+}
+.notice-item.read {
+  opacity: 0.55;
+}
+.notice-item .dot {
+  position: absolute;
+  left: 6px;
+  top: 18px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+.notice-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.notice-body .line1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.notice-body .item-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notice-body .item-title.unread {
+  font-weight: 600;
+}
+.notice-body .item-snippet {
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.notice-body .item-time {
+  font-size: 11px;
+}
+.notice-foot {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  border-top: 1px solid var(--color-border);
+}

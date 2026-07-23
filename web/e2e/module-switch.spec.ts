@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { login, openAppPicker, enterApp, sidebarLeaves } from './helpers'
 
 /**
  * 多应用门户回归:切换应用后首页要跟着变,且切回来后菜单点得开(不能白屏)。
@@ -7,46 +8,9 @@ import { test, expect, type Page } from '@playwright/test'
  * 前置:后端在 :5100 跑,库里至少有 2 个应用(内置「系统」+ 你自己建的业务应用),超管账号可登录。
  */
 
-const ACCOUNT = process.env.TENON_E2E_ACCOUNT ?? 'superAdmin'
-const PASSWORD = process.env.TENON_E2E_PASSWORD ?? 'Aa123456'
-
-/** 登录。验证码若开着,直接从内联 SVG 的 <text> 里抠字符——SvgCaptchaProvider 自己就说了"防人不防机"。 */
-async function login(page: Page) {
-  await page.goto('/login')
-  await page.getByPlaceholder(/账号|account/i).fill(ACCOUNT)
-  await page.getByPlaceholder(/密码|password/i).first().fill(PASSWORD)
-
-  const captchaSvg = page.locator('.lf-captcha-img svg')
-  if (await captchaSvg.isVisible().catch(() => false)) {
-    const code = (await captchaSvg.locator('text').allInnerTexts()).join('')
-    await page.getByPlaceholder(/验证码|captcha/i).fill(code)
-  }
-
-  await page.locator('button.hero-btn').click()
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 15_000 })
-}
-
-/** 顶栏九宫格 → 应用选择页 /module(不再是下拉直切:应用一多下拉就难用,且「设为默认」只在选择页上)。 */
-async function gotoModulePage(page: Page) {
-  await page.getByRole('button', { name: /切换应用|switch app/i }).click()
-  await expect(page).toHaveURL(/\/module/)
-  const cards = page.locator('.card')
-  await expect(cards.first()).toBeVisible()
-  return cards
-}
-
-/** 在选择页上点某个应用卡片。精确匹配 .name:子串匹配下「系统」会先命中「业务系统」,切成原地不动。 */
-async function pickCard(page: Page, title: string) {
-  const card = page.locator('.card').filter({ has: page.locator('.name', { hasText: new RegExp(`^${title}$`) }) })
-  await card.click()
-  // 进应用必然离开选择页(落到该应用首页);还停在 /module 就是没进去——别让后续断言在假现场上跑
-  await expect(page, `点了「${title}」但没进应用`).not.toHaveURL(/\/module/, { timeout: 10_000 })
-}
-
-/** 从应用内切到另一个应用:顶栏九宫格 → 选择页 → 点卡片。 */
+/** 从任意位置切到指定应用(选择页上直接点;在应用里则先经顶栏九宫格回选择页)。 */
 async function switchTo(page: Page, title: string) {
-  await gotoModulePage(page)
-  await pickCard(page, title)
+  await enterApp(page, new RegExp(`^${title}$`))
 }
 
 /** 内容区渲染出东西了没——白屏 bug 的判据就是这个 .page 下空空如也。 */
@@ -55,30 +19,22 @@ async function expectContentRendered(page: Page, ctx: string) {
   await expect(content.first(), `内容区空白(${ctx})`).toBeVisible({ timeout: 10_000 })
 }
 
-/** 侧边菜单里所有可见叶子(展开所有目录后)。 */
-async function sidebarLeafNames(page: Page): Promise<string[]> {
-  // 目录项(有展开箭头)全部展开,露出叶子
-  const submenus = page.locator('.n-submenu > .n-menu-item > .n-menu-item-content')
-  for (let i = 0; i < (await submenus.count()); i++) {
-    await submenus.nth(i).click()
-  }
-  const leaves = page.locator('.n-menu-item-content:not(.n-menu-item-content--collapsed)')
-  await expect(leaves.first()).toBeVisible()
-  return (await leaves.allInnerTexts()).map((s) => s.trim()).filter(Boolean)
-}
-
 test('切换应用:首页跟着应用变,切回来后菜单还点得开', async ({ page }) => {
+  // 登录 + 3 次切应用 + 逐个点开全部叶子,冷 vite(首次按需 transform)实测 33s,顶穿全局 30s。
+  // 这条比别的用例长一个量级,单独给余量,别为它把全局超时放宽。
+  test.setTimeout(60_000)
+
   await login(page)
 
   // 门户里至少要有两个应用,否则这个测试没有意义(而不是假装通过)
-  const cards = await gotoModulePage(page)
+  const cards = await openAppPicker(page)
   const titles = (await cards.locator('.name').allInnerTexts()).map((s) => s.trim()).filter(Boolean)
   expect(titles.length, '库里至少要有 2 个应用才能测切换').toBeGreaterThanOrEqual(2)
 
   const [first, second] = titles
 
   // ① 进 A 应用,记下它的首页(此刻已在选择页上,直接点卡片)
-  await pickCard(page, first!)
+  await switchTo(page, first!)
   const homeA = new URL(page.url()).pathname
   await expectContentRendered(page, `${first} 首页`)
 
@@ -94,10 +50,16 @@ test('切换应用:首页跟着应用变,切回来后菜单还点得开', async 
   expect(new URL(page.url()).pathname).toBe(homeA)
 
   // ④ 切回来之后,逐个点侧边菜单叶子,每个都得渲染出内容(bug 表现为全部空白)
-  const leaves = await sidebarLeafNames(page)
+  const leaves = await sidebarLeaves(page)
   expect(leaves.length, '侧边菜单不该是空的').toBeGreaterThan(0)
-  for (const name of leaves) {
-    await page.locator('.n-menu-item-content').filter({ hasText: name }).first().click()
+  for (const { name, item } of leaves) {
+    await item.click()
+    // 先断"这一项真的成了选中项",再断内容。少了这一条,「点到的其实是别的东西」会伪装成通过:
+    // 下面的 expectContentRendered 断的是**上一页**,而上一页当然是渲染好的。
+    await expect(item, `点击菜单「${name}」后它没有变成选中态`).toHaveClass(
+      /n-menu-item-content--selected/,
+      { timeout: 10_000 },
+    )
     await expectContentRendered(page, `切回 ${first} 后点击菜单「${name}」`)
   }
 })
@@ -109,7 +71,7 @@ test('切换应用:首页跟着应用变,切回来后菜单还点得开', async 
 test('默认应用:选择页能改默认,F5 也不会被弹回首页', async ({ page }) => {
   await login(page)
 
-  const cards = await gotoModulePage(page)
+  const cards = await openAppPicker(page)
   expect(await cards.count(), '库里至少要有 2 个应用才能测改默认').toBeGreaterThanOrEqual(2)
 
   const isDefault = /^默认$|^Default$/

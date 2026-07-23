@@ -1,0 +1,85 @@
+name: web-react-ci
+
+# React 模板 CI:push / PR 触发 lint + 单测 + build + dev server 冒烟。只在 web-react 被动时跑。
+# 与 web-ci.yml 各自独立(两模板零共享),paths 只有 web-react/**。
+on:
+  push:
+    branches: [main, dev]
+    paths: ['web-react/**', '.github/workflows/web-react-ci.yml']
+  pull_request:
+    paths: ['web-react/**', '.github/workflows/web-react-ci.yml']
+
+jobs:
+  lint-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-react
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web-react/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # build = tsc --noEmit && vite build,类型检查已含在内,不再单独跑 typecheck
+      - name: Build
+        run: npm run build
+
+      # dev server 冒烟:**断言内容而非状态码**。未知路径命中 SPA history fallback 会返 200 + index.html,
+      # 只查状态码的检查会在什么都没证明的情况下通过。冒烟不需要后端(只打 / 与 /@fs,不打 /api、/hub)。
+      # 注:「零控制台错误 / 动态 import 裸包 re-optimize」那类风险要浏览器执行 JS 才看得到,curl 冒烟覆盖不到;
+      # 对症办法是给那些包写 optimizeDeps.include(见台账 E2 注),不是放宽这里的断言。浏览器级冒烟留作后续增强。
+      - name: Dev server smoke (content, SPA fallback, /@fs security)
+        run: |
+          npm run dev > /tmp/dev.log 2>&1 &
+          DEV_PID=$!
+          # 等 dev server 起来(vite strictPort 5174;起不来后面的 curl -sf 会失败 → 步骤红)
+          for i in $(seq 1 60); do curl -sf http://localhost:5174/ >/dev/null 2>&1 && break; sleep 1; done
+          # 1) 内容而非状态:根路径要真的吐出 SPA 外壳
+          curl -sf http://localhost:5174/ | grep -q 'id="root"' \
+            || { echo "FAIL: 根路径没吐出应用外壳"; cat /tmp/dev.log; kill $DEV_PID; exit 1; }
+          # 2) 未知深链 → SPA history fallback 仍吐 index.html(内容断言;只查状态码会在 200 fallback 上白过)
+          curl -sf http://localhost:5174/no/such/route | grep -q 'id="root"' \
+            || { echo "FAIL: SPA history fallback 坏了"; kill $DEV_PID; exit 1; }
+          # 3) 安全:dev server 不得服务项目目录之外的文件。仓库根 CLAUDE.md 经 /@fs 必须 403。
+          #    这条守着 vite.config 警告的「fs.allow 静默扩张」:哪天仓库根引入 workspaces 标记,
+          #    白名单会悄悄扩到仓库根、此文件变可读,这条断言随即翻红。
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:5174/@fs${GITHUB_WORKSPACE}/CLAUDE.md")
+          [ "$code" = "403" ] || { echo "FAIL: 仓库根 /@fs 期望 403,实得 $code"; kill $DEV_PID; exit 1; }
+          kill $DEV_PID 2>/dev/null || true
+          echo "smoke OK"
+
+  # 单测拆 3 个 vitest --shard(各自独立进程):web-react 串行配置(pool:forks/maxWorkers:1/fileParallelism:false)
+  # 下全量单跑会把主进程堆撑爆 OOM。用 --shard 而非按目录手列:自动覆盖全部 *.spec,不会漏列某目录致其静默不跑。
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-react
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web-react/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Unit test (shard ${{ matrix.shard }}/3)
+        run: npx vitest run --shard=${{ matrix.shard }}/3

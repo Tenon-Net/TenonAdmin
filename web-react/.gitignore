@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.vite
+
+# Playwright(E2E)产物
+test-results
+playwright-report
+
+# Syncthing 同步临时文件
+~syncthing~*
+*.tmp

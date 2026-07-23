@@ -1,0 +1,160 @@
+/**
+ * TenonAdmin 设计 tokens —— 唯一色源(single source of truth)
+ * 来源:Claude Design 工程「设计系统 Design Tokens」(web/design-mockups/design-tokens.dc.html)提炼。
+ *
+ * 分层:
+ *   1) 原语色板 --color-gray-* / 品牌主色 / 语义色基色 —— 固定值,不随主题翻转。
+ *   2) 角色令牌 --color-bg-* / --color-text-* / --color-border* / --color-fill* / --color-primary* / --color-mask
+ *      —— 语义化,随主题翻转:亮色在 :root,暗色在 [data-theme="dark"] 覆盖。业务只用角色令牌,不直接用原语。
+ *   3) 字号 / 间距 / 圆角 —— 与主题无关,仅在 :root。
+ *   4) 阴影 —— 亮色在 :root,暗色覆盖(暗底需更重)。
+ *
+ * 明暗切换:在 <html> 上打 data-theme="dark"(不打即亮色)。
+ */
+
+:root {
+  /* ── 原语:中性色阶(Arco 系,低饱和微冷灰)────────────────── */
+  --color-gray-900: #1D2129;  /* 主文字 / 标题 */
+  --color-gray-800: #2B303A;  /* 正文加强 */
+  --color-gray-700: #4E5969;  /* 次级文字 */
+  --color-gray-600: #6B7280;  /* 辅助文字 / 图标 */
+  --color-gray-500: #86909C;  /* 占位 / 说明文字 */
+  --color-gray-400: #A9AEB8;  /* 禁用文字 */
+  --color-gray-300: #C9CDD4;  /* 重边框 / 分隔线 */
+  --color-gray-200: #E5E6EB;  /* 常规边框 */
+  --color-gray-100: #F2F3F5;  /* 填充 / hover 底 */
+  --color-gray-50:  #F7F8FA;  /* 页面背景底 */
+  --color-white:    #FFFFFF;
+
+  /* ── 原语:品牌主色(明快现代靛蓝,四档态)──────────────────── */
+  --color-primary:         #646CFF;  /* 默认态 · 主按钮 / 链接 / 选中 */
+  --color-primary-hover:   #7D84FF;  /* 悬浮 hover · 加亮一档 */
+  --color-primary-pressed: #5259D1;  /* 按下 pressed / active */
+  --color-primary-light:   #F0F0FF;  /* 浅底 · 选中背景 / 标签底 */
+
+  /* ── 原语:语义色(base + 浅底 light-bg,亮色)─────────────── */
+  --color-success:        #18A058;
+  --color-success-bg:     #E3F3EB;
+  --color-warning:        #F0A020;
+  --color-warning-bg:     #FDF4E4;
+  --color-danger:         #D03050;
+  --color-danger-bg:      #F9E6EA;
+  --color-info:           #2080F0;
+  --color-info-bg:        #E4F0FD;
+
+  /* ── 角色令牌(亮色主题)—— 业务只消费这一层 ─────────────────── */
+  --color-bg-body:        #F7F8FA;  /* 页面背景 / 画布 */
+  --color-bg-container:   #FFFFFF;  /* 卡片 / 面板容器 */
+  --color-bg-elevated:    #FFFFFF;  /* 弹层 / 下拉 / 抽屉 */
+  --color-text-primary:   #1D2129;  /* 主文字 / 标题 */
+  --color-text-secondary: #4E5969;  /* 次级文字 */
+  --color-text-tertiary:  #86909C;  /* 占位 / 辅助文字 */
+  --color-text-disabled:  #A9AEB8;  /* 禁用文字 */
+  --color-border:         #E5E6EB;  /* 常规边框 / 分隔 */
+  --color-border-strong:  #D3D6DB;  /* 强调边框 / 输入描边 */
+  --color-fill:           #F2F3F5;  /* 填充 / 表头 / hover 底 */
+  --color-fill-hover:     #EBEDF0;  /* 行 hover / 悬浮填充 */
+  /* 第三档:**按下**态。antd 的填充阶是四级,而 filled 按钮/搜索框把 rest/hover/active 三态分别接到
+     colorFillTertiary / colorFillSecondary / colorFill —— 只有两档的话 hover 与 active 同色,
+     按下去毫无反馈。Naive 侧不需要这一档,所以这是两个模板**有意分叉**的一处。 */
+  --color-fill-active:    #E4E6EA;
+  --color-mask:           rgba(20, 27, 45, 0.45);  /* 遮罩 / 弹窗背景 */
+  --color-header-bg:      rgba(255, 255, 255, 0.82);  /* 顶栏底(配 backdrop-filter: blur(12px)) */
+  /* 阴影**基色**(区别于下方三级完整 box-shadow):UI 库靠它自己派生抽屉/气泡/标签溢出等十来个阴影。
+     不给的话 antd 暗色下回落 rgba(255,255,255,0.2),抽屉阴影会变成白色发光。
+
+     **必须不透明,别在这里带 alpha。**antd 把这个值当基色,再把**它的 alpha 乘进每一层派生阴影**
+     (`theme/util/alias.js`:`getShadowColor = a => base.clone().setA(base.a * a)`)。
+     这里曾经写的是 `rgba(20,27,45,0.16)`,于是 `boxShadowDrawerLeft` 的三档从 antd 原本的
+     0.08/0.12/0.05 塌成 0.0128/0.0192/0.008 —— **淡了 6.25 倍,几乎看不见**。
+     antd 自己的亮色默认就是不透明的 `#000`。要调深浅请改这个颜色本身,或改下面的 --shadow-1/2/3,
+     **不要给它加 alpha**;也别把它直接写进 `box-shadow`(它不是一个能用的阴影值)。 */
+  --color-shadow:         #141B2D;
+
+  /* ── 字体 ──────────────────────────────────────────────── */
+  --font-family-base: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-family-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  /* 字号阶梯(px / 行高px / 字重),正文默认 14/22 */
+  --font-size-xs:   12px;  --line-height-xs:   18px;  /* 角标 / 表格次要信息  w400 */
+  --font-size-sm:   13px;  --line-height-sm:   20px;  /* 次级说明 / 密集表格  w400 */
+  --font-size-base: 14px;  --line-height-base: 22px;  /* 正文(默认)         w400 */
+  --font-size-md:   16px;  --line-height-md:   24px;  /* 强调正文 / 卡片标题  w500 */
+  --font-size-lg:   20px;  --line-height-lg:   28px;  /* 小标题 / 弹窗标题    w600 */
+  --font-size-xl:   24px;  --line-height-xl:   32px;  /* 页面主标题          w600 */
+
+  --font-weight-normal:   400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+
+  /* ── 间距:4px 基准网格 ────────────────────────────────────── */
+  --space-4:  4px;
+  --space-8:  8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+
+  /* ── 圆角(design_handoff_rbac_admin:更圆)──────────────── */
+  --radius-sm: 6px;   /* 标签 / 小控件 */
+  --radius-md: 10px;  /* 按钮 / 输入 / 表格单元 */
+  --radius-lg: 12px;  /* 卡片 / 面板 / 弹层 */
+  --radius-xl: 16px;  /* 登录卡 / 大面板 */
+
+  /* ── 阴影(亮色)三级(design_handoff:shadow-2 更柔更大)──────── */
+  --shadow-1: 0 1px 2px rgba(20, 27, 45, 0.04), 0 2px 6px rgba(20, 27, 45, 0.06);  /* 卡片 card */
+  --shadow-2: 0 10px 30px rgba(20, 27, 45, 0.12);                                  /* 弹层 popover / 卡片 hover 上浮 */
+  --shadow-3: 0 16px 48px rgba(20, 27, 45, 0.18);                                  /* 悬浮 overlay / 抽屉 */
+
+  /* ── 过渡 ──────────────────────────────────────────────── */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+}
+
+/* ══════════════════════════════════════════════════════════
+   暗色主题:只覆盖会翻转的角色令牌 / 主色 / 语义色 / 阴影。
+   原语灰阶、字号、间距、圆角保持不变。
+   ══════════════════════════════════════════════════════════ */
+:root[data-theme="dark"] {
+  /* 主色(暗底提亮一档) */
+  --color-primary:         #8B91FF;
+  --color-primary-hover:   #A2A7FF;
+  --color-primary-pressed: #767CF0;
+  --color-primary-light:   #2D3154;
+
+  /* 语义色(暗底 base + 浅底) */
+  --color-success:    #52B882;  --color-success-bg: #16291E;
+  --color-warning:    #F4B858;  --color-warning-bg: #2E2513;
+  --color-danger:     #DC647C;  --color-danger-bg:  #2E171C;
+  --color-info:       #58A0F4;  --color-info-bg:    #15263D;
+
+  /* 角色令牌(暗色) */
+  --color-bg-body:        #16181D;
+  --color-bg-container:    #1F2229;
+  --color-bg-elevated:     #262A31;
+  --color-text-primary:    #E8EAED;
+  --color-text-secondary:  #A6ABB5;
+  --color-text-tertiary:   #6E7681;
+  --color-text-disabled:   #4E545E;
+  --color-border:          #363A42;
+  --color-border-strong:   #4A4F58;
+  --color-fill:            #262A31;
+  --color-fill-hover:      #2E333B;
+  --color-fill-active:     #363B44;  /* 按下态,理由见亮色处 */
+  --color-mask:            rgba(0, 0, 0, 0.65);
+  --color-header-bg:       rgba(31, 34, 41, 0.82);  /* 顶栏底(配 blur) */
+  /* 同样不透明,理由见亮色处;不给会被 antd 回落成白色发光。
+
+     **暗色派生阴影的上限就到这里了,别再试图加深。**基色 alpha 已经是 1(纯黑),而 antd 的派生档位是
+     0.08/0.12/0.05 —— 也就是说抽屉/气泡/标签溢出那十来个走派生的地方,在暗底上只能到这个深度。
+     下面手写的 --shadow-1/2/3 用的是 0.30/0.44/0.52,**比派生档位重 3-6 倍**,所以暗色下
+     Modal/Dropdown(走手写档)会明显重于 Drawer(走派生档)。这是 antd 的结构约束,`colorShadow`
+     这个杠杆修不了(alpha 不能超过 1);真要拉平只能逐个覆盖 boxShadowDrawer* / boxShadowCard,很啰嗦。
+     现状是接受的:比修之前的 rgba(0,0,0,0.45)(派生只有 0.036/0.054/0.0225)严格更好。 */
+  --color-shadow:          #000000;
+
+  /* 阴影(暗底需更重) */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 10px 30px rgba(0, 0, 0, 0.44);
+  --shadow-3: 0 16px 48px rgba(0, 0, 0, 0.52);
+}

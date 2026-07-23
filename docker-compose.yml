@@ -107,6 +107,22 @@ services:
     ports:
       - "${TENON_WEB_PORT:-8080}:80"
 
+  # React 模板（web-react）。与 Vue 版 web **各自自包含、零共享**：构建上下文是 web-react/ 自己
+  # （不再需要仓库根，这正是自包含买到的），故这里不写 dockerfile 字段、直接 context: ./web-react。
+  # 想同时起两套前端对照:`docker compose --profile react up`,web-react 与 web 各占一口、都反代到同一个 app。
+  #
+  # **profiles: ["react"] 是刻意的解耦**:默认 `docker compose up`(docker-smoke.yml 那条容器验收就是它)
+  # **不构建/不启动** web-react —— 否则 web-react 一处构建问题会拖垮与它无关的 backend/web 容器 smoke,
+  # 那正是零共享要避免的跨模板耦合。web-react 自己的构建由 web-react-ci.yml 独立把关。
+  web-react:
+    profiles: ["react"]
+    build:
+      context: ./web-react
+    depends_on:
+      - app
+    ports:
+      - "${TENON_WEB_REACT_PORT:-8082}:80"
+
 # 命名卷而非绑定挂载：命名卷首次挂载时会继承镜像目录中的所有权，
 # 这是容器内非 root 用户能写入的唯一方式。
 # 绑定挂载会用宿主机的所有权覆盖，导致非 root 用户无法写入——

@@ -1,0 +1,68 @@
+/* 聚光皮肤:网格 mesh 底 + 指针跟随光晕 spot,居中卡片。移植 Vue skins/Spotlight.vue 的 scoped 样式。 */
+.spotlight {
+  /* 光晕初始位置(略偏上居中);指针移动时由 Spotlight.tsx 直写覆盖 --mx/--my。 */
+  --mx: 50%;
+  --my: 38%;
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-body);
+}
+.spotlight .mesh {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(30% 40% at 15% 20%, var(--s1), transparent 60%),
+    radial-gradient(30% 40% at 85% 80%, var(--s2), transparent 60%);
+  opacity: 0.9;
+}
+.spotlight .spot {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(340px 340px at var(--mx) var(--my), var(--spot), transparent 60%);
+  transition: background 0.12s ease-out;
+}
+.spotlight .card {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 460px;
+  padding: 46px;
+  background: var(--color-bg-container);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-3);
+  animation: spotlight-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes spotlight-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* 窄屏:给卡片侧边留白 + 收紧内边距(默认 46px 在 ~360px 手机上挤压表单、卡片贴边) */
+@media (max-width: 480px) {
+  .spotlight {
+    padding: 0 16px;
+  }
+  .spotlight .card {
+    padding: 32px 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 光晕仍跟随指针(指针驱动的位移,非自发动画);仅去掉缓动过渡。 */
+  .spotlight .spot {
+    transition: none;
+  }
+  .spotlight .card {
+    animation: none;
+  }
+}

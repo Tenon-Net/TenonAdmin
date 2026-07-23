@@ -52,8 +52,6 @@ export default defineConfig({
     include: ['src/**/*.spec.ts'], // 必须限定 src:web/e2e 的 Playwright 用例也叫 *.spec.ts,默认 glob 会误吞
     globals: false,
     pool: 'forks',
-    maxWorkers: 1,
-    fileParallelism: false, // 本机 node 堆 ~3GB,串行保内存曲线可预测;CI 不分叉同配置
     restoreMocks: true,
     unstubGlobals: true,
   },

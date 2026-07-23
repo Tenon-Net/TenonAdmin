@@ -1,0 +1,110 @@
+/* 布局模式线框卡片(移植 Vue LayoutModeCards.vue)。三档主色跟随实时 --color-primary。 */
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding-inline: 3px; /* 给边列卡片的 2px 选中环留出裁剪余量 */
+}
+.mode-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.mode-card {
+  width: 100%;
+  height: 62px;
+  padding: 6px;
+  border: none;
+  border-radius: 4px;
+  background: var(--color-bg-container);
+  box-shadow: 0 1px 3px rgba(20, 27, 45, 0.1), 0 0 0 2px transparent;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+.mode-cell:hover .mode-card,
+.mode-card.on {
+  box-shadow: 0 1px 3px rgba(20, 27, 45, 0.1), 0 0 0 2px var(--color-primary);
+}
+
+/* 线框:三档主色派生跟随实时 --color-primary */
+.mode-inner {
+  --strong: var(--color-primary);
+  --p300: color-mix(in srgb, var(--color-primary) 58%, var(--color-bg-container));
+  --p200: color-mix(in srgb, var(--color-primary) 34%, var(--color-bg-container));
+  display: flex;
+  gap: 5px;
+  width: 100%;
+  height: 100%;
+}
+.mode-inner.row {
+  flex-direction: row;
+}
+.mode-inner.col {
+  flex-direction: column;
+}
+.mode-inner i,
+.mode-inner .vwrap,
+.mode-inner .hwrap {
+  border-radius: 3px;
+}
+.mode-inner .strong {
+  background: var(--strong);
+}
+.mode-inner .p300 {
+  background: var(--p300);
+}
+.mode-inner .p200 {
+  background: var(--p200);
+}
+.mode-inner .sider {
+  width: 18%;
+  flex-shrink: 0;
+}
+.mode-inner .rail {
+  width: 9%;
+  flex-shrink: 0;
+}
+.mode-inner .subsider {
+  width: 16%;
+  flex-shrink: 0;
+}
+.mode-inner .header {
+  flex-shrink: 0;
+  height: 13px;
+}
+.mode-inner .header.full {
+  width: 100%;
+}
+.mode-inner .main {
+  flex: 1;
+}
+.mode-inner .vwrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.mode-inner .vwrap .header {
+  width: 100%;
+}
+.mode-inner .hwrap {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  gap: 5px;
+}
+
+.mode-label {
+  margin: 0;
+  text-align: center;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+  color: var(--color-text-secondary);
+}
+.mode-label.on {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+}
