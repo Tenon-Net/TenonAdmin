@@ -12,6 +12,15 @@ describe('unwrap', () => {
     expect(unwrap(res)).toEqual({ foo: 'bar' })
   })
 
+  it('rejects a successful response without an envelope', () => {
+    const res = {
+      data: { value: 'not-an-envelope' },
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    }
+    expect(() => unwrap(res)).toThrow(ApiError)
+  })
+
   it('2xx code≠0 → 抛 ApiError 且 code/msgKey/args 透传', () => {
     const res = {
       data: { code: 40001, msgKey: 'error.auth.passwordWrong', args: { a: 1 }, message: 'bad' },
@@ -97,6 +106,15 @@ describe('分页接缝(站内无调用方,只能靠用例守着)', () => {
       response: new Response(null, { status: 200 }),
     }
     expect(toPage(res)).toEqual({ items: [{ id: 1 }], total: 57 })
+  })
+
+  it('rejects malformed paged data', () => {
+    const res = {
+      data: { code: 0, data: { current: 2, size: 10, total: '57', items: {} } },
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    }
+    expect(() => toPage(res)).toThrow(ApiError)
   })
 
   it('toPage 沿用 unwrap 的错误分支:业务错照样抛 ApiError', () => {

@@ -17,7 +17,7 @@ export function withXssPlugin(plugins: MarkdownItConfigPlugin[]): MarkdownItConf
 
 let done = false
 /**
- * 幂等:全局配置 md-editor-rt。在 main.tsx 渲染前调用一次。做两件事:
+ * 幂等:全局配置 md-editor-rt。由各 Markdown 懒加载入口在自身组件渲染前调用。做两件事:
  *   1. markdownItPlugins:挂 XSS 过滤(见上)。
  *   2. editorExtensions.echarts:给个**空 no-op instance**。echarts 是唯一没有 `no*` 旗标的懒加载扩展
  *      (katex/mermaid/highlight/prettier 都在组件上用 `no*` 关了),不给 instance 它就挂载即从 unpkg 拉

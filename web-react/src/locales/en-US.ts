@@ -39,6 +39,7 @@ export default {
   notFound: {
     desc: 'Page not found',
     back: 'Back to workbench',
+    component: 'Configuration error: menu component "{component}" was not found.',
   },
   userPicker: {
     title: 'Select users',

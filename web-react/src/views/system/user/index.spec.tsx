@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { App as AntdApp } from 'antd'
 import '@/locales' // t() 要真文案
-import { userApi, roleApi, dictApi } from '@/api'
+import { userApi, roleApi, dictApi, orgApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
 /**
@@ -34,6 +34,7 @@ beforeEach(() => {
   // mount 时的三处副作用取数全桩掉,免真发 openapi-fetch 请求打出 ECONNREFUSED 噪音
   // (被各自 .catch 吞掉、测试仍绿,但噪音会盖住真错,且将来 vitest 收紧未处理错误就会红)。
   vi.spyOn(roleApi, 'page').mockResolvedValue({ items: [], total: 0 })
+  vi.spyOn(orgApi, 'list').mockResolvedValue([])
   vi.spyOn(userApi, 'page').mockResolvedValue({ items: [], total: 0 })
   vi.spyOn(dictApi, 'items').mockResolvedValue([]) // useDictOptions('gender')
 })
@@ -43,6 +44,14 @@ afterEach(() => {
 })
 
 describe('UserPage 接线', () => {
+  it('关键筛选数据加载失败时显示错误而不是静默隐藏', async () => {
+    vi.mocked(orgApi.list).mockRejectedValueOnce(new Error('org options failed'))
+    vi.mocked(roleApi.page).mockRejectedValueOnce(new Error('role options failed'))
+    mount()
+    expect(await screen.findByText('org options failed')).toBeTruthy()
+    expect(await screen.findByText('role options failed')).toBeTruthy()
+  })
+
   it('fetcher:ProTable 的 {page,pageSize,account,sortField,sortOrder} → userApi.page 强类型入参', async () => {
     useAuthStore.setState({ isSuperAdmin: true, permissionsLoaded: true, permissionCodes: [] })
     mount()

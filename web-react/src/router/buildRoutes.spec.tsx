@@ -1,8 +1,12 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter, useRoutes } from 'react-router-dom'
 import { buildRoutes, viewKeysFrom, type ViewGlob } from './buildRoutes'
 import { MenuType, type MenuNode } from '@/types/menu'
+
+vi.mock('@/views/embed/iframe', () => ({
+  default: ({ src }: { src: string }) => <div data-testid="iframe-view" data-src={src} />,
+}))
 
 function node(p: Partial<MenuNode> & { id: number }): MenuNode {
   return { parentId: 0, type: MenuType.Menu, title: `t${p.id}`, sort: 0, visible: true, children: [], ...p }
@@ -33,12 +37,10 @@ describe('buildRoutes 落地', () => {
   })
 
   it('iframe 描述符 → 渲染 IframeView,src 落到 iframe 的 src 上', () => {
-    const { container } = render(
+    render(
       <Harness tree={[node({ id: 5, path: 'embed/r', component: 'https://ex.com/r' })]} at="/embed/r" />,
     )
-    const iframe = container.querySelector('iframe')
-    expect(iframe).not.toBeNull()
-    expect(iframe!.getAttribute('src')).toBe('https://ex.com/r')
+    expect(screen.getByTestId('iframe-view').dataset.src).toBe('https://ex.com/r')
   })
 
   it('handle 带上 name/title/icon(留给 B8 布局壳读)', () => {
@@ -47,8 +49,8 @@ describe('buildRoutes 落地', () => {
     expect(routes[0]!.path).toBe('/system/user')
   })
 
-  it('校验存在与取 loader 是同一个真相源:glob 里没有的组件不建路由,有的能渲染', async () => {
-    // 'system/role/index' 不在上面的假 glob 里 → menuToRouteDescriptors 的 hasView 判它不存在 → 跳过。
+  it('校验存在与取 loader 是同一个真相源:glob 里没有的组件仍保留可诊断路由', async () => {
+    // 'system/role/index' 不在上面的假 glob 里 → menuToRouteDescriptors 的 hasView 判它不存在 → missing 路由。
     const routes = buildRoutes(
       [
         node({ id: 1, path: 'system/role', component: 'system/role/index' }), // 缺
@@ -56,7 +58,28 @@ describe('buildRoutes 落地', () => {
       ],
       glob,
     )
-    expect(routes.map((r) => r.path)).toEqual(['/dashboard']) // 只剩存在的那条
+    expect(routes.map((r) => r.path)).toEqual(['/system/role', '/dashboard'])
+  })
+
+  it('缺失组件保留原路径并渲染可见配置错误', () => {
+    render(<Harness tree={[node({ id: 7, path: 'system/missing', component: 'system/nope/index' })]} at="/system/missing" />)
+    expect(screen.getByRole('alert').textContent).toContain('system/nope/index')
+  })
+
+  it('重复 buildRoutes 使用同一 loader 时复用同一个 lazy 组件类型', () => {
+    const tree = [
+      node({ id: 1, path: 'first', component: 'system/user/index' }),
+      node({ id: 2, path: 'second', component: 'system/user/index' }),
+    ]
+    const first = buildRoutes(tree, glob)
+    const second = buildRoutes(tree, glob)
+
+    const lazyType = (route: ReturnType<typeof buildRoutes>[number]) => {
+      const suspense = route.element as React.ReactElement<{ children: React.ReactElement }>
+      return suspense.props.children.type
+    }
+    expect(lazyType(first[0]!)).toBe(lazyType(first[1]!))
+    expect(lazyType(first[0]!)).toBe(lazyType(second[0]!))
   })
 })
 
@@ -70,9 +93,9 @@ describe('真实 glob(不注入)——堵住"假 glob 掩盖真 glob 失效"的�
     expect(routes.map((r) => r.path)).toEqual(['/system/user'])
   })
 
-  it('buildRoutes 用默认 glob 时,不存在的组件不建路由(反面对照,排除"恒建")', () => {
+  it('buildRoutes 用默认 glob 时,不存在的组件仍建立可诊断路由', () => {
     const routes = buildRoutes([node({ id: 1, path: 'x', component: '压根不存在/index' })])
-    expect(routes).toEqual([])
+    expect(routes.map((route) => route.path)).toEqual(['/x'])
   })
 })
 
@@ -80,10 +103,12 @@ describe('viewKeysFrom(菜单管理的组件下拉真相源)', () => {
   it('glob 键 → component 值(剥前缀后缀),排除非页面目录,排序', () => {
     const withInternals: ViewGlob = {
       ...glob,
+      '/src/views/oauth/CallbackPage.tsx': async () => ({ default: () => null }),
+      '/src/views/error/NotFoundPage.tsx': async () => ({ default: () => null }),
       '/src/views/embed/iframe.tsx': async () => ({ default: () => null }),
       '/src/views/_placeholder/UnderConstruction.tsx': async () => ({ default: () => null }),
     }
-    // login/LoginPage(静态路由)、embed/iframe(静态 import 的 iframe 视图)、_placeholder(内部占位)
+    // login/oauth/error(静态路由)、embed/iframe(静态 import 的 iframe 视图)、_placeholder(内部占位)
     // 都不是菜单能配的落点,必须挡在下拉外 —— 选到它们会渲染坏页/占位页。
     expect(viewKeysFrom(withInternals)).toEqual(['dashboard/index', 'system/user/index'])
   })

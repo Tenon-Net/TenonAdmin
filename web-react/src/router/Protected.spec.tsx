@@ -93,7 +93,8 @@ describe('守卫③:F5 深链 → enterInitial 重建后渲染目标页', () => 
   it('重建后无权限路径 → 404(而不是白屏或错显登录)', async () => {
     login()
     mountAt('/nope/path')
-    expect(await screen.findByText(/没有这个页面/)).toBeTruthy()
+    expect(await screen.findByText('页面不存在')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '返回工作台' })).toBeTruthy()
   })
 
   it('多应用无记住无默认(chooser)→ 落 /module 选择器', async () => {

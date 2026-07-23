@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
 import { createElement } from 'react'
-import { svgToIcon, sortedIconNames, getLocalIconNames, loadIconNames, isBundled, COLLECTIONS } from '@/lib/icons'
+import { svgToIcon, sortedIconNames, getLocalIconNames, loadIconNames, isBundled, isCoreIcon, setupIcons, COLLECTIONS } from '@/lib/icons'
 import { AppIcon } from '@/components/AppIcon'
 
 afterEach(cleanup)
@@ -55,6 +55,20 @@ describe('本地 svg', () => {
 describe('COLLECTIONS', () => {
   it('每个 Tab 前缀都是内置集(有对应 loader)', () => {
     expect(COLLECTIONS.every((c) => isBundled(c.prefix))).toBe(true)
+  })
+})
+
+describe('首屏图标子集', () => {
+  it('包含源码图标和内置菜单种子，不依赖完整集合异步下载', () => {
+    expect(isCoreIcon('ph:floppy-disk')).toBe(true)
+    expect(isCoreIcon('ph:buildings-duotone')).toBe(true)
+    expect(isCoreIcon('lucide:settings')).toBe(true)
+  })
+
+  it('setupIcons 同步注册子集中的图标', () => {
+    setupIcons()
+    const { container } = render(createElement(AppIcon, { icon: 'ph:buildings-duotone' }))
+    expect(container.querySelector('svg')).toBeTruthy()
   })
 })
 

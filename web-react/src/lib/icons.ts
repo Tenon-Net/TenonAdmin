@@ -4,10 +4,18 @@
 //
 // **/offline 入口**:未注册图标只出占位、绝不请求 api.iconify.design(C3 review HIGH)。symbols 与默认入口一致。
 import { addCollection, addIcon } from '@iconify/react/offline'
+import coreCollectionsJson from '@/assets/icons.generated.json'
 
 // addCollection/addIcon 的入参类型即 IconifyJSON / IconifyIcon;经 Parameters 取,免猜它 re-export 在哪个子包。
 type IconifyJSON = Parameters<typeof addCollection>[0]
 type IconifyIcon = Parameters<typeof addIcon>[1]
+const coreCollections = coreCollectionsJson as unknown as IconifyJSON[]
+const coreIconNames = new Set(
+  coreCollections.flatMap((collection) => [
+    ...Object.keys(collection.icons ?? {}).map((name) => `${collection.prefix}:${name}`),
+    ...Object.keys(collection.aliases ?? {}).map((name) => `${collection.prefix}:${name}`),
+  ]),
+)
 
 /** 本地自定义 svg 前缀,值格式 `local:<名字>`。 */
 export const LOCAL_PREFIX = 'local'
@@ -33,6 +41,7 @@ const loaders: Record<string, () => Promise<IconifyJSON>> = {
 }
 
 const nameCache: Record<string, string[]> = {}
+const loadPromises: Record<string, Promise<string[]> | undefined> = {}
 
 /** 该前缀是否为内置离线集(对齐 Vue 包的 isBundled)。COLLECTIONS ↔ loaders 一致性靠它可测:
  *  某 Tab 前缀若无对应 loader,其网格会静默空,靠 `COLLECTIONS.every(isBundled)` 钉住。 */
@@ -48,11 +57,27 @@ export async function loadIconNames(prefix: string): Promise<string[]> {
   if (nameCache[prefix]) return nameCache[prefix]
   const load = loaders[prefix]
   if (!load) return []
-  const data = await load()
-  addCollection(data)
-  const names = sortedIconNames(data)
-  nameCache[prefix] = names
-  return names
+  loadPromises[prefix] ??= load().then((data) => {
+    addCollection(data)
+    const names = sortedIconNames(data)
+    nameCache[prefix] = names
+    return names
+  })
+  return loadPromises[prefix]
+}
+
+/** 已生成进首屏小集合的图标无需再下载完整集合。 */
+export function isCoreIcon(name: string): boolean {
+  return coreIconNames.has(name)
+}
+
+/** 后端配置了小集合外的图标时，按前缀补载完整离线集合。 */
+export async function ensureIconLoaded(name: string): Promise<void> {
+  if (name.startsWith(`${LOCAL_PREFIX}:`) || isCoreIcon(name)) return
+  const separator = name.indexOf(':')
+  if (separator <= 0) return
+  const prefix = name.slice(0, separator)
+  if (isBundled(prefix)) await loadIconNames(prefix)
 }
 
 /** 集合 JSON → 排序后的图标名(纯逻辑,便于单测;`?? {}` 兜住无 icons 的畸形集)。 */
@@ -87,6 +112,9 @@ export function getLocalIconNames(): string[] {
 }
 
 /** 首屏调用一次:异步注册 4 个离线集(非阻塞;<Icon> 在集合就绪后自动重渲染)。本地 svg 已在模块级注册。 */
+let coreRegistered = false
 export function setupIcons(): void {
-  for (const prefix in loaders) void loaders[prefix]().then(addCollection)
+  if (coreRegistered) return
+  coreRegistered = true
+  for (const collection of coreCollections) addCollection(collection)
 }

@@ -1,4 +1,5 @@
 import { client } from './client'
+import type { components } from './schema'
 import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, ServerInfoOutput, SysConfig, SysDictItem, SysDictType, SysExceptionLog, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
@@ -24,6 +25,10 @@ interface Envelope {
   data?: unknown
 }
 
+function malformedResponse(response: Response): ApiError {
+  return new ApiError(response.status, undefined, undefined, 'Malformed API response')
+}
+
 /**
  * 解包 openapi-fetch 结果,同时容忍两种形状:
  *   - 2xx:body 是 Result<T> 信封;code!==0 抛 ApiError,否则返回 data.data。
@@ -40,8 +45,10 @@ export function unwrap<T>(res: { data?: unknown; error?: unknown; response: Resp
     const pd = error as { title?: string; detail?: string }
     throw new ApiError(response.status, undefined, undefined, pd.title ?? pd.detail ?? response.statusText)
   }
-  const env = (data ?? {}) as Envelope
-  if (typeof env.code === 'number' && env.code !== 0) {
+  if (!data || typeof data !== 'object') throw malformedResponse(response)
+  const env = data as Envelope
+  if (typeof env.code !== 'number') throw malformedResponse(response)
+  if (env.code !== 0) {
     throw new ApiError(env.code, env.msgKey, env.args, env.message)
   }
   return env.data as T
@@ -61,6 +68,9 @@ export const pageParams = (p: { page: number; pageSize: number }) => ({ Current:
 
 export function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; total: number } {
   const p = unwrap<PagedList<T>>(res)
+  if (!Array.isArray(p.items) || typeof p.total !== 'number') {
+    throw new ApiError(res.response.status, undefined, undefined, 'Malformed paged API response')
+  }
   return { items: p.items, total: p.total }
 }
 
@@ -194,7 +204,7 @@ export const orgApi = {
     client.DELETE('/api/v1/sys/org/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 复制机构子树(整支克隆挂到源节点同级),返回新根 Id。 */
   copy: (id: number, body?: { name?: string }) =>
-    client.POST('/api/v1/sys/org/{id}/copy', { params: { path: { id } }, body: body as any }).then((r) => unwrap<number>(r)),
+    client.POST('/api/v1/sys/org/{id}/copy', { params: { path: { id } }, body }).then((r) => unwrap<number>(r)),
 }
 
 export const positionApi = {
@@ -541,14 +551,17 @@ export const menuApi = {
 
 // ── 回收站 ────────────────────────────────────────────────────────
 
-export interface RecycleBinItem { id: number; name: string; code: string | null; deletedAt: string | null; deletedBy: number | null }
+export type RecycleBinItem = Omit<components['schemas']['RecycleBinItem'], 'id' | 'deletedBy'> & {
+  id: number
+  deletedBy: number | null
+}
 
 export const recycleApi = {
   page: (type: string) => (params: { page: number; pageSize: number }) =>
-    client.GET('/api/v1/sys/recycle/{type}/page' as any, { params: { path: { type }, query: pageParams(params) as any } })
+    client.GET('/api/v1/sys/recycle/{type}/page', { params: { path: { type }, query: pageParams(params) } })
       .then((r) => toPage<RecycleBinItem>(r)),
   restore: (type: string, id: number) =>
-    client.POST('/api/v1/sys/recycle/{type}/{id}/restore' as any, { params: { path: { type, id } } }).then((r) => unwrap<boolean>(r)),
+    client.POST('/api/v1/sys/recycle/{type}/{id}/restore', { params: { path: { type, id } } }).then((r) => unwrap<boolean>(r)),
   purge: (type: string, id: number) =>
-    client.DELETE('/api/v1/sys/recycle/{type}/{id}' as any, { params: { path: { type, id } } }).then((r) => unwrap<boolean>(r)),
+    client.DELETE('/api/v1/sys/recycle/{type}/{id}', { params: { path: { type, id } } }).then((r) => unwrap<boolean>(r)),
 }

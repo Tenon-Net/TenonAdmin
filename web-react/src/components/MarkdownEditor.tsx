@@ -19,8 +19,8 @@ export interface MarkdownEditorProps {
 
 /**
  * 通知公告 Markdown 编辑器:封 md-editor-rt,跟随应用明暗主题。存 Markdown 源文本 —— 注意 Markdown
- * **天然放行内联 HTML**,不等于无 XSS 面;渲染安全由 `main.tsx` 里 `setupMarkdown()` 全局挂的 XSSPlugin 兜底
- * (见 `@/lib/markdown`)。对应 Vue 侧 `MarkdownEditor/index.vue`。
+ * **天然放行内联 HTML**,不等于无 XSS 面;`main.tsx` 会在首次渲染前全局挂上 XSSPlugin 兜底。
+ * 对应 Vue 侧 `MarkdownEditor/index.vue`。
  */
 export function MarkdownEditor({ value, onChange }: MarkdownEditorProps) {
   const dark = useAppStore(isDark)

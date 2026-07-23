@@ -61,6 +61,7 @@ export function LayoutShell() {
   const watermarkText = useAppStore((s) => s.watermarkText)
   const site = useSiteStore((s) => s.site)
   const userInfo = useUserStore((s) => s.userInfo)
+  const modules = useAuthStore((s) => s.modules)
   const currentTab = useTabsStore((s) => s.tabs.find((tt) => tt.path === pathname))
   const { items, l1Items, l2Items, selectedL1, activeKey, onSelect, onSelectL1 } = useLayoutMenu()
   useTabSync() // 路由 → 标签同步(当前页进标签栏 + KeepAlive)
@@ -205,6 +206,11 @@ export function LayoutShell() {
           ) : null}
 
           <div className="shell-header-right">
+            {modules.length > 1 ? (
+              <Tooltip title={t('app.switchModule')}>
+                <Button type="text" aria-label={t('app.switchModule')} icon={<AppstoreOutlined />} onClick={() => navigate('/module')} />
+              </Tooltip>
+            ) : null}
             <Tooltip title={`${t('app.search')} (Ctrl+K)`}>
               <Button type="text" aria-label={t('app.search')} icon={<SearchOutlined />} onClick={() => setSearchOpen(true)} />
             </Tooltip>

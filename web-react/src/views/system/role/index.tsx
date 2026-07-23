@@ -41,7 +41,9 @@ export default function RolePage() {
   const reload = useCallback(() => tableRef.current?.reload(), [])
 
   const [modules, setModules] = useState<ModuleRow[]>([])
-  useEffect(() => { moduleApi.list().then(setModules).catch(() => {}) }, []) // 仅供授权抽屉「所属应用」下拉,失败不阻塞
+  useEffect(() => {
+    moduleApi.list().then(setModules).catch((e: unknown) => message.error(translateError(e)))
+  }, [message]) // 仅供授权抽屉「所属应用」下拉,失败不阻塞
 
   const fetchRoles: PageFetcher<SysRole> = (q) =>
     roleApi.page({ page: q.page, pageSize: q.pageSize, name: typeof q.name === 'string' ? q.name : undefined })

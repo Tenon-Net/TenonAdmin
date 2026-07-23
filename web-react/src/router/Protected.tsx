@@ -15,6 +15,7 @@ const PasswordPage = lazy(() => import('@/views/personal/password'))
 const NoticePage = lazy(() => import('@/views/personal/notice'))
 const SessionsPage = lazy(() => import('@/views/personal/sessions'))
 const BindingsPage = lazy(() => import('@/views/personal/bindings'))
+const NotFoundPage = lazy(() => import('@/views/error/NotFoundPage'))
 const lazyEl = (El: ComponentType) => (
   <Suspense fallback={null}>
     <El />
@@ -93,20 +94,11 @@ function DynamicRoutes() {
           { path: '/personal/bindings', element: lazyEl(BindingsPage) },
           // '/' 落到当前应用首页;chooser 态 homePath 回落 /module。
           { path: '/', element: <Navigate to={home} replace /> },
-          { path: '*', element: <NotFound /> },
+          { path: '*', element: lazyEl(NotFoundPage) },
         ],
       },
     ],
     [menuTree, home],
   )
   return useRoutes(routes)
-}
-
-function NotFound() {
-  const { pathname } = useLocation()
-  return (
-    <div style={{ display: 'grid', placeItems: 'center', minHeight: 320, padding: 24 }}>
-      <span>404 —— 没有这个页面:{pathname}</span>
-    </div>
-  )
 }

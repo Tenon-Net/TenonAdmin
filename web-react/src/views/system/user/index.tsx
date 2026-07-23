@@ -41,8 +41,8 @@ export default function UserPage() {
   const [orgTree, setOrgTree] = useState<TreeNode<SysOrg>[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
   useEffect(() => {
-    orgApi.list().then((flat) => setOrgTree(buildTree(flat))).catch(() => {})
-  }, [])
+    orgApi.list().then((flat) => setOrgTree(buildTree(flat))).catch((e: unknown) => message.error(translateError(e)))
+  }, [message])
 
   // ── 批量删除(复用 hook + userApi.batchRemove;超管行禁勾见下方 rowSelection.getCheckboxProps)──
   const batch = useBatchDelete({ remove: userApi.batchRemove, refresh: reload, successMsg: t('user.deleted') })
@@ -53,8 +53,8 @@ export default function UserPage() {
     roleApi
       .page({ page: 1, pageSize: 200 })
       .then(({ items }) => setRoleOptions(items.map((r) => ({ label: r.name, value: r.id }))))
-      .catch(() => {})
-  }, [])
+      .catch((e: unknown) => message.error(translateError(e)))
+  }, [message])
 
   // ── 分页取数:ProTable 搜索表单值(unknown)→ userApi.page 的强类型入参 ──
   // account/name 来自搜索表单(列未设 search:false);sortField/sortOrder 来自列排序(toProTable 已映)。

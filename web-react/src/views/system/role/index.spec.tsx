@@ -62,6 +62,12 @@ afterEach(() => {
 })
 
 describe('RolePage 接线', () => {
+  it('应用选项加载失败时显示错误', async () => {
+    vi.mocked(moduleApi.list).mockRejectedValueOnce(new Error('module options failed'))
+    mount()
+    expect(await screen.findByText('module options failed')).toBeTruthy()
+  })
+
   it('状态列:全量 update(全字段 + enabled)', async () => {
     mount()
     await waitFor(() => expect(dt.columns).toBeTruthy())

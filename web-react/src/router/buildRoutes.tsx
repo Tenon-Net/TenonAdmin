@@ -1,8 +1,9 @@
-import { lazy, Suspense, type ComponentType, type ReactElement } from 'react'
+import { lazy, Suspense, type ComponentType, type LazyExoticComponent, type ReactElement } from 'react'
 import type { RouteObject } from 'react-router-dom'
 import { menuToRouteDescriptors, type RouteDescriptor } from './menuRoutes'
 import IframeView from '@/views/embed/iframe'
 import type { MenuNode } from '@/types/menu'
+import { MissingRoute } from './MissingRoute'
 
 /**
  * 描述符 → react-router `RouteObject`。决策(哪些节点、建成什么)在 `menuRoutes.ts`,这里只做机械落地:
@@ -24,6 +25,8 @@ export interface RouteHandle {
 //   `.spec.tsx`      —— 测试文件(否则 `hasView('x.spec')` 返真、也污染菜单管理下拉)。
 //   `login/**`       —— 登录页是**静态路由**(App 直接 import),不是菜单能配的组件。
 //   `module/**`      —— 应用选择页是 Protected 里的**静态路由**,同理。
+//   `oauth/**`       —— OAuth 回调是 App 里的公开静态路由。
+//   `error/**`       —— 404 是 Protected 里的静态兜底路由。
 //   `embed/**`       —— iframe 视图由 buildRoutes **静态 import**,菜单走的是 component=URL 那条 iframe 分支。
 //   `_placeholder/**`—— 内部共用占位实现,不是独立页面。
 // 这几类若留在 glob 里,既会同时被静态 + 动态 import 而**永远无法 code-split**(build 告警的来源),
@@ -31,11 +34,14 @@ export interface RouteHandle {
 // **加静态路由页时都要同步排进来**,否则这个冲突会复发。
 type ViewModule = { default: ComponentType }
 export type ViewGlob = Record<string, () => Promise<ViewModule>>
+const lazyComponents = new WeakMap<() => Promise<ViewModule>, LazyExoticComponent<ComponentType>>()
 const views = import.meta.glob<ViewModule>([
   '/src/views/**/*.tsx',
   '!/src/views/**/*.spec.tsx',
   '!/src/views/login/**',
   '!/src/views/module/**',
+  '!/src/views/oauth/**',
+  '!/src/views/error/**',
   '!/src/views/embed/**',
   '!/src/views/personal/**',
   '!/src/views/_placeholder/**',
@@ -43,7 +49,7 @@ const views = import.meta.glob<ViewModule>([
 
 // 上面 glob 已排除的目录前缀 —— `viewKeysFrom` 也照它过滤,好让**注入假表**的测试与真实 glob 结论一致
 // (假表不经 glob 的负模式,只能靠这里的显式过滤把内部组件挡在下拉外)。
-const NON_PAGE_PREFIXES = ['login/', 'module/', 'embed/', 'personal/', '_placeholder/']
+const NON_PAGE_PREFIXES = ['login/', 'module/', 'oauth/', 'error/', 'embed/', 'personal/', '_placeholder/']
 
 /**
  * glob 键(`/src/views/system/user/index.tsx`)→ 菜单 component 值(`system/user/index`)。
@@ -61,15 +67,16 @@ export function viewKeysFrom(glob: ViewGlob): string[] {
 export const viewComponentPaths: string[] = viewKeysFrom(views)
 
 function elementFor(d: RouteDescriptor, glob: ViewGlob): ReactElement {
-  if (d.iframeSrc !== undefined) return <IframeView src={d.iframeSrc} />
-  // component 已由 menuToRouteDescriptors 用同一张表的 hasView 校验过存在,这里 glob[key] 必有。
+  if (d.kind === 'iframe') return <IframeView src={d.iframeSrc} />
+  if (d.kind === 'missing') return <MissingRoute component={d.component} />
+
   const loader = glob[`/src/views/${d.component}.tsx`]!
-  const Lazy = lazy(loader)
-  return (
-    <Suspense fallback={null}>
-      <Lazy />
-    </Suspense>
-  )
+  let Lazy = lazyComponents.get(loader)
+  if (!Lazy) {
+    Lazy = lazy(loader)
+    lazyComponents.set(loader, Lazy)
+  }
+  return <Suspense fallback={null}><Lazy /></Suspense>
 }
 
 /**

@@ -21,7 +21,7 @@ describe('menuToRouteDescriptors', () => {
   it('普通 Menu → view 描述符,name/path/component 都对', () => {
     const r = build([node({ id: 7, path: 'system/user', component: 'system/user/index', icon: 'user' })])
     expect(r).toEqual<RouteDescriptor[]>([
-      { name: 'menu-7', path: '/system/user', component: 'system/user/index', title: 't7', icon: 'user' },
+      { name: 'menu-7', path: '/system/user', kind: 'view', component: 'system/user/index', title: 't7', icon: 'user' },
     ])
   })
 
@@ -81,27 +81,29 @@ describe('外链 / iframe', () => {
   it('component 为 URL → iframe 描述符(带 iframeSrc,无 component)', () => {
     const r = build([node({ id: 5, path: 'embed/report', component: 'https://ex.com/r', title: '报表', icon: 'chart' })])
     expect(r).toEqual<RouteDescriptor[]>([
-      { name: 'menu-5', path: '/embed/report', iframeSrc: 'https://ex.com/r', title: '报表', icon: 'chart' },
+      { name: 'menu-5', path: '/embed/report', kind: 'iframe', iframeSrc: 'https://ex.com/r', title: '报表', icon: 'chart' },
     ])
   })
 
   it('普通组件不被误判成 iframe(没有 iframeSrc,有 component)', () => {
     const [d] = build([node({ id: 1, path: 'x', component: 'system/user/index' })])
-    expect(d!.iframeSrc).toBeUndefined()
-    expect(d!.component).toBe('system/user/index')
+    expect(d).toMatchObject({ kind: 'view', component: 'system/user/index' })
+    expect('iframeSrc' in d!).toBe(false)
   })
 })
 
-describe('缺组件:告警且不建路由', () => {
-  it('component 指向不存在的视图 → 不进路由表', () => {
+describe('缺组件:告警且保留可诊断路由', () => {
+  it('component 指向不存在的视图 → 保留 missing 描述符和原路径', () => {
     const r = build([node({ id: 1, path: 'x', component: 'system/nope/index' })])
-    expect(r).toEqual([])
+    expect(r).toEqual<RouteDescriptor[]>([
+      { name: 'menu-1', path: '/x', kind: 'missing', component: 'system/nope/index', title: 't1', icon: undefined },
+    ])
   })
 
   it('缺组件时 warn 被调用(否则菜单静默消失,没人知道错在哪)', () => {
     const warn = vi.fn()
     const r = menuToRouteDescriptors([node({ id: 1, path: 'x', component: 'typo/index' })], hasView, warn)
-    expect(r).toEqual([])
+    expect(r).toMatchObject([{ kind: 'missing', path: '/x', component: 'typo/index' }])
     expect(warn).toHaveBeenCalledOnce()
     expect(warn.mock.calls[0]).toContain('typo/index') // 把错的键回给管理员
   })
@@ -115,6 +117,7 @@ describe('缺组件:告警且不建路由', () => {
 
   it('前导斜杠的 component 键被归一后再查表(/system/user/index === system/user/index)', () => {
     const r = build([node({ id: 1, path: 'x', component: '/system/user/index' })])
-    expect(r.map((d) => d.component)).toEqual(['system/user/index']) // 存在,建成功
+    expect(r.filter((d): d is Extract<RouteDescriptor, { kind: 'view' }> => d.kind === 'view').map((d) => d.component))
+      .toEqual(['system/user/index']) // 存在,建成功
   })
 })

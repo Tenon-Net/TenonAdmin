@@ -170,6 +170,18 @@ describe('LayoutShell 设置抽屉 + 面包屑(D2b)', () => {
 })
 
 describe('LayoutShell 顶栏', () => {
+  it('拥有多个应用时显示切换入口并导航到应用选择页', async () => {
+    useAuthStore.setState({
+      modules: [
+        { id: 1, code: 'sys', title: '系统', defaultRoute: '/dashboard', sort: 1 },
+        { id: 2, code: 'biz', title: '业务', defaultRoute: '/biz', sort: 2 },
+      ],
+    })
+    mountAt('/dashboard')
+    fireEvent.click(await screen.findByRole('button', { name: /切换应用|switch app/i }))
+    expect(navigate).toHaveBeenCalledWith('/module')
+  })
+
   it('点折叠按钮 → 翻转 app.collapsed', async () => {
     mountAt('/dashboard')
     await screen.findByText('DASH PAGE')

@@ -8,6 +8,11 @@
 > **写每条断言时问一句:期望值是从哪来的?** 它若和实际值出自同一个变量,这条就是回声,恒真。B4 那句 `greeting === (i18n.language === 'en-US' ? … : …)` 正是如此 —— 删掉 `lng` 初值后 `i18n.language` 不是 undefined 而是被 `fallbackLng` 顶成 `'en-US'`,期望值跟着一起挪,中文下也照样绿。**期望值要取自被测链路之外**(那条改成比 store 就红了)。这是被"跑绿的用例什么都不证明"咬的第三次,而且咬的正是为防它而特意加的那一步。
 > 横切纪律:两个模板**零共享、各自自包含**。`web-react/` 里不得出现 `@shared`、`web-shared`、`../web` 任何形式的跨模板引用。
 
+## 2026-07-22 · 对齐审计后的架构决策
+
+- **API 客户端保持单宿主单例**:`client.ts` 只导出模块级 `client`,不提供 `ApiAdapter`、工厂或多宿主 options。typed client、裸刷新客户端与请求重放共享模块求值时捕获的同一个原始传输;协议级测试先替换全局 `fetch` 与 API 源地址,再重载模块,用 Node 原生 `Request` 验证 POST body 重放、并发 401 合流和刷新不递归,不为测试扩大生产 API。
+- **Markdown 安全初始化归属应用入口**:`main.tsx` 在首次渲染前唯一调用幂等 `setupMarkdown()`,统一挂载 XSSPlugin 与离线 echarts no-op。`MarkdownEditor.tsx`、`MarkdownView.tsx` 只负责组件行为,不再重复承担全局副作用。
+
 ## 为什么推翻共享层（防反复,别再抽一次）
 
 共享层把成本转嫁给了消费者,收益只归维护者。四条证据:

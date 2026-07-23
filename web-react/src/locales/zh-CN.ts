@@ -49,6 +49,7 @@ export default {
   notFound: {
     desc: '页面不存在',
     back: '返回工作台',
+    component: '配置错误:未找到菜单组件“{component}”。',
   },
   app: {
     theme: '主题',

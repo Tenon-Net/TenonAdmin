@@ -59,6 +59,14 @@ afterEach(() => {
 })
 
 describe('MenuPage 接线', () => {
+  it('辅助应用和权限路由加载失败时显示错误', async () => {
+    vi.mocked(moduleApi.list).mockRejectedValueOnce(new Error('module options failed'))
+    vi.mocked(menuApi.routes).mockRejectedValueOnce(new Error('permission routes failed'))
+    mount()
+    expect(await screen.findByText('module options failed')).toBeTruthy()
+    expect(await screen.findByText('permission routes failed')).toBeTruthy()
+  })
+
   it('load + 按应用过滤(仅顶级)+ 剥按钮 + 播种展开', async () => {
     mount()
     await waitFor(() => expect(captured.data?.length).toBe(1)) // moduleId 10 只有「系统」这一顶级

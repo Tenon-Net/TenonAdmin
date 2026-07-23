@@ -9,18 +9,21 @@ import { MenuType, type MenuNode } from '@/types/menu'
  * `hasView` 与 `warn` 注入,不在函数里直接摸 `import.meta.glob` / `console`:
  * 前者让「组件存不存在」可控,后者让「缺组件要告警」可断言 —— 否则那条 warn 分支永远测不到。
  */
-export interface RouteDescriptor {
+interface RouteDescriptorBase {
   /** 路由名,`menu-${id}`。keep-alive / 精确移除都按它。 */
   name: string
   /** 归一后的路由路径(前导斜杠)。 */
   path: string
   /** 视图组件键(如 `system/user/index`);iframe 描述符没有它。 */
-  component?: string
   /** component 为 http URL 时,内嵌 iframe 的目标地址。 */
-  iframeSrc?: string
   title: string
   icon?: string
 }
+
+export type RouteDescriptor =
+  | (RouteDescriptorBase & { kind: 'view'; component: string })
+  | (RouteDescriptorBase & { kind: 'iframe'; iframeSrc: string })
+  | (RouteDescriptorBase & { kind: 'missing'; component: string })
 
 function flatten(nodes: MenuNode[]): MenuNode[] {
   return nodes.flatMap((n) => [n, ...(n.children?.length ? flatten(n.children) : [])])
@@ -49,7 +52,7 @@ export function menuToRouteDescriptors(
 
     // 内嵌 iframe 菜单:component 为 URL(path 为内部路径)→ 通用 iframe 视图,URL 进 iframeSrc。
     if (isHttpUrl(node.component)) {
-      out.push({ name, path, iframeSrc: node.component, title: node.title, icon: node.icon })
+      out.push({ name, path, kind: 'iframe', iframeSrc: node.component!, title: node.title, icon: node.icon })
       continue
     }
 
@@ -58,9 +61,10 @@ export function menuToRouteDescriptors(
     if (!hasView(key)) {
       // 手敲错一个字符,这个菜单项就静默消失,管理员根本不知道错在哪。至少留一句 warn。
       warn('[menu] 缺少视图组件:', node.component, key)
+      out.push({ name, path, kind: 'missing', component: key, title: node.title, icon: node.icon })
       continue
     }
-    out.push({ name, path, component: key, title: node.title, icon: node.icon })
+    out.push({ name, path, kind: 'view', component: key, title: node.title, icon: node.icon })
   }
   return out
 }

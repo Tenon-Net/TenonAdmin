@@ -11,8 +11,8 @@
 // 换句话说,环境本身没有那个陷阱,再怎么调桩也造不出来。
 //
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { client as Client } from './client'
-import type { useUserStore as UseUserStore } from '@/stores/user'
+import type { client as ApiClient } from './client'
+import type { useUserStore as UserStore } from '@/stores/user'
 
 /**
  * 中间件的三个机制。它们防的失败模式有个共同点:**都只在时序恰好对上时才出现**,
@@ -35,18 +35,11 @@ const json = (body: unknown, status = 200) =>
 let calls: Call[]
 let assigned: string[]
 
-let client: typeof Client
-let useUserStore: typeof UseUserStore
+let client: typeof ApiClient
+let useUserStore: typeof UserStore
 
 /**
- * 打桩 fetch,然后**重新求值 `client` 模块**再取它。
- *
- * 这一步不是仪式:`createClient()` 在**模块求值时**就把 `globalThis.fetch` 抓进闭包了
- * (openapi-fetch 的 `baseFetch = globalThis.fetch` 默认值),晚于它打的桩一律不生效 ——
- * 症状是用例去打真网络、报 `NetworkError: ... http://localhost:3000/...`。
- * (`stores/app.ts` 的 matchMedia 桥是同一个模式。)
- *
- * `handler` 决定每次调用返回什么;记账与 body 读取在这里统一做。
+ * 注入原始传输。`handler` 决定每次调用返回什么;记账与 body 读取在这里统一做。
  *
  * **body 必须用 `req.text()` 直接读,不能用 `req.clone().text()`。** 这一条是踩出来的:
  * 用 clone 读的话原始请求的流**从没被消费过**,而「一次性流」正是机制①要防的东西 ——
@@ -57,7 +50,6 @@ let useUserStore: typeof UseUserStore
 async function setup(handler: (c: Call, n: number) => Response | Promise<Response>) {
   // node 环境没有文档源,相对 URL 无法解析(生产里 baseUrl 为空 = 同源,靠的正是浏览器那个源)。
   // 给一个绝对源只为让 URL 解析得动,被测的路径部分原样保留。
-  vi.stubEnv('VITE_API_BASE', 'http://api.test')
   // 记账数组**每次 setup 新建、由桩闭包持有**,不是往模块级的 `calls` 上推。
   //
   // 这是踩出来的:原先桩里写 `calls.push(...)`,而 `calls` 是模块级变量、`resetModules` 不碰它,
@@ -67,15 +59,17 @@ async function setup(handler: (c: Call, n: number) => Response | Promise<Respons
   // 每个 setup 各持一份,迟到回调就只会推进自己那个已经没人看的数组。
   const mine: Call[] = []
   calls = mine
-  vi.stubGlobal('fetch', async (req: Request) => {
+  const transport = async (req: Request) => {
     const body = req.method === 'GET' || req.method === 'HEAD' ? null : await req.text()
     const c: Call = { url: req.url, method: req.method, body, auth: req.headers.get('Authorization') }
     mine.push(c)
     return handler(c, mine.length - 1)
-  })
+  }
+  vi.stubEnv('VITE_API_BASE', 'http://api.test')
+  vi.stubGlobal('fetch', transport)
   vi.resetModules()
-  ;({ client } = await import('./client'))
   ;({ useUserStore } = await import('@/stores/user'))
+  ;({ client } = await import('./client'))
   useUserStore.setState({ accessToken: 'OLD', refreshToken: 'R1', userInfo: null })
 }
 

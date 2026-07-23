@@ -8,6 +8,7 @@ vi.mock('@/lib/icons', () => ({
   COLLECTIONS: [{ prefix: 'ph', name: 'Phosphor' }, { prefix: 'lucide', name: 'Lucide' }],
   LOCAL_PREFIX: 'local',
   loadIconNames: vi.fn(),
+  ensureIconLoaded: vi.fn(),
   getLocalIconNames: vi.fn(() => ['star']),
 }))
 import { loadIconNames } from '@/lib/icons'

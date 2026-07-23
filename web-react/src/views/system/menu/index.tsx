@@ -59,8 +59,8 @@ export default function MenuPage() {
    */
   const syncShell = useCallback(() => {
     const id = useAuthStore.getState().currentModuleId
-    if (id) void enter(id).catch(() => {})
-  }, [])
+    if (id) void enter(id).catch((e: unknown) => message.error(translateError(e)))
+  }, [message])
 
   useEffect(() => { void load() }, [load])
   useEffect(() => {
@@ -68,9 +68,9 @@ export default function MenuPage() {
     moduleApi.list().then((ms) => {
       setModules(ms)
       setModuleFilter((cur) => (ms.some((m) => m.id === cur) || cur === UNASSIGNED ? cur : ms[0]?.id ?? UNASSIGNED))
-    }).catch(() => {})
-    menuApi.routes().then(setRoutes).catch(() => {})
-  }, [])
+    }).catch((e: unknown) => message.error(translateError(e)))
+    menuApi.routes().then(setRoutes).catch((e: unknown) => message.error(translateError(e)))
+  }, [message])
 
   // 各节点直属按钮的 count(徽标)+ perms(关键字搜索,取自未剥离原树)。
   const buttonInfo = useMemo(() => buildButtonInfo(tree), [tree])

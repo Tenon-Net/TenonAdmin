@@ -4,15 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm run gen:icons",
     "dev": "vite",
+    "prebuild": "npm run gen:icons",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "typecheck": "tsc --noEmit",
-    "gen:api": "openapi-typescript http://localhost:5100/openapi/v1.json -o src/api/schema.d.ts"
+    "gen:api": "openapi-typescript http://localhost:5100/openapi/v1.json -o src/api/schema.d.ts",
+    "gen:icons": "node scripts/generate-icon-subset.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
@@ -37,6 +41,7 @@
     "@iconify-json/ep": "^1.2.4",
     "@iconify-json/lucide": "^1.2.118",
     "@iconify-json/ph": "^1.2.2",
+    "@playwright/test": "^1.61.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^22.13.0",
     "@types/react": "^19.2.17",

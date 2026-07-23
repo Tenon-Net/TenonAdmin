@@ -2,6 +2,8 @@
 // 未注册图标只出占位、绝不触网(在线默认入口会 phone home,C3 review HIGH)。symbols 与默认入口一致。
 import { Icon } from '@iconify/react/offline'
 import type { CSSProperties } from 'react'
+import { useEffect } from 'react'
+import { ensureIconLoaded } from '@/lib/icons'
 
 /**
  * iconify 图标名兜底:空串 / 未传 → fallback。与 Vue 侧 `renderIcon` 的 `name || fallback` 同义。
@@ -27,5 +29,9 @@ export interface AppIconProps {
  * 对应 Vue 侧 `AppIcon.vue`(那边包 tenon-naive-iconify-picker 的 OfflineIcon)。
  */
 export function AppIcon({ icon, size = 18, fallback = 'ph:dot-outline-duotone', className, style }: AppIconProps) {
-  return <Icon icon={iconName(icon, fallback)} width={size} height={size} className={className} style={style} />
+  const name = iconName(icon, fallback)
+  useEffect(() => {
+    void ensureIconLoaded(name)
+  }, [name])
+  return <Icon icon={name} width={size} height={size} className={className} style={style} />
 }

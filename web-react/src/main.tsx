@@ -20,7 +20,7 @@ import App from './App'
 
 // 首屏注册 4 套离线图标集(非阻塞;菜单/AppIcon 在集合就绪后自动重渲染)。
 setupIcons()
-// 全局给 md-editor-rt 挂上 XSS 过滤(通知正文是富文本,默认放行内联 HTML —— C5 review HIGH-1)。
+// Markdown 渲染器允许内联 HTML,在首次渲染前统一挂载 XSS 过滤插件。
 setupMarkdown()
 
 createRoot(document.getElementById('root')!).render(
