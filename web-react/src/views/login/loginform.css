@@ -28,6 +28,35 @@
   margin: 0 0 22px;
   color: var(--lf-title, var(--color-text-primary));
 }
+/* 二次验证副标题(紧贴标题下方的弱化提示行) */
+.lf-hint-line {
+  margin: -14px 0 18px;
+  font-size: 13px;
+  color: var(--lf-hint, var(--color-text-tertiary));
+}
+.row {
+  margin: 4px 0 20px;
+}
+.lf-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+/* 模式切换/重发:文字链接,复用主题色 */
+.lf-link {
+  font-size: 13px;
+  color: var(--color-primary);
+  cursor: pointer;
+  user-select: none;
+}
+.lf-link:hover {
+  opacity: 0.85;
+}
+.lf-link-disabled {
+  color: var(--lf-hint, var(--color-text-tertiary));
+  cursor: default;
+  pointer-events: none;
+}
 /* 验证码:输入框 + 可点击刷新的 SVG 图形(等高对齐) */
 .lf-captcha {
   display: flex;
@@ -51,6 +80,27 @@
 .lf-captcha-img svg {
   height: 100%;
   width: auto;
+}
+/* 短信发码/重发按钮(与验证码输入等高并排) */
+.lf-send-btn {
+  flex: 0 0 auto;
+  height: 40px;
+  min-width: 96px;
+  padding: 0 12px;
+  border: 1px solid var(--lf-border, var(--color-border));
+  border-radius: var(--radius-md);
+  background: var(--color-fill);
+  font-size: 13px;
+  color: var(--lf-title, var(--color-text-secondary));
+  cursor: pointer;
+}
+.lf-send-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.lf-send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 /* 第三方登录:分隔线 + 等宽按钮(设计稿 §Variant A) */
 .lf-divider {

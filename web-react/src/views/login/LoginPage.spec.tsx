@@ -7,7 +7,10 @@ vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>()
   return {
     ...actual, // ApiError 要真的(translateError 用 instanceof 判它)
-    authApi: { login: vi.fn(), captcha: vi.fn() },
+    authApi: {
+      login: vi.fn(), captcha: vi.fn(),
+      smsLoginSend: vi.fn(), smsLogin: vi.fn(), smsChallengeLogin: vi.fn(), smsChallengeResend: vi.fn(),
+    },
     configApi: { siteInfo: vi.fn() },
     // providers 默认空数组(SSO 区不显);不 mock 会走真 fetch 打网络(air-gap 违规)。
     externalAuthApi: { ...actual.externalAuthApi, providers: vi.fn(() => Promise.resolve([])) },
@@ -35,6 +38,10 @@ const loginMock = vi.mocked(authApi.login)
 const captchaMock = vi.mocked(authApi.captcha)
 const siteMock = vi.mocked(configApi.siteInfo)
 const providersMock = vi.mocked(externalAuthApi.providers)
+const smsSendMock = vi.mocked(authApi.smsLoginSend)
+const smsLoginMock = vi.mocked(authApi.smsLogin)
+const challengeLoginMock = vi.mocked(authApi.smsChallengeLogin)
+const challengeResendMock = vi.mocked(authApi.smsChallengeResend)
 
 const SITE = {
   title: '榫卯后台', subtitle: '', copyright: '', copyrightUrl: '', logo: '',
@@ -80,6 +87,10 @@ beforeEach(() => {
   captchaMock.mockReset()
   loginMock.mockReset()
   siteMock.mockReset()
+  smsSendMock.mockReset()
+  smsLoginMock.mockReset()
+  challengeLoginMock.mockReset()
+  challengeResendMock.mockReset()
   navigate.mockClear() // 它是本文件自己的 vi.fn(),不在上面三个里;漏清会让"失败不跳转"吃到上一条的调用
 })
 
@@ -104,6 +115,80 @@ describe('品牌信息来自 site store', () => {
   it('logo 非空时渲染出来', async () => {
     await mount({ ...SITE, logo: '/files/logo.png' })
     await waitFor(() => expect(screen.getByTestId('login-card').querySelector('img')?.getAttribute('src')).toBe('/files/logo.png'))
+  })
+})
+
+describe('短信免密登录(site.smsLoginEnabled 驱动)', () => {
+  it('未启用:不渲染切换链接', async () => {
+    await mount()
+    expect(screen.queryByText('短信登录')).toBeNull()
+  })
+
+  it('启用:切短信模式 → 发码 → 提交走 sms 端点并落会话', async () => {
+    smsSendMock.mockResolvedValue({ expiresSeconds: 300, resendSeconds: 60 })
+    smsLoginMock.mockResolvedValue(SESSION)
+    const store = await mount({ ...SITE, smsLoginEnabled: true })
+
+    fireEvent.click(screen.getByText('短信登录'))
+    // 账号/密码字段随模式卸载,手机号字段出现
+    expect(screen.queryByPlaceholderText('请输入密码')).toBeNull()
+    fireEvent.change(await screen.findByPlaceholderText('请输入手机号'), { target: { value: '13800138000' } })
+
+    fireEvent.click(screen.getByText('获取验证码'))
+    await waitFor(() => expect(smsSendMock).toHaveBeenCalledWith(expect.objectContaining({ phone: '13800138000' })))
+    // 发码成功进入倒计时,按钮转"Ns 后重发"并禁用
+    expect(await screen.findByText(/\d+s 后重发/)).toBeTruthy()
+
+    fireEvent.change(screen.getByPlaceholderText('请输入短信验证码'), { target: { value: '123456' } })
+    submit()
+    await waitFor(() => expect(smsLoginMock).toHaveBeenCalledWith({ phone: '13800138000', code: '123456' }))
+    await waitFor(() => expect(store.getState().accessToken).toBe('A'))
+  })
+
+  it('手机号为空点发码:提示且不发请求', async () => {
+    await mount({ ...SITE, smsLoginEnabled: true })
+    fireEvent.click(screen.getByText('短信登录'))
+    fireEvent.click(screen.getByText('获取验证码'))
+    expect(await screen.findByText('请输入手机号')).toBeTruthy()
+    expect(smsSendMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('短信二次验证(40009 信令)', () => {
+  const reject40009 = () =>
+    loginMock.mockRejectedValue(
+      new ApiError(40009, 'error.auth.smsChallengeRequired', { challengeId: 'ch1', phoneMask: '138****8000', resendSeconds: 60 }),
+    )
+
+  it('密码过后 40009:切挑战页(掩码手机号),提交码完成登录', async () => {
+    reject40009()
+    challengeLoginMock.mockResolvedValue(SESSION)
+    const store = await mount()
+    submit()
+
+    expect(await screen.findByText('验证码已发送至 138****8000')).toBeTruthy()
+    fireEvent.change(screen.getByPlaceholderText('请输入短信验证码'), { target: { value: '654321' } })
+    fireEvent.click(screen.getByRole('button', { name: /登\s*录/ }))
+    await waitFor(() => expect(challengeLoginMock).toHaveBeenCalledWith({ challengeId: 'ch1', code: '654321' }))
+    await waitFor(() => expect(store.getState().accessToken).toBe('A'))
+  })
+
+  it('返回密码登录:回到账号表单', async () => {
+    reject40009()
+    await mount()
+    submit()
+    await screen.findByText('验证码已发送至 138****8000')
+
+    fireEvent.click(screen.getByText('返回密码登录'))
+    expect(await screen.findByPlaceholderText('请输入账号')).toBeTruthy()
+  })
+
+  it('40009 不落会话、不当失败弹错', async () => {
+    reject40009()
+    const store = await mount()
+    submit()
+    await screen.findByText('验证码已发送至 138****8000')
+    expect(store.getState().accessToken).toBe('')
   })
 })
 
