@@ -148,6 +148,17 @@
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
 
+### 2026-07-23 · 双模板文档收口(README/skills/COMPONENTS.md)
+
+B12 过验后把仓库文档层从"只有一个 Vue 前端"的时代拉到现状,纯文档改动:
+
+- **README ×3 去图纯 MD**:删 hero + 2 张 section 大图与 `assets/readme/` 整目录(18 文件,832KB),徽章/链接排保留;前端特性区重写为「两套官方模板,选一套就够」——对比表(Vue/Naive/Pinia vs React/antd6/zustand)+ 共同能力清单。zh 基准,en/ja 按人话意译,不逐句机翻。
+- **skills 对称双技能**:新写 `skills/create-crud-frontend-react.md`(532 行,镜像 Vue 版结构;示例全部改编自 position/user 真实页面,antd 用法过离线 CLI 复核);`new-module`/`README`/`create-crud-backend`/`create-page-variant` 全部双模板感知;新增 `/create-crud-frontend-react` wrapper;`tenon-release` + `docs/releasing.md` 版本 bump 纳入 `web-react/package.json`(+lock)。
+- **新建 `web-react/COMPONENTS.md`**(76 行,自包含单文件,无 README 树):DataTable/TreeTable 专节 + 20 组件契约索引 + useConfirm/useBatchDelete + iframe/水印约定,props 逐字抄自源码。
+- **`docs/rebuild-design.md` 订正 4+2 处**"React 模板 v1.x 拆独立仓 tenon-admin-web-react"的过期表述 → 已同仓 `web-react/` 落地。
+
+判据:COMPONENTS.md 抽查 5 组件(FormContainer/StatusSwitch/DataTable/useBatchDelete/Can)契约与源码逐字一致;skill 审校纠出 2 处事实错(`positionApi.batchRemove` 不存在 → 改角色页真实范例;"组件缺失菜单静默消失"与 `MissingRoute` 占位行为相反 → 订正);全仓 grep 无 `assets/readme` 残留引用。**预测与实测不符**:预计 rebuild-design.md 只有 4 处过期,实查连带 §1 合仓理由段与目录树共 6 处。下一条:批次 G 收口。
+
 ### 2026-07-23 · B12 阶段一验收(chrome-devtools 浏览器实测,`main` 分支)
 
 对照台账 10 条链路逐条浏览器实测(superAdmin,后端 :5100 / 前端 :5174),全过,零代码缺陷:
