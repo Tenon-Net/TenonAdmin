@@ -130,6 +130,13 @@
 - [x] **F1 登录页测试补强(D5)**(`7e6ec1b`) — D5 已落时 `LoginPage.spec.tsx` 原 11 条表单用例(品牌/验证码/提交)**运行期已核对仍全绿**(打在「壳渲染默认皮肤 aurora 内嵌的 LoginForm」链上),覆盖未丢。**已就地修一处防挂**:`mount()` 的 `vi.resetModules()` + D5 首次从 `@ant-design/icons` **barrel** 具名导入(antd 自身走深导入)→ 重估整包超时;spec 里 stub 三个具名图标解挂(记 `546609e` commit body)。**F1 只需新增**(非修复):皮肤选择阶梯(`?skin=`/localStorage/默认)、切换 UI + localStorage 持久化、`showBrand/showFooter` 关闭时不渲染品牌/页脚、Spotlight 指针→CSS 变量映射、SplitPanel 卖点/headline i18n——**预测先行变异**。
 - [x] **F2 其余推迟条目滚动登记 + 全量收口**(`2563520`) — D5b 起每条落地时在此追加「欠哪些测试 + 变异钉在哪」,最后一期照单补齐,按 3 分片(见记忆 `reference-machine-memory-tight`)跑全量 vitest 收口。**实况**:E 批全是基础设施/CI/文档/shell,无可单测的 unit 债;D1–D4 变异网不回溯、D5 login 债 F1 已清 —— 故 F2 无「补齐」项,只剩 3 分片全量收口。**结果 699/699 全绿(98 文件),并照出一处预存气隙泄漏(iframe src 触网),已修。**
 
+## 批次 G · 上线前对齐打磨（维护者实测驱动）
+
+> 来源:2026-07-22/23 维护者把两模板并排实测,报出的差异逐条修。G1 已随 `1579aa6` 并 dev——**首次把 web-react 整棵带上 dev**,push 触发的四条 CI(web-ci / web-react-ci / contract-drift / docker-smoke)全绿。
+
+- [x] **G1 对齐批次(三提交)**(`0e0cedb` / `5e16aa2` / `8a4568b`) — ①vitest 并行解锁(两模板);②web-react 对齐 web:登录页 SSO 按钮、壳层 TenonLogo + favicon 全套 + document.title、头部补全屏/语言并对齐按钮序、NoticeBell 富面板、去页内 headerTitle、用户表单两列 + 机构/职位/主管、全局 border-box、Menu 右边线令牌灭除、机构页刷新钮 icon-only;③两侧通知面板重设计为无页签单列表。详见轮次日志 2026-07-23。
+- [ ] **G2 短信登录移植** — LoginForm 三模式(`account/sms/mfa`):短信免密登录 + 密码后短信二次验证,对照 Vue `LoginForm.vue` 的 mode 切换/倒计时/挑战往返;React 侧 authApi 端点与 i18n 键先盘点(按 G1 经验大概率已在)。这是登录页与 Vue 的最后一块功能缺口(组件注释里挂着"留给后续批次")。
+
 ## 不做清单（有依据,防反复）
 
 - [~] **`web-shared/` 共享层** — 2026-07-20 推翻,理由见本文件开头四条证据。不要再抽第二次。
@@ -140,6 +147,21 @@
 ## 轮次日志
 
 （每轮追加:做了哪条、判据、变异结果、**预测与实测不符的地方**、下一条。）
+
+### 2026-07-23 · G1 对齐批次三提交(`0e0cedb`/`5e16aa2`/`8a4568b`)+ 并 dev(`1579aa6`)
+
+维护者两轮并排实测报出 9 处差异 + 1 处两侧共有的设计问题,逐条定位到根因再修,全部浏览器实测闭环。
+
+- **登录卡过宽(~612px vs Vue 472)**:两侧皮肤 CSS 数值逐字相同,差在 web-react **缺全局 `box-sizing: border-box` reset**(Vue 在 `styles/index.css`)。一条规则连带修好 tabsbar 43→42、aside 237→236 的 1px 偏移。实测卡宽 472px 与 Vue 一致。
+- **侧栏/选项卡交界双线**:antd 6 给 inline root Menu 自带 `border-inline-end`,规则特异性 `(0,3,0)`(`:where` + 三类),`sidenav.css` 的 `.sidenav .ant-menu` 覆写 `(0,2,0)` **静默落败**。修法是主题令牌 `Menu.activeBarBorderWidth: 0`(正是 antd 画线用的宽度令牌,明/暗/折叠三态一次灭),不打特异性仗;死掉的 CSS 覆写删除。
+- **机构页"英文按钮"**:刷新按钮用了双语文件都不存在的 `common.refresh` → i18next 渲染**原始键名**(全仓唯一消费点)。改 Vue 同款 icon-only(`ph:arrow-clockwise`),文案复用现有 `proTable.refresh`,零新键。
+- **SSO 按钮"不显示/只有一个"**:两轮都不是前端问题——后端 `appsettings.Development.json` 起初根本没有 `ExternalAuth` 段(两模板都空,"Vue 有"的前提不成立);配齐 OIDC/企微/钉钉三个占位后两侧都显 3 按钮。前端只欠 UI 一片:LoginForm 挂载拉 `providers()`、分隔线 + AppIcon 按钮行,API/回调页/绑定页/i18n 键 G1 前全已就位。
+- **NoticeBell**:React 从"铃铛直跳页面"升级为富面板 Popover;随后维护者指出**两侧**的 全部/未读 页签不协调 → 参考普查(SimpleAdmin/soybean/XiHan/ant-design-pro)证实**没有一家把读没读做成页签**(页签分内容类型/来源,"未读"是过滤器)→ 两侧同步改无页签单列表:未读=圆点+加粗+4% 主色底(XiHan 式),已读=整行 0.55 变淡(pro 式),筛选交给个人通知页;`tabAll/tabUnread` 四处键删除(grep 确认仅两个铃铛消费)。
+- 其余:壳层恒用 `TenonLogo`(`site.logo` 只属登录页,对齐 Vue)、`App.tsx` 启动 `loadSite()` 同步 `document.title`、`web-react/public/` favicon 全套(fork-and-own 复制)、头部补全屏/语言下拉并按 Vue 序重排、13 视图 `headerTitle` 全链路删除(菜单名只留面包屑)、用户表单 Row/Col 两列 + 机构树/职位/主管三控件(`extraRef` 透传机制随之删除)。
+- **vitest 并行解锁**:维护者说"内存够了",**实测不成立**——仍 16GB 物理、无页文件、commit 92%,并行首跑即 `Zone Allocation failed`(worker 堆才 ~65MB,是 commit 上限不是物理内存)。按 PID 精确清 15 个 ≥3h 僵尸 MCP(-1.25GB)+ 配 16GB 页文件(重启生效)后并行立住:**全量 851s→145s(5.9×)**。并行顺带照出两处 spec 漏 mock 我新加的 API 调用(air-gap 噪音)已补,testing-library `asyncUtilTimeout` 1s→3s 治 8 核跑满的偶发超时(等待上限,不拖慢绿例)。
+- **预测与实测不符**:①"Vue 有 3 个 SSO 按钮"“语言按钮没了”两条,实测都不是模板差异(前者是后端配置,后者登录页两侧一致、缺的是壳层头部按钮);②修 spec 后一轮全量,`Protected.spec` 深链用例超时——单跑秒绿,是并行负载下 `findBy*` 默认 1s 上限的抖动,不是回归;③React locale 键三轮盘点(SSO/全屏/notice 类型标签)全部已在,唯 `common.refresh` 例外——它在 Vue 侧从不需要。
+- **判据**:typecheck / oxlint / `antd lint`(逐文件)/ 目标 spec(login 24、user 17、layouts 66)/ 全量 714 / build 全绿;chrome-devtools 实测四条链路(登录页卡宽+SSO、壳层按钮+语言即时切换、机构页全中文、通知发布→SignalR 角标→面板→详情→已读闭环)。
+- **下一条**:G2 短信登录移植。
 
 ### 2026-07-22 · 用户页对齐 Vue:机构树 + 两卡视觉 + 批删/头像(DataTable `7f93df5` / 用户页本条)
 
