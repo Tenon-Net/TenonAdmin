@@ -1,10 +1,16 @@
 <!-- Keep in sync with README.zh-CN.md (canonical) -->
 
-# TenonAdmin
-
 English | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-Named after mortise-and-tenon joinery (榫卯) — pieces that lock together without a single nail. TenonAdmin plugs a complete admin backend into your ASP.NET Core project the same way: no forking, no glue code.
+<p align="center">
+  <img src="web/design-mockups/brand/icon-128.png" width="80" height="80" alt="TenonAdmin">
+</p>
+
+<h1 align="center">TenonAdmin</h1>
+
+<p align="center">
+  <em>Three lines of code to add a complete, extensible RBAC access-management layer to your ASP.NET Core project.</em>
+</p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="License"></a>
