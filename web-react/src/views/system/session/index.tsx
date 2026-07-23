@@ -63,7 +63,6 @@ export default function SessionPage() {
       columns={columns}
       fetcher={fetchSessions}
       persistKey="sys-session"
-      headerTitle={t('session.title')}
     />
   )
 }

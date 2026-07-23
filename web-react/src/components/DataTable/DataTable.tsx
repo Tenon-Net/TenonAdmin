@@ -24,7 +24,6 @@ export interface DataTableProps<T extends Record<string, any>> {
   rowKey?: string
   /** 工具栏右侧按钮(新增 / 批量删除等)。 */
   toolbar?: ReactNode
-  headerTitle?: ReactNode
   /**
    * 受控行选择(勾选列 + 选中态)。透传给内层 ProTable —— 批量删除页配 useBatchDelete 用:
    * `rowSelection={{ selectedRowKeys, onChange }}`。不给则不显示勾选列(默认无选择)。
@@ -47,7 +46,7 @@ export interface DataTableHandle {
 }
 
 function DataTableInner<T extends Record<string, any>>(
-  { columns, fetcher, persistKey, rowKey = 'id', toolbar, headerTitle, rowSelection, onRowClick, activeRowKey, params }: DataTableProps<T>,
+  { columns, fetcher, persistKey, rowKey = 'id', toolbar, rowSelection, onRowClick, activeRowKey, params }: DataTableProps<T>,
   ref: React.ForwardedRef<DataTableHandle>,
 ) {
   const actionRef = useRef<ActionType | undefined>(undefined)
@@ -69,7 +68,6 @@ function DataTableInner<T extends Record<string, any>>(
       // 不开则两块无边框区浮在页面底色上、视觉连成一片。
       cardBordered
       pagination={{ showSizeChanger: true, defaultPageSize: 10 }}
-      headerTitle={headerTitle}
       toolBarRender={() => (toolbar ? [toolbar] : [])}
       dateFormatter="string"
     />

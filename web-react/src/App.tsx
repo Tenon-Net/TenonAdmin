@@ -1,11 +1,12 @@
 import { App as AntdApp, ConfigProvider, Spin } from 'antd'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import antdZhCN from 'antd/locale/zh_CN'
 import antdEnUS from 'antd/locale/en_US'
 import { useAntdTheme } from '@/theme/useAntdTheme'
 import { useDocumentGrayscale } from '@/theme/useDocumentGrayscale'
 import { useAppStore, isDark } from '@/stores/app'
+import { useSiteStore } from '@/stores/site'
 const LoginPage = lazy(() => import('@/views/login/LoginPage'))
 const CallbackPage = lazy(() => import('@/views/oauth/CallbackPage'))
 const Protected = lazy(() => import('@/router/Protected').then((module) => ({ default: module.Protected })))
@@ -29,6 +30,15 @@ export default function App() {
   const themeConfig = useAntdTheme({ dark, accent, density })
   // data-theme/data-density 由 useAntdTheme 打;灰阶单独一条(不进 antd 主题依赖)。见该 hook 注释。
   useDocumentGrayscale()
+
+  // 站点信息启动即拉(对齐 Vue App.vue:onMounted → loadSite):硬刷新已登录会话也能同步
+  // 后台配置的标题到浏览器标签页。store 内部去重,登录页再次调用无害。
+  useEffect(() => {
+    void useSiteStore.getState().load().then(() => {
+      const { title } = useSiteStore.getState().site
+      if (title) document.title = title
+    })
+  }, [])
 
   return (
     // antd 自带文案(空态/分页/日期)是**另一套 locale**,与我们的 i18n 无关,必须一起切 ——

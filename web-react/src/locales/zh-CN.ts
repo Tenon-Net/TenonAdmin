@@ -78,8 +78,6 @@ export default {
       empty: '暂无通知',
       markAllRead: '全部已读',
       viewAll: '查看全部',
-      tabAll: '全部',
-      tabUnread: '未读',
     },
   },
   settings: {

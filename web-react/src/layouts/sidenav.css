@@ -29,7 +29,8 @@
   overflow-y: auto;
   overflow-x: hidden;
 }
+/* Menu 自带的 border-inline-end 由主题令牌 Menu.activeBarBorderWidth=0 灭掉(antd-theme.ts):
+   CSS 覆写打不过 antd `:where(...).ant-menu-light.ant-menu-root.ant-menu-inline` 的 (0,3,0) 特异性。 */
 .sidenav .ant-menu {
-  border-inline-end: none;
   background: transparent;
 }

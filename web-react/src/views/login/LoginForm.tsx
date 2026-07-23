@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { App, Button, Checkbox, Form, Input } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { authApi } from '@/api'
+import { authApi, externalAuthApi, type ExternalProvider } from '@/api'
 import { useUserStore } from '@/stores/user'
 import { useSiteStore, appVersion } from '@/stores/site'
 import { translateError } from '@/utils/error'
 import { TenonLogo } from '@/components/TenonLogo'
+import { AppIcon } from '@/components/AppIcon'
 import './loginform.css'
 
 interface FormValues {
@@ -24,7 +25,7 @@ interface FormValues {
  * (双栏)传 `showBrand={false}` / `showFooter={false}` 关掉卡内重复。文字色走 `--lf-title` / `--lf-hint`
  * 变量(默认跟随应用令牌;深色玻璃皮肤覆写为浅色)。
  *
- * **暂不含** 短信免密 / 短信二次验证 / 外部登录(SSO)—— 与 Vue 侧一致地留给后续批次。
+ * 含第三方登录(SSO)按钮区;**暂不含** 短信免密 / 短信二次验证 —— 留给后续批次。
  */
 export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?: boolean; showFooter?: boolean }) {
   const { t } = useTranslation()
@@ -37,6 +38,8 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
 
   const [loading, setLoading] = useState(false)
   const [captcha, setCaptcha] = useState<{ id: string; svg: string; type: string } | null>(null)
+  // 第三方登录:后端 GET providers 驱动(仅点亮已启用的);空数组 = 整段 SSO 区不显。
+  const [ssoProviders, setSsoProviders] = useState<ExternalProvider[]>([])
   const [form] = Form.useForm<FormValues>()
 
   async function loadCaptcha() {
@@ -53,7 +56,14 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
     void loadSite().then(() => {
       if (useSiteStore.getState().site.captchaEnabled) void loadCaptcha()
     })
+    // 未配置外部登录或拉取失败:静默,整段 SSO 区不显
+    externalAuthApi.providers().then(setSsoProviders).catch(() => {})
   }, [loadSite])
+
+  /** 点击第三方登录:顶层导航到 authorize,后端 302 跳 IdP(OAuth2 授权码往返)。 */
+  function onSso(code: string) {
+    window.location.href = externalAuthApi.authorizeUrl(code)
+  }
 
   /** 验证码一次性消费:任何用掉票据的请求失败后必刷新,避免复用作废票据。 */
   async function refreshCaptchaAfterUse() {
@@ -158,6 +168,23 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
           {t('login.submit')}
         </Button>
       </Form>
+
+      {/* 第三方登录:后端 providers 驱动;无启用项则整段不显。 */}
+      {ssoProviders.length > 0 ? (
+        <>
+          <div className="lf-divider">
+            <span>{t('login.otherMethods')}</span>
+          </div>
+          <div className="lf-sso">
+            {ssoProviders.map((p) => (
+              <button key={p.code} className="lf-sso-btn" type="button" onClick={() => onSso(p.code)}>
+                {p.icon ? <AppIcon icon={p.icon} size={18} className="lf-sso-icon" /> : null}
+                {p.displayName}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
 
       {showFooter ? (
         <footer className="lf-foot">

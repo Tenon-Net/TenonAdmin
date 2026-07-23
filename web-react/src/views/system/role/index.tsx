@@ -217,7 +217,6 @@ export default function RolePage() {
         columns={columns}
         fetcher={fetchRoles}
         persistKey="sys-role"
-        headerTitle={t('role.title')}
         rowSelection={{ selectedRowKeys: batch.selectedKeys, onChange: batch.setSelectedKeys }}
         toolbar={
           <Space>

@@ -3,9 +3,10 @@
 // filterTree 是浅拷贝,故 StatusSwitch 成功后**重拉整树**而非写行(写浅拷贝的祖先行不会回源树,开关会弹回)。
 // 照 B11 范式:纯逻辑抽 orgForm.ts(变异钉),本页只接线。
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { App, Button, Dropdown, Form, Input, InputNumber, Modal, Space, Switch, type MenuProps } from 'antd'
+import { App, Button, Dropdown, Form, Input, InputNumber, Modal, Space, Switch, Tooltip, type MenuProps } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { ProColumns } from '@ant-design/pro-components'
+import { AppIcon } from '@/components/AppIcon'
 import { TreeTable } from '@/components/TreeTable'
 import { Can } from '@/components/Can'
 import { DictSelect } from '@/components/DictSelect'
@@ -167,7 +168,6 @@ export default function OrgPage() {
         expandedRowKeys={expandedKeys}
         onExpandedRowKeysChange={(keys) => setExpandedKeys(keys as number[])}
         persistKey="sys-org"
-        headerTitle={t('org.title')}
         toolbar={
           <Space>
             <Input
@@ -177,7 +177,15 @@ export default function OrgPage() {
               placeholder={t('org.searchPlaceholder')}
               style={{ width: 220 }}
             />
-            <Button onClick={() => void load()} loading={loading}>{t('common.refresh')}</Button>
+            {/* icon-only(对齐 Vue):文案键复用 proTable.refresh,不新增 common 键 */}
+            <Tooltip title={t('proTable.refresh')}>
+              <Button
+                icon={<AppIcon icon="ph:arrow-clockwise" size={16} />}
+                aria-label={t('proTable.refresh')}
+                onClick={() => void load()}
+                loading={loading}
+              />
+            </Tooltip>
             <Button onClick={toggleExpandAll}>{allExpanded ? t('common.collapseAll') : t('common.expandAll')}</Button>
             <Can code="POST:/api/v1/sys/org/add">
               <Button type="primary" onClick={() => openAdd(0)}>{t('common.add')}</Button>

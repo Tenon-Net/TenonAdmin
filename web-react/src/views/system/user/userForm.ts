@@ -4,10 +4,9 @@
 import type { AddUserInput, UpdateUserInput, UserDetail } from '@/types/api'
 
 /**
- * 编辑弹窗的字段模型。B11 原型只给账号/姓名/昵称/手机/邮箱/性别/角色/状态八个**编辑控件**,
- * 但 `orgId/positionId/directorId/avatar` 仍进模型 —— 它们**没有编辑控件却必须原样回传**:
- * `UpdateUserInput` 是全量替换语义(缺字段即置空),编辑时不带回去会把用户的机构/职位/头像**清掉**。
- * 机构树选择器 / 头像上传属批次 C,那之前这四个字段在本页只做透传(detail 取来、save 原样送回)。
+ * 编辑弹窗的字段模型。账号/姓名/昵称/手机/邮箱/性别/机构/职位/主管/角色/状态都有编辑控件;
+ * `avatar` 无 Form 控件(受控 state 挂上传组件),save 时并回。模型必须涵盖**全部可写字段**:
+ * `UpdateUserInput` 是全量替换语义(缺字段即置空),编辑时少带一个就会把用户对应字段**清掉**。
  */
 export interface UserForm {
   account: string
@@ -19,10 +18,10 @@ export interface UserForm {
   gender: string | null
   enabled: boolean
   roleIds: number[]
-  // ── 无编辑控件、仅透传(防全量替换清空),批次 C 补控件 ──
   orgId: number | null
   positionId: number | null
   directorId: number | null
+  // 无 Form 控件(受控 state 挂上传组件),save 时并回;仍进模型防全量替换清空
   avatar: string | null
 }
 
@@ -75,7 +74,7 @@ export function toAddInput(f: UserForm): AddUserInput {
   }
 }
 
-/** 更新入参(全量替换):透传字段一并回送,缺一个就被后端置空。 */
+/** 更新入参(全量替换):所有可写字段一并回送,缺一个就被后端置空。 */
 export function toUpdateInput(f: UserForm): UpdateUserInput {
   return {
     name: f.name,

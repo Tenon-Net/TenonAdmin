@@ -1,8 +1,8 @@
 // 用户管理页。C1 起改用共享组件层:写侧表单走 <FormContainer>(Modal/Drawer 二合一,onConfirm owns
 // loading+close),行内启停走 <StatusSwitch>(悲观 + 自动回滚),性别下拉/列翻译走 <DictSelect>/<DictTag>。
-// 机构树选择 / 头像上传 / 批量删除等仍属后续批次(orgId 等四字段在本页仍只透传,防全量替换清空)。
+// 表单两列栅格 + 机构/职位/主管控件对齐 Vue 用户页;仅头像仍是 Form 外受控 state(save 时并回)。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Avatar, Button, Card, Form, Input, Modal, Select, Space, Switch, Tag, Tree } from 'antd'
+import { App, Avatar, Button, Card, Col, Form, Input, Modal, Row, Select, Space, Switch, Tag, Tree } from 'antd'
 import type { TreeDataNode } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type DataTableHandle, type PageFetcher } from '@/components/DataTable'
@@ -13,10 +13,11 @@ import { FileUpload } from '@/components/FileUpload'
 import { StatusSwitch } from '@/components/StatusSwitch'
 import { DictSelect } from '@/components/DictSelect'
 import { DictTag } from '@/components/DictTag'
+import { OrgTreeSelect } from '@/components/OrgTreeSelect'
 import { useConfirm } from '@/hooks/useConfirm'
 import { useBatchDelete } from '@/hooks/useBatchDelete'
 import { useHasPerm } from '@/stores/auth'
-import { orgApi, roleApi, userApi } from '@/api'
+import { orgApi, positionApi, roleApi, userApi } from '@/api'
 import { buildTree, type Tree as TreeNode } from '@/utils/tree'
 import { translateError } from '@/utils/error'
 import type { SysOrg, UserItem } from '@/types/api'
@@ -25,8 +26,8 @@ import {
   type UserForm,
 } from './userForm'
 
-/** 弹窗表单里**有编辑控件**的字段;透传字段(orgId 等)不进 Form,save 时从 extraRef 合回。 */
-type EditableFields = Pick<UserForm, 'account' | 'password' | 'name' | 'nickname' | 'phone' | 'email' | 'gender' | 'enabled' | 'roleIds'>
+/** 弹窗表单里**有编辑控件**的字段;仅头像不进 Form(受控 state 挂上传组件),save 时并回。 */
+type EditableFields = Omit<UserForm, 'avatar'>
 
 export default function UserPage() {
   const { t } = useTranslation()
@@ -56,6 +57,21 @@ export default function UserPage() {
       .catch((e: unknown) => message.error(translateError(e)))
   }, [message])
 
+  // 职位/主管下拉源:同上拉一页足量;两者是配角,失败静默不打断列表(对齐 Vue)。
+  const [positionOptions, setPositionOptions] = useState<{ label: string; value: number }[]>([])
+  const [directorOptions, setDirectorOptions] = useState<{ label: string; value: number }[]>([])
+  useEffect(() => {
+    positionApi
+      .page({ page: 1, pageSize: 200 })
+      .then(({ items }) => setPositionOptions(items.map((p) => ({ label: p.name, value: p.id }))))
+      .catch(() => {})
+    // 主管候选就是用户自身(允许把某用户选为自己主管,后台系统无害,不加环检)
+    userApi
+      .page({ page: 1, pageSize: 200 })
+      .then(({ items }) => setDirectorOptions(items.map((u) => ({ label: `${u.name}(${u.account})`, value: u.id }))))
+      .catch(() => {})
+  }, [])
+
   // ── 分页取数:ProTable 搜索表单值(unknown)→ userApi.page 的强类型入参 ──
   // account/name 来自搜索表单(列未设 search:false);sortField/sortOrder 来自列排序(toProTable 已映)。
   // 有意**不 memo**:pro-table 经 useRefFunction 读 request,父组件重渲染(开弹窗/roleOptions)不会触发重取;
@@ -76,10 +92,6 @@ export default function UserPage() {
   const [form] = Form.useForm<EditableFields>()
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
-  // 无编辑控件、仅透传的字段(orgId/positionId/directorId):开弹窗时暂存,save 时合回,防全量替换清空。
-  const extraRef = useRef<Pick<UserForm, 'orgId' | 'positionId' | 'directorId'>>({
-    orgId: null, positionId: null, directorId: null,
-  })
   // 头像现有上传控件,升级为受控 state(开弹窗同步、上传写回、save 并入 full)。存 viewUrl 签名直链,不存 id/storagePath。
   const [avatar, setAvatar] = useState<string | null>(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
@@ -88,17 +100,15 @@ export default function UserPage() {
   const openAdd = () => {
     setEditingId(null)
     const b = blankForm()
-    extraRef.current = { orgId: b.orgId, positionId: b.positionId, directorId: b.directorId }
     setAvatar(b.avatar)
     form.setFieldsValue(b)
     setOpen(true)
   }
-  /** 编辑:先取 detail(拿 roleIds + 透传字段回显),成功再开弹层;失败弹码不开。 */
+  /** 编辑:先取 detail(拿 roleIds 等完整字段回显),成功再开弹层;失败弹码不开。 */
   const openEdit = useCallback(
     async (r: UserItem) => {
       try {
         const f = detailToForm(await userApi.detail(r.id))
-        extraRef.current = { orgId: f.orgId, positionId: f.positionId, directorId: f.directorId }
         setAvatar(f.avatar)
         form.setFieldsValue(f)
         setEditingId(r.id)
@@ -116,8 +126,8 @@ export default function UserPage() {
    */
   const save = async () => {
     const v = await form.validateFields() // 校验失败抛 → FormContainer 不关
-    // v 只含可编辑字段;blankForm 补默认、extraRef 补透传、avatar 受控值最后并入,合成完整 UserForm 再映射入参。
-    const full: UserForm = { ...blankForm(), ...v, ...extraRef.current, avatar }
+    // v 含除头像外全部字段;blankForm 补默认(编辑态 password 无控件)、avatar 受控值最后并入,合成完整 UserForm 再映射入参。
+    const full: UserForm = { ...blankForm(), ...v, avatar }
     try {
       if (editingId === null) {
         const out = await userApi.add(toAddInput(full))
@@ -242,7 +252,6 @@ export default function UserPage() {
             columns={columns}
             fetcher={fetchUsers}
             persistKey="sys-user"
-            headerTitle={t('user.title')}
             params={{ orgId: selectedOrgId ?? undefined }}
             rowSelection={{
               selectedRowKeys: batch.selectedKeys,
@@ -268,70 +277,109 @@ export default function UserPage() {
         open={open}
         onOpenChange={setOpen}
         title={editingId === null ? t('user.addTitle') : t('user.editTitle')}
-        width={560}
+        width={640}
         onConfirm={save}
       >
-        <Form form={form} labelCol={{ span: 6 }} wrapperCol={{ span: 18 }} style={{ marginTop: 12 }}>
-          <Form.Item
-            name="account" label={t('user.account')}
-            rules={[{ required: true, whitespace: true, message: t('user.accountRequired') }]}
-          >
-            {/* 账号建后不可改(后端也拒);编辑时置灰 */}
-            <Input disabled={editingId !== null} placeholder={t('user.account')} />
-          </Form.Item>
-          {editingId === null && (
-            <Form.Item name="password" label={t('user.password')}>
-              <Input.Password placeholder={t('user.passwordHint')} />
-            </Form.Item>
-          )}
-          <Form.Item
-            name="name" label={t('user.name')}
-            rules={[{ required: true, whitespace: true, message: t('user.nameRequired') }]}
-          >
-            <Input placeholder={t('user.name')} />
-          </Form.Item>
-          <Form.Item name="nickname" label={t('user.nickname')}>
-            <Input placeholder={t('user.nicknamePlaceholder')} />
-          </Form.Item>
-          <Form.Item
-            name="phone" label={t('user.phone')}
-            rules={[{ validator: (_, v: string) => (!v || /^1[3-9]\d{9}$/.test(v) ? Promise.resolve() : Promise.reject(new Error(t('user.phoneInvalid')))) }]}
-          >
-            <Input placeholder={t('user.phonePlaceholder')} />
-          </Form.Item>
-          <Form.Item
-            name="email" label={t('user.email')}
-            rules={[{ validator: (_, v: string) => (!v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? Promise.resolve() : Promise.reject(new Error(t('user.emailInvalid')))) }]}
-          >
-            <Input placeholder={t('user.emailPlaceholder')} />
-          </Form.Item>
-          {/* 头像:非表单字段,受控 state。预览用 Avatar(有图显图、无图显姓名首字母);上传走共享 FileUpload。 */}
-          <Form.Item label={t('user.avatar')}>
-            <Space>
-              <Avatar shape="circle" size={48} src={avatar || undefined}>
-                {watchedName?.trim()?.[0]?.toUpperCase()}
-              </Avatar>
-              <FileUpload
-                accept="image/*"
-                showUploadList={false}
-                onLoadingChange={setAvatarUploading}
-                onUploaded={(o) => setAvatar(o.viewUrl ?? null)}
+        {/* 两列栅格(对齐 Vue):相关字段成对排,头像整行;账号编辑时禁改并占整行。定宽 label 让半行/整行项对齐。 */}
+        <Form form={form} labelCol={{ flex: '76px' }} wrapperCol={{ flex: 1 }} style={{ marginTop: 12 }}>
+          <Row gutter={16}>
+            <Col xs={24} sm={editingId === null ? 12 : 24}>
+              <Form.Item
+                name="account" label={t('user.account')}
+                rules={[{ required: true, whitespace: true, message: t('user.accountRequired') }]}
               >
-                <Button size="small" loading={avatarUploading}>
-                  {avatarUploading ? t('user.avatarUploading') : t('user.avatar')}
-                </Button>
-              </FileUpload>
-            </Space>
-          </Form.Item>
-          <Form.Item name="gender" label={t('user.gender')}>
-            <DictSelect typeCode="gender" allowClear placeholder={t('user.genderPlaceholder')} />
-          </Form.Item>
-          <Form.Item name="roleIds" label={t('user.roles')}>
-            <Select mode="multiple" allowClear placeholder={t('user.rolesPlaceholder')} options={roleOptions} />
-          </Form.Item>
-          <Form.Item name="enabled" label={t('common.status')} valuePropName="checked">
-            <Switch />
-          </Form.Item>
+                {/* 账号建后不可改(后端也拒);编辑时置灰 */}
+                <Input disabled={editingId !== null} placeholder={t('user.account')} />
+              </Form.Item>
+            </Col>
+            {editingId === null && (
+              <Col xs={24} sm={12}>
+                <Form.Item name="password" label={t('user.password')}>
+                  <Input.Password placeholder={t('user.passwordHint')} />
+                </Form.Item>
+              </Col>
+            )}
+            <Col xs={24} sm={12}>
+              <Form.Item
+                name="name" label={t('user.name')}
+                rules={[{ required: true, whitespace: true, message: t('user.nameRequired') }]}
+              >
+                <Input placeholder={t('user.name')} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="nickname" label={t('user.nickname')}>
+                <Input placeholder={t('user.nicknamePlaceholder')} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="gender" label={t('user.gender')}>
+                <DictSelect typeCode="gender" allowClear placeholder={t('user.genderPlaceholder')} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                name="phone" label={t('user.phone')}
+                rules={[{ validator: (_, v: string) => (!v || /^1[3-9]\d{9}$/.test(v) ? Promise.resolve() : Promise.reject(new Error(t('user.phoneInvalid')))) }]}
+              >
+                <Input placeholder={t('user.phonePlaceholder')} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                name="email" label={t('user.email')}
+                rules={[{ validator: (_, v: string) => (!v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? Promise.resolve() : Promise.reject(new Error(t('user.emailInvalid')))) }]}
+              >
+                <Input placeholder={t('user.emailPlaceholder')} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="orgId" label={t('user.org')}>
+                <OrgTreeSelect placeholder={t('user.orgPlaceholder')} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="positionId" label={t('user.position')}>
+                <Select allowClear placeholder={t('user.positionPlaceholder')} options={positionOptions} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="directorId" label={t('user.director')}>
+                {/* antd v6:optionFilterProp 收进 showSearch 对象(顶层写法已废弃) */}
+                <Select showSearch={{ optionFilterProp: 'label' }} allowClear placeholder={t('user.directorPlaceholder')} options={directorOptions} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="roleIds" label={t('user.roles')}>
+                <Select mode="multiple" allowClear placeholder={t('user.rolesPlaceholder')} options={roleOptions} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="enabled" label={t('common.status')} valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              {/* 头像:非表单字段,受控 state。预览用 Avatar(有图显图、无图显姓名首字母);上传走共享 FileUpload。 */}
+              <Form.Item label={t('user.avatar')}>
+                <Space>
+                  <Avatar shape="circle" size={48} src={avatar || undefined}>
+                    {watchedName?.trim()?.[0]?.toUpperCase()}
+                  </Avatar>
+                  <FileUpload
+                    accept="image/*"
+                    showUploadList={false}
+                    onLoadingChange={setAvatarUploading}
+                    onUploaded={(o) => setAvatar(o.viewUrl ?? null)}
+                  >
+                    <Button size="small" loading={avatarUploading}>
+                      {avatarUploading ? t('user.avatarUploading') : t('user.avatar')}
+                    </Button>
+                  </FileUpload>
+                </Space>
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </FormContainer>
 

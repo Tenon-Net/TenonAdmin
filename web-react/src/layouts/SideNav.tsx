@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Menu, Typography, type MenuProps } from 'antd'
-import { AppstoreOutlined } from '@ant-design/icons'
 import { useAppStore, isDark } from '@/stores/app'
 import { useSiteStore } from '@/stores/site'
+import { TenonLogo } from '@/components/TenonLogo'
 import { openKeysFor, type MenuItem } from './menuItems'
 import './sidenav.css'
 
@@ -40,7 +40,8 @@ export function SideNav({
     <div className={`sidenav${rail ? ' rail' : ''}`}>
       {showBrand ? (
         <div className="sidenav-brand">
-          {site.logo ? <img src={site.logo} alt="" style={{ height: 28 }} /> : <AppstoreOutlined style={{ fontSize: 22 }} />}
+          {/* 壳层品牌恒用内置矢量 logo(对齐 Vue SideNav);后台配的 site.logo 只用于登录页。 */}
+          <TenonLogo size={28} />
           {!iconOnly ? (
             <Typography.Text strong style={{ fontSize: 16, color: dark ? '#fff' : undefined, whiteSpace: 'nowrap' }}>
               {site.title}

@@ -20,6 +20,14 @@
   --gap-card: 12px;
 }
 
+/* 全局 border-box(镜像 Vue styles/index.css):所有移植 CSS 的宽高/内边距数值都按 border-box 设计,
+   缺了它手写容器全按 content-box 膨胀(登录卡宽 +90px、tabsbar 43px、aside 237px 等一票 1px~百px 偏移)。 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body,
 #root {

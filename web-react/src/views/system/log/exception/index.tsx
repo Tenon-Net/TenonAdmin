@@ -57,7 +57,6 @@ export default function ExceptionLogPage() {
         columns={columns}
         fetcher={fetchException}
         persistKey="sys-log-exception"
-        headerTitle={t('log.exceptionTitle')}
         toolbar={
           <Can code="DELETE:/api/v1/sys/log/exception">
             <Button danger onClick={clearLogs}>{t('log.clear')}</Button>

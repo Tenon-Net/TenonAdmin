@@ -73,7 +73,6 @@ export default function RecyclePage() {
         columns={columns}
         fetcher={fetchRecycle}
         persistKey={`sys-recycle-${activeTab}`}
-        headerTitle={t('recycle.title')}
       />
     </>
   )

@@ -241,7 +241,6 @@ export default function MenuPage() {
         expandedRowKeys={expandedKeys}
         onExpandedRowKeysChange={(keys) => setExpandedKeys(keys as number[])}
         persistKey="sys-menu"
-        headerTitle={t('menu.title')}
         toolbar={
           <Space>
             <Select value={moduleFilter} onChange={setModuleFilter} options={filterOptions} style={{ width: 200 }} placeholder={t('menu.module')} />

@@ -202,7 +202,6 @@ export default function DictPage() {
           columns={typeColumns}
           fetcher={fetchTypes}
           persistKey="sys-dict-type"
-          headerTitle={t('dict.title')}
           activeRowKey={selectedType?.id ?? null}
           onRowClick={selectType}
           rowSelection={{ selectedRowKeys: typeBatch.selectedKeys, onChange: typeBatch.setSelectedKeys }}

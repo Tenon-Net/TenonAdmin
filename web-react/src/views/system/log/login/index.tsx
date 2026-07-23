@@ -61,7 +61,6 @@ export default function LoginLogPage() {
       columns={columns}
       fetcher={fetchLogin}
       persistKey="sys-log-login"
-      headerTitle={t('log.loginTitle')}
       toolbar={
         <Can code="DELETE:/api/v1/sys/log/login">
           <Button danger onClick={clearLogs}>{t('log.clear')}</Button>

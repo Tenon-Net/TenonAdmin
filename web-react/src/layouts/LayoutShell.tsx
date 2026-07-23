@@ -1,25 +1,27 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Avatar, Badge, Breadcrumb, Button, Drawer, Dropdown, Grid, Menu, Space, Tooltip, Typography, Watermark, type MenuProps } from 'antd'
+import { Avatar, Breadcrumb, Button, Drawer, Dropdown, Grid, Menu, Space, Tooltip, Typography, Watermark, type MenuProps } from 'antd'
 import {
-  AppstoreOutlined, BellOutlined, DesktopOutlined, KeyOutlined, LinkOutlined, LogoutOutlined,
-  MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SettingOutlined, SunOutlined, UserOutlined,
+  AppstoreOutlined, DesktopOutlined, FullscreenExitOutlined, FullscreenOutlined, KeyOutlined, LinkOutlined, LogoutOutlined,
+  MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SettingOutlined, SunOutlined, TranslationOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useAppStore, isDark, type LayoutMode } from '@/stores/app'
+import { useAppStore, isDark, type LayoutMode, type Locale } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
 import { useSiteStore } from '@/stores/site'
 import { useTabsStore } from '@/stores/tabs'
-import { authApi, noticeApi } from '@/api'
+import { authApi } from '@/api'
+import { TenonLogo } from '@/components/TenonLogo'
 import { useLayoutMenu } from './useLayoutMenu'
+import { NoticeBell } from './NoticeBell'
 import { SideNav } from './SideNav'
 import { SettingsDrawer } from './SettingsDrawer'
 import { MenuSearch } from './MenuSearch'
 import { TabsBar } from './TabsBar'
 import { KeepAliveOutlet } from './KeepAliveOutlet'
 import { useTabSync } from './useTabSync'
-import { useRealtime, noticeBus } from '@/composables/useRealtime'
+import { useRealtime } from '@/composables/useRealtime'
 import { breadcrumbFor, type MenuItem } from './menuItems'
 import './shell.css'
 
@@ -53,6 +55,7 @@ export function LayoutShell() {
   const collapsed = useAppStore((s) => s.collapsed)
   const toggleCollapsed = useAppStore((s) => s.toggleCollapsed)
   const toggleDark = useAppStore((s) => s.toggleDark)
+  const setLocale = useAppStore((s) => s.setLocale)
   const dark = useAppStore(isDark)
   const showTabs = useAppStore((s) => s.showTabs)
   const showBreadcrumb = useAppStore((s) => s.showBreadcrumb)
@@ -71,6 +74,18 @@ export function LayoutShell() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
 
+  // 全屏(对齐 Vue AppHeader 的 toggleFullscreen):监听 fullscreenchange,Esc/F11 退出时图标同步。
+  const [fullscreen, setFullscreen] = useState(false)
+  useEffect(() => {
+    const sync = () => setFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', sync)
+    return () => document.removeEventListener('fullscreenchange', sync)
+  }, [])
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen()
+    else void document.documentElement.requestFullscreen()
+  }
+
   // 全局 Ctrl/Cmd+K:开合命令面板(菜单搜索)。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -81,21 +96,6 @@ export function LayoutShell() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
-  // 通知未读角标:30s 轮询兜底(个人页读通知后由此自愈)+ 订阅 noticeBus(SignalR 推送 `notice-changed` 即刻重拉,免最长 30s 延迟);失败静默不糊顶栏。
-  const [unread, setUnread] = useState(0)
-  useEffect(() => {
-    let alive = true
-    const poll = () => noticeApi.unreadCount().then((n) => alive && setUnread(n)).catch(() => {})
-    void poll()
-    const id = setInterval(() => void poll(), 30000)
-    const off = noticeBus.on(() => void poll())
-    return () => {
-      alive = false
-      clearInterval(id)
-      off()
-    }
   }, [])
 
   // 用户下拉:个人中心四页 + 登出。key=personal 段名,logout 单独处理。
@@ -180,7 +180,8 @@ export function LayoutShell() {
                 否则只出面包屑/标题。别合成互斥三元,否则 header-brand 模式下 showBreadcrumb 成死控件。 */}
             {headerShowBrand ? (
               <div className="shell-brand">
-                {site.logo ? <img src={site.logo} alt="" style={{ height: 26 }} /> : <AppstoreOutlined style={{ fontSize: 20 }} />}
+                {/* 壳层品牌恒用内置矢量 logo(对齐 Vue AppHeader);后台配的 site.logo 只用于登录页。 */}
+                <TenonLogo size={26} />
                 <Typography.Text strong style={{ color: dark ? '#fff' : undefined, whiteSpace: 'nowrap' }}>
                   {site.title}
                 </Typography.Text>
@@ -205,26 +206,45 @@ export function LayoutShell() {
             </div>
           ) : null}
 
+          {/* 按钮序对齐 Vue AppHeader:搜索 → 全屏 → 主题 → 语言 → 设置 → 切应用 → 通知 → 用户 */}
           <div className="shell-header-right">
+            <Tooltip title={`${t('app.search')} (Ctrl+K)`}>
+              <Button type="text" aria-label={t('app.search')} icon={<SearchOutlined />} onClick={() => setSearchOpen(true)} />
+            </Tooltip>
+            <Tooltip title={fullscreen ? t('app.exitFullscreen') : t('app.fullscreen')}>
+              <Button
+                type="text"
+                aria-label={fullscreen ? t('app.exitFullscreen') : t('app.fullscreen')}
+                icon={fullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                onClick={toggleFullscreen}
+              />
+            </Tooltip>
+            <Tooltip title={t('app.theme')}>
+              <Button type="text" aria-label={t('app.theme')} icon={dark ? <SunOutlined /> : <MoonOutlined />} onClick={toggleDark} />
+            </Tooltip>
+            {/* 语言下拉(对齐 Vue 的 localeOptions):店招用固定双语文案,不走 t()(切错语言时也要认得出) */}
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'zh-CN', label: '简体中文' },
+                  { key: 'en-US', label: 'English' },
+                ],
+                onClick: ({ key }) => setLocale(key as Locale),
+              }}
+              trigger={['click']}
+            >
+              <Button type="text" aria-label={t('app.language')} icon={<TranslationOutlined />} />
+            </Dropdown>
+            <Tooltip title={t('app.settings')}>
+              <Button type="text" aria-label={t('app.settings')} icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)} />
+            </Tooltip>
             {modules.length > 1 ? (
               <Tooltip title={t('app.switchModule')}>
                 <Button type="text" aria-label={t('app.switchModule')} icon={<AppstoreOutlined />} onClick={() => navigate('/module')} />
               </Tooltip>
             ) : null}
-            <Tooltip title={`${t('app.search')} (Ctrl+K)`}>
-              <Button type="text" aria-label={t('app.search')} icon={<SearchOutlined />} onClick={() => setSearchOpen(true)} />
-            </Tooltip>
-            <Tooltip title={t('app.settings')}>
-              <Button type="text" aria-label={t('app.settings')} icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)} />
-            </Tooltip>
-            <Tooltip title={t('app.theme')}>
-              <Button type="text" aria-label={t('app.theme')} icon={dark ? <SunOutlined /> : <MoonOutlined />} onClick={toggleDark} />
-            </Tooltip>
-            <Tooltip title={t('menu.notice')}>
-              <Badge count={unread} size="small" offset={[-2, 4]}>
-                <Button type="text" aria-label={t('menu.notice')} icon={<BellOutlined />} onClick={() => navigate('/personal/notice')} />
-              </Badge>
-            </Tooltip>
+            {/* 通知铃铛:富面板 Popover(未读角标 + 列表 + 正文弹层),对齐 Vue <NoticeBell /> */}
+            <NoticeBell />
             <Dropdown menu={{ items: userMenu, onClick: onUserMenu }} trigger={['click']}>
               <Space size={8} style={{ cursor: 'pointer', padding: '0 4px' }}>
                 <Avatar size="small" src={userInfo?.avatar || undefined}>{avatarChar}</Avatar>

@@ -114,7 +114,6 @@ export default function PositionPage() {
         columns={columns}
         fetcher={fetchPositions}
         persistKey="sys-position"
-        headerTitle={t('position.title')}
         toolbar={
           <Can code="POST:/api/v1/sys/position/add">
             <Button type="primary" onClick={openAdd}>{t('common.add')}</Button>

@@ -85,7 +85,6 @@ export default function FilePage() {
       columns={columns}
       fetcher={fetchFiles}
       persistKey="sys-file"
-      headerTitle={t('file.title')}
       rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys }}
       toolbar={
         <Space>

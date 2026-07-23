@@ -116,7 +116,6 @@ export default function NoticePage() {
         columns={columns}
         fetcher={fetchNotices}
         persistKey="sys-notice"
-        headerTitle={t('notice.title')}
         toolbar={
           <Can code="POST:/api/v1/sys/notice">
             <Button type="primary" onClick={openPublish}>{t('notice.publish')}</Button>

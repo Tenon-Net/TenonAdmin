@@ -81,7 +81,6 @@ export default function OpLogPage() {
         columns={columns}
         fetcher={fetchOp}
         persistKey="sys-log-op"
-        headerTitle={t('log.opTitle')}
         toolbar={
           <Can code="DELETE:/api/v1/sys/log/op">
             <Button danger onClick={clearLogs}>{t('log.clear')}</Button>

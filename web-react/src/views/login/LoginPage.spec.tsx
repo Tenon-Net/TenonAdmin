@@ -9,6 +9,8 @@ vi.mock('@/api', async (orig) => {
     ...actual, // ApiError 要真的(translateError 用 instanceof 判它)
     authApi: { login: vi.fn(), captcha: vi.fn() },
     configApi: { siteInfo: vi.fn() },
+    // providers 默认空数组(SSO 区不显);不 mock 会走真 fetch 打网络(air-gap 违规)。
+    externalAuthApi: { ...actual.externalAuthApi, providers: vi.fn(() => Promise.resolve([])) },
   }
 })
 
@@ -27,11 +29,12 @@ vi.mock('@ant-design/icons', () => ({
   CheckCircleFilled: () => null,
 }))
 
-import { authApi, configApi, ApiError } from '@/api'
+import { authApi, configApi, externalAuthApi, ApiError } from '@/api'
 
 const loginMock = vi.mocked(authApi.login)
 const captchaMock = vi.mocked(authApi.captcha)
 const siteMock = vi.mocked(configApi.siteInfo)
+const providersMock = vi.mocked(externalAuthApi.providers)
 
 const SITE = {
   title: '榫卯后台', subtitle: '', copyright: '', copyrightUrl: '', logo: '',
@@ -101,6 +104,25 @@ describe('品牌信息来自 site store', () => {
   it('logo 非空时渲染出来', async () => {
     await mount({ ...SITE, logo: '/files/logo.png' })
     await waitFor(() => expect(screen.getByTestId('login-card').querySelector('img')?.getAttribute('src')).toBe('/files/logo.png'))
+  })
+})
+
+describe('第三方登录(SSO)由后端 providers 驱动', () => {
+  it('无启用 provider(默认空数组):整段不渲染', async () => {
+    await mount()
+    expect(screen.getByTestId('login-card').querySelector('.lf-sso')).toBeNull()
+  })
+
+  it('有启用 provider:渲染分隔线 + 按钮行', async () => {
+    providersMock.mockResolvedValueOnce([
+      { code: 'gitee', displayName: 'Gitee' },
+      { code: 'github', displayName: 'GitHub', icon: 'ph:github-logo' },
+    ])
+    await mount()
+    expect(await screen.findByText('GitHub')).toBeTruthy()
+    expect(screen.getByText('Gitee')).toBeTruthy()
+    expect(screen.getByText('其他登录方式')).toBeTruthy()
+    expect(screen.getByTestId('login-card').querySelectorAll('.lf-sso-btn').length).toBe(2)
   })
 })
 

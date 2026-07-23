@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { App as AntdApp } from 'antd'
 import '@/locales' // t() 要真文案
-import { userApi, roleApi, dictApi, orgApi } from '@/api'
+import { userApi, roleApi, dictApi, orgApi, positionApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
 /**
@@ -36,6 +36,7 @@ beforeEach(() => {
   vi.spyOn(roleApi, 'page').mockResolvedValue({ items: [], total: 0 })
   vi.spyOn(orgApi, 'list').mockResolvedValue([])
   vi.spyOn(userApi, 'page').mockResolvedValue({ items: [], total: 0 })
+  vi.spyOn(positionApi, 'page').mockResolvedValue({ items: [], total: 0 }) // 职位下拉源
   vi.spyOn(dictApi, 'items').mockResolvedValue([]) // useDictOptions('gender')
 })
 afterEach(() => {

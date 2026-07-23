@@ -52,6 +52,55 @@
   height: 100%;
   width: auto;
 }
+/* 第三方登录:分隔线 + 等宽按钮(设计稿 §Variant A) */
+.lf-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 24px 0 16px;
+}
+.lf-divider::before,
+.lf-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--lf-border, var(--color-border));
+}
+.lf-divider span {
+  font-size: 12px;
+  color: var(--lf-hint, var(--color-text-tertiary));
+}
+.lf-sso {
+  display: flex;
+  gap: 12px;
+}
+.lf-sso-btn {
+  flex: 1;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1.5px solid var(--lf-border, var(--color-border));
+  border-radius: 11px;
+  background: var(--color-fill);
+  font-size: 13px;
+  color: var(--lf-title, var(--color-text-secondary));
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+.lf-sso-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+.lf-sso-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 /* 页脚:版权(可选链接)+ 构建期版本号 */
 .lf-foot {
   display: flex;

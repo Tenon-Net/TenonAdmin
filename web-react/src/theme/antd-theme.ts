@@ -168,6 +168,9 @@ export function buildAntdTheme(opts: ThemeOpts): ThemeConfig {
       Card: defined({ borderRadiusLG: num(v('--radius-lg')) }),
       // compactAlgorithm 不管表格行高,单元格纵向内边距要另给。
       Table: opts.density === 'compact' ? { cellPaddingBlock: 8, cellPaddingBlockSM: 6 } : {},
+      // 侧栏菜单不画自己的右边线(竖向唯一分隔线属主是 .shell-aside 的 border-right,否则交界处双线)。
+      // 用令牌而非 CSS 覆写:antd 的规则特异性 (0,3,0),类选择器打不过。
+      Menu: { activeBarBorderWidth: 0 },
     },
   }
 }
