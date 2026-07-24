@@ -37,7 +37,7 @@ features:
     details: JWT auth, login lockout, rate limiting, forced logout, and log redaction are on by default; three CAPTCHA styles ship built in and switch on when you want them.
   - icon: 🖥️
     title: Full-Stack Delivery
-    details: Ships with a Vue 3 + Naive UI admin console, with containerized deployment and multi-replica horizontal scaling supported.
+    details: Ships with two self-contained admin console templates — Vue 3 + Naive UI or React 19 + Ant Design, pick one — with containerized deployment and multi-replica horizontal scaling supported.
   - icon: 🧰
     title: Component Ecosystem
     details: Shared components like ProTable and IconPicker are published as standalone npm packages — install them individually into any Vue 3 + Naive UI project.

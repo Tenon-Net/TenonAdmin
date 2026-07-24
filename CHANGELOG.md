@@ -13,6 +13,26 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 > **This file is the source of truth for what shipped**, not the GitHub Release page: `backend-release` creates that page with `gh release create --generate-notes`, which drafts "What's Changed" from merged PRs only. Feature commits pushed straight to `dev` (common in this repo) never show up there, while unrelated PRs (docs, CI) do — so the release page can look complete while missing the actual content. The runbook's post-release step now replaces that draft with the matching section of this file.
 
+## 0.3.0 - 2026-07-23
+
+A second official frontend template — a full React 19 + Ant Design port of `web/`, self-contained and zero-shared by design — plus a batch of parity fixes discovered while building it, and a SqlServer/PostgreSQL startup performance fix.
+
+### Added
+
+- **`web-react/`: a new React 19 + Ant Design (antd 6) admin console template**, feature-for-feature parity with `web/` (Vue 3 + Naive UI) against the same backend contract, but deliberately **self-contained and zero-shared** — no code is factored out between the two templates (rationale in `docs/react-template-ledger.md`). Covers the three login skins, dynamic routing driven by the backend menu tree, a six-mode layout shell with settings drawer, tabs + keep-alive page caching, shared components (dict trio, form container, selectors, upload, Markdown editor, charts, icon picker), every business page (org/menu tree-tables with button management, role authorization, dict master-detail, the three audit-log pages, five personal-center pages, dashboards, and more), SMS login, SignalR realtime push (force-logout, notice badges), a command palette (Ctrl/Cmd+K), and Docker/Caddy/nginx deployment configs. `npm run dev` runs on port 5174.
+- **Dynamic-route diagnostics page** (both templates): when a menu entry's route matches but its view component can't be resolved, the app now shows a diagnostic page instead of a silent 404 or a stale view — helps distinguish a typo'd component path from a glob that didn't match (`web/src/views/error/MissingRoute.vue`, `web-react/src/router/detailRoutes.tsx`).
+
+### Fixed
+
+- **SqlServer/PostgreSQL CodeFirst startup could take 10+ minutes on table-heavy schemas** (#16): each `CREATE TABLE`/`CREATE INDEX` auto-committed independently, so every statement paid its own transaction-log flush (measured 152 tables at 10+ minutes). `DatabaseInitializer` now wraps the whole `CodeFirst.InitTables` call in one transaction, collapsing that to a single flush at commit. MySQL's DDL already auto-commits regardless, so the wrapper is a no-op there.
+- **`web/` production reverse-proxy configs were missing `/hub`**: `Caddyfile`/`nginx.conf` only proxied `/api` and `/health`, so the SignalR realtime channel (force-logout, unread-count refresh) failed its WebSocket handshake behind Docker/Caddy or nginx and silently degraded to 30-second polling. Fixed to match `web-react/`'s already-correct config.
+- **`web/`'s Markdown editor had a stored-XSS gap and phoned home** (the same defect class found and fixed on `web-react/` during its build): `md-editor-v3` renders raw inline HTML with no sanitizer (a malicious notice author could steal a viewer's JWT) and lazy-loads highlight/katex/mermaid/prettier/echarts from unpkg on mount, breaking air-gapped self-containment. Fixed symmetrically: a bundled `XSSPlugin` sanitizes rendered Markdown and echarts gets a no-op instance; the other four extensions are disabled.
+- **`web/src/api/schema.d.ts` was missing the site-info `Logo` field**: the backend DTO gained the field earlier but `gen:api` was never re-run afterward, and the hand-written `unwrap<T>` type assertion masked the drift from typecheck. Regenerated to match the backend contract.
+
+### Changed
+
+- **Notice bell redesigned as a single list** (both templates, symmetric): dropped the "all/unread" tabs — unread is a filter, not a category, so presenting it as a sibling of "all" was misplaced navigation. Unread rows now get a dot, bold text, and a tinted background; read rows dim. Filtering by read state moved to the personal notice page.
+
 ## 0.2.2 - 2026-07-22
 
 A small fix-and-polish release: consumer seed Ids are no longer capped at a tiny fixed range, and the web UI gets a new enterprise color palette with a supporting texture pass.

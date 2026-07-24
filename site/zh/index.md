@@ -37,7 +37,7 @@ features:
     details: JWT 鉴权、登录锁定、请求限流、强制下线、日志脱敏，默认全都在。图形验证码内置三种，按需开启。
   - icon: 🖥️
     title: 全栈交付
-    details: 配套 Vue 3 + Naive UI 管理端，支持容器化部署与多副本水平扩展。
+    details: 配套两套各自独立的管理端模板——Vue 3 + Naive UI 或 React 19 + Ant Design，二选一，支持容器化部署与多副本水平扩展。
   - icon: 🧰
     title: 组件生态
     details: ProTable、IconPicker 这些通用组件已经拆成独立 npm 包，任意 Vue 3 + Naive UI 项目都能单装。
