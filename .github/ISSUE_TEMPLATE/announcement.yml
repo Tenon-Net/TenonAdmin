@@ -1,0 +1,34 @@
+name: 公告 / Announcement
+description: 仅限维护者发布面向用户的通知(发版、维护、弃用等)/ Maintainers only — publish a user-facing notice (release, maintenance, deprecation, etc.)
+labels: [announcement]
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: 通知类型 / Notice type
+      options:
+        - 发版 / Release
+        - 维护 / Maintenance
+        - 弃用 / Deprecation
+        - 安全 / Security
+        - 其他 / Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: content
+    attributes:
+      label: 通知内容 / Notice content
+      description: |
+        面向用户展示的正文,支持 Markdown。
+        User-facing body, Markdown supported.
+    validations:
+      required: true
+
+  - type: input
+    id: affected-versions
+    attributes:
+      label: 影响版本 / Affected versions
+      description: |
+        选填。不涉及具体版本可留空。
+        Optional. Leave blank if not version-specific.
