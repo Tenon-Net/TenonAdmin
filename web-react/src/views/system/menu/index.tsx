@@ -23,7 +23,7 @@ import { MenuType, type MenuInput, type MenuTreeNode } from '@/types/menu'
 import type { ModuleRow } from '@/types/api'
 import type { PermissionRouteItem } from '@/types/api'
 import {
-  UNASSIGNED, blankMenu, buildButtonInfo, menuRowToInput, stripButtons, subtreeIds,
+  ALL_MODULES, UNASSIGNED, blankMenu, buildButtonInfo, menuRowToInput, stripButtons, subtreeIds,
 } from './menuForm'
 
 export default function MenuPage() {
@@ -78,7 +78,11 @@ export default function MenuPage() {
   // moduleId 只存在顶级目录(parentId==0),子节点为 null 靠继承,故只过滤顶级数组、子树自动跟随;
   // UNASSIGNED 归拢 moduleId==null 的顶级目录。再剥按钮交表格。
   const filteredTree = useMemo(
-    () => stripButtons(tree.filter((r) => (moduleFilter === UNASSIGNED ? r.moduleId == null : r.moduleId === moduleFilter))),
+    () => stripButtons(tree.filter((r) =>
+      moduleFilter === ALL_MODULES ? true
+      : moduleFilter === UNASSIGNED ? r.moduleId == null
+      : r.moduleId === moduleFilter,
+    )),
     [tree, moduleFilter],
   )
 
@@ -99,7 +103,11 @@ export default function MenuPage() {
   const toggleExpandAll = () => setExpandedKeys(allExpanded ? [] : expandableIds(visibleTree))
 
   const filterOptions = useMemo(
-    () => [...modules.map((m) => ({ label: m.title, value: m.id })), { label: t('menu.moduleUnassigned'), value: UNASSIGNED }],
+    () => [
+      { label: t('menu.moduleAll'), value: ALL_MODULES },
+      ...modules.map((m) => ({ label: m.title, value: m.id })),
+      { label: t('menu.moduleUnassigned'), value: UNASSIGNED },
+    ],
     [modules, t],
   )
   const currentAppPrefix = moduleFilter === UNASSIGNED ? undefined : modules.find((m) => m.id === moduleFilter)?.apiPrefix ?? undefined
@@ -128,8 +136,8 @@ export default function MenuPage() {
 
   const openAdd = useCallback((pid = 0) => {
     setEditingId(null)
-    // 新建顶级目录时自动盖上当前筛选的应用(「未分配」筛选下留空)。
-    const moduleId = pid === 0 && moduleFilter !== UNASSIGNED ? moduleFilter : null
+    // 新建顶级目录时自动盖上当前筛选的应用(「未分配」「全部」筛选下留空,交给用户手选)。
+    const moduleId = pid === 0 && moduleFilter !== UNASSIGNED && moduleFilter !== ALL_MODULES ? moduleFilter : null
     form.setFieldsValue(blankMenu(pid, moduleId, MenuType.Menu))
     setOpen(true)
   }, [form, moduleFilter])

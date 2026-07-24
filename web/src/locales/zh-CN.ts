@@ -219,6 +219,7 @@ export default {
     module: '所属应用',
     moduleHint: '仅顶级目录可设',
     linkHint: '外链/内嵌:路径填 http(s) URL = 外链(新窗口打开);组件填 http(s) URL = 内嵌 iframe。',
+    moduleAll: '全部',
     moduleUnassigned: '未分配',
     path: '路由路径',
     component: '组件路径',

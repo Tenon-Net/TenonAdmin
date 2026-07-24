@@ -218,6 +218,7 @@ export default {
     module: 'App',
     moduleHint: 'Top-level catalog only',
     linkHint: 'External / embed: an http(s) URL in Path = external link (new window); an http(s) URL in Component = embedded iframe.',
+    moduleAll: 'All',
     moduleUnassigned: 'Unassigned',
     path: 'Route path',
     component: 'Component',

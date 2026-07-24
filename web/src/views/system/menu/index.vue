@@ -26,6 +26,9 @@ const tree = ref<MenuTreeNode[]>([])
 const modules = ref<ModuleRow[]>([])
 /** 「未分配」哨兵:雪花 id 无 0,用它表示 moduleId==null 的顶级目录分组。 */
 const UNASSIGNED = 0
+/** 「全部」哨兵:雪花 id 无负数,用它表示不按应用过滤。默认筛选停在当前应用时,
+ * 别的应用底下新建的菜单会被筛掉、看着像"存了但不见了"(issue #17)——需要一个能看全量的退路。 */
+const ALL_MODULES = -1
 /** 所属应用筛选:默认跟随当前进入的应用,modules 加载后再校正。 */
 const moduleFilter = ref<number>(auth.currentModuleId ?? UNASSIGNED)
 /** 后端实时路由表(含消费方自建控制器)——权限码下拉的数据源,免手敲 `GET:/api/v1/...`。 */
@@ -85,8 +88,9 @@ const typeTagType = (ty: MenuType): 'info' | 'success' => (ty === MenuType.Catal
 
 const moduleOptions = computed(() => modules.value.map((m) => ({ label: m.title, value: m.id })))
 
-/** 顶部筛选下拉:各应用 +「未分配」。 */
+/** 顶部筛选下拉:「全部」+ 各应用 +「未分配」。 */
 const filterOptions = computed(() => [
+  { label: t('menu.moduleAll'), value: ALL_MODULES },
   ...moduleOptions.value,
   { label: t('menu.moduleUnassigned'), value: UNASSIGNED },
 ])
@@ -105,7 +109,11 @@ function stripButtons(nodes: MenuTreeNode[]): MenuTreeNode[] {
  */
 const filteredTree = computed(() =>
   stripButtons(
-    tree.value.filter((r) => (moduleFilter.value === UNASSIGNED ? r.moduleId == null : r.moduleId === moduleFilter.value)),
+    tree.value.filter((r) =>
+      moduleFilter.value === ALL_MODULES ? true
+      : moduleFilter.value === UNASSIGNED ? r.moduleId == null
+      : r.moduleId === moduleFilter.value,
+    ),
   ),
 )
 

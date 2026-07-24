@@ -5,6 +5,10 @@ import { MenuType, type MenuInput, type MenuTreeNode } from '@/types/menu'
 /** 「未分配」哨兵:雪花 id 无 0,用它表示 moduleId==null 的顶级目录分组。 */
 export const UNASSIGNED = 0
 
+/** 「全部」哨兵:雪花 id 无负数,用它表示不按应用过滤。默认筛选停在当前应用时,
+ * 别的应用底下新建的菜单会被筛掉、看着像"存了但不见了"(issue #17)——需要一个能看全量的退路。 */
+export const ALL_MODULES = -1
+
 /** 新增默认表单。type 默认页面(主表单),按钮弹窗传 MenuType.Button;moduleId 仅顶级目录有效。 */
 export function blankMenu(parentId = 0, moduleId: number | null = null, type: MenuType = MenuType.Menu): MenuInput {
   return { parentId, type, title: '', permission: '', sort: 0, enabled: true, moduleId, path: '', component: '', icon: '', visible: true }

@@ -28,8 +28,9 @@ const emit = defineEmits<{ (e: 'saved'): void }>()
 const { t } = useI18n()
 const message = useMessage()
 
-/** 「未分配」哨兵,与父页一致:openAdd 顶级目录时据此决定是否自动带上当前应用。 */
+/** 「未分配」「全部」哨兵,与父页一致:openAdd 顶级目录时据此决定是否自动带上当前应用。 */
 const UNASSIGNED = 0
+const ALL_MODULES = -1
 
 const show = ref(false)
 const formRef = ref<FormInst | null>(null)
@@ -95,8 +96,8 @@ const parentOptions = computed(() => {
 
 function openAdd(parentId = 0) {
   editingId.value = null
-  // 新建顶级目录时,自动盖上当前筛选的应用(「未分配」筛选下则留空)。
-  const moduleId = parentId === 0 && props.moduleFilter !== UNASSIGNED ? props.moduleFilter : null
+  // 新建顶级目录时,自动盖上当前筛选的应用(「未分配」「全部」筛选下则留空,交给用户手选)。
+  const moduleId = parentId === 0 && props.moduleFilter !== UNASSIGNED && props.moduleFilter !== ALL_MODULES ? props.moduleFilter : null
   Object.assign(form, blank(), { parentId, moduleId })
   show.value = true
 }
