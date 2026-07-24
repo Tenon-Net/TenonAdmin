@@ -14,6 +14,8 @@
 | 表格封装 | ProTable | DataTable |
 | dev 端口 | `5173` | `5174` |
 
+各自的实现细节——路由、门户守卫、请求层、权限、国际化、主题——分别有一份深入文档：[Vue 深入文档](/zh/frontend/structure)、[React 深入文档](/zh/frontend-react/structure)。
+
 ## 怎么选
 
 先看团队。天天写 Vue 的选 `web/`，习惯 React 的选 `web-react/`，这一条就够定大多数人的去向。功能上两套是对齐的，不存在「选了这个就少个能力」的取舍，别在功能清单上纠结。

@@ -14,6 +14,8 @@ Both templates generate their typed client from the backend's `/openapi/v1.json`
 | Table wrapper | ProTable | DataTable |
 | Dev port | `5173` | `5174` |
 
+Implementation details for each — routing, portal guards, the request layer, permissions, i18n, theming — live in their own deep-dive sections: [Vue docs](/frontend/structure) and [React docs](/frontend-react/structure).
+
 ## Which One
 
 Start with the team. If you write Vue day to day, take `web/`; if React is your habit, take `web-react/` — that alone settles it for most people. The two are feature-aligned, so there's no "pick this one and lose a capability" trade-off to agonize over.

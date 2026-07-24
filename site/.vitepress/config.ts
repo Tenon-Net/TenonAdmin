@@ -50,12 +50,18 @@ const enThemeConfig = {
   nav: [
     { text: 'Guide', link: '/guide/getting-started' },
     { text: 'Backend', link: '/backend/structure' },
-    { text: 'Frontend', link: '/frontend/structure' },
+    {
+      text: 'Frontend',
+      items: [
+        { text: 'Vue (web/)', link: '/frontend/structure' },
+        { text: 'React (web-react/)', link: '/frontend-react/structure' },
+      ],
+    },
     { text: 'Components', link: '/components/' },
     { text: 'Standards', link: '/standard/backend' },
     { text: 'Community', link: '/community/contributing' },
     { text: 'Live Demo', link: 'https://tenonadmin.52moyu.net/login' },
-    { text: '0.2.0', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
+    { text: '0.2.2', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
   ],
   sidebar: {
     '/guide/': enGuideSidebar,
@@ -126,6 +132,41 @@ const enThemeConfig = {
         text: 'Appearance',
         items: [
           { text: 'Theme & Icons', link: '/frontend/appearance' },
+        ],
+      },
+    ],
+    '/frontend-react/': [
+      {
+        text: 'Get Started',
+        items: [
+          { text: 'Project Structure & Startup', link: '/frontend-react/structure' },
+        ],
+      },
+      {
+        text: 'Routing & Menus',
+        items: [
+          { text: 'Routing & Dynamic Menus', link: '/frontend-react/routing' },
+          { text: 'Multi-App Portal & Router Guards', link: '/frontend-react/portal-guards' },
+        ],
+      },
+      {
+        text: 'Requests & Contract',
+        items: [
+          { text: 'HTTP Request Layer', link: '/frontend-react/request' },
+          { text: 'Backend Contract & Error Codes', link: '/frontend-react/api-contract' },
+        ],
+      },
+      {
+        text: 'Features',
+        items: [
+          { text: 'Frontend Permissions', link: '/frontend-react/permission' },
+          { text: 'Internationalization', link: '/frontend-react/i18n' },
+        ],
+      },
+      {
+        text: 'Appearance',
+        items: [
+          { text: 'Theme & Icons', link: '/frontend-react/appearance' },
         ],
       },
     ],
@@ -216,12 +257,18 @@ const zhThemeConfig = {
   nav: [
     { text: '指南', link: '/zh/guide/getting-started' },
     { text: '后端', link: '/zh/backend/structure' },
-    { text: '前端', link: '/zh/frontend/structure' },
+    {
+      text: '前端',
+      items: [
+        { text: 'Vue（web/）', link: '/zh/frontend/structure' },
+        { text: 'React（web-react/）', link: '/zh/frontend-react/structure' },
+      ],
+    },
     { text: '组件', link: '/zh/components/' },
     { text: '规范', link: '/zh/standard/backend' },
     { text: '参与', link: '/zh/community/contributing' },
     { text: '在线预览', link: 'https://tenonadmin.52moyu.net/login' },
-    { text: '0.2.0', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
+    { text: '0.2.2', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
   ],
   sidebar: {
     '/zh/guide/': zhGuideSidebar,
@@ -292,6 +339,41 @@ const zhThemeConfig = {
         text: '外观',
         items: [
           { text: '主题与图标', link: '/zh/frontend/appearance' },
+        ],
+      },
+    ],
+    '/zh/frontend-react/': [
+      {
+        text: '入门',
+        items: [
+          { text: '项目结构与启动', link: '/zh/frontend-react/structure' },
+        ],
+      },
+      {
+        text: '路由与菜单',
+        items: [
+          { text: '路由与动态菜单', link: '/zh/frontend-react/routing' },
+          { text: '多应用门户与路由守卫', link: '/zh/frontend-react/portal-guards' },
+        ],
+      },
+      {
+        text: '请求与契约',
+        items: [
+          { text: 'HTTP 请求层', link: '/zh/frontend-react/request' },
+          { text: '对接后端:响应契约与错误码', link: '/zh/frontend-react/api-contract' },
+        ],
+      },
+      {
+        text: '功能',
+        items: [
+          { text: '前端权限', link: '/zh/frontend-react/permission' },
+          { text: '国际化', link: '/zh/frontend-react/i18n' },
+        ],
+      },
+      {
+        text: '外观',
+        items: [
+          { text: '主题与图标', link: '/zh/frontend-react/appearance' },
         ],
       },
     ],

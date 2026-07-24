@@ -60,7 +60,7 @@ app.mount('#app')
 
 - 用 `n-config-provider` 包裹全部内容。`:theme` 和 `:theme-overrides` 来自 `useTheme()` 组合式函数。`:locale` 和 `:date-locale` 按 app store 的 locale 算出来，取的是 naive-ui 的 `zhCN`/`enUS` 与 `dateZhCN`/`dateEnUS`。
 - 内部嵌套 `n-message-provider` > `n-dialog-provider` > `router-view`。
-- `onMounted` 时调用 `loadSite()` 拉一次站点品牌信息，这份信息是匿名的、全站共用的。`site.title` 有值就设 `document.title = site.title`。`loadSite()` 来自 `useSite()`。
+- `onMounted` 时用 `useSite()` 的 `loadSite()` 拉一次站点品牌信息，这份信息是匿名的、全站共用的。`site.title` 有值就设 `document.title = site.title`。
 - 监听 app store 的 `locale`，把 `i18n.global.locale.value` 同步过去（`immediate: true`），这样应用任何地方切换语言都会立即反映到译文上。
 
 ## Dev 代理

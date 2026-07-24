@@ -60,7 +60,7 @@ Two stylesheets — `styles/tokens.css` and `styles/index.css` — are imported 
 
 - Wraps everything in `n-config-provider`, passing `:theme`/`:theme-overrides` from the `useTheme()` composable and `:locale`/`:date-locale` computed from the app store's locale (naive-ui's `zhCN`/`enUS` and `dateZhCN`/`dateEnUS`).
 - Nests `n-message-provider` > `n-dialog-provider` > `router-view` inside it.
-- On `onMounted`, calls `loadSite()` (from `useSite()`) to fetch the anonymous, site-wide branding info once, and sets `document.title = site.title` if `site.title` has a value.
+- On `onMounted`, uses `useSite()`'s `loadSite()` to fetch the anonymous, site-wide branding info once, and sets `document.title = site.title` if `site.title` has a value.
 - Watches the app store's `locale` and keeps `i18n.global.locale.value` in sync (`immediate: true`), so a locale change anywhere in the app is reflected in translations immediately.
 
 ## Dev proxy
