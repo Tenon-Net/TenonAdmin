@@ -42,7 +42,16 @@ internal sealed class DatabaseInitializer(
 
         if (codeFirstAllowed)
         {
-            db.CodeFirst.InitTables(entityTypes);
+            // 建表语句默认各自独立自动提交 —— SqlServer/PostgreSQL 上每条 CREATE TABLE/INDEX 都各自落一次
+            // 事务日志,表数一多(实测 152 张表 10+ 分钟,见 issue #16)绝大部分耗时都花在这上面,而不是
+            // DDL 本身。包一层显式事务,让全部语句只在最后 COMMIT 时落一次盘。MySQL 的 DDL 本身隐式自动
+            // 提交、事务包不住,这层对它是空操作,无害。
+            var tran = await db.Ado.UseTranAsync(() =>
+            {
+                db.CodeFirst.InitTables(entityTypes);
+                return Task.CompletedTask;
+            });
+            if (!tran.IsSuccess) throw tran.ErrorException;
             logger.LogInformation("TenonAdmin: CodeFirst 建表完成({Count} 个实体:{Tables})",
                 entityTypes.Length, string.Join(", ", entityTypes.Select(t => t.Name)));
         }
