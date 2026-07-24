@@ -43,7 +43,7 @@
 ### P0 · 走一遍上手路径(产物是坑单,不是 app)
 - **状态**:已完成(2026-07-24)。
 - 要求:建公开仓 `tenon-example`,先选定一个已发布的稳定版本 `<release-version>`(不 float、不 pre-release),记录对应 Git tag / commit;首个提交同时创建 app 自己的 README / ledger,承接 P1–P4 细任务。
-- 要求:`dotnet new install TenonAdmin.Templates::<release-version>` 后执行 `dotnet new tenon-app`;核对生成的 `PackageReference` 精确等于 `<release-version>`。
+- 要求:`dotnet new install TenonAdmin.Templates@<release-version>` 后执行 `dotnet new tenon-app`;核对生成的 `PackageReference` 精确等于 `<release-version>`。
 - 要求:`npx degit Tenon-Net/TenonAdmin/web#v<release-version> web` 作前端;若 release tag 命名不等于 `v<release-version>`,以该 NuGet release 对应的实际 tag / commit 为准,不得拉 `dev`。
 - 要求:零配置 SQLite 跑起来,核对广告项:三行启动 / 首启随机超管密码 / CodeFirst 建表 / OpenAPI 可读 / `gen:api` 通。
 - 要求:**产出「第一个真实消费者踩到的坑」清单** → 按 P5 规则回流。**这是 P0 最值钱的东西。**

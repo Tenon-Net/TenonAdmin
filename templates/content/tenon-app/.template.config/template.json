@@ -12,6 +12,9 @@
     "language": "C#",
     "type": "project"
   },
+  "primaryOutputs": [
+    { "path": "TenonApp.csproj" }
+  ],
   "symbols": {
     "TenonPkgVersion": {
       "type": "parameter",

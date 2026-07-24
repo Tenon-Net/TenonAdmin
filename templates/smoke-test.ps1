@@ -25,6 +25,19 @@ New-Item -ItemType Directory -Force -Path $feed | Out-Null
 # earlier run satisfies the restore, and a template pinned to an unpublished version still comes up green.
 $env:NUGET_PACKAGES = Join-Path $work 'nuget'
 
+# The template's automatic restore runs before the generated project can carry its own NuGet.config.
+# Put the isolated feed configuration in the parent so the post-action discovers it naturally.
+@"
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="local" value="$feed" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+  </packageSources>
+</configuration>
+"@ | Out-File -FilePath (Join-Path $work 'NuGet.config') -Encoding utf8
+
 function Check($msg) { if ($LASTEXITCODE -ne 0) { throw "FAILED: $msg (exit $LASTEXITCODE)" } }
 
 try {
@@ -38,22 +51,15 @@ try {
     dotnet new install (Join-Path $feed "TenonAdmin.Templates.$ver.nupkg") --force; Check 'template install'
 
     try {
-        # No --TenonPkgVersion on purpose: this is the consumer's first command, verbatim.
+        # No --TenonPkgVersion or --skipRestore on purpose: this is the consumer's first command, verbatim.
         # Passing it would paper over the packaged default, which is exactly the thing that has to be right.
-        Write-Host "== scaffold tenon-app -> $out (template default version, no overrides)"
-        dotnet new tenon-app -n Probe -o $out --skipRestore true; Check 'dotnet new'
+        Write-Host "== scaffold tenon-app -> $out (template default version + automatic restore)"
+        dotnet new tenon-app -n Probe -o $out; Check 'dotnet new + automatic restore'
 
-        # Point restore at the local feed + nuget.org via nuget.config (more robust than restore -s <url>, consistent across shells).
-        @"
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <packageSources>
-    <clear />
-    <add key="local" value="$feed" />
-    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-  </packageSources>
-</configuration>
-"@ | Out-File -FilePath (Join-Path $out 'nuget.config') -Encoding utf8
+        $assets = Join-Path $out 'obj/project.assets.json'
+        if (-not (Test-Path $assets)) {
+            throw 'FAILED: template restore post-action did not create obj/project.assets.json.'
+        }
 
         # The generated project must pin exactly what we just packed. Without this assertion the test is
         # near-useless: a PackageReference Version is a MINIMUM, so a stale version silently floats up to
@@ -66,8 +72,8 @@ try {
         }
 
         # -warnaserror:NU1603 is the general net: restore must find the exact version, never float to it.
-        Write-Host "== build generated project (restore + build, exact version required)"
-        dotnet build $out -c Release -warnaserror:NU1603; Check 'build'
+        Write-Host "== build generated project without restoring again (exact version required)"
+        dotnet build $out -c Release --no-restore -warnaserror:NU1603; Check 'build'
 
         Write-Host "`n[OK] smoke passed: generated tenon-app compiles against the real kernel."
     }
