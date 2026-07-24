@@ -1,7 +1,7 @@
 # 参考应用执行台账 · `tenon-example`(多机构数据范围 · 面向企业评估者)
 
 > **来源**:2026-07-24 grilling 定向。全部方向决策见 §1,grilling 已钉死,执行期不回炉。
-> **当前状态**:未开始。`tenon-example` 是待创建的独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓建成后由其 README / ledger 维护实现细节。
+> **当前状态**:P0 已完成，P1 未开始。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
 > **目标**:给「中小团队 / 企业内部后台」这个人群一个能信、能 dogfood 的证据 —— 一个独立开源的 CRM-lite 参考应用,吃**已发布的 NuGet 包**、degit `web/`、部署上线,头条是**多机构数据范围当场生效**。
 > **驱动方式**:仿 `docs/refinement-ledger.md` —— 逐条执行、每条独立英文 conventional commit、可断点续跑;用 `/loop` 或 `/goal` 逐轮推进。
 > **执行协议**:本文件的 P0–P4 是阶段门,不是跨仓细任务清单。P0 在 `tenon-example` 首个提交中创建 app 自己的 ledger,把 P1–P4 拆成可逐条勾选的实现任务;实现提交与勾选只发生在新仓。每个阶段验收通过后,再在 `tenon-admin` 用单独 docs 提交更新对应状态与证据链接。P5 的回流项继续在本仓执行。
@@ -41,7 +41,7 @@
 ## 3. 执行阶段
 
 ### P0 · 走一遍上手路径(产物是坑单,不是 app)
-- **状态**:未开始。
+- **状态**:已完成(2026-07-24)。
 - 要求:建公开仓 `tenon-example`,先选定一个已发布的稳定版本 `<release-version>`(不 float、不 pre-release),记录对应 Git tag / commit;首个提交同时创建 app 自己的 README / ledger,承接 P1–P4 细任务。
 - 要求:`dotnet new install TenonAdmin.Templates::<release-version>` 后执行 `dotnet new tenon-app`;核对生成的 `PackageReference` 精确等于 `<release-version>`。
 - 要求:`npx degit Tenon-Net/TenonAdmin/web#v<release-version> web` 作前端;若 release tag 命名不等于 `v<release-version>`,以该 NuGet release 对应的实际 tag / commit 为准,不得拉 `dev`。
@@ -50,6 +50,10 @@
 - 决策已锁定:CRM 消费者模块使用 `code=crm`、`ModuleId=1000`;三个试用用户的 `DefaultModuleId=1000`。试用用户均为非超级管理员，`MustChangePassword=false`、`LastPasswordChangeTime` 有值、不绑定手机号、`Enabled=true`、`IsSuperAdmin=false`。
 - 决策已锁定:scope API 返回结构化 DTO，不返回固定中文句子；前端用 zh/en i18n 根据 DTO 组装范围文案。
 - 验收:在全新目录按 README 完整执行 install → create → run;记录包版本、源码 tag / commit、restore / build / 首启日志、登录与 `/openapi/v1.json` 证据;能登录进后台并成功生成前端契约。
+- **版本证据**:`TenonAdmin` / `TenonAdmin.Templates` 最新稳定版均为 `0.3.0`;源码 tag `v0.3.0` 对应 commit `ac84cad325bb808e67321b7b1b4c8b37d6fa94bd`。
+- **产物证据**:公开仓 `https://github.com/Tenon-Net/tenon-example`;首个提交 `e54c17b`,P0 验收提交 `d31b732`,当前 P0 文档提交 `c7e2b5b`。
+- **验证证据**:restore / Release build(0 warning,0 error)、SQLite 首启 / CodeFirst / 随机超管密码、真实 HTTP 登录、`/health` / `/health/ready` / `/openapi/v1.json`、`npm install` / `gen:api` / `typecheck` / `lint`、Playwright Chromium 真实登录以及空目录 README 复现均已通过;完整记录见 `https://github.com/Tenon-Net/tenon-example/blob/dev/docs/p0-validation.md`。
+- **坑单回流**:可复用的模板 / 前端发布物问题已记录为 `https://github.com/Tenon-Net/TenonAdmin/issues/22`;CRM 业务实现未开始。
 
 ### P1 · CRM 实体 + 后端(头条地基)
 - **状态**:未开始。
