@@ -1,11 +1,11 @@
-# 参考应用执行台账 · `tenon-crm-demo`(多机构数据范围 · 面向企业评估者)
+# 参考应用执行台账 · `tenon-example`(多机构数据范围 · 面向企业评估者)
 
 > **来源**:2026-07-24 grilling 定向。全部方向决策见 §1,grilling 已钉死,执行期不回炉。
-> **当前状态**:未开始。`tenon-crm-demo` 是待创建的独立公开仓库,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓建成后由其 README / ledger 维护实现细节。
+> **当前状态**:未开始。`tenon-example` 是待创建的独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓建成后由其 README / ledger 维护实现细节。
 > **目标**:给「中小团队 / 企业内部后台」这个人群一个能信、能 dogfood 的证据 —— 一个独立开源的 CRM-lite 参考应用,吃**已发布的 NuGet 包**、degit `web/`、部署上线,头条是**多机构数据范围当场生效**。
 > **驱动方式**:仿 `docs/refinement-ledger.md` —— 逐条执行、每条独立英文 conventional commit、可断点续跑;用 `/loop` 或 `/goal` 逐轮推进。
-> **执行协议**:本文件的 P0–P4 是阶段门,不是跨仓细任务清单。P0 在 `tenon-crm-demo` 首个提交中创建 app 自己的 ledger,把 P1–P4 拆成可逐条勾选的实现任务;实现提交与勾选只发生在新仓。每个阶段验收通过后,再在 `tenon-admin` 用单独 docs 提交更新对应状态与证据链接。P5 的回流项继续在本仓执行。
-> **台账选址**:本文件住在 `tenon-admin`(战略驱动 + dogfood 收件箱);`tenon-crm-demo` README / ledger 是 app 实现期的唯一细粒度事实源,不在两个仓重复维护同一组复选框。
+> **执行协议**:本文件的 P0–P4 是阶段门,不是跨仓细任务清单。P0 在 `tenon-example` 首个提交中创建 app 自己的 ledger,把 P1–P4 拆成可逐条勾选的实现任务;实现提交与勾选只发生在新仓。每个阶段验收通过后,再在 `tenon-admin` 用单独 docs 提交更新对应状态与证据链接。P5 的回流项继续在本仓执行。
+> **台账选址**:本文件住在 `tenon-admin`(战略驱动 + dogfood 收件箱);`tenon-example` README / ledger 是 app 实现期的唯一细粒度事实源,不在两个仓重复维护同一组复选框。
 > **版本纪律**:后端 `TenonAdmin`、`TenonAdmin.Templates` 与 degit 的 `web/` 必须来自**同一个稳定 release**;禁止后端钉发布包、前端却拉 `dev`。
 > **验证纪律**:后端改动跑新宿主实打 + curl;前端 `npm run gen:api` + `npm run typecheck` + `npm run lint` + `npm run dev` 实点;两个重进程不并发。**验证 = 跑出来的证据,不是"代码写完了"。**
 
@@ -22,6 +22,10 @@
 | 载体 | 独立消费者仓库,吃已发布包 |
 | 演示头条 | 数据范围当场生效 |
 | 前端 | `web/`(Vue + Naive) |
+| 仓结构 | 单仓多模块参考应用 `tenon-example`;CRM 为旗舰模块 #1 |
+| 模块边界 | 未来模块(工作流等)= 加码项,时间盒见分晓后进**同一仓**;可复用引擎属内核 / 卫星包,不进本仓 |
+
+**仓结构与模块边界(2026-07-24 追加)**:一个企业内部后台天生多模块,所以 `tenon-example` 是**一个持续长模块的单一真系统**,不是一堆单模块 demo —— 对 solo 维护者是一个部署、一条上手路径、一个 URL。CRM 是它的**第一个也是旗舰模块**;工作流 / 资产 / 审批等是 **§4 时间盒证明这条路走得通(≥3 陌生人真实评估动作)之后**才加的**加码项**,加进**同一个仓**,不另开新仓(P0 上手路径的证明价值只有第一次是新的)。**一个边界**:若某"模块"其实是想要**可复用的引擎 / 能力**(如通用工作流引擎,消费者能直接吃),那属于 `tenon-admin` 或独立 package 仓,**不进本参考应用** —— 本仓只演示"用内核现有积木搭业务模块",不孵化内核能力。
 
 ---
 
@@ -37,7 +41,7 @@
 
 ### P0 · 走一遍上手路径(产物是坑单,不是 app)
 - **状态**:未开始。
-- 要求:建公开仓 `tenon-crm-demo`,先选定一个已发布的稳定版本 `<release-version>`(不 float、不 pre-release),记录对应 Git tag / commit;首个提交同时创建 app 自己的 README / ledger,承接 P1–P4 细任务。
+- 要求:建公开仓 `tenon-example`,先选定一个已发布的稳定版本 `<release-version>`(不 float、不 pre-release),记录对应 Git tag / commit;首个提交同时创建 app 自己的 README / ledger,承接 P1–P4 细任务。
 - 要求:`dotnet new install TenonAdmin.Templates::<release-version>` 后执行 `dotnet new tenon-app`;核对生成的 `PackageReference` 精确等于 `<release-version>`。
 - 要求:`npx degit Tenon-Net/TenonAdmin/web#v<release-version> web` 作前端;若 release tag 命名不等于 `v<release-version>`,以该 NuGet release 对应的实际 tag / commit 为准,不得拉 `dev`。
 - 要求:零配置 SQLite 跑起来,核对广告项:三行启动 / 首启随机超管密码 / CodeFirst 建表 / OpenAPI 可读 / `gen:api` 通。
@@ -76,7 +80,7 @@
 - 验收:未登录访客能照引导在 2 分钟内自己看到那一幕;三个账号均不能写数据;健康检查、登录、客户分页与回滚步骤完成冒烟验证;共享账号具备可重复执行的密码 / 锁定状态重置办法。
 
 ### P5 · dogfood 回流(整件事的真目的)+ 启动时间盒
-- [ ] P0–P4 中**可复用于内核或模板**的坑开成 `tenon-admin` issue / ledger 条目;CRM 自身业务问题留在 `tenon-crm-demo`,不把消费者待办倒灌成内核噪音。
+- [ ] P0–P4 中**可复用于内核或模板**的坑开成 `tenon-admin` issue / ledger 条目;CRM 自身业务问题留在 `tenon-example`,不把消费者待办倒灌成内核噪音。
 - [ ] 写**那篇社区文**(见 §2 头条),发掘金 / 博客园 + 投几个 .NET 群 —— **这一发即启动 §4 时间盒计时。**
 - [ ] consumer 仓从此当**永久集成金丝雀**:内核每次发版后 bump 精确版本、重验一遍。
 
