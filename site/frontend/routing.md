@@ -111,6 +111,23 @@ The whole chain: fetch the current app's menu tree (`personalApi.menu(moduleId)`
 
 Each registered route carries `name: 'menu-{id}'` and `meta.keepAlive: true`, and is hung under the `layout` parent via `router.addRoute('layout', ...)`. Every name added this way is tracked through `registerDynamic(name)`, so it can be torn down precisely on logout or app switch (see `resetRouter` in `router/index.ts`).
 
+## External links and embedded pages: no new menu type
+
+`MenuType` still has only `Catalog`/`Menu`/`Button`. External links and iframe embeds reuse the existing `Path` and `Component` fields, with `isHttpUrl()` deciding whether a value starts with `http(s)://`.
+
+| Effect you want | How to configure it | Runtime behavior |
+| --- | --- | --- |
+| External-link menu | Put the full URL in `Path`; leave `Component` empty | `buildRoutesForModule` builds no route. The sidebar and search open the URL with `window.open` |
+| Embedded iframe menu | Put an internal path in `Path`; put the full URL in `Component` | Registers the shared `views/embed/iframe.vue` route and stores the URL in `route.meta.iframeSrc` |
+
+The iframe view snapshots `route.meta.iframeSrc` during setup instead of reacting to every route change. A cached iframe instance therefore keeps its own URL when the user switches tabs; it cannot be recomputed to `undefined` or to another embedded page.
+
+## Convention-based detail routes
+
+Dropping a `detail.vue` anywhere under `views` adds a `/<module path>/:id/detail` route without editing `routes.ts`. `registerDetailRoutes()` in `router/detailRoutes.ts` scans the detail files and runs beside menu-route registration, so login, app switching, and hard-refresh reconstruction restore both sets together.
+
+Detail routes default to `meta.noCache: true` and start with the shared detail title. Once the record loads, `useTabTitle()` may replace the current tab title with the record name. The parameter name is fixed to `:id`; use an explicit static route when a page needs another parameter shape or several detail routes in one directory.
+
 ## Page caching & named components
 
 `layouts/default.vue` caches pages like this:
