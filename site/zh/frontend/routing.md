@@ -64,37 +64,40 @@ export async function buildRoutesForModule(moduleId: number): Promise<void> {
 
   resetRouter()
   for (const node of flatten(tree)) {
-    if (node.type !== MenuType.Menu || !node.path) continue
-    // 外链菜单:path 为 URL(component 空)→ 不建路由,点击时另行 window.open
-    if (isHttpUrl(node.path)) continue
+    const route = describeMenuRoute(node, viewKeys)
+    if (!route) continue
 
-    const name = `menu-${node.id}`
-    const routePath = node.path.startsWith('/') ? node.path : `/${node.path}`
-
-    // 内嵌 iframe 菜单:component 为 URL → 注册通用 iframe 视图,URL 进 meta.iframeSrc
-    if (isHttpUrl(node.component)) {
+    if (router.hasRoute(route.name)) router.removeRoute(route.name)
+    if (route.kind === 'iframe') {
       router.addRoute('layout', {
-        path: routePath, name,
-        component: namedPage(name, () => import('@/views/embed/iframe.vue')),
-        meta: { title: node.title, icon: node.icon, keepAlive: true, iframeSrc: node.component },
+        path: route.path,
+        name: route.name,
+        component: namedPage(route.name, () => import('@/views/embed/iframe.vue')),
+        meta: { title: route.title, icon: route.icon, keepAlive: true, iframeSrc: route.iframeSrc },
       })
-      registerDynamic(name)
+      registerDynamic(route.name)
       continue
     }
 
-    if (!node.component) continue
-    const key = `/src/views/${node.component.replace(/^\/+/, '')}.vue`
-    const loader = views[key]
-    if (!loader) {
-      console.warn('[menu] 缺少视图组件:', node.component, '→', key)
+    if (route.kind === 'missing') {
+      console.warn('[menu] 缺少视图组件:', route.component)
+      router.addRoute('layout', {
+        path: route.path,
+        name: route.name,
+        component: namedPage(route.name, () => import('@/views/error/MissingRoute.vue')),
+        meta: { title: route.title, icon: route.icon, keepAlive: true, missingComponent: route.component },
+      })
+      registerDynamic(route.name)
       continue
     }
+
     router.addRoute('layout', {
-      path: routePath, name,
-      component: namedPage(name, loader),
-      meta: { title: node.title, icon: node.icon, keepAlive: true },
+      path: route.path,
+      name: route.name,
+      component: namedPage(route.name, views[route.viewKey]),
+      meta: { title: route.title, icon: route.icon, keepAlive: true },
     })
-    registerDynamic(name)
+    registerDynamic(route.name)
   }
   registerDetailRoutes()   // 约定式详情路由,见下文
   auth.routesReady = true
@@ -103,7 +106,7 @@ export async function buildRoutesForModule(moduleId: number): Promise<void> {
 
 整条链路是这样。先拉当前应用的菜单树，走 `personalApi.menu(moduleId)`，拍平成一维数组。再对每个 `type` 为 `MenuType.Menu` 的节点，把它的 `component` 字符串拿去比对映射表，映射表由 `import.meta.glob('/src/views/**/*.vue')` 生成。目录 `Catalog` 没有页面，按钮 `Button` 不是路由，两者都跳过。约定很直接：菜单的 `component` 字段就是相对 `src/views` 的文件路径，去掉 `.vue` 后缀。例如 `system/user/index`，对应 `/src/views/system/user/index.vue`。
 
-**组件缺失不会有任何显眼的报错，只会悄悄把这条菜单项从路由表里丢掉。** `node.component` 在 glob 表里找不到对应的键时，`buildRoutesForModule` 只打一条 `console.warn`，然后跳过这个节点，不注册路由。菜单链接哪怕还渲染得出来，点了也是 404，或者压根不显示。普通用户完全看不出哪里出了问题。为了不让菜单管理员踩这个坑，`useAuthMenu.ts` 同时导出了 `viewComponentPaths`。它把 glob 表里每个合法键都换算成同样格式的 `component` 字符串，喂给菜单管理表单的「组件路径」字段做下拉选择，不用人去手敲。
+**组件缺失时仍会保留原菜单路径。** `node.component` 在 glob 表里找不到对应的键时，`buildRoutesForModule` 会打一条 `console.warn`，并把这条路由落成 `MissingRoute`。用户点进去能直接看到缺失的组件路径，不会被一个没有上下文的 404 误导。`useAuthMenu.ts` 还导出了 `viewComponentPaths`，把合法 glob 键转换成菜单表单需要的 `component` 字符串。菜单管理员用下拉选择路径，通常不会走到这条诊断分支。
 
 每条注册出来的路由都带 `name: 'menu-{id}'` 和 `meta.keepAlive: true`，通过 `router.addRoute('layout', ...)` 挂在 `layout` 下。每个这样加进去的路由名，都会经 `registerDynamic(name)` 登记一下，好在登出或切应用时精确地把它们移除。这段逻辑在 `router/index.ts` 的 `resetRouter` 里。
 

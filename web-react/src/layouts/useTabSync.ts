@@ -4,9 +4,10 @@ import { useAuthStore } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
 import { isHttpUrl } from '@/utils/url'
 import type { MenuNode } from '@/types/menu'
+import { detailMetaForPath } from '@/router/detailRoutes'
 
 /** 个人中心静态页(不在 menuTree)→ i18n 标题键 + 图标。tabTitle 见 `.` 走 t()。 */
-const PERSONAL_META: Record<string, { title: string; icon: string }> = {
+const PERSONAL_META: Record<string, TabMeta> = {
   '/personal/profile': { title: 'menu.profile', icon: 'ph:user' },
   '/personal/password': { title: 'menu.password', icon: 'ph:key' },
   '/personal/notice': { title: 'menu.notice', icon: 'ph:bell' },
@@ -14,8 +15,14 @@ const PERSONAL_META: Record<string, { title: string; icon: string }> = {
   '/personal/bindings': { title: 'menu.bindings', icon: 'ph:link-simple' },
 }
 
+interface TabMeta {
+  title: string
+  icon?: string
+  noCache?: boolean
+}
+
 /** menuTree 扁平化:path → {title(原始,可能是 i18n key), icon(iconify 名)}。外链跳过(不会成为 location)。 */
-function flatten(tree: MenuNode[], out: Map<string, { title: string; icon?: string }>): Map<string, { title: string; icon?: string }> {
+function flatten(tree: MenuNode[], out: Map<string, TabMeta>): Map<string, TabMeta> {
   for (const n of tree) {
     if (n.path && !isHttpUrl(n.path)) out.set(n.path, { title: n.title, icon: n.icon })
     if (n.children.length) flatten(n.children, out)
@@ -34,8 +41,8 @@ export function useTabSync() {
   const menuTree = useAuthStore((s) => s.menuTree)
 
   useEffect(() => {
-    const meta = flatten(menuTree, new Map()).get(pathname) ?? PERSONAL_META[pathname]
+    const meta = flatten(menuTree, new Map()).get(pathname) ?? PERSONAL_META[pathname] ?? detailMetaForPath(pathname)
     if (!meta) return // 无标题来源 → 不建标签
-    useTabsStore.getState().addTab({ path: pathname, fullPath, title: meta.title, icon: meta.icon, noCache: false })
+    useTabsStore.getState().addTab({ path: pathname, fullPath, title: meta.title, icon: meta.icon, noCache: meta.noCache ?? false })
   }, [pathname, fullPath, menuTree])
 }

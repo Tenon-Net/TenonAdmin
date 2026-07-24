@@ -197,7 +197,7 @@ async function save() {
 | Component | `sample/doc/index` | → `/src/views/sample/doc/index.vue`（不带前后缀） |
 | 所属应用 | 选一个应用 | 仅顶级目录有效 |
 
-保存后重新登录（或刷新触发路由重建），菜单里就能看到这个页面了。要是控制台报 `[menu] 缺少视图组件`，就是 `Component` 字符串跟文件路径没对上。`useAuthMenu` 匹配不到组件时会 `console.warn` 然后跳过，表现是这个菜单项静默消失。刷新或深链时，守卫怎么重建这些内存里的动态路由？见[动态路由与门户守卫](/zh/frontend/routing)。
+保存后重新登录（或刷新触发路由重建），菜单里就能看到这个页面了。要是控制台报 `[menu] 缺少视图组件`，就是 `Component` 字符串跟文件路径没对上。`useAuthMenu` 会保留原菜单路径并显示 `MissingRoute`，页面上能直接看到缺失的组件值。刷新或深链时，守卫怎么重建这些内存里的动态路由？见[动态路由与门户守卫](/zh/frontend/routing)。
 
 ## 补 i18n 文案
 

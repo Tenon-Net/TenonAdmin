@@ -45,6 +45,7 @@ const views = import.meta.glob<ViewModule>([
   '!/src/views/embed/**',
   '!/src/views/personal/**',
   '!/src/views/_placeholder/**',
+  '!/src/views/**/detail.tsx',
 ]) as ViewGlob
 
 // 上面 glob 已排除的目录前缀 —— `viewKeysFrom` 也照它过滤,好让**注入假表**的测试与真实 glob 结论一致
@@ -53,13 +54,14 @@ const NON_PAGE_PREFIXES = ['login/', 'module/', 'oauth/', 'error/', 'embed/', 'p
 
 /**
  * glob 键(`/src/views/system/user/index.tsx`)→ 菜单 component 值(`system/user/index`)。
- * 供菜单管理表单的「组件路径」下拉:由这张 glob 表反推,天然不漂移。手敲错一个字符,
- * `menuToRouteDescriptors` 只会 warn 然后跳过,菜单项**静默消失**——给下拉就从根上没了这个坑。
+ * 供菜单管理表单的「组件路径」下拉:由这张 glob 表反推,天然不漂移。手敲错一个字符时,
+ * `menuToRouteDescriptors` 会保留路径并落到 MissingRoute;下拉让配置值从同一张 glob 表产生。
  * 排除登录页(它是静态路由,不是菜单能配的落点)。
  */
 export function viewKeysFrom(glob: ViewGlob): string[] {
   return Object.keys(glob)
     .map((k) => k.replace(/^\/src\/views\//, '').replace(/\.tsx$/, ''))
+    .filter((k) => !k.endsWith('/detail'))
     .filter((k) => !NON_PAGE_PREFIXES.some((p) => k.startsWith(p)))
     .sort()
 }

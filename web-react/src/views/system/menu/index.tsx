@@ -54,7 +54,7 @@ export default function MenuPage() {
 
   /**
    * 菜单改完顺手重建当前应用的壳层(侧边栏 + 动态路由)——否则新建菜单要 F5 才出现,而这与
-   * 「组件路径写错→菜单静默消失」是同一症状,管理员无从分辨。React 侧 enter() 重拉门户树写回 store、
+   * 「组件路径写错→进入 MissingRoute」都指向配置错误。React 侧 enter() 重拉门户树写回 store、
    * 路由反应式派生(≠ Vue 的命令式 buildRoutesForModule)。失败静默:菜单已存成功,下次 F5 自愈。
    */
   const syncShell = useCallback(() => {

@@ -39,6 +39,10 @@ export default {
     desc: 'Page not found',
     back: 'Back to workbench',
   },
+  missingRoute: {
+    title: 'Menu page unavailable',
+    message: 'The component path configured for “{title}” does not exist: {component}',
+  },
   userPicker: {
     title: 'Select users',
     available: 'Available',

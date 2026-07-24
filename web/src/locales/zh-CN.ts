@@ -49,6 +49,10 @@ export default {
     desc: '页面不存在',
     back: '返回工作台',
   },
+  missingRoute: {
+    title: '菜单页面无法加载',
+    message: '菜单“{title}”配置的组件路径不存在，请检查组件路径：{component}',
+  },
   app: {
     theme: '主题',
     dark: '暗色',

@@ -5,6 +5,7 @@ import { useUserStore, isLoggedIn } from '@/stores/user'
 import { useAuthStore, homePath } from '@/stores/auth'
 import { enterInitial } from '@/composables/useModule'
 import { buildRoutes } from './buildRoutes'
+import { buildDetailRoutes } from './detailRoutes'
 import ModuleChooser from '@/views/module'
 import { LayoutShell } from '@/layouts/LayoutShell'
 
@@ -86,6 +87,7 @@ function DynamicRoutes() {
         element: <LayoutShell />,
         children: [
           ...buildRoutes(menuTree),
+          ...buildDetailRoutes(),
           // 个人中心五页(静态路由,壳内渲染;入口在顶栏用户下拉 / 铃铛)。
           { path: '/personal/profile', element: lazyEl(ProfilePage) },
           { path: '/personal/password', element: lazyEl(PasswordPage) },

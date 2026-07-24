@@ -53,7 +53,7 @@ useRoutes([
 
 ## 动态路由：菜单树 → 真实路由
 
-`<LayoutShell>` 下除了那五个静态个人页和 404 兜底，其余全部来自 `buildRoutes(menuTree)`。这个函数把菜单树拍平，对每个 `type` 为 `MenuType.Menu` 的节点算出一条路由。目录 `Catalog` 只组织层级、不落地成页，按钮 `Button` 不是路由，两者都跳过。约定很直接：菜单的 `component` 字段就是相对 `src/views` 的文件路径去掉 `.tsx` 后缀。比如 `system/user/index` 对应 `/src/views/system/user/index.tsx`。
+`<LayoutShell>` 下的菜单页来自 `buildRoutes(menuTree)`。这个函数把菜单树拍平，对每个 `type` 为 `MenuType.Menu` 的节点算出一条路由。目录 `Catalog` 只组织层级、不落地成页，按钮 `Button` 不是路由，两者都跳过。约定很直接：菜单的 `component` 字段就是相对 `src/views` 的文件路径去掉 `.tsx` 后缀。比如 `system/user/index` 对应 `/src/views/system/user/index.tsx`。非菜单详情页由后面的 `detail.tsx` 约定补进同一个布局壳。
 
 ### 决策与落地分成两层
 
@@ -77,7 +77,7 @@ menuToRouteDescriptors(tree, hasView): RouteDescriptor[]
 
 ### 组件缺失：留一条可诊断的路由
 
-`component` 在 glob 表里找不到时，这里和 Vue 的处理不同。Vue 直接把这条菜单项丢掉、不注册路由，点进去是 404，管理员看不出错在哪。React 这边照样建一条路由，只是渲染成 `MissingRoute`：页面上一行 `role="alert"` 的告警，写明缺的是哪个组件。两边都会打一条 `console.warn`。留一条看得见的诊断，比静默消失一个菜单项好排查。配菜单时用上面那个下拉，从一开始就敲不错。
+`component` 在 glob 表里找不到时，路由仍然保留，只是渲染成 `MissingRoute`：页面上一行 `role="alert"` 的告警，写明缺的是哪个组件，同时控制台打一条 `console.warn`。Vue 侧采用相同处理。留一条看得见的诊断，比把用户送进没有上下文的 404 好排查。配菜单时用上面那个下拉，通常不会走到这条分支。
 
 ### glob 排除表：静态页别混进动态 import
 
@@ -91,10 +91,11 @@ import.meta.glob([
   '!/src/views/oauth/**',    '!/src/views/error/**',
   '!/src/views/embed/**',    '!/src/views/personal/**',
   '!/src/views/_placeholder/**',
+  '!/src/views/**/detail.tsx',
 ])
 ```
 
-被排掉的这几类都在别处被**静态** import：登录页、应用选择页、OAuth 回调、404、个人五页都是静态路由直接 import，iframe 视图由 `buildRoutes` 静态 import，`_placeholder` 是内部占位。留在 glob 里会有两个后果：同一个文件既被静态又被动态 import，Vite 没法 code-split（build 告警就是这么来的）；管理员还会在「组件路径」下拉里选到一个坏页（iframe 没有 src、占位页是空壳）。加静态路由页时要顺手把它排进来，否则这个冲突会复发。
+登录页、应用选择页、OAuth 回调、404、个人五页都在别处被**静态** import，iframe 视图由 `buildRoutes` 静态 import，`_placeholder` 是内部占位。`detail.tsx` 则交给独立的详情 glob，不进入菜单组件下拉。少了这些排除项，同一个文件可能被两种入口重复 import，Vite 无法 code-split；管理员也可能选到缺少必要上下文的页面。加静态路由页或新的约定页面时，要同步维护排除表。
 
 ## 外链与内嵌页：没有新的菜单类型
 
@@ -119,9 +120,13 @@ React 没有 Vue `<keep-alive>` 的对等物，`KeepAliveOutlet` 是手搓的一
 
 页面切换的入场动画只挂在当前可见的那页上，用 CSS `animation` 不用 `transition`。div 从 `display:none` 变回 `block` 时 `animation` 会重跑，`transition` 跨 `display` 切换不触发，所以切走切回也有入场效果，且全程不 remount、不动缓存。
 
-## 没有约定式详情路由
+## 详情页的约定路由
 
-Vue 版有一条约定：`views/**/detail.vue` 会自动生成 `/<模块>/:id/detail` 路由。**web-react 这一版没有对应机制。** 路由目录里没有 `registerDetailRoutes` 之类的扫描，详情不靠约定路由，而是在列表页里就地用弹层或抽屉展开（`system/user` 编辑用 Modal，`system/log` 用 Drawer）。真需要一条带参数的独立详情页时，按普通页面显式配置，别指望约定帮你生成。
+`views/**/detail.tsx` 会自动生成 `/<模块>/:id/detail` 路由。比如 `views/system/user/detail.tsx` 对应 `/system/user/:id/detail`，组件用 `useParams()` 读取固定参数 `id`。这些路由和菜单路由一起挂在 `<LayoutShell>` 下，硬刷新和深链都能重新匹配，不需要在后端菜单里再配一条详情项。
+
+每个详情地址按完整 `pathname` 建标签，所以不同记录 ID 可以同时打开。默认标题是 `common.detail`，页面拿到数据后可用 tabs store 的 `setTitle` 换成记录名。详情路由标记为 `noCache`，切走就卸载，复访重新取数。需要别的参数名或同目录下多个详情页时，改用显式路由。
+
+这条约定没有把现有弹层改成页面。日志仍用 Drawer，通知等轻量详情仍可用 Modal；只有确实需要独立地址、可刷新深链或多记录标签时，才新增 `detail.tsx`。入口按钮照常走 `<Can>` 或 `hasPerm`，真正的数据权限仍由后端接口判定。
 
 ::: tip 这两样东西不在这里
 路由链路里没有进度条（不用 NProgress 或类似的库）。`document.title` 也不由守卫按导航设，只在 `App` 启动拉站点配置时设一次，站点标题改了再由系统配置页设一次，不随每次导航联动。

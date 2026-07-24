@@ -65,30 +65,49 @@ export async function buildRoutesForModule(moduleId: number): Promise<void> {
 
   resetRouter()
   for (const node of flatten(tree)) {
-    if (node.type !== MenuType.Menu || !node.component || !node.path) continue
-    const key = `/src/views/${node.component.replace(/^\/+/, '')}.vue`
-    const loader = views[key]
-    if (!loader) {
-      console.warn('[menu] 缺少视图组件:', node.component, '→', key)
+    const route = describeMenuRoute(node, viewKeys)
+    if (!route) continue
+
+    if (router.hasRoute(route.name)) router.removeRoute(route.name)
+    if (route.kind === 'iframe') {
+      router.addRoute('layout', {
+        path: route.path,
+        name: route.name,
+        component: namedPage(route.name, () => import('@/views/embed/iframe.vue')),
+        meta: { title: route.title, icon: route.icon, keepAlive: true, iframeSrc: route.iframeSrc },
+      })
+      registerDynamic(route.name)
       continue
     }
-    const name = `menu-${node.id}`
-    if (router.hasRoute(name)) router.removeRoute(name)
+
+    if (route.kind === 'missing') {
+      console.warn('[menu] 缺少视图组件:', route.component)
+      router.addRoute('layout', {
+        path: route.path,
+        name: route.name,
+        component: namedPage(route.name, () => import('@/views/error/MissingRoute.vue')),
+        meta: { title: route.title, icon: route.icon, keepAlive: true, missingComponent: route.component },
+      })
+      registerDynamic(route.name)
+      continue
+    }
+
     router.addRoute('layout', {
-      path: node.path.startsWith('/') ? node.path : `/${node.path}`,
-      name,
-      component: namedPage(name, loader),
-      meta: { title: node.title, icon: node.icon, keepAlive: true },
+      path: route.path,
+      name: route.name,
+      component: namedPage(route.name, views[route.viewKey]),
+      meta: { title: route.title, icon: route.icon, keepAlive: true },
     })
-    registerDynamic(name)
+    registerDynamic(route.name)
   }
+  registerDetailRoutes()
   auth.routesReady = true
 }
 ```
 
 The whole chain: fetch the current app's menu tree (`personalApi.menu(moduleId)`), flatten it into a one-dimensional array, and for every node whose `type` is `MenuType.Menu` (a `Catalog` has no page and a `Button` isn't a route — both are skipped) take its `component` string and look it up against the map built by `import.meta.glob('/src/views/**/*.vue')`. The convention is direct: a menu's `component` field is the file path relative to `src/views`, minus the `.vue` extension — so `system/user/index` maps to `/src/views/system/user/index.vue`.
 
-**A missing component produces no conspicuous error at all — it just quietly drops the menu item from the routing table.** If `node.component` doesn't match any key in the glob map, `buildRoutesForModule` logs one `console.warn` and skips the node — no route is registered, so the menu link (even if it still renders) either 404s on click or simply doesn't appear, with no sign to the ordinary user of what went wrong. To keep menu administrators from stepping on this, `useAuthMenu.ts` also exports `viewComponentPaths` — every valid glob key converted back into that same `component` string format — which feeds the "component path" field in the menu-admin form as a dropdown, instead of leaving people to type it by hand.
+**A missing component keeps the original menu path.** If `node.component` doesn't match any key in the glob map, `buildRoutesForModule` logs one `console.warn` and materializes the route as `MissingRoute`. Following the menu link then shows the missing component path directly instead of an unexplained 404. `useAuthMenu.ts` also exports `viewComponentPaths`, converting every valid glob key back into the `component` string consumed by the menu form. Choosing from that dropdown normally prevents the diagnostic branch from being needed.
 
 Each registered route carries `name: 'menu-{id}'` and `meta.keepAlive: true`, and is hung under the `layout` parent via `router.addRoute('layout', ...)`. Every name added this way is tracked through `registerDynamic(name)`, so it can be torn down precisely on logout or app switch (see `resetRouter` in `router/index.ts`).
 

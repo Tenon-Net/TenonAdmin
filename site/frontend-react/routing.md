@@ -54,7 +54,7 @@ A few of these choices are deliberate:
 
 ## Dynamic routes: menu tree → real routes
 
-Everything under `<LayoutShell>` beyond those five static personal pages and the 404 fallback comes from `buildRoutes(menuTree)`. The function flattens the menu tree and computes one route per node whose `type` is `MenuType.Menu`. A `Catalog` only organizes the hierarchy and has no page of its own; a `Button` isn't a route; both are skipped. The convention is direct: a menu's `component` field is the file path relative to `src/views`, minus the `.tsx` suffix. So `system/user/index` maps to `/src/views/system/user/index.tsx`.
+Menu pages under `<LayoutShell>` come from `buildRoutes(menuTree)`. The function flattens the menu tree and computes one route per node whose `type` is `MenuType.Menu`. A `Catalog` only organizes the hierarchy and has no page of its own; a `Button` isn't a route; both are skipped. The convention is direct: a menu's `component` field is the file path relative to `src/views`, minus the `.tsx` suffix. So `system/user/index` maps to `/src/views/system/user/index.tsx`. Non-menu detail pages are added to the same shell by the `detail.tsx` convention described below.
 
 ### Decision and materialization, split in two
 
@@ -78,7 +78,7 @@ The components that can materialize into pages are collected into a lookup by `i
 
 ### Missing component: a diagnosable route, not a silent drop
 
-When `component` isn't found in the glob table, the handling here differs from Vue. Vue simply drops the menu item and registers no route, so clicking it lands on a 404 and the admin can't tell what went wrong. This side still builds a route, but renders it as `MissingRoute`: a `role="alert"` line on the page naming exactly which component is missing. Both sides also log a `console.warn`. Leaving a visible diagnostic is easier to trace than silently losing a menu item. And with the dropdown above, the path is hard to mistype in the first place.
+When `component` isn't found in the glob table, the route stays in place but renders as `MissingRoute`: a `role="alert"` line names exactly which component is missing, and the console receives a `console.warn`. The Vue template now behaves the same way. A visible diagnostic is easier to trace than an unexplained 404, while the dropdown above prevents most path mistakes before they reach this branch.
 
 ### The glob exclusion list
 
@@ -92,10 +92,11 @@ import.meta.glob([
   '!/src/views/oauth/**',    '!/src/views/error/**',
   '!/src/views/embed/**',    '!/src/views/personal/**',
   '!/src/views/_placeholder/**',
+  '!/src/views/**/detail.tsx',
 ])
 ```
 
-Every excluded group is **statically** imported somewhere else: the login page, app chooser, OAuth callback, 404, and the five personal pages are static routes imported directly; the iframe view is statically imported by `buildRoutes`; `_placeholder` is an internal stub. Leaving them in the glob has two consequences: the same file gets both a static and a dynamic import, which Vite can't code-split (that's the source of the build warning); and the admin could pick a broken page in the "component path" dropdown (the iframe view has no src, a placeholder is an empty shell). When you add a static-route page, exclude it here too, or the conflict comes back.
+The login page, app chooser, OAuth callback, 404, and five personal pages are **statically** imported elsewhere; the iframe view is statically imported by `buildRoutes`; `_placeholder` is an internal stub. A `detail.tsx` file belongs to the separate detail glob and must not enter the menu component dropdown. Without these exclusions, one file may be imported through two entry paths and prevent Vite from code-splitting, while administrators may also select a page that lacks its required context. Keep the exclusion list in step with new static routes and new file conventions.
 
 ## External links and embeds: no new menu type
 
@@ -120,9 +121,13 @@ Refreshing a tab (`refreshTab`) has to force a remount, and deleting the cache a
 
 The page-switch entrance animation is applied only to the currently visible page, using a CSS `animation` rather than a `transition`. When a div flips from `display:none` back to `block`, the `animation` re-runs, whereas a `transition` doesn't fire across a `display` change — so switching away and back still animates in, without any remount and without disturbing the cache.
 
-## No convention-based detail routes
+## Convention-based detail routes
 
-The Vue version has a convention: `views/**/detail.vue` auto-generates a `/<module>/:id/detail` route. **web-react has no equivalent.** There's no `registerDetailRoutes`-style scan in the router directory; detail views don't rely on a convention route but expand in place within the list page, via a dialog or drawer (`system/user` edits in a Modal, `system/log` in a Drawer). If you genuinely need a standalone detail page with a route param, configure it explicitly like any other page — don't expect a convention to generate it.
+`views/**/detail.tsx` automatically generates a `/<module>/:id/detail` route. For example, `views/system/user/detail.tsx` maps to `/system/user/:id/detail`, and the component reads the fixed `id` parameter through `useParams()`. These routes sit under `<LayoutShell>` beside menu routes, so hard refreshes and deep links rematch without adding a detail item to the backend menu.
+
+Each concrete detail URL opens a tab keyed by its full `pathname`, allowing several record IDs to stay open at once. The initial title is `common.detail`; after loading the record, the page may replace it through the tabs store's `setTitle`. Detail routes carry `noCache`, so leaving unmounts the page and revisiting fetches fresh data. Use an explicit route when you need another parameter name or multiple detail pages in one directory.
+
+The convention does not turn existing overlays into pages. Logs still use a Drawer, and lightweight details such as notices may remain in a Modal. Add `detail.tsx` only when a record needs its own address, a refresh-safe deep link, or a separate tab. Entry actions still use `<Can>` or `hasPerm`; backend endpoints remain the authorization boundary.
 
 ::: tip Two things that aren't here
 There's no progress bar in the routing path (no NProgress or similar library). `document.title` isn't set per-navigation by a guard either: it's set once when `App` loads the site config, and again by the system-config page when the site title changes, never in step with each navigation.

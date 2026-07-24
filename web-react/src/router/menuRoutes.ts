@@ -31,7 +31,7 @@ function flatten(nodes: MenuNode[]): MenuNode[] {
 
 /**
  * @param hasView 判定某个 component 键是否有对应视图文件(真实调用方传 `(k) => k in views` 的 glob 表)。
- * @param warn    组件缺失时的告警(默认 `console.warn`;缺一个字符菜单会**静默消失**,所以必须留声)。
+ * @param warn    组件缺失时的控制台告警(默认 `console.warn`;页面内另由 MissingRoute 给出可见诊断)。
  */
 export function menuToRouteDescriptors(
   tree: MenuNode[],
@@ -59,7 +59,7 @@ export function menuToRouteDescriptors(
     if (!node.component) continue
     const key = node.component.replace(/^\/+/, '')
     if (!hasView(key)) {
-      // 手敲错一个字符,这个菜单项就静默消失,管理员根本不知道错在哪。至少留一句 warn。
+      // 保留原路径交给 MissingRoute,同时给开发者控制台留一条可搜索的诊断。
       warn('[menu] 缺少视图组件:', node.component, key)
       out.push({ name, path, kind: 'missing', component: key, title: node.title, icon: node.icon })
       continue

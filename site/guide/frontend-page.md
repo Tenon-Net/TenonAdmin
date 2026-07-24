@@ -197,7 +197,7 @@ No need to hand-edit `router/`. Dynamic routes are registered automatically afte
 | Component | `sample/doc/index` | → `/src/views/sample/doc/index.vue` (no prefix/suffix) |
 | App | Pick an app | Only meaningful on top-level directories |
 
-After saving, log back in (or refresh to trigger a route rebuild) and the page shows up in the menu. If the console reports `[menu] missing view component`, the `Component` string doesn't line up with the file path — when `useAuthMenu` can't match a component it `console.warn`s and skips it, so the symptom is the menu item silently vanishing. For how the guard rebuilds these in-memory dynamic routes on a refresh or deep link, see [Dynamic Routing & Portal Guards](/frontend/routing).
+After saving, log back in (or refresh to trigger a route rebuild) and the page shows up in the menu. If the console reports `[menu] missing view component`, the `Component` string doesn't line up with the file path. `useAuthMenu` keeps the original menu path and renders `MissingRoute`, so the page names the missing component directly. For how the guard rebuilds these in-memory dynamic routes on a refresh or deep link, see [Dynamic Routing & Portal Guards](/frontend/routing).
 
 ## Fill in i18n text
 

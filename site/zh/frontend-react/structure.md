@@ -18,7 +18,7 @@
 | `layouts/` | 布局壳：顶栏、侧栏、标签页、设置抽屉、菜单搜索、通知铃铛 |
 | `lib/` | 一次性初始化与运行时基座：`icons`（离线图标注册）、`markdown`（md-editor-rt 的 XSS 过滤接线）、`echarts`（按需注册图种） |
 | `locales/` | i18n 资源（`zh-CN.ts`、`en-US.ts`）与 i18next 实例（`index.ts`）；`ext/` 是消费者扩展位，上游不写，同步时零冲突 |
-| `router/` | `buildRoutes`（菜单树 → `RouteObject`）、`menuRoutes`（建路由的决策逻辑）、`Protected`（守卫组件）、`MissingRoute` |
+| `router/` | `buildRoutes`（菜单树 → `RouteObject`）、`menuRoutes`（菜单路由决策）、`detailRoutes`（约定式详情路由）、`Protected`（守卫组件）、`MissingRoute` |
 | `stores/` | zustand 状态（`app`、`auth`、`user`、`dict`、`site`、`tabs`），均持久化 |
 | `styles/` | `tokens.css`（设计令牌）、`chrome.css`（布局壳裸 CSS + reset）、`code.css`（代码块高亮配色） |
 | `theme/` | antd 主题桥：`antd-theme`（构建 `ThemeConfig`）、`useAntdTheme`（落 `data-*` 并重建主题的 hook）、`accents`/`mix`（强调色候选与混色）、`useDocumentGrayscale`（哀悼灰阶，独立 CSS filter） |

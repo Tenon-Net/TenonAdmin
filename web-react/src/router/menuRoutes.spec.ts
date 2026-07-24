@@ -100,7 +100,7 @@ describe('缺组件:告警且保留可诊断路由', () => {
     ])
   })
 
-  it('缺组件时 warn 被调用(否则菜单静默消失,没人知道错在哪)', () => {
+  it('缺组件时保留 MissingRoute 描述符并输出控制台诊断', () => {
     const warn = vi.fn()
     const r = menuToRouteDescriptors([node({ id: 1, path: 'x', component: 'typo/index' })], hasView, warn)
     expect(r).toMatchObject([{ kind: 'missing', path: '/x', component: 'typo/index' }])

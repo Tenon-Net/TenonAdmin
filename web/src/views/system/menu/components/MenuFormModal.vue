@@ -54,7 +54,7 @@ const typeOptions = computed(() => [
   { label: t('menu.typeMenu'), value: MenuType.Menu },
 ])
 const moduleOptions = computed(() => props.modules.map((m) => ({ label: m.title, value: m.id })))
-// 组件路径下拉:取自 import.meta.glob 的真实文件表 —— 选得到的一定存在,不会再"填错→菜单静默消失"。
+// 组件路径下拉:取自 import.meta.glob 的真实文件表,选得到的一定存在;手填错误则由 MissingRoute 诊断。
 const componentOptions = computed(() => viewComponentPaths.map((p) => ({ label: p, value: p })))
 
 /** 收集以 id 为根的子树全部 id(含自身)——编辑时排除,防止把节点挂到自己的子孙下形成环。 */
@@ -162,7 +162,7 @@ async function save() {
           <n-input v-model:value="(form.path as string)" placeholder="/system/xxx | https://..." />
         </n-form-item-gi>
         <!-- 组件路径:选项来自 import.meta.glob 的真实文件表,选得到的一定能加载;
-             手敲错则该菜单只会 console.warn 后静默消失。tag 保留手敲(页面文件尚未创建时先占位)。
+             手敲错则该菜单进入 MissingRoute 并输出 console.warn。tag 保留手敲(页面文件尚未创建时先占位)。
              外链/iframe 约定见下方 linkHint:路径填 URL = 外链新窗口打开;组件填 URL = 内嵌 iframe。 -->
         <n-form-item-gi :label="t('menu.component')">
           <n-select

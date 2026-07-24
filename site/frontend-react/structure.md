@@ -18,7 +18,7 @@ All paths below are relative to `web-react/src/`.
 | `layouts/` | The layout shell: header, sidebar, tabs, settings drawer, menu search, notice bell |
 | `lib/` | One-time setup and runtime bases: `icons` (offline icon registration), `markdown` (md-editor-rt XSS wiring), `echarts` (on-demand chart registration) |
 | `locales/` | i18n resources (`zh-CN.ts`, `en-US.ts`) and the i18next instance (`index.ts`); `ext/` is the consumer extension slot that upstream never writes to, so it never conflicts on sync |
-| `router/` | `buildRoutes` (menu tree → `RouteObject`), `menuRoutes` (the route-building decisions), `Protected` (the guard component), `MissingRoute` |
+| `router/` | `buildRoutes` (menu tree → `RouteObject`), `menuRoutes` (menu-route decisions), `detailRoutes` (convention-based detail routes), `Protected` (the guard component), `MissingRoute` |
 | `stores/` | zustand stores (`app`, `auth`, `user`, `dict`, `site`, `tabs`), all persisted |
 | `styles/` | `tokens.css` (design tokens), `chrome.css` (layout-shell bare CSS + reset), `code.css` (code-block highlight colors) |
 | `theme/` | The antd theme bridge: `antd-theme` (builds the `ThemeConfig`), `useAntdTheme` (the hook that stamps `data-*` and rebuilds the theme), `accents`/`mix` (accent candidates and color mixing), `useDocumentGrayscale` (mourning grayscale, a standalone CSS filter) |

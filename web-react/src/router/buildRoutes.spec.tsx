@@ -107,6 +107,7 @@ describe('viewKeysFrom(菜单管理的组件下拉真相源)', () => {
       '/src/views/error/NotFoundPage.tsx': async () => ({ default: () => null }),
       '/src/views/embed/iframe.tsx': async () => ({ default: () => null }),
       '/src/views/_placeholder/UnderConstruction.tsx': async () => ({ default: () => null }),
+      '/src/views/system/user/detail.tsx': async () => ({ default: () => null }),
     }
     // login/oauth/error(静态路由)、embed/iframe(静态 import 的 iframe 视图)、_placeholder(内部占位)
     // 都不是菜单能配的落点,必须挡在下拉外 —— 选到它们会渲染坏页/占位页。
