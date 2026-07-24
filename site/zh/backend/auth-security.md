@@ -1,8 +1,8 @@
 # 认证与安全
 
-三行代码跑起来的服务，安全是不是就是一张白纸？并不是。登录连错五次账号就锁，密码写进日志之前已经打上了码。真正躲不过去的只有一件事：生产环境必须配 JWT 签名密钥。不配，服务直接起不来。剩下的每一项都有默认值。大半还能在运行时用 `SysConfig` 覆盖部署期的 Options。
+三行代码跑起来的服务并非安全白纸。登录连错五次账号就锁，密码写进日志之前已经打上了码。真正躲不过去的只有一件事：生产环境必须配 JWT 签名密钥，不配服务直接起不来。剩下的每一项都有默认值，大半还能在运行时用 `SysConfig` 覆盖部署期的 Options。
 
-上线前该核对哪些必须改、哪些能放着用默认值？交给[部署指南的安全基线](/zh/guide/deployment/)做清单。这一页讲的是这些机制本身怎么运作。
+上线前哪些必须改、哪些能放着用默认值，交给[部署指南的安全基线](/zh/guide/deployment/)列清单。这里只讲这些机制本身怎么运作。
 
 ## JWT 令牌
 
@@ -42,7 +42,7 @@
 
 ## 验证码
 
-登录要不要加一道验证码？`CaptchaService` 内置了三种生成器，都不依赖绘图库。配置在 `TenonAdmin:Security:Captcha`（`AdminCaptchaOptions`）下：
+`CaptchaService` 内置三种验证码生成器，都不依赖绘图库。配置在 `TenonAdmin:Security:Captcha`（`AdminCaptchaOptions`）下：
 
 | 配置键 | 默认 | 说明 |
 | --- | --- | --- |
@@ -126,7 +126,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);          // TryAdd 让位
 
 ## 邮件通道
 
-邮件呢？内核也带一个类似的抽象，`IEmailSender`，和 `ISmsSender` 一个路数。眼下**没有任何内置功能真的在用它**。这是先立好的通道，等以后邮件验证码登录、通知邮件这类功能落地时直接拿来用，不用再补一次可替换性设计。
+内核给邮件也备了一个抽象 `IEmailSender`，和 `ISmsSender` 一个路数。眼下**没有任何内置功能真的在用它**。这是先立好的通道，等以后邮件验证码登录、通知邮件这类功能落地时直接拿来用，不用再补一次可替换性设计。
 
 配置在 `TenonAdmin:Email`（`AdminEmailOptions`）下，只看一个字段就决定用哪个实现：
 
@@ -163,7 +163,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 
 ## 会话与强制下线
 
-会话谁说了算？`SessionService` 管着。数据库里那份是源头，缓存里那份纯粹是为了省掉热路径上的一次查询，两者不对等。刷新令牌只存 SHA-256 哈希，不存明文。时间统一走 UTC。登录的时候用 GUID v7 生成一个 `sessionId`，写进令牌的 `sid` claim 里。以后列举在线用户、强制下线，都靠这个锚点。
+会话由 `SessionService` 管。数据库里那份是源头，缓存里那份纯粹是为了省掉热路径上的一次查询，两者不对等。刷新令牌只存 SHA-256 哈希，不存明文。时间统一走 UTC。登录的时候用 GUID v7 生成一个 `sessionId`，写进令牌的 `sid` claim 里。以后列举在线用户、强制下线，都靠这个锚点。
 
 管理员在「在线用户」里点一下踢人，是不是要等令牌自然过期才生效？不用，**强退是即时生效的**。授权管道在每个请求里都会校验 `sid` 对应的会话是不是还活着，见[请求管线](/zh/backend/request-pipeline)第 ② 步。踢人这一下具体做了什么？
 
@@ -191,7 +191,7 @@ public virtual async Task RevokeAsync(string sessionId)
 
 ## 密码策略
 
-密码要多复杂才算数？`SecurityPolicyProvider.GetPasswordPolicyAsync()` 每一项都先读 `SysConfig`，读不到才回退默认值：
+密码复杂度由 `SecurityPolicyProvider.GetPasswordPolicyAsync()` 定，每一项都先读 `SysConfig`，读不到才回退默认值：
 
 | 运行时配置键 | 默认 |
 | --- | --- |
@@ -248,7 +248,7 @@ public class PersonalService(
 
 ## 演示模式（只读展示）
 
-想挂一个谁都能点进去玩、但谁也改不动数据的对外演示站？打开 `TenonAdmin:DemoMode`（默认 `false`）就行：
+对外演示站要的是谁都能点进去玩、谁也改不动数据。打开 `TenonAdmin:DemoMode`（默认 `false`）就行：
 
 ```jsonc
 // appsettings.json，或环境变量 TenonAdmin__DemoMode=true

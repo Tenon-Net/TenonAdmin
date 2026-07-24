@@ -20,7 +20,7 @@
 
 ## 选实体基类：`BaseEntity` 还是 `DataEntity`
 
-先问自己一个问题：这张表需不需要按机构做数据隔离？
+选哪个基类，就看这张表要不要按机构做数据隔离。
 
 - **不需要**（全局共享，比如字典、配置）→ 继承 `BaseEntity`。字典类型实体 `SysDictType`（`backend/src/TenonAdmin.SqlSugar/Entities/`）就是这样。
 - **需要**（不同机构的用户只看得到、改得动自己机构的数据）→ 继承 `DataEntity`。它自带 `CreateOrgId` 锚点，查询会被全局过滤器按当前用户的数据范围自动裁剪。

@@ -20,7 +20,7 @@ Follow the structure of these two, and the module you add will naturally grow in
 
 ## Choosing an entity base class: `BaseEntity` or `DataEntity`
 
-First ask yourself one question: does this table need per-organization data isolation?
+Which base class you pick comes down to one thing: whether this table needs per-organization data isolation.
 
 - **No** (globally shared, e.g. dictionaries, config) → inherit `BaseEntity`. The dictionary-type entity `SysDictType` (`backend/src/TenonAdmin.SqlSugar/Entities/`) is like this.
 - **Yes** (users in different orgs should only see and modify their own org's data) → inherit `DataEntity`. It carries a `CreateOrgId` anchor, and queries are automatically trimmed by the global filter according to the current user's data scope.

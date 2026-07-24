@@ -1,6 +1,6 @@
 # 容器化与多副本
 
-同一份代码，`dotnet run` 跑得好好的，进了容器为什么处处要重配？因为 compose 里的后端直接跑生产环境，`ASPNETCORE_ENVIRONMENT=Production`。开发期默默替你兜底的那几项，到这里全要求显式给出。一条 `docker compose up`，于是等于把上线首启预演了一遍。
+容器里的后端直接跑生产环境（`ASPNETCORE_ENVIRONMENT=Production`），开发期 `dotnet run` 默默替你兜底的那几项，到这里全要求显式给出。所以一条 `docker compose up`，等于把上线首启预演了一遍。
 
 ::: tip 这套 compose 是给谁用的
 仓库根的 `Dockerfile` 是从**源码**构建示例宿主 `MinimalHost`，给内核自己的 CI 用。你要是 NuGet 消费方，那用另一份。`dotnet new tenon-app` 生成的目录里已经带了一份 `Dockerfile`，它从 NuGet 装内核、构建你自己的 host，直接用就行，下面的步骤照样适用。

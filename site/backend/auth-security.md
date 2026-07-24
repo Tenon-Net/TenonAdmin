@@ -115,6 +115,24 @@ builder.Services.AddTenonAdmin(builder.Configuration);          // TryAdd yields
 
 Error codes: `SmsCodeRequired` 40009 (signal), `SmsCodeWrong` 40010 (carries `attemptsLeft`), `SmsCodeExpired` 40011 (missing/expired/consumed/exhausted — deliberately indistinguishable), `SmsLoginDisabled` 40012; send throttling reuses `TooManyRequests` 40008.
 
+## Email channel
+
+The kernel ships the same kind of abstraction for email, `IEmailSender`, mirroring `ISmsSender` — and **no built-in feature actually uses it yet**. It's a channel wired up ahead of time, so email verification codes or notification emails can plug straight into it later without a fresh replaceability design pass.
+
+Configuration lives under `TenonAdmin:Email` (`AdminEmailOptions`); a single field decides which implementation is active:
+
+| `Host` | Implementation selected | Behavior |
+| --- | --- | --- |
+| Empty (default) | `LoggingEmailSender` | Writes recipient/subject to the backend log instead of sending — visible in development, useless in production |
+| Non-empty | `SmtpEmailSender` | Talks SMTP directly via the BCL's `System.Net.Mail` (STARTTLS, default port 587) |
+
+`SmtpEmailSender`'s ceiling is whatever the BCL's own `SmtpClient` can do: plain SMTP works, but it can't do OAuth2 SMTP or a cloud vendor's own API. For that, implement your own `IEmailSender` — MailKit is a common choice — and register it before `AddTenonAdmin()` to take over. This replacement path is already covered by the regression tests, so a future kernel upgrade won't quietly break it:
+
+```csharp
+builder.Services.AddSingleton<IEmailSender, MailKitEmailSender>();  // yours, TryAdd yields
+builder.Services.AddTenonAdmin(builder.Configuration);
+```
+
 ## Login lockout (brute-force protection)
 
 `LoginLockService` is invoked at the **very front of login**, before credential validation — during a lockout, even the correct password is rejected. Configured under `TenonAdmin:Security:LoginLock` (`AdminLoginLockOptions`):

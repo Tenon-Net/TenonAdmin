@@ -70,7 +70,7 @@ export function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; tota
 
 ## 错误码怎么变成文案
 
-`unwrap` 抛出的 `ApiError` 带着一个数字 `code` 和一个 `msgKey`。这两样怎么落成一句中文或英文提示？这是前后端约定里最不直观的一环。
+`unwrap` 抛出的 `ApiError` 带着一个数字 `code` 和一个 `msgKey`，把这两样落成一句中文或英文提示，是前后端约定里最不直观的一环。
 
 约定的根子是一句话：**后端从不下发本地化文案**。每个业务错误都是一个数字 `ErrorCode`，定义在 `backend/src/TenonAdmin.Core/ErrorCode.cs`。每个枚举成员标一个 `[MsgKey("...")]` 点分路径：
 

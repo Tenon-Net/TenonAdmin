@@ -97,7 +97,7 @@ authStore.hasPerm('PUT:/api/v1/sys/position/{id}')
 
 ## 树表：静态数据模式，坑不少
 
-先问自己一个问题：这张表是平铺分页的列表，还是机构、菜单那样带层级的树？平铺就用上面的 `fetcher` 模式，翻页搜索都交给它。树不一样。它没有分页，一次把整棵拉回来自己摆。机构页和菜单页都走**静态 data 模式**，对应 `org/index.vue` 和 `menu/index.vue`：
+机构、菜单这类带层级的树表没有分页，一次把整棵拉回来自己摆，走**静态 data 模式**，对应 `org/index.vue` 和 `menu/index.vue`。平铺分页的列表仍用上面的 `fetcher`，翻页搜索都交给它：
 
 ```vue
 <ProTable

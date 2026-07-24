@@ -97,7 +97,7 @@ The toolbar's add / bulk-delete buttons work the same way via the `v-auth` direc
 
 ## Tree tables: static-data mode, and its four traps
 
-First ask yourself one question: is this a flat, paginated list, or a hierarchical tree like orgs or menus? Flat means the `fetcher` mode above — hand paging and search off to it. A tree is different — a tree has no pagination; you pull the whole thing back at once and lay it out yourself. The org page (`org/index.vue`) and the menu page (`menu/index.vue`) both run in **static-data mode**:
+Hierarchical trees like orgs and menus have no pagination — you pull the whole thing back at once and lay it out yourself, so both the org page (`org/index.vue`) and the menu page (`menu/index.vue`) run in **static-data mode**. A flat, paginated list still uses the `fetcher` mode above, which hands paging and search off to it:
 
 ```vue
 <ProTable

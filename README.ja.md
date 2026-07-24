@@ -29,9 +29,7 @@
 
 ## 🎨 これは何？
 
-管理画面フレームワークの定番の使い方はご存じの通り：テンプレートリポジトリをクローンした瞬間、数百のファイルが全部自分の保守対象になります。ビジネスコードとフレームワークのコードが絡み合い、フレームワークの新バージョンが出ても、diff を眺めて手作業でマージするしかありません。
-
-TenonAdmin は発想を逆にしました：**管理画面の共通機能を NuGet パッケージにする**。ユーザー、ロール、メニュー、マルチ組織データ権限、辞書・設定、操作ログ、ファイルアップロード——どのバックオフィスでも毎回作り直しているものを `dotnet add package` で導入し、`Program.cs` に 3 行足せば、完全な管理 API 一式が起動します：
+TenonAdmin は管理画面の共通機能を NuGet パッケージにしました。ユーザー、ロール、メニュー、マルチ組織データ権限、辞書・設定、操作ログ、ファイルアップロード——どのバックオフィスでも毎回作り直しているものを `dotnet add package` で導入できます。`Program.cs` に 3 行足せば、完全な管理 API 一式が起動します：
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration);
@@ -43,7 +41,65 @@ app.MapTenonAdmin();
 - **気に入らない部分は差し替え** — 内蔵サービスはすべてインターフェース + `TryAdd` 登録。自分の実装を登録すれば内蔵実装は自動的に退きます。フォーク不要。
 - **アップグレード = パッケージのバージョンを上げるだけ** — バグ修正も新機能もパッケージ更新で届き、ビジネスコードは一行も動かしません。
 
-バックエンドの「顔」も用意済み：**機能同等の 2 つのフロントエンドテンプレート**（Vue と React）。好みの方を選んで、自分のプロジェクトの出発点にしてください。
+従来のやり方はテンプレートリポジトリをクローンすることでした：数百のファイルが自分の保守対象になり、ビジネスコードとフレームワークのコードが絡み合い、フレームワークの新バージョンが出ても diff を手作業でマージするしかありません。TenonAdmin はそこを逆転させます——共通機能はパッケージ管理に任せ、ビジネスコードはビジネスコードのままです。
+
+フロントエンドも用意済みです：**機能同等の 2 つのテンプレート**（Vue と React）。好みの方を選んで、自分のプロジェクトの出発点にしてください。
+
+## 🚀 クイックスタート
+
+### 動作要件
+
+- .NET 10 SDK
+- Node.js 20+（フロントエンドテンプレートを動かす場合のみ）
+
+### まず動かしてみる
+
+リポジトリをクローンして、バックエンドはコマンド 1 つ：
+
+```bash
+dotnet run --project backend/samples/MinimalHost
+```
+
+初回起動でデータベースとテーブルを作成、シードデータを投入し、ランダム生成された管理者パスワードをコンソールに出力します（アカウントは `superAdmin`）。API は http://localhost:5100 で待機。
+
+フロントエンドはどちらか一方を（両方起動してもポートは衝突しません）：
+
+```bash
+cd web && npm install && npm run dev            # Vue 版 → http://localhost:5173
+cd web-react && npm install && npm run dev      # React 版 → http://localhost:5174
+```
+
+ブラウザを開いて、コンソールに出た認証情報でログインすれば、フル機能のバックオフィスが使えます。Windows ならもっと楽：リポジトリルートの `dev.bat` をダブルクリックすれば、バックエンド + 両フロントエンドが一度に起動します。
+
+### 自分のプロジェクトに組み込む
+
+```bash
+dotnet add package TenonAdmin
+```
+
+`Program.cs` に先ほどの 3 行を足せば、起動時に JWT 認証・RBAC・データ権限・全管理エンドポイントが自動登録されます。データベースを変えたい？設定を 1 ブロック書くだけ：
+
+```jsonc
+// appsettings.json
+"TenonAdmin": {
+  "Database": {
+    "DbType": "MySql",          // Sqlite / MySql / SqlServer / PostgreSQL
+    "ConnectionString": "..."
+  }
+}
+```
+
+### 内蔵実装が気に入らない？差し替えましょう
+
+内蔵サービスはすべてインターフェース + `TryAdd` 登録——先にあなたの実装を登録すれば、内蔵実装は自動的に退きます：
+
+```csharp
+// 例:パスワードハッシュアルゴリズムの差し替え。AddTenonAdmin の前に登録する
+builder.Services.AddSingleton<IPasswordHasher, MyPasswordHasher>();
+builder.Services.AddTenonAdmin(builder.Configuration);
+```
+
+さらに細かい粒度も：長いサービスメソッドは小さな `virtual` ステップに分割されているので、内蔵サービスを継承して気になる 1 ステップだけをオーバーライドできます。メソッドを丸ごとコピーする必要はありません。この差し替え可能性はスローガンではなく、専用の契約テスト一式がロックしています。
 
 ## ✨ バックエンド機能
 
@@ -80,62 +136,6 @@ app.MapTenonAdmin();
 - **デザイントークン + ライト/ダークテーマ** — 4 層の CSS 変数トークン、システム追従 / 手動切替
 - **3 種のログインページスキン** — すぐに使える切り替え式、スタイル分離
 - **自社開発コンポーネント** — FormContainer（モーダル/ドロワー統合）、StatusSwitch（悲観更新トグル）、辞書スイート、OrgTreeSelect、FileUpload（チャンク/リジューム/即時アップロード）、PasswordStrength、チャートラッパーなど、各テンプレートに独立実装
-
-## 🚀 クイックスタート
-
-### 動作要件
-
-- .NET 10 SDK
-- Node.js 20+（フロントエンドテンプレートを動かす場合のみ）
-
-### まず動かしてみる
-
-リポジトリをクローンして、バックエンドはコマンド 1 つ：
-
-```bash
-dotnet run --project backend/samples/MinimalHost
-```
-
-初回起動でデータベースとテーブルを作成、シードデータを投入し、ランダム生成された管理者パスワードをコンソールに出力します（アカウントは `superAdmin`）。API は http://localhost:5100 で待機。
-
-フロントエンドはどちらか一方を（両方起動してもポートは衝突しません）：
-
-```bash
-cd web && npm install && npm run dev            # Vue 版 → http://localhost:5173
-cd web-react && npm install && npm run dev      # React 版 → http://localhost:5174
-```
-
-ブラウザを開いて、コンソールに出た認証情報でログインすれば、フル機能のバックオフィスがそこにあります。Windows ならもっと楽：リポジトリルートの `dev.bat` をダブルクリックすれば、バックエンド + 両フロントエンドが一度に起動します。
-
-### 自分のプロジェクトに組み込む
-
-```bash
-dotnet add package TenonAdmin
-```
-
-`Program.cs` に先ほどの 3 行を足せば、起動時に JWT 認証・RBAC・データ権限・全管理エンドポイントが自動登録されます。データベースを変えたい？設定を 1 ブロック書くだけ：
-
-```jsonc
-// appsettings.json
-"TenonAdmin": {
-  "Database": {
-    "DbType": "MySql",          // Sqlite / MySql / SqlServer / PostgreSQL
-    "ConnectionString": "..."
-  }
-}
-```
-
-### 内蔵実装が気に入らない？差し替えましょう
-
-内蔵サービスはすべてインターフェース + `TryAdd` 登録——先にあなたの実装を登録すれば、内蔵実装は自動的に退きます：
-
-```csharp
-// 例:パスワードハッシュアルゴリズムの差し替え。AddTenonAdmin の前に登録する
-builder.Services.AddSingleton<IPasswordHasher, MyPasswordHasher>();
-builder.Services.AddTenonAdmin(builder.Configuration);
-```
-
-さらに細かい粒度も：長いサービスメソッドは小さな `virtual` ステップに分割されているので、内蔵サービスを継承して気になる 1 ステップだけをオーバーライドできます。メソッドを丸ごとコピーする必要はありません。この差し替え可能性はスローガンではなく、専用の契約テスト一式がロックしています。
 
 ## 🧩 リポジトリ構成
 

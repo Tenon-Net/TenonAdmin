@@ -2,7 +2,7 @@
 
 You want to change some behavior of the kernel — swap the password-hashing algorithm, slot a step into the login flow, replace the built-in dictionary module wholesale with your own. This page lays out which routes there are and how to take each one. No fork, no copying kernel code.
 
-First ask yourself one question: how big is the change you're making?
+How big your change is decides which route you take:
 
 - **Replace an entire service implementation** (say, PBKDF2 → argon2, or the in-process cache → Redis) → register your own implementation ahead of `AddTenonAdmin()`.
 - **Change just one step in a flow** (log something extra after login, route credential checks through LDAP) → subclass the built-in service and override that one `virtual` method.

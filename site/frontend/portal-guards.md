@@ -1,6 +1,6 @@
 # Multi-App Portal & Router Guards
 
-A user may be authorized for several apps (modules) at once — so after login, should you drop them straight into an app, or show a chooser and let them pick? This page covers two interlocking things: how the portal makes that decision, and how the guard stitches the static shell, the dynamic routes, and the portal state together on every navigation.
+Which app a user lands in after login is decided by a ladder, tried in order: the remembered app, the only app, the default app — and only when none of those holds does the chooser appear. A user may be authorized for several apps (modules) at once, so that landing point can't be hard-coded; it's computed for the current user.
 
 ## Which app to enter after login: enterInitial
 

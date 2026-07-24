@@ -29,9 +29,7 @@ English | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
 ## 🎨 What is this?
 
-You know how admin frameworks usually work: clone a template repo, and now hundreds of files are yours to maintain. Business code and framework code end up tangled together, and when the framework ships a new version, all you can do is stare at the diff and merge by hand.
-
-TenonAdmin flips that around: **the common admin machinery ships as NuGet packages**. Users, roles, menus, multi-org data permissions, dictionaries, config, operation logs, file uploads — all the stuff every back office rebuilds from scratch — comes in via `dotnet add package`, and three lines in `Program.cs` give you a complete set of admin APIs:
+TenonAdmin ships the common admin machinery as NuGet packages. Users, roles, menus, multi-org data permissions, dictionaries, config, operation logs, file uploads — all the stuff every back office rebuilds from scratch — comes in via `dotnet add package`. Three lines in `Program.cs` give you a complete set of admin APIs:
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration);
@@ -43,43 +41,9 @@ app.MapTenonAdmin();
 - **Replace what you don't like** — every built-in service is interface-based and registered with `TryAdd`. Register your own implementation and the built-in one steps aside. No forking.
 - **Upgrading = bumping a package version** — bug fixes and new features arrive as package updates; your business code doesn't move.
 
-The "face" of the backend is covered too: **two feature-equivalent frontend templates** (Vue and React). Pick whichever feels right and use it as the starting point of your own project.
+The usual approach is cloning a template repo: hundreds of files become yours to maintain, business code and framework code end up tangled together, and when the framework ships a new version you're stuck merging diffs by hand. TenonAdmin flips that — the common machinery is a package dependency, and your business code stays your business code.
 
-## ✨ Backend features
-
-- **Auth** — Account/password + captcha, JWT + refresh-token rotation, login lockout, online sessions & force-logout
-- **RBAC** — Roles, three-level menus (directory / page / button), button-level permission codes, role-menu authorization
-- **Data permissions** — All / this org / org & children / self only / custom orgs, enforced by ORM global filters — zero filtering code in your business logic
-- **Multi-app portal** — App management, independent menu trees, app selection & switching
-- **Organization** — Org tree, positions, multi-role users with a primary org
-- **Notifications** — In-app notices & announcements, targetable to everyone / roles / users
-- **Dictionary & config** — Dict types + items + key-value config, cached with event-driven invalidation
-- **Logging** — Auto-recorded operation logs with sensitive-input masking
-- **File management** — Upload/download, size limits, extension whitelist, path-traversal protection
-- **Multi-database** — SQLite (default) / MySQL / SQL Server / PostgreSQL; switching is a config change
-- **Multi-replica** — Optional Redis cache, cross-replica rate-limit counters, per-replica snowflake worker IDs — scales out without surprises
-- **Restrained dependencies** — Core packages depend only on SqlSugarCore + Microsoft.* at runtime; no third-party framework zoo dumped into your project
-
-## 🖥️ Frontend: two official templates, pick one
-
-The same backend contract ships with two fully independent frontend templates — take whichever stack you're comfortable with:
-
-| | `web/` | `web-react/` |
-|---|---|---|
-| Framework | Vue 3 + Naive UI | React 19 + Ant Design 6 |
-| State / routing | Pinia + vue-router | zustand + react-router |
-| i18n | vue-i18n | react-i18next |
-| Dev port | :5173 | :5174 |
-
-Zero sharing is deliberate: the two templates never import from each other — not even a utility function. Take one and you only carry that one's dependencies; delete the other and nothing happens. Features were ported page by page, so both sides have:
-
-- **Contract-generated API** — OpenAPI → `schema.d.ts`, type-safe end to end; change an endpoint and the frontend fails to compile
-- **Dynamic routing** — Backend menu tree drives route registration; multi-app portal with seamless switching
-- **Button-level permissions** — `v-auth` directive in Vue, `<Can>` component in React, same permission codes
-- **Column-driven tables** — One `columns` array drives the search form, dict rendering, and column settings
-- **Design tokens + light/dark themes** — Four-layer CSS variable tokens, follows the system or toggles manually
-- **Three login-page skins** — Switchable out of the box, style-isolated
-- **In-house component library** — FormContainer (modal/drawer two-in-one), StatusSwitch (pessimistic-update toggle), dict suite, OrgTreeSelect, FileUpload (chunked / resumable / instant), PasswordStrength, chart wrappers, and more — implemented once per template
+The frontend is covered too: **two feature-equivalent templates** (Vue and React). Pick whichever feels right and use it as the starting point of your own project.
 
 ## 🚀 Quick Start
 
@@ -136,6 +100,42 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 ```
 
 It goes finer than that: long service methods are split into small `virtual` steps, so you can subclass a built-in service and override just the one step you care about instead of copying the whole method. And this replaceability isn't a slogan — a dedicated set of contract tests locks it in place.
+
+## ✨ Backend features
+
+- **Auth** — Account/password + captcha, JWT + refresh-token rotation, login lockout, online sessions & force-logout
+- **RBAC** — Roles, three-level menus (directory / page / button), button-level permission codes, role-menu authorization
+- **Data permissions** — All / this org / org & children / self only / custom orgs, enforced by ORM global filters — zero filtering code in your business logic
+- **Multi-app portal** — App management, independent menu trees, app selection & switching
+- **Organization** — Org tree, positions, multi-role users with a primary org
+- **Notifications** — In-app notices & announcements, targetable to everyone / roles / users
+- **Dictionary & config** — Dict types + items + key-value config, cached with event-driven invalidation
+- **Logging** — Auto-recorded operation logs with sensitive-input masking
+- **File management** — Upload/download, size limits, extension whitelist, path-traversal protection
+- **Multi-database** — SQLite (default) / MySQL / SQL Server / PostgreSQL; switching is a config change
+- **Multi-replica** — Optional Redis cache, cross-replica rate-limit counters, per-replica snowflake worker IDs — scales out without surprises
+- **Restrained dependencies** — Core packages depend only on SqlSugarCore + Microsoft.* at runtime; no third-party framework zoo dumped into your project
+
+## 🖥️ Frontend: two official templates, pick one
+
+The same backend contract ships with two fully independent frontend templates — take whichever stack you're comfortable with:
+
+| | `web/` | `web-react/` |
+|---|---|---|
+| Framework | Vue 3 + Naive UI | React 19 + Ant Design 6 |
+| State / routing | Pinia + vue-router | zustand + react-router |
+| i18n | vue-i18n | react-i18next |
+| Dev port | :5173 | :5174 |
+
+Zero sharing is deliberate: the two templates never import from each other — not even a utility function. Take one and you only carry that one's dependencies; delete the other and nothing happens. Features were ported page by page, so both sides have:
+
+- **Contract-generated API** — OpenAPI → `schema.d.ts`, type-safe end to end; change an endpoint and the frontend fails to compile
+- **Dynamic routing** — Backend menu tree drives route registration; multi-app portal with seamless switching
+- **Button-level permissions** — `v-auth` directive in Vue, `<Can>` component in React, same permission codes
+- **Column-driven tables** — One `columns` array drives the search form, dict rendering, and column settings
+- **Design tokens + light/dark themes** — Four-layer CSS variable tokens, follows the system or toggles manually
+- **Three login-page skins** — Switchable out of the box, style-isolated
+- **In-house component library** — FormContainer (modal/drawer two-in-one), StatusSwitch (pessimistic-update toggle), dict suite, OrgTreeSelect, FileUpload (chunked / resumable / instant), PasswordStrength, chart wrappers, and more — implemented once per template
 
 ## 🧩 Repository layout
 

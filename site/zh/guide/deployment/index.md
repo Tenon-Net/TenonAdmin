@@ -1,6 +1,6 @@
 # 部署：先选路线，再过安全基线
 
-你已经用 `dotnet new tenon-app` 在本地跑通了，`npm run dev` 一切正常，其实靠 Vite dev server（配置在 `web/vite.config.ts`）把 `/api` 反代到了后端，这层代理只在开发期存在。上线后只剩 `web/dist` 一堆静态文件：谁托管它、它怎么找到后端，这两个问题决定了部署方式。下面先选托管路线，再过一道谁都绕不过的安全基线。
+你已经用 `dotnet new tenon-app` 在本地跑通了，`npm run dev` 一切正常，其实靠 Vite dev server（配置在 `web/vite.config.ts`）把 `/api` 反代到了后端，这层代理只在开发期存在。上线后只剩 `web/dist` 一堆静态文件：谁托管它、它怎么找到后端，这两个问题决定了部署方式。
 
 ## 选一条托管路线
 

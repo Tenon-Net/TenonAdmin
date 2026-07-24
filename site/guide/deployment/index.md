@@ -1,6 +1,6 @@
 # Deployment: Choose a Route, Then Clear the Security Baseline
 
-You've already got it running locally via `dotnet new tenon-app` (or three lines of `Program.cs`), and now you need to ship it to a server. `npm run dev` works because the Vite dev server reverse-proxies `/api` and `/openapi` to the backend (`web/vite.config.ts`) — that proxy layer only exists during development. The build output `web/dist` is a pile of static files, and who hosts it and how it finds the backend are the two questions going live has to answer. This page first helps you pick a hosting route by those two questions, then walks the security baseline that no route escapes.
+You've already got it running locally via `dotnet new tenon-app` (or three lines of `Program.cs`), and now you need to ship it to a server. `npm run dev` works because the Vite dev server reverse-proxies `/api` and `/openapi` to the backend (`web/vite.config.ts`) — that proxy layer only exists during development. The build output `web/dist` is a pile of static files, and who hosts it and how it finds the backend are the two questions going live has to answer.
 
 ## Pick a hosting route
 
