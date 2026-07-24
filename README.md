@@ -29,7 +29,7 @@ English | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
 ## 🎨 What is this?
 
-TenonAdmin ships the common admin machinery as NuGet packages. Users, roles, menus, multi-org data permissions, dictionaries, config, operation logs, file uploads — all the stuff every back office rebuilds from scratch — comes in via `dotnet add package`. Three lines in `Program.cs` give you a complete set of admin APIs:
+TenonAdmin packages the common back-office machinery as NuGet packages. Users, roles, menus, multi-org data permissions, dictionaries, config, operation logs, file uploads — everything every back office ends up rebuilding — comes in via `dotnet add package`. Three lines in `Program.cs` give you a complete admin API:
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration);

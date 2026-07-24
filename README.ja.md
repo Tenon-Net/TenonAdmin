@@ -29,7 +29,7 @@
 
 ## 🎨 これは何？
 
-TenonAdmin は管理画面の共通機能を NuGet パッケージにしました。ユーザー、ロール、メニュー、マルチ組織データ権限、辞書・設定、操作ログ、ファイルアップロード——どのバックオフィスでも毎回作り直しているものを `dotnet add package` で導入できます。`Program.cs` に 3 行足せば、完全な管理 API 一式が起動します：
+TenonAdmin はバックオフィスの共通機能を NuGet パッケージにまとめています。ユーザー、ロール、メニュー、マルチ組織データ権限、辞書・設定、操作ログ、ファイルアップロード——どのバックオフィスでも結局作り直すことになるものを `dotnet add package` で導入できます。`Program.cs` に 3 行足せば、完全な管理 API が手に入ります：
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration);
