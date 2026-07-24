@@ -15,7 +15,8 @@ TenonAdmin 前后端同仓、**同版本号一起发**。后端以 NuGet 包发�
 2. **bump 前端版本**(后端不用改文件,tag 注入;两套模板都要):
    - `web/package.json` 与 `web-react/package.json` 的 `version`
    - `web/package-lock.json` 与 `web-react/package-lock.json` 各两处:顶层 `version` + `packages[""].version`
-   - 核对无残留:`grep -n '"version": "X.Y.<旧>"' web/package*.json web-react/package*.json` 应为空。
+   - `site/.vitepress/config.ts` 里英文/中文导航栏各一处版本徽章 `{ text: '<旧版本>', link: '.../CHANGELOG.md' }`(文档站显示的版本号,漏了会跟实际发布的对不上——0.3.0 发布时就漏过一次)
+   - 核对无残留:`grep -n '"version": "X.Y.<旧>"' web/package*.json web-react/package*.json` 与 `grep -n "'X.Y.<旧>'" site/.vitepress/config.ts` 都应为空。
 
 3. **本地验绿**(CI 会再跑一遍,但先本地确认省得白打 tag;本机内存紧,**别并发**跑 vue-tsc 和 dotnet test,一次一个):
 
@@ -72,6 +73,7 @@ git push origin vX.Y.Z
   gh release edit vX.Y.Z --notes-file <(awk '/^## X\.Y\.Z - /{f=1;next} /^## /{f=0} f' CHANGELOG.md)
   ```
 
+- **文档站**:合 `main` 那一步如果带上了 `site/**` 的改动(包括上面 bump 的导航版本徽章),`docs` workflow 会自动触发部署——`gh run list --workflow=docs.yml --branch=main -L1` 确认 lint/build/deploy 三步绿。它只在 push `main` 命中 `site/**` 路径时跑,漏改了版本徽章之后单独补提交,记得也要单独确认这一步跑绿。
 - 发布成功后,两个前端 `package.json` 已是新版本,`dev` 继续开发,下一版从新的 `## Unreleased` 攒起。
 
 > 发布节奏与闸门的**为什么**在 [CHANGELOG.md](../CHANGELOG.md) 顶部;本页是**怎么做**的操作清单。
