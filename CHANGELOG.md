@@ -13,6 +13,26 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 > **This file is the source of truth for what shipped**, not the GitHub Release page: `backend-release` creates that page with `gh release create --generate-notes`, which drafts "What's Changed" from merged PRs only. Feature commits pushed straight to `dev` (common in this repo) never show up there, while unrelated PRs (docs, CI) do — so the release page can look complete while missing the actual content. The runbook's post-release step now replaces that draft with the matching section of this file.
 
+## 0.3.1 - 2026-07-24
+
+A consumer-bootstrap patch release: the project template now restores cleanly on creation, and the Vue template ships with an audited dependency tree and an explicit install-script policy.
+
+### Added
+
+- Added a GitHub issue form for publishing and tracking user-facing project announcements such as releases, maintenance, deprecations, and security notices.
+
+### Fixed
+
+- **`dotnet new tenon-app` now restores the generated project without a template-engine warning** (#22): the template declares `TenonApp.csproj` as its primary output, so the existing restore post-action can locate and restore the generated project. The template smoke test now exercises the consumer command without `--skipRestore`, asserts the restore asset exists, and builds with `--no-restore` to prove the post-action did the work.
+- **The Vue template's reported npm advisories are resolved** (#22): ECharts and vue-echarts are upgraded together, vulnerable `brace-expansion` and `js-yaml` resolutions are replaced, and the dependency tree now audits with zero known vulnerabilities.
+- **Release-exact Vue source passes `git diff --check` when imported unchanged** (#22): trailing whitespace and end-of-file formatting defects in the published source and design handoff files were removed.
+
+### Changed
+
+- **The Vue template now records an explicit npm install-script policy** (#22): only the pinned `esbuild@0.25.12` install script is allowed; the previous `vue-demi` script is gone with the vue-echarts upgrade.
+- Maintained guidance now uses the .NET 10 exact-version template syntax, `TenonAdmin.Templates@<version>`, instead of the deprecated `Package::version` form.
+- Refreshed the project README copy across Chinese, English, and Japanese, added the `tenon-example` CRM reference-app execution ledger, and expanded the release runbook's version-badge checks.
+
 ## 0.3.0 - 2026-07-23
 
 A second official frontend template — a full React 19 + Ant Design port of `web/`, self-contained and zero-shared by design — plus a batch of parity fixes discovered while building it, and a SqlServer/PostgreSQL startup performance fix.
