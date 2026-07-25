@@ -16,8 +16,12 @@ public class LogService(
     IRepository<SysExceptionLog> exceptionLogs,
     IRepository<SysUser> users,
     ICurrentUser currentUser,
-    ILogger<LogService> logger) : ILogService
+    ILogger<LogService> logger,
+    // 导出行数上限(excel-ledger §6.1);可选尾参,未注入时用默认 50000
+    AdminExcelOptions? excel = null) : ILogService
 {
+    private AdminExcelOptions Excel => excel ?? new AdminExcelOptions();
+
     /// <inheritdoc />
     public virtual async Task RecordOperationAsync(OperationLogEntry entry)
     {
@@ -95,18 +99,34 @@ public class LogService(
     /// <inheritdoc />
     public virtual async Task<PagedList<SysOpLog>> PageOperationAsync(OpLogPageInput input)
     {
-        var page = await opLogs.AsQueryable()
+        var page = await BuildOpListQuery(input).ToPagedListAsync(input.Current, input.Size);
+        await FillOperatorNamesAsync(page.Items);
+        return page;
+    }
+
+    /// <inheritdoc />
+    // 坑 1:不得走 PageOperationAsync/ToPagedListAsync——MAX_SIZE=200 会静默截断导出。
+    public virtual async Task<IReadOnlyList<SysOpLog>> ExportOpLogsAsync(OpLogPageInput input)
+    {
+        var max = Excel.MaxExportRows;
+        var items = await BuildOpListQuery(input).Take(max + 1).ToListAsync();
+        AdminException.ThrowIf(items.Count > max, ErrorCode.ExportRowLimitExceeded);
+        await FillOperatorNamesAsync(items);
+        return items;
+    }
+
+    /// <summary>
+    /// 操作日志列表/导出共用查询骨架。与 <see cref="PageOperationAsync"/> 共用,避免过滤条件漂移。
+    /// </summary>
+    protected virtual ISugarQueryable<SysOpLog> BuildOpListQuery(OpLogPageInput input) =>
+        opLogs.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Title), x => x.Title.Contains(input.Title!))
             .WhereIF(input.Success.HasValue, x => x.Success == input.Success!.Value)
             .WhereIF(input.OperatorId.HasValue, x => x.OperatorId == input.OperatorId!.Value)
             .WhereIF(!string.IsNullOrEmpty(input.Path), x => x.Path.Contains(input.Path!))
             .WhereIF(input.StartTime.HasValue, x => x.CreateTime >= input.StartTime!.Value)
             .WhereIF(input.EndTime.HasValue, x => x.CreateTime <= input.EndTime!.Value)
-            .OrderBy(x => x.Id, OrderByType.Desc)   // 雪花 Id 时间有序,降序 = 最新在前
-            .ToPagedListAsync(input.Current, input.Size);
-        await FillOperatorNamesAsync(page.Items);
-        return page;
-    }
+            .OrderBy(x => x.Id, OrderByType.Desc);   // 雪花 Id 时间有序,降序 = 最新在前
 
     /// <summary>
     /// 按本页出现的操作人 Id 去重批量查一次姓名回填(避免逐行 N+1)。

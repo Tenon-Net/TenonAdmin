@@ -138,6 +138,7 @@ TenonAdmin.Excel(卫星包) ← 只有 3 个 codec 实现 + 1 个装配扩展。
 
 | 文件 | 改动 |
 |---|---|
+| `TenonAdminSetup.cs` | `AddSingleton(options.Excel)`,与 Email / ExternalAuth / Realtime 同型 —— **G3 就要改**(`ImportRunner` / `ExportAsync` 要注入 `AdminExcelOptions`),不是 G4 才动 |
 | `Controllers/UserController.cs` | 5 个导入端点 + 1 个导出端点 |
 | `Controllers/SysLogController.cs` | 1 个导出端点 |
 
@@ -584,7 +585,7 @@ G1 只加接口和 DTO,`TenonAdmin.Core.csproj` 一行不改。`MiniExcel` / `Do
 **验收**:`dotnet build` 绿;写一个小程序或测试真生成一份模板并**用 Excel/WPS 打开确认下拉能点开**(下拉是取 OpenXml 的唯一理由,不验等于没做)。
 **变异**:把 `AddTenonAdminExcel()` 的调用去掉 → 模板端点必须返回 `46001`,而不是 500 或空文件。
 
-### - [ ] G3 · `DictTextResolver` + `ImportRunner` + 三个 Profile
+### - [x] G3 · `DictTextResolver` + `ImportRunner` + 三个 Profile
 **改**:§3.2 的 Services 新增 5 个文件 + `ServicesSetup.cs` + `IUserService`/`UserService`(坑 1 的抽取 + `ExportAsync`)+ `ILogService`/`LogService`(`ExportOpLogsAsync`)。
 **`UserImportProfile` 的列**:`Account*` / `Name*` / `Nickname` / `Phone` / `Email` / `Gender`(字典 `gender`)/ `OrgName*`(按名查)/ `PositionName`(按名查)/ `DirectorName`(按名查)/ `RoleNames`(按名查,逗号分隔)/ `Enabled`(字典或"是/否")。业务键 = `["Account"]`。
 `ValidateRowAsync` 负责:四处按名查外键(查不到 → `ImportCellRefNotFound`)、**机构越权检查**(解析出的 OrgId 不在当前用户数据范围 → `ImportOrgOutOfScope`)、手机/邮箱格式。
@@ -672,6 +673,9 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 ---
 
 ## 12. 轮次日志
+
+### 第 3 轮 — G3 DictTextResolver + ImportRunner + 三个 Profile(2026-07-25)
+提交 `feat(excel): add ImportRunner, DictTextResolver, and user/op-log profiles`。**改**:`Services/ImportExport/` 五文件(`DictTextResolver` over `IDictService`、`ImportRunner` 分步 virtual 编排含 Commit 重校验、`UserImportProfile`/`UserExportProfile`/`OpLogExportProfile`)+ `ServicesSetup` TryAdd 五件 + `IUserService.ExportAsync`/`UserService.BuildListQuery` 抽取(坑 1,不改 PageAsync 签名)+ `ILogService.ExportOpLogsAsync`/`LogService.BuildOpListQuery` + `TenonAdminSetup` 注册 `options.Excel` 单例;`UserImportProfile.CommitRowAsync` 只走 `IUserService.AddAsync`/`UpdateAsync`(坑 5)。测试:`ImportExportTests` 两条(坑 6 篡改 Errors / 坑 1 导出不截断 200)。**验收**:`dotnet build -c Release` 绿(0 error);全量 `dotnet test` 326/326 绿(G2 基线 324+2)。**变异**:①注释 `CommitAsync` 里 `ValidateAllAsync` → `CommitAsync_TamperedErrors_StillBlocked` 红(`Assert.Equal() Failure: Expected: 0 Actual: 1` on Inserted) → 改回绿;②`ExportAsync` 改走 `PageAsync(Size=50000)` → `ExportAsync_NotTruncatedAt200` 红(`导出不得被 200 截断,实际 200`) → 改回绿。G4 及以后未碰。
 
 ### 第 2 轮 — G2 卫星包 TenonAdmin.Excel codec(2026-07-25)
 提交 `feat(excel): add TenonAdmin.Excel satellite with MiniExcel and OpenXml codecs`。**改**:新建 `backend/src/TenonAdmin.Excel/`(`MiniExcelReader` / `MiniExcelWriter` / `OpenXmlTemplateBuilder` / `ExcelSetup.AddTenonAdminExcel` / csproj,仅 ProjectReference Core)+ `Directory.Packages.props` 增 MiniExcel 1.45.0 与 DocumentFormat.OpenXml 3.5.1(注释「仅卫星包」)+ `TenonAdmin.slnx` 纳入;`TenonAdmin.csproj` 元包未动。测试:`ExcelCodecTests` 四条(缺包 46001 / TryAdd 前置胜出 / 模板 dataValidation+字典 label / 读写 round-trip);模板落盘仓库外 `C:\Project\HuHuHu\excel-artifacts\user-template.xlsx`。**验收**:`dotnet build -c Release` 绿(0 error);全量 `dotnet test` 324/324 绿(G1 基线 320+4)。**变异**:①注释 `ExcelSetup` 里 `IExcelTemplateBuilder` 的 `TryAddSingleton` → `AddTenonAdminExcel_BeforeKernel_WinsTryAdd` 红(`Expected OpenXmlTemplateBuilder, Actual MissingExcelProvider`) → 改回绿;②让 builder 写 dataValidation 但不往 `_dict` 写 label(「填写说明」hint 仍有男/女)→ 旧断言假绿;收紧后 `OpenXmlTemplateBuilder_WritesDataValidation_WithDictLabels` 沿 formula1→workbook sheet 名→r:id→rels Target 解析到真正 worksheet,断言**那张** sheet 含「男」「女」且 `state="hidden"` → 红(`Assert.Contains() Failure: Sub-string not found / Not found: "男"`) → 改回绿,ExcelCodecTests 4/4。G3 及以后未碰。**报告(未改 CI)**:`backend-release.yml` 的 Pack 是 `dotnet pack backend/TenonAdmin.slnx`(按 slnx 内 `IsPackable` 打),**未**显式枚举包项目;新卫星包进 slnx 且 `IsPackable=true` 即会被 pack/push,无需改 workflow——是否接受由维护者裁定。

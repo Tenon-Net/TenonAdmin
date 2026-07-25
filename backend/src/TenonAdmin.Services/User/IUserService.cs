@@ -12,6 +12,13 @@ public interface IUserService
     /// <summary>分页查询(账号/姓名模糊 + 机构/状态过滤)</summary>
     Task<PagedList<UserItem>> PageAsync(UserPageInput input);
 
+    /// <summary>
+    /// 导出用全量列表(与 <see cref="PageAsync"/> 共用查询构造,筛选一致)。
+    /// 不走分页 <c>MAX_SIZE=200</c> 截断(excel-ledger 坑 1);超过
+    /// <c>TenonAdmin:Excel:MaxExportRows</c> 抛 <see cref="ErrorCode.ExportRowLimitExceeded"/>。
+    /// </summary>
+    Task<IReadOnlyList<UserItem>> ExportAsync(UserPageInput input);
+
     /// <summary>取用户详情(含角色 Id 集合);不存在抛 <see cref="ErrorCode.UserNotFound"/></summary>
     Task<UserDetail> GetAsync(long id);
 

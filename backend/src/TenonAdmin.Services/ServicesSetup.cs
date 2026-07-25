@@ -58,6 +58,13 @@ public static class ServicesSetup
         services.TryAddSingleton<IExcelWriter, MissingExcelProvider>();
         services.TryAddSingleton<IExcelTemplateBuilder, MissingExcelProvider>();
 
+        // 导入/导出领域层(excel-ledger §3.2 G3):字典翻译 + 编排 + 三个档案。TryAdd 可被消费者前置替换。
+        services.TryAddScoped<IDictTextResolver, DictTextResolver>();
+        services.TryAddScoped<IImportRunner, ImportRunner>();
+        services.TryAddScoped<UserImportProfile>();
+        services.TryAddScoped<UserExportProfile>();
+        services.TryAddScoped<OpLogExportProfile>();
+
         // 会话与刷新令牌(§15):登录建会话、每请求校验、刷新轮换+复用检测、登出/强退
         services.TryAddScoped<ISessionService, SessionService>();
 

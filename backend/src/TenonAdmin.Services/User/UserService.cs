@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using SqlSugar;
 using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
 
@@ -24,13 +25,17 @@ public class UserService(
     IPasswordHistoryService? passwordHistory = null,
     ISysUserExternalService? externalBindings = null,
     // 统一时间源(§1.11):尾随可选参数,DI 正常注入;消费者子类省略也能编译(§5.3)
-    TimeProvider? time = null) : IUserService
+    TimeProvider? time = null,
+    // 导出行数上限(excel-ledger §6.1);可选尾参,未注入时用默认 50000
+    AdminExcelOptions? excel = null) : IUserService
 {
     // 生成随机初始口令的字符集:去掉易混字符(0/O、1/l/I),含大小写+数字+符号。
     private const string PASSWORD_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*";
 
     // LastPasswordChangeTime 是与审计字段同类的持久化业务时间戳,走本地时钟(与 SqlSugarSetup 的 GetLocalNow 审计口径一致)
     private DateTime Now => (time ?? TimeProvider.System).GetLocalNow().DateTime;
+
+    private AdminExcelOptions Excel => excel ?? new AdminExcelOptions();
 
     /// <summary>
     /// 解析初始口令:显式给定 → 用之;否则用配置的默认口令;都没有 → 密码学随机强口令(安全默认,不落公开常量)。
@@ -51,7 +56,37 @@ public class UserService(
         if (holders is { Count: 0 })
             return new PagedList<UserItem> { Current = input.Current, Size = input.Size, Total = 0, Items = [] };
 
-        var page = await users.AsQueryable()
+        var page = await BuildListQuery(input, holders).ToPagedListAsync(input.Current, input.Size);
+        return new PagedList<UserItem>
+        {
+            Current = page.Current,
+            Size = page.Size,
+            Total = page.Total,
+            Items = await FillOrgPositionNamesAsync(page.Items),
+        };
+    }
+
+    /// <inheritdoc />
+    // 坑 1:不得走 PageAsync/ToPagedListAsync——MAX_SIZE=200 会静默截断导出。
+    // 与 PageAsync 共用 BuildListQuery,保证导出筛选与列表一致。
+    public virtual async Task<IReadOnlyList<UserItem>> ExportAsync(UserPageInput input)
+    {
+        var holders = await ResolveRoleHolderIdsAsync(input.RoleId);
+        if (holders is { Count: 0 }) return [];
+
+        var max = Excel.MaxExportRows;
+        var items = await BuildListQuery(input, holders).Take(max + 1).ToListAsync();
+        AdminException.ThrowIf(items.Count > max, ErrorCode.ExportRowLimitExceeded);
+        return await FillOrgPositionNamesAsync(items);
+    }
+
+    /// <summary>
+    /// 用户列表/导出共用的查询骨架(过滤 + 排序 + 投影)。
+    /// 抽出来是为了 PageAsync 与 ExportAsync 不复制过滤条件(坑 1:两条链漂移 = 导出数据范围与列表不一致)。
+    /// <b>不改</b> <see cref="PageAsync"/> 的 public 签名(它是 virtual,消费者可能已覆写)。
+    /// </summary>
+    protected virtual ISugarQueryable<UserItem> BuildListQuery(UserPageInput input, List<long>? holders) =>
+        users.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Account), u => u.Account.Contains(input.Account!))
             .WhereIF(!string.IsNullOrEmpty(input.Name), u => u.Name.Contains(input.Name!))
             .WhereIF(input.OrgId.HasValue, u => u.OrgId == input.OrgId)
@@ -76,16 +111,7 @@ public class UserService(
                 Enabled = u.Enabled,
                 IsSuperAdmin = u.IsSuperAdmin,
                 CreateTime = u.CreateTime,
-            })
-            .ToPagedListAsync(input.Current, input.Size);
-        return new PagedList<UserItem>
-        {
-            Current = page.Current,
-            Size = page.Size,
-            Total = page.Total,
-            Items = await FillOrgPositionNamesAsync(page.Items),
-        };
-    }
+            });
 
     /// <summary>
     /// 角色 → 持有者 Id 列表(未按角色筛选时返回 null,调用方据此跳过该条件)。
