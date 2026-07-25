@@ -75,7 +75,37 @@ try {
         Write-Host "== build generated project without restoring again (exact version required)"
         dotnet build $out -c Release --no-restore -warnaserror:NU1603; Check 'build'
 
-        Write-Host "`n[OK] smoke passed: generated tenon-app compiles against the real kernel."
+        # Compiling is not the advertised promise -- "dotnet run and it works" is. A green build hid a real
+        # regression once: the template shipped no launch profile, so dotnet run resolved to Production,
+        # CodeFirst auto-DDL is off there by design, and the consumer's first command died on missing seed
+        # tables. Run it verbatim (no env override) and require a live /health.
+        Write-Host "== run generated project verbatim (dotnet run must reach /health)"
+        $runLog = Join-Path $work 'run.log'
+        $errLog = Join-Path $work 'run.err.log'
+        $proc = Start-Process dotnet -PassThru -NoNewWindow `
+            -ArgumentList 'run', '--project', $out, '-c', 'Release', '--no-build' `
+            -RedirectStandardOutput $runLog -RedirectStandardError $errLog
+        try {
+            $healthy = $false
+            foreach ($i in 1..60) {
+                if ($proc.HasExited) { break }
+                try {
+                    $r = Invoke-WebRequest -Uri 'http://localhost:5100/health' -UseBasicParsing -TimeoutSec 5
+                    if ($r.StatusCode -eq 200) { $healthy = $true; break }
+                } catch { Start-Sleep -Seconds 2 }
+            }
+            if (-not $healthy) {
+                $tail = (Get-Content $runLog, $errLog -ErrorAction SilentlyContinue | Select-Object -Last 40) -join "`n"
+                throw "FAILED: generated tenon-app did not serve /health from a plain 'dotnet run'.`n$tail"
+            }
+        }
+        finally {
+            if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+            # 'dotnet run' launches the app as a child; killing the parent orphans it (and the port).
+            Get-Process -Name 'Probe' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+
+        Write-Host "`n[OK] smoke passed: generated tenon-app compiles and runs against the real kernel."
     }
     finally {
         dotnet new uninstall TenonAdmin.Templates 2>$null | Out-Null

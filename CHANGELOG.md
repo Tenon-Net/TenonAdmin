@@ -13,6 +13,16 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 > **This file is the source of truth for what shipped**, not the GitHub Release page: `backend-release` creates that page with `gh release create --generate-notes`, which drafts "What's Changed" from merged PRs only. Feature commits pushed straight to `dev` (common in this repo) never show up there, while unrelated PRs (docs, CI) do — so the release page can look complete while missing the actual content. The runbook's post-release step now replaces that draft with the matching section of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`dotnet new tenon-app` 生成的工程现在 `dotnet run` 就能起来**:模板此前不带 `Properties/launchSettings.json`,`dotnet run` 落到 `Production`,而那里 CodeFirst 自动建表默认关闭(§12 建表安全)—— 首启在"种子要写的表不存在"上抛 `InvalidOperationException`,只留一个空 `admin.db`,与模板 README 承诺的"零配置 SQLite 自动建表 + 种子"直接矛盾。模板补上 launch profile(钉 `ASPNETCORE_ENVIRONMENT=Development`、`applicationUrl` 用 `web/` 开发代理指向的 `http://localhost:5100`),README 说明这个文件别删、生产建表走 `EnableCodeFirstInProduction` 或 DBA 预建。由 `tenon-example` 参考应用第二轮 dogfood 抓到。
+
+### Changed
+
+- **模板冒烟测试从"能编译"升级到"能跑起来"**:`templates/smoke-test.ps1` 在 build 之后逐字执行 `dotnet run`(不注入任何环境变量)并要求 `/health` 返回 200。上面那个坑正是因为 `template-smoke` 只 build 不 run 才在 7 个 CI 检查全绿的情况下发布出去。
+
 ## 0.3.1 - 2026-07-24
 
 A consumer-bootstrap patch release: the project template now restores cleanly on creation, and the Vue template ships with an audited dependency tree and an explicit install-script policy.
