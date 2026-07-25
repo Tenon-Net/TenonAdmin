@@ -68,11 +68,11 @@
 
 ## 未排期备忘
 
-- 定时任务调度中心:自写 5 段 cron(~100 行,不做秒级/L/W/#)+ `IAdminJob` TryAddEnumerable + `JobSchedulerService : BackgroundService`(复用 FileGcService 骨架与 ICacheProvider.IncrementAsync 多副本租约);表 sys_job / sys_job_log;ErrorCode 46xxx 段。设计已成稿,待排期。
+- 定时任务调度中心:自写 5 段 cron(~100 行,不做秒级/L/W/#)+ `IAdminJob` TryAddEnumerable + `JobSchedulerService : BackgroundService`(复用 FileGcService 骨架与 ICacheProvider.IncrementAsync 多副本租约);表 sys_job / sys_job_log;ErrorCode **47xxx** 段(46xxx 已由导入/导出占用,见 `docs/excel-ledger.md` §6.3)。设计已成稿,待排期。
 - ~~SignalR 实时通知~~ → **已做(批次 F,第 14 轮)**,见上。
-- `TenonAdmin.Excel` 卫星包(Magicodes.IE,`rebuild-design.md:165` 已定稿方向):用户导入 + 同步导出,经 ApplicationAssemblies 通路挂入,内核零改动。
+- ~~`TenonAdmin.Excel` 卫星包~~ → 改由 `docs/excel-ledger.md` 驱动施工(库选型推翻 Magicodes,改 MiniExcel + OpenXml;契约落 Core,codec 进卫星包)。
 - ~~多租户消费者侧 skill 文档~~ → **2026-07-25 裁定不做**,理由与证据进「不做清单」,见上。
-- ⚠ **定时任务的归属两处打架,开工前先定**:`rebuild-design.md:305` / `:320` 写的是卫星包 `TenonAdmin.Scheduling` + v1.0 明确不做;本文件上一条却按**进内核**设计(`sys_job`/`sys_job_log` 是内核 CodeFirst 表、`ErrorCode 46xxx` 是内核枚举段、复用内核 `FileGcService` 骨架)。这条不定,「自写 5 段 cron」这个前提就是悬的——留在内核才需要自写(运行时只允许 SqlSugarCore + Microsoft.\*),做成卫星包就该直接吃 Quartz/Hangfire,别自写。
+- ⚠ **定时任务的归属两处打架,开工前先定**:`rebuild-design.md:305` / `:320` 写的是卫星包 `TenonAdmin.Scheduling` + v1.0 明确不做;本文件上一条却按**进内核**设计(`sys_job`/`sys_job_log` 是内核 CodeFirst 表、`ErrorCode 47xxx` 是内核枚举段、复用内核 `FileGcService` 骨架)。这条不定,「自写 5 段 cron」这个前提就是悬的——留在内核才需要自写(运行时只允许 SqlSugarCore + Microsoft.\*),做成卫星包就该直接吃 Quartz/Hangfire,别自写。
 
 ## 轮次日志
 

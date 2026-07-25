@@ -19,6 +19,7 @@ namespace TenonAdmin.Core;
 ///   <item><term>43000–43999</term><description>字典 / 配置</description></item>
 ///   <item><term>44000–44999</term><description>文件上传</description></item>
 ///   <item><term>45000–45999</term><description>消息通知</description></item>
+///   <item><term>46000–46999</term><description>导入 / 导出</description></item>
 ///   <item><term>50000–50999</term><description>系统内部错误</description></item>
 /// </list>
 /// </summary>
@@ -267,6 +268,48 @@ public enum ErrorCode
     /// <summary>通知不存在(或已被删除)</summary>
     [MsgKey("error.notice.notFound")]
     NoticeNotFound = 45001,
+
+    // ── 46xxx 导入 / 导出 ────────────────────────────────────────────
+
+    /// <summary>未安装 TenonAdmin.Excel(或未在 AddTenonAdmin() 之前调 AddTenonAdminExcel())</summary>
+    [MsgKey("error.excel.providerMissing")]
+    ExcelProviderMissing = 46001,
+    /// <summary>导入文件为空</summary>
+    [MsgKey("error.import.fileEmpty")]
+    ImportFileEmpty = 46002,
+    /// <summary>导入行数超过 TenonAdmin:Excel:MaxImportRows</summary>
+    [MsgKey("error.import.rowLimitExceeded")]
+    ImportRowLimitExceeded = 46003,
+    /// <summary>必填列没有被任何表头映射上(列级,不属于任何一行)</summary>
+    [MsgKey("error.import.columnMissing")]
+    ImportColumnMissing = 46004,
+    /// <summary>单元格必填但为空</summary>
+    [MsgKey("error.import.cellRequired")]
+    ImportCellRequired = 46005,
+    /// <summary>字典列的值不在该字典的启用项里</summary>
+    [MsgKey("error.import.cellDictInvalid")]
+    ImportCellDictInvalid = 46006,
+    /// <summary>按名查外键失败(机构名/岗位名/角色名/主管姓名在库里找不到)</summary>
+    [MsgKey("error.import.cellRefNotFound")]
+    ImportCellRefNotFound = 46007,
+    /// <summary>单元格格式不合法(日期/数字/邮箱/手机号)</summary>
+    [MsgKey("error.import.cellFormatInvalid")]
+    ImportCellFormatInvalid = 46008,
+    /// <summary>业务键在本文件内重复</summary>
+    [MsgKey("error.import.duplicateInFile")]
+    ImportDuplicateInFile = 46009,
+    /// <summary>业务键在库中已存在(Error 策略下才算错误)</summary>
+    [MsgKey("error.import.duplicateInDb")]
+    ImportDuplicateInDb = 46010,
+    /// <summary>导入行指定的机构不在当前用户的数据范围内(越权写入,§3.4)</summary>
+    [MsgKey("error.import.orgOutOfScope")]
+    ImportOrgOutOfScope = 46011,
+    /// <summary>导出结果超过 TenonAdmin:Excel:MaxExportRows,请先收窄筛选条件</summary>
+    [MsgKey("error.export.tooManyRows")]
+    ExportRowLimitExceeded = 46012,
+    /// <summary>请求导出的列不在该档案的可导列里</summary>
+    [MsgKey("error.export.columnInvalid")]
+    ExportColumnInvalid = 46013,
 
     // ── 50xxx 系统内部 ───────────────────────────────────────────────
 
