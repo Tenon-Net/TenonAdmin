@@ -16,7 +16,13 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path "$PSScriptRoot/..").Path
 $work = Join-Path ([System.IO.Path]::GetTempPath()) ("tenon-tmpl-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $feed = Join-Path $work 'feed'
-$out  = Join-Path $work 'Probe'
+# Hyphenated on purpose. 'dotnet new' sanitizes "-" to "_" when substituting the name into file CONTENT,
+# but renames FILES with the literal, so the two disagree for any hyphenated name -- a common convention
+# (tenon-example itself). A non-hyphenated scaffold name cannot see that class of bug at all; it shipped
+# a broken generated Dockerfile once precisely because this test used 'Probe'.
+$name = 'probe-app'
+$sanitized = $name -replace '-', '_'
+$out  = Join-Path $work $name
 $ver  = $Version
 New-Item -ItemType Directory -Force -Path $feed | Out-Null
 
@@ -54,7 +60,7 @@ try {
         # No --TenonPkgVersion or --skipRestore on purpose: this is the consumer's first command, verbatim.
         # Passing it would paper over the packaged default, which is exactly the thing that has to be right.
         Write-Host "== scaffold tenon-app -> $out (template default version + automatic restore)"
-        dotnet new tenon-app -n Probe -o $out; Check 'dotnet new + automatic restore'
+        dotnet new tenon-app -n $name -o $out; Check 'dotnet new + automatic restore'
 
         $assets = Join-Path $out 'obj/project.assets.json'
         if (-not (Test-Path $assets)) {
@@ -66,9 +72,30 @@ try {
         # whatever the feed has (NU1603) and everything looks green -- while the shipped template references
         # a version that was never published. Consumers on TreatWarningsAsErrors / lock files / exact-version
         # policies are the ones who eat it.
-        $csproj = Get-Content (Join-Path $out 'Probe.csproj') -Raw
+        $csproj = Get-Content (Join-Path $out "$name.csproj") -Raw
         if ($csproj -notmatch [regex]::Escape("Version=`"$ver`"")) {
             throw "FAILED: generated project does not reference the packed version $ver. The template default was not stamped at pack time. csproj says: $(($csproj | Select-String 'PackageReference.*TenonAdmin' -AllMatches).Matches.Value -join ', ')"
+        }
+
+        # The generated Dockerfile is never built here (no docker in CI for this job), so a hyphenated
+        # scaffold name alone would still not see the bug that shipped in 0.3.2: content substitution wrote
+        # probe_app.csproj / probe_app.dll into the Dockerfile while the real file is probe-app.csproj, and
+        # docker build died for every consumer using a hyphenated name. Assert statically instead --
+        # no sanitized-name literal anywhere, and any literal .csproj it names must actually exist.
+        $dockerfile = Join-Path $out 'Dockerfile'
+        if (Test-Path $dockerfile) {
+            $df = Get-Content $dockerfile -Raw
+            # Guard on the names actually differing. With a hyphen-free name the sanitized form IS the real
+            # name, so an unguarded check fires on the legitimate substitution and reports the nonsense
+            # "contains 'Probe' but the files use 'Probe'". (Hit while proving this assertion reddens.)
+            if ($sanitized -ne $name -and $df -match [regex]::Escape($sanitized)) {
+                throw "FAILED: generated Dockerfile contains the sanitized project name '$sanitized', but the scaffolded files use '$name'. Name substitution disagrees with file renaming; docker build would fail for any hyphenated project name."
+            }
+            foreach ($m in [regex]::Matches($df, '[\w.-]+\.csproj')) {
+                if (-not (Test-Path (Join-Path $out $m.Value))) {
+                    throw "FAILED: generated Dockerfile references '$($m.Value)', which does not exist in the scaffolded project. Use a *.csproj glob instead of a project-name literal."
+                }
+            }
         }
 
         # -warnaserror:NU1603 is the general net: restore must find the exact version, never float to it.
@@ -102,7 +129,7 @@ try {
         finally {
             if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
             # 'dotnet run' launches the app as a child; killing the parent orphans it (and the port).
-            Get-Process -Name 'Probe' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
         }
 
         Write-Host "`n[OK] smoke passed: generated tenon-app compiles and runs against the real kernel."
