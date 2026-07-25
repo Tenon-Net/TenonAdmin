@@ -1,7 +1,7 @@
 # 参考应用执行台账 · `tenon-example`(多机构数据范围 · 面向企业评估者)
 
 > **来源**:2026-07-24 grilling 定向。全部方向决策见 §1,grilling 已钉死,执行期不回炉。
-> **当前状态**:P0 已完成;第二轮 dogfood 抓到的 launch-profile 坑已随 `v0.3.2` 发布,`tenon-example` 已升级并采用正式修复(不再靠环境变量绕过);P1(CRM 实体 + 后端)已完成,P2(种子数据)未开始。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
+> **当前状态**:P0 已完成;第二轮 dogfood 抓到的 launch-profile 坑已随 `v0.3.2` 发布,`tenon-example` 已升级并采用正式修复(不再靠环境变量绕过);P1(CRM 实体 + 后端)、P2(种子数据)均已完成——头条(同一接口三个账号分别看到 214/128/42 行,跨范围不可见)已用真实 HTTP 登录验证过。P3(前端页)未开始。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
 > **目标**:给「中小团队 / 企业内部后台」这个人群一个能信、能 dogfood 的证据 —— 一个独立开源的 CRM-lite 参考应用,吃**已发布的 NuGet 包**、degit `web/`、部署上线,头条是**多机构数据范围当场生效**。
 > **驱动方式**:仿 `docs/refinement-ledger.md` —— 逐条执行、每条独立英文 conventional commit、可断点续跑;用 `/loop` 或 `/goal` 逐轮推进。
 > **执行协议**:本文件的 P0–P4 是阶段门,不是跨仓细任务清单。P0 在 `tenon-example` 首个提交中创建 app 自己的 ledger,把 P1–P4 拆成可逐条勾选的实现任务;实现提交与勾选只发生在新仓。每个阶段验收通过后,再在 `tenon-admin` 用单独 docs 提交更新对应状态与证据链接。P5 的回流项继续在本仓执行。
@@ -60,7 +60,7 @@
   2. `npm audit` 报 7 条 high,全在构建期工具链(`brace-expansion`→`minimatch`→`@redocly/openapi-core`/`openapi-typescript`,以及 `postcss`),不进浏览器产物;公告晚于 `0.3.1`,且 `brace-expansion` 链只能靠破坏性升 `vue-tsc@3` 才断得掉,故本轮不动发布钉死的依赖。
 
 ### P1 · CRM 实体 + 后端(头条地基)
-- **状态**:已完成(2026-07-24)。提交 `2236b3b`(`tenon-example`)。`Customer : DataEntity`;六件套齐全(`Modules/Crm/` 下 Models/Interface/Service/ErrorCode/DI/Controller);`BizErrorCode.CustomerNotFound = 60001`;`CustomerService` 静态复核(grep)确认无 `CreateOrgId`/机构过滤代码,唯一命中是类自身文档注释里的这句保证。`CrmModuleSeed` 注册 `SysModule`(`ModuleId=1000`,`code=crm`,`DefaultRoute=/crm/customer`)供 P2 引用,不预置菜单。新增 `GET /api/v1/biz/customer/scope`,返回结构化 `CustomerScopeDto`(`Kind`/`OrgName`/`VisibleOrgCount`/`IncludeSelf`),算法据 `IDataScopeContext.Current` + 完整机构树判定"全部/根机构及以下/单机构/指定若干机构",`IncludeSelf` 与 `Kind` 正交叠加。新建 `tests/tenon-example.Tests`(12 用例全绿):CRUD/分页往返、跨机构详情不可见与改删被拒(经 `CustomerService`,不绕过服务层触发内核通用 IDOR 守卫——那条已由内核自己的 `DataScopeTests` 覆盖)、scope 算法 8 组用例(含"华南少广州"这种非整棵子树、不得误判为"及以下"的边界)。端到端手工验证:裸 `dotnet run`(不设环境变量,顺带验证 0.3.2 的 launch-profile 修复)、真实登录、HTTP 全链路增删改查、`/openapi/v1.json` 挂全五条路由,Release build 0 警告 0 错误。
+- **状态**:已完成(2026-07-24)。提交 `2236b3b`(`tenon-example`,P2 已在 `fc285dc` 补齐三账号固定行数验收)。`Customer : DataEntity`;六件套齐全(`Modules/Crm/` 下 Models/Interface/Service/ErrorCode/DI/Controller);`BizErrorCode.CustomerNotFound = 60001`;`CustomerService` 静态复核(grep)确认无 `CreateOrgId`/机构过滤代码,唯一命中是类自身文档注释里的这句保证。`CrmModuleSeed` 注册 `SysModule`(`ModuleId=1000`,`code=crm`,`DefaultRoute=/crm/customer`)供 P2 引用,不预置菜单。新增 `GET /api/v1/biz/customer/scope`,返回结构化 `CustomerScopeDto`(`Kind`/`OrgName`/`VisibleOrgCount`/`IncludeSelf`),算法据 `IDataScopeContext.Current` + 完整机构树判定"全部/根机构及以下/单机构/指定若干机构",`IncludeSelf` 与 `Kind` 正交叠加。新建 `tests/tenon-example.Tests`(12 用例全绿):CRUD/分页往返、跨机构详情不可见与改删被拒(经 `CustomerService`,不绕过服务层触发内核通用 IDOR 守卫——那条已由内核自己的 `DataScopeTests` 覆盖)、scope 算法 8 组用例(含"华南少广州"这种非整棵子树、不得误判为"及以下"的边界)。端到端手工验证:裸 `dotnet run`(不设环境变量,顺带验证 0.3.2 的 launch-profile 修复)、真实登录、HTTP 全链路增删改查、`/openapi/v1.json` 挂全五条路由,Release build 0 警告 0 错误。
 - 要求:实体 `Customer`,**必须继承 `DataEntity`**(死穴:只有 `DataEntity` 带 `CreateOrgId` / `CreateUserId` 数据范围锚点;继承错了整件事不成立)。字段:名称 / 联系人 / 电话 / 意向金额 / 状态。普通登录用户新增时,归属机构与创建人靠 AOP 自动填,业务代码不设。
 - 要求:`create-crud-backend` 出六件套(Models / Interface / Service / ErrorCode / DI / Controller);业务路由固定为 `api/v1/biz/customer`;Controller 挂 `[RolePermission]`。消费者错误码集中在 `BizErrorCode` 常量类,从 `60000` 起步,调用时强转内核 `ErrorCode`,不修改内核枚举。
 - 要求:**`CustomerService` 零过滤代码** —— 这个"什么都没写"要在源码里可见(README / 文里指给评估者看)。
@@ -68,13 +68,12 @@
 - 验收:`GET /api/v1/biz/customer/page` 契约出现在 OpenAPI;后端测试绿;静态复核 `CustomerService` 不包含 `CreateOrgId`、机构 Id 或手写机构过滤条件。
 
 ### P2 · 种子数据(叙事弹药 —— 最不起眼最易翻车)
-- **状态**:未开始。
-- 要求:机构树与客户数写死:集团总部 → 华南大区(深圳 42 / 广州 43 / 东莞 43,合计 128)与华北大区(北京 43 / 天津 43),全国合计 214。
-- 要求:三个演示用户全部是**非超级管理员**:总部管理员绑定 `All`;华南区域经理绑定 `OrgAndChildren`;深圳专员绑定 `Org`。不使用“本部门 / 本人”含混配置,也不靠超级管理员绕过伪造“全部”效果。
-- 要求:种子同时创建角色、角色数据范围、用户、用户角色与 CRM 菜单,显式授予 `GET:/api/v1/biz/customer/page`、`GET:/api/v1/biz/customer/{id}`、`GET:/api/v1/biz/customer/scope`。消费者固定 Id 使用 `1000–1999` 区间,同一实体内不得重复。
-- 要求:CRM 消费者模块固定 `code=crm`、`ModuleId=1000`，默认路由和菜单归属该模块；三个试用用户的 `DefaultModuleId=1000`，且均满足 P0 已锁定的密码、手机号、启用和非超级管理员状态。
-- 要求:客户种子显式填写 `CreateOrgId` 与 `CreateUserId`:启动种子没有登录用户上下文,不能依赖运行期 AOP 自动补锚点。各实现注册为 `ISeedData`,重复启动只补缺失行、不漂移既有数据。
-- 验收:自动化测试连续初始化同一数据库两次,行数、固定 Id、角色授权和演示密码不变;三个账号调用同一 `GET /api/v1/biz/customer/page` 分别返回 `214 / 128 / 42`,跨范围详情不可见;P1 的写守卫测试保持绿。**没有这套,头条演不出来。**
+- **状态**:已完成(2026-07-24)。提交 `fc285dc`(`tenon-example`)。
+- 机构树与客户数按要求写死:集团总部 → 华南大区(深圳 42 / 广州 43 / 东莞 43,合计 128)与华北大区(北京 43 / 天津 43),全国合计 214;客户只挂在 5 个分公司叶子机构,数值由代码按分公司循环生成(非手写字面量),不占用大区/总部节点。
+- 三个演示用户均为**非超级管理员**:总部管理员绑定 `All`;华南区域经理绑定 `OrgAndChildren`;深圳专员绑定 `Org`。`Org`/`OrgAndChildren` 按内核 `DataScopeProvider` 约定解析到**用户自己的** `OrgId`,机构因此定在用户行而非角色行。
+- 种子同时创建了角色、角色数据范围、用户、用户角色与 CRM 菜单(1 个页面节点 + 3 个只读按钮),三个角色**同等**被授予 `GET:/api/v1/biz/customer/page`、`GET:/api/v1/biz/customer/{id}`、`GET:/api/v1/biz/customer/scope`——三账号的差异纯粹是数据范围,不是功能权限。消费者固定 Id 落在 `1000–1999`(客户占 `1000–1213`),9 个 `ISeedData` 实现全部幂等(连接表用 `DedupColumns`)。
+- 客户种子显式填 `CreateOrgId`/`CreateUserId`(种子无登录上下文,不能靠运行期 AOP)。
+- 验收证据:`CrmSeedIdempotencyTests` 用**真实** `AddTenonAdmin` 组合根连续起两次同一 SQLite 文件(真正跑 `DatabaseInitializer`,不是手工 `CodeFirst.InitTables`),行数、演示密码哈希两次一致,`214/128/42` 两次都对;外加真实 `dotnet run`(首启 429 行种子、二次启动 0 新增)+ 三账号真实登录 + `page`/`scope` 接口核对 + 深圳账号读北京客户详情返回 `CustomerNotFound`。**顺手抓到一个测试期坑**(非产品缺陷):`AddTenonAdmin` 会把 `IDataScopeContext` 换成挂 `HttpContext.Items` 的实现,脱离真实 HTTP 请求时其 setter 静默空操作——纯内存自检场景要显式换回 SqlSugar 层的实现,文档其实已经写了这条("非 HTTP 场景回退"),这次是踩了一遍才真正确认。
 
 ### P3 · 前端 CRM 页(展示层)
 - **状态**:未开始。
