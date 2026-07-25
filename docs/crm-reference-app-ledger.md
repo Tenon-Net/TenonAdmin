@@ -1,7 +1,7 @@
 # 参考应用执行台账 · `tenon-example`(多机构数据范围 · 面向企业评估者)
 
 > **来源**:2026-07-24 grilling 定向。全部方向决策见 §1,grilling 已钉死,执行期不回炉。
-> **当前状态**:P0 已完成;第二轮 dogfood 抓到的 launch-profile 坑已随 `v0.3.2` 发布,`tenon-example` 已升级并采用正式修复(不再靠环境变量绕过);P1(CRM 实体 + 后端)、P2(种子数据)、P3(前端页)均已完成——头条(同一菜单、三个账号分别看到 214/128/42 行,跨范围不可见)已用真实浏览器登录验证过。**P4 已完成并上线**:用户提供服务器信息并明确授权替换,`tenon-example` 已经 `docker compose` 部署上线,`tenonadmin.52moyu.net` 的宿主 Caddy 已切到新栈(旧内核 demo 栈已备份并停止,未删除,一条命令可回滚)。第三轮 dogfood 又抓到一个模板坑(见下)。**上线后用户 grilling 纠偏**:CRM-only 的登录体验不对——demo 应该展示内核出厂即带的完整后台(组织/用户/角色/菜单/字典/配置/日志/文件)再叠加 CRM,不是只有 CRM 一个菜单;已修:总部管理员额外拿到内核「系统」模块的完整授权(真实角色授权,非 superAdmin 绕过),`superAdmin` 密码转为公开的第四试用账号,清掉了模板遗留的 `SampleDoc` 空表,已重新验证并重新上线。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
+> **当前状态**:P0 已完成;第二轮 dogfood 抓到的 launch-profile 坑已随 `v0.3.2` 发布,`tenon-example` 已升级并采用正式修复(不再靠环境变量绕过);P1(CRM 实体 + 后端)、P2(种子数据)、P3(前端页)均已完成——头条(同一菜单、三个账号分别看到 214/128/42 行,跨范围不可见)已用真实浏览器登录验证过。**P4 已完成并上线**:用户提供服务器信息并明确授权替换,`tenon-example` 已经 `docker compose` 部署上线,`tenonadmin.52moyu.net` 的宿主 Caddy 已切到新栈(旧内核 demo 栈已备份并停止,未删除,一条命令可回滚)。第三轮 dogfood 又抓到一个模板坑,已随 `v0.3.3` 发布(见下)。**上线后用户 grilling 纠偏**:CRM-only 的登录体验不对——demo 应该展示内核出厂即带的完整后台(组织/用户/角色/菜单/字典/配置/日志/文件)再叠加 CRM,不是只有 CRM 一个菜单;已修:总部管理员额外拿到内核「系统」模块的完整授权(真实角色授权,非 superAdmin 绕过),`superAdmin` 密码转为公开的第四试用账号,清掉了模板遗留的 `SampleDoc` 空表,已重新验证并重新上线。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
 > **目标**:给「中小团队 / 企业内部后台」这个人群一个能信、能 dogfood 的证据 —— 一个独立开源的 CRM-lite 参考应用,吃**已发布的 NuGet 包**、degit `web/`、部署上线,头条是**多机构数据范围当场生效**。
 > **驱动方式**:仿 `docs/refinement-ledger.md` —— 逐条执行、每条独立英文 conventional commit、可断点续跑;用 `/loop` 或 `/goal` 逐轮推进。
 > **执行协议**:本文件的 P0–P4 是阶段门,不是跨仓细任务清单。P0 在 `tenon-example` 首个提交中创建 app 自己的 ledger,把 P1–P4 拆成可逐条勾选的实现任务;实现提交与勾选只发生在新仓。每个阶段验收通过后,再在 `tenon-admin` 用单独 docs 提交更新对应状态与证据链接。P5 的回流项继续在本仓执行。
@@ -102,7 +102,8 @@
 ### 第三轮 dogfood 发现:模板 Dockerfile 对连字符项目名坏掉
 - 部署 `tenon-example` 时发现:模板生成的 `Dockerfile` 里 `dotnet publish TenonApp.csproj` / `ENTRYPOINT ["dotnet","TenonApp.dll"]` 会被 `dotnet new` 替换,但**连字符名字在文件内容替换里被安全化成下划线**(`tenon-example` → `tenon_example`),文件名替换却用字面值(`tenon-example.csproj`)——两者对不上,`docker build` 直接找不到文件。用 `dotnet new tenon-app --output hy-test` 百分百复现。
 - 已在两仓修复(`tenon-admin` 提交 `0ad8605`、`tenon-example` 提交 `b39565e`):Dockerfile 不再含项目名字面量,`dotnet publish *.csproj` + 按 `.deps.json` 在运行时找入口程序集,任何项目名都免疫。
-- **未做**:没有为此单独走一轮 0.3.3 发布(`tenon-admin` 的修复目前只在 `dev`,未合 `main` 打 tag);`templates/smoke-test.ps1` 的脚手架用名是 `Probe`(无连字符),这类坑目前仍不在 CI 覆盖范围内——留作后续加固项,不在本轮处理。
+- **已发布**:`v0.3.3`(2026-07-25),`TenonAdmin`/`TenonAdmin.Templates` 均已推到 nuget.org,`backend-release` 三个 job(verify/pack-push/archive-openapi)全绿,GitHub Release 说明已用 CHANGELOG 对应段落替换,文档站版本徽章同步部署。
+- **仍未做**:`templates/smoke-test.ps1` 的脚手架用名是 `Probe`(无连字符),这类坑目前仍不在 CI 覆盖范围内——留作后续加固项,不在本轮处理。
 
 ### P5 · dogfood 回流(整件事的真目的)+ 启动时间盒
 - [ ] P0–P4 中**可复用于内核或模板**的坑开成 `tenon-admin` issue / ledger 条目;CRM 自身业务问题留在 `tenon-example`,不把消费者待办倒灌成内核噪音。
