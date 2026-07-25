@@ -2,7 +2,7 @@ import { ref, watch, type Ref } from 'vue'
 import { darkTheme, type GlobalTheme, type GlobalThemeOverrides } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { buildThemeOverrides } from '@/theme/naive-theme'
-import { mix } from '@/theme/mix'
+import { derivePrimary } from '@/theme/mix'
 
 /**
  * 主题落地:随 app.isDark / app.accent / app.density / app.grayscale 变化,
@@ -17,12 +17,13 @@ export function useTheme() {
 
   function applyPrimaryVars() {
     const el = document.documentElement
-    const primary = app.isDark ? mix(app.accent, '#FFFFFF', 0.18) : app.accent
-    el.style.setProperty('--color-primary', primary)
-    el.style.setProperty('--color-primary-hover', mix(primary, '#FFFFFF', 0.16))
-    el.style.setProperty('--color-primary-pressed', mix(primary, '#000000', 0.18))
-    const container = getComputedStyle(el).getPropertyValue('--color-bg-container').trim() || '#1F2229'
-    el.style.setProperty('--color-primary-light', app.isDark ? mix(primary, container, 0.82) : mix(primary, '#FFFFFF', 0.9))
+    // 容器色要在 data-theme 打上之后读(apply() 里的顺序),否则暗色首帧会拿到亮色容器。
+    const container = getComputedStyle(el).getPropertyValue('--color-bg-container').trim() || undefined
+    const p = derivePrimary(app.accent, app.isDark, container)
+    el.style.setProperty('--color-primary', p.primary)
+    el.style.setProperty('--color-primary-hover', p.hover)
+    el.style.setProperty('--color-primary-pressed', p.pressed)
+    el.style.setProperty('--color-primary-light', p.light)
   }
 
   function apply() {

@@ -1,21 +1,11 @@
 import type { GlobalThemeOverrides } from 'naive-ui'
-import { mix } from './mix'
+import { derivePrimary, mix } from './mix'
 
 // 读取当前主题下的 token 值(getComputedStyle 同步反映最新的 data-theme)。
 const v = (name: string): string =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 
-/** 主色四态(DESIGN §7.1):暗色先把 accent 提亮一档,再派生 hover/pressed。 */
-function derivePrimary(accent: string, dark: boolean) {
-  const primary = dark ? mix(accent, '#FFFFFF', 0.18) : accent
-  return {
-    primary,
-    hover: mix(primary, '#FFFFFF', 0.16),
-    pressed: mix(primary, '#000000', 0.18),
-  }
-}
-
-/** 语义色 hover/pressed/suppl 统一派生。 */
+/** 语义色 hover/pressed/suppl 统一派生。主色不在此列——它走 `mix.ts` 的 `derivePrimary`(与写 CSS 变量的那处共用)。 */
 function semantic(base: string) {
   return {
     base,
