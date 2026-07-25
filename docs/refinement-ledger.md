@@ -13,9 +13,9 @@
 - [ ] **A3 设置抽屉「复制配置」** — `SettingsDrawer.vue` footer 按钮:app store 中 DEFAULTS 同名键当前值 JSON 进剪贴板(VueUse `useClipboard`)+ message 提示「粘贴到 stores/app.ts DEFAULTS 即为新默认」。正中消费者 fork 改默认的模式。**不做主题预设 JSON**(6 色色板+取色器+布局卡片已覆盖其实用面)。
 - [~] **A4 版本更新通知** — **用户裁定不做**(2026-07-16),从前端 pass 移除。— 新建 `composables/useVersionCheck.ts`:`fetch('/index.html', {cache:'no-store'})` 抓 entry `assets/index-*.js` 哈希与当前 document 比对,不一致 → `useDialog` 提示刷新;`useIntervalFn`(5min)+ `useDocumentVisibility` 回前台触发;仅 PROD;「稍后」本轮不再弹;`layouts/default.vue` 挂载(登录页不查)。版本号仍是 Vite define 构建期常量,不能当更新信号——用产物哈希。
 - [x] **A5 外链 / iframe 菜单**(57f8c69;`isHttpUrl` 约定 + iframe 视图 + 点击/搜索外链分支 + 菜单表单 linkHint;**radio 展示糖延后**——用占位提示 + linkHint + COMPONENTS.md 承载约定,radio 属可选 UX,未做)— 零后端改动约定式:**外链** = Menu 节点 `path` 为 URL、component 空(`buildRoutesForModule` 现有 `!component` 分支天然跳过;`useLayoutMenu.onSelect`/`onSelectL1` + `MenuSearch` 回车各加 `window.open` 分支;兜底图标 `ph:arrow-square-out`);**iframe** = `path` 为内部路径、`component` 为 URL(`buildRoutesForModule` 检测 URL 时注册 `namedPage(() => import('@/views/embed/iframe.vue'))`,URL 进 `meta.iframeSrc`,keep-alive 顺带保住 iframe 状态);菜单表单加「链接类型」radio 展示糖。完成后约定写进 `COMPONENTS.md`。⚠ `useAuthMenu.ts`/`COMPONENTS.md` 有在途未提交改动,开工前确认。
-- [ ] **A6 主色派生只留一份** — `theme/naive-theme.ts:derivePrimary` 与 `composables/useTheme.ts:applyPrimaryVars` 各自手写了同一套主色四态派生,**含同样三个魔数**(暗色提亮 `0.18`、hover `+#FFF 0.16`、pressed `+#000 0.18`)。改一处忘另一处 = 裸 CSS 与 Naive 组件主色不同步,而没有任何东西会报错。把派生提进 `theme/mix.ts` 导出一个函数,两处都调它。**注意别把它说成 bug**:两处输出的大小写确实不一致(亮色下 accent 原样透传、暗色下经 `mix` 恒小写),但消费端一个是 CSS 变量一个是 Naive overrides,**都不区分大小写,今天观察不到**——这条的价值在消除重复,不在修 case。发现于 2026-07-20 React 模板分支的 R1 review(`archive/web-shared-extract` 的 `25f4908` 曾用「提到共享层」的方式修过它,共享层方向已推翻,方案不可照搬)。
+- [x] **A6 主色派生只留一份**(`bb2c60d`,第 15 轮) — `theme/naive-theme.ts:derivePrimary` 与 `composables/useTheme.ts:applyPrimaryVars` 各自手写了同一套主色四态派生,**含同样三个魔数**(暗色提亮 `0.18`、hover `+#FFF 0.16`、pressed `+#000 0.18`)。改一处忘另一处 = 裸 CSS 与 Naive 组件主色不同步,而没有任何东西会报错。把派生提进 `theme/mix.ts` 导出一个函数,两处都调它。**注意别把它说成 bug**:两处输出的大小写确实不一致(亮色下 accent 原样透传、暗色下经 `mix` 恒小写),但消费端一个是 CSS 变量一个是 Naive overrides,**都不区分大小写,今天观察不到**——这条的价值在消除重复,不在修 case。发现于 2026-07-20 React 模板分支的 R1 review(`archive/web-shared-extract` 的 `25f4908` 曾用「提到共享层」的方式修过它,共享层方向已推翻,方案不可照搬)。
 
-- [ ] **A7 反向 port 一条 i18n 合并用例** — `web-react/src/locales/index.spec.ts` 有一条「数组不当作对象往下钻」,`web/src/locales/index.spec.ts` 那 8 条里没有等价物。`deepMerge` 两边逐字相同(自包含之后是**有意重复**),所以这个失败模式 Vue 侧同样存在:`isPlainObject` 一旦漏掉 `!Array.isArray(v)`,数组会按下标逐项合并出四不像,而现有 8 条一条都不红。照搬那条用例即可。发现于 2026-07-20 React 模板 R4 的 review。
+- [x] **A7 反向 port 一条 i18n 合并用例**(`bf6c661`,第 15 轮) — `web-react/src/locales/index.spec.ts` 有一条「数组不当作对象往下钻」,`web/src/locales/index.spec.ts` 那 8 条里没有等价物。`deepMerge` 两边逐字相同(自包含之后是**有意重复**),所以这个失败模式 Vue 侧同样存在:`isPlainObject` 一旦漏掉 `!Array.isArray(v)`,数组会按下标逐项合并出四不像,而现有 8 条一条都不红。照搬那条用例即可。发现于 2026-07-20 React 模板 R4 的 review。
 
 ## 批次 B · 后端 S 级速赢
 
@@ -39,6 +39,9 @@
 ## 批次 E · 杂项修缮(可选随手带)
 
 - [x] **E1 岗位行拖拽漂移 → 修文档对齐现实(第 13 轮)** — 核后发现价值很低:岗位排序早已可用(`Sort` 字段可编辑、列表默认 `OrderBy(Sort)`、用户表单岗位下拉继承此序),拖拽只是"改 Sort 值"的顺手糖,对一个种子 6 条、极少改动的小列表不值一个新 `reorder` 端点 + 整表重编号事务。缺陷实为**文档漂移**:`COMPONENTS.md` 吹了不存在的 `row-draggable` + `positionApi.reorder` + `POST /sys/position/reorder`。改文档:三处(行排序说明/^0.3.1 能力注/范例页标注)对齐——岗位排序 = 可编辑 Sort;`row-draggable` 是 pro-table 的纯前端能力但本项目未接线,要拖拽需自行补端点。零代码面。
+
+- [x] **E2 smoke-test 用带连字符的项目名 + Dockerfile 静态断言**(`d5478e1`,第 15 轮)— 补上 `0ad8605` 刻意留下的缺口(它自己的 commit body 写着"`smoke-test.ps1` 用名是 `Probe`,这类坑仍不在 CI 覆盖内")。脚手架用名 `Probe` → `probe-app`。**光改名不够**:该 job 从不 build 镜像,回退修复照样绿;所以另加一条对生成 Dockerfile 的静态断言(不得含被安全化的名字、任何字面 `.csproj` 必须真实存在),无 docker 也能红。**四次真跑**:①`probe-app` + 现行 Dockerfile 全绿(`probe-app.csproj` → `probe-app.dll` → 裸 `dotnet run` 出 `/health`,0 警告)②`probe-app` + 回退 Dockerfile → 新断言红 ③`Probe` + 回退 Dockerfile → **绿**,这才证明了改名是承重的(旧用名根本看不见这个坑,此前只是推断)④第 ③ 次顺带照出断言自身一个缺陷:无连字符时"安全化名"就等于真名,未加守卫会打在合法替换上、报出"contains 'Probe' but files use 'Probe'"的荒唐信息,已加守卫。
+- [x] **E3 刷新 `dev-plan.md`**(`76ffe1b`,第 15 轮)— 该文件职责是回答「做到哪了 / 下一个是什么」,却把第一问答错了(还写着"还不能发,卡在发版链路")。§1 全部重写(测试数**现跑现记**:后端 320、web 60、web-react 723),§4 转历史,§5 从"v1 之后"改成真实候选池。顺带订正两条过时项:T-D7 早由 `3f4dd58` 根治、升级指南已在 `deployment.md`。
 
 ## 批次 F · 实时通知(SignalR,原第二批之一)
 
@@ -72,6 +75,17 @@
 - ⚠ **定时任务的归属两处打架,开工前先定**:`rebuild-design.md:305` / `:320` 写的是卫星包 `TenonAdmin.Scheduling` + v1.0 明确不做;本文件上一条却按**进内核**设计(`sys_job`/`sys_job_log` 是内核 CodeFirst 表、`ErrorCode 46xxx` 是内核枚举段、复用内核 `FileGcService` 骨架)。这条不定,「自写 5 段 cron」这个前提就是悬的——留在内核才需要自写(运行时只允许 SqlSugarCore + Microsoft.\*),做成卫星包就该直接吃 Quartz/Hangfire,别自写。
 
 ## 轮次日志
+
+### 第 15 轮 — 清边角债(A6 / A7 / E2 / E3)+ 多租户退役 · `/grill-with-docs` 走完设计审问后,用户拍板「继续写代码,使用者的事先放一边」→「多租户 skill 文档 + 清边角债」→「多租户那条砍掉进不做清单」。五条独立提交:`4bccebe`(多租户退役)/ `bf6c661`(A7)/ `bb2c60d`(A6)/ `d5478e1`(E2)/ `76ffe1b`(E3)。
+
+**三处「查了才知道原方案不成立」**,都是本轮最值钱的产出:
+1. **多租户备忘的两条路按字面都走不通**。字段级"前置替换 `IDataScopeProvider`"改不了过滤列——全局过滤器硬打在 `SqlSugarSetup.cs:78` 的 `AddTableFilter<IOrgScoped>`,而 `DataScopeResult` 四个字段没有装 `TenantId` 的位置;库级"多 ConfigId"内核没开口(`SqlSugarSetup.cs:46-67` 单个 `ConnectionConfig`)。真走得通的那条(租户 = 机构树根 + 现成 `OrgAndChildren`,零代码)备忘里反而没写。
+2. **A6 的形状我一开始定错了**。原打算"按 Vue 自己的需要另设形状,不拷 React 的 `PrimaryRamp`"——读完才发现 `useTheme.applyPrimaryVars` 还派生了第四态 `light`(要 `--color-bg-container`),React 那个签名**恰好就是 Vue 两个调用点的并集**(它本就是从这两半移植过去的)。照搬即可。
+3. **E2 的变异判据我一开始也定错了**。原写"回退 `0ad8605` 的 Dockerfile 修复,这条必须红"——但该 job 从不 build 镜像,回退不会红。补了静态断言才成立。
+
+**判据纪律的两次现场兑现**:A7 先跑变异证明"现有 8 条看不见 `!Array.isArray(v)` 消失"(实测全绿,缺口是真的),补的用例在变异下红出的正是那个「四不像」(`['a','b','c']` 与 `['x']` 合成 `{"0":"x","1":"b","2":"c"}`,连数组都不是);E2 用第 ③ 次跑证明"旧用名看不见这个坑"——**此前这句只是推断**。
+
+**未做/已知**:Naive 组件真实渲染新 overrides 未目视确认(无鉴权页面都不挂 Naive 按钮——登录皮肤与 404 页用的是原生 `<button>`),改由一条接线断言 + typecheck + 未动的 `common.primaryColor*` 映射兜住;裸 CSS 那一半已对 6 accent × 明暗真实浏览器实测 12/12。**收口**:五条尚未另起 review lane。
 
 ### 第 14 轮 — 批次 F(SignalR 实时通知,原第二批之一)· 从"未排期备忘"排下一步:四项(定时任务/SignalR/Excel/多租户文档)经三路只读探查核准落点后,用户选定先做 **SignalR**(用户可感价值最高、后端零新包、不碰正被另一会话重构的实体基类零冲突)。分 6 个文件原子 commit 落地:①Core `IRealtimePublisher`+`AdminRealtimeOptions`(e3e6ceb)②Services `NoopRealtimePublisher`+`RevokeAsync`/`PublishAsync` 触发接线(18dde1e)③AspNetCore `TenonHub`+`SignalRRealtimePublisher`+JWT query-token+条件 MapHub(625a425)④测试:默认 Noop/触发锁/Hub 401·404/六件套(a737efb)⑤前端 `@microsoft/signalr`+`useRealtime`+NoticeBell 订阅+i18n+vite `/hub` 代理(53e9d48)⑥文档+样例开关(本轮)。**验**:后端 **315/0/0**、typecheck/lint 绿、**推送全链路 Node 冒烟通过**(前端同款客户端直连 MinimalHost:发公告收 notice-changed、踢会话收 force-logout;negotiate 无令牌 401/真令牌 200)。三决策存档 `docs/adr/0003`。全程未触碰另一会话在途的 7 个 SqlSugar 文件(`AuditEntity`/#10)+ `OrgAuditEntityTests.cs`。**未排期余三项**:定时任务调度中心(须等实体基类重构落地)、Excel 卫星包、多租户 skill 文档。
 
