@@ -1,7 +1,7 @@
 # 参考应用执行台账 · `tenon-example`(多机构数据范围 · 面向企业评估者)
 
 > **来源**:2026-07-24 grilling 定向。全部方向决策见 §1,grilling 已钉死,执行期不回炉。
-> **当前状态**:P0 已完成;第二轮 dogfood 抓到的 launch-profile 坑已随 `v0.3.2` 发布,`tenon-example` 已升级并采用正式修复(不再靠环境变量绕过);P1(CRM 实体 + 后端)、P2(种子数据)均已完成——头条(同一接口三个账号分别看到 214/128/42 行,跨范围不可见)已用真实 HTTP 登录验证过。P3(前端页)未开始。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
+> **当前状态**:P0 已完成;第二轮 dogfood 抓到的 launch-profile 坑已随 `v0.3.2` 发布,`tenon-example` 已升级并采用正式修复(不再靠环境变量绕过);P1(CRM 实体 + 后端)、P2(种子数据)、P3(前端页)均已完成——头条(同一菜单、三个账号分别看到 214/128/42 行,跨范围不可见)已用真实浏览器登录验证过。P4(部署 + 叙事包装)未开始,且需另获上线授权。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
 > **目标**:给「中小团队 / 企业内部后台」这个人群一个能信、能 dogfood 的证据 —— 一个独立开源的 CRM-lite 参考应用,吃**已发布的 NuGet 包**、degit `web/`、部署上线,头条是**多机构数据范围当场生效**。
 > **驱动方式**:仿 `docs/refinement-ledger.md` —— 逐条执行、每条独立英文 conventional commit、可断点续跑;用 `/loop` 或 `/goal` 逐轮推进。
 > **执行协议**:本文件的 P0–P4 是阶段门,不是跨仓细任务清单。P0 在 `tenon-example` 首个提交中创建 app 自己的 ledger,把 P1–P4 拆成可逐条勾选的实现任务;实现提交与勾选只发生在新仓。每个阶段验收通过后,再在 `tenon-admin` 用单独 docs 提交更新对应状态与证据链接。P5 的回流项继续在本仓执行。
@@ -76,11 +76,12 @@
 - 验收证据:`CrmSeedIdempotencyTests` 用**真实** `AddTenonAdmin` 组合根连续起两次同一 SQLite 文件(真正跑 `DatabaseInitializer`,不是手工 `CodeFirst.InitTables`),行数、演示密码哈希两次一致,`214/128/42` 两次都对;外加真实 `dotnet run`(首启 429 行种子、二次启动 0 新增)+ 三账号真实登录 + `page`/`scope` 接口核对 + 深圳账号读北京客户详情返回 `CustomerNotFound`。**顺手抓到一个测试期坑**(非产品缺陷):`AddTenonAdmin` 会把 `IDataScopeContext` 换成挂 `HttpContext.Items` 的实现,脱离真实 HTTP 请求时其 setter 静默空操作——纯内存自检场景要显式换回 SqlSugar 层的实现,文档其实已经写了这条("非 HTTP 场景回退"),这次是踩了一遍才真正确认。
 
 ### P3 · 前端 CRM 页(展示层)
-- **状态**:未开始。
-- 要求:`create-crud-frontend`(web/ 版)出列表 + 表单;i18n 双语键零缺口;菜单 / 权限接线。
-- 要求:消费者新增 `GET /api/v1/biz/customer/scope`,挂 `[RolePermission]`。API 返回范围类型、机构名称、可见机构数等结构化 DTO，不返回固定中文句子；实现读取当前有效 `IDataScopeContext` 和完整机构树:不受限表达全部组织;受限时找出 `OrgIds` 中没有可见祖先的最小根,若其全部后代也在 `OrgIds` 中表达“根机构及以下”语义,单机构表达机构语义,其他组合表达指定机构数语义;`IncludeSelf` 单独表达仅本人或组合语义。现有个人资料接口不提供该信息,前端不得按账号硬编码,也不得假设合并后的 context 仍保留原始 `ScopeType`;前端必须通过 zh/en i18n 由 DTO 组装文案。
-- 要求:列表页顶部用 scope 接口 + 分页 `total` 显式回显「当前范围:华南大区及以下 · 共 128 条」—— 切账号时那一幕才有冲击力。
-- 验收:`gen:api` 后 `typecheck` / `lint` 绿;三账号实点,范围文本分别对应全部组织 / 华南大区及以下 / 深圳分公司,总数分别为 `214 / 128 / 42`。
+- **状态**:已完成(2026-07-24)。提交 `80e7d0b`(`tenon-example`)。
+- `create-crud-frontend`(web/ 版)业务模块模式出列表 + 表单,全部落在新文件(`types/crm.ts`、`api/crm.ts`、`locales/ext/{zh-CN,en-US}/crm.ts`、`views/crm/customer/index.vue`),上游自留地(`api/index.ts`/`types/api.ts`/`zh-CN.ts`/`en-US.ts`)一个字节未改;菜单接线零代码——P2 种子的 `Component="crm/customer/index"` 直接解析到位。
+- 范围接口(`GET /api/v1/biz/customer/scope`,P1 已实现)按锁定算法返回结构化 DTO;前端 `scopeLabel()` 按 `Kind`(全部/根机构及以下/单机构/指定若干机构)与正交的 `IncludeSelf` 由 zh/en i18n 拼文案,不按账号硬编码、不臆测原始 `ScopeType`。
+- 列表页顶部用 scope 接口 + `ProTable` 的 `@loaded` 分页 `total` 显式回显当前范围文案。
+- 验收证据:`gen:api`/`typecheck`/`lint`/生产 `build` 全绿;真实 Playwright Chromium 对三个试用账号逐个登录,页面文本核对范围文案(全部组织 / 华南大区 及以下 / 深圳分公司)与总数(`214`/`128`/`42`)全部命中。**顺手补了一处 skill 参考模板没覆盖的点**:新增/编辑/删除按钮按 `auth.hasPerm` 真实授权码显隐,而非无条件展示——三个试用角色在 P2 只被授予只读权限,三账号因此都看不到写按钮,`superAdmin` 从多应用门户选入 CRM 后能看到完整 CRUD(超管 fail-open)。后端测试保持 13/13 绿,Release build 0 警告 0 错误。
+- **顺带记的非产品缺陷**:本地最小消费方 host 未接 SignalR 通知铃铛的 Hub,浏览器控制台登录后持续报 negotiation 404——模板本身既有的噪音,与 CRM 无关,本轮不修。
 
 ### P4 · 部署 + 叙事包装
 - **状态**:未开始;生产域名切换必须另获维护者对切换窗口的明确授权,P0–P3 完成不自动授权上线。
