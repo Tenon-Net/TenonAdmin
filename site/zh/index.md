@@ -26,6 +26,11 @@ features:
   - icon: 🏢
     title: 多组织数据权限
     details: 内置五种数据范围，靠 ORM 全局过滤器自动隔离。业务查询不用手写机构过滤条件。
+  - icon: 🔭
+    title: 有真实参考应用
+    details: 在线演示跑的是独立开源的消费者应用 tenon-example：装包、加一个 CRM 模块、部署上线，全过程可复现。三个账号打开同一张列表看到 214、128、42 条，而查询代码里没有一行机构过滤。
+    link: https://github.com/Tenon-Net/tenon-example
+    linkText: 看看它怎么写的
   - icon: ⚡
     title: 零配置启动
     details: 默认 SQLite 自动建表、写种子，首次启动打印一次超管密码。换数据库只改一处配置。

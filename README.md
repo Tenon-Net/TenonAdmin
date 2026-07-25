@@ -45,6 +45,12 @@ The usual approach is cloning a template repo: hundreds of files become yours to
 
 The frontend is covered too: **two feature-equivalent templates** (Vue and React). Pick whichever feels right and use it as the starting point of your own project.
 
+## 🔭 Want to see the finished thing first?
+
+The [live demo](https://tenonadmin.52moyu.net/login) isn't the kernel's own sample host. It's a separate consumer app, **[tenon-example](https://github.com/Tenon-Net/tenon-example)**: installs the package from NuGet, `degit`s the frontend template, adds a CRM business module, and ships to production. Source is fully open — that's what your code looks like after you adopt it.
+
+The login page has four one-click buttons. Three of those accounts open the same customer list and see 214, 128, and 42 rows, and the `CustomerService` behind it contains no organization filter at all — the data-permission global filter attaches that outside your business code. [One query, three numbers](https://github.com/Tenon-Net/tenon-example/blob/dev/docs/showcase-multi-org-data-scope.md) walks through where.
+
 ## 🚀 Quick Start
 
 ### Requirements

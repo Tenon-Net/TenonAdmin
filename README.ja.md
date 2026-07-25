@@ -45,6 +45,12 @@ app.MapTenonAdmin();
 
 フロントエンドも用意済みです：**機能同等の 2 つのテンプレート**（Vue と React）。好みの方を選んで、自分のプロジェクトの出発点にしてください。
 
+## 🔭 まず完成形を見たい？
+
+[オンラインデモ](https://tenonadmin.52moyu.net/login)で動いているのは、カーネル同梱のサンプルホストではありません。独立した消費者アプリ **[tenon-example](https://github.com/Tenon-Net/tenon-example)** です：NuGet からパッケージを入れ、フロントエンドテンプレートを `degit` で取得し、CRM 業務モジュールを書き、本番にデプロイしたもの。ソースは全公開——TenonAdmin を採用したあなたのコードも、ああいう形になります。
+
+ログインページにはワンクリックボタンが 4 つ。うち 3 つの業務アカウントは同じ顧客一覧を開いて、それぞれ 214 件、128 件、42 件を見ます。しかもそれを叩く `CustomerService` には組織フィルターが 1 行もありません。データ権限のグローバルフィルターが、ビジネスコードの外側で掛けているからです。どこで掛かっているかは[同じクエリ、3 つの数字](https://github.com/Tenon-Net/tenon-example/blob/dev/docs/showcase-multi-org-data-scope.md)（中国語）に。
+
 ## 🚀 クイックスタート
 
 ### 動作要件

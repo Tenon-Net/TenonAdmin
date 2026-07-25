@@ -122,6 +122,8 @@ var orders = await orderRepo.AsQueryable()
 
 With the exact same code, a user with `All` scope sees every pending order, a user with `Org` scope sees only their own org's, and a `Self`-scoped user sees only what they created — the difference comes entirely from the `DataScopeResult` resolved earlier in the request; not a single line of business logic changes.
 
+You can click through what this looks like in a real project. The customer list in the reference app [tenon-example](https://github.com/Tenon-Net/tenon-example) is written exactly like the snippet above, and three accounts logging into the [live demo](https://tenonadmin.52moyu.net/login) see 214, 128, and 42 rows respectively.
+
 ::: warning Write-path guard
 The global filter only applies to **queries (SELECT)** — not to primary-key-based `Updateable` / `Deleteable`. To cover this, the `SqlSugarRepository` repository has a built-in write-path guard for `UpdateAsync` / `DeleteAsync` on `IOrgScoped` entities: before writing, it queries through the scope-filtered path to confirm the target row is within the current scope; attempting to modify/delete a row from another org is rejected (returns 0 rows). Writes that bypass the repository via the `Db.Updateable/Deleteable` escape hatch aren't covered by this guard and must validate ownership themselves.
 :::

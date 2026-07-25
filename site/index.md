@@ -26,6 +26,11 @@ features:
   - icon: 🏢
     title: Multi-Org Data Permissions
     details: Five built-in data scopes, enforced automatically via ORM global filters — business queries never need manual org-filter conditions.
+  - icon: 🔭
+    title: A Real Reference App
+    details: The live demo runs tenon-example, a separate open-source consumer app — install the package, add a CRM module, ship it, every step reproducible. Three accounts open the same list and see 214, 128, and 42 rows, with no organization filter anywhere in the query code.
+    link: https://github.com/Tenon-Net/tenon-example
+    linkText: See how it's written
   - icon: ⚡
     title: Zero-Config Startup
     details: SQLite by default auto-creates tables and writes seed data, printing the super-admin password once on first startup; switching databases is a single config change.

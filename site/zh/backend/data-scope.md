@@ -122,6 +122,8 @@ var orders = await orderRepo.AsQueryable()
 
 还是这段代码。`All` 范围的用户看到全部待处理订单，`Org` 范围的用户只看到本机构的，`Self` 用户只看到自己建的。差异全都来自请求早期解析出的那个 `DataScopeResult`，业务逻辑一个字都不用改。
 
+这一段在真实项目里的样子可以直接点开看。参考应用 [tenon-example](https://github.com/Tenon-Net/tenon-example) 的客户列表就是照上面这样写的，三个账号登录[在线演示](https://tenonadmin.52moyu.net/login)分别看到 214、128、42 条。
+
 ::: warning 写路径守卫
 全局过滤器只管**查询（SELECT）**，不管按主键的 `Updateable` / `Deleteable`。所以仓储 `SqlSugarRepository` 给 `IOrgScoped` 实体的 `UpdateAsync` / `DeleteAsync` 内置了一道写路径守卫。写之前，它先用带范围过滤器的查询确认目标行在当前范围内，越权改删别的机构的行会被拒，返回 0 行。要是绕过仓储、直接走 `Db.Updateable/Deleteable` 这个逃生舱口，这道守卫就管不着了，得自己校验归属。
 :::

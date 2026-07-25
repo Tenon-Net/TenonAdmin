@@ -45,6 +45,12 @@ app.MapTenonAdmin();
 
 前端也有配套方案：**两套功能等价的模板**（Vue 和 React），选择你熟悉的技术栈作为项目起点。
 
+## 🔭 想先看成品？
+
+[在线演示](https://tenonadmin.52moyu.net/login)跑的不是内核自带的样例宿主，是一个独立的消费者应用 **[tenon-example](https://github.com/Tenon-Net/tenon-example)**：它从 NuGet 装包、`degit` 拿前端模板、写了一个 CRM 业务模块，然后部署上线。源码全开，你接入之后写出来的东西就长那样。
+
+登录页有四个一键登录按钮。其中三个业务账号打开同一张客户列表，分别看到 214、128、42 条，而查询它的 `CustomerService` 里没有一行机构过滤——那是数据权限的全局过滤器在业务代码之外挂上去的。[《同一个查询，三个数字》](https://github.com/Tenon-Net/tenon-example/blob/dev/docs/showcase-multi-org-data-scope.md)讲了它挂在哪。
+
 ## 🚀 快速开始
 
 ### 环境要求
