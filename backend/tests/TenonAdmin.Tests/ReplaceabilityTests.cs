@@ -55,6 +55,75 @@ public class ReplaceabilityTests
         Assert.IsType<FakeRealtimePublisher>(f.Services.GetRequiredService<IRealtimePublisher>());
     }
 
+    // ── excel-ledger §9 G5 六件套:导入导出可替换接口各一条 ─────────────────
+
+    /// <summary>
+    /// 变异:把 ServicesSetup 里 IExcelReader 的 TryAdd 改成 Add(覆盖消费者) → 解析到 MissingExcelProvider → 本条红。
+    /// </summary>
+    [Fact]
+    public void ReplaceExcelReader_ShouldUseUserImplementation()
+    {
+        using var f = new AdminAppFactory
+        {
+            Overrides = s => s.Replace(ServiceDescriptor.Singleton<IExcelReader, FakeExcelReader>()),
+        };
+        Assert.IsType<FakeExcelReader>(f.Services.GetRequiredService<IExcelReader>());
+    }
+
+    /// <summary>
+    /// 变异:把 ServicesSetup 里 IExcelWriter 的 TryAdd 改成 Add → 解析到 MissingExcelProvider → 本条红。
+    /// </summary>
+    [Fact]
+    public void ReplaceExcelWriter_ShouldUseUserImplementation()
+    {
+        using var f = new AdminAppFactory
+        {
+            Overrides = s => s.Replace(ServiceDescriptor.Singleton<IExcelWriter, FakeExcelWriter>()),
+        };
+        Assert.IsType<FakeExcelWriter>(f.Services.GetRequiredService<IExcelWriter>());
+    }
+
+    /// <summary>
+    /// 变异:把 ServicesSetup 里 IExcelTemplateBuilder 的 TryAdd 改成 Add → 解析到 MissingExcelProvider → 本条红。
+    /// </summary>
+    [Fact]
+    public void ReplaceExcelTemplateBuilder_ShouldUseUserImplementation()
+    {
+        using var f = new AdminAppFactory
+        {
+            Overrides = s => s.Replace(ServiceDescriptor.Singleton<IExcelTemplateBuilder, FakeExcelTemplateBuilder>()),
+        };
+        Assert.IsType<FakeExcelTemplateBuilder>(f.Services.GetRequiredService<IExcelTemplateBuilder>());
+    }
+
+    /// <summary>
+    /// 变异:把 ServicesSetup 里 IImportRunner 的 TryAdd 改成 Add → 解析到 ImportRunner → 本条红。
+    /// </summary>
+    [Fact]
+    public void ReplaceImportRunner_ShouldUseUserImplementation()
+    {
+        using var f = new AdminAppFactory
+        {
+            Overrides = s => s.Replace(ServiceDescriptor.Scoped<IImportRunner, FakeImportRunner>()),
+        };
+        using var scope = f.Services.CreateScope();
+        Assert.IsType<FakeImportRunner>(scope.ServiceProvider.GetRequiredService<IImportRunner>());
+    }
+
+    /// <summary>
+    /// 变异:把 ServicesSetup 里 IDictTextResolver 的 TryAdd 改成 Add → 解析到 DictTextResolver → 本条红。
+    /// </summary>
+    [Fact]
+    public void ReplaceDictTextResolver_ShouldUseUserImplementation()
+    {
+        using var f = new AdminAppFactory
+        {
+            Overrides = s => s.Replace(ServiceDescriptor.Scoped<IDictTextResolver, FakeDictTextResolver>()),
+        };
+        using var scope = f.Services.CreateScope();
+        Assert.IsType<FakeDictTextResolver>(scope.ServiceProvider.GetRequiredService<IDictTextResolver>());
+    }
+
     [Fact]
     public async Task OverrideAuthStep_ShouldAffectLoginFlow()
     {
@@ -166,6 +235,60 @@ public class ReplaceabilityTests
     {
         public string Hash(string password) => "FAKE:" + password;
         public bool Verify(string password, string hash) => hash == "FAKE:" + password;
+    }
+
+    /// <summary>用户自定义 xlsx 读取(替换 MissingExcelProvider / MiniExcelReader)</summary>
+    private sealed class FakeExcelReader : IExcelReader
+    {
+        public Task<IReadOnlyList<string>> ReadHeadersAsync(Stream file, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<string>>([]);
+        public async IAsyncEnumerable<IReadOnlyDictionary<string, string?>> ReadRowsAsync(
+            Stream file, IReadOnlyDictionary<string, string> headerToKey,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+    }
+
+    /// <summary>用户自定义 xlsx 写出</summary>
+    private sealed class FakeExcelWriter : IExcelWriter
+    {
+        public Task<Stream> WriteAsync(ExportSheet sheet, CancellationToken cancellationToken = default)
+            => Task.FromResult<Stream>(new MemoryStream());
+    }
+
+    /// <summary>用户自定义模板构建</summary>
+    private sealed class FakeExcelTemplateBuilder : IExcelTemplateBuilder
+    {
+        public Task<Stream> BuildAsync(TemplateSpec spec, CancellationToken cancellationToken = default)
+            => Task.FromResult<Stream>(new MemoryStream());
+    }
+
+    /// <summary>用户自定义导入编排(替换 ImportRunner)</summary>
+    private sealed class FakeImportRunner : IImportRunner
+    {
+        public Task<ImportPreview> PreviewAsync(Stream file, IReadOnlyDictionary<string, string>? mapping,
+            IImportProfile profile, CancellationToken cancellationToken = default)
+            => Task.FromResult(new ImportPreview());
+        public Task<ImportPreview> ValidateAsync(IReadOnlyList<ImportRow> rows, IImportProfile profile,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new ImportPreview());
+        public Task<ImportCommitResult> CommitAsync(IReadOnlyList<ImportRow> rows, IImportProfile profile,
+            DuplicateStrategy strategy, CancellationToken cancellationToken = default)
+            => Task.FromResult(new ImportCommitResult());
+    }
+
+    /// <summary>用户自定义字典 label↔value(替换 DictTextResolver)</summary>
+    private sealed class FakeDictTextResolver : IDictTextResolver
+    {
+        public Task<IReadOnlyList<KeyValuePair<string, string>>> GetItemsAsync(
+            string dictTypeCode, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<KeyValuePair<string, string>>>([]);
+        public Task<string?> ToLabelAsync(string dictTypeCode, string? value, CancellationToken cancellationToken = default)
+            => Task.FromResult(value);
+        public Task<string?> ToValueAsync(string dictTypeCode, string? label, CancellationToken cancellationToken = default)
+            => Task.FromResult(label);
     }
 
     /// <summary>用户覆写登录出参组装步骤(模板方法覆写,§5.3)</summary>

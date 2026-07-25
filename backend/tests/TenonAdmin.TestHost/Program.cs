@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddTenonAdmin(builder.Configuration, o => o.ApplicationAssemblies.Add(typeof(Program).Assembly));
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleWidgetSeed>());   // 用户自定义种子
 builder.Services.TryAddScoped<ISampleDocService, SampleDocService>();   // 示例机构隔离业务服务(DataEntity 范本)
+builder.Services.TryAddScoped<SampleDocExportProfile>();                // 示例导出档案(消费方接导出的范本,excel-ledger §9 G5-12)
 var app = builder.Build();
 app.MapTenonAdmin();
 app.Run();

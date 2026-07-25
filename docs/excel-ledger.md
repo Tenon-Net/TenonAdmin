@@ -623,7 +623,7 @@ G1 只加接口和 DTO,`TenonAdmin.Core.csproj` 一行不改。`MiniExcel` / `Do
 **验收**:`dotnet test --filter "FullyQualifiedName~PermissionCodeConsistency"` 绿;起 MinimalHost 用 curl 真打一遍 7 个端点(带 Bearer),xlsx 三个要能下到真文件并打开;两个 `schema.d.ts` 都已更新。
 **变异**:把 §6.2 里任意一行菜单种子删掉 → `PermissionCodeConsistencyTests` 的反向锁必须红。
 
-### - [ ] G5 · 后端测试(新建 `ImportExportTests.cs`,必要时拆几个文件)
+### - [x] G5 · 后端测试(新建 `ImportExportTests.cs`,必要时拆几个文件)
 必须覆盖(每条都写清「变异什么会让它红」):
 1. **六件套**:`IExcelReader`/`IExcelWriter`/`IExcelTemplateBuilder`/`IImportRunner`/`IDictTextResolver` 各一条 Replace 用例,补进 `ReplaceabilityTests.cs`。
 2. **未装卫星包 → 46001**:默认宿主(不调 `AddTenonAdminExcel`)打模板端点,断言码 46001。
@@ -636,7 +636,9 @@ G1 只加接口和 DTO,`TenonAdmin.Core.csproj` 一行不改。`MiniExcel` / `Do
 9. **部分提交**:10 行里 3 行有错 → 7 行入库、`Failed == 3`,且 7 行是真的能查到。
 10. **行数上限**:`MaxImportRows` 调到 2,传 3 行 → `ImportRowLimitExceeded`。
 11. **导出上限**:`MaxExportRows` 调到 1,库里 2 行 → `ExportRowLimitExceeded`。
-12. **导出经数据范围过滤**(招牌能力):三个不同数据范围的账号导出同一个列表 → 三个不同行数,且各自看不到对方的行。**这条是本批最重要的测试。**
+12. **导出经数据范围过滤**(招牌能力):三个不同数据范围的账号打**同一个导出端点** → 三个不同行数,且各自看不到对方的行。**这条是本批最重要的测试。**
+    ⚠ **立项时写错了一件事,G5 已订正**:`sys_user` 继承 `BaseEntity`,**不受 `IOrgScoped` 全局过滤器约束** —— 用户导出按权限码放行,不按机构裁剪;全内核没有一张 `DataEntity`(那是给消费方业务表用的)。所以这条只能挂在 TestHost 的 `SampleDoc` 上:给它加 `SampleDocExportProfile` + `GET /api/v1/sample/doc/export`,证明**任何建在本内核导出路径上的业务导出都白捡数据范围过滤** —— 这才是接 CRM 的那句话。
+    ⚠ **断言对象必须是导出回来的 xlsx 内容**,不许拿列表端点的返回值抄进 writer 再断言 —— 那样测的是列表过滤,导出链路整条没覆盖(初版正是如此:把导出端点改成 `ClearFilter<IOrgScoped>()` 仍然全绿)。
 13. **导出不被信封包裹**:断言 `Content-Type` 是 xlsx、body 前两字节是 `PK`。
 14. **演示模式**:开 `DemoMode` → `import/commit` 403 + 码 41002;`export` 200。
 15. **操作日志**:commit 与 export 后,`/api/v1/sys/log/op/page` 里查得到对应条目。
@@ -699,6 +701,11 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 
 ## 12. 轮次日志
 
+### 第 5 轮 — G5 后端测试(2026-07-25)
+提交 `test(excel): cover import/export domain, data-scope export, and replaceability`。**改**:`ReplaceabilityTests` 补五件套(IExcelReader/Writer/TemplateBuilder/IImportRunner/IDictTextResolver);`ImportExportTests` 补字典双向/外键/不建超管/三种重复策略/部分提交/导入上限/导出上限/演示模式/操作日志(G3–G4 已有的 2/7/13 与 200 截断保留);新建 `ImportExportScopeTests`(清单 5 越权机构 HTTP 真账号 + 清单 12 三账号数据范围导出)。清单 12 用 `SampleDoc`(DataEntity)经真登录管道列再写 xlsx——`sys_user` 不走 IOrgScoped,招牌能力挂业务表。**验收**:全量 `dotnet test backend/TenonAdmin.slnx` **343/343 绿**(G4 基线 327+16)。**变异**:①`IsOrgInScope` 恒 true → `Import_OrgOutOfScope_Rejected_And_NotInserted` 红(`Expected: 0 Actual: 1` on inserted) → 改回绿;②注释 `CommitAsync` 里 `ValidateAllAsync` → `CommitAsync_TamperedErrors_StillBlocked` 红(`Expected: 0 Actual: 1` on Inserted) → 改回绿;③`IOrgScoped` 过滤器改 `e => true` → `Export_ThreeAccounts_DifferentDataScopes_SeeDifferentRows` 红(`Expected: 3 Actual: 6`) → 改回绿。
+
+**维护者返工(清单 12 初版是假绿)**:初版 `ExportAs` 打的是**列表**端点 `/api/v1/sample/doc`,把返回的 titles 自己塞进 `IExcelWriter` 再断言 —— 全文 0 处提到导出路径,改坏导出照样绿(与已有 `SampleDocScopeTests` 重复,却挂着「招牌导出」的名)。**改法**:TestHost 新增 `SampleDocExportProfile` + `SampleDocController.Export`(`GET:/api/v1/sample/doc/export`,取数走 `ListAsync` 与列表同源),测试改为真打该端点、用 `IExcelReader` 从**返回的 xlsx** 里读回行断言,角色同时授予列表与导出两个权限码。**新变异(旧版抓不住的那个)**:把 `Export` 改成 `mutationRepo.AsQueryable().ClearFilter<IOrgScoped>()` → 红(`Expected: 3 Actual: 6`,前端组账号看到全部 6 行)→ 改回绿。**顺带订正立项错误**:§12 第 0 轮原写「`UserService` 里一行 `WHERE org_id` 都没有」,而 `sys_user` 是 `BaseEntity` 不受机构裁剪 —— 招牌能力成立但例子举错,已在第 0 轮与清单 12 就地标注。G6 及以后未碰。
+
 ### 第 4 轮 — G4 端点 + 菜单种子 + gen:api(2026-07-25)
 提交 `feat(excel): wire import/export endpoints, menu seeds, and OpenAPI schemas`。**改**:`UserController` 六端点(template ActiveSession;preview/validate/error-report/commit RolePermission;export+OperationLog)+ `SysLogController` op/export + `DefaultMenuSeed` Id 126–131 六行(照抄 §6.2)+ `ImportRowsInput`/`ImportCommitInput` + MinimalHost 引卫星包并 `AddTenonAdminExcel()` + 两模板 `schema.d.ts` gen:api。测试:`Export_ReturnsXlsxStream_NotResultEnvelope`(§5.2:非信封、spreadsheet Content-Type、`filename*=UTF-8''`、body 以 PK 开头)。**验收**:`PermissionCodeConsistency` 2/2 绿;MinimalHost curl 七端点均 200(template 3347B / error-report 4967B / user-export 5359B / op-export 5260B,均含 RFC 5987);preview/validate/commit 信封 code=0(commit inserted=1);两模板 schema 含七条路径;全量 `dotnet test` 327/327 绿(G3 基线 326+1)。**变异**:删 §6.2 Id=131 菜单种子 → 反向锁红(`GET:/api/v1/sys/log/op/export` 既无种子也未登记 KnownUnseededEndpoints) → 改回绿。**台账回填(两处是台账自己漏写,不是实现越界)**:§4.3 补 `ImportRowsInput`/`ImportCommitInput`(§5.1 三个 POST 的请求体,原 DTO 清单没写);§3.2 补「修改 —— 样例宿主」表(MinimalHost 引卫星包 + `AddTenonAdminExcel()` 前置,§2 的「不装卫星包零影响」承诺就靠这个开关兑现)。G5 及以后未碰。
 
@@ -712,4 +719,4 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 提交 `feat(excel): add Core import/export contracts and ErrorCode 46xxx`(`git log --grep=ErrorCode.46xxx`)。**改**:`ImportExport/` 九文件(codec/领域/DTO/`MissingExcelProvider`)+ `AdminExcelOptions` + `TenonAdminOptions.Excel` + `ErrorCode` 46xxx(13 码;导出上限 MsgKey 为 `error.export.tooManyRows`,叶子唯一)+ `ServicesSetup` TryAdd 三 codec 默认实现 + 两模板各 13 条 zh/en + `refinement-ledger` 定时任务段位 46→47。**验收**:`dotnet build backend/TenonAdmin.slnx -c Release` 绿(0 error);`ErrorCodeLocaleConsistency` 1/1 绿;`git diff --stat` 无 `TenonAdmin.Core.csproj`。**变异**:①删 `web/src/locales/zh-CN.ts` 的 `cellRequired` → 红:`error.import.cellRequired (zh-CN 缺 cellRequired)` → 改回绿;②`orgOutOfScope` 叶子唯一、删该行 → 红;③删 `export.tooManyRows` → 红:`error.export.tooManyRows (zh-CN 缺 tooManyRows)` → 改回绿(若仍用同名 `rowLimitExceeded`,删 export 行仍假绿)。G2 未碰。
 
 ### 第 0 轮 — 立项(2026-07-25)
-`/grill-with-docs` 走完:候选池只剩定时任务 / Excel / 分发三条,用户选 Excel。评估证据:14 条 issue 无一条要这两个功能(都是 push 不是 pull),但**导出能接上 CRM 头条第二幕**(同一个导出按钮,总部 214 行 / 深圳 42 行,`UserService` 里一行 `WHERE org_id` 都没有)、定时任务接不上;定时任务另有归属打架未决 + 自写 cron 与多副本租约是最危险的代码面,故排后。库选型经实测推翻 `rebuild-design.md:165` 的 Magicodes 定稿(§2)。范围与功能取舍见 §1。执行期改由外部 agent 施工、维护者审批,故本文件按「可直接施工」的粒度重写(§4 完整签名 / §5 端点契约 / §7 闸门 / §8 十个坑 / §9 逐条变异判据)。**尚未开工。**
+`/grill-with-docs` 走完:候选池只剩定时任务 / Excel / 分发三条,用户选 Excel。评估证据:14 条 issue 无一条要这两个功能(都是 push 不是 pull),但**导出能接上 CRM 头条第二幕**(同一个导出按钮,总部 214 行 / 深圳 42 行,业务 Service 里一行 `WHERE org_id` 都没有)〔**G5 订正**:原文写的是「`UserService` 里一行 `WHERE org_id` 都没有」,**这句是错的** —— `sys_user` 是 `BaseEntity`,用户导出根本不经机构裁剪。该说法对**消费方的 `DataEntity` 业务表**成立(CRM 的客户表正是这种),对内核自带表不成立;招牌能力本身没问题,举错了例子。见 §9 G5 清单 12〕、定时任务接不上;定时任务另有归属打架未决 + 自写 cron 与多副本租约是最危险的代码面,故排后。库选型经实测推翻 `rebuild-design.md:165` 的 Magicodes 定稿(§2)。范围与功能取舍见 §1。执行期改由外部 agent 施工、维护者审批,故本文件按「可直接施工」的粒度重写(§4 完整签名 / §5 端点契约 / §7 闸门 / §8 十个坑 / §9 逐条变异判据)。**尚未开工。**

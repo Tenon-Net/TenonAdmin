@@ -10,13 +10,45 @@ namespace TenonAdmin.TestHost;
 /// </summary>
 [ApiController]
 [Route("api/v1/sample/doc")]
-public class SampleDocController(ISampleDocService svc) : ControllerBase
+public class SampleDocController(
+    ISampleDocService svc,
+    SampleDocExportProfile exportProfile,
+    IExcelWriter writer) : ControllerBase
 {
     /// <summary>列出当前数据范围内可见的文档</summary>
     [HttpGet]
     [RolePermission]
     public async Task<Result<IReadOnlyList<SampleDoc>>> List() =>
         Result<IReadOnlyList<SampleDoc>>.Ok(await svc.ListAsync());
+
+    /// <summary>
+    /// 导出当前数据范围内可见的文档(excel-ledger §5.2:xlsx 流,不进信封)。
+    /// <para>
+    /// 行集取自 <see cref="ISampleDocService.ListAsync"/> —— 与列表**同源**,所以导出的可见范围
+    /// 由 <c>IOrgScoped</c> 全局过滤器决定,这里没有任何机构判断代码。这正是要演示的招牌能力,
+    /// 也是消费方给自己的业务表接导出时该抄的形状(别另写一条查询,两条链一漂移就不一致了)。
+    /// </para>
+    /// </summary>
+    [HttpGet("export")]
+    [RolePermission]
+    [OperationLog("导出示例文档")]
+    public async Task<IActionResult> Export(CancellationToken cancellationToken)
+    {
+        var docs = await svc.ListAsync();
+        var rows = docs
+            .Select(d => (IReadOnlyDictionary<string, object?>)
+                new Dictionary<string, object?> { ["Title"] = d.Title })
+            .ToList();
+
+        var stream = await writer.WriteAsync(new ExportSheet
+        {
+            SheetName = "示例文档",
+            Columns = exportProfile.Columns,
+            Rows = rows,
+        }, cancellationToken);
+
+        return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "示例文档导出.xlsx");
+    }
 
     /// <summary>新建文档</summary>
     [HttpPost]
