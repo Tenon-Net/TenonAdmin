@@ -578,7 +578,7 @@ G1 只加接口和 DTO,`TenonAdmin.Core.csproj` 一行不改。`MiniExcel` / `Do
 **验收**:`dotnet build` 绿;`dotnet test --filter "FullyQualifiedName~ErrorCodeLocaleConsistency"` 绿;`TenonAdmin.Core.csproj` **零改动**(`git diff --stat` 里不出现)。
 **变异**:删掉任意一条新码的 zh-CN 文案 → `ErrorCodeLocaleConsistencyTests` 必须红。
 
-### - [ ] G2 · 卫星包 `TenonAdmin.Excel`(codec)
+### - [x] G2 · 卫星包 `TenonAdmin.Excel`(codec)
 **改**:新建 4 个文件 + `Directory.Packages.props` + `TenonAdmin.slnx`。
 **内容**:`MiniExcelReader`(`ReadHeadersAsync` / 流式 `ReadRowsAsync`)、`MiniExcelWriter`、`OpenXmlTemplateBuilder`(表头行 + `*` 标必填 + 列宽 + 字典列 `dataValidation` 下拉 + 「填写说明」sheet)、`ExcelSetup.AddTenonAdminExcel()`。
 **验收**:`dotnet build` 绿;写一个小程序或测试真生成一份模板并**用 Excel/WPS 打开确认下拉能点开**(下拉是取 OpenXml 的唯一理由,不验等于没做)。
@@ -672,6 +672,9 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 ---
 
 ## 12. 轮次日志
+
+### 第 2 轮 — G2 卫星包 TenonAdmin.Excel codec(2026-07-25)
+提交 `feat(excel): add TenonAdmin.Excel satellite with MiniExcel and OpenXml codecs`。**改**:新建 `backend/src/TenonAdmin.Excel/`(`MiniExcelReader` / `MiniExcelWriter` / `OpenXmlTemplateBuilder` / `ExcelSetup.AddTenonAdminExcel` / csproj,仅 ProjectReference Core)+ `Directory.Packages.props` 增 MiniExcel 1.45.0 与 DocumentFormat.OpenXml 3.5.1(注释「仅卫星包」)+ `TenonAdmin.slnx` 纳入;`TenonAdmin.csproj` 元包未动。测试:`ExcelCodecTests` 四条(缺包 46001 / TryAdd 前置胜出 / 模板 dataValidation+字典 label / 读写 round-trip);模板落盘仓库外 `C:\Project\HuHuHu\excel-artifacts\user-template.xlsx`。**验收**:`dotnet build -c Release` 绿(0 error);全量 `dotnet test` 324/324 绿(G1 基线 320+4)。**变异**:①注释 `ExcelSetup` 里 `IExcelTemplateBuilder` 的 `TryAddSingleton` → `AddTenonAdminExcel_BeforeKernel_WinsTryAdd` 红(`Expected OpenXmlTemplateBuilder, Actual MissingExcelProvider`) → 改回绿;②让 builder 写 dataValidation 但不往 `_dict` 写 label(「填写说明」hint 仍有男/女)→ 旧断言假绿;收紧后 `OpenXmlTemplateBuilder_WritesDataValidation_WithDictLabels` 沿 formula1→workbook sheet 名→r:id→rels Target 解析到真正 worksheet,断言**那张** sheet 含「男」「女」且 `state="hidden"` → 红(`Assert.Contains() Failure: Sub-string not found / Not found: "男"`) → 改回绿,ExcelCodecTests 4/4。G3 及以后未碰。**报告(未改 CI)**:`backend-release.yml` 的 Pack 是 `dotnet pack backend/TenonAdmin.slnx`(按 slnx 内 `IsPackable` 打),**未**显式枚举包项目;新卫星包进 slnx 且 `IsPackable=true` 即会被 pack/push,无需改 workflow——是否接受由维护者裁定。
 
 ### 第 1 轮 — G1 Core 契约 + Options + ErrorCode(2026-07-25)
 提交 `feat(excel): add Core import/export contracts and ErrorCode 46xxx`(`git log --grep=ErrorCode.46xxx`)。**改**:`ImportExport/` 九文件(codec/领域/DTO/`MissingExcelProvider`)+ `AdminExcelOptions` + `TenonAdminOptions.Excel` + `ErrorCode` 46xxx(13 码;导出上限 MsgKey 为 `error.export.tooManyRows`,叶子唯一)+ `ServicesSetup` TryAdd 三 codec 默认实现 + 两模板各 13 条 zh/en + `refinement-ledger` 定时任务段位 46→47。**验收**:`dotnet build backend/TenonAdmin.slnx -c Release` 绿(0 error);`ErrorCodeLocaleConsistency` 1/1 绿;`git diff --stat` 无 `TenonAdmin.Core.csproj`。**变异**:①删 `web/src/locales/zh-CN.ts` 的 `cellRequired` → 红:`error.import.cellRequired (zh-CN 缺 cellRequired)` → 改回绿;②`orgOutOfScope` 叶子唯一、删该行 → 红;③删 `export.tooManyRows` → 红:`error.export.tooManyRows (zh-CN 缺 tooManyRows)` → 改回绿(若仍用同名 `rowLimitExceeded`,删 export 行仍假绿)。G2 未碰。

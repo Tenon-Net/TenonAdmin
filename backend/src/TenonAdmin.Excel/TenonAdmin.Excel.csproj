@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 可选卫星包:xlsx 编解码(读/写/模板)。用户装它并前置 AddTenonAdminExcel 即把三个 codec
+       从 MissingExcelProvider 换成 MiniExcel + OpenXml 真实现。
+       只引用 Core 契约层 + MiniExcel / DocumentFormat.OpenXml;核心四包不反向引用本包,
+       保持"运行时只依赖 SqlSugarCore + Microsoft.*"。元包 TenonAdmin 也不引用本包——装了才有,这是可选性的定义。 -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>TenonAdmin 导入导出可选包:MiniExcel 读写 xlsx + OpenXml 生成带字典下拉的导入模板;前置 AddTenonAdminExcel 即整体替换默认 MissingExcelProvider。</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TenonAdmin.Core\TenonAdmin.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MiniExcel" />
+    <PackageReference Include="DocumentFormat.OpenXml" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+</Project>
