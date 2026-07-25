@@ -11,12 +11,13 @@ Apart from "where," the two routes are identical. Below follows Route B — also
 
 ## Grounded in real code
 
-Rather than inventing a "product" example, this page walks you through two places in the repo that genuinely exist and run in CI:
+Rather than inventing a "product" example, this page walks you through three places that genuinely exist and have tests running against them:
 
 - `backend/src/TenonAdmin.Services/Dict/` — the kernel's built-in dictionary module, a template for a plain table (not org-isolated).
 - `backend/tests/TenonAdmin.TestHost/` — the consumer host used for integration tests, where `SampleDoc` is a genuine org-isolated business module, following exactly Route B.
+- `Modules/Crm/` in [tenon-example](https://github.com/Tenon-Net/tenon-example) — a standalone reference app in its own repo, holding an entire CRM module from entity through service, controller, menu and permission seeds. It's also the code the [live demo](https://tenonadmin.52moyu.net/login) runs. For Route B end to end in a real project, this is the most complete one.
 
-Follow the structure of these two, and the module you add will naturally grow into the shape the kernel expects.
+Follow the structure of these, and the module you add will naturally grow into the shape the kernel expects.
 
 ## Choosing an entity base class: `BaseEntity` or `DataEntity`
 

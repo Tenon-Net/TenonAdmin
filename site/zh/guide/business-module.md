@@ -11,12 +11,13 @@
 
 ## 用真实代码打底
 
-这页不编「商品」示例，而是带你读仓库里两处真实存在、CI 里跑着的代码：
+这页不编「商品」示例，而是带你读三处真实存在、都有测试跑着的代码：
 
 - `backend/src/TenonAdmin.Services/Dict/`：内核内置字典模块，普通表（不按机构隔离）的范本。
 - `backend/tests/TenonAdmin.TestHost/`：集成测试用的消费方宿主，里面的 `SampleDoc` 是一个货真价实的机构隔离业务模块，走的正是路线 B。
+- [tenon-example](https://github.com/Tenon-Net/tenon-example) 的 `Modules/Crm/`：另一个仓库里的独立参考应用，一整个 CRM 模块从实体、服务、控制器到菜单与权限种子全在里面，也是[在线演示](https://tenonadmin.52moyu.net/login)跑的那份代码。想看路线 B 在一个真项目里从头到尾是什么样，看它最全。
 
-照着这两处的结构走，你加的模块会自然长成内核期望的样子。
+照着这几处的结构走，你加的模块会自然长成内核期望的样子。
 
 ## 选实体基类：`BaseEntity` 还是 `DataEntity`
 
