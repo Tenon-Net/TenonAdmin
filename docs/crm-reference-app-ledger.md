@@ -1,7 +1,7 @@
 # 参考应用执行台账 · `tenon-example`(多机构数据范围 · 面向企业评估者)
 
 > **来源**:2026-07-24 grilling 定向。全部方向决策见 §1,grilling 已钉死,执行期不回炉。
-> **当前状态**:P0 已完成;第二轮 dogfood 抓到的 launch-profile 坑已随 `v0.3.2` 发布,`tenon-example` 已升级并采用正式修复(不再靠环境变量绕过);P1(CRM 实体 + 后端)、P2(种子数据)、P3(前端页)均已完成——头条(同一菜单、三个账号分别看到 214/128/42 行,跨范围不可见)已用真实浏览器登录验证过。P4 的本地/演示环境部分(DemoMode、试用账号表、三账号截图)已验证;**生产域名切换仍需另获上线授权,未执行**。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
+> **当前状态**:P0 已完成;第二轮 dogfood 抓到的 launch-profile 坑已随 `v0.3.2` 发布,`tenon-example` 已升级并采用正式修复(不再靠环境变量绕过);P1(CRM 实体 + 后端)、P2(种子数据)、P3(前端页)均已完成——头条(同一菜单、三个账号分别看到 214/128/42 行,跨范围不可见)已用真实浏览器登录验证过。**P4 已完成并上线**:用户提供服务器信息并明确授权替换,`tenon-example` 已经 `docker compose` 部署上线,`tenonadmin.52moyu.net` 的宿主 Caddy 已切到新栈(旧内核 demo 栈已备份并停止,未删除,一条命令可回滚)。第三轮 dogfood 又抓到一个模板坑(见下)。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
 > **目标**:给「中小团队 / 企业内部后台」这个人群一个能信、能 dogfood 的证据 —— 一个独立开源的 CRM-lite 参考应用,吃**已发布的 NuGet 包**、degit `web/`、部署上线,头条是**多机构数据范围当场生效**。
 > **驱动方式**:仿 `docs/refinement-ledger.md` —— 逐条执行、每条独立英文 conventional commit、可断点续跑;用 `/loop` 或 `/goal` 逐轮推进。
 > **执行协议**:本文件的 P0–P4 是阶段门,不是跨仓细任务清单。P0 在 `tenon-example` 首个提交中创建 app 自己的 ledger,把 P1–P4 拆成可逐条勾选的实现任务;实现提交与勾选只发生在新仓。每个阶段验收通过后,再在 `tenon-admin` 用单独 docs 提交更新对应状态与证据链接。P5 的回流项继续在本仓执行。
@@ -84,12 +84,18 @@
 - **顺带记的非产品缺陷**:本地最小消费方 host 未接 SignalR 通知铃铛的 Hub,浏览器控制台登录后持续报 negotiation 404——模板本身既有的噪音,与 CRM 无关,本轮不修。
 
 ### P4 · 部署 + 叙事包装
-- **状态**:本地/演示环境部分已验证完成(2026-07-24,提交 `7ce99b6`);**生产域名切换未授权、未执行**。
-- 要求:获授权后部署上线并**替换** `tenonadmin.52moyu.net`(consumer app 是现有 demo 的超集,含全部内核管理页 + CRM)。切换前备份现有配置 / 数据并记录可执行回滚步骤;上线后验证 `/health` 与 `/health/ready`。**未请求、未执行**——本轮用户明确选择"先本地验证,不换生产域名"。
-- 要求:公开环境开启 `TenonAdmin:DemoMode`;三个共享试用账号只授予 CRM 读取权限,写按钮不展示、写请求仍由后端拒绝。新增 / 编辑 / 删除只在源码与本地环境演示。`TenonAdmin:DemoMode` 是内核既有开关(`DemoModeFilter`),非本 app 实现;本地用 `TenonAdmin__DemoMode=true` 实测:登录/`page`/`scope` 读接口照常,任意非 GET 请求对试用账号和 `superAdmin` 均返回 41002(全局过滤器,超管不绕过)——三账号的写按钮本就因 P3 的权限门控(而非 DemoMode)不可见,两条路径叠加即公开部署要的效果。
-- 要求:demo 首屏放**试用账号表**(总部 / 区域 / 分公司三账号 + 密码)+ 一句引导"用这三个账号分别登录看同一个客户菜单"。已写进 `tenon-example` README 新增的「CRM Module」小节(账号 / 数据范围 / 行数三列表 + 共用密码)。
-- 要求:一张三账号同页不同结果的 GIF / 截图;README / 文档站加「Real app built on Tenon」入口。已产出三张真实截图(`docs/assets/{hq-admin-214,south-manager-128,shenzhen-specialist-42}.png`),各自嵌入 README,展示范围横幅与行数;「Real app built on Tenon」文档站入口留待真正上线时再加(现在加会指向一个还不存在的公开地址)。
-- 验收:未登录访客能照引导在 2 分钟内自己看到那一幕;三个账号均不能写数据;健康检查、登录、客户分页与回滚步骤完成冒烟验证;共享账号具备可重复执行的密码 / 锁定状态重置办法。健康检查/登录/客户分页已在 P0–P3 反复验证;**回滚步骤与"2 分钟未登录访客发现路径"只有对着真实部署目标才有意义,留到实际上线那一步**,不针对不存在的目标预先设计。
+- **状态**:已完成(2026-07-25)。上线到 `tenonadmin.52moyu.net`,替换了内核自己的旧 demo。`tenon-example` 提交 `b39565e`(docker 修复 + compose 栈)、`ab895ea`(部署记录)。
+- 授权:用户在会话中直接给出服务器 root 信息并明确说"你替换掉吧"——比上一轮"先本地验证"更进一步的授权,本轮据此执行了真正的上线。
+- 部署方式:`tenon-example`(`dev`@`b39565e`)克隆到服务器 `/root/opt/tenon/tenon-example`,`docker compose`(MySQL + Redis + 后端 + Caddy 前端)先在临时端口(8090/8091)起栈、自证健康检查/三账号登录/`214`/`128`/`42`/DemoMode 写拒绝全部通过,再把宿主级 Caddy(`/etc/caddy/Caddyfile`,该服务器上还跑着好几个不相关站点)的 `tenonadmin.52moyu.net` 反代目标从旧栈的 18086 改到新栈的 8090、`systemctl reload caddy`(不影响同机其它域名),外部验证 `https://tenonadmin.52moyu.net/health`、`/health/ready`、`/login` 均 200。
+- 备份与回滚:切换前对旧 `tenon-admin` 栈做了完整备份(未提交的 git diff、`.env`、`docker-compose.override.yml`、宿主 Caddyfile、`mysqldump --all-databases`,共 4.25MB/1905 行 SQL),旧栈容器 `stop` 而非删除(数据卷原样保留)。回滚 = 恢复 Caddyfile 备份 + reload + `docker compose -p tenon-admin start`,已确认旧容器仍在、可直接拉起,未做过实际回滚演练(那意味着真的下线新部署)。
+- 公开只读:`TenonAdmin:DemoMode` 通过服务器本地的 `docker-compose.override.yml`(未提交,与旧栈同款约定)开启,已针对**真实上线环境**(非本地)复测:读接口 200,`POST .../customer/add` 返回 `41002`。
+- 首屏引导与截图:README「CRM Module」小节的账号表、三张截图、demo mode 说明均已随部署更新为指向真实 URL;截图仍是本地那一轮拍的(渲染结果与生产字节一致,未重拍)。
+- 未做:没有另建一个"2 分钟发现路径"专用首屏横幅(访客直接看 README 账号表即可);没有做真实回滚演练;没有把共享账号的密码/锁定状态重置做成自动化(种子本身幂等,够用)。
+
+### 第三轮 dogfood 发现:模板 Dockerfile 对连字符项目名坏掉
+- 部署 `tenon-example` 时发现:模板生成的 `Dockerfile` 里 `dotnet publish TenonApp.csproj` / `ENTRYPOINT ["dotnet","TenonApp.dll"]` 会被 `dotnet new` 替换,但**连字符名字在文件内容替换里被安全化成下划线**(`tenon-example` → `tenon_example`),文件名替换却用字面值(`tenon-example.csproj`)——两者对不上,`docker build` 直接找不到文件。用 `dotnet new tenon-app --output hy-test` 百分百复现。
+- 已在两仓修复(`tenon-admin` 提交 `0ad8605`、`tenon-example` 提交 `b39565e`):Dockerfile 不再含项目名字面量,`dotnet publish *.csproj` + 按 `.deps.json` 在运行时找入口程序集,任何项目名都免疫。
+- **未做**:没有为此单独走一轮 0.3.3 发布(`tenon-admin` 的修复目前只在 `dev`,未合 `main` 打 tag);`templates/smoke-test.ps1` 的脚手架用名是 `Probe`(无连字符),这类坑目前仍不在 CI 覆盖范围内——留作后续加固项,不在本轮处理。
 
 ### P5 · dogfood 回流(整件事的真目的)+ 启动时间盒
 - [ ] P0–P4 中**可复用于内核或模板**的坑开成 `tenon-admin` issue / ledger 条目;CRM 自身业务问题留在 `tenon-example`,不把消费者待办倒灌成内核噪音。
