@@ -3,25 +3,38 @@
 > 设计单源:同目录 `rebuild-design.md`(§ 引用均指向它)。
 > 本文件只回答三个问题:**做到哪了、怎么干活、下一个是什么**。
 > 逐提交的历史在 `git log`,不在这里 —— 这份文件不是变更日志。
-> 最后更新:2026-07-14(v1 发版前审计:文档清理 + 阻塞项定位)。
+> 最后更新:2026-07-25(发版后刷新:§1 全部重写,§4 转为历史,§5 重排)。
 
 ---
 
 ## 1. 现在在哪
 
-**功能上已经够发第一个正式版了**,但**还不能发** —— 卡在发版链路和升级路径上,不是卡在功能上(见 §4)。
+**已发版,并且有真实消费者在吃它。** `0.3.3`(`TenonAdmin` / `TenonAdmin.Templates`)已推到 nuget.org;
+公开参考应用 [`tenon-example`](https://github.com/Tenon-Net/tenon-example) 吃**已发布的包**,部署在 `tenonadmin.52moyu.net`。
+§4 那两批(发版链路 / 升级路径)早已收口,自此是历史记录。
+
+**瓶颈不在功能面了** —— 精致化台账 A–E 全部收口,两个前端模板各自到位,剩下的候选见 §5。
+
+今日实测(2026-07-25,现跑现记,不是抄旧数):
+
+| 面 | 证据 |
+|---|---|
+| 后端 | `dotnet test backend/TenonAdmin.slnx` —— **320 通过 / 0 失败 / 0 跳过** |
+| `web/`(Vue 3 + Naive UI) | vitest **60/60**(15 文件)+ typecheck + lint + 生产构建全绿 |
+| `web-react/`(React 19 + antd 6) | vitest **723/723**(100 文件)。与 `web/` **零共享、各自自包含**(理由见 `react-template-ledger.md`) |
+| 消费者第一条命令 | `template-smoke` 逐字跑 `dotnet new tenon-app` → build → 裸 `dotnet run` 必须出 `/health`,且用**带连字符**的项目名(那类替换坑真发生过) |
 
 已在 CI 里被真实执行验证的能力(不是"代码写完了"):
 
 | 能力 | 证据 |
 |---|---|
-| 三行启动 / 零配置 SQLite / CodeFirst 建表 / 幂等种子 / 首启随机超管密码 | `backend-ci`,4 库矩阵(sqlite / mysql / sqlserver / postgres)各 **184 用例全绿** |
+| 三行启动 / 零配置 SQLite / CodeFirst 建表 / 幂等种子 / 首启随机超管密码 | `backend-ci`,4 库矩阵(sqlite / mysql / sqlserver / postgres)。**注**:push/PR 上 sqlserver 腿只跑方言敏感子集(全量太慢,见 `CLAUDE.md`),全量走 nightly |
 | 认证 · RBAC · 多机构数据范围 · 字典配置 · 日志 · 上传 · 多应用门户 | 同上 |
 | **可替换性六件套**(§8 契约) | `ReplaceabilityTests` —— **当契约看,不是普通测试** |
 | 容器化交付(Caddy + compose) | `docker-smoke` 的 `single` 腿 |
 | **多副本正确性**(强退跨副本即时生效 / 锁定阈值不翻倍 / 每副本独立雪花机器号 / 反代后取真实客户端 IP / 限流阈值是集群级的) | `docker-smoke` 的 `multi` 腿,5 条断言各钉一个真 bug;反面对照(缓存换回进程内)如期变红 |
 
-前端:后端**每一个** Controller 都有对应页面,i18n **zh-CN / en-US 各 497 键、零缺口**。
+前端:后端**每一个** Controller 都有对应页面(两个模板各一套),i18n zh-CN / en-US 零缺口。
 
 ## 2. 工作约定
 
@@ -43,9 +56,10 @@
 - **M1.5 + M2 + M3**:多应用门户 → Vue3 前端脚手架 → 系统管理全量页面 + 配置中心(「改配置不改代码」4 类:基础 / 安全 / 上传 / 限流)。
 - **M4 清债(五批)**:操作日志 opt-out、首次登录强制改密、分片续传+秒传、种子主键保留区间、树表可用性、**磁盘回收**(`FileGcService`)、**签名直链**、**容器化交付**、**多副本就绪**(T-D3,见 §1 表)。
 
-## 4. 发 v1 之前必须做的(唯一优先级)
+## 4. ~~发 v1 之前必须做的~~ ✅ 已收口(历史记录,不是待办)
 
-功能没缺口,缺的是"发得出去"和"升得上去"。**两批都已完成(2026-07-14)——现在可以发版了。**
+功能没缺口,缺的是"发得出去"和"升得上去"。**两批已于 2026-07-14 完成,`0.1.0` 起持续发版,当前 `0.3.3`。**
+本节保留是因为下面那几条"只有真跑才抓得到的坑"仍然值钱 —— 别当待办读。
 
 ### ~~第七批 · 发版链路~~ ✅ 已完成(2026-07-14)
 
@@ -77,14 +91,31 @@ R1–R6 全部处置。闸门先红后绿的证据在下面这张表里 —— *
 ### 顺带(不单独占一批)
 
 - ~~**`CHANGELOG.md` 缺**~~ ✅ 已建(2026-07-14),`0.0.1-preview` 的能力清单 + 未发布段。
-- **升级指南缺**——和 O1 绑定:内核加列时消费者该做什么,写进 `deployment.md`。
+- ~~**升级指南缺**~~ ✅ 已补,和 O1 绑定:内核升级补列/种子写进 `deployment.md`(见其目录第 7 行)。
 
-## 5. v1 之后(不阻塞发版)
+## 5. 现在的候选池(下一个做什么)
+
+**先读这条**:功能面已经没有"下一批"了,下面全是自选动作。台账 `refinement-ledger.md` 的
+批次 A–E 已收口,`react-template-ledger.md` 的 R/B/C/D/E/F/G 已收口。真正的候选只有三个:
+
+| 候选 | 状态 |
+|---|---|
+| **定时任务调度中心** | 设计已成稿(自写 5 段 cron + `IAdminJob` + `JobSchedulerService`),前置阻塞(实体基类重构 `c2a963e`)已解除。**但归属两处打架、开工前必须先定**:`rebuild-design.md:305/320` 写的是卫星包 `TenonAdmin.Scheduling`,台账按进内核设计 —— 这条决定了是自写 cron(留内核,依赖纪律只允许 SqlSugarCore + Microsoft.\*)还是直接吃 Quartz/Hangfire(卫星包)。 |
+| **`TenonAdmin.Excel` 卫星包** | Magicodes.IE,`rebuild-design.md:165` 已定稿方向;用户导入 + 同步导出,经 `ApplicationAssemblies` 挂入,内核零改动。 |
+| **E6 pro-components 转正** | `web-react/` 等上游 beta → stable,**不由我们控制**,长期挂着。 |
+
+已裁定**不做**的(别再排):多租户与其消费者侧 skill 文档(2026-07-25,证据在 `refinement-ledger.md` 不做清单)。
+
+**功能之外的那条**:仓龄 19 天、21 star / 4 fork,但 10 个外部 issue 全来自同一个人 ——
+按 `crm-reference-app-ledger.md` §4 的去重规则,真实评估动作 = 1,阈值是 3;而 P5 的社区文已撤,
+时间盒起点至今没有重新定义。**"下一个做什么"的答案未必是代码**,这一点写在这里免得下次又只在功能里挑。
+
+### v1 之后的老条目(仍有效)
 
 - ~~**密码过期策略**~~ —— **已实现(2026-07-16)**:`SysUser.LastPasswordChangeTime` + 运行时配置 `sys.security.password.expireDays`(默认 0=关闭);null 回填 = 存量用户首次登录时回填当时时间、过期窗口从那一刻起算(不会上线当天全员被判过期);过期仅置 `MustChangePassword`(现成通道,不拦登录),自助改密清标志并重置窗口。测试 `PasswordExpiryTests`。
 - **T-D5 RoutePrefix / Version 配置化**。深耦合鉴权路径(权限码 = 路由),需引入 Core 的 `PermissionCode` 规范化 helper 供过滤器与种子共用。低频低价值,明确后置。
 - **T-D6 验证码更多类型**。`ICaptchaProvider` 已有 SVG / 算术(`MathCaptchaProvider`)/ 笔画拼图(`PathCaptchaProvider`)三种实现。滑块 / 行为码仍后置 —— **YAGNI 未解除,先确认真有人要**,否则不做。
-- **T-D7 文件引用关系**。「秒传」按内容哈希复用**同一条** `sys_file` 记录 → 同一文件 Id 被多方引用,甲删掉"他的"文件,乙的引用就悬空。现靠 GC 保留期(默认 7 天)兜底,不是真解。**先确认真有消费者被咬到**再动。
+- ~~**T-D7 文件引用关系**~~ —— **已根治(2026-07-17,`3f4dd58`,零 DDL)**:秒传命中改「一引用一行」,各引用方独立记录互删不影响;`FileGcService` 删盘前查同 `StoragePath` 是否仍有他行,末个引用回收时才真删盘。
 - `BaseEntity` 是否 POCO 化进 Core(§5.6)—— Phase 2a 结论:收益低,维持现状。
 
 ## 6. 这次审计确认「没问题」的(别再查了)
