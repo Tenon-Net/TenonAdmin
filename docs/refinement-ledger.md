@@ -48,7 +48,8 @@
 
 | 项 | 理由 |
 |---|---|
-| 多租户 | `rebuild-design.md:38` 整体不做;官方替换点 IDataScopeProvider(:391) |
+| 多租户 | `rebuild-design.md:38` 整体不做。**替换点边界(2026-07-25 查证,别再照字面转述)**:替换 `IDataScopeProvider` 只能改「哪些 OrgId 可见」,改不了「按哪一列过滤」——全局过滤器硬打在 `SqlSugarSetup.cs:78` 的 `AddTableFilter<IOrgScoped>`,表达式只认 `CreateOrgId` / `CreateUserId`,而 `DataScopeResult` 的四个字段(`IsUnrestricted`/`OrgIds`/`IncludeSelf`/`UserId`)没有装 `TenantId` 的位置。故 `rebuild-design.md:391`「自定义数据隔离维度(如租户)」只在**租户 ≡ 机构子树**时成立;要独立租户列,消费者须自挂 `AddTableFilter<ITenantScoped>` + 自建租户上下文 + AOP 填列,与"前置替换一个接口"不是一回事。 |
+| 多租户消费者侧 skill 文档(replace-service 姊妹篇) | **2026-07-25 退役**(原在「未排期备忘」)。写这篇等于把上一行那两条路当承诺发出去,而两条按原设想都不成立:①字段级见上行;②库级「多 ConfigId」内核没开口——`SqlSugarSetup.cs:46-67` 是**单个** `ConnectionConfig`(`ConfigId = "TenonAdmin"` 写死)交给 `new SqlSugarScope(config, …)`,多库形态要 `SqlSugarScope(List<ConnectionConfig>, …)`。今天真走得通的只有「租户 = 机构树根 + 现成 `OrgAndChildren` 范围」,零代码、已由 `tenon-example` 演示,撑不起一篇 skill。要改这个结论,先拿能跑的证据,别拿设计意图。 |
 | 工作流/审批 | `rebuild-design.md:320` 非目标;属应用域独立产品 |
 | 锁屏 | 纯前端是安全表演(F12 即破);真保护 = [ActiveSession] + 强退 + OS 锁屏 |
 | 自注册/忘记密码 | 后台账号管理员开;SMS 免密 + 首登强改密已闭环 |
@@ -67,7 +68,8 @@
 - 定时任务调度中心:自写 5 段 cron(~100 行,不做秒级/L/W/#)+ `IAdminJob` TryAddEnumerable + `JobSchedulerService : BackgroundService`(复用 FileGcService 骨架与 ICacheProvider.IncrementAsync 多副本租约);表 sys_job / sys_job_log;ErrorCode 46xxx 段。设计已成稿,待排期。
 - ~~SignalR 实时通知~~ → **已做(批次 F,第 14 轮)**,见上。
 - `TenonAdmin.Excel` 卫星包(Magicodes.IE,`rebuild-design.md:165` 已定稿方向):用户导入 + 同步导出,经 ApplicationAssemblies 通路挂入,内核零改动。
-- 多租户消费者侧 skill 文档(replace-service 姊妹篇):字段级 = 前置替换 IDataScopeProvider + DataEntity 子类基座;库级 = 多 ConfigId。
+- ~~多租户消费者侧 skill 文档~~ → **2026-07-25 裁定不做**,理由与证据进「不做清单」,见上。
+- ⚠ **定时任务的归属两处打架,开工前先定**:`rebuild-design.md:305` / `:320` 写的是卫星包 `TenonAdmin.Scheduling` + v1.0 明确不做;本文件上一条却按**进内核**设计(`sys_job`/`sys_job_log` 是内核 CodeFirst 表、`ErrorCode 46xxx` 是内核枚举段、复用内核 `FileGcService` 骨架)。这条不定,「自写 5 段 cron」这个前提就是悬的——留在内核才需要自写(运行时只允许 SqlSugarCore + Microsoft.\*),做成卫星包就该直接吃 Quartz/Hangfire,别自写。
 
 ## 轮次日志
 
