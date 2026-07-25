@@ -64,4 +64,13 @@ describe('withExt', () => {
     withExt(base, { './ext/zh-CN/error.ts': mod({ auth: { passwordWrong: 'x' } }) }, 'zh-CN')
     expect(base.error.auth).toEqual({ passwordWrong: '账号或密码错误', captchaExpired: '验证码已过期' })
   })
+
+  // 数组不是"普通对象",不能往下钻:isPlainObject 一旦漏掉 !Array.isArray(v),
+  // ['a','b','c'] 与 ['x'] 会按下标逐项合并成 ['x','b','c'] —— 而上面 8 条一条都不红(实测)。
+  // 反向 port 自 web-react/src/locales/index.spec.ts:73:deepMerge 两边逐字相同(自包含之后是有意重复),
+  // 所以同一个失败模式两个模板都存在,用例也得各写一份。用行内 base,不碰上面共享的那个。
+  it('数组不当作对象往下钻(否则会按下标逐项合并出四不像)', () => {
+    const out = withExt({ m: { tags: ['a', 'b', 'c'] } }, { './ext/zh-CN/m.ts': mod({ tags: ['x'] }) }, 'zh-CN')
+    expect(out.m).toEqual({ tags: ['x'] })
+  })
 })
