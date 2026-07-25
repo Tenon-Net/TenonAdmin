@@ -1,16 +1,61 @@
+using System.Net.Http.Headers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using TenonAdmin.Core;
+using TenonAdmin.Excel;
 using TenonAdmin.Services;
 using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// G3 导入导出领域层变异测试(excel-ledger §9 G3 自带载体;完整套件在 G5)。
+/// 导入导出测试(excel-ledger §9 G3 领域层 + G4 端点信封)。完整套件在 G5。
 /// 每条必须先被变异证伪(改坏→红→改回),跑绿不算数。
 /// </summary>
 public class ImportExportTests
 {
+    /// <summary>
+    /// §5.2:导出 xlsx 端点返回文件流,不进 Result&lt;T&gt; 信封。
+    /// Content-Type 为 spreadsheet;Content-Disposition 含 RFC 5987 的 filename*=UTF-8''。
+    /// 变异:改成 return Result.Ok(...) 或裸 DTO → body 变 JSON 信封、Content-Type 非 spreadsheet → 本条红。
+    /// </summary>
+    [Fact]
+    public async Task Export_ReturnsXlsxStream_NotResultEnvelope()
+    {
+        using var f = new AdminAppFactory
+        {
+            // TestHost 默认 MissingExcelProvider;用真 codec 写出 xlsx 字节
+            Overrides = s =>
+            {
+                s.Replace(ServiceDescriptor.Singleton<IExcelReader, MiniExcelReader>());
+                s.Replace(ServiceDescriptor.Singleton<IExcelWriter, MiniExcelWriter>());
+                s.Replace(ServiceDescriptor.Singleton<IExcelTemplateBuilder, OpenXmlTemplateBuilder>());
+            },
+        };
+        var client = f.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", await client.LoginToken("superAdmin", "Test@123456"));
+
+        var resp = await client.GetAsync("/api/v1/sys/user/export");
+        Assert.True(resp.IsSuccessStatusCode, $"export HTTP {(int)resp.StatusCode}: {await resp.Content.ReadAsStringAsync()}");
+
+        var media = resp.Content.Headers.ContentType?.MediaType;
+        Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", media);
+
+        var disposition = resp.Content.Headers.ContentDisposition?.ToString()
+                          ?? resp.Headers.GetValues("Content-Disposition").FirstOrDefault()
+                          ?? "";
+        Assert.Contains("filename*=UTF-8''", disposition, StringComparison.OrdinalIgnoreCase);
+
+        var bytes = await resp.Content.ReadAsByteArrayAsync();
+        Assert.True(bytes.Length > 4, $"xlsx 应有内容,实际 {bytes.Length} 字节");
+        // ZIP/xlsx 魔数 PK
+        Assert.Equal((byte)'P', bytes[0]);
+        Assert.Equal((byte)'K', bytes[1]);
+        // 不是 JSON 信封(不以 { 开头)
+        Assert.NotEqual((byte)'{', bytes[0]);
+    }
+
     /// <summary>
     /// 坑 6:CommitAsync 不得信任前端送来的 Errors。
     /// 一行真实非法(字典值「男性」),Errors 显式置空直送 Commit → 未落库且 Failures 带 ImportCellDictInvalid。

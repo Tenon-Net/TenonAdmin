@@ -9,10 +9,10 @@ namespace TenonAdmin.Services;
 /// (大写 Method + 冒号 + 小写路由模板),否则授了也匹配不上。</para>
 /// <para>菜单树顶级节点:system 模块下工作台(根级页面)+ 组织管理 / 系统运维 / 日志审计 / 文件管理四个目录;
 /// 另有示例 business 模块下一条工作台(ModuleId 仅顶级节点设)。节点 Id 手工分配、无分配器,新增节点接着当前
-/// 最大值往后取(现已用到 125:异常日志 116–118 + 服务器监控 119–120 + 缓存管理 121–125),避免覆盖历史 Id。</para>
+/// 最大值往后取(现已用到 131:缓存管理 121–125 + 用户导入导出 126–130 + 操作日志导出 131),避免覆盖历史 Id。</para>
 /// <para>层级约定:目录 → 页面 → 按钮。<b>按钮挂在它所属的页面下</b>(而非目录),这样菜单管理页里
 /// 每个页面的权限按钮一目了然。唯一例外是无对应页面的权限码锚点(如 Id=2 探针),挂在目录下。</para>
-/// <para><b>Id 登记</b>:菜单种子的固定 Id 历史散布在 2–125(不连续),<b>新增行一律取当前最大号 +1(现为 126)</b>,
+/// <para><b>Id 登记</b>:菜单种子的固定 Id 历史散布在 2–131(不连续),<b>新增行一律取当前最大号 +1(现为 132)</b>,
 /// 不要回填空洞——空洞可能是被挪走/删除的历史号,复用会撞上老库存量行。撞号/越界会被启动检查
 /// (<c>DatabaseInitializer</c>)与 <c>SeedIdRangeTests</c> 当场拒绝,不会静默吞掉。</para>
 /// </summary>
@@ -58,6 +58,12 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 83, ParentId = 15, Type = MenuType.Button, Title = "用户-批量删除", Permission = "POST:/api/v1/sys/user/batch-delete", Sort = 16, Enabled = true },
         new SysMenu { Id = 53, ParentId = 15, Type = MenuType.Button, Title = "用户-重置密码", Permission = "PUT:/api/v1/sys/user/{id}/password", Sort = 14, Enabled = true },
         new SysMenu { Id = 54, ParentId = 15, Type = MenuType.Button, Title = "用户-启停", Permission = "PUT:/api/v1/sys/user/{id}/enabled", Sort = 15, Enabled = true },
+        // 用户导入导出(ParentId=15 用户管理页)。template 走 [ActiveSession] 无需权限节点(见 excel-ledger §5.3)。
+        new SysMenu { Id = 126, ParentId = 15, Type = MenuType.Button, Title = "用户-导入预览",   Permission = "POST:/api/v1/sys/user/import/preview",      Sort = 17, Enabled = true },
+        new SysMenu { Id = 127, ParentId = 15, Type = MenuType.Button, Title = "用户-导入重验",   Permission = "POST:/api/v1/sys/user/import/validate",     Sort = 18, Enabled = true },
+        new SysMenu { Id = 128, ParentId = 15, Type = MenuType.Button, Title = "用户-导入错误报告", Permission = "POST:/api/v1/sys/user/import/error-report", Sort = 19, Enabled = true },
+        new SysMenu { Id = 129, ParentId = 15, Type = MenuType.Button, Title = "用户-导入提交",   Permission = "POST:/api/v1/sys/user/import/commit",       Sort = 20, Enabled = true },
+        new SysMenu { Id = 130, ParentId = 15, Type = MenuType.Button, Title = "用户-导出",       Permission = "GET:/api/v1/sys/user/export",               Sort = 21, Enabled = true },
 
         // 角色管理页(SysRoleController:CRUD + 授菜单权限 + 配数据范围)。
         // 授权抽屉读菜单树复用菜单管理页的「菜单-树」锚点(Id=41);授菜单/数据范围锚点 Id 3/4 归此页。
@@ -139,6 +145,8 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 66, ParentId = 90, Type = MenuType.Menu, Title = "操作日志", Permission = "", Path = "/system/log/op", Component = "system/log/op/index", Icon = "ph:scroll-duotone", Sort = 2, Enabled = true, Visible = true },
         new SysMenu { Id = 7, ParentId = 66, Type = MenuType.Button, Title = "操作日志-分页", Permission = "GET:/api/v1/sys/log/op/page", Sort = 3, Enabled = true },
         new SysMenu { Id = 67, ParentId = 66, Type = MenuType.Button, Title = "操作日志-清空", Permission = "DELETE:/api/v1/sys/log/op", Sort = 4, Enabled = true },
+        // 操作日志导出(ParentId=66 操作日志页)
+        new SysMenu { Id = 131, ParentId = 66, Type = MenuType.Button, Title = "操作日志-导出",   Permission = "GET:/api/v1/sys/log/op/export",             Sort = 5,  Enabled = true },
 
         // 异常日志页(B1:SysLogController 只读 + 清空,记未捕获异常)。
         new SysMenu { Id = 116, ParentId = 90, Type = MenuType.Menu, Title = "异常日志", Permission = "", Path = "/system/log/exception", Component = "system/log/exception/index", Icon = "ph:warning-octagon-duotone", Sort = 3, Enabled = true, Visible = true },

@@ -142,6 +142,15 @@ TenonAdmin.Excel(卫星包) ← 只有 3 个 codec 实现 + 1 个装配扩展。
 | `Controllers/UserController.cs` | 5 个导入端点 + 1 个导出端点 |
 | `Controllers/SysLogController.cs` | 1 个导出端点 |
 
+**修改 —— 样例宿主**
+
+| 文件 | 改动 |
+|---|---|
+| `backend/samples/MinimalHost/MinimalHost.csproj` | 加 `TenonAdmin.Excel` 的 `ProjectReference` |
+| `backend/samples/MinimalHost/Program.cs` | `AddTenonAdminExcel()` 放在 `AddTenonAdmin()` **之前**(TryAdd 语义:先注册者胜) |
+
+不接这一步,样例站点七个导入导出端点全抛 46001。**§2 的「不装卫星包部署零影响」承诺,兑现方式正是这个开关** —— 样例宿主必须演示怎么打开,否则消费者照抄 MinimalHost 会得到一套全抛 46001 的端点而不知道差在哪。
+
 **修改 —— 构建**
 
 | 文件 | 改动 |
@@ -381,6 +390,22 @@ public sealed class TemplateSpec
     public IReadOnlyDictionary<string, IReadOnlyList<string>> DictOptions { get; set; }
         = new Dictionary<string, IReadOnlyList<string>>();
 }
+
+// —— 以下两个是 §5.1 三个 POST 的请求体(validate / error-report 收前者,commit 收后者)。
+// 它们同属 Core 契约:前端按这个形状回传改过的行,不是 G4 越界改 Core。
+
+/// <summary>回传行(重验、错误报告)。</summary>
+public sealed class ImportRowsInput
+{
+    public List<ImportRow> Rows { get; set; } = [];
+}
+
+/// <summary>提交(回传行 + 重复策略)。</summary>
+public sealed class ImportCommitInput
+{
+    public List<ImportRow> Rows { get; set; } = [];
+    public DuplicateStrategy Strategy { get; set; } = DuplicateStrategy.Skip;
+}
 ```
 
 ### 4.4 `ImportRunner` 的分步(每步 `protected virtual`)
@@ -593,7 +618,7 @@ G1 只加接口和 DTO,`TenonAdmin.Core.csproj` 一行不改。`MiniExcel` / `Do
 **验收**:`dotnet build` 绿;单测层面能跑通"一批行 → 预览 → 提交"。
 **变异**:把 `CommitAsync` 里的"重新校验"那一步注释掉 → G5 里那条「篡改 Errors 仍被拦」必须红。
 
-### - [ ] G4 · 端点 + 菜单种子 + `gen:api`
+### - [x] G4 · 端点 + 菜单种子 + `gen:api`
 **改**:`UserController`(6 个端点)、`SysLogController`(1 个)、`DefaultMenuSeed.cs`(6 行)、两个模板各跑一次 `npm run gen:api`(需后端在跑)。
 **验收**:`dotnet test --filter "FullyQualifiedName~PermissionCodeConsistency"` 绿;起 MinimalHost 用 curl 真打一遍 7 个端点(带 Bearer),xlsx 三个要能下到真文件并打开;两个 `schema.d.ts` 都已更新。
 **变异**:把 §6.2 里任意一行菜单种子删掉 → `PermissionCodeConsistencyTests` 的反向锁必须红。
@@ -673,6 +698,9 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 ---
 
 ## 12. 轮次日志
+
+### 第 4 轮 — G4 端点 + 菜单种子 + gen:api(2026-07-25)
+提交 `feat(excel): wire import/export endpoints, menu seeds, and OpenAPI schemas`。**改**:`UserController` 六端点(template ActiveSession;preview/validate/error-report/commit RolePermission;export+OperationLog)+ `SysLogController` op/export + `DefaultMenuSeed` Id 126–131 六行(照抄 §6.2)+ `ImportRowsInput`/`ImportCommitInput` + MinimalHost 引卫星包并 `AddTenonAdminExcel()` + 两模板 `schema.d.ts` gen:api。测试:`Export_ReturnsXlsxStream_NotResultEnvelope`(§5.2:非信封、spreadsheet Content-Type、`filename*=UTF-8''`、body 以 PK 开头)。**验收**:`PermissionCodeConsistency` 2/2 绿;MinimalHost curl 七端点均 200(template 3347B / error-report 4967B / user-export 5359B / op-export 5260B,均含 RFC 5987);preview/validate/commit 信封 code=0(commit inserted=1);两模板 schema 含七条路径;全量 `dotnet test` 327/327 绿(G3 基线 326+1)。**变异**:删 §6.2 Id=131 菜单种子 → 反向锁红(`GET:/api/v1/sys/log/op/export` 既无种子也未登记 KnownUnseededEndpoints) → 改回绿。**台账回填(两处是台账自己漏写,不是实现越界)**:§4.3 补 `ImportRowsInput`/`ImportCommitInput`(§5.1 三个 POST 的请求体,原 DTO 清单没写);§3.2 补「修改 —— 样例宿主」表(MinimalHost 引卫星包 + `AddTenonAdminExcel()` 前置,§2 的「不装卫星包零影响」承诺就靠这个开关兑现)。G5 及以后未碰。
 
 ### 第 3 轮 — G3 DictTextResolver + ImportRunner + 三个 Profile(2026-07-25)
 提交 `feat(excel): add ImportRunner, DictTextResolver, and user/op-log profiles`。**改**:`Services/ImportExport/` 五文件(`DictTextResolver` over `IDictService`、`ImportRunner` 分步 virtual 编排含 Commit 重校验、`UserImportProfile`/`UserExportProfile`/`OpLogExportProfile`)+ `ServicesSetup` TryAdd 五件 + `IUserService.ExportAsync`/`UserService.BuildListQuery` 抽取(坑 1,不改 PageAsync 签名)+ `ILogService.ExportOpLogsAsync`/`LogService.BuildOpListQuery` + `TenonAdminSetup` 注册 `options.Excel` 单例;`UserImportProfile.CommitRowAsync` 只走 `IUserService.AddAsync`/`UpdateAsync`(坑 5)。测试:`ImportExportTests` 两条(坑 6 篡改 Errors / 坑 1 导出不截断 200)。**验收**:`dotnet build -c Release` 绿(0 error);全量 `dotnet test` 326/326 绿(G2 基线 324+2)。**变异**:①注释 `CommitAsync` 里 `ValidateAllAsync` → `CommitAsync_TamperedErrors_StillBlocked` 红(`Assert.Equal() Failure: Expected: 0 Actual: 1` on Inserted) → 改回绿;②`ExportAsync` 改走 `PageAsync(Size=50000)` → `ExportAsync_NotTruncatedAt200` 红(`导出不得被 200 截断,实际 200`) → 改回绿。G4 及以后未碰。

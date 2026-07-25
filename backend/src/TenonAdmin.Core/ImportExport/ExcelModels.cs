@@ -104,3 +104,16 @@ public sealed class TemplateSpec
     public IReadOnlyDictionary<string, IReadOnlyList<string>> DictOptions { get; set; }
         = new Dictionary<string, IReadOnlyList<string>>();
 }
+
+/// <summary>导入重验 / 错误报告入参(excel-ledger §5.1):前端改过的行原样带回。</summary>
+public sealed class ImportRowsInput
+{
+    public List<ImportRow> Rows { get; set; } = [];
+}
+
+/// <summary>导入提交入参:行数据 + 重复策略(0=Skip / 1=Overwrite / 2=Error)。</summary>
+public sealed class ImportCommitInput
+{
+    public List<ImportRow> Rows { get; set; } = [];
+    public DuplicateStrategy Strategy { get; set; } = DuplicateStrategy.Skip;
+}
