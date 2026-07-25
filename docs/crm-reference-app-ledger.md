@@ -1,7 +1,7 @@
 # 参考应用执行台账 · `tenon-example`(多机构数据范围 · 面向企业评估者)
 
 > **来源**:2026-07-24 grilling 定向。全部方向决策见 §1,grilling 已钉死,执行期不回炉。
-> **当前状态**:P0 已完成;第二轮 dogfood 抓到的 launch-profile 坑已随 `v0.3.2` 发布,`tenon-example` 已升级并采用正式修复(不再靠环境变量绕过);P1(CRM 实体 + 后端)、P2(种子数据)、P3(前端页)均已完成——头条(同一菜单、三个账号分别看到 214/128/42 行,跨范围不可见)已用真实浏览器登录验证过。**P4 已完成并上线**:用户提供服务器信息并明确授权替换,`tenon-example` 已经 `docker compose` 部署上线,`tenonadmin.52moyu.net` 的宿主 Caddy 已切到新栈(旧内核 demo 栈已备份并停止,未删除,一条命令可回滚)。第三轮 dogfood 又抓到一个模板坑(见下)。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
+> **当前状态**:P0 已完成;第二轮 dogfood 抓到的 launch-profile 坑已随 `v0.3.2` 发布,`tenon-example` 已升级并采用正式修复(不再靠环境变量绕过);P1(CRM 实体 + 后端)、P2(种子数据)、P3(前端页)均已完成——头条(同一菜单、三个账号分别看到 214/128/42 行,跨范围不可见)已用真实浏览器登录验证过。**P4 已完成并上线**:用户提供服务器信息并明确授权替换,`tenon-example` 已经 `docker compose` 部署上线,`tenonadmin.52moyu.net` 的宿主 Caddy 已切到新栈(旧内核 demo 栈已备份并停止,未删除,一条命令可回滚)。第三轮 dogfood 又抓到一个模板坑(见下)。**上线后用户 grilling 纠偏**:CRM-only 的登录体验不对——demo 应该展示内核出厂即带的完整后台(组织/用户/角色/菜单/字典/配置/日志/文件)再叠加 CRM,不是只有 CRM 一个菜单;已修:总部管理员额外拿到内核「系统」模块的完整授权(真实角色授权,非 superAdmin 绕过),`superAdmin` 密码转为公开的第四试用账号,清掉了模板遗留的 `SampleDoc` 空表,已重新验证并重新上线。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
 > **目标**:给「中小团队 / 企业内部后台」这个人群一个能信、能 dogfood 的证据 —— 一个独立开源的 CRM-lite 参考应用,吃**已发布的 NuGet 包**、degit `web/`、部署上线,头条是**多机构数据范围当场生效**。
 > **驱动方式**:仿 `docs/refinement-ledger.md` —— 逐条执行、每条独立英文 conventional commit、可断点续跑;用 `/loop` 或 `/goal` 逐轮推进。
 > **执行协议**:本文件的 P0–P4 是阶段门,不是跨仓细任务清单。P0 在 `tenon-example` 首个提交中创建 app 自己的 ledger,把 P1–P4 拆成可逐条勾选的实现任务;实现提交与勾选只发生在新仓。每个阶段验收通过后,再在 `tenon-admin` 用单独 docs 提交更新对应状态与证据链接。P5 的回流项继续在本仓执行。
@@ -91,6 +91,13 @@
 - 公开只读:`TenonAdmin:DemoMode` 通过服务器本地的 `docker-compose.override.yml`(未提交,与旧栈同款约定)开启,已针对**真实上线环境**(非本地)复测:读接口 200,`POST .../customer/add` 返回 `41002`。
 - 首屏引导与截图:README「CRM Module」小节的账号表、三张截图、demo mode 说明均已随部署更新为指向真实 URL;截图仍是本地那一轮拍的(渲染结果与生产字节一致,未重拍)。
 - 未做:没有另建一个"2 分钟发现路径"专用首屏横幅(访客直接看 README 账号表即可);没有做真实回滚演练;没有把共享账号的密码/锁定状态重置做成自动化(种子本身幂等,够用)。
+
+### P4 之后的用户 grilling 纠偏:demo 得是「内核全功能 + CRM」,不是「CRM-only」
+- **状态**:已完成(2026-07-25)。`tenon-example` 提交见其自身 `docs/app-ledger.md`「Correction」章节。
+- 用户实测上线后的 demo,反馈三个试用账号登录后只看到一个 CRM 菜单,不符合预期——demo 应该是内核出厂即带的完整后台(组织/用户/角色/菜单/字典/配置/日志/文件)基础上叠加 CRM,不是只有 CRM。`/grill-me` 走完整个流程(3 个并行 Explore agent 定位根因 → 4 问 AskUserQuestion 钉死方案 → 写 plan → 用户批准)。
+- 根因不是渲染 bug,是种子缺口:内核自带「系统」模块(ModuleId=1)出厂即含完整后台菜单树,但三个 CRM 试用角色只被授予了 CRM 自己的 3 个按钮权限,前端门户按"当前用户菜单授权"算可见模块,零授权即算不出第二个模块,选择页自然不出现。
+- 拍板结果:只给**总部管理员**追加系统模块的完整授权(全按钮,含增删改,真授权非 superAdmin 绕过);华南区域经理/深圳专员保持 CRM-only;`superAdmin` 密码(部署时已固定)转为公开的第四试用账号;模板遗留的 `SampleDoc` 空模块删除。
+- 验证:总部管理员登录后 `/module` 选择页出现「系统」+「客户管理」两个应用,进入系统模块能看到组织/用户/角色/菜单/字典/配置/日志/文件全树且增删改按钮均可见可用(本地 DemoMode 关闭,真实生效,非绕过);华南/深圳两号复测无回归(128/42 不变);已重新部署上线并对生产域名复测。
 
 ### 第三轮 dogfood 发现:模板 Dockerfile 对连字符项目名坏掉
 - 部署 `tenon-example` 时发现:模板生成的 `Dockerfile` 里 `dotnet publish TenonApp.csproj` / `ENTRYPOINT ["dotnet","TenonApp.dll"]` 会被 `dotnet new` 替换,但**连字符名字在文件内容替换里被安全化成下划线**(`tenon-example` → `tenon_example`),文件名替换却用字面值(`tenon-example.csproj`)——两者对不上,`docker build` 直接找不到文件。用 `dotnet new tenon-app --output hy-test` 百分百复现。
