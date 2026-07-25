@@ -217,6 +217,72 @@ public class ImportExportTests
         Assert.False(await users.AsQueryable().AnyAsync(u => u.Account == "dict-import-bad"));
     }
 
+    /// <summary>
+    /// 向导真实链路:Preview → 把**返回的行**原样回传 Validate → Commit。
+    /// Preview 会把字典 label 就地换成 value 再返回,所以后两步拿到的是 value 而不是 label;
+    /// 这一步必须幂等,否则任何带字典列的档案在预览通过后都会在「重新校验」和「提交」上被判 46006。
+    /// <para>
+    /// 上面那条 <see cref="Dict_Bidirectional_ExportLabel_ImportValue_RejectsUnknown"/> 抓不到这个 ——
+    /// 它每次都手工造带 label 的行,永远走不到第二遍。缺陷是浏览器实走向导时发现的。
+    /// </para>
+    /// 变异:去掉 ImportRunner 里「raw 已是合法字典 value 就幂等接受」那一段 → 本条红(Gender 报 46006)。
+    /// </summary>
+    [Fact]
+    public async Task PreviewRows_FedBackTo_ValidateAndCommit_AreIdempotentOnDictColumns()
+    {
+        using var f = new AdminAppFactory { Overrides = UseRealExcelCodecs };
+        using var scope = f.Services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var runner = sp.GetRequiredService<IImportRunner>();
+        var profile = sp.GetRequiredService<UserImportProfile>();
+        var users = sp.GetRequiredService<IRepository<SysUser>>();
+        var writer = new MiniExcelWriter();
+
+        // 造一份和用户真上传等价的 xlsx:性别写 label「男」
+        await using var sheet = await writer.WriteAsync(new ExportSheet
+        {
+            SheetName = "数据",
+            Columns =
+            [
+                new ExportColumn { Key = "Account", Title = "登录账号" },
+                new ExportColumn { Key = "Name", Title = "姓名" },
+                new ExportColumn { Key = "Gender", Title = "性别" },
+                new ExportColumn { Key = "OrgName", Title = "所属机构" },
+            ],
+            Rows =
+            [
+                new Dictionary<string, object?>
+                {
+                    ["Account"] = "rt-dict-1", ["Name"] = "往返一", ["Gender"] = "男", ["OrgName"] = "技术部",
+                },
+            ],
+        });
+        using var upload = new MemoryStream();
+        await sheet.CopyToAsync(upload);
+        upload.Position = 0;
+
+        var preview = await runner.PreviewAsync(upload, null, profile);
+        Assert.Empty(preview.ColumnErrors);
+        Assert.Equal(0, preview.ErrorRows);
+        // 预览已把 label 换成 value,前端拿到并回传的就是这个
+        Assert.Equal("1", preview.Rows[0].Cells["Gender"]);
+
+        // 第二遍:原样回传(前端「重新校验」)
+        var again = await runner.ValidateAsync(preview.Rows, profile);
+        Assert.Equal(0, again.ErrorRows);
+        Assert.DoesNotContain(again.Rows.SelectMany(r => r.Errors), e => e.Code == ErrorCode.ImportCellDictInvalid);
+
+        // 第三遍:提交(坑 6 会再全量校验一次)
+        var commit = await runner.CommitAsync(again.Rows, profile, DuplicateStrategy.Skip);
+        Assert.Equal(1, commit.Inserted);
+        Assert.Equal("1", (await users.AsQueryable().FirstAsync(u => u.Account == "rt-dict-1")).Gender);
+
+        // 幂等不等于放行垃圾:非法值仍要被拦
+        var junk = await runner.ValidateAsync(
+            [Row(1, "rt-dict-junk", "往返坏", gender: "9")], profile);
+        Assert.Contains(junk.Rows.SelectMany(r => r.Errors), e => e.Code == ErrorCode.ImportCellDictInvalid);
+    }
+
     // ── 清单 4:按名查外键 ─────────────────────────────────────────────────
 
     /// <summary>

@@ -200,6 +200,17 @@ public class ImportRunner(
                 {
                     var value = await dict.ToValueAsync(dtc, raw, cancellationToken);
                     if (value is null)
+                    {
+                        // 本步是**幂等**的:预览已把 label 就地换成 value 并回给前端,前端改完错原样送回,
+                        // 重验/提交会再走一遍这里 —— 此时 raw 已经是 value 而不是 label。
+                        // 不认这种情况的话,任何字典列在预览通过后都会在「重新校验」和「提交」上被判 46006,
+                        // 即整条向导对带字典列的档案完全不可用(浏览器实走发现,单测因手工造行而漏掉)。
+                        var items = await dict.GetItemsAsync(dtc, cancellationToken);
+                        if (items.Any(kv => string.Equals(kv.Key, raw.Trim(), StringComparison.OrdinalIgnoreCase)))
+                            value = raw.Trim();
+                    }
+
+                    if (value is null)
                         row.Errors.Add(new CellError(col.Key, ErrorCode.ImportCellDictInvalid));
                     else
                         row.Cells[col.Key] = value;   // 就地 label→value,Commit 拿到的已是字典 value

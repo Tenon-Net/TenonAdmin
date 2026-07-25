@@ -2,6 +2,7 @@
 // 操作日志 = 只读 ProTable + 详情抽屉。后端无 op/{id},分页项已含全字段 → 抽屉直接用行数据。
 // 搜索区要能答审计的三个问题:谁(操作人)、什么时候(时间范围)、干了什么(操作名/路径/成败)。
 // paramJson 走 CodeBlock(json 高亮 + 复制;美化仍是 parse→stringify,失败原样);异常堆栈保持危险色 <pre>——堆栈非代码,高亮无意义。
+// 导出(G6):ExportColumnsModal 选列 + 当前筛选条件。
 import { h, ref } from 'vue'
 import {
   NButton, NTag, NDrawer, NDrawerContent, NDescriptions, NDescriptionsItem, useMessage,
@@ -11,15 +12,66 @@ import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pr
 import AppIcon from '@/components/AppIcon.vue'
 import CodeBlock from '@/components/CodeBlock/index.vue'
 import UserSelect from '@/components/UserSelect/index.vue'
+import ExportColumnsModal from '@/components/ExportColumnsModal/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { logApi } from '@/api'
 import { translateError } from '@/utils/error'
-import type { SysOpLog } from '@/types/api'
+import type { ExportColumnDef, SysOpLog } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
 const tableRef = ref<ProTableInst<SysOpLog>>()
+
+const exportShow = ref(false)
+const exporting = ref(false)
+
+/** 与后端 OpLogExportProfile.Columns 对齐。 */
+const opExportColumns: ExportColumnDef[] = [
+  { key: 'Title', title: '操作名' },
+  { key: 'HttpMethod', title: '方法' },
+  { key: 'Path', title: '路径' },
+  { key: 'ResultCode', title: '结果码' },
+  { key: 'Success', title: '成功' },
+  { key: 'OperatorName', title: '操作人' },
+  { key: 'Ip', title: 'IP' },
+  { key: 'ElapsedMs', title: '耗时(ms)' },
+  { key: 'CreateTime', title: '时间' },
+  { key: 'ExceptionMessage', title: '异常信息', defaultSelected: false },
+]
+
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+async function onExport(keys: string[]) {
+  const p = tableRef.value?.params ?? {}
+  exporting.value = true
+  try {
+    const blob = await logApi.opExport({
+      title: p.title || undefined,
+      success: p.success,
+      operatorId: p.operatorId != null ? Number(p.operatorId) : undefined,
+      path: p.path || undefined,
+      createTime: p.createTime ?? null,
+      columns: keys.join(','),
+    })
+    triggerDownload(blob, '操作日志导出.xlsx')
+    exportShow.value = false
+    message.success(t('export.done'))
+  } catch (e) {
+    message.error(translateError(e))
+  } finally {
+    exporting.value = false
+  }
+}
 
 const columns: ProTableColumn<SysOpLog>[] = [
   { key: 'title', title: () => t('log.opName'), search: true },
@@ -116,8 +168,18 @@ function clearLogs() {
       <n-button v-auth="'DELETE:/api/v1/sys/log/op'" type="error" secondary @click="clearLogs">
         <template #icon><AppIcon icon="ph:trash" :size="16" /></template>{{ t('log.clear') }}
       </n-button>
+      <n-button v-auth="'GET:/api/v1/sys/log/op/export'" @click="exportShow = true">
+        <template #icon><AppIcon icon="ph:download-simple" :size="16" /></template>{{ t('export.button') }}
+      </n-button>
     </template>
   </ProTable>
+
+  <ExportColumnsModal
+    v-model:show="exportShow"
+    :columns="opExportColumns"
+    :loading="exporting"
+    @confirm="onExport"
+  />
 
   <n-drawer v-model:show="showDetail" :width="560" placement="right">
     <n-drawer-content :title="t('log.detail')" closable>

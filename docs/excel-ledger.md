@@ -593,6 +593,15 @@ G1 只加接口和 DTO,`TenonAdmin.Core.csproj` 一行不改。`MiniExcel` / `Do
 **坑 10 — 元包不引卫星包。**
 `backend/src/TenonAdmin/TenonAdmin.csproj` 不动。装了 `TenonAdmin` 不等于装了 Excel,这是「可选」的定义,也是部署零影响承诺的兑现方式。
 
+**坑 11 — 字典列的 label→value 必须幂等(G6 实走发现,已修)。**
+`ImportRunner` 校验时会把字典 label 就地换成 value 写回 `row.Cells`,**预览返回给前端的已经是 value**。前端改完错原样送回,「重新校验」和「提交」会再走一遍同一段代码 —— 这次拿到的是 value 不是 label。原实现只做 `ToValueAsync(label)`,于是**任何带字典列的档案在预览通过之后,必然在重新校验和提交上被判 46006**,整条向导对用户导入根本不可用。
+现已在 `ImportRunner` 里补:`ToValueAsync` 返回 null 时,再用 `GetItemsAsync` 判断 raw 是否本身就是合法 value,是则幂等接受(非法值仍照旧拦下)。
+**为什么单测没抓到**:G5 的字典用例每次都手工造带 label 的行,永远走不到第二遍。回归用例是 `PreviewRows_FedBackTo_ValidateAndCommit_AreIdempotentOnDictColumns` —— 它把 **Preview 的输出**喂回 Validate/Commit。给自己的实体接导入时,凡有字典列都照这个形状写测试。
+
+**坑 12 — 四条前端闸门全绿 ≠ 页面能用。**
+`typecheck / lint / test / build` 都不进浏览器,**渲染期才失效的东西一个都照不出来**。G6 实走撞到的具体例子:错误格红底写成 `color-mix(in srgb, var(--n-error-color) 18%, transparent)`,而 `--n-error-color` 是 naive 组件内部变量、在那层普通 div 上未定义 → 整条声明被判无效丢弃 → **红底从未渲染过,四条闸门全绿**。用仓库自己的 `--color-danger-bg`(亮暗都有定义)。
+G7 的 antd 版同理:**别只信闸门,一定起 dev server 把向导从上传点到提交走一遍**,并核实错误格是真的有底色(读 `getComputedStyle().backgroundColor`,别只看类名挂上了)。
+
 ---
 
 ## 9. 批次(每条一个独立提交)
@@ -644,7 +653,7 @@ G1 只加接口和 DTO,`TenonAdmin.Core.csproj` 一行不改。`MiniExcel` / `Do
 15. **操作日志**:commit 与 export 后,`/api/v1/sys/log/op/page` 里查得到对应条目。
 **验收**:`dotnet test backend/TenonAdmin.slnx` 全绿,总数比现在(320)多出新增条数。
 
-### - [ ] G6 · `web/` 导入向导 + 接线
+### - [x] G6 · `web/` 导入向导 + 接线
 **新增**:`web/src/components/ImportWizard/`(`index.vue` + `README.md`)、`web/src/components/ExportColumnsModal/`。
 **改**:`web/src/api/index.ts`(userApi 加 6 个方法 + logApi 加 1 个,下载走坑 2、上传走坑 3)、`web/src/views/system/user/index.vue`(`#toolbar` 加两个按钮,`v-auth` 用 §6.2 的权限码)、`web/src/views/system/log/op/index.vue`(导出按钮)、`web/src/locales/*`、`web/COMPONENTS.md`。
 **向导四步**(`n-steps`):①上传(`n-upload`,拖拽)②列映射(左=文件表头,右=`n-select` 选目标列;自动匹配的预选上)③预览改错(**裸 `n-data-table`**,不用 ProTable —— 要可编辑单元格 + 错误高亮;错误格红底 + `n-tooltip` 显示 `translateError(code)`;顶部「只看错误行」开关;「重新校验」按钮)④结果(计数 + 失败行可回到第③步继续改 + 「下载错误报告」)。
@@ -700,6 +709,12 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 ---
 
 ## 12. 轮次日志
+
+### 第 6 轮 — G6 `web/` 导入向导 + 接线(2026-07-25)
+提交 `feat(web): add the import wizard and export column picker`。**改**:新增 `components/ImportWizard/`(590 行 `index.vue` + README,四步 `n-steps`;第③步裸 `n-data-table` + 可编辑单元格 + `NTooltip`;API 由父级经 `ImportWizardApi` 注入,组件对资源无感知)与 `components/ExportColumnsModal/`;`api/index.ts` 加 userApi 六方法 + logApi 一方法(下载走 `unwrapDownload`/坑 2,上传走 `bodySerializer`/坑 3);`views/system/user/index.vue`、`views/system/log/op/index.vue` 加按钮(`v-auth` 用 §6.2 权限码);`utils/error.ts`、两个 locale、`COMPONENTS.md`。**闸门**:`typecheck` / `lint` / `test 61/61` / `build` 四条全绿。
+**浏览器实走(维护者做,chrome-devtools 驱动 :5173 + :5100)**:上传 3 行(2 对 1 错)→ 表头 11/11 自动映射 → 预览「共 3 行,其中 1 行有错误」→ 改对机构名 → 重新校验 0 错 → 提交「新增 3 / 失败 0」→ 列表查得到三个新用户且机构正确;「只看错误行」3→1;导出弹窗按 `DefaultSelected` 预选,请求带上当前筛选(`?Account=imp-ok-1&columns=…`)。
+**实走查出两个缺陷,闸门全绿也照不出来(详见 §8 坑 11 / 坑 12)**:①**后端**字典 label→value 不幂等 → 预览通过的字典单元格在重新校验/提交上必被判 46006,向导对用户导入完全不可用;修 `ImportRunner` 并补 `PreviewRows_FedBackTo_ValidateAndCommit_AreIdempotentOnDictColumns`,**变异**(去掉幂等接受那段)→ 该用例红(`Assert.Equal() Failure`)→ 改回绿。②**前端**错误格红底用了未定义的 `--n-error-color`,`color-mix()` 整条失效、红底从未渲染;改用 `--color-danger-bg` 后实测 `rgb(255, 236, 237)`。
+**遗留(未修,记账)**:`web/src/utils/error.ts` 里手抄了一张 `数值码 → msgKey` 表(46001–46013 等)。这是 §4.3「`CellError` 只带码不带文案」的必然结果 —— 信封有 `msgKey`,单元格错误没有,前端只能自己查。但**没有任何闸门钉住这张表与后端 `ErrorCode` 枚举一致**:改了码值或 MsgKey,向导会静默显示错文案。G7 按零共享约定会再抄一份(两份都得改)。要不要加一条一致性测试(比对 OpenAPI 或后端导出的码表),留给 G8 或后续批次裁定。G7 及以后未碰。
 
 ### 第 5 轮 — G5 后端测试(2026-07-25)
 提交 `test(excel): cover import/export domain, data-scope export, and replaceability`。**改**:`ReplaceabilityTests` 补五件套(IExcelReader/Writer/TemplateBuilder/IImportRunner/IDictTextResolver);`ImportExportTests` 补字典双向/外键/不建超管/三种重复策略/部分提交/导入上限/导出上限/演示模式/操作日志(G3–G4 已有的 2/7/13 与 200 截断保留);新建 `ImportExportScopeTests`(清单 5 越权机构 HTTP 真账号 + 清单 12 三账号数据范围导出)。清单 12 用 `SampleDoc`(DataEntity)经真登录管道列再写 xlsx——`sys_user` 不走 IOrgScoped,招牌能力挂业务表。**验收**:全量 `dotnet test backend/TenonAdmin.slnx` **343/343 绿**(G4 基线 327+16)。**变异**:①`IsOrgInScope` 恒 true → `Import_OrgOutOfScope_Rejected_And_NotInserted` 红(`Expected: 0 Actual: 1` on inserted) → 改回绿;②注释 `CommitAsync` 里 `ValidateAllAsync` → `CommitAsync_TamperedErrors_StillBlocked` 红(`Expected: 0 Actual: 1` on Inserted) → 改回绿;③`IOrgScoped` 过滤器改 `e => true` → `Export_ThreeAccounts_DifferentDataScopes_SeeDifferentRows` 红(`Expected: 3 Actual: 6`) → 改回绿。
