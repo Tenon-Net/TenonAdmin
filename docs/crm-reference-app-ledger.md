@@ -1,7 +1,7 @@
 # 参考应用执行台账 · `tenon-example`(多机构数据范围 · 面向企业评估者)
 
 > **来源**:2026-07-24 grilling 定向。全部方向决策见 §1,grilling 已钉死,执行期不回炉。
-> **当前状态**:P0 已完成,`tenon-example` 已升到 `0.3.1` 并全门重跑通过;第二轮 dogfood 抓到一个更狠的坑(模板不带 launch profile,消费者第一条 `dotnet run` 直接启动失败),已在本仓修复待发版;P1 未开始。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
+> **当前状态**:P0 已完成;第二轮 dogfood 抓到的 launch-profile 坑已随 `v0.3.2` 发布,`tenon-example` 已升级并采用正式修复(不再靠环境变量绕过);P1 即将开始。`tenon-example` 是独立公开**参考应用仓(单仓多模块,CRM 为首个旗舰模块)**,不在本仓内;本文件只维护战略里程碑与 dogfood 回流,新仓由其 README / ledger 维护实现细节。
 > **目标**:给「中小团队 / 企业内部后台」这个人群一个能信、能 dogfood 的证据 —— 一个独立开源的 CRM-lite 参考应用,吃**已发布的 NuGet 包**、degit `web/`、部署上线,头条是**多机构数据范围当场生效**。
 > **驱动方式**:仿 `docs/refinement-ledger.md` —— 逐条执行、每条独立英文 conventional commit、可断点续跑;用 `/loop` 或 `/goal` 逐轮推进。
 > **执行协议**:本文件的 P0–P4 是阶段门,不是跨仓细任务清单。P0 在 `tenon-example` 首个提交中创建 app 自己的 ledger,把 P1–P4 拆成可逐条勾选的实现任务;实现提交与勾选只发生在新仓。每个阶段验收通过后,再在 `tenon-admin` 用单独 docs 提交更新对应状态与证据链接。P5 的回流项继续在本仓执行。
@@ -56,7 +56,7 @@
 - **坑单回流**:`https://github.com/Tenon-Net/TenonAdmin/issues/22` 已由 commit `172605f` 修复并关闭,修复随 `https://github.com/Tenon-Net/TenonAdmin/releases/tag/v0.3.1` 发布;CRM 业务实现未开始。
 - **发布后回验**:[x] 已完成(2026-07-24)。`tenon-example` 提交 `251cf6a` 把包引用与 `web/` 统一升到 `0.3.1` / `v0.3.1`(tag `v0.3.1` = commit `bc7a1ee`),restore、Release build(0 warning / 0 error)、SQLite 首启(25 实体 / 181 行种子)、真实登录(envelope code 0)、`/health` / `/health/ready` / `/openapi/v1.json`、`npm ci`、`npm audit`、`gen:api`(产物与 P0 契约逐字节一致)、test(14 文件 50 用例)、typecheck、lint、生产构建全绿;空目录用**已发布的** `TenonAdmin.Templates@0.3.1` 复现了 install → create → run 全路径。证据见 `https://github.com/Tenon-Net/tenon-example/blob/dev/docs/v0.3.1-revalidation.md`。`0.3.0` 那五条坑已全部关闭。
 - **第二轮坑单(2026-07-24,比第一轮更狠)**:
-  1. **模板不带 launch profile → 消费者第一条 `dotnet run` 直接启动失败。** 生成物没有 `Properties/launchSettings.json`,环境落到 `Production`,`EnableCodeFirstInProduction` 默认 false → CodeFirst 跳过 → 种子表不存在 → `InvalidOperationException`,只留一个空 `admin.db`。模板 README 却写着"零配置 SQLite 自动建表 + 种子"。三种方式复现(消费者仓 `dotnet run` / `dotnet run -c Release` / 空目录用发布包生成的干净工程),内核自己的 `backend/samples/MinimalHost` **有**这个 profile,所以缺口在模板。**这正是 P0 存在的理由**:`template-smoke` 只 build 不 run,7 个 CI 检查全绿也照样漏。已在本仓修复:模板补 `Properties/launchSettings.json`(钉 `ASPNETCORE_ENVIRONMENT=Development`)+ 模板 README 说明 + `smoke-test.ps1` 加"逐字 `dotnet run` 必须能出 `/health`"这一道回归闸。**修复要随下一个发布版才到消费者手里;发版需另获授权。**
+  1. **模板不带 launch profile → 消费者第一条 `dotnet run` 直接启动失败。** 生成物没有 `Properties/launchSettings.json`,环境落到 `Production`,`EnableCodeFirstInProduction` 默认 false → CodeFirst 跳过 → 种子表不存在 → `InvalidOperationException`,只留一个空 `admin.db`。模板 README 却写着"零配置 SQLite 自动建表 + 种子"。三种方式复现(消费者仓 `dotnet run` / `dotnet run -c Release` / 空目录用发布包生成的干净工程),内核自己的 `backend/samples/MinimalHost` **有**这个 profile,所以缺口在模板。**这正是 P0 存在的理由**:`template-smoke` 只 build 不 run,7 个 CI 检查全绿也照样漏。修复已随 `v0.3.2`(commit `14a5b35`)发布:模板补 `Properties/launchSettings.json`(钉 `ASPNETCORE_ENVIRONMENT=Development`)+ 模板 README 说明 + `smoke-test.ps1` 加"逐字 `dotnet run` 必须能出 `/health`"这一道回归闸(拿掉 profile 重跑验证过确实会红)。`tenon-example` 已升到 `0.3.2`,用同一份 `Properties/launchSettings.json` 替掉了 README 里的环境变量绕行写法,`dotnet run` 原样能起。
   2. `npm audit` 报 7 条 high,全在构建期工具链(`brace-expansion`→`minimatch`→`@redocly/openapi-core`/`openapi-typescript`,以及 `postcss`),不进浏览器产物;公告晚于 `0.3.1`,且 `brace-expansion` 链只能靠破坏性升 `vue-tsc@3` 才断得掉,故本轮不动发布钉死的依赖。
 
 ### P1 · CRM 实体 + 后端(头条地基)
