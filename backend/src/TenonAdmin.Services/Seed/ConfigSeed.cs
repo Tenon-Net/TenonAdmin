@@ -56,5 +56,9 @@ internal sealed class ConfigSeed : ISeedData<SysConfig>
         // 上传约束(GroupCode=upload):FileService.UploadAsync 强制执行,改值即时生效。默认须与 AdminUploadOptions 默认一致。
         new SysConfig { Id = 11, ConfigKey = FileService.KEY_MAX_SIZE, ConfigValue = "20", Name = "单文件大小上限(MB)", GroupCode = FileService.GROUP, Sort = 40, Remark = "超过即拒收上传" },
         new SysConfig { Id = 12, ConfigKey = FileService.KEY_ALLOWED_EXTS, ConfigValue = ".jpg,.png,.pdf,.xlsx,.docx,.zip", Name = "允许的文件后缀", GroupCode = FileService.GROUP, Sort = 41, Remark = "逗号分隔的后缀白名单(含点);留空则回退到 Options 默认" },
+
+        // 定时任务(GroupCode=job):运行期可调旋钮;结构性参数(心跳/租约/围栏)留 TenonAdmin:Jobs 节(scheduling-ledger §6)。
+        new SysConfig { Id = 27, ConfigKey = JobConfigKeys.KEY_LOG_RETENTION_DAYS, ConfigValue = "30", Name = "执行记录保留天数", GroupCode = JobConfigKeys.GROUP, Sort = 60, Remark = "JobLogCleanupJob 按此清理 sys_job_log;≤0 不清理" },
+        new SysConfig { Id = 28, ConfigKey = JobConfigKeys.KEY_ALERT_EMAILS, ConfigValue = "", Name = "任务告警收件人", GroupCode = JobConfigKeys.GROUP, Sort = 61, Remark = "连败告警邮件的全局兜底收件人(逗号分隔);任务行自带收件人时优先任务行" },
     ];
 }

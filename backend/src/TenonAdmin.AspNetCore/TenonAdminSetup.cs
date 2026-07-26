@@ -58,6 +58,11 @@ public static class TenonAdminSetup
         services.AddSingleton(options.ExternalAuth);   // 外部登录 / SSO 配置(内置 OIDC provider 列表 + 回调基址,见批次 D)
         services.AddSingleton(options.Realtime);   // 实时通知配置(SignalR 开关/Hub 路径;MapTenonAdmin 读它决定是否 MapHub)
         services.AddSingleton(options.Excel);   // 导入/导出行数与文件大小上限(excel-ledger §6.1;ImportRunner/ExportAsync 注入)
+        // 定时任务(scheduling-ledger §6):租约必须容得下两次心跳丢失,否则一次 GC 停顿/DB 抖动就丢主,主备来回震荡。
+        if (options.Jobs.LeaseSeconds <= options.Jobs.HeartbeatSeconds * 2)
+            throw new InvalidOperationException(
+                $"TenonAdmin:Jobs 配置无效:LeaseSeconds({options.Jobs.LeaseSeconds})必须大于 2×HeartbeatSeconds({options.Jobs.HeartbeatSeconds})。");
+        services.AddSingleton(options.Jobs);
 
         // ── 雪花机器号(§12):多副本同号 = 同毫秒发号撞主键。这是数据损坏级的问题,而它今天静默发生 ──
         //   没有可靠的"我是不是多副本"信号,但选了 Redis 缓存基本等同于宣告多实例意图

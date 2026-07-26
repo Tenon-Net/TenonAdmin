@@ -22,7 +22,7 @@
 
 ## 0.1 当前状态与换机接手(2026-07-26)
 
-**施工中。已完成:G1(Core 契约 + Cron 引擎 + 向量测试,含三视角对抗验证与 4 处修正,见 §17 第 1 轮)。** 下一条:G2(实体四张 + 种子 + Options 接线)。接手从 §14 对应批次开工,施工期在本节滚动更新状态。
+**施工中。已完成:G1(Core 契约 + Cron 引擎,§17 第 1 轮)、G2(实体四张 + 种子 + Options 接线,§17 第 2 轮)。** 下一条:G3(调度引擎)。接手从 §14 对应批次开工,施工期在本节滚动更新状态。
 
 ---
 
@@ -576,7 +576,7 @@ API 副本两种姿态(§10.1 之上的部署选择):①什么都不配 —— A
 | 批 | 内容 | 验收判据 | 变异判据 |
 |---|---|---|---|
 | ✅G1 | Core:`IAdminJob`/`JobExecutionContext`/`IJobHandlerResolver`/`CronExpression`/`AdminJobsOptions`/ErrorCode 47xxx | §4.4 向量全绿(70 例);`Normalize` 5→6 段 | 删 `31W` 不跨月约束 → 3 向量红(已实测) |
-| G2 | 实体四张 + `DefaultJobSeed` + ConfigSeed 27/28 + `TenonAdminOptions.Jobs` 接线 | sqlite 全新建库启动成功;SeedIdRange 绿 | 把种子 Id 改 1001 → SeedIdRange 红 |
+| ✅G2 | 实体四张 + `DefaultJobSeed` + ConfigSeed 27/28 + `TenonAdminOptions.Jobs` 接线 | sqlite 全新建库启动成功;SeedIdRange 绿 | 把种子 Id 改 1001 → SeedIdRange 红(已实测) |
 | G3 | 引擎:选主/循环/执行器/registry/三个内置处理器/`JobChangedEvent`/DI | §12 FakeTimeProvider + 选主 + CAS 测试全绿 | 删 CAS 的 `AND NextRunTime=@expected` → 双发测试红 |
 | G4 | `JobController` 13 端点 + 菜单种子 132–146 + `RecycleBin` 登记 + `gen:api` | PermissionCodeConsistency/OperationLogCoverage 绿 | 摘掉任一 [OperationLog] → 红 |
 | G5 | HTTP 级测试 + Replaceability 追加 + TestHost `SampleJob` + backend-ci TEST_FILTER | 47xxx 各码有用例;SqlServer 子集含 Election/Claim | 前置注册假 `IJobService` 不生效 → 六件套红 |
@@ -633,3 +633,9 @@ bash scripts/smoke-multi-replica.sh http://localhost:8080                  # 含
 - 落码:`Core/Scheduling/{IAdminJob,JobExecutionContext,IJobHandlerResolver,JobFireMode,CronExpression}.cs`、`Core/Options/AdminJobsOptions.cs`、ErrorCode 47001–47014、四份语言包 `error.job.*` 14 键(locale 闸门只查叶子段,`cronInvalid` 等 10 个新叶子不随批就红——i18n 错误键因此从 G7/G8 前置到 G1,页面键仍留 G7/G8)。向量测试 70 例全绿;31W 变异判据实测 3 红后还原。
 - **三视角对抗验证**(TimeCrontab 源码+双侧探针实跑 / 边角攻击 130+ 输入 / 规格逐条核对)抓出并已修 4 个真缺陷:①周段带步长的环绕区间在 0..7 八格轮上数错相位(`6-1/2` 给出{六,日},应为{六,一})→ 改 7 格周环专用解析;②4 年搜索上界会把 `SUN#5 2月`(下次 2032-02-29)误判无解 → 任务被错置 Completed,改 100 年,原稿「TimeCrontab 同款上界」说法核实为假(它无界);③after 逼近 DateTime.MaxValue 时抛 ArgumentOutOfRangeException → 收口返回 null;④GetNextOccurrences 大 count 预分配 OOM → count 上限 1000。另:CRLF 计入空白分隔、归一化统一大写。
 - 验证同时钉死 4 处对照语义并回写 §4.1(步长锚点=段最小值明示豁免、7≡0 全位置、孤立 L=SAT、L-n 仲裁不适用),§16 增两行(枚举混用 L/W/#、全名月/周),§6 参数名 `ct`→`cancellationToken`、§9.1 种子注册 Singleton→Transient 两处笔误订正。
+
+### 第 2 轮 — G2 实体四张 + 种子 + Options 接线(2026-07-26,提交即本条对应的 feat(services) 提交)
+
+- 落码:`Entities/{JobEnums,SysJob,SysJobLog,SysJobLock,SysJobNode}.cs`(§3 逐列;job 枚举六件合一文件)、`Jobs/JobConfigKeys.cs`(sys_config 键常量,照 FileService.KEY_* 成法)、`Seed/DefaultJobSeed.cs`(Id=1、SyncOnUpgrade=false 理由留档)、ConfigSeed 追加 Id 27/28(GroupCode="job")、`TenonAdminOptions.Jobs` + `TenonAdminSetup` AddSingleton 与 LeaseSeconds>2×HeartbeatSeconds 绑定校验、ServicesSetup 种子注册。
+- 实现期敲定两处细节:①种子行 **NextRunTime 留空**——种子编写期没有时钟;G3 的 ReloadJobs 须对「Ready 且 NextRunTime 为空」的行按触发配置补算(顺带覆盖 enable 复活路径),此约定已写进种子注释;②种子 HandlerName 暂为字面量 `"TenonAdmin.Services.JobLogCleanupJob"`,G3 落类后改 `typeof(...).FullName!`。
+- 全量 417 绿(WebApplicationFactory 即 sqlite 全新建库);变异判据实测:种子 Id 改 1001 → SeedIdRange 红,还原。

@@ -38,6 +38,9 @@ public class TenonAdminOptions
     /// <summary>实时通知配置(SignalR 推送开关/Hub 路径;默认关,开启后强退/公告即时推送,见 <see cref="AdminRealtimeOptions"/>)</summary>
     public AdminRealtimeOptions Realtime { get; set; } = new();
 
+    /// <summary>定时任务配置(本副本调度开关/心跳租约/HTTP 围栏/SQL 闸,见 <see cref="AdminJobsOptions"/>;对应 <c>TenonAdmin:Jobs</c>)</summary>
+    public AdminJobsOptions Jobs { get; set; } = new();
+
     /// <summary>演示模式:开启后仅允许 GET/HEAD/OPTIONS,其余写请求一律拒绝(41002)</summary>
     public bool DemoMode { get; set; }
 
