@@ -713,14 +713,23 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 ### 第 7 轮 — G7 `web-react/` 同款导入向导 + 接线(2026-07-25)
 提交 `feat(web-react): add the import wizard and export column picker`。**改**:新增 `ImportWizard.tsx`(四步 antd `Steps` + 裸 `Table` 可编辑预览;错误格 `background: var(--color-danger-bg)` 坑 12;API 由父级注入)+ `ExportColumnsModal.tsx`(+ 各自 `.spec.tsx`);`api/index.ts` 加 userApi 六方法 + logApi 一方法(下载走 `unwrapDownload`/坑 2,上传走 `bodySerializer`/坑 3)+ 归一 Preview/Commit;`utils/error.ts` 补数值码→msgKey 表(与 web 有意重复,坑 7);`views/system/user/index.tsx` / `log/op/index.tsx` 加按钮(`<Can code>` 用 §6.2 权限码,fetcher 截 lastQuery 带当前筛选);两个 locale 的 `import.*`/`export.*` UI 键、`COMPONENTS.md`、`types/api.ts` 导入导出 DTO。写前 `antd info Steps/Table/Modal/Upload --version 6.x`,写完 `antd lint` 清掉 v6 弃用(`Space.orientation`、`Alert.title`、受控 Upload `onChange`)。**闸门**:`typecheck` / `lint` / `test 730/730` / `build` 四条全绿(均在 `web-react/` 目录)。**浏览器实走(维护者做,chrome-devtools 驱动 :5174 + :5100)**:上传 3 行(2 对 1 错,账号前缀 `rct-` 以避开 G6 已导入的)→ 表头 11/11 自动映射 → 预览「共 3 行,其中 1 行有错误」→ **错误格底色实测 `rgb(249, 230, 234)` = `--color-danger-bg`(真渲染,不是只挂上了类名)** → 改对机构名 → 重新校验 0 错 → 提交「新增 3 / 失败 0」→ 经后端 `user/page` 核实三行确已落库、机构正确、`gender` 已是字典值 1/2;筛选 `Account=rct-ok-1` 后导出请求为 `?Account=rct-ok-1&columns=…`(带上了当前筛选);`antd lint` 四个文件均 0 issue;控制台无 `Maximum update depth exceeded`(zustand selector 没造成无限重渲染)。
 **维护者补记 —— `ImportWizard.spec.tsx` 里那条坑 12 用例是假守卫**:它断言的是 `errCell.style.background` 这个**字符串**含 `var(--color-danger-bg)`,而 jsdom 根本不解析 CSS 变量 —— **变量哪怕压根没定义,这条也照绿**,正是 G6 踩的形状。真正钉住它的是上面浏览器里读 `getComputedStyle().backgroundColor`。渲染期才失效的东西**没有单测能替代实走**(坑 12),别因为 spec 绿了就跳过点检。
+**遗留 —— 「已存在」被当成错误呈现(两个模板都有,后端是对的)**:对着**已导过一次**的库重跑向导时,预览显示「共 3 行,其中 3 行有错误」,登录账号列全部标红。查下来后端没问题 —— `CommitAsync` 把 `ImportDuplicateInDb` 排除在 `hardErrors` 之外,再按策略分流(Skip→跳过 / Overwrite→更新 / Error→失败),G5 清单 8 正钉住这个。问题在**预览端只按「有无 errors」判定并标红**,而 §6.3 明写 46010 是「Error 策略下才算错误」。于是在跳过/覆盖策略下,一批完全正常的行会被显示成必须修的错误 —— 尤其覆盖策略,用户看到满屏红却其实会被正常更新。
+**改法建议(未做)**:`ImportPreview` 把「硬错误」与「已存在」分开计数,前端对后者用警示色 + 「已存在,将按策略处理」而非错误红;或预览请求带上当前策略。属于呈现层缺陷,不影响落库正确性,故未在 G7 顺手改 —— 动它要同时改后端 DTO 和两个模板,该单独一批。
+
 **遗留(沿第 6 轮,已扩)**:前端有**两处**镜像后端档案且无任何闸门钉住 —— ①两份 `CODE_MSG_KEY`(数值码→msgKey);②两份 `userExportColumns`(导出列清单;后端没有列清单端点,两个模板只能各自硬编码)。后端一旦改码值 / MsgKey / `UserExportProfile.Columns`,四个前端文件要跟着改,漏改只会静默显示错文案或少给一列。要不要加一致性测试(比对 OpenAPI 或后端导出的码表/列表),留给 G8 或后续裁定。G8 未碰。
 
 ### 第 6 轮 — G6 `web/` 导入向导 + 接线(2026-07-25)
 提交 `feat(web): add the import wizard and export column picker`。**改**:新增 `components/ImportWizard/`(590 行 `index.vue` + README,四步 `n-steps`;第③步裸 `n-data-table` + 可编辑单元格 + `NTooltip`;API 由父级经 `ImportWizardApi` 注入,组件对资源无感知)与 `components/ExportColumnsModal/`;`api/index.ts` 加 userApi 六方法 + logApi 一方法(下载走 `unwrapDownload`/坑 2,上传走 `bodySerializer`/坑 3);`views/system/user/index.vue`、`views/system/log/op/index.vue` 加按钮(`v-auth` 用 §6.2 权限码);`utils/error.ts`、两个 locale、`COMPONENTS.md`。**闸门**:`typecheck` / `lint` / `test 61/61` / `build` 四条全绿。
 **浏览器实走(维护者做,chrome-devtools 驱动 :5173 + :5100)**:上传 3 行(2 对 1 错)→ 表头 11/11 自动映射 → 预览「共 3 行,其中 1 行有错误」→ 改对机构名 → 重新校验 0 错 → 提交「新增 3 / 失败 0」→ 列表查得到三个新用户且机构正确;「只看错误行」3→1;导出弹窗按 `DefaultSelected` 预选,请求带上当前筛选(`?Account=imp-ok-1&columns=…`)。
 **实走查出两个缺陷,闸门全绿也照不出来(详见 §8 坑 11 / 坑 12)**:①**后端**字典 label→value 不幂等 → 预览通过的字典单元格在重新校验/提交上必被判 46006,向导对用户导入完全不可用;修 `ImportRunner` 并补 `PreviewRows_FedBackTo_ValidateAndCommit_AreIdempotentOnDictColumns`,**变异**(去掉幂等接受那段)→ 该用例红(`Assert.Equal() Failure`)→ 改回绿。②**前端**错误格红底用了未定义的 `--n-error-color`,`color-mix()` 整条失效、红底从未渲染;改用 `--color-danger-bg` 后实测 `rgb(255, 236, 237)`。
-**⚠ 待办 —— `web/`(Vue)侧两个下载按钮尚未实走验证**。已验的是 `web-react/` 侧:「下载模板」实测 Blob 3349B、「下载错误报告」实测 Blob 5218B,MIME 均为 spreadsheet,`<a download="…xlsx">` 指向 `blob:`(做法:先 hook `URL.createObjectURL` 与 `HTMLAnchorElement.prototype.click`,再点按钮,读 hook 记录 —— 比翻浏览器下载目录可靠)。`web/` 侧因 chrome-devtools MCP 卡在「browser already running」而中断,**只有旁证**:`unwrapDownload` 与已验证的 React 版逐字相同,`triggerDownload` 是标准 9 行写法(在 `ImportWizard/index.vue`、`views/system/user/index.vue`、`views/system/log/op/index.vue` 各抄一份)。**旁证不算验证**。
-**复现步骤**:起 `:5100`(`dotnet run --project backend/samples/MinimalHost`)与 `web/` 的 `:5173`;若不知超管口令,删掉 `backend/samples/MinimalHost/data/admin.db` 重启后端,新口令会打印在控制台。登录 → 用户管理 → 导入 → 点「下载模板」;再随便传一份 xlsx 走到第三步点「下载错误报告」。两个都应拿到真 xlsx。
+**下载按钮实走验证(两个模板各两个按钮,四条路径全过)**。做法:先 hook `URL.createObjectURL` 与 `HTMLAnchorElement.prototype.click`,再点按钮,读 hook 记录 —— 直接证明「请求 → Blob → 触发下载」整条通,比翻浏览器下载目录可靠。结果:
+
+| 模板 | 下载模板 | 下载错误报告 |
+|---|---|---|
+| `web/`(Vue) | Blob 3348B | Blob 5218B |
+| `web-react/` | Blob 3349B | Blob 5218B |
+
+四者 MIME 均为 spreadsheet,`<a download="用户导入模板.xlsx" / "用户导入错误报告.xlsx">` 均指向 `blob:`。(模板差 1 字节是 xlsx 内嵌时间戳,无意义。)
 
 **遗留(未修,记账)**:`web/src/utils/error.ts` 里手抄了一张 `数值码 → msgKey` 表(46001–46013 等)。这是 §4.3「`CellError` 只带码不带文案」的必然结果 —— 信封有 `msgKey`,单元格错误没有,前端只能自己查。但**没有任何闸门钉住这张表与后端 `ErrorCode` 枚举一致**:改了码值或 MsgKey,向导会静默显示错文案。G7 按零共享约定会再抄一份(两份都得改)。要不要加一条一致性测试(比对 OpenAPI 或后端导出的码表),留给 G8 或后续批次裁定。G7 及以后未碰。
 
