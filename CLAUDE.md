@@ -127,7 +127,7 @@ The full SqlServer suite ran **40–60 min** (measured 2026-07-20: 2302 / 2466 /
 
 ### Module scaffolding
 
-Building a new module (entity / backend CRUD / frontend page / service replacement)? Start from `skills/README.md` — `skills/new-module.md` orchestrates the full flow (entity → backend → tests → `gen:api` → frontend → i18n → menu/permission wiring). Also exposed as slash commands (`/new-module`, `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/create-crud-frontend-react`, `/replace-service`, `/create-page-variant`) via thin wrappers in `.claude/skills/`; the markdown files in `skills/` are the single source of truth. The frontend CRUD skill is per-template: `create-crud-frontend.md` for `web/` (Vue), `create-crud-frontend-react.md` for `web-react/`.
+Building a new module (entity / backend CRUD / frontend page / service replacement)? Start from `skills/README.md` — `skills/new-module.md` orchestrates the full flow (entity → backend → tests → `gen:api` → frontend → i18n → menu/permission wiring). Also exposed as slash commands (`/new-module`, `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/create-crud-frontend-react`, `/replace-service`, `/create-job`, `/create-page-variant`) via thin wrappers in `.claude/skills/`; the markdown files in `skills/` are the single source of truth. The frontend CRUD skill is per-template: `create-crud-frontend.md` for `web/` (Vue), `create-crud-frontend-react.md` for `web-react/`.
 
 ### Writing docs
 

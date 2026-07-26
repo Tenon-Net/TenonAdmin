@@ -1631,6 +1631,550 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/job/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询任务(行含全列,编辑表单直接用行数据) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 任务名称(模糊,可选) */
+                    Name?: string;
+                    /** @description 状态(精确,可选) */
+                    Status?: components["schemas"]["JobStatus"];
+                    /** @description 载荷类型(精确,可选) */
+                    HandlerKind?: components["schemas"]["JobHandlerKind"];
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfSysJob"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfSysJob"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfSysJob"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 新增任务 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["JobInput"];
+                    "text/json": components["schemas"]["JobInput"];
+                    "application/*+json": components["schemas"]["JobInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOflong"];
+                        "application/json": components["schemas"]["ResultOflong"];
+                        "text/json": components["schemas"]["ResultOflong"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/job/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新任务(Code 创建后不可变;触发配置变更即重算下次执行时刻) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["JobInput"];
+                    "text/json": components["schemas"]["JobInput"];
+                    "application/*+json": components["schemas"]["JobInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** 删除任务(软删,可回收站恢复;内置任务禁删) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/job/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量删除任务(命中内置任务则整批拒绝) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BatchDeleteInput"];
+                    "text/json": components["schemas"]["BatchDeleteInput"];
+                    "application/*+json": components["schemas"]["BatchDeleteInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/job/{id}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 启停任务(true=恢复调度并重算下次执行时刻,false=暂停) */
+        put: {
+            parameters: {
+                query?: {
+                    enabled?: boolean;
+                };
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/job/{id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 执行一次(在收到请求的副本本机执行,不经选主、不影响调度节奏) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/job/preview-cron": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** cron 预览(归一化 + 未来若干次)。POST 而非 GET:cron 含 `? #`,走 query 有转义坑 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CronPreviewInput"];
+                    "text/json": components["schemas"]["CronPreviewInput"];
+                    "application/*+json": components["schemas"]["CronPreviewInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfCronPreviewOutput"];
+                        "application/json": components["schemas"]["ResultOfCronPreviewOutput"];
+                        "text/json": components["schemas"]["ResultOfCronPreviewOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/job/handlers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 已注册的编译处理器清单(前端下拉数据源,免手打 HandlerName) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfstring"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfstring"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfstring"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/job/log/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页查询执行记录 */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 任务 Id(精确,可选) */
+                    JobId?: number | string;
+                    /** @description 执行结果(精确,可选) */
+                    RunStatus?: components["schemas"]["JobRunStatus"];
+                    /** @description 开始时刻下界(可选) */
+                    StartFrom?: string;
+                    /** @description 开始时刻上界(可选) */
+                    StartTo?: string;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfSysJobLog"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfSysJobLog"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfSysJobLog"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/job/log/{id}/kill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 终止一次执行(跨节点:写终止旗标,目标节点最迟 KillPollSeconds 后停) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/job/log/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 清空执行记录(硬删;运行中的记录一律保留) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["JobLogClearInput"];
+                    "text/json": components["schemas"]["JobLogClearInput"];
+                    "application/*+json": components["schemas"]["JobLogClearInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfint"];
+                        "application/json": components["schemas"]["ResultOfint"];
+                        "text/json": components["schemas"]["ResultOfint"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/job/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 监控仪表盘(今日成败/在飞/状态分布/近 14 日趋势/即将执行/集群节点) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfJobDashboardOutput"];
+                        "application/json": components["schemas"]["ResultOfJobDashboardOutput"];
+                        "text/json": components["schemas"]["ResultOfJobDashboardOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/menu/tree": {
         parameters: {
             query?: never;
@@ -5287,6 +5831,30 @@ export interface components {
             /** @description 备注 */
             remark?: null | string;
         };
+        /** @description cron 预览入参(POST:cron 含 `? #`,走 query 有转义坑) */
+        CronPreviewInput: {
+            /** @description cron 表达式(5 或 6 段) */
+            cron?: string;
+            /**
+             * Format: int32
+             * @description 预览条数(默认 5,上限 20)
+             */
+            count?: number | string;
+            /**
+             * Format: date-time
+             * @description 起算时刻(默认当前服务器时间)
+             */
+            from?: null | string;
+        };
+        /** @description cron 预览结果 */
+        CronPreviewOutput: {
+            /** @description 归一化后的 6 段表达式(入库形态) */
+            normalized?: string;
+            /** @description 未来若干次触发时刻(可能少于请求条数,甚至为空 = 已无未来时刻) */
+            occurrences?: string[];
+            /** @description 秒段等效每秒执行的告警(前端提示用;不硬拦,故意写的算深思熟虑) */
+            everySecondWarning?: boolean;
+        };
         /**
          * @description 工作台首页统计(设计 §4)。形状直接对齐前端图表组件:
          *     折线图收 `categories: string[]` + 两条 `number[]`,饼图的"资源分布"就是前三个计数,前端自行拼装。
@@ -5385,6 +5953,7 @@ export interface components {
          *     * 44000–44999文件上传
          *     * 45000–45999消息通知
          *     * 46000–46999导入 / 导出
+         *     * 47000–47999定时任务
          *     * 50000–50999系统内部错误
          */
         ErrorCode: number;
@@ -5504,6 +6073,167 @@ export interface components {
         /** @description 导入重验 / 错误报告入参(excel-ledger §5.1):前端改过的行原样带回。 */
         ImportRowsInput: {
             rows?: components["schemas"]["ImportRow"][];
+        };
+        /** @description 并发模式:上一次触发未结束时,本次怎么办(刻意不做「排队」,§16) */
+        JobConcurrencyMode: number;
+        /** @description 监控仪表盘输出(前端 15s 轮询) */
+        JobDashboardOutput: {
+            /**
+             * Format: int32
+             * @description 今日成功次数
+             */
+            todaySuccess?: number | string;
+            /**
+             * Format: int32
+             * @description 今日失败次数(含超时)
+             */
+            todayFailed?: number | string;
+            /**
+             * Format: int32
+             * @description 当前运行中(未闭合执行记录数)
+             */
+            running?: number | string;
+            /**
+             * Format: int32
+             * @description 任务总数(未删)
+             */
+            totalJobs?: number | string;
+            /** @description 按状态的任务数 */
+            statusCounts?: {
+                [key: string]: number | string;
+            };
+            /** @description 近 14 日成败趋势(按日,含零值日) */
+            trend?: components["schemas"]["JobTrendPoint"][];
+            /** @description 即将执行的前 10 次 */
+            upcoming?: components["schemas"]["JobUpcomingItem"][];
+            /** @description 集群节点表(角色由与锁行比对得出,不落库) */
+            nodes?: components["schemas"]["JobNodeItem"][];
+        };
+        /** @description 触发来源(`sys_job_log.FireMode`,docs/scheduling-ledger.md §3.3) */
+        JobFireMode: number;
+        /** @description 任务载荷类型(`sys_job.HandlerKind`,docs/scheduling-ledger.md §7) */
+        JobHandlerKind: number;
+        /** @description 任务新增/编辑入参。`Code` 仅新增时生效——更新时服务层忽略,创建后不可变(它是排障锚点)。 */
+        JobInput: {
+            /** @description 任务编码(唯一,创建后不可变) */
+            code?: string;
+            /** @description 任务名称 */
+            name?: string;
+            /** @description 载荷类型 */
+            handlerKind?: components["schemas"]["JobHandlerKind"];
+            /** @description 处理器标识(编译类填 IAdminJob.Name;HTTP/SQL 由服务端固定填内置处理器名,此处传什么都会被覆盖) */
+            handlerName?: string;
+            /** @description 属性包(处理器参数;HTTP 的 url/headers、SQL 的 sql、编译类的自定义参数) */
+            properties?: null | {
+                [key: string]: string;
+            };
+            /** @description 触发类型 */
+            triggerKind?: components["schemas"]["JobTriggerKind"];
+            /** @description cron 表达式(TriggerKind=Cron 必填;入库前归一化为 6 段大写) */
+            cronExpression?: null | string;
+            /**
+             * Format: int32
+             * @description 固定间隔秒数(TriggerKind=Interval 必填,≥5)
+             */
+            intervalSeconds?: null | number | string;
+            /**
+             * Format: date-time
+             * @description 一次性执行时刻(TriggerKind=OneShot 必填,须为将来)
+             */
+            oneShotTime?: null | string;
+            /**
+             * Format: date-time
+             * @description 生效窗口起点(可选)
+             */
+            startTime?: null | string;
+            /**
+             * Format: date-time
+             * @description 生效窗口终点(可选)
+             */
+            endTime?: null | string;
+            /** @description 错过策略 */
+            misfireStrategy?: components["schemas"]["JobMisfireStrategy"];
+            /** @description 并发模式 */
+            concurrencyMode?: components["schemas"]["JobConcurrencyMode"];
+            /**
+             * Format: int32
+             * @description 执行超时(秒,0=不限)
+             */
+            timeoutSeconds?: number | string;
+            /**
+             * Format: int32
+             * @description 失败重试次数
+             */
+            retryCount?: number | string;
+            /**
+             * Format: int32
+             * @description 重试间隔(秒)
+             */
+            retryIntervalSeconds?: number | string;
+            /**
+             * Format: int32
+             * @description 连败告警阈值(0=不告警不 Panic)
+             */
+            failAlertThreshold?: number | string;
+            /** @description 告警走站内信 */
+            alertByNotice?: boolean;
+            /** @description 告警邮件收件人(逗号分隔;空则回退全局配置) */
+            alertEmails?: null | string;
+            /** @description 备注 */
+            remark?: null | string;
+        };
+        /** @description 清空执行记录入参 */
+        JobLogClearInput: {
+            /**
+             * Format: int32
+             * @description 只删这么多天以前的记录;为空 = 删全部(未闭合的运行中记录一律保留)
+             */
+            beforeDays?: null | number | string;
+            /**
+             * Format: int64
+             * @description 只删该任务的记录;为空 = 全部任务
+             */
+            jobId?: null | number | string;
+        };
+        /** @description 错过(misfire)处理策略:到期时刻迟到超过 MisfireThresholdSeconds 才触发本策略 */
+        JobMisfireStrategy: number;
+        /** @description 集群节点一行 */
+        JobNodeItem: {
+            nodeName: string;
+            hostName: string;
+            isLeader: boolean;
+            /** Format: date-time */
+            lastHeartbeat: string;
+            /** Format: int32 */
+            workerId: number | string;
+            /** Format: int32 */
+            pid: number | string;
+        };
+        /** @description 单次执行结果(`sys_job_log.RunStatus`) */
+        JobRunStatus: number;
+        /**
+         * @description 任务状态(`sys_job.Status`,§2.2)。<b>刻意没有 Running 态</b>——「正在运行」由未闭合的
+         *     执行记录行(`sys_job_log.EndTime IS NULL`)推导,进程崩溃不会留下卡死的 Running 任务。
+         *     进入 Paused/Completed/Panic 时 NextRunTime 置 NULL,扫表条件天然排除。
+         */
+        JobStatus: number;
+        /** @description 成败趋势的一天 */
+        JobTrendPoint: {
+            date: string;
+            /** Format: int32 */
+            success: number | string;
+            /** Format: int32 */
+            failed: number | string;
+        };
+        /** @description 触发类型(`sys_job.TriggerKind`) */
+        JobTriggerKind: number;
+        /** @description 即将执行的一项 */
+        JobUpcomingItem: {
+            /** Format: int64 */
+            jobId: number | string;
+            name: string;
+            /** Format: date-time */
+            nextRunTime: string;
         };
         /** @description 登录入参。验证码字段在 `Security:Captcha:Enabled` 关闭时可不传(默认关)。 */
         LoginInput: {
@@ -5954,6 +6684,62 @@ export interface components {
          * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
          *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
          */
+        PagedListOfSysJob: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["SysJob"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
+        PagedListOfSysJobLog: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["SysJobLog"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
         PagedListOfSysLoginLog: {
             /**
              * Format: int32
@@ -6293,6 +7079,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfCronPreviewOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["CronPreviewOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfDashboardSummaryOutput: {
             /**
              * Format: int32
@@ -6599,6 +7406,28 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfIReadOnlyListOfstring: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | string[];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfIReadOnlyListOfSysDictItem: {
             /**
              * Format: int32
@@ -6657,6 +7486,27 @@ export interface components {
             message?: null | string;
             /** @description 业务数据载荷 */
             data?: null | components["schemas"]["SysOrg"][];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfJobDashboardOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["JobDashboardOutput"];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -6914,6 +7764,48 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["PagedListOfSysFile"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfPagedListOfSysJob: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfSysJob"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfPagedListOfSysJobLog: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfSysJobLog"];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -7629,6 +8521,159 @@ export interface components {
             /** @description 内容 SHA-256(hex,小写);分片上传落库,供「秒传」按内容去重。单文件上传暂不计算(留 null)。 */
             hash?: null | string;
             isDelete?: boolean;
+            /** Format: date-time */
+            createTime?: string;
+            /** Format: int64 */
+            createUserId?: null | number | string;
+            /** Format: date-time */
+            updateTime?: null | string;
+            /** Format: int64 */
+            updateUserId?: null | number | string;
+            /** Format: int64 */
+            id?: number | string;
+        };
+        /**
+         * @description 定时任务表——一行完整声明一个任务:触发配置 + 载荷 + 失败策略 + 运行状态(docs/scheduling-ledger.md §2/§3.2)。
+         *     一任务 = 一触发(ADR-0004 决策三):同一段业务逻辑要两套时刻表 = 建两行。
+         *     基类用 BaseEntity(软删 + 回收站)而不是 DataEntity:任务是全局运维对象,
+         *     调度循环在后台线程跑、无 HTTP 上下文,挂 IOrgScoped 会被数据范围过滤器搅局。DateTime? SysJob.NextRunTime 是领取列:每次触发前对它做原子 CAS(§5.2),防双发的唯一正确性来源;
+         *     所有写入路径必须先整秒截断(MySQL datetime 毫秒四舍五入会让 CAS 无声失效,§13-9)。
+         */
+        SysJob: {
+            /** @description 任务编码(唯一;种子/日志/排障的稳定锚点,冲突 → 47002) */
+            code?: string;
+            name?: string;
+            handlerKind?: components["schemas"]["JobHandlerKind"];
+            /** @description 编译类 = 处理器标识(IAdminJob.Name,默认类型全名);HTTP/SQL 由服务端固定填内置处理器名 */
+            handlerName?: string;
+            /** @description 属性包:Dictionary&lt;string,string?&gt; JSON,处理器参数的唯一入口(键表见台账 §7) */
+            propsJson?: null | string;
+            triggerKind?: components["schemas"]["JobTriggerKind"];
+            /** @description 6 段秒级 cron(入库前归一化 + 统一大写,§4.2) */
+            cronExpression?: null | string;
+            /**
+             * Format: int32
+             * @description 固定间隔秒数,≥5(&lt;5 拒 47004,防日志表爆炸,§13-7)
+             */
+            intervalSeconds?: null | number | string;
+            /**
+             * Format: date-time
+             * @description 一次性执行时刻(已过去 → 47004)
+             */
+            oneShotTime?: null | string;
+            /**
+             * Format: date-time
+             * @description 生效窗口起点(空 = 立即生效)
+             */
+            startTime?: null | string;
+            /**
+             * Format: date-time
+             * @description 生效窗口终点(过点置 Completed)
+             */
+            endTime?: null | string;
+            misfireStrategy?: components["schemas"]["JobMisfireStrategy"];
+            concurrencyMode?: components["schemas"]["JobConcurrencyMode"];
+            status?: components["schemas"]["JobStatus"];
+            /**
+             * Format: date-time
+             * @description 下次执行时刻 = 领取列(整秒;Paused/Completed/Panic 时为 NULL)
+             */
+            nextRunTime?: null | string;
+            /**
+             * Format: date-time
+             * @description 最近一次领取时刻
+             */
+            lastRunTime?: null | string;
+            /** Format: int64 */
+            numberOfRuns?: number | string;
+            /** Format: int64 */
+            numberOfErrors?: number | string;
+            /**
+             * Format: int32
+             * @description 连续失败计数(成功清零;达 FailAlertThreshold → Panic + 告警)
+             */
+            consecutiveErrors?: number | string;
+            /**
+             * Format: int32
+             * @description 单次执行超时秒数,0=不限;超时取消本次执行并记 Timeout
+             */
+            timeoutSeconds?: number | string;
+            /**
+             * Format: int32
+             * @description 单次触发内的重试次数(0=不重试)
+             */
+            retryCount?: number | string;
+            /** Format: int32 */
+            retryIntervalSeconds?: number | string;
+            /**
+             * Format: int32
+             * @description 连败达此值 → 发告警 + 转 Panic;0=不告警不 Panic
+             */
+            failAlertThreshold?: number | string;
+            /** @description 告警走站内信(Notice 定向发任务创建人 + 超管,不广播) */
+            alertByNotice?: boolean;
+            /** @description 告警邮件收件人(逗号分隔);空 → 回退 sys_config 的 sys.job.alertEmails */
+            alertEmails?: null | string;
+            /** @description 内核种子任务 = true:禁删(47014),可暂停、可改触发配置 */
+            isSystem?: boolean;
+            remark?: null | string;
+            isDelete?: boolean;
+            /** Format: date-time */
+            createTime?: string;
+            /** Format: int64 */
+            createUserId?: null | number | string;
+            /** Format: date-time */
+            updateTime?: null | string;
+            /** Format: int64 */
+            updateUserId?: null | number | string;
+            /** Format: int64 */
+            id?: number | string;
+        };
+        /**
+         * @description 任务执行记录——一行 = 一次执行尝试(docs/scheduling-ledger.md §3.3)。
+         *     DateTime? SysJobLog.EndTime 为空 = 运行中(任务无 Running 态,全靠此行推导,§2.2);
+         *     同一次触发的各次重试共享 long SysJobLog.FireInstanceId,靠它聚合。基类 AuditEntity(物理删):只增日志,镜像 SysOpLog 语义,清理走硬删。
+         *     永不落请求头——header 常含密钥(§13-1)。
+         */
+        SysJobLog: {
+            /** Format: int64 */
+            jobId?: number | string;
+            /** @description 任务名快照(任务删了记录仍可读) */
+            jobName?: string;
+            /**
+             * Format: int64
+             * @description 一次触发的关联 Id(雪花);重试各占一行,靠它聚合
+             */
+            fireInstanceId?: number | string;
+            /**
+             * Format: int32
+             * @description 重试序号,0 = 首次
+             */
+            retryIndex?: number | string;
+            fireMode?: components["schemas"]["JobFireMode"];
+            /**
+             * Format: date-time
+             * @description 计划触发时刻(整秒)
+             */
+            scheduledTime?: string;
+            /** Format: date-time */
+            startTime?: string;
+            /**
+             * Format: date-time
+             * @description 结束时刻;<b>为空 = 运行中</b>
+             */
+            endTime?: null | string;
+            runStatus?: components["schemas"]["JobRunStatus"];
+            /** Format: int64 */
+            elapsedMs?: number | string;
+            /** @description 执行节点(NodeName,{MachineName}#{WorkerId}) */
+            nodeName?: string;
+            /** @description 跨节点终止旗标:kill 端点置 true,执行侧每 KillPollSeconds 轮询自己这行(§5.4) */
+            killRequested?: boolean;
+            /** @description 处理器输出(截 8KB;HTTP 响应体截 Http.MaxResponseLogBytes) */
+            messageText?: null | string;
+            /** @description 失败异常信息(截 8KB) */
+            errorText?: null | string;
             /** Format: date-time */
             createTime?: string;
             /** Format: int64 */

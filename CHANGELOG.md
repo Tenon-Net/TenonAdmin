@@ -15,6 +15,17 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+### Added
+
+- **Scheduled jobs, in the kernel, with no new dependency.** Write an `IAdminJob`, register it with one `TryAddEnumerable` line, and the admin UI can drive it on a cron — no package to install, nothing to configure, no extra process. Also ships two payload kinds that need no code at all: HTTP (behind an SSRF fence) and SQL (off by default; enabling it admits that job-edit rights are DBA rights). The cron engine is self-written, six fields with seconds first and the full `* , - / ? L W #` syntax; behaviour was checked against Furion's TimeCrontab with live probes on both sides, and the deliberate divergences are recorded in `docs/scheduling-ledger.md` §4.1.
+  - "Jobs must not stop when the backend stops" resolves into three shapes, none of which need a code change: the schedule survives a restart (misfire policy decides whether a missed occurrence is caught up), two API replicas elect a leader through a DB lease so one dying doesn't stop the schedule, and an optional `samples/WorkerHost` (three-line `Program.cs`, `AddTenonAdminWorker`) keeps jobs running with the API down.
+  - **Double firing is prevented by a claim, not by the lease.** Every fire compare-and-sets the row's `NextRunTime`; an old leader waking from a GC pause finds the slot already advanced and gets nothing. The lease only decides who scans. The dual-replica smoke test asserts pairwise-distinct scheduled times and then kills the leader to prove takeover.
+  - Both frontend templates ship the same three pages (jobs, run log, monitor) plus a CronEditor with live preview, zero-shared as always. Consumer guide: [Scheduled Jobs](https://tenon.52moyu.net/zh/guide/scheduled-jobs) and `skills/create-job.md`. Execution ledger: `docs/scheduling-ledger.md`; the design decision is archived as `docs/adr/0004-scheduling-in-kernel-self-built.md`.
+
+### Fixed
+
+- **Operation-log masking now covers header-shaped fields.** Masking matches on field names (`password`, `token`, …), and a scheduled HTTP job carries its whole header set in one `headers` value — a bearer token therefore landed in `sys_op_log.ParamJson` in plain text. `header`, `authorization`, `apikey` and `cookie` joined the keyword list.
+
 ## 0.4.0 - 2026-07-26
 
 A feature release: xlsx import/export lands as an optional package, and both frontend templates ship the wizard that drives it. Nothing in the core four packages changed shape — install nothing and the kernel behaves exactly as it did in 0.3.3.

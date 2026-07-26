@@ -31,7 +31,8 @@
 7. **菜单/权限接线**:
    - 系统模块:`DefaultMenuSeed` 加页面节点 + 权限按钮。
    - 消费者:菜单管理 UI 建节点,`component` 填 `views/` 相对路径(如 `biz/product/index`),动态路由自动注册,**不写任何路由代码**。
-8. **验证**(顺序跑,两个重进程不要并发):
+8. **可选加挂**:这个模块要定时跑点什么(对账、清理、推送)→ `create-job.md`;要 xlsx 导入导出 → `wire-import-export.md`。两者都不改动上面任何一步的产出,是纯加法。
+9. **验证**(顺序跑,两个重进程不要并发):
    - `dotnet build backend/TenonAdmin.slnx -c Release` → `dotnet test backend/TenonAdmin.slnx`
    - `cd web && npm run typecheck && npm run lint`(React 模板:`cd web-react`,命令同名)
    - `npm run dev` 手工走查:列表/搜索/新增/编辑/删除/StatusSwitch 不回弹/无权限按钮被隐藏/错误提示走 i18n。
