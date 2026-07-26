@@ -19,6 +19,51 @@
 
 ---
 
+## 0.1 当前状态与换机接手(2026-07-26)
+
+> 这一段是给**换一台机器接着干**的人看的。上面 §0 那三条硬规矩仍然有效,但 **G1–G8 八批已全部做完并合并**,别再从 §9 重头施工。
+
+### 东西在哪
+
+**全部已推送并合并进 `dev`** —— PR **#23**(`Tenon-Net/TenonAdmin`,base `dev`)已 merge,合并提交 `cda4c72`。换机后:
+
+```bash
+git clone https://github.com/Tenon-Net/TenonAdmin.git   # 或 git pull
+git checkout dev
+```
+
+`dev` 已包含全部内容,**不需要 `feat/excel` 分支,也不需要那个本地 worktree**(它只是施工期的隔离环境,`C:\Project\HuHuHu\tenon-admin-excel`,可弃)。本台账自身也在仓库里,`docs/excel-ledger.md`。
+
+### 做完了什么(逐轮证据见 §12)
+
+八批:Core 契约与 46xxx 错误码 → 卫星包 `TenonAdmin.Excel`(MiniExcel 读写 + OpenXml 模板下拉)→ `ImportRunner`/`DictTextResolver`/三个档案 → 七个端点与菜单种子 → 后端测试 → `web/` 四步向导 → `web-react/` 同款 → 文档与消费者接入指南(`skills/wire-import-export.md`)。
+其后第 9–13 轮:判重查询分批(SqlServer 2100 参数上限)、下载触发收敛成带测试的工具、启用状态改挂 `common_status` 字典、字典下拉弹层不再被列宽挤窄、首次推送并拿到 **CI 15 个检查全绿**。
+后端全量 **347/347**;`web` 62 用例、`web-react` 730 用例;两个模板的向导都在浏览器里从上传实走到提交过。
+
+### 还开着的四件(接手就从这里开始)
+
+| # | 事项 | 性质 | 出处 |
+|---|---|---|---|
+| ① | `backend-release.yml` 的 pack 不枚举项目 → **`dev` 合进 `main` 后首个 `v*` tag 会把 `TenonAdmin.Excel` 永久发布到 nuget.org**,包名与 `AddTenonAdminExcel()` 入口届时定死 | **不可撤销,需产品决定**。CI 未动 | §12 第 9 轮 ① |
+| ② | SqlServer **完整**套件只在 `schedule` 夜间跑,而 `schedule` 只跑默认分支 —— 本批代码的 SqlServer 全量验证要等**进了默认分支之后**那一夜才真正发生。PR 上跑的是方言子集 | 覆盖缺口,非缺陷 | §12 第 13 轮末 |
+| ③ | 「已存在」被当错误呈现:重复导同一批时预览显示「N 行有错误」并标红,但后端在 Skip/Overwrite 策略下会正常跳过/更新。**呈现层缺陷,落库正确** | 改法要动 `ImportPreview` DTO + 两个模板,该单独一批 | §12 第 7 轮末 |
+| ④ | 向导三条支路从未实走:**手动改列映射**、**覆盖/报错两种策略走 UI**、**必填列未映射的 `columnErrors` 分支**(实走只覆盖「自动映射全中 + 跳过策略」主路) | 验证缺口 | §12 第 9 轮 ④ |
+
+建议次序:①要你拍板(在合 `main` 之前决定);②合进 `main` 后隔夜看一次 nightly;③④可各自成一批。
+
+### 本地怎么跑起来(验证命令详见 §10)
+
+```bash
+dotnet test backend/TenonAdmin.slnx                    # 默认 SQLite,347 条
+dotnet run  --project backend/samples/MinimalHost      # :5100,首启控制台打印超管口令
+cd web       && npm i && npm run dev                   # :5173
+cd web-react && npm i && npm run dev                   # :5174
+```
+
+超管口令只在**首次启动**打印;忘了就删 `backend/samples/MinimalHost/data/admin.db` 重启,会重新建库并打印新口令(样例库,可随便删)。
+
+---
+
 ## 1. 决策全表(grilling 钉死,不回炉)
 
 | 维度 | 结论 | 依据 |
