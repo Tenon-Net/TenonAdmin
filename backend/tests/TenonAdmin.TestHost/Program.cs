@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TenonAdmin.AspNetCore;
+using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
 using TenonAdmin.TestHost;
 
@@ -10,6 +11,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, o => o.ApplicationAssembli
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, SampleWidgetSeed>());   // 用户自定义种子
 builder.Services.TryAddScoped<ISampleDocService, SampleDocService>();   // 示例机构隔离业务服务(DataEntity 范本)
 builder.Services.TryAddScoped<SampleDocExportProfile>();                // 示例导出档案(消费方接导出的范本,excel-ledger §9 G5-12)
+builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, SampleJob>());   // 示例定时任务处理器(scheduling-ledger §6)
 var app = builder.Build();
 app.MapTenonAdmin();
 app.Run();

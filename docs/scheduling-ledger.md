@@ -579,7 +579,7 @@ API 副本两种姿态(§10.1 之上的部署选择):①什么都不配 —— A
 | ✅G2 | 实体四张 + `DefaultJobSeed` + ConfigSeed 27/28 + `TenonAdminOptions.Jobs` 接线 | sqlite 全新建库启动成功;SeedIdRange 绿 | 把种子 Id 改 1001 → SeedIdRange 红(已实测) |
 | ✅G3 | 引擎:选主/循环/执行器/registry/三个内置处理器/`JobChangedEvent`/DI | §12 FakeTimeProvider + 选主 + CAS 测试全绿(21 例) | 删 CAS 的 `AND NextRunTime=@expected` → 双发测试红(已实测) |
 | ✅G4 | `JobController` 13 端点 + 菜单种子 132–146 + `RecycleBin` 登记 + `gen:api` | PermissionCodeConsistency/OperationLogCoverage 绿;24 例 HTTP + 40 例安全测试绿 | 摘掉任一 [OperationLog] → 红 |
-| G5 | HTTP 级测试 + Replaceability 追加 + TestHost `SampleJob` + backend-ci TEST_FILTER | 47xxx 各码有用例;SqlServer 子集含 Election/Claim | 前置注册假 `IJobService` 不生效 → 六件套红 |
+| ✅G5 | HTTP 级测试 + Replaceability 追加 + TestHost `SampleJob` + backend-ci TEST_FILTER | 47xxx 各码有用例;SqlServer 子集含 Election/Claim | 前置注册假 `IJobService` 不生效 → 六件套红(已实测) |
 | G6 | Worker:`WorkerSetup` + `samples/WorkerHost` + compose TZ + smoke 第 6 断言 | multi 腿 6 断言绿 | 注释掉 standby 夺取 → 杀主断言红 |
 | G7 | `web/`:三页面 + CronEditor + COMPONENTS.md + i18n | typecheck/lint 绿;浏览器实走建任务→执行→看记录 | — |
 | G8 | `web-react/`:同款 | 同上 + 既有测试套件绿 | — |
@@ -656,3 +656,10 @@ bash scripts/smoke-multi-replica.sh http://localhost:8080                  # 含
   - **密钥面**(§13-1 的三条旁路):属性包 headers 值在列表接口按 `********` 掩码、保存时掩码原样回传即取回原值;操作日志脱敏词表加 `header/authorization/apikey/cookie`;执行记录只落 `scheme+host+path`(原 url 的 userinfo 与查询串常含凭据)。
   - **PG 专属坑**:响应体含 `\0` 时 PostgreSQL text 列拒收(22021)→ 记录闭合失败 → 永久 Running → 该任务再也不触发。修:摘要入库前净化控制字符。
 - 全量 504 绿。
+
+### 第 4 轮 — G5 六件套 + 消费者证明 + CI 子集(2026-07-26)
+
+- `TestHost/SampleJob.cs`(消费者程序集里的 `IAdminJob`,一行 `TryAddEnumerable` 注册)+ `ReplaceabilityTests` 追加两条:消费者处理器可被默认解析器按 Name 找到且出现在 `/handlers` 清单;`IJobService`/`IJobHandlerResolver`/`JobSchedulerService` 前置注册即胜出。
+- **写六件套测试时发现的坑,值得记住**:本文件既有用例的 `Overrides = s => s.Replace(...)` 写法**测不出 TryAdd**——它是 `ConfigureTestServices`,跑在 `AddTenonAdmin` 之后,把 TryAdd 改成 Add 照样绿(它证明的是"可替换",不是"TryAdd 注册")。新用例改为裸容器**前置**注册再调 `AddTenonAdminServices()`,变异实测:TryAdd→Add 即红。
+- `backend-ci.yml` 的 SqlServer 推送腿子集追加 `JobElectionTests|JobClaimTests` —— DateTime 等值 CAS 正是该方言的精度/舍入敏感面,不进子集就只剩 nightly 兜底。
+- 全量 506 绿。

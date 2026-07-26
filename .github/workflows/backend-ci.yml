@@ -128,11 +128,12 @@ jobs:
           # SqlServer full suite builds ~200 isolated databases, each replaying 23 CREATE TABLE whose per-statement
           # log flush dominates — 40-60 min on every push/PR (measured 2026-07-20; see CLAUDE.md "CI"). On push/PR the
           # SqlServer leg runs only the dialect-sensitive subset: the SqlServer-SPECIFIC surface (nvarchar Chinese,
-          # boolean-predicate global filters, T-SQL DDL/bootstrap, Storageable seed SQL). DB-agnostic business logic is
+          # boolean-predicate global filters, T-SQL DDL/bootstrap, Storageable seed SQL, and the scheduler's DateTime
+          # equality CAS — datetime rounding is exactly where a silently-never-matching claim would hide). DB-agnostic business logic is
           # already covered by the full sqlite/mysql/postgres legs on the same PR; the full SqlServer suite runs nightly
           # (schedule) as the net. Rename a class out of this list and it silently drops to nightly-only — not a coverage
           # hole, just delayed signal. Other legs and the nightly run are unfiltered.
-          TEST_FILTER: ${{ (matrix.db == 'sqlserver' && github.event_name != 'schedule') && 'FullyQualifiedName~DataScopeTests|FullyQualifiedName~SoftDeleteAuditTests|FullyQualifiedName~OrgAuditEntityTests|FullyQualifiedName~SeedUpgradeTests|FullyQualifiedName~RecycleBinTests|FullyQualifiedName~UserCrudTests|FullyQualifiedName~DictCrudTests|FullyQualifiedName~ReplaceabilityTests|FullyQualifiedName~ProductionBootstrapTests' || '' }}
+          TEST_FILTER: ${{ (matrix.db == 'sqlserver' && github.event_name != 'schedule') && 'FullyQualifiedName~DataScopeTests|FullyQualifiedName~SoftDeleteAuditTests|FullyQualifiedName~OrgAuditEntityTests|FullyQualifiedName~SeedUpgradeTests|FullyQualifiedName~RecycleBinTests|FullyQualifiedName~UserCrudTests|FullyQualifiedName~DictCrudTests|FullyQualifiedName~ReplaceabilityTests|FullyQualifiedName~ProductionBootstrapTests|FullyQualifiedName~JobElectionTests|FullyQualifiedName~JobClaimTests' || '' }}
         run: |
           if [ -n "$TEST_FILTER" ]; then
             echo "SqlServer push/PR leg: dialect-sensitive subset only (full SqlServer suite runs nightly)"

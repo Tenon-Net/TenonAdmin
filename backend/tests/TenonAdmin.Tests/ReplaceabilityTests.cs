@@ -55,6 +55,56 @@ public class ReplaceabilityTests
         Assert.IsType<FakeRealtimePublisher>(f.Services.GetRequiredService<IRealtimePublisher>());
     }
 
+    // ── scheduling-ledger §12:定时任务的可替换面 ─────────────────────────
+
+    /// <summary>
+    /// 定时任务三件套的「<b>前置</b>注册即胜出」——这才是 TryAdd 契约的真判据。
+    /// <para>注意别照抄本文件其它用例的 <c>Overrides = s => s.Replace(...)</c> 写法来测 TryAdd:那是
+    /// <c>ConfigureTestServices</c>,跑在 <c>AddTenonAdmin</c> <b>之后</b>,TryAdd 改成 Add 它照样绿——
+    /// 它证明的是"可替换",不是"TryAdd 注册"。故此处直接在裸容器里前置注册再调 <c>AddTenonAdminServices()</c>。</para>
+    /// <para>变异:把 ServicesSetup 里这三行任一的 TryAdd 改成 Add → 内置实现后注册即胜出 → 本条红。</para>
+    /// </summary>
+    [Fact]
+    public async Task PreRegisteredJobServices_ShouldWinOverBuiltIns()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(new AdminCacheOptions());
+        services.AddSingleton(new AdminIdOptions());
+        services.AddSingleton(new AdminJobsOptions());
+        // 消费者的前置注册(在 AddTenonAdmin* 之前)
+        services.AddScoped<IJobService, FakeJobService>();
+        services.AddSingleton<IJobHandlerResolver, FakeJobHandlerResolver>();
+        services.AddSingleton<JobSchedulerService, SubclassedScheduler>();
+
+        var dbOptions = new AdminDatabaseOptions { DbType = "Sqlite", ConnectionString = "DataSource=:memory:" };
+        services.AddSingleton(dbOptions);
+        services.AddTenonAdminSqlSugar(dbOptions, [typeof(ServicesSetup).Assembly]);
+        services.AddTenonAdminServices();
+
+        // 容器必须异步释放:ChannelEventBus 只实现 IAsyncDisposable,同步 Dispose 会直接抛
+        await using var sp = services.BuildServiceProvider();
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeJobService>(scope.ServiceProvider.GetRequiredService<IJobService>());
+        Assert.IsType<FakeJobHandlerResolver>(sp.GetRequiredService<IJobHandlerResolver>());
+        Assert.IsType<SubclassedScheduler>(sp.GetRequiredService<JobSchedulerService>());
+    }
+
+    /// <summary>消费者自己的 IAdminJob(TestHost 的 SampleJob)必须被默认解析器认得,并出现在处理器清单里。</summary>
+    [Fact]
+    public async Task ConsumerJobHandler_ShouldBeResolvableAndListed()
+    {
+        using var f = new AdminAppFactory();
+        using var scope = f.Services.CreateScope();
+
+        var resolver = f.Services.GetRequiredService<IJobHandlerResolver>();
+        var handler = await resolver.ResolveAsync(typeof(SampleJob).FullName!, scope.ServiceProvider);
+        Assert.IsType<SampleJob>(handler);
+
+        var listed = scope.ServiceProvider.GetRequiredService<IJobService>().ListHandlers();
+        Assert.Contains(typeof(SampleJob).FullName, listed);
+    }
+
     // ── excel-ledger §9 G5 六件套:导入导出可替换接口各一条 ─────────────────
 
     /// <summary>
@@ -290,6 +340,35 @@ public class ReplaceabilityTests
         public Task<string?> ToValueAsync(string dictTypeCode, string? label, CancellationToken cancellationToken = default)
             => Task.FromResult(label);
     }
+
+    /// <summary>用户自定义任务管理服务(替换 JobService)</summary>
+    private sealed class FakeJobService : IJobService
+    {
+        public Task<PagedList<SysJob>> PageAsync(JobPageInput input) => throw new NotSupportedException();
+        public Task<long> AddAsync(JobInput input) => throw new NotSupportedException();
+        public Task UpdateAsync(long id, JobInput input) => throw new NotSupportedException();
+        public Task DeleteAsync(long id) => throw new NotSupportedException();
+        public Task DeleteBatchAsync(IReadOnlyCollection<long> ids) => throw new NotSupportedException();
+        public Task SetEnabledAsync(long id, bool enabled) => throw new NotSupportedException();
+        public Task RunOnceAsync(long id) => throw new NotSupportedException();
+        public CronPreviewOutput PreviewCron(CronPreviewInput input) => new();
+        public IReadOnlyList<string> ListHandlers() => [];
+        public Task<JobDashboardOutput> GetDashboardAsync() => Task.FromResult(new JobDashboardOutput());
+    }
+
+    /// <summary>用户自定义处理器解析策略(替换 DefaultJobHandlerResolver)</summary>
+    private sealed class FakeJobHandlerResolver : IJobHandlerResolver
+    {
+        public Task<IAdminJob?> ResolveAsync(string handlerName, IServiceProvider scopedProvider, CancellationToken cancellationToken = default)
+            => Task.FromResult<IAdminJob?>(null);
+    }
+
+    /// <summary>用户子类化调度器(证明 TryAddSingleton + 双注册下托管的也是子类实例)</summary>
+    private sealed class SubclassedScheduler(
+        ISqlSugarClient db, JobExecutor executor, IEventBus eventBus, AdminJobsOptions options,
+        AdminIdOptions idOptions, AdminDatabaseOptions dbOptions, IIdGenerator idGenerator, TimeProvider time,
+        Microsoft.Extensions.Logging.ILogger<JobSchedulerService> logger)
+        : JobSchedulerService(db, executor, eventBus, options, idOptions, dbOptions, idGenerator, time, logger);
 
     /// <summary>用户覆写登录出参组装步骤(模板方法覆写,§5.3)</summary>
     private sealed class OverridingAuthService(
