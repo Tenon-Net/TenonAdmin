@@ -13,6 +13,12 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 > **This file is the source of truth for what shipped**, not the GitHub Release page: `backend-release` creates that page with `gh release create --generate-notes`, which drafts "What's Changed" from merged PRs only. Feature commits pushed straight to `dev` (common in this repo) never show up there, while unrelated PRs (docs, CI) do — so the release page can look complete while missing the actual content. The runbook's post-release step now replaces that draft with the matching section of this file.
 
+## Unreleased
+
+### Added
+
+- **`TenonAdmin.Excel` optional satellite package** for xlsx import/export: MiniExcel (read/write) + DocumentFormat.OpenXml (template dropdowns only). Core defines the contracts (`IImportProfile` / `IExportProfile` / `IImportRunner` / codec trio); the satellite supplies codecs. Install the package and call `AddTenonAdminExcel()` **before** `AddTenonAdmin()` — without it every codec call fails loud with `46001`. Kernel demos: user import (dict + name-based FK + org scope) and user / op-log export; both frontend templates ship an import wizard + export column picker (zero-shared). Consumer guide: `skills/wire-import-export.md` and site page [Wire Import/Export](https://tenon.52moyu.net/zh/guide/import-export). Execution ledger: `docs/excel-ledger.md`.
+
 ## 0.3.3 - 2026-07-25
 
 A patch release for the consumer's very first `docker build`: a project generated with a hyphenated name now actually builds. Found by the `tenon-example` reference application while deploying it to production.

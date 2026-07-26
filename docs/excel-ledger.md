@@ -669,7 +669,7 @@ G7 的 antd 版同理:**别只信闸门,一定起 dev server 把向导从上传�
 **⚠ 命令必须在 `web-react/` 目录跑**(cd 错了 build 会 ENOENT 静默跑错)。
 **验收**:`npm run typecheck && npm run lint && npm test && npm run build` 全绿;`npm run dev`(:5174)真点一遍同样的流程。
 
-### - [ ] G8 · 文档
+### - [x] G8 · 文档
 **改**:`skills/` 新增一篇「给自己的实体接导入导出」(消费者视角:实现 `IImportProfile` 的最小样板 + 6 个端点怎么加 + 菜单种子怎么取号)并在 `skills/README.md` 挂上;`.claude/skills/` 加薄包装;`rebuild-design.md:165` 订正库选型(指向本文件 §2)、`:305`/`:320` 的卫星包清单标注 Excel 已做;`site/` 加文档页(**先读 `skills/write-docs.md`**,写完 `cd site && npm run lint:prose -- <page>`);`CHANGELOG.md`。
 
 ---
@@ -709,6 +709,9 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 ---
 
 ## 12. 轮次日志
+
+### 第 8 轮 — G8 文档(2026-07-25)
+提交 `docs(excel): consumer guide, site page, and ledger close-out for import/export`。**改**:`skills/wire-import-export.md`(消费者接入指南:装 `TenonAdmin.Excel` + `AddTenonAdminExcel()` 前置、`IImportProfile`/`IExportProfile` 最小样板照 `SampleDoc`/`UserImportProfile`、六个端点、菜单种子取号 §6.2、**坑 11 字典幂等**与**坑 1 导出不得走 PageAsync**)+ `skills/README.md` 挂表与斜杠命令 + `.claude/skills/wire-import-export/` 薄包装;`docs/rebuild-design.md` 订正 Magicodes 定稿为指向本台账 §2、v1.x 清单与「明确不做」标注 Excel 已做;`site/zh|en/guide/import-export.md` + 侧栏 + `community/agent-skills` 挂 skill;`CHANGELOG.md` Unreleased 段。**闸门**:`cd site && npm run lint:prose -- zh/guide/import-export.md` 硬拦 0(见提交说明 / 轮次贴出的结果)。**未动**:代码与 CI;台账「留给 G8 裁定」的码表/导出列一致性测试**原样留下、本轮不裁定**。G 批全部勾完。
 
 ### 第 7 轮 — G7 `web-react/` 同款导入向导 + 接线(2026-07-25)
 提交 `feat(web-react): add the import wizard and export column picker`。**改**:新增 `ImportWizard.tsx`(四步 antd `Steps` + 裸 `Table` 可编辑预览;错误格 `background: var(--color-danger-bg)` 坑 12;API 由父级注入)+ `ExportColumnsModal.tsx`(+ 各自 `.spec.tsx`);`api/index.ts` 加 userApi 六方法 + logApi 一方法(下载走 `unwrapDownload`/坑 2,上传走 `bodySerializer`/坑 3)+ 归一 Preview/Commit;`utils/error.ts` 补数值码→msgKey 表(与 web 有意重复,坑 7);`views/system/user/index.tsx` / `log/op/index.tsx` 加按钮(`<Can code>` 用 §6.2 权限码,fetcher 截 lastQuery 带当前筛选);两个 locale 的 `import.*`/`export.*` UI 键、`COMPONENTS.md`、`types/api.ts` 导入导出 DTO。写前 `antd info Steps/Table/Modal/Upload --version 6.x`,写完 `antd lint` 清掉 v6 弃用(`Space.orientation`、`Alert.title`、受控 Upload `onChange`)。**闸门**:`typecheck` / `lint` / `test 730/730` / `build` 四条全绿(均在 `web-react/` 目录)。**浏览器实走(维护者做,chrome-devtools 驱动 :5174 + :5100)**:上传 3 行(2 对 1 错,账号前缀 `rct-` 以避开 G6 已导入的)→ 表头 11/11 自动映射 → 预览「共 3 行,其中 1 行有错误」→ **错误格底色实测 `rgb(249, 230, 234)` = `--color-danger-bg`(真渲染,不是只挂上了类名)** → 改对机构名 → 重新校验 0 错 → 提交「新增 3 / 失败 0」→ 经后端 `user/page` 核实三行确已落库、机构正确、`gender` 已是字典值 1/2;筛选 `Account=rct-ok-1` 后导出请求为 `?Account=rct-ok-1&columns=…`(带上了当前筛选);`antd lint` 四个文件均 0 issue;控制台无 `Maximum update depth exceeded`(zustand selector 没造成无限重渲染)。

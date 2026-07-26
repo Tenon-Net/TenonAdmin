@@ -18,6 +18,7 @@ const enGuideSidebar = [
     items: [
       { text: 'Add a Business Module (Backend)', link: '/guide/business-module' },
       { text: 'Add a Frontend Page', link: '/guide/frontend-page' },
+      { text: 'Wire Import/Export on Your Entity', link: '/guide/import-export' },
     ],
   },
   {
@@ -225,6 +226,7 @@ const zhGuideSidebar = [
     items: [
       { text: '加一个业务模块(后端)', link: '/zh/guide/business-module' },
       { text: '加一个前端页面', link: '/zh/guide/frontend-page' },
+      { text: '给自己的实体接导入导出', link: '/zh/guide/import-export' },
     ],
   },
   {
