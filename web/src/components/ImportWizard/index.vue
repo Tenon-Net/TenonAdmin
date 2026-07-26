@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
 import DictSelect from '@/components/DictSelect/index.vue'
 import { translateError } from '@/utils/error'
+import { triggerBlobDownload } from '@/utils/download'
 import type {
   DuplicateStrategy as DupStrategyNum,
   ImportColumn,
@@ -95,22 +96,11 @@ function applyPreview(p: ImportPreview) {
   errorRows.value = p.errorRows
 }
 
-function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
-
 async function onDownloadTemplate() {
   loading.value = true
   try {
     const blob = await props.api.downloadTemplate()
-    triggerDownload(blob, props.templateFileName ?? 'import-template.xlsx')
+    triggerBlobDownload(blob, props.templateFileName ?? 'import-template.xlsx')
   } catch (e) {
     message.error(translateError(e))
   } finally {
@@ -333,7 +323,7 @@ async function downloadErrorReport() {
   loading.value = true
   try {
     const blob = await props.api.errorReport(source)
-    triggerDownload(blob, props.errorReportFileName ?? 'import-errors.xlsx')
+    triggerBlobDownload(blob, props.errorReportFileName ?? 'import-errors.xlsx')
   } catch (e) {
     message.error(translateError(e))
   } finally {

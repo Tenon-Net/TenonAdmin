@@ -19,6 +19,7 @@ import { useBatchDelete } from '@/composables/useBatchDelete'
 import { userApi, positionApi, roleApi, orgApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
+import { triggerBlobDownload } from '@/utils/download'
 import { buildTree, type Tree } from '@/utils/tree'
 import type { ExportColumnDef, SysOrg, UserItem } from '@/types/api'
 
@@ -128,17 +129,6 @@ const userImportApi: ImportWizardApi = {
   errorReport: (rows) => userApi.importErrorReport(rows),
 }
 
-function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
-
 /** 导出:带当前 ProTable 筛选(含左侧机构树 orgId)+ 选中列。 */
 async function onExport(keys: string[]) {
   const p = tableRef.value?.params ?? {}
@@ -153,7 +143,7 @@ async function onExport(keys: string[]) {
       sortOrder: p.sortOrder || undefined,
       columns: keys.join(','),
     })
-    triggerDownload(blob, '用户导出.xlsx')
+    triggerBlobDownload(blob, '用户导出.xlsx')
     exportShow.value = false
     message.success(t('export.done'))
   } catch (e) {

@@ -9,16 +9,7 @@ export function formatSize(bytes: number): string {
 }
 
 /**
- * 触发浏览器下载 blob:createObjectURL → 临时 <a download> 点击 → **移除并释放 URL**。
- * 抽出便于单测下载编排 —— 漏 revoke 会内存泄漏、漏 download 名会用 URL 末段当文件名,都是会静默出错的点。
+ * 触发浏览器下载 —— 实现已移到 `@/utils/download`(导入向导与两个列表页也要用,不该住在文件页里)。
+ * 此处保留同名再导出,文件页与 `fileFormat.spec` 的既有写法不动。
  */
-export function triggerBlobDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
+export { triggerBlobDownload } from '@/utils/download'

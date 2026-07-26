@@ -715,6 +715,12 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 
 ## 12. 轮次日志
 
+### 第 10 轮 — 下载触发收敛成带测试的工具(2026-07-25)
+**起因**:第 7 轮记「下载按钮四条路径全过」时,顺带记下 `triggerDownload` 那 9 行在两个模板里各抄了三份(向导 + 用户页 + 操作日志页,均为 G6/G7 本批引入)。浏览器实走**走完就没了**,而这段的两种错法都是静默的 —— 漏 `revokeObjectURL` 内存泄漏、漏 `download` 名把文件存成一串 uuid,都不报错、不影响构建、`typecheck`/`lint`/`build` 全绿(坑 12 同款)。
+**改**:两模板各建 `src/utils/download.ts` 的 `triggerBlobDownload`,六处内联全部改为引用;`web/` 新增 `download.spec.ts`(镜像 `web-react` 既有的 `fileFormat.spec` 那条:断言 `createObjectURL` 收到该 blob、`<a download>` 是给定文件名、`click()` 被调、`revokeObjectURL` 收到同一 URL、用完从 DOM 移除);`web-react` 侧原实现住在 `views/system/file/fileFormat.ts`(位置不对,组件不该往视图目录里 import),移到 `utils/download.ts` 并在原处**同名再导出**,文件页与它既有的用例一行不动。
+**验收**:`web` typecheck / lint / test **62 通过(16 文件,较前 +1 文件 +1 条)**;`web-react` typecheck / lint 绿。
+**边界(照实说)**:这是把已实走验证过的行为**固化成每次 CI 都跑的用例**,不是新验证 —— 四条路径的实走结论以第 7 轮那张表为准。另:`web/` 的文件页(`views/system/file/index.vue`)另有一份更早的同款内联(非本次引入),未动。
+
 ### 第 9 轮 — 合并前风险处置:判重查询分批(2026-07-25)
 提交 `fix(excel): batch the duplicate-key lookup under the parameter limit`。**起因**:八批做完后过一遍合并风险,发现 `MaxImportRows` 默认 5000 而判重走 `keys.Contains(...)` → `IN` 一键一参,**SqlServer 参数上限 2100 是硬限**,即默认配置下导入两千多行必炸(详见 §8 坑 13)。**改**:`ImportRunner` 新增 `ExistingKeyBatchSize`(默认 500,`protected virtual`)与 `FindExistingKeysBatchedAsync`,分批调档案并合并结果 —— **兜在编排层而非各档案**,消费者照指南抄的档案一并免疫;同步改 `IImportProfile.FindExistingKeysAsync` 的契约注释与 `skills/wire-import-export.md` 的样板注释(「Runner 已分批,别自己再分」)。**验收**:全量 `dotnet test` 345/345 绿(G8 基线 344+1)。**变异**:把分批换回 `profile.FindExistingKeysAsync(keys, …)` 单次调用 → `ExistingKeyLookup_IsBatched_BelowDatabaseParameterLimit` 红(单批 1200 > 500)→ 改回绿。新用例同时钉住**合并结果不丢**:三个「已存在」的键刻意分落第 1/2/3 批,全部要被判 `ImportDuplicateInDb`。
 **仍未处置的合并风险(按序)**:①`backend-release.yml` 的 pack 不枚举项目,合进 main 后首个 `v*` tag 会把 `TenonAdmin.Excel` **永久发布到 nuget.org**(包名与 `AddTenonAdminExcel()` 入口届时定死)—— 产品决定,未动 CI;②本分支**从未推送**,七个检查一次没跑,只在 SQLite 上验过;③「已存在」被当错误呈现(第 7 轮记);④向导里**手动改列映射、覆盖/报错两种策略走 UI、必填列未映射的 `columnErrors` 分支**三条路径从未实走(实走只覆盖「自动映射全中 + 跳过策略」主路)。

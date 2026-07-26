@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { AppIcon } from '@/components/AppIcon'
 import { DictSelect } from '@/components/DictSelect'
 import { translateError } from '@/utils/error'
+import { triggerBlobDownload } from '@/utils/download'
 import type {
   DuplicateStrategy as DupStrategyNum,
   ImportColumn,
@@ -38,17 +39,6 @@ export interface ImportWizardProps {
   errorReportFileName?: string
   /** 提交成功(含部分成功)后触发,父级通常 refresh 列表 */
   onDone?: () => void
-}
-
-function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
 }
 
 const cellWrap: CSSProperties = { padding: 2, borderRadius: 4 }
@@ -124,7 +114,7 @@ export function ImportWizard({
     setLoading(true)
     try {
       const blob = await api.downloadTemplate()
-      triggerDownload(blob, templateFileName)
+      triggerBlobDownload(blob, templateFileName)
     } catch (e) {
       message.error(translateError(e))
     } finally {
@@ -335,7 +325,7 @@ export function ImportWizard({
     setLoading(true)
     try {
       const blob = await api.errorReport(source)
-      triggerDownload(blob, errorReportFileName)
+      triggerBlobDownload(blob, errorReportFileName)
     } catch (e) {
       message.error(translateError(e))
     } finally {

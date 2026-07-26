@@ -23,6 +23,7 @@ import { useHasPerm } from '@/stores/auth'
 import { orgApi, positionApi, roleApi, userApi } from '@/api'
 import { buildTree, type Tree as TreeNode } from '@/utils/tree'
 import { translateError } from '@/utils/error'
+import { triggerBlobDownload } from '@/utils/download'
 import type { ExportColumnDef, SysOrg, UserItem } from '@/types/api'
 import {
   blankForm, canDelete, canEdit, canReset, canToggleEnabled, detailToForm, toAddInput, toUpdateInput,
@@ -118,17 +119,6 @@ export default function UserPage() {
     [],
   )
 
-  function triggerDownload(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
-  }
-
   /** 导出:带当前 DataTable 筛选(含左侧机构树 orgId)+ 选中列。 */
   const onExport = async (keys: string[]) => {
     const p = lastQueryRef.current
@@ -142,7 +132,7 @@ export default function UserPage() {
         sortOrder: p.sortOrder || undefined,
         columns: keys.join(','),
       })
-      triggerDownload(blob, '用户导出.xlsx')
+      triggerBlobDownload(blob, '用户导出.xlsx')
       setExportOpen(false)
       message.success(t('export.done'))
     } catch (e) {

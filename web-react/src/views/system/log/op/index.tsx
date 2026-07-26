@@ -14,6 +14,7 @@ import { ExportColumnsModal } from '@/components/ExportColumnsModal'
 import { useConfirm } from '@/hooks/useConfirm'
 import { logApi } from '@/api'
 import { translateError } from '@/utils/error'
+import { triggerBlobDownload } from '@/utils/download'
 import type { ExportColumnDef, SysOpLog } from '@/types/api'
 import { operatorText, prettyParam } from '../logFormat'
 
@@ -56,17 +57,6 @@ export default function OpLogPage() {
     [],
   )
 
-  function triggerDownload(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
-  }
-
   const onExport = async (keys: string[]) => {
     const p = lastQueryRef.current
     setExporting(true)
@@ -79,7 +69,7 @@ export default function OpLogPage() {
         createTime: p.createTime ?? null,
         columns: keys.join(','),
       })
-      triggerDownload(blob, '操作日志导出.xlsx')
+      triggerBlobDownload(blob, '操作日志导出.xlsx')
       setExportOpen(false)
       message.success(t('export.done'))
     } catch (e) {
