@@ -13,7 +13,7 @@
 | 表名 / 路由 | `sys_*` / `api/v1/sys/*` | `biz_*` / `api/v1/biz/*`(或自定前缀) |
 | DI 注册 | `ServicesSetup.cs` 里 `TryAddScoped`(可替换性契约) | 自己 `Program.cs` 里普通 `AddScoped` |
 | ErrorCode | `ErrorCode.cs` 42xxx 段追加(看枚举头部分段表取下一个号) | 自建枚举,从 60000 起步 |
-| 菜单/权限 | `DefaultMenuSeed.cs` 追加种子,Id 按登记取号(勿回填空洞) | 后台「菜单管理」UI 添加;要预置则自注册 `ISeedData<T>`,Id ∈ [1000, 4095] |
+| 菜单/权限 | `DefaultMenuSeed.cs` 追加种子,Id 按登记取号(勿回填空洞) | 后台「菜单管理」UI 添加;要预置则自注册 `ISeedData<T>`,Id ≥ `TenonSeedIds.ConsumerMin`(1000) |
 | 程序集挂载 | 内置 | `options.ApplicationAssemblies.Add(typeof(Program).Assembly)`(缺这行:表不建、Controller 404) |
 | 前端类型 / API | 追加进 `web/src/types/api.ts` / `api/index.ts` | **新建** `types/<模块>.ts` / `api/<域>.ts`(从 `api/index.ts` 导入 `unwrap`/`pageParams`/`toPage`) |
 | 前端 i18n | 追加进 `locales/zh-CN.ts` + `en-US.ts` | **新建** `locales/ext/zh-CN/<模块>.ts` + `ext/en-US/<模块>.ts`(glob 自动并入,无需注册) |

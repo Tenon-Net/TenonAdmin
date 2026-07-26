@@ -1,6 +1,6 @@
 # 给自己的实体接导入导出
 
-装 `TenonAdmin.Excel`、写一份档案、在资源控制器上挂六个端点，业务表就能走 xlsx 导入导出。不装这个包，相关接口一律返回 `46001`，部署体积也不会多一个字节。
+装 `TenonAdmin.Excel`、写一份档案、在资源控制器上挂六个端点，业务表就能走 xlsx 导入导出。不装这个包，凡要读写 xlsx 的调用一律返回 `46001`，部署体积也不会多一个字节。
 
 实体和 CRUD 还没有的话，先走[加一个业务模块](/zh/guide/business-module)。Agent 施工用的逐步清单在仓库 `skills/wire-import-export.md`。
 
@@ -24,7 +24,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 });
 ```
 
-写反了不会报错，codec 却仍是缺省实现，七个导入导出端点全是 `46001`。活样板在 `backend/samples/MinimalHost/Program.cs`。
+写反了不会报错，codec 却仍是缺省实现：模板、预览、错误报告和两个导出一调就是 `46001`。`validate` 和 `commit` 不碰 codec，可没有预览喂行，它们也无事可做。活样板在 `backend/samples/MinimalHost/Program.cs`。
 
 可选配置节 `TenonAdmin:Excel`：`MaxImportRows`（默认 5000）、`MaxExportRows`（默认 50000）、`MaxImportFileSizeMb`（默认 10，**不**与上传头像共用上限）。
 
@@ -135,7 +135,7 @@ public class SampleDocImportProfile(IRepository<SampleDoc> repo, ISampleDocServi
 
 `template` 用会话即可：导入按钮本身由 `preview` 的权限码把门。`preview` 不能降成 `ActiveSession`，否则变成业务键是否存在的探测器。
 
-`[RolePermission]` 端点要有菜单按钮节点，Permission 写成 `METHOD:/路由模板`，与控制器一字不差。系统模块在 `DefaultMenuSeed` 里取号：当前最大 Id + 1 起编，**不要回填空洞**，内核段 `[1, 999]`。消费方预置菜单 Id 从 `TenonSeedIds.ConsumerMin`（1000）起。用户资源的六颗按钮是 Id 126–131，可直接对照。
+`[RolePermission]` 端点要有菜单按钮节点，Permission 写成 `METHOD:/路由模板`，与控制器一字不差。系统模块在 `DefaultMenuSeed` 里取号：当前最大 Id + 1 起编，**不要回填空洞**，内核段 `[1, 999]`。消费方预置菜单 Id 从 `TenonSeedIds.ConsumerMin`（1000）起。用户资源的五颗按钮是 Id 126–130，可直接对照；操作日志导出在 131。模板下载走 `[ActiveSession]`，没有按钮。
 
 前端 `web/` 与 `web-react/` 各有一套导入向导与导出选列弹窗（零共享，按你选的模板抄）。`gen:api` 后按钮用 `v-auth` 或 `<Can code>` 挂真实权限码。
 

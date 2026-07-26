@@ -306,7 +306,7 @@ public class PositionController(IPositionService positionService) : ControllerBa
 
 在 `backend/src/TenonAdmin.Services/Seed/DefaultMenuSeed.cs` 中追加。结构：一条 `MenuType.Menu`（页面节点）+ 若干条 `MenuType.Button`（权限按钮）。
 
-**取号规则**（见 `DefaultMenuSeed` 头部注释的 Id 登记）：新行一律取当前最大号 +1 继续编（历史号段散布在 2–115，**不要回填空洞**——空洞可能是被挪走的历史号，复用会撞老库存量行）。内核种子上限 999；撞号/越界会被启动检查与 `SeedIdRangeTests` 当场拒绝。
+**取号规则**（见 `DefaultMenuSeed` 头部注释的 Id 登记）：新行一律取当前最大号 +1 继续编（历史号段散布在 2–131，**不要回填空洞**——空洞可能是被挪走的历史号，复用会撞老库存量行）。内核种子上限 999；撞号/越界会被启动检查与 `SeedIdRangeTests` 当场拒绝。
 
 ```csharp
 // 页面节点:Component 对应前端 views/ 下的路径

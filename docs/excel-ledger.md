@@ -47,11 +47,11 @@ git checkout dev
 | ① | **`dev` 合进 `main` 后首个 `v*` tag 会把 `TenonAdmin.Excel` 发布到 nuget.org**(推包不可撤销,只能 unlist),包名与 `AddTenonAdminExcel()` 入口届时定死 | **需产品确认,但基本已成定局**,见下 | §12 第 9 轮 ① |
 | ② | SqlServer **完整**套件只在 `schedule` 夜间跑,而 `schedule` 只跑默认分支 —— 本批代码的 SqlServer 全量验证要等**进了默认分支之后**那一夜才真正发生。PR 上跑的是方言子集 | 覆盖缺口,非缺陷 | §12 第 13 轮末 |
 | ③ | ~~「已存在」被当错误呈现~~ | ✅ **已修**(2026-07-26) | §12 第 14 轮 |
-| ④ | 向导三条支路从未实走:**手动改列映射**、**覆盖/报错两种策略走 UI**、**必填列未映射的 `columnErrors` 分支**(实走只覆盖「自动映射全中 + 跳过策略」主路) | 验证缺口 | §12 第 9 轮 ④ |
+| ④ | ~~向导三条支路从未实走:手动改列映射、覆盖/报错两种策略走 UI、`columnErrors` 分支~~ | ✅ **已实走**(2026-07-26,双模板,含第 14 轮欠的配色) | §12 第 15 轮 |
 
 **①的原始说法要订正**:第 9 轮记的是「`backend-release.yml` 的 pack 不枚举项目」,读起来像**漏配**。实际不是 —— `backend/Directory.Build.props` 默认 `IsPackable=false`,`src/` 下各包**逐个显式开**,`TenonAdmin.Excel.csproj` 里那句 `<IsPackable>true</IsPackable>` 是第 2 轮主动写的。而且 `CHANGELOG.md` 已经对外写明了包名、`AddTenonAdminExcel()` 前置要求和文档站链接。所以这是**已作出并已公开的选择**,不是待补的配置;真要不发,得同时撤 `IsPackable` 和 CHANGELOG 那一条。
 
-建议次序:①合 `main` 前确认一句即可(默认就发);②合进 `main` 后隔夜看一次 nightly;④单独一批(要开浏览器,顺带把第 14 轮欠的配色实走一起做了)。
+建议次序:①合 `main` 前确认一句即可(默认就发);②合进 `main` 后隔夜看一次 nightly。(③④均已关闭,见 §12 第 14/15 轮。)
 
 ### 本地怎么跑起来(验证命令详见 §10)
 
@@ -500,7 +500,7 @@ CommitAsync
 ### 5.2 返回形态
 
 - **xlsx 三个端点**(`template` / `error-report` / `export`)返回 `FileStreamResult`,`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,`FileDownloadName` 用 **RFC 5987** 编码(`filename*=UTF-8''...`)否则中文名在部分浏览器乱码。**它们不进 `Result<T>` 信封** —— `ResultEnvelopeFilter` 只包裸返回值,`FileStreamResult` 是 `IActionResult`,天然绕开,但要写测试钉住(§7)。
-- **其余端点**返回裸 DTO,由 `ResultEnvelopeFilter` 包信封,与现有端点一致。
+- **其余端点**显式返回 `Result<T>`(与全部内置控制器一致;`ResultEnvelopeFilter` 对已是信封的值放行,不是由它来包 —— 显式声明是为 OpenAPI 契约保真,见该过滤器注释 P1-3。第 15 轮审计订正,线上契约不受影响)。
 
 ### 5.3 两个鉴权决定(写下来,免得 review 时被当疏漏)
 
@@ -765,6 +765,21 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 ---
 
 ## 12. 轮次日志
+
+### 第 15 轮 — 全面复核:静态审计 229 项 + 七端点实测 + 双模板实走,遗留④关闭(2026-07-26)
+**起因**:用户要求按本台账全面复核导入导出。三线并行:8 维度静态审计(共 229 项断言逐条对码)、MinimalHost 七端点 API 实测、双模板浏览器实走。
+
+**静态审计(229 项,7 条发现,0 功能缺陷)**:
+- Core 契约/打包 39 项、codec 18 项、Runner/Profile 29 项、`web/` 29 项、`web-react/` 32 项:**全符**(含 CODE_MSG_KEY 46xxx 全量对码、导出列镜像全量对码、antd v6 无 v5 遗物、zustand selector 无对象字面量)
+- 端点/种子 27 项,1 条:§5.2 原写「其余端点返回裸 DTO,由 `ResultEnvelopeFilter` 包信封」与实现相反 —— `UserController` 显式 `Result<T>.Ok(...)` 预包壳,过滤器对 `IResultEnvelope` 放行(刻意设计,为 OpenAPI 契约保真,见过滤器注释 P1-3)。线上契约无差,本轮已订正 §5.2
+- 测试覆盖 21 项,2 条**测试强度债(记账不动手,均非 Excel 特有)**:(a)`ReplaceabilityTests` 五件套用 `ConfigureTestServices` + `Replace`,在 `AddTenonAdmin` **之后**执行,故各条注释「把 TryAdd 改 Add → 本条红」实际不会红 —— 它们证明「事后 Replace 能换」,真正的 TryAdd 前置序只有三个 codec 有 `AddTenonAdminExcel_BeforeKernel_WinsTryAdd` 钉着(且是模拟注册),`IImportRunner`/`IDictTextResolver` 无钉。全套件沿用的老模式,修法涉及测试基建(WebApplicationFactory 无 AddTenonAdmin 前注册钩子);(b)46001 只有模拟注册的单元测试,「默认宿主打模板端点 → 信封 46001」无 HTTP 用例(G2 当年的该变异是手工验的)
+- 消费者文档 34 项,4 条文档漂移,**本轮已全改**:site 双语页「不装包相关接口一律 46001」夸大(validate/commit 不碰 codec);「用户六颗按钮 126–131」错(用户五颗 126–130,131 是操作日志导出,模板下载无按钮);`create-crud-backend.md` 历史号段 2–115 → 2–131;`new-module.md` 的 [1000, 4095] 上限已退役 → ≥ `TenonSeedIds.ConsumerMin`
+
+**API 实测(14/14 全过)**:手搓最小 OOXML 三个测试文件打七端点。四个 xlsx 响应全部 spreadsheet Content-Type + `PK` 头 + RFC 5987;文件 A「账号」列不匹配 → 返回 headers 11 项/mapping 10 项(未匹配头**不出现在 mapping**,向导取差集渲染),带改后 mapping 重预览 → 2 行 0 错,字典 男→1;提交 Skip inserted=2;文件 C 撞库标 46010,三策略依次 Skip=skipped 1/inserted 1、Overwrite=updated 2、Error=failed 2(failures 附 46010);文件 B 整列缺 → columnErrors 46004;用户导出内容含 Overwrite 后的新姓名(**真落库**);操作日志导出含 commit 路由(操作日志真记了)
+
+**浏览器实走(双模板,遗留④三条支路全关)**:两模板均实走:上传 A → 第②步 alert「Account: 必填列未映射」(46004 分支渲染)→ 手动把「账号」映射到「登录账号」→ 下一步带新映射重预览 → 第③步汇总「共 2 行,其中 0 行有错误 另有 2 行已存在」+ 「已存在」标签 + 警示底色**实测**(web `--color-warning-bg:#FFF8E0`=rgb(255,248,224);web-react `#FDF4E4`=rgb(253,244,228),两值不同是零共享各自 token —— 第 14 轮欠的配色实走补上)→ 切「已存在记为错误」汇总翻成「2 行有错误」、警示格变错误格 → web 侧再切「覆盖已存在」提交,结果页「合计 2 新增 0 **更新 2** 跳过 0 失败 0」。UI 层与后端语义逐级一致
+
+**过程中的环境坑(记下省后人)**:①Syncthing 残留 75 个 `*.sync-conflict-*` 副本(被 `.gitignore` 遮蔽,`git status` 看不见)把后端编译打成 CS0229 二义性,逐个比对 HEAD 确认过期后删净即愈;②首跑全量套件与 8 个审计 agent 并行,35 个失败全是 TestHost 请求过载超时(1h16m),安静环境重跑 **347/347 绿(1 分钟)** —— 重负载并行下的红不算数;③`dotnet test` 只建测试工程依赖图**不建样例宿主**,`dotnet run --no-build` 于是跑了 7 月 15 日的旧 MinimalHost 二进制,七条导入导出路由整体 404 —— 冒烟前先 `dotnet build backend/samples/MinimalHost`
 
 ### 第 14 轮 — 「已存在」不再被当错误呈现(2026-07-26,§0.1 遗留③)
 **起因**:§0.1 遗留③ —— 对着已导过一次的库重跑向导,预览显示「共 3 行,其中 3 行有错误」且登录账号列全部标红,而后端在 Skip/Overwrite 策略下会正常跳过/更新。呈现层缺陷,落库一直是对的。

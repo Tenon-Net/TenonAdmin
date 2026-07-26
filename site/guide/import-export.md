@@ -1,6 +1,6 @@
 # Wire Import/Export on Your Entity
 
-Install `TenonAdmin.Excel`, write a profile, and hang six endpoints on the resource controller — that is enough for xlsx import/export on a business table. Without the package every related call returns `46001`, and publish size does not grow by a single byte.
+Install `TenonAdmin.Excel`, write a profile, and hang six endpoints on the resource controller — that is enough for xlsx import/export on a business table. Without the package, every call that reads or writes xlsx returns `46001`, and publish size does not grow by a single byte.
 
 If the entity and CRUD do not exist yet, start with [Add a Business Module](/guide/business-module). The step-by-step agent checklist lives in `skills/wire-import-export.md` in the repo.
 
@@ -24,7 +24,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 });
 ```
 
-Reverse the order and nothing throws at startup, but codecs stay missing and every import/export endpoint returns `46001`. Live sample: `backend/samples/MinimalHost/Program.cs`.
+Reverse the order and nothing throws at startup, but codecs stay missing: template, preview, error-report and both exports fail with `46001` on the first call. `validate` and `commit` never touch a codec, yet with no preview to feed them rows they have nothing to do either. Live sample: `backend/samples/MinimalHost/Program.cs`.
 
 Optional config under `TenonAdmin:Excel`: `MaxImportRows` (default 5000), `MaxExportRows` (default 50000), `MaxImportFileSizeMb` (default 10 — **not** shared with avatar upload limits).
 
@@ -135,7 +135,7 @@ Hang routes on each resource. Do not build a generic `/import/{code}` controller
 
 `template` only needs an active session: the import entry is gated by the `preview` permission. Do not demote `preview` to `ActiveSession` — that turns it into an existence oracle for business keys.
 
-Every `[RolePermission]` endpoint needs a menu button whose `Permission` is `METHOD:/route-template`, character-identical to the controller. System modules take the next free Id in `DefaultMenuSeed` (max + 1; **never backfill holes**); kernel range is `[1, 999]`. Consumer menu seeds start at `TenonSeedIds.ConsumerMin` (1000). User resource buttons are Ids 126–131 — use them as the reference.
+Every `[RolePermission]` endpoint needs a menu button whose `Permission` is `METHOD:/route-template`, character-identical to the controller. System modules take the next free Id in `DefaultMenuSeed` (max + 1; **never backfill holes**); kernel range is `[1, 999]`. Consumer menu seeds start at `TenonSeedIds.ConsumerMin` (1000). The user resource's five buttons are Ids 126–130 — use them as the reference; the op-log export button is 131. Template download is `[ActiveSession]`-only and has no button.
 
 `web/` and `web-react/` each ship an import wizard and export column picker (zero-shared; copy the template you use). After `gen:api`, gate buttons with `v-auth` or `<Can code>` and the real permission codes.
 
