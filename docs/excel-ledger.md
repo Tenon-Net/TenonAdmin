@@ -607,6 +607,10 @@ G1 只加接口和 DTO,`TenonAdmin.Core.csproj` 一行不改。`MiniExcel` / `Do
 `typecheck / lint / test / build` 都不进浏览器,**渲染期才失效的东西一个都照不出来**。G6 实走撞到的具体例子:错误格红底写成 `color-mix(in srgb, var(--n-error-color) 18%, transparent)`,而 `--n-error-color` 是 naive 组件内部变量、在那层普通 div 上未定义 → 整条声明被判无效丢弃 → **红底从未渲染过,四条闸门全绿**。用仓库自己的 `--color-danger-bg`(亮暗都有定义)。
 G7 的 antd 版同理:**别只信闸门,一定起 dev server 把向导从上传点到提交走一遍**,并核实错误格是真的有底色(读 `getComputedStyle().backgroundColor`,别只看类名挂上了)。
 
+**坑 14 — 要给某列加下拉,先查内核有没有现成字典,别加平行机制。**
+`ImportColumn` 出下拉**只认 `DictTypeCode`** 这一条路。碰到布尔/枚举列没下拉,第一反应容易是「给 `ImportColumn` 加个非字典的固定候选值属性」—— 第 11 轮就这么派工出去过,写到一半才发现 `DictSeed.cs` 里 `common_status`(启用=1/停用=0)**早就种好了,只是没人用**。挂上字典即得模板下拉 + 向导 `DictSelect` + label→value 翻译,零契约改动、零前端改动、不用 `gen:api`;加平行机制则是给同一件事造第二套表达,还剥夺了消费者在字典管理界面改选项的能力。
+**先查 `DictSeed.cs`**(现有 `common_status` / `org_category` / `gender` 三个),没有再考虑新种一个字典类型;真到了「候选值不该进字典」的场景再谈扩契约,并把理由写进 §1 决策全表。
+
 ---
 
 ## 9. 批次(每条一个独立提交)
@@ -714,6 +718,21 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 ---
 
 ## 12. 轮次日志
+
+### 第 11 轮 — 启用状态改挂 `common_status` 字典(2026-07-26)
+**起因**:用户实测两条反馈。①「5173 所有页面 404」—— 排查后**不是缺陷**:后端菜单接口正常、19 个路由菜单的 `component` 逐个核对 `web/src/views` **一个不缺**、全新隔离会话登录→选应用→逐个点菜单全通、深链接硬刷新也通。真因是当时两个 vite 进程已死(只剩后端在监听);杀掉 vite 后在已打开的页面里点菜单可复现:`ERR_CONNECTION_REFUSED` + `Unhandled error during execution of async component loader` → 内容区空白。②「用户管理里状态是 switch,导入模板里却是自由文本框」—— **是真缺陷**。
+
+**根因**:`ImportColumn` 出下拉**只有 `DictTypeCode` 一条路**(`OpenXmlTemplateBuilder` 见到非字典列直接 `continue`,两个向导的单元格也是 `col.dictTypeCode ? 下拉 : 文本框`),而 `Enabled` 是布尔列没挂字典。
+
+**改**:`UserImportProfile` 的 `Enabled` 列挂上 `DictTypeSeed.COMMON_STATUS_CODE`(启用=1 / 停用=0)。**这个字典内核早就种了**(`DictSeed.cs`,备注写着「启用/停用等二态开关的通用字典」),但在此之前**没有任何代码在用它**。挂上即得:模板下拉、向导 `DictSelect`、label→value 翻译,全是现成机制。`ValidateRowAsync` 里的 `ParseEnabled` 检查保留作纵深防御(Commit 走前端回传的 Cells,不能只信上游),但加了「该格已被字典判过错就不再重复报」,免得一个单元格出两条错。
+
+**走过又退掉的路(别重走)**:先按「给 `ImportColumn` 加非字典的固定候选值 `Options` + 改 codec + 改两个向导 + 两边 `gen:api`」派了工,写到一半才发现 `common_status` 已存在。**加平行机制是错的**:内核已有闭合二态的表达方式,消费者也该被引导去用字典(它还能在字典管理界面改)。派出去的改动已 `git checkout` 全退。教训与坑 12 同源 —— 动手改契约前先查内核已有什么。
+
+**顺带**:导出侧本来就是对的(`UserController.GetUserCell` 里 `"Enabled" => u.Enabled ? "启用" : "停用"`),导出文件写的就是中文 label,与新的导入下拉正好对得上,导出→改→再导入闭环通。
+
+**行为收窄(照实说)**:`Hint` 从「启用/停用,或 是/否」改成「下拉选择」。挂字典后手写的「是/否/true/yes」会被字典闸门判 `ImportCellDictInvalid`,不再被接受(`1`/`0` 仍可,它们是字典 value)。本特性从未合并发布,不存在存量文件,故无兼容负担。
+
+**验收**:全量 `dotnet test` 347/347 绿(第 9 轮基线 345 + 2)。**变异**:摘掉 `Enabled` 列的 `DictTypeCode` → 两条新用例都红(模板那条报「K 列没有 dataValidation」,链路那条报单元格仍是「启用」而非「1」)→ 改回绿。链路那条刻意断言在 `ValidateAsync` 的**返回行**上 —— `Commit`/`Validate` 都深拷贝入参(坑 6 防篡改),入参 `Cells` 永远不会被改;且只断言落库结果会**假绿**,因为 `ParseEnabled` 本来就认「停用」。
 
 ### 第 10 轮 — 下载触发收敛成带测试的工具(2026-07-25)
 **起因**:第 7 轮记「下载按钮四条路径全过」时,顺带记下 `triggerDownload` 那 9 行在两个模板里各抄了三份(向导 + 用户页 + 操作日志页,均为 G6/G7 本批引入)。浏览器实走**走完就没了**,而这段的两种错法都是静默的 —— 漏 `revokeObjectURL` 内存泄漏、漏 `download` 名把文件存成一串 uuid,都不报错、不影响构建、`typecheck`/`lint`/`build` 全绿(坑 12 同款)。

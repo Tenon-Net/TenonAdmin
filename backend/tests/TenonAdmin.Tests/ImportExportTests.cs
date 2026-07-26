@@ -1,4 +1,6 @@
+using System.IO.Compression;
 using System.Net.Http.Headers;
+using System.Xml.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TenonAdmin.Core;
@@ -684,5 +686,108 @@ public class ImportExportTests
         var byExport = await (await client.GetAsync(
             "/api/v1/sys/log/op/page?Current=1&Size=50&Path=/api/v1/sys/user/export")).ReadEnvelope();
         Assert.NotEmpty(byExport.GetProperty("data").GetProperty("items").EnumerateArray());
+    }
+
+    // ── §12 第 11 轮:启用状态是闭合二态,模板/向导都该出下拉 ────────────────
+
+    /// <summary>
+    /// 用户导入模板里「启用状态」列必须带下拉,候选值是 common_status 的两个 label。
+    /// 表单里这个字段是开关,导入却给自由文本框,是口径不一致(用户实测反馈)。
+    /// 变异:把 UserImportProfile 的 Enabled 列上的 DictTypeCode 去掉 → 该列不再有
+    /// dataValidation → 本条必须红(性别那列的下拉在别的列号上,兜不住)。
+    /// </summary>
+    [Fact]
+    public async Task ImportTemplate_EnabledColumn_HasCommonStatusDropdown()
+    {
+        using var f = new AdminAppFactory { Overrides = UseRealExcelCodecs };
+        var client = f.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", await client.LoginToken("superAdmin", "Test@123456"));
+
+        var resp = await client.GetAsync("/api/v1/sys/user/import/template");
+        Assert.True(resp.IsSuccessStatusCode,
+            $"template HTTP {(int)resp.StatusCode}: {await resp.Content.ReadAsStringAsync()}");
+
+        var bytes = await resp.Content.ReadAsByteArrayAsync();
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        XNamespace main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        // 1) 在带表头的那张 sheet 上定位「启用状态」的列字母(不假设列顺序)
+        string? enabledLetter = null;
+        XDocument? dataSheet = null;
+        foreach (var entry in zip.Entries.Where(e =>
+                     e.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase)
+                     && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            using var es = entry.Open();
+            var doc = XDocument.Load(es);
+            var header = doc.Descendants(main + "row")
+                .FirstOrDefault(r => (string?)r.Attribute("r") == "1");
+            var cell = header?.Descendants(main + "c").FirstOrDefault(c =>
+                c.Descendants(main + "t").Any(t => t.Value == "启用状态"));
+            if (cell is null) continue;
+
+            enabledLetter = new string(((string?)cell.Attribute("r") ?? "")
+                .TakeWhile(char.IsLetter).ToArray());
+            dataSheet = doc;
+            break;
+        }
+
+        Assert.False(string.IsNullOrEmpty(enabledLetter), "模板表头里没找到「启用状态」列");
+
+        // 2) 该列上必须挂着 dataValidation(sqref 形如 K2:K1001)
+        var dv = dataSheet!.Descendants(main + "dataValidation").FirstOrDefault(v =>
+            ((string?)v.Attribute("sqref") ?? "").StartsWith($"{enabledLetter}", StringComparison.Ordinal));
+        Assert.True(dv is not null,
+            $"「启用状态」({enabledLetter} 列)没有 dataValidation —— 模板里它还是自由文本框");
+
+        // 3) 候选值确实是 common_status 的两个 label
+        var allText = zip.Entries
+            .Where(e => e.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(e =>
+            {
+                using var es = e.Open();
+                return XDocument.Load(es).Descendants(main + "t").Select(t => t.Value).ToList();
+            })
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("启用", allText);
+        Assert.Contains("停用", allText);
+    }
+
+    /// <summary>
+    /// 启用状态挂上字典后整条链要真通:label「停用」→ value「0」→ ParseEnabled → Enabled=false。
+    /// <para>
+    /// 光看落库结果不够:ParseEnabled 本来就认「停用」,去掉字典也会绿(假绿)。所以先在
+    /// ValidateAsync 的返回行上断言 label 已被换成 "1"/"0" —— 这才是「真走了字典」的证据。
+    /// (Commit/Validate 都会深拷贝入参,坑 6 的防篡改设计,所以只能从返回值上看。)
+    /// </para>
+    /// 变异:去掉 UserImportProfile 里 Enabled 列的 DictTypeCode → 单元格仍是「启用」→ 本条必须红。
+    /// </summary>
+    [Fact]
+    public async Task Commit_EnabledLabel_TranslatedToDictValue_ThenParsed()
+    {
+        using var f = new AdminAppFactory();
+        using var scope = f.Services.CreateScope();
+        var sp = scope.ServiceProvider;
+
+        var runner = sp.GetRequiredService<IImportRunner>();
+        var profile = sp.GetRequiredService<UserImportProfile>();
+        var users = sp.GetRequiredService<IRepository<SysUser>>();
+
+        var on = Row(1, "import-enabled-on", "启用用户", extra: new() { ["Enabled"] = "启用" });
+        var off = Row(2, "import-enabled-off", "停用用户", extra: new() { ["Enabled"] = "停用" });
+
+        var preview = await runner.ValidateAsync([on, off], profile);
+        Assert.All(preview.Rows, r => Assert.Empty(r.Errors));
+        Assert.Equal("1", preview.Rows[0].Cells["Enabled"]);
+        Assert.Equal("0", preview.Rows[1].Cells["Enabled"]);
+
+        var result = await runner.CommitAsync([on, off], profile, DuplicateStrategy.Error);
+        Assert.Equal(2, result.Inserted);
+
+        var uOn = await users.GetFirstAsync(u => u.Account == "import-enabled-on");
+        var uOff = await users.GetFirstAsync(u => u.Account == "import-enabled-off");
+        Assert.True(uOn!.Enabled);
+        Assert.False(uOff!.Enabled);
     }
 }

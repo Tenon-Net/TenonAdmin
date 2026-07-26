@@ -49,8 +49,12 @@ public partial class UserImportProfile(
         },
         new()
         {
-            Key = "Enabled", Title = "启用状态", Width = 12,
-            Hint = "启用/停用,或 是/否",
+            // 复用内核已种的 common_status(启用=1 / 停用=0)。表单里这个字段是开关,是个闭合二态,
+            // 导入自然也该是下拉而不是自由文本(用户实测反馈,§12 第 11 轮)。挂上字典即可,
+            // 模板下拉与向导下拉都是现成机制;Runner 把 label「启用」译成 value「1」,
+            // ParseEnabled 正好认 1/0,不必再加一套非字典候选值的平行机制。
+            Key = "Enabled", Title = "启用状态", DictTypeCode = DictTypeSeed.COMMON_STATUS_CODE, Width = 12,
+            Hint = "下拉选择",
         },
     ];
 
@@ -66,8 +70,12 @@ public partial class UserImportProfile(
         if (Cell(row, "Email") is { Length: > 0 } email && !EmailRegex().IsMatch(email.Trim()))
             errors.Add(new CellError("Email", ErrorCode.ImportCellFormatInvalid));
 
-        // 启用状态:启用/停用/是/否/1/0
-        if (Cell(row, "Enabled") is { Length: > 0 } en && ParseEnabled(en) is null)
+        // 启用状态:字典列,值由 Runner 的字典校验先把关(label→value)。这里是纵深防御——
+        // Commit 走的是前端回传的 Cells,不能只信上游。已被字典判过错的格子不再重复报,
+        // 免得同一个单元格在错误报告里出现两条。
+        if (Cell(row, "Enabled") is { Length: > 0 } en
+            && ParseEnabled(en) is null
+            && !row.Errors.Any(e => e.ColumnKey == "Enabled"))
             errors.Add(new CellError("Enabled", ErrorCode.ImportCellFormatInvalid));
 
         // 机构按名查 + 越权
