@@ -598,6 +598,11 @@ G1 只加接口和 DTO,`TenonAdmin.Core.csproj` 一行不改。`MiniExcel` / `Do
 现已在 `ImportRunner` 里补:`ToValueAsync` 返回 null 时,再用 `GetItemsAsync` 判断 raw 是否本身就是合法 value,是则幂等接受(非法值仍照旧拦下)。
 **为什么单测没抓到**:G5 的字典用例每次都手工造带 label 的行,永远走不到第二遍。回归用例是 `PreviewRows_FedBackTo_ValidateAndCommit_AreIdempotentOnDictColumns` —— 它把 **Preview 的输出**喂回 Validate/Commit。给自己的实体接导入时,凡有字典列都照这个形状写测试。
 
+**坑 13 — 判重的 `IN` 查询有参数上限,必须分批(已在 Runner 兜住)。**
+档案的常规写法 `Where(x => keys.Contains(x.Key))` 翻成 `IN (@p0, @p1, …)`,**一个业务键一个参数**。SQL Server 单语句参数上限 **2100(硬限)**、老版 SQLite 999、PostgreSQL 65535。而 `MaxImportRows` 默认 **5000** —— 不分批的话,在 SqlServer 上导入超过约 2100 行**必然抛异常**,且默认配置主动允许到五千行。
+**分批放在 `ImportRunner.FindExistingKeysBatchedAsync`(`ExistingKeyBatchSize` 默认 500),不放在各档案里** —— 消费者照 `skills/wire-import-export.md` 抄出来的档案会原样带同一个缺陷,兜在编排层所有档案(含消费者自己的)才一并免疫,档案实现保持「一条 `IN` 查询」的简单形状。写自己的档案时**不必也不该**再自己分批。
+**为什么之前没发现**:G5 第 10 条测行数上限时把 `MaxImportRows` 调到 2、传 3 行,从没有一条测试真发几千行;而 SqlServer 那条腿在 push/PR 上只跑方言子集,这类用例大概率也不在子集内 —— 即**上线前 CI 也未必会红**。
+
 **坑 12 — 四条前端闸门全绿 ≠ 页面能用。**
 `typecheck / lint / test / build` 都不进浏览器,**渲染期才失效的东西一个都照不出来**。G6 实走撞到的具体例子:错误格红底写成 `color-mix(in srgb, var(--n-error-color) 18%, transparent)`,而 `--n-error-color` 是 naive 组件内部变量、在那层普通 div 上未定义 → 整条声明被判无效丢弃 → **红底从未渲染过,四条闸门全绿**。用仓库自己的 `--color-danger-bg`(亮暗都有定义)。
 G7 的 antd 版同理:**别只信闸门,一定起 dev server 把向导从上传点到提交走一遍**,并核实错误格是真的有底色(读 `getComputedStyle().backgroundColor`,别只看类名挂上了)。
@@ -709,6 +714,10 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 ---
 
 ## 12. 轮次日志
+
+### 第 9 轮 — 合并前风险处置:判重查询分批(2026-07-25)
+提交 `fix(excel): batch the duplicate-key lookup under the parameter limit`。**起因**:八批做完后过一遍合并风险,发现 `MaxImportRows` 默认 5000 而判重走 `keys.Contains(...)` → `IN` 一键一参,**SqlServer 参数上限 2100 是硬限**,即默认配置下导入两千多行必炸(详见 §8 坑 13)。**改**:`ImportRunner` 新增 `ExistingKeyBatchSize`(默认 500,`protected virtual`)与 `FindExistingKeysBatchedAsync`,分批调档案并合并结果 —— **兜在编排层而非各档案**,消费者照指南抄的档案一并免疫;同步改 `IImportProfile.FindExistingKeysAsync` 的契约注释与 `skills/wire-import-export.md` 的样板注释(「Runner 已分批,别自己再分」)。**验收**:全量 `dotnet test` 345/345 绿(G8 基线 344+1)。**变异**:把分批换回 `profile.FindExistingKeysAsync(keys, …)` 单次调用 → `ExistingKeyLookup_IsBatched_BelowDatabaseParameterLimit` 红(单批 1200 > 500)→ 改回绿。新用例同时钉住**合并结果不丢**:三个「已存在」的键刻意分落第 1/2/3 批,全部要被判 `ImportDuplicateInDb`。
+**仍未处置的合并风险(按序)**:①`backend-release.yml` 的 pack 不枚举项目,合进 main 后首个 `v*` tag 会把 `TenonAdmin.Excel` **永久发布到 nuget.org**(包名与 `AddTenonAdminExcel()` 入口届时定死)—— 产品决定,未动 CI;②本分支**从未推送**,七个检查一次没跑,只在 SQLite 上验过;③「已存在」被当错误呈现(第 7 轮记);④向导里**手动改列映射、覆盖/报错两种策略走 UI、必填列未映射的 `columnErrors` 分支**三条路径从未实走(实走只覆盖「自动映射全中 + 跳过策略」主路)。
 
 ### 第 8 轮 — G8 文档(2026-07-25)
 提交 `docs(excel): consumer guide, site page, and ledger close-out for import/export`。**改**:`skills/wire-import-export.md`(消费者接入指南:装 `TenonAdmin.Excel` + `AddTenonAdminExcel()` 前置、`IImportProfile`/`IExportProfile` 最小样板照 `SampleDoc`/`UserImportProfile`、六个端点、菜单种子取号 §6.2、**坑 11 字典幂等**与**坑 1 导出不得走 PageAsync**)+ `skills/README.md` 挂表与斜杠命令 + `.claude/skills/wire-import-export/` 薄包装;`docs/rebuild-design.md` 订正 Magicodes 定稿为指向本台账 §2、v1.x 清单与「明确不做」标注 Excel 已做;`site/zh|en/guide/import-export.md` + 侧栏 + `community/agent-skills` 挂 skill;`CHANGELOG.md` Unreleased 段。**闸门**:`cd site && npm run lint:prose -- zh/guide/import-export.md` 硬拦 0(见提交说明 / 轮次贴出的结果)。**未动**:代码与 CI;台账「留给 G8 裁定」的码表/导出列一致性测试**原样留下、本轮不裁定**。G 批全部勾完。

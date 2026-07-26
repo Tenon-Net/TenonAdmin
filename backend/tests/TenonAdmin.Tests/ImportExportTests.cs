@@ -283,6 +283,83 @@ public class ImportExportTests
         Assert.Contains(junk.Rows.SelectMany(r => r.Errors), e => e.Code == ErrorCode.ImportCellDictInvalid);
     }
 
+    /// <summary>
+    /// 判重查询必须分批送进档案:一次塞太多业务键会撞数据库的语句参数上限。
+    /// <para>
+    /// 档案的常规写法(内核的 <c>UserImportProfile</c> 与消费者指南的样板都是)是
+    /// <c>Where(x =&gt; keys.Contains(x.Key))</c> → <c>IN (@p0, @p1, …)</c>,<b>一个键一个参数</b>。
+    /// SQL Server 单语句参数上限 2100(硬限)、老版 SQLite 999,而 <c>MaxImportRows</c> 默认 5000 ——
+    /// 不分批的话在 SqlServer 上导入两千多行就必然抛异常,且默认配置主动允许到五千行。
+    /// 分批放在 Runner 而非各档案,消费者照抄的档案才能一并免疫。
+    /// </para>
+    /// 变异:把 <c>FindExistingKeysBatchedAsync</c> 换回直接 <c>profile.FindExistingKeysAsync(keys, …)</c>
+    /// → 单批 1200 &gt; 500 → 本条红。
+    /// </summary>
+    [Fact]
+    public async Task ExistingKeyLookup_IsBatched_BelowDatabaseParameterLimit()
+    {
+        using var f = new AdminAppFactory { Overrides = UseRealExcelCodecs };
+        using var scope = f.Services.CreateScope();
+        var runner = scope.ServiceProvider.GetRequiredService<IImportRunner>();
+
+        // 三个「库里已存在」的键,刻意分落在第 1、2、3 批,用来钉住合并结果没丢
+        var profile = new BatchProbeProfile(
+            new HashSet<string>(StringComparer.Ordinal) { "k0003", "k0600", "k1150" });
+        var rows = Enumerable.Range(1, 1200)
+            .Select(i => new ImportRow
+            {
+                Index = i,
+                Cells = new Dictionary<string, string?> { ["K"] = $"k{i:D4}" },
+                Errors = [],
+            })
+            .ToList();
+
+        var preview = await runner.ValidateAsync(rows, profile);
+
+        Assert.True(profile.BatchSizes.Count > 1,
+            $"1200 个键必须分多批送进档案,实际只调了 {profile.BatchSizes.Count} 次");
+        Assert.All(profile.BatchSizes, n => Assert.True(n <= 500,
+            $"单批 {n} 个键超过 500,会撞 SqlServer 的 2100 参数上限"));
+        Assert.Equal(1200, profile.BatchSizes.Sum());
+
+        // 合并结果:三批里各自命中的都要算上,一个都不能漏
+        var dup = preview.Rows
+            .Where(r => r.Errors.Any(e => e.Code == ErrorCode.ImportDuplicateInDb))
+            .Select(r => r.Cells["K"]!)
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(new HashSet<string> { "k0003", "k0600", "k1150" }, dup);
+    }
+
+    /// <summary>只为上面那条服务:记录每次被送进来多少个键,并按预置集合报「已存在」。</summary>
+    private sealed class BatchProbeProfile(IReadOnlySet<string> existing) : IImportProfile
+    {
+        public List<int> BatchSizes { get; } = [];
+
+        public string Code => "batch-probe";
+
+        public IReadOnlyList<string> BusinessKeys { get; } = ["K"];
+
+        public IReadOnlyList<ImportColumn> Columns { get; } =
+        [
+            new() { Key = "K", Title = "键", Required = true },
+        ];
+
+        public Task<IReadOnlyList<CellError>> ValidateRowAsync(
+            ImportRow row, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<CellError>>([]);
+
+        public Task<IReadOnlySet<string>> FindExistingKeysAsync(
+            IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)
+        {
+            BatchSizes.Add(keys.Count);
+            return Task.FromResult<IReadOnlySet<string>>(
+                keys.Where(existing.Contains).ToHashSet(StringComparer.Ordinal));
+        }
+
+        public Task CommitRowAsync(ImportRow row, bool overwrite, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
+
     // ── 清单 4:按名查外键 ─────────────────────────────────────────────────
 
     /// <summary>

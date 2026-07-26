@@ -253,7 +253,7 @@ public class ImportRunner(
                 .ToList();
             if (keys.Count > 0)
             {
-                var existing = await profile.FindExistingKeysAsync(keys, cancellationToken);
+                var existing = await FindExistingKeysBatchedAsync(keys, profile, cancellationToken);
                 foreach (var row in rows)
                 {
                     var bk = BuildBusinessKey(row, profile.BusinessKeys);
@@ -263,6 +263,43 @@ public class ImportRunner(
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// 一批业务键最多几个进一次 <see cref="IImportProfile.FindExistingKeysAsync"/>。
+    /// <para>
+    /// <b>为什么必须分批</b>:档案的常规写法是 <c>Where(x =&gt; keys.Contains(x.Key))</c>,translate 成
+    /// <c>IN (@p0, @p1, …)</c> —— <b>一个键一个参数</b>。而 SQL Server 单条语句参数上限 2100(硬限),
+    /// 老版 SQLite 是 999。<c>MaxImportRows</c> 默认 5000,即默认配置就允许一次传进来五千个键,
+    /// 不分批的话在 SqlServer 上导入超过约 2100 行必然抛异常。
+    /// </para>
+    /// <para>
+    /// 分批放在编排层而不是各档案里:<b>消费者照 <c>skills/wire-import-export.md</c> 抄出来的档案
+    /// 会原样带同一个缺陷</b>,在这里兜住,所有档案(含消费者自己的)都免疫,档案实现保持"一条查询"的简单形状。
+    /// </para>
+    /// 500 是各数据库都安全的保守值(SqlServer 2100 / 老 SQLite 999 / PostgreSQL 65535)。
+    /// 五千行也就十次往返,相对后面几千次落库可以忽略。
+    /// </summary>
+    protected virtual int ExistingKeyBatchSize => 500;
+
+    /// <summary>
+    /// 按 <see cref="ExistingKeyBatchSize"/> 分批查库内已存在的业务键,合并结果。
+    /// </summary>
+    protected virtual async Task<IReadOnlySet<string>> FindExistingKeysBatchedAsync(
+        IReadOnlyList<string> keys, IImportProfile profile, CancellationToken cancellationToken = default)
+    {
+        var size = Math.Max(1, ExistingKeyBatchSize);
+        if (keys.Count <= size)
+            return await profile.FindExistingKeysAsync(keys, cancellationToken);
+
+        var merged = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < keys.Count; i += size)
+        {
+            var batch = keys.Skip(i).Take(size).ToList();
+            foreach (var k in await profile.FindExistingKeysAsync(batch, cancellationToken))
+                merged.Add(k);
+        }
+        return merged;
     }
 
     /// <summary>

@@ -21,7 +21,14 @@ public interface IImportProfile
     /// </summary>
     Task<IReadOnlyList<CellError>> ValidateRowAsync(ImportRow row, CancellationToken cancellationToken = default);
 
-    /// <summary>库内已存在的业务键集合。Runner 把本批全部业务键一次传入,<b>实现须一次查完</b>,不得逐行查库。</summary>
+    /// <summary>
+    /// 库内已存在的业务键集合。<b>实现须一次查完传进来的这批</b>(一条 <c>IN</c> 查询),不得逐行查库。
+    /// <para>
+    /// Runner 会<b>分批</b>调用本方法(见 <c>ImportRunner.ExistingKeyBatchSize</c>,默认 500),因为
+    /// <c>keys.Contains(...)</c> 翻成 <c>IN</c> 是一个键一个参数,而 SQL Server 单语句参数上限 2100、
+    /// 老版 SQLite 999 —— 一次塞五千个键在 SqlServer 上必炸。所以实现<b>不必也不该</b>自己再分批。
+    /// </para>
+    /// </summary>
     Task<IReadOnlySet<string>> FindExistingKeysAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default);
 
     /// <summary>

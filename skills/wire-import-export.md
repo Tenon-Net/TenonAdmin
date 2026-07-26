@@ -132,7 +132,7 @@ public class SampleDocImportProfile(IRepository<SampleDoc> repo, ISampleDocServi
         ImportRow row, CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlyList<CellError>>([]);
 
-    /// <summary>本批业务键一次查完，禁止逐行查库。</summary>
+    /// <summary>传进来这批一次查完，禁止逐行查库。Runner 已按 500 分批调用，别自己再分。</summary>
     public virtual async Task<IReadOnlySet<string>> FindExistingKeysAsync(
         IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)
     {
