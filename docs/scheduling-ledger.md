@@ -20,9 +20,16 @@
 
 ---
 
-## 0.1 当前状态与换机接手(2026-07-26)
+## 0.1 当前状态与换机接手(2026-07-27)
 
-**施工中。已完成:G1(Core 契约 + Cron 引擎)、G2(实体 + 种子 + Options)、G3(调度引擎 + 三处理器)、G4(13 端点 + 菜单种子 + 回收站)——见 §17 各轮。** 下一条:G5(六件套追加 + TestHost SampleJob + CI TEST_FILTER)。接手从 §14 对应批次开工,施工期在本节滚动更新状态。
+**施工完成。G1–G9 全部落地,见 §17 各轮。** 后端 510 测试全绿;`web/`(vue-tsc + oxlint + 66 vitest)与 `web-react/`(tsc + oxlint + 770 vitest + `antd lint`)双绿。
+
+**未做、留给下一位的两件**(都不是缺陷,是本机跑不了的验证):
+
+1. **浏览器实走查**。`dev.bat` 起全栈后过一遍:建任务 → 执行一次 → 看执行记录 → 终止 → 监控页轮询;两套模板各一遍。本轮只有 MinimalHost 上的接口级预演(5 秒任务 25 秒出 5 行、时刻两两互异)。
+2. **集群故障转移**。`scripts/smoke-multi-replica.sh` 第 6 断言(杀主节点后新副本接手)只能在 CI 的 `multi` 腿或局域网 VM 上真跑,本机无 Docker。
+
+接手改动前先读 §13 的坑表,尤其第 9 条(整秒截断)与孤儿行回收——两者都是"错了不报错,只是任务再也不跑"的类型。
 
 ---
 
@@ -571,7 +578,7 @@ API 副本两种姿态(§10.1 之上的部署选择):①什么都不配 —— A
 
 ---
 
-## 14. 施工批次(G1–G9,一批一提交;**本轮只出设计,未排期实施**)
+## 14. 施工批次(G1–G9,一批一提交;**已全部完成**)
 
 | 批 | 内容 | 验收判据 | 变异判据 |
 |---|---|---|---|
@@ -581,9 +588,9 @@ API 副本两种姿态(§10.1 之上的部署选择):①什么都不配 —— A
 | ✅G4 | `JobController` 13 端点 + 菜单种子 132–146 + `RecycleBin` 登记 + `gen:api` | PermissionCodeConsistency/OperationLogCoverage 绿;24 例 HTTP + 40 例安全测试绿 | 摘掉任一 [OperationLog] → 红 |
 | ✅G5 | HTTP 级测试 + Replaceability 追加 + TestHost `SampleJob` + backend-ci TEST_FILTER | 47xxx 各码有用例;SqlServer 子集含 Election/Claim | 前置注册假 `IJobService` 不生效 → 六件套红(已实测) |
 | ✅G6 | Worker:`WorkerSetup` + `samples/WorkerHost` + compose TZ + smoke 第 6 断言 | multi 腿 6 断言绿(本机彩排:5s 任务 25s 内 5 次、时刻互异、全 Success) | 注释掉 standby 夺取 → 杀主断言红 |
-| G7 | `web/`:三页面 + CronEditor + COMPONENTS.md + i18n | typecheck/lint 绿;浏览器实走建任务→执行→看记录 | — |
-| G8 | `web-react/`:同款 | 同上 + 既有测试套件绿 | — |
-| G9 | 文档收口:本台账 §0.1 更新、CHANGELOG、site 文档、`skills/new-module.md` 交叉引用 | `lint:prose` 绿(site 侧) | — |
+| ✅G7 | `web/`:三页面 + CronEditor + COMPONENTS.md + i18n | vue-tsc + oxlint 绿;66 vitest 绿。**浏览器实走查未做**(见 §0.1) | — |
+| ✅G8 | `web-react/`:同款 | tsc + oxlint + `antd lint` 绿;770 vitest 绿(含 37 例新纯函数 spec) | 把 `8L` 的拒收改回 `%7` → cronParts 新增用例红(已实测) |
+| ✅G9 | 文档收口:本台账 §0.1 更新、CHANGELOG、site 文档、`skills/create-job.md` + `new-module.md` 交叉引用 | `lint:prose` 绿(site 侧) | — |
 
 ---
 
@@ -672,3 +679,17 @@ bash scripts/smoke-multi-replica.sh http://localhost:8080                  # 含
 - `scripts/smoke-multi-replica.sh` 第 6 断言:前置断言 nodes==2(不足即 fail,不静默跳过)→ 建 5s 间隔 HTTP 任务打自身 `/health` → 25s 后行数 ≥3 **且 ScheduledTime 两两互异**(重复即双发,断言消息写明"修前长这样")→ 从 dashboard 取 leader、按 nodeName 的 `#WorkerId` 后缀映射回 compose 服务 → `docker compose stop` 杀主 → 50s 后断言有新行且 leader 已易主 → 复原并删任务。
 - **本机彩排**(无 Docker,故用 MinimalHost 真跑同一套断言):5s 任务 25 秒内触发 5 次、5 个互异时刻、全 Success(HTTP 200 打到自身 /health);dashboard 的 `nodes[].nodeName/isLeader/workerId`、log 分页的 `items[].scheduledTime`、`/handlers` 三项形状与脚本读法逐字对上。剩下只有杀主接管那半段要真容器,交给 CI 的 multi 腿。
 - 全量 509 绿。
+
+### 第 6 轮 — G9 文档半程:site 双语页 + create-job skill(2026-07-26)
+
+- `site/zh/guide/scheduled-jobs.md` + `site/guide/scheduled-jobs.md`(中文是源、英文是译)、两侧 sidebar 接线、`skills/create-job.md` + `.claude/skills/create-job/SKILL.md` 薄壳、`skills/README.md` 与 `new-module.md` 第 8 步交叉引用、CHANGELOG Unreleased、`CLAUDE.md` 斜杠命令清单。
+- `lint:prose` 首跑 94 处半角标点告警:写了个只碰 CJK 相邻标点、跳过围栏块与行内代码的转换器过一遍,再手修 1 处;导语从 101 CJK 字/4 句压到 83 字/3 句满足配额。
+
+### 第 7 轮 — G7/G8 双前端 + 两处后端契约回流(2026-07-27)
+
+- 两条前端流水线各自实现后,评审抓出 1 blocker + 1 major + 若干 minor,**其中两条的根因都在后端**,已回流修掉(提交 `feat(backend): filter job logs by fire instance and expose the SQL gate`):
+  1. **`log/page` 缺 `FireInstanceId` 过滤**。两侧不约而同地退化成"按 jobId 拉首页 100 条再本地过滤",翻到老触发时那一页里根本没有兄弟行 —— 重试列表**静默缺项**(不报错,只是少几行)。加过滤参数后两侧都改成直取。变异实测:删 `WhereIF` → 新增用例红。
+  2. **`Jobs:Sql:Enabled` 没有任何端点下发**,于是 §11.1「关时禁选并提示」两侧都做不了,用户只能填完整张表单再撞 47008。`GET /handlers` 由裸清单改为 `{handlers, sqlEnabled}`,两侧禁选 + 提示文案。**这条是 blocker 的来源**:后端契约改了而 React 侧仍按 `string[]` 消费,`unwrap<T>` 是强转挡不住,打开表单即崩 —— 评审在提交前抓到。
+- 前端侧另修:趋势图按规格改柱线组合(原为双折线);`web/` 的 jobId watcher 加 `route.path` 守卫(keep-alive 下切走页面会清掉筛选并发一次没人看的请求);三处枚举名对齐后端(`Serial`→`SerialSkip`、`Backfill`→`Misfire`、`MisfireSkip`→`MissedSkipped`),避免同一漂移在双模板+后端固化成四处;`web-react` 的周段单值 `%7` 兜底改为拒收(后端只认 0-7,兜底会把 `8L` 悄悄读成"周一最后一个")。变异实测:改回 `%7` → cronParts 用例红。
+- **有意保留的两处打折**(非缺陷,已在组件 README 记明):CronEditor 的可视化页签只反解常用数字形态,含 `SUN`/`JAN` 名字或混写步长时留在表达式页签编辑,值不丢;表达式页签直填出"日/周双侧受限"再改别的段时,编辑器不自动补 `?`(预览区照常显 47003,不会静默入库)。
+- 后端 510 绿;`web/` typecheck+lint+66 vitest 绿;`web-react/` typecheck+lint+`antd lint`+770 vitest 绿。
