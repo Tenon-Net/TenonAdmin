@@ -15,9 +15,27 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.4.0 - 2026-07-26
+
+A feature release: xlsx import/export lands as an optional package, and both frontend templates ship the wizard that drives it. Nothing in the core four packages changed shape — install nothing and the kernel behaves exactly as it did in 0.3.3.
+
 ### Added
 
 - **`TenonAdmin.Excel` optional satellite package** for xlsx import/export: MiniExcel (read/write) + DocumentFormat.OpenXml (template dropdowns only). Core defines the contracts (`IImportProfile` / `IExportProfile` / `IImportRunner` / codec trio); the satellite supplies codecs. Install the package and call `AddTenonAdminExcel()` **before** `AddTenonAdmin()` — without it every codec call fails loud with `46001`. Kernel demos: user import (dict + name-based FK + org scope) and user / op-log export; both frontend templates ship an import wizard + export column picker (zero-shared). Consumer guide: `skills/wire-import-export.md` and site page [Wire Import/Export](https://tenon.52moyu.net/zh/guide/import-export). Execution ledger: `docs/excel-ledger.md`.
+
+### Fixed
+
+- **The duplicate-key lookup is batched under the database parameter limit.** A profile resolves existing rows with `keys.Contains(...)`, which compiles to one SQL parameter per business key — SQL Server caps a statement at 2100 parameters and older SQLite at 999, while `MaxImportRows` defaults to 5000. The default configuration therefore invited an import that threw somewhere past two thousand rows. `IImportRunner` now chunks the lookup at 500 keys and merges the results, so a profile copied from the consumer guide inherits the fix instead of the bug. No test caught this: the row-limit test lowers the cap to 2 and sends 3 rows, and no test ever sent thousands.
+- **The import preview no longer presents "already exists" as an error.** Re-running the wizard against a database that already held the batch reported every row as broken and painted the business-key cells red — under the Overwrite strategy, a screen of red hid the fact that every row was about to update normally. `ImportRunner.CommitAsync` already draws this line (`46010` is excluded from the hard errors and routed by `DuplicateStrategy`); only the preview failed to mirror it. Each template gained its own `utils/importDup.ts` (duplicated on purpose — the two templates are zero-shared).
+- **The user import's enabled-status column now offers a dropdown** instead of a free-text box. The kernel already seeded a reusable two-state `common_status` dict that nothing consumed, while the import column carried no `DictTypeCode`. Attaching the existing dict delivers the template dropdown, the wizard's `DictSelect`, and label→value translation at once — no contract, codec, or frontend change.
+- **The wizard's dict dropdown no longer clips its options.** The preview grid's columns are narrow, so a popup sized to its trigger rendered the options as truncated stubs (measured: a 66px trigger in the Vue template). Both templates decouple popup width from trigger width in the wizard only.
+
+### Changed
+
+- **Each frontend template now has one tested blob-download helper** (`utils/download.ts`) instead of the same nine lines inlined in the wizard, the user page, and the op-log page. Both ways of getting them wrong are silent under typecheck, lint, and build: skip `revokeObjectURL` and the object URL leaks; skip the download name and the file lands as a uuid.
+- **The Vue template derives its primary-color ramp in one place** (`theme/mix.ts`). The Naive theme overrides and the CSS-variable writer each hand-rolled the same mixing numbers, so changing one and forgetting the other desynchronized raw CSS from Naive components with nothing failing anywhere. The React template keeps its own copy, as the self-contained templates require.
+- **The template smoke test scaffolds with a hyphenated project name** and statically asserts the generated `Dockerfile` names no sanitized-name literal. The 0.3.3 bug shipped past this job precisely because it scaffolded as `Probe`, a name with nothing for `dotnet new` to sanitize.
+- Documentation: a site page and consumer skill for wiring import/export onto your own entity, runtime i18n architecture diagrams in the READMEs, and `TenonAdmin.Excel` added to the package overview (the architecture and structure pages still counted eight packages and omitted it).
 
 ## 0.3.3 - 2026-07-25
 
