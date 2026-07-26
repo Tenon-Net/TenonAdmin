@@ -47,10 +47,13 @@ public class AdminJobsHttpOptions
     public string[]? AllowedHosts { get; set; }
 
     /// <summary>
-    /// 目标 IP 黑名单(CIDR)。默认只封云元数据段,<b>不封内网</b>——调度器打内网服务是主用途。
-    /// 解析后的 IP 在 <c>ConnectCallback</c> 里复检(防 DNS rebinding:校验时是公网、执行时解析成内网的把戏)。
+    /// 目标 IP 黑名单(CIDR)。默认封云元数据段的 IPv4/IPv6 两种形态,<b>不封内网</b>——调度器打内网服务是主用途
+    /// (RFC1918 与 ULA <c>fc00::/7</c> 照旧放行)。<c>fe80::/10</c> 是 <c>169.254.0.0/16</c> 的 IPv6 孪生,一并默认封。
+    /// 用 NAT64 的环境请自行追加 <c>64:ff9b::/96</c>。
+    /// <para>解析后的 IP 在 <c>ConnectCallback</c> 里复检(防 DNS rebinding:校验时是公网、执行时解析成内网的把戏)。
+    /// 条目在启动绑定期校验,写错即抛——静默失效等于围栏无声关闭。</para>
     /// </summary>
-    public string[] BlockedCidrs { get; set; } = ["169.254.0.0/16"];
+    public string[] BlockedCidrs { get; set; } = ["169.254.0.0/16", "fd00:ec2::/32", "fe80::/10"];
 
     /// <summary>HTTP 响应体落执行记录的截断长度(字节)</summary>
     public int MaxResponseLogBytes { get; set; } = 4096;

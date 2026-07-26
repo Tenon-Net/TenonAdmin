@@ -127,6 +127,19 @@ public static class ServicesSetup
         services.TryAddSingleton<FileGcService>();
         services.AddHostedService(sp => sp.GetRequiredService<FileGcService>());
 
+        // 定时任务(scheduling-ledger §9.1):解析器/执行器/调度器全 TryAdd(六件套),调度器双注册防实例化两份;
+        // 三个内置处理器与消费者同一条 TryAddEnumerable 路径;HTTP 客户端单例带 SSRF 围栏(不引 IHttpClientFactory)。
+        services.TryAddScoped<IJobService, JobService>();
+        services.TryAddScoped<IJobLogService, JobLogService>();
+        services.TryAddSingleton<IJobHandlerResolver, DefaultJobHandlerResolver>();
+        services.TryAddSingleton<JobHttpClient>();
+        services.TryAddSingleton<JobExecutor>();
+        services.TryAddSingleton<JobSchedulerService>();
+        services.AddHostedService(sp => sp.GetRequiredService<JobSchedulerService>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, HttpAdminJob>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, SqlAdminJob>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, JobLogCleanupJob>());
+
         // 个人中心(§4,T8):当前用户对自己账号的读改(看/改资料、验旧改密)
         services.TryAddScoped<IPersonalService, PersonalService>();
 

@@ -22,7 +22,7 @@
 
 ## 0.1 当前状态与换机接手(2026-07-26)
 
-**施工中。已完成:G1(Core 契约 + Cron 引擎,§17 第 1 轮)、G2(实体四张 + 种子 + Options 接线,§17 第 2 轮)。** 下一条:G3(调度引擎)。接手从 §14 对应批次开工,施工期在本节滚动更新状态。
+**施工中。已完成:G1(Core 契约 + Cron 引擎)、G2(实体 + 种子 + Options)、G3(调度引擎 + 三处理器)、G4(13 端点 + 菜单种子 + 回收站)——见 §17 各轮。** 下一条:G5(六件套追加 + TestHost SampleJob + CI TEST_FILTER)。接手从 §14 对应批次开工,施工期在本节滚动更新状态。
 
 ---
 
@@ -577,8 +577,8 @@ API 副本两种姿态(§10.1 之上的部署选择):①什么都不配 —— A
 |---|---|---|---|
 | ✅G1 | Core:`IAdminJob`/`JobExecutionContext`/`IJobHandlerResolver`/`CronExpression`/`AdminJobsOptions`/ErrorCode 47xxx | §4.4 向量全绿(70 例);`Normalize` 5→6 段 | 删 `31W` 不跨月约束 → 3 向量红(已实测) |
 | ✅G2 | 实体四张 + `DefaultJobSeed` + ConfigSeed 27/28 + `TenonAdminOptions.Jobs` 接线 | sqlite 全新建库启动成功;SeedIdRange 绿 | 把种子 Id 改 1001 → SeedIdRange 红(已实测) |
-| G3 | 引擎:选主/循环/执行器/registry/三个内置处理器/`JobChangedEvent`/DI | §12 FakeTimeProvider + 选主 + CAS 测试全绿 | 删 CAS 的 `AND NextRunTime=@expected` → 双发测试红 |
-| G4 | `JobController` 13 端点 + 菜单种子 132–146 + `RecycleBin` 登记 + `gen:api` | PermissionCodeConsistency/OperationLogCoverage 绿 | 摘掉任一 [OperationLog] → 红 |
+| ✅G3 | 引擎:选主/循环/执行器/registry/三个内置处理器/`JobChangedEvent`/DI | §12 FakeTimeProvider + 选主 + CAS 测试全绿(21 例) | 删 CAS 的 `AND NextRunTime=@expected` → 双发测试红(已实测) |
+| ✅G4 | `JobController` 13 端点 + 菜单种子 132–146 + `RecycleBin` 登记 + `gen:api` | PermissionCodeConsistency/OperationLogCoverage 绿;24 例 HTTP + 40 例安全测试绿 | 摘掉任一 [OperationLog] → 红 |
 | G5 | HTTP 级测试 + Replaceability 追加 + TestHost `SampleJob` + backend-ci TEST_FILTER | 47xxx 各码有用例;SqlServer 子集含 Election/Claim | 前置注册假 `IJobService` 不生效 → 六件套红 |
 | G6 | Worker:`WorkerSetup` + `samples/WorkerHost` + compose TZ + smoke 第 6 断言 | multi 腿 6 断言绿 | 注释掉 standby 夺取 → 杀主断言红 |
 | G7 | `web/`:三页面 + CronEditor + COMPONENTS.md + i18n | typecheck/lint 绿;浏览器实走建任务→执行→看记录 | — |
@@ -639,3 +639,20 @@ bash scripts/smoke-multi-replica.sh http://localhost:8080                  # 含
 - 落码:`Entities/{JobEnums,SysJob,SysJobLog,SysJobLock,SysJobNode}.cs`(§3 逐列;job 枚举六件合一文件)、`Jobs/JobConfigKeys.cs`(sys_config 键常量,照 FileService.KEY_* 成法)、`Seed/DefaultJobSeed.cs`(Id=1、SyncOnUpgrade=false 理由留档)、ConfigSeed 追加 Id 27/28(GroupCode="job")、`TenonAdminOptions.Jobs` + `TenonAdminSetup` AddSingleton 与 LeaseSeconds>2×HeartbeatSeconds 绑定校验、ServicesSetup 种子注册。
 - 实现期敲定两处细节:①种子行 **NextRunTime 留空**——种子编写期没有时钟;G3 的 ReloadJobs 须对「Ready 且 NextRunTime 为空」的行按触发配置补算(顺带覆盖 enable 复活路径),此约定已写进种子注释;②种子 HandlerName 暂为字面量 `"TenonAdmin.Services.JobLogCleanupJob"`,G3 落类后改 `typeof(...).FullName!`。
 - 全量 417 绿(WebApplicationFactory 即 sqlite 全新建库);变异判据实测:种子 Id 改 1001 → SeedIdRange 红,还原。
+
+### 第 3 轮 — G3 调度引擎 + G4 端点(2026-07-26)
+
+- **G3 落码**:`Jobs/{JobTime,JobTrigger,DefaultJobHandlerResolver,JobHttpFence,JobHttpClient,HttpAdminJob,SqlAdminJob,JobLogCleanupJob,JobExecutor,JobSchedulerService}.cs` + `Events/JobEvents.cs` + ServicesSetup 十行注册。测试 `JobEngineHost`(裸容器 + 可拨时钟 + 手动推拍)、`JobElectionTests`/`JobClaimTests`/`JobSchedulerTests`/`JobExecutorTests` 共 21 例。**CAS 变异判据实测**:删 `NextRunTime == expected` → 3 例红,还原。
+- **G4 落码**:`Jobs/{JobModels,IJobService,JobService}.cs`(含 `JobLogService`)+ `Controllers/JobController.cs` 13 端点 + 菜单种子 132–146 + `RecycleBinController` 的 `job` 类型(恢复走专用分支强制 Paused)。`JobApiTests` 24 例 + `JobSecurityTests` 40 例。
+- **实现期新增的三处纪律**(台账原稿没有,已落码并有测试):①`ExecutionContext.SuppressFlow` —— SqlSugarScope 按 AsyncLocal 隔离连接,fire-and-forget 与 kill 轮询不掐断上下文就会与调度循环共用连接、并发查询直接炸 reader;②处理器不响应取消令牌时(SqlSugar 的 Ado 执行就是),`await` 返回后必须复查 `linked.IsCancellationRequested`,否则跑过头的 SQL 会被记成 Success;③`JobExecutor.IsBusyLocally` 内存在飞表 —— SerialSkip 的库查询是 check-then-act,同节点窗口靠它闭死。
+- **三视角对抗验证**(并发正确性 / 规格核对 / SSRF 实跑探针)抓出 1 blocker + 5 major,全部已修并有回归:
+  - **blocker**:节点 `kill -9` 遗留的未闭合 Running 行永不闭合,而它正是 SerialSkip 的调度输入 → 任务永久停摆且无 API 恢复路径(kill 写旗标没人轮询、清空与狗粮都刻意保留未闭合行)。修:主节点每拍 `ReapOrphanRunsAsync`,把「执行节点心跳陈死(> 2×LeaseSeconds)」的未闭合行判死闭合为 Cancelled。§2.2「无需启动期修复扫描」的说法只对 Status 列成立,已按此订正理解。
+  - **major**:重试 `Task.Delay` 不挂令牌 → 停机硬停后还会开跑全新一次尝试并把 `StopAsync` 无限卡死;修为挂 drain 令牌 + 每轮复查。
+  - **major**:`SocketsHttpHandler` 默认走系统/环境代理 → 有 `HTTP_PROXY` 时 ConnectCallback 只看得见代理 IP,**IP 围栏整个归零**(实测能经代理取回云元数据)。修:`UseProxy=false`。
+  - **major**:请求头属性包用 `TryAddWithoutValidation`,CRLF 原样上线路 → 内部人可在同一连接走私第二个请求(方法/路径/Host 全自选,围栏与执行记录都看不见)。修:`JobHttpFence.ValidateHeader` 在入库与执行两处校验 token 名与控制字符。
+  - **major**:默认 `BlockedCidrs` 只有 IPv4 → AWS IMDS 的 IPv6 端点 `fd00:ec2::254` 裸奔。修:默认值加 `fd00:ec2::/32` 与 `fe80::/10`(169.254/16 的 IPv6 孪生;RFC1918 与 ULA 照旧不封)。
+  - **major**:`HandlerKind=Compiled` + 填内置处理器全名可整体跳过入库侧围栏与 SQL 总闸(执行侧还拦得住,但纵深掉一层、47008/47009 保存时不报)。修:编译类拒绝内置处理器全名。
+  - 另修 4 条 minor:判死 UPDATE 补 `NextRunTime IS NULL` 谓词(否则并发编辑会把刚救活的任务判死并留下 Completed+非空 NextRunTime,破 §2.2 不变量);`JobService.UpdateAsync` 从整行盲写改为定向更新 + NextRunTime CAS(整行写回会复活已领取的 occurrence → 双发,顺带覆盖计数器);丢失唤醒窗口补 `_dirty` 复查;畸形 CIDR 静默失效改为绑定期抛。
+  - **密钥面**(§13-1 的三条旁路):属性包 headers 值在列表接口按 `********` 掩码、保存时掩码原样回传即取回原值;操作日志脱敏词表加 `header/authorization/apikey/cookie`;执行记录只落 `scheme+host+path`(原 url 的 userinfo 与查询串常含凭据)。
+  - **PG 专属坑**:响应体含 `\0` 时 PostgreSQL text 列拒收(22021)→ 记录闭合失败 → 永久 Running → 该任务再也不触发。修:摘要入库前净化控制字符。
+- 全量 504 绿。

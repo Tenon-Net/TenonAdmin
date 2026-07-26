@@ -26,8 +26,8 @@ internal sealed class DefaultJobSeed : ISeedData<SysJob>
             Code = LOG_CLEANUP_CODE,
             Name = "执行记录清理",
             HandlerKind = JobHandlerKind.Compiled,
-            // G3 落 JobLogCleanupJob 类后改为 typeof(JobLogCleanupJob).FullName!(IAdminJob.Name 默认 = 类型全名)
-            HandlerName = "TenonAdmin.Services.JobLogCleanupJob",
+            HandlerName = typeof(JobLogCleanupJob).FullName!,   // IAdminJob.Name 默认 = 类型全名
+
             TriggerKind = JobTriggerKind.Cron,
             CronExpression = "0 30 3 * * ?",   // 每天 03:30,已是归一化 6 段
             MisfireStrategy = JobMisfireStrategy.Skip,

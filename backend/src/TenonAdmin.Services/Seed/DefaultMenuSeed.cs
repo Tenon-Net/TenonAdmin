@@ -190,6 +190,27 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 124, ParentId = 121, Type = MenuType.Button, Title = "缓存-清配置", Permission = "POST:/api/v1/sys/cache/flush-config", Sort = 3, Enabled = true },
         new SysMenu { Id = 125, ParentId = 121, Type = MenuType.Button, Title = "缓存-重建门户菜单", Permission = "POST:/api/v1/sys/cache/rebuild-portal", Sort = 4, Enabled = true },
 
+        // 定时任务三页(scheduling-ledger §9.3)。平铺挂系统运维目录,照缓存管理/服务器监控先例。
+        // 注意 146 挂在 132 页下、Id 却大于 140–145:Id 按取号顺序不按归属排(/handlers 是后补决策),
+        // 这正是「接着最大值往后取」纪律的正确形状,不回填空洞。
+        new SysMenu { Id = 132, ParentId = 20, Type = MenuType.Menu, Title = "定时任务", Permission = "", Path = "/system/job", Component = "system/job/index", Icon = "ph:clock-countdown-duotone", Sort = 9, Enabled = true, Visible = true },
+        new SysMenu { Id = 133, ParentId = 132, Type = MenuType.Button, Title = "任务-分页",     Permission = "GET:/api/v1/sys/job/page", Sort = 1, Enabled = true },
+        new SysMenu { Id = 134, ParentId = 132, Type = MenuType.Button, Title = "任务-新增",     Permission = "POST:/api/v1/sys/job", Sort = 2, Enabled = true },
+        new SysMenu { Id = 135, ParentId = 132, Type = MenuType.Button, Title = "任务-更新",     Permission = "PUT:/api/v1/sys/job/{id}", Sort = 3, Enabled = true },
+        new SysMenu { Id = 136, ParentId = 132, Type = MenuType.Button, Title = "任务-删除",     Permission = "DELETE:/api/v1/sys/job/{id}", Sort = 4, Enabled = true },
+        new SysMenu { Id = 137, ParentId = 132, Type = MenuType.Button, Title = "任务-批量删除", Permission = "POST:/api/v1/sys/job/batch-delete", Sort = 5, Enabled = true },
+        new SysMenu { Id = 138, ParentId = 132, Type = MenuType.Button, Title = "任务-启停",     Permission = "PUT:/api/v1/sys/job/{id}/enabled", Sort = 6, Enabled = true },
+        new SysMenu { Id = 139, ParentId = 132, Type = MenuType.Button, Title = "任务-执行一次", Permission = "POST:/api/v1/sys/job/{id}/run", Sort = 7, Enabled = true },
+        new SysMenu { Id = 146, ParentId = 132, Type = MenuType.Button, Title = "任务-处理器清单", Permission = "GET:/api/v1/sys/job/handlers", Sort = 8, Enabled = true },
+
+        new SysMenu { Id = 140, ParentId = 20, Type = MenuType.Menu, Title = "执行记录", Permission = "", Path = "/system/job-log", Component = "system/job-log/index", Icon = "ph:list-checks-duotone", Sort = 10, Enabled = true, Visible = true },
+        new SysMenu { Id = 141, ParentId = 140, Type = MenuType.Button, Title = "记录-分页", Permission = "GET:/api/v1/sys/job/log/page", Sort = 1, Enabled = true },
+        new SysMenu { Id = 142, ParentId = 140, Type = MenuType.Button, Title = "记录-终止", Permission = "POST:/api/v1/sys/job/log/{id}/kill", Sort = 2, Enabled = true },
+        new SysMenu { Id = 143, ParentId = 140, Type = MenuType.Button, Title = "记录-清空", Permission = "POST:/api/v1/sys/job/log/clear", Sort = 3, Enabled = true },
+
+        new SysMenu { Id = 144, ParentId = 20, Type = MenuType.Menu, Title = "任务监控", Permission = "", Path = "/system/job-monitor", Component = "system/job-monitor/index", Icon = "ph:gauge-duotone", Sort = 11, Enabled = true, Visible = true },
+        new SysMenu { Id = 145, ParentId = 144, Type = MenuType.Button, Title = "监控-总览", Permission = "GET:/api/v1/sys/job/dashboard", Sort = 1, Enabled = true },
+
         // ═══ 业务中心(示例业务模块 Id=2)═══════════════════════════
         // 复用现成的 dashboard/biz.vue;工作台是根级 Menu 节点(可挂 ModuleId),Path 与 system 工作台错开。
         new SysMenu { Id = 109, ParentId = 0, Type = MenuType.Menu, Title = "工作台", Permission = "", Path = "/business/workbench", Component = "dashboard/biz", Icon = "ph:squares-four-duotone", Sort = 0, Enabled = true, Visible = true, ModuleId = DefaultModuleSeed.BUSINESS_MODULE_ID },

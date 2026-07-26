@@ -62,6 +62,11 @@ public static class TenonAdminSetup
         if (options.Jobs.LeaseSeconds <= options.Jobs.HeartbeatSeconds * 2)
             throw new InvalidOperationException(
                 $"TenonAdmin:Jobs 配置无效:LeaseSeconds({options.Jobs.LeaseSeconds})必须大于 2×HeartbeatSeconds({options.Jobs.HeartbeatSeconds})。");
+        // 围栏条目写错会静默变空集(整条黑名单失效、启动日志一个字不提)——这是失效开,代价不对称,故绑定期就抛
+        foreach (var cidr in options.Jobs.Http.BlockedCidrs)
+            if (!JobHttpFence.TryParseCidr(cidr, out _, out _))
+                throw new InvalidOperationException(
+                    $"TenonAdmin:Jobs:Http:BlockedCidrs 配置无效:\"{cidr}\" 不是合法的 CIDR 或 IP 地址(写错会让 SSRF 围栏静默失效)。");
         services.AddSingleton(options.Jobs);
 
         // ── 雪花机器号(§12):多副本同号 = 同毫秒发号撞主键。这是数据损坏级的问题,而它今天静默发生 ──

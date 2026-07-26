@@ -36,6 +36,7 @@ public class RecycleBinController(ISqlSugarClient db, IServiceProvider sp) : Con
             "config" => await ListAsync<SysConfig>(input, e => e.Name, e => e.ConfigKey),
             "dict" => await ListAsync<SysDictType>(input, e => e.Name, e => e.Code),
             "menu" => await ListAsync<SysMenu>(input, e => e.Title, e => e.Permission),
+            "job" => await ListAsync<SysJob>(input, e => e.Name, e => e.Code),
             _ => throw new AdminException(ErrorCode.RecycleInvalidType),
         };
         return Result<PagedList<RecycleBinItem>>.Ok(data);
@@ -57,10 +58,27 @@ public class RecycleBinController(ISqlSugarClient db, IServiceProvider sp) : Con
             "config" => await Repo<SysConfig>().RestoreAsync(id),
             "dict" => await Repo<SysDictType>().RestoreAsync(id),
             "menu" => await Repo<SysMenu>().RestoreAsync(id),
+            "job" => await RestoreJobAsync(id),
             _ => throw new AdminException(ErrorCode.RecycleInvalidType),
         };
         AdminException.ThrowIf(rows == 0, ErrorCode.RecycleNotFound);
         return Result<bool>.Ok(true);
+    }
+
+    /// <summary>
+    /// 恢复定时任务:<b>强制置 Paused</b>(scheduling-ledger §13-3)。
+    /// 恢复出来的行 NextRunTime 是删除时的过去时刻,直接放回 Ready 会被当成错过而立刻补跑/推进——
+    /// 人工在任务页 enable 才重算复跑,是恢复动作该有的语义。
+    /// </summary>
+    private async Task<int> RestoreJobAsync(long id)
+    {
+        var rows = await Repo<SysJob>().RestoreAsync(id);
+        if (rows > 0)
+            await db.Updateable<SysJob>()
+                .SetColumns(j => new SysJob { Status = JobStatus.Paused, NextRunTime = null })
+                .Where(j => j.Id == id)
+                .ExecuteCommandAsync();
+        return rows;
     }
 
     /// <summary>彻底删除(物理删除,不可恢复)</summary>
@@ -79,6 +97,7 @@ public class RecycleBinController(ISqlSugarClient db, IServiceProvider sp) : Con
             "config" => await Repo<SysConfig>().HardDeleteAsync(id),
             "dict" => await Repo<SysDictType>().HardDeleteAsync(id),
             "menu" => await Repo<SysMenu>().HardDeleteAsync(id),
+            "job" => await Repo<SysJob>().HardDeleteAsync(id),
             _ => throw new AdminException(ErrorCode.RecycleInvalidType),
         };
         AdminException.ThrowIf(rows == 0, ErrorCode.RecycleNotFound);

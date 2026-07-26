@@ -12,7 +12,10 @@ namespace TenonAdmin.AspNetCore;
 public static class SensitiveDataMasker
 {
     /// <summary>敏感字段名关键字(大小写不敏感,子串匹配:newPassword、access_token 等都能命中)</summary>
-    private static readonly string[] SENSITIVE_KEYS = ["password", "pwd", "secret", "token", "credential"];
+    // header/authorization/apikey/cookie:定时任务的 HTTP 载荷把请求头整包塞在一个键里,
+    // 不加这几个词,Bearer token 会原文落进 sys_op_log.ParamJson
+    private static readonly string[] SENSITIVE_KEYS =
+        ["password", "pwd", "secret", "token", "credential", "header", "authorization", "apikey", "api_key", "cookie"];
 
     private const string REDACTED = "***";
     private const string UNSERIALIZABLE = "<unserializable>";
