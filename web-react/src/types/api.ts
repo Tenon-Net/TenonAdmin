@@ -550,3 +550,158 @@ export interface ImportCommitResult {
   failed: number
   failures: ImportRow[]
 }
+
+// ── 定时任务(G8)────────────────────────────────────────────────
+
+/** 定时任务行(后端 SysJob;page 返回全列,编辑表单直接用行数据)。int64 收敛为 number。 */
+export interface SysJob {
+  id: number
+  /** 任务编码(唯一,创建后不可变;排障锚点) */
+  code: string
+  name: string
+  /** 载荷类型:1=编译类 2=HTTP 3=SQL */
+  handlerKind: number
+  /** 编译类 = IAdminJob.Name;HTTP/SQL 由服务端固定填内置处理器名 */
+  handlerName: string
+  /** 属性包(Dictionary<string,string?> 的 JSON 串;HTTP 的 headers 值读取时已被掩码,原样回传即"不改") */
+  propsJson?: string | null
+  /** 触发类型:1=Cron 2=固定间隔 3=一次性 */
+  triggerKind: number
+  cronExpression?: string | null
+  /** 固定间隔秒数(≥5) */
+  intervalSeconds?: number | null
+  oneShotTime?: string | null
+  /** 生效窗口起点(空 = 立即生效) */
+  startTime?: string | null
+  /** 生效窗口终点(过点置 Completed) */
+  endTime?: string | null
+  /** 错过策略:1=Skip 2=FireOnceNow */
+  misfireStrategy: number
+  /** 并发模式:1=串行跳过 2=并行 */
+  concurrencyMode: number
+  /** 状态:1=Ready 2=Paused 3=Completed 4=Panic */
+  status: number
+  nextRunTime?: string | null
+  lastRunTime?: string | null
+  numberOfRuns: number
+  numberOfErrors: number
+  /** 连续失败计数(成功清零;达 failAlertThreshold → Panic) */
+  consecutiveErrors: number
+  timeoutSeconds: number
+  retryCount: number
+  retryIntervalSeconds: number
+  failAlertThreshold: number
+  alertByNotice: boolean
+  alertEmails?: string | null
+  /** 内核种子任务 = true:禁删,可暂停、可改触发配置 */
+  isSystem: boolean
+  remark?: string | null
+  createTime?: string
+}
+
+/** 任务新增/编辑入参(后端 JobInput;code 仅新增生效,更新时服务层忽略)。 */
+export interface JobInput {
+  code?: string
+  name: string
+  handlerKind: number
+  handlerName?: string
+  /** 属性包对象(非字符串!后端存成 propsJson);HTTP 的 headers 子键值对序列化成 JSON 字符串放 properties.headers */
+  properties?: Record<string, string> | null
+  triggerKind: number
+  cronExpression?: string | null
+  intervalSeconds?: number | null
+  oneShotTime?: string | null
+  startTime?: string | null
+  endTime?: string | null
+  misfireStrategy: number
+  concurrencyMode: number
+  timeoutSeconds: number
+  retryCount: number
+  retryIntervalSeconds: number
+  failAlertThreshold: number
+  alertByNotice: boolean
+  alertEmails?: string | null
+  remark?: string | null
+}
+
+/** 任务执行记录行(后端 SysJobLog;endTime 为空 = 运行中,同 fireInstanceId 聚合一次触发的各次重试)。 */
+export interface SysJobLog {
+  id: number
+  jobId: number
+  /** 任务名快照(任务删了记录仍可读) */
+  jobName: string
+  fireInstanceId: number
+  /** 重试序号,0 = 首次 */
+  retryIndex: number
+  /** 触发来源:1=调度 2=手动 3=补跑 4=错过跳过 */
+  fireMode: number
+  scheduledTime: string
+  startTime: string
+  /** 为空 = 运行中 */
+  endTime?: string | null
+  /** 执行结果:1=运行中 2=成功 3=失败 4=超时 5=取消 6=跳过 */
+  runStatus: number
+  elapsedMs: number
+  nodeName: string
+  killRequested: boolean
+  messageText?: string | null
+  errorText?: string | null
+  createTime?: string
+}
+
+/** cron 预览结果(后端 CronPreviewOutput)。 */
+export interface CronPreviewOutput {
+  /** 归一化后的 6 段表达式(入库形态) */
+  normalized: string
+  /** 未来若干次触发时刻(可能少于请求条数,甚至为空) */
+  occurrences: string[]
+  /** 秒段等效每秒执行的告警(提示用,不硬拦) */
+  everySecondWarning: boolean
+}
+
+/** 处理器清单(后端 JobHandlersOutput)。 */
+export interface JobHandlersOutput {
+  /** 已注册的编译类处理器名(IAdminJob.Name)。 */
+  handlers: string[]
+  /** SQL 载荷总闸(TenonAdmin:Jobs:Sql:Enabled);false 时前端禁选 SQL 并提示。 */
+  sqlEnabled: boolean
+}
+
+/** 成败趋势的一天。 */
+export interface JobTrendPoint {
+  date: string
+  success: number
+  failed: number
+}
+
+/** 即将执行的一项。 */
+export interface JobUpcomingItem {
+  jobId: number
+  name: string
+  nextRunTime: string
+}
+
+/** 集群节点一行(角色由与锁行比对得出)。 */
+export interface JobNodeItem {
+  nodeName: string
+  hostName: string
+  isLeader: boolean
+  lastHeartbeat: string
+  workerId: number
+  pid: number
+}
+
+/** 任务监控仪表盘(后端 JobDashboardOutput;前端 15s 轮询)。 */
+export interface JobDashboard {
+  todaySuccess: number
+  todayFailed: number
+  running: number
+  totalJobs: number
+  /** 按状态的任务数,键 Ready/Paused/Completed/Panic */
+  statusCounts: Record<string, number>
+  /** 近 14 日成败趋势(按日,含零值日) */
+  trend: JobTrendPoint[]
+  /** 即将执行的前 10 次 */
+  upcoming: JobUpcomingItem[]
+  nodes: JobNodeItem[]
+}

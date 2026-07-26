@@ -47,6 +47,7 @@
 | AppIcon | tenon 图标渲染器 | `{icon?, size?, fallback?, className?, style?}`。`@iconify/react/offline` 薄封装 + 空值兜底(`icon || fallback`,用 `||` 不用 `??`——空串也要退兜底,`??` 只兜 null/undefined)。离线集由 `lib/icons.setupIcons` 注册,渲染任意 iconify 串(`ph:*`/`lucide:*`/`ep:*`/`ant-design:*`)全离线、不打 `api.iconify.design`。 |
 | IconPicker | 轻量内联图标选择器(离线) | `{value?, onChange?, placeholder?, clearable?}`。触发器 + 弹窗(搜索 + 集合 Tab + 图标网格)。值契约 `prefix:name`(如 `ph:folder`)或 `local:name`,空串=未选。**不做在线搜索**(气隙自包含约定)。单页可见上限 `CAP=300`,超出提示继续输入缩小范围,避免一次渲染上千 `<Icon>`。`value`/`onChange` 声明可选以便直接放进 antd `Form.Item`。 |
 | TenonLogo | 品牌徽标(透榫) | `{size?}`。内联 SVG,明暗跟随 `app` store;固定品牌色 `#646CFF`,不随 accent 变。 |
+| CronEditor | cron 表达式可视化编辑器(定时任务表单用,自包含于 `src/components/CronEditor/`) | `{value?, onChange?, previewCount?}`(受控;二者声明可选以便直接放进 antd `Form.Item`;previewCount 默认 5)。6 个段页签(秒/分/时/日/月/周),每段:每 · 区间 · 步长 · 指定值;日页签额外 L / L-n / nW / LW 专项,周页签额外 nL / n#m 专项;**日与周互斥**——一侧受限时另一侧自动落 `?`(后端日周同限拒 47003,互斥在 `cronParts.setSegment`)。「表达式」页签直填任意表达式;解析不进已知模式的段(名字/混合列表)显"自定义片段"提示,选模式即覆盖。底部预览防抖 400ms 调 `POST /sys/job/preview-cron`(任何登录用户可用)显示归一化 + 未来时刻;非法显后端 47003 文案;everySecondWarning 出"等效每秒执行"警告(不拦截)。段级解析/组装是纯函数(`cronParts.ts`,变异钉)。 |
 | ImportWizard | 导入四步向导(`Steps`):上传 → 列映射 → 预览改错(**裸 antd `Table`**,可编辑+错误红底 tooltip,勿塞 `DataTable`)→ 结果;api 注入,用户管理已落地。错误格底色用 `--color-danger-bg`(坑 12)。**「已存在」(46010)按重复策略呈现**(警示色 `--color-warning-bg`,不是硬错误)—— 判定在 `src/utils/importDup.ts`。 |
 | ExportColumnsModal | 导出选列弹窗;默认按 `defaultSelected` 勾选,确认后父级带 **当前筛选** 请求 blob 下载;用户管理 / 操作日志已落地。 |
 

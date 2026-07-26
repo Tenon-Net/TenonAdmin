@@ -1,6 +1,6 @@
 import { client } from './client'
 import type { components } from './schema'
-import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, DuplicateStrategy, FileUploadOutput, ImportCommitResult, ImportPreview, ImportRow, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, ServerInfoOutput, SysConfig, SysDictItem, SysDictType, SysExceptionLog, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, CronPreviewOutput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, DuplicateStrategy, FileUploadOutput, ImportCommitResult, ImportPreview, ImportRow, JobDashboard, JobHandlersOutput, JobInput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, ServerInfoOutput, SysConfig, SysDictItem, SysDictType, SysExceptionLog, SysFile, SysJob, SysJobLog, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -758,6 +758,75 @@ export const menuApi = {
     client.PUT('/api/v1/sys/menu/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
   remove: (id: number) =>
     client.DELETE('/api/v1/sys/menu/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+}
+
+// ── 定时任务(G8;路由前缀 /api/v1/sys/job,13 端点)──────────────
+
+export const jobApi = {
+  /** 任务分页;行含全列(编辑表单直接用行数据)。搜索键 name/status/handlerKind → PascalCase 查询参。 */
+  page: (params: { page: number; pageSize: number; name?: string; status?: number; handlerKind?: number; sortField?: string; sortOrder?: string }) =>
+    client
+      .GET('/api/v1/sys/job/page', {
+        params: {
+          query: {
+            ...pageParams(params),
+            Name: params.name,
+            Status: params.status,
+            HandlerKind: params.handlerKind,
+            SortField: params.sortField,
+            SortOrder: params.sortOrder,
+          },
+        },
+      })
+      .then((r) => toPage<SysJob>(r)),
+  add: (body: JobInput) => client.POST('/api/v1/sys/job', { body }).then((r) => unwrap<number>(r)),
+  /** 更新任务(code 创建后不可变,服务层忽略;触发配置变更即重算下次执行时刻)。 */
+  update: (id: number, body: JobInput) =>
+    client.PUT('/api/v1/sys/job/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
+  /** 删除任务(软删,可回收站恢复;内置任务 47014 拒删)。 */
+  remove: (id: number) =>
+    client.DELETE('/api/v1/sys/job/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** 批量删除(命中内置任务则整批拒绝)。 */
+  batchRemove: (ids: number[]) => client.POST('/api/v1/sys/job/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
+  /** 启停(true=恢复调度并重算下次执行时刻,false=暂停);集群下最长 30 秒后生效。 */
+  setEnabled: (id: number, enabled: boolean) =>
+    client.PUT('/api/v1/sys/job/{id}/enabled', { params: { path: { id }, query: { enabled } } }).then((r) => unwrap<boolean>(r)),
+  /** 执行一次(在收到请求的副本本机执行,不经选主、不影响调度节奏)。 */
+  runOnce: (id: number) => client.POST('/api/v1/sys/job/{id}/run', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** cron 预览(归一化 + 未来若干次);任何登录用户可用。POST 而非 GET:cron 含 `? #`,走 query 有转义坑。 */
+  previewCron: (body: { cron: string; count?: number; from?: string | null }) =>
+    client.POST('/api/v1/sys/job/preview-cron', { body }).then((r) => unwrap<CronPreviewOutput>(r)),
+  /** 已注册的编译处理器全名清单(表单下拉数据源,免手打 handlerName)。 */
+  handlers: () => client.GET('/api/v1/sys/job/handlers', {}).then((r) => unwrap<JobHandlersOutput>(r)),
+  /**
+   * 执行记录分页。startTime 是 dateRange 列回传的 [开始, 结束] 日期串 → 后端 StartFrom/StartTo;
+   * 结束日拼 23:59:59(与 splitRange 同理,免"筛到今天"漏掉今天)。
+   */
+  logPage: (params: { page: number; pageSize: number; jobId?: number; runStatus?: number; startTime?: [string, string] | null; sortField?: string; sortOrder?: string; fireInstanceId?: number }) =>
+    client
+      .GET('/api/v1/sys/job/log/page', {
+        params: {
+          query: {
+            ...pageParams(params),
+            JobId: params.jobId,
+            RunStatus: params.runStatus,
+            FireInstanceId: params.fireInstanceId,
+            StartFrom: params.startTime?.[0] || undefined,
+            StartTo: params.startTime?.[1] ? `${params.startTime[1]} 23:59:59` : undefined,
+            SortField: params.sortField,
+            SortOrder: params.sortOrder,
+          },
+        },
+      })
+      .then((r) => toPage<SysJobLog>(r)),
+  /** 终止一次执行(跨节点:写终止旗标,目标节点最迟 KillPollSeconds 后停)。 */
+  killLog: (id: number) =>
+    client.POST('/api/v1/sys/job/log/{id}/kill', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  /** 清空执行记录(硬删;运行中的记录一律保留)。返回删除行数。 */
+  clearLogs: (body: { beforeDays?: number | null; jobId?: number | null }) =>
+    client.POST('/api/v1/sys/job/log/clear', { body }).then((r) => unwrap<number>(r)),
+  /** 监控仪表盘(今日成败/在飞/状态分布/近 14 日趋势/即将执行/集群节点)。 */
+  dashboard: () => client.GET('/api/v1/sys/job/dashboard', {}).then((r) => unwrap<JobDashboard>(r)),
 }
 
 // ── 回收站 ────────────────────────────────────────────────────────
