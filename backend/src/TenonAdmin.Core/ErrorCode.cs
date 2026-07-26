@@ -20,6 +20,7 @@ namespace TenonAdmin.Core;
 ///   <item><term>44000–44999</term><description>文件上传</description></item>
 ///   <item><term>45000–45999</term><description>消息通知</description></item>
 ///   <item><term>46000–46999</term><description>导入 / 导出</description></item>
+///   <item><term>47000–47999</term><description>定时任务</description></item>
 ///   <item><term>50000–50999</term><description>系统内部错误</description></item>
 /// </list>
 /// </summary>
@@ -310,6 +311,64 @@ public enum ErrorCode
     /// <summary>请求导出的列不在该档案的可导列里</summary>
     [MsgKey("error.export.columnInvalid")]
     ExportColumnInvalid = 46013,
+
+    // ── 47xxx 定时任务 ───────────────────────────────────────────────
+
+    /// <summary>任务不存在</summary>
+    [MsgKey("error.job.notFound")]
+    JobNotFound = 47001,
+
+    /// <summary>任务编码已存在(编码唯一)</summary>
+    [MsgKey("error.job.codeExists")]
+    JobCodeExists = 47002,
+
+    /// <summary>cron 表达式不合法;args 携带 reason(段位与原因,来自 CronExpression 的 FormatException)</summary>
+    [MsgKey("error.job.cronInvalid")]
+    JobCronInvalid = 47003,
+
+    /// <summary>触发配置不合法(间隔 &lt; 5 秒 / 一次性时刻已过 / 必填字段缺失)</summary>
+    [MsgKey("error.job.triggerInvalid")]
+    JobTriggerInvalid = 47004,
+
+    /// <summary>编译处理器未注册(HandlerName 在 DI 集合里无匹配);args 携带 handlerName</summary>
+    [MsgKey("error.job.handlerNotFound")]
+    JobHandlerNotFound = 47005,
+
+    /// <summary>串行任务上次执行未结束(SerialSkip 语义;「执行一次」时校验)</summary>
+    [MsgKey("error.job.alreadyRunning")]
+    JobAlreadyRunning = 47006,
+
+    /// <summary>目标执行记录不在运行中(终止无从谈起)</summary>
+    [MsgKey("error.job.runNotAlive")]
+    JobRunNotAlive = 47007,
+
+    /// <summary>SQL 任务未启用(TenonAdmin:Jobs:Sql:Enabled 总闸,默认关)</summary>
+    [MsgKey("error.job.sqlDisabled")]
+    JobSqlDisabled = 47008,
+
+    /// <summary>HTTP 任务 URL 被围栏拒绝(非 http/https / 不在白名单 / 命中 CIDR 黑名单)</summary>
+    [MsgKey("error.job.httpUrlBlocked")]
+    JobHttpUrlBlocked = 47009,
+
+    /// <summary>状态流转非法(如 enable 后重算仍无未来时刻)</summary>
+    [MsgKey("error.job.statusConflict")]
+    JobStatusConflict = 47010,
+
+    /// <summary>属性包缺键或畸形;args 携带 key</summary>
+    [MsgKey("error.job.propsInvalid")]
+    JobPropsInvalid = 47011,
+
+    /// <summary>执行记录不存在</summary>
+    [MsgKey("error.job.logNotFound")]
+    JobLogNotFound = 47012,
+
+    /// <summary>在飞执行数已达 MaxConcurrentRuns 上限</summary>
+    [MsgKey("error.job.runLimitReached")]
+    JobRunLimitReached = 47013,
+
+    /// <summary>内置任务(IsSystem)禁删</summary>
+    [MsgKey("error.job.protected")]
+    JobProtected = 47014,
 
     // ── 50xxx 系统内部 ───────────────────────────────────────────────
 
