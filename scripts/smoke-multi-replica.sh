@@ -177,6 +177,78 @@ else
   fail "$OK_COUNT requests were let through (expected <= 20), $LIMITED were rate-limited -- the count isn't shared across replicas, so the threshold was doubled to 40"
 fi
 
+echo "== 6. Scheduled jobs fire exactly once cluster-wide, and the standby takes over =="
+# Both replicas run a scheduler. The lease only decides who scans; correctness comes from the
+# per-fire CAS on NextRunTime. Without it both replicas fire the same occurrence -- which looks
+# exactly like duplicate ScheduledTime values below. Then we kill the leader: without the
+# standby's lease takeover, the job simply stops running and no new log rows ever appear.
+NODES_JSON=$(curl -s "$BASE/api/v1/sys/job/dashboard" -H "Authorization: Bearer $ADMIN_TOKEN")
+NODE_COUNT=$(echo "$NODES_JSON" | python3 -c "
+import sys,json
+try: print(len(json.load(sys.stdin)['data']['nodes']))
+except Exception: print(0)")
+if [ "$NODE_COUNT" -lt 2 ]; then
+  fail "Only $NODE_COUNT scheduler node(s) registered -- expected 2. Either a replica is down or its scheduler never started; the rest of this section cannot prove anything, so it is not skipped silently."
+else
+  pass "Both replicas registered as scheduler nodes ($NODE_COUNT)"
+
+  JOB_BODY='{"code":"smoke-tick","name":"smoke tick","handlerKind":2,"handlerName":"","triggerKind":2,"intervalSeconds":5,"properties":{"url":"http://127.0.0.1:8080/health"}}'
+  JOB_ID=$(curl -s -X POST "$BASE/api/v1/sys/job" -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $ADMIN_TOKEN" -d "$JOB_BODY" | json data)
+  if [ -z "$JOB_ID" ]; then
+    fail "Could not create the smoke job -- the scheduling module may be disabled or the payload was rejected"
+  else
+    echo "  (waiting 25s for the 5s-interval job to fire a few times...)"
+    sleep 25
+    RUNS=$(curl -s "$BASE/api/v1/sys/job/log/page?JobId=$JOB_ID&Size=50" -H "Authorization: Bearer $ADMIN_TOKEN" \
+      | python3 -c "
+import sys,json
+items = json.load(sys.stdin)['data']['items']
+times = [i['scheduledTime'] for i in items]
+print(len(times), len(set(times)))")
+    TOTAL=$(echo "$RUNS" | cut -d' ' -f1)
+    DISTINCT=$(echo "$RUNS" | cut -d' ' -f2)
+    [ "${TOTAL:-0}" -ge 3 ] \
+      && pass "The job fired $TOTAL times in ~25s" \
+      || fail "Only ${TOTAL:-0} run(s) in ~25s -- a 5s-interval job should fire at least 3 times; the scheduler is not running"
+    [ "${TOTAL:-0}" = "${DISTINCT:-0}" ] \
+      && pass "All $TOTAL runs have distinct scheduled times -- no occurrence fired twice" \
+      || fail "$TOTAL runs but only $DISTINCT distinct scheduled times -- both replicas fired the same occurrence (this is exactly what dropping 'AND NextRunTime=@expected' from the claim looks like)"
+
+    LEADER=$(echo "$NODES_JSON" | python3 -c "
+import sys,json
+nodes = json.load(sys.stdin)['data']['nodes']
+print(next((n['nodeName'] for n in nodes if n['isLeader']), ''))")
+    LEADER_SVC=$(docker compose ps --format '{{.Service}} {{.Name}}' 2>/dev/null | while read -r svc name; do
+      case "$svc" in app|app2)
+        wid=$(docker exec "$name" printenv TenonAdmin__Id__WorkerId 2>/dev/null)
+        [ -n "$wid" ] && [ "${LEADER##*#}" = "$wid" ] && echo "$svc"
+      ;; esac
+    done | head -1)
+    if [ -z "$LEADER_SVC" ]; then
+      fail "Could not map the leader node '$LEADER' back to a compose service -- cannot test failover"
+    else
+      BEFORE=$(curl -s "$BASE/api/v1/sys/job/log/page?JobId=$JOB_ID&Size=1" -H "Authorization: Bearer $ADMIN_TOKEN" | json data.total)
+      echo "  (stopping the leader '$LEADER_SVC', then waiting 50s for the standby to take over: lease 30s + heartbeat 10s)"
+      docker compose stop "$LEADER_SVC" >/dev/null 2>&1
+      sleep 50
+      AFTER=$(curl -s "$BASE/api/v1/sys/job/log/page?JobId=$JOB_ID&Size=1" -H "Authorization: Bearer $ADMIN_TOKEN" | json data.total)
+      NEW_LEADER=$(curl -s "$BASE/api/v1/sys/job/dashboard" -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "
+import sys,json
+nodes = json.load(sys.stdin)['data']['nodes']
+print(next((n['nodeName'] for n in nodes if n['isLeader']), ''))")
+      [ "${AFTER:-0}" -gt "${BEFORE:-0}" ] \
+        && pass "New runs kept appearing after the leader went down ($BEFORE -> $AFTER)" \
+        || fail "No new runs after the leader went down ($BEFORE -> $AFTER) -- the standby never took the lease, so jobs stop when one replica dies"
+      [ -n "$NEW_LEADER" ] && [ "$NEW_LEADER" != "$LEADER" ] \
+        && pass "Leadership moved from '$LEADER' to '$NEW_LEADER'" \
+        || fail "Leader is still reported as '$NEW_LEADER' -- the lease was never taken over"
+      docker compose start "$LEADER_SVC" >/dev/null 2>&1
+    fi
+    curl -s -X DELETE "$BASE/api/v1/sys/job/$JOB_ID" -H "Authorization: Bearer $ADMIN_TOKEN" >/dev/null
+  fi
+fi
+
 echo
 if [ "$FAILURES" -eq 0 ]; then
   echo "✅ Dual-replica smoke test: all checks passed"

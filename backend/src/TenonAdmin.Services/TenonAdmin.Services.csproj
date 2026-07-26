@@ -9,6 +9,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <!-- WorkerSetup 要绑 TenonAdmin 配置节(独立 Worker 宿主没有 AspNetCore 层可依赖);Microsoft.* 合规 -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <!-- ICacheProvider 默认实现 MemoryCacheProvider 用 IMemoryCache(设计 §5.5;Microsoft.* 合规) -->
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
   </ItemGroup>

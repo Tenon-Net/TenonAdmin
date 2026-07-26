@@ -580,7 +580,7 @@ API 副本两种姿态(§10.1 之上的部署选择):①什么都不配 —— A
 | ✅G3 | 引擎:选主/循环/执行器/registry/三个内置处理器/`JobChangedEvent`/DI | §12 FakeTimeProvider + 选主 + CAS 测试全绿(21 例) | 删 CAS 的 `AND NextRunTime=@expected` → 双发测试红(已实测) |
 | ✅G4 | `JobController` 13 端点 + 菜单种子 132–146 + `RecycleBin` 登记 + `gen:api` | PermissionCodeConsistency/OperationLogCoverage 绿;24 例 HTTP + 40 例安全测试绿 | 摘掉任一 [OperationLog] → 红 |
 | ✅G5 | HTTP 级测试 + Replaceability 追加 + TestHost `SampleJob` + backend-ci TEST_FILTER | 47xxx 各码有用例;SqlServer 子集含 Election/Claim | 前置注册假 `IJobService` 不生效 → 六件套红(已实测) |
-| G6 | Worker:`WorkerSetup` + `samples/WorkerHost` + compose TZ + smoke 第 6 断言 | multi 腿 6 断言绿 | 注释掉 standby 夺取 → 杀主断言红 |
+| ✅G6 | Worker:`WorkerSetup` + `samples/WorkerHost` + compose TZ + smoke 第 6 断言 | multi 腿 6 断言绿(本机彩排:5s 任务 25s 内 5 次、时刻互异、全 Success) | 注释掉 standby 夺取 → 杀主断言红 |
 | G7 | `web/`:三页面 + CronEditor + COMPONENTS.md + i18n | typecheck/lint 绿;浏览器实走建任务→执行→看记录 | — |
 | G8 | `web-react/`:同款 | 同上 + 既有测试套件绿 | — |
 | G9 | 文档收口:本台账 §0.1 更新、CHANGELOG、site 文档、`skills/new-module.md` 交叉引用 | `lint:prose` 绿(site 侧) | — |
@@ -663,3 +663,12 @@ bash scripts/smoke-multi-replica.sh http://localhost:8080                  # 含
 - **写六件套测试时发现的坑,值得记住**:本文件既有用例的 `Overrides = s => s.Replace(...)` 写法**测不出 TryAdd**——它是 `ConfigureTestServices`,跑在 `AddTenonAdmin` 之后,把 TryAdd 改成 Add 照样绿(它证明的是"可替换",不是"TryAdd 注册")。新用例改为裸容器**前置**注册再调 `AddTenonAdminServices()`,变异实测:TryAdd→Add 即红。
 - `backend-ci.yml` 的 SqlServer 推送腿子集追加 `JobElectionTests|JobClaimTests` —— DateTime 等值 CAS 正是该方言的精度/舍入敏感面,不进子集就只剩 nightly 兜底。
 - 全量 506 绿。
+
+### 第 5 轮 — G6 Worker 配方 + 部署纪律 + 冒烟断言(2026-07-26)
+
+- `Services/WorkerSetup.cs`(`AddTenonAdminWorker`:绑 `TenonAdmin` 节 → 注册各选项 POCO → SqlSugar + Services;WorkerId 未显式配置直接抛,租约参数同 API 侧校验)+ `samples/WorkerHost`(Program.cs 三行 + 带注释的 appsettings)+ 进 `.slnx`。`WorkerSetupTests` 3 例:Generic Host 装配得出调度器、双注册同实例、两条守卫。
+- **施工时钉死的 §10.2 待定项**:worker 的「建表与种子关掉」= `Database:EnableCodeFirst=false` + `Database:EnableSeed=false`(schema 归 API 侧所有);`Services` 加了 `Microsoft.Extensions.Configuration.Binder`(Worker 宿主没有 AspNetCore 层可依赖,Microsoft.* 合规),`Microsoft.Extensions.Hosting` 只进样例项目、不进内核包。
+- compose 两份都加 `TZ`(默认 `Asia/Shanghai`,可 `TENON_TZ` 覆盖)——容器默认 UTC、宿主机常是 +8,全副本同时区是调度的部署前提(§10.4)。
+- `scripts/smoke-multi-replica.sh` 第 6 断言:前置断言 nodes==2(不足即 fail,不静默跳过)→ 建 5s 间隔 HTTP 任务打自身 `/health` → 25s 后行数 ≥3 **且 ScheduledTime 两两互异**(重复即双发,断言消息写明"修前长这样")→ 从 dashboard 取 leader、按 nodeName 的 `#WorkerId` 后缀映射回 compose 服务 → `docker compose stop` 杀主 → 50s 后断言有新行且 leader 已易主 → 复原并删任务。
+- **本机彩排**(无 Docker,故用 MinimalHost 真跑同一套断言):5s 任务 25 秒内触发 5 次、5 个互异时刻、全 Success(HTTP 200 打到自身 /health);dashboard 的 `nodes[].nodeName/isLeader/workerId`、log 分页的 `items[].scheduledTime`、`/handlers` 三项形状与脚本读法逐字对上。剩下只有杀主接管那半段要真容器,交给 CI 的 multi 腿。
+- 全量 509 绿。

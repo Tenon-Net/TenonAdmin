@@ -50,6 +50,10 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      # 时区：容器默认 UTC、宿主机常是 +8。定时任务全模块用**服务器本地时间**，参与调度的所有进程
+      # 必须同一时区,否则任务会在错误的时刻执行(领取 CAS 仍保证不双发,但时刻是错的)。
+      # 见 docs/scheduling-ledger.md §10.4。
+      TZ: ${TENON_TZ:-Asia/Shanghai}
       # 所有配置通过双下划线环境变量传入（docs/deployment.md §0）；镜像中不烘焙任何密钥
       TenonAdmin__Jwt__SecretKey: ${TENON_JWT_SECRET:-tenon-compose-demo-signing-key-please-change-me}
       TenonAdmin__Database__DbType: MySql

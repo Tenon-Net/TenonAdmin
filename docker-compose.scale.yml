@@ -9,6 +9,8 @@
 #   · 登录失败计数走 Redis → 锁定阈值不会翻倍
 #   · 每个副本有不同的 WorkerId → 同一毫秒内生成的 ID 不会在主键上冲突
 #   · X-Forwarded-For → 两个副本都按真实客户端 IP 限流，而非都看到 Caddy 的单一 IP
+#   · 定时任务：两个副本竞选主节点，同一到期时刻**恰好触发一次**；杀掉主副本后备副本接管
+#     （scheduling-ledger §12 的第 6 断言，由 scripts/smoke-multi-replica.sh 验收）
 #
 # **为什么用两个显式 app 服务而不是 `--scale app=2`**：compose 无法为通过 `--scale` 启动的
 # 副本分配各自独立的环境变量，而 WorkerId 必须每个副本不同——相同的值意味着主键冲突。
@@ -31,6 +33,7 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      TZ: ${TENON_TZ:-Asia/Shanghai}   # 必须与 app 一致：全副本同时区是调度的部署前提（scheduling-ledger §10.4）
       TenonAdmin__Jwt__SecretKey: ${TENON_JWT_SECRET:-tenon-compose-demo-signing-key-please-change-me}
       TenonAdmin__Database__DbType: MySql
       TenonAdmin__Database__ConnectionString: Server=db;Port=3306;Database=tenon;User ID=root;Password=${TENON_DB_PASSWORD:-tenon-compose-demo};AllowPublicKeyRetrieval=true;SSL Mode=None;

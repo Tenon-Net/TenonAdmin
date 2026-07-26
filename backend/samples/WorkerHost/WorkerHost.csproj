@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <ItemGroup>
+    <!-- Generic Host 本体:样例宿主自己需要,内核包一律只依赖 Hosting.Abstractions -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Worker 只要领域层:调度器、执行器与三个内置处理器都在这儿(不需要 ASP.NET 宿主) -->
+    <ProjectReference Include="..\..\src\TenonAdmin.Services\TenonAdmin.Services.csproj" />
+    <!-- 多副本部署的前置条件:Worker 与 API 必须共享缓存,否则强退/权限缓存各说各话 -->
+    <ProjectReference Include="..\..\src\TenonAdmin.Caching.Redis\TenonAdmin.Caching.Redis.csproj" />
+  </ItemGroup>
+</Project>
