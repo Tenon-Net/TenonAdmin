@@ -13,7 +13,7 @@ namespace TenonAdmin.AspNetCore;
 [ApiController]
 [Route("api/v1/sys/job")]
 [Module("Job")]   // 可经 Api:DisabledModules=["Job"] 整模块下线
-public class JobController(IJobService jobService, IJobLogService jobLogService) : ControllerBase
+public class JobController(IJobService jobService, IJobLogService jobLogService, AdminJobsOptions jobsOptions) : ControllerBase
 {
     /// <summary>分页查询任务(行含全列,编辑表单直接用行数据)</summary>
     [HttpGet("page")]
@@ -87,8 +87,14 @@ public class JobController(IJobService jobService, IJobLogService jobLogService)
     /// <summary>已注册的编译处理器清单(前端下拉数据源,免手打 HandlerName)</summary>
     [HttpGet("handlers")]
     [RolePermission]
-    public Result<IReadOnlyList<string>> Handlers() =>
-        Result<IReadOnlyList<string>>.Ok(jobService.ListHandlers());
+    public Result<JobHandlersOutput> Handlers() =>
+        Result<JobHandlersOutput>.Ok(new JobHandlersOutput
+        {
+            Handlers = jobService.ListHandlers(),
+            // SQL 载荷的总闸只有后端知道。不下发,前端就只能让用户填完整张表单再撞 47008;
+            // 下发了才能按规格「关时禁选并提示」。
+            SqlEnabled = jobsOptions.Sql.Enabled,
+        });
 
     /// <summary>分页查询执行记录</summary>
     [HttpGet("log/page")]

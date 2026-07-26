@@ -13,7 +13,6 @@ public class JobService(
     IRepository<SysJob> jobs,
     ISqlSugarClient db,
     JobExecutor executor,
-    JobSchedulerService scheduler,
     IEnumerable<IAdminJob> handlers,
     AdminJobsOptions options,
     IEventBus events,
@@ -418,6 +417,7 @@ public class JobLogService(ISqlSugarClient db, JobExecutor executor, TimeProvide
             .WhereIF(input.RunStatus is not null, l => l.RunStatus == input.RunStatus!.Value)
             .WhereIF(input.StartFrom is not null, l => l.StartTime >= input.StartFrom!.Value)
             .WhereIF(input.StartTo is not null, l => l.StartTime <= input.StartTo!.Value)
+            .WhereIF(input.FireInstanceId is not null, l => l.FireInstanceId == input.FireInstanceId!.Value)
             .OrderBy(l => l.Id, OrderByType.Desc)
             .ToPagedListAsync(input.Current, input.Size);
 

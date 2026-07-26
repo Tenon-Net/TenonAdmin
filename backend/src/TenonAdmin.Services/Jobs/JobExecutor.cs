@@ -67,7 +67,7 @@ public class JobExecutor(
         _fires[fireInstanceId] = task;
         _ = task.ContinueWith(_ =>
         {
-            _fires.TryRemove(fireInstanceId, out _);
+            _fires.TryRemove(fireInstanceId, out Task? _);
             _busyJobs.AddOrUpdate(job.Id, 0, (_, n) => n - 1);
             _busyJobs.TryRemove(new KeyValuePair<long, int>(job.Id, 0));
         }, TaskScheduler.Default);

@@ -1987,9 +1987,9 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfstring"];
-                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfstring"];
-                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfstring"];
+                        "text/plain": components["schemas"]["ResultOfJobHandlersOutput"];
+                        "application/json": components["schemas"]["ResultOfJobHandlersOutput"];
+                        "text/json": components["schemas"]["ResultOfJobHandlersOutput"];
                     };
                 };
             };
@@ -2021,6 +2021,8 @@ export interface paths {
                     StartFrom?: string;
                     /** @description 开始时刻上界(可选) */
                     StartTo?: string;
+                    /** @description 同一次触发的标识(精确,可选)——取一次触发的全部重试行,详情抽屉按它拉重试列表 */
+                    FireInstanceId?: number | string;
                     Current?: number | string;
                     Size?: number | string;
                     SortField?: string;
@@ -6113,6 +6115,13 @@ export interface components {
         JobFireMode: number;
         /** @description 任务载荷类型(`sys_job.HandlerKind`,docs/scheduling-ledger.md §7) */
         JobHandlerKind: number;
+        /** @description 处理器清单出参:已注册的编译类处理器 + SQL 载荷总闸状态 */
+        JobHandlersOutput: {
+            /** @description 已注册的 `IAdminJob.Name` 清单(编译类载荷的下拉数据源) */
+            handlers?: string[];
+            /** @description `TenonAdmin:Jobs:Sql:Enabled`;false 时前端禁选 SQL 载荷并提示 */
+            sqlEnabled?: boolean;
+        };
         /** @description 任务新增/编辑入参。`Code` 仅新增时生效——更新时服务层忽略,创建后不可变(它是排障锚点)。 */
         JobInput: {
             /** @description 任务编码(唯一,创建后不可变) */
@@ -7406,28 +7415,6 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
-        ResultOfIReadOnlyListOfstring: {
-            /**
-             * Format: int32
-             * @description 业务码,0 为成功,其余见 ErrorCode 分段
-             */
-            code?: number | string;
-            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
-            msgKey?: null | string;
-            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
-            args?: null | Record<string, never>;
-            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
-            message?: null | string;
-            /** @description 业务数据载荷 */
-            data?: null | string[];
-        };
-        /**
-         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
-         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
-         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
-         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
-         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
-         */
         ResultOfIReadOnlyListOfSysDictItem: {
             /**
              * Format: int32
@@ -7507,6 +7494,27 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["JobDashboardOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfJobHandlersOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["JobHandlersOutput"];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。

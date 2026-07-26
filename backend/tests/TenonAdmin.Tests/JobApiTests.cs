@@ -319,10 +319,26 @@ public class JobApiTests
         using var f = new AdminAppFactory();
         var admin = await SuperAdminClient(f);
         var body = await (await admin.GetAsync("/api/v1/sys/job/handlers")).ReadEnvelope();
-        var names = body.GetProperty("data").EnumerateArray().Select(e => e.GetString()).ToList();
+        var data = body.GetProperty("data");
+        var names = data.GetProperty("handlers").EnumerateArray().Select(e => e.GetString()).ToList();
         Assert.Contains("TenonAdmin.Services.JobLogCleanupJob", names);
         Assert.Contains("TenonAdmin.Services.HttpAdminJob", names);
         Assert.Contains("TenonAdmin.Services.SqlAdminJob", names);
+
+        // SQL 总闸默认关:前端据此禁选 SQL 载荷,不下发就只能让用户填完表单再撞 47008
+        Assert.False(data.GetProperty("sqlEnabled").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Handlers_endpoint_reports_sql_enabled_when_the_gate_is_open()
+    {
+        using var f = new AdminAppFactory
+        {
+            Settings = new Dictionary<string, string?> { ["TenonAdmin:Jobs:Sql:Enabled"] = "true" },
+        };
+        var admin = await SuperAdminClient(f);
+        var body = await (await admin.GetAsync("/api/v1/sys/job/handlers")).ReadEnvelope();
+        Assert.True(body.GetProperty("data").GetProperty("sqlEnabled").GetBoolean());
     }
 
     [Fact]
@@ -351,6 +367,37 @@ public class JobApiTests
         // 手动触发不动调度节奏
         var after = await ReadJobAsync(admin, "t-runnow");
         Assert.Equal(nextBefore, after.GetProperty("nextRunTime").GetString());
+    }
+
+    [Fact]
+    public async Task Log_page_filters_by_fire_instance_id()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+        var id = await AddJobAsync(admin, CronJob("t-fireinstance"));
+
+        // 触发两次:两次触发各有自己的 FireInstanceId,按它筛只应回自己那一次的行
+        await admin.PostJson($"/api/v1/sys/job/{id}/run", new { });
+        JsonElement items = default;
+        for (var i = 0; i < 100; i++)
+        {
+            await admin.PostJson($"/api/v1/sys/job/{id}/run", new { });
+            items = (await (await admin.GetAsync($"/api/v1/sys/job/log/page?jobId={id}")).ReadEnvelope())
+                .GetProperty("data").GetProperty("items");
+            if (items.GetArrayLength() >= 2) break;
+            await Task.Delay(100);
+        }
+        Assert.True(items.GetArrayLength() >= 2);
+
+        var fid = items.EnumerateArray().First().GetProperty("fireInstanceId").GetInt64();
+        Assert.NotEqual(0, fid);
+        var filtered = (await (await admin.GetAsync($"/api/v1/sys/job/log/page?fireInstanceId={fid}")).ReadEnvelope())
+            .GetProperty("data").GetProperty("items");
+
+        // 全部命中同一次触发,且比不筛时少(证明 where 真的生效,不是被忽略的参数)
+        Assert.True(filtered.GetArrayLength() >= 1);
+        Assert.True(filtered.GetArrayLength() < items.GetArrayLength());
+        Assert.All(filtered.EnumerateArray(), r => Assert.Equal(fid, r.GetProperty("fireInstanceId").GetInt64()));
     }
 
     [Fact]

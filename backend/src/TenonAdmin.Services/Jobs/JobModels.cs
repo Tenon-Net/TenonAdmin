@@ -79,6 +79,16 @@ public record JobPageInput : PageInputBase
     public JobHandlerKind? HandlerKind { get; init; }
 }
 
+/// <summary>处理器清单出参:已注册的编译类处理器 + SQL 载荷总闸状态</summary>
+public record JobHandlersOutput
+{
+    /// <summary>已注册的 <c>IAdminJob.Name</c> 清单(编译类载荷的下拉数据源)</summary>
+    public IReadOnlyList<string> Handlers { get; init; } = [];
+
+    /// <summary><c>TenonAdmin:Jobs:Sql:Enabled</c>;false 时前端禁选 SQL 载荷并提示</summary>
+    public bool SqlEnabled { get; init; }
+}
+
 /// <summary>执行记录分页查询入参</summary>
 public record JobLogPageInput : PageInputBase
 {
@@ -93,6 +103,9 @@ public record JobLogPageInput : PageInputBase
 
     /// <summary>开始时刻上界(可选)</summary>
     public DateTime? StartTo { get; init; }
+
+    /// <summary>同一次触发的标识(精确,可选)——取一次触发的全部重试行,详情抽屉按它拉重试列表</summary>
+    public long? FireInstanceId { get; init; }
 }
 
 /// <summary>清空执行记录入参</summary>
