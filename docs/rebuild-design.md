@@ -139,7 +139,7 @@ TenonAdmin.Security.Gm   ──→ BouncyCastle(国密 SM2/3/4)                 
 | JWT(MoYu.Extras) | `Microsoft.AspNetCore.Authentication.JwtBearer` |
 | Swashbuckle | 内置 `Microsoft.AspNetCore.OpenApi`;UI 走可选 Scalar 包 |
 | 事件总线 | 自写 `System.Threading.Channels` 进程内总线(<200 行) |
-| 定时任务插件 | `IHostedService` + 自写轻量 cron 解析 |
+| 定时任务插件 | `IHostedService` + 自写轻量 cron 解析(设计已定稿:`docs/scheduling-ledger.md` / ADR-0004,6 段秒级 + DB 选主) |
 | Yitter 雪花 ID | 自写雪花算法(单文件,`IIdGenerator` 可换) |
 | NewLife.Redis / 缓存 | 对外抽象 `ICacheProvider`,默认 `MemoryCacheProvider`(基于 `IMemoryCache`);Redis 可选包 `RedisCacheProvider` 用你的 **SimpleRedis**(含高并发 + MQ);HybridCache 仅作内部可选细节,不作为用户核心概念 |
 | Mapster 映射 | **不替换,直接去掉**:DTO↔实体手写赋值(内核全部服务都这么写),不引任何映射库 |
@@ -302,7 +302,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 
 **v1.x 以可选包/后续版本补齐**(不阻塞 v1.0 发布):
 **React 模板**、**SoybeanUI 皮肤**、**分片上传**、IP 地理/UA 精解、代码生成(`TenonAdmin.CodeGen`)、
-~~导入导出(`TenonAdmin.Excel`)~~（**已做**，见 `docs/excel-ledger.md`）、批量修改、消息中心、MQTT(`TenonAdmin.Mqtt`)、任务调度(`TenonAdmin.Scheduling`)、
+~~导入导出(`TenonAdmin.Excel`)~~（**已做**，见 `docs/excel-ledger.md`）、批量修改、消息中心、MQTT(`TenonAdmin.Mqtt`)、~~任务调度(`TenonAdmin.Scheduling`)~~（**改判进内核,不做卫星包**,设计已定稿:`docs/scheduling-ledger.md` / ADR-0004）、
 国密(`TenonAdmin.Security.Gm`)、OSS/Minio 存储(`TenonAdmin.Storage.*`)、可观测性(`TenonAdmin.Observability`)。
 
 ### 4.1 v1.0 非目标(明确不做,防膨胀)
@@ -317,7 +317,7 @@ v1.0 **明确不做**——写清楚"不做什么"和"做什么"同样重要:
 - 不做代码生成 / 批量修改（Excel 导入导出已做：可选卫星包 `TenonAdmin.Excel`，见 `docs/excel-ledger.md`）;
 - 不做 Minio / OSS 存储;
 - 不做 MQTT 推送、不用 SignalR(v1 只 HTTP 轮询);
-- 不做国密、不做任务调度;
+- 不做国密、~~不做任务调度~~（2026-07-26 改判:进内核,设计已定稿待施工,见 `docs/scheduling-ledger.md` / ADR-0004）;
 - 不做复杂工作流 / 表单引擎;
 - 不承诺生产环境自动改表(§12 建表安全)。
 
@@ -664,7 +664,7 @@ web/src/
 
 ### v1.x 路线(发布后按需)
 **React 版模板 ✅ 完成(改为同仓 `web-react/`,不拆独立仓;`docs/react-template-ledger.md`)** → **SoybeanUI 皮肤**(补视图层)→ **分片上传** → IP 地理/UA 精解 → 代码生成 → Excel 导入导出 →
-任务调度 → 消息中心 → OSS 存储 → 国密 → MQTT → 可观测性
+任务调度(**设计已定稿**,进内核,`docs/scheduling-ledger.md`)→ 消息中心 → OSS 存储 → 国密 → MQTT → 可观测性
 
 ### 9.1 优先级(P0/P1/P2)
 

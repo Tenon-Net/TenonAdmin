@@ -100,7 +100,7 @@ R1–R6 全部处置。闸门先红后绿的证据在下面这张表里 —— *
 
 | 候选 | 状态 |
 |---|---|
-| **定时任务调度中心** | 设计已成稿(自写 5 段 cron + `IAdminJob` + `JobSchedulerService`),前置阻塞(实体基类重构 `c2a963e`)已解除。**但归属两处打架、开工前必须先定**:`rebuild-design.md:305/320` 写的是卫星包 `TenonAdmin.Scheduling`,台账按进内核设计 —— 这条决定了是自写 cron(留内核,依赖纪律只允许 SqlSugarCore + Microsoft.\*)还是直接吃 Quartz/Hangfire(卫星包)。 |
+| **定时任务调度中心** | **归属已定、设计已定稿(2026-07-26)**:进内核 + 自研零依赖(ADR-0004),施工规格 `docs/scheduling-ledger.md`(6 段秒级 cron 全语法、DB 选主 + 触发 CAS、编译/HTTP/SQL 三类载荷、双前端三页面 + CronEditor、可选 Worker 形态)。批次 G1–G9 待排期,接手直接从台账 §14 开工。 |
 | **`TenonAdmin.Excel` 卫星包** | Magicodes.IE,`rebuild-design.md:165` 已定稿方向;用户导入 + 同步导出,经 `ApplicationAssemblies` 挂入,内核零改动。 |
 | **E6 pro-components 转正** | `web-react/` 等上游 beta → stable,**不由我们控制**,长期挂着。 |
 
