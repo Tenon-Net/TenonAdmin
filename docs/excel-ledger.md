@@ -44,12 +44,14 @@ git checkout dev
 
 | # | 事项 | 性质 | 出处 |
 |---|---|---|---|
-| ① | `backend-release.yml` 的 pack 不枚举项目 → **`dev` 合进 `main` 后首个 `v*` tag 会把 `TenonAdmin.Excel` 永久发布到 nuget.org**,包名与 `AddTenonAdminExcel()` 入口届时定死 | **不可撤销,需产品决定**。CI 未动 | §12 第 9 轮 ① |
+| ① | **`dev` 合进 `main` 后首个 `v*` tag 会把 `TenonAdmin.Excel` 发布到 nuget.org**(推包不可撤销,只能 unlist),包名与 `AddTenonAdminExcel()` 入口届时定死 | **需产品确认,但基本已成定局**,见下 | §12 第 9 轮 ① |
 | ② | SqlServer **完整**套件只在 `schedule` 夜间跑,而 `schedule` 只跑默认分支 —— 本批代码的 SqlServer 全量验证要等**进了默认分支之后**那一夜才真正发生。PR 上跑的是方言子集 | 覆盖缺口,非缺陷 | §12 第 13 轮末 |
-| ③ | 「已存在」被当错误呈现:重复导同一批时预览显示「N 行有错误」并标红,但后端在 Skip/Overwrite 策略下会正常跳过/更新。**呈现层缺陷,落库正确** | 改法要动 `ImportPreview` DTO + 两个模板,该单独一批 | §12 第 7 轮末 |
+| ③ | ~~「已存在」被当错误呈现~~ | ✅ **已修**(2026-07-26) | §12 第 14 轮 |
 | ④ | 向导三条支路从未实走:**手动改列映射**、**覆盖/报错两种策略走 UI**、**必填列未映射的 `columnErrors` 分支**(实走只覆盖「自动映射全中 + 跳过策略」主路) | 验证缺口 | §12 第 9 轮 ④ |
 
-建议次序:①要你拍板(在合 `main` 之前决定);②合进 `main` 后隔夜看一次 nightly;③④可各自成一批。
+**①的原始说法要订正**:第 9 轮记的是「`backend-release.yml` 的 pack 不枚举项目」,读起来像**漏配**。实际不是 —— `backend/Directory.Build.props` 默认 `IsPackable=false`,`src/` 下各包**逐个显式开**,`TenonAdmin.Excel.csproj` 里那句 `<IsPackable>true</IsPackable>` 是第 2 轮主动写的。而且 `CHANGELOG.md` 已经对外写明了包名、`AddTenonAdminExcel()` 前置要求和文档站链接。所以这是**已作出并已公开的选择**,不是待补的配置;真要不发,得同时撤 `IsPackable` 和 CHANGELOG 那一条。
+
+建议次序:①合 `main` 前确认一句即可(默认就发);②合进 `main` 后隔夜看一次 nightly;④单独一批(要开浏览器,顺带把第 14 轮欠的配色实走一起做了)。
 
 ### 本地怎么跑起来(验证命令详见 §10)
 
@@ -763,6 +765,19 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 ---
 
 ## 12. 轮次日志
+
+### 第 14 轮 — 「已存在」不再被当错误呈现(2026-07-26,§0.1 遗留③)
+**起因**:§0.1 遗留③ —— 对着已导过一次的库重跑向导,预览显示「共 3 行,其中 3 行有错误」且登录账号列全部标红,而后端在 Skip/Overwrite 策略下会正常跳过/更新。呈现层缺陷,落库一直是对的。
+
+**推翻了台账原来的改法建议(第 7 轮末写的「改 `ImportPreview` DTO 拆计数」)**:拆 DTO 解决不了问题。颜色判定要的是**当前重复策略**,而 preview/validate 两个端点**都不收策略**(`ImportRowsInput` 只有 `Rows`),后端算不出「这行该不该标红」;策略单选框又恰好和预览表在同一步,前端本来就知道它。所以拆完 DTO 前端**照样**得自己按策略判色 —— 那层后端改动是白加的。**后端一行未动**(`CommitAsync:113` 的 `hardErrors` 判定本来就是对的)。
+
+**改**:两个模板各新增 `utils/importDup.ts`(零共享,有意重复)——`isHardError` / `hardErrorsOf` / `isDuplicateOnly` 三个纯函数,把「46010 只在 Error 策略下算错」这一条镜像后端。向导四处用它:①单元格底色(`--color-warning-bg` + `import-cell--dup` 类,输入框不置 `error` 态)②行尾标签(「已存在」警示标签 + tooltip「提交时按『跳过已存在』略过,不必修改」,而非红色错误数)③「只看错误行」不再把这些行算进去 ④汇总行「共 N 行,其中 X 行有错误」后追加「另有 Y 行已存在」。`errorRows` 从 `ref` + 四处赋值改成按策略算的 `computed`/`useMemo`(React 侧 `revalidate` 里就地算,`useMemo` 要等下一次渲染)。四个 locale 各加 `summaryDup`/`dupTag`/`dupHint.{0,1,2}`(后缀 = `DuplicateStrategy` 数值)。
+
+**新增镜像债(照实说)**:`IMPORT_DUPLICATE_IN_DB = 46010` 是第三处前端镜像后端的常量(前两处见第 7 轮末:`CODE_MSG_KEY`、`userExportColumns`),同样没有闸门钉住。相比之前的两处,这次至少有个**具名文件**装它,不再埋在 600 行 SFC 里。
+
+**闸门**:`web` typecheck / lint / **test 66/66**(基线 62 + 4)/ build 四条绿;`web-react` typecheck / lint / **test 734/734**(基线 730 + 4)/ build 四条绿 + `antd lint ImportWizard.tsx` 0 issue。**变异**:`isHardError` 改成 `return true`(即退回「任何错误都算硬错误」的旧行为)→ `importDup.spec.ts` **4 条里红 3 条**(`isDuplicateOnly(row(DUP), Skip)` 报 `expected false to be true`)→ 改回绿。
+
+**未做**:浏览器实走。这一轮改的是判定与配色,单测钉的是判定;**配色和 tooltip 属于第 7 轮那条「渲染期才失效、单测替代不了实走」的形状**(jsdom 不解析 CSS 变量),`--color-warning-bg` 在两个模板的 `tokens.css` 亮/暗都有定义(已核对),但**实测底色未验**。下次开浏览器时顺手读一次 `getComputedStyle().backgroundColor` 即可闭环。
 
 ### 第 11 轮 — 启用状态改挂 `common_status` 字典(2026-07-26)
 **起因**:用户实测两条反馈。①「5173 所有页面 404」—— 排查后**不是缺陷**:后端菜单接口正常、19 个路由菜单的 `component` 逐个核对 `web/src/views` **一个不缺**、全新隔离会话登录→选应用→逐个点菜单全通、深链接硬刷新也通。真因是当时两个 vite 进程已死(只剩后端在监听);杀掉 vite 后在已打开的页面里点菜单可复现:`ERR_CONNECTION_REFUSED` + `Unhandled error during execution of async component loader` → 内容区空白。②「用户管理里状态是 switch,导入模板里却是自由文本框」—— **是真缺陷**。

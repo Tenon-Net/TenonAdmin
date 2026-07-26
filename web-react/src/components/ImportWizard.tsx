@@ -12,7 +12,9 @@ import { AppIcon } from '@/components/AppIcon'
 import { DictSelect } from '@/components/DictSelect'
 import { translateError } from '@/utils/error'
 import { triggerBlobDownload } from '@/utils/download'
+import { hardErrorsOf as hardErrors, isDuplicateOnly, isHardError } from '@/utils/importDup'
 import type {
+  CellError,
   DuplicateStrategy as DupStrategyNum,
   ImportColumn,
   ImportCommitResult,
@@ -47,6 +49,11 @@ const cellErrorWrap: CSSProperties = {
   // 用仓库自己的语义令牌(亮/暗都有定义)。别写 antd 组件内部变量 —— 未定义时整条声明静默失效(坑 12)。
   background: 'var(--color-danger-bg)',
 }
+const cellDupWrap: CSSProperties = {
+  ...cellWrap,
+  // 「库里已存在」在跳过/覆盖策略下会被正常处理,用警示色而非错误红
+  background: 'var(--color-warning-bg)',
+}
 
 export function ImportWizard({
   open,
@@ -70,10 +77,23 @@ export function ImportWizard({
   const [columns, setColumns] = useState<ImportColumn[]>([])
   const [rows, setRows] = useState<ImportRow[]>([])
   const [columnErrors, setColumnErrors] = useState<ImportPreview['columnErrors']>([])
-  const [errorRows, setErrorRows] = useState(0)
   const [onlyErrors, setOnlyErrors] = useState(false)
   const [strategy, setStrategy] = useState<DupStrategyNum>(DuplicateStrategy.Skip)
   const [commitResult, setCommitResult] = useState<ImportCommitResult | null>(null)
+
+  // 「已存在」按策略呈现的判定见 utils/importDup(那里也记着与后端的镜像关系)
+  const isHard = useCallback((e: CellError) => isHardError(e, strategy), [strategy])
+  const hardErrorsOf = useCallback((r: ImportRow) => hardErrors(r, strategy), [strategy])
+  /** 需要用户动手改的行数(不含「已存在」——那些按策略自动处理)。 */
+  const errorRows = useMemo(
+    () => rows.filter((r) => hardErrorsOf(r).length > 0).length,
+    [rows, hardErrorsOf],
+  )
+  /** 只是「已存在」、会被策略正常处理的行数。 */
+  const duplicateRows = useMemo(
+    () => rows.filter((r) => isDuplicateOnly(r, strategy)).length,
+    [rows, strategy],
+  )
 
   const reset = useCallback(() => {
     setStep(0)
@@ -85,7 +105,6 @@ export function ImportWizard({
     setColumns([])
     setRows([])
     setColumnErrors([])
-    setErrorRows(0)
     setOnlyErrors(false)
     setStrategy(DuplicateStrategy.Skip)
     setCommitResult(null)
@@ -107,7 +126,6 @@ export function ImportWizard({
       })),
     )
     setColumnErrors(p.columnErrors)
-    setErrorRows(p.errorRows)
   }
 
   const onDownloadTemplate = async () => {
@@ -191,8 +209,8 @@ export function ImportWizard({
   }
 
   const displayRows = useMemo(
-    () => (onlyErrors ? rows.filter((r) => r.errors.length > 0) : rows),
-    [onlyErrors, rows],
+    () => (onlyErrors ? rows.filter((r) => hardErrorsOf(r).length > 0) : rows),
+    [onlyErrors, rows, hardErrorsOf],
   )
 
   const previewColumns: ColumnsType<ImportRow> = useMemo(() => {
@@ -212,6 +230,8 @@ export function ImportWizard({
         minWidth: 120,
         render: (_, row) => {
           const err = row.errors.find((e) => e.columnKey === col.key)
+          // 「已存在」在跳过/覆盖策略下不算错:走警示底色,输入框也不置 error 态
+          const soft = err !== undefined && !isHard(err)
           const val = row.cells[col.key] ?? null
           const editor = col.dictTypeCode ? (
             <DictSelect
@@ -224,24 +244,31 @@ export function ImportWizard({
               // 只在向导关掉,不动共用的 DictSelect —— 普通表单里下拉够宽,跟随反而更整齐。
               popupMatchSelectWidth={false}
               style={{ width: '100%' }}
-              status={err ? 'error' : undefined}
+              status={err && !soft ? 'error' : undefined}
               onChange={(v) => setCell(row.index, col.key, (v as string | null) ?? null)}
             />
           ) : (
             <Input
               value={val ?? ''}
               size="small"
-              status={err ? 'error' : undefined}
+              status={err && !soft ? 'error' : undefined}
               onChange={(e) => setCell(row.index, col.key, e.target.value)}
             />
           )
           const cell = (
-            <div className={err ? 'import-cell import-cell--error' : 'import-cell'} style={err ? cellErrorWrap : cellWrap}>
+            <div
+              className={
+                !err ? 'import-cell' : soft ? 'import-cell import-cell--dup' : 'import-cell import-cell--error'
+              }
+              style={!err ? cellWrap : soft ? cellDupWrap : cellErrorWrap}
+            >
               {editor}
             </div>
           )
           if (!err) return cell
-          return <Tooltip title={translateError(err.code)}>{cell}</Tooltip>
+          return (
+            <Tooltip title={soft ? t(`import.dupHint.${strategy}`) : translateError(err.code)}>{cell}</Tooltip>
+          )
         },
       })
     }
@@ -254,16 +281,25 @@ export function ImportWizard({
         if (r.errors.length === 0) {
           return <Tag color="success">{t('import.ok')}</Tag>
         }
-        const tip = r.errors.map((e) => `${e.columnKey}: ${translateError(e.code)}`).join('\n')
+        const hard = hardErrorsOf(r)
+        // 只剩「已存在」:不是要用户改的错,给警示标签 +「将按策略处理」而非红色错误数
+        if (hard.length === 0) {
+          return (
+            <Tooltip title={t(`import.dupHint.${strategy}`)}>
+              <Tag color="warning">{t('import.dupTag')}</Tag>
+            </Tooltip>
+          )
+        }
+        const tip = hard.map((e) => `${e.columnKey}: ${translateError(e.code)}`).join('\n')
         return (
           <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tip}</span>}>
-            <Tag color="error">{t('import.errorCount', { n: r.errors.length })}</Tag>
+            <Tag color="error">{t('import.errorCount', { n: hard.length })}</Tag>
           </Tooltip>
         )
       },
     })
     return cols
-  }, [columns, t])
+  }, [columns, t, strategy, isHard, hardErrorsOf])
 
   const revalidate = async () => {
     // 变异判据:请求必须带 rows;空数组也是明确失败路径(服务端会返回 0 行)
@@ -278,8 +314,10 @@ export function ImportWizard({
         })),
       )
       if (p.columns.length) setColumns(p.columns)
-      setErrorRows(p.errorRows)
-      message.success(t('import.revalidated', { errors: p.errorRows, total: p.total }))
+      // 就地按策略数,不用 p.errorRows —— 后端不知道当前策略,会把「已存在」也计进去;
+      // 也不能读 errorRows(useMemo 要等 setRows 生效的下一次渲染才更新)
+      const hardCount = p.rows.filter((r) => r.errors.some((e) => isHard(e))).length
+      message.success(t('import.revalidated', { errors: hardCount, total: p.total }))
     } catch (e) {
       message.error(translateError(e))
     } finally {
@@ -311,7 +349,6 @@ export function ImportWizard({
         errors: [...r.errors],
       })),
     )
-    setErrorRows(commitResult.failures.filter((r) => r.errors.length > 0).length)
     setOnlyErrors(true)
     setCommitResult(null)
     setStep(2)
@@ -428,6 +465,7 @@ export function ImportWizard({
           <Space>
             <Typography.Text>
               {t('import.summary', { total: rows.length, errors: errorRows })}
+              {duplicateRows > 0 ? ` ${t('import.summaryDup', { n: duplicateRows })}` : ''}
             </Typography.Text>
             <Space size={4}>
               <Switch size="small" checked={onlyErrors} onChange={setOnlyErrors} />

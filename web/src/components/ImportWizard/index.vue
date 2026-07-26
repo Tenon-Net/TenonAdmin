@@ -12,7 +12,9 @@ import AppIcon from '@/components/AppIcon.vue'
 import DictSelect from '@/components/DictSelect/index.vue'
 import { translateError } from '@/utils/error'
 import { triggerBlobDownload } from '@/utils/download'
+import { hardErrorsOf as hardErrors, isDuplicateOnly, isHardError } from '@/utils/importDup'
 import type {
+  CellError,
   DuplicateStrategy as DupStrategyNum,
   ImportColumn,
   ImportCommitResult,
@@ -58,10 +60,19 @@ const mapping = ref<Record<string, string>>({})
 const columns = ref<ImportColumn[]>([])
 const rows = ref<ImportRow[]>([])
 const columnErrors = ref<ImportPreview['columnErrors']>([])
-const errorRows = ref(0)
 const onlyErrors = ref(false)
 const strategy = ref<DupStrategyNum>(DuplicateStrategy.Skip)
 const commitResult = ref<ImportCommitResult | null>(null)
+
+// 「已存在」按策略呈现的判定见 utils/importDup(那里也记着与后端的镜像关系)
+const isHard = (e: CellError) => isHardError(e, strategy.value)
+const hardErrorsOf = (r: ImportRow) => hardErrors(r, strategy.value)
+/** 需要用户动手改的行数(不含「已存在」——那些按策略自动处理)。 */
+const errorRows = computed(() => rows.value.filter((r) => hardErrorsOf(r).length > 0).length)
+/** 只是「已存在」、会被策略正常处理的行数。 */
+const duplicateRows = computed(
+  () => rows.value.filter((r) => isDuplicateOnly(r, strategy.value)).length,
+)
 
 function reset() {
   step.value = 1
@@ -73,7 +84,6 @@ function reset() {
   columns.value = []
   rows.value = []
   columnErrors.value = []
-  errorRows.value = 0
   onlyErrors.value = false
   strategy.value = DuplicateStrategy.Skip
   commitResult.value = null
@@ -93,7 +103,6 @@ function applyPreview(p: ImportPreview) {
     errors: [...r.errors],
   }))
   columnErrors.value = p.columnErrors
-  errorRows.value = p.errorRows
 }
 
 async function onDownloadTemplate() {
@@ -181,7 +190,7 @@ function setCell(row: ImportRow, key: string, value: string | null) {
 }
 
 const displayRows = computed(() =>
-  onlyErrors.value ? rows.value.filter((r) => r.errors.length > 0) : rows.value,
+  onlyErrors.value ? rows.value.filter((r) => hardErrorsOf(r).length > 0) : rows.value,
 )
 
 const previewColumns = computed<DataTableColumns<ImportRow>>(() => {
@@ -202,6 +211,8 @@ const previewColumns = computed<DataTableColumns<ImportRow>>(() => {
       ellipsis: { tooltip: false },
       render: (row) => {
         const err = cellError(row, col.key)
+        // 「已存在」在跳过/覆盖策略下不算错:走警示底色,输入框也不置 error 态
+        const soft = err !== undefined && !isHard(err)
         const val = row.cells[col.key] ?? null
         const editor = col.dictTypeCode
           ? h(DictSelect, {
@@ -214,19 +225,23 @@ const previewColumns = computed<DataTableColumns<ImportRow>>(() => {
               // 跟随反而更整齐 —— 所以只在向导关掉,不动共用的 DictSelect。
               consistentMenuWidth: false,
               style: { width: '100%' },
-              status: err ? 'error' : undefined,
+              status: err && !soft ? 'error' : undefined,
               'onUpdate:value': (v: string | null) => setCell(row, col.key, v),
             })
           : h(NInput, {
               value: val ?? '',
               size: 'small',
-              status: err ? 'error' : undefined,
+              status: err && !soft ? 'error' : undefined,
               onUpdateValue: (v: string) => setCell(row, col.key, v),
             })
         const cell = h(
           'div',
           {
-            class: err ? 'import-cell import-cell--error' : 'import-cell',
+            class: !err
+              ? 'import-cell'
+              : soft
+                ? 'import-cell import-cell--dup'
+                : 'import-cell import-cell--error',
           },
           [editor],
         )
@@ -236,7 +251,7 @@ const previewColumns = computed<DataTableColumns<ImportRow>>(() => {
           { trigger: 'hover' },
           {
             trigger: () => cell,
-            default: () => translateError(err.code),
+            default: () => (soft ? t(`import.dupHint.${strategy.value}`) : translateError(err.code)),
           },
         )
       },
@@ -249,16 +264,28 @@ const previewColumns = computed<DataTableColumns<ImportRow>>(() => {
     fixed: 'right',
     render: (r) => {
       if (r.errors.length === 0) return h(NTag, { size: 'small', type: 'success', bordered: false }, () => t('import.ok'))
+      const hard = hardErrorsOf(r)
+      // 只剩「已存在」:不是要用户改的错,给警示标签 +「将按策略处理」而非红色错误数
+      if (hard.length === 0) {
+        return h(
+          NTooltip,
+          { trigger: 'hover' },
+          {
+            trigger: () =>
+              h(NTag, { size: 'small', type: 'warning', bordered: false }, () => t('import.dupTag')),
+            default: () => t(`import.dupHint.${strategy.value}`),
+          },
+        )
+      }
       return h(
         NTooltip,
         { trigger: 'hover' },
         {
           trigger: () =>
             h(NTag, { size: 'small', type: 'error', bordered: false }, () =>
-              t('import.errorCount', { n: r.errors.length }),
+              t('import.errorCount', { n: hard.length }),
             ),
-          default: () =>
-            r.errors.map((e) => `${e.columnKey}: ${translateError(e.code)}`).join('\n'),
+          default: () => hard.map((e) => `${e.columnKey}: ${translateError(e.code)}`).join('\n'),
         },
       )
     },
@@ -278,8 +305,8 @@ async function revalidate() {
       errors: [...r.errors],
     }))
     columns.value = p.columns.length ? p.columns : columns.value
-    errorRows.value = p.errorRows
-    message.success(t('import.revalidated', { errors: p.errorRows, total: p.total }))
+    // 用本地按策略算出的硬错误数,不用 p.errorRows —— 后端不知道当前策略,会把「已存在」也计进去
+    message.success(t('import.revalidated', { errors: errorRows.value, total: p.total }))
   } catch (e) {
     message.error(translateError(e))
   } finally {
@@ -309,7 +336,6 @@ function backToEditFailures() {
     cells: { ...r.cells },
     errors: [...r.errors],
   }))
-  errorRows.value = rows.value.filter((r) => r.errors.length > 0).length
   onlyErrors.value = true
   commitResult.value = null
   step.value = 3
@@ -416,6 +442,9 @@ function close() {
         <n-space align="center">
           <n-text>
             {{ t('import.summary', { total: rows.length, errors: errorRows }) }}
+            <template v-if="duplicateRows">
+              {{ t('import.summaryDup', { n: duplicateRows }) }}
+            </template>
           </n-text>
           <n-switch v-model:value="onlyErrors" size="small">
             <template #checked>{{ t('import.onlyErrors') }}</template>
@@ -582,5 +611,9 @@ function close() {
   /* 用仓库自己的语义令牌(亮/暗都有定义)。别写 --n-error-color:那是 naive 组件内部的变量,
      在这层普通 div 上未定义,整条 color-mix() 会被判无效丢弃 —— 红底静默不渲染,而 tsc/lint/build 全绿。 */
   background: var(--color-danger-bg);
+}
+:deep(.import-cell--dup) {
+  /* 「库里已存在」在跳过/覆盖策略下会被正常处理,用警示色而非错误红——同上,只用语义令牌 */
+  background: var(--color-warning-bg);
 }
 </style>
