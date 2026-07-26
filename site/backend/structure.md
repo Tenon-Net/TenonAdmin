@@ -11,7 +11,7 @@ The design *why* — dependency direction, replaceability, the request pipeline 
 | Folder | Contents |
 | --- | --- |
 | `samples/` | `MinimalHost` — the zero-config sample host used for local dev and manual verification |
-| `src/` | The eight shipped packages |
+| `src/` | The nine shipped packages |
 | `tests/` | `TenonAdmin.Tests` (the test suite) and `TenonAdmin.TestHost` (a minimal consumer host) |
 
 `src/` holds the packages described in depth on the [Architecture](/backend/architecture) page — here's just enough to orient you:
@@ -24,6 +24,7 @@ The design *why* — dependency direction, replaceability, the request pipeline 
 | `TenonAdmin.AspNetCore` | Host integration: one-call `AddTenonAdmin`/`MapTenonAdmin` wiring, JWT auth, `[RolePermission]` authorization, built-in controllers and filters |
 | `TenonAdmin` | Meta-package: installing this alone pulls in the whole kernel (AspNetCore + Services + SqlSugar + Core) |
 | `TenonAdmin.Caching.Redis` | Optional: `StackExchange.Redis`-backed `ICacheProvider`, opt-in before `AddTenonAdmin()` |
+| `TenonAdmin.Excel` | Optional: xlsx read/write and templates with dropdowns, opt-in before `AddTenonAdmin()`; without it those endpoints return `46001` |
 
 ## Central package versioning
 

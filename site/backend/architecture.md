@@ -1,6 +1,6 @@
 # Layered Architecture and Package Dependencies
 
-TenonAdmin is composed of eight NuGet packages; the five forming the core chain may only depend downward — upper layers can reference lower ones, never the reverse. Reverse that direction in any one layer and both replaceability and the dependency boundary collapse together. The other three all hang off `Core` as optional side-branches outside that chain.
+TenonAdmin is composed of nine NuGet packages; the five forming the core chain may only depend downward — upper layers can reference lower ones, never the reverse. Reverse that direction in any one layer and both replaceability and the dependency boundary collapse together. The other four all hang off `Core` as optional side-branches outside that chain.
 
 ## The core chain — five packages
 
@@ -17,13 +17,15 @@ TenonAdmin.AspNetCore  Host integration: AddTenonAdmin / MapTenonAdmin, JWT, [Ro
 TenonAdmin             Meta-package: references AspNetCore only. Consumers install this one package and transitively pull in the whole stack.
 ```
 
-Off to the side, all three optional packages depend only on `Core` — none of Core/SqlSugar/Services/AspNetCore reference any of them back:
+Off to the side, all four optional packages depend only on `Core` — none of Core/SqlSugar/Services/AspNetCore reference any of them back:
 
 ```text
 TenonAdmin.Caching.Redis   Optional: RedisCacheProvider (StackExchange.Redis-backed ICacheProvider), opt-in via
                             AddTenonAdminRedisCache(configuration) called *before* AddTenonAdmin().
 TenonAdmin.Auth.WeCom      Optional: an IExternalLoginProvider implementation for WeCom QR-code login.
 TenonAdmin.Auth.DingTalk   Optional: an IExternalLoginProvider implementation for DingTalk QR-code login.
+TenonAdmin.Excel           Optional: xlsx read/write and template generation with dropdowns, opt-in via
+                            AddTenonAdminExcel() called *before* AddTenonAdmin().
    ↑
 TenonAdmin.Core
 ```
@@ -42,8 +44,11 @@ Responsibilities and dependency direction per layer:
 | `TenonAdmin.Caching.Redis` (optional) | `RedisCacheProvider` — Redis-backed `ICacheProvider` | Core only | StackExchange.Redis |
 | `TenonAdmin.Auth.WeCom` (optional) | `IExternalLoginProvider` for WeCom QR-code login | Core only | Microsoft.* only |
 | `TenonAdmin.Auth.DingTalk` (optional) | `IExternalLoginProvider` for DingTalk QR-code login | Core only | Microsoft.* only |
+| `TenonAdmin.Excel` (optional) | `IExcelReader`/`IExcelWriter`/`IExcelTemplateBuilder` for xlsx | Core only | MiniExcel, DocumentFormat.OpenXml |
 
 `TenonAdmin.Caching.Redis` doesn't introduce a new mechanism — it's the kernel's `TryAdd` replaceability, applied to the cache provider. A consumer calls `AddTenonAdminRedisCache(configuration)` before `AddTenonAdmin()`, which `TryAddSingleton`s a `RedisCacheProvider` that wins the race and replaces the kernel's default in-process `MemoryCacheProvider`. Skip the call, or don't set `TenonAdmin:Cache:Provider=Redis`, and the kernel's in-process default keeps working unchanged.
+
+`TenonAdmin.Excel` takes the same route: the three codecs the kernel registers by default are all `MissingExcelProvider`, and the first call throws `ErrorCode.ExcelProviderMissing` (`46001`). Install the package and call `AddTenonAdminExcel()` before `AddTenonAdmin()`, and `TryAdd` lands on the real implementations instead. Skip the package and the publish output doesn't grow by a byte. Wiring it up: [Wire Import/Export on Your Entity](/guide/import-export).
 
 ::: tip Entities live in Services, not in SqlSugar
 The data layer only provides `IRepository<>` and entity base classes; the concrete `Sys*` business entities are defined in `TenonAdmin.Services`. This follows from the dependency direction: entities need to reference domain concepts, and the data layer cannot depend upward on the domain layer.

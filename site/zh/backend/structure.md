@@ -11,7 +11,7 @@
 | 文件夹 | 内容 |
 | --- | --- |
 | `samples/` | `MinimalHost`：零配置示例宿主，用于本地开发与手工验证 |
-| `src/` | 八个正式发版的包 |
+| `src/` | 九个正式发版的包 |
 | `tests/` | `TenonAdmin.Tests`（测试套件）与 `TenonAdmin.TestHost`（一个最小化的消费方宿主） |
 
 `src/` 下的包在[架构](/zh/backend/architecture)页有详细展开，这里只做定位：
@@ -24,6 +24,7 @@
 | `TenonAdmin.AspNetCore` | 宿主集成：一键装配的 `AddTenonAdmin`/`MapTenonAdmin`、JWT 认证、`[RolePermission]` 授权、内置控制器与过滤器 |
 | `TenonAdmin` | 元包：装这一个即拉起整条内核（AspNetCore + Services + SqlSugar + Core） |
 | `TenonAdmin.Caching.Redis` | 可选包：基于 `StackExchange.Redis` 的 `ICacheProvider` 实现，在 `AddTenonAdmin()` 之前调用即启用 |
+| `TenonAdmin.Excel` | 可选包：xlsx 读写与带下拉的模板生成，在 `AddTenonAdmin()` 之前调用即启用，不装则相关接口返回 `46001` |
 
 ## 中心化包版本管理
 

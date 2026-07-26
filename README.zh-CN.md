@@ -133,6 +133,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 - **字典与配置**——字典类型+项+键值配置，事件驱动失效缓存
 - **日志**——操作日志自动记录，敏感输入脱敏
 - **文件管理**——上传下载、尺寸限制、扩展名白名单、防路径穿越
+- **导入导出**——xlsx 导入向导（预览、逐格校验、查重、部分提交）与列可选导出，由可选包 `TenonAdmin.Excel` 提供，不装则发布产物零增量
 - **多数据库**——SQLite（默认）/MySQL/SQL Server/PostgreSQL，配置切换
 - **多副本**——可选 Redis 缓存、跨副本限流计数器、副本级雪花 Worker ID，横向扩展无忧
 - **依赖克制**——核心包运行时仅依赖 SqlSugarCore 和 Microsoft.*，不向你的项目倾倒第三方框架
@@ -156,13 +157,13 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 - **列驱动表格**——一个 `columns` 数组驱动搜索表单、字典渲染、列设置
 - **设计令牌 + 明暗主题**——四层 CSS 变量令牌，跟随系统或手动切换
 - **三套登录页皮肤**——可切换、样式隔离
-- **自研组件库**——FormContainer（模态框/抽屉二合一）、StatusSwitch（悲观更新切换）、字典组件集、OrgTreeSelect、FileUpload（分片/可恢复/秒传）、PasswordStrength、图表封装等——每套模板各实现一次
+- **自研组件库**——FormContainer（模态框/抽屉二合一）、StatusSwitch（悲观更新切换）、字典组件集、OrgTreeSelect、FileUpload（分片/可恢复/秒传）、PasswordStrength、ImportWizard（导入向导）、图表封装等——每套模板各实现一次
 
 ## 🧩 仓库结构
 
 | 目录 | 说明 |
 |---|---|
-| `backend/` | .NET 10 核心（5 个 NuGet 包）+ 样例宿主 + 测试 |
+| `backend/` | .NET 10 核心（9 个 NuGet 包）+ 样例宿主 + 测试 |
 | `web/` | Vue 3 + Naive UI 前端模板，独立运行 |
 | `web-react/` | React 19 + Ant Design 6 前端模板，独立运行 |
 | `templates/` | `dotnet new tenon-app` 项目模板 |

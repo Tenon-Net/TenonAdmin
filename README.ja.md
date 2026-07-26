@@ -133,6 +133,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 - **辞書と設定** — 辞書タイプ + 項目 + キーバリュー設定、キャッシュとイベント駆動キャッシュ無効化
 - **ログ** — 操作ログ自動記録、機密入力マスキング
 - **ファイル管理** — アップロード/ダウンロード、サイズ制限、拡張子ホワイトリスト、パストラバーサル防御
+- **インポート/エクスポート** — xlsx インポートウィザード（プレビュー、セル単位バリデーション、重複検出、部分コミット）と列選択エクスポート。オプションパッケージ `TenonAdmin.Excel` が提供し、入れなければ発行サイズは 1 バイトも増えません
 - **マルチデータベース** — SQLite（デフォルト）/ MySQL / SQL Server / PostgreSQL、切り替えは設定変更だけ
 - **マルチレプリカ** — オプション Redis キャッシュ、レプリカ間レート制限カウンタ共有、レプリカごとの Snowflake ワーカー ID——スケールアウトで落とし穴なし
 - **抑制された依存関係** — コアパッケージのランタイム依存は SqlSugarCore + Microsoft.* のみ。サードパーティフレームワークの動物園をあなたのプロジェクトに持ち込みません
@@ -156,13 +157,13 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 - **列駆動テーブル** — 1 つの `columns` 配列で検索フォーム・辞書レンダリング・列設定を同時に駆動
 - **デザイントークン + ライト/ダークテーマ** — 4 層の CSS 変数トークン、システム追従 / 手動切替
 - **3 種のログインページスキン** — すぐに使える切り替え式、スタイル分離
-- **自社開発コンポーネント** — FormContainer（モーダル/ドロワー統合）、StatusSwitch（悲観更新トグル）、辞書スイート、OrgTreeSelect、FileUpload（チャンク/リジューム/即時アップロード）、PasswordStrength、チャートラッパーなど、各テンプレートに独立実装
+- **自社開発コンポーネント** — FormContainer（モーダル/ドロワー統合）、StatusSwitch（悲観更新トグル）、辞書スイート、OrgTreeSelect、FileUpload（チャンク/リジューム/即時アップロード）、PasswordStrength、ImportWizard（インポートウィザード）、チャートラッパーなど、各テンプレートに独立実装
 
 ## 🧩 リポジトリ構成
 
 | ディレクトリ | 内容 |
 |---|---|
-| `backend/` | .NET 10 カーネル(NuGet パッケージ 5 つ)+ サンプルホスト + テスト |
+| `backend/` | .NET 10 カーネル(NuGet パッケージ 9 つ)+ サンプルホスト + テスト |
 | `web/` | Vue 3 + Naive UI フロントエンドテンプレート、自己完結 |
 | `web-react/` | React 19 + Ant Design 6 フロントエンドテンプレート、自己完結 |
 | `templates/` | `dotnet new tenon-app` プロジェクトテンプレート |

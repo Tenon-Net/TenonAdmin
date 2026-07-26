@@ -1,6 +1,6 @@
 # 架构分层与包依赖
 
-TenonAdmin 一共八个 NuGet 包。其中五个构成核心链条，依赖方向只能自上而下：上层能引下层，下层永远看不见上层。哪一层把这个方向反转，可替换性和依赖红线就一起垮掉。剩下三个只挂在 `Core` 旁边，是主链之外的可选支线。
+TenonAdmin 一共九个 NuGet 包。其中五个构成核心链条，依赖方向只能自上而下：上层能引下层，下层永远看不见上层。哪一层把这个方向反转，可替换性和依赖红线就一起垮掉。剩下四个只挂在 `Core` 旁边，是主链之外的可选支线。
 
 ## 核心链条：五个包
 
@@ -17,13 +17,15 @@ TenonAdmin.AspNetCore  宿主集成:AddTenonAdmin / MapTenonAdmin、JWT、[RoleP
 TenonAdmin             元包:只引用 AspNetCore。消费方装这一个,即传递引入整条栈。
 ```
 
-三个旁支都只依赖 `Core`，而 Core/SqlSugar/Services/AspNetCore 都不会反过来引用它们：
+四个旁支都只依赖 `Core`，而 Core/SqlSugar/Services/AspNetCore 都不会反过来引用它们：
 
 ```text
 TenonAdmin.Caching.Redis   可选包:RedisCacheProvider(基于 StackExchange.Redis 的 ICacheProvider 实现),
                             消费方在 AddTenonAdmin() *之前* 调用 AddTenonAdminRedisCache(configuration) 即可启用。
 TenonAdmin.Auth.WeCom      可选包:企业微信扫码登录的 IExternalAuthProvider 实现。
 TenonAdmin.Auth.DingTalk   可选包:钉钉扫码登录的 IExternalAuthProvider 实现。
+TenonAdmin.Excel           可选包:xlsx 读写与带下拉的模板生成,消费方在 AddTenonAdmin() *之前*
+                            调用 AddTenonAdminExcel() 即可启用。
    ↑
 TenonAdmin.Core
 ```
@@ -42,8 +44,11 @@ TenonAdmin.Core
 | `TenonAdmin.Caching.Redis`（可选） | `RedisCacheProvider`：Redis 版 `ICacheProvider` | 仅 Core | StackExchange.Redis |
 | `TenonAdmin.Auth.WeCom`（可选） | 企业微信扫码登录的 `IExternalAuthProvider` | 仅 Core | 仅 Microsoft.* |
 | `TenonAdmin.Auth.DingTalk`（可选） | 钉钉扫码登录的 `IExternalAuthProvider` | 仅 Core | 仅 Microsoft.* |
+| `TenonAdmin.Excel`（可选） | xlsx 读写与模板生成的 `IExcelReader`/`IExcelWriter`/`IExcelTemplateBuilder` | 仅 Core | MiniExcel、DocumentFormat.OpenXml |
 
 `TenonAdmin.Caching.Redis` 没有引入新机制，就是把内核那套 `TryAdd` 可替换性套用在缓存提供者上。消费方在 `AddTenonAdmin()` 之前调用 `AddTenonAdminRedisCache(configuration)`。它内部用 `TryAddSingleton` 注册 `RedisCacheProvider`，抢先赢下注册，替换掉内核默认的进程内 `MemoryCacheProvider`。不调用这个方法，或者没把 `TenonAdmin:Cache:Provider` 配成 `Redis`，内核的进程内默认实现照常工作，不受影响。
+
+`TenonAdmin.Excel` 走的是同一条路：内核默认注册的三个 codec 全是 `MissingExcelProvider`，一调就抛 `ErrorCode.ExcelProviderMissing`（`46001`）。装了包并在 `AddTenonAdmin()` 之前调用 `AddTenonAdminExcel()`，`TryAdd` 才轮到真实现。不装包，发布产物一个字节都不涨。接法见[给自己的实体接导入导出](/zh/guide/import-export)。
 
 ::: tip 实体住在 Services，不在 SqlSugar
 数据层只提供 `IRepository<>` 和实体基类，具体的 `Sys*` 业务实体定义在 `TenonAdmin.Services`。原因是依赖方向：实体需要引用领域概念，而数据层不能反过来依赖领域层。

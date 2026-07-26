@@ -133,6 +133,7 @@ It goes finer than that: long service methods are split into small `virtual` ste
 - **Dictionary & config** — Dict types + items + key-value config, cached with event-driven invalidation
 - **Logging** — Auto-recorded operation logs with sensitive-input masking
 - **File management** — Upload/download, size limits, extension whitelist, path-traversal protection
+- **Import/export** — xlsx import wizard (preview, per-cell validation, dedupe, partial commit) and column-pickable export, from the optional `TenonAdmin.Excel` package — skip it and publish size doesn't grow by a byte
 - **Multi-database** — SQLite (default) / MySQL / SQL Server / PostgreSQL; switching is a config change
 - **Multi-replica** — Optional Redis cache, cross-replica rate-limit counters, per-replica snowflake worker IDs — scales out without surprises
 - **Restrained dependencies** — Core packages depend only on SqlSugarCore + Microsoft.* at runtime; no third-party framework zoo dumped into your project
@@ -156,13 +157,13 @@ Zero sharing is deliberate: the two templates never import from each other — n
 - **Column-driven tables** — One `columns` array drives the search form, dict rendering, and column settings
 - **Design tokens + light/dark themes** — Four-layer CSS variable tokens, follows the system or toggles manually
 - **Three login-page skins** — Switchable out of the box, style-isolated
-- **In-house component library** — FormContainer (modal/drawer two-in-one), StatusSwitch (pessimistic-update toggle), dict suite, OrgTreeSelect, FileUpload (chunked / resumable / instant), PasswordStrength, chart wrappers, and more — implemented once per template
+- **In-house component library** — FormContainer (modal/drawer two-in-one), StatusSwitch (pessimistic-update toggle), dict suite, OrgTreeSelect, FileUpload (chunked / resumable / instant), PasswordStrength, ImportWizard, chart wrappers, and more — implemented once per template
 
 ## 🧩 Repository layout
 
 | Directory | What it is |
 |---|---|
-| `backend/` | .NET 10 kernel (5 NuGet packages) + sample host + tests |
+| `backend/` | .NET 10 kernel (9 NuGet packages) + sample host + tests |
 | `web/` | Vue 3 + Naive UI frontend template, self-contained |
 | `web-react/` | React 19 + Ant Design 6 frontend template, self-contained |
 | `templates/` | `dotnet new tenon-app` project template |
