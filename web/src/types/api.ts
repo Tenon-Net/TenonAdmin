@@ -550,3 +550,191 @@ export interface ImportCommitResult {
   failed: number
   failures: ImportRow[]
 }
+
+// ── 定时任务(scheduling-ledger §11;与后端 SysJob/SysJobLog/JobInput 对齐) ──
+
+/** 载荷类型(后端 JobHandlerKind;存库 int)。 */
+export enum JobHandlerKind {
+  Compiled = 1,
+  Http = 2,
+  Sql = 3,
+}
+
+/** 触发类型(后端 JobTriggerKind)。 */
+export enum JobTriggerKind {
+  Cron = 1,
+  Interval = 2,
+  OneShot = 3,
+}
+
+/** 错过策略(后端 JobMisfireStrategy)。 */
+export enum JobMisfireStrategy {
+  Skip = 1,
+  FireOnceNow = 2,
+}
+
+/** 并发模式(后端 JobConcurrencyMode;SerialSkip=上次未结束则跳过本次)。 */
+export enum JobConcurrencyMode {
+  SerialSkip = 1,
+  Parallel = 2,
+}
+
+/** 任务状态(后端 JobStatus;无 Running 态——"正在运行"由未闭合执行记录推导)。 */
+export enum JobStatus {
+  Ready = 1,
+  Paused = 2,
+  Completed = 3,
+  Panic = 4,
+}
+
+/** 单次执行结果(后端 JobRunStatus)。 */
+export enum JobRunStatus {
+  Running = 1,
+  Success = 2,
+  Failed = 3,
+  Timeout = 4,
+  Cancelled = 5,
+  Skipped = 6,
+}
+
+/** 触发来源(后端 JobFireMode)。 */
+export enum JobFireMode {
+  Schedule = 1,
+  Manual = 2,
+  Misfire = 3,
+  MissedSkipped = 4,
+}
+
+/** 任务行(后端 SysJob;page 返回整行,编辑表单直接用行数据回填)。 */
+export interface SysJob {
+  id: number
+  code: string
+  name: string
+  handlerKind: JobHandlerKind
+  handlerName: string
+  /** 属性包 JSON(Dictionary<string,string?> 字符串化;HTTP 的 headers 值读取时已被掩码)。 */
+  propsJson?: string | null
+  triggerKind: JobTriggerKind
+  cronExpression?: string | null
+  intervalSeconds?: number | null
+  oneShotTime?: string | null
+  startTime?: string | null
+  endTime?: string | null
+  misfireStrategy: JobMisfireStrategy
+  concurrencyMode: JobConcurrencyMode
+  status: JobStatus
+  nextRunTime?: string | null
+  lastRunTime?: string | null
+  numberOfRuns: number
+  numberOfErrors: number
+  consecutiveErrors: number
+  timeoutSeconds: number
+  retryCount: number
+  retryIntervalSeconds: number
+  failAlertThreshold: number
+  alertByNotice: boolean
+  alertEmails?: string | null
+  isSystem: boolean
+  remark?: string | null
+  createTime?: string
+}
+
+/** 任务新增/编辑入参(后端 JobInput;code 仅新增时生效,更新被服务层忽略)。 */
+export interface JobInput {
+  code: string
+  name: string
+  handlerKind: JobHandlerKind
+  /** 编译类填处理器标识;HTTP/SQL 由服务端固定填内置处理器名,传空即可。 */
+  handlerName: string
+  /** 属性包对象(非字符串!后端存成 propsJson;HTTP 的 headers 子键值对序列化成 JSON 字符串放 properties.headers)。 */
+  properties?: Record<string, string> | null
+  triggerKind: JobTriggerKind
+  cronExpression?: string | null
+  /** ≥5(<5 后端拒 47004)。 */
+  intervalSeconds?: number | null
+  oneShotTime?: string | null
+  startTime?: string | null
+  endTime?: string | null
+  misfireStrategy: JobMisfireStrategy
+  concurrencyMode: JobConcurrencyMode
+  timeoutSeconds: number
+  retryCount: number
+  retryIntervalSeconds: number
+  failAlertThreshold: number
+  alertByNotice: boolean
+  alertEmails?: string | null
+  remark?: string | null
+}
+
+/** 执行记录行(后端 SysJobLog;endTime 为空 = 运行中,同 fireInstanceId 聚合重试)。 */
+export interface SysJobLog {
+  id: number
+  jobId: number
+  jobName: string
+  fireInstanceId: number
+  retryIndex: number
+  fireMode: JobFireMode
+  scheduledTime: string
+  startTime: string
+  endTime?: string | null
+  runStatus: JobRunStatus
+  elapsedMs: number
+  nodeName: string
+  killRequested: boolean
+  messageText?: string | null
+  errorText?: string | null
+  createTime?: string
+}
+
+/** cron 预览结果(后端 CronPreviewOutput)。 */
+export interface CronPreviewOutput {
+  normalized: string
+  occurrences: string[]
+  /** 秒段等效每秒执行的告警(仅提示,不拦截)。 */
+  everySecondWarning: boolean
+}
+
+/** 处理器清单(后端 JobHandlersOutput)。 */
+export interface JobHandlersOutput {
+  /** 已注册的编译类处理器名(IAdminJob.Name)。 */
+  handlers: string[]
+  /** SQL 载荷总闸(TenonAdmin:Jobs:Sql:Enabled);false 时前端禁选 SQL 并提示。 */
+  sqlEnabled: boolean
+}
+
+/** 成败趋势的一天。 */
+export interface JobTrendPoint {
+  date: string
+  success: number
+  failed: number
+}
+
+/** 即将执行的一项。 */
+export interface JobUpcomingItem {
+  jobId: number
+  name: string
+  nextRunTime: string
+}
+
+/** 集群节点一行(角色由与锁行比对得出)。 */
+export interface JobNodeItem {
+  nodeName: string
+  hostName: string
+  isLeader: boolean
+  lastHeartbeat: string
+  workerId: number
+  pid: number
+}
+
+/** 任务监控仪表盘(后端 JobDashboardOutput)。 */
+export interface JobDashboard {
+  todaySuccess: number
+  todayFailed: number
+  running: number
+  totalJobs: number
+  /** 按状态的任务数(键 = Ready/Paused/Completed/Panic)。 */
+  statusCounts: Record<string, number>
+  trend: JobTrendPoint[]
+  upcoming: JobUpcomingItem[]
+  nodes: JobNodeItem[]
+}

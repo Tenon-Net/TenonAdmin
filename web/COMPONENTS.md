@@ -52,6 +52,7 @@ tenon 内接入约定:
 | DetailPage | 详情页外壳:返回 + 标题 + actions/body 插槽;`@back` 交父级(路由态关标签回列表 / 就地态清状态),补偿非菜单详情路由的空面包屑;配 `useTabTitle` 设动态标签标题。用法/骨架见 `skills/create-page-variant.md` 变体四 | `src/components/DetailPage/README.md` |
 | ImportWizard | 导入四步向导(`n-steps`):上传 → 列映射 → 预览改错(**裸 `n-data-table`**,可编辑+错误红底 tooltip)→ 结果;api 注入,用户管理已落地。**「已存在」(46010)按重复策略呈现**,不是硬错误 —— 判定在 `src/utils/importDup.ts` | `src/components/ImportWizard/README.md` |
 | ExportColumnsModal | 导出选列弹窗;默认按 `defaultSelected` 勾选,确认后父级带 **ProTable 当前筛选** 请求 blob 下载;用户管理 / 操作日志已落地 | `src/components/ExportColumnsModal/README.md` |
+| CronEditor | 6 段 cron 可视化编辑(秒/分/时/日/月/周 + 表达式直填,日 L/L-n/nW/LW、周 nL/n#m 专项);日/周互斥自动落 `?`,防抖 400ms 调 preview-cron 预览未来时刻;定时任务表单已落地 | `src/components/CronEditor/README.md` |
 
 字典三件套的数据基座是 `src/stores/dict.ts`(按 typeCode 缓存 + 并发去重;字典管理操作后调 `invalidate()`),页面拿原始选项用 `useDictOptions(typeCode)`。范例页:`src/views/system/menu/index.vue`、`module/index.vue`(FormContainer + useConfirm + StatusSwitch 完整落地)。
 
