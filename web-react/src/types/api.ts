@@ -488,3 +488,65 @@ export interface NoticePublishInput {
   /** 接收目标 Id(角色 Id 或用户 Id,取决于 receiverType);All 时忽略。 */
   receiverIds?: number[]
 }
+
+// ── 导入 / 导出(excel-ledger §4.3;与后端 Core DTO 对齐;与 web/ 有意重复,零共享) ──
+
+/** 导入列声明。 */
+export interface ImportColumn {
+  key: string
+  title: string
+  required?: boolean
+  dictTypeCode?: string | null
+  hint?: string | null
+  width?: number
+}
+
+/** 导出列声明(前端选列弹窗用;DefaultSelected 决定默认勾选)。 */
+export interface ExportColumnDef {
+  key: string
+  title: string
+  defaultSelected?: boolean
+}
+
+/** 单元格级错误:只带码,文案由前端 translateError(code) 渲染(设计 §13.2)。 */
+export interface CellError {
+  columnKey: string
+  code: number
+  args?: Record<string, unknown> | null
+}
+
+/** 一行导入数据;单元格一律字符串。 */
+export interface ImportRow {
+  index: number
+  cells: Record<string, string | null | undefined>
+  errors: CellError[]
+}
+
+/** 预览 / 重验结果。 */
+export interface ImportPreview {
+  headers: string[]
+  /** 表头文本 → 列 Key */
+  mapping: Record<string, string>
+  columns: ImportColumn[]
+  rows: ImportRow[]
+  total: number
+  errorRows: number
+  columnErrors: CellError[]
+}
+
+/** 重复处理策略(与后端 DuplicateStrategy 一致)。 */
+export enum DuplicateStrategy {
+  Skip = 0,
+  Overwrite = 1,
+  Error = 2,
+}
+
+/** 提交结果。 */
+export interface ImportCommitResult {
+  total: number
+  inserted: number
+  updated: number
+  skipped: number
+  failed: number
+  failures: ImportRow[]
+}

@@ -1,6 +1,7 @@
 // 用户管理页。C1 起改用共享组件层:写侧表单走 <FormContainer>(Modal/Drawer 二合一,onConfirm owns
 // loading+close),行内启停走 <StatusSwitch>(悲观 + 自动回滚),性别下拉/列翻译走 <DictSelect>/<DictTag>。
 // 表单两列栅格 + 机构/职位/主管控件对齐 Vue 用户页;仅头像仍是 Form 外受控 state(save 时并回)。
+// 导入导出(G7):ImportWizard 四步向导 + ExportColumnsModal 选列导出(带当前筛选)。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Avatar, Button, Card, Col, Form, Input, Modal, Row, Select, Space, Switch, Tag, Tree } from 'antd'
 import type { TreeDataNode } from 'antd'
@@ -14,13 +15,16 @@ import { StatusSwitch } from '@/components/StatusSwitch'
 import { DictSelect } from '@/components/DictSelect'
 import { DictTag } from '@/components/DictTag'
 import { OrgTreeSelect } from '@/components/OrgTreeSelect'
+import { ImportWizard, type ImportWizardApi } from '@/components/ImportWizard'
+import { ExportColumnsModal } from '@/components/ExportColumnsModal'
 import { useConfirm } from '@/hooks/useConfirm'
 import { useBatchDelete } from '@/hooks/useBatchDelete'
 import { useHasPerm } from '@/stores/auth'
 import { orgApi, positionApi, roleApi, userApi } from '@/api'
 import { buildTree, type Tree as TreeNode } from '@/utils/tree'
 import { translateError } from '@/utils/error'
-import type { SysOrg, UserItem } from '@/types/api'
+import { triggerBlobDownload } from '@/utils/download'
+import type { ExportColumnDef, SysOrg, UserItem } from '@/types/api'
 import {
   blankForm, canDelete, canEdit, canReset, canToggleEnabled, detailToForm, toAddInput, toUpdateInput,
   type UserForm,
@@ -72,21 +76,98 @@ export default function UserPage() {
       .catch(() => {})
   }, [])
 
+  // ── 导入 / 导出 ──
+  const [importOpen, setImportOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  /** DataTable 不外泄搜索表单;在 fetcher 里截一份当前筛选,导出时带上。 */
+  const lastQueryRef = useRef<{
+    account?: string
+    name?: string
+    orgId?: number
+    sortField?: string
+    sortOrder?: string
+  }>({})
+
+  /** 与后端 UserExportProfile.Columns 对齐(前端无列清单端点,照档案硬编码)。 */
+  const userExportColumns: ExportColumnDef[] = useMemo(
+    () => [
+      { key: 'Account', title: '登录账号' },
+      { key: 'Name', title: '姓名' },
+      { key: 'Nickname', title: '昵称' },
+      { key: 'Phone', title: '手机号' },
+      { key: 'Email', title: '邮箱' },
+      { key: 'Gender', title: '性别' },
+      { key: 'OrgName', title: '所属机构' },
+      { key: 'PositionName', title: '职位' },
+      { key: 'DirectorName', title: '直属主管' },
+      { key: 'Enabled', title: '启用状态' },
+      { key: 'IsSuperAdmin', title: '超级管理员', defaultSelected: false },
+      { key: 'CreateTime', title: '创建时间' },
+    ],
+    [],
+  )
+
+  const userImportApi: ImportWizardApi = useMemo(
+    () => ({
+      downloadTemplate: () => userApi.importTemplate(),
+      preview: (file, mapping) => userApi.importPreview(file, mapping),
+      validate: (rows) => userApi.importValidate(rows),
+      commit: (rows, strategy) => userApi.importCommit(rows, strategy),
+      errorReport: (rows) => userApi.importErrorReport(rows),
+    }),
+    [],
+  )
+
+  /** 导出:带当前 DataTable 筛选(含左侧机构树 orgId)+ 选中列。 */
+  const onExport = async (keys: string[]) => {
+    const p = lastQueryRef.current
+    setExporting(true)
+    try {
+      const blob = await userApi.export({
+        account: p.account || undefined,
+        name: p.name || undefined,
+        orgId: p.orgId,
+        sortField: p.sortField || undefined,
+        sortOrder: p.sortOrder || undefined,
+        columns: keys.join(','),
+      })
+      triggerBlobDownload(blob, '用户导出.xlsx')
+      setExportOpen(false)
+      message.success(t('export.done'))
+    } catch (e) {
+      message.error(translateError(e))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // ── 分页取数:ProTable 搜索表单值(unknown)→ userApi.page 的强类型入参 ──
   // account/name 来自搜索表单(列未设 search:false);sortField/sortOrder 来自列排序(toProTable 已映)。
   // 有意**不 memo**:pro-table 经 useRefFunction 读 request,父组件重渲染(开弹窗/roleOptions)不会触发重取;
   // 反倒是给它加 useCallback + 错误的依赖数组才会变成真 footgun。别"顺手优化"成 memo。
-  const fetchUsers: PageFetcher<UserItem> = (q) =>
-    userApi.page({
+  const fetchUsers: PageFetcher<UserItem> = (q) => {
+    const account = typeof q.account === 'string' ? q.account : undefined
+    const name = typeof q.name === 'string' ? q.name : undefined
+    // orgId 来自左侧机构树(经 DataTable 的 params 透传),非搜索表单。
+    const orgId = typeof q.orgId === 'number' ? q.orgId : undefined
+    lastQueryRef.current = {
+      account,
+      name,
+      orgId,
+      sortField: q.sortField,
+      sortOrder: q.sortOrder,
+    }
+    return userApi.page({
       page: q.page,
       pageSize: q.pageSize,
-      account: typeof q.account === 'string' ? q.account : undefined,
-      name: typeof q.name === 'string' ? q.name : undefined,
-      // orgId 来自左侧机构树(经 DataTable 的 params 透传),非搜索表单。
-      orgId: typeof q.orgId === 'number' ? q.orgId : undefined,
+      account,
+      name,
+      orgId,
       sortField: q.sortField,
       sortOrder: q.sortOrder,
     })
+  }
 
   // ── 新增/编辑弹窗(FormContainer:loading/关闭由它按 onConfirm 结果接管)──
   const [form] = Form.useForm<EditableFields>()
@@ -266,6 +347,13 @@ export default function UserPage() {
                 <Can code="POST:/api/v1/sys/user/batch-delete">
                   <Button danger disabled={!batch.hasSelection} onClick={batch.run}>{t('common.batchDelete')}</Button>
                 </Can>
+                {/* §6.2 权限码一字不差:导入入口 = preview;导出 = export */}
+                <Can code="POST:/api/v1/sys/user/import/preview">
+                  <Button onClick={() => setImportOpen(true)}>{t('import.button')}</Button>
+                </Can>
+                <Can code="GET:/api/v1/sys/user/export">
+                  <Button onClick={() => setExportOpen(true)}>{t('export.button')}</Button>
+                </Can>
               </Space>
             }
           />
@@ -414,6 +502,22 @@ export default function UserPage() {
           suffix={<Button type="link" size="small" style={{ padding: 0 }} onClick={copyResult}>{t('user.copy')}</Button>}
         />
       </Modal>
+
+      <ImportWizard
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        api={userImportApi}
+        templateFileName="用户导入模板.xlsx"
+        errorReportFileName="用户导入错误报告.xlsx"
+        onDone={reload}
+      />
+      <ExportColumnsModal
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        columns={userExportColumns}
+        loading={exporting}
+        onConfirm={onExport}
+      />
     </>
   )
 }

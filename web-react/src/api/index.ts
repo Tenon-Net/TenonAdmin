@@ -1,6 +1,6 @@
 import { client } from './client'
 import type { components } from './schema'
-import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, FileUploadOutput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, ServerInfoOutput, SysConfig, SysDictItem, SysDictType, SysExceptionLog, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, DuplicateStrategy, FileUploadOutput, ImportCommitResult, ImportPreview, ImportRow, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, ServerInfoOutput, SysConfig, SysDictItem, SysDictType, SysExceptionLog, SysFile, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -72,6 +72,107 @@ export function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; tota
     throw new ApiError(res.response.status, undefined, undefined, 'Malformed paged API response')
   }
   return { items: p.items, total: p.total }
+}
+
+/**
+ * 下载 xlsx 等二进制:parseAs blob + 手查 ok(excel-ledger 坑 2:unwrap 假定 JSON 信封)。
+ * AdminExceptionFilter 对业务失败仍回 HTTP 200 + JSON 信封,故还要辨 content-type /
+ * 是否以 `{` 开头,避免把错误信封当 xlsx 触发下载。
+ */
+async function unwrapDownload(res: { data?: unknown; error?: unknown; response: Response }): Promise<Blob> {
+  const { data, error, response } = res
+  if (!response.ok) {
+    const env = (error ?? {}) as Envelope
+    if (typeof env.code === 'number') throw new ApiError(env.code, env.msgKey, env.args, env.message)
+    throw new ApiError(response.status, undefined, undefined, response.statusText)
+  }
+  const blob = data as Blob
+  const ct = response.headers.get('content-type') ?? ''
+  if (ct.includes('spreadsheet') || ct.includes('octet-stream')) return blob
+  // 200 + application/json = 业务失败信封(导出行数超限等)
+  if (ct.includes('json') || ct.includes('text/plain')) {
+    const env = JSON.parse(await blob.text()) as Envelope
+    if (typeof env.code === 'number' && env.code !== 0) {
+      throw new ApiError(env.code, env.msgKey, env.args, env.message)
+    }
+  } else {
+    // content-type 缺失时嗅探:xlsx 是 zip(`PK`),信封以 `{` 开头
+    const head = new Uint8Array(await blob.slice(0, 1).arrayBuffer())
+    if (head[0] === 0x7b /* { */) {
+      const env = JSON.parse(await blob.text()) as Envelope
+      if (typeof env.code === 'number' && env.code !== 0) {
+        throw new ApiError(env.code, env.msgKey, env.args, env.message)
+      }
+    }
+  }
+  return blob
+}
+
+/** 归一 ImportPreview:int64/int 序列化噪音 → number,缺省数组补齐。 */
+function normalizePreview(raw: ImportPreview): ImportPreview {
+  return {
+    headers: raw.headers ?? [],
+    mapping: raw.mapping ?? {},
+    columns: (raw.columns ?? []).map((c) => ({
+      key: c.key,
+      title: c.title,
+      required: c.required,
+      dictTypeCode: c.dictTypeCode,
+      hint: c.hint,
+      width: c.width != null ? Number(c.width) : undefined,
+    })),
+    rows: (raw.rows ?? []).map(normalizeRow),
+    total: Number(raw.total ?? 0),
+    errorRows: Number(raw.errorRows ?? 0),
+    columnErrors: (raw.columnErrors ?? []).map((e) => ({
+      columnKey: e.columnKey,
+      code: Number(e.code),
+      args: e.args,
+    })),
+  }
+}
+
+function normalizeRow(r: ImportRow): ImportRow {
+  return {
+    index: Number(r.index ?? 0),
+    cells: { ...r.cells },
+    errors: (r.errors ?? []).map((e) => ({
+      columnKey: e.columnKey,
+      code: Number(e.code),
+      args: e.args,
+    })),
+  }
+}
+
+function normalizeCommit(raw: ImportCommitResult): ImportCommitResult {
+  return {
+    total: Number(raw.total ?? 0),
+    inserted: Number(raw.inserted ?? 0),
+    updated: Number(raw.updated ?? 0),
+    skipped: Number(raw.skipped ?? 0),
+    failed: Number(raw.failed ?? 0),
+    failures: (raw.failures ?? []).map(normalizeRow),
+  }
+}
+
+/**
+ * 回传行:schema 把 cells 标成 `Record<string, string>`(无 null),而运行时/编辑态允许空。
+ * 发送前把 null/undefined 收成 `''`,避免 openapi-fetch 类型卡死。
+ */
+function toWireRows(rows: ImportRow[]) {
+  return rows.map((r) => {
+    const cells: Record<string, string> = {}
+    for (const [k, v] of Object.entries(r.cells ?? {})) cells[k] = v ?? ''
+    return {
+      index: r.index,
+      cells,
+      errors: r.errors.map((e) => ({
+        columnKey: e.columnKey,
+        code: e.code,
+        args: e.args as Record<string, never> | null | undefined,
+      })),
+    }
+  })
 }
 
 export const authApi = {
@@ -192,6 +293,89 @@ export const userApi = {
   /** 专用启停端点(非全量 update)。 */
   setEnabled: (id: number, enabled: boolean) =>
     client.PUT('/api/v1/sys/user/{id}/enabled', { params: { path: { id } }, body: { enabled } }).then((r) => unwrap<boolean>(r)),
+
+  // ── 导入 / 导出(excel-ledger §5.1;下载走坑 2,上传走坑 3) ──
+
+  /** 下载用户导入模板(xlsx)。[ActiveSession],无需独立权限码。 */
+  importTemplate: () =>
+    client.GET('/api/v1/sys/user/import/template', { parseAs: 'blob' }).then((r) => unwrapDownload(r)),
+
+  /**
+   * 上传 xlsx 预览校验。multipart:`file` + 可选 `mapping`(JSON 字符串:表头→列 Key)。
+   * bodySerializer 建 FormData(坑 3:与 fileApi.upload 同型)。
+   */
+  importPreview: (file: File, mapping?: Record<string, string>) =>
+    client
+      .POST('/api/v1/sys/user/import/preview', {
+        body: {
+          file: file as unknown as string,
+          mapping: mapping ? JSON.stringify(mapping) : undefined,
+        },
+        bodySerializer: (body) => {
+          const b = body as unknown as { file: File; mapping?: string }
+          const fd = new FormData()
+          fd.append('file', b.file)
+          if (b.mapping) fd.append('mapping', b.mapping)
+          return fd
+        },
+      })
+      .then((r) => normalizePreview(unwrap<ImportPreview>(r))),
+
+  /** 对前端改过的行重新校验(不碰文件)。 */
+  importValidate: (rows: ImportRow[]) =>
+    client
+      .POST('/api/v1/sys/user/import/validate', { body: { rows: toWireRows(rows) } })
+      .then((r) => normalizePreview(unwrap<ImportPreview>(r))),
+
+  /** 下载错误报告 xlsx(原列 +「错误原因」列)。 */
+  importErrorReport: (rows: ImportRow[]) =>
+    client
+      .POST('/api/v1/sys/user/import/error-report', {
+        body: { rows: toWireRows(rows) },
+        parseAs: 'blob',
+      })
+      .then((r) => unwrapDownload(r)),
+
+  /** 按策略提交导入(部分提交:有错行跳过;服务端重校验,不信任前端 Errors)。 */
+  importCommit: (rows: ImportRow[], strategy: DuplicateStrategy = 0) =>
+    client
+      .POST('/api/v1/sys/user/import/commit', {
+        body: { rows: toWireRows(rows), strategy },
+      })
+      .then((r) => normalizeCommit(unwrap<ImportCommitResult>(r))),
+
+  /**
+   * 导出用户 xlsx。筛选条件与列表同源(Account/Name/OrgId/RoleId…)+ `columns` 逗号分隔列 Key。
+   * 返回 blob,不进信封(§5.2)。
+   */
+  export: (params: {
+    account?: string
+    name?: string
+    orgId?: number
+    roleId?: number
+    enabled?: boolean
+    sortField?: string
+    sortOrder?: string
+    /** 逗号分隔列 Key;缺省 = 档案 DefaultSelected */
+    columns?: string
+  }) =>
+    client
+      .GET('/api/v1/sys/user/export', {
+        params: {
+          query: {
+            Account: params.account,
+            Name: params.name,
+            OrgId: params.orgId,
+            RoleId: params.roleId,
+            Enabled: params.enabled,
+            SortField: params.sortField,
+            SortOrder: params.sortOrder,
+            columns: params.columns,
+          },
+        },
+        parseAs: 'blob',
+      })
+      .then((r) => unwrapDownload(r)),
 }
 
 export const orgApi = {
@@ -368,6 +552,33 @@ export const logApi = {
       .then((r) => toPage<SysOpLog>(r)),
   /** 清空操作日志(硬删,不可恢复)。 */
   opClear: () => client.DELETE('/api/v1/sys/log/op', {}).then((r) => unwrap<boolean>(r)),
+  /**
+   * 导出操作日志 xlsx。筛选与 opPage 同源 + `columns` 逗号分隔列 Key。
+   * 返回 blob(坑 2);不进信封(§5.2)。
+   */
+  opExport: (params: {
+    title?: string
+    success?: boolean
+    operatorId?: number
+    path?: string
+    createTime?: [string, string] | null
+    columns?: string
+  }) =>
+    client
+      .GET('/api/v1/sys/log/op/export', {
+        params: {
+          query: {
+            Title: params.title,
+            Success: params.success,
+            OperatorId: params.operatorId,
+            Path: params.path,
+            ...splitRange(params.createTime),
+            columns: params.columns,
+          },
+        },
+        parseAs: 'blob',
+      })
+      .then((r) => unwrapDownload(r)),
   /** 异常日志分页;接口路径模糊 + 异常类型模糊 + 时间范围。 */
   exceptionPage: (params: { page: number; pageSize: number; path?: string; exceptionType?: string; createTime?: [string, string] | null }) =>
     client

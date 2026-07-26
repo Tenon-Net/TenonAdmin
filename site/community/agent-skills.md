@@ -63,9 +63,10 @@ This set of docs targets "building business features on top of TenonAdmin" — w
 | `create-crud-backend` | Create a full backend CRUD set | Models + Interface + Service + ErrorCode + DI + Controller |
 | `create-crud-frontend` | Create a frontend CRUD page | Types + API + Vue page (ProTable + FormContainer) |
 | `replace-service` | Replace/extend a built-in service | Customize login flow, swap password hashing, override service steps |
+| `wire-import-export` | Wire import/export on your entity | Install `TenonAdmin.Excel`, profiles, six endpoints, menu Ids |
 | `create-page-variant` | Non-standard page templates | Tree tables, master-detail split, sidebar filters |
 
-Under **Claude Code**, these six skills are already wrapped as slash commands under `.claude/skills/` — just type `/new-module`, `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/replace-service`, or `/create-page-variant`. They also support natural-language auto-triggering, e.g. just saying "help me create a Product entity." Other AI tools don't have a slash-command mechanism, so reference the file path directly in the conversation instead — e.g. "refer to skills/create-entity.md and help me create a BizProduct entity."
+Under **Claude Code**, these skills are already wrapped as slash commands under `.claude/skills/` — just type `/new-module`, `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/replace-service`, `/wire-import-export`, or `/create-page-variant`. They also support natural-language auto-triggering, e.g. just saying "help me create a Product entity." Other AI tools don't have a slash-command mechanism, so reference the file path directly in the conversation instead — e.g. "refer to skills/create-entity.md and help me create a BizProduct entity."
 
 Standard order for adding a complete new CRUD module (`/new-module` chains these three into a single run; call them individually if you want to go step by step):
 

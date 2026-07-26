@@ -3715,6 +3715,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/log/op/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 导出操作日志 xlsx。query 复用 OpLogPageInput + `Columns`(逗号分隔列 Key,缺省=DefaultSelected)。
+         *     返回文件流,不进信封(§5.2);显式挂操作日志(§7)。
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 操作名(模糊匹配,可选) */
+                    Title?: string;
+                    /** @description 是否成功(可选,不传则不限) */
+                    Success?: boolean;
+                    /** @description 操作人用户 Id(精确;日志只存 Id,姓名是读取时回填的,故不做姓名模糊) */
+                    OperatorId?: number | string;
+                    /** @description 接口路径(模糊,可选;如 `/api/v1/sys/role` 可捞出角色相关的全部动作) */
+                    Path?: string;
+                    /** @description 操作时间下界(含) */
+                    StartTime?: string;
+                    /** @description 操作时间上界(含) */
+                    EndTime?: string;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                    columns?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sys/log/op": {
         parameters: {
             query?: never;
@@ -4822,6 +4877,274 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sys/user/import/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载用户导入模板(xlsx)。只泄露列名与字典 label(表单里本就可见),故
+         *     `[ActiveSession]` 而非 `[RolePermission]`(excel-ledger §5.3);
+         *     导入入口由 `import/preview` 的权限码管着。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/user/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 上传 xlsx 并全量预览校验。`multipart/form-data`:`file` + 可选 `mapping`(JSON 字符串:表头→列 Key)。
+         *     必须 `[RolePermission]`——会调 `FindExistingKeysAsync` 查库判重,等于账号枚举面(§5.3)。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file?: components["schemas"]["IFormFile"];
+                    } & {
+                        mapping?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfImportPreview"];
+                        "application/json": components["schemas"]["ResultOfImportPreview"];
+                        "text/json": components["schemas"]["ResultOfImportPreview"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/user/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 对前端改过的行重新校验(不碰文件)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ImportRowsInput"];
+                    "text/json": components["schemas"]["ImportRowsInput"];
+                    "application/*+json": components["schemas"]["ImportRowsInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfImportPreview"];
+                        "application/json": components["schemas"]["ResultOfImportPreview"];
+                        "text/json": components["schemas"]["ResultOfImportPreview"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/user/import/error-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 下载错误报告 xlsx(原列 +「错误原因」列)。返回文件流,不进信封(§5.2)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ImportRowsInput"];
+                    "text/json": components["schemas"]["ImportRowsInput"];
+                    "application/*+json": components["schemas"]["ImportRowsInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/user/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 按策略提交导入。<b>部分提交</b>:有错行跳过。服务端会重跑完整校验,不信任前端 Errors(坑 6)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ImportCommitInput"];
+                    "text/json": components["schemas"]["ImportCommitInput"];
+                    "application/*+json": components["schemas"]["ImportCommitInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfImportCommitResult"];
+                        "application/json": components["schemas"]["ResultOfImportCommitResult"];
+                        "text/json": components["schemas"]["ResultOfImportCommitResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/user/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 导出用户 xlsx。query 复用 UserPageInput 全部筛选 + `Columns`(逗号分隔列 Key,缺省=全部 DefaultSelected)。
+         *     GET 默认不进操作日志,显式挂 `[OperationLog]`(§7)。返回文件流,不进信封(§5.2)。
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 账号(模糊) */
+                    Account?: string;
+                    /** @description 姓名(模糊) */
+                    Name?: string;
+                    /** @description 主属机构 Id(精确) */
+                    OrgId?: number | string;
+                    /** @description 角色 Id(精确):只返回持有该角色的用户。管理端"这个角色有哪些人"的反查即走此参。 */
+                    RoleId?: number | string;
+                    /** @description 启用状态(null=全部) */
+                    Enabled?: boolean;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                    columns?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4880,6 +5203,12 @@ export interface components {
             svg: string;
             /** @description 验证码类型(char/path/math…);前端据此调整输入提示(如 math 提示“输入计算结果”)。 */
             type?: string;
+        };
+        /** @description 单元格级错误。<b>只带码不带文案</b>(设计 §13.2):前端按 code 查 i18n 渲染。 */
+        CellError: {
+            columnKey: string;
+            code: components["schemas"]["ErrorCode"];
+            args?: null | Record<string, never>;
         };
         /** @description 改密码入参:须验旧密码(即便令牌未过期,也要证明你知道当前密码)。 */
         ChangePasswordInput: {
@@ -5042,6 +5371,23 @@ export interface components {
              */
             freeBytes?: number | string;
         };
+        /** @description 重复处理策略。 */
+        DuplicateStrategy: number;
+        /**
+         * @description 业务错误码(设计 §13.2)。
+         *                 核心纪律:后端只抛码、不写文案。每个码携带一个语义 msgKey(如 error.auth.passwordWrong),
+         *     前端用 msgKey 查本地语言包渲染提示;后端返回的 Message 字段仅作非浏览器调用方的兜底降级。
+         *     这样文案单源在前端,切语言零后端参与。分段规划(新增错误码时按段落位,勿跨段挪用):* 0成功
+         *     * 40000–40999认证与登录
+         *     * 41000–41999权限与数据范围
+         *     * 42000–42999用户 / 组织 / 角色 / 菜单
+         *     * 43000–43999字典 / 配置
+         *     * 44000–44999文件上传
+         *     * 45000–45999消息通知
+         *     * 46000–46999导入 / 导出
+         *     * 50000–50999系统内部错误
+         */
+        ErrorCode: number;
         /** @description 个人中心"账号绑定"列表项(只回展示所需,不回 Subject 等原始标识)。 */
         ExternalBindingItem: {
             provider: string;
@@ -5081,6 +5427,84 @@ export interface components {
         };
         /** Format: binary */
         IFormFile: string;
+        /** @description 导入列声明。 */
+        ImportColumn: {
+            /** @description 列 Key = 属性名,如 `Account`。前端按它索引单元格。 */
+            key: string;
+            /** @description 表头文本(模板里写这个,也是列映射的匹配对象),如 `登录账号`。 */
+            title: string;
+            /** @description 必填(模板表头加 `*`,空值记 ImportCellRequired)。 */
+            required?: boolean;
+            /** @description 非空 = 字典列:模板出下拉、导入 label→value、导出 value→label。 */
+            dictTypeCode?: null | string;
+            /** @description 「填写说明」sheet 的备注,如「填机构名称,如:深圳分公司」。 */
+            hint?: null | string;
+            /**
+             * Format: int32
+             * @description 模板列宽(字符数)。
+             */
+            width?: number | string;
+        };
+        /** @description 导入提交入参:行数据 + 重复策略(0=Skip / 1=Overwrite / 2=Error)。 */
+        ImportCommitInput: {
+            rows?: components["schemas"]["ImportRow"][];
+            strategy?: components["schemas"]["DuplicateStrategy"];
+        };
+        /** @description 提交结果。 */
+        ImportCommitResult: {
+            /** Format: int32 */
+            total?: number | string;
+            /** Format: int32 */
+            inserted?: number | string;
+            /** Format: int32 */
+            updated?: number | string;
+            /** Format: int32 */
+            skipped?: number | string;
+            /** Format: int32 */
+            failed?: number | string;
+            /** @description 失败行(含原单元格 + 失败原因码),前端直接接回预览表继续改。 */
+            failures?: components["schemas"]["ImportRow"][];
+        };
+        /** @description 预览/重验结果。 */
+        ImportPreview: {
+            /** @description 文件里的原始表头(列映射 UI 的左侧)。重验时为空。 */
+            headers?: string[];
+            /** @description 实际生效的映射:表头文本 → 列 Key。前端据此回显并允许改。 */
+            mapping?: {
+                [key: string]: string;
+            };
+            /** @description 列定义(前端建预览表用,免得再拉一次档案)。 */
+            columns?: components["schemas"]["ImportColumn"][];
+            rows?: components["schemas"]["ImportRow"][];
+            /** Format: int32 */
+            total?: number | string;
+            /** Format: int32 */
+            errorRows?: number | string;
+            /** @description 必填列没有被任何表头映射上 —— 这类错误不属于任何一行,单列在此。 */
+            columnErrors?: components["schemas"]["CellError"][];
+        };
+        /**
+         * @description 一行导入数据。<b>单元格一律是字符串</b>——刻意不做泛型 `TRow`:数据来自表格本就是文本,
+         *     又要在"预览→前端改错→重验"之间经 JSON 往返,字符串是唯一诚实的模型;类型转换在
+         *     Task IImportProfile.CommitRowAsync(ImportRow row, bool overwrite, CancellationToken cancellationToken = default(CancellationToken)) 里一次完成。这个决定省掉了整套泛型编排,别改回去。
+         */
+        ImportRow: {
+            /**
+             * Format: int32
+             * @description 数据行号(1 起,对应 Excel 里表头之后的第几行)。前端展示用,错误定位靠它。
+             */
+            index?: number | string;
+            /** @description 列 Key → 单元格原文。 */
+            cells?: {
+                [key: string]: string;
+            };
+            /** @description 服务端算出的错误;前端只读,提交时原样带回也会被服务端覆盖重算。 */
+            errors?: components["schemas"]["CellError"][];
+        };
+        /** @description 导入重验 / 错误报告入参(excel-ledger §5.1):前端改过的行原样带回。 */
+        ImportRowsInput: {
+            rows?: components["schemas"]["ImportRow"][];
+        };
         /** @description 登录入参。验证码字段在 `Security:Captcha:Enabled` 关闭时可不传(默认关)。 */
         LoginInput: {
             /** @description 登录账号 */
@@ -5924,6 +6348,48 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["FileUploadOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfImportCommitResult: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["ImportCommitResult"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfImportPreview: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["ImportPreview"];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。

@@ -52,6 +52,19 @@ public static class ServicesSetup
         // AspNetCore 层前置注册基于 SignalR 的真实现即接管(零新增 NuGet,SignalR 属共享框架);消费方可注册自有通道整体替换。
         services.TryAddSingleton<IRealtimePublisher, NoopRealtimePublisher>();
 
+        // 导入/导出 codec(excel-ledger §3/§6):默认 MissingExcelProvider 一律抛 46001(fail-loud,与实时 Noop 不同)。
+        // 装 TenonAdmin.Excel 并在 AddTenonAdmin() 之前调 AddTenonAdminExcel() 即经 TryAdd 前置替换接管。
+        services.TryAddSingleton<IExcelReader, MissingExcelProvider>();
+        services.TryAddSingleton<IExcelWriter, MissingExcelProvider>();
+        services.TryAddSingleton<IExcelTemplateBuilder, MissingExcelProvider>();
+
+        // 导入/导出领域层(excel-ledger §3.2 G3):字典翻译 + 编排 + 三个档案。TryAdd 可被消费者前置替换。
+        services.TryAddScoped<IDictTextResolver, DictTextResolver>();
+        services.TryAddScoped<IImportRunner, ImportRunner>();
+        services.TryAddScoped<UserImportProfile>();
+        services.TryAddScoped<UserExportProfile>();
+        services.TryAddScoped<OpLogExportProfile>();
+
         // 会话与刷新令牌(§15):登录建会话、每请求校验、刷新轮换+复用检测、登出/强退
         services.TryAddScoped<ISessionService, SessionService>();
 

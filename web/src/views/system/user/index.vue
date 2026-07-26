@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 用户管理(写侧)= ProTable(列表/搜索/分页)+ UserFormModal(新增/编辑)+ ResetPasswordModal(重置/初始口令展示)+ 专用启停端点。
 // 超管行(isSuperAdmin)删除/停用置灰防自锁;启停走专用 setEnabled(非全量 update)。
+// 导入导出(G6):ImportWizard 四步向导 + ExportColumnsModal 选列导出(带当前筛选)。
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { NButton, NCard, NTree, NSpace, NTag, NAvatar, NPopconfirm, useMessage } from 'naive-ui'
 import { useRoute } from 'vue-router'
@@ -9,6 +10,8 @@ import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pr
 import AppIcon from '@/components/AppIcon.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import DictTag from '@/components/DictTag/index.vue'
+import ImportWizard, { type ImportWizardApi } from '@/components/ImportWizard/index.vue'
+import ExportColumnsModal from '@/components/ExportColumnsModal/index.vue'
 import UserFormModal from './components/UserFormModal.vue'
 import ResetPasswordModal from './components/ResetPasswordModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
@@ -16,8 +19,9 @@ import { useBatchDelete } from '@/composables/useBatchDelete'
 import { userApi, positionApi, roleApi, orgApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
+import { triggerBlobDownload } from '@/utils/download'
 import { buildTree, type Tree } from '@/utils/tree'
-import type { SysOrg, UserItem } from '@/types/api'
+import type { ExportColumnDef, SysOrg, UserItem } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -95,6 +99,59 @@ watch(
 // 头像首字母兜底。NAvatar 的规矩:default 插槽一有内容就渲染它、彻底无视 src(见 naive Avatar.render)。
 // 所以有头像时 default 必须留空让 <img> 出来,首字母只放 #fallback(图挂了/链过期才兜底);无头像才用 default 当文字头像。
 const initial = (name?: string | null) => (name || '?').slice(0, 1)
+
+// ── 导入 / 导出 ──
+const importShow = ref(false)
+const exportShow = ref(false)
+const exporting = ref(false)
+
+/** 与后端 UserExportProfile.Columns 对齐(前端无列清单端点,照档案硬编码)。 */
+const userExportColumns: ExportColumnDef[] = [
+  { key: 'Account', title: '登录账号' },
+  { key: 'Name', title: '姓名' },
+  { key: 'Nickname', title: '昵称' },
+  { key: 'Phone', title: '手机号' },
+  { key: 'Email', title: '邮箱' },
+  { key: 'Gender', title: '性别' },
+  { key: 'OrgName', title: '所属机构' },
+  { key: 'PositionName', title: '职位' },
+  { key: 'DirectorName', title: '直属主管' },
+  { key: 'Enabled', title: '启用状态' },
+  { key: 'IsSuperAdmin', title: '超级管理员', defaultSelected: false },
+  { key: 'CreateTime', title: '创建时间' },
+]
+
+const userImportApi: ImportWizardApi = {
+  downloadTemplate: () => userApi.importTemplate(),
+  preview: (file, mapping) => userApi.importPreview(file, mapping),
+  validate: (rows) => userApi.importValidate(rows),
+  commit: (rows, strategy) => userApi.importCommit(rows, strategy),
+  errorReport: (rows) => userApi.importErrorReport(rows),
+}
+
+/** 导出:带当前 ProTable 筛选(含左侧机构树 orgId)+ 选中列。 */
+async function onExport(keys: string[]) {
+  const p = tableRef.value?.params ?? {}
+  exporting.value = true
+  try {
+    const blob = await userApi.export({
+      account: p.account || undefined,
+      name: p.name || undefined,
+      orgId: p.orgId != null ? Number(p.orgId) : undefined,
+      roleId: p.roleId != null ? Number(p.roleId) : undefined,
+      sortField: p.sortField || undefined,
+      sortOrder: p.sortOrder || undefined,
+      columns: keys.join(','),
+    })
+    triggerBlobDownload(blob, '用户导出.xlsx')
+    exportShow.value = false
+    message.success(t('export.done'))
+  } catch (e) {
+    message.error(translateError(e))
+  } finally {
+    exporting.value = false
+  }
+}
 
 const columns: ProTableColumn<UserItem>[] = [
   // 超管行禁勾:批量删除同样不可含超管(后端也会整体拒绝)
@@ -235,6 +292,13 @@ const columns: ProTableColumn<UserItem>[] = [
       >
         <template #icon><AppIcon icon="ph:trash" :size="16" /></template>{{ t('common.batchDelete') }}
       </n-button>
+      <!-- §6.2 权限码一字不差:导入入口 = preview;导出 = export -->
+      <n-button v-auth="'POST:/api/v1/sys/user/import/preview'" @click="importShow = true">
+        <template #icon><AppIcon icon="ph:upload-simple" :size="16" /></template>{{ t('import.button') }}
+      </n-button>
+      <n-button v-auth="'GET:/api/v1/sys/user/export'" @click="exportShow = true">
+        <template #icon><AppIcon icon="ph:download-simple" :size="16" /></template>{{ t('export.button') }}
+      </n-button>
     </template>
     </ProTable>
   </div>
@@ -249,6 +313,21 @@ const columns: ProTableColumn<UserItem>[] = [
   />
 
   <ResetPasswordModal ref="resetModalRef" />
+
+  <ImportWizard
+    v-model:show="importShow"
+    :api="userImportApi"
+    template-file-name="用户导入模板.xlsx"
+    error-report-file-name="用户导入错误报告.xlsx"
+    @done="() => tableRef?.refresh()"
+  />
+
+  <ExportColumnsModal
+    v-model:show="exportShow"
+    :columns="userExportColumns"
+    :loading="exporting"
+    @confirm="onExport"
+  />
 </template>
 
 <style scoped>

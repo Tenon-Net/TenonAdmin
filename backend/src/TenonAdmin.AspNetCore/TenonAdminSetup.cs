@@ -57,6 +57,7 @@ public static class TenonAdminSetup
         services.AddSingleton(options.Email);   // 邮件通道配置(SMTP 主机为空则走日志实现,见 ServicesSetup 的 IEmailSender 工厂)
         services.AddSingleton(options.ExternalAuth);   // 外部登录 / SSO 配置(内置 OIDC provider 列表 + 回调基址,见批次 D)
         services.AddSingleton(options.Realtime);   // 实时通知配置(SignalR 开关/Hub 路径;MapTenonAdmin 读它决定是否 MapHub)
+        services.AddSingleton(options.Excel);   // 导入/导出行数与文件大小上限(excel-ledger §6.1;ImportRunner/ExportAsync 注入)
 
         // ── 雪花机器号(§12):多副本同号 = 同毫秒发号撞主键。这是数据损坏级的问题,而它今天静默发生 ──
         //   没有可靠的"我是不是多副本"信号,但选了 Redis 缓存基本等同于宣告多实例意图

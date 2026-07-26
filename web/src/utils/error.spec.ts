@@ -19,4 +19,10 @@ describe('translateError', () => {
     expect(translateError(null)).toBe('操作失败,请稍后重试')
     expect(translateError('random string')).toBe('操作失败,请稍后重试')
   })
+
+  it('数字 ErrorCode(CellError) → 按码查 i18n', () => {
+    expect(translateError(46005)).toBe('该单元格为必填项')
+    expect(translateError(46010)).toBe('业务键在库中已存在')
+    expect(translateError(99999)).toBe('操作失败,请稍后重试')
+  })
 })

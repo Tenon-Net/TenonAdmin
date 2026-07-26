@@ -21,6 +21,13 @@ public interface ILogService
     /// <summary>分页查询操作日志(按时间倒序)。</summary>
     Task<PagedList<SysOpLog>> PageOperationAsync(OpLogPageInput input);
 
+    /// <summary>
+    /// 导出用操作日志全量列表(与 <see cref="PageOperationAsync"/> 共用过滤)。
+    /// 不走分页 <c>MAX_SIZE=200</c> 截断;超过 <c>TenonAdmin:Excel:MaxExportRows</c> 抛
+    /// <see cref="ErrorCode.ExportRowLimitExceeded"/>。
+    /// </summary>
+    Task<IReadOnlyList<SysOpLog>> ExportOpLogsAsync(OpLogPageInput input);
+
     /// <summary>分页查询登录日志(按时间倒序)。</summary>
     Task<PagedList<SysLoginLog>> PageLoginAsync(LoginLogPageInput input);
 

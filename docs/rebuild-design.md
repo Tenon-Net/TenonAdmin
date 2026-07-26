@@ -163,7 +163,7 @@ TenonAdmin.Security.Gm   ──→ BouncyCastle(国密 SM2/3/4)                 
 | Lazy.Captcha.Core | 图形验证码 | **自写 SVG** → 默认 SVG,图片/滑块走 `ICaptchaProvider` | ✅ 定 |
 | NewLife.Core | 工具/网络 | **移除** → 用到处换 BCL | ✅ 定 |
 | Masuit.Tools.Core | 工具集 | **移除/拷源** → 仅拷用到的 helper 进 Core.Extension | ✅ 定 |
-| Magicodes.IE.Excel | Excel 导入导出 | **v1.x 可选包** → `TenonAdmin.Excel` | ✅ 定 |
+| （原 Magicodes.IE.Excel） | Excel 导入导出 | **已定稿推翻**：改 MiniExcel + DocumentFormat.OpenXml，卫星包 `TenonAdmin.Excel`（实测见 `docs/excel-ledger.md` §2） | ✅ 定（Excel 已做） |
 | Minio | 对象存储 | **v1.x 可选包** → `TenonAdmin.Storage.Minio`,走 `IFileStorage` | ✅ 定 |
 | SimpleMQTT | MQTT | **可选包依赖** → `TenonAdmin.Mqtt` 直接用 SimpleMQTT | ✅ 定 |
 | SimpleRedis | Redis 缓存 + MQ | **可选包依赖** → `TenonAdmin.Caching.Redis` 直接用 SimpleRedis(高并发 + MQ 封装,StackExchange 无现成 MQ 层) | ✅ 定 |
@@ -302,7 +302,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 
 **v1.x 以可选包/后续版本补齐**(不阻塞 v1.0 发布):
 **React 模板**、**SoybeanUI 皮肤**、**分片上传**、IP 地理/UA 精解、代码生成(`TenonAdmin.CodeGen`)、
-导入导出(`TenonAdmin.Excel`)、批量修改、消息中心、MQTT(`TenonAdmin.Mqtt`)、任务调度(`TenonAdmin.Scheduling`)、
+~~导入导出(`TenonAdmin.Excel`)~~（**已做**，见 `docs/excel-ledger.md`）、批量修改、消息中心、MQTT(`TenonAdmin.Mqtt`)、任务调度(`TenonAdmin.Scheduling`)、
 国密(`TenonAdmin.Security.Gm`)、OSS/Minio 存储(`TenonAdmin.Storage.*`)、可观测性(`TenonAdmin.Observability`)。
 
 ### 4.1 v1.0 非目标(明确不做,防膨胀)
@@ -314,7 +314,7 @@ v1.0 **明确不做**——写清楚"不做什么"和"做什么"同样重要:
 - 不提供 React 正式模板(v1.x);
 - 不提供 Vue 第二套 UI 皮肤(SoybeanUI,v1.x);
 - 不做分片上传(v1.x);
-- 不做代码生成 / Excel 导入导出 / 批量修改;
+- 不做代码生成 / 批量修改（Excel 导入导出已做：可选卫星包 `TenonAdmin.Excel`，见 `docs/excel-ledger.md`）;
 - 不做 Minio / OSS 存储;
 - 不做 MQTT 推送、不用 SignalR(v1 只 HTTP 轮询);
 - 不做国密、不做任务调度;

@@ -9,6 +9,11 @@ describe('translateError', () => {
     expect(translateError(err)).toBe('账号或密码错误')
   })
 
+  it('数字 ErrorCode(CellError) → 按码查 i18n', () => {
+    expect(translateError(46005)).toBe('该单元格为必填项')
+    expect(translateError(46001)).toContain('Excel')
+  })
+
   it('msgKey 未命中但有 message → message,普通 Error → message', () => {
     const withUnknownKey = new ApiError(99999, 'error.does.not.exist', undefined, 'fallback message text')
     expect(translateError(withUnknownKey)).toBe('fallback message text')

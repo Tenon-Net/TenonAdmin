@@ -17,6 +17,9 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
     <!-- 仅 TenonAdmin.Caching.Redis 可选包直接引用(RedisCacheProvider);核心四包不引,保持"运行时只依赖 SqlSugarCore + Microsoft.*" -->
     <PackageVersion Include="StackExchange.Redis" Version="3.0.11" />
+    <!-- 仅 TenonAdmin.Excel 卫星包直接引用:MiniExcel 读写 xlsx;DocumentFormat.OpenXml 只生成带 dataValidation 的模板。核心四包不引 -->
+    <PackageVersion Include="MiniExcel" Version="1.45.0" />
+    <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <!-- 可选包读取 TenonAdmin:Cache 配置节自装配用(RedisSetup);同属 Microsoft.* -->
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />

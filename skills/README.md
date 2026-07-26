@@ -14,6 +14,7 @@
 | [create-crud-frontend.md](create-crud-frontend.md) | 创建前端 CRUD 页面（Vue 版，`web/`） | Types + API + Vue 页面（ProTable + FormContainer） |
 | [create-crud-frontend-react.md](create-crud-frontend-react.md) | 创建前端 CRUD 页面（React 版，`web-react/`） | Types + API + React 页面（DataTable + FormContainer + `<Can>`） |
 | [replace-service.md](replace-service.md) | 替换/扩展内置服务 | 定制登录流程、换密码哈希、覆写服务步骤 |
+| [wire-import-export.md](wire-import-export.md) | **给自己的实体接导入导出** | 装 `TenonAdmin.Excel`、`IImportProfile`/`IExportProfile`、六个端点、菜单取号、两坑 |
 | [create-page-variant.md](create-page-variant.md) | 非标准页面模板 | 树表、主从分栏、侧栏筛选 |
 | [write-docs.md](write-docs.md) | **文档写作规范** | 写或改 `site/` 下任何一页；中英双语的口吻、标点、开头、破折号 + 闸门 |
 
@@ -30,6 +31,7 @@
 /create-crud-frontend
 /create-crud-frontend-react
 /replace-service
+/wire-import-export
 /create-page-variant
 /write-docs
 ```

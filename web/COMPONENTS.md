@@ -50,6 +50,8 @@ tenon 内接入约定:
 | Chart(+ LineChart/PieChart) | ECharts 封装(封 vue-echarts);自动跟随明暗主题/accent、按需注册图种、自带 autoresize;预设传 data、BaseChart 传 option;工作台已落地 | `src/components/Chart/README.md` |
 | CodeBlock | 代码/JSON 只读展示;NCode + `hljs/lib/core` 按需注册(现仅 json),复制按钮 + 自动换行,配色随 Naive 主题;操作日志详情已落地 | `src/components/CodeBlock/README.md` |
 | DetailPage | 详情页外壳:返回 + 标题 + actions/body 插槽;`@back` 交父级(路由态关标签回列表 / 就地态清状态),补偿非菜单详情路由的空面包屑;配 `useTabTitle` 设动态标签标题。用法/骨架见 `skills/create-page-variant.md` 变体四 | `src/components/DetailPage/README.md` |
+| ImportWizard | 导入四步向导(`n-steps`):上传 → 列映射 → 预览改错(**裸 `n-data-table`**,可编辑+错误红底 tooltip)→ 结果;api 注入,用户管理已落地 | `src/components/ImportWizard/README.md` |
+| ExportColumnsModal | 导出选列弹窗;默认按 `defaultSelected` 勾选,确认后父级带 **ProTable 当前筛选** 请求 blob 下载;用户管理 / 操作日志已落地 | `src/components/ExportColumnsModal/README.md` |
 
 字典三件套的数据基座是 `src/stores/dict.ts`(按 typeCode 缓存 + 并发去重;字典管理操作后调 `invalidate()`),页面拿原始选项用 `useDictOptions(typeCode)`。范例页:`src/views/system/menu/index.vue`、`module/index.vue`(FormContainer + useConfirm + StatusSwitch 完整落地)。
 

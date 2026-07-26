@@ -23,6 +23,9 @@ public class TenonAdminOptions
     /// <summary>上传配置(存储根/大小上限/后缀白名单,见 <see cref="AdminUploadOptions"/>)</summary>
     public AdminUploadOptions Upload { get; set; } = new();
 
+    /// <summary>导入/导出配置(行数上限/文件大小,见 <see cref="AdminExcelOptions"/>;对应 <c>TenonAdmin:Excel</c>)</summary>
+    public AdminExcelOptions Excel { get; set; } = new();
+
     /// <summary>邮件通道配置(SMTP 主机/端口/凭据;空主机走日志实现,见 <see cref="AdminEmailOptions"/>)</summary>
     public AdminEmailOptions Email { get; set; } = new();
 

@@ -61,9 +61,10 @@ TenonAdmin 现在还没有 `CONTEXT.md` 或 `docs/adr/`，因为按约定它们�
 | `create-crud-backend` | 创建后端 CRUD 全套 | Models + Interface + Service + ErrorCode + DI + Controller |
 | `create-crud-frontend` | 创建前端 CRUD 页面 | Types + API + Vue 页面（ProTable + FormContainer） |
 | `replace-service` | 替换/扩展内置服务 | 定制登录流程、换密码哈希、覆写服务步骤 |
+| `wire-import-export` | 给自己的实体接导入导出 | 装 `TenonAdmin.Excel`、档案、六个端点、菜单取号 |
 | `create-page-variant` | 非标准页面模板 | 树表、主从分栏、侧栏筛选 |
 
-**Claude Code** 下这六个 skill 已经包装成 `.claude/skills/` 下的斜杠命令，直接输入 `/new-module`、`/create-entity`、`/create-crud-backend`、`/create-crud-frontend`、`/replace-service`、`/create-page-variant` 即可。也支持自然语言自动触发，比如直接说「帮我创建一个产品实体」。其它 AI 工具没有斜杠命令机制，在对话里直接引用文件路径就行，比如「参考 skills/create-entity.md，帮我创建一个 BizProduct 实体」。
+**Claude Code** 下这些 skill 已经包装成 `.claude/skills/` 下的斜杠命令，直接输入 `/new-module`、`/create-entity`、`/create-crud-backend`、`/create-crud-frontend`、`/replace-service`、`/wire-import-export`、`/create-page-variant` 即可。也支持自然语言自动触发，比如直接说「帮我创建一个产品实体」。其它 AI 工具没有斜杠命令机制，在对话里直接引用文件路径就行，比如「参考 skills/create-entity.md，帮我创建一个 BizProduct 实体」。
 
 新增一个完整 CRUD 模块，标准顺序是下面三步。`/new-module` 会把它们串起来一次跑完，想分步来就单独调用：
 

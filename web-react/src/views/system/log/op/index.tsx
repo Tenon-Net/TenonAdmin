@@ -1,17 +1,21 @@
 // 操作日志 = 只读 DataTable + 详情抽屉。后端无 op/{id},分页项已含全字段 → 抽屉直接用行数据。
 // 搜索区要能答审计三问:谁(操作人,精确 id → UserSelect)、什么时候(时间范围)、干了什么(操作名/路径/成败)。
 // paramJson 走 CodeBlock(json 高亮 + 复制);异常信息保持危险色 <pre>(堆栈非代码,高亮无意义)。
-import { useRef, useState, type CSSProperties } from 'react'
-import { Button, Descriptions, Drawer, Tag } from 'antd'
+// 导出(G7):ExportColumnsModal 选列 + 当前筛选条件。
+import { useMemo, useRef, useState, type CSSProperties } from 'react'
+import { App, Button, Descriptions, Drawer, Space, Tag } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { ProColumns } from '@ant-design/pro-components'
 import { DataTable, type DataTableHandle, type PageFetcher } from '@/components/DataTable'
 import { Can } from '@/components/Can'
 import { CodeBlock } from '@/components/CodeBlock'
 import { UserSelect } from '@/components/UserSelect'
+import { ExportColumnsModal } from '@/components/ExportColumnsModal'
 import { useConfirm } from '@/hooks/useConfirm'
 import { logApi } from '@/api'
-import type { SysOpLog } from '@/types/api'
+import { translateError } from '@/utils/error'
+import { triggerBlobDownload } from '@/utils/download'
+import type { ExportColumnDef, SysOpLog } from '@/types/api'
 import { operatorText, prettyParam } from '../logFormat'
 
 const preStyle: CSSProperties = {
@@ -21,21 +25,74 @@ const preStyle: CSSProperties = {
 
 export default function OpLogPage() {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const { confirm } = useConfirm()
   const tableRef = useRef<DataTableHandle>(null)
   const [detailRow, setDetailRow] = useState<SysOpLog | null>(null)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  /** DataTable 不外泄搜索表单;在 fetcher 里截一份当前筛选,导出时带上。 */
+  const lastQueryRef = useRef<{
+    title?: string
+    path?: string
+    success?: boolean
+    operatorId?: number
+    createTime?: [string, string] | null
+  }>({})
+
+  /** 与后端 OpLogExportProfile.Columns 对齐。 */
+  const opExportColumns: ExportColumnDef[] = useMemo(
+    () => [
+      { key: 'Title', title: '操作名' },
+      { key: 'HttpMethod', title: '方法' },
+      { key: 'Path', title: '路径' },
+      { key: 'ResultCode', title: '结果码' },
+      { key: 'Success', title: '成功' },
+      { key: 'OperatorName', title: '操作人' },
+      { key: 'Ip', title: 'IP' },
+      { key: 'ElapsedMs', title: '耗时(ms)' },
+      { key: 'CreateTime', title: '时间' },
+      { key: 'ExceptionMessage', title: '异常信息', defaultSelected: false },
+    ],
+    [],
+  )
+
+  const onExport = async (keys: string[]) => {
+    const p = lastQueryRef.current
+    setExporting(true)
+    try {
+      const blob = await logApi.opExport({
+        title: p.title || undefined,
+        success: p.success,
+        operatorId: p.operatorId,
+        path: p.path || undefined,
+        createTime: p.createTime ?? null,
+        columns: keys.join(','),
+      })
+      triggerBlobDownload(blob, '操作日志导出.xlsx')
+      setExportOpen(false)
+      message.success(t('export.done'))
+    } catch (e) {
+      message.error(translateError(e))
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // fetcher 有意**不 memo**(ProTable 经 ref 读 request,父重渲染不会触发重取)。搜索表单值经 ...q 透传,
   // 逐字段收敛类型;createTime 是 dateRange 列的 [start,end] 串,api 层 splitRange 拆 StartTime/EndTime。
-  const fetchOp: PageFetcher<SysOpLog> = (q) =>
-    logApi.opPage({
+  const fetchOp: PageFetcher<SysOpLog> = (q) => {
+    const title = typeof q.title === 'string' ? q.title : undefined
+    const path = typeof q.path === 'string' ? q.path : undefined
+    const success = typeof q.success === 'boolean' ? q.success : undefined
+    const operatorId = typeof q.operatorId === 'number' ? q.operatorId : undefined
+    const createTime = (q.createTime as [string, string] | undefined) ?? null
+    lastQueryRef.current = { title, path, success, operatorId, createTime }
+    return logApi.opPage({
       page: q.page, pageSize: q.pageSize,
-      title: typeof q.title === 'string' ? q.title : undefined,
-      path: typeof q.path === 'string' ? q.path : undefined,
-      success: typeof q.success === 'boolean' ? q.success : undefined,
-      operatorId: typeof q.operatorId === 'number' ? q.operatorId : undefined,
-      createTime: (q.createTime as [string, string] | undefined) ?? null,
+      title, path, success, operatorId, createTime,
     })
+  }
 
   const columns: ProColumns<SysOpLog>[] = [
     { title: t('log.opName'), dataIndex: 'title' },
@@ -82,9 +139,14 @@ export default function OpLogPage() {
         fetcher={fetchOp}
         persistKey="sys-log-op"
         toolbar={
-          <Can code="DELETE:/api/v1/sys/log/op">
-            <Button danger onClick={clearLogs}>{t('log.clear')}</Button>
-          </Can>
+          <Space>
+            <Can code="DELETE:/api/v1/sys/log/op">
+              <Button danger onClick={clearLogs}>{t('log.clear')}</Button>
+            </Can>
+            <Can code="GET:/api/v1/sys/log/op/export">
+              <Button onClick={() => setExportOpen(true)}>{t('export.button')}</Button>
+            </Can>
+          </Space>
         }
       />
       <Drawer open={!!detailRow} onClose={() => setDetailRow(null)} title={t('log.detail')} size={560}>
@@ -105,6 +167,13 @@ export default function OpLogPage() {
           ]} />
         )}
       </Drawer>
+      <ExportColumnsModal
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        columns={opExportColumns}
+        loading={exporting}
+        onConfirm={onExport}
+      />
     </>
   )
 }
