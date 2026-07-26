@@ -661,7 +661,7 @@ G7 的 antd 版同理:**别只信闸门,一定起 dev server 把向导从上传�
 **验收**:`npm run typecheck && npm run lint && npm test && npm run build` 全绿;**`npm run dev` 真点一遍**:下模板 → 填 3 行(含 1 行错)→ 上传 → 看到错误格标红 → 就地改对 → 重验转绿 → 提交 → 列表里查得到新用户。
 **变异**:把「重新校验」按钮的请求改成不带 rows → 必须能观察到明确失败,而不是静默显示旧结果。
 
-### - [ ] G7 · `web-react/` 同款
+### - [x] G7 · `web-react/` 同款
 **新增**:`web-react/src/components/ImportWizard.tsx` + `ExportColumnsModal.tsx`(+ 各自 `.spec.tsx`)。
 **改**:`web-react/src/api/index.ts`、`views/system/user/index.tsx`(`toolbar` 加按钮,用 `<Can code="...">`)、`views/system/log/op/index.tsx`、`locales/*`、`web-react/COMPONENTS.md`。
 用 antd `Steps` + `Table`(**不要塞进 `DataTable`** —— 它是 pro-components 的薄封装,向导要的是可编辑表格,性质不同)。
@@ -709,6 +709,11 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 ---
 
 ## 12. 轮次日志
+
+### 第 7 轮 — G7 `web-react/` 同款导入向导 + 接线(2026-07-25)
+提交 `feat(web-react): add the import wizard and export column picker`。**改**:新增 `ImportWizard.tsx`(四步 antd `Steps` + 裸 `Table` 可编辑预览;错误格 `background: var(--color-danger-bg)` 坑 12;API 由父级注入)+ `ExportColumnsModal.tsx`(+ 各自 `.spec.tsx`);`api/index.ts` 加 userApi 六方法 + logApi 一方法(下载走 `unwrapDownload`/坑 2,上传走 `bodySerializer`/坑 3)+ 归一 Preview/Commit;`utils/error.ts` 补数值码→msgKey 表(与 web 有意重复,坑 7);`views/system/user/index.tsx` / `log/op/index.tsx` 加按钮(`<Can code>` 用 §6.2 权限码,fetcher 截 lastQuery 带当前筛选);两个 locale 的 `import.*`/`export.*` UI 键、`COMPONENTS.md`、`types/api.ts` 导入导出 DTO。写前 `antd info Steps/Table/Modal/Upload --version 6.x`,写完 `antd lint` 清掉 v6 弃用(`Space.orientation`、`Alert.title`、受控 Upload `onChange`)。**闸门**:`typecheck` / `lint` / `test 730/730` / `build` 四条全绿(均在 `web-react/` 目录)。**浏览器实走(维护者做,chrome-devtools 驱动 :5174 + :5100)**:上传 3 行(2 对 1 错,账号前缀 `rct-` 以避开 G6 已导入的)→ 表头 11/11 自动映射 → 预览「共 3 行,其中 1 行有错误」→ **错误格底色实测 `rgb(249, 230, 234)` = `--color-danger-bg`(真渲染,不是只挂上了类名)** → 改对机构名 → 重新校验 0 错 → 提交「新增 3 / 失败 0」→ 经后端 `user/page` 核实三行确已落库、机构正确、`gender` 已是字典值 1/2;筛选 `Account=rct-ok-1` 后导出请求为 `?Account=rct-ok-1&columns=…`(带上了当前筛选);`antd lint` 四个文件均 0 issue;控制台无 `Maximum update depth exceeded`(zustand selector 没造成无限重渲染)。
+**维护者补记 —— `ImportWizard.spec.tsx` 里那条坑 12 用例是假守卫**:它断言的是 `errCell.style.background` 这个**字符串**含 `var(--color-danger-bg)`,而 jsdom 根本不解析 CSS 变量 —— **变量哪怕压根没定义,这条也照绿**,正是 G6 踩的形状。真正钉住它的是上面浏览器里读 `getComputedStyle().backgroundColor`。渲染期才失效的东西**没有单测能替代实走**(坑 12),别因为 spec 绿了就跳过点检。
+**遗留(沿第 6 轮,已扩)**:前端有**两处**镜像后端档案且无任何闸门钉住 —— ①两份 `CODE_MSG_KEY`(数值码→msgKey);②两份 `userExportColumns`(导出列清单;后端没有列清单端点,两个模板只能各自硬编码)。后端一旦改码值 / MsgKey / `UserExportProfile.Columns`,四个前端文件要跟着改,漏改只会静默显示错文案或少给一列。要不要加一致性测试(比对 OpenAPI 或后端导出的码表/列表),留给 G8 或后续裁定。G8 未碰。
 
 ### 第 6 轮 — G6 `web/` 导入向导 + 接线(2026-07-25)
 提交 `feat(web): add the import wizard and export column picker`。**改**:新增 `components/ImportWizard/`(590 行 `index.vue` + README,四步 `n-steps`;第③步裸 `n-data-table` + 可编辑单元格 + `NTooltip`;API 由父级经 `ImportWizardApi` 注入,组件对资源无感知)与 `components/ExportColumnsModal/`;`api/index.ts` 加 userApi 六方法 + logApi 一方法(下载走 `unwrapDownload`/坑 2,上传走 `bodySerializer`/坑 3);`views/system/user/index.vue`、`views/system/log/op/index.vue` 加按钮(`v-auth` 用 §6.2 权限码);`utils/error.ts`、两个 locale、`COMPONENTS.md`。**闸门**:`typecheck` / `lint` / `test 61/61` / `build` 四条全绿。
