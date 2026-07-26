@@ -734,6 +734,17 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 
 **验收**:全量 `dotnet test` 347/347 绿(第 9 轮基线 345 + 2)。**变异**:摘掉 `Enabled` 列的 `DictTypeCode` → 两条新用例都红(模板那条报「K 列没有 dataValidation」,链路那条报单元格仍是「启用」而非「1」)→ 改回绿。链路那条刻意断言在 `ValidateAsync` 的**返回行**上 —— `Commit`/`Validate` 都深拷贝入参(坑 6 防篡改),入参 `Cells` 永远不会被改;且只断言落库结果会**假绿**,因为 `ParseEnabled` 本来就认「停用」。
 
+### 第 13 轮 — 分支首次推送,CI 15 个检查全绿(2026-07-26)
+八批做完后第一次把 `feat/excel` 推上远端(14 个提交),开草稿 PR **#23**(base `dev`)。
+
+**先踩了个预期错误**:原以为「推分支就会跑 CI」。实际 `backend-ci.yml` 与 `docker-smoke.yml` 的 `on.push.branches` 都是 `[main, dev]`,推 `feat/excel` **一个 workflow 都没触发**(`gh run list --branch feat/excel` 为空)。要拿检查只有 `pull_request` 一条路,**必须开 PR**。
+
+**触发的是 15 个检查,不是预估的 7 个** —— 漏算了两个前端模板各自的 CI(`lint` / `lint-build` / `test (1..3)` / `drift`)。结果:**15 pass / 0 fail / 2 skipping**(`deploy`、`nightly-alert` 按条件跳过)。后端七个全过:`build-test` 的 sqlite / mysql / sqlserver / postgres 四条腿、`template-smoke`、docker `single` 与 `multi`。
+
+**这一轮的实质收获**:此前八批只在 SQLite 上验过(§12 第 9 轮列的合并风险②),MySQL / PostgreSQL / SqlServer 的方言差异是真空。现在三条腿都绿了,`template-smoke` 也证明消费者的 `dotnet new tenon-app` 没被这批改动弄坏。
+
+**仍未覆盖(别当成全绿就万事大吉)**:SqlServer 腿在 push/PR 上只跑方言子集,**完整套件靠 `schedule` 夜间跑,而 `schedule` 只在默认分支上跑,不会跑 `feat/excel`** —— 即本批代码的 SqlServer 全量验证要等合并进默认分支后的那一夜才会真正发生。
+
 ### 第 12 轮 — 字典下拉的弹层不再被列宽挤窄(2026-07-26)
 **起因**:第 11 轮实走时顺手看到的 —— 向导预览表里点开字典下拉,选项被截成「启..」「停..」。性别列(男/女)同款,**是 G6/G7 就有的,不是第 11 轮引入的**。
 
