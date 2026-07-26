@@ -209,6 +209,10 @@ const previewColumns = computed<DataTableColumns<ImportRow>>(() => {
               value: val,
               clearable: !col.required,
               size: 'small',
+              // 弹层不跟随触发器宽度:向导的列很窄(minWidth 120,实测触发器约 66px),
+              // 跟随会把「启用」「停用」截成「启..」「停..」。普通表单里下拉够宽,
+              // 跟随反而更整齐 —— 所以只在向导关掉,不动共用的 DictSelect。
+              consistentMenuWidth: false,
               style: { width: '100%' },
               status: err ? 'error' : undefined,
               'onUpdate:value': (v: string | null) => setCell(row, col.key, v),

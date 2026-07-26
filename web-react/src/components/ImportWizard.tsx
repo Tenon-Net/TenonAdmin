@@ -219,6 +219,10 @@ export function ImportWizard({
               value={val ?? undefined}
               allowClear={!col.required}
               size="small"
+              // 弹层宽度与列宽解耦:列一多就挤窄,跟随触发器会把「启用」「停用」截成「启..」「停..」。
+              // (实测当前列宽 119px 时两者一样,这里是防列数增多;Vue 侧列只有 66px,已真截断。)
+              // 只在向导关掉,不动共用的 DictSelect —— 普通表单里下拉够宽,跟随反而更整齐。
+              popupMatchSelectWidth={false}
               style={{ width: '100%' }}
               status={err ? 'error' : undefined}
               onChange={(v) => setCell(row.index, col.key, (v as string | null) ?? null)}

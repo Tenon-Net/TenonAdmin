@@ -734,6 +734,16 @@ cd web-react  && npm run typecheck && npm run lint && npm test && npm run build 
 
 **验收**:全量 `dotnet test` 347/347 绿(第 9 轮基线 345 + 2)。**变异**:摘掉 `Enabled` 列的 `DictTypeCode` → 两条新用例都红(模板那条报「K 列没有 dataValidation」,链路那条报单元格仍是「启用」而非「1」)→ 改回绿。链路那条刻意断言在 `ValidateAsync` 的**返回行**上 —— `Commit`/`Validate` 都深拷贝入参(坑 6 防篡改),入参 `Cells` 永远不会被改;且只断言落库结果会**假绿**,因为 `ParseEnabled` 本来就认「停用」。
 
+### 第 12 轮 — 字典下拉的弹层不再被列宽挤窄(2026-07-26)
+**起因**:第 11 轮实走时顺手看到的 —— 向导预览表里点开字典下拉,选项被截成「启..」「停..」。性别列(男/女)同款,**是 G6/G7 就有的,不是第 11 轮引入的**。
+
+**改**:两个模板各在向导的单元格 `DictSelect` 上把弹层宽度与触发器解耦(`web` 用 naive 2.44.1 的 `consistentMenuWidth: false`,`web-react` 用 antd v6 的 `popupMatchSelectWidth={false}`;两个属性名都对着 `node_modules` / `antd info` 核实过,不是凭记忆写的)。**只改向导用法,不动共用的 `DictSelect`** —— 普通表单里下拉够宽,跟随触发器反而更整齐。
+
+**两侧不对称,照实说**:实测 `web` 触发器宽 **66px**,弹层跟随后选项真被截断,改完弹层 72px、`启用`/`停用` 完整(`scrollWidth <= clientWidth`);`web-react` 触发器 **119px**,**开关这个属性前后测得完全一样(119/119,均未截断)** —— 那边本来就没这个毛病,加上是防列数增多。反事实是真跑出来的:把 `popupMatchSelectWidth` 临时翻成 `true` 重走一遍向导再量,不是推的。
+**顺带修回一处误伤**:用 `sed` 做反事实时把 `web-react` 列映射 Select 上**原有的** `popupMatchSelectWidth={false}`(G7 就写了)一起翻成了 `true`,已复原;`git diff` 确认最终改动只有 4 行新增。
+
+**验收**:`web` typecheck / lint / 62 用例 / build 全绿;`web-react` typecheck / lint / `antd lint` / 730 用例 / build 全绿。两个模板都起 dev server 实走了向导(上传 → 列映射 → 预览 → 点开启用状态下拉),坑 12 要求的实走不可省。
+
 ### 第 10 轮 — 下载触发收敛成带测试的工具(2026-07-25)
 **起因**:第 7 轮记「下载按钮四条路径全过」时,顺带记下 `triggerDownload` 那 9 行在两个模板里各抄了三份(向导 + 用户页 + 操作日志页,均为 G6/G7 本批引入)。浏览器实走**走完就没了**,而这段的两种错法都是静默的 —— 漏 `revokeObjectURL` 内存泄漏、漏 `download` 名把文件存成一串 uuid,都不报错、不影响构建、`typecheck`/`lint`/`build` 全绿(坑 12 同款)。
 **改**:两模板各建 `src/utils/download.ts` 的 `triggerBlobDownload`,六处内联全部改为引用;`web/` 新增 `download.spec.ts`(镜像 `web-react` 既有的 `fileFormat.spec` 那条:断言 `createObjectURL` 收到该 blob、`<a download>` 是给定文件名、`click()` 被调、`revokeObjectURL` 收到同一 URL、用完从 DOM 移除);`web-react` 侧原实现住在 `views/system/file/fileFormat.ts`(位置不对,组件不该往视图目录里 import),移到 `utils/download.ts` 并在原处**同名再导出**,文件页与它既有的用例一行不动。
