@@ -45,6 +45,21 @@ The usual approach is cloning a template repo: hundreds of files become yours to
 
 The frontend is covered too: **two feature-equivalent templates** (Vue and React). Pick whichever feels right and use it as the starting point of your own project.
 
+## 🗺️ Runtime architecture
+
+Primary request path from browser to database: dual SPA templates → Host → auth & data-scope pipeline → domain services → SqlSugar → DB.
+
+<p align="center">
+  <a href="docs/architecture/tenon-runtime.en.architecture.html">
+    <img src="docs/architecture/tenon-runtime.en.readme.png" alt="TenonAdmin runtime architecture" width="100%">
+  </a>
+</p>
+
+<p align="center">
+  <a href="docs/architecture/tenon-runtime.en.architecture.html"><strong>Open interactive architecture diagram</strong></a>
+  · Source JSON: <a href="docs/architecture/tenon-runtime.en.architecture.json"><code>tenon-runtime.en.architecture.json</code></a>
+</p>
+
 ## 🔭 Want to see the finished thing first?
 
 The [live demo](https://tenonadmin.52moyu.net/login) isn't the kernel's own sample host. It's a separate consumer app, **[tenon-example](https://github.com/Tenon-Net/tenon-example)**: installs the package from NuGet, `degit`s the frontend template, adds a CRM business module, and ships to production. Source is fully open — that's what your code looks like after you adopt it.

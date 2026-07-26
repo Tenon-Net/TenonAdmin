@@ -45,6 +45,21 @@ app.MapTenonAdmin();
 
 フロントエンドも用意済みです：**機能同等の 2 つのテンプレート**（Vue と React）。好みの方を選んで、自分のプロジェクトの出発点にしてください。
 
+## 🗺️ ランタイムアーキテクチャ
+
+ブラウザから DB までの主経路：デュアル SPA テンプレート → Host → 認証・データ権限パイプライン → ドメインサービス → SqlSugar → DB。
+
+<p align="center">
+  <a href="docs/architecture/tenon-runtime.ja.architecture.html">
+    <img src="docs/architecture/tenon-runtime.ja.readme.png" alt="TenonAdmin ランタイムアーキテクチャ" width="100%">
+  </a>
+</p>
+
+<p align="center">
+  <a href="docs/architecture/tenon-runtime.ja.architecture.html"><strong>インタラクティブな構成図を開く</strong></a>
+  · ソース JSON：<a href="docs/architecture/tenon-runtime.ja.architecture.json"><code>tenon-runtime.ja.architecture.json</code></a>
+</p>
+
 ## 🔭 まず完成形を見たい？
 
 [オンラインデモ](https://tenonadmin.52moyu.net/login)で動いているのは、カーネル同梱のサンプルホストではありません。独立した消費者アプリ **[tenon-example](https://github.com/Tenon-Net/tenon-example)** です：NuGet からパッケージを入れ、フロントエンドテンプレートを `degit` で取得し、CRM 業務モジュールを書き、本番にデプロイしたもの。ソースは全公開——TenonAdmin を採用したあなたのコードも、ああいう形になります。

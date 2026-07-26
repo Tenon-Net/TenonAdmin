@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "TenonAdmin 运行时架构",
+    "subtitle": "浏览器 -> SPA 模板 -> Host -> 鉴权与数据权限 -> 领域服务 -> SqlSugar -> DB",
+    "output": "tenon-runtime.zh-CN.architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 720],
+    "views": [
+      {
+        "id": "request-path",
+        "label": "主请求路径",
+        "focus": ["users", "spa", "host", "pipeline", "services", "sqlsugar", "db"],
+        "note": "跟随一次管理端请求：浏览器经 JWT、RBAC、数据权限与仓储过滤器进入持久化存储。"
+      },
+      {
+        "id": "auth-and-data",
+        "label": "鉴权、缓存与数据权限",
+        "focus": ["pipeline", "ext_auth", "cache", "services", "sqlsugar", "db"],
+        "note": "外部登录回调进入鉴权管道；会话与权限缓存挂在领域服务旁。"
+      },
+      {
+        "id": "kernel-core",
+        "label": "内核宿主路径",
+        "focus": ["host", "pipeline", "services", "sqlsugar", "db"],
+        "note": "宿主内：过滤器、领域服务、SqlSugar 全局过滤，再到数据库。"
+      }
+    ]
+  },
+  "components": [
+    { "id": "users", "type": "external", "label": "用户", "sublabel": "浏览器", "pos": [40, 188], "size": [132, 80] },
+    { "id": "spa", "type": "frontend", "label": "管理端 SPA", "sublabel": "Vue / React / 零共享", "tag": ":5173 / :5174", "pos": [230, 188], "size": [176, 80] },
+    { "id": "host", "type": "backend", "label": "MinimalHost", "sublabel": "ASP.NET / Controllers", "tag": ":5100", "pos": [460, 188], "size": [168, 80] },
+    { "id": "pipeline", "type": "security", "label": "鉴权管道", "sublabel": "JWT / RolePermission", "tag": "DataScope", "pos": [690, 188], "size": [176, 80] },
+    { "id": "ext_auth", "type": "security", "label": "外部登录", "sublabel": "企微 / 钉钉 / OIDC", "pos": [690, 76], "size": [176, 72] },
+    { "id": "services", "type": "backend", "label": "领域服务", "sublabel": "Sys* / RBAC / CRUD", "pos": [230, 428], "size": [176, 80] },
+    { "id": "cache", "type": "database", "label": "缓存", "sublabel": "Memory / Redis", "pos": [40, 428], "size": [140, 80] },
+    { "id": "sqlsugar", "type": "backend", "label": "SqlSugar", "sublabel": "仓储 / CodeFirst / 数据权限", "pos": [460, 428], "size": [176, 80] },
+    { "id": "db", "type": "database", "label": "数据库", "sublabel": "SQLite / MySQL / PG / SqlServer", "pos": [690, 428], "size": [184, 80] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "TenonAdmin 内核宿主", "wraps": ["host", "pipeline", "services", "sqlsugar"] },
+    { "kind": "security-group", "label": "鉴权与会话", "wraps": ["pipeline", "ext_auth"] },
+    { "kind": "region", "label": "数据面", "wraps": ["db"] }
+  ],
+  "connections": [
+    { "id": "users-to-spa", "from": "users", "to": "spa", "label": "HTTPS", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "spa-to-host", "from": "spa", "to": "host", "label": "/api", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "host-to-pipeline", "from": "host", "to": "pipeline", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "ext-auth-to-pipeline", "from": "ext_auth", "to": "pipeline", "label": "回调", "variant": "security", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "labelAt": [778, 158] },
+    { "id": "pipeline-to-services", "from": "pipeline", "to": "services", "label": "已授权", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "via": [[778, 348], [318, 348]], "labelAt": [548, 336] },
+    { "id": "services-to-cache", "from": "services", "to": "cache", "label": "会话 / 权限", "variant": "dashed", "route": "orthogonal-h", "labelAt": [205, 416] },
+    { "id": "services-to-sqlsugar", "from": "services", "to": "sqlsugar", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "sqlsugar-to-db", "from": "sqlsugar", "to": "db", "label": "SQL", "variant": "emphasis", "route": "orthogonal-h" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "前端",
+      "items": [
+        "两套可 degit 模板：web/（Vue）与 web-react/",
+        "同一套 OpenAPI 契约；不共享 UI 层"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "包分层",
+      "items": [
+        "Core -> SqlSugar -> Services -> AspNetCore",
+        "TryAdd 可替换；ApplicationAssemblies 挂载业务模块"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "请求约定",
+      "items": [
+        "权限码 = 规范化路由",
+        "错误为数字 ErrorCode（前端做 i18n）"
+      ]
+    }
+  ]
+}

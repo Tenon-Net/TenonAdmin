@@ -45,6 +45,21 @@ app.MapTenonAdmin();
 
 前端也有配套方案：**两套功能等价的模板**（Vue 和 React），选择你熟悉的技术栈作为项目起点。
 
+## 🗺️ 运行时架构
+
+一次请求从浏览器到数据库的主路径：双前端模板 → Host → 鉴权与数据权限管道 → 领域服务 → SqlSugar → DB。
+
+<p align="center">
+  <a href="docs/architecture/tenon-runtime.zh-CN.architecture.html">
+    <img src="docs/architecture/tenon-runtime.zh-CN.readme.png" alt="TenonAdmin 运行时架构" width="100%">
+  </a>
+</p>
+
+<p align="center">
+  <a href="docs/architecture/tenon-runtime.zh-CN.architecture.html"><strong>打开可交互架构图</strong></a>
+  · 源 JSON：<a href="docs/architecture/tenon-runtime.zh-CN.architecture.json"><code>tenon-runtime.zh-CN.architecture.json</code></a>
+</p>
+
 ## 🔭 想先看成品？
 
 [在线演示](https://tenonadmin.52moyu.net/login)跑的不是内核自带的样例宿主，是一个独立的消费者应用 **[tenon-example](https://github.com/Tenon-Net/tenon-example)**：它从 NuGet 装包、`degit` 拿前端模板、写了一个 CRM 业务模块，然后部署上线。源码全开，你接入之后写出来的东西就长那样。

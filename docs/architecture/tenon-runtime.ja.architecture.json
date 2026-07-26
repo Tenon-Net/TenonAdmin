@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "TenonAdmin ランタイムアーキテクチャ",
+    "subtitle": "Browser -> SPA -> Host -> 認証とデータ権限 -> ドメイン -> SqlSugar -> DB",
+    "output": "tenon-runtime.ja.architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 720],
+    "views": [
+      {
+        "id": "request-path",
+        "label": "主リクエスト経路",
+        "focus": ["users", "spa", "host", "pipeline", "services", "sqlsugar", "db"],
+        "note": "管理画面の 1 リクエストを、JWT / RBAC / データ権限とリポジトリフィルタを経て永続化まで追う。"
+      },
+      {
+        "id": "auth-and-data",
+        "label": "認証・キャッシュ・データ権限",
+        "focus": ["pipeline", "ext_auth", "cache", "services", "sqlsugar", "db"],
+        "note": "外部ログインのコールバックは認証パイプラインへ。セッションと権限キャッシュはドメインサービスの傍ら。"
+      },
+      {
+        "id": "kernel-core",
+        "label": "カーネルホスト経路",
+        "focus": ["host", "pipeline", "services", "sqlsugar", "db"],
+        "note": "ホスト内: フィルタ、ドメインサービス、SqlSugar グローバルフィルタ、そして DB。"
+      }
+    ]
+  },
+  "components": [
+    { "id": "users", "type": "external", "label": "ユーザー", "sublabel": "Browser", "pos": [40, 188], "size": [132, 80] },
+    { "id": "spa", "type": "frontend", "label": "管理 SPA", "sublabel": "Vue / React / 非共有", "tag": ":5173 / :5174", "pos": [230, 188], "size": [176, 80] },
+    { "id": "host", "type": "backend", "label": "MinimalHost", "sublabel": "ASP.NET / Controllers", "tag": ":5100", "pos": [460, 188], "size": [168, 80] },
+    { "id": "pipeline", "type": "security", "label": "認証パイプライン", "sublabel": "JWT / RolePermission", "tag": "DataScope", "pos": [690, 188], "size": [176, 80] },
+    { "id": "ext_auth", "type": "security", "label": "外部ログイン", "sublabel": "WeCom / DingTalk / OIDC", "pos": [690, 76], "size": [176, 72] },
+    { "id": "services", "type": "backend", "label": "ドメインサービス", "sublabel": "Sys* / RBAC / CRUD", "pos": [230, 428], "size": [176, 80] },
+    { "id": "cache", "type": "database", "label": "キャッシュ", "sublabel": "Memory / Redis", "pos": [40, 428], "size": [140, 80] },
+    { "id": "sqlsugar", "type": "backend", "label": "SqlSugar", "sublabel": "Repo / CodeFirst / 権限", "pos": [460, 428], "size": [176, 80] },
+    { "id": "db", "type": "database", "label": "データベース", "sublabel": "SQLite / MySQL / PG / SqlServer", "pos": [690, 428], "size": [184, 80] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "TenonAdmin カーネルホスト", "wraps": ["host", "pipeline", "services", "sqlsugar"] },
+    { "kind": "security-group", "label": "認証とセッション", "wraps": ["pipeline", "ext_auth"] },
+    { "kind": "region", "label": "データプレーン", "wraps": ["db"] }
+  ],
+  "connections": [
+    { "id": "users-to-spa", "from": "users", "to": "spa", "label": "HTTPS", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "spa-to-host", "from": "spa", "to": "host", "label": "/api", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "host-to-pipeline", "from": "host", "to": "pipeline", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "ext-auth-to-pipeline", "from": "ext_auth", "to": "pipeline", "label": "callback", "variant": "security", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "labelAt": [778, 158] },
+    { "id": "pipeline-to-services", "from": "pipeline", "to": "services", "label": "認可済み", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "via": [[778, 348], [318, 348]], "labelAt": [548, 336] },
+    { "id": "services-to-cache", "from": "services", "to": "cache", "label": "session / perm", "variant": "dashed", "route": "orthogonal-h", "labelAt": [205, 416] },
+    { "id": "services-to-sqlsugar", "from": "services", "to": "sqlsugar", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "sqlsugar-to-db", "from": "sqlsugar", "to": "db", "label": "SQL", "variant": "emphasis", "route": "orthogonal-h" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "フロントエンド",
+      "items": [
+        "degit 可能な 2 テンプレート: web/ (Vue) と web-react/",
+        "同一 OpenAPI 契約。UI レイヤは共有しない"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "パッケージ階層",
+      "items": [
+        "Core -> SqlSugar -> Services -> AspNetCore",
+        "TryAdd で差し替え可能。ApplicationAssemblies で業務モジュール"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "リクエスト契約",
+      "items": [
+        "権限コード = 正規化されたルート",
+        "エラーは数値 ErrorCode（i18n はフロント）"
+      ]
+    }
+  ]
+}

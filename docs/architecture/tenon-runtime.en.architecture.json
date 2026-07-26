@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "TenonAdmin Runtime Architecture",
+    "subtitle": "Browser -> SPA -> Host -> auth & data-scope -> domain -> SqlSugar -> DB",
+    "output": "tenon-runtime.en.architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 720],
+    "views": [
+      {
+        "id": "request-path",
+        "label": "Primary request path",
+        "focus": ["users", "spa", "host", "pipeline", "services", "sqlsugar", "db"],
+        "note": "Follow one admin request from the browser through JWT, RBAC, data scope, and the repository filter into durable storage."
+      },
+      {
+        "id": "auth-and-data",
+        "label": "Auth, cache, and data scope",
+        "focus": ["pipeline", "ext_auth", "cache", "services", "sqlsugar", "db"],
+        "note": "External login callbacks enter the auth pipeline; session and permission caches sit beside domain services."
+      },
+      {
+        "id": "kernel-core",
+        "label": "Kernel host path",
+        "focus": ["host", "pipeline", "services", "sqlsugar", "db"],
+        "note": "Inside the host: filters, domain services, SqlSugar global filters, then the database."
+      }
+    ]
+  },
+  "components": [
+    { "id": "users", "type": "external", "label": "Users", "sublabel": "Browser", "pos": [40, 188], "size": [132, 80] },
+    { "id": "spa", "type": "frontend", "label": "Admin SPA", "sublabel": "Vue / React / zero-shared", "tag": ":5173 / :5174", "pos": [230, 188], "size": [176, 80] },
+    { "id": "host", "type": "backend", "label": "MinimalHost", "sublabel": "ASP.NET / Controllers", "tag": ":5100", "pos": [460, 188], "size": [168, 80] },
+    { "id": "pipeline", "type": "security", "label": "Auth Pipeline", "sublabel": "JWT / RolePermission", "tag": "DataScope", "pos": [690, 188], "size": [176, 80] },
+    { "id": "ext_auth", "type": "security", "label": "External Auth", "sublabel": "WeCom / DingTalk / OIDC", "pos": [690, 76], "size": [176, 72] },
+    { "id": "services", "type": "backend", "label": "Domain Services", "sublabel": "Sys* / RBAC / CRUD", "pos": [230, 428], "size": [176, 80] },
+    { "id": "cache", "type": "database", "label": "Cache", "sublabel": "Memory / Redis", "pos": [40, 428], "size": [140, 80] },
+    { "id": "sqlsugar", "type": "backend", "label": "SqlSugar", "sublabel": "Repo / CodeFirst / scope", "pos": [460, 428], "size": [176, 80] },
+    { "id": "db", "type": "database", "label": "Database", "sublabel": "SQLite / MySQL / PG / SqlServer", "pos": [690, 428], "size": [184, 80] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "TenonAdmin Kernel Host", "wraps": ["host", "pipeline", "services", "sqlsugar"] },
+    { "kind": "security-group", "label": "Auth & session", "wraps": ["pipeline", "ext_auth"] },
+    { "kind": "region", "label": "Data plane", "wraps": ["db"] }
+  ],
+  "connections": [
+    { "id": "users-to-spa", "from": "users", "to": "spa", "label": "HTTPS", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "spa-to-host", "from": "spa", "to": "host", "label": "/api", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "host-to-pipeline", "from": "host", "to": "pipeline", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "ext-auth-to-pipeline", "from": "ext_auth", "to": "pipeline", "label": "callback", "variant": "security", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "labelAt": [778, 158] },
+    { "id": "pipeline-to-services", "from": "pipeline", "to": "services", "label": "authorized", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "via": [[778, 348], [318, 348]], "labelAt": [548, 336] },
+    { "id": "services-to-cache", "from": "services", "to": "cache", "label": "session / perm", "variant": "dashed", "route": "orthogonal-h", "labelAt": [205, 416] },
+    { "id": "services-to-sqlsugar", "from": "services", "to": "sqlsugar", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "sqlsugar-to-db", "from": "sqlsugar", "to": "db", "label": "SQL", "variant": "emphasis", "route": "orthogonal-h" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Frontend",
+      "items": [
+        "Two degit-able templates: web/ (Vue) and web-react/",
+        "Same OpenAPI contract; no shared UI layer"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Packages",
+      "items": [
+        "Core -> SqlSugar -> Services -> AspNetCore",
+        "TryAdd replaceability; ApplicationAssemblies for modules"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Request contract",
+      "items": [
+        "Permission code = normalized route",
+        "Errors are numeric ErrorCode (i18n on FE)"
+      ]
+    }
+  ]
+}
