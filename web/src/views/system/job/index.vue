@@ -209,7 +209,9 @@ const formRef = ref<FormInst | null>(null)
 const editingId = ref<number | null>(null)
 const blank = (): JobForm => ({
   code: '', name: '', remark: '',
-  triggerKind: JobTriggerKind.Cron, cronExpression: '',
+  // 给个能跑的默认值(每天零点),不留空:CronEditor 的各段控件本来就带默认选中,
+  // 留空会让新增表单"看着填好了"却因必填校验存不下,而且预览区在用户动手之前一直不出现。
+  triggerKind: JobTriggerKind.Cron, cronExpression: '0 0 0 * * ?',
   intervalSeconds: 60, oneShotTime: null, startTime: null, endTime: null,
   misfireStrategy: JobMisfireStrategy.Skip, concurrencyMode: JobConcurrencyMode.SerialSkip,
   handlerKind: JobHandlerKind.Compiled, handlerName: '', props: [],

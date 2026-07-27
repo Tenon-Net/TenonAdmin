@@ -62,7 +62,9 @@ const trendOption = computed<EChartsOption>(() => {
   const trend = data.value?.trend ?? []
   return {
     tooltip: { trigger: 'axis' },
-    legend: {},
+    // 图例位置写死在顶部:留给默认值时它会落到绘图区底部、压在 x 轴日期标签上(实测)。
+    // grid.top 的 32 就是给它留的位置。
+    legend: { top: 0 },
     grid: { left: 8, right: 16, bottom: 8, top: 32, containLabel: true },
     xAxis: { type: 'category', data: trend.map((p) => p.date.slice(5)) }, // MM-dd 足够,14 天跨年概率忽略
     yAxis: { type: 'value', minInterval: 1 },
