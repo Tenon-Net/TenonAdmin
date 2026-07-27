@@ -22,12 +22,12 @@
 
 ## 0.1 当前状态与换机接手(2026-07-27)
 
-**施工完成。G1–G9 全部落地,见 §17 各轮。** 后端 510 测试全绿;`web/`(vue-tsc + oxlint + 66 vitest)与 `web-react/`(tsc + oxlint + 770 vitest + `antd lint`)双绿。
+**施工完成,两项遗留验证也已补做(第 8 轮)。G1–G9 全部落地,见 §17 各轮。** 后端 511 测试全绿;`web/`(vue-tsc + oxlint + 66 vitest)与 `web-react/`(tsc + oxlint + 770 vitest + `antd lint`)双绿。
 
-**未做、留给下一位的两件**(都不是缺陷,是本机跑不了的验证):
+- **浏览器实走查**:两套模板各走一遍(建任务 → cron 预览 → 执行一次 → 执行记录 → 详情抽屉重试列表 → 终止 → 监控页轮询),真后端真调度器。查出并修掉两处**只有点开才看得见**的前端问题,见 §17 第 8 轮。
+- **集群故障转移**:局域网 VM 上双副本真跑,`scripts/smoke-multi-replica.sh` 六段全绿,含杀主后备节点接管(`5 → 10` 行、主节点易主)。同一环境上做的 CAS 变异**推翻了脚本自己的注释**——详见下面这条。
 
-1. **浏览器实走查**。`dev.bat` 起全栈后过一遍:建任务 → 执行一次 → 看执行记录 → 终止 → 监控页轮询;两套模板各一遍。本轮只有 MinimalHost 上的接口级预演(5 秒任务 25 秒出 5 行、时刻两两互异)。
-2. **集群故障转移**。`scripts/smoke-multi-replica.sh` 第 6 断言(杀主节点后新副本接手)只能在 CI 的 `multi` 腿或局域网 VM 上真跑,本机无 Docker。
+**⚠ 接手前必知的一条(第 8 轮实测)**:`smoke-multi-replica.sh` 第 6 断言的「时刻两两互异」**并不能**把关领取 CAS。只有主节点扫表(`if (!_isLeader) return null`),平稳双副本跑根本没有第二个扫描者;把 `&& j.NextRunTime == expected` 删掉重建两个副本,整段照样全绿。CAS 防的是**主节点重叠窗口**(旧主 GC 停顿醒来时备节点已接管),脚本复现不了。**CAS 的真闸门是 `JobClaimTests`,要变异就去那里变异**(G3 已实测 3 例红)。§14 的 G6 行与脚本注释都已按此改写。
 
 接手改动前先读 §13 的坑表,尤其第 9 条(整秒截断)与孤儿行回收——两者都是"错了不报错,只是任务再也不跑"的类型。
 
@@ -587,9 +587,9 @@ API 副本两种姿态(§10.1 之上的部署选择):①什么都不配 —— A
 | ✅G3 | 引擎:选主/循环/执行器/registry/三个内置处理器/`JobChangedEvent`/DI | §12 FakeTimeProvider + 选主 + CAS 测试全绿(21 例) | 删 CAS 的 `AND NextRunTime=@expected` → 双发测试红(已实测) |
 | ✅G4 | `JobController` 13 端点 + 菜单种子 132–146 + `RecycleBin` 登记 + `gen:api` | PermissionCodeConsistency/OperationLogCoverage 绿;24 例 HTTP + 40 例安全测试绿 | 摘掉任一 [OperationLog] → 红 |
 | ✅G5 | HTTP 级测试 + Replaceability 追加 + TestHost `SampleJob` + backend-ci TEST_FILTER | 47xxx 各码有用例;SqlServer 子集含 Election/Claim | 前置注册假 `IJobService` 不生效 → 六件套红(已实测) |
-| ✅G6 | Worker:`WorkerSetup` + `samples/WorkerHost` + compose TZ + smoke 第 6 断言 | multi 腿 6 断言绿(本机彩排:5s 任务 25s 内 5 次、时刻互异、全 Success) | 注释掉 standby 夺取 → 杀主断言红 |
-| ✅G7 | `web/`:三页面 + CronEditor + COMPONENTS.md + i18n | vue-tsc + oxlint 绿;66 vitest 绿。**浏览器实走查未做**(见 §0.1) | — |
-| ✅G8 | `web-react/`:同款 | tsc + oxlint + `antd lint` 绿;770 vitest 绿(含 37 例新纯函数 spec) | 把 `8L` 的拒收改回 `%7` → cronParts 新增用例红(已实测) |
+| ✅G6 | Worker:`WorkerSetup` + `samples/WorkerHost` + compose TZ + smoke 第 6 断言 | **VM 双副本实测六段全绿**(5s 任务 25s 内 5 次、时刻互异、杀主后 `5→10` 行且主节点易主) | 注释掉 standby 夺取 → 杀主断言红。**但本断言把不了 CAS 的关**:删 CAS 重建双副本仍全绿(第 8 轮实测),CAS 的闸门是 `JobClaimTests` |
+| ✅G7 | `web/`:三页面 + CronEditor + COMPONENTS.md + i18n | vue-tsc + oxlint 绿;66 vitest 绿;**浏览器实走查已过**(第 8 轮;修了图例压轴、cron 默认值两处) | — |
+| ✅G8 | `web-react/`:同款 | tsc + oxlint + `antd lint` 绿;770 vitest 绿(含 37 例新纯函数 spec);**浏览器实走查已过**(第 8 轮,无新问题) | 把 `8L` 的拒收改回 `%7` → cronParts 新增用例红(已实测) |
 | ✅G9 | 文档收口:本台账 §0.1 更新、CHANGELOG、site 文档、`skills/create-job.md` + `new-module.md` 交叉引用 | `lint:prose` 绿(site 侧) | — |
 
 ---
@@ -693,3 +693,28 @@ bash scripts/smoke-multi-replica.sh http://localhost:8080                  # 含
 - 前端侧另修:趋势图按规格改柱线组合(原为双折线);`web/` 的 jobId watcher 加 `route.path` 守卫(keep-alive 下切走页面会清掉筛选并发一次没人看的请求);三处枚举名对齐后端(`Serial`→`SerialSkip`、`Backfill`→`Misfire`、`MisfireSkip`→`MissedSkipped`),避免同一漂移在双模板+后端固化成四处;`web-react` 的周段单值 `%7` 兜底改为拒收(后端只认 0-7,兜底会把 `8L` 悄悄读成"周一最后一个")。变异实测:改回 `%7` → cronParts 用例红。
 - **有意保留的两处打折**(非缺陷,已在组件 README 记明):CronEditor 的可视化页签只反解常用数字形态,含 `SUN`/`JAN` 名字或混写步长时留在表达式页签编辑,值不丢;表达式页签直填出"日/周双侧受限"再改别的段时,编辑器不自动补 `?`(预览区照常显 47003,不会静默入库)。
 - 后端 510 绿;`web/` typecheck+lint+66 vitest 绿;`web-react/` typecheck+lint+`antd lint`+770 vitest 绿。
+
+### 第 8 轮 — 补做两项遗留验证:集群故障转移 + 双模板浏览器实走查(2026-07-27)
+
+**§0.1 挂着的两件都做了,不是补个记号,是真跑出来的。** 顺带各查出问题若干。
+
+**一、集群故障转移(局域网 VM,Docker 双副本 + Caddy)**
+
+- `git archive HEAD | ssh … tar -x` 把 HEAD 树送上 VM(只有跟踪文件,天然不带 `data/` 与 `appsettings.Development.json`),`TENON_WEB_PORT=18080` 避开 VM 上已占的 8080,`up -d --build` 起 db/redis/app/app2/web 五个容器。
+- `smoke-multi-replica.sh` **六段全绿**,第 6 段:双节点注册 → 5s 任务 25s 触发 5 次 → 时刻两两互异 → `docker compose stop` 杀主 → 50s 后 `5 → 10` 行、主节点由 `bf14e7ebdb0f#0` 易主到 `3a41210368ee#1`。
+- **脚本本身修了两处**(都是真跑才暴露的):
+  1. **不可重跑**。任务编码固定写死 `smoke-tick`,而删除是软删、编码仍占用 —— 同一套库上第二次跑直接 47002。而"起栈 → 跑 → 改代码重建 → 再跑"正是脚本文件头自己写的用法。改为 `smoke-tick-$RANDOM`(与上面 `LOCK_ACCOUNT` 同款)。
+  2. **建任务失败时的报错指错方向**:原文案猜"调度模块可能被禁用",实际是 47002。改为直接打印信封,让错误码自己说话。
+- **⚠ CAS 变异的意外结论(本轮最值钱的一条)**:在这套真集群上把 `ClaimAsync` 的 `&& j.NextRunTime == expected` 删掉、重建两个副本、重跑 —— **第 6 段照样全绿**,包括"时刻两两互异"。原因是架构性的:只有主节点扫表(`if (!_isLeader) return null`),平稳双副本跑压根没有第二个扫描者;CAS 防的是主节点**重叠窗口**(旧主 GC 停顿醒来时备节点已接管),脚本复现不了。**脚本注释此前断言"删了 CAS 两个副本就会撞同一次触发"是错的,已改写**;CAS 的真闸门仍是 G3 的 `JobClaimTests`(那里删 CAS 实测 3 例红)。§0.1 与 §14 的 G6 行同步更正。
+- 验完 `down -v` 拆栈、删临时目录,VM 只剩用户自己的容器。
+
+**二、双模板浏览器实走查(真后端 + 真调度器)**
+
+- 后端另起一份 MinimalHost 挂**独立 SQLite**(`Data Source=./data/walkthrough.db`),不碰开发库 `admin.db`;走完删库,`admin.db` 修改时间未变。
+- 两套模板各走一遍:建任务 → cron 预览 → 执行一次 → 执行记录 → 详情抽屉重试列表 → 终止 → 监控页轮询。真观察到的:5s 任务时刻严格 `:16/:21/:26/…`;手动触发那行 FireMode 显"手动";详情抽屉出 `HTTP 200 GET …/health` 与同 fireInstanceId 的尝试列表;监控页 15s 轮询实测自己刷新(`07:54:21 → 07:54:36`,未动鼠标)。
+- **终止**要有个真的长任务才测得出来:先拿不可达地址试,秒失败,只测到 47007(该执行记录不在运行中);改用"只接受连接、永不应答"的本地 TCP 黑洞才造出在飞执行,两侧各终止一次 —— 结果都是 `RunStatus=Cancelled` + `KillRequested=true`(19.2s / 46.9s),旗标轮询这条链是通的。
+- 顺手确认的围栏:UI 侧 SQL 载荷**禁选且带提示**(第 7 轮那条后端下发真的到了页面)、系统任务删除按钮两侧都禁用、间隔秒数输入框前端夹到下限 5(打 3 自动变 5);后端 47004/47008/47009 直连接口逐个复验有码有文案。
+- **修掉两处只有点开才看得见的问题(都在 `web/`,React 侧无此问题)**:
+  1. **趋势图图例压在 x 轴日期上**。`legend: {}` 交给默认值,在 Vue 这套里落到了绘图区底部,正好盖住 `07-20`/`07-21`(React 同样写法却在顶部,故不是共性)。改为显式 `legend: { top: 0 }` —— `grid.top: 32` 本来就是给它留的位。
+  2. **新增表单 cron 默认值为空**。CronEditor 各段控件自带默认选中,看着像填好了,实则模型是空串:预览区在用户动手前不出现,直接保存则撞必填校验。改为 `'0 0 0 * * ?'`(React 侧 `blankJob()` 早就是这个值,本次是把 Vue 对齐,不是抽共享层)。
+- 走查用到的临时任务全部删除;`web/` typecheck + oxlint + 66 vitest 复跑绿。
