@@ -178,10 +178,17 @@ else
 fi
 
 echo "== 6. Scheduled jobs fire exactly once cluster-wide, and the standby takes over =="
-# Both replicas run a scheduler. The lease only decides who scans; correctness comes from the
-# per-fire CAS on NextRunTime. Without it both replicas fire the same occurrence -- which looks
-# exactly like duplicate ScheduledTime values below. Then we kill the leader: without the
-# standby's lease takeover, the job simply stops running and no new log rows ever appear.
+# Both replicas run a scheduler, but only the lease holder scans (`if (!_isLeader) return null`),
+# so a calm two-replica run has exactly one scanner. What this section really gates is the
+# **failover**: kill the leader and, without the standby's lease takeover, the job simply stops
+# running and no new log rows ever appear.
+#
+# The distinct-ScheduledTime check below is a cheap "did any occurrence fire twice" backstop --
+# it is NOT what gates the claim CAS, despite what this comment used to say. Measured 2026-07-27:
+# delete `&& j.NextRunTime == expected` from JobSchedulerService.ClaimAsync, rebuild both replicas,
+# and this whole section still passes green. It cannot catch it, because the CAS defends the
+# overlapping-leader window (old leader resumes from a GC pause after the standby took the lease),
+# which no scripted run reproduces. The CAS's real gate is JobClaimTests -- mutate it there.
 NODES_JSON=$(curl -s "$BASE/api/v1/sys/job/dashboard" -H "Authorization: Bearer $ADMIN_TOKEN")
 NODE_COUNT=$(echo "$NODES_JSON" | python3 -c "
 import sys,json
@@ -192,11 +199,18 @@ if [ "$NODE_COUNT" -lt 2 ]; then
 else
   pass "Both replicas registered as scheduler nodes ($NODE_COUNT)"
 
-  JOB_BODY='{"code":"smoke-tick","name":"smoke tick","handlerKind":2,"handlerName":"","triggerKind":2,"intervalSeconds":5,"properties":{"url":"http://127.0.0.1:8080/health"}}'
-  JOB_ID=$(curl -s -X POST "$BASE/api/v1/sys/job" -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $ADMIN_TOKEN" -d "$JOB_BODY" | json data)
+  # Randomize the code, like LOCK_ACCOUNT above. Deleting a job is a **soft** delete, so its Code
+  # stays taken -- with a fixed code, the second run against the same database dies on 47002
+  # (codeExists). That is the normal local loop: bring the stack up, run this, rebuild, run it again.
+  JOB_CODE="smoke-tick-$RANDOM"
+  JOB_BODY="{\"code\":\"$JOB_CODE\",\"name\":\"smoke tick\",\"handlerKind\":2,\"handlerName\":\"\",\"triggerKind\":2,\"intervalSeconds\":5,\"properties\":{\"url\":\"http://127.0.0.1:8080/health\"}}"
+  JOB_RESP=$(curl -s -X POST "$BASE/api/v1/sys/job" -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $ADMIN_TOKEN" -d "$JOB_BODY")
+  JOB_ID=$(echo "$JOB_RESP" | json data)
   if [ -z "$JOB_ID" ]; then
-    fail "Could not create the smoke job -- the scheduling module may be disabled or the payload was rejected"
+    # Print the envelope: "module disabled" was only ever a guess, and it sent the last person
+    # looking in the wrong place -- the actual code (47002/47004/47009/...) says what happened.
+    fail "Could not create the smoke job -- response: $JOB_RESP"
   else
     echo "  (waiting 25s for the 5s-interval job to fire a few times...)"
     sleep 25
@@ -213,7 +227,7 @@ print(len(times), len(set(times)))")
       || fail "Only ${TOTAL:-0} run(s) in ~25s -- a 5s-interval job should fire at least 3 times; the scheduler is not running"
     [ "${TOTAL:-0}" = "${DISTINCT:-0}" ] \
       && pass "All $TOTAL runs have distinct scheduled times -- no occurrence fired twice" \
-      || fail "$TOTAL runs but only $DISTINCT distinct scheduled times -- both replicas fired the same occurrence (this is exactly what dropping 'AND NextRunTime=@expected' from the claim looks like)"
+      || fail "$TOTAL runs but only $DISTINCT distinct scheduled times -- some occurrence fired twice. Two leaders were scanning at once, or one leader claimed the same occurrence twice; start at the lease (sys_job_lock) and the claim (JobSchedulerService.ClaimAsync)"
 
     LEADER=$(echo "$NODES_JSON" | python3 -c "
 import sys,json
