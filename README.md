@@ -134,6 +134,7 @@ It goes finer than that: long service methods are split into small `virtual` ste
 - **Logging** — Auto-recorded operation logs with sensitive-input masking
 - **File management** — Upload/download, size limits, extension whitelist, path-traversal protection
 - **Import/export** — xlsx import wizard (preview, per-cell validation, dedupe, partial commit) and column-pickable export, from the optional `TenonAdmin.Excel` package — skip it and publish size doesn't grow by a byte
+- **Scheduled jobs** — a scheduler in the kernel, with no new dependency and no extra process: cron (six fields, seconds first, `L`/`W`/`#` included), fixed interval or one-shot triggers; write an `IAdminJob` class for the payload, or write no code at all and configure an HTTP call. Replicas elect a leader through a database lease, so one dying doesn't stop the schedule — and every occurrence still fires exactly once cluster-wide
 - **Multi-database** — SQLite (default) / MySQL / SQL Server / PostgreSQL; switching is a config change
 - **Multi-replica** — Optional Redis cache, cross-replica rate-limit counters, per-replica snowflake worker IDs — scales out without surprises
 - **Restrained dependencies** — Core packages depend only on SqlSugarCore + Microsoft.* at runtime; no third-party framework zoo dumped into your project

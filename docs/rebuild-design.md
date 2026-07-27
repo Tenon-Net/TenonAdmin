@@ -139,7 +139,7 @@ TenonAdmin.Security.Gm   ──→ BouncyCastle(国密 SM2/3/4)                 
 | JWT(MoYu.Extras) | `Microsoft.AspNetCore.Authentication.JwtBearer` |
 | Swashbuckle | 内置 `Microsoft.AspNetCore.OpenApi`;UI 走可选 Scalar 包 |
 | 事件总线 | 自写 `System.Threading.Channels` 进程内总线(<200 行) |
-| 定时任务插件 | `IHostedService` + 自写轻量 cron 解析(设计已定稿:`docs/scheduling-ledger.md` / ADR-0004,6 段秒级 + DB 选主) |
+| 定时任务插件 | `IHostedService` + 自写轻量 cron 解析(**已实现,2026-07-27**:`docs/scheduling-ledger.md` / ADR-0004,6 段秒级 + DB 选主 + 触发 CAS) |
 | Yitter 雪花 ID | 自写雪花算法(单文件,`IIdGenerator` 可换) |
 | NewLife.Redis / 缓存 | 对外抽象 `ICacheProvider`,默认 `MemoryCacheProvider`(基于 `IMemoryCache`);Redis 可选包 `RedisCacheProvider` 用你的 **SimpleRedis**(含高并发 + MQ);HybridCache 仅作内部可选细节,不作为用户核心概念 |
 | Mapster 映射 | **不替换,直接去掉**:DTO↔实体手写赋值(内核全部服务都这么写),不引任何映射库 |

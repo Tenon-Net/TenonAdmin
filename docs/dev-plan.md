@@ -96,17 +96,20 @@ R1–R6 全部处置。闸门先红后绿的证据在下面这张表里 —— *
 ## 5. 现在的候选池(下一个做什么)
 
 **先读这条**:功能面已经没有"下一批"了,下面全是自选动作。台账 `refinement-ledger.md` 的
-批次 A–E 已收口,`react-template-ledger.md` 的 R/B/C/D/E/F/G 已收口。真正的候选只有三个:
+批次 A–E 已收口,`react-template-ledger.md` 的 R/B/C/D/E/F/G 已收口。**原来那三个候选,两个已经做完了
+(2026-07-26 / 07-27),只剩一个不由我们控制的**:
 
 | 候选 | 状态 |
 |---|---|
-| **定时任务调度中心** | **归属已定、设计已定稿(2026-07-26)**:进内核 + 自研零依赖(ADR-0004),施工规格 `docs/scheduling-ledger.md`(6 段秒级 cron 全语法、DB 选主 + 触发 CAS、编译/HTTP/SQL 三类载荷、双前端三页面 + CronEditor、可选 Worker 形态)。批次 G1–G9 待排期,接手直接从台账 §14 开工。 |
-| **`TenonAdmin.Excel` 卫星包** | Magicodes.IE,`rebuild-design.md:165` 已定稿方向;用户导入 + 同步导出,经 `ApplicationAssemblies` 挂入,内核零改动。 |
 | **E6 pro-components 转正** | `web-react/` 等上游 beta → stable,**不由我们控制**,长期挂着。 |
+| ~~定时任务调度中心~~ | **✅ 已完工(2026-07-27)**:进内核 + 自研零依赖(ADR-0004),G1–G9 全部落地并验证 —— 6 段秒级 cron 全语法、DB 选主 + 触发 CAS、编译/HTTP/SQL 三类载荷、双前端三页面 + CronEditor、可选 Worker 形态。记录见 `docs/scheduling-ledger.md`(§17 第 8 轮含 VM 双副本故障转移与双模板浏览器实走查)。**未发版**,在 CHANGELOG 的 Unreleased 段。 |
+| ~~`TenonAdmin.Excel` 卫星包~~ | **✅ 已发布(0.4.0,2026-07-26)**。最终选型不是立项时写的 Magicodes.IE,而是 MiniExcel + OpenXml(仅模板下拉);记录见 `docs/excel-ledger.md`。 |
+
+**所以"下一个做什么"现在是张白纸** —— 别再从上表里挑,它已经空了。往下看那条"功能之外的"。
 
 已裁定**不做**的(别再排):多租户与其消费者侧 skill 文档(2026-07-25,证据在 `refinement-ledger.md` 不做清单)。
 
-**功能之外的那条**:仓龄 19 天、21 star / 4 fork,但 10 个外部 issue 全来自同一个人 ——
+**功能之外的那条**(数字是 2026-07-25 的快照,要用先重新数):仓龄 19 天、21 star / 4 fork,但 10 个外部 issue 全来自同一个人 ——
 按 `crm-reference-app-ledger.md` §4 的去重规则,真实评估动作 = 1,阈值是 3;而 P5 的社区文已撤,
 时间盒起点至今没有重新定义。**"下一个做什么"的答案未必是代码**,这一点写在这里免得下次又只在功能里挑。
 

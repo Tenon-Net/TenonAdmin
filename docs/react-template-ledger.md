@@ -47,7 +47,7 @@
 
 前四条是从 `archive` 搬运 + 落实两份 review 的结论。**不要把已知缺陷重新发一遍。**
 
-- [ ] **B1 空壳能起** — 已含在 R3/R4。探针页(`App.tsx`)一并搬:它**故意不是 hello world**——只渲染文字的壳在下面任何一条假设坏掉时照样绿,所以把它们逐条渲染成肉眼可见的红字。到 B8 布局壳落地时删掉。
+- [x] **B1 空壳能起** — 已含在 R3/R4。探针页(`App.tsx`)一并搬:它**故意不是 hello world**——只渲染文字的壳在下面任何一条假设坏掉时照样绿,所以把它们逐条渲染成肉眼可见的红字。到 B8 布局壳落地时删掉 —— **已随 B8(`cac1efc`)删除,本条就此收口**(检查项已被 antd-theme / i18n / app spec 接住)。
 - [x] **B2 主题桥 + review 处置**(5bd7ada) — 搬 `theme/{antd-theme,useAntdTheme}.ts` 与 `antd-theme.spec.ts`,并修:
   - **[HIGH] `--color-shadow` 必须是不透明色**:`#141B2D`(亮)/ `#000000`(暗)。antd 拿它当**基色**、把它自己的 alpha 乘进每一层。令牌旁注明"这是基色,antd 会按自己的档位乘 alpha,**别直接写进 `box-shadow`**"。
   - **[HIGH] 测试断量级,不断色相**:现有 `not.toMatch(/255,255,255/)` 在坏与好两种状态下都绿。改为断言明暗两色下派生阴影的 alpha 与 antd 默认档位一致。
@@ -296,7 +296,7 @@ E1(web-react 工程化第一件):
 - **`/hub` 反代**:web-react D3 用 SignalR 连 `/hub/realtime`,故 Caddyfile/nginx 都加了 `/hub`(Caddy 自动升级 WebSocket、nginx 需显式 `Upgrade`/`Connection` 头)。
 - **判据(受限)**:docker 本机不可用 → 未 `docker build`;镜像 web/ 的已验证 Dockerfile 结构 + `npm run build` 已绿 + `python yaml` 解析 compose 确认良构(services 含 web-react、ctx/端口/依赖正确)。**docker build 的实测留待有 docker 的环境**(记入 E2 CI 或部署时)。
 
-**⚠ 发现:web/(Vue,已发布默认交付物)存在潜伏生产 bug —— 待授权修**:
+**~~⚠ 发现:web/(Vue,已发布默认交付物)存在潜伏生产 bug —— 待授权修~~ → 已修(E5 轮,`908858e`)**:
 - web 也用 SignalR(`web/src/composables/useRealtime.ts` 连 `/hub/realtime`、`layouts/default.vue` 起、`NoticeBell.vue` 订阅),`web/vite.config.ts` dev proxy 有 `/hub` `ws:true`。**但 `web/Caddyfile` 与 `web/nginx.conf` 都没有 `/hub` 反代**(只有 `/api`+`/health`)。
 - 后果:**dev 正常,Docker/Caddy 生产部署下 `/hub/*` 命中 SPA fallback(`try_files`)→ SignalR 握手失败 → 实时(强制登出、未读角标刷新)静默退化成 30s 轮询**。强制登出因此在生产延迟最多 30s、且依赖轮询端点存在。
 - 修法极小(web/Caddyfile 加一个 `handle /hub/*` 块、web/nginx.conf 加一个带 Upgrade 头的 `location /hub/`)。当时**动 web/ 需维护者授权**(同 R2/E7 纪律)故不擅动,先登记 + 上报。**已于 E5 轮次维护者授权后修复(`908858e`)**,照 web-react 两份逐字镜像。

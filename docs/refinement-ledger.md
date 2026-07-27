@@ -9,8 +9,8 @@
 ## 批次 A · 前端速赢
 
 - [x] **A1 路由加载进度条**(b8dfde6) — `App.vue` 包 `n-loading-bar-provider` + 桥单例 `src/lib/loadingBar.ts`(内嵌 ~10 行桥组件存实例,不用 createDiscreteApi);`router/index.ts` 守卫 start/finish/error(enterInitial 重建菜单与懒加载 chunk 是最有价值时刻)。零依赖。验收:F5 深链/切页可见进度条,typecheck+lint 绿。
-- [ ] **A2 Tab 中键关闭 + 用户固定** — `stores/tabs.ts` 加 `pinned?: boolean`,close 系列守卫统一 `affix || pinned`;`TabsBar.vue` 中键关闭(`@auxclick`)+ 右键菜单「固定/取消固定」(`ph:push-pin`),pinned 藏关闭 X;持久化白捡(persist.pick 已含 tabs)。**不做拖拽重排**(soybean 也没有)。⚠ 工作区有在途 `tabs.ts` 未提交改动(用户详情页特性),开工前与维护者确认处置。
-- [ ] **A3 设置抽屉「复制配置」** — `SettingsDrawer.vue` footer 按钮:app store 中 DEFAULTS 同名键当前值 JSON 进剪贴板(VueUse `useClipboard`)+ message 提示「粘贴到 stores/app.ts DEFAULTS 即为新默认」。正中消费者 fork 改默认的模式。**不做主题预设 JSON**(6 色色板+取色器+布局卡片已覆盖其实用面)。
+- [x] **A2 Tab 中键关闭 + 用户固定**(`45224e5`) — `stores/tabs.ts` 加 `pinned?: boolean`,close 系列守卫统一 `affix || pinned`;`TabsBar.vue` 中键关闭(`@auxclick`)+ 右键菜单「固定/取消固定」(`ph:push-pin`),pinned 藏关闭 X;持久化白捡(persist.pick 已含 tabs)。**不做拖拽重排**(soybean 也没有)。当时那条「工作区有在途 `tabs.ts` 未提交改动」的提醒已随提交作废。
+- [x] **A3 设置抽屉「复制配置」**(`9e629c6`) — `SettingsDrawer.vue` footer 按钮:app store 中 DEFAULTS 同名键当前值 JSON 进剪贴板(VueUse `useClipboard`)+ message 提示「粘贴到 stores/app.ts DEFAULTS 即为新默认」。正中消费者 fork 改默认的模式。**不做主题预设 JSON**(6 色色板+取色器+布局卡片已覆盖其实用面)。**落地时收窄了一处**:该按钮仅 DEV 显示 —— 它是给消费者 fork 后改默认用的开发期动作,不该出现在终端管理员的设置抽屉里。
 - [~] **A4 版本更新通知** — **用户裁定不做**(2026-07-16),从前端 pass 移除。— 新建 `composables/useVersionCheck.ts`:`fetch('/index.html', {cache:'no-store'})` 抓 entry `assets/index-*.js` 哈希与当前 document 比对,不一致 → `useDialog` 提示刷新;`useIntervalFn`(5min)+ `useDocumentVisibility` 回前台触发;仅 PROD;「稍后」本轮不再弹;`layouts/default.vue` 挂载(登录页不查)。版本号仍是 Vite define 构建期常量,不能当更新信号——用产物哈希。
 - [x] **A5 外链 / iframe 菜单**(57f8c69;`isHttpUrl` 约定 + iframe 视图 + 点击/搜索外链分支 + 菜单表单 linkHint;**radio 展示糖延后**——用占位提示 + linkHint + COMPONENTS.md 承载约定,radio 属可选 UX,未做)— 零后端改动约定式:**外链** = Menu 节点 `path` 为 URL、component 空(`buildRoutesForModule` 现有 `!component` 分支天然跳过;`useLayoutMenu.onSelect`/`onSelectL1` + `MenuSearch` 回车各加 `window.open` 分支;兜底图标 `ph:arrow-square-out`);**iframe** = `path` 为内部路径、`component` 为 URL(`buildRoutesForModule` 检测 URL 时注册 `namedPage(() => import('@/views/embed/iframe.vue'))`,URL 进 `meta.iframeSrc`,keep-alive 顺带保住 iframe 状态);菜单表单加「链接类型」radio 展示糖。完成后约定写进 `COMPONENTS.md`。⚠ `useAuthMenu.ts`/`COMPONENTS.md` 有在途未提交改动,开工前确认。
 - [x] **A6 主色派生只留一份**(`bb2c60d`,第 15 轮) — `theme/naive-theme.ts:derivePrimary` 与 `composables/useTheme.ts:applyPrimaryVars` 各自手写了同一套主色四态派生,**含同样三个魔数**(暗色提亮 `0.18`、hover `+#FFF 0.16`、pressed `+#000 0.18`)。改一处忘另一处 = 裸 CSS 与 Naive 组件主色不同步,而没有任何东西会报错。把派生提进 `theme/mix.ts` 导出一个函数,两处都调它。**注意别把它说成 bug**:两处输出的大小写确实不一致(亮色下 accent 原样透传、暗色下经 `mix` 恒小写),但消费端一个是 CSS 变量一个是 Naive overrides,**都不区分大小写,今天观察不到**——这条的价值在消除重复,不在修 case。发现于 2026-07-20 React 模板分支的 R1 review(`archive/web-shared-extract` 的 `25f4908` 曾用「提到共享层」的方式修过它,共享层方向已推翻,方案不可照搬)。
@@ -72,7 +72,7 @@
 - ~~SignalR 实时通知~~ → **已做(批次 F,第 14 轮)**,见上。
 - ~~`TenonAdmin.Excel` 卫星包~~ → 改由 `docs/excel-ledger.md` 驱动施工(库选型推翻 Magicodes,改 MiniExcel + OpenXml;契约落 Core,codec 进卫星包)。
 - ~~多租户消费者侧 skill 文档~~ → **2026-07-25 裁定不做**,理由与证据进「不做清单」,见上。
-- ~~⚠ 定时任务的归属两处打架,开工前先定~~ → **已定(2026-07-26,ADR-0004):进内核 + 自研零依赖**。推理链条按原句取了"留在内核才需要自写"这一支;`rebuild-design.md` 的卫星包条目与「v1.0 不做任务调度」措辞已同步订正。施工规格 `docs/scheduling-ledger.md`,批次 G1–G9 待排期。
+- ~~⚠ 定时任务的归属两处打架,开工前先定~~ → **已定(2026-07-26,ADR-0004):进内核 + 自研零依赖**。推理链条按原句取了"留在内核才需要自写"这一支;`rebuild-design.md` 的卫星包条目与「v1.0 不做任务调度」措辞已同步订正。施工规格 `docs/scheduling-ledger.md`,**批次 G1–G9 已于 2026-07-27 全部完工并验证**(含 VM 双副本故障转移与双模板浏览器实走查,见该台账 §17 第 8 轮)。
 
 ## 轮次日志
 
