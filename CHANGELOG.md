@@ -15,16 +15,28 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.5.0 - 2026-07-29
+
+A feature release: **scheduled jobs land in the kernel**, with no new dependency and no extra process by default. Both frontend templates ship the management UI; an optional Worker host keeps jobs running when the API is down.
+
 ### Added
 
 - **Scheduled jobs, in the kernel, with no new dependency.** Write an `IAdminJob`, register it with one `TryAddEnumerable` line, and the admin UI can drive it on a cron — no package to install, nothing to configure, no extra process. Also ships two payload kinds that need no code at all: HTTP (behind an SSRF fence) and SQL (off by default; enabling it admits that job-edit rights are DBA rights). The cron engine is self-written, six fields with seconds first and the full `* , - / ? L W #` syntax; behaviour was checked against Furion's TimeCrontab with live probes on both sides, and the deliberate divergences are recorded in `docs/scheduling-ledger.md` §4.1.
-  - "Jobs must not stop when the backend stops" resolves into three shapes, none of which need a code change: the schedule survives a restart (misfire policy decides whether a missed occurrence is caught up), two API replicas elect a leader through a DB lease so one dying doesn't stop the schedule, and an optional `samples/WorkerHost` (three-line `Program.cs`, `AddTenonAdminWorker`) keeps jobs running with the API down.
+  - "Jobs must not stop when the backend stops" resolves into three shapes, none of which need a code change: the schedule survives a restart (misfire policy decides whether a missed occurrence is caught up), two API replicas elect a leader through a database lease so one dying doesn't stop the schedule, and an optional `samples/WorkerHost` (three-line `Program.cs`, `AddTenonAdminWorker`) keeps jobs running with the API down.
   - **Double firing is prevented by a claim, not by the lease.** Every fire compare-and-sets the row's `NextRunTime`; an old leader waking from a GC pause finds the slot already advanced and gets nothing. The lease only decides who scans, which is also why the dual-replica smoke test can't prove the claim — with one scanner there's nothing to race. That test kills the leader to prove takeover; the claim itself is covered by `JobClaimTests`.
-  - Both frontend templates ship the same three pages (jobs, run log, monitor) plus a CronEditor with live preview, zero-shared as always. Consumer guide: [Scheduled Jobs](https://tenon.52moyu.net/zh/guide/scheduled-jobs) and `skills/create-job.md`. Execution ledger: `docs/scheduling-ledger.md`; the design decision is archived as `docs/adr/0004-scheduling-in-kernel-self-built.md`.
+  - Built-in log-cleanup dogfood job, 13 HTTP endpoints under `/api/v1/sys/job`, ErrorCode `47xxx`, and a top-level **任务调度** menu with jobs / run log / monitor pages on both templates (plus a CronEditor with live preview). `GET /handlers` returns `{ handlers, sqlEnabled }` so the form can disable SQL when the gate is off; run-log paging accepts `FireInstanceId` so the retry drawer does not silently miss siblings.
+  - Consumer guide: [Scheduled Jobs](https://tenon.52moyu.net/zh/guide/scheduled-jobs) and `skills/create-job.md`. Execution ledger: `docs/scheduling-ledger.md`; design decision: `docs/adr/0004-scheduling-in-kernel-self-built.md`.
 
 ### Fixed
 
 - **Operation-log masking now covers header-shaped fields.** Masking matches on field names (`password`, `token`, …), and a scheduled HTTP job carries its whole header set in one `headers` value — a bearer token therefore landed in `sys_op_log.ParamJson` in plain text. `header`, `authorization`, `apikey` and `cookie` joined the keyword list.
+- **Same-name node restarts no longer leave SerialSkip jobs stuck forever.** Orphan running rows were reaped only when the node name's heartbeat went stale; a restart that reuses the same `NodeName` refreshes the heartbeat and leaves the previous process's open run looking alive, so every later tick is skipped. Nodes and run logs now carry a process `InstanceId`; reaping keys on name + instance. Concurrent capacity / local serial checks also enter the fire path under one gate (`TryFireAndTrack`) instead of check-then-act outside it; the local busy slot is released in the fire task's `finally` so an `await FireAndTrack` that finishes cannot still look busy to the next call. API and Worker hosts share the same `AdminJobsOptions` validation so a Worker cannot start with a silently broken SSRF CIDR list.
+- **Vue job UI walkthrough fixes:** the monitor trend legend no longer covers the x-axis dates, and the create form defaults cron to `0 0 0 * * ?` so the editor no longer looks filled while the model is empty.
+- **React table toolbars put primary actions on the left**, matching the Vue template (`headerTitle` for add / batch-delete; pro settings stay on the right).
+
+### Changed
+
+- **Job create/edit forms are denser on both templates:** collapsible basic / trigger / handler / advanced sections, two-column advanced rows, and React CronEditor preview styling aligned with Vue.
 
 ## 0.4.0 - 2026-07-26
 

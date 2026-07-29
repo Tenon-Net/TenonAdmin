@@ -85,20 +85,30 @@ public class JobExecutor(
             _busyJobs.AddOrUpdate(job.Id, 1, (_, n) => n + 1);   // 同步登记:SerialSkip 检查立刻看得见
             // SuppressFlow 是必须的:SqlSugarScope 按 AsyncLocal 上下文隔离连接,而 ExecutionContext 会流进
             // Task.Run——不掐断,fire 任务与调度循环共用同一连接,并发查询直接炸 reader。
+            // 占位释放必须在 fire task 自己的 finally 里做完,不能 ContinueWith:await FireAndTrack
+            // 返回后 ContinueWith 可能还没跑,紧接着的第二次 TryFire 会误判 AlreadyRunning 空跑
+            // (Panic 连败阈值等「await 完再点一次」路径会 flake)。
             using (ExecutionContext.SuppressFlow())
             {
-                task = Task.Run(() => RunFireAsync(job, scheduledTime, fireMode, fireInstanceId));
+                var jobId = job.Id;
+                task = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await RunFireAsync(job, scheduledTime, fireMode, fireInstanceId);
+                    }
+                    finally
+                    {
+                        lock (_fireGate)
+                        {
+                            _fires.TryRemove(fireInstanceId, out Task? _);
+                            _busyJobs.AddOrUpdate(jobId, 0, (_, n) => n - 1);
+                            _busyJobs.TryRemove(new KeyValuePair<long, int>(jobId, 0));
+                        }
+                    }
+                });
             }
             _fires[fireInstanceId] = task;
-            _ = task.ContinueWith(_ =>
-            {
-                lock (_fireGate)
-                {
-                    _fires.TryRemove(fireInstanceId, out Task? _);
-                    _busyJobs.AddOrUpdate(job.Id, 0, (_, n) => n - 1);
-                    _busyJobs.TryRemove(new KeyValuePair<long, int>(job.Id, 0));
-                }
-            }, TaskScheduler.Default);
             // check-then-add 复查:登记与 drain 置位非原子,极窄窗口内溜进来的 fire 在此被追认并取消
             if (_draining) _drainCts.Cancel();
         }
