@@ -223,19 +223,29 @@ else
     # looking in the wrong place -- the actual code (47002/47004/47009/...) says what happened.
     fail "Could not create the smoke job -- response: $JOB_RESP"
   else
-    echo "  (waiting 25s for the 5s-interval job to fire a few times...)"
-    sleep 25
-    RUNS=$(curl -s "$BASE/api/v1/sys/job/log/page?JobId=$JOB_ID&Size=50" -H "Authorization: Bearer $ADMIN_TOKEN" \
-      | python3 -c "
+    # Poll instead of a fixed sleep: create → first claim can lag a tick on a cold leader,
+    # and a single 25s window once showed only 1 row on main while failover still worked.
+    echo "  (waiting up to 40s for the 5s-interval job to fire at least 3 times...)"
+    TOTAL=0
+    DISTINCT=0
+    for _wait in $(seq 1 20); do
+      RUNS=$(curl -s --max-time 5 "$BASE/api/v1/sys/job/log/page?JobId=$JOB_ID&Size=50" -H "Authorization: Bearer $ADMIN_TOKEN" \
+        | python3 -c "
 import sys,json
-items = json.load(sys.stdin)['data']['items']
-times = [i['scheduledTime'] for i in items]
-print(len(times), len(set(times)))")
-    TOTAL=$(echo "$RUNS" | cut -d' ' -f1)
-    DISTINCT=$(echo "$RUNS" | cut -d' ' -f2)
+try:
+    items = json.load(sys.stdin)['data']['items']
+    times = [i.get('scheduledTime') or i.get('ScheduledTime') for i in items]
+    print(len(times), len(set(times)))
+except Exception:
+    print('0 0')")
+      TOTAL=$(echo "$RUNS" | cut -d' ' -f1)
+      DISTINCT=$(echo "$RUNS" | cut -d' ' -f2)
+      [ "${TOTAL:-0}" -ge 3 ] && break
+      sleep 2
+    done
     [ "${TOTAL:-0}" -ge 3 ] \
-      && pass "The job fired $TOTAL times in ~25s" \
-      || fail "Only ${TOTAL:-0} run(s) in ~25s -- a 5s-interval job should fire at least 3 times; the scheduler is not running"
+      && pass "The job fired $TOTAL times" \
+      || fail "Only ${TOTAL:-0} run(s) in ~40s -- a 5s-interval job should fire at least 3 times; the scheduler is not running"
     [ "${TOTAL:-0}" = "${DISTINCT:-0}" ] \
       && pass "All $TOTAL runs have distinct scheduled times -- no occurrence fired twice" \
       || fail "$TOTAL runs but only $DISTINCT distinct scheduled times -- some occurrence fired twice. Two leaders were scanning at once, or one leader claimed the same occurrence twice; start at the lease (sys_job_lock) and the claim (JobSchedulerService.ClaimAsync)"
