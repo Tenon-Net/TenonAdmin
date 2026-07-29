@@ -184,6 +184,72 @@ public class JobExecutorTests : IAsyncLifetime
         Assert.Equal(1, row.NumberOfRuns);        // Manual 触发在收尾处补计数
     }
 
+    [Fact]
+    public async Task TryFire_serial_skip_rejects_concurrent_manual_fires_atomically()
+    {
+        // 可阻塞的 SerialSkip handler:并发 TryFire 只应有一条 Started,其余 AlreadyRunning
+        var job = await _host.InsertJobAsync(typeof(SlowJob).FullName!, j =>
+        {
+            j.ConcurrencyMode = JobConcurrencyMode.SerialSkip;
+            j.TimeoutSeconds = 30;
+        });
+
+        var results = new JobFireResult[8];
+        var tasks = new Task?[8];
+        Parallel.For(0, 8, i =>
+        {
+            results[i] = _host.Executor.TryFireAndTrack(job, _host.Now, JobFireMode.Manual, out tasks[i]);
+        });
+
+        Assert.Equal(1, results.Count(r => r == JobFireResult.Started));
+        Assert.Equal(7, results.Count(r => r == JobFireResult.AlreadyRunning));
+        Assert.Equal(1, _host.Executor.InFlightCount);
+
+        var started = tasks.Single(t => t is not null && t != Task.CompletedTask)!;
+        var logs = await _host.WaitForLogsAsync(job.Id, l => l.Count == 1);
+        Assert.True(_host.Executor.TryCancelLocal(logs[0].Id));
+        await started;
+    }
+
+    [Fact]
+    public async Task TryFire_never_exceeds_max_concurrent_runs()
+    {
+        // 多个不同任务并行;容量 2 时并发 Started 数永远 ≤ 2
+        var previous = _host.Jobs.MaxConcurrentRuns;
+        _host.Jobs.MaxConcurrentRuns = 2;
+        try
+        {
+            var jobs = new List<SysJob>();
+            for (var i = 0; i < 6; i++)
+                jobs.Add(await _host.InsertJobAsync(typeof(SlowJob).FullName!, j =>
+                {
+                    j.ConcurrencyMode = JobConcurrencyMode.Parallel;
+                    j.TimeoutSeconds = 30;
+                }));
+
+            var results = new JobFireResult[6];
+            var fires = new Task?[6];
+            Parallel.For(0, 6, i =>
+            {
+                results[i] = _host.Executor.TryFireAndTrack(jobs[i], _host.Now, JobFireMode.Manual, out fires[i]);
+            });
+
+            Assert.Equal(2, results.Count(r => r == JobFireResult.Started));
+            Assert.Equal(4, results.Count(r => r == JobFireResult.LimitReached));
+            Assert.True(_host.Executor.InFlightCount <= 2);
+
+            // 收尾:取消已启动的,避免 Dispose 时挂起
+            var open = await _host.Db.Queryable<SysJobLog>().Where(l => l.EndTime == null).ToListAsync();
+            foreach (var log in open)
+                _host.Executor.TryCancelLocal(log.Id);
+            await Task.WhenAll(fires.Where(t => t is not null).Cast<Task>());
+        }
+        finally
+        {
+            _host.Jobs.MaxConcurrentRuns = previous;
+        }
+    }
+
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync()

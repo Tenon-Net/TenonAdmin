@@ -58,15 +58,8 @@ public static class TenonAdminSetup
         services.AddSingleton(options.ExternalAuth);   // 外部登录 / SSO 配置(内置 OIDC provider 列表 + 回调基址,见批次 D)
         services.AddSingleton(options.Realtime);   // 实时通知配置(SignalR 开关/Hub 路径;MapTenonAdmin 读它决定是否 MapHub)
         services.AddSingleton(options.Excel);   // 导入/导出行数与文件大小上限(excel-ledger §6.1;ImportRunner/ExportAsync 注入)
-        // 定时任务(scheduling-ledger §6):租约必须容得下两次心跳丢失,否则一次 GC 停顿/DB 抖动就丢主,主备来回震荡。
-        if (options.Jobs.LeaseSeconds <= options.Jobs.HeartbeatSeconds * 2)
-            throw new InvalidOperationException(
-                $"TenonAdmin:Jobs 配置无效:LeaseSeconds({options.Jobs.LeaseSeconds})必须大于 2×HeartbeatSeconds({options.Jobs.HeartbeatSeconds})。");
-        // 围栏条目写错会静默变空集(整条黑名单失效、启动日志一个字不提)——这是失效开,代价不对称,故绑定期就抛
-        foreach (var cidr in options.Jobs.Http.BlockedCidrs)
-            if (!JobHttpFence.TryParseCidr(cidr, out _, out _))
-                throw new InvalidOperationException(
-                    $"TenonAdmin:Jobs:Http:BlockedCidrs 配置无效:\"{cidr}\" 不是合法的 CIDR 或 IP 地址(写错会让 SSRF 围栏静默失效)。");
+        // 定时任务(scheduling-ledger §6):API 与 Worker 共用同一校验入口(租约/正数项/CIDR 围栏)
+        AdminJobsOptionsValidation.Validate(options.Jobs);
         services.AddSingleton(options.Jobs);
 
         // ── 雪花机器号(§12):多副本同号 = 同毫秒发号撞主键。这是数据损坏级的问题,而它今天静默发生 ──

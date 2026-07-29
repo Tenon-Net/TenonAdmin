@@ -134,20 +134,29 @@ public class JobSchedulerService(
     /// 回收孤儿执行记录:节点被 <c>kill -9</c>/断电后,它插下的 Running 行永远闭合不了,
     /// 而未闭合行正是 SerialSkip 的调度输入——不收,该任务从此每次都被判"上次还在跑"而永久停摆
     /// (kill 端点写旗标没人轮询、清空与狗粮都刻意保留未闭合行,唯一出路是人工 SQL)。
-    /// <para>判死依据:执行节点的心跳已陈死(超过 2×LeaseSeconds)或节点行压根不在。
-    /// 本机在跑的行绝不误伤——本机心跳必然新鲜。仅主节点执行,每拍一次,零行时零成本。</para>
+    /// <para>判活依据:<b>节点名 + 进程实例 Id</b> 同时对应一条新鲜心跳。仅比 NodeName 不够——
+    /// 同名进程重启会先刷新心跳,旧实例遗留的 Running 行会被误判存活。仅主节点执行,每拍一次。</para>
     /// </summary>
     protected virtual async Task<int> ReapOrphanRunsAsync(DateTime now, CancellationToken cancellationToken)
     {
         var deadline = now.AddSeconds(-options.LeaseSeconds * 2);
-        var aliveNodes = await db.Queryable<SysJobNode>()
+        var alivePairs = await db.Queryable<SysJobNode>()
             .Where(n => n.LastHeartbeat > deadline)
-            .Select(n => n.NodeName)
+            .Select(n => new { n.NodeName, n.InstanceId })
             .ToListAsync();
-        var orphans = await db.Queryable<SysJobLog>()
-            .Where(l => l.EndTime == null && l.StartTime < deadline && !aliveNodes.Contains(l.NodeName))
+        var aliveKeys = new HashSet<string>(
+            alivePairs.Select(n => AliveKey(n.NodeName, n.InstanceId)),
+            StringComparer.Ordinal);
+
+        // 先筛未闭合且足够陈旧的候选,再在内存里按实例键判活(四库通吃,避免元组 Contains 方言差)
+        var candidates = await db.Queryable<SysJobLog>()
+            .Where(l => l.EndTime == null && l.StartTime < deadline)
+            .Select(l => new { l.Id, l.NodeName, l.NodeInstanceId })
+            .ToListAsync();
+        var orphans = candidates
+            .Where(l => !aliveKeys.Contains(AliveKey(l.NodeName, l.NodeInstanceId)))
             .Select(l => l.Id)
-            .ToListAsync();
+            .ToList();
         if (orphans.Count == 0) return 0;
 
         var reaped = await db.Updateable<SysJobLog>()
@@ -155,14 +164,16 @@ public class JobSchedulerService(
             {
                 EndTime = now,
                 RunStatus = JobRunStatus.Cancelled,
-                ErrorText = "执行节点失联(心跳陈死),按节点崩溃推定终止——本行由主节点回收闭合,实际结果未知。",
+                ErrorText = "执行节点失联或进程实例已更替,按崩溃/重启推定终止——本行由主节点回收闭合,实际结果未知。",
             })
             .Where(l => orphans.Contains(l.Id) && l.EndTime == null)
             .ExecuteCommandAsync();
         if (reaped > 0)
-            logger.LogWarning("TenonAdmin 调度器:回收 {Count} 条失联节点遗留的未闭合执行记录。", reaped);
+            logger.LogWarning("TenonAdmin 调度器:回收 {Count} 条失联/更替实例遗留的未闭合执行记录。", reaped);
         return reaped;
     }
+
+    private static string AliveKey(string nodeName, string? instanceId) => $"{nodeName}\0{instanceId ?? ""}";
 
     /// <summary>心跳:节点行 upsert + 主节点续租 / 备节点夺租(§5.2)。全部参数化 UPDATE 按影响行数判定,四库通吃。</summary>
     protected virtual async Task HeartbeatAsync(DateTime now, CancellationToken cancellationToken)
@@ -195,12 +206,21 @@ public class JobSchedulerService(
         }
     }
 
-    /// <summary>节点行 upsert(每拍;所有节点含备节点都写,监控页据此展示集群)。</summary>
+    /// <summary>节点行 upsert(每拍;所有节点含备节点都写,监控页据此展示集群)。同名重启时一并覆写 InstanceId/StartTime。</summary>
     protected virtual async Task UpsertNodeAsync(DateTime now, CancellationToken cancellationToken)
     {
         _nodeStartTime ??= now;
+        var instanceId = executor.InstanceId;
         var updated = await db.Updateable<SysJobNode>()
-            .SetColumns(n => new SysJobNode { LastHeartbeat = now, Pid = Environment.ProcessId, HostName = Environment.MachineName })
+            .SetColumns(n => new SysJobNode
+            {
+                LastHeartbeat = now,
+                Pid = Environment.ProcessId,
+                HostName = Environment.MachineName,
+                WorkerId = idOptions.WorkerId ?? 0,
+                InstanceId = instanceId,
+                StartTime = _nodeStartTime.Value,
+            })
             .Where(n => n.NodeName == NodeName)
             .ExecuteCommandAsync();
         if (updated != 0) return;
@@ -210,6 +230,7 @@ public class JobSchedulerService(
             {
                 Id = idGenerator.NextId(),
                 NodeName = NodeName,
+                InstanceId = instanceId,
                 HostName = Environment.MachineName,
                 Pid = Environment.ProcessId,
                 WorkerId = idOptions.WorkerId ?? 0,
@@ -217,10 +238,18 @@ public class JobSchedulerService(
                 LastHeartbeat = now,
             }).ExecuteCommandAsync();
         }
-        catch (Exception)   // 并发首插撞唯一索引 → 回退为更新
+        catch (Exception)   // 并发首插撞唯一索引 → 回退为更新(含 InstanceId,避免旧实例键滞留)
         {
             await db.Updateable<SysJobNode>()
-                .SetColumns(n => new SysJobNode { LastHeartbeat = now })
+                .SetColumns(n => new SysJobNode
+                {
+                    LastHeartbeat = now,
+                    Pid = Environment.ProcessId,
+                    HostName = Environment.MachineName,
+                    WorkerId = idOptions.WorkerId ?? 0,
+                    InstanceId = instanceId,
+                    StartTime = _nodeStartTime.Value,
+                })
                 .Where(n => n.NodeName == NodeName)
                 .ExecuteCommandAsync();
         }
@@ -304,15 +333,24 @@ public class JobSchedulerService(
                 continue;
             }
             var fireMode = isMisfire ? JobFireMode.Misfire : JobFireMode.Schedule;
-            // 本机在飞表先查:库查询是 check-then-act(领取到插 Running 行之间有窗口),同节点靠内存表闭死
+            // 跨节点:库里未闭合行(含别的副本)仍须查;本机 SerialSkip/容量由 TryFire 原子占位,避免 check-then-act
             if (job.ConcurrencyMode == JobConcurrencyMode.SerialSkip
-                && (executor.IsBusyLocally(job.Id)
-                    || await db.Queryable<SysJobLog>().AnyAsync(l => l.JobId == job.Id && l.EndTime == null)))
+                && await db.Queryable<SysJobLog>().AnyAsync(l => l.JobId == job.Id && l.EndTime == null))
             {
                 await InsertSerialSkippedLogAsync(job, expected, now);
                 continue;
             }
-            _ = executor.FireAndTrack(job, expected, fireMode);   // fire-and-forget:任务永不抛,收尾在执行器内
+            var fireResult = executor.TryFireAndTrack(job, expected, fireMode, out _);
+            if (fireResult == JobFireResult.AlreadyRunning)
+            {
+                await InsertSerialSkippedLogAsync(job, expected, now);
+                continue;
+            }
+            if (fireResult is JobFireResult.LimitReached or JobFireResult.Draining)
+            {
+                logger.LogWarning("在飞执行数已达上限或宿主排水中,本拍停止领取(47013 语义)。");
+                break;
+            }
         }
     }
 
@@ -359,6 +397,7 @@ public class JobSchedulerService(
             EndTime = now,
             RunStatus = JobRunStatus.Skipped,
             NodeName = NodeName,
+            NodeInstanceId = executor.InstanceId,
             MessageText = $"错过 {(missed >= 1000 ? "≥1000" : missed.ToString())} 次触发(最早 {expected:yyyy-MM-dd HH:mm:ss}),按 Skip 策略不补跑,直接推进到未来时刻。",
         }).ExecuteCommandAsync();
     }
@@ -376,6 +415,7 @@ public class JobSchedulerService(
             EndTime = now,
             RunStatus = JobRunStatus.Skipped,
             NodeName = NodeName,
+            NodeInstanceId = executor.InstanceId,
             MessageText = "上次触发尚未结束(存在未闭合执行记录),SerialSkip 跳过本次。",
         }).ExecuteCommandAsync();
 

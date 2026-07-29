@@ -87,3 +87,22 @@ public enum JobRunStatus
     /// <summary>SerialSkip 跳过(上次触发未结束)</summary>
     Skipped = 6,
 }
+
+/// <summary>
+/// <see cref="JobExecutor.TryFireAndTrack"/> 的结果:容量与 SerialSkip 本地占位在执行器内原子完成,
+/// 避免服务层 check-then-act 被并发手动执行绕过。
+/// </summary>
+public enum JobFireResult
+{
+    /// <summary>已登记并启动本次触发</summary>
+    Started = 0,
+
+    /// <summary>SerialSkip 且本机已有在飞</summary>
+    AlreadyRunning = 1,
+
+    /// <summary>本机在飞数已达 <c>MaxConcurrentRuns</c></summary>
+    LimitReached = 2,
+
+    /// <summary>宿主正在 drain,拒绝新触发</summary>
+    Draining = 3,
+}

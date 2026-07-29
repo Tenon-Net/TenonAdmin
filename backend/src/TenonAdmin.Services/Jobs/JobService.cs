@@ -175,13 +175,15 @@ public class JobService(
     public virtual async Task RunOnceAsync(long id)
     {
         var entity = await GetAsync(id);
+        // 跨节点:库里未闭合行仍须查(别的副本在跑);本机 SerialSkip/容量由 TryFire 原子完成,避免并发 /run 竞态
         if (entity.ConcurrencyMode == JobConcurrencyMode.SerialSkip)
             AdminException.ThrowIf(
                 await db.Queryable<SysJobLog>().AnyAsync(l => l.JobId == id && l.EndTime == null),
                 ErrorCode.JobAlreadyRunning);
-        AdminException.ThrowIf(executor.InFlightCount >= options.MaxConcurrentRuns, ErrorCode.JobRunLimitReached);
         // 本机执行、不动 NextRunTime:调度节奏不受手动触发干扰(§8 端点 7)
-        _ = executor.FireAndTrack(entity, Now, JobFireMode.Manual);
+        var result = executor.TryFireAndTrack(entity, Now, JobFireMode.Manual, out _);
+        AdminException.ThrowIf(result == JobFireResult.AlreadyRunning, ErrorCode.JobAlreadyRunning);
+        AdminException.ThrowIf(result is JobFireResult.LimitReached or JobFireResult.Draining, ErrorCode.JobRunLimitReached);
     }
 
     /// <inheritdoc />

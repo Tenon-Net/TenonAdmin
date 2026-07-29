@@ -16,6 +16,13 @@ public class SysJobNode : PrimaryId
     [SugarColumn(Length = 128, ColumnDescription = "节点名(唯一)")]
     public string NodeName { get; set; } = "";
 
+    /// <summary>
+    /// 进程实例 Id(每次进程启动生成,不可复用)。同名节点重启后靠它与旧进程遗留的执行记录区分:
+    /// 心跳刷新 NodeName 行时,旧 InstanceId 的 Running 行会被判定为孤儿并回收。
+    /// </summary>
+    [SugarColumn(Length = 32, ColumnDescription = "进程实例 Id(每次启动唯一)")]
+    public string InstanceId { get; set; } = "";
+
     [SugarColumn(Length = 128, ColumnDescription = "主机名")]
     public string HostName { get; set; } = "";
 

@@ -39,9 +39,8 @@ public static class WorkerSetup
             throw new InvalidOperationException(
                 "Worker 进程必须显式配置 TenonAdmin:Id:WorkerId(0–63,与所有 API 副本及其它 Worker 互不相同)。" +
                 "Worker 天然是多实例形态,机器号同号会让不同进程在同毫秒发出相同的雪花 Id、撞主键。");
-        if (options.Jobs.LeaseSeconds <= options.Jobs.HeartbeatSeconds * 2)
-            throw new InvalidOperationException(
-                $"TenonAdmin:Jobs 配置无效:LeaseSeconds({options.Jobs.LeaseSeconds})必须大于 2×HeartbeatSeconds({options.Jobs.HeartbeatSeconds})。");
+        // 与 AddTenonAdmin 共用:租约、正数项、HTTP 围栏 CIDR——Worker 才是真正执行任务的一侧,不能漏
+        AdminJobsOptionsValidation.Validate(options.Jobs);
 
         services.AddSingleton(options);
         services.AddSingleton(options.Database);

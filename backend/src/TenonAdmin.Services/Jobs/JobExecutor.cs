@@ -31,13 +31,14 @@ public class JobExecutor(
     private readonly ConcurrentDictionary<long, Task> _fires = new();                // fireInstanceId → 整次触发(drain 用)
     private readonly ConcurrentDictionary<long, int> _busyJobs = new();              // jobId → 本机在飞次数(SerialSkip 的同机即时视图)
     private readonly CancellationTokenSource _drainCts = new();                       // drain 硬停:唤醒重试等待
+    private readonly object _fireGate = new();                                       // SerialSkip 占位 + 全局容量 + 开 fire 的原子区
     private volatile bool _draining;
 
     private sealed record RunRegistration(long JobId, CancellationTokenSource KillCts);
 
     /// <summary>
     /// 本机是否正在跑该任务。SerialSkip 的库查询是 check-then-act:领取到插 Running 行之间有窗口
-    /// (线程池饥饿时可达秒级),期间库里查不到未闭合行 → 串行任务被并行双跑。本表在 <see cref="FireAndTrack"/> 里
+    /// (线程池饥饿时可达秒级),期间库里查不到未闭合行 → 串行任务被并行双跑。本表在 <see cref="TryFireAndTrack"/> 里
     /// <b>同步</b>登记,把同节点的窗口彻底闭死;跨节点残余窗口(主切换瞬间)仍在,见台账 §13。
     /// </summary>
     public virtual bool IsBusyLocally(long jobId) => _busyJobs.ContainsKey(jobId);
@@ -45,35 +46,64 @@ public class JobExecutor(
     /// <summary>本节点名(写进执行记录 NodeName 列)</summary>
     public string NodeName { get; } = JobTime.ResolveNodeName(options, idOptions);
 
+    /// <summary>
+    /// 本进程实例 Id(启动时生成,不可复用)。写进节点行与执行记录,孤儿回收按「节点名 + 实例」判活,
+    /// 避免同名重启后误把旧进程遗留的 Running 行当成仍在飞。
+    /// </summary>
+    public string InstanceId { get; } = Guid.NewGuid().ToString("N");
+
     /// <summary>在飞触发数(MaxConcurrentRuns 的比较对象;一次触发含其全部重试算 1)</summary>
     public int InFlightCount => _fires.Count;
 
     /// <summary>
     /// 发起一次触发并登记(fire-and-forget:返回的 Task 永不抛,调度循环可弃;run-now 端点可等)。
-    /// 停机 drain 开始后拒绝新触发。
+    /// 内部走 <see cref="TryFireAndTrack"/>:容量满 / SerialSkip 占位失败时返回已完成 Task。
     /// </summary>
     public virtual Task FireAndTrack(SysJob job, DateTime scheduledTime, JobFireMode fireMode)
+        => TryFireAndTrack(job, scheduledTime, fireMode, out var task) == JobFireResult.Started
+            ? task!
+            : Task.CompletedTask;
+
+    /// <summary>
+    /// 原子地完成「SerialSkip 本地占位 + 全局容量预留 + 创建 fire task」。
+    /// 服务层不应在调用前自行做可被并发绕过的分离检查;跨节点 SerialSkip 仍需查库未闭合行。
+    /// </summary>
+    public virtual JobFireResult TryFireAndTrack(SysJob job, DateTime scheduledTime, JobFireMode fireMode, out Task? fireTask)
     {
-        if (_draining) return Task.CompletedTask;
-        var fireInstanceId = idGenerator.NextId();
-        _busyJobs.AddOrUpdate(job.Id, 1, (_, n) => n + 1);   // 同步登记:SerialSkip 检查立刻看得见(见 IsBusyLocally)
-        // SuppressFlow 是必须的:SqlSugarScope 按 AsyncLocal 上下文隔离连接,而 ExecutionContext 会流进
-        // Task.Run——不掐断,fire 任务与调度循环共用同一连接,并发查询直接炸 reader。
+        fireTask = null;
+        long fireInstanceId;
         Task task;
-        using (ExecutionContext.SuppressFlow())
+        lock (_fireGate)
         {
-            task = Task.Run(() => RunFireAsync(job, scheduledTime, fireMode, fireInstanceId));
+            if (_draining) return JobFireResult.Draining;
+            if (job.ConcurrencyMode == JobConcurrencyMode.SerialSkip && _busyJobs.ContainsKey(job.Id))
+                return JobFireResult.AlreadyRunning;
+            if (_fires.Count >= options.MaxConcurrentRuns)
+                return JobFireResult.LimitReached;
+
+            fireInstanceId = idGenerator.NextId();
+            _busyJobs.AddOrUpdate(job.Id, 1, (_, n) => n + 1);   // 同步登记:SerialSkip 检查立刻看得见
+            // SuppressFlow 是必须的:SqlSugarScope 按 AsyncLocal 上下文隔离连接,而 ExecutionContext 会流进
+            // Task.Run——不掐断,fire 任务与调度循环共用同一连接,并发查询直接炸 reader。
+            using (ExecutionContext.SuppressFlow())
+            {
+                task = Task.Run(() => RunFireAsync(job, scheduledTime, fireMode, fireInstanceId));
+            }
+            _fires[fireInstanceId] = task;
+            _ = task.ContinueWith(_ =>
+            {
+                lock (_fireGate)
+                {
+                    _fires.TryRemove(fireInstanceId, out Task? _);
+                    _busyJobs.AddOrUpdate(job.Id, 0, (_, n) => n - 1);
+                    _busyJobs.TryRemove(new KeyValuePair<long, int>(job.Id, 0));
+                }
+            }, TaskScheduler.Default);
+            // check-then-add 复查:登记与 drain 置位非原子,极窄窗口内溜进来的 fire 在此被追认并取消
+            if (_draining) _drainCts.Cancel();
         }
-        _fires[fireInstanceId] = task;
-        _ = task.ContinueWith(_ =>
-        {
-            _fires.TryRemove(fireInstanceId, out Task? _);
-            _busyJobs.AddOrUpdate(job.Id, 0, (_, n) => n - 1);
-            _busyJobs.TryRemove(new KeyValuePair<long, int>(job.Id, 0));
-        }, TaskScheduler.Default);
-        // check-then-add 复查:登记与 drain 置位非原子,极窄窗口内溜进来的 fire 在此被追认并取消
-        if (_draining) _drainCts.Cancel();
-        return task;
+        fireTask = task;
+        return JobFireResult.Started;
     }
 
     /// <summary>终止本机在跑的一次执行(kill 端点的快路径;执行在别的节点时走 KillRequested 旗标轮询)。</summary>
@@ -159,6 +189,7 @@ public class JobExecutor(
             StartTime = startedAt,
             RunStatus = JobRunStatus.Running,
             NodeName = NodeName,
+            NodeInstanceId = InstanceId,
         };
         await db.Insertable(log).ExecuteCommandAsync();   // AOP 填雪花 Id/CreateTime
 

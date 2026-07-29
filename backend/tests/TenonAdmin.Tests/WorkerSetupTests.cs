@@ -73,4 +73,54 @@ public class WorkerSetupTests
         var ex = Assert.Throws<InvalidOperationException>(() => services.AddTenonAdminWorker(Config(settings)));
         Assert.Contains("LeaseSeconds", ex.Message);
     }
+
+    [Fact]
+    public void Worker_with_invalid_blocked_cidr_throws()
+    {
+        // Worker 与 API 共用校验:非法 CIDR 必须启动即拒,不能等到执行 HTTP 任务时静默失效
+        var settings = Baseline("ignored.db");
+        settings["TenonAdmin:Jobs:Http:BlockedCidrs:0"] = "not-a-cidr";
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => services.AddTenonAdminWorker(Config(settings)));
+        Assert.Contains("BlockedCidrs", ex.Message);
+        Assert.Contains("not-a-cidr", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("HeartbeatSeconds", "0")]
+    [InlineData("ReloadSeconds", "0")]
+    [InlineData("MisfireThresholdSeconds", "0")]
+    [InlineData("MaxConcurrentRuns", "0")]
+    public void Worker_with_non_positive_job_option_throws(string key, string value)
+    {
+        var settings = Baseline("ignored.db");
+        settings[$"TenonAdmin:Jobs:{key}"] = value;
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => services.AddTenonAdminWorker(Config(settings)));
+        Assert.Contains(key, ex.Message);
+    }
+
+    [Fact]
+    public void Worker_with_negative_max_response_log_bytes_throws()
+    {
+        var settings = Baseline("ignored.db");
+        settings["TenonAdmin:Jobs:Http:MaxResponseLogBytes"] = "-1";
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => services.AddTenonAdminWorker(Config(settings)));
+        Assert.Contains("MaxResponseLogBytes", ex.Message);
+    }
+
+    [Fact]
+    public void Shared_validation_rejects_invalid_cidr_for_api_and_worker_alike()
+    {
+        var jobs = new AdminJobsOptions { Http = { BlockedCidrs = ["169.254.0.0/16", "bogus"] } };
+        var ex = Assert.Throws<InvalidOperationException>(() => AdminJobsOptionsValidation.Validate(jobs));
+        Assert.Contains("BlockedCidrs", ex.Message);
+    }
 }

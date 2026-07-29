@@ -216,13 +216,47 @@ public class JobSchedulerTests : IAsyncLifetime
             ScheduledTime = _host.Now.AddMinutes(-30),
             StartTime = _host.Now.AddMinutes(-30),
             RunStatus = JobRunStatus.Running,
-            NodeName = scheduler.NodeName,   // 本节点,心跳新鲜
+            NodeName = scheduler.NodeName,                     // 本节点,心跳新鲜
+            NodeInstanceId = _host.Executor.InstanceId,       // 且进程实例仍匹配
         }).ExecuteCommandAsync();
 
         await scheduler.TickAsync();
         var row = (await _host.ReadLogsAsync(job.Id)).Single(l => l.FireInstanceId == 43);
         Assert.Equal(JobRunStatus.Running, row.RunStatus);
         Assert.Null(row.EndTime);
+    }
+
+    [Fact]
+    public async Task Same_node_name_restart_reaps_stale_instance_runs_and_serial_skip_resumes()
+    {
+        // 同名节点重启:心跳先刷新,仅比 NodeName 会把旧实例 Running 行误判存活 → SerialSkip 永久停摆。
+        // 判活必须是「节点名 + 进程实例 Id」。同一拍:心跳覆写 InstanceId → 回收旧实例行 → 调度恢复执行。
+        var job = await _host.InsertJobAsync(OkName);
+        await _host.Db.Insertable(new SysJobLog
+        {
+            JobId = job.Id,
+            JobName = job.Name,
+            FireInstanceId = 99,
+            FireMode = JobFireMode.Schedule,
+            ScheduledTime = _host.Now.AddMinutes(-30),
+            StartTime = _host.Now.AddMinutes(-30),
+            RunStatus = JobRunStatus.Running,
+            NodeName = "node-a",                       // 与本宿主 NodeName 相同
+            NodeInstanceId = "dead-previous-instance", // 属于已死进程
+        }).ExecuteCommandAsync();
+
+        var scheduler = _host.NewScheduler();
+        await scheduler.TickAsync();
+
+        var logs = await _host.WaitForLogsAsync(job.Id, l =>
+            l.Any(x => x.FireInstanceId == 99 && x.EndTime != null)
+            && l.Any(x => x.RunStatus == JobRunStatus.Success));
+
+        var reaped = logs.Single(l => l.FireInstanceId == 99);
+        Assert.Equal(JobRunStatus.Cancelled, reaped.RunStatus);
+        Assert.Contains("实例", reaped.ErrorText);
+        Assert.Contains(logs, l => l.RunStatus == JobRunStatus.Success);
+        Assert.DoesNotContain(logs, l => l.RunStatus == JobRunStatus.Skipped);
     }
 
     public Task InitializeAsync() => Task.CompletedTask;

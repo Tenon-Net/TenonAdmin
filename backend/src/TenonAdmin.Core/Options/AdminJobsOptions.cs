@@ -15,19 +15,19 @@ public class AdminJobsOptions
     /// <summary>节点名(集群内唯一);空 → <c>{MachineName}#{WorkerId}</c></summary>
     public string? NodeName { get; set; }
 
-    /// <summary>心跳间隔(秒):节点行 upsert + 主节点续租/备节点夺租的节拍</summary>
+    /// <summary>心跳间隔(秒):节点行 upsert + 主节点续租/备节点夺租的节拍;必须为正数(绑定时校验)</summary>
     public int HeartbeatSeconds { get; set; } = 10;
 
     /// <summary>选主租约时长(秒);必须 > 2×<see cref="HeartbeatSeconds"/>(绑定时校验),容一次 GC 停顿或一次 DB 抖动</summary>
     public int LeaseSeconds { get; set; } = 30;
 
-    /// <summary>任务缓存全量重载间隔(秒)——跨副本配置收敛上限(事件总线仅进程内,别的副本改任务靠它兜底)</summary>
+    /// <summary>任务缓存全量重载间隔(秒)——跨副本配置收敛上限(事件总线仅进程内,别的副本改任务靠它兜底);必须为正数</summary>
     public int ReloadSeconds { get; set; } = 30;
 
-    /// <summary>到期时刻迟到超过此秒数才算「错过」,走任务行上的 MisfireStrategy;以内正常触发</summary>
+    /// <summary>到期时刻迟到超过此秒数才算「错过」,走任务行上的 MisfireStrategy;以内正常触发;必须为正数</summary>
     public int MisfireThresholdSeconds { get; set; } = 60;
 
-    /// <summary>在飞执行上限(线程池保护的兜底;达到后本拍不再领取,下拍再来)</summary>
+    /// <summary>在飞执行上限(线程池保护的兜底;达到后本拍不再领取,下拍再来);必须为正数</summary>
     public int MaxConcurrentRuns { get; set; } = 8;
 
     /// <summary>跨节点终止旗标(KillRequested)的轮询间隔(秒)</summary>
@@ -55,7 +55,7 @@ public class AdminJobsHttpOptions
     /// </summary>
     public string[] BlockedCidrs { get; set; } = ["169.254.0.0/16", "fd00:ec2::/32", "fe80::/10"];
 
-    /// <summary>HTTP 响应体落执行记录的截断长度(字节)</summary>
+    /// <summary>HTTP 响应体落执行记录的截断长度(字节);不能为负数(绑定时校验)</summary>
     public int MaxResponseLogBytes { get; set; } = 4096;
 }
 
