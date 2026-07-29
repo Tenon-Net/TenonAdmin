@@ -210,16 +210,22 @@ public class JobSchedulerService(
     protected virtual async Task UpsertNodeAsync(DateTime now, CancellationToken cancellationToken)
     {
         _nodeStartTime ??= now;
+        // SqlSugar SetColumns 表达式会求值闭包成员;idOptions.WorkerId 为 null 时 ?? 会炸(issue #24)。
+        // 先提局部变量,表达式里只出现常量/局部,不碰可空成员链。
         var instanceId = executor.InstanceId;
+        var workerId = idOptions.WorkerId ?? 0;
+        var pid = Environment.ProcessId;
+        var hostName = Environment.MachineName;
+        var startTime = _nodeStartTime.Value;
         var updated = await db.Updateable<SysJobNode>()
             .SetColumns(n => new SysJobNode
             {
                 LastHeartbeat = now,
-                Pid = Environment.ProcessId,
-                HostName = Environment.MachineName,
-                WorkerId = idOptions.WorkerId ?? 0,
+                Pid = pid,
+                HostName = hostName,
+                WorkerId = workerId,
                 InstanceId = instanceId,
-                StartTime = _nodeStartTime.Value,
+                StartTime = startTime,
             })
             .Where(n => n.NodeName == NodeName)
             .ExecuteCommandAsync();
@@ -231,10 +237,10 @@ public class JobSchedulerService(
                 Id = idGenerator.NextId(),
                 NodeName = NodeName,
                 InstanceId = instanceId,
-                HostName = Environment.MachineName,
-                Pid = Environment.ProcessId,
-                WorkerId = idOptions.WorkerId ?? 0,
-                StartTime = _nodeStartTime.Value,
+                HostName = hostName,
+                Pid = pid,
+                WorkerId = workerId,
+                StartTime = startTime,
                 LastHeartbeat = now,
             }).ExecuteCommandAsync();
         }
@@ -244,11 +250,11 @@ public class JobSchedulerService(
                 .SetColumns(n => new SysJobNode
                 {
                     LastHeartbeat = now,
-                    Pid = Environment.ProcessId,
-                    HostName = Environment.MachineName,
-                    WorkerId = idOptions.WorkerId ?? 0,
+                    Pid = pid,
+                    HostName = hostName,
+                    WorkerId = workerId,
                     InstanceId = instanceId,
-                    StartTime = _nodeStartTime.Value,
+                    StartTime = startTime,
                 })
                 .Where(n => n.NodeName == NodeName)
                 .ExecuteCommandAsync();
