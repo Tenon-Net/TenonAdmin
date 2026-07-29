@@ -11,8 +11,7 @@ let captured: Record<string, any> = {}
 vi.mock('@ant-design/pro-components', () => ({
   ProTable: (props: Record<string, unknown>) => {
     captured = props as Record<string, any>
-    const tb = (props.toolBarRender as (() => React.ReactNode[]) | undefined)?.()
-    return <div data-testid="pt">{tb}</div>
+    return <div data-testid="pt">{props.headerTitle as React.ReactNode}</div>
   },
 }))
 
@@ -63,8 +62,9 @@ describe('TreeTable 接线', () => {
     expect(captured.rowKey).toBe('code')
   })
 
-  it('toolbar 渲染到工具栏', () => {
+  it('toolbar 挂到 headerTitle(左侧,对齐 Vue #toolbar)', () => {
     mount({ toolbar: <button>新增</button> })
+    expect(captured.headerTitle).toBeTruthy()
     expect(screen.getByText('新增')).toBeTruthy()
   })
 })

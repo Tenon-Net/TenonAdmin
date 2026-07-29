@@ -22,7 +22,10 @@ export interface DataTableProps<T extends Record<string, any>> {
   /** 列设置持久化键 → `localStorage['protable:{persistKey}']`;不给则列设置不持久化。 */
   persistKey?: string
   rowKey?: string
-  /** 工具栏右侧按钮(新增 / 批量删除等)。 */
+  /**
+   * 工具栏主操作(新增 / 批量删除等)。挂在**左侧**(`headerTitle`),对齐 Vue ProTable 的 `#toolbar`;
+   * 右侧留给 pro-components 自带的刷新/密度/列设置,不再把业务按钮塞进 `toolBarRender`。
+   */
   toolbar?: ReactNode
   /**
    * 受控行选择(勾选列 + 选中态)。透传给内层 ProTable —— 批量删除页配 useBatchDelete 用:
@@ -68,7 +71,9 @@ function DataTableInner<T extends Record<string, any>>(
       // 不开则两块无边框区浮在页面底色上、视觉连成一片。
       cardBordered
       pagination={{ showSizeChanger: true, defaultPageSize: 10 }}
-      toolBarRender={() => (toolbar ? [toolbar] : [])}
+      // 左业务钮、右设置钮:headerTitle 在 ListToolBar 左侧,对齐 Vue #toolbar。
+      // 勿用 toolBarRender 放业务钮——那是右侧 actions,和 Vue 对不齐。
+      headerTitle={toolbar}
       dateFormatter="string"
     />
   )

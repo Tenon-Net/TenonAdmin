@@ -225,11 +225,11 @@ export default function DictPage() {
             styles={{ body: { paddingTop: 12 } }}
             extra={
               <Space size={8}>
-                <Can code="POST:/api/v1/sys/dict/item/batch-delete">
-                  <Button danger size="small" disabled={!itemBatch.hasSelection} onClick={itemBatch.run}>{t('common.batchDelete')}</Button>
-                </Can>
                 <Can code="POST:/api/v1/sys/dict/item">
                   <Button type="primary" size="small" onClick={openItemAdd}>{t('dict.addItem')}</Button>
+                </Can>
+                <Can code="POST:/api/v1/sys/dict/item/batch-delete">
+                  <Button danger size="small" disabled={!itemBatch.hasSelection} onClick={itemBatch.run}>{t('common.batchDelete')}</Button>
                 </Can>
               </Space>
             }

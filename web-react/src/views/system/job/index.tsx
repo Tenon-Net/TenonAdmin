@@ -261,12 +261,13 @@ export default function JobPage() {
           getCheckboxProps: (r) => ({ disabled: r.isSystem }), // 内置任务受保护,不进批删
         }}
         toolbar={
+          // 顺序对齐 Vue:新增(主操作)在前,批删在后
           <Space>
-            <Can code="POST:/api/v1/sys/job/batch-delete">
-              <Button danger disabled={!batch.hasSelection} onClick={batch.run}>{t('common.batchDelete')}</Button>
-            </Can>
             <Can code="POST:/api/v1/sys/job">
               <Button type="primary" onClick={openAdd}>{t('common.add')}</Button>
+            </Can>
+            <Can code="POST:/api/v1/sys/job/batch-delete">
+              <Button danger disabled={!batch.hasSelection} onClick={batch.run}>{t('common.batchDelete')}</Button>
             </Can>
           </Space>
         }

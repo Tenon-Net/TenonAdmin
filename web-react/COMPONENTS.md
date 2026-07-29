@@ -8,6 +8,8 @@
 
 `<DataTable columns fetcher persistKey? rowKey? toolbar? rowSelection? onRowClick? activeRowKey? params?>`(`src/components/DataTable/DataTable.tsx`):
 
+- **`toolbar` 在左侧**:映射到 ProTable `headerTitle`,对齐 Vue ProTable `#toolbar`(新增/批删等主操作在左);右侧留给刷新/密度/列设置。业务钮顺序约定 **主操作(新增)在前、批删在后**。
+
 - **fetcher 契约**:`(params) => {items, total}`,`params` = `{page, pageSize, sortField?, sortOrder?, ...搜索字段}`。`toProTable(fetcher)`(`src/components/DataTable/toProTable.ts`)把它适配成 antd ProTable 的 `request(params, sort)` → `{data, success, total}` 契约:`current`→`page`、`{字段: 'ascend'|'descend'}`→`sortField`+`sortOrder`(固定映成 `'asc'/'desc'`,不管后端 `OrderBySafe` 目前只认 `desc`);只接单字段排序(多列排序不支持,天花板非遗漏);列级 filter 不支持,筛选一律走搜索表单。
 - **工具栏文案**(列设置/密度/刷新/搜索/重置)由 pro-components 自带 intl 提供,跟随 `App.tsx` 的 `ConfigProvider locale` 自动切中英 —— **不新增 `proTable.*` i18n 键**(Vue 侧 Naive ProTable 那 8 个自留文案,这里用不上)。列标题等业务文案由各页 `columns` 的 `title` 自己 `t()`。
 - **persistKey → storage-key 唯一性**:给了才持久化,落 `localStorage['protable:{persistKey}']`(`columnsState.persistenceKey`);命名约定 `{模块}-{页面}`,如 `sys-user`。**同一 key 在两处用会互相污染列设置**,新页面起名前检查是否与已有 persistKey 撞名。
@@ -20,7 +22,7 @@
 
 - **静态树模式**:`data` 是已 `buildTree`(`src/utils/tree.ts`)拼好 `children` 的树,无 `request`/无分页/`search={false}`,antd Table 按 `childrenColumnName='children'` 自动嵌套渲染;树列须排列首位(第一列自动承载展开箭头)。
 - **展开受控**:`expandedRowKeys`/`onExpandedRowKeysChange` 必须由调用方管理 —— antd 的 prop 名是 `onExpandedRowsChange`(内部已对齐,外部只认这两个)。**默认全展开**由调用方自己播种 `expandableIds(tree)`;`data` 变化(搜索/切筛选)后须重算,否则命中结果藏在折叠的祖先里看不见。
-- 工具栏(搜索框/展开折叠/新增)由各页自管,传入 `toolbar`;树表无分页,pro-components 自带搜索卡片会白占一整块高度,故未接。
+- 工具栏(搜索框/展开折叠/新增)由各页自管,传入 `toolbar`(同样挂左侧 `headerTitle`,对齐 Vue);树表无分页,pro-components 自带搜索卡片会白占一整块高度,故未接。
 - `persistKey` 同 `DataTable`;`options` 固定关掉 `reload`/`fullScreen`(无 `request` 时二者无意义),`density` 保留(树行高本就紧凑)。
 
 范例页:`system/user`(标准列表 + 排序)、`system/org` / `system/menu`(TreeTable)、`system/dict`(主从 + activeRowKey/onRowClick)、`system/role`(rowSelection + 批量删除)。

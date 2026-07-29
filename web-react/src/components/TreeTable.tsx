@@ -19,7 +19,7 @@ export interface TreeTableProps<T extends Record<string, any>> {
   /** 受控展开行 key —— 默认全展开由调用方播种 `expandableIds`,`data` 变(搜索/切筛)后须重算。 */
   expandedRowKeys: Key[]
   onExpandedRowKeysChange: (keys: Key[]) => void
-  /** 工具栏右侧内容(搜索框 / 展开折叠 / 新增)。 */
+  /** 工具栏主操作(搜索框 / 展开折叠 / 新增)。挂左侧 headerTitle,对齐 Vue #toolbar。 */
   toolbar?: ReactNode
   /** 列设置持久化键 → `localStorage['protable:{persistKey}']`;不给则不持久化。 */
   persistKey?: string
@@ -42,7 +42,8 @@ export function TreeTable<T extends Record<string, any>>({
       // antd 的 prop 名是 `onExpandedRowsChange`(尽管回调收到的是展开行的 **key** 数组)。
       expandable={{ expandedRowKeys, onExpandedRowsChange: (keys) => onExpandedRowKeysChange(keys as Key[]) }}
       columnsState={persistKey ? { persistenceKey: `protable:${persistKey}`, persistenceType: 'localStorage' } : undefined}
-      toolBarRender={() => (toolbar ? [toolbar] : [])}
+      // 左业务区、右列设置:对齐 Vue #toolbar / DataTable
+      headerTitle={toolbar}
     />
   )
 }

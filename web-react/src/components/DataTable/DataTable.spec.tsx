@@ -17,7 +17,7 @@ let captured: {
   request?: (p: Record<string, unknown>, sort: Record<string, unknown>) => Promise<unknown>
   columnsState?: { persistenceKey?: string; persistenceType?: string }
   rowKey?: string
-  toolBarRender?: () => React.ReactNode[]
+  headerTitle?: React.ReactNode
   rowSelection?: unknown
   onRow?: (record: Row) => { onClick?: () => void; style?: Record<string, unknown> }
   rowClassName?: (record: Row) => string
@@ -36,10 +36,10 @@ vi.mock('@ant-design/pro-components', () => ({
       load()
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
-    const toolbar = (props.toolBarRender as (() => React.ReactNode[]) | undefined)?.()
+    // toolbar 现挂 headerTitle(左侧),对齐 Vue #toolbar
     return (
       <div>
-        <div data-testid="toolbar">{toolbar}</div>
+        <div data-testid="toolbar">{props.headerTitle as React.ReactNode}</div>
         {rows.map((r) => (
           <div key={r.id}>{r.name}</div>
         ))}
@@ -105,9 +105,10 @@ describe('DataTable 接线', () => {
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
   })
 
-  it('toolbar 传入的按钮渲染到工具栏', async () => {
+  it('toolbar 挂到 headerTitle(左侧,对齐 Vue #toolbar)', async () => {
     mount({ toolbar: <button>新增</button> })
     expect(await screen.findByText('新增')).toBeTruthy()
+    expect(captured.headerTitle).toBeTruthy()
   })
 
   it('rowSelection 透传给内层 ProTable(受控批删勾选列;不给则 undefined)', () => {
