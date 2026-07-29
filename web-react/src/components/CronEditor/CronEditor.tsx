@@ -21,6 +21,7 @@ import {
   composeSegment, joinCron, parseSegment, setSegment, splitCron,
   SEG_RANGES, type SegIndex, type SegState,
 } from './cronParts'
+import './cron-editor.css'
 
 export interface CronEditorProps {
   value?: string
@@ -181,7 +182,7 @@ export function CronEditor({ value, onChange, previewCount = 5 }: CronEditorProp
   }
 
   return (
-    <div>
+    <div className="cron-editor">
       <Tabs
         size="small"
         items={[
@@ -203,33 +204,40 @@ export function CronEditor({ value, onChange, previewCount = 5 }: CronEditorProp
           },
         ]}
       />
-      {/* 预览区:归一化 + 未来时刻;非法显后端 47003 文案;everySecondWarning 提示不拦截 */}
-      <div style={{ marginTop: 4 }}>
-        {previewError && <Alert type="error" showIcon title={previewError} />}
-        {!previewError && preview && (
-          <Space orientation="vertical" size={4} style={{ width: '100%' }}>
-            {preview.everySecondWarning && <Alert type="warning" showIcon title={t('job.cron.everySecondWarning')} />}
-            <Typography.Text type="secondary">
-              {t('job.cron.normalized')}: <Typography.Text code>{preview.normalized}</Typography.Text>
-            </Typography.Text>
-            <Typography.Text type="secondary">{t('job.cron.next')}:</Typography.Text>
-            {preview.occurrences.length === 0 && <Typography.Text type="secondary">{t('job.cron.noOccurrence')}</Typography.Text>}
-            {/* 横向 wrap 而非一行一个:5 个时刻竖排要占 110px 高,在任务表单里这是纯浪费 */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 16, rowGap: 2 }}>
-              {preview.occurrences.map((o) => (
-                <Typography.Text key={o} style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 12 }}>
-                  {o.replace('T', ' ')}
-                </Typography.Text>
-              ))}
-            </div>
-          </Space>
-        )}
-        {!previewError && !preview && (
-          <Typography.Text type="secondary">
-            {previewing ? <Spin size="small" /> : t('job.cron.previewEmpty')}
-          </Typography.Text>
-        )}
-      </div>
+      {/* 预览卡:对齐 Vue 侧填充底 + 行标签布局;非法显后端 47003 文案;everySecondWarning 提示不拦截 */}
+      {expr.trim() ? (
+        <div className="cron-editor-preview">
+          {previewError && <div className="cron-editor-preview-error">{previewError}</div>}
+          {!previewError && preview && (
+            <>
+              {preview.everySecondWarning && (
+                <Alert type="warning" showIcon banner title={t('job.cron.everySecondWarning')} />
+              )}
+              <div className="cron-editor-preview-row">
+                <span className="cron-editor-preview-label">{t('job.cron.normalized')}</span>
+                <code className="cron-editor-preview-code">{preview.normalized}</code>
+              </div>
+              <div className="cron-editor-preview-row">
+                <span className="cron-editor-preview-label">{t('job.cron.next')}</span>
+                <div className="cron-editor-occurrences">
+                  {preview.occurrences.length === 0 ? (
+                    <span className="cron-editor-empty">{t('job.cron.noOccurrence')}</span>
+                  ) : (
+                    preview.occurrences.map((o) => (
+                      <span key={o} className="cron-editor-occurrence">{o.replace('T', ' ')}</span>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+          {!previewError && !preview && (
+            <span className="cron-editor-empty">
+              {previewing ? <Spin size="small" /> : t('job.cron.previewEmpty')}
+            </span>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -7,7 +7,7 @@
 import { h, reactive, ref } from 'vue'
 import {
   NButton, NSpace, NTag, NTooltip, NPopconfirm, NForm, NInput, NInputNumber,
-  NRadioGroup, NRadio, NSelect, NSwitch, NDatePicker, NDivider,
+  NRadioGroup, NRadio, NSelect, NSwitch, NDatePicker,
   NGrid, NFormItemGi, NCollapse, NCollapseItem,
   useMessage, type FormInst, type FormRules,
 } from 'naive-ui'
@@ -255,11 +255,12 @@ async function ensureHandlers() {
 
 const httpMethodOptions = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'].map((m) => ({ label: m, value: m }))
 
-// ── 高级选项折叠 ──
-// 收进去的十项全都自带合理默认值、且一条校验规则都没有(rules 里没有它们),
-// 所以折叠永远挡不住保存 —— 这正是它与页签的区别:展开是可选的,不是必经的一步。
-const ADVANCED_NAME = 'advanced'
-const advancedOpen = ref<string[]>([])
+// ── 分节折叠 ──
+// 基本/触发/载荷默认展开(必填都在这里),高级默认收起;用户可把已填好的节折掉减视觉噪音。
+// display-directive="show":收起不卸载,校验读 form 态也不依赖 DOM 挂载。
+const SEC = { basic: 'basic', trigger: 'trigger', handler: 'handler', advanced: 'advanced' } as const
+const DEFAULT_SECTIONS = [SEC.basic, SEC.trigger, SEC.handler]
+const sectionOpen = ref<string[]>([...DEFAULT_SECTIONS])
 
 /** 该行动过任一高级项?动过就默认展开,免得用户觉得"我配过的东西不见了"。 */
 function hasAdvanced(r: SysJob): boolean {
@@ -276,7 +277,7 @@ const toLocal = (s?: string | null) => (s ? s.slice(0, 19) : null)
 function openAdd() {
   editingId.value = null
   Object.assign(form, blank())
-  advancedOpen.value = []
+  sectionOpen.value = [...DEFAULT_SECTIONS]
   show.value = true
   void ensureHandlers()
 }
@@ -284,7 +285,7 @@ function openAdd() {
 function openEdit(r: SysJob) {
   editingId.value = r.id
   Object.assign(form, blank())
-  advancedOpen.value = hasAdvanced(r) ? [ADVANCED_NAME] : []
+  sectionOpen.value = hasAdvanced(r) ? [...DEFAULT_SECTIONS, SEC.advanced] : [...DEFAULT_SECTIONS]
   let props: Record<string, string | null> = {}
   try {
     props = JSON.parse(r.propsJson || '{}') as Record<string, string | null>
@@ -411,142 +412,148 @@ async function save() {
   <FormContainer
     v-model:show="show"
     :title="editingId === null ? t('job.addTitle') : t('job.editTitle')"
-    :width="900"
+    :width="880"
     :on-confirm="save"
     :confirm-text="t('common.save')"
   >
-    <!-- 一页到底,不拆页签:页签是"必须点"才能继续填,把一次顺序填写拆成先找页签,
-         必填项还会藏在未激活的页签后面。降高改走两列栅格 + 高级项默认折叠。
-         两列栅格照 UserFormModal.vue 的写法:成对的短字段一行两个,宽控件 span 2。 -->
-    <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :label-width="110">
-      <!-- ── 基本 ── -->
-      <n-divider title-placement="left" class="job-sec">{{ t('job.form.sectionBasic') }}</n-divider>
-      <n-grid cols="1 s:2" responsive="screen" :x-gap="16">
-        <n-form-item-gi :label="t('job.code')" path="code">
-          <n-input v-model:value="form.code" :placeholder="t('job.codePlaceholder')" :disabled="editingId !== null" />
-        </n-form-item-gi>
-        <n-form-item-gi :label="t('job.name')" path="name">
-          <n-input v-model:value="form.name" :placeholder="t('job.name')" />
-        </n-form-item-gi>
-        <!-- 无校验规则的项一律 show-feedback=false:那条空的反馈占位每个吃掉 24px,
-             四个可见项加起来就是一屏与要滚动的差别 -->
-        <n-form-item-gi :span="2" :label="t('job.remark')" :show-feedback="false">
-          <n-input v-model:value="form.remark" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" />
-        </n-form-item-gi>
-      </n-grid>
+    <!-- 四分节都可折叠:默认展开基本/触发/载荷,高级默认收;填完可折掉减噪音。
+         不拆页签——页签会藏必填项。两列栅格照 User 页:短字段并排,宽控件 span 2。 -->
+    <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :label-width="112" class="job-form">
+      <n-collapse v-model:expanded-names="sectionOpen" display-directive="show" class="job-sections">
+        <!-- ── 基本 ── -->
+        <n-collapse-item :name="SEC.basic">
+          <template #header>
+            <span class="job-sec-text">{{ t('job.form.sectionBasic') }}</span>
+          </template>
+          <n-grid cols="1 s:2" responsive="screen" :x-gap="16" :y-gap="0">
+            <n-form-item-gi :label="t('job.code')" path="code">
+              <n-input v-model:value="form.code" :placeholder="t('job.codePlaceholder')" :disabled="editingId !== null" />
+            </n-form-item-gi>
+            <n-form-item-gi :label="t('job.name')" path="name">
+              <n-input v-model:value="form.name" :placeholder="t('job.name')" />
+            </n-form-item-gi>
+            <n-form-item-gi :span="2" :label="t('job.remark')" :show-feedback="false">
+              <n-input v-model:value="form.remark" type="textarea" :autosize="{ minRows: 1, maxRows: 2 }" />
+            </n-form-item-gi>
+          </n-grid>
+        </n-collapse-item>
 
-      <!-- ── 触发 ── -->
-      <n-divider title-placement="left" class="job-sec">{{ t('job.form.sectionTrigger') }}</n-divider>
-      <n-grid cols="1 s:2" responsive="screen" :x-gap="16">
-        <n-form-item-gi :label="t('job.trigger.kind')" :show-feedback="false">
-          <n-radio-group v-model:value="form.triggerKind">
-            <n-space>
-              <n-radio :value="JobTriggerKind.Cron">{{ t('job.trigger.cron') }}</n-radio>
-              <n-radio :value="JobTriggerKind.Interval">{{ t('job.trigger.interval') }}</n-radio>
-              <n-radio :value="JobTriggerKind.OneShot">{{ t('job.trigger.oneShot') }}</n-radio>
-            </n-space>
-          </n-radio-group>
-        </n-form-item-gi>
-        <!-- 间隔/一次性跟触发方式同排;cron 编辑器占整行,栅格自然把它挤到下一行 -->
-        <n-form-item-gi v-if="form.triggerKind === JobTriggerKind.Interval" :label="t('job.trigger.intervalSeconds')" path="intervalSeconds">
-          <n-input-number v-model:value="form.intervalSeconds" :min="5" style="width: 200px">
-            <template #suffix>{{ t('job.trigger.seconds') }}</template>
-          </n-input-number>
-        </n-form-item-gi>
-        <n-form-item-gi v-if="form.triggerKind === JobTriggerKind.OneShot" :label="t('job.trigger.oneShotTime')" path="oneShotTime">
-          <n-date-picker
-            v-model:formatted-value="form.oneShotTime"
-            type="datetime"
-            value-format="yyyy-MM-dd'T'HH:mm:ss"
-            clearable
-            style="width: 240px"
-          />
-        </n-form-item-gi>
-        <n-form-item-gi v-if="form.triggerKind === JobTriggerKind.Cron" :span="2" :label="t('job.trigger.cronExpression')" path="cronExpression">
-          <CronEditor v-model:model-value="form.cronExpression" />
-        </n-form-item-gi>
-      </n-grid>
+        <!-- ── 触发 ── -->
+        <n-collapse-item :name="SEC.trigger">
+          <template #header>
+            <span class="job-sec-text">{{ t('job.form.sectionTrigger') }}</span>
+          </template>
+          <n-grid cols="1 s:2" responsive="screen" :x-gap="16" :y-gap="0">
+            <n-form-item-gi :label="t('job.trigger.kind')" :show-feedback="false">
+              <n-radio-group v-model:value="form.triggerKind">
+                <n-space>
+                  <n-radio :value="JobTriggerKind.Cron">{{ t('job.trigger.cron') }}</n-radio>
+                  <n-radio :value="JobTriggerKind.Interval">{{ t('job.trigger.interval') }}</n-radio>
+                  <n-radio :value="JobTriggerKind.OneShot">{{ t('job.trigger.oneShot') }}</n-radio>
+                </n-space>
+              </n-radio-group>
+            </n-form-item-gi>
+            <n-form-item-gi v-if="form.triggerKind === JobTriggerKind.Interval" :label="t('job.trigger.intervalSeconds')" path="intervalSeconds">
+              <n-input-number v-model:value="form.intervalSeconds" :min="5" style="width: 200px">
+                <template #suffix>{{ t('job.trigger.seconds') }}</template>
+              </n-input-number>
+            </n-form-item-gi>
+            <n-form-item-gi v-if="form.triggerKind === JobTriggerKind.OneShot" :label="t('job.trigger.oneShotTime')" path="oneShotTime">
+              <n-date-picker
+                v-model:formatted-value="form.oneShotTime"
+                type="datetime"
+                value-format="yyyy-MM-dd'T'HH:mm:ss"
+                clearable
+                style="width: 240px"
+              />
+            </n-form-item-gi>
+            <n-form-item-gi v-if="form.triggerKind === JobTriggerKind.Cron" :span="2" :label="t('job.trigger.cronExpression')" path="cronExpression">
+              <CronEditor v-model:model-value="form.cronExpression" />
+            </n-form-item-gi>
+          </n-grid>
+        </n-collapse-item>
 
-      <!-- ── 载荷 ── -->
-      <n-divider title-placement="left" class="job-sec">{{ t('job.form.sectionHandler') }}</n-divider>
-      <n-grid cols="1 s:2" responsive="screen" :x-gap="16">
-        <n-form-item-gi :span="2" :label="t('job.handler.kind')" :show-feedback="false">
-          <n-space align="center">
-            <n-radio-group v-model:value="form.handlerKind">
-              <n-space>
-                <n-radio :value="JobHandlerKind.Compiled">{{ t('job.handler.compiled') }}</n-radio>
-                <n-radio :value="JobHandlerKind.Http">{{ t('job.handler.http') }}</n-radio>
-                <n-radio :value="JobHandlerKind.Sql" :disabled="!sqlEnabled">{{ t('job.handler.sql') }}</n-radio>
+        <!-- ── 载荷 ── -->
+        <n-collapse-item :name="SEC.handler">
+          <template #header>
+            <span class="job-sec-text">{{ t('job.form.sectionHandler') }}</span>
+          </template>
+          <n-grid cols="1 s:2" responsive="screen" :x-gap="16" :y-gap="0">
+            <n-form-item-gi :span="2" :label="t('job.handler.kind')" :show-feedback="false">
+              <n-space align="center">
+                <n-radio-group v-model:value="form.handlerKind">
+                  <n-space>
+                    <n-radio :value="JobHandlerKind.Compiled">{{ t('job.handler.compiled') }}</n-radio>
+                    <n-radio :value="JobHandlerKind.Http">{{ t('job.handler.http') }}</n-radio>
+                    <n-radio :value="JobHandlerKind.Sql" :disabled="!sqlEnabled">{{ t('job.handler.sql') }}</n-radio>
+                  </n-space>
+                </n-radio-group>
+                <span v-if="!sqlEnabled" class="job-hint">{{ t('job.handler.sqlDisabledHint') }}</span>
               </n-space>
-            </n-radio-group>
-            <!-- 总闸关着就说清是"后端没开",否则用户只会看见一个莫名其妙点不动的选项 -->
-            <span v-if="!sqlEnabled" class="job-hint">{{ t('job.handler.sqlDisabledHint') }}</span>
-          </n-space>
-        </n-form-item-gi>
-        <template v-if="form.handlerKind === JobHandlerKind.Compiled">
-          <n-form-item-gi :span="2" :label="t('job.handler.name')" path="handlerName">
-            <n-select v-model:value="form.handlerName" filterable :options="handlerOptions" :placeholder="t('job.handler.namePlaceholder')" />
-          </n-form-item-gi>
-          <n-form-item-gi :span="2" :label="t('job.handler.props')" :show-feedback="false">
-            <div class="kv-editor">
-              <div v-for="(kv, i) in form.props" :key="i" class="kv-row">
-                <n-input v-model:value="kv.key" size="small" :placeholder="t('job.handler.propKey')" />
-                <n-input v-model:value="kv.value" size="small" :placeholder="t('job.handler.propValue')" />
-                <n-button quaternary circle size="small" @click="form.props.splice(i, 1)">
-                  <template #icon><AppIcon icon="ph:x" :size="14" /></template>
-                </n-button>
-              </div>
-              <n-button dashed size="small" @click="form.props.push({ key: '', value: '' })">
-                <template #icon><AppIcon icon="ph:plus" :size="14" /></template>{{ t('job.handler.addProp') }}
-              </n-button>
-            </div>
-          </n-form-item-gi>
-        </template>
-        <template v-if="form.handlerKind === JobHandlerKind.Http">
-          <n-form-item-gi :span="2" :label="t('job.handler.httpUrl')" path="httpUrl">
-            <n-input v-model:value="form.httpUrl" placeholder="https://example.com/api/task" />
-          </n-form-item-gi>
-          <n-form-item-gi :label="t('job.handler.httpMethod')">
-            <n-select v-model:value="form.httpMethod" :options="httpMethodOptions" style="width: 160px" />
-          </n-form-item-gi>
-          <n-form-item-gi :label="t('job.handler.successStatuses')">
-            <n-input v-model:value="form.successStatuses" :placeholder="t('job.handler.successStatusesPlaceholder')" style="width: 240px" />
-          </n-form-item-gi>
-          <n-form-item-gi :span="2" :label="t('job.handler.httpHeaders')">
-            <div class="kv-editor">
-              <div v-for="(kv, i) in form.headers" :key="i" class="kv-row">
-                <n-input v-model:value="kv.key" size="small" :placeholder="t('job.handler.propKey')" />
-                <n-input v-model:value="kv.value" size="small" :placeholder="t('job.handler.propValue')" />
-                <n-button quaternary circle size="small" @click="form.headers.splice(i, 1)">
-                  <template #icon><AppIcon icon="ph:x" :size="14" /></template>
-                </n-button>
-              </div>
-              <n-button dashed size="small" @click="form.headers.push({ key: '', value: '' })">
-                <template #icon><AppIcon icon="ph:plus" :size="14" /></template>{{ t('job.handler.addProp') }}
-              </n-button>
-              <span v-if="editingId !== null" class="kv-hint">{{ t('job.handler.headersMaskHint') }}</span>
-            </div>
-          </n-form-item-gi>
-          <n-form-item-gi :span="2" :label="t('job.handler.httpBody')">
-            <n-input v-model:value="form.httpBody" type="textarea" :autosize="{ minRows: 2, maxRows: 6 }" />
-          </n-form-item-gi>
-        </template>
-        <n-form-item-gi v-if="form.handlerKind === JobHandlerKind.Sql" :span="2" :label="t('job.handler.sqlText')" path="sqlText">
-          <n-input v-model:value="form.sqlText" type="textarea" :autosize="{ minRows: 3, maxRows: 10 }" placeholder="UPDATE ..." />
-        </n-form-item-gi>
-      </n-grid>
+            </n-form-item-gi>
+            <template v-if="form.handlerKind === JobHandlerKind.Compiled">
+              <n-form-item-gi :span="2" :label="t('job.handler.name')" path="handlerName">
+                <n-select v-model:value="form.handlerName" filterable :options="handlerOptions" :placeholder="t('job.handler.namePlaceholder')" />
+              </n-form-item-gi>
+              <n-form-item-gi :span="2" :label="t('job.handler.props')" :show-feedback="false">
+                <div class="kv-editor">
+                  <div v-for="(kv, i) in form.props" :key="i" class="kv-row">
+                    <n-input v-model:value="kv.key" size="small" :placeholder="t('job.handler.propKey')" />
+                    <n-input v-model:value="kv.value" size="small" :placeholder="t('job.handler.propValue')" />
+                    <n-button quaternary circle size="small" @click="form.props.splice(i, 1)">
+                      <template #icon><AppIcon icon="ph:x" :size="14" /></template>
+                    </n-button>
+                  </div>
+                  <n-button dashed size="small" @click="form.props.push({ key: '', value: '' })">
+                    <template #icon><AppIcon icon="ph:plus" :size="14" /></template>{{ t('job.handler.addProp') }}
+                  </n-button>
+                </div>
+              </n-form-item-gi>
+            </template>
+            <template v-if="form.handlerKind === JobHandlerKind.Http">
+              <n-form-item-gi :span="2" :label="t('job.handler.httpUrl')" path="httpUrl">
+                <n-input v-model:value="form.httpUrl" placeholder="https://example.com/api/task" />
+              </n-form-item-gi>
+              <n-form-item-gi :label="t('job.handler.httpMethod')" :show-feedback="false">
+                <n-select v-model:value="form.httpMethod" :options="httpMethodOptions" style="width: 160px" />
+              </n-form-item-gi>
+              <n-form-item-gi :label="t('job.handler.successStatuses')" :show-feedback="false">
+                <n-input v-model:value="form.successStatuses" :placeholder="t('job.handler.successStatusesPlaceholder')" style="width: 240px" />
+              </n-form-item-gi>
+              <n-form-item-gi :span="2" :label="t('job.handler.httpHeaders')" :show-feedback="false">
+                <div class="kv-editor">
+                  <div v-for="(kv, i) in form.headers" :key="i" class="kv-row">
+                    <n-input v-model:value="kv.key" size="small" :placeholder="t('job.handler.propKey')" />
+                    <n-input v-model:value="kv.value" size="small" :placeholder="t('job.handler.propValue')" />
+                    <n-button quaternary circle size="small" @click="form.headers.splice(i, 1)">
+                      <template #icon><AppIcon icon="ph:x" :size="14" /></template>
+                    </n-button>
+                  </div>
+                  <n-button dashed size="small" @click="form.headers.push({ key: '', value: '' })">
+                    <template #icon><AppIcon icon="ph:plus" :size="14" /></template>{{ t('job.handler.addProp') }}
+                  </n-button>
+                  <span v-if="editingId !== null" class="kv-hint">{{ t('job.handler.headersMaskHint') }}</span>
+                </div>
+              </n-form-item-gi>
+              <n-form-item-gi :span="2" :label="t('job.handler.httpBody')" :show-feedback="false">
+                <n-input v-model:value="form.httpBody" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" />
+              </n-form-item-gi>
+            </template>
+            <n-form-item-gi v-if="form.handlerKind === JobHandlerKind.Sql" :span="2" :label="t('job.handler.sqlText')" path="sqlText">
+              <n-input v-model:value="form.sqlText" type="textarea" :autosize="{ minRows: 3, maxRows: 8 }" placeholder="UPDATE ..." />
+            </n-form-item-gi>
+          </n-grid>
+        </n-collapse-item>
 
-      <!-- ── 高级选项(默认折叠;十项全都有默认值且无校验规则,折不折都存得下) ── -->
-      <!-- display-directive="show":Naive 首次展开前一律懒渲染,展开过之后才改用 v-show —— 收起时
-           不再卸载,来回折叠不会丢输入焦点。首展前不挂载也无妨:值存在 form 里,与 DOM 在不在无关。 -->
-      <n-collapse v-model:expanded-names="advancedOpen" display-directive="show" class="job-advanced">
-        <n-collapse-item :name="ADVANCED_NAME">
+        <!-- ── 高级(默认收;十项都有缺省且无校验,折不折都能存) ── -->
+        <!-- 比上面三节更松:单选整行不挤半列;数字+说明用 inline 横排,y-gap 给行距 -->
+        <n-collapse-item :name="SEC.advanced" class="job-advanced">
           <template #header>
             <span class="job-sec-text">{{ t('job.form.sectionAdvanced') }}</span>
             <span class="job-hint">{{ t('job.form.sectionAdvancedHint') }}</span>
           </template>
-          <n-grid cols="1 s:2" responsive="screen" :x-gap="16">
-            <n-form-item-gi :label="t('job.form.startTime')">
+          <n-grid cols="1 s:2" responsive="screen" :x-gap="24" :y-gap="4">
+            <n-form-item-gi :label="t('job.form.startTime')" :show-feedback="false">
               <n-date-picker
                 v-model:formatted-value="form.startTime"
                 type="datetime"
@@ -556,7 +563,7 @@ async function save() {
                 style="width: 100%"
               />
             </n-form-item-gi>
-            <n-form-item-gi :label="t('job.form.endTime')">
+            <n-form-item-gi :label="t('job.form.endTime')" :show-feedback="false">
               <n-date-picker
                 v-model:formatted-value="form.endTime"
                 type="datetime"
@@ -566,40 +573,45 @@ async function save() {
                 style="width: 100%"
               />
             </n-form-item-gi>
-            <n-form-item-gi :label="t('job.form.misfireStrategy')">
+            <!-- 文案较长的单选独占整行,半列会折成两行很难看 -->
+            <n-form-item-gi :span="2" :label="t('job.form.misfireStrategy')" :show-feedback="false">
               <n-radio-group v-model:value="form.misfireStrategy">
-                <n-space>
+                <n-space :size="16">
                   <n-radio :value="JobMisfireStrategy.Skip">{{ t('job.form.misfireSkip') }}</n-radio>
                   <n-radio :value="JobMisfireStrategy.FireOnceNow">{{ t('job.form.misfireFireOnceNow') }}</n-radio>
                 </n-space>
               </n-radio-group>
             </n-form-item-gi>
-            <n-form-item-gi :label="t('job.form.concurrencyMode')">
+            <n-form-item-gi :span="2" :label="t('job.form.concurrencyMode')" :show-feedback="false">
               <n-radio-group v-model:value="form.concurrencyMode">
-                <n-space>
+                <n-space :size="16">
                   <n-radio :value="JobConcurrencyMode.SerialSkip">{{ t('job.form.concurrencySerial') }}</n-radio>
                   <n-radio :value="JobConcurrencyMode.Parallel">{{ t('job.form.concurrencyParallel') }}</n-radio>
                 </n-space>
               </n-radio-group>
             </n-form-item-gi>
-            <n-form-item-gi :label="t('job.form.timeoutSeconds')">
-              <n-input-number v-model:value="form.timeoutSeconds" :min="0" style="width: 140px" />
-              <span class="job-hint">{{ t('job.form.timeoutHint') }}</span>
+            <n-form-item-gi :label="t('job.form.timeoutSeconds')" :show-feedback="false">
+              <div class="job-inline">
+                <n-input-number v-model:value="form.timeoutSeconds" :min="0" style="width: 140px" />
+                <span class="job-hint">{{ t('job.form.timeoutHint') }}</span>
+              </div>
             </n-form-item-gi>
-            <n-form-item-gi :label="t('job.form.retryCount')">
+            <n-form-item-gi :label="t('job.form.retryCount')" :show-feedback="false">
               <n-input-number v-model:value="form.retryCount" :min="0" :max="10" style="width: 140px" />
             </n-form-item-gi>
-            <n-form-item-gi :label="t('job.form.retryIntervalSeconds')">
+            <n-form-item-gi :label="t('job.form.retryIntervalSeconds')" :show-feedback="false">
               <n-input-number v-model:value="form.retryIntervalSeconds" :min="0" style="width: 140px" />
             </n-form-item-gi>
-            <n-form-item-gi :label="t('job.form.failAlertThreshold')">
-              <n-input-number v-model:value="form.failAlertThreshold" :min="0" style="width: 140px" />
-              <span class="job-hint">{{ t('job.form.failAlertHint') }}</span>
+            <n-form-item-gi :label="t('job.form.failAlertThreshold')" :show-feedback="false">
+              <div class="job-inline">
+                <n-input-number v-model:value="form.failAlertThreshold" :min="0" style="width: 140px" />
+                <span class="job-hint">{{ t('job.form.failAlertHint') }}</span>
+              </div>
             </n-form-item-gi>
-            <n-form-item-gi :label="t('job.form.alertByNotice')">
+            <n-form-item-gi :label="t('job.form.alertByNotice')" :show-feedback="false">
               <n-switch v-model:value="form.alertByNotice" />
             </n-form-item-gi>
-            <n-form-item-gi :label="t('job.form.alertEmails')">
+            <n-form-item-gi :label="t('job.form.alertEmails')" :show-feedback="false">
               <n-input v-model:value="form.alertEmails" :placeholder="t('job.form.alertEmailsPlaceholder')" />
             </n-form-item-gi>
           </n-grid>
@@ -610,15 +622,6 @@ async function save() {
 </template>
 
 <style scoped>
-.job-sec {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  /* n-divider 默认上下各 24px,三条就白吃掉近 120px 高度 —— 这里只要一条分节线,不要那么松 */
-  margin: 8px 0 14px;
-}
-.job-sec:first-child {
-  margin-top: 0;
-}
 .kv-editor {
   display: flex;
   flex-direction: column;
@@ -635,21 +638,45 @@ async function save() {
   color: var(--color-text-tertiary);
 }
 .job-hint {
-  margin-left: 10px;
   font-size: 12px;
   color: var(--color-text-tertiary);
+  white-space: nowrap;
+  line-height: 1.4;
 }
-/* 折叠头做成和上面几个分节分隔线同一号字重,读起来是第四个章节而不是一个孤立控件 */
-.job-advanced {
-  margin-top: 4px;
-}
-/* 高级区里一条校验规则都没有,那 10 个反馈占位(每个 24px)是纯粹的空高度。
-   一条规则顶十个 :show-feedback="false",展开后省下约 120px。 */
-.job-advanced :deep(.n-form-item-feedback-wrapper) {
-  min-height: 0;
+/* 数字框 + 旁注同一行,不跟 label 抢半列宽度 */
+.job-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 .job-sec-text {
   font-size: var(--font-size-sm);
   font-weight: 600;
+}
+/* 分节折叠:头像分节标题;内容区留呼吸感 */
+.job-sections :deep(.n-collapse-item) {
+  margin: 0;
+}
+.job-sections :deep(.n-collapse-item__header) {
+  padding: 10px 0;
+}
+.job-sections :deep(.n-collapse-item__content-inner) {
+  padding: 4px 0 12px;
+}
+.job-sections :deep(.n-form-item) {
+  margin-bottom: 14px;
+}
+.job-sections :deep(.n-form-item-feedback-wrapper:empty),
+.job-sections :deep(.n-form-item-feedback-wrapper:has(:empty)) {
+  min-height: 0;
+}
+/* 高级区再松一点:行距 + label 别贴控件 */
+.job-advanced :deep(.n-form-item) {
+  margin-bottom: 18px;
+}
+.job-advanced :deep(.n-form-item-label) {
+  padding-right: 12px;
 }
 </style>
