@@ -15,6 +15,21 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.5.1 - 2026-07-28
+
+A patch for the scheduled-jobs surface that shipped in 0.5.0: an unset snowflake `WorkerId` no longer crashes every scheduler tick, and job PUT on PostgreSQL no longer returns a broken body.
+
+### Fixed
+
+- **Scheduler node heartbeat no longer throws when `TenonAdmin:Id:WorkerId` is unset** (#24). SqlSugar evaluates expression-tree members when building `SetColumns`; the previous `idOptions.WorkerId ?? 0` ran against a null options object and flooded the tick loop with exceptions. Locals (`workerId`, `pid`, `hostName`, `startTime`) are hoisted before the expression so the tree only sees constants and locals.
+- **Job update (PUT) on PostgreSQL no longer returns a non-JSON body.** `JobService.UpdateAsync` switched to the same `Updateable(entity).IgnoreColumns(...)` pattern used elsewhere (Dict/User), and the nullable `NextRunTime` CAS is split into two branches so a ternary does not land in the expression tree.
+- **Multi-replica smoke is less flaky after failover.** Caddy upstreams gain health checks and `lb_try_duration`; the multi-smoke script polls until the 5s job has three runs instead of a fixed 25s wait. Both frontend OpenAPI clients pick up the missing `nodeInstanceId` field that had drifted from the contract.
+
+### Changed
+
+- Runtime architecture diagrams and README previews refreshed for in-kernel jobs, optional WorkerHost, and the SignalR hub path.
+- Documented the MLPS assessment boundary (ADR-0005) and matching domain terms in `CONTEXT.md`.
+
 ## 0.5.0 - 2026-07-29
 
 A feature release: **scheduled jobs land in the kernel**, with no new dependency and no extra process by default. Both frontend templates ship the management UI; an optional Worker host keeps jobs running when the API is down.
