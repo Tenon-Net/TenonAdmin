@@ -3,10 +3,10 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "TenonAdmin Runtime Architecture",
-    "subtitle": "Browser -> SPA -> Host -> auth & data-scope -> domain -> SqlSugar -> DB",
+    "subtitle": "Primary request path + realtime push + in-kernel jobs (optional Worker)",
     "output": "tenon-runtime.en.architecture.html",
     "quality_profile": "showcase",
-    "viewBox": [1080, 720],
+    "viewBox": [1120, 800],
     "views": [
       {
         "id": "request-path",
@@ -16,43 +16,55 @@
       },
       {
         "id": "auth-and-data",
-        "label": "Auth, cache, and data scope",
-        "focus": ["pipeline", "ext_auth", "cache", "services", "sqlsugar", "db"],
-        "note": "External login callbacks enter the auth pipeline; session and permission caches sit beside domain services."
+        "label": "Auth, cache, and realtime",
+        "focus": ["spa", "host", "pipeline", "ext_auth", "cache", "services"],
+        "note": "External login callbacks enter the auth pipeline; session cache sits beside domain services; SignalR pushes force-logout and notices."
+      },
+      {
+        "id": "scheduled-jobs",
+        "label": "Jobs and Worker",
+        "focus": ["services", "jobs", "worker", "sqlsugar", "db"],
+        "note": "In-kernel cron scheduler; DB lease elects a leader and claim prevents double fire; optional WorkerHost keeps jobs running if API is down."
       },
       {
         "id": "kernel-core",
         "label": "Kernel host path",
-        "focus": ["host", "pipeline", "services", "sqlsugar", "db"],
-        "note": "Inside the host: filters, domain services, SqlSugar global filters, then the database."
+        "focus": ["host", "pipeline", "services", "jobs", "sqlsugar", "db"],
+        "note": "Inside the host: filters, domain services, job scheduler, SqlSugar global filters, then the database."
       }
     ]
   },
   "components": [
-    { "id": "users", "type": "external", "label": "Users", "sublabel": "Browser", "pos": [40, 188], "size": [132, 80] },
-    { "id": "spa", "type": "frontend", "label": "Admin SPA", "sublabel": "Vue / React / zero-shared", "tag": ":5173 / :5174", "pos": [230, 188], "size": [176, 80] },
-    { "id": "host", "type": "backend", "label": "MinimalHost", "sublabel": "ASP.NET / Controllers", "tag": ":5100", "pos": [460, 188], "size": [168, 80] },
-    { "id": "pipeline", "type": "security", "label": "Auth Pipeline", "sublabel": "JWT / RolePermission", "tag": "DataScope", "pos": [690, 188], "size": [176, 80] },
-    { "id": "ext_auth", "type": "security", "label": "External Auth", "sublabel": "WeCom / DingTalk / OIDC", "pos": [690, 76], "size": [176, 72] },
-    { "id": "services", "type": "backend", "label": "Domain Services", "sublabel": "Sys* / RBAC / CRUD", "pos": [230, 428], "size": [176, 80] },
-    { "id": "cache", "type": "database", "label": "Cache", "sublabel": "Memory / Redis", "pos": [40, 428], "size": [140, 80] },
-    { "id": "sqlsugar", "type": "backend", "label": "SqlSugar", "sublabel": "Repo / CodeFirst / scope", "pos": [460, 428], "size": [176, 80] },
-    { "id": "db", "type": "database", "label": "Database", "sublabel": "SQLite / MySQL / PG / SqlServer", "pos": [690, 428], "size": [184, 80] }
+    { "id": "users", "type": "external", "label": "Users", "sublabel": "Browser", "pos": [40, 168], "size": [132, 80] },
+    { "id": "spa", "type": "frontend", "label": "Admin SPA", "sublabel": "Vue / React / zero-shared", "tag": ":5173 / :5174", "pos": [230, 168], "size": [176, 80] },
+    { "id": "host", "type": "backend", "label": "MinimalHost", "sublabel": "Controllers · SignalR Hub", "tag": ":5100", "pos": [460, 168], "size": [176, 80] },
+    { "id": "pipeline", "type": "security", "label": "Auth Pipeline", "sublabel": "JWT / RolePermission", "tag": "DataScope", "pos": [700, 168], "size": [176, 80] },
+    { "id": "ext_auth", "type": "security", "label": "External Auth", "sublabel": "WeCom / DingTalk / OIDC", "pos": [700, 56], "size": [176, 72] },
+    { "id": "services", "type": "backend", "label": "Domain Services", "sublabel": "Sys* / RBAC / CRUD", "pos": [230, 400], "size": [176, 80] },
+    { "id": "cache", "type": "database", "label": "Cache", "sublabel": "Memory / Redis", "pos": [40, 400], "size": [140, 80] },
+    { "id": "sqlsugar", "type": "backend", "label": "SqlSugar", "sublabel": "Repo / CodeFirst / scope", "pos": [460, 400], "size": [176, 80] },
+    { "id": "db", "type": "database", "label": "Database", "sublabel": "SQLite / MySQL / PG / SqlServer", "pos": [700, 400], "size": [184, 80] },
+    { "id": "jobs", "type": "backend", "label": "Job Scheduler", "sublabel": "cron / IAdminJob / claim", "tag": "in-kernel", "pos": [460, 560], "size": [176, 80] },
+    { "id": "worker", "type": "backend", "label": "WorkerHost", "sublabel": "optional process", "tag": "AddTenonAdminWorker", "pos": [230, 560], "size": [176, 80] }
   ],
   "boundaries": [
-    { "kind": "region", "label": "TenonAdmin Kernel Host", "wraps": ["host", "pipeline", "services", "sqlsugar"] },
+    { "kind": "region", "label": "TenonAdmin Kernel Host", "wraps": ["host", "pipeline", "services", "sqlsugar", "jobs"] },
     { "kind": "security-group", "label": "Auth & session", "wraps": ["pipeline", "ext_auth"] },
-    { "kind": "region", "label": "Data plane", "wraps": ["db"] }
+    { "kind": "region", "label": "Data plane", "wraps": ["db"] },
+    { "kind": "region", "label": "Optional Worker", "wraps": ["worker"] }
   ],
   "connections": [
     { "id": "users-to-spa", "from": "users", "to": "spa", "label": "HTTPS", "variant": "emphasis", "route": "orthogonal-h" },
-    { "id": "spa-to-host", "from": "spa", "to": "host", "label": "/api", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "spa-to-host", "from": "spa", "to": "host", "label": "/api · /hub", "variant": "emphasis", "route": "orthogonal-h", "labelAt": [433, 158] },
     { "id": "host-to-pipeline", "from": "host", "to": "pipeline", "variant": "emphasis", "route": "orthogonal-h" },
-    { "id": "ext-auth-to-pipeline", "from": "ext_auth", "to": "pipeline", "label": "callback", "variant": "security", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "labelAt": [778, 158] },
-    { "id": "pipeline-to-services", "from": "pipeline", "to": "services", "label": "authorized", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "via": [[778, 348], [318, 348]], "labelAt": [548, 336] },
-    { "id": "services-to-cache", "from": "services", "to": "cache", "label": "session / perm", "variant": "dashed", "route": "orthogonal-h", "labelAt": [205, 416] },
+    { "id": "ext-auth-to-pipeline", "from": "ext_auth", "to": "pipeline", "label": "callback", "variant": "security", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "labelAt": [788, 148] },
+    { "id": "pipeline-to-services", "from": "pipeline", "to": "services", "label": "authorized", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "via": [[788, 328], [318, 328]], "labelAt": [558, 316] },
+    { "id": "services-to-cache", "from": "services", "to": "cache", "label": "session / perm", "variant": "dashed", "route": "orthogonal-h", "labelAt": [205, 388] },
     { "id": "services-to-sqlsugar", "from": "services", "to": "sqlsugar", "variant": "emphasis", "route": "orthogonal-h" },
-    { "id": "sqlsugar-to-db", "from": "sqlsugar", "to": "db", "label": "SQL", "variant": "emphasis", "route": "orthogonal-h" }
+    { "id": "sqlsugar-to-db", "from": "sqlsugar", "to": "db", "label": "SQL", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "services-to-jobs", "from": "services", "to": "jobs", "label": "config", "variant": "dashed", "fromSide": "bottom", "toSide": "left", "via": [[318, 510], [440, 510]], "labelAt": [360, 498] },
+    { "id": "jobs-to-sqlsugar", "from": "jobs", "to": "sqlsugar", "label": "lease · claim", "variant": "emphasis", "fromSide": "top", "toSide": "bottom", "route": "orthogonal-v", "labelAt": [560, 540] },
+    { "id": "worker-to-jobs", "from": "worker", "to": "jobs", "label": "same engine", "variant": "dashed", "route": "orthogonal-h", "labelAt": [408, 654] }
   ],
   "cards": [
     {
@@ -67,16 +79,16 @@
       "dot": "emerald",
       "title": "Packages",
       "items": [
-        "Core -> SqlSugar -> Services -> AspNetCore",
-        "TryAdd replaceability; ApplicationAssemblies for modules"
+        "Core → SqlSugar → Services → AspNetCore",
+        "Optional satellites: Redis / WeCom / DingTalk / Excel"
       ]
     },
     {
       "dot": "rose",
-      "title": "Request contract",
+      "title": "Runtime notes",
       "items": [
-        "Permission code = normalized route",
-        "Errors are numeric ErrorCode (i18n on FE)"
+        "Permission code = normalized route; numeric ErrorCode",
+        "Jobs in-kernel; Worker optional; SignalR push"
       ]
     }
   ]

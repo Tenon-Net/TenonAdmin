@@ -47,7 +47,7 @@ The frontend is covered too: **two feature-equivalent templates** (Vue and React
 
 ## 🗺️ Runtime architecture
 
-Primary request path from browser to database: dual SPA templates → Host → auth & data-scope pipeline → domain services → SqlSugar → DB.
+Primary request path: dual SPA templates → Host (with SignalR) → auth & data-scope → domain services → SqlSugar → DB. Side path: in-kernel job scheduler, plus an optional standalone Worker process.
 
 <p align="center">
   <a href="docs/architecture/tenon-runtime.en.architecture.html">
@@ -57,7 +57,6 @@ Primary request path from browser to database: dual SPA templates → Host → a
 
 <p align="center">
   <a href="docs/architecture/tenon-runtime.en.architecture.html"><strong>Open interactive architecture diagram</strong></a>
-  · Source JSON: <a href="docs/architecture/tenon-runtime.en.architecture.json"><code>tenon-runtime.en.architecture.json</code></a>
 </p>
 
 ## 🔭 Want to see the finished thing first?

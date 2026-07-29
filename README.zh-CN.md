@@ -47,7 +47,7 @@ app.MapTenonAdmin();
 
 ## 🗺️ 运行时架构
 
-一次请求从浏览器到数据库的主路径：双前端模板 → Host → 鉴权与数据权限管道 → 领域服务 → SqlSugar → DB。
+请求主路径：双前端模板 → Host（含 SignalR）→ 鉴权与数据权限 → 领域服务 → SqlSugar → DB。旁路是内核自带的定时任务调度，以及可选的独立 Worker 进程。
 
 <p align="center">
   <a href="docs/architecture/tenon-runtime.zh-CN.architecture.html">
@@ -57,7 +57,6 @@ app.MapTenonAdmin();
 
 <p align="center">
   <a href="docs/architecture/tenon-runtime.zh-CN.architecture.html"><strong>打开可交互架构图</strong></a>
-  · 源 JSON：<a href="docs/architecture/tenon-runtime.zh-CN.architecture.json"><code>tenon-runtime.zh-CN.architecture.json</code></a>
 </p>
 
 ## 🔭 想先看成品？

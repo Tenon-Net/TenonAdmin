@@ -3,10 +3,10 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "TenonAdmin ランタイムアーキテクチャ",
-    "subtitle": "Browser -> SPA -> Host -> 認証とデータ権限 -> ドメイン -> SqlSugar -> DB",
+    "subtitle": "主リクエスト経路 + リアルタイム通知 + カーネル内ジョブ（任意 Worker）",
     "output": "tenon-runtime.ja.architecture.html",
     "quality_profile": "showcase",
-    "viewBox": [1080, 720],
+    "viewBox": [1120, 800],
     "views": [
       {
         "id": "request-path",
@@ -16,43 +16,55 @@
       },
       {
         "id": "auth-and-data",
-        "label": "認証・キャッシュ・データ権限",
-        "focus": ["pipeline", "ext_auth", "cache", "services", "sqlsugar", "db"],
-        "note": "外部ログインのコールバックは認証パイプラインへ。セッションと権限キャッシュはドメインサービスの傍ら。"
+        "label": "認証・キャッシュ・リアルタイム",
+        "focus": ["spa", "host", "pipeline", "ext_auth", "cache", "services"],
+        "note": "外部ログインのコールバックは認証パイプラインへ。セッションキャッシュはドメインサービスの傍ら。SignalR が強制ログアウトと通知を配信。"
+      },
+      {
+        "id": "scheduled-jobs",
+        "label": "ジョブと Worker",
+        "focus": ["services", "jobs", "worker", "sqlsugar", "db"],
+        "note": "カーネル内 cron スケジューラ。DB リースで選主、claim で二重実行防止。任意 WorkerHost は API 停止中も継続。"
       },
       {
         "id": "kernel-core",
         "label": "カーネルホスト経路",
-        "focus": ["host", "pipeline", "services", "sqlsugar", "db"],
-        "note": "ホスト内: フィルタ、ドメインサービス、SqlSugar グローバルフィルタ、そして DB。"
+        "focus": ["host", "pipeline", "services", "jobs", "sqlsugar", "db"],
+        "note": "ホスト内: フィルタ、ドメインサービス、ジョブスケジューラ、SqlSugar グローバルフィルタ、そして DB。"
       }
     ]
   },
   "components": [
-    { "id": "users", "type": "external", "label": "ユーザー", "sublabel": "Browser", "pos": [40, 188], "size": [132, 80] },
-    { "id": "spa", "type": "frontend", "label": "管理 SPA", "sublabel": "Vue / React / 非共有", "tag": ":5173 / :5174", "pos": [230, 188], "size": [176, 80] },
-    { "id": "host", "type": "backend", "label": "MinimalHost", "sublabel": "ASP.NET / Controllers", "tag": ":5100", "pos": [460, 188], "size": [168, 80] },
-    { "id": "pipeline", "type": "security", "label": "認証パイプライン", "sublabel": "JWT / RolePermission", "tag": "DataScope", "pos": [690, 188], "size": [176, 80] },
-    { "id": "ext_auth", "type": "security", "label": "外部ログイン", "sublabel": "WeCom / DingTalk / OIDC", "pos": [690, 76], "size": [176, 72] },
-    { "id": "services", "type": "backend", "label": "ドメインサービス", "sublabel": "Sys* / RBAC / CRUD", "pos": [230, 428], "size": [176, 80] },
-    { "id": "cache", "type": "database", "label": "キャッシュ", "sublabel": "Memory / Redis", "pos": [40, 428], "size": [140, 80] },
-    { "id": "sqlsugar", "type": "backend", "label": "SqlSugar", "sublabel": "Repo / CodeFirst / 権限", "pos": [460, 428], "size": [176, 80] },
-    { "id": "db", "type": "database", "label": "データベース", "sublabel": "SQLite / MySQL / PG / SqlServer", "pos": [690, 428], "size": [184, 80] }
+    { "id": "users", "type": "external", "label": "ユーザー", "sublabel": "Browser", "pos": [40, 168], "size": [132, 80] },
+    { "id": "spa", "type": "frontend", "label": "管理 SPA", "sublabel": "Vue / React / 非共有", "tag": ":5173 / :5174", "pos": [230, 168], "size": [176, 80] },
+    { "id": "host", "type": "backend", "label": "MinimalHost", "sublabel": "Controllers · SignalR Hub", "tag": ":5100", "pos": [460, 168], "size": [176, 80] },
+    { "id": "pipeline", "type": "security", "label": "認証パイプライン", "sublabel": "JWT / RolePermission", "tag": "DataScope", "pos": [700, 168], "size": [176, 80] },
+    { "id": "ext_auth", "type": "security", "label": "外部ログイン", "sublabel": "WeCom / DingTalk / OIDC", "pos": [700, 56], "size": [176, 72] },
+    { "id": "services", "type": "backend", "label": "ドメインサービス", "sublabel": "Sys* / RBAC / CRUD", "pos": [230, 400], "size": [176, 80] },
+    { "id": "cache", "type": "database", "label": "キャッシュ", "sublabel": "Memory / Redis", "pos": [40, 400], "size": [140, 80] },
+    { "id": "sqlsugar", "type": "backend", "label": "SqlSugar", "sublabel": "Repo / CodeFirst / 権限", "pos": [460, 400], "size": [176, 80] },
+    { "id": "db", "type": "database", "label": "データベース", "sublabel": "SQLite / MySQL / PG / SqlServer", "pos": [700, 400], "size": [184, 80] },
+    { "id": "jobs", "type": "backend", "label": "ジョブスケジューラ", "sublabel": "cron / IAdminJob / claim", "tag": "カーネル内蔵", "pos": [460, 560], "size": [176, 80] },
+    { "id": "worker", "type": "backend", "label": "WorkerHost", "sublabel": "任意の独立プロセス", "tag": "AddTenonAdminWorker", "pos": [230, 560], "size": [176, 80] }
   ],
   "boundaries": [
-    { "kind": "region", "label": "TenonAdmin カーネルホスト", "wraps": ["host", "pipeline", "services", "sqlsugar"] },
+    { "kind": "region", "label": "TenonAdmin カーネルホスト", "wraps": ["host", "pipeline", "services", "sqlsugar", "jobs"] },
     { "kind": "security-group", "label": "認証とセッション", "wraps": ["pipeline", "ext_auth"] },
-    { "kind": "region", "label": "データプレーン", "wraps": ["db"] }
+    { "kind": "region", "label": "データプレーン", "wraps": ["db"] },
+    { "kind": "region", "label": "任意 Worker", "wraps": ["worker"] }
   ],
   "connections": [
     { "id": "users-to-spa", "from": "users", "to": "spa", "label": "HTTPS", "variant": "emphasis", "route": "orthogonal-h" },
-    { "id": "spa-to-host", "from": "spa", "to": "host", "label": "/api", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "spa-to-host", "from": "spa", "to": "host", "label": "/api · /hub", "variant": "emphasis", "route": "orthogonal-h", "labelAt": [433, 158] },
     { "id": "host-to-pipeline", "from": "host", "to": "pipeline", "variant": "emphasis", "route": "orthogonal-h" },
-    { "id": "ext-auth-to-pipeline", "from": "ext_auth", "to": "pipeline", "label": "callback", "variant": "security", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "labelAt": [778, 158] },
-    { "id": "pipeline-to-services", "from": "pipeline", "to": "services", "label": "認可済み", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "via": [[778, 348], [318, 348]], "labelAt": [548, 336] },
-    { "id": "services-to-cache", "from": "services", "to": "cache", "label": "session / perm", "variant": "dashed", "route": "orthogonal-h", "labelAt": [205, 416] },
+    { "id": "ext-auth-to-pipeline", "from": "ext_auth", "to": "pipeline", "label": "callback", "variant": "security", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "labelAt": [788, 148] },
+    { "id": "pipeline-to-services", "from": "pipeline", "to": "services", "label": "認可済み", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "via": [[788, 328], [318, 328]], "labelAt": [558, 316] },
+    { "id": "services-to-cache", "from": "services", "to": "cache", "label": "session / perm", "variant": "dashed", "route": "orthogonal-h", "labelAt": [205, 388] },
     { "id": "services-to-sqlsugar", "from": "services", "to": "sqlsugar", "variant": "emphasis", "route": "orthogonal-h" },
-    { "id": "sqlsugar-to-db", "from": "sqlsugar", "to": "db", "label": "SQL", "variant": "emphasis", "route": "orthogonal-h" }
+    { "id": "sqlsugar-to-db", "from": "sqlsugar", "to": "db", "label": "SQL", "variant": "emphasis", "route": "orthogonal-h" },
+    { "id": "services-to-jobs", "from": "services", "to": "jobs", "label": "設定", "variant": "dashed", "fromSide": "bottom", "toSide": "left", "via": [[318, 510], [440, 510]], "labelAt": [360, 498] },
+    { "id": "jobs-to-sqlsugar", "from": "jobs", "to": "sqlsugar", "label": "lease · claim", "variant": "emphasis", "fromSide": "top", "toSide": "bottom", "route": "orthogonal-v", "labelAt": [560, 540] },
+    { "id": "worker-to-jobs", "from": "worker", "to": "jobs", "label": "同一エンジン", "variant": "dashed", "route": "orthogonal-h", "labelAt": [408, 654] }
   ],
   "cards": [
     {
@@ -67,16 +79,16 @@
       "dot": "emerald",
       "title": "パッケージ階層",
       "items": [
-        "Core -> SqlSugar -> Services -> AspNetCore",
-        "TryAdd で差し替え可能。ApplicationAssemblies で業務モジュール"
+        "Core → SqlSugar → Services → AspNetCore",
+        "任意の支線: Redis / WeCom / DingTalk / Excel"
       ]
     },
     {
       "dot": "rose",
-      "title": "リクエスト契約",
+      "title": "ランタイム要点",
       "items": [
-        "権限コード = 正規化されたルート",
-        "エラーは数値 ErrorCode（i18n はフロント）"
+        "権限コード = 正規化ルート。エラーは数値 ErrorCode",
+        "ジョブはカーネル内蔵。Worker は任意。SignalR 配信"
       ]
     }
   ]

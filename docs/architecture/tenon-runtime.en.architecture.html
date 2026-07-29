@@ -4498,10 +4498,10 @@
         <div class="pulse-dot"></div>
         <h1>TenonAdmin Runtime Architecture</h1>
       </div>
-      <p class="subtitle">Browser -&gt; SPA -&gt; Host -&gt; auth &amp; data-scope -&gt; domain -&gt; SqlSugar -&gt; DB</p>
+      <p class="subtitle">Primary request path + realtime push + in-kernel jobs (optional Worker)</p>
     </div>
 
-    <script id="archify-guided-views-data" type="application/json">[{"id":"request-path","label":"Primary request path","focus":["users","spa","host","pipeline","services","sqlsugar","db"],"note":"Follow one admin request from the browser through JWT, RBAC, data scope, and the repository filter into durable storage."},{"id":"auth-and-data","label":"Auth, cache, and data scope","focus":["pipeline","ext_auth","cache","services","sqlsugar","db"],"note":"External login callbacks enter the auth pipeline; session and permission caches sit beside domain services."},{"id":"kernel-core","label":"Kernel host path","focus":["host","pipeline","services","sqlsugar","db"],"note":"Inside the host: filters, domain services, SqlSugar global filters, then the database."}]</script>
+    <script id="archify-guided-views-data" type="application/json">[{"id":"request-path","label":"Primary request path","focus":["users","spa","host","pipeline","services","sqlsugar","db"],"note":"Follow one admin request from the browser through JWT, RBAC, data scope, and the repository filter into durable storage."},{"id":"auth-and-data","label":"Auth, cache, and realtime","focus":["spa","host","pipeline","ext_auth","cache","services"],"note":"External login callbacks enter the auth pipeline; session cache sits beside domain services; SignalR pushes force-logout and notices."},{"id":"scheduled-jobs","label":"Jobs and Worker","focus":["services","jobs","worker","sqlsugar","db"],"note":"In-kernel cron scheduler; DB lease elects a leader and claim prevents double fire; optional WorkerHost keeps jobs running if API is down."},{"id":"kernel-core","label":"Kernel host path","focus":["host","pipeline","services","jobs","sqlsugar","db"],"note":"Inside the host: filters, domain services, job scheduler, SqlSugar global filters, then the database."}]</script>
 
     <div class="guided-views no-print" id="guided-views" hidden aria-label="Guided diagram views">
       <button id="guided-view-prev" type="button" aria-label="Previous guided view" title="Previous guided view ([)">&#8592;</button>
@@ -4544,9 +4544,9 @@
 
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="map">
-      <svg viewBox="0 0 1080 720" role="img" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+      <svg viewBox="0 0 1120 800" role="img" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
         <title id="archify-diagram-title">TenonAdmin Runtime Architecture</title>
-        <desc id="archify-diagram-description">Browser -&gt; SPA -&gt; Host -&gt; auth &amp; data-scope -&gt; domain -&gt; SqlSugar -&gt; DB</desc>
+        <desc id="archify-diagram-description">Primary request path + realtime push + in-kernel jobs (optional Worker)</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -4570,186 +4570,228 @@
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" x="200" y="158" width="696" height="370" rx="12" class="c-region" stroke-width="1"/>
-        <text x="208" y="176" class="t-cloud" font-size="9" font-weight="600">TenonAdmin Kernel Host</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" x="200" y="138" width="706" height="522" rx="12" class="c-region" stroke-width="1"/>
+        <text x="208" y="156" class="t-cloud" font-size="9" font-weight="600">TenonAdmin Kernel Host</text>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="1" x="660" y="46" width="236" height="242" rx="8" class="c-security-group" stroke-width="1"/>
-        <text x="668" y="64" class="t-security" font-size="9" font-weight="600">Auth &amp; session</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="1" x="670" y="26" width="236" height="242" rx="8" class="c-security-group" stroke-width="1"/>
+        <text x="678" y="44" class="t-security" font-size="9" font-weight="600">Auth &amp; session</text>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" x="660" y="398" width="244" height="130" rx="12" class="c-region" stroke-width="1"/>
-        <text x="668" y="416" class="t-cloud" font-size="9" font-weight="600">Data plane</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" x="670" y="370" width="244" height="130" rx="12" class="c-region" stroke-width="1"/>
+        <text x="678" y="388" class="t-cloud" font-size="9" font-weight="600">Data plane</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="3" x="200" y="530" width="236" height="130" rx="12" class="c-region" stroke-width="1"/>
+        <text x="208" y="548" class="t-cloud" font-size="9" font-weight="600">Optional Worker</text>
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="users" data-edge-to="spa" data-edge-label="HTTPS" data-edge-key="0" data-edge-id="users-to-spa" data-composition-points="172,228;201,228;201,228;230,228" d="M 172 228 L 201 228 L 201 228 L 230 228" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="spa" data-edge-to="host" data-edge-label="/api" data-edge-key="1" data-edge-id="spa-to-host" data-composition-points="406,228;433,228;433,228;460,228" d="M 406 228 L 433 228 L 433 228 L 460 228" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="host" data-edge-to="pipeline" data-edge-key="2" data-edge-id="host-to-pipeline" data-composition-points="628,228;659,228;659,228;690,228" d="M 628 228 L 659 228 L 659 228 L 690 228" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="ext_auth" data-edge-to="pipeline" data-edge-label="callback" data-edge-key="3" data-edge-id="ext-auth-to-pipeline" data-composition-points="778,148;778,168;778,168;778,188" d="M 778 148 L 778 168 L 778 168 L 778 188" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="pipeline" data-edge-to="services" data-edge-label="authorized" data-edge-key="4" data-edge-id="pipeline-to-services" data-composition-points="778,268;778,348;318,348;318,428" d="M 778 268 L 778 340 Q 778 348 770 348 L 326 348 Q 318 348 318 356 L 318 428" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="services" data-edge-to="cache" data-edge-label="session / perm" data-edge-key="5" data-edge-id="services-to-cache" data-composition-points="230,468;205,468;205,468;180,468" d="M 230 468 L 205 468 L 205 468 L 180 468" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="services" data-edge-to="sqlsugar" data-edge-key="6" data-edge-id="services-to-sqlsugar" data-composition-points="406,468;433,468;433,468;460,468" d="M 406 468 L 433 468 L 433 468 L 460 468" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="sqlsugar" data-edge-to="db" data-edge-label="SQL" data-edge-key="7" data-edge-id="sqlsugar-to-db" data-composition-points="636,468;663,468;663,468;690,468" d="M 636 468 L 663 468 L 663 468 L 690 468" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="users" data-edge-to="spa" data-edge-label="HTTPS" data-edge-key="0" data-edge-id="users-to-spa" data-composition-points="172,208;201,208;201,208;230,208" d="M 172 208 L 201 208 L 201 208 L 230 208" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="spa" data-edge-to="host" data-edge-label="/api · /hub" data-edge-key="1" data-edge-id="spa-to-host" data-composition-points="406,208;433,208;433,208;460,208" d="M 406 208 L 433 208 L 433 208 L 460 208" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="host" data-edge-to="pipeline" data-edge-key="2" data-edge-id="host-to-pipeline" data-composition-points="636,208;668,208;668,208;700,208" d="M 636 208 L 668 208 L 668 208 L 700 208" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="ext_auth" data-edge-to="pipeline" data-edge-label="callback" data-edge-key="3" data-edge-id="ext-auth-to-pipeline" data-composition-points="788,128;788,148;788,148;788,168" d="M 788 128 L 788 148 L 788 148 L 788 168" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="pipeline" data-edge-to="services" data-edge-label="authorized" data-edge-key="4" data-edge-id="pipeline-to-services" data-composition-points="788,248;788,328;318,328;318,400" d="M 788 248 L 788 320 Q 788 328 780 328 L 326 328 Q 318 328 318 336 L 318 400" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="services" data-edge-to="cache" data-edge-label="session / perm" data-edge-key="5" data-edge-id="services-to-cache" data-composition-points="230,440;205,440;205,440;180,440" d="M 230 440 L 205 440 L 205 440 L 180 440" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="services" data-edge-to="sqlsugar" data-edge-key="6" data-edge-id="services-to-sqlsugar" data-composition-points="406,440;433,440;433,440;460,440" d="M 406 440 L 433 440 L 433 440 L 460 440" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="sqlsugar" data-edge-to="db" data-edge-label="SQL" data-edge-key="7" data-edge-id="sqlsugar-to-db" data-composition-points="636,440;668,440;668,440;700,440" d="M 636 440 L 668 440 L 668 440 L 700 440" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="services" data-edge-to="jobs" data-edge-label="config" data-edge-key="8" data-edge-id="services-to-jobs" data-composition-points="318,480;318,510;440,510;460,600" d="M 318 480 L 318 502 Q 318 510 326 510 L 432 510 Q 440 510 441.73544366254924 517.8094964814716 L 460 600" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="jobs" data-edge-to="sqlsugar" data-edge-label="lease · claim" data-edge-key="9" data-edge-id="jobs-to-sqlsugar" data-composition-points="548,560;548,520;548,520;548,480" d="M 548 560 L 548 520 L 548 520 L 548 480" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="worker" data-edge-to="jobs" data-edge-label="same engine" data-edge-key="10" data-edge-id="worker-to-jobs" data-composition-points="406,600;433,600;433,600;460,600" d="M 406 600 L 433 600 L 433 600 L 460 600" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
 
         <!-- Components -->
         <g id="node-users" data-node-id="users" data-node-label="Users" tabindex="0" role="button" aria-label="Focus Users, Browser, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="Browser" data-node-context="Architecture component">
           <title>Users · Browser · Architecture component</title>
-          <rect x="40" y="188" width="132" height="80" rx="6" class="c-mask"/>
-          <rect x="40" y="188" width="132" height="80" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 194) scale(0.6875)">
+          <rect x="40" y="168" width="132" height="80" rx="6" class="c-mask"/>
+          <rect x="40" y="168" width="132" height="80" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 174) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-detail-anchor x="106" y="226" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Users</text>
-        <text data-detail="context" x="106" y="242" class="t-muted" font-size="9" text-anchor="middle">Browser</text>
+          <text data-detail-anchor x="106" y="206" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Users</text>
+        <text data-detail="context" x="106" y="222" class="t-muted" font-size="9" text-anchor="middle">Browser</text>
         </g>
 
         <g id="node-spa" data-node-id="spa" data-node-label="Admin SPA" tabindex="0" role="button" aria-label="Focus Admin SPA, Vue / React / zero-shared, Architecture component" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="Vue / React / zero-shared" data-node-tag=":5173 / :5174" data-node-context="Architecture component">
           <title>Admin SPA · Vue / React / zero-shared · Architecture component · :5173 / :5174</title>
-          <rect x="230" y="188" width="176" height="80" rx="6" class="c-mask"/>
-          <rect x="230" y="188" width="176" height="80" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(236 194) scale(0.6875)">
+          <rect x="230" y="168" width="176" height="80" rx="6" class="c-mask"/>
+          <rect x="230" y="168" width="176" height="80" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(236 174) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-detail-anchor x="318" y="226" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Admin SPA</text>
-        <text data-detail="context" x="318" y="242" class="t-muted" font-size="9" text-anchor="middle">Vue / React / zero-shared</text>
-        <text data-detail="fine" x="318" y="260" class="t-frontend" font-size="7" text-anchor="middle">:5173 / :5174</text>
+          <text data-detail-anchor x="318" y="206" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Admin SPA</text>
+        <text data-detail="context" x="318" y="222" class="t-muted" font-size="9" text-anchor="middle">Vue / React / zero-shared</text>
+        <text data-detail="fine" x="318" y="240" class="t-frontend" font-size="7" text-anchor="middle">:5173 / :5174</text>
         </g>
 
-        <g id="node-host" data-node-id="host" data-node-label="MinimalHost" tabindex="0" role="button" aria-label="Focus MinimalHost, ASP.NET / Controllers, TenonAdmin Kernel Host" aria-pressed="false" data-node-kind="backend" data-node-sublabel="ASP.NET / Controllers" data-node-tag=":5100" data-node-context="TenonAdmin Kernel Host">
-          <title>MinimalHost · ASP.NET / Controllers · TenonAdmin Kernel Host · :5100</title>
-          <rect x="460" y="188" width="168" height="80" rx="6" class="c-mask"/>
-          <rect x="460" y="188" width="168" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(466 194) scale(0.6875)">
+        <g id="node-host" data-node-id="host" data-node-label="MinimalHost" tabindex="0" role="button" aria-label="Focus MinimalHost, Controllers · SignalR Hub, TenonAdmin Kernel Host" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Controllers · SignalR Hub" data-node-tag=":5100" data-node-context="TenonAdmin Kernel Host">
+          <title>MinimalHost · Controllers · SignalR Hub · TenonAdmin Kernel Host · :5100</title>
+          <rect x="460" y="168" width="176" height="80" rx="6" class="c-mask"/>
+          <rect x="460" y="168" width="176" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(466 174) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-detail-anchor x="544" y="226" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MinimalHost</text>
-        <text data-detail="context" x="544" y="242" class="t-muted" font-size="9" text-anchor="middle">ASP.NET / Controllers</text>
-        <text data-detail="fine" x="544" y="260" class="t-backend" font-size="7" text-anchor="middle">:5100</text>
+          <text data-detail-anchor x="548" y="206" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MinimalHost</text>
+        <text data-detail="context" x="548" y="222" class="t-muted" font-size="9" text-anchor="middle">Controllers · SignalR Hub</text>
+        <text data-detail="fine" x="548" y="240" class="t-backend" font-size="7" text-anchor="middle">:5100</text>
         </g>
 
         <g id="node-pipeline" data-node-id="pipeline" data-node-label="Auth Pipeline" tabindex="0" role="button" aria-label="Focus Auth Pipeline, JWT / RolePermission, TenonAdmin Kernel Host › Auth &amp; session" aria-pressed="false" data-node-kind="security" data-node-sublabel="JWT / RolePermission" data-node-tag="DataScope" data-node-context="TenonAdmin Kernel Host › Auth &amp; session">
           <title>Auth Pipeline · JWT / RolePermission · TenonAdmin Kernel Host › Auth &amp; session · DataScope</title>
-          <rect x="690" y="188" width="176" height="80" rx="6" class="c-mask"/>
-          <rect x="690" y="188" width="176" height="80" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(696 194) scale(0.6875)">
+          <rect x="700" y="168" width="176" height="80" rx="6" class="c-mask"/>
+          <rect x="700" y="168" width="176" height="80" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(706 174) scale(0.6875)">
             <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-detail-anchor x="778" y="226" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Auth Pipeline</text>
-        <text data-detail="context" x="778" y="242" class="t-muted" font-size="9" text-anchor="middle">JWT / RolePermission</text>
-        <text data-detail="fine" x="778" y="260" class="t-security" font-size="7" text-anchor="middle">DataScope</text>
+          <text data-detail-anchor x="788" y="206" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Auth Pipeline</text>
+        <text data-detail="context" x="788" y="222" class="t-muted" font-size="9" text-anchor="middle">JWT / RolePermission</text>
+        <text data-detail="fine" x="788" y="240" class="t-security" font-size="7" text-anchor="middle">DataScope</text>
         </g>
 
         <g id="node-ext_auth" data-node-id="ext_auth" data-node-label="External Auth" tabindex="0" role="button" aria-label="Focus External Auth, WeCom / DingTalk / OIDC, Auth &amp; session" aria-pressed="false" data-node-kind="security" data-node-sublabel="WeCom / DingTalk / OIDC" data-node-context="Auth &amp; session">
           <title>External Auth · WeCom / DingTalk / OIDC · Auth &amp; session</title>
-          <rect x="690" y="76" width="176" height="72" rx="6" class="c-mask"/>
-          <rect x="690" y="76" width="176" height="72" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(696 82) scale(0.6875)">
+          <rect x="700" y="56" width="176" height="72" rx="6" class="c-mask"/>
+          <rect x="700" y="56" width="176" height="72" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(706 62) scale(0.6875)">
             <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-detail-anchor x="778" y="110" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">External Auth</text>
-        <text data-detail="context" x="778" y="126" class="t-muted" font-size="9" text-anchor="middle">WeCom / DingTalk / OIDC</text>
+          <text data-detail-anchor x="788" y="90" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">External Auth</text>
+        <text data-detail="context" x="788" y="106" class="t-muted" font-size="9" text-anchor="middle">WeCom / DingTalk / OIDC</text>
         </g>
 
         <g id="node-services" data-node-id="services" data-node-label="Domain Services" tabindex="0" role="button" aria-label="Focus Domain Services, Sys* / RBAC / CRUD, TenonAdmin Kernel Host" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Sys* / RBAC / CRUD" data-node-context="TenonAdmin Kernel Host">
           <title>Domain Services · Sys* / RBAC / CRUD · TenonAdmin Kernel Host</title>
-          <rect x="230" y="428" width="176" height="80" rx="6" class="c-mask"/>
-          <rect x="230" y="428" width="176" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(236 434) scale(0.6875)">
+          <rect x="230" y="400" width="176" height="80" rx="6" class="c-mask"/>
+          <rect x="230" y="400" width="176" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(236 406) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-detail-anchor x="318" y="466" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Domain Services</text>
-        <text data-detail="context" x="318" y="482" class="t-muted" font-size="9" text-anchor="middle">Sys* / RBAC / CRUD</text>
+          <text data-detail-anchor x="318" y="438" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Domain Services</text>
+        <text data-detail="context" x="318" y="454" class="t-muted" font-size="9" text-anchor="middle">Sys* / RBAC / CRUD</text>
         </g>
 
         <g id="node-cache" data-node-id="cache" data-node-label="Cache" tabindex="0" role="button" aria-label="Focus Cache, Memory / Redis, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="Memory / Redis" data-node-context="Architecture component">
           <title>Cache · Memory / Redis · Architecture component</title>
-          <rect x="40" y="428" width="140" height="80" rx="6" class="c-mask"/>
-          <rect x="40" y="428" width="140" height="80" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(46 434) scale(0.6875)">
+          <rect x="40" y="400" width="140" height="80" rx="6" class="c-mask"/>
+          <rect x="40" y="400" width="140" height="80" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(46 406) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-detail-anchor x="110" y="466" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Cache</text>
-        <text data-detail="context" x="110" y="482" class="t-muted" font-size="9" text-anchor="middle">Memory / Redis</text>
+          <text data-detail-anchor x="110" y="438" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Cache</text>
+        <text data-detail="context" x="110" y="454" class="t-muted" font-size="9" text-anchor="middle">Memory / Redis</text>
         </g>
 
         <g id="node-sqlsugar" data-node-id="sqlsugar" data-node-label="SqlSugar" tabindex="0" role="button" aria-label="Focus SqlSugar, Repo / CodeFirst / scope, TenonAdmin Kernel Host" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Repo / CodeFirst / scope" data-node-context="TenonAdmin Kernel Host">
           <title>SqlSugar · Repo / CodeFirst / scope · TenonAdmin Kernel Host</title>
-          <rect x="460" y="428" width="176" height="80" rx="6" class="c-mask"/>
-          <rect x="460" y="428" width="176" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(466 434) scale(0.6875)">
+          <rect x="460" y="400" width="176" height="80" rx="6" class="c-mask"/>
+          <rect x="460" y="400" width="176" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(466 406) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-detail-anchor x="548" y="466" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">SqlSugar</text>
-        <text data-detail="context" x="548" y="482" class="t-muted" font-size="9" text-anchor="middle">Repo / CodeFirst / scope</text>
+          <text data-detail-anchor x="548" y="438" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">SqlSugar</text>
+        <text data-detail="context" x="548" y="454" class="t-muted" font-size="9" text-anchor="middle">Repo / CodeFirst / scope</text>
         </g>
 
         <g id="node-db" data-node-id="db" data-node-label="Database" tabindex="0" role="button" aria-label="Focus Database, SQLite / MySQL / PG / SqlServer, Data plane" aria-pressed="false" data-node-kind="database" data-node-sublabel="SQLite / MySQL / PG / SqlServer" data-node-context="Data plane">
           <title>Database · SQLite / MySQL / PG / SqlServer · Data plane</title>
-          <rect x="690" y="428" width="184" height="80" rx="6" class="c-mask"/>
-          <rect x="690" y="428" width="184" height="80" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(696 434) scale(0.6875)">
+          <rect x="700" y="400" width="184" height="80" rx="6" class="c-mask"/>
+          <rect x="700" y="400" width="184" height="80" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(706 406) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-detail-anchor x="782" y="466" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Database</text>
-        <text data-detail="context" x="782" y="482" class="t-muted" font-size="9" text-anchor="middle">SQLite / MySQL / PG / SqlServer</text>
+          <text data-detail-anchor x="792" y="438" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Database</text>
+        <text data-detail="context" x="792" y="454" class="t-muted" font-size="9" text-anchor="middle">SQLite / MySQL / PG / SqlServer</text>
+        </g>
+
+        <g id="node-jobs" data-node-id="jobs" data-node-label="Job Scheduler" tabindex="0" role="button" aria-label="Focus Job Scheduler, cron / IAdminJob / claim, TenonAdmin Kernel Host" aria-pressed="false" data-node-kind="backend" data-node-sublabel="cron / IAdminJob / claim" data-node-tag="in-kernel" data-node-context="TenonAdmin Kernel Host">
+          <title>Job Scheduler · cron / IAdminJob / claim · TenonAdmin Kernel Host · in-kernel</title>
+          <rect x="460" y="560" width="176" height="80" rx="6" class="c-mask"/>
+          <rect x="460" y="560" width="176" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(466 566) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="548" y="598" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Job Scheduler</text>
+        <text data-detail="context" x="548" y="614" class="t-muted" font-size="9" text-anchor="middle">cron / IAdminJob / claim</text>
+        <text data-detail="fine" x="548" y="632" class="t-backend" font-size="7" text-anchor="middle">in-kernel</text>
+        </g>
+
+        <g id="node-worker" data-node-id="worker" data-node-label="WorkerHost" tabindex="0" role="button" aria-label="Focus WorkerHost, optional process, Optional Worker" aria-pressed="false" data-node-kind="backend" data-node-sublabel="optional process" data-node-tag="AddTenonAdminWorker" data-node-context="Optional Worker">
+          <title>WorkerHost · optional process · Optional Worker · AddTenonAdminWorker</title>
+          <rect x="230" y="560" width="176" height="80" rx="6" class="c-mask"/>
+          <rect x="230" y="560" width="176" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(236 566) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="318" y="598" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">WorkerHost</text>
+        <text data-detail="context" x="318" y="614" class="t-muted" font-size="9" text-anchor="middle">optional process</text>
+        <text data-detail="fine" x="318" y="632" class="t-backend" font-size="7" text-anchor="middle">AddTenonAdminWorker</text>
         </g>
 
         <!-- Connection labels -->
         <g data-detail="context" data-edge-from="users" data-edge-to="spa" data-edge-label="HTTPS" data-edge-key="0" data-edge-id="users-to-spa">
-          <rect x="184" y="208" width="34" height="14" rx="3" class="c-mask"/>
-          <text x="201" y="218" class="t-backend" font-size="8" text-anchor="middle">HTTPS</text>
+          <rect x="184" y="188" width="34" height="14" rx="3" class="c-mask"/>
+          <text x="201" y="198" class="t-backend" font-size="8" text-anchor="middle">HTTPS</text>
         </g>
-        <g data-detail="context" data-edge-from="spa" data-edge-to="host" data-edge-label="/api" data-edge-key="1" data-edge-id="spa-to-host">
-          <rect x="418" y="208" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="433" y="218" class="t-backend" font-size="8" text-anchor="middle">/api</text>
+        <g data-detail="context" data-edge-from="spa" data-edge-to="host" data-edge-label="/api · /hub" data-edge-key="1" data-edge-id="spa-to-host">
+          <rect x="401.6" y="148" width="62.8" height="14" rx="3" class="c-mask"/>
+          <text x="433" y="158" class="t-backend" font-size="8" text-anchor="middle">/api · /hub</text>
         </g>
 
         <g data-detail="context" data-edge-from="ext_auth" data-edge-to="pipeline" data-edge-label="callback" data-edge-key="3" data-edge-id="ext-auth-to-pipeline">
-          <rect x="753.8" y="148" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="778" y="158" class="t-security" font-size="8" text-anchor="middle">callback</text>
+          <rect x="763.8" y="138" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="788" y="148" class="t-security" font-size="8" text-anchor="middle">callback</text>
         </g>
         <g data-detail="context" data-edge-from="pipeline" data-edge-to="services" data-edge-label="authorized" data-edge-key="4" data-edge-id="pipeline-to-services">
-          <rect x="519" y="326" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="548" y="336" class="t-backend" font-size="8" text-anchor="middle">authorized</text>
+          <rect x="529" y="306" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="558" y="316" class="t-backend" font-size="8" text-anchor="middle">authorized</text>
         </g>
         <g data-detail="context" data-edge-from="services" data-edge-to="cache" data-edge-label="session / perm" data-edge-key="5" data-edge-id="services-to-cache">
-          <rect x="166.4" y="406" width="77.2" height="14" rx="3" class="c-mask"/>
-          <text x="205" y="416" class="t-messagebus" font-size="8" text-anchor="middle">session / perm</text>
+          <rect x="166.4" y="378" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="205" y="388" class="t-messagebus" font-size="8" text-anchor="middle">session / perm</text>
         </g>
 
         <g data-detail="context" data-edge-from="sqlsugar" data-edge-to="db" data-edge-label="SQL" data-edge-key="7" data-edge-id="sqlsugar-to-db">
-          <rect x="648" y="448" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="663" y="458" class="t-backend" font-size="8" text-anchor="middle">SQL</text>
+          <rect x="653" y="420" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="668" y="430" class="t-backend" font-size="8" text-anchor="middle">SQL</text>
+        </g>
+        <g data-detail="context" data-edge-from="services" data-edge-to="jobs" data-edge-label="config" data-edge-key="8" data-edge-id="services-to-jobs">
+          <rect x="340.6" y="488" width="38.8" height="14" rx="3" class="c-mask"/>
+          <text x="360" y="498" class="t-messagebus" font-size="8" text-anchor="middle">config</text>
+        </g>
+        <g data-detail="context" data-edge-from="jobs" data-edge-to="sqlsugar" data-edge-label="lease · claim" data-edge-key="9" data-edge-id="jobs-to-sqlsugar">
+          <rect x="523.8" y="530" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="560" y="540" class="t-backend" font-size="8" text-anchor="middle">lease · claim</text>
+        </g>
+        <g data-detail="context" data-edge-from="worker" data-edge-to="jobs" data-edge-label="same engine" data-edge-key="10" data-edge-id="worker-to-jobs">
+          <rect x="376.6" y="644" width="62.8" height="14" rx="3" class="c-mask"/>
+          <text x="408" y="654" class="t-messagebus" font-size="8" text-anchor="middle">same engine</text>
         </g>
 
         <!-- Legend -->
         <g data-legend-bridge>
-          <text x="40" y="691" class="t-primary" font-size="9" font-weight="600">Legend</text>
+          <text x="40" y="771" class="t-primary" font-size="9" font-weight="600">Legend</text>
           <g data-legend-kind="external">
-            <rect x="40" y="696" width="14" height="9" rx="2" class="c-external" stroke-width="1"/>
-            <text x="60" y="704" class="t-muted" font-size="8">External</text>
+            <rect x="40" y="776" width="14" height="9" rx="2" class="c-external" stroke-width="1"/>
+            <text x="60" y="784" class="t-muted" font-size="8">External</text>
           </g>
           <g data-legend-kind="frontend">
-            <rect x="144" y="696" width="14" height="9" rx="2" class="c-frontend" stroke-width="1"/>
-            <text x="164" y="704" class="t-muted" font-size="8">Frontend</text>
+            <rect x="144" y="776" width="14" height="9" rx="2" class="c-frontend" stroke-width="1"/>
+            <text x="164" y="784" class="t-muted" font-size="8">Frontend</text>
           </g>
           <g data-legend-kind="backend">
-            <rect x="248" y="696" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
-            <text x="268" y="704" class="t-muted" font-size="8">Backend</text>
+            <rect x="248" y="776" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
+            <text x="268" y="784" class="t-muted" font-size="8">Backend</text>
           </g>
           <g data-legend-kind="security">
-            <rect x="347" y="696" width="14" height="9" rx="2" class="c-security" stroke-width="1"/>
-            <text x="367" y="704" class="t-muted" font-size="8">Security</text>
+            <rect x="347" y="776" width="14" height="9" rx="2" class="c-security" stroke-width="1"/>
+            <text x="367" y="784" class="t-muted" font-size="8">Security</text>
           </g>
           <g data-legend-kind="database">
-            <rect x="451" y="696" width="14" height="9" rx="2" class="c-database" stroke-width="1"/>
-            <text x="471" y="704" class="t-muted" font-size="8">Database</text>
+            <rect x="451" y="776" width="14" height="9" rx="2" class="c-database" stroke-width="1"/>
+            <text x="471" y="784" class="t-muted" font-size="8">Database</text>
           </g>
         </g>
       </svg>
@@ -4952,19 +4994,19 @@
           <h3>Packages</h3>
         </div>
         <ul>
-          <li>&bull; Core -&gt; SqlSugar -&gt; Services -&gt; AspNetCore</li>
-          <li>&bull; TryAdd replaceability; ApplicationAssemblies for modules</li>
+          <li>&bull; Core → SqlSugar → Services → AspNetCore</li>
+          <li>&bull; Optional satellites: Redis / WeCom / DingTalk / Excel</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot rose"></div>
-          <h3>Request contract</h3>
+          <h3>Runtime notes</h3>
         </div>
         <ul>
-          <li>&bull; Permission code = normalized route</li>
-          <li>&bull; Errors are numeric ErrorCode (i18n on FE)</li>
+          <li>&bull; Permission code = normalized route; numeric ErrorCode</li>
+          <li>&bull; Jobs in-kernel; Worker optional; SignalR push</li>
         </ul>
       </div>
     </div>

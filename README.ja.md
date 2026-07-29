@@ -47,7 +47,7 @@ app.MapTenonAdmin();
 
 ## 🗺️ ランタイムアーキテクチャ
 
-ブラウザから DB までの主経路：デュアル SPA テンプレート → Host → 認証・データ権限パイプライン → ドメインサービス → SqlSugar → DB。
+主リクエスト経路：デュアル SPA テンプレート → Host（SignalR 含む）→ 認証・データ権限 → ドメインサービス → SqlSugar → DB。支線はカーネル内蔵のジョブスケジューラと、任意の独立 Worker プロセス。
 
 <p align="center">
   <a href="docs/architecture/tenon-runtime.ja.architecture.html">
@@ -57,7 +57,6 @@ app.MapTenonAdmin();
 
 <p align="center">
   <a href="docs/architecture/tenon-runtime.ja.architecture.html"><strong>インタラクティブな構成図を開く</strong></a>
-  · ソース JSON：<a href="docs/architecture/tenon-runtime.ja.architecture.json"><code>tenon-runtime.ja.architecture.json</code></a>
 </p>
 
 ## 🔭 まず完成形を見たい？
