@@ -80,35 +80,28 @@ public class JobService(
         var entity = await GetAsync(id);
         var originalNext = entity.NextRunTime;
         ApplyInput(entity, input, entity.PropsJson);   // Code 不动:创建后不可变
+        entity.UpdateTime = Now;
 
-        // 定向更新,不碰运行态列(NextRunTime/LastRunTime/计数器/Status)。
-        // 整行盲写会把读取瞬间之后由领取 CAS 推进的 NextRunTime 写回旧值——同一 occurrence 会被领第二次(双发),
-        // 顺带覆盖掉计数器与连败数、搅乱 Panic 判阈。
-        await db.Updateable<SysJob>()
-            .SetColumns(j => new SysJob
+        // 用整实体 Update + IgnoreColumns 写配置列,不碰运行态(NextRunTime/LastRunTime/计数器/Status/Code/IsSystem)。
+        // 不能整行盲写:会把读取瞬间之后由领取 CAS 推进的 NextRunTime 写回旧值——同一 occurrence 会被领第二次(双发),
+        // 顺带覆盖计数器与连败数、搅乱 Panic 判阈。
+        // 也不用 SetColumns(j => new SysJob { ... }):表达式树在 PostgreSQL 上对可空 DateTime/枚举的参数化
+        // 偶发生成非法 SQL 或运行时炸(CI postgres 腿 Job 更新返回非 JSON),IgnoreColumns 与 Dict/User 等同款成法。
+        await db.Updateable(entity)
+            .IgnoreColumns(j => new
             {
-                Name = entity.Name,
-                HandlerKind = entity.HandlerKind,
-                HandlerName = entity.HandlerName,
-                PropsJson = entity.PropsJson,
-                TriggerKind = entity.TriggerKind,
-                CronExpression = entity.CronExpression,
-                IntervalSeconds = entity.IntervalSeconds,
-                OneShotTime = entity.OneShotTime,
-                StartTime = entity.StartTime,
-                EndTime = entity.EndTime,
-                MisfireStrategy = entity.MisfireStrategy,
-                ConcurrencyMode = entity.ConcurrencyMode,
-                TimeoutSeconds = entity.TimeoutSeconds,
-                RetryCount = entity.RetryCount,
-                RetryIntervalSeconds = entity.RetryIntervalSeconds,
-                FailAlertThreshold = entity.FailAlertThreshold,
-                AlertByNotice = entity.AlertByNotice,
-                AlertEmails = entity.AlertEmails,
-                Remark = entity.Remark,
-                UpdateTime = Now,
+                j.Code,
+                j.IsSystem,
+                j.Status,
+                j.NextRunTime,
+                j.LastRunTime,
+                j.NumberOfRuns,
+                j.NumberOfErrors,
+                j.ConsecutiveErrors,
+                j.CreateTime,
+                j.CreateUserId,
+                j.IsDelete,
             })
-            .Where(j => j.Id == id)
             .ExecuteCommandAsync();
 
         // 触发配置变了才重算下次时刻,且带 CAS:若这期间调度器已经领取推进过,让它的值胜出
@@ -116,14 +109,25 @@ public class JobService(
         if (entity.Status == JobStatus.Ready)
         {
             var next = JobTrigger.ComputeNext(entity, Now);
-            await db.Updateable<SysJob>()
-                .SetColumns(j => new SysJob { NextRunTime = next })
-                .Where(j => j.Id == id && j.Status == JobStatus.Ready
-                    && (originalNext == null ? j.NextRunTime == null : j.NextRunTime == originalNext))
-                .ExecuteCommandAsync();
+            // 可空比较拆成两条,避免三元写进表达式树后在 PG 上渲染异常
+            if (originalNext is null)
+            {
+                await db.Updateable<SysJob>()
+                    .SetColumns(j => j.NextRunTime == next)
+                    .Where(j => j.Id == id && j.Status == JobStatus.Ready && j.NextRunTime == null)
+                    .ExecuteCommandAsync();
+            }
+            else
+            {
+                var expected = originalNext.Value;
+                await db.Updateable<SysJob>()
+                    .SetColumns(j => j.NextRunTime == next)
+                    .Where(j => j.Id == id && j.Status == JobStatus.Ready && j.NextRunTime == expected)
+                    .ExecuteCommandAsync();
+            }
             if (next is null)
                 await db.Updateable<SysJob>()
-                    .SetColumns(j => new SysJob { Status = JobStatus.Completed })
+                    .SetColumns(j => j.Status == JobStatus.Completed)
                     .Where(j => j.Id == id && j.Status == JobStatus.Ready && j.NextRunTime == null)
                     .ExecuteCommandAsync();
         }

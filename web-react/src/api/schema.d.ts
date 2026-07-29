@@ -8676,6 +8676,11 @@ export interface components {
             elapsedMs?: number | string;
             /** @description 执行节点(NodeName,{MachineName}#{WorkerId}) */
             nodeName?: string;
+            /**
+             * @description 执行进程实例快照(与 string SysJobNode.InstanceId 对应)。
+             *     孤儿回收按「节点名 + 实例 Id」判活:同名重启后旧实例的未闭合行会被回收,避免 SerialSkip 永久停摆。
+             */
+            nodeInstanceId?: string;
             /** @description 跨节点终止旗标:kill 端点置 true,执行侧每 KillPollSeconds 轮询自己这行(§5.4) */
             killRequested?: boolean;
             /** @description 处理器输出(截 8KB;HTTP 响应体截 Http.MaxResponseLogBytes) */

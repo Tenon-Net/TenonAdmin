@@ -133,16 +133,27 @@ LOCK_CODE=$(login "$LOCK_ACCOUNT" "wrong-password-6" | json code)
 
 echo "== 3. The two replicas use different snowflake worker ids =="
 # Same worker id = colliding primary keys when issued in the same millisecond (data-corruption
-# grade, and it happens silently). Decode the worker id out of the login log's row Id:
-# workerId = (id >> 6) & 63 (per SnowflakeIdGenerator's bit layout).
-WORKERS=$(curl -s "$BASE/api/v1/sys/log/login/page?Current=1&Size=50" -H "Authorization: Bearer $ADMIN_TOKEN" \
+# grade, and it happens silently). Prefer the job dashboard's node registry: every scheduler
+# process heartbeats its WorkerId there, so we see both replicas even if login traffic was
+# sticky to one. Fall back to decoding snowflake ids from the login log if the dashboard is empty.
+WORKERS=$(curl -s "$BASE/api/v1/sys/job/dashboard" -H "Authorization: Bearer $ADMIN_TOKEN" \
   | python3 -c "
+import sys,json
+try:
+    nodes = json.load(sys.stdin)['data']['nodes']
+    print(' '.join(sorted({str(n.get('workerId', n.get('WorkerId', ''))) for n in nodes if n is not None})))
+except Exception:
+    print('')")
+if [ -z "${WORKERS// }" ]; then
+  WORKERS=$(curl -s "$BASE/api/v1/sys/log/login/page?Current=1&Size=50" -H "Authorization: Bearer $ADMIN_TOKEN" \
+    | python3 -c "
 import sys,json
 items = json.load(sys.stdin)['data']['items']
 print(' '.join(sorted({str((int(i['id']) >> 6) & 63) for i in items})))")
+fi
 WORKER_COUNT=$(echo "$WORKERS" | wc -w)
 [ "$WORKER_COUNT" -ge 2 ] \
-  && pass "$WORKER_COUNT distinct worker ids showed up in the login log's row Ids ($WORKERS) -- the two replicas really are issuing IDs independently" \
+  && pass "$WORKER_COUNT distinct worker ids showed up ($WORKERS) -- the two replicas really are issuing IDs independently" \
   || fail "Only worker id(s) [$WORKERS] showed up -- both replicas share the same WorkerId, so same-millisecond issuance would collide on the primary key"
 
 echo "== 4. The real client IP is captured after the reverse proxy =="
@@ -246,11 +257,22 @@ print(next((n['nodeName'] for n in nodes if n['isLeader']), ''))")
       echo "  (stopping the leader '$LEADER_SVC', then waiting 50s for the standby to take over: lease 30s + heartbeat 10s)"
       docker compose stop "$LEADER_SVC" >/dev/null 2>&1
       sleep 50
-      AFTER=$(curl -s "$BASE/api/v1/sys/job/log/page?JobId=$JOB_ID&Size=1" -H "Authorization: Bearer $ADMIN_TOKEN" | json data.total)
-      NEW_LEADER=$(curl -s "$BASE/api/v1/sys/job/dashboard" -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "
+      # After stop, Caddy may still briefly route to the dead upstream (empty body / 502). Retry
+      # until we get a real JSON envelope so a proxy blip is not reported as "standby never took over".
+      AFTER=""
+      NEW_LEADER=""
+      for _try in $(seq 1 15); do
+        AFTER=$(curl -s --max-time 5 "$BASE/api/v1/sys/job/log/page?JobId=$JOB_ID&Size=1" -H "Authorization: Bearer $ADMIN_TOKEN" | json data.total)
+        NEW_LEADER=$(curl -s --max-time 5 "$BASE/api/v1/sys/job/dashboard" -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "
 import sys,json
-nodes = json.load(sys.stdin)['data']['nodes']
-print(next((n['nodeName'] for n in nodes if n['isLeader']), ''))")
+try:
+    nodes = json.load(sys.stdin)['data']['nodes']
+    print(next((n['nodeName'] for n in nodes if n.get('isLeader') or n.get('IsLeader')), ''))
+except Exception:
+    print('')" 2>/dev/null)
+        [ -n "$AFTER" ] && [ -n "$NEW_LEADER" ] && break
+        sleep 2
+      done
       [ "${AFTER:-0}" -gt "${BEFORE:-0}" ] \
         && pass "New runs kept appearing after the leader went down ($BEFORE -> $AFTER)" \
         || fail "No new runs after the leader went down ($BEFORE -> $AFTER) -- the standby never took the lease, so jobs stop when one replica dies"

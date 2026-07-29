@@ -26,19 +26,43 @@
 	# upstream 可以有多个(见 docker-compose.scale.yml 的双副本),Caddy 默认轮询 → 它就是那套验收的负载均衡器。
 	# reverse_proxy 会自动写 X-Forwarded-For / X-Forwarded-Proto ——
 	# 后端要真正采信它,还需配 TenonAdmin:Api:ForwardedHeaders(受信网段),否则限流按 IP 分区形同虚设。
+	# 多上游时(docker-compose.scale.yml):lb_try_duration 让单次请求在上游挂了后改试别的副本,
+	# 避免 docker stop 一个 app 后 Caddy 仍把一半流量打到死节点、冒烟拿到空 body / 502。
+	# health_uri 主动摘掉不健康上游;单副本时列表只有一个,行为不变。
 	handle /api/* {
-		reverse_proxy {$TENON_UPSTREAMS:app:8080}
+		reverse_proxy {$TENON_UPSTREAMS:app:8080} {
+			lb_try_duration 2s
+			fail_duration 10s
+			max_fails 1
+			health_uri /health
+			health_interval 2s
+			health_timeout 1s
+		}
 	}
 
 	# SignalR 实时通知 Hub(强制下线、未读刷新):Caddy 的 reverse_proxy **自动处理 WebSocket 升级**,
 	# 无需像 nginx 那样手写 Upgrade/Connection 头。漏掉这块,实时通知会静默退化成 30s 轮询。
 	handle /hub/* {
-		reverse_proxy {$TENON_UPSTREAMS:app:8080}
+		reverse_proxy {$TENON_UPSTREAMS:app:8080} {
+			lb_try_duration 2s
+			fail_duration 10s
+			max_fails 1
+			health_uri /health
+			health_interval 2s
+			health_timeout 1s
+		}
 	}
 
 	# 探针:编排层/负载均衡直接探这里,不必知道后端在哪
 	handle /health* {
-		reverse_proxy {$TENON_UPSTREAMS:app:8080}
+		reverse_proxy {$TENON_UPSTREAMS:app:8080} {
+			lb_try_duration 2s
+			fail_duration 10s
+			max_fails 1
+			health_uri /health
+			health_interval 2s
+			health_timeout 1s
+		}
 	}
 
 	# 兜底:前端 history 路由,未命中静态文件就交给 SPA 自己解析(深链刷新不 404)
