@@ -769,7 +769,8 @@ export default {
       basic: 'Basics',
       trigger: 'Trigger',
       handler: 'Payload',
-      failure: 'Failure handling',
+      advanced: 'Advanced',
+      advancedHint: 'Active window, misfire, concurrency, retry and alerting — saving works without opening this',
     },
     status: {
       ready: 'Ready',
@@ -802,7 +803,6 @@ export default {
       seconds: 's',
       oneShotTime: 'Fire time',
       oneShotRequired: 'Please pick the fire time',
-      window: 'Active window',
       windowStart: 'Start (empty = now)',
       windowEnd: 'End (empty = never)',
       misfireStrategy: 'Misfire strategy',

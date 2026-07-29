@@ -33,6 +33,11 @@ export interface FormContainerProps {
   cancelText?: string
   /** 默认 false:表单防误触丢输入 */
   maskClosable?: boolean
+  /**
+   * 垂直居中(仅 modal 形态)。antd Modal 默认 `top: 100px`,高表单会白白少掉 100px 可用高度而多出滚动;
+   * Naive 的 n-modal 本来就是居中的,所以这也是把 React 侧对齐 Vue 侧的开关。矮表单不必开。
+   */
+  centered?: boolean
   children: ReactNode
 }
 
@@ -43,7 +48,7 @@ export interface FormContainerProps {
  * 对齐 Vue 侧 FormContainer;keep-alive 页签切走强制收起那一段留到 D1(标签页容器落地时)。
  */
 export function FormContainer({
-  open, onOpenChange, title, variant, width, onConfirm, confirmText, cancelText, maskClosable, children,
+  open, onOpenChange, title, variant, width, onConfirm, confirmText, cancelText, maskClosable, centered, children,
 }: FormContainerProps) {
   const { t } = useTranslation()
   const mode = useAppStore((s) => variant ?? s.formStyle)
@@ -70,6 +75,7 @@ export function FormContainer({
         open={open}
         title={title}
         width={w}
+        centered={centered}
         confirmLoading={loading}
         okText={confirmText ?? t('common.confirm')}
         cancelText={cancelText ?? t('common.cancel')}

@@ -422,10 +422,11 @@ onMounted(() => void loadPreview(expr.value))
   font-size: 13px;
   line-height: 22px;
 }
+/* 横向 wrap 而非一行一个:5 个时刻竖排要占 110px 高,在任务表单里这是纯浪费 */
 .cron-occurrences {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  gap: 2px 16px;
 }
 .cron-occurrence {
   font-family: var(--font-family-mono, ui-monospace, monospace);

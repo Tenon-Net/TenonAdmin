@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import dayjs from 'dayjs'
 import type { SysJob } from '@/types/api'
 import {
-  blankJob, describeTrigger, formToInput, pairsToProps, parseHeaders, parsePropsJson, propsToPairs, rowToForm,
+  blankJob, describeTrigger, formToInput, hasAdvanced, pairsToProps, parseHeaders, parsePropsJson, propsToPairs, rowToForm,
 } from './jobForm'
 
 /** 造一行最小 SysJob(覆盖必填,测试各自覆写关心字段)。 */
@@ -14,7 +14,8 @@ function makeRow(patch: Partial<SysJob>): SysJob {
     misfireStrategy: 1, concurrencyMode: 1, status: 1,
     nextRunTime: null, lastRunTime: null, numberOfRuns: 0, numberOfErrors: 0, consecutiveErrors: 0,
     timeoutSeconds: 0, retryCount: 0, retryIntervalSeconds: 30, failAlertThreshold: 0,
-    alertByNotice: false, alertEmails: null, isSystem: false, remark: null,
+    // 与 blankJob() 的缺省对齐:这行代表"高级项一个没动过"的干净行,hasAdvanced 应判 false
+    alertByNotice: true, alertEmails: null, isSystem: false, remark: null,
     ...patch,
   }
 }
@@ -115,5 +116,33 @@ describe('describeTrigger', () => {
     expect(describeTrigger(makeRow({ triggerKind: 2, intervalSeconds: 30 }), t)).toBe('job.trigger.every|{"n":30}')
     expect(describeTrigger(makeRow({ triggerKind: 3, oneShotTime: '2026-08-01T10:00:00.123' }), t))
       .toBe('job.trigger.at|{"time":"2026-08-01 10:00:00"}')
+  })
+})
+
+describe('blankJob 缺省', () => {
+  it('站内信告警默认开(与后端 SysJob/JobInput 的 true 一致)', () => {
+    // 曾经是 false —— 从 React 建的任务默认收不到告警,而同样操作在 Vue 侧收得到
+    expect(blankJob().alertByNotice).toBe(true)
+  })
+})
+
+describe('hasAdvanced(决定编辑时高级区是否默认展开)', () => {
+  it('十项一个没动过 → false', () => {
+    expect(hasAdvanced(makeRow({}))).toBe(false)
+  })
+  it('动过任一项 → true', () => {
+    expect(hasAdvanced(makeRow({ startTime: '2026-08-01T00:00:00' }))).toBe(true)
+    expect(hasAdvanced(makeRow({ endTime: '2026-08-01T00:00:00' }))).toBe(true)
+    expect(hasAdvanced(makeRow({ misfireStrategy: 2 }))).toBe(true)
+    expect(hasAdvanced(makeRow({ concurrencyMode: 2 }))).toBe(true)
+    expect(hasAdvanced(makeRow({ timeoutSeconds: 30 }))).toBe(true)
+    expect(hasAdvanced(makeRow({ retryCount: 1 }))).toBe(true)
+    expect(hasAdvanced(makeRow({ retryIntervalSeconds: 60 }))).toBe(true)
+    expect(hasAdvanced(makeRow({ failAlertThreshold: 3 }))).toBe(true)
+    expect(hasAdvanced(makeRow({ alertByNotice: false }))).toBe(true)
+    expect(hasAdvanced(makeRow({ alertEmails: 'a@b.c' }))).toBe(true)
+  })
+  it('只动非高级字段(名称/cron/载荷)不算', () => {
+    expect(hasAdvanced(makeRow({ name: '改了名', cronExpression: '0 30 * * * ?', handlerName: 'X' }))).toBe(false)
   })
 })

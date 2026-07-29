@@ -134,7 +134,7 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 2, ParentId = 20, Type = MenuType.Button, Title = "连通性探针", Permission = "GET:/api/v1/ping", Sort = 23, Enabled = true },
 
         // ═══ 日志审计 ═══════════════════════════════════════════════
-        new SysMenu { Id = 90, ParentId = 0, Type = MenuType.Catalog, Title = "日志审计", Permission = "", Icon = "ph:clipboard-text-duotone", Sort = 3, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
+        new SysMenu { Id = 90, ParentId = 0, Type = MenuType.Catalog, Title = "日志审计", Permission = "", Icon = "ph:clipboard-text-duotone", Sort = 4, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
 
         // 登录日志页(R2:SysLogController 只读 + 清空)。分页码 8、清空码 69。
         new SysMenu { Id = 68, ParentId = 90, Type = MenuType.Menu, Title = "登录日志", Permission = "", Path = "/system/log/login", Component = "system/log/login/index", Icon = "ph:sign-in-duotone", Sort = 1, Enabled = true, Visible = true },
@@ -159,7 +159,7 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 6, ParentId = 81, Type = MenuType.Button, Title = "强制下线", Permission = "DELETE:/api/v1/sys/session/{sessionid}", Sort = 6, Enabled = true },
 
         // ═══ 文件管理 ═══════════════════════════════════════════════
-        new SysMenu { Id = 30, ParentId = 0, Type = MenuType.Catalog, Title = "文件管理", Permission = "", Icon = "ph:folder-duotone", Sort = 4, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
+        new SysMenu { Id = 30, ParentId = 0, Type = MenuType.Catalog, Title = "文件管理", Permission = "", Icon = "ph:folder-duotone", Sort = 5, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
 
         // 文件管理页(R8:SysFileController 列表 + 上传/下载/删除)。上传码 31、分页码 32、下载 79、删除 80。
         new SysMenu { Id = 78, ParentId = 30, Type = MenuType.Menu, Title = "文件管理", Permission = "", Path = "/system/file", Component = "system/file/index", Icon = "ph:files-duotone", Sort = 1, Enabled = true, Visible = true },
@@ -190,10 +190,16 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 124, ParentId = 121, Type = MenuType.Button, Title = "缓存-清配置", Permission = "POST:/api/v1/sys/cache/flush-config", Sort = 3, Enabled = true },
         new SysMenu { Id = 125, ParentId = 121, Type = MenuType.Button, Title = "缓存-重建门户菜单", Permission = "POST:/api/v1/sys/cache/rebuild-portal", Sort = 4, Enabled = true },
 
-        // 定时任务三页(scheduling-ledger §9.3)。平铺挂系统运维目录,照缓存管理/服务器监控先例。
+        // ═══ 任务调度(自成一个功能域,不再平铺在系统运维下)═══════════
+        // 三页原本与系统配置/字典/缓存等八个不相干的页面挤在「系统运维」里,自立门户后
+        // 目录名用「任务调度」而非「定时任务」——后者与子菜单重名,菜单树里读着像套娃。
+        // 路由与 Component 一律不动(仍 /system/job*),旧链接、已持久化的页签都不受影响。
+        new SysMenu { Id = 147, ParentId = 0, Type = MenuType.Catalog, Title = "任务调度", Permission = "", Icon = "ph:timer-duotone", Sort = 3, Enabled = true, ModuleId = DefaultModuleSeed.BUILTIN_MODULE_ID },
+
+        // 定时任务三页(scheduling-ledger §9.3)。
         // 注意 146 挂在 132 页下、Id 却大于 140–145:Id 按取号顺序不按归属排(/handlers 是后补决策),
         // 这正是「接着最大值往后取」纪律的正确形状,不回填空洞。
-        new SysMenu { Id = 132, ParentId = 20, Type = MenuType.Menu, Title = "定时任务", Permission = "", Path = "/system/job", Component = "system/job/index", Icon = "ph:clock-countdown-duotone", Sort = 9, Enabled = true, Visible = true },
+        new SysMenu { Id = 132, ParentId = 147, Type = MenuType.Menu, Title = "定时任务", Permission = "", Path = "/system/job", Component = "system/job/index", Icon = "ph:clock-countdown-duotone", Sort = 1, Enabled = true, Visible = true },
         new SysMenu { Id = 133, ParentId = 132, Type = MenuType.Button, Title = "任务-分页",     Permission = "GET:/api/v1/sys/job/page", Sort = 1, Enabled = true },
         new SysMenu { Id = 134, ParentId = 132, Type = MenuType.Button, Title = "任务-新增",     Permission = "POST:/api/v1/sys/job", Sort = 2, Enabled = true },
         new SysMenu { Id = 135, ParentId = 132, Type = MenuType.Button, Title = "任务-更新",     Permission = "PUT:/api/v1/sys/job/{id}", Sort = 3, Enabled = true },
@@ -203,12 +209,12 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 139, ParentId = 132, Type = MenuType.Button, Title = "任务-执行一次", Permission = "POST:/api/v1/sys/job/{id}/run", Sort = 7, Enabled = true },
         new SysMenu { Id = 146, ParentId = 132, Type = MenuType.Button, Title = "任务-处理器清单", Permission = "GET:/api/v1/sys/job/handlers", Sort = 8, Enabled = true },
 
-        new SysMenu { Id = 140, ParentId = 20, Type = MenuType.Menu, Title = "执行记录", Permission = "", Path = "/system/job-log", Component = "system/job-log/index", Icon = "ph:list-checks-duotone", Sort = 10, Enabled = true, Visible = true },
+        new SysMenu { Id = 140, ParentId = 147, Type = MenuType.Menu, Title = "执行记录", Permission = "", Path = "/system/job-log", Component = "system/job-log/index", Icon = "ph:list-checks-duotone", Sort = 2, Enabled = true, Visible = true },
         new SysMenu { Id = 141, ParentId = 140, Type = MenuType.Button, Title = "记录-分页", Permission = "GET:/api/v1/sys/job/log/page", Sort = 1, Enabled = true },
         new SysMenu { Id = 142, ParentId = 140, Type = MenuType.Button, Title = "记录-终止", Permission = "POST:/api/v1/sys/job/log/{id}/kill", Sort = 2, Enabled = true },
         new SysMenu { Id = 143, ParentId = 140, Type = MenuType.Button, Title = "记录-清空", Permission = "POST:/api/v1/sys/job/log/clear", Sort = 3, Enabled = true },
 
-        new SysMenu { Id = 144, ParentId = 20, Type = MenuType.Menu, Title = "任务监控", Permission = "", Path = "/system/job-monitor", Component = "system/job-monitor/index", Icon = "ph:gauge-duotone", Sort = 11, Enabled = true, Visible = true },
+        new SysMenu { Id = 144, ParentId = 147, Type = MenuType.Menu, Title = "任务监控", Permission = "", Path = "/system/job-monitor", Component = "system/job-monitor/index", Icon = "ph:gauge-duotone", Sort = 3, Enabled = true, Visible = true },
         new SysMenu { Id = 145, ParentId = 144, Type = MenuType.Button, Title = "监控-总览", Permission = "GET:/api/v1/sys/job/dashboard", Sort = 1, Enabled = true },
 
         // ═══ 业务中心(示例业务模块 Id=2)═══════════════════════════

@@ -2,7 +2,7 @@
 // 行含全列 → 编辑直接用行数据回填,不另拉详情;状态列 StatusSwitch 绑 {id}/enabled 端点,
 // Panic 显红 tag(悬浮出连败次数);isSystem 行禁删(后端 47014 兜底)。纯逻辑在 jobForm.ts(变异钉)。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, DatePicker, Divider, Form, Input, InputNumber, Radio, Select, Space, Switch, Tag, Tooltip } from 'antd'
+import { App, Button, Col, Collapse, DatePicker, Divider, Form, Input, InputNumber, Radio, Row, Select, Space, Switch, Tag, Tooltip, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import type { ProColumns } from '@ant-design/pro-components'
@@ -18,7 +18,10 @@ import { useTabsStore } from '@/stores/tabs'
 import { jobApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { SysJob } from '@/types/api'
-import { blankJob, describeTrigger, formToInput, rowToForm, type JobFormValues } from './jobForm'
+import { blankJob, describeTrigger, formToInput, hasAdvanced, rowToForm, type JobFormValues } from './jobForm'
+
+/** 高级选项折叠面板的 key(只有一块,常量化免得字面量散落两处对不上)。 */
+const ADVANCED_KEY = 'advanced'
 
 /** ISO 时刻截到秒、去 T;空显 —。 */
 const fmtTime = (s?: string | null): string => (s ? s.replace('T', ' ').slice(0, 19) : '—')
@@ -77,10 +80,15 @@ export default function JobPage() {
       .catch(() => setHandlerOptions([]))
   }, [open, handlerOptions])
 
+  // 高级选项折叠。收进去的十项全都有缺省值、且一条校验规则都没有,所以折叠永远挡不住保存 ——
+  // 这正是它与页签的区别:展开是可选的,不是必经的一步。
+  const [advancedOpen, setAdvancedOpen] = useState<string[]>([])
+
   const openAdd = () => {
     setEditingId(null)
     form.resetFields()
     form.setFieldsValue(blankJob())
+    setAdvancedOpen([])
     setOpen(true)
   }
   const openEdit = useCallback(
@@ -88,6 +96,7 @@ export default function JobPage() {
       setEditingId(r.id)
       form.resetFields()
       form.setFieldsValue(rowToForm(r))
+      setAdvancedOpen(hasAdvanced(r) ? [ADVANCED_KEY] : [])
       setOpen(true)
     },
     [form],
@@ -226,7 +235,8 @@ export default function JobPage() {
     [t, has, reload, openEdit, handleRun, gotoLogs, handleDelete],
   )
 
-  const formLayout = { labelCol: { span: 6 }, wrapperCol: { span: 17 } }
+  // 定宽 label(对齐 user 页):两列栅格下用 span 比例会让"半行项"和"整行项"的输入框左边缘错开
+  const formLayout = { labelCol: { flex: '104px' }, wrapperCol: { flex: 1 } }
 
   return (
     <>
@@ -256,194 +266,272 @@ export default function JobPage() {
         open={open}
         onOpenChange={setOpen}
         title={editingId === null ? t('job.addTitle') : t('job.editTitle')}
-        width={720}
+        width={900}
+        centered
         confirmText={t('common.save')}
         onConfirm={save}
       >
+        {/* 一页到底,不拆页签:页签是"必须点"才能继续填,把一次顺序填写拆成先找页签,
+            必填项还会藏在未激活的页签后面。降高改走两列栅格 + 高级项默认折叠。
+            定宽 label(对齐 user 页写法)让半行项与整行项的输入框左边缘对齐。 */}
         <Form form={form} {...formLayout} style={{ marginTop: 4 }}>
           {/* ── 基本 ── */}
           <Divider titlePlacement="start" size="small">{t('job.section.basic')}</Divider>
-          <Form.Item
-            name="code" label={t('job.code')}
-            rules={editingId === null ? [{ required: true, whitespace: true, message: t('job.form.codeRequired') }] : undefined}
-          >
-            {/* 任务编码建后不可变(后端更新时忽略);编辑时置灰 */}
-            <Input disabled={editingId !== null} placeholder={t('job.form.codePlaceholder')} />
-          </Form.Item>
-          <Form.Item name="name" label={t('job.name')} rules={[{ required: true, whitespace: true, message: t('job.form.nameRequired') }]}>
-            <Input placeholder={t('job.name')} />
-          </Form.Item>
-          <Form.Item name="remark" label={t('job.remark')}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                name="code" label={t('job.code')}
+                rules={editingId === null ? [{ required: true, whitespace: true, message: t('job.form.codeRequired') }] : undefined}
+              >
+                {/* 任务编码建后不可变(后端更新时忽略);编辑时置灰 */}
+                <Input disabled={editingId !== null} placeholder={t('job.form.codePlaceholder')} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="name" label={t('job.name')} rules={[{ required: true, whitespace: true, message: t('job.form.nameRequired') }]}>
+                <Input placeholder={t('job.name')} />
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Form.Item name="remark" label={t('job.remark')}>
+                <Input.TextArea rows={2} />
+              </Form.Item>
+            </Col>
+          </Row>
 
           {/* ── 触发 ── */}
           <Divider titlePlacement="start" size="small">{t('job.section.trigger')}</Divider>
-          <Form.Item name="triggerKind" label={t('job.form.triggerKind')}>
-            <Radio.Group
-              options={[
-                { label: t('job.trigger.cron'), value: 1 },
-                { label: t('job.trigger.interval'), value: 2 },
-                { label: t('job.trigger.oneShot'), value: 3 },
-              ]}
-            />
-          </Form.Item>
-          {triggerKind === 1 && (
-            <Form.Item name="cronExpression" label={t('job.form.cron')} rules={[{ required: true, whitespace: true, message: t('job.form.cronRequired') }]}>
-              <CronEditor />
-            </Form.Item>
-          )}
-          {triggerKind === 2 && (
-            <Form.Item name="intervalSeconds" label={t('job.form.interval')} rules={[{ required: true, message: t('job.form.intervalRequired') }]}>
-              <InputNumber min={5} precision={0} suffix={t('job.form.seconds')} style={{ width: 180 }} />
-            </Form.Item>
-          )}
-          {triggerKind === 3 && (
-            <Form.Item name="oneShotTime" label={t('job.form.oneShotTime')} rules={[{ required: true, message: t('job.form.oneShotRequired') }]}>
-              <DatePicker showTime style={{ width: 220 }} />
-            </Form.Item>
-          )}
-          <Form.Item label={t('job.form.window')}>
-            <Space size={8}>
-              <Form.Item name="startTime" noStyle>
-                <DatePicker showTime placeholder={t('job.form.windowStart')} style={{ width: 200 }} />
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item name="triggerKind" label={t('job.form.triggerKind')}>
+                <Radio.Group
+                  options={[
+                    { label: t('job.trigger.cron'), value: 1 },
+                    { label: t('job.trigger.interval'), value: 2 },
+                    { label: t('job.trigger.oneShot'), value: 3 },
+                  ]}
+                />
               </Form.Item>
-              <span>~</span>
-              <Form.Item name="endTime" noStyle>
-                <DatePicker showTime placeholder={t('job.form.windowEnd')} style={{ width: 200 }} />
-              </Form.Item>
-            </Space>
-          </Form.Item>
-          <Form.Item name="misfireStrategy" label={t('job.form.misfireStrategy')}>
-            <Radio.Group
-              options={[
-                { label: t('job.form.misfireSkip'), value: 1 },
-                { label: t('job.form.misfireFireOnceNow'), value: 2 },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="concurrencyMode" label={t('job.form.concurrencyMode')}>
-            <Radio.Group
-              options={[
-                { label: t('job.form.concurrencySerial'), value: 1 },
-                { label: t('job.form.concurrencyParallel'), value: 2 },
-              ]}
-            />
-          </Form.Item>
+            </Col>
+            {/* 间隔/一次性跟触发方式同排;cron 编辑器占整行,自然落到下一行 */}
+            {triggerKind === 2 && (
+              <Col xs={24} sm={12}>
+                <Form.Item name="intervalSeconds" label={t('job.form.interval')} rules={[{ required: true, message: t('job.form.intervalRequired') }]}>
+                  <InputNumber min={5} precision={0} suffix={t('job.form.seconds')} style={{ width: 180 }} />
+                </Form.Item>
+              </Col>
+            )}
+            {triggerKind === 3 && (
+              <Col xs={24} sm={12}>
+                <Form.Item name="oneShotTime" label={t('job.form.oneShotTime')} rules={[{ required: true, message: t('job.form.oneShotRequired') }]}>
+                  <DatePicker showTime style={{ width: 220 }} />
+                </Form.Item>
+              </Col>
+            )}
+            {triggerKind === 1 && (
+              <Col span={24}>
+                <Form.Item name="cronExpression" label={t('job.form.cron')} rules={[{ required: true, whitespace: true, message: t('job.form.cronRequired') }]}>
+                  <CronEditor />
+                </Form.Item>
+              </Col>
+            )}
+          </Row>
 
           {/* ── 载荷 ── */}
           <Divider titlePlacement="start" size="small">{t('job.section.handler')}</Divider>
-          <Form.Item
-            name="handlerKind"
-            label={t('job.handlerKind')}
-            // 总闸关着就说清是"后端没开",否则用户只会看见一个莫名其妙点不动的选项
-            extra={sqlEnabled ? undefined : t('job.form.sqlDisabledHint')}
-          >
-            <Radio.Group
-              options={[
-                { label: t('job.handler.compiled'), value: 1 },
-                { label: t('job.handler.http'), value: 2 },
-                { label: t('job.handler.sql'), value: 3, disabled: !sqlEnabled },
-              ]}
-            />
-          </Form.Item>
-          {handlerKind === 1 && (
-            <>
-              <Form.Item name="handlerName" label={t('job.form.handlerName')} rules={[{ required: true, message: t('job.form.handlerRequired') }]}>
-                <Select
-                  showSearch={{ optionFilterProp: 'label' }}
-                  placeholder={t('job.form.handlerPlaceholder')}
-                  loading={open && handlerOptions === null}
-                  options={(handlerOptions ?? []).map((h) => ({ label: h, value: h }))}
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item
+                name="handlerKind"
+                label={t('job.handlerKind')}
+                // 总闸关着就说清是"后端没开",否则用户只会看见一个莫名其妙点不动的选项
+                extra={sqlEnabled ? undefined : t('job.form.sqlDisabledHint')}
+              >
+                <Radio.Group
+                  options={[
+                    { label: t('job.handler.compiled'), value: 1 },
+                    { label: t('job.handler.http'), value: 2 },
+                    { label: t('job.handler.sql'), value: 3, disabled: !sqlEnabled },
+                  ]}
                 />
               </Form.Item>
-              <Form.Item label={t('job.form.props')}>
-                <Form.List name="props">
-                  {(fields, { add, remove }) => (
-                    <>
-                      {fields.map((field) => (
-                        <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
-                          <Form.Item name={[field.name, 'key']} noStyle>
-                            <Input placeholder={t('job.form.propKey')} style={{ width: 160 }} />
-                          </Form.Item>
-                          <Form.Item name={[field.name, 'value']} noStyle>
-                            <Input placeholder={t('job.form.propValue')} style={{ width: 240 }} />
-                          </Form.Item>
-                          <Button type="link" danger size="small" onClick={() => remove(field.name)}>{t('common.delete')}</Button>
-                        </Space>
-                      ))}
-                      <Button type="dashed" block onClick={() => add({ key: '', value: '' })}>{t('job.form.addProp')}</Button>
-                    </>
-                  )}
-                </Form.List>
-              </Form.Item>
-            </>
-          )}
-          {handlerKind === 2 && (
-            <>
-              <Form.Item name="httpUrl" label="URL" rules={[{ required: true, whitespace: true, message: t('job.form.urlRequired') }]}>
-                <Input placeholder="https://" />
-              </Form.Item>
-              <Form.Item name="httpMethod" label={t('job.form.method')}>
-                <Select
-                  style={{ width: 140 }}
-                  options={['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'].map((m) => ({ label: m, value: m }))}
-                />
-              </Form.Item>
-              <Form.Item label={t('job.form.headers')} extra={t('job.form.headersMaskHint')}>
-                <Form.List name="httpHeaders">
-                  {(fields, { add, remove }) => (
-                    <>
-                      {fields.map((field) => (
-                        <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
-                          <Form.Item name={[field.name, 'key']} noStyle>
-                            <Input placeholder={t('job.form.propKey')} style={{ width: 160 }} />
-                          </Form.Item>
-                          <Form.Item name={[field.name, 'value']} noStyle>
-                            <Input placeholder={t('job.form.propValue')} style={{ width: 240 }} />
-                          </Form.Item>
-                          <Button type="link" danger size="small" onClick={() => remove(field.name)}>{t('common.delete')}</Button>
-                        </Space>
-                      ))}
-                      <Button type="dashed" block onClick={() => add({ key: '', value: '' })}>{t('job.form.addHeader')}</Button>
-                    </>
-                  )}
-                </Form.List>
-              </Form.Item>
-              <Form.Item name="httpBody" label={t('job.form.body')}>
-                <Input.TextArea rows={3} placeholder={t('job.form.bodyPlaceholder')} />
-              </Form.Item>
-              <Form.Item name="httpSuccessStatuses" label={t('job.form.successStatuses')}>
-                <Input placeholder={t('job.form.successStatusesPlaceholder')} style={{ width: 220 }} />
-              </Form.Item>
-            </>
-          )}
-          {handlerKind === 3 && (
-            <Form.Item name="sql" label="SQL" rules={[{ required: true, whitespace: true, message: t('job.form.sqlRequired') }]}>
-              <Input.TextArea rows={4} placeholder={t('job.form.sqlPlaceholder')} />
-            </Form.Item>
-          )}
+            </Col>
+            {handlerKind === 1 && (
+              <>
+                <Col span={24}>
+                  <Form.Item name="handlerName" label={t('job.form.handlerName')} rules={[{ required: true, message: t('job.form.handlerRequired') }]}>
+                    <Select
+                      showSearch={{ optionFilterProp: 'label' }}
+                      placeholder={t('job.form.handlerPlaceholder')}
+                      loading={open && handlerOptions === null}
+                      options={(handlerOptions ?? []).map((h) => ({ label: h, value: h }))}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={24}>
+                  <Form.Item label={t('job.form.props')}>
+                    <Form.List name="props">
+                      {(fields, { add, remove }) => (
+                        <>
+                          {fields.map((field) => (
+                            <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
+                              <Form.Item name={[field.name, 'key']} noStyle>
+                                <Input placeholder={t('job.form.propKey')} style={{ width: 160 }} />
+                              </Form.Item>
+                              <Form.Item name={[field.name, 'value']} noStyle>
+                                <Input placeholder={t('job.form.propValue')} style={{ width: 240 }} />
+                              </Form.Item>
+                              <Button type="link" danger size="small" onClick={() => remove(field.name)}>{t('common.delete')}</Button>
+                            </Space>
+                          ))}
+                          <Button type="dashed" block onClick={() => add({ key: '', value: '' })}>{t('job.form.addProp')}</Button>
+                        </>
+                      )}
+                    </Form.List>
+                  </Form.Item>
+                </Col>
+              </>
+            )}
+            {handlerKind === 2 && (
+              <>
+                <Col span={24}>
+                  <Form.Item name="httpUrl" label="URL" rules={[{ required: true, whitespace: true, message: t('job.form.urlRequired') }]}>
+                    <Input placeholder="https://" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="httpMethod" label={t('job.form.method')}>
+                    <Select
+                      style={{ width: 140 }}
+                      options={['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'].map((m) => ({ label: m, value: m }))}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="httpSuccessStatuses" label={t('job.form.successStatuses')}>
+                    <Input placeholder={t('job.form.successStatusesPlaceholder')} style={{ width: 220 }} />
+                  </Form.Item>
+                </Col>
+                <Col span={24}>
+                  <Form.Item label={t('job.form.headers')} extra={t('job.form.headersMaskHint')}>
+                    <Form.List name="httpHeaders">
+                      {(fields, { add, remove }) => (
+                        <>
+                          {fields.map((field) => (
+                            <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
+                              <Form.Item name={[field.name, 'key']} noStyle>
+                                <Input placeholder={t('job.form.propKey')} style={{ width: 160 }} />
+                              </Form.Item>
+                              <Form.Item name={[field.name, 'value']} noStyle>
+                                <Input placeholder={t('job.form.propValue')} style={{ width: 240 }} />
+                              </Form.Item>
+                              <Button type="link" danger size="small" onClick={() => remove(field.name)}>{t('common.delete')}</Button>
+                            </Space>
+                          ))}
+                          <Button type="dashed" block onClick={() => add({ key: '', value: '' })}>{t('job.form.addHeader')}</Button>
+                        </>
+                      )}
+                    </Form.List>
+                  </Form.Item>
+                </Col>
+                <Col span={24}>
+                  <Form.Item name="httpBody" label={t('job.form.body')}>
+                    <Input.TextArea rows={3} placeholder={t('job.form.bodyPlaceholder')} />
+                  </Form.Item>
+                </Col>
+              </>
+            )}
+            {handlerKind === 3 && (
+              <Col span={24}>
+                <Form.Item name="sql" label="SQL" rules={[{ required: true, whitespace: true, message: t('job.form.sqlRequired') }]}>
+                  <Input.TextArea rows={4} placeholder={t('job.form.sqlPlaceholder')} />
+                </Form.Item>
+              </Col>
+            )}
+          </Row>
 
-          {/* ── 失败处理 ── */}
-          <Divider titlePlacement="start" size="small">{t('job.section.failure')}</Divider>
-          <Form.Item name="timeoutSeconds" label={t('job.form.timeoutSeconds')} extra={t('job.form.timeoutHint')}>
-            <InputNumber min={0} precision={0} suffix={t('job.form.seconds')} style={{ width: 180 }} />
-          </Form.Item>
-          <Form.Item name="retryCount" label={t('job.form.retryCount')}>
-            <InputNumber min={0} precision={0} style={{ width: 180 }} />
-          </Form.Item>
-          <Form.Item name="retryIntervalSeconds" label={t('job.form.retryInterval')}>
-            <InputNumber min={0} precision={0} suffix={t('job.form.seconds')} style={{ width: 180 }} />
-          </Form.Item>
-          <Form.Item name="failAlertThreshold" label={t('job.form.failAlertThreshold')} extra={t('job.form.failAlertHint')}>
-            <InputNumber min={0} precision={0} style={{ width: 180 }} />
-          </Form.Item>
-          <Form.Item name="alertByNotice" label={t('job.form.alertByNotice')} valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="alertEmails" label={t('job.form.alertEmails')}>
-            <Input placeholder={t('job.form.alertEmailsPlaceholder')} />
-          </Form.Item>
+          {/* ── 高级选项(默认折叠;十项全都有缺省值且无校验规则,折不折都存得下) ── */}
+          <Collapse
+            ghost
+            size="small"
+            activeKey={advancedOpen}
+            onChange={(keys) => setAdvancedOpen(Array.isArray(keys) ? keys.map(String) : [String(keys)])}
+            items={[{
+              key: ADVANCED_KEY,
+              label: (
+                <>
+                  <span style={{ fontWeight: 600 }}>{t('job.section.advanced')}</span>
+                  <Typography.Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                    {t('job.section.advancedHint')}
+                  </Typography.Text>
+                </>
+              ),
+              children: (
+                <Row gutter={16}>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="startTime" label={t('job.form.windowStart')}>
+                      <DatePicker showTime style={{ width: '100%' }} />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="endTime" label={t('job.form.windowEnd')}>
+                      <DatePicker showTime style={{ width: '100%' }} />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="misfireStrategy" label={t('job.form.misfireStrategy')}>
+                      <Radio.Group
+                        options={[
+                          { label: t('job.form.misfireSkip'), value: 1 },
+                          { label: t('job.form.misfireFireOnceNow'), value: 2 },
+                        ]}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="concurrencyMode" label={t('job.form.concurrencyMode')}>
+                      <Radio.Group
+                        options={[
+                          { label: t('job.form.concurrencySerial'), value: 1 },
+                          { label: t('job.form.concurrencyParallel'), value: 2 },
+                        ]}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="timeoutSeconds" label={t('job.form.timeoutSeconds')} extra={t('job.form.timeoutHint')}>
+                      <InputNumber min={0} precision={0} suffix={t('job.form.seconds')} style={{ width: 180 }} />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="retryCount" label={t('job.form.retryCount')}>
+                      <InputNumber min={0} precision={0} style={{ width: 180 }} />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="retryIntervalSeconds" label={t('job.form.retryInterval')}>
+                      <InputNumber min={0} precision={0} suffix={t('job.form.seconds')} style={{ width: 180 }} />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="failAlertThreshold" label={t('job.form.failAlertThreshold')} extra={t('job.form.failAlertHint')}>
+                      <InputNumber min={0} precision={0} style={{ width: 180 }} />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="alertByNotice" label={t('job.form.alertByNotice')} valuePropName="checked">
+                      <Switch />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="alertEmails" label={t('job.form.alertEmails')}>
+                      <Input placeholder={t('job.form.alertEmailsPlaceholder')} />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              ),
+            }]}
+          />
         </Form>
       </FormContainer>
     </>

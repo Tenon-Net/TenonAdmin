@@ -111,9 +111,28 @@ export function blankJob(): JobFormValues {
     retryCount: 0,
     retryIntervalSeconds: 30,
     failAlertThreshold: 0,
-    alertByNotice: false,
+    // 站内信告警跟后端保持一致地默认开:SysJob.AlertByNotice 与 JobInput.AlertByNotice 都是 true。
+    // 这里曾是 false —— 等于从 React 建的任务默认收不到告警,而同样的操作在 Vue 侧是收得到的。
+    alertByNotice: true,
     alertEmails: '',
   }
+}
+
+/**
+ * 该行动过任一「高级选项」?动过就默认展开那一块,免得用户觉得"我配过的东西不见了"。
+ * 判据是"与新增缺省不同",所以缺省值改了这里自动跟着走。
+ */
+export function hasAdvanced(r: SysJob): boolean {
+  const d = blankJob()
+  return !!r.startTime || !!r.endTime
+    || r.misfireStrategy !== d.misfireStrategy
+    || r.concurrencyMode !== d.concurrencyMode
+    || r.timeoutSeconds !== d.timeoutSeconds
+    || r.retryCount !== d.retryCount
+    || r.retryIntervalSeconds !== d.retryIntervalSeconds
+    || r.failAlertThreshold !== d.failAlertThreshold
+    || r.alertByNotice !== d.alertByNotice
+    || !!r.alertEmails
 }
 
 /** 行数据 → 表单值(page 行含全列,编辑不用另拉详情)。 */

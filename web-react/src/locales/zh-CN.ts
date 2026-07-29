@@ -775,7 +775,8 @@ export default {
       basic: '基本',
       trigger: '触发',
       handler: '载荷',
-      failure: '失败处理',
+      advanced: '高级选项',
+      advancedHint: '生效窗口、错过策略、并发、重试与告警;不展开也能保存',
     },
     status: {
       ready: '就绪',
@@ -808,7 +809,6 @@ export default {
       seconds: '秒',
       oneShotTime: '执行时刻',
       oneShotRequired: '请选择执行时刻',
-      window: '生效窗口',
       windowStart: '起点(空=立即)',
       windowEnd: '终点(空=不限)',
       misfireStrategy: '错过策略',

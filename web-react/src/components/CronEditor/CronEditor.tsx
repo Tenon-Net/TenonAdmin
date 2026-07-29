@@ -214,11 +214,14 @@ export function CronEditor({ value, onChange, previewCount = 5 }: CronEditorProp
             </Typography.Text>
             <Typography.Text type="secondary">{t('job.cron.next')}:</Typography.Text>
             {preview.occurrences.length === 0 && <Typography.Text type="secondary">{t('job.cron.noOccurrence')}</Typography.Text>}
-            {preview.occurrences.map((o) => (
-              <Typography.Text key={o} style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 12 }}>
-                {o.replace('T', ' ')}
-              </Typography.Text>
-            ))}
+            {/* 横向 wrap 而非一行一个:5 个时刻竖排要占 110px 高,在任务表单里这是纯浪费 */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 16, rowGap: 2 }}>
+              {preview.occurrences.map((o) => (
+                <Typography.Text key={o} style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 12 }}>
+                  {o.replace('T', ' ')}
+                </Typography.Text>
+              ))}
+            </div>
           </Space>
         )}
         {!previewError && !preview && (

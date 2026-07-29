@@ -29,7 +29,7 @@
 
 | 组件 | 定位 | 关键契约 |
 |---|---|---|
-| FormContainer | 弹窗/抽屉二合一表单容器 | `open/onOpenChange/title/variant?/width?/onConfirm?/confirmText?/cancelText?/maskClosable?`。`variant` 不传则跟随全局偏好 `app.formStyle`(设置抽屉可切)。**onConfirm 协议**(`shouldCloseAfterConfirm`):不传 → 直接关;`resolve(false)` → 不关(校验失败放 onConfirm 首行 `return false`);抛错 → 不关(错误 toast 由业务自己弹);其余(含 `resolve(true)`/`resolve(undefined)`)→ 关。确认钮自动 loading,提交中锁死 esc/遮罩/关闭钮/取消钮防中途关闭。宽度取 `min(width ?? 560, 90vw)`。 |
+| FormContainer | 弹窗/抽屉二合一表单容器 | `open/onOpenChange/title/variant?/width?/onConfirm?/confirmText?/cancelText?/maskClosable?/centered?`。`variant` 不传则跟随全局偏好 `app.formStyle`(设置抽屉可切)。`centered` 仅 modal 形态生效(antd 默认 `top:100px`,高表单可开居中对齐 Vue `n-modal`)。**onConfirm 协议**(`shouldCloseAfterConfirm`):不传 → 直接关;`resolve(false)` → 不关(校验失败放 onConfirm 首行 `return false`);抛错 → 不关(错误 toast 由业务自己弹);其余(含 `resolve(true)`/`resolve(undefined)`)→ 关。确认钮自动 loading,提交中锁死 esc/遮罩/关闭钮/取消钮防中途关闭。宽度取 `min(width ?? 560, 90vw)`。 |
 | StatusSwitch | 表格行内启停开关 | `value/request/confirm?/disabled?/size?/successMsg?/onChange?`。**悲观更新**:`checked` 绑父传 `value`,点击不先翻转,`request(next)` 成功才 `onChange(next)`;失败不 `onChange` = UI 保持原值即回滚,零成本。`confirm` 给了则先二次确认(函数形态按目标态出文案,返回空值本次跳过确认)。loading 期间自锁防连点。 |
 | DictSelect | 字典下拉 | `{typeCode, ...rest}`,`rest` 全透传 antd `Select`。经 `stores/dict` 缓存 + 并发去重取数,过滤停用项(`toDictOptions`)。无 loading 圈(ponytail:字典通常极小且缓存命中,真遇到慢字典再从 store 引出在途态)。 |
 | DictTag | 表格列字典翻译 + 语义色标签 | `{typeCode, value, typeMap?}`。空值(`null`/`undefined`/`''`)渲染 `—`;命中字典按启用项排序下标 `i%4` 取 `[processing, success, warning, error]`(`typeMap` 显式映射优先);未命中(未加载完/脏值)渲染原始 value、色 `default`,不空白不闪烁。 |
