@@ -26,9 +26,31 @@ import type { useUserStore as UserStore } from '@/stores/user'
  *    表现为「偶发被踢下线」。
  * ③ 刷新自身 401 不递归。
  */
-type Call = { url: string; method: string; body: string | null; auth: string | null }
+type Call = {
+  url: string
+  method: string
+  body: string | null
+  auth: string | null
+  csrf: string | null
+  credentials: RequestCredentials | null
+}
 
-const SESSION = { accessToken: 'NEW', refreshToken: 'R2', userId: 1, account: 'a', name: 'n', mustChangePassword: false }
+const SESSION = {
+  accessToken: 'NEW',
+  refreshToken: 'R2',
+  userId: 1,
+  account: 'a',
+  name: 'n',
+  mustChangePassword: false,
+  sessionMode: 'body' as const,
+  csrfRequired: false,
+}
+const SESSION_COOKIE = {
+  ...SESSION,
+  refreshToken: '',
+  sessionMode: 'cookie' as const,
+  csrfRequired: true,
+}
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
@@ -37,6 +59,8 @@ let assigned: string[]
 
 let client: typeof ApiClient
 let useUserStore: typeof UserStore
+let tryRestoreCookieSession: typeof import('./client').tryRestoreCookieSession
+let AUTH_CSRF_HEADER: typeof import('./client').AUTH_CSRF_HEADER
 
 /**
  * 注入原始传输。`handler` 决定每次调用返回什么;记账与 body 读取在这里统一做。
@@ -61,7 +85,14 @@ async function setup(handler: (c: Call, n: number) => Response | Promise<Respons
   calls = mine
   const transport = async (req: Request) => {
     const body = req.method === 'GET' || req.method === 'HEAD' ? null : await req.text()
-    const c: Call = { url: req.url, method: req.method, body, auth: req.headers.get('Authorization') }
+    const c: Call = {
+      url: req.url,
+      method: req.method,
+      body,
+      auth: req.headers.get('Authorization'),
+      csrf: req.headers.get('X-Tenon-CSRF'),
+      credentials: req.credentials,
+    }
     mine.push(c)
     return handler(c, mine.length - 1)
   }
@@ -69,8 +100,14 @@ async function setup(handler: (c: Call, n: number) => Response | Promise<Respons
   vi.stubGlobal('fetch', transport)
   vi.resetModules()
   ;({ useUserStore } = await import('@/stores/user'))
-  ;({ client } = await import('./client'))
-  useUserStore.setState({ accessToken: 'OLD', refreshToken: 'R1', userInfo: null })
+  ;({ client, tryRestoreCookieSession, AUTH_CSRF_HEADER } = await import('./client'))
+  useUserStore.setState({
+    accessToken: 'OLD',
+    refreshToken: 'R1',
+    userInfo: null,
+    sessionMode: 'body',
+    csrfRequired: false,
+  })
 }
 
 beforeEach(() => {
@@ -84,6 +121,24 @@ beforeEach(() => {
   // `Cannot read properties of undefined (reading 'setItem')`,和 location 毫无关系。
   const mineAssigned: string[] = []
   assigned = mineAssigned
+  // document.cookie 供 Level3 双提交 CSRF 读取
+  let cookieJar = ''
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      get cookie() {
+        return cookieJar
+      },
+      set cookie(v: string) {
+        // 简化:只支持 `name=value` 追加;测试里直接赋整串即可
+        if (!v) {
+          cookieJar = ''
+          return
+        }
+        cookieJar = v.includes('=') && !v.includes(';') ? (cookieJar ? `${cookieJar}; ${v}` : v) : v
+      },
+    },
+  })
   vi.stubGlobal('window', {
     localStorage: globalThis.localStorage,
     location: { pathname: '/system/user', assign: (u: string) => mineAssigned.push(u) },
@@ -240,5 +295,94 @@ describe('③ 刷新失败:清会话 + 跳登录,且不递归', () => {
     expect(refreshCount()).toBe(0)
     expect(assigned).toEqual([])
     expect(useUserStore.getState().accessToken).toBe('OLD') // 会话没被清
+  })
+})
+
+describe('④ Level3 cookie 会话:credentials + CSRF + 无 body refresh', () => {
+  it('业务请求带 credentials:include 与 X-Tenon-CSRF', async () => {
+    document.cookie = 'tenon_csrf=csrf-token-1'
+    await setup((c) => {
+      if (isRefresh(c)) return json({ code: 0, data: SESSION_COOKIE })
+      return json({ code: 0, data: {} })
+    })
+    useUserStore.setState({
+      accessToken: 'OLD',
+      refreshToken: '',
+      sessionMode: 'cookie',
+      csrfRequired: true,
+    })
+
+    await client.GET('/api/v1/sys/dict/type/page', { params: { query: {} } as never })
+
+    const business = calls.filter((c) => !isRefresh(c))
+    expect(business).toHaveLength(1)
+    expect(business[0]!.credentials).toBe('include')
+    expect(business[0]!.csrf).toBe('csrf-token-1')
+    expect(business[0]!.auth).toBe('Bearer OLD')
+  })
+
+  it('cookie 模式无本地 refreshToken 仍可静默刷新(body 空 refresh)', async () => {
+    document.cookie = 'tenon_csrf=csrf-r'
+    await setup((c) => {
+      if (isRefresh(c)) return json({ code: 0, data: SESSION_COOKIE })
+      return c.auth === 'Bearer OLD' ? json({}, 401) : json({ code: 0, data: {} })
+    })
+    useUserStore.setState({
+      accessToken: 'OLD',
+      refreshToken: '',
+      sessionMode: 'cookie',
+      csrfRequired: true,
+    })
+
+    await client.GET('/api/v1/sys/dict/type/page', { params: { query: {} } as never })
+
+    expect(refreshCount()).toBe(1)
+    const refresh = calls.find(isRefresh)!
+    expect(refresh.csrf).toBe('csrf-r')
+    expect(refresh.credentials).toBe('include')
+    const body = JSON.parse(refresh.body!)
+    expect(body.refreshToken).toBe('')
+    expect(useUserStore.getState().accessToken).toBe('NEW')
+    expect(useUserStore.getState().refreshToken).toBe('')
+    expect(useUserStore.getState().sessionMode).toBe('cookie')
+  })
+
+  it('tryRestoreCookieSession:无 access + cookie 模式 → 静默刷新成功', async () => {
+    document.cookie = 'tenon_csrf=csrf-boot'
+    await setup((c) => {
+      if (isRefresh(c)) return json({ code: 0, data: SESSION_COOKIE })
+      return json({ code: 0, data: {} })
+    })
+    useUserStore.setState({
+      accessToken: '',
+      refreshToken: '',
+      sessionMode: 'cookie',
+      csrfRequired: true,
+      userInfo: { userId: 1, account: 'a', name: 'n', mustChangePassword: false },
+    })
+
+    const ok = await tryRestoreCookieSession()
+    expect(ok).toBe(true)
+    expect(useUserStore.getState().accessToken).toBe('NEW')
+    expect(refreshCount()).toBe(1)
+    expect(calls[0]!.csrf).toBe('csrf-boot')
+  })
+
+  it('tryRestoreCookieSession:body 模式不发起刷新', async () => {
+    await setup(() => json({ code: 0, data: SESSION }))
+    useUserStore.setState({
+      accessToken: '',
+      refreshToken: '',
+      sessionMode: 'body',
+      csrfRequired: false,
+    })
+
+    const ok = await tryRestoreCookieSession()
+    expect(ok).toBe(false)
+    expect(refreshCount()).toBe(0)
+  })
+
+  it('AUTH_CSRF_HEADER 常量与后端双提交头一致', () => {
+    expect(AUTH_CSRF_HEADER).toBe('X-Tenon-CSRF')
   })
 })

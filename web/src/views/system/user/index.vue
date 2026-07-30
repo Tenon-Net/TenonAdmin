@@ -4,7 +4,7 @@
 // 导入导出(G6):ImportWizard 四步向导 + ExportColumnsModal 选列导出(带当前筛选)。
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { NButton, NCard, NTree, NSpace, NTag, NAvatar, NPopconfirm, useMessage } from 'naive-ui'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
@@ -12,11 +12,12 @@ import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import DictTag from '@/components/DictTag/index.vue'
 import ImportWizard, { type ImportWizardApi } from '@/components/ImportWizard/index.vue'
 import ExportColumnsModal from '@/components/ExportColumnsModal/index.vue'
+import FormContainer from '@/components/FormContainer/index.vue'
 import UserFormModal from './components/UserFormModal.vue'
 import ResetPasswordModal from './components/ResetPasswordModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
-import { userApi, positionApi, roleApi, orgApi } from '@/api'
+import { mfaApi, userApi, positionApi, roleApi, orgApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import { triggerBlobDownload } from '@/utils/download'
@@ -27,6 +28,7 @@ const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
 const authStore = useAuthStore()
+const router = useRouter()
 const tableRef = ref<ProTableInst<UserItem>>()
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   remove: userApi.batchRemove,
@@ -37,6 +39,48 @@ const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
 // 新增/编辑弹窗 + 重置密码弹窗(表单/校验/保存均在各自组件内,父页只传下拉选项 + 收 saved/passwordGenerated)。
 const userFormRef = ref<InstanceType<typeof UserFormModal> | null>(null)
 const resetModalRef = ref<InstanceType<typeof ResetPasswordModal> | null>(null)
+
+const inviteShow = ref(false)
+const inviteLoading = ref(false)
+const inviteToken = ref('')
+const inviteExpiresAt = ref<string | null>(null)
+const inviteUserName = ref('')
+const inviteUrl = computed(() => {
+  if (!inviteToken.value) return ''
+  const href = router.resolve({ name: 'mfa-bind', query: { token: inviteToken.value } }).href
+  return new URL(href, window.location.origin).toString()
+})
+watch(inviteShow, (shown) => {
+  if (shown) return
+  inviteToken.value = ''
+  inviteExpiresAt.value = null
+  inviteUserName.value = ''
+})
+
+async function issueMfaInvite(user: UserItem) {
+  inviteLoading.value = true
+  try {
+    const invite = await mfaApi.invite({ userId: user.id })
+    if (!invite.token) throw new Error(t('mfa.inviteResponseIncomplete'))
+    inviteToken.value = invite.token
+    inviteExpiresAt.value = invite.expiresAt ?? null
+    inviteUserName.value = user.name
+    inviteShow.value = true
+  } catch (e) {
+    message.error(translateError(e))
+  } finally {
+    inviteLoading.value = false
+  }
+}
+
+async function copyInvite(value: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    message.success(t('user.copied'))
+  } catch {
+    message.error(t('user.copyFailed'))
+  }
+}
 
 // 职位/角色/主管下拉:各拉一页足量。ponytail: 200 覆盖绝大多数系统;真超再上分页搜索。
 // roleOptions 一份两用:既喂编辑弹窗,也当列表页「角色」搜索项的选项源(ProTable 支持 Ref 选项源)。
@@ -217,7 +261,7 @@ const columns: ProTableColumn<UserItem>[] = [
   {
     key: 'op',
     title: () => t('common.operation'),
-    width: 210,
+    width: 280,
     fixed: 'right', // 钉右:横向滚动时操作列始终可见
     hideInSetting: true,
     render: (r) =>
@@ -227,6 +271,9 @@ const columns: ProTableColumn<UserItem>[] = [
           : null,
         authStore.hasPerm('PUT:/api/v1/sys/user/{id}/password')
           ? h(NButton, { size: 'small', quaternary: true, onClick: () => resetModalRef.value?.openReset(r) }, () => t('user.resetPassword'))
+          : null,
+        !r.totpEnabled && authStore.hasPerm('POST:/api/v1/sys/mfa/invite')
+          ? h(NButton, { size: 'small', quaternary: true, loading: inviteLoading.value, onClick: () => issueMfaInvite(r) }, () => t('user.issueTotpInvite'))
           : null,
         r.isSuperAdmin || !authStore.hasPerm('DELETE:/api/v1/sys/user/{id}')
           ? null
@@ -313,6 +360,25 @@ const columns: ProTableColumn<UserItem>[] = [
   />
 
   <ResetPasswordModal ref="resetModalRef" />
+
+  <FormContainer v-model:show="inviteShow" :title="t('user.totpInviteTitle', { name: inviteUserName })" :confirm-text="t('common.close')">
+    <n-alert type="warning" :bordered="false" style="margin-bottom: 16px">{{ t('user.totpInviteOnce') }}</n-alert>
+    <n-form label-placement="top">
+      <n-form-item :label="t('user.totpInviteUrl')">
+        <n-input :value="inviteUrl" readonly>
+          <template #suffix><n-button text type="primary" @click="copyInvite(inviteUrl)">{{ t('user.copy') }}</n-button></template>
+        </n-input>
+      </n-form-item>
+      <n-form-item :label="t('user.totpInviteToken')">
+        <n-input :value="inviteToken" readonly>
+          <template #suffix><n-button text type="primary" @click="copyInvite(inviteToken)">{{ t('user.copy') }}</n-button></template>
+        </n-input>
+      </n-form-item>
+      <n-form-item v-if="inviteExpiresAt" :label="t('user.totpInviteExpires')">
+        <n-input :value="inviteExpiresAt" readonly />
+      </n-form-item>
+    </n-form>
+  </FormContainer>
 
   <ImportWizard
     v-model:show="importShow"

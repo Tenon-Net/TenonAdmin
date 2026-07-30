@@ -12,6 +12,18 @@ export interface LoginOutput {
   name: string
   /** 是否需强制改密(管理员建号/重置后首登为 true)。 */
   mustChangePassword: boolean
+  /**
+   * 会话交付模式(Level3 扩展,可选)。
+   * - `body`:刷新令牌在 JSON 体(非 Level3 默认,前端 localStorage 持久化)
+   * - `cookie`:刷新令牌在 HttpOnly Cookie,access 仅内存
+   * 旧后端/未 regen 的 schema 可能缺此字段,前端用 refreshToken 空串 + csrfRequired 兜底判定。
+   */
+  sessionMode?: 'body' | 'cookie' | string | null
+  /**
+   * 是否要求双提交 CSRF(`X-Tenon-CSRF` + `tenon_csrf` Cookie)。
+   * Level3 cookie 会话为 true;非 Level3 为 false/缺省。
+   */
+  csrfRequired?: boolean | null
 }
 
 /** 我的应用列表(后端 MyModulesOutput)。 */
@@ -78,6 +90,10 @@ export interface UserItem {
   directorName?: string | null
   enabled: boolean
   isSuperAdmin: boolean
+  /** 管理员显式强制 TOTP(只能加严)。 */
+  forceTotp?: boolean
+  /** 是否已绑定 TOTP(只读)。 */
+  totpEnabled?: boolean
   createTime: string
 }
 
@@ -395,6 +411,8 @@ export interface AddUserInput {
   positionId?: number | null
   directorId?: number | null
   enabled: boolean
+  /** 建号即强制 TOTP。 */
+  forceTotp?: boolean
   roleIds: number[]
 }
 
@@ -423,6 +441,7 @@ export interface UpdateUserInput {
   positionId?: number | null
   directorId?: number | null
   enabled: boolean
+  forceTotp?: boolean
   roleIds: number[]
 }
 
@@ -441,6 +460,8 @@ export interface UserDetail {
   directorId?: number | null
   enabled: boolean
   isSuperAdmin: boolean
+  forceTotp?: boolean
+  totpEnabled?: boolean
   roleIds: number[]
   createTime?: string
 }

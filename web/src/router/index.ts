@@ -4,6 +4,7 @@ import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
 import { loadingBar } from '@/lib/loadingBar'
+import { ensureAccessToken } from '@/api/client'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -35,8 +36,18 @@ router.beforeEach(async (to) => {
   const user = useUserStore()
   const auth = useAuthStore()
 
+  // Level3 Cookie 会话:access 只在内存,F5 后靠 cookieSession 标记 + HttpOnly refresh 静默换发。
+  // 非 Level3 令牌已 localStorage 水合,ensureAccessToken 立即 true。
+  if (!user.accessToken && (user.cookieSession || user.refreshToken)) {
+    const ok = await ensureAccessToken()
+    if (!ok) user.clear()
+  }
+
   // 登录页是唯一免认证页;已登录再访问则回首页。
   if (to.name === 'login') return user.isLoggedIn ? { path: '/', replace: true } : true
+
+  // 公开的 OAuth 回调和 MFA 绑定/恢复页不能被登录守卫送回登录页。
+  if (to.meta.public) return true
 
   if (!user.isLoggedIn) return { path: '/login', replace: true }
 

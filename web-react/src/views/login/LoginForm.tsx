@@ -45,11 +45,13 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
   const [ssoProviders, setSsoProviders] = useState<ExternalProvider[]>([])
   const [form] = Form.useForm<FormValues>()
 
-  // 登录形态:账号密码 / 短信免密(site.smsLoginEnabled 运行时驱动)/ 短信二次验证(密码过后 40009 信令进入)
-  const [mode, setMode] = useState<'account' | 'sms' | 'mfa'>('account')
+  // 登录形态:账号密码 / 短信免密 / 短信二次验证(40009) / TOTP 二次验证(40018)
+  const [mode, setMode] = useState<'account' | 'sms' | 'mfa' | 'totp'>('account')
   // 二次验证挑战(40009 信令 args 下发);码输入是单字段小表单,走受控 state 不进 antd Form
   const [mfa, setMfa] = useState({ challengeId: '', phoneMask: '' })
   const [mfaCode, setMfaCode] = useState('')
+  const [totp, setTotp] = useState({ challengeId: '' })
+  const [totpCode, setTotpCode] = useState('')
 
   // 发码/重发共用倒计时(同一时刻只有一个发码入口可见)
   const [countdown, setCountdown] = useState(0)
@@ -82,6 +84,14 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
     })
     // 未配置外部登录或拉取失败:静默,整段 SSO 区不显
     externalAuthApi.providers().then(setSsoProviders).catch(() => {})
+
+    // SSO 回调带回的 TOTP 挑战
+    const ch = new URLSearchParams(window.location.search).get('totpChallenge')
+    if (ch) {
+      setTotp({ challengeId: ch })
+      setTotpCode('')
+      setMode('totp')
+    }
   }, [loadSite])
 
   /** 点击第三方登录:顶层导航到 authorize,后端 302 跳 IdP(OAuth2 授权码往返)。 */
@@ -117,8 +127,12 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
             })
       finishLogin(res)
     } catch (err) {
-      // 40009 = 密码已过、需短信二次验证(信令而非失败):切码输入页,args 带挑战与倒计时参数
-      if (err instanceof ApiError && err.code === 40009 && err.args) {
+      if (err instanceof ApiError && err.code === 40018 && err.args) {
+        setTotp({ challengeId: String(err.args.challengeId ?? '') })
+        setTotpCode('')
+        setMode('totp')
+      } else if (err instanceof ApiError && err.code === 40009 && err.args) {
+        // 40009 = 密码已过、需短信二次验证
         setMfa({ challengeId: String(err.args.challengeId ?? ''), phoneMask: String(err.args.phoneMask ?? '') })
         setMfaCode('')
         setMode('mfa')
@@ -170,6 +184,21 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
     }
   }
 
+  async function onTotpSubmit() {
+    if (!totpCode) {
+      message.warning(t('login.totpPlaceholder'))
+      return
+    }
+    setLoading(true)
+    try {
+      finishLogin(await authApi.totpChallengeLogin({ challengeId: totp.challengeId, code: totpCode }))
+    } catch (err) {
+      message.error(translateError(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function onMfaResend() {
     if (countdown > 0) return
     try {
@@ -185,6 +214,8 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
     setMode('account')
     setMfa({ challengeId: '', phoneMask: '' })
     setMfaCode('')
+    setTotp({ challengeId: '' })
+    setTotpCode('')
   }
 
   return (
@@ -199,11 +230,16 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
         </>
       ) : null}
 
-      {/* 短信二次验证态:标题换挑战提示(掩码手机号);其余两态显常规标题(随 showBrand) */}
+      {/* 短信/TOTP 二次验证态:标题换挑战提示;其余态显常规标题(随 showBrand) */}
       {mode === 'mfa' ? (
         <>
           <h2 className="lf-title">{t('login.mfaTitle', { phone: mfa.phoneMask })}</h2>
           <p className="lf-hint-line">{t('login.mfaSub')}</p>
+        </>
+      ) : mode === 'totp' ? (
+        <>
+          <h2 className="lf-title">{t('login.totpTitle')}</h2>
+          <p className="lf-hint-line">{t('login.totpSub')}</p>
         </>
       ) : showBrand ? (
         <h2 className="lf-title">{t('login.title')}</h2>
@@ -229,6 +265,26 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
             </a>
           </div>
           <Button type="primary" size="large" block loading={loading} onClick={() => void onMfaSubmit()}>
+            {t('login.submit')}
+          </Button>
+        </>
+      ) : mode === 'totp' ? (
+        <>
+          <Input
+            size="large"
+            maxLength={6}
+            value={totpCode}
+            onChange={(e) => setTotpCode(e.target.value)}
+            placeholder={t('login.totpPlaceholder')}
+            onPressEnter={() => void onTotpSubmit()}
+          />
+          <div className="row lf-between">
+            <a className="lf-link" onClick={backToAccount}>
+              {t('login.backToPassword')}
+            </a>
+            <span />
+          </div>
+          <Button type="primary" size="large" block loading={loading} onClick={() => void onTotpSubmit()}>
             {t('login.submit')}
           </Button>
         </>

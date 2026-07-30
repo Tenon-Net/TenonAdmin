@@ -13,9 +13,10 @@ namespace TenonAdmin.Caching.Redis;
 /// 连接<b>惰性</b>建立且 <c>AbortOnConnectFail=false</c>:构造时不连库(DI 注册期不依赖活跃 Redis),
 /// 首次使用才连、断线后台自动重连;连不上时操作抛异常,由 <c>/health/ready</c> 探针捕获报未就绪。</para>
 /// </summary>
-public class RedisCacheProvider : ICacheProvider, IDisposable
+public class RedisCacheProvider : ICacheProvider, ISecureCacheCapabilities, IDisposable
 {
     private readonly string _prefix;
+    private readonly AdminCacheOptions _options;
     private readonly Lazy<IConnectionMultiplexer> _mux;
 
     // 缓存 DTO 属性名与 JSON 默认(PascalCase)一致,无需驼峰策略;不缩进以省带宽。
@@ -29,16 +30,48 @@ public class RedisCacheProvider : ICacheProvider, IDisposable
         if (string.IsNullOrWhiteSpace(options.RedisConnectionString))
             throw new InvalidOperationException("启用 Redis 缓存需配置 TenonAdmin:Cache:RedisConnectionString。");
 
+        _options = options;
         _prefix = options.KeyPrefix;
         var conn = options.RedisConnectionString;
+        var requireTls = options.RequireTls;
         // AbortOnConnectFail=false:连不上也返回多路复用器(后台持续重连),
         // 避免 Lazy 缓存首连异常,导致 Redis 恢复后本进程仍永久不可用。
         _mux = new Lazy<IConnectionMultiplexer>(() =>
         {
             var config = ConfigurationOptions.Parse(conn);
             config.AbortOnConnectFail = false;
+            // Level3 / 显式 RequireTls:强制 SSL,避免连接串漏写 ssl=true 时明文连
+            if (requireTls)
+                config.Ssl = true;
             return ConnectionMultiplexer.Connect(config);
         });
+    }
+
+    /// <inheritdoc />
+    public bool IsDistributed => true;
+
+    /// <inheritdoc />
+    public bool HasAuthenticationConfigured =>
+        RedisConnectionSecurity.Inspect(_options.RedisConnectionString, _options.RequireTls).HasAuth;
+
+    /// <inheritdoc />
+    public bool HasTlsConfigured =>
+        RedisConnectionSecurity.Inspect(_options.RedisConnectionString, _options.RequireTls).HasTls
+        || _options.RequireTls;
+
+    /// <inheritdoc />
+    public virtual async Task<(bool Ok, string Message)> ProbeAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var pong = await Database.PingAsync();
+            return (true, $"PING ok ({pong.TotalMilliseconds:F0} ms)");
+        }
+        catch (Exception ex)
+        {
+            // 脱敏:不回显连接串/密码
+            return (false, $"Redis PING 失败: {ex.GetType().Name}");
+        }
     }
 
     /// <summary>当前 Redis 库句柄(扩展点:子类可覆写以复用外部注入的 <see cref="IConnectionMultiplexer"/> 单例)。</summary>

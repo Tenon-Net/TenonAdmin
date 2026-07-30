@@ -36,6 +36,20 @@ public class SysSession : BaseEntity
     [SugarColumn(ColumnDescription = "会话过期时刻(= 刷新令牌有效期)")]
     public DateTime ExpiresAt { get; set; }
 
+    /// <summary>
+    /// 绝对过期时刻(Level3:最长 8 小时;刷新不得突破)。
+    /// 默认与 <see cref="ExpiresAt"/> 同语义;Level3 登录时按策略写入,CodeFirst 自动补列。
+    /// </summary>
+    [SugarColumn(ColumnDescription = "绝对过期时刻")]
+    public DateTime AbsoluteExpiresAt { get; set; }
+
+    /// <summary>
+    /// 最近活动时间(Level3 闲置判定)。热路径经 Redis 节流后回写,不每请求落库。
+    /// null = 功能上线前的存量会话或尚未回写。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "最近活动时间")]
+    public DateTime? LastActivityAt { get; set; }
+
     /// <summary>吊销时刻;null = 活跃。登出/强退/单端踢出/复用检测吊销时置值。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "吊销时刻(null=活跃)")]
     public DateTime? RevokedAt { get; set; }

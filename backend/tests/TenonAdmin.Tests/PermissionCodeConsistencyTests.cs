@@ -87,7 +87,7 @@ public class PermissionCodeConsistencyTests
                 {
                     var template = Combine(controllerRoute, http.Template);
                     foreach (var verb in http.HttpMethods)
-                        codes.Add($"{verb.ToUpperInvariant()}:/{template.TrimStart('/').ToLowerInvariant()}");
+                        codes.Add(PermissionCode.Build(verb, template));
                 }
             }
         }
@@ -102,8 +102,12 @@ public class PermissionCodeConsistencyTests
         return seed.HasData().Select(m => m.Permission).Where(p => !string.IsNullOrEmpty(p)).ToList();
     }
 
-    private static string Combine(string controllerRoute, string? actionTemplate) =>
-        string.IsNullOrEmpty(actionTemplate)
-            ? controllerRoute
-            : $"{controllerRoute.TrimEnd('/')}/{actionTemplate.TrimStart('/')}";
+    private static string Combine(string controllerRoute, string? actionTemplate)
+    {
+        if (string.IsNullOrEmpty(actionTemplate)) return controllerRoute;
+        // ASP.NET Core 以 / 或 ~/ 起始的动作模板是绝对路由，不能再拼控制器前缀。
+        if (actionTemplate.StartsWith('/') || actionTemplate.StartsWith("~/", StringComparison.Ordinal))
+            return actionTemplate.TrimStart('~');
+        return $"{controllerRoute.TrimEnd('/')}/{actionTemplate.TrimStart('/')}";
+    }
 }

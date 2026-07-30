@@ -1,4 +1,5 @@
 import { client } from './client'
+import type { components } from './schema'
 import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, CronPreviewOutput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, DuplicateStrategy, FileUploadOutput, ImportCommitResult, ImportPreview, ImportRow, JobDashboard, JobHandlersOutput, JobInput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, ServerInfoOutput, SysConfig, SysDictItem, SysDictType, SysExceptionLog, SysFile, SysJob, SysJobLog, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
@@ -172,12 +173,40 @@ export const authApi = {
   /** 短信二次验证:重发验证码(服务端冷却/日上限,过频抛 40008)。 */
   smsChallengeResend: (body: { challengeId: string }) =>
     client.POST('/api/v1/auth/login/sms/resend', { body }).then((r) => unwrap<{ expiresSeconds: number; resendSeconds: number }>(r)),
+  /** TOTP 二次验证完成登录(40018 / SSO totpChallenge);走 openapi-fetch → CSRF/credentials 中间件生效。 */
+  totpChallengeLogin: (body: { challengeId: string; code: string }) =>
+    client.POST('/api/v1/auth/login/totp', { body }).then((r) => unwrap<LoginOutput>(r)),
+  /** 短时再认证(Level3 高危写操作 40024 后由中间件唤起;窗口约 5 分钟)。 */
+  reauth: (body: { method?: string; totpCode?: string; password?: string }) =>
+    client.POST('/api/v1/auth/reauth', { body }).then((r) => unwrap<void>(r)),
   /** 免密登录发码(图形验证码启用时须携带;响应不区分手机号是否存在,防枚举)。 */
   smsLoginSend: (body: { phone: string; captchaId?: string; captchaCode?: string }) =>
     client.POST('/api/v1/auth/sms/send', { body }).then((r) => unwrap<{ expiresSeconds: number; resendSeconds: number }>(r)),
   /** 免密登录:手机号 + 短信码换令牌。 */
   smsLogin: (body: { phone: string; code: string }) =>
     client.POST('/api/v1/auth/sms/login', { body }).then((r) => unwrap<LoginOutput>(r)),
+}
+
+/** TOTP enrollment and recovery. Anonymous endpoints still use the shared client so credentials/CSRF stay consistent. */
+export const mfaApi = {
+  invite: (body: components['schemas']['MfaInviteInput']) =>
+    client.POST('/api/v1/sys/mfa/invite', { body }).then((r) => unwrap<components['schemas']['TotpBindInviteOutput']>(r)),
+  bindStart: (body: components['schemas']['TotpBindStartInput']) =>
+    client.POST('/api/v1/auth/mfa/bind/start', { body }).then((r) => unwrap<components['schemas']['TotpBindStartOutput']>(r)),
+  bindComplete: (body: components['schemas']['TotpBindCompleteInput']) =>
+    client.POST('/api/v1/auth/mfa/bind/complete', { body }).then((r) => unwrap<components['schemas']['TotpBindCompleteOutput']>(r)),
+  recovery: (body: components['schemas']['TotpRecoveryInput']) =>
+    client.POST('/api/v1/auth/mfa/recovery', { body }).then((r) => unwrap<void>(r)),
+}
+
+/** 高敏权限自定义追加(内核默认只读;写操作须 reauth)。 */
+export const highSensApi = {
+  list: () =>
+    client.GET('/api/v1/sys/mfa/high-sensitivity', {}).then((r) => unwrap<components['schemas']['HighSensitivityPermissionList']>(r)),
+  add: (body: components['schemas']['HighSensitivityPermissionInput']) =>
+    client.POST('/api/v1/sys/mfa/high-sensitivity', { body }).then((r) => unwrap<components['schemas']['HighSensitivityPermissionItem']>(r)),
+  remove: (id: number) =>
+    client.DELETE('/api/v1/sys/mfa/high-sensitivity/{id}', { params: { path: { id } } }).then((r) => unwrap<void>(r)),
 }
 
 export interface ExternalProvider {

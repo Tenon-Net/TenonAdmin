@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
 import { configApi } from '@/api'
 import { translateError } from '@/utils/error'
+import HighSensConfig from './HighSensConfig.vue'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -169,7 +170,10 @@ async function save() {
         </n-form-item-gi>
       </n-grid>
 
-      <div>
+      <n-divider title-placement="left">{{ t('config.security.highSens.title') }}</n-divider>
+      <HighSensConfig />
+
+      <div style="margin-top: 16px">
         <n-button v-auth="'PUT:/api/v1/sys/config/batch'" type="primary" :loading="saving" @click="save">
           <template #icon><AppIcon icon="ph:floppy-disk" :size="16" /></template>{{ t('common.save') }}
         </n-button>

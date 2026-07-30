@@ -18,6 +18,12 @@ export const staticRoutes: RouteRecordRaw[] = [
     meta: { public: true },
   },
   {
+    path: '/mfa/bind',
+    name: 'mfa-bind',
+    component: () => import('@/views/mfa/index.vue'),
+    meta: { public: true },
+  },
+  {
     path: '/module',
     name: 'module',
     component: () => import('@/views/module/index.vue'),

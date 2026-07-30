@@ -13,6 +13,9 @@ public interface ICurrentUser
     /// <summary>当前用户 Id;未认证为 null</summary>
     long? UserId { get; }
 
+    /// <summary>当前会话 Id(令牌 sid claim);未认证或无 sid 为 null。再认证/强退锚点。</summary>
+    string? SessionId { get; }
+
     /// <summary>是否超级管理员(令牌 sadm claim);超管不受权限与数据范围约束</summary>
     bool IsSuperAdmin { get; }
 

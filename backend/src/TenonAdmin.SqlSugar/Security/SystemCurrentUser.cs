@@ -11,6 +11,7 @@ public sealed class SystemCurrentUser : ICurrentUser
 {
     public bool IsAuthenticated => false;
     public long? UserId => null;
+    public string? SessionId => null;
     public bool IsSuperAdmin => false;
     public long? OrgId => null;
 

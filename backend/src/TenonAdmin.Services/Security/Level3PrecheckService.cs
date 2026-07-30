@@ -1,0 +1,661 @@
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using TenonAdmin.Core;
+using TenonAdmin.SqlSugar;
+
+namespace TenonAdmin.Services;
+
+/// <summary>
+/// <see cref="ILevel3PrecheckService"/> 默认实现:读部署 Options + 有效策略 + 可选用户库状态,
+/// 输出第一期预检报告并列出第二/三期未实现强制项。
+/// </summary>
+public class Level3PrecheckService(
+    ISecurityProfileAccessor profile,
+    AdminSecurityOptions security,
+    AdminCacheOptions cache,
+    ISecurityPolicyProvider policy,
+    IHostEnvironment env,
+    IRepository<SysUser>? users = null,
+    ICacheProvider? cacheProvider = null,
+    ILogger<Level3PrecheckService>? logger = null,
+    AdminApiOptions? api = null,
+    ILevel3DeployGrantStore? deployGrants = null) : ILevel3PrecheckService
+{
+    /// <inheritdoc />
+    public virtual async Task<Level3PrecheckResult> RunAsync(CancellationToken cancellationToken = default)
+    {
+        var checks = new List<Level3PrecheckItem>
+        {
+            CheckProfile(),
+            CheckRedisProvider(),
+            CheckActualCacheProvider(),
+            CheckRedisAuth(),
+            CheckRedisTls(),
+            CheckSecretProtectorKey(),
+            CheckDeployGrantStore(),
+            await CheckMfaInitStateAsync(cancellationToken),
+            await CheckSessionPolicyFloorsAsync(cancellationToken),
+            CheckCookieCsrfTopology(),
+        };
+
+        var isLevel3 = profile.IsLevel3;
+        // 一期合规:显式 Level3 且本报告无 fail(warn 可接受,如超管尚未绑定 TOTP)
+        var overall = isLevel3 && checks.All(c => c.Status != Level3CheckStatus.Fail);
+
+        var result = new Level3PrecheckResult
+        {
+            CapabilityVersion = Level3PrecheckConstants.CapabilityVersion,
+            Profile = profile.Profile.ToString(),
+            Environment = env.EnvironmentName,
+            Checks = checks,
+            UnimplementedMandates = Level3PrecheckConstants.UnimplementedPhase23Mandates,
+            OverallCompliantForPhase1 = overall,
+        };
+
+        if (result.HasCriticalFailures)
+        {
+            logger?.LogError(
+                "Level3 预检关键项失败: {Ids}",
+                string.Join(", ", result.CriticalFailureIds));
+        }
+
+        return result;
+    }
+
+    /// <summary>Profile 检查:Level3 通过;生产未启用 → warn;其它环境未启用 → warn(不阻断)。</summary>
+    protected virtual Level3PrecheckItem CheckProfile()
+    {
+        if (profile.IsLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckProfileLevel3,
+                "Security Profile",
+                Level3CheckStatus.Pass,
+                "已启用 TenonAdmin:Security:Profile=Level3。",
+                "无需处理。",
+                critical: false);
+        }
+
+        if (profile.IsProductionWithoutLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckProfileLevel3,
+                "Security Profile",
+                Level3CheckStatus.Warn,
+                "生产环境未启用 Level3;当前部署不满足等保三级应用安全基线(内核不宣称已通过等保三级)。",
+                "若需第一期基线:部署配置 TenonAdmin:Security:Profile=Level3 并完成 Redis/密钥预检后重启。",
+                critical: false);
+        }
+
+        return Item(
+            Level3PrecheckConstants.CheckProfileLevel3,
+            "Security Profile",
+            Level3CheckStatus.Warn,
+            $"当前 Profile={profile.Profile};第一期合规要求显式 Level3。",
+            "部署配置 TenonAdmin:Security:Profile=Level3(默认不启用,避免破坏性升级)。",
+            critical: false);
+    }
+
+    /// <summary>Level3 强制 Redis;非 Level3 仅信息性检查。</summary>
+    protected virtual Level3PrecheckItem CheckRedisProvider()
+    {
+        var isRedis = string.Equals(cache.Provider, "Redis", StringComparison.OrdinalIgnoreCase);
+        var critical = profile.IsLevel3;
+
+        if (isRedis)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckRedisProvider,
+                "Redis Provider",
+                Level3CheckStatus.Pass,
+                "Cache:Provider=Redis。",
+                "无需处理。",
+                critical);
+        }
+
+        if (!profile.IsLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckRedisProvider,
+                "Redis Provider",
+                Level3CheckStatus.Pass,
+                $"非 Level3:当前 Provider={cache.Provider}(允许 Memory)。",
+                "启用 Level3 前改为 Provider=Redis 并安装 TenonAdmin.Caching.Redis。",
+                critical: false);
+        }
+
+        return Item(
+            Level3PrecheckConstants.CheckRedisProvider,
+            "Redis Provider",
+            Level3CheckStatus.Fail,
+            $"Level3 禁止进程内缓存:当前 Provider={cache.Provider}。",
+            "配置 TenonAdmin:Cache:Provider=Redis,安装 TenonAdmin.Caching.Redis,并在 AddTenonAdmin 之前调用 AddTenonAdminRedisCache。",
+            critical: true);
+    }
+
+    /// <summary>
+    /// 通过 <see cref="ISecureCacheCapabilities"/> 校验真实分布式缓存能力(不依赖类名含 Redis)。
+    /// </summary>
+    protected virtual Level3PrecheckItem CheckActualCacheProvider()
+    {
+        var critical = profile.IsLevel3;
+        var caps = cacheProvider as ISecureCacheCapabilities;
+
+        if (!profile.IsLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckRedisActual,
+                "Cache Implementation",
+                Level3CheckStatus.Pass,
+                caps is null
+                    ? "非 Level3:当前缓存未声明 ISecureCacheCapabilities(允许 Memory)。"
+                    : "非 Level3:已注册安全缓存能力声明。",
+                "启用 Level3 前须注册实现 ISecureCacheCapabilities 的 Redis 缓存。",
+                critical: false);
+        }
+
+        if (caps is null || !caps.IsDistributed)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckRedisActual,
+                "Cache Implementation",
+                Level3CheckStatus.Fail,
+                "Level3 要求实现 ISecureCacheCapabilities 的分布式缓存(通常为 TenonAdmin.Caching.Redis);当前为进程内或未声明能力。",
+                "安装 TenonAdmin.Caching.Redis,并在 AddTenonAdmin() 之前调用 AddTenonAdminRedisCache。",
+                critical: true);
+        }
+
+        if (!caps.HasAuthenticationConfigured || !caps.HasTlsConfigured)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckRedisActual,
+                "Cache Implementation",
+                Level3CheckStatus.Fail,
+                $"分布式缓存能力声明不完整:auth={caps.HasAuthenticationConfigured}, tls={caps.HasTlsConfigured}。",
+                "连接串含 password= 与 ssl=true,或设置 Cache:RequireTls=true。",
+                critical: true);
+        }
+
+        // 探针:连不通时 fail-closed(测试可用假实现返回 Ok)
+        try
+        {
+            var probe = caps.ProbeAsync().GetAwaiter().GetResult();
+            if (!probe.Ok)
+            {
+                return Item(
+                    Level3PrecheckConstants.CheckRedisActual,
+                    "Cache Implementation",
+                    Level3CheckStatus.Fail,
+                    $"分布式缓存探针失败: {probe.Message}",
+                    "确认 Redis 可达、TLS/认证正确,并在启动前修复连接。",
+                    critical: true);
+            }
+
+            return Item(
+                Level3PrecheckConstants.CheckRedisActual,
+                "Cache Implementation",
+                Level3CheckStatus.Pass,
+                $"分布式缓存能力声明与探针通过({probe.Message})。",
+                "无需处理。",
+                critical);
+        }
+        catch (Exception ex)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckRedisActual,
+                "Cache Implementation",
+                Level3CheckStatus.Fail,
+                $"分布式缓存探针异常: {ex.GetType().Name}",
+                "确认 Redis 可达与 TLS/认证配置。",
+                critical: true);
+        }
+    }
+
+    protected virtual Level3PrecheckItem CheckRedisAuth()
+    {
+        var critical = profile.IsLevel3;
+        var isRedis = string.Equals(cache.Provider, "Redis", StringComparison.OrdinalIgnoreCase);
+
+        if (!isRedis && !profile.IsLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckRedisAuth,
+                "Redis Authentication",
+                Level3CheckStatus.Pass,
+                "非 Redis / 非 Level3:跳过认证检查。",
+                "启用 Level3 时连接串须含 password=。",
+                critical: false);
+        }
+
+        if (!isRedis && profile.IsLevel3)
+        {
+            // redis_provider 已 fail;此处仍给可定位项
+            return Item(
+                Level3PrecheckConstants.CheckRedisAuth,
+                "Redis Authentication",
+                Level3CheckStatus.Fail,
+                "Level3 要求 Redis 且连接串含认证密码;当前未使用 Redis。",
+                "配置 Provider=Redis 且 RedisConnectionString 含 password=<非空>。",
+                critical: true);
+        }
+
+        var (hasAuth, _) = RedisConnectionSecurity.Inspect(cache.RedisConnectionString, cache.RequireTls);
+        var summary = RedisConnectionSecurity.Summarize(cache.RedisConnectionString);
+
+        if (hasAuth)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckRedisAuth,
+                "Redis Authentication",
+                Level3CheckStatus.Pass,
+                $"连接串已配置密码(摘要:{summary})。",
+                "无需处理。",
+                critical);
+        }
+
+        var status = profile.IsLevel3 ? Level3CheckStatus.Fail : Level3CheckStatus.Warn;
+        return Item(
+            Level3PrecheckConstants.CheckRedisAuth,
+            "Redis Authentication",
+            status,
+            $"Redis 连接串未检测到密码(摘要:{summary})。",
+            "在 TenonAdmin:Cache:RedisConnectionString 中加入 password=<强密码>;生产禁止无认证 Redis。",
+            critical);
+    }
+
+    protected virtual Level3PrecheckItem CheckRedisTls()
+    {
+        var critical = profile.IsLevel3;
+        var isRedis = string.Equals(cache.Provider, "Redis", StringComparison.OrdinalIgnoreCase);
+
+        if (!isRedis && !profile.IsLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckRedisTls,
+                "Redis TLS",
+                Level3CheckStatus.Pass,
+                "非 Redis / 非 Level3:跳过 TLS 检查。",
+                "启用 Level3 时连接串须 ssl=true 或 Cache:RequireTls=true。",
+                critical: false);
+        }
+
+        if (!isRedis && profile.IsLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckRedisTls,
+                "Redis TLS",
+                Level3CheckStatus.Fail,
+                "Level3 要求 Redis TLS;当前未使用 Redis。",
+                "配置 Provider=Redis,连接串加 ssl=true(或 RequireTls=true)。",
+                critical: true);
+        }
+
+        var (_, hasTls) = RedisConnectionSecurity.Inspect(cache.RedisConnectionString, cache.RequireTls);
+        var summary = RedisConnectionSecurity.Summarize(cache.RedisConnectionString);
+
+        if (hasTls)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckRedisTls,
+                "Redis TLS",
+                Level3CheckStatus.Pass,
+                cache.RequireTls
+                    ? $"已声明 TLS(RequireTls=true 和/或 连接串;摘要:{summary})。"
+                    : $"连接串已声明 TLS(摘要:{summary})。",
+                "无需处理。",
+                critical);
+        }
+
+        var status = profile.IsLevel3 ? Level3CheckStatus.Fail : Level3CheckStatus.Warn;
+        return Item(
+            Level3PrecheckConstants.CheckRedisTls,
+            "Redis TLS",
+            status,
+            $"未检测到 Redis TLS(摘要:{summary};RequireTls={cache.RequireTls})。",
+            "连接串加入 ssl=true,或设置 TenonAdmin:Cache:RequireTls=true(部署声明强制 TLS)。",
+            critical);
+    }
+
+    /// <summary>Level3 必须显式配置 DataProtection:Key;不输出密钥内容。</summary>
+    protected virtual Level3PrecheckItem CheckSecretProtectorKey()
+    {
+        var critical = profile.IsLevel3;
+        var key = security.DataProtection?.Key;
+        var configured = !string.IsNullOrWhiteSpace(key);
+
+        if (configured)
+        {
+            // 与 LocalDataProtectionKeyProvider 同一下限:Base64 且解码后 ≥32 字节
+            const int minKeyBytes = 32;
+            try
+            {
+                var bytes = Convert.FromBase64String(key!.Trim());
+                if (bytes.Length < minKeyBytes)
+                {
+                    return Item(
+                        Level3PrecheckConstants.CheckSecretProtectorKey,
+                        "Secret Protector Key",
+                        Level3CheckStatus.Fail,
+                        $"DataProtection:Key 过短({bytes.Length} 字节 < {minKeyBytes} 字节);启动后首次保护会失败。",
+                        "配置至少 32 字节随机密钥的 Base64 到 TenonAdmin:Security:DataProtection:Key。",
+                        critical: true);
+                }
+
+                return Item(
+                    Level3PrecheckConstants.CheckSecretProtectorKey,
+                    "Secret Protector Key",
+                    Level3CheckStatus.Pass,
+                    $"已配置数据保护主密钥({bytes.Length} bytes, KeyVersion={security.DataProtection?.KeyVersion ?? 1})。",
+                    "无需处理。密钥勿写入日志或预检导出明文。",
+                    critical);
+            }
+            catch (FormatException)
+            {
+                return Item(
+                    Level3PrecheckConstants.CheckSecretProtectorKey,
+                    "Secret Protector Key",
+                    Level3CheckStatus.Fail,
+                    "DataProtection:Key 不是合法 Base64。",
+                    "配置至少 32 字节随机密钥的 Base64 到 TenonAdmin:Security:DataProtection:Key。",
+                    critical: true);
+            }
+        }
+
+        if (!profile.IsLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckSecretProtectorKey,
+                "Secret Protector Key",
+                Level3CheckStatus.Warn,
+                "未配置 DataProtection:Key;开发环境可自动生成临时密钥。",
+                "生产 / Level3 必须显式配置 TenonAdmin:Security:DataProtection:Key(Base64,≥32 字节)。",
+                critical: false);
+        }
+
+        return Item(
+            Level3PrecheckConstants.CheckSecretProtectorKey,
+            "Secret Protector Key",
+            Level3CheckStatus.Fail,
+            "Level3 必须显式配置数据保护主密钥;禁止使用开发自动密钥。",
+            "设置 TenonAdmin:Security:DataProtection:Key 为 ≥32 字节随机密钥的 Base64(可接 KMS 替换 IDataProtectionKeyProvider)。",
+            critical: true);
+    }
+
+    /// <summary>
+    /// Level3 必须注册持久化部署授权存储;缺失则 Init/Emergency 无法满足抗缓存清空语义。
+    /// </summary>
+    protected virtual Level3PrecheckItem CheckDeployGrantStore()
+    {
+        if (!profile.IsLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckDeployGrantStore,
+                "Deploy Grant Store",
+                Level3CheckStatus.Pass,
+                "非 Level3:不强制 ILevel3DeployGrantStore。",
+                "启用 Level3 后须注册持久化 ILevel3DeployGrantStore(默认 Level3DeployGrantStore → DB)。",
+                critical: false);
+        }
+
+        if (deployGrants is null)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckDeployGrantStore,
+                "Deploy Grant Store",
+                Level3CheckStatus.Fail,
+                "Level3 未注册 ILevel3DeployGrantStore;InitGrant/EmergencyGrant 不得回退可丢弃缓存。",
+                "确保 ServicesSetup 注册 TryAddScoped&lt;ILevel3DeployGrantStore, Level3DeployGrantStore&gt;,或消费者前置注册等价持久实现。",
+                critical: true);
+        }
+
+        return Item(
+            Level3PrecheckConstants.CheckDeployGrantStore,
+            "Deploy Grant Store",
+            Level3CheckStatus.Pass,
+            "已注册 ILevel3DeployGrantStore(持久 first-seen/消费)。",
+            "无需处理。",
+            critical: false);
+    }
+
+    /// <summary>
+    /// MFA 初始化态势:Level3 下若尚无已绑定 TOTP 的超管,必须具备仍有效的 InitGrant 恢复路径,否则 critical fail。
+    /// </summary>
+    protected virtual async Task<Level3PrecheckItem> CheckMfaInitStateAsync(CancellationToken ct)
+    {
+        if (!profile.IsLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckMfaInitState,
+                "MFA Init State",
+                Level3CheckStatus.Pass,
+                "非 Level3:不强制 TOTP 初始化。",
+                "启用 Level3 后为首个超管准备部署期一次性初始化授权并完成 TOTP 绑定。",
+                critical: false);
+        }
+
+        if (users is null)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckMfaInitState,
+                "MFA Init State",
+                Level3CheckStatus.Warn,
+                "无法访问用户仓储,跳过超管 TOTP 绑定态势检查。",
+                "确保预检在完整宿主 DI 中运行。",
+                critical: false);
+        }
+
+        // 是否已有超管完成 TOTP 绑定
+        var anyBound = await users.AnyAsync(u => u.IsSuperAdmin && u.TotpEnabled);
+        if (anyBound)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckMfaInitState,
+                "MFA Init State",
+                Level3CheckStatus.Pass,
+                "至少一名超级管理员已完成 TOTP 绑定。",
+                "无需处理。",
+                critical: false);
+        }
+
+        // 无已绑定超管:必须存在仍可用的 InitGrant(+绝对 NotAfter),否则可启动但无人能登录
+        var init = security.Level3.InitGrant?.Trim();
+        if (string.IsNullOrWhiteSpace(init))
+        {
+            return Item(
+                Level3PrecheckConstants.CheckMfaInitState,
+                "MFA Init State",
+                Level3CheckStatus.Fail,
+                "Level3 已启用但尚无已绑定 TOTP 的超级管理员,且未配置 InitGrant——部署将无法完成首个超管绑定。",
+                "配置 TenonAdmin:Security:Level3:InitGrant 与 InitGrantNotAfter(未来 UTC 截止时刻),完成首绑后轮换/清除。",
+                critical: true);
+        }
+
+        if (security.Level3.InitGrantNotAfter is null)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckMfaInitState,
+                "MFA Init State",
+                Level3CheckStatus.Fail,
+                "Level3 尚无已绑定超管,且未配置 InitGrantNotAfter——未使用授权可无限期存活,违反可验证到期语义。",
+                "设置 TenonAdmin:Security:Level3:InitGrantNotAfter 为未来 UTC 时刻(与 InitGrantTtlMinutes 同时生效,取更严者)。",
+                critical: true);
+        }
+
+        if (security.Level3.InitGrantNotAfter.Value.UtcDateTime <= DateTime.UtcNow)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckMfaInitState,
+                "MFA Init State",
+                Level3CheckStatus.Fail,
+                "Level3 尚无已绑定超管,且 InitGrantNotAfter 已过期。",
+                "重新签发 InitGrant 并设置未来的 InitGrantNotAfter 后重启。",
+                critical: true);
+        }
+
+        // store 缺失已由 CheckDeployGrantStore critical;此处再验 InitGrant 可用性
+        if (deployGrants is null)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckMfaInitState,
+                "MFA Init State",
+                Level3CheckStatus.Fail,
+                "Level3 尚无已绑定超管且缺少 ILevel3DeployGrantStore,无法验证 InitGrant 可用性。",
+                "注册持久化 ILevel3DeployGrantStore 后重跑预检。",
+                critical: true);
+        }
+
+        var hash = SecretHash.Hash(init);
+        var usable = await deployGrants.CheckUsableAsync(
+            Level3DeployGrantKinds.Init,
+            hash,
+            security.Level3.InitGrantTtlMinutes,
+            security.Level3.InitGrantNotAfter,
+            ct);
+        if (!usable.Usable)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckMfaInitState,
+                "MFA Init State",
+                Level3CheckStatus.Fail,
+                $"Level3 尚无已绑定超管,InitGrant 不可用:{usable.Reason}。",
+                "配置新的 InitGrant + 未来 InitGrantNotAfter 并重启;勿复用已消费/已过 TTL 授权。",
+                critical: true);
+        }
+
+        return Item(
+            Level3PrecheckConstants.CheckMfaInitState,
+            "MFA Init State",
+            Level3CheckStatus.Pass,
+            "尚无已绑定超管;已配置可用 InitGrant(+NotAfter),可通过 /mfa/bind 完成首启绑定。",
+            "首个超管绑定成功后清除或轮换 InitGrant;勿长期保留。",
+            critical: false);
+    }
+
+    /// <summary>
+    /// Level3 Cookie/CSRF 拓扑:CORS 跨源时必须配置 CookieDomain,否则声明不可用的跨源组合。
+    /// 空 CORS = 同源反代模型(推荐)。
+    /// </summary>
+    protected virtual Level3PrecheckItem CheckCookieCsrfTopology()
+    {
+        if (!profile.IsLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckCookieCsrfTopology,
+                "Cookie/CSRF Topology",
+                Level3CheckStatus.Pass,
+                "非 Level3:不强制 Cookie 会话拓扑。",
+                "启用 Level3 后优先同源反代;跨源须配置 CookieDomain + CORS 凭证。",
+                critical: false);
+        }
+
+        var origins = api?.Cors.AllowedOrigins ?? [];
+        var domain = security.Level3.CookieDomain?.Trim();
+        var hasCrossOrigin = origins.Length > 0;
+
+        if (!hasCrossOrigin)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckCookieCsrfTopology,
+                "Cookie/CSRF Topology",
+                Level3CheckStatus.Pass,
+                "Level3 同源模型:未配置 CORS AllowedOrigins,Cookie host-only + 双提交 CSRF。",
+                "前后端请经同一 origin 反代(推荐 Caddy/nginx 同域);跨源须显式配置。",
+                critical: false);
+        }
+
+        if (string.IsNullOrEmpty(domain))
+        {
+            return Item(
+                Level3PrecheckConstants.CheckCookieCsrfTopology,
+                "Cookie/CSRF Topology",
+                Level3CheckStatus.Fail,
+                "Level3 已配置 CORS AllowedOrigins 但未设置 CookieDomain:SPA 无法读取 API host-only csrf Cookie,写请求将 CSRF 失败。",
+                "二选一:① 改为同源反代并清空 AllowedOrigins;② 设置 CookieDomain 为共享父域并启用 CORS AllowCredentials。",
+                critical: true);
+        }
+
+        if (api?.Cors.AllowCredentials != true)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckCookieCsrfTopology,
+                "Cookie/CSRF Topology",
+                Level3CheckStatus.Fail,
+                "Level3 跨源已配置 CookieDomain,但 Cors.AllowCredentials=false:浏览器不会携带 Cookie,CSRF/静默刷新失败。",
+                "设置 TenonAdmin:Api:Cors:AllowCredentials=true,并确保 AllowedOrigins 为显式列表(禁止 * )。",
+                critical: true);
+        }
+
+        return Item(
+            Level3PrecheckConstants.CheckCookieCsrfTopology,
+            "Cookie/CSRF Topology",
+            Level3CheckStatus.Pass,
+            $"Level3 跨源 Cookie 模型:CookieDomain={domain},CORS origins={origins.Length},AllowCredentials=true。",
+            "确认 CookieDomain 为 SPA 与 API 的公共父域,且边缘为 HTTPS(SameSite=None 需 Secure)。",
+            critical: false);
+    }
+
+    /// <summary>会话/密码有效策略下限是否在读取层生效。</summary>
+    protected virtual async Task<Level3PrecheckItem> CheckSessionPolicyFloorsAsync(CancellationToken ct)
+    {
+        if (!profile.IsLevel3)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckSessionPolicyFloors,
+                "Session Policy Floors",
+                Level3CheckStatus.Pass,
+                "非 Level3:不施加会话/密码下限钳制。",
+                "启用 Level3 后有效策略自动施加 15m access / 8h absolute / 密码与锁定下限。",
+                critical: false);
+        }
+
+        var (access, refresh) = await policy.GetSessionTtlAsync();
+        var (maxFail, lockMin) = await policy.GetLoginLockAsync();
+        var pwd = await policy.GetPasswordPolicyAsync();
+        var history = await policy.GetPasswordHistoryCountAsync();
+        var expire = await policy.GetPasswordExpireDaysAsync();
+
+        var issues = new List<string>();
+        if (access > SecurityPolicyProvider.Level3MaxAccessMinutes)
+            issues.Add($"accessMinutes={access}>{SecurityPolicyProvider.Level3MaxAccessMinutes}");
+        if (refresh > SecurityPolicyProvider.Level3MaxAbsoluteSessionMinutes)
+            issues.Add($"refreshMinutes={refresh}>{SecurityPolicyProvider.Level3MaxAbsoluteSessionMinutes}");
+        if (maxFail <= 0 || maxFail > SecurityPolicyProvider.Level3MaxFailCount)
+            issues.Add($"maxFailCount={maxFail}");
+        if (lockMin < SecurityPolicyProvider.Level3MinLockMinutes)
+            issues.Add($"lockMinutes={lockMin}<{SecurityPolicyProvider.Level3MinLockMinutes}");
+        if (pwd.MinLength < SecurityPolicyProvider.Level3MinPasswordLength)
+            issues.Add($"minLength={pwd.MinLength}");
+        if (history < SecurityPolicyProvider.Level3MinHistoryCount)
+            issues.Add($"historyCount={history}");
+        if (expire <= 0 || expire > SecurityPolicyProvider.Level3MaxExpireDays)
+            issues.Add($"expireDays={expire}");
+
+        if (issues.Count > 0)
+        {
+            return Item(
+                Level3PrecheckConstants.CheckSessionPolicyFloors,
+                "Session Policy Floors",
+                Level3CheckStatus.Fail,
+                "Level3 有效策略下限未满足:" + string.Join("; ", issues),
+                "检查 ISecurityPolicyProvider 实现是否在 Level3 下钳制下限;勿绕过默认 SecurityPolicyProvider。",
+                critical: true);
+        }
+
+        return Item(
+            Level3PrecheckConstants.CheckSessionPolicyFloors,
+            "Session Policy Floors",
+            Level3CheckStatus.Pass,
+            $"有效策略满足一期下限:access≤{access}m, refresh≤{refresh}m, lock={maxFail}/{lockMin}m, " +
+            $"password minLen={pwd.MinLength}, history={history}, expireDays={expire}。",
+            "SysConfig 只能再收紧,不能放宽这些下限。",
+            critical: true);
+    }
+
+    private static Level3PrecheckItem Item(
+        string id, string name, string status, string message, string remediation, bool critical) =>
+        new(id, name, status, message, remediation, critical);
+
+    /// <summary>第二/三期强制项清单(与 <see cref="Level3PrecheckConstants.UnimplementedPhase23Mandates"/> 同源)。</summary>
+    public static IReadOnlyList<Level3UnimplementedMandate> UnimplementedMandates =>
+        Level3PrecheckConstants.UnimplementedPhase23Mandates;
+}

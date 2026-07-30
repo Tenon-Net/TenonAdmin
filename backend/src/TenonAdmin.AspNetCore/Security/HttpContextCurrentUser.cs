@@ -18,6 +18,15 @@ public sealed class HttpContextCurrentUser(IHttpContextAccessor accessor) : ICur
     public long? UserId =>
         long.TryParse(Principal?.FindFirstValue(JwtRegisteredClaimNames.Sub), out var id) ? id : null;
 
+    public string? SessionId
+    {
+        get
+        {
+            var sid = Principal?.FindFirstValue(TokenClaimNames.SESSION_ID);
+            return string.IsNullOrEmpty(sid) ? null : sid;
+        }
+    }
+
     public bool IsSuperAdmin => Principal?.HasClaim(TokenClaimNames.SUPER_ADMIN, "true") == true;
 
     public long? OrgId =>

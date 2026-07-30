@@ -1,23 +1,49 @@
 import { defineConfig } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
+import { tmpdir } from 'node:os'
+import { join, sep } from 'node:path'
+import { resolvePortPair } from './e2e/portPair.mjs'
 
-// E2E 打真实前后端(dev 环境)。后端须已在 :5100 跑(dev.bat),否则登录/菜单接口无从谈起。
+/**
+ * 收口配置:固定 127.0.0.1 + 本 run 端口;reuseExistingServer 恒 false。
+ * 忽略 TENON_WEB_BASE。CI 必须注入唯一 TENON_E2E_*_PORT。
+ */
+const { apiPort, webPort } = await resolvePortPair({ apiMin: 21000, webMin: 32000, span: 4000 })
+const webUrl = `http://127.0.0.1:${webPort}`
+const apiUrl = `http://127.0.0.1:${apiPort}`
+process.env.TENON_E2E_API_BASE = apiUrl
+const adminPassword = process.env.TENON_E2E_PASSWORD ?? 'Aa123456'
+const databaseFile = join(tmpdir(), `tenon-admin-e2e-vue-${randomUUID()}.db`)
+const backendOutput = `${join(tmpdir(), `tenon-admin-e2e-vue-build-${randomUUID()}`)}${sep}`
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
-  // 同一个超管账号 + 同一份库,必须串行,否则会话/标签/授权互踩。
-  // **真正起作用的是 workers:1**(实测从 "7 tests using 3 workers" 变成 "using 1 worker")——
-  // 只有一个 worker 进程,并行无从谈起。`fullyParallel: false` 本就是 Playwright 默认值,
-  // 单独设它拦不住跨文件并发(它只管文件内),留在这儿是把"必须串行"这个意图写明,不是第二道闸。
   fullyParallel: false,
   workers: 1,
   use: {
-    baseURL: process.env.TENON_WEB_BASE ?? 'http://localhost:5173',
+    baseURL: webUrl,
     trace: 'retain-on-failure',
   },
-  webServer: {
-    command: 'npm run dev',
-    url: process.env.TENON_WEB_BASE ?? 'http://localhost:5173',
-    reuseExistingServer: true, // 本地已 dev.bat 起着就直接复用
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      command: `dotnet run --no-launch-profile --project ../backend/samples/MinimalHost -p:BaseOutputPath=${backendOutput}`,
+      url: `${apiUrl}/health`,
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: {
+        ASPNETCORE_URLS: apiUrl,
+        ASPNETCORE_ENVIRONMENT: 'Development',
+        TenonAdmin__Database__ConnectionString: `Data Source=${databaseFile}`,
+        TenonAdmin__Seed__AdminPassword: adminPassword,
+      },
+    },
+    {
+      command: `node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port ${webPort} --strictPort`,
+      url: webUrl,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      env: { TENON_API_TARGET: apiUrl },
+    },
+  ],
 })

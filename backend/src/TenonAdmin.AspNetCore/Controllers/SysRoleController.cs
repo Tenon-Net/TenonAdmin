@@ -28,12 +28,14 @@ public class SysRoleController(IRoleService roleService, IRbacService rbac) : Co
     /// <summary>新增角色</summary>
     [HttpPost("add")]
     [RolePermission]
+    [RequireReauth]
     public async Task<Result<long>> Add(RoleInput input) =>
         Result<long>.Ok(await roleService.AddAsync(input));
 
     /// <summary>更新角色</summary>
     [HttpPut("{id}")]
     [RolePermission]
+    [RequireReauth]
     public async Task<Result<bool>> Update(long id, RoleInput input)
     {
         await roleService.UpdateAsync(id, input);
@@ -43,6 +45,7 @@ public class SysRoleController(IRoleService roleService, IRbacService rbac) : Co
     /// <summary>删除角色(级联清关联)</summary>
     [HttpDelete("{id}")]
     [RolePermission]
+    [RequireReauth]
     public async Task<Result<bool>> Delete(long id)
     {
         await roleService.DeleteAsync(id);
@@ -52,6 +55,7 @@ public class SysRoleController(IRoleService roleService, IRbacService rbac) : Co
     /// <summary>批量删除角色</summary>
     [HttpPost("batch-delete")]
     [RolePermission]
+    [RequireReauth]
     public async Task<Result<bool>> BatchDelete(BatchDeleteInput input)
     {
         await roleService.DeleteBatchAsync(input.Ids);
@@ -79,6 +83,7 @@ public class SysRoleController(IRoleService roleService, IRbacService rbac) : Co
     /// <summary>全量设置某角色关联的用户;成功后受影响用户权限+数据范围缓存即时失效。</summary>
     [HttpPut("users")]
     [RolePermission]
+    [RequireReauth]
     public async Task<Result<bool>> SetUsers(SetRoleUsersInput input)
     {
         await rbac.SetRoleUsersAsync(input.RoleId, input.UserIds);
@@ -88,6 +93,7 @@ public class SysRoleController(IRoleService roleService, IRbacService rbac) : Co
     /// <summary>全量设置某角色授予的菜单;成功后受影响用户权限缓存即时失效(设计 §6)。</summary>
     [HttpPut("menu")]
     [RolePermission]
+    [RequireReauth]
     public async Task<Result<bool>> SetMenus(SetRoleMenusInput input)
     {
         await rbac.SetRoleMenusAsync(input.RoleId, input.MenuIds);
@@ -97,6 +103,7 @@ public class SysRoleController(IRoleService roleService, IRbacService rbac) : Co
     /// <summary>设置某角色的数据范围(招牌能力,§6);成功后受影响用户数据范围缓存即时失效。</summary>
     [HttpPut("datascope")]
     [RolePermission]
+    [RequireReauth]
     public async Task<Result<bool>> SetDataScope(SetRoleDataScopeInput input)
     {
         await rbac.SetRoleDataScopeAsync(input.RoleId, input.ScopeType, input.CustomOrgIds);

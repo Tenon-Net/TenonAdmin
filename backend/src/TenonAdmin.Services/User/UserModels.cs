@@ -54,6 +54,13 @@ public record UserItem
 
     public required bool Enabled { get; init; }
     public required bool IsSuperAdmin { get; init; }
+
+    /// <summary>管理员显式强制 TOTP(只能加严;超管/高敏持有者仍由策略自动强制)。</summary>
+    public bool ForceTotp { get; init; }
+
+    /// <summary>是否已绑定 TOTP(只读状态;绑定走 MFA 流程,不可经本字段写入)。</summary>
+    public bool TotpEnabled { get; init; }
+
     public DateTime CreateTime { get; init; }
 }
 
@@ -82,6 +89,9 @@ public record AddUserInput
     public long? PositionId { get; init; }
     public long? DirectorId { get; init; }
     public bool Enabled { get; init; } = true;
+
+    /// <summary>建号即显式强制 TOTP(用户须完成绑定后才能登录完成态)。</summary>
+    public bool ForceTotp { get; init; }
 
     /// <summary>初始分配的角色 Id 集合</summary>
     public IReadOnlyCollection<long> RoleIds { get; init; } = [];
@@ -115,7 +125,7 @@ public record SetEnabledInput
     public bool Enabled { get; init; }
 }
 
-/// <summary>更新用户入参。不含 Account(不可改)、Password(走重置)、IsSuperAdmin(防提权)。</summary>
+/// <summary>更新用户入参。不含 Account(不可改)、Password(走重置)、IsSuperAdmin(防提权)、TotpEnabled(只读)。</summary>
 public record UpdateUserInput
 {
     public string Name { get; init; } = "";
@@ -128,5 +138,9 @@ public record UpdateUserInput
     public long? PositionId { get; init; }
     public long? DirectorId { get; init; }
     public bool Enabled { get; init; } = true;
+
+    /// <summary>管理员显式强制 TOTP(只能加严;关断不解除超管/高敏自动强制)。</summary>
+    public bool ForceTotp { get; init; }
+
     public IReadOnlyCollection<long> RoleIds { get; init; } = [];
 }

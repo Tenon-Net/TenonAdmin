@@ -104,6 +104,42 @@ public enum ErrorCode
     [MsgKey("error.auth.oauthAlreadyBound")]
     OAuthAlreadyBound = 40017,
 
+    /// <summary>密码已通过,需 TOTP 二次验证(Level3 MFA;args 可携带 challenge 信息)</summary>
+    [MsgKey("error.auth.totpRequired")]
+    TotpRequired = 40018,
+
+    /// <summary>TOTP 动态口令不正确</summary>
+    [MsgKey("error.auth.totpWrong")]
+    TotpWrong = 40019,
+
+    /// <summary>账号尚未绑定 TOTP(强制 MFA 用户须先完成绑定邀请流程)</summary>
+    [MsgKey("error.auth.totpNotBound")]
+    TotpNotBound = 40020,
+
+    /// <summary>TOTP 绑定邀请无效(缺失/过期/已消费/已撤销;统一归此,防探测)</summary>
+    [MsgKey("error.auth.bindInviteInvalid")]
+    BindInviteInvalid = 40021,
+
+    /// <summary>恢复码不正确或已使用</summary>
+    [MsgKey("error.auth.recoveryCodeInvalid")]
+    RecoveryCodeInvalid = 40022,
+
+    /// <summary>CSRF 校验失败(双提交 Cookie 与请求头不一致/缺失)</summary>
+    [MsgKey("error.auth.csrfInvalid")]
+    CsrfInvalid = 40023,
+
+    /// <summary>高风险操作需要短时再次认证(约 5 分钟窗口内的 reauth grant 缺失或已过期)</summary>
+    [MsgKey("error.auth.reauthRequired")]
+    ReauthRequired = 40024,
+
+    /// <summary>Level3 强制档配置不完整(如缺 Redis TLS/认证、缺数据保护密钥等);args 可携带 checkId</summary>
+    [MsgKey("error.auth.level3Misconfigured")]
+    Level3Misconfigured = 40025,
+
+    /// <summary>绑定 TOTP 时必须先验证目标用户当前密码</summary>
+    [MsgKey("error.auth.mfaBindPasswordRequired")]
+    MfaBindPasswordRequired = 40026,
+
     // ── 41xxx 权限与数据范围 ─────────────────────────────────────────
 
     /// <summary>无接口访问权限(权限码不在当前用户 PermissionCodeList 内)</summary>

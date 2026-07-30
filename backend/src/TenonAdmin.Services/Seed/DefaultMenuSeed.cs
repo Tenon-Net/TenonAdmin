@@ -9,10 +9,10 @@ namespace TenonAdmin.Services;
 /// (大写 Method + 冒号 + 小写路由模板),否则授了也匹配不上。</para>
 /// <para>菜单树顶级节点:system 模块下工作台(根级页面)+ 组织管理 / 系统运维 / 日志审计 / 文件管理四个目录;
 /// 另有示例 business 模块下一条工作台(ModuleId 仅顶级节点设)。节点 Id 手工分配、无分配器,新增节点接着当前
-/// 最大值往后取(现已用到 131:缓存管理 121–125 + 用户导入导出 126–130 + 操作日志导出 131),避免覆盖历史 Id。</para>
+/// 最大值往后取(现已用到 155:等保三级一期安全管理权限锚点),避免覆盖历史 Id。</para>
 /// <para>层级约定:目录 → 页面 → 按钮。<b>按钮挂在它所属的页面下</b>(而非目录),这样菜单管理页里
 /// 每个页面的权限按钮一目了然。唯一例外是无对应页面的权限码锚点(如 Id=2 探针),挂在目录下。</para>
-/// <para><b>Id 登记</b>:菜单种子的固定 Id 历史散布在 2–131(不连续),<b>新增行一律取当前最大号 +1(现为 132)</b>,
+/// <para><b>Id 登记</b>:菜单种子的固定 Id 历史散布在 2–147(不连续),<b>新增行一律取当前最大号 +1(现为 148)</b>,
 /// 不要回填空洞——空洞可能是被挪走/删除的历史号,复用会撞上老库存量行。撞号/越界会被启动检查
 /// (<c>DatabaseInitializer</c>)与 <c>SeedIdRangeTests</c> 当场拒绝,不会静默吞掉。</para>
 /// </summary>
@@ -92,6 +92,15 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 58, ParentId = 55, Type = MenuType.Button, Title = "配置-更新", Permission = "PUT:/api/v1/sys/config/{id}", Sort = 4, Enabled = true },
         new SysMenu { Id = 59, ParentId = 55, Type = MenuType.Button, Title = "配置-删除", Permission = "DELETE:/api/v1/sys/config/{id}", Sort = 5, Enabled = true },
         new SysMenu { Id = 97, ParentId = 55, Type = MenuType.Button, Title = "配置-批量存值", Permission = "PUT:/api/v1/sys/config/batch", Sort = 28, Enabled = true },
+        // 等保三级一期安全管理:高敏权限设置已嵌入安全配置页;其余没有独立页面的管理/预检端点仍播权限锚点，供角色菜单授权。
+        new SysMenu { Id = 148, ParentId = 55, Type = MenuType.Button, Title = "MFA-发放绑定邀请", Permission = "POST:/api/v1/sys/mfa/invite", Sort = 29, Enabled = true },
+        new SysMenu { Id = 149, ParentId = 55, Type = MenuType.Button, Title = "MFA-撤销绑定邀请", Permission = "DELETE:/api/v1/sys/mfa/invite/{id:long}", Sort = 30, Enabled = true },
+        new SysMenu { Id = 150, ParentId = 55, Type = MenuType.Button, Title = "MFA-重置超级管理员", Permission = "POST:/api/v1/sys/mfa/reset", Sort = 31, Enabled = true },
+        new SysMenu { Id = 151, ParentId = 55, Type = MenuType.Button, Title = "高敏权限-查看", Permission = "GET:/api/v1/sys/mfa/high-sensitivity", Sort = 32, Enabled = true },
+        new SysMenu { Id = 152, ParentId = 55, Type = MenuType.Button, Title = "高敏权限-追加", Permission = "POST:/api/v1/sys/mfa/high-sensitivity", Sort = 33, Enabled = true },
+        new SysMenu { Id = 153, ParentId = 55, Type = MenuType.Button, Title = "高敏权限-删除", Permission = "DELETE:/api/v1/sys/mfa/high-sensitivity/{id:long}", Sort = 34, Enabled = true },
+        new SysMenu { Id = 154, ParentId = 55, Type = MenuType.Button, Title = "安全基线-查看", Permission = "GET:/api/v1/sys/security/baseline", Sort = 35, Enabled = true },
+        new SysMenu { Id = 155, ParentId = 55, Type = MenuType.Button, Title = "等保三级预检-查看", Permission = "GET:/api/v1/sys/level3/precheck", Sort = 36, Enabled = true },
 
         // 字典管理页(R5:DictController 主从 CRUD)。类型分页 21、项查询 22、项新增 23;写端点码 61-65;82 管理端项分页。
         new SysMenu { Id = 60, ParentId = 20, Type = MenuType.Menu, Title = "字典管理", Permission = "", Path = "/system/dict", Component = "system/dict/index", Icon = "ph:book-open-text-duotone", Sort = 2, Enabled = true, Visible = true },

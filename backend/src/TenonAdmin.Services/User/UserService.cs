@@ -110,6 +110,8 @@ public class UserService(
                 DirectorId = u.DirectorId,
                 Enabled = u.Enabled,
                 IsSuperAdmin = u.IsSuperAdmin,
+                ForceTotp = u.ForceTotp,
+                TotpEnabled = u.TotpEnabled,
                 CreateTime = u.CreateTime,
             });
 
@@ -175,6 +177,8 @@ public class UserService(
             DirectorId = u.DirectorId,
             Enabled = u.Enabled,
             IsSuperAdmin = u.IsSuperAdmin,
+            ForceTotp = u.ForceTotp,
+            TotpEnabled = u.TotpEnabled,
             CreateTime = u.CreateTime,
             RoleIds = roleIds,
         };
@@ -208,6 +212,7 @@ public class UserService(
             PositionId = input.PositionId,
             DirectorId = input.DirectorId,
             Enabled = input.Enabled,
+            ForceTotp = input.ForceTotp,
             IsSuperAdmin = false,       // 接口永不建超管(防提权);超管只能种子/手工建
             MustChangePassword = true,  // 管理员建号:初始口令由管理员/系统设定,强制用户首登改密(§14)
             LastPasswordChangeTime = Now,   // 密码过期窗口从建号起算
@@ -242,6 +247,7 @@ public class UserService(
         user.PositionId = input.PositionId;
         user.DirectorId = input.DirectorId;
         user.Enabled = input.Enabled;
+        user.ForceTotp = input.ForceTotp;
         await InTransactionAsync(async () =>
         {
             await users.UpdateAsync(user);

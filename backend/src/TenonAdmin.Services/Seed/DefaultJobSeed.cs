@@ -3,18 +3,22 @@ using TenonAdmin.SqlSugar;
 namespace TenonAdmin.Services;
 
 /// <summary>
-/// 内置任务种子:执行记录清理(狗粮任务,docs/scheduling-ledger.md §7.3)。
-/// Id=1 —— sys_job 自有 Id 空间,内核段 [1,1000),SeedIdRangeTests 自动看护。
+/// 内置任务种子:执行记录清理 + Level3 闲置账号扫描(docs/scheduling-ledger.md §7.3)。
+/// Id=1..2 —— sys_job 自有 Id 空间,内核段 [1,1000),SeedIdRangeTests 自动看护。
 /// </summary>
 internal sealed class DefaultJobSeed : ISeedData<SysJob>
 {
     /// <summary>内置清理任务的编码(排障/文档的稳定锚点)</summary>
     internal const string LOG_CLEANUP_CODE = "sys-job-log-cleanup";
 
+    /// <summary>Level3 闲置账号扫描任务编码(幂等补种锚点)</summary>
+    internal const string IDLE_ACCOUNT_SCAN_CODE = "sys-idle-account-scan";
+
     /// <summary>
     /// <b>刻意 false(与菜单种子相反),理由留档:</b>job 行是运行态可变数据——NextRunTime/计数器/
     /// 用户改过的 cron 全在同一行,升级刷回种子值 = 清空运行态 + 吞掉用户调参。
-    /// 菜单是内核拥有的纯结构件才敢开 SyncOnUpgrade。
+    /// 菜单是内核拥有的纯结构件才敢开 SyncOnUpgrade。升级库由
+    /// <see cref="Level3IdleAccountJobEnsureHostedService"/> 幂等补种闲置扫描行。
     /// </summary>
     public bool SyncOnUpgrade => false;
 
@@ -38,6 +42,22 @@ internal sealed class DefaultJobSeed : ISeedData<SysJob>
             IsSystem = true,
             AlertByNotice = true,
             Remark = "删除过期执行记录(保留天数见配置 sys.job.logRetentionDays),并顺手清理失联超 24h 的调度节点行",
+        },
+        new SysJob
+        {
+            Id = 2,
+            Code = IDLE_ACCOUNT_SCAN_CODE,
+            Name = "闲置账号扫描",
+            HandlerKind = JobHandlerKind.Compiled,
+            HandlerName = typeof(IdleAccountJob).FullName!,
+            TriggerKind = JobTriggerKind.Cron,
+            CronExpression = "0 15 4 * * ?",   // 每天 04:15
+            MisfireStrategy = JobMisfireStrategy.Skip,
+            ConcurrencyMode = JobConcurrencyMode.SerialSkip,
+            Status = JobStatus.Ready,
+            IsSystem = true,
+            AlertByNotice = true,
+            Remark = "Level3 闲置账号治理:60 天告警 / 90 天停用;非 Level3 服务内空跑",
         },
     ];
 }

@@ -28,9 +28,13 @@ export default function CallbackPage() {
     const ticket = searchParams.get('ticket') ?? ''
     const bind = searchParams.get('bind') ?? ''
     const error = searchParams.get('error') ?? ''
+    const totpChallenge = searchParams.get('totpChallenge') ?? ''
     const fail = (text: string) => setErrorText(text)
 
-    if (error) {
+    // SSO 后需 TOTP:挑战 Id 交给登录页完成
+    if (totpChallenge) {
+      navigate(`/login?totpChallenge=${encodeURIComponent(totpChallenge)}`, { replace: true })
+    } else if (error) {
       const key = OAUTH_ERROR_KEYS[Number(error)]
       fail(key ? t(key) : t('oauth.failed'))
     } else if (bind) {

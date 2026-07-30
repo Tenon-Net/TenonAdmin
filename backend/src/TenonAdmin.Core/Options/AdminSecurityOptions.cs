@@ -10,6 +10,87 @@ public enum SessionMode
     Single,
 }
 
+/// <summary>
+/// 安全档(对应 <c>TenonAdmin:Security:Profile</c>)。仅部署配置/密钥管理可信来源;不可经 SysConfig 或管理页降级。
+/// 默认 <see cref="None"/>——既有项目升级零阻断;显式 <see cref="Level3"/> 才施加等保三级应用安全强制下限。
+/// </summary>
+public enum SecurityProfile
+{
+    /// <summary>默认档:不施加 Level3 下限,登录/刷新/localStorage 令牌模式完全兼容</summary>
+    None = 0,
+
+    /// <summary>等保三级应用安全强制档(显式启用)。内核不宣称「已通过等保三级」。</summary>
+    Level3 = 1,
+}
+
+/// <summary>
+/// 数据保护密钥配置(对应 <c>TenonAdmin:Security:DataProtection</c>)。
+/// 为 <c>ISecretProtector</c> 提供主密钥材料;可替换为 KMS/HSM 的 <c>IDataProtectionKeyProvider</c>。
+/// </summary>
+public class AdminDataProtectionOptions
+{
+    /// <summary>
+    /// 主密钥 Base64(解码后建议 ≥32 字节)。null 时开发环境可自动生成落盘密钥;
+    /// Level3 必须显式配置(缺配由预检/启动失败)。
+    /// </summary>
+    public string? Key { get; set; }
+
+    /// <summary>当前密钥版本号(轮换时递增;信封带版本以便渐进解密)</summary>
+    public int KeyVersion { get; set; } = 1;
+}
+
+/// <summary>
+/// Level3 MFA 相关部署配置(对应 <c>TenonAdmin:Security:Level3</c>)。
+/// 初始化/紧急授权为部署期短时一次性 bearer;明文最多出现在部署密钥中,消费后由内核标记失效。
+/// </summary>
+public class AdminLevel3Options
+{
+    /// <summary>
+    /// 首个超级管理员 TOTP 绑定用的部署期一次性初始化授权明文(高熵 bearer)。
+    /// 绑定成功后立即失效;仅允许尚未绑定 TOTP 的超管使用。
+    /// </summary>
+    public string? InitGrant { get; set; }
+
+    /// <summary>InitGrant 有效期(分钟);默认 60。从首次观测起算;超过后即使未消费也拒绝。</summary>
+    public int InitGrantTtlMinutes { get; set; } = 60;
+
+    /// <summary>
+    /// InitGrant 绝对截止时刻(UTC,部署侧可验证)。Level3 尚无已绑定超管时<strong>必填</strong>;
+    /// 缺失或已过期 → 预检 critical fail。与 <see cref="InitGrantTtlMinutes"/> 同时生效(取更严者)。
+    /// </summary>
+    public DateTimeOffset? InitGrantNotAfter { get; set; }
+
+    /// <summary>
+    /// 唯一超级管理员 MFA 紧急恢复授权明文。仅当系统中只有一名超管且需重置其 MFA 时使用;
+    /// 消费后失效,并记最高级安全日志。
+    /// </summary>
+    public string? EmergencyGrant { get; set; }
+
+    /// <summary>EmergencyGrant 有效期(分钟);默认 30。从首次观测起算。</summary>
+    public int EmergencyGrantTtlMinutes { get; set; } = 30;
+
+    /// <summary>EmergencyGrant 绝对截止时刻(UTC);过期拒绝,见 <see cref="InitGrantNotAfter"/>。</summary>
+    public DateTimeOffset? EmergencyGrantNotAfter { get; set; }
+
+    /// <summary>
+    /// Level3 Cookie Domain(如 <c>.example.com</c>)。空 = 仅同源/同 host Cookie(推荐反代同源)。
+    /// 跨源 SPA+API 时必须显式设置父域,并配合 CORS 凭证与预检。
+    /// </summary>
+    public string? CookieDomain { get; set; }
+
+    /// <summary>TOTP 绑定邀请默认有效期(分钟);默认 15。</summary>
+    public int BindInviteTtlMinutes { get; set; } = 15;
+
+    /// <summary>高风险操作再次认证有效窗口(分钟);默认 5。</summary>
+    public int ReauthWindowMinutes { get; set; } = 5;
+
+    /// <summary>TOTP 登录挑战 TTL(秒);默认 300。</summary>
+    public int TotpChallengeTtlSeconds { get; set; } = 300;
+
+    /// <summary>TOTP otpauth URI 中的 issuer 名(Authenticator 展示);默认 TenonAdmin。</summary>
+    public string TotpIssuer { get; set; } = "TenonAdmin";
+}
+
 /// <summary>会话配置(对应 <c>TenonAdmin:Security:Session</c>,设计 §15)。</summary>
 public class AdminSessionOptions
 {
@@ -18,6 +99,18 @@ public class AdminSessionOptions
 
     /// <summary>最大并发会话数;&gt;0 时超出则按最早登录吊销最旧会话。0 = 不限。</summary>
     public int MaxConcurrent { get; set; }
+
+    /// <summary>
+    /// Level3 活动回写节流秒数(热路径只更新缓存,满此间隔才回写 DB)。默认 60。
+    /// 非 Level3 不启用闲置/绝对窗时本项无影响。
+    /// </summary>
+    public int ActivityThrottleSeconds { get; set; } = 60;
+
+    /// <summary>Level3 普通用户闲置超时(分钟)。默认 30。</summary>
+    public int IdleMinutesNormal { get; set; } = 30;
+
+    /// <summary>Level3 MFA 用户闲置超时(分钟)。默认 15。</summary>
+    public int IdleMinutesMfa { get; set; } = 15;
 }
 
 /// <summary>验证码配置(对应 <c>TenonAdmin:Security:Captcha</c>,设计 §3.2)。</summary>
@@ -109,10 +202,17 @@ public class AdminSmsOtpOptions
 
 /// <summary>
 /// 安全配置(对应 <c>TenonAdmin:Security</c> 节,设计 §3.2/§14)。
-/// v1 落 <see cref="Session"/> + <see cref="LoginLock"/> + <see cref="Captcha"/> + <see cref="RateLimit"/> + <see cref="SmsOtp"/>。
+/// v1 落 <see cref="Session"/> + <see cref="LoginLock"/> + <see cref="Captcha"/> + <see cref="RateLimit"/> + <see cref="SmsOtp"/>;
+/// Level3 档位见 <see cref="Profile"/> + <see cref="DataProtection"/>。
 /// </summary>
 public class AdminSecurityOptions
 {
+    /// <summary>
+    /// 安全档(对应 <c>TenonAdmin:Security:Profile</c>)。默认 <see cref="SecurityProfile.None"/>;
+    /// 仅部署配置可信,不能经 SysConfig/管理页降级。
+    /// </summary>
+    public SecurityProfile Profile { get; set; } = SecurityProfile.None;
+
     /// <summary>会话并发策略(单端/多端/限并发数,见 <see cref="AdminSessionOptions"/>)</summary>
     public AdminSessionOptions Session { get; set; } = new();
 
@@ -127,6 +227,15 @@ public class AdminSecurityOptions
 
     /// <summary>短信验证码策略(二次验证/免密登录,默认全关,见 <see cref="AdminSmsOtpOptions"/>)</summary>
     public AdminSmsOtpOptions SmsOtp { get; set; } = new();
+
+    /// <summary>数据保护密钥(TOTP seed / HMAC 密钥等信封加密的主密钥材料,见 <see cref="AdminDataProtectionOptions"/>)</summary>
+    public AdminDataProtectionOptions DataProtection { get; set; } = new();
+
+    /// <summary>
+    /// Level3 MFA/初始化授权等(对应 <c>TenonAdmin:Security:Level3</c>)。
+    /// 仅部署配置可信;绑定/紧急恢复凭据消费后即失效。
+    /// </summary>
+    public AdminLevel3Options Level3 { get; set; } = new();
 
     /// <summary>
     /// 新建用户 / 重置密码时未显式给定密码的默认初始口令(对应 <c>TenonAdmin:Security:DefaultInitialPassword</c>)。

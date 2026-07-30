@@ -57,11 +57,14 @@ interface UserForm {
   positionId: number | null
   directorId: number | null
   enabled: boolean
+  forceTotp: boolean
+  totpEnabled: boolean
   roleIds: number[]
 }
 const blank = (): UserForm => ({
   account: '', password: '', name: '', nickname: '', phone: '', email: '',
-  gender: null, avatar: null, orgId: null, positionId: null, directorId: null, enabled: true, roleIds: [],
+  gender: null, avatar: null, orgId: null, positionId: null, directorId: null,
+  enabled: true, forceTotp: false, totpEnabled: false, roleIds: [],
 })
 const form = reactive<UserForm>(blank())
 const avatarUploading = ref(false) // 头像上传中:给上传按钮加 spinner,别让用户对着空白干等
@@ -81,7 +84,8 @@ async function openEdit(r: UserItem) {
       nickname: d.nickname ?? '', phone: d.phone ?? '', email: d.email ?? '',
       gender: d.gender ?? null, avatar: d.avatar ?? null,
       orgId: d.orgId ?? null, positionId: d.positionId ?? null, directorId: d.directorId ?? null,
-      enabled: d.enabled, roleIds: d.roleIds ?? [],
+      enabled: d.enabled, forceTotp: !!d.forceTotp, totpEnabled: !!d.totpEnabled,
+      roleIds: d.roleIds ?? [],
     })
     show.value = true
   } catch (e) {
@@ -101,6 +105,7 @@ async function save() {
         nickname: form.nickname || null, phone: form.phone || null, email: form.email || null,
         gender: form.gender, avatar: form.avatar,
         orgId: form.orgId, positionId: form.positionId, directorId: form.directorId, enabled: form.enabled,
+        forceTotp: form.forceTotp,
         roleIds: form.roleIds,
       }
       const out = await userApi.add(body)
@@ -113,6 +118,7 @@ async function save() {
         nickname: form.nickname || null, phone: form.phone || null, email: form.email || null,
         gender: form.gender, avatar: form.avatar,
         orgId: form.orgId, positionId: form.positionId, directorId: form.directorId, enabled: form.enabled,
+        forceTotp: form.forceTotp,
         roleIds: form.roleIds,
       }
       await userApi.update(editingId.value, body)
@@ -175,6 +181,12 @@ async function save() {
         </n-form-item-gi>
         <n-form-item-gi :label="t('common.status')">
           <n-switch v-model:value="form.enabled" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="t('user.forceTotp')">
+          <n-switch v-model:value="form.forceTotp" />
+        </n-form-item-gi>
+        <n-form-item-gi v-if="editingId !== null" :label="t('user.totpBound')">
+          <n-switch :value="form.totpEnabled" disabled />
         </n-form-item-gi>
         <n-form-item-gi :span="2" :label="t('user.avatar')">
           <div class="avatar-field">

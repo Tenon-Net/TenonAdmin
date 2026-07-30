@@ -2,6 +2,7 @@
 // 外部登录 / SSO 回调结果页(批次 D)。IdP → 后端回调换会话后,后端 302 到本页并带:
 //   ?ticket=xxx  登录成功:凭一次性票据换令牌 → 存会话 → 进首页
 //   ?bind=code   绑定成功:回个人中心绑定页
+//   ?totpChallenge=id (+ error=40018) SSO 后需 TOTP:带回登录页完成二次验证
 //   ?error=NNNNN 失败:按错误码提示,稍候回登录页
 // 公开路由(未登录也能到);令牌不进 URL,只带票据(见后端 ExternalAuthController)。
 import { onMounted, ref } from 'vue'
@@ -41,6 +42,13 @@ onMounted(async () => {
   const ticket = typeof q.ticket === 'string' ? q.ticket : ''
   const bind = typeof q.bind === 'string' ? q.bind : ''
   const error = typeof q.error === 'string' ? q.error : ''
+  const totpChallenge = typeof q.totpChallenge === 'string' ? q.totpChallenge : ''
+
+  // SSO 已通过 IdP,但需 TOTP:把挑战 Id 交给登录页完成 40018 流
+  if (totpChallenge) {
+    await router.replace({ path: '/login', query: { totpChallenge } })
+    return
+  }
 
   if (error) {
     const key = OAUTH_ERROR_KEYS[Number(error)]

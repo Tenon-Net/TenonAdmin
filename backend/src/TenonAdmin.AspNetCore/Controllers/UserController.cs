@@ -42,6 +42,7 @@ public class UserController(
     /// <summary>新增用户,返回新用户 Id + 实际生效的初始口令(留空口令时由系统随机生成,不回传则无人知晓)</summary>
     [HttpPost]
     [RolePermission]
+    [RequireReauth]
     [OperationLog("新增用户")]   // 入参含 Password,操作日志里会被脱敏为 ***;出参明文不进日志(过滤器只记入参)
     public async Task<Result<AddUserOutput>> Add(AddUserInput input) =>
         Result<AddUserOutput>.Ok(await users.AddAsync(input));
@@ -49,6 +50,7 @@ public class UserController(
     /// <summary>更新用户资料与角色</summary>
     [HttpPut("{id}")]
     [RolePermission]
+    [RequireReauth]
     public async Task<Result<bool>> Update(long id, UpdateUserInput input)
     {
         await users.UpdateAsync(id, input);
@@ -58,6 +60,7 @@ public class UserController(
     /// <summary>软删除用户</summary>
     [HttpDelete("{id}")]
     [RolePermission]
+    [RequireReauth]
     public async Task<Result<bool>> Delete(long id)
     {
         await users.DeleteAsync(id);
@@ -67,6 +70,7 @@ public class UserController(
     /// <summary>批量软删除用户(集合含超管则整体拒绝)</summary>
     [HttpPost("batch-delete")]
     [RolePermission]
+    [RequireReauth]
     [OperationLog("批量删除用户")]
     public async Task<Result<bool>> BatchDelete(BatchDeleteInput input)
     {
@@ -77,6 +81,7 @@ public class UserController(
     /// <summary>重置密码;返回实际生效的初始密码(供管理员当场转达)</summary>
     [HttpPut("{id}/password")]
     [RolePermission]
+    [RequireReauth]
     [OperationLog("重置用户密码")]   // 入参 NewPassword 会被脱敏;返回的明文密码不进日志(过滤器只记入参)
     public async Task<Result<string>> ResetPassword(long id, ResetPasswordInput input) =>
         Result<string>.Ok(await users.ResetPasswordAsync(id, input.NewPassword));
@@ -84,6 +89,7 @@ public class UserController(
     /// <summary>启用/停用</summary>
     [HttpPut("{id}/enabled")]
     [RolePermission]
+    [RequireReauth]
     public async Task<Result<bool>> SetEnabled(long id, SetEnabledInput input)
     {
         await users.SetEnabledAsync(id, input.Enabled);

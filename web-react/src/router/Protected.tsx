@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ComponentType } from 'react'
 import { Spin } from 'antd'
 import { Navigate, useLocation, useRoutes } from 'react-router-dom'
-import { useUserStore, isLoggedIn } from '@/stores/user'
+import { useUserStore, isLoggedIn, isCookieSession } from '@/stores/user'
 import { useAuthStore, homePath } from '@/stores/auth'
+import { tryRestoreCookieSession } from '@/api/client'
 import { enterInitial } from '@/composables/useModule'
 import { buildRoutes } from './buildRoutes'
 import { buildDetailRoutes } from './detailRoutes'
@@ -43,9 +44,25 @@ export function Protected() {
   // 「已尝试过引导」。routesReady 只在 enter() 成功时转真,而 chooser 态它永远是 false ——
   // 靠它做重跑判据会 enterInitial 打点风暴。所以另立一个只跑一次的本地标志。
   const [booted, setBooted] = useState(routesReady)
+  // Level3:F5 后 access 仅内存已空,须先凭 Cookie 静默刷新再判未登录(否则会误踢 /login)。
+  const [sessionChecked, setSessionChecked] = useState(() => {
+    const s = useUserStore.getState()
+    return !!s.accessToken || !isCookieSession(s)
+  })
 
   useEffect(() => {
-    if (!loggedIn || mustChange || routesReady || booted) return
+    if (sessionChecked) return
+    let alive = true
+    void tryRestoreCookieSession().finally(() => {
+      if (alive) setSessionChecked(true)
+    })
+    return () => {
+      alive = false
+    }
+  }, [sessionChecked])
+
+  useEffect(() => {
+    if (!sessionChecked || !loggedIn || mustChange || routesReady || booted) return
     let alive = true
     enterInitial()
       .catch(() => useUserStore.getState().clear()) // 拉门户失败 → 清会话,下面回落 /login
@@ -55,8 +72,15 @@ export function Protected() {
     return () => {
       alive = false
     }
-  }, [loggedIn, mustChange, routesReady, booted])
+  }, [sessionChecked, loggedIn, mustChange, routesReady, booted])
 
+  if (!sessionChecked) {
+    return (
+      <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
   if (!loggedIn) return <Navigate to="/login" replace />
   // 强制改密:只允许停在改密页。放在 routesReady 之前 —— 改密页是静态路由,不需要门户重建即可渲染,
   // 避免"重建→选应用→又被弹回"的循环。

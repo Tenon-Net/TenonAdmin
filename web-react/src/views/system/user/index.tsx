@@ -20,7 +20,7 @@ import { ExportColumnsModal } from '@/components/ExportColumnsModal'
 import { useConfirm } from '@/hooks/useConfirm'
 import { useBatchDelete } from '@/hooks/useBatchDelete'
 import { useHasPerm } from '@/stores/auth'
-import { orgApi, positionApi, roleApi, userApi } from '@/api'
+import { mfaApi, orgApi, positionApi, roleApi, userApi } from '@/api'
 import { buildTree, type Tree as TreeNode } from '@/utils/tree'
 import { translateError } from '@/utils/error'
 import { triggerBlobDownload } from '@/utils/download'
@@ -267,6 +267,30 @@ export default function UserPage() {
     }
   }
 
+  const [invite, setInvite] = useState<{ name: string; token: string; expiresAt?: string } | null>(null)
+  const issueMfaInvite = useCallback(async (r: UserItem) => {
+    try {
+      const out = await mfaApi.invite({ userId: r.id })
+      if (!out.token) {
+        message.error(t('mfaBind.inviteResponseIncomplete'))
+        return
+      }
+      setInvite({ name: r.name, token: out.token, expiresAt: out.expiresAt ?? undefined })
+    } catch (e) {
+      message.error(translateError(e))
+    }
+  }, [message])
+  const inviteLink = invite ? `${window.location.origin}/mfa/bind?token=${encodeURIComponent(invite.token)}` : ''
+  const copyInvite = async () => {
+    if (!inviteLink) return
+    try {
+      await navigator.clipboard.writeText(inviteLink)
+      message.success(t('user.copied'))
+    } catch {
+      message.error(t('user.copyFailed'))
+    }
+  }
+
   const columns = useMemo<ProColumns<UserItem>[]>(
     () => [
       { title: t('user.account'), dataIndex: 'account', sorter: true, ellipsis: true },
@@ -291,17 +315,18 @@ export default function UserPage() {
       },
       { title: t('user.createTime'), dataIndex: 'createTime', search: false, sorter: true },
       {
-        title: t('common.operation'), key: 'op', search: false, hideInSetting: true, width: 200, fixed: 'right',
+        title: t('common.operation'), key: 'op', search: false, hideInSetting: true, width: 260, fixed: 'right',
         render: (_, r) => (
           <Space size={4}>
             {canEdit(r, has) && <Button type="link" size="small" onClick={() => openEdit(r)}>{t('common.edit')}</Button>}
             {canReset(r, has) && <Button type="link" size="small" onClick={() => openReset(r)}>{t('user.resetPassword')}</Button>}
+            {!r.totpEnabled && has('POST:/api/v1/sys/mfa/invite') && <Button type="link" size="small" onClick={() => void issueMfaInvite(r)}>{t('user.inviteAuthenticator')}</Button>}
             {canDelete(r, has) && <Button type="link" size="small" danger onClick={() => handleDelete(r)}>{t('common.delete')}</Button>}
           </Space>
         ),
       },
     ],
-    [t, has, reload, openEdit, openReset, handleDelete],
+    [t, has, reload, openEdit, openReset, handleDelete, issueMfaInvite],
   )
 
   return (
@@ -447,6 +472,18 @@ export default function UserPage() {
                 <Switch />
               </Form.Item>
             </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="forceTotp" label={t('user.forceTotp')} valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+            {editingId != null && (
+              <Col xs={24} sm={12}>
+                <Form.Item name="totpEnabled" label={t('user.totpBound')} valuePropName="checked">
+                  <Switch disabled />
+                </Form.Item>
+              </Col>
+            )}
             <Col span={24}>
               {/* 头像:非表单字段,受控 state。预览用 Avatar(有图显图、无图显姓名首字母);上传走共享 FileUpload。 */}
               <Form.Item label={t('user.avatar')}>
@@ -501,6 +538,21 @@ export default function UserPage() {
           readOnly value={resultPwd ?? ''}
           suffix={<Button type="link" size="small" style={{ padding: 0 }} onClick={copyResult}>{t('user.copy')}</Button>}
         />
+      </Modal>
+
+      <Modal
+        open={invite !== null}
+        title={t('user.inviteAuthenticator')}
+        width={560}
+        onOk={() => setInvite(null)}
+        onCancel={() => setInvite(null)}
+        cancelButtonProps={{ style: { display: 'none' } }}
+        okText={t('common.confirm')}
+      >
+        <p>{t('user.inviteHint', { name: invite?.name ?? '' })}</p>
+        {invite?.expiresAt ? <p style={{ color: 'var(--color-text-secondary, #888)' }}>{t('user.inviteExpires', { time: invite.expiresAt })}</p> : null}
+        <Input.TextArea readOnly value={inviteLink} autoSize={{ minRows: 3, maxRows: 5 }} />
+        <Button style={{ marginTop: 8 }} onClick={() => void copyInvite()}>{t('user.copyInviteLink')}</Button>
       </Modal>
 
       <ImportWizard

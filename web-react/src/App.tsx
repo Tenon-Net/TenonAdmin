@@ -7,8 +7,10 @@ import { useAntdTheme } from '@/theme/useAntdTheme'
 import { useDocumentGrayscale } from '@/theme/useDocumentGrayscale'
 import { useAppStore, isDark } from '@/stores/app'
 import { useSiteStore } from '@/stores/site'
+import { ReauthModal } from '@/components/ReauthModal'
 const LoginPage = lazy(() => import('@/views/login/LoginPage'))
 const CallbackPage = lazy(() => import('@/views/oauth/CallbackPage'))
+const MfaBindPage = lazy(() => import('@/views/mfa/BindPage'))
 const Protected = lazy(() => import('@/router/Protected').then((module) => ({ default: module.Protected })))
 const routeFallback = (
   <div style={{ display: 'grid', minHeight: '100vh', placeItems: 'center' }}>
@@ -51,11 +53,14 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/oauth/callback" element={<CallbackPage />} />
+              <Route path="/mfa/bind" element={<MfaBindPage />} />
             {/* 受保护区:登录守卫 + 强制改密守卫 + F5 深链重建 + 布局壳 + 菜单派生的动态路由。 */}
               <Route path="/*" element={<Protected />} />
             </Routes>
           </Suspense>
         </BrowserRouter>
+        {/* Level3 高危写 40024:client 中间件唤起,须在 AntdApp 内以享用 message 上下文 */}
+        <ReauthModal />
       </AntdApp>
     </ConfigProvider>
   )

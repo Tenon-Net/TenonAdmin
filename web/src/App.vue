@@ -7,6 +7,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useAppStore } from '@/stores/app'
 import { i18n } from '@/locales'
 import { useSite } from '@/composables/useSite'
+import ReauthModal from '@/components/ReauthModal.vue'
 
 const app = useAppStore()
 const { overrides, naiveTheme } = useTheme()
@@ -43,6 +44,8 @@ watch(
       <n-message-provider>
         <n-dialog-provider>
           <router-view />
+          <!-- Level3 高危写 40024:client 中间件唤起,须挂在 message/dialog 之内 -->
+          <ReauthModal />
         </n-dialog-provider>
       </n-message-provider>
     </n-loading-bar-provider>

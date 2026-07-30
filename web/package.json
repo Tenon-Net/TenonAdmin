@@ -12,6 +12,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "gen:api": "openapi-typescript http://localhost:5100/openapi/v1.json -o src/api/schema.d.ts"
   },
   "dependencies": {

@@ -11,6 +11,7 @@ import {
   CAPTCHA_KEY, PWD_BOOL_FIELDS, RATELIMIT_KEY, SMS_LOGIN_KEY, SMS_MFA_KEY,
   parseSecurity, serializeSecurity, type SecurityState,
 } from './configForm'
+import HighSensConfig from './HighSensConfig'
 
 const CAPTCHA_TYPES = ['char', 'path', 'math']
 
@@ -116,6 +117,9 @@ export default function SecurityConfig() {
           {numItem('sys.security.rateLimit.permitPerWindow', 0)}
           {numItem('sys.security.rateLimit.authPermitPerWindow', 0)}
         </Row>
+
+        <Divider titlePlacement="start">{t('config.security.highSens.title')}</Divider>
+        <HighSensConfig />
 
         <Can code="PUT:/api/v1/sys/config/batch">
           <Button
