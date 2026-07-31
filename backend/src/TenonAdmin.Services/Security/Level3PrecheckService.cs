@@ -18,8 +18,7 @@ public class Level3PrecheckService(
     IRepository<SysUser>? users = null,
     ICacheProvider? cacheProvider = null,
     ILogger<Level3PrecheckService>? logger = null,
-    AdminApiOptions? api = null,
-    ILevel3DeployGrantStore? deployGrants = null) : ILevel3PrecheckService
+    AdminApiOptions? api = null) : ILevel3PrecheckService
 {
     /// <inheritdoc />
     public virtual async Task<Level3PrecheckResult> RunAsync(CancellationToken cancellationToken = default)
@@ -32,7 +31,6 @@ public class Level3PrecheckService(
             CheckRedisAuth(),
             CheckRedisTls(),
             CheckSecretProtectorKey(),
-            CheckDeployGrantStore(),
             await CheckMfaInitStateAsync(cancellationToken),
             await CheckSessionPolicyFloorsAsync(cancellationToken),
             CheckCookieCsrfTopology(),
@@ -382,54 +380,19 @@ public class Level3PrecheckService(
     }
 
     /// <summary>
-    /// Level3 必须注册持久化部署授权存储;缺失则 Init/Emergency 无法满足抗缓存清空语义。
-    /// </summary>
-    protected virtual Level3PrecheckItem CheckDeployGrantStore()
-    {
-        if (!profile.IsLevel3)
-        {
-            return Item(
-                Level3PrecheckConstants.CheckDeployGrantStore,
-                "Deploy Grant Store",
-                Level3CheckStatus.Pass,
-                "非 Level3:不强制 ILevel3DeployGrantStore。",
-                "启用 Level3 后须注册持久化 ILevel3DeployGrantStore(默认 Level3DeployGrantStore → DB)。",
-                critical: false);
-        }
-
-        if (deployGrants is null)
-        {
-            return Item(
-                Level3PrecheckConstants.CheckDeployGrantStore,
-                "Deploy Grant Store",
-                Level3CheckStatus.Fail,
-                "Level3 未注册 ILevel3DeployGrantStore;InitGrant/EmergencyGrant 不得回退可丢弃缓存。",
-                "确保 ServicesSetup 注册 TryAddScoped&lt;ILevel3DeployGrantStore, Level3DeployGrantStore&gt;,或消费者前置注册等价持久实现。",
-                critical: true);
-        }
-
-        return Item(
-            Level3PrecheckConstants.CheckDeployGrantStore,
-            "Deploy Grant Store",
-            Level3CheckStatus.Pass,
-            "已注册 ILevel3DeployGrantStore(持久 first-seen/消费)。",
-            "无需处理。",
-            critical: false);
-    }
-
-    /// <summary>
-    /// MFA 初始化态势:Level3 下若尚无已绑定 TOTP 的超管,必须具备仍有效的 InitGrant 恢复路径,否则 critical fail。
+    /// MFA 初始化态势(诊断用):是否有超管已绑定 TOTP。
+    /// ADR 0006 后无 InitGrant 仪式——未绑定仅 warn,用户可自助绑定。
     /// </summary>
     protected virtual async Task<Level3PrecheckItem> CheckMfaInitStateAsync(CancellationToken ct)
     {
-        if (!profile.IsLevel3)
+        if (!profile.IsLevel3 && !security.IsTotpFeatureEnabled)
         {
             return Item(
                 Level3PrecheckConstants.CheckMfaInitState,
                 "MFA Init State",
                 Level3CheckStatus.Pass,
-                "非 Level3:不强制 TOTP 初始化。",
-                "启用 Level3 后为首个超管准备部署期一次性初始化授权并完成 TOTP 绑定。",
+                "未启用 TOTP/历史 Level3:不强制第二因子初始化。",
+                "需要时配置 TenonAdmin:Security:Totp:Enabled 并自助绑定。",
                 critical: false);
         }
 
@@ -444,7 +407,6 @@ public class Level3PrecheckService(
                 critical: false);
         }
 
-        // 是否已有超管完成 TOTP 绑定
         var anyBound = await users.AnyAsync(u => u.IsSuperAdmin && u.TotpEnabled);
         if (anyBound)
         {
@@ -457,77 +419,12 @@ public class Level3PrecheckService(
                 critical: false);
         }
 
-        // 无已绑定超管:必须存在仍可用的 InitGrant(+绝对 NotAfter),否则可启动但无人能登录
-        var init = security.Level3.InitGrant?.Trim();
-        if (string.IsNullOrWhiteSpace(init))
-        {
-            return Item(
-                Level3PrecheckConstants.CheckMfaInitState,
-                "MFA Init State",
-                Level3CheckStatus.Fail,
-                "Level3 已启用但尚无已绑定 TOTP 的超级管理员,且未配置 InitGrant——部署将无法完成首个超管绑定。",
-                "配置 TenonAdmin:Security:Level3:InitGrant 与 InitGrantNotAfter(未来 UTC 截止时刻),完成首绑后轮换/清除。",
-                critical: true);
-        }
-
-        if (security.Level3.InitGrantNotAfter is null)
-        {
-            return Item(
-                Level3PrecheckConstants.CheckMfaInitState,
-                "MFA Init State",
-                Level3CheckStatus.Fail,
-                "Level3 尚无已绑定超管,且未配置 InitGrantNotAfter——未使用授权可无限期存活,违反可验证到期语义。",
-                "设置 TenonAdmin:Security:Level3:InitGrantNotAfter 为未来 UTC 时刻(与 InitGrantTtlMinutes 同时生效,取更严者)。",
-                critical: true);
-        }
-
-        if (security.Level3.InitGrantNotAfter.Value.UtcDateTime <= DateTime.UtcNow)
-        {
-            return Item(
-                Level3PrecheckConstants.CheckMfaInitState,
-                "MFA Init State",
-                Level3CheckStatus.Fail,
-                "Level3 尚无已绑定超管,且 InitGrantNotAfter 已过期。",
-                "重新签发 InitGrant 并设置未来的 InitGrantNotAfter 后重启。",
-                critical: true);
-        }
-
-        // store 缺失已由 CheckDeployGrantStore critical;此处再验 InitGrant 可用性
-        if (deployGrants is null)
-        {
-            return Item(
-                Level3PrecheckConstants.CheckMfaInitState,
-                "MFA Init State",
-                Level3CheckStatus.Fail,
-                "Level3 尚无已绑定超管且缺少 ILevel3DeployGrantStore,无法验证 InitGrant 可用性。",
-                "注册持久化 ILevel3DeployGrantStore 后重跑预检。",
-                critical: true);
-        }
-
-        var hash = SecretHash.Hash(init);
-        var usable = await deployGrants.CheckUsableAsync(
-            Level3DeployGrantKinds.Init,
-            hash,
-            security.Level3.InitGrantTtlMinutes,
-            security.Level3.InitGrantNotAfter,
-            ct);
-        if (!usable.Usable)
-        {
-            return Item(
-                Level3PrecheckConstants.CheckMfaInitState,
-                "MFA Init State",
-                Level3CheckStatus.Fail,
-                $"Level3 尚无已绑定超管,InitGrant 不可用:{usable.Reason}。",
-                "配置新的 InitGrant + 未来 InitGrantNotAfter 并重启;勿复用已消费/已过 TTL 授权。",
-                critical: true);
-        }
-
         return Item(
             Level3PrecheckConstants.CheckMfaInitState,
             "MFA Init State",
-            Level3CheckStatus.Pass,
-            "尚无已绑定超管;已配置可用 InitGrant(+NotAfter),可通过 /mfa/bind 完成首启绑定。",
-            "首个超管绑定成功后清除或轮换 InitGrant;勿长期保留。",
+            Level3CheckStatus.Warn,
+            "尚无已绑定 TOTP 的超级管理员;可通过登录页或个人安全自助绑定(不再使用部署期 InitGrant)。",
+            "打开 Totp:Enabled 后用账号密码完成 /mfa/bind。",
             critical: false);
     }
 

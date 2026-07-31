@@ -95,9 +95,6 @@ public static class ServicesSetup
         // 会话与刷新令牌(§15):登录建会话、每请求校验、刷新轮换+复用检测、登出/强退
         services.TryAddScoped<ISessionService, SessionService>();
         services.TryAddScoped<ISessionActivityTracker, SessionActivityTracker>();
-        services.TryAddScoped<IIdleAccountService, IdleAccountService>();
-        services.TryAddScoped<ILevel3EnableMigrator, Level3EnableMigrator>();
-        services.AddHostedService<Level3EnableMigrationHostedService>();
 
         // 缓存:进程内 MemoryCache 默认实现(§5.5);IMemoryCache 需 AddMemoryCache 落地
         services.AddMemoryCache();
@@ -175,11 +172,6 @@ public static class ServicesSetup
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, HttpAdminJob>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, SqlAdminJob>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, JobLogCleanupJob>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, IdleAccountJob>());
-        services.AddHostedService<Level3IdleAccountJobEnsureHostedService>();
-
-        // Level3 部署期 Init/Emergency 授权持久 first-seen + 一次性消费
-        services.TryAddScoped<ILevel3DeployGrantStore, Level3DeployGrantStore>();
 
         // 个人中心(§4,T8):当前用户对自己账号的读改(看/改资料、验旧改密)
         services.TryAddScoped<IPersonalService, PersonalService>();

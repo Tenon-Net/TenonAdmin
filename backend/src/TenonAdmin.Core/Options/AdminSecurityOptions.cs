@@ -70,23 +70,15 @@ public class AdminTotpOptions
 }
 
 /// <summary>
-/// 历史 Level3 部署期授权等(对应 <c>TenonAdmin:Security:Level3</c>)。
-/// <b>ADR 0006：非产品路径</b>;保留反序列化以免旧配置炸;实现侧应停止依赖。
-/// Cookie 域与 TOTP 参数已迁到 <see cref="AdminSessionOptions"/> / <see cref="AdminTotpOptions"/>。
+/// 历史 Level3 节(对应 <c>TenonAdmin:Security:Level3</c>)。
+/// <b>ADR 0006：非产品路径</b>。InitGrant/Emergency/邀请等仪式键已拆除实现;
+/// 仍保留 CookieDomain 与 TOTP 参数字段,供旧配置反序列化与 helper 回退。
 /// </summary>
 public class AdminLevel3Options
 {
-    public string? InitGrant { get; set; }
-    public int InitGrantTtlMinutes { get; set; } = 60;
-    public DateTimeOffset? InitGrantNotAfter { get; set; }
-    public string? EmergencyGrant { get; set; }
-    public int EmergencyGrantTtlMinutes { get; set; } = 30;
-    public DateTimeOffset? EmergencyGrantNotAfter { get; set; }
-
     /// <summary>已迁到 <c>Security:Session:CookieDomain</c>;此处仅旧配置回退。</summary>
     public string? CookieDomain { get; set; }
 
-    public int BindInviteTtlMinutes { get; set; } = 15;
     public int ReauthWindowMinutes { get; set; } = 5;
     public int TotpChallengeTtlSeconds { get; set; } = 300;
     public string TotpIssuer { get; set; } = "TenonAdmin";

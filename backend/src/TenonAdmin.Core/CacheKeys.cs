@@ -60,21 +60,6 @@ public static class CacheKeys
     /// <summary>用户当前持有 reauth 的 sid 列表(便于按用户全清)</summary>
     public static string ReauthSessions(long userId) => $"reauth:sids:{userId}";
 
-    /// <summary>Level3 InitGrant 已消费标记(一次性;永不过期或长 TTL)</summary>
-    public const string Level3InitGrantConsumed = "level3:initgrant:consumed";
-
-    /// <summary>Level3 EmergencyGrant 已消费标记</summary>
-    public const string Level3EmergencyGrantConsumed = "level3:emergency:consumed";
-
-    /// <summary>
-    /// Level3 InitGrant 首次观测时刻(按授权明文哈希区分)。用于强制 <c>InitGrantTtlMinutes</c>:
-    /// 首次见后起算,超时即使未消费也拒绝;长 TTL 存档避免窗口过期后被重新起算。
-    /// </summary>
-    public static string Level3InitGrantFirstSeen(string grantHash) => $"level3:initgrant:firstseen:{grantHash}";
-
-    /// <summary>Level3 EmergencyGrant 首次观测时刻(按授权明文哈希区分;同 InitGrant 起算规则)。</summary>
-    public static string Level3EmergencyGrantFirstSeen(string grantHash) => $"level3:emergency:firstseen:{grantHash}";
-
     /// <summary>外部登录授权态(<c>state</c>)→ {providerCode, nonce, codeVerifier, redirectUri}(设计批次 D)。防 CSRF 兼承载 PKCE/nonce;回调时按 <c>state</c> 一次性消费,短 TTL 过期。</summary>
     public static string OAuthState(string state) => $"oauth:state:{state}";
 
@@ -117,7 +102,4 @@ public static class CacheKeys
     /// 值可为最近回写时刻;与 <see cref="Session"/> 热路径缓存分离,避免污染活跃校验结构。
     /// </summary>
     public static string SessionActivityThrottle(string sessionId) => $"session:act:{sessionId}";
-
-    /// <summary>Level3 首次启用迁移完成标记(SysConfig 键;也可用缓存旁路,以配置中心为准)</summary>
-    public const string Level3EnableMigrationDone = "sys.security.level3.enableMigrationDone";
 }

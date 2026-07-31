@@ -53,10 +53,6 @@ public class SecurityPolicyProvider(
     public const int Level3MaxConcurrentMfaDefault = 1;
     /// <summary>MFA 用户并发上限(再多需运维显式收紧配置,内核钳到此)</summary>
     public const int Level3MaxConcurrentMfaCap = 2;
-    /// <summary>MFA 闲置账号:告警天数</summary>
-    public const int Level3IdleAccountWarnDays = 60;
-    /// <summary>MFA 闲置账号:自动停用天数(超管仅告警)</summary>
-    public const int Level3IdleAccountDisableDays = 90;
 
     /// <summary>历史 Level3 总档才施加策略地板;产品独立键不钳位。</summary>
     private bool IsLegacyLevel3 => security.IsLegacyLevel3Profile;

@@ -95,7 +95,6 @@ public static class Level3PrecheckConstants
     public const string CheckMfaInitState = "mfa_init_state";
     public const string CheckSessionPolicyFloors = "session_policy_floors";
     public const string CheckCookieCsrfTopology = "cookie_csrf_topology";
-    public const string CheckDeployGrantStore = "deploy_grant_store";
 
     /// <summary>
     /// 第二/三期 Level3 强制项清单(固定;报告始终列出,避免把一期读成完整三级基线)。

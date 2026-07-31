@@ -89,25 +89,7 @@ public class Level3PrecheckTests
             env,
             users: null,
             cacheProvider: runtimeCache,
-            logger: NullLogger<Level3PrecheckService>.Instance,
-            deployGrants: new PassDeployGrantStore());
-    }
-
-    /// <summary>预检 ok 路径用:声明 store 已注册且授权可用。</summary>
-    private sealed class PassDeployGrantStore : ILevel3DeployGrantStore
-    {
-        public Task<Level3DeployGrantUsability> CheckUsableAsync(
-            string kind, string grantHash, int ttlMinutes, DateTimeOffset? absoluteNotAfter,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(Level3DeployGrantUsability.Ok("test-pass"));
-
-        public Task EnsureWithinTtlAsync(
-            string kind, string grantHash, int ttlMinutes, DateTimeOffset? absoluteNotAfter,
-            CancellationToken cancellationToken = default) => Task.CompletedTask;
-
-        public Task ConsumeAsync(
-            string kind, string grantHash, int ttlMinutes, DateTimeOffset? absoluteNotAfter,
-            CancellationToken cancellationToken = default) => Task.CompletedTask;
+            logger: NullLogger<Level3PrecheckService>.Instance);
     }
 
     /// <summary>声明完整 ISecureCacheCapabilities 的假分布式缓存(不依赖类名)。</summary>
@@ -399,9 +381,9 @@ public class Level3PrecheckTests
     }
 
     [Fact]
-    public async Task Level3_without_bound_superadmin_and_without_InitGrant_is_critical()
+    public async Task Level3_without_bound_superadmin_is_warn_not_critical()
     {
-        // IsLevel3 桩 + 去掉启动闸门;Options 上 InitGrant 为空;库中无超管 TOTP
+        // ADR 0006:无 InitGrant 仪式;未绑定超管仅为 warn,不 critical fail
         var key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         using var f = new AdminAppFactory
         {
@@ -409,7 +391,6 @@ public class Level3PrecheckTests
             {
                 ["TenonAdmin:Security:DataProtection:Key"] = key,
                 ["TenonAdmin:Security:DataProtection:KeyVersion"] = "1",
-                ["TenonAdmin:Security:Level3:InitGrant"] = "",
             },
             Overrides = s =>
             {
@@ -420,8 +401,7 @@ public class Level3PrecheckTests
                     var name = d.ImplementationType?.Name
                                ?? d.ImplementationInstance?.GetType().Name
                                ?? "";
-                    if (name.Contains("Level3Startup", StringComparison.Ordinal)
-                        || name.Contains("Level3Idle", StringComparison.Ordinal))
+                    if (name.Contains("Level3Startup", StringComparison.Ordinal))
                         s.Remove(d);
                 }
             },
@@ -440,9 +420,9 @@ public class Level3PrecheckTests
         var precheck = scope.ServiceProvider.GetRequiredService<ILevel3PrecheckService>();
         var result = await precheck.RunAsync();
         var mfa = result.Checks.Single(c => c.Id == Level3PrecheckConstants.CheckMfaInitState);
-        Assert.Equal(Level3CheckStatus.Fail, mfa.Status);
-        Assert.True(mfa.Critical);
-        Assert.Contains(Level3PrecheckConstants.CheckMfaInitState, result.CriticalFailureIds);
+        Assert.Equal(Level3CheckStatus.Warn, mfa.Status);
+        Assert.False(mfa.Critical);
+        Assert.DoesNotContain(Level3PrecheckConstants.CheckMfaInitState, result.CriticalFailureIds);
     }
 
     [Fact]
@@ -455,7 +435,6 @@ public class Level3PrecheckTests
             DataProtection = new AdminDataProtectionOptions { Key = key, KeyVersion = 1 },
             Level3 = new AdminLevel3Options
             {
-                InitGrant = "init-grant-for-precheck-test-32bytes!!",
                 CookieDomain = null,
             },
         };
@@ -494,7 +473,6 @@ public class Level3PrecheckTests
             DataProtection = new AdminDataProtectionOptions { Key = key, KeyVersion = 1 },
             Level3 = new AdminLevel3Options
             {
-                InitGrant = "init-grant-for-precheck-test-32bytes!!",
                 CookieDomain = ".example.com",
             },
         };
