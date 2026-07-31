@@ -12,21 +12,21 @@ namespace TenonAdmin.AspNetCore;
 [ApiController]
 [Route("api/v1/sys/security")]
 [Module("Security")]
-public class SecurityController(ILevel3PrecheckService precheck) : ControllerBase
+public class SecurityController(ISecurityBaselinePrecheckService precheck) : ControllerBase
 {
     /// <summary>
     /// 可选安全配置态势报告(机器可读,历史 capability 字段仍兼容)。
     /// </summary>
     [HttpGet("baseline")]
     [RolePermission]
-    public async Task<Result<Level3PrecheckResult>> Baseline(CancellationToken cancellationToken) =>
-        Result<Level3PrecheckResult>.Ok(await precheck.RunAsync(cancellationToken));
+    public async Task<Result<SecurityBaselinePrecheckResult>> Baseline(CancellationToken cancellationToken) =>
+        Result<SecurityBaselinePrecheckResult>.Ok(await precheck.RunAsync(cancellationToken));
 
     /// <summary>
     /// 与 <see cref="Baseline"/> 同义别名(历史路径兼容;不作为产品主入口)。
     /// </summary>
     [HttpGet("/api/v1/sys/level3/precheck")]
     [RolePermission]
-    public Task<Result<Level3PrecheckResult>> Level3Precheck(CancellationToken cancellationToken) =>
+    public Task<Result<SecurityBaselinePrecheckResult>> LegacyLevel3Precheck(CancellationToken cancellationToken) =>
         Baseline(cancellationToken);
 }

@@ -4,10 +4,10 @@ using TenonAdmin.Services;
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// Level3 有效策略下限:Profile 默认兼容;Level3 下 SysConfig 试图放宽仍被读取层钳制。
-/// 直接驱动 <see cref="SecurityPolicyProvider"/> 真实现,不重写策略逻辑。
+/// 历史 Profile=Level3 策略下限:默认 Profile 不钳位;Level3 下 SysConfig 试图放宽仍被读取层钳制。
+/// 直接驱动 <see cref="SecurityPolicyProvider"/> 真实现。
 /// </summary>
-public class Level3PolicyFloorTests
+public class LegacySecurityPolicyFloorTests
 {
     private sealed class MapConfig(Dictionary<string, string?> map) : IConfigService
     {

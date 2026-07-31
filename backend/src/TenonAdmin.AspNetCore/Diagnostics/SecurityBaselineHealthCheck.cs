@@ -7,7 +7,7 @@ namespace TenonAdmin.AspNetCore;
 /// ADR 0006：可选安全不得拖垮就绪探针；始终 Healthy，保留注册以免破坏既有探针名。
 /// 后续瘦身可整类删除。
 /// </summary>
-internal sealed class Level3PrecheckHealthCheck : IHealthCheck
+internal sealed class SecurityBaselineHealthCheck : IHealthCheck
 {
     public Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,

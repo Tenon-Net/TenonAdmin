@@ -144,7 +144,7 @@ public static class ServicesSetup
         services.TryAddScoped<ISecurityPolicyProvider, SecurityPolicyProvider>();
 
         // 可选安全态势诊断(历史 Level3 预检实现;非测评产品路径,ADR 0006)
-        services.TryAddScoped<ILevel3PrecheckService, Level3PrecheckService>();
+        services.TryAddScoped<ISecurityBaselinePrecheckService, SecurityBaselinePrecheckService>();
         // 幂等禁用已拆除的 MFA 邀请/重置菜单权限锚点
         services.AddHostedService<RetiredSecurityMenuCleanupHostedService>();
 

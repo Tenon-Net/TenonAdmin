@@ -1,9 +1,10 @@
 namespace TenonAdmin.Core;
 
 /// <summary>
-/// Level3 一期预检检查项状态字面量(机器可读 JSON 直接输出 <c>pass|fail|warn</c>)。
+/// 可选安全态势预检状态字面量(机器可读 JSON 直接输出 <c>pass|fail|warn</c>)。
+/// 历史名 Level3CheckStatus;ADR 0006 后与等保总档脱钩。
 /// </summary>
-public static class Level3CheckStatus
+public static class SecurityBaselineCheckStatus
 {
     public const string Pass = "pass";
     public const string Fail = "fail";
@@ -15,13 +16,13 @@ public static class Level3CheckStatus
 /// </summary>
 /// <param name="Id">稳定检查项 Id(如 <c>redis_tls</c>),CI/日志可定位</param>
 /// <param name="Name">人类可读短名</param>
-/// <param name="Status"><see cref="Level3CheckStatus"/> 常量:pass|fail|warn</param>
+/// <param name="Status"><see cref="SecurityBaselineCheckStatus"/> 常量:pass|fail|warn</param>
 /// <param name="Message">现状说明(脱敏)</param>
 /// <param name="Remediation">修复建议</param>
 /// <param name="Critical">
-/// Level3 下是否为启动/readiness 关键项;true 时 fail → 拒绝启动或 /health/ready Unhealthy。
+/// 是否为关键诊断项(ADR 0006 后不再 fail-closed 阻断启动;仍用于报告 CriticalFailureIds)。
 /// </param>
-public sealed record Level3PrecheckItem(
+public sealed record SecurityBaselinePrecheckItem(
     string Id,
     string Name,
     string Status,
@@ -30,60 +31,60 @@ public sealed record Level3PrecheckItem(
     bool Critical = false);
 
 /// <summary>
-/// 本期未实现的 Level3 强制能力条目(明示能力边界,避免把一期报告读成完整三级基线)。
+/// 历史路线图中未实现的能力条目(明示能力边界;ADR 0006 后不再承诺按期交付)。
 /// </summary>
 /// <param name="Id">稳定标识</param>
 /// <param name="Name">短名</param>
-/// <param name="Phase">计划期次(2|3)</param>
+/// <param name="Phase">历史期次标记(2|3;仅文档语义)</param>
 /// <param name="Description">缺口说明</param>
-public sealed record Level3UnimplementedMandate(
+public sealed record SecurityBaselineUnimplementedMandate(
     string Id,
     string Name,
     int Phase,
     string Description);
 
 /// <summary>
-/// Level3 一期预检结构化结果。可被宿主启动闸门、/health/ready、安全基线 API 与 CI 消费。
-/// <para>内核不宣称「已通过等保三级」;<see cref="OverallCompliantForPhase1"/> 仅表示第一期强制配置项是否齐备。</para>
+/// 可选安全态势预检结果。供诊断 API / CI 消费;ADR 0006 后不作为启动 fail-closed 合同。
+/// <para>内核不宣称「已通过等保三级」;<see cref="OverallCompliantForPhase1"/> 仅表示历史一期检查项是否无 fail。</para>
 /// </summary>
-public sealed class Level3PrecheckResult
+public sealed class SecurityBaselinePrecheckResult
 {
-    /// <summary>能力版本,如 <c>level3-phase1</c></summary>
-    public string CapabilityVersion { get; init; } = Level3PrecheckConstants.CapabilityVersion;
+    /// <summary>能力版本标识(JSON 字段兼容历史 <c>level3-phase1</c>)</summary>
+    public string CapabilityVersion { get; init; } = SecurityBaselinePrecheckConstants.CapabilityVersion;
 
-    /// <summary>当前安全档(None|Level3)</summary>
+    /// <summary>当前安全档(None|Level3;Level3 为废弃总档)</summary>
     public string Profile { get; init; } = nameof(SecurityProfile.None);
 
     /// <summary>宿主环境名(Development|Production|…)</summary>
     public string Environment { get; init; } = "";
 
     /// <summary>检查项列表</summary>
-    public IReadOnlyList<Level3PrecheckItem> Checks { get; init; } = [];
+    public IReadOnlyList<SecurityBaselinePrecheckItem> Checks { get; init; } = [];
 
-    /// <summary>第二/三期 Level3 强制项(本内核版本尚未实现)</summary>
-    public IReadOnlyList<Level3UnimplementedMandate> UnimplementedMandates { get; init; } = [];
+    /// <summary>历史路线图未实现项(明示边界;不构成交付承诺)</summary>
+    public IReadOnlyList<SecurityBaselineUnimplementedMandate> UnimplementedMandates { get; init; } = [];
 
     /// <summary>
-    /// 是否满足第一期配置闭环:Profile=Level3 且无任何 fail 项。
+    /// 历史一期检查是否无 fail(且 Profile 曾为 Level3 时语义更严)。
     /// 即使为 true 也不等于完整三级基线(见 <see cref="UnimplementedMandates"/>)。
     /// </summary>
     public bool OverallCompliantForPhase1 { get; init; }
 
-    /// <summary>是否存在 Level3 关键项失败(启动闸门 / readiness 用)</summary>
-    public bool HasCriticalFailures => Checks.Any(c => c.Critical && c.Status == Level3CheckStatus.Fail);
+    /// <summary>是否存在关键项失败(诊断用;不再阻断启动)</summary>
+    public bool HasCriticalFailures => Checks.Any(c => c.Critical && c.Status == SecurityBaselineCheckStatus.Fail);
 
     /// <summary>关键失败项 Id 列表(稳定、可定位)</summary>
     public IReadOnlyList<string> CriticalFailureIds =>
-        Checks.Where(c => c.Critical && c.Status == Level3CheckStatus.Fail).Select(c => c.Id).ToList();
+        Checks.Where(c => c.Critical && c.Status == SecurityBaselineCheckStatus.Fail).Select(c => c.Id).ToList();
 
     /// <summary>是否存在任意 fail 项(含非关键)</summary>
-    public bool HasAnyFailure => Checks.Any(c => c.Status == Level3CheckStatus.Fail);
+    public bool HasAnyFailure => Checks.Any(c => c.Status == SecurityBaselineCheckStatus.Fail);
 }
 
 /// <summary>预检常量与稳定检查项 Id。</summary>
-public static class Level3PrecheckConstants
+public static class SecurityBaselinePrecheckConstants
 {
-    /// <summary>第一期能力版本标识</summary>
+    /// <summary>能力版本标识(JSON 兼容;不代表仍交付完整 Level3)</summary>
     public const string CapabilityVersion = "level3-phase1";
 
     public const string CheckProfileLevel3 = "profile_level3";
@@ -99,7 +100,7 @@ public static class Level3PrecheckConstants
     /// <summary>
     /// 第二/三期 Level3 强制项清单(固定;报告始终列出,避免把一期读成完整三级基线)。
     /// </summary>
-    public static IReadOnlyList<Level3UnimplementedMandate> UnimplementedPhase23Mandates { get; } =
+    public static IReadOnlyList<SecurityBaselineUnimplementedMandate> UnimplementedPhase23Mandates { get; } =
     [
         new("audit_retention_180d", "审计留存 ≥180 天", 2,
             "操作/登录/异常审计最短 180 天留存、禁止一键清空、仅清理到期数据。"),
@@ -127,11 +128,11 @@ public static class Level3PrecheckConstants
 }
 
 /// <summary>
-/// Level3 一期预检服务:输出结构化机器可读结果(Profile / Redis 认证·TLS / 数据保护密钥 / MFA 初始化 / 会话策略下限等)。
-/// 注册为 Scoped;<c>TryAdd</c> 可替换;方法 <c>virtual</c>。
+/// 可选安全态势预检:输出结构化机器可读结果(Profile / Redis / 数据保护密钥 / MFA / 会话与 Cookie 拓扑等)。
+/// 注册为 Scoped;<c>TryAdd</c> 可替换。历史接口名 <c>ILevel3PrecheckService</c>。
 /// </summary>
-public interface ILevel3PrecheckService
+public interface ISecurityBaselinePrecheckService
 {
     /// <summary>执行预检。结果不含密钥、连接串密码、TOTP 种子等敏感值。</summary>
-    Task<Level3PrecheckResult> RunAsync(CancellationToken cancellationToken = default);
+    Task<SecurityBaselinePrecheckResult> RunAsync(CancellationToken cancellationToken = default);
 }

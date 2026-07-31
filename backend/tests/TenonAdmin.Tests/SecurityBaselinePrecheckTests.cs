@@ -12,10 +12,10 @@ using TenonAdmin.SqlSugar;
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// Level3 一期预检:Redis 无 TLS/认证失败且稳定 check id;报告含能力版本与二/三期未实现项。
-/// 驱动真实 <see cref="Level3PrecheckService"/> / <see cref="RedisConnectionSecurity"/>。
+/// 可选安全态势预检:Redis/TLS/密钥/拓扑等稳定 check id;报告含能力版本与历史未实现清单。
+/// 驱动真实 <see cref="SecurityBaselinePrecheckService"/> / <see cref="RedisConnectionSecurity"/>。
 /// </summary>
-public class Level3PrecheckTests
+public class SecurityBaselinePrecheckTests
 {
     private static readonly string ScratchDir =
         Environment.GetEnvironmentVariable("GROK_SCRATCH")
@@ -46,7 +46,7 @@ public class Level3PrecheckTests
         public Task DeleteAsync(long id) => throw new NotImplementedException();
     }
 
-    private static Level3PrecheckService Make(
+    private static SecurityBaselinePrecheckService Make(
         SecurityProfile profile,
         string cacheProvider = "Memory",
         string? redisConn = null,
@@ -81,7 +81,7 @@ public class Level3PrecheckTests
             ? new FakeRedisCacheProvider()
             : new FakeMemoryCacheProvider();
 
-        return new Level3PrecheckService(
+        return new SecurityBaselinePrecheckService(
             accessor,
             security,
             cache,
@@ -89,7 +89,7 @@ public class Level3PrecheckTests
             env,
             users: null,
             cacheProvider: runtimeCache,
-            logger: NullLogger<Level3PrecheckService>.Instance);
+            logger: NullLogger<SecurityBaselinePrecheckService>.Instance);
     }
 
     /// <summary>声明完整 ISecureCacheCapabilities 的假分布式缓存(不依赖类名)。</summary>
@@ -161,17 +161,17 @@ public class Level3PrecheckTests
 
         var result = await svc.RunAsync();
 
-        Assert.Equal(Level3PrecheckConstants.CapabilityVersion, result.CapabilityVersion);
+        Assert.Equal(SecurityBaselinePrecheckConstants.CapabilityVersion, result.CapabilityVersion);
         Assert.Equal(nameof(SecurityProfile.Level3), result.Profile);
         Assert.False(result.OverallCompliantForPhase1);
         Assert.True(result.HasCriticalFailures);
 
         var byId = result.Checks.ToDictionary(c => c.Id);
-        Assert.Equal(Level3CheckStatus.Fail, byId[Level3PrecheckConstants.CheckRedisAuth].Status);
-        Assert.Equal(Level3CheckStatus.Fail, byId[Level3PrecheckConstants.CheckRedisTls].Status);
-        Assert.Equal("fail", byId[Level3PrecheckConstants.CheckRedisAuth].Status);
-        Assert.Contains(Level3PrecheckConstants.CheckRedisAuth, result.CriticalFailureIds);
-        Assert.Contains(Level3PrecheckConstants.CheckRedisTls, result.CriticalFailureIds);
+        Assert.Equal(SecurityBaselineCheckStatus.Fail, byId[SecurityBaselinePrecheckConstants.CheckRedisAuth].Status);
+        Assert.Equal(SecurityBaselineCheckStatus.Fail, byId[SecurityBaselinePrecheckConstants.CheckRedisTls].Status);
+        Assert.Equal("fail", byId[SecurityBaselinePrecheckConstants.CheckRedisAuth].Status);
+        Assert.Contains(SecurityBaselinePrecheckConstants.CheckRedisAuth, result.CriticalFailureIds);
+        Assert.Contains(SecurityBaselinePrecheckConstants.CheckRedisTls, result.CriticalFailureIds);
 
         // 无密钥泄漏
         var json = JsonSerializer.Serialize(result);
@@ -185,10 +185,10 @@ public class Level3PrecheckTests
         var svc = Make(SecurityProfile.Level3, cacheProvider: "Memory", dataProtectionKey: key);
         var result = await svc.RunAsync();
 
-        var redisProvider = result.Checks.Single(c => c.Id == Level3PrecheckConstants.CheckRedisProvider);
-        Assert.Equal(Level3CheckStatus.Fail, redisProvider.Status);
+        var redisProvider = result.Checks.Single(c => c.Id == SecurityBaselinePrecheckConstants.CheckRedisProvider);
+        Assert.Equal(SecurityBaselineCheckStatus.Fail, redisProvider.Status);
         Assert.True(redisProvider.Critical);
-        Assert.Contains(Level3PrecheckConstants.CheckRedisProvider, result.CriticalFailureIds);
+        Assert.Contains(SecurityBaselinePrecheckConstants.CheckRedisProvider, result.CriticalFailureIds);
     }
 
     [Fact]
@@ -201,10 +201,10 @@ public class Level3PrecheckTests
             dataProtectionKey: null);
 
         var result = await svc.RunAsync();
-        var item = result.Checks.Single(c => c.Id == Level3PrecheckConstants.CheckSecretProtectorKey);
-        Assert.Equal(Level3CheckStatus.Fail, item.Status);
+        var item = result.Checks.Single(c => c.Id == SecurityBaselinePrecheckConstants.CheckSecretProtectorKey);
+        Assert.Equal(SecurityBaselineCheckStatus.Fail, item.Status);
         Assert.True(item.Critical);
-        Assert.Contains(Level3PrecheckConstants.CheckSecretProtectorKey, result.CriticalFailureIds);
+        Assert.Contains(SecurityBaselinePrecheckConstants.CheckSecretProtectorKey, result.CriticalFailureIds);
     }
 
     [Fact]
@@ -218,8 +218,8 @@ public class Level3PrecheckTests
             redisConn: "prod.redis:6380,password=strong-pass,ssl=true",
             dataProtectionKey: shortKey);
         var result = await svc.RunAsync();
-        var item = result.Checks.Single(c => c.Id == Level3PrecheckConstants.CheckSecretProtectorKey);
-        Assert.Equal(Level3CheckStatus.Fail, item.Status);
+        var item = result.Checks.Single(c => c.Id == SecurityBaselinePrecheckConstants.CheckSecretProtectorKey);
+        Assert.Equal(SecurityBaselineCheckStatus.Fail, item.Status);
         Assert.True(item.Critical);
     }
 
@@ -245,15 +245,15 @@ public class Level3PrecheckTests
             security,
             new AdminJwtOptions());
         // 只实现 ICacheProvider、不声明安全能力 → redis_actual 必须 fail
-        var svc = new Level3PrecheckService(
+        var svc = new SecurityBaselinePrecheckService(
             accessor, security, cache, policy, env,
             users: null,
             cacheProvider: new FakeMemoryCacheProvider(),
-            logger: NullLogger<Level3PrecheckService>.Instance);
+            logger: NullLogger<SecurityBaselinePrecheckService>.Instance);
 
         var result = await svc.RunAsync();
-        var item = result.Checks.Single(c => c.Id == Level3PrecheckConstants.CheckRedisActual);
-        Assert.Equal(Level3CheckStatus.Fail, item.Status);
+        var item = result.Checks.Single(c => c.Id == SecurityBaselinePrecheckConstants.CheckRedisActual);
+        Assert.Equal(SecurityBaselineCheckStatus.Fail, item.Status);
         Assert.True(item.Critical);
     }
 
@@ -270,14 +270,14 @@ public class Level3PrecheckTests
 
         var result = await svc.RunAsync();
 
-        Assert.Equal(Level3PrecheckConstants.CapabilityVersion, result.CapabilityVersion);
+        Assert.Equal(SecurityBaselinePrecheckConstants.CapabilityVersion, result.CapabilityVersion);
         Assert.False(result.HasCriticalFailures);
         // mfa_init 在无 users 仓储时为 warn → OverallCompliantForPhase1 仍 true(仅 fail 阻断)
         Assert.True(result.OverallCompliantForPhase1);
 
         Assert.All(
             result.Checks.Where(c => c.Critical),
-            c => Assert.Equal(Level3CheckStatus.Pass, c.Status));
+            c => Assert.Equal(SecurityBaselineCheckStatus.Pass, c.Status));
 
         Assert.NotEmpty(result.UnimplementedMandates);
         Assert.Contains(result.UnimplementedMandates, m => m.Id == "audit_retention_180d");
@@ -333,8 +333,8 @@ public class Level3PrecheckTests
 
         Assert.False(result.OverallCompliantForPhase1);
         Assert.False(result.HasCriticalFailures); // 非 Level3 不触发关键 fail
-        var profileCheck = result.Checks.Single(c => c.Id == Level3PrecheckConstants.CheckProfileLevel3);
-        Assert.Equal(Level3CheckStatus.Warn, profileCheck.Status);
+        var profileCheck = result.Checks.Single(c => c.Id == SecurityBaselinePrecheckConstants.CheckProfileLevel3);
+        Assert.Equal(SecurityBaselineCheckStatus.Warn, profileCheck.Status);
     }
 
     [Fact]
@@ -370,7 +370,7 @@ public class Level3PrecheckTests
         var body = await r.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(body);
         var data = doc.RootElement.GetProperty("data");
-        Assert.Equal(Level3PrecheckConstants.CapabilityVersion, data.GetProperty("capabilityVersion").GetString());
+        Assert.Equal(SecurityBaselinePrecheckConstants.CapabilityVersion, data.GetProperty("capabilityVersion").GetString());
         Assert.True(data.TryGetProperty("checks", out var checks) && checks.GetArrayLength() > 0);
         Assert.True(data.TryGetProperty("unimplementedMandates", out var um) && um.GetArrayLength() > 0);
         Assert.True(data.TryGetProperty("overallCompliantForPhase1", out _));
@@ -401,7 +401,7 @@ public class Level3PrecheckTests
                     var name = d.ImplementationType?.Name
                                ?? d.ImplementationInstance?.GetType().Name
                                ?? "";
-                    if (name.Contains("Level3Startup", StringComparison.Ordinal))
+                    if (name.Contains("SecurityStartupDiagnostic", StringComparison.Ordinal))
                         s.Remove(d);
                 }
             },
@@ -417,12 +417,12 @@ public class Level3PrecheckTests
             await users.UpdateAsync(u);
         }
 
-        var precheck = scope.ServiceProvider.GetRequiredService<ILevel3PrecheckService>();
+        var precheck = scope.ServiceProvider.GetRequiredService<ISecurityBaselinePrecheckService>();
         var result = await precheck.RunAsync();
-        var mfa = result.Checks.Single(c => c.Id == Level3PrecheckConstants.CheckMfaInitState);
-        Assert.Equal(Level3CheckStatus.Warn, mfa.Status);
+        var mfa = result.Checks.Single(c => c.Id == SecurityBaselinePrecheckConstants.CheckMfaInitState);
+        Assert.Equal(SecurityBaselineCheckStatus.Warn, mfa.Status);
         Assert.False(mfa.Critical);
-        Assert.DoesNotContain(Level3PrecheckConstants.CheckMfaInitState, result.CriticalFailureIds);
+        Assert.DoesNotContain(SecurityBaselinePrecheckConstants.CheckMfaInitState, result.CriticalFailureIds);
     }
 
     [Fact]
@@ -451,15 +451,15 @@ public class Level3PrecheckTests
         {
             Cors = new AdminCorsOptions { AllowedOrigins = ["https://admin.example.com"], AllowCredentials = true },
         };
-        var svc = new Level3PrecheckService(
+        var svc = new SecurityBaselinePrecheckService(
             accessor, security, cache, policy, env,
             users: null,
             cacheProvider: new FakeRedisCacheProvider(),
             api: api);
 
         var result = await svc.RunAsync();
-        var topo = result.Checks.Single(c => c.Id == Level3PrecheckConstants.CheckCookieCsrfTopology);
-        Assert.Equal(Level3CheckStatus.Fail, topo.Status);
+        var topo = result.Checks.Single(c => c.Id == SecurityBaselinePrecheckConstants.CheckCookieCsrfTopology);
+        Assert.Equal(SecurityBaselineCheckStatus.Fail, topo.Status);
         Assert.True(topo.Critical);
     }
 
@@ -493,15 +493,15 @@ public class Level3PrecheckTests
                 AllowCredentials = false,
             },
         };
-        var svc = new Level3PrecheckService(
+        var svc = new SecurityBaselinePrecheckService(
             accessor, security, cache, policy, env,
             users: null,
             cacheProvider: new FakeRedisCacheProvider(),
             api: api);
 
         var result = await svc.RunAsync();
-        var topo = result.Checks.Single(c => c.Id == Level3PrecheckConstants.CheckCookieCsrfTopology);
-        Assert.Equal(Level3CheckStatus.Fail, topo.Status);
+        var topo = result.Checks.Single(c => c.Id == SecurityBaselinePrecheckConstants.CheckCookieCsrfTopology);
+        Assert.Equal(SecurityBaselineCheckStatus.Fail, topo.Status);
         Assert.True(topo.Critical);
         Assert.Contains("AllowCredentials", topo.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -533,15 +533,15 @@ public class Level3PrecheckTests
                 AllowCredentials = true,
             },
         };
-        var svc = new Level3PrecheckService(
+        var svc = new SecurityBaselinePrecheckService(
             accessor, security, cache, policy, env,
             users: null,
             cacheProvider: new FakeRedisCacheProvider(),
             api: api);
 
         var result = await svc.RunAsync();
-        var topo = result.Checks.Single(c => c.Id == Level3PrecheckConstants.CheckCookieCsrfTopology);
-        Assert.Equal(Level3CheckStatus.Pass, topo.Status);
+        var topo = result.Checks.Single(c => c.Id == SecurityBaselinePrecheckConstants.CheckCookieCsrfTopology);
+        Assert.Equal(SecurityBaselineCheckStatus.Pass, topo.Status);
     }
 
     private sealed class AlwaysLevel3Profile : ISecurityProfileAccessor

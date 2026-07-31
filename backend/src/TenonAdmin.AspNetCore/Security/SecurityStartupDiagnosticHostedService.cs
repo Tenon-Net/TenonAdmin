@@ -10,10 +10,10 @@ namespace TenonAdmin.AspNetCore;
 /// ADR 0006：可选安全不得以 fail-closed 总档阻断启动；本服务不再抛异常。
 /// 若仍配置了 Profile=Level3，仅打日志提示应迁移到独立开关（见 security-optional-slim-plan）。
 /// </summary>
-internal sealed class Level3StartupValidationHostedService(
+internal sealed class SecurityStartupDiagnosticHostedService(
     IServiceScopeFactory scopeFactory,
     ISecurityProfileAccessor profile,
-    ILogger<Level3StartupValidationHostedService> logger) : IHostedService
+    ILogger<SecurityStartupDiagnosticHostedService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -31,13 +31,13 @@ internal sealed class Level3StartupValidationHostedService(
         try
         {
             using var scope = scopeFactory.CreateScope();
-            var precheck = scope.ServiceProvider.GetService<ILevel3PrecheckService>();
+            var precheck = scope.ServiceProvider.GetService<ISecurityBaselinePrecheckService>();
             if (precheck is null)
                 return;
 
             var result = await precheck.RunAsync(cancellationToken).ConfigureAwait(false);
             var criticalFails = result.Checks
-                .Where(c => c.Critical && c.Status == Level3CheckStatus.Fail)
+                .Where(c => c.Critical && c.Status == SecurityBaselineCheckStatus.Fail)
                 .Select(c => c.Id)
                 .ToList();
 

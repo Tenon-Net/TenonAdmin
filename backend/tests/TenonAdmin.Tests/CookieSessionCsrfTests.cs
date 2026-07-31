@@ -12,14 +12,14 @@ using TenonAdmin.SqlSugar;
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// Level3 Cookie 会话 + CSRF + 绝对/闲置/并发钳制 + 首启迁移。
-/// 集成宿主跳过 Level3 启动 Redis 闸门(用通过型预检桩),仍单独覆盖 Redis 预检失败用例。
+/// Cookie 会话 + CSRF + 绝对/闲置/并发钳制(历史 Profile=Level3 兼容路径)。
+/// 集成宿主用通过型预检桩;Redis 预检失败见 <see cref="SecurityBaselinePrecheckTests"/>。
 /// </summary>
-public class Level3SessionCsrfTests
+public class CookieSessionCsrfTests
 {
     private static string DataProtectionKey => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
-    /// <summary>Level3 工厂:跳过启动 Redis 闸门,配置数据保护密钥。</summary>
+    /// <summary>Cookie/历史 Level3 工厂:通过型预检桩 + 数据保护密钥。</summary>
     private static AdminAppFactory Level3Factory(Action<IServiceCollection>? extra = null) => new()
     {
         Settings = new Dictionary<string, string?>
@@ -32,9 +32,9 @@ public class Level3SessionCsrfTests
         },
         Overrides = services =>
         {
-            // 用通过型预检替换,避免 Memory 缓存触发启动拒绝(真实 Redis 失败仍由 Level3PrecheckTests 覆盖)
-            services.RemoveAll<ILevel3PrecheckService>();
-            services.AddSingleton<ILevel3PrecheckService, PassLevel3Precheck>();
+            // 用通过型预检替换,避免 Memory 缓存触发启动拒绝(真实 Redis 失败仍由 SecurityBaselinePrecheckTests 覆盖)
+            services.RemoveAll<ISecurityBaselinePrecheckService>();
+            services.AddSingleton<ISecurityBaselinePrecheckService, PassSecurityBaselinePrecheck>();
             // 会话/Cookie 用例专注会话层:关闭 MFA 强制,避免超管未绑 TOTP 挡登录
             services.RemoveAll<IMfaPolicyService>();
             services.AddSingleton<IMfaPolicyService, NoMfaPolicy>();
@@ -53,16 +53,16 @@ public class Level3SessionCsrfTests
         public Task ValidateAsync(string? captchaId, string? code) => Task.CompletedTask;
     }
 
-    private sealed class PassLevel3Precheck : ILevel3PrecheckService
+    private sealed class PassSecurityBaselinePrecheck : ISecurityBaselinePrecheckService
     {
-        public Task<Level3PrecheckResult> RunAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new Level3PrecheckResult
+        public Task<SecurityBaselinePrecheckResult> RunAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new SecurityBaselinePrecheckResult
             {
-                CapabilityVersion = Level3PrecheckConstants.CapabilityVersion,
+                CapabilityVersion = SecurityBaselinePrecheckConstants.CapabilityVersion,
                 Profile = "Level3",
                 Environment = "Development",
                 Checks = [],
-                UnimplementedMandates = Level3PrecheckService.UnimplementedMandates,
+                UnimplementedMandates = SecurityBaselinePrecheckService.UnimplementedMandates,
                 OverallCompliantForPhase1 = true,
             });
     }
@@ -357,8 +357,8 @@ public class Level3SessionCsrfTests
             },
             Overrides = services =>
             {
-                services.RemoveAll<ILevel3PrecheckService>();
-                services.AddSingleton<ILevel3PrecheckService, PassLevel3Precheck>();
+                services.RemoveAll<ISecurityBaselinePrecheckService>();
+                services.AddSingleton<ISecurityBaselinePrecheckService, PassSecurityBaselinePrecheck>();
                 services.RemoveAll<IMfaPolicyService>();
                 services.AddSingleton<IMfaPolicyService, NoMfaPolicy>();
                 services.RemoveAll<ICaptchaService>();

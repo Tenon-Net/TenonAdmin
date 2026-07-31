@@ -221,7 +221,7 @@ public class ExternalAuthTests
                 var name = d.ImplementationType?.Name
                            ?? d.ImplementationInstance?.GetType().Name
                            ?? "";
-                if (name.Contains("Level3Startup", StringComparison.Ordinal))
+                if (name.Contains("SecurityStartupDiagnostic", StringComparison.Ordinal))
                     s.Remove(d);
             }
         },

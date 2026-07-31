@@ -254,14 +254,14 @@ public static class TenonAdminSetup
         // ── 历史 Level3 注册位(ADR 0006:告警/启动 fail-closed/ready 预检已退役为空操作;后续可删)──
         services.AddHostedService<SecurityProfileWarningHostedService>();
         services.TryAddSingleton<AuthCookieService>(); // Cookie/CSRF 服务;启用条件见会话选项瘦身
-        services.AddHostedService<Level3StartupValidationHostedService>();
+        services.AddHostedService<SecurityStartupDiagnosticHostedService>();
 
         // ── 内置 OpenAPI 文档(§13.6 契约源)+ 健康检查(§12:/health 存活 + /health/ready 依赖就绪)──
         services.AddOpenApi();          // 产出 /openapi/v1.json;内置控制器显式 Result<T> → 契约含信封(裸返回端点见 ResultEnvelopeFilter 契约提示)
         services.AddHealthChecks()
             .AddCheck<DatabaseHealthCheck>("db", tags: ["ready"])
             .AddCheck<CacheHealthCheck>("cache", tags: ["ready"])
-            .AddCheck<Level3PrecheckHealthCheck>("level3-precheck", tags: ["ready"]); // 恒 Healthy,保留探针名
+            .AddCheck<SecurityBaselineHealthCheck>("level3-precheck", tags: ["ready"]); // 恒 Healthy,保留探针名
 
         return services;
     }

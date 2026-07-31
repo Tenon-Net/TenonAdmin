@@ -20,11 +20,11 @@
 ## 本轮验证命令
 
 ```bash
-dotnet test backend/TenonAdmin.slnx -c Release --filter "FullyQualifiedName~MfaEnrollmentTests|FullyQualifiedName~Level3SessionCsrfTests|FullyQualifiedName~Level3PolicyFloorTests|FullyQualifiedName~Level3PrecheckTests"
+dotnet test backend/TenonAdmin.slnx -c Release --filter "FullyQualifiedName~MfaEnrollmentTests|FullyQualifiedName~CookieSessionCsrfTests|FullyQualifiedName~LegacySecurityPolicyFloorTests|FullyQualifiedName~SecurityBaselinePrecheckTests"
 ```
 
 期望：上述过滤器全部通过。  
-（`Level3_startup_with_missing_redis_auth_*` 已改为**不**拒绝启动，符合 ADR 0006。）
+（历史 `Profile=Level3` 启动 fail-closed 已退役，符合 ADR 0006。）
 
 前端（可选）：
 
@@ -37,7 +37,7 @@ cd web-react && npx vitest run src/views/mfa/BindPage.spec.tsx
 1. ~~CookieMode 双前端~~ — 客户端已具备 credentials + CSRF + 静默刷新（见 web/web-react `api/client.ts`）  
 2. ~~登录页 / 个人中心链到 `/mfa/bind`~~ — `/personal/security` + 登录「设置身份验证器」  
 3. ~~物理删除 DeployGrant/Invite 实体、闲置账号 Job、EnableMigrator~~ — 预检 InitGrant 改为 warn  
-4. 重命名/精简仍带 `Level3*` 的测试类名  
+4. ~~重命名 Level3* 测试/预检类型~~ — `SecurityBaseline*` / `CookieSessionCsrfTests` / `LegacySecurityPolicyFloorTests`（配置键与 `/sys/level3/precheck` 路由仍兼容）  
 5. 正式 `gen:api`（当前 schema 已手工对齐 clear/自助 bind，下次 gen 会覆盖）  
 
 ## P2 跟进（Codex review 后已修）
