@@ -12,7 +12,7 @@ vi.mock('@/lib/icons', async (orig) => {
   const actual = await orig<typeof import('@/lib/icons')>()
   return {
     ...actual,
-    ensureIconLoaded: (...args: unknown[]) => ensureIconLoaded(...args),
+    ensureIconLoaded: (name: string) => ensureIconLoaded(name),
   }
 })
 

@@ -994,11 +994,14 @@ export default {
   },
   personalSecurity: {
     title: 'Account security',
-    hint: 'Manage your authenticator (TOTP) here. An admin must enable “Enable authenticator” under System config → Security.',
+    // Everyone: what the user can do — no admin console paths.
+    hint: 'Bind or manage your authenticator (TOTP) for sign-in two-factor verification.',
+    // Admins only (super-admin / system-config access): points at Security policy toggle.
+    adminHint: 'If setup fails or sign-in never asks for a code, open System config → Security and ensure “Enable authenticator” is on.',
     bindDesc: 'Self-service setup uses your account and current password. You can also use a recovery code to remove and rebind.',
     setupAuthenticator: 'Set up authenticator',
     useRecovery: 'Use recovery code',
-    note: 'Voluntary setup starts here. If MFA is required and not bound yet, a modal appears after password sign-in succeeds.',
+    note: 'Start voluntary setup from this page. If MFA is required and not bound yet, a prompt appears after password sign-in succeeds.',
   },
   changePassword: {
     title: 'Change password',
