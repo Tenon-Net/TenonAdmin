@@ -1,0 +1,17 @@
+namespace TenonAdmin.Core;
+
+/// <summary>
+/// Cookie 会话 / CSRF 常量(禁硬编码字符串纪律)。
+/// 启用条件:<c>Security:Session:CookieMode</c>(或历史 Profile=Level3);默认 body refresh。
+/// </summary>
+public static class AuthCookieNames
+{
+    /// <summary>HttpOnly 刷新令牌 Cookie</summary>
+    public const string RefreshToken = "tenon_rt";
+
+    /// <summary>可读 CSRF Cookie(双提交)</summary>
+    public const string Csrf = "tenon_csrf";
+
+    /// <summary>客户端须回传的 CSRF 请求头</summary>
+    public const string CsrfHeader = "X-Tenon-CSRF";
+}

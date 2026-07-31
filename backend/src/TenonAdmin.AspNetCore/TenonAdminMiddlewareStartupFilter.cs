@@ -25,6 +25,8 @@ internal sealed class TenonAdminMiddlewareStartupFilter(AdminApiOptions api) : I
         if (api.ForwardedHeaders.Enabled) app.UseForwardedHeaders();
         app.UseCors(TenonAdminSetup.CorsPolicyName);
         app.UseMiddleware<RateLimitMiddleware>();
+        // Level3 CSRF:限流之后、认证之前即可(只看 Cookie/头);非 Level3 中间件内直通
+        app.UseMiddleware<CsrfMiddleware>();
         next(app);
     };
 }

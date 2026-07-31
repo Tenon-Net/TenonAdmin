@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
 import { configApi } from '@/api'
 import { translateError } from '@/utils/error'
+import HighSensConfig from './HighSensConfig.vue'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -36,6 +37,9 @@ const BOOL_FIELDS = [
 const CAPTCHA_KEY = 'sys.security.captcha.enabled'
 // 验证码类型(字符串枚举:char 字符 / path 描边更抗爬 / math 算术)
 const CAPTCHA_TYPE_KEY = 'sys.security.captcha.type'
+// TOTP 动态口令(与验证码同款运行时总闸;用户 ForceTotp 仅在此开启后生效)
+const TOTP_KEY = 'sys.security.totp.enabled'
+const TOTP_SUPER_KEY = 'sys.security.totp.requireForSuperAdmin'
 // 短信验证两开关(§14 登录加固):二次验证(密码后再验短信码)/ 免密登录(手机号+码)。
 // 发送经 ISmsSender,内核默认只写日志——生产须由消费方注册真实短信通道。
 const SMS_MFA_KEY = 'sys.security.mfa.enabled'
@@ -63,6 +67,8 @@ onMounted(async () => {
     for (const k of BOOL_FIELDS) bools[k] = map.get(k) === 'true'
     bools[CAPTCHA_KEY] = map.get(CAPTCHA_KEY) === 'true'
     captchaType.value = map.get(CAPTCHA_TYPE_KEY) || 'char'
+    bools[TOTP_KEY] = map.get(TOTP_KEY) === 'true'
+    bools[TOTP_SUPER_KEY] = map.get(TOTP_SUPER_KEY) === 'true'
     bools[SMS_MFA_KEY] = map.get(SMS_MFA_KEY) === 'true'
     bools[SMS_LOGIN_KEY] = map.get(SMS_LOGIN_KEY) === 'true'
     bools[RATELIMIT_KEY] = map.get(RATELIMIT_KEY) === 'true'
@@ -82,6 +88,8 @@ async function save() {
       ...BOOL_FIELDS.map((k) => ({ configKey: k, configValue: String(bools[k]) })),
       { configKey: CAPTCHA_KEY, configValue: String(bools[CAPTCHA_KEY]) },
       { configKey: CAPTCHA_TYPE_KEY, configValue: captchaType.value },
+      { configKey: TOTP_KEY, configValue: String(bools[TOTP_KEY]) },
+      { configKey: TOTP_SUPER_KEY, configValue: String(bools[TOTP_SUPER_KEY]) },
       { configKey: SMS_MFA_KEY, configValue: String(bools[SMS_MFA_KEY]) },
       { configKey: SMS_LOGIN_KEY, configValue: String(bools[SMS_LOGIN_KEY]) },
       { configKey: RATELIMIT_KEY, configValue: String(bools[RATELIMIT_KEY]) },
@@ -141,6 +149,17 @@ async function save() {
         </n-form-item-gi>
       </n-grid>
 
+      <n-divider title-placement="left">{{ t('config.security.totp.title') }}</n-divider>
+      <n-grid :cols="'1 s:2'" responsive="screen" :x-gap="32" :y-gap="0">
+        <n-form-item-gi :label="label('sys.security.totp.enabled')">
+          <n-switch v-model:value="bools[TOTP_KEY]" />
+        </n-form-item-gi>
+        <n-form-item-gi :label="label('sys.security.totp.requireForSuperAdmin')">
+          <n-switch v-model:value="bools[TOTP_SUPER_KEY]" :disabled="!bools[TOTP_KEY]" />
+        </n-form-item-gi>
+      </n-grid>
+      <p class="sms-hint">{{ t('config.security.totp.hint') }}</p>
+
       <n-divider title-placement="left">{{ t('config.security.sms.title') }}</n-divider>
       <n-grid :cols="'1 s:2'" responsive="screen" :x-gap="32" :y-gap="0">
         <n-form-item-gi :label="label('sys.security.mfa.enabled')">
@@ -169,7 +188,10 @@ async function save() {
         </n-form-item-gi>
       </n-grid>
 
-      <div>
+      <n-divider title-placement="left">{{ t('config.security.highSens.title') }}</n-divider>
+      <HighSensConfig />
+
+      <div style="margin-top: 16px">
         <n-button v-auth="'PUT:/api/v1/sys/config/batch'" type="primary" :loading="saving" @click="save">
           <template #icon><AppIcon icon="ph:floppy-disk" :size="16" /></template>{{ t('common.save') }}
         </n-button>

@@ -28,7 +28,8 @@ public class ExternalAuthController(
     ICacheProvider cache,
     ICurrentUser currentUser,
     AdminExternalAuthOptions options,
-    IWebHostEnvironment env) : ControllerBase
+    IWebHostEnvironment env,
+    AuthCookieService cookies) : ControllerBase
 {
     private static readonly TimeSpan STATE_TTL = TimeSpan.FromMinutes(5);      // 授权→回调往返窗口
     private static readonly TimeSpan TICKET_TTL = TimeSpan.FromSeconds(120);   // 回调→前端换令牌窗口
@@ -104,19 +105,30 @@ public class ExternalAuthController(
         }
         catch (AdminException ex)
         {
+            // TOTP 二次验证信令(40018):必须把 challengeId 带回前端,否则 SSO 合法路径无法完成登录
+            if (ex.Code == ErrorCode.TotpRequired
+                && ex.Args is not null
+                && ex.Args.TryGetValue("challengeId", out var cid)
+                && cid is string challengeId
+                && !string.IsNullOrEmpty(challengeId))
+            {
+                return Redirect(FrontendResultUrl(
+                    $"totpChallenge={Uri.EscapeDataString(challengeId)}&error={(int)ErrorCode.TotpRequired}"));
+            }
+
             // 登录/绑定失败也回前端(错误码在 URL,前端按码查文案);避免把裸异常页甩给用户
             return Redirect(FrontendResultUrl($"error={(int)ex.Code}"));
         }
     }
 
-    /// <summary>一次性票据换令牌(登录回调后前端调用;票据无效/过期/已用抛 40014)。</summary>
+    /// <summary>一次性票据换令牌(登录回调后前端调用;票据无效/过期/已用抛 40014)。Level3 同步写 Cookie/CSRF。</summary>
     [HttpPost("exchange")]
     [AllowAnonymous]
     public async Task<Result<LoginOutput>> Exchange(ExternalExchangeInput input, CancellationToken cancellationToken)
     {
         var output = await cache.GetAndRemoveAsync<LoginOutput>(CacheKeys.OAuthTicket(input.Ticket), cancellationToken);
         AdminException.ThrowIf(output is null, ErrorCode.OAuthStateInvalid);
-        return Result<LoginOutput>.Ok(output!);
+        return Result<LoginOutput>.Ok(cookies.ApplyAuthCookies(HttpContext, output!));
     }
 
     /// <summary>【个人中心】看自己已绑定的外部账号。</summary>

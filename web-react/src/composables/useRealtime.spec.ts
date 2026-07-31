@@ -42,7 +42,7 @@ vi.mock('@microsoft/signalr', () => ({
   LogLevel: { Warning: 3 },
 }))
 
-import { noticeBus, useRealtime } from './useRealtime'
+import { beginVoluntaryLogout, noticeBus, useRealtime } from './useRealtime'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
@@ -104,5 +104,42 @@ describe('useRealtime force-logout', () => {
     expect(useTabsStore.getState().tabs).toHaveLength(0) // authStore.reset → clearTabs
     expect(useAuthStore.getState().menuTree).toHaveLength(0) // authStore.reset
     expect(navigate).toHaveBeenCalledWith('/login', { replace: true })
+  })
+
+  it('beginVoluntaryLogout 先断连;迟到的 force-logout 仍清会话(自愿标记静默,不谎报被踢)', async () => {
+    const warning = vi.fn()
+    vi.spyOn(AntdApp, 'useApp').mockReturnValue({
+      message: { warning, success: vi.fn(), error: vi.fn(), info: vi.fn(), loading: vi.fn(), open: vi.fn() },
+      modal: {} as never,
+      notification: {} as never,
+    } as never)
+
+    useUserStore.setState({ accessToken: 't', refreshToken: 'r', userInfo: { userId: 1, account: 'a', name: 'n', mustChangePassword: false } })
+    useAuthStore.setState({ routesReady: true } as never)
+
+    render(createElement(AntdApp, null, createElement(MemoryRouter, null, createElement(Probe))))
+    expect(handlers['force-logout']).toBeTruthy()
+
+    await beginVoluntaryLogout()
+    expect(conn.stop).toHaveBeenCalled()
+
+    handlers['force-logout']()
+    expect(useUserStore.getState().accessToken).toBe('')
+    expect(navigate).toHaveBeenCalledWith('/login', { replace: true })
+    expect(warning).not.toHaveBeenCalled()
+  })
+
+  it('非自愿 force-logout 仍提示强制下线', () => {
+    const warning = vi.fn()
+    vi.spyOn(AntdApp, 'useApp').mockReturnValue({
+      message: { warning, success: vi.fn(), error: vi.fn(), info: vi.fn(), loading: vi.fn(), open: vi.fn() },
+      modal: {} as never,
+      notification: {} as never,
+    } as never)
+
+    useUserStore.setState({ accessToken: 't', refreshToken: 'r', userInfo: { userId: 1, account: 'a', name: 'n', mustChangePassword: false } })
+    render(createElement(AntdApp, null, createElement(MemoryRouter, null, createElement(Probe))))
+    handlers['force-logout']()
+    expect(warning).toHaveBeenCalled()
   })
 })

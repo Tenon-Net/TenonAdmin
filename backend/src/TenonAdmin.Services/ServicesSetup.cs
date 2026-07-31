@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
@@ -19,6 +20,32 @@ public static class ServicesSetup
 
         // 密码哈希:PBKDF2 默认实现,无状态 → Singleton;用户可前置注册替换(§5.2)
         services.TryAddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+
+        // 安全档访问器(Level3 Profile):部署配置只读,Singleton
+        services.TryAddSingleton<ISecurityProfileAccessor, SecurityProfileAccessor>();
+
+        // 数据保护密钥 + 窄域秘密保护(等保三级应用安全一期前置;TOTP seed/HMAC 密钥信封加密)
+        // 工厂注入 ContentRoot/IsDevelopment,避免把宿主路径硬编码进 Options
+        services.TryAddSingleton<IDataProtectionKeyProvider>(sp =>
+        {
+            var security = sp.GetRequiredService<AdminSecurityOptions>();
+            var env = sp.GetService<IHostEnvironment>();
+            var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(nameof(LocalDataProtectionKeyProvider));
+            return new LocalDataProtectionKeyProvider(
+                security,
+                env?.ContentRootPath,
+                env?.IsDevelopment() ?? true,
+                logger);
+        });
+        services.TryAddSingleton<ISecretProtector, AesGcmSecretProtector>();
+
+        // 原生 TOTP + MFA 策略/绑定/挑战/再次认证/高敏追加(等保三级应用安全一期)
+        services.TryAddSingleton<ITotpService, TotpService>();
+        services.TryAddScoped<IMfaPolicyService, MfaPolicyService>();
+        services.TryAddScoped<IMfaEnrollmentService, MfaEnrollmentService>();
+        services.TryAddScoped<IMfaChallengeService, MfaChallengeService>();
+        services.TryAddScoped<IReauthService, ReauthService>();
+        services.TryAddScoped<IHighSensitivityPermissionService, HighSensitivityPermissionService>();
 
         // 认证:模板方法样板服务(§5.3);Scoped——按请求生命周期,与仓储一致
         services.TryAddScoped<IAuthService, AuthService>();
@@ -67,6 +94,7 @@ public static class ServicesSetup
 
         // 会话与刷新令牌(§15):登录建会话、每请求校验、刷新轮换+复用检测、登出/强退
         services.TryAddScoped<ISessionService, SessionService>();
+        services.TryAddScoped<ISessionActivityTracker, SessionActivityTracker>();
 
         // 缓存:进程内 MemoryCache 默认实现(§5.5);IMemoryCache 需 AddMemoryCache 落地
         services.AddMemoryCache();
@@ -114,6 +142,11 @@ public static class ServicesSetup
 
         // 安全策略读取层(§14):DB(SysConfig)优先、Options 兜底,收口锁定/会话时长/密码复杂度的取值
         services.TryAddScoped<ISecurityPolicyProvider, SecurityPolicyProvider>();
+
+        // 可选安全态势诊断(历史 Level3 预检实现;非测评产品路径,ADR 0006)
+        services.TryAddScoped<ISecurityBaselinePrecheckService, SecurityBaselinePrecheckService>();
+        // 幂等禁用已拆除的 MFA 邀请/重置菜单权限锚点
+        services.AddHostedService<RetiredSecurityMenuCleanupHostedService>();
 
         // 日志模块(§4,T6):操作日志(过滤器写)+ 登录日志(AuthService 写);写入尽力而为
         services.TryAddScoped<ILogService, LogService>();

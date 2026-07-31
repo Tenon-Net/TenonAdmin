@@ -20,6 +20,12 @@ public interface IAuthService
     /// <summary>短信二次验证:重发验证码(冷却/日上限内置);挑战失效抛 40011。</summary>
     Task<SmsSendOutput> ResendSmsChallengeAsync(SmsResendInput input);
 
+    /// <summary>
+    /// TOTP 二次验证:凭挑战 Id(登录 40018 信令)+ 动态口令完成登录。
+    /// 码错抛 40019;未绑定抛 40020。
+    /// </summary>
+    Task<LoginOutput> LoginByTotpChallengeAsync(TotpChallengeLoginInput input);
+
     /// <summary>免密登录:向手机号发送登录验证码(开关关抛 40012;响应刻意不区分手机号是否存在,防枚举)。</summary>
     Task<SmsSendOutput> SendSmsLoginCodeAsync(PhoneCodeInput input);
 

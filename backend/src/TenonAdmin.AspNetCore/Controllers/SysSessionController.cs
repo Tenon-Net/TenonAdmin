@@ -20,6 +20,7 @@ public class SysSessionController(ISessionService sessions) : ControllerBase
     /// <summary>强制下线指定会话(强退);该会话原访问令牌下次请求即 401。</summary>
     [HttpDelete("{sessionId}")]
     [RolePermission]
+    [RequireReauth]
     public async Task<Result<bool>> ForceLogout(string sessionId)
     {
         await sessions.RevokeAsync(sessionId);

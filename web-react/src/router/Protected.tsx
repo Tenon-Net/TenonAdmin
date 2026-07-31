@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ComponentType } from 'react'
 import { Spin } from 'antd'
 import { Navigate, useLocation, useRoutes } from 'react-router-dom'
-import { useUserStore, isLoggedIn } from '@/stores/user'
+import { useUserStore, isLoggedIn, isCookieSession } from '@/stores/user'
 import { useAuthStore, homePath } from '@/stores/auth'
+import { tryRestoreCookieSession } from '@/api/client'
 import { enterInitial } from '@/composables/useModule'
 import { buildRoutes } from './buildRoutes'
 import { buildDetailRoutes } from './detailRoutes'
@@ -13,9 +14,11 @@ import { LayoutShell } from '@/layouts/LayoutShell'
 // **已在 buildRoutes 的 glob 排除 `personal/**`**,否则静态+动态双 import 无法 code-split。
 const ProfilePage = lazy(() => import('@/views/personal/profile'))
 const PasswordPage = lazy(() => import('@/views/personal/password'))
+const SecurityPage = lazy(() => import('@/views/personal/security'))
 const NoticePage = lazy(() => import('@/views/personal/notice'))
 const SessionsPage = lazy(() => import('@/views/personal/sessions'))
 const BindingsPage = lazy(() => import('@/views/personal/bindings'))
+const PersonalLayout = lazy(() => import('@/layouts/PersonalLayout'))
 const NotFoundPage = lazy(() => import('@/views/error/NotFoundPage'))
 const lazyEl = (El: ComponentType) => (
   <Suspense fallback={null}>
@@ -43,23 +46,54 @@ export function Protected() {
   // 「已尝试过引导」。routesReady 只在 enter() 成功时转真,而 chooser 态它永远是 false ——
   // 靠它做重跑判据会 enterInitial 打点风暴。所以另立一个只跑一次的本地标志。
   const [booted, setBooted] = useState(routesReady)
+  // Level3:F5 后 access 仅内存已空,须先凭 Cookie 静默刷新再判未登录(否则会误踢 /login)。
+  const [sessionChecked, setSessionChecked] = useState(() => {
+    const s = useUserStore.getState()
+    return !!s.accessToken || !isCookieSession(s)
+  })
+
+  // 登出/换号后必须允许再次 enterInitial;booted 是组件本地态,不随 auth.reset 清零。
+  useEffect(() => {
+    if (!loggedIn) setBooted(false)
+  }, [loggedIn])
 
   useEffect(() => {
-    if (!loggedIn || mustChange || routesReady || booted) return
+    if (sessionChecked) return
+    let alive = true
+    void tryRestoreCookieSession().finally(() => {
+      if (alive) setSessionChecked(true)
+    })
+    return () => {
+      alive = false
+    }
+  }, [sessionChecked])
+
+  useEffect(() => {
+    if (!sessionChecked || !loggedIn || mustChange || routesReady || booted) return
     let alive = true
     enterInitial()
-      .catch(() => useUserStore.getState().clear()) // 拉门户失败 → 清会话,下面回落 /login
+      .catch(() => {
+        useAuthStore.getState().reset()
+        useUserStore.getState().clear()
+      })
       .finally(() => {
         if (alive) setBooted(true)
       })
     return () => {
       alive = false
     }
-  }, [loggedIn, mustChange, routesReady, booted])
+  }, [sessionChecked, loggedIn, mustChange, routesReady, booted])
 
+  if (!sessionChecked) {
+    return (
+      <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
   if (!loggedIn) return <Navigate to="/login" replace />
   // 强制改密:只允许停在改密页。放在 routesReady 之前 —— 改密页是静态路由,不需要门户重建即可渲染,
-  // 避免"重建→选应用→又被弹回"的循环。
+  // 避免"重建→选应用→又被弹回"的循环。强制改密期间不套个人中心左导航(只改密、无其它区)。
   if (mustChange) {
     return location.pathname === '/personal/password' ? lazyEl(PasswordPage) : <Navigate to="/personal/password" replace />
   }
@@ -88,12 +122,19 @@ function DynamicRoutes() {
         children: [
           ...buildRoutes(menuTree),
           ...buildDetailRoutes(),
-          // 个人中心五页(静态路由,壳内渲染;入口在顶栏用户下拉 / 铃铛)。
-          { path: '/personal/profile', element: lazyEl(ProfilePage) },
-          { path: '/personal/password', element: lazyEl(PasswordPage) },
+          // 个人中心:二级壳(左导航)+ 子页;通知铃铛入口独立。
+          {
+            element: lazyEl(PersonalLayout),
+            children: [
+              { path: '/personal', element: <Navigate to="/personal/profile" replace /> },
+              { path: '/personal/profile', element: lazyEl(ProfilePage) },
+              { path: '/personal/password', element: lazyEl(PasswordPage) },
+              { path: '/personal/security', element: lazyEl(SecurityPage) },
+              { path: '/personal/sessions', element: lazyEl(SessionsPage) },
+              { path: '/personal/bindings', element: lazyEl(BindingsPage) },
+            ],
+          },
           { path: '/personal/notice', element: lazyEl(NoticePage) },
-          { path: '/personal/sessions', element: lazyEl(SessionsPage) },
-          { path: '/personal/bindings', element: lazyEl(BindingsPage) },
           // '/' 落到当前应用首页;chooser 态 homePath 回落 /module。
           { path: '/', element: <Navigate to={home} replace /> },
           { path: '*', element: lazyEl(NotFoundPage) },

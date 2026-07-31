@@ -43,6 +43,23 @@ public static class CacheKeys
     /// <summary>MFA 挑战票据 → 已过密码校验的 userId(短信码必须绑定该用户而非仅手机号;一次性消费,TTL 同码)</summary>
     public static string MfaChallenge(string challengeId) => $"mfa:{challengeId}";
 
+    /// <summary>TOTP 登录挑战 → 已过密码校验的 userId(一次性消费;TTL 见 Level3 选项)</summary>
+    public static string TotpMfaChallenge(string challengeId) => $"totp:mfa:{challengeId}";
+
+    /// <summary>TOTP 绑定进行中挑战 → 受保护 seed 等暂存(完成绑定后消费)</summary>
+    public static string TotpBindChallenge(string challengeId) => $"totp:bind:{challengeId}";
+
+    /// <summary>
+    /// 短时再次认证授予标记(值=方法名;TTL≈5 分钟)。
+    /// 绑定会话 sid,避免同一用户其它并发会话复用 reauth 窗口。
+    /// <paramref name="sessionId"/> 为空时退化为 user 键(仅测试/无会话兼容)。
+    /// </summary>
+    public static string ReauthGrant(long userId, string? sessionId = null) =>
+        string.IsNullOrEmpty(sessionId) ? $"reauth:{userId}" : $"reauth:{userId}:{sessionId}";
+
+    /// <summary>用户当前持有 reauth 的 sid 列表(便于按用户全清)</summary>
+    public static string ReauthSessions(long userId) => $"reauth:sids:{userId}";
+
     /// <summary>外部登录授权态(<c>state</c>)→ {providerCode, nonce, codeVerifier, redirectUri}(设计批次 D)。防 CSRF 兼承载 PKCE/nonce;回调时按 <c>state</c> 一次性消费,短 TTL 过期。</summary>
     public static string OAuthState(string state) => $"oauth:state:{state}";
 
@@ -79,4 +96,10 @@ public static class CacheKeys
 
     /// <summary>某用户在某模块下的侧边栏菜单树(门户导航;随 <see cref="PortalGeneration"/> 代际失效)</summary>
     public static string PortalMenuTree(long userId, long moduleId, long generation) => $"portal:menu:{userId}:{moduleId}:{generation}";
+
+    /// <summary>
+    /// 会话活动回写节流标记(Level3):存在则跳过 DB 回写,TTL = 节流窗口。
+    /// 值可为最近回写时刻;与 <see cref="Session"/> 热路径缓存分离,避免污染活跃校验结构。
+    /// </summary>
+    public static string SessionActivityThrottle(string sessionId) => $"session:act:{sessionId}";
 }

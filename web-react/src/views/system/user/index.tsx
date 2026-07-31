@@ -3,7 +3,7 @@
 // 表单两列栅格 + 机构/职位/主管控件对齐 Vue 用户页;仅头像仍是 Form 外受控 state(save 时并回)。
 // 导入导出(G7):ImportWizard 四步向导 + ExportColumnsModal 选列导出(带当前筛选)。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Avatar, Button, Card, Col, Form, Input, Modal, Row, Select, Space, Switch, Tag, Tree } from 'antd'
+import { App, Avatar, Button, Card, Col, Dropdown, Form, Input, Modal, Row, Select, Space, Switch, Tag, Tree, type MenuProps } from 'antd'
 import type { TreeDataNode } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type DataTableHandle, type PageFetcher } from '@/components/DataTable'
@@ -20,7 +20,7 @@ import { ExportColumnsModal } from '@/components/ExportColumnsModal'
 import { useConfirm } from '@/hooks/useConfirm'
 import { useBatchDelete } from '@/hooks/useBatchDelete'
 import { useHasPerm } from '@/stores/auth'
-import { orgApi, positionApi, roleApi, userApi } from '@/api'
+import { mfaApi, orgApi, positionApi, roleApi, userApi } from '@/api'
 import { buildTree, type Tree as TreeNode } from '@/utils/tree'
 import { translateError } from '@/utils/error'
 import { triggerBlobDownload } from '@/utils/download'
@@ -267,6 +267,19 @@ export default function UserPage() {
     }
   }
 
+  const clearUserMfa = useCallback(
+    (r: UserItem) => {
+      void confirm({
+        content: t('user.clearMfaConfirm', { name: r.name }),
+        action: () => mfaApi.clear({ userId: r.id }),
+        successMsg: t('user.mfaCleared'),
+      }).then((ok) => {
+        if (ok) reload()
+      })
+    },
+    [confirm, reload, t],
+  )
+
   const columns = useMemo<ProColumns<UserItem>[]>(
     () => [
       { title: t('user.account'), dataIndex: 'account', sorter: true, ellipsis: true },
@@ -291,17 +304,34 @@ export default function UserPage() {
       },
       { title: t('user.createTime'), dataIndex: 'createTime', search: false, sorter: true },
       {
-        title: t('common.operation'), key: 'op', search: false, hideInSetting: true, width: 200, fixed: 'right',
-        render: (_, r) => (
-          <Space size={4}>
-            {canEdit(r, has) && <Button type="link" size="small" onClick={() => openEdit(r)}>{t('common.edit')}</Button>}
-            {canReset(r, has) && <Button type="link" size="small" onClick={() => openReset(r)}>{t('user.resetPassword')}</Button>}
-            {canDelete(r, has) && <Button type="link" size="small" danger onClick={() => handleDelete(r)}>{t('common.delete')}</Button>}
-          </Space>
-        ),
+        // 操作:编辑/删除外露;重置密码、解绑验证器进「更多」(放操作列末尾)。
+        title: t('common.operation'), key: 'op', search: false, hideInSetting: true, width: 160, fixed: 'right',
+        render: (_, r) => {
+          const moreItems = ([
+            canReset(r, has) ? { key: 'resetPassword', label: t('user.resetPassword') } : null,
+            r.totpEnabled && has('POST:/api/v1/sys/mfa/clear')
+              ? { key: 'clearMfa', label: t('user.clearMfa') }
+              : null,
+          ] as MenuProps['items'])!.filter(Boolean)
+          const onMore: MenuProps['onClick'] = ({ key }) => {
+            if (key === 'resetPassword') openReset(r)
+            else if (key === 'clearMfa') void clearUserMfa(r)
+          }
+          return (
+            <Space size={4}>
+              {canEdit(r, has) && <Button type="link" size="small" onClick={() => openEdit(r)}>{t('common.edit')}</Button>}
+              {canDelete(r, has) && <Button type="link" size="small" danger onClick={() => handleDelete(r)}>{t('common.delete')}</Button>}
+              {moreItems!.length > 0 && (
+                <Dropdown menu={{ items: moreItems, onClick: onMore }} trigger={['click']}>
+                  <Button type="link" size="small">{t('common.more')}</Button>
+                </Dropdown>
+              )}
+            </Space>
+          )
+        },
       },
     ],
-    [t, has, reload, openEdit, openReset, handleDelete],
+    [t, has, reload, openEdit, openReset, handleDelete, clearUserMfa],
   )
 
   return (
@@ -365,11 +395,11 @@ export default function UserPage() {
         open={open}
         onOpenChange={setOpen}
         title={editingId === null ? t('user.addTitle') : t('user.editTitle')}
-        width={640}
+        width={720}
         onConfirm={save}
       >
         {/* 两列栅格(对齐 Vue):相关字段成对排,头像整行;账号编辑时禁改并占整行。定宽 label 让半行/整行项对齐。 */}
-        <Form form={form} labelCol={{ flex: '76px' }} wrapperCol={{ flex: 1 }} style={{ marginTop: 12 }}>
+        <Form form={form} labelCol={{ flex: '96px' }} wrapperCol={{ flex: 1 }} style={{ marginTop: 12 }}>
           <Row gutter={16}>
             <Col xs={24} sm={editingId === null ? 12 : 24}>
               <Form.Item
@@ -447,6 +477,18 @@ export default function UserPage() {
                 <Switch />
               </Form.Item>
             </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="forceTotp" label={t('user.forceTotp')} valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+            {editingId != null && (
+              <Col xs={24} sm={12}>
+                <Form.Item name="totpEnabled" label={t('user.totpBound')} valuePropName="checked">
+                  <Switch disabled />
+                </Form.Item>
+              </Col>
+            )}
             <Col span={24}>
               {/* 头像:非表单字段,受控 state。预览用 Avatar(有图显图、无图显姓名首字母);上传走共享 FileUpload。 */}
               <Form.Item label={t('user.avatar')}>

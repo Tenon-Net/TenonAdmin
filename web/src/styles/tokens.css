@@ -28,11 +28,11 @@
   --color-gray-50:  #F0F0F0;  /* 页面背景底(corporate base-200 柔化) */
   --color-white:    #FFFFFF;
 
-  /* ── 原语:品牌主色(corporate 蓝,四档态;运行时由 useTheme 按 accent 重写)── */
-  --color-primary:         #0082CE;  /* 默认态 · 主按钮 / 链接 / 选中 */
-  --color-primary-hover:   #2996D6;  /* 悬浮 hover · 加亮一档 */
-  --color-primary-pressed: #006BA9;  /* 按下 pressed / active */
-  --color-primary-light:   #E6F3FA;  /* 浅底 · 选中背景 / 标签底 */
+  /* ── 原语:品牌主色(靛蓝,与 Logo #646CFF 一致;四档态;运行时由 useTheme 按 accent 重写)── */
+  --color-primary:         #646CFF;  /* 默认态 · 主按钮 / 链接 / 选中 */
+  --color-primary-hover:   #7D84FF;  /* 悬浮 hover · 加亮一档 */
+  --color-primary-pressed: #5259D1;  /* 按下 pressed / active */
+  --color-primary-light:   #F0F0FF;  /* 浅底 · 选中背景 / 标签底 */
 
   /* ── 原语:语义色(base + 浅底 light-bg,亮色;corporate 语义色,
         warning/error 原值偏浅、按正文可读加深一档)─────────────── */
@@ -46,7 +46,7 @@
   --color-info-bg:        #E0F2F6;
 
   /* ── 角色令牌(亮色主题)—— 业务只消费这一层 ─────────────────── */
-  --color-bg-body:        #F0F0F0;  /* 页面背景 / 画布 */
+  --color-bg-body:        #F7F8FA;  /* 页面背景 / 画布(与 web-react 对齐) */
   --color-bg-container:   #FFFFFF;  /* 卡片 / 面板容器 */
   --color-bg-elevated:    #FFFFFF;  /* 弹层 / 下拉 / 抽屉 */
   --color-text-primary:   #181A2A;  /* 主文字 / 标题 */
@@ -105,11 +105,11 @@
    原语灰阶、字号、间距、圆角保持不变。
    ══════════════════════════════════════════════════════════ */
 :root[data-theme="dark"] {
-  /* 主色(corporate 蓝暗底提亮一档;运行时由 useTheme 按 accent 重写) */
-  --color-primary:         #2E99D7;
-  --color-primary-hover:   #4FA9DD;
-  --color-primary-pressed: #267DB0;
-  --color-primary-light:   #233641;
+  /* 主色(靛蓝暗底提亮一档;运行时由 useTheme 按 accent 重写) */
+  --color-primary:         #8B91FF;
+  --color-primary-hover:   #A2A7FF;
+  --color-primary-pressed: #767CF0;
+  --color-primary-light:   #2D3154;
 
   /* 语义色(business;error 原值过暗、提亮一档保可读) */
   --color-success:    #6BB187;  --color-success-bg: #2F3D35;

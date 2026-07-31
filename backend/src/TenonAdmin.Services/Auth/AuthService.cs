@@ -25,8 +25,14 @@ public class AuthService(
     ISysUserExternalService? externalBindings = null,
     IRbacService? rbac = null,
     // 统一时间源(§1.11):尾随可选参数,DI 正常注入;消费者子类省略也能编译(§5.3,同上面 rbac 成法)
-    TimeProvider? time = null) : IAuthService
+    TimeProvider? time = null,
+    // TOTP/MFA(等保三级一期):尾随可选;DI 正常注入;子类省略时 TOTP 检查直通
+    IMfaPolicyService? mfaPolicy = null,
+    IMfaChallengeService? mfaChallenge = null,
+    AdminSecurityOptions? security = null) : IAuthService
 {
+    private readonly AdminSecurityOptions security = security ?? new AdminSecurityOptions();
+
     // LastPasswordChangeTime 是与审计字段同类的持久化业务时间戳,走本地时钟(与 SqlSugarSetup 的 GetLocalNow 审计口径一致)
     private DateTime Now => (time ?? TimeProvider.System).GetLocalNow().DateTime;
 
@@ -47,6 +53,7 @@ public class AuthService(
             var user = await ValidateUserAsync(input);      // 2. 账密校验 —— 对接 LDAP/AD 覆写这步
             await CheckLoginPolicyAsync(user);              // 3. 策略检查(停用/锁定)
             await CheckPasswordExpiryAsync(user);           // 4. 密码过期检查(过期→置强制改密标志,不拦登录)
+            await CheckTotpSecondFactorAsync(user);         // 4.4 TOTP MFA(强制对象未绑定拒;已绑定抛 40018 信令)
             await CheckSmsSecondFactorAsync(user);          // 4.5 短信二次验证(开且绑手机→发码抛 40009 信令)
             var pair = await CreateTokenAsync(user);        // 5. 签发令牌
             await OnLoginSucceededAsync(user, pair);        // 6. 成功后置(登录日志/事件)
@@ -120,11 +127,36 @@ public class AuthService(
     }
 
     /// <summary>
+    /// TOTP 二次验证(等保三级一期):当用户属强制 MFA 对象时——
+    /// 未绑定 → <see cref="ErrorCode.TotpNotBound"/>(不得密码直通);
+    /// 已绑定 → 建挑战并抛 <see cref="ErrorCode.TotpRequired"/>(40018)信令。
+    /// 非强制对象或 MFA 服务未注入时直通(保持非 Level3 兼容)。
+    /// </summary>
+    protected virtual async Task CheckTotpSecondFactorAsync(SysUser user)
+    {
+        if (mfaPolicy is null || mfaChallenge is null) return;
+        if (!await mfaPolicy.IsMfaRequiredAsync(user)) return;
+
+        if (!user.TotpEnabled || string.IsNullOrEmpty(user.TotpSeedProtected))
+            throw new AdminException(ErrorCode.TotpNotBound);
+
+        var challengeId = await mfaChallenge.CreateChallengeAsync(user.Id);
+        // 与 MfaChallengeService 同一 TTL 解析,避免信令与实际过期不一致
+        var expires = Math.Max(60, security.ResolveTotpChallengeTtlSeconds());
+        throw new AdminException(ErrorCode.TotpRequired, new Dictionary<string, object?>
+        {
+            ["challengeId"] = challengeId,
+            ["expiresSeconds"] = expires,
+        });
+    }
+
+    /// <summary>
     /// 短信二次验证检查(§14 登录加固):全局开关(<c>sys.security.mfa.enabled</c>)开且用户绑了手机号时,
     /// 创建挑战票据(绑定该 userId)并发码,抛 <see cref="ErrorCode.SmsCodeRequired"/>(40009)<b>信令</b>——
     /// 前端据 args 切验证码页,凭 <see cref="LoginBySmsChallengeAsync"/> 完成下半场。
     /// <para>无手机号的用户直通(全局开关不能锁死任何人——种子超管没有手机号);要强制全员 MFA 的消费方
     /// 覆写本步即可。40009 会被外层 catch 记为登录日志(审计"密码已过、待短信"),但不计失败锁定。</para>
+    /// <para>若已走 TOTP 强制挑战,本步不会到达(TOTP 先抛)。</para>
     /// </summary>
     protected virtual async Task CheckSmsSecondFactorAsync(SysUser user)
     {
@@ -139,6 +171,28 @@ public class AuthService(
             ["expiresSeconds"] = sent.ExpiresSeconds,
             ["resendSeconds"] = sent.ResendSeconds,
         });
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<LoginOutput> LoginByTotpChallengeAsync(TotpChallengeLoginInput input)
+    {
+        AdminException.ThrowIf(mfaChallenge is null, ErrorCode.TotpNotBound);
+        SysUser? user = null;
+        try
+        {
+            var userId = await mfaChallenge!.VerifyAndConsumeAsync(input.ChallengeId, input.Code);
+            user = await users.GetByIdAsync(userId);
+            AdminException.ThrowIf(user is null, ErrorCode.TotpWrong);
+            await CheckLoginPolicyAsync(user!);
+            var pair = await CreateTokenAsync(user!);
+            await OnLoginSucceededAsync(user!, pair);
+            return BuildLoginOutput(user!, pair);
+        }
+        catch (AdminException ex)
+        {
+            await OnLoginFailedAsync(new LoginInput { Account = user?.Account ?? "" }, ex.Code);
+            throw;
+        }
     }
 
     /// <inheritdoc />
@@ -159,6 +213,8 @@ public class AuthService(
             AdminException.ThrowIf(user is null, ErrorCode.SmsCodeExpired);
 
             await CheckLoginPolicyAsync(user!);
+            // 短信二次验证完成后仍过 TOTP 门禁(防其它入口签发路径旁路;密码路径已先 TOTP)
+            await CheckTotpSecondFactorAsync(user!);
             var pair = await CreateTokenAsync(user!);
             await OnLoginSucceededAsync(user!, pair);
             return BuildLoginOutput(user!, pair);
@@ -212,6 +268,8 @@ public class AuthService(
 
             await CheckLoginPolicyAsync(user);
             await CheckPasswordExpiryAsync(user);
+            // Level3:短信免密不得绕过强制 TOTP
+            await CheckTotpSecondFactorAsync(user);
             var pair = await CreateTokenAsync(user);
             await OnLoginSucceededAsync(user, pair);
             return BuildLoginOutput(user, pair);
@@ -240,6 +298,7 @@ public class AuthService(
             var identity = await ResolveExternalIdentityAsync(input);   // 1. provider 换外部身份(含存在/启用校验)
             user = await ResolveExternalUserAsync(identity);            // 2. 找绑定 / 按策略开户 or 拒绝
             await CheckLoginPolicyAsync(user);                          // 3. 停用检查(复用)
+            await CheckTotpSecondFactorAsync(user);                     // 3.5 Level3:外部登录不得绕过强制 TOTP
             var pair = await CreateTokenAsync(user);                    // 4. 签发令牌 + 开会话(复用)
             await OnLoginSucceededAsync(user, pair);                    // 5. 成功后置(复用)
             return BuildLoginOutput(user, pair);                        // 6. 出参(复用)
@@ -366,24 +425,28 @@ public class AuthService(
     public virtual Task LogoutAsync(string sessionId) => sessions.RevokeAsync(sessionId);
 
     /// <summary>
-    /// 登录成功后置钩子:写成功登录日志(§4/§14)。也是用户挂自定义动作(发登录事件、更新最后登录时间等)的扩展点——
-    /// 覆写时记得 <c>base.OnLoginSucceededAsync(...)</c> 保留日志,或自行接管。
+    /// 登录成功后置钩子:写成功登录日志(§4/§14)、刷新 <see cref="SysUser.LastSuccessfulLoginAt"/>(Level3 闲置治理锚点)。
+    /// 也是用户挂自定义动作(发登录事件等)的扩展点——覆写时记得 <c>base.OnLoginSucceededAsync(...)</c> 保留日志,或自行接管。
     /// </summary>
     protected virtual async Task OnLoginSucceededAsync(SysUser user, TokenPair pair)
     {
         await loginLock.ResetAsync(user.Account);   // 成功即清零失败计数
+        // 闲置账号锚点:每次成功登录刷新(本地时钟,与审计/改密时间同口径)
+        user.LastSuccessfulLoginAt = Now;
+        await users.UpdateAsync(user);
         await logService.RecordLoginAsync(new LoginLogEntry { Account = user.Account, Success = true, ResultCode = 0, UserId = user.Id });
     }
 
     /// <summary>
     /// 登录失败后置钩子:写失败登录日志(§14)。记<b>原始输入账号</b>(哪怕账号不存在)+ 具体失败码,
     /// 供暴力破解/账号探测排查;IP/UA 由日志服务从当前请求补全。绝不记密码。
-    /// <para>仅"密码错误"计入失败锁定——验证码错/已锁定/停用等不累加,避免把锁定窗口无限延长或误伤。</para>
+    /// <para>仅"密码错误"计入失败锁定——验证码错/已锁定/停用/TOTP 信令等不累加,避免把锁定窗口无限延长或误伤。</para>
     /// </summary>
     protected virtual async Task OnLoginFailedAsync(LoginInput input, ErrorCode code)
     {
         if (code == ErrorCode.PasswordWrong)
             await loginLock.RecordFailureAsync(input.Account);
+        // TOTP/短信二次验证信令不是失败,但仍记审计轨迹;不计锁定
         await logService.RecordLoginAsync(new LoginLogEntry { Account = input.Account, Success = false, ResultCode = (int)code });
     }
 

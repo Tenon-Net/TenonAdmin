@@ -93,7 +93,7 @@ export const useAppStore = defineStore('app', {
   },
   persist: {
     // 迁移:localStorage 残留的旧模式(mixed-nav / full-content / header-mixed)不在新集合 → 回落 vertical。
-    // 主色同理:残留的旧候选(如 #646CFF)已不在 ACCENTS → 回落默认。
+    // 主色同理:残留的旧候选(如 #0082CE corporate 蓝)已不在 ACCENTS → 回落默认。
     afterHydrate: ({ store }) => {
       if (!LAYOUT_MODES.includes(store.layoutMode)) store.layoutMode = 'vertical'
       if (!(ACCENTS as readonly string[]).includes(store.accent)) store.accent = ACCENTS[0]

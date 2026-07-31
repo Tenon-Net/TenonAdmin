@@ -182,6 +182,7 @@ public class DataScopeTests
     {
         public bool IsAuthenticated => true;
         public long? UserId => userId;
+        public string? SessionId => null;
         public bool IsSuperAdmin => false;
         public long? OrgId => orgId;
         public string? IpAddress => null;

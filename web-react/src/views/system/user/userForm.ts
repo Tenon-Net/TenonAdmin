@@ -17,6 +17,9 @@ export interface UserForm {
   email: string
   gender: string | null
   enabled: boolean
+  forceTotp: boolean
+  /** 只读回显;不写入 Update 入参 */
+  totpEnabled: boolean
   roleIds: number[]
   orgId: number | null
   positionId: number | null
@@ -27,7 +30,7 @@ export interface UserForm {
 
 export const blankForm = (): UserForm => ({
   account: '', password: '', name: '', nickname: '', phone: '', email: '',
-  gender: null, enabled: true, roleIds: [],
+  gender: null, enabled: true, forceTotp: false, totpEnabled: false, roleIds: [],
   orgId: null, positionId: null, directorId: null, avatar: null,
 })
 
@@ -42,6 +45,8 @@ export function detailToForm(d: UserDetail): UserForm {
     email: d.email ?? '',
     gender: d.gender ?? null,
     enabled: d.enabled,
+    forceTotp: !!d.forceTotp,
+    totpEnabled: !!d.totpEnabled,
     roleIds: d.roleIds ?? [],
     orgId: d.orgId ?? null,
     positionId: d.positionId ?? null,
@@ -70,6 +75,7 @@ export function toAddInput(f: UserForm): AddUserInput {
     positionId: f.positionId,
     directorId: f.directorId,
     enabled: f.enabled,
+    forceTotp: f.forceTotp,
     roleIds: f.roleIds,
   }
 }
@@ -87,6 +93,7 @@ export function toUpdateInput(f: UserForm): UpdateUserInput {
     positionId: f.positionId,
     directorId: f.directorId,
     enabled: f.enabled,
+    forceTotp: f.forceTotp,
     roleIds: f.roleIds,
   }
 }

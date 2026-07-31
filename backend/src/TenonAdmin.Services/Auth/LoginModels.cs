@@ -33,6 +33,16 @@ public record SmsChallengeLoginInput
     public string Code { get; init; } = "";
 }
 
+/// <summary>TOTP 二次验证完成登录入参(密码登录抛 40018 信令后,凭挑战 Id + 动态口令换令牌)</summary>
+public record TotpChallengeLoginInput
+{
+    /// <summary>挑战票据 Id(取自 40018 信令的 args.challengeId)</summary>
+    public string ChallengeId { get; init; } = "";
+
+    /// <summary>6 位 TOTP 动态口令</summary>
+    public string Code { get; init; } = "";
+}
+
 /// <summary>短信二次验证重发入参(持有活挑战即已过密码校验,无需图形验证码)</summary>
 public record SmsResendInput
 {
@@ -108,4 +118,16 @@ public record LoginOutput
 
     /// <summary>是否需强制修改密码(管理员建号/重置后首登为 true);前端据此强制跳转改密页,后端不拦登录。</summary>
     public bool MustChangePassword { get; init; }
+
+    /// <summary>
+    /// 会话交付模式。<c>body</c>=刷新令牌在 JSON 体(非 Level3 默认);
+    /// <c>cookie</c>=刷新令牌在 HttpOnly Cookie(Level3)。null 表示未声明(旧客户端可忽略)。
+    /// </summary>
+    public string? SessionMode { get; init; }
+
+    /// <summary>
+    /// 是否要求双提交 CSRF(<c>X-Tenon-CSRF</c> + <c>tenon_csrf</c> Cookie)。
+    /// Level3 cookie 会话为 true;非 Level3 为 null/false。旧客户端可忽略。
+    /// </summary>
+    public bool? CsrfRequired { get; init; }
 }

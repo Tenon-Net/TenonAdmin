@@ -83,4 +83,27 @@ public class SysUser : BaseEntity
     /// </summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "最后改密时间")]
     public DateTime? LastPasswordChangeTime { get; set; }
+
+    /// <summary>
+    /// 最近一次成功登录时间(Level3 闲置账号治理锚点)。
+    /// 首次启用 Level3 时对存量启用用户以启用时刻初始化,避免历史缺失导致批量停用。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "最近成功登录时间")]
+    public DateTime? LastSuccessfulLoginAt { get; set; }
+
+    /// <summary>管理员显式强制该用户启用 TOTP(只能加严,不能覆盖超管/高敏自动强制)</summary>
+    [SugarColumn(ColumnDescription = "是否强制 TOTP")]
+    public bool ForceTotp { get; set; }
+
+    /// <summary>是否已完成 TOTP 绑定(有可用 seed)</summary>
+    [SugarColumn(ColumnDescription = "是否已启用 TOTP")]
+    public bool TotpEnabled { get; set; }
+
+    /// <summary>TOTP 种子信封(ISecretProtector 加密;明文不落库)</summary>
+    [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "TOTP 种子信封")]
+    public string? TotpSeedProtected { get; set; }
+
+    /// <summary>TOTP 绑定完成时刻</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "TOTP 绑定时刻")]
+    public DateTime? TotpBoundAt { get; set; }
 }

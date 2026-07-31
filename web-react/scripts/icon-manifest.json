@@ -22,5 +22,9 @@
   "ph:files-duotone",
   "ph:trash-duotone",
   "ph:pulse-duotone",
-  "ph:database-duotone"
+  "ph:database-duotone",
+  "ph:timer-duotone",
+  "ph:clock-countdown-duotone",
+  "ph:list-checks-duotone",
+  "ph:gauge-duotone"
 ]

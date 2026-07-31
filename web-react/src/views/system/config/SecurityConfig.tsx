@@ -9,8 +9,10 @@ import { configApi } from '@/api'
 import { translateError } from '@/utils/error'
 import {
   CAPTCHA_KEY, PWD_BOOL_FIELDS, RATELIMIT_KEY, SMS_LOGIN_KEY, SMS_MFA_KEY,
+  TOTP_KEY, TOTP_SUPER_KEY,
   parseSecurity, serializeSecurity, type SecurityState,
 } from './configForm'
+import HighSensConfig from './HighSensConfig'
 
 const CAPTCHA_TYPES = ['char', 'path', 'math']
 
@@ -99,6 +101,23 @@ export default function SecurityConfig() {
           </Col>
         </Row>
 
+        <Divider titlePlacement="start">{t('config.security.totp.title')}</Divider>
+        <Row gutter={32}>
+          {boolItem(TOTP_KEY)}
+          <Col xs={24} sm={12}>
+            <Form.Item label={label(TOTP_SUPER_KEY)}>
+              <Switch
+                checked={!!s.bools[TOTP_SUPER_KEY]}
+                disabled={!s.bools[TOTP_KEY]}
+                onChange={setBool(TOTP_SUPER_KEY)}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+        <p style={{ margin: '-6px 0 12px', fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+          {t('config.security.totp.hint')}
+        </p>
+
         <Divider titlePlacement="start">{t('config.security.sms.title')}</Divider>
         <Row gutter={32}>
           {boolItem(SMS_MFA_KEY)}
@@ -116,6 +135,9 @@ export default function SecurityConfig() {
           {numItem('sys.security.rateLimit.permitPerWindow', 0)}
           {numItem('sys.security.rateLimit.authPermitPerWindow', 0)}
         </Row>
+
+        <Divider titlePlacement="start">{t('config.security.highSens.title')}</Divider>
+        <HighSensConfig />
 
         <Can code="PUT:/api/v1/sys/config/batch">
           <Button

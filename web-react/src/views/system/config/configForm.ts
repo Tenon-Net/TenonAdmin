@@ -82,12 +82,22 @@ export const PWD_BOOL_FIELDS = [
 
 export const CAPTCHA_KEY = 'sys.security.captcha.enabled'
 export const CAPTCHA_TYPE_KEY = 'sys.security.captcha.type' // 字符串枚举:char/path/math
+export const TOTP_KEY = 'sys.security.totp.enabled'
+export const TOTP_SUPER_KEY = 'sys.security.totp.requireForSuperAdmin'
 export const SMS_MFA_KEY = 'sys.security.mfa.enabled' // 二次验证
 export const SMS_LOGIN_KEY = 'sys.security.smsLogin.enabled' // 免密登录
 export const RATELIMIT_KEY = 'sys.security.rateLimit.enabled'
 
-/** 全部布尔键(密码 4 + 验证码 + mfa + smsLogin + 限流);load/save 统一按 'true' 串处理。 */
-export const ALL_BOOL_KEYS = [...PWD_BOOL_FIELDS, CAPTCHA_KEY, SMS_MFA_KEY, SMS_LOGIN_KEY, RATELIMIT_KEY] as const
+/** 全部布尔键(密码 4 + 验证码 + TOTP 2 + mfa + smsLogin + 限流);load/save 统一按 'true' 串处理。 */
+export const ALL_BOOL_KEYS = [
+  ...PWD_BOOL_FIELDS,
+  CAPTCHA_KEY,
+  TOTP_KEY,
+  TOTP_SUPER_KEY,
+  SMS_MFA_KEY,
+  SMS_LOGIN_KEY,
+  RATELIMIT_KEY,
+] as const
 
 export interface SecurityState {
   nums: Record<string, number>

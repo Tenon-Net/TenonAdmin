@@ -47,7 +47,10 @@ public class CaptchaService(
     public virtual async Task ValidateAsync(string? captchaId, string? code)
     {
         // 是否强制校验先读 SysConfig(改值即时生效),缺失/解析失败回退 Options 默认。
+        // 历史 Level3 总档强制验证码;产品路径只认 Captcha:Enabled / SysConfig
         var enabled = bool.TryParse(await config.GetValueByKeyAsync(KEY_ENABLED), out var e) ? e : security.Captcha.Enabled;
+        if (security.IsLegacyLevel3Profile)
+            enabled = true;
         if (!enabled) return;   // 未启用:直通(登录不校验验证码)
 
         AdminException.ThrowIf(string.IsNullOrEmpty(captchaId) || string.IsNullOrEmpty(code), ErrorCode.CaptchaExpired);

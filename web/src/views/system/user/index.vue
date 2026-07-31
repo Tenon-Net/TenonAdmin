@@ -3,8 +3,8 @@
 // 超管行(isSuperAdmin)删除/停用置灰防自锁;启停走专用 setEnabled(非全量 update)。
 // 导入导出(G6):ImportWizard 四步向导 + ExportColumnsModal 选列导出(带当前筛选)。
 import { computed, h, onMounted, ref, watch } from 'vue'
-import { NButton, NCard, NTree, NSpace, NTag, NAvatar, NPopconfirm, useMessage } from 'naive-ui'
 import { useRoute } from 'vue-router'
+import { NButton, NCard, NTree, NSpace, NTag, NAvatar, NPopconfirm, NDropdown, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
@@ -16,7 +16,7 @@ import UserFormModal from './components/UserFormModal.vue'
 import ResetPasswordModal from './components/ResetPasswordModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useBatchDelete } from '@/composables/useBatchDelete'
-import { userApi, positionApi, roleApi, orgApi } from '@/api'
+import { mfaApi, userApi, positionApi, roleApi, orgApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import { triggerBlobDownload } from '@/utils/download'
@@ -25,7 +25,7 @@ import type { ExportColumnDef, SysOrg, UserItem } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
-const { run } = useConfirm()
+const { run, confirm } = useConfirm()
 const authStore = useAuthStore()
 const tableRef = ref<ProTableInst<UserItem>>()
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
@@ -37,6 +37,22 @@ const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
 // 新增/编辑弹窗 + 重置密码弹窗(表单/校验/保存均在各自组件内,父页只传下拉选项 + 收 saved/passwordGenerated)。
 const userFormRef = ref<InstanceType<typeof UserFormModal> | null>(null)
 const resetModalRef = ref<InstanceType<typeof ResetPasswordModal> | null>(null)
+
+const clearMfaLoading = ref(false)
+
+async function clearUserMfa(user: UserItem) {
+  clearMfaLoading.value = true
+  try {
+    const ok = await confirm({
+      content: t('user.clearMfaConfirm', { name: user.name }),
+      action: () => mfaApi.clear({ userId: user.id }),
+      successMsg: t('user.mfaCleared'),
+    })
+    if (ok) tableRef.value?.refresh()
+  } finally {
+    clearMfaLoading.value = false
+  }
+}
 
 // 职位/角色/主管下拉:各拉一页足量。ponytail: 200 覆盖绝大多数系统;真超再上分页搜索。
 // roleOptions 一份两用:既喂编辑弹窗,也当列表页「角色」搜索项的选项源(ProTable 支持 Ref 选项源)。
@@ -214,19 +230,26 @@ const columns: ProTableColumn<UserItem>[] = [
       r.isSuperAdmin ? h(NTag, { type: 'warning', size: 'small', bordered: false }, () => t('user.superAdmin')) : '—',
   },
   { key: 'createTime', title: () => t('user.createTime'), format: 'datetime', sorter: true },
+  // 操作:编辑/删除外露;重置密码、解绑验证器进「更多」(放操作列末尾)。
+  // width 须够「编辑+删除+更多」单行;wrap:false 禁止 NSpace 默认换行(否则「更多」掉到删除下一行)。
   {
     key: 'op',
     title: () => t('common.operation'),
-    width: 210,
+    width: 200,
     fixed: 'right', // 钉右:横向滚动时操作列始终可见
     hideInSetting: true,
-    render: (r) =>
-      h(NSpace, { size: 4, wrapItem: false }, () => [
+    render: (r) => {
+      const moreOptions = [
+        authStore.hasPerm('PUT:/api/v1/sys/user/{id}/password')
+          ? { key: 'resetPassword', label: t('user.resetPassword') }
+          : null,
+        r.totpEnabled && authStore.hasPerm('POST:/api/v1/sys/mfa/clear')
+          ? { key: 'clearMfa', label: t('user.clearMfa'), disabled: clearMfaLoading.value }
+          : null,
+      ].filter(Boolean) as { key: string; label: string; disabled?: boolean }[]
+      return h(NSpace, { size: 4, wrap: false, wrapItem: false }, () => [
         authStore.hasPerm('PUT:/api/v1/sys/user/{id}')
           ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => userFormRef.value?.openEdit(r) }, () => t('common.edit'))
-          : null,
-        authStore.hasPerm('PUT:/api/v1/sys/user/{id}/password')
-          ? h(NButton, { size: 'small', quaternary: true, onClick: () => resetModalRef.value?.openReset(r) }, () => t('user.resetPassword'))
           : null,
         r.isSuperAdmin || !authStore.hasPerm('DELETE:/api/v1/sys/user/{id}')
           ? null
@@ -243,7 +266,22 @@ const columns: ProTableColumn<UserItem>[] = [
                 default: () => t('user.deleteConfirm', { name: r.name }),
               },
             ),
-      ]),
+        moreOptions.length
+          ? h(
+              NDropdown,
+              {
+                trigger: 'click',
+                options: moreOptions,
+                onSelect: (key: string) => {
+                  if (key === 'resetPassword') resetModalRef.value?.openReset(r)
+                  else if (key === 'clearMfa') void clearUserMfa(r)
+                },
+              },
+              () => h(NButton, { size: 'small', quaternary: true, loading: clearMfaLoading.value }, () => t('common.more')),
+            )
+          : null,
+      ])
+    },
   },
 ]
 </script>

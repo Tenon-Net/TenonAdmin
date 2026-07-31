@@ -130,6 +130,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** TOTP 二次验证完成登录:凭挑战 Id(登录 40018 信令)+ 动态口令换令牌。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TotpChallengeLoginInput"];
+                    "text/json": components["schemas"]["TotpChallengeLoginInput"];
+                    "application/*+json": components["schemas"]["TotpChallengeLoginInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfLoginOutput"];
+                        "application/json": components["schemas"]["ResultOfLoginOutput"];
+                        "text/json": components["schemas"]["ResultOfLoginOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login/sms/resend": {
         parameters: {
             query?: never;
@@ -271,7 +315,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 刷新令牌换发新令牌对(轮换 + 复用检测,§15)。匿名:访问令牌可能已过期,凭刷新令牌换发。 */
+        /**
+         * 刷新令牌换发新令牌对(轮换 + 复用检测,§15)。匿名:访问令牌可能已过期,凭刷新令牌换发。
+         *     Level3:body 可空,从 `tenon_rt` Cookie 读取;成功后轮换 Cookie/CSRF。
+         */
         post: {
             parameters: {
                 query?: never;
@@ -279,11 +326,11 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
-                    "application/json": components["schemas"]["RefreshInput"];
-                    "text/json": components["schemas"]["RefreshInput"];
-                    "application/*+json": components["schemas"]["RefreshInput"];
+                    "application/json": null | components["schemas"]["RefreshInput"];
+                    "text/json": null | components["schemas"]["RefreshInput"];
+                    "application/*+json": null | components["schemas"]["RefreshInput"];
                 };
             };
             responses: {
@@ -315,7 +362,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 登出:吊销当前会话(sid 取自令牌)。仅需认证,不挂具体权限码。 */
+        /** 登出:吊销当前会话(sid 取自令牌)。仅需认证,不挂具体权限码。Level3 同时清 Cookie。 */
         post: {
             parameters: {
                 query?: never;
@@ -1478,7 +1525,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 一次性票据换令牌(登录回调后前端调用;票据无效/过期/已用抛 40014)。 */
+        /** 一次性票据换令牌(登录回调后前端调用;票据无效/过期/已用抛 40014)。Level3 同步写 Cookie/CSRF。 */
         post: {
             parameters: {
                 query?: never;
@@ -2367,6 +2414,364 @@ export interface paths {
                         "application/json": components["schemas"]["ResultOfboolean"];
                         "text/json": components["schemas"]["ResultOfboolean"];
                     };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/bind/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 自助绑定启动(公开:账号 + 当前密码)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TotpBindStartInput"];
+                    "text/json": components["schemas"]["TotpBindStartInput"];
+                    "application/*+json": components["schemas"]["TotpBindStartInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["TotpBindStartOutput"];
+                        "application/json": components["schemas"]["TotpBindStartOutput"];
+                        "text/json": components["schemas"]["TotpBindStartOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/bind/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 自助绑定完成(公开:挑战 + 首个 TOTP 码 → 恢复码)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TotpBindCompleteInput"];
+                    "text/json": components["schemas"]["TotpBindCompleteInput"];
+                    "application/*+json": components["schemas"]["TotpBindCompleteInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["TotpBindCompleteOutput"];
+                        "application/json": components["schemas"]["TotpBindCompleteOutput"];
+                        "text/json": components["schemas"]["TotpBindCompleteOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 使用恢复码(公开:账密 + 恢复码 → 清 MFA 并吊销会话)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TotpRecoveryInput"];
+                    "text/json": components["schemas"]["TotpRecoveryInput"];
+                    "application/*+json": components["schemas"]["TotpRecoveryInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/challenge/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** TOTP 二次验证挑战校验。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TotpChallengeVerifyInput"];
+                    "text/json": components["schemas"]["TotpChallengeVerifyInput"];
+                    "application/*+json": components["schemas"]["TotpChallengeVerifyInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["MfaChallengeVerifyOutput"];
+                        "application/json": components["schemas"]["MfaChallengeVerifyOutput"];
+                        "text/json": components["schemas"]["MfaChallengeVerifyOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/reauth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 短时再次认证:验 TOTP 或密码后写入 reauth 授予。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReauthInput"];
+                    "text/json": components["schemas"]["ReauthInput"];
+                    "application/*+json": components["schemas"]["ReauthInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": boolean;
+                        "application/json": boolean;
+                        "text/json": boolean;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/mfa/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 管理员清除目标用户 MFA(目标之后自助重绑)。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TotpClearMfaInput"];
+                    "text/json": components["schemas"]["TotpClearMfaInput"];
+                    "application/*+json": components["schemas"]["TotpClearMfaInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/mfa/high-sensitivity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 列出内核默认高敏权限 + 自定义追加项。 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["HighSensitivityPermissionList"];
+                        "application/json": components["schemas"]["HighSensitivityPermissionList"];
+                        "text/json": components["schemas"]["HighSensitivityPermissionList"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** 追加自定义高敏权限码。 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["HighSensitivityPermissionInput"];
+                    "text/json": components["schemas"]["HighSensitivityPermissionInput"];
+                    "application/*+json": components["schemas"]["HighSensitivityPermissionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["HighSensitivityPermissionItem"];
+                        "application/json": components["schemas"]["HighSensitivityPermissionItem"];
+                        "text/json": components["schemas"]["HighSensitivityPermissionItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/mfa/high-sensitivity/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除自定义高敏权限码。 */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -3808,6 +4213,82 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/security/baseline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 可选安全配置态势报告(机器可读,历史 capability 字段仍兼容)。 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
+                        "application/json": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
+                        "text/json": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sys/level3/precheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 与 Task&lt;Result&lt;SecurityBaselinePrecheckResult&gt;&gt; SecurityController.Baseline(CancellationToken cancellationToken) 同义别名(历史路径兼容;不作为产品主入口)。 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
+                        "application/json": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
+                        "text/json": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5714,6 +6195,8 @@ export interface components {
             /** Format: int64 */
             directorId?: null | number | string;
             enabled?: boolean;
+            /** @description 建号即显式强制 TOTP(用户须完成绑定后才能登录完成态)。 */
+            forceTotp?: boolean;
             /** @description 初始分配的角色 Id 集合 */
             roleIds?: (number | string)[];
         };
@@ -5996,6 +6479,25 @@ export interface components {
              */
             viewUrl?: null | string;
         };
+        /** @description 追加高敏权限入参。 */
+        HighSensitivityPermissionInput: {
+            permissionCode?: string;
+            remark?: null | string;
+        };
+        /** @description 自定义高敏项展示。 */
+        HighSensitivityPermissionItem: {
+            /** Format: int64 */
+            id?: number | string;
+            permissionCode?: string;
+            remark?: null | string;
+        };
+        /** @description 高敏列表出参。 */
+        HighSensitivityPermissionList: {
+            /** @description 内核默认集(不可删) */
+            defaults?: string[];
+            /** @description 消费者追加项 */
+            customs?: components["schemas"]["HighSensitivityPermissionItem"][];
+        };
         /** Format: binary */
         IFormFile: string;
         /** @description 导入列声明。 */
@@ -6269,6 +6771,16 @@ export interface components {
             name: string;
             /** @description 是否需强制修改密码(管理员建号/重置后首登为 true);前端据此强制跳转改密页,后端不拦登录。 */
             mustChangePassword?: boolean;
+            /**
+             * @description 会话交付模式。`body`=刷新令牌在 JSON 体(非 Level3 默认);
+             *     `cookie`=刷新令牌在 HttpOnly Cookie(Level3)。null 表示未声明(旧客户端可忽略)。
+             */
+            sessionMode?: null | string;
+            /**
+             * @description 是否要求双提交 CSRF(`X-Tenon-CSRF` + `tenon_csrf` Cookie)。
+             *     Level3 cookie 会话为 true;非 Level3 为 null/false。旧客户端可忽略。
+             */
+            csrfRequired?: null | boolean;
         };
         /**
          * @description 菜单新增/编辑入参。long? MenuInput.ModuleId<b>仅顶级目录(ParentId==0)有效</b>,
@@ -6334,6 +6846,11 @@ export interface components {
         };
         /** @description 菜单节点类型(设计 §16 目录/页面/按钮三级)。用枚举而非魔法数;存库为 int。 */
         MenuType: number;
+        /** @description 挑战校验出参。 */
+        MfaChallengeVerifyOutput: {
+            /** Format: int64 */
+            userId?: number | string;
+        };
         /** @description 模块新增/编辑入参 */
         ModuleInput: {
             /** @description 模块编码(唯一) */
@@ -6970,6 +7487,13 @@ export interface components {
             sort?: number | string;
             /** @description 是否启用 */
             enabled?: boolean;
+        };
+        /** @description 再次认证入参。 */
+        ReauthInput: {
+            /** @description 方法:`totp` | `password` */
+            method?: string;
+            totpCode?: null | string;
+            password?: null | string;
         };
         /**
          * @description 接收范围:全体 / 指定角色 / 指定用户。<b>All = 0 是刻意的</b>——CodeFirst 给旧行补的默认值即 0,
@@ -7969,6 +8493,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfSecurityBaselinePrecheckResult: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["SecurityBaselinePrecheckResult"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfServerInfoOutput: {
             /**
              * Format: int32
@@ -8251,6 +8796,65 @@ export interface components {
             enabled?: boolean;
             /** @description 备注 */
             remark?: null | string;
+        };
+        /** @description 单条预检项(机器可读;不含密钥/连接串明文)。 */
+        SecurityBaselinePrecheckItem: {
+            /** @description 稳定检查项 Id(如 `redis_tls`),CI/日志可定位 */
+            id: string;
+            /** @description 人类可读短名 */
+            name: string;
+            /** @description SecurityBaselineCheckStatus 常量:pass|fail|warn */
+            status: string;
+            /** @description 现状说明(脱敏) */
+            message: string;
+            /** @description 修复建议 */
+            remediation: string;
+            /**
+             * @description 是否为关键诊断项(ADR 0006 后不再 fail-closed 阻断启动;仍用于报告 CriticalFailureIds)。
+             * @default false
+             */
+            critical: boolean;
+        };
+        /**
+         * @description 可选安全态势预检结果。供诊断 API / CI 消费;ADR 0006 后不作为启动 fail-closed 合同。
+         *     内核不宣称「已通过等保三级」;bool SecurityBaselinePrecheckResult.OverallCompliantForPhase1 仅表示历史一期检查项是否无 fail。
+         */
+        SecurityBaselinePrecheckResult: {
+            /** @description 能力版本标识(JSON 字段兼容历史 `level3-phase1`) */
+            capabilityVersion?: string;
+            /** @description 当前安全档(None|Level3;Level3 为废弃总档) */
+            profile?: string;
+            /** @description 宿主环境名(Development|Production|…) */
+            environment?: string;
+            /** @description 检查项列表 */
+            checks?: components["schemas"]["SecurityBaselinePrecheckItem"][];
+            /** @description 历史路线图未实现项(明示边界;不构成交付承诺) */
+            unimplementedMandates?: components["schemas"]["SecurityBaselineUnimplementedMandate"][];
+            /**
+             * @description 历史一期检查是否无 fail(且 Profile 曾为 Level3 时语义更严)。
+             *     即使为 true 也不等于完整三级基线(见 IReadOnlyList&lt;SecurityBaselineUnimplementedMandate&gt; SecurityBaselinePrecheckResult.UnimplementedMandates)。
+             */
+            overallCompliantForPhase1?: boolean;
+            /** @description 是否存在关键项失败(诊断用;不再阻断启动) */
+            hasCriticalFailures?: boolean;
+            /** @description 关键失败项 Id 列表(稳定、可定位) */
+            criticalFailureIds?: null | string[];
+            /** @description 是否存在任意 fail 项(含非关键) */
+            hasAnyFailure?: boolean;
+        };
+        /** @description 历史路线图中未实现的能力条目(明示能力边界;ADR 0006 后不再承诺按期交付)。 */
+        SecurityBaselineUnimplementedMandate: {
+            /** @description 稳定标识 */
+            id: string;
+            /** @description 短名 */
+            name: string;
+            /**
+             * Format: int32
+             * @description 历史期次标记(2|3;仅文档语义)
+             */
+            phase: number | string;
+            /** @description 缺口说明 */
+            description: string;
         };
         /**
          * @description 服务器监控快照(设计 §4 运维)。只报<b>进程与主机基础面</b>——系统级全量指标(APM/链路/告警)
@@ -8942,6 +9546,64 @@ export interface components {
             /** Format: int64 */
             id?: number | string;
         };
+        /** @description 绑定完成入参:挑战 + 当前 Authenticator 动态口令。 */
+        TotpBindCompleteInput: {
+            /** @description string TotpBindStartOutput.BindChallengeId */
+            bindChallengeId?: string;
+            /** @description 6 位 TOTP 动态口令 */
+            totpCode?: string;
+        };
+        /** @description 绑定完成出参:恢复码仅展示一次。 */
+        TotpBindCompleteOutput: {
+            /** @description 一次性恢复码明文(服务端只存哈希) */
+            recoveryCodes?: string[];
+        };
+        /** @description 自助绑定启动入参:账号 + 当前密码 → otpauth URI。 */
+        TotpBindStartInput: {
+            /** @description 登录账号(自助绑定目标) */
+            account?: string;
+            /** @description 当前密码(必填;缺失/错误一律拒绝写 seed) */
+            currentPassword?: string;
+            /** @description 历史字段:曾表示邀请/InitGrant token。<b>ADR 0006 后忽略</b>;保留以免旧客户端反序列化失败。 */
+            token?: null | string;
+        };
+        /** @description 绑定启动出参:临时挑战 + otpauth URI(种子暂存缓存,完成前不落库)。 */
+        TotpBindStartOutput: {
+            /** @description 绑定挑战 Id(完成绑定时回传) */
+            bindChallengeId?: string;
+            /** @description otpauth URI,供扫码 */
+            otpauthUri?: string;
+            /** @description Base32 种子明文(仅此响应;服务端不落库明文) */
+            seed?: string;
+            /**
+             * Format: int32
+             * @description 挑战过期秒数
+             */
+            expiresSeconds?: number | string;
+        };
+        /** @description TOTP 二次验证完成登录入参(密码登录抛 40018 信令后,凭挑战 Id + 动态口令换令牌) */
+        TotpChallengeLoginInput: {
+            /** @description 挑战票据 Id(取自 40018 信令的 args.challengeId) */
+            challengeId?: string;
+            /** @description 6 位 TOTP 动态口令 */
+            code?: string;
+        };
+        /** @description TOTP 挑战校验入参。 */
+        TotpChallengeVerifyInput: {
+            challengeId?: string;
+            code?: string;
+        };
+        /** @description 管理员清除 MFA 入参。 */
+        TotpClearMfaInput: {
+            /** Format: int64 */
+            userId?: number | string;
+        };
+        /** @description 使用恢复码入参。 */
+        TotpRecoveryInput: {
+            account?: string;
+            currentPassword?: string;
+            recoveryCode?: string;
+        };
         /**
          * @description 改个人资料入参:只允许改自己能改的字段(姓名/昵称/性别/手机/邮箱/头像);机构/职位/角色由管理员维护,不在此。
          *     全量替换语义(与管理端 UpdateUserInput 一致):前端须整表单提交,缺字段即置空。
@@ -8955,7 +9617,7 @@ export interface components {
             gender?: null | string;
             avatar?: null | string;
         };
-        /** @description 更新用户入参。不含 Account(不可改)、Password(走重置)、IsSuperAdmin(防提权)。 */
+        /** @description 更新用户入参。不含 Account(不可改)、Password(走重置)、IsSuperAdmin(防提权)、TotpEnabled(只读)。 */
         UpdateUserInput: {
             name?: string;
             nickname?: null | string;
@@ -8970,6 +9632,8 @@ export interface components {
             /** Format: int64 */
             directorId?: null | number | string;
             enabled?: boolean;
+            /** @description 管理员显式强制 TOTP(只能加严;关断不解除超管/高敏自动强制)。 */
+            forceTotp?: boolean;
             roleIds?: (number | string)[];
         };
         /** @description 用户详情:列表字段 + 当前所属角色 Id 集合(编辑表单回显用) */
@@ -9000,6 +9664,10 @@ export interface components {
             directorName?: null | string;
             enabled: boolean;
             isSuperAdmin: boolean;
+            /** @description 管理员显式强制 TOTP(只能加严;超管/高敏持有者仍由策略自动强制)。 */
+            forceTotp?: boolean;
+            /** @description 是否已绑定 TOTP(只读状态;绑定走 MFA 流程,不可经本字段写入)。 */
+            totpEnabled?: boolean;
             /** Format: date-time */
             createTime?: string;
         };
@@ -9030,6 +9698,10 @@ export interface components {
             directorName?: null | string;
             enabled: boolean;
             isSuperAdmin: boolean;
+            /** @description 管理员显式强制 TOTP(只能加严;超管/高敏持有者仍由策略自动强制)。 */
+            forceTotp?: boolean;
+            /** @description 是否已绑定 TOTP(只读状态;绑定走 MFA 流程,不可经本字段写入)。 */
+            totpEnabled?: boolean;
             /** Format: date-time */
             createTime?: string;
         };

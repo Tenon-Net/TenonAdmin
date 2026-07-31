@@ -7,6 +7,18 @@ public record SessionCacheInfo
 {
     public required long UserId { get; init; }
     public required DateTime ExpiresAt { get; init; }
+
+    /// <summary>绝对过期(Level3);非 Level3 可与 ExpiresAt 对齐</summary>
+    public DateTime AbsoluteExpiresAt { get; init; }
+
+    /// <summary>最近活动(UTC);闲置判定用</summary>
+    public DateTime? LastActivityAt { get; init; }
+
+    /// <summary>闲置超时分钟;0 = 不检闲置(非 Level3)</summary>
+    public int IdleMinutes { get; init; }
+
+    /// <summary>是否按 MFA 会话策略(并发/闲置)</summary>
+    public bool IsMfa { get; init; }
 }
 
 /// <summary>刷新换发的结果:新令牌对 + 用户(供上层组装登录出参)</summary>

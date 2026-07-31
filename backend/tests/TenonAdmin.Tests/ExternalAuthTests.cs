@@ -1,6 +1,9 @@
 using System.Net;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
 using TenonAdmin.SqlSugar;
@@ -195,5 +198,97 @@ public class ExternalAuthTests
 
         var ex = await Assert.ThrowsAsync<AdminException>(() => svc.BindAsync(b.Id, identity));
         Assert.Equal(ErrorCode.OAuthAlreadyBound, ex.Code);        // 该外部身份已归他人
+    }
+
+    /// <summary>
+    /// 测试宿主:策略层 IsLevel3=true,但跳过启动 Redis 预检闸门(与 MfaEnrollmentTests 同款)。
+    /// </summary>
+    private static AdminAppFactory Level3MfaFactory(IExternalAuthProvider provider) => new()
+    {
+        Settings = new Dictionary<string, string?>
+        {
+            ["TenonAdmin:Security:DataProtection:Key"] =
+                Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+            ["TenonAdmin:Security:DataProtection:KeyVersion"] = "1",
+        },
+        Overrides = s =>
+        {
+            s.AddSingleton(provider);
+            s.Replace(ServiceDescriptor.Singleton<ISecurityProfileAccessor, Level3ProfileStub>());
+            foreach (var d in s.ToList())
+            {
+                if (d.ServiceType != typeof(IHostedService)) continue;
+                var name = d.ImplementationType?.Name
+                           ?? d.ImplementationInstance?.GetType().Name
+                           ?? "";
+                if (name.Contains("SecurityStartupDiagnostic", StringComparison.Ordinal))
+                    s.Remove(d);
+            }
+        },
+    };
+
+    /// <summary>Level3 强制 MFA:外部登录已绑用户须 TOTP;未绑定 → TotpNotBound,不可直接出票。</summary>
+    [Fact]
+    public async Task Level3_external_login_unbound_force_totp_is_rejected()
+    {
+        var identity = new ExternalIdentity("sso-mfa", "sub-force");
+        using var f = Level3MfaFactory(new FakeExternalAuthProvider(identity));
+        using var scope = f.Services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var users = sp.GetRequiredService<IRepository<SysUser>>();
+        var user = await InsertUserAsync(sp, "sso-force-user");
+        user.ForceTotp = true;
+        user.TotpEnabled = false;
+        await users.UpdateAsync(user);
+        await sp.GetRequiredService<ISysUserExternalService>().BindAsync(user.Id, identity);
+
+        var ex = await Assert.ThrowsAsync<AdminException>(() =>
+            sp.GetRequiredService<IAuthService>().LoginByExternalAsync(Input("sso-mfa")));
+        Assert.Equal(ErrorCode.TotpNotBound, ex.Code);
+    }
+
+    /// <summary>Level3:外部登录已绑且已启用 TOTP → 40018 信令 + challengeId(供回调页完成流)。</summary>
+    [Fact]
+    public async Task Level3_external_login_totp_required_carries_challenge_id()
+    {
+        var identity = new ExternalIdentity("sso-totp", "sub-totp");
+        using var f = Level3MfaFactory(new FakeExternalAuthProvider(identity));
+        using var scope = f.Services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var users = sp.GetRequiredService<IRepository<SysUser>>();
+        var totp = sp.GetRequiredService<ITotpService>();
+        var protector = sp.GetRequiredService<ISecretProtector>();
+
+        var user = await InsertUserAsync(sp, "sso-totp-user");
+        user.ForceTotp = true;
+        user.TotpEnabled = true;
+        var seed = totp.GenerateSeed();
+        user.TotpSeedProtected = protector.Protect(seed);
+        user.TotpBoundAt = DateTime.Now;
+        await users.UpdateAsync(user);
+        await sp.GetRequiredService<ISysUserExternalService>().BindAsync(user.Id, identity);
+
+        var ex = await Assert.ThrowsAsync<AdminException>(() =>
+            sp.GetRequiredService<IAuthService>().LoginByExternalAsync(Input("sso-totp")));
+        Assert.Equal(ErrorCode.TotpRequired, ex.Code);
+        Assert.NotNull(ex.Args);
+        Assert.True(ex.Args!.ContainsKey("challengeId"));
+        Assert.False(string.IsNullOrEmpty(ex.Args["challengeId"]?.ToString()));
+
+        // 凭挑战 + 正确码可完成登录(与密码路径同一完成端点)
+        var login = await sp.GetRequiredService<IAuthService>().LoginByTotpChallengeAsync(new TotpChallengeLoginInput
+        {
+            ChallengeId = ex.Args["challengeId"]!.ToString()!,
+            Code = totp.ComputeCode(seed),
+        });
+        Assert.Equal(user.Id, login.UserId);
+        Assert.False(string.IsNullOrEmpty(login.AccessToken));
+    }
+
+    private sealed class Level3ProfileStub : ISecurityProfileAccessor
+    {
+        public SecurityProfile Profile => SecurityProfile.Level3;
+        public bool IsLevel3 => true;
+        public bool IsProductionWithoutLevel3 => false;
     }
 }

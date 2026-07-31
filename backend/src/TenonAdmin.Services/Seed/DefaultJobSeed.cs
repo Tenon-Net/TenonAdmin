@@ -3,7 +3,7 @@ using TenonAdmin.SqlSugar;
 namespace TenonAdmin.Services;
 
 /// <summary>
-/// 内置任务种子:执行记录清理(狗粮任务,docs/scheduling-ledger.md §7.3)。
+/// 内置任务种子:执行记录清理(docs/scheduling-ledger.md §7.3)。
 /// Id=1 —— sys_job 自有 Id 空间,内核段 [1,1000),SeedIdRangeTests 自动看护。
 /// </summary>
 internal sealed class DefaultJobSeed : ISeedData<SysJob>
