@@ -2422,46 +2422,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sys/mfa/clear": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 管理员清除目标用户 MFA(目标之后自助重绑)。 */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["TotpClearMfaInput"];
-                    "text/json": components["schemas"]["TotpClearMfaInput"];
-                    "application/*+json": components["schemas"]["TotpClearMfaInput"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/mfa/bind/start": {
         parameters: {
             query?: never;
@@ -2515,7 +2475,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 绑定完成(公开:挑战 + 首个 TOTP 码 → 恢复码)。 */
+        /** 自助绑定完成(公开:挑战 + 首个 TOTP 码 → 恢复码)。 */
         post: {
             parameters: {
                 query?: never;
@@ -2599,7 +2559,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** TOTP 二次验证挑战校验(登录下半场接线钩子)。 */
+        /** TOTP 二次验证挑战校验。 */
         post: {
             parameters: {
                 query?: never;
@@ -2643,7 +2603,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 短时再次认证:验 TOTP 或密码后写入 reauth 授予(绑定当前 sid)。 */
+        /** 短时再次认证:验 TOTP 或密码后写入 reauth 授予。 */
         post: {
             parameters: {
                 query?: never;
@@ -2664,7 +2624,11 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "text/plain": boolean;
+                        "application/json": boolean;
+                        "text/json": boolean;
+                    };
                 };
             };
         };
@@ -2674,7 +2638,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sys/mfa/reset": {
+    "/api/v1/sys/mfa/clear": {
         parameters: {
             query?: never;
             header?: never;
@@ -2683,7 +2647,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 超级管理员 MFA 重置(peer 或 emergency;需 reauth)。 */
+        /** 管理员清除目标用户 MFA(目标之后自助重绑)。 */
         post: {
             parameters: {
                 query?: never;
@@ -2693,9 +2657,9 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TotpSuperAdminResetInput"];
-                    "text/json": components["schemas"]["TotpSuperAdminResetInput"];
-                    "application/*+json": components["schemas"]["TotpSuperAdminResetInput"];
+                    "application/json": components["schemas"]["TotpClearMfaInput"];
+                    "text/json": components["schemas"]["TotpClearMfaInput"];
+                    "application/*+json": components["schemas"]["TotpClearMfaInput"];
                 };
             };
             responses: {
@@ -2704,11 +2668,7 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "text/plain": components["schemas"]["TotpResetOutput"];
-                        "application/json": components["schemas"]["TotpResetOutput"];
-                        "text/json": components["schemas"]["TotpResetOutput"];
-                    };
+                    content?: never;
                 };
             };
         };
@@ -2725,7 +2685,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 列出内核默认高敏权限(只读)+ 消费者自定义追加项。 */
+        /** 列出内核默认高敏权限 + 自定义追加项。 */
         get: {
             parameters: {
                 query?: never;
@@ -2749,7 +2709,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** 追加自定义高敏权限码(不可删默认集;Level3 须 reauth)。 */
+        /** 追加自定义高敏权限码。 */
         post: {
             parameters: {
                 query?: never;
@@ -2794,7 +2754,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** 删除自定义高敏权限码(禁止删内核默认)。 */
+        /** 删除自定义高敏权限码。 */
         delete: {
             parameters: {
                 query?: never;
@@ -4265,10 +4225,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Level3 一期安全基线预检报告(机器可读)。
-         *     含 capabilityVersion、checks[]、unimplementedMandates[]、overallCompliantForPhase1。
-         */
+        /** 可选安全配置态势报告(机器可读,历史 capability 字段仍兼容)。 */
         get: {
             parameters: {
                 query?: never;
@@ -4284,9 +4241,9 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "text/plain": components["schemas"]["ResultOfLevel3PrecheckResult"];
-                        "application/json": components["schemas"]["ResultOfLevel3PrecheckResult"];
-                        "text/json": components["schemas"]["ResultOfLevel3PrecheckResult"];
+                        "text/plain": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
+                        "application/json": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
+                        "text/json": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
                     };
                 };
             };
@@ -4306,7 +4263,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 与 Task&lt;Result&lt;Level3PrecheckResult&gt;&gt; SecurityController.Baseline(CancellationToken cancellationToken) 同义别名(`/api/v1/sys/level3/precheck` 风格路径的兼容入口挂在同控制器下)。 */
+        /** 与 Task&lt;Result&lt;SecurityBaselinePrecheckResult&gt;&gt; SecurityController.Baseline(CancellationToken cancellationToken) 同义别名(历史路径兼容;不作为产品主入口)。 */
         get: {
             parameters: {
                 query?: never;
@@ -4322,9 +4279,9 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "text/plain": components["schemas"]["ResultOfLevel3PrecheckResult"];
-                        "application/json": components["schemas"]["ResultOfLevel3PrecheckResult"];
-                        "text/json": components["schemas"]["ResultOfLevel3PrecheckResult"];
+                        "text/plain": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
+                        "application/json": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
+                        "text/json": components["schemas"]["ResultOfSecurityBaselinePrecheckResult"];
                     };
                 };
             };
@@ -6238,7 +6195,7 @@ export interface components {
             /** Format: int64 */
             directorId?: null | number | string;
             enabled?: boolean;
-            /** @description 建号即显式强制 TOTP */
+            /** @description 建号即显式强制 TOTP(用户须完成绑定后才能登录完成态)。 */
             forceTotp?: boolean;
             /** @description 初始分配的角色 Id 集合 */
             roleIds?: (number | string)[];
@@ -6789,65 +6746,6 @@ export interface components {
             /** Format: date-time */
             nextRunTime: string;
         };
-        /** @description 单条预检项(机器可读;不含密钥/连接串明文)。 */
-        Level3PrecheckItem: {
-            /** @description 稳定检查项 Id(如 `redis_tls`),CI/日志可定位 */
-            id: string;
-            /** @description 人类可读短名 */
-            name: string;
-            /** @description Level3CheckStatus 常量:pass|fail|warn */
-            status: string;
-            /** @description 现状说明(脱敏) */
-            message: string;
-            /** @description 修复建议 */
-            remediation: string;
-            /**
-             * @description Level3 下是否为启动/readiness 关键项;true 时 fail → 拒绝启动或 /health/ready Unhealthy。
-             * @default false
-             */
-            critical: boolean;
-        };
-        /**
-         * @description Level3 一期预检结构化结果。可被宿主启动闸门、/health/ready、安全基线 API 与 CI 消费。
-         *     内核不宣称「已通过等保三级」;bool Level3PrecheckResult.OverallCompliantForPhase1 仅表示第一期强制配置项是否齐备。
-         */
-        Level3PrecheckResult: {
-            /** @description 能力版本,如 `level3-phase1` */
-            capabilityVersion?: string;
-            /** @description 当前安全档(None|Level3) */
-            profile?: string;
-            /** @description 宿主环境名(Development|Production|…) */
-            environment?: string;
-            /** @description 检查项列表 */
-            checks?: components["schemas"]["Level3PrecheckItem"][];
-            /** @description 第二/三期 Level3 强制项(本内核版本尚未实现) */
-            unimplementedMandates?: components["schemas"]["Level3UnimplementedMandate"][];
-            /**
-             * @description 是否满足第一期配置闭环:Profile=Level3 且无任何 fail 项。
-             *     即使为 true 也不等于完整三级基线(见 IReadOnlyList&lt;Level3UnimplementedMandate&gt; Level3PrecheckResult.UnimplementedMandates)。
-             */
-            overallCompliantForPhase1?: boolean;
-            /** @description 是否存在 Level3 关键项失败(启动闸门 / readiness 用) */
-            hasCriticalFailures?: boolean;
-            /** @description 关键失败项 Id 列表(稳定、可定位) */
-            criticalFailureIds?: null | string[];
-            /** @description 是否存在任意 fail 项(含非关键) */
-            hasAnyFailure?: boolean;
-        };
-        /** @description 本期未实现的 Level3 强制能力条目(明示能力边界,避免把一期报告读成完整三级基线)。 */
-        Level3UnimplementedMandate: {
-            /** @description 稳定标识 */
-            id: string;
-            /** @description 短名 */
-            name: string;
-            /**
-             * Format: int32
-             * @description 计划期次(2|3)
-             */
-            phase: number | string;
-            /** @description 缺口说明 */
-            description: string;
-        };
         /** @description 登录入参。验证码字段在 `Security:Captcha:Enabled` 关闭时可不传(默认关)。 */
         LoginInput: {
             /** @description 登录账号 */
@@ -6948,13 +6846,8 @@ export interface components {
         };
         /** @description 菜单节点类型(设计 §16 目录/页面/按钮三级)。用枚举而非魔法数;存库为 int。 */
         MenuType: number;
-        /** @description 挑战校验出参(供 Auth 接线与集成测试)。 */
+        /** @description 挑战校验出参。 */
         MfaChallengeVerifyOutput: {
-            /** Format: int64 */
-            userId?: number | string;
-        };
-        /** @description 发放邀请入参。 */
-        MfaInviteInput: {
             /** Format: int64 */
             userId?: number | string;
         };
@@ -7599,9 +7492,7 @@ export interface components {
         ReauthInput: {
             /** @description 方法:`totp` | `password` */
             method?: string;
-            /** @description TOTP 动态口令(method=totp) */
             totpCode?: null | string;
-            /** @description 当前密码(method=password) */
             password?: null | string;
         };
         /**
@@ -8156,27 +8047,6 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
-        ResultOfLevel3PrecheckResult: {
-            /**
-             * Format: int32
-             * @description 业务码,0 为成功,其余见 ErrorCode 分段
-             */
-            code?: number | string;
-            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
-            msgKey?: null | string;
-            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
-            args?: null | Record<string, never>;
-            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
-            message?: null | string;
-            data?: null | components["schemas"]["Level3PrecheckResult"];
-        };
-        /**
-         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
-         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
-         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
-         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
-         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
-         */
         ResultOfLoginOutput: {
             /**
              * Format: int32
@@ -8623,6 +8493,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfSecurityBaselinePrecheckResult: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["SecurityBaselinePrecheckResult"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfServerInfoOutput: {
             /**
              * Format: int32
@@ -8905,6 +8796,65 @@ export interface components {
             enabled?: boolean;
             /** @description 备注 */
             remark?: null | string;
+        };
+        /** @description 单条预检项(机器可读;不含密钥/连接串明文)。 */
+        SecurityBaselinePrecheckItem: {
+            /** @description 稳定检查项 Id(如 `redis_tls`),CI/日志可定位 */
+            id: string;
+            /** @description 人类可读短名 */
+            name: string;
+            /** @description SecurityBaselineCheckStatus 常量:pass|fail|warn */
+            status: string;
+            /** @description 现状说明(脱敏) */
+            message: string;
+            /** @description 修复建议 */
+            remediation: string;
+            /**
+             * @description 是否为关键诊断项(ADR 0006 后不再 fail-closed 阻断启动;仍用于报告 CriticalFailureIds)。
+             * @default false
+             */
+            critical: boolean;
+        };
+        /**
+         * @description 可选安全态势预检结果。供诊断 API / CI 消费;ADR 0006 后不作为启动 fail-closed 合同。
+         *     内核不宣称「已通过等保三级」;bool SecurityBaselinePrecheckResult.OverallCompliantForPhase1 仅表示历史一期检查项是否无 fail。
+         */
+        SecurityBaselinePrecheckResult: {
+            /** @description 能力版本标识(JSON 字段兼容历史 `level3-phase1`) */
+            capabilityVersion?: string;
+            /** @description 当前安全档(None|Level3;Level3 为废弃总档) */
+            profile?: string;
+            /** @description 宿主环境名(Development|Production|…) */
+            environment?: string;
+            /** @description 检查项列表 */
+            checks?: components["schemas"]["SecurityBaselinePrecheckItem"][];
+            /** @description 历史路线图未实现项(明示边界;不构成交付承诺) */
+            unimplementedMandates?: components["schemas"]["SecurityBaselineUnimplementedMandate"][];
+            /**
+             * @description 历史一期检查是否无 fail(且 Profile 曾为 Level3 时语义更严)。
+             *     即使为 true 也不等于完整三级基线(见 IReadOnlyList&lt;SecurityBaselineUnimplementedMandate&gt; SecurityBaselinePrecheckResult.UnimplementedMandates)。
+             */
+            overallCompliantForPhase1?: boolean;
+            /** @description 是否存在关键项失败(诊断用;不再阻断启动) */
+            hasCriticalFailures?: boolean;
+            /** @description 关键失败项 Id 列表(稳定、可定位) */
+            criticalFailureIds?: null | string[];
+            /** @description 是否存在任意 fail 项(含非关键) */
+            hasAnyFailure?: boolean;
+        };
+        /** @description 历史路线图中未实现的能力条目(明示能力边界;ADR 0006 后不再承诺按期交付)。 */
+        SecurityBaselineUnimplementedMandate: {
+            /** @description 稳定标识 */
+            id: string;
+            /** @description 短名 */
+            name: string;
+            /**
+             * Format: int32
+             * @description 历史期次标记(2|3;仅文档语义)
+             */
+            phase: number | string;
+            /** @description 缺口说明 */
+            description: string;
         };
         /**
          * @description 服务器监控快照(设计 §4 运维)。只报<b>进程与主机基础面</b>——系统级全量指标(APM/链路/告警)
@@ -9600,45 +9550,22 @@ export interface components {
         TotpBindCompleteInput: {
             /** @description string TotpBindStartOutput.BindChallengeId */
             bindChallengeId?: string;
-            /** @description 6 位 TOTP 动态口令(证明用户已正确配置认证器) */
+            /** @description 6 位 TOTP 动态口令 */
             totpCode?: string;
         };
-        /** @description 绑定完成出参:10 个恢复码仅展示一次。 */
+        /** @description 绑定完成出参:恢复码仅展示一次。 */
         TotpBindCompleteOutput: {
-            /** @description 10 个一次性恢复码明文(服务端只存哈希) */
+            /** @description 一次性恢复码明文(服务端只存哈希) */
             recoveryCodes?: string[];
         };
-        /** @description 管理员发放 TOTP 绑定邀请出参(令牌仅此一次返回)。 */
-        TotpBindInviteOutput: {
-            /** @description 一次性邀请 bearer 明文(服务端只存哈希) */
-            token?: string;
-            /**
-             * Format: int64
-             * @description 目标用户 Id
-             */
-            userId?: number | string;
-            /**
-             * Format: date-time
-             * @description 过期时刻(本地时钟口径)
-             */
-            expiresAt?: string;
-        };
-        /** @description 自助绑定启动入参:账号 + 当前密码 → 下发 otpauth URI。 */
+        /** @description 自助绑定启动入参:账号 + 当前密码 → otpauth URI。 */
         TotpBindStartInput: {
-            /** @description 登录账号 */
+            /** @description 登录账号(自助绑定目标) */
             account?: string;
-            /** @description 当前密码(必填) */
+            /** @description 当前密码(必填;缺失/错误一律拒绝写 seed) */
             currentPassword?: string;
-            /** @description 历史字段,已忽略 */
-            token?: string | null;
-        };
-        /** @description 管理员清除 MFA 入参 */
-        TotpClearMfaInput: {
-            /**
-             * Format: int64
-             * @description 目标用户 Id
-             */
-            userId?: number | string;
+            /** @description 历史字段:曾表示邀请/InitGrant token。<b>ADR 0006 后忽略</b>;保留以免旧客户端反序列化失败。 */
+            token?: null | string;
         };
         /** @description 绑定启动出参:临时挑战 + otpauth URI(种子暂存缓存,完成前不落库)。 */
         TotpBindStartOutput: {
@@ -9646,7 +9573,7 @@ export interface components {
             bindChallengeId?: string;
             /** @description otpauth URI,供扫码 */
             otpauthUri?: string;
-            /** @description Base32 种子明文(仅此响应;便于无法扫码时手输;服务端不落库明文) */
+            /** @description Base32 种子明文(仅此响应;服务端不落库明文) */
             seed?: string;
             /**
              * Format: int32
@@ -9666,34 +9593,16 @@ export interface components {
             challengeId?: string;
             code?: string;
         };
+        /** @description 管理员清除 MFA 入参。 */
+        TotpClearMfaInput: {
+            /** Format: int64 */
+            userId?: number | string;
+        };
         /** @description 使用恢复码入参。 */
         TotpRecoveryInput: {
-            /** @description 登录账号 */
             account?: string;
-            /** @description 当前密码(防止仅持有恢复码的旁路) */
             currentPassword?: string;
-            /** @description 一次性恢复码 */
             recoveryCode?: string;
-        };
-        /** @description 重置后发放的重新绑定邀请(不直接解除后无邀请——返回新邀请 token)。 */
-        TotpResetOutput: {
-            /** @description 重新绑定邀请(与管理员邀请同形) */
-            invite?: components["schemas"]["TotpBindInviteOutput"];
-        };
-        /** @description 超级管理员 MFA 重置入参。 */
-        TotpSuperAdminResetInput: {
-            /**
-             * Format: int64
-             * @description 被重置的超管用户 Id
-             */
-            targetUserId?: number | string;
-            /**
-             * @description 批准方式:`peer`=另一已启用 TOTP 的超管操作(需当前操作者已 reauth);
-             *     `emergency`=部署紧急授权(仅唯一超管场景)。
-             */
-            mode?: string;
-            /** @description 紧急授权明文(`Mode=emergency` 时必填) */
-            emergencyGrant?: null | string;
         };
         /**
          * @description 改个人资料入参:只允许改自己能改的字段(姓名/昵称/性别/手机/邮箱/头像);机构/职位/角色由管理员维护,不在此。
@@ -9723,7 +9632,7 @@ export interface components {
             /** Format: int64 */
             directorId?: null | number | string;
             enabled?: boolean;
-            /** @description 管理员显式强制 TOTP */
+            /** @description 管理员显式强制 TOTP(只能加严;关断不解除超管/高敏自动强制)。 */
             forceTotp?: boolean;
             roleIds?: (number | string)[];
         };
@@ -9755,9 +9664,9 @@ export interface components {
             directorName?: null | string;
             enabled: boolean;
             isSuperAdmin: boolean;
-            /** @description 管理员显式强制 TOTP */
+            /** @description 管理员显式强制 TOTP(只能加严;超管/高敏持有者仍由策略自动强制)。 */
             forceTotp?: boolean;
-            /** @description 是否已绑定 TOTP(只读) */
+            /** @description 是否已绑定 TOTP(只读状态;绑定走 MFA 流程,不可经本字段写入)。 */
             totpEnabled?: boolean;
             /** Format: date-time */
             createTime?: string;
@@ -9789,9 +9698,9 @@ export interface components {
             directorName?: null | string;
             enabled: boolean;
             isSuperAdmin: boolean;
-            /** @description 管理员显式强制 TOTP */
+            /** @description 管理员显式强制 TOTP(只能加严;超管/高敏持有者仍由策略自动强制)。 */
             forceTotp?: boolean;
-            /** @description 是否已绑定 TOTP(只读) */
+            /** @description 是否已绑定 TOTP(只读状态;绑定走 MFA 流程,不可经本字段写入)。 */
             totpEnabled?: boolean;
             /** Format: date-time */
             createTime?: string;

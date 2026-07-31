@@ -15,7 +15,7 @@
 | 双前端绑定 UI 自助化 | 已做 |
 | 相关后端测试（见下） | **须绿** |
 | 不宣称完整三级 / 无 phase2–3 路线图承诺 | ADR + 计划已废止 |
-| OpenAPI `gen:api` | **合入后**有跑后端时再刷（invite 已删） |
+| OpenAPI `gen:api` | **已做**（双前端 schema 已刷，无 reset/invite 幽灵路径） |
 
 ## 本轮验证命令
 
@@ -38,7 +38,7 @@ cd web-react && npx vitest run src/views/mfa/BindPage.spec.tsx
 2. ~~登录页 / 个人中心链到 `/mfa/bind`~~ — `/personal/security` + 登录「设置身份验证器」  
 3. ~~物理删除 DeployGrant/Invite 实体、闲置账号 Job、EnableMigrator~~ — 预检 InitGrant 改为 warn  
 4. ~~重命名 Level3* 测试/预检类型~~ — `SecurityBaseline*` / `CookieSessionCsrfTests` / `LegacySecurityPolicyFloorTests`（配置键与 `/sys/level3/precheck` 路由仍兼容）  
-5. 正式 `gen:api`（schema 仍可能残留 reset/invite；有跑后端时再刷）  
+5. ~~正式 `gen:api`~~ — Vue/React `schema.d.ts` 已从运行中后端重新生成  
 6. ~~Codex P2 优先项~~ — Challenge TTL 走 Resolve*、预检 ADR 文案/CookieMode 拓扑、recovery TotpOn、清 MFA 确认  
 
 ### 审查后已修（2026-07-31）
