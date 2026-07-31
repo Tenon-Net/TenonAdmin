@@ -3,6 +3,7 @@
 - 状态：**已定键名**（2026-07-30）
 - 决策：[ADR 0006](../adr/0006-general-admin-optional-security.md)
 - 绑定类型：`backend/src/TenonAdmin.Core/Options/AdminSecurityOptions.cs`
+- 网页自审（入口与勾选表）：[security-optional-ui-checklist.md](security-optional-ui-checklist.md)
 
 配置节根：`TenonAdmin:Security`。  
 **默认全部宽松 / 可关**，零配置可跑；需要时再显式打开。

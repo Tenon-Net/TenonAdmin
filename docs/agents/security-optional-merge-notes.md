@@ -4,6 +4,7 @@
 - 分支：`feature/mlps-level3-phase1`
 - 决策：[ADR 0006](../adr/0006-general-admin-optional-security.md)
 - 配置键：[security-optional-config.md](security-optional-config.md)
+- **网页自审清单**：[security-optional-ui-checklist.md](security-optional-ui-checklist.md)（浏览器可点路径；本地验收与提问对照）
 
 ## 合入门禁（本轮）
 
