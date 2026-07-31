@@ -1,9 +1,25 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { render, cleanup } from '@testing-library/react'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { render, cleanup, waitFor } from '@testing-library/react'
 import { addIcon } from '@iconify/react/offline'
 import { iconName, AppIcon } from './AppIcon'
 
-afterEach(cleanup)
+const ensureIconLoaded = vi.fn(async () => {
+  // 模拟"子集外图标"懒加载完成后才注册 —— 与 ensureIconLoaded 真实现同序。
+  addIcon('lazy:box', { body: '<circle cx="12" cy="12" r="10" />', width: 24, height: 24 })
+})
+
+vi.mock('@/lib/icons', async (orig) => {
+  const actual = await orig<typeof import('@/lib/icons')>()
+  return {
+    ...actual,
+    ensureIconLoaded: (...args: unknown[]) => ensureIconLoaded(...args),
+  }
+})
+
+afterEach(() => {
+  cleanup()
+  ensureIconLoaded.mockClear()
+})
 
 // ── 纯逻辑(变异钉死)──
 describe('iconName', () => {
@@ -26,5 +42,14 @@ describe('AppIcon', () => {
   it('把 icon 接进 <Icon>,渲成 svg', () => {
     const { container } = render(<AppIcon icon="test:box" />)
     expect(container.querySelector('svg')).toBeTruthy()
+  })
+
+  it('ensureIconLoaded 完成后重渲染出 svg(子集外图标)', async () => {
+    // 首帧集合未就绪时 Icon 可能无 svg;加载完成后必须 bump 再渲一次,否则侧栏会"空白到点开才出"。
+    const { container } = render(<AppIcon icon="lazy:box" />)
+    await waitFor(() => {
+      expect(ensureIconLoaded).toHaveBeenCalledWith('lazy:box')
+      expect(container.querySelector('svg')).toBeTruthy()
+    })
   })
 })
