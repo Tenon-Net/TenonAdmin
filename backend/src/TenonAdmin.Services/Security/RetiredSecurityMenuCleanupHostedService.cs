@@ -26,10 +26,12 @@ internal sealed class RetiredSecurityMenuCleanupHostedService(
         {
             using var scope = scopes.CreateScope();
             var menus = scope.ServiceProvider.GetRequiredService<IRepository<SysMenu>>();
+            // 拷到局部:SqlSugar 无法翻译 private static 字段 Contains(Field "RetiredPermissions" can't be private)
+            var retired = RetiredPermissions.ToArray();
             // 含软删过滤外的物理行:清 Enabled 即可,角色上残留权限码不再生效于 UI(鉴权仍按码,但端点已不存在 → 404)
             var n = await menus.Db.Updateable<SysMenu>()
                 .SetColumns(m => new SysMenu { Enabled = false, Visible = false })
-                .Where(m => RetiredPermissions.Contains(m.Permission) && (m.Enabled || m.Visible))
+                .Where(m => retired.Contains(m.Permission) && (m.Enabled || m.Visible))
                 .ExecuteCommandAsync();
             if (n > 0)
                 logger.LogInformation(

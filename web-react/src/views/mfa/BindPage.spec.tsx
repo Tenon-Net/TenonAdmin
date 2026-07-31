@@ -58,7 +58,7 @@ async function goToAuthenticatorStep() {
   fill('账号', 'ada')
   fill('当前密码', 'Secret1!')
   fireEvent.click(btn(/继\s*续/))
-  await screen.findByText('将此帐户添加到认证器应用，然后输入当前动态口令。')
+  await screen.findByText(/扫描下方二维码|Google Authenticator/)
   expect(bindStartMock).toHaveBeenCalledWith({
     account: 'ada',
     currentPassword: 'Secret1!',

@@ -51,6 +51,11 @@ export function Protected() {
     return !!s.accessToken || !isCookieSession(s)
   })
 
+  // 登出/换号后必须允许再次 enterInitial;booted 是组件本地态,不随 auth.reset 清零。
+  useEffect(() => {
+    if (!loggedIn) setBooted(false)
+  }, [loggedIn])
+
   useEffect(() => {
     if (sessionChecked) return
     let alive = true
@@ -66,7 +71,10 @@ export function Protected() {
     if (!sessionChecked || !loggedIn || mustChange || routesReady || booted) return
     let alive = true
     enterInitial()
-      .catch(() => useUserStore.getState().clear()) // 拉门户失败 → 清会话,下面回落 /login
+      .catch(() => {
+        useAuthStore.getState().reset()
+        useUserStore.getState().clear()
+      })
       .finally(() => {
         if (alive) setBooted(true)
       })

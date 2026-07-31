@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { Alert, App, Button, Card, Form, Input, Typography } from 'antd'
+import { Alert, App, Button, Card, Form, Input, QRCode, Typography } from 'antd'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { mfaApi } from '@/api'
 import { translateError } from '@/utils/error'
+import { triggerBlobDownload } from '@/utils/download'
 import { useUserStore } from '@/stores/user'
+import { useAuthStore } from '@/stores/auth'
 import { takeRecoveryCodes } from './bindComplete'
 
-type Setup = { bindChallengeId: string; otpauthUri?: string; seed?: string }
+type Setup = { bindChallengeId: string; account: string; otpauthUri?: string; seed?: string }
 
 export default function BindPage() {
   const { t } = useTranslation()
@@ -17,7 +19,9 @@ export default function BindPage() {
   const storeAccount = useUserStore((s) => s.userInfo?.account ?? '')
   const prefillAccount = params.get('account') ?? storeAccount
 
-  const [mode, setMode] = useState<'bind' | 'recovery'>('bind')
+  const [mode, setMode] = useState<'bind' | 'recovery'>(
+    params.get('mode') === 'recovery' ? 'recovery' : 'bind',
+  )
   const [setup, setSetup] = useState<Setup | null>(null)
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null)
   const [recoveryComplete, setRecoveryComplete] = useState(false)
@@ -33,6 +37,32 @@ export default function BindPage() {
     }
   }
 
+  function backToLogin() {
+    // 绑定页可能仍挂着旧登录会话;清会话后再进登录,避免受保护区跳过门户重建。
+    useAuthStore.getState().reset()
+    useUserStore.getState().clear()
+    void navigate('/login', { replace: true })
+  }
+
+  /** 恢复码下载到本地 txt(一次性展示后用户可离线保管)。 */
+  const downloadRecoveryCodes = (codes: string[]) => {
+    const account = (setup?.account || params.get('account') || storeAccount || 'account').trim() || 'account'
+    const lines = [
+      t('mfaBind.recoveryDownloadHeader', { account }),
+      '',
+      ...codes,
+      '',
+      t('mfaBind.recoveryDownloadFooter'),
+    ]
+    const stamp = new Date().toISOString().slice(0, 10)
+    const safe = account.replace(/[^\w.\-@]+/g, '_')
+    triggerBlobDownload(
+      new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' }),
+      `tenon-recovery-codes-${safe}-${stamp}.txt`,
+    )
+    message.success(t('mfaBind.recoveryDownloaded'))
+  }
+
   const start = async ({ account, password }: { account: string; password: string }) => {
     setStarting(true)
     try {
@@ -46,6 +76,7 @@ export default function BindPage() {
       }
       setSetup({
         bindChallengeId: out.bindChallengeId,
+        account: account.trim(),
         otpauthUri: out.otpauthUri ?? undefined,
         seed: out.seed ?? undefined,
       })
@@ -111,7 +142,7 @@ export default function BindPage() {
           recoveryComplete ? (
             <>
               <Alert type="success" showIcon title={t('mfaBind.recoveryComplete')} description={t('mfaBind.recoveryRebind')} />
-              <Button type="primary" block style={{ marginTop: 16 }} onClick={() => navigate('/login')}>
+              <Button type="primary" block style={{ marginTop: 16 }} onClick={() => backToLogin()}>
                 {t('mfaBind.backToLogin')}
               </Button>
             </>
@@ -135,8 +166,13 @@ export default function BindPage() {
             <Typography.Title level={4}>{t('mfaBind.recoveryTitle')}</Typography.Title>
             <Alert type="warning" showIcon title={t('mfaBind.recoveryHint')} style={{ marginBottom: 12 }} />
             <Input.TextArea readOnly value={recoveryCodes.join('\n')} autoSize={{ minRows: 8 }} />
-            <Button style={{ marginTop: 12 }} onClick={() => void copy(recoveryCodes.join('\n'))}>{t('mfaBind.copy')}</Button>
-            <Button type="primary" block style={{ marginTop: 8 }} onClick={() => navigate('/login')}>
+            <Button type="primary" block style={{ marginTop: 12 }} onClick={() => downloadRecoveryCodes(recoveryCodes)}>
+              {t('mfaBind.downloadCodes')}
+            </Button>
+            <Button block style={{ marginTop: 8 }} onClick={() => void copy(recoveryCodes.join('\n'))}>
+              {t('mfaBind.copy')}
+            </Button>
+            <Button block style={{ marginTop: 8 }} onClick={() => backToLogin()}>
               {t('mfaBind.backToLogin')}
             </Button>
           </>
@@ -153,14 +189,24 @@ export default function BindPage() {
           </Form>
         ) : (
           <>
-            <Typography.Paragraph>{t('mfaBind.setupHint')}</Typography.Paragraph>
+            <Alert type="info" showIcon title={t('mfaBind.scanSetupHint')} style={{ marginBottom: 16 }} />
             {setup.otpauthUri ? (
-              <Form.Item label={t('mfaBind.uri')}>
-                <Input.TextArea readOnly value={setup.otpauthUri} autoSize={{ minRows: 3 }} />
-              </Form.Item>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  marginBottom: 16,
+                  padding: 16,
+                  background: '#fff',
+                  borderRadius: 8,
+                  border: '1px solid var(--ant-color-border, #e5e7eb)',
+                }}
+              >
+                <QRCode value={setup.otpauthUri} size={200} errorLevel="M" />
+              </div>
             ) : null}
             {setup.seed ? (
-              <Form.Item label={t('mfaBind.seed')}>
+              <Form.Item label={t('mfaBind.seed')} style={{ marginBottom: 8 }}>
                 <Input
                   readOnly
                   value={setup.seed}
@@ -168,6 +214,9 @@ export default function BindPage() {
                 />
               </Form.Item>
             ) : null}
+            <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+              {t('mfaBind.manualSetupHint')}
+            </Typography.Paragraph>
             <Form layout="vertical" onFinish={complete}>
               <Form.Item name="code" label={t('mfaBind.code')} rules={[{ required: true, pattern: /^\d{6}$/, message: t('mfaBind.codeRequired') }]}>
                 <Input inputMode="numeric" autoComplete="one-time-code" maxLength={6} />

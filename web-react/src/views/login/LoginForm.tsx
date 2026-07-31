@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { App, Button, Checkbox, Form, Input } from 'antd'
+import { App, Button, Checkbox, Form, Input, Modal } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { authApi, externalAuthApi, ApiError, type ExternalProvider } from '@/api'
 import { useUserStore } from '@/stores/user'
+import { useAuthStore } from '@/stores/auth'
 import { useSiteStore, appVersion } from '@/stores/site'
 import { translateError } from '@/utils/error'
 import { TenonLogo } from '@/components/TenonLogo'
@@ -28,7 +29,8 @@ interface FormValues {
  * 变量(默认跟随应用令牌;深色玻璃皮肤覆写为浅色)。
  *
  * 含第三方登录(SSO)按钮区与短信路径:短信免密登录(`site.smsLoginEnabled` 运行时驱动)
- * + 密码后短信二次验证(后端 40009 信令进入,args 带挑战参数)。与 Vue 侧三模式同构。
+ * + 密码后短信二次验证(40009) / TOTP 挑战(40018) / 强制 MFA 未绑定引导(40020)。
+ * 登录页默认不常驻「设置身份验证器」;自愿绑定走个人中心。
  */
 export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?: boolean; showFooter?: boolean }) {
   const { t } = useTranslation()
@@ -46,12 +48,16 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
   const [form] = Form.useForm<FormValues>()
 
   // 登录形态:账号密码 / 短信免密 / 短信二次验证(40009) / TOTP 二次验证(40018)
+  // 强制 MFA 未绑定(40020)用 Modal 引导,不切 mode
   const [mode, setMode] = useState<'account' | 'sms' | 'mfa' | 'totp'>('account')
   // 二次验证挑战(40009 信令 args 下发);码输入是单字段小表单,走受控 state 不进 antd Form
   const [mfa, setMfa] = useState({ challengeId: '', phoneMask: '' })
   const [mfaCode, setMfaCode] = useState('')
   const [totp, setTotp] = useState({ challengeId: '' })
   const [totpCode, setTotpCode] = useState('')
+  // 强制 MFA 但未绑定(40020):弹窗 + 带到 /mfa/bind 的账号
+  const [bindRequiredOpen, setBindRequiredOpen] = useState(false)
+  const [bindAccount, setBindAccount] = useState('')
 
   // 发码/重发共用倒计时(同一时刻只有一个发码入口可见)
   const [countdown, setCountdown] = useState(0)
@@ -108,6 +114,8 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
   }
 
   function finishLogin(res: Awaited<ReturnType<typeof authApi.login>>) {
+    // 每次登录清授权态,否则 routesReady 残留 true 会跳过 enterInitial → 空菜单/全 404。
+    useAuthStore.getState().reset()
     setSession(res)
     message.success(t('login.success'))
     void navigate('/', { replace: true })
@@ -131,6 +139,11 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
         setTotp({ challengeId: String(err.args.challengeId ?? '') })
         setTotpCode('')
         setMode('totp')
+      } else if (err instanceof ApiError && err.code === 40020) {
+        // 40020 = 强制 MFA 未绑定 → Modal 引导自助设置(登录页默认不常驻链接)
+        const account = String(values.account ?? '').trim()
+        setBindAccount(account)
+        setBindRequiredOpen(true)
       } else if (err instanceof ApiError && err.code === 40009 && err.args) {
         // 40009 = 密码已过、需短信二次验证
         setMfa({ challengeId: String(err.args.challengeId ?? ''), phoneMask: String(err.args.phoneMask ?? '') })
@@ -144,6 +157,19 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
     } finally {
       setLoading(false)
     }
+  }
+
+  function goBindAuthenticator() {
+    const account = bindAccount || String(form.getFieldValue('account') ?? '').trim()
+    setBindRequiredOpen(false)
+    void navigate(account ? `/mfa/bind?account=${encodeURIComponent(account)}` : '/mfa/bind')
+  }
+
+  function goRecovery() {
+    const account = String(form.getFieldValue('account') ?? '').trim() || bindAccount
+    const q = new URLSearchParams({ mode: 'recovery' })
+    if (account) q.set('account', account)
+    void navigate(`/mfa/bind?${q.toString()}`)
   }
 
   /** 短信免密:发码。护发码的验证码在此消费(账号模式的验证码护登录本身)。 */
@@ -282,7 +308,9 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
             <a className="lf-link" onClick={backToAccount}>
               {t('login.backToPassword')}
             </a>
-            <span />
+            <a className="lf-link" onClick={goRecovery}>
+              {t('login.useRecovery')}
+            </a>
           </div>
           <Button type="primary" size="large" block loading={loading} onClick={() => void onTotpSubmit()}>
             {t('login.submit')}
@@ -390,14 +418,6 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
             <Button type="primary" size="large" block htmlType="submit" loading={loading}>
               {t('login.submit')}
             </Button>
-            {mode === 'account' ? (
-              <div className="row lf-between" style={{ marginTop: 12 }}>
-                <a className="lf-link" href="/mfa/bind" onClick={(e) => { e.preventDefault(); navigate('/mfa/bind') }}>
-                  {t('login.setupAuthenticator')}
-                </a>
-                <span />
-              </div>
-            ) : null}
           </Form>
 
           {/* 第三方登录:后端 providers 驱动;无启用项则整段不显。 */}
@@ -435,6 +455,19 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
           {appVersion ? <span className="lf-ver">v{appVersion}</span> : null}
         </footer>
       ) : null}
+
+      {/* 强制 MFA 未绑定(40020):遮罩 Modal,账密表单仍在底下;默认登录页不常驻绑定链接 */}
+      <Modal
+        open={bindRequiredOpen}
+        title={t('login.totpBindTitle')}
+        okText={t('login.setupAuthenticator')}
+        cancelText={t('common.cancel')}
+        onOk={goBindAuthenticator}
+        onCancel={() => setBindRequiredOpen(false)}
+        destroyOnHidden
+      >
+        <p style={{ margin: 0 }}>{t('login.totpBindSub')}</p>
+      </Modal>
     </div>
   )
 }

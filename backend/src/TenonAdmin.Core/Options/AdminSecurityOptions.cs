@@ -42,17 +42,28 @@ public class AdminDataProtectionOptions
 }
 
 /// <summary>
-/// TOTP 二因子(对应 <c>TenonAdmin:Security:Totp</c>)。默认全关;显式 <see cref="Enabled"/> 后才提供绑定/挑战。
+/// TOTP 二因子(对应 <c>TenonAdmin:Security:Totp</c>)。默认全关。
+/// <para>运行时总闸与登录验证码同款:SysConfig <see cref="KEY_ENABLED"/> 可在配置中心即时开关;
+/// <see cref="Enabled"/> 为部署级地板(Options 为真则始终开;默认 false,以 UI/DB 为准)。</para>
 /// 绑定模型:用户自助(ADR 0006);恢复码在绑定时下发。
 /// </summary>
 public class AdminTotpOptions
 {
-    /// <summary>是否启用 TOTP 能力(绑定 API、登录挑战、恢复码)。默认 <c>false</c>。</summary>
+    /// <summary>SysConfig 键:启用 TOTP 能力(绑定/登录挑战/恢复码)。改值即时生效。</summary>
+    public const string KEY_ENABLED = "sys.security.totp.enabled";
+
+    /// <summary>SysConfig 键:超管是否必须第二因子。改值即时生效。</summary>
+    public const string KEY_REQUIRE_FOR_SUPER_ADMIN = "sys.security.totp.requireForSuperAdmin";
+
+    /// <summary>
+    /// 部署级是否启用 TOTP(appsettings)。默认 <c>false</c>。
+    /// 与 <see cref="KEY_ENABLED"/> 任一为真即开能力;生产若写 true 则 UI 无法关断(硬开地板)。
+    /// </summary>
     public bool Enabled { get; set; }
 
     /// <summary>
-    /// 启用 TOTP 时,超级管理员是否必须完成第二因子(未绑定则登录引导自助绑定,不走部署期 InitGrant)。
-    /// 默认 <c>false</c>——由账号 <c>ForceTotp</c> 或用户自愿绑定控制。
+    /// 启用 TOTP 时,超级管理员是否必须完成第二因子(未绑定则登录引导自助绑定)。
+    /// 默认 <c>false</c>;运行时可由 <see cref="KEY_REQUIRE_FOR_SUPER_ADMIN"/> 覆盖。
     /// </summary>
     public bool RequireForSuperAdmin { get; set; }
 
@@ -227,7 +238,10 @@ public class AdminSecurityOptions
     /// </summary>
     public bool IsLegacyLevel3Profile => Profile == SecurityProfile.Level3;
 
-    /// <summary>TOTP 功能是否可用: <c>Totp:Enabled</c> 或历史 Profile=Level3。</summary>
+    /// <summary>
+    /// 部署/历史总档下的 TOTP 能力(不含 SysConfig 运行时键)。
+    /// 完整判定请用 <c>IMfaPolicyService.IsTotpFeatureEnabledAsync</c>(Options ∨ DB ∨ Level3)。
+    /// </summary>
     public bool IsTotpFeatureEnabled =>
         Totp.Enabled || IsLegacyLevel3Profile;
 

@@ -5,25 +5,37 @@ namespace TenonAdmin.Services;
 
 /// <summary>
 /// <see cref="IMfaPolicyService"/> 默认实现。
-/// <para>ADR 0006：强制 TOTP 仅在 <c>Security:Totp:Enabled</c>（或过渡期 Profile=Level3）下生效。
-/// 产品规则：账号 <c>ForceTotp</c>；可选 <c>Totp:RequireForSuperAdmin</c>。
-/// 历史 Level3 的「高敏权限自动强制」仅在过渡期 Profile=Level3 时保留。</para>
+/// <para>ADR 0006：TOTP 能力 = SysConfig 运行时总闸 ∨ Options 部署地板 ∨ 过渡 Level3；
+/// 强制对象 = 账号 ForceTotp / 超管必绑 / (过渡)高敏。</para>
 /// </summary>
 public class MfaPolicyService(
     IPermissionProvider permissions,
     IRepository<SysHighSensitivityPermission> customHighSens,
     AdminSecurityOptions security,
+    IConfigService? config = null,
     ISecurityProfileAccessor? profile = null,
     IRepository<SysUser>? users = null) : IMfaPolicyService
 {
     /// <inheritdoc />
+    public virtual async Task<bool> IsTotpFeatureEnabledAsync(CancellationToken cancellationToken = default)
+    {
+        if (security.IsLegacyLevel3Profile || profile?.IsLevel3 == true) return true;
+        // 部署地板:appsettings Totp:Enabled=true 时始终开(测试与硬开部署)
+        if (security.Totp.Enabled) return true;
+        // 运行时总闸:配置中心 sys.security.totp.enabled(与 captcha 同款)
+        if (config is null) return false;
+        var raw = await config.GetValueByKeyAsync(AdminTotpOptions.KEY_ENABLED);
+        return bool.TryParse(raw, out var e) && e;
+    }
+
+    /// <inheritdoc />
     public virtual async Task<bool> IsMfaRequiredAsync(SysUser user, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(user);
-        if (!security.IsTotpFeatureEnabled) return false;
+        if (!await IsTotpFeatureEnabledAsync(cancellationToken)) return false;
 
         if (user.ForceTotp) return true;
-        if (user.IsSuperAdmin && security.Totp.RequireForSuperAdmin) return true;
+        if (user.IsSuperAdmin && await ResolveRequireForSuperAdminAsync()) return true;
 
         // 过渡：历史 Level3 总档仍自动强制超管 + 高敏权限持有者
         var legacyLevel3 = profile?.IsLevel3 == true || security.IsLegacyLevel3Profile;
@@ -34,6 +46,15 @@ public class MfaPolicyService(
         }
 
         return false;
+    }
+
+    /// <summary>超管必绑:Options 地板 ∨ SysConfig 运行时开(与总闸同语义,避免种子 false 盖掉测试/部署 Options)。</summary>
+    protected virtual async Task<bool> ResolveRequireForSuperAdminAsync()
+    {
+        if (security.Totp.RequireForSuperAdmin) return true;
+        if (config is null) return false;
+        var raw = await config.GetValueByKeyAsync(AdminTotpOptions.KEY_REQUIRE_FOR_SUPER_ADMIN);
+        return bool.TryParse(raw, out var e) && e;
     }
 
     /// <inheritdoc />

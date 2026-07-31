@@ -8,7 +8,13 @@ namespace TenonAdmin.Services;
 public interface IMfaPolicyService
 {
     /// <summary>
-    /// 用户是否被强制 MFA:超级管理员 OR <see cref="SysUser.ForceTotp"/> OR 持有任一高敏权限。
+    /// TOTP 能力是否开启:历史 Level3 ∨ <c>Totp:Enabled</c>(Options) ∨ SysConfig <c>sys.security.totp.enabled</c>。
+    /// 与登录验证码同款——配置中心改值即时生效。
+    /// </summary>
+    Task<bool> IsTotpFeatureEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 用户是否被强制 MFA:能力开启前提下,账号 ForceTotp / 超管必绑 / (过渡)高敏权限。
     /// 显式 ForceTotp 只能加严,不能覆盖自动强制。
     /// </summary>
     Task<bool> IsMfaRequiredAsync(SysUser user, CancellationToken cancellationToken = default);

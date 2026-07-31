@@ -90,7 +90,11 @@ export async function tryRestoreCookieSession(): Promise<boolean> {
   if (s.accessToken) return true
   if (!isCookieSession(s)) return false
   const ok = await refreshOnce()
-  if (!ok) useUserStore.getState().clear()
+  if (!ok) {
+    useUserStore.getState().clear()
+    const { useAuthStore } = await import('@/stores/auth')
+    useAuthStore.getState().reset()
+  }
   return ok
 }
 
@@ -113,6 +117,9 @@ const refreshMiddleware: Middleware = {
 
     if (!(await refreshOnce())) {
       useUserStore.getState().clear()
+      // 与登录成功路径对称:清授权态,避免 routesReady 残留导致下次进门户跳过重建
+      const { useAuthStore } = await import('@/stores/auth')
+      useAuthStore.getState().reset()
       gotoLogin()
       return response
     }

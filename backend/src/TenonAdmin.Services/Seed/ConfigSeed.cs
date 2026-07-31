@@ -46,6 +46,9 @@ internal sealed class ConfigSeed : ISeedData<SysConfig>
         new SysConfig { Id = 21, ConfigKey = CaptchaService.KEY_TYPE, ConfigValue = "char", Name = "验证码类型", GroupCode = SecurityPolicyProvider.GROUP, Sort = 41, Remark = "char 字符 / path 描边(明文不入标记、更抗爬)/ math 算术;或消费方自注册的类型" },
         new SysConfig { Id = 23, ConfigKey = SmsOtpService.KEY_MFA_ENABLED, ConfigValue = "false", Name = "启用短信二次验证", GroupCode = SecurityPolicyProvider.GROUP, Sort = 42, Remark = "开启后绑定了手机号的用户密码登录须再验短信码;未绑手机号的用户不受影响。需接入真实短信通道(ISmsSender)" },
         new SysConfig { Id = 24, ConfigKey = SmsOtpService.KEY_LOGIN_ENABLED, ConfigValue = "false", Name = "启用短信验证码登录", GroupCode = SecurityPolicyProvider.GROUP, Sort = 43, Remark = "开启后登录页出现短信登录入口(手机号+验证码免密)。需接入真实短信通道(ISmsSender)" },
+        // TOTP 运行时总闸(与 captcha 同款):配置中心即时开关;用户 ForceTotp 在能力开启后才生效
+        new SysConfig { Id = 29, ConfigKey = AdminTotpOptions.KEY_ENABLED, ConfigValue = "false", Name = "启用动态口令(TOTP)", GroupCode = SecurityPolicyProvider.GROUP, Sort = 44, Remark = "开启后才提供自助绑定/登录二因子/恢复码;用户「强制动态口令」仅在此开启后生效。Options Totp:Enabled 为部署级硬开地板" },
+        new SysConfig { Id = 30, ConfigKey = AdminTotpOptions.KEY_REQUIRE_FOR_SUPER_ADMIN, ConfigValue = "false", Name = "超管必须动态口令", GroupCode = SecurityPolicyProvider.GROUP, Sort = 45, Remark = "能力开启时超管是否必须完成第二因子;未绑则登录引导自助绑定" },
 
         // 请求限流(GroupCode=security):RuntimeRateLimit 快照读取,改值经事件刷新即时生效。默认须与 AdminRateLimitOptions 默认一致。
         new SysConfig { Id = 14, ConfigKey = AdminRateLimitOptions.KEY_ENABLED, ConfigValue = "true", Name = "启用请求限流", GroupCode = SecurityPolicyProvider.GROUP, Sort = 50, Remark = "按客户端 IP 固定窗口限流;Options 硬关时此项无效" },

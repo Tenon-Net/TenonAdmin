@@ -9,9 +9,15 @@ const { t } = useI18n()
 const router = useRouter()
 const user = useUserStore()
 
-function goBind() {
+function goBind(mode?: 'recovery') {
   const account = user.userInfo?.account
-  router.push({ path: '/mfa/bind', query: account ? { account } : {} })
+  router.push({
+    path: '/mfa/bind',
+    query: {
+      ...(account ? { account } : {}),
+      ...(mode === 'recovery' ? { mode: 'recovery' } : {}),
+    },
+  })
 }
 </script>
 
@@ -22,8 +28,8 @@ function goBind() {
     </n-alert>
     <p class="sec-desc">{{ t('personalSecurity.bindDesc') }}</p>
     <n-space>
-      <n-button type="primary" @click="goBind">{{ t('personalSecurity.setupAuthenticator') }}</n-button>
-      <n-button quaternary @click="goBind">{{ t('personalSecurity.useRecovery') }}</n-button>
+      <n-button type="primary" @click="goBind()">{{ t('personalSecurity.setupAuthenticator') }}</n-button>
+      <n-button quaternary @click="goBind('recovery')">{{ t('personalSecurity.useRecovery') }}</n-button>
     </n-space>
     <p class="sec-note">{{ t('personalSecurity.note') }}</p>
   </n-card>

@@ -20,6 +20,7 @@ public class MfaEnrollmentService(
     ICacheProvider cache,
     AdminSecurityOptions security,
     ILogger<MfaEnrollmentService> logger,
+    IMfaPolicyService? mfaPolicy = null,
     TimeProvider? time = null,
     IPermissionProvider? permissions = null) : IMfaEnrollmentService
 {
@@ -27,15 +28,22 @@ public class MfaEnrollmentService(
 
     private DateTime Now => (time ?? TimeProvider.System).GetLocalNow().DateTime;
 
-    private bool TotpOn => security.IsTotpFeatureEnabled;
-
     private int RecoveryCodeCount =>
         security.Totp.RecoveryCodeCount > 0 ? security.Totp.RecoveryCodeCount : 10;
+
+    /// <summary>运行时总闸(SysConfig ∨ Options ∨ Level3);无 policy 时回退 Options 同步判定。</summary>
+    protected virtual async Task EnsureTotpOnAsync()
+    {
+        var on = mfaPolicy is not null
+            ? await mfaPolicy.IsTotpFeatureEnabledAsync()
+            : security.IsTotpFeatureEnabled;
+        AdminException.ThrowIf(!on, ErrorCode.NoPermission);
+    }
 
     /// <inheritdoc />
     public virtual async Task<TotpBindStartOutput> StartBindAsync(TotpBindStartInput input)
     {
-        AdminException.ThrowIf(!TotpOn, ErrorCode.NoPermission);
+        await EnsureTotpOnAsync();
         AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.Account), ErrorCode.PasswordWrong);
         AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.CurrentPassword), ErrorCode.MfaBindPasswordRequired);
 
@@ -81,7 +89,7 @@ public class MfaEnrollmentService(
     /// <inheritdoc />
     public virtual async Task<TotpBindCompleteOutput> CompleteBindAsync(TotpBindCompleteInput input)
     {
-        AdminException.ThrowIf(!TotpOn, ErrorCode.NoPermission);
+        await EnsureTotpOnAsync();
         AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.BindChallengeId), ErrorCode.MfaBindInvalid);
         AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.TotpCode), ErrorCode.TotpWrong);
 
@@ -124,7 +132,7 @@ public class MfaEnrollmentService(
     /// <inheritdoc />
     public virtual async Task UseRecoveryCodeAsync(TotpRecoveryInput input)
     {
-        AdminException.ThrowIf(!TotpOn, ErrorCode.NoPermission);
+        await EnsureTotpOnAsync();
         AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.Account), ErrorCode.PasswordWrong);
         AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.CurrentPassword), ErrorCode.PasswordWrong);
         AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.RecoveryCode), ErrorCode.RecoveryCodeInvalid);
@@ -159,7 +167,7 @@ public class MfaEnrollmentService(
     /// <inheritdoc />
     public virtual async Task ClearUserMfaAsync(long targetUserId, long operatorUserId)
     {
-        AdminException.ThrowIf(!TotpOn, ErrorCode.NoPermission);
+        await EnsureTotpOnAsync();
         AdminException.ThrowIf(operatorUserId <= 0, ErrorCode.NoPermission);
 
         var op = await users.GetByIdAsync(operatorUserId);

@@ -121,7 +121,10 @@ const refreshMiddleware: Middleware = {
     const ok = await refreshOnce()
     if (!ok) {
       useUserStore().clear()
-      const { router } = await import('@/router') // 惰性引入,避免与 router 静态循环依赖
+      const { useAuthStore } = await import('@/stores/auth')
+      useAuthStore().reset()
+      const { router, resetRouter } = await import('@/router') // 惰性引入,避免与 router 静态循环依赖
+      resetRouter()
       if (router.currentRoute.value.path !== '/login') router.replace('/login')
       return response
     }

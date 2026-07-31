@@ -16,8 +16,10 @@
 
 | 配置键 | 类型 | 默认 | 含义 |
 |--------|------|------|------|
-| `Totp:Enabled` | bool | `false` | 是否启用 TOTP（绑定/登录挑战/恢复码） |
-| `Totp:RequireForSuperAdmin` | bool | `false` | 启用 TOTP 时，超管是否必须第二因子（未绑定 → 引导**自助绑定**，非 InitGrant） |
+| **`sys.security.totp.enabled`**（SysConfig） | bool | `false` | **运行时总闸**（与登录验证码同款）。配置中心 → 安全策略可即时开关，无需改 appsettings |
+| **`sys.security.totp.requireForSuperAdmin`**（SysConfig） | bool | `false` | 运行时：超管是否必须第二因子 |
+| `Totp:Enabled`（appsettings） | bool | `false` | **部署地板**：为 `true` 时始终开能力（UI 关不掉）；默认 false，以 SysConfig 为准 |
+| `Totp:RequireForSuperAdmin`（appsettings） | bool | `false` | SysConfig 键缺失时的回退 |
 | `Totp:Issuer` | string | `TenonAdmin` | Authenticator 展示的 issuer |
 | `Totp:ChallengeTtlSeconds` | int | `300` | 登录/挑战有效期（秒） |
 | `Totp:ReauthWindowMinutes` | int | `5` | 高危操作再次确认窗口（分钟） |

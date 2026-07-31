@@ -36,7 +36,8 @@ cd web-react && npx vitest run src/views/mfa/BindPage.spec.tsx
 ## 合入后可跟（不挡本 PR）
 
 1. ~~CookieMode 双前端~~ — 客户端已具备 credentials + CSRF + 静默刷新（见 web/web-react `api/client.ts`）  
-2. ~~登录页 / 个人中心链到 `/mfa/bind`~~ — `/personal/security` + 登录「设置身份验证器」  
+2. ~~登录页 / 个人中心链到 `/mfa/bind`~~ — 自愿：`/personal/security`；强制未绑：登录 40020 **Modal**「设置身份验证器」（登录页**不**常驻链接）  
+
 3. ~~物理删除 DeployGrant/Invite 实体、闲置账号 Job、EnableMigrator~~ — 预检 InitGrant 改为 warn  
 4. ~~重命名 Level3* 测试/预检类型~~ — `SecurityBaseline*` / `CookieSessionCsrfTests` / `LegacySecurityPolicyFloorTests`（配置键与 `/sys/level3/precheck` 路由仍兼容）  
 5. ~~正式 `gen:api`~~ — Vue/React `schema.d.ts` 已从运行中后端重新生成  

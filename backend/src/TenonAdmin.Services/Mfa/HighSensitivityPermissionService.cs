@@ -14,11 +14,14 @@ public class HighSensitivityPermissionService(
     AdminSecurityOptions? security = null,
     IPermissionProvider? permissions = null,
     ISecurityProfileAccessor? profile = null,
+    IMfaPolicyService? mfaPolicy = null,
     ILogger<HighSensitivityPermissionService>? logger = null) : IHighSensitivityPermissionService
 {
-    private bool TotpOn =>
-        security?.IsTotpFeatureEnabled == true
-        || profile?.IsLevel3 == true;
+    protected virtual async Task<bool> IsTotpOnAsync()
+    {
+        if (mfaPolicy is not null) return await mfaPolicy.IsTotpFeatureEnabledAsync();
+        return security?.IsTotpFeatureEnabled == true || profile?.IsLevel3 == true;
+    }
 
     /// <inheritdoc />
     public virtual async Task<HighSensitivityPermissionList> ListAsync(
@@ -89,7 +92,7 @@ public class HighSensitivityPermissionService(
         AdminException.ThrowIf(operatorUserId <= 0, ErrorCode.NoPermission);
         var op = await users.GetByIdAsync(operatorUserId);
         AdminException.ThrowIf(op is null || !op!.Enabled, ErrorCode.NoPermission);
-        if (TotpOn)
+        if (await IsTotpOnAsync())
             AdminException.ThrowIf(!op.TotpEnabled, ErrorCode.TotpNotBound);
         if (op.IsSuperAdmin) return;
         if (permissions is null)

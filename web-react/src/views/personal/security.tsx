@@ -9,9 +9,12 @@ export default function SecurityPage() {
   const navigate = useNavigate()
   const account = useUserStore((s) => s.userInfo?.account)
 
-  const goBind = () => {
-    const q = account ? `?account=${encodeURIComponent(account)}` : ''
-    navigate(`/mfa/bind${q}`)
+  const goBind = (mode?: 'recovery') => {
+    const q = new URLSearchParams()
+    if (account) q.set('account', account)
+    if (mode === 'recovery') q.set('mode', 'recovery')
+    const qs = q.toString()
+    navigate(qs ? `/mfa/bind?${qs}` : '/mfa/bind')
   }
 
   return (
@@ -19,8 +22,8 @@ export default function SecurityPage() {
       <Alert type="info" showIcon title={t('personalSecurity.hint')} style={{ marginBottom: 16 }} />
       <Typography.Paragraph type="secondary">{t('personalSecurity.bindDesc')}</Typography.Paragraph>
       <Space>
-        <Button type="primary" onClick={goBind}>{t('personalSecurity.setupAuthenticator')}</Button>
-        <Button type="link" onClick={goBind}>{t('personalSecurity.useRecovery')}</Button>
+        <Button type="primary" onClick={() => goBind()}>{t('personalSecurity.setupAuthenticator')}</Button>
+        <Button type="link" onClick={() => goBind('recovery')}>{t('personalSecurity.useRecovery')}</Button>
       </Space>
       <Typography.Paragraph type="secondary" style={{ marginTop: 20, marginBottom: 0, fontSize: 12 }}>
         {t('personalSecurity.note')}

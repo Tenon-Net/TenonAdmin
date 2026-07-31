@@ -69,6 +69,9 @@ public class CookieSessionCsrfTests
 
     private sealed class NoMfaPolicy : IMfaPolicyService
     {
+        public Task<bool> IsTotpFeatureEnabledAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
+
         public Task<bool> IsMfaRequiredAsync(SysUser user, CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
 

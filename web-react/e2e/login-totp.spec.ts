@@ -81,3 +81,28 @@ test('login TOTP challenge (40018) completes and enters app', async ({ page }) =
   await expect(page).not.toHaveURL(/\/login/, { timeout: 15_000 })
   expect(totpBody).toEqual({ challengeId: 'chal-totp-e2e', code: '123456' })
 })
+
+test('login force-MFA unbound (40020) shows bind Modal, not always-on login link', async ({ page }) => {
+  await mockPortalBootstrap(page)
+
+  await page.route('**/api/v1/auth/login', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue()
+    await route.fulfill({
+      status: 400,
+      json: envelope(null, 40020),
+    })
+  })
+
+  await page.goto('/login')
+  await expect(page.getByRole('link', { name: /设置身份验证器|Set up authenticator/i })).toHaveCount(0)
+
+  await page.getByPlaceholder(/账号|account/i).fill('forced-user')
+  await page.getByPlaceholder(/密码|password/i).first().fill('Secret1!')
+  await page.getByRole('button', { name: /登\s*录|sign\s*in/i }).click()
+
+  await expect(page.getByText(/需要设置身份验证器|Authenticator required/i).first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByPlaceholder(/账号|account/i)).toBeVisible()
+  await page.getByRole('button', { name: /设置身份验证器|Set up authenticator/i }).click()
+  await expect(page).toHaveURL(/\/mfa\/bind/, { timeout: 10_000 })
+  expect(page.url()).toContain('account=forced-user')
+})

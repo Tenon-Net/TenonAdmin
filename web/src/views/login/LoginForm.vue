@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { NForm, NFormItem, NInput, NCheckbox, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NCheckbox, NModal, useMessage } from 'naive-ui'
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
 import { authApi, externalAuthApi, ApiError } from '@/api'
 import type { LoginOutput } from '@/types/api'
 import { useUserStore } from '@/stores/user'
+import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useSite } from '@/composables/useSite'
+import { resetRouter } from '@/router'
 import { btnGrad, glowSh } from '@/theme/mix'
 import { translateError } from '@/utils/error'
 import TenonLogo from '@/components/TenonLogo.vue'
@@ -24,6 +26,7 @@ const router = useRouter()
 const message = useMessage()
 const { t } = useI18n()
 const user = useUserStore()
+const auth = useAuthStore()
 const app = useAppStore()
 const { site, appVersion, loadSite } = useSite()
 const year = new Date().getFullYear()
@@ -37,6 +40,7 @@ const model = reactive(
 const loading = ref(false)
 
 // 登录形态:账号密码 / 短信免密 / 短信二次验证(40009) / TOTP 二次验证(40018)
+// 强制 MFA 未绑定(40020)用 Modal 引导,不切 mode,登录页默认也不常驻绑定链接
 const mode = ref<'account' | 'sms' | 'mfa' | 'totp'>('account')
 
 // 短信免密登录
@@ -45,6 +49,9 @@ const smsModel = reactive({ phone: '', code: '' })
 const mfa = reactive({ challengeId: '', phoneMask: '', code: '' })
 // TOTP 挑战(40018)
 const totp = reactive({ challengeId: '', code: '' })
+// 强制 MFA 但未绑定(40020):弹窗 + 带到 /mfa/bind 的账号
+const bindRequiredShow = ref(false)
+const bindAccount = ref('')
 
 // 发码/重发共用倒计时(同一时刻只有一个发码入口可见)
 const countdown = ref(0)
@@ -127,6 +134,10 @@ function onSso(code: string) {
 }
 
 function finishLogin(res: LoginOutput) {
+  // 每次登录都清动态路由/授权态,否则上次会话的 routesReady=true 会跳过 enterInitial,
+  // 菜单壳在、业务路由未重建 → 进系统后处处 404(绑定 MFA 后回登录再登最易踩中)。
+  resetRouter()
+  auth.reset()
   user.setSession(res)
   message.success(t('login.success'))
   router.replace('/')
@@ -159,6 +170,10 @@ async function onSubmit() {
       totp.challengeId = String(e.args.challengeId ?? '')
       totp.code = ''
       mode.value = 'totp'
+    } else if (e instanceof ApiError && e.code === 40020) {
+      // 40020 = 强制 MFA 未绑定 → Modal 引导自助设置(登录页默认不常驻链接)
+      bindAccount.value = model.account.trim()
+      bindRequiredShow.value = true
     } else if (e instanceof ApiError && e.code === 40009 && e.args) {
       // 40009 = 密码已过、需短信二次验证
       mfa.challengeId = String(e.args.challengeId ?? '')
@@ -173,6 +188,21 @@ async function onSubmit() {
   } finally {
     loading.value = false
   }
+}
+
+function closeBindRequired() {
+  bindRequiredShow.value = false
+}
+
+function goBindAuthenticator() {
+  const account = bindAccount.value || model.account.trim()
+  bindRequiredShow.value = false
+  void router.push({ path: '/mfa/bind', query: account ? { account } : {} })
+}
+
+function goRecovery() {
+  const account = model.account.trim() || bindAccount.value
+  void router.push({ path: '/mfa/bind', query: { ...(account ? { account } : {}), mode: 'recovery' } })
 }
 
 async function onMfaSubmit() {
@@ -306,7 +336,7 @@ async function onSmsSubmit() {
         </n-form-item>
         <div class="row lf-between">
           <a class="lf-link" @click="backToAccount">{{ t('login.backToPassword') }}</a>
-          <span />
+          <a class="lf-link" @click="goRecovery">{{ t('login.useRecovery') }}</a>
         </div>
         <button class="hero-btn" type="button" :style="heroStyle" :disabled="loading" @click.prevent="onSubmit">
           {{ loading ? t('common.loading') : t('login.submit') }}
@@ -376,10 +406,6 @@ async function onSmsSubmit() {
         <button class="hero-btn" type="button" :style="heroStyle" :disabled="loading" @click.prevent="onSubmit">
           {{ loading ? t('common.loading') : t('login.submit') }}
         </button>
-        <div v-if="mode === 'account'" class="row lf-between" style="margin-top: 12px">
-          <RouterLink class="lf-link" to="/mfa/bind">{{ t('login.setupAuthenticator') }}</RouterLink>
-          <span />
-        </div>
       </n-form>
 
       <!-- 第三方登录:后端 providers 驱动;无启用项则整段不显。点击顶层跳转到 IdP(OAuth2 授权码往返)。 -->
@@ -403,6 +429,19 @@ async function onSmsSubmit() {
       </span>
       <span v-if="appVersion" class="lf-ver">v{{ appVersion }}</span>
     </footer>
+
+    <!-- 强制 MFA 未绑定(40020):遮罩 Modal,账密表单仍在底下;默认登录页不常驻绑定链接 -->
+    <n-modal
+      v-model:show="bindRequiredShow"
+      preset="dialog"
+      type="warning"
+      :title="t('login.totpBindTitle')"
+      :content="t('login.totpBindSub')"
+      :positive-text="t('login.setupAuthenticator')"
+      :negative-text="t('common.cancel')"
+      @positive-click="goBindAuthenticator"
+      @negative-click="closeBindRequired"
+    />
   </div>
 </template>
 

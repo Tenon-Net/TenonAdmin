@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   ALL_BOOL_KEYS, CAPTCHA_KEY, CAPTCHA_TYPE_KEY, KEY_ALLOWED, KEY_MAX_SIZE, NUM_FIELDS,
-  RATELIMIT_KEY, SMS_LOGIN_KEY, SMS_MFA_KEY, SYS_FIELDS,
+  RATELIMIT_KEY, SMS_LOGIN_KEY, SMS_MFA_KEY, SYS_FIELDS, TOTP_KEY,
   blankConfig, configToInput, normalizeExt, parseBase, parseSecurity, parseUpload,
   rowsToMap, serializeBase, serializeSecurity, serializeUpload, type SecurityState,
 } from './configForm'
@@ -93,7 +93,7 @@ describe('安全策略 parse/serialize', () => {
     expect(map.get('sys.security.password.requireUpper')).toBe('true')
     expect(map.get('sys.security.password.requireLower')).toBe('false')
     expect(map.get(CAPTCHA_TYPE_KEY)).toBe('math')
-    // 键集完整:9 数值 + 8 布尔 + 1 captchaType
+    // 键集完整:NUM + BOOL(含 TOTP) + 1 captchaType
     expect(items).toHaveLength(NUM_FIELDS.length + ALL_BOOL_KEYS.length + 1)
     for (const k of ALL_BOOL_KEYS) expect(map.has(k)).toBe(true)
   })
@@ -106,10 +106,11 @@ describe('安全策略 parse/serialize', () => {
     const back = parseSecurity(serializeSecurity(state))
     expect(back).toEqual(state)
   })
-  it('ALL_BOOL_KEYS = 密码4 + 验证码 + mfa + smsLogin + 限流(共8,无重复)', () => {
-    expect(ALL_BOOL_KEYS).toHaveLength(8)
-    expect(new Set(ALL_BOOL_KEYS).size).toBe(8)
+  it('ALL_BOOL_KEYS = 密码4 + 验证码 + TOTP2 + mfa + smsLogin + 限流(共10,无重复)', () => {
+    expect(ALL_BOOL_KEYS).toHaveLength(10)
+    expect(new Set(ALL_BOOL_KEYS).size).toBe(10)
     expect(ALL_BOOL_KEYS).toContain(SMS_LOGIN_KEY)
+    expect(ALL_BOOL_KEYS).toContain(TOTP_KEY)
   })
 })
 

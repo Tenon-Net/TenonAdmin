@@ -34,10 +34,12 @@ export function useRealtime() {
       .configureLogging(LogLevel.Warning)
       .build()
 
-    // 强制下线:清会话 + 提示 + 跳登录(与 api/client.ts 刷新失败路径同款收尾)
+    // 强制下线:清会话 + 授权态 + 提示 + 跳登录(与 api/client.ts 刷新失败路径同款收尾)
     conn.on('force-logout', () => {
       void stop()
       useUserStore().clear()
+      void import('@/stores/auth').then(({ useAuthStore }) => useAuthStore().reset())
+      void import('@/router').then(({ resetRouter }) => resetRouter())
       message.warning(t('realtime.forcedLogout'))
       if (router.currentRoute.value.path !== '/login') router.replace('/login')
     })
