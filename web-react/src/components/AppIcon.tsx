@@ -38,7 +38,8 @@ export function AppIcon({ icon, size = 18, fallback = 'ph:dot-outline-duotone', 
   const [, setReadyTick] = useState(0)
   useEffect(() => {
     let live = true
-    void ensureIconLoaded(name).then(() => {
+    // Promise.resolve:测试 mock 若漏 return Promise,也不要把 .then 打到 undefined 上。
+    void Promise.resolve(ensureIconLoaded(name)).then(() => {
       if (live) setReadyTick((n) => n + 1)
     })
     return () => {

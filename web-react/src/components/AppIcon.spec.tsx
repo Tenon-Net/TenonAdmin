@@ -3,10 +3,13 @@ import { render, cleanup, waitFor } from '@testing-library/react'
 import { addIcon } from '@iconify/react/offline'
 import { iconName, AppIcon } from './AppIcon'
 
-const ensureIconLoaded = vi.fn(async () => {
-  // 模拟"子集外图标"懒加载完成后才注册 —— 与 ensureIconLoaded 真实现同序。
-  addIcon('lazy:box', { body: '<circle cx="12" cy="12" r="10" />', width: 24, height: 24 })
-})
+// vi.mock 提升执行,mock 须用 vi.hoisted 才能在 factory 里引用。
+const { ensureIconLoaded } = vi.hoisted(() => ({
+  ensureIconLoaded: vi.fn(async (_name: string) => {
+    // 模拟"子集外图标"懒加载完成后才注册 —— 与 ensureIconLoaded 真实现同序。
+    addIcon('lazy:box', { body: '<circle cx="12" cy="12" r="10" />', width: 24, height: 24 })
+  }),
+}))
 
 vi.mock('@/lib/icons', async (orig) => {
   const actual = await orig<typeof import('@/lib/icons')>()
