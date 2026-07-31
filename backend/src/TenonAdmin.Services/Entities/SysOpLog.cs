@@ -26,7 +26,8 @@ public class SysOpLog : BaseEntity
     public string Path { get; set; } = "";
 
     /// <summary>请求入参 JSON(密码等敏感字段已脱敏为 <c>***</c>);超大/不可序列化入参记占位串</summary>
-    [SugarColumn(ColumnDataType = "text", IsNullable = true, ColumnDescription = "入参(脱敏后 JSON)")]
+    /// <remarks>SqlServer 禁止裸 text(非 Unicode);见 <c>SysJobLog.ErrorText</c> 同注。</remarks>
+    [SugarColumn(ColumnDataType = StaticConfig.CodeFirst_BigString, IsNullable = true, ColumnDescription = "入参(脱敏后 JSON)")]
     public string? ParamJson { get; set; }
 
     /// <summary>业务返回码(0 成功,其余见 <c>ErrorCode</c>)</summary>
@@ -41,7 +42,7 @@ public class SysOpLog : BaseEntity
     /// 异常信息:仅动作抛异常时记(异常消息,截断)。业务码已由 ResultCode 表达,此列答"为什么失败";
     /// 成功/纯业务错误(未抛异常)恒 null。<b>只记异常消息不记响应体</b>——响应体可能含明文密码/令牌(设计 §14)。
     /// </summary>
-    [SugarColumn(ColumnDataType = "text", IsNullable = true, ColumnDescription = "异常信息")]
+    [SugarColumn(ColumnDataType = StaticConfig.CodeFirst_BigString, IsNullable = true, ColumnDescription = "异常信息")]
     public string? ExceptionMessage { get; set; }
 
     /// <summary>接口耗时(毫秒)</summary>

@@ -31,7 +31,8 @@ public class SysJob : BaseEntity
     public string HandlerName { get; set; } = "";
 
     /// <summary>属性包:Dictionary&lt;string,string?&gt; JSON,处理器参数的唯一入口(键表见台账 §7)</summary>
-    [SugarColumn(ColumnDataType = "text", IsNullable = true, ColumnDescription = "属性包(JSON 字符串字典)")]
+    /// <remarks>SqlServer 禁止裸 text(非 Unicode);见 <c>SysJobLog.ErrorText</c> 同注。</remarks>
+    [SugarColumn(ColumnDataType = StaticConfig.CodeFirst_BigString, IsNullable = true, ColumnDescription = "属性包(JSON 字符串字典)")]
     public string? PropsJson { get; set; }
 
     [SugarColumn(ColumnDescription = "触发类型:1=Cron/2=固定间隔/3=一次性")]
