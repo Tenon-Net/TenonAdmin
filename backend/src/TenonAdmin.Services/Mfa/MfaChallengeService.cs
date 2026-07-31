@@ -17,7 +17,8 @@ public class MfaChallengeService(
     public virtual async Task<string> CreateChallengeAsync(long userId)
     {
         var challengeId = Guid.CreateVersion7().ToString("N");
-        var ttl = TimeSpan.FromSeconds(Math.Max(60, security.Level3.TotpChallengeTtlSeconds));
+        // 产品键 Totp:ChallengeTtlSeconds;回退历史 Level3 节(见 ResolveTotpChallengeTtlSeconds)
+        var ttl = TimeSpan.FromSeconds(Math.Max(60, security.ResolveTotpChallengeTtlSeconds()));
         await cache.SetAsync(CacheKeys.TotpMfaChallenge(challengeId), userId, ttl);
         return challengeId;
     }

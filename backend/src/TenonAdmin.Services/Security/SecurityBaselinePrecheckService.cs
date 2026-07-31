@@ -63,34 +63,24 @@ public class SecurityBaselinePrecheckService(
     /// <summary>Profile 检查:Level3 通过;生产未启用 → warn;其它环境未启用 → warn(不阻断)。</summary>
     protected virtual SecurityBaselinePrecheckItem CheckProfile()
     {
+        // ADR 0006:不再以 Profile=Level3 为合规目标;独立可选键 Totp / Session:CookieMode。
         if (profile.IsLevel3)
         {
             return Item(
                 SecurityBaselinePrecheckConstants.CheckProfileLevel3,
                 "Security Profile",
-                SecurityBaselineCheckStatus.Pass,
-                "已启用 TenonAdmin:Security:Profile=Level3。",
-                "无需处理。",
-                critical: false);
-        }
-
-        if (profile.IsProductionWithoutLevel3)
-        {
-            return Item(
-                SecurityBaselinePrecheckConstants.CheckProfileLevel3,
-                "Security Profile",
                 SecurityBaselineCheckStatus.Warn,
-                "生产环境未启用 Level3;当前部署不满足等保三级应用安全基线(内核不宣称已通过等保三级)。",
-                "若需第一期基线:部署配置 TenonAdmin:Security:Profile=Level3 并完成 Redis/密钥预检后重启。",
+                "仍配置历史 Profile=Level3(已废弃产品路径);功能过渡兼容中。",
+                "迁移到 TenonAdmin:Security:Totp:Enabled 与 Session:CookieMode 等独立键,并去掉 Profile=Level3。",
                 critical: false);
         }
 
         return Item(
             SecurityBaselinePrecheckConstants.CheckProfileLevel3,
             "Security Profile",
-            SecurityBaselineCheckStatus.Warn,
-            $"当前 Profile={profile.Profile};第一期合规要求显式 Level3。",
-            "部署配置 TenonAdmin:Security:Profile=Level3(默认不启用,避免破坏性升级)。",
+            SecurityBaselineCheckStatus.Pass,
+            $"Profile={profile.Profile};可选安全由 Totp/CookieMode 等独立开关控制(ADR 0006)。",
+            "需要时显式启用 Totp:Enabled 或 Session:CookieMode;勿再依赖 Level3 总档。",
             critical: false);
     }
 
@@ -429,24 +419,24 @@ public class SecurityBaselinePrecheckService(
     }
 
     /// <summary>
-    /// Level3 Cookie/CSRF 拓扑:CORS 跨源时必须配置 CookieDomain,否则声明不可用的跨源组合。
-    /// 空 CORS = 同源反代模型(推荐)。
+    /// Cookie/CSRF 拓扑:仅在 <see cref="AdminSecurityOptions.IsCookieSessionEnabled"/> 时检查。
+    /// CORS 跨源时必须配置 CookieDomain + AllowCredentials;空 CORS = 同源反代(推荐)。
     /// </summary>
     protected virtual SecurityBaselinePrecheckItem CheckCookieCsrfTopology()
     {
-        if (!profile.IsLevel3)
+        if (!security.IsCookieSessionEnabled)
         {
             return Item(
                 SecurityBaselinePrecheckConstants.CheckCookieCsrfTopology,
                 "Cookie/CSRF Topology",
                 SecurityBaselineCheckStatus.Pass,
-                "非 Level3:不强制 Cookie 会话拓扑。",
-                "启用 Level3 后优先同源反代;跨源须配置 CookieDomain + CORS 凭证。",
+                "未启用 Cookie 会话(Session:CookieMode / 历史 Level3);body refresh 模式无需 CSRF 拓扑。",
+                "需要时设 TenonAdmin:Security:Session:CookieMode=true;跨源再配 CookieDomain + CORS 凭证。",
                 critical: false);
         }
 
         var origins = api?.Cors.AllowedOrigins ?? [];
-        var domain = security.Level3.CookieDomain?.Trim();
+        var domain = security.ResolveCookieDomain();
         var hasCrossOrigin = origins.Length > 0;
 
         if (!hasCrossOrigin)
@@ -455,7 +445,7 @@ public class SecurityBaselinePrecheckService(
                 SecurityBaselinePrecheckConstants.CheckCookieCsrfTopology,
                 "Cookie/CSRF Topology",
                 SecurityBaselineCheckStatus.Pass,
-                "Level3 同源模型:未配置 CORS AllowedOrigins,Cookie host-only + 双提交 CSRF。",
+                "Cookie 会话同源模型:未配置 CORS AllowedOrigins,Cookie host-only + 双提交 CSRF。",
                 "前后端请经同一 origin 反代(推荐 Caddy/nginx 同域);跨源须显式配置。",
                 critical: false);
         }
@@ -466,8 +456,8 @@ public class SecurityBaselinePrecheckService(
                 SecurityBaselinePrecheckConstants.CheckCookieCsrfTopology,
                 "Cookie/CSRF Topology",
                 SecurityBaselineCheckStatus.Fail,
-                "Level3 已配置 CORS AllowedOrigins 但未设置 CookieDomain:SPA 无法读取 API host-only csrf Cookie,写请求将 CSRF 失败。",
-                "二选一:① 改为同源反代并清空 AllowedOrigins;② 设置 CookieDomain 为共享父域并启用 CORS AllowCredentials。",
+                "已启用 Cookie 会话且配置了 CORS AllowedOrigins,但未设置 CookieDomain:SPA 无法读到 API host-only csrf Cookie。",
+                "二选一:① 改为同源反代并清空 AllowedOrigins;② 设置 Session:CookieDomain(或历史 Level3:CookieDomain)为共享父域并启用 CORS AllowCredentials。",
                 critical: true);
         }
 
@@ -477,7 +467,7 @@ public class SecurityBaselinePrecheckService(
                 SecurityBaselinePrecheckConstants.CheckCookieCsrfTopology,
                 "Cookie/CSRF Topology",
                 SecurityBaselineCheckStatus.Fail,
-                "Level3 跨源已配置 CookieDomain,但 Cors.AllowCredentials=false:浏览器不会携带 Cookie,CSRF/静默刷新失败。",
+                "Cookie 会话跨源已配置 CookieDomain,但 Cors.AllowCredentials=false:浏览器不会携带 Cookie。",
                 "设置 TenonAdmin:Api:Cors:AllowCredentials=true,并确保 AllowedOrigins 为显式列表(禁止 * )。",
                 critical: true);
         }
@@ -486,7 +476,7 @@ public class SecurityBaselinePrecheckService(
             SecurityBaselinePrecheckConstants.CheckCookieCsrfTopology,
             "Cookie/CSRF Topology",
             SecurityBaselineCheckStatus.Pass,
-            $"Level3 跨源 Cookie 模型:CookieDomain={domain},CORS origins={origins.Length},AllowCredentials=true。",
+            $"Cookie 会话跨源模型:CookieDomain={domain},CORS origins={origins.Length},AllowCredentials=true。",
             "确认 CookieDomain 为 SPA 与 API 的公共父域,且边缘为 HTTPS(SameSite=None 需 Secure)。",
             critical: false);
     }

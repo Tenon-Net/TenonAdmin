@@ -124,6 +124,7 @@ public class MfaEnrollmentService(
     /// <inheritdoc />
     public virtual async Task UseRecoveryCodeAsync(TotpRecoveryInput input)
     {
+        AdminException.ThrowIf(!TotpOn, ErrorCode.NoPermission);
         AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.Account), ErrorCode.PasswordWrong);
         AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.CurrentPassword), ErrorCode.PasswordWrong);
         AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.RecoveryCode), ErrorCode.RecoveryCodeInvalid);

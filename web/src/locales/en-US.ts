@@ -355,6 +355,7 @@ export default {
     totpBound: 'Authenticator bound',
     issueTotpInvite: 'Invite authenticator',
     clearMfa: 'Clear MFA',
+    clearMfaConfirm: 'Clear authenticator for user "{name}"? They must rebind before MFA works again.',
     mfaCleared: 'Authenticator cleared for user',
     totpInviteTitle: 'Authenticator invite for {name}',
     totpInviteOnce: 'This invitation is shown only now. Send the link or token to the user through an approved channel.',

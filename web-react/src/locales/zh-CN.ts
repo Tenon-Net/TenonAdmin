@@ -352,6 +352,7 @@ export default {
     totpBound: '已绑动态口令',
     inviteAuthenticator: '邀请认证器',
     clearMfa: '清除二因子',
+    clearMfaConfirm: '确定清除用户「{name}」的身份验证器？该用户需重新绑定才能使用二因子。',
     mfaCleared: '已清除该用户二因子',
     inviteHint: '将此一次性注册链接发送给 {name}。关闭后将不再显示。',
     inviteExpires: '过期时间: {time}',

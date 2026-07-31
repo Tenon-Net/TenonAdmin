@@ -24,7 +24,7 @@ import type { ExportColumnDef, SysOrg, UserItem } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
-const { run } = useConfirm()
+const { run, confirm } = useConfirm()
 const authStore = useAuthStore()
 const tableRef = ref<ProTableInst<UserItem>>()
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
@@ -42,11 +42,12 @@ const clearMfaLoading = ref(false)
 async function clearUserMfa(user: UserItem) {
   clearMfaLoading.value = true
   try {
-    await mfaApi.clear({ userId: user.id })
-    message.success(t('user.mfaCleared'))
-    tableRef.value?.refresh()
-  } catch (e) {
-    message.error(translateError(e))
+    const ok = await confirm({
+      content: t('user.clearMfaConfirm', { name: user.name }),
+      action: () => mfaApi.clear({ userId: user.id }),
+      successMsg: t('user.mfaCleared'),
+    })
+    if (ok) tableRef.value?.refresh()
   } finally {
     clearMfaLoading.value = false
   }

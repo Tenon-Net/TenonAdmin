@@ -267,15 +267,18 @@ export default function UserPage() {
     }
   }
 
-  const clearUserMfa = useCallback(async (r: UserItem) => {
-    try {
-      await mfaApi.clear({ userId: r.id })
-      message.success(t('user.mfaCleared'))
-      reload()
-    } catch (e) {
-      message.error(translateError(e))
-    }
-  }, [message, reload, t])
+  const clearUserMfa = useCallback(
+    (r: UserItem) => {
+      void confirm({
+        content: t('user.clearMfaConfirm', { name: r.name }),
+        action: () => mfaApi.clear({ userId: r.id }),
+        successMsg: t('user.mfaCleared'),
+      }).then((ok) => {
+        if (ok) reload()
+      })
+    },
+    [confirm, reload, t],
+  )
 
   const columns = useMemo<ProColumns<UserItem>[]>(
     () => [

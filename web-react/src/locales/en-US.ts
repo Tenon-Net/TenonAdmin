@@ -349,6 +349,7 @@ export default {
     totpBound: 'Authenticator bound',
     inviteAuthenticator: 'Invite authenticator',
     clearMfa: 'Clear MFA',
+    clearMfaConfirm: 'Clear authenticator for user "{name}"? They must rebind before MFA works again.',
     mfaCleared: 'Authenticator cleared for user',
     inviteHint: 'Send this one-time enrollment link to {name}. It will not be shown again after closing.',
     inviteExpires: 'Expires: {time}',

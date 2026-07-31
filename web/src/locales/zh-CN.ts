@@ -358,6 +358,7 @@ export default {
     totpBound: '已绑动态口令',
     issueTotpInvite: '发放动态口令邀请',
     clearMfa: '清除二因子',
+    clearMfaConfirm: '确定清除用户「{name}」的身份验证器？该用户需重新绑定才能使用二因子。',
     mfaCleared: '已清除该用户二因子',
     totpInviteTitle: '{name} 的动态口令邀请',
     totpInviteOnce: '邀请仅在当前显示一次，请通过受控渠道将链接或令牌发送给用户。',

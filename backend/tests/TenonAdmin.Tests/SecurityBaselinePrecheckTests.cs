@@ -326,15 +326,17 @@ public class SecurityBaselinePrecheckTests
     }
 
     [Fact]
-    public async Task Default_profile_is_not_phase1_compliant_but_not_critical()
+    public async Task Default_profile_is_pass_not_level3_compliance_warn()
     {
+        // ADR 0006:默认 Profile 不再因「未开 Level3」告警;可选安全独立开关
         var svc = Make(SecurityProfile.None, environment: "Production");
         var result = await svc.RunAsync();
 
         Assert.False(result.OverallCompliantForPhase1);
-        Assert.False(result.HasCriticalFailures); // 非 Level3 不触发关键 fail
+        Assert.False(result.HasCriticalFailures);
         var profileCheck = result.Checks.Single(c => c.Id == SecurityBaselinePrecheckConstants.CheckProfileLevel3);
-        Assert.Equal(SecurityBaselineCheckStatus.Warn, profileCheck.Status);
+        Assert.Equal(SecurityBaselineCheckStatus.Pass, profileCheck.Status);
+        Assert.DoesNotContain("等保", profileCheck.Message, StringComparison.Ordinal);
     }
 
     [Fact]

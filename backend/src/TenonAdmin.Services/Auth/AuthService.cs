@@ -28,8 +28,11 @@ public class AuthService(
     TimeProvider? time = null,
     // TOTP/MFA(等保三级一期):尾随可选;DI 正常注入;子类省略时 TOTP 检查直通
     IMfaPolicyService? mfaPolicy = null,
-    IMfaChallengeService? mfaChallenge = null) : IAuthService
+    IMfaChallengeService? mfaChallenge = null,
+    AdminSecurityOptions? security = null) : IAuthService
 {
+    private readonly AdminSecurityOptions security = security ?? new AdminSecurityOptions();
+
     // LastPasswordChangeTime 是与审计字段同类的持久化业务时间戳,走本地时钟(与 SqlSugarSetup 的 GetLocalNow 审计口径一致)
     private DateTime Now => (time ?? TimeProvider.System).GetLocalNow().DateTime;
 
@@ -138,10 +141,12 @@ public class AuthService(
             throw new AdminException(ErrorCode.TotpNotBound);
 
         var challengeId = await mfaChallenge.CreateChallengeAsync(user.Id);
+        // 与 MfaChallengeService 同一 TTL 解析,避免信令与实际过期不一致
+        var expires = Math.Max(60, security.ResolveTotpChallengeTtlSeconds());
         throw new AdminException(ErrorCode.TotpRequired, new Dictionary<string, object?>
         {
             ["challengeId"] = challengeId,
-            ["expiresSeconds"] = 300,
+            ["expiresSeconds"] = expires,
         });
     }
 
