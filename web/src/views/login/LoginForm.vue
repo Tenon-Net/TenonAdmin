@@ -376,6 +376,10 @@ async function onSmsSubmit() {
         <button class="hero-btn" type="button" :style="heroStyle" :disabled="loading" @click.prevent="onSubmit">
           {{ loading ? t('common.loading') : t('login.submit') }}
         </button>
+        <div v-if="mode === 'account'" class="row lf-between" style="margin-top: 12px">
+          <RouterLink class="lf-link" to="/mfa/bind">{{ t('login.setupAuthenticator') }}</RouterLink>
+          <span />
+        </div>
       </n-form>
 
       <!-- 第三方登录:后端 providers 驱动;无启用项则整段不显。点击顶层跳转到 IdP(OAuth2 授权码往返)。 -->

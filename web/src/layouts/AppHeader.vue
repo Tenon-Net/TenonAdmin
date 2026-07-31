@@ -72,6 +72,7 @@ function onLocale(key: string) {
 const userOptions = computed<DropdownOption[]>(() => [
   { label: t('app.profile'), key: 'profile' },
   { label: t('app.password'), key: 'password' },
+  { label: t('app.security'), key: 'security' },
   { label: t('app.sessions'), key: 'sessions' },
   { label: t('app.bindings'), key: 'bindings' },
   { type: 'divider', key: 'd1' },
@@ -80,6 +81,7 @@ const userOptions = computed<DropdownOption[]>(() => [
 async function onUser(key: string) {
   if (key === 'profile') router.push('/personal/profile')
   else if (key === 'password') router.push('/personal/password')
+  else if (key === 'security') router.push('/personal/security')
   else if (key === 'sessions') router.push('/personal/sessions')
   else if (key === 'bindings') router.push('/personal/bindings')
   else if (key === 'logout') await logout()

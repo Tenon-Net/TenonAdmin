@@ -40,7 +40,7 @@ function attachCsrf(headers: Headers) {
   if (csrf) headers.set(CSRF_HEADER, csrf)
 }
 
-// credentials:'include'——Level3 静默刷新/登出依赖 HttpOnly refresh Cookie;
+// credentials:'include'——Cookie 会话(Session:CookieMode)静默刷新/登出依赖 HttpOnly refresh Cookie;
 // 同源默认也会带 Cookie,显式 include 覆盖 VITE_API_BASE 跨源场景(需后端 CORS AllowCredentials)。
 export const client = createClient<paths>({ baseUrl, credentials: 'include' })
 // 刷新专用客户端:不挂刷新中间件,避免刷新自身 401 触发递归。

@@ -390,6 +390,14 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
             <Button type="primary" size="large" block htmlType="submit" loading={loading}>
               {t('login.submit')}
             </Button>
+            {mode === 'account' ? (
+              <div className="row lf-between" style={{ marginTop: 12 }}>
+                <a className="lf-link" href="/mfa/bind" onClick={(e) => { e.preventDefault(); navigate('/mfa/bind') }}>
+                  {t('login.setupAuthenticator')}
+                </a>
+                <span />
+              </div>
+            ) : null}
           </Form>
 
           {/* 第三方登录:后端 providers 驱动;无启用项则整段不显。 */}

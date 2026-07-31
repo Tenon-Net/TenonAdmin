@@ -11,8 +11,8 @@ const baseUrl = import.meta.env.VITE_API_BASE ?? ''
 const rawTransport = globalThis.fetch
 
 /**
- * credentials:include —— Level3 依赖 HttpOnly refresh Cookie + 可读 CSRF Cookie。
- * 非 Level3 同源默认也无副作用;跨源时宿主须配 CORS AllowedOrigins(与部署文档一致)。
+ * credentials:include —— Cookie 会话(Session:CookieMode)依赖 HttpOnly refresh + 可读 CSRF Cookie。
+ * body 模式同源默认也无副作用;跨源时宿主须配 CORS AllowedOrigins(与部署文档一致)。
  */
 const client = createClient<paths>({ baseUrl, fetch: rawTransport, credentials: 'include' })
 const bare = createClient<paths>({ baseUrl, fetch: rawTransport, credentials: 'include' })

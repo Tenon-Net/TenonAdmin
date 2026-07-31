@@ -34,8 +34,8 @@ cd web-react && npx vitest run src/views/mfa/BindPage.spec.tsx
 
 ## 合入后可跟（不挡本 PR）
 
-1. CookieMode 双前端完整对齐（内存 access + CSRF）  
-2. 登录页 / 个人中心链到 `/mfa/bind`  
+1. ~~CookieMode 双前端~~ — 客户端已具备 credentials + CSRF + 静默刷新（见 web/web-react `api/client.ts`）  
+2. ~~登录页 / 个人中心链到 `/mfa/bind`~~ — `/personal/security` + 登录「设置身份验证器」  
 3. 物理删除历史 Level3 注册位、DeployGrant/Invite 实体、闲置账号 Job  
 4. 重命名/精简仍带 `Level3*` 的测试类名  
 5. 正式 `gen:api`（当前 schema 已手工对齐 clear/自助 bind，下次 gen 会覆盖）  

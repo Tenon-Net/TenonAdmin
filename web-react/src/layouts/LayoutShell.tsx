@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Avatar, Breadcrumb, Button, Drawer, Dropdown, Grid, Menu, Space, Tooltip, Typography, Watermark, type MenuProps } from 'antd'
 import {
   AppstoreOutlined, DesktopOutlined, FullscreenExitOutlined, FullscreenOutlined, KeyOutlined, LinkOutlined, LogoutOutlined,
-  MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SettingOutlined, SunOutlined, TranslationOutlined, UserOutlined,
+  MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, MoonOutlined, SafetyCertificateOutlined, SearchOutlined, SettingOutlined, SunOutlined, TranslationOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -98,10 +98,11 @@ export function LayoutShell() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // 用户下拉:个人中心四页 + 登出。key=personal 段名,logout 单独处理。
+  // 用户下拉:个人中心页 + 登出。key=personal 段名,logout 单独处理。
   const userMenu: MenuProps['items'] = [
     { key: 'profile', label: t('menu.profile'), icon: <UserOutlined /> },
     { key: 'password', label: t('menu.password'), icon: <KeyOutlined /> },
+    { key: 'security', label: t('menu.security'), icon: <SafetyCertificateOutlined /> },
     { key: 'sessions', label: t('menu.sessions'), icon: <DesktopOutlined /> },
     { key: 'bindings', label: t('menu.bindings'), icon: <LinkOutlined /> },
     { type: 'divider' },

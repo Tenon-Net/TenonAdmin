@@ -14,6 +14,7 @@ import { LayoutShell } from '@/layouts/LayoutShell'
 // **已在 buildRoutes 的 glob 排除 `personal/**`**,否则静态+动态双 import 无法 code-split。
 const ProfilePage = lazy(() => import('@/views/personal/profile'))
 const PasswordPage = lazy(() => import('@/views/personal/password'))
+const SecurityPage = lazy(() => import('@/views/personal/security'))
 const NoticePage = lazy(() => import('@/views/personal/notice'))
 const SessionsPage = lazy(() => import('@/views/personal/sessions'))
 const BindingsPage = lazy(() => import('@/views/personal/bindings'))
@@ -115,6 +116,7 @@ function DynamicRoutes() {
           // 个人中心五页(静态路由,壳内渲染;入口在顶栏用户下拉 / 铃铛)。
           { path: '/personal/profile', element: lazyEl(ProfilePage) },
           { path: '/personal/password', element: lazyEl(PasswordPage) },
+          { path: '/personal/security', element: lazyEl(SecurityPage) },
           { path: '/personal/notice', element: lazyEl(NoticePage) },
           { path: '/personal/sessions', element: lazyEl(SessionsPage) },
           { path: '/personal/bindings', element: lazyEl(BindingsPage) },

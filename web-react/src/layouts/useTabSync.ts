@@ -10,6 +10,7 @@ import { detailMetaForPath } from '@/router/detailRoutes'
 const PERSONAL_META: Record<string, TabMeta> = {
   '/personal/profile': { title: 'menu.profile', icon: 'ph:user' },
   '/personal/password': { title: 'menu.password', icon: 'ph:key' },
+  '/personal/security': { title: 'menu.security', icon: 'ph:shield-check' },
   '/personal/notice': { title: 'menu.notice', icon: 'ph:bell' },
   '/personal/sessions': { title: 'menu.sessions', icon: 'ph:desktop' },
   '/personal/bindings': { title: 'menu.bindings', icon: 'ph:link-simple' },
