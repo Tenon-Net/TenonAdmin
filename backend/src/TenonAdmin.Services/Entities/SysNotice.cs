@@ -43,7 +43,8 @@ public class SysNotice : BaseEntity
     [SugarColumn(Length = 128, ColumnDescription = "标题")]
     public string Title { get; set; } = "";
 
-    // ponytail: 正文限 2000 字符(经全局 string→nvarchar 映射跨方言安全);要富文本/超长正文再改 text 列 + 按方言映射。
+    // ponytail: 正文限 2000 字符(经全局 string→nvarchar 映射跨方言安全)。
+    // 要富文本/超长正文用 StaticConfig.CodeFirst_BigString(SqlServer→nvarchar(max)),禁止裸 ColumnDataType="text"(非 Unicode,中文变 ???)。
     [SugarColumn(Length = 2000, IsNullable = true, ColumnDescription = "正文")]
     public string? Content { get; set; }
 

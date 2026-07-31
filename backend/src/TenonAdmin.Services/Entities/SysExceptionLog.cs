@@ -30,11 +30,12 @@ public class SysExceptionLog : BaseEntity
     public string ExceptionType { get; set; } = "";
 
     /// <summary>异常消息(截断)。只记消息文本,不含请求/响应体。</summary>
-    [SugarColumn(ColumnDataType = "text", IsNullable = true, ColumnDescription = "异常消息")]
+    /// <remarks>SqlServer 禁止裸 text(非 Unicode);见 <c>SysJobLog.ErrorText</c> 同注。</remarks>
+    [SugarColumn(ColumnDataType = StaticConfig.CodeFirst_BigString, IsNullable = true, ColumnDescription = "异常消息")]
     public string? Message { get; set; }
 
     /// <summary>异常堆栈(截断);排障主依据</summary>
-    [SugarColumn(ColumnDataType = "text", IsNullable = true, ColumnDescription = "异常堆栈")]
+    [SugarColumn(ColumnDataType = StaticConfig.CodeFirst_BigString, IsNullable = true, ColumnDescription = "异常堆栈")]
     public string? StackTrace { get; set; }
 
     /// <summary>触发人用户 Id(从当前登录态取,匿名端点为 null;名称按 Id 关联 sys_user,不冗余存)</summary>

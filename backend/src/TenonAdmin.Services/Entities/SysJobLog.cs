@@ -66,10 +66,15 @@ public class SysJobLog : AuditEntity
     public bool KillRequested { get; set; }
 
     /// <summary>处理器输出(截 8KB;HTTP 响应体截 Http.MaxResponseLogBytes)</summary>
-    [SugarColumn(ColumnDataType = "text", IsNullable = true, ColumnDescription = "输出消息(截断)")]
+    /// <remarks>
+    /// 禁止 <c>ColumnDataType="text"</c>:SqlServer 的 text 是非 Unicode,中文写入后读回成 ???。
+    /// <see cref="StaticConfig.CodeFirst_BigString"/> 在 SqlServer 上解析为 nvarchar(max),其它方言仍是 longtext/text。
+    /// </remarks>
+    [SugarColumn(ColumnDataType = StaticConfig.CodeFirst_BigString, IsNullable = true, ColumnDescription = "输出消息(截断)")]
     public string? MessageText { get; set; }
 
     /// <summary>失败异常信息(截 8KB)</summary>
-    [SugarColumn(ColumnDataType = "text", IsNullable = true, ColumnDescription = "异常信息(截断)")]
+    /// <remarks>同 <see cref="MessageText"/>:须走 CodeFirst_BigString,否则 SqlServer 丢中文(nightly #25)。</remarks>
+    [SugarColumn(ColumnDataType = StaticConfig.CodeFirst_BigString, IsNullable = true, ColumnDescription = "异常信息(截断)")]
     public string? ErrorText { get; set; }
 }

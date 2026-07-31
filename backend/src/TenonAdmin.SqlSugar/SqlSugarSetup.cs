@@ -51,6 +51,8 @@ public static class SqlSugarSetup
                 IsAutoCloseConnection = true,
                 // SqlServer CodeFirst 默认把 string 建成 varchar,存中文丢成 "??"(其他方言用 Unicode 类型,无此坑)。
                 // 打开后 string 列建为 nvarchar,跨方言统一走 Unicode。ponytail: SqlSugar 内置开关,一行胜过逐实体标 [SugarColumn]。
+                // 注意:显式 ColumnDataType="text" 仍会建成非 Unicode 的 text,不受本开关影响——超长列须用
+                // StaticConfig.CodeFirst_BigString(SqlServer 上解析为 nvarchar(max);见 SysJobLog.ErrorText)。
                 MoreSettings = new ConnMoreSettings { SqlServerCodeFirstNvarchar = true },
             };
 
