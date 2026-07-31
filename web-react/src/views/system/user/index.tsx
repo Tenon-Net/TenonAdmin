@@ -3,7 +3,7 @@
 // 表单两列栅格 + 机构/职位/主管控件对齐 Vue 用户页;仅头像仍是 Form 外受控 state(save 时并回)。
 // 导入导出(G7):ImportWizard 四步向导 + ExportColumnsModal 选列导出(带当前筛选)。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Avatar, Button, Card, Col, Form, Input, Modal, Row, Select, Space, Switch, Tag, Tree } from 'antd'
+import { App, Avatar, Button, Card, Col, Dropdown, Form, Input, Modal, Row, Select, Space, Switch, Tag, Tree, type MenuProps } from 'antd'
 import type { TreeDataNode } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type DataTableHandle, type PageFetcher } from '@/components/DataTable'
@@ -304,15 +304,31 @@ export default function UserPage() {
       },
       { title: t('user.createTime'), dataIndex: 'createTime', search: false, sorter: true },
       {
-        title: t('common.operation'), key: 'op', search: false, hideInSetting: true, width: 260, fixed: 'right',
-        render: (_, r) => (
-          <Space size={4}>
-            {canEdit(r, has) && <Button type="link" size="small" onClick={() => openEdit(r)}>{t('common.edit')}</Button>}
-            {canReset(r, has) && <Button type="link" size="small" onClick={() => openReset(r)}>{t('user.resetPassword')}</Button>}
-            {r.totpEnabled && has('POST:/api/v1/sys/mfa/clear') && <Button type="link" size="small" onClick={() => void clearUserMfa(r)}>{t('user.clearMfa')}</Button>}
-            {canDelete(r, has) && <Button type="link" size="small" danger onClick={() => handleDelete(r)}>{t('common.delete')}</Button>}
-          </Space>
-        ),
+        // 操作:编辑/删除外露;重置密码、解绑验证器进「更多」(放操作列末尾)。
+        title: t('common.operation'), key: 'op', search: false, hideInSetting: true, width: 160, fixed: 'right',
+        render: (_, r) => {
+          const moreItems = ([
+            canReset(r, has) ? { key: 'resetPassword', label: t('user.resetPassword') } : null,
+            r.totpEnabled && has('POST:/api/v1/sys/mfa/clear')
+              ? { key: 'clearMfa', label: t('user.clearMfa') }
+              : null,
+          ] as MenuProps['items'])!.filter(Boolean)
+          const onMore: MenuProps['onClick'] = ({ key }) => {
+            if (key === 'resetPassword') openReset(r)
+            else if (key === 'clearMfa') void clearUserMfa(r)
+          }
+          return (
+            <Space size={4}>
+              {canEdit(r, has) && <Button type="link" size="small" onClick={() => openEdit(r)}>{t('common.edit')}</Button>}
+              {canDelete(r, has) && <Button type="link" size="small" danger onClick={() => handleDelete(r)}>{t('common.delete')}</Button>}
+              {moreItems!.length > 0 && (
+                <Dropdown menu={{ items: moreItems, onClick: onMore }} trigger={['click']}>
+                  <Button type="link" size="small">{t('common.more')}</Button>
+                </Dropdown>
+              )}
+            </Space>
+          )
+        },
       },
     ],
     [t, has, reload, openEdit, openReset, handleDelete, clearUserMfa],
@@ -379,11 +395,11 @@ export default function UserPage() {
         open={open}
         onOpenChange={setOpen}
         title={editingId === null ? t('user.addTitle') : t('user.editTitle')}
-        width={640}
+        width={720}
         onConfirm={save}
       >
         {/* 两列栅格(对齐 Vue):相关字段成对排,头像整行;账号编辑时禁改并占整行。定宽 label 让半行/整行项对齐。 */}
-        <Form form={form} labelCol={{ flex: '76px' }} wrapperCol={{ flex: 1 }} style={{ marginTop: 12 }}>
+        <Form form={form} labelCol={{ flex: '96px' }} wrapperCol={{ flex: 1 }} style={{ marginTop: 12 }}>
           <Row gutter={16}>
             <Col xs={24} sm={editingId === null ? 12 : 24}>
               <Form.Item

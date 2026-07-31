@@ -136,12 +136,12 @@ async function save() {
   <FormContainer
     v-model:show="show"
     :title="editingId === null ? t('user.addTitle') : t('user.editTitle')"
-    :width="640"
+    :width="720"
     :on-confirm="save"
     :confirm-text="t('common.save')"
   >
     <!-- 两列栅格:相关字段成对排,头像整行(span 2);账号编辑时禁改并占整行 -->
-    <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :label-width="76">
+    <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :label-width="96">
       <n-grid :cols="2" :x-gap="16">
         <n-form-item-gi :span="editingId === null ? 1 : 2" :label="t('user.account')" path="account">
           <n-input v-model:value="form.account" :disabled="editingId !== null" :placeholder="t('user.account')" />
