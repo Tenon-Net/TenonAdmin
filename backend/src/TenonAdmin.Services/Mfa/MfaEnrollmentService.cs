@@ -51,7 +51,7 @@ public class MfaEnrollmentService(
 
         AdminException.ThrowIf(
             user.TotpEnabled && !string.IsNullOrEmpty(user.TotpSeedProtected),
-            ErrorCode.BindInviteInvalid);
+            ErrorCode.MfaBindInvalid);
 
         var seed = totp.GenerateSeed();
         var protectedSeed = protector.Protect(seed);
@@ -82,19 +82,19 @@ public class MfaEnrollmentService(
     public virtual async Task<TotpBindCompleteOutput> CompleteBindAsync(TotpBindCompleteInput input)
     {
         AdminException.ThrowIf(!TotpOn, ErrorCode.NoPermission);
-        AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.BindChallengeId), ErrorCode.BindInviteInvalid);
+        AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.BindChallengeId), ErrorCode.MfaBindInvalid);
         AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.TotpCode), ErrorCode.TotpWrong);
 
         var challengeKey = CacheKeys.TotpBindChallenge(input.BindChallengeId.Trim());
         var raw = await cache.GetAsync<string>(challengeKey);
-        AdminException.ThrowIf(string.IsNullOrEmpty(raw), ErrorCode.BindInviteInvalid);
+        AdminException.ThrowIf(string.IsNullOrEmpty(raw), ErrorCode.MfaBindInvalid);
 
         var payload = JsonSerializer.Deserialize<BindChallengePayload>(raw!);
-        AdminException.ThrowIf(payload is null || payload.UserId == 0, ErrorCode.BindInviteInvalid);
+        AdminException.ThrowIf(payload is null || payload.UserId == 0, ErrorCode.MfaBindInvalid);
 
         string seed;
         try { seed = protector.Unprotect(payload!.SeedProtected); }
-        catch { throw new AdminException(ErrorCode.BindInviteInvalid); }
+        catch { throw new AdminException(ErrorCode.MfaBindInvalid); }
 
         if (!totp.Verify(seed, input.TotpCode.Trim()))
             throw new AdminException(ErrorCode.TotpWrong);
@@ -105,7 +105,7 @@ public class MfaEnrollmentService(
         var consumed = await cache.GetAndRemoveAsync<string>(challengeKey);
         AdminException.ThrowIf(
             string.IsNullOrEmpty(consumed) || !string.Equals(raw, consumed, StringComparison.Ordinal),
-            ErrorCode.BindInviteInvalid);
+            ErrorCode.MfaBindInvalid);
 
         user!.TotpSeedProtected = protector.Protect(seed);
         user.TotpEnabled = true;

@@ -2422,7 +2422,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sys/mfa/invite": {
+    "/api/v1/sys/mfa/clear": {
         parameters: {
             query?: never;
             header?: never;
@@ -2431,7 +2431,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 管理员为目标用户发放 TOTP 绑定邀请(须已绑 TOTP + 短时再认证)。 */
+        /** 管理员清除目标用户 MFA(目标之后自助重绑)。 */
         post: {
             parameters: {
                 query?: never;
@@ -2441,52 +2441,11 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["MfaInviteInput"];
-                    "text/json": components["schemas"]["MfaInviteInput"];
-                    "application/*+json": components["schemas"]["MfaInviteInput"];
+                    "application/json": components["schemas"]["TotpClearMfaInput"];
+                    "text/json": components["schemas"]["TotpClearMfaInput"];
+                    "application/*+json": components["schemas"]["TotpClearMfaInput"];
                 };
             };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/plain": components["schemas"]["TotpBindInviteOutput"];
-                        "application/json": components["schemas"]["TotpBindInviteOutput"];
-                        "text/json": components["schemas"]["TotpBindInviteOutput"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sys/mfa/invite/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** 撤销未使用绑定邀请。 */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: number;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
             responses: {
                 /** @description OK */
                 200: {
@@ -2497,6 +2456,7 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2511,7 +2471,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 绑定启动(公开:持邀请/InitGrant + 当前密码)。 */
+        /** 自助绑定启动(公开:账号 + 当前密码)。 */
         post: {
             parameters: {
                 query?: never;
@@ -9663,17 +9623,22 @@ export interface components {
              */
             expiresAt?: string;
         };
-        /** @description 绑定启动入参:邀请(或 InitGrant)+ 当前密码 → 下发 otpauth URI。 */
+        /** @description 自助绑定启动入参:账号 + 当前密码 → 下发 otpauth URI。 */
         TotpBindStartInput: {
-            /** @description 绑定邀请 token 或部署 InitGrant */
-            token?: string;
-            /** @description 目标用户当前密码(必填;缺失/错误一律拒绝写 seed) */
+            /** @description 登录账号 */
+            account?: string;
+            /** @description 当前密码(必填) */
             currentPassword?: string;
+            /** @description 历史字段,已忽略 */
+            token?: string | null;
+        };
+        /** @description 管理员清除 MFA 入参 */
+        TotpClearMfaInput: {
             /**
-             * @description 可选:显式目标用户账号(InitGrant 路径需要指定要绑定的超管账号;
-             *     邀请路径忽略,以邀请记录中的 UserId 为准)。
+             * Format: int64
+             * @description 目标用户 Id
              */
-            account?: null | string;
+            userId?: number | string;
         };
         /** @description 绑定启动出参:临时挑战 + otpauth URI(种子暂存缓存,完成前不落库)。 */
         TotpBindStartOutput: {

@@ -143,7 +143,7 @@ public class MfaEnrollmentTests
                 Account = user.Account,
                 CurrentPassword = password,
             }));
-        Assert.Equal(ErrorCode.BindInviteInvalid, ex.Code);
+        Assert.Equal(ErrorCode.MfaBindInvalid, ex.Code);
     }
 
     [Fact]
@@ -271,5 +271,121 @@ public class MfaEnrollmentTests
         })).ReadEnvelope();
         Assert.Equal(0, completeEnv.GetProperty("code").GetInt32());
         Assert.True(completeEnv.GetProperty("data").GetProperty("recoveryCodes").GetArrayLength() >= 1);
+    }
+
+    [Fact]
+    public async Task Self_bind_rejects_when_totp_feature_off()
+    {
+        await using var f = new AdminAppFactory
+        {
+            Settings = new Dictionary<string, string?>
+            {
+                ["TenonAdmin:Security:Totp:Enabled"] = "false",
+                ["TenonAdmin:Security:DataProtection:Key"] =
+                    Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+            },
+        };
+        var (_, user, password) = await SeedUserAsync(f);
+        using var scope = f.Services.CreateScope();
+        var enroll = scope.ServiceProvider.GetRequiredService<IMfaEnrollmentService>();
+
+        var ex = await Assert.ThrowsAsync<AdminException>(() =>
+            enroll.StartBindAsync(new TotpBindStartInput
+            {
+                Account = user.Account,
+                CurrentPassword = password,
+            }));
+        Assert.Equal(ErrorCode.NoPermission, ex.Code);
+    }
+
+    [Fact]
+    public async Task Policy_require_for_super_admin_when_configured()
+    {
+        await using var f = new AdminAppFactory
+        {
+            Settings = new Dictionary<string, string?>
+            {
+                ["TenonAdmin:Security:Totp:Enabled"] = "true",
+                ["TenonAdmin:Security:Totp:RequireForSuperAdmin"] = "true",
+                ["TenonAdmin:Security:DataProtection:Key"] =
+                    Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+            },
+        };
+        var (_, super, _) = await SeedUserAsync(f, superAdmin: true);
+        var (_, normal, _) = await SeedUserAsync(f, superAdmin: false);
+        using var scope = f.Services.CreateScope();
+        var policy = scope.ServiceProvider.GetRequiredService<IMfaPolicyService>();
+
+        Assert.True(await policy.IsMfaRequiredAsync(super));
+        Assert.False(await policy.IsMfaRequiredAsync(normal));
+    }
+
+    [Fact]
+    public async Task Clear_mfa_non_super_without_permission_denied()
+    {
+        await using var f = Factory();
+        var (_, target, password) = await SeedUserAsync(f);
+        var (_, operatorUser, _) = await SeedUserAsync(f);
+        using var scope = f.Services.CreateScope();
+        var enroll = scope.ServiceProvider.GetRequiredService<IMfaEnrollmentService>();
+        var totp = scope.ServiceProvider.GetRequiredService<ITotpService>();
+
+        await BindSelfAsync(enroll, totp, target.Account, password);
+
+        var ex = await Assert.ThrowsAsync<AdminException>(() =>
+            enroll.ClearUserMfaAsync(target.Id, operatorUser.Id));
+        // 未绑 TOTP 的非超管:先撞 TotpNotBound;若操作人无 TOTP 且非超管
+        Assert.True(ex.Code is ErrorCode.TotpNotBound or ErrorCode.NoPermission);
+    }
+
+    [Fact]
+    public async Task Http_clear_mfa_as_super_admin()
+    {
+        await using var f = Factory();
+        var (_, target, password) = await SeedUserAsync(f);
+        using var scope = f.Services.CreateScope();
+        var enroll = scope.ServiceProvider.GetRequiredService<IMfaEnrollmentService>();
+        var totp = scope.ServiceProvider.GetRequiredService<ITotpService>();
+        var users = scope.ServiceProvider.GetRequiredService<IRepository<SysUser>>();
+
+        await BindSelfAsync(enroll, totp, target.Account, password);
+
+        // 超管默认无 TOTP:ClearUserMfa 允许未绑 TOTP 的超管清理他人
+        var super = await users.GetFirstAsync(u => u.Account == "superAdmin");
+        Assert.NotNull(super);
+
+        var c = f.CreateClient();
+        c.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer", await c.LoginToken("superAdmin", "Test@123456"));
+
+        // Totp:Enabled → RequireReauth 生效;成功时 void action 可能空 body 200
+        async Task<bool> TryClearAsync()
+        {
+            var resp = await c.PostJson("/api/v1/sys/mfa/clear", new { userId = target.Id });
+            var raw = await resp.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(raw))
+                return resp.IsSuccessStatusCode;
+            using var doc = System.Text.Json.JsonDocument.Parse(raw);
+            var code = doc.RootElement.GetProperty("code").GetInt32();
+            if (code == (int)ErrorCode.ReauthRequired)
+            {
+                var reauthEnv = await (await c.PostJson("/api/v1/auth/reauth", new
+                {
+                    method = "password",
+                    password = "Test@123456",
+                })).ReadEnvelope();
+                Assert.Equal(0, reauthEnv.GetProperty("code").GetInt32());
+                return false; // 调用方再试一次 clear
+            }
+            Assert.Equal(0, code);
+            return true;
+        }
+
+        if (!await TryClearAsync())
+            Assert.True(await TryClearAsync());
+
+        var reloaded = await users.GetByIdAsync(target.Id);
+        Assert.False(reloaded!.TotpEnabled);
     }
 }

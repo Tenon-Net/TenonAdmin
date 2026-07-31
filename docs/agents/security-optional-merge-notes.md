@@ -36,8 +36,18 @@ cd web-react && npx vitest run src/views/mfa/BindPage.spec.tsx
 
 1. CookieMode 双前端完整对齐（内存 access + CSRF）  
 2. 登录页 / 个人中心链到 `/mfa/bind`  
-3. 物理删除历史 Level3 注册位、预检测评话术、闲置账号 Job  
+3. 物理删除历史 Level3 注册位、DeployGrant/Invite 实体、闲置账号 Job  
 4. 重命名/精简仍带 `Level3*` 的测试类名  
+5. 正式 `gen:api`（当前 schema 已手工对齐 clear/自助 bind，下次 gen 会覆盖）  
+
+## P2 跟进（Codex review 后已修）
+
+- [x] Reauth TTL → `ResolveReauthWindowMinutes`
+- [x] `MfaBindInvalid` 语义 + i18n（40021 兼容）
+- [x] 测试洞：Totp off / RequireForSuperAdmin / clear 拒绝 / HTTP clear
+- [x] baseline/precheck 菜单默认禁用 + 控制器文档降级
+- [x] 启动清理：禁用已拆除 invite/reset 菜单权限行
+- [x] schema.d.ts：invite → clear；bind 入参自助化
 
 ## 建议 commit 主题（英文）
 

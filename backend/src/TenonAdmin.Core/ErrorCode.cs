@@ -112,13 +112,19 @@ public enum ErrorCode
     [MsgKey("error.auth.totpWrong")]
     TotpWrong = 40019,
 
-    /// <summary>账号尚未绑定 TOTP(强制 MFA 用户须先完成绑定邀请流程)</summary>
+    /// <summary>账号尚未绑定 TOTP(强制 MFA 时须先完成自助绑定)</summary>
     [MsgKey("error.auth.totpNotBound")]
     TotpNotBound = 40020,
 
-    /// <summary>TOTP 绑定邀请无效(缺失/过期/已消费/已撤销;统一归此,防探测)</summary>
-    [MsgKey("error.auth.bindInviteInvalid")]
-    BindInviteInvalid = 40021,
+    /// <summary>
+    /// TOTP 绑定无效:挑战缺失/过期/已消费、账号已绑定等(统一归此,防探测)。
+    /// 数值 40021 保持兼容;历史名 <see cref="BindInviteInvalid"/> 同码。
+    /// </summary>
+    [MsgKey("error.auth.mfaBindInvalid")]
+    MfaBindInvalid = 40021,
+
+    /// <summary>历史别名,同 <see cref="MfaBindInvalid"/>。</summary>
+    BindInviteInvalid = MfaBindInvalid,
 
     /// <summary>恢复码不正确或已使用</summary>
     [MsgKey("error.auth.recoveryCodeInvalid")]

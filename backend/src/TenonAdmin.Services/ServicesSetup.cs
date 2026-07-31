@@ -146,8 +146,10 @@ public static class ServicesSetup
         // 安全策略读取层(§14):DB(SysConfig)优先、Options 兜底,收口锁定/会话时长/密码复杂度的取值
         services.TryAddScoped<ISecurityPolicyProvider, SecurityPolicyProvider>();
 
-        // Level3 一期预检(等保三级应用安全基线):机器可读报告 / 启动闸门 / readiness / 安全基线 API
+        // 可选安全态势诊断(历史 Level3 预检实现;非测评产品路径,ADR 0006)
         services.TryAddScoped<ILevel3PrecheckService, Level3PrecheckService>();
+        // 幂等禁用已拆除的 MFA 邀请/重置菜单权限锚点
+        services.AddHostedService<RetiredSecurityMenuCleanupHostedService>();
 
         // 日志模块(§4,T6):操作日志(过滤器写)+ 登录日志(AuthService 写);写入尽力而为
         services.TryAddScoped<ILogService, LogService>();

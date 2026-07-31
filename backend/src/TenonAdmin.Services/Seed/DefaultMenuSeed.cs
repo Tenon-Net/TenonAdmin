@@ -92,13 +92,14 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 58, ParentId = 55, Type = MenuType.Button, Title = "配置-更新", Permission = "PUT:/api/v1/sys/config/{id}", Sort = 4, Enabled = true },
         new SysMenu { Id = 59, ParentId = 55, Type = MenuType.Button, Title = "配置-删除", Permission = "DELETE:/api/v1/sys/config/{id}", Sort = 5, Enabled = true },
         new SysMenu { Id = 97, ParentId = 55, Type = MenuType.Button, Title = "配置-批量存值", Permission = "PUT:/api/v1/sys/config/batch", Sort = 28, Enabled = true },
-        // 等保三级一期安全管理:高敏权限设置已嵌入安全配置页;其余没有独立页面的管理/预检端点仍播权限锚点，供角色菜单授权。
-        // 148–150 曾为 MFA 邀请/紧急重置(ADR 0006 拆除);号段保留勿复用
+        // 可选安全:高敏权限 + MFA 清除;预检/基线菜单默认禁用(ADR 0006 非测评产品)。
+        // 148–150 曾为 MFA 邀请/紧急重置(已拆除);号段保留勿复用。
         new SysMenu { Id = 151, ParentId = 55, Type = MenuType.Button, Title = "高敏权限-查看", Permission = "GET:/api/v1/sys/mfa/high-sensitivity", Sort = 32, Enabled = true },
         new SysMenu { Id = 152, ParentId = 55, Type = MenuType.Button, Title = "高敏权限-追加", Permission = "POST:/api/v1/sys/mfa/high-sensitivity", Sort = 33, Enabled = true },
         new SysMenu { Id = 153, ParentId = 55, Type = MenuType.Button, Title = "高敏权限-删除", Permission = "DELETE:/api/v1/sys/mfa/high-sensitivity/{id:long}", Sort = 34, Enabled = true },
-        new SysMenu { Id = 154, ParentId = 55, Type = MenuType.Button, Title = "安全基线-查看", Permission = "GET:/api/v1/sys/security/baseline", Sort = 35, Enabled = true },
-        new SysMenu { Id = 155, ParentId = 55, Type = MenuType.Button, Title = "等保三级预检-查看", Permission = "GET:/api/v1/sys/level3/precheck", Sort = 36, Enabled = true },
+        // 154–155 诊断端点权限锚点:Enabled=false,不进入默认角色可见菜单;运维可手动启用
+        new SysMenu { Id = 154, ParentId = 55, Type = MenuType.Button, Title = "安全诊断-基线(可选)", Permission = "GET:/api/v1/sys/security/baseline", Sort = 35, Enabled = false, Visible = false },
+        new SysMenu { Id = 155, ParentId = 55, Type = MenuType.Button, Title = "安全诊断-预检(历史路径)", Permission = "GET:/api/v1/sys/level3/precheck", Sort = 36, Enabled = false, Visible = false },
         new SysMenu { Id = 156, ParentId = 55, Type = MenuType.Button, Title = "MFA-清除用户二因子", Permission = "POST:/api/v1/sys/mfa/clear", Sort = 29, Enabled = true },
 
         // 字典管理页(R5:DictController 主从 CRUD)。类型分页 21、项查询 22、项新增 23;写端点码 61-65;82 管理端项分页。

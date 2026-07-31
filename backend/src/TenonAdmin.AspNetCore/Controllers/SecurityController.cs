@@ -5,9 +5,9 @@ using TenonAdmin.Services;
 namespace TenonAdmin.AspNetCore;
 
 /// <summary>
-/// 安全基线 / Level3 预检端点(等保三级应用安全一期)。
+/// 可选安全态势诊断端点(ADR 0006:非等保测评产品路径)。
 /// 高敏感:默认需路由权限;超管(sadm)放行。结果不含密钥/连接串密码/TOTP 种子。
-/// <para>内核不宣称「已通过等保三级」——报告仅反映已实现能力版本与配置态势。</para>
+/// <para>默认菜单不展示;仅运维/调试或历史 Profile=Level3 过渡诊断用。内核不宣称通过等保。</para>
 /// </summary>
 [ApiController]
 [Route("api/v1/sys/security")]
@@ -15,8 +15,7 @@ namespace TenonAdmin.AspNetCore;
 public class SecurityController(ILevel3PrecheckService precheck) : ControllerBase
 {
     /// <summary>
-    /// Level3 一期安全基线预检报告(机器可读)。
-    /// 含 capabilityVersion、checks[]、unimplementedMandates[]、overallCompliantForPhase1。
+    /// 可选安全配置态势报告(机器可读,历史 capability 字段仍兼容)。
     /// </summary>
     [HttpGet("baseline")]
     [RolePermission]
@@ -24,7 +23,7 @@ public class SecurityController(ILevel3PrecheckService precheck) : ControllerBas
         Result<Level3PrecheckResult>.Ok(await precheck.RunAsync(cancellationToken));
 
     /// <summary>
-    /// 与 <see cref="Baseline"/> 同义别名(<c>/api/v1/sys/level3/precheck</c> 风格路径的兼容入口挂在同控制器下)。
+    /// 与 <see cref="Baseline"/> 同义别名(历史路径兼容;不作为产品主入口)。
     /// </summary>
     [HttpGet("/api/v1/sys/level3/precheck")]
     [RolePermission]
