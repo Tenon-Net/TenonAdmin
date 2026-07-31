@@ -26,9 +26,13 @@ export const noticeBus = {
 
 // 进程内单例连接:鉴权外壳挂载一次即建一条;重复 start 幂等(已连不再建)。
 let connection: HubConnection | null = null
+// 主动登出/改密重登:后端 Logout 也走 RevokeAsync → 推 force-logout;本页应静默,勿弹「您已被强制下线」。
+// 其它同会话标签页仍会收到推送并提示。下次 start 清零。
+let voluntaryLogout = false
 
 function start(onForceLogout: Listener, onNoticeChanged: Listener): void {
   if (connection || !useUserStore.getState().accessToken) return
+  voluntaryLogout = false
   try {
     const baseUrl = import.meta.env.VITE_API_BASE ?? ''
     const conn = new HubConnectionBuilder()
@@ -67,6 +71,16 @@ async function stop(): Promise<void> {
 }
 
 /**
+ * 主动登出前调用:标记自愿退出 + 先断 SignalR。
+ * <p>后端会话吊销会推 `force-logout`(与管理员强退共用通道);本页断连后收不到,即便迟到推送也不弹强制下线文案。
+ * 其它标签页仍可被踢并提示。</p>
+ */
+export async function beginVoluntaryLogout(): Promise<void> {
+  voluntaryLogout = true
+  await stop()
+}
+
+/**
  * 实时通知客户端(SignalR)。在鉴权外壳(LayoutShell)挂载时 start、卸载时 stop —— 整个会话只挂一次。
  * 后端 `TenonAdmin:Realtime:Enabled` 关闭时 Hub 不存在 → 初次连接失败,**静默退回**未读轮询兜底与惰性 401 登出(纯增强,无回归)。
  */
@@ -79,10 +93,13 @@ export function useRealtime(): void {
     start(
       () => {
         // 强制下线:停连 + 清会话 + 提示 + 跳登录(与本地登出同款收尾,少一次 authApi.logout —— 服务端已强制)。
+        const silent = voluntaryLogout
+        voluntaryLogout = false
         void stop()
         useAuthStore.getState().reset()
         useUserStore.getState().clear()
-        message.warning(t('realtime.forcedLogout'))
+        // 主动登出也会触发后端 force-logout 推送:只静默清会话,不谎报「被强制下线」。
+        if (!silent) message.warning(t('realtime.forcedLogout'))
         if (window.location.pathname !== '/login') navigate('/login', { replace: true })
       },
       () => noticeBus.emit(),

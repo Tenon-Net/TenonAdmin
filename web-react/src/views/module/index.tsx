@@ -8,6 +8,7 @@ import { useUserStore } from '@/stores/user'
 import { switchModule, setDefault } from '@/composables/useModule'
 import { AppIcon } from '@/components/AppIcon'
 import { authApi } from '@/api'
+import { beginVoluntaryLogout } from '@/composables/useRealtime'
 import { translateError } from '@/utils/error'
 
 /**
@@ -58,6 +59,7 @@ export default function ModuleChooser() {
   async function logout() {
     if (busy) return
     setBusy(true)
+    await beginVoluntaryLogout()
     try {
       await authApi.logout()
     } catch {

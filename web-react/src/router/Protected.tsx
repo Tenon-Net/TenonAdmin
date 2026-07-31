@@ -18,6 +18,7 @@ const SecurityPage = lazy(() => import('@/views/personal/security'))
 const NoticePage = lazy(() => import('@/views/personal/notice'))
 const SessionsPage = lazy(() => import('@/views/personal/sessions'))
 const BindingsPage = lazy(() => import('@/views/personal/bindings'))
+const PersonalLayout = lazy(() => import('@/layouts/PersonalLayout'))
 const NotFoundPage = lazy(() => import('@/views/error/NotFoundPage'))
 const lazyEl = (El: ComponentType) => (
   <Suspense fallback={null}>
@@ -92,7 +93,7 @@ export function Protected() {
   }
   if (!loggedIn) return <Navigate to="/login" replace />
   // 强制改密:只允许停在改密页。放在 routesReady 之前 —— 改密页是静态路由,不需要门户重建即可渲染,
-  // 避免"重建→选应用→又被弹回"的循环。
+  // 避免"重建→选应用→又被弹回"的循环。强制改密期间不套个人中心左导航(只改密、无其它区)。
   if (mustChange) {
     return location.pathname === '/personal/password' ? lazyEl(PasswordPage) : <Navigate to="/personal/password" replace />
   }
@@ -121,13 +122,19 @@ function DynamicRoutes() {
         children: [
           ...buildRoutes(menuTree),
           ...buildDetailRoutes(),
-          // 个人中心五页(静态路由,壳内渲染;入口在顶栏用户下拉 / 铃铛)。
-          { path: '/personal/profile', element: lazyEl(ProfilePage) },
-          { path: '/personal/password', element: lazyEl(PasswordPage) },
-          { path: '/personal/security', element: lazyEl(SecurityPage) },
+          // 个人中心:二级壳(左导航)+ 子页;通知铃铛入口独立。
+          {
+            element: lazyEl(PersonalLayout),
+            children: [
+              { path: '/personal', element: <Navigate to="/personal/profile" replace /> },
+              { path: '/personal/profile', element: lazyEl(ProfilePage) },
+              { path: '/personal/password', element: lazyEl(PasswordPage) },
+              { path: '/personal/security', element: lazyEl(SecurityPage) },
+              { path: '/personal/sessions', element: lazyEl(SessionsPage) },
+              { path: '/personal/bindings', element: lazyEl(BindingsPage) },
+            ],
+          },
           { path: '/personal/notice', element: lazyEl(NoticePage) },
-          { path: '/personal/sessions', element: lazyEl(SessionsPage) },
-          { path: '/personal/bindings', element: lazyEl(BindingsPage) },
           // '/' 落到当前应用首页;chooser 态 homePath 回落 /module。
           { path: '/', element: <Navigate to={home} replace /> },
           { path: '*', element: lazyEl(NotFoundPage) },

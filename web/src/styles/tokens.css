@@ -46,7 +46,7 @@
   --color-info-bg:        #E0F2F6;
 
   /* ── 角色令牌(亮色主题)—— 业务只消费这一层 ─────────────────── */
-  --color-bg-body:        #F0F0F0;  /* 页面背景 / 画布 */
+  --color-bg-body:        #F7F8FA;  /* 页面背景 / 画布(与 web-react 对齐) */
   --color-bg-container:   #FFFFFF;  /* 卡片 / 面板容器 */
   --color-bg-elevated:    #FFFFFF;  /* 弹层 / 下拉 / 抽屉 */
   --color-text-primary:   #181A2A;  /* 主文字 / 标题 */

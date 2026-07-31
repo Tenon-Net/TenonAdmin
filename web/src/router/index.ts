@@ -89,7 +89,7 @@ router.beforeEach(async (to) => {
 // 记录已访问页为标签(动态路由就绪后触发,F5 重解析也会命中)。
 router.afterEach((to) => {
   if (to.meta.public) return
-  if (['login', 'module', 'not-found'].includes(to.name as string)) return
+  if (['login', 'module', 'not-found', 'personal'].includes(to.name as string)) return
   if (!to.matched.some((r) => r.name === 'layout')) return
   useTabsStore().addTab(to)
 })

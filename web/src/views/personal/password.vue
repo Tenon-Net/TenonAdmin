@@ -5,6 +5,7 @@ import { NCard, NForm, NFormItem, NInput, NButton, NAlert, useMessage, type Form
 import { useI18n } from 'vue-i18n'
 import PasswordStrength from '@/components/PasswordStrength/index.vue'
 import { personalApi, authApi } from '@/api'
+import { beginVoluntaryLogout } from '@/composables/useRealtime'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { resetRouter } from '@/router'
@@ -46,7 +47,8 @@ async function submit() {
   try {
     await personalApi.updatePassword({ oldPassword: model.oldPassword, newPassword: model.newPassword })
     message.success(t('changePassword.changed'))
-    // 改密后强制重新登录
+    // 改密后强制重新登录(自愿路径:先断实时,避免 force-logout 误弹「被强制下线」)
+    await beginVoluntaryLogout()
     try {
       await authApi.logout()
     } catch { /* 尽力而为 */ }

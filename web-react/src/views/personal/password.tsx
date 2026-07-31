@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { PasswordStrength } from '@/components/PasswordStrength'
 import { authApi, personalApi } from '@/api'
+import { beginVoluntaryLogout } from '@/composables/useRealtime'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
@@ -37,7 +38,8 @@ export default function PasswordPage() {
     try {
       await personalApi.updatePassword({ oldPassword: v.oldPassword, newPassword: v.newPassword })
       message.success(t('changePassword.changed'))
-      // 改密后强制重新登录:登出尽力而为,清会话 + 动态路由,回落 /login。
+      // 改密后强制重新登录:自愿路径先断实时,避免 force-logout 误弹;登出尽力而为后清会话回 /login。
+      await beginVoluntaryLogout()
       try {
         await authApi.logout()
       } catch {

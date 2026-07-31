@@ -22,6 +22,8 @@ import { useLayoutMenu } from '@/composables/useLayoutMenu'
 import { useMenuFlat } from '@/composables/useMenuFlat'
 import { useSite } from '@/composables/useSite'
 import { authApi } from '@/api'
+import { clearClientCache } from '@/composables/clearClientCache'
+import { beginVoluntaryLogout } from '@/composables/useRealtime'
 import { resetRouter } from '@/router'
 import { translateError } from '@/utils/error'
 import TenonLogo from '@/components/TenonLogo.vue'
@@ -69,24 +71,29 @@ function onLocale(key: string) {
   app.setLocale(key as Locale)
 }
 
+// 下拉:个人中心 / 清除缓存 / 退出;五块能力进 /personal 二级壳(见 PersonalLayout)。
 const userOptions = computed<DropdownOption[]>(() => [
-  { label: t('app.profile'), key: 'profile' },
-  { label: t('app.password'), key: 'password' },
-  { label: t('app.security'), key: 'security' },
-  { label: t('app.sessions'), key: 'sessions' },
-  { label: t('app.bindings'), key: 'bindings' },
+  { label: t('app.personalCenter'), key: 'personal' },
+  { label: t('app.clearCache'), key: 'clearCache' },
   { type: 'divider', key: 'd1' },
   { label: t('app.logout'), key: 'logout' },
 ])
 async function onUser(key: string) {
-  if (key === 'profile') router.push('/personal/profile')
-  else if (key === 'password') router.push('/personal/password')
-  else if (key === 'security') router.push('/personal/security')
-  else if (key === 'sessions') router.push('/personal/sessions')
-  else if (key === 'bindings') router.push('/personal/bindings')
+  if (key === 'personal') router.push('/personal/profile')
+  else if (key === 'clearCache') await onClearCache()
   else if (key === 'logout') await logout()
 }
+async function onClearCache() {
+  try {
+    await clearClientCache()
+    message.success(t('app.cacheCleared'))
+  } catch (e) {
+    message.error(translateError(e))
+  }
+}
 async function logout() {
+  // 先断实时并标记自愿退出:logout API 会 Revoke 会话并推 force-logout,避免误弹「您已被强制下线」。
+  await beginVoluntaryLogout()
   try {
     await authApi.logout()
   } catch (e) {

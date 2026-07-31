@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Avatar, Breadcrumb, Button, Drawer, Dropdown, Grid, Menu, Space, Tooltip, Typography, Watermark, type MenuProps } from 'antd'
+import { App, Avatar, Breadcrumb, Button, Drawer, Dropdown, Grid, Menu, Space, Tooltip, Typography, Watermark, type MenuProps } from 'antd'
 import {
-  AppstoreOutlined, DesktopOutlined, FullscreenExitOutlined, FullscreenOutlined, KeyOutlined, LinkOutlined, LogoutOutlined,
-  MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, MoonOutlined, SafetyCertificateOutlined, SearchOutlined, SettingOutlined, SunOutlined, TranslationOutlined, UserOutlined,
+  AppstoreOutlined, ClearOutlined, FullscreenExitOutlined, FullscreenOutlined, LogoutOutlined,
+  MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SettingOutlined, SunOutlined, TranslationOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -21,7 +21,9 @@ import { MenuSearch } from './MenuSearch'
 import { TabsBar } from './TabsBar'
 import { KeepAliveOutlet } from './KeepAliveOutlet'
 import { useTabSync } from './useTabSync'
-import { useRealtime } from '@/composables/useRealtime'
+import { clearClientCache } from '@/composables/clearClientCache'
+import { beginVoluntaryLogout, useRealtime } from '@/composables/useRealtime'
+import { translateError } from '@/utils/error'
 import { breadcrumbFor, type MenuItem } from './menuItems'
 import './shell.css'
 
@@ -46,6 +48,7 @@ function topMenuFor(mode: LayoutMode): TopMenu {
  */
 export function LayoutShell() {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const screens = Grid.useBreakpoint()
@@ -98,20 +101,32 @@ export function LayoutShell() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // 用户下拉:个人中心页 + 登出。key=personal 段名,logout 单独处理。
+  // 用户下拉:个人中心 / 清除缓存 / 退出;五块能力进 /personal 二级壳(PersonalLayout)。
   const userMenu: MenuProps['items'] = [
-    { key: 'profile', label: t('menu.profile'), icon: <UserOutlined /> },
-    { key: 'password', label: t('menu.password'), icon: <KeyOutlined /> },
-    { key: 'security', label: t('menu.security'), icon: <SafetyCertificateOutlined /> },
-    { key: 'sessions', label: t('menu.sessions'), icon: <DesktopOutlined /> },
-    { key: 'bindings', label: t('menu.bindings'), icon: <LinkOutlined /> },
+    { key: 'personal', label: t('app.personalCenter'), icon: <UserOutlined /> },
+    { key: 'clearCache', label: t('app.clearCache'), icon: <ClearOutlined /> },
     { type: 'divider' },
     { key: 'logout', label: t('app.logout'), icon: <LogoutOutlined />, danger: true },
   ]
-  const onUserMenu: MenuProps['onClick'] = ({ key }) => (key === 'logout' ? void logout() : navigate(`/personal/${key}`))
+  const onUserMenu: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'logout') void logout()
+    else if (key === 'clearCache') void onClearCache()
+    else navigate('/personal/profile')
+  }
   const avatarChar = (userInfo?.name ?? '').trim().charAt(0).toUpperCase() || '?'
 
+  async function onClearCache() {
+    try {
+      await clearClientCache()
+      message.success(t('app.cacheCleared'))
+    } catch (e) {
+      message.error(translateError(e))
+    }
+  }
+
   async function logout() {
+    // 先断实时并标记自愿退出:logout API 会 Revoke 会话并推 force-logout,避免误弹「您已被强制下线」。
+    await beginVoluntaryLogout()
     try {
       await authApi.logout()
     } catch {

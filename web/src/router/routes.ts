@@ -37,17 +37,44 @@ export const staticRoutes: RouteRecordRaw[] = [
     // 算出的首页必然是错的。'/' 的落点改由守卫在路由就绪后决定(见 router/index.ts)。
     children: [
       // 工作台不在此:它是每个应用自己的一条菜单(后端播种),由 useAuthMenu 动态注册。
+      // 个人中心:二级壳(左导航)+ 子页;URL 仍为 /personal/*。通知铃铛入口独立,不进中心导航。
       {
-        path: '/personal/profile',
-        name: 'personal-profile',
-        component: namedPage('personal-profile', () => import('@/views/personal/profile.vue')),
-        meta: { title: 'menu.profile' },
-      },
-      {
-        path: '/personal/password',
-        name: 'personal-password',
-        component: namedPage('personal-password', () => import('@/views/personal/password.vue')),
-        meta: { title: 'menu.password' },
+        path: '/personal',
+        name: 'personal',
+        component: () => import('@/layouts/PersonalLayout.vue'),
+        redirect: '/personal/profile',
+        children: [
+          {
+            path: 'profile',
+            name: 'personal-profile',
+            component: namedPage('personal-profile', () => import('@/views/personal/profile.vue')),
+            meta: { title: 'menu.profile' },
+          },
+          {
+            path: 'password',
+            name: 'personal-password',
+            component: namedPage('personal-password', () => import('@/views/personal/password.vue')),
+            meta: { title: 'menu.password' },
+          },
+          {
+            path: 'security',
+            name: 'personal-security',
+            component: namedPage('personal-security', () => import('@/views/personal/security.vue')),
+            meta: { title: 'menu.security' },
+          },
+          {
+            path: 'sessions',
+            name: 'personal-sessions',
+            component: namedPage('personal-sessions', () => import('@/views/personal/sessions.vue')),
+            meta: { title: 'menu.sessions' },
+          },
+          {
+            path: 'bindings',
+            name: 'personal-bindings',
+            component: namedPage('personal-bindings', () => import('@/views/personal/bindings.vue')),
+            meta: { title: 'menu.bindings' },
+          },
+        ],
       },
       // 我的通知:走 [ActiveSession] 的 notice/mine,人人可读 —— 故是静态路由而非菜单
       // (进菜单就得播种 + 给每个角色授权,那才是真正的多余功课)。入口在顶栏铃铛的「查看全部」。
@@ -56,27 +83,6 @@ export const staticRoutes: RouteRecordRaw[] = [
         name: 'personal-notice',
         component: namedPage('personal-notice', () => import('@/views/personal/notice.vue')),
         meta: { title: 'menu.notice' },
-      },
-      // 我的会话:理由同上 —— [ActiveSession] 人人可用,静态路由不进菜单;入口在顶栏用户下拉。
-      {
-        path: '/personal/sessions',
-        name: 'personal-sessions',
-        component: namedPage('personal-sessions', () => import('@/views/personal/sessions.vue')),
-        meta: { title: 'menu.sessions' },
-      },
-      // 账号绑定(外部登录 / SSO,批次 D):[ActiveSession] 人人可用,静态路由不进菜单;入口在顶栏用户下拉。
-      {
-        path: '/personal/bindings',
-        name: 'personal-bindings',
-        component: namedPage('personal-bindings', () => import('@/views/personal/bindings.vue')),
-        meta: { title: 'menu.bindings' },
-      },
-      // 个人安全(TOTP 自助绑定入口):[ActiveSession] 人人可用,静态路由;入口在顶栏用户下拉。
-      {
-        path: '/personal/security',
-        name: 'personal-security',
-        component: namedPage('personal-security', () => import('@/views/personal/security.vue')),
-        meta: { title: 'menu.security' },
       },
       // 404 挂在壳内(而非顶级):打错一个 URL 不该把人甩出侧边栏、标签栏和退出按钮之外。
       // 未登录者到不了这里——守卫先于 public 判定就把他弹去登录页;深链刷新也不会闪 404,

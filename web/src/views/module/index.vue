@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
 import { useModule } from '@/composables/useModule'
+import { beginVoluntaryLogout } from '@/composables/useRealtime'
 import { resetRouter } from '@/router'
 import { translateError } from '@/utils/error'
 import { authApi } from '@/api'
@@ -32,6 +33,7 @@ async function pick(id: number) {
 }
 
 async function handleLogout() {
+  await beginVoluntaryLogout()
   try { await authApi.logout() } catch {}
   resetRouter()
   auth.reset()
