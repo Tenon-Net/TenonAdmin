@@ -124,6 +124,54 @@ builder.Services.AddTenonAdmin(builder.Configuration);          // TryAdd 让位
 
 涉及的错误码汇总一下：`SmsCodeRequired` 40009（信令）、`SmsCodeWrong` 40010（args 带 `attemptsLeft`）、`SmsCodeExpired` 40011（缺失/过期/已消费/次数耗尽，刻意不可区分）、`SmsLoginDisabled` 40012；发送过频复用 `TooManyRequests` 40008。
 
+## 可选 TOTP（Authenticator）
+
+短信二因子之外，内核还带一套**默认关闭**的 TOTP：用户用手机认证器扫码绑定，登录时在密码后再输 6 位动态口令。它和 `SmsOtp` **互不替代**——可以只开其一，也可以都开。产品定位是通用后台加固，**不是**等保定级包；完整 Level3 总档已废止（见仓库 ADR 0006）。
+
+运行时总闸跟图形验证码一个路数，配置中心「安全策略」里即时开关，一般不必改 appsettings：
+
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `sys.security.totp.enabled` | `false` | 能力总闸；关时绑定 / 登录挑战 / 恢复码一律拒绝 |
+| `sys.security.totp.requireForSuperAdmin` | `false` | 超管是否必须第二因子 |
+| `TenonAdmin:Security:Totp:Enabled` | `false` | 部署地板：`true` 时能力始终开（UI 关不掉） |
+| `TenonAdmin:Security:Totp:Issuer` | `TenonAdmin` | 认证器里显示的 issuer |
+| `TenonAdmin:Security:Totp:ChallengeTtlSeconds` | `300` | 登录挑战有效期（秒） |
+| `TenonAdmin:Security:Totp:ReauthWindowMinutes` | `5` | 高危写操作再次确认窗口（分钟） |
+| `TenonAdmin:Security:Totp:RecoveryCodeCount` | `10` | 每次绑定生成的恢复码个数 |
+
+账号级还有一个 `ForceTotp`（用户管理里的「强制动态口令」）：只对**这个人**要求登录必须完成 TOTP，与全局键正交。总闸没开时，强制开关不会单独生效。
+
+**自助绑定**是默认产品路径。`POST /api/v1/auth/mfa/bind/start` 要账号 + 当前密码，返回 `otpauth` URI 与一次性种子；`complete` 校验 6 位码后落库，并**一次性**下发恢复码（服务端只存哈希）。模板入口在登录后的「账号安全」页（`/personal/security`），登录页**默认不常驻**绑定链接。管理员清除：`POST /api/v1/sys/mfa/clear`（通常要再认证）。邀请绑定、InitGrant、紧急授权**不是**产品路径，接口已拆除。
+
+登录侧三种信封码（与短信 40009 同级，都是「还差一步」或「必须先绑」）：
+
+| 码 | 含义 | 前端怎么做 |
+| --- | --- | --- |
+| `40018` | 已绑定，要动态口令 | 进 TOTP 步；`POST /api/v1/auth/login/totp` |
+| `40019` | 动态口令错误 | 可重试 |
+| `40020` | 被强制但未绑定 | Modal 引导去 `/mfa/bind`，**不要**整页替换成永久入口 |
+| `40022` | 恢复码无效 / 已用 | 换码或走管理员清 MFA |
+
+恢复码：`POST /api/v1/auth/mfa/recovery`（账号 + 密码 + 码）。成功后清 MFA、吊销会话，需重新绑定。同一恢复码不能再用。
+
+高危写操作（改用户、清 MFA、部分角色/会话操作）可挂 `[RequireReauth]`：短时窗口内再验密码或 TOTP（`POST /api/v1/auth/reauth`）。模板里有统一的再认证弹窗。
+
+TOTP 种子走 `ISecretProtector` 信封加密，不是全库字段加密产品。配置键总表见仓库 `docs/agents/security-optional-config.md`。
+
+## 可选 Cookie 会话与 CSRF
+
+默认会话模型不变：登录 JSON 里同时给 access + refresh，前端可把 refresh 放 localStorage，body 刷新。打开 **`TenonAdmin:Security:Session:CookieMode`**（默认 `false`，部署级，改完要重启）之后：
+
+- refresh 只进 **HttpOnly** Cookie（`tenon_rt`），响应体里 refresh 清空
+- 另发可读 CSRF Cookie（`tenon_csrf`）；写请求须带头 `X-Tenon-CSRF`，与 Cookie 常量时间比对
+- 登录出参带 `sessionMode: "cookie"`、`csrfRequired: true`
+- 两套前端模板已 `credentials: 'include'` 并自动带 CSRF；access 仍放内存，靠 Cookie 静默刷新
+
+业务 API 仍靠 `Authorization: Bearer` + 每请求 `sid` 活跃校验；Cookie **不**代替 access token。跨子域再配 `Session:CookieDomain`（常配 `SameSite=None` + HTTPS）。同源 Vite 反代本地联调一般不必设 Domain。
+
+会话表还可配闲置 / 绝对寿命（默认 `0` = 不额外限制）：`Session:IdleMinutesNormal`、`IdleMinutesMfa`、`AbsoluteHours`。与 CookieMode 独立，按需收紧。
+
 ## 邮件通道
 
 内核给邮件也备了一个抽象 `IEmailSender`，和 `ISmsSender` 一个路数。眼下**没有任何内置功能真的在用它**。这是先立好的通道，等以后邮件验证码登录、通知邮件这类功能落地时直接拿来用，不用再补一次可替换性设计。
@@ -184,6 +232,10 @@ public virtual async Task RevokeAsync(string sessionId)
 | --- | --- | --- |
 | `...:Session:Mode` | `Multi` | `Multi`（多端并存）/ `Single`（新登录踢旧） |
 | `...:Session:MaxConcurrent` | `0` | 最大并发会话数；`>0` 时超出按最早登录吊销最旧；`0` 不限 |
+| `...:Session:CookieMode` | `false` | `true` 时 refresh 仅 HttpOnly Cookie + CSRF（见上节） |
+| `...:Session:CookieDomain` | `null` | Cookie Domain；空 = 当前 host |
+| `...:Session:IdleMinutesNormal` / `IdleMinutesMfa` | `0` | 闲置超时（分）；`0` = 不启用 |
+| `...:Session:AbsoluteHours` | `0` | 绝对最长小时；`0` = 仅随 refresh |
 
 同一个人挤爆并发会话上限，该踢谁？这里用的是「**先插入、再收敛**」：新会话先插进数据库，收敛动作在那之后才做。这样一来，并发发生的两个登录都能看到对方那一行，各自算出的都是同一个「只保留最新 N 个」的答案，自然收敛到一致结果，不需要额外协调。为什么不用进程内锁？锁只在单个进程里有效。换成多副本部署，一个副本锁着，另一个副本照样能把同一个名额抢走，锁挡不住跨副本的并发。
 

@@ -152,4 +152,4 @@
 | `ResolveIdleMinutes(mfaUser)` | 闲置分钟 |
 | `ResolveAbsoluteTimeSpan()` | 绝对寿命；未启用则 `null` |
 
-过渡期结束后删除对 `Profile=Level3` 的兼容分支（见 [security-optional-slim-plan.md](security-optional-slim-plan.md)）。
+过渡期结束后可删除对 `Profile=Level3` 的兼容分支（产品键见上文；决策见 ADR 0006）。

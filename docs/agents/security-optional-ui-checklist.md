@@ -1,10 +1,9 @@
 # 可选安全 — 网页自审功能清单
 
 - 日期：2026-07-31
-- 分支：`feature/mlps-level3-phase1`（未要求 push；可本地自审）
 - 决策：[ADR 0006](../adr/0006-general-admin-optional-security.md)
 - 配置键：[security-optional-config.md](security-optional-config.md)
-- 合入收口：[security-optional-merge-notes.md](security-optional-merge-notes.md)
+- 对外说明：文档站 [认证与安全](../../site/zh/backend/auth-security.md)
 
 本文只列**能在浏览器里看到、能点的**路径，供维护者对照验收与提问。  
 勾选列给本地打印/复制用；不要求提交勾选结果。
@@ -193,7 +192,11 @@
 | 密码策略地板 / 遗留 Profile=Level3 钳位 | 配置与读策略层；非独立菜单 |
 | 登录锁与自助 bind 的交叉爆破 | 需专门安全测试 |
 
-合入门禁命令仍见 [security-optional-merge-notes.md](security-optional-merge-notes.md)。
+后端定向回归示例：
+
+```bash
+dotnet test backend/TenonAdmin.slnx -c Release --filter "FullyQualifiedName~MfaEnrollmentTests|FullyQualifiedName~CookieSessionCsrfTests|FullyQualifiedName~LegacySecurityPolicyFloorTests|FullyQualifiedName~SecurityBaselinePrecheckTests"
+```
 
 ---
 

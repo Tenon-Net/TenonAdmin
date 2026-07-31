@@ -15,6 +15,32 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.5.2 - 2026-07-31
+
+Optional application security lands as **independent, off-by-default switches** — not a full MLPS Level-3 profile. Also fixes SQL Server long-text mapping that broke Chinese error text in the job scheduler suite.
+
+### Added
+
+- **Optional TOTP (authenticator) second factor**, off by default. Runtime master switch `sys.security.totp.enabled` (config center, same style as captcha) plus deploy floor `Security:Totp:*`. Self-service bind (`POST /api/v1/auth/mfa/bind/start|complete`) with one-time recovery codes; admin force-TOTP and clear MFA; login signals `40018` / `40020` and recovery path. Both Vue and React templates: Account Security page, bind UI with QR, login Modal for forced unbound users (no permanent login-page bind link), re-auth modal for sensitive writes.
+- **Optional Cookie + CSRF session mode** (`Security:Session:CookieMode`, default false). HttpOnly refresh cookie, double-submit CSRF (`tenon_csrf` / `X-Tenon-CSRF`), dual-template silent refresh. Configurable idle / absolute session caps when you want them.
+- **Narrow secret protection** for TOTP seeds (`IDataProtectionKeyProvider` / `ISecretProtector`) and diagnostic security baseline precheck API (not a certification report).
+- Product direction documented as **general admin kernel + optional security** (ADR 0006); full Level3 multi-phase roadmap retired. Site page [Auth & Security](https://tenon.52moyu.net/zh/backend/auth-security) covers TOTP and CookieMode.
+
+### Fixed
+
+- **SQL Server long-text columns map to Unicode `nvarchar(max)`** via SqlSugar `CodeFirst_BigString` (#26). Bare `text` was non-Unicode and corrupted Chinese `ErrorText` from job orphan reaping on the full SqlServer suite (#25). Affects job / op-log / notice / exception-log large string columns.
+- **React offline menu icons** load after the lazy icon pack finishes (`AppIcon` re-render + test mock hoist), so sidebar icons no longer stay blank until a folder is expanded.
+- **User-admin UX polish**: wider edit form, operations column order (edit / delete / more), force-TOTP and clear-MFA copy; personal-security admin hints gated by permission.
+
+### Changed
+
+- Removed product paths for MFA bind invites, InitGrant, emergency reset, and idle-account auto-disable heavy plays. Historical `Profile=Level3` is transition-only; new deploys should use the independent keys above.
+- README / `CONTEXT.md` terminology updated for optional security; agent config notes under `docs/agents/security-optional-config.md`.
+
+### Removed
+
+- Construction-only agent docs for the retired Level3 phase-1 program (review/closeout prompts). Keep ADR 0006 and the optional-security config / UI checklist for maintainers.
+
 ## 0.5.1 - 2026-07-28
 
 A patch for the scheduled-jobs surface that shipped in 0.5.0: an unset snowflake `WorkerId` no longer crashes every scheduler tick, and job PUT on PostgreSQL no longer returns a broken body.

@@ -85,7 +85,7 @@
 
 - 本 ADR 为安全产品方向的**现行**决策源。
 - `docs/mlps-level3-kernel-plan.md` 改为**历史评估/废止路线图**，不得再当施工计划执行。
-- `docs/agents/mlps-level3-phase1-*` 等施工稿仅作历史；新工作以本文与可选安全瘦身计划为准。
+- 历史一期施工稿已清理；新工作以本文与 `docs/agents/security-optional-config.md` 为准。
 - `CONTEXT.md` 术语从「Level3 安全档 / 三期交付」迁到「可选应用安全」。
 
 ## 后果

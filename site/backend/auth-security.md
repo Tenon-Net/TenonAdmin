@@ -115,6 +115,54 @@ builder.Services.AddTenonAdmin(builder.Configuration);          // TryAdd yields
 
 Error codes: `SmsCodeRequired` 40009 (signal), `SmsCodeWrong` 40010 (carries `attemptsLeft`), `SmsCodeExpired` 40011 (missing/expired/consumed/exhausted — deliberately indistinguishable), `SmsLoginDisabled` 40012; send throttling reuses `TooManyRequests` 40008.
 
+## Optional TOTP (authenticator)
+
+Besides SMS second factor, the kernel ships **optional, off-by-default TOTP**: users bind a phone authenticator and enter a 6-digit code after the password. It is **independent of** `SmsOtp` — enable either, both, or neither. This is general admin hardening, **not** an MLPS Level-3 product pack; the old full Level3 profile is retired (see ADR 0006 in the repo).
+
+The runtime master switch works like captcha: flip it in the config center security tab, no restart required in the common case:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `sys.security.totp.enabled` | `false` | Feature gate; when off, bind / login challenge / recovery all refuse |
+| `sys.security.totp.requireForSuperAdmin` | `false` | Whether super-admins must complete a second factor |
+| `TenonAdmin:Security:Totp:Enabled` | `false` | Deploy floor: when `true`, capability stays on (UI cannot turn it off) |
+| `TenonAdmin:Security:Totp:Issuer` | `TenonAdmin` | Issuer shown in the authenticator |
+| `TenonAdmin:Security:Totp:ChallengeTtlSeconds` | `300` | Login challenge lifetime (seconds) |
+| `TenonAdmin:Security:Totp:ReauthWindowMinutes` | `5` | High-risk write re-auth window (minutes) |
+| `TenonAdmin:Security:Totp:RecoveryCodeCount` | `10` | Recovery codes issued per bind |
+
+Per account, `ForceTotp` (user admin "force TOTP") requires that user to finish TOTP at login. It is orthogonal to the global keys and does nothing useful while the master switch is off.
+
+**Self-service bind** is the product path. `POST /api/v1/auth/mfa/bind/start` takes account + current password and returns an `otpauth` URI plus a one-time seed; `complete` verifies the 6-digit code, stores the seed, and returns recovery codes **once** (server stores hashes only). Templates expose this under Account Security (`/personal/security`) after login — the login page does **not** show a permanent bind link. Admins clear MFA with `POST /api/v1/sys/mfa/clear` (usually behind re-auth). Invite bind, InitGrant, and emergency grants are **not** product paths and were removed.
+
+Login envelope codes (same class as SMS 40009 — "one more step" or "must bind first"):
+
+| Code | Meaning | Frontend |
+| --- | --- | --- |
+| `40018` | Bound; needs TOTP | TOTP step; `POST /api/v1/auth/login/totp` |
+| `40019` | Wrong TOTP | Retry |
+| `40020` | Forced but unbound | Modal → `/mfa/bind`, not a permanent login-page link |
+| `40022` | Bad / reused recovery code | Another code or admin clear |
+
+Recovery: `POST /api/v1/auth/mfa/recovery` (account + password + code). Success clears MFA and revokes sessions; re-bind is required. Each recovery code works once.
+
+High-risk writes (user edits, clear MFA, some role/session ops) may use `[RequireReauth]`: re-check password or TOTP inside a short window (`POST /api/v1/auth/reauth`). Both templates ship a shared re-auth modal.
+
+TOTP seeds are envelope-encrypted via `ISecretProtector` — not whole-database field encryption. Full key table: `docs/agents/security-optional-config.md` in the repo.
+
+## Optional cookie session and CSRF
+
+Default session shape is unchanged: login JSON returns access + refresh; clients may keep refresh in localStorage and refresh via the body. When **`TenonAdmin:Security:Session:CookieMode`** is `true` (default `false`, deploy-time, restart required):
+
+- refresh is **HttpOnly** cookie only (`tenon_rt`); body refresh is cleared
+- a readable CSRF cookie (`tenon_csrf`) is issued; mutating requests must send header `X-Tenon-CSRF` (constant-time match)
+- login payload includes `sessionMode: "cookie"` and `csrfRequired: true`
+- both front templates already use `credentials: 'include'` and attach CSRF; access stays in memory with silent cookie refresh
+
+Business APIs still use `Authorization: Bearer` plus per-request `sid` liveness checks — cookies do **not** replace the access token. Cross-subdomain setups need `Session:CookieDomain` (often with `SameSite=None` + HTTPS). Same-origin Vite proxy local work usually needs no Domain.
+
+Optional idle / absolute caps (default `0` = off): `Session:IdleMinutesNormal`, `IdleMinutesMfa`, `AbsoluteHours`. Independent of CookieMode.
+
 ## Email channel
 
 The kernel ships the same kind of abstraction for email, `IEmailSender`, mirroring `ISmsSender` — and **no built-in feature actually uses it yet**. It's a channel wired up ahead of time, so email verification codes or notification emails can plug straight into it later without a fresh replaceability design pass.
@@ -175,6 +223,10 @@ The kicked user's access token, even if not yet expired, gets a 401 on the next 
 | --- | --- | --- |
 | `...:Session:Mode` | `Multi` | `Multi` (multiple devices coexist) / `Single` (new login kicks the old one) |
 | `...:Session:MaxConcurrent` | `0` | Max concurrent sessions; when `>0`, exceeding it revokes the oldest login first; `0` means unlimited |
+| `...:Session:CookieMode` | `false` | When `true`, refresh is HttpOnly cookie + CSRF only (see section above) |
+| `...:Session:CookieDomain` | `null` | Cookie Domain; empty = current host |
+| `...:Session:IdleMinutesNormal` / `IdleMinutesMfa` | `0` | Idle timeout (minutes); `0` = off |
+| `...:Session:AbsoluteHours` | `0` | Absolute max hours; `0` = follow refresh only |
 
 Quota trimming uses "**insert first, then converge**": the new session is inserted into the DB before trimming runs, so two concurrent logins both see each other's row and both compute the same "keep only the newest N" answer — convergence happens naturally, without relying on an in-process lock, which is what lets it work correctly across multiple replicas (a single-process lock wouldn't kick an old session on a different replica).
 
