@@ -9,10 +9,10 @@ vi.mock('@/api', async (orig) => {
   return {
     ...actual,
     mfaApi: {
-      invite: vi.fn(),
       bindStart: vi.fn(),
       bindComplete: vi.fn(),
       recovery: vi.fn(),
+      clear: vi.fn(),
     },
   }
 })
@@ -23,7 +23,7 @@ import BindPage from './BindPage'
 const bindStartMock = vi.mocked(mfaApi.bindStart)
 const bindCompleteMock = vi.mocked(mfaApi.bindComplete)
 
-function mount(path = '/mfa/bind?token=invite-token') {
+function mount(path = '/mfa/bind') {
   render(
     <AntdApp>
       <MemoryRouter initialEntries={[path]}>
@@ -54,14 +54,22 @@ afterEach(() => {
   cleanup()
 })
 
-describe('MFA BindPage recovery-code integrity', () => {
+async function goToAuthenticatorStep() {
+  fill('账号', 'ada')
+  fill('当前密码', 'Secret1!')
+  fireEvent.click(btn(/继\s*续/))
+  await screen.findByText('将此帐户添加到认证器应用，然后输入当前动态口令。')
+  expect(bindStartMock).toHaveBeenCalledWith({
+    account: 'ada',
+    currentPassword: 'Secret1!',
+  })
+}
+
+describe('MFA BindPage self-service + recovery-code integrity', () => {
   it('rejects an empty recoveryCodes response and never shows the recovery screen', async () => {
     bindCompleteMock.mockResolvedValue({ recoveryCodes: [] })
     mount()
-
-    fill('当前密码', 'Secret1!')
-    fireEvent.click(btn(/继\s*续/))
-    await screen.findByText('将此帐户添加到认证器应用，然后输入当前动态口令。')
+    await goToAuthenticatorStep()
 
     fill('动态口令', '123456')
     fireEvent.click(btn(/验证并完成/))
@@ -74,17 +82,13 @@ describe('MFA BindPage recovery-code integrity', () => {
       expect(document.body.textContent).toContain('设置未能返回恢复码，请重新开始设置。')
     })
     expect(screen.queryByText('保存恢复码')).toBeNull()
-    // Still on the authenticator step — not a blank “success” recovery view.
     expect(btn(/验证并完成/)).toBeTruthy()
   })
 
   it('rejects a missing recoveryCodes field the same way', async () => {
     bindCompleteMock.mockResolvedValue({})
     mount()
-
-    fill('当前密码', 'Secret1!')
-    fireEvent.click(btn(/继\s*续/))
-    await screen.findByText('将此帐户添加到认证器应用，然后输入当前动态口令。')
+    await goToAuthenticatorStep()
 
     fill('动态口令', '654321')
     fireEvent.click(btn(/验证并完成/))
@@ -98,10 +102,7 @@ describe('MFA BindPage recovery-code integrity', () => {
   it('shows recovery codes when bindComplete returns a non-empty list', async () => {
     bindCompleteMock.mockResolvedValue({ recoveryCodes: ['code-one', 'code-two'] })
     mount()
-
-    fill('当前密码', 'Secret1!')
-    fireEvent.click(btn(/继\s*续/))
-    await screen.findByText('将此帐户添加到认证器应用，然后输入当前动态口令。')
+    await goToAuthenticatorStep()
 
     fill('动态口令', '111111')
     fireEvent.click(btn(/验证并完成/))

@@ -7,13 +7,14 @@ using TenonAdmin.Services;
 namespace TenonAdmin.AspNetCore;
 
 /// <summary>
-/// Level3 浏览器会话 Cookie 写入/清除 + CSRF 双提交令牌。
-/// 仅 Profile=Level3 时由 <see cref="AuthController"/> 调用;非 Level3 不触碰 Cookie。
+/// 浏览器会话 Cookie 写入/清除 + CSRF 双提交令牌。
+/// 由 <c>TenonAdmin:Security:Session:CookieMode</c> 控制(ADR 0006);
+/// 过渡期历史 <c>Profile=Level3</c> 仍视为开启(见 <see cref="AdminSecurityOptions.IsCookieSessionEnabled"/>)。
 /// </summary>
 public class AuthCookieService(AdminSecurityOptions security, IHostEnvironment env)
 {
-    /// <summary>是否启用 Cookie 会话模型(Level3)</summary>
-    public bool IsCookieSessionEnabled => security.Profile == SecurityProfile.Level3;
+    /// <summary>是否启用 Cookie 会话模型</summary>
+    public bool IsCookieSessionEnabled => security.IsCookieSessionEnabled;
 
     /// <summary>
     /// 登录/刷新成功后:把 refresh 写入 HttpOnly Cookie,CSRF 写入可读 Cookie;
@@ -104,12 +105,11 @@ public class AuthCookieService(AdminSecurityOptions security, IHostEnvironment e
 
     private CookieOptions BuildCookieOptions(HttpContext http, bool httpOnly, DateTimeOffset? expires)
     {
-        // Level3:始终标 Secure + SameSite=Lax + Path=/
-        // CookieDomain 非空时共享父域(跨源 SPA+API);空则 host-only,要求同源反代。
-        // 生产须经 HTTPS 边缘,否则浏览器拒存;集成测试读 Set-Cookie 头断言标志,必要时手动回传 Cookie。
+        // Cookie 模式:Secure + SameSite=Lax + Path=/;Domain 非空时跨子域(常配 SameSite=None)。
+        // 生产须经 HTTPS 边缘,否则浏览器拒存。
         _ = http;
         _ = env;
-        var domain = security.Level3.CookieDomain?.Trim();
+        var domain = security.ResolveCookieDomain();
         return new CookieOptions
         {
             HttpOnly = httpOnly,

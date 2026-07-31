@@ -4,25 +4,36 @@ using TenonAdmin.SqlSugar;
 namespace TenonAdmin.Services;
 
 /// <summary>
-/// <see cref="IMfaPolicyService"/> 默认实现。默认高敏集合见 <see cref="HighSensitivityPermissions.Default"/>。
-/// <para>强制 MFA 仅在 <see cref="SecurityProfile.Level3"/> 下生效——非 Level3 保持密码直通兼容(ADR 0005 / 一期兼容冻结)。</para>
+/// <see cref="IMfaPolicyService"/> 默认实现。
+/// <para>ADR 0006：强制 TOTP 仅在 <c>Security:Totp:Enabled</c>（或过渡期 Profile=Level3）下生效。
+/// 产品规则：账号 <c>ForceTotp</c>；可选 <c>Totp:RequireForSuperAdmin</c>。
+/// 历史 Level3 的「高敏权限自动强制」仅在过渡期 Profile=Level3 时保留。</para>
 /// </summary>
 public class MfaPolicyService(
     IPermissionProvider permissions,
     IRepository<SysHighSensitivityPermission> customHighSens,
-    ISecurityProfileAccessor profile,
-    // 超管在权限码集合中通常为空(授权管道旁路);IsSuperAdmin 字段直接判定
+    AdminSecurityOptions security,
+    ISecurityProfileAccessor? profile = null,
     IRepository<SysUser>? users = null) : IMfaPolicyService
 {
     /// <inheritdoc />
     public virtual async Task<bool> IsMfaRequiredAsync(SysUser user, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(user);
-        // 非 Level3:不强制 TOTP(既有项目升级零阻断;短信 MFA 仍由独立开关控制)
-        if (!profile.IsLevel3) return false;
-        if (user.IsSuperAdmin) return true;
+        if (!security.IsTotpFeatureEnabled) return false;
+
         if (user.ForceTotp) return true;
-        return await HoldsHighSensitivityPermissionAsync(user.Id, cancellationToken);
+        if (user.IsSuperAdmin && security.Totp.RequireForSuperAdmin) return true;
+
+        // 过渡：历史 Level3 总档仍自动强制超管 + 高敏权限持有者
+        var legacyLevel3 = profile?.IsLevel3 == true || security.IsLegacyLevel3Profile;
+        if (legacyLevel3)
+        {
+            if (user.IsSuperAdmin) return true;
+            return await HoldsHighSensitivityPermissionAsync(user.Id, cancellationToken);
+        }
+
+        return false;
     }
 
     /// <inheritdoc />

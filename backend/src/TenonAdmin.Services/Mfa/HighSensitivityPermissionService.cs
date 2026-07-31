@@ -11,12 +11,14 @@ namespace TenonAdmin.Services;
 public class HighSensitivityPermissionService(
     IRepository<SysHighSensitivityPermission> repo,
     IRepository<SysUser> users,
+    AdminSecurityOptions? security = null,
     IPermissionProvider? permissions = null,
     ISecurityProfileAccessor? profile = null,
     ILogger<HighSensitivityPermissionService>? logger = null) : IHighSensitivityPermissionService
 {
-    private bool IsLevel3 =>
-        profile?.IsLevel3 == true;
+    private bool TotpOn =>
+        security?.IsTotpFeatureEnabled == true
+        || profile?.IsLevel3 == true;
 
     /// <inheritdoc />
     public virtual async Task<HighSensitivityPermissionList> ListAsync(
@@ -87,7 +89,7 @@ public class HighSensitivityPermissionService(
         AdminException.ThrowIf(operatorUserId <= 0, ErrorCode.NoPermission);
         var op = await users.GetByIdAsync(operatorUserId);
         AdminException.ThrowIf(op is null || !op!.Enabled, ErrorCode.NoPermission);
-        if (IsLevel3)
+        if (TotpOn)
             AdminException.ThrowIf(!op.TotpEnabled, ErrorCode.TotpNotBound);
         if (op.IsSuperAdmin) return;
         if (permissions is null)

@@ -6,7 +6,7 @@ namespace TenonAdmin.Services;
 /// <summary>
 /// <see cref="ISessionActivityTracker"/> 默认实现:更新会话缓存中的 LastActivityAt,
 /// 并按 <see cref="AdminSessionOptions.ActivityThrottleSeconds"/> 节流回写 DB。
-/// Level3 下缓存操作异常 → 返回 false(fail-closed);非 Level3 失败吞掉并返回 true。
+/// 启用闲置/Cookie 会话时缓存异常 → 返回 false(活动不可信);否则吞掉并返回 true。
 /// </summary>
 public class SessionActivityTracker(
     ICacheProvider cache,
@@ -15,8 +15,6 @@ public class SessionActivityTracker(
     TimeProvider time) : ISessionActivityTracker
 {
     private DateTime Now => time.GetUtcNow().UtcDateTime;
-
-    private bool IsLevel3 => security.Profile == SecurityProfile.Level3;
 
     /// <inheritdoc />
     public virtual async Task<bool> TouchAsync(
@@ -54,8 +52,9 @@ public class SessionActivityTracker(
         }
         catch
         {
-            // Level3:活动路径不可用 → 失败关闭;非 Level3 不阻断既有会话
-            return !IsLevel3;
+            // 闲置或 Cookie 会话依赖活动跟踪:失败则 fail-closed;否则不阻断
+            var strict = security.IsSessionIdleEnabled || security.IsCookieSessionEnabled;
+            return !strict;
         }
     }
 }

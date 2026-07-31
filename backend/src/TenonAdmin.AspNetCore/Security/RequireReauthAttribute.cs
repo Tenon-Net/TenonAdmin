@@ -20,9 +20,9 @@ public sealed class RequireReauthAttribute : Attribute, IAsyncAuthorizationFilte
 {
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
-        // 非 Level3 不强制再认证,避免破坏既有非等保部署与集成测试
-        var profile = context.HttpContext.RequestServices.GetService<ISecurityProfileAccessor>();
-        if (profile is null || !profile.IsLevel3)
+        // 仅 TOTP 能力开启时强制再认证(Totp:Enabled 或历史 Profile=Level3)
+        var security = context.HttpContext.RequestServices.GetService<AdminSecurityOptions>();
+        if (security is null || !security.IsTotpFeatureEnabled)
             return;
 
         var user = context.HttpContext.User;

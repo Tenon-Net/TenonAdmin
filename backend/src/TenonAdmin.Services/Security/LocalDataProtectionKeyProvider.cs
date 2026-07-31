@@ -52,12 +52,13 @@ public class LocalDataProtectionKeyProvider : IDataProtectionKeyProvider
                     $"TenonAdmin:Security:DataProtection:Key 过短({keyBytes.Length} 字节 < {MinKeyBytes} 字节)。" +
                     "请配置至少 32 字节随机密钥的 Base64。");
         }
-        else if (security.Profile == SecurityProfile.Level3)
+        else if (security.IsLegacyLevel3Profile
+                 || ((security.Totp.Enabled || security.Session.CookieMode) && !isDevelopment))
         {
-            // Level3 禁止开发自动密钥:缺配 fail-loud(预检/启动会报 Level3Misconfigured)
+            // 历史 Level3、或生产启用 TOTP/Cookie 时必须显式主密钥
             throw new InvalidOperationException(
-                "Level3 安全档必须显式配置 TenonAdmin:Security:DataProtection:Key(Base64,≥32 字节);" +
-                "禁止使用自动生成的开发密钥。");
+                "启用 TOTP/Cookie 会话或历史 Profile=Level3 时必须显式配置 " +
+                "TenonAdmin:Security:DataProtection:Key(Base64,≥32 字节);禁止使用自动开发密钥。");
         }
         else if (isDevelopment && !string.IsNullOrEmpty(contentRoot))
         {

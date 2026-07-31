@@ -251,12 +251,9 @@ public static class TenonAdminSetup
         services.TryAddSingleton<RuntimeRateLimit>();
         services.AddHostedService(sp => sp.GetRequiredService<RuntimeRateLimit>());
 
-        // ── Level3 档位:生产环境未启用时启动告警(不阻断既有项目;预检报告另标不合规)──
+        // ── 历史 Level3 注册位(ADR 0006:告警/启动 fail-closed/ready 预检已退役为空操作;后续可删)──
         services.AddHostedService<SecurityProfileWarningHostedService>();
-
-        // Level3 Cookie 会话 / CSRF(仅 Profile=Level3 时生效;非 Level3 方法内空操作)
-        services.TryAddSingleton<AuthCookieService>();
-        // Level3 显式启用时启动预检闸门:关键项(Redis 认证/TLS、数据保护密钥等)失败即拒绝启动
+        services.TryAddSingleton<AuthCookieService>(); // Cookie/CSRF 服务;启用条件见会话选项瘦身
         services.AddHostedService<Level3StartupValidationHostedService>();
 
         // ── 内置 OpenAPI 文档(§13.6 契约源)+ 健康检查(§12:/health 存活 + /health/ready 依赖就绪)──
@@ -264,7 +261,7 @@ public static class TenonAdminSetup
         services.AddHealthChecks()
             .AddCheck<DatabaseHealthCheck>("db", tags: ["ready"])
             .AddCheck<CacheHealthCheck>("cache", tags: ["ready"])
-            .AddCheck<Level3PrecheckHealthCheck>("level3-precheck", tags: ["ready"]);
+            .AddCheck<Level3PrecheckHealthCheck>("level3-precheck", tags: ["ready"]); // 恒 Healthy,保留探针名
 
         return services;
     }

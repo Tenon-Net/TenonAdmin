@@ -1,0 +1,58 @@
+# 可选安全 — 合入前收口说明
+
+- 日期：2026-07-30
+- 分支：`feature/mlps-level3-phase1`
+- 决策：[ADR 0006](../adr/0006-general-admin-optional-security.md)
+- 配置键：[security-optional-config.md](security-optional-config.md)
+
+## 合入门禁（本轮）
+
+| 项 | 状态 |
+|----|------|
+| 默认路径无 Level3 fail-closed / 生产合规告警 | 已做 |
+| 独立键 `Totp` / `Session:CookieMode` | 已定稿并接线 |
+| 自助绑定 + 清除 MFA；无邀请/InitGrant 产品路径 | 已做 |
+| 双前端绑定 UI 自助化 | 已做 |
+| 相关后端测试（见下） | **须绿** |
+| 不宣称完整三级 / 无 phase2–3 路线图承诺 | ADR + 计划已废止 |
+| OpenAPI `gen:api` | **合入后**有跑后端时再刷（invite 已删） |
+
+## 本轮验证命令
+
+```bash
+dotnet test backend/TenonAdmin.slnx -c Release --filter "FullyQualifiedName~MfaEnrollmentTests|FullyQualifiedName~Level3SessionCsrfTests|FullyQualifiedName~Level3PolicyFloorTests|FullyQualifiedName~Level3PrecheckTests"
+```
+
+期望：上述过滤器全部通过。  
+（`Level3_startup_with_missing_redis_auth_*` 已改为**不**拒绝启动，符合 ADR 0006。）
+
+前端（可选）：
+
+```bash
+cd web-react && npx vitest run src/views/mfa/BindPage.spec.tsx
+```
+
+## 合入后可跟（不挡本 PR）
+
+1. CookieMode 双前端完整对齐（内存 access + CSRF）  
+2. 登录页 / 个人中心链到 `/mfa/bind`  
+3. 物理删除历史 Level3 注册位、预检测评话术、闲置账号 Job  
+4. 重命名/精简仍带 `Level3*` 的测试类名  
+
+## 建议 commit 主题（英文）
+
+```
+feat(security): optional TOTP/Cookie instead of Level3 profile
+
+- Adopt ADR 0006: general admin kernel; drop MLPS phase 2/3 roadmap
+- Independent Security:Totp and Session:CookieMode flags (default off)
+- No fail-closed Level3 startup; ready probe no longer gates on precheck
+- Self-service TOTP bind (account+password); admin clear MFA; remove invites
+- Vue/React bind pages and user admin UI updated; related tests adjusted
+```
+
+## 明确不对消费者说
+
+- 「已通过等保三级」  
+- 「完整三级应用安全基线」  
+- 「请配置 Profile=Level3 才能安全上线」  

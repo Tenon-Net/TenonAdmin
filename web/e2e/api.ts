@@ -48,26 +48,10 @@ export async function apiCreateUser(
   return env.data.id
 }
 
-export async function apiIssueBindInvite(
-  request: APIRequestContext,
-  token: string,
-  userId: number,
-): Promise<string> {
-  const res = await request.post(`${apiBase()}/api/v1/sys/mfa/invite`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: { userId },
-  })
-  const env = await readEnvelope<{ token: string }>(res)
-  if (env.code !== 0 || !env.data?.token) {
-    throw new Error(`invite failed: code=${env.code} msg=${env.msg}`)
-  }
-  return env.data.token
-}
-
-export async function seedForceTotpInvite(request: APIRequestContext): Promise<{
+/** 建 ForceTotp 用户供自助绑定 e2e(ADR 0006:无邀请)。宿主须启用 Totp:Enabled。 */
+export async function seedForceTotpUser(request: APIRequestContext): Promise<{
   account: string
   password: string
-  inviteToken: string
   userId: number
 }> {
   const account = `e2e_mfa_${Date.now().toString(36)}`
@@ -79,6 +63,5 @@ export async function seedForceTotpInvite(request: APIRequestContext): Promise<{
     password,
     forceTotp: true,
   })
-  const inviteToken = await apiIssueBindInvite(request, admin, userId)
-  return { account, password, inviteToken, userId }
+  return { account, password, userId }
 }

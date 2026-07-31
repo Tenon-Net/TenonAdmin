@@ -123,7 +123,7 @@ It goes finer than that: long service methods are split into small `virtual` ste
 
 ## ✨ Backend features
 
-- **Auth** — Account/password + captcha, JWT + refresh-token rotation, login lockout, online sessions & force-logout
+- **Auth** — Account/password + captcha, JWT + refresh-token rotation, login lockout, online sessions & force-logout; optional TOTP self-enrollment / Cookie sessions (off by default — see `docs/agents/security-optional-config.md`). Not an MLPS certification product
 - **RBAC** — Roles, three-level menus (directory / page / button), button-level permission codes, role-menu authorization
 - **Data permissions** — All / this org / org & children / self only / custom orgs, enforced by ORM global filters — zero filtering code in your business logic
 - **Multi-app portal** — App management, independent menu trees, app selection & switching

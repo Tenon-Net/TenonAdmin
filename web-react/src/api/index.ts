@@ -210,15 +210,19 @@ export const highSensApi = {
     client.DELETE('/api/v1/sys/mfa/high-sensitivity/{id}', { params: { path: { id } } }).then((r) => unwrap<void>(r)),
 }
 
+/** TOTP 自助绑定 / 恢复 / 管理员清除(ADR 0006;无邀请路径)。 */
 export const mfaApi = {
-  invite: (body: components['schemas']['MfaInviteInput']) =>
-    client.POST('/api/v1/sys/mfa/invite', { body }).then((r) => unwrap<components['schemas']['TotpBindInviteOutput']>(r)),
-  bindStart: (body: components['schemas']['TotpBindStartInput']) =>
-    client.POST('/api/v1/auth/mfa/bind/start', { body }).then((r) => unwrap<components['schemas']['TotpBindStartOutput']>(r)),
+  bindStart: (body: { account: string; currentPassword: string }) =>
+    client.POST('/api/v1/auth/mfa/bind/start', { body: body as components['schemas']['TotpBindStartInput'] })
+      .then((r) => unwrap<components['schemas']['TotpBindStartOutput']>(r)),
   bindComplete: (body: components['schemas']['TotpBindCompleteInput']) =>
     client.POST('/api/v1/auth/mfa/bind/complete', { body }).then((r) => unwrap<components['schemas']['TotpBindCompleteOutput']>(r)),
   recovery: (body: components['schemas']['TotpRecoveryInput']) =>
     client.POST('/api/v1/auth/mfa/recovery', { body }).then((r) => unwrap<void>(r)),
+  clear: (body: { userId: number }) =>
+    (client as { POST: (path: string, init: { body: { userId: number } }) => Promise<unknown> })
+      .POST('/api/v1/sys/mfa/clear', { body })
+      .then((r) => unwrap<void>(r as never)),
 }
 
 export interface ExternalProvider {

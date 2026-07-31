@@ -26,7 +26,8 @@ public class IdleAccountService(
     /// <inheritdoc />
     public virtual async Task<IdleAccountScanResult> ScanAsync(CancellationToken cancellationToken = default)
     {
-        if (security.Profile != SecurityProfile.Level3)
+        // 闲置账号自动停用仅历史 Level3 产品路径;ADR 0006 未纳入通用独立键
+        if (!security.IsLegacyLevel3Profile)
             return new IdleAccountScanResult(0, 0, 0);
 
         var now = Now;

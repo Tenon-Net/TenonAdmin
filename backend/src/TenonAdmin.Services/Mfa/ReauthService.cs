@@ -17,7 +17,8 @@ public class ReauthService(
     /// <inheritdoc />
     public virtual async Task GrantAsync(long userId, string method, string? sessionId = null)
     {
-        var minutes = Math.Max(1, security.Level3.ReauthWindowMinutes);
+        // ADR 0006:产品键 Totp:ReauthWindowMinutes 优先,回退历史 Level3 键
+        var minutes = Math.Max(1, security.ResolveReauthWindowMinutes());
         var value = string.IsNullOrWhiteSpace(method) ? "totp" : method.Trim();
         await cache.SetAsync(CacheKeys.ReauthGrant(userId, sessionId), value, TimeSpan.FromMinutes(minutes));
         // 记录用户维度的 sid 集合,便于 RevokeAllForUserAsync(尽力而为)

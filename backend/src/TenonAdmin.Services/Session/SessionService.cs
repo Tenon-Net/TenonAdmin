@@ -13,7 +13,8 @@ namespace TenonAdmin.Services;
 /// 并发登录都落库后各自重读、各自算出同一个"保留最新 N"的答案,天然收敛,不靠锁串行化。
 /// 原实现用一把 <c>static</c> 锁字典护住"读活跃集合 → 腾位 → 插入"这个读-改-写,但那把锁跨不了进程:
 /// 多副本下两个登录照样各读各的,单端踢不掉旧会话、并发上限被突破(换 Redis 也修不好,它不是缓存问题)。</para>
-/// <para>Level3:绝对过期 8h、闲置 30/15 分、并发 MFA 1–2 / 普通 ≤3、活动经 <see cref="ISessionActivityTracker"/> 节流回写。</para>
+/// <para>会话绝对/闲置/并发由 <see cref="AdminSecurityOptions"/> 独立键控制(ADR 0006);
+/// 历史 Profile=Level3 仍走内置下限与钳位(过渡兼容)。</para>
 /// </summary>
 public class SessionService(
     IRepository<SysSession> sessions,
@@ -31,8 +32,6 @@ public class SessionService(
 {
     private DateTime Now => time.GetUtcNow().UtcDateTime;
 
-    private bool IsLevel3 => security.Profile == SecurityProfile.Level3;
-
     /// <summary>高熵随机串的哈希:SHA-256 十六进制(不是密码,无需 PBKDF2)。</summary>
     private static string Sha256Hex(string input) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input)));
@@ -42,11 +41,11 @@ public class SessionService(
     {
         var expiresAt = pair.RefreshExpiresAt.UtcDateTime;
         var now = Now;
-        // Level3:绝对窗 = min(now+8h, 刷新过期);非 Level3 与刷新过期对齐(兼容既有行为)
-        var absolute = IsLevel3
-            ? Min(expiresAt, now.AddMinutes(SecurityPolicyProvider.Level3MaxAbsoluteSessionMinutes))
+        // 绝对窗:Session:AbsoluteHours 或历史 Level3 的 8h;未启用则与 refresh 对齐
+        var absSpan = security.ResolveAbsoluteTimeSpan();
+        var absolute = absSpan is { } ts
+            ? Min(expiresAt, now.Add(ts))
             : expiresAt;
-        // 刷新本身若被策略钳到 ≤8h,仍保证 AbsoluteExpiresAt 不晚于 expiresAt
         if (absolute > expiresAt) absolute = expiresAt;
 
         var isMfa = IsMfaUser(user);
@@ -283,22 +282,21 @@ public class SessionService(
             await RevokeAsync(s.SessionId);
     }
 
-    /// <summary>解析应保留的并发名额;0 = 不限(仅非 Level3 Multi+MaxConcurrent≤0)。</summary>
+    /// <summary>解析应保留的并发名额;0 = 不限(Multi 且 MaxConcurrent≤0)。</summary>
     protected virtual int ResolveKeepCount(bool isMfa)
     {
         var mode = security.Session.Mode;
         var max = security.Session.MaxConcurrent;
 
-        if (IsLevel3)
+        // 历史 Level3:内置并发上限(过渡);产品路径只认 Mode / MaxConcurrent
+        if (security.IsLegacyLevel3Profile)
         {
             if (mode == SessionMode.Single) return 1;
             if (isMfa)
             {
-                // MFA:默认 1,配置可放宽到 2,内核钳上限 2
                 if (max <= 0) return SecurityPolicyProvider.Level3MaxConcurrentMfaDefault;
                 return Math.Clamp(max, 1, SecurityPolicyProvider.Level3MaxConcurrentMfaCap);
             }
-            // 普通:最多 3;配置 0 → 3;配置更大 → 钳 3
             if (max <= 0) return SecurityPolicyProvider.Level3MaxConcurrentNormal;
             return Math.Min(max, SecurityPolicyProvider.Level3MaxConcurrentNormal);
         }
@@ -317,23 +315,26 @@ public class SessionService(
     protected virtual bool IsMfaUser(SysUser user) => user.TotpEnabled || user.ForceTotp;
 
     /// <summary>
-    /// Level3 闲置分钟:部署配置可收紧(更短),不可放宽超过内核下限
-    /// (MFA <see cref="SecurityPolicyProvider.Level3IdleMinutesMfa"/> /
-    /// 普通 <see cref="SecurityPolicyProvider.Level3IdleMinutesNormal"/>)。非 Level3 返回 0(不启用闲置窗)。
+    /// 闲置分钟:产品键 <c>Session:IdleMinutes*</c>(0=关);
+    /// 历史 Level3 使用 30/15 下限且配置只能更严。
     /// </summary>
     protected virtual int ResolveIdleMinutes(bool isMfa)
     {
-        if (!IsLevel3) return 0;
-        if (isMfa)
+        if (security.IsLegacyLevel3Profile)
         {
-            var floor = SecurityPolicyProvider.Level3IdleMinutesMfa;
-            var configured = security.Session.IdleMinutesMfa;
-            return configured <= 0 ? floor : Math.Min(configured, floor);
+            if (isMfa)
+            {
+                var floor = SecurityPolicyProvider.Level3IdleMinutesMfa;
+                var configured = security.Session.IdleMinutesMfa;
+                return configured <= 0 ? floor : Math.Min(configured, floor);
+            }
+
+            var normalFloor = SecurityPolicyProvider.Level3IdleMinutesNormal;
+            var normalConfigured = security.Session.IdleMinutesNormal;
+            return normalConfigured <= 0 ? normalFloor : Math.Min(normalConfigured, normalFloor);
         }
 
-        var normalFloor = SecurityPolicyProvider.Level3IdleMinutesNormal;
-        var normalConfigured = security.Session.IdleMinutesNormal;
-        return normalConfigured <= 0 ? normalFloor : Math.Min(normalConfigured, normalFloor);
+        return security.ResolveIdleMinutes(isMfa);
     }
 
     /// <summary>滑动过期 / 绝对窗 / 闲置三重判定。</summary>

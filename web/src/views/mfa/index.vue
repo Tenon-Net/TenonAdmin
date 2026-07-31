@@ -5,20 +5,24 @@ import { NAlert, NButton, NCard, NForm, NFormItem, NInput, NSteps, NStep, useMes
 import { useI18n } from 'vue-i18n'
 import { mfaApi } from '@/api'
 import { translateError } from '@/utils/error'
+import { useUserStore } from '@/stores/user'
 import { takeRecoveryCodes } from './bindComplete'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const userStore = useUserStore()
 
 const mode = ref<'bind' | 'recovery'>('bind')
 const step = ref(1)
 const loading = ref(false)
 const completed = ref(false)
+
+const queryAccount = typeof route.query.account === 'string' ? route.query.account : ''
+const knownAccount = queryAccount || userStore.userInfo?.account || ''
 const bind = reactive({
-  token: typeof route.query.token === 'string' ? route.query.token : '',
-  account: '',
+  account: knownAccount,
   currentPassword: '',
   bindChallengeId: '',
   otpauthUri: '',
@@ -26,8 +30,12 @@ const bind = reactive({
   totpCode: '',
   recoveryCodes: [] as string[],
 })
-const recovery = reactive({ account: '', currentPassword: '', recoveryCode: '' })
-const canStart = computed(() => !!bind.token && !!bind.currentPassword)
+const recovery = reactive({
+  account: knownAccount,
+  currentPassword: '',
+  recoveryCode: '',
+})
+const canStart = computed(() => !!bind.account.trim() && !!bind.currentPassword)
 
 async function copy(value: string) {
   try {
@@ -45,7 +53,10 @@ async function startBind() {
   }
   loading.value = true
   try {
-    const result = await mfaApi.bindStart({ token: bind.token, currentPassword: bind.currentPassword, account: bind.account || null })
+    const result = await mfaApi.bindStart({
+      account: bind.account.trim(),
+      currentPassword: bind.currentPassword,
+    })
     bind.bindChallengeId = result.bindChallengeId ?? ''
     bind.otpauthUri = result.otpauthUri ?? ''
     bind.seed = result.seed ?? ''
@@ -67,7 +78,6 @@ async function completeBind() {
   loading.value = true
   try {
     const result = await mfaApi.bindComplete({ bindChallengeId: bind.bindChallengeId, totpCode: bind.totpCode })
-    // 账号此时服务端已绑定：绝不能因缺恢复码仍切入“成功展示”空屏。
     const codes = takeRecoveryCodes(result)
     if (!codes) throw new Error(t('mfa.bindCompleteResponseIncomplete'))
     bind.recoveryCodes = codes
@@ -136,9 +146,8 @@ function switchMode() {
 
         <n-form v-if="step === 1" label-placement="top" @keyup.enter="startBind">
           <n-alert type="info" :bordered="false" style="margin-bottom: 16px">{{ t('mfa.bindHint') }}</n-alert>
-          <n-form-item :label="t('mfa.inviteToken')"><n-input v-model:value="bind.token" /></n-form-item>
-          <n-form-item :label="t('mfa.accountOptional')"><n-input v-model:value="bind.account" /></n-form-item>
-          <n-form-item :label="t('mfa.currentPassword')"><n-input v-model:value="bind.currentPassword" type="password" show-password-on="click" /></n-form-item>
+          <n-form-item :label="t('mfa.account')"><n-input v-model:value="bind.account" autocomplete="username" /></n-form-item>
+          <n-form-item :label="t('mfa.currentPassword')"><n-input v-model:value="bind.currentPassword" type="password" show-password-on="click" autocomplete="current-password" /></n-form-item>
           <n-button type="primary" block :loading="loading" @click="startBind">{{ t('mfa.startBind') }}</n-button>
         </n-form>
 
@@ -150,7 +159,7 @@ function switchMode() {
           <n-form-item :label="t('mfa.otpauthUri')">
             <n-input :value="bind.otpauthUri" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" readonly><template #suffix><n-button text type="primary" @click="copy(bind.otpauthUri)">{{ t('mfa.copy') }}</n-button></template></n-input>
           </n-form-item>
-          <n-form-item :label="t('mfa.authenticatorCode')"><n-input v-model:value="bind.totpCode" :maxlength="6" /></n-form-item>
+          <n-form-item :label="t('mfa.authenticatorCode')"><n-input v-model:value="bind.totpCode" :maxlength="6" autocomplete="one-time-code" /></n-form-item>
           <n-button type="primary" block :loading="loading" @click="completeBind">{{ t('mfa.completeBind') }}</n-button>
         </n-form>
 
@@ -164,9 +173,9 @@ function switchMode() {
 
       <n-form v-else-if="!completed" label-placement="top" @keyup.enter="submitRecovery">
         <n-alert type="warning" :bordered="false" style="margin-bottom: 16px">{{ t('mfa.recoveryHint') }}</n-alert>
-        <n-form-item :label="t('mfa.account')"><n-input v-model:value="recovery.account" /></n-form-item>
-        <n-form-item :label="t('mfa.currentPassword')"><n-input v-model:value="recovery.currentPassword" type="password" show-password-on="click" /></n-form-item>
-        <n-form-item :label="t('mfa.recoveryCode')"><n-input v-model:value="recovery.recoveryCode" /></n-form-item>
+        <n-form-item :label="t('mfa.account')"><n-input v-model:value="recovery.account" autocomplete="username" /></n-form-item>
+        <n-form-item :label="t('mfa.currentPassword')"><n-input v-model:value="recovery.currentPassword" type="password" show-password-on="click" autocomplete="current-password" /></n-form-item>
+        <n-form-item :label="t('mfa.recoveryCode')"><n-input v-model:value="recovery.recoveryCode" autocomplete="one-time-code" /></n-form-item>
         <n-button type="primary" block :loading="loading" @click="submitRecovery">{{ t('mfa.submitRecovery') }}</n-button>
       </n-form>
       <template v-else>

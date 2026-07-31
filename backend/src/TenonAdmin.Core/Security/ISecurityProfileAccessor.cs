@@ -1,19 +1,19 @@
 namespace TenonAdmin.Core;
 
 /// <summary>
-/// 安全档访问器:读部署配置中的 <see cref="AdminSecurityOptions.Profile"/>,供策略层/预检/业务判定 Level3。
-/// 默认实现注册为 Singleton;<c>TryAdd</c> 可替换(测试可钉死档位)。
+/// 历史安全档访问器:读 <see cref="AdminSecurityOptions.Profile"/>。
+/// <para><b>ADR 0006：</b>产品能力请读 <see cref="AdminSecurityOptions.IsTotpFeatureEnabled"/> /
+/// <see cref="AdminSecurityOptions.IsCookieSessionEnabled"/> 等 helper。
+/// 本接口仅服务预检、闲置账号 Job 等仍认 <c>Profile=Level3</c> 的过渡路径与测试桩。</para>
 /// </summary>
 public interface ISecurityProfileAccessor
 {
-    /// <summary>当前安全档(部署配置,运行时不可经 SysConfig 降级)</summary>
+    /// <summary>当前历史安全档</summary>
     SecurityProfile Profile { get; }
 
-    /// <summary>是否已启用 Level3 强制档</summary>
+    /// <summary>是否配置了历史 Level3 总档(<see cref="AdminSecurityOptions.IsLegacyLevel3Profile"/>)</summary>
     bool IsLevel3 { get; }
 
-    /// <summary>
-    /// 生产环境且未启用 Level3——应告警并在预检标记不合规,但不阻断既有项目运行。
-    /// </summary>
+    /// <summary>生产且未配历史 Level3(遗留语义;ADR 0006 后不再触发合规告警)</summary>
     bool IsProductionWithoutLevel3 { get; }
 }

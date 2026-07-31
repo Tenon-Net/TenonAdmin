@@ -24,7 +24,7 @@ public class Level3EnableMigrator(
     /// <inheritdoc />
     public virtual async Task<int> EnsureMigratedAsync(CancellationToken cancellationToken = default)
     {
-        if (security.Profile != SecurityProfile.Level3)
+        if (!security.IsLegacyLevel3Profile)
             return 0;
 
         var flag = await configs.GetFirstAsync(c => c.ConfigKey == ConfigKey);

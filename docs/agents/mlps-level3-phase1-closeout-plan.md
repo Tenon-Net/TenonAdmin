@@ -1,10 +1,10 @@
 # 等保三级一期收口执行计划
 
-- 状态：**第一期已完成（T1–T5 含第十轮复审阻断关闭）**（**不是**等保测评结论）
-- 收口日期：2026-07-30
+- 状态：**历史收口记录** — 一期曾在分支完成；**产品方向已由 [ADR 0006](../adr/0006-general-admin-optional-security.md) 纠正**。后续执行见 [security-optional-slim-plan.md](security-optional-slim-plan.md)，**禁止**原样将完整 Level3 合入 main，**禁止**按二/三期继续建设。
+- 收口日期：2026-07-30（一期实现）；方向纠正：2026-07-30
 - T5 第一版～第十轮复审修复：2026-07-30
-- 依据：`docs/mlps-level3-kernel-plan.md`、`docs/agents/mlps-level3-phase1-*.md`、`docs/agents/mlps-level3-cookie-csrf-deploy.md`
-- 目标：完成并验证等保三级应用安全内核第一期；不扩展到第二、三期，且不得宣称产品已通过等保三级测评。
+- 依据（历史）：`docs/mlps-level3-kernel-plan.md`、`docs/agents/mlps-level3-phase1-*.md`、`docs/agents/mlps-level3-cookie-csrf-deploy.md`
+- 原目标：完成并验证等保三级应用安全内核第一期；不扩展到第二、三期，且不得宣称产品已通过等保三级测评。
 
 ## 范围与约束
 

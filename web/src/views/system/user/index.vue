@@ -2,9 +2,8 @@
 // 用户管理(写侧)= ProTable(列表/搜索/分页)+ UserFormModal(新增/编辑)+ ResetPasswordModal(重置/初始口令展示)+ 专用启停端点。
 // 超管行(isSuperAdmin)删除/停用置灰防自锁;启停走专用 setEnabled(非全量 update)。
 // 导入导出(G6):ImportWizard 四步向导 + ExportColumnsModal 选列导出(带当前筛选)。
-import { computed, h, onMounted, ref, watch } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import { NButton, NCard, NTree, NSpace, NTag, NAvatar, NPopconfirm, useMessage } from 'naive-ui'
-import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import AppIcon from '@/components/AppIcon.vue'
@@ -12,7 +11,6 @@ import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import DictTag from '@/components/DictTag/index.vue'
 import ImportWizard, { type ImportWizardApi } from '@/components/ImportWizard/index.vue'
 import ExportColumnsModal from '@/components/ExportColumnsModal/index.vue'
-import FormContainer from '@/components/FormContainer/index.vue'
 import UserFormModal from './components/UserFormModal.vue'
 import ResetPasswordModal from './components/ResetPasswordModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
@@ -28,7 +26,6 @@ const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
 const authStore = useAuthStore()
-const router = useRouter()
 const tableRef = ref<ProTableInst<UserItem>>()
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   remove: userApi.batchRemove,
@@ -40,45 +37,18 @@ const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
 const userFormRef = ref<InstanceType<typeof UserFormModal> | null>(null)
 const resetModalRef = ref<InstanceType<typeof ResetPasswordModal> | null>(null)
 
-const inviteShow = ref(false)
-const inviteLoading = ref(false)
-const inviteToken = ref('')
-const inviteExpiresAt = ref<string | null>(null)
-const inviteUserName = ref('')
-const inviteUrl = computed(() => {
-  if (!inviteToken.value) return ''
-  const href = router.resolve({ name: 'mfa-bind', query: { token: inviteToken.value } }).href
-  return new URL(href, window.location.origin).toString()
-})
-watch(inviteShow, (shown) => {
-  if (shown) return
-  inviteToken.value = ''
-  inviteExpiresAt.value = null
-  inviteUserName.value = ''
-})
+const clearMfaLoading = ref(false)
 
-async function issueMfaInvite(user: UserItem) {
-  inviteLoading.value = true
+async function clearUserMfa(user: UserItem) {
+  clearMfaLoading.value = true
   try {
-    const invite = await mfaApi.invite({ userId: user.id })
-    if (!invite.token) throw new Error(t('mfa.inviteResponseIncomplete'))
-    inviteToken.value = invite.token
-    inviteExpiresAt.value = invite.expiresAt ?? null
-    inviteUserName.value = user.name
-    inviteShow.value = true
+    await mfaApi.clear({ userId: user.id })
+    message.success(t('user.mfaCleared'))
+    tableRef.value?.refresh()
   } catch (e) {
     message.error(translateError(e))
   } finally {
-    inviteLoading.value = false
-  }
-}
-
-async function copyInvite(value: string) {
-  try {
-    await navigator.clipboard.writeText(value)
-    message.success(t('user.copied'))
-  } catch {
-    message.error(t('user.copyFailed'))
+    clearMfaLoading.value = false
   }
 }
 
@@ -272,8 +242,8 @@ const columns: ProTableColumn<UserItem>[] = [
         authStore.hasPerm('PUT:/api/v1/sys/user/{id}/password')
           ? h(NButton, { size: 'small', quaternary: true, onClick: () => resetModalRef.value?.openReset(r) }, () => t('user.resetPassword'))
           : null,
-        !r.totpEnabled && authStore.hasPerm('POST:/api/v1/sys/mfa/invite')
-          ? h(NButton, { size: 'small', quaternary: true, loading: inviteLoading.value, onClick: () => issueMfaInvite(r) }, () => t('user.issueTotpInvite'))
+        r.totpEnabled && authStore.hasPerm('POST:/api/v1/sys/mfa/clear')
+          ? h(NButton, { size: 'small', quaternary: true, loading: clearMfaLoading.value, onClick: () => clearUserMfa(r) }, () => t('user.clearMfa'))
           : null,
         r.isSuperAdmin || !authStore.hasPerm('DELETE:/api/v1/sys/user/{id}')
           ? null
@@ -360,25 +330,6 @@ const columns: ProTableColumn<UserItem>[] = [
   />
 
   <ResetPasswordModal ref="resetModalRef" />
-
-  <FormContainer v-model:show="inviteShow" :title="t('user.totpInviteTitle', { name: inviteUserName })" :confirm-text="t('common.close')">
-    <n-alert type="warning" :bordered="false" style="margin-bottom: 16px">{{ t('user.totpInviteOnce') }}</n-alert>
-    <n-form label-placement="top">
-      <n-form-item :label="t('user.totpInviteUrl')">
-        <n-input :value="inviteUrl" readonly>
-          <template #suffix><n-button text type="primary" @click="copyInvite(inviteUrl)">{{ t('user.copy') }}</n-button></template>
-        </n-input>
-      </n-form-item>
-      <n-form-item :label="t('user.totpInviteToken')">
-        <n-input :value="inviteToken" readonly>
-          <template #suffix><n-button text type="primary" @click="copyInvite(inviteToken)">{{ t('user.copy') }}</n-button></template>
-        </n-input>
-      </n-form-item>
-      <n-form-item v-if="inviteExpiresAt" :label="t('user.totpInviteExpires')">
-        <n-input :value="inviteExpiresAt" readonly />
-      </n-form-item>
-    </n-form>
-  </FormContainer>
 
   <ImportWizard
     v-model:show="importShow"

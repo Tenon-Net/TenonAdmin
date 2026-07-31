@@ -187,16 +187,20 @@ export const authApi = {
     client.POST('/api/v1/auth/sms/login', { body }).then((r) => unwrap<LoginOutput>(r)),
 }
 
-/** TOTP enrollment and recovery. Anonymous endpoints still use the shared client so credentials/CSRF stay consistent. */
+/** TOTP 自助绑定 / 恢复 / 管理员清除(ADR 0006;无邀请路径)。 */
 export const mfaApi = {
-  invite: (body: components['schemas']['MfaInviteInput']) =>
-    client.POST('/api/v1/sys/mfa/invite', { body }).then((r) => unwrap<components['schemas']['TotpBindInviteOutput']>(r)),
-  bindStart: (body: components['schemas']['TotpBindStartInput']) =>
-    client.POST('/api/v1/auth/mfa/bind/start', { body }).then((r) => unwrap<components['schemas']['TotpBindStartOutput']>(r)),
+  bindStart: (body: { account: string; currentPassword: string }) =>
+    client.POST('/api/v1/auth/mfa/bind/start', { body: body as components['schemas']['TotpBindStartInput'] })
+      .then((r) => unwrap<components['schemas']['TotpBindStartOutput']>(r)),
   bindComplete: (body: components['schemas']['TotpBindCompleteInput']) =>
     client.POST('/api/v1/auth/mfa/bind/complete', { body }).then((r) => unwrap<components['schemas']['TotpBindCompleteOutput']>(r)),
   recovery: (body: components['schemas']['TotpRecoveryInput']) =>
     client.POST('/api/v1/auth/mfa/recovery', { body }).then((r) => unwrap<void>(r)),
+  /** schema 未 gen 前用 never 占位;路径 POST /api/v1/sys/mfa/clear */
+  clear: (body: { userId: number }) =>
+    (client as { POST: (path: string, init: { body: { userId: number } }) => Promise<unknown> })
+      .POST('/api/v1/sys/mfa/clear', { body })
+      .then((r) => unwrap<void>(r as never)),
 }
 
 /** 高敏权限自定义追加(内核默认只读;写操作须 reauth)。 */

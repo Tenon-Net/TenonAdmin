@@ -47,9 +47,9 @@ public class CaptchaService(
     public virtual async Task ValidateAsync(string? captchaId, string? code)
     {
         // 是否强制校验先读 SysConfig(改值即时生效),缺失/解析失败回退 Options 默认。
-        // Level3:验证码下限不可放宽——SysConfig 不得关闭(失败后强制门槛的一期简化:Level3 始终要求验证码)
+        // 历史 Level3 总档强制验证码;产品路径只认 Captcha:Enabled / SysConfig
         var enabled = bool.TryParse(await config.GetValueByKeyAsync(KEY_ENABLED), out var e) ? e : security.Captcha.Enabled;
-        if (security.Profile == SecurityProfile.Level3)
+        if (security.IsLegacyLevel3Profile)
             enabled = true;
         if (!enabled) return;   // 未启用:直通(登录不校验验证码)
 

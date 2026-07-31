@@ -7,8 +7,8 @@ namespace TenonAdmin.Services;
 /// (<see cref="IConfigService.GetValueByKeyAsync"/>——读穿透缓存、改动即失效),
 /// 缺失或解析失败则回退到 Options 默认。配置键常量集中在此,<see cref="ConfigSeed"/> 与前端安全策略 Tab 均以此对齐。
 /// <para>
-/// Level3 档在本读取路径施加不可放宽的下限(effective policy):SysConfig/管理页只能收紧,不能放宽。
-/// 档位本身来自部署配置 <see cref="AdminSecurityOptions.Profile"/>,不读库。
+/// 历史 Profile=Level3 在本读取路径施加不可放宽下限(过渡兼容 ADR 0006)。
+/// 产品路径(<c>Totp:Enabled</c> / <c>CookieMode</c>)不自动钳位,只读 SysConfig + Options。
 /// </para>
 /// </summary>
 public class SecurityPolicyProvider(
@@ -58,14 +58,15 @@ public class SecurityPolicyProvider(
     /// <summary>MFA 闲置账号:自动停用天数(超管仅告警)</summary>
     public const int Level3IdleAccountDisableDays = 90;
 
-    private bool IsLevel3 => security.Profile == SecurityProfile.Level3;
+    /// <summary>历史 Level3 总档才施加策略地板;产品独立键不钳位。</summary>
+    private bool IsLegacyLevel3 => security.IsLegacyLevel3Profile;
 
     /// <inheritdoc />
     public virtual async Task<(int MaxFailCount, int LockMinutes)> GetLoginLockAsync()
     {
         var maxFail = await IntAsync(KEY_MAX_FAIL, security.LoginLock.MaxFailCount);
         var lockMin = await IntAsync(KEY_LOCK_MIN, security.LoginLock.LockMinutes);
-        if (!IsLevel3) return (maxFail, lockMin);
+        if (!IsLegacyLevel3) return (maxFail, lockMin);
 
         // Level3:5 次失败至少锁 15 分钟;关闭锁定(0)时强制打开为 5/15;次数上限 5(可更严=更小,下限 1)
         if (maxFail <= 0)
@@ -86,9 +87,9 @@ public class SecurityPolicyProvider(
     {
         var access = await IntAsync(KEY_ACCESS_MIN, jwt.ExpireMinutes);
         var refresh = await IntAsync(KEY_REFRESH_MIN, jwt.RefreshExpireMinutes);
-        if (!IsLevel3) return (access, refresh);
+        if (!IsLegacyLevel3) return (access, refresh);
 
-        // Level3:access ≤15 分;refresh 不得超过绝对会话窗 8h;SysConfig 可再收紧
+        // 历史 Level3:access ≤15 分;refresh 不得超过绝对会话窗 8h
         access = Math.Clamp(access, 1, Level3MaxAccessMinutes);
         refresh = Math.Clamp(refresh, access, Level3MaxAbsoluteSessionMinutes);
         return (access, refresh);
@@ -103,10 +104,9 @@ public class SecurityPolicyProvider(
         var reqDigit = await BoolAsync(KEY_REQ_DIGIT, true);
         var reqSpecial = await BoolAsync(KEY_REQ_SPECIAL, false);
 
-        if (IsLevel3)
+        if (IsLegacyLevel3)
         {
             minLen = Math.Max(minLen, Level3MinPasswordLength);
-            // 四类字符至少强制三类:若配置有效要求不足 3,抬到 upper+lower+digit 基线
             var required = (reqUpper ? 1 : 0) + (reqLower ? 1 : 0) + (reqDigit ? 1 : 0) + (reqSpecial ? 1 : 0);
             if (required < 3)
             {
@@ -123,8 +123,7 @@ public class SecurityPolicyProvider(
     public virtual async Task<int> GetPasswordExpireDaysAsync()
     {
         var days = await IntAsync(KEY_EXPIRE_DAYS, 0);
-        if (!IsLevel3) return days;
-        // Level3:最长 90 天;配置 0(关闭)→ 强制 90;配置 >90 → 钳到 90;可配更短
+        if (!IsLegacyLevel3) return days;
         if (days <= 0) return Level3MaxExpireDays;
         return Math.Min(days, Level3MaxExpireDays);
     }
@@ -133,7 +132,7 @@ public class SecurityPolicyProvider(
     public virtual async Task<int> GetPasswordHistoryCountAsync()
     {
         var n = await IntAsync(KEY_HISTORY_COUNT, 0);
-        if (!IsLevel3) return n;
+        if (!IsLegacyLevel3) return n;
         return Math.Max(n, Level3MinHistoryCount);
     }
 
@@ -153,8 +152,7 @@ public class SecurityPolicyProvider(
             && (!p.RequireDigit || hasDigit)
             && (!p.RequireSpecial || hasSpecial);
 
-        // Level3 纵深:即使标志组合边界情况,口令本身也须覆盖至少 3 类字符
-        if (ok && IsLevel3)
+        if (ok && IsLegacyLevel3)
         {
             var classes = (hasUpper ? 1 : 0) + (hasLower ? 1 : 0) + (hasDigit ? 1 : 0) + (hasSpecial ? 1 : 0);
             ok = classes >= 3;

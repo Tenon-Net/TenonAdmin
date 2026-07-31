@@ -356,9 +356,9 @@ public class Level3PrecheckTests
     }
 
     [Fact]
-    public void Level3_startup_with_missing_redis_auth_refuses_host()
+    public void Level3_startup_with_missing_redis_auth_does_not_refuse_host()
     {
-        // 集成:Level3 + Memory/无认证 → CreateClient 触发 HostedService 抛 InvalidOperationException
+        // ADR 0006:历史 Profile=Level3 不再 fail-closed 阻断启动;预检仍可报告缺口。
         var key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         using var f = new AdminAppFactory
         {
@@ -370,9 +370,8 @@ public class Level3PrecheckTests
             },
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => f.CreateClient());
-        Assert.Contains(Level3PrecheckConstants.CheckRedisProvider, ex.Message);
-        Assert.Contains("Level3", ex.Message);
+        var client = f.CreateClient();
+        Assert.NotNull(client);
     }
 
     [Fact]

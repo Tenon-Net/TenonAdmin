@@ -1,8 +1,8 @@
 namespace TenonAdmin.Core;
 
 /// <summary>
-/// Level3 浏览器会话 Cookie / CSRF 常量(禁硬编码字符串纪律)。
-/// 仅 <see cref="SecurityProfile.Level3"/> 时启用;非 Level3 仍走请求体 refresh。
+/// Cookie 会话 / CSRF 常量(禁硬编码字符串纪律)。
+/// 启用条件:<c>Security:Session:CookieMode</c>(或历史 Profile=Level3);默认 body refresh。
 /// </summary>
 public static class AuthCookieNames
 {

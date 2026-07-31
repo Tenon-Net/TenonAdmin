@@ -16,7 +16,7 @@ public sealed class Level3EnableMigrationHostedService(
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (security.Profile != SecurityProfile.Level3) return;
+        if (!security.IsLegacyLevel3Profile) return;
 
         try
         {
