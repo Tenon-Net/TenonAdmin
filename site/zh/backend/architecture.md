@@ -84,14 +84,14 @@ app.Run();
 1. **绑定配置**。先 `configuration.GetSection("TenonAdmin").Bind(options)`，再跑一遍可选的 `configure` 回调做覆写。最后把 `TenonAdminOptions` 及其各子节（`Database` / `Cache` / `Jwt` / `Security` / `Upload` / `Api` / `Id` / `Logging`）作为单例入容器。缺省即默认值，所以零配置可跑。
 2. **雪花机器号校验**。选了 Redis 缓存却没显式给 `TenonAdmin:Id:WorkerId`，启动就直接抛错。选 Redis 通常意味着要跑多实例，这一抛，把一个静默的主键冲突换成了一条看得懂的启动错误。为什么两个实例撞同一个 `WorkerId` 会撞主键，[数据层与审计](./data-layer.md)里雪花 ID 的位运算讲得更细。
 3. **当前用户 + 数据范围环境**。HTTP 侧实现 `HttpContextCurrentUser`、`HttpContextDataScopeContext` 在此先 `TryAdd` 注册，压过 SqlSugar 层的 `AsyncLocal` 兜底实现。
-4. **调用下层**。`AddTenonAdminSqlSugar(options.Database, entityAssemblies)` 装数据层，`AddTenonAdminServices()` 装领域服务。
+4. **调用下层**。`AddTenonAdminSqlSugar(options.Database, entityAssemblies, options.AdditionalDatabases)` 装数据层（主库 + 可选副库），`AddTenonAdminServices()` 装领域服务。
 5. **宿主集成**。JWT 密钥解析、认证/授权、MVC 控制器 + 全局过滤器、CORS、限流、OpenAPI、健康检查。
 
 ```csharp
 // TenonAdminSetup.AddTenonAdmin 内,向下装配数据层与领域层
 var entityAssemblies = new List<Assembly> { typeof(ServicesSetup).Assembly };
 entityAssemblies.AddRange(options.ApplicationAssemblies);
-services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()]);
+services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()], options.AdditionalDatabases);
 services.AddTenonAdminServices();
 ```
 

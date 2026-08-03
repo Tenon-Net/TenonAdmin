@@ -43,6 +43,7 @@
 | 你想做的事 | 去哪看 |
 |---|---|
 | 把默认 SQLite 换成 MySQL / SqlServer / PostgreSQL | [快速上手](/zh/guide/getting-started) 的换库一节 |
+| 同进程再挂日志库 / 遗留库（多 ConfigId） | [配置多数据库](/zh/guide/multi-database) |
 | `npm run gen:api` 报错 / 生成的类型不对（得先起后端） | [前端 API 契约](/zh/frontend/api-contract) |
 | 本地 `/api` 为什么能通、生产要不要配 CORS | [前端请求与代理](/zh/frontend/request) |
 | `/health` 和 `/health/ready` 分别探什么、`/openapi` 生产 404 是不是漏了 | [部署指南](/zh/guide/deployment/) 的上线自检 |

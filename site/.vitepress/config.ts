@@ -26,6 +26,7 @@ const enGuideSidebar = [
     text: 'Customize the Kernel',
     items: [
       { text: 'Replace Built-in Services', link: '/guide/replace-service' },
+      { text: 'Configure Multiple Databases', link: '/guide/multi-database' },
       { text: 'Syncing Your Fork', link: '/guide/sync-fork' },
     ],
   },
@@ -87,6 +88,7 @@ const enThemeConfig = {
           { text: 'Realtime Notifications', link: '/backend/realtime' },
           { text: 'Event Bus', link: '/backend/event-bus' },
           { text: 'Data Layer & Auditing', link: '/backend/data-layer' },
+          { text: 'Multiple Databases (ConfigId)', link: '/guide/multi-database' },
         ],
       },
       {
@@ -235,6 +237,7 @@ const zhGuideSidebar = [
     text: '定制内核',
     items: [
       { text: '替换内置服务', link: '/zh/guide/replace-service' },
+      { text: '配置多数据库', link: '/zh/guide/multi-database' },
       { text: '同步上游 Fork', link: '/zh/guide/sync-fork' },
     ],
   },
@@ -296,6 +299,7 @@ const zhThemeConfig = {
           { text: '实时通知', link: '/zh/backend/realtime' },
           { text: '事件总线', link: '/zh/backend/event-bus' },
           { text: '数据层与审计', link: '/zh/backend/data-layer' },
+          { text: '多数据库（ConfigId）', link: '/zh/guide/multi-database' },
         ],
       },
       {

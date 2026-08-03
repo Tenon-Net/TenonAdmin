@@ -53,7 +53,7 @@ public static class WorkerSetup
         services.AddSingleton(options.Upload);     // FileGcService 是 Services 层的托管服务,构造要它
         services.AddSingleton(options.Logging);
 
-        services.AddTenonAdminSqlSugar(options.Database, options.ApplicationAssemblies);
+        services.AddTenonAdminSqlSugar(options.Database, options.ApplicationAssemblies, options.AdditionalDatabases);
         services.AddTenonAdminServices();
         return services;
     }

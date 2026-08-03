@@ -120,7 +120,7 @@ TenonAdmin.Security.Gm   ──→ BouncyCastle(国密 SM2/3/4)                 
 | 包 | 内容 | 依赖 |
 |---|---|---|
 | `TenonAdmin.Core` | 实体基类(`BaseEntity`/`DataEntity`)、`Result<T>` 统一返回模型、业务异常体系(`AdminException`)、全部扩展点接口(§5)、雪花 ID 实现、Channels 事件总线、分页模型、常用扩展方法 | 无第三方(只有 Microsoft.* 扩展抽象) |
-| `TenonAdmin.SqlSugar` | `SugarClient` 单例封装、`IRepository<T>` 仓储、CodeFirst 建表、种子数据机制(`ISeedData`)、多库/读写分离配置解析 | Core + SqlSugarCore |
+| `TenonAdmin.SqlSugar` | `SugarClient` 单例封装、`IRepository<T>` 仓储、CodeFirst 建表、种子数据机制(`ISeedData`)、多库配置解析(`AdditionalDatabases` 多 ConfigId 开口；读写分离策略仍由消费方自定，见站点「配置多数据库」) | Core + SqlSugarCore |
 | `TenonAdmin.Services` | 全部领域服务及其 DTO:认证、RBAC、用户/机构/职位/角色/菜单、字典、系统配置、操作/登录日志、本地上传、在线用户;内置种子数据 | SqlSugar |
 | `TenonAdmin.AspNetCore` | 控制器(按模块)、`AddTenonAdmin()`/`MapTenonAdmin()`、JWT 接入、统一返回过滤器、全局异常处理、权限/数据范围过滤器、验证码端点、内置 OpenAPI 文档 | Services + ASP.NET Core 框架引用 |
 | `TenonAdmin`(元包) | 仅 PackageReference,一键全装 | AspNetCore |

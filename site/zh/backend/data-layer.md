@@ -4,24 +4,19 @@
 
 ## 一个 `SqlSugarScope` 单例
 
-`ISqlSugarClient` 以 `SqlSugarScope` 形态注册为单例。这是 SqlSugar 官方推荐的线程安全形态，内部按线程建 Client。构造时一次性挂上全局过滤器、审计 AOP、SQL 诊断日志三组钩子。
+`ISqlSugarClient` 以 `SqlSugarScope` 形态注册为单例。这是 SqlSugar 官方推荐的线程安全形态，内部按线程建 Client。构造时挂上全局过滤器、审计 AOP、SQL 诊断日志。默认只有主库一条连接，ConfigId 固定为 `TenonAdmin`。
 
 ```csharp
-// backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs
-services.TryAddSingleton<ISqlSugarClient>(sp =>
-{
-    var config = new ConnectionConfig
-    {
-        ConfigId = "TenonAdmin",
-        DbType = Enum.Parse<DbType>(db.DbType, ignoreCase: true),
-        ConnectionString = db.ConnectionString,
-        IsAutoCloseConnection = true,
-        // SqlServer CodeFirst 默认把 string 建成 varchar,存中文丢成 "??";打开后统一建 nvarchar
-        MoreSettings = new ConnMoreSettings { SqlServerCodeFirstNvarchar = true },
-    };
-    return new SqlSugarScope(config, client => { /* 挂过滤器 + AOP + 日志 */ });
-});
+// 主库（零配置即这条路径）
+// ConfigId = "TenonAdmin"，钩子：软删 + 数据范围 + 审计 AOP + 失败/慢 SQL 日志
+return new SqlSugarScope(mainConfig, client => { /* 挂过滤器 + AOP + 日志 */ });
 ```
+
+### 多数据库（多 ConfigId）
+
+主库仍是一条连接。要再挂日志库、遗留库，写 `TenonAdmin:AdditionalDatabases`，用 `db.AsTenant().GetConnection("Audit")` 访问。`IRepository<T>` 永远打主库。
+
+字段表、踩坑和最小示例见指南：[配置多数据库](/zh/guide/multi-database)。
 
 ## 全局查询过滤器
 

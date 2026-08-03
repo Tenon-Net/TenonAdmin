@@ -118,7 +118,7 @@ public static class TenonAdminSetup
         //   实体扫描 = 内置 Services + 用户显式登记的业务程序集,让用户实体也 CodeFirst 建表
         var entityAssemblies = new List<Assembly> { typeof(ServicesSetup).Assembly };
         entityAssemblies.AddRange(options.ApplicationAssemblies);
-        services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()]);
+        services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()], options.AdditionalDatabases);
 
         // ── 实时通知(§14):开启时挂 SignalR + 注册真实现,压过 Services 的 Noop(TryAdd 先到者胜,故须在 AddTenonAdminServices 之前)──
         //   SignalR 属 ASP.NET Core 共享框架,零新增 NuGet。关闭时不挂 Hub、不建长连接,Noop 生效 = 维持既有轮询/惰性 401(纯增强)。

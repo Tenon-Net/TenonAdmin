@@ -43,6 +43,7 @@ Each of these has its own page with the full detail; here are just the symptoms 
 | What you want to do | Where to look |
 |---|---|
 | Switch the default SQLite to MySQL / SqlServer / PostgreSQL | The database-switching section of [Quick Start](/guide/getting-started) |
+| Attach a log/legacy DB in-process (multiple ConfigIds) | [Configure Multiple Databases](/guide/multi-database) |
 | `npm run gen:api` errors / generates the wrong types (start the backend first) | [Frontend API Contract](/frontend/api-contract) |
 | Why `/api` works locally, and whether production needs CORS | [Request & Proxying](/frontend/request) |
 | What `/health` and `/health/ready` each probe, and whether a production 404 on `/openapi` means something's missing | The go-live self-check in the [Deployment guide](/guide/deployment/) |
