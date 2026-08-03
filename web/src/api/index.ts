@@ -233,24 +233,17 @@ export const externalAuthApi = {
   providers: () => client.GET('/api/v1/auth/external/providers', {}).then((r) => unwrap<ExternalProvider[]>(r)),
   /** 管理端全量列表(含已禁用);系统配置「第三方登录」Tab。 */
   providersAll: () =>
-    client.GET('/api/v1/auth/external/providers/all' as '/api/v1/auth/external/providers', {}).then((r) =>
-      unwrap<ExternalProviderAdmin[]>(r),
-    ),
+    client.GET('/api/v1/auth/external/providers/all', {}).then((r) => unwrap<ExternalProviderAdmin[]>(r)),
   /** 发起某 provider 登录的 URL(顶层浏览器导航,不走 fetch —— 后端 302 跳 IdP)。 */
   authorizeUrl: (code: string) =>
     `${import.meta.env.VITE_API_BASE ?? ''}/api/v1/auth/external/${encodeURIComponent(code)}/authorize`,
   /** 一次性票据换令牌(登录回调后);票据无效/过期/已用抛 40014。 */
   exchange: (ticket: string) =>
     client.POST('/api/v1/auth/external/exchange', { body: { ticket } }).then((r) => unwrap<LoginOutput>(r)),
-  /**
-   * 认领未绑定 SSO 的 pending-link(账密登录后);票据无效 40014,已被他人绑 40017。
-   * 路径未进 schema 时用 as 绕过(与 providers/all 同口径;运行时 body 仍是 pendingLink)。
-   */
+  /** 认领未绑定 SSO 的 pending-link(账密登录后);票据无效 40014,已被他人绑 40017。 */
   claimPendingLink: (pendingLink: string) =>
     client
-      .POST('/api/v1/auth/external/pending-link/claim' as '/api/v1/auth/external/exchange', {
-        body: { pendingLink } as unknown as { ticket: string },
-      })
+      .POST('/api/v1/auth/external/pending-link/claim', { body: { pendingLink } })
       .then((r) => unwrap<boolean>(r)),
   /** 我的外部账号绑定列表(个人中心)。 */
   bindings: () => client.GET('/api/v1/auth/external/bindings', {}).then((r) => unwrap<ExternalBinding[]>(r)),

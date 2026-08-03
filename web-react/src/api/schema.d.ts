@@ -1440,6 +1440,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/external/providers/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 管理端:全部已注册 provider(含已禁用)+ enabled。供系统配置「第三方登录」Tab 开关登录页显示。
+         *     权限码 = 本路由;种子挂在系统配置菜单下。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfExternalProviderAdminItem"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfExternalProviderAdminItem"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfExternalProviderAdminItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/external/{provider}/authorize": {
         parameters: {
             query?: never;
@@ -1550,6 +1591,53 @@ export interface paths {
                         "text/plain": components["schemas"]["ResultOfLoginOutput"];
                         "application/json": components["schemas"]["ResultOfLoginOutput"];
                         "text/json": components["schemas"]["ResultOfLoginOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/external/pending-link/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 认领「未绑定外部登录」待绑定票据:账密/短信登录成功后前端调用,把已解析的外部身份绑到当前用户。
+         *     票据无效/过期/已用/非发起浏览器(缺 binder cookie) → 40014;已被他人绑定 → 40017。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExternalClaimPendingLinkInput"];
+                    "text/json": components["schemas"]["ExternalClaimPendingLinkInput"];
+                    "application/*+json": components["schemas"]["ExternalClaimPendingLinkInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
                     };
                 };
             };
@@ -6453,9 +6541,21 @@ export interface components {
         ExternalBindStartOutput: {
             authorizeUrl: string;
         };
+        /** @description 账密登录后认领待绑定外部身份入参。 */
+        ExternalClaimPendingLinkInput: {
+            pendingLink?: string;
+        };
         /** @description 一次性票据换令牌入参(登录回调后前端凭票据拉取真正的令牌对)。 */
         ExternalExchangeInput: {
             ticket?: string;
+        };
+        /** @description 管理端:全部已注册 provider + 当前运营启用状态(含已禁用,供配置中心开关)。 */
+        ExternalProviderAdminItem: {
+            code: string;
+            displayName: string;
+            icon?: null | string;
+            /** @description 对应 `sys.externalauth.{code}.enabled`;缺省 true。 */
+            enabled?: boolean;
         };
         /** @description 登录页可用的外部登录方式(仅非密钥字段;点亮 SSO 按钮用)。 */
         ExternalProviderItem: {
@@ -7821,6 +7921,28 @@ export interface components {
             message?: null | string;
             /** @description 业务数据载荷 */
             data?: null | components["schemas"]["ExternalBindingItem"][];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyListOfExternalProviderAdminItem: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | components["schemas"]["ExternalProviderAdminItem"][];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
