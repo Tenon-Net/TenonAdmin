@@ -84,14 +84,14 @@ app.Run();
 1. **Bind configuration.** `configuration.GetSection("TenonAdmin").Bind(options)`, then run the optional `configure` callback to override, then register `TenonAdminOptions` and its sub-sections (`Database` / `Cache` / `Jwt` / `Security` / `Upload` / `Api` / `Id` / `Logging`) as singletons in the container. Everything defaults, so zero-config startup works.
 2. **Validate the snowflake worker ID.** If Redis caching is chosen (implying multiple instances) but `TenonAdmin:Id:WorkerId` isn't set explicitly, startup throws immediately — turning a silent primary-key collision into a readable startup error. For why two instances sharing a `WorkerId` actually collide on the primary key, the snowflake ID's bit layout is spelled out in [Data Layer and Auditing](./data-layer.md).
 3. **Current-user + data-scope context.** The HTTP-side implementations `HttpContextCurrentUser` and `HttpContextDataScopeContext` are `TryAdd`-registered here first, taking precedence over the `AsyncLocal`-based fallback in the SqlSugar layer.
-4. **Call down into lower layers.** `AddTenonAdminSqlSugar(options.Database, entityAssemblies)` wires the data layer, `AddTenonAdminServices()` wires the domain services.
+4. **Call down into lower layers.** `AddTenonAdminSqlSugar(options.Database, entityAssemblies, options.AdditionalDatabases)` wires the data layer (main DB plus optional secondaries), `AddTenonAdminServices()` wires the domain services.
 5. **Host integration.** JWT key resolution, authentication/authorization, MVC controllers + global filters, CORS, rate limiting, OpenAPI, health checks.
 
 ```csharp
 // Inside TenonAdminSetup.AddTenonAdmin, wiring the data and domain layers below it
 var entityAssemblies = new List<Assembly> { typeof(ServicesSetup).Assembly };
 entityAssemblies.AddRange(options.ApplicationAssemblies);
-services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()]);
+services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()], options.AdditionalDatabases);
 services.AddTenonAdminServices();
 ```
 

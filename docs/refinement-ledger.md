@@ -52,7 +52,7 @@
 | 项 | 理由 |
 |---|---|
 | 多租户 | `rebuild-design.md:38` 整体不做。**替换点边界(2026-07-25 查证,别再照字面转述)**:替换 `IDataScopeProvider` 只能改「哪些 OrgId 可见」,改不了「按哪一列过滤」——全局过滤器硬打在 `SqlSugarSetup.cs:78` 的 `AddTableFilter<IOrgScoped>`,表达式只认 `CreateOrgId` / `CreateUserId`,而 `DataScopeResult` 的四个字段(`IsUnrestricted`/`OrgIds`/`IncludeSelf`/`UserId`)没有装 `TenantId` 的位置。故 `rebuild-design.md:391`「自定义数据隔离维度(如租户)」只在**租户 ≡ 机构子树**时成立;要独立租户列,消费者须自挂 `AddTableFilter<ITenantScoped>` + 自建租户上下文 + AOP 填列,与"前置替换一个接口"不是一回事。 |
-| 多租户消费者侧 skill 文档(replace-service 姊妹篇) | **2026-07-25 退役**(原在「未排期备忘」)。写这篇等于把上一行那两条路当承诺发出去,而两条按原设想都不成立:①字段级见上行;②库级「多 ConfigId」内核没开口——`SqlSugarSetup.cs:46-67` 是**单个** `ConnectionConfig`(`ConfigId = "TenonAdmin"` 写死)交给 `new SqlSugarScope(config, …)`,多库形态要 `SqlSugarScope(List<ConnectionConfig>, …)`。今天真走得通的只有「租户 = 机构树根 + 现成 `OrgAndChildren` 范围」,零代码、已由 `tenon-example` 演示,撑不起一篇 skill。要改这个结论,先拿能跑的证据,别拿设计意图。 |
+| 多租户消费者侧 skill 文档(replace-service 姊妹篇) | **2026-07-25 退役**(原在「未排期备忘」)。写这篇等于把上一行那两条路当承诺发出去,而两条按原设想都不成立:①字段级见上行;②库级「多 ConfigId」——**2026-08-01 已开口**(issue #28):`AdditionalDatabases` + `SqlSugarScope(List<ConnectionConfig>)`,用户文档见站点 `guide/multi-database`。注意:开口≠库级多租户路由,也≠ `IRepository` 自动切库;租户产品化仍不做。今天真走得通的租户模型仍是「租户 = 机构树根 + 现成 `OrgAndChildren` 范围」,零代码、已由 `tenon-example` 演示,撑不起一篇多租户 skill。 |
 | 工作流/审批 | `rebuild-design.md:320` 非目标;属应用域独立产品 |
 | 锁屏 | 纯前端是安全表演(F12 即破);真保护 = [ActiveSession] + 强退 + OS 锁屏 |
 | 自注册/忘记密码 | 后台账号管理员开;SMS 免密 + 首登强改密已闭环 |
@@ -79,7 +79,7 @@
 ### 第 15 轮 — 清边角债(A6 / A7 / E2 / E3)+ 多租户退役 · `/grill-with-docs` 走完设计审问后,用户拍板「继续写代码,使用者的事先放一边」→「多租户 skill 文档 + 清边角债」→「多租户那条砍掉进不做清单」。五条独立提交:`4bccebe`(多租户退役)/ `bf6c661`(A7)/ `bb2c60d`(A6)/ `d5478e1`(E2)/ `76ffe1b`(E3)。
 
 **三处「查了才知道原方案不成立」**,都是本轮最值钱的产出:
-1. **多租户备忘的两条路按字面都走不通**。字段级"前置替换 `IDataScopeProvider`"改不了过滤列——全局过滤器硬打在 `SqlSugarSetup.cs:78` 的 `AddTableFilter<IOrgScoped>`,而 `DataScopeResult` 四个字段没有装 `TenantId` 的位置;库级"多 ConfigId"内核没开口(`SqlSugarSetup.cs:46-67` 单个 `ConnectionConfig`)。真走得通的那条(租户 = 机构树根 + 现成 `OrgAndChildren`,零代码)备忘里反而没写。
+1. **多租户备忘的两条路按字面都走不通**。字段级"前置替换 `IDataScopeProvider`"改不了过滤列——全局过滤器硬打在 `SqlSugarSetup.cs` 的 `AddTableFilter<IOrgScoped>`,而 `DataScopeResult` 四个字段没有装 `TenantId` 的位置;库级"多 ConfigId"当时内核没开口(单 `ConnectionConfig`)。真走得通的那条(租户 = 机构树根 + 现成 `OrgAndChildren`,零代码)备忘里反而没写。**(2026-08-01 注:多 ConfigId 装配口已在 issue #28 落地,见站点 `guide/multi-database`;仍不等于库级多租户路由。)**
 2. **A6 的形状我一开始定错了**。原打算"按 Vue 自己的需要另设形状,不拷 React 的 `PrimaryRamp`"——读完才发现 `useTheme.applyPrimaryVars` 还派生了第四态 `light`(要 `--color-bg-container`),React 那个签名**恰好就是 Vue 两个调用点的并集**(它本就是从这两半移植过去的)。照搬即可。
 3. **E2 的变异判据我一开始也定错了**。原写"回退 `0ad8605` 的 Dockerfile 修复,这条必须红"——但该 job 从不 build 镜像,回退不会红。补了静态断言才成立。
 

@@ -179,6 +179,8 @@ TenonAdmin__Database__DbType='MySql'
 TenonAdmin__Database__ConnectionString='Server=db;Port=3306;Database=tenon;User ID=...;Password=...'
 ```
 
+「换方言」仍是**一条**连接。若还要同进程挂日志库、遗留库，见[配置多数据库](/zh/guide/multi-database)。
+
 ::: warning 生产不会自动建表
 `ASPNETCORE_ENVIRONMENT=Production` 时，即便开了 CodeFirst 也**不会**自动建表。这道安全闸门防的是线上误改表结构。空库首次上生产，要么临时打开 `EnableCodeFirstInProduction: true` 让它自己建一次，要么让 DBA 手工建。详见[部署指南](/zh/guide/deployment/)。
 :::

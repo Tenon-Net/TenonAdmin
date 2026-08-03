@@ -8,6 +8,14 @@ public class TenonAdminOptions
     /// <summary>数据库配置(类型/连接串,见 <see cref="AdminDatabaseOptions"/>)</summary>
     public AdminDatabaseOptions Database { get; set; } = new();
 
+    /// <summary>
+    /// 副库连接列表(多 ConfigId;见 <see cref="AdminDatabaseConnectionOptions"/>)。
+    /// <para>空列表 = 单库(与历史行为一致)。主库仍由 <see cref="Database"/> 提供,ConfigId 固定为 <c>TenonAdmin</c>。
+    /// 访问副库请用 SqlSugar 原生多库 API(如 <c>GetConnection(configId)</c>);
+    /// <c>IRepository&lt;T&gt;</c> 始终打主库。副库实体勿登记进 <see cref="ApplicationAssemblies"/>。</para>
+    /// </summary>
+    public List<AdminDatabaseConnectionOptions> AdditionalDatabases { get; set; } = new();
+
     /// <summary>缓存配置(提供者/前缀/权限缓存过期,见 <see cref="AdminCacheOptions"/>)</summary>
     public AdminCacheOptions Cache { get; set; } = new();
 

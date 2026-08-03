@@ -78,6 +78,7 @@ Everything binds from the `TenonAdmin` section of `appsettings.json` into `Tenon
 | Property | Sub-options type | Example default |
 | --- | --- | --- |
 | `Database` | `AdminDatabaseOptions` | `DbType = "Sqlite"`, `ConnectionString = "Data Source=./data/admin.db"`, `EnableCodeFirst = true` |
+| `AdditionalDatabases` | `List<AdminDatabaseConnectionOptions>` | Empty by default: secondary multi-ConfigId list; see [Configure Multiple Databases](/guide/multi-database) |
 | `Cache` | `AdminCacheOptions` | `Provider = "Memory"`, `KeyPrefix = "tenon:"`, `PermissionMinutes = 20` |
 | `Seed` | `AdminSeedOptions` | superadmin account/password seeding |
 | `Jwt` | `AdminJwtOptions` | signing key/issuer/expiry |

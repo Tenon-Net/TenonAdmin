@@ -78,6 +78,7 @@ app.Run();
 | 属性 | 子配置类型 | 默认值示例 |
 | --- | --- | --- |
 | `Database` | `AdminDatabaseOptions` | `DbType = "Sqlite"`、`ConnectionString = "Data Source=./data/admin.db"`、`EnableCodeFirst = true` |
+| `AdditionalDatabases` | `List<AdminDatabaseConnectionOptions>` | 默认空：副库多 ConfigId 列表；见[配置多数据库](/zh/guide/multi-database) |
 | `Cache` | `AdminCacheOptions` | `Provider = "Memory"`、`KeyPrefix = "tenon:"`、`PermissionMinutes = 20` |
 | `Seed` | `AdminSeedOptions` | 超管账号/密码种子 |
 | `Jwt` | `AdminJwtOptions` | 签名密钥/签发者/有效期 |

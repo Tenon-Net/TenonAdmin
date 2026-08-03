@@ -4,24 +4,19 @@ The line of business code that queries orders writes neither `IsDelete == false`
 
 ## One `SqlSugarScope` singleton
 
-`ISqlSugarClient` is registered as a singleton in the form of `SqlSugarScope` — the thread-safe form officially recommended by SqlSugar (it builds a Client per thread internally). At construction time, three sets of hooks are attached in one pass: global filters, audit AOP, and SQL diagnostic logging.
+`ISqlSugarClient` is registered as a singleton in the form of `SqlSugarScope` — the thread-safe form officially recommended by SqlSugar (it builds a Client per thread internally). At construction time it attaches global filters, audit AOP, and SQL diagnostic logging. By default there is a single main connection whose ConfigId is fixed as `TenonAdmin`.
 
 ```csharp
-// backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs
-services.TryAddSingleton<ISqlSugarClient>(sp =>
-{
-    var config = new ConnectionConfig
-    {
-        ConfigId = "TenonAdmin",
-        DbType = Enum.Parse<DbType>(db.DbType, ignoreCase: true),
-        ConnectionString = db.ConnectionString,
-        IsAutoCloseConnection = true,
-        // SqlServer CodeFirst defaults string columns to varchar, which mangles Chinese text into "??"; turning this on builds nvarchar instead
-        MoreSettings = new ConnMoreSettings { SqlServerCodeFirstNvarchar = true },
-    };
-    return new SqlSugarScope(config, client => { /* attach filters + AOP + logging */ });
-});
+// Main database (the zero-config path)
+// ConfigId = "TenonAdmin"; hooks: soft-delete + data-scope + audit AOP + failed/slow SQL logging
+return new SqlSugarScope(mainConfig, client => { /* attach filters + AOP + logging */ });
 ```
+
+### Multiple databases (multiple ConfigIds)
+
+The main database is still one connection. To attach a log or legacy store, use `TenonAdmin:AdditionalDatabases` and `db.AsTenant().GetConnection("Audit")`. `IRepository<T>` always hits main.
+
+Field reference, pitfalls, and a minimal walkthrough: [Configure Multiple Databases](/guide/multi-database).
 
 ## Global query filters
 
