@@ -124,7 +124,7 @@ export function serializeSecurity(s: SecurityState): BatchItem[] {
 
 // ── 其他配置(通用兜底 CRUD)──
 // 内置分组有专属结构化表单;其他页仍允许消费方自定义任意分组,但不重复展示内置项。
-export const STRUCTURED_GROUPS = ['sys', 'security', 'upload']
+export const STRUCTURED_GROUPS = ['sys', 'security', 'upload', 'externalauth']
 
 export function blankConfig(): ConfigInput {
   return { configKey: '', configValue: '', name: '', groupCode: '', sort: 0, remark: '' }

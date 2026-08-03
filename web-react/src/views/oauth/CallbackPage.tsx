@@ -3,6 +3,7 @@ import { Spin } from 'antd'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { externalAuthApi } from '@/api'
 import { useUserStore } from '@/stores/user'
+import { useAuthStore } from '@/stores/auth'
 import { t } from '@/locales'
 import { translateError } from '@/utils/error'
 
@@ -12,6 +13,14 @@ const OAUTH_ERROR_KEYS: Record<number, string> = {
   40015: 'error.auth.oauthExchangeFailed',
   40016: 'error.auth.oauthAccountNotBound',
   40017: 'error.auth.oauthAlreadyBound',
+}
+
+/** 丢掉残留 SPA 会话,避免 pendingLink/totp 回登录时仍带着旧 token 误进系统。 */
+function dropResidualSession() {
+  const u = useUserStore.getState()
+  if (!u.accessToken && !u.refreshToken && u.sessionMode !== 'cookie' && !u.csrfRequired) return
+  useAuthStore.getState().reset()
+  u.clear()
 }
 
 /** 公开 IdP 回调:兑换一次性票据,或显示简短的本地化错误。 */
@@ -27,13 +36,24 @@ export default function CallbackPage() {
 
     const ticket = searchParams.get('ticket') ?? ''
     const bind = searchParams.get('bind') ?? ''
+    const pendingLink = searchParams.get('pendingLink') ?? ''
+    const provider = searchParams.get('provider') ?? ''
+    const displayName = searchParams.get('displayName') ?? ''
     const error = searchParams.get('error') ?? ''
     const totpChallenge = searchParams.get('totpChallenge') ?? ''
     const fail = (text: string) => setErrorText(text)
 
     // SSO 后需 TOTP:挑战 Id 交给登录页完成
     if (totpChallenge) {
+      dropResidualSession()
       navigate(`/login?totpChallenge=${encodeURIComponent(totpChallenge)}`, { replace: true })
+    } else if (pendingLink) {
+      // 未绑定:转登录页,账密成功后须确认再 claim;先清残留会话
+      dropResidualSession()
+      const q = new URLSearchParams({ pendingLink })
+      if (provider) q.set('provider', provider)
+      if (displayName) q.set('displayName', displayName)
+      navigate(`/login?${q.toString()}`, { replace: true })
     } else if (error) {
       const key = OAUTH_ERROR_KEYS[Number(error)]
       fail(key ? t(key) : t('oauth.failed'))

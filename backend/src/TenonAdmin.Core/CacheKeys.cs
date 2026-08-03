@@ -67,6 +67,12 @@ public static class CacheKeys
     public static string OAuthTicket(string ticket) => $"oauth:ticket:{ticket}";
 
     /// <summary>
+    /// 未绑定外部登录的「待绑定」票据 → 已解析的外部身份字段(设计批次 D 现场绑定)。
+    /// 登录回调在策略=拒绝时签发;用户账密登录后 <c>claim</c> 一次性消费并写绑定。短 TTL。
+    /// </summary>
+    public static string OAuthPendingLink(string token) => $"oauth:pending-link:{token}";
+
+    /// <summary>
     /// 固定窗口限流计数(设计 §12/§14)。<paramref name="bucket"/> 为 <c>auth</c>(认证端点,更严)或 <c>all</c>;
     /// <paramref name="windowIndex"/> 是<b>窗口序号</b>(<c>unixSeconds / windowSeconds</c>)。
     /// <para>把窗口序号<b>编进键</b>:换窗口即换键,计数自然归零,无需任何清理逻辑(旧键靠 TTL 回收)。

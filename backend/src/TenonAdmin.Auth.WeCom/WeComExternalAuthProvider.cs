@@ -7,34 +7,48 @@ namespace TenonAdmin.Auth.WeCom;
 /// <summary>
 /// 企业微信外部登录 provider(卫星包,批次 D)。PC 端<b>扫码授权登录</b>:构造扫码 URL → 用户扫码授权后带 <c>code</c> 回调 →
 /// 用企业 access_token 拿 <c>userid</c> 作为外部身份 <see cref="ExternalIdentity.Subject"/>。
-/// <para>不走 OIDC(无 id_token/nonce/PKCE);裸 <see cref="HttpClient"/> 对接企业微信 API。方法 <c>virtual</c> 可覆写。</para>
+/// <para>不走 OIDC(无 id_token/nonce/PKCE);<see cref="HttpClient"/> 由 DI 注入(与 GitHub/WeChat 同 H1 成法)。方法 <c>virtual</c> 可覆写。</para>
 /// </summary>
-public class WeComExternalAuthProvider(WeComAuthOptions options, ILogger<WeComExternalAuthProvider> logger) : IExternalAuthProvider
+public class WeComExternalAuthProvider : IExternalAuthProvider
 {
-    // 单例 provider,进程内复用一个 HttpClient(ponytail: 静态实例够用;需连接池精细控制再上 IHttpClientFactory)
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
+    public const string HttpClientName = "TenonAdmin.Auth.WeCom";
 
-    // 企业 access_token 有额度且有效期 2h,不能每次登录都换 → 进程内缓存(ponytail: 每副本各缓存,多实例可接受)
+    private readonly WeComAuthOptions _options;
+    private readonly HttpClient _http;
+    private readonly ILogger<WeComExternalAuthProvider> _logger;
+
+    // 企业 access_token 有额度且有效期 2h,不能每次登录都换 → 实例内缓存(每 DI 单例一份)
     private readonly SemaphoreSlim _tokenLock = new(1, 1);
     private string? _cachedToken;
     private DateTimeOffset _tokenExpiry;
 
-    /// <inheritdoc />
-    public string Code => options.Code;
+    public WeComExternalAuthProvider(
+        WeComAuthOptions options,
+        HttpClient http,
+        ILogger<WeComExternalAuthProvider> logger)
+    {
+        _options = options;
+        _http = http;
+        _logger = logger;
+    }
 
     /// <inheritdoc />
-    public string DisplayName => options.DisplayName;
+    public string Code => _options.Code;
 
     /// <inheritdoc />
-    public string? Icon => options.Icon;
+    public string DisplayName =>
+        string.IsNullOrWhiteSpace(_options.DisplayName) ? "企业微信" : _options.DisplayName.Trim();
+
+    /// <inheritdoc />
+    public string? Icon => _options.Icon;
 
     /// <inheritdoc />
     public virtual Task<string> BuildAuthorizeUrlAsync(ExternalAuthorizeRequest request, CancellationToken cancellationToken = default)
     {
         // 企业微信 PC 扫码授权登录(state 防 CSRF;不使用 nonce/PKCE)
         var url = "https://login.work.weixin.qq.com/wwlogin/sso/login?login_type=CorpApp" +
-                  $"&appid={Uri.EscapeDataString(options.CorpId)}" +
-                  $"&agentid={Uri.EscapeDataString(options.AgentId)}" +
+                  $"&appid={Uri.EscapeDataString(_options.CorpId)}" +
+                  $"&agentid={Uri.EscapeDataString(_options.AgentId)}" +
                   $"&redirect_uri={Uri.EscapeDataString(request.RedirectUri)}" +
                   $"&state={Uri.EscapeDataString(request.State)}";
         return Task.FromResult(url);
@@ -43,8 +57,32 @@ public class WeComExternalAuthProvider(WeComAuthOptions options, ILogger<WeComEx
     /// <inheritdoc />
     public virtual async Task<ExternalIdentity> ExchangeAsync(ExternalExchangeRequest request, CancellationToken cancellationToken = default)
     {
+        try
+        {
+            return await ExchangeCoreAsync(request, cancellationToken);
+        }
+        catch (AdminException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException
+                                       or InvalidOperationException or FormatException or ArgumentException
+                                       or KeyNotFoundException)
+        {
+            // 对齐 GitHub:网络/解析类异常 → 40015,勿 500;不记含 secret 的 URL
+            _logger.LogWarning(ex, "WeCom OAuth exchange failed ({Type})", ex.GetType().Name);
+            throw new AdminException(ErrorCode.OAuthExchangeFailed);
+        }
+    }
+
+    private async Task<ExternalIdentity> ExchangeCoreAsync(ExternalExchangeRequest request, CancellationToken cancellationToken)
+    {
         var token = await GetAccessTokenAsync(cancellationToken);
-        var url = $"https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo?access_token={token}&code={Uri.EscapeDataString(request.Code)}";
+        var url = $"https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo?access_token={Uri.EscapeDataString(token)}&code={Uri.EscapeDataString(request.Code)}";
         using var doc = await GetJsonAsync(url, cancellationToken);
         var root = doc.RootElement;
         EnsureOk(root, "getuserinfo");
@@ -53,13 +91,14 @@ public class WeComExternalAuthProvider(WeComAuthOptions options, ILogger<WeComEx
         var subject = StringProp(root, "userid") ?? StringProp(root, "openid");
         if (string.IsNullOrEmpty(subject))
         {
-            logger.LogWarning("企业微信 getuserinfo 未返回 userid/openid");
+            _logger.LogWarning("企业微信 getuserinfo 未返回 userid/openid");
             throw new AdminException(ErrorCode.OAuthExchangeFailed);
         }
-        return new ExternalIdentity(options.Code, subject);
+        // DisplayName 需再调 user/get,本批不扩;pending-link 确认框仍可用 provider 展示名
+        return new ExternalIdentity(_options.Code, subject);
     }
 
-    /// <summary>取企业 access_token(进程内缓存,提前 5 分钟过期刷新)。</summary>
+    /// <summary>取企业 access_token(实例内缓存,提前 5 分钟过期刷新)。</summary>
     protected virtual async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
     {
         if (_cachedToken is not null && DateTimeOffset.UtcNow < _tokenExpiry) return _cachedToken;
@@ -67,10 +106,8 @@ public class WeComExternalAuthProvider(WeComAuthOptions options, ILogger<WeComEx
         try
         {
             if (_cachedToken is not null && DateTimeOffset.UtcNow < _tokenExpiry) return _cachedToken;
-            // ponytail: corpsecret 走 query 是企业微信 gettoken 的 GET API 契约,非本处设计;走 TLS 到 qyapi.weixin.qq.com
-            //   传输中不可截。风险仅在于 URL 易被沿途正向代理/访问日志记全 —— 本类日志只记 status+body(见 GetJsonAsync/EnsureOk),
-            //   不落 URL;部署侧勿对 qyapi.weixin.qq.com 记完整请求行。无代码可改(厂商协议),记此备查。
-            var url = $"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={Uri.EscapeDataString(options.CorpId)}&corpsecret={Uri.EscapeDataString(options.CorpSecret)}";
+            // corpsecret 走 query 是企业微信 gettoken 的 GET API 契约;日志禁止完整 URL
+            var url = $"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={Uri.EscapeDataString(_options.CorpId)}&corpsecret={Uri.EscapeDataString(_options.CorpSecret)}";
             using var doc = await GetJsonAsync(url, cancellationToken);
             var root = doc.RootElement;
             EnsureOk(root, "gettoken");
@@ -87,11 +124,11 @@ public class WeComExternalAuthProvider(WeComAuthOptions options, ILogger<WeComEx
 
     private async Task<JsonDocument> GetJsonAsync(string url, CancellationToken cancellationToken)
     {
-        using var resp = await Http.GetAsync(url, cancellationToken);
+        using var resp = await _http.GetAsync(url, cancellationToken);
         var body = await resp.Content.ReadAsStringAsync(cancellationToken);
         if (!resp.IsSuccessStatusCode)
         {
-            logger.LogWarning("企业微信 API HTTP {Status}: {Body}", (int)resp.StatusCode, body);
+            _logger.LogWarning("企业微信 API HTTP {Status}", (int)resp.StatusCode);
             throw new AdminException(ErrorCode.OAuthExchangeFailed);
         }
         return JsonDocument.Parse(body);
@@ -101,7 +138,7 @@ public class WeComExternalAuthProvider(WeComAuthOptions options, ILogger<WeComEx
     {
         if (root.TryGetProperty("errcode", out var ec) && ec.GetInt32() != 0)
         {
-            logger.LogWarning("企业微信 {Api} errcode={Code} errmsg={Msg}", api, ec.GetInt32(), StringProp(root, "errmsg"));
+            _logger.LogWarning("企业微信 {Api} errcode={Code} errmsg={Msg}", api, ec.GetInt32(), StringProp(root, "errmsg"));
             throw new AdminException(ErrorCode.OAuthExchangeFailed);
         }
     }

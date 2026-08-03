@@ -107,14 +107,16 @@ describe('品牌信息来自 site store', () => {
     expect(await screen.findByText('榫卯后台')).toBeTruthy()
   })
 
-  it('logo 为空时不渲染 img(不占位)', async () => {
+  it('logo 为空时不渲染站点 logo img(不占位;SSO 圆标可有 img)', async () => {
     await mount()
-    expect(screen.getByTestId('login-card').querySelector('img')).toBeNull()
+    expect(screen.getByTestId('login-card').querySelector('img.lf-logo')).toBeNull()
   })
 
   it('logo 非空时渲染出来', async () => {
     await mount({ ...SITE, logo: '/files/logo.png' })
-    await waitFor(() => expect(screen.getByTestId('login-card').querySelector('img')?.getAttribute('src')).toBe('/files/logo.png'))
+    await waitFor(() =>
+      expect(screen.getByTestId('login-card').querySelector('img.lf-logo')?.getAttribute('src')).toBe('/files/logo.png'),
+    )
   })
 })
 
@@ -198,16 +200,29 @@ describe('第三方登录(SSO)由后端 providers 驱动', () => {
     expect(screen.getByTestId('login-card').querySelector('.lf-sso')).toBeNull()
   })
 
-  it('有启用 provider:渲染分隔线 + 按钮行', async () => {
+  it('有启用 provider:渲染分隔线 + 纯图标圆钮(aria-label)', async () => {
     providersMock.mockResolvedValueOnce([
       { code: 'gitee', displayName: 'Gitee' },
       { code: 'github', displayName: 'GitHub', icon: 'ph:github-logo' },
     ])
     await mount()
-    expect(await screen.findByText('GitHub')).toBeTruthy()
-    expect(screen.getByText('Gitee')).toBeTruthy()
+    expect(await screen.findByLabelText('GitHub')).toBeTruthy()
+    expect(screen.getByLabelText('Gitee')).toBeTruthy()
     expect(screen.getByText('其他登录方式')).toBeTruthy()
     expect(screen.getByTestId('login-card').querySelectorAll('.lf-sso-btn').length).toBe(2)
+  })
+
+  it('超过 4 个 provider:前 4 平铺 + 更多按钮', async () => {
+    providersMock.mockResolvedValueOnce(
+      Array.from({ length: 5 }, (_, i) => ({ code: `p${i}`, displayName: `P${i}` })),
+    )
+    await mount()
+    await screen.findByLabelText('P0')
+    const btns = screen.getByTestId('login-card').querySelectorAll('.lf-sso-btn')
+    // 4 可见 + 1「…」
+    expect(btns.length).toBe(5)
+    expect(screen.getByLabelText('更多登录方式')).toBeTruthy()
+    expect(screen.queryByLabelText('P4')).toBeNull()
   })
 })
 

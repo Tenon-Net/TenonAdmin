@@ -63,5 +63,12 @@ internal sealed class ConfigSeed : ISeedData<SysConfig>
         // 定时任务(GroupCode=job):运行期可调旋钮;结构性参数(心跳/租约/围栏)留 TenonAdmin:Jobs 节(scheduling-ledger §6)。
         new SysConfig { Id = 27, ConfigKey = JobConfigKeys.KEY_LOG_RETENTION_DAYS, ConfigValue = "30", Name = "执行记录保留天数", GroupCode = JobConfigKeys.GROUP, Sort = 60, Remark = "JobLogCleanupJob 按此清理 sys_job_log;≤0 不清理" },
         new SysConfig { Id = 28, ConfigKey = JobConfigKeys.KEY_ALERT_EMAILS, ConfigValue = "", Name = "任务告警收件人", GroupCode = JobConfigKeys.GROUP, Sort = 61, Remark = "连败告警邮件的全局兜底收件人(逗号分隔);任务行自带收件人时优先任务行" },
+
+        // 第三方登录运营开关(GroupCode=externalauth):登录页 GET providers 读 IsEnabledAsync;缺省 true=配了连接即显示。
+        // 配置中心「第三方登录」Tab 结构化开关;密钥仍在 appsettings。
+        new SysConfig { Id = 31, ConfigKey = "sys.externalauth.wecom.enabled", ConfigValue = "true", Name = "企业微信-登录页显示", GroupCode = "externalauth", Sort = 70, Remark = "关闭后登录页不显示该按钮;authorize 同步拒绝" },
+        new SysConfig { Id = 32, ConfigKey = "sys.externalauth.dingtalk.enabled", ConfigValue = "true", Name = "钉钉-登录页显示", GroupCode = "externalauth", Sort = 71, Remark = "关闭后登录页不显示该按钮;authorize 同步拒绝" },
+        new SysConfig { Id = 33, ConfigKey = "sys.externalauth.github.enabled", ConfigValue = "true", Name = "GitHub-登录页显示", GroupCode = "externalauth", Sort = 72, Remark = "关闭后登录页不显示该按钮;需已注册 Auth.GitHub 包" },
+        new SysConfig { Id = 34, ConfigKey = "sys.externalauth.wechat.enabled", ConfigValue = "true", Name = "微信-登录页显示", GroupCode = "externalauth", Sort = 73, Remark = "个人微信开放平台;关闭后登录页不显示" },
     ];
 }

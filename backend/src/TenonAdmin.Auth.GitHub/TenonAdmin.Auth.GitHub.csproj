@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 可选卫星包:GitHub OAuth App 登录。装它并在 AddTenonAdmin() 前调 AddTenonAdminGitHubAuth 即点亮登录页 GitHub 入口。
+       只引用 Core + Microsoft.*;注入 HttpClient(H1)便于假 handler 单测。Code 硬固定 github(K1)。 -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>TenonAdmin GitHub 登录可选包:IExternalAuthProvider(OAuth App, code=github, scope=read:user),裸 HttpClient。</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TenonAdmin.Core\TenonAdmin.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+</Project>

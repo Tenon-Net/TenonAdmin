@@ -92,6 +92,8 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 58, ParentId = 55, Type = MenuType.Button, Title = "配置-更新", Permission = "PUT:/api/v1/sys/config/{id}", Sort = 4, Enabled = true },
         new SysMenu { Id = 59, ParentId = 55, Type = MenuType.Button, Title = "配置-删除", Permission = "DELETE:/api/v1/sys/config/{id}", Sort = 5, Enabled = true },
         new SysMenu { Id = 97, ParentId = 55, Type = MenuType.Button, Title = "配置-批量存值", Permission = "PUT:/api/v1/sys/config/batch", Sort = 28, Enabled = true },
+        // 第三方登录配置 Tab:列出已注册 provider + 启停(与公开 providers 不同,含已禁用)
+        new SysMenu { Id = 157, ParentId = 55, Type = MenuType.Button, Title = "外部登录-全部方式", Permission = "GET:/api/v1/auth/external/providers/all", Sort = 30, Enabled = true },
         // 可选安全:高敏权限 + MFA 清除;预检/基线菜单默认禁用(ADR 0006 非测评产品)。
         // 148–150 曾为 MFA 邀请/紧急重置(已拆除);号段保留勿复用。
         new SysMenu { Id = 151, ParentId = 55, Type = MenuType.Button, Title = "高敏权限-查看", Permission = "GET:/api/v1/sys/mfa/high-sensitivity", Sort = 32, Enabled = true },

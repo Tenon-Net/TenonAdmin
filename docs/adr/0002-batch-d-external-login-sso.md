@@ -38,3 +38,4 @@
 - **企业微信 `corpsecret` 走 query**:`gettoken` 是企业微信的 GET API 契约(secret 进请求行),非本设计选择;走 TLS 到 `qyapi.weixin.qq.com` 传输中不可截,风险仅在 URL 易被沿途代理/访问日志记全。卫星包自身日志只记 status+body(不落 URL);部署侧勿对该域记完整请求行。无代码可改。
 - **复查加固(第 12 轮)**:双 reviewer 对抗审后,补两处 Medium——① 删用户连带清外部绑定(否则孤儿绑定占唯一位使外部身份永久锁死);② login 模式 `state` 用 `HttpOnly;SameSite=Lax` binder cookie 绑定发起浏览器,防登录 CSRF(bind 模式已由 `[ActiveSession]` UserId 兜住)。另 fail-closed 收口:生产强制 OIDC https 元数据、生产必配 `CallbackBaseUrl`(不回退请求 Host)。核心令牌/身份校验面审后无改。
 - 内核认证能力 = 账密 + 短信免密 + 短信 MFA + **外部登录 / SSO**;字段级审计仍交消费者按需扩展([[ADR-0001]] 决策一)。
+- **后续(不改本 ADR 三处取舍)**:登录/绑定品牌化 UI 与 GitHub、个人微信卫星包见 `docs/external-login-brand/`（[[ADR-0007]] 指针 → 同目录 `decisions.md` + `ledger.md`）。

@@ -33,7 +33,9 @@ public class ExternalAuthController(
 {
     private static readonly TimeSpan STATE_TTL = TimeSpan.FromMinutes(5);      // 授权→回调往返窗口
     private static readonly TimeSpan TICKET_TTL = TimeSpan.FromSeconds(120);   // 回调→前端换令牌窗口
+    private static readonly TimeSpan PENDING_LINK_TTL = TimeSpan.FromMinutes(15); // 未绑定→账密登录后认领窗口
     private const string STATE_COOKIE = "tn_oauth_state";                      // 登录态 binder cookie(防登录 CSRF)
+    private const string PENDING_COOKIE = "tn_oauth_pending";                  // pending-link binder(防换浏览器抢绑)
 
     private long CurrentUserId => currentUser.UserId ?? throw new AdminException(ErrorCode.TokenInvalid);
 
@@ -47,6 +49,28 @@ public class ExternalAuthController(
             if (await externalBindings.IsEnabledAsync(p.Code))
                 items.Add(new ExternalProviderItem { Code = p.Code, DisplayName = p.DisplayName, Icon = p.Icon });
         return Result<IReadOnlyList<ExternalProviderItem>>.Ok(items);
+    }
+
+    /// <summary>
+    /// 管理端:全部已注册 provider(含已禁用)+ enabled。供系统配置「第三方登录」Tab 开关登录页显示。
+    /// 权限码 = 本路由;种子挂在系统配置菜单下。
+    /// </summary>
+    [HttpGet("providers/all")]
+    [RolePermission]
+    public async Task<Result<IReadOnlyList<ExternalProviderAdminItem>>> ProvidersAll()
+    {
+        var items = new List<ExternalProviderAdminItem>();
+        foreach (var p in externalProviders)
+        {
+            items.Add(new ExternalProviderAdminItem
+            {
+                Code = p.Code,
+                DisplayName = p.DisplayName,
+                Icon = p.Icon,
+                Enabled = await externalBindings.IsEnabledAsync(p.Code),
+            });
+        }
+        return Result<IReadOnlyList<ExternalProviderAdminItem>>.Ok(items);
     }
 
     /// <summary>发起登录:生成 state/nonce/PKCE 存缓存,302 跳转到 IdP 授权端点(顶层浏览器导航)。</summary>
@@ -91,17 +115,39 @@ public class ExternalAuthController(
                 return Redirect(FrontendResultUrl($"bind={Uri.EscapeDataString(provider)}"));
             }
 
-            var output = await auth.LoginByExternalAsync(new ExternalLoginInput
+            // 登录:先 Exchange 一次(授权码单次),再按已解析身份登录/开户;未绑定 reject → pending-link 而非死 40016。
+            var p = await ResolveEnabledProviderAsync(provider);
+            var identity = await p.ExchangeAsync(
+                new ExternalExchangeRequest(code!, st.CodeVerifier, st.Nonce, st.RedirectUri), cancellationToken);
+            try
             {
-                ProviderCode = provider,
-                Code = code!,
-                CodeVerifier = st.CodeVerifier,
-                Nonce = st.Nonce,
-                RedirectUri = st.RedirectUri,
-            });
-            var ticket = RandomToken();
-            await cache.SetAsync(CacheKeys.OAuthTicket(ticket), output, TICKET_TTL, cancellationToken);
-            return Redirect(FrontendResultUrl($"ticket={ticket}"));
+                var output = await auth.LoginByExternalIdentityAsync(identity, cancellationToken);
+                var ticket = RandomToken();
+                await cache.SetAsync(CacheKeys.OAuthTicket(ticket), output, TICKET_TTL, cancellationToken);
+                return Redirect(FrontendResultUrl($"ticket={ticket}"));
+            }
+            catch (AdminException ex) when (ex.Code == ErrorCode.OAuthAccountNotBound)
+            {
+                // pending-link:外部身份已解析,但未绑本地账号。票据进 URL 可被复制;
+                // 再下发仅本浏览器持有的 binder cookie,claim 时必须同浏览器,挡钓鱼抢绑。
+                var pending = RandomToken();
+                var pendingBinder = RandomToken();
+                Response.Cookies.Append(PENDING_COOKIE, pendingBinder, PendingCookieOptions());
+                await cache.SetAsync(CacheKeys.OAuthPendingLink(pending), new ExternalPendingLinkPayload
+                {
+                    Provider = identity.Provider,
+                    Subject = identity.Subject,
+                    DisplayName = identity.DisplayName,
+                    Email = identity.Email,
+                    Phone = identity.Phone,
+                    Binder = pendingBinder,
+                }, PENDING_LINK_TTL, cancellationToken);
+                var q = $"pendingLink={Uri.EscapeDataString(pending)}&provider={Uri.EscapeDataString(provider)}";
+                // displayName 非敏感,仅供登录页确认框展示;subject 仍只在服务端缓存
+                if (!string.IsNullOrWhiteSpace(identity.DisplayName))
+                    q += $"&displayName={Uri.EscapeDataString(identity.DisplayName)}";
+                return Redirect(FrontendResultUrl(q));
+            }
         }
         catch (AdminException ex)
         {
@@ -129,6 +175,49 @@ public class ExternalAuthController(
         var output = await cache.GetAndRemoveAsync<LoginOutput>(CacheKeys.OAuthTicket(input.Ticket), cancellationToken);
         AdminException.ThrowIf(output is null, ErrorCode.OAuthStateInvalid);
         return Result<LoginOutput>.Ok(cookies.ApplyAuthCookies(HttpContext, output!));
+    }
+
+    /// <summary>
+    /// 认领「未绑定外部登录」待绑定票据:账密/短信登录成功后前端调用,把已解析的外部身份绑到当前用户。
+    /// 票据无效/过期/已用/非发起浏览器(缺 binder cookie) → 40014;已被他人绑定 → 40017。
+    /// </summary>
+    [HttpPost("pending-link/claim")]
+    [ActiveSession]
+    [OperationLog("认领外部登录待绑定")]
+    public async Task<Result<bool>> ClaimPendingLink(ExternalClaimPendingLinkInput input, CancellationToken cancellationToken)
+    {
+        AdminException.ThrowIf(string.IsNullOrWhiteSpace(input.PendingLink), ErrorCode.OAuthStateInvalid);
+        var key = CacheKeys.OAuthPendingLink(input.PendingLink.Trim());
+
+        // 先读不消费:binder 不对时保留票据,合法浏览器仍可重试(勿因钓鱼试探把真用户票据烧掉)
+        var peek = await cache.GetAsync<ExternalPendingLinkPayload>(key, cancellationToken);
+        if (peek is null || string.IsNullOrEmpty(peek.Provider) || string.IsNullOrEmpty(peek.Subject))
+            throw new AdminException(ErrorCode.OAuthStateInvalid);
+
+        // 同浏览器门:cookie 必须与签发时写入 payload 的 binder 一致(防换浏览器抢绑 / 钓鱼链接)
+        var cookieBinder = Request.Cookies[PENDING_COOKIE];
+        if (string.IsNullOrEmpty(peek.Binder)
+            || string.IsNullOrEmpty(cookieBinder)
+            || !FixedTimeEquals(cookieBinder, peek.Binder))
+            throw new AdminException(ErrorCode.OAuthStateInvalid);
+
+        // binder 通过后再单次消费
+        var payload = await cache.GetAndRemoveAsync<ExternalPendingLinkPayload>(key, cancellationToken);
+        if (payload is null || string.IsNullOrEmpty(payload.Provider) || string.IsNullOrEmpty(payload.Subject))
+            throw new AdminException(ErrorCode.OAuthStateInvalid);
+        Response.Cookies.Delete(PENDING_COOKIE, new CookieOptions { Path = "/api/v1/auth/external" });
+
+        // 运营可能在窗口内关掉该 provider:与 bind 回调一致,fail-closed
+        await ResolveEnabledProviderAsync(payload.Provider);
+
+        var identity = new ExternalIdentity(
+            payload.Provider,
+            payload.Subject,
+            payload.DisplayName,
+            payload.Email,
+            payload.Phone);
+        await externalBindings.BindAsync(CurrentUserId, identity);
+        return Result<bool>.Ok(true);
     }
 
     /// <summary>【个人中心】看自己已绑定的外部账号。</summary>
@@ -249,6 +338,16 @@ public class ExternalAuthController(
         var sep = basePath.Contains('?') ? '&' : '?';
         return $"{basePath}{sep}{query}";
     }
+
+    /// <summary>pending-link binder cookie:仅本浏览器 claim 时携带;Path 与 API 前缀对齐。</summary>
+    private CookieOptions PendingCookieOptions() => new()
+    {
+        HttpOnly = true,
+        Secure = Request.IsHttps,
+        SameSite = SameSiteMode.Lax,
+        MaxAge = PENDING_LINK_TTL,
+        Path = "/api/v1/auth/external",
+    };
 
     /// <summary>256 位加密随机 → base64url(state/nonce/PKCE verifier/票据/binder 通用)。</summary>
     protected static string RandomToken() => Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));

@@ -44,7 +44,20 @@ router.beforeEach(async (to) => {
   }
 
   // 登录页是唯一免认证页;已登录再访问则回首页。
-  if (to.name === 'login') return user.isLoggedIn ? { path: '/', replace: true } : true
+  // 例外:SSO 未绑定 pendingLink / SSO 后 TOTP 挑战——必须停在登录页完成账密或二次验证。
+  // 若仍带着残留会话进 /login,会误弹回首页,看起来像「解绑后 GitHub 仍直接登录」。
+  if (to.name === 'login') {
+    const needReauth = !!(to.query.pendingLink || to.query.totpChallenge)
+    if (needReauth) {
+      if (user.accessToken || user.refreshToken || user.cookieSession) {
+        resetRouter()
+        auth.reset()
+        user.clear()
+      }
+      return true
+    }
+    return user.isLoggedIn ? { path: '/', replace: true } : true
+  }
 
   // 公开的 OAuth 回调和 MFA 绑定/恢复页不能被登录守卫送回登录页。
   if (to.meta.public) return true

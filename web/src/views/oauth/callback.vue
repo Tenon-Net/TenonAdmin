@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // 外部登录 / SSO 回调结果页(批次 D)。IdP → 后端回调换会话后,后端 302 到本页并带:
-//   ?ticket=xxx  登录成功:凭一次性票据换令牌 → 存会话 → 进首页
-//   ?bind=code   绑定成功:回个人中心绑定页
+//   ?ticket=xxx        登录成功:凭一次性票据换令牌 → 存会话 → 进首页
+//   ?bind=code         绑定成功:回个人中心绑定页
+//   ?pendingLink=…&provider=…  未绑定:转登录页,账密成功后认领自动绑定
 //   ?totpChallenge=id (+ error=40018) SSO 后需 TOTP:带回登录页完成二次验证
-//   ?error=NNNNN 失败:按错误码提示,稍候回登录页
+//   ?error=NNNNN       失败:按错误码提示,稍候回登录页
 // 公开路由(未登录也能到);令牌不进 URL,只带票据(见后端 ExternalAuthController)。
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -12,12 +13,15 @@ import { NSpin } from 'naive-ui'
 import { Icon } from '@iconify/vue'
 import { externalAuthApi } from '@/api'
 import { useUserStore } from '@/stores/user'
+import { useAuthStore } from '@/stores/auth'
+import { resetRouter } from '@/router'
 import { translateError } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const user = useUserStore()
+const auth = useAuthStore()
 
 const state = ref<'processing' | 'error'>('processing')
 const errorText = ref('')
@@ -37,16 +41,46 @@ function fail(text: string) {
   window.setTimeout(() => router.replace('/login'), 2600)
 }
 
+/**
+ * 丢掉残留 SPA 会话。解绑后 SSO 会回 pendingLink/totpChallenge → /login;
+ * 若 localStorage 仍有 token,路由守卫会把「已登录访问 /login」弹回首页,看起来像「GitHub 直接登录进去了」。
+ * 双前端(5173/5174)不同源存储时尤其易踩:在一端登出,回调却落到另一端仍带旧会话。
+ */
+function dropResidualSession() {
+  if (!user.accessToken && !user.refreshToken && !user.cookieSession) return
+  resetRouter()
+  auth.reset()
+  user.clear()
+}
+
 onMounted(async () => {
   const q = route.query
   const ticket = typeof q.ticket === 'string' ? q.ticket : ''
   const bind = typeof q.bind === 'string' ? q.bind : ''
+  const pendingLink = typeof q.pendingLink === 'string' ? q.pendingLink : ''
+  const provider = typeof q.provider === 'string' ? q.provider : ''
+  const displayName = typeof q.displayName === 'string' ? q.displayName : ''
   const error = typeof q.error === 'string' ? q.error : ''
   const totpChallenge = typeof q.totpChallenge === 'string' ? q.totpChallenge : ''
 
   // SSO 已通过 IdP,但需 TOTP:把挑战 Id 交给登录页完成 40018 流
   if (totpChallenge) {
+    dropResidualSession()
     await router.replace({ path: '/login', query: { totpChallenge } })
+    return
+  }
+
+  // 未绑定:转登录页现场绑定(账密成功后须确认再 claim);必须先清残留会话,否则守卫直接送首页
+  if (pendingLink) {
+    dropResidualSession()
+    await router.replace({
+      path: '/login',
+      query: {
+        pendingLink,
+        ...(provider ? { provider } : {}),
+        ...(displayName ? { displayName } : {}),
+      },
+    })
     return
   }
 

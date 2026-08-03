@@ -1,5 +1,7 @@
 using TenonAdmin.AspNetCore;
 using TenonAdmin.Auth.DingTalk;
+using TenonAdmin.Auth.GitHub;
+using TenonAdmin.Auth.WeChat;
 using TenonAdmin.Auth.WeCom;
 using TenonAdmin.Caching.Redis;
 using TenonAdmin.Excel;
@@ -17,6 +19,8 @@ builder.Services.AddTenonAdminRedisCache(builder.Configuration);
 // 内置 OIDC provider 由 AddTenonAdmin 按 TenonAdmin:ExternalAuth:Oidc 自动装配,无需在此显式调用。
 builder.Services.AddTenonAdminWeComAuth(builder.Configuration);
 builder.Services.AddTenonAdminDingTalkAuth(builder.Configuration);
+builder.Services.AddTenonAdminGitHubAuth(builder.Configuration);
+builder.Services.AddTenonAdminWeChatAuth(builder.Configuration);
 
 // 可选卫星包:xlsx 导入导出。必须在 AddTenonAdmin **之前**调用才赢 TryAdd(excel-ledger §2/§3);
 // 不调则 codec 走 MissingExcelProvider,任意导入/导出端点抛 46001。

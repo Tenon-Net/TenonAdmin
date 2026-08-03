@@ -287,37 +287,61 @@ public class AuthService(
     private const string PROVISION_PWD_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
 
     /// <inheritdoc />
-    public virtual async Task<LoginOutput> LoginByExternalAsync(ExternalLoginInput input)
+    public virtual async Task<LoginOutput> LoginByExternalAsync(
+        ExternalLoginInput input,
+        CancellationToken cancellationToken = default)
     {
         // 外部登录依赖三件可选注入(provider 集合 / 绑定服务 / RBAC);DI 下必然齐备,但手工构造 AuthService 且
         // 省略了这些参数的消费者子类会走到这——给出明确"该能力未接线"信号(40013),而非后续裸 NRE。
         AdminException.ThrowIf(externalProviders is null || externalBindings is null || rbac is null, ErrorCode.OAuthProviderDisabled);
-        SysUser? user = null;
+        ExternalIdentity identity;
         try
         {
-            var identity = await ResolveExternalIdentityAsync(input);   // 1. provider 换外部身份(含存在/启用校验)
-            user = await ResolveExternalUserAsync(identity);            // 2. 找绑定 / 按策略开户 or 拒绝
-            await CheckLoginPolicyAsync(user);                          // 3. 停用检查(复用)
-            await CheckTotpSecondFactorAsync(user);                     // 3.5 Level3:外部登录不得绕过强制 TOTP
-            var pair = await CreateTokenAsync(user);                    // 4. 签发令牌 + 开会话(复用)
-            await OnLoginSucceededAsync(user, pair);                    // 5. 成功后置(复用)
-            return BuildLoginOutput(user, pair);                        // 6. 出参(复用)
+            identity = await ResolveExternalIdentityAsync(input, cancellationToken); // 1. provider 换外部身份
         }
         catch (AdminException ex)
         {
-            // 账号栏记已解析账号或 external:{provider}(尚未解析时);永不等于 PasswordWrong,不触发失败锁定
-            await OnLoginFailedAsync(new LoginInput { Account = user?.Account ?? $"external:{input.ProviderCode}" }, ex.Code);
+            // Exchange 阶段失败时尚无 user;账号栏记 provider 码。后续登录步由 LoginByExternalIdentityAsync 记失败。
+            await OnLoginFailedAsync(new LoginInput { Account = $"external:{input.ProviderCode}" }, ex.Code);
+            throw;
+        }
+        return await LoginByExternalIdentityAsync(identity, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<LoginOutput> LoginByExternalIdentityAsync(
+        ExternalIdentity identity,
+        CancellationToken cancellationToken = default)
+    {
+        AdminException.ThrowIf(externalProviders is null || externalBindings is null || rbac is null, ErrorCode.OAuthProviderDisabled);
+        SysUser? user = null;
+        try
+        {
+            user = await ResolveExternalUserAsync(identity);            // 找绑定 / 按策略开户 or 拒绝
+            await CheckLoginPolicyAsync(user);                          // 停用检查(复用)
+            await CheckTotpSecondFactorAsync(user);                     // Level3:外部登录不得绕过强制 TOTP
+            var pair = await CreateTokenAsync(user);                    // 签发令牌 + 开会话(复用)
+            await OnLoginSucceededAsync(user, pair);                    // 成功后置(复用)
+            return BuildLoginOutput(user, pair);                        // 出参(复用)
+        }
+        catch (AdminException ex)
+        {
+            await OnLoginFailedAsync(new LoginInput { Account = user?.Account ?? $"external:{identity.Provider}" }, ex.Code);
             throw;
         }
     }
 
     /// <summary>解析外部身份:按 code 选 provider(不存在/被运营关掉抛 40013),调其 ExchangeAsync 换身份。</summary>
-    protected virtual async Task<ExternalIdentity> ResolveExternalIdentityAsync(ExternalLoginInput input)
+    protected virtual async Task<ExternalIdentity> ResolveExternalIdentityAsync(
+        ExternalLoginInput input,
+        CancellationToken cancellationToken = default)
     {
         var provider = externalProviders?.FirstOrDefault(p => p.Code == input.ProviderCode);
         AdminException.ThrowIf(provider is null, ErrorCode.OAuthProviderDisabled);
         AdminException.ThrowIf(!await externalBindings!.IsEnabledAsync(input.ProviderCode), ErrorCode.OAuthProviderDisabled);
-        return await provider!.ExchangeAsync(new ExternalExchangeRequest(input.Code, input.CodeVerifier, input.Nonce, input.RedirectUri));
+        return await provider!.ExchangeAsync(
+            new ExternalExchangeRequest(input.Code, input.CodeVerifier, input.Nonce, input.RedirectUri),
+            cancellationToken);
     }
 
     /// <summary>外部身份 → 本地用户:有绑定取之;无绑定按 provider 运营策略(默认拒绝抛 40016,或自动开户)。</summary>

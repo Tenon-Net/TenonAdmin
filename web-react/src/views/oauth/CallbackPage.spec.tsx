@@ -64,8 +64,31 @@ describe('OAuth callback', () => {
     mountAt('/oauth/callback?error=40016')
 
     await act(async () => { await Promise.resolve() })
-    expect(screen.getByText('该第三方账号尚未绑定系统账号，请先用账号登录后在个人中心绑定')).toBeTruthy()
+    expect(screen.getByText('该第三方账号尚未绑定系统账号，请先登录本系统账号以完成绑定')).toBeTruthy()
     await act(async () => { await vi.advanceTimersByTimeAsync(2600) })
     expect(screen.getByText('LOGIN')).toBeTruthy()
+  })
+
+  it('forwards pending-link to the login page for on-the-spot binding', async () => {
+    mountAt('/oauth/callback?pendingLink=tok123&provider=github')
+
+    expect(await screen.findByText('LOGIN')).toBeTruthy()
+    expect(exchangeMock).not.toHaveBeenCalled()
+  })
+
+  it('drops residual SPA session before forwarding pending-link (unbind then SSO must re-auth)', async () => {
+    useUserStore.setState({
+      accessToken: 'stale-access',
+      refreshToken: 'stale-refresh',
+      userInfo: { userId: 1, account: 'superAdmin', name: '超管', mustChangePassword: false },
+      sessionMode: 'body',
+      csrfRequired: false,
+    })
+    mountAt('/oauth/callback?pendingLink=tok456&provider=github')
+
+    expect(await screen.findByText('LOGIN')).toBeTruthy()
+    expect(useUserStore.getState().accessToken).toBe('')
+    expect(useUserStore.getState().refreshToken).toBe('')
+    expect(exchangeMock).not.toHaveBeenCalled()
   })
 })

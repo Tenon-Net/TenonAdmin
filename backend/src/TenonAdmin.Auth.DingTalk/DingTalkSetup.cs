@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using TenonAdmin.Core;
 
 namespace TenonAdmin.Auth.DingTalk;
@@ -14,17 +15,11 @@ public static class DingTalkSetup
     /// <summary>
     /// 按配置启用钉钉登录:读 <c>TenonAdmin:ExternalAuth:DingTalk</c> 节;未配 AppKey 则空操作(不点亮入口)。
     /// </summary>
-    /// <example>
-    /// <code>
-    /// builder.Services.AddTenonAdminDingTalkAuth(builder.Configuration); // 先注册
-    /// builder.Services.AddTenonAdmin(builder.Configuration);
-    /// </code>
-    /// </example>
     public static IServiceCollection AddTenonAdminDingTalkAuth(this IServiceCollection services, IConfiguration configuration)
     {
         var options = configuration.GetSection("TenonAdmin:ExternalAuth:DingTalk").Get<DingTalkAuthOptions>();
         if (options is null || string.IsNullOrWhiteSpace(options.AppKey))
-            return services;   // 未配置:空操作
+            return services;
         return services.AddTenonAdminDingTalkAuth(options);
     }
 
@@ -35,8 +30,19 @@ public static class DingTalkSetup
             throw new InvalidOperationException("启用钉钉登录需配置 AppKey + AppSecret(TenonAdmin:ExternalAuth:DingTalk)。");
 
         services.AddSingleton(options);
-        // TryAddEnumerable 按 impl 类型去重:装两次也只有一个钉钉 provider;与内置/企业微信 provider 并存,按 Code 选型。
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IExternalAuthProvider, DingTalkExternalAuthProvider>());
+        services.AddHttpClient(DingTalkExternalAuthProvider.HttpClientName)
+            .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(15));
+
+        // 与 GitHub 相同:TryAddEnumerable + TImplementation,工厂注入命名 HttpClient
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IExternalAuthProvider, DingTalkExternalAuthProvider>(sp =>
+        {
+            var factory = sp.GetRequiredService<IHttpClientFactory>();
+            var http = factory.CreateClient(DingTalkExternalAuthProvider.HttpClientName);
+            return new DingTalkExternalAuthProvider(
+                sp.GetRequiredService<DingTalkAuthOptions>(),
+                http,
+                sp.GetRequiredService<ILogger<DingTalkExternalAuthProvider>>());
+        }));
         return services;
     }
 }

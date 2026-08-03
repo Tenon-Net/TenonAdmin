@@ -79,11 +79,57 @@ public class ConfigService(
         foreach (var item in items)
         {
             var entity = await configs.GetFirstAsync(c => c.ConfigKey == item.ConfigKey);
-            if (entity is null) continue; // 只更新已存在(预置)键,未知键忽略
+            if (entity is null)
+            {
+                // 第三方登录运营键:配置中心 Tab 可能对「已注册但尚未种子」的 code 写 enabled,
+                // 允许按键自动落库(GroupCode=externalauth);其它未知键仍忽略。
+                if (!item.ConfigKey.StartsWith("sys.externalauth.", StringComparison.Ordinal))
+                    continue;
+                // 并发首配:两请求都查不到 → 双插撞 ConfigKey 唯一索引;冲突后改为重读并更新。
+                try
+                {
+                    await configs.InsertAsync(new SysConfig
+                    {
+                        ConfigKey = item.ConfigKey,
+                        ConfigValue = item.ConfigValue,
+                        Name = item.ConfigKey,
+                        GroupCode = "externalauth",
+                        Sort = 80,
+                        Remark = "第三方登录运营项(配置中心写入)",
+                    });
+                }
+                catch (Exception ex) when (LooksLikeUniqueKeyViolation(ex))
+                {
+                    entity = await configs.GetFirstAsync(c => c.ConfigKey == item.ConfigKey);
+                    if (entity is null) throw;
+                    entity.ConfigValue = item.ConfigValue;
+                    await configs.UpdateAsync(entity);
+                }
+                await InvalidateAsync(item.ConfigKey);
+                continue;
+            }
             entity.ConfigValue = item.ConfigValue;
             await configs.UpdateAsync(entity);
             await InvalidateAsync(entity.ConfigKey);
         }
+    }
+
+    /// <summary>跨 SQLite/MySQL/SqlServer/PG 的唯一键冲突粗判(消息/SqlState 启发式)。</summary>
+    public static bool LooksLikeUniqueKeyViolation(Exception ex)
+    {
+        for (Exception? e = ex; e is not null; e = e.InnerException)
+        {
+            var m = e.Message ?? "";
+            if (m.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("unique constraint", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("Duplicate entry", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("2627") // SQL Server unique constraint
+                || m.Contains("2601") // SQL Server unique index
+                || m.Contains("23505")) // PostgreSQL unique_violation
+                return true;
+        }
+        return false;
     }
 
     /// <inheritdoc />

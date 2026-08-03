@@ -47,7 +47,7 @@ describe('OtherConfig 接线', () => {
     mount()
     await waitFor(() => expect(dt.fetcher).toBeTruthy())
     dt.fetcher!({ page: 1, pageSize: 10 })
-    expect(configApi.page).toHaveBeenCalledWith(expect.objectContaining({ excludedGroupCodes: ['sys', 'security', 'upload'] }))
+    expect(configApi.page).toHaveBeenCalledWith(expect.objectContaining({ excludedGroupCodes: ['sys', 'security', 'upload', 'externalauth'] }))
   })
 
   it('新增:提交全部 6 字段(未填项落空白默认,无 C9 漏字段)', async () => {

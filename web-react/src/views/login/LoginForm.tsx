@@ -1,14 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
-import { App, Button, Checkbox, Form, Input, Modal } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Alert, App, Button, Checkbox, Dropdown, Form, Input, Modal } from 'antd'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { authApi, externalAuthApi, ApiError, type ExternalProvider } from '@/api'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteStore, appVersion } from '@/stores/site'
 import { translateError } from '@/utils/error'
+import {
+  splitLoginProviders,
+  PREVIEW_ALL_SSO_BRANDS,
+  previewAllBrandProviders,
+} from '@/utils/oauthBrand'
 import { TenonLogo } from '@/components/TenonLogo'
 import { AppIcon } from '@/components/AppIcon'
+import { BrandIcon } from '@/components/oauth/BrandIcon'
 import './loginform.css'
 
 interface FormValues {
@@ -36,15 +42,39 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
   const { t } = useTranslation()
   const { message } = App.useApp()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const site = useSiteStore((s) => s.site)
   const loadSite = useSiteStore((s) => s.load)
   const setSession = useUserStore((s) => s.setSession)
   const year = new Date().getFullYear()
 
+  const pendingLink = searchParams.get('pendingLink') ?? ''
+  const pendingProvider = searchParams.get('provider') ?? ''
+  const pendingDisplayName = searchParams.get('displayName') ?? ''
+
   const [loading, setLoading] = useState(false)
+  const [pendingConfirmOpen, setPendingConfirmOpen] = useState(false)
+  const [pendingClaimToken, setPendingClaimToken] = useState('')
+  const [pendingClaimBusy, setPendingClaimBusy] = useState(false)
   const [captcha, setCaptcha] = useState<{ id: string; svg: string; type: string } | null>(null)
-  // 第三方登录:后端 GET providers 驱动(仅点亮已启用的);空数组 = 整段 SSO 区不显。
+  // 第三方登录:默认后端 providers;PREVIEW_ALL_SSO_BRANDS 时铺全品牌图(图标验收)。
   const [ssoProviders, setSsoProviders] = useState<ExternalProvider[]>([])
+  const ssoDisplayList = useMemo(
+    () => (PREVIEW_ALL_SSO_BRANDS ? previewAllBrandProviders() : ssoProviders),
+    [ssoProviders],
+  )
+  const ssoSplit = useMemo(
+    () =>
+      PREVIEW_ALL_SSO_BRANDS
+        ? { visible: ssoDisplayList, overflow: [] as typeof ssoDisplayList }
+        : splitLoginProviders(ssoDisplayList),
+    [ssoDisplayList],
+  )
+  const pendingProviderLabel = useMemo(() => {
+    if (!pendingProvider) return t('oauth.thirdParty')
+    const hit = ssoProviders.find((p) => p.code === pendingProvider)
+    return hit?.displayName || pendingProvider
+  }, [pendingProvider, ssoProviders, t])
   const [form] = Form.useForm<FormValues>()
 
   // 登录形态:账号密码 / 短信免密 / 短信二次验证(40009) / TOTP 二次验证(40018)
@@ -101,8 +131,9 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
   }, [loadSite])
 
   /** 点击第三方登录:顶层导航到 authorize,后端 302 跳 IdP(OAuth2 授权码往返)。 */
-  function onSso(code: string) {
-    window.location.href = externalAuthApi.authorizeUrl(code)
+  /** 顶层跳 IdP(与 Gitee 一样用 <a href>) */
+  function ssoHref(code: string) {
+    return externalAuthApi.authorizeUrl(code)
   }
 
   /** 验证码一次性消费:任何用掉票据的请求失败后必刷新,避免复用作废票据。 */
@@ -113,10 +144,40 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
     }
   }
 
-  function finishLogin(res: Awaited<ReturnType<typeof authApi.login>>) {
+  async function finishLogin(res: Awaited<ReturnType<typeof authApi.login>>) {
     // 每次登录清授权态,否则 routesReady 残留 true 会跳过 enterInitial → 空菜单/全 404。
     useAuthStore.getState().reset()
     setSession(res)
+
+    // 现场绑定:不静默 claim——须用户确认,并依赖服务端 binder cookie 同浏览器校验
+    if (pendingLink) {
+      setPendingClaimToken(pendingLink)
+      setPendingConfirmOpen(true)
+      return
+    }
+    message.success(t('login.success'))
+    void navigate('/', { replace: true })
+  }
+
+  async function confirmPendingBind() {
+    if (pendingClaimBusy) return
+    setPendingClaimBusy(true)
+    try {
+      await externalAuthApi.claimPendingLink(pendingClaimToken)
+      message.success(t('oauth.pendingLinkSuccess', { name: pendingProviderLabel }))
+    } catch (e) {
+      message.warning(translateError(e))
+    } finally {
+      setPendingClaimBusy(false)
+      setPendingConfirmOpen(false)
+      setPendingClaimToken('')
+    }
+    void navigate('/', { replace: true })
+  }
+
+  function skipPendingBind() {
+    setPendingConfirmOpen(false)
+    setPendingClaimToken('')
     message.success(t('login.success'))
     void navigate('/', { replace: true })
   }
@@ -133,7 +194,7 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
               captchaId: captcha?.id,
               captchaCode: values.captchaCode,
             })
-      finishLogin(res)
+      await finishLogin(res)
     } catch (err) {
       if (err instanceof ApiError && err.code === 40018 && err.args) {
         setTotp({ challengeId: String(err.args.challengeId ?? '') })
@@ -202,7 +263,7 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
     }
     setLoading(true)
     try {
-      finishLogin(await authApi.smsChallengeLogin({ challengeId: mfa.challengeId, code: mfaCode }))
+      await finishLogin(await authApi.smsChallengeLogin({ challengeId: mfa.challengeId, code: mfaCode }))
     } catch (err) {
       message.error(translateError(err))
     } finally {
@@ -217,7 +278,7 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
     }
     setLoading(true)
     try {
-      finishLogin(await authApi.totpChallengeLogin({ challengeId: totp.challengeId, code: totpCode }))
+      await finishLogin(await authApi.totpChallengeLogin({ challengeId: totp.challengeId, code: totpCode }))
     } catch (err) {
       message.error(translateError(err))
     } finally {
@@ -244,6 +305,11 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
     setTotpCode('')
   }
 
+  const account = useUserStore((s) => s.userInfo?.account ?? '')
+  const pendingIdentity = pendingDisplayName
+    ? t('oauth.pendingLinkIdentity', { display: pendingDisplayName })
+    : ''
+
   return (
     <div className="login-form" data-testid="login-card">
       {showBrand ? (
@@ -255,6 +321,37 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
           </div>
         </>
       ) : null}
+
+      {pendingLink ? (
+        <Alert
+          type="info"
+          showIcon
+          className="lf-pending-alert"
+          style={{ marginBottom: 16, borderRadius: 10, textAlign: 'left' }}
+          message={t('oauth.pendingLinkTitle', { name: pendingProviderLabel })}
+          description={t('oauth.pendingLinkHint', { name: pendingProviderLabel })}
+        />
+      ) : null}
+
+      <Modal
+        open={pendingConfirmOpen}
+        title={t('oauth.pendingLinkConfirmTitle')}
+        okText={t('oauth.pendingLinkConfirmOk')}
+        cancelText={t('oauth.pendingLinkConfirmSkip')}
+        confirmLoading={pendingClaimBusy}
+        closable={false}
+        maskClosable={false}
+        onOk={() => void confirmPendingBind()}
+        onCancel={skipPendingBind}
+      >
+        <p>
+          {t('oauth.pendingLinkConfirmContent', {
+            name: pendingProviderLabel,
+            identity: pendingIdentity,
+            account,
+          })}
+        </p>
+      </Modal>
 
       {/* 短信/TOTP 二次验证态:标题换挑战提示;其余态显常规标题(随 showBrand) */}
       {mode === 'mfa' ? (
@@ -322,10 +419,14 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
             form={form}
             layout="vertical"
             requiredMark={false}
-            // ponytail: 开发环境预填超管账号密码,免得每次手敲;生产构建下 import.meta.env.DEV 为 false,留空。
+            // ponytail: 开发环境预填超管;pending-link 不预填密码,避免「一点就进」被当成 SSO 直登。
             initialValues={
               import.meta.env.DEV
-                ? { account: 'superAdmin', password: 'Aa123456', remember: true }
+                ? {
+                    account: 'superAdmin',
+                    password: pendingLink ? '' : 'Aa123456',
+                    remember: true,
+                  }
                 : { account: '', password: '', remember: true }
             }
             onFinish={(v) => void onFinish(v)}
@@ -420,19 +521,54 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
             </Button>
           </Form>
 
-          {/* 第三方登录:后端 providers 驱动;无启用项则整段不显。 */}
-          {ssoProviders.length > 0 ? (
+          {/* 第三方登录:Gitee 风圆标。PREVIEW_ALL_SSO_BRANDS 时展示全部品牌图。 */}
+          {ssoDisplayList.length > 0 ? (
             <>
               <div className="lf-divider">
                 <span>{t('login.otherMethods')}</span>
               </div>
               <div className="lf-sso">
-                {ssoProviders.map((p) => (
-                  <button key={p.code} className="lf-sso-btn" type="button" onClick={() => onSso(p.code)}>
-                    {p.icon ? <AppIcon icon={p.icon} size={18} className="lf-sso-icon" /> : null}
-                    {p.displayName}
-                  </button>
+                {ssoSplit.visible.map((p) => (
+                  <a
+                    key={p.code}
+                    className="lf-sso-btn"
+                    href={ssoHref(p.code)}
+                    title={p.displayName}
+                    aria-label={p.displayName}
+                  >
+                    <BrandIcon code={p.code} icon={p.icon} size={32} />
+                  </a>
                 ))}
+                {ssoSplit.overflow.length > 0 ? (
+                  <Dropdown
+                    menu={{
+                      items: ssoSplit.overflow.map((p) => ({
+                        key: p.code,
+                        label: (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                            <BrandIcon code={p.code} icon={p.icon} size={20} />
+                            {p.displayName}
+                          </span>
+                        ),
+                        onClick: () => {
+                          window.location.href = ssoHref(p.code)
+                        },
+                      })),
+                    }}
+                    trigger={['click']}
+                  >
+                    <a
+                      className="lf-sso-btn lf-sso-more"
+                      href="#"
+                      role="button"
+                      title={t('login.moreMethods')}
+                      aria-label={t('login.moreMethods')}
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <AppIcon icon="ph:dots-three-bold" size={18} />
+                    </a>
+                  </Dropdown>
+                ) : null}
               </div>
             </>
           ) : null}

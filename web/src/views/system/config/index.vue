@@ -5,6 +5,7 @@ import { NTabs, NTabPane, NCard } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import SysBaseConfig from './components/SysBaseConfig.vue'
 import SecurityConfig from './components/SecurityConfig.vue'
+import ExternalAuthConfig from './components/ExternalAuthConfig.vue'
 import UploadConfig from './components/UploadConfig.vue'
 import OtherConfig from './components/OtherConfig.vue'
 
@@ -25,6 +26,11 @@ const { t } = useI18n()
     <n-tab-pane name="security" :tab="t('config.tab.security')" display-directive="show:lazy">
       <n-card :bordered="false" :title="t('config.tab.security')">
         <security-config />
+      </n-card>
+    </n-tab-pane>
+    <n-tab-pane name="externalAuth" :tab="t('config.tab.externalAuth')" display-directive="show:lazy">
+      <n-card :bordered="false" :title="t('config.tab.externalAuth')">
+        <external-auth-config />
       </n-card>
     </n-tab-pane>
     <n-tab-pane name="upload" :tab="t('config.tab.upload')" display-directive="show:lazy">

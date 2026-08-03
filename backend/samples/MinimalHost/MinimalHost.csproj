@@ -6,6 +6,8 @@
     <!-- 可选卫星包:外部登录 / SSO(企业微信 / 钉钉)。不配对应配置节时是空操作,不点亮按钮(见 Program.cs)。 -->
     <ProjectReference Include="..\..\src\TenonAdmin.Auth.WeCom\TenonAdmin.Auth.WeCom.csproj" />
     <ProjectReference Include="..\..\src\TenonAdmin.Auth.DingTalk\TenonAdmin.Auth.DingTalk.csproj" />
+    <ProjectReference Include="..\..\src\TenonAdmin.Auth.GitHub\TenonAdmin.Auth.GitHub.csproj" />
+    <ProjectReference Include="..\..\src\TenonAdmin.Auth.WeChat\TenonAdmin.Auth.WeChat.csproj" />
     <!-- 可选卫星包:xlsx 导入导出。须在 AddTenonAdmin() 之前调 AddTenonAdminExcel()(见 Program.cs)。 -->
     <ProjectReference Include="..\..\src\TenonAdmin.Excel\TenonAdmin.Excel.csproj" />
   </ItemGroup>

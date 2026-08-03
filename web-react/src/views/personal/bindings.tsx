@@ -1,13 +1,21 @@
-// 账号绑定(个人中心):把第三方账号绑到本账号,以后可一键 SSO 登录。[ActiveSession] 人人可用,静态路由不进菜单。
-// 绑定走一次 OAuth 往返证明拥有该外部身份(顶层跳 authorizeUrl,回调把身份绑到当前用户并回本页)。
-import { useCallback, useEffect, useState } from 'react'
-import { App, Button, Card, Empty, List, Spin, Tag, Typography } from 'antd'
+// 账号绑定(个人中心 + 品牌化):启用 providers ∪ 已绑定停用项(B-A);卡片网格与配置 Tab 同风。
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Alert, App, Button, Empty, Spin, Tag } from 'antd'
+import { LinkOutlined, DisconnectOutlined, CheckOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { AppIcon } from '@/components/AppIcon'
 import { useConfirm } from '@/hooks/useConfirm'
 import { externalAuthApi, type ExternalBinding, type ExternalProvider } from '@/api'
 import { translateError } from '@/utils/error'
+import { mergeBindingRows, type BindingRow } from '@/utils/oauthBrand'
+import { BrandIcon } from '@/components/oauth/BrandIcon'
 import { fmtDateTime } from './personalForms'
+import './bindings.css'
+
+function cardClass(row: BindingRow) {
+  if (!row.enabled) return 'bind-card bind-card--disabled'
+  if (row.binding) return 'bind-card bind-card--bound'
+  return 'bind-card bind-card--free'
+}
 
 export default function BindingsPage() {
   const { t } = useTranslation()
@@ -16,8 +24,10 @@ export default function BindingsPage() {
   const [loading, setLoading] = useState(true)
   const [providers, setProviders] = useState<ExternalProvider[]>([])
   const [bindings, setBindings] = useState<ExternalBinding[]>([])
+  const [busyCode, setBusyCode] = useState<string | null>(null)
 
-  const bindingOf = (code: string) => bindings.find((b) => b.provider === code)
+  const rows = useMemo(() => mergeBindingRows(providers, bindings), [providers, bindings])
+  const boundCount = useMemo(() => rows.filter((r) => !!r.binding).length, [rows])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -31,70 +41,137 @@ export default function BindingsPage() {
       setLoading(false)
     }
   }, [message])
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    void load()
+  }, [load])
 
   const bind = useCallback(
-    async (p: ExternalProvider) => {
+    async (row: BindingRow) => {
+      if (!row.enabled || busyCode) return
+      setBusyCode(row.code)
       try {
-        const { authorizeUrl } = await externalAuthApi.bindStart(p.code)
-        window.location.href = authorizeUrl // 顶层跳转开始 OAuth 往返;回调把身份绑到当前用户并回本页
+        const { authorizeUrl } = await externalAuthApi.bindStart(row.code)
+        window.location.href = authorizeUrl
       } catch (e) {
         message.error(translateError(e))
+        setBusyCode(null)
       }
     },
-    [message],
+    [message, busyCode],
   )
 
   const unbind = useCallback(
-    (p: ExternalProvider) => {
-      confirm({ content: t('oauth.unbindConfirm', { name: p.displayName }), action: () => externalAuthApi.unbind(p.code), successMsg: t('oauth.unbound') }).then(
-        (ok) => { if (ok) void load() },
-      )
+    (row: BindingRow) => {
+      if (busyCode) return
+      confirm({
+        content: t('oauth.unbindConfirm', { name: row.displayName }),
+        action: () => externalAuthApi.unbind(row.code),
+        successMsg: t('oauth.unbound'),
+      }).then((ok) => {
+        if (ok) void load()
+      })
     },
-    [confirm, t, load],
+    [confirm, t, load, busyCode],
   )
 
   return (
-    <Card title={t('oauth.bindingsTitle')} style={{ maxWidth: 720 }}>
-      <Typography.Paragraph type="secondary" style={{ fontSize: 13 }}>
-        {t('oauth.bindingsHint')}
-      </Typography.Paragraph>
+    <div className="bind">
+      <header className="bind-header">
+        <div>
+          <h2 className="bind-title">{t('oauth.bindingsTitle')}</h2>
+          <p className="bind-hint">{t('oauth.bindingsHint')}</p>
+        </div>
+        {!loading && rows.length > 0 ? (
+          <div className="bind-summary">
+            <span className="bind-summary-num">{boundCount}</span>
+            <span className="bind-summary-sep">/</span>
+            <span>{rows.length}</span>
+            <span className="bind-summary-label">{t('oauth.boundCountLabel')}</span>
+          </div>
+        ) : null}
+      </header>
+
+      <Alert type="info" showIcon className="bind-alert" message={t('oauth.bindingsTip')} />
+
       {loading ? (
-        <Spin />
-      ) : !providers.length ? (
-        <Empty description={t('oauth.noProviders')} />
+        <div className="bind-loading">
+          <Spin />
+        </div>
+      ) : !rows.length ? (
+        <Empty className="bind-empty" description={t('oauth.noProviders')} />
       ) : (
-        <List
-          bordered
-          dataSource={providers}
-          renderItem={(p) => {
-            const b = bindingOf(p.code)
-            return (
-              <List.Item
-                actions={[
-                  b ? (
-                    <Button key="unbind" size="small" type="text" danger onClick={() => unbind(p)}>{t('oauth.unbind')}</Button>
-                  ) : (
-                    <Button key="bind" size="small" type="primary" onClick={() => bind(p)}>{t('oauth.bind')}</Button>
-                  ),
-                ]}
-              >
-                <List.Item.Meta
-                  avatar={<AppIcon icon={p.icon || 'ph:link-simple'} size={26} />}
-                  title={p.displayName}
-                  description={
-                    b ? (
-                      <Tag color="green">{t('oauth.boundAt', { time: fmtDateTime(b.boundAt) })}</Tag>
+        <div className="bind-grid">
+          {rows.map((row) => (
+            <article key={row.code} className={cardClass(row)}>
+              <div className="bind-card-main">
+                <span className={`bind-avatar${row.binding ? ' bind-avatar--bound' : ''}`}>
+                  <BrandIcon code={row.code} icon={row.icon} size={44} />
+                  {row.binding ? (
+                    <span className="bind-check" aria-hidden>
+                      <CheckOutlined style={{ fontSize: 10 }} />
+                    </span>
+                  ) : null}
+                </span>
+                <div className="bind-meta">
+                  <div className="bind-title-row">
+                    <span className="bind-name">{row.displayName}</span>
+                    {!row.enabled ? (
+                      <Tag color="orange" bordered={false}>
+                        {t('oauth.disabled')}
+                      </Tag>
+                    ) : row.binding ? (
+                      <Tag color="success" bordered={false}>
+                        {t('oauth.bound')}
+                      </Tag>
                     ) : (
-                      <span style={{ color: 'var(--color-text-tertiary)' }}>{t('oauth.notBound')}</span>
-                    )
-                  }
-                />
-              </List.Item>
-            )
-          }}
-        />
+                      <Tag bordered={false}>{t('oauth.notBound')}</Tag>
+                    )}
+                  </div>
+                  <code className="bind-code">{row.code}</code>
+                  {row.binding ? (
+                    <p className="bind-time">
+                      {t('oauth.boundAt', { time: fmtDateTime(row.binding.boundAt) })}
+                    </p>
+                  ) : !row.enabled ? (
+                    <p className="bind-disabled-tip">{t('oauth.disabledTip')}</p>
+                  ) : (
+                    <p className="bind-free-tip">{t('oauth.bindTip')}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="bind-actions">
+                {row.binding ? (
+                  <Button
+                    size="small"
+                    type="text"
+                    danger
+                    icon={<DisconnectOutlined />}
+                    disabled={!!busyCode}
+                    onClick={() => unbind(row)}
+                  >
+                    {t('oauth.unbind')}
+                  </Button>
+                ) : row.enabled ? (
+                  <Button
+                    size="small"
+                    type="primary"
+                    ghost
+                    icon={<LinkOutlined />}
+                    loading={busyCode === row.code}
+                    disabled={!!busyCode && busyCode !== row.code}
+                    onClick={() => void bind(row)}
+                  >
+                    {t('oauth.bind')}
+                  </Button>
+                ) : (
+                  <span className="bind-na">{t('oauth.cannotBind')}</span>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
       )}
-    </Card>
+    </div>
   )
 }

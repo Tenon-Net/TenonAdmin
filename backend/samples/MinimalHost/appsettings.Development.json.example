@@ -9,6 +9,7 @@
     "ExternalAuth": {
       "CallbackBaseUrl": "https://admin.example.com",
       "FrontendResultPath": "/oauth/callback",
+      "_FrontendResultPathDevNote": "前后端分离开发请写完整前端 URL,如 http://localhost:5173/oauth/callback(Vue) 或 http://localhost:5174/oauth/callback(React);相对路径会 302 到后端主机。",
 
       "Oidc": [],
       "_OidcExample": {
@@ -32,6 +33,18 @@
         "_note": "钉钉扫码登录;填 AppKey + AppSecret 即启用(空则不点亮按钮)",
         "AppKey": "",
         "AppSecret": ""
+      },
+      "GitHub": {
+        "_note": "GitHub OAuth App;填 ClientId+ClientSecret 即启用。登录页显示开关:sys.externalauth.github.enabled。未绑定默认拒绝;演示 JIT 请在配置中心设 sys.externalauth.github.provisioning=provision(不是本文件)。",
+        "ClientId": "",
+        "ClientSecret": "",
+        "DisplayName": "GitHub"
+      },
+      "WeChat": {
+        "_note": "个人微信开放平台网站应用扫码;填 AppId+AppSecret 即启用。Subject 仅 unionid(应用须挂开放平台账号)。与企业微信(WeCom)不同。",
+        "AppId": "",
+        "AppSecret": "",
+        "DisplayName": "微信"
       }
     }
   }

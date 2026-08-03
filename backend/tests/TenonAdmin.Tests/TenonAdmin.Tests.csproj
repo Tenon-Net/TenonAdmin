@@ -11,6 +11,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\TenonAdmin.AspNetCore\TenonAdmin.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\TenonAdmin.Auth.GitHub\TenonAdmin.Auth.GitHub.csproj" />
+    <ProjectReference Include="..\..\src\TenonAdmin.Auth.WeChat\TenonAdmin.Auth.WeChat.csproj" />
+    <ProjectReference Include="..\..\src\TenonAdmin.Auth.WeCom\TenonAdmin.Auth.WeCom.csproj" />
+    <ProjectReference Include="..\..\src\TenonAdmin.Auth.DingTalk\TenonAdmin.Auth.DingTalk.csproj" />
     <ProjectReference Include="..\..\src\TenonAdmin.Caching.Redis\TenonAdmin.Caching.Redis.csproj" />
     <ProjectReference Include="..\..\src\TenonAdmin.Excel\TenonAdmin.Excel.csproj" />
     <ProjectReference Include="..\TenonAdmin.TestHost\TenonAdmin.TestHost.csproj" />
