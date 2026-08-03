@@ -56,7 +56,10 @@ public class MultiConfigIdTests
         var mainFile = Path.Combine(Path.GetTempPath(), $"tenon-{id}-main.db");
         var sideFile = Path.Combine(Path.GetTempPath(), $"tenon-{id}-side.db");
         sideOptions.ConfigId = string.IsNullOrWhiteSpace(sideOptions.ConfigId) ? SideConfigId : sideOptions.ConfigId;
-        sideOptions.DbType = string.IsNullOrWhiteSpace(sideOptions.DbType) ? TestDb.DbType : sideOptions.DbType;
+        // Options 默认 DbType="Sqlite"。CI 矩阵腿若仍用该默认 + TestDb 的 MySql/Postgres 连接串,
+        // SqlSugar 会拿 SQLite 驱动去解析 Server=… → "keyword 'server' is not supported"。
+        // 双库隔离用例必须与当前 TestDb 方言一致,强制覆盖默认值。
+        sideOptions.DbType = TestDb.DbType;
         if (string.IsNullOrWhiteSpace(sideOptions.ConnectionString))
             sideOptions.ConnectionString = TestDb.ConnectionString(id + "-side", sideFile);
 
