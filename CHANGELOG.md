@@ -15,6 +15,27 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.5.3 - 2026-08-03
+
+Two consumer-facing surfaces land on the same patch: **same-process secondary databases** (SqlSugar multi-ConfigId) and **branded external login** (GitHub / personal WeChat packages + dual-template UI, with pending-link hardening).
+
+### Added
+
+- **Same-process additional databases (multi-ConfigId)** (#28). Configure `TenonAdmin:AdditionalDatabases` with a unique `ConfigId` (reserved name `TenonAdmin` is the main DB). Access secondaries with `db.AsTenant().GetConnection(configId)`; `IRepository<T>` and CodeFirst/seed still hit main only. Soft-delete, data-scope, and audit AOP are **off by default** on secondaries and opt-in per connection (`ApplySoftDeleteFilter` / `ApplyDataScopeFilter` / `ApplyAuditAop`). Site guide: [Configure Multiple Databases](https://tenon.52moyu.net/zh/guide/multi-database).
+- **Optional satellite packages `TenonAdmin.Auth.GitHub` and `TenonAdmin.Auth.WeChat`.** Same shape as WeCom/DingTalk: install the package, call `AddTenonAdminGitHubAuth` / `AddTenonAdminWeChatAuth` before `AddTenonAdmin()`. GitHub uses OAuth App with fixed code `github` and scope `read:user`; personal WeChat uses website-app `qrconnect` with code `wechat` and Subject = `unionid` only (no openid fallback — empty unionid fails the exchange).
+- **Branded external-login UI on both templates** (login strip + personal bindings, zero-shared). Known provider codes map to local SVG brand icons; system config gains a third-party login tab driven by `GET /api/v1/auth/external/providers/all` for enable/display toggles. Frontend brand map also reserves icons for codes without a kernel package yet (e.g. gitee/qq placeholders).
+- **Pending-link claim for unbound SSO.** When an external identity is resolved but not bound, the callback issues a short-lived pending-link plus a browser-only binder cookie (`tn_oauth_pending`); after password/SMS login the client calls `POST /api/v1/auth/external/pending-link/claim`. Claim requires the same browser (binder match); wrong binder does not burn the ticket. Covered by integration tests and ADR 0007 / `docs/external-login-brand/`.
+
+### Fixed
+
+- **WeCom / DingTalk providers** use `IHttpClientFactory` and clearer exchange error mapping (aligned with the new GitHub/WeChat packages).
+- **MultiConfigIdTests on non-SQLite CI legs**: dual-connection fixtures now force the active `TestDb` dialect onto secondary `AdminDatabaseConnectionOptions` (default `DbType` is Sqlite and was pairing with MySQL/Postgres connection strings).
+
+### Changed
+
+- OpenAPI schemas on `web/` and `web-react/` regenerated for external-auth providers/all and pending-link/claim; temporary path casts in the API clients dropped.
+- Construction-only external-login review artifacts removed; keep decisions, ledger, and QA checklist under `docs/external-login-brand/`.
+
 ## 0.5.2 - 2026-07-31
 
 Optional application security lands as **independent, off-by-default switches** — not a full MLPS Level-3 profile. Also fixes SQL Server long-text mapping that broke Chinese error text in the job scheduler suite.
