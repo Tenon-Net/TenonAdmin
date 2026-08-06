@@ -18,10 +18,11 @@
 | [create-job.md](create-job.md) | **给自己的模块加定时任务** | 写 `IAdminJob`、注册一行、后台建任务或写种子;HTTP/SQL 任务与五个常见坑 |
 | [create-page-variant.md](create-page-variant.md) | 非标准页面模板 | 树表、主从分栏、侧栏筛选 |
 | [write-docs.md](write-docs.md) | **文档写作规范** | 写或改 `site/` 下任何一页；中英双语的口吻、标点、开头、破折号 + 闸门 |
+| [tenon-release.md](tenon-release.md) | **TenonAdmin 发版**（`/tenon-release`） | 定版 → CHANGELOG → 双前端 + 文档站徽章 → 验绿 → 合 main → 打 tag → 盯 CI / 改 Release 说明 |
 
 ## 使用方式
 
-### Claude Code
+### Claude Code / Grok
 
 项目已配置 `.claude/skills/` 包装（薄壳，单一真源仍是本目录的 md），直接输入：
 
@@ -36,9 +37,22 @@
 /create-job
 /create-page-variant
 /write-docs
+/tenon-release
 ```
 
-也支持自动触发——对 Claude 说"帮我加一个产品管理模块"即可匹配对应 skill。
+也支持自动触发——对 Claude 说"帮我加一个产品管理模块"即可匹配对应 skill。Grok 同样扫描 `.claude/skills/`。
+
+### Codex
+
+Codex **不扫** `.claude/skills/`。项目级 skill 要放在：
+
+| 路径 | 作用 |
+|------|------|
+| `.agents/skills/<name>/SKILL.md` | 跨 agent 项目级（推荐） |
+| `.codex/skills/<name>/SKILL.md` | 仅 Codex 项目级 |
+| `~/.codex/skills/<name>/SKILL.md` | 用户全局 |
+
+`tenon-release` 已在 `.agents/skills/tenon-release/` 与 `.codex/skills/tenon-release/` 各放一份包装，真源仍是 `skills/tenon-release.md`。装完或新增 skill 后**重启 Codex 会话**才会进列表。
 
 ### 其他 AI 工具
 

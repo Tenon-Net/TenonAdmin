@@ -127,11 +127,15 @@ The full SqlServer suite ran **40–60 min** (measured 2026-07-20: 2302 / 2466 /
 
 ### Module scaffolding
 
-Building a new module (entity / backend CRUD / frontend page / service replacement)? Start from `skills/README.md` — `skills/new-module.md` orchestrates the full flow (entity → backend → tests → `gen:api` → frontend → i18n → menu/permission wiring). Also exposed as slash commands (`/new-module`, `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/create-crud-frontend-react`, `/replace-service`, `/create-job`, `/create-page-variant`) via thin wrappers in `.claude/skills/`; the markdown files in `skills/` are the single source of truth. The frontend CRUD skill is per-template: `create-crud-frontend.md` for `web/` (Vue), `create-crud-frontend-react.md` for `web-react/`.
+Building a new module (entity / backend CRUD / frontend page / service replacement)? Start from `skills/README.md` — `skills/new-module.md` orchestrates the full flow (entity → backend → tests → `gen:api` → frontend → i18n → menu/permission wiring). Also exposed as slash commands (`/new-module`, `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/create-crud-frontend-react`, `/replace-service`, `/create-job`, `/create-page-variant`, `/tenon-release`) via thin wrappers in `.claude/skills/`; the markdown files in `skills/` are the single source of truth. The frontend CRUD skill is per-template: `create-crud-frontend.md` for `web/` (Vue), `create-crud-frontend-react.md` for `web-react/`.
 
 ### Writing docs
 
 Writing or editing any page under `site/`? Read `skills/write-docs.md` first (`/write-docs`) — voice, punctuation, openings, em-dash budget, and the zh-is-source/en-is-translation contract. Its machine-checkable half is enforced by `site/scripts/lint-prose.mjs` (`cd site && npm run lint:prose -- <page>`).
+
+### Releasing
+
+Shipping a TenonAdmin version (changelog, dual frontend + site badge bumps, merge to `main`, `v*` tag, NuGet via `backend-release`)? Use `skills/tenon-release.md` (`/tenon-release`). Human runbook and cadence notes stay in `docs/releasing.md`.
 
 ### Issue tracker
 
