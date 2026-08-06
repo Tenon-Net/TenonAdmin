@@ -105,7 +105,7 @@ public class SessionService(
         var session = await sessions.GetFirstAsync(s => s.SessionId == sessionId);
         if (session is null || session.RevokedAt != null || session.ExpiresAt <= Now) return false;
 
-        var absolute = session.AbsoluteExpiresAt == default ? session.ExpiresAt : session.AbsoluteExpiresAt;
+        var absolute = session.AbsoluteExpiresAt ?? session.ExpiresAt;
         var user = await users.GetByIdAsync(session.UserId);
         var isMfa = user is not null && IsMfaUser(user);
         var idleMinutes = ResolveIdleMinutes(isMfa);
@@ -149,7 +149,7 @@ public class SessionService(
 
         var session = await sessions.GetFirstAsync(s => s.SessionId == rt.SessionId);
         if (session is null) throw new AdminException(ErrorCode.RefreshTokenInvalid);
-        var absolute = session.AbsoluteExpiresAt == default ? session.ExpiresAt : session.AbsoluteExpiresAt;
+        var absolute = session.AbsoluteExpiresAt ?? session.ExpiresAt;
         if (absolute <= Now) throw new AdminException(ErrorCode.RefreshTokenInvalid);
 
         // 原子轮换:仅当仍 Active 才置 Used;rowsAffected==0 说明已被并发轮换,按无效处理

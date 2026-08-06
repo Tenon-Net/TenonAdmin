@@ -289,7 +289,8 @@ public class CookieSessionCsrfTests
         var row = await sessionRepo.GetFirstAsync(s => s.SessionId == sid);
         Assert.NotNull(row);
         // 绝对窗 ≤ now+8h
-        Assert.True(row!.AbsoluteExpiresAt <= clock.GetUtcNow().UtcDateTime.AddHours(8).AddSeconds(2));
+        Assert.NotNull(row!.AbsoluteExpiresAt);
+        Assert.True(row.AbsoluteExpiresAt.Value <= clock.GetUtcNow().UtcDateTime.AddHours(8).AddSeconds(2));
         Assert.True(await sessions.IsActiveAsync(sid));
 
         // 推进超过绝对窗

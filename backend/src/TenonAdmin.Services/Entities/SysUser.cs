@@ -92,11 +92,11 @@ public class SysUser : BaseEntity
     public DateTime? LastSuccessfulLoginAt { get; set; }
 
     /// <summary>管理员显式强制该用户启用 TOTP(只能加严,不能覆盖超管/高敏自动强制)</summary>
-    [SugarColumn(ColumnDescription = "是否强制 TOTP")]
+    [SugarColumn(IsNullable = true, ColumnDescription = "是否强制 TOTP")]
     public bool ForceTotp { get; set; }
 
     /// <summary>是否已完成 TOTP 绑定(有可用 seed)</summary>
-    [SugarColumn(ColumnDescription = "是否已启用 TOTP")]
+    [SugarColumn(IsNullable = true, ColumnDescription = "是否已启用 TOTP")]
     public bool TotpEnabled { get; set; }
 
     /// <summary>TOTP 种子信封(ISecretProtector 加密;明文不落库)</summary>

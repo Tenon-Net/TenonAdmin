@@ -40,8 +40,8 @@ public class SysSession : BaseEntity
     /// 绝对过期时刻(Level3:最长 8 小时;刷新不得突破)。
     /// 默认与 <see cref="ExpiresAt"/> 同语义;Level3 登录时按策略写入,CodeFirst 自动补列。
     /// </summary>
-    [SugarColumn(ColumnDescription = "绝对过期时刻")]
-    public DateTime AbsoluteExpiresAt { get; set; }
+    [SugarColumn(IsNullable = true, ColumnDescription = "绝对过期时刻")]
+    public DateTime? AbsoluteExpiresAt { get; set; }
 
     /// <summary>
     /// 最近活动时间(Level3 闲置判定)。热路径经 Redis 节流后回写,不每请求落库。
