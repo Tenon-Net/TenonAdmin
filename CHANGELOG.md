@@ -15,6 +15,13 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.5.4 - 2026-08-06
+
+### Fixed
+
+- **CodeFirst column upgrades on tables that already have data** (#31). `SysUser.ForceTotp`/`TotpEnabled` and `SysSession.AbsoluteExpiresAt` are now nullable database columns — SQL Server rejects `ADD`ing a `NOT NULL` column without a `DEFAULT` to a non-empty table, so upgrading a live kernel install used to fail on this dialect. Existing rows read back as `NULL`; the read path treats that as the pre-upgrade default (MFA flags `false`, absolute expiry falling back to `ExpiresAt`) without changing the CLR type of the already-published public properties. Covered by a new regression test, `CodeFirstNullableUpgradeTests` (drops the columns from a seeded table, then asserts CodeFirst re-adds them and old rows still read correctly), now also run in the SqlServer dialect-sensitive CI subset.
+- Documented the underlying rule for anyone adding columns to an already-shipped entity: `docs/coding-standards.md` §1.3, a new "已有表加列" section in `skills/create-entity.md`, and a tip box in the [deployment guide](https://tenon.52moyu.net/guide/deployment/) explaining why evolved columns must be nullable.
+
 ## 0.5.3 - 2026-08-03
 
 Two consumer-facing surfaces land on the same patch: **same-process secondary databases** (SqlSugar multi-ConfigId) and **branded external login** (GitHub / personal WeChat packages + dual-template UI, with pending-link hardening).

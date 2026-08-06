@@ -64,7 +64,7 @@ const enThemeConfig = {
     { text: 'Standards', link: '/standard/backend' },
     { text: 'Community', link: '/community/contributing' },
     { text: 'Live Demo', link: 'https://tenonadmin.52moyu.net/login' },
-    { text: '0.5.3', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
+    { text: '0.5.4', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
   ],
   sidebar: {
     '/guide/': enGuideSidebar,
@@ -275,7 +275,7 @@ const zhThemeConfig = {
     { text: '规范', link: '/zh/standard/backend' },
     { text: '参与', link: '/zh/community/contributing' },
     { text: '在线预览', link: 'https://tenonadmin.52moyu.net/login' },
-    { text: '0.5.3', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
+    { text: '0.5.4', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
   ],
   sidebar: {
     '/zh/guide/': zhGuideSidebar,
