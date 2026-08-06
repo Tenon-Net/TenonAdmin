@@ -38,9 +38,11 @@ public class SysSession : BaseEntity
 
     /// <summary>
     /// 绝对过期时刻(Level3:最长 8 小时;刷新不得突破)。
-    /// 默认与 <see cref="ExpiresAt"/> 同语义;Level3 登录时按策略写入,CodeFirst 自动补列。
+    /// 登录建会话时按策略写入;未启用绝对窗时与 <see cref="ExpiresAt"/> 对齐。
+    /// 数据库 NULL = 功能上线前的存量会话;SqlSugar 物化为 <see cref="DateTime.MinValue"/>,读侧回退到 <see cref="ExpiresAt"/>。
+    /// 演进列必须可空:MSSQL 无法对有数据的表 ADD 无 DEFAULT 的 NOT NULL 列。
     /// </summary>
-    [SugarColumn(ColumnDescription = "绝对过期时刻")]
+    [SugarColumn(IsNullable = true, ColumnDescription = "绝对过期时刻")]
     public DateTime AbsoluteExpiresAt { get; set; }
 
     /// <summary>

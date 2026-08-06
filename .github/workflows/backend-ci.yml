@@ -135,7 +135,7 @@ jobs:
           # already covered by the full sqlite/mysql/postgres legs on the same PR; the full SqlServer suite runs nightly
           # (schedule) as the net. Rename a class out of this list and it silently drops to nightly-only — not a coverage
           # hole, just delayed signal. Other legs and the nightly run are unfiltered.
-          TEST_FILTER: ${{ (matrix.db == 'sqlserver' && github.event_name != 'schedule') && 'FullyQualifiedName~DataScopeTests|FullyQualifiedName~SoftDeleteAuditTests|FullyQualifiedName~OrgAuditEntityTests|FullyQualifiedName~SeedUpgradeTests|FullyQualifiedName~RecycleBinTests|FullyQualifiedName~UserCrudTests|FullyQualifiedName~DictCrudTests|FullyQualifiedName~ReplaceabilityTests|FullyQualifiedName~ProductionBootstrapTests|FullyQualifiedName~JobElectionTests|FullyQualifiedName~JobClaimTests|FullyQualifiedName~JobSchedulerTests' || '' }}
+          TEST_FILTER: ${{ (matrix.db == 'sqlserver' && github.event_name != 'schedule') && 'FullyQualifiedName~DataScopeTests|FullyQualifiedName~SoftDeleteAuditTests|FullyQualifiedName~OrgAuditEntityTests|FullyQualifiedName~SeedUpgradeTests|FullyQualifiedName~CodeFirstNullableUpgradeTests|FullyQualifiedName~RecycleBinTests|FullyQualifiedName~UserCrudTests|FullyQualifiedName~DictCrudTests|FullyQualifiedName~ReplaceabilityTests|FullyQualifiedName~ProductionBootstrapTests|FullyQualifiedName~JobElectionTests|FullyQualifiedName~JobClaimTests|FullyQualifiedName~JobSchedulerTests' || '' }}
         run: |
           if [ -n "$TEST_FILTER" ]; then
             echo "SqlServer push/PR leg: dialect-sensitive subset only (full SqlServer suite runs nightly)"
