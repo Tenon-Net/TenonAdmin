@@ -91,12 +91,19 @@ public class SysUser : BaseEntity
     [SugarColumn(IsNullable = true, ColumnDescription = "最近成功登录时间")]
     public DateTime? LastSuccessfulLoginAt { get; set; }
 
-    /// <summary>管理员显式强制该用户启用 TOTP(只能加严,不能覆盖超管/高敏自动强制)</summary>
-    [SugarColumn(ColumnDescription = "是否强制 TOTP")]
+    /// <summary>
+    /// 管理员显式强制该用户启用 TOTP(只能加严,不能覆盖超管/高敏自动强制)。
+    /// 数据库 NULL = 功能上线前的存量用户;SqlSugar 物化为 false,不改变已发布公共属性的 CLR 类型。
+    /// 演进列必须可空:MSSQL 无法对有数据的表 ADD 无 DEFAULT 的 NOT NULL 列。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "是否强制 TOTP")]
     public bool ForceTotp { get; set; }
 
-    /// <summary>是否已完成 TOTP 绑定(有可用 seed)</summary>
-    [SugarColumn(ColumnDescription = "是否已启用 TOTP")]
+    /// <summary>
+    /// 是否已完成 TOTP 绑定(有可用 seed)。
+    /// 数据库 NULL = 功能上线前的存量用户;SqlSugar 物化为 false,不改变已发布公共属性的 CLR 类型。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "是否已启用 TOTP")]
     public bool TotpEnabled { get; set; }
 
     /// <summary>TOTP 种子信封(ISecretProtector 加密;明文不落库)</summary>

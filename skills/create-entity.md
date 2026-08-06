@@ -145,6 +145,39 @@ public OrderStatus Status { get; set; }
 
 继承 `DataEntity` 的实体，`IRepository` 的 `UpdateAsync`/`DeleteAsync` 已内置数据范围守卫——越权改删他机构行会被拒。业务服务仍建议改/删前先 `GetAsync`（经范围过滤），以返回准确的"未找到"错误。
 
+## 已有表加列（演进列 / 升级补列）
+
+CodeFirst **只加列、不删列、不改窄**。对**已经发过版、库里可能有数据**的表再加字段时：
+
+| 情况 | 怎么建 |
+|---|---|
+| **新表**（首次 `InitTables` 时还不存在） | 可用 `NOT NULL`：`bool` / `DateTime` / 非空 `string` 均可 |
+| **已有表加列** | **数据库列必须可空**：`[SugarColumn(IsNullable = true)]`；新增属性可用 `T?` |
+| 业务默认 false / 未绑定 / 未设置 | DB 允许 `NULL`；**读侧**把它当默认；已发布公共属性保留 CLR 类型并锁定 ORM 默认值物化 |
+
+**为什么**：MSSQL 不能对「有数据的表」`ADD` 无 `DEFAULT` 的 `NOT NULL` 列；SQLite 开发库往往不炸，生产 SqlServer 升级会挂。本仓不做自动改窄 / 回填后改 `NOT NULL`。
+
+错误示例（已有表上禁止）：
+
+```csharp
+public bool ForceTotp { get; set; }           // 非空 bool 新列
+public DateTime AbsoluteExpiresAt { get; set; } // 非空时间新列
+```
+
+正确示例（新增属性；对齐 `SysUser.ForceTotp` / `SysSession.AbsoluteExpiresAt` 的数据库列）：
+
+```csharp
+[SugarColumn(IsNullable = true, ColumnDescription = "是否强制 TOTP")]
+public bool? ForceTotp { get; set; }   // null = 补列前存量行；读侧 ForceTotp == true
+
+[SugarColumn(IsNullable = true, ColumnDescription = "绝对过期时刻")]
+public DateTime? AbsoluteExpiresAt { get; set; }  // 读侧 AbsoluteExpiresAt ?? ExpiresAt
+```
+
+已发布的公共属性不能仅为迁移改成 `T?`：保留原 CLR 类型，用测试锁住存量 `NULL` 的默认值物化和业务回退，见 `SysUser.ForceTotp` / `SysSession.AbsoluteExpiresAt`。
+
+回归锁：`CodeFirstNullableUpgradeTests`（非空表砍列再 InitTables 补回）。
+
 ## 注意事项
 
 - 实体建完后，CodeFirst 会在应用启动时自动建表（`DatabaseInitializer`）
@@ -154,3 +187,4 @@ public OrderStatus Status { get; set; }
       o.ApplicationAssemblies.Add(typeof(Program).Assembly));
   ```
 - 不需要手动建表或写迁移脚本
+- **已有表加列**见上一节，勿在演进列上使用非空无默认值

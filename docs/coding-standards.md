@@ -52,6 +52,7 @@ TenonAdmin  元包：只引用 AspNetCore，消费方装它即拉全栈。
   - `BaseEntity`（`SqlSugar/Entities/BaseEntity.cs`）：主键 + 审计四件套（CreateTime/CreateUserId/UpdateTime/UpdateUserId）+ 软删 `IsDelete`。这些字段由 AOP 自动填，业务代码零感知。
   - `DataEntity`（带机构数据范围的业务表继承它，含 `CreateOrgId` 锚点）——需要按机构做数据隔离时用它。
 - **SqlSugar 特性**：`[SugarTable("表名", TableDescription=…)]`、唯一索引 `[SugarIndex(..., IsUnique=true)]`、列 `[SugarColumn(Length=…, ColumnDescription=…, IsNullable=…)]`。参照 `Entities/SysDictType.cs`。
+- **演进列（已有表加字段）**：数据库列必须可空——`IsNullable = true`；读侧定义存量 `NULL` 的默认语义。新增属性可用 `T?` 表达该语义，但不得仅为迁移而改变已发布公共属性的 CLR 类型；保留既有 `bool` / `DateTime` 时，锁定 ORM 的默认值物化和读侧回退。禁止对已发版实体新增无 DEFAULT 的 `NOT NULL` 列（MSSQL 非空表 `ADD` 会失败）。新表首建不受此限。见 `skills/create-entity.md`「已有表加列」、`CodeFirstNullableUpgradeTests`。
 - **不可变约定写进注释**：如“Code 创建后不可变”，并在 Service 的 Update 里落实（不改该字段）。
 
 ### 1.4 服务规范
