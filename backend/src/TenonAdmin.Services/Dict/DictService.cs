@@ -69,8 +69,8 @@ public class DictService(
     public virtual async Task DeleteTypeAsync(long id)
     {
         var entity = await GetTypeAsync(id);
+        AdminException.ThrowIf(entity.Id < 1000, ErrorCode.SeedDataProtected);
         await types.DeleteAsync(id);
-        // 关联字典项按 Code 归属,类型删除时一并清理,避免留下孤儿项
         await items.Db.Deleteable<SysDictItem>().Where(i => i.DictTypeCode == entity.Code).ExecuteCommandAsync();
         await InvalidateAsync(entity.Code);
     }
@@ -81,6 +81,10 @@ public class DictService(
         if (ids.Count == 0) return;
         var idList = ids.ToList();
         var targets = await types.AsQueryable().Where(t => idList.Contains(t.Id)).ToListAsync();
+        foreach (var t in targets)
+        {
+            AdminException.ThrowIf(t.Id < 1000, ErrorCode.SeedDataProtected);
+        }
         foreach (var t in targets)
         {
             await types.DeleteAsync(t.Id);
@@ -120,6 +124,11 @@ public class DictService(
     /// <inheritdoc />
     public virtual async Task<long> AddItemAsync(DictItemInput input)
     {
+        AdminException.ThrowIf(
+            await items.AsQueryable().ClearFilter<ISoftDelete>()
+                .AnyAsync(i => i.DictTypeCode == input.DictTypeCode && i.Value == input.Value),
+            ErrorCode.DictItemValueExists);
+
         var entity = new SysDictItem
         {
             DictTypeCode = input.DictTypeCode,
@@ -139,6 +148,11 @@ public class DictService(
         var entity = await items.GetByIdAsync(id);
         AdminException.ThrowIf(entity is null, ErrorCode.DictItemNotFound);
 
+        AdminException.ThrowIf(
+            await items.AsQueryable().ClearFilter<ISoftDelete>()
+                .AnyAsync(i => i.DictTypeCode == input.DictTypeCode && i.Value == input.Value && i.Id != id),
+            ErrorCode.DictItemValueExists);
+
         var oldTypeCode = entity!.DictTypeCode;
         entity.DictTypeCode = input.DictTypeCode;
         entity.Label = input.Label;
@@ -157,9 +171,10 @@ public class DictService(
     {
         var entity = await items.GetByIdAsync(id);
         AdminException.ThrowIf(entity is null, ErrorCode.DictItemNotFound);
+        AdminException.ThrowIf(entity!.Id < 1000, ErrorCode.SeedDataProtected);
 
         await items.DeleteAsync(id);
-        await InvalidateAsync(entity!.DictTypeCode);
+        await InvalidateAsync(entity.DictTypeCode);
     }
 
     /// <inheritdoc />
@@ -168,8 +183,9 @@ public class DictService(
         if (ids.Count == 0) return;
         var idList = ids.ToList();
         var targets = await items.AsQueryable().Where(i => idList.Contains(i.Id)).ToListAsync();
+        foreach (var it in targets)
+            AdminException.ThrowIf(it.Id < 1000, ErrorCode.SeedDataProtected);
         foreach (var it in targets) await items.DeleteAsync(it.Id);
-        // 所涉类型去重后各失效一次(避免同类型重复失效)
         foreach (var code in targets.Select(i => i.DictTypeCode).Distinct()) await InvalidateAsync(code);
     }
 

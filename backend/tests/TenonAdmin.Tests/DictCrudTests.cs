@@ -171,4 +171,46 @@ public class DictCrudTests
         Assert.Equal(43001, get1.GetProperty("code").GetInt32());
         Assert.Equal(43001, get2.GetProperty("code").GetInt32());
     }
+
+    // ── QA13: Seed data protection ──────────────────────────────────────
+
+    [Fact]
+    public async Task Delete_seed_dict_type_returns_SeedDataProtected()
+    {
+        using var f = new AdminAppFactory { DisabledModules = [] };
+        var admin = await SuperAdminClient(f);
+
+        // Id=1 is the seed dict type "common_status"
+        var env = await (await admin.DeleteAsync("/api/v1/sys/dict/type/1")).ReadEnvelope();
+        Assert.Equal(43010, env.GetProperty("code").GetInt32());
+    }
+
+    [Fact]
+    public async Task Delete_seed_dict_item_returns_SeedDataProtected()
+    {
+        using var f = new AdminAppFactory { DisabledModules = [] };
+        var admin = await SuperAdminClient(f);
+
+        // Id=1 is the seed dict item under "common_status"
+        var env = await (await admin.DeleteAsync("/api/v1/sys/dict/item/1")).ReadEnvelope();
+        Assert.Equal(43010, env.GetProperty("code").GetInt32());
+    }
+
+    // ── QA13: Dict item value uniqueness ────────────────────────────────
+
+    [Fact]
+    public async Task Add_duplicate_dict_item_value_returns_DictItemValueExists()
+    {
+        using var f = new AdminAppFactory { DisabledModules = [] };
+        var admin = await SuperAdminClient(f);
+
+        await admin.PostJson("/api/v1/sys/dict/type",
+            new { code = "dup_val_test", name = "值唯一测试", sort = 1, enabled = true });
+        await admin.PostJson("/api/v1/sys/dict/item",
+            new { dictTypeCode = "dup_val_test", label = "标签A", value = "same_val", sort = 1, enabled = true });
+
+        var dup = await (await admin.PostJson("/api/v1/sys/dict/item",
+            new { dictTypeCode = "dup_val_test", label = "标签B", value = "same_val", sort = 2, enabled = true })).ReadEnvelope();
+        Assert.Equal(43011, dup.GetProperty("code").GetInt32());
+    }
 }

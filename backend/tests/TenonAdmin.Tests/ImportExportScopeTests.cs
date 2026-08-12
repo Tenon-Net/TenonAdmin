@@ -90,7 +90,7 @@ public class ImportExportScopeTests
                     {
                         ["Account"] = "out-of-scope-user",
                         ["Name"] = "越权机构用户",
-                        ["OrgName"] = "人事部",
+                        ["OrgCode"] = "tenon_hr",
                         ["Gender"] = "男",
                     },
                     errors = Array.Empty<object>(),

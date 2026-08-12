@@ -21,7 +21,7 @@ const message = useMessage()
 const { run } = useConfirm()
 const authStore = useAuthStore()
 const tableRef = ref<ProTableInst<SysConfig>>()
-const STRUCTURED_GROUPS = ['sys', 'security', 'upload', 'externalauth']
+const STRUCTURED_GROUPS = ['sys', 'security', 'upload', 'externalauth', 'job']
 
 // 内置分组有专属结构化表单;此处仍允许消费方自定义任意分组(含空分组),但不再重复展示内置项。
 const fetchOtherConfigs = (params: Parameters<typeof configApi.page>[0]) =>

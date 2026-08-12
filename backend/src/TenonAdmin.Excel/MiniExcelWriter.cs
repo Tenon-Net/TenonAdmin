@@ -26,7 +26,7 @@ public sealed class MiniExcelWriter : IExcelWriter
             foreach (var col in sheet.Columns)
             {
                 if (row.TryGetValue(col.Key, out var val) && val is not null)
-                    dr[col.Title] = val;
+                    dr[col.Title] = val is string s ? (object?)ExcelSanitizer.Escape(s) ?? DBNull.Value : val;
                 else
                     dr[col.Title] = DBNull.Value;
             }

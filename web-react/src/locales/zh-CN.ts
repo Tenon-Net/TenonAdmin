@@ -484,7 +484,12 @@ export default {
     deleteConfirm: '确定删除配置「{name}」?',
     saved: '保存成功',
     deleted: '已删除',
-    tab: { base: '系统基础', security: '安全策略', externalAuth: '第三方登录', upload: '上传策略', other: '其他配置' },
+    tab: { base: '系统基础', security: '安全策略', externalAuth: '第三方登录', upload: '上传策略', job: '定时任务', other: '其他配置' },
+    job: {
+      logRetentionDays: '日志保留天数',
+      alertEmails: '告警邮箱',
+      alertEmailsHint: '多个邮箱用逗号分隔',
+    },
     externalAuth: {
       hint: '控制登录页显示哪些已部署的第三方登录方式。关闭后按钮隐藏,授权入口同步拒绝。连接密钥仍在服务器配置文件中。',
       empty: '当前未注册任何第三方登录(需在部署中装包或配置 OIDC)',
@@ -1140,7 +1145,7 @@ export default {
     },
     menu: { notFound: '菜单不存在', hasChildren: '存在子节点,不可删除', invalidParent: '上级菜单无效(不能指向自身或其子节点)' },
     session: { notFound: '会话不存在或已下线' },
-    dict: { typeNotFound: '字典类型不存在', typeCodeExists: '字典类型编码已存在', itemNotFound: '字典项不存在' },
+    dict: { typeNotFound: '字典类型不存在', typeCodeExists: '字典类型编码已存在', itemNotFound: '字典项不存在', seedProtected: '种子数据受保护,不可删除', itemValueExists: '字典项值在该类型下已存在' },
     config: { notFound: '配置不存在', keyExists: '配置键已存在' },
     notice: { notFound: '通知不存在' },
     file: { empty: '文件为空', tooLarge: '文件超出大小限制', extNotAllowed: '不支持的文件类型', notFound: '文件不存在', chunkMissing: '分片缺失,请重试上传', chunkHashMismatch: '文件校验失败,请重新上传' },

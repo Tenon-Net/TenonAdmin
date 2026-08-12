@@ -474,7 +474,12 @@ export default {
     deleteConfirm: 'Delete config "{name}"?',
     saved: 'Saved',
     deleted: 'Deleted',
-    tab: { base: 'General', security: 'Security', externalAuth: 'External login', upload: 'Upload', other: 'Other' },
+    tab: { base: 'General', security: 'Security', externalAuth: 'External login', upload: 'Upload', job: 'Scheduled jobs', other: 'Other' },
+    job: {
+      logRetentionDays: 'Log retention days',
+      alertEmails: 'Alert emails',
+      alertEmailsHint: 'Separate multiple emails with commas',
+    },
     externalAuth: {
       hint: 'Choose which deployed third-party sign-in methods appear on the login page. Disabled methods are hidden and authorize is rejected. Secrets stay in server appsettings.',
       empty: 'No external login providers registered (install satellite packages or configure OIDC)',
@@ -1117,7 +1122,7 @@ export default {
     },
     menu: { notFound: 'Menu not found', hasChildren: 'Menu has children and cannot be deleted', invalidParent: 'Invalid parent menu (cannot be itself or its descendant)' },
     session: { notFound: 'Session not found or already signed out' },
-    dict: { typeNotFound: 'Dict type not found', typeCodeExists: 'Dict type code exists', itemNotFound: 'Dict item not found' },
+    dict: { typeNotFound: 'Dict type not found', typeCodeExists: 'Dict type code exists', itemNotFound: 'Dict item not found', seedProtected: 'Seed data is protected and cannot be deleted', itemValueExists: 'Dict item value already exists under this type' },
     config: { notFound: 'Config not found', keyExists: 'Config key exists' },
     notice: { notFound: 'Notification not found', receiverRequired: 'At least one receiver must be specified', receiverNotFound: 'Receiver does not exist or is disabled' },
     file: { empty: 'Empty file', tooLarge: 'File too large', extNotAllowed: 'File type not allowed', notFound: 'File not found', chunkMissing: 'Missing chunk, please retry upload', chunkHashMismatch: 'File integrity check failed, please re-upload' },

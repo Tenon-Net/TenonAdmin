@@ -16,7 +16,8 @@ public partial class UserImportProfile(
     IRepository<SysPosition> positions,
     IRepository<SysRole> roles,
     IRbacService rbac,
-    IDataScopeContext dataScope) : IImportProfile
+    IDataScopeContext dataScope,
+    IRoleGrantPolicy? roleGrantPolicy = null) : IImportProfile
 {
     /// <inheritdoc />
     public virtual string Code => "sys-user";
@@ -38,15 +39,15 @@ public partial class UserImportProfile(
         },
         new()
         {
-            Key = "OrgName", Title = "所属机构", Required = true, Width = 18,
-            Hint = "填机构名称,如:技术部",
+            Key = "OrgCode", Title = "所属机构编码", Required = true, Width = 18,
+            Hint = "填机构编码,如:tech",
         },
-        new() { Key = "PositionName", Title = "职位", Width = 14, Hint = "填职位名称,如:专员" },
-        new() { Key = "DirectorName", Title = "直属主管", Width = 14, Hint = "填主管姓名" },
+        new() { Key = "PositionCode", Title = "职位编码", Width = 14, Hint = "填职位编码,如:specialist" },
+        new() { Key = "DirectorAccount", Title = "直属主管账号", Width = 14, Hint = "填主管登录账号" },
         new()
         {
-            Key = "RoleNames", Title = "角色", Width = 22,
-            Hint = "多个角色用逗号分隔,如:系统管理员,全部数据",
+            Key = "RoleCodes", Title = "角色编码", Width = 22,
+            Hint = "多个角色编码用逗号分隔,如:admin,data_all",
         },
         new()
         {
@@ -79,41 +80,41 @@ public partial class UserImportProfile(
             && !row.Errors.Any(e => e.ColumnKey == "Enabled"))
             errors.Add(new CellError("Enabled", ErrorCode.ImportCellFormatInvalid));
 
-        // 机构按名查 + 越权
-        if (Cell(row, "OrgName") is { Length: > 0 } orgName)
+        // 机构按编码查 + 越权
+        if (Cell(row, "OrgCode") is { Length: > 0 } orgCode)
         {
-            var org = await orgs.GetFirstAsync(o => o.Name == orgName.Trim());
+            var org = await orgs.GetFirstAsync(o => o.Code == orgCode.Trim());
             if (org is null)
-                errors.Add(new CellError("OrgName", ErrorCode.ImportCellRefNotFound));
+                errors.Add(new CellError("OrgCode", ErrorCode.ImportCellRefNotFound));
             else if (!IsOrgInScope(org.Id))
-                errors.Add(new CellError("OrgName", ErrorCode.ImportOrgOutOfScope));
+                errors.Add(new CellError("OrgCode", ErrorCode.ImportOrgOutOfScope));
         }
 
-        // 职位按名查
-        if (Cell(row, "PositionName") is { Length: > 0 } posName)
+        // 职位按编码查
+        if (Cell(row, "PositionCode") is { Length: > 0 } posCode)
         {
-            var pos = await positions.GetFirstAsync(p => p.Name == posName.Trim());
+            var pos = await positions.GetFirstAsync(p => p.Code == posCode.Trim());
             if (pos is null)
-                errors.Add(new CellError("PositionName", ErrorCode.ImportCellRefNotFound));
+                errors.Add(new CellError("PositionCode", ErrorCode.ImportCellRefNotFound));
         }
 
-        // 主管按姓名查
-        if (Cell(row, "DirectorName") is { Length: > 0 } dirName)
+        // 主管按账号查
+        if (Cell(row, "DirectorAccount") is { Length: > 0 } dirAccount)
         {
-            var dir = await userRepo.GetFirstAsync(u => u.Name == dirName.Trim());
+            var dir = await userRepo.GetFirstAsync(u => u.Account == dirAccount.Trim());
             if (dir is null)
-                errors.Add(new CellError("DirectorName", ErrorCode.ImportCellRefNotFound));
+                errors.Add(new CellError("DirectorAccount", ErrorCode.ImportCellRefNotFound));
         }
 
-        // 角色按名查(逗号分隔)
-        if (Cell(row, "RoleNames") is { Length: > 0 } roleNames)
+        // 角色按编码查(逗号分隔)
+        if (Cell(row, "RoleCodes") is { Length: > 0 } roleCodes)
         {
-            foreach (var name in SplitNames(roleNames))
+            foreach (var code in SplitNames(roleCodes))
             {
-                var role = await roles.GetFirstAsync(r => r.Name == name);
+                var role = await roles.GetFirstAsync(r => r.Code == code);
                 if (role is null)
                 {
-                    errors.Add(new CellError("RoleNames", ErrorCode.ImportCellRefNotFound));
+                    errors.Add(new CellError("RoleCodes", ErrorCode.ImportCellRefNotFound));
                     break;
                 }
             }
@@ -152,40 +153,37 @@ public partial class UserImportProfile(
         var enabled = ParseEnabled(Cell(row, "Enabled")) ?? true;
 
         long? orgId = null;
-        if (Cell(row, "OrgName") is { Length: > 0 } orgName)
+        if (Cell(row, "OrgCode") is { Length: > 0 } orgCode)
         {
-            var org = await orgs.GetFirstAsync(o => o.Name == orgName.Trim())
+            var org = await orgs.GetFirstAsync(o => o.Code == orgCode.Trim())
                 ?? throw new AdminException(ErrorCode.ImportCellRefNotFound);
-            // 提交路径再守一次越权(Validate 已查,防绕过)
             AdminException.ThrowIf(!IsOrgInScope(org.Id), ErrorCode.ImportOrgOutOfScope);
             orgId = org.Id;
         }
 
         long? positionId = null;
-        if (Cell(row, "PositionName") is { Length: > 0 } posName)
+        if (Cell(row, "PositionCode") is { Length: > 0 } posCode)
         {
-            var pos = await positions.GetFirstAsync(p => p.Name == posName.Trim())
+            var pos = await positions.GetFirstAsync(p => p.Code == posCode.Trim())
                 ?? throw new AdminException(ErrorCode.ImportCellRefNotFound);
             positionId = pos.Id;
         }
 
         long? directorId = null;
-        if (Cell(row, "DirectorName") is { Length: > 0 } dirName)
+        if (Cell(row, "DirectorAccount") is { Length: > 0 } dirAccount)
         {
-            var dir = await userRepo.GetFirstAsync(u => u.Name == dirName.Trim())
+            var dir = await userRepo.GetFirstAsync(u => u.Account == dirAccount.Trim())
                 ?? throw new AdminException(ErrorCode.ImportCellRefNotFound);
             directorId = dir.Id;
         }
 
-        // RoleNames 有值才解析;覆盖且留空 = 保持原角色(UpdateAsync 是全量重设,
-        // 空列表会把已授权清掉——导入列是可选的,空白不等于「清空」)。
         List<long>? roleIds = null;
-        if (Cell(row, "RoleNames") is { Length: > 0 } roleNames)
+        if (Cell(row, "RoleCodes") is { Length: > 0 } roleCodes)
         {
             roleIds = [];
-            foreach (var rn in SplitNames(roleNames))
+            foreach (var rc in SplitNames(roleCodes))
             {
-                var role = await roles.GetFirstAsync(r => r.Name == rn)
+                var role = await roles.GetFirstAsync(r => r.Code == rc)
                     ?? throw new AdminException(ErrorCode.ImportCellRefNotFound);
                 roleIds.Add(role.Id);
             }
@@ -201,10 +199,17 @@ public partial class UserImportProfile(
                 .ToListAsync();
             var entity = existing.FirstOrDefault();
             AdminException.ThrowIf(entity is null, ErrorCode.UserNotFound);
-            // UpdateAsync 走 Id;软删行 GetById 会 miss——此处若已软删则拒绝覆盖(需管理员先恢复)
             AdminException.ThrowIf(entity!.IsDelete, ErrorCode.UserNotFound);
+            AdminException.ThrowIf(!IsOrgInScope(entity.OrgId ?? 0), ErrorCode.ImportOrgOutOfScope);
 
             roleIds ??= (await rbac.GetUserRoleIdsAsync(entity.Id)).ToList();
+
+            if (roleGrantPolicy is not null && roleIds is { Count: > 0 })
+            {
+                var existingRoleIds = (await rbac.GetUserRoleIdsAsync(entity.Id)).ToHashSet();
+                var addedRoleIds = roleIds.Where(r => !existingRoleIds.Contains(r)).ToList();
+                await roleGrantPolicy.EnsureGrantableAsync(addedRoleIds, entity.Id, orgId ?? entity.OrgId);
+            }
 
             await users.UpdateAsync(entity.Id, new UpdateUserInput
             {
@@ -222,7 +227,9 @@ public partial class UserImportProfile(
         }
         else
         {
-            // 坑 5:必须走 IUserService.AddAsync,不直插实体
+            if (roleGrantPolicy is not null && roleIds is { Count: > 0 })
+                await roleGrantPolicy.EnsureGrantableAsync(roleIds, null, orgId);
+
             await users.AddAsync(new AddUserInput
             {
                 Account = account,

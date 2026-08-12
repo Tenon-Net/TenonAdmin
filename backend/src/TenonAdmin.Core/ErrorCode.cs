@@ -316,6 +316,14 @@ public enum ErrorCode
     [MsgKey("error.config.keyExists")]
     ConfigKeyExists = 43005,
 
+    /// <summary>种子数据受保护(Id &lt; 1000):不可删除,须通过数据库直接操作</summary>
+    [MsgKey("error.dict.seedProtected")]
+    SeedDataProtected = 43010,
+
+    /// <summary>字典项 Value 在该类型下已存在(含软删行;唯一约束)</summary>
+    [MsgKey("error.dict.itemValueExists")]
+    DictItemValueExists = 43011,
+
     // ── 44xxx 文件上传 ───────────────────────────────────────────────
 
     /// <summary>空文件(未选择文件或文件长度为 0)</summary>

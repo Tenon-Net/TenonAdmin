@@ -10,6 +10,7 @@ import SysBaseConfig from './SysBaseConfig'
 import SecurityConfig from './SecurityConfig'
 import ExternalAuthConfig from './ExternalAuthConfig'
 import UploadConfig from './UploadConfig'
+import JobConfig from './JobConfig'
 import OtherConfig from './OtherConfig'
 
 export default function ConfigPage() {
@@ -20,6 +21,7 @@ export default function ConfigPage() {
       { key: 'security', label: t('config.tab.security'), children: <SecurityConfig /> },
       { key: 'externalAuth', label: t('config.tab.externalAuth'), children: <ExternalAuthConfig /> },
       { key: 'upload', label: t('config.tab.upload'), children: <UploadConfig /> },
+      { key: 'job', label: t('config.tab.job'), children: <JobConfig /> },
       { key: 'other', label: t('config.tab.other'), children: <OtherConfig /> },
     ],
     [t],
