@@ -104,10 +104,11 @@ internal sealed class DefaultMenuSeed : ISeedData<SysMenu>
         new SysMenu { Id = 155, ParentId = 55, Type = MenuType.Button, Title = "安全诊断-预检(历史路径)", Permission = "GET:/api/v1/sys/level3/precheck", Sort = 36, Enabled = false, Visible = false },
         new SysMenu { Id = 156, ParentId = 55, Type = MenuType.Button, Title = "MFA-清除用户二因子", Permission = "POST:/api/v1/sys/mfa/clear", Sort = 29, Enabled = true },
 
-        // 字典管理页(R5:DictController 主从 CRUD)。类型分页 21、项查询 22、项新增 23;写端点码 61-65;82 管理端项分页。
+        // 字典管理页(R5:DictController 主从 CRUD)。类型分页 21、项新增 23;写端点码 61-65;82 管理端项分页。
+        // 22("字典项-查询" GET items/{typecode})已在 QA12 改 [ActiveSession](任何登录用户可读,不占权限码),
+        // 号段保留勿复用——不再种子化(否则会撞 PermissionCodeConsistencyTests:种子码找不到对应 [RolePermission] 端点)。
         new SysMenu { Id = 60, ParentId = 20, Type = MenuType.Menu, Title = "字典管理", Permission = "", Path = "/system/dict", Component = "system/dict/index", Icon = "ph:book-open-text-duotone", Sort = 2, Enabled = true, Visible = true },
         new SysMenu { Id = 21, ParentId = 60, Type = MenuType.Button, Title = "字典类型-分页", Permission = "GET:/api/v1/sys/dict/type/page", Sort = 6, Enabled = true },
-        new SysMenu { Id = 22, ParentId = 60, Type = MenuType.Button, Title = "字典项-查询", Permission = "GET:/api/v1/sys/dict/items/{typecode}", Sort = 7, Enabled = true },
         new SysMenu { Id = 23, ParentId = 60, Type = MenuType.Button, Title = "字典项-新增", Permission = "POST:/api/v1/sys/dict/item", Sort = 8, Enabled = true },
         new SysMenu { Id = 61, ParentId = 60, Type = MenuType.Button, Title = "字典类型-新增", Permission = "POST:/api/v1/sys/dict/type", Sort = 9, Enabled = true },
         new SysMenu { Id = 62, ParentId = 60, Type = MenuType.Button, Title = "字典类型-更新", Permission = "PUT:/api/v1/sys/dict/type/{id}", Sort = 10, Enabled = true },

@@ -242,6 +242,19 @@ public class SessionService(
     }
 
     /// <inheritdoc />
+    public virtual async Task RevokeAllForUserExceptAsync(long userId, string? exceptSessionId)
+    {
+        var active = await sessions.AsQueryable()
+            .Where(s => s.UserId == userId && s.RevokedAt == null && s.ExpiresAt > Now)
+            .ToListAsync();
+        foreach (var s in active)
+        {
+            if (!string.IsNullOrEmpty(exceptSessionId) && s.SessionId == exceptSessionId) continue;
+            await RevokeAsync(s.SessionId);
+        }
+    }
+
+    /// <inheritdoc />
     public virtual Task<PagedList<OnlineSessionItem>> ListOnlineAsync(SessionPageInput input) =>
         sessions.AsQueryable()
             .Where(s => s.RevokedAt == null && s.ExpiresAt > Now)

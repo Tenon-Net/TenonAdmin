@@ -27,7 +27,9 @@ public class UserService(
     // 统一时间源(§1.11):尾随可选参数,DI 正常注入;消费者子类省略也能编译(§5.3)
     TimeProvider? time = null,
     // 导出行数上限(excel-ledger §6.1);可选尾参,未注入时用默认 50000
-    AdminExcelOptions? excel = null) : IUserService
+    AdminExcelOptions? excel = null,
+    // QA25.3:头像 URL 校验(默认只放行 null/空白或本地签名直链);未注入(纯 Services 宿主)时跳过校验
+    IAvatarUrlValidator? avatarValidator = null) : IUserService
 {
     // 生成随机初始口令的字符集:去掉易混字符(0/O、1/l/I),含大小写+数字+符号。
     private const string PASSWORD_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*";
@@ -191,6 +193,9 @@ public class UserService(
         AdminException.ThrowIf(
             await users.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(u => u.Account == input.Account),
             ErrorCode.AccountExists);
+        AdminException.ThrowIf(
+            avatarValidator is not null && !avatarValidator.IsValid(input.Avatar),
+            ErrorCode.AvatarUrlInvalid);
 
         // 仅校验管理员显式提供的口令;未提供时走随机/默认强口令,不套策略(生成的随机口令无特殊字符,避免误伤)
         if (!string.IsNullOrEmpty(input.Password)) await policy.ValidatePasswordAsync(input.Password);
@@ -235,6 +240,9 @@ public class UserService(
         // 超管护栏(与 SetEnabledAsync/DeleteAsync 同源):不可经普通更新面停用/降权超管——
         // 否则被授予用户更新权限码的下位者(或超管误操作)可把 Enabled 置 false + 清空角色,把最高账号锁死(P1-8)。
         AdminException.ThrowIf(user!.IsSuperAdmin && !input.Enabled, ErrorCode.SuperAdminProtected);
+        AdminException.ThrowIf(
+            avatarValidator is not null && !avatarValidator.IsValid(input.Avatar),
+            ErrorCode.AvatarUrlInvalid);
 
         // 只改资料字段;Account/Password/IsSuperAdmin 原样保留(整行更新时未改动即不变)
         user.Name = input.Name;

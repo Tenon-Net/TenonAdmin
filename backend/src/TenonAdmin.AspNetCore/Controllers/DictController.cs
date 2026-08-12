@@ -5,8 +5,10 @@ using TenonAdmin.Services;
 namespace TenonAdmin.AspNetCore;
 
 /// <summary>
-/// 字典管理端点(类型 + 项的标准增删改查)。<c>items/{typeCode}</c> 是前端下拉的缓存数据源;
-/// 全部 <c>[RolePermission]</c>——超管放行,普通用户需被授予对应路由权限码。
+/// 字典管理端点(类型 + 项的标准增删改查)。管理端点全部 <c>[RolePermission]</c>——超管放行,
+/// 普通用户需被授予对应路由权限码。<c>items/{typeCode}</c> 例外(QA12):它是前端下拉/字典标签渲染的
+/// 热路径读取,任何已登录用户都该能取到(表单/列表到处要显示字典项),故降为 <c>[ActiveSession]</c>
+/// ——只要求会话有效,不占用一个专门的权限码;管理端点(增删改)仍是 <c>[RolePermission]</c>。
 /// </summary>
 [ApiController]
 [Route("api/v1/sys/dict")]
@@ -59,9 +61,12 @@ public class DictController(IDictService dictService) : ControllerBase
         return Result<bool>.Ok(true);
     }
 
-    /// <summary>按类型编码取启用中的字典项列表(前端下拉数据源,读穿透缓存)</summary>
+    /// <summary>
+    /// 按类型编码取启用中的字典项列表(前端下拉数据源,读穿透缓存)。
+    /// <c>[ActiveSession]</c>(QA12):任何已登录用户都能取,不挂专门权限码。
+    /// </summary>
     [HttpGet("items/{typeCode}")]
-    [RolePermission]
+    [ActiveSession]
     public async Task<Result<IReadOnlyList<SysDictItem>>> GetItems(string typeCode) =>
         Result<IReadOnlyList<SysDictItem>>.Ok(await dictService.GetItemsByTypeAsync(typeCode));
 

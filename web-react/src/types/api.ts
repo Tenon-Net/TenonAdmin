@@ -367,6 +367,7 @@ export interface SysRole {
   sort: number
   enabled: boolean
   remark?: string | null
+  isDelegatable?: boolean | null
   createTime?: string
 }
 
@@ -377,6 +378,7 @@ export interface RoleInput {
   sort: number
   enabled: boolean
   remark?: string | null
+  isDelegatable?: boolean | null
 }
 
 /** 数据范围类型(后端 DataScopeType;存库为 int,枚举值须与后端一致)。 */

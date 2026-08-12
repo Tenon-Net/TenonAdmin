@@ -142,6 +142,11 @@ public static class TenonAdminSetup
         //(<img src> 带不了 Authorization 头 —— 通知正文里的图片全靠它)
         services.TryAddSingleton<IFileUrlSigner>(sp => new FileUrlSigner(sp.GetRequiredService<SymmetricSecurityKey>()));
 
+        // 头像 URL 校验(QA25.3):依赖上面刚注册的 IFileUrlSigner,故放在这层而非 ServicesSetup——
+        // 纯 Services 宿主(WorkerSetup)没有 IFileUrlSigner,PersonalService/UserService 拿到的是可选依赖,
+        // 未注册时就是 null(跳过校验),不会在那种宿主里因缺依赖而 DI 解析失败。
+        services.TryAddSingleton<IAvatarUrlValidator, AvatarUrlValidator>();
+
         // 权限码提供者由 Services 层的 RbacPermissionProvider 提供(RBAC 真实现,§6);
         // 用户前置注册同接口实现(如对接外部鉴权中心)即整体替换(§5.2)。
 

@@ -13,7 +13,6 @@ namespace TenonAdmin.AspNetCore;
 [Route("api/v1")]
 public class MfaController(
     IMfaEnrollmentService enrollment,
-    IMfaChallengeService totpChallenge,
     IReauthService reauth,
     IHighSensitivityPermissionService highSens,
     ICurrentUser currentUser) : ControllerBase
@@ -35,15 +34,6 @@ public class MfaController(
     [HttpPost("auth/mfa/recovery")]
     public Task UseRecovery([FromBody] TotpRecoveryInput input) =>
         enrollment.UseRecoveryCodeAsync(input);
-
-    /// <summary>TOTP 二次验证挑战校验。</summary>
-    [AllowAnonymous]
-    [HttpPost("auth/mfa/challenge/verify")]
-    public async Task<MfaChallengeVerifyOutput> VerifyChallenge([FromBody] TotpChallengeVerifyInput input)
-    {
-        var userId = await totpChallenge.VerifyAndConsumeAsync(input.ChallengeId, input.Code);
-        return new MfaChallengeVerifyOutput { UserId = userId };
-    }
 
     /// <summary>短时再次认证:验 TOTP 或密码后写入 reauth 授予。</summary>
     [Authorize]
@@ -102,17 +92,4 @@ public class MfaController(
         var uid = currentUser.UserId ?? throw new AdminException(ErrorCode.TokenInvalid);
         await highSens.DeleteAsync(id, uid);
     }
-}
-
-/// <summary>TOTP 挑战校验入参。</summary>
-public record TotpChallengeVerifyInput
-{
-    public string ChallengeId { get; init; } = "";
-    public string Code { get; init; } = "";
-}
-
-/// <summary>挑战校验出参。</summary>
-public record MfaChallengeVerifyOutput
-{
-    public long UserId { get; init; }
 }

@@ -259,8 +259,20 @@ public class AuthService(
         try
         {
             AdminException.ThrowIf(!await smsOtp.IsLoginEnabledAsync(), ErrorCode.SmsLoginDisabled);
-            // 未知/重复手机号从未存过码 → VerifyAsync 统一抛 40011,与"码过期"不可区分(防枚举)
-            await smsOtp.VerifyAsync(ISmsOtpService.PURPOSE_LOGIN, phone, input.Code);
+            // 未知/重复手机号从未存过码 → VerifyAsync 统一抛 40011,与"码过期"不可区分(防枚举)。
+            // 已知手机号错码时 VerifyAsync 会抛 40010(带 attemptsLeft)——这本身就泄露了"手机号已注册"
+            // (未知手机号永远 40011,已知手机号错码才 40010),故本入口把 40010 归一为 40011、不透出
+            // attemptsLeft;底层仍照常计次/达上限作废该码,只是对外观感与未知手机号完全一致。
+            // 密码登录后的短信二次验证挑战(LoginBySmsChallengeAsync)已过密码校验、账号不再是秘密,
+            // 不受此归一影响,继续保留 40010 + attemptsLeft。
+            try
+            {
+                await smsOtp.VerifyAsync(ISmsOtpService.PURPOSE_LOGIN, phone, input.Code);
+            }
+            catch (AdminException ex) when (ex.Code == ErrorCode.SmsCodeWrong)
+            {
+                throw new AdminException(ErrorCode.SmsCodeExpired);
+            }
 
             var matches = await users.AsQueryable().Where(u => u.Phone == phone && u.Enabled).Take(2).ToListAsync();
             AdminException.ThrowIf(matches.Count != 1, ErrorCode.SmsCodeExpired);   // 发码后用户被停用/删除的窗口期防御

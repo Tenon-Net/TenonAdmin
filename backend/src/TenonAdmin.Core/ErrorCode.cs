@@ -76,7 +76,11 @@ public enum ErrorCode
     [MsgKey("error.auth.smsCodeWrong")]
     SmsCodeWrong = 40010,
 
-    /// <summary>短信验证码已失效(缺失/过期/已消费/尝试次数耗尽/挑战无效统一归此,防探测)</summary>
+    /// <summary>
+    /// 短信验证码已失效(缺失/过期/已消费/尝试次数耗尽/挑战无效统一归此,防探测)。
+    /// 免密登录(手机号+码换令牌)还把错码(本应是 <see cref="SmsCodeWrong"/>)也归一到此码且不带
+    /// attemptsLeft——否则"错码回 40010"与"未知手机号回 40011"本身就泄露了手机号是否已注册。
+    /// </summary>
     [MsgKey("error.auth.smsCodeExpired")]
     SmsCodeExpired = 40011,
 
@@ -155,6 +159,18 @@ public enum ErrorCode
     /// <summary>演示模式下禁止写操作</summary>
     [MsgKey("error.perm.demoReadOnly")]
     DemoModeReadOnly = 41002,
+
+    /// <summary>该操作仅限超级管理员执行(角色定义/授权菜单/数据范围配置等);超出路由权限之外的强约束,QA09/QA36</summary>
+    [MsgKey("error.perm.superAdminRequired")]
+    SuperAdminRequired = 41003,
+
+    /// <summary>目标角色不可转授(未启用/已删除/未标记 IsDelegatable):非超管只能授予"启用+未删除+可转授"的角色,QA36</summary>
+    [MsgKey("error.role.notDelegatable")]
+    RoleNotDelegatable = 41004,
+
+    /// <summary>目标用户超出当前用户的数据范围,不能为其授予角色,QA36</summary>
+    [MsgKey("error.user.outOfDataScope")]
+    UserOutOfDataScope = 41005,
 
     // ── 42xxx 用户 / 组织 / 角色 / 菜单 ──────────────────────────────
 
@@ -258,6 +274,10 @@ public enum ErrorCode
     [MsgKey("error.user.passwordReused")]
     PasswordReused = 42025,
 
+    /// <summary>头像 URL 不合法:仅允许空/空白 或 IFileUrlSigner 签出的本地直链,拒绝外部/未签名地址(QA25.3 防注入)</summary>
+    [MsgKey("error.user.avatarUrlInvalid")]
+    AvatarUrlInvalid = 42026,
+
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 
     /// <summary>字典类型不存在</summary>
@@ -311,6 +331,14 @@ public enum ErrorCode
     /// <summary>通知不存在(或已被删除)</summary>
     [MsgKey("error.notice.notFound")]
     NoticeNotFound = 45001,
+
+    /// <summary>定向发布(按角色/按用户)必须至少指定一个接收目标(QA25.2)</summary>
+    [MsgKey("error.notice.receiverRequired")]
+    NoticeReceiverRequired = 45002,
+
+    /// <summary>定向发布的接收目标(角色/用户)不存在或已停用/已删除(QA25.2,发布前整体拒绝、不落库)</summary>
+    [MsgKey("error.notice.receiverNotFound")]
+    NoticeReceiverNotFound = 45003,
 
     // ── 46xxx 导入 / 导出 ────────────────────────────────────────────
 
