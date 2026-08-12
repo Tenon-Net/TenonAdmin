@@ -88,7 +88,9 @@ public class RoleService(IRepository<SysRole> roles, IRbacService rbac, ICurrent
         EnsureSuperAdmin();   // QA36:角色定义超管专属
         await GetAsync(id);
         await roles.DeleteAsync(id);
-        await rbac.OnRoleDeletedAsync(id);   // 级联清关联 + 失效受影响用户权限/数据范围缓存
+        // 软删不清关联(QA23):角色恢复后关联自动生效;真正清理在回收站 Purge。
+        // 但仍需失效受影响用户的权限/数据范围缓存,使软删后权限立即收窄。
+        await rbac.InvalidateByRoleAsync(id);
     }
 
     /// <inheritdoc />

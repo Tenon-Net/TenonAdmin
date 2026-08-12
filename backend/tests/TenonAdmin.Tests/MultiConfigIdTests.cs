@@ -575,6 +575,15 @@ public class MultiConfigIdTests
         var nullItem = Assert.Throws<InvalidOperationException>(() =>
             AddWith((AdminDatabaseConnectionOptions?)null));
         Assert.Contains("null", nullItem.Message, StringComparison.OrdinalIgnoreCase);
+
+        // QA29: DbType default is now empty → omitting it must be caught
+        var emptyDbType = Assert.Throws<InvalidOperationException>(() =>
+            AddWith(new AdminDatabaseConnectionOptions
+            {
+                ConfigId = "Audit",
+                ConnectionString = "Data Source=a.db",
+            }));
+        Assert.Contains("DbType", emptyDbType.Message);
     }
 
     [Fact]

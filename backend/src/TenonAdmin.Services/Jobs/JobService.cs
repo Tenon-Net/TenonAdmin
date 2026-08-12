@@ -78,6 +78,8 @@ public class JobService(
     public virtual async Task UpdateAsync(long id, JobInput input)
     {
         var entity = await GetAsync(id);
+        if (entity.IsSystem)
+            RejectSystemPayloadChange(entity, input);
         var originalNext = entity.NextRunTime;
         ApplyInput(entity, input, entity.PropsJson);   // Code 不动:创建后不可变
         entity.UpdateTime = Now;
@@ -268,6 +270,24 @@ public class JobService(
         var entity = await jobs.GetByIdAsync(id);
         AdminException.ThrowIf(entity is null, ErrorCode.JobNotFound);
         return entity!;
+    }
+
+    /// <summary>
+    /// 系统任务载荷锁:HandlerKind / HandlerName / Properties 三字段与库中值不一致时拒绝(47014)。
+    /// 允许改触发配置(cron / 间隔 / 窗口)和运维参数(名称 / 备注 / 告警 / 超时 / 重试)。
+    /// </summary>
+    protected virtual void RejectSystemPayloadChange(SysJob entity, JobInput input)
+    {
+        if (input.HandlerKind != entity.HandlerKind)
+            throw new AdminException(ErrorCode.JobProtected);
+
+        var resolvedName = ResolveHandlerName(input);
+        if (!string.Equals(resolvedName, entity.HandlerName, StringComparison.Ordinal))
+            throw new AdminException(ErrorCode.JobProtected);
+
+        var serializedProps = ValidateAndSerializeProps(input, entity.PropsJson);
+        if (!string.Equals(serializedProps, entity.PropsJson, StringComparison.Ordinal))
+            throw new AdminException(ErrorCode.JobProtected);
     }
 
     /// <summary>入参落到实体:载荷归一 + 触发配置校验 + 属性包序列化(<paramref name="storedProps"/> 供占位符回填)。</summary>

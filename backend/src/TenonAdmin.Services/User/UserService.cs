@@ -21,9 +21,12 @@ public class UserService(
     ILoginLockService loginLock,
     ISecurityPolicyProvider policy,
     AdminSecurityOptions security,
-    // 可选参数:默认 DI 注入;消费者子类省略也能编译(§5.3)。externalBindings 用于删用户时连带清其外部身份绑定。
+    // 可选参数:默认 DI 注入;消费者子类省略也能编译(§5.3)。externalBindings 保留为构造参数(消费者子类可能依赖它);
+    // 软删不再清绑定(QA23),真正清理由回收站 Purge 经 DI 取 ISysUserExternalService 完成。
     IPasswordHistoryService? passwordHistory = null,
+#pragma warning disable CS9113
     ISysUserExternalService? externalBindings = null,
+#pragma warning restore CS9113
     // 统一时间源(§1.11):尾随可选参数,DI 正常注入;消费者子类省略也能编译(§5.3)
     TimeProvider? time = null,
     // 导出行数上限(excel-ledger §6.1);可选尾参,未注入时用默认 50000
@@ -298,12 +301,9 @@ public class UserService(
 
         await InTransactionAsync(async () =>
         {
-            await rbac.SetUserRolesAsync(id, []);   // 先清角色(顺带失效缓存),再软删——避免残留孤儿关联
+            // 软删不清角色/外部绑定:关联保留,恢复即可用;真正清理在回收站 Purge(QA23)
             await users.DeleteAsync(id);
             await sessions.RevokeAllForUserAsync(id);   // 删除用户即下线其全部会话(原令牌不再可用)
-            // 连带清外部身份绑定:否则绑定行残留占着 (Provider,Subject) 唯一位,该外部身份既登不进(悬挂绑定)
-            // 也绑不到新账号 → 永久锁死(批次 D 复查 M1)。externalBindings 未接线(消费者精简)时跳过。
-            if (externalBindings is not null) await externalBindings.UnbindAllAsync(id);
         });
     }
 
@@ -318,15 +318,13 @@ public class UserService(
         // 超管护栏(与 DeleteAsync 同源):集合里只要含超管就整体拒绝,不做"删其余、跳超管"的部分成功(语义更明确)。
         AdminException.ThrowIf(targets.Any(u => u.IsSuperAdmin), ErrorCode.SuperAdminProtected);
 
-        // 整批包一个事务:任一步失败全回滚,不留半删状态。逐个复用单删的三步(清角色→软删→下线会话)。
+        // 整批包一个事务:任一步失败全回滚。软删不清角色/外部绑定(QA23:关联保留,恢复即可用;真正清理在 Purge)。
         await InTransactionAsync(async () =>
         {
             foreach (var u in targets)
             {
-                await rbac.SetUserRolesAsync(u.Id, []);
                 await users.DeleteAsync(u.Id);
                 await sessions.RevokeAllForUserAsync(u.Id);
-                if (externalBindings is not null) await externalBindings.UnbindAllAsync(u.Id);   // 同单删:连带清外部绑定(批次 D 复查 M1)
             }
         });
     }

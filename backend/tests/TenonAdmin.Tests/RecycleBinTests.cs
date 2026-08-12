@@ -1,6 +1,9 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using SqlSugar;
 using TenonAdmin.Core;
+using TenonAdmin.Services;
 
 namespace TenonAdmin.Tests;
 
@@ -95,5 +98,92 @@ public class RecycleBinTests
             .GetProperty("data").GetProperty("items").EnumerateArray().ToList();
         Assert.Contains(logs, l => l.GetProperty("httpMethod").GetString() == "DELETE"
             && l.GetProperty("path").GetString() == $"/api/v1/sys/recycle/role/{id}");
+    }
+
+    // ── QA23: soft-delete preserves associations, purge cleans them ──────
+
+    [Fact]
+    public async Task Soft_delete_user_preserves_role_association()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+
+        var roleId = await AddRole(admin, "qa23-role", "qa23-role-code");
+
+        // add a user with the role
+        var addResult = await (await admin.PostJson("/api/v1/sys/user", new
+        {
+            account = "qa23user",
+            name = "QA23",
+            password = "Test@123456!",
+            roleIds = new[] { roleId },
+            enabled = true,
+        })).ReadEnvelope();
+        var userId = addResult.GetProperty("data").GetProperty("id").GetInt64();
+
+        // soft-delete the user
+        await admin.DeleteAsync($"/api/v1/sys/user/{userId}");
+
+        // user_role row should still exist (bypass soft-delete filter to see user)
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var userRoles = await db.Queryable<SysUserRole>()
+            .Where(ur => ur.UserId == userId)
+            .ToListAsync();
+        Assert.NotEmpty(userRoles);
+
+        // restore the user
+        var restore = await (await admin.PostJson($"/api/v1/sys/recycle/user/{userId}/restore", new { })).ReadEnvelope();
+        Assert.Equal(0, restore.GetProperty("code").GetInt32());
+
+        // purge the user → associations should be cleaned
+        await admin.DeleteAsync($"/api/v1/sys/user/{userId}");   // soft-delete again
+        var purge = await (await admin.DeleteAsync($"/api/v1/sys/recycle/user/{userId}")).ReadEnvelope();
+        Assert.Equal(0, purge.GetProperty("code").GetInt32());
+
+        var userRolesAfterPurge = await db.Queryable<SysUserRole>()
+            .Where(ur => ur.UserId == userId)
+            .ToListAsync();
+        Assert.Empty(userRolesAfterPurge);
+    }
+
+    [Fact]
+    public async Task Soft_delete_role_preserves_associations_purge_cleans()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+
+        var roleId = await AddRole(admin, "qa23-delrole", "qa23-dr-code");
+
+        // add a user with the role
+        var addResult = await (await admin.PostJson("/api/v1/sys/user", new
+        {
+            account = "qa23roleuser",
+            name = "QA23RU",
+            password = "Test@123456!",
+            roleIds = new[] { roleId },
+            enabled = true,
+        })).ReadEnvelope();
+        var userId = addResult.GetProperty("data").GetProperty("id").GetInt64();
+
+        // soft-delete the role
+        await admin.DeleteAsync($"/api/v1/sys/role/{roleId}");
+
+        // user_role row should still exist
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var userRoles = await db.Queryable<SysUserRole>()
+            .Where(ur => ur.RoleId == roleId)
+            .ToListAsync();
+        Assert.NotEmpty(userRoles);
+
+        // purge the role → associations cleaned
+        var purge = await (await admin.DeleteAsync($"/api/v1/sys/recycle/role/{roleId}")).ReadEnvelope();
+        Assert.Equal(0, purge.GetProperty("code").GetInt32());
+
+        var userRolesAfterPurge = await db.Queryable<SysUserRole>()
+            .Where(ur => ur.RoleId == roleId)
+            .ToListAsync();
+        Assert.Empty(userRolesAfterPurge);
     }
 }

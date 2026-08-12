@@ -178,6 +178,9 @@ public static class ServicesSetup
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, SqlAdminJob>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, JobLogCleanupJob>());
 
+        // QA27: WorkerId 数据库租约守卫——防止多实例配相同 WorkerId 导致雪花 Id 碰撞
+        services.AddHostedService<WorkerIdLeaseGuard>();
+
         // 个人中心(§4,T8):当前用户对自己账号的读改(看/改资料、验旧改密)
         services.TryAddScoped<IPersonalService, PersonalService>();
 

@@ -90,6 +90,34 @@ public class ReplaceabilityTests
         Assert.IsType<SubclassedScheduler>(sp.GetRequiredService<JobSchedulerService>());
     }
 
+    /// <summary>
+    /// QA29: core 服务(IPasswordHasher / IAuthService / IFileService)的前置注册 TryAdd 契约。
+    /// 变异:把 ServicesSetup 里任一的 TryAdd 改成 Add → 内置实现后注册即胜出 → 本条红。
+    /// </summary>
+    [Fact]
+    public async Task PreRegisteredCoreServices_ShouldWinOverBuiltIns()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(new AdminCacheOptions());
+        services.AddSingleton(new AdminIdOptions());
+        services.AddSingleton(new AdminJobsOptions());
+        services.AddSingleton<IPasswordHasher, FakeHasher>();
+        services.AddScoped<IAuthService, FakeAuthService>();
+        services.AddScoped<IFileService, FakeFileService>();
+
+        var dbOptions = new AdminDatabaseOptions { DbType = "Sqlite", ConnectionString = "DataSource=:memory:" };
+        services.AddSingleton(dbOptions);
+        services.AddTenonAdminSqlSugar(dbOptions, [typeof(ServicesSetup).Assembly]);
+        services.AddTenonAdminServices();
+
+        await using var sp = services.BuildServiceProvider();
+        Assert.IsType<FakeHasher>(sp.GetRequiredService<IPasswordHasher>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeAuthService>(scope.ServiceProvider.GetRequiredService<IAuthService>());
+        Assert.IsType<FakeFileService>(scope.ServiceProvider.GetRequiredService<IFileService>());
+    }
+
     /// <summary>消费者自己的 IAdminJob(TestHost 的 SampleJob)必须被默认解析器认得,并出现在处理器清单里。</summary>
     [Fact]
     public async Task ConsumerJobHandler_ShouldBeResolvableAndListed()
@@ -379,5 +407,33 @@ public class ReplaceabilityTests
     {
         protected override LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) =>
             base.BuildLoginOutput(user, pair) with { Name = "OVERRIDDEN" };
+    }
+
+    /// <summary>QA29: 用户自定义认证服务(证明 IAuthService TryAdd 可替换)</summary>
+    private sealed class FakeAuthService : IAuthService
+    {
+        public Task<LoginOutput> LoginAsync(LoginInput input) => throw new NotSupportedException();
+        public Task<LoginOutput> LoginBySmsChallengeAsync(SmsChallengeLoginInput input) => throw new NotSupportedException();
+        public Task<SmsSendOutput> ResendSmsChallengeAsync(SmsResendInput input) => throw new NotSupportedException();
+        public Task<LoginOutput> LoginByTotpChallengeAsync(TotpChallengeLoginInput input) => throw new NotSupportedException();
+        public Task<SmsSendOutput> SendSmsLoginCodeAsync(PhoneCodeInput input) => throw new NotSupportedException();
+        public Task<LoginOutput> LoginByPhoneAsync(PhoneLoginInput input) => throw new NotSupportedException();
+        public Task<LoginOutput> LoginByExternalAsync(ExternalLoginInput input, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<LoginOutput> LoginByExternalIdentityAsync(Core.ExternalIdentity identity, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<LoginOutput> RefreshAsync(RefreshInput input) => throw new NotSupportedException();
+        public Task LogoutAsync(string sessionId) => Task.CompletedTask;
+    }
+
+    /// <summary>QA29: 用户自定义文件服务(证明 IFileService TryAdd 可替换)</summary>
+    private sealed class FakeFileService : IFileService
+    {
+        public Task<FileUploadOutput> UploadAsync(FileUploadInput input) => throw new NotSupportedException();
+        public Task<FileDownload> DownloadAsync(long id) => throw new NotSupportedException();
+        public Task<PagedList<SysFile>> PageAsync(FilePageInput input) => throw new NotSupportedException();
+        public Task DeleteAsync(long id) => Task.CompletedTask;
+        public Task DeleteBatchAsync(IReadOnlyCollection<long> ids) => Task.CompletedTask;
+        public Task<ChunkInitOutput> ChunkInitAsync(ChunkInitInput input) => throw new NotSupportedException();
+        public Task SaveChunkAsync(ChunkSaveInput input) => throw new NotSupportedException();
+        public Task<FileUploadOutput> ChunkCompleteAsync(ChunkCompleteInput input) => throw new NotSupportedException();
     }
 }

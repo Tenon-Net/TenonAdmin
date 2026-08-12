@@ -564,6 +564,61 @@ public class JobApiTests
         Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    // ── QA21: system job payload lock ──────────────────────────────────
+
+    [Fact]
+    public async Task System_job_handler_change_is_rejected_47014()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+
+        var page = await (await admin.GetAsync("/api/v1/sys/job/page?size=50")).ReadEnvelope();
+        var seeded = page.GetProperty("data").GetProperty("items").EnumerateArray()
+            .Single(r => r.GetProperty("code").GetString() == "sys-job-log-cleanup");
+        var seededId = seeded.GetProperty("id").GetInt64();
+
+        // changing HandlerKind on a system job → 47014
+        var changekind = await (await admin.PutJson($"/api/v1/sys/job/{seededId}", new
+        {
+            code = "sys-job-log-cleanup",
+            name = "日志清理",
+            handlerKind = 2,   // HTTP instead of Compiled
+            handlerName = "",
+            triggerKind = 1,
+            cronExpression = "0 30 3 * * ?",
+            properties = new Dictionary<string, string?> { ["url"] = "http://10.0.0.1/ping" },
+        })).ReadEnvelope();
+        Assert.Equal(47014, changekind.GetProperty("code").GetInt32());
+    }
+
+    [Fact]
+    public async Task System_job_cron_change_succeeds()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+
+        var page = await (await admin.GetAsync("/api/v1/sys/job/page?size=50")).ReadEnvelope();
+        var seeded = page.GetProperty("data").GetProperty("items").EnumerateArray()
+            .Single(r => r.GetProperty("code").GetString() == "sys-job-log-cleanup");
+        var seededId = seeded.GetProperty("id").GetInt64();
+        var handlerName = seeded.GetProperty("handlerName").GetString();
+
+        // changing cron on a system job → allowed
+        var result = await (await admin.PutJson($"/api/v1/sys/job/{seededId}", new
+        {
+            code = "sys-job-log-cleanup",
+            name = "日志清理(改 cron)",
+            handlerKind = 1,   // keep Compiled
+            handlerName,
+            triggerKind = 1,
+            cronExpression = "0 0 5 * * ?",
+        })).ReadEnvelope();
+        Assert.Equal(0, result.GetProperty("code").GetInt32());
+
+        var updated = await ReadJobAsync(admin, "sys-job-log-cleanup");
+        Assert.Equal("0 0 5 * * ?", updated.GetProperty("cronExpression").GetString());
+    }
+
     private static async Task<JsonElement> ReadJobAsync(HttpClient admin, string code)
     {
         var page = await (await admin.GetAsync("/api/v1/sys/job/page?size=100")).ReadEnvelope();
