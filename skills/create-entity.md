@@ -178,6 +178,20 @@ public DateTime? AbsoluteExpiresAt { get; set; }  // 读侧 AbsoluteExpiresAt ??
 
 回归锁：`CodeFirstNullableUpgradeTests`（非空表砍列再 InitTables 补回）。
 
+## 种子数据的 Id 区间：消费者一律 `>= 1000`
+
+字典类型 / 字典项 / 配置项的删除接口按 **`Id < 1000` 判定为内核种子并拒删**（`ErrorCode.SeedDataProtected`，QA13）。判定只看 Id，不看 code，所以新增内核种子会自动受保护——代价是消费者写种子时必须避开这个区间：
+
+```csharp
+// ❌ 消费者种子用小 Id：建出来就删不掉,管理端点「删除」永远报 SeedDataProtected
+new SysDictType { Id = 42, Code = "crm_customer_level", ... }
+
+// ✅ 消费者种子从 1000 起（雪花 Id 天然远大于 1000,手写才需要注意）
+new SysDictType { Id = 1001, Code = "crm_customer_level", ... }
+```
+
+只影响**手写 Id** 的种子；走 AOP 自动填充雪花 Id 的业务数据不受影响。
+
 ## 注意事项
 
 - 实体建完后，CodeFirst 会在应用启动时自动建表（`DatabaseInitializer`）
