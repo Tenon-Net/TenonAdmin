@@ -1096,6 +1096,7 @@ export default {
       passwordReused: 'New password must differ from your current and recently used passwords',
       outOfDataScope: 'Target user is outside your data scope',
       avatarUrlInvalid: 'Avatar URL is not allowed',
+      cannotOperateSelf: 'You cannot perform this action on yourself',
     },
     role: { notFound: 'Role not found', codeExists: 'Role code already exists', notDelegatable: 'Role is not delegatable' },
     org: {
@@ -1103,8 +1104,10 @@ export default {
       hasChildren: 'Org has children and cannot be deleted',
       invalidParent: 'Invalid parent org',
       codeExists: 'Org code already exists',
+      hasUsers: 'Org still has active users and cannot be deleted',
+      outOfScope: 'Target org is outside your data scope',
     },
-    position: { notFound: 'Position not found', codeExists: 'Position code already exists' },
+    position: { notFound: 'Position not found', codeExists: 'Position code already exists', hasUsers: 'Position still has active users and cannot be deleted' },
     module: {
       notFound: 'App not found',
       codeExists: 'App code already exists',

@@ -186,6 +186,8 @@ public class FileService(
     {
         var file = await files.GetByIdAsync(id);
         AdminException.ThrowIf(file is null, ErrorCode.FileNotFound);
+        // QA15: non-superadmin can only download own files
+        ValidateFileOwner(file!);
 
         var stream = await storage.OpenReadAsync(file!.StoragePath);
         AdminException.ThrowIf(stream is null, ErrorCode.FileNotFound);   // 记录在、物理丢了也算不存在
@@ -201,25 +203,48 @@ public class FileService(
     }
 
     /// <inheritdoc />
-    public virtual Task<PagedList<SysFile>> PageAsync(FilePageInput input) =>
-        files.AsQueryable()
+    public virtual Task<PagedList<SysFile>> PageAsync(FilePageInput input)
+    {
+        var ownerFilter = currentUser is not null && !currentUser.IsSuperAdmin;
+        var ownerId = currentUser?.UserId ?? 0;
+        return files.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.FileName), f => f.OriginalName.Contains(input.FileName!))
-            .OrderBy(f => f.Id, OrderByType.Desc)   // 雪花 Id 时间有序,最新在前
+            // QA15: non-superadmin only sees own files
+            .WhereIF(ownerFilter, f => f.CreateUserId == ownerId)
+            .OrderBy(f => f.Id, OrderByType.Desc)
             .ToPagedListAsync(input.Current, input.Size);
+    }
 
     /// <inheritdoc />
     public virtual async Task DeleteAsync(long id)
     {
         var file = await files.GetByIdAsync(id);
         AdminException.ThrowIf(file is null, ErrorCode.FileNotFound);
-        await files.DeleteAsync(id);   // 软删记录;物理回收留清理任务(ponytail:v1 不删盘)
+        // QA15: non-superadmin can only delete own files
+        ValidateFileOwner(file!);
+        await files.DeleteAsync(id);
     }
 
     /// <inheritdoc />
     public virtual async Task DeleteBatchAsync(IReadOnlyCollection<long> ids)
     {
-        // 逐个软删,复用仓储单删(不存在的 Id 影响 0 行,无害);物理文件同样保留(v1 不删盘)。
+        if (ids.Count == 0) return;
+        // QA15: non-superadmin can only delete own files; check all targets first
+        if (currentUser is not null && !currentUser.IsSuperAdmin)
+        {
+            var idList = ids.ToList();
+            var targets = await files.AsQueryable().Where(f => idList.Contains(f.Id)).ToListAsync();
+            var ownerId = currentUser.UserId;
+            AdminException.ThrowIf(targets.Any(f => f.CreateUserId != ownerId), ErrorCode.FileNotFound);
+        }
         foreach (var id in ids) await files.DeleteAsync(id);
+    }
+
+    /// <summary>QA15: non-superadmin can only access own files; other users' files appear as FileNotFound.</summary>
+    protected virtual void ValidateFileOwner(SysFile file)
+    {
+        if (currentUser is null || currentUser.IsSuperAdmin) return;
+        AdminException.ThrowIf(file.CreateUserId != currentUser.UserId, ErrorCode.FileNotFound);
     }
 
     // 后缀白名单以逗号分隔字符串落库;规范化为「含点、小写」。空/全空白 → null(回退 Options 默认)。

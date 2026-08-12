@@ -29,7 +29,10 @@ public class UserService(
     // 导出行数上限(excel-ledger §6.1);可选尾参,未注入时用默认 50000
     AdminExcelOptions? excel = null,
     // QA25.3:头像 URL 校验(默认只放行 null/空白或本地签名直链);未注入(纯 Services 宿主)时跳过校验
-    IAvatarUrlValidator? avatarValidator = null) : IUserService
+    IAvatarUrlValidator? avatarValidator = null,
+    // QA08:数据范围(非超管只能管理范围内机构的用户)+ 当前用户上下文
+    IDataScopeContext? dataScope = null,
+    ICurrentUser? currentUser = null) : IUserService
 {
     // 生成随机初始口令的字符集:去掉易混字符(0/O、1/l/I),含大小写+数字+符号。
     private const string PASSWORD_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*";
@@ -87,13 +90,24 @@ public class UserService(
     /// 抽出来是为了 PageAsync 与 ExportAsync 不复制过滤条件(坑 1:两条链漂移 = 导出数据范围与列表不一致)。
     /// <b>不改</b> <see cref="PageAsync"/> 的 public 签名(它是 virtual,消费者可能已覆写)。
     /// </summary>
-    protected virtual ISugarQueryable<UserItem> BuildListQuery(UserPageInput input, List<long>? holders) =>
-        users.AsQueryable()
+    protected virtual ISugarQueryable<UserItem> BuildListQuery(UserPageInput input, List<long>? holders)
+    {
+        var scope = dataScope?.Current;
+        var isSuperAdmin = currentUser?.IsSuperAdmin == true;
+        var scopeOrgIds = scope is not null && !scope.IsUnrestricted && !isSuperAdmin
+            ? scope.OrgIds.ToList() : null;
+        var selfId = currentUser?.UserId ?? 0;
+
+        return users.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Account), u => u.Account.Contains(input.Account!))
             .WhereIF(!string.IsNullOrEmpty(input.Name), u => u.Name.Contains(input.Name!))
             .WhereIF(input.OrgId.HasValue, u => u.OrgId == input.OrgId)
             .WhereIF(holders != null, u => holders!.Contains(u.Id))
             .WhereIF(input.Enabled.HasValue, u => u.Enabled == input.Enabled!.Value)
+            // QA08: non-superadmin sees only users in their org scope (+ self if IncludeSelf)
+            .WhereIF(scopeOrgIds != null, u =>
+                (u.OrgId != null && scopeOrgIds!.Contains(u.OrgId.Value))
+                || (scope!.IncludeSelf && u.Id == selfId))
             // 客户端排序(按 SysUser 实体列安全校验)优先,否则默认按 Id;必须在 Select 投影前,按实体列排序
             .OrderBySafe(input, q => q.OrderBy(u => u.Id))
             // 投影到 UserItem:SQL 层就不取 Password 列,哈希从不进内存/出接口
@@ -116,6 +130,7 @@ public class UserService(
                 TotpEnabled = u.TotpEnabled,
                 CreateTime = u.CreateTime,
             });
+    }
 
     /// <summary>
     /// 角色 → 持有者 Id 列表(未按角色筛选时返回 null,调用方据此跳过该条件)。
@@ -189,6 +204,9 @@ public class UserService(
     /// <inheritdoc />
     public virtual async Task<AddUserOutput> AddAsync(AddUserInput input)
     {
+        // QA08: non-superadmin cannot add user to out-of-scope org
+        ValidateOrgInScope(input.OrgId);
+
         // 查重把软删行也纳入:软删行仍占着唯一索引里的 Account,漏检会撞库唯一约束抛原生 500(P1-10)
         AdminException.ThrowIf(
             await users.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(u => u.Account == input.Account),
@@ -240,6 +258,10 @@ public class UserService(
         // 超管护栏(与 SetEnabledAsync/DeleteAsync 同源):不可经普通更新面停用/降权超管——
         // 否则被授予用户更新权限码的下位者(或超管误操作)可把 Enabled 置 false + 清空角色,把最高账号锁死(P1-8)。
         AdminException.ThrowIf(user!.IsSuperAdmin && !input.Enabled, ErrorCode.SuperAdminProtected);
+        // QA10: cannot update self (prevent admin from accidentally disabling/modifying own account)
+        AdminException.ThrowIf(currentUser?.UserId == id, ErrorCode.CannotOperateSelf);
+        // QA08: non-superadmin cannot move user to out-of-scope org
+        ValidateOrgInScope(input.OrgId);
         AdminException.ThrowIf(
             avatarValidator is not null && !avatarValidator.IsValid(input.Avatar),
             ErrorCode.AvatarUrlInvalid);
@@ -271,6 +293,8 @@ public class UserService(
         var user = await users.GetByIdAsync(id);
         AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
         AdminException.ThrowIf(user!.IsSuperAdmin, ErrorCode.SuperAdminProtected);
+        // QA10: cannot delete self
+        AdminException.ThrowIf(currentUser?.UserId == id, ErrorCode.CannotOperateSelf);
 
         await InTransactionAsync(async () =>
         {
@@ -287,6 +311,8 @@ public class UserService(
     public virtual async Task DeleteBatchAsync(IReadOnlyCollection<long> ids)
     {
         if (ids.Count == 0) return;
+        // QA10: cannot delete self via batch
+        AdminException.ThrowIf(currentUser?.UserId is long self && ids.Contains(self), ErrorCode.CannotOperateSelf);
         var idList = ids.ToList();
         var targets = await users.AsQueryable().Where(u => idList.Contains(u.Id)).ToListAsync();
         // 超管护栏(与 DeleteAsync 同源):集合里只要含超管就整体拒绝,不做"删其余、跳超管"的部分成功(语义更明确)。
@@ -338,11 +364,26 @@ public class UserService(
         var user = await users.GetByIdAsync(id);
         AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
         AdminException.ThrowIf(!enabled && user!.IsSuperAdmin, ErrorCode.SuperAdminProtected);
+        // QA10: cannot enable/disable self
+        AdminException.ThrowIf(currentUser?.UserId == id, ErrorCode.CannotOperateSelf);
 
         user!.Enabled = enabled;
         await users.UpdateAsync(user);
         // 停用即下线其全部会话 → 原访问令牌下次请求即 401(不等自然过期);启用则不动会话
         if (!enabled) await sessions.RevokeAllForUserAsync(id);
+    }
+
+    /// <summary>
+    /// QA08: validate that the given org is within the caller's data scope.
+    /// Superadmin and unrestricted scope bypass; null orgId is allowed (unassigned user).
+    /// </summary>
+    protected virtual void ValidateOrgInScope(long? orgId)
+    {
+        if (orgId is null) return;
+        if (currentUser?.IsSuperAdmin == true) return;
+        var scope = dataScope?.Current;
+        if (scope is null || scope.IsUnrestricted) return;
+        AdminException.ThrowIf(!scope.OrgIds.Contains(orgId.Value), ErrorCode.OrgOutOfScope);
     }
 
     /// <summary>

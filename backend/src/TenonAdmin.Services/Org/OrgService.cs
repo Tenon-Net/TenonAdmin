@@ -7,11 +7,34 @@ namespace TenonAdmin.Services;
 /// <see cref="IOrgService"/> 默认实现。机构树本身不做环检测(设计上只禁止"父指向自己"这一种一步环),
 /// 更复杂的多级环由前端拼树时天然规避(找不到父节点的机构不会出现在树上)。
 /// </summary>
-public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgService
+public class OrgService(
+    IRepository<SysOrg> orgs,
+    IRbacService rbac,
+    // QA08+QA10: trailing optional params (§5.3 replaceability)
+    IDataScopeContext? dataScope = null,
+    ICurrentUser? currentUser = null,
+    IRepository<SysUser>? userRepo = null) : IOrgService
 {
     /// <inheritdoc />
-    public virtual async Task<IReadOnlyList<SysOrg>> ListAsync() =>
-        await orgs.AsQueryable().OrderBy(o => o.Sort).OrderBy(o => o.Id).ToListAsync();
+    public virtual async Task<IReadOnlyList<SysOrg>> ListAsync()
+    {
+        var all = await orgs.AsQueryable().OrderBy(o => o.Sort).OrderBy(o => o.Id).ToListAsync();
+        if (currentUser?.IsSuperAdmin == true) return all;
+        var scope = dataScope?.Current;
+        if (scope is null || scope.IsUnrestricted) return all;
+
+        // QA08: non-superadmin sees only orgs in scope + their ancestor chain (structural nodes for tree display)
+        var scopeIds = scope.OrgIds.ToHashSet();
+        var ancestorIds = new HashSet<long>();
+        var byId = all.ToDictionary(o => o.Id);
+        foreach (var id in scopeIds)
+        {
+            var cur = byId.GetValueOrDefault(id);
+            while (cur is not null && cur.ParentId != 0 && ancestorIds.Add(cur.ParentId))
+                cur = byId.GetValueOrDefault(cur.ParentId);
+        }
+        return all.Where(o => scopeIds.Contains(o.Id) || ancestorIds.Contains(o.Id)).ToList();
+    }
 
     /// <inheritdoc />
     public virtual async Task<SysOrg> GetAsync(long id)
@@ -24,6 +47,9 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
     /// <inheritdoc />
     public virtual async Task<long> AddAsync(OrgInput input)
     {
+        // QA08: non-superadmin must add under an org within their scope
+        ValidateOrgInScope(input.ParentId == 0 ? null : input.ParentId);
+
         if (input.ParentId != 0)
             AdminException.ThrowIf(!await orgs.AnyAsync(o => o.Id == input.ParentId), ErrorCode.OrgNotFound);
 
@@ -60,6 +86,9 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
     /// <inheritdoc />
     public virtual async Task UpdateAsync(long id, OrgInput input)
     {
+        // QA08: non-superadmin can only update orgs whose ParentId is in scope
+        ValidateOrgInScope(input.ParentId == 0 ? null : input.ParentId);
+
         // 父指向自己是非法父级,用专用码 OrgInvalidParent(42008),不再复用语义不符的 OrgNotFound(P2-12)
         AdminException.ThrowIf(input.ParentId == id, ErrorCode.OrgInvalidParent);
         // 父指向自己的后代 → 成环:整支子树脱离根、从机构树 UI 消失且无法在 UI 修复。只挡"父指向自己"不够,
@@ -88,7 +117,13 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
     /// <inheritdoc />
     public virtual async Task DeleteAsync(long id)
     {
+        // QA08: non-superadmin can only delete orgs within their scope
+        ValidateOrgInScope(id);
+
         AdminException.ThrowIf(await orgs.AnyAsync(o => o.ParentId == id), ErrorCode.OrgHasChildren);
+        // QA10: block delete if any non-deleted user still belongs to this org
+        if (userRepo is not null)
+            AdminException.ThrowIf(await userRepo.AnyAsync(u => u.OrgId == id), ErrorCode.OrgHasUsers);
         await orgs.DeleteAsync(id);
         // 删除机构改变了相关"本机构及以下"子孙集 → 失效全体 scope
         await rbac.InvalidateAllScopesAsync();
@@ -136,6 +171,19 @@ public class OrgService(IRepository<SysOrg> orgs, IRbacService rbac) : IOrgServi
         if (!result.IsSuccess) throw result.ErrorException;
         await rbac.InvalidateAllScopesAsync();   // 新增子树改变"本机构及以下"子孙集 → 失效全体 scope
         return idMap[id];
+    }
+
+    /// <summary>
+    /// QA08: validate that the given org is within the caller's data scope.
+    /// Superadmin and unrestricted scope bypass; null means root-level (allowed for superadmin only when restricted).
+    /// </summary>
+    protected virtual void ValidateOrgInScope(long? orgId)
+    {
+        if (currentUser?.IsSuperAdmin == true) return;
+        var scope = dataScope?.Current;
+        if (scope is null || scope.IsUnrestricted) return;
+        if (orgId is null) return;   // root-level add: ParentId==0 translates to null here
+        AdminException.ThrowIf(!scope.OrgIds.Contains(orgId.Value), ErrorCode.OrgOutOfScope);
     }
 
     /// <summary>

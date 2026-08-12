@@ -1119,6 +1119,7 @@ export default {
       passwordTooWeak: '新密码不满足密码复杂度要求',
       passwordReused: '新密码不能与当前或最近使用过的密码相同',
       outOfDataScope: '目标用户超出当前数据范围',
+      cannotOperateSelf: '不能对自己执行此操作',
     },
     role: { notFound: '角色不存在', codeExists: '角色编码已存在', notDelegatable: '目标角色不可转授' },
     org: {
@@ -1126,8 +1127,10 @@ export default {
       hasChildren: '存在子机构,不可删除',
       invalidParent: '上级机构无效',
       codeExists: '机构编码已存在',
+      hasUsers: '机构下仍有用户,不可删除',
+      outOfScope: '目标机构超出当前数据范围',
     },
-    position: { notFound: '职位不存在', codeExists: '职位编码已存在' },
+    position: { notFound: '职位不存在', codeExists: '职位编码已存在', hasUsers: '该职位下仍有用户,不可删除' },
     module: {
       notFound: '应用不存在',
       codeExists: '应用编码已存在',

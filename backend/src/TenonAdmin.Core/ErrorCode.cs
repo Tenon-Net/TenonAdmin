@@ -278,6 +278,22 @@ public enum ErrorCode
     [MsgKey("error.user.avatarUrlInvalid")]
     AvatarUrlInvalid = 42026,
 
+    /// <summary>机构下仍有在职用户,不能删除(先移除或迁移用户,QA10)</summary>
+    [MsgKey("error.org.hasUsers")]
+    OrgHasUsers = 42027,
+
+    /// <summary>职位下仍有在职用户,不能删除(先移除或迁移用户,QA10)</summary>
+    [MsgKey("error.position.hasUsers")]
+    PositionHasUsers = 42028,
+
+    /// <summary>不能对自己执行此操作(QA10:防管理员自行停用/删除/修改自己)</summary>
+    [MsgKey("error.user.cannotOperateSelf")]
+    CannotOperateSelf = 42029,
+
+    /// <summary>目标机构不在当前用户的数据范围内(QA08:机构/用户管理越权写入)</summary>
+    [MsgKey("error.org.outOfScope")]
+    OrgOutOfScope = 42030,
+
     // ── 43xxx 字典 / 配置 ────────────────────────────────────────────
 
     /// <summary>字典类型不存在</summary>
