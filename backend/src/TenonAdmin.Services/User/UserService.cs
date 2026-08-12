@@ -311,12 +311,12 @@ public class UserService(
     public virtual async Task DeleteBatchAsync(IReadOnlyCollection<long> ids)
     {
         if (ids.Count == 0) return;
-        // QA10: cannot delete self via batch
-        AdminException.ThrowIf(currentUser?.UserId is long self && ids.Contains(self), ErrorCode.CannotOperateSelf);
         var idList = ids.ToList();
         var targets = await users.AsQueryable().Where(u => idList.Contains(u.Id)).ToListAsync();
-        // 超管护栏(与 DeleteAsync 同源):集合里只要含超管就整体拒绝,不做"删其余、跳超管"的部分成功(语义更明确)。
+        // 超管护栏先于自操作护栏:批次含超管时返回更具体的 SuperAdminProtected(与单删同源语义)。
         AdminException.ThrowIf(targets.Any(u => u.IsSuperAdmin), ErrorCode.SuperAdminProtected);
+        // QA10: cannot delete self via batch
+        AdminException.ThrowIf(currentUser?.UserId is long self && ids.Contains(self), ErrorCode.CannotOperateSelf);
 
         // 整批包一个事务:任一步失败全回滚。软删不清角色/外部绑定(QA23:关联保留,恢复即可用;真正清理在 Purge)。
         await InTransactionAsync(async () =>

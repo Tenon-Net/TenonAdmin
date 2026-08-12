@@ -49,9 +49,27 @@ internal sealed class JobEngineHost : IAsyncDisposable
     }
 
     /// <summary>建本模块所需的表(含告警要写的通知两张)。多宿主共库时只需在第一个宿主上调。</summary>
-    public void InitTables() => Db.CodeFirst.InitTables(
-        typeof(SysJob), typeof(SysJobLog), typeof(SysJobLock), typeof(SysJobNode),
-        typeof(SysConfig), typeof(SysNotice), typeof(SysNoticeReceiver));
+    public void InitTables()
+    {
+        Db.CodeFirst.InitTables(
+            typeof(SysJob), typeof(SysJobLog), typeof(SysJobLock), typeof(SysJobNode),
+            typeof(SysConfig), typeof(SysNotice), typeof(SysNoticeReceiver), typeof(SysUser));
+
+        // Panic 站内信定向到超管 Id=1(QA25 校验目标必须存在);精简宿主不跑种子,这里补一行。
+        const long superAdminId = 1; // = SuperAdminSeed.SUPER_ADMIN_ID (internal to Services)
+        if (!Db.Queryable<SysUser>().ClearFilter<ISoftDelete>().Any(u => u.Id == superAdminId))
+        {
+            Db.Insertable(new SysUser
+            {
+                Id = superAdminId,
+                Account = "superAdmin",
+                Name = "超管",
+                Password = "x",
+                Enabled = true,
+                IsSuperAdmin = true,
+            }).ExecuteCommand();
+        }
+    }
 
     public TestJobScheduler NewScheduler() => ActivatorUtilities.CreateInstance<TestJobScheduler>(Sp);
 

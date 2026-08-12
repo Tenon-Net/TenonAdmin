@@ -202,10 +202,15 @@ public class ExternalAuthTests
 
         await sp.GetRequiredService<IUserService>().DeleteAsync(user.Id);
 
-        // 绑定随用户软删被清:(Provider,Subject) 唯一位释放 → 不再悬挂锁死,可被另一用户重新绑定(批次 D 复查 M1)
-        Assert.Null(await ext.FindByExternalAsync("test", "sub-del"));
+        // QA23:软删保留外部绑定;唯一位仍被占用,不能直接重绑
+        Assert.NotNull(await ext.FindByExternalAsync("test", "sub-del"));
         var other = await InsertUserAsync(sp, "rebinder");
-        await ext.BindAsync(other.Id, identity);   // 不再抛 OAuthAlreadyBound
+        await Assert.ThrowsAsync<AdminException>(() => ext.BindAsync(other.Id, identity));
+
+        // 回收站硬删路径会 UnbindAll → 释放 (Provider,Subject) 唯一位后可重绑
+        await ext.UnbindAllAsync(user.Id);
+        Assert.Null(await ext.FindByExternalAsync("test", "sub-del"));
+        await ext.BindAsync(other.Id, identity);
         Assert.Equal(other.Id, (await ext.FindByExternalAsync("test", "sub-del"))!.UserId);
     }
 

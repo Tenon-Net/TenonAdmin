@@ -205,7 +205,8 @@ public class FileService(
     /// <inheritdoc />
     public virtual Task<PagedList<SysFile>> PageAsync(FilePageInput input)
     {
-        var ownerFilter = currentUser is not null && !currentUser.IsSuperAdmin;
+        // 匿名/未认证(签名直链场景)不过滤;已登录非超管只看本人上传
+        var ownerFilter = currentUser is { IsAuthenticated: true, IsSuperAdmin: false };
         var ownerId = currentUser?.UserId ?? 0;
         return files.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.FileName), f => f.OriginalName.Contains(input.FileName!))
@@ -240,10 +241,13 @@ public class FileService(
         foreach (var id in ids) await files.DeleteAsync(id);
     }
 
-    /// <summary>QA15: non-superadmin can only access own files; other users' files appear as FileNotFound.</summary>
+    /// <summary>
+    /// QA15: non-superadmin can only access own files; other users' files appear as FileNotFound.
+    /// 未认证(含签名直链 <c>/view</c>)跳过——能力链路由签名守门,与登录态无关。
+    /// </summary>
     protected virtual void ValidateFileOwner(SysFile file)
     {
-        if (currentUser is null || currentUser.IsSuperAdmin) return;
+        if (currentUser is null || !currentUser.IsAuthenticated || currentUser.IsSuperAdmin) return;
         AdminException.ThrowIf(file.CreateUserId != currentUser.UserId, ErrorCode.FileNotFound);
     }
 

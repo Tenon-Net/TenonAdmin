@@ -1,5 +1,8 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using SqlSugar;
+using TenonAdmin.Services;
 
 namespace TenonAdmin.Tests;
 
@@ -64,7 +67,7 @@ public class RoleCrudTests
     }
 
     [Fact]
-    public async Task Delete_role_cascades_all_associations()
+    public async Task Soft_delete_preserves_associations_purge_cleans_them()
     {
         using var f = new AdminAppFactory();
         var c = await SuperAdminClient(f);
@@ -80,12 +83,28 @@ public class RoleCrudTests
         Assert.Equal(JsonValueKind.Object, (await (await c.GetAsync($"/api/v1/sys/role/{roleId}/datascope")).ReadEnvelope()).GetProperty("data").ValueKind);
         Assert.Contains(roleId, (await (await c.GetAsync($"/api/v1/sys/user/{userId}")).ReadEnvelope()).GetProperty("data").GetProperty("roleIds").EnumerateArray().Select(x => x.GetInt64()));
 
-        // 删角色
+        // 软删角色(QA23):关联保留,恢复即可用
         Assert.Equal(0, (await (await c.DeleteAsync($"/api/v1/sys/role/{roleId}")).ReadEnvelope()).GetProperty("code").GetInt32());
 
-        // 后置:三组关联都被清理(sys_role_menu / sys_role_data_scope / sys_user_role)
-        Assert.Empty((await (await c.GetAsync($"/api/v1/sys/role/{roleId}/menus")).ReadEnvelope()).GetProperty("data").EnumerateArray());
-        Assert.Equal(JsonValueKind.Null, (await (await c.GetAsync($"/api/v1/sys/role/{roleId}/datascope")).ReadEnvelope()).GetProperty("data").ValueKind);
+        using (var scope = f.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            Assert.NotEmpty(await db.Queryable<SysRoleMenu>().Where(x => x.RoleId == roleId).ToListAsync());
+            Assert.NotEmpty(await db.Queryable<SysRoleDataScope>().Where(x => x.RoleId == roleId).ToListAsync());
+            Assert.NotEmpty(await db.Queryable<SysUserRole>().Where(x => x.RoleId == roleId).ToListAsync());
+        }
+
+        // 回收站硬删(QA23):真正清关联
+        Assert.Equal(0, (await (await c.DeleteAsync($"/api/v1/sys/recycle/role/{roleId}")).ReadEnvelope()).GetProperty("code").GetInt32());
+
+        using (var scope = f.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            Assert.Empty(await db.Queryable<SysRoleMenu>().Where(x => x.RoleId == roleId).ToListAsync());
+            Assert.Empty(await db.Queryable<SysRoleDataScope>().Where(x => x.RoleId == roleId).ToListAsync());
+            Assert.Empty(await db.Queryable<SysUserRole>().Where(x => x.RoleId == roleId).ToListAsync());
+        }
+
         Assert.DoesNotContain(roleId, (await (await c.GetAsync($"/api/v1/sys/user/{userId}")).ReadEnvelope()).GetProperty("data").GetProperty("roleIds").EnumerateArray().Select(x => x.GetInt64()));
     }
 }
