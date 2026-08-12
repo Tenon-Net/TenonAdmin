@@ -36,7 +36,7 @@ A 36-finding QA sweep of the kernel, closed in five batches. Most of it is autho
 
 Authorization and disclosure:
 
-- File management is owner-only for non-superadmin: the list filters by uploader, download and delete validate ownership, batch delete checks every target before touching anything, and a cross-owner reference answers `FileNotFound` so the endpoint doesn't confirm whether the file exists (QA15).
+- File management is owner-only for non-superadmin: the list filters by uploader, download and delete validate ownership, batch delete checks every target before touching anything, and a cross-owner reference answers `FileNotFound` so the endpoint doesn't confirm whether the file exists. The check applies to *authenticated* callers only — anonymous signed `/view` links are a capability URL guarded by their signature, and have nothing to filter by (QA15).
 - `[ActiveSession]` endpoints now resolve and write the data scope, the same way `[RolePermission]` does. Previously the scope context was simply unset on those routes, and an unset context reads as *unrestricted* — so a consumer querying a `DataEntity` from a login-only endpoint saw every org (QA07).
 - Self-service password change revokes the account's other sessions, keeping the current one (QA04).
 - Marking a notice read checks that the notice is visible to the caller, instead of accepting any id (QA24).
@@ -55,7 +55,8 @@ Data integrity and operations:
 - Dictionary item values are unique per type (QA13).
 - The dictionary lookup used by every form dropdown is `[ActiveSession]` rather than a permission-coded route. It is a cross-module hot path, and granting it per-menu meant every new module that used a dictionary had to remember to re-grant it. Write operations stay permission-coded (QA12).
 - A disabled dictionary type returns no items, instead of continuing to serve its enabled entries (QA14).
-- Deleting an org or position is refused while active users reference it, and users can no longer delete or disable themselves (QA10).
+- Deleting an org or position is refused while active users reference it, and users can no longer delete or disable themselves. A batch containing a superadmin reports `SuperAdminProtected` ahead of the self-deletion guard, the more specific answer of the two (QA10).
+- A job's panic alert sends its in-app notice and its e-mail independently. They shared one `try`, so once QA25 started validating notice recipients, a rejected notice target also swallowed the e-mail — the channel most likely to actually reach someone at 3am.
 - Soft-deleting a user or role preserves its associations, so restoring from the recycle bin restores the permissions too; the associations are cleaned on permanent deletion instead (QA23).
 - With the SQL job gate closed, existing SQL jobs can still have their schedule and name edited — only payload changes are refused. System jobs now lock `HandlerKind`, `HandlerName`, `Props` and `Name` while leaving trigger and run configuration editable (QA20, QA21).
 - Snowflake `WorkerId` collisions fail fast. A new `SysWorkerLease` table backs `WorkerIdLeaseGuard`, which claims the id at startup, renews it, and releases it on shutdown; a second instance configured with the same id refuses to start with a readable error instead of silently minting colliding ids (QA27).
