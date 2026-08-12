@@ -16,39 +16,40 @@
 |----|--------|------|------|------|
 | QA01 | P1 | fixed | web-react | `LoginPage.spec.tsx` 全量 vitest 品牌用例偶发红（site mock / 竞态；已加固 mount） |
 | QA02 | P2 | fixed | web | Vue 模板未设 `strictPort`，5173 被占时会静默挪端口连错应用 |
-| QA03 | P2 | open | backend | 匿名 `POST /api/v1/auth/mfa/challenge/verify` 无前端调用，会消费登录 MFA 挑战并回 userId |
-| QA04 | P2 | question | backend | 自助改密不吊销其它会话（管理员重置会吊销） |
+| QA03 | P2 | fixed | backend | 匿名 `POST /api/v1/auth/mfa/challenge/verify` 已删除 |
+| QA04 | P2 | fixed | backend | 自助改密吊销除当前外的其他会话 |
 | QA05 | P1 | fixed | backend | MFA 绑定/恢复在账号不存在时每次都 `Hash()` 陪跑，耗时可枚举 |
-| QA06 | P1 | open | backend | 短信免密登录：错码 40010 vs 无码 40011，可区分「该手机号是否刚被发过真码」 |
+| QA06 | P1 | fixed | backend | 短信免密登录错码归一为 40011，防枚举 |
 | QA07 | P1 | fixed | backend | `[ActiveSession]` 未写入数据范围，仅登录端点上的 DataEntity 查询默认 Unrestricted |
-| QA08 | P2 | question | backend | 用户/机构/岗位列表不走数据范围（设计如此）；有用户管理权即可看全库账号 |
-| QA09 | P1 | question | backend | `SetRoleDataScope` 不校验调用者自身范围，持有该权限即可把角色扩成 All/任意机构 |
-| QA10 | P2 | question | backend | 删机构/岗位不检查仍挂靠的用户；用户可删/停用自己 |
+| QA08 | P2 | fixed | backend | 用户/机构按数据范围隔离；职位保持全局 |
+| QA09 | P1 | fixed | backend | 角色数据范围仅超管可配置 |
+| QA10 | P2 | fixed | backend | 有活跃用户时拒删机构/职位；禁止自操作 |
 | QA11 | P1 | fixed | backend | 停用角色后权限码已失效，门户模块/菜单树仍按该角色授权展示 |
-| QA12 | P1 | question | backend | `GET /sys/dict/items/{typeCode}` 挂 RolePermission；未授字典菜单时用户/机构表单下拉静默空白 |
-| QA13 | P2 | question | backend | 种子字典类型与配置键可删；字典项 (类型,值) 无唯一；job 分组出现在「其他」 |
+| QA12 | P1 | fixed | backend | 字典下拉改为 ActiveSession，登录即可读 |
+| QA13 | P2 | fixed | backend | 种子数据禁删；字典值唯一；job 配置独立 Tab |
 | QA14 | P2 | fixed | backend | 字典类型停用后 `GetItemsByTypeAsync` 仍返回启用项 |
-| QA15 | P1 | question | backend | 文件分页/下载/删除不按上传人过滤；有文件管理权即可操作全库 |
-| QA16 | P2 | question | backend | 签名直链只绑文件 Id、无过期；链接泄漏后直到 JWT 密钥轮换都有效 |
+| QA15 | P1 | fixed | backend | 文件管理按所有者隔离；超管全库 |
+| QA16 | P2 | wontfix | backend | 签名直链为永久能力 URL（设计决策，已补文档） |
 | QA17 | P1 | fixed | backend | `import/validate`·`commit` 不卡 `MaxImportRows`，JSON 入口可绕过文件行数上限 |
 | QA18 | P1 | fixed | backend | 覆盖导入 `RoleNames` 留空会把已有角色清掉（`UpdateAsync` 全量重设） |
-| QA19 | P2 | question | backend | 导入按角色名赋任意角色；覆盖按账号命中全库；机构/主管按名取第一条 |
+| QA19 | P2 | fixed | backend | 导入改用编码匹配 + 范围校验 + 角色策略 + 公式转义 |
 | QA20 | P2 | fixed | backend | SQL 总闸关闭后，存量 SQL 任务连改 cron/名称也撞 47008 |
-| QA21 | P2 | question | backend | `Api:DisabledModules=["Job"]` 只摘 HTTP 路由，调度器仍跑；`IsSystem` 可改 Handler/Props |
+| QA21 | P2 | fixed | backend | 系统任务载荷锁定；API 与调度开关独立已补文档 |
 | QA22 | P2 | fixed | web+web-react | 回收站页签漏了 `job`，软删任务只能靠 API 恢复 |
-| QA23 | P2 | question | backend | 软删用户/角色会级联清关联，恢复后角色/菜单授权不会回来 |
+| QA23 | P2 | fixed | backend | 软删保留关联，彻底删除时清理；恢复后刷缓存 |
 | QA24 | P1 | fixed | backend | `MarkReadAsync` 不校验可见性，任意登录用户可对任意通知 Id 写已读回执 |
-| QA25 | P2 | question | backend | Hub 仅 JWT 鉴权不验会话活性；定向通知空 receiverIds 成幽灵；头像字段可任意 URL |
+| QA25 | P2 | fixed | backend | Hub 校验 sid 活性；通知目标必须有效；头像限本站签名 URL |
 | QA26 | P2 | fixed | tests | `SecurityBaselinePrecheckTests` 样本 JSON 落盘路径硬编码到不可写目录，本机红 |
-| QA27 | P2 | question | backend | 限流固定窗口边界可近 2× 突发；显式 `WorkerId=0` 的多副本仍可撞号 |
+| QA27 | P2 | fixed | backend | 固定窗口保持并补文档；WorkerId DB 租约守卫已加 |
 | QA28 | P1 | fixed | backend | Worker 实体扫描漏挂 Services 程序集，开 CodeFirst 时内核表建不全 |
-| QA29 | P3 | question | tests | 多数 Replace* 用例后置 Replace，不真正锁 TryAdd；副库 DbType 默认为 Sqlite |
+| QA29 | P3 | fixed | tests | 核心服务 TryAdd 契约测试已补；副库 DbType 改为必填 |
 | QA30 | P2 | fixed | web | `vite preview` 未设 `strictPort`，5173 被占时会静默挪端口 |
-| QA31 | P2 | question | web+web-react | `/personal/profile` 失败时超管被当普通用户，空权限码导致全部权限按钮消失 |
-| QA32 | P3 | question | web | 登录皮肤切换器文案写死中文；`v-auth` 仅 mounted 时 remove，权限刷新不回挂 |
+| QA31 | P2 | fixed | web+web-react | LoginOutput 携带 isSuperAdmin，profile 失败回退会话值 |
+| QA32 | P3 | fixed | web | 皮肤名 i18n；v-auth 改为响应式 watchEffect |
 | QA33 | P2 | fixed | web-react | `vite preview` 未设 `strictPort`（与 Vue QA30 对偶） |
-| QA34 | P3 | question | web-react | 登录皮肤切换器文案写死中文（与 Vue QA32 对偶） |
-| QA35 | P3 | question | web | Vue `v-auth` 仅 mounted remove；React `Can` 可随 store 重渲（框架差，非缺功能） |
+| QA34 | P3 | fixed | web-react | 皮肤名 i18n（对偶 QA32） |
+| QA35 | P3 | fixed | web | v-auth 改为响应式，与 React Can 行为对齐 |
+| QA36 | P1 | fixed | backend | 角色委派策略：定义仅超管；非超管只能授予可委派角色给范围内用户 |
 
 ---
 
