@@ -15,6 +15,7 @@ public partial class UserImportProfile(
     IRepository<SysOrg> orgs,
     IRepository<SysPosition> positions,
     IRepository<SysRole> roles,
+    IRbacService rbac,
     IDataScopeContext dataScope) : IImportProfile
 {
     /// <inheritdoc />
@@ -176,9 +177,12 @@ public partial class UserImportProfile(
             directorId = dir.Id;
         }
 
-        var roleIds = new List<long>();
+        // RoleNames 有值才解析;覆盖且留空 = 保持原角色(UpdateAsync 是全量重设,
+        // 空列表会把已授权清掉——导入列是可选的,空白不等于「清空」)。
+        List<long>? roleIds = null;
         if (Cell(row, "RoleNames") is { Length: > 0 } roleNames)
         {
+            roleIds = [];
             foreach (var rn in SplitNames(roleNames))
             {
                 var role = await roles.GetFirstAsync(r => r.Name == rn)
@@ -199,6 +203,8 @@ public partial class UserImportProfile(
             AdminException.ThrowIf(entity is null, ErrorCode.UserNotFound);
             // UpdateAsync 走 Id;软删行 GetById 会 miss——此处若已软删则拒绝覆盖(需管理员先恢复)
             AdminException.ThrowIf(entity!.IsDelete, ErrorCode.UserNotFound);
+
+            roleIds ??= (await rbac.GetUserRoleIdsAsync(entity.Id)).ToList();
 
             await users.UpdateAsync(entity.Id, new UpdateUserInput
             {
@@ -229,7 +235,7 @@ public partial class UserImportProfile(
                 PositionId = positionId,
                 DirectorId = directorId,
                 Enabled = enabled,
-                RoleIds = roleIds,
+                RoleIds = roleIds ?? [],
             });
         }
     }

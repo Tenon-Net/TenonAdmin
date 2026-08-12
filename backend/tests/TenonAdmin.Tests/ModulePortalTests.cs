@@ -87,6 +87,34 @@ public class ModulePortalTests
     }
 
     [Fact]
+    public async Task Disabled_role_does_not_expose_module()
+    {
+        // 权限码路径已按 Enabled 角色过滤;门户模块反推原先漏了 → 停用角色后 ping 403,侧栏仍见 system。
+        using var f = new AdminAppFactory();
+        var (account, password) = await SeedUser(f, menuId: 2);
+
+        using (var scope = f.Services.CreateScope())
+        {
+            var sp = scope.ServiceProvider;
+            var uid = (await sp.GetRequiredService<IRepository<SysUser>>().GetFirstAsync(u => u.Account == account))!.Id;
+            var roleId = (await sp.GetRequiredService<IRbacService>().GetUserRoleIdsAsync(uid)).First();
+            var roles = sp.GetRequiredService<IRoleService>();
+            var role = await roles.GetAsync(roleId);
+            await roles.UpdateAsync(roleId, new RoleInput
+            {
+                Name = role.Name, Code = role.Code, Sort = role.Sort, Enabled = false, Remark = role.Remark,
+            });
+        }
+
+        var c = f.CreateClient();
+        WithToken(c, await c.LoginToken(account, password));
+
+        var mods = await (await c.GetAsync("/api/v1/personal/modules")).ReadEnvelope();
+        Assert.Empty(ModuleIds(mods));
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.GetAsync("/api/v1/ping")).StatusCode);
+    }
+
+    [Fact]
     public async Task No_grants_means_no_modules()
     {
         using var f = new AdminAppFactory();

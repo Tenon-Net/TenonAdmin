@@ -26,6 +26,12 @@ public class MfaEnrollmentService(
 {
     private static readonly TimeSpan BindChallengeTtl = TimeSpan.FromMinutes(10);
 
+    /// <summary>
+    /// 与 <see cref="AuthService"/> 同款防枚举陪跑哈希:账号不存在时也走一次真实代价的 Verify,
+    /// 进程内算一次缓存,避免每次 <c>Hash()</c> 让「账号不存在」比「密码错误」多一轮 PBKDF2。
+    /// </summary>
+    private static string? _dummyHash;
+
     private DateTime Now => (time ?? TimeProvider.System).GetLocalNow().DateTime;
 
     private int RecoveryCodeCount =>
@@ -50,7 +56,7 @@ public class MfaEnrollmentService(
         var user = await users.GetFirstAsync(u => u.Account == input.Account.Trim());
         if (user is null)
         {
-            hasher.Verify(input.CurrentPassword, hasher.Hash("tenon-admin.timing-dummy"));
+            hasher.Verify(input.CurrentPassword, _dummyHash ??= hasher.Hash("tenon-admin.timing-dummy"));
             throw new AdminException(ErrorCode.PasswordWrong);
         }
 
@@ -140,7 +146,7 @@ public class MfaEnrollmentService(
         var user = await users.GetFirstAsync(u => u.Account == input.Account.Trim());
         if (user is null)
         {
-            hasher.Verify(input.CurrentPassword, hasher.Hash("tenon-admin.timing-dummy"));
+            hasher.Verify(input.CurrentPassword, _dummyHash ??= hasher.Hash("tenon-admin.timing-dummy"));
             throw new AdminException(ErrorCode.PasswordWrong);
         }
 

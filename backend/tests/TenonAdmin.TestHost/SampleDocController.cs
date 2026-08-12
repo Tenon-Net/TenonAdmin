@@ -6,7 +6,7 @@ namespace TenonAdmin.TestHost;
 
 /// <summary>
 /// 示例机构隔离业务控制器——消费方业务控制器与内置控制器同管道(统一信封 / 鉴权 / 数据范围)。
-/// 全部 <c>[RolePermission]</c>:超管放行,普通用户需被授予对应路由权限码(权限码 = 规范化路由,无魔法串)。
+/// 写操作挂 <c>[RolePermission]</c>(权限码 = 规范化路由);<c>GET mine</c> 挂 <c>[ActiveSession]</c> 锁仅登录也会写入数据范围。
 /// </summary>
 [ApiController]
 [Route("api/v1/sample/doc")]
@@ -19,6 +19,15 @@ public class SampleDocController(
     [HttpGet]
     [RolePermission]
     public async Task<Result<IReadOnlyList<SampleDoc>>> List() =>
+        Result<IReadOnlyList<SampleDoc>>.Ok(await svc.ListAsync());
+
+    /// <summary>
+    /// 仅登录即可列当前范围内的文档——锁 <c>[ActiveSession]</c> 也会写入数据范围,
+    /// 避免默认 Unrestricted 把全机构行漏给任意登录用户。
+    /// </summary>
+    [HttpGet("mine")]
+    [ActiveSession]
+    public async Task<Result<IReadOnlyList<SampleDoc>>> ListMine() =>
         Result<IReadOnlyList<SampleDoc>>.Ok(await svc.ListAsync());
 
     /// <summary>

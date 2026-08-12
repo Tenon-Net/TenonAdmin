@@ -13,7 +13,7 @@ const message = useMessage()
 const { run } = useConfirm()
 const authStore = useAuthStore()
 
-const types = ['user', 'role', 'org', 'position', 'module', 'config', 'dict', 'menu'] as const
+const types = ['user', 'role', 'org', 'position', 'module', 'config', 'dict', 'menu', 'job'] as const
 type RecycleType = (typeof types)[number]
 const activeTab = ref<RecycleType>('user')
 const tableRefs = ref<Record<string, ProTableInst<RecycleBinItem>>>({})

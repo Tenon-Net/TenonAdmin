@@ -66,6 +66,8 @@ public class ImportRunner(
         IImportProfile profile,
         CancellationToken cancellationToken = default)
     {
+        EnsureWithinRowLimit(rows.Count);
+
         // 拷一份可变行,避免调用方持有的列表与内部共用引用时的意外
         var working = rows.Select(r => new ImportRow
         {
@@ -95,6 +97,8 @@ public class ImportRunner(
         DuplicateStrategy strategy,
         CancellationToken cancellationToken = default)
     {
+        EnsureWithinRowLimit(rows.Count);
+
         // 坑 6:不信任前端送来的 Errors——重新完整校验,把送上来的 Errors 直接丢弃
         var working = rows.Select(r => new ImportRow
         {
@@ -263,6 +267,16 @@ public class ImportRunner(
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Preview 流式读行已卡 <see cref="AdminExcelOptions.MaxImportRows"/>;Validate/Commit
+    /// 收的是前端 JSON,不经文件入口,必须再守一次,否则调大 body 即可绕过上限打爆内存。
+    /// </summary>
+    protected virtual void EnsureWithinRowLimit(int count)
+    {
+        if (count > Excel.MaxImportRows)
+            throw new AdminException(ErrorCode.ImportRowLimitExceeded);
     }
 
     /// <summary>

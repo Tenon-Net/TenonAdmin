@@ -1181,6 +1181,6 @@ export default {
     restored: 'Restored',
     purged: 'Permanently deleted',
     empty: 'Recycle bin is empty',
-    tabs: { user: 'Users', role: 'Roles', org: 'Orgs', position: 'Positions', module: 'Modules', config: 'Configs', dict: 'Dicts', menu: 'Menus' },
+    tabs: { user: 'Users', role: 'Roles', org: 'Orgs', position: 'Positions', module: 'Modules', config: 'Configs', dict: 'Dicts', menu: 'Menus', job: 'Jobs' },
   },
 }

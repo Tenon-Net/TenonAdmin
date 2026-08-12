@@ -75,6 +75,29 @@ public class DictCrudTests
     }
 
     [Fact]
+    public async Task Items_by_type_empty_when_type_disabled()
+    {
+        using var f = new AdminAppFactory { DisabledModules = [] };
+        var admin = await SuperAdminClient(f);
+
+        var add = await (await admin.PostJson("/api/v1/sys/dict/type",
+            new { code = "off_channel", name = "停用渠道", sort = 1, enabled = true })).ReadEnvelope();
+        var typeId = add.GetProperty("data").GetInt64();
+        await admin.PostJson("/api/v1/sys/dict/item",
+            new { dictTypeCode = "off_channel", label = "微信", value = "wx", sort = 1, enabled = true });
+
+        Assert.Single((await (await admin.GetAsync("/api/v1/sys/dict/items/off_channel")).ReadEnvelope())
+            .GetProperty("data").EnumerateArray());
+
+        await admin.PutJson($"/api/v1/sys/dict/type/{typeId}",
+            new { code = "off_channel", name = "停用渠道", sort = 1, enabled = false });
+
+        var after = await (await admin.GetAsync("/api/v1/sys/dict/items/off_channel")).ReadEnvelope();
+        Assert.Equal(0, after.GetProperty("code").GetInt32());
+        Assert.Empty(after.GetProperty("data").EnumerateArray());
+    }
+
+    [Fact]
     public async Task Update_type_changes_name_but_code_stays_immutable()
     {
         using var f = new AdminAppFactory { DisabledModules = [] };

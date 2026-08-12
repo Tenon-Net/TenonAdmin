@@ -1,5 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using TenonAdmin.Core;
 
 namespace TenonAdmin.Tests;
 
@@ -151,6 +153,60 @@ public class JobApiTests
             properties = new Dictionary<string, string?> { ["sql"] = "DELETE FROM sys_job_log" },
         })).ReadEnvelope();
         Assert.Equal(47008, body.GetProperty("code").GetInt32());
+    }
+
+    /// <summary>
+    /// SQL 总闸关闭后:存量 SQL 任务仍可改 cron/名称;改 sql 文本或新建仍 47008。
+    /// 变异:ValidateAndSerializeProps 对 Sql 一律 ThrowIf(!Enabled) → 本条「改名」分支红。
+    /// </summary>
+    [Fact]
+    public async Task Existing_sql_job_can_update_non_payload_while_gate_closed()
+    {
+        using var f = new AdminAppFactory
+        {
+            Settings = new Dictionary<string, string?> { ["TenonAdmin:Jobs:Sql:Enabled"] = "true" },
+        };
+        var admin = await SuperAdminClient(f);
+        var id = await AddJobAsync(admin, new
+        {
+            code = "t-sql-keep",
+            name = "原名",
+            handlerKind = 3,
+            handlerName = "",
+            triggerKind = 1,
+            cronExpression = "0 30 3 * * ?",
+            properties = new Dictionary<string, string?> { ["sql"] = "DELETE FROM sys_job_log WHERE 1=0" },
+        });
+
+        using (var scope = f.Services.CreateScope())
+            scope.ServiceProvider.GetRequiredService<AdminJobsOptions>().Sql.Enabled = false;
+
+        var rename = await (await admin.PutJson($"/api/v1/sys/job/{id}", new
+        {
+            code = "t-sql-keep",
+            name = "改名后",
+            handlerKind = 3,
+            handlerName = "",
+            triggerKind = 1,
+            cronExpression = "0 0 4 * * ?",
+            properties = new Dictionary<string, string?> { ["sql"] = "DELETE FROM sys_job_log WHERE 1=0" },
+        })).ReadEnvelope();
+        Assert.Equal(0, rename.GetProperty("code").GetInt32());
+        var row = await ReadJobAsync(admin, "t-sql-keep");
+        Assert.Equal("改名后", row.GetProperty("name").GetString());
+        Assert.Equal("0 0 4 * * ?", row.GetProperty("cronExpression").GetString());
+
+        var tweakSql = await (await admin.PutJson($"/api/v1/sys/job/{id}", new
+        {
+            code = "t-sql-keep",
+            name = "改名后",
+            handlerKind = 3,
+            handlerName = "",
+            triggerKind = 1,
+            cronExpression = "0 0 4 * * ?",
+            properties = new Dictionary<string, string?> { ["sql"] = "DROP TABLE sys_user" },
+        })).ReadEnvelope();
+        Assert.Equal(47008, tweakSql.GetProperty("code").GetInt32());
     }
 
     [Fact]

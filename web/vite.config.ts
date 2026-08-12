@@ -32,6 +32,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // 与 web-react 相同：端口被占时必须失败，禁止静默挪到 5174 去顶掉 React 或连上别的 Vite 应用。
+    strictPort: true,
     proxy: {
       '/api': { target: apiTarget, changeOrigin: true },
       '/openapi': { target: apiTarget, changeOrigin: true },
@@ -41,6 +43,8 @@ export default defineConfig({
   // vite preview(产物预览)不继承 server.proxy,这里配同一套;低内存机上用 build+preview 代替 dev 跑整站。
   preview: {
     port: 5173,
+    // 与 server 同理：预览被占端口时必须失败，禁止静默挪端口连错应用（见 QA02 / Round 17）。
+    strictPort: true,
     proxy: {
       '/api': { target: apiTarget, changeOrigin: true },
       '/openapi': { target: apiTarget, changeOrigin: true },

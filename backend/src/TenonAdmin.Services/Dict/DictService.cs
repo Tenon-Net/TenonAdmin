@@ -96,6 +96,10 @@ public class DictService(
         var cached = await cache.GetAsync<List<SysDictItem>>(key);
         if (cached is not null) return cached;
 
+        // 类型不存在或已停用 → 下拉空(与项 Enabled 过滤同口径)。UpdateType 已 Invalidate,不会读到停用前的缓存。
+        var type = await types.GetFirstAsync(t => t.Code == typeCode);
+        if (type is null || !type.Enabled) return [];
+
         var list = await items.AsQueryable()
             .Where(i => i.DictTypeCode == typeCode && i.Enabled)
             .OrderBy(i => i.Sort)

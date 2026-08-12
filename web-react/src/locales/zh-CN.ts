@@ -1188,6 +1188,6 @@ export default {
     restored: '已恢复',
     purged: '已彻底删除',
     empty: '回收站为空',
-    tabs: { user: '用户', role: '角色', org: '机构', position: '岗位', module: '模块', config: '配置', dict: '字典', menu: '菜单' },
+    tabs: { user: '用户', role: '角色', org: '机构', position: '岗位', module: '模块', config: '配置', dict: '字典', menu: '菜单', job: '定时任务' },
   },
 }

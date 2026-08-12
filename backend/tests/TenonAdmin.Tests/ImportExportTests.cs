@@ -553,6 +553,68 @@ public class ImportExportTests
         Assert.Equal(ErrorCode.ImportRowLimitExceeded, ex.Code);
     }
 
+    /// <summary>
+    /// MaxImportRows 对 Validate/Commit 的 JSON 入口同样生效(不经 xlsx 流)。
+    /// 变异:只在 PreviewAsync 数行、Validate/Commit 不调 EnsureWithinRowLimit → 本条红。
+    /// </summary>
+    [Fact]
+    public async Task ValidateAndCommit_ExceedsMaxImportRows_Throws()
+    {
+        using var f = new AdminAppFactory
+        {
+            Settings = new Dictionary<string, string?>
+            {
+                ["TenonAdmin:Excel:MaxImportRows"] = "2",
+            },
+        };
+        using var scope = f.Services.CreateScope();
+        var runner = scope.ServiceProvider.GetRequiredService<IImportRunner>();
+        var profile = scope.ServiceProvider.GetRequiredService<UserImportProfile>();
+        var tooMany = new[] { Row(1, "lim-a", "A"), Row(2, "lim-b", "B"), Row(3, "lim-c", "C") };
+
+        var validateEx = await Assert.ThrowsAsync<AdminException>(() =>
+            runner.ValidateAsync(tooMany, profile));
+        Assert.Equal(ErrorCode.ImportRowLimitExceeded, validateEx.Code);
+
+        var commitEx = await Assert.ThrowsAsync<AdminException>(() =>
+            runner.CommitAsync(tooMany, profile, DuplicateStrategy.Skip));
+        Assert.Equal(ErrorCode.ImportRowLimitExceeded, commitEx.Code);
+    }
+
+    /// <summary>
+    /// 覆盖导入且 RoleNames 留空:不得把已有角色清掉(UpdateAsync 全量重设,空列表=清空)。
+    /// 变异:CommitRowAsync 覆盖分支把 roleIds 默认 [] 传进 UpdateAsync → 本条红。
+    /// </summary>
+    [Fact]
+    public async Task Overwrite_BlankRoleNames_KeepsExistingRoles()
+    {
+        using var f = new AdminAppFactory();
+        using var scope = f.Services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var runner = sp.GetRequiredService<IImportRunner>();
+        var profile = sp.GetRequiredService<UserImportProfile>();
+        var userSvc = sp.GetRequiredService<IUserService>();
+        var rbac = sp.GetRequiredService<IRbacService>();
+        const long seedRoleId = 2; // 全部数据
+
+        var created = await userSvc.AddAsync(new AddUserInput
+        {
+            Account = "keep-roles", Password = "Keep@123456", Name = "原名",
+            Enabled = true, OrgId = 3, RoleIds = [seedRoleId],
+        });
+
+        var over = await runner.CommitAsync(
+            [Row(1, "keep-roles", "覆盖后名")],
+            profile, DuplicateStrategy.Overwrite);
+        Assert.Equal(1, over.Updated);
+
+        var kept = await rbac.GetUserRoleIdsAsync(created.Id);
+        Assert.Contains(seedRoleId, kept);
+        Assert.Equal("覆盖后名",
+            (await sp.GetRequiredService<IRepository<SysUser>>()
+                .GetFirstAsync(u => u.Account == "keep-roles"))!.Name);
+    }
+
     // ── 清单 11:导出上限 ─────────────────────────────────────────────────
 
     /// <summary>

@@ -136,6 +136,11 @@ public class NoticeService(
     public virtual async Task MarkReadAsync(long noticeId)
     {
         var me = CurrentUserId;
+        // 必须先确认这条对当前用户可见:否则任何人可对任意 Id 写已读回执(污染表 / 日后被定向到自己时已是「已读」)。
+        var visible = await VisibleToMeAsync(me);
+        AdminException.ThrowIf(
+            !await visible.AnyAsync(n => n.Id == noticeId),
+            ErrorCode.NoticeNotFound);
         var already = await reads.AsQueryable().AnyAsync(r => r.UserId == me && r.NoticeId == noticeId);
         if (already) return; // 幂等:已读回执唯一,不重复插
         await reads.InsertAsync(new SysNoticeRead { UserId = me, NoticeId = noticeId });

@@ -8,8 +8,9 @@ namespace TenonAdmin.AspNetCore;
 /// <para>为什么不用 AsyncLocal:授权过滤器是 MVC 管道的被调用方,其内部 <c>await</c> 之后设置的 AsyncLocal
 /// 不会回流到管道上游(经典陷阱),动作里的查询将读不到。<c>HttpContext.Items</c> 挂在请求对象上、
 /// 全管道稳定可见,无此问题。非 HTTP 场景(自检/后台)回退到 SqlSugar 层的 AsyncLocal 实现。</para>
-/// <para>未设置(如匿名请求/无 HttpContext)返回 <see cref="DataScopeResult.Unrestricted"/>——
-/// 但受保护业务接口都会在授权管道显式解析并写入范围,故认证请求恒被正确约束。</para>
+/// <para>未设置(如匿名请求/无 HttpContext/后台托管服务)返回 <see cref="DataScopeResult.Unrestricted"/>。
+/// <see cref="RolePermissionAttribute"/> 与 <see cref="ActiveSessionAttribute"/> 都会在授权阶段写入范围;
+/// 未挂二者的认证请求(极少)仍会落到不受限,消费方自建端点勿只挂 <c>[Authorize]</c>。</para>
 /// </summary>
 public sealed class HttpContextDataScopeContext(IHttpContextAccessor accessor) : IDataScopeContext
 {

@@ -172,6 +172,8 @@ public class UserController(
     public async Task<IActionResult> ImportErrorReport(
         ImportRowsInput input, CancellationToken cancellationToken)
     {
+        AdminException.ThrowIf(input.Rows.Count > excel.MaxImportRows, ErrorCode.ImportRowLimitExceeded);
+
         var cols = importProfile.Columns
             .Select(c => new ExportColumn { Key = c.Key, Title = c.Title, Width = c.Width })
             .Append(new ExportColumn { Key = "_errors", Title = "错误原因", Width = 40 })

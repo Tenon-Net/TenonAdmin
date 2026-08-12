@@ -62,10 +62,15 @@ const SESSION = {
  * 跨图读写永远对不上。
  */
 async function mount(site = SITE) {
-  siteMock.mockResolvedValue(site)
+  providersMock.mockResolvedValue([])
   vi.resetModules()
+  // 先钉当前模块图里的桩,再挂页面(load 在 useEffect,渲染前必须已 mockResolved)
+  const api = await import('@/api')
+  vi.mocked(api.configApi.siteInfo).mockResolvedValue(site)
+  vi.mocked(api.externalAuthApi.providers).mockResolvedValue([])
   const { default: Page } = await import('./LoginPage')
   const { useUserStore: store } = await import('@/stores/user')
+  const { useSiteStore } = await import('@/stores/site')
   store.setState({ accessToken: '', refreshToken: '', userInfo: null })
   render(
     <MemoryRouter>
@@ -75,6 +80,12 @@ async function mount(site = SITE) {
     </MemoryRouter>,
   )
   await screen.findByTestId('login-card')
+  // 等 site.load 落地,避免品牌断言抢在默认 title/logo 上
+  await waitFor(() => {
+    const s = useSiteStore.getState().site
+    expect(s.title).toBe(site.title || 'TenonAdmin')
+    expect(s.logo).toBe(site.logo ?? '')
+  })
   return store
 }
 
@@ -87,11 +98,13 @@ beforeEach(() => {
   captchaMock.mockReset()
   loginMock.mockReset()
   siteMock.mockReset()
+  providersMock.mockReset().mockResolvedValue([])
   smsSendMock.mockReset()
   smsLoginMock.mockReset()
   challengeLoginMock.mockReset()
   challengeResendMock.mockReset()
   navigate.mockClear() // 它是本文件自己的 vi.fn(),不在上面三个里;漏清会让"失败不跳转"吃到上一条的调用
+  localStorage.clear()
 })
 
 afterEach(() => {

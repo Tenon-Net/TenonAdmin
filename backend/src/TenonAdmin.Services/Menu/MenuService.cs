@@ -19,6 +19,16 @@ public class MenuService(
     /// <summary>上溯 ParentId 链到根目录的最大步数(防断链/环)。菜单层级远小于此。</summary>
     private const int WalkGuard = 64;
 
+    /// <summary>
+    /// 当前用户启用中的角色 Id。与 <see cref="RbacPermissionProvider"/> 同口径(停用角色不授码),
+    /// 门户模块/菜单树必须同样过滤,否则停用角色后接口 403、侧栏仍显示入口。
+    /// </summary>
+    protected virtual async Task<List<long>> ResolveEnabledRoleIdsAsync(long userId) =>
+        await userRoles.AsQueryable()
+            .InnerJoin<SysRole>((ur, r) => ur.RoleId == r.Id && r.Enabled)
+            .Where((ur, r) => ur.UserId == userId)
+            .Select((ur, r) => ur.RoleId).ToListAsync();
+
     // 门户缓存 TTL:仅作孤儿回收 + 直连改库的兜底(正确性由 CUD 自增 PortalGeneration 保证);复用权限缓存过期配置。
     private TimeSpan? PortalTtl => cacheOptions.PermissionMinutes > 0 ? TimeSpan.FromMinutes(cacheOptions.PermissionMinutes) : null;
 
@@ -44,7 +54,7 @@ public class MenuService(
         var allModules = await modules.AsQueryable().Where(m => m.Enabled).OrderBy(m => m.Sort).OrderBy(m => m.Id).ToListAsync();
         if (isSuperAdmin) return allModules.Select(ToItem).ToList();
 
-        var roleIds = await userRoles.AsQueryable().Where(x => x.UserId == userId).Select(x => x.RoleId).ToListAsync();
+        var roleIds = await ResolveEnabledRoleIdsAsync(userId);
         if (roleIds.Count == 0) return [];
         var grantedMenuIds = await roleMenus.AsQueryable().Where(x => roleIds.Contains(x.RoleId)).Select(x => x.MenuId).ToListAsync();
         if (grantedMenuIds.Count == 0) return [];
@@ -86,7 +96,7 @@ public class MenuService(
         IEnumerable<SysMenu> visible = moduleMenus;
         if (!isSuperAdmin)
         {
-            var roleIds = await userRoles.AsQueryable().Where(x => x.UserId == userId).Select(x => x.RoleId).ToListAsync();
+            var roleIds = await ResolveEnabledRoleIdsAsync(userId);
             var grantedMenuIds = roleIds.Count == 0
                 ? []
                 : await roleMenus.AsQueryable().Where(x => roleIds.Contains(x.RoleId)).Select(x => x.MenuId).ToListAsync();

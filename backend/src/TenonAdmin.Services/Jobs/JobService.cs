@@ -388,8 +388,17 @@ public class JobService(
                 }
                 break;
             case JobHandlerKind.Sql:
-                AdminException.ThrowIf(!options.Sql.Enabled, ErrorCode.JobSqlDisabled);
                 AdminException.ThrowIf(string.IsNullOrWhiteSpace(Prop(props, "sql")), ErrorCode.JobPropsInvalid, new Dictionary<string, object?> { ["key"] = "sql" });
+                // 总闸关着时:禁止新建 SQL 任务、禁止改 sql 文本;仍允许改 cron/备注等非载荷字段。
+                // 执行侧 SqlAdminJob 继续拒跑(存量 Ready 会记 Failed)。storedProps 空 = 新增路径。
+                if (!options.Sql.Enabled)
+                {
+                    var previousSql = ReadStoredProp(storedProps, "sql");
+                    var nextSql = Prop(props, "sql");
+                    AdminException.ThrowIf(
+                        storedProps is null || !string.Equals(nextSql, previousSql, StringComparison.Ordinal),
+                        ErrorCode.JobSqlDisabled);
+                }
                 break;
         }
         return props.Count == 0 ? null : JsonSerializer.Serialize(props);
@@ -405,6 +414,18 @@ public class JobService(
             return JsonSerializer.Deserialize<Dictionary<string, string?>>(headers!) ?? [];
         }
         catch (JsonException) { return []; }
+    }
+
+    /// <summary>从已存 PropsJson 取单个键;非法 JSON / 缺键 → null。</summary>
+    private static string? ReadStoredProp(string? storedProps, string key)
+    {
+        if (string.IsNullOrWhiteSpace(storedProps)) return null;
+        try
+        {
+            var props = JsonSerializer.Deserialize<Dictionary<string, string?>>(storedProps!);
+            return props is not null && props.TryGetValue(key, out var v) ? v : null;
+        }
+        catch (JsonException) { return null; }
     }
 
     private static string? Prop(IReadOnlyDictionary<string, string?> props, string key) =>
