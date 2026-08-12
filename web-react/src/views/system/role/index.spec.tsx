@@ -72,7 +72,7 @@ describe('RolePage 接线', () => {
     mount()
     await waitFor(() => expect(dt.columns).toBeTruthy())
     await callRender(col('enabled'), ROLES[0]).props.request(false)
-    expect(roleApi.update).toHaveBeenCalledWith(1, { code: 'admin', name: '管理员', sort: 0, enabled: false, remark: '内置' })
+    expect(roleApi.update).toHaveBeenCalledWith(1, { code: 'admin', name: '管理员', sort: 0, enabled: false, remark: '内置', isDelegatable: false })
   })
 
   it('状态列:切换成功回调必须重拉表格(悲观开关回显真实态)', async () => {
@@ -135,7 +135,7 @@ describe('RolePage 接线', () => {
     fireEvent.change(await screen.findByPlaceholderText('角色编码'), { target: { value: 'ops' } })
     fireEvent.change(screen.getByPlaceholderText('角色名称'), { target: { value: '运维' } })
     fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
-    await waitFor(() => expect(roleApi.add).toHaveBeenCalledWith({ code: 'ops', name: '运维', sort: 0, enabled: true, remark: '' }))
+    await waitFor(() => expect(roleApi.add).toHaveBeenCalledWith({ code: 'ops', name: '运维', sort: 0, enabled: true, remark: '', isDelegatable: false }))
   })
 
   it('授权菜单保存:全量替换(setMenus 收当前勾选)', async () => {
