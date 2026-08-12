@@ -72,19 +72,30 @@ public sealed class WorkerIdLeaseGuard(
         logger.LogInformation("WorkerId {WorkerId} 租约已获取(node={Node}, pid={Pid}, ttl={Ttl}s)。",
             _workerId, _nodeName, pid, LeaseTtl.TotalSeconds);
 
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // 自有 CTS,不要 CreateLinkedTokenSource(StartAsync 的 token):
+        // 宿主停机时会先 Dispose 启动链上的 token source,再调 StopAsync——
+        // 链到它的 CTS 已被 Dispose,CancelAsync 会抛 ObjectDisposedException,拖垮整批 WebApplicationFactory 测试。
+        _cts = new CancellationTokenSource();
         _heartbeatTask = HeartbeatLoopAsync(_cts.Token);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (_cts is not null)
+        var cts = Interlocked.Exchange(ref _cts, null);
+        if (cts is not null)
         {
-            await _cts.CancelAsync();
+            try { await cts.CancelAsync(); }
+            catch (ObjectDisposedException) { /* already torn down */ }
+
             if (_heartbeatTask is not null)
             {
-                try { await _heartbeatTask; } catch (OperationCanceledException) { }
+                // 循环内部已吞掉所有续租异常,唯一还能逃出来的是它那句告警日志本身
+                // (停机期日志提供者可能已释放,同 StopAsync 尾部)。停机不该被它拖垮。
+                try { await _heartbeatTask; }
+                catch { /* 取消或日志提供者已释放 */ }
             }
+
+            cts.Dispose();
         }
 
         try
@@ -96,7 +107,14 @@ public sealed class WorkerIdLeaseGuard(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "WorkerId {WorkerId} 租约释放失败(进程退出后租约将自然过期)。", _workerId);
+            // 释放是尽力而为:租约到期会自然回收。停机期日志提供者可能已被释放(Windows EventLog
+            // 就会抛 ObjectDisposedException),所以告警本身也要兜住——任何异常冒出 StopAsync,
+            // Host.StopAsync 都会聚合抛出,连带拖垮正在销毁的 WebApplicationFactory。
+            try
+            {
+                logger.LogWarning(ex, "WorkerId {WorkerId} 租约释放失败(进程退出后租约将自然过期)。", _workerId);
+            }
+            catch { /* 日志提供者已随宿主停机释放,无处可报 */ }
         }
     }
 
@@ -126,6 +144,7 @@ public sealed class WorkerIdLeaseGuard(
 
     public void Dispose()
     {
-        _cts?.Dispose();
+        var cts = Interlocked.Exchange(ref _cts, null);
+        cts?.Dispose();
     }
 }
