@@ -100,6 +100,7 @@ public class UserService(
         var scopeOrgIds = scope is not null && !scope.IsUnrestricted && !isSuperAdmin
             ? scope.OrgIds.ToList() : null;
         var selfId = currentUser?.UserId ?? 0;
+        var includeSelf = scope?.IncludeSelf == true;
 
         return users.AsQueryable()
             .WhereIF(!string.IsNullOrEmpty(input.Account), u => u.Account.Contains(input.Account!))
@@ -108,9 +109,11 @@ public class UserService(
             .WhereIF(holders != null, u => holders!.Contains(u.Id))
             .WhereIF(input.Enabled.HasValue, u => u.Enabled == input.Enabled!.Value)
             // QA08: non-superadmin sees only users in their org scope (+ self if IncludeSelf)
+            // 布尔标记写成 `== true` 而非裸布尔:SqlServer 的谓词上下文不接受裸标量(裸 1/0 →
+            // "非布尔类型的表达式"),必须渲染成比较式。同 SqlSugarSetup 的全局数据范围过滤器。
             .WhereIF(scopeOrgIds != null, u =>
                 (u.OrgId != null && scopeOrgIds!.Contains(u.OrgId.Value))
-                || (scope!.IncludeSelf && u.Id == selfId))
+                || (includeSelf == true && u.Id == selfId))
             // 客户端排序(按 SysUser 实体列安全校验)优先,否则默认按 Id;必须在 Select 投影前,按实体列排序
             .OrderBySafe(input, q => q.OrderBy(u => u.Id))
             // 投影到 UserItem:SQL 层就不取 Password 列,哈希从不进内存/出接口
