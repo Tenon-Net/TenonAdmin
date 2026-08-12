@@ -11,6 +11,7 @@ const LOGIN: LoginOutput = {
   account: 'admin',
   name: '超管',
   mustChangePassword: false,
+  isSuperAdmin: false,
 }
 
 const LOGIN_COOKIE: LoginOutput = {
@@ -34,7 +35,13 @@ describe('useUserStore', () => {
     expect(s.refreshToken).toBe('rt')
     expect(s.sessionMode).toBe('body')
     expect(s.csrfRequired).toBe(false)
-    expect(s.userInfo).toEqual({ userId: 1, account: 'admin', name: '超管', mustChangePassword: false })
+    expect(s.userInfo).toEqual({
+      userId: 1,
+      account: 'admin',
+      name: '超管',
+      mustChangePassword: false,
+      isSuperAdmin: false,
+    })
     expect(isLoggedIn(s)).toBe(true)
     expect(isCookieSession(s)).toBe(false)
   })
@@ -45,6 +52,12 @@ describe('useUserStore', () => {
     const { mustChangePassword: _omit, ...partial } = LOGIN
     useUserStore.getState().setSession(partial as LoginOutput)
     expect(useUserStore.getState().userInfo?.mustChangePassword).toBe(false)
+  })
+
+  it('后端漏给 isSuperAdmin 时归一为 false,而不是 undefined', () => {
+    const { isSuperAdmin: _omit, ...partial } = LOGIN
+    useUserStore.getState().setSession(partial as LoginOutput)
+    expect(useUserStore.getState().userInfo?.isSuperAdmin).toBe(false)
   })
 
   it('clear 清空会话', () => {
@@ -64,7 +77,13 @@ describe('useUserStore', () => {
     const saved = JSON.parse(localStorage.getItem('user')!).state
     expect(saved.accessToken).toBe('at')
     expect(saved.refreshToken).toBe('rt')
-    expect(saved.userInfo).toEqual({ userId: 1, account: 'admin', name: '超管', mustChangePassword: false })
+    expect(saved.userInfo).toEqual({
+      userId: 1,
+      account: 'admin',
+      name: '超管',
+      mustChangePassword: false,
+      isSuperAdmin: false,
+    })
     expect(saved.sessionMode).toBe('body')
     expect(saved.csrfRequired).toBe(false)
   })
