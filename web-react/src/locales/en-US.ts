@@ -181,6 +181,9 @@ export default {
     ssoDingtalk: 'DingTalk',
     sso: 'SSO',
     ssoComingSoon: 'Third-party login coming soon',
+    skinAurora: 'Aurora',
+    skinSplit: 'Split',
+    skinSpotlight: 'Spotlight',
   },
   module: {
     choose: 'Choose app',

@@ -56,7 +56,7 @@ export default function LoginPage() {
               aria-selected={s.id === skin}
               onClick={() => pick(s.id)}
             >
-              {s.label}
+              {t(s.label)}
             </button>
           ))}
         </div>

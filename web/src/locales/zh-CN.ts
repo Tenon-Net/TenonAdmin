@@ -184,6 +184,9 @@ export default {
     ssoDingtalk: '钉钉',
     sso: 'SSO',
     ssoComingSoon: '第三方登录即将开放',
+    skinAurora: '极光',
+    skinSplit: '双栏',
+    skinSpotlight: '聚光',
   },
   module: {
     choose: '选择应用',
@@ -1109,7 +1112,6 @@ export default {
       cannotOperateSelf: '不能对自己执行此操作',
     },
     role: { notFound: '角色不存在', codeExists: '角色编码已存在', notDelegatable: '目标角色不可转授' },
-    role: { notFound: '角色不存在', codeExists: '角色编码已存在' },
     org: {
       notFound: '机构不存在',
       hasChildren: '存在子机构,不可删除',

@@ -23,6 +23,8 @@ export interface LoginOutput {
    * Level3 cookie 会话为 true;非 Level3 为 null/false。
    */
   csrfRequired?: boolean | null
+  /** 是否超管;前端据此在 profile 接口故障时仍能正确 fail-open v-auth。 */
+  isSuperAdmin?: boolean
 }
 
 /** 我的应用列表(后端 MyModulesOutput)。 */

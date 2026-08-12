@@ -182,6 +182,9 @@ export default {
     ssoDingtalk: '钉钉',
     sso: 'SSO',
     ssoComingSoon: '第三方登录即将开放',
+    skinAurora: '极光',
+    skinSplit: '双栏',
+    skinSpotlight: '聚光',
   },
   module: {
     choose: '选择应用',

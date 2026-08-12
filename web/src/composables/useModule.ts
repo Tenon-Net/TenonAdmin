@@ -23,7 +23,7 @@ export function useModule() {
     const [{ modules, defaultModuleId }, perm, profile] = await Promise.all([
       personalApi.modules(),
       personalApi.permissions().then((codes) => ({ ok: true, codes })).catch(() => ({ ok: false, codes: [] as string[] })),
-      personalApi.profile().then((p) => ({ sadm: p.isSuperAdmin, avatar: p.avatar ?? null })).catch(() => ({ sadm: false, avatar: null })),
+      personalApi.profile().then((p) => ({ sadm: p.isSuperAdmin, avatar: p.avatar ?? null })).catch(() => ({ sadm: useUserStore().userInfo?.isSuperAdmin ?? false, avatar: null })),
     ])
     auth.modules = modules
     auth.defaultModuleId = defaultModuleId ?? null
