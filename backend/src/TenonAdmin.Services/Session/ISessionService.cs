@@ -23,6 +23,14 @@ public interface ISessionService
     /// <summary>吊销某用户的<b>全部</b>活跃会话(停用/删除用户时调用),使其持有的所有访问令牌下次请求即 401。</summary>
     Task RevokeAllForUserAsync(long userId);
 
+    /// <summary>
+    /// 吊销某用户的活跃会话,但保留 <paramref name="exceptSessionId"/>(若非空)——自助改密等场景下,
+    /// 当前会话应保留以便本次 HTTP 请求正常返回,由前端据此自愿登出;其余会话立即失效。
+    /// <para>默认实现直接吊销全部(不排除任何会话),使既有第三方 <see cref="ISessionService"/> 实现无需改动即可编译;
+    /// 内置 <see cref="SessionService"/> 覆写为精确排除。</para>
+    /// </summary>
+    Task RevokeAllForUserExceptAsync(long userId, string? exceptSessionId) => RevokeAllForUserAsync(userId);
+
     /// <summary>在线会话分页(活跃且未过期)。</summary>
     Task<PagedList<OnlineSessionItem>> ListOnlineAsync(SessionPageInput input);
 }

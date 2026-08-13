@@ -103,4 +103,17 @@ public class ConfigCenterTests
         Assert.Contains(items, item => item.GetProperty("configKey").GetString() == "custom.feature.enabled");
         Assert.DoesNotContain(items, item => item.GetProperty("groupCode").GetString() is "sys" or "security" or "upload");
     }
+
+    // ── QA13: Seed config protection ────────────────────────────────────
+
+    [Fact]
+    public async Task Delete_seed_config_returns_SeedDataProtected()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+
+        // Id=1 is the seed config "sys.site.title"
+        var env = await (await admin.DeleteAsync("/api/v1/sys/config/1")).ReadEnvelope();
+        Assert.Equal(43010, env.GetProperty("code").GetInt32());
+    }
 }

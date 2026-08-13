@@ -17,9 +17,14 @@ namespace TenonAdmin.Tests;
 /// </summary>
 public class SecurityBaselinePrecheckTests
 {
+    /// <summary>
+    /// 落盘样本 JSON 的目录。优先 <c>GROK_SCRATCH</c>(外部交付流水线注入);
+    /// 否则用系统临时目录下的固定子路径——原先硬编码 <c>ADMINI~1\...\grok-goal-...</c>,
+    /// 在别的机器/账号上 CreateDirectory 直接 UnauthorizedAccessException,把本已绿的预检断言冲红。
+    /// </summary>
     private static readonly string ScratchDir =
         Environment.GetEnvironmentVariable("GROK_SCRATCH")
-        ?? @"C:\Users\ADMINI~1\AppData\Local\Temp\grok-goal-e152992c897d\implementer";
+        ?? Path.Combine(Path.GetTempPath(), "tenon-admin-tests", "level3-precheck");
 
     private static readonly string SamplePath = Path.Combine(ScratchDir, "level3-precheck-sample.json");
 

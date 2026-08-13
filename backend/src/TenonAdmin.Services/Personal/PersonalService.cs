@@ -14,7 +14,12 @@ public class PersonalService(
     IMenuService menu,
     IPasswordHistoryService? passwordHistory = null,
     // 统一时间源(§1.11):尾随可选参数,DI 正常注入;消费者子类省略也能编译(§5.3,同 FileGcService 成法)
-    TimeProvider? time = null) : IPersonalService
+    TimeProvider? time = null,
+    // QA04:自助改密后吊销"其它"会话(保留当前会话,使本次响应正常返回);尾随可选,消费者子类省略也能编译
+    ISessionService? sessions = null,
+    ICurrentUser? currentUser = null,
+    // QA25.3:头像 URL 校验(默认只放行 null/空白或本地签名直链);未注入(纯 Services 宿主)时跳过校验
+    IAvatarUrlValidator? avatarValidator = null) : IPersonalService
 {
     // LastPasswordChangeTime 是与审计字段同类的持久化业务时间戳,走本地时钟(与 SqlSugarSetup 的 GetLocalNow 审计口径一致)
     private DateTime Now => (time ?? TimeProvider.System).GetLocalNow().DateTime;
@@ -61,6 +66,9 @@ public class PersonalService(
     {
         var user = await users.GetByIdAsync(userId);
         AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
+        AdminException.ThrowIf(
+            avatarValidator is not null && !avatarValidator.IsValid(input.Avatar),
+            ErrorCode.AvatarUrlInvalid);
         // 只改自己能改的字段;账号/机构/职位/超管标志一律不动(全量替换语义,见 UpdateProfileInput)
         user!.Name = input.Name;
         user.Nickname = input.Nickname;
@@ -87,6 +95,11 @@ public class PersonalService(
         user.LastPasswordChangeTime = Now;   // 密码过期窗口从本次改密重新起算
         await users.UpdateAsync(user);
         await (passwordHistory?.AppendAsync(userId, user.Password) ?? Task.CompletedTask);   // 记录新口令哈希,供后续防重用
+
+        // 改密后吊销该用户的其它会话,只保留当前会话(本次响应仍能正常返回);
+        // 旧会话对应的前端下次请求即 401,据此自愿登出重新登录。
+        if (sessions is not null)
+            await sessions.RevokeAllForUserExceptAsync(userId, currentUser?.SessionId);
     }
 
     /// <inheritdoc />

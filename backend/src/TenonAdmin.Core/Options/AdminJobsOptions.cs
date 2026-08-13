@@ -6,6 +6,10 @@ namespace TenonAdmin.Core;
 /// <b>没有第二个总开关</b>:整模块下线走既有 <c>Api:DisabledModules=["Job"]</c>;
 /// <see cref="SchedulerEnabled"/> 只回答"本副本要不要参与调度"。
 /// </para>
+/// <para>
+/// <c>DisabledModules=["Job"]</c> 只摘除 HTTP 管理 API 路由;调度器按 <see cref="SchedulerEnabled"/> 独立运行。
+/// 要彻底停止任务执行,须设 <c>SchedulerEnabled=false</c>。
+/// </para>
 /// </summary>
 public class AdminJobsOptions
 {

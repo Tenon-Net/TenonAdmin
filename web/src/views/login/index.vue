@@ -43,7 +43,7 @@ const active = computed(() => LOGIN_SKINS.find((s) => s.id === skin.value) ?? LO
           :aria-selected="s.id === skin"
           @click="skin = s.id"
         >
-          {{ s.label }}
+          {{ t(s.label) }}
         </button>
       </div>
 

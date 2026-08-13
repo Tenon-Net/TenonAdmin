@@ -6,7 +6,7 @@
 - **路线 A**：直接改本仓库，在内核内加，新代码进 `TenonAdmin.Services` / `TenonAdmin.AspNetCore`。
 - **路线 B**：你的项目装了 `TenonAdmin` NuGet 包，在自己的业务程序集里加，靠 `options.ApplicationAssemblies` 挂载，内核源码一行不碰。
 
-除了「放哪」之外两条路完全一样。下面走路线 B。它也是消费方的推荐路线。
+除了「放哪」之外两条路完全一样，下面走路线 B，也是消费方的推荐路线。
 :::
 
 ## 用真实代码打底

@@ -7,6 +7,12 @@ namespace TenonAdmin.Services;
 /// <see cref="IRbacService"/> 默认实现。关联维护用"整删再插"全量替换语义:
 /// 关联行是纯连接数据、无保留价值,故物理删除(走 <c>Db.Deleteable</c> 逃生舱口)而非软删——
 /// 免得软删残行既撑大表又撞唯一索引。删+插包在事务里,失效缓存放在事务提交之后。
+/// <para>
+/// QA36/QA09:角色<b>授权面</b>(菜单挂载、数据范围)是超管专属,越过路由权限之外的强约束——
+/// 由 <see cref="EnsureSuperAdmin"/> 兜底;角色<b>指派面</b>(把角色关联到用户)经 <see cref="IRoleGrantPolicy"/>
+/// 收口,非超管只能把"可转授"角色授予其数据范围内的用户。两个依赖均尾随可选:未注入(消费者精简子类/
+/// 手工构造的旧测试)时不加限制,行为与批次前一致。
+/// </para>
 /// </summary>
 public class RbacService(
     IRepository<SysRole> roles,
@@ -14,11 +20,20 @@ public class RbacService(
     IRepository<SysUserRole> userRoles,
     IRepository<SysRoleMenu> roleMenus,
     IRepository<SysRoleDataScope> roleScopes,
-    ICacheProvider cache) : IRbacService
+    ICacheProvider cache,
+    IRoleGrantPolicy? grantPolicy = null,
+    ICurrentUser? currentUser = null) : IRbacService
 {
+    /// <summary>超管专属操作守卫(角色授权面);系统/未认证上下文视为可信,不受限。</summary>
+    protected virtual void EnsureSuperAdmin() =>
+        AdminException.ThrowIf(
+            currentUser is { IsAuthenticated: true, IsSuperAdmin: false },
+            ErrorCode.SuperAdminRequired);
+
     /// <inheritdoc />
     public virtual async Task SetRoleMenusAsync(long roleId, IReadOnlyCollection<long> menuIds)
     {
+        EnsureSuperAdmin();   // QA36:角色菜单授权超管专属
         AdminException.ThrowIf(!await roles.AnyAsync(r => r.Id == roleId), ErrorCode.RoleNotFound);
 
         var links = menuIds.Distinct().Select(mid => new SysRoleMenu { RoleId = roleId, MenuId = mid }).ToList();
@@ -35,7 +50,15 @@ public class RbacService(
     /// <inheritdoc />
     public virtual async Task SetUserRolesAsync(long userId, IReadOnlyCollection<long> roleIds)
     {
-        AdminException.ThrowIf(!await users.AnyAsync(u => u.Id == userId), ErrorCode.UserNotFound);
+        var user = await users.GetByIdAsync(userId);
+        AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
+
+        // QA36:只对"相对已有关联新增"的角色做转授校验——全量替换语义下,若连同被保留的既有关联一起校验,
+        // 非超管重新提交一份"早先由超管授过某不可转授角色"的既有集合时,即便一个角色都没多加也会被误挡。
+        var oldRoleIds = await userRoles.AsQueryable().Where(x => x.UserId == userId).Select(x => x.RoleId).ToListAsync();
+        var addedRoleIds = roleIds.Except(oldRoleIds).ToList();
+        if (grantPolicy is not null)
+            await grantPolicy.EnsureGrantableAsync(addedRoleIds, userId, user!.OrgId);
 
         var links = roleIds.Distinct().Select(rid => new SysUserRole { UserId = userId, RoleId = rid }).ToList();
         await ReplaceAsync(
@@ -67,6 +90,15 @@ public class RbacService(
 
         var oldUserIds = await userRoles.AsQueryable().Where(x => x.RoleId == roleId).Select(x => x.UserId).ToListAsync();
 
+        // QA36:只对"新增"的用户做转授校验(同 SetUserRolesAsync 的理由);每个新增用户各自的机构决定是否在范围内。
+        var addedUserIds = userIds.Except(oldUserIds).ToList();
+        if (grantPolicy is not null && addedUserIds.Count > 0)
+        {
+            var addedUsers = await users.AsQueryable().Where(u => addedUserIds.Contains(u.Id)).Select(u => new { u.Id, u.OrgId }).ToListAsync();
+            foreach (var u in addedUsers)
+                await grantPolicy.EnsureGrantableAsync([roleId], u.Id, u.OrgId);
+        }
+
         var links = userIds.Distinct().Select(uid => new SysUserRole { UserId = uid, RoleId = roleId }).ToList();
         await ReplaceAsync(
             deleteExisting: () => userRoles.Db.Deleteable<SysUserRole>().Where(x => x.RoleId == roleId).ExecuteCommandAsync(),
@@ -81,6 +113,7 @@ public class RbacService(
     /// <inheritdoc />
     public virtual async Task SetRoleDataScopeAsync(long roleId, DataScopeType scopeType, IReadOnlyCollection<long>? customOrgIds = null)
     {
+        EnsureSuperAdmin();   // QA09:数据范围配置超管专属
         AdminException.ThrowIf(!await roles.AnyAsync(r => r.Id == roleId), ErrorCode.RoleNotFound);
 
         // 自定义机构仅 Custom 有意义;非 Custom 一律清空,避免残留误导

@@ -37,7 +37,6 @@ public class UserProfileFieldsTests
             phone = "13800138000",
             email = "staff@example.com",
             gender = "1",
-            avatar = "http://x/a.png",
             directorId,
             enabled = true,
             roleIds = Array.Empty<long>(),
@@ -49,7 +48,6 @@ public class UserProfileFieldsTests
         Assert.Equal("13800138000", detail.GetProperty("phone").GetString());
         Assert.Equal("staff@example.com", detail.GetProperty("email").GetString());
         Assert.Equal("1", detail.GetProperty("gender").GetString());
-        Assert.Equal("http://x/a.png", detail.GetProperty("avatar").GetString());
         Assert.Equal(directorId, detail.GetProperty("directorId").GetInt64());
 
         // 列表:主管姓名由 DirectorId 关联回填(不落库字段)

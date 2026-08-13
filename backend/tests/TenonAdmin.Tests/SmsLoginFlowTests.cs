@@ -113,6 +113,64 @@ public class SmsLoginFlowTests
         Assert.Equal(40011, login.GetProperty("code").GetInt32());
     }
 
+    /// <summary>
+    /// QA06:免密登录(手机号+码)错码时的响应,不能因手机号是否已注册而不同——
+    /// 已知启用手机号错码与未知手机号错码都统一回 40011、且都不带 attemptsLeft(防枚举)。
+    /// 底层验证码计次/达上限作废逻辑仍照常执行,只是对外观感一致。
+    /// </summary>
+    [Fact]
+    public async Task Wrong_code_for_known_phone_normalizes_to_expired_without_attempts_left()
+    {
+        var sms = new MfaLoginFlowTests.CapturingSmsSender();
+        using var f = Factory(sms);
+        await SetConfig(f, "sys.security.smsLogin.enabled", "true");
+        await SetPhone(f, "superAdmin", "13800001234");
+
+        var c = f.CreateClient();
+        var send = await (await c.PostJson("/api/v1/auth/sms/send", new { phone = "13800001234" })).ReadEnvelope();
+        Assert.Equal(0, send.GetProperty("code").GetInt32());
+
+        var wrong = sms.LastCode == "000000" ? "111111" : "000000";
+        var login = await (await c.PostJson("/api/v1/auth/sms/login",
+            new { phone = "13800001234", code = wrong })).ReadEnvelope();
+
+        // 已知手机号错码:与未知手机号(见 Unknown_phone_send_is_indistinguishable_and_login_fails_generically)
+        // 响应码完全一致——40011,且无 attemptsLeft(该字段只在 40010 场景出现)。
+        Assert.Equal(40011, login.GetProperty("code").GetInt32());
+        Assert.False(login.TryGetProperty("args", out var args) &&
+            args.ValueKind == System.Text.Json.JsonValueKind.Object &&
+            args.TryGetProperty("attemptsLeft", out _));
+
+        // 正确码仍能登录成功(码未被此前的错码尝试作废——底层计次未到上限)
+        var ok = await (await c.PostJson("/api/v1/auth/sms/login",
+            new { phone = "13800001234", code = sms.LastCode })).ReadEnvelope();
+        Assert.Equal(0, ok.GetProperty("code").GetInt32());
+    }
+
+    /// <summary>
+    /// QA06 对照组:密码登录后的短信二次验证挑战(已过密码校验,账号不再是秘密)不受免密登录归一影响——
+    /// 错码继续回 40010 并带 attemptsLeft,行为与批次前一致。
+    /// </summary>
+    [Fact]
+    public async Task Password_login_sms_challenge_keeps_wrong_code_with_attempts_left()
+    {
+        var sms = new MfaLoginFlowTests.CapturingSmsSender();
+        using var f = Factory(sms);
+        await SetConfig(f, "sys.security.mfa.enabled", "true");
+        await SetPhone(f, "superAdmin", "13800001234");
+
+        var c = f.CreateClient();
+        var login = await (await c.PostJson("/api/v1/auth/login",
+            new { account = "superAdmin", password = "Test@123456" })).ReadEnvelope();
+        Assert.Equal(40009, login.GetProperty("code").GetInt32());
+        var challengeId = login.GetProperty("args").GetProperty("challengeId").GetString()!;
+
+        var wrong = sms.LastCode == "000000" ? "111111" : "000000";
+        var verify = await (await c.PostJson("/api/v1/auth/login/sms", new { challengeId, code = wrong })).ReadEnvelope();
+        Assert.Equal(40010, verify.GetProperty("code").GetInt32());
+        Assert.True(verify.GetProperty("args").GetProperty("attemptsLeft").GetInt32() >= 0);
+    }
+
     [Fact]
     public async Task Duplicate_phone_users_are_silently_excluded_from_sms_login()
     {

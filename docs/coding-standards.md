@@ -101,6 +101,14 @@ public class DictController(IDictService svc) : ControllerBase
 - **多写操作包事务**：`Db.Ado.UseTranAsync`，失败整体回滚；**缓存失效放在事务提交之后**（`RbacService.ReplaceAsync`、`SessionService.OpenAsync`）。
 - 审计字段（Id 雪花、CreateTime/User/Org、UpdateTime/User）由 AOP 自动填（`SqlSugarSetup.cs:75-104`），业务只设业务字段。`CreateOrgId` 不填则机构维度数据范围对业务表恒 0 行——不要手动绕过 AOP。
 - 雪花 `WorkerId` 来自 `TenonAdmin:Id:WorkerId`，**多实例必须各配不同值**。
+- **查询表达式里的布尔标记一律写成 `flag == true`，不写裸 `flag`**。裸布尔（尤其是闭包捕获的 C# 变量）会被翻成 SQL 里的裸字面量 `1`/`0`；SQLite 与 MySQL 拿它当真值，**SQL Server 的谓词上下文直接拒**（`An expression of non-boolean type specified in a context where a condition is expected`）。写成比较式才渲染成 `@p = 1`，四方言通吃。
+  ```csharp
+  // ❌ 三条腿绿,sqlserver 上该端点整个 500
+  .WhereIF(scopeOrgIds != null, u => ... || (scope!.IncludeSelf && u.Id == selfId))
+  // ✅
+  .WhereIF(scopeOrgIds != null, u => ... || (includeSelf == true && u.Id == selfId))
+  ```
+  实体列同理（`e.IsDelete == false` 而非 `!e.IsDelete`）。现有两处范例：`SqlSugarSetup` 的全局数据范围过滤器、`UserService.BuildListQuery`。**这类缺陷本地与 CI 的 sqlite/mysql/postgres 三条腿都不会红**，只有 sqlserver 腿抓得到。
 
 ### 1.8 缓存规范（性能核心，务必遵守）
 

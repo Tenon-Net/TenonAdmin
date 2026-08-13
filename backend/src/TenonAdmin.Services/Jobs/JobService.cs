@@ -78,6 +78,8 @@ public class JobService(
     public virtual async Task UpdateAsync(long id, JobInput input)
     {
         var entity = await GetAsync(id);
+        if (entity.IsSystem)
+            RejectSystemPayloadChange(entity, input);
         var originalNext = entity.NextRunTime;
         ApplyInput(entity, input, entity.PropsJson);   // Code 不动:创建后不可变
         entity.UpdateTime = Now;
@@ -270,6 +272,24 @@ public class JobService(
         return entity!;
     }
 
+    /// <summary>
+    /// 系统任务载荷锁:HandlerKind / HandlerName / Properties 三字段与库中值不一致时拒绝(47014)。
+    /// 允许改触发配置(cron / 间隔 / 窗口)和运维参数(名称 / 备注 / 告警 / 超时 / 重试)。
+    /// </summary>
+    protected virtual void RejectSystemPayloadChange(SysJob entity, JobInput input)
+    {
+        if (input.HandlerKind != entity.HandlerKind)
+            throw new AdminException(ErrorCode.JobProtected);
+
+        var resolvedName = ResolveHandlerName(input);
+        if (!string.Equals(resolvedName, entity.HandlerName, StringComparison.Ordinal))
+            throw new AdminException(ErrorCode.JobProtected);
+
+        var serializedProps = ValidateAndSerializeProps(input, entity.PropsJson);
+        if (!string.Equals(serializedProps, entity.PropsJson, StringComparison.Ordinal))
+            throw new AdminException(ErrorCode.JobProtected);
+    }
+
     /// <summary>入参落到实体:载荷归一 + 触发配置校验 + 属性包序列化(<paramref name="storedProps"/> 供占位符回填)。</summary>
     protected virtual void ApplyInput(SysJob entity, JobInput input, string? storedProps)
     {
@@ -388,8 +408,17 @@ public class JobService(
                 }
                 break;
             case JobHandlerKind.Sql:
-                AdminException.ThrowIf(!options.Sql.Enabled, ErrorCode.JobSqlDisabled);
                 AdminException.ThrowIf(string.IsNullOrWhiteSpace(Prop(props, "sql")), ErrorCode.JobPropsInvalid, new Dictionary<string, object?> { ["key"] = "sql" });
+                // 总闸关着时:禁止新建 SQL 任务、禁止改 sql 文本;仍允许改 cron/备注等非载荷字段。
+                // 执行侧 SqlAdminJob 继续拒跑(存量 Ready 会记 Failed)。storedProps 空 = 新增路径。
+                if (!options.Sql.Enabled)
+                {
+                    var previousSql = ReadStoredProp(storedProps, "sql");
+                    var nextSql = Prop(props, "sql");
+                    AdminException.ThrowIf(
+                        storedProps is null || !string.Equals(nextSql, previousSql, StringComparison.Ordinal),
+                        ErrorCode.JobSqlDisabled);
+                }
                 break;
         }
         return props.Count == 0 ? null : JsonSerializer.Serialize(props);
@@ -405,6 +434,18 @@ public class JobService(
             return JsonSerializer.Deserialize<Dictionary<string, string?>>(headers!) ?? [];
         }
         catch (JsonException) { return []; }
+    }
+
+    /// <summary>从已存 PropsJson 取单个键;非法 JSON / 缺键 → null。</summary>
+    private static string? ReadStoredProp(string? storedProps, string key)
+    {
+        if (string.IsNullOrWhiteSpace(storedProps)) return null;
+        try
+        {
+            var props = JsonSerializer.Deserialize<Dictionary<string, string?>>(storedProps!);
+            return props is not null && props.TryGetValue(key, out var v) ? v : null;
+        }
+        catch (JsonException) { return null; }
     }
 
     private static string? Prop(IReadOnlyDictionary<string, string?> props, string key) =>

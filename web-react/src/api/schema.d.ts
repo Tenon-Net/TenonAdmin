@@ -1166,7 +1166,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 按类型编码取启用中的字典项列表(前端下拉数据源,读穿透缓存) */
+        /**
+         * 按类型编码取启用中的字典项列表(前端下拉数据源,读穿透缓存)。
+         *     `[ActiveSession]`(QA12):任何已登录用户都能取,不挂专门权限码。
+         */
         get: {
             parameters: {
                 query?: never;
@@ -2629,50 +2632,6 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/mfa/challenge/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** TOTP 二次验证挑战校验。 */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["TotpChallengeVerifyInput"];
-                    "text/json": components["schemas"]["TotpChallengeVerifyInput"];
-                    "application/*+json": components["schemas"]["TotpChallengeVerifyInput"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/plain": components["schemas"]["MfaChallengeVerifyOutput"];
-                        "application/json": components["schemas"]["MfaChallengeVerifyOutput"];
-                        "text/json": components["schemas"]["MfaChallengeVerifyOutput"];
-                    };
                 };
             };
         };
@@ -6881,6 +6840,8 @@ export interface components {
              *     Level3 cookie 会话为 true;非 Level3 为 null/false。旧客户端可忽略。
              */
             csrfRequired?: null | boolean;
+            /** @description 是否超管;前端据此在 profile 接口故障时仍能正确 fail-open v-auth。 */
+            isSuperAdmin?: boolean;
         };
         /**
          * @description 菜单新增/编辑入参。long? MenuInput.ModuleId<b>仅顶级目录(ParentId==0)有效</b>,
@@ -6946,11 +6907,6 @@ export interface components {
         };
         /** @description 菜单节点类型(设计 §16 目录/页面/按钮三级)。用枚举而非魔法数;存库为 int。 */
         MenuType: number;
-        /** @description 挑战校验出参。 */
-        MfaChallengeVerifyOutput: {
-            /** Format: int64 */
-            userId?: number | string;
-        };
         /** @description 模块新增/编辑入参 */
         ModuleInput: {
             /** @description 模块编码(唯一) */
@@ -8918,6 +8874,11 @@ export interface components {
             enabled?: boolean;
             /** @description 备注 */
             remark?: null | string;
+            /**
+             * @description 是否可被非超管转授给他人(QA36)。角色定义本身即超管专属操作(见 RoleService),
+             *     故此处不加额外访问控制;留空/false 与显式声明"不可转授"同义(安全默认)。
+             */
+            isDelegatable?: null | boolean;
         };
         /** @description 单条预检项(机器可读;不含密钥/连接串明文)。 */
         SecurityBaselinePrecheckItem: {
@@ -9634,6 +9595,13 @@ export interface components {
             sort?: number | string;
             enabled?: boolean;
             remark?: null | string;
+            /**
+             * @description 是否可被非超管转授给他人(QA36 角色委派)。可空以兼容存量库的无损升级:
+             *     数据库 NULL(功能上线前的存量角色)与显式 `false` 同判定为"不可转授",只有显式 `true` 才放行——
+             *     安全默认(未标注的旧角色一律收紧,不因升级静默放宽)。演进列必须可空:MSSQL 无法对有数据的表
+             *     ADD 无 DEFAULT 的 NOT NULL 列(同 bool SysUser.ForceTotp 的成法)。
+             */
+            isDelegatable?: null | boolean;
             isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
@@ -9708,11 +9676,6 @@ export interface components {
             /** @description 挑战票据 Id(取自 40018 信令的 args.challengeId) */
             challengeId?: string;
             /** @description 6 位 TOTP 动态口令 */
-            code?: string;
-        };
-        /** @description TOTP 挑战校验入参。 */
-        TotpChallengeVerifyInput: {
-            challengeId?: string;
             code?: string;
         };
         /** @description 管理员清除 MFA 入参。 */

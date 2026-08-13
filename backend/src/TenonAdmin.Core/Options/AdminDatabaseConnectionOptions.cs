@@ -12,8 +12,8 @@ public class AdminDatabaseConnectionOptions
     /// </summary>
     public string ConfigId { get; set; } = "";
 
-    /// <summary>Sqlite | MySql | SqlServer | PostgreSQL</summary>
-    public string DbType { get; set; } = "Sqlite";
+    /// <summary>Sqlite | MySql | SqlServer | PostgreSQL(必填;无默认值,省略即启动抛异常)</summary>
+    public string DbType { get; set; } = "";
 
     /// <summary>
     /// 连接串。SQLite 相对 <c>Data Source</c> 在装配时按 ContentRoot 解析为绝对路径,并 Ensure 父目录。

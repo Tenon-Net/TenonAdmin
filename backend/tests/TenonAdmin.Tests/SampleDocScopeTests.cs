@@ -107,4 +107,50 @@ public class SampleDocScopeTests
         Assert.Contains("B 的文档", titles);      // B 完好
         Assert.DoesNotContain("A 的文档", titles); // A 已被本机构用户删
     }
+
+    [Fact]
+    public async Task ActiveSession_endpoint_still_filters_by_data_scope()
+    {
+        const long orgA = 910011, orgB = 910012;
+        using var f = new AdminAppFactory();
+
+        string account, password = "Scope@123456";
+        using (var scope = f.Services.CreateScope())
+        {
+            var sp = scope.ServiceProvider;
+            var roles = sp.GetRequiredService<IRepository<SysRole>>();
+            var rbac = sp.GetRequiredService<IRbacService>();
+            var role = new SysRole { Name = "仅登录范围", Code = "as-scope-" + Guid.CreateVersion7().ToString("N")[..8], Enabled = true };
+            await roles.InsertAsync(role);
+            await rbac.SetRoleDataScopeAsync(role.Id, DataScopeType.Org);
+
+            account = "as-scope-" + Guid.CreateVersion7().ToString("N")[..8];
+            await sp.GetRequiredService<IUserService>().AddAsync(new AddUserInput
+            {
+                Account = account, Password = password, Name = "机构A仅登录", Enabled = true, OrgId = orgA, RoleIds = [role.Id],
+            });
+
+            var docs = sp.GetRequiredService<IRepository<SampleDoc>>();
+            await docs.InsertRangeAsync(
+            [
+                new SampleDoc { Title = "A-mine", CreateOrgId = orgA },
+                new SampleDoc { Title = "B-mine", CreateOrgId = orgB },
+            ]);
+        }
+
+        var c = f.CreateClient();
+        WithToken(c, await c.LoginToken(account, password));
+
+        // 无 GET:/api/v1/sample/doc 权限,但 mine 是 [ActiveSession];范围必须仍是本机构,不能因漏绑而看到 B
+        var titles = (await (await c.GetAsync("/api/v1/sample/doc/mine")).ReadEnvelope()).GetProperty("data")
+            .EnumerateArray().Select(d => d.GetProperty("title").GetString()).ToList();
+        Assert.Contains("A-mine", titles);
+        Assert.DoesNotContain("B-mine", titles);
+
+        WithToken(c, await c.LoginToken("superAdmin", "Test@123456"));
+        var all = (await (await c.GetAsync("/api/v1/sample/doc/mine")).ReadEnvelope()).GetProperty("data")
+            .EnumerateArray().Select(d => d.GetProperty("title").GetString()).ToList();
+        Assert.Contains("A-mine", all);
+        Assert.Contains("B-mine", all);
+    }
 }

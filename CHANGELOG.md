@@ -15,6 +15,68 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.6.0 - 2026-08-12
+
+A 36-finding QA sweep of the kernel, closed in five batches. Most of it is authorization boundaries: the data-scope guarantee that only ever covered business `DataEntity` tables now also covers user, org and file management, and the role system grew an explicit delegation boundary so a non-superadmin holding the role menu can no longer mint themselves a privileged role.
+
+**Four changes alter behaviour that existing installs depend on.** Read *Changed* before upgrading — one of them stops the app from starting.
+
+### Changed
+
+- **`AdditionalDatabases[].DbType` is now required.** It used to default to `"Sqlite"`, so copying a MySQL connection string into a secondary connection and forgetting the type produced a dialect mismatch that only surfaced on the first query. Startup validation now rejects an empty value. **An install that omits `DbType` will fail to start until the type is filled in** (QA29).
+- **The user import template addresses references by code, not display name.** `OrgCode` / `PositionCode` / `RoleCodes` / `DirectorAccount` replace the old name columns; an unresolvable value is now a cell error (`ImportCellRefNotFound`) instead of silently binding to whichever duplicate name sorted first. Overwrite also checks that the *target user's current org* is inside the caller's scope, and role grants run through the same delegation policy as the UI. **Templates downloaded from an older version no longer parse** — re-download from the template endpoint (QA19).
+- **Assigning a role now requires that role to be marked delegatable.** `SysRole.IsDelegatable` plus `IRoleGrantPolicy` split the role *definition* surface from the role *granting* surface: defining, renaming, deleting a role and configuring its menus or data scope are superadmin-only, and a non-superadmin may only grant roles explicitly marked delegatable, and only to users inside their own data scope. The column is nullable and `NULL` counts as *not* delegatable, so **every role that exists today becomes non-delegatable on upgrade** — a superadmin has to tick the box for any role that non-superadmin administrators are expected to hand out (QA09, QA36).
+- **User and org management honour the caller's data scope.** The user list and add/update paths filter by `OrgId ∈ scope`, and the org tree returns in-scope orgs plus their ancestors so the tree still has a root to render from. Positions stay global, being a company-level vocabulary rather than an org asset. **A non-superadmin who could previously see every account now sees only their own scope** (QA08).
+
+### Removed
+
+- The anonymous `POST /api/v1/auth/mfa/challenge/verify` endpoint. Neither template ever called it; TOTP login goes through `POST /api/v1/auth/login/totp`. It could burn an in-flight MFA challenge and disclosed a `userId` on an unauthenticated surface, so it is gone rather than fixed (QA03).
+
+### Fixed
+
+Authorization and disclosure:
+
+- File management is owner-only for non-superadmin: the list filters by uploader, download and delete validate ownership, batch delete checks every target before touching anything, and a cross-owner reference answers `FileNotFound` so the endpoint doesn't confirm whether the file exists. The check applies to *authenticated* callers only — anonymous signed `/view` links are a capability URL guarded by their signature, and have nothing to filter by (QA15).
+- `[ActiveSession]` endpoints now resolve and write the data scope, the same way `[RolePermission]` does. Previously the scope context was simply unset on those routes, and an unset context reads as *unrestricted* — so a consumer querying a `DataEntity` from a login-only endpoint saw every org (QA07).
+- Self-service password change revokes the account's other sessions, keeping the current one (QA04).
+- Marking a notice read checks that the notice is visible to the caller, instead of accepting any id (QA24).
+- The SignalR hub validates the session id at connection time and aborts without joining any group, so a force-logged-out client with an unexpired JWT stops receiving pushes rather than staying connected until the token expires (QA25).
+- Avatar URLs are validated as local signed file links through the new `IAvatarUrlValidator`; the field previously accepted any string and rendered it into an `img src` (QA25).
+- Passwordless SMS login returns one error code whether the phone belongs to an enabled account or not. The wrong-code and expired-code paths were distinguishable, which turned the login step into a phone-number oracle even though code *sending* was already enumeration-safe. Password login's SMS challenge keeps its remaining-attempts feedback, the caller's identity being established there already (QA06).
+- MFA bind and recovery reuse the cached dummy hash for unknown accounts, matching the login path, so response time no longer separates "no such account" from "wrong secret" (QA05).
+- A disabled role no longer contributes to the portal's module and menu tree. Permission codes already excluded it, so the sidebar offered entries whose endpoints answered 403 (QA11).
+- Import row limits apply to the JSON `validate` and `commit` entry points and to the error-report endpoint, not just to the streaming preview that well-behaved clients happen to go through first (QA17).
+- Overwrite import with a blank role column keeps the target's existing roles instead of clearing them; an optional column means "don't change", not "set to empty" (QA18).
+- Export cells starting with `=`, `+`, `-` or `@` are escaped in the writer, covering every export path at once (QA19).
+
+Data integrity and operations:
+
+- Seed dictionaries, dictionary items and config keys are protected from deletion (`Id < 1000` marks kernel seed data). Deleting the gender dictionary used to be one click, and it silently emptied user-form dropdowns; deleting a `sys.security.*` key silently fell back to `Options` defaults while the config centre still looked authoritative. **Consumer seeds must therefore use `Id >= 1000`** — now written down in `skills/create-entity.md` (QA13).
+- Dictionary item values are unique per type (QA13).
+- The dictionary lookup used by every form dropdown is `[ActiveSession]` rather than a permission-coded route. It is a cross-module hot path, and granting it per-menu meant every new module that used a dictionary had to remember to re-grant it. Write operations stay permission-coded (QA12).
+- A disabled dictionary type returns no items, instead of continuing to serve its enabled entries (QA14).
+- Deleting an org or position is refused while active users reference it, and users can no longer delete or disable themselves. A batch containing a superadmin reports `SuperAdminProtected` ahead of the self-deletion guard, the more specific answer of the two (QA10).
+- A job's panic alert sends its in-app notice and its e-mail independently. They shared one `try`, so once QA25 started validating notice recipients, a rejected notice target also swallowed the e-mail — the channel most likely to actually reach someone at 3am.
+- Soft-deleting a user or role preserves its associations, so restoring from the recycle bin restores the permissions too; the associations are cleaned on permanent deletion instead (QA23).
+- With the SQL job gate closed, existing SQL jobs can still have their schedule and name edited — only payload changes are refused. System jobs now lock `HandlerKind`, `HandlerName`, `Props` and `Name` while leaving trigger and run configuration editable (QA20, QA21).
+- Snowflake `WorkerId` collisions fail fast. A new `SysWorkerLease` table backs `WorkerIdLeaseGuard`, which claims the id at startup, renews it, and releases it on shutdown; a second instance configured with the same id refuses to start with a readable error instead of silently minting colliding ids (QA27).
+- `AddTenonAdminWorker` scans the Services assembly for entities, matching the HTTP composition root. A Worker deployment with CodeFirst enabled used to create only the SqlSugar-layer table and then fail on every query against a missing kernel table (QA28).
+- `WorkerIdLeaseGuard.StopAsync` no longer lets a logging failure escape. Lease release is best-effort, but the warning it logged on failure could itself throw during shutdown once the logging providers were disposed, and `Host.StopAsync` then aggregated it into whichever test was disposing its host.
+
+Frontend, both templates:
+
+- The recycle bin has a `job` tab; the backend supported restoring soft-deleted jobs but the UI listed no way to reach them (QA22).
+- `LoginOutput` carries `isSuperAdmin`, and the stores fall back to it when the profile request fails. A superadmin usually holds no explicit permission codes, so a failed profile call used to hide every write button until a refresh (QA31).
+- The `v-auth` directive is reactive. It removed the element once on mount, so a permission refresh could neither restore a hidden button nor hide a newly-revoked one until the route remounted — the React `<Can>` component already re-rendered (QA32, QA35).
+- Login skin names come from i18n keys rather than hardcoded Chinese (QA32, QA34).
+- `vite preview` pins its port in both templates, matching the dev server. Without `strictPort` it silently moves to the next free port, and the docs and scripts that name a fixed port then open a different application (QA30, QA33).
+
+### Added
+
+- `job` gets its own structured tab in the config centre of both templates, instead of appearing among free-form "other" keys where its retention setting could be deleted like a custom row (QA13).
+- `ReplaceabilityTests` covers a core service registered *before* `AddTenonAdmin()`. The suite mostly used post-registration `Replace`, which stays green even if a `TryAdd` regresses to a plain `Add` — the guarantee the suite exists to protect (QA29).
+- `FileOwnerTests` runs. All four tests covering the QA15 owner isolation fix shipped as `[Fact(Skip = ...)]`, leaving a P1 control with no executing coverage; the fixtures were rebuilt and the suite now runs 694 tests with nothing skipped.
+
 ## 0.5.4 - 2026-08-06
 
 ### Fixed

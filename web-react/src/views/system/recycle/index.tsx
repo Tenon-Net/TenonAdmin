@@ -1,4 +1,4 @@
-// 回收站页:8 类实体各一页签,每页签一张只读列表 + 行内「恢复 / 彻底删除」。
+// 回收站页:9 类实体各一页签(含 job——后端 /sys/recycle/job 已支持,恢复强制 Paused),每页签一张只读列表 + 行内「恢复 / 彻底删除」。
 // antd Tabs(items API)只做切页签;单个 DataTable 用 `key={activeTab}` 随切页重挂(拉当前类型的数据)。
 // 恢复/彻底删走 useConfirm 二次确认,按 activeTab + 行 id 定位(选错类型会还原错实体,是会静默出错的点)。
 import { useCallback, useMemo, useRef, useState } from 'react'
@@ -10,7 +10,7 @@ import { useConfirm } from '@/hooks/useConfirm'
 import { useHasPerm } from '@/stores/auth'
 import { recycleApi, type RecycleBinItem } from '@/api'
 
-const RECYCLE_TYPES = ['user', 'role', 'org', 'position', 'module', 'config', 'dict', 'menu'] as const
+const RECYCLE_TYPES = ['user', 'role', 'org', 'position', 'module', 'config', 'dict', 'menu', 'job'] as const
 type RecycleType = (typeof RECYCLE_TYPES)[number]
 
 export default function RecyclePage() {

@@ -15,7 +15,11 @@ public class NoticeService(
     IRepository<SysNoticeReceiver> receivers,
     IRbacService rbac,
     ICurrentUser currentUser,
-    IRealtimePublisher? realtime = null) : INoticeService
+    IRealtimePublisher? realtime = null,
+    // QA25.2:定向发布前校验接收目标存在性(角色/用户),尾随可选——消费者子类省略也能编译(§5.3);
+    // 未注入时(如手工构造的旧测试)跳过校验,行为与批次前一致。
+    IRepository<SysUser>? users = null,
+    IRepository<SysRole>? roles = null) : INoticeService
 {
     /// <summary>当前登录用户 Id(用户端端点均 <c>[ActiveSession]</c> 保证已认证;缺失按令牌失效处理)。</summary>
     private long CurrentUserId
@@ -48,6 +52,16 @@ public class NoticeService(
     /// <inheritdoc />
     public virtual async Task<long> PublishAsync(NoticePublishInput input)
     {
+        // 定向发布(非全体广播)必须先过关:目标非空 + 全部真实存在(启用中、未删除)。
+        // 在插入通知本体<b>之前</b>校验并整体拒绝——避免插了通知却一个接收目标都没落地(或落了假目标)的半成品状态(QA25.2)。
+        List<long> targetIds = [];
+        if (input.ReceiverType != ReceiverType.All)
+        {
+            targetIds = (input.ReceiverIds ?? []).Distinct().ToList();
+            AdminException.ThrowIf(targetIds.Count == 0, ErrorCode.NoticeReceiverRequired);
+            await EnsureReceiversExistAsync(input.ReceiverType, targetIds);
+        }
+
         var entity = new SysNotice
         {
             Title = input.Title,
@@ -57,9 +71,9 @@ public class NoticeService(
         };
         await notices.InsertAsync(entity);
         // 定向发送:每个目标(角色 Id 或用户 Id)写一行接收目标;全体广播不写行。
-        if (input.ReceiverType != ReceiverType.All && input.ReceiverIds is { Count: > 0 })
+        if (targetIds.Count > 0)
         {
-            var rows = input.ReceiverIds.Distinct()
+            var rows = targetIds
                 .Select(rid => new SysNoticeReceiver { NoticeId = entity.Id, ReceiverId = rid })
                 .ToList();
             await receivers.InsertRangeAsync(rows);
@@ -69,6 +83,30 @@ public class NoticeService(
         if (realtime is not null)
             await realtime.NotifyAllAsync("notice-changed");
         return entity.Id;
+    }
+
+    /// <summary>
+    /// 校验定向发布的接收目标全部真实存在(保守语义:启用中 + 未删除——全局软删过滤器已排除已删行)。
+    /// 未注入对应仓储(消费者精简子类)时跳过,行为与批次前一致(不阻断发布)。
+    /// </summary>
+    protected virtual async Task EnsureReceiversExistAsync(ReceiverType type, IReadOnlyCollection<long> targetIds)
+    {
+        if (type == ReceiverType.Role)
+        {
+            if (roles is null) return;
+            var existing = await roles.AsQueryable()
+                .Where(r => targetIds.Contains(r.Id) && r.Enabled)
+                .Select(r => r.Id).ToListAsync();
+            AdminException.ThrowIf(targetIds.Except(existing).Any(), ErrorCode.NoticeReceiverNotFound);
+        }
+        else if (type == ReceiverType.User)
+        {
+            if (users is null) return;
+            var existing = await users.AsQueryable()
+                .Where(u => targetIds.Contains(u.Id) && u.Enabled)
+                .Select(u => u.Id).ToListAsync();
+            AdminException.ThrowIf(targetIds.Except(existing).Any(), ErrorCode.NoticeReceiverNotFound);
+        }
     }
 
     /// <inheritdoc />
@@ -136,6 +174,11 @@ public class NoticeService(
     public virtual async Task MarkReadAsync(long noticeId)
     {
         var me = CurrentUserId;
+        // 必须先确认这条对当前用户可见:否则任何人可对任意 Id 写已读回执(污染表 / 日后被定向到自己时已是「已读」)。
+        var visible = await VisibleToMeAsync(me);
+        AdminException.ThrowIf(
+            !await visible.AnyAsync(n => n.Id == noticeId),
+            ErrorCode.NoticeNotFound);
         var already = await reads.AsQueryable().AnyAsync(r => r.UserId == me && r.NoticeId == noticeId);
         if (already) return; // 幂等:已读回执唯一,不重复插
         await reads.InsertAsync(new SysNoticeRead { UserId = me, NoticeId = noticeId });

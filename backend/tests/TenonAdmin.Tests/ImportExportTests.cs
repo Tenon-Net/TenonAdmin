@@ -23,14 +23,14 @@ public class ImportExportTests
         s.Replace(ServiceDescriptor.Singleton<IExcelTemplateBuilder, OpenXmlTemplateBuilder>());
     }
 
-    private static ImportRow Row(int index, string account, string name, string orgName = "技术部",
+    private static ImportRow Row(int index, string account, string name, string orgCode = "tenon_tech",
         string? gender = null, Dictionary<string, string?>? extra = null)
     {
         var cells = new Dictionary<string, string?>
         {
             ["Account"] = account,
             ["Name"] = name,
-            ["OrgName"] = orgName,
+            ["OrgCode"] = orgCode,
         };
         if (gender is not null) cells["Gender"] = gender;
         if (extra is not null)
@@ -96,7 +96,7 @@ public class ImportExportTests
                 ["Account"] = account,
                 ["Name"] = "篡改错误用户",
                 ["Gender"] = "男性",
-                ["OrgName"] = "技术部",
+                ["OrgCode"] = "tenon_tech",
             },
             Errors = [],
         };
@@ -249,13 +249,13 @@ public class ImportExportTests
                 new ExportColumn { Key = "Account", Title = "登录账号" },
                 new ExportColumn { Key = "Name", Title = "姓名" },
                 new ExportColumn { Key = "Gender", Title = "性别" },
-                new ExportColumn { Key = "OrgName", Title = "所属机构" },
+                new ExportColumn { Key = "OrgCode", Title = "所属机构编码" },
             ],
             Rows =
             [
                 new Dictionary<string, object?>
                 {
-                    ["Account"] = "rt-dict-1", ["Name"] = "往返一", ["Gender"] = "男", ["OrgName"] = "技术部",
+                    ["Account"] = "rt-dict-1", ["Name"] = "往返一", ["Gender"] = "男", ["OrgCode"] = "tenon_tech",
                 },
             ],
         });
@@ -369,7 +369,7 @@ public class ImportExportTests
     /// 变异:UserImportProfile.ValidateRowAsync 去掉机构存在性检查 → 本条红。
     /// </summary>
     [Fact]
-    public async Task Import_OrgName_ResolvesId_Or_RefNotFound()
+    public async Task Import_OrgCode_ResolvesId_Or_RefNotFound()
     {
         using var f = new AdminAppFactory();
         using var scope = f.Services.CreateScope();
@@ -379,14 +379,14 @@ public class ImportExportTests
         var users = sp.GetRequiredService<IRepository<SysUser>>();
 
         var ok = await runner.CommitAsync(
-            [Row(1, "fk-org-ok", "外键机构对", "技术部")],
+            [Row(1, "fk-org-ok", "外键机构对", "tenon_tech")],
             profile, DuplicateStrategy.Skip);
         Assert.Equal(1, ok.Inserted);
         var saved = await users.AsQueryable().FirstAsync(u => u.Account == "fk-org-ok");
-        Assert.Equal(3, saved!.OrgId); // DefaultOrgSeed: 技术部 Id=3
+        Assert.Equal(3, saved!.OrgId); // DefaultOrgSeed: tenon_tech Id=3
 
         var bad = await runner.CommitAsync(
-            [Row(1, "fk-org-miss", "外键机构错", "不存在的机构XYZ")],
+            [Row(1, "fk-org-miss", "外键机构错", "not_exist_xyz")],
             profile, DuplicateStrategy.Skip);
         Assert.Equal(0, bad.Inserted);
         Assert.Contains(bad.Failures, r => r.Errors.Any(e => e.Code == ErrorCode.ImportCellRefNotFound));
@@ -537,13 +537,13 @@ public class ImportExportTests
             [
                 new ExportColumn { Key = "Account", Title = "登录账号" },
                 new ExportColumn { Key = "Name", Title = "姓名" },
-                new ExportColumn { Key = "OrgName", Title = "所属机构" },
+                new ExportColumn { Key = "OrgCode", Title = "所属机构编码" },
             ],
             Rows =
             [
-                new Dictionary<string, object?> { ["Account"] = "lim1", ["Name"] = "A", ["OrgName"] = "技术部" },
-                new Dictionary<string, object?> { ["Account"] = "lim2", ["Name"] = "B", ["OrgName"] = "技术部" },
-                new Dictionary<string, object?> { ["Account"] = "lim3", ["Name"] = "C", ["OrgName"] = "技术部" },
+                new Dictionary<string, object?> { ["Account"] = "lim1", ["Name"] = "A", ["OrgCode"] = "tenon_tech" },
+                new Dictionary<string, object?> { ["Account"] = "lim2", ["Name"] = "B", ["OrgCode"] = "tenon_tech" },
+                new Dictionary<string, object?> { ["Account"] = "lim3", ["Name"] = "C", ["OrgCode"] = "tenon_tech" },
             ],
         });
         if (xlsx.CanSeek) xlsx.Position = 0;
@@ -551,6 +551,68 @@ public class ImportExportTests
         var ex = await Assert.ThrowsAsync<AdminException>(() =>
             runner.PreviewAsync(xlsx, null, profile));
         Assert.Equal(ErrorCode.ImportRowLimitExceeded, ex.Code);
+    }
+
+    /// <summary>
+    /// MaxImportRows 对 Validate/Commit 的 JSON 入口同样生效(不经 xlsx 流)。
+    /// 变异:只在 PreviewAsync 数行、Validate/Commit 不调 EnsureWithinRowLimit → 本条红。
+    /// </summary>
+    [Fact]
+    public async Task ValidateAndCommit_ExceedsMaxImportRows_Throws()
+    {
+        using var f = new AdminAppFactory
+        {
+            Settings = new Dictionary<string, string?>
+            {
+                ["TenonAdmin:Excel:MaxImportRows"] = "2",
+            },
+        };
+        using var scope = f.Services.CreateScope();
+        var runner = scope.ServiceProvider.GetRequiredService<IImportRunner>();
+        var profile = scope.ServiceProvider.GetRequiredService<UserImportProfile>();
+        var tooMany = new[] { Row(1, "lim-a", "A"), Row(2, "lim-b", "B"), Row(3, "lim-c", "C") };
+
+        var validateEx = await Assert.ThrowsAsync<AdminException>(() =>
+            runner.ValidateAsync(tooMany, profile));
+        Assert.Equal(ErrorCode.ImportRowLimitExceeded, validateEx.Code);
+
+        var commitEx = await Assert.ThrowsAsync<AdminException>(() =>
+            runner.CommitAsync(tooMany, profile, DuplicateStrategy.Skip));
+        Assert.Equal(ErrorCode.ImportRowLimitExceeded, commitEx.Code);
+    }
+
+    /// <summary>
+    /// 覆盖导入且 RoleNames 留空:不得把已有角色清掉(UpdateAsync 全量重设,空列表=清空)。
+    /// 变异:CommitRowAsync 覆盖分支把 roleIds 默认 [] 传进 UpdateAsync → 本条红。
+    /// </summary>
+    [Fact]
+    public async Task Overwrite_BlankRoleNames_KeepsExistingRoles()
+    {
+        using var f = new AdminAppFactory();
+        using var scope = f.Services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var runner = sp.GetRequiredService<IImportRunner>();
+        var profile = sp.GetRequiredService<UserImportProfile>();
+        var userSvc = sp.GetRequiredService<IUserService>();
+        var rbac = sp.GetRequiredService<IRbacService>();
+        const long seedRoleId = 2; // 全部数据
+
+        var created = await userSvc.AddAsync(new AddUserInput
+        {
+            Account = "keep-roles", Password = "Keep@123456", Name = "原名",
+            Enabled = true, OrgId = 3, RoleIds = [seedRoleId],
+        });
+
+        var over = await runner.CommitAsync(
+            [Row(1, "keep-roles", "覆盖后名")],
+            profile, DuplicateStrategy.Overwrite);
+        Assert.Equal(1, over.Updated);
+
+        var kept = await rbac.GetUserRoleIdsAsync(created.Id);
+        Assert.Contains(seedRoleId, kept);
+        Assert.Equal("覆盖后名",
+            (await sp.GetRequiredService<IRepository<SysUser>>()
+                .GetFirstAsync(u => u.Account == "keep-roles"))!.Name);
     }
 
     // ── 清单 11:导出上限 ─────────────────────────────────────────────────
@@ -622,7 +684,7 @@ public class ImportExportTests
                     {
                         ["Account"] = "demo-block",
                         ["Name"] = "演示挡",
-                        ["OrgName"] = "技术部",
+                        ["OrgCode"] = "tenon_tech",
                     },
                     errors = Array.Empty<object>(),
                 },
@@ -664,7 +726,7 @@ public class ImportExportTests
                     {
                         ["Account"] = "oplog-import-u",
                         ["Name"] = "日志导入",
-                        ["OrgName"] = "技术部",
+                        ["OrgCode"] = "tenon_tech",
                         ["Gender"] = "男",
                     },
                     errors = Array.Empty<object>(),
@@ -789,5 +851,71 @@ public class ImportExportTests
         var uOff = await users.GetFirstAsync(u => u.Account == "import-enabled-off");
         Assert.True(uOn!.Enabled);
         Assert.False(uOff!.Enabled);
+    }
+
+    // ── QA19: Import with non-existent role code → error ────────────────
+
+    /// <summary>
+    /// 导入行引用不存在的角色编码 → ImportCellRefNotFound,行不落库。
+    /// 变异:去掉 ValidateRowAsync/CommitRowAsync 中角色按编码查的校验 → 本条红。
+    /// </summary>
+    [Fact]
+    public async Task Import_NonExistentRoleCode_Rejected()
+    {
+        using var f = new AdminAppFactory();
+        using var scope = f.Services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var runner = sp.GetRequiredService<IImportRunner>();
+        var profile = sp.GetRequiredService<UserImportProfile>();
+        var users = sp.GetRequiredService<IRepository<SysUser>>();
+
+        var row = Row(1, "role-bad-code", "角色编码不存在", extra: new Dictionary<string, string?>
+        {
+            ["RoleCodes"] = "not_a_real_role_code",
+        });
+        var result = await runner.CommitAsync([row], profile, DuplicateStrategy.Skip);
+        Assert.Equal(0, result.Inserted);
+        Assert.Contains(result.Failures, r => r.Errors.Any(e => e.Code == ErrorCode.ImportCellRefNotFound));
+        Assert.False(await users.AsQueryable().AnyAsync(u => u.Account == "role-bad-code"));
+    }
+
+    // ── QA19: Import overwrite to out-of-scope user's org → error ───────
+
+    /// <summary>
+    /// 覆盖导入:目标用户的已有机构不在当前用户数据范围 → ImportOrgOutOfScope,不更新。
+    /// </summary>
+    [Fact]
+    public async Task Import_Overwrite_OutOfScopeOrg_Rejected()
+    {
+        using var f = new AdminAppFactory
+        {
+            Overrides = s =>
+            {
+                s.RemoveAll<IDataScopeContext>();
+                s.AddSingleton<IDataScopeContext, TenonAdmin.SqlSugar.DataScopeContext>();
+            },
+        };
+        using var scope = f.Services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var userSvc = sp.GetRequiredService<IUserService>();
+
+        await userSvc.AddAsync(new AddUserInput
+        {
+            Account = "scope-overwrite", Password = "Scope@123456", Name = "原名",
+            Enabled = true, OrgId = 7, RoleIds = [],
+        });
+
+        var dsCtx = sp.GetRequiredService<IDataScopeContext>();
+        dsCtx.Current = DataScopeResult.Restricted([3], false, 0);
+
+        var profile = sp.GetRequiredService<UserImportProfile>();
+        var row = Row(1, "scope-overwrite", "更新名");
+        var runner = sp.GetRequiredService<IImportRunner>();
+        var result = await runner.CommitAsync([row], profile, DuplicateStrategy.Overwrite);
+
+        Assert.Equal(0, result.Updated);
+        Assert.True(result.Failed >= 1);
+        Assert.Contains(result.Failures, r =>
+            r.Errors.Any(e => e.Code == ErrorCode.ImportOrgOutOfScope));
     }
 }

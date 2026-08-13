@@ -158,4 +158,29 @@ public class NoticeTests
         Assert.Equal(2, (await MineTitles(c)).Count);                                   // 全部:A、B
         Assert.Equal(["B"], await MineTitles(c, "Current=1&Size=50&OnlyUnread=true")); // 仅未读:只剩 B
     }
+
+    [Fact]
+    public async Task Mark_read_invisible_notice_is_rejected()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+        await AddUser(admin, "u-outsider");
+        var insiderId = await AddUser(admin, "u-insider");
+
+        var id = (await (await admin.PostJson("/api/v1/sys/notice", new
+        {
+            title = "秘密",
+            type = 1,
+            receiverType = 2,
+            receiverIds = new[] { insiderId },
+        })).ReadEnvelope()).GetProperty("data").GetInt64();
+
+        var outsider = await ClientFor(f, "u-outsider");
+        var env = await (await outsider.PutJson($"/api/v1/sys/notice/{id}/read", new { })).ReadEnvelope();
+        Assert.Equal(45001, env.GetProperty("code").GetInt32());
+
+        // 定向通知对局外人不可见;未读应为 0,且不得写入脏回执
+        Assert.Empty(await MineTitles(outsider));
+        Assert.Equal(0, await Unread(outsider));
+    }
 }

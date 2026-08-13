@@ -19,7 +19,11 @@ public record RecycleBinPageInput : PageInputBase;
 /// </summary>
 [ApiController]
 [Route("api/v1/sys/recycle")]
-public class RecycleBinController(ISqlSugarClient db, IServiceProvider sp) : ControllerBase
+public class RecycleBinController(
+    ISqlSugarClient db,
+    IServiceProvider sp,
+    IRbacService rbac,
+    ICacheProvider cache) : ControllerBase
 {
     /// <summary>分页列出指定类型的已删记录</summary>
     [HttpGet("{type}/page")]
@@ -50,8 +54,8 @@ public class RecycleBinController(ISqlSugarClient db, IServiceProvider sp) : Con
     {
         var rows = type switch
         {
-            "user" => await Repo<SysUser>().RestoreAsync(id),
-            "role" => await Repo<SysRole>().RestoreAsync(id),
+            "user" => await RestoreUserAsync(id),
+            "role" => await RestoreRoleAsync(id),
             "org" => await Repo<SysOrg>().RestoreAsync(id),
             "position" => await Repo<SysPosition>().RestoreAsync(id),
             "module" => await Repo<SysModule>().RestoreAsync(id),
@@ -63,6 +67,27 @@ public class RecycleBinController(ISqlSugarClient db, IServiceProvider sp) : Con
         };
         AdminException.ThrowIf(rows == 0, ErrorCode.RecycleNotFound);
         return Result<bool>.Ok(true);
+    }
+
+    /// <summary>QA23: restore user → invalidate permission/scope caches so restored associations take effect.</summary>
+    private async Task<int> RestoreUserAsync(long id)
+    {
+        var rows = await Repo<SysUser>().RestoreAsync(id);
+        if (rows > 0)
+            await cache.IncrementAsync(CacheKeys.PortalGeneration);
+        return rows;
+    }
+
+    /// <summary>QA23: restore role → invalidate caches for users who hold this role.</summary>
+    private async Task<int> RestoreRoleAsync(long id)
+    {
+        var rows = await Repo<SysRole>().RestoreAsync(id);
+        if (rows > 0)
+        {
+            await rbac.InvalidateByRoleAsync(id);
+            await cache.IncrementAsync(CacheKeys.PortalGeneration);
+        }
+        return rows;
     }
 
     /// <summary>
@@ -89,8 +114,8 @@ public class RecycleBinController(ISqlSugarClient db, IServiceProvider sp) : Con
     {
         var rows = type switch
         {
-            "user" => await Repo<SysUser>().HardDeleteAsync(id),
-            "role" => await Repo<SysRole>().HardDeleteAsync(id),
+            "user" => await PurgeUserAsync(id),
+            "role" => await PurgeRoleAsync(id),
             "org" => await Repo<SysOrg>().HardDeleteAsync(id),
             "position" => await Repo<SysPosition>().HardDeleteAsync(id),
             "module" => await Repo<SysModule>().HardDeleteAsync(id),
@@ -102,6 +127,22 @@ public class RecycleBinController(ISqlSugarClient db, IServiceProvider sp) : Con
         };
         AdminException.ThrowIf(rows == 0, ErrorCode.RecycleNotFound);
         return Result<bool>.Ok(true);
+    }
+
+    /// <summary>QA23: purge user → clean associations before hard-delete.</summary>
+    private async Task<int> PurgeUserAsync(long id)
+    {
+        await db.Deleteable<SysUserRole>().Where(ur => ur.UserId == id).ExecuteCommandAsync();
+        var externalBindings = sp.GetService<ISysUserExternalService>();
+        if (externalBindings is not null) await externalBindings.UnbindAllAsync(id);
+        return await Repo<SysUser>().HardDeleteAsync(id);
+    }
+
+    /// <summary>QA23: purge role → clean associations before hard-delete.</summary>
+    private async Task<int> PurgeRoleAsync(long id)
+    {
+        await rbac.OnRoleDeletedAsync(id);
+        return await Repo<SysRole>().HardDeleteAsync(id);
     }
 
     private IRepository<T> Repo<T>() where T : BaseEntity, new() =>

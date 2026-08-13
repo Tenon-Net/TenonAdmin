@@ -14,7 +14,7 @@
 | 表格封装 | ProTable | DataTable |
 | dev 端口 | `5173` | `5174` |
 
-各自的实现细节——路由、门户守卫、请求层、权限、国际化、主题——分别有一份深入文档：[Vue 深入文档](/zh/frontend/structure)、[React 深入文档](/zh/frontend-react/structure)。
+各自的实现细节（路由、门户守卫、请求层、权限、国际化、主题）分别有一份深入文档：[Vue 深入文档](/zh/frontend/structure)、[React 深入文档](/zh/frontend-react/structure)。
 
 ## 怎么选
 

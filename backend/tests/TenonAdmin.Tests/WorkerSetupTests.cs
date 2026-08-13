@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
+using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Tests;
 
@@ -122,5 +123,24 @@ public class WorkerSetupTests
         var jobs = new AdminJobsOptions { Http = { BlockedCidrs = ["169.254.0.0/16", "bogus"] } };
         var ex = Assert.Throws<InvalidOperationException>(() => AdminJobsOptionsValidation.Validate(jobs));
         Assert.Contains("BlockedCidrs", ex.Message);
+    }
+
+    /// <summary>
+    /// Worker 实体扫描必须含 Services 程序集(与 HTTP 组合根对称)。默认关 CodeFirst 时不易暴露,
+    /// 但登记表一旦漏挂,运维打开 EnableCodeFirst 只会建出 schema_version、任务表全无。
+    /// </summary>
+    [Fact]
+    public void Worker_entity_scan_includes_services_assembly()
+    {
+        var dbFile = Path.Combine(Path.GetTempPath(), $"tenon-worker-{Guid.NewGuid():N}.db");
+        var builder = Host.CreateApplicationBuilder();
+        builder.Configuration.AddInMemoryCollection(Baseline(dbFile));
+        builder.Services.AddTenonAdminWorker(builder.Configuration);
+
+        using var host = builder.Build();
+        var sources = host.Services.GetRequiredService<TenonEntitySources>();
+        Assert.Contains(typeof(SysJob).Assembly, sources.Assemblies);
+
+        TestDb.Cleanup(dbFile, dbFile);
     }
 }

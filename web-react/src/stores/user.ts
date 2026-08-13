@@ -10,6 +10,8 @@ export interface UserInfo {
   avatar?: string | null
   /** 是否需强制改密(管理员建号/重置后首登为 true);路由守卫据此强制跳改密页。 */
   mustChangePassword: boolean
+  /** 登录时快照的超管标记;profile 故障时 hasPerm 用此值 fail-open。 */
+  isSuperAdmin?: boolean
 }
 
 /** 浏览器会话交付模式:与后端 LoginOutput.sessionMode 对齐。 */
@@ -71,6 +73,7 @@ export const useUserStore = create<UserState>()(
             account: data.account,
             name: data.name,
             mustChangePassword: data.mustChangePassword ?? false,
+            isSuperAdmin: data.isSuperAdmin ?? false,
           },
         })
       },

@@ -43,19 +43,14 @@ public class RolePermissionAttribute : Attribute, IAsyncAuthorizationFilter
         }
 
         // 数据范围载体:本请求后续的 DataEntity 查询由全局过滤器读它(设计 §6)。
-        // 在授权阶段(动作执行前)写入,保证查询时已就绪。
-        var scopeContext = services.GetRequiredService<IDataScopeContext>();
+        // 在授权阶段(动作执行前)写入,保证查询时已就绪。与 [ActiveSession] 同源,见 DataScopeRequestBinder。
+        await DataScopeRequestBinder.BindAsync(context.HttpContext, user, abort);
 
-        // 3. 超管直接放行 + 数据范围不受限(claim 随令牌下发,零查库;设计 §6 授权管道第一步)
+        // 3. 超管直接放行(claim 随令牌下发,零查库;设计 §6 授权管道第一步)。范围已在 Bind 里写成 Unrestricted。
         if (user.HasClaim(TokenClaimNames.SUPER_ADMIN, "true"))
-        {
-            scopeContext.Current = DataScopeResult.Unrestricted;
             return;
-        }
 
-        // 4. 普通用户:解析生效数据范围(走缓存)写入上下文
         var userId = long.Parse(user.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
-        scopeContext.Current = await services.GetRequiredService<IDataScopeProvider>().ResolveAsync(userId, abort);
 
         // 5. 权限码 = 规范化路由(含 HTTP Method),与用户权限码集合比对
         var code = BuildPermissionCode(context);

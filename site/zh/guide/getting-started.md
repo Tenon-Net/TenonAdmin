@@ -102,7 +102,7 @@ curl http://localhost:5100/api/v1/ping \
 dotnet add package TenonAdmin
 ```
 
-当前版本是 `0.1.1`，已发布到 nuget.org。核心接入只有三行：
+当前版本是 `0.5.4`，已发布到 nuget.org。核心接入只有三行：
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);

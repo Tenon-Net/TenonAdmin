@@ -1,5 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using TenonAdmin.Core;
 
 namespace TenonAdmin.Tests;
 
@@ -151,6 +153,60 @@ public class JobApiTests
             properties = new Dictionary<string, string?> { ["sql"] = "DELETE FROM sys_job_log" },
         })).ReadEnvelope();
         Assert.Equal(47008, body.GetProperty("code").GetInt32());
+    }
+
+    /// <summary>
+    /// SQL 总闸关闭后:存量 SQL 任务仍可改 cron/名称;改 sql 文本或新建仍 47008。
+    /// 变异:ValidateAndSerializeProps 对 Sql 一律 ThrowIf(!Enabled) → 本条「改名」分支红。
+    /// </summary>
+    [Fact]
+    public async Task Existing_sql_job_can_update_non_payload_while_gate_closed()
+    {
+        using var f = new AdminAppFactory
+        {
+            Settings = new Dictionary<string, string?> { ["TenonAdmin:Jobs:Sql:Enabled"] = "true" },
+        };
+        var admin = await SuperAdminClient(f);
+        var id = await AddJobAsync(admin, new
+        {
+            code = "t-sql-keep",
+            name = "原名",
+            handlerKind = 3,
+            handlerName = "",
+            triggerKind = 1,
+            cronExpression = "0 30 3 * * ?",
+            properties = new Dictionary<string, string?> { ["sql"] = "DELETE FROM sys_job_log WHERE 1=0" },
+        });
+
+        using (var scope = f.Services.CreateScope())
+            scope.ServiceProvider.GetRequiredService<AdminJobsOptions>().Sql.Enabled = false;
+
+        var rename = await (await admin.PutJson($"/api/v1/sys/job/{id}", new
+        {
+            code = "t-sql-keep",
+            name = "改名后",
+            handlerKind = 3,
+            handlerName = "",
+            triggerKind = 1,
+            cronExpression = "0 0 4 * * ?",
+            properties = new Dictionary<string, string?> { ["sql"] = "DELETE FROM sys_job_log WHERE 1=0" },
+        })).ReadEnvelope();
+        Assert.Equal(0, rename.GetProperty("code").GetInt32());
+        var row = await ReadJobAsync(admin, "t-sql-keep");
+        Assert.Equal("改名后", row.GetProperty("name").GetString());
+        Assert.Equal("0 0 4 * * ?", row.GetProperty("cronExpression").GetString());
+
+        var tweakSql = await (await admin.PutJson($"/api/v1/sys/job/{id}", new
+        {
+            code = "t-sql-keep",
+            name = "改名后",
+            handlerKind = 3,
+            handlerName = "",
+            triggerKind = 1,
+            cronExpression = "0 0 4 * * ?",
+            properties = new Dictionary<string, string?> { ["sql"] = "DROP TABLE sys_user" },
+        })).ReadEnvelope();
+        Assert.Equal(47008, tweakSql.GetProperty("code").GetInt32());
     }
 
     [Fact]
@@ -506,6 +562,61 @@ public class JobApiTests
         var admin = await SuperAdminClient(f);
         var response = await admin.GetAsync("/api/v1/sys/job/page");
         Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ── QA21: system job payload lock ──────────────────────────────────
+
+    [Fact]
+    public async Task System_job_handler_change_is_rejected_47014()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+
+        var page = await (await admin.GetAsync("/api/v1/sys/job/page?size=50")).ReadEnvelope();
+        var seeded = page.GetProperty("data").GetProperty("items").EnumerateArray()
+            .Single(r => r.GetProperty("code").GetString() == "sys-job-log-cleanup");
+        var seededId = seeded.GetProperty("id").GetInt64();
+
+        // changing HandlerKind on a system job → 47014
+        var changekind = await (await admin.PutJson($"/api/v1/sys/job/{seededId}", new
+        {
+            code = "sys-job-log-cleanup",
+            name = "日志清理",
+            handlerKind = 2,   // HTTP instead of Compiled
+            handlerName = "",
+            triggerKind = 1,
+            cronExpression = "0 30 3 * * ?",
+            properties = new Dictionary<string, string?> { ["url"] = "http://10.0.0.1/ping" },
+        })).ReadEnvelope();
+        Assert.Equal(47014, changekind.GetProperty("code").GetInt32());
+    }
+
+    [Fact]
+    public async Task System_job_cron_change_succeeds()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+
+        var page = await (await admin.GetAsync("/api/v1/sys/job/page?size=50")).ReadEnvelope();
+        var seeded = page.GetProperty("data").GetProperty("items").EnumerateArray()
+            .Single(r => r.GetProperty("code").GetString() == "sys-job-log-cleanup");
+        var seededId = seeded.GetProperty("id").GetInt64();
+        var handlerName = seeded.GetProperty("handlerName").GetString();
+
+        // changing cron on a system job → allowed
+        var result = await (await admin.PutJson($"/api/v1/sys/job/{seededId}", new
+        {
+            code = "sys-job-log-cleanup",
+            name = "日志清理(改 cron)",
+            handlerKind = 1,   // keep Compiled
+            handlerName,
+            triggerKind = 1,
+            cronExpression = "0 0 5 * * ?",
+        })).ReadEnvelope();
+        Assert.Equal(0, result.GetProperty("code").GetInt32());
+
+        var updated = await ReadJobAsync(admin, "sys-job-log-cleanup");
+        Assert.Equal("0 0 5 * * ?", updated.GetProperty("cronExpression").GetString());
     }
 
     private static async Task<JsonElement> ReadJobAsync(HttpClient admin, string code)

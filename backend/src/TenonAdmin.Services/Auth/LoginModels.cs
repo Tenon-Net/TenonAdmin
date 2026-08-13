@@ -130,4 +130,7 @@ public record LoginOutput
     /// Level3 cookie 会话为 true;非 Level3 为 null/false。旧客户端可忽略。
     /// </summary>
     public bool? CsrfRequired { get; init; }
+
+    /// <summary>是否超管;前端据此在 profile 接口故障时仍能正确 fail-open v-auth。</summary>
+    public bool IsSuperAdmin { get; init; }
 }

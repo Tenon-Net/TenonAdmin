@@ -68,7 +68,7 @@ async function doEnterInitial(): Promise<EnterResult> {
     personalApi
       .profile()
       .then((p) => ({ sadm: p.isSuperAdmin, avatar: p.avatar ?? null }))
-      .catch(() => ({ sadm: false, avatar: null })),
+      .catch(() => ({ sadm: useUserStore.getState().userInfo?.isSuperAdmin ?? false, avatar: null })),
   ])
 
   useAuthStore.setState({

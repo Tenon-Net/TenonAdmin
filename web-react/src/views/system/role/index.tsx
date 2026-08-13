@@ -36,6 +36,7 @@ export default function RolePage() {
   const { message } = App.useApp()
   const { confirm } = useConfirm()
   const has = useHasPerm()
+  const isSuperAdmin = useAuthStore((s) => s.isSuperAdmin)
 
   const tableRef = useRef<DataTableHandle>(null)
   const reload = useCallback(() => tableRef.current?.reload(), [])
@@ -182,23 +183,25 @@ export default function RolePage() {
       title: t('common.status'), dataIndex: 'enabled', search: false, width: 90,
       // StatusSwitch 悲观受控(checked 绑 value):成功后必须 onChange={reload} 重拉,否则行数据不变、开关视觉回弹误导管理员。对齐 module 页。
       render: (_, r) => (
-        <StatusSwitch value={r.enabled} disabled={!has('PUT:/api/v1/sys/role/{id}')} request={(next) => roleApi.update(r.id, { ...roleToInput(r), enabled: next })} onChange={reload} />
+        <StatusSwitch value={r.enabled} disabled={!isSuperAdmin || !has('PUT:/api/v1/sys/role/{id}')} request={(next) => roleApi.update(r.id, { ...roleToInput(r), enabled: next })} onChange={reload} />
       ),
     },
     { title: t('role.remark'), dataIndex: 'remark', search: false, ellipsis: true, render: (_, r) => r.remark || '—' },
     {
       title: t('common.operation'), key: 'op', search: false, hideInSetting: true, width: 240, fixed: 'right',
       render: (_, r) => {
+        // QA36:角色定义(编辑/删除)与角色授权面(授权菜单/数据范围)为超管专属;
+        // 仅"授权用户"(角色指派面)对普通管理员开放(经 RoleGrantPolicy 收口校验)。
         const moreItems = ([
-          has('PUT:/api/v1/sys/role/menu') ? { key: 'menus', label: t('role.grantMenus') } : null,
-          has('PUT:/api/v1/sys/role/datascope') ? { key: 'scope', label: t('role.dataScope') } : null,
+          isSuperAdmin && has('PUT:/api/v1/sys/role/menu') ? { key: 'menus', label: t('role.grantMenus') } : null,
+          isSuperAdmin && has('PUT:/api/v1/sys/role/datascope') ? { key: 'scope', label: t('role.dataScope') } : null,
           has('PUT:/api/v1/sys/role/users') ? { key: 'users', label: t('role.grantUsers') } : null,
         ] as MenuProps['items'])!.filter(Boolean)
         const onMore: MenuProps['onClick'] = ({ key }) => (key === 'menus' ? openMenus(r) : key === 'scope' ? openScope(r) : openUsers(r))
         return (
           <Space size={4}>
-            {has('PUT:/api/v1/sys/role/{id}') && <Button type="link" size="small" onClick={() => openEdit(r)}>{t('common.edit')}</Button>}
-            {has('DELETE:/api/v1/sys/role/{id}') && <Button type="link" size="small" danger onClick={() => askDelete(r)}>{t('common.delete')}</Button>}
+            {isSuperAdmin && has('PUT:/api/v1/sys/role/{id}') && <Button type="link" size="small" onClick={() => openEdit(r)}>{t('common.edit')}</Button>}
+            {isSuperAdmin && has('DELETE:/api/v1/sys/role/{id}') && <Button type="link" size="small" danger onClick={() => askDelete(r)}>{t('common.delete')}</Button>}
             {moreItems!.length > 0 && (
               <Dropdown menu={{ items: moreItems, onClick: onMore }} trigger={['click']}>
                 <Button type="link" size="small">{t('common.more')}</Button>
@@ -208,7 +211,7 @@ export default function RolePage() {
         )
       },
     },
-  ], [t, has, reload, openEdit, askDelete, openMenus, openScope, openUsers])
+  ], [t, has, isSuperAdmin, reload, openEdit, askDelete, openMenus, openScope, openUsers])
 
   return (
     <>
@@ -218,12 +221,12 @@ export default function RolePage() {
         fetcher={fetchRoles}
         persistKey="sys-role"
         rowSelection={{ selectedRowKeys: batch.selectedKeys, onChange: batch.setSelectedKeys }}
-        toolbar={
+        toolbar={isSuperAdmin ? (
           <Space>
             <Can code="POST:/api/v1/sys/role/add"><Button type="primary" onClick={openAdd}>{t('common.add')}</Button></Can>
             <Can code="POST:/api/v1/sys/role/batch-delete"><Button danger disabled={!batch.hasSelection} onClick={batch.run}>{t('common.batchDelete')}</Button></Can>
           </Space>
-        }
+        ) : undefined}
       />
 
       {/* 新增/编辑 */}
@@ -238,6 +241,7 @@ export default function RolePage() {
           <Form.Item name="sort" label={t('role.sort')}><InputNumber min={0} style={{ width: 160 }} /></Form.Item>
           <Form.Item name="remark" label={t('role.remark')}><Input.TextArea autoSize={{ minRows: 2 }} placeholder={t('role.remark')} /></Form.Item>
           <Form.Item name="enabled" label={t('common.status')} valuePropName="checked"><Switch /></Form.Item>
+          {isSuperAdmin && <Form.Item name="isDelegatable" label={t('role.isDelegatable')} valuePropName="checked"><Switch /></Form.Item>}
         </Form>
       </FormContainer>
 

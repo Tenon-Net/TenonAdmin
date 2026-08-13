@@ -7,7 +7,10 @@ namespace TenonAdmin.Services;
 /// <summary>
 /// <see cref="IPositionService"/> 默认实现——职位是纯字典表,无关联维护,直接走仓储标准 CRUD。
 /// </summary>
-public class PositionService(IRepository<SysPosition> positions) : IPositionService
+public class PositionService(
+    IRepository<SysPosition> positions,
+    // QA10: trailing optional param to check active users before delete (§5.3 replaceability)
+    IRepository<SysUser>? userRepo = null) : IPositionService
 {
     /// <inheritdoc />
     public virtual async Task<PagedList<SysPosition>> PageAsync(PositionPageInput input) =>
@@ -68,6 +71,9 @@ public class PositionService(IRepository<SysPosition> positions) : IPositionServ
     public virtual async Task DeleteAsync(long id)
     {
         await GetAsync(id);
+        // QA10: block delete if any non-deleted user still holds this position
+        if (userRepo is not null)
+            AdminException.ThrowIf(await userRepo.AnyAsync(u => u.PositionId == id), ErrorCode.PositionHasUsers);
         await positions.DeleteAsync(id);
     }
 

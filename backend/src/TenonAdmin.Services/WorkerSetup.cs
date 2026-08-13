@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TenonAdmin.Core;
@@ -53,7 +54,12 @@ public static class WorkerSetup
         services.AddSingleton(options.Upload);     // FileGcService 是 Services 层的托管服务,构造要它
         services.AddSingleton(options.Logging);
 
-        services.AddTenonAdminSqlSugar(options.Database, options.ApplicationAssemblies, options.AdditionalDatabases);
+        // 与 AddTenonAdmin 对齐:实体扫描 = 内置 Services + 消费者 ApplicationAssemblies。
+        // 漏挂 Services 时，若运维把 Worker 的 EnableCodeFirst 打开，只会建出 SqlSugar 层的 sys_schema_version，
+        // 任务/用户等内核表缺失，调度器一启动就查无表。
+        var entityAssemblies = new List<Assembly> { typeof(ServicesSetup).Assembly };
+        entityAssemblies.AddRange(options.ApplicationAssemblies);
+        services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()], options.AdditionalDatabases);
         services.AddTenonAdminServices();
         return services;
     }

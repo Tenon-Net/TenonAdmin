@@ -106,6 +106,7 @@ public static class ServicesSetup
 
         // RBAC(§6):权限码提供者真实现(取代 AspNetCore 层的空占位)+ 角色菜单授权服务
         services.TryAddScoped<IPermissionProvider, RbacPermissionProvider>();
+        services.TryAddScoped<IRoleGrantPolicy, RoleGrantPolicy>();   // QA36:角色授予的唯一判定出口,RbacService 收口调用
         services.TryAddScoped<IRbacService, RbacService>();
         services.TryAddScoped<IRoleService, RoleService>();   // 角色生命周期 CRUD(授权/数据范围仍走 IRbacService)
 
@@ -151,6 +152,10 @@ public static class ServicesSetup
         // 日志模块(§4,T6):操作日志(过滤器写)+ 登录日志(AuthService 写);写入尽力而为
         services.TryAddScoped<ILogService, LogService>();
 
+        // 头像 URL 校验(QA25.3,默认实现见 AvatarUrlValidator):其依赖 IFileUrlSigner 只在 AspNetCore 层注册
+        // (纯 Services 宿主如 WorkerSetup 没有它),故不在此 TryAdd——留给 TenonAdminSetup 在那层注册,
+        // PersonalService/UserService 拿到的是可选依赖,纯 Services 宿主里它是 null(跳过校验)而不是 DI 解析炸掉。
+
         // 文件模块(§4/§14,T7):本地存储(无状态,单例)+ 分片临时存储(无状态,单例)+ 上传服务(校验/重写名/记账,Scoped)
         services.TryAddSingleton<IFileStorage, LocalFileStorage>();
         services.TryAddSingleton<ChunkStorage>();
@@ -172,6 +177,9 @@ public static class ServicesSetup
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, HttpAdminJob>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, SqlAdminJob>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, JobLogCleanupJob>());
+
+        // QA27: WorkerId 数据库租约守卫——防止多实例配相同 WorkerId 导致雪花 Id 碰撞
+        services.AddHostedService<WorkerIdLeaseGuard>();
 
         // 个人中心(§4,T8):当前用户对自己账号的读改(看/改资料、验旧改密)
         services.TryAddScoped<IPersonalService, PersonalService>();

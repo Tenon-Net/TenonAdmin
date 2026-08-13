@@ -102,7 +102,7 @@ What you ran above is the sample bundled with the repo. To actually wire the ker
 dotnet add package TenonAdmin
 ```
 
-The current version is `0.1.1`, published to nuget.org. The core integration is just three lines:
+The current version is `0.5.4`, published to nuget.org. The core integration is just three lines:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);

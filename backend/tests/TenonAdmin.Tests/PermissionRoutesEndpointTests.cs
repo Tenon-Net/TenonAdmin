@@ -49,6 +49,7 @@ public class PermissionRoutesEndpointTests
 
         Assert.DoesNotContain("POST:/api/v1/auth/login", codes);          // [AllowAnonymous]
         Assert.DoesNotContain("GET:/api/v1/personal/profile", codes);     // [ActiveSession](任何登录用户,无需授权)
+        Assert.DoesNotContain("GET:/api/v1/sample/doc/mine", codes);      // 消费方 [ActiveSession],不进授权清单
     }
 
     /// <summary>清单里的每个码,都必须能真的授权成功——即与 RolePermissionAttribute 的比对逻辑同源。</summary>

@@ -171,6 +171,7 @@ public class ConfigService(
     public virtual async Task DeleteAsync(long id)
     {
         var config = await GetAsync(id);
+        AdminException.ThrowIf(config.Id < 1000, ErrorCode.SeedDataProtected);
         await configs.DeleteAsync(id);
         await InvalidateAsync(config.ConfigKey);
     }

@@ -45,6 +45,16 @@ export default defineConfig({
       '/hub': { target: apiTarget, changeOrigin: true, ws: true }, // SignalR 实时通知 Hub;ws:true 反代 WebSocket 升级
     },
   },
+  // vite preview 不继承 server;与 Vue 模板同理须 strictPort,禁止静默挪端口连错应用(QA30 对偶)。
+  preview: {
+    port: 5174,
+    strictPort: true,
+    proxy: {
+      '/api': { target: apiTarget, changeOrigin: true },
+      '/openapi': { target: apiTarget, changeOrigin: true },
+      '/hub': { target: apiTarget, changeOrigin: true, ws: true },
+    },
+  },
   test: {
     environment: 'happy-dom',
     // 气隙自包含硬约束:**任何测试都不得触网**。md-editor-rt 的 MdPreview/MdEditor 挂载时会往 DOM 注入

@@ -10,9 +10,9 @@ export interface LoginSkin {
 }
 
 export const LOGIN_SKINS: LoginSkin[] = [
-  { id: 'aurora', label: '极光', component: AuroraGlass },
-  { id: 'split', label: '双栏', component: SplitPanel },
-  { id: 'spotlight', label: '聚光', component: Spotlight },
+  { id: 'aurora', label: 'login.skinAurora', component: AuroraGlass },
+  { id: 'split', label: 'login.skinSplit', component: SplitPanel },
+  { id: 'spotlight', label: 'login.skinSpotlight', component: Spotlight },
 ]
 
 export const DEFAULT_SKIN = 'aurora'

@@ -81,7 +81,7 @@ async function askDelete(r: SysRole) {
   if (ok) tableRef.value?.refresh()
 }
 
-const toInput = (r: SysRole): RoleInput => ({ name: r.name, code: r.code, sort: r.sort, enabled: r.enabled, remark: r.remark ?? '' })
+const toInput = (r: SysRole): RoleInput => ({ name: r.name, code: r.code, sort: r.sort, enabled: r.enabled, remark: r.remark ?? '', isDelegatable: r.isDelegatable ?? false })
 
 const columns: ProTableColumn<SysRole>[] = [
   { type: 'selection' },
@@ -95,7 +95,7 @@ const columns: ProTableColumn<SysRole>[] = [
     render: (r) =>
       h(StatusSwitch, {
         value: r.enabled,
-        disabled: !auth.hasPerm('PUT:/api/v1/sys/role/{id}'),
+        disabled: !auth.isSuperAdmin || !auth.hasPerm('PUT:/api/v1/sys/role/{id}'),
         request: (next: boolean) => roleApi.update(r.id, { ...toInput(r), enabled: next }),
         'onUpdate:value': (v: boolean) => {
           r.enabled = v
@@ -109,17 +109,18 @@ const columns: ProTableColumn<SysRole>[] = [
     width: 240,
     hideInSetting: true,
     render: (r) => {
-      // 更多▾:授权菜单/数据范围/授权用户各按自己的权限码显隐。
+      // QA36:角色定义(编辑/删除)与角色授权面(授权菜单/数据范围)为超管专属;
+      // 仅"授权用户"(角色指派面)对普通管理员开放(经 RoleGrantPolicy 收口校验)。
       const dropdownOptions = [
-        auth.hasPerm('PUT:/api/v1/sys/role/menu') ? { label: t('role.grantMenus'), key: 'menus' } : null,
-        auth.hasPerm('PUT:/api/v1/sys/role/datascope') ? { label: t('role.dataScope'), key: 'scope' } : null,
+        auth.isSuperAdmin && auth.hasPerm('PUT:/api/v1/sys/role/menu') ? { label: t('role.grantMenus'), key: 'menus' } : null,
+        auth.isSuperAdmin && auth.hasPerm('PUT:/api/v1/sys/role/datascope') ? { label: t('role.dataScope'), key: 'scope' } : null,
         auth.hasPerm('PUT:/api/v1/sys/role/users') ? { label: t('role.grantUsers'), key: 'users' } : null,
       ].filter((o): o is { label: string; key: string } => o !== null)
       return h(NSpace, { size: 4, wrapItem: false }, () => [
-        auth.hasPerm('PUT:/api/v1/sys/role/{id}')
+        auth.isSuperAdmin && auth.hasPerm('PUT:/api/v1/sys/role/{id}')
           ? h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => openEdit(r) }, () => t('common.edit'))
           : null,
-        auth.hasPerm('DELETE:/api/v1/sys/role/{id}')
+        auth.isSuperAdmin && auth.hasPerm('DELETE:/api/v1/sys/role/{id}')
           ? h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => askDelete(r) }, () => t('common.delete'))
           : null,
         dropdownOptions.length
@@ -145,7 +146,7 @@ const rules: FormRules = {
   code: { required: true, whitespace: true, message: () => t('role.codeRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('role.nameRequired'), trigger: ['input', 'blur'] },
 }
-const blank = (): RoleInput => ({ name: '', code: '', sort: 0, enabled: true, remark: '' })
+const blank = (): RoleInput => ({ name: '', code: '', sort: 0, enabled: true, remark: '', isDelegatable: false })
 const form = reactive<RoleInput>(blank())
 
 function openAdd() {
@@ -273,10 +274,11 @@ async function saveScope() {
     @error="(e) => message.error(translateError(e))"
   >
     <template #toolbar>
-      <n-button v-auth="'POST:/api/v1/sys/role/add'" type="primary" @click="openAdd">
+      <n-button v-if="auth.isSuperAdmin" v-auth="'POST:/api/v1/sys/role/add'" type="primary" @click="openAdd">
         <template #icon><AppIcon icon="ph:plus" :size="16" /></template>{{ t('common.add') }}
       </n-button>
       <n-button
+        v-if="auth.isSuperAdmin"
         v-auth="'POST:/api/v1/sys/role/batch-delete'"
         type="error"
         :disabled="!hasSelection"
@@ -310,6 +312,9 @@ async function saveScope() {
       </n-form-item>
       <n-form-item :label="t('common.status')">
         <n-switch v-model:value="form.enabled" />
+      </n-form-item>
+      <n-form-item v-if="auth.isSuperAdmin" :label="t('role.isDelegatable')">
+        <n-switch v-model:value="(form.isDelegatable as boolean)" />
       </n-form-item>
     </n-form>
   </FormContainer>

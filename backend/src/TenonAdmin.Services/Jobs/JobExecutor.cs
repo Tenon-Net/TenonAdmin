@@ -372,14 +372,15 @@ public class JobExecutor(
     /// <summary>发 Panic 告警:站内信定向(创建人 + 超管,不广播)+ 邮件(任务行收件人,空则回退全局配置)。失败只记日志。</summary>
     protected virtual async Task SendPanicAlertAsync(SysJob job, int consecutive, string? lastError)
     {
-        try
-        {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var title = $"定时任务连续失败:{job.Name}";
-            var body = $"任务「{job.Name}」({job.Code})连续失败 {consecutive} 次,已转入 Panic 停摆,需人工在任务页重新启用。"
-                       + (string.IsNullOrEmpty(lastError) ? "" : $"\n最后错误:{Cap(lastError!, 500)}");
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var title = $"定时任务连续失败:{job.Name}";
+        var body = $"任务「{job.Name}」({job.Code})连续失败 {consecutive} 次,已转入 Panic 停摆,需人工在任务页重新启用。"
+                   + (string.IsNullOrEmpty(lastError) ? "" : $"\n最后错误:{Cap(lastError!, 500)}");
 
-            if (job.AlertByNotice)
+        // 站内信与邮件彼此独立:接收目标校验失败(QA25)或精简宿主缺用户表时,不能拖死邮件通道。
+        if (job.AlertByNotice)
+        {
+            try
             {
                 var receivers = new HashSet<long> { SuperAdminSeed.SUPER_ADMIN_ID };
                 if (job.CreateUserId is > 0) receivers.Add(job.CreateUserId.Value);
@@ -391,24 +392,30 @@ public class JobExecutor(
                     ReceiverIds = receivers.ToArray(),
                 });
             }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "任务 {Code} 的 Panic 站内信告警发送失败。", job.Code);
+            }
+        }
 
+        try
+        {
             var recipients = SplitEmails(job.AlertEmails);
             if (recipients.Length == 0)
                 recipients = SplitEmails(await scope.ServiceProvider.GetRequiredService<IConfigService>()
                     .GetValueByKeyAsync(JobConfigKeys.KEY_ALERT_EMAILS));
-            if (recipients.Length > 0)
+            if (recipients.Length == 0) return;
+
+            var email = scope.ServiceProvider.GetRequiredService<IEmailSender>();
+            foreach (var address in recipients)
             {
-                var email = scope.ServiceProvider.GetRequiredService<IEmailSender>();
-                foreach (var address in recipients)
-                {
-                    try { await email.SendAsync(address, title, body); }
-                    catch (Exception ex) { logger.LogWarning(ex, "任务告警邮件发送失败:{Address}。", address); }
-                }
+                try { await email.SendAsync(address, title, body); }
+                catch (Exception ex) { logger.LogWarning(ex, "任务告警邮件发送失败:{Address}。", address); }
             }
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "任务 {Code} 的 Panic 告警发送失败(不影响调度)。", job.Code);
+            logger.LogWarning(ex, "任务 {Code} 的 Panic 邮件告警发送失败(不影响调度)。", job.Code);
         }
     }
 

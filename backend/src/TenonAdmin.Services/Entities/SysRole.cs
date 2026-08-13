@@ -27,4 +27,13 @@ public class SysRole : BaseEntity
 
     [SugarColumn(Length = 256, IsNullable = true, ColumnDescription = "备注")]
     public string? Remark { get; set; }
+
+    /// <summary>
+    /// 是否可被非超管转授给他人(QA36 角色委派)。可空以兼容存量库的无损升级:
+    /// 数据库 NULL(功能上线前的存量角色)与显式 <c>false</c> 同判定为"不可转授",只有显式 <c>true</c> 才放行——
+    /// 安全默认(未标注的旧角色一律收紧,不因升级静默放宽)。演进列必须可空:MSSQL 无法对有数据的表
+    /// ADD 无 DEFAULT 的 NOT NULL 列(同 <see cref="SysUser.ForceTotp"/> 的成法)。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "是否可转授(非超管可授予)")]
+    public bool? IsDelegatable { get; set; }
 }

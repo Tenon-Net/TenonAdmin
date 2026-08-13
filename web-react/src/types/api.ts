@@ -23,6 +23,8 @@ export interface LoginOutput {
    * Level3 cookie 会话为 true;非 Level3 为 null/false。
    */
   csrfRequired?: boolean | null
+  /** 是否超管;前端据此在 profile 接口故障时仍能正确 fail-open v-auth。 */
+  isSuperAdmin?: boolean
 }
 
 /** 我的应用列表(后端 MyModulesOutput)。 */
@@ -367,6 +369,7 @@ export interface SysRole {
   sort: number
   enabled: boolean
   remark?: string | null
+  isDelegatable?: boolean | null
   createTime?: string
 }
 
@@ -377,6 +380,7 @@ export interface RoleInput {
   sort: number
   enabled: boolean
   remark?: string | null
+  isDelegatable?: boolean | null
 }
 
 /** 数据范围类型(后端 DataScopeType;存库为 int,枚举值须与后端一致)。 */
