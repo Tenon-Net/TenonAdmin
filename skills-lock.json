@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/daisyui/SKILL.md",
       "computedHash": "8ae127fa514329a854b89aa6620554e4ae5fbab78a099f4c46730946f0406bbc"
+    },
+    "kill-ai-slop": {
+      "source": "yetone/kill-ai-slop",
+      "sourceType": "github",
+      "skillPath": "skill/SKILL.md",
+      "computedHash": "7f0187c769ef43b86b162363156f1561b16f3898587b18041f4239ec9ec954f5"
     }
   }
 }
