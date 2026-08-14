@@ -48,7 +48,7 @@
 - **表格密度**:舒适(行高 58)/ 紧凑(行高 48)两档(运行时可切,存 `app.density`;联动页内边距 24/18、卡片间距 16/12、卡片内边距 20×22/16×18);数值列 `tabular-nums`。
 - **状态反馈**:标签 = 语义 base 文字 + `-bg` 底 + 圆点;空/加载/错误态统一走 Naive 内建占位。
 - **主色可换(运行时)**:6 候选 `#646CFF`(默认,与 Logo 一致)/ `#7C5CFF` / `#0EA5E9` / `#EC4899` / `#F97316` / `#10B981`;切主色 = 按 §7 派生规则从 accent 重算 `--color-primary*`(写到 `document.documentElement`)+ 重建 Naive `themeOverrides`,存 `app.accent`(旧候选残留由 afterHydrate 回落默认)。
-- **英雄元素(仅登录页/欢迎横幅/头像)**:主按钮渐变 `btnGrad` + 发光 `glowSh` + hover 上浮 `translateY(-2px)`;**应用内常规按钮走 Naive 平面主色**,不满屏渐变。环境动画(柔光/扫光)默认关(沉稳档)。
+- **英雄元素**:登录页主按钮 = accent 实心 + hover 上浮 `translateY(-2px)`,层级靠 48 高/600 字重/整行宽,**不加渐变与光晕**(与 React 模板的平面主色按钮一致);渐变 `btnGrad` 只留给欢迎横幅的占位头像。**应用内常规按钮走 Naive 平面主色**。环境动画(柔光/扫光)默认关(沉稳档)。
 
 ## 6. 可访问性
 
@@ -102,8 +102,9 @@
 | 语义徽章底 | `mix(base, #FFF, .88)` | `mix(base, bg-container, .80)` |
 | 语义徽章字 | `mix(base, #000, .06)` | `mix(base, #FFF, .18)` |
 
-英雄专用(仅登录页/欢迎横幅/头像,自定义 CSS,不入 Naive 覆写):
+头像专用(仅欢迎横幅的占位头像,自定义 CSS,不入 Naive 覆写):
 - `btnGrad(accent)` = `linear-gradient(135deg, accent 0%, mix(accent,#8B5CF6,.55) 55%, mix(accent,#EC4899,.62) 100%)`
-- `glowSh(accent)` = `0 6px 20px rgba(accent, .42)`
+
+登录页主按钮**不用**上式,取 `accent` 实心、无光晕(§5)。
 
 > Naive `common.borderRadius`←`--radius-md`(10)覆盖多数控件;卡片圆角(lg=12)、`DataTable` 紧凑档行高等按组件细粒度覆写(`Card`/`DataTable`),脚手架刀在 `naive-theme.ts` 补。
