@@ -169,8 +169,8 @@ TenonAdmin.Security.Gm   ──→ BouncyCastle(国密 SM2/3/4)                 
 | SimpleRedis | Redis 缓存 + MQ | **可选包依赖** → `TenonAdmin.Caching.Redis` 直接用 SimpleRedis(高并发 + MQ 封装,StackExchange 无现成 MQ 层) | ✅ 定 |
 | SimpleTool | 工具(你自己的) | **拷源进 Core** → 常用 helper 拷进 `Core.Extension`,不作外部依赖 | ✅ 定 |
 | Portable.BouncyCastle | 国密/加密 | **v1.x 可选包** → `TenonAdmin.Security.Gm`;v1 核心用 BCL AES/RSA/SHA | ✅ 定 |
-| IP2Region.Net (+ ip2region.xdb) | IP 地理(登录日志) | **v1.x 可选包** → v1 登录日志只存 IP 原文;地理定位后置 | ✅ 定 |
-| UAParser | UA 解析(登录日志) | **v1.x/移除** → v1 只存 UserAgent 原文;精解后置 | ✅ 定 |
+| IP2Region.Net (+ ip2region.xdb) | IP 地理(登录日志) | **重新评估(2026-08-10)**:需卫星包 + ~11MB 离线数据文件且随 IP 段重新分配持续过时,非一次性成本;无真实用户诉求 → 暂不做 | YAGNI 未解除 |
+| UAParser | UA 解析(登录日志) | **已用零依赖方案替代**:`web/src/utils/ua.ts`(`web-react/` 同款)前端正则启发式解析浏览器/系统,不再需要引入此包 | 已改道,不做 |
 | Microsoft.Extensions.Hosting | 宿主 | **保留**(框架件) | ✅ 定 |
 | Microsoft.Extensions.Hosting.WindowsServices | Windows 服务托管 | **移除** → 管理系统后端 v1 不需 Windows 服务托管 | ✅ 定 |
 
@@ -295,14 +295,14 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 | 字典 | 字典类型 + 字典项,前端下拉数据源 |
 | 系统配置 | 键值配置,分组管理,带缓存 |
 | 日志 | 操作日志(过滤器自动记录)+ 登录日志(存 IP + UserAgent 原文 + 时间 + 结果 + 用户 + 失败原因),查询/清空 |
-| 文件 | **普通本地上传** + 下载 + 列表 + 大小限制 + 后缀白名单 + 路径穿越防护(分片上传后置 v1.x) |
+| 文件 | **普通本地上传** + **分片上传** + 下载 + 列表 + 大小限制 + 后缀白名单 + 路径穿越防护 |
 | 个人中心 | 改密码、改资料、头像 |
 
-> 登录日志的 **IP 地理定位 / UA 精解**(旧版 IP2Region / UAParser)后置 v1.x,v1 只存原文。
+> 登录日志的 **UA 精解**已用零依赖方案解决(`web/src/utils/ua.ts` 前端正则启发式);**IP 地理定位**重新评估后暂不做(需卫星包 + 持续维护的离线数据文件,无真实需求),v1 仍只存 IP 原文。
 
 **v1.x 以可选包/后续版本补齐**(不阻塞 v1.0 发布):
-**React 模板**、**SoybeanUI 皮肤**、**分片上传**、IP 地理/UA 精解、代码生成(`TenonAdmin.CodeGen`)、
-~~导入导出(`TenonAdmin.Excel`)~~（**已做**，见 `docs/excel-ledger.md`）、批量修改、消息中心、MQTT(`TenonAdmin.Mqtt`)、~~任务调度(`TenonAdmin.Scheduling`)~~（**改判进内核,不做卫星包**,设计已定稿:`docs/scheduling-ledger.md` / ADR-0004）、
+**SoybeanUI 皮肤**、~~UA 精解~~（**已做**，`web/src/utils/ua.ts` 零依赖方案）、IP 地理（**重新评估后暂不做**，YAGNI 未解除）、代码生成(`TenonAdmin.CodeGen`)、
+~~导入导出(`TenonAdmin.Excel`)~~（**已做**，见 `docs/excel-ledger.md`）、批量修改、~~消息中心~~（**已做**，以"消息通知/Notice"模块交付，见 `docs/refinement-ledger.md` 批次 F / `docs/adr/0003-realtime-signalr.md`）、MQTT(`TenonAdmin.Mqtt`)、~~任务调度(`TenonAdmin.Scheduling`)~~（**改判进内核,不做卫星包**,设计已定稿:`docs/scheduling-ledger.md` / ADR-0004）、
 国密(`TenonAdmin.Security.Gm`)、OSS/Minio 存储(`TenonAdmin.Storage.*`)、可观测性(`TenonAdmin.Observability`)。
 
 ### 4.1 v1.0 非目标(明确不做,防膨胀)
@@ -663,14 +663,14 @@ web/src/
 - [x] 走一遍 §18 最小验收闭环 —— 2026-07-16 完成:16 步全过。API 半场由 76 个域测试对号(SQLite 本机全绿 267/267;MySQL/SqlServer/PostgreSQL 腿由 backend-ci 矩阵、容器链路由 docker-smoke 覆盖);消费者三行启动经模板冒烟 + 独立首启脚本验证(首启打印随机超管口令、二启静默、/health+/openapi 200);浏览器半场用 chrome-devtools 驱动走完(登录→建机构/角色/用户→授权菜单+数据范围→新用户首登强制改密→菜单权裁剪+数据范围隔离生效→操作日志→我的会话踢下线→F5 动态路由重建),验收数据已清理
 
 ### v1.x 路线(发布后按需)
-**React 版模板 ✅ 完成(改为同仓 `web-react/`,不拆独立仓;`docs/react-template-ledger.md`)** → **SoybeanUI 皮肤**(补视图层)→ **分片上传** → IP 地理/UA 精解 → 代码生成 → Excel 导入导出 →
-任务调度(**设计已定稿**,进内核,`docs/scheduling-ledger.md`)→ 消息中心 → OSS 存储 → 国密 → MQTT → 可观测性
+**React 版模板 ✅ 完成(改为同仓 `web-react/`,不拆独立仓;`docs/react-template-ledger.md`)** → **SoybeanUI 皮肤**(补视图层)→ **分片上传** → ~~UA 精解~~(**已做**,`web/src/utils/ua.ts` 零依赖方案)、IP 地理(**重新评估后暂不做**,YAGNI 未解除)→ 代码生成 → Excel 导入导出 →
+任务调度(**设计已定稿**,进内核,`docs/scheduling-ledger.md`)→ ~~消息中心~~(**已做**,`docs/adr/0003-realtime-signalr.md`) → OSS 存储 → 国密 → MQTT → 可观测性
 
 ### 9.1 优先级(P0/P1/P2)
 
 - **P0(没有它项目不成立)**:三行启动 / 默认 SQLite / 默认超管 / 登录 / RBAC / 多机构数据权限 / Vue 登录到菜单闭环 / OpenAPI / 核心测试(可重写三件套 + 数据范围)/ NuGet 打包。
 - **P1(v1.0 应该有)**:字典 / 系统配置 / 操作日志 / 登录日志 / 本地上传 / Docker demo / i18n / 限流 / 健康检查。
-- **P2(后置 v1.x)**:React / SoybeanUI 皮肤 / 分片上传 / 非竖向布局 / MQTT / Excel / Minio / 国密 / 代码生成 / 任务调度 / OpenTelemetry / IP 地理 / UA 精解。
+- **P2(后置 v1.x)**:React / SoybeanUI 皮肤 / 分片上传 / 非竖向布局 / MQTT / Excel / Minio / 国密 / 代码生成 / 任务调度 / OpenTelemetry / IP 地理。
 
 ---
 
