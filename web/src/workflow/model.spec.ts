@@ -1,3 +1,4 @@
+import { reactive } from 'vue'
 import { describe, expect, it } from 'vitest'
 import {
   cloneModel,
@@ -47,10 +48,17 @@ describe('workflow/model M1 chain', () => {
     expect(m.root.name).toBe('')
   })
 
-  it('cloneNode deep-copies', () => {
-    const ap = createApprovalNode({ name: 'A' })
-    const c = cloneNode(ap)
-    c.name = 'B'
-    expect(ap.name).toBe('A')
+  it('cloneNode deep-copies through the chain', () => {
+    const a = createApprovalNode({ name: 'A' })
+    insertAfter(a, a.id, createCcNode({ name: 'B' }))
+    const c = cloneNode(a)
+    c.next!.name = 'Z'
+    expect(a.next!.name).toBe('B')
+  })
+
+  it('cloneModel/cloneNode survive a reactive proxy (the bug this guards against)', () => {
+    const m = reactive(createDefaultModel())
+    expect(() => cloneModel(m)).not.toThrow()
+    expect(() => cloneNode(reactive(createApprovalNode()))).not.toThrow()
   })
 })
