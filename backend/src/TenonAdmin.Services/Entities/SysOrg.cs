@@ -31,4 +31,11 @@ public class SysOrg : BaseEntity
 
     [SugarColumn(ColumnDescription = "是否启用")]
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// 机构负责人用户 Id;可空(未指定)。软引用 <c>sys_user</c>,无导航属性。
+    /// 工作流「机构负责人」审批人 Provider 读此字段(<c>docs/review/workflow-design-plan-2026-08-17.md</c>)。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "机构负责人用户 Id")]
+    public long? LeaderUserId { get; set; }
 }

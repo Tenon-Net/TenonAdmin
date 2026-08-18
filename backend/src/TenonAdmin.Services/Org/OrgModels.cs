@@ -20,6 +20,9 @@ public record OrgInput
 
     /// <summary>是否启用</summary>
     public bool Enabled { get; init; } = true;
+
+    /// <summary>机构负责人用户 Id(可空;软引用 sys_user)</summary>
+    public long? LeaderUserId { get; init; }
 }
 
 /// <summary>复制机构入参</summary>

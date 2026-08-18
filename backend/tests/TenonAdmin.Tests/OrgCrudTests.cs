@@ -129,4 +129,45 @@ public class OrgCrudTests
         var got = await Get(admin, 999999999);
         Assert.Equal((int)ErrorCode.OrgNotFound, got.GetProperty("code").GetInt32());
     }
+
+    [Fact]
+    public async Task Leader_must_exist_and_be_enabled()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+
+        var missing = await (await admin.PostJson("/api/v1/sys/org/add", new
+        {
+            parentId = 0,
+            name = "无效负责人",
+            code = "BAD_LEADER_MISSING",
+            category = "",
+            sort = 0,
+            enabled = true,
+            leaderUserId = 9_999_999L,
+        })).ReadEnvelope();
+        Assert.Equal((int)ErrorCode.UserNotFound, missing.GetProperty("code").GetInt32());
+
+        var disabledUser = await (await admin.PostJson("/api/v1/sys/user", new
+        {
+            account = "disabled-org-leader",
+            password = "Test@123456",
+            name = "停用负责人",
+            enabled = false,
+            orgId = 1,
+            roleIds = Array.Empty<long>(),
+        })).ReadEnvelope();
+        var disabledId = disabledUser.GetProperty("data").GetProperty("id").GetInt64();
+        var disabled = await (await admin.PostJson("/api/v1/sys/org/add", new
+        {
+            parentId = 0,
+            name = "停用负责人机构",
+            code = "BAD_LEADER_DISABLED",
+            category = "",
+            sort = 0,
+            enabled = true,
+            leaderUserId = disabledId,
+        })).ReadEnvelope();
+        Assert.Equal((int)ErrorCode.AccountDisabled, disabled.GetProperty("code").GetInt32());
+    }
 }

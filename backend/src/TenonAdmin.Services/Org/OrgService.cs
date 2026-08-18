@@ -52,6 +52,7 @@ public class OrgService(
 
         if (input.ParentId != 0)
             AdminException.ThrowIf(!await orgs.AnyAsync(o => o.Id == input.ParentId), ErrorCode.OrgNotFound);
+        await ValidateLeaderAsync(input.LeaderUserId);
 
         // 编码留空则自动生成 10 位随机字母数字串(参照 SimpleAdmin)
         var code = input.Code;
@@ -76,6 +77,7 @@ public class OrgService(
             Category = input.Category,
             Sort = input.Sort,
             Enabled = input.Enabled,
+            LeaderUserId = input.LeaderUserId,
         };
         await orgs.InsertAsync(entity);
         // 新增机构改变了祖先"本机构及以下"的子孙集 → 失效全体 scope,新机构的数据方能被相应范围用户看见
@@ -97,6 +99,7 @@ public class OrgService(
             await EnsureNotDescendantAsync(id, input.ParentId);
 
         var entity = await GetAsync(id);
+        await ValidateLeaderAsync(input.LeaderUserId);
         // 改编码时排除自身查重(纳入软删行)
         AdminException.ThrowIf(
             input.Code != entity.Code &&
@@ -109,6 +112,7 @@ public class OrgService(
         entity.Category = input.Category;
         entity.Sort = input.Sort;
         entity.Enabled = input.Enabled;
+        entity.LeaderUserId = input.LeaderUserId;
         await orgs.UpdateAsync(entity);
         // 改父/改编码等结构变更可能改变"本机构及以下"解析 → 失效全体 scope
         await rbac.InvalidateAllScopesAsync();
@@ -135,6 +139,7 @@ public class OrgService(
         var all = await orgs.AsQueryable().ToListAsync();   // 平铺(软删已被全局过滤器排除)
         var source = all.FirstOrDefault(o => o.Id == id);
         AdminException.ThrowIf(source is null, ErrorCode.OrgNotFound);
+        await ValidateLeaderAsync(source!.LeaderUserId);
 
         // 已用编码集合(纳入软删行,避免克隆编码撞唯一索引 idx_sys_org_code);生成克隆码时就地扩充
         var usedCodes = (await orgs.AsQueryable().ClearFilter<ISoftDelete>().Select(o => o.Code).ToListAsync())
@@ -161,6 +166,7 @@ public class OrgService(
                     Category = node.Category,
                     Sort = node.Sort,
                     Enabled = node.Enabled,
+                    LeaderUserId = node.LeaderUserId,
                 };
                 await orgs.InsertAsync(clone);   // AOP 回填新雪花 Id
                 idMap[node.Id] = clone.Id;
@@ -184,6 +190,14 @@ public class OrgService(
         if (scope is null || scope.IsUnrestricted) return;
         if (orgId is null) return;   // root-level add: ParentId==0 translates to null here
         AdminException.ThrowIf(!scope.OrgIds.Contains(orgId.Value), ErrorCode.OrgOutOfScope);
+    }
+
+    protected virtual async Task ValidateLeaderAsync(long? leaderUserId)
+    {
+        if (leaderUserId is not > 0 || userRepo is null) return;
+        var user = await userRepo.GetByIdAsync(leaderUserId.Value);
+        AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
+        AdminException.ThrowIf(!user!.Enabled, ErrorCode.AccountDisabled);
     }
 
     /// <summary>

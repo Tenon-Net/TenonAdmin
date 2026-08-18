@@ -331,6 +331,7 @@ export interface SysOrg {
   category?: string | null
   sort: number
   enabled: boolean
+  leaderUserId?: number | null
   createTime?: string
 }
 
@@ -342,6 +343,7 @@ export interface OrgInput {
   category?: string | null
   sort: number
   enabled: boolean
+  leaderUserId?: number | null
 }
 
 /** 职位行(后端 SysPosition)。int64 收敛为 number。 */
