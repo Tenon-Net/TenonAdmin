@@ -6336,7 +6336,6 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        /** 删除流程定义(软删;有在途单据则拒绝) */
         delete: {
             parameters: {
                 query?: never;
