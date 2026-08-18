@@ -1,0 +1,21 @@
+/**
+ * Workflow 节点身份色(局部变量)。
+ * 中性色继续用 Tenon tokens;这里只放彩头 / 加号强调 / 选中描边同源色。
+ * 观感对齐 Workflow-Vue3 / AntFlow / wflow:更亮更饱和,不做霓虹/发光。
+ */
+:root {
+  --wf-start: #12b886;
+  --wf-approval: #ff8f2b;
+  --wf-cc: #2b8aff;
+  --wf-end: #555a66;
+  /* 加号等画布强调色:跟抄送蓝同源,不跟 Tenon 主色紫 */
+  --wf-accent: #2b8aff;
+}
+
+html[data-theme='dark'] {
+  --wf-start: #2dd4a0;
+  --wf-approval: #ffa857;
+  --wf-cc: #5aadff;
+  --wf-end: #b8bcc6;
+  --wf-accent: #5aadff;
+}
