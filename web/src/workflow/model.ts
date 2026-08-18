@@ -63,6 +63,11 @@ export function cloneModel(model: WfModel): WfModel {
   return JSON.parse(JSON.stringify(model)) as WfModel
 }
 
+/** 深度克隆单个节点(树增删场景;理由同 {@link cloneModel})。 */
+export function cloneNode(node: WfNode): WfNode {
+  return JSON.parse(JSON.stringify(node)) as WfNode
+}
+
 /** 按 next 展开为数组(不含 null)。 */
 export function flattenChain(root: WfNode): WfNode[] {
   const list: WfNode[] = []

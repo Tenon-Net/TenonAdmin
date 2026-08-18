@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import WfNodeCard from './WfNodeCard.vue'
 import WfAddNode from './WfAddNode.vue'
-import { createNode, insertAfter, removeNode } from '@/workflow/model'
+import { cloneNode, createNode, insertAfter, removeNode } from '@/workflow/model'
 import type { WfModel, WfNode, WfNodeType } from '@/workflow/schema'
 import '../../wf-identity.css'
 
@@ -40,7 +40,7 @@ function bump(nextRoot: WfNode) {
 }
 
 function onAdd(afterId: string, type: Extract<WfNodeType, 'approval' | 'cc'>) {
-  const root = structuredClone(props.model.root)
+  const root = cloneNode(props.model.root)
   const node = createNode(type)
   if (!insertAfter(root, afterId, node)) return
   bump(root)
@@ -48,7 +48,7 @@ function onAdd(afterId: string, type: Extract<WfNodeType, 'approval' | 'cc'>) {
 }
 
 function onRemove(id: string) {
-  const root = structuredClone(props.model.root)
+  const root = cloneNode(props.model.root)
   if (!removeNode(root, id)) return
   bump(root)
 }

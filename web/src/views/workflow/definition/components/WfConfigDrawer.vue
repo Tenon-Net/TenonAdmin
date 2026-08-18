@@ -14,7 +14,7 @@ import ApiSelect from '@/components/ApiSelect/index.vue'
 import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
 import { roleApi, positionApi } from '@/api'
 import type { WfAssigneeProvider, WfModel } from '@/workflow/schema'
-import { findNode } from '@/workflow/model'
+import { cloneModel, findNode } from '@/workflow/model'
 
 const props = defineProps<{
   show: boolean
@@ -100,7 +100,7 @@ function buildAssigneeParams(): Record<string, unknown> {
 
 function apply() {
   if (!props.nodeId || !node.value) return
-  const next = structuredClone(props.model) as WfModel
+  const next = cloneModel(props.model)
   const n = findNode(next.root, props.nodeId)
   if (!n) return
   n.name = form.name.trim() || n.name

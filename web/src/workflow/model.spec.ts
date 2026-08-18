@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cloneModel,
+  cloneNode,
   createApprovalNode,
   createCcNode,
   createDefaultModel,
@@ -44,5 +45,12 @@ describe('workflow/model M1 chain', () => {
     const c = cloneModel(m)
     c.root.name = 'X'
     expect(m.root.name).toBe('')
+  })
+
+  it('cloneNode deep-copies', () => {
+    const ap = createApprovalNode({ name: 'A' })
+    const c = cloneNode(ap)
+    c.name = 'B'
+    expect(ap.name).toBe('A')
   })
 })
