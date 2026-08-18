@@ -1,0 +1,400 @@
+using SqlSugar;
+using TenonAdmin.Core;
+using TenonAdmin.SqlSugar;
+
+namespace TenonAdmin.Workflow;
+
+/// <summary>
+/// 内置流程定义服务:草稿落 <see cref="DraftVersion"/>(=0),发布即不可变快照。
+/// </summary>
+public class WfDefinitionService(
+    IRepository<WfDefinition> definitions,
+    IRepository<WfDefinitionVersion> versions,
+    IEnumerable<IApproverProvider> approverProviders,
+    TimeProvider timeProvider,
+    ICurrentUser? currentUser = null) : IWfDefinitionService
+{
+    /// <summary>未发布工作副本版本号;已发布快照从 1 起递增。</summary>
+    public const int DraftVersion = 0;
+
+    /// <inheritdoc />
+    public virtual async Task<PagedList<WfDefinition>> PageAsync(
+        WfDefinitionPageInput input,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return await definitions.AsQueryable()
+            .WhereIF(!string.IsNullOrWhiteSpace(input.Name), d => d.Name.Contains(input.Name!))
+            .WhereIF(!string.IsNullOrWhiteSpace(input.GroupName), d => d.GroupName == input.GroupName)
+            .WhereIF(input.Status.HasValue, d => d.Status == input.Status!.Value)
+            .ToPagedListAsync(input, q => q.OrderBy(d => d.Id, OrderByType.Desc));
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<WfDefinitionDetailOutput> GetAsync(
+        long id,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var def = await RequireDefinitionAsync(id);
+        var draft = await GetOrCreateDraftAsync(def.Id, cancellationToken);
+        return MapDetail(def, draft);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<long> AddAsync(
+        WfDefinitionInput input,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var name = NormalizeName(input.Name);
+        ValidateMetadata(input.Icon, input.GroupName);
+        var modelJson = SerializeModel(input.Model ?? CreateDefaultModel());
+
+        var db = definitions.Db;
+        var tran = await db.Ado.UseTranAsync(async () =>
+        {
+            var def = new WfDefinition
+            {
+                Name = name,
+                Icon = input.Icon,
+                GroupName = input.GroupName,
+                Status = WfDefinitionStatus.Draft,
+                CurrentVersion = 0,
+            };
+            await db.Insertable(def).ExecuteCommandAsync();
+
+            var draft = new WfDefinitionVersion
+            {
+                DefinitionId = def.Id,
+                Version = DraftVersion,
+                ModelJson = modelJson,
+                FormSchema = null,
+                PublishTime = null,
+                PublishUserId = null,
+            };
+            await db.Insertable(draft).ExecuteCommandAsync();
+            return def.Id;
+        });
+
+        if (!tran.IsSuccess)
+            throw tran.ErrorException ?? WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed);
+        return tran.Data;
+    }
+
+    /// <inheritdoc />
+    public virtual async Task UpdateAsync(
+        WfDefinitionInput input,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (input.Id <= 0)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionNotFound);
+
+        var name = NormalizeName(input.Name);
+        ValidateMetadata(input.Icon, input.GroupName);
+        var modelJson = SerializeModel(input.Model ?? CreateDefaultModel());
+
+        var db = definitions.Db;
+        var tran = await db.Ado.UseTranAsync(async () =>
+        {
+            var def = await db.Queryable<WfDefinition>().InSingleAsync(input.Id)
+                      ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionNotFound);
+
+            def.Name = name;
+            def.Icon = input.Icon;
+            def.GroupName = input.GroupName;
+            await db.Updateable(def)
+                .UpdateColumns(d => new { d.Name, d.Icon, d.GroupName, d.UpdateTime, d.UpdateUserId })
+                .ExecuteCommandAsync();
+
+            var draft = await db.Queryable<WfDefinitionVersion>()
+                .Where(v => v.DefinitionId == def.Id && v.Version == DraftVersion)
+                .FirstAsync();
+            if (draft is null)
+            {
+                draft = new WfDefinitionVersion
+                {
+                    DefinitionId = def.Id,
+                    Version = DraftVersion,
+                    ModelJson = modelJson,
+                };
+                await db.Insertable(draft).ExecuteCommandAsync();
+            }
+            else
+            {
+                draft.ModelJson = modelJson;
+                await db.Updateable(draft)
+                    .UpdateColumns(v => new { v.ModelJson, v.UpdateTime, v.UpdateUserId })
+                    .ExecuteCommandAsync();
+            }
+        });
+
+        if (!tran.IsSuccess)
+            throw tran.ErrorException ?? WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<int> PublishAsync(long id, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (id <= 0)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionNotFound);
+
+        var db = definitions.Db;
+        var publishUserId = currentUser?.UserId;
+        var now = timeProvider.GetLocalNow().DateTime;
+
+        var tran = await db.Ado.UseTranAsync(async () =>
+        {
+            var def = await db.Queryable<WfDefinition>().InSingleAsync(id)
+                      ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionNotFound);
+
+            var draft = await db.Queryable<WfDefinitionVersion>()
+                .Where(v => v.DefinitionId == def.Id && v.Version == DraftVersion)
+                .FirstAsync();
+            if (draft is null || string.IsNullOrWhiteSpace(draft.ModelJson))
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?> { ["reason"] = "draftEmpty" });
+
+            var model = WfModelJson.Deserialize(draft.ModelJson)
+                        ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid);
+            ValidateModelForPublish(model);
+
+            var nextVersion = def.CurrentVersion + 1;
+            var snapshot = new WfDefinitionVersion
+            {
+                DefinitionId = def.Id,
+                Version = nextVersion,
+                ModelJson = WfModelJson.Serialize(model),
+                FormSchema = model.FormSchema is null ? null : System.Text.Json.JsonSerializer.Serialize(model.FormSchema, WfModelJson.Options),
+                PublishTime = now,
+                PublishUserId = publishUserId,
+            };
+            await db.Insertable(snapshot).ExecuteCommandAsync();
+
+            def.CurrentVersion = nextVersion;
+            def.Status = WfDefinitionStatus.Published;
+            await db.Updateable(def)
+                .UpdateColumns(d => new { d.CurrentVersion, d.Status, d.UpdateTime, d.UpdateUserId })
+                .ExecuteCommandAsync();
+
+            return nextVersion;
+        });
+
+        if (!tran.IsSuccess)
+            throw tran.ErrorException ?? WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed);
+        return tran.Data;
+    }
+
+    /// <inheritdoc />
+    public virtual async Task DisableAsync(long id, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var def = await RequireDefinitionAsync(id);
+        if (def.Status == WfDefinitionStatus.Disabled)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionStatusConflict,
+                new Dictionary<string, object?> { ["status"] = "disabled" });
+
+        def.Status = WfDefinitionStatus.Disabled;
+        await definitions.UpdateAsync(def);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task DeleteAsync(long id, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var def = await RequireDefinitionAsync(id);
+        var db = definitions.Db;
+
+        var versionIds = await db.Queryable<WfDefinitionVersion>()
+            .Where(v => v.DefinitionId == def.Id)
+            .Select(v => v.Id)
+            .ToListAsync();
+        if (versionIds.Count > 0)
+        {
+            // 跨机构看在途单:本机构看不见的运行中单据,也不能把定义抽掉。
+            var hasRunning = await db.Queryable<WfInstance>()
+                .ClearFilter<IOrgScoped>()
+                .Where(i => versionIds.Contains(i.DefinitionVersionId) && i.Status == WfInstanceStatus.Running)
+                .AnyAsync();
+            if (hasRunning)
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionHasRunningInstances);
+        }
+
+        await definitions.DeleteAsync(def.Id);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<IReadOnlyList<WfDefinitionVersionOutput>> ListVersionsAsync(
+        long definitionId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await RequireDefinitionAsync(definitionId);
+
+        var list = await versions.AsQueryable()
+            .Where(v => v.DefinitionId == definitionId && v.Version >= 1)
+            .OrderBy(v => v.Version, OrderByType.Desc)
+            .ToListAsync();
+
+        return list.Select(v => new WfDefinitionVersionOutput
+        {
+            Id = v.Id,
+            DefinitionId = v.DefinitionId,
+            Version = v.Version,
+            ModelJson = v.ModelJson,
+            FormSchema = v.FormSchema,
+            PublishTime = v.PublishTime,
+            PublishUserId = v.PublishUserId,
+        }).ToList();
+    }
+
+    /// <summary>校验 M1 可发布模型:根为 start、仅 start|approval|cc 串行链、节点 Id 非空且唯一。</summary>
+    protected virtual void ValidateModelForPublish(WfModel model)
+    {
+        if (model.Root.Type != WfNodeType.Start)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "rootNotStart" });
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var providerKeys = approverProviders.Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
+        ValidateLength(model.FormComponent, 256, "formComponent");
+        WfNode? node = model.Root;
+        while (node is not null)
+        {
+            if (node.Type is not (WfNodeType.Start or WfNodeType.Approval or WfNodeType.Cc))
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.NodeTypeUnsupported,
+                    new Dictionary<string, object?> { ["type"] = node.Type.ToString() });
+            }
+
+            if (string.IsNullOrWhiteSpace(node.Id))
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?> { ["reason"] = "emptyNodeId" });
+            }
+
+            ValidateLength(node.Id, 64, "nodeId");
+            ValidateLength(node.Name, 128, "nodeName");
+
+            if (!seen.Add(node.Id))
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?> { ["reason"] = "duplicateNodeId", ["nodeId"] = node.Id });
+            }
+
+            var provider = node.Props?.Assignee?.Provider;
+            if (node.Type is WfNodeType.Approval or WfNodeType.Cc)
+            {
+                if (!string.IsNullOrWhiteSpace(provider))
+                {
+                    ValidateLength(provider, 64, "provider");
+                    if (!providerKeys.Contains(provider))
+                    {
+                        throw WorkflowErrorCode.Exception(WorkflowErrorCode.ProviderNotRegistered,
+                            new Dictionary<string, object?> { ["provider"] = provider, ["nodeId"] = node.Id });
+                    }
+                }
+            }
+
+            if (node.Conditions is { Count: > 0 })
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.NodeTypeUnsupported,
+                    new Dictionary<string, object?> { ["type"] = "branch" });
+            }
+
+            node = node.Next;
+        }
+    }
+
+    /// <summary>按 Id 取定义;不存在抛 <see cref="WorkflowErrorCode.DefinitionNotFound"/>。</summary>
+    protected virtual async Task<WfDefinition> RequireDefinitionAsync(long id)
+    {
+        if (id <= 0)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionNotFound);
+        var def = await definitions.GetByIdAsync(id);
+        if (def is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionNotFound);
+        return def;
+    }
+
+    /// <summary>取草稿版本 0;缺失则插入默认模型草稿。</summary>
+    protected virtual async Task<WfDefinitionVersion> GetOrCreateDraftAsync(
+        long definitionId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var draft = await versions.AsQueryable()
+            .Where(v => v.DefinitionId == definitionId && v.Version == DraftVersion)
+            .FirstAsync();
+        if (draft is not null)
+            return draft;
+
+        draft = new WfDefinitionVersion
+        {
+            DefinitionId = definitionId,
+            Version = DraftVersion,
+            ModelJson = SerializeModel(CreateDefaultModel()),
+        };
+        await versions.InsertAsync(draft);
+        return draft;
+    }
+
+    protected virtual string NormalizeName(string? name)
+    {
+        var trimmed = name?.Trim() ?? "";
+        if (string.IsNullOrEmpty(trimmed))
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionNameInvalid);
+        ValidateLength(trimmed, 128, "definitionName");
+        return trimmed;
+    }
+
+    protected virtual void ValidateMetadata(string? icon, string? groupName)
+    {
+        ValidateLength(icon, 64, "icon");
+        ValidateLength(groupName, 64, "groupName");
+    }
+
+    protected virtual void ValidateLength(string? value, int maxLength, string field)
+    {
+        if (value?.Length > maxLength)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelFieldTooLong,
+                new Dictionary<string, object?>
+                {
+                    ["field"] = field,
+                    ["maxLength"] = maxLength,
+                });
+        }
+    }
+
+    protected virtual string SerializeModel(WfModel model) => WfModelJson.Serialize(model);
+
+    protected virtual WfModel CreateDefaultModel() => new()
+    {
+        Version = WfModelJson.CurrentVersion,
+        Root = new WfNode { Id = "start", Type = WfNodeType.Start, Name = "" },
+    };
+
+    protected virtual WfDefinitionDetailOutput MapDetail(WfDefinition def, WfDefinitionVersion draft)
+    {
+        var model = WfModelJson.Deserialize(draft.ModelJson) ?? CreateDefaultModel();
+        return new WfDefinitionDetailOutput
+        {
+            Id = def.Id,
+            Name = def.Name,
+            Icon = def.Icon,
+            GroupName = def.GroupName,
+            Status = def.Status,
+            CurrentVersion = def.CurrentVersion,
+            CreateTime = def.CreateTime,
+            CreateUserId = def.CreateUserId,
+            UpdateTime = def.UpdateTime,
+            UpdateUserId = def.UpdateUserId,
+            Model = model,
+        };
+    }
+}

@@ -12,7 +12,7 @@ public class SysSchemaVersion : BaseEntity
     /// <see cref="ISeedData{TEntity}.SyncOnUpgrade"/> 为 true 的结构性种子执行覆盖。
     /// 新增行不需要 bump(缺哪行插哪行,本就会到)。
     /// </summary>
-    public const string Current = "4";
+    public const string Current = "5";
 
     [SugarColumn(Length = 32, ColumnDescription = "架构版本")]
     public string Version { get; set; } = "";
