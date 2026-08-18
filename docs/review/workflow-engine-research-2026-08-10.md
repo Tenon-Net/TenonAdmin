@@ -2,6 +2,8 @@
 
 调研日期:2026-08-10。范围:为 TenonAdmin 自研一个 BPMN 风格的审批工作流卫星包(`TenonAdmin.Workflow`)收集设计参考——**不打算直接依赖别人的执行引擎**,只借架构思路;前端可视化画布则可能直接引用现成库。
 
+本地参考仓不进本仓库,约定放在本仓**上级目录**(与 `tenon-admin` 并列):`../参考项目/`。工作流摸底在 `../参考项目/工作流/`。
+
 ## 结论
 
 TenonAdmin 要做的是一个**单机可写、DB 驱动、以人工审批链为核心场景**的 BPMN 风格引擎,跑在一个已经有过一次分布式协调经验的内核里(调度中心的选主模式)。不需要为工作流再解决一次分布式共识问题。最值得抄的架构决定来自 **Flowable**(token/agenda 执行模型)、**Zeebe**(状态即日志投影的思路,但只落单机)、**Netflix Conductor**(任务收件箱而非引擎主动推送)、**JeecgBoot/RuoYi-Office**(引擎基建/业务分派/设计器三层惯例)。**Temporal 的确定性重放**、**Zeebe 的 Raft/分区**、**Kogito 的 AOT 代码生成**、**Conductor 的跨语言 worker 轮询协议**都是过度工程,明确不抄。
@@ -10,7 +12,7 @@ TenonAdmin 要做的是一个**单机可写、DB 驱动、以人工审批链为�
 
 2026-08-17 补:追加考察了国产老牌引擎 **CCFlow/驰骋**(见第四节)。它对执行架构没有增量,但贡献了一份别处拿不到的**国内审批流功能词汇表**,并且反证了"不做 BPMN"这条路在国内可行。它是 GPL-3.0,**只可读公开文档与本地结构,不可复制源码**。
 
-同日第二轮本地克隆后补强:**国内审批流产品形态**并不走 BPMN——主流是「钉钉/飞书树状审批设计器 + 自研或嵌 Flowable 的引擎」。对本仓最值得对照的新增邻居是 **AntFlow.net**(纯 .NET)、**Warm-Flow** / **FlowLong**(轻量国产引擎)、以及 **StavinLi/Workflow-Vue3·React**(钉钉风前端母体)。第五轮又补了商业/半商业公开仓(**Slickflow**、**WorkflowEngine.NET**、Camunda 7/8、AntFlow Java、Elsa Studio)——只作参考,落地仍自研。完整本地目录见 `D:\胡国东\家宽服务器\参考项目\工作流\README.md`;**摸底结论与分仓笔记**见同目录 `SUMMARY.md` 与各仓 `_TENON_REF.md`。
+同日第二轮本地克隆后补强:**国内审批流产品形态**并不走 BPMN——主流是「钉钉/飞书树状审批设计器 + 自研或嵌 Flowable 的引擎」。对本仓最值得对照的新增邻居是 **AntFlow.net**(纯 .NET)、**Warm-Flow** / **FlowLong**(轻量国产引擎)、以及 **StavinLi/Workflow-Vue3·React**(钉钉风前端母体)。第五轮又补了商业/半商业公开仓(**Slickflow**、**WorkflowEngine.NET**、Camunda 7/8、AntFlow Java、Elsa Studio)——只作参考,落地仍自研。完整本地目录见 `../参考项目/工作流/README.md`;**摸底结论与分仓笔记**见同目录 `SUMMARY.md` 与各仓 `_TENON_REF.md`。
 
 2026-08-18 第六轮:本地补了商业低代码整机 **JNPF 7.0**(见第六节)。执行骨架没有新东西(仍是嵌 Flowable),增量在**权限如何与流程相交**以及「图引擎 / OA 业务层」切分。合同许可,**不引依赖、不复制源码**;不翻转已定稿的自研 JSON 树 + 零自带组织模型。
 
@@ -75,7 +77,7 @@ CCFlow 是 **GPL-3.0**。TenonAdmin 以 NuGet 分发给消费者构建闭源业�
 
 ### 技术栈事实(排除依赖的第二重理由)
 
-> 2026-08-17 **本地浅克隆核对**(`D:\胡国东\家宽服务器\参考项目\工作流\`)。此前在线转述的「.NET Core 3.0 Preview 5」来自空壳仓 README 的历史安装段与第三方 README,**已作废**。
+> 2026-08-17 **本地浅克隆核对**(`../参考项目/工作流/`)。此前在线转述的「.NET Core 3.0 Preview 5」来自空壳仓 README 的历史安装段与第三方 README,**已作废**。
 
 | 项 | 现状 |
 |---|---|
@@ -108,7 +110,7 @@ CCFlow 把**表单引擎与流程引擎的耦合**当头号卖点(流程引擎�
 
 ## 五、国内钉钉风产品与全网补检(2026-08-17 第二轮)
 
-本地克隆根目录:`D:\胡国东\家宽服务器\参考项目\工作流\`(索引见该目录 `README.md`)。本节只记**选型影响**,不展开逐仓精读。
+本地克隆根目录:`../参考项目/工作流/`(索引见该目录 `README.md`)。本节只记**选型影响**,不展开逐仓精读。
 
 ### 市场形态修正
 
@@ -150,7 +152,7 @@ CCFlow 把**表单引擎与流程引擎的耦合**当头号卖点(流程引擎�
 
 **立场**:商业或半商业仓也可以本地浅克隆——只作产品、表结构、宿主集成方式的参考;**落地代码仍自研 `TenonAdmin.Workflow`,不引入依赖、不复制源码**。商业条款约束的是「能不能当依赖卖」,不是「能不能读」。
 
-本地已补:`WorkflowEngine.NET`、`Slickflow`、`camunda`(C8)、`camunda-bpm-platform`(C7)、`operaton`、`AntFlow` / `AntFlow-activiti`(Java 主线)、`elsa-studio`。索引见 `参考项目/工作流/README.md` 节 D。
+本地已补:`WorkflowEngine.NET`、`Slickflow`、`camunda`(C8)、`camunda-bpm-platform`(C7)、`operaton`、`AntFlow` / `AntFlow-activiti`(Java 主线)、`elsa-studio`。索引见 `../参考项目/工作流/README.md` 节 D。
 
 | 项目 | 对本仓的参考价值 | 不做什么 |
 |---|---|---|
@@ -165,7 +167,7 @@ CCFlow 把**表单引擎与流程引擎的耦合**当头号卖点(流程引擎�
 
 ## 六、JNPF 7.0——权限 × 流程的整机对照(2026-08-18 第六轮)
 
-本地:`D:\胡国东\家宽服务器\参考项目\工作流\jnpf`(主树 `jnpf7.0/`)。分仓笔记:`jnpf/_TENON_REF.md`。
+本地:`../参考项目/工作流/jnpf`(主树 `jnpf7.0/`)。分仓笔记:`jnpf/_TENON_REF.md`。
 
 ### 先说法律
 
@@ -232,10 +234,10 @@ JNPF 是**合同交付的商业产品**(福建引迈)。仓根没有 Apache/MIT/
 
 第二轮(架构借鉴):[Bernd Rücker — Zeebe distributed state machine](https://blog.bernd-ruecker.com/how-we-built-a-highly-scalable-distributed-state-machine-f2595e3c0422)、[Camunda 8 Zeebe technical concepts](https://docs.camunda.io/docs/components/zeebe/technical-concepts/technical-concepts-overview/)、[Flowable BPMN execution](https://deepwiki.com/flowable/flowable-engine/4.1-bpmn-execution)、[Flowable: Top 10 advances since Activiti](https://www.flowable.com/blog/top-10-advances-flowable-made-since-activiti)、[Baeldung: Kogito](https://www.baeldung.com/java-kogito)、[Netflix TechBlog: Conductor](https://netflixtechblog.com/netflix-conductor-a-microservices-orchestrator-2e8d4771bf40)、[Temporal: Events and Event History](https://docs.temporal.io/workflow-execution/event)、[Temporal Workflow docs](https://docs.temporal.io/workflows)、[JeecgBoot + Flowable 集成](https://blog.gitcode.com/c2bdfcc10839f95d6e36be0b2ee390e6.html)(技术博客,非一手文档,方向性参考)。
 
-第三轮(2026-08-17,国产自研引擎):[opencc/CCFlow](https://gitee.com/opencc/ccflow)、[opencc/CCFlowForNetcore](https://gitee.com/opencc/CCFlowForNetcore)(空壳仓)、[驰骋官网下载页](https://ccflow.org/Down.html)。**本地浅克隆**:`D:\胡国东\家宽服务器\参考项目\工作流\`。**GPL-3.0:可读结构,不复制源码进本仓。**
+第三轮(2026-08-17,国产自研引擎):[opencc/CCFlow](https://gitee.com/opencc/ccflow)、[opencc/CCFlowForNetcore](https://gitee.com/opencc/CCFlowForNetcore)(空壳仓)、[驰骋官网下载页](https://ccflow.org/Down.html)。**本地浅克隆**:`../参考项目/工作流/`。**GPL-3.0:可读结构,不复制源码进本仓。**
 
-第四轮(2026-08-17,钉钉风产品与全网补检):[willianfu/wflow](https://github.com/willianfu/wflow)、[wflow-web-next](https://gitee.com/willianfu/wflow-web-next)、[junyue/flyflow](https://gitee.com/junyue/flyflow)、[JackRolling/jsonflow-ui](https://github.com/JackRolling/jsonflow-ui)、[smart-flow/smart-flow-design](https://github.com/smart-flow/smart-flow-design)、[dromara/warm-flow](https://github.com/dromara/warm-flow)、[retejs/rete](https://github.com/retejs/rete)、[StavinLi/Workflow-Vue3](https://github.com/StavinLi/Workflow-Vue3)、[StavinLi/Workflow-React](https://github.com/StavinLi/Workflow-React)、[aizuda/flowlong](https://github.com/aizuda/flowlong)、[mrtylerzhou/AntFlow.net](https://github.com/mrtylerzhou/AntFlow.net)、[antvis/X6](https://github.com/antvis/X6)。索引与降权说明见本地 `参考项目/工作流/README.md`。
+第四轮(2026-08-17,钉钉风产品与全网补检):[willianfu/wflow](https://github.com/willianfu/wflow)、[wflow-web-next](https://gitee.com/willianfu/wflow-web-next)、[junyue/flyflow](https://gitee.com/junyue/flyflow)、[JackRolling/jsonflow-ui](https://github.com/JackRolling/jsonflow-ui)、[smart-flow/smart-flow-design](https://github.com/smart-flow/smart-flow-design)、[dromara/warm-flow](https://github.com/dromara/warm-flow)、[retejs/rete](https://github.com/retejs/rete)、[StavinLi/Workflow-Vue3](https://github.com/StavinLi/Workflow-Vue3)、[StavinLi/Workflow-React](https://github.com/StavinLi/Workflow-React)、[aizuda/flowlong](https://github.com/aizuda/flowlong)、[mrtylerzhou/AntFlow.net](https://github.com/mrtylerzhou/AntFlow.net)、[antvis/X6](https://github.com/antvis/X6)。索引与降权说明见本地 `../参考项目/工作流/README.md`。
 
 第五轮(2026-08-17,商业/半商业公开源码对照):[optimajet/WorkflowEngine.NET](https://github.com/optimajet/WorkflowEngine.NET)、[besley/Slickflow](https://github.com/besley/Slickflow)、[camunda/camunda](https://github.com/camunda/camunda)、[camunda/camunda-bpm-platform](https://github.com/camunda/camunda-bpm-platform)、[operaton/operaton](https://github.com/operaton/operaton)、[mrtylerzhou/AntFlow](https://github.com/mrtylerzhou/AntFlow)、[mrtylerzhou/AntFlow-activiti](https://github.com/mrtylerzhou/AntFlow-activiti)、[elsa-workflows/elsa-studio](https://github.com/elsa-workflows/elsa-studio)。**可读参考,不引入依赖、不复制源码。**
 
-第六轮(2026-08-18,JNPF 7.0 商业整机):本地 `D:\胡国东\家宽服务器\参考项目\工作流\jnpf`。一手来源:`jnpf7.0/jnpf-java-boot/README.md`(合同交付)、`jnpf-workflow-core`(Flowable 适配 + `ITaskService`)、`jnpf-flowable`(RecordEnum / OperatorEnum / FlowNature / ButtonModel / TaskEntity=实例 / OperatorEntity=经办)、`jnpf-permission` + `AuthorizeConst`(含 `itemType=flow`)、`jnpf-web-apps-main/.../useFlowForm.ts`(字段矩阵)。公开站点 [jnpfsoft.com](https://www.jnpfsoft.com)。**合同许可:可读设计,不复制源码。**
+第六轮(2026-08-18,JNPF 7.0 商业整机):本地 `../参考项目/工作流/jnpf`。一手来源:`jnpf7.0/jnpf-java-boot/README.md`(合同交付)、`jnpf-workflow-core`(Flowable 适配 + `ITaskService`)、`jnpf-flowable`(RecordEnum / OperatorEnum / FlowNature / ButtonModel / TaskEntity=实例 / OperatorEntity=经办)、`jnpf-permission` + `AuthorizeConst`(含 `itemType=flow`)、`jnpf-web-apps-main/.../useFlowForm.ts`(字段矩阵)。公开站点 [jnpfsoft.com](https://www.jnpfsoft.com)。**合同许可:可读设计,不复制源码。**
