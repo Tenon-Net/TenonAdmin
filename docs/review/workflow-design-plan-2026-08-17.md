@@ -252,3 +252,40 @@ POST /api/v1/workflow/task/approve|reject|return|transfer|delegate  // 各带意
 3. **实例列表按参与**(发起/待办/已办/抄送/监控),组织数据范围继续只管业务实体,不要拿来滤 `WfInstance`。
 
 连续多级主管若运行时现查 `DirectorId`:M2 须写死「发起时快照 vs 实时」,JNPF 选择发起时拍 `workflow_launch_user`。
+
+**M1 专项复核(结论:无新增)**:对照已完成的 M1 代码(8 个 `IApproverProvider`、三级空审批人策略、串行节点 schema、同意/拒绝/转办动词集)逐项核对 JNPF 全部材料(`OperatorEnum`/`RecordEnum`/`ErrorRuleEnum`/`NodeModel` 等)——JNPF 没有 Tenon M1 缺失的基础能力:其审批人类型与 Tenon 8 种 1:1 对应,独有的 VARIATE/LINK/SERVE 分别依赖动态表单/多节点历史/webhook,均已按既定分级挂在 M2/M3/永不做;空审批人更细的选项、签收、转审等均已在既有分级或本节其余条目覆盖。M1 范围不变。
+
+## 十三、M2 开工定案(2026-08-18,经用户裁决)
+
+不翻转 §〇/§八/§九/§十;本节只把 M2 开工前必须写死的三条定下来,并按 §八「每个里程碑结束都是可发布、可演示的完整产品」把 M2 切成两个各自可发布的半程。
+
+### 13.1 M1 已超交付(§八 M2 行里已经不必再做的)
+
+对照已落地代码,§八 M2 列的三项在 M1 就已完成,**不重复排期**:
+
+| §八 列在 M2 | 真实状态 |
+|---|---|
+| 空审批人三级可配 | 已完成:`EnterNodeOp.ResolveNobody`(节点 > 流程 > 全局 `WorkflowOptions.Nobody`) |
+| 会签一票否决 / 或签先表态即定局 | 引擎已完成:`CompleteTaskOp.TryPassAsync` 三态计票(Any/All/Sequential),拒绝走 `skipRemaining`。**缺的只是设计器没暴露 `props.mode`** |
+| 发起范围 | 已完成:`initiatorScope` + `InitiatorNotAllowed`(48016)。JNPF 增量第 1 条已满足 |
+
+同理,`WfBranchArm`/`WfConditionExpr`/`WfTimeout`/`WfReturnPolicy` 的 schema 空壳、`wf_task.DueTime` 列、`WfTaskAction` 的 M2 枚举值、引擎里累积却无人消费的 `ctx.NewAssigneeUserIds`/`NewCcUserIds`——**M2 大量工作是把 M1 预留的插头插上,不是新建**。
+
+### 13.2 三条写死
+
+| # | 问题 | 裁决 | 理由 |
+|---|---|---|---|
+| 1 | 连续多级主管(`multiLeader`)何时解析主管链? | **发起时快照**:发起瞬间沿 `SysUser.DirectorId` 链拍平存进实例,之后组织调整不影响在途单 | 与 JNPF 一致(拍 `workflow_launch_user`);审批链可预测、发起页能提前展示「将由谁审」、排查简单。代价(发起后主管离职需人工干预)可接受 |
+| 2 | 待办通知落地成什么? | **只推 `IRealtimePublisher`,不落 `SysNotice`** | 待办本身已在 `wf_task` 且有独立待办列表,再存一份站内信是重复数据,还要为「待办已办完」同步清理站内信状态。§〇「复用 Notice/SignalR,零新通道」的约束是**不新建通道**,不是两个都用 |
+| 3 | M2 交付切分? | **切成 M2a / M2b 两段,各自可发布可演示** | 见 13.3 |
+
+### 13.3 M2a / M2b 切分
+
+| 段 | 后端 | 前端(仅 Vue) | 验收线 |
+|---|---|---|---|
+| **M2a 分支** | 结构化条件求值器 + `branch` 节点执行(`EnterNodeOp` 现在 `default:` 直接抛 `NodeTypeUnsupported`)+ `GatewayTaken` 事件 + `multiLeader` 主管链改发起时快照(13.2 #1,小而独立,先锁语义免得后续代码依赖旧行为) | `model.ts` 由串行链改树(`flattenChain`/`insertAfter`/`removeNode`/`validate` 全部要处理分支臂)+ `WfNodeTree.vue` 分支容器横排 + 条件编辑器 + 配置抽屉暴露 `mode`(会签/或签/顺序) | 报销流程「金额>1万 走总经理,否则直接通过」建完发布走通两条臂;会签一票否决、或签先表态各走一单 |
+| **M2b 动词与时效** | 退回(`returnPolicy` + `onReject=toNode`,`RejectInstanceAsync` 现在写死忽略 `toNode`)/撤销/委托/催办 + `WfTimeoutJob : IAdminJob` + 写 `wf_task.DueTime` + 同一人相邻节点去重 + `IWorkflowNotifier` 落地(**现为空接口,零方法**)接 `IRealtimePublisher` + 节点 `btnInfo`(JNPF 增量第 2 条) | 抄送独立列表 + 我发起的 / 我已办的 + 流程图回放(高亮已走路径)+ 实例列表按参与筛选(JNPF 增量第 3 条) | 钉钉典型报销流 1:1 复刻(条件分支 + 会签 + 超时提醒);退回后重提、发起人撤销各走一单;CCFlow 行为清单逐项过 |
+
+**先 M2a 的理由**:M2a 是 M2 里唯一改 schema 形状的一段(树化 + 条件),定了才谈得上 §六.2 的「schema 定稿后一次性 port 到 React」;M2b 全是加动词加页面,对 schema 只增不改,压在后面更稳。
+
+**警戒线**:M2a 的 `model.ts` 树化会动 M1 刚修好的设计器(`cloneModel`/`cloneNode` 的 reactive-proxy 坑见 `.loop/wf-m1-close.md` Round 2),改完必须重跑一遍真实浏览器全链路,不能只信 `npm run typecheck`——M1 三轮 typecheck 全绿也没发现「添加节点」是坏的。
