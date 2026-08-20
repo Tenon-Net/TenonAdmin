@@ -5,9 +5,10 @@ using TenonAdmin.Workflow;
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// 工作流卫星包可替换性「六件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
-/// 六个 <c>TryAddScoped</c> 面:<see cref="IApproverResolver"/> /
+/// 工作流卫星包可替换性「七件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
+/// 七个 <c>TryAddScoped</c> 面:<see cref="IApproverResolver"/> /
 /// <see cref="IWorkflowFormBinder"/> / <see cref="IWorkflowEngine"/> /
+/// <see cref="IWfConditionEvaluator"/> /
 /// <see cref="IWfDefinitionService"/> / <see cref="IWfTaskService"/> /
 /// <see cref="IWfInstanceService"/>。
 /// <para>
@@ -42,6 +43,16 @@ public class WorkflowReplaceabilityTests
         await using var sp = BuildProvider(s => s.AddScoped<IWorkflowEngine, FakeEngine>());
         await using var scope = sp.CreateAsyncScope();
         Assert.IsType<FakeEngine>(scope.ServiceProvider.GetRequiredService<IWorkflowEngine>());
+    }
+
+    /// <summary>变异:WorkflowSetup 里 IWfConditionEvaluator 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredConditionEvaluator_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s => s.AddScoped<IWfConditionEvaluator, FakeConditionEvaluator>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeConditionEvaluator>(
+            scope.ServiceProvider.GetRequiredService<IWfConditionEvaluator>());
     }
 
     /// <summary>变异:WorkflowSetup 里 IWfDefinitionService 的 TryAdd 改 Add → 本条红。</summary>
@@ -102,6 +113,11 @@ public class WorkflowReplaceabilityTests
     {
         public Task<WfEngineResult> ExecuteAsync(IWfCommand command, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+    }
+
+    private sealed class FakeConditionEvaluator : IWfConditionEvaluator
+    {
+        public bool Evaluate(WfConditionExpr? expr, string? variablesJson) => false;
     }
 
     private sealed class FakeDefinitionService : IWfDefinitionService

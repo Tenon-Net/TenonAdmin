@@ -16,6 +16,7 @@ public sealed class WfExecutionContext
     public required IWorkflowFormBinder FormBinder { get; init; }
     public required WorkflowOptions Options { get; init; }
     public required TimeProvider TimeProvider { get; init; }
+    public required IWfConditionEvaluator ConditionEvaluator { get; init; }
 
     public required WfInstance Instance { get; set; }
     public required WfToken Token { get; set; }
@@ -29,6 +30,12 @@ public sealed class WfExecutionContext
     /// <summary>发起人主属机构。</summary>
     public long? StarterOrgId { get; init; }
 
+    /// <summary>
+    /// 发起时按 <c>level</c> 快照的连续多级主管链;<c>null</c>=无快照(老实例或模型无 multiLeader 节点)。
+    /// 命中 level 的空数组表示快照过但该级链为空。透传给 <see cref="ApproverResolveContext.LeaderChainByLevel"/>。
+    /// </summary>
+    public IReadOnlyDictionary<int, IReadOnlyList<long>>? LeaderChainByLevel { get; init; }
+
     /// <summary>当前 Agenda 步关联的节点(Enter/Leave 时更新)。</summary>
     public WfNode? CurrentNode { get; set; }
 
@@ -38,16 +45,19 @@ public sealed class WfExecutionContext
     public List<long> NewAssigneeUserIds { get; } = [];
     public List<long> NewCcUserIds { get; } = [];
 
-    /// <summary>按节点 Id 在串行链上查找(M1 不进 branch 臂)。</summary>
-    public WfNode? FindNode(string nodeId)
-    {
-        for (var n = Model.Root; n is not null; n = n.Next)
-        {
-            if (string.Equals(n.Id, nodeId, StringComparison.Ordinal))
-                return n;
-        }
-        return null;
-    }
+    private WfModelIndex? _modelIndex;
+
+    /// <summary>模型树索引:懒建一次并缓存;ctx 是单事务对象,树在整个 Agenda 循环内不变,无失效问题。</summary>
+    private WfModelIndex ModelIndex => _modelIndex ??= WfModelIndex.Build(Model);
+
+    /// <summary>按节点 Id 查找(含分支臂内的所有节点)。</summary>
+    public WfNode? FindNode(string nodeId) => ModelIndex.Find(nodeId);
+
+    /// <summary>
+    /// 汇合目标:节点 <c>Next</c> 非 null 直接用;否则沿外层 branch 向上找第一个 <c>Next</c> 非 null 的
+    /// 外层 branch 并返回其 <c>Next</c>;一路到顶仍无 → null(实例完结)。
+    /// </summary>
+    public WfNode? ResolveMergeTarget(WfNode from) => ModelIndex.ResolveMergeTarget(from);
 
     public IReadOnlyList<long>? GetSelectedUserIds(string nodeId) =>
         SelectedUserIdsByNode.TryGetValue(nodeId, out var ids) ? ids : null;

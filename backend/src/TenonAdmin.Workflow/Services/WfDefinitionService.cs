@@ -250,7 +250,11 @@ public class WfDefinitionService(
         }).ToList();
     }
 
-    /// <summary>校验 M1 可发布模型:根为 start、仅 start|approval|cc 串行链、节点 Id 非空且唯一。</summary>
+    /// <summary>
+    /// 校验可发布模型(树语义,M2a):根为 start;节点类型限 start|approval|cc|branch
+    /// (Parallel/Webhook 仍被拒,M3 开放);节点 Id 跨整棵树(含分支臂内)非空且唯一;
+    /// branch 节点的臂配置合法(见 <see cref="ValidateBranch"/>)。
+    /// </summary>
     protected virtual void ValidateModelForPublish(WfModel model)
     {
         if (model.Root.Type != WfNodeType.Start)
@@ -262,51 +266,127 @@ public class WfDefinitionService(
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var providerKeys = approverProviders.Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
         ValidateLength(model.FormComponent, 256, "formComponent");
-        WfNode? node = model.Root;
-        while (node is not null)
+        ValidateChain(model.Root, seen, providerKeys);
+    }
+
+    /// <summary>沿 <c>.Next</c> 走一条链,逐节点校验;<paramref name="seen"/> 跨整棵树共享,
+    /// 遇到 branch 节点额外递归校验它的每条臂。</summary>
+    protected virtual void ValidateChain(WfNode? node, HashSet<string> seen, HashSet<string> providerKeys)
+    {
+        for (var n = node; n is not null; n = n.Next)
         {
-            if (node.Type is not (WfNodeType.Start or WfNodeType.Approval or WfNodeType.Cc))
+            ValidateNode(n, seen, providerKeys);
+
+            if (n.Type == WfNodeType.Branch)
             {
-                throw WorkflowErrorCode.Exception(WorkflowErrorCode.NodeTypeUnsupported,
-                    new Dictionary<string, object?> { ["type"] = node.Type.ToString() });
+                ValidateBranch(n, seen, providerKeys);
             }
+        }
+    }
 
-            if (string.IsNullOrWhiteSpace(node.Id))
+    /// <summary>
+    /// 单节点公共校验:类型白名单、非 branch 节点不得携带 <see cref="WfNode.Conditions"/>、
+    /// Id 非空唯一、长度、审批人 Provider 已注册。
+    /// </summary>
+    protected virtual void ValidateNode(WfNode node, HashSet<string> seen, HashSet<string> providerKeys)
+    {
+        if (node.Type is not (WfNodeType.Start or WfNodeType.Approval or WfNodeType.Cc or WfNodeType.Branch))
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.NodeTypeUnsupported,
+                new Dictionary<string, object?> { ["type"] = node.Type.ToString() });
+        }
+
+        if (node.Type != WfNodeType.Branch && node.Conditions is { Count: > 0 })
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "conditionsOnNonBranch", ["nodeId"] = node.Id });
+        }
+
+        if (string.IsNullOrWhiteSpace(node.Id))
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "emptyNodeId" });
+        }
+
+        ValidateLength(node.Id, 64, "nodeId");
+        ValidateLength(node.Name, 128, "nodeName");
+
+        if (!seen.Add(node.Id))
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "duplicateNodeId", ["nodeId"] = node.Id });
+        }
+
+        var provider = node.Props?.Assignee?.Provider;
+        if (node.Type is WfNodeType.Approval or WfNodeType.Cc)
+        {
+            if (!string.IsNullOrWhiteSpace(provider))
             {
-                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
-                    new Dictionary<string, object?> { ["reason"] = "emptyNodeId" });
-            }
-
-            ValidateLength(node.Id, 64, "nodeId");
-            ValidateLength(node.Name, 128, "nodeName");
-
-            if (!seen.Add(node.Id))
-            {
-                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
-                    new Dictionary<string, object?> { ["reason"] = "duplicateNodeId", ["nodeId"] = node.Id });
-            }
-
-            var provider = node.Props?.Assignee?.Provider;
-            if (node.Type is WfNodeType.Approval or WfNodeType.Cc)
-            {
-                if (!string.IsNullOrWhiteSpace(provider))
+                ValidateLength(provider, 64, "provider");
+                if (!providerKeys.Contains(provider))
                 {
-                    ValidateLength(provider, 64, "provider");
-                    if (!providerKeys.Contains(provider))
-                    {
-                        throw WorkflowErrorCode.Exception(WorkflowErrorCode.ProviderNotRegistered,
-                            new Dictionary<string, object?> { ["provider"] = provider, ["nodeId"] = node.Id });
-                    }
+                    throw WorkflowErrorCode.Exception(WorkflowErrorCode.ProviderNotRegistered,
+                        new Dictionary<string, object?> { ["provider"] = provider, ["nodeId"] = node.Id });
                 }
             }
+        }
+    }
 
-            if (node.Conditions is { Count: > 0 })
+    /// <summary>
+    /// branch 专属校验:臂非空(<c>branchNoArms</c>)、臂 Id 非空(<c>emptyArmId</c>)且本 branch 内唯一
+    /// (<c>duplicateArmId</c>)、非默认臂须有 <see cref="WfBranchArm.Expr"/>(<c>branchArmWithoutExpr</c>)、
+    /// 恰好一条默认臂(<c>branchDefaultArmCount</c>);再递归校验每条臂的子链。
+    /// </summary>
+    protected virtual void ValidateBranch(WfNode branch, HashSet<string> seen, HashSet<string> providerKeys)
+    {
+        if (branch.Conditions is not { Count: > 0 } arms)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "branchNoArms", ["nodeId"] = branch.Id });
+        }
+
+        var armIds = new HashSet<string>(StringComparer.Ordinal);
+        var defaultCount = 0;
+        foreach (var arm in arms)
+        {
+            if (string.IsNullOrWhiteSpace(arm.Id))
             {
-                throw WorkflowErrorCode.Exception(WorkflowErrorCode.NodeTypeUnsupported,
-                    new Dictionary<string, object?> { ["type"] = "branch" });
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?> { ["reason"] = "emptyArmId", ["nodeId"] = branch.Id });
             }
 
-            node = node.Next;
+            ValidateLength(arm.Id, 64, "armId");
+            ValidateLength(arm.Name, 128, "armName");
+
+            if (!armIds.Add(arm.Id))
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?>
+                    {
+                        ["reason"] = "duplicateArmId", ["nodeId"] = branch.Id, ["armId"] = arm.Id,
+                    });
+            }
+
+            if (arm.IsDefault)
+            {
+                defaultCount++;
+            }
+            else if (arm.Expr is null)
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?>
+                    {
+                        ["reason"] = "branchArmWithoutExpr", ["nodeId"] = branch.Id, ["armId"] = arm.Id,
+                    });
+            }
+
+            ValidateChain(arm.Next, seen, providerKeys);
+        }
+
+        if (defaultCount != 1)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "branchDefaultArmCount", ["nodeId"] = branch.Id });
         }
     }
 

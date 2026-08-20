@@ -64,7 +64,7 @@ public class WfTaskService(
                 .Where(d => defIds.Contains(d.Id))
                 .ToListAsync())
             .ToDictionary(d => d.Id);
-        var modelCache = new Dictionary<long, WfModel?>();
+        var modelCache = new Dictionary<long, WfModelIndex?>();
 
         var items = new List<WfTodoItemOutput>(actorPage.Items.Count);
         foreach (var actor in actorPage.Items)
@@ -297,29 +297,26 @@ public class WfTaskService(
         };
     }
 
+    /// <summary>
+    /// 按 <see cref="WfModelIndex"/>(含分支臂内节点)解析节点名,每个 <paramref name="modelCache"/> 未命中的
+    /// definitionVersionId 只建一次索引、后续同页命中同版本的行 O(1) 查——不写第三次主链线性扫描。
+    /// </summary>
     protected static string? ResolveNodeNameCached(
         long definitionVersionId,
         string nodeId,
         IReadOnlyDictionary<long, WfDefinitionVersion> versionMap,
-        Dictionary<long, WfModel?> modelCache)
+        Dictionary<long, WfModelIndex?> modelCache)
     {
-        if (!modelCache.TryGetValue(definitionVersionId, out var model))
+        if (!modelCache.TryGetValue(definitionVersionId, out var index))
         {
-            model = versionMap.TryGetValue(definitionVersionId, out var ver)
+            var model = versionMap.TryGetValue(definitionVersionId, out var ver)
                 ? WfModelJson.Deserialize(ver.ModelJson)
                 : null;
-            modelCache[definitionVersionId] = model;
+            index = model is null ? null : WfModelIndex.Build(model);
+            modelCache[definitionVersionId] = index;
         }
 
-        if (model is null)
-            return null;
-        for (var n = model.Root; n is not null; n = n.Next)
-        {
-            if (n.Id == nodeId)
-                return n.Name;
-        }
-
-        return null;
+        return index?.Find(nodeId)?.Name;
     }
 
     protected static PagedList<WfTodoItemOutput> EmptyTodoPage(WfTaskPageInput input) => new()

@@ -59,6 +59,11 @@ public class MultiLeaderApproverProvider(IRepository<SysUser> users) : ApproverP
     {
         cancellationToken.ThrowIfCancellationRequested();
         var maxLevel = Math.Max(1, ApproverParamReader.GetInt(context.Params, "level", 1));
+
+        // 发起时按 level 快照;命中的空数组也直接返回。缺键按异常存量数据处理,回退实时解析。
+        if (context.LeaderChainByLevel?.TryGetValue(maxLevel, out var snapshot) == true)
+            return snapshot;
+
         var chain = new List<long>();
         var current = context.InitiatorUserId;
         for (var i = 0; i < maxLevel; i++)

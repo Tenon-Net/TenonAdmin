@@ -34,4 +34,11 @@ public class WfInstance : DataEntity
     /// <summary>按节点 Id 保存发起人自选审批人,供后续请求恢复执行上下文。</summary>
     [SugarColumn(ColumnDataType = StaticConfig.CodeFirst_BigString, IsNullable = true, ColumnDescription = "节点自选审批人 JSON")]
     public string? SelectedUserIdsJson { get; set; }
+
+    /// <summary>
+    /// 发起时按 <c>level</c> 快照的连续多级主管链(<see cref="ApproverProviderKeys.MultiLeader"/>);
+    /// JSON 形如 <c>{"2":[...],"3":[...]}</c>;<c>null</c>=模型无 multiLeader 节点或老实例未快照。
+    /// </summary>
+    [SugarColumn(ColumnDataType = StaticConfig.CodeFirst_BigString, IsNullable = true, ColumnDescription = "按级别多级主管链快照 JSON")]
+    public string? LeaderChainJson { get; set; }
 }

@@ -1,7 +1,9 @@
 namespace TenonAdmin.Workflow;
 
 /// <summary>
-/// token 离开当前节点 → 求后继(M1 纯串行取 <see cref="WfNode.Next"/>) → 进入下一节点或完结实例。
+/// token 离开当前节点 → 求汇合目标(主链节点直接取 <see cref="WfNode.Next"/>;分支臂末节点经
+/// <see cref="WfExecutionContext.ResolveMergeTarget"/> 向上找外层 branch 的 <c>Next</c>,嵌套分支一路上溯)
+/// → 进入下一节点或完结实例。树遍历全部委托 ctx/<see cref="WfModelIndex"/>,本类不做。
 /// </summary>
 public class TakeTransitionOp(WfNode fromNode) : IWfOperation
 {
@@ -13,7 +15,7 @@ public class TakeTransitionOp(WfNode fromNode) : IWfOperation
 
         await ctx.AppendHistoryAsync(WfHistoryEventType.NodeLeave, FromNode.Id, cancellationToken: cancellationToken);
 
-        var next = FromNode.Next;
+        var next = ctx.ResolveMergeTarget(FromNode);
         if (next is null)
         {
             await CompleteInstanceAsync(ctx, WfInstanceStatus.Approved, cancellationToken);

@@ -38,6 +38,14 @@ public sealed class ApproverResolveContext
     /// 其它 Provider 忽略)。
     /// </summary>
     public IReadOnlyList<long>? SelectedUserIds { get; init; }
+
+    /// <summary>
+    /// 发起时按 <c>level</c> 快照的连续多级主管链(仅 <see cref="ApproverProviderKeys.MultiLeader"/> 使用)。
+    /// <c>null</c> = 没有快照(计算快照本身,或老实例未曾快照)→ Provider 应回退实时上溯;
+    /// 字典命中当前 <c>level</c> 时,即使对应链为空也必须原样返回,<b>不得</b>回退查库。
+    /// 字典缺少当前 <c>level</c> 只可能来自异常存量数据,按安全兼容方向回退实时解析。
+    /// </summary>
+    public IReadOnlyDictionary<int, IReadOnlyList<long>>? LeaderChainByLevel { get; init; }
 }
 
 /// <summary>

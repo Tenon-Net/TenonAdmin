@@ -377,6 +377,7 @@ public class WfInstanceService(
         };
     }
 
+    /// <summary>按 <see cref="WfModelIndex"/>(含分支臂内节点)解析节点名——不写第三次主链线性扫描。</summary>
     protected virtual async Task<string?> ResolveNodeName(long definitionVersionId, string nodeId)
     {
         var version = await versions.AsQueryable()
@@ -385,15 +386,7 @@ public class WfInstanceService(
         if (version is null)
             return null;
         var model = WfModelJson.Deserialize(version.ModelJson);
-        if (model is null)
-            return null;
-        for (var n = model.Root; n is not null; n = n.Next)
-        {
-            if (n.Id == nodeId)
-                return n.Name;
-        }
-
-        return null;
+        return model is null ? null : WfModelIndex.Build(model).Find(nodeId)?.Name;
     }
 
     protected virtual async Task<(WfDefinition Definition, WfDefinitionVersion Version, WfModel Model)>

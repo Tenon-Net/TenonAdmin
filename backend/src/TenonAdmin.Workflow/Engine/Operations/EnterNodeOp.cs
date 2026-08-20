@@ -37,6 +37,10 @@ public class EnterNodeOp(WfNode node) : IWfOperation
                 await EnterCcAsync(ctx, cancellationToken);
                 break;
 
+            case WfNodeType.Branch:
+                await EnterBranchAsync(ctx, cancellationToken);
+                break;
+
             default:
                 throw WorkflowErrorCode.Exception(WorkflowErrorCode.NodeTypeUnsupported,
                     new Dictionary<string, object?> { ["type"] = Node.Type.ToString() });
@@ -62,6 +66,7 @@ public class EnterNodeOp(WfNode node) : IWfOperation
                 InitiatorOrgId = ctx.StarterOrgId,
                 Params = assignee?.Params,
                 SelectedUserIds = ctx.GetSelectedUserIds(Node.Id),
+                LeaderChainByLevel = ctx.LeaderChainByLevel,
             },
             cancellationToken);
 
@@ -91,6 +96,7 @@ public class EnterNodeOp(WfNode node) : IWfOperation
                     InitiatorOrgId = ctx.StarterOrgId,
                     Params = assignee?.Params,
                     SelectedUserIds = ctx.GetSelectedUserIds(Node.Id),
+                    LeaderChainByLevel = ctx.LeaderChainByLevel,
                 },
                 cancellationToken);
         }
@@ -114,6 +120,64 @@ public class EnterNodeOp(WfNode node) : IWfOperation
         }
 
         ctx.Agenda.Plan(new TakeTransitionOp(Node));
+    }
+
+    /// <summary>
+    /// 分支执行:选臂 → 写 <see cref="WfHistoryEventType.GatewayTaken"/> →
+    /// 臂无子链(<c>arm.Next is null</c>,直接汇合到 <c>Node.Next</c>)时交给 <see cref="TakeTransitionOp"/>
+    /// 写 <see cref="WfHistoryEventType.NodeLeave"/> 并求汇合;否则本方法先写 NodeLeave 再进臂子链入口。
+    /// </summary>
+    protected virtual async Task EnterBranchAsync(WfExecutionContext ctx, CancellationToken cancellationToken)
+    {
+        var arm = Node.Conditions is { Count: > 0 } arms
+            ? SelectArm(arms, ctx.ConditionEvaluator, ctx.Instance.VariablesJson)
+            : null;
+        if (arm is null)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "branchNoArmMatched", ["nodeId"] = Node.Id });
+        }
+
+        await ctx.AppendHistoryAsync(
+            WfHistoryEventType.GatewayTaken,
+            Node.Id,
+            new { armId = arm.Id, armName = arm.Name, isDefault = arm.IsDefault },
+            cancellationToken);
+
+        if (arm.Next is null)
+        {
+            ctx.Agenda.Plan(new TakeTransitionOp(Node));
+            return;
+        }
+
+        await ctx.AppendHistoryAsync(WfHistoryEventType.NodeLeave, Node.Id, cancellationToken: cancellationToken);
+        ctx.Agenda.Plan(new EnterNodeOp(arm.Next));
+    }
+
+    /// <summary>
+    /// 选臂:按 <paramref name="arms"/> 数组顺序取第一条非默认且条件求值为 true 的臂;都不中则取默认臂;
+    /// 都没有返回 <c>null</c>。入参全是普通值(不吃 ctx),便于单测。求值器本身失败安全(不抛异常),
+    /// 这里不再加一层 try/catch 或类型判断。
+    /// </summary>
+    protected virtual WfBranchArm? SelectArm(
+        IReadOnlyList<WfBranchArm> arms,
+        IWfConditionEvaluator evaluator,
+        string? variablesJson)
+    {
+        WfBranchArm? defaultArm = null;
+        foreach (var arm in arms)
+        {
+            if (arm.IsDefault)
+            {
+                defaultArm ??= arm;
+                continue;
+            }
+
+            if (evaluator.Evaluate(arm.Expr, variablesJson))
+                return arm;
+        }
+
+        return defaultArm;
     }
 
     /// <summary>空审批人:节点 &gt; 流程 &gt; 全局。</summary>
