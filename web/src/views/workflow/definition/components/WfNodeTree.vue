@@ -1,12 +1,21 @@
 <script setup lang="ts">
-// 钉钉树串行链:递归 next;节点间插入审批/抄送。
+// 整棵工作流的唯一 mutation coordinator:clone → model helper → 一次性 emit。
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import WfNodeCard from './WfNodeCard.vue'
-import WfAddNode from './WfAddNode.vue'
-import { cloneNode, createNode, insertAfter, removeNode } from '@/workflow/model'
+import {
+  addBranchArm,
+  cloneNode,
+  createNode,
+  findNode,
+  insertAfter,
+  insertIntoBranchArm,
+  removeBranchArm,
+  removeNode,
+} from '@/workflow/model'
 import type { WfModel, WfNode, WfNodeType } from '@/workflow/schema'
+import WfNodeChain from './WfNodeChain.vue'
 import '../../wf-identity.css'
+
+type InsertableNodeType = Extract<WfNodeType, 'approval' | 'cc' | 'branch'>
 
 const props = defineProps<{
   model: WfModel
@@ -18,28 +27,21 @@ const emit = defineEmits<{
   select: [node: WfNode]
 }>()
 
-const { t } = useI18n()
-
 const errorSet = computed(() => {
   if (!props.errorIds) return new Set<string>()
   return props.errorIds instanceof Set ? props.errorIds : new Set(props.errorIds)
 })
 
-const chain = computed(() => {
-  const list: WfNode[] = []
-  let cur: WfNode | null | undefined = props.model.root
-  while (cur) {
-    list.push(cur)
-    cur = cur.next ?? null
-  }
-  return list
-})
-
-function bump(nextRoot: WfNode) {
-  emit('update:model', { ...props.model, root: nextRoot })
+function bump(root: WfNode) {
+  emit('update:model', { ...props.model, root })
 }
 
-function onAdd(afterId: string, type: Extract<WfNodeType, 'approval' | 'cc'>) {
+function onSelect(nodeId: string) {
+  const node = findNode(props.model.root, nodeId)
+  if (node) emit('select', node)
+}
+
+function onAddAfter(afterId: string, type: InsertableNodeType) {
   const root = cloneNode(props.model.root)
   const node = createNode(type)
   if (!insertAfter(root, afterId, node)) return
@@ -47,29 +49,60 @@ function onAdd(afterId: string, type: Extract<WfNodeType, 'approval' | 'cc'>) {
   emit('select', node)
 }
 
-function onRemove(id: string) {
+function onAddAtArmHead(branchId: string, armId: string, type: InsertableNodeType) {
   const root = cloneNode(props.model.root)
-  if (!removeNode(root, id)) return
+  const node = createNode(type)
+  if (!insertIntoBranchArm(root, branchId, armId, node)) return
+  bump(root)
+  emit('select', node)
+}
+
+function onRemoveNode(nodeId: string) {
+  const root = cloneNode(props.model.root)
+  if (!removeNode(root, nodeId)) return
+  bump(root)
+}
+
+function onAddArm(branchId: string) {
+  const root = cloneNode(props.model.root)
+  const branch = findNode(root, branchId)
+  if (!branch || !addBranchArm(branch)) return
+  bump(root)
+}
+
+function onRemoveArm(branchId: string, armId: string) {
+  const root = cloneNode(props.model.root)
+  const branch = findNode(root, branchId)
+  if (!branch || !removeBranchArm(branch, armId)) return
+  bump(root)
+}
+
+function onRenameArm(branchId: string, armId: string, name: string) {
+  const root = cloneNode(props.model.root)
+  const branch = findNode(root, branchId)
+  if (branch?.type !== 'branch') return
+  const arm = branch.conditions?.find((item) => item.id === armId)
+  if (!arm) return
+  arm.name = name
   bump(root)
 }
 </script>
 
 <template>
   <div class="wf-tree">
-    <template v-for="node in chain" :key="node.id">
-      <WfNodeCard
-        :node="node"
-        :active="selectedId === node.id"
-        :error="errorSet.has(node.id)"
-        @select="$emit('select', node)"
-        @remove="onRemove(node.id)"
-      />
-      <WfAddNode @add="(type) => onAdd(node.id, type)" />
-    </template>
-    <div class="wf-end">
-      <span class="wf-end-dot" />
-      <span class="wf-end-text">{{ t('workflow.designer.end') }}</span>
-    </div>
+    <WfNodeChain
+      :root="model.root"
+      :selected-id="selectedId"
+      :error-set="errorSet"
+      terminal
+      @select="onSelect"
+      @add-after="onAddAfter"
+      @add-at-arm-head="onAddAtArmHead"
+      @remove-node="onRemoveNode"
+      @add-arm="onAddArm"
+      @remove-arm="onRemoveArm"
+      @rename-arm="onRenameArm"
+    />
   </div>
 </template>
 
@@ -78,26 +111,7 @@ function onRemove(id: string) {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  padding: 28px 48px 64px;
   min-width: min-content;
-}
-.wf-end {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  margin-top: -8px;
-}
-.wf-end-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--wf-end);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--wf-end) 16%, transparent);
-}
-.wf-end-text {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-  letter-spacing: 0.04em;
+  padding: 28px 48px 64px;
 }
 </style>

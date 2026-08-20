@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 节点间大圆加号;Popover 为图标+文字双列(M1 仅审批/抄送)。语言学 wflow InsertButton / Workflow-Vue3 addNode。
+// 节点间大圆加号;Popover 提供 M2a 可插入的审批/抄送/条件分支。
 import { ref } from 'vue'
 import { NPopover } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -7,11 +7,13 @@ import AppIcon from '@/components/AppIcon.vue'
 import type { WfNodeType } from '@/workflow/schema'
 import '../../wf-identity.css'
 
-const emit = defineEmits<{ add: [type: Extract<WfNodeType, 'approval' | 'cc'>] }>()
+type InsertableNodeType = Extract<WfNodeType, 'approval' | 'cc' | 'branch'>
+
+const emit = defineEmits<{ add: [type: InsertableNodeType] }>()
 const { t } = useI18n()
 const open = ref(false)
 
-function pick(type: Extract<WfNodeType, 'approval' | 'cc'>) {
+function pick(type: InsertableNodeType) {
   open.value = false
   emit('add', type)
 }
@@ -19,20 +21,24 @@ function pick(type: Extract<WfNodeType, 'approval' | 'cc'>) {
 
 <template>
   <div class="wf-add">
-    <n-popover v-model:show="open" trigger="click" placement="right-start" :show-arrow="false" :width="280">
+    <n-popover v-model:show="open" trigger="click" placement="right-start" :show-arrow="false">
       <template #trigger>
         <button type="button" class="wf-add-btn" :aria-label="t('workflow.designer.addNode')" :title="t('workflow.designer.addNode')">
           <AppIcon icon="ph:plus-bold" :size="16" />
         </button>
       </template>
-      <div class="wf-add-grid" role="menu">
-        <button type="button" class="wf-add-item" role="menuitem" @click="pick('approval')">
+      <div class="wf-add-grid">
+        <button type="button" class="wf-add-item" @click="pick('approval')">
           <span class="wf-add-icon is-approval"><AppIcon icon="ph:user-circle-check" :size="22" /></span>
           <span class="wf-add-label">{{ t('workflow.node.approval') }}</span>
         </button>
-        <button type="button" class="wf-add-item" role="menuitem" @click="pick('cc')">
+        <button type="button" class="wf-add-item" @click="pick('cc')">
           <span class="wf-add-icon is-cc"><AppIcon icon="ph:paper-plane-tilt" :size="22" /></span>
           <span class="wf-add-label">{{ t('workflow.node.cc') }}</span>
+        </button>
+        <button type="button" class="wf-add-item" @click="pick('branch')">
+          <span class="wf-add-icon is-branch"><AppIcon icon="ph:git-branch" :size="22" /></span>
+          <span class="wf-add-label">{{ t('workflow.node.branch') }}</span>
         </button>
       </div>
     </n-popover>
@@ -87,8 +93,9 @@ function pick(type: Extract<WfNodeType, 'approval' | 'cc'>) {
 }
 
 .wf-add-grid {
+  width: min(360px, calc(100vw - 64px));
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   gap: 8px;
 }
 .wf-add-item {
@@ -123,6 +130,7 @@ function pick(type: Extract<WfNodeType, 'approval' | 'cc'>) {
 }
 .wf-add-icon.is-approval { color: var(--wf-approval); }
 .wf-add-icon.is-cc { color: var(--wf-cc); }
+.wf-add-icon.is-branch { color: var(--color-primary); }
 .wf-add-label {
   font-size: var(--font-size-sm);
   font-weight: 500;

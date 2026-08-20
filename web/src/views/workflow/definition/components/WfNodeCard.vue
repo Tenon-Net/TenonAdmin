@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 钉钉树节点卡:彩头 + 正文摘要 + 空态占位 + 右侧指向。交互语言学 Workflow-Vue3 / wflow,不拷 class/CSS。
+// 钉钉树节点卡:彩头 + 正文摘要 + 空态占位 + 右侧指向。
 import { computed } from 'vue'
 import { NButton, NTooltip } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -24,6 +24,8 @@ const tone = computed(() => {
       return 'approval'
     case 'cc':
       return 'cc'
+    case 'branch':
+      return 'branch'
     default:
       return 'end'
   }
@@ -37,6 +39,8 @@ const icon = computed(() => {
       return 'ph:user-circle-check'
     case 'cc':
       return 'ph:paper-plane-tilt'
+    case 'branch':
+      return 'ph:git-branch'
     default:
       return 'ph:flag'
   }
@@ -44,13 +48,16 @@ const icon = computed(() => {
 
 const title = computed(() => props.node.name || t(`workflow.node.${props.node.type}`))
 
-/** 正文摘要;未配办理人时走空态占位(学 Workflow-Vue3「请选择审批人」)。 */
+/** 正文摘要;未配办理人时显示对应空态占位。 */
 const body = computed(() => {
   const n = props.node
   if (n.type === 'start') {
     const scope = n.props?.initiatorScope ?? []
     if (!scope.length) return { text: t('workflow.node.placeholder.start'), empty: false }
     return { text: t('workflow.node.initiatorCount', { n: scope.length }), empty: false }
+  }
+  if (n.type === 'branch') {
+    return { text: t('workflow.designer.armCount', { count: n.conditions?.length ?? 0 }), empty: false }
   }
 
   const placeholder =
@@ -99,7 +106,8 @@ const body = computed(() => {
     role="button"
     tabindex="0"
     @click="$emit('select')"
-    @keydown.enter="$emit('select')"
+    @keydown.enter.self="$emit('select')"
+    @keydown.space.self.prevent="$emit('select')"
   >
     <div class="wf-card-head">
       <AppIcon :icon="icon" :size="14" class="wf-card-head-icon" />
@@ -156,6 +164,7 @@ const body = computed(() => {
 .wf-card.is-start { --wf-head: var(--wf-start); }
 .wf-card.is-approval { --wf-head: var(--wf-approval); }
 .wf-card.is-cc { --wf-head: var(--wf-cc); }
+.wf-card.is-branch { --wf-head: var(--color-primary); }
 .wf-card.is-end { --wf-head: var(--wf-end); }
 
 .wf-card:hover {

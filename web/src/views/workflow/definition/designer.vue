@@ -15,7 +15,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import type { WfDefinitionInput } from '@/types/workflow'
-import { cloneModel, createDefaultModel, validateM1Model } from '@/workflow/model'
+import { cloneModel, createDefaultModel, validateModel } from '@/workflow/model'
 import type { WfModel, WfNode } from '@/workflow/schema'
 import WfNodeTree from './components/WfNodeTree.vue'
 import WfConfigDrawer from './components/WfConfigDrawer.vue'
@@ -46,7 +46,7 @@ const canvasRef = ref<HTMLElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
 
 const errorIds = computed(() => {
-  const issues = validateM1Model(model.value)
+  const issues = validateModel(model.value)
   return new Set(issues.map((i) => i.nodeId).filter(Boolean) as string[])
 })
 
@@ -117,7 +117,7 @@ function onSelect(node: WfNode) {
 
 async function save(): Promise<boolean> {
   if (!defId.value) return false
-  const issues = validateM1Model(model.value)
+  const issues = validateModel(model.value)
   if (issues.length) {
     message.warning(t('workflow.designer.invalid'))
     return false
@@ -306,7 +306,8 @@ function onBack() {
 .wf-stage {
   display: flex;
   justify-content: center;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
 }
 .wf-stage-inner {
   display: inline-block;

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * 节点配置抽屉。默认可见 ≤5 项,其余进「高级」(设计方案配置纪律)。
- * M1:start / approval / cc;不配分支/超时/字段权限。
+ * M2a:start / approval / cc / branch;不配超时/字段权限。
  */
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import {
   NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber, NSelect,
   NButton, NSpace, NCollapse, NCollapseItem,
@@ -13,8 +13,19 @@ import UserSelect from '@/components/UserSelect/index.vue'
 import ApiSelect from '@/components/ApiSelect/index.vue'
 import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
 import { roleApi, positionApi } from '@/api'
-import type { WfAssigneeProvider, WfModel } from '@/workflow/schema'
-import { cloneModel, findNode } from '@/workflow/model'
+import type {
+  WfApprovalMode,
+  WfAssigneeProvider,
+  WfConditionExpr,
+  WfModel,
+} from '@/workflow/schema'
+import { findNode } from '@/workflow/model'
+import {
+  applyNodeConfiguration,
+  createConditionGroup,
+  type WfEditorNodeConfig,
+} from '@/workflow/configuration'
+import WfConditionEditor from './WfConditionEditor.vue'
 
 const props = defineProps<{
   show: boolean
@@ -34,6 +45,7 @@ const form = reactive({
   name: '',
   formComponent: '' as string,
   provider: 'leader' as string,
+  mode: 'any' as WfApprovalMode,
   level: 1,
   userIds: [] as number[],
   roleId: null as number | null,
@@ -42,7 +54,9 @@ const form = reactive({
   initiatorUserIds: [] as number[],
   initiatorRoleIds: [] as number[],
   initiatorOrgIds: [] as number[],
+  armExpressions: {} as Record<string, WfConditionExpr>,
 })
+const expandedArm = ref<string | number | null>(null)
 
 const providerOptions = computed(() =>
   (['user', 'leader', 'multiLeader', 'role', 'position', 'selfSelect', 'initiator', 'orgLeader'] as WfAssigneeProvider[]).map(
@@ -50,11 +64,28 @@ const providerOptions = computed(() =>
   ),
 )
 
+const modeOptions = computed(() => (['any', 'all', 'seq'] as WfApprovalMode[]).map(
+  (value) => ({ label: t(`workflow.mode.${value}`), value }),
+))
+
+const approvalMode = computed<WfApprovalMode>({
+  get: () => form.provider === 'multiLeader' ? 'seq' : form.mode,
+  set: (value) => { form.mode = value },
+})
+
 const showAdvanced = computed(() => {
   if (!node.value) return false
   if (node.value.type === 'start') return true
+  if (node.value.type === 'branch') return false
   return form.provider === 'position'
 })
+
+function loadArmExpression(expression: WfConditionExpr | null | undefined): WfConditionExpr {
+  const cloned = JSON.parse(JSON.stringify(expression ?? createConditionGroup())) as WfConditionExpr
+  return cloned.children != null
+    ? cloned
+    : { ...createConditionGroup(), children: [cloned] }
+}
 
 watch(
   () => [props.show, props.nodeId, props.model] as const,
@@ -65,6 +96,7 @@ watch(
     form.formComponent = props.model.formComponent ?? ''
     const a = n.props?.assignee
     form.provider = a?.provider || (n.type === 'cc' ? 'user' : 'leader')
+    form.mode = a?.provider === 'multiLeader' ? 'seq' : n.props?.mode ?? 'any'
     const params = a?.params ?? {}
     form.level = Number(params.level ?? 1) || 1
     const ids = params.userIds
@@ -76,6 +108,17 @@ watch(
     form.initiatorUserIds = scope.filter((x) => x.type === 'user').map((x) => x.id)
     form.initiatorRoleIds = scope.filter((x) => x.type === 'role').map((x) => x.id)
     form.initiatorOrgIds = scope.filter((x) => x.type === 'org').map((x) => x.id)
+    form.armExpressions = Object.fromEntries(
+      (n.conditions ?? [])
+        .filter((arm) => !arm.isDefault)
+        .map((arm) => [
+          arm.id,
+          loadArmExpression(arm.expr),
+        ]),
+    )
+    expandedArm.value = n.type === 'branch'
+      ? n.conditions?.find((arm) => !arm.isDefault)?.id ?? null
+      : null
   },
   { immediate: true },
 )
@@ -100,33 +143,38 @@ function buildAssigneeParams(): Record<string, unknown> {
 
 function apply() {
   if (!props.nodeId || !node.value) return
-  const next = cloneModel(props.model)
-  const n = findNode(next.root, props.nodeId)
-  if (!n) return
-  n.name = form.name.trim() || n.name
-  if (n.type === 'start') {
-    next.formComponent = form.formComponent.trim() || null
-    n.props = {
-      ...n.props,
+  let config: WfEditorNodeConfig
+  if (node.value.type === 'start') {
+    config = {
+      type: 'start',
+      name: form.name,
+      formComponent: form.formComponent,
       initiatorScope: [
         ...form.initiatorUserIds.map((id) => ({ type: 'user' as const, id })),
         ...form.initiatorRoleIds.map((id) => ({ type: 'role' as const, id })),
         ...form.initiatorOrgIds.map((id) => ({ type: 'org' as const, id })),
       ],
     }
-  } else {
-    n.props = {
-      ...n.props,
+  } else if (node.value.type === 'branch') {
+    config = { type: 'branch', name: form.name, armExpressions: form.armExpressions }
+  } else if (node.value.type === 'approval') {
+    config = {
+      type: 'approval',
+      name: form.name,
+      assignee: { provider: form.provider, params: buildAssigneeParams() },
+      mode: approvalMode.value,
+    }
+  } else if (node.value.type === 'cc') {
+    config = {
+      type: 'cc',
+      name: form.name,
       assignee: { provider: form.provider, params: buildAssigneeParams() },
     }
-    if (n.type === 'approval') {
-      n.props.mode = 'any'
-      n.props.nobody = 'autoPass'
-      n.props.nobodyTransferUserId = undefined
-      n.props.onReject = 'terminate'
-      n.props.formPerms = n.props.formPerms ?? []
-    }
+  } else {
+    return
   }
+  const next = applyNodeConfiguration(props.model, props.nodeId, config)
+  if (!next) return
   emit('update:model', next)
   emit('update:show', false)
 }
@@ -161,6 +209,28 @@ const title = computed(() => {
           </n-form-item>
         </template>
 
+        <template v-else-if="node.type === 'branch'">
+          <n-collapse
+            v-model:expanded-names="expandedArm"
+            accordion
+            display-directive="if"
+            class="wf-branch-conditions"
+          >
+            <n-collapse-item v-for="arm in node.conditions ?? []" :key="arm.id" :name="arm.id">
+              <template #header>
+                <span class="wf-branch-condition-title">{{ arm.name || t('workflow.designer.armName') }}</span>
+              </template>
+              <div v-if="arm.isDefault" class="wf-branch-default-hint">
+                {{ t('workflow.condition.defaultHint') }}
+              </div>
+              <WfConditionEditor
+                v-else
+                v-model="form.armExpressions[arm.id]"
+              />
+            </n-collapse-item>
+          </n-collapse>
+        </template>
+
         <template v-else>
           <n-form-item :label="t('workflow.designer.assignee')">
             <n-select v-model:value="form.provider" :options="providerOptions" />
@@ -177,6 +247,14 @@ const title = computed(() => {
           </n-form-item>
           <n-form-item v-else-if="form.provider === 'position'" :label="t('workflow.designer.position')">
             <ApiSelect v-model:value="form.positionId" :fetch="fetchPositions" :placeholder="t('workflow.designer.position')" />
+          </n-form-item>
+
+          <n-form-item v-if="node.type === 'approval'" :label="t('workflow.designer.mode')">
+            <n-select
+              v-model:value="approvalMode"
+              :options="modeOptions"
+              :disabled="form.provider === 'multiLeader'"
+            />
           </n-form-item>
         </template>
 
@@ -236,5 +314,21 @@ const title = computed(() => {
 }
 .wf-advanced :deep(.n-collapse-item__content-inner) {
   padding-top: 8px;
+}
+.wf-branch-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+.wf-branch-condition-title {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+.wf-branch-default-hint {
+  padding: var(--space-8);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-body);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 </style>

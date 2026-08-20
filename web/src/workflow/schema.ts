@@ -5,13 +5,26 @@
 
 export const WF_MODEL_VERSION = 1 as const
 
-/** M1 启用的节点类型;branch/parallel/webhook 留到 M2/M3。 */
+/** 流程节点类型;M2a 启用 branch,parallel/webhook 留到 M3。 */
 export type WfNodeType = 'start' | 'approval' | 'cc' | 'branch' | 'parallel' | 'webhook'
 
 export type WfApprovalMode = 'any' | 'all' | 'seq'
 export type WfRejectAction = 'terminate' | 'toNode'
 export type WfNobodyAction = 'autoPass' | 'transfer' | 'block'
 export type WfReturnPolicy = 'prev' | 'any' | 'node'
+export type WfConditionLogic = 'and' | 'or'
+export type WfConditionOp =
+  | 'eq'
+  | 'ne'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'in'
+  | 'notIn'
+  | 'contains'
+  | 'empty'
+  | 'notEmpty'
 
 /** 内置 8 种审批人 Provider 键(与 ApproverProviderKeys 对齐)。 */
 export type WfAssigneeProvider =
@@ -51,13 +64,31 @@ export interface WfNodeProps {
   webhookUrl?: string
 }
 
+/** 结构化条件:叶子使用 field/op/value,组使用 logic/children。 */
+export interface WfConditionExpr {
+  field?: string | null
+  op?: WfConditionOp | null
+  value?: unknown
+  logic?: WfConditionLogic | null
+  children?: WfConditionExpr[] | null
+}
+
+/** 条件分支的一条臂;默认臂的 expr 可空。 */
+export interface WfBranchArm {
+  id: string
+  name: string
+  expr?: WfConditionExpr | null
+  isDefault: boolean
+  next?: WfNode | null
+}
+
 export interface WfNode {
   id: string
   type: WfNodeType
   name: string
   props?: WfNodeProps
-  /** 仅 branch(M2);M1 设计器不读写。 */
-  conditions?: unknown[]
+  /** 仅 branch(M2a);须恰好一条默认臂。 */
+  conditions?: WfBranchArm[]
   next?: WfNode | null
 }
 
@@ -77,3 +108,6 @@ export const WF_M1_INSERTABLE: ReadonlyArray<Extract<WfNodeType, 'approval' | 'c
 ]
 
 export const WF_M1_NODE_TYPES: ReadonlySet<WfNodeType> = new Set(['start', 'approval', 'cc'])
+
+/** M2a 可发布的节点类型。 */
+export const WF_M2A_NODE_TYPES: ReadonlySet<WfNodeType> = new Set(['start', 'approval', 'cc', 'branch'])
