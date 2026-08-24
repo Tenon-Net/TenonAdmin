@@ -20,7 +20,7 @@
 
 ## Tasks
 
-> 对照 `docs/review/workflow-design-plan-2026-08-17.md` §八 M1 验收线 + 当前 `gh run list` 真实 CI 状态推导,只列有证据的缺口,不臆造。
+> 对照 `docs/workflow/workflow-design-plan-2026-08-17.md` §八 M1 验收线 + 当前 `gh run list` 真实 CI 状态推导,只列有证据的缺口,不臆造。
 
 - [x] contract-drift 转绿:起 MinimalHost,`web/` + `web-react/` 各跑一次 `npm run gen:api`,更新 `schema.d.ts`(根因排查见 Round 1 log;**已在工作区就绪但未提交**,按 loop 规则不擅自 commit,需用户下达明确指令后提交)
 - [x] Playwright 走一遍「请假审批」全链路(登录→设计器建流程→发布→发起→审批→详情完结),留证据 —— **过程中发现设计器"添加节点"是真坏的(`DataCloneError`),已定位根因并修复,见 Round 2**。证据截图:`.loop/wf-ui-shots/m1-close-01-instance-approved.png`(详情页,状态"已通过")、`m1-close-02-designer-fixed.png`(设计器,节点已可正常添加)

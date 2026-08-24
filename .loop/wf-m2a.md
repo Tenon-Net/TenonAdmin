@@ -2,7 +2,7 @@
 
 ## GOAL
 
-在 M1(已收口,四项 CI 全绿)基础上做 **M2a 分支**:排他分支 + 结构化条件 + 条件编辑器 + 会签/或签在设计器暴露。范围与定案见 `docs/review/workflow-design-plan-2026-08-17.md` **§十三**(M2a/M2b 切分、三条写死)。
+在 M1(已收口,四项 CI 全绿)基础上做 **M2a 分支**:排他分支 + 结构化条件 + 条件编辑器 + 会签/或签在设计器暴露。范围与定案见 `docs/workflow/workflow-design-plan-2026-08-17.md` **§十三**(M2a/M2b 切分、三条写死)。
 
 **不做 M2b**(退回/撤销/委托/催办/超时 Job/去重/SignalR/抄送列表/回放)、**不做 M3**(动态表单/并行/webhook/加减签/React port)。不抽 `web/` 与 `web-react/` 共享层——M2a 只动 `web/`。
 
@@ -576,7 +576,7 @@ P1 = **同一个主链线性扫描在包里有三份**,Task 2 只换掉引擎那
 
 ### Round 3 — 任务1/review
 
-- **动作**:先 `git status --short` + `git diff --stat` 锁定范围(3 个新文件 untracked + `WorkflowSetup.cs` +3 行;`docs/review/workflow-design-plan-2026-08-17.md` 的改动**早于本 loop**,不属于 Task 1)。跑 Codex companion review。
+- **动作**:先 `git status --short` + `git diff --stat` 锁定范围(3 个新文件 untracked + `WorkflowSetup.cs` +3 行;`docs/workflow/workflow-design-plan-2026-08-17.md` 的改动**早于本 loop**,不属于 Task 1)。跑 Codex companion review。
 - **Codex 判定为无效并丢弃**:它点名的 5 个文件(`web/src/components/CronEditor/index.vue`、`web/src/views/workflow/start/index.vue`、`web/src/views/workflow/instance/detail.vue`、`web/src/components/ApiSelect/index.vue`、`web/src/views/workflow/definition/index.vue`)**没有一个在 Task 1 改动集内**。**根因这次查清了**(比「PowerShell 子进程挂了」更准):Task 1 的三个核心文件是 **untracked**,`git diff`(Codex 的 review target = working tree diff)只能看到 `WorkflowSetup.cs` 那 3 行,它没读到求值器一个字,于是靠 codegraph 漫游既有已提交代码编出了一堆前端异步竞态 finding。**教训:本 loop 后续每轮 review 前,新文件要么 `git add -N`,要么继续走 `code-reviewer` 并显式列路径。**
 - **改用 `code-reviewer`**(显式列出 4 个文件路径 + 语义定案表 + 范围外清单)。结果:**1×P1 + 7×P2 + 3×P3**,已写进 `## Findings`。含金量够:它在临时目录引真实程序集跑了 30 个探针逐行实测语义表(20 行除 P1 外全部相符),P1 是**实测复现**的,7 条 P2 每条都给了「变异实现后 29 条测试仍全绿」的证据。
 - **P1 摘要**:`ParseVariables` 的 `catch (JsonException)` 挡不住落单 UTF-16 代理项触发的 `ArgumentException` → 在引擎事务里炸掉整单发起。HTTP 入口不可达(外层 STJ 先 400),但消费者直调 `StartAsync` 与数据迁移直写库可达。

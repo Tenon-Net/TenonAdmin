@@ -2,7 +2,7 @@
 
 ## GOAL
 
-在 M2a(已收口,四项 CI 全绿,commit `b0d796e`/`a2bd9c6`/`dce7e75`)基础上做 **M2b**:退回/撤销/委托/催办/超时 Job/同一人相邻节点去重/`IWorkflowNotifier` 落地(接 `IRealtimePublisher`)/`btnInfo`;前端(仅 `web/`)加抄送列表、我发起的/我已办的、流程图回放、实例列表按参与筛选。范围与定案见 `docs/review/workflow-design-plan-2026-08-17.md` **§十三 13.3**「M2b 动词与时效」行,语义默认值见 `CONTEXT.md` 「工作流」节「行为语义默认值」条。
+在 M2a(已收口,四项 CI 全绿,commit `b0d796e`/`a2bd9c6`/`dce7e75`)基础上做 **M2b**:退回/撤销/委托/催办/超时 Job/同一人相邻节点去重/`IWorkflowNotifier` 落地(接 `IRealtimePublisher`)/`btnInfo`;前端(仅 `web/`)加抄送列表、我发起的/我已办的、流程图回放、实例列表按参与筛选。范围与定案见 `docs/workflow/workflow-design-plan-2026-08-17.md` **§十三 13.3**「M2b 动词与时效」行,语义默认值见 `CONTEXT.md` 「工作流」节「行为语义默认值」条。
 
 **禁止做 M3**(动态表单/`formPerms`/并行/webhook/加减签/比例票签/长期委托/React port)。**不改 `web-react/`**,除了最后一个任务的 `gen:api` 刷 `schema.d.ts`。不抽 `web/` 与 `web-react/` 共享层。**长期委托规则(定时/条件触发)不做**——本 loop 的「委托」只做单次、发起人手动指定的一次性委托,对齐 §十三 13.3 明确写的「委托」而非 CONTEXT.md 未提及的规则委托。
 
@@ -208,7 +208,7 @@
 
 ## Log
 
-### Round 1 — 任务1/plan — 动作:开新台账 `.loop/wf-m2b.md`,读 `docs/review/workflow-design-plan-2026-08-17.md` §十三 13.3、`CONTEXT.md` 工作流节「行为语义默认值」、`WfNode.cs`/`WfSchemaEnums.cs`/`WfEnums.cs`(确认 M2b 相关 schema 字段与枚举值均已预留、零消费方)、`IWorkflowNotifier.cs`(空接口)、`IRealtimePublisher.cs`(成品)、`CompleteTaskOp.cs`/`TransferTaskOp.cs`(现状与改动模板)、`WfInstanceService.cs`/`WfTaskService.cs`(确认「我发起的」「我已办的」后端契约已存在)。拆 12 个任务(见 `## Tasks`),Task 1(`IWorkflowNotifier` 落地)写了完整 Plan(6 决策点 + 9 步骤)。**未写任何产品代码**。
+### Round 1 — 任务1/plan — 动作:开新台账 `.loop/wf-m2b.md`,读 `docs/workflow/workflow-design-plan-2026-08-17.md` §十三 13.3、`CONTEXT.md` 工作流节「行为语义默认值」、`WfNode.cs`/`WfSchemaEnums.cs`/`WfEnums.cs`(确认 M2b 相关 schema 字段与枚举值均已预留、零消费方)、`IWorkflowNotifier.cs`(空接口)、`IRealtimePublisher.cs`(成品)、`CompleteTaskOp.cs`/`TransferTaskOp.cs`(现状与改动模板)、`WfInstanceService.cs`/`WfTaskService.cs`(确认「我发起的」「我已办的」后端契约已存在)。拆 12 个任务(见 `## Tasks`),Task 1(`IWorkflowNotifier` 落地)写了完整 Plan(6 决策点 + 9 步骤)。**未写任何产品代码**。
 NEXT: Round 2 进 exec,把本轮 `## Plan` 整段 + 硬约束喂给 `Agent(executor)`。
 
 ### Round 2 — 任务1/exec — 动作:executor 实现 `IWorkflowNotifier` 落地(9 改动文件 + 2 新文件),4 个变异(移除三个调用点各一次 + 去掉 try/catch)逐个转红后还原,报 96/96 绿。Opus 独立复核:`git status`/`git diff --stat` 核对改动集与报告一致;亲手复跑最容易漏的一个(`TakeTransitionOp` 的 Approved 完结出口)——注释掉调用 → 独立确认 `Approve_flow_notifies_task_assigned_and_instance_completed:54` 红,复原后独立重跑 96/96,`git diff --check` 干净、无残留。

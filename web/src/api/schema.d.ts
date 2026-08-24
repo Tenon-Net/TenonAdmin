@@ -10848,7 +10848,7 @@ export interface components {
             /**
              * Format: int64
              * @description 机构负责人用户 Id;可空(未指定)。软引用 `sys_user`,无导航属性。
-             *     工作流「机构负责人」审批人 Provider 读此字段(`docs/review/workflow-design-plan-2026-08-17.md`)。
+             *     工作流「机构负责人」审批人 Provider 读此字段(`docs/workflow/workflow-design-plan-2026-08-17.md`)。
              */
             leaderUserId?: null | number | string;
             isDelete?: boolean;

@@ -1,5 +1,7 @@
 # 工作流模块调研(自研引擎,参考不引用)
 
+> 文档入口：[`README.md`](./README.md)
+
 调研日期:2026-08-10。范围:为 TenonAdmin 自研一个 BPMN 风格的审批工作流卫星包(`TenonAdmin.Workflow`)收集设计参考——**不打算直接依赖别人的执行引擎**,只借架构思路;前端可视化画布则可能直接引用现成库。
 
 本地参考仓不进本仓库,约定放在本仓**上级目录**(与 `tenon-admin` 并列):`../参考项目/`。工作流摸底在 `../参考项目/工作流/`。
@@ -217,9 +219,87 @@ JNPF 是**合同交付的商业产品**(福建引迈)。仓根没有 Apache/MIT/
 
 **无翻转**。自研 JSON 树、9 表冷启动、`IApproverProvider`、零自带组织、钉钉树双模板——全部维持。JNPF 把「权限交点」从开放问题收成可执行的分层清单,供 M2 发起范围 / M3 字段矩阵与按钮开关对照。
 
-## 七、写需求前建议先定的问题
+## 七、OpenWorkflow——可靠执行层专项对照（2026-08-23）
 
-> 2026-08-17:以下问题已在 `docs/review/workflow-design-plan-2026-08-17.md` §九给出建议决议(不做 BPMN 互通、钉钉树自研×2、Provider 分派、表单出圈等),本节保留原始提问作对照。
+本地浅克隆：`C:\HuHuHu\参考项目\工作流\openworkflow`；对照提交 `46dcc85d230bb54894dc4bab022a1ce34cc11c13`，包版本 `0.9.2`，Apache-2.0。分仓笔记：`openworkflow/_TENON_REF.md`；详细源码对照另见 [`openworkflow-reference-2026-08-23.md`](./openworkflow-reference-2026-08-23.md)。
+
+它是 TypeScript durable/resumable workflow 框架，不是审批产品。工作流以代码函数定义，worker 从数据库领取 run，每次从头重放函数；完成过的 `step.run` 从 `step_attempts` 返回缓存结果，新步骤才执行。`step.sleep`、子工作流和 `waitForSignal` 会持久化挂起，`availableAt` 同时承担唤醒时间与 worker 租约，SQLite/Postgres 是 `Backend` 的两个 Adapter。
+
+### 与 Tenon 当前实现的正面对照
+
+| 维度 | OpenWorkflow | TenonAdmin.Workflow | 判断 |
+|---|---|---|---|
+| 产品模型 | 代码优先自动化编排 | JSON 定义快照 + 人工审批任务/办理人/表单权限 | **Tenon 方向正确**；两者不是替代关系 |
+| 执行指针 | 函数重放 + step attempt memoization | `WfToken` + 单事务 `WfAgenda`，停在活跃 `WfTask` | 人工审批不需要重放；继续保留表状态恢复 |
+| 并发 | worker 原子领取、租约、心跳、崩溃再领取 | 用户动作按 `WfTask.Version` CAS；调度器选主 | 前台审批已有正确 CAS；后台超时/自动节点仍需完整领取语义 |
+| 幂等 | run 支持 idempotency key；完成步骤按 durable step key 复用 | 命令无通用 `RequestId`；`BusinessKey` 只是普通索引 | **明确缺口**：CAS 防双赢，不等于重复请求返回同一结果 |
+| 长等待 | durable sleep / signal / child workflow | 活跃任务持久化；`DueTime`/`TimeoutFired` 已预留，超时 Job 尚未收口 | OpenWorkflow 验证了“持久化唤醒而非阻塞线程”的路线 |
+| 版本 | run version + 业务代码保留旧分支；step 改名会破坏在途重放 | 实例固定 `WfDefinitionVersion` JSON 快照 | 无代码审批里 Tenon 的不可变定义快照更稳、更容易解释 |
+| 可观测性 | run/attempt/error/retry + dashboard | `WfHistory`/`WfHisTask`；事务后通知失败静默吞掉 | 历史有基础，但缺 request/attempt/最后错误关联 |
+
+### deep-module 判断
+
+OpenWorkflow 的 `step.run/sleep/runWorkflow/sendSignal/waitForSignal` 是小 **Interface**，持久化、租约、重试、恢复藏在 **Implementation** 中，形成高 **Depth**、高 **Leverage** 的 **Module**；`Backend` 是真实 **Seam**，Postgres/SQLite **Adapter** 共用契约测试，**Locality** 很好。代价也很清楚：确定性与版本兼容复杂度泄漏到工作流代码和 durable step 名称中。
+
+Tenon 的 `IWorkflowEngine.ExecuteAsync(IWfCommand)` + Agenda 对审批域同样够深；人员解析、表单绑定、通知是现实存在的业务 Seam。不要因为 OpenWorkflow 接口多就为每张表再造 Repository/Adapter。真正值得新增的 Seam 只有“命令去重/后台工作领取/自动节点 attempt”等能通过删除测试、且已有两个实现或消费者替换需求的边界。
+
+### 借鉴优先级
+
+1. **M2b：完成超时闭环与通知观测。** 建任务计算 `DueTime`；`WfTimeoutJob` 以任务 `Version` CAS 处理到期动作；失败通知写日志/指标。继续复用 ADR-0004 调度器，不建 OpenWorkflow worker 集群，也不为纯 SignalR 提示建 outbox。
+2. **M2c：给所有变更命令增加请求幂等。** API 接受 `RequestId/IdempotencyKey`，以“组织/租户 + 实例/任务 + 操作 + 操作者 + request id”唯一约束保存操作回执；重复请求返回第一次结果。它解决 HTTP 重试与双击，和现有 `Version` CAS 互补。
+3. **M2c：建立四库持久化契约测试。** 针对回执唯一性、CAS、事务回滚、超时与人工动作竞争建立 provider-neutral 测试，不为抽象好看照搬 OpenWorkflow 的 Backend Interface。
+4. **M3：为机器动作增加 attempt。** Webhook/自定义节点记录 `OperationId/RequestId/Attempt/LastError/NextRetryAt`；需要保证执行的外部副作用使用 outbox + 领取/fence，人的审批动作不自动重放。
+5. **M3b：AI Decision 作为可靠节点 SPI 的首个战略 Adapter。** M3a 先完成 execution/attempt/deadline/fence/outbox；M3b 同一阶段交付结构化 proposal、schema/policy、shadow mode、低风险自动放行和人工 fallback。模型供应商 SDK 不进入工作流内核。
+
+### 明确不借
+
+- 不把 JSON 审批定义改成 C#/TypeScript 代码工作流，不引入确定性重放。
+- 不引入独立 worker 舰队、通用子工作流、signal 字符串总线或另一套调度器。
+- 不用 `step.run` 包人工审批；审批等待继续由 `WfTask/WfTaskActor/WfToken` 表达。
+- 不把 OpenWorkflow 的 step memoization 误当 exactly-once：worker 在步骤完成落盘前崩溃，外部副作用仍可能再次执行；未来 Webhook 必须自带幂等键/outbox。
+
+**对既有决策无翻转。** OpenWorkflow 不是新的引擎候选，而是补上此前调研较弱的“可靠执行层”样本。它强化了 M2b 超时 Job、命令幂等和 M3 Webhook attempt/outbox 的必要性，同时也反证人工审批无需 Temporal 式重放。
+
+## 八、Elsa 3 / Slickflow.AI——.NET AI × 工作流专项对照（2026-08-23）
+
+本地仓均已存在，无需新增克隆：`../参考项目/工作流/elsa-core` 已 ff-only 更新到 `ae146a17655664645f3761720b998d65f587344a`；`Slickflow` 已是远端最新 `646392d3e9be7e34b79f6fa8ca0f23dd80db2b6e`。详细报告见 [`elsa3-slickflow-ai-reference-2026-08-23.md`](./elsa3-slickflow-ai-reference-2026-08-23.md)。
+
+先纠正称呼：这两个项目都属于 .NET 工作流生态，但不能并称为“开箱 AI 审批库”。Elsa 3 的 AI 是 Weaver 设计/诊断 Copilot；Slickflow 才把 LLM/RAG/Agent 做成运行时节点，但“AI 审核”仍是节点输出与规则网关的组合，不是引擎内置的审批安全策略。
+
+Slickflow 官方[文档中心](https://www.slickflow.com/wiki/index)及 [LLM](https://www.slickflow.com/wiki/llmguide)、[RAG](https://www.slickflow.com/wiki/ragguide)、[多智能体](https://www.slickflow.com/wiki/multiagent)指南描述了更完整的产品形态，但部分示例 API（如 `[LLMTask]`、`[AgentRole]`、`RunMultiAgentAsync`、`IRAGService`、Human-in-the-Loop 节点）在固定提交中未找到。调研据此把它们归为“文档方向”，不当作当前源码已交付能力；详细逐项核对见专项报告 §3.4。
+
+| 维度 | Elsa Workflows 3 | Slickflow.NET / Slickflow.AI |
+|---|---|---|
+| 当前身份 | 官方主仓；稳定 `3.7.1`，AI 模块随 `3.8.0-rc2` 预发布；MIT | 官方主仓；GitHub release `V5.0.0`，项目/NuGet 仍标 `3.5.0`；MIT |
+| AI 所在位置 | `Elsa.AI.Abstractions/Host/Copilot/Persistence` + Studio Weaver | `Slickflow.AI` + 引擎 `AIServiceNode` + BPMN 设计器属性面板 |
+| 主要用途 | 对话查询 Activity/定义/实例/incident；生成/修改流程定义 proposal；诊断 | 运行时调用 LLM/RAG/Agent，将结果写回流程变量；另有文生 BPMN、RAG、Agent/MCP |
+| “审核”含义 | 用户审核 AI 生成的**流程定义提案**，不是 AI 审核业务单据 | 模型输出结构化结果/score，确定性网关路由到接受或人工复核 |
+| 安全亮点 | Provider SDK 隔离；RBAC/租户过滤、脱敏、tool enablement、proposal-only mutation、audit | AI 结果不必直接改流程状态，可先写变量再走规则分支 |
+| 当前短板 | 3.8 RC / Weaver 仍在产品化；实际 Provider Adapter 目前是 GitHub Copilot SDK；无运行时 AI 审批 Activity | Engine 直接引用 AI 项目；两套执行路径行为不同，经典路径 RAG 退化为 LLM；存在 sync-over-async；缺统一 schema 校验、attempt/deadline/重试/幂等/人工兜底 Module |
+
+### 真正值得借的两条线
+
+1. **运行时 AI 预审——借 Slickflow 的形状，不借实现。** `AI structured output → JSON schema validation → deterministic threshold/rule → 自动路由或人工复核`。模型只给建议，不直接调用 Approve/Reject；低置信度、异常、超时、无效 JSON 一律转人工。
+2. **AI 流程设计/诊断——借 Elsa 的治理。** AI 对定义的创建/修改只生成 proposal；服务端做权限过滤、脱敏、模型校验、图 diff 和 validation；用户显式 approve/apply 后才保存草稿，并记录 prompt/tool/proposal/apply audit。AI 不直接发布流程，也不改在途版本。
+
+Slickflow 固定源码的完整执行链、两套 executor 差异、LLM/RAG/Agent 真实完成度、Tenon 目标 Interface、execution/attempt/AI decision/outbox 概念模型、安全不变量与验收指标均已固化在专项报告 §3–§5。后续开发不再重新通读该参考仓；只有上游 commit 变化时做增量核对。
+
+### 对开发阶段的影响
+
+- **M2b/M2c 无新增 AI 工作**：先完成审批功能、超时闭环、命令幂等与四库契约测试。
+- **M3a**：Webhook/节点 SPI 建好可靠机器动作执行 Module（execution、attempt、deadline、退避、fence、outbox），统一所有机器节点入口。
+- **M3b**：交付最小 AI Decision Node，先 shadow、再按场景评测开放低风险自动放行；自动拒绝不进 V0，异常统一转人工。
+- **M3+**：增加证据/RAG、只读 Agent tools、更多 Provider；设计器有真实需求后再做 Elsa 式 Copilot proposal/diff/audit。
+
+### deep-module 判断
+
+Elsa 的 AI Host 把 Provider、tool、context、proposal、audit 分开，外部 Interface 不泄漏 Copilot SDK，Provider Adapter Seam 有较好 Locality；但当前只有一个实际 Adapter，Tenon 不应提前照抄全部抽象。Slickflow 的 `AIServiceNode` Interface 对设计者很直观、Leverage 高，但 Implementation 把远程模型调用、引擎推进和 Provider 实现耦在一起，Depth 被可靠性缺口抵消。Tenon 应把“可靠自动节点执行”做成深 Module，再让 AI 只是其中一个 Adapter。
+
+**底层路线不翻转，产品优先级上调。** OpenWorkflow 提供可靠执行参考；Slickflow 提供运行时 AI 节点产品形状；Elsa 提供 AI 设计/诊断治理。三者分别解决不同问题，不能互相替代。AI Decision 从“M3+ 可选”前移为 M3b 战略交付，但仍必须建立在 M2c 幂等和 M3a 可靠机器节点 Module 之上。
+
+## 九、写需求前建议先定的问题
+
+> 2026-08-17:以下问题已在 [`workflow-design-plan-2026-08-17.md`](./workflow-design-plan-2026-08-17.md) §九给出建议决议(不做 BPMN 互通、钉钉树自研×2、Provider 分派、表单出圈等),本节保留原始提问作对照。
 
 - 是否需要 BPMN 2.0 XML 互操作(决定前端画布选型)?——第五节后更倾向「不需要」,前端走钉钉树状。
 - 网关支持范围:排他/并行是否够用,还是要包容网关、多实例(会签/或签)?
@@ -241,3 +321,7 @@ JNPF 是**合同交付的商业产品**(福建引迈)。仓根没有 Apache/MIT/
 第五轮(2026-08-17,商业/半商业公开源码对照):[optimajet/WorkflowEngine.NET](https://github.com/optimajet/WorkflowEngine.NET)、[besley/Slickflow](https://github.com/besley/Slickflow)、[camunda/camunda](https://github.com/camunda/camunda)、[camunda/camunda-bpm-platform](https://github.com/camunda/camunda-bpm-platform)、[operaton/operaton](https://github.com/operaton/operaton)、[mrtylerzhou/AntFlow](https://github.com/mrtylerzhou/AntFlow)、[mrtylerzhou/AntFlow-activiti](https://github.com/mrtylerzhou/AntFlow-activiti)、[elsa-workflows/elsa-studio](https://github.com/elsa-workflows/elsa-studio)。**可读参考,不引入依赖、不复制源码。**
 
 第六轮(2026-08-18,JNPF 7.0 商业整机):本地 `../参考项目/工作流/jnpf`。一手来源:`jnpf7.0/jnpf-java-boot/README.md`(合同交付)、`jnpf-workflow-core`(Flowable 适配 + `ITaskService`)、`jnpf-flowable`(RecordEnum / OperatorEnum / FlowNature / ButtonModel / TaskEntity=实例 / OperatorEntity=经办)、`jnpf-permission` + `AuthorizeConst`(含 `itemType=flow`)、`jnpf-web-apps-main/.../useFlowForm.ts`(字段矩阵)。公开站点 [jnpfsoft.com](https://www.jnpfsoft.com)。**合同许可:可读设计,不复制源码。**
+
+OpenWorkflow 专项(2026-08-23,可靠执行层):[openworkflowdev/openworkflow](https://github.com/openworkflowdev/openworkflow)、[官方 Workflows 文档](https://openworkflow.dev/docs/workflows)、本地 `../参考项目/工作流/openworkflow`（固定提交 `46dcc85d230bb54894dc4bab022a1ce34cc11c13`）。重点源码：`packages/openworkflow/{client,core,worker,postgres,sqlite,testing}` 与 `ARCHITECTURE.md`。**Apache-2.0；只借幂等、持久化唤醒、租约、重试和契约测试，不引入代码工作流重放。**
+
+Elsa 3 / Slickflow.AI 专项(2026-08-23):[Elsa Core 固定提交](https://github.com/elsa-workflows/elsa-core/tree/ae146a17655664645f3761720b998d65f587344a)、[Elsa.AI.Host 3.8.0-rc2](https://www.nuget.org/packages/Elsa.AI.Host/3.8.0-rc2)、[Elsa.AI.Copilot 3.8.0-rc2](https://www.nuget.org/packages/Elsa.AI.Copilot/3.8.0-rc2)、[Slickflow 固定提交](https://github.com/besley/Slickflow/tree/646392d3e9be7e34b79f6fa8ca0f23dd80db2b6e)、[Slickflow 官方 Wiki](https://www.slickflow.com/wiki/index)、[Slickflow.Engine 3.5.0](https://www.nuget.org/packages/Slickflow.Engine/3.5.0)。本地 `../参考项目/工作流/{elsa-core,Slickflow}`。**两仓 MIT；借治理和产品形状，不复制实现、不引入整引擎；Wiki 超前于固定源码的条目仅作路线参考。**

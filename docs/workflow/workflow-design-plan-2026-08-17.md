@@ -1,12 +1,14 @@
 # TenonAdmin.Workflow 设计规划(基于 31 仓摸底)
 
-日期:2026-08-17。前置材料:`docs/review/workflow-engine-research-2026-08-10.md`(调研)、本地参考库 `../参考项目/工作流/SUMMARY.md` 与各仓 `_TENON_REF.md`(摸底笔记;参考仓在本仓上级目录,与 `tenon-admin` 并列)。本文把调研收敛为**可开工的设计决策**;2026-08-17 经磨盘八问逐条裁决(见§十),**已定稿**。
+> 文档入口：[`README.md`](./README.md)
+
+日期:2026-08-17。前置材料:[`workflow-engine-research-2026-08-10.md`](./workflow-engine-research-2026-08-10.md)(调研)、本地参考库 `C:\HuHuHu\参考项目\工作流\SUMMARY.md` 与各仓 `_TENON_REF.md`。本文把调研收敛为**可开工的设计决策**;2026-08-17 经磨盘八问逐条裁决(见§十),2026-08-23 在不翻转审批内核的前提下把 AI Decision 上调为 M3b 战略交付。
 
 ## 〇、决策总览(一屏版)
 
 | 维度 | 决策 | 主要依据 |
 |---|---|---|
-| 产品定位 | **审批为核**(人工审批链),不做自动化编排;保留一颗自动化种子:**Webhook 节点(M3)** + 节点类型 SPI(消费者可注册自定义节点类型) | Elsa/Conductor 那类编排是另一个产品;SPI 保住"通用性"不牺牲焦点 |
+| 产品定位 | **AI 原生审批为核**：M1–M2 先完成可信人工审批链，M3a 建可靠机器节点，M3b 用 AI Decision 处理低风险审批、人工只接异常；不扩成通用自动化编排平台 | Slickflow 给出 AI 节点产品形状，OpenWorkflow 补可靠执行，Elsa 补 proposal 治理；三者组合但仍围绕审批 |
 | 引擎 | **自研**,零第三方运行时依赖(只靠 SqlSugarCore + Microsoft.*) | 所有 .NET 候选要么许可不干净(WorkflowEngine.NET EULA、CCFlow GPL、AntFlow.net 附加条款),要么产品面错位(Elsa/WorkflowCore 是编排不是审批) |
 | 归属 | **卫星包 `TenonAdmin.Workflow`**,不进内核 | 对照 ADR-0004 三条判据反着全中:没有内核功能把它当载体、表/页面体量大、"可选"名副其实;`TenonAdmin.Excel` 已趟平卫星包接线模式 |
 | 流程定义 | **自研 JSON 钉钉树模型**(非 BPMN XML),后端为唯一 schema 源 | CCFlow 反证 + FlyFlow/Warm-Flow/FlowLong/AntFlow 全走这条线;bpmn-js 出局 |
@@ -195,10 +197,12 @@ POST /api/v1/workflow/task/approve|reject|return|transfer|delegate  // 各带意
 |---|---|---|---|
 | **M1 能走通一单** | 包骨架(TryAdd/virtual/CodeFirst)+ 9 表 + JSON schema v1(`formSchema`/`formPerms` 预留)+ 引擎核心(token 推进、串行)+ 动词:同意/拒绝/转办 + 8 种 Provider + SPI + `SysOrg.LeaderUserId` + 定义发布/版本 + 发起/待办/已办/详情 API + 历史事件流 | 仅 Vue:设计器 MVP(串行链:审批+抄送节点)+ 配置抽屉 + 发起页/待办列表/详情页(含 `IWorkflowFormBinder` 挂载点) | "请假审批"3 分钟不看文档建完、发布、走通一单;四库 CI 绿;`WorkflowReplaceabilityTests` 六件套 |
 | **M2 正经审批产品** | 排他分支(结构化条件 + 可视化编辑器)+ 会签(一票否决)/或签(先表态即定局)+ 动词:退回(可配目标)/撤销/委托/催办 + 超时策略(`IAdminJob`:提醒/自动通过/自动拒绝)+ 空审批人三级可配 + 同一人去重 + SignalR 通知 | 仅 Vue:分支容器 + 条件编辑器 + 抄送独立列表 + 流程图回放(高亮已走路径) | 钉钉上一个典型报销流程(条件分支+会签+超时提醒)1:1 复刻;CCFlow 行为清单逐项过 |
-| **M3 通用性拉满 → GA** | 简易动态表单(~10 控件)+ 字段权限矩阵 + 动词封顶:加签/减签/拿回/比例票签 + 长期委托规则 + 并行分支(多 token)+ Webhook 节点 + 节点类型 SPI 对外文档化 | 表单设计器(单列)+ **React 模板整体 port** | **GA 门槛:双模板 feature 对齐 + 文档站 guide 上线** |
-| **M3+ 按需** | 子流程(仅当真实需求出现)、经典图模式(LogicFlow)、统计报表 | — | 不进任何承诺 |
+| **M2c 可靠性收口** | 所有写命令增加 `RequestId/IdempotencyKey` + 同事务操作回执；通知失败日志/指标；把超时领取、CAS、事务回滚和回执唯一性收成四库共享契约测试 | Vue 在一次提交生命周期内生成并复用 request key；刷新双前端 API 类型，但不提前 port React 工作流页面 | 同一请求串行/并发重放均返回第一次结果；超时与人工动作竞争只允许一个胜出；四库 CI 全绿 |
+| **M3a 通用性拉满 → GA 基石** | 简易动态表单(~10 控件)+ 字段权限矩阵 + 动词封顶:加签/减签/拿回/比例票签 + 长期委托规则 + 并行分支(多 token)+ Webhook 节点 + 可靠自动节点执行 Module（execution/attempt/deadline/retry/fence/outbox）+ 节点类型 SPI 对外文档化 | 表单设计器(单列)+ **React 模板整体 port** | **基础 GA 门槛:双模板 feature 对齐 + 文档站 guide 上线；远程节点无长事务、崩溃可恢复、同一 execution 只推进一次** |
+| **M3b AI Decision v0** | 以 M3a Seam 接入 AI Decision Adapter：OpenAI-compatible + fake Provider、结构化 proposal、schema/policy、shadow mode、低风险自动放行、人工 fallback、审计/脱敏/限额 | 双模板 AI 节点配置、proposal/证据/策略结果审计视图 | AI 不直接写任务状态；无效输出/低置信度/风险/异常全部转人工；场景评测达标后才能由 shadow 切自动放行 |
+| **M3+ AI 扩展/按需** | 证据与 RAG Adapter、只读 Agent tools、更多 Provider、评测集/灰度策略；AI 设计 Copilot、子流程、经典图模式、统计报表按真实需求进入 | — | AI 自动拒绝和写工具不进入首版；每项扩权单独做安全与审计验收 |
 
-## 九、调研§七开放问题——决议
+## 九、调研§九开放问题——决议
 
 | 问题 | 决议 |
 |---|---|
@@ -213,14 +217,14 @@ POST /api/v1/workflow/task/approve|reject|return|transfer|delegate  // 各带意
 
 | # | 问题 | 裁决 |
 |---|---|---|
-| 1 | 产品定位:审批 or 编排? | **审批为核**;唯一自动化种子 = Webhook 节点(M3);节点类型走 SPI 可扩展;完整编排(脚本/定时/重试)明确不做 |
+| 1 | 产品定位:审批 or 编排? | **AI 原生审批为核**；Webhook(M3a)+AI Decision(M3b) 都走节点 SPI；机器处理低风险、人处理异常；完整通用编排平台仍不做 |
 | 2 | 功能丰富 vs 配置简单? | FlowLong 动词全集 = **路线图上限**分三期铺开;配置纪律:每节点默认可见项 ≤5、全部有默认值;验收线 = 请假流程 3 分钟建完 |
 | 3 | 表单怎么整合? | 双腿并存:M1 挂载点(开发者)、M3 简易动态表单进包内(业务管理员);`formSchema`/`formPerms` M1 即预留;布局/公式/联动/子表永久不做 |
 | 4 | 建模能力边界? | 排他分支 M2、并行 M3、**包容永不**、子流程 M3+ 按需 |
 | 5 | 内置审批人 Provider? | **8 种**:指定成员/直属主管(N 级)/连续多级主管/角色/职位(可限机构)/发起人自选/发起人本人/机构负责人——最后一种要求 `SysOrg` 新增 `LeaderUserId`;HRBP 等私有逻辑走消费者自注册 |
 | 6 | 行为语义默认值? | 见下表;空审批人策略**三级可配**(节点>流程默认>全局配置),出厂默认自动通过 |
 | 7 | 设计器双模板成本? | **Vue 先行打磨,schema 定稿后一次性 port 到 React(GA 前)**;纯 TS 逻辑框架无关;无框架共享包否决(配置抽屉占 60% 工作量,无法框架无关化) |
-| 8 | 里程碑切分? | 见§八,照此执行;Webhook 留在 M3 不提前 |
+| 8 | 里程碑切分? | 见§八；M2a/M2b 后先做 M2c 可靠性收口，再进 M3；Webhook 留在 M3 不提前 |
 
 ### 行为语义默认值(问题 6 细则,M2 写代码前的既定答案)
 
@@ -284,8 +288,42 @@ POST /api/v1/workflow/task/approve|reject|return|transfer|delegate  // 各带意
 | 段 | 后端 | 前端(仅 Vue) | 验收线 |
 |---|---|---|---|
 | **M2a 分支** | 结构化条件求值器 + `branch` 节点执行(`EnterNodeOp` 现在 `default:` 直接抛 `NodeTypeUnsupported`)+ `GatewayTaken` 事件 + `multiLeader` 主管链改发起时快照(13.2 #1,小而独立,先锁语义免得后续代码依赖旧行为) | `model.ts` 由串行链改树(`flattenChain`/`insertAfter`/`removeNode`/`validate` 全部要处理分支臂)+ `WfNodeTree.vue` 分支容器横排 + 条件编辑器 + 配置抽屉暴露 `mode`(会签/或签/顺序) | 报销流程「金额>1万 走总经理,否则直接通过」建完发布走通两条臂;会签一票否决、或签先表态各走一单 |
-| **M2b 动词与时效** | 退回(`returnPolicy` + `onReject=toNode`,`RejectInstanceAsync` 现在写死忽略 `toNode`)/撤销/委托/催办 + `WfTimeoutJob : IAdminJob` + 写 `wf_task.DueTime` + 同一人相邻节点去重 + `IWorkflowNotifier` 落地(**现为空接口,零方法**)接 `IRealtimePublisher` + 节点 `btnInfo`(JNPF 增量第 2 条) | 抄送独立列表 + 我发起的 / 我已办的 + 流程图回放(高亮已走路径)+ 实例列表按参与筛选(JNPF 增量第 3 条) | 钉钉典型报销流 1:1 复刻(条件分支 + 会签 + 超时提醒);退回后重提、发起人撤销各走一单;CCFlow 行为清单逐项过 |
+| **M2b 动词与时效** | 退回(`returnPolicy` + `onReject=toNode`)/撤销/委托/催办 + `WfTimeoutJob : IAdminJob` + 写 `wf_task.DueTime` + 同一人相邻节点去重 + `IWorkflowNotifier` 接 `IRealtimePublisher` + 节点 `btnInfo`(JNPF 增量第 2 条) | 抄送独立列表 + 我发起的 / 我已办的 + 流程图回放(高亮已走路径)+ 实例列表按参与筛选(JNPF 增量第 3 条) | 钉钉典型报销流 1:1 复刻(条件分支 + 会签 + 超时提醒);退回后重提、发起人撤销各走一单;CCFlow 行为清单逐项过 |
 
 **先 M2a 的理由**:M2a 是 M2 里唯一改 schema 形状的一段(树化 + 条件),定了才谈得上 §六.2 的「schema 定稿后一次性 port 到 React」;M2b 全是加动词加页面,对 schema 只增不改,压在后面更稳。
 
 **警戒线**:M2a 的 `model.ts` 树化会动 M1 刚修好的设计器(`cloneModel`/`cloneNode` 的 reactive-proxy 坑见 `.loop/wf-m1-close.md` Round 2),改完必须重跑一遍真实浏览器全链路,不能只信 `npm run typecheck`——M1 三轮 typecheck 全绿也没发现「添加节点」是坏的。
+
+## 十四、OpenWorkflow 增量与 M2c 定案（2026-08-23）
+
+对照报告：[`openworkflow-reference-2026-08-23.md`](./openworkflow-reference-2026-08-23.md)。本节不翻转 JSON 审批树、Token/Agenda、版本快照和“AI 原生审批为核”的既有决策，只补执行可靠性及其开发落点。
+
+### 14.1 为什么不塞进 M2b
+
+M2b 正在收口审批动词、超时和 Vue 产品面。通用请求幂等会同时改命令 DTO、HTTP API、数据库唯一约束、双前端生成类型和并发测试；混入 M2b 会扩大回归面，也会把“功能是否做完”和“重复请求是否可靠”两个验收目标搅在一起。
+
+M2b 只吸收与现有任务天然重合的两项：
+
+1. `WfTimeoutJob` 使用 `taskId + Version + DueTime <= now` 条件更新，CAS 失败表示人工动作或其他执行者已经胜出；写 `TimeoutFired` 历史，不建另一套 worker/lease。
+2. `IWorkflowNotifier` 继续事务提交后调用，但失败必须写结构化日志与指标，不能静默无痕。SignalR 只是刷新提示，`wf_task` 才是事实源，因此此时不建 outbox。
+
+### 14.2 M2c 交付内容
+
+1. 新增操作回执存储（表名在实现任务定稿），唯一 identity 至少包含组织/租户、命令类型、目标实例或任务、操作者、客户端 request key；回执与领域状态在同一事务落库。
+2. `Start/Approve/Reject/Transfer/Return/Cancel/Resubmit` 等所有写命令接收 `RequestId/IdempotencyKey`。第一次已提交但 HTTP 响应丢失时，重试返回第一次 `WfEngineResult`，不再只报 `TaskConflict`。
+3. Vue 在一次提交生命周期内持有同一个 request key；用户明确发起一个新动作才生成新 key。按钮防连点仍保留，但不把 UI 防抖当并发正确性。
+4. 建 provider-neutral 工作流持久化契约测试，同一套用例跑 SQLite、MySQL、PostgreSQL、SQL Server，覆盖回执唯一性、并发 CAS、事务回滚、超时与人工动作竞争、终态保护。
+5. M2c 不新增审批动词、页面或通用 Backend Interface。幂等回执是现实 Seam；照搬 OpenWorkflow 二十多个 Backend 方法会形成 hypothetical Seam。
+
+### 14.3 M3 与 AI 的落点
+
+详细源码结论与目标架构见 [`elsa3-slickflow-ai-reference-2026-08-23.md`](./elsa3-slickflow-ai-reference-2026-08-23.md) §3–§5。后续实现以该报告为基线，不因开发 AI 节点再次通读 Slickflow 固定提交。
+
+M3 分成连续的 M3a/M3b。M3a 在 Webhook/自定义节点引入可靠机器动作执行 Module：稳定 execution key、持久化 attempt、指数退避、deadline、ownership fence、输出/错误摘要。Webhook 等必须执行的外部副作用使用事务型 outbox/attempt；当前 SignalR 提示不一刀切持久化。所有入口只跨同一个节点 Interface，禁止复制 Slickflow 两套执行链。
+
+AI 分成两条互不混用的能力线：
+
+1. **运行时 AI Decision（Slickflow.AI 对照，M3b）**：在 M3a 节点 Interface 稳定后立即交付最小纵切，不再列为无承诺的 M3+。模型只能返回受 JSON schema 约束的 proposal（结论、分数、理由、证据引用）；服务端确定性 policy 再决定低风险自动放行或创建人工任务。V0 不自动拒绝。低置信度、风险标记、模型异常、超时、结构化输出校验失败一律转人工。模型不得直接调用 Approve/Reject，也不得在远程模型调用期间持有工作流数据库事务。
+2. **AI 流程设计/诊断 Copilot（Elsa 3 Weaver 对照）**：这是设计器/运维能力，不是执行节点。AI 生成或修改模型时只创建 proposal，经过权限过滤、脱敏、schema 校验、图 diff、用户 approve/apply 和完整 audit 后，才能写入定义草稿；不得直接发布流程或修改在途版本。
+
+两条线都不把模型 SDK、Prompt 或供应商配置耦合进 `TenonAdmin.Workflow`。Provider 类型留在 Adapter；审计只保存必要的模型/Prompt/schema/policy 版本、输入摘要、证据引用、结构化输出、耗时与 token/费用统计，敏感业务字段按配置脱敏。M3b AI Decision v0 是 AI 原生路线的战略交付；RAG、Agent、更多 Provider 与设计 Copilot 后置到 M3+。
