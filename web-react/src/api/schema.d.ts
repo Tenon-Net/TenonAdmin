@@ -6779,6 +6779,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow/instance/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfInstanceCancelInput"];
+                    "text/json": components["schemas"]["WfInstanceCancelInput"];
+                    "application/*+json": components["schemas"]["WfInstanceCancelInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfInstanceResubmitInput"];
+                    "text/json": components["schemas"]["WfInstanceResubmitInput"];
+                    "application/*+json": components["schemas"]["WfInstanceResubmitInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflow/task/todo": {
         parameters: {
             query?: never;
@@ -6952,6 +7038,92 @@ export interface paths {
         trace?: never;
     };
     "/api/v1/workflow/task/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/urge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/return": {
         parameters: {
             query?: never;
             header?: never;
@@ -11123,6 +11295,10 @@ export interface components {
             /** Format: int64 */
             id?: number | string;
         };
+        WfInstanceCancelInput: {
+            /** Format: int64 */
+            instanceId?: number | string;
+        };
         WfInstanceDetailOutput: {
             /** Format: int64 */
             id?: number | string;
@@ -11157,6 +11333,14 @@ export interface components {
             variablesJson?: null | string;
             /** Format: date-time */
             createTime?: string;
+        };
+        WfInstanceResubmitInput: {
+            /** Format: int64 */
+            instanceId?: number | string;
+            variablesJson?: null | string;
+            selectedUserIdsByNode?: null | {
+                [key: string]: (number | string)[];
+            };
         };
         WfInstanceStatus: number;
         WfModel: {
@@ -11242,6 +11426,7 @@ export interface components {
             comment?: null | string;
             /** Format: int64 */
             toUserId?: number | string;
+            targetNodeId?: null | string;
         };
         WfTimeout: {
             /** Format: int32 */
