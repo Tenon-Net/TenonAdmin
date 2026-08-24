@@ -33,8 +33,15 @@ npm run dev          # Vite on :5173, proxies /api and /openapi to backend :5100
 npm run build        # vue-tsc --noEmit && vite build
 npm run lint         # oxlint (lint:fix to autofix)
 npm run typecheck    # vue-tsc --noEmit
-npm run gen:api      # regenerate src/api/schema.d.ts from a RUNNING backend's /openapi/v1.json
+npm run gen:api      # regenerate src/api/schema.d.ts; override the backend with TENON_API_TARGET
 ```
+
+Contract drift check (run once per clone to activate the tracked pre-push hook):
+```bash
+git config core.hooksPath .githooks
+node scripts/check-contract-drift.mjs
+```
+The check starts its own Development MinimalHost, regenerates both frontend schemas, and compares them with `HEAD`.
 
 Full local env: `dev.bat` starts backend + frontend in separate windows (installs web deps on first run); `stop.bat` stops them.
 
