@@ -123,5 +123,19 @@ public class TransferTaskOp(
 
         // 通知用:新办理人(待办本身未换 Id)。
         ctx.NewAssigneeUserIds.Add(ToUserId);
+
+        // 通知排队,事务提交后由 WorkflowEngine 统一派发。
+        ctx.PendingTaskAssignedNotifications.Add((
+            new WfNotifyContext
+            {
+                InstanceId = ctx.Instance.Id,
+                DefinitionVersionId = ctx.Instance.DefinitionVersionId,
+                BusinessKey = ctx.Instance.BusinessKey,
+                NodeId = Task.NodeId,
+                NodeName = node.Name,
+                StarterUserId = ctx.Instance.StarterUserId,
+                Status = ctx.Instance.Status,
+            },
+            [ToUserId]));
     }
 }

@@ -149,4 +149,13 @@ public enum WfHistoryEventType
 
     /// <summary>抄送已发</summary>
     CcSent = 9,
+
+    /// <summary>催办</summary>
+    TaskUrged = 10,
+
+    /// <summary>同一人相邻节点自动跳过</summary>
+    DuplicateApproverSkipped = 11,
+
+    /// <summary>发起人重提(退回后重新提交,复用同一实例行)</summary>
+    InstanceResubmitted = 12,
 }

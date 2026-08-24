@@ -41,4 +41,25 @@ public interface IWfTaskService
         long toUserId,
         string? comment = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 催办:仅发起人可对当前待办的 Pending 办理人发起一次提醒。不推进 token、不改任何任务/实例状态,
+    /// 只追加一条 <see cref="WfHistoryEventType.TaskUrged"/> 历史事件并派发通知;可重复调用,无限流。
+    /// </summary>
+    Task UrgeAsync(
+        long taskId,
+        long callerUserId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 主动退回:把待办退回给之前某个节点(按节点 <see cref="WfReturnPolicy"/> 解析目标),不像
+    /// <see cref="TransferAsync"/> 那样继续等人——关闭当前待办、token 回退,等发起人重提。
+    /// <paramref name="targetNodeId"/> 仅 <see cref="WfReturnPolicy.Any"/> 策略有意义,其余策略忽略。
+    /// </summary>
+    Task<WfEngineResult> ReturnAsync(
+        long taskId,
+        long userId,
+        string? targetNodeId,
+        string? comment = null,
+        CancellationToken cancellationToken = default);
 }

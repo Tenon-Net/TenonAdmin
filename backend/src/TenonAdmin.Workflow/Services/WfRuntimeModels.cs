@@ -53,7 +53,7 @@ public record WfTaskPageInput : PageInputBase
     public long? DefinitionId { get; init; }
 }
 
-/// <summary>审批动词入参(同意 / 拒绝 / 转办)。</summary>
+/// <summary>审批动词入参(同意 / 拒绝 / 转办 / 退回)。</summary>
 public record WfTaskActionInput
 {
     public long TaskId { get; init; }
@@ -62,6 +62,25 @@ public record WfTaskActionInput
 
     /// <summary>转办目标用户 Id;仅 transfer 必填</summary>
     public long ToUserId { get; init; }
+
+    /// <summary>退回目标节点 Id;仅节点 <see cref="WfReturnPolicy.Any"/> 策略时前端会传,其余动作忽略。</summary>
+    public string? TargetNodeId { get; init; }
+}
+
+/// <summary>撤销流程入参。</summary>
+public record WfInstanceCancelInput
+{
+    public long InstanceId { get; init; }
+}
+
+/// <summary>重提流程入参(退回后发起人重新提交)。</summary>
+public record WfInstanceResubmitInput
+{
+    public long InstanceId { get; init; }
+
+    public string? VariablesJson { get; init; }
+
+    public Dictionary<string, List<long>>? SelectedUserIdsByNode { get; init; }
 }
 
 /// <summary>我发起的列表项。</summary>
@@ -151,6 +170,27 @@ public record WfDoneItemOutput
     public WfInstanceStatus InstanceStatus { get; init; }
     public long StarterUserId { get; init; }
     public DateTime CreateTime { get; init; }
+}
+
+/// <summary>
+/// <see cref="IWorkflowNotifier"/> 各方法共用的通知上下文(建任务 / 实例完结 / 转办 / 催办)。
+/// </summary>
+public record WfNotifyContext
+{
+    public required long InstanceId { get; init; }
+    public required long DefinitionVersionId { get; init; }
+    public string? BusinessKey { get; init; }
+    public string? NodeId { get; init; }
+    public string? NodeName { get; init; }
+
+    /// <summary>发起人用户 Id;<see cref="IWorkflowNotifier.InstanceCompletedAsync"/> 的通知对象。</summary>
+    public required long StarterUserId { get; init; }
+
+    /// <summary>
+    /// 触发通知时刻的实例状态——待办到达时为 <see cref="WfInstanceStatus.Running"/>;
+    /// 实例完结通知按实际终态传(<c>Approved</c>/<c>Rejected</c>),接收方据此区分通过还是拒绝。
+    /// </summary>
+    public required WfInstanceStatus Status { get; init; }
 }
 
 /// <summary>历史任务(详情时间线)。</summary>

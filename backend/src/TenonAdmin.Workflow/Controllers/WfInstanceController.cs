@@ -66,4 +66,23 @@ public class WfInstanceController(
         CancellationToken cancellationToken) =>
         Result<WfInstanceDetailOutput>.Ok(
             await instanceService.GetAsync(id, CurrentUserId, cancellationToken));
+
+    /// <summary>撤销流程(仅发起人、仅无人已批的 Running 实例)</summary>
+    [HttpPost("cancel")]
+    [OperationLog("撤销流程")]
+    public async Task<Result<WfEngineResult>> Cancel(
+        WfInstanceCancelInput input,
+        CancellationToken cancellationToken) =>
+        Result<WfEngineResult>.Ok(
+            await instanceService.CancelAsync(input.InstanceId, CurrentUserId, cancellationToken));
+
+    /// <summary>重新提交(仅发起人、仅退回后无活跃待办的 Running 实例)</summary>
+    [HttpPost("resubmit")]
+    [OperationLog("重新提交")]
+    public async Task<Result<WfEngineResult>> Resubmit(
+        WfInstanceResubmitInput input,
+        CancellationToken cancellationToken) =>
+        Result<WfEngineResult>.Ok(
+            await instanceService.ResubmitAsync(
+                input.InstanceId, CurrentUserId, input.VariablesJson, input.SelectedUserIdsByNode, cancellationToken));
 }

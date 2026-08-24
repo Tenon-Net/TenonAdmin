@@ -9,9 +9,10 @@ namespace TenonAdmin.Workflow;
 /// </summary>
 /// <remarks>
 /// M2a 有意的源码级破坏性变更:主构造函数新增 <paramref name="conditionEvaluator"/> 参数(分支求值 SPI,
-/// 供 <see cref="EnterNodeOp"/> 选臂用)。前置 <c>TryAdd</c> 整体替换 <see cref="IWorkflowEngine"/>
+/// 供 <see cref="EnterNodeOp"/> 选臂用)。M2b 同理追加 <paramref name="notifier"/> 参数(通知 SPI,
+/// 供各 Op 建任务 / 实例完结 / 转办后调用)。前置 <c>TryAdd</c> 整体替换 <see cref="IWorkflowEngine"/>
 /// 的消费者不受影响(<see cref="IWorkflowEngine"/> 契约本身没动);<b>继承</b> <see cref="WorkflowEngine"/>
-/// 的消费者需要在自己的 <c>base(...)</c> 调用里补上这个参数。不为兼容加 <c>[Obsolete]</c> 双构造函数。
+/// 的消费者需要在自己的 <c>base(...)</c> 调用里补上这些参数。不为兼容加 <c>[Obsolete]</c> 双构造函数。
 /// </remarks>
 public class WorkflowEngine(
     IRepository<WfInstance> instances,
@@ -19,7 +20,8 @@ public class WorkflowEngine(
     IWorkflowFormBinder formBinder,
     WorkflowOptions options,
     TimeProvider timeProvider,
-    IWfConditionEvaluator conditionEvaluator) : IWorkflowEngine
+    IWfConditionEvaluator conditionEvaluator,
+    IWorkflowNotifier notifier) : IWorkflowEngine
 {
     /// <inheritdoc />
     public virtual async Task<WfEngineResult> ExecuteAsync(
@@ -30,13 +32,17 @@ public class WorkflowEngine(
         cancellationToken.ThrowIfCancellationRequested();
 
         var db = instances.Db;
+        WfExecutionContext? ctx = null;
         var tran = await db.Ado.UseTranAsync(async () =>
         {
-            var ctx = command switch
+            ctx = command switch
             {
                 StartInstanceCmd start => await BeginStartAsync(db, start, cancellationToken),
                 CompleteTaskCmd complete => await BeginCompleteAsync(db, complete, cancellationToken),
                 TransferTaskCmd transfer => await BeginTransferAsync(db, transfer, cancellationToken),
+                CancelInstanceCmd cancel => await BeginCancelAsync(db, cancel, cancellationToken),
+                ReturnTaskCmd ret => await BeginReturnAsync(db, ret, cancellationToken),
+                ResubmitInstanceCmd resubmit => await BeginResubmitAsync(db, resubmit, cancellationToken),
                 _ => throw WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed,
                     new Dictionary<string, object?> { ["command"] = command.GetType().Name }),
             };
@@ -48,7 +54,46 @@ public class WorkflowEngine(
         if (!tran.IsSuccess)
             throw tran.ErrorException ?? WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed);
 
+        // 事务已提交:此时才派发排队的通知(不能在事务内发——提交失败时不该已经推过,
+        // 且真实 SignalR 网关会让客户端在提交落盘前就收到推送去查询,读到脏数据)。
+        if (ctx is not null)
+            await DispatchPendingNotificationsAsync(ctx, cancellationToken);
+
         return tran.Data;
+    }
+
+    /// <summary>
+    /// 事务提交成功后统一派发 <see cref="WfExecutionContext.PendingTaskAssignedNotifications"/> /
+    /// <see cref="WfExecutionContext.PendingInstanceCompletedNotification"/>。通知失败仍要 try/catch——
+    /// 此时事务已提交,不会回滚,但不能让通知异常炸掉这次 HTTP 响应。
+    /// </summary>
+    protected virtual async Task DispatchPendingNotificationsAsync(
+        WfExecutionContext ctx,
+        CancellationToken cancellationToken)
+    {
+        foreach (var (notifyCtx, userIds) in ctx.PendingTaskAssignedNotifications)
+        {
+            try
+            {
+                await ctx.Notifier.TaskAssignedAsync(notifyCtx, userIds, cancellationToken);
+            }
+            catch (Exception)
+            {
+                // 通知失败不得影响已提交事务的响应;静默吞掉。
+            }
+        }
+
+        if (ctx.PendingInstanceCompletedNotification is { } completedCtx)
+        {
+            try
+            {
+                await ctx.Notifier.InstanceCompletedAsync(completedCtx, cancellationToken);
+            }
+            catch (Exception)
+            {
+                // 同上。
+            }
+        }
     }
 
     /// <summary>Agenda 出队循环;某 Op 不再 plan 则自然停(等人审批)。</summary>
@@ -94,7 +139,8 @@ public class WorkflowEngine(
             cancellationToken);
 
         var leaderLevels = ResolveLeaderLevels(model);
-        var leaderChainByLevel = await SnapshotLeaderChainsAsync(cmd, leaderLevels, cancellationToken);
+        var leaderChainByLevel = await SnapshotLeaderChainsAsync(
+            cmd.StarterUserId, cmd.StarterOrgId, leaderLevels, cancellationToken);
 
         var instance = new WfInstance
         {
@@ -130,6 +176,7 @@ public class WorkflowEngine(
             Options = options,
             TimeProvider = timeProvider,
             ConditionEvaluator = conditionEvaluator,
+            Notifier = notifier,
             Instance = instance,
             Token = token,
             Model = model,
@@ -206,6 +253,7 @@ public class WorkflowEngine(
             Options = options,
             TimeProvider = timeProvider,
             ConditionEvaluator = conditionEvaluator,
+            Notifier = notifier,
             Instance = instance,
             Token = token,
             Model = model,
@@ -268,6 +316,7 @@ public class WorkflowEngine(
             Options = options,
             TimeProvider = timeProvider,
             ConditionEvaluator = conditionEvaluator,
+            Notifier = notifier,
             Instance = instance,
             Token = token,
             Model = model,
@@ -277,6 +326,131 @@ public class WorkflowEngine(
         };
 
         agenda.Plan(new TransferTaskOp(task, cmd.UserId, cmd.ToUserId, cmd.Comment));
+        return ctx;
+    }
+
+    /// <summary>撤销:仅发起人、仅无人已批的 Running 实例 → 入队 CancelInstanceOp。</summary>
+    protected virtual async Task<WfExecutionContext> BeginCancelAsync(
+        ISqlSugarClient db, CancelInstanceCmd cmd, CancellationToken cancellationToken)
+    {
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>()
+            .Where(i => i.Id == cmd.InstanceId)
+            .FirstAsync();
+        if (instance is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceNotFound);
+        if (instance.Status != WfInstanceStatus.Running)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceStatusConflict);
+        if (instance.StarterUserId != cmd.CallerUserId)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.CancelNotAllowed,
+                new Dictionary<string, object?> { ["reason"] = "notStarter" });
+        }
+
+        if (await db.Queryable<WfHisTask>()
+                .AnyAsync(h => h.InstanceId == instance.Id && h.Action == WfTaskAction.Approve))
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.CancelNotAllowed,
+                new Dictionary<string, object?> { ["reason"] = "alreadyApproved" });
+        }
+
+        var token = await db.Queryable<WfToken>()
+            .Where(t => t.InstanceId == instance.Id && t.Status == WfTokenStatus.Active)
+            .FirstAsync();
+        if (token is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TokenNotFound);
+
+        var version = await db.Queryable<WfDefinitionVersion>()
+            .Where(v => v.Id == instance.DefinitionVersionId)
+            .FirstAsync();
+        if (version is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionVersionNotFound);
+
+        var model = WfModelJson.Deserialize(version.ModelJson)
+                    ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid);
+
+        var agenda = new WfAgenda();
+        var ctx = new WfExecutionContext
+        {
+            Db = db,
+            Agenda = agenda,
+            ApproverResolver = approverResolver,
+            FormBinder = formBinder,
+            Options = options,
+            TimeProvider = timeProvider,
+            ConditionEvaluator = conditionEvaluator,
+            Notifier = notifier,
+            Instance = instance,
+            Token = token,
+            Model = model,
+            DefinitionVersion = version,
+            SelectedUserIdsByNode = DeserializeSelectedUsers(instance.SelectedUserIdsJson),
+            LeaderChainByLevel = DeserializeLeaderChainsByLevel(instance.LeaderChainJson),
+        };
+
+        agenda.Plan(new CancelInstanceOp());
+        return ctx;
+    }
+
+    /// <summary>退回:加载运行态 → 入队 ReturnTaskOp(关闭当前待办、token 回退,Agenda 留空等重提)。</summary>
+    protected virtual async Task<WfExecutionContext> BeginReturnAsync(
+        ISqlSugarClient db,
+        ReturnTaskCmd cmd,
+        CancellationToken cancellationToken)
+    {
+        var task = await db.Queryable<WfTask>().Where(t => t.Id == cmd.TaskId).FirstAsync();
+        if (task is null)
+        {
+            var completed = await db.Queryable<WfHisTask>()
+                .AnyAsync(h => h.TaskId == cmd.TaskId);
+            throw WorkflowErrorCode.Exception(
+                completed ? WorkflowErrorCode.TaskConflict : WorkflowErrorCode.TaskNotFound);
+        }
+
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>()
+            .Where(i => i.Id == task.InstanceId)
+            .FirstAsync();
+        if (instance is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceNotFound);
+        if (instance.Status != WfInstanceStatus.Running)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceStatusConflict);
+
+        var token = await db.Queryable<WfToken>()
+            .Where(t => t.Id == task.TokenId && t.Status == WfTokenStatus.Active)
+            .FirstAsync();
+        if (token is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TokenNotFound);
+
+        var version = await db.Queryable<WfDefinitionVersion>()
+            .Where(v => v.Id == instance.DefinitionVersionId)
+            .FirstAsync();
+        if (version is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionVersionNotFound);
+
+        var model = WfModelJson.Deserialize(version.ModelJson)
+                    ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid);
+
+        var agenda = new WfAgenda();
+        var ctx = new WfExecutionContext
+        {
+            Db = db,
+            Agenda = agenda,
+            ApproverResolver = approverResolver,
+            FormBinder = formBinder,
+            Options = options,
+            TimeProvider = timeProvider,
+            ConditionEvaluator = conditionEvaluator,
+            Notifier = notifier,
+            Instance = instance,
+            Token = token,
+            Model = model,
+            DefinitionVersion = version,
+            SelectedUserIdsByNode = DeserializeSelectedUsers(instance.SelectedUserIdsJson),
+            LeaderChainByLevel = DeserializeLeaderChainsByLevel(instance.LeaderChainJson),
+        };
+
+        agenda.Plan(new ReturnTaskOp(task, cmd.UserId, cmd.TargetNodeId, cmd.Comment));
         return ctx;
     }
 
@@ -351,7 +525,8 @@ public class WorkflowEngine(
     /// provider 自然走实时上溯。各级结果原样存(启用过滤后,运行期不再二次过滤)。
     /// </summary>
     protected virtual async Task<IReadOnlyDictionary<int, IReadOnlyList<long>>?> SnapshotLeaderChainsAsync(
-        StartInstanceCmd cmd,
+        long starterUserId,
+        long? starterOrgId,
         IReadOnlyDictionary<int, Dictionary<string, System.Text.Json.JsonElement>?> leaderLevels,
         CancellationToken cancellationToken)
     {
@@ -370,8 +545,8 @@ public class WorkflowEngine(
                 ApproverProviderKeys.MultiLeader,
                 new ApproverResolveContext
                 {
-                    InitiatorUserId = cmd.StarterUserId,
-                    InitiatorOrgId = cmd.StarterOrgId,
+                    InitiatorUserId = starterUserId,
+                    InitiatorOrgId = starterOrgId,
                     Params = levelParams,
                     LeaderChainByLevel = null,
                 },
@@ -379,5 +554,123 @@ public class WorkflowEngine(
         }
 
         return chains;
+    }
+
+    /// <summary>
+    /// 重提:仅发起人、仅退回后无活跃待办的 Running 实例可重提 → 重算 multiLeader 快照 → token/实例回到
+    /// start → 入队 EnterNode(start),从头重走一遍(连已批过的节点也重新审)。复用同一实例行,不新建实例。
+    /// </summary>
+    protected virtual async Task<WfExecutionContext> BeginResubmitAsync(
+        ISqlSugarClient db,
+        ResubmitInstanceCmd cmd,
+        CancellationToken cancellationToken)
+    {
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>()
+            .Where(i => i.Id == cmd.InstanceId)
+            .FirstAsync();
+        if (instance is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceNotFound);
+        if (instance.Status != WfInstanceStatus.Running)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceStatusConflict);
+        if (instance.StarterUserId != cmd.CallerUserId)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ResubmitNotAllowed,
+                new Dictionary<string, object?> { ["reason"] = "notStarter" });
+        }
+
+        var token = await db.Queryable<WfToken>()
+            .Where(t => t.InstanceId == instance.Id && t.Status == WfTokenStatus.Active)
+            .FirstAsync();
+        if (token is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TokenNotFound);
+
+        if (await db.Queryable<WfTask>().AnyAsync(t => t.TokenId == token.Id))
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ResubmitNotAllowed,
+                new Dictionary<string, object?> { ["reason"] = "hasActiveTask" });
+        }
+
+        var version = await db.Queryable<WfDefinitionVersion>()
+            .Where(v => v.Id == instance.DefinitionVersionId)
+            .FirstAsync();
+        if (version is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionVersionNotFound);
+
+        var model = WfModelJson.Deserialize(version.ModelJson)
+                    ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid);
+
+        await formBinder.ValidateOnStartAsync(
+            new WfFormBindContext
+            {
+                InstanceId = instance.Id,
+                DefinitionVersionId = instance.DefinitionVersionId,
+                BusinessKey = instance.BusinessKey,
+                VariablesJson = cmd.VariablesJson ?? instance.VariablesJson,
+                Status = WfInstanceStatus.Running,
+                StarterUserId = instance.StarterUserId,
+            },
+            cancellationToken);
+
+        if (cmd.VariablesJson is not null)
+            instance.VariablesJson = cmd.VariablesJson;
+        if (cmd.SelectedUserIdsByNode is not null)
+        {
+            instance.SelectedUserIdsJson = System.Text.Json.JsonSerializer.Serialize(
+                cmd.SelectedUserIdsByNode, WfModelJson.Options);
+        }
+
+        long? starterOrgId = null;
+        var starter = await db.Queryable<TenonAdmin.Services.SysUser>()
+            .Where(u => u.Id == instance.StarterUserId)
+            .FirstAsync();
+        if (starter is not null)
+            starterOrgId = starter.OrgId;
+
+        var leaderLevels = ResolveLeaderLevels(model);
+        var leaderChainByLevel = await SnapshotLeaderChainsAsync(
+            instance.StarterUserId, starterOrgId, leaderLevels, cancellationToken);
+        instance.LeaderChainJson = leaderChainByLevel is null
+            ? null
+            : System.Text.Json.JsonSerializer.Serialize(leaderChainByLevel, WfModelJson.Options);
+
+        await db.Updateable(instance)
+            .UpdateColumns(i => new { i.VariablesJson, i.LeaderChainJson, i.SelectedUserIdsJson, i.UpdateTime, i.UpdateUserId })
+            .ExecuteCommandAsync();
+
+        token.NodeId = model.Root.Id;
+        await db.Updateable(token)
+            .UpdateColumns(t => new { t.NodeId, t.UpdateTime, t.UpdateUserId })
+            .ExecuteCommandAsync();
+
+        var agenda = new WfAgenda();
+        var ctx = new WfExecutionContext
+        {
+            Db = db,
+            Agenda = agenda,
+            ApproverResolver = approverResolver,
+            FormBinder = formBinder,
+            Options = options,
+            TimeProvider = timeProvider,
+            ConditionEvaluator = conditionEvaluator,
+            Notifier = notifier,
+            Instance = instance,
+            Token = token,
+            Model = model,
+            DefinitionVersion = version,
+            SelectedUserIdsByNode = cmd.SelectedUserIdsByNode
+                                    ?? DeserializeSelectedUsers(instance.SelectedUserIdsJson),
+            StarterOrgId = starterOrgId,
+            LeaderChainByLevel = leaderChainByLevel,
+        };
+
+        await ctx.AppendHistoryAsync(
+            WfHistoryEventType.InstanceResubmitted,
+            model.Root.Id,
+            new { starterUserId = cmd.CallerUserId },
+            cancellationToken);
+
+        agenda.Plan(new EnterNodeOp(model.Root));
+        return ctx;
     }
 }

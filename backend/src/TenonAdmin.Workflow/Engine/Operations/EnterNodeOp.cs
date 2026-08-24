@@ -1,3 +1,4 @@
+using SqlSugar;
 using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Workflow;
@@ -77,7 +78,15 @@ public class EnterNodeOp(WfNode node) : IWfOperation
         }
 
         var signMode = MapSignMode(Node.Props?.Mode, providerKey);
-        await CreateTaskAsync(ctx, users, signMode, cancellationToken);
+
+        // multiLeader(连续多级主管)的语义就是同一人跨级重现——不是意外重复,豁免去重。
+        if (string.Equals(providerKey, ApproverProviderKeys.MultiLeader, StringComparison.Ordinal))
+        {
+            await CreateTaskAsync(ctx, users, signMode, cancellationToken);
+            return;
+        }
+
+        await CreateTaskDedupedAsync(ctx, users, signMode, cancellationToken);
     }
 
     /// <summary>抄送:写 wf_cc 后立刻转移(抄送≠待办)。</summary>
@@ -249,9 +258,76 @@ public class EnterNodeOp(WfNode node) : IWfOperation
             cancellationToken);
 
         ctx.CreatedTaskId = task.Id;
-        ctx.NewAssigneeUserIds.AddRange(
-            signMode == WfSignMode.Sequential ? userIds.Take(1) : userIds);
-        // 停顿等人——不再 plan TakeTransition。
+        var pendingUserIds = signMode == WfSignMode.Sequential ? userIds.Take(1).ToList() : userIds;
+        ctx.NewAssigneeUserIds.AddRange(pendingUserIds);
+
+        ctx.PendingTaskAssignedNotifications.Add((
+            new WfNotifyContext
+            {
+                InstanceId = ctx.Instance.Id,
+                DefinitionVersionId = ctx.Instance.DefinitionVersionId,
+                BusinessKey = ctx.Instance.BusinessKey,
+                NodeId = Node.Id,
+                NodeName = Node.Name,
+                StarterUserId = ctx.Instance.StarterUserId,
+                Status = ctx.Instance.Status,
+            },
+            pendingUserIds));
+        // 停顿等人——不再 plan TakeTransition。通知排队,事务提交后由 WorkflowEngine 统一派发。
+    }
+
+    /// <summary>
+    /// 同一人相邻节点去重:与最近一个已审批节点的完整审批人集合求交集,交集内的人不再重复建待办;
+    /// 若去重后无人剩余,本节点直接自动通过(不建 wf_task);若有剩余,只给剩余人建待办。
+    /// </summary>
+    protected virtual async Task CreateTaskDedupedAsync(
+        WfExecutionContext ctx,
+        IReadOnlyList<long> users,
+        WfSignMode signMode,
+        CancellationToken cancellationToken)
+    {
+        var adjacentApproved = await ResolveAdjacentApprovedUserIdsAsync(ctx, cancellationToken);
+        if (adjacentApproved.Count == 0 || !users.Any(adjacentApproved.Contains))
+        {
+            await CreateTaskAsync(ctx, users, signMode, cancellationToken);
+            return;
+        }
+
+        var skipped = users.Where(adjacentApproved.Contains).ToList();
+        var remaining = users.Where(u => !adjacentApproved.Contains(u)).ToList();
+
+        await ctx.AppendHistoryAsync(
+            WfHistoryEventType.DuplicateApproverSkipped,
+            Node.Id,
+            new { nodeId = Node.Id, userIds = skipped },
+            cancellationToken);
+
+        if (remaining.Count == 0)
+        {
+            ctx.Agenda.Plan(new TakeTransitionOp(Node));
+            return;
+        }
+
+        await CreateTaskAsync(ctx, remaining, signMode, cancellationToken);
+    }
+
+    /// <summary>
+    /// 取「本 token 最近一个已审批节点」的完整审批人集合(同节点可能多人各一行,如顺序/会签)。
+    /// 按 <c>wf_his_task.Id</c> 倒序取第一条 Approve 行的 NodeId,再收集同 NodeId 的全部 UserId。
+    /// 无任何 Approve 行(链上第一个审批节点)时返回空集合。
+    /// </summary>
+    protected virtual async Task<IReadOnlySet<long>> ResolveAdjacentApprovedUserIdsAsync(
+        WfExecutionContext ctx, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var rows = await ctx.Db.Queryable<WfHisTask>()
+            .Where(h => h.InstanceId == ctx.Instance.Id && h.TokenId == ctx.Token.Id && h.Action == WfTaskAction.Approve)
+            .OrderBy(h => h.Id, OrderByType.Desc)
+            .ToListAsync();
+        if (rows.Count == 0)
+            return new HashSet<long>();
+
+        return rows.TakeWhile(h => h.NodeId == rows[0].NodeId).Select(h => h.UserId).ToHashSet();
     }
 
     protected virtual WfNobodyAction ResolveNobody(WfExecutionContext ctx)

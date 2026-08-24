@@ -73,9 +73,11 @@ public class WorkflowMultiLeaderSnapshotTests
         var firstId = await AddUser(admin, "wf-snap-cc-first", directorId: secondId);
         await AddUser(admin, "wf-snap-cc-starter", directorId: firstId);
         var decoyId = await AddUser(admin, "wf-snap-cc-decoy");
-        var definitionId = await Publish(admin, "快照-抄送逐级主管", GateThenCcThenApprovalModel());
+        var finalApproverId = await AddUser(admin, "wf-snap-cc-final");
+        var definitionId = await Publish(admin, "快照-抄送逐级主管", GateThenCcThenApprovalModel(finalApproverId));
 
         var starter = await ClientFor(f, "wf-snap-cc-starter");
+        var finalApprover = await ClientFor(f, "wf-snap-cc-final");
 
         var start = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
         Assert.Equal(0, start.GetProperty("code").GetInt32());
@@ -99,7 +101,7 @@ public class WorkflowMultiLeaderSnapshotTests
 
         var finalTaskId = gateApprove.GetProperty("data").GetProperty("createdTaskId").GetInt64();
         Assert.Equal((int)WfInstanceStatus.Approved,
-            (await PostEnvelope(starter, "/api/v1/workflow/task/approve", new { taskId = finalTaskId }))
+            (await PostEnvelope(finalApprover, "/api/v1/workflow/task/approve", new { taskId = finalTaskId }))
             .GetProperty("data").GetProperty("instanceStatus").GetInt32());
     }
 
@@ -458,10 +460,12 @@ public class WorkflowMultiLeaderSnapshotTests
     };
 
     /// <summary>
-    /// start → gate(approval,initiator,自批用来暂停) → cc(multiLeader level=2) → final(approval,initiator)。
+    /// start → gate(approval,initiator,自批用来暂停) → cc(multiLeader level=2) → final(approval,专职用户)。
     /// cc 节点必须夹在两个跨事务的审批之间,才能让「组织调整发生在快照之后、cc 解析之前」这个窗口真实存在。
+    /// final 用专职用户而非 initiator 自批,避开 Task 3 相邻节点同人去重的默认行为
+    /// (否则 starter 批完 gate 后,gate 与 final 会被当成「同一人相邻重复」直接自动通过,拿不到 finalTaskId)。
     /// </summary>
-    private static object GateThenCcThenApprovalModel() => new
+    private static object GateThenCcThenApprovalModel(long finalApproverId) => new
     {
         version = 1,
         root = new
@@ -493,7 +497,15 @@ public class WorkflowMultiLeaderSnapshotTests
                         id = "final",
                         type = "approval",
                         name = "终审",
-                        props = new { assignee = new { provider = "initiator", @params = new { } }, mode = "any" },
+                        props = new
+                        {
+                            assignee = new
+                            {
+                                provider = "user",
+                                @params = new Dictionary<string, object> { ["userIds"] = new[] { finalApproverId } },
+                            },
+                            mode = "any",
+                        },
                         next = (object?)null,
                     },
                 },
@@ -642,7 +654,7 @@ public class WorkflowMultiLeaderSnapshotTests
     }
 
     private sealed class WorkflowEngineProbe(IApproverResolver resolver)
-        : WorkflowEngine(null!, resolver, null!, null!, TimeProvider.System, null!)
+        : WorkflowEngine(null!, resolver, null!, null!, TimeProvider.System, null!, null!)
     {
         public IReadOnlyDictionary<int, Dictionary<string, JsonElement>?> GetLeaderLevels(WfModel model) =>
             ResolveLeaderLevels(model);
@@ -650,7 +662,7 @@ public class WorkflowMultiLeaderSnapshotTests
         public Task<IReadOnlyDictionary<int, IReadOnlyList<long>>?> SnapshotAsync(
             StartInstanceCmd cmd,
             IReadOnlyDictionary<int, Dictionary<string, JsonElement>?> levels) =>
-            SnapshotLeaderChainsAsync(cmd, levels, CancellationToken.None);
+            SnapshotLeaderChainsAsync(cmd.StarterUserId, cmd.StarterOrgId, levels, CancellationToken.None);
 
         public IReadOnlyDictionary<int, IReadOnlyList<long>>? Deserialize(string? json) =>
             DeserializeLeaderChainsByLevel(json);

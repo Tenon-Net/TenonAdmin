@@ -50,4 +50,22 @@ public interface IWfInstanceService
         long instanceId,
         long currentUserId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>撤销实例:仅发起人、仅无人已批的 Running 实例可撤销。</summary>
+    Task<WfEngineResult> CancelAsync(
+        long instanceId,
+        long callerUserId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 重提:仅发起人、仅退回后尚无活跃待办的 Running 实例可重提。从 <c>start</c> 重新走一遍
+    /// (连已批过的节点也重新审),复用同一实例行;可选带新的 <paramref name="variablesJson"/> /
+    /// <paramref name="selectedUserIdsByNode"/> 覆盖原发起时提交的值。
+    /// </summary>
+    Task<WfEngineResult> ResubmitAsync(
+        long instanceId,
+        long callerUserId,
+        string? variablesJson,
+        IReadOnlyDictionary<string, List<long>>? selectedUserIdsByNode,
+        CancellationToken cancellationToken = default);
 }

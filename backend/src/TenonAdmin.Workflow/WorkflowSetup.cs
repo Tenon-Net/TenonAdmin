@@ -72,6 +72,9 @@ public static class WorkflowSetup
         // 分支条件求值(结构化 JSON,非脚本);消费者可前置注册同接口整体替换。
         services.TryAddScoped<IWfConditionEvaluator, WfConditionEvaluator>();
 
+        // 通知 SPI(待办到达 / 完结);默认接内核 IRealtimePublisher,消费者可前置注册同接口整体替换。
+        services.TryAddScoped<IWorkflowNotifier, WfDefaultNotifier>();
+
         // 待办/已办 + 审批动词(同意/拒绝/转办)。
         services.TryAddScoped<IWfTaskService, WfTaskService>();
 

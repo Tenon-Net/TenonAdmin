@@ -60,4 +60,23 @@ public class WfTaskController(
         Result<WfEngineResult>.Ok(
             await taskService.TransferAsync(
                 input.TaskId, CurrentUserId, input.ToUserId, input.Comment, cancellationToken));
+
+    /// <summary>催办</summary>
+    [HttpPost("urge")]
+    [OperationLog("催办")]
+    public async Task<Result<bool>> Urge(WfTaskActionInput input, CancellationToken cancellationToken)
+    {
+        await taskService.UrgeAsync(input.TaskId, CurrentUserId, cancellationToken);
+        return Result<bool>.Ok(true);
+    }
+
+    /// <summary>退回</summary>
+    [HttpPost("return")]
+    [OperationLog("退回")]
+    public async Task<Result<WfEngineResult>> Return(
+        WfTaskActionInput input,
+        CancellationToken cancellationToken) =>
+        Result<WfEngineResult>.Ok(
+            await taskService.ReturnAsync(
+                input.TaskId, CurrentUserId, input.TargetNodeId, input.Comment, cancellationToken));
 }

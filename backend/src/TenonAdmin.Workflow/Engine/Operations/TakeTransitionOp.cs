@@ -57,5 +57,15 @@ public class TakeTransitionOp(WfNode fromNode) : IWfOperation
                 StarterUserId = ctx.Instance.StarterUserId,
             },
             cancellationToken);
+
+        // 通知排队,事务提交后由 WorkflowEngine 统一派发。
+        ctx.PendingInstanceCompletedNotification = new WfNotifyContext
+        {
+            InstanceId = ctx.Instance.Id,
+            DefinitionVersionId = ctx.Instance.DefinitionVersionId,
+            BusinessKey = ctx.Instance.BusinessKey,
+            StarterUserId = ctx.Instance.StarterUserId,
+            Status = status,
+        };
     }
 }

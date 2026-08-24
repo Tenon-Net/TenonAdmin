@@ -2,6 +2,8 @@ extern alias workflowhost;
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace TenonAdmin.Tests;
 
@@ -9,6 +11,9 @@ namespace TenonAdmin.Tests;
 public sealed class WorkflowAppFactory : WebApplicationFactory<workflowhost::WorkflowProgram>
 {
     public string DbPath { get; } = Path.Combine(Path.GetTempPath(), $"tenon-wf-it-{Guid.NewGuid():N}.db");
+
+    /// <summary>每测试的服务覆盖(ConfigureTestServices;仿 <see cref="AdminAppFactory.Overrides"/>)。</summary>
+    public Action<IServiceCollection>? Overrides { get; init; }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -19,6 +24,7 @@ public sealed class WorkflowAppFactory : WebApplicationFactory<workflowhost::Wor
         builder.UseSetting("TenonAdmin:Jwt:SecretKey", "tenon-workflow-test-signing-key-please-keep-32plus");
         builder.UseSetting("TenonAdmin:Security:DataProtection:Key", Convert.ToBase64String(new byte[32]));
         builder.UseSetting("TenonAdmin:Security:RateLimit:Enabled", "false");
+        if (Overrides != null) builder.ConfigureTestServices(Overrides);
     }
 
     protected override void Dispose(bool disposing)

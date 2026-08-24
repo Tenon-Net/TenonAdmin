@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SqlSugar;
 using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
@@ -14,7 +15,9 @@ public class WfTaskService(
     IRepository<WfHisTask> hisTasks,
     IRepository<WfInstance> instances,
     IRepository<WfDefinition> definitions,
-    IRepository<WfDefinitionVersion> versions) : IWfTaskService
+    IRepository<WfDefinitionVersion> versions,
+    IRepository<WfHistory> histories,
+    IWorkflowNotifier notifier) : IWfTaskService
 {
     /// <inheritdoc />
     public virtual async Task<PagedList<WfTodoItemOutput>> PageTodoAsync(
@@ -155,6 +158,90 @@ public class WfTaskService(
                 TaskId = taskId,
                 UserId = userId,
                 ToUserId = toUserId,
+                Comment = comment,
+            },
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task UrgeAsync(
+        long taskId,
+        long callerUserId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var task = await tasks.GetByIdAsync(taskId)
+            ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.TaskNotFound);
+
+        var instance = await instances.AsQueryable()
+            .ClearFilter<IOrgScoped>()
+            .Where(i => i.Id == task.InstanceId)
+            .FirstAsync()
+            ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceNotFound);
+
+        if (instance.StarterUserId != callerUserId)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.UrgeNotAllowed);
+
+        var toUserIds = (await actors.AsQueryable()
+                .Where(a => a.TaskId == taskId
+                            && a.ActorType == WfActorType.Approver
+                            && a.Status == WfActorStatus.Pending)
+                .Select(a => a.UserId)
+                .ToListAsync())
+            .Where(userId => userId != callerUserId)
+            .Distinct()
+            .ToList();
+
+        if (toUserIds.Count == 0)
+            return;
+
+        await histories.InsertAsync(new WfHistory
+        {
+            InstanceId = instance.Id,
+            EventType = WfHistoryEventType.TaskUrged,
+            NodeId = task.NodeId,
+            PayloadJson = JsonSerializer.Serialize(
+                new { taskId, fromUserId = callerUserId, toUserIds }, WfModelJson.Options),
+        });
+
+        try
+        {
+            await notifier.TaskUrgedAsync(
+                new WfNotifyContext
+                {
+                    InstanceId = instance.Id,
+                    DefinitionVersionId = instance.DefinitionVersionId,
+                    BusinessKey = instance.BusinessKey,
+                    NodeId = task.NodeId,
+                    StarterUserId = instance.StarterUserId,
+                    Status = instance.Status,
+                },
+                taskId,
+                callerUserId,
+                toUserIds,
+                cancellationToken);
+        }
+        catch (Exception)
+        {
+            // 通知失败不得影响已提交的历史写入;静默吞掉。
+        }
+    }
+
+    /// <inheritdoc />
+    public virtual Task<WfEngineResult> ReturnAsync(
+        long taskId,
+        long userId,
+        string? targetNodeId,
+        string? comment = null,
+        CancellationToken cancellationToken = default)
+    {
+        return engine.ExecuteAsync(
+            new ReturnTaskCmd
+            {
+                TaskId = taskId,
+                UserId = userId,
+                TargetNodeId = targetNodeId,
                 Comment = comment,
             },
             cancellationToken);

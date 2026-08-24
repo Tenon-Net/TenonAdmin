@@ -71,3 +71,45 @@ public sealed class TransferTaskCmd : IWfCommand
 
     public string? Comment { get; init; }
 }
+
+/// <summary>撤销实例:仅发起人、仅无人已批的 Running 实例可撤销。</summary>
+public sealed class CancelInstanceCmd : IWfCommand
+{
+    public required long InstanceId { get; init; }
+
+    public required long CallerUserId { get; init; }
+}
+
+/// <summary>
+/// 主动退回:当前办理人把待办退回给之前某个节点。目标节点按节点 <see cref="WfReturnPolicy"/> 解析
+/// (<c>Node</c>/<c>Prev</c> 忽略 <see cref="TargetNodeId"/>;<c>Any</c> 才用它)。不像
+/// <see cref="TransferTaskCmd"/> 那样继续在原节点等人——关闭当前待办、token 回退到目标节点、
+/// Agenda 留空,等发起人重提(<see cref="ResubmitInstanceCmd"/>)。
+/// </summary>
+public sealed class ReturnTaskCmd : IWfCommand
+{
+    public required long TaskId { get; init; }
+
+    /// <summary>当前办理人(须为 Pending Approver)。</summary>
+    public required long UserId { get; init; }
+
+    /// <summary><see cref="WfReturnPolicy.Any"/> 时的目标节点 Id;其余策略忽略。</summary>
+    public string? TargetNodeId { get; init; }
+
+    public string? Comment { get; init; }
+}
+
+/// <summary>
+/// 发起人重提:仅 <see cref="ReturnTaskCmd"/> 退回后、尚无活跃待办的 Running 实例可重提。
+/// 从 <c>start</c> 重新走一遍(连已批过的节点也重新审),复用同一实例行。
+/// </summary>
+public sealed class ResubmitInstanceCmd : IWfCommand
+{
+    public required long InstanceId { get; init; }
+
+    public required long CallerUserId { get; init; }
+
+    public string? VariablesJson { get; init; }
+
+    public IReadOnlyDictionary<string, List<long>>? SelectedUserIdsByNode { get; init; }
+}

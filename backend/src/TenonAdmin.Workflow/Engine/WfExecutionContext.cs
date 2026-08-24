@@ -17,6 +17,7 @@ public sealed class WfExecutionContext
     public required WorkflowOptions Options { get; init; }
     public required TimeProvider TimeProvider { get; init; }
     public required IWfConditionEvaluator ConditionEvaluator { get; init; }
+    public required IWorkflowNotifier Notifier { get; init; }
 
     public required WfInstance Instance { get; set; }
     public required WfToken Token { get; set; }
@@ -44,6 +45,15 @@ public sealed class WfExecutionContext
     public long? CreatedTaskId { get; set; }
     public List<long> NewAssigneeUserIds { get; } = [];
     public List<long> NewCcUserIds { get; } = [];
+
+    /// <summary>
+    /// 待派发的「待办到达」通知(事务提交后由 <see cref="WorkflowEngine"/> 统一派发,不在事务内直接调用
+    /// <see cref="Notifier"/>——避免提交失败仍推送、或推送先于提交落盘导致客户端读到脏数据)。
+    /// </summary>
+    public List<(WfNotifyContext Ctx, IReadOnlyList<long> UserIds)> PendingTaskAssignedNotifications { get; } = [];
+
+    /// <summary>待派发的「实例完结」通知,语义同 <see cref="PendingTaskAssignedNotifications"/>。</summary>
+    public WfNotifyContext? PendingInstanceCompletedNotification { get; set; }
 
     private WfModelIndex? _modelIndex;
 

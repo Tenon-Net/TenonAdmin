@@ -244,6 +244,32 @@ public class WfInstanceService(
         }).ToList();
     }
 
+    /// <inheritdoc />
+    public virtual Task<WfEngineResult> CancelAsync(
+        long instanceId,
+        long callerUserId,
+        CancellationToken cancellationToken = default) =>
+        engine.ExecuteAsync(
+            new CancelInstanceCmd { InstanceId = instanceId, CallerUserId = callerUserId },
+            cancellationToken);
+
+    /// <inheritdoc />
+    public virtual Task<WfEngineResult> ResubmitAsync(
+        long instanceId,
+        long callerUserId,
+        string? variablesJson,
+        IReadOnlyDictionary<string, List<long>>? selectedUserIdsByNode,
+        CancellationToken cancellationToken = default) =>
+        engine.ExecuteAsync(
+            new ResubmitInstanceCmd
+            {
+                InstanceId = instanceId,
+                CallerUserId = callerUserId,
+                VariablesJson = variablesJson,
+                SelectedUserIdsByNode = selectedUserIdsByNode,
+            },
+            cancellationToken);
+
     /// <summary>按 Id 取实例;不存在抛 <see cref="WorkflowErrorCode.InstanceNotFound"/>。</summary>
     protected virtual async Task<WfInstance> RequireInstanceAsync(long id)
     {

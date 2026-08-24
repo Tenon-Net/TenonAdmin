@@ -123,6 +123,18 @@ public class CompleteTaskOp(
                         new Dictionary<string, object?> { ["taskId"] = Task.Id });
                 }
                 ctx.NewAssigneeUserIds.Add(next.UserId);
+                ctx.PendingTaskAssignedNotifications.Add((
+                    new WfNotifyContext
+                    {
+                        InstanceId = ctx.Instance.Id,
+                        DefinitionVersionId = ctx.Instance.DefinitionVersionId,
+                        BusinessKey = ctx.Instance.BusinessKey,
+                        NodeId = Task.NodeId,
+                        NodeName = ctx.CurrentNode?.Name,
+                        StarterUserId = ctx.Instance.StarterUserId,
+                        Status = ctx.Instance.Status,
+                    },
+                    [next.UserId]));
                 return false;
 
             case WfSignMode.All:
@@ -154,14 +166,26 @@ public class CompleteTaskOp(
         await ctx.Db.Deleteable<WfTask>().In(Task.Id).ExecuteCommandAsync();
     }
 
-    /// <summary>拒绝:默认终止(节点 onReject=toNode 属 M2 行为,M1 一律终止)。</summary>
+    /// <summary>
+    /// 拒绝:节点未配置 <see cref="WfRejectAction"/> 或配为 <see cref="WfRejectAction.Terminate"/> 时终止整单;
+    /// 配为 <see cref="WfRejectAction.ToNode"/> 时不终止,回退到 <see cref="WfNodeProps.RejectToNodeId"/> 指向的
+    /// 节点重新进入(M2)——实例仍在正常审批流程中,后续一切交给 <see cref="EnterNodeOp"/> 处理。
+    /// </summary>
     protected virtual async Task RejectInstanceAsync(
         WfExecutionContext ctx,
         WfNode node,
         CancellationToken cancellationToken)
     {
-        // M1:忽略 toNode,统一 terminate。
-        _ = node;
+        if (node.Props?.OnReject == WfRejectAction.ToNode)
+        {
+            var target = ctx.FindNode(node.Props!.RejectToNodeId!)
+                         ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                             new Dictionary<string, object?> { ["reason"] = "rejectTargetInvalid" });
+
+            await ctx.AppendHistoryAsync(WfHistoryEventType.NodeLeave, node.Id, cancellationToken: cancellationToken);
+            ctx.Agenda.Plan(new EnterNodeOp(target));
+            return;
+        }
 
         ctx.Instance.Status = WfInstanceStatus.Rejected;
         await ctx.Db.Updateable(ctx.Instance)
@@ -189,5 +213,15 @@ public class CompleteTaskOp(
                 StarterUserId = ctx.Instance.StarterUserId,
             },
             cancellationToken);
+
+        // 通知排队,事务提交后由 WorkflowEngine 统一派发。
+        ctx.PendingInstanceCompletedNotification = new WfNotifyContext
+        {
+            InstanceId = ctx.Instance.Id,
+            DefinitionVersionId = ctx.Instance.DefinitionVersionId,
+            BusinessKey = ctx.Instance.BusinessKey,
+            StarterUserId = ctx.Instance.StarterUserId,
+            Status = WfInstanceStatus.Rejected,
+        };
     }
 }
