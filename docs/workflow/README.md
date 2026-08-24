@@ -11,19 +11,21 @@ TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可�
 ## 必读顺序
 
 1. [`workflow-design-plan-2026-08-17.md`](./workflow-design-plan-2026-08-17.md) — 当前产品决策、Schema、数据模型、运行时语义、M1–M3+ 里程碑。**继续开发时先读这份。**
-2. [`elsa3-slickflow-ai-reference-2026-08-23.md`](./elsa3-slickflow-ai-reference-2026-08-23.md) — AI 工作流实施基线。§3 固化 Slickflow 调用链，§4 固化 Tenon 的 Module、Interface、execution/attempt/AI decision/outbox、安全不变量与验收线，§5 固化阶段安排。**开发 M3a/M3b 时必读。**
-3. [`openworkflow-reference-2026-08-23.md`](./openworkflow-reference-2026-08-23.md) — 可靠执行参考：幂等、持久化唤醒、lease/fence、attempt、重试与崩溃恢复。**开发 M2c/M3a 时按需读。**
-4. [`workflow-engine-research-2026-08-10.md`](./workflow-engine-research-2026-08-10.md) — 完整选型与参考项目调研，保留“为什么这样设计”的证据。日常实现不必通读。
+2. [`workflow-database-design-review-2026-08-24.md`](./workflow-database-design-review-2026-08-24.md) — 当前 9 表兼容性评审：保留项、实例/Token CAS、NodeVisitId、办理人历史，以及 M2c/M3a/M3b 的目标表与迁移顺序。**修改工作流字段或开发 M2c/M3a 时必读。**
+3. [`elsa3-slickflow-ai-reference-2026-08-23.md`](./elsa3-slickflow-ai-reference-2026-08-23.md) — AI 工作流实施基线。§3 固化 Slickflow 调用链，§4 固化 Tenon 的 Module、Interface、execution/attempt/AI decision/outbox、安全不变量与验收线，§5 固化阶段安排。**开发 M3a/M3b 时必读。**
+4. [`openworkflow-reference-2026-08-23.md`](./openworkflow-reference-2026-08-23.md) — 可靠执行参考：幂等、持久化唤醒、lease/fence、attempt、重试与崩溃恢复。**开发 M2c/M3a 时按需读。**
+5. [`workflow-engine-research-2026-08-10.md`](./workflow-engine-research-2026-08-10.md) — 完整选型与参考项目调研，保留“为什么这样设计”的证据。日常实现不必通读。
 
 ## 按任务读取
 
 | 任务 | 先读 | 再读 |
 | --- | --- | --- |
 | 继续 M2a/M2b | 设计规划 §13 | 总调研中对应产品参考 |
-| 开发 M2c 幂等与四库契约 | 设计规划 §14.2 | OpenWorkflow 报告 §4–§6 |
-| 开发 M3a 自动节点执行 | AI 基石 §4.4–§4.8 | OpenWorkflow 报告的 execution/lease/retry 部分 |
+| 开发 M2c 幂等与四库契约 | 数据库评审 §四、§五、§九、§十 | 设计规划 §14.2、OpenWorkflow 报告 §4–§6 |
+| 开发 M3a 自动节点执行 | 数据库评审 §四、§六、§八–§十 | AI 基石 §4.4–§4.8、OpenWorkflow 的 execution/lease/retry 部分 |
 | 开发 M3b AI Decision | AI 基石 §4–§5 | 设计规划 §14.3 |
 | 开发 RAG/Agent/设计 Copilot | AI 基石 §2–§4 | 固定参考提交有变化时才增量复核源码 |
+| 修改 `wf_*` 字段、索引或迁移 | 数据库评审全文 | 当前实体、四库契约测试和设计规划 |
 | 查选型缘由或许可证 | 总调研 | 对应专项报告 |
 
 ## 继续开发提示词
@@ -51,7 +53,7 @@ TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可�
 ```text
 继续开发 TenonAdmin.Workflow 的 M2c“写操作幂等与四数据库契约”。
 
-先阅读 AGENTS.md、CLAUDE.md、docs/workflow/README.md、workflow-design-plan-2026-08-17.md §14.2，以及 openworkflow-reference-2026-08-23.md 中幂等、receipt、事务边界和崩溃恢复相关章节。固定参考 commit 未变化时不要重新调研参考仓；存在 .codegraph 时先用 CodeGraph 定位调用链。
+先阅读 AGENTS.md、CLAUDE.md、docs/workflow/README.md、workflow-database-design-review-2026-08-24.md 的 M2c 相关章节、workflow-design-plan-2026-08-17.md §14.2，以及 openworkflow-reference-2026-08-23.md 中幂等、receipt、事务边界和崩溃恢复相关章节。固定参考 commit 未变化时不要重新调研参考仓；存在 .codegraph 时先用 CodeGraph 定位调用链。
 
 先依据 git status、当前代码和测试确认已有实现，再补齐所有关键写命令的 RequestId/IdempotencyKey、同事务 receipt、唯一性约束和首次结果重放语义。覆盖至少“重复请求不重复推进”“并发同键只有一次生效”“业务事务回滚时 receipt 不残留”“重试返回首次成功结果”。不要覆盖用户已有改动。
 
@@ -63,7 +65,7 @@ TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可�
 ```text
 继续开发 TenonAdmin.Workflow 的 M3a“可靠自动节点执行层”。
 
-先阅读 AGENTS.md、CLAUDE.md、docs/workflow/README.md、elsa3-slickflow-ai-reference-2026-08-23.md §4.4–§4.8，以及 openworkflow-reference-2026-08-23.md 中 execution、attempt、lease/fence、retry、outbox 和恢复相关章节。存在 .codegraph 时先用 CodeGraph；固定参考 commit 未变化时不要重读外部项目。
+先阅读 AGENTS.md、CLAUDE.md、docs/workflow/README.md、workflow-database-design-review-2026-08-24.md 的 M3a 相关章节、elsa3-slickflow-ai-reference-2026-08-23.md §4.4–§4.8，以及 openworkflow-reference-2026-08-23.md 中 execution、attempt、lease/fence、retry、outbox 和恢复相关章节。存在 .codegraph 时先用 CodeGraph；固定参考 commit 未变化时不要重读外部项目。
 
 以当前代码和测试为事实源，设计并实现最小闭环：IWorkflowNodeHandler 扩展点、持久化 WfNodeExecution/Attempt、稳定 execution key、短事务 claim、lease + fencing token、可分类重试、outbox 唤醒、超时与崩溃恢复。先用 Fake Handler 和 Webhook Handler 验证执行框架，不在本阶段加入模型厂商耦合或让外部调用持有数据库事务。
 
