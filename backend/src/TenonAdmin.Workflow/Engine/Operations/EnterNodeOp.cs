@@ -24,6 +24,18 @@ public class EnterNodeOp(WfNode node) : IWfOperation
         cancellationToken.ThrowIfCancellationRequested();
         ctx.CurrentNode = Node;
 
+        // token 级 CAS,必须留在**本方法**的第一个写操作位置:换节点就是状态推进,先抢锁再留痕。
+        // ⚠「第一个写操作」只在方法内成立,**跨事务不成立**:approve 路径上任务级 CAS 在前、
+        // wf_his_task 与 wf_history(TaskCompleted) 都写在本 Op 的 token 领取之前。安全性由整事务回滚
+        // 兜底(一条 Cmd 一个事务),不由语句顺序保证。
+        // 这是覆盖「审批 vs 撤销」**这个方向**的手段——一次会推进 token 的同意与一次并发撤销都要 CAS
+        // 同一行,只有一个拿得到 1 行,输的整事务回滚。**不是唯一手段**:反方向另有一道既有防线——
+        // 撤销要删掉那行活跃 wf_task,而同意已经把它删了,撤销的 FirstAsync() 找不到行;而未满票的
+        // 同意这条路本 Op 压根不跑,由 CompleteTaskOp 的 !passed 分支自己领取 token 补上。
+        // 一次事务里本 Op 可能跑多次(start → 汇合 → 审批节点),每次领取一次,助手把新版本写回
+        // ctx.Token 故后续 CAS 对得上。
+        await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
+
         ctx.Token.NodeId = Node.Id;
         await ctx.Db.Updateable(ctx.Token)
             .UpdateColumns(t => new { t.NodeId, t.UpdateTime, t.UpdateUserId })

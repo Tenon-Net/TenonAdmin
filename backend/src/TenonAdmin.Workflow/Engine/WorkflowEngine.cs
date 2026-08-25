@@ -943,15 +943,11 @@ public class WorkflowEngine(
             ? null
             : System.Text.Json.JsonSerializer.Serialize(leaderChainByLevel, WfModelJson.Options);
 
-        await db.Updateable(instance)
-            .UpdateColumns(i => new { i.VariablesJson, i.LeaderChainJson, i.SelectedUserIdsJson, i.UpdateTime, i.UpdateUserId })
-            .ExecuteCommandAsync();
-
-        token.NodeId = model.Root.Id;
-        await db.Updateable(token)
-            .UpdateColumns(t => new { t.NodeId, t.UpdateTime, t.UpdateUserId })
-            .ExecuteCommandAsync();
-
+        // ctx 有意构造在两条 UPDATE **之前**:重提此前全程无 CAS 锚点(两处 Updateable(entity) 都是无条件,
+        // 上面的「无活跃任务」校验只是读),双击重提会让两个事务都通过校验、都 Plan(EnterNodeOp(root)) →
+        // 同一节点两套 wf_task/actor + 两条 InstanceResubmitted + 两次通知,批掉一个还会留孤儿。
+        // 锚点落在 token 而不是实例:重提不改实例状态(Running → Running),没有可锚的状态变化;而 token
+        // 的 NodeId 归零**就是**这次重提的状态推进,锚在它上面既是真锚点也符合 §4.1 的原文形状。
         var agenda = new WfAgenda();
         var ctx = new WfExecutionContext
         {
@@ -972,6 +968,18 @@ public class WorkflowEngine(
             StarterOrgId = starterOrgId,
             LeaderChainByLevel = leaderChainByLevel,
         };
+
+        // 本事务的第一个写操作。输的那一边抛 48004(reason=tokenVersionConflict)→ 整事务回滚。
+        await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
+
+        await db.Updateable(instance)
+            .UpdateColumns(i => new { i.VariablesJson, i.LeaderChainJson, i.SelectedUserIdsJson, i.UpdateTime, i.UpdateUserId })
+            .ExecuteCommandAsync();
+
+        token.NodeId = model.Root.Id;
+        await db.Updateable(token)
+            .UpdateColumns(t => new { t.NodeId, t.UpdateTime, t.UpdateUserId })
+            .ExecuteCommandAsync();
 
         await ctx.AppendHistoryAsync(
             WfHistoryEventType.InstanceResubmitted,

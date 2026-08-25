@@ -73,6 +73,24 @@ public abstract class ReassignTaskOpBase(
                 new Dictionary<string, object?> { ["taskId"] = Task.Id });
         }
 
+        // ⚠ 这段任务级 CAS 是转办与委托**全部**并发安全性的唯一锚点,不是冗余,删不得也放松不得。
+        // 它在任何 actor 行被改动之前抢到任务级独占,后面的「原 actor 翻 Skipped」「插新 actor」
+        // 「插 wf_his_task」才不会两副本各做一遍。
+        // Task 9 给实例与 token 各加了 Version 并把状态推进收口到「期望状态 + 版本」双条件 CAS,但那一层
+        // 对本路径**不构成任何保护**:改派压根不改实例状态、不改 token(节点没变、状态没变),两个并发
+        // 委托同一件待办时实例与 token 一字不动,新 CAS 拦不住,后果是两行 Pending actor + 两条 Delegate
+        // 历史。反过来也不能给改派加实例级 CAS —— 那会让同实例上两件**不同**待办的并发委托互相冲突,
+        // 属过度加锁。两个方向都由 WfVersionCasTests.Reassign_claims_task_version_only_and_leaves_
+        // instance_and_token_untouched 钉住:删掉本段 → 任务版本不前进;加实例级 CAS → 实例版本前进。
+        //
+        // ⚠ 那么「实例已 Cancelled 但改派仍成功」今天靠什么挡住?**不是**本段任务级 CAS,而是一条此前
+        // 没有任何地方写下来的隐式不变量:**每一个把实例改成终态的动作都会物理删掉那一行活跃 wf_task**
+        // (CancelInstanceOp 撤销、CompleteTaskOp.CloseTaskAsync 同意/拒绝、ReturnTaskOp 退回)。撤销先
+        // 提交时,本段 CAS 打在一行**已被删除**的记录上 → 影响 0 行 → TaskConflict → 整事务回滚。
+        // 换句话说跨层一致性来自「终态动作必删待办」,不来自任何版本列。**M3 一旦出现「不删待办的实例级
+        // 动作」(挂起 / 终止 / 并行网关下只收某一分支),这条不变量静默失效**,届时改派必须自己加一道
+        // 实例状态复验(在事务内,不能只靠 BeginXxxAsync 的那次读),否则会出现「实例已挂起、待办还能
+        // 被转手」。新增任何实例级动作时先回头看这段。
         var taskClaimed = await ctx.Db.Updateable<WfTask>()
             .SetColumns(t => new WfTask { Version = Task.Version + 1 })
             .Where(t => t.Id == Task.Id && t.Version == Task.Version)

@@ -94,7 +94,12 @@ public class ReturnTaskOp(
         await ctx.Db.Deleteable<WfTaskActor>().Where(a => a.TaskId == Task.Id).ExecuteCommandAsync();
         await ctx.Db.Deleteable<WfTask>().In(Task.Id).ExecuteCommandAsync();
 
-        // token 回退;Status 不变(仍 Active——退回后原实例保持 Running,不是完结)。
+        // token 回退;Status 不变(仍 Active——退回后原实例保持 Running,不是完结),故领取的期望状态与
+        // 目标状态都是 Active,双条件 CAS 只推进版本。顺序照旧「先抢任务、再动 token」:上面那段任务级
+        // CAS 仍是本 Op 的第一个写操作。
+        // ⚠「第一个写操作」只在**本 Op 内**成立,跨事务不成立(退回自己的 wf_his_task 与 wf_history 都
+        // 写在本次 token 领取之前);安全性由整事务回滚兜底,不由语句顺序保证。
+        await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
         ctx.Token.NodeId = target.Id;
         await ctx.Db.Updateable(ctx.Token)
             .UpdateColumns(t => new { t.NodeId, t.UpdateTime, t.UpdateUserId })

@@ -88,7 +88,18 @@ public class CompleteTaskOp(
         // Approve 计票
         var passed = await TryPassAsync(ctx, cancellationToken);
         if (!passed)
+        {
+            // 未满票的同意**也是一次审批**,必须领取 token —— 否则 mode=all / mode=seq(以及被
+            // MapSignMode 强制成 Sequential 的 multiLeader)的**非末位投票**这条路上实例与 token 一字
+            // 不动,本轮的两级 CAS 一个都不触发:并发撤销的 ClaimInstanceAsync(Running) 与
+            // ClaimTokenAsync(Active) 两个条件全都满足,于是「会签第一票同意」与「发起人撤销」两边都
+            // 成功,落成 Status = Cancelled 与一条 Approve 行共存(BeginCancelAsync 的「无任何 Approve
+            // 行」准入只是一次读、提交前不复验),违背语义契约「仅当没有任何 Approve 记录才允许撤销」。
+            // 语义站得住:这个 token 上的签核进度前进了一步,与「进节点也算状态推进」是同一条论证;
+            // 锚的是本 token,故不引入过度加锁(M3 并行网关下不同 token 各走各的行)。
+            await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
             return; // 顺序/会签未满票:待办仍在,Agenda 空 → 等人
+        }
 
         await CloseTaskAsync(ctx, skipRemaining: true, cancellationToken);
         ctx.Agenda.Plan(new TakeTransitionOp(node));
@@ -192,11 +203,15 @@ public class CompleteTaskOp(
             return;
         }
 
+        // 终态写入前先领取实例与 token(数据库评审 §4.1)。只在**终止**分支做:上面的 ToNode 分支压根
+        // 不写实例/token 状态,它 plan 的 EnterNodeOp 会自己领取 token。
+        await ctx.ClaimInstanceAsync(WfInstanceStatus.Running, cancellationToken);
         ctx.Instance.Status = WfInstanceStatus.Rejected;
         await ctx.Db.Updateable(ctx.Instance)
             .UpdateColumns(i => new { i.Status, i.UpdateTime, i.UpdateUserId })
             .ExecuteCommandAsync();
 
+        await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
         ctx.Token.Status = WfTokenStatus.Cancelled;
         await ctx.Db.Updateable(ctx.Token)
             .UpdateColumns(t => new { t.Status, t.UpdateTime, t.UpdateUserId })
