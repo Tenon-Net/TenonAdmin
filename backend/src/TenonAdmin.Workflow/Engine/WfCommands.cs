@@ -89,6 +89,38 @@ public sealed class DelegateTaskCmd : IWfCommand
     public string? Comment { get; init; }
 }
 
+/// <summary>
+/// 超时触发:<see cref="WfTimeoutJob"/> 扫到一件到期待办后派一条本命令,由引擎在**同一事务**里
+/// 领取(<c>taskId + Version + DueTime &lt;= now</c> 条件更新,设计规划 §14.1)、写
+/// <see cref="WfHistoryEventType.TimeoutFired"/>、再等价入队人工动作的 Op。
+/// <para>之所以不让 Job 直接拼 <see cref="CompleteTaskCmd"/> / <see cref="TransferTaskCmd"/>:
+/// ①<c>TimeoutFired</c> 必须与动作同事务落库,否则崩在中间就只剩一行「张三同意了」而没有任何超时
+/// 痕迹,审计误导变永久;②§14.1 的领取 CAS 只有在事务内才消掉「领取与动作之间的窗口」;
+/// ③会签需要一次事务里对多个 Pending 办理人各记一次,那两条命令的形状表达不了。</para>
+/// <para><see cref="WfTimeoutAction.Remind"/> **不走本命令**——它什么状态都不改,由 Job 直接写事件
+/// 并推送(见 <see cref="WfTimeoutJob"/> 上关于「提醒不做版本 CAS」的说明)。</para>
+/// </summary>
+public sealed class TimeoutFireCmd : IWfCommand
+{
+    public required long TaskId { get; init; }
+
+    /// <summary>扫描时读到的 <see cref="WfTask.Version"/>;领取 CAS 对不上即人工动作已胜出。</summary>
+    public required int ExpectedVersion { get; init; }
+
+    /// <summary>节点配置的超时动作;<see cref="WfTimeoutAction.Remind"/> 非法(不进引擎)。</summary>
+    public required WfTimeoutAction Action { get; init; }
+
+    /// <summary><see cref="WfTimeoutAction.Transfer"/> 时的目标用户。</summary>
+    public long? TransferUserId { get; init; }
+
+    /// <summary>
+    /// 落进 <c>wf_his_task.Comment</c> 的说明文案。超时动作以**当前 Pending 办理人**的身份记
+    /// **原生动词**(见 <see cref="WorkflowEngine.BeginTimeoutAsync"/>),不读事件流的视图光看
+    /// 「张三同意了」会误解,故一并写上系统触发说明。
+    /// </summary>
+    public string? Comment { get; init; }
+}
+
 /// <summary>撤销实例:仅发起人、仅无人已批的 Running 实例可撤销。</summary>
 public sealed class CancelInstanceCmd : IWfCommand
 {

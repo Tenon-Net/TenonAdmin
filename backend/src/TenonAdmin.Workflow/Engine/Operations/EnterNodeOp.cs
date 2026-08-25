@@ -9,6 +9,14 @@ namespace TenonAdmin.Workflow;
 /// </summary>
 public class EnterNodeOp(WfNode node) : IWfOperation
 {
+    /// <summary>
+    /// <see cref="ResolveDueTime"/> 允许的最大超时小时数(10 年)。<see cref="WfTimeout.Hours"/> 是
+    /// <c>int</c>,设计器里填个 <c>int.MaxValue</c> 会让 <see cref="DateTime.AddHours"/> 溢出抛
+    /// <see cref="ArgumentOutOfRangeException"/> → 发起流程 500。截到上限而不是报错:语义上
+    /// 「10 年后到期」等于「基本不会到期」,正是填这种数的人想表达的意思。
+    /// </summary>
+    protected const int MaxTimeoutHours = 87_600;
+
     protected WfNode Node { get; } = node;
 
     public virtual async Task ExecuteAsync(WfExecutionContext ctx, CancellationToken cancellationToken)
@@ -242,7 +250,7 @@ public class EnterNodeOp(WfNode node) : IWfOperation
             TokenId = ctx.Token.Id,
             SignMode = signMode,
             Version = 0,
-            DueTime = null,
+            DueTime = ResolveDueTime(ctx),
         };
         await ctx.Db.Insertable(task).ExecuteCommandAsync();
 
@@ -285,6 +293,26 @@ public class EnterNodeOp(WfNode node) : IWfOperation
             },
             pendingUserIds));
         // 停顿等人——不再 plan TakeTransition。通知排队,事务提交后由 WorkflowEngine 统一派发。
+    }
+
+    /// <summary>
+    /// 建任务时算 <see cref="WfTask.DueTime"/>:节点 <see cref="WfNodeProps.Timeout"/> 的
+    /// <see cref="WfTimeout.Hours"/> 大于 0 才计时,否则 <c>null</c>(=不启用)。
+    /// <para><c>Hours &lt;= 0</c> 必须等于「不启用」而不是抛错:<see cref="WfTimeout.Hours"/> 是非可空
+    /// <c>int</c>,设计器上只点了 <c>action</c> 没填小时数就是 0——若把 0 当「立刻到期」,这类节点
+    /// 建完任务当场就被超时策略处置;若抛错,存量定义整条流程发不起来。</para>
+    /// <para>不做整秒截断:<see cref="WfTimeoutJob"/> 用的是不等式比较(<c>DueTime &lt;= now</c>),
+    /// MySQL <c>datetime(0)</c> 的毫秒四舍五入最多让任务早/晚半秒到期,没有 CAS 失效风险。
+    /// (内核的 <c>JobTime.Truncate</c> 是 <c>internal</c>,跨程序集取不到。)</para>
+    /// <para>拆成 <c>virtual</c> 单步而非内联表达式:「按工作日算到期」这类需求正好覆写这一步。</para>
+    /// </summary>
+    protected virtual DateTime? ResolveDueTime(WfExecutionContext ctx)
+    {
+        if (Node.Props?.Timeout is not { } timeout || timeout.Hours <= 0)
+            return null;
+
+        var hours = Math.Min(timeout.Hours, MaxTimeoutHours);
+        return ctx.TimeProvider.GetLocalNow().DateTime.AddHours(hours);
     }
 
     /// <summary>

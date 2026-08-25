@@ -83,6 +83,12 @@ public static class WorkflowSetup
 
         // 发起 / 我发起的 / 详情(含 FormBinder 挂载点) / 事件流。
         services.TryAddScoped<IWfInstanceService, WfInstanceService>();
+
+        // 超时扫描:处理器 + 预置的 sys_job 行。**两行都必须有**——注册只让处理器可被解析器选到,
+        // 调度器只派发 sys_job 表里 Status=Ready 的行,少了种子就是「装了包但超时永不触发」。
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, WfTimeoutJob>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WfTimeoutJobSeed>());
+
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WorkflowMenuSeed>());
 
         return services;

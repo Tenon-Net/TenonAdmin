@@ -272,8 +272,9 @@ public class WfDefinitionService(
     }
 
     /// <summary>
-    /// 跳转目标的引用完整性(M2b):<c>onReject=toNode</c> ⇒ <see cref="WfNodeProps.RejectToNodeId"/> 非空且
-    /// 指向全树存在的节点;<c>returnPolicy=node</c> ⇒ <see cref="WfNodeProps.ReturnToNodeId"/> 同理。
+    /// 跳转目标与超时目标的引用完整性(M2b):<c>onReject=toNode</c> ⇒ <see cref="WfNodeProps.RejectToNodeId"/>
+    /// 非空且指向全树存在的节点;<c>returnPolicy=node</c> ⇒ <see cref="WfNodeProps.ReturnToNodeId"/> 同理;
+    /// <c>timeout.action=transfer</c>(且 <c>hours &gt; 0</c>)⇒ <see cref="WfTimeout.TransferUserId"/> 为正。
     /// <para>必须独立于 <see cref="ValidateChain"/> 单独走一趟:跳转目标可能在当前遍历位置<b>之后</b>、
     /// 或在另一条分支臂上,只查已 <c>seen</c> 的集合会把合法的前向/跨臂引用误判成非法。这里复用
     /// <see cref="WfModelIndex"/> 的整树索引,不再手写第三次遍历。</para>
@@ -294,6 +295,19 @@ public class WfDefinitionService(
             if (node.Props?.ReturnPolicy == WfReturnPolicy.Node)
             {
                 RequireNodeReference(index, node, node.Props.ReturnToNodeId, "returnToNodeId");
+            }
+
+            // 超时自动转办缺目标是「永久失败」形态:待办到期后每一拍都失败一次,直到有人手工办掉。
+            // 运行期只能计数 + 日志,发布期拒了才是根治。复用 48002 + reason,零新增错误码。
+            if (node.Props?.Timeout is { Hours: > 0, Action: WfTimeoutAction.Transfer } timeout
+                && timeout.TransferUserId is not > 0)
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?>
+                    {
+                        ["reason"] = "timeoutTransferUserIdInvalid",
+                        ["nodeId"] = node.Id,
+                    });
             }
         }
     }
