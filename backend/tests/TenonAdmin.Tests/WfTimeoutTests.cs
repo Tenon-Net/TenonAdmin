@@ -259,10 +259,16 @@ public class WfTimeoutTests
 
         await MakeDue(f, instanceId, TimeSpan.FromDays(1));
         var versionBeforeRemind = await VersionOf(f, taskId);
+        var instanceVersionBeforeRemind = await InstanceVersionOf(f, instanceId);
+        var tokenVersionBeforeRemind = await TokenVersionOf(f, instanceId);
         await RunTimeoutJob(f);
 
         // 这条是钉子:提醒只写事件 + 推送,**不得**碰 wf_task.Version。
         Assert.Equal(versionBeforeRemind, await VersionOf(f, taskId));
+        // Task 9 补的两条同款钉子:实例与 token 各有了自己的 Version 之后,「顺手给提醒加 CAS」多了两个
+        // 新落点,而症状仍然是办理人为了一条提醒收到 48004/48007。三个级别都不得被提醒碰到。
+        Assert.Equal(instanceVersionBeforeRemind, await InstanceVersionOf(f, instanceId));
+        Assert.Equal(tokenVersionBeforeRemind, await TokenVersionOf(f, instanceId));
 
         var approve = await PostEnvelope(a, "/api/v1/workflow/task/approve", new { taskId });
         Assert.Equal(0, approve.GetProperty("code").GetInt32());
@@ -1120,6 +1126,28 @@ public class WfTimeoutTests
         var task = await db.Queryable<WfTask>().Where(t => t.Id == taskId).FirstAsync();
         Assert.NotNull(task);
         return task.Version;
+    }
+
+    /// <summary>实例级乐观锁版本(Task 9);没有 HTTP 出口,只能读库。</summary>
+    private static async Task<int> InstanceVersionOf(WorkflowAppFactory f, long instanceId)
+    {
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<TenonAdmin.SqlSugar.IOrgScoped>()
+            .Where(i => i.Id == instanceId)
+            .FirstAsync();
+        Assert.NotNull(instance);
+        return instance.Version;
+    }
+
+    /// <summary>token 级乐观锁版本(Task 9);M2b 单 token,故按实例定位。</summary>
+    private static async Task<int> TokenVersionOf(WorkflowAppFactory f, long instanceId)
+    {
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var tokens = await db.Queryable<WfToken>().Where(t => t.InstanceId == instanceId).ToListAsync();
+        return Assert.Single(tokens).Version;
     }
 
     private static async Task<WfInstanceStatus> InstanceStatus(WorkflowAppFactory f, long instanceId)

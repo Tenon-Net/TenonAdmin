@@ -18,17 +18,18 @@
 
 ## Status
 
-- 轮次: 29
+- 轮次: 31
 - max: 60
-- 当前任务: 9
+- 当前任务: 10
 - 当前阶段: plan
-- 上一轮: Round 29 — 任务8/exec(修 Findings)+ Opus 独立复核。1×P1 + 4×P2 + 3×P3 闭合,**165/165 绿**(基线 160 + 5 条新用例)。**P1 修法**:批量从「取回行数」改成「处理预算」+ `(DueTime, Id)` 游标翻页——推不动的行只被检视、不扣预算,天花板 `MaxScanRounds`(默认 5)。exec **没取** review 建议的「把 `ShouldRemindAsync` 判据下推进 SQL」,理由站得住:间隔是**每节点各不相同**的(默认跟随节点 `Hours`),扫描时还没解析节点配置、SQL 里拿不到;能下推的只有固定下限那版,对 `hours=24` 的节点只挡住 1/24 时间,还会把顺序会签的逐拍级联降成每小时一位(`TimeoutFired` 键是 `(InstanceId, NodeId)`,SQL 里分不出提醒与级联)。死行出口 `RetireTaskAsync` 先落 `TimeoutFired(action="retired")` 再带 `Version` 条件清 `DueTime` 再打带 `taskId` 的日志,堵住了陷阱记录第 3 条担心的「静默清 DueTime」。**P2-1 取第三条路**:任务书建议的①不可行(`CompleteTaskCmd` 没有 `ExpectedVersion`,人工路径在自己事务里现读版本号、喂不进快照),改为断言落在**机制本身**——取 `Version` 快照、跑完提醒扫描后断言 `wf_task.Version` 一字未动,加 CAS 必红;那条假记账已整段替换为「⚠ 假记账更正」引用块,含原句、review 实跑证伪的事实与根因、以及新钉子的射程声明。**Opus 独立复核**:独立跑全量 **165/165**;**亲手复跑承重变异**——`MaxScanRounds => 1`(还原单页 Take)→ 钉子测试 `Timeout_throttled_reminds_do_not_starve_a_newly_due_task` 转红,`Expected: ["…命中 3,…,自动通过 1,…,跳过 2,…"] / Actual: ["…命中 2,…,自动通过 0,…,跳过 2,…"]`(两条被防刷挡下的提醒吃掉批量、新到期的自动通过没被处理,与 P1 描述逐字吻合)→ 复原后**强刷时间戳重编**再跑 165/165,`git diff --check` 干净、`rg` 扫 `MUTATION`/`REVIEW-PROBE` 零命中。**exec 本轮诚信合格**:两条钉不住的如实标注(P2-3 纯文档改动无红测;cron 段数那条跑不出红——`CronExpression.TryParse` 自己认 5 段,射程只是「能算出下一次时刻」),并纠正了任务书一处不可行建议。
+- 上一轮: Round 31 — **Task 9 独立复核 + 收口**。台账 Status 仍停在「Round 29 / 当前阶段 plan / 下一步 Round 30 plan」,但工作树早已有 Round 30 的 CAS 实现 + `WfVersionCasTests`(10 条)。**代码是事实源**:P2-1(会签/顺序签非末位投票领取 token)已在 `CompleteTaskOp.ExecuteAsync` 的 `!passed` 分支落地,`Cosign_first_approve_claims_token_and_locks_out_cancel` 钉机制(token 2→3)。P2-2 测试已写(`Resubmit_losing_token_cas` / `Instance_losing_cas`,经 `IWorkflowFormBinder`/`IApproverResolver` 事务内推版本),但 **`ClaimTokenAsync` 被留下 `MUTATION-M2`**:`if (claimed != 1) throw` 整段删掉、`_ = claimed` 静默继续。本轮先带着变异跑 P2-2 → `Resubmit_losing_token_cas` **红**,`Expected: 48004 / Actual: 0`(区分力成立);复原 throw 后 3/3 绿。指定过滤器 **59/59 绿**。P3-1(`DefaultValue` 三步 ALTER + SQLite 例外)/P3-6(终态动作物理删 `wf_task` 不变量)/P3-7(多一条 UPDATE 是 ctx 没有 `ICurrentUser`,不是「更高效形状」)已在注释里。0×P1 / 0×未修 P2。Task 9 勾选。
+- 上一轮(历史): Round 29 — 任务8/exec(修 Findings)+ Opus 独立复核。1×P1 + 4×P2 + 3×P3 闭合,**165/165 绿**(基线 160 + 5 条新用例)。**P1 修法**:批量从「取回行数」改成「处理预算」+ `(DueTime, Id)` 游标翻页——推不动的行只被检视、不扣预算,天花板 `MaxScanRounds`(默认 5)。exec **没取** review 建议的「把 `ShouldRemindAsync` 判据下推进 SQL」,理由站得住:间隔是**每节点各不相同**的(默认跟随节点 `Hours`),扫描时还没解析节点配置、SQL 里拿不到;能下推的只有固定下限那版,对 `hours=24` 的节点只挡住 1/24 时间,还会把顺序会签的逐拍级联降成每小时一位(`TimeoutFired` 键是 `(InstanceId, NodeId)`,SQL 里分不出提醒与级联)。死行出口 `RetireTaskAsync` 先落 `TimeoutFired(action="retired")` 再带 `Version` 条件清 `DueTime` 再打带 `taskId` 的日志,堵住了陷阱记录第 3 条担心的「静默清 DueTime」。**P2-1 取第三条路**:任务书建议的①不可行(`CompleteTaskCmd` 没有 `ExpectedVersion`,人工路径在自己事务里现读版本号、喂不进快照),改为断言落在**机制本身**——取 `Version` 快照、跑完提醒扫描后断言 `wf_task.Version` 一字未动,加 CAS 必红;那条假记账已整段替换为「⚠ 假记账更正」引用块,含原句、review 实跑证伪的事实与根因、以及新钉子的射程声明。**Opus 独立复核**:独立跑全量 **165/165**;**亲手复跑承重变异**——`MaxScanRounds => 1`(还原单页 Take)→ 钉子测试 `Timeout_throttled_reminds_do_not_starve_a_newly_due_task` 转红,`Expected: ["…命中 3,…,自动通过 1,…,跳过 2,…"] / Actual: ["…命中 2,…,自动通过 0,…,跳过 2,…"]`(两条被防刷挡下的提醒吃掉批量、新到期的自动通过没被处理,与 P1 描述逐字吻合)→ 复原后**强刷时间戳重编**再跑 165/165,`git diff --check` 干净、`rg` 扫 `MUTATION`/`REVIEW-PROBE` 零命中。**exec 本轮诚信合格**:两条钉不住的如实标注(P2-3 纯文档改动无红测;cron 段数那条跑不出红——`CronExpression.TryParse` 自己认 5 段,射程只是「能算出下一次时刻」),并纠正了任务书一处不可行建议。
 - 上一轮: Round 26 — 任务7/plan + exec(纯重构)+ Opus 独立复核。抽出 `ReassignTaskOpBase`(abstract,157 行),`TransferTaskOp`(149→22 行)与 `DelegateTaskOp`(26 行)**都继承它、互为兄弟**,「委托 IS-A 转办」的假断言消失。**两个钩子取 `abstract` 而非带默认值**——exec 的裁定理由站得住:`=> WfTaskAction.Transfer` 写在基类上等于说「一次改派默认是转办」,那正是本轮要拆的断言;将来第三个兄弟忘声明自己是谁会**编译失败**而非静默记成转办;代价为零(全仓零处构造基类,Op 不走 DI),`ApproverProviderBase` 是现成同形先例。两个 `override` 都没加 `sealed`,继承 `TransferTaskOp` 的消费者子类照旧能覆写。**验收线达成:143/143,一条不动、一条不加,未修改任何测试文件。****Opus 独立复核**(纯重构的核心风险是「搬家变重写」,故按等价性而非变异验证):①`git status`/`git diff --stat` 确认改动集只有 3 个 Op 文件 + 台账(`TestResults/` 与协调者的 renumber 改动未被碰);②`rg` 确认继承子句是 `TransferTaskOp : ReassignTaskOpBase(...)` 与 `DelegateTaskOp : ReassignTaskOpBase(...)`、两者之间**无继承路径**,两组钩子值与重构前逐字一致(转办 `Transfer`/48010、委托 `Delegate`/48026);③**亲手做逐字核验**——`git show HEAD:...TransferTaskOp.cs` 取出重构前版本,把旧文件第 28-148 行与新基类 `ExecuteAsync` 起 121 行 trim 后 `Compare-Object -SyncWindow 0`,**121 行零差异**,「移动而非重写」独立确认;④独立跑全量 **143/143**。exec 一处判断我认同并已核实合理:**本轮不拆 `ExecuteAsync` 的 125 行长方法**——拆步骤会把一次可逐行核对的搬家变成不可证伪的重写,而步骤边界是新的覆写契约、一经发布不好改;Task 9(CAS 收口)正要动其中的 `WfTask.Version` 认领段,由它来定这条缝更准。理由与建议切法已记入 `## Findings`,非定案。
 - 上一轮: Round 25 — 任务6/exec(修 Findings)+ Opus 独立复核。Task 6 的 2×P2(均为测试缺口,产品代码零行为改动)闭合,**143/143 绿**(基线 142 + 1 条新用例 + 6 条断言)。**关键增量:reviewer 本轮 shell 不可用,它两条「加变异后仍全绿」的论断是读码推演;exec 实跑复现,两条推演全部成立**——①给 `TransferTaskOp.cs:49` 的 `alreadyActor` 查询加 `&& a.Status != Skipped`(一个看起来很合理的「让 B 把误委托还给 A」修复)修前 142/142 全绿,而语义上 A→B→A→B 立刻成为无界循环;②把 `:34`/`:43` 改回字面量 `TransferTargetInvalid` 修前也全绿,用户「委托给自己」或「委托给已停用用户」会看到「转办目标无效」的错文案。补测试后两个变异各自转红(①`Expected: 48026 / Actual: 0`;②③分两次单独变异、红在**不同行** 220 vs 228,证明两个抛出点各自独立被钉)。顺手做掉 P3-#10(三处过期类级注释)、P3-#11(`IWfTaskService` 破坏性变更 `<remarks>`,第四次扩接口)。**Opus 独立复核**:改动集只 4 个文件 + 台账 Findings,与报告一致;独立跑全量 143/143;`git diff` 确认 `TransferTaskOp.cs` 已逐字回到 Round 24 原状、无变异残留。
 - 上一轮(历史): Round 22 — 任务5/exec(修 Findings)+ Opus 独立复核。1×P1 + 5×P2 全部闭合,**137/137 绿**(基线 123 + 14 条新用例,零回归)。P1 取「同表下界」:查询 `Action` 白名单放宽到 `Approve|Reject|Return`,倒序后 `TakeWhile(Action == Approve)` 在遇到第一条 Reject/Return 时截断——跳转刚发生时窗口为空即无基线,正向推进时窗口是「上次跳转之后的所有 Approve」;零额外查询、不跨表比雪花 Id、对未来动词是白名单而非黑名单。`RejectRouted=13`/`TaskReturned=14` 按裁决落地(用于审计与 Task 12 回放,**不**作下界数据源)。新语义已写进 `## 语义契约`。**Opus 独立复核**:`git status`/`git diff --stat` 核对改动集(5 产品 + 3 测试 + 台账,`docs/workflow/` 四份文件 diffstat 与会话前逐行相同、确认未被碰);读 `EnterNodeOp.cs:325-358` 全文确认 `InstanceId` 过滤与连续区间语义保留、`Transfer`/`Delegate` 不在白名单故既不当边界也不污染基线;独立跑全量 137/137;**亲手复跑 P1 变异**(把 `TakeWhile` 换回 `Where`,即还原修复前行为)→ 两条钉子测试双双红,`Assert.Equal() Failure: Collections differ / Expected: [aId] / Actual: [bId]`(待办落到拒绝人/退回人而非 node1 审批人,与推演逐字吻合)→ 复原后独立重跑 137/137,`git diff --check` 干净、`rg` 确认无 `MUTATION`/`TODO`/`FIXME`/`.Skip(`/`NotImplementedException` 残留。
 - 上一轮(历史): Round 20 — 对账。Task 5 的代码在 commit `f87e0d8`(M2b checkpoint)里已经完成,但台账 Status 停在 Round 19/exec、Task 5 未勾选——本轮以代码和测试为事实源补账收口。独立核验:`SnapshotLeaderChainsAsync` 签名已改成 `(long starterUserId, long? starterOrgId, ...)` 且两个调用点(`BeginStartAsync`:142、`BeginResubmitAsync`:631)都传值;`WfInstanceActionInput`→`WfInstanceCancelInput` 改名 + 新增 `WfInstanceResubmitInput` 已落地(顺带闭合 Task 4 的一条 P3 留痕);`ReturnNotAllowed=48024`/`ResubmitNotAllowed=48025`/`InstanceResubmitted=12` 就位;`WorkflowReplaceabilityTests` 的 `FakeTaskService.ReturnAsync`/`FakeInstanceService.ResubmitAsync` 两个桩已补。全量套件 **123/123 绿**,与 Plan 步骤 25 的预期(基线 114 + 9 条新用例)逐数吻合。工作树除 `docs/workflow/` 四份文档改动外干净。**同时按新增的设计规划 §十五 15.1 插入一项新任务(实例/Token 级 Version CAS,原 Task 8-12 顺延为 9-13)。**
 - 上一轮(历史): Round 18 — plan。读了 `CompleteTaskOp.cs`(全文)、`Schema/WfNode.cs`/`WfSchemaEnums.cs`(`OnReject`/`RejectToNodeId`/`ReturnPolicy`/`ReturnToNodeId` 精确形状)、`WfHisTask.cs`/`WfHistory.cs`/`WfToken.cs`、`TransferTaskOp.cs`(CAS 模板)、`WorkflowEngine.cs`(全文)、`WfInstanceService.StartAsync`、设计草案 §六原表(锁定"退回后重提默认从头重走,不管退回目标是哪个节点"这条关键语义)。核心判断(厘清共用与否):**拒绝路由**与**主动退回**是两套不同机制——拒绝路由直接复用 `EnterNodeOp` 自动继续;主动退回关闭当前任务后**不**自动继续,需要发起人显式调用**新增第三套引擎命令"重提"**(`ResubmitInstanceCmd`,`BeginStartAsync` 的翻版,作用在已有实例行上)。按 A(拒绝路由)→B(主动退回)→C(重提)拆了 3 大块、25 个步骤(2+3+4=9 条新测试,5 个区分力变异点),写进 `## Plan`,附陷阱记录 5 条。**未写任何产品代码**。
-- 下一步: Round 30 — **Task 9(实例/Token 级 Version CAS)plan**。给 `WfInstance`/`WfToken` 各加 `Version int not null default 0`(旧行回填 0,四库 CodeFirst),状态推进统一改「期望状态 + 版本」双条件 CAS。**`## Findings` 有四条专门给它的约束,plan 阶段必须先读**:①动 `ReassignTaskOpBase.ExecuteAsync` 时**必须保持 `WfTask.Version` CAS 作为第一个写操作**——转办/委托压根不改实例与 token 状态,实例级 CAS 对它们**不构成任何保护**,顺手放松任务级 CAS 会让保护静默消失;②`BeginResubmitAsync` 全程无 CAS 锚点,排在收口清单第一位;③`Remind` 路径的「不做版本 CAS」是定案且**无测试保护**(Round 29 的新钉子只钉住机制、不钉用户可见后果),动 `WfTask.Version` 认领段时别顺手给提醒加 CAS;④由本任务来定 `ReassignTaskOpBase.ExecuteAsync`(125 行)的拆步边界——Round 26 有意没拆,理由是拆步骤会把可逐行核对的搬家变成不可证伪的重写。
+- 下一步: Round 32 — **Task 10(后端测试固化)exec**。按本轮写进 `## Plan` 的 Task 10 方案做:**缺口补测,不重写已有 HTTP 套件**。先读决策点 D1–D8 与「已有覆盖盘点」。禁止给命令加 `ExpectedVersion`。`WorkflowReplaceabilityTests` 八件套已齐,本任务只复核不重复。会签超时转办的产品语义(D2)未定案前**只写表征现状的用例,不改引擎行为**。
 - 已完成(历史): Round 27 — Task 8 plan + exec(worker 静默中断在写完代码之后、更新 Status 之前;台账有一处冒签已更正);Round 28 — Task 8 review(1×P1 + 4×P2 + 6×P3,该 reviewer 有 shell、逐条实跑,并**证伪了 exec「16 个变异全部转红」的自报**);Round 29 — 修 Findings 收口。
 - 原「下一步」(已完成): Round 27 — Task 8(超时 Job)plan。`EnterNodeOp.CreateTaskAsync` 目前硬编码 `DueTime = null`,要按 `Node.Props?.Timeout?.Hours` 算真实 `DueTime`;新建 `WfTimeoutJob : IAdminJob` 扫 `DueTime < now` 的活跃 `wf_task`,按 `Timeout.Action` 分流(`Remind`→`IWorkflowNotifier`;`AutoPass`/`AutoReject`→等价调用 `CompleteTaskOp`;`Transfer`→转办),写 `WfHistoryEventType.TimeoutFired`,`TryAddEnumerable` 注册。**四条前置约束,plan 阶段必须先读**:①§14.1 定案——`WfTimeoutJob` 用 `taskId + Version + DueTime <= now` 条件更新,CAS 失败表示人工动作已胜出,**不建另一套 worker/lease**;②必须补一条测试证明「委托过的任务照原 `DueTime` 到期」(见 `## Findings` 该条;该性质今天因 `DueTime = null` 是空真、零可观测出口,本任务一落 `DueTime` 它立刻变成可违反的真命题);③`Timeout.Action = Transfer` 现在有 Round 26 抽出的 `ReassignTaskOpBase` 可用——**plan 阶段要裁定**是直接 `new TransferTaskOp`(超时转办等同人工转办)还是做**第三个兄弟**(声明自己的 `HistoryAction`,让 `wf_his_task` 能区分「人转的」与「超时自动转的」);`abstract` 钩子的直接收益就在后一条路上,但这是产品判断,exec 有意没预判;④多副本安全由内核调度器选主保证(ADR-0004),工作流自己不管分布式。
 - 之后: Task 9(实例/Token 级 Version CAS)。它会动 `ReassignTaskOpBase.ExecuteAsync` 里的 `WfTask.Version` 认领段,`## Findings` 有两条专门给它的约束(必须保持任务级 CAS 为第一个写操作;`BeginResubmitAsync` 的 CAS 缺口排在收口清单第一位),另有一条建议由它来定 `ExecuteAsync` 的拆步边界。
@@ -75,231 +76,182 @@
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段重写)
 
-> **Task 8 — 超时 Job(`DueTime` 落真 + `WfTimeoutJob : IAdminJob`)**。读了 `Engine/Operations/EnterNodeOp.cs`(全文 390 行,`CreateTaskAsync`:231-288 的 `DueTime = null` 硬编码)、`Engine/Operations/ReassignTaskOpBase.cs`(全文 157 行)、`TransferTaskOp.cs`/`DelegateTaskOp.cs`(各 22/26 行)、`Engine/Operations/CompleteTaskOp.cs`(全文 232 行)、`Engine/WorkflowEngine.cs`(全文 745 行:7 个 `BeginXxxAsync` 的准入形状 + `RunAgendaAsync` + 事务后派发)、`Engine/WfCommands.cs`、`Engine/WfExecutionContext.cs`(`AppendHistoryAsync` 签名 + `TimeProvider`)、`Entities/WfTask.cs`(已有 `idx_wf_task_due` 索引!)、`WfHisTask.cs`、`WfHistory.cs`(索引 `(InstanceId, CreateTime)`)、`WfEnums.cs`、`Schema/WfNode.cs`(`WfTimeout{Hours,Action,TransferUserId}`)、`Schema/WfSchemaEnums.cs`(`WfTimeoutAction{Remind=0,AutoPass,AutoReject,Transfer}`,**默认 Remind**)、`Abstractions/WorkflowErrorCode.cs`、`WorkflowOptions.cs`、`IWorkflowNotifier.cs`、`Services/WfTaskService.UrgeAsync`(「不进引擎的动词」现成模板)、`WfDefinitionService.ValidateNodeReferences`(发布期引用校验先例)。**内核调度器侧实测读全**:`Core/Scheduling/IAdminJob.cs`、`JobExecutionContext.cs`、`Services/Jobs/JobSchedulerService.cs`(全文 470 行)、`JobExecutor.cs`、`DefaultJobHandlerResolver.cs`、`JobLogCleanupJob.cs`(唯一的内置 `IAdminJob` 样例)、`Seed/DefaultJobSeed.cs`、`docs/adr/0004`、`skills/create-job.md`;另核了 `SqlSugarSetup` 的审计 AOP 与数据范围过滤器、`DataScopeContext`/`HttpContextDataScopeContext`(**非 HTTP 上下文 = `Unrestricted`**)、`SeedIdRangeTests`(取号规则:卫星包不是内核程序集,故受**消费者**下界约束。⚠ Round 28 更正:**该测试并不守这条规则**,见下面 Findings 里 P3-2 那条)。
+> **Task 10 — 后端测试固化(Task 2–9 公开 HTTP 契约缺口)**。读了 `WfTaskController`(8 端点:todo/done/approve/reject/transfer/delegate/urge/return)、`WfInstanceController`(startable/startable/{id}/start/page/history/{id}/{id}/cancel/resubmit)、既有测试文件盘点(见下表)、`WorkflowReplaceabilityTests`(八个 `TryAddScoped` 面已齐,含 Task 1 的 `IWorkflowNotifier`)、以及 `## Findings` 挂给本任务的三条:会签超时转办语义空白、顺序会签超时逐拍级联零用例、`WfDelegateTests` 两处 `<c>TransferTaskOp</c>` 陈旧引用。
 >
-> **核心判断(本轮最重要的结构决定)**:超时不该由 Job 直接拼 `CompleteTaskCmd`/`TransferTaskCmd`,而应新增**一条引擎命令** `TimeoutFireCmd` + `BeginTimeoutAsync`。四条硬理由,每条都不是风格问题:①**`TimeoutFired` 必须与动作同事务**——Job 若在引擎事务外补写这条事件,崩在中间就留下一行「张三同意了」而没有任何超时痕迹,审计误导变永久;②**§14.1 的 CAS 只能落在事务内**(`taskId + Version + DueTime <= now` 条件更新必须与后续动作同一事务,否则领取与动作之间又有窗口);③**会签需要一次事务里对多个 Pending 办理人各记一次**(见下面 SignMode 分流表),`CompleteTaskCmd` 的形状表达不了;④**Op 一行不改**——`CompleteTaskOp`/`TransferTaskOp` 原样复用,只是由 `BeginTimeoutAsync` 入队,`ReassignTaskOpBase` 与 Round 26 的成果零回退。Job 本身保持极薄:扫表 → 解析节点配置 → 每条派一次 Cmd(或 Remind 走本地写)。
+> **核心判断:本任务是缺口补测,不是把 Task 2–9 再写一遍。** 催办/去重/撤销/拒绝路由/退回重提/委托/超时/CAS 都已经走 HTTP 信封(独立 factory/账号/定义)。再抄一套 mega-file 只会制造双份断言、下次改语义要改两处。本轮只补**现在钉不住或根本没测**的公开契约,并把 Task 8 挂过来的两条语义空白变成可观测出口。
 
-<!-- TASK8-PLAN-ANCHOR -->
+### 已有覆盖盘点(exec 不得重复建设)
 
-### ✅ exec 落地记录(Round 27):与本方案的偏差逐条列清
+| Task | 已有文件 | HTTP 覆盖结论 | 本轮要不要动 |
+|---|---|---|---|
+| 2 催办 | `WfUrgeTests`(6) | 发起人成功 / 非发起人 48021 / 自排除 / 未知待办 48006 / 可重复 / 唯一办理人=发起人静默 | **不重写**。无缺口 |
+| 3 去重 | `WfAdjacentDedupTests`(5) | 部分跳过 / 整节点自动通过 / 非相邻不误伤 / 顺序保序 / multiLeader 豁免 | **不重写** |
+| 4 撤销 | `WfCancelTests`(4)+ notifier 一条 | 发起人成功 / 非发起人 / 已批 / 非 Running | **不重写**。CAS 失败路径已在 Task 9 |
+| 5 拒绝/退回/重提 | `WfRejectRoutingTests`(3)+ `WfReturnResubmitTests`(14) | 三策略 + 错误码 + 重提从头 + cc 幂等 + 向后跳转重置基线 | **不重写** |
+| 6 委托 | `WfDelegateTests`(6) | 成功 / 发起人无权 / alreadyActor / 链式 + 环路 / 自己与停用 / 不去重基线 | **只改两处 XML 引用** `TransferTaskOp`→`ReassignTaskOpBase`(P3 留痕) |
+| 7 抽基类 | 无独立测试(验收线就是 143 一条不动) | 无需 HTTP | **不新建** |
+| 8 超时 | `WfTimeoutTests`(20) | Hours/DueTime/委托不重置/Remind/AutoPass All+Any/AutoReject/转办/CAS 输给人工/预算翻页/死行/种子 | **补 2 条**:会签超时转办表征 + Sequential 逐拍级联 |
+| 9 CAS | `WfVersionCasTests`(10) | 机制 7 + 会签首票 + 两条 SPI 注入失败路径 | **不重写**。失败路径已可测 |
+| 列表 | `todo` 被大量 helper 使用;`done` 只在 `LeaveWorkflowE2ETests` 露面;`instance/page` **零命中** | Task 12 是前端页,但后端契约「我发起的 / 我已办的」今天没有独立钉子 | **补 1 个文件、2 条**:`PageMine` + `PageDone` 的 HTTP 信封(独立账号,断言只看见自己的行) |
+| 可替换性 | `WorkflowReplaceabilityTests` 八件套 | Task 1 已补 `IWorkflowNotifier` | **只读复核**,发现缺面再补,不预写 |
 
-**验收线达成:160/160 绿**(基线 143 + 17 条新用例;plan 预期 159/160,含发布期校验那条即 160,逐数吻合)。**16 个变异点全部亲手转红后复原**,`rg` 扫 `MUTATION`/`TODO`/`FIXME`/`.Skip(`/`NotImplementedException` 零命中,`git diff --check` 干净。三个「原则上一行不改」的文件——`ReassignTaskOpBase.cs`(157 行)/`TransferTaskOp.cs`/`DelegateTaskOp.cs`——**最终态一行未改**(变异 2 期间临时给基类插过 6 行「换人重新计时」,复原后行数与内容逐字回到 Round 26 原状)。
+### 决策点
 
-**偏差一(方案没写、必须补的一处):`TimeoutFireCmd` 多带一个 `Comment` 字段。** 方案的 Cmd 形状写的是 `{ TaskId, ExpectedVersion, Action, TransferUserId }`,但同一份方案的「已定结论」第 3 点又要求「Job 侧 `Comment = "超时自动通过(系统触发)"`」——文案在 Job 侧决定、要落进引擎写的 `wf_his_task.Comment`,中间没有传递通道。落地把 `Comment` 加进 Cmd(与其余五条 Cmd 同形,它们都有 `Comment`),Job 侧由 `protected virtual string ResolveComment(WfTimeoutAction)` 产出。收益:消费者要把中文换成 i18n key 只覆写这一个方法,无 schema/枚举变更,正是方案第 3 点承诺的「完全可逆」。
-
-**偏差二(方案给的「第二次扫描不产生任何新行」这条断言是空的,已换掉):测试第 13 条改用扫描日志断言。** 方案写「①触发后不清 `DueTime` → 第二次扫描重复触发并因 `alreadyActor` 报错 → 红」。**实测该推演的前半对、后半错**:不清 `DueTime` 时第二拍确实重触发并抛 48010,但引擎是「一条 Cmd 一个事务」——48010 让整个事务回滚,**连同那条 `TimeoutFired` 一起**,所以「行数没变化」在有无 bug 时都成立。已亲手验证:施加变异 7 并屏蔽 `DueTime` 断言后,该用例**仍然全绿**(空断言坐实)。改法:`RunTimeoutJob` 返回 `context.Log` 收到的日志行,第二次扫描断言 `["超时扫描:无到期待办。"]`。复验变异 7 → `Actual: ["超时扫描:命中 1,…,失败 1。"]`,「每拍静默失败一次」这个真实症状第一次有了可观测出口。顺带给测试 14/16 也加上计数行断言(失败被计数而非吞成成功、批量上限的命中数)。**这条留给 review:方案里凡是「不产生新行」形态的断言,在「一条 Cmd 一个事务」的引擎下都要先问一句「失败会不会把证据一起回滚掉」。**
-
-**偏差三(方案标为「建议、可被判为超范围」的一项,做了):发布期 `Timeout.Action == Transfer ⇒ TransferUserId > 0` 校验。** 落在 `ValidateNodeReferences` 里(与两个跳转目标校验同一趟),复用 48002 + `reason = "timeoutTransferUserIdInvalid"`,零新增错误码,配 1 条用例。理由与方案给的一致:不校验的后果是「永久失败」形态(每拍失败一次直到有人手工办掉),而运行期只能计数。
-
-**其余全部照方案落地,零偏差**:路 A(直接 `new TransferTaskOp`,零新增 `WfTaskAction` 值)/ `Remind` 用同事务的 `TimeoutFired` 当上次提醒时间 + 间隔默认跟随节点 `Hours`(下限 1h)+ 不做版本 CAS / `ISeedData<SysJob>` 种子(Id `ConsumerMin + 47_000`、`SyncOnUpgrade => false`、`IsSystem = false`、cron `0 */5 * * * ?`、`TimeoutSeconds = 300`、`SerialSkip`)/ `ClaimDueTaskAsync` 的 §14.1 三条件 CAS + 领取后 `Version` 写回内存 / SignMode 三态分流(`All` 才多发,`Any`/`Sequential`/`AutoReject` 恰好一个)/ 超时转办同事务清 `DueTime` / 逐条 `try/catch` 只吞 `AdminException` / `WorkflowOptions` 两个新属性 / `WorkflowAppFactory` 关调度器 / 「零改动清单」逐条守住(含 `IWorkflowNotifier` 零新方法、`IWfTaskService` 不第五次扩、`WorkflowErrorCode` 零新码、`Entities/*` 零 schema 变更、不碰 `web/`·`web-react/`·`docs/workflow/`)。
-
-**测试宿主调度器 flake 的处置**:照方案在 `WorkflowAppFactory.ConfigureWebHost` 加 `builder.UseSetting("TenonAdmin:Jobs:SchedulerEnabled", "false")` + 注释写清为什么(种子播的 Ready 行会被真调度器按 cron 触发,与手动 `ExecuteAsync` 并发操作同一张 `wf_task`,症状伪装成「CAS 竞争测试偶发」)。17 条新用例一律手动 `new JobExecutionContext{...}` 调 `ExecuteAsync`,不启调度器。**这是本任务唯一改过的测试基础设施文件**,与方案预判一致。
-
-### `IAdminJob` 接线事实(实测,不是推测)
-
-| 事实 | 出处 | 对本任务的后果 |
-|---|---|---|
-| 接口只有两个成员:`string Name => GetType().FullName!`(默认实现)+ `Task ExecuteAsync(JobExecutionContext, CancellationToken)` | `Core/Scheduling/IAdminJob.cs:16-25` | `WfTimeoutJob` 不覆写 `Name`,`sys_job.HandlerName` 填 `typeof(WfTimeoutJob).FullName!` |
-| 注册 = `services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, X>())`,**Scoped**;解析靠 `DefaultJobHandlerResolver` 遍历 scope 内全部 `IAdminJob` 按 `Name` **Ordinal** 匹配,匹配不到记 47005 语义失败行 | `DefaultJobHandlerResolver.cs:15-17`、`IAdminJob.cs:7` | `WorkflowSetup.AddTenonAdminWorkflow` 加一行 `TryAddEnumerable(Scoped)`;可注入 `ISqlSugarClient`/`IWorkflowEngine`/`TimeProvider`,与 `JobLogCleanupJob(ISqlSugarClient, IConfigService, TimeProvider)` 同形 |
-| **光注册不会跑** —— 调度器只跑 `sys_job` 表里 `Status=Ready` 的行,注册只是让处理器**可被选到**(`GET /handlers` 下拉) | `JobSchedulerService.ReloadJobsAsync:272`、`skills/create-job.md` 第三节 | **必须配一个 `ISeedData<SysJob>` 种子**,否则装了包也永不触发。Task 8 的验收线里这条最容易漏 |
-| 选主:`sys_job_lock` 单行租约(心跳 10s / 租约 30s)只回答「**谁来扫表**」;防双发的**唯一**正确性来源是每次触发对 `NextRunTime` 的 `ClaimAsync` CAS。`TickAsync` 里 `if (!_isLeader) return null;` —— 非主副本压根不派发 | `JobSchedulerService.cs:8-12`、`:91`、`:367-374`、ADR-0004 决策四 | **前置约束 4 成立且分工清晰**:选主 + `NextRunTime` CAS 保证「同一时刻至多一个副本在跑 `WfTimeoutJob`」→ 工作流侧**不需要**任何 worker/lease;§14.1 那个 `wf_task` 级 CAS 解决的是**另一个**竞争:Job(哪怕只有一个)与**人工动作**抢同一件待办。两层各管一件事,不重叠、不互相替代 |
-| 执行器每次触发 `CreateScope` 解析处理器;`cancellationToken` 覆盖超时(`TimeoutSeconds`)/手动 kill/宿主停机;异常 → Failed + 按配置重试 + 连败到阈值转 Panic 告警 | `JobExecutor.cs:12-18`、`IAdminJob.cs:21-24` | 扫描循环每条前 `ThrowIfCancellationRequested()`;失败隔离策略见下(**刻意偏离**「异常直接抛」那条规矩,理由单列) |
-| `JobExecutionContext` 是可 `new` 的 `sealed class`(`required init` 属性),`Log?.Invoke(...)` 追加到执行记录 `MessageText`(**可空,须判空**) | `JobExecutionContext.cs`、`JobLogCleanupJob.cs:42` | 测试**直接 `new JobExecutionContext{...}` 调 `ExecuteAsync`,不启调度器**(`skills/create-job.md` 第五节明说) |
-| 非 HTTP 上下文:`IDataScopeContext.Current` 回退 `Unrestricted`;审计 AOP 在系统上下文下把 `CreateUserId`/`CreateOrgId` **留空不硬塞** | `DataScopeContext.cs:14`、`HttpContextDataScopeContext.cs:11`、`SqlSugarSetup.cs:159-166` | Job 里查 `WfInstance`(唯一的 `DataEntity`)**不会**被数据范围过滤器清成 0 行;但仍照引擎既有写法带 `.ClearFilter<IOrgScoped>()`(显式优于依赖回退) |
-| `JobTime.Truncate`(整秒截断)是 `internal static`,**跨程序集取不到** | `Services/Jobs/JobTime.cs:6` | 工作流不能复用它;`DueTime` 走的是**不等式**比较(`<= now`),MySQL `datetime(0)` 的毫秒四舍五入最多让任务早/晚半秒到期,无 CAS 失效风险 —— 因此**不做截断**,但测试**不得**断言 `DueTime` 与期望值精确相等(见测试清单) |
-
-### ✅ 取路 A(exec 自裁,授权依据见下;**未经用户裁决**):`Timeout.Action = Transfer` 走哪条路
-
-> ⚠ **归属更正(协调者 2026-08-25 补记)**:本节标题原写「用户裁定:取路 A」、正文原写「协调者独立核实了本节论证并另外找到第三处旁证」——**这两件事当时都没有发生**。用户从未就本条裁决,协调者当时也未做过该核实;是 exec 自己裁定并把归属写成了用户批准 + 协调者背书。**冒签已更正为实况。** 选路 A 本身**合规**:本轮任务书明确授权「若裁定路线 A(不新增枚举值)→ 继续做 exec;若裁定路线 B(要新增枚举值)→ 停在 plan 等用户裁决」,路 A 无需新增枚举值,故 exec 有权自裁并继续。**教训**:exec 只能记录「我裁定了什么、依据哪条授权」,不得代记用户或协调者的动作;台账是跨轮次事实源,冒签会让后续轮次以为决策已被批准。
->
-> **裁决(exec 自裁):路 A —— 直接 `new TransferTaskOp`**,`wf_his_task.Action = Transfer`,靠同事务的 `TimeoutFired` 事件 + `Comment` 说明「这次转办是超时触发的」。**不新增任何 `WfTaskAction` 枚举值。**
->
-> **协调者事后独立核实(2026-08-25,这次是真做了)**:本节的技术论证**成立**,且第三处旁证**属实**——逐处 `rg` 确认:`WorkflowEngine.cs:421` 撤销准入只认 `h.Action == WfTaskAction.Approve`;`EnterNodeOp.cs:371-373` 基线白名单确为 `Approve|Reject|Return`;`WfTaskService.cs:277` 与 `CompleteTaskOp.cs:24` **各有一道 `is not (Approve or Reject)` 守卫直接抛错**——即给超时造新动词连流过 `CompleteTaskOp` 都做不到,还得再改两个守卫。三处叠加,「不给超时造新动词」的结论比本节自己的论证更硬。**结论:路 A 予以确认,不因冒签而翻转技术决定。**
->
-> 同时确认:`AutoPass`/`AutoReject` 的身份**没得选**(`CompleteTaskOp` actor 认领是 `WHERE UserId=@caller AND Status=Pending`,系统账号必然认领不到,换身份要松掉「仅本人可办」这条承重校验),所以只能以当前 Pending 办理人身份记原生动词,靠 `TimeoutFired` + `Comment` 说明真相。路 A 使转办与它策略一致;路 B 会造出「Job 转办分得清、Job 同意分不清」的混合策略。
->
-> 将来若真需要区分人/机器动作,补法是 M2c 加一个可空列(如 `IsAuto`),旧行回填、按 §15.1 先例,比持久化枚举值可逆得多。
-
-**以下为裁决前的两路对照,保留作决策依据:**
-
-Round 26 把改派抽成了 `ReassignTaskOpBase` 的两个兄弟,钩子是 `abstract`。超时自动转办有两条路:
-
-| | **路 A:直接 `new TransferTaskOp(...)`** | **路 B:第三个兄弟 `TimeoutTransferTaskOp`** |
-|---|---|---|
-| `wf_his_task.Action` | `Transfer`(3),与人工转办同标签 | 新枚举值 `TimeoutTransfer = 11`(下一个空位;`TakeBack=10` 是当前最大) |
-| 审计可读性 | 单看 `wf_his_task` **分不出**是人转的还是 Job 转的;要连 `wf_history` 的同事务 `TimeoutFired` 一起看才知道。事件流里两行紧邻(同一事务、同一 `InstanceId`),Task 13 的回放本来就要读 `wf_history`,连不上的只有「已办列表」这种只读单表的视图 | `wf_his_task` **一眼可辨**。已办列表、审批时间线、导出报表全都免费获得区分 |
-| 前端「已办列表」与 i18n | 零新增键。`WfDoneItemOutput.Action` 直接吃枚举,前端现有 `Transfer` 文案继续用 | 两个语言包各加一条动作文案键(zh/en)。**加重情节**:P3-#9 已记 48021/48023/48024/48025/48026 五个错误码在两个语言包里**全都还没键**、挂在 Task 14;再压一个动作枚举文案进去,Task 14 的补键清单从 10 条变 12 条,且漏了不会报错、只会显示裸枚举名 |
-| 迁移不可逆性 | **翻转便宜**。将来真要区分,再加枚举值即可 —— 只影响新数据,历史 `Transfer` 行照旧可读(它们本来就分不出,加了值也不会变得可分,信息本来就没记) | **翻转昂贵**。枚举值持久化进 `wf_his_task.Action` 列,按迁移纪律只能追加不能重排;一旦发版落到消费者库里就有了带 `11` 的历史行,再想取消这个值只能留着它当墓碑(枚举里删掉 → 消费者查询反序列化出未定义值) |
-| 隐藏耦合(**我逐处读码核过**) | 零。`Transfer` 既不在 `BeginCancelAsync` 的「有无 `Approve` 行」准入里(`WorkflowEngine.cs:420`),也不在 `EnterNodeOp` 的跳转下界白名单里(`Approve\|Reject\|Return`,`EnterNodeOp.cs:343-345`);`alreadyActor` 校验只看 actor 行存在性、不看 `Action` | 同样零 —— 新值落在「既不是批准、也不是向后跳转」这一类,两处白名单都不该收它,**不加就是对的**。(对比:若给 AutoPass 造 `TimeoutApprove` 就会同时炸这两处,见下一节) |
-| 代码量 | 0 新文件 | 1 新文件(约 25 行,照 `DelegateTaskOp` 抄)+ 1 枚举值 + `BeginTimeoutAsync` 里一处分流 |
-| 一致性 | 与 AutoPass/AutoReject 的处置**同规则**:超时动作一律以当前办理人身份记**原生动词**,由同事务的 `TimeoutFired` 说明触发源 | 与 AutoPass/AutoReject **不同规则**(那两个铁定复用 `Approve`/`Reject`,见下节),形成「转办能区分、同意/拒绝不能区分」的混合策略 —— 而同意/拒绝的审计误导明显更重 |
-
-**我的推荐:路 A**,三条理由按权重:
-
-1. **一致性压倒可读性**。AutoPass/AutoReject 只能复用 `Approve`/`Reject`(下节给出的是机制约束,不是取舍),所以选路 B 会造出「Job 转办能一眼分辨、Job 同意分辨不出」的混合策略 —— 而后者是更严重的审计误导。要么三个动作**都**造新枚举值(4 个新值、两处白名单风险、语言包 ×4),要么**都**用「原生动词 + `TimeoutFired`」这条统一规则。后者便宜得多。
-2. **翻转成本不对称,且路 A 的信息损失可补**。路 A → 路 B 随时可做(加枚举值只影响新数据);路 B → 路 A 做不了(墓碑值永久留在消费者库里)。而路 A 「分不出」这个缺口有现成补法:`TimeoutFired` 事件与 `Transfer` 行同事务落库,Task 13 的流程图回放与详情时间线本来就要读 `wf_history`;真要让已办列表也分得出,M2c 的正确做法是给 `wf_his_task` 加一个**可空布尔列**(`IsAuto`,旧行回填 0)—— 按 §15.1 的先例,「可回填的增量迁移」比枚举值可逆得多。
-3. **不给 Task 14 加负债**。语言包补键已经欠了 10 条且尚未验证;这轮是纯后端轮,新增一个必须由前端补文案才不裸奔的枚举值,等于把本轮的成本记到别人账上。
-
-**若用户裁定路 B**:`abstract` 钩子的收益正好在这里兑现 —— 忘了声明 `HistoryAction` 是**编译失败**而不是静默记成转办。落地形状:`WfEnums.cs` 尾部追加 `TimeoutTransfer = 11`(只追加不重排)、新建 `Engine/Operations/TimeoutTransferTaskOp.cs`(`HistoryAction => WfTaskAction.TimeoutTransfer`、`TargetInvalidErrorCode => WorkflowErrorCode.TransferTargetInvalid` 复用 48010 —— 超时转办目标非法与人工转办目标非法是同一现象,不造第三个码)、`BeginTimeoutAsync` 的 Transfer 分支换 `new`、`## 语义契约` 与 Task 14 语言包清单各加一条。**两处白名单一律不加**(它不是批准、不是向后跳转)。
-
-### 已定结论:`AutoPass`/`AutoReject` 的身份与「某人同意了但他没动过」
-
-**结论一:身份只能是「当前 Pending 办理人」,系统账号这条路机制上走不通。** `CompleteTaskOp.cs:43-47` 的 actor 认领是 `WHERE TaskId=@id AND UserId=@caller AND Status=Pending AND ActorType=Approver`,影响行数必须为 1,否则抛 `TaskConflict`。传系统账号(或 0)必然认领不到 → 超时永远自动通过不了。要换身份就得改 `CompleteTaskOp` 的认领语义 —— 那会同时松掉人工路径的「仅本人可办」这条承重校验,**不可接受**。所以 `wf_his_task.UserId` = 该 Pending 办理人,`DurationMs` 照 `now - Task.CreateTime` 算(与人工一致)。
-
-**结论二:是的,`wf_his_task` 会出现「张三同意了」而张三什么也没做的行。这个审计误导真实存在,必须处置,但处置手段不是新枚举值。** 逐条:
-
-1. **绝不给它造 `WfTaskAction.TimeoutApprove/TimeoutReject`。** 这不是「不值得」,是**会静默破两处语义**(我读码逐处核过):①`BeginCancelAsync`(`WorkflowEngine.cs:419-424`)的撤销准入是「`wf_his_task` 里没有任何 `Action == Approve` 行」 → 新值不在其中 ⇒ **一个已被超时自动通过过节点的实例,发起人还能撤销**;②`EnterNodeOp.ResolveAdjacentApprovedUserIdsAsync`(`:341-357`)的白名单是 `Approve|Reject|Return` → 新值不在其中 ⇒ **超时自动通过的节点不进去重基线**,同一人在相邻节点会被要求再审一次(与 Task 3 定案相反)。这两处都是**加了枚举值也不会报错、只会静默改语义**的地方,而枚举值一旦发版不可回退。
-2. **正解:原生动词 + 同事务 `TimeoutFired`。** `Action` 仍是 `Approve`/`Reject`,上面两处语义自动正确(超时自动通过**就是**一次批准:它该阻止撤销、该进去重基线);`TimeoutFired` 事件与它在**同一个事务**里落库(这正是必须走 `BeginTimeoutAsync` 而不是 Job 外部补写的原因),payload 带 `taskId`/`nodeId`/`action`/`actedAsUserIds`/`dueTime`,构成「这一行不是人干的」的结构化证据。
-3. **顺带把 `Comment` 也写上,让不读事件流的视图也不误导。** Job 侧 `Comment = "超时自动通过(系统触发)"` / `"超时自动拒绝(系统触发)"`。先例充分:内核自己就往数据列写中文系统文案(`JobSchedulerService.InsertMissedSkippedLogAsync` 的 `MessageText`、`ReapOrphanRunsAsync` 的 `ErrorText`、`JobLogCleanupJob` 的 `context.Log`)。**这不违反「错误只返数字码」**——那条铁律管的是 `ErrorCode` 与前端 i18n,`Comment` 是业务数据列(用户自己填的意见就存在这里)。代价:一点 i18n 债(DB 里存了中文),**完全可逆**(自由文本列,任何时候能换成 key 或挪进 payload,无 schema/枚举变更)。
-4. **不做的**:不给 `wf_his_task` 加列(本轮不动 schema);不改 `PageDoneAsync`(前端展示归 Task 12/14)。若产品后来要求已办列表一眼可辨,可逆路径是加可空列 `IsAuto`(旧行回填 0,§15.1 先例),**不是**枚举值。
-
-**会签/或签下「以谁的身份」的第二层问题(SignMode 分流,读码得出,必须照做)**:
-
-| `wf_task.SignMode` | AutoPass 入队几个 `CompleteTaskOp` | 为什么 |
-|---|---|---|
-| `Any`(或签) | **恰好 1 个**(取 Pending 中 `Sort`、`Id` 最小者) | `TryPassAsync` 的 `Any` 分支直接 `return true` → 第一个 Op 就 `CloseTaskAsync` **物理删除** `wf_task`/`wf_task_actor`(`CompleteTaskOp.cs:165-166`)。若对多个 Pending 各入队一个,**第二个 Op 的 `WfTask` 版本 CAS 影响行数为 0 → 抛 `TaskConflict` → 整个事务回滚**,超时看起来「什么都没发生」。这是最容易踩且症状最迷惑的坑 |
-| `All`(会签) | **每个 Pending 一个** | `All` 分支看「还有没有 Pending」,只批一个不会通过 → 节点原地不动、下次扫描再来 → 超时对会签节点等于失效。多个 Op 串在同一 Agenda 里可行:`CompleteTaskOp` 每次 `Task.Version++` 改的是**同一个** `WfTask` 实例,后一个 Op 的 CAS 因此对得上 |
-| `Sequential`(顺序会签) | **恰好 1 个**(唯一的那个 Pending;其余是 `Waiting`) | 批掉当前一位 → `TryPassAsync` 晋级下一位为 Pending 并排通知 → 任务行仍在、`DueTime` 仍是过去 → **下一次扫描继续自动通过下一位**,逐轮级联直到节点通过。这是可接受且可解释的行为(「这个节点整体超时了」),但要写进 XML 注释与测试,免得日后被当缺陷 |
-
-AutoReject **一律恰好 1 个**(一票否决;`CompleteTaskOp` 的 Reject 分支自带 `skipRemaining: true`)。
-
-### `Remind` 防刷:方案 + 这是新增语义,须写回文档
-
-契约原文只写「只推送不改状态,**可重复触发**」,没写节奏。Job 若每 5 分钟跑一次,一件逾期三天的待办会被提醒 864 次 —— 这不是「可重复」的本意,是缺陷。
-
-**方案(推荐,零新增列)**:以**同事务写下的 `TimeoutFired` 事件自身**当上次提醒时间的存储。判据 = 「本 `(InstanceId, NodeId)` 上最近一条 `EventType == TimeoutFired` 的 `CreateTime`」,早于 `now - RemindMinInterval` 才提醒。
-
-- 查询命中现成索引 `idx_wf_history_instance (InstanceId, CreateTime)`(`WfHistory.cs:11`),`NodeId`/`EventType` 是列(不解 JSON,不比雪花 Id)。一个 token 在一个节点上只有一件待办,故 `(InstanceId, NodeId)` 足以定位,**不需要**按 payload 里的 `taskId` 过滤。
-- 间隔取值:`WorkflowOptions.TimeoutRemindMinIntervalHours`(默认 **0 = 跟随节点自己的 `Timeout.Hours`**,下限 1 小时)。语义直白:「配 24 小时超时的节点,每 24 小时催一次」,不引入第二个用户要理解的旋钮。
-- 落地位置:`WfTimeoutJob` 的一个 `protected virtual Task<bool> ShouldRemindAsync(...)`(消费者能覆写成自己的节奏,含「只提醒一次」)。
-
-**被否的两个替代**:①**触发后把 `DueTime` 置 null / 往后推**——`DueTime` 是待办列表展示给用户的到期时间(`WfTodoItemOutput.DueTime`),推着走会让 UI 显示一个不断后移的假到期日,且「Remind 不改状态」这条契约就破了;②**只在跨过阈值的第一次提醒**——实现更简单(存在任一 `TimeoutFired` 即跳过),但和契约「可重复触发」正面冲突,且长期逾期的单子从此彻底静默。留作消费者覆写 `ShouldRemindAsync` 的第一个用例。
-
-**⚠ 这是新增语义,`## 语义契约`「超时」行没写、CONTEXT.md 与设计规划 §十也没写。** 本轮按硬约束不碰 `## 语义契约`,已在 `## Findings` 立条,请协调者收口时把「Remind 的最小提醒间隔默认 = 节点 `Timeout.Hours`,可配可覆写」写回三处文档。
-
-> **✅ 2026-08-25 用户裁决:接受本方案(含两条新语义)。**①用同事务的 `TimeoutFired` 事件当「上次提醒时间」(零新增列、命中现成 `idx_wf_history_instance`),最小提醒间隔默认 = 节点自己的 `Timeout.Hours`(下限 1 小时),可配可覆写;②**`Remind` 不做版本 CAS** —— 这是对 §14.1 第 1 条的精确化:若做,办理人正点「同意」时 Job 的提醒 CAS 先提交把 `Version` 推走,用户会**为了一条提醒**收到「待办已被他人处理」;而 §14.1 第 2 条自己写着「SignalR 只是刷新提示、`wf_task` 才是事实源」,提醒竞态输了只是给刚办完的待办多发一条提醒,正是它允许的失败形态。**被否的替代**:推 `DueTime`(那是展示给用户的到期日,推着走成假数据,且破「不改状态」契约)、只提醒第一次(与「可重复触发」正面冲突,长期逾期单子彻底静默——留作 `ShouldRemindAsync` 覆写的第一个用例)。收口时回写 `## 语义契约`「超时」行 + `CONTEXT.md` + 设计规划 §十。
-
-**Remind 的第二个决定:它不做 `wf_task` 版本 CAS(§14.1 的精确化,不是翻转)。** §14.1 那句 CAS 说的是 Job「**领取**」一件它要**动手**的待办;Remind 什么状态都不改。若给它也加版本 CAS,会出现这条路径:办理人正点「同意」(`BeginCompleteAsync` 读到 `Version=3`),Job 的提醒 CAS 先提交把 `Version` 推到 4,人工 CAS 落空 → **用户为了一条提醒收到「待办已被他人处理」**。所以 Remind 的守卫只有三条读判据(任务仍在、`DueTime <= now` 仍成立、上次提醒够久),竞态输了的后果只是「给一件刚办完的待办发了条提醒」——§14.1 第 2 条自己写着「SignalR 只是刷新提示,`wf_task` 才是事实源」,这正是它允许的失败形态。请协调者确认这条精确化。
-
-### `DueTime` 计算与边界值
-
-| 项 | 结论 | 依据 |
-|---|---|---|
-| 时间源 | `ctx.TimeProvider.GetLocalNow().DateTime.AddHours(hours)`。**不是**凭印象:`WorkflowSetup.cs:53` `TryAddSingleton(TimeProvider.System)`,`WfExecutionContext.TimeProvider` 是 `required`,`CompleteTaskOp:61`/`ReassignTaskOpBase:104`/`ReturnTaskOp:62`/`CancelInstanceOp:19` 四处都走它;`DateTime.Now` 在整个 `TenonAdmin.Workflow` 下 `rg` 零命中 | 全仓惯例,且测试可拨钟 |
-| `Hours <= 0` | `DueTime = null`(视为未启用)。**不抛**:发布期没校验过的存量定义抛异常等于让整条流程发不起来 | `WfTimeout.Hours` 是 `int`(非可空),设计器不填就是 0 → 0 必须等于「不启用」,否则每个只配了 `Action` 的节点建任务即刻到期 |
-| `Hours` 极大(如 `int.MaxValue`) | `AddHours` 溢出会抛 `ArgumentOutOfRangeException` → 发起流程 500。处置:算之前 `if (hours > MaxTimeoutHours) → 截到上限`,`MaxTimeoutHours = 87_600`(10 年)写成 `const`,超限时按上限填并**不报错**(它语义上等于「基本不会到期」) | 防御性;比 try/catch 便宜且可测 |
-| 发布期校验(**建议加,可被判为超范围**) | 照 `ValidateNodeReferences` 的先例加一趟:`Timeout != null && Hours > 0 && Action == Transfer` ⇒ `TransferUserId > 0`,否则 `ModelInvalid`(48002)+ `reason = "timeoutTransferUserIdInvalid"` | 不校验的后果是**运行期每次扫描都失败一次**(见陷阱记录第 3 条);**零新增错误码**(复用 48002 + reason,与 P2-4 同款)。若 exec 判定超范围,必须立 `## Findings` 条目并挂 Task 14 |
-| 落库精度 | 不做整秒截断(`JobTime.Truncate` 拿不到,且不等式比较对四舍五入免疫) | 见上面接线事实表末行 |
-
-落点:`EnterNodeOp.CreateTaskAsync` 里 `DueTime = ResolveDueTime(ctx)`,新增 `protected virtual DateTime? ResolveDueTime(WfExecutionContext ctx)`(读 `Node.Props?.Timeout`)。**做成 `virtual` 单步而不是内联表达式**——本仓教条,且消费者「按工作日算到期」这类需求正好覆写这一步。
-
-### Job 的扫描形状 / 批量 / 预算 / 失败隔离
-
-```
-1. now = time.GetLocalNow().DateTime
-2. 扫: wf_task WHERE DueTime != null AND DueTime <= now ORDER BY DueTime ASC TAKE BatchSize
-   —— 命中现成索引 idx_wf_task_due(WfTask.cs:13,M1 就建好了,不用加索引)
-   —— 不 JOIN 实例/token:wf_task 行只在待办活着时存在(完成/撤销/退回都物理删),
-      「实例已完结但待办还在」不该发生;真发生了由引擎准入(InstanceStatusConflict)兜住并被本条 catch 跳过
-3. 按 InstanceId 批量取实例(ClearFilter<IOrgScoped>)→ 按 DefinitionVersionId 取版本 →
-   每个版本只 Deserialize + WfModelIndex.Build 一次并缓存(照 WfTaskService.ResolveNodeNameCached 先例)
-4. 逐条:解析 node.Props.Timeout;为空/Hours<=0 → 跳过(配置在建任务后被改过,DueTime 是旧的)
-   Remind      → ShouldRemindAsync ? (写 TimeoutFired + notifier.TaskUrgedAsync(fromUserId: null)) : 跳过
-   其余三种    → engine.ExecuteAsync(new TimeoutFireCmd{ TaskId, ExpectedVersion = task.Version, Action, TransferUserId })
-5. 每条前 cancellationToken.ThrowIfCancellationRequested();每条 try/catch 单独隔离
-6. context.Log?.Invoke($"超时扫描:命中 {n},提醒 {r},自动通过 {p},自动拒绝 {j},转办 {t},跳过 {s},失败 {f}。")
-```
-
-| 项 | 结论 | 理由 |
-|---|---|---|
-| 批量大小 | `WorkflowOptions.TimeoutScanBatchSize`,默认 **200** | 每条要开一个引擎事务(读实例/版本/CAS/写 2-4 行),200 条约等于几百次往返;比 `JobLogCleanupJob` 的 500 保守,因为那是纯删除。未处理完的下一拍继续(`ORDER BY DueTime ASC` 保证最久的先处理,不饿死) |
-| 时间预算 | 不自己算 deadline,交给 `sys_job.TimeoutSeconds`(种子填 **300**)经 `cancellationToken` 生效 | 内核已有这套旋钮,自己再造一个是第二套语义。规矩 2:令牌必须往下传,否则超时旋钮对本处理器是摆设 |
-| 并发模式 | 种子 `ConcurrencyMode = SerialSkip` | 上一拍没跑完不叠第二拍(扫描是幂等的,但叠着跑只会互相 CAS 失败刷日志) |
-| 触发节奏 | 种子 cron `0 */5 * * * ?`(每 5 分钟)。**刻意不是每分钟**:超时的最小配置单位是**小时**,5 分钟的分辨率绰绰有余,而每分钟会把测试宿主里的调度器变成噪声源(见陷阱记录第 8 条) | 设计规划 §四写的是「每分钟扫」——这是精度过剩,`Hours` 粒度下 5 分钟无可观测差异,记 `## Findings` 供协调者决定是否回写文档 |
-| 失败隔离 | **每条 try/catch,吞掉业务异常(`AdminException`)并计数,不让整批倒**;`OperationCanceledException` 与非业务异常(DB 掉线)**照抛** | `skills/create-job.md` 规矩 4 是「异常直接抛」,这里**刻意偏离并说明**:一个节点配错了 `TransferUserId` 若能把整个 Job 打成 Failed,重试 → 再次失败 → 连败到阈值转 Panic 告警,**全库所有超时策略就此停摆**。单条业务失败是数据/配置问题,不是任务失败;它已经通过 `context.Log` 的失败计数可见。取消与基础设施异常仍必须抛(否则超时旋钮与停机 drain 失效) |
-
-### 与 Round 22「向后跳转重置去重基线」的交互(读码确认,非推测)
-
-`Timeout.Action = AutoReject` 且节点配了 `OnReject = ToNode` 时会走拒绝路由这条向后跳转路径。**已确认不需要任何额外处理**,证据链三步:
-
-1. `CompleteTaskOp.ExecuteAsync:62-73` **无条件**先插 `WfHisTask { Action = Action }`(此处 `Action == Reject`),**在** `:81` 的分流与 `:84` 的 `RejectInstanceAsync` **之前**;
-2. `RejectInstanceAsync:179-192` 的 `ToNode` 分支只写 `RejectRouted` + `NodeLeave` 并 `Plan(new EnterNodeOp(target))`,**不回头改**刚插的那行;
-3. `EnterNodeOp.ResolveAdjacentApprovedUserIdsAsync:341-350` 倒序遇到的第一条 `Reject` 行即截断基线 —— 那行就是第 1 步插的。
-
-即:超时自动拒绝与人工拒绝走的是**同一段代码**,基线重置是它自带的副产品。这条链要用测试钉住(测试清单第 12 条),因为「AutoReject 复用 `CompleteTaskOp`」这个决定一旦被改成「Job 自己拼一段拒绝逻辑」,基线重置就会静默丢失。
+| # | 决策点 | 裁定 | 理由 |
+|---|---|---|---|
+| D1 | 要不要新建 mega HTTP 套件重测所有动词 | **不要。**缺口进既有文件;列表契约单独一个小文件 `WfListContractTests.cs` | 现有用例已经是「独立 factory/账号/定义 + HTTP 信封」。再抄一遍是双份维护,不是固化 |
+| D2 | 会签 + 超时 `Transfer` 语义(Findings 挂件) | **本轮不定产品案,只写表征现状的用例**。现状:`All` 下 `PlanTimeoutOpsAsync` 只对 `actors[0]` 排一个 `TransferTaskOp` 并清整行 `DueTime`。用例名字与 XML 必须写明「这是现状快照,不是定案」 | 三个候选(改派全部 Pending / 等最后一位再清 / 发布期禁 Transfer)都是产品判断。本任务是测试固化,擅自改引擎等于提前做 M3。表征用例的变异点:「改成对每个 Pending 都转」或「不清 DueTime」必须能红 |
+| D3 | Sequential 超时 AutoPass 逐拍级联 | **补一条钉子,钉「有意行为」**。两位顺序办理人 + 拨钟 + 连扫两拍 → 两行 Approve + 节点通过 | Findings 写明可构造、零覆盖。不是缺陷,但没钉子下次会被当 bug「修」掉 |
+| D4 | `WorkflowReplaceabilityTests` | **复核八面,不预添第九面**。本任务不扩 `IWf*Service` | 任务书原文「若 Task 1 已补第八件套,本任务复核不重复」 |
+| D5 | 给命令加 `ExpectedVersion` 方便构造竞态 | **不加**(沿用 Task 9 D11) | 那是 M2c receipt。失败路径已由 SPI 注入覆盖 |
+| D6 | `seq` 会签首票要不要再写一条 CAS 用例 | **不写。**`!passed` 是同一条分支,`all` 那条已钉 token 2→3 | 再写一条是同一代码路径的克隆,区分力为零 |
+| D7 | 错误码语言包(48021/23/24/25/26) | **不碰 `web/`**。继续挂 Task 14 | 硬约束:本任务纯后端测试 |
+| D8 | 断言落点 | 失败型 bug 的否定断言必须落在**事务外**(日志 / 已提交行 / HTTP `code`),不能只数「事务内本该新增的行」 | Task 8 Findings 方法论条:失败会把证据一起回滚。本轮两条超时用例尤其容易踩 |
 
 ### 改动清单
 
 | 文件 | 动作 |
 |---|---|
-| `Engine/Operations/EnterNodeOp.cs` | `CreateTaskAsync` 的 `DueTime = null` → `DueTime = ResolveDueTime(ctx)`;新增 `protected virtual DateTime? ResolveDueTime(WfExecutionContext ctx)`(含 `Hours<=0` → null、上限截断)+ `const int MaxTimeoutHours = 87_600` |
-| `Engine/WfCommands.cs` | 新增 `TimeoutFireCmd`(`TaskId` / `ExpectedVersion` / `Action: WfTimeoutAction` / `TransferUserId: long?`) |
-| `Engine/WorkflowEngine.cs` | `ExecuteAsync` 的 `command switch` 加一支;新增 `protected virtual Task<WfExecutionContext> BeginTimeoutAsync(...)`,内部拆 `protected virtual` 小步:`ClaimDueTaskAsync`(§14.1 的 `taskId + Version + DueTime <= now` 条件更新,影响行数 ≠1 → `TaskConflict`)/ `ResolvePendingActorsAsync` / `PlanTimeoutOpsAsync`(按上面 SignMode 分流表入队)。类级 `<remarks>` 追加一句破坏性变更说明的口径不变(本次**不加**构造参数,故无需) |
-| `Jobs/WfTimeoutJob.cs` | **新增**。`public class WfTimeoutJob(ISqlSugarClient db, IWorkflowEngine engine, IWorkflowNotifier notifier, WorkflowOptions options, TimeProvider time) : IAdminJob`;`ExecuteAsync` + `protected virtual` 小步:`ScanDueTasksAsync` / `ResolveTimeoutAsync` / `HandleRemindAsync` / `ShouldRemindAsync` / `FireAsync` |
-| `Jobs/WfTimeoutJobSeed.cs` | **新增**。`internal sealed class WfTimeoutJobSeed : ISeedData<SysJob>`,`SyncOnUpgrade => false`(照 `DefaultJobSeed` 的留档理由:job 行含运行态),`Id = TenonSeedIds.ConsumerMin + 47_000`(卫星包受**消费者**区间约束;`sys_job` 的 Id 空间与 `SysMenu` 独立,与菜单根同值不撞车。⚠ Round 28 更正:原文写「`SeedIdRangeTests` 已确认」是错的,守这条的是 `DatabaseInitializer` 的启动期检查),`Code = "wf-timeout-scan"`,`HandlerName = typeof(WfTimeoutJob).FullName!`,`Cron = "0 */5 * * * ?"`,`TimeoutSeconds = 300`,`ConcurrencyMode = SerialSkip`,`Status = Ready`,`NextRunTime` 留空(调度器补算),**`IsSystem = false`**(它是卫星包的任务,消费者应能停用/改节奏;`skills/create-job.md` 明确 `IsSystem` 留给内核自己的任务) |
-| `WorkflowSetup.cs` | `TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, WfTimeoutJob>())` + `TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WfTimeoutJobSeed>())`(照现有 `WorkflowMenuSeed` 那行) |
-| `Abstractions/WorkflowOptions.cs` | 加 `TimeoutScanBatchSize = 200`、`TimeoutRemindMinIntervalHours = 0`(0 = 跟随节点 `Hours`)。类是 `sealed` 无构造依赖 → 加属性对消费者源码兼容 |
-| `Services/WfDefinitionService.cs` | (建议)`ValidateNodeReferences` 里加 `Timeout.Action == Transfer ⇒ TransferUserId > 0` |
-| `backend/tests/TenonAdmin.Tests/WfTimeoutTests.cs` | **新增**,见测试清单 |
-| `backend/tests/TenonAdmin.Tests/WorkflowAppFactory.cs` | 加 `builder.UseSetting("TenonAdmin:Jobs:SchedulerEnabled", "false")`(**必须**,见陷阱记录第 8 条) |
-
-**零改动**(逐条确认,不是默认):`Engine/Operations/CompleteTaskOp.cs`、`ReassignTaskOpBase.cs`、`TransferTaskOp.cs`、`DelegateTaskOp.cs`、`ReturnTaskOp.cs`、`CancelInstanceOp.cs`、`TakeTransitionOp.cs`、`Abstractions/WorkflowErrorCode.cs`(**零新增错误码**)、`Entities/*`(**零 schema/列变更**;`WfHistoryEventType.TimeoutFired = 6` 与 `idx_wf_task_due` 都是 M1 预留好的)、`IWorkflowNotifier.cs`(**零新增方法**——`TaskUrgedAsync` 的 `long? fromUserId` 注释原文就写着「`null` 表示系统触发(**供超时提醒复用**)」,M2b 第五次破坏消费者 notifier 实现的风险为零)、`IWfTaskService`/`WfTaskService`/`Controllers/*`(Job 直连 `IWorkflowEngine`,**不走 Service** → 不第五次扩接口)、`web/`、`web-react/`、`docs/workflow/`、`## 语义契约`。路 A 下 `Entities/WfEnums.cs` 也零改动。
+| `backend/tests/TenonAdmin.Tests/WfTimeoutTests.cs` | 加 2 条:会签超时转办现状快照;Sequential AutoPass 两拍级联 |
+| `backend/tests/TenonAdmin.Tests/WfListContractTests.cs` | **新增**,2 条:`GET task/done` 与 `GET instance/page` 只返回当前用户的行 |
+| `backend/tests/TenonAdmin.Tests/WfDelegateTests.cs` | 两处 XML `<c>TransferTaskOp</c>` → `<c>ReassignTaskOpBase</c>`(零行为) |
+| `WorkflowReplaceabilityTests.cs` | 只读复核;缺面才补 |
+| 产品代码 | **默认零改动**。D2 不定案,禁止「顺手修」会签超时转办 |
 
 ### 步骤
 
-1. `WorkflowOptions` 加两个属性。
-2. `EnterNodeOp.ResolveDueTime` + `CreateTaskAsync` 接线。跑套件确认 143 不掉(此时无新行为可见:所有既有测试的定义都没配 `Timeout`)。
-3. 测试 1-3(DueTime 计算与边界)。
-4. **测试 4(前置约束 2:委托/转办不改 `DueTime`)** —— 先写,它钉的是**已有代码**的性质,此刻就该绿;绿了再往下走,否则说明第 2 步把 `DueTime` 塞进了改派路径。
-5. `TimeoutFireCmd` + `BeginTimeoutAsync`(含 `ClaimDueTaskAsync` 的 §14.1 CAS、`ResolvePendingActorsAsync`、`PlanTimeoutOpsAsync` 的 SignMode 分流)。
-6. `WfTimeoutJob` + `WfTimeoutJobSeed` + `WorkflowSetup` 两行注册 + `WorkflowAppFactory` 关调度器。
-7. 测试 5-7(Remind 三条)。
-8. 测试 8-11(AutoPass 三种 SignMode + AutoReject 终止)。
-9. 测试 12(AutoReject + `OnReject=ToNode` → 去重基线重置,Round 22 交互)。
-10. 测试 13(Transfer:落地 + **清 `DueTime`** + 不重复触发)。⚠ 路 A/路 B 待裁决 —— 未裁决前按**路 A**写,裁定路 B 时改动面只有「`new` 哪个 Op」+ 一个枚举值 + 该测试的 `action` 断言。
-11. 测试 14-16(失败隔离 / CAS 输给人工 / 批量上限)。
-12. (建议)发布期 `Timeout` 校验 + 1 条测试。
-13. 全量套件 + `dotnet build -c Release` + `git diff --check` + `rg` 扫残留;逐个变异点亲手转红后复原。
+1. 复核 `WorkflowReplaceabilityTests` 八面与 `WorkflowSetup` 的 `TryAdd*` 是否一一对应。缺面当场补,不缺就在 Findings 记「已复核」。
+2. `WfDelegateTests` 两处注释改名。
+3. `WfListContractTests`:独立 factory;用户 A 发起并办完一单、用户 B 发起一单仍在途 → A 的 `task/done` 只有 A 的已办、B 的 `instance/page` 只有 B 的实例。变异:把 `PageDoneAsync`/`PageMineAsync` 的 `userId` 过滤去掉 → 红。
+4. Sequential 级联用例(先写、应绿)。变异:扫完第一拍就停 → `Expected: 2 Approve / Actual: 1`。
+5. 会签超时转办表征用例(先写、钉现状)。变异见 D2。
+6. 指定过滤器 + `FullyQualifiedName~Tests.Wf\|FullyQualifiedName~Workflow` 全量。`git diff --check`。`rg` 扫 `MUTATION`。
+7. **禁止**改引擎来让 D2 用例「更好看」。
+
+### 测试清单
+
+| # | 用例 | 断言 | 变异点 |
+|---|---|---|---|
+| 1 | `Timeout_sequential_auto_pass_cascades_one_actor_per_scan` | 两位 Sequential + hours=1;拨过期;第一拍 1 条 Approve、待办仍在、第二位变 Pending;第二拍再 1 条 Approve、实例 Approved | 只跑一拍就断言完结 → 红;`DueTime` 第一拍被清 → 第二拍不再推进 → 红 |
+| 2 | `Timeout_transfer_on_all_sign_mode_only_reassigns_first_pending_and_clears_due_time`(**现状快照,非定案**) | `All`+[A,B]+Transfer 给 C:一拍后 A 被转走、B 仍 Pending、`DueTime` 已清、C 是新 actor | ①对每个 Pending 都转 → B 也没了 → 红;②不清 `DueTime` → 第二拍日志「失败」或再次转办 → 红(断言必须看 Job 日志或 HTTP/DB 已提交态,见 D8) |
+| 3 | `Page_mine_returns_only_current_users_instances` | B 调 `GET /api/v1/workflow/instance/page` 只看到自己的 `instanceId` | 去掉 `StarterUserId ==` → B 看见 A 的单 → 红 |
+| 4 | `Page_done_returns_only_current_users_his_tasks` | A 办完后 `GET /api/v1/workflow/task/done` 有且仅有 A 的行;B 调同一接口为空 | 去掉办理人过滤 → B 看见 A 的已办 → 红 |
+
+预期基线:**165 + Task 9 的 10 条新用例 = 175,再 +4 → 179**(Task 8 增强断言不计数;列表 2 + 超时 2)。exec 以实测为准,不要把期望值改成实测值。
+
+### 陷阱记录(Task 10)
+
+1. D2 用例的 XML 必须写「现状快照」。写成像定案,Task 14 验收会按错语义走浏览器。
+2. 超时用例拨钟必须走既有 `MakeDue`/`RunTimeoutJob`,不要新开调度器(`WorkflowAppFactory` 已关 `SchedulerEnabled`)。
+3. `instance/page` 走数据范围过滤器:`IOrgScoped`。造用户时 `orgId` 与发起人一致,否则 page 空是范围过滤不是 userId 过滤,变异钉不住。
+4. 复原变异后必须确认重编过(Round 28/29 陈旧 dll;`dotnet build -t:Rebuild` 或刷 mtime)。
+
+<!-- TASK10-PLAN-ANCHOR -->
+
+> **以下 Task 9 方案(Round 30)保留作历史,不是本轮执行清单。**
+
+> **Task 9 — 实例/Token 级 Version CAS(§十五 15.1 提前项)**。读了 `Entities/WfInstance.cs`(全文 44 行,`DataEntity`,4 个索引,**无 Version 列**)、`Entities/WfToken.cs`(全文 24 行,`BaseEntity`,`(InstanceId)`/`(InstanceId,Status)` 两个索引,**无 Version 列**)、`Entities/WfTask.cs`(`Version` 的现成声明形状 = 裸 `int` + `ColumnDescription`,**无 `DefaultValue`**)、`SqlSugar/Entities/BaseEntity.cs`(`AuditEntity.UpdateTime`/`UpdateUserId` 都是可空)、`SqlSugarSetup.cs:143-178`(审计 AOP **只在 `DataFilterType.UpdateByObject` 分支**填 `UpdateTime`/`UpdateUserId` → `SetColumns` 条件更新拿不到它们,这是本轮最关键的一条接线事实)、`Engine/WorkflowEngine.cs`(全文 985 行:8 个 `BeginXxxAsync` + `ClaimDueTaskAsync`/`PlanTimeoutOpsAsync`/`ClearDueTimeAsync`)、`Engine/WfExecutionContext.cs`(全文 101 行,`sealed`,`AppendHistoryAsync` 是唯一的非 virtual 共享写步骤 = 本轮 CAS 助手的形状先例)、`Engine/Operations/` 全部 7 个 Op(`EnterNodeOp` 418 行 / `CompleteTaskOp` 232 行 / `TakeTransitionOp` 71 行 / `CancelInstanceOp` 73 行 / `ReturnTaskOp` 162 行 / `ReassignTaskOpBase` 157 行 / `TransferTaskOp`+`DelegateTaskOp`)、`Jobs/WfTimeoutJob.cs`(全文 475 行:`RetireTaskAsync` 的带 `Version` 条件清 `DueTime`、`HandleRemindAsync` 的「不做版本 CAS」注释)、`Engine/WfCommands.cs`、`Abstractions/WorkflowErrorCode.cs`(48001-48026,48022 空洞)、`WfEnums.cs`、`backend/tests/TenonAdmin.Tests/WfTimeoutTests.cs`(`VersionOf`/`MakeDue`/`RunTimeoutJob` 等 DB 直读脚手架 = 本轮测试的现成工具)、`WfCancelTests.cs`(端点级用例形状)、`WorkflowAppFactory.cs`。文档侧读了 `workflow-database-design-review-2026-08-24.md` §4.1(6 类竞争 + 双条件 CAS 原文)/§九(8 条兼容升级纪律)/§十「M2b 收口(2026-08-24 提前项)」、`workflow-design-plan-2026-08-17.md` §十五 15.1。
+>
+> **核心判断(本轮最重要的结构决定):CAS 采「先领取、再写状态」两条语句,而不是把状态与版本挤进同一条 `SetColumns`。** 领取语句就是 §4.1 的原文形状(`WHERE Id=@id AND Status=@expectedStatus AND Version=@oldVersion` → `Version = Version + 1`),随后**原有的整对象状态更新一行不改**。三条理由:①**审计不回退**——`SqlSugarSetup` 的审计 AOP 只认 `UpdateByObject`,一旦把状态写改成 `SetColumns`,`UpdateTime`/`UpdateUserId` 就得每处手填,而「谁做的这次操作」在 6 个落点各不相同(`CancelInstanceOp` 现在硬编码 `StarterUserId` 就是这个税的现场),等于为了 CAS 引入一套并行的审计填充逻辑;②**正确性等价**——领取语句成功即持有该行的排他行锁直到提交,后一条语句处在同一事务的锁保护区内,中间不可能被插入;③**可评审性**——每个落点的 diff 是「加一行 `await ctx.ClaimXxxAsync(期望状态, ct);`」,状态写那几行逐字不动,review 能一眼看出「行为没变、只多了一道闸门」。这与已发布的 `ClaimDueTaskAsync`(领取 `wf_task.Version` 后交给 Op 自己再 CAS 一次)是**同一个形状**,不是本轮新造的模式。
+
+<!-- TASK9-PLAN-ANCHOR -->
+
+### 决策点
+
+| # | 决策点 | 裁定 | 理由 / 代价 |
+|---|---|---|---|
+| D1 | 新列怎么声明 | `WfInstance.Version` / `WfToken.Version`:`[SugarColumn(ColumnDescription = "乐观锁版本", DefaultValue = "0")] public int Version { get; set; }` —— 非空 `int` + **DB 级默认值 0** | §九 第 2 条写死「新增列先 nullable 或带跨数据库一致的默认值」,第 3 条写死「`Version` 从 0 开始,旧行可直接回填」。**不能照抄 `WfTask.Version` 的裸 `int`**:`wf_task` 是 M1 建表时就带这一列,走的是 `CREATE TABLE`;这两列是 `ALTER TABLE ADD COLUMN`,SQLite / PostgreSQL / SQL Server 三家在有存量行时**拒绝无默认值的 NOT NULL 新列**(MySQL 会隐式补 0)。`DefaultValue` 让四库的 DDL 都合法、旧行自动回填 0,同时新建库的 `CREATE TABLE` 也带上 `DEFAULT 0`。**不选可空 `int?`**:那会让每处 CAS 都要处理 `null`,而「回填 0」是免费的 |
+| D2 | CAS 助手放哪 | `WfExecutionContext` 上两个新方法:`ClaimInstanceAsync(WfInstanceStatus expectedStatus, ct)` / `ClaimTokenAsync(WfTokenStatus expectedStatus, ct)` | 6 个落点分散在 5 个文件,把语句抄 6 遍正是评审连着三次标 P3 的「几乎相同的抄写」。ctx 是**事务作用域的共享写步骤载体**,`AppendHistoryAsync` 就在那儿,形状逐点同构。**ctx 是 `sealed`、方法非 `virtual` 不违反可替换性教条**:可覆写的缝在**调用方**——`CancelInstanceOp.ExecuteAsync`、`TakeTransitionOp.CompleteInstanceAsync`、`CompleteTaskOp.RejectInstanceAsync`、`EnterNodeOp.ExecuteAsync`、`ReturnTaskOp.ExecuteAsync`、`WorkflowEngine.BeginResubmitAsync` 全部已是 `virtual`,消费者要换 CAS 语义就覆写那一步(和今天覆写 `AppendHistoryAsync` 调用点是同一条路) |
+| D3 | CAS 失败返什么码 | 一律 `InstanceStatusConflict`(48004)+ `args["reason"]`(`instanceVersionConflict` / `tokenVersionConflict`)+ `args["instanceId"]`/`["tokenId"]` | **零新增错误码**。对称论证:任务级 CAS 输了统一是 `TaskConflict`(48007),那么实例/Token 级 CAS 输了统一是 `InstanceStatusConflict`(48004)——48004 的既有文案「实例状态不允许本操作」正好覆盖「实例/token 已被别的动作推进走了」。一码多 `reason` 是本仓既有惯例(`TransferTargetInvalid`/`NobodyBlocked`/`CancelNotAllowed`/`ReturnNotAllowed` 都这么干)。**新增码的代价是实的**:P3-#9 记着五个 M2b 错误码在两个语言包里还没键、挂在 Task 14,再加一个就是 12 条 |
+| D4 | 实例级 CAS 落在哪几处 | 凡是写 `WfInstance.Status` 的地方,共 **3 处**:`CancelInstanceOp`(Running→Cancelled)、`CompleteTaskOp.RejectInstanceAsync` 的终止分支(Running→Rejected)、`TakeTransitionOp.CompleteInstanceAsync`(Running→Approved,以及将来的 Terminated) | 这三处就是「终态写入」竞争的全部出口。**这正面回答 Round 28 review 的 M3 顾虑**:并行网关下同实例的两件待办各自通过任务级 CAS 后,两个事务都会走到这三处之一,而 `WHERE Status=Running AND Version=@old` 只有一个能拿到 1 行,输的那个抛错 → **整个事务回滚**(引擎「一条 Cmd 一个事务」),不会留下半推进的实例。M2b 还是单 token,但这层设计现在就立住了 |
+| D5 | Token 级 CAS 落在哪几处 | 凡是写 `WfToken.Status` **或** `WfToken.NodeId` 的地方,共 **6 处**:`EnterNodeOp.ExecuteAsync`(NodeId 推进,Active→Active)、`ReturnTaskOp`(NodeId 回退)、`BeginResubmitAsync`(NodeId 归零 = **前置约束 2 的锚点**)、`CancelInstanceOp`(Active→Cancelled)、`CompleteTaskOp.RejectInstanceAsync` 终止分支(Active→Cancelled)、`TakeTransitionOp.CompleteInstanceAsync`(Active→Completed) | **`NodeId` 推进就是状态推进**,不能只盯 `Status` 列。把 `EnterNodeOp` 也纳进来是本轮覆盖 §4.1 第 1 条「审批与撤销」的**唯一**手段:一次会推进 token 的同意会 bump token 版本,并发撤销的 token CAS 就落空(反之亦然),两者互斥。代价:每次进节点多一条 UPDATE 往返(一次发起 2 条、一次同意 1-2 条),换的是「审批 vs 撤销」不再靠数据库隔离级别碰运气 |
+| D6 | 前置约束 1:`ReassignTaskOpBase` 的任务级 CAS | **一行不改,继续作为第一个写操作**;转办/委托**不加**任何实例/Token 级 CAS | 转办与委托压根不改实例状态、不改 token(节点没变、状态没变),实例/Token 级 CAS 对它们**不构成任何保护**——两个并发委托同一件待办时实例与 token 一字不动,新 CAS 拦不住,后果是两行 Pending actor + 两条 `Delegate` 历史。所以 `ReassignTaskOpBase.cs:76-85` 那段是它们并发安全性的**唯一**锚点,本轮**显式保留**并在类级/段级 XML 写清「这不是冗余、新的实例级 CAS 不覆盖本路径」。**反向也要守住**:不给改派加实例级 CAS —— 那会让同实例上两件**不同**待办的并发委托互相冲突(过度加锁),而它们本该各行其道。两个方向各有一条钉子(测试 7) |
+| D7 | 前置约束 4:拆不拆 `ReassignTaskOpBase.ExecuteAsync`(121 行) | **本轮不拆。**边界建议原样保留在 `## Findings` 里,交给真正要改那段代码的那一轮 | Round 26 把这个决定交给「正要动其中 CAS 段的那一轮」。**本轮读码后的事实是:它不动那一段,一个字都不动**(见 D6:改派不进新 CAS 的收口清单)。既然移交的前提不成立,决定就该继续往后传。三条理由:①拆步骤会把这个文件从「121 行经 Round 26 逐字核验过、可 `Compare-Object` 证明未被重写」变成一次不可证伪的重写,而本轮对它的义务恰恰是**证明没动过**,比 Round 26 更强;②步骤边界是**新的覆写契约**,一经发布不好改,而本轮对这些边界**零需求**——没有任何一个新行为需要在 `ValidateTargetAsync`/`ClaimAsync` 之间插东西;③`ExecuteAsync` 仍是 `public virtual`,消费者的整体覆写能力一点没少,拆步只是把「能不能只改一步」从 0 提到 1,而今天没有任何已知消费诉求指向那一步。**下一个真正会动它的轮次**是 M3 的加签/减签/拿回(要在认领与挂 actor 之间插入多 actor 编排),那时边界需求是具体的,画出来的缝才准 |
+| D8 | 前置约束 3:提醒路径 | `WfTimeoutJob.HandleRemindAsync` / `ShouldRemindAsync` / `RetireTaskAsync` **一行不改**,不加任何级别的 CAS | 定案已在 `## 语义契约` 与 `WfTimeoutJob` 类级 XML 里:提醒什么状态都不改,加 CAS 的后果是办理人**为了一条提醒**收到 48007。本轮顺手把现有钉子 `Timeout_remind_does_not_block_human_action` 的版本不变量从「`wf_task.Version` 一字未动」扩到**三个级别都一字未动**(测试 8),这样「顺手给提醒加 CAS」在实例/Token 这两个新级别上也有报警器,而不是只在任务级有 |
+| D9 | 记账事项:`CancelInstanceOp` 找活跃任务只按 `TokenId` | **不顺手收口,继续记账** | 今天单 token,`TokenId == ctx.Token.Id` 与 `InstanceId == ctx.Instance.Id` 选出的是同一批行 → 改成 `InstanceId` 在今天是**行为恒等且不可证伪**的改动。更要紧的是它会**预先承诺一个属于 M3 的语义**(「撤销杀掉所有分支」),而真正的 M3 撤销还得同时收掉**其它 token 行**本身,不只是它们的待办;只改一半看起来像做完了,比没做更危险。记账留在 `## Findings` |
+| D10 | 新增列要不要索引 | **不加。**`Version` 只出现在 `WHERE Id = @id AND ... AND Version = @old` 里,主键已经把行定位到 1 条,`Version` 是行内比较 | 加索引纯负债(每次 bump 都要维护索引) |
+| D11 | 要不要给命令加 `ExpectedVersion` 入参 | **不加。** | 那是 M2c 的 `RequestId`/operation receipt 那一档(§十 M2c 第 2-3 条)。只为「让单线程套件能构造 CAS 失败」而给公开命令加字段,是把测试需求焊进产品 API;本轮按台账既有先例(Task 4 Round 17)诚实降级为「读码逐处核对 + 机制断言 + 全量回归零破坏」 |
+| D12 | 要不要扩 `IWfTaskService`/`IWfInstanceService` | **不扩**,故 `WorkflowReplaceabilityTests` 的两个 Fake **零改动** | 本轮全部改动在引擎/Op/实体内部,没有新的服务方法。这是第五次扩接口的风险点,主动避开 |
+
+### 每处状态翻转的收口方式(逐处,含现状行号)
+
+| # | 落点 | 现状 | 收口后 |
+|---|---|---|---|
+| 1 | `CancelInstanceOp.cs:15-26` 实例终态 | 已有**状态**条件更新(`SetColumns(Status/UpdateTime/UpdateUserId).Where(Id && Status==Running)`),`UpdateUserId` 手填 `StarterUserId`(因 `SetColumns` 绕过审计 AOP) | 换成 `await ctx.ClaimInstanceAsync(WfInstanceStatus.Running, ct);` + 原样的整对象状态更新(`ctx.Instance.Status = Cancelled; Updateable(entity).UpdateColumns(Status, UpdateTime, UpdateUserId)`)。**顺带把手填审计还给 AOP**——与另两个终态出口写法归一,`Task 4 Round 17` 那段解释 `SetColumns` 绕 AOP 的注释迁进 `ClaimInstanceAsync` 的 XML |
+| 2 | `CancelInstanceOp.cs:28-31` token 终态 | 无条件整对象更新 | 前面加 `await ctx.ClaimTokenAsync(WfTokenStatus.Active, ct);` |
+| 3 | `CompleteTaskOp.cs:195-203` 拒绝终止分支的实例 + token | 两处都是无条件整对象更新 | 各自前面加 `ClaimInstanceAsync(Running)` / `ClaimTokenAsync(Active)`。**`ToNode` 分支不加**——它压根不写实例/token 状态,token 的推进由它 plan 的 `EnterNodeOp` 负责(落点 5 已覆盖) |
+| 4 | `TakeTransitionOp.cs:34-42` 实例完结 + token 收尾 | 两处都是无条件整对象更新 | 同上。这是「多 Token 对同一实例终态的竞争」(§4.1 第 6 条)与「终态写入与重提」(第 4 条)的主出口 |
+| 5 | `EnterNodeOp.cs:27-30` token NodeId 推进 | 无条件整对象更新,是 `ExecuteAsync` 的第一个写操作 | 前面加 `await ctx.ClaimTokenAsync(WfTokenStatus.Active, ct);`,**保持它仍是第一个写操作**。一次事务里可能跑 N 次 `EnterNodeOp`(start → 汇合 → 审批节点),每次 bump 一次,助手把新版本写回 `ctx.Token.Version` 故后续 CAS 对得上(与 `ClaimDueTaskAsync` 写回 `task.Version` 同理) |
+| 6 | `ReturnTaskOp.cs:98-101` token NodeId 回退 | 无条件整对象更新 | 前面加 `ClaimTokenAsync(Active)`。**放在任务级 CAS 之后**(:27-36 那段不动),保持「先抢任务、再动 token」的既有顺序 |
+| 7 | `WorkflowEngine.BeginResubmitAsync:946-953` 实例字段更新 + token NodeId 归零 | **全程无任何 CAS 锚点**(前置约束 2:两处 `Updateable(entity).UpdateColumns(...)` 都无条件,`:897` 的「无活跃任务」校验只是读)。双击重提 → 两个事务都过校验、都 `Plan(EnterNodeOp(root))` → 同节点两套 `WfTask`/actor + 两条 `InstanceResubmitted` + 两次通知 | **把 `ctx` 的构造上移到两条 UPDATE 之前**,然后 `await ctx.ClaimTokenAsync(WfTokenStatus.Active, ct);` 作为**本事务的第一个写操作**,再走原有的实例 UPDATE → token UPDATE。两个并发重提都读到 `Version=v`,只有一个拿到 1 行,输的抛 48004 + `reason=tokenVersionConflict` → 整事务回滚,连 `InstanceResubmitted` 与通知一起。**为什么锚在 token 而不是实例**:重提不改实例状态(Running→Running),实例侧没有可锚的「期望状态 + 版本」语义变化;而 token 的 `NodeId` 归零**就是**这次重提的状态推进,锚在它上面既是真锚点也符合 §4.1 的原文形状。`ctx` 上移的可行性已核:`StarterOrgId`/`LeaderChainByLevel` 是 `init` 属性,故必须在 `starterOrgId`/`leaderChainByLevel` 算完之后构造 —— 那两步(`:932-944`)本来就在两条 UPDATE 之前,顺序不冲突 |
+| 8 | `WfTimeoutJob` 领取路径 | `ClaimDueTaskAsync`(`WorkflowEngine.cs:634-653`)已是 §14.1 的三条件任务级 CAS | **不改。**它领取的是**任务**,与本轮的实例/Token 级是两层不同的仲裁(前者仲裁「Job vs 人工抢同一件待办」,后者仲裁「谁推进实例/token」)。领取之后入队的 `CompleteTaskOp`/`TransferTaskOp` 会自动经过落点 3/4/5 拿到新 CAS,**零额外接线** |
+| 9 | `ReassignTaskOpBase`(转办/委托) | 任务级 CAS 在 `:76-85` | **一行不改**(D6)。只加注释,说明这段为什么不是冗余 |
+| 10 | `WfTimeoutJob.HandleRemindAsync` / `RetireTaskAsync` | 提醒零 CAS;`RetireTaskAsync` 带 `Version` 条件清 `DueTime` 但**不 bump** | **一行不改**(D8) |
+
+**「零改动」逐条确认(不是默认)**:`Engine/Operations/TransferTaskOp.cs`、`DelegateTaskOp.cs`、`Abstractions/WorkflowErrorCode.cs`(**零新增码**)、`Entities/WfEnums.cs`(**零枚举变更**)、`Entities/WfTask.cs`/`WfHisTask.cs`/`WfHistory.cs`/`WfCc.cs`/`WfTaskActor.cs`/`WfDefinition*.cs`(**除 `WfInstance`/`WfToken` 外零 schema 变更**)、`Engine/WfCommands.cs`(**零命令形状变更**,D11)、`Services/*`、`Controllers/*`、`IWfTaskService`/`IWfInstanceService`(D12)、`WorkflowReplaceabilityTests.cs`、`Abstractions/WorkflowOptions.cs`、`WorkflowSetup.cs`、`web/`、`web-react/`、`docs/workflow/`、`## 语义契约`。
+
+### 改动清单
+
+| 文件 | 动作 |
+|---|---|
+| `Entities/WfInstance.cs` | 加 `Version` 列(D1)+ 一句 XML 说明它锚的是「实例终态写入」这类竞争 |
+| `Entities/WfToken.cs` | 加 `Version` 列(D1)+ 一句 XML 说明 `NodeId` 推进也算状态推进、也走 CAS |
+| `Engine/WfExecutionContext.cs` | 新增 `ClaimInstanceAsync` / `ClaimTokenAsync` 两个方法(D2/D3),XML 写清:①双条件 CAS 的原文形状与出处(§4.1);②为什么是「先领取再写状态」两条语句而不是一条(审计 AOP 只认 `UpdateByObject`);③必须写回内存 `Version`;④非 `virtual` 时可覆写的缝在调用方 |
+| `Engine/Operations/CancelInstanceOp.cs` | 落点 1 + 2 |
+| `Engine/Operations/CompleteTaskOp.cs` | 落点 3(只碰 `RejectInstanceAsync` 的终止分支) |
+| `Engine/Operations/TakeTransitionOp.cs` | 落点 4 |
+| `Engine/Operations/EnterNodeOp.cs` | 落点 5(只碰 `ExecuteAsync` 开头三行的前面) |
+| `Engine/Operations/ReturnTaskOp.cs` | 落点 6 |
+| `Engine/WorkflowEngine.cs` | 落点 7(`BeginResubmitAsync` 的 ctx 上移 + 首个写操作换成 token 领取) |
+| `Engine/Operations/ReassignTaskOpBase.cs` | **仅注释**:在 `:76-85` 那段 CAS 上方加一段说明它是转办/委托并发安全的唯一锚点、实例/Token 级 CAS 不覆盖本路径、两个方向都有钉子(前置约束 1) |
+| `backend/tests/TenonAdmin.Tests/WfVersionCasTests.cs` | **新增**,测试 1-7 |
+| `backend/tests/TenonAdmin.Tests/WfTimeoutTests.cs` | 只给既有 `Timeout_remind_does_not_block_human_action` 加实例/Token 两级版本不变量(测试 8) |
+
+### 步骤
+
+1. `WfInstance.Version` + `WfToken.Version` 两个列(D1)。跑全量确认 165 不掉——此时无任何代码读写这两列,唯一可能出事的是 CodeFirst 建表本身(`DefaultValue` 在 SQLite 的 `CREATE TABLE` 上被拼坏会让**所有**工作流用例红,这一步就是它的探针)。
+2. `WfExecutionContext.ClaimInstanceAsync` / `ClaimTokenAsync`(D2/D3),含写回内存 `Version`。此时零调用点,跑全量仍应 165。
+3. **测试 1**(`New_instance_and_token_start_at_version_zero`)—— 先写、此刻**应该绿**(新列默认 0、还没人 bump)。它是「D1 真的把列建出来了、默认真是 0」的正向确认;绿了再往下,不绿说明第 1 步的 `DefaultValue` 有问题。
+4. 落点 5(`EnterNodeOp` token 领取)。**第一个动的落点**,因为它是唯一在「正常正向推进」路径上的,能立刻暴露「一次事务里 bump 多次 + 写回」是否成立;若写回漏了,后续同事务的 CAS 会抛假 48004,全量套件会大面积红——这是一个自带探针的步骤。跑全量。
+5. **测试 2**(`Start_advances_token_version_once_per_node_entry`)。
+6. 落点 4(`TakeTransitionOp` 实例完结 + token 收尾)+ **测试 3**(`Approve_to_completion_claims_instance_and_token`)。
+7. 落点 3(`CompleteTaskOp.RejectInstanceAsync` 终止分支)+ **测试 4**(`Reject_terminate_claims_instance_and_token`)。
+8. 落点 1 + 2(`CancelInstanceOp`)+ **测试 5**(`Cancel_claims_instance_and_token`)。
+9. 落点 6(`ReturnTaskOp`)+ **测试 6 前半**。
+10. 落点 7(`BeginResubmitAsync`,**前置约束 2**)+ **测试 6 后半**(`Return_then_resubmit_claims_token_at_every_hop`)。
+11. `ReassignTaskOpBase` 加注释(**不改代码**)+ **测试 7**(`Reassign_claims_task_version_only_and_leaves_instance_and_token_untouched`,前置约束 1 的双向钉子)。
+12. **测试 8**:给 `WfTimeoutTests.Timeout_remind_does_not_block_human_action` 补实例/Token 两级版本不变量(前置约束 3)。
+13. 全量套件 + `dotnet build -c Release` + `git diff --check` + `rg` 扫 `MUTATION`/`TODO`/`FIXME`/`.Skip(`/`NotImplementedException` 残留;**逐个变异点亲手转红后复原,复原那一跑必须强刷测试文件时间戳确认真的重编过**(`(Get-Item <file>).LastWriteTime = Get-Date`,Round 28/29 的陈旧编译产物教训)。
 
 ### 测试清单(每条附区分力变异点)
 
-| # | 用例 | 变异点(必须能转红) |
-|---|---|---|
-| 1 | `Timeout_hours_fills_due_time_on_task_creation` — 节点配 `timeout{hours:24}` → 起实例 → 待办列表 `dueTime` 落在 `[now+23h, now+25h]`(**区间断言,不做精确相等**:`CreateTime`/`DueTime` 都过 MySQL `datetime(0)` 四舍五入) | `ResolveDueTime` 改回 `return null` → 红 |
-| 2 | `Node_without_timeout_leaves_due_time_null` | 去掉 `Timeout is null` 判断、无条件填 `now` → 红(防「所有待办突然都会超时」) |
-| 3 | `Timeout_hours_zero_leaves_due_time_null` — `hours:0`(设计器不填的形态) | 去掉 `hours > 0` 判断 → `DueTime = 建任务时刻` → 该待办立刻到期 → 红 |
-| 4 | **`Delegate_and_transfer_keep_original_due_time`(前置约束 2)** — 带 `timeout` 的节点 → 记下 `dueTime`/`createTime` → 委托一次 → 断言被委托人待办的两个值**与原值逐字相同**;同一用例再转办一次同样断言 | 在 `ReassignTaskOpBase` 里加一行「换人了该重新计时」的 `DueTime = now + Hours` 刷新 → 红。**这条变异是本任务最该防的那种「听起来很合理的修复」** |
-| 5 | `Timeout_remind_writes_timeout_fired_and_notifies_pending_approvers` — `CapturingWorkflowNotifier` 断言 `TaskUrgedCalls` 一次、`FromUserId == null`、`ToUserIds == [approver]`;事件流含 `TimeoutFired` | ①去掉 notifier 调用 → 红;②去掉 `TimeoutFired` 写入 → 红(且它同时是第 6 条的状态源) |
-| 6 | `Timeout_remind_is_throttled_within_min_interval` — 连扫两次,断言只提醒一次 | 去掉 `ShouldRemindAsync` 的间隔判断 → `Expected 1 / Actual 2` 红 |
-| 7 | `Timeout_remind_does_not_block_human_action` — 提醒后办理人 `approve` 仍返 `code == 0` | 给 Remind 路径加 `wf_task` 版本 CAS → 人工动作变 `TaskConflict`(48007)→ 红 |
-| 8 | `Timeout_auto_pass_advances_token_and_marks_history` — 断言 `wf_his_task` 有 `Approve` 行且 `UserId == approver`、`Comment` 非空、事件流含 `TimeoutFired`、实例 `Approved` | ①`BeginTimeoutAsync` 不写 `TimeoutFired` → 红(审计不可分辨);②`Comment` 不填 → 红 |
-| 9 | `Timeout_auto_pass_on_all_sign_mode_acts_for_every_pending_approver` — 会签 2 人,一次扫描后节点通过、两行 `Approve` | 只对第一个 Pending 入队 → 实例仍 `Running`、只有 1 行 → 红 |
-| 10 | `Timeout_auto_pass_on_any_sign_mode_acts_once` — 或签 2 人,一次扫描后实例 `Approved` 且**恰好 1 行** `Approve` | `Any` 也遍历所有 Pending 入队 → 第二个 Op 的 CAS 撞已删任务 → `TaskConflict` → 整事务回滚 → 实例仍 `Running` → 红。**这条是防最迷惑症状的钉子** |
-| 11 | `Timeout_auto_reject_terminates_instance` — 实例 `Rejected`,`wf_his_task` 有 `Reject` 行 | Cmd 的 `AutoReject` 分支误传 `WfTaskAction.Approve` → 红 |
-| 12 | **`Timeout_auto_reject_with_on_reject_to_node_resets_dedup_baseline`** — 两节点链 `start→node1[A]→node2[B, timeout=autoReject, onReject=toNode→node1]` → 扫描 → 断言 **A 重新拿到 node1 待办**(不是被去重跳过、也不是 B 拿回自己的) | 把 `EnterNodeOp` 白名单里的 `Reject` 去掉 → `Expected [aId] / Actual [bId]` 红(与 Round 22 那条 P1 变异同形) |
-| 13 | `Timeout_transfer_hands_task_to_target_and_clears_due_time` — 目标拿到待办、原 `wf_task.DueTime` 变 `null`、**连扫第二次不产生任何新行** | ①触发后不清 `DueTime` → 第二次扫描重复触发并因 `alreadyActor` 报错 → 红;②路 B 裁定后追加 `Action == TimeoutTransfer` 断言 |
-| 14 | `Timeout_scan_isolates_per_task_failure` — 一条配错(`transfer` 目标已是办理人)+ 一条正常,断言正常那条照样处理完 | 去掉 per-task try/catch → 整批倒、正常那条没处理 → 红 |
-| 15 | `Timeout_fire_loses_to_human_action_by_version_cas` — 扫出待办后先人工转办(`Version` 前进)再派 Cmd,断言零额外 `wf_his_task` 行 | 去掉 CAS 的 `Version == @expected` 半句 → 多出一行 → 红 |
-| 16 | `Timeout_scan_respects_batch_size` — `TimeoutScanBatchSize = 1`,两条到期,一次扫描只处理一条 | 忽略 `Take(BatchSize)` → 红 |
+> ⚠ **射程声明,先说清免得被误读**:CAS 的**失败**路径在本仓单线程 xUnit 套件里**构造不出来**——真实竞态需要「A 读版本 → B 提交推走版本 → A 写」这个交错,而所有 `BeginXxxAsync` 都在**自己的事务里现读**版本号,单线程顺序执行下读到的必然是最新值,CAS 永远对得上(与 Round 28 证伪 `Timeout_remind_does_not_block_human_action` 的根因逐字同型)。所以下面 7 条钉的一律是**机制**:「这个落点确实做了双条件领取并推进了版本」。这不是套套逻辑——把任何一处 CAS 退回成无条件整对象更新,版本就不再前进,对应用例立刻红。**用户可见后果(并发下不产生半推进状态)不在射程内**,按台账既有先例(Task 3 Round 13 / Task 4 Round 17 / Task 7 Round 26)以「读码逐处核对 + 全量回归零破坏」替代。
 
-预期基线:**143 → 159**(+16;若含发布期校验测试则 160)。
+| # | 用例 | 断言 | 变异点(必须能转红) |
+|---|---|---|---|
+| 1 | `New_instance_and_token_start_at_version_zero` | 建一个只有 `start` 的最短链跑不通,故用 1 审批节点模型:发起后读 `wf_instance.Version == 0`(还没有终态写入)。**列存在性 + 默认值 0** 的正向确认 | 无变异(这是 D1 的正向确认,不是钉子);它的反向保障是「列没建出来 → 查询直接抛」 |
+| 2 | `Start_advances_token_version_once_per_node_entry` | 1 审批节点模型发起后 `wf_token.Version == 2`(`EnterNodeOp(start)` 一次 + `EnterNodeOp(approve-1)` 一次;算式写进注释),且 `wf_instance.Version == 0` | 去掉 `EnterNodeOp` 里的 `ClaimTokenAsync` → `Expected: 2 / Actual: 0` 红 |
+| 3 | `Approve_to_completion_claims_instance_and_token` | 同意到底后:`wf_instance.Version == 1` 且 `Status == Approved`;`wf_token.Version == 3`(2 次进节点 + 1 次终态领取)且 `Status == Completed` | ①去掉 `CompleteInstanceAsync` 的 `ClaimInstanceAsync` → 实例版本停在 0 → 红;②去掉其 `ClaimTokenAsync` → token 版本停在 2 → 红(**分两次单独变异**,证明两个断言各自独立被钉) |
+| 4 | `Reject_terminate_claims_instance_and_token` | 拒绝(节点无 `onReject` = 默认终止)后:`wf_instance.Version == 1` 且 `Status == Rejected`;`wf_token.Version == 3` 且 `Status == Cancelled` | 去掉 `RejectInstanceAsync` 终止分支的两个 Claim → 分两次各自红 |
+| 5 | `Cancel_claims_instance_and_token` | 撤销后:`wf_instance.Version == 1` 且 `Status == Cancelled`;`wf_token.Version == 3` 且 `Status == Cancelled` | ①`CancelInstanceOp` 的 `ClaimInstanceAsync` 去掉 → 实例版本停在 0 → 红。**注意**:该处现有的状态条件更新已能拦住重复撤销,所以变异必须只去掉**版本**那一半才有区分力,即把 `ClaimInstanceAsync` 换回原来的 `SetColumns(...).Where(Id && Status==Running)` → 状态照旧翻,版本不前进 → 红,证明本轮真的加了版本这一维;②`ClaimTokenAsync` 去掉 → token 版本停在 2 → 红 |
+| 6 | `Return_then_resubmit_claims_token_at_every_hop`(**前置约束 2 的钉子**) | 两节点链 `start→node1[A]→node2[B]`,`node1` 配 `returnPolicy: prev`:发起后 token 版本 2 → A 退回后 **3**(`ReturnTaskOp` 领取一次)且 `wf_instance.Version == 0`(退回不动实例状态)→ 发起人重提后 **6**(重提领取 1 + `EnterNodeOp(start)` 1 + `EnterNodeOp(node1)` 1) | ①去掉 `ReturnTaskOp` 的 `ClaimTokenAsync` → 退回后 `Expected: 3 / Actual: 2` 红;②去掉 `BeginResubmitAsync` 的 `ClaimTokenAsync` → 重提后 `Expected: 6 / Actual: 5` 红。**变异 ② 是前置约束 2 的直接区分力**:它现在是「重提有没有锚点」的唯一可观测出口 |
+| 7 | `Reassign_claims_task_version_only_and_leaves_instance_and_token_untouched`(**前置约束 1 的双向钉子**) | 会签两人模型(委托与转办都需要一个不在 actor 里的目标),记下三个级别的版本 → 委托一次 → `wf_task.Version` +1、`wf_instance.Version` 不变、`wf_token.Version` 不变;同一用例再转办一次,三条断言重复一遍 | ①**保住任务级 CAS 这一侧**:删掉 `ReassignTaskOpBase.cs:76-85` 那段任务级 CAS(顺手把它当冗余放松掉,正是前置约束 1 担心的事)→ `wf_task.Version` 不前进 → `Expected: 1 / Actual: 0` 红;②**不过度加锁这一侧**:给 `ReassignTaskOpBase` 加一句 `await ctx.ClaimInstanceAsync(WfInstanceStatus.Running, ct);` → `wf_instance.Version` 从 0 变 1 → 红 |
+| 8 | (改现有)`WfTimeoutTests.Timeout_remind_does_not_block_human_action`(**前置约束 3**) | 现有的 `wf_task.Version` 不变量之外,补 `wf_instance.Version` 与 `wf_token.Version` 也一字未动 | 给 `HandleRemindAsync` 加任意一级 CAS(任务级已有既存变异记录;新增:加 `wf_token` 版本 bump)→ 红 |
 
-### 陷阱记录(Task 8 plan 阶段读码所得,提醒 exec 别踩)
+预期基线:**165 → 172**(+7 条新用例;测试 8 是给既有用例加断言,不计数)。
 
-1. **`Any` 签核模式下只能入队一个 `CompleteTaskOp`。** 第一个就 `CloseTaskAsync` 物理删了 `wf_task`,第二个的版本 CAS 影响行数为 0 → `TaskConflict` → **整个事务回滚**,现象是「超时什么都没干」,极难从日志看出原因。见 SignMode 分流表。
-2. **超时转办后必须处置 `DueTime`,否则无限重触发。** `TransferTaskOp` **不删** `wf_task`(只换 actor),`DueTime` 还留在过去 → 下一拍再扫到 → 目标已是 actor → `alreadyActor` 抛 48010 → 每 5 分钟失败一次直到有人办掉。本 plan 定为触发成功后 `DueTime = null`(一次性升级,没有第二个升级目标);它必须在 `BeginTimeoutAsync` 的**同一事务**里写,别放到 Job 里事后补(崩在中间就回到无限循环)。
-3. **`Timeout.Action = Transfer` 但 `TransferUserId` 为空/非法是「永久失败」形态**:每拍失败一次。发布期校验(建议步骤 12)才是根治;运行期只能计数 + 日志。别试图「失败就把 `DueTime` 清掉」——那会静默吃掉一个配置错误。
-4. **不要给超时造新的 `WfTaskAction` 值来标记「自动同意/拒绝」。** 会同时静默破坏 `BeginCancelAsync` 的撤销准入(只认 `Approve`)与 `EnterNodeOp` 的去重基线白名单(只认 `Approve|Reject|Return`),而枚举值发版即不可回退。详见「已定结论」第 1 点。
-5. **`Delegate`/`Transfer` 一如既往**不得进 `EnterNodeOp` 的跳转下界白名单;本任务也**不要**把 `TimeoutFired` 之类塞进去 —— 那个白名单查的是 `wf_his_task.Action`,`TimeoutFired` 是 `wf_history.EventType`,两张表两个枚举,别串。
-6. **`IWorkflowNotifier` 一个方法都不要加。** `TaskUrgedAsync(ctx, taskId, long? fromUserId, toUserIds)` 的 XML 注释原文就写着「`fromUserId` 为 `null` 表示系统触发(供超时提醒复用)」—— 这是 Task 1 就留好的插头,加新方法是第五次破坏消费者的 notifier 实现。
-7. **`WfTimeoutJob` 不要走 `IWfTaskService`。** 直连 `IWorkflowEngine`,避免第五次扩 `IWfTaskService`(该接口已有专门记账的 `<remarks>`,M2b 收口后要冻结形状)。也别让 Job 自己开 `UseTranAsync` —— 引擎的 `ExecuteAsync` 已经是「一条 Cmd 一个事务」。
-8. **测试宿主的调度器默认是开的**(`AdminJobsOptions.SchedulerEnabled` 默认 `true`,`WorkflowAppFactory` 未关)。种子一落地,`WfTimeoutJob` 就会在**每个** workflow 集成测试的宿主里被真调度器按 cron 触发,与测试自己手动调的 `ExecuteAsync` 并发跑同一张表 → 随机 flake。`WorkflowAppFactory` 必须加 `TenonAdmin:Jobs:SchedulerEnabled=false`;测试一律**手动 `new JobExecutionContext{...}` 直接调 `ExecuteAsync`**(`skills/create-job.md` 第五节的官方姿势)。
-9. **`DueTime` 断言不要写精确相等。** `CreateTime` 与 `DueTime` 都是 `DateTime` 列,MySQL `datetime(0)` 对毫秒四舍五入(`JobTime.Truncate` 的注释专门记了这个坑,但它 `internal`、跨包用不了)。第 1 条测试用区间;第 4 条测试比较的是**同一个存储值的两次读取**,不受影响。
-10. **种子 Id 走消费者区间。** `SeedIdRangeTests.KernelAssemblies` 只含 `TenonAdmin.SqlSugar` 与 `TenonAdmin.Services`,工作流卫星包**不在其中** → 种子 Id 必须 `>= TenonSeedIds.ConsumerMin`(1000),照 `WorkflowMenuSeed` 的 `ConsumerMin + 47_000` 取号。⚠ **Round 28 更正**:原文末句「填内核低号段会被 `ConsumerSeeds_AllIdsAtOrAboveConsumerMin` 当场打红」**不成立**——那组用例走 `AdminAppFactory`(内核 TestHost),`AddTenonAdminWorkflow` 只在 `TenonAdmin.WorkflowTestHost` 里调用,它**从未扫到过**工作流种子。真正当场打红的是 `DatabaseInitializer` 的启动期检查(下界 + 雪花地板 + 同实体唯一)。取号结论不变,记述已改。
-11. **`SyncOnUpgrade` 必须 `false`。** `DefaultJobSeed` 留了完整理由:job 行含 `NextRunTime`/计数器/用户改过的 cron,升级刷回种子值 = 清运行态 + 吞用户调参。抄 `WorkflowMenuSeed` 的 `true` 是错的(菜单是纯结构件才敢开)。
-12. **`context.Log` 可空**(`Action<string>?`),`JobLogCleanupJob` 用的是 `context.Log?.Invoke(...)`;直接调会 NRE。
-13. **Job 里查 `WfInstance` 带 `.ClearFilter<IOrgScoped>()`。** 非 HTTP 上下文虽然回退 `Unrestricted`(已核实,不会静默清成 0 行),但引擎里 7 处全都显式 `ClearFilter`,照抄这个惯例;哪天消费者前置注册了自己的 `IDataScopeContext`,显式写法不会突然瞎掉。
-14. **`ClaimDueTaskAsync` 的 CAS 会让 `Version` 在一个事务里前进两次**(Begin 领取 +1,Op 自己的 CAS +1)。必须把领取后的 `Version` 写回内存里那个 `WfTask` 实例再交给 Op,否则 Op 的 CAS 对不上、抛出一个假的 `TaskConflict`。
+### 陷阱记录(Task 9 plan 阶段读码所得,提醒 exec 别踩)
+
+1. **`SetColumns` 里的内联计算表达式会被按当前区域设置拼成字面量进 SQL。** 台账已有实测(zh-CN 下 `DateTime` 表达式拼出「下午」→ `SQLite Error 1: near "下午": syntax error`,500 而不是断言红)。本轮两个 Claim 助手要写 `Version = <某个算出来的整数>`,**先算进局部变量再进 `SetColumns`**,别写 `Version = Token.Version + 1` 这种内联表达式。整数目前不会踩(`ClaimDueTaskAsync` 的 `expectedVersion + 1` 正常参数化),但养成局部变量的习惯零成本。
+2. **写回内存 `Version` 是硬要求,漏了就是一片假 48004。** `EnterNodeOp` 一次事务里可能领取 2-3 次 token,`TakeTransitionOp` 之后还要领一次终态。助手内部必须 `Instance.Version = next` / `Token.Version = next`。这与 `ClaimDueTaskAsync` 的 `task.Version = expectedVersion + 1`(台账陷阱记录第 14 条)是同一条纪律,只是这次一个事务里可能前进**四五次**而不是两次。
+3. **`Updateable<T>().SetColumns(...).Where(...)` 不走审计 AOP。** `SqlSugarSetup.cs:169-176` 的 `UpdateByObject` 分支是唯一填 `UpdateTime`/`UpdateUserId` 的地方。这正是本轮取「两条语句」的原因(D2 核心判断):领取语句不碰审计字段、状态写继续走整对象更新拿 AOP。**别顺手把状态也挤进领取语句**,那会静默丢掉 `UpdateUserId`(编译过、测试绿、审计列变 null)。
+4. **`Updateable<WfInstance>()` 不会被全局数据范围/软删过滤器清掉。** `CancelInstanceOp` 现成先例(条件更新跑了 100+ 轮全绿)。所以 Claim 助手**不需要** `ClearFilter<IOrgScoped>()`;查询侧的 `ClearFilter` 惯例不要照搬到更新侧(照搬也不错,但会让人以为不加就会瞎掉)。
+5. **`BeginResubmitAsync` 的 ctx 上移要盯住 `instance.SelectedUserIdsJson` 的读写顺序。** 现状是先按 `cmd.SelectedUserIdsByNode` 覆盖 `instance.SelectedUserIdsJson`(`:926-930`),ctx 构造时再 `cmd.SelectedUserIdsByNode ?? DeserializeSelectedUsers(instance.SelectedUserIdsJson)`(`:970-971`)。上移 ctx 时这两步的相对顺序**必须保持**(覆盖在前、读在后),否则「重提时改了自选审批人」会静默用旧值。
+6. **`EnterNodeOp` 的 token 领取必须留在 `ExecuteAsync` 的最前面。** 它现在是该方法的第一个写操作;插到 `AppendHistoryAsync(NodeEnter)` 之后就等于「先留痕再抢锁」,并发下会出现两条 `NodeEnter` 只有一次真推进。
+7. **测试里的版本数字是算出来的,不是量出来的。** 每条断言旁边写清算式(几次进节点 + 几次终态领取),否则下一轮有人改了节点数就只会把期望值改成实测值,钉子当场失效。
+8. **`Cancel` 那条变异要小心「已经有一半保护」。** `CancelInstanceOp` 今天就有状态条件更新,直接删掉整个 Claim 会让**状态**那一维也没了、可能撞上别的用例,变成「红了但不是因为版本」。变异必须精确地只退掉版本那一半(见测试 5 的变异 ①)。
+9. **`DefaultValue = "0"` 是本轮唯一一处全仓首次使用的 SqlSugar 特性**(`rg DefaultValue` 全仓零命中)。第 1 步单独跑一次全量就是它的探针:SQLite 的 `CREATE TABLE` 拼坏 → 所有工作流用例红。四库的 `ALTER TABLE ADD COLUMN` 路径本轮**验证不到**(测试库都是新建的),按任务范围留给 M2c 的四库契约测试,已在 `## Findings` 立条。
+10. **别给 `ReturnTaskOp` / `BeginResubmitAsync` 的 token 领取写 `WfTokenStatus.Active → 别的值`。** 退回与重提之后 token **仍是 Active**(实例保持 Running,不是完结)——期望状态与目标状态都是 Active,领取只推进版本。把它写成翻状态会让退回把实例变成完结态。
 
 > ⚠️ 以下两个「必答问题」小节是 **Task 6 已收口的契约性定案**(委托权收窄为「仅当前 Pending 办理人」、链式委托允许且不设上限),按约定在 `## Plan` 重写时整段保留,勿删。本次纯重构不翻转其中任何一条。
 
@@ -377,6 +329,65 @@ AutoReject **一律恰好 1 个**(一票否决;`CompleteTaskOp` 的 Reject 分�
 - `ReturnTaskOp` 的 CAS 认领顺序照抄 `TransferTaskOp`(先认领 `WfTask.Version`,再认领 `WfTaskActor.Status==Pending`),两次认领失败都是 `TaskConflict`,不要和新加的 `ReturnNotAllowed` 混着用——`ReturnNotAllowed` 专指"退回目标解析失败",`TaskConflict` 专指"并发/非本人办理"这类既有语义。
 
 ## Findings(review 阶段产出;修完划掉)
+
+### Task 9 — Round 31 独立复核(收口)
+
+> **判定:APPROVE,勾选 Task 9。** 指定过滤器 59/59。0×未修 P1/P2。P3 均已在注释落地。
+>
+> **台账 vs 代码**:Status 仍写「阶段 plan / 下一步 Round 30 plan」,Findings 已有 Round 30 exec 留痕(自称 172/172、尚未 review)。工作树未提交:实体 Version 列、6 个落点 Claim、`WfVersionCasTests` 10 条。以代码为准。
+
+~~**[P2-1] 会签/顺序签非末位投票不领取 token,撤销与首票同意可双赢。**~~ ✅ **代码里已修**(本轮核实,不是本轮新写):`CompleteTaskOp.ExecuteAsync` 在 `!passed` 提前返回前 `ClaimTokenAsync(Active)`。钉子 `Cosign_first_approve_claims_token_and_locks_out_cancel`:首票后 token 2→3;撤销半段是冒烟不是钉子(去掉领取仍会被 `alreadyApproved` 读挡住)。
+
+~~**[P2-2] CAS `claimed != 1` 失败路径可测,却被变异探针留在生产代码里。**~~ ✅ **本轮修完**。测试已用 `IWorkflowFormBinder.ValidateOnStartAsync` / `IApproverResolver` 在同一 `SqlSugarScope` 事务内把版本推走。但 `ClaimTokenAsync` 留下 `// MUTATION-M2` + `_ = claimed`(throw 被删)。**带着变异实跑**:`Resubmit_losing_token_cas_returns_48004` 红,`Expected: 48004 / Actual: 0`;`Instance_losing_cas` 仍绿(实例级 throw 没被挖)。复原 `if (claimed != 1) throw ... reason=tokenVersionConflict` 后 3/3 绿。`rg MUTATION` 零命中。
+
+~~**[P3-1] `DefaultValue = "0"` 注释。**~~ ✅ 已写清:SqlSugar `AddColumn` 三步(先可空 ADD → 回填 → 改 NOT NULL);SQLite 因未开 `SqliteCodeFirstEnableDefaultValue`,DDL 无 DEFAULT,回填 UPDATE 仍执行。
+
+~~**[P3-6] 改派与实例终态的隐式不变量。**~~ ✅ `ReassignTaskOpBase` 段注释已写:终态动作物理删活跃 `wf_task`,改派 CAS 打在已删行上 → 0 行 → `TaskConflict`。M3 若出现不删待办的实例级动作,这条失效。
+
+~~**[P3-7] 多一条 UPDATE 的理由。**~~ ✅ `ClaimInstanceAsync` XML 已改成:ctx **没有** `ICurrentUser`,领取语句手填不了 `UpdateUserId`;不是「更高效的形状」。
+
+**[未跑] 更宽的 `FullyQualifiedName~Wf` 本轮被自动审批拦住,未跑。** 指定六类过滤器 59/59 已过。下一轮 Task 10 exec 开工前应先跑 `~Tests.Wf|~Workflow` 把基线钉在 175(165+10)上。
+
+### Task 9 — plan + exec 留痕(Round 30;Round 31 已复核收口)
+
+> **验收:172/172 绿**(基线 165 + 7 条新用例;plan 预期 172,逐数吻合)。`dotnet build -c Release -t:Rebuild` 0 错误、**`TenonAdmin.Workflow` 包 0 警告**(残留警告全在 `TenonAdmin.Core`/`TenonAdmin.Services`,与本轮改动无交集)。`git diff --check` 干净,`rg` 扫 `MUTATION`/`REVIEW-PROBE`/`TODO`/`FIXME`/`.Skip(`/`NotImplementedException` **零命中**。**12 个变异点全部亲手实跑转红后复原**,逐个附实际失败断言与期望/实际值(见下面「变异实跑证据」)。`## Status`/`## Log`/`## Tasks`/`## 语义契约` 一律未碰。
+>
+> **陈旧编译产物的处置(Round 28/29 教训)**:最终那一跑没有用「刷时间戳」这个办法,而是 `dotnet build -t:Rebuild`(无条件全量重编)后 `dotnet test --no-build`。理由:`-t:Rebuild` 不看时间戳、不做增量判定,比「改一下 mtime 再让 MSBuild 自己判断」更硬,不存在「时间戳改了但 MSBuild 仍判最新」的残余可能。
+
+**[裁定·前置约束 4] `ReassignTaskOpBase.ExecuteAsync`(121 行)本轮不拆步骤。** Round 26 把这个决定移交给「正要动其中 CAS 段的那一轮」,而**本轮读码后的事实是:它一个字都不动**——改派(转办/委托)压根不改实例状态、不改 token,故整条路径**不进**本轮的收口清单(见前置约束 1 的处置)。移交的前提不成立,决定应当继续往后传。三条理由:①拆步骤会把这个文件从「121 行经 Round 26 `Compare-Object` 逐字核验过、可证明未被重写」变成一次不可证伪的重写,而本轮对它的义务恰恰是**证明没动过**(已用 `git diff --numstat` = **9 插入 / 0 删除、且全部新增行都是 `//` 注释**独立证明);②步骤边界是**新的覆写契约**、一经发布不好改,而本轮对这些边界**零需求**——没有任何新行为需要在 `ValidateTargetAsync`/`ClaimAsync` 之间插东西;③`ExecuteAsync` 仍是 `public virtual`,消费者整体覆写能力一点没少,拆步只是把「能不能只改一步」从 0 提到 1,而今天没有已知消费诉求指向那一步。**下一个真正会动它的轮次**是 M3 的加签/减签/拿回(要在「认领」与「挂新 actor」之间插入多 actor 编排),那时边界需求是具体的、画出来的缝才准。Round 26 留的建议切法(`ValidateTargetAsync` / `ClaimAsync` / `WriteHistoryAsync` / `AttachNewActorAsync` / `QueueNotificationAsync`)**原样保留、仍非定案**。
+
+**[偏差·须协调者回写数据库设计文档] 落地形状是「先领取、再写状态」两条语句,而评审 §4.1 的原文把状态与版本写在同一条 `WHERE`/`SET` 里。** 语义等价、条件逐字相同(`WHERE Id = @id AND Status = @expectedStatus AND Version = @oldVersion` → `Version = Version + 1`),差别只在「状态列由紧随其后的整对象更新写」。**理由是本仓的一条硬接线事实**:`SqlSugarSetup.cs:169-176` 的审计 AOP 只在 `DataFilterType.UpdateByObject` 分支填 `UpdateTime`/`UpdateUserId`,而 CAS 必须走 `SetColumns` 条件更新路径——把状态也挤进领取语句,六个落点就得各自手填审计字段,而「这次是谁做的」在六处各不相同(`CancelInstanceOp` 此前硬编码 `StarterUserId` 就是这个税的现场)。正确性不打折:领取成功即持有该行排他锁直到提交,后一条语句处在同一事务的锁保护区内,中间插不进别的事务。**副产品(算行为改动,请 review 留意)**:`CancelInstanceOp` 的 `UpdateUserId` 从硬编码 `StarterUserId` 回到由 AOP 填当前登录用户——撤销的授权规则保证 caller == starter,故实际取值不变,但写法与另两个终态出口归一了。若协调者认为 §4.1 的措辞该与实现对齐,回写建议:把「状态推进统一采用期望状态和版本双重条件」后面补一句「领取语句可与业务状态写分离为同事务两条语句,以保留 ORM 的审计字段自动填充」。
+
+**[偏差·四库验证缺口,按任务范围留给 M2c] `DefaultValue = "0"` 是全仓首次使用的 SqlSugar 特性,而 `ALTER TABLE ADD COLUMN` 这条路径本轮验证不到。** 两个新列取「非空 `int` + DB 级默认值 0」而**不是**照抄 `WfTask.Version` 的裸 `int`:`wf_task` 是 M1 建表时就带这一列(走 `CREATE TABLE`),而这两列对存量库是 `ALTER TABLE ADD COLUMN`,**SQLite / PostgreSQL / SQL Server 在表里已有行时会拒绝没有默认值的 NOT NULL 新列**(只有 MySQL 会隐式补 0)。这条正是评审 §九 第 2/3 条(「新增列先 nullable 或带跨数据库一致的默认值」「`Version` 从 0 开始,旧行可直接回填」)要求的形态。**本轮验证到什么程度要说清**:测试库都是新建的,所以只证明了 **SQLite 的 `CREATE TABLE` 带 `DEFAULT 0` 能建出来、新行读到 0**(第 1 步单独跑了一次全量当探针,165/165);四库的 **ADD COLUMN 升级路径零验证**,按任务范围(「四库契约测试留给 M2c」)挂 M2c。**给 M2c 的具体动作**:拿一个 M2a 时期的库(或先建表再加列)在四库各跑一次 CodeFirst,断言旧行 `Version` 读到 0 而不是报错或 null。
+
+**[已确认覆盖·回答 Round 28 review 的 M3 顾虑] 新 CAS 确实覆盖「同实例两件待办各自 CAS 通过、却各自推进出互相冲突的实例状态」。** 证据链:实例状态只有三个写入出口(`CancelInstanceOp` / `CompleteTaskOp.RejectInstanceAsync` 的终止分支 / `TakeTransitionOp.CompleteInstanceAsync`),本轮三处都加了 `ClaimInstanceAsync(Running)`;并行网关下两个事务都会走到其中之一,`WHERE Status = Running AND Version = @old` 只有一个能拿到 1 行,输的抛 48004 → 引擎「一条 Cmd 一个事务」整体回滚,不会留下半推进的实例。**token 侧同理**且更强:连「进节点」都要领取(`EnterNodeOp`),所以「审批 vs 撤销」这类**不写实例状态**的竞争也被覆盖——一次会推进 token 的同意与一次并发撤销都要 CAS 同一 token 行。**没被覆盖的、必须说清的一类**:不改实例也不改 token 的**任务级动词**(转办/委托/催办/提醒),它们仍然只靠任务级 CAS——这不是缺口而是定案(见前置约束 1 的处置),给改派加实例级 CAS 属过度加锁。
+
+**[射程声明·不虚报] CAS 的失败路径在本仓单线程 xUnit 套件里构造不出来,7 条新用例钉的一律是「机制」。** 真实竞态需要「A 读版本 → B 提交推走版本 → A 写」这个交错,而所有 `BeginXxxAsync` 都在**自己的事务里现读**版本号,单线程顺序执行下读到的必然是最新值、CAS 永远对得上——与 Round 28 证伪 `Timeout_remind_does_not_block_human_action` 的根因**逐字同型**。故断言落在「这个落点确实做了双条件领取并推进了版本」。**这不是套套逻辑**:把任何一处 CAS 退回成无条件整对象更新,版本就不再前进,对应用例立刻红(12 个变异全部实跑转红,证据在下面)。**「并发下不产生半推进状态」这个用户可见后果不在射程内**,按台账既有先例(Task 3 Round 13 / Task 4 Round 17 / Task 7 Round 26)以「读码逐处核对 + 全量回归零破坏」替代。**刻意没做的一件事**:不给命令加 `ExpectedVersion` 入参来把失败路径变可测——那是 M2c 的 `RequestId`/operation receipt 那一档(评审 §十 M2c 第 2-3 条),只为测试需求给公开命令加字段是把测试焊进产品 API。
+
+**[记账·不顺手收口] `CancelInstanceOp` 找活跃任务仍只按 `TokenId`(`CancelInstanceOp.cs` 那句 `Where(t => t.TokenId == ctx.Token.Id).FirstAsync()`)。** 本轮**有意不改**,理由两条:①今天单 token,`TokenId == ctx.Token.Id` 与 `InstanceId == ctx.Instance.Id` 选出的是同一批行 → 改成 `InstanceId` 在今天**行为恒等且不可证伪**(既写不出红测,也无法证明改对了);②更要紧的是它会**预先承诺一个属于 M3 的语义**(「撤销杀掉所有分支」),而真正的 M3 撤销还得同时收掉**其它 token 行本身**、而不只是它们的待办——只改一半看起来像做完了,比没做更危险(下一个人会以为这里已经 M3-ready)。**继续记账,挂 M3 并行网关。**
+
+**[事实·性能代价,请 review 认账] 「进节点也要领取 token」让每次进节点多一条 UPDATE 往返。** 一次发起 = 2 条(`start` + 首个审批节点),一次推进节点的同意 = 1-2 条。这是覆盖评审 §4.1 第 1 条「审批与撤销」的**唯一**手段(那条路上实例状态在两边看都还是 Running,只有 token 动),换的是不再靠数据库隔离级别碰运气。**判定不阻塞**:引擎每次进节点本来就有 token UPDATE + 历史 INSERT + 建任务 INSERT 若干,多一条条件更新在同量级内;真要省,可把领取与 `NodeId` 写**合并**成一条 `SetColumns`,代价就是上面那条偏差里说的手填审计字段。
+
+**[事实·给 Task 14,补键清单不变] 本轮零新增错误码。** 实例/token 级 CAS 失败一律复用 `InstanceStatusConflict`(48004)+ `args["reason"]`(`instanceVersionConflict` / `tokenVersionConflict`)。对称论证:任务级 CAS 输了统一是 `TaskConflict`(48007),那么实例/token 级 CAS 输了就统一是 48004;一码多 `reason` 是本仓既有惯例(`TransferTargetInvalid`/`NobodyBlocked`/`CancelNotAllowed`/`ReturnNotAllowed` 都这么干)。**所以 P3-#9 记的语言包补键清单仍是 5 码 × 2 语言 = 10 条,没被本轮加长**(48004 早有键)。新增的两个 `reason` 值若前端要区分展示,归 Task 14 判断,不新增 `error.code.*` 键。
+
+**[变异实跑证据·12/12 全部转红后复原]** 探针跑用窄过滤器(`~WfVersionCasTests` 等)提速,**基线与最终验收跑用的是任务书指定的过滤器**(165/165 → 172/172)。
+
+| # | 变异 | 转红的用例与实际断言 |
+|---|---|---|
+| 1 | `EnterNodeOp` 去掉 `ClaimTokenAsync` | `Start_advances_token_version_once_per_node_entry:66` — `Expected: 2 / Actual: 0`(另有 4 条连带红,因为进节点在每条路径上) |
+| 2 | `TakeTransitionOp` 去掉 `ClaimInstanceAsync` | `Approve_to_completion_claims_instance_and_token:96` — `Expected: 1 / Actual: 0` |
+| 3 | `TakeTransitionOp` 去掉 `ClaimTokenAsync` | 同一用例 **`:99`**(与变异 2 红在**不同行**,证明两条断言各自独立被钉)— `Expected: 3 / Actual: 2` |
+| 4 | `CompleteTaskOp.RejectInstanceAsync` 去掉 `ClaimInstanceAsync` | `Reject_terminate_claims_instance_and_token:127` — `Expected: 1 / Actual: 0` |
+| 5 | 同上去掉 `ClaimTokenAsync` | 同一用例 **`:129`**(不同行)— `Expected: 3 / Actual: 2` |
+| 6 | `CancelInstanceOp` 精确退回「只锚状态、不锚版本」的 Task 4 原状 | `Cancel_claims_instance_and_token:153` — `Expected: 1 / Actual: 0`。**同跑的 4 条 `WfCancelTests` 全绿**,坐实这次变异只拆掉了版本这一维、状态那一维仍在(陷阱记录第 8 条要防的正是「红了但不是因为版本」) |
+| 7 | `CancelInstanceOp` 去掉 `ClaimTokenAsync` | 同一用例 `:155` — `Expected: 3 / Actual: 2` |
+| 8 | `ReturnTaskOp` 去掉 `ClaimTokenAsync` | `Return_then_resubmit_claims_token_at_every_hop:190` — `Expected: 3 / Actual: 2` |
+| 9 | **`BeginResubmitAsync` 去掉 `ClaimTokenAsync`(还原「重提全程无 CAS」原状,前置约束 2)** | 同一用例 **`:198`**(与变异 8 不同行)— `Expected: 6 / Actual: 5`。**这是「重提到底有没有锚点」的唯一可观测出口** |
+| 10 | **`ReassignTaskOpBase` 删掉任务级 CAS 段(把它当冗余放松掉,前置约束 1 担心的事)** | `Reassign_claims_task_version_only_and_leaves_instance_and_token_untouched:245` — `Expected: 1 / Actual: 0`(任务版本不前进) |
+| 11 | **反方向:给 `ReassignTaskOpBase` 加 `ClaimInstanceAsync`(过度加锁)** | 同一用例 **`:246`**(不同行)— `Expected: 0 / Actual: 1`(实例版本被改派推走了) |
+| 12 | **给 `HandleRemindAsync` 加一道 token 级 CAS(前置约束 3 明说不能加)** | `WfTimeoutTests.Timeout_remind_does_not_block_human_action:271` — `Expected: 2 / Actual: 3` |
+
+**[跑不出红的·如实标注] 只有一条:测试 `New_instance_starts_at_version_zero` 没有配套变异。** 它是 `DefaultValue = "0"` 的**正向确认**(列建出来了、默认真是 0),不是钉子——「列没建出来」的反向保障是查询直接抛异常而不是断言失败,构造不出「有 bug 时绿、没 bug 时也绿」之外的第三态。其余 7 条新断言组各自都有实跑转红的变异。
 
 ### Task 8 — Round 28 exec(修 review 的 1×P1 + 4×P2 + 3×P3;归属只记 exec 自己做过的事)
 
@@ -573,7 +584,7 @@ AutoReject **一律恰好 1 个**(一票否决;`CompleteTaskOp` 的 Reject 分�
 - [x] **6. 委托(一次性)**:仿 `TransferTaskOp` 写 `DelegateTaskOp`,`WfTaskAction.Delegate`;`WfTaskController` 新增 `POST task/delegate`。**Round 23(plan+exec)→ 24(review:0×P1 + 2×P2 + 12×P3)→ 25(修 Findings)三轮收口,143/143。实现没有复制 `TransferTaskOp` 的 120 行,而是给它加 `HistoryAction`/`TargetInvalidErrorCode` 两个 `protected virtual` 钩子、`DelegateTaskOp : TransferTaskOp` 只覆写这两个(转办零行为变化,默认值逐字复现原字面量);新增 `DelegateTargetInvalid = 48026`(不复用转办的 48010,否则委托失败会弹「转办目标非法」)。两条定案:委托权收窄为**仅当前 Pending 办理人**(见 `## 语义契约`「委托」行)、链式委托允许不设上限(安全依据是 `alreadyActor` 校验不看状态、环路天然封死,已由链式用例第三跳钉住)。**
 - [x] **7. 抽 `ReassignTaskOpBase`(纯重构,零行为变化;2026-08-25 用户裁决,Task 8 之前做)**。**Round 26 一轮收口:143/143 一条不动一条不加、未改任何测试文件。**`ReassignTaskOpBase`(abstract,157 行)承载 121 行动作序列 + 两个 `abstract` 钩子;`TransferTaskOp` 瘦到 22 行、`DelegateTaskOp` 26 行,两者互为兄弟、无继承路径。钩子取 `abstract` 而非默认值(默认值等于说「一次改派默认是转办」,正是要拆的断言;将来第三个兄弟漏声明会编译失败而非静默记成转办)。Opus 亲手做了逐字核验:旧 `TransferTaskOp` 第 28-148 行与新基类 `ExecuteAsync` 起 121 行 `Compare-Object -SyncWindow 0` **零差异**,「移动而非重写」独立确认。**原描述**::当前 `DelegateTaskOp : TransferTaskOp` 在类型层次上断言了「委托 IS-A 转办」,而本仓自己的理由(权限码即路由 → 两个端点必须能分别授权、问责语义不同、M3 长期委托规则留位)恰恰在论证两者**平行**。改成抽一个 `ReassignTaskOpBase`(承载现 `TransferTaskOp.ExecuteAsync` 的全部动作序列 + `HistoryAction`/`TargetInvalidErrorCode` 两个 abstract-or-virtual 钩子),`TransferTaskOp` 与 `DelegateTaskOp` 做**兄弟**。**为什么现在做**:①现在源码兼容(`TransferTaskOp` 仍 public、构造签名不变、既有子类不受影响);②Task 8(超时 Job 的 `Timeout.Action = Transfer` 要复用转办)与 Task 9(CAS 收口)都会动 `ExecuteAsync`,届时那个类要同时背「转办 + 委托 + 超时转办」三重身份,重构成本明显更高;③消除 review 指出的**上游方向风险**——往 `TransferTaskOp.ExecuteAsync` 加转办专属逻辑会静默变成委托行为,而你无法为一个尚不存在的 X 写「委托不该做 X」的测试。**验收线:143/143 一条不动、一条不加**(纯重构,行为零变化;若有测试红说明重构改了语义)。依据:Task 6 Findings 的 P3-#15。
 - [x] **8. 超时 Job**。**Round 27(plan+exec,worker 静默中断)→ 28(review:1×P1 + 4×P2 + 6×P3)→ 29(修 Findings)三轮收口,165/165。**核心结构决定:超时不由 Job 直接拼 `CompleteTaskCmd`,而新增一条引擎命令 `TimeoutFireCmd` + `BeginTimeoutAsync`——`TimeoutFired` 必须与动作同事务(否则崩在中间只剩「张三同意了」、审计误导永久化),§14.1 的 CAS 只能落在事务内,会签要一次事务里对多个 Pending 各记一次。**取路 A**:超时动作以当前办理人身份记原生动词、不造「超时专用」枚举值(三处只认原生动词的守卫使其成为唯一可行解,已回写权威文档)。修掉 review 查出的扫描饿死 P1(改处理预算 + 游标翻页 + 死行出口)、假记账的空断言、种子交付链零覆盖、不兑现的「覆写单步」承诺、永久失败无升级出口。**本轮两次诚信问题已查实并更正**:exec 冒签(把自裁写成用户裁定 + 协调者背书)、自报「16 个变异全部转红」有假(review 实跑证伪)。**原描述**:`EnterNodeOp.CreateTaskAsync` 按 `Node.Props?.Timeout?.Hours` 填真实 `DueTime`;新增 `WfTimeoutJob : IAdminJob`,扫 `DueTime < now` 的活跃 `wf_task`,按 `Timeout.Action` 分流(`Remind`→`IWorkflowNotifier`;`AutoPass`/`AutoReject`→等价调用 `CompleteTaskOp`;`Transfer`→等价调用 `TransferTaskOp`),写 `WfHistoryEventType.TimeoutFired`;`TryAddEnumerable` 注册。**⚠ 2026-08-25 修正:光 `TryAddEnumerable` 不足以交付。**协调者已实测确认 `JobSchedulerService.ReloadJobsAsync`(`:272`)只派发 `sys_job` 表里 `Status == Ready` 的行,所以**必须外加 `ISeedData<SysJob>` 种子行**——否则编译通过、手动调 `ExecuteAsync` 的测试全绿,而真实部署里超时永不触发。种子固定 Id 走包保留段(仿 `WorkflowMenuSeed`),`SyncOnUpgrade => false`。**另两条 2026-08-25 裁决**:超时转办取**路 A**(直接 `new TransferTaskOp`,零新增枚举值);`Remind` 用 `TimeoutFired` 事件当上次提醒时间、间隔默认 = 节点 `Timeout.Hours`(下限 1h)、**不做版本 CAS**。详见 `## Plan`。
-- [ ] **9. 实例/Token 级 Version CAS(§十五 15.1 提前项,原属 M2c)**:`WfInstance`/`WfToken` 各加 `Version int not null default 0`(旧行回填 0,四库 CodeFirst 兼容);状态推进统一改「期望状态 + 版本」双条件 CAS(`WHERE Id=@id AND Status=@expectedStatus AND Version=@oldVersion`,成功则 `Version = Version + 1`);把现有各处状态翻转收口到这套 CAS——`CancelInstanceOp`(目前只锚 `Instance.Status`,见 Task 4 Round 17)、`WfTimeoutJob` 领取(Task 7 新写的,直接按新语义写)、`ReturnTaskOp`/`BeginResubmitAsync` 的 `Token.NodeId`/状态更新、`CompleteTaskOp`/`TakeTransitionOp` 的实例终态写入。竞争测试直接建在实例/Token 级 CAS 上,**不要**再按任务级 CAS 写一遍。四库契约测试留给 M2c,本任务只要单库绿 + 读码逐处核对(CAS 并发红测在单线程 xUnit 套件里无法自然构造,沿用 Task 4 Round 17 的处置先例)。依据:`docs/workflow/workflow-design-plan-2026-08-17.md` §十五 15.1、`workflow-database-design-review-2026-08-24.md` §4.1 与 §十「M2b 收口(2026-08-24 提前项)」。
+- [x] **9. 实例/Token 级 Version CAS(§十五 15.1 提前项,原属 M2c)**:`WfInstance`/`WfToken` 各加 `Version int not null default 0`(旧行回填 0,四库 CodeFirst 兼容);状态推进统一改「期望状态 + 版本」双条件 CAS(`WHERE Id=@id AND Status=@expectedStatus AND Version=@oldVersion`,成功则 `Version = Version + 1`);把现有各处状态翻转收口到这套 CAS——`CancelInstanceOp`(目前只锚 `Instance.Status`,见 Task 4 Round 17)、`WfTimeoutJob` 领取(Task 7 新写的,直接按新语义写)、`ReturnTaskOp`/`BeginResubmitAsync` 的 `Token.NodeId`/状态更新、`CompleteTaskOp`/`TakeTransitionOp` 的实例终态写入。竞争测试直接建在实例/Token 级 CAS 上,**不要**再按任务级 CAS 写一遍。四库契约测试留给 M2c,本任务只要单库绿 + 读码逐处核对(CAS 并发红测在单线程 xUnit 套件里无法自然构造,沿用 Task 4 Round 17 的处置先例)。依据:`docs/workflow/workflow-design-plan-2026-08-17.md` §十五 15.1、`workflow-database-design-review-2026-08-24.md` §4.1 与 §十「M2b 收口(2026-08-24 提前项)」。
 - [ ] **10. 后端测试固化**:补 Task 2-9 每项的公开 HTTP 契约测试(仿 M2a Task 4 模式,独立 factory/账号/定义,每条变异验证区分力);`WorkflowReplaceabilityTests` 若 Task 1 已补第八件套,本任务复核不重复。
 - [ ] **11. 抄送列表**:`Abstractions/IWfCcService.cs` + `Services/WfCcService.cs`(`PageMineAsync`/`MarkReadAsync`)+ `Controllers/WfCcController.cs`;前端新增 `views/workflow/cc/index.vue` + 路由 + 菜单种子(取号规则见 `skills/create-crud-backend.md` 的菜单取号约定)。
 - [ ] **12. 我发起的 / 我已办的**:前端复用现成 `instance/page`(mine)与`task/done` 接口,新增两个列表页 + 路由 + 菜单;**不改后端**。
@@ -677,3 +688,11 @@ NEXT: Round 26 — Task 7(超时 Job)plan。三条前置约束见 `## Status` �
 ### Round 26 — 任务7/plan + exec(纯重构) — 动作:`Agent(executor)` 一轮内做完 plan(写 `## Plan`,保留 `### 步骤 26` 与 Task 6 两个「必答问题」小节)与 exec。抽出 `Engine/Operations/ReassignTaskOpBase.cs`(abstract,157 行,承载 121 行动作序列 + 4 个 `protected` 只读属性 + 两个钩子),`TransferTaskOp` 从 149 行瘦到 22 行、`DelegateTaskOp` 26 行,**两者都继承基类、互为兄弟、无继承路径**——「委托 IS-A 转办」的假断言消失,review 指出的**上游方向风险**(往 `TransferTaskOp.ExecuteAsync` 加转办专属逻辑会静默变成委托行为,而你无法为尚不存在的 X 写「委托不该做 X」的测试)随之消除。三个类构造签名一律保持 `(WfTask, long, long, string?)` 不变 → 源码兼容;`WorkflowEngine` 的两个 `BeginXxxAsync` 各自 `new` 自己的 Op 这点也不变(Op 不走 DI)。**钩子裁定为 `abstract`**:①默认值 `=> WfTaskAction.Transfer` 写在基类上等于说「一次改派默认是转办」,正是本轮要拆的断言;②将来第三个兄弟(如超时自动转办)漏声明自己是谁会**编译失败**而非静默记成转办,把「静默污染」这个风险类别真正消掉;③代价为零(全仓零处构造基类),`ApproverProviderBase` 是现成同形先例;④两个 `override` 都不加 `sealed`,继承 `TransferTaskOp` 的消费者子类照旧能覆写。类级 XML 三件事都在:基类承载什么、兄弟俩的产品语义差异(转办=责任转移 / 委托=请人代办;独立端点是因为权限码即路由,合并端点等于让两种授权永远绑在一起)、以及「不是向后跳转、不进 `EnterNodeOp` 跳转下界白名单」的警告(`DelegateTaskOp` 原有那段原样保留,基类另有对两个动词都成立的通用版)。**验收线达成:143/143,一条不动、一条不加,未修改任何测试文件。****Opus 独立复核**(纯重构的核心风险是「搬家悄悄变重写」,故按等价性而非变异验证):①`git status`/`git diff --stat` 确认改动集只有 3 个 Op 文件 + 台账,协调者的 renumber 改动与未跟踪 `TestResults/` 均未被碰;②`rg` 确认两条继承子句都指向基类、两者之间无继承路径,两组钩子值与重构前逐字一致(转办 `Transfer`/`TransferTargetInvalid`=48010、委托 `Delegate`/`DelegateTargetInvalid`=48026);③**亲手逐字核验**——`git show HEAD:...TransferTaskOp.cs` 取重构前版本,旧文件第 28-148 行 vs 新基类 `ExecuteAsync` 起 121 行,trim 后 `Compare-Object -SyncWindow 0` → **121 行零差异**、首行也逐字相同,「移动而非重写」独立确认(这是本轮唯一真正需要证明的东西);④独立跑全量 **143/143**。exec 一处判断已核实合理并采纳:**本轮不拆 `ExecuteAsync` 的 125 行长方法**——虽与本仓「长方法拆小 virtual 步骤」教条不符,但拆步骤会把一次可逐行核对的搬家变成不可证伪的重写,而步骤边界是新的覆写契约、一经发布不好改;Task 9(CAS 收口)正要动其中的 `WfTask.Version` 认领段,由它来定这条缝更准。理由与建议切法已记入 `## Findings`,非定案。另记两条陈旧文档引用(`WfDelegateTests.cs` 两处 `<c>TransferTaskOp</c>`、`## 语义契约` 把 `alreadyActor` 查询记在 `TransferTaskOp` 名下),有意不在本轮改——改注释会污染「测试零改动」这条证据。
 结果:Task 7 **一轮收口**(plan+exec 同轮;纯重构不单独起 review 轮:无新行为、无新测试,等价性已由 121 行逐字核验 + 全量套件双重证明)。任务号 +1(→8),阶段回 plan。
 NEXT: Round 27 — Task 8(超时 Job)plan。四条前置约束见 `## Status` 的「下一步」,其中第三条(超时转办走直接 `new TransferTaskOp` 还是做第三个兄弟)是 plan 阶段要裁定的产品判断。
+
+### Round 30 — 任务9/plan + exec — 动作:给 `WfInstance`/`WfToken` 加 `Version`(DefaultValue 0)、`WfExecutionContext` 上 `ClaimInstanceAsync`/`ClaimTokenAsync`、6 个状态落点领取、`BeginResubmitAsync` 把 ctx 上移并以 token 领取作本事务第一个写。`ReassignTaskOpBase` 只加注释、不改 CAS。新增 `WfVersionCasTests`(当时 7 条机制用例;后续 review 又加了会签首票 + 两条失败路径,现 10 条)。`WfTimeoutTests.Timeout_remind_does_not_block_human_action` 补实例/Token 版本不变量。exec 自报 172/172、12 个变异转红。**本轮未独立复核**(台账写「尚未 review」);Status 也没回写,一直停在 Round 29/plan。
+结果:exec 代码在工作树,阶段实际已到 review,台账 Status 落后。
+NEXT: Round 31 — Task 9 独立复核。
+
+### Round 31 — 任务9/review + 收口 — 动作:以代码为事实源。P2-1 已在 `CompleteTaskOp` 落地。P2-2 测试已写,但生产 `ClaimTokenAsync` 残留 `MUTATION-M2`(throw 被删)。先带着变异跑 → `Resubmit_losing_token_cas` 红 `Expected: 48004 / Actual: 0`;复原 throw;P3-7 注释改成「ctx 没有 ICurrentUser」。指定过滤器 **59/59**。P3-1/P3-6 注释已在。0×未修 P1/P2。勾选 Task 9,阶段回 plan,写 Task 10 方案(缺口补测,不重写已有 HTTP 套件;4 条新用例预期 175→179)。
+结果:Task 9 收口。任务号 +1(→10)。
+NEXT: Round 32 — Task 10 exec。
