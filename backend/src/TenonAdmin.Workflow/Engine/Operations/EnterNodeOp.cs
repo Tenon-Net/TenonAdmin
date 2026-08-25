@@ -112,14 +112,25 @@ public class EnterNodeOp(WfNode node) : IWfOperation
 
         if (users.Count > 0)
         {
-            var rows = users.Select(uid => new WfCc
-            {
-                InstanceId = ctx.Instance.Id,
-                NodeId = Node.Id,
-                UserId = uid,
-                IsRead = false,
-            }).ToList();
-            await ctx.Db.Insertable(rows).ExecuteCommandAsync();
+            // 按 (InstanceId, NodeId, UserId) 幂等:重提会从 start 把整条链(含 cc 节点)重走一遍,
+            // wf_cc 没有唯一约束,无条件 Insertable 会给同一 (实例, 节点, 用户) 反复插行 → 抄送列表出现
+            // 重复条目、标已读只标掉其中一行。先查后插(四库通用,不用某一库特有的 upsert 语法)。
+            var existing = await ctx.Db.Queryable<WfCc>()
+                .Where(c => c.InstanceId == ctx.Instance.Id && c.NodeId == Node.Id)
+                .Select(c => c.UserId)
+                .ToListAsync();
+            var rows = users.Distinct()
+                .Where(uid => !existing.Contains(uid))
+                .Select(uid => new WfCc
+                {
+                    InstanceId = ctx.Instance.Id,
+                    NodeId = Node.Id,
+                    UserId = uid,
+                    IsRead = false,
+                })
+                .ToList();
+            if (rows.Count > 0)
+                await ctx.Db.Insertable(rows).ExecuteCommandAsync();
             ctx.NewCcUserIds.AddRange(users);
             await ctx.AppendHistoryAsync(
                 WfHistoryEventType.CcSent,
@@ -315,19 +326,35 @@ public class EnterNodeOp(WfNode node) : IWfOperation
     /// 取「本 token 最近一个已审批节点」的完整审批人集合(同节点可能多人各一行,如顺序/会签)。
     /// 按 <c>wf_his_task.Id</c> 倒序取第一条 Approve 行的 NodeId,再收集同 NodeId 的全部 UserId。
     /// 无任何 Approve 行(链上第一个审批节点)时返回空集合。
+    /// <para><b>向后跳转重置基线</b>:token 只在单向前进时才有「紧邻的上一个已审批节点」。拒绝路由
+    /// (<see cref="WfRejectAction.ToNode"/>)/ 主动退回(<see cref="ReturnTaskOp"/>)/ 退回重提都会让 token
+    /// 向后跳,跳转目标往往正是最近一条 Approve 行所在的节点——若沿用它当基线,回退目标会被判成「已审过」
+    /// 而整节点自动通过,拒绝路由退化成空操作、重提「从头重走」跳过已批节点。故本方法只认最近一次跳转
+    /// <b>之后</b>的 Approve 行:跳转之前批过的节点在回退后必须重新审。跳转下界取同表的
+    /// <see cref="WfTaskAction.Reject"/>/<see cref="WfTaskAction.Return"/> 行(两者都由跳转发起方在同一事务里
+    /// 先写入 <c>wf_his_task</c>,重提则必然前置一次 Return),不跨表比较雪花 Id。</para>
     /// </summary>
     protected virtual async Task<IReadOnlySet<long>> ResolveAdjacentApprovedUserIdsAsync(
         WfExecutionContext ctx, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var rows = await ctx.Db.Queryable<WfHisTask>()
-            .Where(h => h.InstanceId == ctx.Instance.Id && h.TokenId == ctx.Token.Id && h.Action == WfTaskAction.Approve)
+            .Where(h => h.InstanceId == ctx.Instance.Id && h.TokenId == ctx.Token.Id
+                        && (h.Action == WfTaskAction.Approve
+                            || h.Action == WfTaskAction.Reject
+                            || h.Action == WfTaskAction.Return))
             .OrderBy(h => h.Id, OrderByType.Desc)
             .ToListAsync();
-        if (rows.Count == 0)
+
+        // 倒序遇到的第一条 Reject/Return 行就是最近一次向后跳转,它及更早的行一律不参与基线。
+        var sinceLastJump = rows.TakeWhile(h => h.Action == WfTaskAction.Approve).ToList();
+        if (sinceLastJump.Count == 0)
             return new HashSet<long>();
 
-        return rows.TakeWhile(h => h.NodeId == rows[0].NodeId).Select(h => h.UserId).ToHashSet();
+        return sinceLastJump
+            .TakeWhile(h => h.NodeId == sinceLastJump[0].NodeId)
+            .Select(h => h.UserId)
+            .ToHashSet();
     }
 
     protected virtual WfNobodyAction ResolveNobody(WfExecutionContext ctx)

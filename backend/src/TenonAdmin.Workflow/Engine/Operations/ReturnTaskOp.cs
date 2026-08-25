@@ -79,6 +79,12 @@ public class ReturnTaskOp(
             new { taskId = Task.Id, userId = UserId, action = "Return", targetNodeId = target.Id },
             cancellationToken);
 
+        await ctx.AppendHistoryAsync(
+            WfHistoryEventType.TaskReturned,
+            Task.NodeId,
+            new { fromNodeId = Task.NodeId, targetNodeId = target.Id },
+            cancellationToken);
+
         // 关闭当前活跃任务:全部 actor(不限 Pending——顺序会签的 Waiting 后手也要清)标 Skipped → 物理删
         // actor 行 → 物理删 task 行(转历史已写入 wf_his_task,同 CompleteTaskOp.CloseTaskAsync 的三步)。
         await ctx.Db.Updateable<WfTaskActor>()
@@ -120,8 +126,12 @@ public class ReturnTaskOp(
                 return configured;
 
             case WfReturnPolicy.Prev:
+                // InstanceId 打头命中 idx_wf_his_task_instance(wf_his_task 无 TokenId 索引,只按 TokenId
+                // 过滤是在永不清理的表上做无索引扫描);NodeId 排除当前节点自身——CompleteTaskOp 在计票前
+                // 就插 WfHisTask,故会签/顺序会签下第一位 Approve 后任务仍开着,第二位调退回会命中自己。
                 var lastApproved = await ctx.Db.Queryable<WfHisTask>()
-                    .Where(h => h.TokenId == Task.TokenId && h.Action == WfTaskAction.Approve)
+                    .Where(h => h.InstanceId == ctx.Instance.Id && h.TokenId == Task.TokenId
+                                && h.Action == WfTaskAction.Approve && h.NodeId != Task.NodeId)
                     .OrderBy(h => h.Id, OrderByType.Desc)
                     .FirstAsync();
                 return lastApproved?.NodeId ?? ctx.Model.Root.Id;

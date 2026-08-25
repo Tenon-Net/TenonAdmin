@@ -253,7 +253,8 @@ public class WfDefinitionService(
     /// <summary>
     /// 校验可发布模型(树语义,M2a):根为 start;节点类型限 start|approval|cc|branch
     /// (Parallel/Webhook 仍被拒,M3 开放);节点 Id 跨整棵树(含分支臂内)非空且唯一;
-    /// branch 节点的臂配置合法(见 <see cref="ValidateBranch"/>)。
+    /// branch 节点的臂配置合法(见 <see cref="ValidateBranch"/>);跳转目标引用完整
+    /// (见 <see cref="ValidateNodeReferences"/>)。
     /// </summary>
     protected virtual void ValidateModelForPublish(WfModel model)
     {
@@ -267,6 +268,54 @@ public class WfDefinitionService(
         var providerKeys = approverProviders.Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
         ValidateLength(model.FormComponent, 256, "formComponent");
         ValidateChain(model.Root, seen, providerKeys);
+        ValidateNodeReferences(model);
+    }
+
+    /// <summary>
+    /// 跳转目标的引用完整性(M2b):<c>onReject=toNode</c> ⇒ <see cref="WfNodeProps.RejectToNodeId"/> 非空且
+    /// 指向全树存在的节点;<c>returnPolicy=node</c> ⇒ <see cref="WfNodeProps.ReturnToNodeId"/> 同理。
+    /// <para>必须独立于 <see cref="ValidateChain"/> 单独走一趟:跳转目标可能在当前遍历位置<b>之后</b>、
+    /// 或在另一条分支臂上,只查已 <c>seen</c> 的集合会把合法的前向/跨臂引用误判成非法。这里复用
+    /// <see cref="WfModelIndex"/> 的整树索引,不再手写第三次遍历。</para>
+    /// <para>不校验会漏出「拒绝动作永久不可用」的定义:运行到该节点点拒绝才抛
+    /// <see cref="WorkflowErrorCode.ModelInvalid"/> 并回滚,而那个码的语义(根非 start / 缺节点)
+    /// 完全看不出是配置问题。</para>
+    /// </summary>
+    protected virtual void ValidateNodeReferences(WfModel model)
+    {
+        var index = WfModelIndex.Build(model);
+        foreach (var node in index.Nodes)
+        {
+            if (node.Props?.OnReject == WfRejectAction.ToNode)
+            {
+                RequireNodeReference(index, node, node.Props.RejectToNodeId, "rejectToNodeId");
+            }
+
+            if (node.Props?.ReturnPolicy == WfReturnPolicy.Node)
+            {
+                RequireNodeReference(index, node, node.Props.ReturnToNodeId, "returnToNodeId");
+            }
+        }
+    }
+
+    /// <summary>目标节点 Id 非空且能在整树索引里解析;否则抛 <c>&lt;field&gt;Invalid</c>。</summary>
+    protected virtual void RequireNodeReference(
+        WfModelIndex index,
+        WfNode node,
+        string? targetNodeId,
+        string field)
+    {
+        ValidateLength(targetNodeId, 64, field);
+        if (string.IsNullOrWhiteSpace(targetNodeId) || index.Find(targetNodeId) is null)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?>
+                {
+                    ["reason"] = $"{field}Invalid",
+                    ["nodeId"] = node.Id,
+                    ["targetNodeId"] = targetNodeId,
+                });
+        }
     }
 
     /// <summary>沿 <c>.Next</c> 走一条链,逐节点校验;<paramref name="seen"/> 跨整棵树共享,

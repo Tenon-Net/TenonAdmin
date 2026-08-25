@@ -182,6 +182,11 @@ public class CompleteTaskOp(
                          ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
                              new Dictionary<string, object?> { ["reason"] = "rejectTargetInvalid" });
 
+            await ctx.AppendHistoryAsync(
+                WfHistoryEventType.RejectRouted,
+                node.Id,
+                new { fromNodeId = node.Id, targetNodeId = target.Id },
+                cancellationToken);
             await ctx.AppendHistoryAsync(WfHistoryEventType.NodeLeave, node.Id, cancellationToken: cancellationToken);
             ctx.Agenda.Plan(new EnterNodeOp(target));
             return;
