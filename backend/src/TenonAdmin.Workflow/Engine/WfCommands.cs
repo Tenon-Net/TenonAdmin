@@ -72,6 +72,23 @@ public sealed class TransferTaskCmd : IWfCommand
     public string? Comment { get; init; }
 }
 
+/// <summary>
+/// 任务级委托(一次性):当前办理人把这一件待办指给别人代办。机制与 <see cref="TransferTaskCmd"/>
+/// 同构,只在 <c>wf_his_task</c> 记 <see cref="WfTaskAction.Delegate"/>;长期委托规则属 M3,不在此列。
+/// </summary>
+public sealed class DelegateTaskCmd : IWfCommand
+{
+    public required long TaskId { get; init; }
+
+    /// <summary>当前办理人(须为 Pending Approver;实例发起人无权委托他人的待办)。</summary>
+    public required long UserId { get; init; }
+
+    /// <summary>委托目标用户。</summary>
+    public required long ToUserId { get; init; }
+
+    public string? Comment { get; init; }
+}
+
 /// <summary>撤销实例:仅发起人、仅无人已批的 Running 实例可撤销。</summary>
 public sealed class CancelInstanceCmd : IWfCommand
 {

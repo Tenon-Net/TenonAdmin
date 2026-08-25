@@ -39,7 +39,7 @@ public class WfHisTask : BaseEntity
     [SugarColumn(ColumnDescription = "耗时(毫秒)")]
     public long DurationMs { get; set; }
 
-    /// <summary>转办目标用户 Id(仅 Transfer 时有值)。</summary>
+    /// <summary>转办 / 委托目标用户 Id(仅 Transfer 与 Delegate 时有值)。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "转办目标用户 Id")]
     public long? TransferToUserId { get; set; }
 }

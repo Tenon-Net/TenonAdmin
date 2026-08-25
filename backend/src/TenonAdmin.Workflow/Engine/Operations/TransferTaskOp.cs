@@ -5,6 +5,8 @@ namespace TenonAdmin.Workflow;
 /// <summary>
 /// 任务级转办(M1):CAS 跳过当前办理人 → 写历史 → 挂上目标 Pending actor。
 /// 不推进 token、不删待办;Agenda 自然空停。
+/// <para>M2b 的委托(<see cref="DelegateTaskOp"/>)机制与转办同构,只换 <see cref="HistoryAction"/>
+/// 与 <see cref="TargetInvalidErrorCode"/> 两个语义钩子,故继承本类而不复制整段动作序列。</para>
 /// </summary>
 public class TransferTaskOp(
     WfTask task,
@@ -17,13 +19,19 @@ public class TransferTaskOp(
     protected long ToUserId { get; } = toUserId;
     protected string? Comment { get; } = comment;
 
+    /// <summary>落进 <c>wf_his_task.Action</c> 与事件流 payload 的动作标签。</summary>
+    protected virtual WfTaskAction HistoryAction => WfTaskAction.Transfer;
+
+    /// <summary>目标用户不可用 / 已是办理人 / 是自己时抛的业务码。</summary>
+    protected virtual int TargetInvalidErrorCode => WorkflowErrorCode.TransferTargetInvalid;
+
     public virtual async Task ExecuteAsync(WfExecutionContext ctx, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         if (ToUserId <= 0 || ToUserId == UserId)
         {
-            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TransferTargetInvalid,
+            throw WorkflowErrorCode.Exception(TargetInvalidErrorCode,
                 new Dictionary<string, object?> { ["toUserId"] = ToUserId });
         }
 
@@ -32,7 +40,7 @@ public class TransferTaskOp(
             .AnyAsync();
         if (!targetEnabled)
         {
-            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TransferTargetInvalid,
+            throw WorkflowErrorCode.Exception(TargetInvalidErrorCode,
                 new Dictionary<string, object?> { ["toUserId"] = ToUserId, ["reason"] = "userUnavailable" });
         }
 
@@ -42,7 +50,7 @@ public class TransferTaskOp(
             .AnyAsync();
         if (targetExists)
         {
-            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TransferTargetInvalid,
+            throw WorkflowErrorCode.Exception(TargetInvalidErrorCode,
                 new Dictionary<string, object?> { ["toUserId"] = ToUserId, ["reason"] = "alreadyActor" });
         }
 
@@ -94,7 +102,7 @@ public class TransferTaskOp(
             TaskId = Task.Id,
             TokenId = Task.TokenId,
             UserId = UserId,
-            Action = WfTaskAction.Transfer,
+            Action = HistoryAction,
             Comment = Comment,
             DurationMs = durationMs,
             TransferToUserId = ToUserId,
@@ -116,7 +124,7 @@ public class TransferTaskOp(
             {
                 taskId = Task.Id,
                 userId = UserId,
-                action = WfTaskAction.Transfer.ToString(),
+                action = HistoryAction.ToString(),
                 toUserId = ToUserId,
             },
             cancellationToken);

@@ -6,7 +6,7 @@ using TenonAdmin.SqlSugar;
 namespace TenonAdmin.Workflow;
 
 /// <summary>
-/// 内置审批任务服务:待办/已办列表 + 三动词派发引擎 Cmd。
+/// 内置审批任务服务:待办/已办列表 + 六动词(同意/拒绝/转办/委托/催办/退回)派发引擎 Cmd。
 /// </summary>
 public class WfTaskService(
     IWorkflowEngine engine,
@@ -154,6 +154,25 @@ public class WfTaskService(
     {
         return engine.ExecuteAsync(
             new TransferTaskCmd
+            {
+                TaskId = taskId,
+                UserId = userId,
+                ToUserId = toUserId,
+                Comment = comment,
+            },
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public virtual Task<WfEngineResult> DelegateAsync(
+        long taskId,
+        long userId,
+        long toUserId,
+        string? comment = null,
+        CancellationToken cancellationToken = default)
+    {
+        return engine.ExecuteAsync(
+            new DelegateTaskCmd
             {
                 TaskId = taskId,
                 UserId = userId,

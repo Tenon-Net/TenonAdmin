@@ -40,6 +40,7 @@ public class WorkflowEngine(
                 StartInstanceCmd start => await BeginStartAsync(db, start, cancellationToken),
                 CompleteTaskCmd complete => await BeginCompleteAsync(db, complete, cancellationToken),
                 TransferTaskCmd transfer => await BeginTransferAsync(db, transfer, cancellationToken),
+                DelegateTaskCmd delegateCmd => await BeginDelegateAsync(db, delegateCmd, cancellationToken),
                 CancelInstanceCmd cancel => await BeginCancelAsync(db, cancel, cancellationToken),
                 ReturnTaskCmd ret => await BeginReturnAsync(db, ret, cancellationToken),
                 ResubmitInstanceCmd resubmit => await BeginResubmitAsync(db, resubmit, cancellationToken),
@@ -326,6 +327,74 @@ public class WorkflowEngine(
         };
 
         agenda.Plan(new TransferTaskOp(task, cmd.UserId, cmd.ToUserId, cmd.Comment));
+        return ctx;
+    }
+
+    /// <summary>
+    /// 委托(一次性):加载运行态 → 入队 DelegateTaskOp(不推进 token)。准入与转办逐字同款——
+    /// 待办是否还在、实例是否 Running、token 是否活跃;「只有当前 Pending 办理人有权委托」由
+    /// <see cref="DelegateTaskOp"/> 的 actor CAS 认领兜住(认领不到即 <c>TaskConflict</c>)。
+    /// 有意不与 <see cref="BeginTransferAsync"/> 合并成一个泛型方法:<c>BeginXxxAsync</c> 是消费者
+    /// 覆写单个动词准入逻辑的入口,合并会让「只想改委托的准入」变成「必须连转办一起复制」。
+    /// </summary>
+    protected virtual async Task<WfExecutionContext> BeginDelegateAsync(
+        ISqlSugarClient db,
+        DelegateTaskCmd cmd,
+        CancellationToken cancellationToken)
+    {
+        var task = await db.Queryable<WfTask>().Where(t => t.Id == cmd.TaskId).FirstAsync();
+        if (task is null)
+        {
+            var completed = await db.Queryable<WfHisTask>()
+                .AnyAsync(h => h.TaskId == cmd.TaskId);
+            throw WorkflowErrorCode.Exception(
+                completed ? WorkflowErrorCode.TaskConflict : WorkflowErrorCode.TaskNotFound);
+        }
+
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>()
+            .Where(i => i.Id == task.InstanceId)
+            .FirstAsync();
+        if (instance is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceNotFound);
+        if (instance.Status != WfInstanceStatus.Running)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceStatusConflict);
+
+        var token = await db.Queryable<WfToken>()
+            .Where(t => t.Id == task.TokenId && t.Status == WfTokenStatus.Active)
+            .FirstAsync();
+        if (token is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TokenNotFound);
+
+        var version = await db.Queryable<WfDefinitionVersion>()
+            .Where(v => v.Id == instance.DefinitionVersionId)
+            .FirstAsync();
+        if (version is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionVersionNotFound);
+
+        var model = WfModelJson.Deserialize(version.ModelJson)
+                    ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid);
+
+        var agenda = new WfAgenda();
+        var ctx = new WfExecutionContext
+        {
+            Db = db,
+            Agenda = agenda,
+            ApproverResolver = approverResolver,
+            FormBinder = formBinder,
+            Options = options,
+            TimeProvider = timeProvider,
+            ConditionEvaluator = conditionEvaluator,
+            Notifier = notifier,
+            Instance = instance,
+            Token = token,
+            Model = model,
+            DefinitionVersion = version,
+            SelectedUserIdsByNode = DeserializeSelectedUsers(instance.SelectedUserIdsJson),
+            LeaderChainByLevel = DeserializeLeaderChainsByLevel(instance.LeaderChainJson),
+        };
+
+        agenda.Plan(new DelegateTaskOp(task, cmd.UserId, cmd.ToUserId, cmd.Comment));
         return ctx;
     }
 

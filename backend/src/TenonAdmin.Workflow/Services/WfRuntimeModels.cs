@@ -53,14 +53,14 @@ public record WfTaskPageInput : PageInputBase
     public long? DefinitionId { get; init; }
 }
 
-/// <summary>审批动词入参(同意 / 拒绝 / 转办 / 退回)。</summary>
+/// <summary>审批动词入参(同意 / 拒绝 / 转办 / 委托 / 退回 / 催办)。</summary>
 public record WfTaskActionInput
 {
     public long TaskId { get; init; }
 
     public string? Comment { get; init; }
 
-    /// <summary>转办目标用户 Id;仅 transfer 必填</summary>
+    /// <summary>转办 / 委托目标用户 Id;仅 transfer 与 delegate 必填</summary>
     public long ToUserId { get; init; }
 
     /// <summary>退回目标节点 Id;仅节点 <see cref="WfReturnPolicy.Any"/> 策略时前端会传,其余动作忽略。</summary>

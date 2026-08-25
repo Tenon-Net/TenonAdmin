@@ -80,6 +80,9 @@ public static class WorkflowErrorCode
     /// <summary>非发起人重提 / 无待重提状态</summary>
     public const int ResubmitNotAllowed = 48025;
 
+    /// <summary>委托目标非法(≤0 / 委托给自己 / 目标已在办理人中)</summary>
+    public const int DelegateTargetInvalid = 48026;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }

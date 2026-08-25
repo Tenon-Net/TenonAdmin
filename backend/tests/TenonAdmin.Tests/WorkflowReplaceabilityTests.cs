@@ -167,6 +167,10 @@ public class WorkflowReplaceabilityTests
         public Task<WfEngineResult> TransferAsync(
             long taskId, long userId, long toUserId, string? comment = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+        public Task<WfEngineResult> DelegateAsync(
+            long taskId, long userId, long toUserId, string? comment = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
         public Task UrgeAsync(
             long taskId, long callerUserId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
