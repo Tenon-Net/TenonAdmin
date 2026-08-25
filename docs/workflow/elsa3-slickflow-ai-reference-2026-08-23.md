@@ -185,6 +185,8 @@ Slickflow 把 AI 作为流程节点类型：[`AIServiceTypeEnum.cs#L12-L33`](htt
 
 `provider/model/modelVersion/promptVersion`、token、费用和耗时属于执行审计 envelope，由 Adapter/宿主记录，不信任模型自行回填。必须使用严格 schema 校验；超时、provider 错误、格式错误、低 confidence 或证据不足一律转人工。即使流程定义显式允许自动处理，也必须由服务端确定性 policy 检查阈值、权限、租户数据范围、风险标记和幂等性后再执行。
 
+`confidence` 在这份契约里是被降级的字段：模型自报置信度业界已知普遍未校准，把“confidence 超过阈值”单独作为自动放行条件等于把路由权变相还给模型。policy 的主判据必须是 `reasonCodes`、`riskFlags` 与证据完整性这些可确定性核验的字段；`confidence` 只作为审计记录与事后评测输入。自动放行的真实门槛来自 shadow mode 期间按场景统计的实际准确率，不来自模型自评分。
+
 ### 4.3 明确不借
 
 - 不把 Elsa Core/Studio/Copilot SDK 整体引入 Tenon 工作流核心；不复制 Copilot provider 的 `ApproveAll`。
@@ -262,12 +264,15 @@ public interface IWorkflowNodeHandler
 5. RAG 只返回调用者有权限读取的证据；保存引用和 hash，敏感正文按策略脱敏或不落审计。
 6. Agent 工具首批只读；写工具必须单独声明危险度、权限、租户、幂等和人工确认策略。审批写命令不注册为模型可调用工具。
 7. Provider 密钥不进流程定义、变量或日志；供应商 SDK 与配置只存在于 Adapter。
+8. 自动放行默认关闭。内核只交付 shadow mode 机制、指标采集与审计视图；开关按流程定义显式开启，放行阈值由消费者部署在自己的数据上校准，内核不提供“开箱即用”的阈值默认值。
 
 ### 4.8 验收线与产品指标
 
 工程验收至少覆盖：同一 `ExecutionKey` 串行/并发重放只推进一次；worker 在调用前后崩溃可恢复；远程调用期间无工作流数据库长事务；无效 JSON、超时、限流、低置信度稳定转人工；provider fake 可覆盖成功/重试/人工 fallback；四库上的 execution 唯一约束、CAS/fence、事务回滚和 outbox 契约一致；跨租户证据与工具调用被拒绝。
 
 产品指标不再只看“支持多少节点”，而看人工触达率、平均审批时长、自动放行覆盖率、人工推翻率、错放/逃逸风险率、schema 失败率、fallback 率、provider 延迟与单次成本。首版必须有 shadow mode：只记录 AI proposal，不改变路由；达到场景级评测阈值后再打开低风险自动放行。
+
+评测阈值属于部署方，不属于内核：TenonAdmin 以内核包分发、自身没有生产流量，各消费者的审批场景与单据分布互不相同。内核负责指标采集与审计视图，“何时由 shadow 切自动放行”是每个消费者按自己场景数据做的决定；产品文档必须明确这一责任边界，防止消费者拿默认配置直接开自动放行。
 
 ## 5. 建议开发阶段
 

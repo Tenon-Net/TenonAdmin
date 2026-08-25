@@ -20,10 +20,11 @@ TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可�
 
 | 任务 | 先读 | 再读 |
 | --- | --- | --- |
-| 继续 M2a/M2b | 设计规划 §13 | 总调研中对应产品参考 |
-| 开发 M2c 幂等与四库契约 | 数据库评审 §四、§五、§九、§十 | 设计规划 §14.2、OpenWorkflow 报告 §4–§6 |
-| 开发 M3a 自动节点执行 | 数据库评审 §四、§六、§八–§十 | AI 基石 §4.4–§4.8、OpenWorkflow 的 execution/lease/retry 部分 |
-| 开发 M3b AI Decision | AI 基石 §4–§5 | 设计规划 §14.3 |
+| 继续 M2a/M2b | 设计规划 §13、§15.1（Version 字段提前项） | 总调研中对应产品参考 |
+| 开发 M2c 幂等与四库契约 | 数据库评审 §四、§五、§九、§十 | 设计规划 §14.2、§15.1、OpenWorkflow 报告 §4–§6 |
+| 开发 M3a-1 自动节点执行 | 设计规划 §15.2–§15.3、数据库评审 §四、§六、§八–§十 | AI 基石 §4.4–§4.8、OpenWorkflow 的 execution/lease/retry 部分 |
+| 开发 M3a-2 表单/动词/并行/React port | 设计规划 §八、§15.2 | 设计规划 §五、§六 |
+| 开发 M3b AI Decision | AI 基石 §4–§5 | 设计规划 §14.3、§15.4 |
 | 开发 RAG/Agent/设计 Copilot | AI 基石 §2–§4 | 固定参考提交有变化时才增量复核源码 |
 | 修改 `wf_*` 字段、索引或迁移 | 数据库评审全文 | 当前实体、四库契约测试和设计规划 |
 | 查选型缘由或许可证 | 总调研 | 对应专项报告 |
@@ -79,7 +80,7 @@ TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可�
 
 先阅读 AGENTS.md、CLAUDE.md、docs/workflow/README.md、elsa3-slickflow-ai-reference-2026-08-23.md §4–§5，以及 workflow-design-plan-2026-08-17.md §14.3。存在 .codegraph 时先用 CodeGraph；固定参考 commit 未变化时不要重新调研参考仓。
 
-在 M3a 可靠执行层之上实现最小 AI 决策闭环：模型适配接口、Fake Provider 和一个 OpenAI-compatible Provider、结构化 proposal schema、服务端 policy 校验、shadow mode、置信度与风险阈值、人工兜底和完整审计。模型输出只能是 proposal，不能直接修改 task/token；v0 只允许低风险场景自动批准，不允许自动拒绝。所有越权、解析失败、超时、低置信度、策略不匹配和敏感场景都必须确定性转人工。
+在 M3a 可靠执行层之上实现最小 AI 决策闭环：模型适配接口、Fake Provider 和一个 OpenAI-compatible Provider、结构化 proposal schema、服务端 policy 校验、shadow mode、置信度与风险阈值、人工兜底和完整审计。模型输出只能是 proposal，不能直接修改 task/token；v0 只允许低风险场景自动批准，不允许自动拒绝。自动放行默认关闭，阈值来自消费者部署在自己数据上的 shadow 评测，模型自报 confidence 不得单独作为放行条件。所有越权、解析失败、超时、低置信度、策略不匹配和敏感场景都必须确定性转人工。
 
 测试覆盖结构化输出校验、策略路由、重复执行幂等、provider 故障、PII/secret 处理、tenant 隔离、审计重放，以及“模型不可直接推进流程”的安全不变量。先用 shadow 数据证明效果，再开放受控自动化。契约变化时重新生成双前端 schema，并把最终接口、阈值来源、审计字段和上线门槛回写到工作流文档；不要自行提交或推送。
 ```
@@ -112,6 +113,7 @@ TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可�
 
 - 新的工作流设计、调研和专项报告统一放在 `docs/workflow/`，并在本页登记。
 - 需求实现中的最终语义同步回设计规划；不要只写在临时任务记录或聊天中。
+- 契约性决定（`IdentityHash` 构造规则、状态机、fence 语义、放行阈值来源等）在任务收尾报告中列明回写到了哪份文档；只存在于聊天或 `.loop` 台账中的语义视为未定稿。
 - 外部文档只能证明产品方向；已交付能力以固定源码和可获取包为准。
 - AI 模型只生成 proposal，服务端 schema/policy 决定路由；模型不得直接修改任务或 token 状态。
 - 移动或重命名本目录文件时，全仓更新引用，并重新生成受 XML 注释影响的双前端 OpenAPI schema。

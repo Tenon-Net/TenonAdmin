@@ -125,7 +125,7 @@ WHERE Id = @id
   AND Version = @oldVersion
 ```
 
-成功时 `Version = Version + 1`。这项应进入 M2c 的四库契约测试，而不是等到 M3 自动节点再补。
+成功时 `Version = Version + 1`。两个字段在 M2b 收口时即落地（旧行回填 0，见 §十），M2b 刚交付的撤销、催办与超时正是这些竞争的高发区，竞争测试应直接建立在实例/Token 级 CAS 上；四库契约测试随 M2c 收口，而不是等到 M3 自动节点再补。
 
 ### 4.2 缺少明确完结时间
 
@@ -304,12 +304,22 @@ ScopeKey + CommandType + TargetType + TargetId + ActorUserId + RequestKey
 
 四数据库实现时优先对规范化后的 `IdentityHash` 建唯一索引，同时保留组成字段用于排查。不要直接依赖包含 nullable `CreateOrgId` 的组合唯一索引，因为不同数据库对 `NULL` 唯一性的行为会造成幂等差异。
 
+`IdentityHash` 的构造规则是发包后不可逆的契约：本项目通过 NuGet 分发，消费者数据库里会留下按旧规则算出的 hash，任何后续调整都会让同一请求产生不同 identity、幂等静默失效。首个实现必须一次定死以下规则，并写进契约测试：
+
+- 参与字段固定为 `ScopeKey、CommandType、TargetType、TargetId、ActorUserId、RequestKey`，按此顺序拼接，之后只增不改、不随索引调整重排；
+- 分隔符使用不会出现在任何参与值中的固定字符（如 `\n`）；数值型 Id 用不变文化十进制序列化；
+- 字符串字段 trim 后保持原大小写；`CommandType/TargetType` 使用固定枚举名，不用显示文案；
+- 可空维度（如无机构用户的 `ScopeKey`）归一化为固定哨兵值，不允许 null 与空字符串产生两个不同 hash；
+- 哈希算法固定（建议 SHA-256），输出格式固定（建议小写十六进制）；
+- 用一组“已知输入 → 已知 hash”快照用例在四库共同锁定，保证任何数据库、任何运行时算出同一值。
+
 完成标准：
 
 - receipt 与领域状态在同一事务提交；
 - 相同 identity 的串行、并发请求只推进一次；
 - 重试返回第一次成功的 `WfEngineResult`；
 - 事务回滚时 receipt 不残留；
+- 相同输入在四库与任何运行时得到同一 `IdentityHash`（快照用例）；
 - SQLite、MySQL、PostgreSQL、SQL Server 使用同一套契约用例。
 
 ## 六、M3a：可靠自动节点执行
@@ -448,13 +458,19 @@ TenonAdmin 通过 NuGet 和 CodeFirst 分发，迁移应优先采用可回滚的
 
 ## 十、推荐开发顺序
 
+### M2b 收口（2026-08-24 提前项）
+
+1. 增加 `WfInstance.Version`、`WfToken.Version`，旧行回填 0；
+2. 撤销、催办、超时与人工动作的竞争测试直接建立在实例/Token 级 CAS 上，避免 M2c 重写。
+
+字段本身是可回填的增量迁移，成本极低；提前一个里程碑落地的收益是 M2b 的竞争语义从一开始就正确，而不是先按任务级 CAS 写一批测试、M2c 再改写一遍。
+
 ### M2c
 
-1. 增加 `WfInstance.Version`、`WfToken.Version`；
-2. 增加 `WfInstance.CompletedTime`；
-3. 新增 operation receipt；
-4. 将 `RequestId` 贯穿命令、receipt 和事件；
-5. 用四库测试锁定重复请求、并发 CAS、回滚和终态保护。
+1. 增加 `WfInstance.CompletedTime`；
+2. 新增 operation receipt，`IdentityHash` 构造规则按 §五 一次定死；
+3. 将 `RequestId` 贯穿命令、receipt 和事件；
+4. 用四库测试锁定重复请求、并发 CAS、回滚和终态保护。
 
 ### M2c 与 M3a 之间
 
