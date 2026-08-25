@@ -238,6 +238,8 @@ POST /api/v1/workflow/task/approve|reject|return|transfer|delegate  // 各带意
 | 审批人解析为空 | 自动通过(出厂全局默认) | 三级可配:自动通过 / 转指定人 / 卡住通知管理员 |
 | 同一人相邻节点 | 自动通过后一次(去重)。**去重基线只认最近一次向后跳转之后的批准记录**——拒绝路由 / 主动退回 / 退回重提都重置基线,跳转之前批过的节点在回退后必须重新审(2026-08-24 定案,见下方「向后跳转重置去重基线」) | 节点可配"仍需重复审批" |
 | 委托(一次性) | **仅当前 Pending 办理人可委托**,实例发起人无权委托他人待办;被委托人拿新 actor(原 actor 翻 `Skipped`),同一 `taskId` 换人而非新建待办;不重置 `DurationMs` 基准与 `DueTime` | — |
+| 超时提醒频率 | `Remind` 可重复触发,**最小提醒间隔默认 = 该节点自己的 `timeout.hours`(下限 1 小时)**,即「配 24 小时超时的节点每 24 小时催一次」。判据取本(实例, 节点)上最近一条 `TimeoutFired` 事件的时间,不新增列 | `TenonAdmin:Workflow:TimeoutRemindMinIntervalHours` 全局覆盖(0 = 跟随节点);或覆写 `WfTimeoutJob.ShouldRemindAsync` 换节奏(「只提醒一次」是它的第一个用例)——**注意**:覆写子类后还须把 `sys_job` 中该行的 `HandlerName` 改成子类全名,否则调度器仍选中基类、覆写不生效 |
+| 超时动作的动作主体 | 超时触发的自动动作一律**以当前 Pending 办理人身份记原生动词**(`Approve`/`Reject`/`Transfer`),不新增「超时专用」的 `WfTaskAction` 值;真相由同事务的 `TimeoutFired` 事件 + `Comment` 说明。机制约束:`CompleteTaskOp` 的 actor 认领是 `WHERE UserId=@caller AND Status=Pending`,系统账号必然认领不到,换身份要松掉「仅本人可办」这条承重校验 | 将来若要区分人/机器动作,补法是加一个可空列(如 `IsAuto`,旧行回填),比持久化枚举值可逆 |
 | 链式委托 | 允许 A→B→C,不设次数/深度上限;委托回本待办任何参与过的人会被拒(`alreadyActor` 校验只看 actor 行存在性、不看状态),故环路天然封死 | — |
 | 会签中一人拒绝 | 一票否决立即拒 | 比例票签是 M3 动词 |
 | 或签中第一人表态 | 先表态即定局(先拒即拒/先过即过),其余任务自动取消 | — |
