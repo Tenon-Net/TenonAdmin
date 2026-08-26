@@ -377,6 +377,57 @@ public class WfTimeoutTests
         Assert.Equal(1, await HisTaskCount(f, instanceId, WfTaskAction.Approve));
     }
 
+    /// <summary>
+    /// 顺序会签(<see cref="WfSignMode.Sequential"/>)超时自动通过是<b>有意的逐拍级联</b>:一拍只批当前
+    /// 那位 Pending,晋级下一位,任务行仍在、<c>DueTime</c> 仍是过去 → 下一拍再批下一位,直到节点通过。
+    /// <para>Findings 写明可构造、此前零覆盖。不是缺陷,但没钉子下次会被当 bug「修」成「一拍批完全部」
+    /// 或「第一拍清掉 <c>DueTime</c>」。变异:只跑一拍就断言完结 → <c>Expected: 2 Approve / Actual: 1</c>;
+    /// 第一拍清 <c>DueTime</c> → 第二拍扫不到 → 实例停在 Running。</para>
+    /// </summary>
+    [Fact]
+    public async Task Timeout_sequential_auto_pass_cascades_one_actor_per_scan()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        var starterAccount = "wf-autopass-seq-starter";
+        await AddUser(admin, starterAccount);
+        var aId = await AddUser(admin, "wf-autopass-seq-a");
+        var bId = await AddUser(admin, "wf-autopass-seq-b");
+        var definitionId = await Publish(admin, "超时-顺序会签逐拍",
+            SingleApprovalModel([aId, bId], mode: "seq", timeout: new { hours = 1, action = "autoPass" }));
+
+        var starter = await ClientFor(f, starterAccount);
+        var a = await ClientFor(f, "wf-autopass-seq-a");
+        var b = await ClientFor(f, "wf-autopass-seq-b");
+
+        var start = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
+        Assert.Equal(0, start.GetProperty("code").GetInt32());
+        var instanceId = start.GetProperty("data").GetProperty("instanceId").GetInt64();
+        var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
+
+        Assert.Single(await TodoItemsFor(a, instanceId));
+        Assert.Empty(await TodoItemsFor(b, instanceId));
+
+        await MakeDue(f, instanceId, TimeSpan.FromDays(1));
+        await RunTimeoutJob(f);
+
+        Assert.Equal(WfInstanceStatus.Running, await InstanceStatus(f, instanceId));
+        Assert.Equal(1, await HisTaskCount(f, instanceId, WfTaskAction.Approve));
+        Assert.Empty(await TodoItemsFor(a, instanceId));
+        Assert.Single(await TodoItemsFor(b, instanceId));
+        Assert.Equal(WfActorStatus.Done, await ActorStatusOf(f, taskId, aId));
+        Assert.Equal(WfActorStatus.Pending, await ActorStatusOf(f, taskId, bId));
+        // 级联靠「DueTime 仍在过去」成立:第一拍若清掉它,第二拍扫不到,B 永远停在 Pending。
+        Assert.NotNull(await DueTimeOf(f, taskId));
+
+        await RunTimeoutJob(f);
+
+        Assert.Equal(WfInstanceStatus.Approved, await InstanceStatus(f, instanceId));
+        Assert.Equal(2, await HisTaskCount(f, instanceId, WfTaskAction.Approve));
+        Assert.Empty(await TodoItemsFor(a, instanceId));
+        Assert.Empty(await TodoItemsFor(b, instanceId));
+    }
+
     /// <summary>自动拒绝:一票否决,实例终止为 <see cref="WfInstanceStatus.Rejected"/>。</summary>
     [Fact]
     public async Task Timeout_auto_reject_terminates_instance()
@@ -492,6 +543,64 @@ public class WfTimeoutTests
         // alreadyActor 抛 48010 → 整个事务连 TimeoutFired 一起回滚),行数断言对它完全瞎。
         Assert.Equal(["超时扫描:无到期待办。"], await RunTimeoutJob(f));
         Assert.Equal(1, await HisTaskCount(f, instanceId, WfTaskAction.Transfer));
+        Assert.Single(await TodoItemsFor(c, instanceId));
+    }
+
+    /// <summary>
+    /// <b>现状快照,不是定案。</b>会签(<see cref="WfSignMode.All"/>)下超时 <c>Transfer</c> 今天只改派
+    /// <c>actors[0]</c>,却把整行 <c>DueTime</c> 清掉——剩下的 Pending 办理人从此不受任何超时约束。
+    /// 三个候选(改派全部 Pending / 等最后一位再清 / 发布期禁 Transfer)都是产品判断,本条<b>不</b>把
+    /// 任何一种写成契约,只把当前引擎行为焊成可观测出口,防止「顺手修」在没定案时改掉它。
+    /// <para>变异必须能红:①对每个 Pending 都转 → B 的待办也没了;②不清 <c>DueTime</c> → 第二拍
+    /// Job 日志变成「失败」或再次转办(断言看<b>已提交</b>的日志 / HTTP / DB,不能数回滚事务里的行,
+    /// 见 Task 8 Findings 方法论条)。</para>
+    /// </summary>
+    [Fact]
+    public async Task Timeout_transfer_on_all_sign_mode_only_reassigns_first_pending_and_clears_due_time()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        await AddUser(admin, "wf-timeout-all-xfer-starter");
+        var aId = await AddUser(admin, "wf-timeout-all-xfer-a");
+        var bId = await AddUser(admin, "wf-timeout-all-xfer-b");
+        var cId = await AddUser(admin, "wf-timeout-all-xfer-c");
+        var definitionId = await Publish(admin, "超时-会签转办现状快照",
+            SingleApprovalModel([aId, bId], mode: "all",
+                timeout: new { hours = 1, action = "transfer", transferUserId = cId }));
+
+        var starter = await ClientFor(f, "wf-timeout-all-xfer-starter");
+        var a = await ClientFor(f, "wf-timeout-all-xfer-a");
+        var b = await ClientFor(f, "wf-timeout-all-xfer-b");
+        var c = await ClientFor(f, "wf-timeout-all-xfer-c");
+
+        var start = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
+        Assert.Equal(0, start.GetProperty("code").GetInt32());
+        var instanceId = start.GetProperty("data").GetProperty("instanceId").GetInt64();
+        var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
+
+        Assert.Single(await TodoItemsFor(a, instanceId));
+        Assert.Single(await TodoItemsFor(b, instanceId));
+
+        await MakeDue(f, instanceId, TimeSpan.FromDays(1));
+        await RunTimeoutJob(f);
+
+        Assert.Equal(WfInstanceStatus.Running, await InstanceStatus(f, instanceId));
+        Assert.Empty(await TodoItemsFor(a, instanceId));
+        Assert.Single(await TodoItemsFor(b, instanceId));
+        var cTodo = Assert.Single(await TodoItemsFor(c, instanceId));
+        Assert.Equal(taskId, cTodo.GetProperty("taskId").GetInt64());
+        Assert.Equal(JsonValueKind.Null, cTodo.GetProperty("dueTime").ValueKind);
+        Assert.Null(await DueTimeOf(f, taskId));
+        Assert.Equal(WfActorStatus.Skipped, await ActorStatusOf(f, taskId, aId));
+        Assert.Equal(WfActorStatus.Pending, await ActorStatusOf(f, taskId, bId));
+        Assert.Equal(WfActorStatus.Pending, await ActorStatusOf(f, taskId, cId));
+        Assert.Equal(1, await HisTaskCount(f, instanceId, WfTaskAction.Transfer));
+
+        // 第二拍必须扫不到。不清 DueTime 时现象不是「多一行 Transfer」,而是 alreadyActor 整事务回滚,
+        // 行数断言对失败型 bug 瞎;日志是事务外的已提交出口。
+        Assert.Equal(["超时扫描:无到期待办。"], await RunTimeoutJob(f));
+        Assert.Equal(1, await HisTaskCount(f, instanceId, WfTaskAction.Transfer));
+        Assert.Single(await TodoItemsFor(b, instanceId));
         Assert.Single(await TodoItemsFor(c, instanceId));
     }
 
@@ -1160,6 +1269,17 @@ public class WfTimeoutTests
             .FirstAsync();
         Assert.NotNull(instance);
         return instance.Status;
+    }
+
+    private static async Task<WfActorStatus> ActorStatusOf(WorkflowAppFactory f, long taskId, long userId)
+    {
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var actor = await db.Queryable<WfTaskActor>()
+            .Where(a => a.TaskId == taskId && a.UserId == userId && a.ActorType == WfActorType.Approver)
+            .FirstAsync();
+        Assert.NotNull(actor);
+        return actor.Status;
     }
 
     private static async Task<int> HisTaskCount(WorkflowAppFactory f, long instanceId, WfTaskAction? action = null)

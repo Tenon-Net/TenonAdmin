@@ -83,6 +83,9 @@ public static class WorkflowErrorCode
     /// <summary>委托目标非法(≤0 / 委托给自己 / 目标已在办理人中)</summary>
     public const int DelegateTargetInvalid = 48026;
 
+    /// <summary>抄送行不存在或不属于当前用户</summary>
+    public const int CcNotFound = 48027;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }

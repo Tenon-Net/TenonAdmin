@@ -5,8 +5,9 @@ using TenonAdmin.Core;
 namespace TenonAdmin.Workflow;
 
 /// <summary>
-/// 流程实例运行态(设计方案 §七 / §6.3 审批中心):发起 / 我发起的 / 详情 / 事件流。
-/// 全部 <c>[ActiveSession]</c>——登录用户操作自己的单据,userId 取自令牌。
+/// 流程实例运行态(设计方案 §七 / §6.3 审批中心):发起 / 我发起的 / 监控 / 详情 / 事件流。
+/// 默认 <c>[ActiveSession]</c>(登录用户操作自己的单据,userId 取自令牌);
+/// 监控列表单独挂 <c>[RolePermission]</c>。
 /// </summary>
 [ApiController]
 [Route("api/v1/workflow/instance")]
@@ -50,6 +51,15 @@ public class WfInstanceController(
         CancellationToken cancellationToken) =>
         Result<PagedList<WfInstanceListItemOutput>>.Ok(
             await instanceService.PageMineAsync(CurrentUserId, input, cancellationToken));
+
+    /// <summary>管理员监控分页(参与业务过滤,机构范围照旧)</summary>
+    [HttpGet("monitor")]
+    [RolePermission]
+    public async Task<Result<PagedList<WfInstanceListItemOutput>>> Monitor(
+        [FromQuery] WfInstanceMonitorPageInput input,
+        CancellationToken cancellationToken) =>
+        Result<PagedList<WfInstanceListItemOutput>>.Ok(
+            await instanceService.PageMonitorAsync(input, cancellationToken));
 
     /// <summary>事件流(按时间升序)</summary>
     [HttpGet("history/{id:long}")]

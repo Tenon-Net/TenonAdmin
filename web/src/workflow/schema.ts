@@ -12,6 +12,7 @@ export type WfApprovalMode = 'any' | 'all' | 'seq'
 export type WfRejectAction = 'terminate' | 'toNode'
 export type WfNobodyAction = 'autoPass' | 'transfer' | 'block'
 export type WfReturnPolicy = 'prev' | 'any' | 'node'
+export type WfTimeoutAction = 'remind' | 'autoPass' | 'autoReject' | 'transfer'
 export type WfConditionLogic = 'and' | 'or'
 export type WfConditionOp =
   | 'eq'
@@ -48,6 +49,21 @@ export interface WfInitiatorScopeItem {
   id: number
 }
 
+export interface WfTimeout {
+  hours: number
+  action: WfTimeoutAction
+  transferUserId?: number
+}
+
+export interface WfButtonLabels {
+  approve?: string
+  reject?: string
+  return?: string
+  transfer?: string
+  delegate?: string
+  urge?: string
+}
+
 export interface WfNodeProps {
   initiatorScope?: WfInitiatorScopeItem[]
   assignee?: WfAssignee
@@ -57,6 +73,8 @@ export interface WfNodeProps {
   rejectToNodeId?: string
   returnPolicy?: WfReturnPolicy
   returnToNodeId?: string
+  timeout?: WfTimeout
+  buttonLabels?: WfButtonLabels
   nobody?: WfNobodyAction
   nobodyTransferUserId?: number
   /** M1 预留空数组;M3 启用字段权限。 */

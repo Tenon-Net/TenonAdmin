@@ -133,7 +133,7 @@ public class WfDelegateTests
     /// 「你是被委托来的」标记位,所有办理人动词对他一视同仁。
     /// <para><b>「不设次数/深度上限」这条定案的唯一安全依据就钉在本用例的第三跳上</b>:C 再委托回 A 或 B
     /// 一律被 <c>alreadyActor</c> 拦下——因为
-    /// <c>TransferTaskOp</c> 那条「目标已是本待办任一 Approver」查询**只看 actor 行存在性、不看
+    /// <c>ReassignTaskOpBase</c> 那条「目标已是本待办任一 Approver」查询**只看 actor 行存在性、不看
     /// <see cref="WfActorStatus"/></c>,被委托走的人 actor 行仍在(只是翻成 <c>Skipped</c>)。
     /// 链长因此 ≤ 本待办参与过的人数,环路走不成,无界增长不存在,所以才不需要次数上限。
     /// 若有人给该查询加上 <c>Status != Skipped</c>(看着像修「B 收到误委托后不能还给 A」的合理 bug 修复),
@@ -194,7 +194,7 @@ public class WfDelegateTests
     /// 目标非法的另两条路径:委托给自己(人员选择器里误点极常见)与委托给不存在 / 已停用的用户。
     /// 三者都必须返 <see cref="WorkflowErrorCode.DelegateTargetInvalid"/>(48026),**不是**转办的 48010——
     /// 错误只返数字码、前端按 <c>error.code.&lt;数字&gt;</c> 翻译,复用转办码会让委托失败弹出
-    /// 「转办目标无效」的错文案。`TransferTaskOp` 里三处 <c>TargetInvalidErrorCode</c> 钩子,
+    /// 「转办目标无效」的错文案。`ReassignTaskOpBase` 里三处 <c>TargetInvalidErrorCode</c> 钩子,
     /// <see cref="Delegate_to_existing_actor_is_rejected"/> 只钉住 <c>alreadyActor</c> 那一处,本用例补另两处。
     /// </summary>
     [Fact]

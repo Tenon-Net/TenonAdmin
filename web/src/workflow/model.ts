@@ -70,6 +70,7 @@ export function createApprovalNode(partial?: Partial<WfNode>): WfNode {
       assignee: { provider: 'leader', params: { level: 1 } },
       mode: 'any',
       nobody: 'autoPass',
+      returnPolicy: 'prev',
       formPerms: [],
       ...partial?.props,
     },

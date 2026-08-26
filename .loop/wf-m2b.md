@@ -18,18 +18,27 @@
 
 ## Status
 
-- 轮次: 31
+- 轮次: 41
 - max: 60
-- 当前任务: 10
-- 当前阶段: plan
-- 上一轮: Round 31 — **Task 9 独立复核 + 收口**。台账 Status 仍停在「Round 29 / 当前阶段 plan / 下一步 Round 30 plan」,但工作树早已有 Round 30 的 CAS 实现 + `WfVersionCasTests`(10 条)。**代码是事实源**:P2-1(会签/顺序签非末位投票领取 token)已在 `CompleteTaskOp.ExecuteAsync` 的 `!passed` 分支落地,`Cosign_first_approve_claims_token_and_locks_out_cancel` 钉机制(token 2→3)。P2-2 测试已写(`Resubmit_losing_token_cas` / `Instance_losing_cas`,经 `IWorkflowFormBinder`/`IApproverResolver` 事务内推版本),但 **`ClaimTokenAsync` 被留下 `MUTATION-M2`**:`if (claimed != 1) throw` 整段删掉、`_ = claimed` 静默继续。本轮先带着变异跑 P2-2 → `Resubmit_losing_token_cas` **红**,`Expected: 48004 / Actual: 0`(区分力成立);复原 throw 后 3/3 绿。指定过滤器 **59/59 绿**。P3-1(`DefaultValue` 三步 ALTER + SQLite 例外)/P3-6(终态动作物理删 `wf_task` 不变量)/P3-7(多一条 UPDATE 是 ctx 没有 `ICurrentUser`,不是「更高效形状」)已在注释里。0×P1 / 0×未修 P2。Task 9 勾选。
+- 当前任务: 14
+- 当前阶段: review
+- 上一轮: Round 41 — **Task 14 review(独立复核)**。指定过滤器亲手 **190/190**;`cd web && npm run typecheck`/`lint` exit 0;`npx vitest run src/workflow/` **29/29**。双 schema SHA256 一致 `2BAF0080CBCF1669B5CB11ECE0FA4A76331CACE4EE984E08DEB8D173A6B460DC`。截图 `m2b-01`…`07` 均在盘且非空。`ButtonLabels` 加 `[JsonIgnore]` → 往返测试转红后复原。`web-react/` 只改 `schema.d.ts`;引擎写路径零 diff。0×P1 / 0×未修 P2。Task 14 **勾选**。Tasks 1–14 全勾。DONE-CONDITION 闸门与截图/哈希已独立核过(本轮未重跑 Playwright,证据是盘上 spec + 七张图)。
+- 上一轮(历史): Round 40 — **Task 14 plan+exec**(`btnInfo` + 抽屉高级字段 + 详情动词 + 双 gen:api + Playwright 验收)。`WfButtonLabels` 经 `WfModelJson` camelCase 往返(+1,指定过滤器 **190/190**)。抽屉默认可见仍 ≤5,退回/拒绝/超时/按钮文案进「高级」;保存默认写出 `returnPolicy=prev`。详情补 return/delegate/urge/cancel/resubmit,催办用 `CurrentTaskId`。`web` typecheck/lint 绿,`src/workflow/` vitest **29/29**。双 schema SHA256=`2BAF0080CBCF1669B5CB11ECE0FA4A76331CACE4EE984E08DEB8D173A6B460DC`。Playwright `workflow-m2b.spec.ts` 1/1,截图 `m2b-01`…`m2b-07`。`web-react/` 只改 `schema.d.ts`。`EnterCcAsync`/引擎写路径未动。**不勾选 Task 14**。
+- 上一轮(历史): Round 39 — **Task 13 review(独立复核)**。代码是事实源。指定过滤器亲手 **189/189**;`cd web && npm run typecheck` exit 0,`npm run lint`(oxlint) exit 0,`npx vitest run src/workflow/` **28/28**。`web-react/` 空;`EnterCcAsync`/引擎写路径零 diff。亲手变异(全复原):丢掉 last-visit cutoff → 两条回放 **双红** `DoesNotContain node2` / Actual `[start,node1,node2]`;丢掉 starter/actor/cc 任一 `WhereIF` → `Monitor_page_filters…` 各红在 :146/:151/:156;去掉 `CanMonitorInstancesAsync` 整段豁免 → :159 `Expected: 0 / Actual: 48015`;去掉 48015 throw → :163 `Expected: 48015 / Actual: 0`。`rg MUTATION`/`REVIEW-PROBE` 零命中。0×P1 / 0×未修 P2。Task 13 **勾选**。未开 Task 14。
+- 上一轮(历史): Round 38 — **Task 13 plan+exec**(流程图回放 + 监控参与筛选)。`GetAsync` 透出实例版本 `Model` + `VisitedNodeIds`(最后一次 `RejectRouted`/`TaskReturned`/`InstanceResubmitted` 之后的 `NodeEnter`)+ `CurrentNodeIds`。`EnsureParticipantAsync` 对超管 / 持有 `GET:/api/v1/workflow/instance/monitor` 的管理员放行,路人仍 48015。新 `GET instance/monitor`(`[RolePermission]`),**不** `ClearFilter<IOrgScoped>()`。菜单 `+26`/`+13`。Vue 复用 `WfNodeTree` 只读态 + `monitor/index.vue`。指定过滤器 **189/189**(基线 185 + 4)。`typecheck`/`lint` 绿,`src/workflow/` vitest **28/28**。`rg MUTATION`/`REVIEW-PROBE` 零命中。**不勾选 Task 13**。未开 Task 14。`web-react/` 零改。不跑 `gen:api`。
+- 上一轮(历史): Round 35 — **Task 11 exec 修 Findings**。补 `Starter_opening_detail_does_not_mark_others_cc`(发起人 `GET instance/{id}` 后抄送人 `cc/page` 仍 `isRead=false`)。变异:去掉 `MarkMyCcReadAsync` 的 `UserId==`(保留 InstanceId && !IsRead)→ **红** `Assert.False Expected: False / Actual: True`;复原 `.Where(c => c.InstanceId == instanceId && c.UserId == userId && !c.IsRead)` 后再跑 **绿**。指定过滤器 **185/185**(基线 184 + 1)。产品代码除临时变异外零改;`EnterCcAsync` 未动;`rg MUTATION`/`REVIEW-PROBE` 产品+测试源零命中。P2-1 闭合。剩余 P3:`DateTime.Now` 未走 TimeProvider;`OnlyUnread`/`DefinitionId` 零用例;48027 i18n 挂 Task 14;`POST /cc/read` 无菜单按钮。Task 11 **勾选**。
+- 上一轮(历史): Round 34 — **Task 11 review**。`EnterCcAsync` 零 diff。`WfCcTests`+第九面亲手 **5/5**。`POST /cc/read` 去 `UserId` → `Expected: 48027 / Actual: 0`(钉得住)。**1×P2**:`GetAsync.MarkMyCcReadAsync` 去掉 `UserId==` 后,`Opening_instance_detail_marks_cc_read` **仍绿**(用例里只有抄送人自己打开详情,标「本实例全部未读」与「只标自己」不可区分)。修法:补一条「发起人先打开详情,抄送人行仍未读」。0×P1。Task 11 **未勾选**。
+- 上一轮(历史): Round 33 — **Task 11 exec(抄送列表)**。`IWfCcService`/`WfCcService`/`WfCcController` + `GetAsync` 看详情标已读 + 菜单 `RootId+22` + Vue 列表页。指定过滤器 **184/184**(基线 179 + 5)。PageMine 去 userId、GetAsync 去掉标已读两条变异转红后复原。Task 11 **未勾选**,留给 review。
+- 上一轮(历史): Round 33 — **Task 10 独立复核 + 收口**。产品代码相对 HEAD 零 diff。指定过滤器亲手 **179/179**。亲手复跑两条承重变异:①去掉 `PageMineAsync` 的 `StarterUserId` → `Expected: [bId] / Actual: [bId, aId]`;②AutoPass 后 `ClearDueTimeAsync` → `Assert.NotNull()` 第一拍 DueTime 被清。复原后 `rg REVIEW-PROBE` 零命中。0×P1 / 0×未修 P2。P3:会签「对每个 Pending 都转」的朴素 foreach 会因 alreadyActor 整事务回滚(红在 A 待办还在,不是 B 被转走)——exec 已如实记;顺序会签一拍只有一位 Pending,「一拍批完全部」靠第一拍 `Running`+1 Approve 钉内循环,不是 `Take(1)`。Task 10 勾选。
+- 上一轮(历史): Round 32 — **Task 10 exec(缺口补测,产品代码零改动)**。`WorkflowReplaceabilityTests` 八个 `TryAddScoped` 面与 `WorkflowSetup` 一一对应,**已复核不缺面**。`WfDelegateTests` 两处 XML `TransferTaskOp`→`ReassignTaskOpBase`。新增 `WfListContractTests`(2):`Page_mine` / `Page_done` 只看见当前用户行,造用户一律 `orgId=1`。`WfTimeoutTests` 加 Sequential AutoPass 两拍级联 + 会签超时转办**现状快照**(不是定案)。指定过滤器 **179/179**(基线 175 + 4)。Task 10 **未勾选**,留给 review。
+- 上一轮(历史): Round 31 — **Task 9 独立复核 + 收口**。台账 Status 仍停在「Round 29 / 当前阶段 plan / 下一步 Round 30 plan」,但工作树早已有 Round 30 的 CAS 实现 + `WfVersionCasTests`(10 条)。**代码是事实源**:P2-1(会签/顺序签非末位投票领取 token)已在 `CompleteTaskOp.ExecuteAsync` 的 `!passed` 分支落地,`Cosign_first_approve_claims_token_and_locks_out_cancel` 钉机制(token 2→3)。P2-2 测试已写(`Resubmit_losing_token_cas` / `Instance_losing_cas`,经 `IWorkflowFormBinder`/`IApproverResolver` 事务内推版本),但 **`ClaimTokenAsync` 被留下 `MUTATION-M2`**:`if (claimed != 1) throw` 整段删掉、`_ = claimed` 静默继续。本轮先带着变异跑 P2-2 → `Resubmit_losing_token_cas` **红**,`Expected: 48004 / Actual: 0`(区分力成立);复原 throw 后 3/3 绿。指定过滤器 **59/59 绿**。P3-1(`DefaultValue` 三步 ALTER + SQLite 例外)/P3-6(终态动作物理删 `wf_task` 不变量)/P3-7(多一条 UPDATE 是 ctx 没有 `ICurrentUser`,不是「更高效形状」)已在注释里。0×P1 / 0×未修 P2。Task 9 勾选。
 - 上一轮(历史): Round 29 — 任务8/exec(修 Findings)+ Opus 独立复核。1×P1 + 4×P2 + 3×P3 闭合,**165/165 绿**(基线 160 + 5 条新用例)。**P1 修法**:批量从「取回行数」改成「处理预算」+ `(DueTime, Id)` 游标翻页——推不动的行只被检视、不扣预算,天花板 `MaxScanRounds`(默认 5)。exec **没取** review 建议的「把 `ShouldRemindAsync` 判据下推进 SQL」,理由站得住:间隔是**每节点各不相同**的(默认跟随节点 `Hours`),扫描时还没解析节点配置、SQL 里拿不到;能下推的只有固定下限那版,对 `hours=24` 的节点只挡住 1/24 时间,还会把顺序会签的逐拍级联降成每小时一位(`TimeoutFired` 键是 `(InstanceId, NodeId)`,SQL 里分不出提醒与级联)。死行出口 `RetireTaskAsync` 先落 `TimeoutFired(action="retired")` 再带 `Version` 条件清 `DueTime` 再打带 `taskId` 的日志,堵住了陷阱记录第 3 条担心的「静默清 DueTime」。**P2-1 取第三条路**:任务书建议的①不可行(`CompleteTaskCmd` 没有 `ExpectedVersion`,人工路径在自己事务里现读版本号、喂不进快照),改为断言落在**机制本身**——取 `Version` 快照、跑完提醒扫描后断言 `wf_task.Version` 一字未动,加 CAS 必红;那条假记账已整段替换为「⚠ 假记账更正」引用块,含原句、review 实跑证伪的事实与根因、以及新钉子的射程声明。**Opus 独立复核**:独立跑全量 **165/165**;**亲手复跑承重变异**——`MaxScanRounds => 1`(还原单页 Take)→ 钉子测试 `Timeout_throttled_reminds_do_not_starve_a_newly_due_task` 转红,`Expected: ["…命中 3,…,自动通过 1,…,跳过 2,…"] / Actual: ["…命中 2,…,自动通过 0,…,跳过 2,…"]`(两条被防刷挡下的提醒吃掉批量、新到期的自动通过没被处理,与 P1 描述逐字吻合)→ 复原后**强刷时间戳重编**再跑 165/165,`git diff --check` 干净、`rg` 扫 `MUTATION`/`REVIEW-PROBE` 零命中。**exec 本轮诚信合格**:两条钉不住的如实标注(P2-3 纯文档改动无红测;cron 段数那条跑不出红——`CronExpression.TryParse` 自己认 5 段,射程只是「能算出下一次时刻」),并纠正了任务书一处不可行建议。
 - 上一轮: Round 26 — 任务7/plan + exec(纯重构)+ Opus 独立复核。抽出 `ReassignTaskOpBase`(abstract,157 行),`TransferTaskOp`(149→22 行)与 `DelegateTaskOp`(26 行)**都继承它、互为兄弟**,「委托 IS-A 转办」的假断言消失。**两个钩子取 `abstract` 而非带默认值**——exec 的裁定理由站得住:`=> WfTaskAction.Transfer` 写在基类上等于说「一次改派默认是转办」,那正是本轮要拆的断言;将来第三个兄弟忘声明自己是谁会**编译失败**而非静默记成转办;代价为零(全仓零处构造基类,Op 不走 DI),`ApproverProviderBase` 是现成同形先例。两个 `override` 都没加 `sealed`,继承 `TransferTaskOp` 的消费者子类照旧能覆写。**验收线达成:143/143,一条不动、一条不加,未修改任何测试文件。****Opus 独立复核**(纯重构的核心风险是「搬家变重写」,故按等价性而非变异验证):①`git status`/`git diff --stat` 确认改动集只有 3 个 Op 文件 + 台账(`TestResults/` 与协调者的 renumber 改动未被碰);②`rg` 确认继承子句是 `TransferTaskOp : ReassignTaskOpBase(...)` 与 `DelegateTaskOp : ReassignTaskOpBase(...)`、两者之间**无继承路径**,两组钩子值与重构前逐字一致(转办 `Transfer`/48010、委托 `Delegate`/48026);③**亲手做逐字核验**——`git show HEAD:...TransferTaskOp.cs` 取出重构前版本,把旧文件第 28-148 行与新基类 `ExecuteAsync` 起 121 行 trim 后 `Compare-Object -SyncWindow 0`,**121 行零差异**,「移动而非重写」独立确认;④独立跑全量 **143/143**。exec 一处判断我认同并已核实合理:**本轮不拆 `ExecuteAsync` 的 125 行长方法**——拆步骤会把一次可逐行核对的搬家变成不可证伪的重写,而步骤边界是新的覆写契约、一经发布不好改;Task 9(CAS 收口)正要动其中的 `WfTask.Version` 认领段,由它来定这条缝更准。理由与建议切法已记入 `## Findings`,非定案。
 - 上一轮: Round 25 — 任务6/exec(修 Findings)+ Opus 独立复核。Task 6 的 2×P2(均为测试缺口,产品代码零行为改动)闭合,**143/143 绿**(基线 142 + 1 条新用例 + 6 条断言)。**关键增量:reviewer 本轮 shell 不可用,它两条「加变异后仍全绿」的论断是读码推演;exec 实跑复现,两条推演全部成立**——①给 `TransferTaskOp.cs:49` 的 `alreadyActor` 查询加 `&& a.Status != Skipped`(一个看起来很合理的「让 B 把误委托还给 A」修复)修前 142/142 全绿,而语义上 A→B→A→B 立刻成为无界循环;②把 `:34`/`:43` 改回字面量 `TransferTargetInvalid` 修前也全绿,用户「委托给自己」或「委托给已停用用户」会看到「转办目标无效」的错文案。补测试后两个变异各自转红(①`Expected: 48026 / Actual: 0`;②③分两次单独变异、红在**不同行** 220 vs 228,证明两个抛出点各自独立被钉)。顺手做掉 P3-#10(三处过期类级注释)、P3-#11(`IWfTaskService` 破坏性变更 `<remarks>`,第四次扩接口)。**Opus 独立复核**:改动集只 4 个文件 + 台账 Findings,与报告一致;独立跑全量 143/143;`git diff` 确认 `TransferTaskOp.cs` 已逐字回到 Round 24 原状、无变异残留。
 - 上一轮(历史): Round 22 — 任务5/exec(修 Findings)+ Opus 独立复核。1×P1 + 5×P2 全部闭合,**137/137 绿**(基线 123 + 14 条新用例,零回归)。P1 取「同表下界」:查询 `Action` 白名单放宽到 `Approve|Reject|Return`,倒序后 `TakeWhile(Action == Approve)` 在遇到第一条 Reject/Return 时截断——跳转刚发生时窗口为空即无基线,正向推进时窗口是「上次跳转之后的所有 Approve」;零额外查询、不跨表比雪花 Id、对未来动词是白名单而非黑名单。`RejectRouted=13`/`TaskReturned=14` 按裁决落地(用于审计与 Task 12 回放,**不**作下界数据源)。新语义已写进 `## 语义契约`。**Opus 独立复核**:`git status`/`git diff --stat` 核对改动集(5 产品 + 3 测试 + 台账,`docs/workflow/` 四份文件 diffstat 与会话前逐行相同、确认未被碰);读 `EnterNodeOp.cs:325-358` 全文确认 `InstanceId` 过滤与连续区间语义保留、`Transfer`/`Delegate` 不在白名单故既不当边界也不污染基线;独立跑全量 137/137;**亲手复跑 P1 变异**(把 `TakeWhile` 换回 `Where`,即还原修复前行为)→ 两条钉子测试双双红,`Assert.Equal() Failure: Collections differ / Expected: [aId] / Actual: [bId]`(待办落到拒绝人/退回人而非 node1 审批人,与推演逐字吻合)→ 复原后独立重跑 137/137,`git diff --check` 干净、`rg` 确认无 `MUTATION`/`TODO`/`FIXME`/`.Skip(`/`NotImplementedException` 残留。
 - 上一轮(历史): Round 20 — 对账。Task 5 的代码在 commit `f87e0d8`(M2b checkpoint)里已经完成,但台账 Status 停在 Round 19/exec、Task 5 未勾选——本轮以代码和测试为事实源补账收口。独立核验:`SnapshotLeaderChainsAsync` 签名已改成 `(long starterUserId, long? starterOrgId, ...)` 且两个调用点(`BeginStartAsync`:142、`BeginResubmitAsync`:631)都传值;`WfInstanceActionInput`→`WfInstanceCancelInput` 改名 + 新增 `WfInstanceResubmitInput` 已落地(顺带闭合 Task 4 的一条 P3 留痕);`ReturnNotAllowed=48024`/`ResubmitNotAllowed=48025`/`InstanceResubmitted=12` 就位;`WorkflowReplaceabilityTests` 的 `FakeTaskService.ReturnAsync`/`FakeInstanceService.ResubmitAsync` 两个桩已补。全量套件 **123/123 绿**,与 Plan 步骤 25 的预期(基线 114 + 9 条新用例)逐数吻合。工作树除 `docs/workflow/` 四份文档改动外干净。**同时按新增的设计规划 §十五 15.1 插入一项新任务(实例/Token 级 Version CAS,原 Task 8-12 顺延为 9-13)。**
 - 上一轮(历史): Round 18 — plan。读了 `CompleteTaskOp.cs`(全文)、`Schema/WfNode.cs`/`WfSchemaEnums.cs`(`OnReject`/`RejectToNodeId`/`ReturnPolicy`/`ReturnToNodeId` 精确形状)、`WfHisTask.cs`/`WfHistory.cs`/`WfToken.cs`、`TransferTaskOp.cs`(CAS 模板)、`WorkflowEngine.cs`(全文)、`WfInstanceService.StartAsync`、设计草案 §六原表(锁定"退回后重提默认从头重走,不管退回目标是哪个节点"这条关键语义)。核心判断(厘清共用与否):**拒绝路由**与**主动退回**是两套不同机制——拒绝路由直接复用 `EnterNodeOp` 自动继续;主动退回关闭当前任务后**不**自动继续,需要发起人显式调用**新增第三套引擎命令"重提"**(`ResubmitInstanceCmd`,`BeginStartAsync` 的翻版,作用在已有实例行上)。按 A(拒绝路由)→B(主动退回)→C(重提)拆了 3 大块、25 个步骤(2+3+4=9 条新测试,5 个区分力变异点),写进 `## Plan`,附陷阱记录 5 条。**未写任何产品代码**。
-- 下一步: Round 32 — **Task 10(后端测试固化)exec**。按本轮写进 `## Plan` 的 Task 10 方案做:**缺口补测,不重写已有 HTTP 套件**。先读决策点 D1–D8 与「已有覆盖盘点」。禁止给命令加 `ExpectedVersion`。`WorkflowReplaceabilityTests` 八件套已齐,本任务只复核不重复。会签超时转办的产品语义(D2)未定案前**只写表征现状的用例,不改引擎行为**。
+- 下一步: M2b 收口。不提交、不推送,除非用户要求。不做 M3。
 - 已完成(历史): Round 27 — Task 8 plan + exec(worker 静默中断在写完代码之后、更新 Status 之前;台账有一处冒签已更正);Round 28 — Task 8 review(1×P1 + 4×P2 + 6×P3,该 reviewer 有 shell、逐条实跑,并**证伪了 exec「16 个变异全部转红」的自报**);Round 29 — 修 Findings 收口。
 - 原「下一步」(已完成): Round 27 — Task 8(超时 Job)plan。`EnterNodeOp.CreateTaskAsync` 目前硬编码 `DueTime = null`,要按 `Node.Props?.Timeout?.Hours` 算真实 `DueTime`;新建 `WfTimeoutJob : IAdminJob` 扫 `DueTime < now` 的活跃 `wf_task`,按 `Timeout.Action` 分流(`Remind`→`IWorkflowNotifier`;`AutoPass`/`AutoReject`→等价调用 `CompleteTaskOp`;`Transfer`→转办),写 `WfHistoryEventType.TimeoutFired`,`TryAddEnumerable` 注册。**四条前置约束,plan 阶段必须先读**:①§14.1 定案——`WfTimeoutJob` 用 `taskId + Version + DueTime <= now` 条件更新,CAS 失败表示人工动作已胜出,**不建另一套 worker/lease**;②必须补一条测试证明「委托过的任务照原 `DueTime` 到期」(见 `## Findings` 该条;该性质今天因 `DueTime = null` 是空真、零可观测出口,本任务一落 `DueTime` 它立刻变成可违反的真命题);③`Timeout.Action = Transfer` 现在有 Round 26 抽出的 `ReassignTaskOpBase` 可用——**plan 阶段要裁定**是直接 `new TransferTaskOp`(超时转办等同人工转办)还是做**第三个兄弟**(声明自己的 `HistoryAction`,让 `wf_his_task` 能区分「人转的」与「超时自动转的」);`abstract` 钩子的直接收益就在后一条路上,但这是产品判断,exec 有意没预判;④多副本安全由内核调度器选主保证(ADR-0004),工作流自己不管分布式。
 - 之后: Task 9(实例/Token 级 Version CAS)。它会动 `ReassignTaskOpBase.ExecuteAsync` 里的 `WfTask.Version` 认领段,`## Findings` 有两条专门给它的约束(必须保持任务级 CAS 为第一个写操作;`BeginResubmitAsync` 的 CAS 缺口排在收口清单第一位),另有一条建议由它来定 `ExecuteAsync` 的拆步边界。
@@ -65,7 +74,7 @@
 | 退回重提 | 发起人对被退回的实例重新提交(復用同一 `wf_instance` 行,不建新实例)后,**默认从头重走**(`start` 节点开始),不是从退回点重走——即退回本质是「打回发起人重填」,不是「打回某审批人重批」 |
 | 撤销(Cancel) | 仅发起人可撤销;仅当 `wf_his_task` 里**没有任何 `Approve` 记录**(还没人批过)才允许;`WfInstanceStatus.Cancelled`,token `Cancelled`,当前任务全部 `Skipped` |
 | 委托(Delegate,一次性) | **仅当前 Pending 办理人**把**自己的当前一个待办**指给别人处理,不是长期规则。**⚠ 措辞已于 2026-08-24 经用户裁决收窄**:本行原文写的是「发起人/办理人」,那是表述松散——实例发起人**无权**委托他人待办,否则等于给自己的单子指派审批人,`IApproverProvider`/multiLeader 主管链/`selfSelect` 白名单全部作废。发起人现有三个动词(撤销/重提/催办)都不改变「谁来批」,委托改这个,性质不同;真实的「审批人休假请人代办」诉求知情方是办理人自己,「发起人指定代办」实质是改审批人、属 M3 长期委托规则那一档。与 `Transfer`(转办)除 `WfHisTask.Action` 标签外只有产品语义差异(问责:转办=责任转移,委托=请人代办),底层复用 `TransferTaskOp` 的 CAS+建新 actor 模式。已回写 `CONTEXT.md` 行为语义默认值与设计规划 §十。 |
-| 链式委托 | 允许 A→B→C,**不设次数/深度上限**(YAGNI)。安全依据:`TransferTaskOp` 的 `alreadyActor` 校验只看 actor 行**存在性**、不看状态,故委托回本待办任何参与过的人都会被拒 → 环路天然封死。注意上界不是「本待办参与过的人数」(那是循环论证),真实上界是全库启用用户数;每一跳都需当前持有人主动动作,单个 actor 无法自己刷。此性质由 `WfDelegateTests.Delegate_chain_hands_todo_along_without_limit` 的第三跳钉住——**改动 `alreadyActor` 查询前先看那条测试**。 |
+| 链式委托 | 允许 A→B→C,**不设次数/深度上限**(YAGNI)。安全依据:`ReassignTaskOpBase` 的 `alreadyActor` 校验只看 actor 行**存在性**、不看状态,故委托回本待办任何参与过的人都会被拒 → 环路天然封死。注意上界不是「本待办参与过的人数」(那是循环论证),真实上界是全库启用用户数;每一跳都需当前持有人主动动作,单个 actor 无法自己刷。此性质由 `WfDelegateTests.Delegate_chain_hands_todo_along_without_limit` 的第三跳钉住——**改动 `alreadyActor` 查询前先看那条测试**。 |
 | 催办(Urge) | 发起人对当前 Pending 办理人发一次提醒;不改变任何任务/实例状态,只落一条历史事件 + 走 `IWorkflowNotifier` 推送;可重复催办,不做频率限制(YAGNI,超出本轮范围) |
 | 超时(Timeout) | `node.Props.Timeout.Hours` 非空且 >0 时,建任务按 `TimeProvider.GetLocalNow() + Hours` 填 `wf_task.DueTime`;`WfTimeoutJob : IAdminJob` 扫 `DueTime <= now` 的活跃任务,按 `Timeout.Action`:`Remind`(只推送不改状态,可重复触发)、`AutoPass`(等价于该 actor 自动同意)、`AutoReject`(等价于该 actor 自动拒绝)、`Transfer`(转给 `TransferUserId`) |
 | 超时提醒频率(Task 8 定案,2026-08-25) | `Remind` 可重复触发,**最小提醒间隔默认 = 该节点自己的 `timeout.hours`(下限 1 小时)**。判据取本(实例, 节点)上最近一条 `TimeoutFired` 事件的时间(且不早于本待办 `CreateTime`,防止向后跳转重入后丢掉第一次提醒),不新增列。可由 `TenonAdmin:Workflow:TimeoutRemindMinIntervalHours` 全局覆盖(0 = 跟随节点),或覆写 `WfTimeoutJob.ShouldRemindAsync`——**但覆写子类后还须把 `sys_job` 该行的 `HandlerName` 改成子类全名**,否则 `TryAddEnumerable` 按实现类型去重 + 解析器按 `Name` 匹配会让调度器永远选中基类、覆写一次都不执行。已回写 `CONTEXT.md` 与设计规划 §十。 |
@@ -75,6 +84,124 @@
 | 抄送 | 独立列表(不是待办),`WfCc.IsRead` 由查看详情页时标记已读(仿 `SysNotice` 已读语义,不新建通道) |
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段重写)
+
+> **Task 14 — `btnInfo` + 配置抽屉暴露新字段 + 验收**(Round 40 plan+exec)。节点 `ButtonLabels`(JNPF 增量#2);抽屉把退回/拒绝/超时/按钮文案放进「高级」;详情补齐退回/撤销/催办/委托/重提;双模板 `gen:api`;Playwright 走通 DONE-CONDITION 浏览器面并落 `.loop/wf-ui-shots/m2b-0*.png`。**不勾选 Task 14**(留给 Round 41 独立复核)。不做 M3(formPerms / parallel / webhook / 长期委托 / React 页移植)。`web-react/` 只刷 `schema.d.ts`(该模板 `error.code` 没有 48001–48020 块,不补 48021+)。
+
+### 读码事实(plan 已核对,exec 勿再猜)
+
+1. `WfNodeProps`(C#)已有 `OnReject` / `ReturnPolicy` / `ReturnToNodeId` / `Timeout`。**没有** `ButtonLabels`。Vue `schema.ts` 有 `returnPolicy`,**没有** `timeout` / `buttonLabels`。`WfConfigDrawer.vue` 注释仍写「M2a:不配超时/字段权限」;`applyNodeConfiguration` 每次保存审批节点都硬写成 `onReject: 'terminate'`,会冲掉抽屉新字段。
+2. 详情页只露同意/拒绝/转办。`web/src/api/workflow.ts` 无 `return` / `delegate` / `urge` / `cancel` / `resubmit`。后端端点已在(`WfTaskController` / `WfInstanceController`)。`ReturnTaskOp` 未配 `ReturnPolicy` 抛 `48024 policyNotConfigured`(default 分支),所以抽屉必须写出 `prev`(或用户选的策略),否则浏览器退回必红。
+3. 催办:发起人调 `POST task/urge`,入参是 **taskId**。`GetAsync` 只给 `MyPendingTask`(当前用户自己的待办)。发起人若不是办理人,详情拿不到可催的 taskId。`UrgeAsync` 在「唯一办理人=发起人」时静默 return、不写历史。要拍到真催办,必须另造一名办理人,并让详情能拿到当前活跃 taskId。
+4. `GetAsync` 已透出 `Model` / `VisitedNodeIds` / `CurrentNodeIds`。详情读 `currentNode.props.buttonLabels`。抄送/监控 API 仍挂 `@ts-expect-error`;`WfCcItem` 仍是手写接口。`web` / `web-react` 的 `schema.d.ts` 都停在 Task 13 之前(详情无 Model,无 `WfCcItemOutput`)。
+5. `error.code`:`web` 两语言停在 48020;缺 48021 / 48023–48027(48022 空洞不填)。`web-react` 语言包**没有** `error.code.480xx` 块 → 本轮不补。
+6. e2e:`web/e2e/helpers.ts` 登录 `superAdmin` / `Aa123456`(`TENON_E2E_*` 可覆盖);`playwright.config.ts` 自起 MinimalHost+Vite,`TenonAdmin__Seed__AdminPassword` 同步该密码,`reuseExistingServer: false`。已有 `workflow-m2a.spec.ts` + `apiCreateUser`。截图目录 `.loop/wf-ui-shots/` 已有 m2a-01..03。
+7. 禁区:不改 `EnterCcAsync` 写路径;不翻 All-sign 超时 Transfer;不建 `TestResults/`;不移植 Vue 页到 `web-react/`。
+
+### 决策点
+
+| # | 决策点 | 裁定 | 理由 |
+|---|---|---|---|
+| D1 | ButtonLabels 形状 | C# 新类 `WfButtonLabels`:`Approve` / `Reject` / `Return` / `Transfer` / `Delegate` / `Urge`(全 `string?`)。挂 `WfNodeProps.ButtonLabels`。JSON 走现有 `WfModelJson`(camelCase + 写忽略 null)→ `buttonLabels:{approve,reject,return,transfer,delegate,urge}`。TS `WfButtonLabels` 同形。空/缺省 = 详情 i18n 默认文案 | 对齐 JNPF btnInfo 增量#2;不新增枚举、不改引擎动作名 |
+| D2 | 抽屉默认 vs 高级 | 审批默认可见保持 ≤5:名称 / 办理人 / Provider 参数 / 签核方式。`returnPolicy`+`returnToNodeId` / `onReject`+`rejectToNodeId` / `timeout` / `buttonLabels` **全部进「高级」**。审批节点**总是**显示高级折叠(不再只在 position 时出现)。抄送不配退回/超时/按钮文案 | 任务书守 ≤5;这些是低频配置。委托没有节点级开关(一次性动词),抽屉只露按钮文案 |
+| D3 | `applyNodeConfiguration` | 审批 config 增 `returnPolicy` / `returnToNodeId` / `onReject` / `rejectToNodeId` / `timeout` / `buttonLabels`。保存时**保留**这些字段,不再每次写死 `onReject:'terminate'`。未设退回策略时默认写出 `prev`(否则发布后点退回必 48024)。`hours<=0` 的 timeout 写成 `undefined`(不启用) | 现实现会冲掉高级字段;引擎 default 不是 Prev |
+| D4 | 详情动词 | 办理人:`approve` / `reject` / `return` / `transfer` / `delegate`(委托与转办同形,只换端点+48026)。发起人且 Running:`urge`(用当前活跃 taskId,不是必须 MyPending)。发起人且 Running 且 hisTasks 无 `Approve`:`cancel`。发起人且 Running 且无 MyPending(退回后停住):`resubmit`(带原 `variablesJson`)。按钮文案=`buttonLabels.*` 非空优先,否则 i18n | 验收硬要求退回/撤销/催办;重提是退回后唯一继续路径;委托便宜 |
+| D5 | 催办用的 taskId | `WfInstanceDetailOutput` 加 `CurrentTaskId`(活跃 `wf_task` 第一条的 Id,可空)。催办优先 `myPendingTask.taskId`,否则 `currentTaskId` | 发起人催别人时自己没有 pending;不改 Urge 写路径 |
+| D6 | Playwright / 登录 | 新 spec `web/e2e/workflow-m2b.spec.ts`。`login`+`enterApp(SYSTEM_APP)`。Playwright 自起栈(与 m2a 同,密码 `Aa123456`)。`apiCreateUser`(forceTotp=false)造一名办理人,避免「发起人=唯一办理人」催办静默。截图 `m2b-01`…`m2b-06` 到 `.loop/wf-ui-shots/` | 任务书优先可靠 Playwright;空列表截图不够 |
+| D7 | e2e 实例路径 | 一条定义:`start → cc(超管) → approval(指定用户=超管,returnPolicy=prev)` 走退回/撤销/抄送/我发起的/我已办的。另起一单:`approval(指定用户=第二用户)` 由超管催办。退回后截退回态即可,不强制再点重提(按钮仍要有) | 超管既是发起人又是办理人才能一个人点退回;催办必须是别人的 pending |
+| D8 | gen:api | 先保证 `:5100` MinimalHost 活着(`dotnet run --project backend/samples/MinimalHost --no-restore`)。`cd web && npm run gen:api`;`cd web-react && npm run gen:api`。两边 `src/api/schema.d.ts` SHA256 必须一致。然后去掉 cc/monitor `@ts-expect-error`;`WfCcItem = Schemas['WfCcItemOutput']`;详情交叉字段若已生成则删 | 契约漂移闸门;web-react 只动 schema |
+| D9 | C# 往返测试 | **加 1 条**无 HTTP 的 `WfButtonLabels_round_trips_through_WfModelJson`(Serialize 含 camelCase 键,Deserialize 回读)。不新建 HTTP 套件 | 便宜;schema 序列化已有覆盖,这一条钉新字段不被 ignore |
+| D10 | i18n / 禁区 | `web` 两语言补 `error.code.48021/48023/48024/48025/48026/48027` + 抽屉/详情新键。`web-react` 语言包不补。不改 `EnterCcAsync`、不翻 All-sign Transfer、不建 `TestResults/`、不勾选 Task 14、不做 M3 | 挂账 P3 + 任务书硬约束 |
+
+### 改动清单
+
+| 文件 | 动作 |
+|---|---|
+| `Schema/WfNode.cs` | `WfButtonLabels` + `WfNodeProps.ButtonLabels` |
+| `WfRuntimeModels` / `WfInstanceService.GetAsync` | `CurrentTaskId` |
+| `WfButtonLabelsTests.cs` | **新增** 1 条往返 |
+| `web/src/workflow/schema.ts` | `timeout` / `WfTimeout` / `buttonLabels` |
+| `configuration.ts` + `*.spec.ts` | 审批高级字段持久化;默认 `returnPolicy=prev` |
+| `WfConfigDrawer.vue` | 审批总是有高级;暴露退回/拒绝/超时/按钮文案 |
+| `instance/detail.vue` | 退回/委托/催办/撤销/重提 + `buttonLabels` |
+| `api/workflow.ts` / `types/workflow.ts` | 五个动词;gen:api 后去 `@ts-expect-error`;`WfCcItem` 改生成类型 |
+| `web/src/locales/{zh-CN,en-US}.ts` | 48021+ 与抽屉/详情文案 |
+| `web/e2e/workflow-m2b.spec.ts` | **新增** 浏览器验收 |
+| `web/src/api/schema.d.ts` + `web-react/src/api/schema.d.ts` | 双 `gen:api` |
+| `.loop/wf-m2b.md` | Plan / Status / Log。**不勾选 Task 14** |
+
+### 步骤
+
+1. 写本 Plan(本段)。
+2. C# `WfButtonLabels` + `CurrentTaskId` + 往返测试。
+3. Vue schema / configuration / 抽屉 / 详情动词 / i18n / api 手写封装。
+4. 起 MinimalHost → 双 `gen:api` → 比 SHA256 → 去 `@ts-expect-error`。
+5. Playwright m2b spec + 截图。
+6. 指定过滤器;`cd web && npm run typecheck && npm run lint`;`npx vitest run src/workflow/`。
+7. 回写 Status=40/exec、Log Round 40、NEXT=Round 41 review。Task 14 保持未勾。
+
+### 验收(本轮 exec 自证,review 再独立核)
+
+- 指定过滤器绿,条数 ≥ 189(只增不减;本轮 +1 往返则 190)
+- typecheck / lint / `src/workflow/` vitest 绿
+- 双 schema SHA256 一致
+- `.loop/wf-ui-shots/m2b-01`… 存在且覆盖退回/撤销/催办/抄送已读/我发起的/我已办的
+- Task 14 **未勾选**
+
+<!-- TASK14-PLAN-ANCHOR -->
+
+<!-- TASK13-PLAN-ANCHOR -->
+
+> **以下 Task 12 方案(Round 36–37)保留作历史,不是本轮执行清单。**
+>
+> **Task 12 — 我发起的 / 我已办的**(历史)。纯前端两张列表 + 菜单 + i18n。后端 `PageMineAsync` / `PageDoneAsync` 已在。D1 不动业务;D2 菜单 +24/+25 Sort 5/6;D3 按钮 +11/+12;D7 无搜索栏。
+
+<!-- TASK12-PLAN-ANCHOR -->
+
+> **以下 Task 11 方案(Round 33–35)保留作历史,不是本轮执行清单。**
+>
+> **Task 11 — 抄送列表**(历史方案)。`wf_cc` 表、`EnterCcAsync` 写入(含重提幂等)、`EnsureParticipantAsync` 已认抄送人,缺的是查询/已读/列表页。表单挂载与详情准入都已在,本任务不重做引擎。
+
+### 决策点(Task 11 历史)
+
+| # | 决策点 | 裁定 |
+|---|---|---|
+| D1 | 接口放哪 | `Services/IWfCcService.cs`,与其他 `IWf*Service` 同层;任务书 `Abstractions/` 是过时路径 |
+| D2 | 何时标已读 | **两处**:`GetAsync` 在准入后把该用户本实例未读行翻已读(对齐语义契约「看详情即已读」);另提供 `POST /cc/read` 显式接口(列表不进详情也能标,幂等) |
+| D3 | 权限 | Controller 挂 `[ActiveSession]`,与 task/instance 同形。菜单 `RootId+22` Sort=4,按钮只挂 `GET .../cc/page` |
+| D4 | 可替换性 | 第九个 `TryAddScoped<IWfCcService, WfCcService>` + `WorkflowReplaceabilityTests` 一条 |
+| D5 | 错误码 | `CcNotFound=48027`:标已读时行不存在或不属于当前用户。语言包挂 Task 14 |
+| D6 | 前端契约 | `web/` 手写 `WfCcItem` + `as never` 调新路径,等 Task 14 `gen:api`。不改 `web-react/` |
+| D7 | 写入 | **不改** `EnterCcAsync` |
+| D8 | 数据范围 | `wf_cc` 不是 `IOrgScoped`;联实例时 `ClearFilter<IOrgScoped>()`,过滤只认 `UserId` |
+
+### 改动清单
+
+| 文件 | 动作 |
+|---|---|
+| `IWfCcService` / `WfCcService` / `WfCcController` | 新增 PageMine / MarkRead |
+| `WfRuntimeModels` / `WorkflowErrorCode` / `WorkflowSetup` | DTO + 48027 + TryAdd |
+| `WfInstanceService.GetAsync` | 准入后标已读 |
+| `WorkflowMenuSeed` | `RootId+22` 抄送列表 |
+| `WorkflowReplaceabilityTests` | 第九面 |
+| `WfCcTests.cs` | 新增 |
+| `web/` 列表页 + i18n + api | 仅 Vue 模板 |
+
+### 测试清单
+
+| # | 用例 | 变异 |
+|---|---|---|
+| 1 | `Page_mine_returns_only_current_users_cc` | 去掉 `UserId==` → 对方看见行 |
+| 2 | `Mark_read_is_idempotent_for_owner` | 去掉 `UserId==` 守卫 → 他人也能标 |
+| 3 | `Mark_read_of_others_row_returns_48027` | 改成 0 → 红 |
+| 4 | `Opening_instance_detail_marks_cc_read` | 去掉 GetAsync 里的标已读 → 仍未读 |
+| 5 | `PreRegisteredCcService_ShouldWinOverBuiltIn` | TryAdd 改 Add → 红 |
+| 6 | `Starter_opening_detail_does_not_mark_others_cc` | 去掉 `MarkMyCcReadAsync` 的 `UserId==` → 抄送人行被误标 |
+
+预期:**184 + 1 → 185**(Round 33 基线 179 + 5;Round 35 再 +1)。
+
+<!-- TASK11-PLAN-ANCHOR -->
+
+> **以下 Task 10 方案(Round 32)保留作历史,不是本轮执行清单。**
 
 > **Task 10 — 后端测试固化(Task 2–9 公开 HTTP 契约缺口)**。读了 `WfTaskController`(8 端点:todo/done/approve/reject/transfer/delegate/urge/return)、`WfInstanceController`(startable/startable/{id}/start/page/history/{id}/{id}/cancel/resubmit)、既有测试文件盘点(见下表)、`WorkflowReplaceabilityTests`(八个 `TryAddScoped` 面已齐,含 Task 1 的 `IWorkflowNotifier`)、以及 `## Findings` 挂给本任务的三条:会签超时转办语义空白、顺序会签超时逐拍级联零用例、`WfDelegateTests` 两处 `<c>TransferTaskOp</c>` 陈旧引用。
 >
@@ -329,6 +456,97 @@
 - `ReturnTaskOp` 的 CAS 认领顺序照抄 `TransferTaskOp`(先认领 `WfTask.Version`,再认领 `WfTaskActor.Status==Pending`),两次认领失败都是 `TaskConflict`,不要和新加的 `ReturnNotAllowed` 混着用——`ReturnNotAllowed` 专指"退回目标解析失败",`TaskConflict` 专指"并发/非本人办理"这类既有语义。
 
 ## Findings(review 阶段产出;修完划掉)
+
+### Task 13 — Round 39 review(收口)
+
+> **判定:0×P1 / 0×未修 P2,勾选 Task 13。** 代码是事实源。未开 Task 14。不改 `web-react/`,不跑 `gen:api`。
+
+**闸门(亲手):** 指定过滤器 `FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow` **189/189**(失败 0 / 跳过 0,约 1 m 2 s)。`cd web && npm run typecheck` exit 0;`npm run lint`(oxlint,无输出) exit 0;`npx vitest run src/workflow/` **2 files / 28 tests**。LSP:本机无 omnisharp / vue-language-server,类型闸门以 `vue-tsc --noEmit` + oxlint 代替。
+
+**范围:** `web-react/` `git status` 空。`EnterNodeOp`/`CompleteTaskOp`/`Engine` 不在本任务 diff。`PageMonitorAsync` **无** `ClearFilter<IOrgScoped>()`(`WfInstanceService.cs:254-262`)。`GET {id}` 仍类级 `[ActiveSession]`,无 `[RolePermission]`。菜单 `RootId+26` / 按钮 `+13`,与 +1..+12、+20..+25 无撞号。`FakeInstanceService.PageMonitorAsync` 已补;`WorkflowSetup` 仍 `TryAddScoped<IWfInstanceService>`。详情 `Model` 来自 `instance.DefinitionVersionId`;Vue `detail.vue` 只读树吃 `visitedNodeIds` / `currentNodeIds`;设计器不传 `readonly`。
+
+**亲手变异(全复原,产品+测试源 0×`MUTATION`/`REVIEW-PROBE`):**
+1. `CollectVisitedNodeIds` 丢掉 cutoff、从 0 收全部 `NodeEnter` → `Last_visit_after_return_and_resubmit…` 与 `Last_visit_after_reject_to_node…` **双红** `DoesNotContain() Failure` Found `node2`,Actual `["start","node1","node2"]`。复原后 2/2 绿。
+2. 监控三筛各丢一条 `WhereIF` → `Monitor_page_filters_starter_actor_and_cc_independently` 分别红在 :146 / :151 / :156(`Expected: [单 id] / Actual: [三单]`)。
+3. 去掉 `EnsureParticipantAsync` 里 `CanMonitorInstancesAsync` 整段豁免 → 同用例 :159 `Expected: 0 / Actual: 48015`(超管打开非参与详情)。
+4. 去掉末尾 48015 throw(always allow) → 同用例 :163 `Expected: 48015 / Actual: 0`;`Monitor_page_rejects_user_without_permission` 仍绿(钉的是列表 `[RolePermission]` 403,不是详情 48015)。
+
+**[P3] 拒绝路由后 start 不在 last-visit 窗口。** `Last_visit_after_reject_to_node…` 只断言 `node1` 在、`node2` 不在,不断言 `start`。cutoff=`RejectRouted` 之后只有重进 `node1` 的 `NodeEnter`,`start` 在前缀里——符合 D1。挂着以免被当成回放 bug。
+
+**[P3] 退回后、重提前的空窗口零用例。** `ReturnTaskOp` 关任务不 `EnterNode`;cutoff=`TaskReturned` 后窗口可空。现有钉子只覆盖重提之后。
+
+**[P3] `CanMonitorInstancesAsync` 的权限码半支没有独立钉子。** 只删 `return codes.Contains(MonitorPermission)`(保留超管)→ `WfReplayMonitorTests` **4/4 仍绿**。D9 钉子写的是超管;D5 的「持有监控码的非超管」产品代码有,HTTP 未单独造角色授权。整段 bypass 已钉住。若要补:造非超管+授监控码打开非参与详情,再丢 `codes.Contains` 必须红 48015。
+
+**[P3] 办理人筛的 Pending 半支未独立钉。** 现用例先 `approve` 再按 `ActorUserId` 查,走的是 `wf_his_task`。整条 actor `WhereIF` 已钉红;只删 pending-actor 查询会仍绿。
+
+**[P3] `@ts-expect-error` 监控(及抄送)路径等 Task 14 `gen:api`。** 无浏览器 e2e,挂 Task 14。
+### Task 12 — Round 37 review(收口)
+
+> **判定:0×P1 / 0×未修 P2,勾选 Task 12。** 代码是事实源。未开 Task 13。
+
+**[P3] 状态/动作数字表在 `mine`/`done`/`detail` 各拷一份。** D6 允许;不抽 composable。
+
+**[P3] 两页无搜索栏。** D7 允许;`wfInstanceApi.page` 仍收 Status/DefinitionId/BusinessKey,日后加 search 不用改契约。
+
+**[P3] Done 的 action map 未映射 Urge=7(以及 M3 的 8–10)。** 与 `detail.vue` 同形。催办只插 `wf_history`(TaskUrged),`PageDoneAsync` 读 `wf_his_task`,`CancelInstanceOp` 也不写 his_task——已办行里不会出现 7。映射 `5→withdraw` 对齐现成 i18n,实例撤销状态走 mine 的 status=4。
+
+**[P3] 本轮无浏览器 e2e。** 挂 Task 14。LSP 本机无 vue/ts server,类型闸门以 `vue-tsc --noEmit` 代替。
+
+### Task 11 — Round 35 exec(修 Findings,收口)
+
+> **判定:P2-1 闭合,勾选 Task 11。** 产品代码只临时变异后复原。指定过滤器 **185/185**。未开 Task 12。
+
+~~**[P2-1] `GetAsync` 标已读的 `UserId` 过滤没有钉子。**~~ ✅ **本轮修完**(纯补测试,产品代码零行为改动)。新增 `Starter_opening_detail_does_not_mark_others_cc`:发起人 `GET /api/v1/workflow/instance/{id}` 后,抄送人 `cc/page` 仍 `isRead=false`。**亲手复跑变异**:删 `c.UserId == userId`(保留 InstanceId && !IsRead)→ 该用例 **红** `Assert.False() Failure Expected: False / Actual: True`;复原 `.Where(c => c.InstanceId == instanceId && c.UserId == userId && !c.IsRead)` 后再跑 **绿**。`Opening_instance_detail_marks_cc_read` 仍只钉「自己打开会标自己」;`UserId` 过滤的区分力落在新钉子上。
+
+### Task 11 — Round 34 review
+
+> **判定:1×P2,不勾选。** `EnterCcAsync` 未动。第九面 + 4 条 HTTP 亲手 5/5。`POST /cc/read` 主人守卫有区分力。Round 35 已补钉子并勾选。
+
+~~**[P2-1] `GetAsync` 标已读的 `UserId` 过滤没有钉子。**~~ ✅ 见上节 Round 35。`MarkMyCcReadAsync` 现写 `InstanceId && UserId && !IsRead`。`Opening_instance_detail_marks_cc_read` 是抄送人自己打开详情——去掉 `UserId==` 后**仍绿**(本实例只有他一条未读,「标全部」与「标自己」同结果)。**亲手复跑**(Round 34):删 `c.UserId == userId` → 该用例 1/1 通过。后果:发起人/审批人打开详情会把别人的抄送标成已读。
+
+**[P3] `POST /cc/read` 菜单未挂按钮。** Controller 是 `[ActiveSession]`,与待办同形,不挡授权;只是权限树里只有 page。
+
+**[P3] `DateTime.Now` 未走 `TimeProvider`。** 已读测试不拨钟,不阻塞。
+
+**[P3] `OnlyUnread` / `DefinitionId` 零用例。** 列表隔离主钉已在。
+
+**[P3] 48027 语言包挂 Task 14。**
+
+### Task 11 — Round 33 exec 留痕(Round 34 已复核)
+
+> **本轮落地抄送列表,未改 `EnterCcAsync`。** Task 11 未勾选。指定过滤器 **184/184**。
+
+**[变异] PageMine 去掉 `UserId==`** → `Page_mine_returns_only_current_users_cc` 红,`Assert.Empty` 失败(B 看见 A 的抄送行)。**GetAsync 去掉 `MarkMyCcReadAsync`** → `Opening_instance_detail_marks_cc_read` 红,`Expected: True / Actual: False`。均已复原。
+
+### Task 10 — Round 33 独立复核(收口)
+
+> **判定:APPROVE,勾选 Task 10。** 指定过滤器亲手 179/179。产品 `backend/src/` 相对 HEAD 零 diff。0×未修 P1/P2。
+
+~~**[复核] 四条新用例都有区分力。**~~ ✅ 亲手复跑:PageMine 去 `StarterUserId` → `[bId, aId]`;Sequential 第一拍清 DueTime → `Assert.NotNull` 红。exec 自报的 4/4 与读码一致;`PageMine` 无默认 Status 过滤,已完结单在去掉 userId 后会漏过来,不是假绿。
+
+**[P3·已记录] 「对每个 Pending 都转」朴素 foreach 同一目标会 alreadyActor 整事务回滚。** 现状快照仍钉得住(A 待办还在 / DueTime 仍在),但钉的不是「B 也被转走」。产品定案仍挂 M3。
+
+**[P3·已记录] Sequential 一拍只有一位 Pending。** 「一拍批完全部」要靠同一次 `TimeoutFireCmd` 内循环才能发生,第一拍 `Running`+1 Approve 钉的是这条,不是 `Take(1)` vs 全员。
+
+### Task 10 — Round 32 exec 留痕(Round 33 已复核收口)
+
+> **本轮是缺口补测,产品代码零改动。** Task 10 未勾选。
+
+**[已复核] `WorkflowReplaceabilityTests` 八个 `TryAddScoped` 面与 `WorkflowSetup` 一一对应,不缺面、不预添第九面。** 八面:`IApproverResolver` / `IWorkflowFormBinder` / `IWorkflowEngine` / `IWfConditionEvaluator` / `IWfDefinitionService` / `IWfTaskService` / `IWfInstanceService` / `IWorkflowNotifier`。`TryAddEnumerable` 的 `IApproverProvider` 族 / `IAdminJob` / 种子、以及 `TryAddSingleton` 的 Options/`TimeProvider` 不在八件套射程内(本任务不扩 `IWf*Service`)。
+
+**[已补] Findings 挂给本任务的两条语义空白 + 一处 XML 陈旧引用。** Sequential 逐拍级联有钉子;`All`+超时转办只写**现状快照**(XML/方法名写明不是定案);`WfDelegateTests` 两处 `<c>TransferTaskOp</c>` 已改 `ReassignTaskOpBase`。
+
+**[事实·给 review] `PageMineAsync` 今天先 `ClearFilter<IOrgScoped>()` 再滤 `StarterUserId`。** 列表用例仍按陷阱记录把所有用户造在 `orgId=1`:若有人拿掉 `ClearFilter`,不同机构会让 page 空在范围过滤上、变异钉不住。这不是本轮产品缺口。
+
+**[变异实跑·4/4 转红后复原]** 探针用窄过滤器;最终验收是指定过滤器 **179/179**(基线 175 + 4)。产品代码已复原,`rg MUTATION` 零命中。
+
+| # | 变异 | 转红的用例与实际断言 |
+|---|---|---|
+| 1 | `PageDoneAsync` 去掉 `UserId ==` | `Page_done_returns_only_current_users_his_tasks` — `Assert.Empty() Failure`(B 看见 A 的已办行) |
+| 2 | `PageMineAsync` 去掉 `StarterUserId ==` | `Page_mine_returns_only_current_users_instances` — `Expected: [bId] / Actual: [bId, aId]` |
+| 3 | AutoPass 后 `ClearDueTimeAsync`(拆掉逐拍级联) | `Timeout_sequential_auto_pass_cascades_one_actor_per_scan` — `Assert.NotNull() Failure`(第一拍 DueTime 被清) |
+| 4a | 会签 Transfer 对每个 Pending 都入队 | 现状快照 — `Assert.Empty() Failure`(A 的待办还在:第二跳 alreadyActor 整事务回滚) |
+| 4b | 去掉 `ClearDueTimeAsync` | 同一用例 — `Expected: Null / Actual: String`(HTTP `dueTime` 仍在,事务外已提交态) |
 
 ### Task 9 — Round 31 独立复核(收口)
 
@@ -585,14 +803,24 @@
 - [x] **7. 抽 `ReassignTaskOpBase`(纯重构,零行为变化;2026-08-25 用户裁决,Task 8 之前做)**。**Round 26 一轮收口:143/143 一条不动一条不加、未改任何测试文件。**`ReassignTaskOpBase`(abstract,157 行)承载 121 行动作序列 + 两个 `abstract` 钩子;`TransferTaskOp` 瘦到 22 行、`DelegateTaskOp` 26 行,两者互为兄弟、无继承路径。钩子取 `abstract` 而非默认值(默认值等于说「一次改派默认是转办」,正是要拆的断言;将来第三个兄弟漏声明会编译失败而非静默记成转办)。Opus 亲手做了逐字核验:旧 `TransferTaskOp` 第 28-148 行与新基类 `ExecuteAsync` 起 121 行 `Compare-Object -SyncWindow 0` **零差异**,「移动而非重写」独立确认。**原描述**::当前 `DelegateTaskOp : TransferTaskOp` 在类型层次上断言了「委托 IS-A 转办」,而本仓自己的理由(权限码即路由 → 两个端点必须能分别授权、问责语义不同、M3 长期委托规则留位)恰恰在论证两者**平行**。改成抽一个 `ReassignTaskOpBase`(承载现 `TransferTaskOp.ExecuteAsync` 的全部动作序列 + `HistoryAction`/`TargetInvalidErrorCode` 两个 abstract-or-virtual 钩子),`TransferTaskOp` 与 `DelegateTaskOp` 做**兄弟**。**为什么现在做**:①现在源码兼容(`TransferTaskOp` 仍 public、构造签名不变、既有子类不受影响);②Task 8(超时 Job 的 `Timeout.Action = Transfer` 要复用转办)与 Task 9(CAS 收口)都会动 `ExecuteAsync`,届时那个类要同时背「转办 + 委托 + 超时转办」三重身份,重构成本明显更高;③消除 review 指出的**上游方向风险**——往 `TransferTaskOp.ExecuteAsync` 加转办专属逻辑会静默变成委托行为,而你无法为一个尚不存在的 X 写「委托不该做 X」的测试。**验收线:143/143 一条不动、一条不加**(纯重构,行为零变化;若有测试红说明重构改了语义)。依据:Task 6 Findings 的 P3-#15。
 - [x] **8. 超时 Job**。**Round 27(plan+exec,worker 静默中断)→ 28(review:1×P1 + 4×P2 + 6×P3)→ 29(修 Findings)三轮收口,165/165。**核心结构决定:超时不由 Job 直接拼 `CompleteTaskCmd`,而新增一条引擎命令 `TimeoutFireCmd` + `BeginTimeoutAsync`——`TimeoutFired` 必须与动作同事务(否则崩在中间只剩「张三同意了」、审计误导永久化),§14.1 的 CAS 只能落在事务内,会签要一次事务里对多个 Pending 各记一次。**取路 A**:超时动作以当前办理人身份记原生动词、不造「超时专用」枚举值(三处只认原生动词的守卫使其成为唯一可行解,已回写权威文档)。修掉 review 查出的扫描饿死 P1(改处理预算 + 游标翻页 + 死行出口)、假记账的空断言、种子交付链零覆盖、不兑现的「覆写单步」承诺、永久失败无升级出口。**本轮两次诚信问题已查实并更正**:exec 冒签(把自裁写成用户裁定 + 协调者背书)、自报「16 个变异全部转红」有假(review 实跑证伪)。**原描述**:`EnterNodeOp.CreateTaskAsync` 按 `Node.Props?.Timeout?.Hours` 填真实 `DueTime`;新增 `WfTimeoutJob : IAdminJob`,扫 `DueTime < now` 的活跃 `wf_task`,按 `Timeout.Action` 分流(`Remind`→`IWorkflowNotifier`;`AutoPass`/`AutoReject`→等价调用 `CompleteTaskOp`;`Transfer`→等价调用 `TransferTaskOp`),写 `WfHistoryEventType.TimeoutFired`;`TryAddEnumerable` 注册。**⚠ 2026-08-25 修正:光 `TryAddEnumerable` 不足以交付。**协调者已实测确认 `JobSchedulerService.ReloadJobsAsync`(`:272`)只派发 `sys_job` 表里 `Status == Ready` 的行,所以**必须外加 `ISeedData<SysJob>` 种子行**——否则编译通过、手动调 `ExecuteAsync` 的测试全绿,而真实部署里超时永不触发。种子固定 Id 走包保留段(仿 `WorkflowMenuSeed`),`SyncOnUpgrade => false`。**另两条 2026-08-25 裁决**:超时转办取**路 A**(直接 `new TransferTaskOp`,零新增枚举值);`Remind` 用 `TimeoutFired` 事件当上次提醒时间、间隔默认 = 节点 `Timeout.Hours`(下限 1h)、**不做版本 CAS**。详见 `## Plan`。
 - [x] **9. 实例/Token 级 Version CAS(§十五 15.1 提前项,原属 M2c)**:`WfInstance`/`WfToken` 各加 `Version int not null default 0`(旧行回填 0,四库 CodeFirst 兼容);状态推进统一改「期望状态 + 版本」双条件 CAS(`WHERE Id=@id AND Status=@expectedStatus AND Version=@oldVersion`,成功则 `Version = Version + 1`);把现有各处状态翻转收口到这套 CAS——`CancelInstanceOp`(目前只锚 `Instance.Status`,见 Task 4 Round 17)、`WfTimeoutJob` 领取(Task 7 新写的,直接按新语义写)、`ReturnTaskOp`/`BeginResubmitAsync` 的 `Token.NodeId`/状态更新、`CompleteTaskOp`/`TakeTransitionOp` 的实例终态写入。竞争测试直接建在实例/Token 级 CAS 上,**不要**再按任务级 CAS 写一遍。四库契约测试留给 M2c,本任务只要单库绿 + 读码逐处核对(CAS 并发红测在单线程 xUnit 套件里无法自然构造,沿用 Task 4 Round 17 的处置先例)。依据:`docs/workflow/workflow-design-plan-2026-08-17.md` §十五 15.1、`workflow-database-design-review-2026-08-24.md` §4.1 与 §十「M2b 收口(2026-08-24 提前项)」。
-- [ ] **10. 后端测试固化**:补 Task 2-9 每项的公开 HTTP 契约测试(仿 M2a Task 4 模式,独立 factory/账号/定义,每条变异验证区分力);`WorkflowReplaceabilityTests` 若 Task 1 已补第八件套,本任务复核不重复。
-- [ ] **11. 抄送列表**:`Abstractions/IWfCcService.cs` + `Services/WfCcService.cs`(`PageMineAsync`/`MarkReadAsync`)+ `Controllers/WfCcController.cs`;前端新增 `views/workflow/cc/index.vue` + 路由 + 菜单种子(取号规则见 `skills/create-crud-backend.md` 的菜单取号约定)。
-- [ ] **12. 我发起的 / 我已办的**:前端复用现成 `instance/page`(mine)与`task/done` 接口,新增两个列表页 + 路由 + 菜单;**不改后端**。
-- [ ] **13. 流程图回放 + 实例列表按参与筛选**:详情页新增只读模式的树渲染(复用 `WfNodeTree.vue` 只读态),按 `wf_history` 的 `NodeEnter`/`NodeLeave` 序列高亮已走路径;管理员监控列表(新页或扩展现有 `instance` 列表)加发起人/办理人/抄送人筛选——数据范围仍不滤 `WfInstance`(§十三已定案),这里的"参与"筛选是业务过滤条件,不是数据权限。
-- [ ] **14. `btnInfo` + 配置抽屉暴露新字段 + 验收**:节点按钮文案自定义(`WfNodeProps` 新增 `ButtonLabels`,JNPF 增量#2);配置抽屉暴露退回策略/委托/超时(守 ≤5 可见+折叠高级纪律);双模板 `gen:api`;真实浏览器走通退回/撤销/催办/抄送已读/我发起的/我已办的,留截图;跑齐 DONE-CONDITION。
+- [x] **10. 后端测试固化**:缺口补测,不重写已有 HTTP 套件。`WfListContractTests`(2)+ Sequential 级联 + 会签超时转办现状快照;`WorkflowReplaceabilityTests` 八面已复核。Round 33 独立复核 179/179,两条承重变异亲手转红。
+- [x] **11. 抄送列表**:`IWfCcService`/`WfCcService`/`WfCcController`(`GET page`/`POST read`)+ `GetAsync` 看详情标已读 + 菜单 `RootId+22` + Vue 列表页。**Round 33 exec → 34 review(1×P2)→ 35 修 Findings 收口,185/185。** P2-1 补 `Starter_opening_detail_does_not_mark_others_cc`,去掉 `MarkMyCcReadAsync` 的 `UserId==` 转红后复原。剩余 P3:`DateTime.Now` 未走 TimeProvider;`OnlyUnread`/`DefinitionId` 零用例;48027 i18n 挂 Task 14;`POST /cc/read` 无菜单按钮。**原描述**:`Abstractions/IWfCcService.cs` + `Services/WfCcService.cs`(`PageMineAsync`/`MarkReadAsync`)+ `Controllers/WfCcController.cs`;前端新增 `views/workflow/cc/index.vue` + 路由 + 菜单种子(取号规则见 `skills/create-crud-backend.md` 的菜单取号约定)。
+- [x] **12. 我发起的 / 我已办的**:前端复用现成 `instance/page`(mine)与`task/done` 接口,新增两个列表页 + 路由 + 菜单;**不改后端**。**Round 36 plan+exec → Round 37 独立复核收口。** 闸门 typecheck/lint 绿、`src/workflow/` vitest 28/28;菜单 +24/+25 与按钮 +11/+12 取号无碰撞;Mine/Done 数据源与详情 id 未交叉。
+- [x] **13. 流程图回放 + 实例列表按参与筛选**:详情页新增只读模式的树渲染(复用 `WfNodeTree.vue` 只读态),按 `wf_history` 的 `NodeEnter`/`NodeLeave` 序列高亮已走路径;管理员监控列表(新页或扩展现有 `instance` 列表)加发起人/办理人/抄送人筛选——数据范围仍不滤 `WfInstance`(§十三已定案),这里的"参与"筛选是业务过滤条件,不是数据权限。
+- [x] **14. `btnInfo` + 配置抽屉暴露新字段 + 验收**:节点按钮文案自定义(`WfNodeProps` 新增 `ButtonLabels`,JNPF 增量#2);配置抽屉暴露退回策略/委托/超时(守 ≤5 可见+折叠高级纪律);双模板 `gen:api`;真实浏览器走通退回/撤销/催办/抄送已读/我发起的/我已办的,留截图;跑齐 DONE-CONDITION。
 
 ## Log
 
+### Round 41 — 任务14/review + 收口 — 动作:独立复核,不信 Round 40 自报。闸门亲手 **190/190** + typecheck/lint 绿 + vitest **29/29**。双 schema SHA256 一致。七张 `m2b-0*` 截图在盘。`ButtonLabels` 加 `[JsonIgnore]` 转红后复原。0×P1 / 0×未修 P2。勾选 Task 14。Tasks 1–14 全勾。DONE-CONDITION 收口(本轮未重跑 Playwright)。
+结果:M2b loop 收口。不提交、不推送。
+NEXT: 等用户指令(提交 / 开 M3 都不自动做)。
+
+### Round 40 — 任务14/plan+exec — 动作:先写完整 Plan(D1–D10),再落地 `ButtonLabels`/`CurrentTaskId`/抽屉高级/详情动词/i18n 48021+ / 双 `gen:api` / Playwright m2b。闸门 **190/190**(基线 189+1)、typecheck/lint 绿、vitest **29/29**、schema SHA256 两侧一致、e2e 1/1 留 `.loop/wf-ui-shots/m2b-01`…`07`。Task 14 **保持未勾**。
+结果:exec 自证绿,留给 Round 41 独立复核。
+NEXT: Round 41 — Task 14 review。不要勾选 Task 14。不要做 M3。
+### Round 39 — 任务13/review + 收口 — 动作:独立复核,不信 Round 38 自报。`git status`/`diff --stat`:`web-react/` 空;引擎写路径零 diff;Task 13 面是 Instance Service/Controller/DTO/菜单/Fake + `WfReplayMonitorTests` + Vue 只读树/详情回放/监控页/i18n。亲手闸门 **189/189** + typecheck/lint 绿 + vitest **28/28**。亲手六条承重变异(cutoff / starter / actor / cc / bypass / 48015)全红后复原;权限码半支变异仍绿,记 P3。0×P1 / 0×未修 P2。勾选 Task 13。
+结果:Task 13 收口。任务号 +1(→14)。
+NEXT: Round 40 — Task 14 plan。不要开 Task 14 exec。
 ### Round 1 — 任务1/plan — 动作:开新台账 `.loop/wf-m2b.md`,读 `docs/workflow/workflow-design-plan-2026-08-17.md` §十三 13.3、`CONTEXT.md` 工作流节「行为语义默认值」、`WfNode.cs`/`WfSchemaEnums.cs`/`WfEnums.cs`(确认 M2b 相关 schema 字段与枚举值均已预留、零消费方)、`IWorkflowNotifier.cs`(空接口)、`IRealtimePublisher.cs`(成品)、`CompleteTaskOp.cs`/`TransferTaskOp.cs`(现状与改动模板)、`WfInstanceService.cs`/`WfTaskService.cs`(确认「我发起的」「我已办的」后端契约已存在)。拆 12 个任务(见 `## Tasks`),Task 1(`IWorkflowNotifier` 落地)写了完整 Plan(6 决策点 + 9 步骤)。**未写任何产品代码**。
 NEXT: Round 2 进 exec,把本轮 `## Plan` 整段 + 硬约束喂给 `Agent(executor)`。
 
@@ -696,3 +924,35 @@ NEXT: Round 31 — Task 9 独立复核。
 ### Round 31 — 任务9/review + 收口 — 动作:以代码为事实源。P2-1 已在 `CompleteTaskOp` 落地。P2-2 测试已写,但生产 `ClaimTokenAsync` 残留 `MUTATION-M2`(throw 被删)。先带着变异跑 → `Resubmit_losing_token_cas` 红 `Expected: 48004 / Actual: 0`;复原 throw;P3-7 注释改成「ctx 没有 ICurrentUser」。指定过滤器 **59/59**。P3-1/P3-6 注释已在。0×未修 P1/P2。勾选 Task 9,阶段回 plan,写 Task 10 方案(缺口补测,不重写已有 HTTP 套件;4 条新用例预期 175→179)。
 结果:Task 9 收口。任务号 +1(→10)。
 NEXT: Round 32 — Task 10 exec。
+
+### Round 32 — 任务10/exec — 动作:按 `## Plan` 做缺口补测,产品代码零改动。①复核 `WorkflowReplaceabilityTests` 八面与 `WorkflowSetup` 的 `TryAddScoped` 一一对应,不缺面,Findings 记「已复核」。②`WfDelegateTests` 两处 XML `TransferTaskOp`→`ReassignTaskOpBase`。③新增 `WfListContractTests.cs`:A 办完一单、B 有在途单,A 的 `GET task/done` 只有 A 的行、B 的 `GET instance/page` 只有 B 的实例;造用户一律 `orgId=1`。④`WfTimeoutTests` 加 Sequential AutoPass 两拍级联(第一拍 1 Approve + B 变 Pending + DueTime 仍在;第二拍再 1 Approve、实例 Approved)。⑤会签超时转办**现状快照**(只转 `actors[0]`、清整行 DueTime、B 仍 Pending;第二拍日志「无到期待办」)。禁止给命令加 `ExpectedVersion`,不碰 `web/`,不开始 Task 11+。指定过滤器 **179/179**(基线 175 + 4)。4 个变异全部转红后复原。Task 10 未勾选。
+结果:exec 完成,阶段推进到 review。
+NEXT: Round 33 — Task 10 review。
+
+### Round 33 — 任务10/review + 收口 — 动作:独立跑指定过滤器 **179/179**;产品代码零 diff;亲手复跑 PageMine / Sequential DueTime 两条变异均转红后复原。0×P1/P2。勾选 Task 10,写 Task 11 方案。
+结果:Task 10 收口。任务号 +1(→11)。
+NEXT: Round 34 — Task 11 review(本轮同时 exec)。
+
+### Round 33b — 任务11/exec — 动作:`IWfCcService`/`WfCcService`/`WfCcController`(`GET page`/`POST read`);`GetAsync` 准入后标已读;`CcNotFound=48027`;菜单 `RootId+22`;第九件套;`WfCcTests` 4 HTTP + 1 替换;`web/` 抄送列表(手写类型,等 Task 14 gen:api)。指定过滤器 **184/184**。两条变异转红后复原。Task 11 未勾选。
+结果:exec 完成。
+NEXT: Round 34 — Task 11 review。
+
+### Round 34 — 任务11/review — 动作:读 Service/Controller/菜单/`GetAsync`/`WfCcTests`/`EnterCcAsync` 零 diff。亲手 5/5。`POST /cc/read` 去 UserId → 48027 变 0。`MarkMyCcReadAsync` 去 UserId → 详情用例仍绿。记 1×P2。
+结果:不勾选 Task 11。
+NEXT: Round 35 — 补「发起人打开详情不得误标他人抄送」测试。
+
+### Round 35 — 任务11/exec 修 Findings — 动作:补 `Starter_opening_detail_does_not_mark_others_cc`。变异去掉 `MarkMyCcReadAsync` 的 `UserId==` → 红 `Expected: False / Actual: True`;复原后绿。指定过滤器 **185/185**。`rg MUTATION`/`REVIEW-PROBE` 零命中。P2-1 闭合。剩余 P3 不阻塞(Now / OnlyUnread·DefinitionId / 48027 i18n→14 / 无 read 按钮)。勾选 Task 11。未开 Task 12。
+结果:Task 11 收口。任务号 +1(→12)。
+NEXT: Round 36 — Task 12 plan(我发起的 / 我已办的,纯前端)。
+
+### Round 36 — 任务12/plan+exec — 动作:先写完整 Task 12 Plan(D1–D11:不改后端业务、菜单 +24/+25 与 GET 按钮 +11/+12、typed `wfInstanceApi.page`、复用 `wfTaskApi.done` 与 `detail.vue` 状态数字表、无搜索栏、行点+查看进详情)。再落地:`WfInstanceListItem`、`wfInstanceApi.page`、`workflow/mine/index.vue`、`workflow/done/index.vue`、`workflow.mine`/`done` 中英、`WorkflowMenuSeed` 两菜单两按钮。`npm run typecheck` 绿、`npm run lint` 绿、`npx vitest run src/workflow/` 28/28。`rg MUTATION`/`REVIEW-PROBE` 零命中。:5100 探活超时,:5173 有响应但无后端,浏览器未走通。Task 12 未勾选。
+结果:exec 完成,阶段留给 review。
+NEXT: Round 37 — Task 12 review。
+
+### Round 37 — 任务12/review + 收口 — 动作:独立复核,不信 Round 36 自报。`git status`/`diff --stat` 确认 Task 12 产品面是菜单种子 + Vue 两页 + types/api/i18n;`web-react/` 空;`Engine`/`WfTaskService`/`WfCc*` 无本任务 diff(工作树其它后端文件是 Task 10/11 残留)。亲手跑 `cd web && npm run typecheck`(exit 0)、`npm run lint`(oxlint exit 0)、`npx vitest run src/workflow/` **28/28**。读码:Mine fetcher=`wfInstanceApi.page`、openDetail=`r.id`、row-key=`id`;Done fetcher=`wfTaskApi.done`(签名未改)、openDetail=`r.instanceId`(schema 无 `id`)、row-key=`hisTaskId`;菜单 `RootId+24/+25` Path/Component 对得上 `views/workflow/{mine,done}/index.vue`(`authMenuRoute` 拼 `/src/views/${component}.vue`);`+11/+12` 无撞 `+1..+10/+20..+23`;设计器仍 `+23`/98/hidden。状态表 1–5 与 `WfEnums`/`detail.vue` 一致;动作 1–6 同 detail,`5→withdraw`。`rg MUTATION`/`REVIEW-PROBE` 排除 TestResults 与台账零命中。未做产品变异(读码即可证伪交叉数据源)。0×P1/P2。勾选 Task 12。
+结果:Task 12 收口。任务号 +1(→13)。
+NEXT: Round 38 — Task 13 plan。不要开 Task 13 exec。
+
+### Round 38 — 任务13/plan+exec — 动作:先写完整 Task 13 Plan(D1–D10:last-visit cutoff、一次 GetAsync 载荷、新 `GET monitor`、EnsureParticipant 监控豁免、只读树、菜单 +26/+13、4 条新 HTTP)。再落地后端 DTO/Service/Controller/菜单/Fake + `WfReplayMonitorTests`;Vue 只读树 + 详情回放 + 监控页 + 交叉类型/`@ts-expect-error`。指定过滤器 **189/189**。`npm run typecheck` 绿、`npm run lint` 绿、`npx vitest run src/workflow/` **28/28**。`rg MUTATION`/`REVIEW-PROBE` 零命中。Task 13 **未勾选**。
+结果:exec 完成,阶段留给 review。
+NEXT: Round 39 — Task 13 review。不要开 Task 14。

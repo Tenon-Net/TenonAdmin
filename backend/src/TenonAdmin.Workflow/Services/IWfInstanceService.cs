@@ -38,7 +38,17 @@ public interface IWfInstanceService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 实例详情:元数据 + <c>formComponent</c> 挂载点 + 当前用户待办 + 审批意见时间线。
+    /// 管理员监控分页:机构数据范围照旧,再叠发起人 / 办理人 / 抄送人业务过滤。
+    /// 办理人 = 当前 Pending actor <b>或</b> <c>wf_his_task</c> 行。
+    /// </summary>
+    Task<PagedList<WfInstanceListItemOutput>> PageMonitorAsync(
+        WfInstanceMonitorPageInput input,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 实例详情:元数据 + <c>formComponent</c> 挂载点 + 当前用户待办 + 审批意见时间线
+    /// + 实例版本快照与最后一次访问收敛的回放节点集。
+    /// 抄送接收人打开详情时,其本实例未读 <c>wf_cc</c> 行会被标已读。
     /// </summary>
     Task<WfInstanceDetailOutput> GetAsync(
         long instanceId,

@@ -11,6 +11,9 @@ const props = defineProps<{
   node: WfNode
   active?: boolean
   error?: boolean
+  readonly?: boolean
+  visited?: boolean
+  current?: boolean
 }>()
 defineEmits<{ select: []; remove: [] }>()
 
@@ -102,17 +105,25 @@ const body = computed(() => {
 <template>
   <div
     class="wf-card"
-    :class="[`is-${tone}`, { 'is-active': active, 'is-error': error, 'is-root': node.type === 'start' }]"
-    role="button"
-    tabindex="0"
-    @click="$emit('select')"
-    @keydown.enter.self="$emit('select')"
-    @keydown.space.self.prevent="$emit('select')"
+    :class="[`is-${tone}`, {
+      'is-active': active && !readonly,
+      'is-error': error,
+      'is-root': node.type === 'start',
+      'is-readonly': readonly,
+      'is-visited': readonly && visited,
+      'is-current': readonly && current,
+      'is-dimmed': readonly && !visited && !current,
+    }]"
+    :role="readonly ? undefined : 'button'"
+    :tabindex="readonly ? undefined : 0"
+    @click="readonly ? undefined : $emit('select')"
+    @keydown.enter.self="readonly ? undefined : $emit('select')"
+    @keydown.space.self.prevent="readonly ? undefined : $emit('select')"
   >
     <div class="wf-card-head">
       <AppIcon :icon="icon" :size="14" class="wf-card-head-icon" />
       <span class="wf-card-title">{{ title }}</span>
-      <n-tooltip v-if="node.type !== 'start'">
+      <n-tooltip v-if="!readonly && node.type !== 'start'">
         <template #trigger>
           <n-button
             text
@@ -167,8 +178,20 @@ const body = computed(() => {
 .wf-card.is-branch { --wf-head: var(--color-primary); }
 .wf-card.is-end { --wf-head: var(--wf-end); }
 
-.wf-card:hover {
+.wf-card:not(.is-readonly):hover {
   box-shadow: var(--shadow-1), 0 0 0 1px color-mix(in srgb, var(--wf-head) 45%, transparent);
+}
+.wf-card.is-readonly {
+  cursor: default;
+}
+.wf-card.is-visited:not(.is-current) {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wf-head) 55%, transparent);
+}
+.wf-card.is-current {
+  box-shadow: var(--shadow-1), 0 0 0 2px var(--wf-head);
+}
+.wf-card.is-dimmed {
+  opacity: 0.42;
 }
 .wf-card.is-active {
   box-shadow: var(--shadow-1), 0 0 0 2px var(--wf-head);

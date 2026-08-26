@@ -62,6 +62,9 @@ public sealed class WfNodeProps
     /// <summary>超时配置(M2);<c>null</c>=不启用。</summary>
     public WfTimeout? Timeout { get; set; }
 
+    /// <summary>节点按钮文案(JNPF btnInfo);空/缺省=前端 i18n 默认。</summary>
+    public WfButtonLabels? ButtonLabels { get; set; }
+
     /// <summary>空审批人策略(节点级;可覆盖流程默认与全局)。</summary>
     public WfNobodyAction? Nobody { get; set; }
 
@@ -109,6 +112,22 @@ public sealed class WfTimeout
 
     /// <summary><see cref="WfTimeoutAction.Transfer"/> 时的目标用户 Id。</summary>
     public long? TransferUserId { get; set; }
+}
+
+/// <summary>节点动作按钮文案(<c>props.buttonLabels</c>);全可空,空=前端默认。</summary>
+public sealed class WfButtonLabels
+{
+    public string? Approve { get; set; }
+
+    public string? Reject { get; set; }
+
+    public string? Return { get; set; }
+
+    public string? Transfer { get; set; }
+
+    public string? Delegate { get; set; }
+
+    public string? Urge { get; set; }
 }
 
 /// <summary>条件分支的一条臂(<c>conditions[]</c>;M2)。</summary>

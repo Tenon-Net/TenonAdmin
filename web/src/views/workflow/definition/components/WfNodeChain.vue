@@ -15,6 +15,9 @@ const props = defineProps<{
   selectedId?: string | null
   errorSet: Set<string>
   terminal?: boolean
+  readonly?: boolean
+  visitedSet?: Set<string>
+  currentSet?: Set<string>
 }>()
 const emit = defineEmits<{
   select: [nodeId: string]
@@ -79,6 +82,9 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
         :node="node"
         :active="selectedId === node.id"
         :error="errorSet.has(node.id)"
+        :readonly="readonly"
+        :visited="visitedSet?.has(node.id) ?? false"
+        :current="currentSet?.has(node.id) ?? false"
         @select="emit('select', node.id)"
         @remove="emit('remove-node', node.id)"
       />
@@ -87,6 +93,7 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
         <div class="wf-branch-toolbar">
           <span>{{ t('workflow.designer.armCount', { count: node.conditions?.length ?? 0 }) }}</span>
           <button
+            v-if="!readonly"
             type="button"
             class="wf-arm-action wf-arm-add"
             :aria-label="t('workflow.designer.addArm')"
@@ -101,6 +108,7 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
           <article v-for="arm in node.conditions ?? []" :key="arm.id" class="wf-arm">
             <header class="wf-arm-head">
               <input
+                v-if="!readonly"
                 class="wf-arm-name"
                 type="text"
                 :value="arm.name"
@@ -108,9 +116,10 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
                 :aria-label="t('workflow.designer.armName')"
                 @change="renameArm(node.id, arm.id, $event)"
               >
+              <span v-else class="wf-arm-name">{{ arm.name || t('workflow.designer.armName') }}</span>
               <span v-if="arm.isDefault" class="wf-arm-default">{{ t('common.isDefault') }}</span>
               <button
-                v-else
+                v-else-if="!readonly"
                 type="button"
                 class="wf-arm-action wf-arm-remove"
                 :aria-label="t('common.delete')"
@@ -122,12 +131,15 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
             </header>
 
             <div class="wf-arm-body">
-              <WfAddNode @add="(type) => emit('add-at-arm-head', node.id, arm.id, type)" />
+              <WfAddNode v-if="!readonly" @add="(type) => emit('add-at-arm-head', node.id, arm.id, type)" />
               <WfNodeChain
                 v-if="arm.next"
                 :root="arm.next"
                 :selected-id="selectedId"
                 :error-set="errorSet"
+                :readonly="readonly"
+                :visited-set="visitedSet"
+                :current-set="currentSet"
                 :terminal="false"
                 @select="forwardSelect"
                 @add-after="forwardAddAfter"
@@ -146,7 +158,7 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
         </div>
       </section>
 
-      <WfAddNode @add="(type) => emit('add-after', node.id, type)" />
+      <WfAddNode v-if="!readonly" @add="(type) => emit('add-after', node.id, type)" />
     </div>
 
     <div v-if="terminal" class="wf-chain-terminal">

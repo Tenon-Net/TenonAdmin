@@ -18,8 +18,13 @@ public class WfInstanceService(
     IRepository<WfTaskActor> actors,
     IRepository<WfCc> ccs,
     IRepository<SysUserRole> userRoles,
-    IWorkflowEngine engine) : IWfInstanceService
+    IWorkflowEngine engine,
+    ICurrentUser? currentUser = null,
+    IPermissionProvider? permissions = null) : IWfInstanceService
 {
+    /// <summary>监控列表权限码 = 规范化路由,与 <c>[RolePermission]</c> 同一套。</summary>
+    public const string MonitorPermission = "GET:/api/v1/workflow/instance/monitor";
+
     /// <inheritdoc />
     public virtual async Task<IReadOnlyList<WfStartableDefinitionOutput>> ListStartableAsync(
         long userId,
@@ -159,6 +164,98 @@ public class WfInstanceService(
         var page = await instances.AsQueryable()
             .ClearFilter<IOrgScoped>()
             .Where(i => i.StarterUserId == starterUserId)
+
+            .WhereIF(input.Status.HasValue, i => i.Status == input.Status!.Value)
+            .WhereIF(versionIds is not null, i => versionIds!.Contains(i.DefinitionVersionId))
+            .WhereIF(!string.IsNullOrWhiteSpace(input.BusinessKey), i => i.BusinessKey == input.BusinessKey)
+            .ToPagedListAsync(input, q => q.OrderBy(i => i.Id, OrderByType.Desc));
+
+        return await MapInstancePageAsync(page, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<PagedList<WfInstanceListItemOutput>> PageMonitorAsync(
+        WfInstanceMonitorPageInput input,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        List<long>? versionIds = null;
+        if (input.DefinitionId is > 0)
+        {
+            versionIds = await versions.AsQueryable()
+                .Where(v => v.DefinitionId == input.DefinitionId.Value && v.Version >= 1)
+                .Select(v => v.Id)
+                .ToListAsync();
+            if (versionIds.Count == 0)
+            {
+                return new PagedList<WfInstanceListItemOutput>
+                {
+                    Current = input.Current <= 0 ? 1 : input.Current,
+                    Size = input.Size <= 0 ? 20 : input.Size,
+                    Total = 0,
+                    Items = [],
+                };
+            }
+        }
+
+        List<long>? actorInstanceIds = null;
+        if (input.ActorUserId is > 0)
+        {
+            var pendingTaskIds = await actors.AsQueryable()
+                .Where(a => a.UserId == input.ActorUserId.Value
+                            && a.ActorType == WfActorType.Approver
+                            && a.Status == WfActorStatus.Pending)
+                .Select(a => a.TaskId)
+                .ToListAsync();
+            var pendingIds = pendingTaskIds.Count == 0
+                ? []
+                : await tasks.AsQueryable()
+                    .Where(t => pendingTaskIds.Contains(t.Id))
+                    .Select(t => t.InstanceId)
+                    .ToListAsync();
+            var hisIds = await hisTasks.AsQueryable()
+                .Where(h => h.UserId == input.ActorUserId.Value)
+                .Select(h => h.InstanceId)
+                .ToListAsync();
+            actorInstanceIds = pendingIds.Union(hisIds).Distinct().ToList();
+            if (actorInstanceIds.Count == 0)
+            {
+                return new PagedList<WfInstanceListItemOutput>
+                {
+                    Current = input.Current <= 0 ? 1 : input.Current,
+                    Size = input.Size <= 0 ? 20 : input.Size,
+                    Total = 0,
+                    Items = [],
+                };
+            }
+        }
+
+        List<long>? ccInstanceIds = null;
+        if (input.CcUserId is > 0)
+        {
+            ccInstanceIds = await ccs.AsQueryable()
+                .Where(c => c.UserId == input.CcUserId.Value)
+                .Select(c => c.InstanceId)
+                .Distinct()
+                .ToListAsync();
+            if (ccInstanceIds.Count == 0)
+            {
+                return new PagedList<WfInstanceListItemOutput>
+                {
+                    Current = input.Current <= 0 ? 1 : input.Current,
+                    Size = input.Size <= 0 ? 20 : input.Size,
+                    Total = 0,
+                    Items = [],
+                };
+            }
+        }
+
+        // 不 ClearFilter<IOrgScoped>:监控叠在现有机构范围上,参与条件是业务谓词。
+        var page = await instances.AsQueryable()
+            .WhereIF(input.StarterUserId is > 0, i => i.StarterUserId == input.StarterUserId!.Value)
+            .WhereIF(actorInstanceIds is not null, i => actorInstanceIds!.Contains(i.Id))
+            .WhereIF(ccInstanceIds is not null, i => ccInstanceIds!.Contains(i.Id))
             .WhereIF(input.Status.HasValue, i => i.Status == input.Status!.Value)
             .WhereIF(versionIds is not null, i => versionIds!.Contains(i.DefinitionVersionId))
             .WhereIF(!string.IsNullOrWhiteSpace(input.BusinessKey), i => i.BusinessKey == input.BusinessKey)
@@ -176,6 +273,7 @@ public class WfInstanceService(
         cancellationToken.ThrowIfCancellationRequested();
         var instance = await RequireInstanceAsync(instanceId);
         await EnsureParticipantAsync(instance, currentUserId, cancellationToken);
+        await MarkMyCcReadAsync(instance.Id, currentUserId, cancellationToken);
 
         var version = await versions.AsQueryable()
             .Where(v => v.Id == instance.DefinitionVersionId)
@@ -193,6 +291,24 @@ public class WfInstanceService(
             .Where(h => h.InstanceId == instance.Id)
             .OrderBy(h => h.CreateTime, OrderByType.Asc)
             .ToListAsync();
+
+        var events = await histories.AsQueryable()
+            .Where(h => h.InstanceId == instance.Id)
+            .OrderBy(h => h.CreateTime, OrderByType.Asc)
+            .OrderBy(h => h.Id, OrderByType.Asc)
+            .ToListAsync();
+
+        var currentTasks = await tasks.AsQueryable()
+            .Where(t => t.InstanceId == instance.Id)
+            .OrderBy(t => t.Id)
+            .Select(t => new { t.Id, t.NodeId })
+            .ToListAsync();
+        var currentNodeIds = currentTasks
+            .Select(t => t.NodeId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        long? currentTaskId = currentTasks.Count > 0 ? currentTasks[0].Id : null;
 
         WfTodoItemOutput? myPending = null;
         if (currentUserId > 0 && instance.Status == WfInstanceStatus.Running)
@@ -215,6 +331,10 @@ public class WfInstanceService(
             CreateTime = instance.CreateTime,
             MyPendingTask = myPending,
             HisTasks = his.Select(MapHisTask).ToList(),
+            Model = model,
+            VisitedNodeIds = CollectVisitedNodeIds(events),
+            CurrentNodeIds = currentNodeIds,
+            CurrentTaskId = currentTaskId,
         };
     }
 
@@ -269,6 +389,32 @@ public class WfInstanceService(
                 SelectedUserIdsByNode = selectedUserIdsByNode,
             },
             cancellationToken);
+
+    /// <summary>
+    /// 查看详情即已读:把当前用户在本实例上未读的 <c>wf_cc</c> 行翻掉。
+    /// 无抄送行时是空操作;已读幂等。对齐语义契约「抄送已读由查看详情页标记」。
+    /// </summary>
+    protected virtual async Task MarkMyCcReadAsync(
+        long instanceId,
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (userId <= 0) return;
+
+        var unread = await ccs.AsQueryable()
+            .Where(c => c.InstanceId == instanceId && c.UserId == userId && !c.IsRead)
+            .ToListAsync();
+        if (unread.Count == 0) return;
+
+        var now = DateTime.Now;
+        foreach (var row in unread)
+        {
+            row.IsRead = true;
+            row.ReadTime = now;
+            await ccs.UpdateAsync(row);
+        }
+    }
 
     /// <summary>按 Id 取实例;不存在抛 <see cref="WorkflowErrorCode.InstanceNotFound"/>。</summary>
     protected virtual async Task<WfInstance> RequireInstanceAsync(long id)
@@ -336,6 +482,7 @@ public class WfInstanceService(
                 BusinessKey = i.BusinessKey,
                 Status = i.Status,
                 VariablesJson = i.VariablesJson,
+                StarterUserId = i.StarterUserId,
                 CreateTime = i.CreateTime,
             };
         }).ToList();
@@ -494,6 +641,54 @@ public class WfInstanceService(
             }));
     }
 
+    /// <summary>
+    /// 流程图回放:取最后一次向后跳转之后的 <see cref="WfHistoryEventType.NodeEnter"/> 节点。
+    /// 重提/拒绝/退回会让同一节点反复进出;丢掉 cutoff 会把回退前旧路径一起点亮。
+    /// </summary>
+    protected virtual IReadOnlyList<string> CollectVisitedNodeIds(IReadOnlyList<WfHistory> events)
+    {
+        var cutoff = -1;
+        for (var i = 0; i < events.Count; i++)
+        {
+            var t = events[i].EventType;
+            if (t is WfHistoryEventType.RejectRouted
+                or WfHistoryEventType.TaskReturned
+                or WfHistoryEventType.InstanceResubmitted)
+            {
+                cutoff = i;
+            }
+        }
+
+        var visited = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = cutoff + 1; i < events.Count; i++)
+        {
+            if (events[i].EventType != WfHistoryEventType.NodeEnter) continue;
+            var nodeId = events[i].NodeId;
+            if (string.IsNullOrWhiteSpace(nodeId) || !seen.Add(nodeId)) continue;
+            visited.Add(nodeId);
+        }
+
+        return visited;
+    }
+
+    /// <summary>
+    /// 超管,或持有监控列表权限的管理员,可以打开非自己参与的实例详情。
+    /// 不把 GET <c>instance/{id}</c> 改成 RolePermission——参与人无监控码也要能看自己的单。
+    /// </summary>
+    protected virtual async Task<bool> CanMonitorInstancesAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (userId <= 0) return false;
+        if (currentUser is { IsSuperAdmin: true, UserId: { } me } && me == userId)
+            return true;
+        if (permissions is null) return false;
+        var codes = await permissions.GetPermissionCodesAsync(userId, cancellationToken);
+        return codes.Contains(MonitorPermission);
+    }
+
     protected virtual async Task EnsureParticipantAsync(
         WfInstance instance,
         long userId,
@@ -502,6 +697,8 @@ public class WfInstanceService(
         cancellationToken.ThrowIfCancellationRequested();
         if (userId <= 0)
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceAccessDenied);
+        if (await CanMonitorInstancesAsync(userId, cancellationToken))
+            return;
         if (instance.StarterUserId == userId)
             return;
 
