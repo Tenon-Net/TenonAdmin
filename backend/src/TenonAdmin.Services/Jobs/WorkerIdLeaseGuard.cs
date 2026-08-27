@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
@@ -10,6 +11,9 @@ namespace TenonAdmin.Services;
 /// 同一 WorkerId 不能被两个活跃实例同时持有——第二个启动的实例在 <see cref="StartAsync"/> 抛异常,
 /// 把静默的主键冲突换成一条可读的启动错误。
 /// <para>租约 TTL = <see cref="AdminJobsOptions.HeartbeatSeconds"/> × 3;续租间隔 = HeartbeatSeconds / 2。</para>
+/// <para>被强杀的进程(调试停止、kill -9、容器重启)来不及释放租约,重启会撞上自己的残留租约。
+/// 这种情况下守卫按 <see cref="OwnerProcessIsGone"/> 判定持有者是否还活着,已退出则直接接管,
+/// 不必干等一个 TTL。</para>
 /// </summary>
 public sealed class WorkerIdLeaseGuard(
     ISqlSugarClient db,
@@ -33,40 +37,22 @@ public sealed class WorkerIdLeaseGuard(
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         _workerId = idOptions.WorkerId ?? 0;
-        _nodeName = $"{Environment.MachineName}#{_workerId}@{_instanceToken}";
+        var machineName = Environment.MachineName;
+        _nodeName = $"{machineName}#{_workerId}@{_instanceToken}";
         var pid = Environment.ProcessId;
-        var now = Now;
-        var expiresAt = now + LeaseTtl;
 
         db.CodeFirst.InitTables<SysWorkerLease>();
 
-        var existing = await db.Queryable<SysWorkerLease>()
-            .Where(l => l.WorkerId == _workerId)
-            .FirstAsync();
-
-        if (existing is not null)
+        // 读到行与落库之间,持有者可能正好释放、或被另一个实例接管。窗口极窄,重读一次即可收敛;
+        // 还抢不到就是真有人在争同一个号,该报错而不是继续重试。
+        for (var attempt = 1; !await TryClaimAsync(machineName, pid); attempt++)
         {
-            if (existing.LeaseExpiresAt > now && existing.NodeName != _nodeName)
+            if (attempt >= 2)
             {
                 throw new InvalidOperationException(
-                    $"WorkerId {_workerId} 已被节点 \"{existing.NodeName}\"(pid={existing.Pid})租约持有" +
-                    $"(到期 {existing.LeaseExpiresAt:O})。请为本实例配置不同的 TenonAdmin:Id:WorkerId。");
+                    $"WorkerId {_workerId} 的租约被其它节点连续抢占,本实例放弃启动。" +
+                    "请为本实例配置不同的 TenonAdmin:Id:WorkerId。");
             }
-
-            existing.NodeName = _nodeName;
-            existing.Pid = pid;
-            existing.LeaseExpiresAt = expiresAt;
-            await db.Updateable(existing).ExecuteCommandAsync();
-        }
-        else
-        {
-            await db.Insertable(new SysWorkerLease
-            {
-                WorkerId = _workerId,
-                NodeName = _nodeName,
-                Pid = pid,
-                LeaseExpiresAt = expiresAt,
-            }).ExecuteCommandAsync();
         }
 
         logger.LogInformation("WorkerId {WorkerId} 租约已获取(node={Node}, pid={Pid}, ttl={Ttl}s)。",
@@ -116,6 +102,115 @@ public sealed class WorkerIdLeaseGuard(
             }
             catch { /* 日志提供者已随宿主停机释放,无处可报 */ }
         }
+    }
+
+    /// <summary>
+    /// 争抢一次租约。<c>false</c> = 落库时那一行已被别人改掉,应当重读再试;
+    /// 号确实被活着的实例占着则直接抛,不在重试范围内。
+    /// </summary>
+    private async Task<bool> TryClaimAsync(string machineName, int pid)
+    {
+        var now = Now;
+        var expiresAt = now + LeaseTtl;
+
+        var existing = await db.Queryable<SysWorkerLease>()
+            .Where(l => l.WorkerId == _workerId)
+            .FirstAsync();
+
+        if (existing is null)
+        {
+            await db.Insertable(new SysWorkerLease
+            {
+                WorkerId = _workerId,
+                NodeName = _nodeName,
+                MachineName = machineName,
+                Pid = pid,
+                LeaseExpiresAt = expiresAt,
+            }).ExecuteCommandAsync();
+            return true;
+        }
+
+        if (existing.LeaseExpiresAt > now && existing.NodeName != _nodeName)
+        {
+            if (!OwnerProcessIsGone(existing))
+            {
+                var remaining = Math.Max(1, (int)Math.Ceiling((existing.LeaseExpiresAt - now).TotalSeconds));
+                throw new InvalidOperationException(
+                    $"WorkerId {_workerId} 已被节点 \"{existing.NodeName}\"" +
+                    $"(pid={existing.Pid}, 主机={OwnerMachine(existing)})租约持有" +
+                    $"(到期 {existing.LeaseExpiresAt:O},约 {remaining}s 后)。" +
+                    "多实例部署请为本实例配置不同的 TenonAdmin:Id:WorkerId;" +
+                    "若持有者是另一台主机上已被强制结束的进程,等租约到期后重试即可。");
+            }
+
+            logger.LogWarning(
+                "WorkerId {WorkerId} 上有节点 \"{Node}\"(pid={Pid})的残留租约,该进程已退出,本实例直接接管。",
+                _workerId, existing.NodeName, existing.Pid);
+        }
+
+        // 条件更新代替读-改-写:两个实例同时判定「可以接管」时,只有先落库的那个 rows=1,
+        // 另一个 rows=0 → 重读再判,而不是双双认为自己拿到了号。
+        var rows = await db.Updateable<SysWorkerLease>()
+            .SetColumns(l => new SysWorkerLease
+            {
+                NodeName = _nodeName,
+                MachineName = machineName,
+                Pid = pid,
+                LeaseExpiresAt = expiresAt,
+            })
+            .Where(l => l.WorkerId == _workerId && l.NodeName == existing.NodeName)
+            .ExecuteCommandAsync();
+
+        return rows > 0;
+    }
+
+    /// <summary>
+    /// 判断租约持有者进程是否已经不在了。跨主机的 pid 没有可比性,因此主机名不同一律当作「还活着」。
+    /// </summary>
+    /// <remarks>
+    /// 只会把「已死」误判成「还活着」(pid 被复用时),不会反过来——前者最多多等一个 TTL,
+    /// 后者会放两个实例同时发号。所以每个查不准的分支都返回 false。
+    /// </remarks>
+    private static bool OwnerProcessIsGone(SysWorkerLease lease)
+    {
+        if (lease.Pid <= 0
+            || !string.Equals(OwnerMachine(lease), Environment.MachineName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var owner = Process.GetProcessById(lease.Pid);
+            return owner.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return true;    // 该 pid 上没有进程
+        }
+        catch (InvalidOperationException)
+        {
+            return true;    // 查询期间进程已退出
+        }
+        catch (Exception)
+        {
+            return false;   // 权限不足 / 平台不支持等查不准的情况,保守处理
+        }
+    }
+
+    /// <summary>
+    /// 取租约持有者的主机名。<see cref="SysWorkerLease.MachineName"/> 是后加的列,升级前写下的行没有,
+    /// 退回从 <see cref="SysWorkerLease.NodeName"/> 前缀取——格式由本类写死为 <c>{主机名}#{WorkerId}@{token}</c>。
+    /// </summary>
+    private static string OwnerMachine(SysWorkerLease lease)
+    {
+        if (!string.IsNullOrEmpty(lease.MachineName))
+        {
+            return lease.MachineName;
+        }
+
+        var hash = lease.NodeName.IndexOf('#');
+        return hash > 0 ? lease.NodeName[..hash] : "";
     }
 
     private async Task HeartbeatLoopAsync(CancellationToken ct)

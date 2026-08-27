@@ -23,4 +23,11 @@ public class SysWorkerLease : PrimaryId
 
     [SugarColumn(ColumnDescription = "进程 Id")]
     public int Pid { get; set; }
+
+    /// <summary>
+    /// 持有者主机名。单独成列而不是从 <see cref="NodeName"/> 里反解:
+    /// <see cref="Pid"/> 只在同一台主机上才有可比性,接管判定要拿它做前置闸门。
+    /// </summary>
+    [SugarColumn(Length = 128, ColumnDescription = "持有者主机名", IsNullable = true)]
+    public string MachineName { get; set; } = "";
 }

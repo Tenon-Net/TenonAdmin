@@ -242,7 +242,7 @@
 - 状态：fixed（WorkerId 部分）/ wontfix（固定窗口部分）
 - 复现/证据：两个独立取舍被并在一条里，处置也分两半。**固定窗口保持不变**：边界近 2× 突发是固定窗口的固有特性，中间件注释早已写明；换滑动窗口要为每个分区留时间戳序列，内存与 Redis 两套实现都变重，而限流在本项目的定位是「挡住脚本级爆破」，不是精确配额——不值这个复杂度。**WorkerId 改了**：原先显式写成相同值（含都写 0）守卫放行，横向扩容时同毫秒撞雪花且静默。新增 `SysWorkerLease` 表 + `WorkerIdLeaseGuard`（启动争抢租约、周期续租、停止释放，TTL = 心跳 ×3），第二个实例拿同一 WorkerId 启动会**直接抛可读的启动错误**，把静默的主键冲突换成起不来。两例锁定：`Second_instance_with_same_worker_id_throws` / `Stop_releases_lease_allowing_new_instance`。
 - 风险：固定窗口边界突发对爆破略软（接受）；WorkerId 误配已从静默撞主键变为 fail-fast。
-- 建议：租约释放是尽力而为，进程被 kill 不会释放，租约按 TTL 自然过期后 WorkerId 才可复用——容器快速重启时若撞上未过期的旧租约会起不来，把 `Jobs:HeartbeatSeconds` 调小即可缩短这个窗口。
+- 建议：~~租约释放是尽力而为，进程被 kill 不会释放，租约按 TTL 自然过期后 WorkerId 才可复用——容器快速重启时若撞上未过期的旧租约会起不来，把 `Jobs:HeartbeatSeconds` 调小即可缩短这个窗口。~~ **已补齐**：`sys_worker_lease` 增列 `MachineName`，守卫启动撞到未过期租约时先判持有者进程是否还活着（`Process.GetProcessById`），**同机 + 进程已退出**即直接接管，不再干等 TTL；持有者仍在运行、或租约来自另一台主机（远端 pid 在本机没有可比性，一律按活着处理）仍旧 fail-fast。接管改走条件更新，两个实例同时判定可接管时只有一个 `rows=1`。三例锁定：`Stale_lease_from_dead_process_on_same_host_is_reclaimed` / `Stale_lease_from_another_host_is_not_reclaimed` / `Stale_lease_written_before_upgrade_is_reclaimed_via_node_name`。
 
 ### QA28 · P1 · Worker 实体扫描漏挂 Services 程序集
 - 表面：backend
