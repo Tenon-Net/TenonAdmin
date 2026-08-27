@@ -6219,6 +6219,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow/cc/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    DefinitionId?: number | string;
+                    OnlyUnread?: boolean;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfWfCcItemOutput"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfWfCcItemOutput"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfWfCcItemOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/cc/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfCcMarkReadInput"];
+                    "text/json": components["schemas"]["WfCcMarkReadInput"];
+                    "application/*+json": components["schemas"]["WfCcMarkReadInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflow/definition/page": {
         parameters: {
             query?: never;
@@ -6701,6 +6788,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow/instance/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    StarterUserId?: number | string;
+                    ActorUserId?: number | string;
+                    CcUserId?: number | string;
+                    Status?: components["schemas"]["WfInstanceStatus"];
+                    DefinitionId?: number | string;
+                    BusinessKey?: string;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfWfInstanceListItemOutput"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfWfInstanceListItemOutput"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfWfInstanceListItemOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflow/instance/history/{id}": {
         parameters: {
             query?: never;
@@ -6773,6 +6908,92 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfInstanceCancelInput"];
+                    "text/json": components["schemas"]["WfInstanceCancelInput"];
+                    "application/*+json": components["schemas"]["WfInstanceCancelInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfInstanceResubmitInput"];
+                    "text/json": components["schemas"]["WfInstanceResubmitInput"];
+                    "application/*+json": components["schemas"]["WfInstanceResubmitInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -6952,6 +7173,135 @@ export interface paths {
         trace?: never;
     };
     "/api/v1/workflow/task/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/delegate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/urge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/return": {
         parameters: {
             query?: never;
             header?: never;
@@ -8271,6 +8621,34 @@ export interface components {
          * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
          *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
          */
+        PagedListOfWfCcItemOutput: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["WfCcItemOutput"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
         PagedListOfWfDefinition: {
             /**
              * Format: int32
@@ -9509,6 +9887,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfPagedListOfWfCcItemOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfWfCcItemOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfPagedListOfWfDefinition: {
             /**
              * Format: int32
@@ -10676,7 +11075,7 @@ export interface components {
             /**
              * Format: int64
              * @description 机构负责人用户 Id;可空(未指定)。软引用 `sys_user`,无导航属性。
-             *     工作流「机构负责人」审批人 Provider 读此字段(`docs/review/workflow-design-plan-2026-08-17.md`)。
+             *     工作流「机构负责人」审批人 Provider 读此字段(`docs/workflow/workflow-design-plan-2026-08-17.md`)。
              */
             leaderUserId?: null | number | string;
             isDelete?: boolean;
@@ -10959,6 +11358,38 @@ export interface components {
             isDefault?: boolean;
             next?: null | components["schemas"]["WfNode"];
         };
+        WfButtonLabels: {
+            approve?: null | string;
+            reject?: null | string;
+            return?: null | string;
+            transfer?: null | string;
+            delegate?: null | string;
+            urge?: null | string;
+        };
+        WfCcItemOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: int64 */
+            instanceId?: number | string;
+            nodeId?: string;
+            nodeName?: null | string;
+            /** Format: int64 */
+            definitionId?: number | string;
+            definitionName?: string;
+            businessKey?: null | string;
+            instanceStatus?: components["schemas"]["WfInstanceStatus"];
+            /** Format: int64 */
+            starterUserId?: number | string;
+            isRead?: boolean;
+            /** Format: date-time */
+            readTime?: null | string;
+            /** Format: date-time */
+            createTime?: string;
+        };
+        WfCcMarkReadInput: {
+            /** Format: int64 */
+            id?: number | string;
+        };
         WfConditionExpr: {
             field?: null | string;
             op?: null | components["schemas"]["WfConditionOp"];
@@ -11123,6 +11554,10 @@ export interface components {
             /** Format: int64 */
             id?: number | string;
         };
+        WfInstanceCancelInput: {
+            /** Format: int64 */
+            instanceId?: number | string;
+        };
         WfInstanceDetailOutput: {
             /** Format: int64 */
             id?: number | string;
@@ -11143,6 +11578,11 @@ export interface components {
             createTime?: string;
             myPendingTask?: null | components["schemas"]["WfTodoItemOutput"];
             hisTasks?: components["schemas"]["WfHisTaskOutput"][];
+            model?: null | components["schemas"]["WfModel"];
+            visitedNodeIds?: string[];
+            currentNodeIds?: string[];
+            /** Format: int64 */
+            currentTaskId?: null | number | string;
         };
         WfInstanceListItemOutput: {
             /** Format: int64 */
@@ -11155,8 +11595,18 @@ export interface components {
             businessKey?: null | string;
             status?: components["schemas"]["WfInstanceStatus"];
             variablesJson?: null | string;
+            /** Format: int64 */
+            starterUserId?: number | string;
             /** Format: date-time */
             createTime?: string;
+        };
+        WfInstanceResubmitInput: {
+            /** Format: int64 */
+            instanceId?: number | string;
+            variablesJson?: null | string;
+            selectedUserIdsByNode?: null | {
+                [key: string]: (number | string)[];
+            };
         };
         WfInstanceStatus: number;
         WfModel: {
@@ -11190,6 +11640,7 @@ export interface components {
             returnPolicy?: null | components["schemas"]["WfReturnPolicy"];
             returnToNodeId?: null | string;
             timeout?: null | components["schemas"]["WfTimeout"];
+            buttonLabels?: null | components["schemas"]["WfButtonLabels"];
             nobody?: null | components["schemas"]["WfNobodyAction"];
             /** Format: int64 */
             nobodyTransferUserId?: null | number | string;
@@ -11242,6 +11693,7 @@ export interface components {
             comment?: null | string;
             /** Format: int64 */
             toUserId?: number | string;
+            targetNodeId?: null | string;
         };
         WfTimeout: {
             /** Format: int32 */

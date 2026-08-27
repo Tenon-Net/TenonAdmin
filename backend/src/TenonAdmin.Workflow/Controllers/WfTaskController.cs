@@ -5,7 +5,7 @@ using TenonAdmin.Core;
 namespace TenonAdmin.Workflow;
 
 /// <summary>
-/// 审批任务端点(设计方案 §七):待办 / 已办 + 同意 / 拒绝 / 转办。
+/// 审批任务端点(设计方案 §七):待办 / 已办 + 同意 / 拒绝 / 转办 / 委托 / 催办 / 退回,共 8 条。
 /// 全部 <c>[ActiveSession]</c>——办理人取自令牌,不接受任意 userId。
 /// </summary>
 [ApiController]
@@ -60,4 +60,33 @@ public class WfTaskController(
         Result<WfEngineResult>.Ok(
             await taskService.TransferAsync(
                 input.TaskId, CurrentUserId, input.ToUserId, input.Comment, cancellationToken));
+
+    /// <summary>委托(一次性:把当前待办指给别人代办)</summary>
+    [HttpPost("delegate")]
+    [OperationLog("委托")]
+    public async Task<Result<WfEngineResult>> Delegate(
+        WfTaskActionInput input,
+        CancellationToken cancellationToken) =>
+        Result<WfEngineResult>.Ok(
+            await taskService.DelegateAsync(
+                input.TaskId, CurrentUserId, input.ToUserId, input.Comment, cancellationToken));
+
+    /// <summary>催办</summary>
+    [HttpPost("urge")]
+    [OperationLog("催办")]
+    public async Task<Result<bool>> Urge(WfTaskActionInput input, CancellationToken cancellationToken)
+    {
+        await taskService.UrgeAsync(input.TaskId, CurrentUserId, cancellationToken);
+        return Result<bool>.Ok(true);
+    }
+
+    /// <summary>退回</summary>
+    [HttpPost("return")]
+    [OperationLog("退回")]
+    public async Task<Result<WfEngineResult>> Return(
+        WfTaskActionInput input,
+        CancellationToken cancellationToken) =>
+        Result<WfEngineResult>.Ok(
+            await taskService.ReturnAsync(
+                input.TaskId, CurrentUserId, input.TargetNodeId, input.Comment, cancellationToken));
 }

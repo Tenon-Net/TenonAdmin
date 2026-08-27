@@ -24,9 +24,11 @@ public class WorkflowM2BranchRegressionTests
         using var f = new WorkflowAppFactory();
         var admin = await ClientFor(f, "superAdmin");
         await AddUser(admin, "wf-branch-hit");
-        var definitionId = await Publish(admin, "命中臂汇合", BranchModel());
+        var mergeApproverId = await AddUser(admin, "wf-branch-merge");
+        var definitionId = await Publish(admin, "命中臂汇合", BranchModel(mergeApproverId));
 
         var starter = await ClientFor(f, "wf-branch-hit");
+        var merger = await ClientFor(f, "wf-branch-merge");
         var start = await PostEnvelope(starter, "/api/v1/workflow/instance/start",
             new { definitionId, variablesJson = """{"amount":200}""" });
         Assert.Equal(0, start.GetProperty("code").GetInt32());
@@ -54,16 +56,18 @@ public class WorkflowM2BranchRegressionTests
 
         // 臂子链末节点(high-approve.Next==null)离开后应汇合到 branch1.Next(merge-approve),
         // 不应该直接完结实例 —— 杀变异①。
-        var secondTodo = await TodoFor(starter, instanceId);
+        // merge-approve 的审批人是独立于 starter 的专职用户(而非 initiator 自批),避免与
+        // Task 3「同一人相邻节点去重」的默认行为产生巧合冲突(starter 若连批两个相邻节点会被去重)。
+        var secondTodo = await TodoFor(merger, instanceId);
         Assert.Equal("merge-approve", secondTodo.GetProperty("nodeId").GetString());
         Assert.Equal("merge-approve", secondTodo.GetProperty("nodeName").GetString());
 
         // 对照组:汇合后主链节点在同一接口下仍应解析正常,证明改动没有连带破坏主链侧。
-        var detailBeforeApprove2 = await GetEnvelope(starter, $"/api/v1/workflow/instance/{instanceId}");
+        var detailBeforeApprove2 = await GetEnvelope(merger, $"/api/v1/workflow/instance/{instanceId}");
         Assert.Equal("merge-approve",
             detailBeforeApprove2.GetProperty("data").GetProperty("myPendingTask").GetProperty("nodeName").GetString());
 
-        var approve2 = await PostEnvelope(starter, "/api/v1/workflow/task/approve",
+        var approve2 = await PostEnvelope(merger, "/api/v1/workflow/task/approve",
             new { taskId = secondTodo.GetProperty("taskId").GetInt64() });
         Assert.Equal(0, approve2.GetProperty("code").GetInt32());
         Assert.Equal((int)WfInstanceStatus.Approved,
@@ -220,8 +224,12 @@ public class WorkflowM2BranchRegressionTests
             .Single(i => i.GetProperty("instanceId").GetInt64() == instanceId);
     }
 
-    /// <summary>root(start) → branch1(armHigh: amount&gt;100 → high-approve;armLow: 默认,无子链) → merge-approve。</summary>
-    private static object BranchModel() => new
+    /// <summary>
+    /// root(start) → branch1(armHigh: amount&gt;100 → high-approve;armLow: 默认,无子链) → merge-approve。
+    /// <paramref name="mergeApproverId"/> 为空时 merge-approve 沿用 initiator 自批(多数用例够用);
+    /// 传入时 merge-approve 改为该专职用户审批,避开 Task 3 相邻节点同人去重的默认行为。
+    /// </summary>
+    private static object BranchModel(long? mergeApproverId = null) => new
     {
         version = 1,
         root = new
@@ -246,19 +254,25 @@ public class WorkflowM2BranchRegressionTests
                     },
                     new { id = "armLow", name = "默认", isDefault = true },
                 },
-                next = ApprovalNode("merge-approve"),
+                next = ApprovalNode("merge-approve", mergeApproverId),
             },
         },
     };
 
-    private static object ApprovalNode(string id) => new
+    private static object ApprovalNode(string id, long? userId = null)
     {
-        id,
-        type = "approval",
-        name = id,
-        props = new { assignee = new { provider = "initiator", @params = new { } }, mode = "any" },
-        next = (object?)null,
-    };
+        object assignee = userId is { } uid
+            ? new { provider = "user", @params = new Dictionary<string, object> { ["userIds"] = new[] { uid } } }
+            : new { provider = "initiator", @params = new { } };
+        return new
+        {
+            id,
+            type = "approval",
+            name = id,
+            props = new { assignee, mode = "any" },
+            next = (object?)null,
+        };
+    }
 
     private static async Task<HttpClient> ClientFor(WorkflowAppFactory f, string account)
     {

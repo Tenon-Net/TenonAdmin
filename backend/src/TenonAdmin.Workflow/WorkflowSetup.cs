@@ -72,6 +72,9 @@ public static class WorkflowSetup
         // 分支条件求值(结构化 JSON,非脚本);消费者可前置注册同接口整体替换。
         services.TryAddScoped<IWfConditionEvaluator, WfConditionEvaluator>();
 
+        // 通知 SPI(待办到达 / 完结);默认接内核 IRealtimePublisher,消费者可前置注册同接口整体替换。
+        services.TryAddScoped<IWorkflowNotifier, WfDefaultNotifier>();
+
         // 待办/已办 + 审批动词(同意/拒绝/转办)。
         services.TryAddScoped<IWfTaskService, WfTaskService>();
 
@@ -80,6 +83,15 @@ public static class WorkflowSetup
 
         // 发起 / 我发起的 / 详情(含 FormBinder 挂载点) / 事件流。
         services.TryAddScoped<IWfInstanceService, WfInstanceService>();
+
+        // 抄送列表(抄送≠待办);消费者前置同接口即可整体替换。
+        services.TryAddScoped<IWfCcService, WfCcService>();
+
+        // 超时扫描:处理器 + 预置的 sys_job 行。**两行都必须有**——注册只让处理器可被解析器选到,
+        // 调度器只派发 sys_job 表里 Status=Ready 的行,少了种子就是「装了包但超时永不触发」。
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, WfTimeoutJob>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WfTimeoutJobSeed>());
+
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WorkflowMenuSeed>());
 
         return services;

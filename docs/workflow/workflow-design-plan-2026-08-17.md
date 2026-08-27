@@ -1,12 +1,14 @@
 # TenonAdmin.Workflow 设计规划(基于 31 仓摸底)
 
-日期:2026-08-17。前置材料:`docs/review/workflow-engine-research-2026-08-10.md`(调研)、本地参考库 `../参考项目/工作流/SUMMARY.md` 与各仓 `_TENON_REF.md`(摸底笔记;参考仓在本仓上级目录,与 `tenon-admin` 并列)。本文把调研收敛为**可开工的设计决策**;2026-08-17 经磨盘八问逐条裁决(见§十),**已定稿**。
+> 文档入口：[`README.md`](./README.md)
+
+日期:2026-08-17。前置材料:[`workflow-engine-research-2026-08-10.md`](./workflow-engine-research-2026-08-10.md)(调研)、本地参考库 `C:\HuHuHu\参考项目\工作流\SUMMARY.md` 与各仓 `_TENON_REF.md`。本文把调研收敛为**可开工的设计决策**;2026-08-17 经磨盘八问逐条裁决(见§十),2026-08-23 在不翻转审批内核的前提下把 AI Decision 上调为 M3b 战略交付。
 
 ## 〇、决策总览(一屏版)
 
 | 维度 | 决策 | 主要依据 |
 |---|---|---|
-| 产品定位 | **审批为核**(人工审批链),不做自动化编排;保留一颗自动化种子:**Webhook 节点(M3)** + 节点类型 SPI(消费者可注册自定义节点类型) | Elsa/Conductor 那类编排是另一个产品;SPI 保住"通用性"不牺牲焦点 |
+| 产品定位 | **AI 原生审批为核**：M1–M2 先完成可信人工审批链，M3a 建可靠机器节点，M3b 用 AI Decision 处理低风险审批、人工只接异常；不扩成通用自动化编排平台 | Slickflow 给出 AI 节点产品形状，OpenWorkflow 补可靠执行，Elsa 补 proposal 治理；三者组合但仍围绕审批 |
 | 引擎 | **自研**,零第三方运行时依赖(只靠 SqlSugarCore + Microsoft.*) | 所有 .NET 候选要么许可不干净(WorkflowEngine.NET EULA、CCFlow GPL、AntFlow.net 附加条款),要么产品面错位(Elsa/WorkflowCore 是编排不是审批) |
 | 归属 | **卫星包 `TenonAdmin.Workflow`**,不进内核 | 对照 ADR-0004 三条判据反着全中:没有内核功能把它当载体、表/页面体量大、"可选"名副其实;`TenonAdmin.Excel` 已趟平卫星包接线模式 |
 | 流程定义 | **自研 JSON 钉钉树模型**(非 BPMN XML),后端为唯一 schema 源 | CCFlow 反证 + FlyFlow/Warm-Flow/FlowLong/AntFlow 全走这条线;bpmn-js 出局 |
@@ -95,6 +97,7 @@ TenonAdmin.Workflow  (引用 TenonAdmin.AspNetCore)
 - 条件表达式是**结构化 JSON**(字段/操作符/值 + and/or 组),不是脚本字符串——安全、可翻译、可在两端 UI 复原。变量来源:发起时提交的业务摘要字段(见§五表单边界)。
 - 定义发布即**版本快照**:实例永远跑自己发布时的版本,改定义不影响在途(Warm-Flow/FlowLong 一致做法)。
 - 定义级预留字段:`formSchema`(M3 简易动态表单的控件描述)与节点级 `formPerms`——**M1 就进 schema 与实体列**,避免 M3 加列迁移;M1/M2 始终存空值。
+- **发布期校验节点引用完整性**(2026-08-24 落地):`onReject=toNode` 必须配一个合法的 `rejectToNodeId`,`returnPolicy=node` 必须配一个合法的 `returnToNodeId`——目标须存在于全树,允许跨分支臂与前向引用(按整树索引解析,不是只查已遍历过的节点)。不校验的后果是能发布出「该节点的拒绝动作永久不可用」的定义:运行到该节点点拒绝会抛 `ModelInvalid`、整事务回滚,而该错误码的含义(根非 start / 缺节点)完全看不出是配置问题。
 
 ## 三、数据模型(9 表冷启动)
 
@@ -195,10 +198,12 @@ POST /api/v1/workflow/task/approve|reject|return|transfer|delegate  // 各带意
 |---|---|---|---|
 | **M1 能走通一单** | 包骨架(TryAdd/virtual/CodeFirst)+ 9 表 + JSON schema v1(`formSchema`/`formPerms` 预留)+ 引擎核心(token 推进、串行)+ 动词:同意/拒绝/转办 + 8 种 Provider + SPI + `SysOrg.LeaderUserId` + 定义发布/版本 + 发起/待办/已办/详情 API + 历史事件流 | 仅 Vue:设计器 MVP(串行链:审批+抄送节点)+ 配置抽屉 + 发起页/待办列表/详情页(含 `IWorkflowFormBinder` 挂载点) | "请假审批"3 分钟不看文档建完、发布、走通一单;四库 CI 绿;`WorkflowReplaceabilityTests` 六件套 |
 | **M2 正经审批产品** | 排他分支(结构化条件 + 可视化编辑器)+ 会签(一票否决)/或签(先表态即定局)+ 动词:退回(可配目标)/撤销/委托/催办 + 超时策略(`IAdminJob`:提醒/自动通过/自动拒绝)+ 空审批人三级可配 + 同一人去重 + SignalR 通知 | 仅 Vue:分支容器 + 条件编辑器 + 抄送独立列表 + 流程图回放(高亮已走路径) | 钉钉上一个典型报销流程(条件分支+会签+超时提醒)1:1 复刻;CCFlow 行为清单逐项过 |
-| **M3 通用性拉满 → GA** | 简易动态表单(~10 控件)+ 字段权限矩阵 + 动词封顶:加签/减签/拿回/比例票签 + 长期委托规则 + 并行分支(多 token)+ Webhook 节点 + 节点类型 SPI 对外文档化 | 表单设计器(单列)+ **React 模板整体 port** | **GA 门槛:双模板 feature 对齐 + 文档站 guide 上线** |
-| **M3+ 按需** | 子流程(仅当真实需求出现)、经典图模式(LogicFlow)、统计报表 | — | 不进任何承诺 |
+| **M2c 可靠性收口** | 所有写命令增加 `RequestId/IdempotencyKey` + 同事务操作回执；通知失败日志/指标；把超时领取、CAS、事务回滚和回执唯一性收成四库共享契约测试 | Vue 在一次提交生命周期内生成并复用 request key；刷新双前端 API 类型，但不提前 port React 工作流页面 | 同一请求串行/并发重放均返回第一次结果；超时与人工动作竞争只允许一个胜出；四库 CI 全绿 |
+| **M3a 通用性拉满 → GA 基石** | 简易动态表单(~10 控件)+ 字段权限矩阵 + 动词封顶:加签/减签/拿回/比例票签 + 长期委托规则 + 并行分支(多 token)+ Webhook 节点 + 可靠自动节点执行 Module（execution/attempt/deadline/retry/fence/outbox）+ 节点类型 SPI 对外文档化 | 表单设计器(单列)+ **React 模板整体 port** | **基础 GA 门槛:双模板 feature 对齐 + 文档站 guide 上线；远程节点无长事务、崩溃可恢复、同一 execution 只推进一次** |
+| **M3b AI Decision v0** | 以 M3a Seam 接入 AI Decision Adapter：OpenAI-compatible + fake Provider、结构化 proposal、schema/policy、shadow mode、低风险自动放行、人工 fallback、审计/脱敏/限额 | 双模板 AI 节点配置、proposal/证据/策略结果审计视图 | AI 不直接写任务状态；无效输出/低置信度/风险/异常全部转人工；场景评测达标后才能由 shadow 切自动放行 |
+| **M3+ AI 扩展/按需** | 证据与 RAG Adapter、只读 Agent tools、更多 Provider、评测集/灰度策略；AI 设计 Copilot、子流程、经典图模式、统计报表按真实需求进入 | — | AI 自动拒绝和写工具不进入首版；每项扩权单独做安全与审计验收 |
 
-## 九、调研§七开放问题——决议
+## 九、调研§九开放问题——决议
 
 | 问题 | 决议 |
 |---|---|
@@ -213,14 +218,14 @@ POST /api/v1/workflow/task/approve|reject|return|transfer|delegate  // 各带意
 
 | # | 问题 | 裁决 |
 |---|---|---|
-| 1 | 产品定位:审批 or 编排? | **审批为核**;唯一自动化种子 = Webhook 节点(M3);节点类型走 SPI 可扩展;完整编排(脚本/定时/重试)明确不做 |
+| 1 | 产品定位:审批 or 编排? | **AI 原生审批为核**；Webhook(M3a)+AI Decision(M3b) 都走节点 SPI；机器处理低风险、人处理异常；完整通用编排平台仍不做 |
 | 2 | 功能丰富 vs 配置简单? | FlowLong 动词全集 = **路线图上限**分三期铺开;配置纪律:每节点默认可见项 ≤5、全部有默认值;验收线 = 请假流程 3 分钟建完 |
 | 3 | 表单怎么整合? | 双腿并存:M1 挂载点(开发者)、M3 简易动态表单进包内(业务管理员);`formSchema`/`formPerms` M1 即预留;布局/公式/联动/子表永久不做 |
 | 4 | 建模能力边界? | 排他分支 M2、并行 M3、**包容永不**、子流程 M3+ 按需 |
 | 5 | 内置审批人 Provider? | **8 种**:指定成员/直属主管(N 级)/连续多级主管/角色/职位(可限机构)/发起人自选/发起人本人/机构负责人——最后一种要求 `SysOrg` 新增 `LeaderUserId`;HRBP 等私有逻辑走消费者自注册 |
 | 6 | 行为语义默认值? | 见下表;空审批人策略**三级可配**(节点>流程默认>全局配置),出厂默认自动通过 |
 | 7 | 设计器双模板成本? | **Vue 先行打磨,schema 定稿后一次性 port 到 React(GA 前)**;纯 TS 逻辑框架无关;无框架共享包否决(配置抽屉占 60% 工作量,无法框架无关化) |
-| 8 | 里程碑切分? | 见§八,照此执行;Webhook 留在 M3 不提前 |
+| 8 | 里程碑切分? | 见§八；M2a/M2b 后先做 M2c 可靠性收口，再进 M3；Webhook 留在 M3 不提前 |
 
 ### 行为语义默认值(问题 6 细则,M2 写代码前的既定答案)
 
@@ -231,9 +236,21 @@ POST /api/v1/workflow/task/approve|reject|return|transfer|delegate  // 各带意
 | 发起人撤销 | 仅当无任何节点被审批过 | 审批人"拿回"是 M3 动词 |
 | 抄送 | **不算待办**:独立"抄送我的"列表 + 已读标记,不催不超时 | — |
 | 审批人解析为空 | 自动通过(出厂全局默认) | 三级可配:自动通过 / 转指定人 / 卡住通知管理员 |
-| 同一人相邻节点 | 自动通过后一次(去重) | 节点可配"仍需重复审批" |
+| 同一人相邻节点 | 自动通过后一次(去重)。**去重基线只认最近一次向后跳转之后的批准记录**——拒绝路由 / 主动退回 / 退回重提都重置基线,跳转之前批过的节点在回退后必须重新审(2026-08-24 定案,见下方「向后跳转重置去重基线」) | 节点可配"仍需重复审批" |
+| 委托(一次性) | **仅当前 Pending 办理人可委托**,实例发起人无权委托他人待办;被委托人拿新 actor(原 actor 翻 `Skipped`),同一 `taskId` 换人而非新建待办;不重置 `DurationMs` 基准与 `DueTime` | — |
+| 超时提醒频率 | `Remind` 可重复触发,**最小提醒间隔默认 = 该节点自己的 `timeout.hours`(下限 1 小时)**,即「配 24 小时超时的节点每 24 小时催一次」。判据取本(实例, 节点)上最近一条 `TimeoutFired` 事件的时间,不新增列 | `TenonAdmin:Workflow:TimeoutRemindMinIntervalHours` 全局覆盖(0 = 跟随节点);或覆写 `WfTimeoutJob.ShouldRemindAsync` 换节奏(「只提醒一次」是它的第一个用例)——**注意**:覆写子类后还须把 `sys_job` 中该行的 `HandlerName` 改成子类全名,否则调度器仍选中基类、覆写不生效 |
+| 超时动作的动作主体 | 超时触发的自动动作一律**以当前 Pending 办理人身份记原生动词**(`Approve`/`Reject`/`Transfer`),不新增「超时专用」的 `WfTaskAction` 值;真相由同事务的 `TimeoutFired` 事件 + `Comment` 说明。机制约束:`CompleteTaskOp` 的 actor 认领是 `WHERE UserId=@caller AND Status=Pending`,系统账号必然认领不到,换身份要松掉「仅本人可办」这条承重校验 | 将来若要区分人/机器动作,补法是加一个可空列(如 `IsAuto`,旧行回填),比持久化枚举值可逆 |
+| 链式委托 | 允许 A→B→C,不设次数/深度上限;委托回本待办任何参与过的人会被拒(`alreadyActor` 校验只看 actor 行存在性、不看状态),故环路天然封死 | — |
 | 会签中一人拒绝 | 一票否决立即拒 | 比例票签是 M3 动词 |
 | 或签中第一人表态 | 先表态即定局(先拒即拒/先过即过),其余任务自动取消 | — |
+
+#### 向后跳转重置去重基线(2026-08-24 定案)
+
+「同一人相邻节点去重」的「紧邻的上一个已完成审批节点」**只在 token 单向前进时有定义**。M2b 的拒绝路由(`onReject=toNode`)、主动退回和退回重提都会让 token 向后跳,而跳转目标往往正是最近一条批准记录所在的节点——若沿用它当基线,回退目标会被判成「已审过」而整节点自动通过:拒绝路由退化成把待办原样弹回拒绝人(可无限循环),重提的「从头重走」会跳过已批节点。两者都与本表既有定案相反。
+
+因此:**任何向后跳转都重置去重基线,跳转之前的批准记录不再参与比对**。「重走就是真重走,不因为上次这个人批过而静默跳过」与本表「退回后重新提交 → 从头重走」是同一条语义的两面。对正向推进的去重行为零变化。
+
+实现取的是同表下界(在 `wf_his_task` 内按 `Id` 倒序,遇到最近一条 `Reject`/`Return` 行即截断),不跨表比较雪花 Id;`RejectRouted`/`TaskReturned` 两个历史事件类型用于审计与流程图回放,不作下界数据源。**流程图回放(M2b 后半程)必须按最后一次节点访问收敛**,否则会把回退前后的路径一起点亮。
 
 ## 十一、风险与警戒线
 
@@ -284,8 +301,75 @@ POST /api/v1/workflow/task/approve|reject|return|transfer|delegate  // 各带意
 | 段 | 后端 | 前端(仅 Vue) | 验收线 |
 |---|---|---|---|
 | **M2a 分支** | 结构化条件求值器 + `branch` 节点执行(`EnterNodeOp` 现在 `default:` 直接抛 `NodeTypeUnsupported`)+ `GatewayTaken` 事件 + `multiLeader` 主管链改发起时快照(13.2 #1,小而独立,先锁语义免得后续代码依赖旧行为) | `model.ts` 由串行链改树(`flattenChain`/`insertAfter`/`removeNode`/`validate` 全部要处理分支臂)+ `WfNodeTree.vue` 分支容器横排 + 条件编辑器 + 配置抽屉暴露 `mode`(会签/或签/顺序) | 报销流程「金额>1万 走总经理,否则直接通过」建完发布走通两条臂;会签一票否决、或签先表态各走一单 |
-| **M2b 动词与时效** | 退回(`returnPolicy` + `onReject=toNode`,`RejectInstanceAsync` 现在写死忽略 `toNode`)/撤销/委托/催办 + `WfTimeoutJob : IAdminJob` + 写 `wf_task.DueTime` + 同一人相邻节点去重 + `IWorkflowNotifier` 落地(**现为空接口,零方法**)接 `IRealtimePublisher` + 节点 `btnInfo`(JNPF 增量第 2 条) | 抄送独立列表 + 我发起的 / 我已办的 + 流程图回放(高亮已走路径)+ 实例列表按参与筛选(JNPF 增量第 3 条) | 钉钉典型报销流 1:1 复刻(条件分支 + 会签 + 超时提醒);退回后重提、发起人撤销各走一单;CCFlow 行为清单逐项过 |
+| **M2b 动词与时效** | 退回(`returnPolicy` + `onReject=toNode`)/撤销/委托/催办 + `WfTimeoutJob : IAdminJob` + 写 `wf_task.DueTime` + 同一人相邻节点去重 + `IWorkflowNotifier` 接 `IRealtimePublisher` + 节点 `btnInfo`(JNPF 增量第 2 条) | 抄送独立列表 + 我发起的 / 我已办的 + 流程图回放(高亮已走路径)+ 实例列表按参与筛选(JNPF 增量第 3 条) | 钉钉典型报销流 1:1 复刻(条件分支 + 会签 + 超时提醒);退回后重提、发起人撤销各走一单;CCFlow 行为清单逐项过 |
 
 **先 M2a 的理由**:M2a 是 M2 里唯一改 schema 形状的一段(树化 + 条件),定了才谈得上 §六.2 的「schema 定稿后一次性 port 到 React」;M2b 全是加动词加页面,对 schema 只增不改,压在后面更稳。
 
 **警戒线**:M2a 的 `model.ts` 树化会动 M1 刚修好的设计器(`cloneModel`/`cloneNode` 的 reactive-proxy 坑见 `.loop/wf-m1-close.md` Round 2),改完必须重跑一遍真实浏览器全链路,不能只信 `npm run typecheck`——M1 三轮 typecheck 全绿也没发现「添加节点」是坏的。
+
+## 十四、OpenWorkflow 增量与 M2c 定案（2026-08-23）
+
+对照报告：[`openworkflow-reference-2026-08-23.md`](./openworkflow-reference-2026-08-23.md)。本节不翻转 JSON 审批树、Token/Agenda、版本快照和“AI 原生审批为核”的既有决策，只补执行可靠性及其开发落点。
+
+### 14.1 为什么不塞进 M2b
+
+M2b 正在收口审批动词、超时和 Vue 产品面。通用请求幂等会同时改命令 DTO、HTTP API、数据库唯一约束、双前端生成类型和并发测试；混入 M2b 会扩大回归面，也会把“功能是否做完”和“重复请求是否可靠”两个验收目标搅在一起。
+
+M2b 只吸收与现有任务天然重合的两项：
+
+1. `WfTimeoutJob` 使用 `taskId + Version + DueTime <= now` 条件更新，CAS 失败表示人工动作或其他执行者已经胜出；写 `TimeoutFired` 历史，不建另一套 worker/lease。
+2. `IWorkflowNotifier` 继续事务提交后调用，但失败必须写结构化日志与指标，不能静默无痕。SignalR 只是刷新提示，`wf_task` 才是事实源，因此此时不建 outbox。
+
+### 14.2 M2c 交付内容
+
+1. 新增操作回执存储（表名在实现任务定稿），唯一 identity 至少包含组织/租户、命令类型、目标实例或任务、操作者、客户端 request key；回执与领域状态在同一事务落库。
+2. `Start/Approve/Reject/Transfer/Return/Cancel/Resubmit` 等所有写命令接收 `RequestId/IdempotencyKey`。第一次已提交但 HTTP 响应丢失时，重试返回第一次 `WfEngineResult`，不再只报 `TaskConflict`。
+3. Vue 在一次提交生命周期内持有同一个 request key；用户明确发起一个新动作才生成新 key。按钮防连点仍保留，但不把 UI 防抖当并发正确性。
+4. 建 provider-neutral 工作流持久化契约测试，同一套用例跑 SQLite、MySQL、PostgreSQL、SQL Server，覆盖回执唯一性、并发 CAS、事务回滚、超时与人工动作竞争、终态保护。
+5. M2c 不新增审批动词、页面或通用 Backend Interface。幂等回执是现实 Seam；照搬 OpenWorkflow 二十多个 Backend 方法会形成 hypothetical Seam。
+
+### 14.3 M3 与 AI 的落点
+
+详细源码结论与目标架构见 [`elsa3-slickflow-ai-reference-2026-08-23.md`](./elsa3-slickflow-ai-reference-2026-08-23.md) §3–§5。后续实现以该报告为基线，不因开发 AI 节点再次通读 Slickflow 固定提交。
+
+M3 分成连续的 M3a/M3b。M3a 在 Webhook/自定义节点引入可靠机器动作执行 Module：稳定 execution key、持久化 attempt、指数退避、deadline、ownership fence、输出/错误摘要。Webhook 等必须执行的外部副作用使用事务型 outbox/attempt；当前 SignalR 提示不一刀切持久化。所有入口只跨同一个节点 Interface，禁止复制 Slickflow 两套执行链。
+
+AI 分成两条互不混用的能力线：
+
+1. **运行时 AI Decision（Slickflow.AI 对照，M3b）**：在 M3a 节点 Interface 稳定后立即交付最小纵切，不再列为无承诺的 M3+。模型只能返回受 JSON schema 约束的 proposal（结论、分数、理由、证据引用）；服务端确定性 policy 再决定低风险自动放行或创建人工任务。V0 不自动拒绝。低置信度、风险标记、模型异常、超时、结构化输出校验失败一律转人工。模型不得直接调用 Approve/Reject，也不得在远程模型调用期间持有工作流数据库事务。
+2. **AI 流程设计/诊断 Copilot（Elsa 3 Weaver 对照）**：这是设计器/运维能力，不是执行节点。AI 生成或修改模型时只创建 proposal，经过权限过滤、脱敏、schema 校验、图 diff、用户 approve/apply 和完整 audit 后，才能写入定义草稿；不得直接发布流程或修改在途版本。
+
+两条线都不把模型 SDK、Prompt 或供应商配置耦合进 `TenonAdmin.Workflow`。Provider 类型留在 Adapter；审计只保存必要的模型/Prompt/schema/policy 版本、输入摘要、证据引用、结构化输出、耗时与 token/费用统计，敏感业务字段按配置脱敏。M3b AI Decision v0 是 AI 原生路线的战略交付；RAG、Agent、更多 Provider 与设计 Copilot 后置到 M3+。
+
+## 十五、数据库评审增量与 M3a 切片定案（2026-08-24）
+
+对照报告：[`workflow-database-design-review-2026-08-24.md`](./workflow-database-design-review-2026-08-24.md)。本节不翻转 §〇/§八/§十四 的既有决策，只把评审结论落成排期与契约裁决。
+
+### 15.1 两条契约性裁决
+
+1. **`WfInstance.Version`/`WfToken.Version` 提前到 M2b 收口，不等 M2c。** M2b 刚交付的撤销、催办与超时正是“审批 vs 撤销”“超时 vs 人工”竞争的高发区；字段是可回填的增量迁移（旧行回填 0），早一个里程碑落地，M2b 的竞争测试直接建立在实例/Token 级 CAS 上，M2c 不必重写。四库契约测试仍随 M2c 收口。
+2. **`IdentityHash` 构造规则是发包后不可逆的契约。** 字段顺序、分隔符、大小写、null 归一化和哈希算法在 M2c 首个实现里一次定死，之后只增不改；细则与快照用例要求见评审 §五。
+
+### 15.2 M3a 切成 M3a-1 / M3a-2，只有 M3a-1 挡 M3b
+
+§八 的 M3a 行把可靠执行层与产品面装在同一个里程碑里，但 M3b 的唯一前置是可靠执行层。切分如下：
+
+| 段 | 内容 | 定位 |
+|---|---|---|
+| **M3a-1 可靠执行** | execution/attempt/outbox/lease/fence、`NodeVisitId` 贯穿 Token/任务/历史/抄送、`wf_history` 补 Token/序号/actor/payload version、Webhook 节点 | **M3b 的唯一前置**；本身即可独立发布 |
+| **M3a-2 产品面** | 简易动态表单 + 字段权限矩阵、动词封顶（加签/减签/拿回/比例票签 + 长期委托）、并行分支（多 token）、React 模板整体 port | 与 M3b 并行推进，只挡 GA |
+
+依赖关系：`M2c → M3a-1 → M3b`；`M3a-2` 与 `M3b` 并行。GA 门槛不变（双模板 feature 对齐 + 文档站 guide + 远程节点无长事务/崩溃可恢复/同一 execution 只推进一次）。
+
+### 15.3 Webhook 按一等功能交付
+
+Webhook 节点不只是给 AI 铺路的试金石——“审批完结后可靠回调业务系统”本身是消费者高频刚需。M3a-1 交付带文档与配置 UI 的正式 Webhook 节点类型，使 M3a-1 成为可发布、可演示的独立里程碑，符合 §八“每个里程碑结束都是可发布的完整产品”原则。
+
+### 15.4 M3b 自动放行默认关闭，阈值校准是消费者的责任
+
+TenonAdmin 以内核包分发，自身没有生产流量，shadow mode 的评测数据只能来自消费者各自的部署。因此：
+
+- 内核交付**机制**：shadow 记录、指标采集（人工推翻率、逃逸率、schema 失败率、fallback 率、provider 延迟与成本）与现成审计视图；
+- 自动放行**默认关闭**，按流程定义显式开启；内核不提供“开箱即用”的放行阈值默认值；
+- 消费者必须先在自己的数据上跑 shadow 达标，“何时由 shadow 切自动放行”是每个部署自己的决定；
+- 模型自报 `confidence` 只作记录与事后评测，不单独作为放行条件——policy 主判据是可确定性核验的 `reasonCodes`、`riskFlags` 与证据完整性（细则见 AI 基石 §4.2、§4.7）。

@@ -149,4 +149,19 @@ public enum WfHistoryEventType
 
     /// <summary>抄送已发</summary>
     CcSent = 9,
+
+    /// <summary>催办</summary>
+    TaskUrged = 10,
+
+    /// <summary>同一人相邻节点自动跳过</summary>
+    DuplicateApproverSkipped = 11,
+
+    /// <summary>发起人重提(退回后重新提交,复用同一实例行)</summary>
+    InstanceResubmitted = 12,
+
+    /// <summary>拒绝路由(<c>onReject=toNode</c>:不终止实例,token 向后跳到目标节点重新进入)</summary>
+    RejectRouted = 13,
+
+    /// <summary>主动退回(办理人把 token 向后跳到目标节点,关闭当前待办后等发起人重提)</summary>
+    TaskReturned = 14,
 }

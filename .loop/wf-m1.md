@@ -2,7 +2,7 @@
 
 ## GOAL
 
-实现 TenonAdmin.Workflow 的 M1（能走通一单），严格按 `docs/review/workflow-design-plan-2026-08-17.md` §八 M1 行执行，不扩范围。
+实现 TenonAdmin.Workflow 的 M1（能走通一单），严格按 `docs/workflow/workflow-design-plan-2026-08-17.md` §八 M1 行执行，不扩范围。
 
 ## DONE-CONDITION
 

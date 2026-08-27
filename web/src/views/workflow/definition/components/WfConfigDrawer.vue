@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 节点配置抽屉。默认可见 ≤5 项,其余进「高级」(设计方案配置纪律)。
- * M2a:start / approval / cc / branch;不配超时/字段权限。
+ * M2b:审批高级暴露退回/拒绝/超时/按钮文案;不配字段权限(M3)。
  */
 import { computed, reactive, ref, watch } from 'vue'
 import {
@@ -18,8 +18,11 @@ import type {
   WfAssigneeProvider,
   WfConditionExpr,
   WfModel,
+  WfRejectAction,
+  WfReturnPolicy,
+  WfTimeoutAction,
 } from '@/workflow/schema'
-import { findNode } from '@/workflow/model'
+import { findNode, flattenChain } from '@/workflow/model'
 import {
   applyNodeConfiguration,
   createConditionGroup,
@@ -55,6 +58,19 @@ const form = reactive({
   initiatorRoleIds: [] as number[],
   initiatorOrgIds: [] as number[],
   armExpressions: {} as Record<string, WfConditionExpr>,
+  returnPolicy: 'prev' as WfReturnPolicy,
+  returnToNodeId: null as string | null,
+  onReject: 'terminate' as WfRejectAction,
+  rejectToNodeId: null as string | null,
+  timeoutHours: 0,
+  timeoutAction: 'remind' as WfTimeoutAction,
+  timeoutTransferUserId: null as number | null,
+  labelApprove: '',
+  labelReject: '',
+  labelReturn: '',
+  labelTransfer: '',
+  labelDelegate: '',
+  labelUrge: '',
 })
 const expandedArm = ref<string | number | null>(null)
 
@@ -75,10 +91,32 @@ const approvalMode = computed<WfApprovalMode>({
 
 const showAdvanced = computed(() => {
   if (!node.value) return false
-  if (node.value.type === 'start') return true
+  if (node.value.type === 'start' || node.value.type === 'approval') return true
   if (node.value.type === 'branch') return false
   return form.provider === 'position'
 })
+
+const jumpNodeOptions = computed(() => {
+  if (!node.value) return []
+  return flattenChain(props.model.root)
+    .filter((n) => n.id !== node.value!.id)
+    .map((n) => ({
+      label: n.name?.trim() || t(`workflow.node.${n.type}`),
+      value: n.id,
+    }))
+})
+
+const returnPolicyOptions = computed(() => (['prev', 'any', 'node'] as WfReturnPolicy[]).map(
+  (value) => ({ label: t(`workflow.returnPolicy.${value}`), value }),
+))
+
+const onRejectOptions = computed(() => (['terminate', 'toNode'] as WfRejectAction[]).map(
+  (value) => ({ label: t(`workflow.onReject.${value}`), value }),
+))
+
+const timeoutActionOptions = computed(() => (['remind', 'autoPass', 'autoReject', 'transfer'] as WfTimeoutAction[]).map(
+  (value) => ({ label: t(`workflow.timeoutAction.${value}`), value }),
+))
 
 function loadArmExpression(expression: WfConditionExpr | null | undefined): WfConditionExpr {
   const cloned = JSON.parse(JSON.stringify(expression ?? createConditionGroup())) as WfConditionExpr
@@ -119,6 +157,19 @@ watch(
     expandedArm.value = n.type === 'branch'
       ? n.conditions?.find((arm) => !arm.isDefault)?.id ?? null
       : null
+    form.returnPolicy = n.props?.returnPolicy ?? 'prev'
+    form.returnToNodeId = n.props?.returnToNodeId ?? null
+    form.onReject = n.props?.onReject ?? 'terminate'
+    form.rejectToNodeId = n.props?.rejectToNodeId ?? null
+    form.timeoutHours = n.props?.timeout?.hours ?? 0
+    form.timeoutAction = n.props?.timeout?.action ?? 'remind'
+    form.timeoutTransferUserId = n.props?.timeout?.transferUserId ?? null
+    form.labelApprove = n.props?.buttonLabels?.approve ?? ''
+    form.labelReject = n.props?.buttonLabels?.reject ?? ''
+    form.labelReturn = n.props?.buttonLabels?.return ?? ''
+    form.labelTransfer = n.props?.buttonLabels?.transfer ?? ''
+    form.labelDelegate = n.props?.buttonLabels?.delegate ?? ''
+    form.labelUrge = n.props?.buttonLabels?.urge ?? ''
   },
   { immediate: true },
 )
@@ -163,6 +214,27 @@ function apply() {
       name: form.name,
       assignee: { provider: form.provider, params: buildAssigneeParams() },
       mode: approvalMode.value,
+      returnPolicy: form.returnPolicy,
+      returnToNodeId: form.returnToNodeId ?? undefined,
+      onReject: form.onReject,
+      rejectToNodeId: form.rejectToNodeId ?? undefined,
+      timeout: form.timeoutHours > 0
+        ? {
+            hours: form.timeoutHours,
+            action: form.timeoutAction,
+            transferUserId: form.timeoutAction === 'transfer'
+              ? form.timeoutTransferUserId ?? undefined
+              : undefined,
+          }
+        : undefined,
+      buttonLabels: {
+        approve: form.labelApprove,
+        reject: form.labelReject,
+        return: form.labelReturn,
+        transfer: form.labelTransfer,
+        delegate: form.labelDelegate,
+        urge: form.labelUrge,
+      },
     }
   } else if (node.value.type === 'cc') {
     config = {
@@ -285,6 +357,51 @@ const title = computed(() => {
             >
               <OrgTreeSelect v-model:value="form.positionOrgId" clearable />
             </n-form-item>
+
+            <template v-if="node.type === 'approval'">
+              <n-form-item :label="t('workflow.designer.returnPolicy')">
+                <n-select v-model:value="form.returnPolicy" :options="returnPolicyOptions" />
+              </n-form-item>
+              <n-form-item v-if="form.returnPolicy === 'node'" :label="t('workflow.designer.returnToNode')">
+                <n-select v-model:value="form.returnToNodeId" :options="jumpNodeOptions" clearable />
+              </n-form-item>
+              <n-form-item :label="t('workflow.designer.onReject')">
+                <n-select v-model:value="form.onReject" :options="onRejectOptions" />
+              </n-form-item>
+              <n-form-item v-if="form.onReject === 'toNode'" :label="t('workflow.designer.rejectToNode')">
+                <n-select v-model:value="form.rejectToNodeId" :options="jumpNodeOptions" clearable />
+              </n-form-item>
+              <n-form-item :label="t('workflow.designer.timeoutHours')">
+                <n-input-number v-model:value="form.timeoutHours" :min="0" :max="8760" class="w-full" />
+              </n-form-item>
+              <n-form-item v-if="form.timeoutHours > 0" :label="t('workflow.designer.timeoutAction')">
+                <n-select v-model:value="form.timeoutAction" :options="timeoutActionOptions" />
+              </n-form-item>
+              <n-form-item
+                v-if="form.timeoutHours > 0 && form.timeoutAction === 'transfer'"
+                :label="t('workflow.designer.timeoutTransfer')"
+              >
+                <UserSelect v-model:value="form.timeoutTransferUserId" />
+              </n-form-item>
+              <n-form-item :label="t('workflow.designer.labelApprove')">
+                <n-input v-model:value="form.labelApprove" :placeholder="t('workflow.detail.approve')" />
+              </n-form-item>
+              <n-form-item :label="t('workflow.designer.labelReject')">
+                <n-input v-model:value="form.labelReject" :placeholder="t('workflow.detail.reject')" />
+              </n-form-item>
+              <n-form-item :label="t('workflow.designer.labelReturn')">
+                <n-input v-model:value="form.labelReturn" :placeholder="t('workflow.detail.return')" />
+              </n-form-item>
+              <n-form-item :label="t('workflow.designer.labelTransfer')">
+                <n-input v-model:value="form.labelTransfer" :placeholder="t('workflow.detail.transfer')" />
+              </n-form-item>
+              <n-form-item :label="t('workflow.designer.labelDelegate')">
+                <n-input v-model:value="form.labelDelegate" :placeholder="t('workflow.detail.delegate')" />
+              </n-form-item>
+              <n-form-item :label="t('workflow.designer.labelUrge')">
+                <n-input v-model:value="form.labelUrge" :placeholder="t('workflow.detail.urge')" />
+              </n-form-item>
+            </template>
           </n-collapse-item>
         </n-collapse>
       </n-form>

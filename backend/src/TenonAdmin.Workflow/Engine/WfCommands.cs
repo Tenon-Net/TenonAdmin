@@ -71,3 +71,94 @@ public sealed class TransferTaskCmd : IWfCommand
 
     public string? Comment { get; init; }
 }
+
+/// <summary>
+/// 任务级委托(一次性):当前办理人把这一件待办指给别人代办。机制与 <see cref="TransferTaskCmd"/>
+/// 同构,只在 <c>wf_his_task</c> 记 <see cref="WfTaskAction.Delegate"/>;长期委托规则属 M3,不在此列。
+/// </summary>
+public sealed class DelegateTaskCmd : IWfCommand
+{
+    public required long TaskId { get; init; }
+
+    /// <summary>当前办理人(须为 Pending Approver;实例发起人无权委托他人的待办)。</summary>
+    public required long UserId { get; init; }
+
+    /// <summary>委托目标用户。</summary>
+    public required long ToUserId { get; init; }
+
+    public string? Comment { get; init; }
+}
+
+/// <summary>
+/// 超时触发:<see cref="WfTimeoutJob"/> 扫到一件到期待办后派一条本命令,由引擎在**同一事务**里
+/// 领取(<c>taskId + Version + DueTime &lt;= now</c> 条件更新,设计规划 §14.1)、写
+/// <see cref="WfHistoryEventType.TimeoutFired"/>、再等价入队人工动作的 Op。
+/// <para>之所以不让 Job 直接拼 <see cref="CompleteTaskCmd"/> / <see cref="TransferTaskCmd"/>:
+/// ①<c>TimeoutFired</c> 必须与动作同事务落库,否则崩在中间就只剩一行「张三同意了」而没有任何超时
+/// 痕迹,审计误导变永久;②§14.1 的领取 CAS 只有在事务内才消掉「领取与动作之间的窗口」;
+/// ③会签需要一次事务里对多个 Pending 办理人各记一次,那两条命令的形状表达不了。</para>
+/// <para><see cref="WfTimeoutAction.Remind"/> **不走本命令**——它什么状态都不改,由 Job 直接写事件
+/// 并推送(见 <see cref="WfTimeoutJob"/> 上关于「提醒不做版本 CAS」的说明)。</para>
+/// </summary>
+public sealed class TimeoutFireCmd : IWfCommand
+{
+    public required long TaskId { get; init; }
+
+    /// <summary>扫描时读到的 <see cref="WfTask.Version"/>;领取 CAS 对不上即人工动作已胜出。</summary>
+    public required int ExpectedVersion { get; init; }
+
+    /// <summary>节点配置的超时动作;<see cref="WfTimeoutAction.Remind"/> 非法(不进引擎)。</summary>
+    public required WfTimeoutAction Action { get; init; }
+
+    /// <summary><see cref="WfTimeoutAction.Transfer"/> 时的目标用户。</summary>
+    public long? TransferUserId { get; init; }
+
+    /// <summary>
+    /// 落进 <c>wf_his_task.Comment</c> 的说明文案。超时动作以**当前 Pending 办理人**的身份记
+    /// **原生动词**(见 <see cref="WorkflowEngine.BeginTimeoutAsync"/>),不读事件流的视图光看
+    /// 「张三同意了」会误解,故一并写上系统触发说明。
+    /// </summary>
+    public string? Comment { get; init; }
+}
+
+/// <summary>撤销实例:仅发起人、仅无人已批的 Running 实例可撤销。</summary>
+public sealed class CancelInstanceCmd : IWfCommand
+{
+    public required long InstanceId { get; init; }
+
+    public required long CallerUserId { get; init; }
+}
+
+/// <summary>
+/// 主动退回:当前办理人把待办退回给之前某个节点。目标节点按节点 <see cref="WfReturnPolicy"/> 解析
+/// (<c>Node</c>/<c>Prev</c> 忽略 <see cref="TargetNodeId"/>;<c>Any</c> 才用它)。不像
+/// <see cref="TransferTaskCmd"/> 那样继续在原节点等人——关闭当前待办、token 回退到目标节点、
+/// Agenda 留空,等发起人重提(<see cref="ResubmitInstanceCmd"/>)。
+/// </summary>
+public sealed class ReturnTaskCmd : IWfCommand
+{
+    public required long TaskId { get; init; }
+
+    /// <summary>当前办理人(须为 Pending Approver)。</summary>
+    public required long UserId { get; init; }
+
+    /// <summary><see cref="WfReturnPolicy.Any"/> 时的目标节点 Id;其余策略忽略。</summary>
+    public string? TargetNodeId { get; init; }
+
+    public string? Comment { get; init; }
+}
+
+/// <summary>
+/// 发起人重提:仅 <see cref="ReturnTaskCmd"/> 退回后、尚无活跃待办的 Running 实例可重提。
+/// 从 <c>start</c> 重新走一遍(连已批过的节点也重新审),复用同一实例行。
+/// </summary>
+public sealed class ResubmitInstanceCmd : IWfCommand
+{
+    public required long InstanceId { get; init; }
+
+    public required long CallerUserId { get; init; }
+
+    public string? VariablesJson { get; init; }
+
+    public IReadOnlyDictionary<string, List<long>>? SelectedUserIdsByNode { get; init; }
+}

@@ -143,6 +143,8 @@ describe('workflow node configuration', () => {
       name: 'Updated approval',
       assignee: { provider: 'user', params: { userIds: [7, 8] } },
       mode,
+      returnPolicy: 'prev',
+      onReject: 'terminate',
     })
 
     expect(result?.root.next?.name).toBe('Updated approval')
@@ -151,6 +153,7 @@ describe('workflow node configuration', () => {
       mode,
       nobody: 'autoPass',
       onReject: 'terminate',
+      returnPolicy: 'prev',
       formPerms: [],
     })
     expect(JSON.stringify(model)).toBe(snapshot)
@@ -197,10 +200,75 @@ describe('workflow node configuration', () => {
       name: 'Approval',
       assignee: { provider: 'multiLeader', params: { level: 3 } },
       mode: 'all',
+      returnPolicy: 'prev',
+      onReject: 'terminate',
     })
 
     expect(result?.root.next?.props?.mode).toBe('seq')
     expect(model.root.next?.props?.mode).toBe('any')
+  })
+
+  it('persists return policy, timeout and button labels on approval save', () => {
+    const model: WfModel = {
+      version: 1,
+      root: {
+        id: 'start',
+        type: 'start',
+        name: 'Start',
+        next: {
+          id: 'approval',
+          type: 'approval',
+          name: 'Approval',
+          props: { assignee: { provider: 'leader', params: { level: 1 } }, mode: 'any' },
+          next: null,
+        },
+      },
+    }
+
+    const result = applyNodeConfiguration(model, 'approval', {
+      type: 'approval',
+      name: 'Approval',
+      assignee: { provider: 'user', params: { userIds: [1] } },
+      mode: 'any',
+      returnPolicy: 'node',
+      returnToNodeId: 'start',
+      onReject: 'toNode',
+      rejectToNodeId: 'start',
+      timeout: { hours: 8, action: 'autoPass' },
+      buttonLabels: { approve: '准了', reject: '  ', return: '打回' },
+    })
+
+    expect(result?.root.next?.props).toMatchObject({
+      returnPolicy: 'node',
+      returnToNodeId: 'start',
+      onReject: 'toNode',
+      rejectToNodeId: 'start',
+      timeout: { hours: 8, action: 'autoPass' },
+      buttonLabels: { approve: '准了', return: '打回' },
+    })
+    expect(result?.root.next?.props?.buttonLabels?.reject).toBeUndefined()
+    expect(applyNodeConfiguration(model, 'approval', {
+      type: 'approval',
+      name: 'Approval',
+      assignee: { provider: 'user', params: { userIds: [1] } },
+      mode: 'any',
+      returnPolicy: 'prev',
+      onReject: 'terminate',
+      timeout: { hours: 0, action: 'remind' },
+      buttonLabels: { approve: '   ' },
+    })?.root.next?.props).toMatchObject({
+      returnPolicy: 'prev',
+      onReject: 'terminate',
+    })
+    expect(applyNodeConfiguration(model, 'approval', {
+      type: 'approval',
+      name: 'Approval',
+      assignee: { provider: 'user', params: { userIds: [1] } },
+      mode: 'any',
+      returnPolicy: 'prev',
+      onReject: 'terminate',
+      timeout: { hours: 0, action: 'remind' },
+    })?.root.next?.props?.timeout).toBeUndefined()
   })
 
   it('updates non-default branch expressions by arm id without touching the default arm or assignee', () => {

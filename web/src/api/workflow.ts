@@ -8,11 +8,13 @@ import type {
   WfDoneItem,
   WfEngineResult,
   WfInstanceDetail,
+  WfInstanceListItem,
   WfStartableDefinition,
   WfStartableDefinitionDetail,
   WfStartInput,
   WfTaskActionInput,
   WfTodoItem,
+  WfCcItem,
 } from '@/types/workflow'
 
 export const wfDefinitionApi = {
@@ -87,6 +89,62 @@ export const wfInstanceApi = {
     client
       .GET('/api/v1/workflow/instance/{id}', { params: { path: { id } } })
       .then((r) => unwrap<WfInstanceDetail>(r)),
+
+  page: (params: {
+    page: number
+    pageSize: number
+    status?: number
+    definitionId?: number
+    businessKey?: string
+  }) =>
+    client
+      .GET('/api/v1/workflow/instance/page', {
+        params: {
+          query: {
+            ...pageParams(params),
+            Status: params.status,
+            DefinitionId: params.definitionId,
+            BusinessKey: params.businessKey,
+          },
+        },
+      })
+      .then((r) => toPage<WfInstanceListItem>(r)),
+
+  monitor: (params: {
+    page: number
+    pageSize: number
+    status?: number
+    definitionId?: number
+    businessKey?: string
+    starterUserId?: number
+    actorUserId?: number
+    ccUserId?: number
+  }) =>
+    client
+      .GET('/api/v1/workflow/instance/monitor', {
+        params: {
+          query: {
+            ...pageParams(params),
+            Status: params.status,
+            DefinitionId: params.definitionId,
+            BusinessKey: params.businessKey,
+            StarterUserId: params.starterUserId,
+            ActorUserId: params.actorUserId,
+            CcUserId: params.ccUserId,
+          },
+        },
+      })
+      .then((r) => toPage<WfInstanceListItem>(r)),
+
+  cancel: (body: { instanceId: number; comment?: string | null }) =>
+    client
+      .POST('/api/v1/workflow/instance/cancel', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
+  resubmit: (body: { instanceId: number; variablesJson?: string | null }) =>
+    client
+      .POST('/api/v1/workflow/instance/resubmit', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
 }
 
 export const wfTaskApi = {
@@ -128,4 +186,33 @@ export const wfTaskApi = {
     client
       .POST('/api/v1/workflow/task/transfer', { body })
       .then((r) => unwrap<WfEngineResult>(r)),
+
+  return: (body: WfTaskActionInput) =>
+    client
+      .POST('/api/v1/workflow/task/return', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
+  delegate: (body: WfTaskActionInput) =>
+    client
+      .POST('/api/v1/workflow/task/delegate', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
+  urge: (body: WfTaskActionInput) =>
+    client
+      .POST('/api/v1/workflow/task/urge', { body })
+      .then((r) => unwrap<boolean>(r)),
+}
+
+export const wfCcApi = {
+  page: (params: { page: number; pageSize: number; onlyUnread?: boolean }) =>
+    client
+      .GET('/api/v1/workflow/cc/page', {
+        params: {
+          query: {
+            ...pageParams(params),
+            OnlyUnread: params.onlyUnread,
+          },
+        },
+      })
+      .then((r) => toPage<WfCcItem>(r)),
 }

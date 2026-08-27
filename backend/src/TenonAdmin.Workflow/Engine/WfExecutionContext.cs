@@ -17,6 +17,7 @@ public sealed class WfExecutionContext
     public required WorkflowOptions Options { get; init; }
     public required TimeProvider TimeProvider { get; init; }
     public required IWfConditionEvaluator ConditionEvaluator { get; init; }
+    public required IWorkflowNotifier Notifier { get; init; }
 
     public required WfInstance Instance { get; set; }
     public required WfToken Token { get; set; }
@@ -45,6 +46,15 @@ public sealed class WfExecutionContext
     public List<long> NewAssigneeUserIds { get; } = [];
     public List<long> NewCcUserIds { get; } = [];
 
+    /// <summary>
+    /// 待派发的「待办到达」通知(事务提交后由 <see cref="WorkflowEngine"/> 统一派发,不在事务内直接调用
+    /// <see cref="Notifier"/>——避免提交失败仍推送、或推送先于提交落盘导致客户端读到脏数据)。
+    /// </summary>
+    public List<(WfNotifyContext Ctx, IReadOnlyList<long> UserIds)> PendingTaskAssignedNotifications { get; } = [];
+
+    /// <summary>待派发的「实例完结」通知,语义同 <see cref="PendingTaskAssignedNotifications"/>。</summary>
+    public WfNotifyContext? PendingInstanceCompletedNotification { get; set; }
+
     private WfModelIndex? _modelIndex;
 
     /// <summary>模型树索引:懒建一次并缓存;ctx 是单事务对象,树在整个 Agenda 循环内不变,无失效问题。</summary>
@@ -61,6 +71,88 @@ public sealed class WfExecutionContext
 
     public IReadOnlyList<long>? GetSelectedUserIds(string nodeId) =>
         SelectedUserIdsByNode.TryGetValue(nodeId, out var ids) ? ids : null;
+
+    /// <summary>
+    /// 实例级乐观锁领取(数据库评审 §4.1):
+    /// <c>WHERE Id = @id AND Status = @expectedStatus AND Version = @oldVersion</c> → <c>Version + 1</c>。
+    /// 影响行数 ≠ 1 表示另一个事务已经把这个实例推走了 → <see cref="WorkflowErrorCode.InstanceStatusConflict"/>,
+    /// 由 <see cref="WorkflowEngine.ExecuteAsync"/> 的「一条 Cmd 一个事务」整体回滚。
+    /// <para><b>为什么是「先领取、再写状态」两条语句,而不是把状态挤进本语句</b>:
+    /// <c>SetColumns</c> 走的是条件更新路径,<b>不触发</b> <c>SqlSugarSetup</c> 里只认
+    /// <c>DataFilterType.UpdateByObject</c> 的审计 AOP(见 <c>SqlSugarRepository.SoftDeleteCoreAsync</c>
+    /// 的同类注释)。把状态也写在这里,每个调用点都得手填 <c>UpdateTime</c>/<c>UpdateUserId</c>,而
+    /// 「这次是谁做的」在六个落点各不相同。本类<b>没有</b> <c>ICurrentUser</c>,领取语句就算想手填
+    /// <c>UpdateUserId</c> 也拿不到调用者 —— 多一条 UPDATE 不是「更高效的形状」,是 ctx 缺审计身份、
+    /// 只能把状态写留给走 AOP 的整对象更新。正确性不打折:领取成功即持有该行排他锁直到提交,后一条
+    /// 语句处在同一事务的锁保护区内。</para>
+    /// <para><b>版本必须写回内存实例</b>(本方法末尾做):一个事务里可能领取多次(进节点 N 次 + 终态
+    /// 一次),不写回,后一次 CAS 会对着旧版本号抛出一个<b>假的</b>冲突。</para>
+    /// <para>非 <c>virtual</c> 不违反可替换性:本类是事务作用域的写步骤载体(<see cref="AppendHistoryAsync"/>
+    /// 同款),可覆写的缝在<b>调用方</b>——<c>CancelInstanceOp.ExecuteAsync</c>、
+    /// <c>TakeTransitionOp.CompleteInstanceAsync</c>、<c>CompleteTaskOp.RejectInstanceAsync</c> 都是
+    /// <c>virtual</c>。</para>
+    /// </summary>
+    public async Task ClaimInstanceAsync(
+        WfInstanceStatus expectedStatus,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        // 先算进局部变量再进 SetColumns:内联表达式会被 SqlSugar 按当前区域设置格式化成字面量拼进 SQL
+        // (台账陷阱记录有 zh-CN 下 DateTime 表达式炸出「near "下午"」的实测)。
+        var current = Instance.Version;
+        var next = current + 1;
+        var claimed = await Db.Updateable<WfInstance>()
+            .SetColumns(i => new WfInstance { Version = next })
+            .Where(i => i.Id == Instance.Id && i.Status == expectedStatus && i.Version == current)
+            .ExecuteCommandAsync();
+        if (claimed != 1)
+        {
+            throw WorkflowErrorCode.Exception(
+                WorkflowErrorCode.InstanceStatusConflict,
+                new Dictionary<string, object?>
+                {
+                    ["reason"] = "instanceVersionConflict",
+                    ["instanceId"] = Instance.Id,
+                });
+        }
+
+        Instance.Version = next;
+    }
+
+    /// <summary>
+    /// token 级乐观锁领取,形状与语义同 <see cref="ClaimInstanceAsync"/>(数据库评审 §4.1)。
+    /// <para><b>凡是写 <see cref="WfToken.NodeId"/> 或 <see cref="WfToken.Status"/> 之前都要先领取</b>——
+    /// 换节点就是状态推进。<c>ReturnTaskOp</c> / <c>BeginResubmitAsync</c> / <c>EnterNodeOp</c> 三处的期望
+    /// 状态与目标状态都是 <see cref="WfTokenStatus.Active"/>(退回与重提之后实例仍 Running,不是完结),
+    /// 领取只推进版本、不翻状态。</para>
+    /// <para>失败复用 <see cref="WorkflowErrorCode.InstanceStatusConflict"/> + <c>reason</c> 而不新造错误码:
+    /// 任务级 CAS 输了统一是 <see cref="WorkflowErrorCode.TaskConflict"/>,那么实例/token 级 CAS 输了就统一
+    /// 是 48004,一码多 <c>reason</c> 是本仓既有惯例。</para>
+    /// </summary>
+    public async Task ClaimTokenAsync(
+        WfTokenStatus expectedStatus,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var current = Token.Version;
+        var next = current + 1;
+        var claimed = await Db.Updateable<WfToken>()
+            .SetColumns(t => new WfToken { Version = next })
+            .Where(t => t.Id == Token.Id && t.Status == expectedStatus && t.Version == current)
+            .ExecuteCommandAsync();
+        if (claimed != 1)
+        {
+            throw WorkflowErrorCode.Exception(
+                WorkflowErrorCode.InstanceStatusConflict,
+                new Dictionary<string, object?>
+                {
+                    ["reason"] = "tokenVersionConflict",
+                    ["tokenId"] = Token.Id,
+                });
+        }
+
+        Token.Version = next;
+    }
 
     /// <summary>append-only 写一条历史事件。</summary>
     public async Task AppendHistoryAsync(

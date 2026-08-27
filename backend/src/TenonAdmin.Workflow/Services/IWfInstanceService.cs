@@ -38,7 +38,17 @@ public interface IWfInstanceService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 实例详情:元数据 + <c>formComponent</c> 挂载点 + 当前用户待办 + 审批意见时间线。
+    /// 管理员监控分页:机构数据范围照旧,再叠发起人 / 办理人 / 抄送人业务过滤。
+    /// 办理人 = 当前 Pending actor <b>或</b> <c>wf_his_task</c> 行。
+    /// </summary>
+    Task<PagedList<WfInstanceListItemOutput>> PageMonitorAsync(
+        WfInstanceMonitorPageInput input,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 实例详情:元数据 + <c>formComponent</c> 挂载点 + 当前用户待办 + 审批意见时间线
+    /// + 实例版本快照与最后一次访问收敛的回放节点集。
+    /// 抄送接收人打开详情时,其本实例未读 <c>wf_cc</c> 行会被标已读。
     /// </summary>
     Task<WfInstanceDetailOutput> GetAsync(
         long instanceId,
@@ -49,5 +59,23 @@ public interface IWfInstanceService
     Task<IReadOnlyList<WfHistoryItemOutput>> ListHistoryAsync(
         long instanceId,
         long currentUserId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>撤销实例:仅发起人、仅无人已批的 Running 实例可撤销。</summary>
+    Task<WfEngineResult> CancelAsync(
+        long instanceId,
+        long callerUserId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 重提:仅发起人、仅退回后尚无活跃待办的 Running 实例可重提。从 <c>start</c> 重新走一遍
+    /// (连已批过的节点也重新审),复用同一实例行;可选带新的 <paramref name="variablesJson"/> /
+    /// <paramref name="selectedUserIdsByNode"/> 覆盖原发起时提交的值。
+    /// </summary>
+    Task<WfEngineResult> ResubmitAsync(
+        long instanceId,
+        long callerUserId,
+        string? variablesJson,
+        IReadOnlyDictionary<string, List<long>>? selectedUserIdsByNode,
         CancellationToken cancellationToken = default);
 }

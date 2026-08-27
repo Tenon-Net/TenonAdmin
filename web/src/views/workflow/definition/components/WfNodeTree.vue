@@ -21,6 +21,9 @@ const props = defineProps<{
   model: WfModel
   selectedId?: string | null
   errorIds?: Set<string> | string[]
+  readonly?: boolean
+  visitedIds?: Set<string> | string[]
+  currentIds?: Set<string> | string[]
 }>()
 const emit = defineEmits<{
   'update:model': [WfModel]
@@ -32,16 +35,28 @@ const errorSet = computed(() => {
   return props.errorIds instanceof Set ? props.errorIds : new Set(props.errorIds)
 })
 
+const visitedSet = computed(() => {
+  if (!props.visitedIds) return new Set<string>()
+  return props.visitedIds instanceof Set ? props.visitedIds : new Set(props.visitedIds)
+})
+
+const currentSet = computed(() => {
+  if (!props.currentIds) return new Set<string>()
+  return props.currentIds instanceof Set ? props.currentIds : new Set(props.currentIds)
+})
+
 function bump(root: WfNode) {
   emit('update:model', { ...props.model, root })
 }
 
 function onSelect(nodeId: string) {
+  if (props.readonly) return
   const node = findNode(props.model.root, nodeId)
   if (node) emit('select', node)
 }
 
 function onAddAfter(afterId: string, type: InsertableNodeType) {
+  if (props.readonly) return
   const root = cloneNode(props.model.root)
   const node = createNode(type)
   if (!insertAfter(root, afterId, node)) return
@@ -50,6 +65,7 @@ function onAddAfter(afterId: string, type: InsertableNodeType) {
 }
 
 function onAddAtArmHead(branchId: string, armId: string, type: InsertableNodeType) {
+  if (props.readonly) return
   const root = cloneNode(props.model.root)
   const node = createNode(type)
   if (!insertIntoBranchArm(root, branchId, armId, node)) return
@@ -58,12 +74,14 @@ function onAddAtArmHead(branchId: string, armId: string, type: InsertableNodeTyp
 }
 
 function onRemoveNode(nodeId: string) {
+  if (props.readonly) return
   const root = cloneNode(props.model.root)
   if (!removeNode(root, nodeId)) return
   bump(root)
 }
 
 function onAddArm(branchId: string) {
+  if (props.readonly) return
   const root = cloneNode(props.model.root)
   const branch = findNode(root, branchId)
   if (!branch || !addBranchArm(branch)) return
@@ -71,6 +89,7 @@ function onAddArm(branchId: string) {
 }
 
 function onRemoveArm(branchId: string, armId: string) {
+  if (props.readonly) return
   const root = cloneNode(props.model.root)
   const branch = findNode(root, branchId)
   if (!branch || !removeBranchArm(branch, armId)) return
@@ -78,6 +97,7 @@ function onRemoveArm(branchId: string, armId: string) {
 }
 
 function onRenameArm(branchId: string, armId: string, name: string) {
+  if (props.readonly) return
   const root = cloneNode(props.model.root)
   const branch = findNode(root, branchId)
   if (branch?.type !== 'branch') return
@@ -94,6 +114,9 @@ function onRenameArm(branchId: string, armId: string, name: string) {
       :root="model.root"
       :selected-id="selectedId"
       :error-set="errorSet"
+      :readonly="readonly"
+      :visited-set="visitedSet"
+      :current-set="currentSet"
       terminal
       @select="onSelect"
       @add-after="onAddAfter"

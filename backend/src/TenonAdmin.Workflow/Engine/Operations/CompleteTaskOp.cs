@@ -88,7 +88,18 @@ public class CompleteTaskOp(
         // Approve 计票
         var passed = await TryPassAsync(ctx, cancellationToken);
         if (!passed)
+        {
+            // 未满票的同意**也是一次审批**,必须领取 token —— 否则 mode=all / mode=seq(以及被
+            // MapSignMode 强制成 Sequential 的 multiLeader)的**非末位投票**这条路上实例与 token 一字
+            // 不动,本轮的两级 CAS 一个都不触发:并发撤销的 ClaimInstanceAsync(Running) 与
+            // ClaimTokenAsync(Active) 两个条件全都满足,于是「会签第一票同意」与「发起人撤销」两边都
+            // 成功,落成 Status = Cancelled 与一条 Approve 行共存(BeginCancelAsync 的「无任何 Approve
+            // 行」准入只是一次读、提交前不复验),违背语义契约「仅当没有任何 Approve 记录才允许撤销」。
+            // 语义站得住:这个 token 上的签核进度前进了一步,与「进节点也算状态推进」是同一条论证;
+            // 锚的是本 token,故不引入过度加锁(M3 并行网关下不同 token 各走各的行)。
+            await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
             return; // 顺序/会签未满票:待办仍在,Agenda 空 → 等人
+        }
 
         await CloseTaskAsync(ctx, skipRemaining: true, cancellationToken);
         ctx.Agenda.Plan(new TakeTransitionOp(node));
@@ -123,6 +134,18 @@ public class CompleteTaskOp(
                         new Dictionary<string, object?> { ["taskId"] = Task.Id });
                 }
                 ctx.NewAssigneeUserIds.Add(next.UserId);
+                ctx.PendingTaskAssignedNotifications.Add((
+                    new WfNotifyContext
+                    {
+                        InstanceId = ctx.Instance.Id,
+                        DefinitionVersionId = ctx.Instance.DefinitionVersionId,
+                        BusinessKey = ctx.Instance.BusinessKey,
+                        NodeId = Task.NodeId,
+                        NodeName = ctx.CurrentNode?.Name,
+                        StarterUserId = ctx.Instance.StarterUserId,
+                        Status = ctx.Instance.Status,
+                    },
+                    [next.UserId]));
                 return false;
 
             case WfSignMode.All:
@@ -154,20 +177,41 @@ public class CompleteTaskOp(
         await ctx.Db.Deleteable<WfTask>().In(Task.Id).ExecuteCommandAsync();
     }
 
-    /// <summary>拒绝:默认终止(节点 onReject=toNode 属 M2 行为,M1 一律终止)。</summary>
+    /// <summary>
+    /// 拒绝:节点未配置 <see cref="WfRejectAction"/> 或配为 <see cref="WfRejectAction.Terminate"/> 时终止整单;
+    /// 配为 <see cref="WfRejectAction.ToNode"/> 时不终止,回退到 <see cref="WfNodeProps.RejectToNodeId"/> 指向的
+    /// 节点重新进入(M2)——实例仍在正常审批流程中,后续一切交给 <see cref="EnterNodeOp"/> 处理。
+    /// </summary>
     protected virtual async Task RejectInstanceAsync(
         WfExecutionContext ctx,
         WfNode node,
         CancellationToken cancellationToken)
     {
-        // M1:忽略 toNode,统一 terminate。
-        _ = node;
+        if (node.Props?.OnReject == WfRejectAction.ToNode)
+        {
+            var target = ctx.FindNode(node.Props!.RejectToNodeId!)
+                         ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                             new Dictionary<string, object?> { ["reason"] = "rejectTargetInvalid" });
 
+            await ctx.AppendHistoryAsync(
+                WfHistoryEventType.RejectRouted,
+                node.Id,
+                new { fromNodeId = node.Id, targetNodeId = target.Id },
+                cancellationToken);
+            await ctx.AppendHistoryAsync(WfHistoryEventType.NodeLeave, node.Id, cancellationToken: cancellationToken);
+            ctx.Agenda.Plan(new EnterNodeOp(target));
+            return;
+        }
+
+        // 终态写入前先领取实例与 token(数据库评审 §4.1)。只在**终止**分支做:上面的 ToNode 分支压根
+        // 不写实例/token 状态,它 plan 的 EnterNodeOp 会自己领取 token。
+        await ctx.ClaimInstanceAsync(WfInstanceStatus.Running, cancellationToken);
         ctx.Instance.Status = WfInstanceStatus.Rejected;
         await ctx.Db.Updateable(ctx.Instance)
             .UpdateColumns(i => new { i.Status, i.UpdateTime, i.UpdateUserId })
             .ExecuteCommandAsync();
 
+        await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
         ctx.Token.Status = WfTokenStatus.Cancelled;
         await ctx.Db.Updateable(ctx.Token)
             .UpdateColumns(t => new { t.Status, t.UpdateTime, t.UpdateUserId })
@@ -189,5 +233,15 @@ public class CompleteTaskOp(
                 StarterUserId = ctx.Instance.StarterUserId,
             },
             cancellationToken);
+
+        // 通知排队,事务提交后由 WorkflowEngine 统一派发。
+        ctx.PendingInstanceCompletedNotification = new WfNotifyContext
+        {
+            InstanceId = ctx.Instance.Id,
+            DefinitionVersionId = ctx.Instance.DefinitionVersionId,
+            BusinessKey = ctx.Instance.BusinessKey,
+            StarterUserId = ctx.Instance.StarterUserId,
+            Status = WfInstanceStatus.Rejected,
+        };
     }
 }

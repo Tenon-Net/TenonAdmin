@@ -5,12 +5,13 @@ using TenonAdmin.Workflow;
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// 工作流卫星包可替换性「七件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
-/// 七个 <c>TryAddScoped</c> 面:<see cref="IApproverResolver"/> /
+/// 工作流卫星包可替换性「九件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
+/// 九个 <c>TryAddScoped</c> 面:<see cref="IApproverResolver"/> /
 /// <see cref="IWorkflowFormBinder"/> / <see cref="IWorkflowEngine"/> /
 /// <see cref="IWfConditionEvaluator"/> /
 /// <see cref="IWfDefinitionService"/> / <see cref="IWfTaskService"/> /
-/// <see cref="IWfInstanceService"/>。
+/// <see cref="IWfInstanceService"/> / <see cref="IWorkflowNotifier"/> /
+/// <see cref="IWfCcService"/>。
 /// <para>
 /// 真判据是<strong>前置</strong>注册即胜出(裸容器,不走 <c>ConfigureTestServices</c>+Replace):
 /// 把任一 <c>TryAdd</c> 退化成 <c>Add</c> → 内置后注册覆盖 → 对应本条红。
@@ -80,6 +81,24 @@ public class WorkflowReplaceabilityTests
         await using var sp = BuildProvider(s => s.AddScoped<IWfInstanceService, FakeInstanceService>());
         await using var scope = sp.CreateAsyncScope();
         Assert.IsType<FakeInstanceService>(scope.ServiceProvider.GetRequiredService<IWfInstanceService>());
+    }
+
+    /// <summary>变异:WorkflowSetup 里 IWorkflowNotifier 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredWorkflowNotifier_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s => s.AddScoped<IWorkflowNotifier, FakeWorkflowNotifier>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeWorkflowNotifier>(scope.ServiceProvider.GetRequiredService<IWorkflowNotifier>());
+    }
+
+    /// <summary>变异:WorkflowSetup 里 IWfCcService 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredCcService_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s => s.AddScoped<IWfCcService, FakeCcService>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeCcService>(scope.ServiceProvider.GetRequiredService<IWfCcService>());
     }
 
     /// <summary>
@@ -158,6 +177,17 @@ public class WorkflowReplaceabilityTests
         public Task<WfEngineResult> TransferAsync(
             long taskId, long userId, long toUserId, string? comment = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+        public Task<WfEngineResult> DelegateAsync(
+            long taskId, long userId, long toUserId, string? comment = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public Task UrgeAsync(
+            long taskId, long callerUserId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public Task<WfEngineResult> ReturnAsync(
+            long taskId, long userId, string? targetNodeId, string? comment = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class FakeInstanceService : IWfInstanceService
@@ -174,11 +204,44 @@ public class WorkflowReplaceabilityTests
         public Task<PagedList<WfInstanceListItemOutput>> PageMineAsync(
             long starterUserId, WfInstancePageInput input, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+        public Task<PagedList<WfInstanceListItemOutput>> PageMonitorAsync(
+            WfInstanceMonitorPageInput input, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
         public Task<WfInstanceDetailOutput> GetAsync(
             long instanceId, long currentUserId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public Task<IReadOnlyList<WfHistoryItemOutput>> ListHistoryAsync(
             long instanceId, long currentUserId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+        public Task<WfEngineResult> CancelAsync(
+            long instanceId, long callerUserId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public Task<WfEngineResult> ResubmitAsync(
+            long instanceId, long callerUserId, string? variablesJson,
+            IReadOnlyDictionary<string, List<long>>? selectedUserIdsByNode,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class FakeCcService : IWfCcService
+    {
+        public Task<PagedList<WfCcItemOutput>> PageMineAsync(
+            long userId, WfCcPageInput input, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public Task MarkReadAsync(long ccId, long userId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class FakeWorkflowNotifier : IWorkflowNotifier
+    {
+        public Task TaskAssignedAsync(
+            WfNotifyContext ctx, IReadOnlyList<long> userIds, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+        public Task InstanceCompletedAsync(WfNotifyContext ctx, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+        public Task TaskUrgedAsync(
+            WfNotifyContext ctx, long taskId, long? fromUserId, IReadOnlyList<long> toUserIds,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

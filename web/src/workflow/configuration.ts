@@ -1,11 +1,15 @@
 import type {
   WfApprovalMode,
   WfAssignee,
+  WfButtonLabels,
   WfConditionExpr,
   WfConditionLogic,
   WfConditionOp,
   WfInitiatorScopeItem,
   WfModel,
+  WfRejectAction,
+  WfReturnPolicy,
+  WfTimeout,
 } from './schema'
 import { cloneModel, findNode } from './model'
 
@@ -60,6 +64,12 @@ export type WfEditorNodeConfig =
     type: 'approval'
     assignee: WfAssignee
     mode: WfApprovalMode
+    returnPolicy: WfReturnPolicy
+    returnToNodeId?: string
+    onReject: WfRejectAction
+    rejectToNodeId?: string
+    timeout?: WfTimeout
+    buttonLabels?: WfButtonLabels
   })
   | (WfEditorNodeConfigBase & {
     type: 'cc'
@@ -167,8 +177,25 @@ export function applyNodeConfiguration(
     mode: config.assignee.provider === 'multiLeader' ? 'seq' : config.mode,
     nobody: 'autoPass',
     nobodyTransferUserId: undefined,
-    onReject: 'terminate',
+    onReject: config.onReject,
+    rejectToNodeId: config.onReject === 'toNode' ? config.rejectToNodeId : undefined,
+    returnPolicy: config.returnPolicy,
+    returnToNodeId: config.returnPolicy === 'node' ? config.returnToNodeId : undefined,
+    timeout: config.timeout && config.timeout.hours > 0
+      ? JSON.parse(JSON.stringify(config.timeout)) as WfTimeout
+      : undefined,
+    buttonLabels: compactButtonLabels(config.buttonLabels),
     formPerms: node.props?.formPerms ?? [],
   }
   return next
+}
+
+function compactButtonLabels(labels: WfButtonLabels | undefined): WfButtonLabels | undefined {
+  if (!labels) return undefined
+  const next: WfButtonLabels = {}
+  for (const key of ['approve', 'reject', 'return', 'transfer', 'delegate', 'urge'] as const) {
+    const value = labels[key]?.trim()
+    if (value) next[key] = value
+  }
+  return Object.keys(next).length > 0 ? next : undefined
 }

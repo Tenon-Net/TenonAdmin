@@ -68,6 +68,24 @@ public static class WorkflowErrorCode
     /// <summary>定义下仍有在途实例,不能删除</summary>
     public const int DefinitionHasRunningInstances = 48020;
 
+    /// <summary>非发起人尝试催办</summary>
+    public const int UrgeNotAllowed = 48021;
+
+    /// <summary>非发起人撤销 / 已有人批准后撤销</summary>
+    public const int CancelNotAllowed = 48023;
+
+    /// <summary>退回策略未配置 / 目标节点非法</summary>
+    public const int ReturnNotAllowed = 48024;
+
+    /// <summary>非发起人重提 / 无待重提状态</summary>
+    public const int ResubmitNotAllowed = 48025;
+
+    /// <summary>委托目标非法(≤0 / 委托给自己 / 目标已在办理人中)</summary>
+    public const int DelegateTargetInvalid = 48026;
+
+    /// <summary>抄送行不存在或不属于当前用户</summary>
+    public const int CcNotFound = 48027;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }
