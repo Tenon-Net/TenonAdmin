@@ -12,10 +12,9 @@ namespace TenonAdmin.Tests;
 /// </summary>
 public class WorkerIdLeaseGuardTests
 {
-    private static (ServiceProvider Sp, string DbFile) BuildProvider()
+    /// <summary>按指定库建一个容器;同一个 identity 再建一个,就等于同库上的另一个实例。</summary>
+    private static ServiceProvider BuildProviderFor(string identity, string dbFile)
     {
-        var id = $"wlg-{Guid.NewGuid():N}";
-        var dbFile = Path.Combine(Path.GetTempPath(), $"tenon-{id}.db");
         var services = new ServiceCollection();
         services.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
         services.AddSingleton(TimeProvider.System);
@@ -24,9 +23,16 @@ public class WorkerIdLeaseGuardTests
         services.AddTenonAdminSqlSugar(new AdminDatabaseOptions
         {
             DbType = TestDb.DbType,
-            ConnectionString = TestDb.ConnectionString(id, dbFile),
+            ConnectionString = TestDb.ConnectionString(identity, dbFile),
         });
-        return (services.BuildServiceProvider(), dbFile);
+        return services.BuildServiceProvider();
+    }
+
+    private static (ServiceProvider Sp, string DbFile) BuildProvider()
+    {
+        var id = $"wlg-{Guid.NewGuid():N}";
+        var dbFile = Path.Combine(Path.GetTempPath(), $"tenon-{id}.db");
+        return (BuildProviderFor(id, dbFile), dbFile);
     }
 
     [Fact]
@@ -176,6 +182,53 @@ public class WorkerIdLeaseGuardTests
 
             var guard = NewGuard(sp);
             await guard.StartAsync(CancellationToken.None);  // 不抛 = 已接管
+
+            await guard.StopAsync(CancellationToken.None);
+            guard.Dispose();
+        }
+
+        TestDb.Cleanup(dbFile, dbFile);
+    }
+
+    [Fact]
+    public async Task Insert_losing_the_race_retries_instead_of_surfacing_a_db_error()
+    {
+        var identity = $"wlg-{Guid.NewGuid():N}";
+        var dbFile = Path.Combine(Path.GetTempPath(), $"tenon-{identity}.db");
+        var sp = BuildProviderFor(identity, dbFile);
+        var rival = BuildProviderFor(identity, dbFile);   // 同一个库上的第二个客户端 = 另一个实例
+        await using (sp)
+        await using (rival)
+        {
+            var db = sp.GetRequiredService<ISqlSugarClient>();
+            db.CodeFirst.InitTables<SysWorkerLease>();
+
+            // 守卫读到「还没有这一行」之后、它那条 INSERT 真正执行之前,让另一个实例抢先插进去。
+            // WorkerId 上有唯一索引,所以守卫的 INSERT 必然失败;抢进去那行的 pid 是死的,
+            // 于是守卫应当重读一次并接管 —— 而不是把唯一索引冲突原样抛给启动流程。
+            var raced = 0;
+            db.Aop.OnLogExecuting = (sql, _) =>
+            {
+                if (sql.IndexOf("INSERT", StringComparison.OrdinalIgnoreCase) < 0
+                    || sql.IndexOf("sys_worker_lease", StringComparison.OrdinalIgnoreCase) < 0
+                    || Interlocked.Exchange(ref raced, 1) == 1)
+                {
+                    return;
+                }
+
+                SeedLeaseAsync(
+                    rival.GetRequiredService<ISqlSugarClient>(),
+                    Environment.MachineName,
+                    Environment.MachineName,
+                    DeadPid).GetAwaiter().GetResult();
+            };
+
+            var guard = NewGuard(sp);
+            await guard.StartAsync(CancellationToken.None);  // 不抛 = 撞行后重读接管
+
+            Assert.Equal(1, raced);
+            var row = await db.Queryable<SysWorkerLease>().Where(l => l.WorkerId == 0).FirstAsync();
+            Assert.Equal(Environment.ProcessId, row.Pid);
 
             await guard.StopAsync(CancellationToken.None);
             guard.Dispose();

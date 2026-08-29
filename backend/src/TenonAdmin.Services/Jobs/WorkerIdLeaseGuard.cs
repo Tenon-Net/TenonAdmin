@@ -105,7 +105,7 @@ public sealed class WorkerIdLeaseGuard(
     }
 
     /// <summary>
-    /// 争抢一次租约。<c>false</c> = 落库时那一行已被别人改掉,应当重读再试;
+    /// 争抢一次租约。<c>false</c> = 落库时那一行已被别人抢先插入或改掉,应当重读再试;
     /// 号确实被活着的实例占着则直接抛,不在重试范围内。
     /// </summary>
     private async Task<bool> TryClaimAsync(string machineName, int pid)
@@ -119,15 +119,31 @@ public sealed class WorkerIdLeaseGuard(
 
         if (existing is null)
         {
-            await db.Insertable(new SysWorkerLease
+            try
             {
-                WorkerId = _workerId,
-                NodeName = _nodeName,
-                MachineName = machineName,
-                Pid = pid,
-                LeaseExpiresAt = expiresAt,
-            }).ExecuteCommandAsync();
-            return true;
+                await db.Insertable(new SysWorkerLease
+                {
+                    WorkerId = _workerId,
+                    NodeName = _nodeName,
+                    MachineName = machineName,
+                    Pid = pid,
+                    LeaseExpiresAt = expiresAt,
+                }).ExecuteCommandAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // WorkerId 上有唯一索引:两个实例同时读到「没有这一行」时,只有一个插得进去。
+                // 输的那个不该把主键冲突原样抛给启动流程 —— 重读确认确实是撞行,再回 false 走上面的重试。
+                // 驱动各自的异常类型不通用,所以不嗅探异常码,改用「行是否已存在」判定。
+                if (!await LeaseRowExistsAsync())
+                {
+                    throw;
+                }
+
+                logger.LogDebug(ex, "WorkerId {WorkerId} 租约插入撞行,重读后再判。", _workerId);
+                return false;
+            }
         }
 
         if (existing.LeaseExpiresAt > now && existing.NodeName != _nodeName)
@@ -163,6 +179,9 @@ public sealed class WorkerIdLeaseGuard(
 
         return rows > 0;
     }
+
+    private async Task<bool> LeaseRowExistsAsync() =>
+        await db.Queryable<SysWorkerLease>().Where(l => l.WorkerId == _workerId).AnyAsync();
 
     /// <summary>
     /// 判断租约持有者进程是否已经不在了。跨主机的 pid 没有可比性,因此主机名不同一律当作「还活着」。
