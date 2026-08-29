@@ -234,6 +234,6 @@ public class WorkerIdLeaseGuardTests
             guard.Dispose();
         }
 
-        TestDb.Cleanup(dbFile, dbFile);
+TestDb.Cleanup(identity, dbFile);
     }
 }
