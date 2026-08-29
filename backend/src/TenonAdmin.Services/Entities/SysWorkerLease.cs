@@ -29,5 +29,5 @@ public class SysWorkerLease : PrimaryId
     /// <see cref="Pid"/> 只在同一台主机上才有可比性,接管判定要拿它做前置闸门。
     /// </summary>
     [SugarColumn(Length = 128, ColumnDescription = "持有者主机名", IsNullable = true)]
-    public string MachineName { get; set; } = "";
+    public string? MachineName { get; set; }
 }
