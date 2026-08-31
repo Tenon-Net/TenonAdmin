@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 18
+- 轮次: 19
 - max: 45
 - 当前任务: 7(通知失败可观测)
-- 当前阶段: 待 plan(Task 6 已勾选)
-- 上一轮: Round 18 — Task 6 review(自审)+ 勾选,**0×P1 / 0×P2,本 M2c 第一次 review 无新增缺陷**。五处变异全部按预期转红:①删 `AppendHistoryAsync` 的赋值 red 3/6、②`?? ""` 空串代替 null red 2/6、③`BeginStartAsync` 传 null red 2/6(用例 1 如期红 —— 「构造时就带上」的钉子成立)、④`BeginCompleteAsync` 传 null red 1/6(精准命中用例 2)、⑤去掉 Task 5 短路 red 1/6。**意外收获**:超时那条内置的对照断言在①③两处变异里都跟着红了,证明它真挡得住「整列压根没写进去」的假绿 —— 上一轮标记要复核的那个疑虑,结论是钉子有效。闸门:全量 Release 0 错、13 警(全为 Core/Services 既有基线);过滤器 **240/240**。
-- 下一步: Round 19 — **Task 7 plan**(不写产品代码)。读 `Engine/WfDefaultNotifier.cs` 全文、`Abstractions/IWorkflowNotifier.cs`、`WorkflowEngine.DispatchPendingNotificationsAsync` 里那**两处**静默 `catch (Exception)`(约 82 / 94 行)、`WorkflowOptions`(看有没有现成的开关位)、仓内既有 `ILogger` 注入姿势(工作流包目前是否已引 `Microsoft.Extensions.Logging.Abstractions`,`WfCompletedTimeBackfill` 已注入 `ILogger` 可作先例),定:①日志打在哪一层 —— `WfDefaultNotifier` 内部,还是引擎的 `DispatchPendingNotificationsAsync`(**两处 catch 在引擎里,通知实现在 Notifier 里,别把日志写成两份**);②结构化字段(`InstanceId`/`Event`/`UserId`/异常)与级别(`LogWarning` 还是 `LogError`);③是否需要 `IOptions` 静默开关(YAGNI 倾向:不加,除非测试拿不到日志);④测试怎么断言日志 —— 仓内是否已有 `ILoggerProvider` 假实现先例,没有就用最小自制;⑤**不引入新 NuGet**(台账 Task 7 原文)。
+- 当前阶段: plan(已定稿,**未写产品代码**)
+- 上一轮: Round 19 — Task 7 plan 定稿(K1–K8)。读码推翻了台账原文的前提:静默吞异常**不是 2 处而是 7 层** —— `WfDefaultNotifier` 内部 3 个方法各吞一次,**外加全部 4 个调用点**各包一层(引擎 ×2、催办 ×1、超时提醒 ×1)。**双层网正是病根**:默认实现的失败被自己的内层 catch 吃掉,永远到不了外层;而只在 `WfDefaultNotifier` 里加日志又覆盖不到被消费者替换掉的实现。故方案定为 **K1 删掉内层 3 个 catch(删代码)+ K2 在外层 4 处记结构化 Warning**,一步到位覆盖两种情形。另一条读码事实:`TaskUrgedAsync` 有 **2 个调用点根本不经引擎**(催办、超时提醒),所以「在 `DispatchPendingNotificationsAsync` 一处解决」是覆盖不全的。`ILogger` 已可用(`WfCompletedTimeBackfill` 先例),不需新 NuGet。改动面 **5 + 1 预期计划外**(`WorkflowEngineProbe` 又要补 `null!`,Round 14 同款,已先声明)。5 条用例(第 5 条「正常时不记警告」不可省)+ 5 个变异点已列。
+- 下一步: Round 20 — **Task 7 exec**(按 K1–K8 实现,**不勾选**)。顺序:删 `WfDefaultNotifier` 的 3 个 try/catch 并改类注释 → 三个类构造各加 `ILogger<T>`(引擎 `<remarks>` 与 M2c 的 `receipts` 并列记一笔)→ 四处 catch 记 `LogWarning(ex, ...)`(**异常走 exception 形参,不拼 `ex.Message`**;级别一律 Warning)→ 自制最小 `ILoggerProvider` + `WfNotifyLoggingTests` 五条 → 全量 `--no-incremental` Release 构建判警告 → 过滤器闸门(240 → 约 245)。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -88,84 +88,84 @@
 | 重放与历史 | 台账 Task 6 的二选一定为 **「命中回执根本不进引擎」**(Round 16 J7):短路发生在 `switch` 之前,`AppendHistoryAsync` 一次都不会跑,所以重放天然不追加历史。**不另建去重机制** |
 | `wf_history.RequestId` | 与 `wf_operation_receipt.RequestKey` **同源不同名**(两张表的既有命名,不统一)。无请求身份的写入(超时 ×3、催办 ×1,都绕开 ctx)一律 `null`,**不是空串** |
 | 催办 | **默认不进 receipt**(可重复催办);翻转须改本表并补测试 |
-| 通知失败 | 不得拖垮审批事务;但必须**结构化日志**(至少 `ILogger`)+ 可计数指标钩子;禁止继续纯静默 |
+| 通知失败 | 不得拖垮审批事务(4 个调用点的 `catch (Exception)` 保持不变);但**内置实现不再自己吞**(Round 19 K1),失败一律浮到调用点的网里记一条**结构化 Warning**(异常走 `exception` 形参)。级别用 Warning 不用 Error:事务已提交、业务已成功,丢的只是一次推送 |
 | `CompletedTime` | 实例进入终态时写入;旧数据可从 `InstanceCompleted` 事件回填,无法确定保持空 |
 | `RequestId` 事件 | `wf_history` 增可空 `RequestId`;新数据写入,旧行 nullable |
 | 范围外 | 不建 outbox、不建 execution/attempt、不加 Webhook、不 port React 工作流页、不新增 Backend Interface 面 |
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段重写)
 
-> **Task 6 — `wf_history.RequestId`**(Round 16 写于 2026-08-31)。已读:`Entities/WfHistory.cs` 全字段、`Engine/WfExecutionContext.cs` 的 `AppendHistoryAsync` 与全部 `required` 属性、`WorkflowEngine.cs` 的 **8 处** `new WfExecutionContext`、仓内**全部** 20 个 `AppendHistoryAsync` 调用点(散在 6 个 Op 文件 + 引擎)、4 处**绕开 ctx** 直插 `WfHistory` 的地方、`WfInstanceService` 的历史投影 DTO。
-> **Task 5 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
+> **Task 7 — 通知失败可观测**(Round 19 写于 2026-08-31)。已读:`Abstractions/IWorkflowNotifier.cs` 三个方法、`Engine/WfDefaultNotifier.cs` 全文、`WorkflowEngine.DispatchPendingNotificationsAsync` 两处 catch、`WfTaskService.UrgeAsync` 的 catch、`WfTimeoutJob` 提醒路径的 catch、两个类的构造函数、`WfCompletedTimeBackfill`(仓内 `ILogger` 注入先例)。
+> **Task 6 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
 
 ### 读码所得(决策的事实底座,exec 不必重查)
 
-- **写入点只有一个**:20 个 `AppendHistoryAsync` 调用全部收敛到 `WfExecutionContext.AppendHistoryAsync` 里那一条 `Insertable`。列值只需在**那一行**赋一次,20 个调用点一个都不用改。
-- **绕开 ctx 直插 `WfHistory` 的只有 4 处,而且全都该写 `null`**:`WfTimeoutJob` ×3(系统扫出来的动作,无请求身份)、`WfTaskService.UrgeAsync` ×1(催办不进引擎、刻意不透传 `requestId`,Task 4 G7)。它们**不设该属性即为 `null`**,一个字都不用改 —— 这不是疏漏,正是语义。
-- **`WfExecutionContext` 有 8 处构造**,全在 `WorkflowEngine.cs` 内;且 `BeginStartAsync` **构造完 ctx 立刻**写 `InstanceStarted` 历史(第 301 行)。所以「switch 之后再往 ctx 上赋值」**会漏掉每条命令最有价值的第一行**,这条路排除。
-- **ctx 已有 12 个 `required` 属性**,新属性照做即可 —— `required` 是这 8 处的**编译期守卫**:将来有人加第 9 个 `BeginXxxAsync` 却忘了带上 `RequestId`,是**编译错误**而不是一条悄悄丢了请求身份的历史。
-- **Task 5 的短路已经免费解决了台账 Task 6 的二选一**:命中回执直接 `return`,压根不进 `switch`,`AppendHistoryAsync` 一次都不会跑。所以「重复请求不重复追加可观测历史」**不需要新机制**,只需要一条钉子。
-- `WfInstanceService` 把历史投影成 `WfHistoryItemOutput`(读路径),本轮**不动**它 —— 透出到 API 就是 OpenAPI 变更,归 Task 10。
+- **静默吞异常共有 7 层,不是台账写的 2 处**:`WfDefaultNotifier` 内部 **3 个方法各吞一次**,加上**全部 4 个调用点**各自又包一层 try/catch(`WorkflowEngine` ×2、`WfTaskService.UrgeAsync` ×1、`WfTimeoutJob` 提醒 ×1)。**是双层网**。
+- **这层双层网正是问题所在**:默认实现的失败被它自己的内层 catch 吃掉,**永远到不了**外层那 4 个 catch。所以「只在引擎里加日志」修不好默认路径;而「只在 `WfDefaultNotifier` 里加日志」又修不好**被消费者替换掉**的通知实现(那时内层不存在,失败落进外层 4 个 catch,依旧无声)。
+- **`TaskUrgedAsync` 有 2 个调用点根本不经过引擎**:`WfTaskService.UrgeAsync`(用户催办)与 `WfTimeoutJob`(超时提醒,`fromUserId = null`)。所以「在 `DispatchPendingNotificationsAsync` 一处解决」覆盖不到催办与提醒。
+- **`ILogger` 已经可用,不需要新 NuGet**:`WfCompletedTimeBackfill` 已经注入 `ILogger<>`(经 Hosting/Core 传递引入),台账 Task 7「不引入新 NuGet」自动满足。
+- `WorkflowOptions` 里**没有**任何通知开关位。
 
 ### 决策点(exec 不得二次发挥)
 
 | # | 决策 | 理由 |
 |---|---|---|
-| J1 | 列名 **`RequestId`**(不叫 `RequestKey`) | 台账 Task 6 原文与对外字段名(Task 4 G1)都是 `RequestId`;`wf_operation_receipt.RequestKey` 是回执表自己的既有名,两张表叫法不同是**已存在的事实**,本轮记录一次而不是改任何一边(改回执列名 = 动已勾选的 Task 1/2) |
-| J2 | `[SugarColumn(Length = 64, IsNullable = true)]`,**无默认值、无索引** | 与 `WfInstance.CompletedTime`(Task 3)同型:可空 `ADD COLUMN` 四库都接受,不触发「先加可空列 → 回填 → 改 NOT NULL」三步路。列宽 64 与 `RequestKey` 对齐。诊断列不建索引,需要时再说 |
-| J3 | 值挂在 `WfExecutionContext` 上,声明成 **`public required string? RequestId { get; init; }`** | `required` 把「8 处构造别漏」从人的纪律变成**编译器的事**。可空表示「本次没有请求身份」 |
-| J4 | 8 处构造一律写 `RequestId = cmd.RequestId`;`BeginTimeoutAsync` 写 **`RequestId = null`** | `TimeoutFireCmd` 不继承 `WfWriteCmd`,压根没有这个属性,`null` 是唯一可写的值,也正是语义 |
-| J5 | **值取自 `cmd.RequestId`,不再调一次 `NormalizeRequestKey`** | 台账 Task 5 锚点写的是「禁止再取第二遍」,指的是**禁止重新归一化出第二条路径**。Task 4 已把归一化写死在 `WfWriteCmd` 的 `init` 里(全仓唯一一份),`cmd.RequestId` **就是**那份归一化的结果,与 Task 5 的 `identity.RequestKey` 恒等。而 `identity` 只活在 `ExecuteAsync` 的局部,要送进 8 个 `BeginXxxAsync` 就得改 8 个签名 —— 那才是真的扩面。**本条是对锚点的显式复核结论,不是漂移** |
-| J6 | 赋值只写在 `AppendHistoryAsync` 的 `new WfHistory { ... }` 里**一行** | 20 个调用点零改动;将来第 21 个调用点自动带上 |
-| J7 | 台账 Task 6 的二选一定为:**命中回执根本不进引擎**,故重放天然不追加历史 | Task 5 已实现;本轮只补钉子并写进 `## 语义契约`。**不新建任何去重机制** |
-| J8 | **不透出 DTO**、不动 `WfHistoryItemOutput`、不碰前端与 `gen:api` | Task 10 边界 |
+| K1 | **删掉 `WfDefaultNotifier` 内部那 3 个 try/catch**,让它老实地抛 | 这是本 Task 的**关键动作**,也是唯一能同时修好两种情形的动作:默认实现的失败终于能到达外层网被记录;而外层 4 个 catch 保证行为不变(仍然绝不拖垮事务/不炸 HTTP)。**删代码,不是加代码** —— 双层网里删掉内层那层,可观测性就通了 |
+| K2 | 结构化日志加在**外层那 4 个 catch** 里,每处一条 | 那是唯一的通用网:任何实现(内置的、消费者替换的)抛出都会落进来。4 处**不是重复**——四种通知的上下文字段本就不同(待办到达 / 实例完结 / 催办 / 超时提醒) |
+| K3 | 级别一律 **`LogWarning`**,不用 `LogError` | 事务已提交、业务已成功,丢的只是一次推送 —— 对系统健康而言这是"降级"不是"故障"。用 Error 会让本就该忽略的噪声去污染告警 |
+| K4 | 字段:`InstanceId` 必带;其余按现场带 `UserId`/`UserCount`/`TaskId`/`NodeId`;异常对象走 `ILogger` 的 `exception` 形参(**不要** `ex.Message` 拼进消息串) | 拼字符串会丢掉堆栈与内层异常,而这正是排障要看的东西 |
+| K5 | **不加** `IOptions` 静默开关 | YAGNI。测试要断言日志,用一个自制的 `ILoggerProvider` 就够(K7),不需要产品代码为测试让路 |
+| K6 | `WorkflowEngine` 加 `ILogger<WorkflowEngine>`、`WfTaskService` 加 `ILogger<WfTaskService>`、`WfTimeoutJob` 加 `ILogger<WfTimeoutJob>`;引擎的类 `<remarks>` 里把这次追加与 M2c 那次 `receipts` **并列记一笔** | 与 M2a/M2b/M2c 既有的「有意的源码级破坏性变更」同型;`ILogger<T>` 在任何 Host 里都已注册,DI 不需要额外配置 |
+| K7 | 测试用**自制最小 `ILoggerProvider`**(捕获 level + 消息 + 异常 + 状态字段),经 `WorkflowAppFactory.Overrides` 注册;不引第三方断言库 | 仓内没有现成的日志假实现先例;自制约 30 行,比引包便宜 |
+| K8 | **不碰**通知内容/时机/`IRealtimePublisher`、不动四个 catch 的**捕获范围**(仍是 `catch (Exception)`) | Task 边界。catch 宽是既有定案(通知绝不能炸事务),本轮只让它**出声** |
 
-### 改动清单(exec 只允许碰这 4 个文件)
+### 改动清单(exec 只允许碰这 6 个文件)
 
-1. `backend/src/TenonAdmin.Workflow/Entities/WfHistory.cs` — 加 `RequestId` 列(J1/J2)
-2. `backend/src/TenonAdmin.Workflow/Engine/WfExecutionContext.cs` — 加 `required` 属性(J3)+ `AppendHistoryAsync` 里赋一行(J6)
-3. `backend/src/TenonAdmin.Workflow/Engine/WorkflowEngine.cs` — 8 处构造各加一行(J4)
-4. `backend/tests/TenonAdmin.Tests/WfHistoryRequestIdTests.cs` — 新增
-
-> 若 `required` 导致**测试里**也有 `new WfExecutionContext`,那是计划外必改的第 5 个文件 —— 照 Round 14 的先例,先质疑再记录,别默默改。
+1. `backend/src/TenonAdmin.Workflow/Engine/WfDefaultNotifier.cs` — **删** 3 个 try/catch + 改类注释(K1)
+2. `backend/src/TenonAdmin.Workflow/Engine/WorkflowEngine.cs` — 构造加 logger + 2 处 catch 记日志 + `<remarks>` 补一句(K2/K6)
+3. `backend/src/TenonAdmin.Workflow/Services/WfTaskService.cs` — 构造加 logger + 催办 catch 记日志
+4. `backend/src/TenonAdmin.Workflow/Jobs/WfTimeoutJob.cs` — 构造加 logger + 提醒 catch 记日志
+5. `backend/tests/TenonAdmin.Tests/WfNotifyLoggingTests.cs` — 新增
+6. `backend/tests/TenonAdmin.Tests/WorkflowMultiLeaderSnapshotTests.cs` — **预期计划外**:`WorkflowEngineProbe` 直接 `new WorkflowEngine(...)`,加参数必然要补一个 `null!`(Round 14 同款)。**先声明,不算溢出**
 
 ### 步骤
 
-1. J2 列 → 2. J3 属性(**先加 `required` 让编译器报出全部构造点**,按报错逐个补,不靠肉眼数)→ 3. J6 赋值一行 → 4. `dotnet build` 过 → 5. `WfHistoryRequestIdTests` 六条 → 6. 全量 `--no-incremental` Release 构建判警告(**只信全量,Round 8/12 两次教训**)→ 7. 指定过滤器闸门(当前 **234**,本 Task 后应 ≈ 240)。
+1. K1 删 3 个内层 catch → 2. K6 三个构造加 logger → 3. K2/K3/K4 四处 catch 记日志 → 4. `dotnet build` 过 → 5. K7 假 `ILoggerProvider` + `WfNotifyLoggingTests` 五条 → 6. 全量 `--no-incremental` Release 构建判警告(**只信全量;上一轮自引入 3 条 `xUnit2031` 就是这么抓到的**)→ 7. 指定过滤器闸门(当前 **240**,本 Task 后应 ≈ 245)。
 
-### 测试清单(`WfHistoryRequestIdTests`,6 条,查库断言)
+### 测试清单(`WfNotifyLoggingTests`,5 条)
 
-1. **发起带 key** → `InstanceStarted` 那一行的 `RequestId` 有值。**这条专钉「构造时就带上」** —— 它是在 `BeginStartAsync` 里、Agenda 跑起来之前写的,任何「switch 之后再赋值」的实现都会让它为空。
-2. **同意带 key** → 该次命令产生的历史行(`NodeLeave`/`InstanceCompleted` 等)全部带同一个值。
-3. **不带 key** → 同一批历史行全部为 `null`(不是空串)。
-4. **超时触发** → `TimeoutFired` 那行为 `null`(`WfTimeoutJob` 绕开 ctx 直插)。
-5. **催办** → `TaskUrged` 那行为 `null`(`UrgeAsync` 不进引擎,Task 4 G7 的另一面)。
-6. **同 key 重放** → 第二次请求**不新增任何历史行**(数量与第一次后一致)。这是 J7 的钉子,从历史侧再证一次 Task 5 的短路。
+前置:注册一个**抛异常的** `IRealtimePublisher`(让内置通知真的失败),外加捕获日志的 `ILoggerProvider`。
 
-### 变异点(留给 Round 18 的 review,exec 阶段不跑)
+1. **待办到达失败 → 审批仍成功 + 有一条 Warning**:approve 返回 `code = 0`,且日志里有一条含 `InstanceId` 的警告,`Exception` 非空。**这条是台账 Task 7 点名要的那条**。
+2. **实例完结失败 → 同上**(走 `InstanceCompletedAsync` 那处 catch)。
+3. **催办失败 → `urge` 仍返回成功 + 有警告**(证明覆盖到了**不经引擎**的那条路)。
+4. **超时提醒失败 → 扫描不中断 + 有警告**(第二条不经引擎的路)。
+5. **通知正常时不产生警告**:同样的流程但 publisher 不抛 → 零条本类警告。**没有这条,前四条无法排除「无论如何都记一条」的实现**。
+
+### 变异点(留给 Round 21 的 review,exec 阶段不跑)
 
 | 变异 | 应红 |
 |---|---|
-| `AppendHistoryAsync` 的 `new WfHistory` 里删掉 `RequestId` 赋值 | 1、2 |
-| `RequestId = ctx.RequestId ?? ""`(空串代替 null) | 3 |
-| `BeginStartAsync` 的构造改成 `RequestId = null` | 1(且**只**红 1 —— 这正是用例 1 存在的理由) |
-| `BeginCompleteAsync` 的构造改成 `RequestId = null` | 2 |
-| 去掉 `ExecuteAsync` 的短路(回滚 Task 5) | 6 |
+| 把 `WfDefaultNotifier` 的 3 个 try/catch **加回去** | 1、2、3、4 全红 —— 这正是「双层网让默认路径无声」的证明 |
+| 某一处 catch 的 `LogWarning` 删掉 | 对应那一条 |
+| `LogWarning(ex, ...)` 改成 `LogWarning(...)` 丢掉异常形参 | 断言 `Exception` 非空的那几条 |
+| 无条件在成功路径也记一条警告 | 用例 5 |
+| 引擎的 catch 改成 `catch (Exception) { throw; }` | 用例 1/2 会从"成功+警告"变成 5xx —— 反向确认「绝不拖垮」仍成立 |
 
 ### 陷阱
 
-- **别在 switch 之后给 ctx 赋值**:`BeginStartAsync` 在构造后立刻写历史,那样第一行永远为空,而它恰恰是排障时最想看的一行。
-- **`required` 会把所有构造点炸出来** —— 这是特性不是麻烦。按编译错误逐个补,别先肉眼数 8 个然后漏一个。
-- **4 处绕开 ctx 的直插保持不动**,它们写 `null` 是语义而非遗漏;exec 若"顺手"给超时或催办也塞上 key,就违反了 Task 4 G7 与「超时没有请求身份」两条既有定案。
-- **空串不等于 null**:无 key 时必须是 `null`,否则「没带 key」和「带了个空 key」在排障时分不开(且与回执表的语义打架)。
-- 不透出 DTO、不动读路径投影、不碰 `gen:api`(Task 10)。
+- **别只在一层加日志**。只加内层 → 替换实现的失败仍无声;只加外层 → 默认实现的失败被内层吃掉。K1 删内层是让「只加外层」成立的前提,两步是一件事,不能只做一半。
+- **别用 `ex.Message` 拼串**,异常要走 `ILogger` 的 `exception` 形参,否则堆栈与 inner exception 全丢。
+- **别收窄 `catch (Exception)`** —— 通知绝不能炸事务是既有定案,本轮只让它出声。
+- **用例 5(正常时不记警告)不能省**:没有它,一个「无脑记一条」的实现也能让前四条全绿。
+- `WfTimeoutJob` 有 `JobExecutionContext.Log`,那是**面向作业执行记录**的文本口,**不能替代**结构化 `ILogger`;两者都写会重复,本轮只写 `ILogger`。
 - 不提交 `TestResults/`。
 
 ### 给后续 Task 的锚点(本轮只记录,不实施)
 
-- Task 8 的四库套件可复用本 Task 的可空 `ADD COLUMN`:`wf_history` 是**有存量数据**的表,比 Task 3 的 `wf_instance` 更能验证「旧行读到 null」。
-- Task 10 若决定把 `RequestId` 透到 `WfHistoryItemOutput`,那是 OpenAPI 变更,记得双模板 `gen:api` 一起刷。
-- P2→Task 8(PG 唯一冲突后整事务 aborted)仍在。
+- Task 8 的四库套件与本 Task 无耦合(日志不落库)。
+- P2→Task 8(PG 唯一冲突后整事务 aborted)仍在,是 Task 8 的头等事项。
+- 若将来要做通知重试/outbox,那是 M3,本轮的日志正是那件事的入口证据。
 
 ## Tasks
 
@@ -391,6 +391,7 @@
 | 16 | plan | Task 6 plan 定稿(J1–J8):20 个 `AppendHistoryAsync` 调用全收敛到 ctx 里一条 `Insertable`,列值只赋一行;绕开 ctx 的 4 处直插(超时 ×3 + 催办 ×1)不设属性即 `null`,零改动且正是语义;`BeginStartAsync` 构造后立刻写 `InstanceStarted`,故排除「switch 后赋值」,改 8 处构造各带一行并把属性声明为 **`required`**(编译器兜底,加第 9 个 Begin 忘带 = 编译错误);台账二选一由 Task 5 短路免费解决,只补钉子。显式复核 Task 5 锚点:取 `cmd.RequestId` 不违反「禁止再取第二遍」——那禁的是重新归一化出第二条路径(J5)。改动面 4 文件,6 条用例(第 1 条专钉「构造时就带上」)+ 5 个变异点。未写产品代码。 |
 | 17 | exec | Task 6 落地 **4 文件、零溢出**:`WfHistory` 可空 64 列;ctx 的 `required string? RequestId` —— `required` 一加编译器精确炸出 8 处构造(与 plan 一致,未靠肉眼数),7 处 `cmd.RequestId` + 超时处 `null`;`AppendHistoryAsync` 赋一行,20 个调用点零改动;绕开 ctx 的 4 处直插(超时 ×3 + 催办 ×1)一个字没动,`null` 是语义。plan 预警的第 5 文件风险未兑现。`WfHistoryRequestIdTests` 6 例一次全绿(用例 1 专钉「构造时就带上」,用例 4 内置对照断言防「整列没写」的假绿)。踩到 3 条自引入的 `xUnit2031`,全量警告 13→16,改用 `Assert.Single` 谓词重载后回到 13 —— 再次印证只信全量构建。过滤器 **240/240**。未勾选。 |
 | 18 | review+勾选 | Task 6 自审:五处变异**全部按预期转红**(删赋值 3/6、`?? ""` 2/6、`BeginStartAsync` 传 null 2/6、`BeginCompleteAsync` 传 null 1/6、去掉 Task 5 短路 1/6),**0×P1 / 0×P2 —— M2c 第一次 review 无新增缺陷**。上一轮标记的两条疑虑均有结论:用例 3 单看弱但与用例 1/2 构成对照组;超时那条的内置对照断言在两处变异里跟着红,证明它真挡得住「整列没写进去」的假绿。J1–J8 全对,改动面零溢出。闸门:全量 Release 0 错、工作流包与测试工程 0 警;过滤器 **240/240**。**Task 6 打勾**。 |
+| 19 | plan | Task 7 plan 定稿(K1–K8)。**读码推翻台账原文的前提**:静默吞异常不是 2 处而是 **7 层**(`WfDefaultNotifier` 内 3 + 4 个调用点各 1),双层网正是病根 —— 默认实现的失败被内层吃掉、到不了外层,而只在 Notifier 里加日志又覆盖不到消费者替换的实现。方案定为 **删内层 3 个 catch + 外层 4 处记结构化 Warning**,一个动作同时修好两种情形,且是**删代码**。另一条事实:`TaskUrgedAsync` 有 2 个调用点不经引擎(催办、超时提醒),「引擎一处解决」覆盖不全。`ILogger` 已可用,不需新 NuGet。改动面 5 + 1 预期计划外(`WorkflowEngineProbe` 补 `null!`,已先声明)。5 条用例(第 5 条「正常时不记警告」不可省)+ 5 个变异点。未写产品代码。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
