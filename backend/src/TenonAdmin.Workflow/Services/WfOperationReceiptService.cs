@@ -22,20 +22,71 @@ public class WfOperationReceiptService(IRepository<WfOperationReceipt> receipts)
         if (existing is not null)
             return existing;
 
+        // 占位 INSERT 圈进一个可单独回滚的点(仅 PostgreSQL 需要,见 UseNestedSavepoint)。
+        var nested = await BeginNestedAsync(cancellationToken);
         try
         {
             await InsertPlaceholderAsync(identity, cancellationToken);
+            if (nested)
+                await ReleaseNestedAsync(cancellationToken);
             return null;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // 唯一索引冲突 = 同一 identity 的另一个请求刚提交。**不解析各库错误码**(四库方言不同,
             // 解析它是方言陷阱):再查一次,查到就是那个赢家的回执;查不到说明异常另有原因,原样抛。
+            // PG 上这次 SELECT 之所以还能执行,全靠下面这一步先回滚到点(否则整事务已 aborted)。
+            if (nested)
+                await RollbackNestedAsync(cancellationToken);
             var winner = await FindAsync(identity.IdentityHash, cancellationToken);
             if (winner is not null)
                 return winner;
             throw;
         }
+    }
+
+    /// <summary>
+    /// 是否需要给占位 INSERT 套一个 SAVEPOINT ——<b>只有 PostgreSQL 需要,且只在显式事务里</b>。
+    /// <para><b>为什么非要有这个方言分支</b>(它是内核 <c>src/</c> 里的第一个):PG 一旦有语句报错,就把
+    /// <b>整个事务</b>置为 aborted,此后任何语句都只回
+    /// <c>25P02 current transaction is aborted, commands ignored until end of transaction block</c>。
+    /// 于是 <see cref="TryBeginAsync"/> 赖以「认赢家」的那次二次 <see cref="FindAsync"/> 在 PG 上根本执行不了,
+    /// 而且那个新异常还会<b>顶替</b>原始的唯一冲突异常抛出去,连诊断线索一并丢掉。SQLite / MySQL / SqlServer
+    /// 的语句级错误不中止事务,这两条语句对它们纯属多余;SqlServer 的语法本就不同(<c>SAVE TRANSACTION</c> /
+    /// <c>ROLLBACK TRANSACTION</c>),写全等于替三个不需要它的方言各付一份代价。<b>这不是性能取舍——PG 的事务
+    /// 中止语义没有可移植替代</b>,躲不掉的这一处,写出来比藏起来便宜。上面那句「不解析各库错误码」的决定仍然
+    /// 有效并保留:本分支判的是<b>方言身份</b>,不是错误码。</para>
+    /// <para><c>IsAnyTran</c> 守卫的原因:PG 的 <c>SAVEPOINT</c> 只能用在事务块里,自动提交模式下发它会直接
+    /// 报错;而在那种模式下语句失败本就不会中止任何东西,也就不需要它。</para>
+    /// </summary>
+    protected virtual bool UseNestedSavepoint =>
+        receipts.Db.CurrentConnectionConfig.DbType == DbType.PostgreSQL && receipts.Db.Ado.IsAnyTran();
+
+    /// <summary>savepoint 名;单事务内只会建一次(<see cref="TryBeginAsync"/> 每事务调一次)。</summary>
+    protected const string NestedSavepointName = "wf_receipt_try";
+
+    /// <summary>需要时建立嵌套点;返回值告诉调用方后面要不要配对地回滚/释放。</summary>
+    protected virtual async Task<bool> BeginNestedAsync(CancellationToken cancellationToken)
+    {
+        if (!UseNestedSavepoint)
+            return false;
+        cancellationToken.ThrowIfCancellationRequested();
+        await receipts.Db.Ado.ExecuteCommandAsync($"SAVEPOINT {NestedSavepointName}");
+        return true;
+    }
+
+    /// <summary>回滚到嵌套点:撤掉失败的那条 INSERT,把事务从 aborted 里救回来,后续语句照常。</summary>
+    protected virtual Task RollbackNestedAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return receipts.Db.Ado.ExecuteCommandAsync($"ROLLBACK TO SAVEPOINT {NestedSavepointName}");
+    }
+
+    /// <summary>成功路径释放嵌套点,不让它挂到事务结束(外层事务的提交/回滚语义不受影响)。</summary>
+    protected virtual Task ReleaseNestedAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return receipts.Db.Ado.ExecuteCommandAsync($"RELEASE SAVEPOINT {NestedSavepointName}");
     }
 
     /// <inheritdoc />
