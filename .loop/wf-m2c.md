@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 20
+- 轮次: 21
 - max: 45
-- 当前任务: 7(通知失败可观测)
-- 当前阶段: exec(已完成,**未勾选**)
-- 上一轮: Round 20 — Task 7 exec 落地,**5 + 1 预期计划外**(`WorkflowEngineProbe` 补 `null!`,plan 已先声明,不算溢出)。K1 删掉 `WfDefaultNotifier` 内部 3 个 try/catch(**净删代码**,类注释改写说明为什么内层那一层必须消失);三个类构造各加 `ILogger<T>`(引擎 `<remarks>` 与 M2c 的 `receipts` 并列记了一笔);四处 catch 记 `LogWarning(ex, ...)`,异常走 exception 形参、级别一律 Warning。`WfNotifyLoggingTests` 5 例:用抛异常的 `IRealtimePublisher` 让**内置** Notifier 原样跑到失败(钉真实调用链),日志经自制最小 `ILoggerProvider` 捕获。**踩到两条测试自身的错**(非产品代码):①待办到达实际产生 **2 条**警告(发起给 a 建待办 + 同意后给 b 建待办),`Assert.Single` 用错,改成「至少一条且每条都带异常」;②超时提醒写的历史事件是 **`TimeoutFired`**(载荷里 `action = Remind`)而非 `TaskUrged` —— 催办与提醒共用通知方法但事件类型不同。闸门:全量 Release 0 错、13 警(全为 Core/Services 既有基线,工作流包 0 警);过滤器 **245/245**(240+5)。
-- 下一步: Round 21 — **Task 7 review**(自审须声明)。变异点五处,每处**先 grep 确认文件真改了**、复原**只 checkout 被变异的那一个文件**:①把 `WfDefaultNotifier` 的 3 个 try/catch **加回去** → 用例 1–4 应全红(这正是「双层网让默认路径无声」的证明,也是本 Task 的核心论点);②删掉任一处 `LogWarning` → 对应那条应红;③`LogWarning(ex, ...)` 改成 `LogWarning(...)` 丢掉异常形参 → 断言 `Exception` 非空的几条应红;④在成功路径也无条件记一条 Warning → 用例 5 应红;⑤引擎的 catch 改成 `catch (Exception) { throw; }` → 用例 1/2 应从「成功 + 警告」变成 5xx(反向确认「绝不拖垮」仍成立)。另需复核:用例 1 改成「至少一条」后是否**弱化**了(若某处 catch 漏记但另一处记了,它可能仍绿 —— 变异②要专门验这一点);以及 `LogSink` 对**所有**类别都返回同一个 logger,是否会把内核其他组件的 Warning 混进来污染用例 5(用例 5 断的是 `Contains("通知失败")`,理论上安全,但要确认)。
+- 当前任务: 8(四库持久化契约套件)
+- 当前阶段: 待 plan(Task 7 已勾选)
+- 上一轮: Round 21 — Task 7 review(自审)+ 勾选,**0×P1 / 0×P2**(M2c 第二次 review 无新增缺陷)。五处变异全按预期转红:①**把内层 3 个 catch 加回去 → red 4/5**,四条失败路径同时变回无声 —— 这是「双层网让默认路径不可观测」的直接证明,也是本 Task 核心论点的实证;②删催办那处 `LogWarning` red 1/5(精准,不误伤);③丢掉异常形参 red 1/5;④成功路径也记一条 red 1/5(用例 5 确实在守「无脑记一条」);⑤catch 里加 `throw` **red 4/5** —— 连发起请求本身都挂(发起就会触发待办到达通知),反向确认「绝不拖垮」成立。上一轮标记的两条疑虑均有结论:用例 1 改「至少一条」**没有弱化**(变异③由 `Assert.All(NotNull(Exception))` 接住、变异②由催办那条接住);`LogSink` 的跨类别捕获**没有污染**用例 5(变异④能让它红,说明它对多余 Warning 是敏感的)。闸门:全量 Release 0 错、13 警(全为 Core/Services 既有基线);过滤器 **245/245**。
+- 下一步: Round 22 — **Task 8 plan**(不写产品代码)。这是 M2c 最大的一个 Task,plan 要读:`.github/workflows/backend-ci.yml` 的四库矩阵与 SqlServer 的 `TEST_FILTER` 子集(**决定新套件要不要进 PR 腿**,CLAUDE.md 明确 SqlServer 全量 40–60 分钟)、`backend/tests/TenonAdmin.Tests/TestDb.cs`(按 `TENON_TEST_DBTYPE` 派生隔离库的机制)、`WfListContractTests`(仓内既有的"列表契约"先例,看它怎么组织四库共用用例)。要定:①**头等事项** `## Findings` 的 P2→Task 8(PG 唯一冲突后整事务 aborted,`TryBeginAsync` 的二次 SELECT 在 PG 上会炸)—— 先写一条**会在 PG 上红**的用例,再定修法(savepoint / `ON CONFLICT DO NOTHING` / 先查后插容忍窗口);②12–20 条用例清单(`IdentityHash` 快照、receipt 唯一性、CAS 三处、事务回滚不残留、超时 vs 人工仅一方胜出、终态保护、可空 `ADD COLUMN` 旧行读 null);③SqlServer PR 腿纳入与否;④**不复制** 245 条全集。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -177,7 +177,7 @@
 - [x] **4. 写命令 DTO + Controller 收 `RequestId`**: `Start/Approve/Reject/Transfer/Delegate/Return/Cancel/Resubmit` 输入 DTO 增 `RequestId`(或 `IdempotencyKey`,plan 阶段二选一对外名、另一名作别名/映射);Controller 透传。OpenAPI 变更 → 留给 Task 10 `gen:api`。**不含 Urge**(默认)。
 - [x] **5. 引擎写路径接 receipt**:上述 8 个 `BeginXxxAsync` 入口在事务开头解析 identity → 命中则直接返回缓存 `WfEngineResult` → 否则执行现有 Op 链 → 成功则落 receipt。覆盖「串行双提交」「并发双提交仅一次推进」「业务失败无 receipt」「终态重试返回首次结果」的集成测试(单库,≥6 条,附变异点)。
 - [x] **6. `wf_history.RequestId`**:列 + `AppendHistoryAsync` 写路径传入;与 receipt 的 `RequestKey` 同源。测试:重复请求不重复追加**可观测**历史(或命中 receipt 根本不进引擎 — plan 阶段二选一并写进契约)。
-- [ ] **7. 通知失败可观测**: `WfDefaultNotifier` 注入 `ILogger<WfDefaultNotifier>`(或内核既有日志抽象),`catch` 改 `LogWarning`/`LogError` 结构化字段(`InstanceId`,`Event`,`UserId`,异常);可选 `IOptions` 开关保留静默模式给测试。补一条「publisher 抛错 → 审批仍成功 + 日志有条目」测试。不引入新 NuGet。
+- [x] **7. 通知失败可观测**: `WfDefaultNotifier` 注入 `ILogger<WfDefaultNotifier>`(或内核既有日志抽象),`catch` 改 `LogWarning`/`LogError` 结构化字段(`InstanceId`,`Event`,`UserId`,异常);可选 `IOptions` 开关保留静默模式给测试。补一条「publisher 抛错 → 审批仍成功 + 日志有条目」测试。不引入新 NuGet。
 - [ ] **8. 四库持久化契约套件**:新建 `WfPersistenceContractTests`(或同级),**同一套用例**经 `TestDb.DbType` 在四库 CI 腿各跑:①`IdentityHash` 快照;②receipt 唯一性;③并发 CAS(实例/Token/任务至少各一条);④事务回滚 receipt 不残留;⑤超时领取 vs 人工 `Approve` 仅一方胜出;⑥终态保护。不复制 190 条全集,只钉持久化契约(目标 **12–20** 条,plan 阶段列清单)。SqlServer PR 腿若已有 `TEST_FILTER`,评估是否纳入子集或 nightly — plan 阶段读 `.github/workflows/backend-ci.yml` 后定。
 - [ ] **9. Vue request key 生命周期**: `web/` 发起页 + 实例详情写操作:一次用户动作(打开弹窗/点一次按钮)生成 UUID,该动作重试(含 axios 重试若存在)复用;成功或明确失败后丢弃;新动作新 key。按钮防连点保留。`src/workflow/` 或 composable 单点实现,避免每页复制。typecheck/lint/vitest 绿。
 - [ ] **10. `gen:api` + 契约漂移 + 验收**:双模板 `gen:api`;SHA256 一致;去掉因新字段产生的 `@ts-expect-error`(若有)。可选:Playwright 或 API 级「双 POST 同 key → 同一 instanceId/同一结果」轻量验收(不强制浏览器截图,除非协调者要求)。**勾选本 Task 前**跑齐 DONE-CONDITION 全闸门。
@@ -359,6 +359,31 @@
 
 **P1**:0 条。**P2**:0 条。→ 满足勾选条件。**这是 M2c 至今第一个 review 阶段没揪出缺陷的 Task**;可归因于 plan 阶段已把「switch 之后赋值会漏第一行」这个真陷阱提前识别并写成了用例 1。
 
+### Task 7 review(Round 21,2026-08-31)
+
+> **⚠ 自审声明**:与 exec 同一 context(会话规则禁止未经用户要求派子 agent)。仍以**变异测试**代替第二双眼睛,每处**先 `grep` 确认文件真改了**再跑,复原**只 checkout 被变异的那一个文件**。
+
+**变异点验证**(跑 `~WfNotifyLoggingTests` → 复原):
+
+| 变异 | 结果 | 说明 |
+|---|---|---|
+| **把 `WfDefaultNotifier` 的 3 个 try/catch 加回去** | **红 4/5** | 四条失败路径**同时**变回无声。这是本 Task 核心论点的实证:双层网存在时,内置实现的失败到不了外层,加多少日志都白搭 |
+| 删掉催办那处 `LogWarning` | **红 1/5** | 精准命中催办那条,不误伤其余三条 —— 四处日志确实各管各的路 |
+| `LogWarning(ex, ...)` 丢掉异常形参 | **红 1/5** | 用例 1 的 `Assert.All(..., NotNull(Exception))` 接住 |
+| 成功路径也无条件记一条 Warning | **红 1/5** | 用例 5 —— 「不能省」这句话有证据了 |
+| 引擎的 catch 里加 `throw;` | **红 4/5** | 连**发起**请求本身都挂(发起就会触发待办到达通知)。反向确认「通知绝不拖垮业务」仍然成立 |
+
+**上一轮标记要复核的两条,结论都是钉子有效**:
+
+1. **用例 1 改成「至少一条」并没有弱化**。当初担心「某处 catch 漏记而另一处记了,它仍绿」——变异②证明漏记催办会被催办那条抓到,变异③证明丢异常会被 `Assert.All` 抓到。数量本就不该硬钉:两条待办到达通知都失败是**正确行为**(发起给 a 建待办、同意后给 b 建待办),硬钉 1 条反而是错的断言。
+2. **`LogSink` 对所有类别返回同一个 logger,没有污染用例 5**。变异④能让用例 5 转红,说明它对「多出来的 Warning」是敏感的;而未变异时它绿,说明内核其他组件并没有产出含「通知失败」的 Warning。敏感 + 干净,两头都验到了。
+
+**核对 K1–K8**:K1(内层 3 个 catch 已删,类注释写明为什么)✅ / K2(外层 4 处各记一条,不是重复而是四种上下文)✅ / K3(级别一律 Warning)✅ / K4(异常走 `exception` 形参,未拼 `ex.Message`;字段含 `InstanceId` 等)✅ / K5(未加 `IOptions` 开关)✅ / K6(三个类各注入 `ILogger<T>`,引擎 `<remarks>` 已并列记一笔)✅ / K7(自制最小 `ILoggerProvider`,未引第三方)✅ / K8(未碰通知内容/时机/`IRealtimePublisher`,catch 仍是 `catch (Exception)`)✅。改动面 = 计划内 5 文件 + **plan 已预先声明**的 `WorkflowMultiLeaderSnapshotTests`(直接 `new WorkflowEngine`,补 `null!`)✅。
+
+**闸门**:全量 `--no-incremental` Release 构建 0 错、13 警(全为 `Core`/`Services` 既有基线,工作流包 0 警);`dotnet test --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"` → **245/245 绿**。
+
+**P1**:0 条。**P2**:0 条。→ 满足勾选条件。
+
 ### 跨任务待办(不阻塞 Task 1,后续任务必须消化)
 
 - **P2 → Task 4**:`RequestKey` / `ScopeKey` 列宽都是 **64**,而 `WfIdentityHash.Compute` 对长度不设限。写命令 DTO 必须把 `RequestId` 卡在 **≤64**(配一条超长即拒的测试):否则 MySQL 非严格模式静默截断诊断列(identity 由完整值算出,不受影响,但排查时看到的是截断值),严格方言下直接插入报错。
@@ -393,6 +418,7 @@
 | 18 | review+勾选 | Task 6 自审:五处变异**全部按预期转红**(删赋值 3/6、`?? ""` 2/6、`BeginStartAsync` 传 null 2/6、`BeginCompleteAsync` 传 null 1/6、去掉 Task 5 短路 1/6),**0×P1 / 0×P2 —— M2c 第一次 review 无新增缺陷**。上一轮标记的两条疑虑均有结论:用例 3 单看弱但与用例 1/2 构成对照组;超时那条的内置对照断言在两处变异里跟着红,证明它真挡得住「整列没写进去」的假绿。J1–J8 全对,改动面零溢出。闸门:全量 Release 0 错、工作流包与测试工程 0 警;过滤器 **240/240**。**Task 6 打勾**。 |
 | 19 | plan | Task 7 plan 定稿(K1–K8)。**读码推翻台账原文的前提**:静默吞异常不是 2 处而是 **7 层**(`WfDefaultNotifier` 内 3 + 4 个调用点各 1),双层网正是病根 —— 默认实现的失败被内层吃掉、到不了外层,而只在 Notifier 里加日志又覆盖不到消费者替换的实现。方案定为 **删内层 3 个 catch + 外层 4 处记结构化 Warning**,一个动作同时修好两种情形,且是**删代码**。另一条事实:`TaskUrgedAsync` 有 2 个调用点不经引擎(催办、超时提醒),「引擎一处解决」覆盖不全。`ILogger` 已可用,不需新 NuGet。改动面 5 + 1 预期计划外(`WorkflowEngineProbe` 补 `null!`,已先声明)。5 条用例(第 5 条「正常时不记警告」不可省)+ 5 个变异点。未写产品代码。 |
 | 20 | exec | Task 7 落地 **5 + 1 预期计划外**:K1 **删掉** `WfDefaultNotifier` 内部 3 个 try/catch(净删代码,类注释写明内层为何必须消失);`WorkflowEngine`/`WfTaskService`/`WfTimeoutJob` 三个构造各加 `ILogger<T>`;四处 catch 记 `LogWarning(ex, ...)`(异常走 exception 形参、一律 Warning)。`WfNotifyLoggingTests` 5 例,用抛异常的 `IRealtimePublisher` 让内置 Notifier 原样跑到失败,自制最小 `ILoggerProvider` 捕获日志。踩到两条**测试自身**的错:待办到达实际有 2 条警告(`Assert.Single` 用错,改「至少一条且每条带异常」)、超时提醒写的是 `TimeoutFired` 而非 `TaskUrged`(催办与提醒共用通知方法但事件类型不同)。build 0 错、工作流包 0 警(全量);过滤器 **245/245**。未勾选。 |
+| 21 | review+勾选 | Task 7 自审:五处变异全按预期转红。**最有说服力的一处**:把内层 3 个 catch 加回去 → **red 4/5**,四条失败路径同时变回无声,直接实证了「双层网让默认路径不可观测」这个本 Task 的核心论点;`throw;` 那处 red 4/5 则反向确认「通知绝不拖垮业务」仍成立。上一轮两条疑虑均证伪:用例 1 改「至少一条」没弱化(变异②③各自接住),`LogSink` 跨类别捕获没污染用例 5(变异④能让它红 = 敏感,未变异时绿 = 干净)。K1–K8 全对,改动面 5 + 1 已预先声明。**0×P1 / 0×P2**。闸门:全量 Release 工作流包 0 警;过滤器 **245/245**。**Task 7 打勾**。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
