@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 2
+- 轮次: 3
 - max: 45
-- 当前任务: 1(Operation receipt 实体 + `IdentityHash`)
-- 当前阶段: exec(已完成,**未勾选**)
-- 上一轮: Round 2 — 按 Plan 落地 4 个文件:`Entities/WfEnums.cs`(+`WfCommandType` 8 值 / `WfTargetType` 3 值)、`Entities/WfOperationReceipt.cs`(`BaseEntity` + `uk_wf_receipt_identity` 唯一索引)、`Engine/WfIdentityHash.cs`(静态 `Compute`,SHA-256 小写 hex)、`tests/WfIdentityHashTests.cs`(11 例)。`dotnet build -c Release` **0 错 0 警**;指定过滤器 **201/201 绿**(基线 190 + 11)。**计划外补了一条 `Enum.IsDefined` 守卫**(未定义枚举值会让 `ToString()` 退化成数字、把数值混进本该是枚举名的契约)——已配套测试,**留待 review 裁定是否保留**。
-- 下一步: Round 3 — **Task 1 review**(独立复核,自审须在 `## Findings` 声明)。必做:①亲手跑 `dotnet test --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"`;②**变异点**至少三处转红验证——改分隔符 `'\n'`→`'|'`、把拼接顺序里 `TargetId` 与 `ActorUserId` 对调、把 `ScopeSentinel` 从 `"-"` 改成 `""`,每处确认快照用例转红后**复原**;③核对 D1–D8 是否被 exec 二次发挥(尤其 `Enum.IsDefined` 这条计划外守卫);④确认没碰 `ExecuteAsync`/DTO/Controller/前端。**仍不勾选**,除非 0×P1 / 0×未修 P2。
+- 当前任务: 1(**已勾选**)→ 下一任务 2
+- 当前阶段: review 完成 + 勾选(0×P1 / 0×阻塞 P2)
+- 上一轮: Round 3 — Task 1 review。**自审**(会话规则禁止未经用户要求派子 agent),用三处变异转红替代第二双眼睛:分隔符、`TargetId`↔`ActorUserId` 顺序、`ScopeSentinel` 各自转红后复原;D1–D8 逐条核对通过;改动面只含计划内 4 文件。全过滤器 **201/201 绿**。计划外的 `Enum.IsDefined` 守卫裁定**保留**(是 D7 的执行保障,非新决策)。Task 1 已打勾;三条跨任务待办进 `## Findings`(Task 4 卡 `RequestId` ≤64 是 **P2**)。
+- 下一步: Round 4 — **Task 2 plan only**(`IWfOperationReceiptService` + 引擎事务内挂钩)。plan 前必读:①`## Findings` 的跨任务待办(P3→Task 2 两条);②`Engine/WorkflowEngine.cs` 的 `ExecuteAsync`(`UseTranAsync` 是唯一事务入口,receipt 钩子挂这一处即覆盖 8 个写命令,但须显式排除 `TimeoutFireCmd`);③`WorkflowReplaceabilityTests` 现有六件套写法(Task 2 要补一面);④`WorkflowSetup.cs` 的 `TryAdd*` 注册风格。**本轮只 plan,不写产品代码,不勾选。**
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -149,7 +149,7 @@
 
 > 任务顺序 = 依赖顺序。编号稳定;`## Log` 引用任务号。
 
-- [ ] **1. Operation receipt 实体 + `IdentityHash`**:新增 `wf_operation_receipt`(`WfOperationReceipt`)、`IdentityHashBuilder`(或同级静态类)、唯一索引 on `IdentityHash`、**无 HTTP** 的快照/归一化单元测试(已知输入 → 已知 hash,四库同一算法)。`CommandType`/`TargetType` 枚举或常量表在实现任务定稿。依据:数据库评审 §五。
+- [x] **1. Operation receipt 实体 + `IdentityHash`**:新增 `wf_operation_receipt`(`WfOperationReceipt`)、`IdentityHashBuilder`(或同级静态类)、唯一索引 on `IdentityHash`、**无 HTTP** 的快照/归一化单元测试(已知输入 → 已知 hash,四库同一算法)。`CommandType`/`TargetType` 枚举或常量表在实现任务定稿。依据:数据库评审 §五。
 - [ ] **2. Receipt 服务 + 引擎事务内挂钩**: `IWfOperationReceiptService`(或引擎内 `virtual` 步骤,须 `TryAdd`) — `TryBeginAsync`(查已有 / 占位)与 `CommitAsync`(同事务写 `ResultJson`);与 `WorkflowEngine.BeginXxxAsync` 事务边界对齐。失败路径:业务抛错 → receipt 随事务回滚。`WorkflowReplaceabilityTests` 补一面。
 - [ ] **3. `WfInstance.CompletedTime`**:实体列 + 终态写入落点(`TakeTransitionOp`/`CompleteTaskOp` 终止分支等);CodeFirst 可空或带默认值;旧行回填策略按评审 §十(可从 `InstanceCompleted` 事件回填,测一条即可)。**不改** receipt 行为。
 - [ ] **4. 写命令 DTO + Controller 收 `RequestId`**: `Start/Approve/Reject/Transfer/Delegate/Return/Cancel/Resubmit` 输入 DTO 增 `RequestId`(或 `IdempotencyKey`,plan 阶段二选一对外名、另一名作别名/映射);Controller 透传。OpenAPI 变更 → 留给 Task 10 `gen:api`。**不含 Urge**(默认)。
@@ -172,9 +172,33 @@
 4. **M2b CAS 不重写** — M2c 测试建立在现有 `Claim*Async` 之上;四库套件验证方言差异,不替换单库 190 条回归。
 5. **`CompletedTime` 与 receipt 独立** — Task 3 不得夹带 receipt 逻辑,避免 review 范围膨胀。
 
-### 待 plan/exec 填充
+### Task 1 review(Round 3,2026-08-31)
 
-- (空)
+> **⚠ 自审声明**:本次 review 与 exec 由**同一 context** 完成(会话规则禁止未经用户要求就派子 agent),不满足「换人复核」。已用**变异测试**替代第二双眼睛:三处变异各自转红后复原,见下表。Task 2 起若条件允许,应换 agent 做 review。
+
+**跑过的闸门**:`dotnet build -c Release` 0 错 0 警;`dotnet test --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"` → **201/201 绿**;变异后已 `git checkout` 复原,`git status` 干净。
+
+**变异点验证**(每处只改 `Engine/WfIdentityHash.cs` 一行,跑 `~WfIdentityHashTests` 后复原):
+
+| 变异 | 结果 | 说明 |
+|---|---|---|
+| 分隔符换行符 → 竖线 | **红 2/11** | `Snapshot_of_a_known_tuple_is_frozen` + `Values_containing_the_separator_are_rejected` |
+| 拼接顺序 `TargetId` ↔ `ActorUserId` 对调 | **红 1/11** | 只有快照抓得到——`Different_dimensions_do_not_collide` 抓不到(两侧同步换位)。**顺序契约只由快照守**,这条测试不可删 |
+| `ScopeSentinel` 从 `-` 改成空串 | **红 1/11** | 快照的无机构用例转红;哨兵归一化用例因两侧同变而仍绿,同上 |
+
+**首次尝试的教训**:第一次改分隔符用 `sed` 转义写错,文件根本没变却报「测试全绿」——**变异测试必须先 `grep` 确认文件真的改了**,否则那个「绿」是假的。已重做并确认转红。
+
+**核对 D1–D8**:D1(`BaseEntity` 非 `DataEntity`)✅ / D2(表名 + 唯一索引 + 辅助索引)✅ / D3(9 字段与评审 §五一致)✅ / D4(8 值,无 Urge/Timeout)✅ / D5(`Start` 锚 `DefinitionVersion`)✅ / D6(哨兵 + RequestKey 抛异常)✅ / D7(顺序/分隔符/InvariantCulture/枚举名/SHA-256 小写 hex)✅ / D8(静态类,不建接口)✅。`git diff --name-only HEAD~1` 只含计划内 4 文件 + 台账,**未碰** `ExecuteAsync`/DTO/Controller/前端 ✅。
+
+**计划外守卫裁定**:`Enum.IsDefined` 两条 —— **保留**。它不是新决策,而是 D7「枚举用枚举名」的执行保障(未定义值会让 `ToString()` 退化成 `"99"`,把数值悄悄写进不可逆契约);4 行 + 1 条测试,无扩面。记为**已声明的计划外增量**,不计 P1/P2。
+
+**P1**:0 条。**P2(阻塞 Task 1)**:0 条。→ 满足勾选条件。
+
+### 跨任务待办(不阻塞 Task 1,后续任务必须消化)
+
+- **P2 → Task 4**:`RequestKey` / `ScopeKey` 列宽都是 **64**,而 `WfIdentityHash.Compute` 对长度不设限。写命令 DTO 必须把 `RequestId` 卡在 **≤64**(配一条超长即拒的测试):否则 MySQL 非严格模式静默截断诊断列(identity 由完整值算出,不受影响,但排查时看到的是截断值),严格方言下直接插入报错。
+- **P3 → Task 2**:落库的 `ScopeKey`/`RequestKey` 必须写**归一化后**的值(哨兵 + `Trim()`,复用 `WfIdentityHash.ScopeSentinel`),不能一边存原值一边用归一化值算 hash,否则诊断列与 identity 对不上。
+- **P3 → Task 2/5**:`ResultCode` 是 `int`,`TenonAdmin.Core.ErrorCode` 也是 int 枚举;映射时 `0` 恒表示成功,别让 `ErrorCode` 的某个具体值落到 `0`。
 
 ## Log
 
@@ -184,6 +208,7 @@
 | 0b | handoff | 补 `## Loop 纪律` + `wf-m2c-handoff.md`;用户要求「严格按 loop」接续。 |
 | 1 | plan | Task 1 plan 定稿:receipt 用 `BaseEntity`+显式 `ScopeKey`(避开数据范围过滤器)、唯一索引 on `IdentityHash`、`WfCommandType`(8 值,排除 Urge/Timeout)/`WfTargetType`(Start 锚 DefinitionVersion)、换行符分隔 + SHA-256 小写 hex、RequestKey 空值抛异常。锚点:`ExecuteAsync` 是唯一事务入口,Task 2/5 挂一处即可。未写产品代码。 |
 | 2 | exec | Task 1 落地 4 文件:`WfCommandType`/`WfTargetType` 枚举、`WfOperationReceipt`(`BaseEntity`,唯一索引 on `IdentityHash`)、静态 `WfIdentityHash.Compute`、`WfIdentityHashTests` 11 例(含两条冻结快照常量)。build 0 错 0 警;过滤器 **201/201**(190+11)。计划外补 `Enum.IsDefined` 守卫,交 review 裁定。未勾选。 |
+| 3 | review+勾选 | Task 1 自审(已声明):三处变异(分隔符 / `TargetId`↔`ActorUserId` / 哨兵)各转红后复原,D1–D8 全对,改动面无溢出,全过滤器 201/201。`Enum.IsDefined` 计划外守卫裁定保留。**Task 1 打勾**。新增跨任务待办:P2→Task 4(`RequestId` 长度 ≤64)、P3→Task 2(落库存归一化值)、P3→Task 2/5(`ResultCode` 0=成功)。教训:变异测试要先 grep 确认文件真改了,否则「绿」是假的。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
