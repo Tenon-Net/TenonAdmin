@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 3
+- 轮次: 4
 - max: 45
-- 当前任务: 1(**已勾选**)→ 下一任务 2
-- 当前阶段: review 完成 + 勾选(0×P1 / 0×阻塞 P2)
-- 上一轮: Round 3 — Task 1 review。**自审**(会话规则禁止未经用户要求派子 agent),用三处变异转红替代第二双眼睛:分隔符、`TargetId`↔`ActorUserId` 顺序、`ScopeSentinel` 各自转红后复原;D1–D8 逐条核对通过;改动面只含计划内 4 文件。全过滤器 **201/201 绿**。计划外的 `Enum.IsDefined` 守卫裁定**保留**(是 D7 的执行保障,非新决策)。Task 1 已打勾;三条跨任务待办进 `## Findings`(Task 4 卡 `RequestId` ≤64 是 **P2**)。
-- 下一步: Round 4 — **Task 2 plan only**(`IWfOperationReceiptService` + 引擎事务内挂钩)。plan 前必读:①`## Findings` 的跨任务待办(P3→Task 2 两条);②`Engine/WorkflowEngine.cs` 的 `ExecuteAsync`(`UseTranAsync` 是唯一事务入口,receipt 钩子挂这一处即覆盖 8 个写命令,但须显式排除 `TimeoutFireCmd`);③`WorkflowReplaceabilityTests` 现有六件套写法(Task 2 要补一面);④`WorkflowSetup.cs` 的 `TryAdd*` 注册风格。**本轮只 plan,不写产品代码,不勾选。**
+- 当前任务: 2(Receipt 服务 + 引擎事务内挂钩)
+- 当前阶段: plan(已完成)
+- 上一轮: Round 4 — 写完 Task 2 的 `## Plan`(E1–E8 + 7 文件改动清单 + 8 条测试 + 陷阱)。**未写产品代码**。关键取舍:①**占位在前**(事后插回执挡不住并发双提交);②唯一冲突用 **SELECT→INSERT→SELECT**,不解析四库错误码;③把归一化提成 `WfIdentityHash` 的两个 public static,让入库值与 hash 同源(消化 P3);④**业务失败不落回执**(整事务回滚);⑤可替换性九件套 → **十件套**。已划清与 Task 5 的边界:本轮不碰 `ExecuteAsync`/命令 DTO/服务层签名。
+- 下一步: Round 5 — **Task 2 exec**。按 `## Plan` 步骤 1–8 只碰 7 个文件。**第一步做完 E3 提取重构就要先跑 `~WfIdentityHashTests`,确认 11/11 仍绿**(快照转红 = 破坏了不可逆契约,立即撤回)。收尾跑 `dotnet build -c Release` + 指定过滤器(当前 201,预计 ≈210)。**不勾选**,勾选等 Round 6 的 review。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -90,58 +90,68 @@
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段重写)
 
-> **Task 1 — Operation receipt 实体 + `IdentityHash`**(Round 1 写于 2026-08-31;读了数据库评审 §五/§八/§九、设计规划 §14.2/§15.1、`WfCc`/`WfHistory`/`WfInstance` 实体、`BaseEntity`/`DataEntity`/`IOrgScoped` 定义、`WorkflowEngine.ExecuteAsync`、`WfCommands.cs`、`WorkflowSetup.cs`)。
+> **Task 2 — Receipt 服务 + 事务内挂钩**(Round 4 写于 2026-08-31)。已读:`## Findings` 跨任务待办、`WorkflowSetup.cs` 全文、`Abstractions/IWorkflowEngine.cs`、`WorkflowEngine.ExecuteAsync`、`WfInstanceService`/`WfTaskService` 的 7 处命令构造点、`WorkflowReplaceabilityTests`(现「九件套」)、`WorkflowAppFactory`、`WfVersionCasTests` 的射程声明写法。
+> **Task 1 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
+
+### 边界(先划清,免得和 Task 5 打架)
+
+- **Task 2 = 回执的持久化 SPI 本身**:查已有 / 占位 / 回填 / 回滚语义 / `TryAdd` 可替换面 / 直接对服务的测试。
+- **Task 5 = 把它挂到 `ExecuteAsync`** 并让 8 个写命令携带 `RequestKey`。**本轮不碰 `ExecuteAsync`、不碰命令 DTO、不碰服务层签名。**
+- 只有 `StartInstanceCmd` 带机构(`StarterOrgId`),其余命令都没有 —— `ScopeKey` 怎么贯穿是 **Task 4/5** 的事,Task 2 只保证「给什么都能正确归一化并算出同一 identity」。
 
 ### 决策点(exec 不得二次发挥)
 
-| # | 决策 | 依据 / 理由 |
+| # | 决策 | 理由 |
 |---|---|---|
-| D1 | 基类用 **`BaseEntity`**,**不用 `DataEntity`** | `DataEntity` 带 `IOrgScoped` → 吃全局数据范围过滤器(只作用于 SELECT)。窄范围用户重试时**可能查不到自己刚写的 receipt** → 幂等静默失效、重复推进。机构维度改由显式**非空** `ScopeKey` 列承载,正是评审 §五「不要直接依赖包含 nullable `CreateOrgId` 的组合唯一索引」。`BaseEntity` 与同为 append-only 的 `WfHistory` 先例一致,且 `IRepository<>`/种子仍可用(`AuditEntity` 用不了仓储)。 |
-| D2 | 表 `wf_operation_receipt`;唯一索引 `uk_wf_receipt_identity` on `IdentityHash`(`IsUnique = true`);辅助 `idx_wf_receipt_target` on `(TargetType, TargetId)` 仅排查用 | 评审 §八表格;唯一索引写法照 `SysJob` 的 `uk_sys_job_code` 先例 |
-| D3 | 字段(评审 §五清单,顺序照抄):`ScopeKey`(Length 64,非空)、`CommandType`、`TargetType`、`TargetId`、`ActorUserId`、`RequestKey`(Length 64,非空)、`IdentityHash`(Length 64,非空)、`ResultCode`(int,0=成功)、`ResultJson`(BigString,可空);`Id`/`CreateTime`/审计由 `BaseEntity` 提供 | 评审 §五。`ResultJson` 存序列化后的 `WfEngineResult`,Task 2 才写入 |
-| D4 | 新枚举 `WfCommandType`:`Start=1, Approve=2, Reject=3, Transfer=4, Delegate=5, Return=6, Cancel=7, Resubmit=8`;**不含 Urge / Timeout** | §14.2 列举的 8 个写命令。`Approve`/`Reject` 虽同属 `CompleteTaskCmd`,但**必须是两个 identity**(同人同任务同 key 先拒后批不能命中同一 receipt)。枚举只追加不重排(评审 §九 #6);`Urge` 见 `## 语义契约` 默认不进 receipt |
-| D5 | 新枚举 `WfTargetType`:`Instance=1, Task=2, DefinitionVersion=3`。**`Start` 命令 `TargetType=DefinitionVersion`、`TargetId=DefinitionVersionId`** | 发起时实例尚不存在,没有 InstanceId 可锚;`(defVerId, actor, requestKey)` 足以定死一次发起 |
-| D6 | 哨兵:`ScopeKey` 为 null / 空白 → 固定 `"-"`;**`RequestKey` 为 null/空白直接 `ArgumentException`**,不归一化 | 评审 §五「可空维度归一化为固定哨兵」。RequestKey 反向处理:「没传 key」和「传了空 key」若共享 identity,会让所有未传 key 的请求互相命中,比不幂等更危险。上层校验在 Task 4 |
-| D7 | 拼接:六段按 `ScopeKey → CommandType → TargetType → TargetId → ActorUserId → RequestKey` 顺序,分隔符 `'\n'`;`long` 用 `InvariantCulture` 十进制;字符串 `Trim()` 后**保留大小写**;枚举用**枚举名字符串**(`nameof` 语义,非数值);UTF-8 → SHA-256 → **小写 hex**(`Convert.ToHexStringLower`) | 评审 §五全部六条细则。用枚举名而非数值:将来枚举值若因合并追加而变动,名字仍稳 |
-| D8 | 落点:实体 `Entities/WfOperationReceipt.cs`;两个枚举追加进 `Entities/WfEnums.cs`;算法 `Engine/WfIdentityHash.cs` 的 **静态类**(`WfIdentityHash.Compute(...)`) | 不建接口——单实现的 seam 是 Task 2 的 `IWfOperationReceiptService`,hash 本身是纯函数,做成接口只会让「可替换」把不可逆契约变成可替换契约,与 §15.1 冲突 |
+| E1 | 接口 `IWfOperationReceiptService`(`Abstractions/`),两个方法:`TryBeginAsync(WfOperationIdentity, ct)` → **`WfOperationReceipt?`**(`null` = 新占位成功、继续执行;非 `null` = 已有回执、调用方短路返回它);`CommitAsync(WfOperationIdentity, int resultCode, string? resultJson, ct)` → 回填占位行 | 一个返回值表达两种结局,不套 wrapper 类。名字沿用台账 Task 2 的 `TryBeginAsync`/`CommitAsync` |
+| E2 | **占位在前(reserve-first)**,不是「执行成功后再插回执」 | 事后插入挡不住并发双提交:两边都已推进状态,第二个只能拿到 `TaskConflict` —— 那正是 M2c 要消灭的现象。占位行走唯一索引,第二个请求会阻塞到第一个提交/回滚,拿到确定结果 |
+| E3 | **归一化只有一份**:把 `ScopeKey`/`RequestKey` 的 trim + 哨兵逻辑从 `WfIdentityHash.Compute` 里提成两个 `public static`(`NormalizeScopeKey` / `NormalizeRequestKey`),`Compute` 与新的 `WfOperationIdentity.Create` 都调它 | 消化 `## Findings` 的 **P3 → Task 2**:落库值必须与算 hash 的值同源。两处各写一遍 trim/哨兵 = 分叉风险,正是评审 §五最担心的。**这是对已勾选 Task 1 文件的唯一允许改动**,且 Task 1 的快照测试就是它的防回归证据(转红 = 改坏了不可逆契约) |
+| E4 | 新值对象 `WfOperationIdentity`(`Engine/`),`Create(...)` 静态工厂:归一化六维 + 当场算出 `IdentityHash`,只读属性 | 服务与将来的引擎钩子都拿同一个对象,不再各自传 6 个散参、也不可能出现「入库值 ≠ 算 hash 的值」 |
+| E5 | 实现类 `Services/WfOperationReceiptService.cs`,注入 `IRepository<WfOperationReceipt>`,读写都走它的 `.Db` | 同一个 `SqlSugarScope` 单例 → 自动落在调用方的 `UseTranAsync` 事务里(Task 5 挂钩后即与领域状态同事务)。`IRepository<>` 可用正是 D1 选 `BaseEntity` 的红利 |
+| E6 | 唯一键冲突**不解析数据库错误码**:`TryBeginAsync` = SELECT → 未命中则 INSERT → **INSERT 抛异常时再 SELECT 一次**,查到就当命中返回,查不到才原样抛 | 四库错误码/异常类型各不相同,解析它是方言陷阱;二次 SELECT 是 provider-neutral 的等价判据 |
+| E7 | **业务失败不落回执**:`ResultCode` 只写 `0`(成功)。业务抛错 → 整事务回滚 → 占位行一并消失 → 重试可再试 | 与 `## 语义契约`「receipt 事务边界」一致。把失败也幂等化会让「改完权限再重试」永远拿到旧的失败,不是本里程碑要的语义。`ResultCode` 字段保留给将来 |
+| E8 | DI:`services.TryAddScoped<IWfOperationReceiptService, WfOperationReceiptService>();` 挂在 `WorkflowSetup` 的引擎注册附近;`WorkflowReplaceabilityTests` 从**九件套变十件套**(类注释同步改) | 内置服务一律 `TryAdd`(内核第一原则);九件套是契约测试,新增一面必须同时补钉子和文档 |
 
-### 改动清单(exec 只允许碰这 4 个文件)
+### 改动清单(exec 只允许碰这 7 个文件)
 
-1. `backend/src/TenonAdmin.Workflow/Entities/WfOperationReceipt.cs` — 新增实体(SugarTable + 2 个 SugarIndex)
-2. `backend/src/TenonAdmin.Workflow/Entities/WfEnums.cs` — 追加 `WfCommandType`、`WfTargetType`
-3. `backend/src/TenonAdmin.Workflow/Engine/WfIdentityHash.cs` — 新增静态算法类 + XML doc 明写「发包后不可逆」
-4. `backend/tests/TenonAdmin.Tests/WfIdentityHashTests.cs` — 新增纯单元测试(**无 HTTP、无 AppFactory**)
-
-**无需**改 `WorkflowSetup.cs`:实体走 `ApplicationAssemblies` 程序集扫描(`WorkflowSetup.cs:28-30`),新表 CodeFirst 自动建。
+1. `backend/src/TenonAdmin.Workflow/Abstractions/IWfOperationReceiptService.cs` — 新增 SPI
+2. `backend/src/TenonAdmin.Workflow/Engine/WfOperationIdentity.cs` — 新增值对象 + `Create`
+3. `backend/src/TenonAdmin.Workflow/Services/WfOperationReceiptService.cs` — 新增实现
+4. `backend/src/TenonAdmin.Workflow/Engine/WfIdentityHash.cs` — **仅** E3 的提取重构(不改算法)
+5. `backend/src/TenonAdmin.Workflow/WorkflowSetup.cs` — `TryAddScoped` 一行
+6. `backend/tests/TenonAdmin.Tests/WorkflowReplaceabilityTests.cs` — 补第十面 + 类注释九→十
+7. `backend/tests/TenonAdmin.Tests/WfOperationReceiptTests.cs` — 新增服务级测试
 
 ### 步骤
 
-1. 追加两个枚举 → 2. 写实体 → 3. 写 `WfIdentityHash.Compute` → 4. 写测试(先手算/先跑一次拿到 hex,再**写死成字面量常量**) → 5. `dotnet build -c Release` → 6. 跑指定过滤器闸门(基线 190,本 Task 后应为 190+8 左右)。
+1. E3 提取归一化 → 立刻跑 `~WfIdentityHashTests` 确认 **11/11 仍绿**(快照不动 = 重构无副作用) → 2. `WfOperationIdentity` → 3. 接口 → 4. 实现 → 5. DI + 第十面 → 6. `WfOperationReceiptTests` → 7. `dotnet build -c Release` → 8. 指定过滤器闸门(当前 201,本 Task 后应 ≈ 210)。
 
-### 测试清单(`WfIdentityHashTests`,≥8 条)
+### 测试清单(`WfOperationReceiptTests`,7 条 + 可替换性 1 面)
 
-1. **快照**:固定六元组 → 写死的 64 位 hex 常量(任何算法改动都转红 = §15.1 的不可逆锁)
-2. `ScopeKey = null` 与 `ScopeKey = "-"` **同 hash**(哨兵归一化)
-3. `ScopeKey = ""` / `"   "` 与 null **同 hash**
-4. `RequestKey` 为 null / `""` / `"  "` → `ArgumentException`
-5. **换位不撞车**:`Approve` vs `Reject`、`Instance` vs `Task`、`TargetId`↔`ActorUserId` 互换 → 三对 hash 各不相同
-6. 值前后空白 `Trim` 后同 hash;大小写不同 → 不同 hash
-7. 输出格式:`^[0-9a-f]{64}$`
-8. 长度自洽:`Compute(...).Length == 64`(与实体 `Length = 64` 对齐,写成断言而非注释)
+1. `TryBeginAsync` 首次返回 `null`,且库里落了一行占位(按 hash 查得到)
+2. 同 identity 第二次 `TryBeginAsync` 返回**已有回执**,`ResultJson` 与第一次 `CommitAsync` 写入的一致
+3. `CommitAsync` 只回填不新增:行数仍为 1,`ResultCode == 0`
+4. **回滚不残留**:在 `UseTranAsync` 里 `TryBeginAsync` 后抛异常 → 事务失败 → 按 hash 查为空(这条是 E2/E7 的核心钉子)
+5. 归一化同源:`scopeKey = null` 与 `= "-"` 命中同一行;入库 `ScopeKey` 恰为哨兵、`RequestKey` 为 trim 后的值
+6. 不串味:仅 `RequestKey` 不同 / 仅 `CommandType` 不同(Approve vs Reject)→ 两行互不命中
+7. 同源钉子:`WfOperationIdentity.Create(x).IdentityHash == WfIdentityHash.Compute(x)`(逐参数对照)
+8. `WorkflowReplaceabilityTests`:前置注册 `FakeReceiptService` 胜出内置(把 `TryAdd` 退化成 `Add` 即红)
 
 ### 陷阱
 
-- **别用 `DataEntity`**(D1);别给 receipt 加软删业务语义——`IsDelete` 来自 `BaseEntity`,永不置真。
-- 分隔符必须是**参与值里不可能出现**的字符;`RequestKey` 由客户端给,若将来允许含 `\n` 需在 builder 里显式拒绝——本轮 builder 对含 `'\n'` 的输入**抛异常**,别让它悄悄产生歧义 hash。
-- `Convert.ToHexStringLower` 是 .NET 9+ API,本仓 `net10.0` 可用;不要退回 `BitConverter.ToString().Replace("-","")`。
-- 不要用 `string.GetHashCode()`/`HashCode.Combine`(进程内随机化,跨库不稳)。
-- 本 Task **不碰** `WorkflowEngine.ExecuteAsync`、命令 DTO、Controller、前端——那是 Task 2/4/5。
-- 不提交 `backend/tests/TenonAdmin.Tests/TestResults/`(已在工作区未跟踪,别 `git add -A`)。
+- **别解析数据库错误码**判唯一冲突(E6);别在 `catch` 里吞掉非唯一冲突的异常。
+- **别把业务失败写进回执**(E7);别在 `TryBeginAsync` 里自己开事务——它必须跑在调用方的事务里,自己开会把占位行提前提交、回滚不掉。
+- 改 `WfIdentityHash` **只允许**提取归一化方法这一种重构:签名、顺序、分隔符、算法、输出格式一个字都不能动;`Snapshot_of_a_known_tuple_is_frozen` 转红就是改坏了。
+- `IRepository<WfOperationReceipt>.DeleteAsync` 是**软删**,回执永不删,别用它清理测试数据。
+- 可替换性测试的类注释写着「九件套」,加了第十面必须同步改,否则文档与钉子对不上。
+- 本轮**不碰** `ExecuteAsync` / 命令 DTO / 服务层签名 / 前端(Task 4/5)。
+- 测试用 `WorkflowAppFactory` 起真实 Host 取 `IWfOperationReceiptService` 与 `ISqlSugarClient`;**射程要写清**:并发交错构造不出来,第 4 条钉的是「同事务回滚」而非真并发(照 `WfVersionCasTests` 的射程声明写法),别把它吹成并发证明。
+- 不提交 `TestResults/`。
 
 ### 给后续 Task 的锚点(本轮只记录,不实施)
 
-- **事务唯一入口是 `WorkflowEngine.ExecuteAsync`**(`Engine/WorkflowEngine.cs:36` 的 `db.Ado.UseTranAsync`),8 个 `BeginXxxAsync` 都在这一个事务里。**Task 2/5 的 receipt 钩子挂 `ExecuteAsync` 一处即可覆盖全部 8 个写命令**,不必改 8 个方法——但 `TimeoutFireCmd` 也走这里,须按 D4 显式排除(超时不是客户端重试)。
-- 通知静默吞异常在 `Engine/WorkflowEngine.cs:83` 与 `:94` 两处 `catch (Exception)` —— Task 7 的落点。
+- Task 5 挂钩落点:`ExecuteAsync` 的 `UseTranAsync` 内、`command switch` **之前**做 `TryBeginAsync`,`ctx.ToResult()` **之后**做 `CommitAsync`;`TimeoutFireCmd` 显式跳过(D4)。
+- Task 4 的 P2 仍在:`RequestId` 长度必须 ≤64,与 `RequestKey` 列宽对齐。
 
 <!-- TASK1-PLAN-ANCHOR -->
 
@@ -209,6 +219,7 @@
 | 1 | plan | Task 1 plan 定稿:receipt 用 `BaseEntity`+显式 `ScopeKey`(避开数据范围过滤器)、唯一索引 on `IdentityHash`、`WfCommandType`(8 值,排除 Urge/Timeout)/`WfTargetType`(Start 锚 DefinitionVersion)、换行符分隔 + SHA-256 小写 hex、RequestKey 空值抛异常。锚点:`ExecuteAsync` 是唯一事务入口,Task 2/5 挂一处即可。未写产品代码。 |
 | 2 | exec | Task 1 落地 4 文件:`WfCommandType`/`WfTargetType` 枚举、`WfOperationReceipt`(`BaseEntity`,唯一索引 on `IdentityHash`)、静态 `WfIdentityHash.Compute`、`WfIdentityHashTests` 11 例(含两条冻结快照常量)。build 0 错 0 警;过滤器 **201/201**(190+11)。计划外补 `Enum.IsDefined` 守卫,交 review 裁定。未勾选。 |
 | 3 | review+勾选 | Task 1 自审(已声明):三处变异(分隔符 / `TargetId`↔`ActorUserId` / 哨兵)各转红后复原,D1–D8 全对,改动面无溢出,全过滤器 201/201。`Enum.IsDefined` 计划外守卫裁定保留。**Task 1 打勾**。新增跨任务待办:P2→Task 4(`RequestId` 长度 ≤64)、P3→Task 2(落库存归一化值)、P3→Task 2/5(`ResultCode` 0=成功)。教训:变异测试要先 grep 确认文件真改了,否则「绿」是假的。 |
+| 4 | plan | Task 2 plan 定稿(E1–E8):`IWfOperationReceiptService` 两方法(`TryBeginAsync` 返回 `WfOperationReceipt?`/`CommitAsync` 回填);**占位在前**;唯一冲突走 SELECT→INSERT→SELECT 不碰方言错误码;新值对象 `WfOperationIdentity` + 归一化提取到 `WfIdentityHash`(入库值与 hash 同源,消化 P3);业务失败不落回执;可替换性九件套→十件套。边界:不碰 `ExecuteAsync`/DTO/服务签名(那是 Task 5)。未写产品代码。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
