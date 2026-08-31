@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 15
+- 轮次: 16
 - max: 45
 - 当前任务: 6(`wf_history.RequestId`)
-- 当前阶段: 待 plan(Task 5 已勾选)
-- 上一轮: Round 15 — Task 5 review(自审)+ 修 1×P2 + 勾选。五处变异:①去短路 red 2/8、②短路返回空结果 red 2/8、③资格判断放宽成 `is WfWriteCmd` red **8/8**(空 key 进 `NormalizeRequestKey` 直接抛,整条路全塌 —— 正是 G4 要防的 500)、④`CommandType` 写死 `Approve` red 1/8。**⑤`CommitAsync` 挪出事务:八条全绿 → P2**,当场补 `The_receipt_is_committed_inside_the_domain_transaction`(测试替身在 `CommitAsync` 里用 `db.Ado.IsAnyTran()` 记录是否仍在事务中),再跑变异⑤ red 1/9。另记两条覆盖真相(「串行重放」的 `wf_his_task` 计数是**够不着的断言**;超时那条 `hours = 0` 语义)。闸门:全量 Release 0 错、工作流包 0 警;过滤器 **234/234**。
-- 下一步: Round 16 — **Task 6 plan**(不写产品代码)。读 `Engine/WfExecutionContext.cs` 的 `AppendHistoryAsync` 全部调用点与 `WfHistory` 实体、`Entities/WfEnums.cs` 的 `WfHistoryEventType`,定:①`wf_history.RequestId` 列的可空性与列宽(与 `wf_operation_receipt.RequestKey` 同为 64,取**归一化后**的值);②值从哪来 —— Task 5 已在 `ExecuteAsync` 解析出 `identity.RequestKey`,**挂到 `WfExecutionContext` 上**即可,禁止从命令上再取第二遍(台账 Task 5 锚点);③`TimeoutFireCmd` 与无 key 请求写 `null`;④台账 Task 6 原文的二选一 —— 「重复请求不重复追加可观测历史」在 Task 5 落地后**已经由短路免费保证**(命中回执压根不进 `switch`,`AppendHistoryAsync` 一次都不会跑),plan 要把这条明确写进契约而不是再造一个机制;⑤测试清单(带 key 的写命令历史行有值、无 key 的为 null、超时的为 null、重放不新增历史行)+ 变异点。
+- 当前阶段: plan(已定稿,**未写产品代码**)
+- 上一轮: Round 16 — Task 6 plan 定稿(J1–J8)。读码定死四件事:①20 个 `AppendHistoryAsync` 调用**全部**收敛到 `WfExecutionContext` 里那一条 `Insertable`,列值只赋一行;②绕开 ctx 直插 `WfHistory` 的只有 4 处(超时 ×3 + 催办 ×1),它们**不设该属性即为 null**,一个字都不用改 —— 这是语义不是疏漏;③`BeginStartAsync` **构造完 ctx 立刻**写 `InstanceStarted`,所以「switch 之后再赋值」会漏掉每条命令最有价值的第一行,该路排除,改在 8 处构造各带一行,并把属性声明成 **`required`** 让编译器兜底(将来加第 9 个 Begin 忘了带 = 编译错误);④台账 Task 6 的二选一由 Task 5 的短路**免费解决**(命中回执压根不进 `switch`),只补钉子不建新机制。另显式复核了 Task 5 锚点「禁止再取第二遍」:值取 `cmd.RequestId` 是对的 —— 那禁的是重新归一化出第二条路径,而 `cmd.RequestId` 就是 Task 4 那份唯一归一化的结果(J5)。改动面 **4 个文件**,6 条用例 + 5 个变异点已列。
+- 下一步: Round 17 — **Task 6 exec**(按 J1–J8 实现,**不勾选**)。顺序:`WfHistory` 加可空 64 列 → ctx 加 `required string? RequestId`(**先加 `required`,按编译错误逐个补 8 处构造,别肉眼数**)→ `AppendHistoryAsync` 赋一行 → `WfHistoryRequestIdTests` 六条(第 1 条专钉「构造时就带上」)→ 全量 `--no-incremental` Release 构建判警告 → 过滤器闸门(234 → 约 240)。**只许碰 4 个文件**;若 `required` 把测试里的 `new WfExecutionContext` 也炸出来,照 Round 14 先例先质疑再记录。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -85,6 +85,8 @@
 | 对外字段名 | 定为 **`requestId`**(Round 10),**不设别名**、不做 `IdempotencyKey` 映射;命令层归一化:`null`/纯空白 → `null`(=本次不做幂等),否则 `Trim()`;>64 或含换行 → `RequestIdInvalid`(48028) |
 | 并发败者 | 唯一冲突后若查不到赢家(赢家尚未提交)→ **该请求失败**,但**绝不推进第二次**;客户端再重试一次才拿到首次结果。不为此跨事务等待赢家提交(Round 13 H8) |
 | 回执结果 JSON | 用 `WfModelJson.Options` 序列化 `WfEngineResult`;`ResultCode` 恒 `0`(业务失败随事务回滚,压根不落回执)。**`WfEngineResult` 今后只增可选字段** —— 新增 `required` 成员会让旧回执反序列化整条抛异常 |
+| 重放与历史 | 台账 Task 6 的二选一定为 **「命中回执根本不进引擎」**(Round 16 J7):短路发生在 `switch` 之前,`AppendHistoryAsync` 一次都不会跑,所以重放天然不追加历史。**不另建去重机制** |
+| `wf_history.RequestId` | 与 `wf_operation_receipt.RequestKey` **同源不同名**(两张表的既有命名,不统一)。无请求身份的写入(超时 ×3、催办 ×1,都绕开 ctx)一律 `null`,**不是空串** |
 | 催办 | **默认不进 receipt**(可重复催办);翻转须改本表并补测试 |
 | 通知失败 | 不得拖垮审批事务;但必须**结构化日志**(至少 `ILogger`)+ 可计数指标钩子;禁止继续纯静默 |
 | `CompletedTime` | 实例进入终态时写入;旧数据可从 `InstanceCompleted` 事件回填,无法确定保持空 |
@@ -93,94 +95,77 @@
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段重写)
 
-> **Task 5 — 引擎写路径接 receipt**(Round 13 写于 2026-08-31)。已读:`Engine/WorkflowEngine.cs` 的 `ExecuteAsync` 事务边界与 8 分支 `switch`、`DispatchPendingNotificationsAsync`、`WfExecutionContext.ToResult()`、`IWfOperationReceiptService` 两方法注释、`WfOperationReceiptService` 实现全文、`WfOperationIdentity.Create`、`WfOperationReceipt` 全字段、`WfCommandType`(8 值)/`WfTargetType`(3 值)、`WfModelJson.Options`、`WorkflowSetup` 的两处 `TryAddScoped`、`WfTimeoutJob` 的引擎调用点。
-> **Task 4 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
+> **Task 6 — `wf_history.RequestId`**(Round 16 写于 2026-08-31)。已读:`Entities/WfHistory.cs` 全字段、`Engine/WfExecutionContext.cs` 的 `AppendHistoryAsync` 与全部 `required` 属性、`WorkflowEngine.cs` 的 **8 处** `new WfExecutionContext`、仓内**全部** 20 个 `AppendHistoryAsync` 调用点(散在 6 个 Op 文件 + 引擎)、4 处**绕开 ctx** 直插 `WfHistory` 的地方、`WfInstanceService` 的历史投影 DTO。
+> **Task 5 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
 
 ### 读码所得(决策的事实底座,exec 不必重查)
 
-- **`ExecuteAsync` 是唯一事务入口**:`switch` 的 8 个 `BeginXxxAsync` **加上** `RunAgendaAsync` 全在同一个 `db.Ado.UseTranAsync(...)` 的 lambda 里。所以挂钩只需 **一处**,不必碰 8 个 `BeginXxxAsync` —— 台账 Task 5 原文写的「8 个 `BeginXxxAsync` 入口」按当前代码形状收敛成 `ExecuteAsync` 一处,这是**收窄不是扩面**。
-- **通知在事务外派发**,由 `if (ctx is not null)` 守着。短路返回时 `ctx` 保持 `null` → **现有守卫已经覆盖「命中回执不重复推送通知」**,不需要新代码。
-- **回执服务已具备全部语义**(Task 2 落地):`TryBeginAsync` = 命中则返回、否则插占位并返回 `null`;唯一冲突走二次 SELECT 不解析方言错误码;`CommitAsync` 只更新不新增,0 行即抛。**两者都必须跑在调用方事务里**(实现走 `IRepository.Db`,自动落在 `UseTranAsync` 内)。
-- **一条可见的回执必然 `ResultJson` 非空**:占位行只在事务内存在,而 `CommitAsync` 的 0 行守卫保证「提交了却没回填」这条路走不通。故命中时 `ResultJson == null` 属于**损坏状态**,不是正常分支。
-- **`WfEngineResult` 可安全 JSON 往返**:两个 `required` 成员(`InstanceId`/`InstanceStatus`)恒有值;`CreatedTaskId` 可空;两个列表默认 `[]` 非 null。仓内已有 `WfModelJson.Options`(camelCase + 字符串枚举 + 写时忽略 null + 读时大小写不敏感),复用它即可,**不新建 options**。
-- **引擎与回执服务都是 `TryAddScoped`**,构造函数注入天然可行。测试里的 `ProbingEngine` 用 `ActivatorUtilities.CreateInstance<WorkflowEngine>` 从 DI 补参,**加构造参数不会破它**;`WorkflowReplaceabilityTests` 的假引擎实现的是 `IWorkflowEngine`(契约不动),也不受影响。
-- **`WfTimeoutJob` 走同一个 `engine.ExecuteAsync`**,派的是 `TimeoutFireCmd` —— 它不继承 `WfWriteCmd`,类型判断天然把它排除,无需特例分支。
+- **写入点只有一个**:20 个 `AppendHistoryAsync` 调用全部收敛到 `WfExecutionContext.AppendHistoryAsync` 里那一条 `Insertable`。列值只需在**那一行**赋一次,20 个调用点一个都不用改。
+- **绕开 ctx 直插 `WfHistory` 的只有 4 处,而且全都该写 `null`**:`WfTimeoutJob` ×3(系统扫出来的动作,无请求身份)、`WfTaskService.UrgeAsync` ×1(催办不进引擎、刻意不透传 `requestId`,Task 4 G7)。它们**不设该属性即为 `null`**,一个字都不用改 —— 这不是疏漏,正是语义。
+- **`WfExecutionContext` 有 8 处构造**,全在 `WorkflowEngine.cs` 内;且 `BeginStartAsync` **构造完 ctx 立刻**写 `InstanceStarted` 历史(第 301 行)。所以「switch 之后再往 ctx 上赋值」**会漏掉每条命令最有价值的第一行**,这条路排除。
+- **ctx 已有 12 个 `required` 属性**,新属性照做即可 —— `required` 是这 8 处的**编译期守卫**:将来有人加第 9 个 `BeginXxxAsync` 却忘了带上 `RequestId`,是**编译错误**而不是一条悄悄丢了请求身份的历史。
+- **Task 5 的短路已经免费解决了台账 Task 6 的二选一**:命中回执直接 `return`,压根不进 `switch`,`AppendHistoryAsync` 一次都不会跑。所以「重复请求不重复追加可观测历史」**不需要新机制**,只需要一条钉子。
+- `WfInstanceService` 把历史投影成 `WfHistoryItemOutput`(读路径),本轮**不动**它 —— 透出到 API 就是 OpenAPI 变更,归 Task 10。
 
 ### 决策点(exec 不得二次发挥)
 
 | # | 决策 | 理由 |
 |---|---|---|
-| H1 | 挂钩点 = **`ExecuteAsync` 一处**,写在 `UseTranAsync` lambda 的**最开头**(`switch` 之前) | 8 个 `BeginXxxAsync` 每个都已经在改状态(领任务、插实例),放它们里面就晚了。单点也意味着未来第 9 条命令自动获得幂等,不会漏挂 |
-| H2 | 资格判断 `command is WfWriteCmd { RequestId: not null }`,由新的 `protected virtual WfOperationIdentity? TryCreateIdentity(IWfCommand)` 返回 `null` 表示「本次不做幂等」 | Task 4 已把「有没有请求身份」编码进类型;超时命令与没传 key 的请求自然落在外面,零特例 |
-| H3 | 8 条命令 → identity 六维的映射表(见下),`CompleteTaskCmd` 按 `Action` 拆成 `Approve`/`Reject`;`Action` 非这两者 → 抛 `OperationFailed` | 映射写死在一处;拆 Action 是必须的 —— 否则「同一个 key 先同意后拒绝」会被误判成重试而返回同意的结果 |
-| H4 | `ScopeKey`:**仅 `Start` 取 `StarterOrgId?.ToString(InvariantCulture)`**,其余 7 条一律传 `null`(→ 哨兵) | 不是偷懒:`Start` 的 `TargetId` 是**定义版本 Id**,同一份定义被多个机构共用,机构维度在这里是承重的;其余命令的 `TargetId` 是实例/待办的雪花 Id,**全局唯一、机构已隐含**,再取一次机构只会多一次查询却不增加区分度。命令对象本身也不带机构,为它去 load 实例等于把「短路要早」的前提毁掉 |
-| H5 | 结果 JSON 用 **`WfModelJson.Options`**;`ResultCode` 在 M2c **恒写 `0`** | 复用已在四库跑过的序列化配置。业务失败一律抛异常 → 整事务回滚 → 压根不落回执,所以非零分支在 M2c 无写入点(消化 `## Findings` 的 P3→Task 2/5:`0` 恒表示成功,不让任何 `ErrorCode` 落到 `0`)。**非零是给 M3 预留的,不在本轮实现** |
-| H6 | 命中 → 反序列化 `ResultJson` 直接 `return`,**不进 `switch`、不派通知**;`ResultJson` 为 `null` 时**抛**(`OperationFailed` + `reason=receiptResultMissing`),不返回空结果 | 空结果比报错更坏:调用方拿到 `InstanceId=0` 会当成功。通知不重发由现有 `ctx is null` 守卫免费获得 |
-| H7 | `WorkflowEngine` 构造函数新增 `IWfOperationReceiptService receipts`,并在类 `<remarks>` 里按 M2a/M2b 同样的措辞记一笔「M2c 有意的源码级破坏性变更」 | 与既有两次(`conditionEvaluator`/`notifier`)同构;`IWorkflowEngine` 契约不动,整体替换的消费者不受影响,继承的消费者补 `base(...)` 参数 |
-| H8 | **并发败者的语义**:唯一索引冲突后二次 SELECT 若查不到赢家(赢家尚未提交),原样抛 → 该请求失败,**但绝不会推进第二次**。客户端**再重试一次**才拿到第一次的结果 | 「并发双提交只推进一次」是硬要求,「并发败者当场拿到赢家结果」不是 —— 后者要跨事务等待赢家提交,那是把 HTTP 线程押在别的事务上。写进 `## 语义契约` |
-| H9 | **不碰**:8 个 Op 链与 M2b 的 CAS、`wf_history`(Task 6)、`WfDefaultNotifier`(Task 7)、四库套件(Task 8)、前端 | Task 边界 |
-| H10 | 新增的步骤一律 `protected virtual`;**不新增 DI 注册**(回执服务 Task 2 已 `TryAddScoped`) | 可替换性模型;十件套无需变更 |
+| J1 | 列名 **`RequestId`**(不叫 `RequestKey`) | 台账 Task 6 原文与对外字段名(Task 4 G1)都是 `RequestId`;`wf_operation_receipt.RequestKey` 是回执表自己的既有名,两张表叫法不同是**已存在的事实**,本轮记录一次而不是改任何一边(改回执列名 = 动已勾选的 Task 1/2) |
+| J2 | `[SugarColumn(Length = 64, IsNullable = true)]`,**无默认值、无索引** | 与 `WfInstance.CompletedTime`(Task 3)同型:可空 `ADD COLUMN` 四库都接受,不触发「先加可空列 → 回填 → 改 NOT NULL」三步路。列宽 64 与 `RequestKey` 对齐。诊断列不建索引,需要时再说 |
+| J3 | 值挂在 `WfExecutionContext` 上,声明成 **`public required string? RequestId { get; init; }`** | `required` 把「8 处构造别漏」从人的纪律变成**编译器的事**。可空表示「本次没有请求身份」 |
+| J4 | 8 处构造一律写 `RequestId = cmd.RequestId`;`BeginTimeoutAsync` 写 **`RequestId = null`** | `TimeoutFireCmd` 不继承 `WfWriteCmd`,压根没有这个属性,`null` 是唯一可写的值,也正是语义 |
+| J5 | **值取自 `cmd.RequestId`,不再调一次 `NormalizeRequestKey`** | 台账 Task 5 锚点写的是「禁止再取第二遍」,指的是**禁止重新归一化出第二条路径**。Task 4 已把归一化写死在 `WfWriteCmd` 的 `init` 里(全仓唯一一份),`cmd.RequestId` **就是**那份归一化的结果,与 Task 5 的 `identity.RequestKey` 恒等。而 `identity` 只活在 `ExecuteAsync` 的局部,要送进 8 个 `BeginXxxAsync` 就得改 8 个签名 —— 那才是真的扩面。**本条是对锚点的显式复核结论,不是漂移** |
+| J6 | 赋值只写在 `AppendHistoryAsync` 的 `new WfHistory { ... }` 里**一行** | 20 个调用点零改动;将来第 21 个调用点自动带上 |
+| J7 | 台账 Task 6 的二选一定为:**命中回执根本不进引擎**,故重放天然不追加历史 | Task 5 已实现;本轮只补钉子并写进 `## 语义契约`。**不新建任何去重机制** |
+| J8 | **不透出 DTO**、不动 `WfHistoryItemOutput`、不碰前端与 `gen:api` | Task 10 边界 |
 
-### identity 六维映射表(H3,exec 照抄)
+### 改动清单(exec 只允许碰这 4 个文件)
 
-| 命令 | CommandType | TargetType | TargetId | ActorUserId | ScopeKey |
-|---|---|---|---|---|---|
-| `StartInstanceCmd` | `Start` | `DefinitionVersion` | `DefinitionVersionId` | `StarterUserId` | `StarterOrgId?.ToString(Invariant)` |
-| `CompleteTaskCmd`(`Action=Approve`) | `Approve` | `Task` | `TaskId` | `UserId` | `null`(哨兵) |
-| `CompleteTaskCmd`(`Action=Reject`) | `Reject` | `Task` | `TaskId` | `UserId` | `null` |
-| `TransferTaskCmd` | `Transfer` | `Task` | `TaskId` | `UserId` | `null` |
-| `DelegateTaskCmd` | `Delegate` | `Task` | `TaskId` | `UserId` | `null` |
-| `ReturnTaskCmd` | `Return` | `Task` | `TaskId` | `UserId` | `null` |
-| `CancelInstanceCmd` | `Cancel` | `Instance` | `InstanceId` | `CallerUserId` | `null` |
-| `ResubmitInstanceCmd` | `Resubmit` | `Instance` | `InstanceId` | `CallerUserId` | `null` |
+1. `backend/src/TenonAdmin.Workflow/Entities/WfHistory.cs` — 加 `RequestId` 列(J1/J2)
+2. `backend/src/TenonAdmin.Workflow/Engine/WfExecutionContext.cs` — 加 `required` 属性(J3)+ `AppendHistoryAsync` 里赋一行(J6)
+3. `backend/src/TenonAdmin.Workflow/Engine/WorkflowEngine.cs` — 8 处构造各加一行(J4)
+4. `backend/tests/TenonAdmin.Tests/WfHistoryRequestIdTests.cs` — 新增
 
-### 改动清单(exec 只允许碰这 2 个文件)
-
-1. `backend/src/TenonAdmin.Workflow/Engine/WorkflowEngine.cs` — 构造参数 + `ExecuteAsync` 挂钩 + `TryCreateIdentity` / `SerializeResult` / `DeserializeResult` 三个 `protected virtual` 小步 + 类 `<remarks>` 补一句
-2. `backend/tests/TenonAdmin.Tests/WfReceiptEngineTests.cs` — 新增
-
-> 改动面之小是设计对了的信号:Task 1–4 已经把实体、服务、字段、透传都铺好,本轮只是把线接上。**若 exec 发现需要改第三个文件,先回头问是不是决策错了。**
+> 若 `required` 导致**测试里**也有 `new WfExecutionContext`,那是计划外必改的第 5 个文件 —— 照 Round 14 的先例,先质疑再记录,别默默改。
 
 ### 步骤
 
-1. 构造参数 + `<remarks>` → 2. `TryCreateIdentity`(映射表)→ 3. `ExecuteAsync` 里的 `TryBegin` 短路 → 4. 成功后 `CommitAsync` → 5. `dotnet build` 过 → 6. `WfReceiptEngineTests` 八条 → 7. 全量 `--no-incremental` Release 构建(**判「0 警」只看全量,Round 8/12 两次教训**)→ 8. 指定过滤器闸门(当前 **225**,本 Task 后应 ≈ 233)。
+1. J2 列 → 2. J3 属性(**先加 `required` 让编译器报出全部构造点**,按报错逐个补,不靠肉眼数)→ 3. J6 赋值一行 → 4. `dotnet build` 过 → 5. `WfHistoryRequestIdTests` 六条 → 6. 全量 `--no-incremental` Release 构建判警告(**只信全量,Round 8/12 两次教训**)→ 7. 指定过滤器闸门(当前 **234**,本 Task 后应 ≈ 240)。
 
-### 测试清单(`WfReceiptEngineTests`,8 条,单库)
+### 测试清单(`WfHistoryRequestIdTests`,6 条,查库断言)
 
-1. **串行双提交**:同一 key 发两次 approve → 第二次返回**同一** `instanceId`/`createdTaskId`;库里 `wf_task` / `wf_his_task` 只有一份(**只推进一次**)。
-2. **终态重试**:approve 到实例完结后同 key 再发 → 返回第一次结果(`instanceStatus=Approved`),**不是** `TaskConflict`。
-3. **不同动作不串**:同一 key、同一 taskId,先 approve 后 reject → **不命中**(`CommandType` 不同),reject 按正常业务规则处理。
-4. **无 key 不建回执**:不传 `requestId` 发两次 → `wf_operation_receipt` **0 行**,行为与今天完全一致(第二次撞 CAS/业务码)。
-5. **超时不建回执**:`WfTimeoutJob` 触发一次超时动作后 → 回执表 **0 行**。
-6. **业务失败不残留**:对已撤销实例的 approve 带 key → 报业务码,回执表 **0 行**(事务回滚);同 key 再发仍报同一业务码,**不会被幂等成"成功"**。
-7. **并发双提交**:两个线程同 key 同时 approve → 至多一次成功推进(另一个失败或命中);**第三次**串行重试拿到第一次的结果。
-8. **落库六维正确**:approve 后查回执行,`CommandType=Approve`、`TargetType=Task`、`TargetId=taskId`、`ActorUserId`、`RequestKey` 已 `Trim`、`ScopeKey` 为哨兵、`ResultCode=0`、`ResultJson` 非空。
+1. **发起带 key** → `InstanceStarted` 那一行的 `RequestId` 有值。**这条专钉「构造时就带上」** —— 它是在 `BeginStartAsync` 里、Agenda 跑起来之前写的,任何「switch 之后再赋值」的实现都会让它为空。
+2. **同意带 key** → 该次命令产生的历史行(`NodeLeave`/`InstanceCompleted` 等)全部带同一个值。
+3. **不带 key** → 同一批历史行全部为 `null`(不是空串)。
+4. **超时触发** → `TimeoutFired` 那行为 `null`(`WfTimeoutJob` 绕开 ctx 直插)。
+5. **催办** → `TaskUrged` 那行为 `null`(`UrgeAsync` 不进引擎,Task 4 G7 的另一面)。
+6. **同 key 重放** → 第二次请求**不新增任何历史行**(数量与第一次后一致)。这是 J7 的钉子,从历史侧再证一次 Task 5 的短路。
 
-### 变异点(留给 Round 15 的 review,exec 阶段不跑)
+### 变异点(留给 Round 18 的 review,exec 阶段不跑)
 
 | 变异 | 应红 |
 |---|---|
-| 去掉命中后的短路 `return` | 1、2 |
-| 短路时不反序列化,返回 `new WfEngineResult()` | 1、2 |
-| 资格判断从 `{ RequestId: not null }` 放宽成 `is WfWriteCmd` | 4 |
-| `CompleteTaskCmd` 的 `CommandType` 写死 `Approve`(不按 `Action` 拆) | 3 |
-| `CommitAsync` 挪到 `UseTranAsync` 之外 | 6 |
+| `AppendHistoryAsync` 的 `new WfHistory` 里删掉 `RequestId` 赋值 | 1、2 |
+| `RequestId = ctx.RequestId ?? ""`(空串代替 null) | 3 |
+| `BeginStartAsync` 的构造改成 `RequestId = null` | 1(且**只**红 1 —— 这正是用例 1 存在的理由) |
+| `BeginCompleteAsync` 的构造改成 `RequestId = null` | 2 |
+| 去掉 `ExecuteAsync` 的短路(回滚 Task 5) | 6 |
 
 ### 陷阱
 
-- **短路必须在 `switch` 之前**。任何 `BeginXxxAsync` 一旦跑过就已经改了状态,那时再短路等于推进两次还只回一次结果。
-- **命中时别派通知**:靠 `ctx` 保持 `null` + 现有守卫,**不要**为此新写分支。
-- **`ResultJson` 为空要抛,不要兜底成空结果** —— 空结果的 `InstanceId=0` 会被调用方当成成功。
-- **PostgreSQL 的事务中止语义**:`TryBeginAsync` 的「唯一冲突 → 二次 SELECT」在 PG 上,冲突会把整个事务置为 aborted,后续 SELECT 直接报 `current transaction is aborted`。本 Task 是**单库(SQLite)**,不会暴露;**Task 8 的四库套件必须专门钉这条**,已记 P2→Task 8。
-- **`WfEngineResult` 今后只增可选字段**:老回执由新版本反序列化时,新增的 `required` 成员会让整条读取抛异常。写进 `## 语义契约`。
-- 不改 `IWorkflowEngine` 契约、不动 Op 链与 CAS、不碰 `wf_history`/通知/前端。
+- **别在 switch 之后给 ctx 赋值**:`BeginStartAsync` 在构造后立刻写历史,那样第一行永远为空,而它恰恰是排障时最想看的一行。
+- **`required` 会把所有构造点炸出来** —— 这是特性不是麻烦。按编译错误逐个补,别先肉眼数 8 个然后漏一个。
+- **4 处绕开 ctx 的直插保持不动**,它们写 `null` 是语义而非遗漏;exec 若"顺手"给超时或催办也塞上 key,就违反了 Task 4 G7 与「超时没有请求身份」两条既有定案。
+- **空串不等于 null**:无 key 时必须是 `null`,否则「没带 key」和「带了个空 key」在排障时分不开(且与回执表的语义打架)。
+- 不透出 DTO、不动读路径投影、不碰 `gen:api`(Task 10)。
 - 不提交 `TestResults/`。
 
 ### 给后续 Task 的锚点(本轮只记录,不实施)
 
-- Task 6 的 `wf_history.RequestId`:值就在 `TryCreateIdentity` 已解析出的 `identity.RequestKey`(已归一化),把它挂到 `WfExecutionContext` 上即可,**不要**再从命令上取第二遍。
-- Task 8 除四库共性外,必须单独钉 PG 的冲突后事务中止(见陷阱)。
-- Task 9 的前端 key 生命周期与 H8 直接相关:并发败者需要客户端**再重试一次**才拿到首次结果,所以 key 必须在整个用户动作里复用,而不是每次 HTTP 新生成。
+- Task 8 的四库套件可复用本 Task 的可空 `ADD COLUMN`:`wf_history` 是**有存量数据**的表,比 Task 3 的 `wf_instance` 更能验证「旧行读到 null」。
+- Task 10 若决定把 `RequestId` 透到 `WfHistoryItemOutput`,那是 OpenAPI 变更,记得双模板 `gen:api` 一起刷。
+- P2→Task 8(PG 唯一冲突后整事务 aborted)仍在。
 
 ## Tasks
 
@@ -378,6 +363,7 @@
 | 13 | plan | Task 5 plan 定稿(H1–H10):挂钩收敛到 `ExecuteAsync` **一处**(`UseTranAsync` 已把 8 个 `BeginXxxAsync` + `RunAgendaAsync` 全包住);资格判断 `command is WfWriteCmd { RequestId: not null }` 零特例;8 条命令 → 六维映射表(`CompleteTaskCmd` 按 `Action` 拆 Approve/Reject,否则「同 key 先同意后拒绝」会被误判成重试);`ScopeKey` 只 `Start` 取机构(其余 `TargetId` 是雪花 Id,机构已隐含);结果 JSON 复用 `WfModelJson.Options`,`ResultCode` 恒 0(消化 P3→Task 2/5);命中不派通知靠现有 `ctx is null` 守卫免费拿到;并发败者「不推进第二次但也不跨事务等赢家」(H8)。改动面 **2 文件**,8 条用例 + 5 个变异点已列。新记 P2→Task 8:PG 唯一冲突会中止整个事务,`TryBeginAsync` 的二次 SELECT 在 PG 上会炸,单库看不见。未写产品代码。 |
 | 14 | exec | Task 5 落地 3 文件(计划 2 + 计划外 1):`ExecuteAsync` 一处短路 + 同事务 `CommitAsync`;三个 `protected virtual` 小步(`TryCreateIdentity` 六维映射、`SerializeResult`/`DeserializeResult` 复用 `WfModelJson.Options`),`CompleteTaskCmd` 按 `Action` 拆码;引擎构造函数追加 `IWfOperationReceiptService`(第三次同型破坏性变更,已记 `<remarks>`)。计划外必改 `WorkflowMultiLeaderSnapshotTests` 的 `WorkflowEngineProbe`(直接 `new WorkflowEngine`,补 `null!`)—— 按 Plan 自检回头质疑过,属 H7 承认的代价。`WfReceiptEngineTests` 8 例,其中**并发那条按射程学说换成「同 key 不同 actor/target 不串」**并写明射程。踩到的真事实:`hours = 0` 在本仓是「不设到期」而非「立刻到期」,超时用例要 `hours = 1` + 手动推 `DueTime`。build 0 错、工作流包 0 警(全量);过滤器 **233/233**。未勾选。 |
 | 15 | review+修+勾选 | Task 5 自审:五处变异,前四处各转红(去短路 2/8、返回空结果 2/8、资格判断放宽 **8/8**、`CommandType` 写死 1/8)。**第五处「`CommitAsync` 挪出事务」八条全绿 → P2** —— 占位行也在事务里,业务失败一起回滚,所以「无残留」那条看不出差别;真正坏的是崩溃窗口会留下一条已提交却 `ResultJson` 为空的回执,让成功的操作永远重试不回来。补 `The_receipt_is_committed_inside_the_domain_transaction`(替身在 `CommitAsync` 里用 `db.Ado.IsAnyTran()` 记录,并同时断言 `CommitCalled` 防空转),变异⑤转红 1/9。另记两条覆盖真相:「串行重放」的计数断言在变异下**够不着**(前面的 `code == 0` 先失败),不是它让用例红;超时那条必须 `hours = 1` + 手动推 `DueTime`,`hours = 0` 在本仓是「不设到期」会造成假绿。闸门:工作流包 0 警(全量);过滤器 **234/234**。**Task 5 打勾**。 |
+| 16 | plan | Task 6 plan 定稿(J1–J8):20 个 `AppendHistoryAsync` 调用全收敛到 ctx 里一条 `Insertable`,列值只赋一行;绕开 ctx 的 4 处直插(超时 ×3 + 催办 ×1)不设属性即 `null`,零改动且正是语义;`BeginStartAsync` 构造后立刻写 `InstanceStarted`,故排除「switch 后赋值」,改 8 处构造各带一行并把属性声明为 **`required`**(编译器兜底,加第 9 个 Begin 忘带 = 编译错误);台账二选一由 Task 5 短路免费解决,只补钉子。显式复核 Task 5 锚点:取 `cmd.RequestId` 不违反「禁止再取第二遍」——那禁的是重新归一化出第二条路径(J5)。改动面 4 文件,6 条用例(第 1 条专钉「构造时就带上」)+ 5 个变异点。未写产品代码。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
