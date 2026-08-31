@@ -11,6 +11,11 @@ namespace TenonAdmin.SqlSugar;
 /// <para>所有查询自动带全局过滤器(软删除;数据范围过滤器随组织模块接入)。
 /// 仓储覆盖不了的复杂操作(联表/事务/批量)直接用 <see cref="Db"/> 上的 SqlSugar 原生能力——
 /// 仓储是便捷层,不是把 ORM 关进笼子的抽象层。</para>
+/// <para><b>实体不能声明 C# <c>required</c> 成员</b>:本接口(及 <c>ISeedData&lt;TEntity&gt;</c>)的 <c>new()</c>
+/// 约束由 SqlSugar 传导——其 <c>Insertable/Updateable/Deleteable/Storageable</c> 的全部泛型入口都要求
+/// <c>class, new()</c>,而含 required 成员的类型不满足 new()(CS9040),此约束无法在本层移除
+/// (即便移除,C# 重载决议还会把 <c>List&lt;T&gt;</c> 参数静默重绑定到 <c>T=List&lt;T&gt;</c> 的单对象重载,埋运行时错误)。
+/// 实体的必填字符串请用非空默认值(<c>= ""</c>)表达,"必填"语义由列 NOT NULL 承载。</para>
 /// </summary>
 public interface IRepository<TEntity> where TEntity : AuditEntity, new()
 {
