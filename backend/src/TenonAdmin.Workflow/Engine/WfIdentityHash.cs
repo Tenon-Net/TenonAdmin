@@ -48,17 +48,13 @@ public static class WfIdentityHash
         long actorUserId,
         string requestKey)
     {
-        if (string.IsNullOrWhiteSpace(requestKey))
-            throw new ArgumentException("request key 必填,不接受 null / 空白。", nameof(requestKey));
         if (!Enum.IsDefined(commandType))
             throw new ArgumentOutOfRangeException(nameof(commandType), commandType, "未定义的写命令类型。");
         if (!Enum.IsDefined(targetType))
             throw new ArgumentOutOfRangeException(nameof(targetType), targetType, "未定义的目标类型。");
 
-        var scope = string.IsNullOrWhiteSpace(scopeKey) ? ScopeSentinel : scopeKey.Trim();
-        var request = requestKey.Trim();
-        EnsureNoSeparator(scope, nameof(scopeKey));
-        EnsureNoSeparator(request, nameof(requestKey));
+        var scope = NormalizeScopeKey(scopeKey);
+        var request = NormalizeRequestKey(requestKey);
 
         var payload = string.Join(
             Separator,
@@ -70,6 +66,33 @@ public static class WfIdentityHash
             request);
 
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
+    }
+
+    /// <summary>
+    /// 归一化 <c>ScopeKey</c>:null / 空串 / 纯空白 → <see cref="ScopeSentinel"/>,否则 <c>Trim()</c>(保留大小写)。
+    /// <para><b>落库的 <c>ScopeKey</c> 必须用本方法的返回值</b> —— 一边存原值、一边用归一化值算 hash,
+    /// 排查时诊断列就与 identity 对不上。<see cref="Compute"/> 与 <c>WfOperationIdentity.Create</c>
+    /// 共用这一份实现,避免规则分叉。</para>
+    /// </summary>
+    public static string NormalizeScopeKey(string? scopeKey)
+    {
+        var scope = string.IsNullOrWhiteSpace(scopeKey) ? ScopeSentinel : scopeKey.Trim();
+        EnsureNoSeparator(scope, nameof(scopeKey));
+        return scope;
+    }
+
+    /// <summary>
+    /// 归一化 <c>RequestKey</c>:<c>Trim()</c> 后返回。**空白不归一化而是抛异常** —— 理由见
+    /// <see cref="Compute"/> 的 <c>requestKey</c> 参数说明。落库同样必须用本方法的返回值。
+    /// </summary>
+    /// <exception cref="ArgumentException">为 null / 空白,或含分隔符。</exception>
+    public static string NormalizeRequestKey(string requestKey)
+    {
+        if (string.IsNullOrWhiteSpace(requestKey))
+            throw new ArgumentException("request key 必填,不接受 null / 空白。", nameof(requestKey));
+        var request = requestKey.Trim();
+        EnsureNoSeparator(request, nameof(requestKey));
+        return request;
     }
 
     private static void EnsureNoSeparator(string value, string paramName)

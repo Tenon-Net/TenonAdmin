@@ -5,13 +5,13 @@ using TenonAdmin.Workflow;
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// 工作流卫星包可替换性「九件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
-/// 九个 <c>TryAddScoped</c> 面:<see cref="IApproverResolver"/> /
+/// 工作流卫星包可替换性「十件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
+/// 十个 <c>TryAddScoped</c> 面:<see cref="IApproverResolver"/> /
 /// <see cref="IWorkflowFormBinder"/> / <see cref="IWorkflowEngine"/> /
 /// <see cref="IWfConditionEvaluator"/> /
 /// <see cref="IWfDefinitionService"/> / <see cref="IWfTaskService"/> /
 /// <see cref="IWfInstanceService"/> / <see cref="IWorkflowNotifier"/> /
-/// <see cref="IWfCcService"/>。
+/// <see cref="IWfCcService"/> / <see cref="IWfOperationReceiptService"/>。
 /// <para>
 /// 真判据是<strong>前置</strong>注册即胜出(裸容器,不走 <c>ConfigureTestServices</c>+Replace):
 /// 把任一 <c>TryAdd</c> 退化成 <c>Add</c> → 内置后注册覆盖 → 对应本条红。
@@ -101,6 +101,17 @@ public class WorkflowReplaceabilityTests
         Assert.IsType<FakeCcService>(scope.ServiceProvider.GetRequiredService<IWfCcService>());
     }
 
+    /// <summary>变异:WorkflowSetup 里 IWfOperationReceiptService 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredOperationReceiptService_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s =>
+            s.AddScoped<IWfOperationReceiptService, FakeOperationReceiptService>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeOperationReceiptService>(
+            scope.ServiceProvider.GetRequiredService<IWfOperationReceiptService>());
+    }
+
     /// <summary>
     /// 消费者前置注册 → <c>AddTenonAdminWorkflow</c> → 解析断言。
     /// 不启宿主、不挂 SqlSugar:只验 DI 描述符,不解析内置实现(它们依赖仓储)。
@@ -111,6 +122,20 @@ public class WorkflowReplaceabilityTests
         preRegister(services);
         services.AddTenonAdminWorkflow();
         return services.BuildServiceProvider();
+    }
+
+    private sealed class FakeOperationReceiptService : IWfOperationReceiptService
+    {
+        public Task<WfOperationReceipt?> TryBeginAsync(
+            WfOperationIdentity identity,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<WfOperationReceipt?>(null);
+
+        public Task CommitAsync(
+            WfOperationIdentity identity,
+            int resultCode,
+            string? resultJson,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class FakeApproverResolver : IApproverResolver

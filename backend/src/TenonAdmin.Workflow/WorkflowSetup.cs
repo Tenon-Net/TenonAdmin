@@ -69,6 +69,9 @@ public static class WorkflowSetup
         services.TryAddScoped<IWorkflowFormBinder, NoOpWorkflowFormBinder>();
         services.TryAddScoped<IWorkflowEngine, WorkflowEngine>();
 
+        // 写操作幂等回执(M2c §14.2):引擎在事务内占位 / 命中 / 回填;消费者可前置注册同接口整体替换。
+        services.TryAddScoped<IWfOperationReceiptService, WfOperationReceiptService>();
+
         // 分支条件求值(结构化 JSON,非脚本);消费者可前置注册同接口整体替换。
         services.TryAddScoped<IWfConditionEvaluator, WfConditionEvaluator>();
 

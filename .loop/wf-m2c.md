@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 4
+- 轮次: 5
 - max: 45
 - 当前任务: 2(Receipt 服务 + 引擎事务内挂钩)
-- 当前阶段: plan(已完成)
-- 上一轮: Round 4 — 写完 Task 2 的 `## Plan`(E1–E8 + 7 文件改动清单 + 8 条测试 + 陷阱)。**未写产品代码**。关键取舍:①**占位在前**(事后插回执挡不住并发双提交);②唯一冲突用 **SELECT→INSERT→SELECT**,不解析四库错误码;③把归一化提成 `WfIdentityHash` 的两个 public static,让入库值与 hash 同源(消化 P3);④**业务失败不落回执**(整事务回滚);⑤可替换性九件套 → **十件套**。已划清与 Task 5 的边界:本轮不碰 `ExecuteAsync`/命令 DTO/服务层签名。
-- 下一步: Round 5 — **Task 2 exec**。按 `## Plan` 步骤 1–8 只碰 7 个文件。**第一步做完 E3 提取重构就要先跑 `~WfIdentityHashTests`,确认 11/11 仍绿**(快照转红 = 破坏了不可逆契约,立即撤回)。收尾跑 `dotnet build -c Release` + 指定过滤器(当前 201,预计 ≈210)。**不勾选**,勾选等 Round 6 的 review。
+- 当前阶段: exec(已完成,**未勾选**)
+- 上一轮: Round 5 — 按 Plan 落地 7 个文件:`WfIdentityHash` 提取 `NormalizeScopeKey`/`NormalizeRequestKey`(**提取后立刻跑 `~WfIdentityHashTests` = 11/11 仍绿**,快照未动)、新增 `WfOperationIdentity`(Create 归一化 + 算 hash)、`IWfOperationReceiptService`、`WfOperationReceiptService`(SELECT→INSERT→异常再 SELECT,不解析方言错误码)、`WorkflowSetup` 加一行 `TryAddScoped`、可替换性**十件套**(补第十面 + 类注释)、`WfOperationReceiptTests` 7 例。`dotnet build -c Release` 0 错(13 警告全在 `TenonAdmin.Services`,工作流包 0 警告);指定过滤器 **209/209 绿**(201 + 8)。
+- 下一步: Round 6 — **Task 2 review**。必做:①跑指定过滤器;②**变异点**至少四处转红后复原——(a) `TryBeginAsync` 里把 `InsertPlaceholderAsync` 挪到 `CommitAsync`(占位在前失效)→ 第 4 条应红;(b) `CommitAsync` 改成 `Insertable` 新增行 → 第 3 条应红;(c) `WorkflowSetup` 的 `TryAddScoped<IWfOperationReceiptService>` 改 `AddScoped` → 第十面应红;(d) `WfOperationIdentity.Create` 里 `ScopeKey` 改存原值不归一化 → 第 5 条应红;③核对 E1–E8 有无二次发挥;④确认 `Snapshot_of_a_known_tuple_is_frozen` 仍绿(E3 重构无副作用);⑤确认没碰 `ExecuteAsync`/命令 DTO/服务层签名。**仍不勾选**,除非 0×P1 / 0×未修 P2。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -220,6 +220,7 @@
 | 2 | exec | Task 1 落地 4 文件:`WfCommandType`/`WfTargetType` 枚举、`WfOperationReceipt`(`BaseEntity`,唯一索引 on `IdentityHash`)、静态 `WfIdentityHash.Compute`、`WfIdentityHashTests` 11 例(含两条冻结快照常量)。build 0 错 0 警;过滤器 **201/201**(190+11)。计划外补 `Enum.IsDefined` 守卫,交 review 裁定。未勾选。 |
 | 3 | review+勾选 | Task 1 自审(已声明):三处变异(分隔符 / `TargetId`↔`ActorUserId` / 哨兵)各转红后复原,D1–D8 全对,改动面无溢出,全过滤器 201/201。`Enum.IsDefined` 计划外守卫裁定保留。**Task 1 打勾**。新增跨任务待办:P2→Task 4(`RequestId` 长度 ≤64)、P3→Task 2(落库存归一化值)、P3→Task 2/5(`ResultCode` 0=成功)。教训:变异测试要先 grep 确认文件真改了,否则「绿」是假的。 |
 | 4 | plan | Task 2 plan 定稿(E1–E8):`IWfOperationReceiptService` 两方法(`TryBeginAsync` 返回 `WfOperationReceipt?`/`CommitAsync` 回填);**占位在前**;唯一冲突走 SELECT→INSERT→SELECT 不碰方言错误码;新值对象 `WfOperationIdentity` + 归一化提取到 `WfIdentityHash`(入库值与 hash 同源,消化 P3);业务失败不落回执;可替换性九件套→十件套。边界:不碰 `ExecuteAsync`/DTO/服务签名(那是 Task 5)。未写产品代码。 |
+| 5 | exec | Task 2 落地 7 文件:归一化提取(快照 11/11 仍绿)、`WfOperationIdentity`、`IWfOperationReceiptService` + 实现(占位在前;唯一冲突走二次 SELECT,不碰方言错误码)、`TryAddScoped` 一行、可替换性**十件套**、`WfOperationReceiptTests` 7 例(含「回滚不残留」核心钉子 + 射程声明)。build 0 错、工作流包 0 警;过滤器 **209/209**(201+8)。未勾选。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
