@@ -25,6 +25,7 @@ import { translateError } from '@/utils/error'
 import type { WfStartableDefinitionDetail } from '@/types/workflow'
 import { flattenChain } from '@/workflow/model'
 import type { WfModel } from '@/workflow/schema'
+import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
 import WfFormMount from '../components/WfFormMount.vue'
 
 interface VarRow {
@@ -43,6 +44,7 @@ const defsLoading = ref(false)
 const defOptions = ref<{ label: string; value: number }[]>([])
 const formComponent = ref<string | null>(null)
 const snapshot = ref<WfStartableDefinitionDetail | null>(null)
+const requestKey = useRequestKey()
 
 const form = reactive({
   definitionId: null as number | null,
@@ -141,7 +143,7 @@ async function submit() {
 
   submitting.value = true
   try {
-    const result = await wfInstanceApi.start({
+    const body = {
       definitionId: form.definitionId!,
       businessKey: form.businessKey.trim() || null,
       variablesJson: variablesJson.value,
@@ -150,10 +152,14 @@ async function submit() {
           .map((node) => [node.id, form.selectedUserIdsByNode[node.id] ?? []] as const)
           .filter(([, ids]) => ids.length > 0),
       ),
-    })
+      requestId: requestKey.value(),
+    }
+    const result = await wfInstanceApi.start(body)
+    requestKey.settle('success')
     message.success(t('workflow.start.started'))
     await router.push(`/workflow/instance/${result.instanceId}/detail`)
   } catch (e) {
+    requestKey.settle(classifyOutcome(e))
     message.error(translateError(e))
   } finally {
     submitting.value = false

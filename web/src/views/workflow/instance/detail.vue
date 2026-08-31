@@ -32,6 +32,7 @@ import { translateError } from '@/utils/error'
 import type { WfHisTask, WfInstanceDetail, WfInstanceStatus, WfTaskAction } from '@/types/workflow'
 import type { WfButtonLabels, WfModel, WfReturnPolicy } from '@/workflow/schema'
 import { findNode, flattenChain } from '@/workflow/model'
+import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
 import WfFormMount from '../components/WfFormMount.vue'
 import WfNodeTree from '../definition/components/WfNodeTree.vue'
 
@@ -47,6 +48,7 @@ const message = useMessage()
 const setTabTitle = useTabTitle()
 const tabs = useTabsStore()
 const { run } = useConfirm()
+const requestKey = useRequestKey()
 
 const isInline = computed(() => props.id != null)
 const uid = computed(() => Number(props.id ?? route.params.id))
@@ -247,6 +249,7 @@ function openAction(kind: ActionKind) {
   actionForm.comment = ''
   actionForm.toUserId = null
   actionForm.targetNodeId = null
+  if (kind !== 'urge') requestKey.reset()
   actionShow.value = true
 }
 
@@ -266,24 +269,39 @@ async function submitAction() {
   actionSubmitting.value = true
   try {
     const taskId = Number(detail.value?.myPendingTask?.taskId ?? detail.value?.currentTaskId ?? 0)
+    const requestId = kind === 'urge' ? undefined : requestKey.value()
     const body = {
       taskId,
       comment: actionForm.comment.trim() || null,
       toUserId: actionForm.toUserId ?? 0,
       targetNodeId: actionForm.targetNodeId,
+      requestId,
     }
-    const api = (): Promise<unknown> => {
+    const dispatch = (): Promise<unknown> => {
       if (kind === 'approve') return wfTaskApi.approve(body)
       if (kind === 'reject') return wfTaskApi.reject(body)
       if (kind === 'transfer') return wfTaskApi.transfer(body)
       if (kind === 'return') return wfTaskApi.return(body)
       if (kind === 'delegate') return wfTaskApi.delegate(body)
       if (kind === 'urge') return wfTaskApi.urge({ taskId })
-      if (kind === 'cancel') return wfInstanceApi.cancel({ instanceId: uid.value })
+      if (kind === 'cancel') return wfInstanceApi.cancel({ instanceId: uid.value, requestId })
       return wfInstanceApi.resubmit({
         instanceId: uid.value,
         variablesJson: detail.value?.variablesJson ?? null,
+        requestId,
       })
+    }
+    // urge 不进 receipt(语义契约既定),不生成/不结算 key,其余动作按结果 settle 复用/丢弃 requestKey。
+    const api = async (): Promise<unknown> => {
+      if (kind === 'urge') return dispatch()
+      try {
+        const res = await dispatch()
+        requestKey.settle('success')
+        return res
+      } catch (e) {
+        requestKey.settle(classifyOutcome(e))
+        throw e
+      }
     }
     const ok = await run(api, t('common.success'))
     if (ok) {

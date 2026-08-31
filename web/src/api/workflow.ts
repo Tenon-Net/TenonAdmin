@@ -136,12 +136,12 @@ export const wfInstanceApi = {
       })
       .then((r) => toPage<WfInstanceListItem>(r)),
 
-  cancel: (body: { instanceId: number; comment?: string | null }) =>
+  cancel: (body: { instanceId: number; comment?: string | null; requestId?: string | null }) =>
     client
       .POST('/api/v1/workflow/instance/cancel', { body })
       .then((r) => unwrap<WfEngineResult>(r)),
 
-  resubmit: (body: { instanceId: number; variablesJson?: string | null }) =>
+  resubmit: (body: { instanceId: number; variablesJson?: string | null; requestId?: string | null }) =>
     client
       .POST('/api/v1/workflow/instance/resubmit', { body })
       .then((r) => unwrap<WfEngineResult>(r)),

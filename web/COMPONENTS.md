@@ -71,6 +71,10 @@ tenon 内接入约定:
 
 `src/composables/useTabTitle.ts`,**仅限 setup 中调用**。`const setTabTitle = useTabTitle()`,详情页数据加载后 `setTabTitle(记录名)` 把当前标签标题改成记录名(如「张三」);内部走 `tabsStore.setTitle` → 置 `titleFixed`,`addTab` 复访不再用静态 `meta.title` 覆盖,标题随 tab 持久化、F5 无闪复原。**就地态(列表页内切换详情)别调用**——那时 `route.path` 是列表标签,会改错标签。
 
+## useRequestKey(写操作幂等请求键,composable)
+
+`src/workflow/useRequestKey.ts`,详细语义见源码头注释。`const requestKey = useRequestKey()`:一次用户动作(打开弹窗/点一次提交)期间 `requestKey.value()` 惰性生成并复用同一个 UUID,拿到确定结果(成功或业务失败)后 `requestKey.settle('success' | 'error')` 丢弃,断网/超时等未确定结果用 `requestKey.settle('network')` 保留待重试;`requestKey.reset()` 给"打开新动作"强制换新。配套 `classifyOutcome(e)` 按 `e instanceof ApiError` 分类 `'error' | 'network'`。工作流发起页 / 实例详情写操作已落地(Urge 不生成/不传该字段)。
+
 ## 外链 / iframe 菜单(约定式,零后端字段新增)
 
 菜单节点(`Type=Menu`)复用现有 `path`/`component` 字段承载,判据是 `isHttpUrl`(`src/utils/url.ts`):

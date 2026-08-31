@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 27
+- 轮次: 28
 - max: 45
 - 当前任务: 9(Vue request key 生命周期)
-- 当前阶段: plan(已完成)
-- 上一轮: Round 27 — Task 9 **plan**。读完 `start/index.vue`、`detail.vue`、`WfFormMount.vue`(确认只挂载展示不自提交)、`api/workflow.ts`、`api/index.ts`(`ApiError`/`unwrap`)、`api/client.ts`(401/403 中间件自带同请求重放)、`useConfirm.ts`、`types/workflow.ts`、后端 `WfRuntimeModels.cs`(`RequestId` 字段已在 Task 4 落地,Urge 故意不透传)。核心决策:新建 `web/src/workflow/useRequestKey.ts`(composable,非 store),API 为 `value()`(惰性生成)/`settle('success'|'error'|'network')`(非 network 才丢弃)/`reset()`;错误分类走纯函数 `classifyOutcome`(`e instanceof ApiError` 沿用 `utils/error.ts` 既有判据)。**关键读码发现**:`web/src/api/schema.d.ts` 从 Task 4 起未重生成(无 `requestId`),但由于 `detail.vue` 现有写法是「先 `const body` 再传函数」而非字面量直传,TypeScript 的超额属性检查不会触发,**本 Task 不需要提前跑 `gen:api`**(留给 Task 10);`start/index.vue` 目前是字面量直传,需先改成同款 `const body` 写法才能加字段。`wfInstanceApi.cancel`/`resubmit` 是手写参数类型,不受 schema 陈旧影响,直接加字段最省事。改动清单锁定 7 个文件(含新建的 composable + 单测、两处页面接入、api 手写类型、`COMPONENTS.md` 索引、台账),预期计划外 0。**不写产品代码。**
-- 下一步: Round 28 — **Task 9 exec**。按 `## Plan` 的步骤 1–6 实现;闸门跑 `cd web && npm run typecheck && npm run lint && npx vitest run src/workflow/`(该命令只覆盖 `src/workflow/` 下的 composable 单测,两个 `views/workflow/` 页面文件靠 typecheck/lint 把关,无既有组件级 spec 可跑,不新增)。**不勾选。**
+- 当前阶段: exec(已完成,**未勾选** —— 待 review)
+- 上一轮: Round 28 — Task 9 **exec**。按 Round 27 的 Plan 步骤 1–6 实现,未偏离决策点:新建 `web/src/workflow/useRequestKey.ts`(composable:`value()` 惰性生成 / `settle('success'|'error'|'network')` / `reset()`)+ `classifyOutcome`(`e instanceof ApiError` 判据,复用 `utils/error.ts` 既有惯用法)+ `useRequestKey.spec.ts`(6 条断言全按测试清单落地)。`detail.vue`:`openAction` 对非 urge 调 `reset()`;`submitAction` 把原来内联的 `api` 分派函数改名 `dispatch`,外层新包一层 `api`(urge 直通 `dispatch()`;其余 kind 成功 `settle('success')`、失败 `settle(classifyOutcome(e))` 后 `throw`,`run()` 的 toast 逻辑不变);`body` 与 `cancel`/`resubmit` 字面量都加了 `requestId`(urge 不生成/不传,与既定语义契约一致)。`start/index.vue`:`submit()` 按计划改成先 `const body = {...}`(对齐 detail.vue 写法)、加 `requestId: requestKey.value()`,成功结果拿到、`router.push` 之前 `settle('success')`,`catch` 分支 `settle(classifyOutcome(e))`。`api/workflow.ts` 的 `cancel`/`resubmit` 手写参数类型各加 `requestId?: string | null`。`COMPONENTS.md` 补 `## useRequestKey(...)` 一节,格式对齐 `useConfirm`/`useTabTitle`(索引 + 源码头注释详情)。**闸门**:`npm run typecheck` 0 错;`npm run lint`(oxlint)0 错 0 警;`npx vitest run src/workflow/` → **35/35 绿**(29 基线 + 6 新增,与测试清单条数一致)。`git status --short` 核对:改动面精确等于计划内 6 个源码文件(`useRequestKey.ts`/`.spec.ts` 新建,`detail.vue`/`start/index.vue`/`api/workflow.ts`/`COMPONENTS.md` 修改),**未碰** `web-react/`、未跑 `gen:api`、未碰 `useConfirm.ts`/`client.ts` 中间件、未碰任何 backend 文件——预期计划外 0 兑现。**未勾选**(exec 阶段规则,留给 review)。
+- 下一步: Round 29 — **Task 9 review**。独立复核(自审需在 `## Findings` 声明「自审」):亲手跑 `npx vitest run src/workflow/`,再按 Round 27 `## Plan` 的「变异点」表逐条变异 `useRequestKey.ts`/`classifyOutcome`(`settle()` 对 `'network'` 也清空 key / `value()` 去掉惰性判断 / `classifyOutcome` 恒返回 `'error'`)验证转红,**变异前先 grep 确认文件真的改了**,**复原只 checkout 被变异的单个文件**;并人工核对 `detail.vue` 的 `submitAction` 里 `kind === 'urge'` 分支确实不生成/不透传 `requestId`(无既有 spec 覆盖这一条,读代码确认或另补断言)。记 P1/P2 到 `## Findings`。**仍不勾选。**
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -510,6 +510,7 @@
 | 25 | 修 Findings | Task 8 修掉 Round 24 的唯一 P2:`WfPersistenceContractTests` 的类注释射程声明补上「列宽/列类型断言在 SQLite 腿恒真」,B1/B2 方法文档各加一段射程说明,指向 mysql/postgres/sqlserver 才是真钉子。只改这一个文件、只加文档注释,不碰产品代码、不加 `SkippableFact`。闸门:259/259 绿(1m12s)。未勾选(留给 Round 26)。 |
 | 26 | 勾选 | Task 8 **勾选**。核对 0×P1、1×P2 已修(Round 25)、闸门已绿(259/259),`## Tasks` 第 8 项打勾。四库持久化契约套件收尾:内核首个方言分支(PG SAVEPOINT)+ 14 条新测试 + `TEST_FILTER` 纳入 SqlServer PR 腿,基线 245→**259**。给后续任务的两条锚点(P2→Task10 四腿本机取不到证 / P3→Task5、8 的 `ActivatorUtilities` 写法)原样保留待用。 |
 | 27 | plan | Task 9 **plan**。重写 `## Plan`:新建 `web/src/workflow/useRequestKey.ts` composable(惰性生成 + `settle` 三态 + `reset`)+ `classifyOutcome` 纯函数(复用 `err instanceof ApiError` 既有判据);`detail.vue`/`start/index.vue` 接入,Urge 不生成/不传 key;`wfInstanceApi.cancel`/`resubmit` 手写类型各加 `requestId?`。**关键发现**:schema.d.ts 从 Task 4 起未重生成,但因 `detail.vue` 已是「先 `const body`」写法,TS 结构类型允许多余字段,本 Task 不需要提前 `gen:api`;`start/index.vue` 需先改成同款写法(字面量直传会触发超额属性检查)。7 文件改动清单,预期计划外 0。**未写产品代码。** |
+| 28 | exec | Task 9 **exec**。新建 `useRequestKey.ts`(惰性生成 + `settle` 三态 + `reset`)+ `classifyOutcome` + 6 条单测;`detail.vue`/`start/index.vue` 接入(urge 不生成/不传 key,`start` 页改成 `const body` 写法对齐 `detail.vue`);`api/workflow.ts` 的 `cancel`/`resubmit` 手写类型各加 `requestId?`;`COMPONENTS.md` 补索引节。闸门:typecheck 0 错、lint 0 错 0 警、`vitest run src/workflow/` **35/35**。改动面精确等于计划内 6 文件,未碰 web-react/backend。**未勾选**,留 Round 29 review。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
