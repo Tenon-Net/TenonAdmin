@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 25
+- 轮次: 26
 - max: 45
-- 当前任务: 8(四库持久化契约套件)
-- 当前阶段: 修 Findings(已完成,**未勾选** —— 待 Round 26 勾选)
-- 上一轮: Round 25 — Task 8 **修 Findings**。只修 Round 24 记的那 1 条 P2(B 段在 SQLite 腿恒真而射程声明漏提列宽):在 `WfPersistenceContractTests` 的类注释里把射程声明从「只提 PG」扩成「两类,PG 事务语义 + 列宽/列类型」;给 B1(`Result_json_round_trips_chinese_and_long_payloads`)、B2(`Scope_key_request_key_and_hash_hold_their_declared_width`)各补一段 `<para><b>射程</b>...</para>`,写明「SQLite 不执行列宽/类型约束,本条在该腿恒真,真钉子在 mysql/postgres/sqlserver」。**只改了这一个文件、只加文档注释**,未碰任何产品代码,未加 `SkippableFact`(守住 L6)。闸门:指定过滤器 259/259 绿(1m12s)。
-- 下一步: Round 26 — **Task 8 勾选**。核对:0×P1(Round 24 已确认)、1×P2 已修且本轮闸门绿、6 处变异的复核结论已写全(含 M6 的「预期写错已更正」)。若都满足,在 `## Tasks` 给 8 打勾,`## Plan` 的「给后续 Task 的锚点」两条(P2→Task10 四腿本机取不到证 / P3→Task5、8 的 `ActivatorUtilities` 写法)保留不动,然后 Status「下一步」改写为「Task 9 plan」。
+- 当前任务: 9(Vue request key 生命周期)
+- 当前阶段: (未开始 —— 下一步 plan)
+- 上一轮: Round 26 — Task 8 **勾选**。核对满足勾选条件:0×P1(Round 24 review 已确认)、1×P2 已在 Round 25 修完且闸门重跑绿、6 处变异的复核结论已写全(含 M6「预期写错已更正」、M1「PG 未取证」如实披露)。`## Tasks` 第 8 项已打勾。**Task 8 全程收尾**:`WfOperationReceiptService` 加了内核第一个方言分支(PG-only SAVEPOINT),`WfPersistenceContractTests` 14 条钉住四库持久化契约里 245 条既有测试没覆盖的三类东西(PG 事务中止恢复、数据库层方言真相、SqlServer PR 腿的幂等冒烟),`backend-ci.yml` 的 `TEST_FILTER` 纳入本类。指定过滤器基线从 245 涨到 **259**。`## Plan` 章节留了两条给后续任务的锚点未变:**P2→Task10**(DONE-CONDITION「四腿各绿」本机无 Docker/无 PG,取不到证,Task 10 收口时需就「push 一次拿 CI 信号」或「授权连某真实 PG」向用户要决定)、**P3→Task5/8**(`ActivatorUtilities.CreateInstance<WorkflowEngine>` 绕过 `TryAdd` 的写法,本 Task 未重蹈)。
+- 下一步: Round 27 — **Task 9 plan**。读 `## 已知起点` 里「前端现状」一节(详情/发起页按钮有 UI 防连点但无 request key 生成与复用)、`## 语义契约` 的「重试语义」「对外字段名(`requestId`)」两行、Task 8 已在后端做好的 `requestId` 贯穿(Engine/DTO/Controller 均已就位,Task 9 只是前端消费方)。范围按 Task 9 原文:`web/` 发起页 + 实例详情写操作,一次用户动作生成 UUID、该动作重试复用、成功或明确失败后丢弃、新动作新 key,`src/workflow/` 或 composable 单点实现避免每页复制,按钮防连点保留。**不碰** `web-react/`(Task 9 明确排除,只在 Task 10 跑 `gen:api`)。plan 阶段先读 `web/src/workflow/` 目录结构与现有发起/详情页代码,再写 `## Plan`,**不写产品代码**。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -220,7 +220,7 @@
 - [x] **5. 引擎写路径接 receipt**:上述 8 个 `BeginXxxAsync` 入口在事务开头解析 identity → 命中则直接返回缓存 `WfEngineResult` → 否则执行现有 Op 链 → 成功则落 receipt。覆盖「串行双提交」「并发双提交仅一次推进」「业务失败无 receipt」「终态重试返回首次结果」的集成测试(单库,≥6 条,附变异点)。
 - [x] **6. `wf_history.RequestId`**:列 + `AppendHistoryAsync` 写路径传入;与 receipt 的 `RequestKey` 同源。测试:重复请求不重复追加**可观测**历史(或命中 receipt 根本不进引擎 — plan 阶段二选一并写进契约)。
 - [x] **7. 通知失败可观测**: `WfDefaultNotifier` 注入 `ILogger<WfDefaultNotifier>`(或内核既有日志抽象),`catch` 改 `LogWarning`/`LogError` 结构化字段(`InstanceId`,`Event`,`UserId`,异常);可选 `IOptions` 开关保留静默模式给测试。补一条「publisher 抛错 → 审批仍成功 + 日志有条目」测试。不引入新 NuGet。
-- [ ] **8. 四库持久化契约套件**:新建 `WfPersistenceContractTests`(或同级),**同一套用例**经 `TestDb.DbType` 在四库 CI 腿各跑:①`IdentityHash` 快照;②receipt 唯一性;③并发 CAS(实例/Token/任务至少各一条);④事务回滚 receipt 不残留;⑤超时领取 vs 人工 `Approve` 仅一方胜出;⑥终态保护。不复制 190 条全集,只钉持久化契约(目标 **12–20** 条,plan 阶段列清单)。SqlServer PR 腿若已有 `TEST_FILTER`,评估是否纳入子集或 nightly — plan 阶段读 `.github/workflows/backend-ci.yml` 后定。
+- [x] **8. 四库持久化契约套件**:新建 `WfPersistenceContractTests`(或同级),**同一套用例**经 `TestDb.DbType` 在四库 CI 腿各跑:①`IdentityHash` 快照;②receipt 唯一性;③并发 CAS(实例/Token/任务至少各一条);④事务回滚 receipt 不残留;⑤超时领取 vs 人工 `Approve` 仅一方胜出;⑥终态保护。不复制 190 条全集,只钉持久化契约(目标 **12–20** 条,plan 阶段列清单)。SqlServer PR 腿若已有 `TEST_FILTER`,评估是否纳入子集或 nightly — plan 阶段读 `.github/workflows/backend-ci.yml` 后定。
 - [ ] **9. Vue request key 生命周期**: `web/` 发起页 + 实例详情写操作:一次用户动作(打开弹窗/点一次按钮)生成 UUID,该动作重试(含 axios 重试若存在)复用;成功或明确失败后丢弃;新动作新 key。按钮防连点保留。`src/workflow/` 或 composable 单点实现,避免每页复制。typecheck/lint/vitest 绿。
 - [ ] **10. `gen:api` + 契约漂移 + 验收**:双模板 `gen:api`;SHA256 一致;去掉因新字段产生的 `@ts-expect-error`(若有)。可选:Playwright 或 API 级「双 POST 同 key → 同一 instanceId/同一结果」轻量验收(不强制浏览器截图,除非协调者要求)。**勾选本 Task 前**跑齐 DONE-CONDITION 全闸门。
 
@@ -509,6 +509,7 @@
 | 23 | exec | Task 8 落地 **3 文件 + 台账,零溢出**。`WfOperationReceiptService` 加 PG-only SAVEPOINT(三个 `protected virtual` 小步;守卫 `DbType == PostgreSQL && Ado.IsAnyTran()` —— 自动提交模式下 PG 拒收 `SAVEPOINT`,而那时也根本不需要它),注释写明为什么这是内核第一个方言分支、以及「不解析错误码」的旧决定为何仍然成立。新增 `WfPersistenceContractTests` **14 条**(A 回执唯一性与 PG 事务中止 4 / B 列类型与列宽 2 / C 可空升级列 2 / D CAS 与 affected-rows 2 / E `DateTime` 相等游标 1 / F 为 SqlServer PR 腿而设的端到端幂等冒烟 3);致盲替身只蒙前 N 次 `FindAsync`,赢家行事务外预提交,冲突与恢复都是真的。`TEST_FILTER` 追加本类 + 一段「为什么唯独这一个 `Wf*` 进 PR 腿」的注释,YAML 已解析验证、过滤器单行 14 项完好。**两条测试自身的错**:D2 让人工先赢时活动 `wf_task` 当场归档进 `wf_his_task`(库里没待办可推到期,证明不了仲裁)→ 改成超时先赢、人工后到收业务错误;`DateTime.Now - TimeSpan` 写进 `SetColumns` 表达式会被当 SQL 翻译,落库值读回绑不上 `DateTime` → 提成局部变量。**L7 探测:本机无 PG**,PG 的「修前红」取不到证,射程声明写进类注释。闸门:全量 `--no-incremental` Release 0 错、13 警(既有基线);过滤器 **259/259**。未勾选。 |
 | 24 | review | Task 8 **自审 review**。指定过滤器 **259/259 绿**;6 处变异逐一跑(先 `grep` 验改、复原只 checkout 单文件):**红 3 处**(`IsUnique` → 4/14、`RequestId ?? ""` → 1/14、删 `DueTime == cursor` 半边 → 1/14),**绿 3 处**且性质不同:M1(去 savepoint)方言使然、如实记「未取证」;M6(删 `Version ==`)本套件按 L4 就不该覆盖,追加取证改跑全过滤器 **红 1/259**(`WfVersionCasTests.Instance_losing_cas_...`)—— 不是覆盖洞,是 plan 变异表那一格预期写错,已更正;M3(`ResultJson` 换 `Length = 200`)**仍绿**,这是本轮唯一真发现 —— **SQLite 不执行列宽**,B1/B2 在 SQLite 腿是恒真断言,而类注释的射程声明只写了 PG、漏了列宽(追加取证:全过滤器 259/259 仍绿(1m17s))。记 **1 条 P2**(补射程注释,不改产品代码、不加 `SkippableFact`)+ 2 条 P3(`RollbackNested`/`ReleaseNested` 抛错会顶替真因,窄,挂账)。**未勾选**。 |
 | 25 | 修 Findings | Task 8 修掉 Round 24 的唯一 P2:`WfPersistenceContractTests` 的类注释射程声明补上「列宽/列类型断言在 SQLite 腿恒真」,B1/B2 方法文档各加一段射程说明,指向 mysql/postgres/sqlserver 才是真钉子。只改这一个文件、只加文档注释,不碰产品代码、不加 `SkippableFact`。闸门:259/259 绿(1m12s)。未勾选(留给 Round 26)。 |
+| 26 | 勾选 | Task 8 **勾选**。核对 0×P1、1×P2 已修(Round 25)、闸门已绿(259/259),`## Tasks` 第 8 项打勾。四库持久化契约套件收尾:内核首个方言分支(PG SAVEPOINT)+ 14 条新测试 + `TEST_FILTER` 纳入 SqlServer PR 腿,基线 245→**259**。给后续任务的两条锚点(P2→Task10 四腿本机取不到证 / P3→Task5、8 的 `ActivatorUtilities` 写法)原样保留待用。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
