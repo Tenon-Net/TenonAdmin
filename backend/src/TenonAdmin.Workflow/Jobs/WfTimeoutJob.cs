@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using SqlSugar;
 using TenonAdmin.Core;
@@ -36,7 +37,8 @@ public class WfTimeoutJob(
     IWorkflowEngine engine,
     IWorkflowNotifier notifier,
     WorkflowOptions options,
-    TimeProvider time) : IAdminJob
+    TimeProvider time,
+    ILogger<WfTimeoutJob> logger) : IAdminJob
 {
     /// <summary>
     /// 一拍最多**检视**多少行 = <see cref="WorkflowOptions.TimeoutScanBatchSize"/> × 本倍数。
@@ -390,9 +392,16 @@ public class WfTimeoutJob(
                 toUserIds,
                 cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // 通知失败不得影响已写入的事件行(与 WfTaskService.UrgeAsync 同款约定)。
+            // 通知失败不得影响已写入的事件行(与 WfTaskService.UrgeAsync 同款约定),但要出声。
+            // 超时提醒同样**不经引擎**,这里是它唯一的可观测出口。
+            logger.LogWarning(
+                ex,
+                "工作流超时提醒通知失败。InstanceId={InstanceId} TaskId={TaskId} ToUserCount={ToUserCount}",
+                instance.Id,
+                task.Id,
+                toUserIds.Count);
         }
 
         return true;

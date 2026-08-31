@@ -654,7 +654,7 @@ public class WorkflowMultiLeaderSnapshotTests
     }
 
     private sealed class WorkflowEngineProbe(IApproverResolver resolver)
-        : WorkflowEngine(null!, resolver, null!, null!, TimeProvider.System, null!, null!, null!)
+        : WorkflowEngine(null!, resolver, null!, null!, TimeProvider.System, null!, null!, null!, null!)
     {
         public IReadOnlyDictionary<int, Dictionary<string, JsonElement>?> GetLeaderLevels(WfModel model) =>
             ResolveLeaderLevels(model);

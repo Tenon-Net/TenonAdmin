@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using SqlSugar;
 using TenonAdmin.Core;
@@ -17,7 +18,8 @@ public class WfTaskService(
     IRepository<WfDefinition> definitions,
     IRepository<WfDefinitionVersion> versions,
     IRepository<WfHistory> histories,
-    IWorkflowNotifier notifier) : IWfTaskService
+    IWorkflowNotifier notifier,
+    ILogger<WfTaskService> logger) : IWfTaskService
 {
     /// <inheritdoc />
     public virtual async Task<PagedList<WfTodoItemOutput>> PageTodoAsync(
@@ -247,9 +249,17 @@ public class WfTaskService(
                 toUserIds,
                 cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // 通知失败不得影响已提交的历史写入;静默吞掉。
+            // 通知失败不得影响已提交的历史写入 —— 但要留下痕迹。催办**不经引擎**,
+            // 所以它的失败不会落进 DispatchPendingNotificationsAsync 的网里,这里是唯一的出口。
+            logger.LogWarning(
+                ex,
+                "工作流催办通知失败。InstanceId={InstanceId} TaskId={TaskId} FromUserId={FromUserId} ToUserCount={ToUserCount}",
+                instance.Id,
+                taskId,
+                callerUserId,
+                toUserIds.Count);
         }
     }
 

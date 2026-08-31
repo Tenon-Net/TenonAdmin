@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 19
+- 轮次: 20
 - max: 45
 - 当前任务: 7(通知失败可观测)
-- 当前阶段: plan(已定稿,**未写产品代码**)
-- 上一轮: Round 19 — Task 7 plan 定稿(K1–K8)。读码推翻了台账原文的前提:静默吞异常**不是 2 处而是 7 层** —— `WfDefaultNotifier` 内部 3 个方法各吞一次,**外加全部 4 个调用点**各包一层(引擎 ×2、催办 ×1、超时提醒 ×1)。**双层网正是病根**:默认实现的失败被自己的内层 catch 吃掉,永远到不了外层;而只在 `WfDefaultNotifier` 里加日志又覆盖不到被消费者替换掉的实现。故方案定为 **K1 删掉内层 3 个 catch(删代码)+ K2 在外层 4 处记结构化 Warning**,一步到位覆盖两种情形。另一条读码事实:`TaskUrgedAsync` 有 **2 个调用点根本不经引擎**(催办、超时提醒),所以「在 `DispatchPendingNotificationsAsync` 一处解决」是覆盖不全的。`ILogger` 已可用(`WfCompletedTimeBackfill` 先例),不需新 NuGet。改动面 **5 + 1 预期计划外**(`WorkflowEngineProbe` 又要补 `null!`,Round 14 同款,已先声明)。5 条用例(第 5 条「正常时不记警告」不可省)+ 5 个变异点已列。
-- 下一步: Round 20 — **Task 7 exec**(按 K1–K8 实现,**不勾选**)。顺序:删 `WfDefaultNotifier` 的 3 个 try/catch 并改类注释 → 三个类构造各加 `ILogger<T>`(引擎 `<remarks>` 与 M2c 的 `receipts` 并列记一笔)→ 四处 catch 记 `LogWarning(ex, ...)`(**异常走 exception 形参,不拼 `ex.Message`**;级别一律 Warning)→ 自制最小 `ILoggerProvider` + `WfNotifyLoggingTests` 五条 → 全量 `--no-incremental` Release 构建判警告 → 过滤器闸门(240 → 约 245)。
+- 当前阶段: exec(已完成,**未勾选**)
+- 上一轮: Round 20 — Task 7 exec 落地,**5 + 1 预期计划外**(`WorkflowEngineProbe` 补 `null!`,plan 已先声明,不算溢出)。K1 删掉 `WfDefaultNotifier` 内部 3 个 try/catch(**净删代码**,类注释改写说明为什么内层那一层必须消失);三个类构造各加 `ILogger<T>`(引擎 `<remarks>` 与 M2c 的 `receipts` 并列记了一笔);四处 catch 记 `LogWarning(ex, ...)`,异常走 exception 形参、级别一律 Warning。`WfNotifyLoggingTests` 5 例:用抛异常的 `IRealtimePublisher` 让**内置** Notifier 原样跑到失败(钉真实调用链),日志经自制最小 `ILoggerProvider` 捕获。**踩到两条测试自身的错**(非产品代码):①待办到达实际产生 **2 条**警告(发起给 a 建待办 + 同意后给 b 建待办),`Assert.Single` 用错,改成「至少一条且每条都带异常」;②超时提醒写的历史事件是 **`TimeoutFired`**(载荷里 `action = Remind`)而非 `TaskUrged` —— 催办与提醒共用通知方法但事件类型不同。闸门:全量 Release 0 错、13 警(全为 Core/Services 既有基线,工作流包 0 警);过滤器 **245/245**(240+5)。
+- 下一步: Round 21 — **Task 7 review**(自审须声明)。变异点五处,每处**先 grep 确认文件真改了**、复原**只 checkout 被变异的那一个文件**:①把 `WfDefaultNotifier` 的 3 个 try/catch **加回去** → 用例 1–4 应全红(这正是「双层网让默认路径无声」的证明,也是本 Task 的核心论点);②删掉任一处 `LogWarning` → 对应那条应红;③`LogWarning(ex, ...)` 改成 `LogWarning(...)` 丢掉异常形参 → 断言 `Exception` 非空的几条应红;④在成功路径也无条件记一条 Warning → 用例 5 应红;⑤引擎的 catch 改成 `catch (Exception) { throw; }` → 用例 1/2 应从「成功 + 警告」变成 5xx(反向确认「绝不拖垮」仍成立)。另需复核:用例 1 改成「至少一条」后是否**弱化**了(若某处 catch 漏记但另一处记了,它可能仍绿 —— 变异②要专门验这一点);以及 `LogSink` 对**所有**类别都返回同一个 logger,是否会把内核其他组件的 Warning 混进来污染用例 5(用例 5 断的是 `Contains("通知失败")`,理论上安全,但要确认)。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -392,6 +392,7 @@
 | 17 | exec | Task 6 落地 **4 文件、零溢出**:`WfHistory` 可空 64 列;ctx 的 `required string? RequestId` —— `required` 一加编译器精确炸出 8 处构造(与 plan 一致,未靠肉眼数),7 处 `cmd.RequestId` + 超时处 `null`;`AppendHistoryAsync` 赋一行,20 个调用点零改动;绕开 ctx 的 4 处直插(超时 ×3 + 催办 ×1)一个字没动,`null` 是语义。plan 预警的第 5 文件风险未兑现。`WfHistoryRequestIdTests` 6 例一次全绿(用例 1 专钉「构造时就带上」,用例 4 内置对照断言防「整列没写」的假绿)。踩到 3 条自引入的 `xUnit2031`,全量警告 13→16,改用 `Assert.Single` 谓词重载后回到 13 —— 再次印证只信全量构建。过滤器 **240/240**。未勾选。 |
 | 18 | review+勾选 | Task 6 自审:五处变异**全部按预期转红**(删赋值 3/6、`?? ""` 2/6、`BeginStartAsync` 传 null 2/6、`BeginCompleteAsync` 传 null 1/6、去掉 Task 5 短路 1/6),**0×P1 / 0×P2 —— M2c 第一次 review 无新增缺陷**。上一轮标记的两条疑虑均有结论:用例 3 单看弱但与用例 1/2 构成对照组;超时那条的内置对照断言在两处变异里跟着红,证明它真挡得住「整列没写进去」的假绿。J1–J8 全对,改动面零溢出。闸门:全量 Release 0 错、工作流包与测试工程 0 警;过滤器 **240/240**。**Task 6 打勾**。 |
 | 19 | plan | Task 7 plan 定稿(K1–K8)。**读码推翻台账原文的前提**:静默吞异常不是 2 处而是 **7 层**(`WfDefaultNotifier` 内 3 + 4 个调用点各 1),双层网正是病根 —— 默认实现的失败被内层吃掉、到不了外层,而只在 Notifier 里加日志又覆盖不到消费者替换的实现。方案定为 **删内层 3 个 catch + 外层 4 处记结构化 Warning**,一个动作同时修好两种情形,且是**删代码**。另一条事实:`TaskUrgedAsync` 有 2 个调用点不经引擎(催办、超时提醒),「引擎一处解决」覆盖不全。`ILogger` 已可用,不需新 NuGet。改动面 5 + 1 预期计划外(`WorkflowEngineProbe` 补 `null!`,已先声明)。5 条用例(第 5 条「正常时不记警告」不可省)+ 5 个变异点。未写产品代码。 |
+| 20 | exec | Task 7 落地 **5 + 1 预期计划外**:K1 **删掉** `WfDefaultNotifier` 内部 3 个 try/catch(净删代码,类注释写明内层为何必须消失);`WorkflowEngine`/`WfTaskService`/`WfTimeoutJob` 三个构造各加 `ILogger<T>`;四处 catch 记 `LogWarning(ex, ...)`(异常走 exception 形参、一律 Warning)。`WfNotifyLoggingTests` 5 例,用抛异常的 `IRealtimePublisher` 让内置 Notifier 原样跑到失败,自制最小 `ILoggerProvider` 捕获日志。踩到两条**测试自身**的错:待办到达实际有 2 条警告(`Assert.Single` 用错,改「至少一条且每条带异常」)、超时提醒写的是 `TimeoutFired` 而非 `TaskUrged`(催办与提醒共用通知方法但事件类型不同)。build 0 错、工作流包 0 警(全量);过滤器 **245/245**。未勾选。 |
 
 ## 参考读码清单(Round 1 plan 前)
 

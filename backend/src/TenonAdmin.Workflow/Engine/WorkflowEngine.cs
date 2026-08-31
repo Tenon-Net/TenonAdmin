@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 using SqlSugar;
 using TenonAdmin.SqlSugar;
 
@@ -15,7 +16,8 @@ namespace TenonAdmin.Workflow;
 /// 的消费者不受影响(<see cref="IWorkflowEngine"/> 契约本身没动);<b>继承</b> <see cref="WorkflowEngine"/>
 /// 的消费者需要在自己的 <c>base(...)</c> 调用里补上这些参数。不为兼容加 <c>[Obsolete]</c> 双构造函数。
 /// M2c 第三次同样的追加:<paramref name="receipts"/>(写操作幂等回执 SPI,供 <see cref="ExecuteAsync"/>
-/// 在事务开头查/占位、成功后回填)。
+/// 在事务开头查/占位、成功后回填),以及 <paramref name="logger"/>(通知失败此前完全无声,见
+/// <see cref="DispatchPendingNotificationsAsync"/>)。
 /// </remarks>
 public class WorkflowEngine(
     IRepository<WfInstance> instances,
@@ -25,7 +27,8 @@ public class WorkflowEngine(
     TimeProvider timeProvider,
     IWfConditionEvaluator conditionEvaluator,
     IWorkflowNotifier notifier,
-    IWfOperationReceiptService receipts) : IWorkflowEngine
+    IWfOperationReceiptService receipts,
+    ILogger<WorkflowEngine> logger) : IWorkflowEngine
 {
     /// <inheritdoc />
     public virtual async Task<WfEngineResult> ExecuteAsync(
@@ -188,9 +191,17 @@ public class WorkflowEngine(
             {
                 await ctx.Notifier.TaskAssignedAsync(notifyCtx, userIds, cancellationToken);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // 通知失败不得影响已提交事务的响应;静默吞掉。
+                // 事务已提交,不能让通知异常炸掉这次响应 —— 但也不能像从前那样一声不吭。
+                // 异常走 exception 形参而非拼进消息串:拼串会丢掉堆栈与 inner exception,
+                // 而那正是排障要看的东西。
+                logger.LogWarning(
+                    ex,
+                    "工作流待办到达通知失败。InstanceId={InstanceId} NodeId={NodeId} UserCount={UserCount}",
+                    notifyCtx.InstanceId,
+                    notifyCtx.NodeId,
+                    userIds.Count);
             }
         }
 
@@ -200,9 +211,14 @@ public class WorkflowEngine(
             {
                 await ctx.Notifier.InstanceCompletedAsync(completedCtx, cancellationToken);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // 同上。
+                logger.LogWarning(
+                    ex,
+                    "工作流实例完结通知失败。InstanceId={InstanceId} StarterUserId={StarterUserId} Status={Status}",
+                    completedCtx.InstanceId,
+                    completedCtx.StarterUserId,
+                    completedCtx.Status);
             }
         }
     }
