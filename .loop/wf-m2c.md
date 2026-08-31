@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 9
+- 轮次: 10
 - max: 45
-- 当前任务: 3(**已勾选**)→ 下一任务 4
-- 当前阶段: review 完成 + 修 P2 + 勾选(0×P1 / 2×P2 均已修)
-- 上一轮: Round 9 — Task 3 review(**自审**,已声明)。四处变异各先 grep 验证后再跑:前两处(删 `CompletedTime` 赋值 / `UpdateColumns` 去掉该列)各**红 3/5**,主落点钉得住;后两处(删回填的事件类型过滤 / 回填改整对象更新)**双双仍绿** → 两条 P2,当场补钉子(旧行再造一条更早的 `NodeLeave` 事件;断言回填后 `UpdateTime`/`UpdateUserId` 仍为 null),补完后同样两处变异各**红 1/5**。闸门 **215/215**,工作流包 0 警。**Task 3 已打勾。**
-- 下一步: Round 10 — **Task 4 plan only**(8 个写命令 DTO + Controller 收 `RequestId`)。plan 前必读:①`Engine/WfCommands.cs` 与 `Services/WfRuntimeModels.cs` 的 8 个写命令入参形状;②`Controllers/WfInstanceController.cs` / `WfTaskController.cs` 的透传写法;③`## Findings` 的 **P2→Task 4**(`RequestId` 必须卡 ≤64,与 `RequestKey` 列宽对齐,配超长即拒的测试)与 **P3→Task 2/5**(`ResultCode` 0 恒为成功)。对外名 `RequestId` vs `IdempotencyKey` **二选一并写进 `## 语义契约`**;**默认不含 Urge**。本轮只 plan,不写产品代码;OpenAPI 变更留给 Task 10。
+- 当前任务: 4(写命令 DTO + Controller 收 `RequestId`)
+- 当前阶段: plan(已完成,未写产品代码)
+- 上一轮: Round 10 — Task 4 plan 定稿(G1–G8)。读码四项结论定了形状:①**入参 DTO 只有 4 个**却覆盖 8 个写命令(`WfTaskActionInput` 一个顶 6 个),加字段只动 4 处;②**催办天然不进引擎**(`UrgeAsync` 不在 4 处 `engine.ExecuteAsync` 之列),「urge 不做幂等」不需要开关,不透传即可;③服务方法收散参、`StartAsync` 是唯一收 DTO 的,故只有 **7 个**方法要加参数;④仓内 DTO 零 `DataAnnotations`、AspNetCore 无 `ModelState` 处理,校验必须抛数字 `ErrorCode`。核心决策:抽 `WfWriteCmd` 基类,归一化 + ≤64 + 禁换行只写**一份**在 `init` 里;`TimeoutFireCmd` **不继承**,用类型表达「超时没有请求身份」。
+- 下一步: Round 11 — **Task 4 exec**。严格按 `## Plan` 的 9 文件清单与「步骤」1→9。三条最容易翻车的:①空白 → `null` 必须在命令层消化(否则 Task 5 的 `NormalizeRequestKey` 抛 `ArgumentException` = 500);②控制器位置实参要跟着签名同步改,**别用命名实参掩盖漏改**;③新码取 **48028**,不填 48022 空号、不复用 `ModelFieldTooLong`。测试要用「包住内置 `IWorkflowEngine` 的装饰器」捕获命令(照 `WfVersionCasTests` 的 `Overrides` 写法)。跑到过滤器闸门(215 → ≈221)即停,**不勾选**。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -90,72 +90,74 @@
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段重写)
 
-> **Task 3 — `WfInstance.CompletedTime`**(Round 7 写于 2026-08-31)。已读:`TakeTransitionOp.CompleteInstanceAsync`、`CompleteTaskOp` 拒绝分支、`CancelInstanceOp`、`WfExecutionContext.ClaimInstanceAsync` 及 `WfInstance.Version` 的 `DefaultValue` 长注释、`BeginResubmitAsync`、`ISeedData` 契约、`DataScopeContext`、评审 §4.2 与 §九 #4。
-> **Task 2 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
+> **Task 4 — 写命令 DTO + Controller 收 `RequestId`**(Round 10 写于 2026-08-31)。已读:`Engine/WfCommands.cs` 全部 9 条命令、`Services/WfRuntimeModels.cs` 的入参 DTO、`IWfTaskService`/`IWfInstanceService` 全部签名、两个 Controller 的写端点、`Abstractions/WorkflowErrorCode.cs` 全码表、`## Findings` 的 P2→Task 4 与 P3→Task 2/5。
+> **Task 3 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
 
 ### 读码所得(决策的事实底座,exec 不必重查)
 
-- **终态落点恰好 3 处,形状完全相同**(先 `ClaimInstanceAsync(Running)` → 设 `Status` → `Updateable(Instance).UpdateColumns(Status, UpdateTime, UpdateUserId)`):`TakeTransitionOp.CompleteInstanceAsync`(Approved)、`CompleteTaskOp` 的**终止**拒绝分支(Rejected)、`CancelInstanceOp`(Cancelled)。
-- **`WfInstanceStatus.Terminated = 5` 全仓只出现在 `WfEnums.cs`**,没有任何写入点 → Task 3 不为它造落点(那是新语义,越界)。
-- **实例一旦终态就回不来**:`BeginResubmitAsync` 要求 `Status == Running`(退回/重提期间实例始终 Running)→ `CompletedTime` 一生最多写一次,**不需要** `??=`、也不需要在重提时清空。
-- **数据范围**:`DataScopeContext.Current` 未设置时返回 `Unrestricted` → 启动期回填看得见全部行(仍按引擎惯例加 `ClearFilter<IOrgScoped>()`)。
-- **`ISeedData` 只插不改**(`HasData()` 声明式 + 同步签名),**不能**拿来做 UPDATE 回填。
+- **入参 DTO 只有 4 个,却覆盖 8 个写命令**:`WfStartInput`(start)、`WfTaskActionInput`(approve/reject/transfer/delegate/return **以及 urge**)、`WfInstanceCancelInput`、`WfInstanceResubmitInput`。加字段只动 4 处,不是 8 处。
+- **催办天然不进引擎**:`WfTaskService` 里只有 4 处 `engine.ExecuteAsync`,`UrgeAsync` 不在其中(它只追加事件 + 推通知,返回 `Task` 而非 `WfEngineResult`)。所以「urge 不做幂等」不需要任何开关 —— **不给它透传即可**。
+- **服务方法收的是散参不是 DTO**(`ApproveAsync(taskId, userId, comment, ct)`),唯一例外是 `StartAsync(WfStartInput input, ...)` —— 它**不需要改签名**,`input.RequestId` 直接可用。要加参数的是另外 **7 个**。
+- **控制器一律位置传参**(`..., input.Comment, cancellationToken)`),插参数必须同步改调用点。**测试不直接调这些服务**(全走 HTTP),所以改签名不会波及现有用例。
+- **仓内 DTO 零 `DataAnnotations`,`TenonAdmin.AspNetCore` 也没有任何 `ModelState` 处理** —— 校验一律在代码里抛数字 `ErrorCode`(§13.2)。`[MaxLength]` 在本仓是死代码,不能用。
+- **错误码表连续到 48027**(`CcNotFound`),**48022 是历史空号**。
 
 ### 决策点(exec 不得二次发挥)
 
 | # | 决策 | 理由 |
 |---|---|---|
-| F1 | 列:`[SugarColumn(IsNullable = true, ColumnDescription = "完结时间")] public DateTime? CompletedTime`,挂在 `Status` 之后。**不给 `DefaultValue`、不建索引** | 评审 §九 #2「新增列先 nullable」。`WfInstance.Version` 注释里那条「翻可空 → ADD COLUMN → 回填 → 改 NOT NULL」三步路只对 **NOT NULL** 列才走,nullable ADD COLUMN 四库都直接接受;给了 `DefaultValue` 反而白跑一遍回填 UPDATE。M2c 无按完结时间的查询,索引留给真需要的里程碑 |
-| F2 | 写入收成一处:`WfExecutionContext.WriteInstanceTerminalStatusAsync(status, ct)` —— 设 `Status` + `CompletedTime`,一条 `UpdateColumns(i => new { i.Status, i.CompletedTime, i.UpdateTime, i.UpdateUserId })`;三个终态落点改为调用它。**不把 `ClaimInstanceAsync` 折进去** | 三处复制同一行 = 将来第 4 个终态落点必漏(根因修法:改共享函数,不改三个调用方)。折进 Claim 就动了 M2b 的 CAS 形状与三处各自的长注释 —— **禁区** |
-| F3 | 时间源 `TimeProvider.GetLocalNow().DateTime`(`ctx.TimeProvider` 已是 `required`) | 与审计 AOP 的 `time.GetLocalNow().DateTime` 同源,测试可用假时钟控;**不用** `DateTime.Now` |
-| F4 | 与 `Status` **同一条 UPDATE**;赋值用 `=` 不用 `??=` | 评审 §4.2 要求「与状态原子写入」;`??=` 是死聪明(见上文:不可能二次写),还会在将来真出现二次写时悄悄留住旧时间 |
-| F5 | 回填 = 启动期一次性 `IHostedService`(`Jobs/WfCompletedTimeBackfill.cs`),带**存在性守卫**:`DbMaintenance.IsAnyTable("wf_instance")` 且 `IsAnyColumn("wf_instance","CompletedTime")` 才动手,否则静默跳过 | 见下方专段 |
-| F6 | **不透出 DTO**:不动 `WfInstanceDetailDto`/列表 DTO/前端 | Task 10 的 `gen:api` 只应因 `RequestId` 而变。列已在库里,何时对外由后续里程碑决定;Task 3 不顺手扩 OpenAPI 面 |
+| G1 | 对外名定 **`requestId`**,**不设别名**、不做 `IdempotencyKey` 映射 | 台账 `## Tasks` 与 `## DONE-CONDITION` 全文用的就是 `RequestId`;两个名字指同一件事正是三点钟要解码的那类东西。写进 `## 语义契约` |
+| G2 | 4 个入参 DTO 各加 `string? RequestId { get; init; }` | 见上:4 个 DTO 覆盖 8 命令。`WfTaskActionInput` 被 urge 共用是**可接受的**,因为 urge 侧不透传(G7) |
+| G3 | 新增 `abstract class WfWriteCmd : IWfCommand`,持 `RequestId`;**8 个写命令改继承它**,`TimeoutFireCmd` **不继承**(仍是裸 `IWfCommand`) | 归一化/校验只写**一份**(在 `init` 访问器里),8 个命令零复制;而「超时没有请求身份」直接由类型表达 —— Task 5 挂钩时 `is WfWriteCmd` 就是天然的排除条件,不必再写 `TimeoutFireCmd` 的特例分支 |
+| G4 | 归一化规则(与 receipt 同源):`null` 或纯空白 → **`null`**(= 本次不做幂等);否则 `Trim()`;`Trim()` 后 **长度 > 64** 或**含换行符** → 抛新码 | ①列宽 `RequestKey(64)`,MySQL 非严格模式会静默截断诊断列(消化 `## Findings` 的 P2→Task 4);②`WfIdentityHash.NormalizeRequestKey` 明确拒换行符,DTO 层不拦,Task 5 就会拿一个**能进 DTO 却必然抛 `ArgumentException`**(→ 500)的值;③**空白必须在 DTO 层就变成 `null`**,否则 Task 5 把空白喂给 `NormalizeRequestKey` 同样是 500 —— `null` 才是「不做幂等」的合法表达 |
+| G5 | 新错误码 **`RequestIdInvalid = 48028`**;**不填 48022 空号**、不复用 `ModelFieldTooLong` | 48017 的语义写死在「流程**模型**字段」,借它会让排障读到错误的方向;空号是历史,填回去可能与旧数据/旧文档撞车。48028 是表尾顺延 |
+| G6 | 7 个服务方法加 `string? requestId = null`,**位置在 `CancellationToken` 之前**;`StartAsync` 不动签名 | 带默认值 → 消费者现有**调用**源码兼容;实现者(覆写 `IWfTaskService` 的消费者)会破,但工作流包尚未发包,现在改是最便宜的时刻 |
+| G7 | Controller 透传 **7 处**(approve/reject/transfer/delegate/return + cancel/resubmit);**urge 不传** | 催办不进引擎,传了没人读,反而暗示它有幂等语义(与 `## 语义契约`「催办默认不进 receipt」冲突) |
+| G8 | 本轮**只让值流到命令对象为止**:不碰 `ExecuteAsync`、不建 identity、不落 receipt(那是 Task 5);OpenAPI 变更留给 Task 10 的 `gen:api` | Task 边界,越界即本轮作废 |
 
-### F5 展开(回填为什么是这个形状)
+### 改动清单(exec 只允许碰这 9 个文件)
 
-- **为什么不是「公开一个方法让消费者手动调」**:内核卖点是三行 `Program.cs`,文档里的手动升级步骤等于不会被执行 → 列永远空,等于没做。
-- **为什么守卫能兜住注册顺序**:`AddTenonAdminWorkflow` 通常在 `AddTenonAdmin` **之前**调用 → 本 HostedService 排在 `DatabaseInitializer`(内核 `internal sealed`,无扩展点)**前面**启动。全新库:表不存在 → 跳过(本就无旧行);升级库:首次启动列还没加 → 跳过,同一次启动里 `DatabaseInitializer` 补上列 → **下次重启自愈**。晚一次重启,换掉「跨包改 HostedService 顺序」的耦合,划算。
-- **SQL 两步走,provider-neutral**:① `Queryable` 连 `wf_instance` × `wf_history`(`EventType == InstanceCompleted`),取 `Status != Running && CompletedTime == null` 的 `(InstanceId, MIN(CreateTime))`;② 逐条 `Updateable<WfInstance>().SetColumns(...).Where(i => i.Id == id && i.CompletedTime == null)`。**不写 `UPDATE ... FROM`、不写方言 SQL**(四库语法各异)。
-- **幂等**:条件恒含 `CompletedTime == null`,第二遍 0 行;无事件可依据的旧行**保持空**(评审 §九 #4 原话)。
-- **回填必须用 `SetColumns` 条件更新**:它不触发只认 `UpdateByObject` 的审计 AOP → 回填不会把 `UpdateTime`/`UpdateUserId` 刷成启动时刻。这是要的语义(回填不是一次业务更新)。
-
-### 改动清单(exec 只允许碰这 7 个文件)
-
-1. `backend/src/TenonAdmin.Workflow/Entities/WfInstance.cs` — 加列(F1)
-2. `backend/src/TenonAdmin.Workflow/Engine/WfExecutionContext.cs` — 加 `WriteInstanceTerminalStatusAsync`(F2)
-3. `backend/src/TenonAdmin.Workflow/Engine/Operations/TakeTransitionOp.cs` — 改调用
-4. `backend/src/TenonAdmin.Workflow/Engine/Operations/CompleteTaskOp.cs` — 改调用(**只**终止分支)
-5. `backend/src/TenonAdmin.Workflow/Engine/Operations/CancelInstanceOp.cs` — 改调用
-6. `backend/src/TenonAdmin.Workflow/Jobs/WfCompletedTimeBackfill.cs` — 新增 + `WorkflowSetup.cs` 一行 `AddHostedService`
-7. `backend/tests/TenonAdmin.Tests/WfCompletedTimeTests.cs` — 新增
+1. `backend/src/TenonAdmin.Workflow/Abstractions/WorkflowErrorCode.cs` — 加 `RequestIdInvalid = 48028`
+2. `backend/src/TenonAdmin.Workflow/Engine/WfCommands.cs` — 加 `WfWriteCmd` 基类(G3/G4 的唯一一份校验)+ 8 个写命令改继承
+3. `backend/src/TenonAdmin.Workflow/Services/WfRuntimeModels.cs` — 4 个入参 DTO 加 `RequestId`
+4. `backend/src/TenonAdmin.Workflow/Services/IWfTaskService.cs` — 5 个方法加参数(**不含 `UrgeAsync`**)
+5. `backend/src/TenonAdmin.Workflow/Services/WfTaskService.cs` — 传进命令
+6. `backend/src/TenonAdmin.Workflow/Services/IWfInstanceService.cs` — `CancelAsync`/`ResubmitAsync` 加参数
+7. `backend/src/TenonAdmin.Workflow/Services/WfInstanceService.cs` — 传进命令(`StartAsync` 从 `input.RequestId` 取)
+8. `backend/src/TenonAdmin.Workflow/Controllers/WfTaskController.cs` + `WfInstanceController.cs` — 透传 7 处
+9. `backend/tests/TenonAdmin.Tests/WfRequestIdTests.cs` — 新增
 
 ### 步骤
 
-1. F1 加列 → 2. F2 加 ctx 方法 → 3. 三处调用点改造 → 4. `dotnet build` 过 → 5. F5 回填 HostedService + 注册 → 6. `WfCompletedTimeTests` → 7. `dotnet build -c Release` → 8. 指定过滤器闸门(当前 **210**,本 Task 后应 ≈ 215)。
+1. G5 错误码 → 2. G3/G4 基类 + 8 命令改继承 → 3. G2 四个 DTO → 4. 服务接口 + 实现(7 处签名) → 5. Controller 透传 7 处 → 6. `dotnet build` 过 → 7. `WfRequestIdTests` → 8. `dotnet build -c Release` → 9. 指定过滤器闸门(当前 **215**,本 Task 后应 ≈ 221)。
 
-### 测试清单(`WfCompletedTimeTests`,5 条)
+### 测试清单(`WfRequestIdTests`,6 条)
 
-1. 同意到底 → 实例 `Approved` 且 `CompletedTime` 非空(DB 直查,照 `WfVersionCasTests` 写法)
-2. 拒绝终止 → `Rejected` 且非空;**拒绝 ToNode 分支**(不终止)→ 仍为 `null`(钉住「只在终止分支写」)
-3. 撤销 → `Cancelled` 且非空
-4. 运行中实例 → `null`
-5. 回填:手造「`Status=Approved` + `CompletedTime=null`」旧行 + 一条 `InstanceCompleted` 历史 → 跑回填 → 时间 == 该事件的 `CreateTime`;另造一条**无事件**的旧行 → 保持 `null`;连跑两次结果不变(幂等)
+命令对象是引擎的入参、本轮又不碰引擎,所以断言要靠**探针**:前置注册一个包住内置 `IWorkflowEngine` 的装饰器捕获 `IWfCommand`(照 `WfVersionCasTests` 的 `Overrides` + 事务内 SPI 注入写法)。
+
+1. `approve` 带合法 `requestId` → 引擎收到的命令 `RequestId` 与请求**逐字一致**
+2. `start` 带 `requestId`(DTO 直传路径,不经新增参数)→ 同上
+3. 首尾带空格 → 命令里是 `Trim()` 后的值;**纯空白 → `null`**(不报错、不做幂等)
+4. 65 字符 → 拒绝,信封 `code == 48028`;64 字符**通过**(边界两侧各一)
+5. 含换行符 → 拒绝,`code == 48028`
+6. `urge` 带 `requestId` → **正常成功**(不报错),且这条只是记录事实:催办不进引擎,该字段无人读
 
 ### 陷阱
 
-- `Terminated` 无写入点,**别顺手补落点**。
-- **别把 `ClaimInstanceAsync` 折进新方法**(M2b CAS 禁区);三处的长注释原样保留。
-- 回填只能 `SetColumns` 条件更新;用整对象 `Updateable` 会触发审计 AOP 把 `UpdateTime` 刷成启动时刻 = 伪造审计。
-- `IsAnyTable` / `IsAnyColumn` 的实际签名与第三参数语义(`isCache` / `ignoreCase`)exec 时**先验证**,别照记忆写。
-- HostedService 直接注入 `ISqlSugarClient`(单例)即可;要 `IRepository<>` 就得自建 scope,没必要。
-- **不夹带 receipt 逻辑**(`## Findings` 硬约束 #5);不碰 DTO / 前端 / Urge / `ExecuteAsync`。
+- **`WfTaskActionInput` 被 urge 共用** —— 别顺手给 urge 也透传(G7)。
+- 服务签名把 `requestId` 插在 `CancellationToken` 前,**控制器的位置实参必须同步改**;编译器会报,但别用命名实参糊过去掩盖漏改。
+- **空白 → `null` 必须在 DTO/命令层完成**,否则 Task 5 的 `NormalizeRequestKey` 会抛 `ArgumentException`(500 而不是业务码)。
+- 校验只能在 `WfWriteCmd` 的 `init` 里写**一份**;别在 7 个服务方法里各抄一遍(那正是 Task 3 收成一处要避免的形状)。
+- 不填 48022 空号;不复用 `ModelFieldTooLong`。
+- **不碰** `ExecuteAsync` / receipt / `wf_history` / 前端 / `gen:api`(Task 5/6/9/10)。
 - 不提交 `TestResults/`。
 
 ### 给后续 Task 的锚点(本轮只记录,不实施)
 
-- Task 8 四库套件可直接复用第 5 条回填用例:nullable `ADD COLUMN` 与回填 UPDATE 的四库行为差异,正是契约套件该钉的。
-- Task 4 的 P2 仍在:`RequestId` 长度必须 ≤64,与 `RequestKey` 列宽对齐。
+- Task 5 的排除条件现成:`command is WfWriteCmd { RequestId: not null }` 才建 identity —— `TimeoutFireCmd` 与「没传 key 的请求」自然落在外面。
+- Task 5 拼 identity 时 `RequestKey` 已被 Task 4 归一化过一遍;`WfIdentityHash.NormalizeRequestKey` 仍会再归一一次(幂等),**不要**因此把 DTO 层的校验删掉 —— 那层拦的是 500 与静默截断。
+- Task 6 的 `wf_history.RequestId` 与本字段同源,直接取命令上的值。
+- P3→Task 2/5 仍在:`ResultCode` 的 `0` 恒表示成功。
 
 <!-- TASK1-PLAN-ANCHOR -->
 
@@ -288,6 +290,7 @@
 | 7 | plan | Task 3 plan 定稿(F1–F6):`CompletedTime` 为 nullable 无默认值列(nullable ADD COLUMN 四库均接受,不触发 `Version` 注释里的三步路);终态写入收成 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 一处、三个落点改调用,**不动 M2b 的 `ClaimInstanceAsync`**;时间源 `ctx.TimeProvider`;回填走带 `IsAnyTable`/`IsAnyColumn` 守卫的一次性 HostedService + 两步 provider-neutral SQL(`SetColumns` 条件更新,不污染审计字段),无事件的旧行保持空;**不透出 DTO**(OpenAPI 面留给 Task 10 的 `RequestId`)。读码新事实:`Terminated` 全仓无写入点、实例终态不可逆、`ISeedData` 只插不改。未写产品代码。 |
 | 8 | exec | Task 3 落地 7 文件:`CompletedTime` 可空列、终态写入收成 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 一处(三个分支改调用,`ClaimInstanceAsync` 未动)、`WfCompletedTimeBackfill` 一次性 HostedService(守卫沿用 `DatabaseInitializer` 的 `IsAnyTable` + `GetColumnInfosByTableName` 写法,回避没验证过的 `IsAnyColumn`;回填 `InnerJoin`+`GroupBy MIN(CreateTime)` → 逐条 `SetColumns` 条件更新)、`WfCompletedTimeTests` 5 例(含 ToNode 分支保持空、回填幂等)。顺带修 Round 6 遗留的 `CS8619`。build 0 错 0 警;过滤器 **215/215**。未勾选。 |
 | 9 | review+修+勾选 | Task 3 自审:四处变异,前两处(删赋值 / `UpdateColumns` 去列)各红 3/5;后两处(删事件类型过滤 / 回填改整对象更新)**仍绿** → 2×P2,当场补钉子后各转红 1/5。另记下「幂等断言是弱钉子」的覆盖真相(回填写入是确定性的,去掉任一 `CompletedTime == null` 守卫也写同样的值)。闸门 **215/215**、工作流包 0 警。**Task 3 打勾**。 |
+| 10 | plan | Task 4 plan 定稿(G1–G8):对外名定 `requestId` 无别名;4 个入参 DTO 加字段(`WfTaskActionInput` 一个覆盖 6 个动词);抽 `WfWriteCmd` 基类把归一化(空白→`null`、`Trim`、≤64、禁换行)写成**唯一一份**,`TimeoutFireCmd` 不继承 → Task 5 的排除条件变成类型判断;新码 `RequestIdInvalid = 48028`(不填 48022 空号、不借 `ModelFieldTooLong`);7 个服务方法加可选参数(`StartAsync` 收 DTO 无需改),Controller 透传 7 处、**urge 不传**(它压根不进引擎)。测试靠引擎装饰器探针,6 条。未写产品代码。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
