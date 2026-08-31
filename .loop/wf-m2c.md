@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 0
+- 轮次: 1
 - max: 45
-- 当前任务: —
-- 当前阶段: —
-- 上一轮: 台账起草 + Loop 纪律 + handoff。M2b 已推送 `origin/dev`=`bffec77`。**未开 Task 1**。
-- 下一步: Round 1 — **Task 1 plan only**(`wf_operation_receipt` + `IdentityHash` 构造规则一次定死 + 快照用例)。先读 `workflow-database-design-review-2026-08-24.md` §五全文,再 grep 现有写命令 DTO/Controller 形状。**严格执行 plan→exec→review,本轮只 plan,不写产品代码。** 不做 M3。
+- 当前任务: 1(Operation receipt 实体 + `IdentityHash`)
+- 当前阶段: plan(已完成)
+- 上一轮: Round 1 — 写完 Task 1 的 `## Plan`(D1–D8 决策 + 4 文件改动清单 + 8 条测试 + 陷阱)。**未写任何产品代码**。`dev` 已 fast-forward 到 `26316d4`(他人 PR #34/#36 合入,`bffec77`/`d701dc0` 仍在史);工作区干净,仅未跟踪 `TestResults/`。
+- 下一步: Round 2 — **Task 1 exec**。严格按 `## Plan` 的改动清单只碰 4 个文件(`Entities/WfOperationReceipt.cs`、`Entities/WfEnums.cs`、`Engine/WfIdentityHash.cs`、`tests/WfIdentityHashTests.cs`),跑 `dotnet build -c Release` + 指定过滤器闸门(基线 190,只增不减)。**不勾选 Task 1**(勾选要等 Round 3 的独立 review)。不碰 `ExecuteAsync`/DTO/Controller/前端。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -90,7 +90,58 @@
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段重写)
 
-> **待 Round 1 填写 Task 1 plan**。锚点:数据库评审 §五字段清单 + `IdentityHash` 快照用例 + `WfOperationReceipt` 实体(`DataEntity` vs `BaseEntity` 裁定在 plan 阶段读 `wf_cc`/`wf_history` 先例后定)。
+> **Task 1 — Operation receipt 实体 + `IdentityHash`**(Round 1 写于 2026-08-31;读了数据库评审 §五/§八/§九、设计规划 §14.2/§15.1、`WfCc`/`WfHistory`/`WfInstance` 实体、`BaseEntity`/`DataEntity`/`IOrgScoped` 定义、`WorkflowEngine.ExecuteAsync`、`WfCommands.cs`、`WorkflowSetup.cs`)。
+
+### 决策点(exec 不得二次发挥)
+
+| # | 决策 | 依据 / 理由 |
+|---|---|---|
+| D1 | 基类用 **`BaseEntity`**,**不用 `DataEntity`** | `DataEntity` 带 `IOrgScoped` → 吃全局数据范围过滤器(只作用于 SELECT)。窄范围用户重试时**可能查不到自己刚写的 receipt** → 幂等静默失效、重复推进。机构维度改由显式**非空** `ScopeKey` 列承载,正是评审 §五「不要直接依赖包含 nullable `CreateOrgId` 的组合唯一索引」。`BaseEntity` 与同为 append-only 的 `WfHistory` 先例一致,且 `IRepository<>`/种子仍可用(`AuditEntity` 用不了仓储)。 |
+| D2 | 表 `wf_operation_receipt`;唯一索引 `uk_wf_receipt_identity` on `IdentityHash`(`IsUnique = true`);辅助 `idx_wf_receipt_target` on `(TargetType, TargetId)` 仅排查用 | 评审 §八表格;唯一索引写法照 `SysJob` 的 `uk_sys_job_code` 先例 |
+| D3 | 字段(评审 §五清单,顺序照抄):`ScopeKey`(Length 64,非空)、`CommandType`、`TargetType`、`TargetId`、`ActorUserId`、`RequestKey`(Length 64,非空)、`IdentityHash`(Length 64,非空)、`ResultCode`(int,0=成功)、`ResultJson`(BigString,可空);`Id`/`CreateTime`/审计由 `BaseEntity` 提供 | 评审 §五。`ResultJson` 存序列化后的 `WfEngineResult`,Task 2 才写入 |
+| D4 | 新枚举 `WfCommandType`:`Start=1, Approve=2, Reject=3, Transfer=4, Delegate=5, Return=6, Cancel=7, Resubmit=8`;**不含 Urge / Timeout** | §14.2 列举的 8 个写命令。`Approve`/`Reject` 虽同属 `CompleteTaskCmd`,但**必须是两个 identity**(同人同任务同 key 先拒后批不能命中同一 receipt)。枚举只追加不重排(评审 §九 #6);`Urge` 见 `## 语义契约` 默认不进 receipt |
+| D5 | 新枚举 `WfTargetType`:`Instance=1, Task=2, DefinitionVersion=3`。**`Start` 命令 `TargetType=DefinitionVersion`、`TargetId=DefinitionVersionId`** | 发起时实例尚不存在,没有 InstanceId 可锚;`(defVerId, actor, requestKey)` 足以定死一次发起 |
+| D6 | 哨兵:`ScopeKey` 为 null / 空白 → 固定 `"-"`;**`RequestKey` 为 null/空白直接 `ArgumentException`**,不归一化 | 评审 §五「可空维度归一化为固定哨兵」。RequestKey 反向处理:「没传 key」和「传了空 key」若共享 identity,会让所有未传 key 的请求互相命中,比不幂等更危险。上层校验在 Task 4 |
+| D7 | 拼接:六段按 `ScopeKey → CommandType → TargetType → TargetId → ActorUserId → RequestKey` 顺序,分隔符 `'\n'`;`long` 用 `InvariantCulture` 十进制;字符串 `Trim()` 后**保留大小写**;枚举用**枚举名字符串**(`nameof` 语义,非数值);UTF-8 → SHA-256 → **小写 hex**(`Convert.ToHexStringLower`) | 评审 §五全部六条细则。用枚举名而非数值:将来枚举值若因合并追加而变动,名字仍稳 |
+| D8 | 落点:实体 `Entities/WfOperationReceipt.cs`;两个枚举追加进 `Entities/WfEnums.cs`;算法 `Engine/WfIdentityHash.cs` 的 **静态类**(`WfIdentityHash.Compute(...)`) | 不建接口——单实现的 seam 是 Task 2 的 `IWfOperationReceiptService`,hash 本身是纯函数,做成接口只会让「可替换」把不可逆契约变成可替换契约,与 §15.1 冲突 |
+
+### 改动清单(exec 只允许碰这 4 个文件)
+
+1. `backend/src/TenonAdmin.Workflow/Entities/WfOperationReceipt.cs` — 新增实体(SugarTable + 2 个 SugarIndex)
+2. `backend/src/TenonAdmin.Workflow/Entities/WfEnums.cs` — 追加 `WfCommandType`、`WfTargetType`
+3. `backend/src/TenonAdmin.Workflow/Engine/WfIdentityHash.cs` — 新增静态算法类 + XML doc 明写「发包后不可逆」
+4. `backend/tests/TenonAdmin.Tests/WfIdentityHashTests.cs` — 新增纯单元测试(**无 HTTP、无 AppFactory**)
+
+**无需**改 `WorkflowSetup.cs`:实体走 `ApplicationAssemblies` 程序集扫描(`WorkflowSetup.cs:28-30`),新表 CodeFirst 自动建。
+
+### 步骤
+
+1. 追加两个枚举 → 2. 写实体 → 3. 写 `WfIdentityHash.Compute` → 4. 写测试(先手算/先跑一次拿到 hex,再**写死成字面量常量**) → 5. `dotnet build -c Release` → 6. 跑指定过滤器闸门(基线 190,本 Task 后应为 190+8 左右)。
+
+### 测试清单(`WfIdentityHashTests`,≥8 条)
+
+1. **快照**:固定六元组 → 写死的 64 位 hex 常量(任何算法改动都转红 = §15.1 的不可逆锁)
+2. `ScopeKey = null` 与 `ScopeKey = "-"` **同 hash**(哨兵归一化)
+3. `ScopeKey = ""` / `"   "` 与 null **同 hash**
+4. `RequestKey` 为 null / `""` / `"  "` → `ArgumentException`
+5. **换位不撞车**:`Approve` vs `Reject`、`Instance` vs `Task`、`TargetId`↔`ActorUserId` 互换 → 三对 hash 各不相同
+6. 值前后空白 `Trim` 后同 hash;大小写不同 → 不同 hash
+7. 输出格式:`^[0-9a-f]{64}$`
+8. 长度自洽:`Compute(...).Length == 64`(与实体 `Length = 64` 对齐,写成断言而非注释)
+
+### 陷阱
+
+- **别用 `DataEntity`**(D1);别给 receipt 加软删业务语义——`IsDelete` 来自 `BaseEntity`,永不置真。
+- 分隔符必须是**参与值里不可能出现**的字符;`RequestKey` 由客户端给,若将来允许含 `\n` 需在 builder 里显式拒绝——本轮 builder 对含 `'\n'` 的输入**抛异常**,别让它悄悄产生歧义 hash。
+- `Convert.ToHexStringLower` 是 .NET 9+ API,本仓 `net10.0` 可用;不要退回 `BitConverter.ToString().Replace("-","")`。
+- 不要用 `string.GetHashCode()`/`HashCode.Combine`(进程内随机化,跨库不稳)。
+- 本 Task **不碰** `WorkflowEngine.ExecuteAsync`、命令 DTO、Controller、前端——那是 Task 2/4/5。
+- 不提交 `backend/tests/TenonAdmin.Tests/TestResults/`(已在工作区未跟踪,别 `git add -A`)。
+
+### 给后续 Task 的锚点(本轮只记录,不实施)
+
+- **事务唯一入口是 `WorkflowEngine.ExecuteAsync`**(`Engine/WorkflowEngine.cs:36` 的 `db.Ado.UseTranAsync`),8 个 `BeginXxxAsync` 都在这一个事务里。**Task 2/5 的 receipt 钩子挂 `ExecuteAsync` 一处即可覆盖全部 8 个写命令**,不必改 8 个方法——但 `TimeoutFireCmd` 也走这里,须按 D4 显式排除(超时不是客户端重试)。
+- 通知静默吞异常在 `Engine/WorkflowEngine.cs:83` 与 `:94` 两处 `catch (Exception)` —— Task 7 的落点。
 
 <!-- TASK1-PLAN-ANCHOR -->
 
@@ -131,6 +182,7 @@
 |---|---|---|
 | 0 | draft | 起草台账。M2b 收口 commit `bffec77`;基线 190/190。下一步 Round 1 Task 1 plan。 |
 | 0b | handoff | 补 `## Loop 纪律` + `wf-m2c-handoff.md`;用户要求「严格按 loop」接续。 |
+| 1 | plan | Task 1 plan 定稿:receipt 用 `BaseEntity`+显式 `ScopeKey`(避开数据范围过滤器)、唯一索引 on `IdentityHash`、`WfCommandType`(8 值,排除 Urge/Timeout)/`WfTargetType`(Start 锚 DefinitionVersion)、换行符分隔 + SHA-256 小写 hex、RequestKey 空值抛异常。锚点:`ExecuteAsync` 是唯一事务入口,Task 2/5 挂一处即可。未写产品代码。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
