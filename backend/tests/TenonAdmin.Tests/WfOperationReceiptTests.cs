@@ -150,6 +150,21 @@ public class WfOperationReceiptTests
     }
 
     /// <summary>
+    /// review 补:占位行不存在时 <c>CommitAsync</c> 必须抛,不能静默更新 0 行 —— 否则会留下
+    /// 「有回执但 ResultJson 为空」的自相矛盾状态,下一次重试拿到它就是空结果。
+    /// </summary>
+    [Fact]
+    public async Task Commit_without_a_placeholder_throws_instead_of_updating_nothing()
+    {
+        using var f = new WorkflowAppFactory();
+        var (scope, svc, _) = Open(f);
+        using var __ = scope;
+
+        await Assert.ThrowsAsync<TenonAdmin.Core.AdminException>(
+            () => svc.CommitAsync(Identity(requestKey: "never-reserved"), 0, "{}"));
+    }
+
+    /// <summary>
     /// #7 同源钉子:值对象算出的 hash 必须与 <see cref="WfIdentityHash.Compute"/> 逐参数一致 ——
     /// 两条路径一旦分叉,入库诊断列就与唯一键对不上。
     /// </summary>

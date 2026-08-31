@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 5
+- 轮次: 6
 - max: 45
-- 当前任务: 2(Receipt 服务 + 引擎事务内挂钩)
-- 当前阶段: exec(已完成,**未勾选**)
-- 上一轮: Round 5 — 按 Plan 落地 7 个文件:`WfIdentityHash` 提取 `NormalizeScopeKey`/`NormalizeRequestKey`(**提取后立刻跑 `~WfIdentityHashTests` = 11/11 仍绿**,快照未动)、新增 `WfOperationIdentity`(Create 归一化 + 算 hash)、`IWfOperationReceiptService`、`WfOperationReceiptService`(SELECT→INSERT→异常再 SELECT,不解析方言错误码)、`WorkflowSetup` 加一行 `TryAddScoped`、可替换性**十件套**(补第十面 + 类注释)、`WfOperationReceiptTests` 7 例。`dotnet build -c Release` 0 错(13 警告全在 `TenonAdmin.Services`,工作流包 0 警告);指定过滤器 **209/209 绿**(201 + 8)。
-- 下一步: Round 6 — **Task 2 review**。必做:①跑指定过滤器;②**变异点**至少四处转红后复原——(a) `TryBeginAsync` 里把 `InsertPlaceholderAsync` 挪到 `CommitAsync`(占位在前失效)→ 第 4 条应红;(b) `CommitAsync` 改成 `Insertable` 新增行 → 第 3 条应红;(c) `WorkflowSetup` 的 `TryAddScoped<IWfOperationReceiptService>` 改 `AddScoped` → 第十面应红;(d) `WfOperationIdentity.Create` 里 `ScopeKey` 改存原值不归一化 → 第 5 条应红;③核对 E1–E8 有无二次发挥;④确认 `Snapshot_of_a_known_tuple_is_frozen` 仍绿(E3 重构无副作用);⑤确认没碰 `ExecuteAsync`/命令 DTO/服务层签名。**仍不勾选**,除非 0×P1 / 0×未修 P2。
+- 当前任务: 2(**已勾选**)→ 下一任务 3
+- 当前阶段: review 完成 + 修 P2 + 勾选(0×P1 / 2×P2 均已修)
+- 上一轮: Round 6 — Task 2 review(**自审**,已声明)。四处变异各转红后复原(先 grep 验证文件真改了)。发现并当场修掉 2 条 P2:①`CommitAsync` 静默更新 0 行会留下「有回执但结果为空」的自相矛盾态 → 改为 `affected != 1` 即抛并回滚,补测试;②`FindAsync` 签名 `Task<WfOperationReceipt>` 却返回 null,而它是 `protected virtual` 公开重写点,趁未发包改成可空。另顺手修 P3:`catch (Exception)` 不再吞取消。闸门 **210/210 绿**。**Task 2 已打勾。**
+- 下一步: Round 7 — **Task 3 plan only**(`WfInstance.CompletedTime`)。plan 前必读:①`Engine/Operations/TakeTransitionOp.cs` 与 `CompleteTaskOp.cs` 的终态分支(实例进 Approved/Rejected/Cancelled/Terminated 的**全部**落点,别漏 `CancelInstanceOp`);②`WfInstance.Version` 的 `DefaultValue` 长注释(新增列在四库的 ADD COLUMN 行为,尤其 SQLite 例外);③数据库评审 §4.2 与 §九 #4(旧行可从 `InstanceCompleted` 事件回填,测一条即可)。**Task 3 不得夹带 receipt 逻辑**(`## Findings` 硬约束 #5)。本轮只 plan,不写产品代码。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -160,7 +160,7 @@
 > 任务顺序 = 依赖顺序。编号稳定;`## Log` 引用任务号。
 
 - [x] **1. Operation receipt 实体 + `IdentityHash`**:新增 `wf_operation_receipt`(`WfOperationReceipt`)、`IdentityHashBuilder`(或同级静态类)、唯一索引 on `IdentityHash`、**无 HTTP** 的快照/归一化单元测试(已知输入 → 已知 hash,四库同一算法)。`CommandType`/`TargetType` 枚举或常量表在实现任务定稿。依据:数据库评审 §五。
-- [ ] **2. Receipt 服务 + 引擎事务内挂钩**: `IWfOperationReceiptService`(或引擎内 `virtual` 步骤,须 `TryAdd`) — `TryBeginAsync`(查已有 / 占位)与 `CommitAsync`(同事务写 `ResultJson`);与 `WorkflowEngine.BeginXxxAsync` 事务边界对齐。失败路径:业务抛错 → receipt 随事务回滚。`WorkflowReplaceabilityTests` 补一面。
+- [x] **2. Receipt 服务 + 引擎事务内挂钩**: `IWfOperationReceiptService`(或引擎内 `virtual` 步骤,须 `TryAdd`) — `TryBeginAsync`(查已有 / 占位)与 `CommitAsync`(同事务写 `ResultJson`);与 `WorkflowEngine.BeginXxxAsync` 事务边界对齐。失败路径:业务抛错 → receipt 随事务回滚。`WorkflowReplaceabilityTests` 补一面。
 - [ ] **3. `WfInstance.CompletedTime`**:实体列 + 终态写入落点(`TakeTransitionOp`/`CompleteTaskOp` 终止分支等);CodeFirst 可空或带默认值;旧行回填策略按评审 §十(可从 `InstanceCompleted` 事件回填,测一条即可)。**不改** receipt 行为。
 - [ ] **4. 写命令 DTO + Controller 收 `RequestId`**: `Start/Approve/Reject/Transfer/Delegate/Return/Cancel/Resubmit` 输入 DTO 增 `RequestId`(或 `IdempotencyKey`,plan 阶段二选一对外名、另一名作别名/映射);Controller 透传。OpenAPI 变更 → 留给 Task 10 `gen:api`。**不含 Urge**(默认)。
 - [ ] **5. 引擎写路径接 receipt**:上述 8 个 `BeginXxxAsync` 入口在事务开头解析 identity → 命中则直接返回缓存 `WfEngineResult` → 否则执行现有 Op 链 → 成功则落 receipt。覆盖「串行双提交」「并发双提交仅一次推进」「业务失败无 receipt」「终态重试返回首次结果」的集成测试(单库,≥6 条,附变异点)。
@@ -204,6 +204,35 @@
 
 **P1**:0 条。**P2(阻塞 Task 1)**:0 条。→ 满足勾选条件。
 
+### Task 2 review(Round 6,2026-08-31)
+
+> **⚠ 自审声明**:与 exec 同一 context(会话规则禁止未经用户要求派子 agent)。仍用**变异测试**代替第二双眼睛,四处变异**每处先 `grep` 确认文件真改了**再跑(Round 3 的教训)。
+
+**变异点验证**(改 → 跑 `~WfOperationReceiptTests|~WorkflowReplaceabilityTests` → 复原):
+
+| 变异 | 结果 | 说明 |
+|---|---|---|
+| `TryBeginAsync` 里去掉占位 INSERT | **红 4/17** | `First_try_begin_reserves...` / `Second_try_begin...` / `Scope_and_request_key...` / `Commit_updates_in_place...` |
+| `CommitAsync` 改成 `Insertable` 新增行 | **红 1/17** | `Second_try_begin_returns_the_first_result` |
+| `TryAddScoped` 退化成 `AddScoped` | **红 1/17** | 第十面 `PreRegisteredOperationReceiptService_ShouldWinOverBuiltIn` |
+| `WfOperationIdentity.Create` 不归一化 `ScopeKey` | **红 2/17** | `Scope_and_request_key_are_stored_normalized` / `Identity_hash_matches_the_raw_algorithm` |
+
+**一处要说清的覆盖真相**:去掉占位 INSERT 后,`Rollback_leaves_no_receipt_behind`(第 4 条)**仍然绿** —— 它只能证明「回滚后没有残留」,证明不了「本来就写进去过」。两条合起来才完整:`First_try_begin...` 证明占位真的发生,`Rollback...` 证明它随事务消失。**第 4 条单独看是弱钉子**,后续任务别只留它。
+
+**修掉的 P2**(review 发现,本轮已修 + 补测试 + 变异验证):
+
+1. **P2 已修 — `CommitAsync` 静默更新 0 行**:占位行不存在时原实现只是「更新了 0 行」然后当成功返回。后果不是报错而是**留下一条 `ResultJson` 为空的回执**,下一次重试命中它 → 拿到「有回执但结果为空」的自相矛盾状态,幂等在最不该出错的地方悄悄坏掉。现改为 `affected != 1` 即抛 `AdminException`(`OperationFailed` + `reason=receiptPlaceholderMissing`),整事务回滚。补测试 `Commit_without_a_placeholder_throws_instead_of_updating_nothing`;把判断改成 `if (false)` 该测试转红(已验证)。
+2. **P2 已修 — `FindAsync` 返回类型撒谎**:签名是 `Task<WfOperationReceipt>` 却会返回 `null`。它是 `protected virtual`,属于**发包后的公开重写点**,签名后改就是破坏性变更,故趁没人依赖时改成 `Task<WfOperationReceipt?>`。
+3. **P3 已顺手修 — `catch (Exception)` 会吞掉取消**:改成 `when (ex is not OperationCanceledException)`,取消不再被误判成唯一键冲突。
+
+**核对 E1–E8**:E1(两方法 + `WfOperationReceipt?` 返回)✅ / E2(占位在前)✅ / E3(归一化单一来源,快照 11/11 仍绿)✅ / E4(值对象 `Create`)✅ / E5(走 `IRepository.Db`,不自开事务)✅ / E6(SELECT→INSERT→再 SELECT,零方言错误码)✅ / E7(失败不落回执)✅ / E8(`TryAdd` + 十件套 + 类注释)✅。改动面只含计划内 7 文件,**未碰** `ExecuteAsync` / 命令 DTO / 服务层签名 / 前端 ✅。
+
+**闸门**:`dotnet build -c Release` 0 错、工作流包 0 警;`dotnet test --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"` → **210/210 绿**(209 + 新增守卫测试)。
+
+**本轮操作教训**:变异复原用了 `git checkout <整个 src 目录>`,把**同轮未提交的 P2 修复一起冲掉**,导致一次「210 里红 1」的假警报。变异复原只该 checkout **被变异的那一个文件**,或先把修复提交掉再做变异。
+
+**P1**:0 条。**P2**:2 条,**均已修并验证**。→ 满足勾选条件。
+
 ### 跨任务待办(不阻塞 Task 1,后续任务必须消化)
 
 - **P2 → Task 4**:`RequestKey` / `ScopeKey` 列宽都是 **64**,而 `WfIdentityHash.Compute` 对长度不设限。写命令 DTO 必须把 `RequestId` 卡在 **≤64**(配一条超长即拒的测试):否则 MySQL 非严格模式静默截断诊断列(identity 由完整值算出,不受影响,但排查时看到的是截断值),严格方言下直接插入报错。
@@ -221,6 +250,7 @@
 | 3 | review+勾选 | Task 1 自审(已声明):三处变异(分隔符 / `TargetId`↔`ActorUserId` / 哨兵)各转红后复原,D1–D8 全对,改动面无溢出,全过滤器 201/201。`Enum.IsDefined` 计划外守卫裁定保留。**Task 1 打勾**。新增跨任务待办:P2→Task 4(`RequestId` 长度 ≤64)、P3→Task 2(落库存归一化值)、P3→Task 2/5(`ResultCode` 0=成功)。教训:变异测试要先 grep 确认文件真改了,否则「绿」是假的。 |
 | 4 | plan | Task 2 plan 定稿(E1–E8):`IWfOperationReceiptService` 两方法(`TryBeginAsync` 返回 `WfOperationReceipt?`/`CommitAsync` 回填);**占位在前**;唯一冲突走 SELECT→INSERT→SELECT 不碰方言错误码;新值对象 `WfOperationIdentity` + 归一化提取到 `WfIdentityHash`(入库值与 hash 同源,消化 P3);业务失败不落回执;可替换性九件套→十件套。边界:不碰 `ExecuteAsync`/DTO/服务签名(那是 Task 5)。未写产品代码。 |
 | 5 | exec | Task 2 落地 7 文件:归一化提取(快照 11/11 仍绿)、`WfOperationIdentity`、`IWfOperationReceiptService` + 实现(占位在前;唯一冲突走二次 SELECT,不碰方言错误码)、`TryAddScoped` 一行、可替换性**十件套**、`WfOperationReceiptTests` 7 例(含「回滚不残留」核心钉子 + 射程声明)。build 0 错、工作流包 0 警;过滤器 **209/209**(201+8)。未勾选。 |
+| 6 | review+修+勾选 | Task 2 自审:四处变异(去占位 / Commit 改新增 / TryAdd→Add / 不归一化)各转红后复原。修 2×P2——`CommitAsync` 0 行不再静默(改抛 + 补测试 + 变异验证)、`FindAsync` 可空签名趁未发包改正;顺带 P3 不再吞 `OperationCanceledException`。闸门 **210/210**。**Task 2 打勾**。教训:变异复原只 checkout 被变异的那一个文件,别 checkout 整个 src 目录(会冲掉同轮未提交的修复,制造假红)。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
