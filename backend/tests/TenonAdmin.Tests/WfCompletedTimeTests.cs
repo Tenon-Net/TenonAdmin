@@ -157,7 +157,13 @@ public class WfCompletedTimeTests
 
         await RunBackfillAsync(f);
 
-        Assert.Equal(completedAt, (await InstanceOf(f, withEvent)).CompletedTime);
+        var filled = await InstanceOf(f, withEvent);
+        Assert.Equal(completedAt, filled.CompletedTime);
+        // 回填不是业务更新:走 SetColumns 条件更新,审计字段必须原样不动。改成整对象 Updateable
+        // (走 UpdateByObject → 触发审计 AOP)这两条立刻红 —— 那等于把「升级那一刻」伪造成一次人为修改。
+        Assert.Null(filled.UpdateTime);
+        Assert.Null(filled.UpdateUserId);
+
         Assert.Null((await InstanceOf(f, withoutEvent)).CompletedTime);
 
         await RunBackfillAsync(f);
@@ -188,6 +194,16 @@ public class WfCompletedTimeTests
 
         if (completedEventTime is { } at)
         {
+            // 先落一条**更早的、别的类型**的事件:真实实例的事件流里 InstanceCompleted 从来不是第一条。
+            // 少了它,回填即使把事件类型过滤删掉(MIN 落到整条事件流的第一条 = 发起时刻)测试仍会绿。
+            await db.Insertable(new WfHistory
+            {
+                InstanceId = instance.Id,
+                EventType = WfHistoryEventType.NodeLeave,
+                CreateTime = at.AddDays(-1),
+                NodeId = "node1",
+            }).ExecuteCommandAsync();
+
             await db.Insertable(new WfHistory
             {
                 InstanceId = instance.Id,

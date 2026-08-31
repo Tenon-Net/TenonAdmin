@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 8
+- 轮次: 9
 - max: 45
-- 当前任务: 3(`WfInstance.CompletedTime`)
-- 当前阶段: exec(已完成,**未勾选**)
-- 上一轮: Round 8 — Task 3 exec 落地 7 文件,严格按 F1–F6:①`WfInstance.CompletedTime` 可空无默认值列;②新增 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 作为终态写入**唯一落点**,三个终态分支改为调用它(`ClaimInstanceAsync` 原样不动,M2b CAS 未碰);③`Jobs/WfCompletedTimeBackfill.cs` 一次性 HostedService + `AddHostedService` 一行,守卫用仓内既有写法 `IsAnyTable(table,false)` + `GetColumnInfosByTableName(table,false)`(**没用**没验证过的 `IsAnyColumn`),回填走 InnerJoin+GroupBy 取 `MIN(CreateTime)` 后逐条 `SetColumns` 条件更新;④`WfCompletedTimeTests` 5 例。顺带修掉 Round 6 遗留的 `CS8619`(见 `## Findings`)。build 0 错 0 警;过滤器 **215/215**(210+5)。
-- 下一步: Round 9 — **Task 3 review**(自审须声明)。必跑的变异点至少四处,每处**先 grep 确认文件真改了**、复原**只 checkout 被变异的那一个文件**:①`WriteInstanceTerminalStatusAsync` 里删掉 `CompletedTime` 赋值 → 应红 3 条(同意/拒绝终止/撤销);②`UpdateColumns` 里去掉 `i.CompletedTime` → 应红 3 条(内存写了但没落库);③回填的 `Where` 去掉 `i.CompletedTime == null` → 幂等断言应红;④回填改成整对象 `Updateable` → 看审计字段是否被污染(若无断言覆盖,这就是一条 P2:缺「回填不动 `UpdateTime`」的钉子)。另需复核:`CompleteTaskOp` 的 ToNode 分支确实没被误改、`GroupBy` 查询在 SQLite 之外的方言上的写法风险(记 P3 交 Task 8)。
+- 当前任务: 3(**已勾选**)→ 下一任务 4
+- 当前阶段: review 完成 + 修 P2 + 勾选(0×P1 / 2×P2 均已修)
+- 上一轮: Round 9 — Task 3 review(**自审**,已声明)。四处变异各先 grep 验证后再跑:前两处(删 `CompletedTime` 赋值 / `UpdateColumns` 去掉该列)各**红 3/5**,主落点钉得住;后两处(删回填的事件类型过滤 / 回填改整对象更新)**双双仍绿** → 两条 P2,当场补钉子(旧行再造一条更早的 `NodeLeave` 事件;断言回填后 `UpdateTime`/`UpdateUserId` 仍为 null),补完后同样两处变异各**红 1/5**。闸门 **215/215**,工作流包 0 警。**Task 3 已打勾。**
+- 下一步: Round 10 — **Task 4 plan only**(8 个写命令 DTO + Controller 收 `RequestId`)。plan 前必读:①`Engine/WfCommands.cs` 与 `Services/WfRuntimeModels.cs` 的 8 个写命令入参形状;②`Controllers/WfInstanceController.cs` / `WfTaskController.cs` 的透传写法;③`## Findings` 的 **P2→Task 4**(`RequestId` 必须卡 ≤64,与 `RequestKey` 列宽对齐,配超长即拒的测试)与 **P3→Task 2/5**(`ResultCode` 0 恒为成功)。对外名 `RequestId` vs `IdempotencyKey` **二选一并写进 `## 语义契约`**;**默认不含 Urge**。本轮只 plan,不写产品代码;OpenAPI 变更留给 Task 10。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -165,7 +165,7 @@
 
 - [x] **1. Operation receipt 实体 + `IdentityHash`**:新增 `wf_operation_receipt`(`WfOperationReceipt`)、`IdentityHashBuilder`(或同级静态类)、唯一索引 on `IdentityHash`、**无 HTTP** 的快照/归一化单元测试(已知输入 → 已知 hash,四库同一算法)。`CommandType`/`TargetType` 枚举或常量表在实现任务定稿。依据:数据库评审 §五。
 - [x] **2. Receipt 服务 + 引擎事务内挂钩**: `IWfOperationReceiptService`(或引擎内 `virtual` 步骤,须 `TryAdd`) — `TryBeginAsync`(查已有 / 占位)与 `CommitAsync`(同事务写 `ResultJson`);与 `WorkflowEngine.BeginXxxAsync` 事务边界对齐。失败路径:业务抛错 → receipt 随事务回滚。`WorkflowReplaceabilityTests` 补一面。
-- [ ] **3. `WfInstance.CompletedTime`**:实体列 + 终态写入落点(`TakeTransitionOp`/`CompleteTaskOp` 终止分支等);CodeFirst 可空或带默认值;旧行回填策略按评审 §十(可从 `InstanceCompleted` 事件回填,测一条即可)。**不改** receipt 行为。
+- [x] **3. `WfInstance.CompletedTime`**:实体列 + 终态写入落点(`TakeTransitionOp`/`CompleteTaskOp` 终止分支等);CodeFirst 可空或带默认值;旧行回填策略按评审 §十(可从 `InstanceCompleted` 事件回填,测一条即可)。**不改** receipt 行为。
 - [ ] **4. 写命令 DTO + Controller 收 `RequestId`**: `Start/Approve/Reject/Transfer/Delegate/Return/Cancel/Resubmit` 输入 DTO 增 `RequestId`(或 `IdempotencyKey`,plan 阶段二选一对外名、另一名作别名/映射);Controller 透传。OpenAPI 变更 → 留给 Task 10 `gen:api`。**不含 Urge**(默认)。
 - [ ] **5. 引擎写路径接 receipt**:上述 8 个 `BeginXxxAsync` 入口在事务开头解析 identity → 命中则直接返回缓存 `WfEngineResult` → 否则执行现有 Op 链 → 成功则落 receipt。覆盖「串行双提交」「并发双提交仅一次推进」「业务失败无 receipt」「终态重试返回首次结果」的集成测试(单库,≥6 条,附变异点)。
 - [ ] **6. `wf_history.RequestId`**:列 + `AppendHistoryAsync` 写路径传入;与 receipt 的 `RequestKey` 同源。测试:重复请求不重复追加**可观测**历史(或命中 receipt 根本不进引擎 — plan 阶段二选一并写进契约)。
@@ -241,6 +241,32 @@
 
 `WfOperationReceiptService.FindAsync` 在 Round 6 改成 `Task<WfOperationReceipt?>` 后,SqlSugar 的 `FirstAsync` 标注是 `Task<T>` 非空 → 留下一条 **CS8619**(`bin` 已缓存时不会重现,故 Round 6 的「0 警」是增量构建的假象)。Round 8 顺手修掉:在 `FirstAsync(...)` 后加 `!` 并注明原因。不是新缺陷,是上一轮闸门读数的更正 —— **判「0 警」要看全量构建输出,别信增量**。
 
+### Task 3 review(Round 9,2026-08-31)
+
+> **⚠ 自审声明**:与 exec 同一 context(会话规则禁止未经用户要求派子 agent)。仍以**变异测试**代替第二双眼睛,四处变异**每处先 `grep` 确认文件真改了**再跑,复原**只 checkout 被变异的那一个文件**。
+
+**变异点验证**(改 → 跑 `~WfCompletedTime` → 复原):
+
+| 变异 | 结果 | 说明 |
+|---|---|---|
+| `WriteInstanceTerminalStatusAsync` 删掉 `CompletedTime` 赋值 | **红 3/5** | 同意 / 拒绝终止 / 撤销三条 |
+| `UpdateColumns` 去掉 `i.CompletedTime`(内存写了但不落库) | **红 3/5** | 同上 —— 两处变异共同证明「写了且落库了」 |
+| 回填去掉 `h.EventType == InstanceCompleted` | **首轮仍绿 → P2** | 补钉子后 **红 1/5** |
+| 回填改成整对象 `Updateable`(触发审计 AOP) | **首轮仍绿 → P2** | 补钉子后 **红 1/5** |
+
+**修掉的 P2**(review 发现,本轮已补测试 + 变异验证):
+
+1. **P2 已修 — 回填的事件类型过滤没有钉子**:原用例给旧行只造了一条 `InstanceCompleted` 历史,于是把事件类型过滤删掉后 `MIN(CreateTime)` 仍落在同一行 → 绿。而真实实例的事件流里 `InstanceCompleted` **从来不是第一条**,过滤一丢,回填出来的就是**发起时刻**冒充完结时刻 —— 错数据,还查不出来。现在旧行额外带一条更早的 `NodeLeave` 事件,过滤一删立刻红。
+2. **P2 已修 — 「回填不动审计字段」没有钉子**:把 `SetColumns` 条件更新换成整对象 `Updateable` 会触发只认 `UpdateByObject` 的审计 AOP,把 `UpdateTime`/`UpdateUserId` 刷成升级那一刻 = 把一次机械回填伪造成人为修改。现在断言回填后两列仍为 `null`。
+
+**一处要说清的覆盖真相**:「连跑两次结果不变」这条**是弱钉子** —— 回填写入是确定性的(同一 `MIN(CreateTime)`),去掉候选查询或更新语句里任一个 `CompletedTime == null` 守卫,第二遍写进去的还是同一个值,断言照样绿。那两个守卫真正省下的是**无谓的 UPDATE**,不是正确性。本条钉住的实际是「有事件→按事件时间补齐」「无事件→保持空」。
+
+**核对 F1–F6**:F1(可空、无 `DefaultValue`、无索引)✅ / F2(唯一落点 + 三处改调用,`ClaimInstanceAsync` 一个字没动)✅ / F3(`ctx.TimeProvider`)✅ / F4(同一条 UPDATE,`=` 非 `??=`)✅ / F5(存在性守卫沿用 `DatabaseInitializer` 的 `IsAnyTable`+`GetColumnInfosByTableName`,回避没验证过的 `IsAnyColumn`;两步 provider-neutral;`SetColumns`)✅ / F6(未透出 DTO)✅。`CompleteTaskOp` 的 **ToNode 分支未被误改**(专门一条用例钉住它仍为空)✅。改动面只含计划内 7 文件,**未碰** `ExecuteAsync` / 命令 DTO / 前端 ✅。
+
+**闸门**:`dotnet build -c Release` 0 错、工作流包 0 警;`dotnet test --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"` → **215/215 绿**。
+
+**P1**:0 条。**P2**:2 条,**均已修并验证**。→ 满足勾选条件。
+
 ### 跨任务待办(不阻塞 Task 1,后续任务必须消化)
 
 - **P2 → Task 4**:`RequestKey` / `ScopeKey` 列宽都是 **64**,而 `WfIdentityHash.Compute` 对长度不设限。写命令 DTO 必须把 `RequestId` 卡在 **≤64**(配一条超长即拒的测试):否则 MySQL 非严格模式静默截断诊断列(identity 由完整值算出,不受影响,但排查时看到的是截断值),严格方言下直接插入报错。
@@ -261,6 +287,7 @@
 | 6 | review+修+勾选 | Task 2 自审:四处变异(去占位 / Commit 改新增 / TryAdd→Add / 不归一化)各转红后复原。修 2×P2——`CommitAsync` 0 行不再静默(改抛 + 补测试 + 变异验证)、`FindAsync` 可空签名趁未发包改正;顺带 P3 不再吞 `OperationCanceledException`。闸门 **210/210**。**Task 2 打勾**。教训:变异复原只 checkout 被变异的那一个文件,别 checkout 整个 src 目录(会冲掉同轮未提交的修复,制造假红)。 |
 | 7 | plan | Task 3 plan 定稿(F1–F6):`CompletedTime` 为 nullable 无默认值列(nullable ADD COLUMN 四库均接受,不触发 `Version` 注释里的三步路);终态写入收成 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 一处、三个落点改调用,**不动 M2b 的 `ClaimInstanceAsync`**;时间源 `ctx.TimeProvider`;回填走带 `IsAnyTable`/`IsAnyColumn` 守卫的一次性 HostedService + 两步 provider-neutral SQL(`SetColumns` 条件更新,不污染审计字段),无事件的旧行保持空;**不透出 DTO**(OpenAPI 面留给 Task 10 的 `RequestId`)。读码新事实:`Terminated` 全仓无写入点、实例终态不可逆、`ISeedData` 只插不改。未写产品代码。 |
 | 8 | exec | Task 3 落地 7 文件:`CompletedTime` 可空列、终态写入收成 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 一处(三个分支改调用,`ClaimInstanceAsync` 未动)、`WfCompletedTimeBackfill` 一次性 HostedService(守卫沿用 `DatabaseInitializer` 的 `IsAnyTable` + `GetColumnInfosByTableName` 写法,回避没验证过的 `IsAnyColumn`;回填 `InnerJoin`+`GroupBy MIN(CreateTime)` → 逐条 `SetColumns` 条件更新)、`WfCompletedTimeTests` 5 例(含 ToNode 分支保持空、回填幂等)。顺带修 Round 6 遗留的 `CS8619`。build 0 错 0 警;过滤器 **215/215**。未勾选。 |
+| 9 | review+修+勾选 | Task 3 自审:四处变异,前两处(删赋值 / `UpdateColumns` 去列)各红 3/5;后两处(删事件类型过滤 / 回填改整对象更新)**仍绿** → 2×P2,当场补钉子后各转红 1/5。另记下「幂等断言是弱钉子」的覆盖真相(回填写入是确定性的,去掉任一 `CompletedTime == null` 守卫也写同样的值)。闸门 **215/215**、工作流包 0 警。**Task 3 打勾**。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
