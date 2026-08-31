@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 17
+- 轮次: 18
 - max: 45
-- 当前任务: 6(`wf_history.RequestId`)
-- 当前阶段: exec(已完成,**未勾选**)
-- 上一轮: Round 17 — Task 6 exec 落地,**严格 4 文件、零溢出**。`WfHistory` 加可空 64 列;ctx 加 `public required string? RequestId`,`required` 一加编译器精确炸出 **8 处**构造(与 plan 数字一致,没靠肉眼数),7 处填 `cmd.RequestId`、`BeginTimeoutAsync` 填 `null` 并附注释;`AppendHistoryAsync` 里赋一行,20 个调用点零改动。plan 担心的第 5 文件风险**没兑现**——测试里没有 `new WfExecutionContext`。`WfHistoryRequestIdTests` 6 例一次全绿。**踩到一条**:新用例引入 3 条 `xUnit2031`(`Assert.Single(x.Where(...))` 应改谓词重载),全量构建警告从 13 涨到 16,已改回 13 —— 又一次印证「只信全量构建」。闸门:全量 Release 0 错、工作流包与测试工程 0 警;过滤器 **240/240**(234+6)。
-- 下一步: Round 18 — **Task 6 review**(自审须声明)。变异点五处,每处**先 grep 确认文件真改了**、复原**只 checkout 被变异的那一个文件**:①`AppendHistoryAsync` 的 `new WfHistory` 里删掉 `RequestId` 赋值 → 用例 1、2 应红;②改成 `RequestId = RequestId ?? ""` → 用例 3 应红;③`BeginStartAsync` 的构造改 `RequestId = null` → **只**用例 1 应红(这正是用例 1 存在的理由,若它不红说明那条钉子没钉住「构造时就带上」);④`BeginCompleteAsync` 的构造改 `RequestId = null` → 用例 2 应红;⑤去掉 `ExecuteAsync` 的短路 → 用例 6 应红。另需复核:用例 3「全为 null」是否**够强**(整列压根没建出来时它也绿 —— 用例 1/2 是它的对照组,要在 Findings 写清);以及超时那条已内置对照断言(同实例的发起行**有**值),确认它真能挡住「整列没写进去」的假绿。
+- 当前任务: 7(通知失败可观测)
+- 当前阶段: 待 plan(Task 6 已勾选)
+- 上一轮: Round 18 — Task 6 review(自审)+ 勾选,**0×P1 / 0×P2,本 M2c 第一次 review 无新增缺陷**。五处变异全部按预期转红:①删 `AppendHistoryAsync` 的赋值 red 3/6、②`?? ""` 空串代替 null red 2/6、③`BeginStartAsync` 传 null red 2/6(用例 1 如期红 —— 「构造时就带上」的钉子成立)、④`BeginCompleteAsync` 传 null red 1/6(精准命中用例 2)、⑤去掉 Task 5 短路 red 1/6。**意外收获**:超时那条内置的对照断言在①③两处变异里都跟着红了,证明它真挡得住「整列压根没写进去」的假绿 —— 上一轮标记要复核的那个疑虑,结论是钉子有效。闸门:全量 Release 0 错、13 警(全为 Core/Services 既有基线);过滤器 **240/240**。
+- 下一步: Round 19 — **Task 7 plan**(不写产品代码)。读 `Engine/WfDefaultNotifier.cs` 全文、`Abstractions/IWorkflowNotifier.cs`、`WorkflowEngine.DispatchPendingNotificationsAsync` 里那**两处**静默 `catch (Exception)`(约 82 / 94 行)、`WorkflowOptions`(看有没有现成的开关位)、仓内既有 `ILogger` 注入姿势(工作流包目前是否已引 `Microsoft.Extensions.Logging.Abstractions`,`WfCompletedTimeBackfill` 已注入 `ILogger` 可作先例),定:①日志打在哪一层 —— `WfDefaultNotifier` 内部,还是引擎的 `DispatchPendingNotificationsAsync`(**两处 catch 在引擎里,通知实现在 Notifier 里,别把日志写成两份**);②结构化字段(`InstanceId`/`Event`/`UserId`/异常)与级别(`LogWarning` 还是 `LogError`);③是否需要 `IOptions` 静默开关(YAGNI 倾向:不加,除非测试拿不到日志);④测试怎么断言日志 —— 仓内是否已有 `ILoggerProvider` 假实现先例,没有就用最小自制;⑤**不引入新 NuGet**(台账 Task 7 原文)。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -176,7 +176,7 @@
 - [x] **3. `WfInstance.CompletedTime`**:实体列 + 终态写入落点(`TakeTransitionOp`/`CompleteTaskOp` 终止分支等);CodeFirst 可空或带默认值;旧行回填策略按评审 §十(可从 `InstanceCompleted` 事件回填,测一条即可)。**不改** receipt 行为。
 - [x] **4. 写命令 DTO + Controller 收 `RequestId`**: `Start/Approve/Reject/Transfer/Delegate/Return/Cancel/Resubmit` 输入 DTO 增 `RequestId`(或 `IdempotencyKey`,plan 阶段二选一对外名、另一名作别名/映射);Controller 透传。OpenAPI 变更 → 留给 Task 10 `gen:api`。**不含 Urge**(默认)。
 - [x] **5. 引擎写路径接 receipt**:上述 8 个 `BeginXxxAsync` 入口在事务开头解析 identity → 命中则直接返回缓存 `WfEngineResult` → 否则执行现有 Op 链 → 成功则落 receipt。覆盖「串行双提交」「并发双提交仅一次推进」「业务失败无 receipt」「终态重试返回首次结果」的集成测试(单库,≥6 条,附变异点)。
-- [ ] **6. `wf_history.RequestId`**:列 + `AppendHistoryAsync` 写路径传入;与 receipt 的 `RequestKey` 同源。测试:重复请求不重复追加**可观测**历史(或命中 receipt 根本不进引擎 — plan 阶段二选一并写进契约)。
+- [x] **6. `wf_history.RequestId`**:列 + `AppendHistoryAsync` 写路径传入;与 receipt 的 `RequestKey` 同源。测试:重复请求不重复追加**可观测**历史(或命中 receipt 根本不进引擎 — plan 阶段二选一并写进契约)。
 - [ ] **7. 通知失败可观测**: `WfDefaultNotifier` 注入 `ILogger<WfDefaultNotifier>`(或内核既有日志抽象),`catch` 改 `LogWarning`/`LogError` 结构化字段(`InstanceId`,`Event`,`UserId`,异常);可选 `IOptions` 开关保留静默模式给测试。补一条「publisher 抛错 → 审批仍成功 + 日志有条目」测试。不引入新 NuGet。
 - [ ] **8. 四库持久化契约套件**:新建 `WfPersistenceContractTests`(或同级),**同一套用例**经 `TestDb.DbType` 在四库 CI 腿各跑:①`IdentityHash` 快照;②receipt 唯一性;③并发 CAS(实例/Token/任务至少各一条);④事务回滚 receipt 不残留;⑤超时领取 vs 人工 `Approve` 仅一方胜出;⑥终态保护。不复制 190 条全集,只钉持久化契约(目标 **12–20** 条,plan 阶段列清单)。SqlServer PR 腿若已有 `TEST_FILTER`,评估是否纳入子集或 nightly — plan 阶段读 `.github/workflows/backend-ci.yml` 后定。
 - [ ] **9. Vue request key 生命周期**: `web/` 发起页 + 实例详情写操作:一次用户动作(打开弹窗/点一次按钮)生成 UUID,该动作重试(含 axios 重试若存在)复用;成功或明确失败后丢弃;新动作新 key。按钮防连点保留。`src/workflow/` 或 composable 单点实现,避免每页复制。typecheck/lint/vitest 绿。
@@ -334,6 +334,31 @@
 
 **P1**:0 条。**P2**:1 条,**已修并验证**。→ 满足勾选条件。
 
+### Task 6 review(Round 18,2026-08-31)
+
+> **⚠ 自审声明**:与 exec 同一 context(会话规则禁止未经用户要求派子 agent)。仍以**变异测试**代替第二双眼睛,每处**先 `grep` 确认文件真改了**再跑,复原**只 checkout 被变异的那一个文件**。
+
+**变异点验证**(跑 `~WfHistoryRequestIdTests` → 复原):
+
+| 变异 | 结果 | 说明 |
+|---|---|---|
+| `AppendHistoryAsync` 的 `new WfHistory` 里删掉 `RequestId` 赋值 | **红 3/6** | 用例 1、2 **加上超时那条**——它的对照断言跟着红 |
+| 改成 `RequestId = RequestId ?? ""` | **红 2/6** | 用例 3(null≠空串)+ 超时那条的对照断言 |
+| `BeginStartAsync` 的构造传 `null` | **红 2/6** | **用例 1 如期红**——「构造 ctx 时就带上」这条钉子成立 |
+| `BeginCompleteAsync` 的构造传 `null` | **红 1/6** | 精准命中用例 2,不误伤其他 |
+| 去掉 `ExecuteAsync` 的短路(回滚 Task 5 行为) | **红 1/6** | 用例 6 —— 从历史侧再证一次「命中回执根本不进引擎」 |
+
+**上一轮标记要复核的两条,结论都是钉子有效**:
+
+1. **用例 3「全为 null」单看确实弱**(整列压根没建出来时它照样绿),但它**不是孤证**:用例 1、2 是它的对照组,而变异①(删赋值)让 1、2 同时红。三条合起来才完整——「写得进去」由 1、2 证,「该为空时为空」由 3 证。
+2. **超时那条的内置对照断言是真起作用的**:它在变异①③里都跟着转红,说明「同实例的发起行**有**值」这半句确实挡住了「整列没写进去 → 超时行当然为空」的假绿。写这条对照时是预防性的,现在有证据了。
+
+**核对 J1–J8**:J1(列名 `RequestId`,与回执表的 `RequestKey` 同源不同名,已记语义契约)✅ / J2(可空 64、无默认值、无索引)✅ / J3(`required` —— 编译器精确炸出 8 处,未靠肉眼数)✅ / J4(7 处 `cmd.RequestId` + 超时处 `null` 并附注释)✅ / J5(取 `cmd.RequestId`,未重新归一化)✅ / J6(只在 `AppendHistoryAsync` 赋一行,20 个调用点零改动)✅ / J7(二选一定为「命中回执不进引擎」,只补钉子未建新机制)✅ / J8(未透出 DTO、未动读路径投影、未碰 `gen:api`)✅。绕开 ctx 的 4 处直插(超时 ×3 + 催办 ×1)**一个字没动**,`null` 由构造得来 ✅。改动面 = 计划内 4 文件,**零溢出**——本 M2c 第一次 ✅。
+
+**闸门**:全量 `--no-incremental` Release 构建 0 错、13 警(全为 `Core`/`Services` 既有基线,工作流包与测试工程 0 警);`dotnet test --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"` → **240/240 绿**。
+
+**P1**:0 条。**P2**:0 条。→ 满足勾选条件。**这是 M2c 至今第一个 review 阶段没揪出缺陷的 Task**;可归因于 plan 阶段已把「switch 之后赋值会漏第一行」这个真陷阱提前识别并写成了用例 1。
+
 ### 跨任务待办(不阻塞 Task 1,后续任务必须消化)
 
 - **P2 → Task 4**:`RequestKey` / `ScopeKey` 列宽都是 **64**,而 `WfIdentityHash.Compute` 对长度不设限。写命令 DTO 必须把 `RequestId` 卡在 **≤64**(配一条超长即拒的测试):否则 MySQL 非严格模式静默截断诊断列(identity 由完整值算出,不受影响,但排查时看到的是截断值),严格方言下直接插入报错。
@@ -365,6 +390,7 @@
 | 15 | review+修+勾选 | Task 5 自审:五处变异,前四处各转红(去短路 2/8、返回空结果 2/8、资格判断放宽 **8/8**、`CommandType` 写死 1/8)。**第五处「`CommitAsync` 挪出事务」八条全绿 → P2** —— 占位行也在事务里,业务失败一起回滚,所以「无残留」那条看不出差别;真正坏的是崩溃窗口会留下一条已提交却 `ResultJson` 为空的回执,让成功的操作永远重试不回来。补 `The_receipt_is_committed_inside_the_domain_transaction`(替身在 `CommitAsync` 里用 `db.Ado.IsAnyTran()` 记录,并同时断言 `CommitCalled` 防空转),变异⑤转红 1/9。另记两条覆盖真相:「串行重放」的计数断言在变异下**够不着**(前面的 `code == 0` 先失败),不是它让用例红;超时那条必须 `hours = 1` + 手动推 `DueTime`,`hours = 0` 在本仓是「不设到期」会造成假绿。闸门:工作流包 0 警(全量);过滤器 **234/234**。**Task 5 打勾**。 |
 | 16 | plan | Task 6 plan 定稿(J1–J8):20 个 `AppendHistoryAsync` 调用全收敛到 ctx 里一条 `Insertable`,列值只赋一行;绕开 ctx 的 4 处直插(超时 ×3 + 催办 ×1)不设属性即 `null`,零改动且正是语义;`BeginStartAsync` 构造后立刻写 `InstanceStarted`,故排除「switch 后赋值」,改 8 处构造各带一行并把属性声明为 **`required`**(编译器兜底,加第 9 个 Begin 忘带 = 编译错误);台账二选一由 Task 5 短路免费解决,只补钉子。显式复核 Task 5 锚点:取 `cmd.RequestId` 不违反「禁止再取第二遍」——那禁的是重新归一化出第二条路径(J5)。改动面 4 文件,6 条用例(第 1 条专钉「构造时就带上」)+ 5 个变异点。未写产品代码。 |
 | 17 | exec | Task 6 落地 **4 文件、零溢出**:`WfHistory` 可空 64 列;ctx 的 `required string? RequestId` —— `required` 一加编译器精确炸出 8 处构造(与 plan 一致,未靠肉眼数),7 处 `cmd.RequestId` + 超时处 `null`;`AppendHistoryAsync` 赋一行,20 个调用点零改动;绕开 ctx 的 4 处直插(超时 ×3 + 催办 ×1)一个字没动,`null` 是语义。plan 预警的第 5 文件风险未兑现。`WfHistoryRequestIdTests` 6 例一次全绿(用例 1 专钉「构造时就带上」,用例 4 内置对照断言防「整列没写」的假绿)。踩到 3 条自引入的 `xUnit2031`,全量警告 13→16,改用 `Assert.Single` 谓词重载后回到 13 —— 再次印证只信全量构建。过滤器 **240/240**。未勾选。 |
+| 18 | review+勾选 | Task 6 自审:五处变异**全部按预期转红**(删赋值 3/6、`?? ""` 2/6、`BeginStartAsync` 传 null 2/6、`BeginCompleteAsync` 传 null 1/6、去掉 Task 5 短路 1/6),**0×P1 / 0×P2 —— M2c 第一次 review 无新增缺陷**。上一轮标记的两条疑虑均有结论:用例 3 单看弱但与用例 1/2 构成对照组;超时那条的内置对照断言在两处变异里跟着红,证明它真挡得住「整列没写进去」的假绿。J1–J8 全对,改动面零溢出。闸门:全量 Release 0 错、工作流包与测试工程 0 警;过滤器 **240/240**。**Task 6 打勾**。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
