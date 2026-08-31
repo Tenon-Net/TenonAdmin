@@ -62,9 +62,11 @@ public interface IWfInstanceService
         CancellationToken cancellationToken = default);
 
     /// <summary>撤销实例:仅发起人、仅无人已批的 Running 实例可撤销。</summary>
-    /// <param name="requestId">
-    /// 幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见 <see cref="WfWriteCmd.RequestId"/>。
-    /// </param>
+    /// <remarks>
+    /// <c>requestId</c> 是幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见
+    /// <see cref="WfWriteCmd.RequestId"/>。写在 <c>remarks</c> 而非 <c>param</c>:本接口其余参数均无
+    /// <c>param</c> 标记,只给一个参数加会触发 CS1573(“有些有、有些没有”)。
+    /// </remarks>
     Task<WfEngineResult> CancelAsync(
         long instanceId,
         long callerUserId,
@@ -76,9 +78,11 @@ public interface IWfInstanceService
     /// (连已批过的节点也重新审),复用同一实例行;可选带新的 <paramref name="variablesJson"/> /
     /// <paramref name="selectedUserIdsByNode"/> 覆盖原发起时提交的值。
     /// </summary>
-    /// <param name="requestId">
-    /// 幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见 <see cref="WfWriteCmd.RequestId"/>。
-    /// </param>
+    /// <remarks>
+    /// <c>requestId</c> 是幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见
+    /// <see cref="WfWriteCmd.RequestId"/>。写在 <c>remarks</c> 而非 <c>param</c>:本接口其余参数均无
+    /// <c>param</c> 标记,只给一个参数加会触发 CS1573(“有些有、有些没有”)。
+    /// </remarks>
     Task<WfEngineResult> ResubmitAsync(
         long instanceId,
         long callerUserId,

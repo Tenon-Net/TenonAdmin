@@ -37,13 +37,12 @@
 
 ## Status
 
-- 轮次: 11
+- 轮次: 12
 - max: 45
-- 当前任务: 4(写命令 DTO + Controller 收 `RequestId`)
-- 当前阶段: exec(已完成,**未勾选**)
-- 上一轮: Round 11 — Task 4 exec 落地。按 G1–G8:新码 `RequestIdInvalid = 48028`;`WfWriteCmd` 基类持 `RequestId`,归一化/校验**全仓唯一一份**写在 `init` 里;**7 个**命令类改继承(不是 8 个 —— 同意/拒绝共用 `CompleteTaskCmd`),`TimeoutFireCmd` 保持裸 `IWfCommand`;4 个入参 DTO 加字段;7 个服务方法加可选参数并传进命令(`StartAsync` 从 `input.RequestId` 取);Controller 透传 7 处,**urge 刻意不传**(附注释说明)。校验用 `trimmed.Any(char.IsControl)` 而非只挡 `
-`/`` —— 更难绕过且不必在源码里写转义。计划外必改 1 文件:`WorkflowReplaceabilityTests` 的两个 Fake 服务(签名跟随,正是 G6 承认的「实现者会破」的代价)。build 0 错 0 警;过滤器 **224/224**(215+9)。
-- 下一步: Round 12 — **Task 4 review**(自审须声明)。变异点至少四处,每处**先 grep 确认文件真改了**、复原**只 checkout 被变异的那一个文件**:①`Normalize` 里去掉长度判断 → 65 字符用例应红;②去掉 `Any(char.IsControl)` → 换行用例应红;③`IsNullOrWhiteSpace` 改成 `is null` → 纯空白用例应红(命令里会变成空串);④任一 Controller 的 `input.RequestId` 换成 `null` → 对应贯穿用例应红。另需复核:`urge` 那条用例是**弱钉子**(给 urge 加透传它也不会红),要在 Findings 里写清;以及 `ProbingEngine` 用 `ActivatorUtilities.CreateInstance<WorkflowEngine>` 是否绕过了 `TryAdd` 的可替换性语义(记 P3)。
+- 当前任务: 5(引擎写路径接 receipt)
+- 当前阶段: 待 plan(Task 4 已勾选)
+- 上一轮: Round 12 — Task 4 review(自审)+ 修 2×P2 + 勾选。四处计划内变异各转红(去长度判断红 1、去控制字符判断红 1、`IsNullOrWhiteSpace`→`is null` 红 2、approve 控制器透传换 `null` 红 1)。计划外第五处变异揭出真缺口:断掉 `cancel` 的透传**套件全绿** → P2「7 处透传只有 2 处有钉子」,补一条流水线用例覆盖余下 6 个动词(transfer→delegate→return→resubmit→reject + 另起实例 cancel),再变异 return+cancel 转红。第二个 P2:Round 11 的「0 警」又是增量假象 —— 全量 Release 构建里工作流包有 20+ 条 CS1573(只给 `requestId` 加 `<param>`,而同方法其余参数都没有标记),改把说明挪进 `<remarks>`。闸门:全量 Release 0 错、工作流包 0 警(仓内既有 13 警在 Core/Services,非本轮);过滤器 **225/225**。
+- 下一步: Round 13 — **Task 5 plan**(不写产品代码)。读 `Engine/WorkflowEngine.cs` 全部 `BeginXxxAsync` 的事务边界、`IWfOperationReceiptService` 两个方法的既有语义、`WfOperationIdentity.Create` 的入参形状,定:①挂钩点是 `ExecuteAsync` 单一入口还是每个 `BeginXxxAsync`;②identity 的 `ScopeKey`/`TargetType`/`TargetId` 从各命令怎么取(8 条命令映射表);③命中已有 receipt 时**返回缓存 `WfEngineResult`** 的反序列化形状与 `ResultCode` 0=成功约定(消化 P3→Task 2/5);④排除条件用 `command is WfWriteCmd { RequestId: not null }`;⑤≥6 条集成测试清单(串行双提交/并发双提交/业务失败无 receipt/终态重试返回首次结果/无 key 不建 receipt/`TimeoutFireCmd` 不建 receipt)。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -170,7 +169,7 @@
 - [x] **1. Operation receipt 实体 + `IdentityHash`**:新增 `wf_operation_receipt`(`WfOperationReceipt`)、`IdentityHashBuilder`(或同级静态类)、唯一索引 on `IdentityHash`、**无 HTTP** 的快照/归一化单元测试(已知输入 → 已知 hash,四库同一算法)。`CommandType`/`TargetType` 枚举或常量表在实现任务定稿。依据:数据库评审 §五。
 - [x] **2. Receipt 服务 + 引擎事务内挂钩**: `IWfOperationReceiptService`(或引擎内 `virtual` 步骤,须 `TryAdd`) — `TryBeginAsync`(查已有 / 占位)与 `CommitAsync`(同事务写 `ResultJson`);与 `WorkflowEngine.BeginXxxAsync` 事务边界对齐。失败路径:业务抛错 → receipt 随事务回滚。`WorkflowReplaceabilityTests` 补一面。
 - [x] **3. `WfInstance.CompletedTime`**:实体列 + 终态写入落点(`TakeTransitionOp`/`CompleteTaskOp` 终止分支等);CodeFirst 可空或带默认值;旧行回填策略按评审 §十(可从 `InstanceCompleted` 事件回填,测一条即可)。**不改** receipt 行为。
-- [ ] **4. 写命令 DTO + Controller 收 `RequestId`**: `Start/Approve/Reject/Transfer/Delegate/Return/Cancel/Resubmit` 输入 DTO 增 `RequestId`(或 `IdempotencyKey`,plan 阶段二选一对外名、另一名作别名/映射);Controller 透传。OpenAPI 变更 → 留给 Task 10 `gen:api`。**不含 Urge**(默认)。
+- [x] **4. 写命令 DTO + Controller 收 `RequestId`**: `Start/Approve/Reject/Transfer/Delegate/Return/Cancel/Resubmit` 输入 DTO 增 `RequestId`(或 `IdempotencyKey`,plan 阶段二选一对外名、另一名作别名/映射);Controller 透传。OpenAPI 变更 → 留给 Task 10 `gen:api`。**不含 Urge**(默认)。
 - [ ] **5. 引擎写路径接 receipt**:上述 8 个 `BeginXxxAsync` 入口在事务开头解析 identity → 命中则直接返回缓存 `WfEngineResult` → 否则执行现有 Op 链 → 成功则落 receipt。覆盖「串行双提交」「并发双提交仅一次推进」「业务失败无 receipt」「终态重试返回首次结果」的集成测试(单库,≥6 条,附变异点)。
 - [ ] **6. `wf_history.RequestId`**:列 + `AppendHistoryAsync` 写路径传入;与 receipt 的 `RequestKey` 同源。测试:重复请求不重复追加**可观测**历史(或命中 receipt 根本不进引擎 — plan 阶段二选一并写进契约)。
 - [ ] **7. 通知失败可观测**: `WfDefaultNotifier` 注入 `ILogger<WfDefaultNotifier>`(或内核既有日志抽象),`catch` 改 `LogWarning`/`LogError` 结构化字段(`InstanceId`,`Event`,`UserId`,异常);可选 `IOptions` 开关保留静默模式给测试。补一条「publisher 抛错 → 审批仍成功 + 日志有条目」测试。不引入新 NuGet。
@@ -271,10 +270,41 @@
 
 **P1**:0 条。**P2**:2 条,**均已修并验证**。→ 满足勾选条件。
 
+### Task 4 review(Round 12,2026-08-31)
+
+> **⚠ 自审声明**:与 exec 同一 context(会话规则禁止未经用户要求派子 agent)。仍以**变异测试**代替第二双眼睛,每处**先 `grep` 确认文件真改了**再跑,复原**只 checkout 被变异的那一个文件**。
+
+**变异点验证**(改 → 跑 `~WfRequestIdTests` → 复原):
+
+| 变异 | 结果 | 说明 |
+|---|---|---|
+| `Normalize` 去掉 `trimmed.Length > RequestIdMaxLength` | **红 1/9** | 65 字符用例 |
+| `Normalize` 去掉 `trimmed.Any(char.IsControl)` | **红 1/9** | 换行用例 |
+| `string.IsNullOrWhiteSpace(value)` → `value is null` | **红 2/9** | 纯空白与空串两条(`Actual: ""`,正是「空白流成空串」的形状) |
+| `WfTaskController` 的 approve 透传 `input.RequestId` → `null` | **红 1/9** | approve 贯穿用例 |
+| **计划外第五处**:`WfInstanceController` 的 cancel 透传 → `null` | **仍绿 9/9 → P2** | 补钉子后 red |
+
+**修掉的 P2**(review 发现,本轮已修 + 变异验证):
+
+1. **P2 已修 — 7 处透传只有 2 处有钉子**:原用例只钉了 approve(服务签名路径)与 start(DTO 直传路径),其余 **6 个动词**(reject/transfer/delegate/return/cancel/resubmit)的透传是**各自独立的手工活**,断掉任意一处套件全绿。后果不是崩,而是那个动词**永远不做幂等**,并且要等到 Task 5 上线后线上重放才暴露。补 `Every_remaining_write_verb_carries_its_own_request_id`:一条流水线(transfer a→b、delegate b→c、return by c、resubmit by starter、reject 新待办)加另起一个实例做 cancel,每步紧跟 `probe.Last` 断言。把 `return`+`cancel` 两处透传同时换 `null` 后转红,已验证。**造用例时踩到的真事实**:委托不能弹回给链上已持有过的人(`DelegateTargetInvalid` 48026),故委托目标必须是第三人。
+2. **P2 已修 — Round 11 的「0 警」是增量构建假象(Round 8 同一个坑,第二次踩)**:全量 `--no-incremental` Release 构建里工作流包有 **20+ 条 CS1573**。根因不是漏写文档,而是这 7 个方法**原本一个 `<param>` 都没有**,只给 `requestId` 加一个就触发了「有些参数有标记、有些没有」。修法取最省的一档:把说明从 `<param>` 挪进 `<remarks>`(并在注释里写明为什么),而不是给 7 个方法补 30 个重复参数名的样板标记。修后全量构建工作流包 **0 警**;仓内**既有** 13 条警告全在 `TenonAdmin.Core`/`TenonAdmin.Services`(CS8602/CS1574/CS1573),不在 M2c 范围,本轮不动。
+
+**两处要说清的覆盖真相**:
+
+- `Urge_accepts_a_request_id_but_never_reaches_the_engine` **是弱钉子** —— 它断的是「催办后 `probe.Last` 仍是发起命令」。给 urge 加上透传,催办依然不进引擎,这条**照样绿**。它记录的是事实(共用 DTO 不等于共用语义),但**守不住** G7 那条决策。真正守住 G7 的只有 `WfTaskController.Urge` 里那句注释和 `UrgeAsync` 不收该参数的签名。
+- `ProbingEngine` 用 `ActivatorUtilities.CreateInstance<WorkflowEngine>(sp)` 直接构造内置引擎,**绕过了 `TryAdd` 的可替换性语义** —— 若消费者替换了 `IWorkflowEngine`,这个探针装饰的仍是内置实现。测试内自用可接受(它要的就是内置引擎的行为),但**不可作为消费者示范**。记 **P3**,见下。
+
+**核对 G1–G8**:G1(对外名 `requestId` 无别名,已写进 `## 语义契约`)✅ / G2(4 个 DTO 加字段)✅ / G3(`WfWriteCmd` 基类;**7** 个命令继承 —— 计划写 8 是把同意/拒绝当成两条命令,实际共用 `CompleteTaskCmd`;`TimeoutFireCmd` 未继承)✅ / G4(空白→`null`、`Trim`、≤64、拒控制字符,唯一一份在 `init`)✅ / G5(`RequestIdInvalid = 48028`,48022 空号未填,未借 `ModelFieldTooLong`)✅ / G6(7 个方法加可选参数在 `CancellationToken` 之前)✅ / G7(透传 7 处,urge 不传)✅ / G8(未碰 `ExecuteAsync`/receipt/`wf_history`/前端/`gen:api`)✅。改动面 = 计划内 9 文件 + 已声明的 `WorkflowReplaceabilityTests`(G6 承认的实现者破坏)✅。
+
+**闸门**:全量 `--no-incremental` Release 构建 0 错、工作流包 0 警;`dotnet test --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"` → **225/225 绿**。
+
+**P1**:0 条。**P2**:2 条,**均已修并验证**。→ 满足勾选条件。
+
 ### 跨任务待办(不阻塞 Task 1,后续任务必须消化)
 
 - **P2 → Task 4**:`RequestKey` / `ScopeKey` 列宽都是 **64**,而 `WfIdentityHash.Compute` 对长度不设限。写命令 DTO 必须把 `RequestId` 卡在 **≤64**(配一条超长即拒的测试):否则 MySQL 非严格模式静默截断诊断列(identity 由完整值算出,不受影响,但排查时看到的是截断值),严格方言下直接插入报错。
 - **P3 → Task 2**:落库的 `ScopeKey`/`RequestKey` 必须写**归一化后**的值(哨兵 + `Trim()`,复用 `WfIdentityHash.ScopeSentinel`),不能一边存原值一边用归一化值算 hash,否则诊断列与 identity 对不上。
+- **P3 → Task 5/8**:测试里用 `ActivatorUtilities.CreateInstance<WorkflowEngine>` 构造内置引擎来做装饰器探针,绕过了 `TryAdd` 的可替换性语义(消费者替换 `IWorkflowEngine` 时探针装的仍是内置实现)。Task 5/8 若还要装饰引擎,先想清楚是要「内置引擎的行为」还是「当前注册的实现」;两者不同,别把这个写法当消费者示范。
 - **P3 → Task 2/5**:`ResultCode` 是 `int`,`TenonAdmin.Core.ErrorCode` 也是 int 枚举;映射时 `0` 恒表示成功,别让 `ErrorCode` 的某个具体值落到 `0`。
 
 ## Log
@@ -294,6 +324,7 @@
 | 9 | review+修+勾选 | Task 3 自审:四处变异,前两处(删赋值 / `UpdateColumns` 去列)各红 3/5;后两处(删事件类型过滤 / 回填改整对象更新)**仍绿** → 2×P2,当场补钉子后各转红 1/5。另记下「幂等断言是弱钉子」的覆盖真相(回填写入是确定性的,去掉任一 `CompletedTime == null` 守卫也写同样的值)。闸门 **215/215**、工作流包 0 警。**Task 3 打勾**。 |
 | 10 | plan | Task 4 plan 定稿(G1–G8):对外名定 `requestId` 无别名;4 个入参 DTO 加字段(`WfTaskActionInput` 一个覆盖 6 个动词);抽 `WfWriteCmd` 基类把归一化(空白→`null`、`Trim`、≤64、禁换行)写成**唯一一份**,`TimeoutFireCmd` 不继承 → Task 5 的排除条件变成类型判断;新码 `RequestIdInvalid = 48028`(不填 48022 空号、不借 `ModelFieldTooLong`);7 个服务方法加可选参数(`StartAsync` 收 DTO 无需改),Controller 透传 7 处、**urge 不传**(它压根不进引擎)。测试靠引擎装饰器探针,6 条。未写产品代码。 |
 | 11 | exec | Task 4 落地 10 文件:`RequestIdInvalid = 48028`;`WfWriteCmd` 基类(归一化 + ≤64 + 拒控制字符,**唯一一份**在 `init` 里),**7** 个命令类改继承(同意/拒绝共用 `CompleteTaskCmd`,故不是 8 个),`TimeoutFireCmd` 不继承;4 个 DTO 加 `RequestId`;7 个服务方法加可选参数;Controller 透传 7 处、urge 不传;`WfRequestIdTests` 9 例(含 `Theory` 的归一化 3 例与长度边界 2 例),靠包住内置引擎的装饰器探针断言真实调用链。计划外必改 `WorkflowReplaceabilityTests` 的两个 Fake(签名跟随)。build 0 错 0 警;过滤器 **224/224**。未勾选。 |
+| 12 | review+修+勾选 | Task 4 自审:四处计划内变异各转红(去长度判断 / 去控制字符判断 / `IsNullOrWhiteSpace`→`is null` / approve 控制器透传换 `null`)。**计划外第五处变异揭出真缺口**:断掉 cancel 透传套件全绿 → P2「7 处透传只有 approve+start 两处有钉子」,补一条流水线用例覆盖余下 6 个动词并变异验证(顺带钉住:委托不能弹回给链上持有过的人,48026)。第二个 P2:Round 11 的「0 警」又是增量假象,全量构建里工作流包 20+ 条 CS1573 —— 根因是只给 `requestId` 加 `<param>` 而同方法其余参数都没标记,把说明挪进 `<remarks>` 修掉。另记两条覆盖真相(urge 那条是弱钉子、`ProbingEngine` 绕过 `TryAdd` → P3)。闸门:全量 Release 工作流包 0 警;过滤器 **225/225**。**Task 4 打勾**。 |
 
 ## 参考读码清单(Round 1 plan 前)
 

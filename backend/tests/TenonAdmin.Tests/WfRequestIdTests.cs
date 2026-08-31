@@ -165,6 +165,80 @@ public class WfRequestIdTests
         Assert.IsType<StartInstanceCmd>(probe.Last);
     }
 
+    /// <summary>
+    /// 剩下 **6 个**写动词各自的透传。Round 12 review 变异出的缺口:只钉 approve + start 时,把
+    /// <c>cancel</c>(或 reject/transfer/delegate/return/resubmit)的 <c>input.RequestId</c> 换成
+    /// <c>null</c>,套件**全绿** —— 那个动词就永远不做幂等,而且没人会发现。7 处透传是 7 份独立的手工活,
+    /// 一份钉子盖不住另一份。
+    /// <para>走一条流水线而不是 6 个夹具:每次 HTTP 调用都会覆盖 <c>probe.Last</c>,所以紧跟着断言即可。
+    /// 撤销要求「无人已批的 Running 实例」,故另起一个实例。</para>
+    /// </summary>
+    [Fact]
+    public async Task Every_remaining_write_verb_carries_its_own_request_id()
+    {
+        var probe = new CommandProbe();
+        using var f = NewFactory(probe);
+        var admin = await ClientFor(f, "superAdmin");
+        await AddUser(admin, "wf-rid-all-starter");
+        var aId = await AddUser(admin, "wf-rid-all-a");
+        var bId = await AddUser(admin, "wf-rid-all-b");
+        var cId = await AddUser(admin, "wf-rid-all-c");
+        var definitionId = await Publish(admin, "RequestId-全动词", ReturnableApprovalModel(aId));
+
+        var starter = await ClientFor(f, "wf-rid-all-starter");
+        var a = await ClientFor(f, "wf-rid-all-a");
+        var b = await ClientFor(f, "wf-rid-all-b");
+        var c = await ClientFor(f, "wf-rid-all-c");
+
+        var start = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
+        Assert.Equal(0, start.GetProperty("code").GetInt32());
+        var instanceId = start.GetProperty("data").GetProperty("instanceId").GetInt64();
+        var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
+
+        // 转办:a → b,任务仍开着,只换办理人。
+        var transfer = await PostEnvelope(
+            a, "/api/v1/workflow/task/transfer", new { taskId, toUserId = bId, requestId = "req-transfer-001" });
+        Assert.Equal(0, transfer.GetProperty("code").GetInt32());
+        Assert.Equal("req-transfer-001", Assert.IsType<TransferTaskCmd>(probe.Last).RequestId);
+
+        // 委托:b → c。不能弹回给 a —— 委托禁止回给链上已持有过的人(DelegateTargetInvalid)。
+        var delegated = await PostEnvelope(
+            b, "/api/v1/workflow/task/delegate", new { taskId, toUserId = cId, requestId = "req-delegate-001" });
+        Assert.Equal(0, delegated.GetProperty("code").GetInt32());
+        Assert.Equal("req-delegate-001", Assert.IsType<DelegateTaskCmd>(probe.Last).RequestId);
+
+        // 退回:prev 策略无先例 → 退到 start,实例仍 Running、无活跃待办。
+        var returned = await PostEnvelope(
+            c, "/api/v1/workflow/task/return", new { taskId, requestId = "req-return-001" });
+        Assert.Equal(0, returned.GetProperty("code").GetInt32());
+        Assert.Equal("req-return-001", Assert.IsType<ReturnTaskCmd>(probe.Last).RequestId);
+
+        // 重提:发起人把退回的实例重新走一遍。
+        var resubmit = await PostEnvelope(
+            starter, "/api/v1/workflow/instance/resubmit", new { instanceId, requestId = "req-resubmit-001" });
+        Assert.Equal(0, resubmit.GetProperty("code").GetInt32());
+        Assert.Equal("req-resubmit-001", Assert.IsType<ResubmitInstanceCmd>(probe.Last).RequestId);
+        var retryTaskId = resubmit.GetProperty("data").GetProperty("createdTaskId").GetInt64();
+
+        // 拒绝:与同意共用 CompleteTaskCmd,但走的是 Controller 上**另一处**透传。
+        var reject = await PostEnvelope(
+            a, "/api/v1/workflow/task/reject", new { taskId = retryTaskId, requestId = "req-reject-001" });
+        Assert.Equal(0, reject.GetProperty("code").GetInt32());
+        var rejectCmd = Assert.IsType<CompleteTaskCmd>(probe.Last);
+        Assert.Equal(WfTaskAction.Reject, rejectCmd.Action);
+        Assert.Equal("req-reject-001", rejectCmd.RequestId);
+
+        // 撤销:另起一个实例(撤销要求无人已批)。
+        var second = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
+        Assert.Equal(0, second.GetProperty("code").GetInt32());
+        var secondId = second.GetProperty("data").GetProperty("instanceId").GetInt64();
+
+        var cancel = await PostEnvelope(
+            starter, "/api/v1/workflow/instance/cancel", new { instanceId = secondId, requestId = "req-cancel-001" });
+        Assert.Equal(0, cancel.GetProperty("code").GetInt32());
+        Assert.Equal("req-cancel-001", Assert.IsType<CancelInstanceCmd>(probe.Last).RequestId);
+    }
+
     // ── 辅助 ──
 
     /// <summary>记下引擎收到的最后一条命令,再委托给内置引擎(流程照常推进)。</summary>
@@ -211,6 +285,35 @@ public class WfRequestIdTests
                         @params = new Dictionary<string, object> { ["userIds"] = userIds },
                     },
                     mode = "any",
+                },
+                next = (object?)null,
+            },
+        },
+    };
+
+    /// <summary>start → node1(any,[userId],returnPolicy=prev) → null。无先例时退回优雅退化到 start。</summary>
+    private static object ReturnableApprovalModel(long userId) => new
+    {
+        version = 1,
+        root = new
+        {
+            id = "start",
+            type = "start",
+            name = "",
+            next = new
+            {
+                id = "node1",
+                type = "approval",
+                name = "审批",
+                props = new
+                {
+                    assignee = new
+                    {
+                        provider = "user",
+                        @params = new Dictionary<string, object> { ["userIds"] = new[] { userId } },
+                    },
+                    mode = "any",
+                    returnPolicy = "prev",
                 },
                 next = (object?)null,
             },
