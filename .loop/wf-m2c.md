@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 28
+- 轮次: 29
 - max: 45
 - 当前任务: 9(Vue request key 生命周期)
-- 当前阶段: exec(已完成,**未勾选** —— 待 review)
-- 上一轮: Round 28 — Task 9 **exec**。按 Round 27 的 Plan 步骤 1–6 实现,未偏离决策点:新建 `web/src/workflow/useRequestKey.ts`(composable:`value()` 惰性生成 / `settle('success'|'error'|'network')` / `reset()`)+ `classifyOutcome`(`e instanceof ApiError` 判据,复用 `utils/error.ts` 既有惯用法)+ `useRequestKey.spec.ts`(6 条断言全按测试清单落地)。`detail.vue`:`openAction` 对非 urge 调 `reset()`;`submitAction` 把原来内联的 `api` 分派函数改名 `dispatch`,外层新包一层 `api`(urge 直通 `dispatch()`;其余 kind 成功 `settle('success')`、失败 `settle(classifyOutcome(e))` 后 `throw`,`run()` 的 toast 逻辑不变);`body` 与 `cancel`/`resubmit` 字面量都加了 `requestId`(urge 不生成/不传,与既定语义契约一致)。`start/index.vue`:`submit()` 按计划改成先 `const body = {...}`(对齐 detail.vue 写法)、加 `requestId: requestKey.value()`,成功结果拿到、`router.push` 之前 `settle('success')`,`catch` 分支 `settle(classifyOutcome(e))`。`api/workflow.ts` 的 `cancel`/`resubmit` 手写参数类型各加 `requestId?: string | null`。`COMPONENTS.md` 补 `## useRequestKey(...)` 一节,格式对齐 `useConfirm`/`useTabTitle`(索引 + 源码头注释详情)。**闸门**:`npm run typecheck` 0 错;`npm run lint`(oxlint)0 错 0 警;`npx vitest run src/workflow/` → **35/35 绿**(29 基线 + 6 新增,与测试清单条数一致)。`git status --short` 核对:改动面精确等于计划内 6 个源码文件(`useRequestKey.ts`/`.spec.ts` 新建,`detail.vue`/`start/index.vue`/`api/workflow.ts`/`COMPONENTS.md` 修改),**未碰** `web-react/`、未跑 `gen:api`、未碰 `useConfirm.ts`/`client.ts` 中间件、未碰任何 backend 文件——预期计划外 0 兑现。**未勾选**(exec 阶段规则,留给 review)。
-- 下一步: Round 29 — **Task 9 review**。独立复核(自审需在 `## Findings` 声明「自审」):亲手跑 `npx vitest run src/workflow/`,再按 Round 27 `## Plan` 的「变异点」表逐条变异 `useRequestKey.ts`/`classifyOutcome`(`settle()` 对 `'network'` 也清空 key / `value()` 去掉惰性判断 / `classifyOutcome` 恒返回 `'error'`)验证转红,**变异前先 grep 确认文件真的改了**,**复原只 checkout 被变异的单个文件**;并人工核对 `detail.vue` 的 `submitAction` 里 `kind === 'urge'` 分支确实不生成/不透传 `requestId`(无既有 spec 覆盖这一条,读代码确认或另补断言)。记 P1/P2 到 `## Findings`。**仍不勾选。**
+- 当前阶段: review(已完成,0×P1/0×P2,**未勾选** —— 待 Round 30 勾选)
+- 上一轮: Round 29 — Task 9 **review**(自审,理由同 Task 1–8:会话规则禁止未经用户要求派子 agent)。跑 `npx vitest run src/workflow/` 先确认基线 35/35 绿。按 Round 27 Plan 的「变异点」表逐条变异 `useRequestKey.ts`,**每处先 grep 确认文件真改了**再跑,复原只 `git checkout` 被变异的单文件:①`settle()` 对 `'network'` 也清空 key → 红 1/6(用例 2,与表一致);②`value()` 去掉惰性判断 → 红 2/6(用例 1 **和** 2,表只列了用例 1,实测覆盖面比预期更强,不是缺口——去记忆化天然连累"网络重试复用"这条,记为已更正的预期,不算 P1/P2);③`classifyOutcome` 恒返回 `'error'` → 红 1/6(用例 6,与表一致)。三处变异后 `git status` 均已核对干净。第④项人工核对(无既有 spec 覆盖):读 `detail.vue` 现状确认 `submitAction` 里 `requestId = kind === 'urge' ? undefined : requestKey.value()`,`dispatch()` 的 `urge` 分支用独立字面量 `{ taskId }`(不含 `body`/`requestId`),`openAction` 只对非 urge 调 `reset()`——urge 既不生成也不透传 `requestId`,与语义契约和 D4 一致。另核对 `start/index.vue`/`api/workflow.ts`/`COMPONENTS.md` 的 diff 逐字对照 D5/D6/D7,**无计划外改动**。收尾重跑一遍完整闸门:`npm run typecheck` 0 错、`npm run lint` 0 错 0 警、`npx vitest run src/workflow/` 35/35。**P1:0。P2:0。** → 满足勾选条件,但按「一轮一阶段」纪律留给 Round 30 勾选。
+- 下一步: Round 30 — **Task 9 勾选**。核对本轮 review 记录的 0×P1/0×P2 与已跑闸门证据,在 `## Tasks` 给 9 打勾,Status「下一步」改写为「Task 10 plan」。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -477,6 +477,28 @@
 
 **P1**:0(沿用 Round 24 结论)。**P2**:1 条,**本轮已修**。→ 待 Round 26 核对后勾选。
 
+### Task 9 review(Round 29,2026-09-01)
+
+> **⚠ 自审声明**:与 exec(Round 28)同一 context(会话规则禁止未经用户要求派子 agent),不满足「换人复核」。用**变异测试**替代第二双眼睛,三处变异**每处先 grep 确认文件真的改了**再跑,复原只 `git checkout` 被变异的单个文件。
+
+**闸门**(变异前基线):`npx vitest run src/workflow/` → 35/35 绿。
+
+**变异点验证**(改 `useRequestKey.ts` → 跑 `useRequestKey.spec.ts` → grep 复原 → 复跑确认绿):
+
+| 变异 | 结果 | 说明 |
+|---|---|---|
+| `settle()` 对 `'network'` 也清空 key | **红 1/6** | 用例 2,与 Round 27 变异点表一致 |
+| `value()` 去掉惰性判断(每次强制重新生成) | **红 2/6** | 用例 1 **和** 2 —— Round 27 的表只列了用例 1;去记忆化天然也破坏"网络重试复用同一个 key"(用例 2 的前提是"多次 `value()` 拿到同一个值"),覆盖面比预期更强,**不是缺口**,是预期记录的一处更正 |
+| `classifyOutcome` 恒返回 `'error'` | **红 1/6** | 用例 6,与 Round 27 变异点表一致 |
+
+**第四项(人工核对,无既有 spec 覆盖 urge 分支)**:读 `detail.vue` 现状 ——`submitAction()` 里 `requestId = kind === 'urge' ? undefined : requestKey.value()`;`dispatch()` 的 `urge` 分支调 `wfTaskApi.urge({ taskId })`,字面量里根本不含 `requestId`/`body`;`openAction()` 只对 `kind !== 'urge'` 调 `requestKey.reset()`。urge 既不生成也不透传 `requestId`,与语义契约「催办默认不进 receipt」及 Round 27 决策点 D4 一致。
+
+**逐条核对改动清单/决策点**:`git diff HEAD~1 HEAD` 精确等于计划内 6 个源码文件 + 台账;`start/index.vue` 的 `submit()` 已改成 `const body`(D5),`settle('success')` 落在 `wfInstanceApi.start(body)` 成功之后、`router.push` 之前;`api/workflow.ts` 的 `cancel`/`resubmit` 手写类型各加 `requestId?: string | null`(D6);`COMPONENTS.md` 新增一节格式对齐 `useConfirm`/`useTabTitle`;**未碰** `web-react/`、未跑 `gen:api`、未改 `useConfirm.ts`/`api/client.ts` 中间件(D7)。
+
+**收尾闸门**(变异全部复原后重跑):`npm run typecheck` 0 错;`npm run lint`(oxlint)0 错 0 警;`npx vitest run src/workflow/` → 35/35 绿。`git status --short` 干净(仅常驻的 `TestResults/`)。
+
+**P1**:0 条。**P2**:0 条。→ 满足勾选条件,留给 Round 30 按「一轮一阶段」纪律打勾。
+
 ## Log
 
 | 轮次 | 阶段 | 摘要 |
@@ -511,6 +533,7 @@
 | 26 | 勾选 | Task 8 **勾选**。核对 0×P1、1×P2 已修(Round 25)、闸门已绿(259/259),`## Tasks` 第 8 项打勾。四库持久化契约套件收尾:内核首个方言分支(PG SAVEPOINT)+ 14 条新测试 + `TEST_FILTER` 纳入 SqlServer PR 腿,基线 245→**259**。给后续任务的两条锚点(P2→Task10 四腿本机取不到证 / P3→Task5、8 的 `ActivatorUtilities` 写法)原样保留待用。 |
 | 27 | plan | Task 9 **plan**。重写 `## Plan`:新建 `web/src/workflow/useRequestKey.ts` composable(惰性生成 + `settle` 三态 + `reset`)+ `classifyOutcome` 纯函数(复用 `err instanceof ApiError` 既有判据);`detail.vue`/`start/index.vue` 接入,Urge 不生成/不传 key;`wfInstanceApi.cancel`/`resubmit` 手写类型各加 `requestId?`。**关键发现**:schema.d.ts 从 Task 4 起未重生成,但因 `detail.vue` 已是「先 `const body`」写法,TS 结构类型允许多余字段,本 Task 不需要提前 `gen:api`;`start/index.vue` 需先改成同款写法(字面量直传会触发超额属性检查)。7 文件改动清单,预期计划外 0。**未写产品代码。** |
 | 28 | exec | Task 9 **exec**。新建 `useRequestKey.ts`(惰性生成 + `settle` 三态 + `reset`)+ `classifyOutcome` + 6 条单测;`detail.vue`/`start/index.vue` 接入(urge 不生成/不传 key,`start` 页改成 `const body` 写法对齐 `detail.vue`);`api/workflow.ts` 的 `cancel`/`resubmit` 手写类型各加 `requestId?`;`COMPONENTS.md` 补索引节。闸门:typecheck 0 错、lint 0 错 0 警、`vitest run src/workflow/` **35/35**。改动面精确等于计划内 6 文件,未碰 web-react/backend。**未勾选**,留 Round 29 review。 |
+| 29 | review | Task 9 **review**(自审)。变异 `useRequestKey.ts` 三处:`settle` 对 network 也清空(红用例2)/`value()` 去惰性(红用例1+2,比预期表更强)/`classifyOutcome` 恒 error(红用例6),均先 grep 确认真改、单文件复原。人工核对 `detail.vue` urge 分支不生成/不透传 `requestId`,`start/index.vue`/`api/workflow.ts`/`COMPONENTS.md` 逐条对照 D5–D7 无计划外改动。闸门重跑:typecheck/lint/vitest 全绿(35/35)。**0×P1、0×P2**,留 Round 30 勾选。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
