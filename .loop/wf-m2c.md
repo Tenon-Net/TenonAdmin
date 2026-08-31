@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 23
+- 轮次: 24
 - max: 45
 - 当前任务: 8(四库持久化契约套件)
-- 当前阶段: exec(已完成,**未勾选**)
-- 上一轮: Round 23 — Task 8 exec 落地 **3 文件 + 台账,零溢出**(与 plan 的「预期计划外 0」一致)。①`WfOperationReceiptService`:占位 INSERT 圈进 SAVEPOINT,catch 里先 `ROLLBACK TO SAVEPOINT` 再做二次 `FindAsync`,成功路径 `RELEASE`;三个 `protected virtual` 小步 + `UseNestedSavepoint` 判定,守卫是 **`DbType == PostgreSQL && Ado.IsAnyTran()`**(自动提交模式下 PG 会拒绝 `SAVEPOINT`,而那时语句失败本就不中止任何东西)。方法注释写明了「为什么这是内核第一个方言分支」以及「不解析错误码」的旧决定仍然有效(本分支判的是方言身份,不是错误码)。②新增 `WfPersistenceContractTests` **14 条**,A/B/C/D/E/F 六段;致盲替身 `BlindedReceiptService` 只蒙住前 N 次 `FindAsync`(A1 蒙 1 次、A2 全蒙),赢家行在事务外预提交。③`backend-ci.yml` 的 `TEST_FILTER` 追加 `WfPersistenceContractTests` 并补了一段注释说明为什么唯独这一个 `Wf*` 类进 PR 腿;YAML 已用 `yaml.safe_load` 解析验证,过滤器仍是单行 14 项、引号与 `' || '' }}` 尾巴完好。**踩到两条测试自身的错(产品代码无辜)**:D2 原本让人工先赢,但同意的一瞬活动 `wf_task` 就归档进 `wf_his_task`,库里已无待办可推到期 → 改成让超时先赢、人工后到收业务错误,那一侧的落败才可观测;另一条是把 `DateTime.Now - TimeSpan.FromHours(1)` 写进 `SetColumns` 表达式,被 SqlSugar 当 SQL 翻译,落库的值读回来绑不上 `DateTime` —— 必须先算成局部变量(仓内既有姿势)。**L7 探测结果:本机 `127.0.0.1:5432` 无 PG**,PG 的「修前红」本轮取不到证,射程声明已写进测试类的类注释。闸门:全量 `--no-incremental` Release **0 错、13 警**(全为 `Core`/`Services` 既有基线,工作流包与测试工程 0 警);过滤器 **259/259**(245 + 14,与 plan 预测一致)。
-- 下一步: Round 24 — **Task 8 review(自审)**。跑指定过滤器 + Plan 已列的 6 个变异点,每处**先 `grep` 确认文件真改了**,复原**只 checkout 被变异的那一个文件**。要点:①**第一处变异(去掉 savepoint 两条语句)在 SQLite 上不会红** —— 这不是钉子失效,是方言使然;review 必须**如实记为「未取证」**,严禁拿 SQLite 的绿冒充 PG 的证据。②其余五处(去 `IsUnique`、`ResultJson` 换 `Length = 200`、`AppendHistoryAsync` 的 `RequestId ?? ""`、删 `ScanDueTasksAsync` 的 `DueTime == cursor` 半边、删某处 CAS 的 `Version ==`)都应在 SQLite 上可观察。③顺带复核两条覆盖真相:A2 的 `DoesNotContain("aborted")` 在非 PG 腿上是**恒真断言**(弱钉子,只有 PG 腿才有意义);E1 的「命中 5」依赖「死行只检视不占预算」这个前提,若将来 `ResolveDeadReason` 的语义变了,这条会从「钉子」退化成「假绿」,值得在 Findings 里写明。
+- 当前阶段: review(已完成,**未勾选** —— 有 1 条 P2 待修)
+- 上一轮: Round 24 — Task 8 **review(自审)**。闸门:指定过滤器 **259/259 绿**。6 处变异逐一跑(每处先 `grep` 确认真改了,复原只 `checkout` 那一个文件):**3 处转红**(去 `IsUnique` → 红 4/14;`RequestId ?? ""` → 红 1/14;删 `DueTime == cursor` 半边 → 红 1/14),**3 处仍绿**且三种绿的性质各不相同 —— ①**M1 去掉 savepoint**:方言使然,SQLite 上本就不该红,如实记「未取证」;②**M6 删 `ClaimInstanceAsync` 的 `Version ==`**:本套件不该红(L4 明令不复制 M2b),追加取证证明它被 `WfVersionCasTests.Instance_losing_cas_...` 抓住(全过滤器 **红 1/259**),**不是覆盖洞**,是 plan 那一格预期写错;③**M3 `ResultJson` 换 `Length = 200` 仍绿** —— 这条是**本轮唯一的真发现**:SQLite 的类型亲和性根本不执行列宽,B1/B2 两条列宽/长文本用例在 SQLite 腿上是**恒真断言**,追加取证:全过滤器 259/259 仍绿(1m17s)。记为 **P2**(不是产品缺陷,是本 Task「四库契约」自称与本机可证射程之间的缺口),修法见 `## Findings`。
+- 下一步: Round 25 — **Task 8 修 Findings**。只修 P2「B 段在 SQLite 上恒真」这一条,**不扩面**:在 `WfPersistenceContractTests` 的 B1/B2 上补一句「本条在 SQLite 腿不具判别力,真正的钉子在 mysql/postgres/sqlserver 三腿」的射程注释,并把 M1/M3 两处「SQLite 不可证」统一收进类注释的射程声明(现有声明只提了 PG,漏了列宽)。**不改产品代码**、不加 `SkippableFact`(L6)。修完重跑指定过滤器,然后才进 Round 26 的勾选。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -435,6 +435,36 @@
 - **P2 → Task 10**:DONE-CONDITION 写着「四库契约套件在 CI 矩阵四腿各绿」,但**本机取不到这个证据** —— 开发机无 Docker,局域网 VM 上的 PG/MySQL 是用户自己的服务(端口已占、凭据未知,而 `TestDb` 会在上面建/删 `tenon_it_*` 库,不在本轮授权内)。于是 Task 8 的 PG 用例只能在 SQLite 上验「不倒」,验不了「修前红」。Task 10 收口前必须就取证方式向用户要一个决定:**push 一次拿 CI 四腿信号**,或**授权连一个真实 PG**。**不许拿 SQLite 的绿当四腿的绿**(Round 22 定)。
 - **P3 → Task 2/5**:`ResultCode` 是 `int`,`TenonAdmin.Core.ErrorCode` 也是 int 枚举;映射时 `0` 恒表示成功,别让 `ErrorCode` 的某个具体值落到 `0`。
 
+### Task 8 review(Round 24,2026-08-31)
+
+> **⚠ 自审声明**:与 exec 同一 context(会话规则禁止未经用户要求派子 agent)。仍以**变异测试**代替第二双眼睛;每处变异**先 `grep` 确认文件真改了**,复原**只 `checkout` 被变异的那一个文件**。
+
+**闸门**:`dotnet test --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"` → **259/259 绿**(1m34s)。变异全部复原后 `git status` 只剩未跟踪的 `TestResults/`。
+
+**变异点验证**(改 → 跑 `~WfPersistenceContractTests`(14 条) → 复原):
+
+| # | 变异 | 结果 | 判读 |
+|---|---|---|---|
+| M1 | `UseNestedSavepoint` 恒 `false`(等于去掉 savepoint 两条语句) | **绿 14/14** | **未取证**,不是钉子失效。SQLite 的语句错误不中止事务,这条只能在 postgres 腿观察。**严禁把这个绿读成 PG 的证据** |
+| M2 | `WfOperationReceipt` 的 `IsUnique = true` → `false` | **红 4/14** | A1/A2/A3/A4 全红 —— 唯一索引真被 CodeFirst 建出来,且 A 段四条都真的依赖它 |
+| M3 | `ResultJson` 的 `CodeFirst_BigString` → `Length = 200` | **绿 14/14** | **本轮唯一真发现**,见下面的 P2 |
+| M4 | `AppendHistoryAsync` 的 `RequestId` → `RequestId ?? ""` | **红 1/14** | C2 `Legacy_history_rows_read_null_for_request_id_not_empty_string` |
+| M5 | `ScanDueTasksAsync` 删掉 `(t.DueTime == cursor && t.Id > afterTaskId)` 半边 | **红 1/14** | E1 `Tasks_sharing_one_due_time_are_all_scanned_across_pages` |
+| M6 | `ClaimInstanceAsync` 删掉 `i.Version == current` | **绿 14/14** | 本套件**本来就不该**红(L4:不复制 M2b);追加取证见下 |
+
+**M6 的追加取证(避免把「不该覆盖」误记成「没覆盖」)**:同一处变异改跑**全过滤器** → **红 1/259**,红的是 `WfVersionCasTests.Instance_losing_cas_returns_48004_and_rolls_back_whole_transaction`。产品 CAS 条件由 M2b 的套件钉住,Task 8 的 D 段钉的是**方言层的 affected-rows 口径**(自己发裸 UPDATE,不经产品代码)。所以这不是覆盖洞,是 `## Plan` 变异表里「应红:用例 9、10」那一格**预期写错了** —— 已在此更正,后续 review 不必再追。
+
+**P1**:0 条。
+
+**P2(阻塞 Task 8)**:1 条,**待 Round 25 修**。
+
+1. **B 段两条在 SQLite 腿上是恒真断言,而类注释的射程声明只提了 PG、漏了列宽。** M3 把 `ResultJson` 从 `CodeFirst_BigString` 改成 `Length = 200` 之后,写入 > 8000 字符的中文载荷**照样通过**——SQLite 的类型亲和性根本不执行列宽,`varchar(200)` 收下任意长度;追加取证:同一变异跑全过滤器 259/259 仍绿(1m17s)。同理 B2 的「64 列真能装 64」在 SQLite 上也判别不了。这两条在 mysql / postgres / sqlserver 三腿上都是真钉子(CHANGELOG #26 那类事故正出在 SqlServer),**测试本身没写错**;错在**本地一句「B 段绿了」会被下一个人读成「列宽已验证」**,而这正是本轮 M1 已经防住、B 段却漏防的同一种假象。**修法(不改产品代码、不加 `SkippableFact`)**:B1/B2 各补一句射程注释,并把类注释的射程声明从「PG 相关断言」扩写成「PG 事务语义 + 列宽/列类型两类断言在 SQLite 腿都不具判别力」。
+
+**P3(挂账)**:
+
+1. **`RollbackNestedAsync` 失败会重新引入它自己要修的那个「真因被顶替」**:catch 里若 `ROLLBACK TO SAVEPOINT` 本身抛错,新异常会盖掉原始的插入异常。实际触发面很窄——语句级错误(含唯一冲突)之后回滚到点在 PG 上恰恰是能成功的,要它失败基本得是连接已断,那时一切都已经坏了。若将来要收紧,写法是「回滚不成就立刻 `throw;` 原始异常,别再去做那次 SELECT」。**本轮不动**(review 阶段只修 P1/P2)。
+2. **`ReleaseNestedAsync` 抛错会掉进 catch,继而对一个已释放的点发 `ROLLBACK TO SAVEPOINT`**。同上,窄且不致命,记录以免将来当新缺陷重查。
+
 ## Log
 
 | 轮次 | 阶段 | 摘要 |
@@ -464,6 +494,7 @@
 | 21 | review+勾选 | Task 7 自审:五处变异全按预期转红。**最有说服力的一处**:把内层 3 个 catch 加回去 → **red 4/5**,四条失败路径同时变回无声,直接实证了「双层网让默认路径不可观测」这个本 Task 的核心论点;`throw;` 那处 red 4/5 则反向确认「通知绝不拖垮业务」仍成立。上一轮两条疑虑均证伪:用例 1 改「至少一条」没弱化(变异②③各自接住),`LogSink` 跨类别捕获没污染用例 5(变异④能让它红 = 敏感,未变异时绿 = 干净)。K1–K8 全对,改动面 5 + 1 已预先声明。**0×P1 / 0×P2**。闸门:全量 Release 工作流包 0 警;过滤器 **245/245**。**Task 7 打勾**。 |
 | 22 | plan | Task 8 plan 定稿(L1–L8)。**读码推翻了台账对本 Task 的原始设想**:`WorkflowAppFactory` 只喂 `TestDb.DbType`,所以现有 **245 条本来就在 sqlite/mysql/postgres 三腿全跑** —— 把 CAS/回滚/重放再写一遍纯属复制。新套件的正当性收敛成三条:①PG 唯一冲突后整事务 aborted(只有新用例能钉);②现有用例**一条都没碰**的数据库层方言真相(唯一索引是否真被建出、`CodeFirst_BigString` 中文与长文本、64 满宽、可空 `ADD COLUMN` 旧行、affected-rows、`DueTime` 相等游标);③**今天 SqlServer PR 腿零条工作流测试**,`TEST_FILTER` 的 13 个类里没有任何 `Wf*`。另两条读码事实:SqlSugar 5.1.4.198 **没有 savepoint API**(扫过 dll 字符串表),内核 `src/` **今天零个方言分支**。PG 修法定 **PG-only SAVEPOINT**,三个替代方案(无差别 savepoint / `ON CONFLICT DO NOTHING` / 接受败者恒失败)各自被否的理由已写进 L1。复现手法定 **致盲首次 `FindAsync` + 事务外预提交赢家行**,把构造不出的并发换成一个诚实的单点伪造。14 条用例 + 6 个变异点 + 9 条陷阱已列;改动面 4 文件、预期计划外 **0**。新记 **P2→Task 10**:四腿绿本机取不到证,需用户 push 或授权。未写产品代码。 |
 | 23 | exec | Task 8 落地 **3 文件 + 台账,零溢出**。`WfOperationReceiptService` 加 PG-only SAVEPOINT(三个 `protected virtual` 小步;守卫 `DbType == PostgreSQL && Ado.IsAnyTran()` —— 自动提交模式下 PG 拒收 `SAVEPOINT`,而那时也根本不需要它),注释写明为什么这是内核第一个方言分支、以及「不解析错误码」的旧决定为何仍然成立。新增 `WfPersistenceContractTests` **14 条**(A 回执唯一性与 PG 事务中止 4 / B 列类型与列宽 2 / C 可空升级列 2 / D CAS 与 affected-rows 2 / E `DateTime` 相等游标 1 / F 为 SqlServer PR 腿而设的端到端幂等冒烟 3);致盲替身只蒙前 N 次 `FindAsync`,赢家行事务外预提交,冲突与恢复都是真的。`TEST_FILTER` 追加本类 + 一段「为什么唯独这一个 `Wf*` 进 PR 腿」的注释,YAML 已解析验证、过滤器单行 14 项完好。**两条测试自身的错**:D2 让人工先赢时活动 `wf_task` 当场归档进 `wf_his_task`(库里没待办可推到期,证明不了仲裁)→ 改成超时先赢、人工后到收业务错误;`DateTime.Now - TimeSpan` 写进 `SetColumns` 表达式会被当 SQL 翻译,落库值读回绑不上 `DateTime` → 提成局部变量。**L7 探测:本机无 PG**,PG 的「修前红」取不到证,射程声明写进类注释。闸门:全量 `--no-incremental` Release 0 错、13 警(既有基线);过滤器 **259/259**。未勾选。 |
+| 24 | review | Task 8 **自审 review**。指定过滤器 **259/259 绿**;6 处变异逐一跑(先 `grep` 验改、复原只 checkout 单文件):**红 3 处**(`IsUnique` → 4/14、`RequestId ?? ""` → 1/14、删 `DueTime == cursor` 半边 → 1/14),**绿 3 处**且性质不同:M1(去 savepoint)方言使然、如实记「未取证」;M6(删 `Version ==`)本套件按 L4 就不该覆盖,追加取证改跑全过滤器 **红 1/259**(`WfVersionCasTests.Instance_losing_cas_...`)—— 不是覆盖洞,是 plan 变异表那一格预期写错,已更正;M3(`ResultJson` 换 `Length = 200`)**仍绿**,这是本轮唯一真发现 —— **SQLite 不执行列宽**,B1/B2 在 SQLite 腿是恒真断言,而类注释的射程声明只写了 PG、漏了列宽(追加取证:全过滤器 259/259 仍绿(1m17s))。记 **1 条 P2**(补射程注释,不改产品代码、不加 `SkippableFact`)+ 2 条 P3(`RollbackNested`/`ReleaseNested` 抛错会顶替真因,窄,挂账)。**未勾选**。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
