@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 6
+- 轮次: 7
 - max: 45
-- 当前任务: 2(**已勾选**)→ 下一任务 3
-- 当前阶段: review 完成 + 修 P2 + 勾选(0×P1 / 2×P2 均已修)
-- 上一轮: Round 6 — Task 2 review(**自审**,已声明)。四处变异各转红后复原(先 grep 验证文件真改了)。发现并当场修掉 2 条 P2:①`CommitAsync` 静默更新 0 行会留下「有回执但结果为空」的自相矛盾态 → 改为 `affected != 1` 即抛并回滚,补测试;②`FindAsync` 签名 `Task<WfOperationReceipt>` 却返回 null,而它是 `protected virtual` 公开重写点,趁未发包改成可空。另顺手修 P3:`catch (Exception)` 不再吞取消。闸门 **210/210 绿**。**Task 2 已打勾。**
-- 下一步: Round 7 — **Task 3 plan only**(`WfInstance.CompletedTime`)。plan 前必读:①`Engine/Operations/TakeTransitionOp.cs` 与 `CompleteTaskOp.cs` 的终态分支(实例进 Approved/Rejected/Cancelled/Terminated 的**全部**落点,别漏 `CancelInstanceOp`);②`WfInstance.Version` 的 `DefaultValue` 长注释(新增列在四库的 ADD COLUMN 行为,尤其 SQLite 例外);③数据库评审 §4.2 与 §九 #4(旧行可从 `InstanceCompleted` 事件回填,测一条即可)。**Task 3 不得夹带 receipt 逻辑**(`## Findings` 硬约束 #5)。本轮只 plan,不写产品代码。
+- 当前任务: 3(`WfInstance.CompletedTime`)
+- 当前阶段: plan(已完成,未写产品代码)
+- 上一轮: Round 7 — Task 3 plan 定稿(F1–F6)。读码三项结论定了形状:①终态落点**恰好 3 处**且形状完全相同(`TakeTransitionOp.CompleteInstanceAsync` / `CompleteTaskOp` 终止拒绝分支 / `CancelInstanceOp`),`Terminated` 全仓无写入点;②`BeginResubmitAsync` 要求 `Status == Running` → 实例终态不可逆 → `CompletedTime` 一生只写一次,不需要 `??=` 或重提清空;③`ISeedData` 只插不改,做不了 UPDATE 回填,故回填走带存在性守卫的一次性 `IHostedService`(全新库跳过、升级库下次重启自愈)。写入收成 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 一处,**不折进 `ClaimInstanceAsync`**(M2b CAS 禁区)。
+- 下一步: Round 8 — **Task 3 exec**。严格按 `## Plan` 的 7 文件改动清单落地,顺序照「步骤」1→8。exec 时必须先验证 `DbMaintenance.IsAnyTable` / `IsAnyColumn` 的真实签名与参数语义(别照记忆写);回填**只能**用 `SetColumns` 条件更新(整对象更新会触发审计 AOP 伪造 `UpdateTime`)。跑到过滤器闸门(210 → ≈215)即停,**不勾选**,review 留给 Round 9。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -90,67 +90,71 @@
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段重写)
 
-> **Task 2 — Receipt 服务 + 事务内挂钩**(Round 4 写于 2026-08-31)。已读:`## Findings` 跨任务待办、`WorkflowSetup.cs` 全文、`Abstractions/IWorkflowEngine.cs`、`WorkflowEngine.ExecuteAsync`、`WfInstanceService`/`WfTaskService` 的 7 处命令构造点、`WorkflowReplaceabilityTests`(现「九件套」)、`WorkflowAppFactory`、`WfVersionCasTests` 的射程声明写法。
-> **Task 1 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
+> **Task 3 — `WfInstance.CompletedTime`**(Round 7 写于 2026-08-31)。已读:`TakeTransitionOp.CompleteInstanceAsync`、`CompleteTaskOp` 拒绝分支、`CancelInstanceOp`、`WfExecutionContext.ClaimInstanceAsync` 及 `WfInstance.Version` 的 `DefaultValue` 长注释、`BeginResubmitAsync`、`ISeedData` 契约、`DataScopeContext`、评审 §4.2 与 §九 #4。
+> **Task 2 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
 
-### 边界(先划清,免得和 Task 5 打架)
+### 读码所得(决策的事实底座,exec 不必重查)
 
-- **Task 2 = 回执的持久化 SPI 本身**:查已有 / 占位 / 回填 / 回滚语义 / `TryAdd` 可替换面 / 直接对服务的测试。
-- **Task 5 = 把它挂到 `ExecuteAsync`** 并让 8 个写命令携带 `RequestKey`。**本轮不碰 `ExecuteAsync`、不碰命令 DTO、不碰服务层签名。**
-- 只有 `StartInstanceCmd` 带机构(`StarterOrgId`),其余命令都没有 —— `ScopeKey` 怎么贯穿是 **Task 4/5** 的事,Task 2 只保证「给什么都能正确归一化并算出同一 identity」。
+- **终态落点恰好 3 处,形状完全相同**(先 `ClaimInstanceAsync(Running)` → 设 `Status` → `Updateable(Instance).UpdateColumns(Status, UpdateTime, UpdateUserId)`):`TakeTransitionOp.CompleteInstanceAsync`(Approved)、`CompleteTaskOp` 的**终止**拒绝分支(Rejected)、`CancelInstanceOp`(Cancelled)。
+- **`WfInstanceStatus.Terminated = 5` 全仓只出现在 `WfEnums.cs`**,没有任何写入点 → Task 3 不为它造落点(那是新语义,越界)。
+- **实例一旦终态就回不来**:`BeginResubmitAsync` 要求 `Status == Running`(退回/重提期间实例始终 Running)→ `CompletedTime` 一生最多写一次,**不需要** `??=`、也不需要在重提时清空。
+- **数据范围**:`DataScopeContext.Current` 未设置时返回 `Unrestricted` → 启动期回填看得见全部行(仍按引擎惯例加 `ClearFilter<IOrgScoped>()`)。
+- **`ISeedData` 只插不改**(`HasData()` 声明式 + 同步签名),**不能**拿来做 UPDATE 回填。
 
 ### 决策点(exec 不得二次发挥)
 
 | # | 决策 | 理由 |
 |---|---|---|
-| E1 | 接口 `IWfOperationReceiptService`(`Abstractions/`),两个方法:`TryBeginAsync(WfOperationIdentity, ct)` → **`WfOperationReceipt?`**(`null` = 新占位成功、继续执行;非 `null` = 已有回执、调用方短路返回它);`CommitAsync(WfOperationIdentity, int resultCode, string? resultJson, ct)` → 回填占位行 | 一个返回值表达两种结局,不套 wrapper 类。名字沿用台账 Task 2 的 `TryBeginAsync`/`CommitAsync` |
-| E2 | **占位在前(reserve-first)**,不是「执行成功后再插回执」 | 事后插入挡不住并发双提交:两边都已推进状态,第二个只能拿到 `TaskConflict` —— 那正是 M2c 要消灭的现象。占位行走唯一索引,第二个请求会阻塞到第一个提交/回滚,拿到确定结果 |
-| E3 | **归一化只有一份**:把 `ScopeKey`/`RequestKey` 的 trim + 哨兵逻辑从 `WfIdentityHash.Compute` 里提成两个 `public static`(`NormalizeScopeKey` / `NormalizeRequestKey`),`Compute` 与新的 `WfOperationIdentity.Create` 都调它 | 消化 `## Findings` 的 **P3 → Task 2**:落库值必须与算 hash 的值同源。两处各写一遍 trim/哨兵 = 分叉风险,正是评审 §五最担心的。**这是对已勾选 Task 1 文件的唯一允许改动**,且 Task 1 的快照测试就是它的防回归证据(转红 = 改坏了不可逆契约) |
-| E4 | 新值对象 `WfOperationIdentity`(`Engine/`),`Create(...)` 静态工厂:归一化六维 + 当场算出 `IdentityHash`,只读属性 | 服务与将来的引擎钩子都拿同一个对象,不再各自传 6 个散参、也不可能出现「入库值 ≠ 算 hash 的值」 |
-| E5 | 实现类 `Services/WfOperationReceiptService.cs`,注入 `IRepository<WfOperationReceipt>`,读写都走它的 `.Db` | 同一个 `SqlSugarScope` 单例 → 自动落在调用方的 `UseTranAsync` 事务里(Task 5 挂钩后即与领域状态同事务)。`IRepository<>` 可用正是 D1 选 `BaseEntity` 的红利 |
-| E6 | 唯一键冲突**不解析数据库错误码**:`TryBeginAsync` = SELECT → 未命中则 INSERT → **INSERT 抛异常时再 SELECT 一次**,查到就当命中返回,查不到才原样抛 | 四库错误码/异常类型各不相同,解析它是方言陷阱;二次 SELECT 是 provider-neutral 的等价判据 |
-| E7 | **业务失败不落回执**:`ResultCode` 只写 `0`(成功)。业务抛错 → 整事务回滚 → 占位行一并消失 → 重试可再试 | 与 `## 语义契约`「receipt 事务边界」一致。把失败也幂等化会让「改完权限再重试」永远拿到旧的失败,不是本里程碑要的语义。`ResultCode` 字段保留给将来 |
-| E8 | DI:`services.TryAddScoped<IWfOperationReceiptService, WfOperationReceiptService>();` 挂在 `WorkflowSetup` 的引擎注册附近;`WorkflowReplaceabilityTests` 从**九件套变十件套**(类注释同步改) | 内置服务一律 `TryAdd`(内核第一原则);九件套是契约测试,新增一面必须同时补钉子和文档 |
+| F1 | 列:`[SugarColumn(IsNullable = true, ColumnDescription = "完结时间")] public DateTime? CompletedTime`,挂在 `Status` 之后。**不给 `DefaultValue`、不建索引** | 评审 §九 #2「新增列先 nullable」。`WfInstance.Version` 注释里那条「翻可空 → ADD COLUMN → 回填 → 改 NOT NULL」三步路只对 **NOT NULL** 列才走,nullable ADD COLUMN 四库都直接接受;给了 `DefaultValue` 反而白跑一遍回填 UPDATE。M2c 无按完结时间的查询,索引留给真需要的里程碑 |
+| F2 | 写入收成一处:`WfExecutionContext.WriteInstanceTerminalStatusAsync(status, ct)` —— 设 `Status` + `CompletedTime`,一条 `UpdateColumns(i => new { i.Status, i.CompletedTime, i.UpdateTime, i.UpdateUserId })`;三个终态落点改为调用它。**不把 `ClaimInstanceAsync` 折进去** | 三处复制同一行 = 将来第 4 个终态落点必漏(根因修法:改共享函数,不改三个调用方)。折进 Claim 就动了 M2b 的 CAS 形状与三处各自的长注释 —— **禁区** |
+| F3 | 时间源 `TimeProvider.GetLocalNow().DateTime`(`ctx.TimeProvider` 已是 `required`) | 与审计 AOP 的 `time.GetLocalNow().DateTime` 同源,测试可用假时钟控;**不用** `DateTime.Now` |
+| F4 | 与 `Status` **同一条 UPDATE**;赋值用 `=` 不用 `??=` | 评审 §4.2 要求「与状态原子写入」;`??=` 是死聪明(见上文:不可能二次写),还会在将来真出现二次写时悄悄留住旧时间 |
+| F5 | 回填 = 启动期一次性 `IHostedService`(`Jobs/WfCompletedTimeBackfill.cs`),带**存在性守卫**:`DbMaintenance.IsAnyTable("wf_instance")` 且 `IsAnyColumn("wf_instance","CompletedTime")` 才动手,否则静默跳过 | 见下方专段 |
+| F6 | **不透出 DTO**:不动 `WfInstanceDetailDto`/列表 DTO/前端 | Task 10 的 `gen:api` 只应因 `RequestId` 而变。列已在库里,何时对外由后续里程碑决定;Task 3 不顺手扩 OpenAPI 面 |
+
+### F5 展开(回填为什么是这个形状)
+
+- **为什么不是「公开一个方法让消费者手动调」**:内核卖点是三行 `Program.cs`,文档里的手动升级步骤等于不会被执行 → 列永远空,等于没做。
+- **为什么守卫能兜住注册顺序**:`AddTenonAdminWorkflow` 通常在 `AddTenonAdmin` **之前**调用 → 本 HostedService 排在 `DatabaseInitializer`(内核 `internal sealed`,无扩展点)**前面**启动。全新库:表不存在 → 跳过(本就无旧行);升级库:首次启动列还没加 → 跳过,同一次启动里 `DatabaseInitializer` 补上列 → **下次重启自愈**。晚一次重启,换掉「跨包改 HostedService 顺序」的耦合,划算。
+- **SQL 两步走,provider-neutral**:① `Queryable` 连 `wf_instance` × `wf_history`(`EventType == InstanceCompleted`),取 `Status != Running && CompletedTime == null` 的 `(InstanceId, MIN(CreateTime))`;② 逐条 `Updateable<WfInstance>().SetColumns(...).Where(i => i.Id == id && i.CompletedTime == null)`。**不写 `UPDATE ... FROM`、不写方言 SQL**(四库语法各异)。
+- **幂等**:条件恒含 `CompletedTime == null`,第二遍 0 行;无事件可依据的旧行**保持空**(评审 §九 #4 原话)。
+- **回填必须用 `SetColumns` 条件更新**:它不触发只认 `UpdateByObject` 的审计 AOP → 回填不会把 `UpdateTime`/`UpdateUserId` 刷成启动时刻。这是要的语义(回填不是一次业务更新)。
 
 ### 改动清单(exec 只允许碰这 7 个文件)
 
-1. `backend/src/TenonAdmin.Workflow/Abstractions/IWfOperationReceiptService.cs` — 新增 SPI
-2. `backend/src/TenonAdmin.Workflow/Engine/WfOperationIdentity.cs` — 新增值对象 + `Create`
-3. `backend/src/TenonAdmin.Workflow/Services/WfOperationReceiptService.cs` — 新增实现
-4. `backend/src/TenonAdmin.Workflow/Engine/WfIdentityHash.cs` — **仅** E3 的提取重构(不改算法)
-5. `backend/src/TenonAdmin.Workflow/WorkflowSetup.cs` — `TryAddScoped` 一行
-6. `backend/tests/TenonAdmin.Tests/WorkflowReplaceabilityTests.cs` — 补第十面 + 类注释九→十
-7. `backend/tests/TenonAdmin.Tests/WfOperationReceiptTests.cs` — 新增服务级测试
+1. `backend/src/TenonAdmin.Workflow/Entities/WfInstance.cs` — 加列(F1)
+2. `backend/src/TenonAdmin.Workflow/Engine/WfExecutionContext.cs` — 加 `WriteInstanceTerminalStatusAsync`(F2)
+3. `backend/src/TenonAdmin.Workflow/Engine/Operations/TakeTransitionOp.cs` — 改调用
+4. `backend/src/TenonAdmin.Workflow/Engine/Operations/CompleteTaskOp.cs` — 改调用(**只**终止分支)
+5. `backend/src/TenonAdmin.Workflow/Engine/Operations/CancelInstanceOp.cs` — 改调用
+6. `backend/src/TenonAdmin.Workflow/Jobs/WfCompletedTimeBackfill.cs` — 新增 + `WorkflowSetup.cs` 一行 `AddHostedService`
+7. `backend/tests/TenonAdmin.Tests/WfCompletedTimeTests.cs` — 新增
 
 ### 步骤
 
-1. E3 提取归一化 → 立刻跑 `~WfIdentityHashTests` 确认 **11/11 仍绿**(快照不动 = 重构无副作用) → 2. `WfOperationIdentity` → 3. 接口 → 4. 实现 → 5. DI + 第十面 → 6. `WfOperationReceiptTests` → 7. `dotnet build -c Release` → 8. 指定过滤器闸门(当前 201,本 Task 后应 ≈ 210)。
+1. F1 加列 → 2. F2 加 ctx 方法 → 3. 三处调用点改造 → 4. `dotnet build` 过 → 5. F5 回填 HostedService + 注册 → 6. `WfCompletedTimeTests` → 7. `dotnet build -c Release` → 8. 指定过滤器闸门(当前 **210**,本 Task 后应 ≈ 215)。
 
-### 测试清单(`WfOperationReceiptTests`,7 条 + 可替换性 1 面)
+### 测试清单(`WfCompletedTimeTests`,5 条)
 
-1. `TryBeginAsync` 首次返回 `null`,且库里落了一行占位(按 hash 查得到)
-2. 同 identity 第二次 `TryBeginAsync` 返回**已有回执**,`ResultJson` 与第一次 `CommitAsync` 写入的一致
-3. `CommitAsync` 只回填不新增:行数仍为 1,`ResultCode == 0`
-4. **回滚不残留**:在 `UseTranAsync` 里 `TryBeginAsync` 后抛异常 → 事务失败 → 按 hash 查为空(这条是 E2/E7 的核心钉子)
-5. 归一化同源:`scopeKey = null` 与 `= "-"` 命中同一行;入库 `ScopeKey` 恰为哨兵、`RequestKey` 为 trim 后的值
-6. 不串味:仅 `RequestKey` 不同 / 仅 `CommandType` 不同(Approve vs Reject)→ 两行互不命中
-7. 同源钉子:`WfOperationIdentity.Create(x).IdentityHash == WfIdentityHash.Compute(x)`(逐参数对照)
-8. `WorkflowReplaceabilityTests`:前置注册 `FakeReceiptService` 胜出内置(把 `TryAdd` 退化成 `Add` 即红)
+1. 同意到底 → 实例 `Approved` 且 `CompletedTime` 非空(DB 直查,照 `WfVersionCasTests` 写法)
+2. 拒绝终止 → `Rejected` 且非空;**拒绝 ToNode 分支**(不终止)→ 仍为 `null`(钉住「只在终止分支写」)
+3. 撤销 → `Cancelled` 且非空
+4. 运行中实例 → `null`
+5. 回填:手造「`Status=Approved` + `CompletedTime=null`」旧行 + 一条 `InstanceCompleted` 历史 → 跑回填 → 时间 == 该事件的 `CreateTime`;另造一条**无事件**的旧行 → 保持 `null`;连跑两次结果不变(幂等)
 
 ### 陷阱
 
-- **别解析数据库错误码**判唯一冲突(E6);别在 `catch` 里吞掉非唯一冲突的异常。
-- **别把业务失败写进回执**(E7);别在 `TryBeginAsync` 里自己开事务——它必须跑在调用方的事务里,自己开会把占位行提前提交、回滚不掉。
-- 改 `WfIdentityHash` **只允许**提取归一化方法这一种重构:签名、顺序、分隔符、算法、输出格式一个字都不能动;`Snapshot_of_a_known_tuple_is_frozen` 转红就是改坏了。
-- `IRepository<WfOperationReceipt>.DeleteAsync` 是**软删**,回执永不删,别用它清理测试数据。
-- 可替换性测试的类注释写着「九件套」,加了第十面必须同步改,否则文档与钉子对不上。
-- 本轮**不碰** `ExecuteAsync` / 命令 DTO / 服务层签名 / 前端(Task 4/5)。
-- 测试用 `WorkflowAppFactory` 起真实 Host 取 `IWfOperationReceiptService` 与 `ISqlSugarClient`;**射程要写清**:并发交错构造不出来,第 4 条钉的是「同事务回滚」而非真并发(照 `WfVersionCasTests` 的射程声明写法),别把它吹成并发证明。
+- `Terminated` 无写入点,**别顺手补落点**。
+- **别把 `ClaimInstanceAsync` 折进新方法**(M2b CAS 禁区);三处的长注释原样保留。
+- 回填只能 `SetColumns` 条件更新;用整对象 `Updateable` 会触发审计 AOP 把 `UpdateTime` 刷成启动时刻 = 伪造审计。
+- `IsAnyTable` / `IsAnyColumn` 的实际签名与第三参数语义(`isCache` / `ignoreCase`)exec 时**先验证**,别照记忆写。
+- HostedService 直接注入 `ISqlSugarClient`(单例)即可;要 `IRepository<>` 就得自建 scope,没必要。
+- **不夹带 receipt 逻辑**(`## Findings` 硬约束 #5);不碰 DTO / 前端 / Urge / `ExecuteAsync`。
 - 不提交 `TestResults/`。
 
 ### 给后续 Task 的锚点(本轮只记录,不实施)
 
-- Task 5 挂钩落点:`ExecuteAsync` 的 `UseTranAsync` 内、`command switch` **之前**做 `TryBeginAsync`,`ctx.ToResult()` **之后**做 `CommitAsync`;`TimeoutFireCmd` 显式跳过(D4)。
+- Task 8 四库套件可直接复用第 5 条回填用例:nullable `ADD COLUMN` 与回填 UPDATE 的四库行为差异,正是契约套件该钉的。
 - Task 4 的 P2 仍在:`RequestId` 长度必须 ≤64,与 `RequestKey` 列宽对齐。
 
 <!-- TASK1-PLAN-ANCHOR -->
@@ -251,6 +255,7 @@
 | 4 | plan | Task 2 plan 定稿(E1–E8):`IWfOperationReceiptService` 两方法(`TryBeginAsync` 返回 `WfOperationReceipt?`/`CommitAsync` 回填);**占位在前**;唯一冲突走 SELECT→INSERT→SELECT 不碰方言错误码;新值对象 `WfOperationIdentity` + 归一化提取到 `WfIdentityHash`(入库值与 hash 同源,消化 P3);业务失败不落回执;可替换性九件套→十件套。边界:不碰 `ExecuteAsync`/DTO/服务签名(那是 Task 5)。未写产品代码。 |
 | 5 | exec | Task 2 落地 7 文件:归一化提取(快照 11/11 仍绿)、`WfOperationIdentity`、`IWfOperationReceiptService` + 实现(占位在前;唯一冲突走二次 SELECT,不碰方言错误码)、`TryAddScoped` 一行、可替换性**十件套**、`WfOperationReceiptTests` 7 例(含「回滚不残留」核心钉子 + 射程声明)。build 0 错、工作流包 0 警;过滤器 **209/209**(201+8)。未勾选。 |
 | 6 | review+修+勾选 | Task 2 自审:四处变异(去占位 / Commit 改新增 / TryAdd→Add / 不归一化)各转红后复原。修 2×P2——`CommitAsync` 0 行不再静默(改抛 + 补测试 + 变异验证)、`FindAsync` 可空签名趁未发包改正;顺带 P3 不再吞 `OperationCanceledException`。闸门 **210/210**。**Task 2 打勾**。教训:变异复原只 checkout 被变异的那一个文件,别 checkout 整个 src 目录(会冲掉同轮未提交的修复,制造假红)。 |
+| 7 | plan | Task 3 plan 定稿(F1–F6):`CompletedTime` 为 nullable 无默认值列(nullable ADD COLUMN 四库均接受,不触发 `Version` 注释里的三步路);终态写入收成 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 一处、三个落点改调用,**不动 M2b 的 `ClaimInstanceAsync`**;时间源 `ctx.TimeProvider`;回填走带 `IsAnyTable`/`IsAnyColumn` 守卫的一次性 HostedService + 两步 provider-neutral SQL(`SetColumns` 条件更新,不污染审计字段),无事件的旧行保持空;**不透出 DTO**(OpenAPI 面留给 Task 10 的 `RequestId`)。读码新事实:`Terminated` 全仓无写入点、实例终态不可逆、`ISeedData` 只插不改。未写产品代码。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
