@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 26
+- 轮次: 27
 - max: 45
 - 当前任务: 9(Vue request key 生命周期)
-- 当前阶段: (未开始 —— 下一步 plan)
-- 上一轮: Round 26 — Task 8 **勾选**。核对满足勾选条件:0×P1(Round 24 review 已确认)、1×P2 已在 Round 25 修完且闸门重跑绿、6 处变异的复核结论已写全(含 M6「预期写错已更正」、M1「PG 未取证」如实披露)。`## Tasks` 第 8 项已打勾。**Task 8 全程收尾**:`WfOperationReceiptService` 加了内核第一个方言分支(PG-only SAVEPOINT),`WfPersistenceContractTests` 14 条钉住四库持久化契约里 245 条既有测试没覆盖的三类东西(PG 事务中止恢复、数据库层方言真相、SqlServer PR 腿的幂等冒烟),`backend-ci.yml` 的 `TEST_FILTER` 纳入本类。指定过滤器基线从 245 涨到 **259**。`## Plan` 章节留了两条给后续任务的锚点未变:**P2→Task10**(DONE-CONDITION「四腿各绿」本机无 Docker/无 PG,取不到证,Task 10 收口时需就「push 一次拿 CI 信号」或「授权连某真实 PG」向用户要决定)、**P3→Task5/8**(`ActivatorUtilities.CreateInstance<WorkflowEngine>` 绕过 `TryAdd` 的写法,本 Task 未重蹈)。
-- 下一步: Round 27 — **Task 9 plan**。读 `## 已知起点` 里「前端现状」一节(详情/发起页按钮有 UI 防连点但无 request key 生成与复用)、`## 语义契约` 的「重试语义」「对外字段名(`requestId`)」两行、Task 8 已在后端做好的 `requestId` 贯穿(Engine/DTO/Controller 均已就位,Task 9 只是前端消费方)。范围按 Task 9 原文:`web/` 发起页 + 实例详情写操作,一次用户动作生成 UUID、该动作重试复用、成功或明确失败后丢弃、新动作新 key,`src/workflow/` 或 composable 单点实现避免每页复制,按钮防连点保留。**不碰** `web-react/`(Task 9 明确排除,只在 Task 10 跑 `gen:api`)。plan 阶段先读 `web/src/workflow/` 目录结构与现有发起/详情页代码,再写 `## Plan`,**不写产品代码**。
+- 当前阶段: plan(已完成)
+- 上一轮: Round 27 — Task 9 **plan**。读完 `start/index.vue`、`detail.vue`、`WfFormMount.vue`(确认只挂载展示不自提交)、`api/workflow.ts`、`api/index.ts`(`ApiError`/`unwrap`)、`api/client.ts`(401/403 中间件自带同请求重放)、`useConfirm.ts`、`types/workflow.ts`、后端 `WfRuntimeModels.cs`(`RequestId` 字段已在 Task 4 落地,Urge 故意不透传)。核心决策:新建 `web/src/workflow/useRequestKey.ts`(composable,非 store),API 为 `value()`(惰性生成)/`settle('success'|'error'|'network')`(非 network 才丢弃)/`reset()`;错误分类走纯函数 `classifyOutcome`(`e instanceof ApiError` 沿用 `utils/error.ts` 既有判据)。**关键读码发现**:`web/src/api/schema.d.ts` 从 Task 4 起未重生成(无 `requestId`),但由于 `detail.vue` 现有写法是「先 `const body` 再传函数」而非字面量直传,TypeScript 的超额属性检查不会触发,**本 Task 不需要提前跑 `gen:api`**(留给 Task 10);`start/index.vue` 目前是字面量直传,需先改成同款 `const body` 写法才能加字段。`wfInstanceApi.cancel`/`resubmit` 是手写参数类型,不受 schema 陈旧影响,直接加字段最省事。改动清单锁定 7 个文件(含新建的 composable + 单测、两处页面接入、api 手写类型、`COMPONENTS.md` 索引、台账),预期计划外 0。**不写产品代码。**
+- 下一步: Round 28 — **Task 9 exec**。按 `## Plan` 的步骤 1–6 实现;闸门跑 `cd web && npm run typecheck && npm run lint && npx vitest run src/workflow/`(该命令只覆盖 `src/workflow/` 下的 composable 单测,两个 `views/workflow/` 页面文件靠 typecheck/lint 把关,无既有组件级 spec 可跑,不新增)。**不勾选。**
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -95,119 +95,118 @@
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段重写)
 
-> **Task 8 — 四库持久化契约套件**(Round 22 写于 2026-08-31)。已读:`.github/workflows/backend-ci.yml` 全文(四库矩阵、服务容器、`TEST_FILTER`、nightly + `nightly-alert`)、`backend/tests/TenonAdmin.Tests/TestDb.cs` 全文、`WorkflowAppFactory.cs`、`WfListContractTests.cs`、`MultiConfigIdTests` 的方言跳过惯用法、`WfOperationReceiptService.cs` 全文、`WfTimeoutJob` 的 `ExecuteAsync` 主循环与 `ScanDueTasksAsync`、7 张 `Wf*` 表的 `SugarIndex` 与 `ColumnDataType` 声明、`Directory.Packages.props` 的 SqlSugar 版本(5.1.4.198)。
-> **Task 7 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
+> **Task 9 — Vue request key 生命周期**(Round 27 写于 2026-08-31)。已读:`web/src/views/workflow/start/index.vue`、
+> `web/src/views/workflow/instance/detail.vue`、`web/src/views/workflow/components/WfFormMount.vue`(确认只挂载展示、
+> 不自行提交)、`web/src/api/workflow.ts`、`web/src/api/index.ts`(`ApiError`/`unwrap`)、`web/src/api/client.ts`
+> (401/403 中间件的请求重放机制)、`web/src/composables/useConfirm.ts`、`web/src/types/workflow.ts`
+> (`WfStartInput`/`WfTaskActionInput` 直接是 `Schemas[...]` 别名)、后端 `WfRuntimeModels.cs` 的
+> `WfStartInput`/`WfTaskActionInput`/`WfInstanceCancelInput`(经 Controller)/`WfInstanceResubmitInput`(确认
+> `RequestId` 字段已在 Task 4 落地,Urge 故意不透传)、`## 语义契约` 的「重试语义」「receipt vs CAS」「对外字段名」
+> 三行、`web/COMPONENTS.md` 的 composable 收录约定(源码头注释写详情,本文件只留一行索引)。
+> **Task 8 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
 
 ### 读码所得(决策的事实底座,exec 不必重查)
 
-- **现有 245 条本来就是四库跑的**。`WorkflowAppFactory` 只喂 `TestDb.DbType` + `TestDb.ConnectionString`,而 CI 每条腿只换 `TENON_TEST_DBTYPE`。所以 sqlite / mysql / postgres 三腿**已经在跑全部 245 条**;`WfVersionCasTests`、`WfOperationReceiptTests`、`WfReceiptEngineTests`、`WfCompletedTimeTests` 全都是四库(准确说三库 + nightly SqlServer)用例。**台账原文列的「CAS 三处 / 事务回滚不残留 / 终态保护 / 重放」如果照抄一遍,就是纯粹的复制**,正是 Task 描述里「不复制 245 条全集」要避免的事。
-- **唯一真正没被覆盖的一腿是 SqlServer 的 PR 时刻**。`TEST_FILTER` 只在 `matrix.db == 'sqlserver' && github.event_name != 'schedule'` 时生效,列了 13 个类,**没有任何 `Wf*` 类**。也就是说:今天一个 PR 改动整个工作流包,SqlServer 上**零条**工作流测试会跑,信号要等到当晚 nightly。
-- **`WfOperationReceiptService.TryBeginAsync` 的恢复路径在 PG 上走不通**(`## Findings` 的 P2)。它靠「`InsertPlaceholderAsync` 撞唯一索引 → catch 里再 `FindAsync` 一次认赢家」。PG 一旦语句报错就把**整个事务**置为 aborted,紧接着那条 SELECT 直接 `25P02 current transaction is aborted`。更刺眼的是:PG 的 `catch` 里那个新异常会**顶替**原始的唯一冲突异常抛出去,连诊断线索一起丢。SQLite / MySQL / SqlServer 都没有这个语义。
-- **恢复路径什么时候真会被走到**:READ COMMITTED 下,第二个事务插同一 hash 会**阻塞**到赢家提交;赢家一提交,我们的 INSERT 才报冲突 —— 也就是说,报冲突的那一刻**赢家一定已经提交、二次 SELECT 一定查得到**。所以三个库上恢复必然成功,PG 上必然失败。这不是「概率窗口」,是方言二选一。
-- **SqlSugar 5.1.4.198 没有 savepoint API**(把 `SqlSugar.dll` 的字符串表整个扫过,`SAVEPOINT` / `Savepoint` 零命中)。要用只能 `db.Ado.ExecuteCommandAsync("SAVEPOINT ...")` 走裸 SQL。
-- **内核 `src/` 今天一个方言分支都没有**(`grep DbType.PostgreSQL` 零命中)。L1 会是第一个,所以它必须被写清楚为什么值得。
-- **`CodeFirst_BigString` 已经是 Unicode**(CHANGELOG #26:SqlServer 上映射到 `nvarchar(max)`,此前裸 `text` 把中文变成 `???`)。`ResultJson` / `PayloadJson` / `ModelJson` / `VariablesJson` 都用的它,**声明是对的** —— 但这一族列的中文往返在工作流侧**没有任何一条直接断言**,而它恰好是仓内出过真事故的那一类。
-- **`WfTimeoutJob.ScanDueTasksAsync` 用 `(DueTime, Id)` 键集翻页**,tie-break 写的是 `t.DueTime > cursor || (t.DueTime == cursor && t.Id > afterTaskId)` —— **DateTime 相等比较**,正是 CLAUDE.md 点名的 SqlServer `datetime` 舍入陷阱所在。若相等判定在某方言上落空,同一 `DueTime` 的那批待办会被 `DueTime > cursor` 整批跳过,**静默漏扫**。页大小由 `WorkflowOptions.TimeoutScanBatchSize` 决定,可用 `UseSetting` 调小,构造得出来。
-- **`TestDb` 的库隔离是「每个 `WorkflowAppFactory` 一个库」**(`DbPath` 是 `Guid.NewGuid()`)。SqlServer 上每个库 ≈ 20s 的 `InitTables`(CLAUDE.md 实测),所以**新类的 SqlServer 成本 ≈ 用例数 × 20s**。
-- **方言跳过的仓内惯用法是裸 `if (...) return;`**(`MultiConfigIdTests.Secondary_Sqlite_EnsuresParentDirectory`),没有 `SkippableFact`。本套件**一条都不该跳** —— 跳过等于把方言差异藏起来。
+- **后端已经全端就位,前端还没跟上**:`WfStartInput`/`WfTaskActionInput`/`WfInstanceCancelInput`/`WfInstanceResubmitInput`
+  都带了可空 `RequestId`,Controller 一路透传到 `WorkflowEngine`(Task 1–8 已验证)。Urge 单独:`WfTaskActionInput`
+  复用同一个 DTO,但 Controller **不给 Urge 透传**(源码注释已写明),前端不必为 Urge 生成 key。
+- **`web/src/api/schema.d.ts` 是本轮唯一的绊脚石,但不阻塞**:`WfStartInput`/`WfEngineResult` 等类型是
+  `Schemas['...']` 的直接别名(`types/workflow.ts`),而 schema 从 Task 4 起就没重生成过
+  (`grep requestId schema.d.ts` 零命中),这是 Task 4 自己写的决定(「OpenAPI 变更 → 留给 Task 10 gen:api」)。
+  **不在本 Task 提前跑 gen:api**(那是 Task 10 双模板同步比对的职责,提前跑会打乱 Task 10「变更从这里开始」的
+  叙事,且 Task 9 完全不需要它)。
+- **TypeScript 的「新鲜对象字面量」规则天然绕开了这个绊脚石**:`detail.vue` 现在的 `submitAction()` 已经是
+  「先 `const body = {...}`,再传给 `wfTaskApi.xxx(body)`」——`body` 不是字面量直接出现在调用位置,超额属性检查
+  不会触发,往这个 `const` 里加一个 schema 还不认识的 `requestId` 字段,`vue-tsc --noEmit` 不会报错(结构类型
+  允许目标类型「不知道」的多余字段)。**`start/index.vue` 目前不是这个写法**——`wfInstanceApi.start({...})` 是
+  把字面量直接摆在调用参数位置,加 `requestId` 会触发超额属性检查报错,exec 必须先把它改成「先 `const body`」
+  的同款写法(不是新引入的怪写法,是把 start 页对齐 detail 页已有的风格)。
+- **`wfInstanceApi.cancel`/`resubmit` 是仓库自己手写的参数类型**(不是 `Schemas[...]` 别名,`grep "cancel:"
+  api/workflow.ts` 可见),本来就不受 schema 陈旧影响,直接在这两个手写类型上加 `requestId?: string | null`
+  字段最省事,不必等 Task 10。
+- **`client.ts` 的 401/403 中间件已经会做一次「同请求重放」**(`refreshMiddleware`/`reauthMiddleware`,靠
+  `request.clone()` 存副本再 `fetch(retry)`)——这层重放复用的是同一个 `Request`(同一个 body,同一个
+  `requestId`),本 Task 不需要为它另写逻辑,只要 `requestId` 在最初的 body 里就位,中间件级重放自动"继承"。
+  真正需要本 Task 处理的,是**用户手动点两次「确认」**这种应用层重试(例如第一次网络超时,弹窗没关,用户再点
+  一次)。
+- **仓内没有 axios、没有任何自动重试**(`useConfirm.run` 是单发,除 `client.ts` 两处中间件外无重试逻辑)——
+  Task 9 原文的「含 axios 重试若存在」是前瞻性措辞,不是本仓现状;本 Task 只需处理"用户手动重复点击"这一种
+  重试来源。
+- **`ApiError` 是判定"确定结果"的现成信号**:`unwrap()` 对已结算的 HTTP 响应(无论成功还是业务失败)都转成
+  `ApiError` 抛出;只有 `fetch` 本身失败(断网、超时、CORS)才会让 `client.POST(...)` 直接 reject 一个非
+  `ApiError` 的值(`translateError`/`api/index.ts` 已经用 `err instanceof ApiError` 做同款判定,是仓内既有
+  惯用法,不是新发明)。这正好对应语义契约「receipt 解决 HTTP 重试/双击」——**网络层没拿到确定结果时保留 key
+  待重试,一旦服务端给出确定结果(成功或业务错误)就丢弃 key**。
+- **`crypto.randomUUID()` 不是新引入的兼容性面**:`utils/chunkUpload.ts` 已经在用 `crypto.subtle.digest`,同样
+  要求安全上下文(HTTPS/localhost),仓库已经默许这个前提;不必为它引入 `uuid` 包。**exec 需要在 vitest
+  (happy-dom 环境)里实测一次 `crypto.randomUUID` 是否可用**,若不可用再退化处理(写进陷阱)。
+- **`web/COMPONENTS.md` 的 composable 收录方式**:正文只留一行索引/一节标题 + 链接,详细用法写在源码头注释
+  (`useConfirm`/`useTabTitle` 都是这个格式)。新 composable 照此格式加一节。
 
 ### 决策点(exec 不得二次发挥)
 
 | # | 决策 | 理由 |
 |---|---|---|
-| L1 | PG 的修法定为 **仅在 PostgreSQL 上给占位 INSERT 包一个 SAVEPOINT**:插入前 `SAVEPOINT wf_receipt_try`,catch 里先 `ROLLBACK TO SAVEPOINT wf_receipt_try` 再做二次 `FindAsync`,成功路径 `RELEASE SAVEPOINT`。判定走 `receipts.Db.CurrentConnectionConfig.DbType == DbType.PostgreSQL` | 这是教科书解法,也是唯一能让「冲突后拿到赢家结果」在四库**一致**的解法。**被否的三个替代**:①无差别对所有方言发 savepoint —— SqlServer 语法是 `SAVE TRANSACTION`/`ROLLBACK TRANSACTION`,还是得分支,而另外三库压根不需要,白付代价;②`ON CONFLICT DO NOTHING` —— PG 专属语法,SqlSugar 不提供可移植写法,方言面积比 savepoint 还大;③**接受 PG 上败者恒失败** —— 语义契约「并发败者」确实允许失败,但那样 PG 与另外三库的**可观测行为不同**却没人知道,而且抛出去的是 `25P02` 这种把真因盖掉的异常。savepoint 是四个里唯一同时修好「结果」和「诊断」的 |
-| L2 | **不接受「内核不许有方言分支」当反对理由**。这是内核**第一个** `DbType` 分支,exec 要在方法注释里写明:分支存在的原因不是性能或偏好,而是 PG 的事务中止语义**没有可移植替代**;并写明另外三库为什么不发这两条语句 | 「零方言分支」是好默认值不是教条。既有代码已经为了躲方言而**不解析错误码**(那个决定仍然正确并保留);躲不掉的这一处,藏起来比写出来更贵 |
-| L3 | **复现手法:测试子类致盲第一次 `FindAsync`**。`TryBeginAsync` 的冲突分支在正常流程里构造不出来(第一次 SELECT 总能查到已提交的赢家)。用一个继承 `WfOperationReceiptService` 的替身,让**第一次** `FindAsync` 返回 `null`、后续照常查库,再预先在事务**外**提交一条同 hash 的赢家行 → 事务内调 `TryBeginAsync` 就是一次**真实**的唯一冲突 + **真实**的二次 SELECT | 这是「射程学说」的正当用法:被伪造的只有「第一次没查到」这一个前提(现实中它由并发提供),冲突与恢复都是真的。**不是**把断言对象换成假的 |
-| L4 | **新套件只写现有 245 条没覆盖的东西**,一条都不复制。合法的三类:①PG 冲突恢复;②数据库层方言真相(唯一索引真被建出、BigString 中文/长文本、64 满宽、可空 `ADD COLUMN` 旧行、affected-rows、`DueTime` 相等游标);③**为 SqlServer PR 腿而设的端到端幂等冒烟 3 条** —— 形状与既有用例相近,但存在理由是「SqlServer PR 时今天零工作流覆盖」,不是无意识重写 | 第③类必须在**用例的 XML 注释里写明这个理由**,否则下一个人会当成重复代码删掉 |
-| L5 | **SqlServer PR 腿:纳入**。在 `TEST_FILTER` 末尾追加 `\|FullyQualifiedName~WfPersistenceContractTests` | 一个「四库契约」套件却在四库之一的 PR 时刻不跑,是自相矛盾。成本估算 ≈ 14 个隔离库 × 20s ≈ **5 分钟**,相对该腿现有 13 个类的规模是同量级增量,不是 40–60 分钟那种量级。**退出机制**:若该腿明显变慢,删掉追加的那一段即可退回 nightly(一行改动)。**绝不给该腿加 `timeout-minutes`**(CLAUDE.md 明令) |
-| L6 | **一条都不跳过方言**,不引 `SkippableFact` | 见上;跳过就是把差异藏起来。用例 1 在 PG 修好前会红——那正是它的价值,不是要被跳过的麻烦 |
-| L7 | **不擅自连局域网 VM 的数据库取证**。本机无 Docker;VM 上的 PG/MySQL 是用户自己的服务(端口已占、凭据未知),`TestDb` 会在上面建/删 `tenon_it_*` 库 | 那是对用户基础设施的写操作,不在本轮授权内。exec 可以探测**本机** `127.0.0.1:5432` 是否恰好有闲置 PG;没有就如实降级为射程声明 |
-| L8 | **`WfPersistenceContractTests` 一个类、每个测试一个 `WorkflowAppFactory`**,与仓内所有工作流测试同款;**不引** `IClassFixture` 共享库 | 共享库能把 SqlServer 成本从 ~5 分钟压到 ~2 分钟,但要引入本测试工程从没有过的模式,还要为 CAS/超时这些会改状态的用例做隔离设计。省 3 分钟不值一个新模式 |
+| D1 | 新建 `web/src/workflow/useRequestKey.ts`(**composable,不是 store**),页面级作用域,每次调用 `useRequestKey()` 各自持有一个 `ref`。API:`value()`(取/惰性生成当前 key)、`settle(outcome)`(`'success' \| 'error' \| 'network'`;非 `'network'` 才丢弃)、`reset()`(强制换新,给"打开新动作"用)。 | 与仓内 `useConfirm`/`useTabTitle` 同款"页面内 setup 调用、无需跨组件共享"的 composable 形状;不做全局 store,因为请求键的生命周期天然绑定单个页面/单个弹窗实例,没有跨组件共享的需求(YAGNI) |
+| D2 | 生命周期语义:**惰性生成**(首次 `value()` 调用才 `crypto.randomUUID()`,不是"打开弹窗就立刻生成"),**`settle('success' \| 'error')` 丢弃、`settle('network')` 保留**,`reset()` 用于"新动作开始"。 | 对应语义契约"重试语义":receipt 解决的是"HTTP 响应丢失",不是"业务失败后重试"——业务失败(如校验不过)重新提交理应是新动作、新 key;只有网络层没拿到确定结果时才要求同 key,让服务端的回执兜住"其实已经成功了"的情况 |
+| D3 | 错误分类交给一个纯函数 `classifyOutcome(e: unknown): 'error' \| 'network'`(`e instanceof ApiError ? 'error' : 'network'`),与 `settle()` 分开导出,不耦合进 `useConfirm`。 | `err instanceof ApiError` 是 `utils/error.ts` 已有的判定惯用法(读码所得已确认),复用同一条判据,不发明新的错误分类体系;保持纯函数便于单测,不依赖 Vue 响应式 |
+| D4 | `detail.vue`:`openAction(kind)` 里对非 `urge` 的 kind 调 `requestKey.reset()`;`submitAction()` 把 `api()` 包一层 try/catch,成功 `settle('success')`,失败 `settle(classifyOutcome(e))` 后 `throw`(不吞异常,`run()` 的 toast 逻辑不变);body 里 `requestId: kind === 'urge' ? undefined : requestKey.value()`。 | Urge 不进 receipt 是既定语义契约,前端不生成/不传这个字段,而不是生成了却让后端丢弃——避免"前端以为幂等、后端其实不认"的认知落差 |
+| D5 | `start/index.vue`:把 `submit()` 里直接摆字面量的 `wfInstanceApi.start({...})` 改成先 `const body = {...}` 再 `wfInstanceApi.start(body)`(对齐 detail.vue 已有写法,顺带绕开超额属性检查);`body` 里加 `requestId: requestKey.value()`;拿到成功结果、`router.push` 跳转**之前** `settle('success')`;`catch` 分支 `settle(classifyOutcome(e))`。 | 把两处写法统一,而不是发明"start 用一套、detail 用一套"两套心智模型;显式 `settle('success')` 而不是依赖组件卸载,防止路由 keep-alive 场景下 composable 状态活得比一次提交更久(exec 需核实工作流路由是否开 keep-alive,若开则这条防线本来就必要,若不开也无害) |
+| D6 | `cancel`/`resubmit` 复用同一个 `detail.vue` 的 `requestKey`(不新开一份)——它们和 approve/reject/... 一样都走 `openAction(kind)` → `submitAction()` 这一条路径(Round 27 读码已确认模板里唯一一个 `n-modal` 覆盖全部动作)。`wfInstanceApi.cancel`/`resubmit` 的手写参数类型各加 `requestId?: string \| null`。 | 不重复造轮子;这两个入口在 UI 层就是同一个弹窗流程的两个 `kind` 分支,天然共享同一个请求键实例 |
+| D7 | **不碰 `web-react/`**,**不跑 `gen:api`**,**不建全局 store**,**不改 `useConfirm`/`api/client.ts` 中间件**。 | 禁区明确排除 web-react;gen:api 是 Task 10 的职责;`useConfirm`/`client.ts` 已经用既有能力(见读码所得、中间件重放)满足需求,改它们是无谓扩面 |
 
-### 改动清单(exec 只允许碰这 4 个文件)
+### 改动清单(exec 只允许碰这 7 个文件)
 
-1. `backend/src/TenonAdmin.Workflow/Services/WfOperationReceiptService.cs` — L1/L2 的 savepoint(新增两个 `protected virtual` 小步 `BeginNestedAsync`/`RollbackNestedAsync` 或等价写法,保持「长方法拆成 virtual 小步」的仓内惯例)
-2. `backend/tests/TenonAdmin.Tests/WfPersistenceContractTests.cs` — **新增**,14 条
-3. `.github/workflows/backend-ci.yml` — `TEST_FILTER` 追加一项 + 在既有那段长注释里补一句「为什么唯独这一个 `Wf*` 类进 PR 腿」
-4. `.loop/wf-m2c.md` — 台账
+1. `web/src/workflow/useRequestKey.ts` —— 新建,composable + `classifyOutcome` 纯函数,源码头注释写完整语义(生命周期/为什么惰性/为什么按 `ApiError` 分类)
+2. `web/src/workflow/useRequestKey.spec.ts` —— 新建,单测(纯逻辑,不需要 mount 组件)
+3. `web/src/views/workflow/instance/detail.vue` —— `openAction`/`submitAction` 接入,`urge` 不生成 key
+4. `web/src/views/workflow/start/index.vue` —— `submit()` 改 `const body` 写法 + 接入
+5. `web/src/api/workflow.ts` —— `wfInstanceApi.cancel`/`resubmit` 手写参数类型各加 `requestId?: string \| null`
+6. `web/COMPONENTS.md` —— 补一节 `## useRequestKey(...)` 索引
+7. `.loop/wf-m2c.md` —— 台账
 
-**预期计划外:0**。`WfOperationReceiptService` 的构造签名不变(`DbType` 从 `receipts.Db` 上读),所以不会像 Task 5/7 那样波及直接构造它的测试。若 exec 发现需要第 5 个文件,先在 `## Log` 里声明再动。
+**预期计划外:0**。若 exec 发现工作流详情页路由确实开了 `keep-alive`,D5 的显式 `settle` 已经覆盖这个情形,不算计划外发现。
 
 ### 步骤
 
-1. L3 的致盲替身 + 用例 1、2、3(回执唯一性与冲突恢复)→ SQLite 上跑绿。
-2. L1 加 savepoint;**SQLite 上前后都绿**,如实记录「本地拿不到修前红」。
-3. 用例 4–8(列类型/列宽/可空升级列)。
-4. 用例 9–11(CAS affected-rows、超时 vs 人工、`DueTime` 相等游标)。
-5. 用例 12–14(为 SqlServer PR 腿的端到端幂等冒烟)。
-6. L5 改 `TEST_FILTER`,**肉眼核对那串单行 `|` 连接没写坏**(写坏的两种后果都很贵:变成跑全量 40–60 分钟,或变成跑空却显示绿)。
-7. 全量 `--no-incremental` Release 构建判警告(**只信全量**;M2c 已在这上面栽过 3 次)。
-8. 指定过滤器闸门(当前 **245**,本 Task 后应 ≈ **259**)。
-9. L7 的探测:`127.0.0.1:5432` 有闲置 PG 就顺手跑一遍本类的 PG 腿并记录;没有就写射程声明。
+1. 写 `useRequestKey.ts` + `classifyOutcome`,补单测(含"惰性生成""'network' 保留""'error'/'success' 丢弃""`reset()` 强制换新"四组断言),vitest 里先探一次 `crypto.randomUUID()` 是否可用(此断言本身就是最快的探测)。
+2. `detail.vue` 接入:`openAction` 里 `reset()`(非 urge),`submitAction` 包一层 settle,body 加 `requestId`。
+3. `start/index.vue` 接入:`submit()` 改 `const body` 写法,加 `requestId`,`settle('success')` 放在拿到成功结果之后、`router.push` 之前;`catch` 分支 `settle(classifyOutcome(e))`。
+4. `web/src/api/workflow.ts` 的 `cancel`/`resubmit` 参数类型加字段。
+5. `web/COMPONENTS.md` 补索引行。
+6. 闸门:`cd web && npm run typecheck && npm run lint && npx vitest run src/workflow/`。
 
-### 测试清单(`WfPersistenceContractTests`,14 条)
+### 测试清单(`useRequestKey.spec.ts`)
 
-**A. 回执唯一性与 PG 事务中止(4 条 —— 本 Task 的头等事项)**
+1. `value() lazily generates a UUID on first call, and returns the same value on repeated calls before settle` —— 惰性 + 同一动作内多次取值应保持不变(对应"该动作重试复用")。
+2. `settle('network') keeps the current key so the next value() call returns the same UUID` —— 网络层未确定结果保留。
+3. `settle('success') discards the key so the next value() call returns a new UUID` —— 成功丢弃。
+4. `settle('error') discards the key the same way as success` —— 业务失败丢弃。
+5. `reset() discards the key even without a prior settle` —— 打开新动作强制换新。
+6. `classifyOutcome distinguishes ApiError from any other thrown value` —— 用真实 `ApiError` 实例 + 一个普通 `Error`/`TypeError` 断言分类结果。
 
-1. `Unique_violation_recovery_returns_the_winner_receipt` — 事务外提交一条赢家回执;致盲首次 `FindAsync`;在 `UseTranAsync` 内调 `TryBeginAsync` → 返回赢家那一行(hash 相同、`ResultJson` 是赢家的)。**修前 PG 红、其余三库绿;修后四库全绿。**
-2. `Unique_violation_without_a_winner_rethrows_the_original_error` — 致盲**全部** `FindAsync`(恒 `null`)→ 抛出的必须是**唯一冲突本身**,不能是 `25P02` 这类被顶替的异常(断言异常消息不含 `aborted`;PG 上没有 savepoint 时正是这条会露馅)。
-3. `The_identity_hash_unique_index_is_enforced_by_the_database` — **绕开服务**直插两条同 `IdentityHash` 的行 → 第二条抛。钉「CodeFirst 在四库都真的建出了唯一索引」,而不是靠应用层 SELECT 兜住。
-4. `A_recovered_conflict_does_not_poison_the_rest_of_the_transaction` — 冲突恢复之后,**同一个事务**里继续写一行(如一条 `wf_history`)并提交 → 提交成功、那行查得到。PG 上专门验「savepoint 只回滚到点,没把整个事务扔掉」。
-
-**B. 列类型与列宽(2 条)**
-
-5. `Result_json_round_trips_chinese_and_long_payloads` — `ResultJson` 写入含中文 + 长度 > 8000 的载荷 → 原样读回(不出现 `?`、不被截断)。钉 `CodeFirst_BigString`(CHANGELOG #26 那类真事故),工作流侧此前零断言。
-6. `Scope_key_request_key_and_hash_hold_their_declared_width` — 三列各写满 64 字符 → 原样读回。消化 `## Findings` 里 P2→Task 4 的另一半:DTO 侧的 ≤64 已经卡住,列侧的「64 真能存下 64」从没验过。
-
-**C. 可空升级列 —— 旧行读 null(2 条)**
-
-7. `Legacy_instance_rows_read_null_for_completed_time` — 造一行 `wf_instance` 后把 `CompletedTime` 显式置 `null`(`SetColumns` 条件更新,**不走整对象 `Updateable`**,避免审计 AOP 插手)→ 读回是 `null` 不是默认时间。
-8. `Legacy_history_rows_read_null_for_request_id_not_empty_string` — 同款做法置 `wf_history.RequestId` 为 `null` → 读回 `null`,并断言它**与空串可区分**(语义契约「不是空串」的四库版)。
-
-**D. CAS 与 affected-rows 语义(2 条)**
-
-9. `Conditional_updates_report_affected_rows_the_same_on_every_dialect` — 对 `wf_instance` / `wf_token` / `wf_task` 各做两次条件 UPDATE:`Version` 对得上 → 返回 **1**,对不上 → 返回 **0**(6 个断言,1 条用例)。M2b 的三处 CAS 全部建立在这个返回值上,而「matched 还是 changed」各驱动默认值不同,是真方言差异。
-10. `A_timeout_claim_and_a_manual_approve_cannot_both_win` — 手动把 `DueTime` 推到过去(**`hours = 1` 再改 `DueTime`;`hours = 0` 在本仓是「不设到期」,Round 15 的坑**),人工 `approve` 与 `WfTimeoutJob.ExecuteAsync` 一前一后 → 只有一方推进,另一方 CAS 落空且不报 500。
-
-**E. DateTime 相等游标(1 条)**
-
-11. `Tasks_sharing_one_due_time_are_all_scanned_across_pages` — 把 `TimeoutScanBatchSize` 调到 2,造 5 件 `DueTime` **完全相同**的到期待办 → 一拍扫完后 5 件都被处理,不漏不重。钉 `ScanDueTasksAsync` 的 `t.DueTime == cursor` 在四库都真的相等(SqlServer `datetime` 舍入正是 CLAUDE.md 点名的藏污点)。
-
-**F. 端到端幂等冒烟 —— 为 SqlServer PR 腿而设(3 条,注释里必须写明这个理由)**
-
-12. `Replaying_one_request_id_returns_the_first_result` — 同 `requestId` 串行两次 `start` → 同一 `instanceId`、只建一件待办。
-13. `Replaying_against_a_terminal_instance_still_returns_the_first_result` — 终态实例上重放 → 拿回首次结果,不二次推进。
-14. `A_failed_command_leaves_no_receipt_behind` — 业务失败 → 事务回滚 → 回执表零行。
-
-### 变异点(留给 Round 24 的 review,exec 阶段不跑)
+### 变异点(留给下一轮 review,exec 阶段不跑)
 
 | 变异 | 应红 | 备注 |
 |---|---|---|
-| 去掉 L1 的 savepoint 两条语句 | 用例 1、2、4 —— **只能在 PG 腿观察** | SQLite/MySQL/SqlServer 上无变化。review 若拿不到 PG,必须如实写「这一处变异未取证」,**不许拿 SQLite 的绿冒充** |
-| `WfOperationReceipt` 的 `IsUnique = true` 去掉 | 用例 3 | |
-| `ResultJson` 的 `CodeFirst_BigString` 换成 `Length = 200` | 用例 5 | |
-| `AppendHistoryAsync` 的 `RequestId` 改成 `?? ""` | 用例 8 | 与 Task 6 的变异同源,这里是四库版 |
-| `ScanDueTasksAsync` 删掉 `(t.DueTime == cursor && t.Id > afterTaskId)` 这半边 | 用例 11 | |
-| 某处 CAS 的 `Version ==` 条件删掉 | 用例 9、10 | |
+| `settle()` 对 `'network'` 也清空 key | 用例 2 | |
+| `value()` 每次都强制重新生成(去掉惰性判断) | 用例 1 | |
+| `classifyOutcome` 恒返回 `'error'` | 用例 6 | |
+| `detail.vue` 的 `openAction` 对 `urge` 也 `reset()` 或生成 key 并透传 | 无既有单测覆盖(views 目录当前无 spec) —— review 需手动核对 `submitAction` 里 `kind === 'urge'` 分支不带 `requestId`,或另补一条断言 | |
 
 ### 陷阱
 
-- **致盲替身只能致盲第一次 `FindAsync`**(用例 1)。连 catch 里那次一起致盲,恢复路径永远走 `throw`,用例就只是在测「会抛异常」,失去全部意义。用例 2 才是「全程致盲」的那条,两条必须分开写。
-- **`TryBeginAsync` 必须在 `UseTranAsync` 里调**。不在显式事务里时 PG 逐语句自提交,压根不会 abort → 用例 1 在 PG 上**假绿**,而这正是本 Task 要钉的那件事。
-- **预置的赢家行必须已提交**(在事务外插)。若它还在另一个未提交事务里,PG/MySQL 会**阻塞**而不是报冲突,用例变成挂死。
-- **造「旧行」不要用整对象 `Updateable`** —— 审计 AOP 认 `UpdateByObject`,会把 `UpdateTime`/`UpdateUserId` 一起刷掉,把机械造数伪装成人为修改(Task 3 review 已经踩过这个形状)。用 `SetColumns` 条件更新。
-- **`TEST_FILTER` 是单行 `|` 连接的长串**。写坏的两种后果都很贵:多一个前导 `|` 或漏一个引号 → 该腿要么退化成跑全量(40–60 分钟),要么过滤成空集却**显示绿**。改完肉眼逐字符核对。
-- **不给 SqlServer 腿加 `timeout-minutes`**(CLAUDE.md 明令:低于 ~90 分钟会把绿腿变红)。
-- **`hours = 0` 是「不设到期」不是「立刻到期」**(Round 15 的坑)。用例 10、11 一律 `hours = 1` + 手动推 `DueTime`。
-- **`WorkflowAppFactory` 已把调度器关掉**(`Jobs:SchedulerEnabled=false`),超时用例必须手动 `new JobExecutionContext` 调 `ExecuteAsync`;别为了图省事把调度器打开,那会让**所有**工作流用例随机 flake。
-- **SqlServer 的 savepoint 语法是 `SAVE TRANSACTION`,本轮不写它** —— L1 只在 PG 上发语句,别顺手"补全"另外三库。
-- 不提交 `TestResults/`。
+- **别把 `requestId` 传给 Urge**——语义契约明文"催办默认不进 receipt",后端 Controller 也确实不透传,但前端仍不该生成/发送这个字段,否则读代码的人会误以为催办也幂等。
+- **`start/index.vue` 现在是字面量直传**,不改成 `const body` 先声明就直接加 `requestId` 字段,`vue-tsc --noEmit` 会报超额属性错——这不是"等 Task 10 才能修"的阻塞,是本 Task 就该顺手改的写法统一。
+- **不要在 `openAction()` 里对 `kind === 'urge'` 调 `reset()`**——reset 本身无害(urge 不读这个 key),但没必要,统一在"需要 key 的地方"才碰它,减少心智负担。
+- **`settle()` 的判定只认 `outcome` 参数,不在 composable 内部做 `instanceof ApiError` 判断**——分类逻辑固定在 `classifyOutcome`,composable 保持"纯状态机",避免以后要支持另一种错误分类体系时还得改 `useRequestKey.ts`。
+- **`crypto.randomUUID()` 需要安全上下文**——vitest 用 happy-dom,若测出不可用,退化方案是自造一个伪随机十六进制拼接(不要引入 `uuid` npm 包,YAGNI),把这一分支写进 `useRequestKey.ts` 头注释里说明理由,不要静默失败。
+- **不要给 `wfTaskApi.approve/reject/transfer/delegate/return` 的函数签名本身加 `requestId` 字段**——它们的参数类型是 `WfTaskActionInput = Schemas['WfTaskActionInput']`,改这个类型等于手改 `schema.d.ts` 生成物的下游别名,应该做的是在调用处的 `const body` 字面量上加字段(结构类型允许),让 Task 10 的 gen:api 把类型"追上"这个早就存在的字段,而不是反过来手工造类型。
+- **不提交 `TestResults/`**。
 
 ### 给后续 Task 的锚点(本轮只记录,不实施)
 
-- **DONE-CONDITION 的「四腿各绿」本机取不到证** —— 已记为 P2→Task 10(见 `## Findings`)。Task 10 收口时必须就「push 一次拿 CI 信号」或「授权连某个真实 PG」向用户要一个决定,不能把 SQLite 的绿当成四腿的绿。
-- Task 9(Vue request key)与本 Task 无耦合。
-- `## Findings` 的 P3→Task 5/8(`ActivatorUtilities.CreateInstance<WorkflowEngine>` 绕过 `TryAdd`):本 Task 的替身继承的是 `WfOperationReceiptService` **具体类**并经 `Overrides` 注册,走的是 DI 正路,**不重蹈那个写法**。
+- Task 10 的 `gen:api` 跑完后,`WfStartInput`/`WfTaskActionInput` 等类型会正式带上 `requestId`,届时可选(不强制)把 `start/index.vue`/`detail.vue` 里手写的 `requestId` 字段替换成类型已知字段(纯类型层面的收尾,行为不变)——不是本 Task 的活,写下来防止以后有人以为"字段还没接上"。
 
 ## Tasks
 
@@ -510,6 +509,7 @@
 | 24 | review | Task 8 **自审 review**。指定过滤器 **259/259 绿**;6 处变异逐一跑(先 `grep` 验改、复原只 checkout 单文件):**红 3 处**(`IsUnique` → 4/14、`RequestId ?? ""` → 1/14、删 `DueTime == cursor` 半边 → 1/14),**绿 3 处**且性质不同:M1(去 savepoint)方言使然、如实记「未取证」;M6(删 `Version ==`)本套件按 L4 就不该覆盖,追加取证改跑全过滤器 **红 1/259**(`WfVersionCasTests.Instance_losing_cas_...`)—— 不是覆盖洞,是 plan 变异表那一格预期写错,已更正;M3(`ResultJson` 换 `Length = 200`)**仍绿**,这是本轮唯一真发现 —— **SQLite 不执行列宽**,B1/B2 在 SQLite 腿是恒真断言,而类注释的射程声明只写了 PG、漏了列宽(追加取证:全过滤器 259/259 仍绿(1m17s))。记 **1 条 P2**(补射程注释,不改产品代码、不加 `SkippableFact`)+ 2 条 P3(`RollbackNested`/`ReleaseNested` 抛错会顶替真因,窄,挂账)。**未勾选**。 |
 | 25 | 修 Findings | Task 8 修掉 Round 24 的唯一 P2:`WfPersistenceContractTests` 的类注释射程声明补上「列宽/列类型断言在 SQLite 腿恒真」,B1/B2 方法文档各加一段射程说明,指向 mysql/postgres/sqlserver 才是真钉子。只改这一个文件、只加文档注释,不碰产品代码、不加 `SkippableFact`。闸门:259/259 绿(1m12s)。未勾选(留给 Round 26)。 |
 | 26 | 勾选 | Task 8 **勾选**。核对 0×P1、1×P2 已修(Round 25)、闸门已绿(259/259),`## Tasks` 第 8 项打勾。四库持久化契约套件收尾:内核首个方言分支(PG SAVEPOINT)+ 14 条新测试 + `TEST_FILTER` 纳入 SqlServer PR 腿,基线 245→**259**。给后续任务的两条锚点(P2→Task10 四腿本机取不到证 / P3→Task5、8 的 `ActivatorUtilities` 写法)原样保留待用。 |
+| 27 | plan | Task 9 **plan**。重写 `## Plan`:新建 `web/src/workflow/useRequestKey.ts` composable(惰性生成 + `settle` 三态 + `reset`)+ `classifyOutcome` 纯函数(复用 `err instanceof ApiError` 既有判据);`detail.vue`/`start/index.vue` 接入,Urge 不生成/不传 key;`wfInstanceApi.cancel`/`resubmit` 手写类型各加 `requestId?`。**关键发现**:schema.d.ts 从 Task 4 起未重生成,但因 `detail.vue` 已是「先 `const body`」写法,TS 结构类型允许多余字段,本 Task 不需要提前 `gen:api`;`start/index.vue` 需先改成同款写法(字面量直传会触发超额属性检查)。7 文件改动清单,预期计划外 0。**未写产品代码。** |
 
 ## 参考读码清单(Round 1 plan 前)
 
