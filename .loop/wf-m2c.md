@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 16
+- 轮次: 17
 - max: 45
 - 当前任务: 6(`wf_history.RequestId`)
-- 当前阶段: plan(已定稿,**未写产品代码**)
-- 上一轮: Round 16 — Task 6 plan 定稿(J1–J8)。读码定死四件事:①20 个 `AppendHistoryAsync` 调用**全部**收敛到 `WfExecutionContext` 里那一条 `Insertable`,列值只赋一行;②绕开 ctx 直插 `WfHistory` 的只有 4 处(超时 ×3 + 催办 ×1),它们**不设该属性即为 null**,一个字都不用改 —— 这是语义不是疏漏;③`BeginStartAsync` **构造完 ctx 立刻**写 `InstanceStarted`,所以「switch 之后再赋值」会漏掉每条命令最有价值的第一行,该路排除,改在 8 处构造各带一行,并把属性声明成 **`required`** 让编译器兜底(将来加第 9 个 Begin 忘了带 = 编译错误);④台账 Task 6 的二选一由 Task 5 的短路**免费解决**(命中回执压根不进 `switch`),只补钉子不建新机制。另显式复核了 Task 5 锚点「禁止再取第二遍」:值取 `cmd.RequestId` 是对的 —— 那禁的是重新归一化出第二条路径,而 `cmd.RequestId` 就是 Task 4 那份唯一归一化的结果(J5)。改动面 **4 个文件**,6 条用例 + 5 个变异点已列。
-- 下一步: Round 17 — **Task 6 exec**(按 J1–J8 实现,**不勾选**)。顺序:`WfHistory` 加可空 64 列 → ctx 加 `required string? RequestId`(**先加 `required`,按编译错误逐个补 8 处构造,别肉眼数**)→ `AppendHistoryAsync` 赋一行 → `WfHistoryRequestIdTests` 六条(第 1 条专钉「构造时就带上」)→ 全量 `--no-incremental` Release 构建判警告 → 过滤器闸门(234 → 约 240)。**只许碰 4 个文件**;若 `required` 把测试里的 `new WfExecutionContext` 也炸出来,照 Round 14 先例先质疑再记录。
+- 当前阶段: exec(已完成,**未勾选**)
+- 上一轮: Round 17 — Task 6 exec 落地,**严格 4 文件、零溢出**。`WfHistory` 加可空 64 列;ctx 加 `public required string? RequestId`,`required` 一加编译器精确炸出 **8 处**构造(与 plan 数字一致,没靠肉眼数),7 处填 `cmd.RequestId`、`BeginTimeoutAsync` 填 `null` 并附注释;`AppendHistoryAsync` 里赋一行,20 个调用点零改动。plan 担心的第 5 文件风险**没兑现**——测试里没有 `new WfExecutionContext`。`WfHistoryRequestIdTests` 6 例一次全绿。**踩到一条**:新用例引入 3 条 `xUnit2031`(`Assert.Single(x.Where(...))` 应改谓词重载),全量构建警告从 13 涨到 16,已改回 13 —— 又一次印证「只信全量构建」。闸门:全量 Release 0 错、工作流包与测试工程 0 警;过滤器 **240/240**(234+6)。
+- 下一步: Round 18 — **Task 6 review**(自审须声明)。变异点五处,每处**先 grep 确认文件真改了**、复原**只 checkout 被变异的那一个文件**:①`AppendHistoryAsync` 的 `new WfHistory` 里删掉 `RequestId` 赋值 → 用例 1、2 应红;②改成 `RequestId = RequestId ?? ""` → 用例 3 应红;③`BeginStartAsync` 的构造改 `RequestId = null` → **只**用例 1 应红(这正是用例 1 存在的理由,若它不红说明那条钉子没钉住「构造时就带上」);④`BeginCompleteAsync` 的构造改 `RequestId = null` → 用例 2 应红;⑤去掉 `ExecuteAsync` 的短路 → 用例 6 应红。另需复核:用例 3「全为 null」是否**够强**(整列压根没建出来时它也绿 —— 用例 1/2 是它的对照组,要在 Findings 写清);以及超时那条已内置对照断言(同实例的发起行**有**值),确认它真能挡住「整列没写进去」的假绿。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -364,6 +364,7 @@
 | 14 | exec | Task 5 落地 3 文件(计划 2 + 计划外 1):`ExecuteAsync` 一处短路 + 同事务 `CommitAsync`;三个 `protected virtual` 小步(`TryCreateIdentity` 六维映射、`SerializeResult`/`DeserializeResult` 复用 `WfModelJson.Options`),`CompleteTaskCmd` 按 `Action` 拆码;引擎构造函数追加 `IWfOperationReceiptService`(第三次同型破坏性变更,已记 `<remarks>`)。计划外必改 `WorkflowMultiLeaderSnapshotTests` 的 `WorkflowEngineProbe`(直接 `new WorkflowEngine`,补 `null!`)—— 按 Plan 自检回头质疑过,属 H7 承认的代价。`WfReceiptEngineTests` 8 例,其中**并发那条按射程学说换成「同 key 不同 actor/target 不串」**并写明射程。踩到的真事实:`hours = 0` 在本仓是「不设到期」而非「立刻到期」,超时用例要 `hours = 1` + 手动推 `DueTime`。build 0 错、工作流包 0 警(全量);过滤器 **233/233**。未勾选。 |
 | 15 | review+修+勾选 | Task 5 自审:五处变异,前四处各转红(去短路 2/8、返回空结果 2/8、资格判断放宽 **8/8**、`CommandType` 写死 1/8)。**第五处「`CommitAsync` 挪出事务」八条全绿 → P2** —— 占位行也在事务里,业务失败一起回滚,所以「无残留」那条看不出差别;真正坏的是崩溃窗口会留下一条已提交却 `ResultJson` 为空的回执,让成功的操作永远重试不回来。补 `The_receipt_is_committed_inside_the_domain_transaction`(替身在 `CommitAsync` 里用 `db.Ado.IsAnyTran()` 记录,并同时断言 `CommitCalled` 防空转),变异⑤转红 1/9。另记两条覆盖真相:「串行重放」的计数断言在变异下**够不着**(前面的 `code == 0` 先失败),不是它让用例红;超时那条必须 `hours = 1` + 手动推 `DueTime`,`hours = 0` 在本仓是「不设到期」会造成假绿。闸门:工作流包 0 警(全量);过滤器 **234/234**。**Task 5 打勾**。 |
 | 16 | plan | Task 6 plan 定稿(J1–J8):20 个 `AppendHistoryAsync` 调用全收敛到 ctx 里一条 `Insertable`,列值只赋一行;绕开 ctx 的 4 处直插(超时 ×3 + 催办 ×1)不设属性即 `null`,零改动且正是语义;`BeginStartAsync` 构造后立刻写 `InstanceStarted`,故排除「switch 后赋值」,改 8 处构造各带一行并把属性声明为 **`required`**(编译器兜底,加第 9 个 Begin 忘带 = 编译错误);台账二选一由 Task 5 短路免费解决,只补钉子。显式复核 Task 5 锚点:取 `cmd.RequestId` 不违反「禁止再取第二遍」——那禁的是重新归一化出第二条路径(J5)。改动面 4 文件,6 条用例(第 1 条专钉「构造时就带上」)+ 5 个变异点。未写产品代码。 |
+| 17 | exec | Task 6 落地 **4 文件、零溢出**:`WfHistory` 可空 64 列;ctx 的 `required string? RequestId` —— `required` 一加编译器精确炸出 8 处构造(与 plan 一致,未靠肉眼数),7 处 `cmd.RequestId` + 超时处 `null`;`AppendHistoryAsync` 赋一行,20 个调用点零改动;绕开 ctx 的 4 处直插(超时 ×3 + 催办 ×1)一个字没动,`null` 是语义。plan 预警的第 5 文件风险未兑现。`WfHistoryRequestIdTests` 6 例一次全绿(用例 1 专钉「构造时就带上」,用例 4 内置对照断言防「整列没写」的假绿)。踩到 3 条自引入的 `xUnit2031`,全量警告 13→16,改用 `Assert.Single` 谓词重载后回到 13 —— 再次印证只信全量构建。过滤器 **240/240**。未勾选。 |
 
 ## 参考读码清单(Round 1 plan 前)
 

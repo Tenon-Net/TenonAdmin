@@ -32,6 +32,16 @@ public sealed class WfExecutionContext
     public long? StarterOrgId { get; init; }
 
     /// <summary>
+    /// 本次命令的幂等请求键;<c>null</c> = 没有请求身份(没带 key 的请求,或系统派的
+    /// <see cref="TimeoutFireCmd"/>)。落进本次产生的每一条 <see cref="WfHistory.RequestId"/>。
+    /// <para><b>刻意声明成 <c>required</c></b>:值必须在**构造 ctx 时**就带上,因为
+    /// <see cref="WorkflowEngine.BeginStartAsync"/> 紧接着就写 <c>InstanceStarted</c> —— 换成
+    /// "switch 之后再赋值"会让每条命令最有价值的第一行永远为空。 让"将来新加一个
+    /// <c>BeginXxxAsync</c> 却忘了带上"变成**编译错误**,而不是一条悄悄丢了身份的历史。</para>
+    /// </summary>
+    public required string? RequestId { get; init; }
+
+    /// <summary>
     /// 发起时按 <c>level</c> 快照的连续多级主管链;<c>null</c>=无快照(老实例或模型无 multiLeader 节点)。
     /// 命中 level 的空数组表示快照过但该级链为空。透传给 <see cref="ApproverResolveContext.LeaderChainByLevel"/>。
     /// </summary>
@@ -191,6 +201,8 @@ public sealed class WfExecutionContext
             InstanceId = Instance.Id,
             EventType = eventType,
             NodeId = nodeId,
+            // 20 个 AppendHistoryAsync 调用点都经过这里,所以请求键只在这一行赋值。
+            RequestId = RequestId,
             PayloadJson = payload is null ? null : JsonSerializer.Serialize(payload, WfModelJson.Options),
         };
         await Db.Insertable(row).ExecuteCommandAsync();
