@@ -133,16 +133,18 @@ public class WfTaskService(
         long taskId,
         long userId,
         string? comment = null,
+        string? requestId = null,
         CancellationToken cancellationToken = default)
-        => CompleteAsync(taskId, userId, WfTaskAction.Approve, comment, cancellationToken);
+        => CompleteAsync(taskId, userId, WfTaskAction.Approve, comment, requestId, cancellationToken);
 
     /// <inheritdoc />
     public virtual Task<WfEngineResult> RejectAsync(
         long taskId,
         long userId,
         string? comment = null,
+        string? requestId = null,
         CancellationToken cancellationToken = default)
-        => CompleteAsync(taskId, userId, WfTaskAction.Reject, comment, cancellationToken);
+        => CompleteAsync(taskId, userId, WfTaskAction.Reject, comment, requestId, cancellationToken);
 
     /// <inheritdoc />
     public virtual Task<WfEngineResult> TransferAsync(
@@ -150,6 +152,7 @@ public class WfTaskService(
         long userId,
         long toUserId,
         string? comment = null,
+        string? requestId = null,
         CancellationToken cancellationToken = default)
     {
         return engine.ExecuteAsync(
@@ -159,6 +162,7 @@ public class WfTaskService(
                 UserId = userId,
                 ToUserId = toUserId,
                 Comment = comment,
+                RequestId = requestId,
             },
             cancellationToken);
     }
@@ -169,6 +173,7 @@ public class WfTaskService(
         long userId,
         long toUserId,
         string? comment = null,
+        string? requestId = null,
         CancellationToken cancellationToken = default)
     {
         return engine.ExecuteAsync(
@@ -178,6 +183,7 @@ public class WfTaskService(
                 UserId = userId,
                 ToUserId = toUserId,
                 Comment = comment,
+                RequestId = requestId,
             },
             cancellationToken);
     }
@@ -253,6 +259,7 @@ public class WfTaskService(
         long userId,
         string? targetNodeId,
         string? comment = null,
+        string? requestId = null,
         CancellationToken cancellationToken = default)
     {
         return engine.ExecuteAsync(
@@ -262,6 +269,7 @@ public class WfTaskService(
                 UserId = userId,
                 TargetNodeId = targetNodeId,
                 Comment = comment,
+                RequestId = requestId,
             },
             cancellationToken);
     }
@@ -272,6 +280,7 @@ public class WfTaskService(
         long userId,
         WfTaskAction action,
         string? comment,
+        string? requestId,
         CancellationToken cancellationToken)
     {
         if (action is not (WfTaskAction.Approve or WfTaskAction.Reject))
@@ -287,6 +296,7 @@ public class WfTaskService(
                 UserId = userId,
                 Action = action,
                 Comment = comment,
+                RequestId = requestId,
             },
             cancellationToken);
     }

@@ -62,9 +62,13 @@ public interface IWfInstanceService
         CancellationToken cancellationToken = default);
 
     /// <summary>撤销实例:仅发起人、仅无人已批的 Running 实例可撤销。</summary>
+    /// <param name="requestId">
+    /// 幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见 <see cref="WfWriteCmd.RequestId"/>。
+    /// </param>
     Task<WfEngineResult> CancelAsync(
         long instanceId,
         long callerUserId,
+        string? requestId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -72,10 +76,14 @@ public interface IWfInstanceService
     /// (连已批过的节点也重新审),复用同一实例行;可选带新的 <paramref name="variablesJson"/> /
     /// <paramref name="selectedUserIdsByNode"/> 覆盖原发起时提交的值。
     /// </summary>
+    /// <param name="requestId">
+    /// 幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见 <see cref="WfWriteCmd.RequestId"/>。
+    /// </param>
     Task<WfEngineResult> ResubmitAsync(
         long instanceId,
         long callerUserId,
         string? variablesJson,
         IReadOnlyDictionary<string, List<long>>? selectedUserIdsByNode,
+        string? requestId = null,
         CancellationToken cancellationToken = default);
 }

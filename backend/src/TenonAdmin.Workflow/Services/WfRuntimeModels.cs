@@ -16,6 +16,12 @@ public record WfStartInput
 
     /// <summary>按节点 Id 提交发起人自选审批人(仅 selfSelect Provider 使用)</summary>
     public Dictionary<string, List<long>>? SelectedUserIdsByNode { get; init; }
+
+    /// <summary>
+    /// 幂等请求键(可空):同一次用户动作(含丢响应后的重试)携带同一个值,服务端据此返回<b>第一次</b>的结果,
+    /// 而不是让重试撞在状态冲突上。去空白后须 ≤64 字符且不含换行,否则 48028;纯空白等同不传。
+    /// </summary>
+    public string? RequestId { get; init; }
 }
 
 /// <summary>当前用户可发起的已发布定义列表项。</summary>
@@ -111,12 +117,27 @@ public record WfTaskActionInput
 
     /// <summary>退回目标节点 Id;仅节点 <see cref="WfReturnPolicy.Any"/> 策略时前端会传,其余动作忽略。</summary>
     public string? TargetNodeId { get; init; }
+
+    /// <summary>
+    /// 幂等请求键(可空):同一次用户动作(含丢响应后的重试)携带同一个值,服务端据此返回<b>第一次</b>的结果,
+    /// 而不是让重试撞在状态冲突上。去空白后须 ≤64 字符且不含换行,否则 48028;纯空白等同不传。
+    /// </summary>
+    public string? RequestId { get; init; }
+
+    // 催办(urge)与本 DTO 共用:字段收得到,但催办不进引擎(UrgeAsync 只追加事件 + 推通知),
+    // 故控制器**不给催办透传**——催办可重复,不做幂等(见台账 ## 语义契约)。
 }
 
 /// <summary>撤销流程入参。</summary>
 public record WfInstanceCancelInput
 {
     public long InstanceId { get; init; }
+
+    /// <summary>
+    /// 幂等请求键(可空):同一次用户动作(含丢响应后的重试)携带同一个值,服务端据此返回<b>第一次</b>的结果,
+    /// 而不是让重试撞在状态冲突上。去空白后须 ≤64 字符且不含换行,否则 48028;纯空白等同不传。
+    /// </summary>
+    public string? RequestId { get; init; }
 }
 
 /// <summary>重提流程入参(退回后发起人重新提交)。</summary>
@@ -127,6 +148,12 @@ public record WfInstanceResubmitInput
     public string? VariablesJson { get; init; }
 
     public Dictionary<string, List<long>>? SelectedUserIdsByNode { get; init; }
+
+    /// <summary>
+    /// 幂等请求键(可空):同一次用户动作(含丢响应后的重试)携带同一个值,服务端据此返回<b>第一次</b>的结果,
+    /// 而不是让重试撞在状态冲突上。去空白后须 ≤64 字符且不含换行,否则 48028;纯空白等同不传。
+    /// </summary>
+    public string? RequestId { get; init; }
 }
 
 /// <summary>我发起的 / 监控列表项。</summary>

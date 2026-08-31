@@ -128,6 +128,7 @@ public class WfInstanceService(
                 BusinessKey = businessKey,
                 VariablesJson = input.VariablesJson,
                 SelectedUserIdsByNode = input.SelectedUserIdsByNode,
+                RequestId = input.RequestId,
             },
             cancellationToken);
     }
@@ -368,9 +369,15 @@ public class WfInstanceService(
     public virtual Task<WfEngineResult> CancelAsync(
         long instanceId,
         long callerUserId,
+        string? requestId = null,
         CancellationToken cancellationToken = default) =>
         engine.ExecuteAsync(
-            new CancelInstanceCmd { InstanceId = instanceId, CallerUserId = callerUserId },
+            new CancelInstanceCmd
+            {
+                InstanceId = instanceId,
+                CallerUserId = callerUserId,
+                RequestId = requestId,
+            },
             cancellationToken);
 
     /// <inheritdoc />
@@ -379,6 +386,7 @@ public class WfInstanceService(
         long callerUserId,
         string? variablesJson,
         IReadOnlyDictionary<string, List<long>>? selectedUserIdsByNode,
+        string? requestId = null,
         CancellationToken cancellationToken = default) =>
         engine.ExecuteAsync(
             new ResubmitInstanceCmd
@@ -387,6 +395,7 @@ public class WfInstanceService(
                 CallerUserId = callerUserId,
                 VariablesJson = variablesJson,
                 SelectedUserIdsByNode = selectedUserIdsByNode,
+                RequestId = requestId,
             },
             cancellationToken);
 

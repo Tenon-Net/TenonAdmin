@@ -84,7 +84,8 @@ public class WfInstanceController(
         WfInstanceCancelInput input,
         CancellationToken cancellationToken) =>
         Result<WfEngineResult>.Ok(
-            await instanceService.CancelAsync(input.InstanceId, CurrentUserId, cancellationToken));
+            await instanceService.CancelAsync(
+                input.InstanceId, CurrentUserId, input.RequestId, cancellationToken));
 
     /// <summary>重新提交(仅发起人、仅退回后无活跃待办的 Running 实例)</summary>
     [HttpPost("resubmit")]
@@ -94,5 +95,10 @@ public class WfInstanceController(
         CancellationToken cancellationToken) =>
         Result<WfEngineResult>.Ok(
             await instanceService.ResubmitAsync(
-                input.InstanceId, CurrentUserId, input.VariablesJson, input.SelectedUserIdsByNode, cancellationToken));
+                input.InstanceId,
+                CurrentUserId,
+                input.VariablesJson,
+                input.SelectedUserIdsByNode,
+                input.RequestId,
+                cancellationToken));
 }

@@ -5,6 +5,53 @@ public interface IWfCommand
 {
 }
 
+/// <summary>
+/// <b>用户发起的</b>写命令基类:携带幂等请求键 <see cref="RequestId"/>(M2c §14.2)。
+/// <para><see cref="TimeoutFireCmd"/> <b>刻意不继承本类</b> —— 超时是系统自己扫出来的,没有「用户这一次点击」
+/// 这个身份,也就没有可重放的请求键。这让排除条件退化成一个类型判断
+/// (<c>command is WfWriteCmd { RequestId: not null }</c>),不必在引擎里写超时的特例分支。</para>
+/// </summary>
+public abstract class WfWriteCmd : IWfCommand
+{
+    /// <summary><c>wf_operation_receipt.RequestKey</c> 的列宽,也是本字段的长度上限。</summary>
+    public const int RequestIdMaxLength = 64;
+
+    private readonly string? _requestId;
+
+    /// <summary>
+    /// 幂等请求键:同一次用户动作的重试携带同一个值,引擎据此命中已有回执并返回<b>第一次</b>的结果。
+    /// <c>null</c> = 本次不做幂等(老客户端 / 系统内部调用)。
+    /// <para><b>归一化与校验在本属性里做,全仓只此一份</b>:<c>null</c> 或纯空白 → <c>null</c>,否则
+    /// <c>Trim()</c>。空白必须在这里就变成 <c>null</c> —— 引擎侧的
+    /// <c>WfIdentityHash.NormalizeRequestKey</c> 对空白是抛 <c>ArgumentException</c> 的(那是编程错误,
+    /// 不是业务错误),让空白流过去就是一个 500。</para>
+    /// <para>越界抛 <see cref="WorkflowErrorCode.RequestIdInvalid"/>:超 64 字符会在 MySQL 非严格模式下
+    /// 被静默截断成对不上的诊断列;含换行符则与 hash 的分隔符打架。</para>
+    /// </summary>
+    public string? RequestId
+    {
+        get => _requestId;
+        init => _requestId = Normalize(value);
+    }
+
+    private static string? Normalize(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+
+        var trimmed = value.Trim();
+        // 控制字符一律拒:换行符是 WfIdentityHash 的分隔符,值里出现即歧义;其余控制字符在幂等键里
+        // 没有任何正当用途,一并挡掉比只挡换行更难被绕过。
+        if (trimmed.Length > RequestIdMaxLength || trimmed.Any(char.IsControl))
+        {
+            throw WorkflowErrorCode.Exception(
+                WorkflowErrorCode.RequestIdInvalid,
+                new Dictionary<string, object?> { ["length"] = trimmed.Length });
+        }
+
+        return trimmed;
+    }
+}
+
 /// <summary>引擎执行结果(事务已提交)。服务层据此发通知 / 返回 DTO。</summary>
 public sealed class WfEngineResult
 {
@@ -23,7 +70,7 @@ public sealed class WfEngineResult
 }
 
 /// <summary>发起实例:建 instance + token,Agenda 从 start 自动推进到首个需停顿的节点。</summary>
-public sealed class StartInstanceCmd : IWfCommand
+public sealed class StartInstanceCmd : WfWriteCmd
 {
     public required long DefinitionVersionId { get; init; }
 
@@ -44,7 +91,7 @@ public sealed class StartInstanceCmd : IWfCommand
 /// 完成待办并推进 token。仅 <see cref="WfTaskAction.Approve"/>(前进)与
 /// <see cref="WfTaskAction.Reject"/>(默认终止);转办走 <see cref="TransferTaskCmd"/>。
 /// </summary>
-public sealed class CompleteTaskCmd : IWfCommand
+public sealed class CompleteTaskCmd : WfWriteCmd
 {
     public required long TaskId { get; init; }
 
@@ -59,7 +106,7 @@ public sealed class CompleteTaskCmd : IWfCommand
 /// 任务级转办:当前办理人把待办交给他人。不推进 token、不删待办;
 /// 写 <c>wf_his_task</c>(Action=Transfer)后替换 actor。
 /// </summary>
-public sealed class TransferTaskCmd : IWfCommand
+public sealed class TransferTaskCmd : WfWriteCmd
 {
     public required long TaskId { get; init; }
 
@@ -76,7 +123,7 @@ public sealed class TransferTaskCmd : IWfCommand
 /// 任务级委托(一次性):当前办理人把这一件待办指给别人代办。机制与 <see cref="TransferTaskCmd"/>
 /// 同构,只在 <c>wf_his_task</c> 记 <see cref="WfTaskAction.Delegate"/>;长期委托规则属 M3,不在此列。
 /// </summary>
-public sealed class DelegateTaskCmd : IWfCommand
+public sealed class DelegateTaskCmd : WfWriteCmd
 {
     public required long TaskId { get; init; }
 
@@ -122,7 +169,7 @@ public sealed class TimeoutFireCmd : IWfCommand
 }
 
 /// <summary>撤销实例:仅发起人、仅无人已批的 Running 实例可撤销。</summary>
-public sealed class CancelInstanceCmd : IWfCommand
+public sealed class CancelInstanceCmd : WfWriteCmd
 {
     public required long InstanceId { get; init; }
 
@@ -135,7 +182,7 @@ public sealed class CancelInstanceCmd : IWfCommand
 /// <see cref="TransferTaskCmd"/> 那样继续在原节点等人——关闭当前待办、token 回退到目标节点、
 /// Agenda 留空,等发起人重提(<see cref="ResubmitInstanceCmd"/>)。
 /// </summary>
-public sealed class ReturnTaskCmd : IWfCommand
+public sealed class ReturnTaskCmd : WfWriteCmd
 {
     public required long TaskId { get; init; }
 
@@ -152,7 +199,7 @@ public sealed class ReturnTaskCmd : IWfCommand
 /// 发起人重提:仅 <see cref="ReturnTaskCmd"/> 退回后、尚无活跃待办的 Running 实例可重提。
 /// 从 <c>start</c> 重新走一遍(连已批过的节点也重新审),复用同一实例行。
 /// </summary>
-public sealed class ResubmitInstanceCmd : IWfCommand
+public sealed class ResubmitInstanceCmd : WfWriteCmd
 {
     public required long InstanceId { get; init; }
 

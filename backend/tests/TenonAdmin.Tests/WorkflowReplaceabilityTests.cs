@@ -194,23 +194,26 @@ public class WorkflowReplaceabilityTests
             long userId, WfTaskPageInput input, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public Task<WfEngineResult> ApproveAsync(
-            long taskId, long userId, string? comment = null, CancellationToken cancellationToken = default)
+            long taskId, long userId, string? comment = null, string? requestId = null,
+            CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public Task<WfEngineResult> RejectAsync(
-            long taskId, long userId, string? comment = null, CancellationToken cancellationToken = default)
+            long taskId, long userId, string? comment = null, string? requestId = null,
+            CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public Task<WfEngineResult> TransferAsync(
-            long taskId, long userId, long toUserId, string? comment = null, CancellationToken cancellationToken = default)
+            long taskId, long userId, long toUserId, string? comment = null, string? requestId = null,
+            CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public Task<WfEngineResult> DelegateAsync(
-            long taskId, long userId, long toUserId, string? comment = null,
+            long taskId, long userId, long toUserId, string? comment = null, string? requestId = null,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public Task UrgeAsync(
             long taskId, long callerUserId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public Task<WfEngineResult> ReturnAsync(
-            long taskId, long userId, string? targetNodeId, string? comment = null,
+            long taskId, long userId, string? targetNodeId, string? comment = null, string? requestId = null,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
@@ -239,11 +242,12 @@ public class WorkflowReplaceabilityTests
             long instanceId, long currentUserId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public Task<WfEngineResult> CancelAsync(
-            long instanceId, long callerUserId, CancellationToken cancellationToken = default)
+            long instanceId, long callerUserId, string? requestId = null,
+            CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public Task<WfEngineResult> ResubmitAsync(
             long instanceId, long callerUserId, string? variablesJson,
-            IReadOnlyDictionary<string, List<long>>? selectedUserIdsByNode,
+            IReadOnlyDictionary<string, List<long>>? selectedUserIdsByNode, string? requestId = null,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }

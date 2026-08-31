@@ -40,7 +40,8 @@ public class WfTaskController(
         WfTaskActionInput input,
         CancellationToken cancellationToken) =>
         Result<WfEngineResult>.Ok(
-            await taskService.ApproveAsync(input.TaskId, CurrentUserId, input.Comment, cancellationToken));
+            await taskService.ApproveAsync(
+                input.TaskId, CurrentUserId, input.Comment, input.RequestId, cancellationToken));
 
     /// <summary>拒绝</summary>
     [HttpPost("reject")]
@@ -49,7 +50,8 @@ public class WfTaskController(
         WfTaskActionInput input,
         CancellationToken cancellationToken) =>
         Result<WfEngineResult>.Ok(
-            await taskService.RejectAsync(input.TaskId, CurrentUserId, input.Comment, cancellationToken));
+            await taskService.RejectAsync(
+                input.TaskId, CurrentUserId, input.Comment, input.RequestId, cancellationToken));
 
     /// <summary>转办</summary>
     [HttpPost("transfer")]
@@ -59,7 +61,7 @@ public class WfTaskController(
         CancellationToken cancellationToken) =>
         Result<WfEngineResult>.Ok(
             await taskService.TransferAsync(
-                input.TaskId, CurrentUserId, input.ToUserId, input.Comment, cancellationToken));
+                input.TaskId, CurrentUserId, input.ToUserId, input.Comment, input.RequestId, cancellationToken));
 
     /// <summary>委托(一次性:把当前待办指给别人代办)</summary>
     [HttpPost("delegate")]
@@ -69,13 +71,15 @@ public class WfTaskController(
         CancellationToken cancellationToken) =>
         Result<WfEngineResult>.Ok(
             await taskService.DelegateAsync(
-                input.TaskId, CurrentUserId, input.ToUserId, input.Comment, cancellationToken));
+                input.TaskId, CurrentUserId, input.ToUserId, input.Comment, input.RequestId, cancellationToken));
 
     /// <summary>催办</summary>
     [HttpPost("urge")]
     [OperationLog("催办")]
     public async Task<Result<bool>> Urge(WfTaskActionInput input, CancellationToken cancellationToken)
     {
+        // input.RequestId 刻意不透传:催办不进引擎(只追加事件 + 推通知),可重复催办、不做幂等。
+        // 透传一个没人读的值只会暗示它有幂等语义(台账 ## 语义契约「催办」)。
         await taskService.UrgeAsync(input.TaskId, CurrentUserId, cancellationToken);
         return Result<bool>.Ok(true);
     }
@@ -88,5 +92,5 @@ public class WfTaskController(
         CancellationToken cancellationToken) =>
         Result<WfEngineResult>.Ok(
             await taskService.ReturnAsync(
-                input.TaskId, CurrentUserId, input.TargetNodeId, input.Comment, cancellationToken));
+                input.TaskId, CurrentUserId, input.TargetNodeId, input.Comment, input.RequestId, cancellationToken));
 }

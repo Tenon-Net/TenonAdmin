@@ -86,6 +86,14 @@ public static class WorkflowErrorCode
     /// <summary>抄送行不存在或不属于当前用户</summary>
     public const int CcNotFound = 48027;
 
+    /// <summary>
+    /// 写命令的 <c>requestId</c> 非法:去空白后超过 64 字符(与 <c>wf_operation_receipt.RequestKey</c> 列宽对齐),
+    /// 或含换行符(<c>WfIdentityHash</c> 用换行符做分隔符,值里出现即歧义)。
+    /// <para>不复用 48017 <see cref="ModelFieldTooLong"/>:那条的语义写死在「流程<b>模型</b>字段」,
+    /// 借它排障会被带向错误的方向。48022 是历史空号,不填回。</para>
+    /// </summary>
+    public const int RequestIdInvalid = 48028;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }

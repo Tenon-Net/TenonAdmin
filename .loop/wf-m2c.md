@@ -37,12 +37,13 @@
 
 ## Status
 
-- 轮次: 10
+- 轮次: 11
 - max: 45
 - 当前任务: 4(写命令 DTO + Controller 收 `RequestId`)
-- 当前阶段: plan(已完成,未写产品代码)
-- 上一轮: Round 10 — Task 4 plan 定稿(G1–G8)。读码四项结论定了形状:①**入参 DTO 只有 4 个**却覆盖 8 个写命令(`WfTaskActionInput` 一个顶 6 个),加字段只动 4 处;②**催办天然不进引擎**(`UrgeAsync` 不在 4 处 `engine.ExecuteAsync` 之列),「urge 不做幂等」不需要开关,不透传即可;③服务方法收散参、`StartAsync` 是唯一收 DTO 的,故只有 **7 个**方法要加参数;④仓内 DTO 零 `DataAnnotations`、AspNetCore 无 `ModelState` 处理,校验必须抛数字 `ErrorCode`。核心决策:抽 `WfWriteCmd` 基类,归一化 + ≤64 + 禁换行只写**一份**在 `init` 里;`TimeoutFireCmd` **不继承**,用类型表达「超时没有请求身份」。
-- 下一步: Round 11 — **Task 4 exec**。严格按 `## Plan` 的 9 文件清单与「步骤」1→9。三条最容易翻车的:①空白 → `null` 必须在命令层消化(否则 Task 5 的 `NormalizeRequestKey` 抛 `ArgumentException` = 500);②控制器位置实参要跟着签名同步改,**别用命名实参掩盖漏改**;③新码取 **48028**,不填 48022 空号、不复用 `ModelFieldTooLong`。测试要用「包住内置 `IWorkflowEngine` 的装饰器」捕获命令(照 `WfVersionCasTests` 的 `Overrides` 写法)。跑到过滤器闸门(215 → ≈221)即停,**不勾选**。
+- 当前阶段: exec(已完成,**未勾选**)
+- 上一轮: Round 11 — Task 4 exec 落地。按 G1–G8:新码 `RequestIdInvalid = 48028`;`WfWriteCmd` 基类持 `RequestId`,归一化/校验**全仓唯一一份**写在 `init` 里;**7 个**命令类改继承(不是 8 个 —— 同意/拒绝共用 `CompleteTaskCmd`),`TimeoutFireCmd` 保持裸 `IWfCommand`;4 个入参 DTO 加字段;7 个服务方法加可选参数并传进命令(`StartAsync` 从 `input.RequestId` 取);Controller 透传 7 处,**urge 刻意不传**(附注释说明)。校验用 `trimmed.Any(char.IsControl)` 而非只挡 `
+`/`` —— 更难绕过且不必在源码里写转义。计划外必改 1 文件:`WorkflowReplaceabilityTests` 的两个 Fake 服务(签名跟随,正是 G6 承认的「实现者会破」的代价)。build 0 错 0 警;过滤器 **224/224**(215+9)。
+- 下一步: Round 12 — **Task 4 review**(自审须声明)。变异点至少四处,每处**先 grep 确认文件真改了**、复原**只 checkout 被变异的那一个文件**:①`Normalize` 里去掉长度判断 → 65 字符用例应红;②去掉 `Any(char.IsControl)` → 换行用例应红;③`IsNullOrWhiteSpace` 改成 `is null` → 纯空白用例应红(命令里会变成空串);④任一 Controller 的 `input.RequestId` 换成 `null` → 对应贯穿用例应红。另需复核:`urge` 那条用例是**弱钉子**(给 urge 加透传它也不会红),要在 Findings 里写清;以及 `ProbingEngine` 用 `ActivatorUtilities.CreateInstance<WorkflowEngine>` 是否绕过了 `TryAdd` 的可替换性语义(记 P3)。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -292,6 +293,7 @@
 | 8 | exec | Task 3 落地 7 文件:`CompletedTime` 可空列、终态写入收成 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 一处(三个分支改调用,`ClaimInstanceAsync` 未动)、`WfCompletedTimeBackfill` 一次性 HostedService(守卫沿用 `DatabaseInitializer` 的 `IsAnyTable` + `GetColumnInfosByTableName` 写法,回避没验证过的 `IsAnyColumn`;回填 `InnerJoin`+`GroupBy MIN(CreateTime)` → 逐条 `SetColumns` 条件更新)、`WfCompletedTimeTests` 5 例(含 ToNode 分支保持空、回填幂等)。顺带修 Round 6 遗留的 `CS8619`。build 0 错 0 警;过滤器 **215/215**。未勾选。 |
 | 9 | review+修+勾选 | Task 3 自审:四处变异,前两处(删赋值 / `UpdateColumns` 去列)各红 3/5;后两处(删事件类型过滤 / 回填改整对象更新)**仍绿** → 2×P2,当场补钉子后各转红 1/5。另记下「幂等断言是弱钉子」的覆盖真相(回填写入是确定性的,去掉任一 `CompletedTime == null` 守卫也写同样的值)。闸门 **215/215**、工作流包 0 警。**Task 3 打勾**。 |
 | 10 | plan | Task 4 plan 定稿(G1–G8):对外名定 `requestId` 无别名;4 个入参 DTO 加字段(`WfTaskActionInput` 一个覆盖 6 个动词);抽 `WfWriteCmd` 基类把归一化(空白→`null`、`Trim`、≤64、禁换行)写成**唯一一份**,`TimeoutFireCmd` 不继承 → Task 5 的排除条件变成类型判断;新码 `RequestIdInvalid = 48028`(不填 48022 空号、不借 `ModelFieldTooLong`);7 个服务方法加可选参数(`StartAsync` 收 DTO 无需改),Controller 透传 7 处、**urge 不传**(它压根不进引擎)。测试靠引擎装饰器探针,6 条。未写产品代码。 |
+| 11 | exec | Task 4 落地 10 文件:`RequestIdInvalid = 48028`;`WfWriteCmd` 基类(归一化 + ≤64 + 拒控制字符,**唯一一份**在 `init` 里),**7** 个命令类改继承(同意/拒绝共用 `CompleteTaskCmd`,故不是 8 个),`TimeoutFireCmd` 不继承;4 个 DTO 加 `RequestId`;7 个服务方法加可选参数;Controller 透传 7 处、urge 不传;`WfRequestIdTests` 9 例(含 `Theory` 的归一化 3 例与长度边界 2 例),靠包住内置引擎的装饰器探针断言真实调用链。计划外必改 `WorkflowReplaceabilityTests` 的两个 Fake(签名跟随)。build 0 错 0 警;过滤器 **224/224**。未勾选。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
