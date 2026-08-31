@@ -165,3 +165,59 @@ public enum WfHistoryEventType
     /// <summary>主动退回(办理人把 token 向后跳到目标节点,关闭当前待办后等发起人重提)</summary>
     TaskReturned = 14,
 }
+
+/// <summary>
+/// 幂等回执覆盖的写命令(<c>wf_operation_receipt.CommandType</c>;设计规划 §14.2 列举的 8 个写命令)。
+/// <para><b>枚举名参与 <see cref="WfIdentityHash"/> 计算,是发包后不可逆契约的一部分</b>:只允许追加新值,
+/// 不得重命名、不得重排已有值(评审 §九 #6)。数值本身不进 hash,改数值不会改 identity,但同样不该动。</para>
+/// <para><see cref="WfTaskAction.Approve"/> 与 <see cref="WfTaskAction.Reject"/> 虽同走
+/// <see cref="CompleteTaskCmd"/>,这里刻意分成两个值——同人同任务同 request key 先拒后批必须是两条
+/// identity,否则第二次动作会命中第一次的回执被当成重试。</para>
+/// <para>催办(Urge)与超时(<see cref="TimeoutFireCmd"/>)<b>不在此列</b>:催办按语义可重复触发,
+/// 超时是服务端 Job 派发、不是客户端重试。</para>
+/// </summary>
+public enum WfCommandType
+{
+    /// <summary>发起实例(<see cref="StartInstanceCmd"/>)</summary>
+    Start = 1,
+
+    /// <summary>同意(<see cref="CompleteTaskCmd"/> + <see cref="WfTaskAction.Approve"/>)</summary>
+    Approve = 2,
+
+    /// <summary>拒绝(<see cref="CompleteTaskCmd"/> + <see cref="WfTaskAction.Reject"/>)</summary>
+    Reject = 3,
+
+    /// <summary>转办(<see cref="TransferTaskCmd"/>)</summary>
+    Transfer = 4,
+
+    /// <summary>委托(<see cref="DelegateTaskCmd"/>)</summary>
+    Delegate = 5,
+
+    /// <summary>主动退回(<see cref="ReturnTaskCmd"/>)</summary>
+    Return = 6,
+
+    /// <summary>撤销实例(<see cref="CancelInstanceCmd"/>)</summary>
+    Cancel = 7,
+
+    /// <summary>发起人重提(<see cref="ResubmitInstanceCmd"/>)</summary>
+    Resubmit = 8,
+}
+
+/// <summary>
+/// 幂等回执的目标类型(<c>wf_operation_receipt.TargetType</c>)。枚举名同样参与
+/// <see cref="WfIdentityHash"/>,约束与 <see cref="WfCommandType"/> 一致。
+/// </summary>
+public enum WfTargetType
+{
+    /// <summary>目标是实例(撤销/重提)</summary>
+    Instance = 1,
+
+    /// <summary>目标是待办(同意/拒绝/转办/委托/退回)</summary>
+    Task = 2,
+
+    /// <summary>
+    /// 目标是定义版本——**仅 <see cref="WfCommandType.Start"/> 用**。发起时实例尚不存在,
+    /// 没有 InstanceId 可锚,`(定义版本 + 发起人 + request key)` 足以定死一次发起。
+    /// </summary>
+    DefinitionVersion = 3,
+}

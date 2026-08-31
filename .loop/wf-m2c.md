@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 1
+- 轮次: 2
 - max: 45
 - 当前任务: 1(Operation receipt 实体 + `IdentityHash`)
-- 当前阶段: plan(已完成)
-- 上一轮: Round 1 — 写完 Task 1 的 `## Plan`(D1–D8 决策 + 4 文件改动清单 + 8 条测试 + 陷阱)。**未写任何产品代码**。`dev` 已 fast-forward 到 `26316d4`(他人 PR #34/#36 合入,`bffec77`/`d701dc0` 仍在史);工作区干净,仅未跟踪 `TestResults/`。
-- 下一步: Round 2 — **Task 1 exec**。严格按 `## Plan` 的改动清单只碰 4 个文件(`Entities/WfOperationReceipt.cs`、`Entities/WfEnums.cs`、`Engine/WfIdentityHash.cs`、`tests/WfIdentityHashTests.cs`),跑 `dotnet build -c Release` + 指定过滤器闸门(基线 190,只增不减)。**不勾选 Task 1**(勾选要等 Round 3 的独立 review)。不碰 `ExecuteAsync`/DTO/Controller/前端。
+- 当前阶段: exec(已完成,**未勾选**)
+- 上一轮: Round 2 — 按 Plan 落地 4 个文件:`Entities/WfEnums.cs`(+`WfCommandType` 8 值 / `WfTargetType` 3 值)、`Entities/WfOperationReceipt.cs`(`BaseEntity` + `uk_wf_receipt_identity` 唯一索引)、`Engine/WfIdentityHash.cs`(静态 `Compute`,SHA-256 小写 hex)、`tests/WfIdentityHashTests.cs`(11 例)。`dotnet build -c Release` **0 错 0 警**;指定过滤器 **201/201 绿**(基线 190 + 11)。**计划外补了一条 `Enum.IsDefined` 守卫**(未定义枚举值会让 `ToString()` 退化成数字、把数值混进本该是枚举名的契约)——已配套测试,**留待 review 裁定是否保留**。
+- 下一步: Round 3 — **Task 1 review**(独立复核,自审须在 `## Findings` 声明)。必做:①亲手跑 `dotnet test --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"`;②**变异点**至少三处转红验证——改分隔符 `'\n'`→`'|'`、把拼接顺序里 `TargetId` 与 `ActorUserId` 对调、把 `ScopeSentinel` 从 `"-"` 改成 `""`,每处确认快照用例转红后**复原**;③核对 D1–D8 是否被 exec 二次发挥(尤其 `Enum.IsDefined` 这条计划外守卫);④确认没碰 `ExecuteAsync`/DTO/Controller/前端。**仍不勾选**,除非 0×P1 / 0×未修 P2。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -183,6 +183,7 @@
 | 0 | draft | 起草台账。M2b 收口 commit `bffec77`;基线 190/190。下一步 Round 1 Task 1 plan。 |
 | 0b | handoff | 补 `## Loop 纪律` + `wf-m2c-handoff.md`;用户要求「严格按 loop」接续。 |
 | 1 | plan | Task 1 plan 定稿:receipt 用 `BaseEntity`+显式 `ScopeKey`(避开数据范围过滤器)、唯一索引 on `IdentityHash`、`WfCommandType`(8 值,排除 Urge/Timeout)/`WfTargetType`(Start 锚 DefinitionVersion)、换行符分隔 + SHA-256 小写 hex、RequestKey 空值抛异常。锚点:`ExecuteAsync` 是唯一事务入口,Task 2/5 挂一处即可。未写产品代码。 |
+| 2 | exec | Task 1 落地 4 文件:`WfCommandType`/`WfTargetType` 枚举、`WfOperationReceipt`(`BaseEntity`,唯一索引 on `IdentityHash`)、静态 `WfIdentityHash.Compute`、`WfIdentityHashTests` 11 例(含两条冻结快照常量)。build 0 错 0 警;过滤器 **201/201**(190+11)。计划外补 `Enum.IsDefined` 守卫,交 review 裁定。未勾选。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
