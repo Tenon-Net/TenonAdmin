@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 29
+- 轮次: 30
 - max: 45
-- 当前任务: 9(Vue request key 生命周期)
-- 当前阶段: review(已完成,0×P1/0×P2,**未勾选** —— 待 Round 30 勾选)
-- 上一轮: Round 29 — Task 9 **review**(自审,理由同 Task 1–8:会话规则禁止未经用户要求派子 agent)。跑 `npx vitest run src/workflow/` 先确认基线 35/35 绿。按 Round 27 Plan 的「变异点」表逐条变异 `useRequestKey.ts`,**每处先 grep 确认文件真改了**再跑,复原只 `git checkout` 被变异的单文件:①`settle()` 对 `'network'` 也清空 key → 红 1/6(用例 2,与表一致);②`value()` 去掉惰性判断 → 红 2/6(用例 1 **和** 2,表只列了用例 1,实测覆盖面比预期更强,不是缺口——去记忆化天然连累"网络重试复用"这条,记为已更正的预期,不算 P1/P2);③`classifyOutcome` 恒返回 `'error'` → 红 1/6(用例 6,与表一致)。三处变异后 `git status` 均已核对干净。第④项人工核对(无既有 spec 覆盖):读 `detail.vue` 现状确认 `submitAction` 里 `requestId = kind === 'urge' ? undefined : requestKey.value()`,`dispatch()` 的 `urge` 分支用独立字面量 `{ taskId }`(不含 `body`/`requestId`),`openAction` 只对非 urge 调 `reset()`——urge 既不生成也不透传 `requestId`,与语义契约和 D4 一致。另核对 `start/index.vue`/`api/workflow.ts`/`COMPONENTS.md` 的 diff 逐字对照 D5/D6/D7,**无计划外改动**。收尾重跑一遍完整闸门:`npm run typecheck` 0 错、`npm run lint` 0 错 0 警、`npx vitest run src/workflow/` 35/35。**P1:0。P2:0。** → 满足勾选条件,但按「一轮一阶段」纪律留给 Round 30 勾选。
-- 下一步: Round 30 — **Task 9 勾选**。核对本轮 review 记录的 0×P1/0×P2 与已跑闸门证据,在 `## Tasks` 给 9 打勾,Status「下一步」改写为「Task 10 plan」。
+- 当前任务: 9 已收尾;下一任务 10(gen:api + 契约漂移 + 验收)
+- 当前阶段: (未开始 —— 下一步 plan)
+- 上一轮: Round 30 — Task 9 **勾选**。核对满足勾选条件:0×P1、0×P2(Round 29 review 已确认,含自审声明),收尾前再重跑一遍闸门 `npm run typecheck`(0 错)/`npm run lint`(0 错 0 警)/`npx vitest run src/workflow/`(35/35)。`## Tasks` 第 9 项已打勾。**Task 9 全程收尾**:新建 `web/src/workflow/useRequestKey.ts`(惰性生成 + 三态 settle + reset 的 composable)+ `classifyOutcome` 纯函数,接入 `detail.vue`(8 种动作,urge 例外)与 `start/index.vue`(改 `const body` 写法对齐),`api/workflow.ts` 手写类型加字段,`COMPONENTS.md` 补索引。全程**未跑 `gen:api`、未碰 `web-react/`**,严格留给 Task 10。
+- 下一步: Round 31 — **Task 10 plan**。这是本台账最后一个 Task,范围按 `## Tasks` 第 10 条:双模板 `gen:api`(需先起 backend,读 `web/package.json`/`web-react/package.json` 的 `gen:api` 脚本与 `TENON_API_TARGET` 约定)、比对两侧 `schema.d.ts` SHA256 一致、检查因新字段(`requestId`)产生的 `@ts-expect-error` 是否需要摘除、跑齐 `## DONE-CONDITION` 全部闸门(含本机取不到证的「四库 CI 各绿」——Round 26 已记的 P2→Task10 锚点:需就「push 一次拿 CI 信号」或「授权连真实 PostgreSQL」向用户要决定,plan 阶段先读这条锚点,决定具体怎么问)。plan 阶段先读 `.github/workflows/backend-ci.yml`、两个模板的 `gen:api`/`package.json`、`docs/react-template-ledger.md`(zero-shared 边界确认 gen:api 是否是例外),**不写产品代码**。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -220,7 +220,7 @@
 - [x] **6. `wf_history.RequestId`**:列 + `AppendHistoryAsync` 写路径传入;与 receipt 的 `RequestKey` 同源。测试:重复请求不重复追加**可观测**历史(或命中 receipt 根本不进引擎 — plan 阶段二选一并写进契约)。
 - [x] **7. 通知失败可观测**: `WfDefaultNotifier` 注入 `ILogger<WfDefaultNotifier>`(或内核既有日志抽象),`catch` 改 `LogWarning`/`LogError` 结构化字段(`InstanceId`,`Event`,`UserId`,异常);可选 `IOptions` 开关保留静默模式给测试。补一条「publisher 抛错 → 审批仍成功 + 日志有条目」测试。不引入新 NuGet。
 - [x] **8. 四库持久化契约套件**:新建 `WfPersistenceContractTests`(或同级),**同一套用例**经 `TestDb.DbType` 在四库 CI 腿各跑:①`IdentityHash` 快照;②receipt 唯一性;③并发 CAS(实例/Token/任务至少各一条);④事务回滚 receipt 不残留;⑤超时领取 vs 人工 `Approve` 仅一方胜出;⑥终态保护。不复制 190 条全集,只钉持久化契约(目标 **12–20** 条,plan 阶段列清单)。SqlServer PR 腿若已有 `TEST_FILTER`,评估是否纳入子集或 nightly — plan 阶段读 `.github/workflows/backend-ci.yml` 后定。
-- [ ] **9. Vue request key 生命周期**: `web/` 发起页 + 实例详情写操作:一次用户动作(打开弹窗/点一次按钮)生成 UUID,该动作重试(含 axios 重试若存在)复用;成功或明确失败后丢弃;新动作新 key。按钮防连点保留。`src/workflow/` 或 composable 单点实现,避免每页复制。typecheck/lint/vitest 绿。
+- [x] **9. Vue request key 生命周期**: `web/` 发起页 + 实例详情写操作:一次用户动作(打开弹窗/点一次按钮)生成 UUID,该动作重试(含 axios 重试若存在)复用;成功或明确失败后丢弃;新动作新 key。按钮防连点保留。`src/workflow/` 或 composable 单点实现,避免每页复制。typecheck/lint/vitest 绿。
 - [ ] **10. `gen:api` + 契约漂移 + 验收**:双模板 `gen:api`;SHA256 一致;去掉因新字段产生的 `@ts-expect-error`(若有)。可选:Playwright 或 API 级「双 POST 同 key → 同一 instanceId/同一结果」轻量验收(不强制浏览器截图,除非协调者要求)。**勾选本 Task 前**跑齐 DONE-CONDITION 全闸门。
 
 ## Findings
@@ -534,6 +534,7 @@
 | 27 | plan | Task 9 **plan**。重写 `## Plan`:新建 `web/src/workflow/useRequestKey.ts` composable(惰性生成 + `settle` 三态 + `reset`)+ `classifyOutcome` 纯函数(复用 `err instanceof ApiError` 既有判据);`detail.vue`/`start/index.vue` 接入,Urge 不生成/不传 key;`wfInstanceApi.cancel`/`resubmit` 手写类型各加 `requestId?`。**关键发现**:schema.d.ts 从 Task 4 起未重生成,但因 `detail.vue` 已是「先 `const body`」写法,TS 结构类型允许多余字段,本 Task 不需要提前 `gen:api`;`start/index.vue` 需先改成同款写法(字面量直传会触发超额属性检查)。7 文件改动清单,预期计划外 0。**未写产品代码。** |
 | 28 | exec | Task 9 **exec**。新建 `useRequestKey.ts`(惰性生成 + `settle` 三态 + `reset`)+ `classifyOutcome` + 6 条单测;`detail.vue`/`start/index.vue` 接入(urge 不生成/不传 key,`start` 页改成 `const body` 写法对齐 `detail.vue`);`api/workflow.ts` 的 `cancel`/`resubmit` 手写类型各加 `requestId?`;`COMPONENTS.md` 补索引节。闸门:typecheck 0 错、lint 0 错 0 警、`vitest run src/workflow/` **35/35**。改动面精确等于计划内 6 文件,未碰 web-react/backend。**未勾选**,留 Round 29 review。 |
 | 29 | review | Task 9 **review**(自审)。变异 `useRequestKey.ts` 三处:`settle` 对 network 也清空(红用例2)/`value()` 去惰性(红用例1+2,比预期表更强)/`classifyOutcome` 恒 error(红用例6),均先 grep 确认真改、单文件复原。人工核对 `detail.vue` urge 分支不生成/不透传 `requestId`,`start/index.vue`/`api/workflow.ts`/`COMPONENTS.md` 逐条对照 D5–D7 无计划外改动。闸门重跑:typecheck/lint/vitest 全绿(35/35)。**0×P1、0×P2**,留 Round 30 勾选。 |
+| 30 | 勾选 | Task 9 **勾选**。核对 0×P1、0×P2(Round 29 review)、收尾闸门重跑绿(typecheck/lint/vitest 35/35),`## Tasks` 第 9 项打勾。Vue request key 生命周期收尾:`useRequestKey` composable + `classifyOutcome`,`detail.vue`/`start/index.vue` 接入,`api/workflow.ts` 手写类型加字段,`COMPONENTS.md` 索引;全程未碰 web-react/未跑 gen:api,留给 Task 10。M2c 仅剩 **Task 10** 未完成。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
