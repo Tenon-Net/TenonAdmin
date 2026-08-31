@@ -15,6 +15,10 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+### Fixed
+
+- **A killed instance no longer blocks its own restart for a full lease TTL.** `WorkerIdLeaseGuard` releases the `WorkerId` lease on graceful shutdown, but a process that is killed outright — Visual Studio "Stop Debugging", `kill -9`, a container restart — never runs `StopAsync`, so the next start hit its own leftover lease and refused to boot with *"WorkerId N 已被节点 … 租约持有"* until that lease expired (30 s at the default `Jobs:HeartbeatSeconds`). `sys_worker_lease` now records the holder's host name, and the guard checks whether the holding process is still alive: a lease left behind by an exited process **on the same host** is taken over immediately. A holder that is still running, or one on any other host, still fails fast exactly as before — a remote pid says nothing about a remote process, so it is always treated as alive. Takeover is a conditional update, so two instances racing to reclaim the same dead lease cannot both win. The very first claim — when no lease row exists yet — is covered the same way: `WorkerId` carries a unique index, so an instance that loses the insert re-reads and retries instead of crashing startup with the raw constraint violation (QA27 follow-up).
+
 ## 0.6.0 - 2026-08-12
 
 A 36-finding QA sweep of the kernel, closed in five batches. Most of it is authorization boundaries: the data-scope guarantee that only ever covered business `DataEntity` tables now also covers user, org and file management, and the role system grew an explicit delegation boundary so a non-superadmin holding the role menu can no longer mint themselves a privileged role.
