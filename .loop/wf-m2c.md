@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 24
+- 轮次: 25
 - max: 45
 - 当前任务: 8(四库持久化契约套件)
-- 当前阶段: review(已完成,**未勾选** —— 有 1 条 P2 待修)
-- 上一轮: Round 24 — Task 8 **review(自审)**。闸门:指定过滤器 **259/259 绿**。6 处变异逐一跑(每处先 `grep` 确认真改了,复原只 `checkout` 那一个文件):**3 处转红**(去 `IsUnique` → 红 4/14;`RequestId ?? ""` → 红 1/14;删 `DueTime == cursor` 半边 → 红 1/14),**3 处仍绿**且三种绿的性质各不相同 —— ①**M1 去掉 savepoint**:方言使然,SQLite 上本就不该红,如实记「未取证」;②**M6 删 `ClaimInstanceAsync` 的 `Version ==`**:本套件不该红(L4 明令不复制 M2b),追加取证证明它被 `WfVersionCasTests.Instance_losing_cas_...` 抓住(全过滤器 **红 1/259**),**不是覆盖洞**,是 plan 那一格预期写错;③**M3 `ResultJson` 换 `Length = 200` 仍绿** —— 这条是**本轮唯一的真发现**:SQLite 的类型亲和性根本不执行列宽,B1/B2 两条列宽/长文本用例在 SQLite 腿上是**恒真断言**,追加取证:全过滤器 259/259 仍绿(1m17s)。记为 **P2**(不是产品缺陷,是本 Task「四库契约」自称与本机可证射程之间的缺口),修法见 `## Findings`。
-- 下一步: Round 25 — **Task 8 修 Findings**。只修 P2「B 段在 SQLite 上恒真」这一条,**不扩面**:在 `WfPersistenceContractTests` 的 B1/B2 上补一句「本条在 SQLite 腿不具判别力,真正的钉子在 mysql/postgres/sqlserver 三腿」的射程注释,并把 M1/M3 两处「SQLite 不可证」统一收进类注释的射程声明(现有声明只提了 PG,漏了列宽)。**不改产品代码**、不加 `SkippableFact`(L6)。修完重跑指定过滤器,然后才进 Round 26 的勾选。
+- 当前阶段: 修 Findings(已完成,**未勾选** —— 待 Round 26 勾选)
+- 上一轮: Round 25 — Task 8 **修 Findings**。只修 Round 24 记的那 1 条 P2(B 段在 SQLite 腿恒真而射程声明漏提列宽):在 `WfPersistenceContractTests` 的类注释里把射程声明从「只提 PG」扩成「两类,PG 事务语义 + 列宽/列类型」;给 B1(`Result_json_round_trips_chinese_and_long_payloads`)、B2(`Scope_key_request_key_and_hash_hold_their_declared_width`)各补一段 `<para><b>射程</b>...</para>`,写明「SQLite 不执行列宽/类型约束,本条在该腿恒真,真钉子在 mysql/postgres/sqlserver」。**只改了这一个文件、只加文档注释**,未碰任何产品代码,未加 `SkippableFact`(守住 L6)。闸门:指定过滤器 259/259 绿(1m12s)。
+- 下一步: Round 26 — **Task 8 勾选**。核对:0×P1(Round 24 已确认)、1×P2 已修且本轮闸门绿、6 处变异的复核结论已写全(含 M6 的「预期写错已更正」)。若都满足,在 `## Tasks` 给 8 打勾,`## Plan` 的「给后续 Task 的锚点」两条(P2→Task10 四腿本机取不到证 / P3→Task5、8 的 `ActivatorUtilities` 写法)保留不动,然后 Status「下一步」改写为「Task 9 plan」。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -465,6 +465,19 @@
 1. **`RollbackNestedAsync` 失败会重新引入它自己要修的那个「真因被顶替」**:catch 里若 `ROLLBACK TO SAVEPOINT` 本身抛错,新异常会盖掉原始的插入异常。实际触发面很窄——语句级错误(含唯一冲突)之后回滚到点在 PG 上恰恰是能成功的,要它失败基本得是连接已断,那时一切都已经坏了。若将来要收紧,写法是「回滚不成就立刻 `throw;` 原始异常,别再去做那次 SELECT」。**本轮不动**(review 阶段只修 P1/P2)。
 2. **`ReleaseNestedAsync` 抛错会掉进 catch,继而对一个已释放的点发 `ROLLBACK TO SAVEPOINT`**。同上,窄且不致命,记录以免将来当新缺陷重查。
 
+### Task 8 修 Findings(Round 25,2026-08-31)
+
+只修 Round 24 记的那 1 条 P2,未扩面:
+
+1. **类注释射程声明扩写**:原文只提「PG 相关断言在 SQLite 腿加不加 savepoint 都是绿的」,现拆成①②两类,②补上「B 段两条列宽/列类型断言在 SQLite 腿是恒真断言,Round 24 mutation 已实测:把 `ResultJson` 换成 `Length = 200` 依旧全绿」,并点名两条测试方法。
+2. **B1/B2 方法级文档各补一段射程说明**,分别指向「本条在 SQLite 腿不具判别力,真正的钉子在 mysql/postgres/sqlserver 三腿」。
+
+**未改动**:产品代码(0 文件)、测试断言逻辑(0 处)、`SkippableFact` 或任何方言跳过写法(遵守 L6)。`git diff --stat` 只有 `WfPersistenceContractTests.cs` 一个文件,+14/-3,全部是文档注释。
+
+**闸门**:`dotnet test --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"` → 259/259 绿(1m12s)。
+
+**P1**:0(沿用 Round 24 结论)。**P2**:1 条,**本轮已修**。→ 待 Round 26 核对后勾选。
+
 ## Log
 
 | 轮次 | 阶段 | 摘要 |
@@ -495,6 +508,7 @@
 | 22 | plan | Task 8 plan 定稿(L1–L8)。**读码推翻了台账对本 Task 的原始设想**:`WorkflowAppFactory` 只喂 `TestDb.DbType`,所以现有 **245 条本来就在 sqlite/mysql/postgres 三腿全跑** —— 把 CAS/回滚/重放再写一遍纯属复制。新套件的正当性收敛成三条:①PG 唯一冲突后整事务 aborted(只有新用例能钉);②现有用例**一条都没碰**的数据库层方言真相(唯一索引是否真被建出、`CodeFirst_BigString` 中文与长文本、64 满宽、可空 `ADD COLUMN` 旧行、affected-rows、`DueTime` 相等游标);③**今天 SqlServer PR 腿零条工作流测试**,`TEST_FILTER` 的 13 个类里没有任何 `Wf*`。另两条读码事实:SqlSugar 5.1.4.198 **没有 savepoint API**(扫过 dll 字符串表),内核 `src/` **今天零个方言分支**。PG 修法定 **PG-only SAVEPOINT**,三个替代方案(无差别 savepoint / `ON CONFLICT DO NOTHING` / 接受败者恒失败)各自被否的理由已写进 L1。复现手法定 **致盲首次 `FindAsync` + 事务外预提交赢家行**,把构造不出的并发换成一个诚实的单点伪造。14 条用例 + 6 个变异点 + 9 条陷阱已列;改动面 4 文件、预期计划外 **0**。新记 **P2→Task 10**:四腿绿本机取不到证,需用户 push 或授权。未写产品代码。 |
 | 23 | exec | Task 8 落地 **3 文件 + 台账,零溢出**。`WfOperationReceiptService` 加 PG-only SAVEPOINT(三个 `protected virtual` 小步;守卫 `DbType == PostgreSQL && Ado.IsAnyTran()` —— 自动提交模式下 PG 拒收 `SAVEPOINT`,而那时也根本不需要它),注释写明为什么这是内核第一个方言分支、以及「不解析错误码」的旧决定为何仍然成立。新增 `WfPersistenceContractTests` **14 条**(A 回执唯一性与 PG 事务中止 4 / B 列类型与列宽 2 / C 可空升级列 2 / D CAS 与 affected-rows 2 / E `DateTime` 相等游标 1 / F 为 SqlServer PR 腿而设的端到端幂等冒烟 3);致盲替身只蒙前 N 次 `FindAsync`,赢家行事务外预提交,冲突与恢复都是真的。`TEST_FILTER` 追加本类 + 一段「为什么唯独这一个 `Wf*` 进 PR 腿」的注释,YAML 已解析验证、过滤器单行 14 项完好。**两条测试自身的错**:D2 让人工先赢时活动 `wf_task` 当场归档进 `wf_his_task`(库里没待办可推到期,证明不了仲裁)→ 改成超时先赢、人工后到收业务错误;`DateTime.Now - TimeSpan` 写进 `SetColumns` 表达式会被当 SQL 翻译,落库值读回绑不上 `DateTime` → 提成局部变量。**L7 探测:本机无 PG**,PG 的「修前红」取不到证,射程声明写进类注释。闸门:全量 `--no-incremental` Release 0 错、13 警(既有基线);过滤器 **259/259**。未勾选。 |
 | 24 | review | Task 8 **自审 review**。指定过滤器 **259/259 绿**;6 处变异逐一跑(先 `grep` 验改、复原只 checkout 单文件):**红 3 处**(`IsUnique` → 4/14、`RequestId ?? ""` → 1/14、删 `DueTime == cursor` 半边 → 1/14),**绿 3 处**且性质不同:M1(去 savepoint)方言使然、如实记「未取证」;M6(删 `Version ==`)本套件按 L4 就不该覆盖,追加取证改跑全过滤器 **红 1/259**(`WfVersionCasTests.Instance_losing_cas_...`)—— 不是覆盖洞,是 plan 变异表那一格预期写错,已更正;M3(`ResultJson` 换 `Length = 200`)**仍绿**,这是本轮唯一真发现 —— **SQLite 不执行列宽**,B1/B2 在 SQLite 腿是恒真断言,而类注释的射程声明只写了 PG、漏了列宽(追加取证:全过滤器 259/259 仍绿(1m17s))。记 **1 条 P2**(补射程注释,不改产品代码、不加 `SkippableFact`)+ 2 条 P3(`RollbackNested`/`ReleaseNested` 抛错会顶替真因,窄,挂账)。**未勾选**。 |
+| 25 | 修 Findings | Task 8 修掉 Round 24 的唯一 P2:`WfPersistenceContractTests` 的类注释射程声明补上「列宽/列类型断言在 SQLite 腿恒真」,B1/B2 方法文档各加一段射程说明,指向 mysql/postgres/sqlserver 才是真钉子。只改这一个文件、只加文档注释,不碰产品代码、不加 `SkippableFact`。闸门:259/259 绿(1m12s)。未勾选(留给 Round 26)。 |
 
 ## 参考读码清单(Round 1 plan 前)
 

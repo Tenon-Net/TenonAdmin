@@ -25,9 +25,15 @@ namespace TenonAdmin.Tests;
 /// 没有</b>,也就是说一个改动整个工作流包的 PR 在 SqlServer 上零条工作流测试会跑。本类进了那份名单,这 3 条
 /// 就是工作流持久化在 SqlServer 上的 PR 时刻信号。<b>别当重复代码删掉。</b></item>
 /// </list>
-/// <para><b>⚠ 射程声明</b>:本文件里凡是与 PG 相关的断言,在 SQLite 腿上<b>加不加 savepoint 都是绿的</b>
-/// ——SQLite/MySQL/SqlServer 的语句错误不中止事务。那几条的「修前红」只能在 postgres 腿观察到,本机
-/// (无 Docker)取不到证。别把 SQLite 的绿读成四库的绿。</para>
+/// <para><b>⚠ 射程声明(两类,都只能在本机 SQLite 腿证实「不假红」,证不了「真钉住」)</b>:
+/// ①凡是与 PG 相关的断言,在 SQLite 腿上<b>加不加 savepoint 都是绿的</b>——SQLite/MySQL/SqlServer 的
+/// 语句错误不中止事务。那几条的「修前红」只能在 postgres 腿观察到,本机(无 Docker)取不到证。
+/// ②B 段两条列宽/列类型断言(<see cref="Result_json_round_trips_chinese_and_long_payloads"/>、
+/// <see cref="Scope_key_request_key_and_hash_hold_their_declared_width"/>)在 SQLite 腿上是<b>恒真断言</b>
+/// ——SQLite 的类型亲和性不执行列宽/类型约束,把 <c>ResultJson</c> 的声明换成 <c>Length = 200</c> 之后
+/// 这两条依旧全绿(Round 24 mutation 实测)。它们真正钉住方言事故(CHANGELOG #26 那类中文变 <c>???</c>、
+/// MySQL 非严格模式静默截断)的地方是 mysql / postgres / sqlserver 三腿。<b>别把 SQLite 的绿读成四库的绿</b>
+/// ——本文件名字里的「四库」指的是四条 CI 腿都跑这同一套用例,不是「本机就能证明四库都对」。</para>
 /// </summary>
 public class WfPersistenceContractTests
 {
@@ -160,6 +166,9 @@ public class WfPersistenceContractTests
     /// B1 <c>ResultJson</c>(<c>CodeFirst_BigString</c>)必须原样往返<b>中文</b>与<b>长载荷</b>。
     /// 仓内出过这个事故:裸 <c>text</c> 在 SqlServer 上是非 Unicode,中文写进去读出来是 <c>???</c>
     /// (CHANGELOG #26)。工作流侧此前一条直接断言都没有。
+    /// <para><b>射程</b>:本条在 <b>SQLite 腿不具判别力</b>——SQLite 的类型亲和性不管列声明成什么都能
+    /// 原样存取任意长度/编码的文本,把 <c>ResultJson</c> 换成 <c>Length = 200</c> 这条依旧全绿
+    /// (Round 24 mutation 实测)。真正的钉子在 mysql / postgres / sqlserver 三腿。</para>
     /// </summary>
     [Fact]
     public async Task Result_json_round_trips_chinese_and_long_payloads()
@@ -186,6 +195,8 @@ public class WfPersistenceContractTests
     /// B2 声明成 64 的三列必须真的存得下 64 个字符,不被静默截断。
     /// DTO 侧的「<c>requestId</c> ≤ 64」在 Task 4 已经卡住,列侧的「64 真能装 64」从没验过;
     /// MySQL 非严格模式下截断是<b>静默</b>的,诊断列与 identity 就此对不上。
+    /// <para><b>射程</b>:同 B1,本条在 <b>SQLite 腿不具判别力</b>——SQLite 不执行列宽约束,把声明宽度
+    /// 改窄这条依旧全绿。真正的钉子在 mysql / postgres / sqlserver 三腿(MySQL 的静默截断正是本条要防的)。</para>
     /// </summary>
     [Fact]
     public async Task Scope_key_request_key_and_hash_hold_their_declared_width()
