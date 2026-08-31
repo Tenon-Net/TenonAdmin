@@ -154,6 +154,30 @@ public sealed class WfExecutionContext
         Token.Version = next;
     }
 
+    /// <summary>
+    /// 实例终态写入的<b>唯一落点</b>:翻 <see cref="WfInstance.Status"/> 并盖
+    /// <see cref="WfInstance.CompletedTime"/>,同一条 UPDATE 提交(数据库评审 §4.2 要求完结时间与状态原子写入)。
+    /// <para>三个终态分支(<c>TakeTransitionOp.CompleteInstanceAsync</c> / <c>CompleteTaskOp</c> 的终止拒绝分支 /
+    /// <c>CancelInstanceOp</c>)本来形状完全相同,收成一处是为了<b>下一个终态落点不可能漏填</b>完结时间。</para>
+    /// <para><b>刻意不含 <see cref="ClaimInstanceAsync"/></b>:领取是实例级 CAS 的语义,三个调用点各有各的长注释
+    /// 说明为什么在那里领取;收进来会把「仲裁」和「写状态」两件事焊死。调用顺序仍是「先领取、再写状态」。</para>
+    /// <para>整对象 <c>Updateable</c> 走 <c>UpdateByObject</c>,审计 AOP 照旧填 <c>UpdateTime</c>/<c>UpdateUserId</c>
+    /// (为什么状态写不能挤进领取语句,见 <see cref="ClaimInstanceAsync"/> 的注释)。</para>
+    /// </summary>
+    public async Task WriteInstanceTerminalStatusAsync(
+        WfInstanceStatus status,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Instance.Status = status;
+        // 直接赋值而非 ??=:实例进终态后回不来(BeginResubmitAsync 要求 Status == Running),一生只写一次;
+        // 真出现二次写时也该记新的完结时间,而不是悄悄留住旧值。
+        Instance.CompletedTime = TimeProvider.GetLocalNow().DateTime;
+        await Db.Updateable(Instance)
+            .UpdateColumns(i => new { i.Status, i.CompletedTime, i.UpdateTime, i.UpdateUserId })
+            .ExecuteCommandAsync();
+    }
+
     /// <summary>append-only 写一条历史事件。</summary>
     public async Task AppendHistoryAsync(
         WfHistoryEventType eventType,

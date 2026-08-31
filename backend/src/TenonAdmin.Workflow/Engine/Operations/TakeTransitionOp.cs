@@ -35,10 +35,7 @@ public class TakeTransitionOp(WfNode fromNode) : IWfOperation
         // 实例终态」两类竞争的主出口——并行网关下同实例的两件待办各自通过任务级 CAS 后都会走到这里,
         // 双条件 CAS 只有一个能拿到 1 行,输的那个整事务回滚,不会留下半推进的实例。
         await ctx.ClaimInstanceAsync(WfInstanceStatus.Running, cancellationToken);
-        ctx.Instance.Status = status;
-        await ctx.Db.Updateable(ctx.Instance)
-            .UpdateColumns(i => new { i.Status, i.UpdateTime, i.UpdateUserId })
-            .ExecuteCommandAsync();
+        await ctx.WriteInstanceTerminalStatusAsync(status, cancellationToken);
 
         await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
         ctx.Token.Status = WfTokenStatus.Completed;

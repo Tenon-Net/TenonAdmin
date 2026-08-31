@@ -71,9 +71,10 @@ public class WfOperationReceiptService(IRepository<WfOperationReceipt> receipts)
     protected virtual Task<WfOperationReceipt?> FindAsync(
         string identityHash,
         CancellationToken cancellationToken) =>
+        // `!`:SqlSugar 的 FirstAsync 标注成 Task<T> 非空,实际查不到就是 null(本方法的语义正是可空)。
         receipts.Db.Queryable<WfOperationReceipt>()
             .Where(r => r.IdentityHash == identityHash)
-            .FirstAsync(cancellationToken);
+            .FirstAsync(cancellationToken)!;
 
     /// <summary>插入占位行(结果列留空,等 <see cref="CommitAsync"/> 回填)。</summary>
     protected virtual Task<int> InsertPlaceholderAsync(

@@ -97,6 +97,11 @@ public static class WorkflowSetup
 
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WorkflowMenuSeed>());
 
+        // 升级回填:给加列前就已终态的旧实例补 CompletedTime。带存在性守卫,全新库/列还没加时静默跳过
+        // (为什么不是文档里的手工步骤、守卫怎么兜住注册顺序,见 WfCompletedTimeBackfill 的类注释)。
+        // 不能做成 ISeedData —— 那套机制只插不改(HasData() 是声明式同步签名),做不了 UPDATE。
+        services.AddHostedService<WfCompletedTimeBackfill>();
+
         return services;
     }
 }

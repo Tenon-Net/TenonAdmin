@@ -28,6 +28,19 @@ public class WfInstance : DataEntity
     public WfInstanceStatus Status { get; set; } = WfInstanceStatus.Running;
 
     /// <summary>
+    /// 实例完结时间(数据库评审 §4.2)——进入 Approved/Rejected/Cancelled 时与 <see cref="Status"/>
+    /// <b>同一条 UPDATE</b> 写入,唯一落点是 <see cref="WfExecutionContext.WriteInstanceTerminalStatusAsync"/>。
+    /// <para><c>UpdateTime</c> 当不了完结时间:重提、修复、任何一次整行更新都会刷新它。</para>
+    /// <para><b>刻意 nullable 且不给 <c>DefaultValue</c></b>:升级策略是「新增列先 nullable」(评审 §九 #2),
+    /// 而 nullable 的 <c>ADD COLUMN</c> 四库都直接接受 —— <see cref="Version"/> 注释里那条「翻可空 → ADD COLUMN
+    /// → 回填 → 改 NOT NULL」三步路<b>只对 NOT NULL 列</b>才走,这里写 <c>DefaultValue</c> 只会白跑一遍回填
+    /// UPDATE。升级前就已终态的旧行由 <see cref="WfCompletedTimeBackfill"/> 从 <c>InstanceCompleted</c> 事件
+    /// 回填,无事件可依据的<b>保持空</b>(评审 §九 #4)。</para>
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "完结时间")]
+    public DateTime? CompletedTime { get; set; }
+
+    /// <summary>
     /// 实例级乐观锁;每次<b>终态写入</b>经「期望状态 + 版本」双条件 CAS 递增
     /// (<see cref="WfExecutionContext.ClaimInstanceAsync"/>)。
     /// <para>任务级的 <see cref="WfTask.Version"/> 只能保证「同一件待办上只有一个动作胜出」,拦不住

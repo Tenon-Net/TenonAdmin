@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 7
+- 轮次: 8
 - max: 45
 - 当前任务: 3(`WfInstance.CompletedTime`)
-- 当前阶段: plan(已完成,未写产品代码)
-- 上一轮: Round 7 — Task 3 plan 定稿(F1–F6)。读码三项结论定了形状:①终态落点**恰好 3 处**且形状完全相同(`TakeTransitionOp.CompleteInstanceAsync` / `CompleteTaskOp` 终止拒绝分支 / `CancelInstanceOp`),`Terminated` 全仓无写入点;②`BeginResubmitAsync` 要求 `Status == Running` → 实例终态不可逆 → `CompletedTime` 一生只写一次,不需要 `??=` 或重提清空;③`ISeedData` 只插不改,做不了 UPDATE 回填,故回填走带存在性守卫的一次性 `IHostedService`(全新库跳过、升级库下次重启自愈)。写入收成 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 一处,**不折进 `ClaimInstanceAsync`**(M2b CAS 禁区)。
-- 下一步: Round 8 — **Task 3 exec**。严格按 `## Plan` 的 7 文件改动清单落地,顺序照「步骤」1→8。exec 时必须先验证 `DbMaintenance.IsAnyTable` / `IsAnyColumn` 的真实签名与参数语义(别照记忆写);回填**只能**用 `SetColumns` 条件更新(整对象更新会触发审计 AOP 伪造 `UpdateTime`)。跑到过滤器闸门(210 → ≈215)即停,**不勾选**,review 留给 Round 9。
+- 当前阶段: exec(已完成,**未勾选**)
+- 上一轮: Round 8 — Task 3 exec 落地 7 文件,严格按 F1–F6:①`WfInstance.CompletedTime` 可空无默认值列;②新增 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 作为终态写入**唯一落点**,三个终态分支改为调用它(`ClaimInstanceAsync` 原样不动,M2b CAS 未碰);③`Jobs/WfCompletedTimeBackfill.cs` 一次性 HostedService + `AddHostedService` 一行,守卫用仓内既有写法 `IsAnyTable(table,false)` + `GetColumnInfosByTableName(table,false)`(**没用**没验证过的 `IsAnyColumn`),回填走 InnerJoin+GroupBy 取 `MIN(CreateTime)` 后逐条 `SetColumns` 条件更新;④`WfCompletedTimeTests` 5 例。顺带修掉 Round 6 遗留的 `CS8619`(见 `## Findings`)。build 0 错 0 警;过滤器 **215/215**(210+5)。
+- 下一步: Round 9 — **Task 3 review**(自审须声明)。必跑的变异点至少四处,每处**先 grep 确认文件真改了**、复原**只 checkout 被变异的那一个文件**:①`WriteInstanceTerminalStatusAsync` 里删掉 `CompletedTime` 赋值 → 应红 3 条(同意/拒绝终止/撤销);②`UpdateColumns` 里去掉 `i.CompletedTime` → 应红 3 条(内存写了但没落库);③回填的 `Where` 去掉 `i.CompletedTime == null` → 幂等断言应红;④回填改成整对象 `Updateable` → 看审计字段是否被污染(若无断言覆盖,这就是一条 P2:缺「回填不动 `UpdateTime`」的钉子)。另需复核:`CompleteTaskOp` 的 ToNode 分支确实没被误改、`GroupBy` 查询在 SQLite 之外的方言上的写法风险(记 P3 交 Task 8)。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -237,6 +237,10 @@
 
 **P1**:0 条。**P2**:2 条,**均已修并验证**。→ 满足勾选条件。
 
+### Round 8 修正:Round 6 「工作流包 0 警」的说法不准
+
+`WfOperationReceiptService.FindAsync` 在 Round 6 改成 `Task<WfOperationReceipt?>` 后,SqlSugar 的 `FirstAsync` 标注是 `Task<T>` 非空 → 留下一条 **CS8619**(`bin` 已缓存时不会重现,故 Round 6 的「0 警」是增量构建的假象)。Round 8 顺手修掉:在 `FirstAsync(...)` 后加 `!` 并注明原因。不是新缺陷,是上一轮闸门读数的更正 —— **判「0 警」要看全量构建输出,别信增量**。
+
 ### 跨任务待办(不阻塞 Task 1,后续任务必须消化)
 
 - **P2 → Task 4**:`RequestKey` / `ScopeKey` 列宽都是 **64**,而 `WfIdentityHash.Compute` 对长度不设限。写命令 DTO 必须把 `RequestId` 卡在 **≤64**(配一条超长即拒的测试):否则 MySQL 非严格模式静默截断诊断列(identity 由完整值算出,不受影响,但排查时看到的是截断值),严格方言下直接插入报错。
@@ -256,6 +260,7 @@
 | 5 | exec | Task 2 落地 7 文件:归一化提取(快照 11/11 仍绿)、`WfOperationIdentity`、`IWfOperationReceiptService` + 实现(占位在前;唯一冲突走二次 SELECT,不碰方言错误码)、`TryAddScoped` 一行、可替换性**十件套**、`WfOperationReceiptTests` 7 例(含「回滚不残留」核心钉子 + 射程声明)。build 0 错、工作流包 0 警;过滤器 **209/209**(201+8)。未勾选。 |
 | 6 | review+修+勾选 | Task 2 自审:四处变异(去占位 / Commit 改新增 / TryAdd→Add / 不归一化)各转红后复原。修 2×P2——`CommitAsync` 0 行不再静默(改抛 + 补测试 + 变异验证)、`FindAsync` 可空签名趁未发包改正;顺带 P3 不再吞 `OperationCanceledException`。闸门 **210/210**。**Task 2 打勾**。教训:变异复原只 checkout 被变异的那一个文件,别 checkout 整个 src 目录(会冲掉同轮未提交的修复,制造假红)。 |
 | 7 | plan | Task 3 plan 定稿(F1–F6):`CompletedTime` 为 nullable 无默认值列(nullable ADD COLUMN 四库均接受,不触发 `Version` 注释里的三步路);终态写入收成 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 一处、三个落点改调用,**不动 M2b 的 `ClaimInstanceAsync`**;时间源 `ctx.TimeProvider`;回填走带 `IsAnyTable`/`IsAnyColumn` 守卫的一次性 HostedService + 两步 provider-neutral SQL(`SetColumns` 条件更新,不污染审计字段),无事件的旧行保持空;**不透出 DTO**(OpenAPI 面留给 Task 10 的 `RequestId`)。读码新事实:`Terminated` 全仓无写入点、实例终态不可逆、`ISeedData` 只插不改。未写产品代码。 |
+| 8 | exec | Task 3 落地 7 文件:`CompletedTime` 可空列、终态写入收成 `WfExecutionContext.WriteInstanceTerminalStatusAsync` 一处(三个分支改调用,`ClaimInstanceAsync` 未动)、`WfCompletedTimeBackfill` 一次性 HostedService(守卫沿用 `DatabaseInitializer` 的 `IsAnyTable` + `GetColumnInfosByTableName` 写法,回避没验证过的 `IsAnyColumn`;回填 `InnerJoin`+`GroupBy MIN(CreateTime)` → 逐条 `SetColumns` 条件更新)、`WfCompletedTimeTests` 5 例(含 ToNode 分支保持空、回填幂等)。顺带修 Round 6 遗留的 `CS8619`。build 0 错 0 警;过滤器 **215/215**。未勾选。 |
 
 ## 参考读码清单(Round 1 plan 前)
 

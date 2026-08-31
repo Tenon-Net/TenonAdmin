@@ -206,10 +206,7 @@ public class CompleteTaskOp(
         // 终态写入前先领取实例与 token(数据库评审 §4.1)。只在**终止**分支做:上面的 ToNode 分支压根
         // 不写实例/token 状态,它 plan 的 EnterNodeOp 会自己领取 token。
         await ctx.ClaimInstanceAsync(WfInstanceStatus.Running, cancellationToken);
-        ctx.Instance.Status = WfInstanceStatus.Rejected;
-        await ctx.Db.Updateable(ctx.Instance)
-            .UpdateColumns(i => new { i.Status, i.UpdateTime, i.UpdateUserId })
-            .ExecuteCommandAsync();
+        await ctx.WriteInstanceTerminalStatusAsync(WfInstanceStatus.Rejected, cancellationToken);
 
         await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
         ctx.Token.Status = WfTokenStatus.Cancelled;

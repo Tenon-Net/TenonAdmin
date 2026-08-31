@@ -14,10 +14,7 @@ public class CancelInstanceOp : IWfOperation
         // 领取只推进版本、不碰业务列,所以下面的状态写照旧走整对象更新、照旧拿到审计 AOP 填充
         // (领取语句用的 SetColumns 走条件更新路径,不触发只认整对象更新的审计 AOP;见 ClaimInstanceAsync)。
         await ctx.ClaimInstanceAsync(WfInstanceStatus.Running, cancellationToken);
-        ctx.Instance.Status = WfInstanceStatus.Cancelled;
-        await ctx.Db.Updateable(ctx.Instance)
-            .UpdateColumns(i => new { i.Status, i.UpdateTime, i.UpdateUserId })
-            .ExecuteCommandAsync();
+        await ctx.WriteInstanceTerminalStatusAsync(WfInstanceStatus.Cancelled, cancellationToken);
 
         await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
         ctx.Token.Status = WfTokenStatus.Cancelled;
