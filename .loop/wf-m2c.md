@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 14
+- 轮次: 15
 - max: 45
-- 当前任务: 5(引擎写路径接 receipt)
-- 当前阶段: exec(已完成,**未勾选**)
-- 上一轮: Round 14 — Task 5 exec 落地。按 H1–H10:`ExecuteAsync` 的 `UseTranAsync` 开头一处短路(命中回执 → 反序列化首次结果直接返回,不进 `switch`)、成功后同事务 `CommitAsync`;新增三个 `protected virtual` 小步(`TryCreateIdentity` 照抄六维映射表 / `SerializeResult` / `DeserializeResult`),`CompleteTaskCmd` 按 `Action` 拆 Approve/Reject;引擎构造函数第三次同型追加 `IWfOperationReceiptService`(已在类 `<remarks>` 记为 M2c 有意的源码级破坏性变更)。**计划外必改 1 文件**:`WorkflowMultiLeaderSnapshotTests` 的 `WorkflowEngineProbe` 直接 `new WorkflowEngine(...)`,补一个 `null!` —— 已按 Plan 的自检要求回头质疑过,结论是 H7 明确承认的代价(M2a/M2b 两次同样如此),不是决策错。**测试与 Plan 有一处偏离**:并发双提交那条按仓内既有射程学说(`WfVersionCasTests`)判定为**构造不出来**,换成「同 key 不同 actor/不同 target 不串」,并在类注释里写明射程。闸门:全量 `--no-incremental` Release 0 错、工作流包 0 警;过滤器 **233/233**(225+8)。
-- 下一步: Round 15 — **Task 5 review**(自审须声明)。变异点至少五处,每处**先 grep 确认文件真改了**、复原**只 checkout 被变异的那一个文件**:①去掉命中后的短路 `return` → 串行重放/终态重试应红;②短路时不反序列化改 `return new WfEngineResult()` → 同上;③资格判断 `{ RequestId: not null }` 放宽成 `is WfWriteCmd` → 无 key 用例应红;④`CompleteTaskCmd` 的 `CommandType` 写死 `Approve` 不按 `Action` 拆 → 同 key 不同动作用例应红;⑤`CommitAsync` 挪到 `UseTranAsync` 之外 → 业务失败不残留用例应红。另需复核:**「串行重放」那条的 `wf_his_task` 计数是不是真钉子**(去掉短路后第二次审批会因待办已关闭而失败,计数可能仍是 1 → 若如此,这条只钉了「没多推一次」而没钉「返回的是首次快照」,要在 Findings 写清并考虑补断言);以及超时那条用了 `hours = 1` + 手动把 `DueTime` 推到过去(`hours = 0` 在本仓语义是**不设到期**,不是立刻到期)。
+- 当前任务: 6(`wf_history.RequestId`)
+- 当前阶段: 待 plan(Task 5 已勾选)
+- 上一轮: Round 15 — Task 5 review(自审)+ 修 1×P2 + 勾选。五处变异:①去短路 red 2/8、②短路返回空结果 red 2/8、③资格判断放宽成 `is WfWriteCmd` red **8/8**(空 key 进 `NormalizeRequestKey` 直接抛,整条路全塌 —— 正是 G4 要防的 500)、④`CommandType` 写死 `Approve` red 1/8。**⑤`CommitAsync` 挪出事务:八条全绿 → P2**,当场补 `The_receipt_is_committed_inside_the_domain_transaction`(测试替身在 `CommitAsync` 里用 `db.Ado.IsAnyTran()` 记录是否仍在事务中),再跑变异⑤ red 1/9。另记两条覆盖真相(「串行重放」的 `wf_his_task` 计数是**够不着的断言**;超时那条 `hours = 0` 语义)。闸门:全量 Release 0 错、工作流包 0 警;过滤器 **234/234**。
+- 下一步: Round 16 — **Task 6 plan**(不写产品代码)。读 `Engine/WfExecutionContext.cs` 的 `AppendHistoryAsync` 全部调用点与 `WfHistory` 实体、`Entities/WfEnums.cs` 的 `WfHistoryEventType`,定:①`wf_history.RequestId` 列的可空性与列宽(与 `wf_operation_receipt.RequestKey` 同为 64,取**归一化后**的值);②值从哪来 —— Task 5 已在 `ExecuteAsync` 解析出 `identity.RequestKey`,**挂到 `WfExecutionContext` 上**即可,禁止从命令上再取第二遍(台账 Task 5 锚点);③`TimeoutFireCmd` 与无 key 请求写 `null`;④台账 Task 6 原文的二选一 —— 「重复请求不重复追加可观测历史」在 Task 5 落地后**已经由短路免费保证**(命中回执压根不进 `switch`,`AppendHistoryAsync` 一次都不会跑),plan 要把这条明确写进契约而不是再造一个机制;⑤测试清单(带 key 的写命令历史行有值、无 key 的为 null、超时的为 null、重放不新增历史行)+ 变异点。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -190,7 +190,7 @@
 - [x] **2. Receipt 服务 + 引擎事务内挂钩**: `IWfOperationReceiptService`(或引擎内 `virtual` 步骤,须 `TryAdd`) — `TryBeginAsync`(查已有 / 占位)与 `CommitAsync`(同事务写 `ResultJson`);与 `WorkflowEngine.BeginXxxAsync` 事务边界对齐。失败路径:业务抛错 → receipt 随事务回滚。`WorkflowReplaceabilityTests` 补一面。
 - [x] **3. `WfInstance.CompletedTime`**:实体列 + 终态写入落点(`TakeTransitionOp`/`CompleteTaskOp` 终止分支等);CodeFirst 可空或带默认值;旧行回填策略按评审 §十(可从 `InstanceCompleted` 事件回填,测一条即可)。**不改** receipt 行为。
 - [x] **4. 写命令 DTO + Controller 收 `RequestId`**: `Start/Approve/Reject/Transfer/Delegate/Return/Cancel/Resubmit` 输入 DTO 增 `RequestId`(或 `IdempotencyKey`,plan 阶段二选一对外名、另一名作别名/映射);Controller 透传。OpenAPI 变更 → 留给 Task 10 `gen:api`。**不含 Urge**(默认)。
-- [ ] **5. 引擎写路径接 receipt**:上述 8 个 `BeginXxxAsync` 入口在事务开头解析 identity → 命中则直接返回缓存 `WfEngineResult` → 否则执行现有 Op 链 → 成功则落 receipt。覆盖「串行双提交」「并发双提交仅一次推进」「业务失败无 receipt」「终态重试返回首次结果」的集成测试(单库,≥6 条,附变异点)。
+- [x] **5. 引擎写路径接 receipt**:上述 8 个 `BeginXxxAsync` 入口在事务开头解析 identity → 命中则直接返回缓存 `WfEngineResult` → 否则执行现有 Op 链 → 成功则落 receipt。覆盖「串行双提交」「并发双提交仅一次推进」「业务失败无 receipt」「终态重试返回首次结果」的集成测试(单库,≥6 条,附变异点)。
 - [ ] **6. `wf_history.RequestId`**:列 + `AppendHistoryAsync` 写路径传入;与 receipt 的 `RequestKey` 同源。测试:重复请求不重复追加**可观测**历史(或命中 receipt 根本不进引擎 — plan 阶段二选一并写进契约)。
 - [ ] **7. 通知失败可观测**: `WfDefaultNotifier` 注入 `ILogger<WfDefaultNotifier>`(或内核既有日志抽象),`catch` 改 `LogWarning`/`LogError` 结构化字段(`InstanceId`,`Event`,`UserId`,异常);可选 `IOptions` 开关保留静默模式给测试。补一条「publisher 抛错 → 审批仍成功 + 日志有条目」测试。不引入新 NuGet。
 - [ ] **8. 四库持久化契约套件**:新建 `WfPersistenceContractTests`(或同级),**同一套用例**经 `TestDb.DbType` 在四库 CI 腿各跑:①`IdentityHash` 快照;②receipt 唯一性;③并发 CAS(实例/Token/任务至少各一条);④事务回滚 receipt 不残留;⑤超时领取 vs 人工 `Approve` 仅一方胜出;⑥终态保护。不复制 190 条全集,只钉持久化契约(目标 **12–20** 条,plan 阶段列清单)。SqlServer PR 腿若已有 `TEST_FILTER`,评估是否纳入子集或 nightly — plan 阶段读 `.github/workflows/backend-ci.yml` 后定。
@@ -320,6 +320,35 @@
 
 **P1**:0 条。**P2**:2 条,**均已修并验证**。→ 满足勾选条件。
 
+### Task 5 review(Round 15,2026-08-31)
+
+> **⚠ 自审声明**:与 exec 同一 context(会话规则禁止未经用户要求派子 agent)。仍以**变异测试**代替第二双眼睛,每处**先 `grep` 确认文件真改了**再跑,复原**只 checkout 被变异的那一个文件**。
+
+**变异点验证**(改 `WorkflowEngine.cs` → 跑 `~WfReceiptEngineTests` → 复原):
+
+| 变异 | 结果 | 说明 |
+|---|---|---|
+| 去掉命中后的短路 `return` | **红 2/8** | 串行重放 + 终态重试 |
+| 短路时返回 `new WfEngineResult()` 而非反序列化 | **红 2/8** | 同上 —— 两处变异合起来证明「短路了」且「回的是首次快照」 |
+| 资格判断 `{ RequestId: not null }` 放宽成 `is WfWriteCmd` | **红 8/8** | 空 key 进 `WfIdentityHash.NormalizeRequestKey` 直接抛 `ArgumentException` → 每条写命令 500。这正是 G4「空白必须在命令层变成 `null`」要防的形状,意外地也证明了那条决策是承重的 |
+| `CompleteTaskCmd` 的 `CommandType` 写死 `Approve` | **红 1/8** | 「同 key 不同动作」——不拆 `Action` 的话,用户点拒绝会收到「同意成功」 |
+| **`CommitAsync` 挪到 `UseTranAsync` 之外** | **首轮全绿 → P2** | 补钉子后 **红 1/9** |
+
+**修掉的 P2**(review 发现,本轮已补测试 + 变异验证):
+
+1. **P2 已修 — 「回执与领域状态同事务提交」没有钉子**:把 `CommitAsync` 移出事务,八条用例**全绿**。原因是占位行也在事务里,业务失败时一起回滚,所以「业务失败不残留」那条看不出区别。但真正坏掉的是**崩溃窗口**:状态已提交、回执还没回填时进程挂掉,库里就留下一条**已提交**且 `ResultJson` 为空的回执 —— 此后每次重试都命中它并抛 `receiptResultMissing`,一个其实已经成功的操作永远重试不回来。这恰好是设计文档硬约束 #2(禁止「先 commit 状态再异步写 receipt」)的违反形态。补 `The_receipt_is_committed_inside_the_domain_transaction`:测试替身包住内置回执服务,在 `CommitAsync` 里用 `db.Ado.IsAnyTran()` 记录调用时是否仍在事务中,再原样委托。**同时断言 `CommitCalled`**,否则「没被调用」也会让 `IsAnyTran` 断言空转。
+
+**两处要说清的覆盖真相**:
+
+- 「串行重放」那条里的 `wf_his_task` 计数断言,在变异①下**根本够不着** —— 短路一去掉,第二次审批就撞上已关闭的待办,`Assert.Equal(0, second.code)` 先失败,后面的计数与 `createdTaskId` 比对都没执行。它不是坏断言(留着能挡住「短路后又跑了一遍 Op 链」这类变异),但**它不是让这条用例转红的那个断言**,别把它当成「只推进一次」的证据来源。
+- 超时那条依赖一个本仓语义:`hours = 0` 是**不设到期**(`dueTime` 落 null),不是「立刻到期」。用例改用 `hours = 1` 再手动把 `DueTime` 推到过去(与 `WfTimeoutTests` 同一姿势)。若后续有人把它改回 `hours = 0`,用例会因为超时压根没触发而**假绿**(回执表当然是 0 行)——所以那条里专门先断言实例已被自动通过。
+
+**核对 H1–H10**:H1(挂钩在 `UseTranAsync` 开头、`switch` 之前)✅ / H2(`command is WfWriteCmd { RequestId: not null }`,`TimeoutFireCmd` 零特例)✅ / H3(六维映射表逐行落地,`Action` 拆码)✅ / H4(仅 `Start` 取 `StarterOrgId`,其余哨兵)✅ / H5(`WfModelJson.Options`;`ResultCode` 恒 0)✅ / H6(命中不进 `switch`、不派通知;`ResultJson` 空则抛)✅ / H7(构造参数 + `<remarks>` 记第三次源码级破坏性变更)✅ / H8(并发败者语义未实现额外等待逻辑)✅ / H9(未碰 Op 链/CAS/`wf_history`/通知/前端)✅ / H10(三个新步骤全 `protected virtual`,零新增 DI 注册)✅。改动面 = 计划内 2 文件 + 已声明的 `WorkflowMultiLeaderSnapshotTests`(H7 承认的直接构造者破坏)✅。
+
+**闸门**:全量 `--no-incremental` Release 构建 0 错、工作流包 0 警;`dotnet test --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"` → **234/234 绿**。
+
+**P1**:0 条。**P2**:1 条,**已修并验证**。→ 满足勾选条件。
+
 ### 跨任务待办(不阻塞 Task 1,后续任务必须消化)
 
 - **P2 → Task 4**:`RequestKey` / `ScopeKey` 列宽都是 **64**,而 `WfIdentityHash.Compute` 对长度不设限。写命令 DTO 必须把 `RequestId` 卡在 **≤64**(配一条超长即拒的测试):否则 MySQL 非严格模式静默截断诊断列(identity 由完整值算出,不受影响,但排查时看到的是截断值),严格方言下直接插入报错。
@@ -348,6 +377,7 @@
 | 12 | review+修+勾选 | Task 4 自审:四处计划内变异各转红(去长度判断 / 去控制字符判断 / `IsNullOrWhiteSpace`→`is null` / approve 控制器透传换 `null`)。**计划外第五处变异揭出真缺口**:断掉 cancel 透传套件全绿 → P2「7 处透传只有 approve+start 两处有钉子」,补一条流水线用例覆盖余下 6 个动词并变异验证(顺带钉住:委托不能弹回给链上持有过的人,48026)。第二个 P2:Round 11 的「0 警」又是增量假象,全量构建里工作流包 20+ 条 CS1573 —— 根因是只给 `requestId` 加 `<param>` 而同方法其余参数都没标记,把说明挪进 `<remarks>` 修掉。另记两条覆盖真相(urge 那条是弱钉子、`ProbingEngine` 绕过 `TryAdd` → P3)。闸门:全量 Release 工作流包 0 警;过滤器 **225/225**。**Task 4 打勾**。 |
 | 13 | plan | Task 5 plan 定稿(H1–H10):挂钩收敛到 `ExecuteAsync` **一处**(`UseTranAsync` 已把 8 个 `BeginXxxAsync` + `RunAgendaAsync` 全包住);资格判断 `command is WfWriteCmd { RequestId: not null }` 零特例;8 条命令 → 六维映射表(`CompleteTaskCmd` 按 `Action` 拆 Approve/Reject,否则「同 key 先同意后拒绝」会被误判成重试);`ScopeKey` 只 `Start` 取机构(其余 `TargetId` 是雪花 Id,机构已隐含);结果 JSON 复用 `WfModelJson.Options`,`ResultCode` 恒 0(消化 P3→Task 2/5);命中不派通知靠现有 `ctx is null` 守卫免费拿到;并发败者「不推进第二次但也不跨事务等赢家」(H8)。改动面 **2 文件**,8 条用例 + 5 个变异点已列。新记 P2→Task 8:PG 唯一冲突会中止整个事务,`TryBeginAsync` 的二次 SELECT 在 PG 上会炸,单库看不见。未写产品代码。 |
 | 14 | exec | Task 5 落地 3 文件(计划 2 + 计划外 1):`ExecuteAsync` 一处短路 + 同事务 `CommitAsync`;三个 `protected virtual` 小步(`TryCreateIdentity` 六维映射、`SerializeResult`/`DeserializeResult` 复用 `WfModelJson.Options`),`CompleteTaskCmd` 按 `Action` 拆码;引擎构造函数追加 `IWfOperationReceiptService`(第三次同型破坏性变更,已记 `<remarks>`)。计划外必改 `WorkflowMultiLeaderSnapshotTests` 的 `WorkflowEngineProbe`(直接 `new WorkflowEngine`,补 `null!`)—— 按 Plan 自检回头质疑过,属 H7 承认的代价。`WfReceiptEngineTests` 8 例,其中**并发那条按射程学说换成「同 key 不同 actor/target 不串」**并写明射程。踩到的真事实:`hours = 0` 在本仓是「不设到期」而非「立刻到期」,超时用例要 `hours = 1` + 手动推 `DueTime`。build 0 错、工作流包 0 警(全量);过滤器 **233/233**。未勾选。 |
+| 15 | review+修+勾选 | Task 5 自审:五处变异,前四处各转红(去短路 2/8、返回空结果 2/8、资格判断放宽 **8/8**、`CommandType` 写死 1/8)。**第五处「`CommitAsync` 挪出事务」八条全绿 → P2** —— 占位行也在事务里,业务失败一起回滚,所以「无残留」那条看不出差别;真正坏的是崩溃窗口会留下一条已提交却 `ResultJson` 为空的回执,让成功的操作永远重试不回来。补 `The_receipt_is_committed_inside_the_domain_transaction`(替身在 `CommitAsync` 里用 `db.Ado.IsAnyTran()` 记录,并同时断言 `CommitCalled` 防空转),变异⑤转红 1/9。另记两条覆盖真相:「串行重放」的计数断言在变异下**够不着**(前面的 `code == 0` 先失败),不是它让用例红;超时那条必须 `hours = 1` + 手动推 `DueTime`,`hours = 0` 在本仓是「不设到期」会造成假绿。闸门:工作流包 0 警(全量);过滤器 **234/234**。**Task 5 打勾**。 |
 
 ## 参考读码清单(Round 1 plan 前)
 

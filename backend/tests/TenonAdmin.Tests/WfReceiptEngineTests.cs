@@ -322,7 +322,79 @@ public class WfReceiptEngineTests
         Assert.Equal(WfInstanceStatus.Approved, restored.InstanceStatus);
     }
 
+    /// <summary>
+    /// 回执**必须与领域状态同一事务提交**(设计文档硬约束:禁止「先 commit 状态再异步写 receipt」)。
+    /// <para>Round 15 的变异揭出的缺口:把 <c>CommitAsync</c> 挪到 <c>UseTranAsync</c> **之外**,
+    /// 前面八条用例**全绿** —— 因为占位行也在事务里,业务失败时照样一起回滚,「无残留」那条看不出区别。
+    /// 但真正坏掉的是崩溃窗口:状态已提交、回执还没回填时进程挂掉,库里就留下一条**已提交**且
+    /// <c>ResultJson</c> 为空的回执;此后每次重试都命中它并抛 <c>receiptResultMissing</c> ——
+    /// 一个其实已经成功的操作,永远重试不回来。</para>
+    /// <para>钉法:换一个记录「被调用时是否仍在事务中」的回执服务(<c>db.Ado.IsAnyTran()</c>),
+    /// 再委托给内置实现。把产品代码里的 <c>CommitAsync</c> 移出事务,这条立刻红。</para>
+    /// </summary>
+    [Fact]
+    public async Task The_receipt_is_committed_inside_the_domain_transaction()
+    {
+        var probe = new TransactionProbe();
+        using var f = new WorkflowAppFactory
+        {
+            Overrides = services => services.AddScoped<IWfOperationReceiptService>(sp =>
+                new TranAwareReceiptService(
+                    probe,
+                    sp.GetRequiredService<ISqlSugarClient>(),
+                    ActivatorUtilities.CreateInstance<WfOperationReceiptService>(sp))),
+        };
+
+        var admin = await ClientFor(f, "superAdmin");
+        await AddUser(admin, "wf-rcp-tran-starter");
+        var aId = await AddUser(admin, "wf-rcp-tran-a");
+        var definitionId = await Publish(admin, "回执-同事务", SingleApprovalModel(aId));
+
+        var starter = await ClientFor(f, "wf-rcp-tran-starter");
+        var a = await ClientFor(f, "wf-rcp-tran-a");
+
+        var start = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
+        var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
+
+        Assert.Equal(0, (await PostEnvelope(
+                a, "/api/v1/workflow/task/approve", new { taskId, requestId = "req-tran-001" }))
+            .GetProperty("code").GetInt32());
+
+        Assert.True(probe.CommitCalled, "CommitAsync 压根没被调用——回执没落地,钉子空转。");
+        Assert.True(probe.CommitWasInTransaction, "CommitAsync 跑在事务之外:崩溃窗口里会留下空结果的已提交回执。");
+    }
+
     // ── 辅助 ──
+
+    private sealed class TransactionProbe
+    {
+        public bool CommitCalled { get; set; }
+
+        public bool CommitWasInTransaction { get; set; }
+    }
+
+    /// <summary>记下 <c>CommitAsync</c> 被调用时是否仍在事务里,再原样委托给内置实现。</summary>
+    private sealed class TranAwareReceiptService(
+        TransactionProbe probe,
+        ISqlSugarClient db,
+        WfOperationReceiptService inner) : IWfOperationReceiptService
+    {
+        public Task<WfOperationReceipt?> TryBeginAsync(
+            WfOperationIdentity identity,
+            CancellationToken cancellationToken = default) =>
+            inner.TryBeginAsync(identity, cancellationToken);
+
+        public Task CommitAsync(
+            WfOperationIdentity identity,
+            int resultCode,
+            string? resultJson,
+            CancellationToken cancellationToken = default)
+        {
+            probe.CommitCalled = true;
+            probe.CommitWasInTransaction = db.Ado.IsAnyTran();
+            return inner.CommitAsync(identity, resultCode, resultJson, cancellationToken);
+        }
+    }
 
     private static async Task<int> ReceiptCount(WorkflowAppFactory f)
     {
