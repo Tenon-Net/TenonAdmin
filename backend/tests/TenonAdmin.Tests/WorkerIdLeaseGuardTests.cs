@@ -28,17 +28,17 @@ public class WorkerIdLeaseGuardTests
         return services.BuildServiceProvider();
     }
 
-    private static (ServiceProvider Sp, string DbFile) BuildProvider()
+    private static (ServiceProvider Sp, string Identity, string DbFile) BuildProvider()
     {
         var id = $"wlg-{Guid.NewGuid():N}";
         var dbFile = Path.Combine(Path.GetTempPath(), $"tenon-{id}.db");
-        return (BuildProviderFor(id, dbFile), dbFile);
+        return (BuildProviderFor(id, dbFile), id, dbFile);
     }
 
     [Fact]
     public async Task Second_instance_with_same_worker_id_throws()
     {
-        var (sp1, dbFile) = BuildProvider();
+        var (sp1, identity, dbFile) = BuildProvider();
         await using (sp1)
         {
             var db = sp1.GetRequiredService<ISqlSugarClient>();
@@ -66,13 +66,13 @@ public class WorkerIdLeaseGuardTests
             guard2.Dispose();
         }
 
-        TestDb.Cleanup(dbFile, dbFile);
+        TestDb.Cleanup(identity, dbFile);
     }
 
     [Fact]
     public async Task Stop_releases_lease_allowing_new_instance()
     {
-        var (sp, dbFile) = BuildProvider();
+        var (sp, identity, dbFile) = BuildProvider();
         await using (sp)
         {
             var db = sp.GetRequiredService<ISqlSugarClient>();
@@ -98,7 +98,7 @@ public class WorkerIdLeaseGuardTests
             guard2.Dispose();
         }
 
-        TestDb.Cleanup(dbFile, dbFile);
+        TestDb.Cleanup(identity, dbFile);
     }
 
     /// <summary>本机不可能存在的 pid:Windows 的 pid 远小于此,Linux 的 pid_max 上限是 4194304。</summary>
@@ -130,7 +130,7 @@ public class WorkerIdLeaseGuardTests
     [Fact]
     public async Task Stale_lease_from_dead_process_on_same_host_is_reclaimed()
     {
-        var (sp, dbFile) = BuildProvider();
+        var (sp, identity, dbFile) = BuildProvider();
         await using (sp)
         {
             var db = sp.GetRequiredService<ISqlSugarClient>();
@@ -146,13 +146,13 @@ public class WorkerIdLeaseGuardTests
             guard.Dispose();
         }
 
-        TestDb.Cleanup(dbFile, dbFile);
+        TestDb.Cleanup(identity, dbFile);
     }
 
     [Fact]
     public async Task Stale_lease_from_another_host_is_not_reclaimed()
     {
-        var (sp, dbFile) = BuildProvider();
+        var (sp, identity, dbFile) = BuildProvider();
         await using (sp)
         {
             var db = sp.GetRequiredService<ISqlSugarClient>();
@@ -167,13 +167,13 @@ public class WorkerIdLeaseGuardTests
             guard.Dispose();
         }
 
-        TestDb.Cleanup(dbFile, dbFile);
+        TestDb.Cleanup(identity, dbFile);
     }
 
     [Fact]
     public async Task Stale_lease_written_before_upgrade_is_reclaimed_via_node_name()
     {
-        var (sp, dbFile) = BuildProvider();
+        var (sp, identity, dbFile) = BuildProvider();
         await using (sp)
         {
             var db = sp.GetRequiredService<ISqlSugarClient>();
@@ -187,7 +187,7 @@ public class WorkerIdLeaseGuardTests
             guard.Dispose();
         }
 
-        TestDb.Cleanup(dbFile, dbFile);
+        TestDb.Cleanup(identity, dbFile);
     }
 
     [Fact]
@@ -234,6 +234,6 @@ public class WorkerIdLeaseGuardTests
             guard.Dispose();
         }
 
-TestDb.Cleanup(identity, dbFile);
+        TestDb.Cleanup(identity, dbFile);
     }
 }
