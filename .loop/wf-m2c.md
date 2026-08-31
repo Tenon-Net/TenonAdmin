@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 21
+- 轮次: 22
 - max: 45
 - 当前任务: 8(四库持久化契约套件)
-- 当前阶段: 待 plan(Task 7 已勾选)
-- 上一轮: Round 21 — Task 7 review(自审)+ 勾选,**0×P1 / 0×P2**(M2c 第二次 review 无新增缺陷)。五处变异全按预期转红:①**把内层 3 个 catch 加回去 → red 4/5**,四条失败路径同时变回无声 —— 这是「双层网让默认路径不可观测」的直接证明,也是本 Task 核心论点的实证;②删催办那处 `LogWarning` red 1/5(精准,不误伤);③丢掉异常形参 red 1/5;④成功路径也记一条 red 1/5(用例 5 确实在守「无脑记一条」);⑤catch 里加 `throw` **red 4/5** —— 连发起请求本身都挂(发起就会触发待办到达通知),反向确认「绝不拖垮」成立。上一轮标记的两条疑虑均有结论:用例 1 改「至少一条」**没有弱化**(变异③由 `Assert.All(NotNull(Exception))` 接住、变异②由催办那条接住);`LogSink` 的跨类别捕获**没有污染**用例 5(变异④能让它红,说明它对多余 Warning 是敏感的)。闸门:全量 Release 0 错、13 警(全为 Core/Services 既有基线);过滤器 **245/245**。
-- 下一步: Round 22 — **Task 8 plan**(不写产品代码)。这是 M2c 最大的一个 Task,plan 要读:`.github/workflows/backend-ci.yml` 的四库矩阵与 SqlServer 的 `TEST_FILTER` 子集(**决定新套件要不要进 PR 腿**,CLAUDE.md 明确 SqlServer 全量 40–60 分钟)、`backend/tests/TenonAdmin.Tests/TestDb.cs`(按 `TENON_TEST_DBTYPE` 派生隔离库的机制)、`WfListContractTests`(仓内既有的"列表契约"先例,看它怎么组织四库共用用例)。要定:①**头等事项** `## Findings` 的 P2→Task 8(PG 唯一冲突后整事务 aborted,`TryBeginAsync` 的二次 SELECT 在 PG 上会炸)—— 先写一条**会在 PG 上红**的用例,再定修法(savepoint / `ON CONFLICT DO NOTHING` / 先查后插容忍窗口);②12–20 条用例清单(`IdentityHash` 快照、receipt 唯一性、CAS 三处、事务回滚不残留、超时 vs 人工仅一方胜出、终态保护、可空 `ADD COLUMN` 旧行读 null);③SqlServer PR 腿纳入与否;④**不复制** 245 条全集。
+- 当前阶段: plan(已完成,**未写产品代码**)
+- 上一轮: Round 22 — Task 8 plan 定稿(L1–L8)。读了 `.github/workflows/backend-ci.yml`、`TestDb.cs`、`WfListContractTests`、`WfOperationReceiptService`、`WfTimeoutJob.ScanDueTasksAsync`、7 张表的 `SugarIndex`/`ColumnDataType` 声明。**plan 推翻了台账对本 Task 的原始设想**:`TestDb.DbType` 驱动一切,现有 245 条**本来就在 sqlite/mysql/postgres 三腿全跑**,所以「把 CAS/回滚/重放再写一遍」纯属复制。新套件的正当性收敛成三条:①PG 唯一冲突后整事务 aborted(`## Findings` 的 P2,只有新用例能钉);②**现有用例一条都没碰的数据库层方言真相**(唯一索引是否真被 CodeFirst 建出来、`CodeFirst_BigString` 中文与长文本、64 列宽满宽、可空 `ADD COLUMN` 旧行、affected-rows 语义、`DueTime` 相等游标);③**今天 SqlServer PR 腿一条工作流测试都不跑** —— 新类进 `TEST_FILTER` 才让工作流持久化第一次有 PR 时的 SqlServer 信号。PG 修法定为 **PG-only SAVEPOINT**(内核首个方言分支,理由与被否方案写在 L1)。14 条用例 + 6 个变异点 + 复现手法(致盲首次 `FindAsync`)已列。**新记 P2→Task 10**:DONE-CONDITION 的「四腿各绿」本机取不到证(无 Docker;局域网 VM 的 PG/MySQL 是用户自己的服务,不擅自连),需要用户一次 push 或授权。
+- 下一步: Round 23 — **Task 8 exec**。按 Plan 的改动清单只碰 4 个文件:`WfOperationReceiptService.cs`(L1 savepoint)、新增 `WfPersistenceContractTests.cs`(14 条)、`.github/workflows/backend-ci.yml`(`TEST_FILTER` 追加一项 + 注释)、台账。先写用例 1(致盲替身)确认它在 SQLite 上绿,再加 savepoint —— **SQLite 上加不加 savepoint 都绿**,所以本地跑不出「修前红」,这一点必须如实写进 exec 记录,别把 SQLite 的绿当成 PG 的证据。跑闸门:全量 `--no-incremental` Release 构建判警告(只信全量)+ 过滤器(当前 **245**,本 Task 后应 ≈ **259**)。**不勾选。**
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -95,77 +95,119 @@
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段重写)
 
-> **Task 7 — 通知失败可观测**(Round 19 写于 2026-08-31)。已读:`Abstractions/IWorkflowNotifier.cs` 三个方法、`Engine/WfDefaultNotifier.cs` 全文、`WorkflowEngine.DispatchPendingNotificationsAsync` 两处 catch、`WfTaskService.UrgeAsync` 的 catch、`WfTimeoutJob` 提醒路径的 catch、两个类的构造函数、`WfCompletedTimeBackfill`(仓内 `ILogger` 注入先例)。
-> **Task 6 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
+> **Task 8 — 四库持久化契约套件**(Round 22 写于 2026-08-31)。已读:`.github/workflows/backend-ci.yml` 全文(四库矩阵、服务容器、`TEST_FILTER`、nightly + `nightly-alert`)、`backend/tests/TenonAdmin.Tests/TestDb.cs` 全文、`WorkflowAppFactory.cs`、`WfListContractTests.cs`、`MultiConfigIdTests` 的方言跳过惯用法、`WfOperationReceiptService.cs` 全文、`WfTimeoutJob` 的 `ExecuteAsync` 主循环与 `ScanDueTasksAsync`、7 张 `Wf*` 表的 `SugarIndex` 与 `ColumnDataType` 声明、`Directory.Packages.props` 的 SqlSugar 版本(5.1.4.198)。
+> **Task 7 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
 
 ### 读码所得(决策的事实底座,exec 不必重查)
 
-- **静默吞异常共有 7 层,不是台账写的 2 处**:`WfDefaultNotifier` 内部 **3 个方法各吞一次**,加上**全部 4 个调用点**各自又包一层 try/catch(`WorkflowEngine` ×2、`WfTaskService.UrgeAsync` ×1、`WfTimeoutJob` 提醒 ×1)。**是双层网**。
-- **这层双层网正是问题所在**:默认实现的失败被它自己的内层 catch 吃掉,**永远到不了**外层那 4 个 catch。所以「只在引擎里加日志」修不好默认路径;而「只在 `WfDefaultNotifier` 里加日志」又修不好**被消费者替换掉**的通知实现(那时内层不存在,失败落进外层 4 个 catch,依旧无声)。
-- **`TaskUrgedAsync` 有 2 个调用点根本不经过引擎**:`WfTaskService.UrgeAsync`(用户催办)与 `WfTimeoutJob`(超时提醒,`fromUserId = null`)。所以「在 `DispatchPendingNotificationsAsync` 一处解决」覆盖不到催办与提醒。
-- **`ILogger` 已经可用,不需要新 NuGet**:`WfCompletedTimeBackfill` 已经注入 `ILogger<>`(经 Hosting/Core 传递引入),台账 Task 7「不引入新 NuGet」自动满足。
-- `WorkflowOptions` 里**没有**任何通知开关位。
+- **现有 245 条本来就是四库跑的**。`WorkflowAppFactory` 只喂 `TestDb.DbType` + `TestDb.ConnectionString`,而 CI 每条腿只换 `TENON_TEST_DBTYPE`。所以 sqlite / mysql / postgres 三腿**已经在跑全部 245 条**;`WfVersionCasTests`、`WfOperationReceiptTests`、`WfReceiptEngineTests`、`WfCompletedTimeTests` 全都是四库(准确说三库 + nightly SqlServer)用例。**台账原文列的「CAS 三处 / 事务回滚不残留 / 终态保护 / 重放」如果照抄一遍,就是纯粹的复制**,正是 Task 描述里「不复制 245 条全集」要避免的事。
+- **唯一真正没被覆盖的一腿是 SqlServer 的 PR 时刻**。`TEST_FILTER` 只在 `matrix.db == 'sqlserver' && github.event_name != 'schedule'` 时生效,列了 13 个类,**没有任何 `Wf*` 类**。也就是说:今天一个 PR 改动整个工作流包,SqlServer 上**零条**工作流测试会跑,信号要等到当晚 nightly。
+- **`WfOperationReceiptService.TryBeginAsync` 的恢复路径在 PG 上走不通**(`## Findings` 的 P2)。它靠「`InsertPlaceholderAsync` 撞唯一索引 → catch 里再 `FindAsync` 一次认赢家」。PG 一旦语句报错就把**整个事务**置为 aborted,紧接着那条 SELECT 直接 `25P02 current transaction is aborted`。更刺眼的是:PG 的 `catch` 里那个新异常会**顶替**原始的唯一冲突异常抛出去,连诊断线索一起丢。SQLite / MySQL / SqlServer 都没有这个语义。
+- **恢复路径什么时候真会被走到**:READ COMMITTED 下,第二个事务插同一 hash 会**阻塞**到赢家提交;赢家一提交,我们的 INSERT 才报冲突 —— 也就是说,报冲突的那一刻**赢家一定已经提交、二次 SELECT 一定查得到**。所以三个库上恢复必然成功,PG 上必然失败。这不是「概率窗口」,是方言二选一。
+- **SqlSugar 5.1.4.198 没有 savepoint API**(把 `SqlSugar.dll` 的字符串表整个扫过,`SAVEPOINT` / `Savepoint` 零命中)。要用只能 `db.Ado.ExecuteCommandAsync("SAVEPOINT ...")` 走裸 SQL。
+- **内核 `src/` 今天一个方言分支都没有**(`grep DbType.PostgreSQL` 零命中)。L1 会是第一个,所以它必须被写清楚为什么值得。
+- **`CodeFirst_BigString` 已经是 Unicode**(CHANGELOG #26:SqlServer 上映射到 `nvarchar(max)`,此前裸 `text` 把中文变成 `???`)。`ResultJson` / `PayloadJson` / `ModelJson` / `VariablesJson` 都用的它,**声明是对的** —— 但这一族列的中文往返在工作流侧**没有任何一条直接断言**,而它恰好是仓内出过真事故的那一类。
+- **`WfTimeoutJob.ScanDueTasksAsync` 用 `(DueTime, Id)` 键集翻页**,tie-break 写的是 `t.DueTime > cursor || (t.DueTime == cursor && t.Id > afterTaskId)` —— **DateTime 相等比较**,正是 CLAUDE.md 点名的 SqlServer `datetime` 舍入陷阱所在。若相等判定在某方言上落空,同一 `DueTime` 的那批待办会被 `DueTime > cursor` 整批跳过,**静默漏扫**。页大小由 `WorkflowOptions.TimeoutScanBatchSize` 决定,可用 `UseSetting` 调小,构造得出来。
+- **`TestDb` 的库隔离是「每个 `WorkflowAppFactory` 一个库」**(`DbPath` 是 `Guid.NewGuid()`)。SqlServer 上每个库 ≈ 20s 的 `InitTables`(CLAUDE.md 实测),所以**新类的 SqlServer 成本 ≈ 用例数 × 20s**。
+- **方言跳过的仓内惯用法是裸 `if (...) return;`**(`MultiConfigIdTests.Secondary_Sqlite_EnsuresParentDirectory`),没有 `SkippableFact`。本套件**一条都不该跳** —— 跳过等于把方言差异藏起来。
 
 ### 决策点(exec 不得二次发挥)
 
 | # | 决策 | 理由 |
 |---|---|---|
-| K1 | **删掉 `WfDefaultNotifier` 内部那 3 个 try/catch**,让它老实地抛 | 这是本 Task 的**关键动作**,也是唯一能同时修好两种情形的动作:默认实现的失败终于能到达外层网被记录;而外层 4 个 catch 保证行为不变(仍然绝不拖垮事务/不炸 HTTP)。**删代码,不是加代码** —— 双层网里删掉内层那层,可观测性就通了 |
-| K2 | 结构化日志加在**外层那 4 个 catch** 里,每处一条 | 那是唯一的通用网:任何实现(内置的、消费者替换的)抛出都会落进来。4 处**不是重复**——四种通知的上下文字段本就不同(待办到达 / 实例完结 / 催办 / 超时提醒) |
-| K3 | 级别一律 **`LogWarning`**,不用 `LogError` | 事务已提交、业务已成功,丢的只是一次推送 —— 对系统健康而言这是"降级"不是"故障"。用 Error 会让本就该忽略的噪声去污染告警 |
-| K4 | 字段:`InstanceId` 必带;其余按现场带 `UserId`/`UserCount`/`TaskId`/`NodeId`;异常对象走 `ILogger` 的 `exception` 形参(**不要** `ex.Message` 拼进消息串) | 拼字符串会丢掉堆栈与内层异常,而这正是排障要看的东西 |
-| K5 | **不加** `IOptions` 静默开关 | YAGNI。测试要断言日志,用一个自制的 `ILoggerProvider` 就够(K7),不需要产品代码为测试让路 |
-| K6 | `WorkflowEngine` 加 `ILogger<WorkflowEngine>`、`WfTaskService` 加 `ILogger<WfTaskService>`、`WfTimeoutJob` 加 `ILogger<WfTimeoutJob>`;引擎的类 `<remarks>` 里把这次追加与 M2c 那次 `receipts` **并列记一笔** | 与 M2a/M2b/M2c 既有的「有意的源码级破坏性变更」同型;`ILogger<T>` 在任何 Host 里都已注册,DI 不需要额外配置 |
-| K7 | 测试用**自制最小 `ILoggerProvider`**(捕获 level + 消息 + 异常 + 状态字段),经 `WorkflowAppFactory.Overrides` 注册;不引第三方断言库 | 仓内没有现成的日志假实现先例;自制约 30 行,比引包便宜 |
-| K8 | **不碰**通知内容/时机/`IRealtimePublisher`、不动四个 catch 的**捕获范围**(仍是 `catch (Exception)`) | Task 边界。catch 宽是既有定案(通知绝不能炸事务),本轮只让它**出声** |
+| L1 | PG 的修法定为 **仅在 PostgreSQL 上给占位 INSERT 包一个 SAVEPOINT**:插入前 `SAVEPOINT wf_receipt_try`,catch 里先 `ROLLBACK TO SAVEPOINT wf_receipt_try` 再做二次 `FindAsync`,成功路径 `RELEASE SAVEPOINT`。判定走 `receipts.Db.CurrentConnectionConfig.DbType == DbType.PostgreSQL` | 这是教科书解法,也是唯一能让「冲突后拿到赢家结果」在四库**一致**的解法。**被否的三个替代**:①无差别对所有方言发 savepoint —— SqlServer 语法是 `SAVE TRANSACTION`/`ROLLBACK TRANSACTION`,还是得分支,而另外三库压根不需要,白付代价;②`ON CONFLICT DO NOTHING` —— PG 专属语法,SqlSugar 不提供可移植写法,方言面积比 savepoint 还大;③**接受 PG 上败者恒失败** —— 语义契约「并发败者」确实允许失败,但那样 PG 与另外三库的**可观测行为不同**却没人知道,而且抛出去的是 `25P02` 这种把真因盖掉的异常。savepoint 是四个里唯一同时修好「结果」和「诊断」的 |
+| L2 | **不接受「内核不许有方言分支」当反对理由**。这是内核**第一个** `DbType` 分支,exec 要在方法注释里写明:分支存在的原因不是性能或偏好,而是 PG 的事务中止语义**没有可移植替代**;并写明另外三库为什么不发这两条语句 | 「零方言分支」是好默认值不是教条。既有代码已经为了躲方言而**不解析错误码**(那个决定仍然正确并保留);躲不掉的这一处,藏起来比写出来更贵 |
+| L3 | **复现手法:测试子类致盲第一次 `FindAsync`**。`TryBeginAsync` 的冲突分支在正常流程里构造不出来(第一次 SELECT 总能查到已提交的赢家)。用一个继承 `WfOperationReceiptService` 的替身,让**第一次** `FindAsync` 返回 `null`、后续照常查库,再预先在事务**外**提交一条同 hash 的赢家行 → 事务内调 `TryBeginAsync` 就是一次**真实**的唯一冲突 + **真实**的二次 SELECT | 这是「射程学说」的正当用法:被伪造的只有「第一次没查到」这一个前提(现实中它由并发提供),冲突与恢复都是真的。**不是**把断言对象换成假的 |
+| L4 | **新套件只写现有 245 条没覆盖的东西**,一条都不复制。合法的三类:①PG 冲突恢复;②数据库层方言真相(唯一索引真被建出、BigString 中文/长文本、64 满宽、可空 `ADD COLUMN` 旧行、affected-rows、`DueTime` 相等游标);③**为 SqlServer PR 腿而设的端到端幂等冒烟 3 条** —— 形状与既有用例相近,但存在理由是「SqlServer PR 时今天零工作流覆盖」,不是无意识重写 | 第③类必须在**用例的 XML 注释里写明这个理由**,否则下一个人会当成重复代码删掉 |
+| L5 | **SqlServer PR 腿:纳入**。在 `TEST_FILTER` 末尾追加 `\|FullyQualifiedName~WfPersistenceContractTests` | 一个「四库契约」套件却在四库之一的 PR 时刻不跑,是自相矛盾。成本估算 ≈ 14 个隔离库 × 20s ≈ **5 分钟**,相对该腿现有 13 个类的规模是同量级增量,不是 40–60 分钟那种量级。**退出机制**:若该腿明显变慢,删掉追加的那一段即可退回 nightly(一行改动)。**绝不给该腿加 `timeout-minutes`**(CLAUDE.md 明令) |
+| L6 | **一条都不跳过方言**,不引 `SkippableFact` | 见上;跳过就是把差异藏起来。用例 1 在 PG 修好前会红——那正是它的价值,不是要被跳过的麻烦 |
+| L7 | **不擅自连局域网 VM 的数据库取证**。本机无 Docker;VM 上的 PG/MySQL 是用户自己的服务(端口已占、凭据未知),`TestDb` 会在上面建/删 `tenon_it_*` 库 | 那是对用户基础设施的写操作,不在本轮授权内。exec 可以探测**本机** `127.0.0.1:5432` 是否恰好有闲置 PG;没有就如实降级为射程声明 |
+| L8 | **`WfPersistenceContractTests` 一个类、每个测试一个 `WorkflowAppFactory`**,与仓内所有工作流测试同款;**不引** `IClassFixture` 共享库 | 共享库能把 SqlServer 成本从 ~5 分钟压到 ~2 分钟,但要引入本测试工程从没有过的模式,还要为 CAS/超时这些会改状态的用例做隔离设计。省 3 分钟不值一个新模式 |
 
-### 改动清单(exec 只允许碰这 6 个文件)
+### 改动清单(exec 只允许碰这 4 个文件)
 
-1. `backend/src/TenonAdmin.Workflow/Engine/WfDefaultNotifier.cs` — **删** 3 个 try/catch + 改类注释(K1)
-2. `backend/src/TenonAdmin.Workflow/Engine/WorkflowEngine.cs` — 构造加 logger + 2 处 catch 记日志 + `<remarks>` 补一句(K2/K6)
-3. `backend/src/TenonAdmin.Workflow/Services/WfTaskService.cs` — 构造加 logger + 催办 catch 记日志
-4. `backend/src/TenonAdmin.Workflow/Jobs/WfTimeoutJob.cs` — 构造加 logger + 提醒 catch 记日志
-5. `backend/tests/TenonAdmin.Tests/WfNotifyLoggingTests.cs` — 新增
-6. `backend/tests/TenonAdmin.Tests/WorkflowMultiLeaderSnapshotTests.cs` — **预期计划外**:`WorkflowEngineProbe` 直接 `new WorkflowEngine(...)`,加参数必然要补一个 `null!`(Round 14 同款)。**先声明,不算溢出**
+1. `backend/src/TenonAdmin.Workflow/Services/WfOperationReceiptService.cs` — L1/L2 的 savepoint(新增两个 `protected virtual` 小步 `BeginNestedAsync`/`RollbackNestedAsync` 或等价写法,保持「长方法拆成 virtual 小步」的仓内惯例)
+2. `backend/tests/TenonAdmin.Tests/WfPersistenceContractTests.cs` — **新增**,14 条
+3. `.github/workflows/backend-ci.yml` — `TEST_FILTER` 追加一项 + 在既有那段长注释里补一句「为什么唯独这一个 `Wf*` 类进 PR 腿」
+4. `.loop/wf-m2c.md` — 台账
+
+**预期计划外:0**。`WfOperationReceiptService` 的构造签名不变(`DbType` 从 `receipts.Db` 上读),所以不会像 Task 5/7 那样波及直接构造它的测试。若 exec 发现需要第 5 个文件,先在 `## Log` 里声明再动。
 
 ### 步骤
 
-1. K1 删 3 个内层 catch → 2. K6 三个构造加 logger → 3. K2/K3/K4 四处 catch 记日志 → 4. `dotnet build` 过 → 5. K7 假 `ILoggerProvider` + `WfNotifyLoggingTests` 五条 → 6. 全量 `--no-incremental` Release 构建判警告(**只信全量;上一轮自引入 3 条 `xUnit2031` 就是这么抓到的**)→ 7. 指定过滤器闸门(当前 **240**,本 Task 后应 ≈ 245)。
+1. L3 的致盲替身 + 用例 1、2、3(回执唯一性与冲突恢复)→ SQLite 上跑绿。
+2. L1 加 savepoint;**SQLite 上前后都绿**,如实记录「本地拿不到修前红」。
+3. 用例 4–8(列类型/列宽/可空升级列)。
+4. 用例 9–11(CAS affected-rows、超时 vs 人工、`DueTime` 相等游标)。
+5. 用例 12–14(为 SqlServer PR 腿的端到端幂等冒烟)。
+6. L5 改 `TEST_FILTER`,**肉眼核对那串单行 `|` 连接没写坏**(写坏的两种后果都很贵:变成跑全量 40–60 分钟,或变成跑空却显示绿)。
+7. 全量 `--no-incremental` Release 构建判警告(**只信全量**;M2c 已在这上面栽过 3 次)。
+8. 指定过滤器闸门(当前 **245**,本 Task 后应 ≈ **259**)。
+9. L7 的探测:`127.0.0.1:5432` 有闲置 PG 就顺手跑一遍本类的 PG 腿并记录;没有就写射程声明。
 
-### 测试清单(`WfNotifyLoggingTests`,5 条)
+### 测试清单(`WfPersistenceContractTests`,14 条)
 
-前置:注册一个**抛异常的** `IRealtimePublisher`(让内置通知真的失败),外加捕获日志的 `ILoggerProvider`。
+**A. 回执唯一性与 PG 事务中止(4 条 —— 本 Task 的头等事项)**
 
-1. **待办到达失败 → 审批仍成功 + 有一条 Warning**:approve 返回 `code = 0`,且日志里有一条含 `InstanceId` 的警告,`Exception` 非空。**这条是台账 Task 7 点名要的那条**。
-2. **实例完结失败 → 同上**(走 `InstanceCompletedAsync` 那处 catch)。
-3. **催办失败 → `urge` 仍返回成功 + 有警告**(证明覆盖到了**不经引擎**的那条路)。
-4. **超时提醒失败 → 扫描不中断 + 有警告**(第二条不经引擎的路)。
-5. **通知正常时不产生警告**:同样的流程但 publisher 不抛 → 零条本类警告。**没有这条,前四条无法排除「无论如何都记一条」的实现**。
+1. `Unique_violation_recovery_returns_the_winner_receipt` — 事务外提交一条赢家回执;致盲首次 `FindAsync`;在 `UseTranAsync` 内调 `TryBeginAsync` → 返回赢家那一行(hash 相同、`ResultJson` 是赢家的)。**修前 PG 红、其余三库绿;修后四库全绿。**
+2. `Unique_violation_without_a_winner_rethrows_the_original_error` — 致盲**全部** `FindAsync`(恒 `null`)→ 抛出的必须是**唯一冲突本身**,不能是 `25P02` 这类被顶替的异常(断言异常消息不含 `aborted`;PG 上没有 savepoint 时正是这条会露馅)。
+3. `The_identity_hash_unique_index_is_enforced_by_the_database` — **绕开服务**直插两条同 `IdentityHash` 的行 → 第二条抛。钉「CodeFirst 在四库都真的建出了唯一索引」,而不是靠应用层 SELECT 兜住。
+4. `A_recovered_conflict_does_not_poison_the_rest_of_the_transaction` — 冲突恢复之后,**同一个事务**里继续写一行(如一条 `wf_history`)并提交 → 提交成功、那行查得到。PG 上专门验「savepoint 只回滚到点,没把整个事务扔掉」。
 
-### 变异点(留给 Round 21 的 review,exec 阶段不跑)
+**B. 列类型与列宽(2 条)**
 
-| 变异 | 应红 |
-|---|---|
-| 把 `WfDefaultNotifier` 的 3 个 try/catch **加回去** | 1、2、3、4 全红 —— 这正是「双层网让默认路径无声」的证明 |
-| 某一处 catch 的 `LogWarning` 删掉 | 对应那一条 |
-| `LogWarning(ex, ...)` 改成 `LogWarning(...)` 丢掉异常形参 | 断言 `Exception` 非空的那几条 |
-| 无条件在成功路径也记一条警告 | 用例 5 |
-| 引擎的 catch 改成 `catch (Exception) { throw; }` | 用例 1/2 会从"成功+警告"变成 5xx —— 反向确认「绝不拖垮」仍成立 |
+5. `Result_json_round_trips_chinese_and_long_payloads` — `ResultJson` 写入含中文 + 长度 > 8000 的载荷 → 原样读回(不出现 `?`、不被截断)。钉 `CodeFirst_BigString`(CHANGELOG #26 那类真事故),工作流侧此前零断言。
+6. `Scope_key_request_key_and_hash_hold_their_declared_width` — 三列各写满 64 字符 → 原样读回。消化 `## Findings` 里 P2→Task 4 的另一半:DTO 侧的 ≤64 已经卡住,列侧的「64 真能存下 64」从没验过。
+
+**C. 可空升级列 —— 旧行读 null(2 条)**
+
+7. `Legacy_instance_rows_read_null_for_completed_time` — 造一行 `wf_instance` 后把 `CompletedTime` 显式置 `null`(`SetColumns` 条件更新,**不走整对象 `Updateable`**,避免审计 AOP 插手)→ 读回是 `null` 不是默认时间。
+8. `Legacy_history_rows_read_null_for_request_id_not_empty_string` — 同款做法置 `wf_history.RequestId` 为 `null` → 读回 `null`,并断言它**与空串可区分**(语义契约「不是空串」的四库版)。
+
+**D. CAS 与 affected-rows 语义(2 条)**
+
+9. `Conditional_updates_report_affected_rows_the_same_on_every_dialect` — 对 `wf_instance` / `wf_token` / `wf_task` 各做两次条件 UPDATE:`Version` 对得上 → 返回 **1**,对不上 → 返回 **0**(6 个断言,1 条用例)。M2b 的三处 CAS 全部建立在这个返回值上,而「matched 还是 changed」各驱动默认值不同,是真方言差异。
+10. `A_timeout_claim_and_a_manual_approve_cannot_both_win` — 手动把 `DueTime` 推到过去(**`hours = 1` 再改 `DueTime`;`hours = 0` 在本仓是「不设到期」,Round 15 的坑**),人工 `approve` 与 `WfTimeoutJob.ExecuteAsync` 一前一后 → 只有一方推进,另一方 CAS 落空且不报 500。
+
+**E. DateTime 相等游标(1 条)**
+
+11. `Tasks_sharing_one_due_time_are_all_scanned_across_pages` — 把 `TimeoutScanBatchSize` 调到 2,造 5 件 `DueTime` **完全相同**的到期待办 → 一拍扫完后 5 件都被处理,不漏不重。钉 `ScanDueTasksAsync` 的 `t.DueTime == cursor` 在四库都真的相等(SqlServer `datetime` 舍入正是 CLAUDE.md 点名的藏污点)。
+
+**F. 端到端幂等冒烟 —— 为 SqlServer PR 腿而设(3 条,注释里必须写明这个理由)**
+
+12. `Replaying_one_request_id_returns_the_first_result` — 同 `requestId` 串行两次 `start` → 同一 `instanceId`、只建一件待办。
+13. `Replaying_against_a_terminal_instance_still_returns_the_first_result` — 终态实例上重放 → 拿回首次结果,不二次推进。
+14. `A_failed_command_leaves_no_receipt_behind` — 业务失败 → 事务回滚 → 回执表零行。
+
+### 变异点(留给 Round 24 的 review,exec 阶段不跑)
+
+| 变异 | 应红 | 备注 |
+|---|---|---|
+| 去掉 L1 的 savepoint 两条语句 | 用例 1、2、4 —— **只能在 PG 腿观察** | SQLite/MySQL/SqlServer 上无变化。review 若拿不到 PG,必须如实写「这一处变异未取证」,**不许拿 SQLite 的绿冒充** |
+| `WfOperationReceipt` 的 `IsUnique = true` 去掉 | 用例 3 | |
+| `ResultJson` 的 `CodeFirst_BigString` 换成 `Length = 200` | 用例 5 | |
+| `AppendHistoryAsync` 的 `RequestId` 改成 `?? ""` | 用例 8 | 与 Task 6 的变异同源,这里是四库版 |
+| `ScanDueTasksAsync` 删掉 `(t.DueTime == cursor && t.Id > afterTaskId)` 这半边 | 用例 11 | |
+| 某处 CAS 的 `Version ==` 条件删掉 | 用例 9、10 | |
 
 ### 陷阱
 
-- **别只在一层加日志**。只加内层 → 替换实现的失败仍无声;只加外层 → 默认实现的失败被内层吃掉。K1 删内层是让「只加外层」成立的前提,两步是一件事,不能只做一半。
-- **别用 `ex.Message` 拼串**,异常要走 `ILogger` 的 `exception` 形参,否则堆栈与 inner exception 全丢。
-- **别收窄 `catch (Exception)`** —— 通知绝不能炸事务是既有定案,本轮只让它出声。
-- **用例 5(正常时不记警告)不能省**:没有它,一个「无脑记一条」的实现也能让前四条全绿。
-- `WfTimeoutJob` 有 `JobExecutionContext.Log`,那是**面向作业执行记录**的文本口,**不能替代**结构化 `ILogger`;两者都写会重复,本轮只写 `ILogger`。
+- **致盲替身只能致盲第一次 `FindAsync`**(用例 1)。连 catch 里那次一起致盲,恢复路径永远走 `throw`,用例就只是在测「会抛异常」,失去全部意义。用例 2 才是「全程致盲」的那条,两条必须分开写。
+- **`TryBeginAsync` 必须在 `UseTranAsync` 里调**。不在显式事务里时 PG 逐语句自提交,压根不会 abort → 用例 1 在 PG 上**假绿**,而这正是本 Task 要钉的那件事。
+- **预置的赢家行必须已提交**(在事务外插)。若它还在另一个未提交事务里,PG/MySQL 会**阻塞**而不是报冲突,用例变成挂死。
+- **造「旧行」不要用整对象 `Updateable`** —— 审计 AOP 认 `UpdateByObject`,会把 `UpdateTime`/`UpdateUserId` 一起刷掉,把机械造数伪装成人为修改(Task 3 review 已经踩过这个形状)。用 `SetColumns` 条件更新。
+- **`TEST_FILTER` 是单行 `|` 连接的长串**。写坏的两种后果都很贵:多一个前导 `|` 或漏一个引号 → 该腿要么退化成跑全量(40–60 分钟),要么过滤成空集却**显示绿**。改完肉眼逐字符核对。
+- **不给 SqlServer 腿加 `timeout-minutes`**(CLAUDE.md 明令:低于 ~90 分钟会把绿腿变红)。
+- **`hours = 0` 是「不设到期」不是「立刻到期」**(Round 15 的坑)。用例 10、11 一律 `hours = 1` + 手动推 `DueTime`。
+- **`WorkflowAppFactory` 已把调度器关掉**(`Jobs:SchedulerEnabled=false`),超时用例必须手动 `new JobExecutionContext` 调 `ExecuteAsync`;别为了图省事把调度器打开,那会让**所有**工作流用例随机 flake。
+- **SqlServer 的 savepoint 语法是 `SAVE TRANSACTION`,本轮不写它** —— L1 只在 PG 上发语句,别顺手"补全"另外三库。
 - 不提交 `TestResults/`。
 
 ### 给后续 Task 的锚点(本轮只记录,不实施)
 
-- Task 8 的四库套件与本 Task 无耦合(日志不落库)。
-- P2→Task 8(PG 唯一冲突后整事务 aborted)仍在,是 Task 8 的头等事项。
-- 若将来要做通知重试/outbox,那是 M3,本轮的日志正是那件事的入口证据。
+- **DONE-CONDITION 的「四腿各绿」本机取不到证** —— 已记为 P2→Task 10(见 `## Findings`)。Task 10 收口时必须就「push 一次拿 CI 信号」或「授权连某个真实 PG」向用户要一个决定,不能把 SQLite 的绿当成四腿的绿。
+- Task 9(Vue request key)与本 Task 无耦合。
+- `## Findings` 的 P3→Task 5/8(`ActivatorUtilities.CreateInstance<WorkflowEngine>` 绕过 `TryAdd`):本 Task 的替身继承的是 `WfOperationReceiptService` **具体类**并经 `Overrides` 注册,走的是 DI 正路,**不重蹈那个写法**。
 
 ## Tasks
 
@@ -390,6 +432,7 @@
 - **P3 → Task 2**:落库的 `ScopeKey`/`RequestKey` 必须写**归一化后**的值(哨兵 + `Trim()`,复用 `WfIdentityHash.ScopeSentinel`),不能一边存原值一边用归一化值算 hash,否则诊断列与 identity 对不上。
 - **P2 → Task 8**:`WfOperationReceiptService.TryBeginAsync` 靠「唯一索引冲突 → 二次 SELECT」认赢家,这在 **PostgreSQL** 上有方言陷阱 —— PG 一旦语句报错就把整个事务置为 aborted,紧接着的 SELECT 会直接报 `current transaction is aborted, commands ignored until end of transaction block`,于是「查到赢家」这条路在 PG 上走不通。SQLite/MySQL/SqlServer 不这样。**单库套件永远看不见这条**,四库套件必须专门钉;修法(savepoint / `ON CONFLICT DO NOTHING` / 先查后插的窗口容忍)留给 Task 8 的 plan 定。
 - **P3 → Task 5/8**:测试里用 `ActivatorUtilities.CreateInstance<WorkflowEngine>` 构造内置引擎来做装饰器探针,绕过了 `TryAdd` 的可替换性语义(消费者替换 `IWorkflowEngine` 时探针装的仍是内置实现)。Task 5/8 若还要装饰引擎,先想清楚是要「内置引擎的行为」还是「当前注册的实现」;两者不同,别把这个写法当消费者示范。
+- **P2 → Task 10**:DONE-CONDITION 写着「四库契约套件在 CI 矩阵四腿各绿」,但**本机取不到这个证据** —— 开发机无 Docker,局域网 VM 上的 PG/MySQL 是用户自己的服务(端口已占、凭据未知,而 `TestDb` 会在上面建/删 `tenon_it_*` 库,不在本轮授权内)。于是 Task 8 的 PG 用例只能在 SQLite 上验「不倒」,验不了「修前红」。Task 10 收口前必须就取证方式向用户要一个决定:**push 一次拿 CI 四腿信号**,或**授权连一个真实 PG**。**不许拿 SQLite 的绿当四腿的绿**(Round 22 定)。
 - **P3 → Task 2/5**:`ResultCode` 是 `int`,`TenonAdmin.Core.ErrorCode` 也是 int 枚举;映射时 `0` 恒表示成功,别让 `ErrorCode` 的某个具体值落到 `0`。
 
 ## Log
@@ -419,6 +462,7 @@
 | 19 | plan | Task 7 plan 定稿(K1–K8)。**读码推翻台账原文的前提**:静默吞异常不是 2 处而是 **7 层**(`WfDefaultNotifier` 内 3 + 4 个调用点各 1),双层网正是病根 —— 默认实现的失败被内层吃掉、到不了外层,而只在 Notifier 里加日志又覆盖不到消费者替换的实现。方案定为 **删内层 3 个 catch + 外层 4 处记结构化 Warning**,一个动作同时修好两种情形,且是**删代码**。另一条事实:`TaskUrgedAsync` 有 2 个调用点不经引擎(催办、超时提醒),「引擎一处解决」覆盖不全。`ILogger` 已可用,不需新 NuGet。改动面 5 + 1 预期计划外(`WorkflowEngineProbe` 补 `null!`,已先声明)。5 条用例(第 5 条「正常时不记警告」不可省)+ 5 个变异点。未写产品代码。 |
 | 20 | exec | Task 7 落地 **5 + 1 预期计划外**:K1 **删掉** `WfDefaultNotifier` 内部 3 个 try/catch(净删代码,类注释写明内层为何必须消失);`WorkflowEngine`/`WfTaskService`/`WfTimeoutJob` 三个构造各加 `ILogger<T>`;四处 catch 记 `LogWarning(ex, ...)`(异常走 exception 形参、一律 Warning)。`WfNotifyLoggingTests` 5 例,用抛异常的 `IRealtimePublisher` 让内置 Notifier 原样跑到失败,自制最小 `ILoggerProvider` 捕获日志。踩到两条**测试自身**的错:待办到达实际有 2 条警告(`Assert.Single` 用错,改「至少一条且每条带异常」)、超时提醒写的是 `TimeoutFired` 而非 `TaskUrged`(催办与提醒共用通知方法但事件类型不同)。build 0 错、工作流包 0 警(全量);过滤器 **245/245**。未勾选。 |
 | 21 | review+勾选 | Task 7 自审:五处变异全按预期转红。**最有说服力的一处**:把内层 3 个 catch 加回去 → **red 4/5**,四条失败路径同时变回无声,直接实证了「双层网让默认路径不可观测」这个本 Task 的核心论点;`throw;` 那处 red 4/5 则反向确认「通知绝不拖垮业务」仍成立。上一轮两条疑虑均证伪:用例 1 改「至少一条」没弱化(变异②③各自接住),`LogSink` 跨类别捕获没污染用例 5(变异④能让它红 = 敏感,未变异时绿 = 干净)。K1–K8 全对,改动面 5 + 1 已预先声明。**0×P1 / 0×P2**。闸门:全量 Release 工作流包 0 警;过滤器 **245/245**。**Task 7 打勾**。 |
+| 22 | plan | Task 8 plan 定稿(L1–L8)。**读码推翻了台账对本 Task 的原始设想**:`WorkflowAppFactory` 只喂 `TestDb.DbType`,所以现有 **245 条本来就在 sqlite/mysql/postgres 三腿全跑** —— 把 CAS/回滚/重放再写一遍纯属复制。新套件的正当性收敛成三条:①PG 唯一冲突后整事务 aborted(只有新用例能钉);②现有用例**一条都没碰**的数据库层方言真相(唯一索引是否真被建出、`CodeFirst_BigString` 中文与长文本、64 满宽、可空 `ADD COLUMN` 旧行、affected-rows、`DueTime` 相等游标);③**今天 SqlServer PR 腿零条工作流测试**,`TEST_FILTER` 的 13 个类里没有任何 `Wf*`。另两条读码事实:SqlSugar 5.1.4.198 **没有 savepoint API**(扫过 dll 字符串表),内核 `src/` **今天零个方言分支**。PG 修法定 **PG-only SAVEPOINT**,三个替代方案(无差别 savepoint / `ON CONFLICT DO NOTHING` / 接受败者恒失败)各自被否的理由已写进 L1。复现手法定 **致盲首次 `FindAsync` + 事务外预提交赢家行**,把构造不出的并发换成一个诚实的单点伪造。14 条用例 + 6 个变异点 + 9 条陷阱已列;改动面 4 文件、预期计划外 **0**。新记 **P2→Task 10**:四腿绿本机取不到证,需用户 push 或授权。未写产品代码。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
