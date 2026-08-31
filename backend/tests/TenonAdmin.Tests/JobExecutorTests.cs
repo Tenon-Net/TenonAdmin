@@ -171,10 +171,7 @@ public class JobExecutorTests : IAsyncLifetime
     {
         var job = await _host.InsertJobAsync(typeof(SlowJob).FullName!);
         var fire = _host.Executor.FireAndTrack(job, _host.Now, JobFireMode.Manual);
-        var logs = await _host.WaitForLogsAsync(job.Id, l => l.Count == 1);
-        var running = Assert.Single(logs);
-
-        Assert.True(_host.Executor.TryCancelLocal(running.Id));
+        await CancelLocalWhenRegisteredAsync(job.Id);
         await fire;
 
         var closed = Assert.Single(await _host.ReadLogsAsync(job.Id));
@@ -206,8 +203,7 @@ public class JobExecutorTests : IAsyncLifetime
         Assert.Equal(1, _host.Executor.InFlightCount);
 
         var started = tasks.Single(t => t is not null && t != Task.CompletedTask)!;
-        var logs = await _host.WaitForLogsAsync(job.Id, l => l.Count == 1);
-        Assert.True(_host.Executor.TryCancelLocal(logs[0].Id));
+        await CancelLocalWhenRegisteredAsync(job.Id);
         await started;
     }
 
@@ -239,15 +235,28 @@ public class JobExecutorTests : IAsyncLifetime
             Assert.True(_host.Executor.InFlightCount <= 2);
 
             // 收尾:取消已启动的,避免 Dispose 时挂起
-            var open = await _host.Db.Queryable<SysJobLog>().Where(l => l.EndTime == null).ToListAsync();
-            foreach (var log in open)
-                _host.Executor.TryCancelLocal(log.Id);
+            for (var i = 0; i < jobs.Count; i++)
+            {
+                if (results[i] != JobFireResult.Started) continue;
+                await CancelLocalWhenRegisteredAsync(jobs[i].Id);
+            }
             await Task.WhenAll(fires.Where(t => t is not null).Cast<Task>());
         }
         finally
         {
             _host.Jobs.MaxConcurrentRuns = previous;
         }
+    }
+
+    private async Task CancelLocalWhenRegisteredAsync(long jobId)
+    {
+        var cancelled = false;
+        await _host.WaitForLogsAsync(jobId, logs =>
+        {
+            var open = logs.FirstOrDefault(l => l.EndTime is null);
+            return open is not null && (cancelled = _host.Executor.TryCancelLocal(open.Id));
+        });
+        Assert.True(cancelled);
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
