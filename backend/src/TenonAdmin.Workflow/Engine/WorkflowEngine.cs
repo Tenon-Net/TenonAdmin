@@ -1,3 +1,4 @@
+using System.Globalization;
 using SqlSugar;
 using TenonAdmin.SqlSugar;
 
@@ -13,6 +14,8 @@ namespace TenonAdmin.Workflow;
 /// 供各 Op 建任务 / 实例完结 / 转办后调用)。前置 <c>TryAdd</c> 整体替换 <see cref="IWorkflowEngine"/>
 /// 的消费者不受影响(<see cref="IWorkflowEngine"/> 契约本身没动);<b>继承</b> <see cref="WorkflowEngine"/>
 /// 的消费者需要在自己的 <c>base(...)</c> 调用里补上这些参数。不为兼容加 <c>[Obsolete]</c> 双构造函数。
+/// M2c 第三次同样的追加:<paramref name="receipts"/>(写操作幂等回执 SPI,供 <see cref="ExecuteAsync"/>
+/// 在事务开头查/占位、成功后回填)。
 /// </remarks>
 public class WorkflowEngine(
     IRepository<WfInstance> instances,
@@ -21,7 +24,8 @@ public class WorkflowEngine(
     WorkflowOptions options,
     TimeProvider timeProvider,
     IWfConditionEvaluator conditionEvaluator,
-    IWorkflowNotifier notifier) : IWorkflowEngine
+    IWorkflowNotifier notifier,
+    IWfOperationReceiptService receipts) : IWorkflowEngine
 {
     /// <inheritdoc />
     public virtual async Task<WfEngineResult> ExecuteAsync(
@@ -33,8 +37,19 @@ public class WorkflowEngine(
 
         var db = instances.Db;
         WfExecutionContext? ctx = null;
+        var identity = TryCreateIdentity(command);
         var tran = await db.Ado.UseTranAsync(async () =>
         {
+            // 幂等短路必须在 switch **之前**:任何 BeginXxxAsync 一跑就已经改了状态(领待办、插实例),
+            // 那时再短路等于推进了两次却只回一次结果。identity 为 null = 本次不做幂等(没带 key,或
+            // 是系统自己派的 TimeoutFireCmd),走原路。
+            if (identity is not null)
+            {
+                var hit = await receipts.TryBeginAsync(identity, cancellationToken);
+                if (hit is not null)
+                    return DeserializeResult(hit);
+            }
+
             ctx = command switch
             {
                 StartInstanceCmd start => await BeginStartAsync(db, start, cancellationToken),
@@ -50,7 +65,14 @@ public class WorkflowEngine(
             };
 
             await RunAgendaAsync(ctx, cancellationToken);
-            return ctx.ToResult();
+            var result = ctx.ToResult();
+
+            // 回填占位行,与领域状态同一事务提交。业务失败走不到这里 —— 异常让整个事务回滚,
+            // 占位行随之消失,重试可以干干净净地重来(这正是「业务失败不落回执」的实现方式)。
+            if (identity is not null)
+                await receipts.CommitAsync(identity, 0, SerializeResult(result), cancellationToken);
+
+            return result;
         });
 
         if (!tran.IsSuccess)
@@ -58,10 +80,97 @@ public class WorkflowEngine(
 
         // 事务已提交:此时才派发排队的通知(不能在事务内发——提交失败时不该已经推过,
         // 且真实 SignalR 网关会让客户端在提交落盘前就收到推送去查询,读到脏数据)。
+        // 命中回执短路时 ctx 保持 null,于是本守卫**顺带**挡掉了「重试把通知再推一遍」——
+        // 第一次已经推过了,不必为此另写分支。
         if (ctx is not null)
             await DispatchPendingNotificationsAsync(ctx, cancellationToken);
 
         return tran.Data;
+    }
+
+    /// <summary>
+    /// 解析这条命令的幂等身份;<c>null</c> = <b>本次不做幂等</b>(命令没带 <c>RequestId</c>,或者
+    /// 是 <see cref="TimeoutFireCmd"/> 这种系统自己扫出来的动作——它不继承 <see cref="WfWriteCmd"/>,
+    /// 没有「用户这一次点击」的身份可言,所以这里不必写它的特例分支)。
+    /// <para><b>ScopeKey 只有 <see cref="WfCommandType.Start"/> 取机构</b>:发起的 <c>TargetId</c> 是
+    /// <b>定义版本 Id</b>,同一份定义被多个机构共用,机构维度在那里是承重的;其余命令的 <c>TargetId</c>
+    /// 是实例/待办的雪花 Id,全局唯一、机构已隐含,再去 load 一次实例只会拖慢短路却不增加区分度。</para>
+    /// </summary>
+    protected virtual WfOperationIdentity? TryCreateIdentity(IWfCommand command)
+    {
+        if (command is not WfWriteCmd { RequestId: not null } write)
+            return null;
+
+        var key = write.RequestId;
+        return write switch
+        {
+            StartInstanceCmd start => WfOperationIdentity.Create(
+                start.StarterOrgId?.ToString(CultureInfo.InvariantCulture),
+                WfCommandType.Start, WfTargetType.DefinitionVersion,
+                start.DefinitionVersionId, start.StarterUserId, key),
+
+            // 同意与拒绝共用 CompleteTaskCmd,但**必须**按 Action 分成两个 CommandType:否则
+            // 「同一个 key 先同意、再拒绝」会被当成同一次动作的重试,直接把同意的结果回给拒绝。
+            CompleteTaskCmd complete => WfOperationIdentity.Create(
+                null,
+                complete.Action switch
+                {
+                    WfTaskAction.Approve => WfCommandType.Approve,
+                    WfTaskAction.Reject => WfCommandType.Reject,
+                    _ => throw WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed,
+                        new Dictionary<string, object?> { ["action"] = complete.Action }),
+                },
+                WfTargetType.Task, complete.TaskId, complete.UserId, key),
+
+            TransferTaskCmd transfer => WfOperationIdentity.Create(
+                null, WfCommandType.Transfer, WfTargetType.Task,
+                transfer.TaskId, transfer.UserId, key),
+
+            DelegateTaskCmd delegateCmd => WfOperationIdentity.Create(
+                null, WfCommandType.Delegate, WfTargetType.Task,
+                delegateCmd.TaskId, delegateCmd.UserId, key),
+
+            ReturnTaskCmd ret => WfOperationIdentity.Create(
+                null, WfCommandType.Return, WfTargetType.Task,
+                ret.TaskId, ret.UserId, key),
+
+            CancelInstanceCmd cancel => WfOperationIdentity.Create(
+                null, WfCommandType.Cancel, WfTargetType.Instance,
+                cancel.InstanceId, cancel.CallerUserId, key),
+
+            ResubmitInstanceCmd resubmit => WfOperationIdentity.Create(
+                null, WfCommandType.Resubmit, WfTargetType.Instance,
+                resubmit.InstanceId, resubmit.CallerUserId, key),
+
+            _ => throw WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed,
+                new Dictionary<string, object?> { ["command"] = write.GetType().Name }),
+        };
+    }
+
+    /// <summary>把首次执行的结果序列化进回执。用 <see cref="WfModelJson.Options"/>,不另起一份配置。</summary>
+    protected virtual string SerializeResult(WfEngineResult result) =>
+        System.Text.Json.JsonSerializer.Serialize(result, WfModelJson.Options);
+
+    /// <summary>
+    /// 命中回执时把首次结果读回来。
+    /// <para><see cref="WfOperationReceipt.ResultJson"/> 为空属于**损坏状态**而不是正常分支:占位行只
+    /// 活在事务里,而 <c>CommitAsync</c> 的「0 行即抛」保证了「提交了却没回填」这条路走不通。这里宁可抛
+    /// 也不兜底成空结果 —— 空结果的 <c>InstanceId = 0</c> 会被调用方当成一次成功。</para>
+    /// </summary>
+    protected virtual WfEngineResult DeserializeResult(WfOperationReceipt receipt)
+    {
+        var restored = string.IsNullOrEmpty(receipt.ResultJson)
+            ? null
+            : System.Text.Json.JsonSerializer.Deserialize<WfEngineResult>(
+                receipt.ResultJson, WfModelJson.Options);
+
+        return restored ?? throw WorkflowErrorCode.Exception(
+            WorkflowErrorCode.OperationFailed,
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "receiptResultMissing",
+                ["identityHash"] = receipt.IdentityHash,
+            });
     }
 
     /// <summary>

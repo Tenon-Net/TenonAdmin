@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 13
+- 轮次: 14
 - max: 45
 - 当前任务: 5(引擎写路径接 receipt)
-- 当前阶段: plan(已定稿,**未写产品代码**)
-- 上一轮: Round 13 — Task 5 plan 定稿(H1–H10)。读码定死三件事:①`ExecuteAsync` 的 `UseTranAsync` 把 8 个 `BeginXxxAsync` **和** `RunAgendaAsync` 全包在一个事务里,挂钩因此收敛到**一处**(台账原文的「8 个入口」按代码形状收窄);②通知在事务外派发且由 `if (ctx is not null)` 守着,**命中回执不重发通知是免费的**,不需要新分支;③`ScopeKey` 只有 `Start` 需要(它的 `TargetId` 是多机构共用的定义版本),其余命令的 `TargetId` 是雪花 Id,机构已隐含,取哨兵不损失区分度且省一次查询。并发败者语义定为「绝不推进第二次,但也不跨事务等赢家」(H8)。改动面只有 **2 个文件**。8 条测试 + 5 个变异点已列。新记 P2→Task 8(PG 唯一冲突会中止整个事务,`TryBeginAsync` 的二次 SELECT 在 PG 上会炸,单库套件看不见)。
-- 下一步: Round 14 — **Task 5 exec**(按 H1–H10 实现,**不勾选**)。顺序:构造参数 + `<remarks>` → `TryCreateIdentity`(照抄映射表)→ `ExecuteAsync` 开头短路 → 成功后 `CommitAsync` → `WfReceiptEngineTests` 八条 → 全量 `--no-incremental` Release 构建判警告 → 过滤器闸门(225 → 约 233)。**只许碰 2 个文件**;若发现要动第三个,先回头质疑决策。
+- 当前阶段: exec(已完成,**未勾选**)
+- 上一轮: Round 14 — Task 5 exec 落地。按 H1–H10:`ExecuteAsync` 的 `UseTranAsync` 开头一处短路(命中回执 → 反序列化首次结果直接返回,不进 `switch`)、成功后同事务 `CommitAsync`;新增三个 `protected virtual` 小步(`TryCreateIdentity` 照抄六维映射表 / `SerializeResult` / `DeserializeResult`),`CompleteTaskCmd` 按 `Action` 拆 Approve/Reject;引擎构造函数第三次同型追加 `IWfOperationReceiptService`(已在类 `<remarks>` 记为 M2c 有意的源码级破坏性变更)。**计划外必改 1 文件**:`WorkflowMultiLeaderSnapshotTests` 的 `WorkflowEngineProbe` 直接 `new WorkflowEngine(...)`,补一个 `null!` —— 已按 Plan 的自检要求回头质疑过,结论是 H7 明确承认的代价(M2a/M2b 两次同样如此),不是决策错。**测试与 Plan 有一处偏离**:并发双提交那条按仓内既有射程学说(`WfVersionCasTests`)判定为**构造不出来**,换成「同 key 不同 actor/不同 target 不串」,并在类注释里写明射程。闸门:全量 `--no-incremental` Release 0 错、工作流包 0 警;过滤器 **233/233**(225+8)。
+- 下一步: Round 15 — **Task 5 review**(自审须声明)。变异点至少五处,每处**先 grep 确认文件真改了**、复原**只 checkout 被变异的那一个文件**:①去掉命中后的短路 `return` → 串行重放/终态重试应红;②短路时不反序列化改 `return new WfEngineResult()` → 同上;③资格判断 `{ RequestId: not null }` 放宽成 `is WfWriteCmd` → 无 key 用例应红;④`CompleteTaskCmd` 的 `CommandType` 写死 `Approve` 不按 `Action` 拆 → 同 key 不同动作用例应红;⑤`CommitAsync` 挪到 `UseTranAsync` 之外 → 业务失败不残留用例应红。另需复核:**「串行重放」那条的 `wf_his_task` 计数是不是真钉子**(去掉短路后第二次审批会因待办已关闭而失败,计数可能仍是 1 → 若如此,这条只钉了「没多推一次」而没钉「返回的是首次快照」,要在 Findings 写清并考虑补断言);以及超时那条用了 `hours = 1` + 手动把 `DueTime` 推到过去(`hours = 0` 在本仓语义是**不设到期**,不是立刻到期)。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -347,6 +347,7 @@
 | 11 | exec | Task 4 落地 10 文件:`RequestIdInvalid = 48028`;`WfWriteCmd` 基类(归一化 + ≤64 + 拒控制字符,**唯一一份**在 `init` 里),**7** 个命令类改继承(同意/拒绝共用 `CompleteTaskCmd`,故不是 8 个),`TimeoutFireCmd` 不继承;4 个 DTO 加 `RequestId`;7 个服务方法加可选参数;Controller 透传 7 处、urge 不传;`WfRequestIdTests` 9 例(含 `Theory` 的归一化 3 例与长度边界 2 例),靠包住内置引擎的装饰器探针断言真实调用链。计划外必改 `WorkflowReplaceabilityTests` 的两个 Fake(签名跟随)。build 0 错 0 警;过滤器 **224/224**。未勾选。 |
 | 12 | review+修+勾选 | Task 4 自审:四处计划内变异各转红(去长度判断 / 去控制字符判断 / `IsNullOrWhiteSpace`→`is null` / approve 控制器透传换 `null`)。**计划外第五处变异揭出真缺口**:断掉 cancel 透传套件全绿 → P2「7 处透传只有 approve+start 两处有钉子」,补一条流水线用例覆盖余下 6 个动词并变异验证(顺带钉住:委托不能弹回给链上持有过的人,48026)。第二个 P2:Round 11 的「0 警」又是增量假象,全量构建里工作流包 20+ 条 CS1573 —— 根因是只给 `requestId` 加 `<param>` 而同方法其余参数都没标记,把说明挪进 `<remarks>` 修掉。另记两条覆盖真相(urge 那条是弱钉子、`ProbingEngine` 绕过 `TryAdd` → P3)。闸门:全量 Release 工作流包 0 警;过滤器 **225/225**。**Task 4 打勾**。 |
 | 13 | plan | Task 5 plan 定稿(H1–H10):挂钩收敛到 `ExecuteAsync` **一处**(`UseTranAsync` 已把 8 个 `BeginXxxAsync` + `RunAgendaAsync` 全包住);资格判断 `command is WfWriteCmd { RequestId: not null }` 零特例;8 条命令 → 六维映射表(`CompleteTaskCmd` 按 `Action` 拆 Approve/Reject,否则「同 key 先同意后拒绝」会被误判成重试);`ScopeKey` 只 `Start` 取机构(其余 `TargetId` 是雪花 Id,机构已隐含);结果 JSON 复用 `WfModelJson.Options`,`ResultCode` 恒 0(消化 P3→Task 2/5);命中不派通知靠现有 `ctx is null` 守卫免费拿到;并发败者「不推进第二次但也不跨事务等赢家」(H8)。改动面 **2 文件**,8 条用例 + 5 个变异点已列。新记 P2→Task 8:PG 唯一冲突会中止整个事务,`TryBeginAsync` 的二次 SELECT 在 PG 上会炸,单库看不见。未写产品代码。 |
+| 14 | exec | Task 5 落地 3 文件(计划 2 + 计划外 1):`ExecuteAsync` 一处短路 + 同事务 `CommitAsync`;三个 `protected virtual` 小步(`TryCreateIdentity` 六维映射、`SerializeResult`/`DeserializeResult` 复用 `WfModelJson.Options`),`CompleteTaskCmd` 按 `Action` 拆码;引擎构造函数追加 `IWfOperationReceiptService`(第三次同型破坏性变更,已记 `<remarks>`)。计划外必改 `WorkflowMultiLeaderSnapshotTests` 的 `WorkflowEngineProbe`(直接 `new WorkflowEngine`,补 `null!`)—— 按 Plan 自检回头质疑过,属 H7 承认的代价。`WfReceiptEngineTests` 8 例,其中**并发那条按射程学说换成「同 key 不同 actor/target 不串」**并写明射程。踩到的真事实:`hours = 0` 在本仓是「不设到期」而非「立刻到期」,超时用例要 `hours = 1` + 手动推 `DueTime`。build 0 错、工作流包 0 警(全量);过滤器 **233/233**。未勾选。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
