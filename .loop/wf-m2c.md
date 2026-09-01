@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 34
+- 轮次: 35
 - max: 45
 - 当前任务: 10(gen:api + 契约漂移 + 验收,本台账最后一个 Task)
-- 当前阶段: review(CI 轮询中,**未完成**)
-- 上一轮: Round 34 — Task 10 **review** 轮询第二轮。`gh run view 33454582222`(docker-smoke)**已全绿**:`single`/`multi` 两个 job 均 success,整体 `conclusion=success`。`gh run view 33454582264`(backend-ci)**仍未收敛**:`template-smoke`、`build-test (sqlite)` 已 success;`build-test (mysql)`、`build-test (postgres)`、`build-test (sqlserver)` 仍 in_progress。五个工作流现状:web-ci ✅/web-react-ci ✅/contract-drift ✅/docker-smoke ✅/backend-ci ⏳(4 库矩阵腿 2/4 完成,mysql+postgres+sqlserver 未收敛)。**如实记录:仍不满足全绿,不勾选**。sqlserver 腿历史耗时最长(40–60 分钟量级),预计还需数轮轮询。本轮无代码改动,仅 `gh run view` 只读查询 + 台账更新。
-- 下一步: Round 35+ — 继续 **Task 10 review** 轮询,只需盯 `gh run view 33454582264`(backend-ci)剩余的 `build-test (mysql)`/`build-test (postgres)`/`build-test (sqlserver)` 三条腿,docker-smoke 已确认绿、无需再查。全部四条 db 矩阵腿 + template-smoke 都 success 后,backend-ci 整体转 success,即五个工作流全绿,可把结论写进 Findings 并进入**勾选**。若任何一条腿 conclusion=failure,记为 P1 并转入**修 Findings** 阶段,不得跳过。
+- 当前阶段: review(CI 轮询中,**未完成,只剩 sqlserver 一条腿**)
+- 上一轮: Round 35 — Task 10 **review** 轮询第三轮。`gh run view 33454582264`(backend-ci):`template-smoke`/`build-test (sqlite)`/`build-test (mysql)`/`build-test (postgres)` **四项均已 success**,只剩 `build-test (sqlserver)` 仍 in_progress,整体 run `status` 仍 in_progress。五个工作流现状:web-ci ✅/web-react-ci ✅/contract-drift ✅/docker-smoke ✅/backend-ci ⏳(仅剩 sqlserver 腿)。**如实记录:仍不满足全绿,不勾选**。sqlserver 腿历史耗时 40–60 分钟量级,继续等待。本轮无代码改动,仅 `gh run view` 只读查询 + 台账更新。
+- 下一步: Round 36+ — 继续 **Task 10 review** 轮询,只需盯 `gh run view 33454582264`(backend-ci)的 `build-test (sqlserver)` 这一条腿(其余四项 job + 其余四个工作流均已确认绿,无需重查)。sqlserver 腿 success 后 backend-ci 整体转 success,即五个工作流全绿,下一轮把结论写进 Findings 并在 ## Tasks 给 Task 10 打勾——Task 10 是最后一个 Task,打勾后下一轮 GUARD 需连带核对 ## DONE-CONDITION 六条闸门是否也全满足,若是则输出「✅ DONE — M2c 收口完成」并停止。若 sqlserver 腿 conclusion=failure,记为 P1 并转入**修 Findings**阶段。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -542,6 +542,7 @@
 | 32 | exec | Task 10 **exec**。`check-contract-drift.mjs` 重生成两模板 schema(非零退出=预期),diff 精确落在 4 处 `requestId`(Cancel/Resubmit/Start/TaskAction 四个 Input),无意外漂移;`sha256sum` 独立核验两文件逐字相同。本地闸门串行全绿:backend build 0/0、test 259/259;web typecheck/lint/vitest 35/35;web-react typecheck/lint/build 全绿。提交 + **已 `git push origin dev`**(用户 Round 31 授权)。未勾选,CI 四库矩阵结果留 Round 33+ review 轮询。 |
 | 33 | review | Task 10 review 轮询 #1。`gh run list`/`gh run view` 核对 commit `4679467` 的五个工作流:web-ci/web-react-ci/contract-drift 已 success;backend-ci(四条 db 矩阵腿全 in_progress)与 docker-smoke(multi 腿 in_progress,single 已 success)仍在跑。如实记录未完成,不勾选,留待后续轮次继续轮询。只读操作,无代码改动。 |
 | 34 | review | Task 10 review 轮询 #2。docker-smoke 转 success(single+multi 均绿)。backend-ci 仍 in_progress:template-smoke/sqlite 已绿,mysql/postgres/sqlserver 三条腿未收敛。五个工作流现状 4 绿 1 未定,如实记录未完成,不勾选,留待后续轮次继续轮询 backend-ci。只读操作,无代码改动。 |
+| 35 | review | Task 10 review 轮询 #3。backend-ci 的 mysql/postgres 腿转 success,只剩 sqlserver 一条腿仍 in_progress(其余四项 job 与其余四个工作流均已确认绿)。如实记录未完成,不勾选,留待后续轮次继续轮询 sqlserver 腿。只读操作,无代码改动。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
