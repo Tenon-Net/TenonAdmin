@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 35
+- 轮次: 36
 - max: 45
 - 当前任务: 10(gen:api + 契约漂移 + 验收,本台账最后一个 Task)
-- 当前阶段: review(CI 轮询中,**未完成,只剩 sqlserver 一条腿**)
-- 上一轮: Round 35 — Task 10 **review** 轮询第三轮。`gh run view 33454582264`(backend-ci):`template-smoke`/`build-test (sqlite)`/`build-test (mysql)`/`build-test (postgres)` **四项均已 success**,只剩 `build-test (sqlserver)` 仍 in_progress,整体 run `status` 仍 in_progress。五个工作流现状:web-ci ✅/web-react-ci ✅/contract-drift ✅/docker-smoke ✅/backend-ci ⏳(仅剩 sqlserver 腿)。**如实记录:仍不满足全绿,不勾选**。sqlserver 腿历史耗时 40–60 分钟量级,继续等待。本轮无代码改动,仅 `gh run view` 只读查询 + 台账更新。
-- 下一步: Round 36+ — 继续 **Task 10 review** 轮询,只需盯 `gh run view 33454582264`(backend-ci)的 `build-test (sqlserver)` 这一条腿(其余四项 job + 其余四个工作流均已确认绿,无需重查)。sqlserver 腿 success 后 backend-ci 整体转 success,即五个工作流全绿,下一轮把结论写进 Findings 并在 ## Tasks 给 Task 10 打勾——Task 10 是最后一个 Task,打勾后下一轮 GUARD 需连带核对 ## DONE-CONDITION 六条闸门是否也全满足,若是则输出「✅ DONE — M2c 收口完成」并停止。若 sqlserver 腿 conclusion=failure,记为 P1 并转入**修 Findings**阶段。
+- 当前阶段: **勾选完成**
+- 上一轮: Round 36 — Task 10 **review+勾选**(0×P1/0×P2,合并同一轮,沿用 Round 3/6/9/12/15/18/21 的先例)。`gh run view 33454582264` 最终确认:`backend-ci` 整体 `conclusion=success`(`template-smoke`/`build-test (sqlite)`/`build-test (mysql)`/`build-test (postgres)`/`build-test (sqlserver)` 全部 success,`nightly-alert` 按设计 skipped)。至此五个工作流对 commit `4679467` **全绿**:web-ci ✅/web-react-ci ✅/contract-drift ✅/docker-smoke ✅/backend-ci ✅。逐条核对 Task 10 验收清单(`## Plan` 步骤 6):①`## Tasks` 1–9 巡查仍为 `[x]` ✅;②`dotnet test` 指定过滤器基线 259(Round 32 本地实测 259/259,`backend-ci` 的 sqlite 腿双重验证)✅;③四库矩阵 CI 四腿逐条 success ✅(本轮新增证据);④`web` typecheck/lint 绿 + request key 复用(Round 32 本地 35/35,Task 9 交付机制未被打破)✅;⑤双模板 `schema.d.ts` SHA256 逐字相同(Round 32 独立核验 `36dbccb7...fa8335`)✅;⑥重复提交同 `RequestId` 返回首次 `WfEngineResult`(Task 5 `WfReceiptEngineTests.Same_request_id_replays_the_first_result_without_advancing_twice` 既有 HTTP 层证据,未新增测试)✅。**0×P1、0×P2** —— `## Tasks` 第 10 项打勾。**M2c 十项 Task 全部勾选**。
+- 下一步: Round 37 — **GUARD 检查**。核对 `## Tasks` 十项皆 `[x]` 且 `## DONE-CONDITION` 六条闸门证据齐全(本轮已逐条列出对应证据),若确认无误,输出「✅ DONE — M2c 收口完成」并停止循环,不再排 `ScheduleWakeup`。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -224,7 +224,7 @@
 - [x] **7. 通知失败可观测**: `WfDefaultNotifier` 注入 `ILogger<WfDefaultNotifier>`(或内核既有日志抽象),`catch` 改 `LogWarning`/`LogError` 结构化字段(`InstanceId`,`Event`,`UserId`,异常);可选 `IOptions` 开关保留静默模式给测试。补一条「publisher 抛错 → 审批仍成功 + 日志有条目」测试。不引入新 NuGet。
 - [x] **8. 四库持久化契约套件**:新建 `WfPersistenceContractTests`(或同级),**同一套用例**经 `TestDb.DbType` 在四库 CI 腿各跑:①`IdentityHash` 快照;②receipt 唯一性;③并发 CAS(实例/Token/任务至少各一条);④事务回滚 receipt 不残留;⑤超时领取 vs 人工 `Approve` 仅一方胜出;⑥终态保护。不复制 190 条全集,只钉持久化契约(目标 **12–20** 条,plan 阶段列清单)。SqlServer PR 腿若已有 `TEST_FILTER`,评估是否纳入子集或 nightly — plan 阶段读 `.github/workflows/backend-ci.yml` 后定。
 - [x] **9. Vue request key 生命周期**: `web/` 发起页 + 实例详情写操作:一次用户动作(打开弹窗/点一次按钮)生成 UUID,该动作重试(含 axios 重试若存在)复用;成功或明确失败后丢弃;新动作新 key。按钮防连点保留。`src/workflow/` 或 composable 单点实现,避免每页复制。typecheck/lint/vitest 绿。
-- [ ] **10. `gen:api` + 契约漂移 + 验收**:双模板 `gen:api`;SHA256 一致;去掉因新字段产生的 `@ts-expect-error`(若有)。可选:Playwright 或 API 级「双 POST 同 key → 同一 instanceId/同一结果」轻量验收(不强制浏览器截图,除非协调者要求)。**勾选本 Task 前**跑齐 DONE-CONDITION 全闸门。
+- [x] **10. `gen:api` + 契约漂移 + 验收**:双模板 `gen:api`;SHA256 一致;去掉因新字段产生的 `@ts-expect-error`(若有)。可选:Playwright 或 API 级「双 POST 同 key → 同一 instanceId/同一结果」轻量验收(不强制浏览器截图,除非协调者要求)。**勾选本 Task 前**跑齐 DONE-CONDITION 全闸门。
 
 ## Findings
 
@@ -501,6 +501,36 @@
 **收尾闸门**(变异全部复原后重跑):`npm run typecheck` 0 错;`npm run lint`(oxlint)0 错 0 警;`npx vitest run src/workflow/` → 35/35 绿。`git status --short` 干净(仅常驻的 `TestResults/`)。
 
 **P1**:0 条。**P2**:0 条。→ 满足勾选条件,留给 Round 30 按「一轮一阶段」纪律打勾。
+### Task 10 review+勾选(Round 36,2026-09-01)
+
+> **⚠ 自审声明**:与 exec(Round 32)同一 context(会话规则禁止未经用户要求派子 agent)。本 Task 未写产品代码(只重生成生成物),**review 的证据来源是 Round 32 的本地闸门记录 + Round 33–36 跨四轮的真实 CI 观测**,不是代码变异——这是 Task 10 的性质决定的(gen:api + 验收,没有可变异的业务逻辑),前九个 Task 的「先 grep 确认真改、变异转红后单文件复原」纪律在本 Task 不适用,改用「逐条核对 DONE-CONDITION 证据来源」代替。
+
+**CI 轮询全过程**(Round 33→36,commit `4679467`):
+
+| 工作流 | Round 33 | Round 34 | Round 35 | Round 36(本轮) |
+|---|---|---|---|---|
+| web-ci | success | — | — | — |
+| web-react-ci | success | — | — | — |
+| contract-drift | success | — | — | — |
+| docker-smoke | in_progress | **success** | — | — |
+| backend-ci | in_progress(4 腿 in_progress) | in_progress(sqlite/mysql/postgres 转绿,sqlserver 仍跑) | 仅剩 sqlserver 未收敛 | **success**(sqlserver 收尾,四腿 + template-smoke 全 success,`nightly-alert` 按设计 skipped) |
+
+**逐条核对验收清单(`## Plan` 步骤 6,对应 `## DONE-CONDITION` 六条)**:
+
+1. `## Tasks` 十项全勾 —— 打勾前巡查 1–9 仍为 `[x]`,无误勾/漏勾 ✅
+2. `dotnet test` 指定过滤器基线 259,只增不减 —— Round 32 本地实测 **259/259**;`backend-ci` 的 `build-test (sqlite)` 腿独立复验 ✅
+3. 四库契约套件 CI 矩阵四腿各绿 —— 本轮 `gh run view 33454582264` 最终确认 `build-test (sqlite/mysql/postgres/sqlserver)` **全部 conclusion=success** ✅(这是本 Task 存在的核心理由:本机无 Docker/无本地 PG 取不到的证据,由用户授权 push 换来)
+4. `web` typecheck/lint 绿 + request key 复用 —— Round 32 本地 `typecheck`/`lint`/`vitest run src/workflow/` **35/35**,Task 9 交付的 `useRequestKey` 未被 schema 重生成打破 ✅
+5. 双模板 `schema.d.ts` SHA256 一致 —— Round 32 独立算过 `sha256sum`,两文件哈希 `36dbccb759527b199774b2c1bdfd0d1749ced9d17e0924dfefa311201fa83356` **逐字相同** ✅
+6. 重复提交同 `RequestId` 返回首次 `WfEngineResult`(HTTP 层可观测)—— 引用 Task 5 `WfReceiptEngineTests.Same_request_id_replays_the_first_result_without_advancing_twice`(真实 `WorkflowAppFactory` 集成测试,两次 `POST /api/v1/workflow/task/approve` 断言 `instanceId`/`createdTaskId` 逐字相同、`wf_his_task` 仅一行)既有证据,未新增测试(Round 31 plan 已定,验收时直接引用)✅
+
+**核对改动清单/决策点**:E1(用 `check-contract-drift.mjs` 而非重造工具,非零退出为预期)✅ / E2(独立 SHA256 已在 Round 32 执行)✅ / E3(diff 范围人工核对,精确落在 4 处 `requestId`,无意外漂移)✅ / E4(本地闸门顺序 backend→web→web-react,不并发重进程)✅ / E5(一次性提交 + `git push origin dev`,不建 PR、不 push main、非 force,严格在用户 Round 31 授权范围内)✅ / E6(五个工作流逐个确认,`backend-ci` 展开四条 `db` 矩阵腿逐条核对,未只看整体汇总;经 Round 33–36 四轮如实记录「仍在跑」直至真正收敛,未提前假设通过)✅ / E7(未修 P3 `ActivatorUtilities` 反模式,继续挂账,不擅自扩面)✅。
+
+**改动面复核**:本轮(Round 33–36 四轮)只改了 `.loop/wf-m2c.md` 一个文件(每轮一次只读 `gh run view` + 台账更新),未再碰任何产品代码或生成物,与 Round 32 exec 的改动清单(2 个 `schema.d.ts` + 台账 + 只读 push/gh 操作)合计仍在计划范围内,**预期计划外 0** 兑现 ✅。
+
+**P1**:0 条。**P2**:0 条。→ 满足勾选条件。**`## Tasks` 第 10 项(本台账最后一项)打勾。**
+
+**给后续维护者的收尾说明**(按 `## Plan` 预留位补齐):`start/index.vue`/`detail.vue` 里手写的 `requestId` 字段理论上可被新生成的 schema 类型覆盖替代(纯类型层收尾),**不是**强制项,留给后续按需处理。**P3(`ActivatorUtilities` 绕过 `TryAdd` 的测试写法,Round 8 起挂账)与 SQLite 射程局限披露(`WfPersistenceContractTests` 类注释,Round 25)均继续挂账**,不因 M2c 收口而被误判为「已解决」——这两条本就不在任何 Task 的范围内,是长期已知、已披露的既有状态。
 
 ## Log
 
@@ -543,6 +573,7 @@
 | 33 | review | Task 10 review 轮询 #1。`gh run list`/`gh run view` 核对 commit `4679467` 的五个工作流:web-ci/web-react-ci/contract-drift 已 success;backend-ci(四条 db 矩阵腿全 in_progress)与 docker-smoke(multi 腿 in_progress,single 已 success)仍在跑。如实记录未完成,不勾选,留待后续轮次继续轮询。只读操作,无代码改动。 |
 | 34 | review | Task 10 review 轮询 #2。docker-smoke 转 success(single+multi 均绿)。backend-ci 仍 in_progress:template-smoke/sqlite 已绿,mysql/postgres/sqlserver 三条腿未收敛。五个工作流现状 4 绿 1 未定,如实记录未完成,不勾选,留待后续轮次继续轮询 backend-ci。只读操作,无代码改动。 |
 | 35 | review | Task 10 review 轮询 #3。backend-ci 的 mysql/postgres 腿转 success,只剩 sqlserver 一条腿仍 in_progress(其余四项 job 与其余四个工作流均已确认绿)。如实记录未完成,不勾选,留待后续轮次继续轮询 sqlserver 腿。只读操作,无代码改动。 |
+| 36 | review+勾选 | Task 10 **review+勾选**(自审,0×P1/0×P2)。`gh run view` 最终确认 backend-ci 整体 conclusion=success(四条 db 矩阵腿 + template-smoke 全绿,nightly-alert 按设计 skipped),五个工作流对 commit `4679467` **全部绿**。逐条核对 DONE-CONDITION 六条证据(Tasks 全勾/259 基线/四库矩阵/web 三件套+request key/双模板 SHA256 一致/Task 5 既有幂等回放证据)全部满足。`## Tasks` 第 10 项(最后一项)打勾。**M2c 十项 Task 全部完成**,下一轮 GUARD 核对闸门后应输出 DONE。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
