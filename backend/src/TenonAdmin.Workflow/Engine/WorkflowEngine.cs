@@ -1337,7 +1337,9 @@ public class WorkflowEngine(
         var executionId = execution.Id;
         var fence = cmd.Fence;
         var status = outcome.Status;
-        var handlerType = cmd.HandlerType;
+        // 类型全名由消费者代码提供(泛型 handler 容易越过 256 列宽);SqlServer/PostgreSQL 超长直接抛、
+        // MySQL 非严格模式静默截断、SQLite 照单全收——本机永远绿,四库不一致靠这里截断堵上(review P2-4)。
+        var handlerType = cmd.HandlerType is { Length: > 256 } h ? h[..256] : cmd.HandlerType;
 
         int affected;
         if (status == WfNodeExecutionStatus.RetryScheduled)
