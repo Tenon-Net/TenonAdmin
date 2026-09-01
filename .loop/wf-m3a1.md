@@ -41,12 +41,12 @@
 
 ## Status
 
-- 轮次: 1
+- 轮次: 2
 - max: 70
 - 当前任务: Task 1(NodeVisitId 贯穿 + wf_history 补字段)
-- 当前阶段: plan 已完成
-- 上一轮: Round 1 — Task 1 **plan**(Opus general-purpose 子代理,35 次工具调用;读完 §4.5/§4.6/§十五 15.2-15.3/§4.4-4.8 与五张实体、`EnterNodeOp`/`AppendHistoryAsync`/4 个绕开 ctx 的路径/M2c `RequestId` commit,定案 6 个决策点,产出改动清单 15 个产品文件 + 3 个测试文件)
-- 下一步: Round 2 — Task 1 **exec**。协调者派 `Agent(subagent_type="oh-my-claudecode:executor", model="sonnet")`,prompt 塞入本文件 `## Plan` 全文 + 两条闸门命令;子代理跑完后协调者**亲自重跑** `dotnet build backend/TenonAdmin.slnx -c Release` 与指定过滤器的 `dotnet test`(期望 279/279),并用 `git diff --stat` 核对改动面与 Plan 改动清单一致。**不勾选**,不顺带做 Task 2。
+- 当前阶段: exec 已完成,闸门已由协调者独立复跑
+- 上一轮: Round 2 — Task 1 **exec**(executor/sonnet 子代理,78 次工具调用)。改动面 19 文件(16 产品 + 3 测试),与 Plan 改动清单 1:1 一致,零偏差。协调者**独立重跑**闸门:`dotnet build -c Release` → 0 错误(13 个 CS1574 警告全在 `TenonAdmin.Services/Rbac/IRoleGrantPolicy.cs`,与 Workflow 无关、既有;Workflow 相关警告 0 条);`dotnet test` 指定过滤器 → **279/279 通过,失败 0**(基线 264 + 15,精确吻合)。commit `fd00b05`,未 push。
+- 下一步: Round 3 — Task 1 **review**。协调者派 `Agent(model="opus"`,不传 `subagent_type`,给全工具含 Edit)。prompt 要求:明确 declare「自审」;对 Task 1 的关键不变量做**变异测试**(至少覆盖 `EnterNodeOp` 的 NodeVisitId 生成行、`WfHistorySequence.NextAsync` 的原子递增与 `ClearFilter`、`WriteSystemRowAsync` 的短事务、四个非空列的 `DefaultValue`、`AppendHistoryAsync` 的 ActorType/TokenId 传递),手法为「先 grep 确认真的改了 → 跑受影响测试确认转红 → `git checkout -- <被变异的那一个文件>` 复原」;把 P1/P2 写清楚返回。协调者收到后交叉验证 `git status` 干净,再把 P1/P2 写进 `## Findings`。**仍不勾选**。
 
 ## 已知起点(2026-09-01,M2c 收口 + 过渡步骤后)
 
@@ -292,3 +292,4 @@ dotnet test  backend/TenonAdmin.slnx --filter "FullyQualifiedName~Tests.Wf|Fully
 |---|---|---|
 | 0 | draft | 起草台账。M2c + 过渡步骤已收口(commit `9589c4d`),基线 264/264。本台账新增「分析/审查用 Opus、执行用 Sonnet」的委派纪律(见 `## Loop 纪律` 表)。下一步 Round 1 Task 1 plan。 |
 | 1 | plan | Task 1 plan 完成(Opus 子代理)。6 个决策点全部定案:NodeVisitId=可空雪花/唯一生成点 EnterNodeOp;Sequence=`wf_instance.HistorySeq` 事务内原子递增+读回(**本轮不建唯一索引**,理由入契约);新枚举 `WfHistoryActorType`(驳回 `Reminder`);PayloadVersion 默认 1 无人显式写;TokenId 不存在写不出的情况;非空列必须带 `DefaultValue` 否则 PG/MSSQL 存量升级炸。改动清单 15 产品文件 + 3 测试文件,预期 264→279。已知会红:`WorkflowMultiLeaderSnapshotTests.cs:657` 构造参数个数。下一步 Round 2 Task 1 exec。 |
+| 2 | exec | Task 1 exec 完成(executor/sonnet)。commit `fd00b05` "feat(workflow): add node-visit identity and history sequence/actor columns",19 文件 +1344/-13,与 Plan 改动清单零偏差。协调者独立复跑闸门:build 0 错误(13 警告全在 Services/Rbac 的 XML cref,既有、非本次引入,Workflow 0 警告);test **279/279 通过、失败 0**(基线 264 + 15 精确吻合)。子代理自报的唯一判断项:测试 2 的抄送断言改为「`wf_cc` 行对自己那次访问的 `wf_history(NodeEnter+CcSent)` 自洽」而非「等于当前 token」——因为 HTTP 响应返回时 token 已越过 cc 节点。留给 review 阶段确认这个弱化是否掩盖了缺陷。**不勾选**,下一步 Round 3 Task 1 review。 |
