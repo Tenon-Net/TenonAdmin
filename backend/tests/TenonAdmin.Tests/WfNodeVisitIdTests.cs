@@ -189,10 +189,13 @@ public class WfNodeVisitIdTests
     }
 
     /// <summary>
-    /// <c>wf_his_task</c> 携带它关闭的那件待办的访问 Id——同意 / 转办 / 退回三条路各断言一次,合并为一条测试。
+    /// <c>wf_his_task.NodeVisitId</c> 与关闭它的那件待办当次的访问 Id 一致(而非「携带它关闭的那件待办的
+    /// 访问 Id」这种更强的说法——当前引擎下写入点与 token 尚未推进重合,无法把「取自 Task」和「取自
+    /// ctx.Token」区分开,见 <see cref="WfHisTask.NodeVisitId"/> 注释)。同意 / 转办 / 退回三条路各断言一次,
+    /// 合并为一条测试。
     /// </summary>
     [Fact]
-    public async Task His_task_carries_the_visit_id_of_the_task_it_closes()
+    public async Task His_task_visit_id_matches_the_visit_that_created_the_task()
     {
         using var f = new WorkflowAppFactory();
         var admin = await ClientFor(f, "superAdmin");

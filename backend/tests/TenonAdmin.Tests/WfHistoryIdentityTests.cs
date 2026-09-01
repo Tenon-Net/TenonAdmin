@@ -44,11 +44,9 @@ public class WfHistoryIdentityTests
 
         var rows = await HistoryOf(f, instanceId);
         var sequences = rows.Select(h => h.Sequence).ToList();
-        Assert.Equal(1, sequences.Min());
-        Assert.Equal(sequences.Distinct().Count(), sequences.Count);
-        Assert.Equal(sequences.OrderBy(x => x).ToList(), sequences);
-        for (var i = 1; i < sequences.Count; i++)
-            Assert.True(sequences[i] > sequences[i - 1]);
+        // 顺序无关:排序后恰好是 1..N 的连续整数,一并钉住「从 1 起」「无重复」「无间隙」三条不变量,
+        // 不依赖 HistoryOf 的取回顺序(CreateTime 在 MySQL 等库上是秒精度,同一命令写的多行会并列)。
+        Assert.Equal(Enumerable.Range(1, sequences.Count).ToList(), sequences.OrderBy(x => x).ToList());
     }
 
     /// <summary>一次命令写的 N 条历史占 N 个连续号。</summary>
@@ -287,9 +285,11 @@ public class WfHistoryIdentityTests
     {
         using var scope = f.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        // 按 Id(雪花,单进程内单调递增)排序,不用 CreateTime——裸 DateTime 在 MySQL 上是秒精度,
+        // 同一命令写的多行会并列,取回顺序非确定。
         return await db.Queryable<WfHistory>()
             .Where(h => h.InstanceId == instanceId)
-            .OrderBy(h => h.CreateTime)
+            .OrderBy(h => h.Id)
             .ToListAsync();
     }
 

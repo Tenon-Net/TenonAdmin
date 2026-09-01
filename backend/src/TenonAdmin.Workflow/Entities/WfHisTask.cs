@@ -57,7 +57,12 @@ public class WfHisTask : BaseEntity
 
     /// <summary>
     /// <see cref="WfToken.NodeVisitId"/> 的拷贝(M3a-1);从 <c>Task.NodeVisitId</c>(活跃待办行)取,
-    /// 而非 <c>ctx.Token.NodeVisitId</c>——读任务行才准确表达「这件待办是哪一次访问建的」。
+    /// 而非 <c>ctx.Token.NodeVisitId</c>。当前引擎下三处写入点(同意/转办/退回)插入本表都发生在
+    /// <c>EnterNodeOp</c> 推进 token 之前,且 <c>ctx.Token</c> 一律由 <c>task.TokenId</c> 加载,所以插入
+    /// 那一刻 <c>Task.NodeVisitId</c> 与 <c>ctx.Token.NodeVisitId</c> 恒等——这个区分今天无法用测试验证。
+    /// 取 <c>Task</c> 是为了将来 token 与任务生命周期解耦(例如一个 token 需要跨多次访问被多个未完成的
+    /// 待办共享)时仍然正确:届时 <c>ctx.Token.NodeVisitId</c> 可能已经推进,而这里要记录的是「产生这件
+    /// 待办的那一次访问」,只有 <c>Task.NodeVisitId</c> 还对得上。
     /// </summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "节点访问 Id")]
     public long? NodeVisitId { get; set; }
