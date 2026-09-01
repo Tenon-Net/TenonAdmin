@@ -67,6 +67,7 @@ public class WorkflowEngine(
                 ReturnTaskCmd ret => await BeginReturnAsync(db, ret, cancellationToken),
                 ResubmitInstanceCmd resubmit => await BeginResubmitAsync(db, resubmit, cancellationToken),
                 TimeoutFireCmd timeout => await BeginTimeoutAsync(db, timeout, cancellationToken),
+                NodeExecutionCompletedCmd done => await BeginNodeExecutionCompletedAsync(db, done, cancellationToken),
                 _ => throw WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed,
                     new Dictionary<string, object?> { ["command"] = command.GetType().Name }),
             };
@@ -1151,5 +1152,340 @@ public class WorkflowEngine(
 
         agenda.Plan(new EnterNodeOp(model.Root));
         return ctx;
+    }
+
+    // ── M3a-1 Task 6:Execution dispatcher 回写(NodeExecutionCompletedCmd) ──────────────────
+
+    /// <summary><see cref="ResolveRetryDelay"/> 无量值可用时的退避基数(秒),按 <c>AttemptCount</c> 指数翻倍。</summary>
+    protected const int RetryBaseSeconds = 30;
+
+    /// <summary>
+    /// handler 提供的 <see cref="WfNodeExecutionResult.RetryAfter"/> 允许的上限——它来自消费者代码
+    /// (trust boundary),必须钳制:<see cref="TimeSpan.Zero"/> 会热循环,过大的值会让
+    /// <c>nowUtc + delay</c> 逼近 <see cref="DateTime.MaxValue"/>。
+    /// </summary>
+    protected static readonly TimeSpan MaxRetryAfter = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// <see cref="BeginNodeExecutionCompletedAsync"/> 的判定结果——<see cref="ResolveExecutionOutcome"/>
+    /// 纯函数算出、<see cref="ClaimExecutionWritebackAsync"/> 落库、<see cref="BuildExecutionOutboxPayload"/>
+    /// 取用。<see cref="IsTerminal"/> 决定是否入队 outbox(§4.6:只在 execution 进终态时入队)。
+    /// </summary>
+    protected readonly record struct WfExecutionOutcome(
+        WfNodeExecutionStatus Status,
+        DateTime? NextRetryAtUtc,
+        DateTime? CompletedTimeUtc,
+        int? ErrorCode,
+        string? Summary,
+        bool IsTerminal);
+
+    /// <summary>
+    /// <see cref="NodeExecutionCompletedCmd"/> 的回写:载入 execution/instance/token/version/model(只读)→
+    /// <see cref="ResolveExecutionOutcome"/> 算出判定 → <see cref="ClaimExecutionWritebackAsync"/>(本 Task
+    /// 全仓唯一一处 <c>Updateable&lt;WfNodeExecution&gt;</c>,fence CAS,**必须在 attempt 写入之前**——顺序颠倒
+    /// 会让老 owner 用被新 worker 推高过的 <c>AttemptCount</c> 插 attempt,撞 <c>uk_wf_node_exec_attempt_no</c>,
+    /// 症状伪装成唯一键 bug 而非 fence 过期)→ <see cref="WfNodeExecutionAttemptStore.AppendAsync"/> →
+    /// 终态才入队 outbox → 按结果 <c>Plan</c> 对应 Op,交给 <see cref="ExecuteAsync"/> 的
+    /// <see cref="RunAgendaAsync"/> 在**同一事务**里跑完。
+    /// <para>本方法不写任何 <c>wf_history</c> 事件(语义契约 D7):自动节点的生命周期不写自己的历史,
+    /// <c>Succeeded</c> 路径的 <c>NodeLeave</c>/<c>NodeEnter</c> 由 <see cref="TakeTransitionOp"/>/
+    /// <see cref="EnterNodeOp"/> 产出,<c>ManualFallback</c> 路径的 <c>TaskCreated</c> 由
+    /// <see cref="EnterNodeOp.CreateTaskAsync"/> 产出,失败/重试路径的审计事实源是
+    /// <c>wf_node_execution_attempt</c>。</para>
+    /// </summary>
+    protected virtual async Task<WfExecutionContext> BeginNodeExecutionCompletedAsync(
+        ISqlSugarClient db,
+        NodeExecutionCompletedCmd cmd,
+        CancellationToken cancellationToken)
+    {
+        var execution = await db.Queryable<WfNodeExecution>()
+            .Where(e => e.Id == cmd.ExecutionId)
+            .FirstAsync();
+        if (execution is null)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed,
+                new Dictionary<string, object?> { ["reason"] = "executionNotFound", ["executionId"] = cmd.ExecutionId });
+        }
+
+        // 后台 worker 没有 IDataScopeContext,IOrgScoped 全局过滤器会让本查询静默返回 0 行
+        // (照抄 BeginTimeoutAsync 的姿势,同款理由)。
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>()
+            .Where(i => i.Id == execution.InstanceId)
+            .FirstAsync();
+        if (instance is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceNotFound);
+
+        var token = await db.Queryable<WfToken>()
+            .Where(t => t.Id == execution.TokenId)
+            .FirstAsync();
+        if (token is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TokenNotFound);
+
+        var version = await db.Queryable<WfDefinitionVersion>()
+            .Where(v => v.Id == execution.DefinitionVersionId)
+            .FirstAsync();
+        if (version is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionVersionNotFound);
+
+        var model = WfModelJson.Deserialize(version.ModelJson)
+                    ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid);
+
+        var node = WfModelIndex.Build(model).Find(execution.NodeId);
+        if (node is null)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "executionNodeMissing", ["nodeId"] = execution.NodeId });
+        }
+
+        long? starterOrgId = null;
+        var starter = await db.Queryable<TenonAdmin.Services.SysUser>()
+            .Where(u => u.Id == instance.StarterUserId)
+            .FirstAsync();
+        if (starter is not null)
+            starterOrgId = starter.OrgId;
+
+        var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
+        var outcome = ResolveExecutionOutcome(execution, instance, token, cmd.Result, nowUtc);
+
+        // 本事务的第一个写操作,且必须在 AppendAsync 之前(见类注释)。
+        await ClaimExecutionWritebackAsync(db, execution, cmd, outcome, cancellationToken);
+
+        var attempt = await WfNodeExecutionAttemptStore.AppendAsync(
+            db, execution, cmd.Result, cmd.StartedAtUtc, cmd.EndedAtUtc, cancellationToken);
+
+        var agenda = new WfAgenda();
+        var ctx = new WfExecutionContext
+        {
+            Db = db,
+            Agenda = agenda,
+            ApproverResolver = approverResolver,
+            FormBinder = formBinder,
+            Options = options,
+            TimeProvider = timeProvider,
+            ConditionEvaluator = conditionEvaluator,
+            Notifier = notifier,
+            // worker 派发的动作没有"用户这一次点击"的身份可言——null 是语义,不是遗漏(同 BeginTimeoutAsync)。
+            RequestId = null,
+            ActorType = WfHistoryActorType.Worker,
+            ActorUserId = null,
+            IdGenerator = idGenerator,
+            Instance = instance,
+            Token = token,
+            Model = model,
+            DefinitionVersion = version,
+            SelectedUserIdsByNode = DeserializeSelectedUsers(instance.SelectedUserIdsJson),
+            StarterOrgId = starterOrgId,
+            LeaderChainByLevel = DeserializeLeaderChainsByLevel(instance.LeaderChainJson),
+        };
+
+        // 终态才入队(§4.6):RetryScheduled 不是终态,不入队——MessageKey 天花板是「一个 (execution,type)
+        // 一条消息」,一次 execution 最多进一次终态,"终态 ⇒ 恰好一条"是唯一自洽的规则。
+        if (outcome.IsTerminal)
+        {
+            var payload = BuildExecutionOutboxPayload(execution, cmd, attempt, outcome);
+            await WfOutboxStore.EnqueueAsync(
+                db, execution, WfOutboxStore.MessageTypeNodeExecutionCompleted, payload, nowUtc, cancellationToken);
+        }
+
+        switch (outcome.Status)
+        {
+            case WfNodeExecutionStatus.Succeeded:
+                // Succeeded 复用 TakeTransitionOp(token 离开当前节点 → 求汇合 → 进下一节点或完结实例)——
+                // 不用 EnterNodeOp(那是"进入",会重新生成 NodeVisitId、重写 NodeEnter 历史)。
+                agenda.Plan(new TakeTransitionOp(node));
+                break;
+
+            case WfNodeExecutionStatus.ManualFallback:
+                agenda.Plan(new WfManualFallbackOp(node));
+                break;
+
+            case WfNodeExecutionStatus.RetryScheduled:
+            case WfNodeExecutionStatus.Failed:
+            case WfNodeExecutionStatus.Cancelled:
+                // 不再前进——RetryScheduled 等下次领取;Failed/Cancelled 是终态,token 原地停住。
+                break;
+
+            default:
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed,
+                    new Dictionary<string, object?> { ["status"] = outcome.Status.ToString() });
+        }
+
+        return ctx;
+    }
+
+    /// <summary>
+    /// 本 Task 全仓唯一一处 <c>Updateable&lt;WfNodeExecution&gt;</c>:双谓词 CAS
+    /// (<c>Fence == fence &amp;&amp; Status == Running</c>)——<c>Fence</c> 挡老 owner 租约过期后醒来回写,
+    /// <c>Status == Running</c> 挡同一 fence 的结果被回放两次。影响行数 ≠ 1 → 48004
+    /// (<c>reason=executionFenceConflict</c>)→ 整事务回滚,attempt/outbox/token 一行都不落。
+    /// <para><c>RetryScheduled</c> 是唯一一次"终态之外的回写":必须同时写非空 <c>NextRetryAtUtc</c> 并把
+    /// <c>LeaseOwner</c>/<c>LeaseExpiresAtUtc</c> 置 null——<c>(RetryScheduled, NextRetryAtUtc = null)</c>
+    /// 的行按领取谓词永远领不回来(台账 Task 3 review P1-1 已实测)。</para>
+    /// <para><c>SetColumns</c> 里所有 <c>DateTime</c> 与要置空的 <c>null</c> 先落局部变量——zh-CN 下 SqlSugar
+    /// 会把内联表达式按区域格式化成字面量拼进 SQL,炸出 <c>near "下午"</c>。</para>
+    /// </summary>
+    protected virtual async Task ClaimExecutionWritebackAsync(
+        ISqlSugarClient db,
+        WfNodeExecution execution,
+        NodeExecutionCompletedCmd cmd,
+        WfExecutionOutcome outcome,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var executionId = execution.Id;
+        var fence = cmd.Fence;
+        var status = outcome.Status;
+        var handlerType = cmd.HandlerType;
+
+        int affected;
+        if (status == WfNodeExecutionStatus.RetryScheduled)
+        {
+            var nextRetryAtUtc = outcome.NextRetryAtUtc;
+            string? noOwner = null;
+            DateTime? noLease = null;
+            affected = await db.Updateable<WfNodeExecution>()
+                .SetColumns(e => new WfNodeExecution
+                {
+                    Status = status,
+                    NextRetryAtUtc = nextRetryAtUtc,
+                    LeaseOwner = noOwner,
+                    LeaseExpiresAtUtc = noLease,
+                    HandlerType = handlerType,
+                })
+                .Where(e => e.Id == executionId && e.Fence == fence && e.Status == WfNodeExecutionStatus.Running)
+                .ExecuteCommandAsync();
+        }
+        else
+        {
+            var completedTimeUtc = outcome.CompletedTimeUtc;
+            var errorCode = outcome.ErrorCode;
+            var summary = outcome.Summary;
+            affected = await db.Updateable<WfNodeExecution>()
+                .SetColumns(e => new WfNodeExecution
+                {
+                    Status = status,
+                    CompletedTimeUtc = completedTimeUtc,
+                    ErrorCode = errorCode,
+                    Summary = summary,
+                    HandlerType = handlerType,
+                })
+                .Where(e => e.Id == executionId && e.Fence == fence && e.Status == WfNodeExecutionStatus.Running)
+                .ExecuteCommandAsync();
+        }
+
+        if (affected != 1)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceStatusConflict,
+                new Dictionary<string, object?>
+                {
+                    ["reason"] = "executionFenceConflict",
+                    ["executionId"] = executionId,
+                    ["fence"] = fence,
+                });
+        }
+    }
+
+    /// <summary>
+    /// 纯函数,按 handler 结果算出落库判定。<b>前置判定优先</b>:实例已非 <see cref="WfInstanceStatus.Running"/>
+    /// 或 token 已非 <see cref="WfTokenStatus.Active"/>(外部撤销/终止)→ 无论 handler 说了什么,一律
+    /// <see cref="WfNodeExecutionStatus.Cancelled"/>——handler 压根不知道实例已被撤销,这条判定就是 fence/CAS
+    /// 之外的第二道"丢弃迟到结果"防线。
+    /// <para>重试预算判定:<c>execution.AttemptCount &gt;= Math.Max(execution.MaxAttempts, 1)</c>——
+    /// <c>AttemptCount</c> 是领取后读回的值(1 基),<c>MaxAttempts &lt;= 0</c> 按 1 处理(=不重试,按字面
+    /// 当"无限"是跑飞的配方)。</para>
+    /// </summary>
+    protected virtual WfExecutionOutcome ResolveExecutionOutcome(
+        WfNodeExecution execution,
+        WfInstance instance,
+        WfToken token,
+        WfNodeExecutionResult result,
+        DateTime nowUtc)
+    {
+        if (instance.Status != WfInstanceStatus.Running || token.Status != WfTokenStatus.Active)
+            return new WfExecutionOutcome(WfNodeExecutionStatus.Cancelled, null, nowUtc, null, null, true);
+
+        switch (result.Type)
+        {
+            case WfNodeExecutionResultType.Succeeded:
+                return new WfExecutionOutcome(WfNodeExecutionStatus.Succeeded, null, nowUtc, null, null, true);
+
+            case WfNodeExecutionResultType.RetryableFailure:
+                var budgetExhausted = execution.AttemptCount >= Math.Max(execution.MaxAttempts, 1);
+                if (budgetExhausted)
+                {
+                    return new WfExecutionOutcome(
+                        WfNodeExecutionStatus.Failed, null, nowUtc,
+                        result.ErrorCode, WfNodeExecutionAttemptStore.Truncate(result.Summary), true);
+                }
+
+                var delay = ResolveRetryDelay(execution, result);
+                return new WfExecutionOutcome(
+                    WfNodeExecutionStatus.RetryScheduled, nowUtc + delay, null, null, null, false);
+
+            case WfNodeExecutionResultType.ManualFallback:
+                return new WfExecutionOutcome(
+                    WfNodeExecutionStatus.ManualFallback, null, nowUtc,
+                    result.ErrorCode, WfNodeExecutionAttemptStore.Truncate(result.Summary), true);
+
+            case WfNodeExecutionResultType.TerminalFailure:
+                return new WfExecutionOutcome(
+                    WfNodeExecutionStatus.Failed, null, nowUtc,
+                    result.ErrorCode, WfNodeExecutionAttemptStore.Truncate(result.Summary), true);
+
+            default:
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed,
+                    new Dictionary<string, object?> { ["resultType"] = result.Type.ToString() });
+        }
+    }
+
+    /// <summary>
+    /// 重试退避:<see cref="WfNodeExecutionResult.RetryAfter"/> 在 <c>(0, 24h]</c> 内则用它;否则(含 <c>null</c>、
+    /// <c>&lt;= 0</c>、<c>&gt; 24h</c>)按 <c>30s &lt;&lt; min(AttemptCount - 1, 5)</c> 指数退避,封顶约 16 分钟。
+    /// <para>上下界钳制是必须实现的、不是优化:<see cref="WfNodeExecutionResult.RetryAfter"/> 由 handler(消费者
+    /// 代码)提供,是 trust boundary。<see cref="TimeSpan.Zero"/> → <c>NextRetryAtUtc &lt;= now</c> → 热循环;
+    /// 过大的值 → <c>nowUtc + delay</c> 逼近 <see cref="DateTime.MaxValue"/>,四库列写入行为各不相同。</para>
+    /// </summary>
+    protected virtual TimeSpan ResolveRetryDelay(WfNodeExecution execution, WfNodeExecutionResult result)
+    {
+        if (result.RetryAfter is { } retryAfter && retryAfter > TimeSpan.Zero && retryAfter <= MaxRetryAfter)
+            return retryAfter;
+
+        var shift = Math.Min(execution.AttemptCount - 1, 5);
+        return TimeSpan.FromSeconds(RetryBaseSeconds << shift);
+    }
+
+    /// <summary>
+    /// outbox payload(§4.6 D6):不含 <see cref="WfNodeExecutionResult.OutputJson"/> 正文——handler 输出是
+    /// PII/密钥泄漏面最大的一处,outbox 又是要投给进程外消费方的,正文进去等于把脱敏责任推给每个消费者;
+    /// 消费方要正文,用 <c>executionKey</c> 回查。走 <see cref="WfModelJson.Options"/>,不另起一份配置。
+    /// </summary>
+    protected virtual string BuildExecutionOutboxPayload(
+        WfNodeExecution execution,
+        NodeExecutionCompletedCmd cmd,
+        WfNodeExecutionAttempt attempt,
+        WfExecutionOutcome outcome)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(
+            new
+            {
+                executionKey = execution.ExecutionKey,
+                executionId = execution.Id,
+                instanceId = execution.InstanceId,
+                tokenId = execution.TokenId,
+                nodeVisitId = execution.NodeVisitId,
+                nodeId = execution.NodeId,
+                nodeType = execution.NodeType,
+                definitionVersionId = execution.DefinitionVersionId,
+                status = outcome.Status,
+                attemptNo = attempt.AttemptNo,
+                fence = cmd.Fence,
+                errorCode = outcome.ErrorCode,
+                summary = outcome.Summary,
+                outputHash = attempt.OutputHash,
+                completedAtUtc = outcome.CompletedTimeUtc,
+            },
+            WfModelJson.Options);
     }
 }

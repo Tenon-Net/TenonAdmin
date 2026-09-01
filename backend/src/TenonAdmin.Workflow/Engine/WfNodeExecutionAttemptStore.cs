@@ -66,6 +66,10 @@ public static class WfNodeExecutionAttemptStore
         return row;
     }
 
-    private static string? Truncate(string? value) =>
+    /// <summary>
+    /// 摘要截断到 <see cref="SummaryMaxLength"/>。<c>public</c> 供 Task 6 的
+    /// <c>wf_node_execution.Summary</c>(同宽同规则)复用——截断规则不许在两处各写一遍(Task 5 P3-1 的教训)。
+    /// </summary>
+    public static string? Truncate(string? value) =>
         value is null || value.Length <= SummaryMaxLength ? value : value[..SummaryMaxLength];
 }

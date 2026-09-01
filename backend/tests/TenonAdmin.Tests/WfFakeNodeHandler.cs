@@ -19,11 +19,18 @@ internal sealed class FakeNodeHandler(
     /// <summary>最后一次收到的上下文,供 Task 6 断言快照投影正确。</summary>
     public WfNodeExecutionContext? LastContext { get; private set; }
 
+    /// <summary>
+    /// 可选钩子,在 <see cref="CallCount"/> 递增之后、返回结果之前调用——供 Task 6 在 handler 内部断言
+    /// 「此刻没有活动数据库事务」(<c>db.Ado.IsAnyTran()</c>)。
+    /// </summary>
+    public Action? OnExecute { get; init; }
+
     public Task<WfNodeExecutionResult> ExecuteAsync(WfNodeExecutionContext context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested(); // 取消走异常,不走返回值
         CallCount++;
         LastContext = context;
+        OnExecute?.Invoke();
         return Task.FromResult(result);
     }
 }

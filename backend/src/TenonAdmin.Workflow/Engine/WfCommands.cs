@@ -209,3 +209,30 @@ public sealed class ResubmitInstanceCmd : WfWriteCmd
 
     public IReadOnlyDictionary<string, List<long>>? SelectedUserIdsByNode { get; init; }
 }
+
+/// <summary>
+/// Execution dispatcher(M3a-1 Task 6)提交节点执行结果:handler 已在事务外跑完,携带结果与领取时的
+/// <see cref="Fence"/> 交给引擎,在**单一短事务**里做 CAS + 落 attempt + outbox + token 推进(§4.6 步骤 5)。
+/// <para><b>刻意不继承 <see cref="WfWriteCmd"/></b>——同 <see cref="TimeoutFireCmd"/>:worker 派的动作没有
+/// 「用户这一次点击」这个身份,<c>TryCreateIdentity</c> 的 <c>command is not WfWriteCmd</c> 天然返回 null,
+/// 不必写它的特例分支。幂等改由 <see cref="Fence"/> CAS 承担(见
+/// <see cref="WorkflowEngine.ClaimExecutionWritebackAsync"/>),不靠回执。</para>
+/// <para><see cref="Fence"/> 与 <see cref="TimeoutFireCmd.ExpectedVersion"/> 是逐字同一个角色:调度器发现时
+/// 读到的期望令牌,回写 CAS 对不上即另一个 worker 已经胜出。</para>
+/// </summary>
+public sealed class NodeExecutionCompletedCmd : IWfCommand
+{
+    public required long ExecutionId { get; init; }
+
+    /// <summary>领取时读回的 <c>wf_node_execution.Fence</c>;回写 CAS 的期望值。</summary>
+    public required long Fence { get; init; }
+
+    public required WfNodeExecutionResult Result { get; init; }
+
+    /// <summary>handler 实现类型全名,落 <c>wf_node_execution.HandlerType</c>(排查「跑的是谁」);找不到 handler 时为 <c>null</c>。</summary>
+    public string? HandlerType { get; init; }
+
+    public required DateTime StartedAtUtc { get; init; }
+
+    public required DateTime EndedAtUtc { get; init; }
+}
