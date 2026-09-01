@@ -76,7 +76,7 @@ public class WfNodeExecutionClaimTests
         Assert.Equal(1, claimed.Fence);
         Assert.Equal(1, claimed.AttemptCount);
         Assert.Equal("worker-a", claimed.LeaseOwner);
-        Assert.NotNull(claimed.LeaseExpiresAtUtc);
+        Assert.Equal(now.AddMinutes(5), claimed.LeaseExpiresAtUtc!.Value, TimeSpan.FromSeconds(1));
     }
 
     /// <summary>#10 租约有效期内再领 → 返回 <c>null</c>,且行未被改动(<c>Fence</c> 仍 1、owner 未变)。</summary>
@@ -95,7 +95,7 @@ public class WfNodeExecutionClaimTests
         Assert.NotNull(first);
 
         var second = await WfNodeExecutionStore.ClaimAsync(
-            db, row.Id, "worker-b", now, TimeSpan.FromMinutes(5), CancellationToken.None);
+            db, row.Id, "worker-b", now.AddMinutes(1), TimeSpan.FromMinutes(5), CancellationToken.None);
         Assert.Null(second);
 
         var loaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == row.Id).FirstAsync();
@@ -161,6 +161,25 @@ public class WfNodeExecutionClaimTests
             db, row.Id, "worker-a", now, TimeSpan.FromMinutes(5), CancellationToken.None);
         Assert.NotNull(onTime);
         Assert.Equal(WfNodeExecutionStatus.Running, onTime.Status);
+    }
+
+    /// <summary>
+    /// #12b <c>RetryScheduled</c> 且 <c>NextRetryAtUtc == null</c>(刚标记退避、退避时间还没算出来)→ 不可领取。
+    /// </summary>
+    [Fact]
+    public async Task Retry_scheduled_row_with_no_retry_time_is_never_claimable()
+    {
+        using var f = new WorkflowAppFactory();
+        var (scope, db) = Open(f);
+        using var _ = scope;
+        var row = NewRow(UniqueKey());
+        row.Status = WfNodeExecutionStatus.RetryScheduled;
+        row.NextRetryAtUtc = null;
+        await db.Insertable(row).ExecuteCommandAsync();
+
+        var claimed = await WfNodeExecutionStore.ClaimAsync(
+            db, row.Id, "worker-a", DateTime.UtcNow, TimeSpan.FromMinutes(5), CancellationToken.None);
+        Assert.Null(claimed);
     }
 
     /// <summary>#13 终态行(<c>Succeeded</c>)→ <c>null</c>。</summary>

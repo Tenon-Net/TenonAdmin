@@ -22,8 +22,10 @@ namespace TenonAdmin.Workflow;
 /// <c>GetLocalNow().DateTime</c>」的惯例——列名后缀就是唯一的护栏。<b>硬约束</b>:基类审计列
 /// <see cref="AuditEntity.CreateTime"/>/<see cref="AuditEntity.UpdateTime"/> 仍是 local(AOP 填的),
 /// <b>任何代码都不得把它们与 <c>*Utc</c> 列做比较或相减</b>。</para>
-/// <para><see cref="HandlerType"/>/<see cref="HandlerVersion"/>/<see cref="InputHash"/>/<see cref="OutputHash"/>/
-/// <see cref="CompletedTimeUtc"/> 是<b>建表期一次造齐</b>的预留列:全部可空,本轮零写入点,Task 6 填值。</para>
+/// <para>凡注释标「建表期预留、本轮零写入点」的列(<see cref="DeadlineAtUtc"/>/<see cref="HandlerType"/>/
+/// <see cref="HandlerVersion"/>/<see cref="InputHash"/>/<see cref="OutputHash"/>/<see cref="CompletedTimeUtc"/>/
+/// <see cref="ErrorCode"/>/<see cref="Summary"/>,共 8 列)都是<b>建表期一次造齐</b>的预留列:全部可空,
+/// 本轮零写入点,Task 6 填值。</para>
 /// </summary>
 [SugarTable("wf_node_execution", TableDescription = "节点可靠执行记录")]
 [SugarIndex("uk_wf_node_exec_key", nameof(ExecutionKey), OrderByType.Asc, IsUnique = true)]
@@ -39,9 +41,12 @@ public class WfNodeExecution : BaseEntity
     [SugarColumn(Length = 64, ColumnDescription = "执行幂等键(SHA-256 小写 hex)")]
     public string ExecutionKey { get; set; } = "";
 
-    /// <summary>机构/租户范围键,归一化同 <see cref="WfIdentityHash.NormalizeScopeKey"/>;无机构 → 哨兵。</summary>
-    [SugarColumn(Length = 64, IsNullable = true, ColumnDescription = "机构/租户范围键")]
-    public string? ScopeKey { get; set; }
+    /// <summary>
+    /// 机构/租户范围键。非空——写入方必须用 <see cref="WfIdentityHash.NormalizeScopeKey"/> 的返回值落库
+    /// (无机构 → 哨兵),不允许 null 与空串产生两个 identity,与 <see cref="WfOperationReceipt.ScopeKey"/> 同款。
+    /// </summary>
+    [SugarColumn(Length = 64, ColumnDescription = "机构/租户范围键(无机构用哨兵)")]
+    public string ScopeKey { get; set; } = "";
 
     [SugarColumn(ColumnDescription = "流程实例 Id")]
     public long InstanceId { get; set; }
