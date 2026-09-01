@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 36
+- 轮次: 37
 - max: 45
-- 当前任务: 10(gen:api + 契约漂移 + 验收,本台账最后一个 Task)
-- 当前阶段: **勾选完成**
-- 上一轮: Round 36 — Task 10 **review+勾选**(0×P1/0×P2,合并同一轮,沿用 Round 3/6/9/12/15/18/21 的先例)。`gh run view 33454582264` 最终确认:`backend-ci` 整体 `conclusion=success`(`template-smoke`/`build-test (sqlite)`/`build-test (mysql)`/`build-test (postgres)`/`build-test (sqlserver)` 全部 success,`nightly-alert` 按设计 skipped)。至此五个工作流对 commit `4679467` **全绿**:web-ci ✅/web-react-ci ✅/contract-drift ✅/docker-smoke ✅/backend-ci ✅。逐条核对 Task 10 验收清单(`## Plan` 步骤 6):①`## Tasks` 1–9 巡查仍为 `[x]` ✅;②`dotnet test` 指定过滤器基线 259(Round 32 本地实测 259/259,`backend-ci` 的 sqlite 腿双重验证)✅;③四库矩阵 CI 四腿逐条 success ✅(本轮新增证据);④`web` typecheck/lint 绿 + request key 复用(Round 32 本地 35/35,Task 9 交付机制未被打破)✅;⑤双模板 `schema.d.ts` SHA256 逐字相同(Round 32 独立核验 `36dbccb7...fa8335`)✅;⑥重复提交同 `RequestId` 返回首次 `WfEngineResult`(Task 5 `WfReceiptEngineTests.Same_request_id_replays_the_first_result_without_advancing_twice` 既有 HTTP 层证据,未新增测试)✅。**0×P1、0×P2** —— `## Tasks` 第 10 项打勾。**M2c 十项 Task 全部勾选**。
-- 下一步: Round 37 — **GUARD 检查**。核对 `## Tasks` 十项皆 `[x]` 且 `## DONE-CONDITION` 六条闸门证据齐全(本轮已逐条列出对应证据),若确认无误,输出「✅ DONE — M2c 收口完成」并停止循环,不再排 `ScheduleWakeup`。
+- 当前任务: (无 —— 十项全部完成)
+- 当前阶段: **DONE**
+- 上一轮: Round 37 — **GUARD 检查确认收口**。`git status --short --branch` 确认在 `dev`,无残留脏改(仅常驻未跟踪的 `TestResults/`)。核对 `## Tasks` 十项:`grep '^\- \['` 逐行确认 **全部 `[x]`**。核对 `## DONE-CONDITION` 六条闸门,证据均已在 Round 32/36 记录在案:①十项全勾(本轮复核)②`dotnet test` 指定过滤器基线 **259**(Round 32 本地实测 259/259,backend-ci sqlite 腿双重验证)③四库 CI 矩阵四腿全绿(Round 36 确认 `backend-ci` conclusion=success,sqlite/mysql/postgres/sqlserver 全部 success)④`web` typecheck/lint 绿 + request key 复用(Round 32 本地 35/35,Task 9 交付)⑤双模板 `schema.d.ts` SHA256 一致(Round 32 独立核验 `36dbccb7...fa8335` 逐字相同)⑥重复提交同 `RequestId` 返回首次 `WfEngineResult`(Task 5 `WfReceiptEngineTests` 既有 HTTP 层证据)。**六条全部满足**。GUARD 判定:Tasks 全勾 + 闸门全绿 → 输出「✅ DONE — M2c 收口完成」,不再做任何工作,不再排 `ScheduleWakeup`。
+- 下一步: (无 —— 循环已结束。若后续需要新工作,由用户另起新台账或新 `/loop`。)
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -574,6 +574,7 @@
 | 34 | review | Task 10 review 轮询 #2。docker-smoke 转 success(single+multi 均绿)。backend-ci 仍 in_progress:template-smoke/sqlite 已绿,mysql/postgres/sqlserver 三条腿未收敛。五个工作流现状 4 绿 1 未定,如实记录未完成,不勾选,留待后续轮次继续轮询 backend-ci。只读操作,无代码改动。 |
 | 35 | review | Task 10 review 轮询 #3。backend-ci 的 mysql/postgres 腿转 success,只剩 sqlserver 一条腿仍 in_progress(其余四项 job 与其余四个工作流均已确认绿)。如实记录未完成,不勾选,留待后续轮次继续轮询 sqlserver 腿。只读操作,无代码改动。 |
 | 36 | review+勾选 | Task 10 **review+勾选**(自审,0×P1/0×P2)。`gh run view` 最终确认 backend-ci 整体 conclusion=success(四条 db 矩阵腿 + template-smoke 全绿,nightly-alert 按设计 skipped),五个工作流对 commit `4679467` **全部绿**。逐条核对 DONE-CONDITION 六条证据(Tasks 全勾/259 基线/四库矩阵/web 三件套+request key/双模板 SHA256 一致/Task 5 既有幂等回放证据)全部满足。`## Tasks` 第 10 项(最后一项)打勾。**M2c 十项 Task 全部完成**,下一轮 GUARD 核对闸门后应输出 DONE。 |
+| 37 | GUARD/DONE | GUARD 检查:`## Tasks` 十项全部 `[x]`,`## DONE-CONDITION` 六条闸门证据齐全(Round 32/36 记录)。判定条件满足,输出「✅ DONE — M2c 收口完成」,循环结束,不再排下一轮。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
