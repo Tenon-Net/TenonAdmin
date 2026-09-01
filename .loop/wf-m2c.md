@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 30
+- 轮次: 31
 - max: 45
-- 当前任务: 9 已收尾;下一任务 10(gen:api + 契约漂移 + 验收)
-- 当前阶段: (未开始 —— 下一步 plan)
-- 上一轮: Round 30 — Task 9 **勾选**。核对满足勾选条件:0×P1、0×P2(Round 29 review 已确认,含自审声明),收尾前再重跑一遍闸门 `npm run typecheck`(0 错)/`npm run lint`(0 错 0 警)/`npx vitest run src/workflow/`(35/35)。`## Tasks` 第 9 项已打勾。**Task 9 全程收尾**:新建 `web/src/workflow/useRequestKey.ts`(惰性生成 + 三态 settle + reset 的 composable)+ `classifyOutcome` 纯函数,接入 `detail.vue`(8 种动作,urge 例外)与 `start/index.vue`(改 `const body` 写法对齐),`api/workflow.ts` 手写类型加字段,`COMPONENTS.md` 补索引。全程**未跑 `gen:api`、未碰 `web-react/`**,严格留给 Task 10。
-- 下一步: Round 31 — **Task 10 plan**。这是本台账最后一个 Task,范围按 `## Tasks` 第 10 条:双模板 `gen:api`(需先起 backend,读 `web/package.json`/`web-react/package.json` 的 `gen:api` 脚本与 `TENON_API_TARGET` 约定)、比对两侧 `schema.d.ts` SHA256 一致、检查因新字段(`requestId`)产生的 `@ts-expect-error` 是否需要摘除、跑齐 `## DONE-CONDITION` 全部闸门(含本机取不到证的「四库 CI 各绿」——Round 26 已记的 P2→Task10 锚点:需就「push 一次拿 CI 信号」或「授权连真实 PostgreSQL」向用户要决定,plan 阶段先读这条锚点,决定具体怎么问)。plan 阶段先读 `.github/workflows/backend-ci.yml`、两个模板的 `gen:api`/`package.json`、`docs/react-template-ledger.md`(zero-shared 边界确认 gen:api 是否是例外),**不写产品代码**。
+- 当前任务: 10(gen:api + 契约漂移 + 验收,本台账最后一个 Task)
+- 当前阶段: plan(已完成)
+- 上一轮: Round 31 — Task 10 **plan**。读完 `backend-ci.yml`(四库矩阵 push/PR 触发)、`contract-drift.yml`(起 MinimalHost 判漂移)、`web-ci.yml`/`web-react-ci.yml`/`docker-smoke.yml` 触发条件、`scripts/gen-api.mjs`/`scripts/check-contract-drift.mjs`(两模板共用的现成生成/漂移工具)、`docs/react-template-ledger.md` E5 条目(契约漂移闸门历史,已实测两模板 IN SYNC)、`WfReceiptEngineTests.cs`(确认 DONE-CONDITION 最后一条已被 Task 5 满足,无需新测试)。**本轮期间用 AskUserQuestion 就 P2→Task10 锚点(四库 CI 本机无法取证)向用户要了决定**:用户选择**「push dev 拿 CI 信号(推荐)」**——已写入 `## Plan` 顶部作为本 Task 对「默认不 push」纪律的唯一、限定范围(仅 `git push origin dev`,不建 PR/不 push main/不 force)的例外授权。`## Plan` 重写完毕:E1–E7 七条决策点(复用现成 `check-contract-drift.mjs` 而非重造工具、SHA256 独立核验、diff 范围人工核对、本地闸门顺序、一次性提交+push、CI 逐工作流逐矩阵腿轮询、P3/既有射程披露不在本 Task 范围内修复),改动清单精确到 2 个生成物文件 + 台账 + 2 条只读操作(push / gh 轮询),6 项对应 DONE-CONDITION 逐条的验收清单。**不写产品代码,未跑 gen:api,未 push。**
+- 下一步: Round 32 — **Task 10 exec**。按 `## Plan` 的步骤 1–5:`node scripts/check-contract-drift.mjs` 重生成两模板 schema(预期非零退出,这是预期行为不是失败)→ 读 diff 核对范围 → 算 SHA256 独立比对 → 串行跑 backend/web/web-react 三套本地闸门(不并发重进程)→ 全绿后一次性提交 + `git push origin dev`(用户已授权)。**不勾选**,push 后的 CI 结果留给 Round 33+ 的 review 轮询确认。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -95,118 +95,121 @@
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段重写)
 
-> **Task 9 — Vue request key 生命周期**(Round 27 写于 2026-08-31)。已读:`web/src/views/workflow/start/index.vue`、
-> `web/src/views/workflow/instance/detail.vue`、`web/src/views/workflow/components/WfFormMount.vue`(确认只挂载展示、
-> 不自行提交)、`web/src/api/workflow.ts`、`web/src/api/index.ts`(`ApiError`/`unwrap`)、`web/src/api/client.ts`
-> (401/403 中间件的请求重放机制)、`web/src/composables/useConfirm.ts`、`web/src/types/workflow.ts`
-> (`WfStartInput`/`WfTaskActionInput` 直接是 `Schemas[...]` 别名)、后端 `WfRuntimeModels.cs` 的
-> `WfStartInput`/`WfTaskActionInput`/`WfInstanceCancelInput`(经 Controller)/`WfInstanceResubmitInput`(确认
-> `RequestId` 字段已在 Task 4 落地,Urge 故意不透传)、`## 语义契约` 的「重试语义」「receipt vs CAS」「对外字段名」
-> 三行、`web/COMPONENTS.md` 的 composable 收录约定(源码头注释写详情,本文件只留一行索引)。
-> **Task 8 的 plan 已完成使命,记录留在 `## Findings` 与 `## Log`。**
+> **Task 10 — `gen:api` + 契约漂移 + 验收**(Round 31 写于 2026-09-01)。本台账最后一个 Task。已读:
+> `.github/workflows/backend-ci.yml`(四库矩阵 `db: [sqlite, mysql, sqlserver, postgres]`,push/PR 触发,
+> paths 含 `backend/**`;SqlServer 在 push/PR 只跑 `TEST_FILTER` 子集,nightly 才跑全量)、
+> `.github/workflows/contract-drift.yml`(push/PR 触发,paths 含 `backend/**` 与两个 `schema.d.ts`,
+> 起 MinimalHost → 两模板 `gen:api` → `git diff --exit-code` 判漂移)、`.github/workflows/web-ci.yml`/
+> `web-react-ci.yml`/`docker-smoke.yml`(各自 paths 触发条件)、`scripts/gen-api.mjs`(共享生成器,读
+> `TENON_API_TARGET` 默认 `http://localhost:5100`,写 `src/api/schema.d.ts`)、`scripts/check-contract-drift.mjs`
+> (根 `CLAUDE.md` 文档化的本地等价闸门:起 MinimalHost 于 5101 → 两模板 `gen:api` → `git diff --quiet HEAD`
+> 判漂移,**不做 web/web-react 互相比对**,只判「本地生成物是否已提交」)、`docs/react-template-ledger.md` E5
+> 条目(2026-07-22,`7d82447`:契约漂移闸门的历史与本地等价验证配方 —— 已实测两模板 `gen:api` 后 IN SYNC)、
+> 两模板 `package.json` 的 `gen:api` 脚本(逐字相同,均指向根 `scripts/gen-api.mjs`)、`backend/tests/.../
+> WfReceiptEngineTests.cs`(确认 `Same_request_id_replays_the_first_result_without_advancing_twice`/
+> `Retry_after_the_instance_finished_returns_the_first_result_not_a_conflict` 已是**真实 HTTP 层**
+> `WorkflowAppFactory` 集成测试,DONE-CONDITION 最后一条已经被 Task 5 满足,不需要新测试)、`## Findings` 里
+> Round 26 记的 **P2 → Task 10** 锚点(四库 CI 本机取不到证)。**Task 9 的 plan 已完成使命,记录留在
+> `## Findings` 与 `## Log`。**
+>
+> **用户决定(Round 31,AskUserQuestion,已获授权)**:DONE-CONDITION「四库契约套件在 CI 矩阵四腿各绿」这条
+> 本机无 Docker/无本地 PostgreSQL 取不到证据,用户在本轮明确选择**「push dev 拿 CI 信号」**(而非授权连局域网
+> VM 的真实 PG/MySQL,也非跳过实证)。**这是本台账「默认不 push」纪律在本 Task 的唯一例外,范围仅限
+> `git push origin dev`(不建 PR、不 push 到 main、不 force push)**,专为触发 `backend-ci.yml` 的四库矩阵 +
+> `contract-drift.yml`/`docker-smoke.yml`/`web-ci.yml`/`web-react-ci.yml` 拿真实 CI 信号,不是本任务之后的
+> 常态授权——后续任何 Task(理论上已无后续)仍不得不问自推。
 
 ### 读码所得(决策的事实底座,exec 不必重查)
 
-- **后端已经全端就位,前端还没跟上**:`WfStartInput`/`WfTaskActionInput`/`WfInstanceCancelInput`/`WfInstanceResubmitInput`
-  都带了可空 `RequestId`,Controller 一路透传到 `WorkflowEngine`(Task 1–8 已验证)。Urge 单独:`WfTaskActionInput`
-  复用同一个 DTO,但 Controller **不给 Urge 透传**(源码注释已写明),前端不必为 Urge 生成 key。
-- **`web/src/api/schema.d.ts` 是本轮唯一的绊脚石,但不阻塞**:`WfStartInput`/`WfEngineResult` 等类型是
-  `Schemas['...']` 的直接别名(`types/workflow.ts`),而 schema 从 Task 4 起就没重生成过
-  (`grep requestId schema.d.ts` 零命中),这是 Task 4 自己写的决定(「OpenAPI 变更 → 留给 Task 10 gen:api」)。
-  **不在本 Task 提前跑 gen:api**(那是 Task 10 双模板同步比对的职责,提前跑会打乱 Task 10「变更从这里开始」的
-  叙事,且 Task 9 完全不需要它)。
-- **TypeScript 的「新鲜对象字面量」规则天然绕开了这个绊脚石**:`detail.vue` 现在的 `submitAction()` 已经是
-  「先 `const body = {...}`,再传给 `wfTaskApi.xxx(body)`」——`body` 不是字面量直接出现在调用位置,超额属性检查
-  不会触发,往这个 `const` 里加一个 schema 还不认识的 `requestId` 字段,`vue-tsc --noEmit` 不会报错(结构类型
-  允许目标类型「不知道」的多余字段)。**`start/index.vue` 目前不是这个写法**——`wfInstanceApi.start({...})` 是
-  把字面量直接摆在调用参数位置,加 `requestId` 会触发超额属性检查报错,exec 必须先把它改成「先 `const body`」
-  的同款写法(不是新引入的怪写法,是把 start 页对齐 detail 页已有的风格)。
-- **`wfInstanceApi.cancel`/`resubmit` 是仓库自己手写的参数类型**(不是 `Schemas[...]` 别名,`grep "cancel:"
-  api/workflow.ts` 可见),本来就不受 schema 陈旧影响,直接在这两个手写类型上加 `requestId?: string | null`
-  字段最省事,不必等 Task 10。
-- **`client.ts` 的 401/403 中间件已经会做一次「同请求重放」**(`refreshMiddleware`/`reauthMiddleware`,靠
-  `request.clone()` 存副本再 `fetch(retry)`)——这层重放复用的是同一个 `Request`(同一个 body,同一个
-  `requestId`),本 Task 不需要为它另写逻辑,只要 `requestId` 在最初的 body 里就位,中间件级重放自动"继承"。
-  真正需要本 Task 处理的,是**用户手动点两次「确认」**这种应用层重试(例如第一次网络超时,弹窗没关,用户再点
-  一次)。
-- **仓内没有 axios、没有任何自动重试**(`useConfirm.run` 是单发,除 `client.ts` 两处中间件外无重试逻辑)——
-  Task 9 原文的「含 axios 重试若存在」是前瞻性措辞,不是本仓现状;本 Task 只需处理"用户手动重复点击"这一种
-  重试来源。
-- **`ApiError` 是判定"确定结果"的现成信号**:`unwrap()` 对已结算的 HTTP 响应(无论成功还是业务失败)都转成
-  `ApiError` 抛出;只有 `fetch` 本身失败(断网、超时、CORS)才会让 `client.POST(...)` 直接 reject 一个非
-  `ApiError` 的值(`translateError`/`api/index.ts` 已经用 `err instanceof ApiError` 做同款判定,是仓内既有
-  惯用法,不是新发明)。这正好对应语义契约「receipt 解决 HTTP 重试/双击」——**网络层没拿到确定结果时保留 key
-  待重试,一旦服务端给出确定结果(成功或业务错误)就丢弃 key**。
-- **`crypto.randomUUID()` 不是新引入的兼容性面**:`utils/chunkUpload.ts` 已经在用 `crypto.subtle.digest`,同样
-  要求安全上下文(HTTPS/localhost),仓库已经默许这个前提;不必为它引入 `uuid` 包。**exec 需要在 vitest
-  (happy-dom 环境)里实测一次 `crypto.randomUUID` 是否可用**,若不可用再退化处理(写进陷阱)。
-- **`web/COMPONENTS.md` 的 composable 收录方式**:正文只留一行索引/一节标题 + 链接,详细用法写在源码头注释
-  (`useConfirm`/`useTabTitle` 都是这个格式)。新 composable 照此格式加一节。
+- **契约漂移闸门已经是现成基础设施,不是本 Task 要新建的东西**:`contract-drift.yml`(`7d82447`,E5)+
+  `scripts/check-contract-drift.mjs` 早就在 CI 里跑,根 `CLAUDE.md` 也文档化了本地等价用法
+  (`git config core.hooksPath .githooks` 激活的 pre-push 钩子)。Task 10 的活是**实际跑一次**(本地
+  `check-contract-drift.mjs` + 之后 push 拿 CI 信号),不是发明新脚本。
+- **`check-contract-drift.mjs` 的判据是「本地生成物 vs HEAD」,不是「web vs web-react 互相比对」**:脚本
+  跑完两模板 `gen:api` 后只对每个文件各自跑 `git diff --quiet HEAD`,不会直接断言两个 `schema.d.ts` 内容
+  相等。DONE-CONDITION 明文要求「SHA256 一致」,这是**独立于漂移闸门的另一条断言**,exec 必须自己算
+  两个文件的 hash 比对,不能拿漂移闸门的绿代替。
+- **两模板 `schema.d.ts` 理论上必然逐字相同**:同一个 `scripts/gen-api.mjs`、同一个 `openapi-typescript`
+  版本(两模板 `package.json` 锁定版本一致,`npm ci` 保证)、同一个后端 `/openapi/v1.json` 输出 ——
+  SHA256 相等是这条流水线的**必然结果**,不是需要额外代码保证的东西;E5 历史记录(`react-template-ledger.md`
+  行 261)已经实测过一次「两个 schema 均 IN SYNC」。exec 只是重新验证这个不变量在 M2c 改动后仍成立。
+- **Task 4 起两侧 `schema.d.ts` 都没重生成过**(`grep requestId web/src/api/schema.d.ts` 零命中,Task 9
+  读码已确认),所以本 Task 跑 `gen:api` **预期会产生真实 diff**:`WfStartInput`/`WfTaskActionInput`/
+  `WfInstanceCancelInput`/`WfInstanceResubmitInput` 的 `requestId`(Task 4)、`WfInstance` 相关响应类型的
+  `completedTime`(Task 3)、以及 `WfEngineResult`/回执相关如果有新暴露字段(Task 1–2、5)。**这些才是
+  「计划内」的 diff 内容**——exec 必须读一遍实际 diff,确认改动都落在这几类字段上,没有跟 M2c 无关的
+  意外漂移(意外漂移意味着后端在别的分支/提交里悄悄改了契约,超出本 Task 该处理的范围)。
+- **`web-react/` 没有任何工作流代码**(`find web-react/src -iname "*workflow*" -o -iname "*wf*"` 零命中,
+  Round 31 读码已验证)——它这次唯一要做的是**吃下 schema 变化后仍能 typecheck/lint/build**,不需要
+  也不应该新增任何工作流页面或测试(禁区)。
+- **仓内没有 `@ts-expect-error`**(`grep -rln "@ts-expect-error" web/src web-react/src` 零命中,Round 31
+  读码已验证)——DONE-CONDITION 提到的「去掉因新字段产生的 `@ts-expect-error`」在本仓不适用,不必找。
+- **DONE-CONDITION 最后一条(重复提交同 `RequestId` 返回首次 `WfEngineResult`,HTTP 层可观测)已经被
+  Task 5 的 `WfReceiptEngineTests` 满足**,且是真实 `WorkflowAppFactory` HTTP 集成测试而非纯引擎层单测
+  (`Same_request_id_replays_the_first_result_without_advancing_twice` 用 `PostEnvelope` 走两次
+  `/api/v1/workflow/task/approve`,断言两次响应的 `instanceId`/`createdTaskId` 逐字相同、`wf_his_task`
+  只有一行)。Task 10 **不需要为这条另写测试**,验收时直接引用这条已有证据。
+- **`web/` 与 `web-react/` 的验证四件套已是既定纪律**(`react-template-ledger.md` 首行):
+  `lint`/`test`/`tsc --noEmit`/`build`,且**本机内存紧张,一次只跑一个重进程,不与 `dotnet test` 并发**——
+  exec 的步骤顺序必须串行,不能图快并发起多个 `dotnet`/`npm`/`node` 重进程。
+- **推送后的 CI 面**:`push` 到 `dev` 会同时触发 `backend-ci`(四库矩阵 + SqlServer PR 子集)、
+  `contract-drift`(应绿,因为本 Task 会先在本地把两个 `schema.d.ts` 更新到位再提交)、`docker-smoke`
+  (`single`+`multi`)、`web-ci`、`web-react-ci`——五个工作流。`backend-release.yml` 只在 `v*` tag 触发,
+  本次 push 不会跑,不必等它。review 阶段要逐个工作流确认结论(不能只看第一个绿就收工)。
 
 ### 决策点(exec 不得二次发挥)
 
 | # | 决策 | 理由 |
 |---|---|---|
-| D1 | 新建 `web/src/workflow/useRequestKey.ts`(**composable,不是 store**),页面级作用域,每次调用 `useRequestKey()` 各自持有一个 `ref`。API:`value()`(取/惰性生成当前 key)、`settle(outcome)`(`'success' \| 'error' \| 'network'`;非 `'network'` 才丢弃)、`reset()`(强制换新,给"打开新动作"用)。 | 与仓内 `useConfirm`/`useTabTitle` 同款"页面内 setup 调用、无需跨组件共享"的 composable 形状;不做全局 store,因为请求键的生命周期天然绑定单个页面/单个弹窗实例,没有跨组件共享的需求(YAGNI) |
-| D2 | 生命周期语义:**惰性生成**(首次 `value()` 调用才 `crypto.randomUUID()`,不是"打开弹窗就立刻生成"),**`settle('success' \| 'error')` 丢弃、`settle('network')` 保留**,`reset()` 用于"新动作开始"。 | 对应语义契约"重试语义":receipt 解决的是"HTTP 响应丢失",不是"业务失败后重试"——业务失败(如校验不过)重新提交理应是新动作、新 key;只有网络层没拿到确定结果时才要求同 key,让服务端的回执兜住"其实已经成功了"的情况 |
-| D3 | 错误分类交给一个纯函数 `classifyOutcome(e: unknown): 'error' \| 'network'`(`e instanceof ApiError ? 'error' : 'network'`),与 `settle()` 分开导出,不耦合进 `useConfirm`。 | `err instanceof ApiError` 是 `utils/error.ts` 已有的判定惯用法(读码所得已确认),复用同一条判据,不发明新的错误分类体系;保持纯函数便于单测,不依赖 Vue 响应式 |
-| D4 | `detail.vue`:`openAction(kind)` 里对非 `urge` 的 kind 调 `requestKey.reset()`;`submitAction()` 把 `api()` 包一层 try/catch,成功 `settle('success')`,失败 `settle(classifyOutcome(e))` 后 `throw`(不吞异常,`run()` 的 toast 逻辑不变);body 里 `requestId: kind === 'urge' ? undefined : requestKey.value()`。 | Urge 不进 receipt 是既定语义契约,前端不生成/不传这个字段,而不是生成了却让后端丢弃——避免"前端以为幂等、后端其实不认"的认知落差 |
-| D5 | `start/index.vue`:把 `submit()` 里直接摆字面量的 `wfInstanceApi.start({...})` 改成先 `const body = {...}` 再 `wfInstanceApi.start(body)`(对齐 detail.vue 已有写法,顺带绕开超额属性检查);`body` 里加 `requestId: requestKey.value()`;拿到成功结果、`router.push` 跳转**之前** `settle('success')`;`catch` 分支 `settle(classifyOutcome(e))`。 | 把两处写法统一,而不是发明"start 用一套、detail 用一套"两套心智模型;显式 `settle('success')` 而不是依赖组件卸载,防止路由 keep-alive 场景下 composable 状态活得比一次提交更久(exec 需核实工作流路由是否开 keep-alive,若开则这条防线本来就必要,若不开也无害) |
-| D6 | `cancel`/`resubmit` 复用同一个 `detail.vue` 的 `requestKey`(不新开一份)——它们和 approve/reject/... 一样都走 `openAction(kind)` → `submitAction()` 这一条路径(Round 27 读码已确认模板里唯一一个 `n-modal` 覆盖全部动作)。`wfInstanceApi.cancel`/`resubmit` 的手写参数类型各加 `requestId?: string \| null`。 | 不重复造轮子;这两个入口在 UI 层就是同一个弹窗流程的两个 `kind` 分支,天然共享同一个请求键实例 |
-| D7 | **不碰 `web-react/`**,**不跑 `gen:api`**,**不建全局 store**,**不改 `useConfirm`/`api/client.ts` 中间件**。 | 禁区明确排除 web-react;gen:api 是 Task 10 的职责;`useConfirm`/`client.ts` 已经用既有能力(见读码所得、中间件重放)满足需求,改它们是无谓扩面 |
+| E1 | exec 用 `node scripts/check-contract-drift.mjs` 完成两模板 `gen:api` 的重生成(它会自动起停 MinimalHost、串行跑两次生成),**不手写另一套「手动起 dotnet run + curl」流程**。脚本大概率以非零退出(检测到漂移)结束,这是**预期结果**,不是失败——它已经把两个文件写到位,只是「跟 HEAD 有 diff」这句话本身就是本 Task 要证实的事。 | 复用现成、已验证过的工具(E5 历史记录),避免重新发明一套本机等价流程;脚本内部已处理 Windows `taskkill` 清进程等细节,自己写容易漏 |
+| E2 | exec 额外单独算一次 `sha256` 比较 `web/src/api/schema.d.ts` 与 `web-react/src/api/schema.d.ts`,作为独立于 `check-contract-drift.mjs` 的第二条证据,写进 `## Log`/`## Findings`。 | DONE-CONDITION 字面要求「SHA256 一致」,不能只靠漂移脚本的「各自不漂移」推断「两者相等」——两条证据分开记录更扎实 |
+| E3 | 生成后**先读 diff 内容**(`git diff -- web/src/api/schema.d.ts`),确认改动只落在 `requestId`/`completedTime`/回执相关字段上,**没有**意外的、与 M2c 无关的契约变化;若有意外字段,记 P1/P2,不得直接无视提交。 | 契约漂移闸门只能告诉「是否漂移」,告诉不了「漂移得对不对」——这一步是人工核对,避免把无关的、可能有问题的后端契约变化悄悄夹带进本次收口提交 |
+| E4 | 本地闸门顺序:①`dotnet build -c Release` + `dotnet test` 指定过滤器(确认 259 基线不降,backend 本身这轮没改代码,预期依旧 259);②`cd web && npm run typecheck && npm run lint && npx vitest run src/workflow/`(Task 9 的 35 条不受影响);③`cd web-react && npm run typecheck && npm run lint && npm run build`(无工作流测试可跑,以 typecheck/lint/build 三件套代替「验」,不新增测试——四件套里 `test` 对 web-react 而言等于跑全量 97 文件会 OOM,按 `react-template-ledger.md` 的既有教训跳过全量 `npm test`,只用 build 兜底「至少能编译」)。**一次只跑一个重进程**,不并发。 | 严格按既定验证纪律执行,不因为是收尾轮就抄近道;web-react 沿用台账里已经吃过教训的「分片/避免全量 OOM」经验,不重蹈 |
+| E5 | 本地闸门全绿后,**一次性提交**(`schema.d.ts` × 2 + 台账),再 `git push origin dev`(用户 Round 31 已授权,仅此一次、仅此分支、非 force)。**不开 PR**(dev 是长期分支,不是 feature 分支流程)。 | 避免「推了但本地闸门没跑全」的半成品状态占用 CI 资源;PR 流程不是本仓 dev 分支的既定工作方式(`git log` 显示直接提交 `dev`) |
+| E6 | push 后进入 review:轮询 `gh run list --branch dev --limit 10` 确认五个工作流(`backend-ci`/`contract-drift`/`docker-smoke`/`web-ci`/`web-react-ci`)都已触发且最终 `conclusion=success`;`backend-ci` 要展开看 `db` 矩阵四条腿逐条确认(不能只看整体 job 汇总),尤其 postgres/mysql/sqlserver 三条不能被漏看成「跳过」。**若 CI 仍在跑,记录当前状态,下一轮继续轮询**,不得瞎猜「应该会过」就直接勾选。 | DONE-CONDITION 明文要求「四腿各绿」是**逐腿**的断言,不是「整个 workflow 绿」的汇总断言(某一腿 fail-fast=false 下可能单独失败而 workflow 汇总仍显示其他腿的绿);CI 有真实延迟,不能靠猜测代替观测 |
+| E7 | Task 10 **不修复**已知的 P3(`ActivatorUtilities.CreateInstance<WorkflowEngine>` 绕过 `TryAdd`,Round 8 起挂账)——这是既有测试代码风格问题,不在「gen:api + 契约漂移 + 验收」范围内,继续挂账,写进最终收尾说明避免被误读成「本该收口却漏了」。 | 严格限定 Task 10 范围,避免收尾轮「顺手」扩面违反 Loop 纪律 |
 
-### 改动清单(exec 只允许碰这 7 个文件)
+### 改动清单(exec 只允许碰这些文件 + 两条 CI 只读操作)
 
-1. `web/src/workflow/useRequestKey.ts` —— 新建,composable + `classifyOutcome` 纯函数,源码头注释写完整语义(生命周期/为什么惰性/为什么按 `ApiError` 分类)
-2. `web/src/workflow/useRequestKey.spec.ts` —— 新建,单测(纯逻辑,不需要 mount 组件)
-3. `web/src/views/workflow/instance/detail.vue` —— `openAction`/`submitAction` 接入,`urge` 不生成 key
-4. `web/src/views/workflow/start/index.vue` —— `submit()` 改 `const body` 写法 + 接入
-5. `web/src/api/workflow.ts` —— `wfInstanceApi.cancel`/`resubmit` 手写参数类型各加 `requestId?: string \| null`
-6. `web/COMPONENTS.md` —— 补一节 `## useRequestKey(...)` 索引
-7. `.loop/wf-m2c.md` —— 台账
+1. `web/src/api/schema.d.ts` —— 重生成(`check-contract-drift.mjs` 自动写入)
+2. `web-react/src/api/schema.d.ts` —— 重生成(同上)
+3. `.loop/wf-m2c.md` —— 台账
+4. **只读**:`git push origin dev`(不建分支、不开 PR、不改任何 workflow yaml)
+5. **只读**:`gh run list`/`gh run view` 轮询(review 阶段)
 
-**预期计划外:0**。若 exec 发现工作流详情页路由确实开了 `keep-alive`,D5 的显式 `settle` 已经覆盖这个情形,不算计划外发现。
+**预期计划外:0**。若 E3 核对 diff 发现字段超出 M2c 范围(比如 CC/定义相关端点也变了形状),按「记 P1,不擅自处理」——那属于本 Task 发现的、但修复动作超出「gen:api + 验收」职责的问题,交给 Findings 挂账,不在本 Task 里顺手改后端契约。
 
 ### 步骤
 
-1. 写 `useRequestKey.ts` + `classifyOutcome`,补单测(含"惰性生成""'network' 保留""'error'/'success' 丢弃""`reset()` 强制换新"四组断言),vitest 里先探一次 `crypto.randomUUID()` 是否可用(此断言本身就是最快的探测)。
-2. `detail.vue` 接入:`openAction` 里 `reset()`(非 urge),`submitAction` 包一层 settle,body 加 `requestId`。
-3. `start/index.vue` 接入:`submit()` 改 `const body` 写法,加 `requestId`,`settle('success')` 放在拿到成功结果之后、`router.push` 之前;`catch` 分支 `settle(classifyOutcome(e))`。
-4. `web/src/api/workflow.ts` 的 `cancel`/`resubmit` 参数类型加字段。
-5. `web/COMPONENTS.md` 补索引行。
-6. 闸门:`cd web && npm run typecheck && npm run lint && npx vitest run src/workflow/`。
+1. `node scripts/check-contract-drift.mjs`(根目录跑,期望非零退出 = 检测到漂移,两个 `schema.d.ts` 已被就地重写)。
+2. `git diff -- web/src/api/schema.d.ts web-react/src/api/schema.d.ts` 读全部 diff,核对改动范围(D3/E3)。
+3. 算 SHA256:两个文件逐字节比较(`certutil -hashfile` 或 Node `crypto` 均可),记录两串 hash 到 `## Log`。
+4. 依次跑(不并发):`dotnet build -c Release` → `dotnet test` 指定过滤器 → `cd web && typecheck/lint/vitest run src/workflow/` → `cd web-react && typecheck/lint/build`。
+5. 全绿后一次性 `git add` 两个 `schema.d.ts` + 台账,提交(英文 conventional commit),`git push origin dev`。
+6. review 阶段(可能跨轮):`gh run list --branch dev --limit 10` 找到本次 push 触发的五个工作流运行,逐个 `gh run view <id>` 确认结论;`backend-ci` 展开 `db` 矩阵四条腿。全绿前不得勾选。
 
-### 测试清单(`useRequestKey.spec.ts`)
+### 验收清单(对应 `## DONE-CONDITION` 逐条,不是新测试,是证据清单)
 
-1. `value() lazily generates a UUID on first call, and returns the same value on repeated calls before settle` —— 惰性 + 同一动作内多次取值应保持不变(对应"该动作重试复用")。
-2. `settle('network') keeps the current key so the next value() call returns the same UUID` —— 网络层未确定结果保留。
-3. `settle('success') discards the key so the next value() call returns a new UUID` —— 成功丢弃。
-4. `settle('error') discards the key the same way as success` —— 业务失败丢弃。
-5. `reset() discards the key even without a prior settle` —— 打开新动作强制换新。
-6. `classifyOutcome distinguishes ApiError from any other thrown value` —— 用真实 `ApiError` 实例 + 一个普通 `Error`/`TypeError` 断言分类结果。
-
-### 变异点(留给下一轮 review,exec 阶段不跑)
-
-| 变异 | 应红 | 备注 |
-|---|---|---|
-| `settle()` 对 `'network'` 也清空 key | 用例 2 | |
-| `value()` 每次都强制重新生成(去掉惰性判断) | 用例 1 | |
-| `classifyOutcome` 恒返回 `'error'` | 用例 6 | |
-| `detail.vue` 的 `openAction` 对 `urge` 也 `reset()` 或生成 key 并透传 | 无既有单测覆盖(views 目录当前无 spec) —— review 需手动核对 `submitAction` 里 `kind === 'urge'` 分支不带 `requestId`,或另补一条断言 | |
+1. `## Tasks` 十项全勾 —— Task 10 本身勾选时自然满足,勾选前逐一巡查 1–9 仍是 `[x]`(防止之前某轮误操作漏勾/多勾)。
+2. `dotnet test` 指定过滤器绿(基线 259,只增不减)—— 本地步骤 4 + CI `backend-ci` 的 sqlite 腿双重验证。
+3. 四库矩阵 CI 四腿绿 —— push 后 `gh run view` 逐腿核对(E6)。
+4. `web` typecheck/lint 绿 + request key 复用 —— 本地步骤 4(Task 9 已交付复用机制,本轮只确认 schema 变化没打破它)。
+5. 双模板 `schema.d.ts` SHA256 一致 —— 步骤 3 的独立比对(E2)。
+6. 重复提交同 `RequestId` 返回首次结果 —— 引用 Task 5 `WfReceiptEngineTests` 既有证据,不新增测试。
 
 ### 陷阱
 
-- **别把 `requestId` 传给 Urge**——语义契约明文"催办默认不进 receipt",后端 Controller 也确实不透传,但前端仍不该生成/发送这个字段,否则读代码的人会误以为催办也幂等。
-- **`start/index.vue` 现在是字面量直传**,不改成 `const body` 先声明就直接加 `requestId` 字段,`vue-tsc --noEmit` 会报超额属性错——这不是"等 Task 10 才能修"的阻塞,是本 Task 就该顺手改的写法统一。
-- **不要在 `openAction()` 里对 `kind === 'urge'` 调 `reset()`**——reset 本身无害(urge 不读这个 key),但没必要,统一在"需要 key 的地方"才碰它,减少心智负担。
-- **`settle()` 的判定只认 `outcome` 参数,不在 composable 内部做 `instanceof ApiError` 判断**——分类逻辑固定在 `classifyOutcome`,composable 保持"纯状态机",避免以后要支持另一种错误分类体系时还得改 `useRequestKey.ts`。
-- **`crypto.randomUUID()` 需要安全上下文**——vitest 用 happy-dom,若测出不可用,退化方案是自造一个伪随机十六进制拼接(不要引入 `uuid` npm 包,YAGNI),把这一分支写进 `useRequestKey.ts` 头注释里说明理由,不要静默失败。
-- **不要给 `wfTaskApi.approve/reject/transfer/delegate/return` 的函数签名本身加 `requestId` 字段**——它们的参数类型是 `WfTaskActionInput = Schemas['WfTaskActionInput']`,改这个类型等于手改 `schema.d.ts` 生成物的下游别名,应该做的是在调用处的 `const body` 字面量上加字段(结构类型允许),让 Task 10 的 gen:api 把类型"追上"这个早就存在的字段,而不是反过来手工造类型。
+- **`check-contract-drift.mjs` 非零退出是预期行为,不是本 Task 的失败**——它检测到「HEAD 上的 schema 陈旧」就会 `fail()` 退出 1,但此时文件已经写好在工作区,`git status` 能看到改动;不要把这个退出码误判成阻塞。
+- **不要用「两个漂移检查各自绿」代替「SHA256 一致」**——两者断言的对象不同(各自 vs HEAD / 两者互相),E2 的独立哈希比对不可省。
+- **CI 轮询别用短轮次硬等**——SqlServer 即使是 PR 子集也可能要几分钟,`docker-smoke` 的 `multi` job 双副本编排也要时间;review 轮次如果 CI 还没跑完,如实记录「仍在跑」,下一轮继续查,不得因为等不及就假设通过。
+- **`gh run list` 默认按时间倒序,要认准 SHA**——本次 push 的 commit SHA 记入 `## Log`,轮询时用 `--commit <sha>` 或核对 `headSha` 字段,避免看错成别的分支/别人推的旧跑。
+- **push 权限只限 `dev`**——不得顺手 `push --force`、不得推 `main`、不得开 PR(用户只授权了「push dev 拿 CI 信号」这一件事)。
 - **不提交 `TestResults/`**。
 
-### 给后续 Task 的锚点(本轮只记录,不实施)
+### 给后续维护者的收尾说明(勾选轮写,先记在这)
 
-- Task 10 的 `gen:api` 跑完后,`WfStartInput`/`WfTaskActionInput` 等类型会正式带上 `requestId`,届时可选(不强制)把 `start/index.vue`/`detail.vue` 里手写的 `requestId` 字段替换成类型已知字段(纯类型层面的收尾,行为不变)——不是本 Task 的活,写下来防止以后有人以为"字段还没接上"。
+- Task 10 完成后,`start/index.vue`/`detail.vue` 里手写的 `requestId` 字段理论上可以被新生成的 schema 类型覆盖替代(纯类型层收尾,Task 9 已预告),但**不是**本 Task 强制项,留给后续按需处理。
+- P3(`ActivatorUtilities` 绕过 `TryAdd` 的测试写法)与 P2 里已如实披露的 SQLite 射程局限(`WfPersistenceContractTests` 类注释)均**继续挂账**,不因为 M2c 收口而被误判为"已解决"。
 
 ## Tasks
 
@@ -535,6 +538,7 @@
 | 28 | exec | Task 9 **exec**。新建 `useRequestKey.ts`(惰性生成 + `settle` 三态 + `reset`)+ `classifyOutcome` + 6 条单测;`detail.vue`/`start/index.vue` 接入(urge 不生成/不传 key,`start` 页改成 `const body` 写法对齐 `detail.vue`);`api/workflow.ts` 的 `cancel`/`resubmit` 手写类型各加 `requestId?`;`COMPONENTS.md` 补索引节。闸门:typecheck 0 错、lint 0 错 0 警、`vitest run src/workflow/` **35/35**。改动面精确等于计划内 6 文件,未碰 web-react/backend。**未勾选**,留 Round 29 review。 |
 | 29 | review | Task 9 **review**(自审)。变异 `useRequestKey.ts` 三处:`settle` 对 network 也清空(红用例2)/`value()` 去惰性(红用例1+2,比预期表更强)/`classifyOutcome` 恒 error(红用例6),均先 grep 确认真改、单文件复原。人工核对 `detail.vue` urge 分支不生成/不透传 `requestId`,`start/index.vue`/`api/workflow.ts`/`COMPONENTS.md` 逐条对照 D5–D7 无计划外改动。闸门重跑:typecheck/lint/vitest 全绿(35/35)。**0×P1、0×P2**,留 Round 30 勾选。 |
 | 30 | 勾选 | Task 9 **勾选**。核对 0×P1、0×P2(Round 29 review)、收尾闸门重跑绿(typecheck/lint/vitest 35/35),`## Tasks` 第 9 项打勾。Vue request key 生命周期收尾:`useRequestKey` composable + `classifyOutcome`,`detail.vue`/`start/index.vue` 接入,`api/workflow.ts` 手写类型加字段,`COMPONENTS.md` 索引;全程未碰 web-react/未跑 gen:api,留给 Task 10。M2c 仅剩 **Task 10** 未完成。 |
+| 31 | plan | Task 10 **plan**(本台账最后一个 Task)。读 CI 工作流五个文件 + gen:api/契约漂移两个脚本 + react-template-ledger E5 历史 + Task 5 的 HTTP 层幂等回放测试(确认 DONE-CONDITION 最后一条已满足,无需新测试)。**AskUserQuestion 问出 P2→Task10 锚点的决定:用户选「push dev 拿 CI 信号」**,写入 Plan 顶部作为「默认不 push」纪律的唯一限定例外。重写 `## Plan`:E1–E7 决策点、2+1 文件改动清单(两 schema.d.ts + 台账)、6 项 DONE-CONDITION 对应验收清单。未写产品代码、未跑 gen:api、未 push。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
