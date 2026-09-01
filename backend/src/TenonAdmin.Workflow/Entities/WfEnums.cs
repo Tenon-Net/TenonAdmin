@@ -304,3 +304,37 @@ public enum WfNodeExecutionStatus
     /// </summary>
     Failed = 7,
 }
+
+/// <summary>
+/// 外发信箱状态(<c>wf_outbox.Status</c>;M3a-1 Task 5)。<b>刻意无 0 值</b>(与
+/// <see cref="WfNodeExecutionStatus"/> 同款理由:本表是新建表,没有旧行需要一个「未知」默认值兜底)。
+/// <para>本表<b>不设 <c>LeaseOwner</c>/<c>LeaseExpiresAtUtc</c>/<c>Fence</c> 三列</b>——领取用
+/// <c>AvailableAtUtc</c>(可见性超时)一列兼任「下次可投时刻」与「租约到期」;老 owner 的迟到回写靠回写时
+/// CAS <c>AttemptCount</c>(单调、每次领取 +1)挡住,<c>AttemptCount</c> 就是 fence。领取谓词四库通用一条:
+/// <c>WHERE Status IN (Pending, Dispatching) AND AvailableAtUtc &lt;= @nowUtc</c>。</para>
+/// <para>状态转换图(本 Task 只落 <c>(insert) → Pending</c> 一条边,其余归消费者任务):</para>
+/// <code>
+/// (insert) ─────────────────────────► Pending          (AvailableAtUtc = nowUtc,立即可领)
+/// Pending        ─── claim ─────────► Dispatching       (AvailableAtUtc = now + 可见性超时;AttemptCount + 1)
+/// Dispatching    ─── 超时未回写 ────► Dispatching       (重新领取;AttemptCount + 1 —— 合法自转移)
+/// Dispatching    ─── 投递成功 ──────► Dispatched        (终态;CompletedAtUtc)
+/// Dispatching    ─── 可重试失败 ────► Pending           (AvailableAtUtc = now + 退避;LastError)
+/// Dispatching    ─── 预算耗尽/永久失败 ► Failed          (终态;CompletedAtUtc + LastError)
+/// Dispatched / Failed = 终态,无出边
+/// </code>
+/// <para><b>只追加、不重排</b>(与 <see cref="WfNodeExecutionStatus"/> 同款约束)。</para>
+/// </summary>
+public enum WfOutboxStatus
+{
+    /// <summary>待领取(初始态,或可重试失败后退避)</summary>
+    Pending = 1,
+
+    /// <summary>已被领取,可见性超时窗口内</summary>
+    Dispatching = 2,
+
+    /// <summary>投递成功(终态)</summary>
+    Dispatched = 3,
+
+    /// <summary>永久失败:预算耗尽或不可重试(终态)</summary>
+    Failed = 4,
+}
