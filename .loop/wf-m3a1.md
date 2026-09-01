@@ -41,12 +41,12 @@
 
 ## Status
 
-- 轮次: 12
+- 轮次: 13
 - max: 70
-- 当前任务: Task 3 **已收口**(`wf_node_execution` 实体 + `ExecutionKey` 唯一约束 + lease/fence CAS 领取)
-- 当前阶段: 修 Findings 完成 → **已勾选**(按 Round 8 先例合并进同一轮)
-- 上一轮: Round 12 — Task 3 **修 Findings + 勾选**(executor/sonnet)。commit `68809c0`,**2 个文件 +31/-7**,严格限定在 P1-1/P1-2/P2-1 + P3-3 一句措辞,**产品逻辑零改动**(`WfNodeExecutionStore.cs` 未进 commit,`git show --stat -- Engine/` 为空)。协调者**独立复核**:①**两个变异都刻意换了子代理没用过的形状**——变异 A 用 `(e.NextRetryAtUtc ?? DateTime.MinValue) <= nowUtc`(台账原文预言的 Task 6 真实失误形状,非子代理的 `== null ||`)→ 新测试转红,失败 1/通过 9;变异 B 用 `nowUtc + TimeSpan.FromSeconds(1)`(**正数但忽略 `leaseDuration` 量值**,比子代理的 `= nowUtc` 更强——若断言只写 `> now` 就会漏掉)→ `#9`/`#10` **两条同时转红**,由此额外证明了 `#9` 查的是值、`#10` 真正依赖租约窗口;②每次变异前 `git diff -U0` 确认落盘,后单文件 `git checkout` 复原,`git diff --stat` 空;③`DefaultValue` 命中仍为 **0**(改非空没连带破坏建表契约),P3-3 只改注释、列一个没动;④重跑两条闸门:build **0 错误**,test **307/307 通过、失败 0**(306 + 1 条新测试,只增不减)。0×P1、0×未修 P2、闸门已跑 → **勾选 Task 3**(10 项已完成 3 项)。
-- 下一步: Round 13 — Task 4 **plan**(`wf_node_execution_attempt` 实体 + append-only attempt 记录)。协调者派 `Agent(model="opus"`,不传 `subagent_type`)。prompt 要点:塞入 Task 4 目标 + `## 语义契约` 全文(**特别是 Task 3 刚定案的 `AttemptCount` 三处口径:领取时 +1 并读回,`AttemptNo` = 读回后的值,1 基——Task 4 在插 attempt 行时【不得再 +1】,这是 Plan 陷阱 8 点名的经典差一**)+ 设计文档(`workflow-database-design-review-2026-08-24.md` §六 6.2、`elsa3-slickflow-ai-reference-2026-08-23.md` §4.5)+ Task 3 已落地的先例(`WfNodeExecution` 的基类选型/UTC 列名后缀/不写 `DefaultValue`/索引命名,attempt 表应逐条沿用)。明确划界:**只建表 + append-only 写入,不接 dispatcher**(归 Task 6),不建 outbox(归 Task 5)。另需在 plan 里回应 Task 3 review 留下的射程限制 R5(`Attempt` 三处口径真的对齐——Task 4 落地 `AttemptNo` 后才第一次有两处可对照)。
+- 当前任务: Task 4(`wf_node_execution_attempt` 实体 + append-only 记录)
+- 当前阶段: plan 已完成
+- 上一轮: Round 13 — Task 4 **plan**(Opus 子代理)。**消息通道长度上限本轮已连吃三次截断**(Task 3 review 两次 + 本轮 plan 一次)→ 改让子代理把全文 `Write` 进 scratchpad 文件(`plan4.md`,36KB/421 行)再由协调者转写,**这个办法后续几轮沿用**。D1–D8 全部拍板,三处判断值得记牢:①**拒建 §6.2 的 7 列**(`Provider`/`Model`/`PromptVersion`/`SchemaVersion`/`PolicyVersion`/`TokenUsage`/`Cost`)——不是「以后再说」,而是它们在 §七的 `wf_ai_decision` 已有家,同一事实两张表两个写入点是 bug 温床;且与 Task 3「建表期一次造齐」不矛盾(那 8 列是同一里程碑 Task 6 要填的,这 7 列属下一个里程碑);②**`AttemptNo` 的防差一靠签名而非纪律**——`AppendAsync` 根本不收 `attemptNo` 形参,`ExecutionId` 与 `AttemptNo` 取自同一个 `execution` 对象;③**`EndedAtUtc` 非空是有意的**,由此 `AttemptCount − count(attempt)` = 崩溃次数,允许「只有开始时间」的行会毁掉这个口径。改动清单 **3 个全新文件、0 个既有文件改动**,预期 307 → 313(+6)。6 条新契约行已入 `## 语义契约`。
+- 下一步: Round 14 — Task 4 **exec**。协调者派 `Agent(subagent_type="oh-my-claudecode:executor", model="sonnet")`,prompt 塞入本文件 `## Plan` 全文(或直接给 `plan4.md` 路径)+ 两条闸门命令 + 13 条陷阱。**特别强调排在最前的四条**:①`AttemptNo = execution.AttemptCount`,**句号**——看到 `+ 1` 是错的,给 `AppendAsync` 加 `int attemptNo` 形参**也是错的**;②`AppendAsync` 只插一行,产品代码里出现任何 `db.Updateable<WfNodeExecution>()` 都是越界(测试里为造过期租约而 UPDATE 是允许的,Task 3 已有先例);③基类必须 `BaseEntity`(误用 `DataEntity` 的症状是「扫不到活」而非报错,**集成测试可能仍绿,别指望测试发现**);④全表不写 `DefaultValue` **且必须把理由写进类注释**(否则 review 会按 Task 1 加列契约误判 P1,Task 3 就差点)。另需强调陷阱 5(别把 `OutputJson` 正文塞进表、尤其别顺手用 `StaticConfig.CodeFirst_BigString`——仓内 `PayloadJson`/`ResultJson` 就那么写的,极易照抄)与陷阱 7(忘了截断摘要 = 本地 SQLite 全绿、CI 三条腿红)。子代理跑完后协调者**亲自重跑**两条闸门(期望 313/313),并用 `git status --short` 核对**只出现 3 个 `??` 新文件、`git diff` 为空**。**不勾选**,不顺带做 Task 5。
 
 ## 已知起点(2026-09-01,M2c 收口 + 过渡步骤后)
 
@@ -93,7 +93,12 @@
 | `wf_node_execution` 基类与时间口径(Task 3 定案) | 继承 **`BaseEntity` 而非 `DataEntity`**:`DataEntity` 的 `IOrgScoped` 全局过滤器会让**无 HTTP 请求上下文的后台 worker** 扫描返回 0 行(症状是「调度器永远没活干」而不是报错,且在有 HTTP 上下文的集成测试里可能仍是绿的),机构维度改由显式非空的 `ScopeKey` 承载——同 `WfOperationReceipt`,理由在这里更强。`IsDelete` 永不置真。四个业务时间列**一律 UTC**(`DeadlineAtUtc`/`NextRetryAtUtc`/`LeaseExpiresAtUtc`/`CompletedTimeUtc`,值取 `GetUtcNow().UtcDateTime`),这是**刻意偏离**本仓「业务时间戳走 `GetLocalNow()`」的惯例(依据评审 §六收尾),**列名 `Utc` 后缀是唯一护栏**。**硬约束:不得把基类的 local `CreateTime`/`UpdateTime` 与任何 `*Utc` 列比较或相减。** SPI 的 `DateTimeOffset` ↔ 本表 `DateTime` 的转换落点在 **Task 6**,必须先 `DateTime.SpecifyKind(x, DateTimeKind.Utc)`(SqlSugar 读回是 `Kind.Unspecified`,直接构造 `DateTimeOffset` 会按本机时区偏移,非 UTC 机器上悄悄错 8 小时)——别为了「统一」把 SPI 改成 `DateTime`。索引:`uk_wf_node_exec_key`(`ExecutionKey` 唯一,命名对齐 `uk_wf_receipt_identity`)+ `idx_wf_node_exec_scan`(`Status`,`NextRetryAtUtc`,取自评审 §八);**刻意不建** `(InstanceId)`/`(TokenId)`,等真有查询再加。 |
 | `AttemptCount` 三处口径(Task 3 定案) | 领取的那条 UPDATE 里 `AttemptCount + 1` 后**读回**;`WfNodeExecutionContext.Attempt` = **读回后**的值 = 领取前 `AttemptCount + 1` = Task 4 将写的 `AttemptNo`。首次领取 0→1,`Attempt=1`(1 基)。三处对齐完成。**Task 4 在插 attempt 行时不得再 +1** —— 那是经典差一。 |
 | Task 3 交付边界与 API(Task 3 定案) | `public static class WfNodeExecutionStore`(放 `Engine/`,与孪生的 `WfHistorySequence.cs` 同目录,**不预建 `Execution/` 目录**,沿用 Task 2 同款决定):`EnsureAsync(db, row, ct)` + `ClaimAsync(db, executionId, owner, nowUtc, leaseDuration, ct)`。**`public` 而非 `internal`**(`WfHistorySequence` 是 internal)——全仓无 `InternalsVisibleTo`,做成 internal 会让本轮「能领取」零直接证据;`WfIdentityHash` 同为 `public static`,先例一致。**本 Task 零 DI 注册**(同 Task 2;第一条注册线仍归 Task 8),`WorkflowSetup.cs` 零改动、十件套仍 10 条。**本表零引擎调用点**:`EnterNodeOp` 对 `WfNodeType.Webhook` 仍走 `default:` 抛 48008,那是正确的中间状态,接上 dispatcher 归 Task 6。`EnsureAsync` **不做唯一冲突的「认赢家」恢复**(Task 3 无并发创建方),归 Task 6——届时 PG 唯一冲突会中止整事务(`25P02`),必须抄 `Services/WfOperationReceiptService.cs` 的 `BeginNestedAsync/RollbackNestedAsync` savepoint,**本轮的定案是连 try/catch 都别写**。 |
-| attempt 记录 | append-only,重试**不覆盖**旧 attempt(AI 基石 §4.5) |
+| attempt 记录(Task 4 定案) | `wf_node_execution_attempt` / `WfNodeExecutionAttempt`,继承 **`BaseEntity`**(理由同 execution:`IOrgScoped` 只作用于 SELECT,后台 worker 无 `IDataScopeContext` 会静默返回 0 行、症状伪装成「调度器扫不到活」,**且在有 HTTP 上下文的集成测试里可能仍是绿的**)。9 个业务列:`ExecutionId`(long,非空)、`AttemptNo`(int,非空,**1 基**)、`StartedAtUtc`/`EndedAtUtc`(DateTime,**均非空**)、`ResultType`(`WfNodeExecutionResultType`,非空)、`OutputSummary`/`ErrorSummary`(string?,512)、`OutputHash`(string?,64)、`ErrorCode`(int?)。append-only 由**两道**保证:硬的是 `UNIQUE(ExecutionId, AttemptNo)`(§八原文;把「同一 attempt 写两行」从静默重复变成抛异常,也是「重试新增一行」那条测试有鉴别力的前提——没它则 `AttemptNo` 恒为 1 的 bug 也能插两行而测试照绿),软的是 Store **只暴露 `AppendAsync` 一个方法**、不提供任何 Update/Delete(§4.7 逐字沿用 `wf_history`/`wf_operation_receipt` 的姿势),`IsDelete` 永不置真。**`EndedAtUtc` 非空是有意的**:一行 attempt = 一次**已返回**的调用,由此 `execution.AttemptCount`(领取次数)− `count(attempt)`(返回次数)= **领了但没返回的次数,即崩溃次数**;允许插「只有开始时间」的行会毁掉这个口径。**不建 `DurationMs`**(相减即得)。**不带 `ScopeKey`**:attempt 行永远经 `ExecutionId` 到达、父行已有,为不存在的查询做反规范化等于永久多一个必须保持一致的写入点;若 review 坚持要,唯一可接受形态是**非空、由 execution 行拷贝**,绝不可空。索引只建 `uk_wf_node_exec_attempt_no`,**刻意不建**单列 `(ExecutionId)`(唯一索引首列已覆盖)与 `(ResultType)`/`(StartedAtUtc)`/`(ErrorCode)`(今天零查询)。 |
+| `AttemptNo` 防差一的签名设计(Task 4 定案) | `AppendAsync(db, WfNodeExecution execution, WfNodeExecutionResult result, DateTime startedAtUtc, DateTime endedAtUtc, ct)` —— **签名里根本没有 `attemptNo` 形参**,方法体内 `AttemptNo = execution.AttemptCount;`(取 `ClaimAsync` 读回后的行),**看到 `+ 1` 就是错的;给它加一个 `int attemptNo` 形参也是错的**(那正是把差一的入口重新打开)。`ExecutionId` 与 `AttemptNo` 两个事实取自**同一个对象**,顺带杜绝「A 的 Id 配 B 的 count」。`WfNodeExecutionResult → 四个扁平列`的投影也收在方法内,Task 6 因此没机会把 `Summary` 映射丢掉(Task 2 review P2-2 的教训)。测试必须**同时**断言 `AttemptNo == 1` 与 `== claimed.AttemptCount`——只断前者则「永远写 1」的实现照绿,只断后者则「三处一起错」的实现照绿。 |
+| attempt 不回写 execution(Task 4 定案) | `AppendAsync` **只插 attempt 一行,零 execution 写入**。把 `Status`/`NextRetryAtUtc`/`CompletedTimeUtc`/`OutputHash`/`ErrorCode`/`Summary` 回写 execution **属于 Task 6 的回写短事务**,理由是硬的:那次回写**必须带 `WHERE Fence == @myFence` 的 CAS**,否则租约过期后老 owner 的迟到回写会压过新 worker 的结果(Task 3 射程限制 **R6** 已记明此项归 Task 6)。本 Task 若顺手更新 execution,等于把**没有 CAS 保护**的写入提前散进来、且散在一个不知道 fence 的地方。注释写清:attempt 行与结果回写将在 Task 6 的**同一个短事务**里提交(§4.6),但**代码归属不同**——本类只管 attempt 那一行,事务由调用方起。 |
+| attempt 不存输出正文(Task 4 定案) | §6.2 原文要求「输出正文、敏感字段和密钥不直接进入日志;保存必要摘要、hash 和受控引用」。定案:**存 hash + 截断摘要,不存全文**。`OutputHash` = `Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(result.OutputJson)))`(与 `WfIdentityHash`/`WfExecutionKey` 最后一行逐字同型;本仓无通用 `string → sha256 hex` helper,**一行内联,不为此新建 helper、不扩 `WfIdentityHash` 的职责**);`OutputJson == null` → 本列 null。两个摘要列 512(对齐 `WfNodeExecution.Summary`),**由写入方在 C# 侧截断**。**不用 `StaticConfig.CodeFirst_BigString`**(仓内 `WfHistory.PayloadJson`/`WfOperationReceipt.ResultJson` 用了它,极易照抄):attempt 是 append-only、永不删除的表,把 handler 输出正文塞进去会让存储与备份成本由消费者长期承担,且这是 **PII/密钥泄漏面最大的一张表**(M3b 之后正文就是模型输出);正文去处由 Task 6 定。**截断是必须实现的、不是可选的**——摘要是外部输入(trust boundary),600 字的 summary 在 **SqlServer/PostgreSQL 上直接抛**、**MySQL 非严格模式静默截断**、**SQLite 照单全收**,正是本仓最典型的「本地 SQLite 全绿、CI 三条腿红」。截在 C# 侧则四库行为一致;两个摘要列与 hash 列都不进索引,零方言争议。 |
+| §6.2 里刻意不建的 7 列(Task 4 定案) | `Provider`/`Model`/`PromptVersion`/`SchemaVersion`/`PolicyVersion`/`TokenUsage`/`Cost` **本轮不建**。理由不是「以后再说」,而是**它们在 §七已经有家**——`wf_ai_decision` 明文带前五个;同一事实两张表两个写入点是 bug 温床。`TokenUsage`/`Cost` 确属 attempt 维度,但只有 M3b 才有值可填,而它们是**可空列**——`WfHistory.RequestId` 注释已实测记录「可空、无默认值的 `ADD COLUMN` 四库都接受,不触发三步序列」,是本仓走熟的路。**与 Task 3「建表期一次造齐」不矛盾**:那 8 列是**同一里程碑内 Task 6** 要填的,这 7 列属于**下一个里程碑**(M3b,还是禁区点名的)。 |
+| 实体如何进 CodeFirst 建表(Task 4 记录) | 靠 `WorkflowSetup.UseWorkflow` 的**整程序集扫描**(`WorkflowSetup.cs:28`,`options.ApplicationAssemblies.Add(asm)`)。**不需要在任何地方登记实体类型**——本仓**不存在**「实体类型列表」这种东西,任何「把新实体加进某个 `typeof` 列表」的动作都是错的,别去找、更别去建。 |
 | outbox | 结果提交后可靠触发通知/外部副作用;短事务与 execution 结果同提交(AI 基石 §4.6) |
 | Webhook 超时/重试分类 | 待 Task 8 plan 定案(哪些 HTTP 状态码/异常归 `RetryableFailure`,哪些归 `TerminalFailure`,是否有的场景该转 `ManualFallback`) |
 | 与人工任务的关系 | `ManualFallback` 时如何创建人工 `wf_task`——待 Task 6(dispatcher)plan 定案,复用 `EnterNodeOp.CreateTaskAsync` 还是新路径 |
@@ -101,270 +106,429 @@
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段的 Agent 重写,协调者转写进本节)
 
-> 本节为 **Task 3**(`wf_node_execution` 实体 + `ExecutionKey` 唯一约束 + lease/fence CAS 领取)的 plan,由 Round 9 的 Opus 子代理产出,协调者原文转写。Task 1/2 的历史 plan 已被覆盖,其定案沉淀在 `## 语义契约`。
+> 本节为 **Task 4**(`wf_node_execution_attempt` 实体 + append-only 记录)的 plan,由 Round 13 的 Opus 子代理产出,协调者原文转写。Task 1/2/3 的历史 plan 已被覆盖,其定案沉淀在 `## 语义契约`。
 
-### 决策点定案
+### 1. 决策点定案
 
-**1. `ExecutionKey` 构成与拼接规则**
+已实际读过:`Entities/WfNodeExecution.cs`、`Engine/WfNodeExecutionStore.cs`、`Entities/WfOperationReceipt.cs`、`Entities/WfHistory.cs`、`Entities/WfEnums.cs`、`Abstractions/IWorkflowNodeHandler.cs`、`WorkflowSetup.cs`、`tests/WfNodeExecutionClaimTests.cs`、`Engine/WfIdentityHash.cs` / `WfExecutionKey.cs`,以及设计评审 §4.7 / §六 6.1–6.3 / §七 / §八、AI 基石 §4.5、台账 `.loop/wf-m3a1.md`。
 
-新增 `public static class WfExecutionKey`(`Engine/WfExecutionKey.cs`),照抄 `WfIdentityHash` 的姿势(`backend/src/TenonAdmin.Workflow/Engine/WfIdentityHash.cs:21,24`),**不复用它的 `Compute`**(那个签名被回执的 6 个维度和 `WfCommandType/WfTargetType` 焊死,追加参数会破坏已发包的回执 hash)。
+#### D1. 表名 / 实体名 / 字段全集
 
-- 参与字段、固定顺序:`ScopeKey → InstanceId → TokenId → NodeVisitId → NodeId → DefinitionVersionId`(评审 §六 6.1 原文「至少包含组织范围、实例、Token、`NodeVisitId`、节点和定义版本」,一字不减)。
-- 分隔符 `'\n'`;数值 `InvariantCulture` 十进制;字符串 `Trim()` 保留大小写;含分隔符直接抛 `ArgumentException`。
-- **`ScopeKey` 归一化直接复用 `WfIdentityHash.NormalizeScopeKey`**(public,`WfIdentityHash.cs:72`),来源是 `WfInstance.CreateOrgId?.ToString(InvariantCulture)`;无机构 → 哨兵 `"-"`。不新造第二套归一化规则。
-- **`NodeVisitId` 进 key**,可空 → 同一个哨兵 `"-"`。语义边界写死:`NodeVisitId` 为 null 时 key 退化为「(scope, instance, token, node, defVer) 一次」,也就是 M3a 之前的旧语义——旧 token 永远停在原节点、不会被将来的 dispatcher 领取(dispatcher 是 Task 6 才有的东西),所以这个退化在本里程碑内**不可达**,但必须写清,否则 Task 6 会当成 bug 去"修"。**不做回填**(Task 1 契约)。
-- 算法 SHA-256 → `Convert.ToHexStringLower`,**固定 64 位小写十六进制**,列 `Length = 64`、**非空**。
-- 索引长度核算:SqlServer 因 `SqlServerCodeFirstNvarchar = true`(`backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs:293`)建成 `nvarchar(64)` = **128 字节 < 900**;MySQL utf8mb4 = 64×4 = **256 字节 < 3072**。选 hash 而非明文拼接的决定性理由就在这里:明文长度随 `NodeId`(64) + `ScopeKey`(64) 浮动,每加一个维度都要重算两次方言上限;hash 是常数 64,这个问题永远消失。组成字段全部保留为独立列,排查用,不参与唯一性(与 `WfOperationReceipt` 同款,`Entities/WfOperationReceipt.cs:20-22`)。
+`wf_node_execution_attempt` / `WfNodeExecutionAttempt`,放 `Entities/WfNodeExecutionAttempt.cs`,继承 `BaseEntity`。
 
-**2. `WfNodeExecutionStatus` 枚举值**(进 `Entities/WfEnums.cs` 尾部,不进 `Abstractions/`——它是持久化枚举,不是 SPI)
+| 列 | C# 类型 | 可空 | 长度 | 说明 |
+|---|---|---|---|---|
+| `ExecutionId` | `long` | 否 | — | 指向 `wf_node_execution.Id`。本仓不建数据库外键(全仓无 FK 先例),靠唯一索引首列串联 |
+| `AttemptNo` | `int` | 否 | — | **1 基**,直接取 execution 领取读回后的 `AttemptCount`,**不得再 +1**(见 D2)。类型跟 `WfNodeExecution.AttemptCount` 一致取 `int`,不取 `long`——它不像 `Fence` 那样会被交给外部系统当令牌 |
+| `StartedAtUtc` | `DateTime` | 否 | — | UTC;值由调用方传入 |
+| `EndedAtUtc` | `DateTime` | 否 | — | UTC;值由调用方传入。**非空是有意的**:一行 attempt = 一次**已返回**的调用(见下方「崩溃可见性」) |
+| `ResultType` | `WfNodeExecutionResultType` | 否 | — | Task 2 定案的枚举(`Succeeded=1/RetryableFailure=2/ManualFallback=3/TerminalFailure=4`,刻意无 0 值) |
+| `OutputSummary` | `string?` | 是 | 512 | 成功时的摘要;写入方截断(见 D8) |
+| `OutputHash` | `string?` | 是 | 64 | `result.OutputJson` 的 SHA-256 小写 hex;`OutputJson == null` → 本列 `null` |
+| `ErrorCode` | `int?` | 是 | — | 失败/回退时的错误码 |
+| `ErrorSummary` | `string?` | 是 | 512 | 失败/回退时的摘要;同样截断 |
 
-```
-Pending = 1, Running = 2, Succeeded = 3, RetryScheduled = 4,
-ManualFallback = 5, Cancelled = 6, Failed = 7
-```
+共 **9 个业务列** + `BaseEntity` 的审计列。
 
-**刻意无 0 值**,理由同 `WfNodeExecutionResultType`(`Abstractions/IWorkflowNodeHandler.cs`):`default(WfNodeExecutionStatus)` 非法 → 漏赋值不会悄悄等于 `Pending`。注意与 `WfHistoryActorType.Unknown = 0`(`WfEnums.cs:236`)的差别是**有理由的**:那个 0 是给升级前旧行读的,本表是**新建表**,不存在旧行。
+**§6.2 里刻意不建的列**:`Provider` / `Model` / `PromptVersion` / `SchemaVersion` / `PolicyVersion` / `TokenUsage` / `Cost`。
 
-`Cancelled` 与 `Failed` 都要:`Failed` = handler 返回 `TerminalFailure` 或重试预算耗尽(永不再动);`Cancelled` = 实例被外部撤销/终止,execution 作废。两者对 Task 6 的后续动作完全不同(前者要转人工或终止实例,后者要静默丢弃),合并会让 dispatcher 分不出该不该报警。
+理由不是「以后再说」,而是**它们在 §七已经有家**:`wf_ai_decision` 明文带 `Provider` / `Model` / `PromptVersion` / `PolicyVersion` / `SchemaVersion`(还带 `InputHash`)。同一个事实两张表、两个写入点,是最典型的 bug 温床。`TokenUsage` / `Cost` 确实是 attempt 维度的,但**只有 M3b 才有值可填**,而它们都是可空数值列——`WfHistory.RequestId` 的注释里已实测记录:「可空、无默认值的 `ADD COLUMN` 四库都接受,不触发『先加可空列 → 回填 → 改 NOT NULL』三步路」。这是本仓走熟的路。
 
-状态转换图(Task 6 照它实现):
+这与 Task 3 的「建表期一次造齐 8 个预留列」**不矛盾**:那 8 列是**同一个里程碑内 Task 6 就要填**的,这 7 列属于**下一个里程碑**,且 M3b 已被本轮禁区点名。本轮建它们 = 建 7 个本里程碑内永远没人填的列。
 
-```
-(insert) ──────────────► Pending
-Pending ───── claim ───► Running
-RetryScheduled ─claim──► Running        (NextRetryAtUtc <= now)
-Running ─── 租约过期 ──► Running        (重新领取;Fence + 1,见决策 4)
-Running ──────────────► Succeeded | RetryScheduled | ManualFallback | Failed | Cancelled
-Pending | RetryScheduled ─────────────► Cancelled
-Succeeded / ManualFallback / Failed / Cancelled = 终态,无出边
-```
+**本表没有 `ScopeKey`**(这条必须写进注释,否则下一轮 review 会当新发现重开):
 
-`Running → Running` 是合法自转移,**这正是 fence 存在的原因**:老 owner 可能还活着,它的回写必须靠 fence 被拒。
+- `wf_node_execution` / `wf_operation_receipt` 带 `ScopeKey`,是因为它们**被按身份直接查**(`ExecutionKey` / `IdentityHash` 唯一索引)、**被 worker 直接扫**(`(Status, NextRetryAtUtc)`),自身就是查询入口。
+- attempt 行永远**经 `ExecutionId` 到达**,父行已经带着 `ScopeKey`。为一个今天不存在的查询做反规范化,等于永久多一个必须与父行保持一致的写入点。
+- **但基类仍必须是 `BaseEntity`**——理由与 execution 逐字相同(见 D7),两件事不能混为一谈:「不要 `DataEntity`」是因为 `IOrgScoped` 全局过滤器会让后台 worker 静默读到 0 行;「不要 `ScopeKey`」是因为没有查询要用它。
+- 若 review 坚持要 `ScopeKey`,**唯一可接受的形态是非空、由 execution 行拷贝**(对齐 `WfOperationReceipt` / Round 12 刚把 `WfNodeExecution.ScopeKey` 改非空的定案),**绝不可空**。
 
-**3. lease/fence 字段**(逐个)
+**崩溃可见性(顺带得到的性质,写进注释)**:`execution.AttemptCount`(领取次数)− `count(attempt)`(返回次数)= 领了但没返回的次数,即崩溃/被杀次数。`EndedAtUtc` 非空正是为了保住这个口径——若允许插「只有开始时间」的行,这个差额就失去意义了。Task 7 的崩溃恢复会用到这个观测点。
 
-| 列 | 类型 | 可空 | 长度/默认 |
-| --- | --- | --- | --- |
-| `LeaseOwner` | `string?` | 是 | `Length = 128`,对齐 `SysJobLock.OwnerNodeName`。未领取 = null 而非空串(本列不进任何唯一索引,也不进领取 WHERE,NULL 无风险)。worker 标识由**调用方传参**决定,Task 3 不接 DI、不读 `AdminJobsOptions`;`JobTime.ResolveNodeName` 是 `internal` 的(`Jobs/JobTime.cs:16`),Workflow 包够不着,Task 6 自己算 `{MachineName}#{WorkerId}` |
-| `LeaseExpiresAtUtc` | `DateTime?` | 是 | 无默认 |
-| `Fence` | `long` | 否 | 从 **0** 起(新行),首次领取变 1。用 `long` 不用 `int`:fence 在 Task 5/8 会作为幂等/排序令牌交给外部系统(outbox/webhook),届时加宽是破坏性列变更;`Version` 从不出库,故 `int` 足够——两者不必一致 |
-| `AttemptCount` | `int` | 否 | 从 0 起 |
+**刻意不建 `DurationMs`**:`EndedAtUtc − StartedAtUtc` 就是,§6.2 也没列它。本仓「办理耗时」那套(§4.3)是人工任务的口径,与机器 attempt 无关,不要顺手搬过来。
 
-**全表所有列一律不写 `DefaultValue`。** Task 1 那条契约管的是 `ADD COLUMN`:`DefaultValue` 唯一的作用是让 `DbMaintenanceProvider.AddColumn` 走「先加可空列 → 回填 → 改 NOT NULL」三步序列(`Entities/WfInstance.cs` 里 `Version` 的长注释已反编译核实)。**`CREATE TABLE` 路径根本不读它**,本表是新建表、四库都在建表时一次性造出全部列,写 `DefaultValue` 是噪音。这条要在实体注释里写明,否则机械套用 Task 1 契约的评审会误判成 P1。
+**刻意不建 `Fence` / `LeaseOwner` 副本**:记录「这次 attempt 跑在哪个 fence 下」看着有诊断价值,但拒绝迟到回写的逻辑在 execution 行的 CAS 上(Task 6),attempt 表存一份既不参与判定也不参与查询。
 
-**4. 领取的 SQL 形状**
+#### D2. `AttemptNo` 的来源 —— 签名里根本没有这个参数
 
 ```csharp
-// nowUtc 由调用方传入(应用时间,见 ④)
-var claimed = await db.Updateable<WfNodeExecution>()
-    .SetColumns(e => new WfNodeExecution
+public static async Task<WfNodeExecutionAttempt> AppendAsync(
+    ISqlSugarClient db,
+    WfNodeExecution execution,          // ← 领取读回后的行(ClaimAsync 的返回值)
+    WfNodeExecutionResult result,
+    DateTime startedAtUtc,
+    DateTime endedAtUtc,
+    CancellationToken cancellationToken)
+```
+
+**差一在类型层面难以发生的机制**:方法签名里**没有 `int attemptNo` 形参可供调用方 +1**。方法体内:
+
+```csharp
+ExecutionId = execution.Id,
+AttemptNo   = execution.AttemptCount,   // 直接取,绝不 +1
+```
+
+两个事实取自**同一个对象**,顺带也杜绝了「A 的 Id 配 B 的 count」这类错配。`WfNodeExecutionResult → 四个扁平列`的投影同样收在方法内部,Task 6 也就没机会把 `Summary` 的映射丢掉——这正是 Task 2 review **P2-2**(四个工厂的 payload 管线没被断言,一个掉了的 `Summary = summary` 会让 `attempt.ErrorSummary` 永远为空)的教训。
+
+**三处口径**(Task 3 定案,逐字沿用):领取 UPDATE 里 `AttemptCount + 1` → 读回 → `WfNodeExecutionContext.Attempt` = 读回后的值 = **本列 `AttemptNo`**。首次领取 `0 → 1`,`Attempt = 1`,`AttemptNo = 1`。本轮第一次有**两处**可以互相对照(Task 3 射程限制 R5 的一半),第三处(Context)归 Task 6。
+
+#### D3. append-only 怎么保证 —— 一硬一软两道
+
+**硬(可验证的机制)**:`UNIQUE(ExecutionId, AttemptNo)`,索引名 `uk_wf_node_exec_attempt_no`。**建**。
+
+- §八原文就推荐这一条(`wf_node_execution_attempt` → `UNIQUE(ExecutionId, AttemptNo)` → 「防 attempt 编号重复」)。
+- 它把「同一次 attempt 写两行」从静默重复变成**抛异常**。
+- 它同时是「重试新增一行」那条测试**有鉴别力的前提**:没有它,一个 `AttemptNo` 恒等于 1 的实现也能插两行、测试照样绿。
+- 代价只有一个索引,而且它的首列天然服务「列出某 execution 的全部 attempt」这个必然会出现的查询。
+- 两列都非空,踩不到 SqlServer「唯一索引把多个 NULL 视为相等」的坑。
+
+**软(约定 + 注释 + API 面)**:
+
+- `WfNodeExecutionAttemptStore` **只暴露 `AppendAsync` 一个方法**,不提供任何 Update / Delete。
+- `BaseEntity` 带来的 `UpdateTime` / `UpdateUserId` / `IsDelete` **永不置真**——§4.7 已明确定调:「不删除现有字段;工作流 Module 不暴露历史记录的通用更新/删除 Interface;新建的 attempt/decision 记录从一开始采用只增写入路径;管理清理走明确的保留期策略,而不是普通软删除」。逐字沿用 `wf_history` / `wf_operation_receipt` 的姿势,写进类注释。
+
+#### D4. 索引:建哪些、刻意不建哪些
+
+| 索引 | 建? | 理由 |
+|---|---|---|
+| `uk_wf_node_exec_attempt_no` UNIQUE `(ExecutionId, AttemptNo)` | **建** | §八原文;把 attempt 编号重复变成硬错误;首列即「按 execution 列出 attempt」的查询 |
+| 单列 `(ExecutionId)` | **不建** | 上面那个复合索引的首列已经覆盖,纯冗余 |
+| `(ResultType)` | **不建** | 今天零查询。「按结果类型统计失败率」是 M3a-2 产品面的事,届时再加 |
+| `(StartedAtUtc)` / `(EndedAtUtc)` | **不建** | 今天零查询。保留期清理走 `ExecutionId` 子查询,不需要时间索引 |
+| `(ErrorCode)` | **不建** | 同上 |
+
+命名沿用 `uk_wf_*`(唯一)/ `idx_wf_*`(普通),对齐 `uk_wf_receipt_identity` / `uk_wf_node_exec_key` / `idx_wf_node_exec_scan`。**刻意不建今天没有查询用得上的索引**,与 Task 3「刻意不建 `(InstanceId)` / `(TokenId)`」同一条纪律。
+
+#### D5. API 形状:本轮就交付写入 API
+
+`public static class WfNodeExecutionAttemptStore`,放 `Engine/WfNodeExecutionAttemptStore.cs`(与孪生的 `WfNodeExecutionStore.cs` / `WfHistorySequence.cs` 同目录;**不预建 `Execution/` 子目录**,沿用 Task 2/3 的同款决定)。
+
+- **`public` 而非 `internal`**:全仓无 `InternalsVisibleTo`(Task 3 已 grep 命中 0),internal 会让本轮零直接证据。`WfIdentityHash` / `WfExecutionKey` / `WfNodeExecutionStore` 同为 `public static`,先例一致。
+- **零 DI 注册**,`WorkflowSetup.cs` **零改动**,十件套仍 **10** 条(第一条注册线仍归 Task 8)。
+- **本轮就给写入 API,不是只建实体**:只建实体不给写入路径,「append-only 写入路径只增不改不删」这一轮就**零直接证据**,台账那句「至少一条测试证明重试不覆盖旧 attempt」也无从落地——测试要么只能自己拼 `Insertable`(那测的是测试自己写的投影,不是产品代码),要么根本写不出来。所以给。
+- **只给一个方法**,不给 `ListAsync` / `GetAsync`:测试直接 `db.Queryable<WfNodeExecutionAttempt>()`,与 `WfNodeExecutionClaimTests` 同款姿势。查询 API 等 Task 6/M3a-2 真有调用方时再长出来。
+
+```csharp
+public static class WfNodeExecutionAttemptStore
+{
+    public const int SummaryMaxLength = 512;
+
+    public static Task<WfNodeExecutionAttempt> AppendAsync(
+        ISqlSugarClient db,
+        WfNodeExecution execution,
+        WfNodeExecutionResult result,
+        DateTime startedAtUtc,
+        DateTime endedAtUtc,
+        CancellationToken cancellationToken);
+}
+```
+
+#### D6. 与 execution 行的关系:本 Task **零 execution 写入**
+
+`AppendAsync` **只插 attempt 一行**,不碰 `wf_node_execution` 的任何列。
+
+把 `Status` / `NextRetryAtUtc` / `CompletedTimeUtc` / `OutputHash` / `ErrorCode` / `Summary` 回写 execution,**属于 Task 6 的回写短事务**,理由是硬的:那次回写**必须带 `WHERE Fence == @myFence` 的 CAS**,否则租约过期后老 owner 的迟到回写会压过新 worker 的结果。fence 语义与 CAS 是 Task 6 的契约(Task 3 射程限制 **R6** 明确记着「租约到期后老 owner 的回写真的被 fence 拒掉 → Task 6 兜」)。本 Task 若顺手更新 execution,等于把**没有 CAS 保护**的写入提前散进来,而且散在一个不知道 fence 的地方。
+
+注释里写清:attempt 行与 execution 结果回写将在 **Task 6 的同一个短事务**里提交(§4.6「结果、变量、历史和 outbox 在同一短事务提交」),但**代码归属不同**——本类只负责 attempt 那一行,事务由调用方起。
+
+#### D7. 基类 / 时间口径 / `DefaultValue` / `ScopeKey` —— 逐条确认这张表具体怎么定
+
+| 契约 | 本表具体怎么定 |
+|---|---|
+| **基类** | `BaseEntity`,**不是** `DataEntity`。`DataEntity` 带 `IOrgScoped` 全局数据范围过滤器(**只作用于 SELECT**),而本表的读写方是**没有 HTTP 请求上下文的后台 worker**——`IDataScopeContext` 为空会让查询静默返回 0 行,症状伪装成「调度器扫不到活」而不是报错,**且在有 HTTP 上下文的集成测试里可能仍然是绿的**(所以别指望测试发现这个,靠这条 checklist)。与 `WfNodeExecution` / `WfOperationReceipt` 同源。 |
+| **机构维度** | 本表**不带** `ScopeKey`(D1 已论证:永远经 `ExecutionId` 到达,父行已有)。若非要带,必须**非空**。 |
+| **时间口径** | 两个业务时间列 `StartedAtUtc` / `EndedAtUtc` **全部 UTC,列名一律带 `Utc` 后缀**,值由调用方算好传入(不在 SqlSugar 表达式里内联)。这是**刻意偏离**本仓「业务时间戳走 `GetLocalNow().DateTime`」的惯例,**列名后缀是唯一的护栏**。**硬约束(必写进注释)**:基类审计列 `CreateTime` / `UpdateTime` 仍是 local(AOP 填的),**任何代码都不得把它们与任何 `*Utc` 列做比较或相减**。 |
+| **`DefaultValue`** | **全表一列都不写。** 并且必须把理由写进类注释:`DefaultValue` 唯一的作用是让 `DbMaintenanceProvider.AddColumn` 走「先加可空列 → 回填 → 改 NOT NULL」三步序列,**`CREATE TABLE` 路径根本不读它**;本表是本 Task 新建表,没有「存量行升级」这回事,写它只是噪音。**Task 1 那条「非空列必须带 `DefaultValue`」契约管的是加列,不是建表**——Task 3 就是差点在这里被机械套用误判成 P1。 |
+| **索引命名** | `uk_wf_node_exec_attempt_no`,对齐 `uk_wf_receipt_identity` / `uk_wf_node_exec_key`。 |
+| **交付形态** | `public static class` + 零 DI + `WorkflowSetup.cs` 零改动 + 十件套仍 10 条(与 Task 2/3 同款)。 |
+| **实体如何进建表** | 靠 `WorkflowSetup.UseWorkflow` 的**整程序集扫描**(`WorkflowSetup.cs:28`,`options.ApplicationAssemblies.Add(asm)`)。**不需要在任何地方登记实体类型**——任何「把新实体加进某个 typeof 列表」的动作都是错的(那种列表在本仓不存在)。 |
+
+#### D8. `OutputJson` 体积 —— attempt 行不存输出正文
+
+§6.2 原文的要求是:「输出正文、敏感字段和密钥**不直接进入日志**;保存必要摘要、hash 和受控引用。」照做,**定案:存 hash + 截断摘要,不存全文**。
+
+- **`OutputHash`**(`Length = 64`,可空)= `Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(result.OutputJson)))`。与 `WfIdentityHash.Compute` / `WfExecutionKey.Compute` 的最后一行**逐字同型**(两处都是 `Convert.ToHexStringLower(SHA256.HashData(...))`)。本仓**没有**通用的 `string → sha256 hex` helper(两个既有 helper 都是结构化入参),**不为此新建 helper**——一行内联即可。`result.OutputJson == null` → 本列 `null`。
+- **`OutputSummary` / `ErrorSummary`**:`Length = 512`,对齐 `WfNodeExecution.Summary` 的既有长度。**写入方截断**到 512。
+- **不用 `StaticConfig.CodeFirst_BigString`**(仓内 `WfHistory.PayloadJson` / `WfOperationReceipt.ResultJson` 用了它)。理由:attempt 是 append-only、永不删除的表;把任意 handler 的输出正文塞进去,存储与备份成本全部由消费者长期承担,而且这是 PII / 密钥泄漏面最大的一张表(M3b 之后正文里就是模型输出)。正文的去处(流程变量 / execution 行 / 受控引用)由 **Task 6** 决定,不是本 Task 的事。
+- **四库可行性与长度上限**:两个摘要列都是 `≤ 512` 的普通变长字符串(SqlSugar 生成 `nvarchar(512)` / `varchar(512)`,SQLite 是 `TEXT` 亲和),`OutputHash` 是定长 64 hex。**四库零方言争议、零大文本类型**(不碰 MySQL `LONGTEXT` / PG `text` / SqlServer `nvarchar(max)` / SQLite 无限 `TEXT` 之间的差异),也不碰任何索引键长上限(这两列都不进索引)。
+- **截断是必须实现的,不是可选的**:handler 的摘要是**外部输入**(trust boundary)。600 字的 summary 在 **SqlServer / PostgreSQL 上直接抛**(超长即报错),**MySQL 非严格模式静默截断**,**SQLite 照单全收**——这是本仓最典型的「本地 SQLite 全绿、CI 三条腿红」。截在 C# 侧,四库行为一致。
+
+---
+
+### 2. 改动清单
+
+| 路径 | 新建 / 改 | 改什么 |
+|---|---|---|
+| `backend/src/TenonAdmin.Workflow/Entities/WfNodeExecutionAttempt.cs` | **新建** | 实体类:`[SugarTable("wf_node_execution_attempt")]` + 1 个唯一索引 `[SugarIndex]` + 9 个业务列 + 类/成员注释(D7 与实现步骤点名的七条必写) |
+| `backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionAttemptStore.cs` | **新建** | `public static class`,`SummaryMaxLength` 常量 + `AppendAsync` 单方法 + 私有 `Truncate` |
+| `backend/tests/TenonAdmin.Tests/WfNodeExecutionAttemptTests.cs` | **新建** | 6 个 `[Fact]` + 脚手架(`Open` / `NewExecution` / `UniqueKey`,抄 `WfNodeExecutionClaimTests`) |
+
+**三个文件,全部是新建,一个都不能多。** 以下文件本轮 **`git diff` 必须为空**:
+
+- `WorkflowSetup.cs`(动了 → 十件套连锁红)
+- `Entities/WfNodeExecution.cs`、`Entities/WfEnums.cs`、`Engine/WfNodeExecutionStore.cs`
+- `Abstractions/**`(含 `IWorkflowNodeHandler.cs`)
+- `Engine/Operations/**`、`Engine/WorkflowEngine.cs`、`Engine/WfExecutionContext.cs`
+- `tests/TenonAdmin.Tests/WfNodeExecutionClaimTests.cs`(Task 3 的测试不许动)
+- `backend/Directory.Packages.props`(不加任何依赖;`SHA256` 在 `System.Security.Cryptography`,BCL 自带)
+
+exec 阶段自查:`git status --short` 只应出现上表三个 `??` 新文件;`git diff` 空。
+
+---
+
+### 3. 实现步骤
+
+**步骤 1 — 实体** `backend/src/TenonAdmin.Workflow/Entities/WfNodeExecutionAttempt.cs`
+
+```csharp
+using SqlSugar;
+using TenonAdmin.SqlSugar;
+
+namespace TenonAdmin.Workflow;
+
+/// <summary>(类注释见下方必写七条)</summary>
+[SugarTable("wf_node_execution_attempt", TableDescription = "节点执行 attempt 记录")]
+[SugarIndex("uk_wf_node_exec_attempt_no",
+    nameof(ExecutionId), OrderByType.Asc,
+    nameof(AttemptNo), OrderByType.Asc,
+    IsUnique = true)]
+public class WfNodeExecutionAttempt : BaseEntity
+{
+    [SugarColumn(ColumnDescription = "所属执行记录 Id")]
+    public long ExecutionId { get; set; }
+
+    /// <summary>本次 attempt 序号,1 基;= 领取读回后的 <c>execution.AttemptCount</c>,写入时不得再 +1。</summary>
+    [SugarColumn(ColumnDescription = "attempt 序号(1 基)")]
+    public int AttemptNo { get; set; }
+
+    [SugarColumn(ColumnDescription = "开始时刻(UTC)")]
+    public DateTime StartedAtUtc { get; set; }
+
+    /// <summary>结束时刻(UTC)。非空:一行 = 一次已返回的调用。</summary>
+    [SugarColumn(ColumnDescription = "结束时刻(UTC)")]
+    public DateTime EndedAtUtc { get; set; }
+
+    [SugarColumn(ColumnDescription = "本次 attempt 的结果类型")]
+    public WfNodeExecutionResultType ResultType { get; set; }
+
+    /// <summary>成功时的输出摘要(已截断至 512);失败/回退时为 null。</summary>
+    [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "输出摘要")]
+    public string? OutputSummary { get; set; }
+
+    /// <summary>输出正文的 SHA-256 小写 hex;正文本身不落库(§6.2)。</summary>
+    [SugarColumn(Length = 64, IsNullable = true, ColumnDescription = "输出哈希(SHA-256 小写 hex)")]
+    public string? OutputHash { get; set; }
+
+    [SugarColumn(IsNullable = true, ColumnDescription = "失败错误码")]
+    public int? ErrorCode { get; set; }
+
+    /// <summary>失败/回退时的错误摘要(已截断至 512);成功时为 null。</summary>
+    [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "错误摘要")]
+    public string? ErrorSummary { get; set; }
+}
+```
+
+**类注释必写七条**(缺一条都会被下一轮 review 当成新发现重开):
+
+1. **append-only**:每次真实调用一行,**重试新增、不覆盖旧 attempt**(AI 基石 §4.5「attempt 必须保留每次真实调用」);基类带来的 `UpdateTime` / `UpdateUserId` / `IsDelete` **永不置真**,清理走**保留期策略**而非普通软删除(评审 §4.7);`WfNodeExecutionAttemptStore` 只暴露 `AppendAsync`,不提供更新/删除 —— 与 `wf_history` / `wf_operation_receipt` 同源。
+2. **基类为什么是 `BaseEntity` 而不是 `DataEntity`**:`DataEntity` 带 `IOrgScoped` 全局过滤器(只作用于 SELECT),后台 worker 无 `IDataScopeContext` → 静默返回 0 行,症状伪装成「调度器扫不到活」;**并说明为什么本表连 `ScopeKey` 都不带**(永远经 `ExecutionId` 到达,父行 `WfNodeExecution.ScopeKey` 已承载机构维度;没有查询要用它,反规范化只会多一个必须保持一致的写入点)。
+3. **`AttemptNo` 1 基,= 领取读回后的 `execution.AttemptCount`,写入时不得再 +1**;点名三处口径(领取 UPDATE 的 `AttemptCount + 1` / `WfNodeExecutionContext.Attempt` / 本列),说明这是经典差一点。
+4. **两个业务时间列全 UTC + `Utc` 后缀**,值由调用方传入;**硬约束:不得把基类 local 的 `CreateTime` / `UpdateTime` 与任何 `*Utc` 列做比较或相减**。
+5. **全表一律不写 `DefaultValue`**:它只驱动 `DbMaintenanceProvider.AddColumn` 的三步序列,`CREATE TABLE` 路径根本不读它;本表是新建表,没有存量行升级这回事;**Task 1 那条契约管的是加列,不是建表**。
+6. **不存输出正文**,只存 `OutputHash` + 512 截断摘要(§6.2「输出正文、敏感字段和密钥不直接进入日志」);§6.2 列的 `Provider` / `Model` / `PromptVersion` / `SchemaVersion` / `PolicyVersion` **归 §七 `wf_ai_decision`**(同一事实不设两个家),`TokenUsage` / `Cost` 待 M3b 以可空列 `ADD COLUMN` 补(四库都接受,`WfHistory.RequestId` 先例)。
+7. **崩溃可见性**:`execution.AttemptCount − count(attempt)` = 领了但没返回的次数;`EndedAtUtc` 非空正是为了保住这个口径。
+
+**步骤 2 — Store** `backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionAttemptStore.cs`
+
+```csharp
+using System.Security.Cryptography;
+using System.Text;
+using SqlSugar;
+
+namespace TenonAdmin.Workflow;
+
+/// <summary>(类/方法注释见下方必写五条)</summary>
+public static class WfNodeExecutionAttemptStore
+{
+    /// <summary>摘要列长度上限,与实体两个 512 列一致。</summary>
+    public const int SummaryMaxLength = 512;
+
+    public static async Task<WfNodeExecutionAttempt> AppendAsync(
+        ISqlSugarClient db,
+        WfNodeExecution execution,
+        WfNodeExecutionResult result,
+        DateTime startedAtUtc,
+        DateTime endedAtUtc,
+        CancellationToken cancellationToken)
     {
-        Status         = WfNodeExecutionStatus.Running,
-        LeaseOwner     = owner,
-        LeaseExpiresAtUtc = leaseUntil,
-        Fence          = e.Fence + 1,
-        AttemptCount   = e.AttemptCount + 1,
-    })
-    .Where(e => e.Id == executionId)
-    .Where(e => e.Status == WfNodeExecutionStatus.Pending
-             || (e.Status == WfNodeExecutionStatus.RetryScheduled && e.NextRetryAtUtc <= nowUtc)
-             || (e.Status == WfNodeExecutionStatus.Running       && e.LeaseExpiresAtUtc < nowUtc))
-    .ExecuteCommandAsync();
-if (claimed != 1) return null;
-// 同一事务内读回(WfHistorySequence.NextAsync 同款,Engine/WfHistorySequence.cs:23)
-return await db.Queryable<WfNodeExecution>().Where(e => e.Id == executionId).FirstAsync();
-```
+        ArgumentNullException.ThrowIfNull(execution);
+        ArgumentNullException.ThrowIfNull(result);
+        cancellationToken.ThrowIfCancellationRequested();
 
-① **为什么只有一个 worker 领到**:领取成功即在该行取排他锁并持有到提交。并发的第二条 UPDATE 被阻塞,解锁后四库都对**新版本**重新求值 WHERE(PG 走 EPQ 重检查、MySQL RR 下 UPDATE 是 current read、SqlServer RC 取 U→X 锁后重读、SQLite 写事务本身串行),此时 `LeaseExpiresAtUtc` 已被推到未来 → 匹配 0 行。仓内先例:`JobSchedulerService.HeartbeatAsync` 的夺租(`Jobs/JobSchedulerService.cs:197-200`)逐字同型。
+        var succeeded = result.Type == WfNodeExecutionResultType.Succeeded;
+        var row = new WfNodeExecutionAttempt
+        {
+            ExecutionId   = execution.Id,
+            AttemptNo     = execution.AttemptCount,   // ← 直接取,绝不 +1
+            StartedAtUtc  = startedAtUtc,
+            EndedAtUtc    = endedAtUtc,
+            ResultType    = result.Type,
+            OutputSummary = succeeded ? Truncate(result.Summary) : null,
+            OutputHash    = result.OutputJson is null
+                ? null
+                : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(result.OutputJson))),
+            ErrorCode     = succeeded ? null : result.ErrorCode,
+            ErrorSummary  = succeeded ? null : Truncate(result.Summary),
+        };
 
-② **四库通用**:只有参数化 `UPDATE ... WHERE` + 影响行数判定,无 `RETURNING`、无 `SET @v = col = col+1`、无 `FOR UPDATE SKIP LOCKED`、无数据库时间函数。`Fence + 1` / `AttemptCount + 1` 用 Task 1 已落地的相对递增手法——**适用,直接复用**。
+        await db.Insertable(row).ExecuteCommandAsync();   // Id 由审计 AOP 填雪花
+        return row;
+    }
 
-③ **影响行数**:`1` = 领到,读回值即真相;`0` = 该行不可领(已终态 / 租约仍有效 / 重试时间未到 / 别的 worker 抢先)。**不抛异常**,返回 `null` 让 dispatcher 跳过——与 `ClaimInstanceAsync`(`Engine/WfExecutionContext.cs:119`)抛 48004 的差别是有意的:那里是用户请求撞车、必须让用户看见;这里是 worker 扫到一行没抢到、下一拍再来,是正常运行状态。
-
-④ **租约过期判定用应用时间**(`nowUtc` 作为参数传入,在 SQL 里是普通参数)。理由:四库时间函数名与精度各不相同,且 DB 时钟与应用时钟混用会让「谁算过期」在多实例下漂移。仓内先例同上(`l.LeaseUntil < now`,`now = time.GetLocalNow().DateTime`)。**Task 7 的手法因此成立**:测试直接把 `LeaseExpiresAtUtc` UPDATE 成过去时刻再调领取即可,无需操纵任何时钟;也可注入 `FakeTimeProvider` 从调用方那端推时间。两条路都通。
-
-⑤ **必须先领取、再在同一事务内读回**——`SetColumns` 走条件更新路径,**不触发**只认 `UpdateByObject` 的审计 AOP(`WfExecutionContext.cs:119` 那段长注释已论证),所以本次领取不会刷新 `UpdateTime/UpdateUserId`,「审计字段不可变」的既有断言不受影响。读回的 Queryable 会吃软删除全局过滤器(`BaseEntity : ISoftDelete`),本表 `IsDelete` 永不置真,无害;**本表不是 `IOrgScoped`,故无需 `ClearFilter`**(见决策 7 的基类选型)。
-
-**5. `AttemptCount` 精确语义**
-
-领取的那条 UPDATE 里 **`AttemptCount + 1`,然后读回**。`Context.Attempt` = **读回后**的值 = 领取前的 `AttemptCount + 1` = Task 4 将写的 `AttemptNo`。首次领取:0 → 1,`Attempt = 1`。三处口径一次对齐,1 基。
-
-**6. 索引**
-
-```csharp
-[SugarTable("wf_node_execution", TableDescription = "节点可靠执行记录")]
-[SugarIndex("uk_wf_node_exec_key", nameof(ExecutionKey), OrderByType.Asc, IsUnique = true)]
-[SugarIndex("idx_wf_node_exec_scan", nameof(Status), OrderByType.Asc, nameof(NextRetryAtUtc), OrderByType.Asc)]
-```
-
-- 唯一索引名 `uk_wf_node_exec_key`,命名对齐 `uk_wf_receipt_identity`。
-- **SqlServer 唯一索引把多个 NULL 视为相等这个坑本表踩不到**:`ExecutionKey` 非空(`= ""` 初始化 + 计算值必然 64 位)。这正是选「哨兵归一化 + hash」而不是「可空组合唯一索引」的第二个理由,与评审 §五「不要直接依赖包含 nullable `CreateOrgId` 的组合唯一索引」同源。
-- 扫描索引 `(Status, NextRetryAtUtc)` 取自评审 §八原文。dispatcher 未来的「找可领取的行」查询形状:`WHERE Status = Pending OR (Status = RetryScheduled AND NextRetryAtUtc <= now) OR (Status = Running AND LeaseExpiresAtUtc < now)`,三条腿都以 `Status` 打头,一个索引够用。
-- **刻意不建** `(InstanceId)` / `(TokenId)`:今天没有任何查询用它们。等 Task 6 的扫描或详情 API 真出现再加。
-
-**7. 交付边界与 API 形状**
-
-`public static class WfNodeExecutionStore`,放 `Engine/WfNodeExecutionStore.cs`(与孪生的 `WfHistorySequence.cs` 同目录;**不预建 `Execution/` 目录**,Task 6 真长出 dispatcher 时再议——沿用 Task 2 的同款决定)。
-
-- **`public` 而不是 `internal`**(`WfHistorySequence` 是 internal):本仓**没有任何 `InternalsVisibleTo`**(全仓 grep 命中 0),而 Task 3 里没有任何引擎路径调用本类(dispatcher 归 Task 6)——做成 internal 等于本轮「能领取」零直接证据。`WfIdentityHash` 同为 `public static`,先例一致。
-- **零 DI 注册**(同 Task 2 的定案,第一条注册线仍归 Task 8)。`WorkflowSetup.cs` 本轮**零改动**,十件套仍 10 条。
-- 两个方法:
-
-```csharp
-public static Task<WfNodeExecution> EnsureAsync(ISqlSugarClient db, WfNodeExecution row, CancellationToken ct);
-public static Task<WfNodeExecution?> ClaimAsync(ISqlSugarClient db, long executionId, string owner,
-                                                DateTime nowUtc, TimeSpan leaseDuration, CancellationToken ct);
-```
-
-`EnsureAsync` = 按 `ExecutionKey` 先查、没有则插、返回行。**唯一冲突的「认赢家」恢复本轮不做**,理由与射程见下(决策不是遗漏,是划界)。
-
-**8. 时间列类型与 UTC 口径**
-
-本表**四个业务时间列全部 UTC**,列名一律带 `Utc` 后缀(`DeadlineAtUtc` / `NextRetryAtUtc` / `LeaseExpiresAtUtc` / `CompletedTimeUtc`,取自评审 §6.1 原文),值来自 `TimeProvider.GetUtcNow().UtcDateTime`,由调用方算好传进来。
-
-这是**刻意偏离**本仓「持久化业务时间戳走 `GetLocalNow().DateTime`」的惯例(隔壁 `WfInstance.CompletedTime` 就是 local,`WfExecutionContext.WriteInstanceTerminalStatusAsync`),依据是评审 §六 收尾那句「时间相关的新字段统一采用 UTC 语义……避免多实例时区和夏令时影响 deadline、lease 与 retry」。列名后缀就是唯一的护栏,必须写进实体注释。
-
-**由此产生的硬约束(写进注释)**:本表基类审计列 `CreateTime`/`UpdateTime` 仍是 local(AOP 填的),**任何代码都不得把它们与 `*Utc` 列做比较或相减**。
-
-Task 2 的 `DateTimeOffset DeadlineAtUtc` ↔ 本表 `DateTime DeadlineAtUtc` 的那次转换:`new DateTimeOffset(DateTime.SpecifyKind(row.DeadlineAtUtc, DateTimeKind.Utc), TimeSpan.Zero)`——**落点在 Task 6 的 dispatcher**,本 Task 不写。`SpecifyKind` 不可省:SqlSugar 读回的 `DateTime` 是 `Kind.Unspecified`,直接构造 `DateTimeOffset` 会按本机时区偏移,在非 UTC 机器上悄悄错 8 小时。
-
-### 改动清单
-
-| 路径 | 新建/改什么 |
-| --- | --- |
-| `backend/src/TenonAdmin.Workflow/Entities/WfNodeExecution.cs` | **新建**。实体 + `[SugarTable]` + 2 个 `[SugarIndex]`,19 列,继承 `BaseEntity` |
-| `backend/src/TenonAdmin.Workflow/Entities/WfEnums.cs` | **改**。文件尾追加 `WfNodeExecutionStatus`(7 个成员 + 状态转换图注释),其余零改动 |
-| `backend/src/TenonAdmin.Workflow/Engine/WfExecutionKey.cs` | **新建**。`public static`,`Compute` + 复用 `WfIdentityHash.NormalizeScopeKey` |
-| `backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionStore.cs` | **新建**。`public static`,`EnsureAsync` + `ClaimAsync` |
-| `backend/tests/TenonAdmin.Tests/WfExecutionKeyTests.cs` | **新建**。6 条快照/规则测试 |
-| `backend/tests/TenonAdmin.Tests/WfNodeExecutionClaimTests.cs` | **新建**。9 条建表/领取/租约测试 |
-
-**4 新建 + 1 改(仅追加)+ 2 测试文件。`WorkflowSetup.cs`、`Engine/Operations/**`、`WorkflowEngine.cs`、`Abstractions/**` 全部零改动。** 前端零改动。
-
-### 实现步骤
-
-**1. `WfEnums.cs` 尾部追加枚举**(`WfHistoryActorType` 之后)
-
-```csharp
-/// <summary>
-/// 节点执行**行状态**(<c>wf_node_execution.Status</c>;AI 基石 §4.6)。
-/// <para><b>与 <see cref="WfNodeExecutionResultType"/> 是两个类型,不许合并、不许共用数值</b>:
-/// 那个是一次 attempt 的答复,本枚举是多次 attempt 聚合出的行状态。</para>
-/// <para><b>刻意无 0 值</b>:理由同 <see cref="WfNodeExecutionResultType"/>。与
-/// <see cref="WfHistoryActorType.Unknown"/> = 0 的差别有理由——那个 0 是给升级前旧行读的,
-/// 本表是新建表,不存在旧行。</para>
-/// <para>转换图(Task 6 照此实现):…… ← 把决策 2 那张图整个抄进来</para>
-/// </summary>
-public enum WfNodeExecutionStatus { Pending = 1, Running = 2, Succeeded = 3, RetryScheduled = 4, ManualFallback = 5, Cancelled = 6, Failed = 7 }
-```
-
-**2. `WfExecutionKey.cs`** — 结构逐字对照 `WfIdentityHash`:`private const char Separator = '\n'`、`NormalizeNodeId`(Trim + 拒绝分隔符 + 非空校验)、`VisitSentinel` 直接用 `WfIdentityHash.ScopeSentinel`(同一个 `"-"`,不新造常量)。
-
-```csharp
-public static string Compute(string? scopeKey, long instanceId, long tokenId,
-                             long? nodeVisitId, string nodeId, long definitionVersionId)
-{
-    var scope = WfIdentityHash.NormalizeScopeKey(scopeKey);   // 复用,不复制规则
-    var node  = NormalizeNodeId(nodeId);
-    var visit = nodeVisitId?.ToString(CultureInfo.InvariantCulture) ?? WfIdentityHash.ScopeSentinel;
-    var payload = string.Join(Separator, scope,
-        instanceId.ToString(CultureInfo.InvariantCulture),
-        tokenId.ToString(CultureInfo.InvariantCulture),
-        visit, node,
-        definitionVersionId.ToString(CultureInfo.InvariantCulture));
-    return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
+    private static string? Truncate(string? value) =>
+        value is null || value.Length <= SummaryMaxLength ? value : value[..SummaryMaxLength];
 }
 ```
 
-类注释必写:发包后不可逆契约、只允许末尾追加(且必须同时给旧维度定哨兵)、`NodeVisitId` 为 null 的语义边界(决策 1 那段)、快照测试转红意味着契约被破坏而不是去改期望值——措辞对齐 `WfIdentityHash` 的开头。
+`Succeeded` 的 `Summary` 落 `OutputSummary`、其余三种落 `ErrorSummary`——与 `WfNodeExecutionResult.Summary` 的既有注释(「落 attempt 的 `OutputSummary`(成功时)或 `ErrorSummary`(失败/回退时)」)**逐字对齐**,不许自创映射。
 
-**3. `WfNodeExecution.cs`** — `BaseEntity`,19 列。基类选型的注释是**必写项**,理由比回执那处更强:
+**方法/类注释必写五条**:
 
-> 刻意继承 `BaseEntity` 而非 `DataEntity`。`DataEntity` 带 `IOrgScoped` 全局数据范围过滤器(只作用于 SELECT),而本表的读写方是**没有 HTTP 请求上下文的后台 worker**——`IDataScopeContext` 是空的,`IOrgScoped` 过滤器会让扫描直接返回 0 行,症状是「调度器永远扫不到活干」而不是报错。机构维度由显式非空的 `ScopeKey` 承载,与 `WfOperationReceipt` 同源。
+1. **签名里没有 `attemptNo` 形参是刻意的**——差一只可能来自「调用方自己算 attempt 号」,拿掉这个入口就拿掉了这一类 bug;`AttemptNo` 与 `ExecutionId` 取自**同一个 `execution` 对象**,也就杜绝了错配。
+2. **本方法不碰 `wf_node_execution` 的任何列**:结果回写(`Status` / `NextRetryAtUtc` / `CompletedTimeUtc` / …)归 **Task 6** 的 fence CAS 短事务(`WHERE Fence == @myFence`),两者将在同一个短事务里提交(§4.6),但代码归属不同。
+3. **唯一索引撞了原样抛出,不写 try/catch**——与 `WfNodeExecutionStore.EnsureAsync` 同款理由:半吊子的 catch 在 PostgreSQL 上更糟(事务已 aborted,`25P02`)。撞唯一键意味着「同一 attempt 号写了两次」,那是调用方的 bug,必须炸出来。
+4. **摘要截断在 C# 侧**,四库一致(SqlServer/PG 超长直接抛、MySQL 非严格模式静默截断、SQLite 照单全收);handler 的摘要是外部输入,截断是 trust boundary 上的必要防护,不是可省的优化。
+5. **零 DI 注册,`public static`**;调用方(Task 6 的 dispatcher)直接经 `ISqlSugarClient` 调用,事务由调用方起。
 
-其余每列的注释要点:`ExecutionKey` 长度核算(决策 1 那两个字节数)、时间列 UTC 口径 + 「不得与 `CreateTime` 混算」、`Fence` 为何是 `long`、全表不写 `DefaultValue` 的机制解释(决策 3 末段)、`HandlerType`/`HandlerVersion`/`InputHash`/`OutputHash`/`CompletedTimeUtc` **零写入点、建表期预留**(同 `WfHistoryActorType.Worker/Ai` 的先例;一次建全比将来 ALTER 四方言便宜)。
+**步骤 3 — 测试** `backend/tests/TenonAdmin.Tests/WfNodeExecutionAttemptTests.cs`
 
-**4. `WfNodeExecutionStore.cs`** — `ClaimAsync` 照决策 4 的代码形状;`EnsureAsync`:
+脚手架逐字抄 `WfNodeExecutionClaimTests`:
 
 ```csharp
-public static async Task<WfNodeExecution> EnsureAsync(ISqlSugarClient db, WfNodeExecution row, CancellationToken ct)
+private static (IServiceScope Scope, ISqlSugarClient Db) Open(WorkflowAppFactory f)
 {
-    ct.ThrowIfCancellationRequested();
-    var existing = await db.Queryable<WfNodeExecution>()
-        .Where(e => e.ExecutionKey == row.ExecutionKey).FirstAsync();
-    if (existing is not null) return existing;
-    await db.Insertable(row).ExecuteCommandAsync();   // Id 由审计 AOP 填雪花
-    return row;
+    _ = f.CreateClient();                 // 触发宿主启动与 CodeFirst 建表
+    var scope = f.Services.CreateScope();
+    return (scope, scope.ServiceProvider.GetRequiredService<ISqlSugarClient>());
 }
+
+private static WfNodeExecution NewExecution(string executionKey) => new()
+{
+    ExecutionKey = executionKey, ScopeKey = "org-1",
+    InstanceId = 1001L, TokenId = 2002L, NodeVisitId = 1L,
+    NodeId = "node-1", NodeType = WfNodeType.Approval,
+    DefinitionVersionId = 1L, MaxAttempts = 3,
+};
+
+private static string UniqueKey() => Guid.NewGuid().ToString("N");
 ```
 
-类注释必写「本轮**不做**唯一冲突的认赢家恢复,Task 6 加,PG 需 savepoint,抄 `Services/WfOperationReceiptService.cs` 的 `BeginNestedAsync/RollbackNestedAsync`」——把坑标在原地,别让 Task 6 重新踩一遍。
+**关键纪律**:测试 1/2/5/6 必须走 `WfNodeExecutionStore.ClaimAsync` 拿到读回后的 execution 行,再交给 `AppendAsync`——**不许手工设 `AttemptCount` 后直插**。真走领取才是「三处口径对齐」的真实证据(R5)。测试 3/4 为了构造唯一冲突可以直插 attempt 行(那是在测索引本身)。
 
-**5. 测试** — `WfNodeExecutionClaimTests` 用 `WorkflowAppFactory`,从 `f.Services.GetRequiredService<ISqlSugarClient>()` 直接读写(`WfPersistenceContractTests` 同款),不经引擎。
+---
 
-### 测试清单(基线 291 → **预期 306,新增 15 条**)
+### 4. 测试清单
 
-`WfExecutionKeyTests`(6 条,仿 `WfIdentityHashTests`)
-1. 已知输入 → 已知 64 位小写 hex(**硬编码快照值**,锁死契约)
-2. `NodeVisitId = null` 归一化为哨兵,且与真实 visitId 算出不同 hash
-3. `ScopeKey` null / 空串 / 纯空白 三者同 hash,且等于显式传 `"-"`
-4. 字段顺序生效:交换 `instanceId` 与 `tokenId` 的取值 → 不同 hash
-5. `NodeId` 含 `'\n'` → `ArgumentException`;`NodeId` 空白 → `ArgumentException`
-6. 输出恒为 64 位、全小写十六进制
+新建 `WfNodeExecutionAttemptTests.cs`,**6 个 `[Fact]`**。基线 **307 → 313**。
 
-`WfNodeExecutionClaimTests`(9 条)
-7. **唯一索引真被建出来**:同 `ExecutionKey` 插第二行 → 抛(本轮"建表成功"的唯一硬证据)
-8. 新行读到 `Status=Pending, Fence=0, AttemptCount=0, LeaseOwner=null, LeaseExpiresAtUtc=null`
-9. 领取 `Pending` → 返回非 null,`Status=Running`、`Fence=1`、`AttemptCount=1`、owner/租约已写
-10. 租约有效期内再领 → 返回 `null`,且行未被改动(`Fence` 仍 1、owner 未变)
-11. **把 `LeaseExpiresAtUtc` 直接 UPDATE 成过去时刻后再领 → 成功,`Fence=2`、`AttemptCount=2`**(Task 7 崩溃恢复要用的手法,本轮先证明可行)
-12. `RetryScheduled` + `NextRetryAtUtc` 在未来 → `null`;改成过去 → 领到
-13. 终态行(`Succeeded`)→ `null`
-14. `EnsureAsync` 按 `ExecutionKey` 幂等:同 key 第二次返回既有行,表内仍 1 行
-15. 领取处在被回滚的事务里 → `Fence`/`AttemptCount` 不留痕(回滚契约,仿 `WfReceiptEngineTests` 同型断言)
+1. **首次 attempt 的 `AttemptNo` = 1,且等于领取读回的 `AttemptCount`**
+   路径:插 execution → `ClaimAsync` → `AppendAsync`。
+   断言:`attempt.AttemptNo == 1` **且** `attempt.AttemptNo == claimed.AttemptCount` **且** `attempt.ExecutionId == execution.Id`。
+   *为什么两个都要断*:只断 `== 1` 的话,一个「永远写 1」的实现照样绿;只断 `== claimed.AttemptCount` 的话,一个「三处一起错」的实现照样绿。两个一起才钉住 1 基口径。
 
-**明确不值得写、不许拿来凑数的**
-- 枚举成员数/数值断言 —— 套套逻辑;数值真被改动时 #1 的快照与 #9 的状态断言会先红。
-- 「两个 worker 真并发抢同一行」—— **构造不出来**,与 `WfVersionCasTests` 开头那段射程声明逐字同型(单线程下第二次读必然读到最新值)。可达的是 0 行分支,#10/#12/#13 已覆盖。
-- 列宽 / 中文往返 / 唯一索引在四库上真被建出 —— SQLite 类型亲和性下是**恒真断言**(`WfPersistenceContractTests` 已实测记录),归 Task 9。
-- 「存量行 `ADD COLUMN NOT NULL`」升级契约 —— 本表是新建表,走不到那条路径;那条归 Task 9。
-- 「本 Task 零 DI 注册」断言 —— 断言"什么都没发生"是噪音;十件套已有测试自会红。
-- `ExecutionKey` 长度 ≤ 索引上限的运行时断言 —— 它是常数 64,#6 已钉住。
+2. **重试新增一行,不覆盖旧 attempt**(台账点名的那条)
+   路径:领取 → `AppendAsync(RetryableFailure(errorCode: 48001, summary: "first"))` → 把 `LeaseExpiresAtUtc` UPDATE 到过去(`var past = now.AddMinutes(-1);`,先落局部变量)→ 再 `ClaimAsync`(`AttemptCount` 变 2)→ `AppendAsync(Succeeded(...))`。
+   断言:该 `ExecutionId` 下 **2 行**;`AttemptNo` 分别是 **1、2**;**第 1 行的 `Id` 未变、`ResultType` 仍是 `RetryableFailure`、`ErrorCode` 仍是 48001、`ErrorSummary` 仍是 `"first"`**(证明是新增而非 upsert/覆盖)。
 
-### 陷阱
+3. **唯一索引 `(ExecutionId, AttemptNo)` 真的挡住重复**
+   同 `ExecutionId` 同 `AttemptNo` 直插第二行 → 抛异常;表内该组合仍 **1 行**。写法仿 Claim 测试 #7(`try/catch` 捕到 `Exception? failure`,`Assert.NotNull(failure)` + 计数)。
 
-1. **最大的越界风险:顺手接引擎/调度器。** `EnterNodeOp.ExecuteAsync` 今天对 `WfNodeType.Webhook` 走 `default:` 抛 48008(`Engine/Operations/EnterNodeOp.cs:68-70`)。Task 3 **不改这一行**,也不在任何 Op 里调 `WfNodeExecutionStore`——本表本轮**零引擎调用点**,这是正确的中间状态。一旦"顺便让它跑起来"就把 Task 6 干了。
-2. **`DefaultValue` 会被机械套用。** Task 1 的契约在评审眼里很显眼,而本表一个 `DefaultValue` 都没有。实体注释必须把「`CREATE TABLE` 不读它」这个机制写死,否则会被误判成 P1 并被"修"成一堆无用的 `DefaultValue="0"`。
-3. **`DataEntity` 的诱惑。** `WfInstance` 是 `DataEntity`,照抄它会给本表挂上 `IOrgScoped` → 后台扫描 0 行,而且**在有 HTTP 上下文的集成测试里可能仍然是绿的**,只在真实 worker 里才炸。基类必须是 `BaseEntity`。
-4. **PG 唯一冲突中止整事务。** `EnsureAsync` 本轮不处理,但若 executor "顺手"加了 try/catch + 二次 SELECT,在 PG 上那次 SELECT 根本执行不了(`25P02`),且新异常会顶替原始冲突异常 —— 要么完整抄 savepoint 那套,要么就别写 catch。**本轮的定案是别写。**
-5. **读回必须与 UPDATE 在同一事务内。** 两条裸自动提交语句之间,另一个 worker 的领取会让读回的 `Fence`/`AttemptCount` 是别人的值 —— `Attempt` 差一的静默 bug 就是这么来的。`ClaimAsync` 的注释要像 `WfHistorySequence` 那样明写「必须在事务内才成立」,调用方(Task 6)负责起事务。
-6. **`SetColumns` 里内联 `DateTime` 表达式。** 台账已记录实测:SqlSugar 会按当前区域把内联表达式格式化成字面量拼进 SQL,zh-CN 下炸出 `near "下午"`。**先算进局部变量**(`ClaimInstanceAsync` 的注释里有原话),`nowUtc`/`leaseUntil`/`owner` 全部先落局部变量。
-7. **`NextRetryAtUtc <= now` 在 `NextRetryAtUtc` 为 NULL 时是 false(四库一致)**——这是对的,靠的正是 `Status == RetryScheduled` 那条腿把它挡在外面。别有人为了"保险"改成 `(NextRetryAtUtc == null || NextRetryAtUtc <= now)`:那会让一条刚标记重试但还没算出时间的行被立刻领走。
-8. **与 Task 4 的对齐风险**:`AttemptCount` 的 +1 时机(领取时,不是写 attempt 行时)。Task 4 建 `wf_node_execution_attempt` 时若在插行处再 +1 一次,就是经典差一。
-9. **与 Task 6 的对齐风险**:`DateTimeOffset ↔ DateTime` 的 `SpecifyKind`(陷阱见决策 8),以及 lease 续期(长任务跑超租约会被别的 worker 抢走 → 那时 fence 拒写回,结果丢失)。**续租不在 Task 3 射程**,但 `LeaseExpiresAtUtc` 列的设计已支持,Task 6 决定策略。
-10. **会波及的现有测试:预期为零。** `WorkflowSetup.cs` 零改动 → 十件套(`WorkflowReplaceabilityTests`)不受影响;`WfEnums.cs` 只在尾部追加 → 无既有枚举数值变动;新表由 CodeFirst 自动建,`WfPersistenceContractTests` 不查表清单。若任何既有测试转红,说明改动越界了,先查是不是碰了 `Engine/`。
+4. **两个不同 execution 各自都可以有 `AttemptNo = 1`**
+   有鉴别力:**专挡把唯一索引写成 `AttemptNo` 单列**的实现。断言两次 append 都成功,两行 `AttemptNo` 都是 1、`ExecutionId` 不同。
 
-### 射程限制
+5. **四种结果的列投影 + 超长摘要截断**(一个方法内,四次 append)
+   参数**互不相同且有辨识性**(照 Task 2 review P2-2 的教训,防参数错位):
+   - `Succeeded(outputJson: "{\"a\":1}", summary: "ok")` → `ResultType == Succeeded`、`OutputSummary == "ok"`、`ErrorCode == null`、`ErrorSummary == null`、`OutputHash` 等于**测试内现算**的 `Convert.ToHexStringLower(SHA256.HashData(...))`(不硬编码常量)。
+   - `RetryableFailure(errorCode: 48001, summary: "r")` → `ErrorCode == 48001`、`ErrorSummary == "r"`、`OutputSummary == null`、`OutputHash == null`。
+   - `ManualFallback(errorCode: 48002, summary: "m")` → 同型,码 48002。
+   - `TerminalFailure(errorCode: 48003, summary: new string('x', 600))` → `ResultType == TerminalFailure`、`ErrorCode == 48003`、**`ErrorSummary!.Length == 512`**。
+   截断断言的是**产品代码的 C# 行为**(不是数据库列宽强制),所以它在 SQLite 上**不是恒真断言**。
+
+6. **`AppendAsync` 处在被回滚的事务里 → 一行不留**
+   仿 Claim 测试 #15:`db.Ado.UseTranAsync` 内 append 后抛异常强制回滚,`Assert.False(tran.IsSuccess)`,回滚后按 `ExecutionId` 查 **0 行**。
+   这是「attempt 与结果落在同一短事务」(§4.6)在本轮唯一可测的那一半。
+
+#### 明确不值得写、不许拿来凑数的
+
+- **枚举成员数 / 数值断言**(`WfNodeExecutionResultType` 有几个成员、值是几)——套套逻辑;Task 2 已钉住 C# 侧,测试 5 的投影断言真被改坏时会先红。
+- **「两个 worker 真并发写同一个 `(ExecutionId, AttemptNo)`」**——单线程构造不出真并发,与 `WfVersionCasTests` 开头那段射程声明逐字同型。可达的是唯一冲突分支,测试 3 已覆盖。
+- **列宽 / 中文往返 / 唯一索引在四库上真被建出来(查系统表元数据)**——SQLite 类型亲和性下是**恒真断言**(`WfPersistenceContractTests` 已实测记录),归 **Task 9**。测试 3 断言的是「插第二行会抛」这个**行为**,不是索引元数据长什么样,两回事。
+- **「存量行 `ADD COLUMN NOT NULL`」升级契约**——本表是新建表,走不到那条路径;归 Task 9。
+- **「本 Task 零 DI 注册 / 十件套仍 10 条」断言**——断言「什么都没发生」是噪音;既有十件套测试自己会红。
+- **反射断言 `WfNodeExecutionAttemptStore` 没有 Update / Delete 方法**——API 面的复读,编译期就是防线;与 Task 2 review 已判 P3-1(「字段名单快照测试」收益低于噪声)同一类。
+- **`IsDelete == false` / `UpdateTime` 未被写 / `CreateTime` 非默认值**——没人写过它们,恒真。append-only 的真实防线是「Store 根本不提供那些方法」+ 唯一索引,不是这类断言。
+- **重测 `ClaimAsync` 的领取语义**(租约窗口、fence 递增、终态不可领)——Task 3 的 8 条已覆盖,本轮只把它当前置动作使用,不许在本文件里复读。
+- **`OutputHash` 与硬编码 SHA-256 常量比对**——把实现抄进测试;用测试内现算值比对即可。
+- **「`AppendAsync` 没有改 execution 行」的断言**——又一个「什么都没发生」;D6 是代码归属纪律,靠 review 和改动清单兜住。
+
+---
+
+### 5. 陷阱(按 exec 最可能踩的顺序)
+
+1. **`AttemptNo` 差一。** `AttemptNo = execution.AttemptCount`,**句号**。看到 `+ 1` 就是错的;给 `AppendAsync` 加一个 `int attemptNo` 形参**也是错的**(那正是把差一的入口重新打开)。测试 1 必须同时断言 `== 1` 和 `== claimed.AttemptCount`,少一个都留后门。
+2. **顺手接 dispatcher / 顺手更新 execution 行。** `AppendAsync` 只插一行。产品代码里出现任何 `db.Updateable<WfNodeExecution>()` 都是越界(测试里为造过期租约而 UPDATE `LeaseExpiresAtUtc` 是允许的,Task 3 测试已有先例)。回写归 Task 6,因为它必须带 fence CAS。
+3. **误用 `DataEntity`。** 症状是「扫不到活」而不是报错,**且在有 HTTP 上下文的集成测试里可能仍是绿的**——别指望测试发现,靠这条 checklist。
+4. **机械套 `DefaultValue`。** 非空列**不写** `DefaultValue`,并且**必须把理由写进类注释**,否则 review 会按 Task 1 的加列契约误判成 P1(Task 3 就差点)。
+5. **把 `OutputJson` 正文塞进表**,尤其顺手用 `StaticConfig.CodeFirst_BigString`(仓内 `PayloadJson` / `ResultJson` 就是那么写的,很容易照抄)。只存 `OutputHash` + 512 截断摘要。
+6. **唯一索引写成 `AttemptNo` 单列**,或漏掉 `IsUnique = true`。测试 4 专挡前者,测试 3 专挡后者。
+7. **忘了截断摘要。** SQLite 上全绿,mysql / postgres / sqlserver 三条腿红——本仓最典型的「本地绿 CI 红」。
+8. **在 SqlSugar 表达式里内联 `DateTime`**(zh-CN 下被格式化成 `下午` 字面量炸 SQL,`near "下午"`)。产品代码走 `Insertable` + 形参,天然安全;**测试里 UPDATE `LeaseExpiresAtUtc` 时必须先落局部变量**(抄 `var past = now.AddMinutes(-1);`)。
+9. **把基类 local 的 `CreateTime` 与 `*Utc` 列比较 / 相减**(比如想断言「开始时间在创建时间之后」或算耗时)。注释里禁,测试里也别写。
+10. **动了 `WorkflowSetup.cs` 或加了 DI 注册** → 十件套从 10 条变样,连锁红。实体进 CodeFirst 建表靠整程序集扫描,**什么都不用登记**;本仓不存在「实体类型列表」这种东西,别去找、更别去建。
+11. **测试里绕过 `AppendAsync` 直接 `db.Insertable(attempt)` 造数据。** 测试 3/4 为测索引可以直插;测试 1/2/5/6 必须走 `AppendAsync`,否则测的是测试自己写的投影,不是产品代码。
+12. **为 SHA-256 新建一个 helper 类 / 往 `WfIdentityHash` 里加通用方法。** 一行内联,与两个既有 helper 的最后一行同型即可;`WfIdentityHash` 是 Task 3 之前定案的结构化 helper,不要扩它的职责。
+13. **把 `EndedAtUtc` 做成可空**(「万一崩溃了要记一行只有开始时间的」)。那会毁掉 `AttemptCount − count(attempt)` 的崩溃计数口径,而且本轮根本没有「开始时插行」的写入点。
+
+---
+
+### 6. 射程限制
 
 | 测不到的不变量 | 为什么 | 谁兜住 |
-| --- | --- | --- |
-| **R1｜真并发两个 worker 抢同一行只有一个赢** | 单线程集成测试构造不出「A 求值 WHERE → B 提交 → A 写」的交错(与 `WfVersionCasTests` 开头的射程声明同根)。本轮只能证明 0 行分支可达、以及机制确实做了条件更新 | 机制层面由 #10/#12/#13 钉住(退回无条件 UPDATE 立刻红);四库的锁语义由 **Task 9** 的四库套件在真库上问;崩溃后重新领取由 **Task 7** |
-| **R2｜唯一索引在 MySQL / PG / SqlServer 上真被 CodeFirst 建出来** | 本机只有 SQLite 腿;#7 在 SQLite 上绿只说明 SQLite 建出来了 | **Task 9**(照抄 `WfPersistenceContractTests` B 段「唯一索引是否真被建出来」的姿势) |
-| **R3｜PG 唯一冲突后 `EnsureAsync` 能认出赢家** | 本轮**根本没实现**(无并发创建方),且 PG 的事务中止语义在 SQLite 腿上完全不可见 | **Task 6**(加 savepoint,抄 `WfOperationReceiptService`);四库验证归 **Task 9** |
-| **R4｜UTC/local Kind 不混用** | `DateTime` 类型层面无法强制,只有列名后缀 + 代码审查。SQLite 腿上 local 与 UTC 都能存能读,混用不会红 | **Task 6** 的 `DateTimeOffset` 转换点是唯一会暴露 Kind 错误的地方;`WfNodeExecutionContext.DeadlineAtUtc` 的断言在 Task 6 才有观测点 |
-| **R5｜`Attempt` 三处口径真的对齐** | 本轮只有 `AttemptCount` 一处可观测(#9/#11),`AttemptNo` 列和 Context 的 `Attempt` 都还不存在 | **Task 4**(写 `AttemptNo`)+ **Task 6**(喂 Context),届时三处对照 |
-| **R6｜租约到期后老 owner 的回写真的被 fence 拒掉** | 回写路径(保存 attempt/结果/推进 token)是 Task 6 的短事务,本轮不存在。#11 只证明「过期后能被重新领取且 fence 递增」,没证明「递增之后老 fence 写不进去」 | **Task 6**(回写 CAS `WHERE Fence == @myFence`)+ **Task 7**(崩溃恢复端到端) |
+|---|---|---|
+| `AttemptNo` 三处口径的**第三处**(`WfNodeExecutionContext.Attempt`)真被喂成同一个值 | 本轮首次能对照**两处**(领取读回的 `AttemptCount` ↔ `AttemptNo`),Task 3 射程限制 R5 兑现一半;Context 的构造点在 dispatcher,本轮不存在 | **Task 6**(构造 Context 处) |
+| attempt 与 execution 结果回写落在**同一个短事务**(§4.6) | 本轮只有 attempt 这一半;测试 6 只证明它参与外围事务,证不了「另一半也在同一个事务里」 | **Task 6**(回写短事务)/ **Task 7**(端到端) |
+| 老 owner 的迟到 attempt / 迟到回写真被 fence 拒掉 | 本表不带 `Fence`,拒绝逻辑在 execution 行的 CAS 上;Task 3 的 R6 同一条 | **Task 6**(`WHERE Fence == @myFence`)/ **Task 7**(崩溃恢复端到端) |
+| 唯一索引 / 列宽 / 中文 / `ResultType` 数值在 **MySQL / PostgreSQL / SqlServer** 上的真实行为 | 本地默认 SQLite,类型亲和性让列宽类断言恒真 | **Task 9**(四库契约)+ CI 矩阵三条全量腿 |
+| 摘要截断在**真正会抛的库**上确实避免了异常 | SQLite 不抛,本地测不出「没截断会炸」 | **Task 9** + CI 的 mysql / postgres / sqlserver 腿 |
+| 「远程调用不在数据库事务内」(§4.6 / §4.8 验收线) | 本轮没有远程调用,也没有 dispatcher | **Task 6** |
+| append-only 在**引擎全链路**下成立(没有第二条路径去 UPDATE / DELETE attempt) | 本轮唯一写入点就是 `AppendAsync`,不存在第二条路径可违反 | **Task 6/7**(接线后)+ 保留期清理策略(M3a-2 之后) |
+| `execution.AttemptCount − count(attempt)` 真能反映崩溃次数 | 需要真的崩一次;本轮没有 worker 进程 | **Task 7**(崩溃恢复) |
+| `TokenUsage` / `Cost` 的可空 `ADD COLUMN` 升级路径 | 列还不存在(D1 定案推迟到 M3b) | **M3b** |
+| handler 可替换性 / 第一条 DI 注册线 | 本 Task 零 DI 注册,十件套保持 10 条是正确的 | **Task 8** |
 
-### 闸门
+---
 
-```bash
+### 7. 闸门
+
+过滤器写法不许改:
+
+```
 dotnet build backend/TenonAdmin.slnx -c Release
 dotnet test  backend/TenonAdmin.slnx --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"
 ```
 
-预期:build **0 错误**;工作流过滤子集全绿。全量重跑确认 **306/306 通过、失败 0**(291 + 15)。
+预期数字:
 
-**不需要前端闸门**:本 Task 零控制器、零 DTO、零端点,`/openapi/v1.json` 不变 → `web/` 与 `web-react/` 的 `schema.d.ts` 不会漂移,`scripts/check-contract-drift.mjs` 无需跑。
+- **build**:0 error / 0 warning。
+- **test**:**313 通过 / 0 失败 / 0 跳过**(基线 307 + 新增 6)。
+- `WorkflowReplaceabilityTests` 的十件套仍 **10** 条,且**本轮不应有任何改动触及它**——**如果它变了,说明有人动了 `WorkflowSetup.cs`,直接回退**。
+
+exec 阶段收尾自查(三行):
+
+```
+git status --short          # 只应有 3 个 ?? 新文件(见改动清单)
+git diff                    # 必须为空
+```
 
 ## Tasks
 
@@ -484,3 +648,4 @@ dotnet test  backend/TenonAdmin.slnx --filter "FullyQualifiedName~Tests.Wf|Fully
 | 10 | exec | Task 3 exec 完成(executor/sonnet)。commit `20bfc9d` "feat(workflow): add wf_node_execution entity with lease/fence claim",**6 个文件 +658/-0**,与 Plan 改动清单零偏差。协调者独立复核:①限定 `Engine/Operations/`+`WorkflowSetup.cs`+`WorkflowEngine.cs`+`Abstractions/` 的 `git show --stat` **输出为空**;②`grep -rln WfNodeExecutionStore backend/src/ --include=*.cs` 初看 18 个命中,**排除 bin/obj 编译产物后只剩 2 个源文件**(自身 + 实体注释)→ 零引擎调用点;③`grep -c '48008'` 在 `EnterNodeOp.cs` 命中 0 一度可疑,查明是符号引用 `WorkflowErrorCode.NodeTypeUnsupported`(`:68-69`),`default:` 分支原样保留;④新实体 `DefaultValue *=` 命中 **0**、基类是 `BaseEntity`(`:31`)、表名 `wf_node_execution` + `uk_wf_node_exec_key`(唯一)+ `idx_wf_node_exec_scan(Status, NextRetryAtUtc)` 与 Plan 一字不差;⑤重跑闸门 build **0 错误**、**Workflow 贡献 0 警告**、test **306/306 通过失败 0**(291+15 精确吻合)。三条重点陷阱(接引擎 / 机械套 `DefaultValue` / 误用 `DataEntity`)**逐条机械验证均未踩**。**不勾选**,下一步 Round 11 Task 3 review。 |
 | 11 | review | Task 3 review 完成(Opus 自审,13 变异点 = 11 必做 + 子代理自加 2)。**11 钉住、2 存活**。P1-1:M2 把 `NextRetryAtUtc <= now` 放宽成 `(== null || <= now)` → 15/15 全绿,因 `#12` 只造过「未来/过去」两种行、**从未构造 `(RetryScheduled, null)`**——正是 Plan 陷阱 7 点名的场景,Task 6 一次「保险」放宽就会让刚标记重试、退避时间还没算出的行被抢跑。P1-2(**子代理自加的 M12 抓到,不在必做清单里**):`leaseUntilUtc = nowUtc + leaseDuration` 改成 `= nowUtc` 仍全绿——三条相关测试各自漏掉的原因不同,其中 `#10` 名叫 "within the lease window" 却因两次领取传同一个 `now` + WHERE 用严格小于,而**从未依赖真实租约窗口**;此条失守则 lease 机制静默归零,fence 拦不住两个 worker 同时执行同一节点。P2-1:`ScopeKey` 列 `IsNullable=true` 与类注释「显式非空、与 `WfOperationReceipt` 同源」矛盾,而兄弟表确为非空——诊断列可能存原始 null 而 `ExecutionKey` 按哨兵 `"-"` 算,正是 `NormalizeScopeKey` 注释警告过的对不上。协调者独立交叉验证:变异全复原(工作区干净/HEAD 未动)、**刻意换手法**(读断言而非跑变异)坐实两个 P1、P2-1 三处原文逐一比对、点名四项中三项 + 四条承诺注释复核无问题。P3 六条入册,**P3-3 经协调者裁定不是范围外增列**(那三列是 Round 10 exec prompt 明文批准的),只需改注释措辞。元教训:exec 避开了全部六类禁令仍漏两个核心行为——**缺口是「缺断言」不是「假断言」,清单核对抓不到,只有变异测试能抓**。**不勾选**,下一步 Round 12 修 Findings。 |
 | 12 | 修 Findings + 勾选 | P1-1/P1-2/P2-1 + P3-3 全部修完(executor/sonnet,commit `68809c0`,**2 文件 +31/-7,产品逻辑零改动**)。P1-1 新增独立测试 `Retry_scheduled_row_with_no_retry_time_is_never_claimable`(307 = 306+1);P1-2 `#9` 的 `NotNull` 换成带 1 秒容差的值断言、`#10` 第二次领取改传 `now.AddMinutes(1)`;P2-1 `ScopeKey` 改成非空 `= ""` 与兄弟表同款。协调者独立复核**两个变异都刻意换形状**:A 用 `?? DateTime.MinValue`(台账预言的 Task 6 真实失误,非子代理的 `== null ||`)→ 转红;B 用 `nowUtc + 1 秒`(**正数但忽略量值**,比子代理的 `= nowUtc` 更强,只写 `> now` 的断言会漏)→ `#9`/`#10` **双双转红**,额外证明 `#9` 查值、`#10` 真依赖租约窗口。另核实:`DefaultValue` 仍 0 命中(改非空未连带破坏建表契约)、`Engine/` 零改动、P3-3 只改注释未动列。重跑闸门 build **0 错误**、test **307/307 通过失败 0**。0×P1、0×未修 P2 → **Task 3 勾选**(10 项已完成 3 项)。下一步 Round 13 Task 4 plan(attempt 表,重点盯 `AttemptNo` 不得二次 +1 的差一陷阱)。 |
+| 13 | plan | Task 4 plan 完成(Opus 子代理)。**消息通道连吃三次截断**(Task 3 review ×2 + 本轮 ×1)→ 改用「子代理 Write 进 scratchpad 文件 + 协调者转写」,`plan4.md` 36KB/421 行七节齐全,**后续沿用此法**。D1–D8 全拍板,改动清单 **3 全新文件、0 既有改动**,预期 307→313(+6)。关键定案:①`wf_node_execution_attempt` 9 列,`BaseEntity`、无 `ScopeKey`(永远经 `ExecutionId` 到达,父行已有;反规范化等于永久多一个要保持一致的写入点)、`EndedAtUtc` **非空**(一行 = 一次**已返回**的调用,由此 `AttemptCount − count(attempt)` = **崩溃次数**);②append-only **两道防线**:硬的 `UNIQUE(ExecutionId, AttemptNo)`(没它则「`AttemptNo` 恒为 1」的 bug 也能插两行而测试照绿)+ 软的「Store 只暴露 `AppendAsync`、不给 Update/Delete」;③**`AttemptNo` 防差一靠签名**——不收 `attemptNo` 形参,`AttemptNo = execution.AttemptCount`,两个事实取自同一对象;④**零 execution 回写**,因为那次回写必须带 `WHERE Fence == @myFence` 的 CAS(Task 3 射程限制 R6 已指派给 Task 6),提前散进来等于放一个无 CAS 保护、且不知道 fence 的写入点;⑤**不存输出正文**,只存 `OutputHash` + 512 截断摘要,**不用 `StaticConfig.CodeFirst_BigString`**(attempt 是永不删除表,且是 PII/密钥泄漏面最大的一张);截断**必须在 C# 侧**——600 字摘要在 SqlServer/PG **直接抛**、MySQL 非严格模式**静默截断**、SQLite **照单全收**,正是本仓最典型的「本地绿 CI 红」;⑥**拒建 §6.2 的 7 列**(它们在 §七的 `wf_ai_decision` 已有家,同一事实两个写入点是 bug 温床;与 Task 3「一次造齐」不矛盾——那 8 列属同一里程碑,这 7 列属 M3b)。6 条新契约行入册。下一步 Round 14 Task 4 exec。 |
