@@ -16,36 +16,75 @@ public class WfNodeHandlerContractTests
 
         foreach (var prop in props)
         {
-            var type = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+            AssertNoSqlSugarLeak(prop.Name, prop.PropertyType, new HashSet<Type>());
+        }
+    }
 
-            Assert.False(
-                type.IsSubclassOf(typeof(PrimaryId)),
-                $"{prop.Name} ({type.FullName}) 派生自 PrimaryId,不该出现在执行上下文里。");
-            Assert.False(
-                typeof(ISqlSugarClient).IsAssignableFrom(type),
-                $"{prop.Name} ({type.FullName}) 可赋给 ISqlSugarClient,不该出现在执行上下文里。");
-            Assert.False(
-                type.Namespace is not null && type.Namespace.StartsWith("SqlSugar", StringComparison.Ordinal),
-                $"{prop.Name} ({type.FullName}) 命名空间以 SqlSugar 开头,不该出现在执行上下文里。");
+    /// <summary>
+    /// 递归到泛型实参/数组元素类型,防止 <c>IReadOnlyList&lt;WfInstance&gt;</c> 这类容器包裹绕过检查(P2-1)。
+    /// <paramref name="visited"/> 挡自引用泛型(如 <see cref="IComparable{T}"/>)造成的无限递归。
+    /// </summary>
+    private static void AssertNoSqlSugarLeak(string propName, Type rawType, HashSet<Type> visited)
+    {
+        var type = Nullable.GetUnderlyingType(rawType) ?? rawType;
+        if (!visited.Add(type))
+        {
+            return;
+        }
+
+        Assert.False(
+            type.IsSubclassOf(typeof(PrimaryId)),
+            $"{propName} ({type.FullName}) 派生自 PrimaryId,不该出现在执行上下文里。");
+        Assert.False(
+            typeof(ISqlSugarClient).IsAssignableFrom(type),
+            $"{propName} ({type.FullName}) 可赋给 ISqlSugarClient,不该出现在执行上下文里。");
+        Assert.False(
+            type.Namespace is not null && type.Namespace.StartsWith("SqlSugar", StringComparison.Ordinal),
+            $"{propName} ({type.FullName}) 命名空间以 SqlSugar 开头,不该出现在执行上下文里。");
+
+        if (type.IsGenericType)
+        {
+            foreach (var arg in type.GetGenericArguments())
+            {
+                AssertNoSqlSugarLeak(propName, arg, visited);
+            }
+        }
+
+        if (type.IsArray)
+        {
+            var elementType = type.GetElementType();
+            if (elementType is not null)
+            {
+                AssertNoSqlSugarLeak(propName, elementType, visited);
+            }
         }
     }
 
     [Fact]
     public void Result_factories_set_the_matching_result_type()
     {
-        var succeeded = WfNodeExecutionResult.Succeeded();
+        var succeeded = WfNodeExecutionResult.Succeeded(outputJson: "{\"a\":1}", summary: "ok");
         Assert.Equal(WfNodeExecutionResultType.Succeeded, succeeded.Type);
+        Assert.Equal("{\"a\":1}", succeeded.OutputJson);
+        Assert.Equal("ok", succeeded.Summary);
         Assert.Null(succeeded.ErrorCode);
         Assert.Null(succeeded.RetryAfter);
 
-        var retryable = WfNodeExecutionResult.RetryableFailure();
+        var retryable = WfNodeExecutionResult.RetryableFailure(errorCode: 48001, summary: "retry-summary", retryAfter: TimeSpan.FromSeconds(7));
         Assert.Equal(WfNodeExecutionResultType.RetryableFailure, retryable.Type);
+        Assert.Equal(48001, retryable.ErrorCode);
+        Assert.Equal("retry-summary", retryable.Summary);
+        Assert.Equal(TimeSpan.FromSeconds(7), retryable.RetryAfter);
 
-        var manualFallback = WfNodeExecutionResult.ManualFallback();
+        var manualFallback = WfNodeExecutionResult.ManualFallback(errorCode: 48002, summary: "fallback-summary");
         Assert.Equal(WfNodeExecutionResultType.ManualFallback, manualFallback.Type);
+        Assert.Equal(48002, manualFallback.ErrorCode);
+        Assert.Equal("fallback-summary", manualFallback.Summary);
 
-        var terminalFailure = WfNodeExecutionResult.TerminalFailure();
+        var terminalFailure = WfNodeExecutionResult.TerminalFailure(errorCode: 48003, summary: "terminal-summary");
         Assert.Equal(WfNodeExecutionResultType.TerminalFailure, terminalFailure.Type);
+        Assert.Equal(48003, terminalFailure.ErrorCode);
+        Assert.Equal("terminal-summary", terminalFailure.Summary);
     }
 
     [Fact]
