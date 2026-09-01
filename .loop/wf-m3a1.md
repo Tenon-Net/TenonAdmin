@@ -329,7 +329,7 @@ dotnet test  backend/TenonAdmin.slnx --filter "FullyQualifiedName~Tests.Wf|Fully
 - **R4｜仍是串行重放,不是真并发。** N6 的两个 worker 是先后跑的;真正的「两个线程同时进回写事务」与四库方言差异归 **Task 9**(`WfPersistenceContractTests` 先例)。
 - **R5｜四库只在 SQLite 上验过。** 本机腿是 SQLite;`NULL < now` 的三值逻辑(N7 那个变异之所以对 T11 全绿的原因)、`DateTime` 精度、唯一索引冲突时的事务状态(PG 的 `25P02`)在 MySQL/SqlServer/PostgreSQL 上未必同形。归 **Task 9**。
 - **R6｜outbox 仍只到「入队一行」。** 领取、可见性超时、退避、`LastError` 写入、真实投递全部零覆盖(`WfOutboxStore` 本来就只有 `EnqueueAsync`)。消费侧归消费者任务。
-- **R7｜4 个预留列仍零写入点**(`DeadlineAtUtc`/`HandlerVersion`/`InputHash`/`OutputHash`)。本轮只把它们的注释改成**说真话**,不给它们接写入点(逐条理由见 Task 6 的 D8)。
+- **R7｜4 个预留列仍零写入点**(`DeadlineAtUtc`/`HandlerVersion`/`InputHash`/`OutputHash`),但 `DeadlineAtUtc` 已有**读取点**(`WfNodeExecutionDispatcher.cs:156`:`execution.DeadlineAtUtc ?? nowUtc + leaseDuration`),另三列仍零引用。本轮只把它们的注释改成**说真话**,不给它们接写入点(逐条理由见 Task 6 的 D8)。
 - **R8｜P3-6 不处理。** T12 的 `EndedAtUtc > StartedAtUtc` 仍只靠时钟分辨率成立(N1/N5 新写的同型断言一样);唯一的真修法要么动产品取时刻的方式、要么引入可控时钟,后者被明文禁止。账继续挂到 **Task 10 收口轮**。
 - **R9｜OCE 只测「不被吞进结果分支」。** dispatcher 自己的三处 `ThrowIfCancellationRequested`(`RunAsync:57`、`BuildContextAsync:123`)在真实取消场景下的行为、以及「取消后租约由谁释放」这个运维问题,本轮零覆盖。
 - **R10｜`MaxAttempts` 仍无生产写入方。** 建 execution 行的人(Task 8)还不存在,本轮全部由测试手填。

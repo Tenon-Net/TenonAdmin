@@ -435,6 +435,9 @@ public class WfNodeExecutionDispatcherTests
         Assert.True(
             highReloaded.NextRetryAtUtc!.Value <= beforeHigh.AddHours(24).AddSeconds(5),
             $"NextRetryAtUtc={highReloaded.NextRetryAtUtc:O} 越过了 24h 上界,RetryAfter 没有被钳制/忽略。");
+        // 量值断言(P2-2):单边松界 <= 24h 连"钳到 24h"这个被注释明文排除的实现都放过,补一条精确到
+        // 30s 基线的量值断言,和下界那条同款。
+        Assert.Equal(beforeHigh.AddSeconds(30), highReloaded.NextRetryAtUtc!.Value, TimeSpan.FromSeconds(5));
     }
 
     // ── T7/T8:ManualFallback ────────────────────────────────────────────────
@@ -869,7 +872,7 @@ public class WfNodeExecutionDispatcherTests
         var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, TimeProvider.System);
 
         var beforeUtc = DateTime.UtcNow;
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        var ex = await Record.ExceptionAsync(
             () => dispatcher.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None));
 
         Assert.Equal(1, handler.CallCount); // OnExecute 在 CallCount++ 之后调用,值必然是 1(D8)。
@@ -893,6 +896,9 @@ public class WfNodeExecutionDispatcherTests
         var instance = await db.Queryable<WfInstance>()
             .ClearFilter<IOrgScoped>().Where(i => i.Id == s.InstanceId).FirstAsync();
         Assert.Equal(WfInstanceStatus.Running, instance.Status);
+
+        // P3-1:异常类型断在最后——先钉副作用,免得变异下 ThrowsAsync 抢先抛出、把后面的行全部跳过。
+        Assert.IsType<InvalidOperationException>(ex);
     }
 
     /// <summary>
@@ -918,7 +924,8 @@ public class WfNodeExecutionDispatcherTests
         };
         var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, TimeProvider.System);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+        var beforeUtc = DateTime.UtcNow;
+        var ex = await Record.ExceptionAsync(
             () => dispatcher.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None));
 
         Assert.Equal(1, handler.CallCount);
@@ -926,12 +933,15 @@ public class WfNodeExecutionDispatcherTests
         var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
         Assert.Equal(WfNodeExecutionStatus.Running, reloaded.Status);
         Assert.Equal(1, reloaded.Fence);
-        Assert.NotEqual(WfNodeExecutionStatus.Failed, reloaded.Status);
-        Assert.NotEqual(WfNodeExecutionStatus.Cancelled, reloaded.Status);
-        Assert.NotEqual(WfNodeExecutionStatus.RetryScheduled, reloaded.Status);
+        // P2-3:租约两列(N3 同款)——OCE 被拒绝归进任何结果分支,行必须仍持有 worker-a 的租约。
+        Assert.Equal("worker-a", reloaded.LeaseOwner);
+        Assert.Equal(beforeUtc.AddMinutes(5), reloaded.LeaseExpiresAtUtc!.Value, TimeSpan.FromSeconds(10));
 
         Assert.Equal(0, await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).CountAsync());
         Assert.Equal(0, await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).CountAsync());
+
+        // P3-1:异常类型断在最后——先钉副作用,免得变异下 ThrowsAnyAsync 抢先抛出、把后面的行全部跳过。
+        Assert.IsAssignableFrom<OperationCanceledException>(ex);
     }
 
     // ── N5/N6/N7:崩溃恢复(租约过期用应用时间 UPDATE 模拟,D1/语义契约 lease/fence 定案)────────────
@@ -1124,7 +1134,6 @@ public class WfNodeExecutionDispatcherTests
         var dispatcherB = new WfNodeExecutionDispatcher(db, [handlerB], engine, TimeProvider.System);
         var statusB = await dispatcherB.RunAsync(execution.Id, "worker-b", TimeSpan.FromMinutes(5), CancellationToken.None);
 
-        Assert.Null(statusB);
         Assert.Equal(0, handlerB.CallCount);
 
         var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
@@ -1143,6 +1152,10 @@ public class WfNodeExecutionDispatcherTests
             .Where(h => h.InstanceId == s.InstanceId && h.EventType == WfHistoryEventType.InstanceCompleted)
             .CountAsync();
         Assert.Equal(1, instanceCompletedCount);
+
+        // P2-1:挪到最后——放最前时变异态下第一条就抛,后面 7 条一次都没跑到,失败消息只说
+        // "返回了 Cancelled",曾把 exec 与协调者双双引向"handler 没被重复调用"的错误结论。
+        Assert.Null(statusB);
     }
 
     // ────────────────────────── 脚手架 ──────────────────────────
