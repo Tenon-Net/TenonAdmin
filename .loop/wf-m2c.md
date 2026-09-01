@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 31
+- 轮次: 32
 - max: 45
-- 当前任务: 10(gen:api + 契约漂移 + 验收,本台账最后一个 Task)
-- 当前阶段: plan(已完成)
-- 上一轮: Round 31 — Task 10 **plan**。读完 `backend-ci.yml`(四库矩阵 push/PR 触发)、`contract-drift.yml`(起 MinimalHost 判漂移)、`web-ci.yml`/`web-react-ci.yml`/`docker-smoke.yml` 触发条件、`scripts/gen-api.mjs`/`scripts/check-contract-drift.mjs`(两模板共用的现成生成/漂移工具)、`docs/react-template-ledger.md` E5 条目(契约漂移闸门历史,已实测两模板 IN SYNC)、`WfReceiptEngineTests.cs`(确认 DONE-CONDITION 最后一条已被 Task 5 满足,无需新测试)。**本轮期间用 AskUserQuestion 就 P2→Task10 锚点(四库 CI 本机无法取证)向用户要了决定**:用户选择**「push dev 拿 CI 信号(推荐)」**——已写入 `## Plan` 顶部作为本 Task 对「默认不 push」纪律的唯一、限定范围(仅 `git push origin dev`,不建 PR/不 push main/不 force)的例外授权。`## Plan` 重写完毕:E1–E7 七条决策点(复用现成 `check-contract-drift.mjs` 而非重造工具、SHA256 独立核验、diff 范围人工核对、本地闸门顺序、一次性提交+push、CI 逐工作流逐矩阵腿轮询、P3/既有射程披露不在本 Task 范围内修复),改动清单精确到 2 个生成物文件 + 台账 + 2 条只读操作(push / gh 轮询),6 项对应 DONE-CONDITION 逐条的验收清单。**不写产品代码,未跑 gen:api,未 push。**
-- 下一步: Round 32 — **Task 10 exec**。按 `## Plan` 的步骤 1–5:`node scripts/check-contract-drift.mjs` 重生成两模板 schema(预期非零退出,这是预期行为不是失败)→ 读 diff 核对范围 → 算 SHA256 独立比对 → 串行跑 backend/web/web-react 三套本地闸门(不并发重进程)→ 全绿后一次性提交 + `git push origin dev`(用户已授权)。**不勾选**,push 后的 CI 结果留给 Round 33+ 的 review 轮询确认。
+- 当前任务: 10(gen:api + 契约漂移 + 验收)
+- 当前阶段: exec(已完成,**未勾选** —— 待 review 轮询 CI)
+- 上一轮: Round 32 — Task 10 **exec**。`node scripts/check-contract-drift.mjs` 起 MinimalHost(5101)重生成两模板 `schema.d.ts`,以非零退出结束(预期行为,已在 Plan E1 写明)。`git diff` 核对:改动精确落在 4 处 `requestId?: null | string`(`WfInstanceCancelInput`/`WfInstanceResubmitInput`/`WfStartInput`/`WfTaskActionInput`),两模板逐字同款 diff,**无意外漂移**(`WfInstance.CompletedTime` 未出现在任何响应 DTO 里——Task 3 的字段目前不经 OpenAPI 暴露,不是缺陷,不在本 Task 处理范围)。`sha256sum` 独立核验:两文件哈希 `36dbccb7...fa8335` **逐字相同**,满足 DONE-CONDITION 第 5 条。本地闸门串行跑完:①`dotnet build -c Release` 0 警 0 错;②`dotnet test` 指定过滤器 **259/259**(与基线持平,backend 本轮未改代码);③`web` `typecheck`/`lint`/`vitest run src/workflow/` 全绿(**35/35**);④`web-react` `typecheck`/`lint`/`build` 全绿(build 1m13s,唯一警告是既有的 rollup 大包体积提示,与本次改动无关)。`git status --short` 核对:仅两个 `schema.d.ts` 被改,无计划外文件。**已提交并 `git push origin dev`**(用户 Round 31 通过 AskUserQuestion 已授权,仅此一次、仅此分支、非 force、未开 PR)。**未勾选**——四库 CI 矩阵结果需要 review 轮次轮询确认。
+- 下一步: Round 33 — **Task 10 review(CI 轮询,可能跨多轮)**。`gh run list --branch dev --limit 10` 找到本次 push 的 commit 触发的五个工作流(`backend-ci`/`contract-drift`/`docker-smoke`/`web-ci`/`web-react-ci`),逐个 `gh run view <id>` 确认 `conclusion=success`;`backend-ci` 必须展开 `db` 矩阵四条腿逐条核对(sqlite/mysql/sqlserver/postgres,不能只看整体汇总)。若仍在跑,如实记录当前状态,下一轮继续查,**不得因等不及就假设通过**。全部确认绿后才可进入勾选。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -539,6 +539,7 @@
 | 29 | review | Task 9 **review**(自审)。变异 `useRequestKey.ts` 三处:`settle` 对 network 也清空(红用例2)/`value()` 去惰性(红用例1+2,比预期表更强)/`classifyOutcome` 恒 error(红用例6),均先 grep 确认真改、单文件复原。人工核对 `detail.vue` urge 分支不生成/不透传 `requestId`,`start/index.vue`/`api/workflow.ts`/`COMPONENTS.md` 逐条对照 D5–D7 无计划外改动。闸门重跑:typecheck/lint/vitest 全绿(35/35)。**0×P1、0×P2**,留 Round 30 勾选。 |
 | 30 | 勾选 | Task 9 **勾选**。核对 0×P1、0×P2(Round 29 review)、收尾闸门重跑绿(typecheck/lint/vitest 35/35),`## Tasks` 第 9 项打勾。Vue request key 生命周期收尾:`useRequestKey` composable + `classifyOutcome`,`detail.vue`/`start/index.vue` 接入,`api/workflow.ts` 手写类型加字段,`COMPONENTS.md` 索引;全程未碰 web-react/未跑 gen:api,留给 Task 10。M2c 仅剩 **Task 10** 未完成。 |
 | 31 | plan | Task 10 **plan**(本台账最后一个 Task)。读 CI 工作流五个文件 + gen:api/契约漂移两个脚本 + react-template-ledger E5 历史 + Task 5 的 HTTP 层幂等回放测试(确认 DONE-CONDITION 最后一条已满足,无需新测试)。**AskUserQuestion 问出 P2→Task10 锚点的决定:用户选「push dev 拿 CI 信号」**,写入 Plan 顶部作为「默认不 push」纪律的唯一限定例外。重写 `## Plan`:E1–E7 决策点、2+1 文件改动清单(两 schema.d.ts + 台账)、6 项 DONE-CONDITION 对应验收清单。未写产品代码、未跑 gen:api、未 push。 |
+| 32 | exec | Task 10 **exec**。`check-contract-drift.mjs` 重生成两模板 schema(非零退出=预期),diff 精确落在 4 处 `requestId`(Cancel/Resubmit/Start/TaskAction 四个 Input),无意外漂移;`sha256sum` 独立核验两文件逐字相同。本地闸门串行全绿:backend build 0/0、test 259/259;web typecheck/lint/vitest 35/35;web-react typecheck/lint/build 全绿。提交 + **已 `git push origin dev`**(用户 Round 31 授权)。未勾选,CI 四库矩阵结果留 Round 33+ review 轮询。 |
 
 ## 参考读码清单(Round 1 plan 前)
 

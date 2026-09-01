@@ -11557,6 +11557,7 @@ export interface components {
         WfInstanceCancelInput: {
             /** Format: int64 */
             instanceId?: number | string;
+            requestId?: null | string;
         };
         WfInstanceDetailOutput: {
             /** Format: int64 */
@@ -11607,6 +11608,7 @@ export interface components {
             selectedUserIdsByNode?: null | {
                 [key: string]: (number | string)[];
             };
+            requestId?: null | string;
         };
         WfInstanceStatus: number;
         WfModel: {
@@ -11685,6 +11687,7 @@ export interface components {
             selectedUserIdsByNode?: null | {
                 [key: string]: (number | string)[];
             };
+            requestId?: null | string;
         };
         WfTaskAction: number;
         WfTaskActionInput: {
@@ -11694,6 +11697,7 @@ export interface components {
             /** Format: int64 */
             toUserId?: number | string;
             targetNodeId?: null | string;
+            requestId?: null | string;
         };
         WfTimeout: {
             /** Format: int32 */
