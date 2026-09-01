@@ -221,3 +221,35 @@ public enum WfTargetType
     /// </summary>
     DefinitionVersion = 3,
 }
+
+/// <summary>
+/// <c>wf_history</c> 事件的行为者类型(<c>wf_history.ActorType</c>;M3a-1)。回答「谁」,不是「干了什么」——
+/// 「干了什么」已经由 <see cref="WfHistoryEventType"/> 表达,所以这里**不设 <c>Reminder</c>**:催办是真实
+/// 用户点的按钮,由 <c>EventType = TaskUrged</c> 表达,行为者仍是 <see cref="Human"/>。
+/// <para><b>不复用 <see cref="WfActorType"/></b>:那个枚举已经被 <c>wf_task_actor.ActorType</c>(审批人 /
+/// 抄送接收人)占用,语义完全不同的两件事共用一个类型名只会在读代码时制造「这是哪张表的 ActorType」的
+/// 歧义。</para>
+/// <para><b>只追加、不重排</b>(评审 §九 #6,与 <see cref="WfCommandType"/>/<see cref="WfTargetType"/> 同款
+/// 约束)。<see cref="Unknown"/> = 0 是升级前旧行的读出值(列带 <c>DefaultValue="0"</c>);
+/// <see cref="Worker"/>/<see cref="Ai"/> 是评审 §4.6 点名预留的值,Task 1 里零写入点,先占位。</para>
+/// </summary>
+public enum WfHistoryActorType
+{
+    /// <summary>未知(升级前旧行的默认值)</summary>
+    Unknown = 0,
+
+    /// <summary>真实用户触发</summary>
+    Human = 1,
+
+    /// <summary>引擎/系统自身触发(如超时 Job 之外的系统写入)</summary>
+    System = 2,
+
+    /// <summary>超时 Job 触发</summary>
+    Timeout = 3,
+
+    /// <summary>后台 Worker 触发(预留)</summary>
+    Worker = 4,
+
+    /// <summary>AI 代理触发(预留)</summary>
+    Ai = 5,
+}

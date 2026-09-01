@@ -35,4 +35,18 @@ public class WfToken : BaseEntity
     /// </summary>
     [SugarColumn(ColumnDescription = "乐观锁版本", DefaultValue = "0")]
     public int Version { get; set; }
+
+    /// <summary>
+    /// 本次「访问」标识(M3a-1):token 每次经 <see cref="EnterNodeOp.ExecuteAsync"/> 进入新节点时生成一次
+    /// 雪花 Id(与 <see cref="NodeId"/> 同一条 UPDATE 落库),**停留期间不变**——会签未满票、转办、催办等
+    /// 「留在原节点」的写路径都不经过 <see cref="EnterNodeOp"/>,只推进 <see cref="Version"/>,不动本列。
+    /// <para><b>与 <see cref="Version"/> 职责不混用</b>:<see cref="Version"/> 是乐观锁,每次状态推进(含
+    /// 停留期间的多次 CAS)都会前进;本列只回答「当前这次访问是哪一次」,同一次访问期间恒定,天然适合
+    /// 拿来标注同一次访问建出的 <c>wf_task</c>/<c>wf_cc</c>/<c>wf_history</c> 行。</para>
+    /// <para>可空、无默认值:与 <see cref="WfInstance.CompletedTime"/> 同型,升级路径走单步
+    /// <c>ADD COLUMN ... NULL</c>,旧行读 <c>null</c>;下次进节点自然补上,永远停在某节点的老 token
+    /// 保持 <c>null</c>——这是语义不是缺陷,不写回填 HostedService。</para>
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "节点访问 Id")]
+    public long? NodeVisitId { get; set; }
 }

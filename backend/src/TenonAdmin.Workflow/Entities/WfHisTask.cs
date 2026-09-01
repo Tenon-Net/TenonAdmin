@@ -54,4 +54,11 @@ public class WfHisTask : BaseEntity
     /// <summary>转办 / 委托目标用户 Id(仅 Transfer 与 Delegate 时有值)。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "转办目标用户 Id")]
     public long? TransferToUserId { get; set; }
+
+    /// <summary>
+    /// <see cref="WfToken.NodeVisitId"/> 的拷贝(M3a-1);从 <c>Task.NodeVisitId</c>(活跃待办行)取,
+    /// 而非 <c>ctx.Token.NodeVisitId</c>——读任务行才准确表达「这件待办是哪一次访问建的」。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "节点访问 Id")]
+    public long? NodeVisitId { get; set; }
 }

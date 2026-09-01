@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SqlSugar;
+using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Workflow;
@@ -40,6 +41,19 @@ public sealed class WfExecutionContext
     /// <c>BeginXxxAsync</c> 却忘了带上"变成**编译错误**,而不是一条悄悄丢了身份的历史。</para>
     /// </summary>
     public required string? RequestId { get; init; }
+
+    /// <summary>
+    /// 本次命令写进每一条 <see cref="WfHistory.ActorType"/> 的行为者类型(M3a-1)。<b>刻意声明成
+    /// <c>required</c></b>:理由与 <see cref="RequestId"/> 那段一致——漏填不该是一条悄悄记成
+    /// <see cref="WfHistoryActorType.Unknown"/> 的历史,而应该是编译错误。
+    /// </summary>
+    public required WfHistoryActorType ActorType { get; init; }
+
+    /// <summary>本次命令写进每一条 <see cref="WfHistory.ActorUserId"/> 的用户 Id;系统/超时命令为 <c>null</c>。</summary>
+    public required long? ActorUserId { get; init; }
+
+    /// <summary><see cref="EnterNodeOp"/> 生成 <see cref="WfToken.NodeVisitId"/> 用的雪花发号器(M3a-1)。</summary>
+    public required IIdGenerator IdGenerator { get; init; }
 
     /// <summary>
     /// 发起时按 <c>level</c> 快照的连续多级主管链;<c>null</c>=无快照(老实例或模型无 multiLeader 节点)。
@@ -201,10 +215,16 @@ public sealed class WfExecutionContext
             InstanceId = Instance.Id,
             EventType = eventType,
             NodeId = nodeId,
-            // 20 个 AppendHistoryAsync 调用点都经过这里,所以请求键只在这一行赋值。
+            // 20 个 AppendHistoryAsync 调用点都经过这里,所以请求键/行为者/token 身份只在这一行赋值。
             RequestId = RequestId,
+            TokenId = Token.Id,
+            NodeVisitId = Token.NodeVisitId,
+            ActorType = ActorType,
+            ActorUserId = ActorUserId,
+            // PayloadVersion 由实体初始化器给 1,这里不写。
             PayloadJson = payload is null ? null : JsonSerializer.Serialize(payload, WfModelJson.Options),
         };
+        row.Sequence = await WfHistorySequence.NextAsync(Db, Instance.Id);
         await Db.Insertable(row).ExecuteCommandAsync();
     }
 

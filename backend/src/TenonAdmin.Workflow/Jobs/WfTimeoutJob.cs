@@ -237,11 +237,15 @@ public class WfTimeoutJob(
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        await db.Insertable(new WfHistory
+        await WfHistorySequence.WriteSystemRowAsync(db, new WfHistory
         {
             InstanceId = task.InstanceId,
             EventType = WfHistoryEventType.TimeoutFired,
             NodeId = task.NodeId,
+            TokenId = task.TokenId,
+            NodeVisitId = task.NodeVisitId,
+            ActorType = WfHistoryActorType.Timeout,
+            ActorUserId = null,
             PayloadJson = JsonSerializer.Serialize(
                 new
                 {
@@ -252,7 +256,7 @@ public class WfTimeoutJob(
                     dueTime = task.DueTime,
                 },
                 WfModelJson.Options),
-        }).ExecuteCommandAsync();
+        }, cancellationToken);
 
         await db.Updateable<WfTask>()
             .SetColumns(t => new WfTask { DueTime = null })
@@ -277,11 +281,15 @@ public class WfTimeoutJob(
     {
         cancellationToken.ThrowIfCancellationRequested();
         var code = (int)error.Code;
-        await db.Insertable(new WfHistory
+        await WfHistorySequence.WriteSystemRowAsync(db, new WfHistory
         {
             InstanceId = task.InstanceId,
             EventType = WfHistoryEventType.TimeoutFired,
             NodeId = task.NodeId,
+            TokenId = task.TokenId,
+            NodeVisitId = task.NodeVisitId,
+            ActorType = WfHistoryActorType.Timeout,
+            ActorUserId = null,
             PayloadJson = JsonSerializer.Serialize(
                 new
                 {
@@ -291,7 +299,7 @@ public class WfTimeoutJob(
                     dueTime = task.DueTime,
                 },
                 WfModelJson.Options),
-        }).ExecuteCommandAsync();
+        }, cancellationToken);
 
         var attempts = await db.Queryable<WfHistory>()
             .Where(h => h.InstanceId == task.InstanceId
@@ -359,11 +367,15 @@ public class WfTimeoutJob(
         if (toUserIds.Count == 0)
             return false;
 
-        await db.Insertable(new WfHistory
+        await WfHistorySequence.WriteSystemRowAsync(db, new WfHistory
         {
             InstanceId = instance.Id,
             EventType = WfHistoryEventType.TimeoutFired,
             NodeId = task.NodeId,
+            TokenId = task.TokenId,
+            NodeVisitId = task.NodeVisitId,
+            ActorType = WfHistoryActorType.Timeout,
+            ActorUserId = null,
             PayloadJson = JsonSerializer.Serialize(
                 new
                 {
@@ -373,7 +385,7 @@ public class WfTimeoutJob(
                     dueTime = task.DueTime,
                 },
                 WfModelJson.Options),
-        }).ExecuteCommandAsync();
+        }, cancellationToken);
 
         try
         {

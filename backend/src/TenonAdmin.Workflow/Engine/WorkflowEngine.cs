@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
+using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Workflow;
@@ -17,7 +18,9 @@ namespace TenonAdmin.Workflow;
 /// 的消费者需要在自己的 <c>base(...)</c> 调用里补上这些参数。不为兼容加 <c>[Obsolete]</c> 双构造函数。
 /// M2c 第三次同样的追加:<paramref name="receipts"/>(写操作幂等回执 SPI,供 <see cref="ExecuteAsync"/>
 /// 在事务开头查/占位、成功后回填),以及 <paramref name="logger"/>(通知失败此前完全无声,见
-/// <see cref="DispatchPendingNotificationsAsync"/>)。
+/// <see cref="DispatchPendingNotificationsAsync"/>)。M3a-1 第四次同样的追加:
+/// <paramref name="idGenerator"/>(<see cref="EnterNodeOp"/> 生成 <see cref="WfToken.NodeVisitId"/> 用的
+/// 雪花发号器,内核既有 <see cref="IIdGenerator"/>,不新造发号机制)。
 /// </remarks>
 public class WorkflowEngine(
     IRepository<WfInstance> instances,
@@ -28,7 +31,8 @@ public class WorkflowEngine(
     IWfConditionEvaluator conditionEvaluator,
     IWorkflowNotifier notifier,
     IWfOperationReceiptService receipts,
-    ILogger<WorkflowEngine> logger) : IWorkflowEngine
+    ILogger<WorkflowEngine> logger,
+    IIdGenerator idGenerator) : IWorkflowEngine
 {
     /// <inheritdoc />
     public virtual async Task<WfEngineResult> ExecuteAsync(
@@ -305,6 +309,9 @@ public class WorkflowEngine(
             ConditionEvaluator = conditionEvaluator,
             Notifier = notifier,
             RequestId = cmd.RequestId,
+            ActorType = WfHistoryActorType.Human,
+            ActorUserId = cmd.StarterUserId,
+            IdGenerator = idGenerator,
             Instance = instance,
             Token = token,
             Model = model,
@@ -383,6 +390,9 @@ public class WorkflowEngine(
             ConditionEvaluator = conditionEvaluator,
             Notifier = notifier,
             RequestId = cmd.RequestId,
+            ActorType = WfHistoryActorType.Human,
+            ActorUserId = cmd.UserId,
+            IdGenerator = idGenerator,
             Instance = instance,
             Token = token,
             Model = model,
@@ -447,6 +457,9 @@ public class WorkflowEngine(
             ConditionEvaluator = conditionEvaluator,
             Notifier = notifier,
             RequestId = cmd.RequestId,
+            ActorType = WfHistoryActorType.Human,
+            ActorUserId = cmd.UserId,
+            IdGenerator = idGenerator,
             Instance = instance,
             Token = token,
             Model = model,
@@ -516,6 +529,9 @@ public class WorkflowEngine(
             ConditionEvaluator = conditionEvaluator,
             Notifier = notifier,
             RequestId = cmd.RequestId,
+            ActorType = WfHistoryActorType.Human,
+            ActorUserId = cmd.UserId,
+            IdGenerator = idGenerator,
             Instance = instance,
             Token = token,
             Model = model,
@@ -580,6 +596,9 @@ public class WorkflowEngine(
             ConditionEvaluator = conditionEvaluator,
             Notifier = notifier,
             RequestId = cmd.RequestId,
+            ActorType = WfHistoryActorType.Human,
+            ActorUserId = cmd.CallerUserId,
+            IdGenerator = idGenerator,
             Instance = instance,
             Token = token,
             Model = model,
@@ -643,6 +662,9 @@ public class WorkflowEngine(
             ConditionEvaluator = conditionEvaluator,
             Notifier = notifier,
             RequestId = cmd.RequestId,
+            ActorType = WfHistoryActorType.Human,
+            ActorUserId = cmd.UserId,
+            IdGenerator = idGenerator,
             Instance = instance,
             Token = token,
             Model = model,
@@ -734,6 +756,9 @@ public class WorkflowEngine(
             Notifier = notifier,
             // 超时是系统扫出来的,没有"用户这一次点击"的身份 —— null 是语义,不是遗漏。
             RequestId = null,
+            ActorType = WfHistoryActorType.Timeout,
+            ActorUserId = null,
+            IdGenerator = idGenerator,
             Instance = instance,
             Token = token,
             Model = model,
@@ -1093,6 +1118,9 @@ public class WorkflowEngine(
             ConditionEvaluator = conditionEvaluator,
             Notifier = notifier,
             RequestId = cmd.RequestId,
+            ActorType = WfHistoryActorType.Human,
+            ActorUserId = cmd.CallerUserId,
+            IdGenerator = idGenerator,
             Instance = instance,
             Token = token,
             Model = model,

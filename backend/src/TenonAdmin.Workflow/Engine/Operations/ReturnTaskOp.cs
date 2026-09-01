@@ -79,6 +79,7 @@ public class ReturnTaskOp(
             Comment = Comment,
             DurationMs = durationMs,
             StartedTime = activatedTime,
+            NodeVisitId = Task.NodeVisitId,
         }).ExecuteCommandAsync();
 
         await ctx.AppendHistoryAsync(

@@ -36,9 +36,12 @@ public class EnterNodeOp(WfNode node) : IWfOperation
         // ctx.Token 故后续 CAS 对得上。
         await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
 
+        // 每次进新节点生成一次访问 Id(M3a-1),与 NodeId 同一条 UPDATE 落库;停留期间的写路径(未满票的
+        // ClaimTokenAsync、转办、催办)不经过本 Op,只推 Version,本列因此天然「停留期间不变」。
+        ctx.Token.NodeVisitId = ctx.IdGenerator.NextId();
         ctx.Token.NodeId = Node.Id;
         await ctx.Db.Updateable(ctx.Token)
-            .UpdateColumns(t => new { t.NodeId, t.UpdateTime, t.UpdateUserId })
+            .UpdateColumns(t => new { t.NodeId, t.NodeVisitId, t.UpdateTime, t.UpdateUserId })
             .ExecuteCommandAsync();
 
         await ctx.AppendHistoryAsync(WfHistoryEventType.NodeEnter, Node.Id, cancellationToken: cancellationToken);
@@ -147,6 +150,7 @@ public class EnterNodeOp(WfNode node) : IWfOperation
                     NodeId = Node.Id,
                     UserId = uid,
                     IsRead = false,
+                    NodeVisitId = ctx.Token.NodeVisitId,
                 })
                 .ToList();
             if (rows.Count > 0)
@@ -263,6 +267,7 @@ public class EnterNodeOp(WfNode node) : IWfOperation
             SignMode = signMode,
             Version = 0,
             DueTime = ResolveDueTime(ctx),
+            NodeVisitId = ctx.Token.NodeVisitId,
         };
         await ctx.Db.Insertable(task).ExecuteCommandAsync();
 

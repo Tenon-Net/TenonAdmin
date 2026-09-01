@@ -132,6 +132,7 @@ public abstract class ReassignTaskOpBase(
             DurationMs = durationMs,
             StartedTime = fromActor.ActivatedTime,
             TransferToUserId = ToUserId,
+            NodeVisitId = Task.NodeVisitId,
         }).ExecuteCommandAsync();
 
         await ctx.Db.Insertable(new WfTaskActor

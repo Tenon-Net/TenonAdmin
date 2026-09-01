@@ -223,14 +223,18 @@ public class WfTaskService(
         if (toUserIds.Count == 0)
             return;
 
-        await histories.InsertAsync(new WfHistory
+        await WfHistorySequence.WriteSystemRowAsync(histories.Db, new WfHistory
         {
             InstanceId = instance.Id,
             EventType = WfHistoryEventType.TaskUrged,
             NodeId = task.NodeId,
+            TokenId = task.TokenId,
+            NodeVisitId = task.NodeVisitId,
+            ActorType = WfHistoryActorType.Human,
+            ActorUserId = callerUserId,
             PayloadJson = JsonSerializer.Serialize(
                 new { taskId, fromUserId = callerUserId, toUserIds }, WfModelJson.Options),
-        });
+        }, cancellationToken);
 
         try
         {

@@ -75,4 +75,19 @@ public class WfInstance : DataEntity
     /// </summary>
     [SugarColumn(ColumnDataType = StaticConfig.CodeFirst_BigString, IsNullable = true, ColumnDescription = "按级别多级主管链快照 JSON")]
     public string? LeaderChainJson { get; set; }
+
+    /// <summary>
+    /// <c>wf_history.Sequence</c> 分配计数器(M3a-1):<see cref="WfHistorySequence.NextAsync"/> 每写一条
+    /// 历史前 <c>SET HistorySeq = HistorySeq + 1</c> 原子相对递增再读回,该 UPDATE 四库都在这一行取排他锁
+    /// 持有到提交,MySQL RR 下走 current read,读回 SELECT 读到本事务自己的写——四库通用,无需方言特有语法。
+    /// <para><b>必须在事务内才成立</b>:两条裸自动提交语句之间,并发的另一次分配会让读回值撞号。</para>
+    /// <para><c>DefaultValue="0"</c> 触发三步升级序列(同 <see cref="Version"/> 那段注释的机制),升级前的
+    /// 存量实例从 0 起、新事件从 1 起——升级那一刻是序号唯一会「断裂」的地方,此后不再跳号(事务回滚连
+    /// 递增一起回滚)。</para>
+    /// <para><b>用 <c>SetColumns</c> 相对递增,不触发审计 AOP</b>——只认整对象 <c>Updateable</c> 的
+    /// <c>UpdateByObject</c> 路径(见 <see cref="WfExecutionContext.ClaimInstanceAsync"/> 同款注释),
+    /// 本列递增因此不会刷新 <c>UpdateTime</c>/<c>UpdateUserId</c>,「审计字段不可变」的既有断言不受影响。</para>
+    /// </summary>
+    [SugarColumn(ColumnDescription = "历史序号分配计数器", DefaultValue = "0")]
+    public int HistorySeq { get; set; }
 }

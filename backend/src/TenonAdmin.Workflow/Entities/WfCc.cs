@@ -25,4 +25,12 @@ public class WfCc : BaseEntity
 
     [SugarColumn(IsNullable = true, ColumnDescription = "已读时间")]
     public DateTime? ReadTime { get; set; }
+
+    /// <summary>
+    /// <see cref="WfToken.NodeVisitId"/> 的拷贝(M3a-1);建行时从 <c>ctx.Token.NodeVisitId</c> 取。
+    /// <b>不改</b> <c>(InstanceId, NodeId)</c> 去重键——重提重走同一 cc 节点时已有行的访问 Id 保持首次值,
+    /// 不随重提刷新。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "节点访问 Id")]
+    public long? NodeVisitId { get; set; }
 }

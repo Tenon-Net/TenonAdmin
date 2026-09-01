@@ -32,4 +32,8 @@ public class WfTask : BaseEntity
     /// <summary>到期时间(超时扫描用;空=不限)。M1 可空,超时 Job 属 M2。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "到期时间")]
     public DateTime? DueTime { get; set; }
+
+    /// <summary><see cref="WfToken.NodeVisitId"/> 的拷贝(M3a-1);建任务时从 <c>ctx.Token.NodeVisitId</c> 取。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "节点访问 Id")]
+    public long? NodeVisitId { get; set; }
 }
