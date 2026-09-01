@@ -47,12 +47,15 @@ public class WfReturnResubmitTests
         Assert.Empty(await TodoItemsFor(b, instanceId));
         Assert.Empty(await TodoItemsFor(a, instanceId));
 
-        // 关闭活跃任务是否真的物理清了 wf_task_actor / wf_task(不止是靠 CAS 认领把办理人自己那行翻 Skipped)。
+        // 关闭活跃任务是否真的物理清了 wf_task(不止是靠 CAS 认领把办理人自己那行翻 Skipped)。
+        // wf_task_actor 不再物理删——数据库评审 §4.4 定案保留为分配历史,关闭只把状态翻终态。
         // token 是否真的回退到 Node 策略配置的目标节点(否则整段 token 回退代码删掉套件也不会红)。
         using (var scope = f.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-            Assert.Equal(0, await db.Queryable<WfTaskActor>().Where(x => x.TaskId == task2Id).CountAsync());
+            var remainingActors = await db.Queryable<WfTaskActor>().Where(x => x.TaskId == task2Id).ToListAsync();
+            Assert.Single(remainingActors);
+            Assert.Equal(WfActorStatus.Skipped, remainingActors[0].Status);
             Assert.Equal(0, await db.Queryable<WfTask>().Where(x => x.Id == task2Id).CountAsync());
         }
 

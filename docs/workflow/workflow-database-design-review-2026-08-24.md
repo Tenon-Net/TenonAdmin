@@ -171,6 +171,8 @@ wf_his_task.StartedTime      datetime nullable
 
 旧数据的 `StartedTime` 可保持空，避免伪造精度。
 
+> **已实现（2026-09-01，M2c → M3a 过渡步骤）**：`wf_task_actor.ActivatedTime`、`wf_his_task.StartedTime` 均已落地（nullable，无 `DefaultValue`，升级策略同 `WfInstance.CompletedTime`）。**未新增 `AssignedTime` 列**——`wf_task_actor` 继承 `BaseEntity`，其审计字段 `CreateTime` 就是「成为候选办理人的时间」，与建议里的 `AssignedTime` 语义完全重合，建两个列是重复。`ActivatedTime` 在两处写入：①或签/会签全员与顺序首位建任务时立刻写（与 `CreateTime` 同一时刻）；②顺序会签的后位在 `CompleteTaskOp.TryPassAsync` 晋级为 Pending 那一刻写。`DurationMs` 改用 `now - (ActivatedTime ?? WfTask.CreateTime)`（`??` 兜底覆盖升级前已是 Pending 的旧行，永远读 `null`，优雅退化回旧公式，不需要回填）。落点：`CompleteTaskOp`/`ReturnTaskOp`（读值不改变既有 CAS 判定条件，只多一次快照读）、`ReassignTaskOpBase`（转办/委托新建的目标 actor 行同样立刻写 `ActivatedTime`）。测试：`WfTaskAssignmentHistoryTests.cs`。
+
 ### 4.4 办理人分配历史会丢失
 
 任务关闭时，当前实现物理删除全部 `wf_task_actor`，`wf_his_task` 只记录真正执行动作的人。因此会丢失：
@@ -207,6 +209,12 @@ EndReason
 ```
 
 最终选择应在实现 M2c/M3a 前写回设计规划，避免前端、审计和统计分别猜测分配历史来源。
+
+> **已实现（2026-09-01，M2c → M3a 过渡步骤）**：选了**方案一**——保留 `wf_task_actor`，任务关闭只把状态翻终态（`Done`/`Skipped`），不再物理删；不新增 `wf_task_assignment_history` 表。
+> **决策依据**：全部读路径已逐一核对，`WfTaskService.PageTodoAsync`、`WfInstanceService`（3 处）、`WorkflowEngine.ResolvePendingActorsAsync`、`WfTimeoutJob` 无一例外都显式过滤 `Status == Pending`，没有任何地方靠「这行还在不在」判断是否活跃；保留下来对现有查询零风险，而新建一张表要多一套实体/仓储/可替换性面，对已经存在的信息纯属复制。
+> **一并修的一个缺口**：`CompleteTaskOp.CloseTaskAsync` 原来关闭时只把 `Pending` 翻 `Skipped`，`Waiting`（顺序会签尚未轮到的候选人）被落下——物理删除年代这不要紧（反正整行都没了），但保留之后 `Waiting` 行会永远卡在「尚未轮到」，不给终态。已改成 `Pending`/`Waiting` 都翻 `Skipped`。`CancelInstanceOp`/`ReturnTaskOp` 原本就是无条件翻全部 actor（不限 `Pending`），不用改。
+> **`wf_task` 本身仍然物理删**——它承担的是另一个职责（改派/超时等路径依赖的隐式不变量「终态动作必删活跃 `wf_task`」，见 `ReassignTaskOpBase` 源码注释），与本表的历史留存无关。
+> 落点：`CompleteTaskOp`/`ReturnTaskOp`/`CancelInstanceOp`（删除 `Deleteable<WfTaskActor>()` 调用）。测试：`WfTaskAssignmentHistoryTests.cs`。
 
 ### 4.5 Token 缺少节点访问身份
 

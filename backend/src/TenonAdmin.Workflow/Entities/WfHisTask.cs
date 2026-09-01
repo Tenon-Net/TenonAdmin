@@ -35,9 +35,21 @@ public class WfHisTask : BaseEntity
     [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "审批意见")]
     public string? Comment { get; set; }
 
-    /// <summary>任务耗时(毫秒;从待办创建到本动作)。</summary>
+    /// <summary>
+    /// 任务耗时(毫秒)。语义:<see cref="StartedTime"/> 有值时是「真正可处理到本动作」的耗时,为空时
+    /// 优雅退化为「待办创建到本动作」(数据库评审 §4.3)。
+    /// </summary>
     [SugarColumn(ColumnDescription = "耗时(毫秒)")]
     public long DurationMs { get; set; }
+
+    /// <summary>
+    /// 本动作对应的 <c>wf_task_actor.ActivatedTime</c> 快照(数据库评审 §4.3)。转办/顺序会签下,继承
+    /// 前手等待时间或跳过等待轮到自己的时间都不该计入本次办理人的真实耗时——<see cref="DurationMs"/>
+    /// 因此改以本字段为基准,不再用 <see cref="WfTask"/>.<c>CreateTime</c>(那是整件任务的创建时间,不是本办理
+    /// 人的接手时间)。升级前的旧行与本办理人从未进入 Pending 前直接办理的边界情形均可能为空,退化到旧公式。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "本次办理起算时间")]
+    public DateTime? StartedTime { get; set; }
 
     /// <summary>转办 / 委托目标用户 Id(仅 Transfer 与 Delegate 时有值)。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "转办目标用户 Id")]

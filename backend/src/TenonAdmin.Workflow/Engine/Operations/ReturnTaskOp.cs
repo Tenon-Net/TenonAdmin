@@ -35,6 +35,14 @@ public class ReturnTaskOp(
         }
         Task.Version++;
 
+        // 读 ActivatedTime 在先(数据库评审 §4.3),不改变下面 CAS 的判定条件与并发语义,只额外取一次快照
+        // 给 DurationMs/StartedTime 用;读不到不代表并发失败,下面的 CAS 才是唯一裁判。
+        var activatedTime = await ctx.Db.Queryable<WfTaskActor>()
+            .Where(a => a.TaskId == Task.Id && a.UserId == UserId && a.Status == WfActorStatus.Pending
+                        && a.ActorType == WfActorType.Approver)
+            .Select(a => a.ActivatedTime)
+            .FirstAsync();
+
         // 仅当前 Pending 办理人可退回(顺序会签的 Waiting 后手不可)。
         var claimed = await ctx.Db.Updateable<WfTaskActor>()
             .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Skipped })
@@ -57,9 +65,8 @@ public class ReturnTaskOp(
                      ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
                          new Dictionary<string, object?> { ["nodeId"] = resolvedTargetId });
 
-        var durationMs = Math.Max(
-            0,
-            (long)(ctx.TimeProvider.GetLocalNow().DateTime - Task.CreateTime).TotalMilliseconds);
+        var now = ctx.TimeProvider.GetLocalNow().DateTime;
+        var durationMs = Math.Max(0, (long)(now - (activatedTime ?? Task.CreateTime)).TotalMilliseconds);
         await ctx.Db.Insertable(new WfHisTask
         {
             InstanceId = Task.InstanceId,
@@ -71,6 +78,7 @@ public class ReturnTaskOp(
             Action = WfTaskAction.Return,
             Comment = Comment,
             DurationMs = durationMs,
+            StartedTime = activatedTime,
         }).ExecuteCommandAsync();
 
         await ctx.AppendHistoryAsync(
@@ -85,13 +93,13 @@ public class ReturnTaskOp(
             new { fromNodeId = Task.NodeId, targetNodeId = target.Id },
             cancellationToken);
 
-        // 关闭当前活跃任务:全部 actor(不限 Pending——顺序会签的 Waiting 后手也要清)标 Skipped → 物理删
-        // actor 行 → 物理删 task 行(转历史已写入 wf_his_task,同 CompleteTaskOp.CloseTaskAsync 的三步)。
+        // 关闭当前活跃任务:全部 actor(不限 Pending——顺序会签的 Waiting 后手也要清)标 Skipped,保留为
+        // 分配历史(数据库评审 §4.4,同 CompleteTaskOp.CloseTaskAsync 的决定——不物理删,详细理由见那边的
+        // 注释)→ 物理删 task 行(承担的是另一个职责,见 ReassignTaskOpBase 的不变量注释)。
         await ctx.Db.Updateable<WfTaskActor>()
             .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Skipped })
             .Where(a => a.TaskId == Task.Id)
             .ExecuteCommandAsync();
-        await ctx.Db.Deleteable<WfTaskActor>().Where(a => a.TaskId == Task.Id).ExecuteCommandAsync();
         await ctx.Db.Deleteable<WfTask>().In(Task.Id).ExecuteCommandAsync();
 
         // token 回退;Status 不变(仍 Active——退回后原实例保持 Running,不是完结),故领取的期望状态与

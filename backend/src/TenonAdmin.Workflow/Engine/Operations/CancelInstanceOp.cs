@@ -27,11 +27,12 @@ public class CancelInstanceOp : IWfOperation
             .FirstAsync();
         if (activeTask is not null)
         {
+            // actor 行保留为分配历史(数据库评审 §4.4,不物理删——理由见 CompleteTaskOp.CloseTaskAsync);
+            // task 行仍物理删,承担的是不同职责(见 ReassignTaskOpBase 的不变量注释)。
             await ctx.Db.Updateable<WfTaskActor>()
                 .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Skipped })
                 .Where(a => a.TaskId == activeTask.Id)
                 .ExecuteCommandAsync();
-            await ctx.Db.Deleteable<WfTaskActor>().Where(a => a.TaskId == activeTask.Id).ExecuteCommandAsync();
             await ctx.Db.Deleteable<WfTask>().In(activeTask.Id).ExecuteCommandAsync();
         }
 

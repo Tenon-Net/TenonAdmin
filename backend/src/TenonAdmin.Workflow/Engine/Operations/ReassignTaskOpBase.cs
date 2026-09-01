@@ -117,9 +117,8 @@ public abstract class ReassignTaskOpBase(
                        new Dictionary<string, object?> { ["nodeId"] = Task.NodeId });
         ctx.CurrentNode = node;
 
-        var durationMs = Math.Max(
-            0,
-            (long)(ctx.TimeProvider.GetLocalNow().DateTime - Task.CreateTime).TotalMilliseconds);
+        var now = ctx.TimeProvider.GetLocalNow().DateTime;
+        var durationMs = Math.Max(0, (long)(now - (fromActor.ActivatedTime ?? Task.CreateTime)).TotalMilliseconds);
         await ctx.Db.Insertable(new WfHisTask
         {
             InstanceId = Task.InstanceId,
@@ -131,6 +130,7 @@ public abstract class ReassignTaskOpBase(
             Action = HistoryAction,
             Comment = Comment,
             DurationMs = durationMs,
+            StartedTime = fromActor.ActivatedTime,
             TransferToUserId = ToUserId,
         }).ExecuteCommandAsync();
 
@@ -141,6 +141,7 @@ public abstract class ReassignTaskOpBase(
             ActorType = WfActorType.Approver,
             Status = WfActorStatus.Pending,
             Sort = fromActor.Sort,
+            ActivatedTime = now,
         }).ExecuteCommandAsync();
 
         await ctx.AppendHistoryAsync(

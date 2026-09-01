@@ -39,6 +39,14 @@ public class CompleteTaskOp(
         }
         Task.Version++;
 
+        // 读 ActivatedTime 在先(数据库评审 §4.3):不改变下面 CAS 的判定条件与并发语义,只是额外取一次
+        // 快照,给 DurationMs/StartedTime 用。读不到不代表并发失败——下面的 CAS 才是唯一裁判。
+        var activatedTime = await ctx.Db.Queryable<WfTaskActor>()
+            .Where(a => a.TaskId == Task.Id && a.UserId == UserId && a.Status == WfActorStatus.Pending
+                        && a.ActorType == WfActorType.Approver)
+            .Select(a => a.ActivatedTime)
+            .FirstAsync();
+
         // 仅当前 Pending 办理人可翻 Done;顺序审批的后级仍是 Waiting。
         var claimed = await ctx.Db.Updateable<WfTaskActor>()
             .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Done })
@@ -56,9 +64,8 @@ public class CompleteTaskOp(
                        new Dictionary<string, object?> { ["nodeId"] = Task.NodeId });
         ctx.CurrentNode = node;
 
-        var durationMs = Math.Max(
-            0,
-            (long)(ctx.TimeProvider.GetLocalNow().DateTime - Task.CreateTime).TotalMilliseconds);
+        var now = ctx.TimeProvider.GetLocalNow().DateTime;
+        var durationMs = Math.Max(0, (long)(now - (activatedTime ?? Task.CreateTime)).TotalMilliseconds);
         await ctx.Db.Insertable(new WfHisTask
         {
             InstanceId = Task.InstanceId,
@@ -70,6 +77,7 @@ public class CompleteTaskOp(
             Action = Action,
             Comment = Comment,
             DurationMs = durationMs,
+            StartedTime = activatedTime,
         }).ExecuteCommandAsync();
 
         await ctx.AppendHistoryAsync(
@@ -124,8 +132,9 @@ public class CompleteTaskOp(
                 if (next is null)
                     return true;
 
+                var promotedAt = ctx.TimeProvider.GetLocalNow().DateTime;
                 var promoted = await ctx.Db.Updateable<WfTaskActor>()
-                    .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Pending })
+                    .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Pending, ActivatedTime = promotedAt })
                     .Where(a => a.Id == next.Id && a.Status == WfActorStatus.Waiting)
                     .ExecuteCommandAsync();
                 if (promoted != 1)
@@ -166,14 +175,22 @@ public class CompleteTaskOp(
         cancellationToken.ThrowIfCancellationRequested();
         if (skipRemaining)
         {
+            // Pending(或签/会签未行动的候选人)与 Waiting(顺序会签尚未轮到的候选人)都要给一个终态,
+            // 否则 Waiting 行会永远卡在「尚未轮到」——数据库评审 §4.4 要求分配历史必须完整、不能有
+            // 「查不出最终去向」的行。
             await ctx.Db.Updateable<WfTaskActor>()
                 .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Skipped })
-                .Where(a => a.TaskId == Task.Id && a.Status == WfActorStatus.Pending)
+                .Where(a => a.TaskId == Task.Id
+                            && (a.Status == WfActorStatus.Pending || a.Status == WfActorStatus.Waiting))
                 .ExecuteCommandAsync();
         }
 
-        // 活跃待办完成即删(转历史已写入 wf_his_task)。
-        await ctx.Db.Deleteable<WfTaskActor>().Where(a => a.TaskId == Task.Id).ExecuteCommandAsync();
+        // 办理人分配历史(数据库评审 §4.4)不再物理删 —— 二选一里选了「保留 wf_task_actor,关闭只翻状态」:
+        // 现有的「我的待办」等全部读路径已经逐一确认过都显式过滤 Status == Pending(见 WfTaskService/
+        // WfInstanceService/WorkflowEngine.ResolvePendingActorsAsync/WfTimeoutJob),没有任何地方靠「这行
+        // 还在不在」判活跃,keep 下来零风险;换新表反而要多一套实体/仓储/可替换性面,对已有信息纯属复制。
+        // wf_task 本身仍然物理删——它承担的是另一个职责:改派/超时等路径的隐式不变量「终态动作必删活跃
+        // wf_task」(见 ReassignTaskOpBase 的详细注释),与本表的历史留存无关,不能一并保留。
         await ctx.Db.Deleteable<WfTask>().In(Task.Id).ExecuteCommandAsync();
     }
 

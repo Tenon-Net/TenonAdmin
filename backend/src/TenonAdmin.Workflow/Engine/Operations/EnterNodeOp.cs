@@ -266,18 +266,21 @@ public class EnterNodeOp(WfNode node) : IWfOperation
         };
         await ctx.Db.Insertable(task).ExecuteCommandAsync();
 
+        var now = ctx.TimeProvider.GetLocalNow().DateTime;
         var actors = new List<WfTaskActor>(userIds.Count);
         for (var i = 0; i < userIds.Count; i++)
         {
+            var startsPending = signMode != WfSignMode.Sequential || i == 0;
             actors.Add(new WfTaskActor
             {
                 TaskId = task.Id,
                 UserId = userIds[i],
                 ActorType = WfActorType.Approver,
-                Status = signMode == WfSignMode.Sequential && i > 0
-                    ? WfActorStatus.Waiting
-                    : WfActorStatus.Pending,
+                Status = startsPending ? WfActorStatus.Pending : WfActorStatus.Waiting,
                 Sort = signMode == WfSignMode.Sequential ? i + 1 : 0,
+                // 直接建成 Pending 的(或签/会签全员、顺序首位)现在就能被处理,ActivatedTime = 建task那刻;
+                // 顺序会签的后位仍在 Waiting,留空到 TryPassAsync 晋级时才写(数据库评审 §4.3)。
+                ActivatedTime = startsPending ? now : null,
             });
         }
         await ctx.Db.Insertable(actors).ExecuteCommandAsync();
