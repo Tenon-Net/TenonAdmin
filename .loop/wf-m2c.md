@@ -37,12 +37,12 @@
 
 ## Status
 
-- 轮次: 32
+- 轮次: 33
 - max: 45
-- 当前任务: 10(gen:api + 契约漂移 + 验收)
-- 当前阶段: exec(已完成,**未勾选** —— 待 review 轮询 CI)
-- 上一轮: Round 32 — Task 10 **exec**。`node scripts/check-contract-drift.mjs` 起 MinimalHost(5101)重生成两模板 `schema.d.ts`,以非零退出结束(预期行为,已在 Plan E1 写明)。`git diff` 核对:改动精确落在 4 处 `requestId?: null | string`(`WfInstanceCancelInput`/`WfInstanceResubmitInput`/`WfStartInput`/`WfTaskActionInput`),两模板逐字同款 diff,**无意外漂移**(`WfInstance.CompletedTime` 未出现在任何响应 DTO 里——Task 3 的字段目前不经 OpenAPI 暴露,不是缺陷,不在本 Task 处理范围)。`sha256sum` 独立核验:两文件哈希 `36dbccb7...fa8335` **逐字相同**,满足 DONE-CONDITION 第 5 条。本地闸门串行跑完:①`dotnet build -c Release` 0 警 0 错;②`dotnet test` 指定过滤器 **259/259**(与基线持平,backend 本轮未改代码);③`web` `typecheck`/`lint`/`vitest run src/workflow/` 全绿(**35/35**);④`web-react` `typecheck`/`lint`/`build` 全绿(build 1m13s,唯一警告是既有的 rollup 大包体积提示,与本次改动无关)。`git status --short` 核对:仅两个 `schema.d.ts` 被改,无计划外文件。**已提交并 `git push origin dev`**(用户 Round 31 通过 AskUserQuestion 已授权,仅此一次、仅此分支、非 force、未开 PR)。**未勾选**——四库 CI 矩阵结果需要 review 轮次轮询确认。
-- 下一步: Round 33 — **Task 10 review(CI 轮询,可能跨多轮)**。`gh run list --branch dev --limit 10` 找到本次 push 的 commit 触发的五个工作流(`backend-ci`/`contract-drift`/`docker-smoke`/`web-ci`/`web-react-ci`),逐个 `gh run view <id>` 确认 `conclusion=success`;`backend-ci` 必须展开 `db` 矩阵四条腿逐条核对(sqlite/mysql/sqlserver/postgres,不能只看整体汇总)。若仍在跑,如实记录当前状态,下一轮继续查,**不得因等不及就假设通过**。全部确认绿后才可进入勾选。
+- 当前任务: 10(gen:api + 契约漂移 + 验收,本台账最后一个 Task)
+- 当前阶段: review(CI 轮询中,**未完成**)
+- 上一轮: Round 33 — Task 10 **review** 轮询第一轮。`gh run list --branch dev --limit 15` 定位到 commit `4679467` 触发的五个工作流:`web-ci`(success)/`web-react-ci`(success)/`contract-drift`(success) **三个已绿**;`backend-ci`/`docker-smoke` 仍 `in_progress`。展开两者的 job 级状态:`backend-ci` 的 `template-smoke` 已 success,四条 `db` 矩阵腿(sqlite/mysql/sqlserver/postgres)**全部 in_progress,尚无结论**;`docker-smoke` 的 `single` 已 success,`multi` 仍 in_progress。**如实记录:CI 尚未全绿,不满足勾选条件**,SqlServer 矩阵腿历史上单独就要 40–60 分钟(见 CLAUDE.md CI 章节),预计还需多轮 60s 轮询才能收敛。本轮未做任何代码改动,仅 `gh run view` 只读查询 + 台账更新。
+- 下一步: Round 34+ — 继续 **Task 10 review** 轮询。`gh run list --branch dev --limit 5` 或直接 `gh run view <runId>` 复查 `backend-ci`(databaseId 33454582264)与 `docker-smoke`(databaseId 33454582222)这两个仍在跑的工作流,展开 `db` 矩阵四条腿逐条确认 `conclusion=success`(尤其 sqlserver 腿可能耗时最久)。全部五个工作流 + 四条矩阵腿确认绿后,才可把 review 结论写进 Findings/Log 并进入**修 Findings**(若有失败)或**勾选**(全绿时)。若某腿失败,记为 P1 并转入修 Findings 阶段,不得跳过。
 
 ## 已知起点(2026-08-27,M2b 收口后)
 
@@ -540,6 +540,7 @@
 | 30 | 勾选 | Task 9 **勾选**。核对 0×P1、0×P2(Round 29 review)、收尾闸门重跑绿(typecheck/lint/vitest 35/35),`## Tasks` 第 9 项打勾。Vue request key 生命周期收尾:`useRequestKey` composable + `classifyOutcome`,`detail.vue`/`start/index.vue` 接入,`api/workflow.ts` 手写类型加字段,`COMPONENTS.md` 索引;全程未碰 web-react/未跑 gen:api,留给 Task 10。M2c 仅剩 **Task 10** 未完成。 |
 | 31 | plan | Task 10 **plan**(本台账最后一个 Task)。读 CI 工作流五个文件 + gen:api/契约漂移两个脚本 + react-template-ledger E5 历史 + Task 5 的 HTTP 层幂等回放测试(确认 DONE-CONDITION 最后一条已满足,无需新测试)。**AskUserQuestion 问出 P2→Task10 锚点的决定:用户选「push dev 拿 CI 信号」**,写入 Plan 顶部作为「默认不 push」纪律的唯一限定例外。重写 `## Plan`:E1–E7 决策点、2+1 文件改动清单(两 schema.d.ts + 台账)、6 项 DONE-CONDITION 对应验收清单。未写产品代码、未跑 gen:api、未 push。 |
 | 32 | exec | Task 10 **exec**。`check-contract-drift.mjs` 重生成两模板 schema(非零退出=预期),diff 精确落在 4 处 `requestId`(Cancel/Resubmit/Start/TaskAction 四个 Input),无意外漂移;`sha256sum` 独立核验两文件逐字相同。本地闸门串行全绿:backend build 0/0、test 259/259;web typecheck/lint/vitest 35/35;web-react typecheck/lint/build 全绿。提交 + **已 `git push origin dev`**(用户 Round 31 授权)。未勾选,CI 四库矩阵结果留 Round 33+ review 轮询。 |
+| 33 | review | Task 10 review 轮询 #1。`gh run list`/`gh run view` 核对 commit `4679467` 的五个工作流:web-ci/web-react-ci/contract-drift 已 success;backend-ci(四条 db 矩阵腿全 in_progress)与 docker-smoke(multi 腿 in_progress,single 已 success)仍在跑。如实记录未完成,不勾选,留待后续轮次继续轮询。只读操作,无代码改动。 |
 
 ## 参考读码清单(Round 1 plan 前)
 
