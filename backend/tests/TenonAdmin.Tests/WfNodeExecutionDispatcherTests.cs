@@ -9,7 +9,7 @@ using TenonAdmin.Workflow;
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// <see cref="WfNodeExecutionDispatcher"/> 的 12 条契约测试(M3a-1 Task 6)——「领取 → 调 handler → 落结果」,
+/// <see cref="WfNodeExecutionDispatcher"/> 的 24 条契约测试(M3a-1 Task 6/7)——「领取 → 调 handler → 落结果」,
 /// 第一次把 Task 2(SPI)/3(lease-fence 领取)/4(attempt)/5(outbox)装配起来。脚手架:用户经 HTTP(复用
 /// <see cref="WfReceiptEngineTests"/> 的 <c>ClientFor</c>/<c>AddUser</c> 姿势,唯一需要认证的部分);流程定义
 /// 版本 / 实例 / token 直接经 <see cref="ISqlSugarClient"/> 与 <see cref="IWorkflowEngine.ExecuteAsync"/> 构造
@@ -382,12 +382,13 @@ public class WfNodeExecutionDispatcherTests
     }
 
     /// <summary>
-    /// 退避上下界钳制。两段各自独立的 execution(避免同 key 撞成同一行):(a) <c>RetryAfter = 0</c> → 忽略,
-    /// 退到 30s 基线(<c>AttemptCount = 1</c> → <c>30 &lt;&lt; 0</c>);(b) <c>RetryAfter = 3650 天</c> → 钳到 24h。
-    /// 变异:<c>ResolveRetryDelay</c> 首行退化成 <c>return result.RetryAfter ?? 默认;</c>(去掉钳制)。
+    /// 退避下界:<c>RetryAfter = 0</c> → 忽略,退到 30s 基线(<c>AttemptCount = 1</c> → <c>30 &lt;&lt; 0</c>)。
+    /// P3-2 从原 <c>Handler_supplied_retry_delay_is_clamped_at_both_ends</c> 拆出(review B2:前段失败会掩盖
+    /// 后段,已在本 loop 误导过一次结论),断言逐字搬运。变异:<c>ResolveRetryDelay</c> 首行退化成
+    /// <c>return result.RetryAfter ?? 默认;</c>(去掉钳制)。
     /// </summary>
     [Fact]
-    public async Task Handler_supplied_retry_delay_is_clamped_at_both_ends()
+    public async Task Handler_supplied_retry_delay_below_the_lower_bound_falls_back_to_the_base_backoff()
     {
         using var f = new WorkflowAppFactory();
         using var scope = f.Services.CreateScope();
@@ -404,6 +405,20 @@ public class WfNodeExecutionDispatcherTests
         var lowReloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == lowExecution.Id).FirstAsync();
         Assert.NotNull(lowReloaded.NextRetryAtUtc);
         Assert.Equal(beforeLow.AddSeconds(30), lowReloaded.NextRetryAtUtc!.Value, TimeSpan.FromSeconds(5));
+    }
+
+    /// <summary>
+    /// 退避上界:<c>RetryAfter = 3650 天</c>——超出 <c>(0, 24h]</c> 的值被忽略,退回默认退避(而不是钳到 24h)。
+    /// P3-2 从原 <c>Handler_supplied_retry_delay_is_clamped_at_both_ends</c> 拆出,断言逐字搬运。变异:同上界
+    /// 的变异会让本条转红,而下界那条不受影响——两条各自独占鉴别力。
+    /// </summary>
+    [Fact]
+    public async Task Handler_supplied_retry_delay_above_the_upper_bound_is_ignored()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
 
         // 上界:RetryAfter = 3650 天——超出 (0, 24h] 的值被忽略,退回默认退避(而不是钳到 24h;
         // 语义契约字面写的是"否则(含 null、<=0、>24h)→ 30s << min(AttemptCount-1,5)")。用一个真实的量值
@@ -705,6 +720,429 @@ public class WfNodeExecutionDispatcherTests
             Assert.NotEqual(attempt.StartedAtUtc, attempt.EndedAtUtc);
             Assert.True(attempt.EndedAtUtc > attempt.StartedAtUtc);
         }
+    }
+
+    // ── N1/N2:Task 7 补的两条结果路径增量(Succeeded 推进副作用 / handler 自己返回的 TerminalFailure)──
+
+    /// <summary>
+    /// Succeeded 的推进副作用(D4 增量):T1 只断了 status/CallCount/context 投影,从未断过
+    /// <see cref="TakeTransitionOp"/> 的推进效果(token/instance/history)与 attempt/outbox 行。全部从库读回再断。
+    /// 变异:(a) <c>case Succeeded</c> 改成 <c>break</c>(不 Plan(TakeTransitionOp))→ instance 仍 Running、
+    /// token 仍 Active;(b) <c>ActorType = Worker</c> 改成 <c>Human</c>(这一列全仓目前零断言);(c)
+    /// <c>WfNodeExecutionAttemptStore</c> 的 <c>OutputSummary</c> 映射丢掉。
+    /// </summary>
+    [Fact]
+    public async Task A_successful_run_advances_the_token_and_completes_the_instance()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "n1");
+        var execution = await BuildExecutionAsync(db, s);
+
+        var beforeUtc = DateTime.UtcNow;
+        var handler = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(summary: "ok"), WfNodeType.Webhook);
+        var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, TimeProvider.System);
+
+        var status = await dispatcher.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None);
+        Assert.Equal(WfNodeExecutionStatus.Succeeded, status);
+
+        var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.Succeeded, reloaded.Status);
+        Assert.Equal(1, reloaded.Fence);
+        Assert.Equal(1, reloaded.AttemptCount);
+        Assert.Null(reloaded.ErrorCode);
+        Assert.Null(reloaded.Summary);
+        Assert.Equal(typeof(FakeNodeHandler).FullName, reloaded.HandlerType);
+        Assert.Equal(beforeUtc, reloaded.CompletedTimeUtc!.Value, TimeSpan.FromSeconds(10)); // 带容差断值,不是 NotNull。
+
+        var attempts = await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).ToListAsync();
+        var attempt = Assert.Single(attempts);
+        Assert.Equal(1, attempt.AttemptNo);
+        Assert.Equal(WfNodeExecutionResultType.Succeeded, attempt.ResultType);
+        Assert.Equal("ok", attempt.OutputSummary);
+        Assert.Null(attempt.ErrorSummary);
+        Assert.True(attempt.EndedAtUtc > attempt.StartedAtUtc);
+
+        var token = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
+        Assert.Equal(WfTokenStatus.Completed, token.Status);
+        Assert.Equal("node1", token.NodeId); // 模型 start → node1 → null,next is null 时 NodeId 不变(D10)。
+        Assert.Equal(s.Token.NodeVisitId, token.NodeVisitId);
+
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>().Where(i => i.Id == s.InstanceId).FirstAsync();
+        Assert.Equal(WfInstanceStatus.Approved, instance.Status);
+
+        var history = await db.Queryable<WfHistory>().Where(h => h.InstanceId == s.InstanceId).ToListAsync();
+        Assert.Single(history, h => h.EventType == WfHistoryEventType.InstanceCompleted);
+        // 只看 node1 的 NodeLeave——StartAsync 发起时离开 start 节点那条是真实用户触发(ActorType=Human),
+        // 与本测试要钉的「dispatcher 推进时的 NodeLeave 是 Worker」是两回事,混着断会被那条 Human 拖累。
+        var nodeLeavesAtNode1 = history.Where(h => h.EventType == WfHistoryEventType.NodeLeave && h.NodeId == "node1").ToList();
+        Assert.NotEmpty(nodeLeavesAtNode1);
+        Assert.All(nodeLeavesAtNode1, h => Assert.Equal(WfHistoryActorType.Worker, h.ActorType));
+
+        var outbox = Assert.Single(await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).ToListAsync());
+        Assert.Equal("wf.node-execution.completed", outbox.MessageType); // 字面值,不是常量(禁写清单 #10)。
+        var payload = JsonDocument.Parse(outbox.PayloadJson!).RootElement;
+        Assert.Equal("succeeded", payload.GetProperty("status").GetString());
+    }
+
+    /// <summary>
+    /// handler 自己返回 <c>TerminalFailure</c>(与 T10 的合成路径不同):<c>ErrorCode</c>/<c>Summary</c> 必须
+    /// 原样带出,不是 dispatcher 写死的 48008——用一个不同的字面码(48003)证明。实例不一起终止(D4)。
+    /// 变异:(a) <c>case TerminalFailure</c> 错配成 <c>Plan(TakeTransitionOp)</c> → instance Approved;(b)
+    /// 错配成 <c>Plan(WfManualFallbackOp)</c> → 多一行 wf_task;(c) 丢掉 <c>result.ErrorCode</c>/<c>Summary</c>
+    /// (写 null)——T10 抓不到 (c),它的 48008 是合成时写死的。
+    /// </summary>
+    [Fact]
+    public async Task A_handler_returned_terminal_failure_stops_the_execution_without_touching_the_instance()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "n2");
+        var execution = await BuildExecutionAsync(db, s);
+
+        var beforeUtc = DateTime.UtcNow;
+        var handler = new FakeNodeHandler(
+            WfNodeExecutionResult.TerminalFailure(errorCode: 48003, summary: "boom"), WfNodeType.Webhook);
+        var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, TimeProvider.System);
+
+        var status = await dispatcher.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None);
+        Assert.Equal(WfNodeExecutionStatus.Failed, status);
+
+        var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.Failed, reloaded.Status);
+        Assert.Equal(48003, reloaded.ErrorCode); // 字面值,刻意 ≠ 合成路径的 48008。
+        Assert.Equal("boom", reloaded.Summary);
+        Assert.Equal(typeof(FakeNodeHandler).FullName, reloaded.HandlerType);
+        Assert.Equal(beforeUtc, reloaded.CompletedTimeUtc!.Value, TimeSpan.FromSeconds(10));
+
+        var attempts = await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).ToListAsync();
+        var attempt = Assert.Single(attempts);
+        Assert.Equal(WfNodeExecutionResultType.TerminalFailure, attempt.ResultType);
+        Assert.Equal("boom", attempt.ErrorSummary);
+        Assert.Null(attempt.OutputSummary);
+
+        var token = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
+        Assert.Equal(WfTokenStatus.Active, token.Status); // 不推进。
+        Assert.Equal("node1", token.NodeId);
+
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>().Where(i => i.Id == s.InstanceId).FirstAsync();
+        Assert.Equal(WfInstanceStatus.Running, instance.Status); // 实例不一起终止(D4)。
+
+        var tasks = await db.Queryable<WfTask>()
+            .Where(t => t.NodeId == "node1" && t.InstanceId == s.InstanceId)
+            .ToListAsync();
+        Assert.Single(tasks); // 只有一开始真实进入 node1 建的那一件,没建兜底任务。
+
+        var outbox = Assert.Single(await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).ToListAsync());
+        var payload = JsonDocument.Parse(outbox.PayloadJson!).RootElement;
+        Assert.Equal("failed", payload.GetProperty("status").GetString());
+    }
+
+    // ── N3/N4:崩溃(handler 抛异常 / 抛 OCE)时什么都不写 ──────────────────────
+
+    /// <summary>
+    /// 崩溃替身(D1):handler 抛异常,tx2 从未开始,execution 停在 Running 持租约,0 行 attempt/outbox。
+    /// 变异:在 <see cref="WfNodeExecutionDispatcher.InvokeHandlerAsync"/> 外面包
+    /// <c>try { … } catch (Exception ex) { return TerminalFailure(...); }</c> → execution 变 Failed + 1 行
+    /// attempt + 1 行 outbox。
+    /// </summary>
+    [Fact]
+    public async Task A_crashing_handler_leaves_the_execution_running_and_writes_nothing()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "n3");
+        var execution = await BuildExecutionAsync(db, s);
+
+        var handler = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(), WfNodeType.Webhook)
+        {
+            OnExecute = () => throw new InvalidOperationException("crash"),
+        };
+        var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, TimeProvider.System);
+
+        var beforeUtc = DateTime.UtcNow;
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => dispatcher.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None));
+
+        Assert.Equal(1, handler.CallCount); // OnExecute 在 CallCount++ 之后调用,值必然是 1(D8)。
+
+        var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.Running, reloaded.Status);
+        Assert.Equal(1, reloaded.Fence);
+        Assert.Equal(1, reloaded.AttemptCount);
+        Assert.Equal("worker-a", reloaded.LeaseOwner);
+        Assert.Equal(beforeUtc.AddMinutes(5), reloaded.LeaseExpiresAtUtc!.Value, TimeSpan.FromSeconds(10));
+        Assert.Null(reloaded.CompletedTimeUtc);
+        Assert.Null(reloaded.Summary);
+
+        Assert.Equal(0, await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).CountAsync());
+        Assert.Equal(0, await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).CountAsync());
+
+        var token = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
+        Assert.Equal(WfTokenStatus.Active, token.Status);
+        Assert.Equal("node1", token.NodeId);
+
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>().Where(i => i.Id == s.InstanceId).FirstAsync();
+        Assert.Equal(WfInstanceStatus.Running, instance.Status);
+    }
+
+    /// <summary>
+    /// 取消语义(Task 2 定案):handler 抛 <see cref="OperationCanceledException"/> 不归进任何结果分支,行为
+    /// 与 N3 同形(Running 持租约、0 行 attempt/outbox)。用 <c>ThrowsAnyAsync</c> 不用 <c>ThrowsAsync</c>——
+    /// xUnit 的 <c>ThrowsAsync&lt;T&gt;</c> 是精确类型匹配,<c>TaskCanceledException</c>(OCE 子类)会漏。
+    /// 变异:加 <c>catch (OperationCanceledException) { result = TerminalFailure(...); }</c>(或
+    /// <c>RetryableFailure</c>)→ 转红。N3 抓不到这个变异(它抛的不是 OCE)。
+    /// </summary>
+    [Fact]
+    public async Task A_cancelled_handler_is_not_folded_into_any_result_branch()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "n4");
+        var execution = await BuildExecutionAsync(db, s);
+
+        var handler = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(), WfNodeType.Webhook)
+        {
+            OnExecute = () => throw new OperationCanceledException(),
+        };
+        var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, TimeProvider.System);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => dispatcher.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None));
+
+        Assert.Equal(1, handler.CallCount);
+
+        var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.Running, reloaded.Status);
+        Assert.Equal(1, reloaded.Fence);
+        Assert.NotEqual(WfNodeExecutionStatus.Failed, reloaded.Status);
+        Assert.NotEqual(WfNodeExecutionStatus.Cancelled, reloaded.Status);
+        Assert.NotEqual(WfNodeExecutionStatus.RetryScheduled, reloaded.Status);
+
+        Assert.Equal(0, await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).CountAsync());
+        Assert.Equal(0, await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).CountAsync());
+    }
+
+    // ── N5/N6/N7:崩溃恢复(租约过期用应用时间 UPDATE 模拟,D1/语义契约 lease/fence 定案)────────────
+
+    /// <summary>
+    /// 崩溃恢复 (a):worker-a 崩溃(N3 的形状)→ 租约打到过去 → worker-b 重新领取并跑完。Fence 1→2,
+    /// <c>AttemptCount</c> 三处口径在一个 ≠1 的值(2)上同时钉住;<c>AttemptCount − count(attempt) == 1</c>
+    /// = 崩溃次数(Task 4 定案,全仓首次落测)。变异:(a) 删
+    /// <see cref="WfNodeExecutionStore.ClaimAsync"/> 领取谓词第三支的 <c>Status == Running</c> → worker-b
+    /// 领不到、<c>RunAsync</c> 返回 null(崩溃恢复 (a) 的直接守门);(b) <c>AppendAsync</c> 的
+    /// <c>AttemptNo = execution.AttemptCount</c> 改成常量 1;(c) <c>BuildContextAsync</c> 的
+    /// <c>Attempt = execution.AttemptCount</c> 改成常量 1(T1 抓不到,那里的期望值本来就是 1)。
+    /// </summary>
+    [Fact]
+    public async Task An_expired_lease_lets_another_worker_reclaim_and_finish_the_execution()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "n5");
+        var execution = await BuildExecutionAsync(db, s);
+
+        var handlerA = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(), WfNodeType.Webhook)
+        {
+            OnExecute = () => throw new InvalidOperationException("crash"),
+        };
+        var dispatcherA = new WfNodeExecutionDispatcher(db, [handlerA], engine, TimeProvider.System);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => dispatcherA.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None));
+
+        var past = DateTime.UtcNow.AddMinutes(-1);
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { LeaseExpiresAtUtc = past })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+
+        var handlerB = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(summary: "b-ok"), WfNodeType.Webhook);
+        var dispatcherB = new WfNodeExecutionDispatcher(db, [handlerB], engine, TimeProvider.System);
+        var status = await dispatcherB.RunAsync(execution.Id, "worker-b", TimeSpan.FromMinutes(5), CancellationToken.None);
+        Assert.Equal(WfNodeExecutionStatus.Succeeded, status);
+
+        Assert.Equal(1, handlerB.CallCount);
+        Assert.Equal(2, handlerB.LastContext!.Attempt); // AttemptCount 三处口径的第三处,在一个 ≠1 的值上。
+
+        var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(2, reloaded.Fence);
+        Assert.Equal(2, reloaded.AttemptCount);
+        Assert.Equal(WfNodeExecutionStatus.Succeeded, reloaded.Status);
+        Assert.Equal("worker-b", reloaded.LeaseOwner); // 终态回写不清租约列(陷阱 2)。
+
+        var attempts = await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).ToListAsync();
+        var attempt = Assert.Single(attempts);
+        Assert.Equal(2, attempt.AttemptNo);
+        Assert.Equal("b-ok", attempt.OutputSummary);
+
+        Assert.Equal(1, reloaded.AttemptCount - attempts.Count); // 领了但没返回的次数 = 崩溃次数(Task 4 定案)。
+
+        var token = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
+        Assert.Equal(WfTokenStatus.Completed, token.Status);
+
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>().Where(i => i.Id == s.InstanceId).FirstAsync();
+        Assert.Equal(WfInstanceStatus.Approved, instance.Status);
+
+        Assert.Equal(1, await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).CountAsync());
+    }
+
+    /// <summary>
+    /// 崩溃恢复 (b),回写方向:老 owner(fence=1,经 <c>ClaimAsync</c> helper 领取,从未经 dispatcher 回写)
+    /// 租约过期后,新 worker 经 <c>RunAsync</c> 真跑完 Succeeded(token Completed、instance Approved、
+    /// 1 attempt、1 outbox)。老 owner 迟到的 fence=1 回写必须被拒绝,且不改动任何已推进的副作用——先断
+    /// 副作用,最后才断异常类型 + 字面 48004。<b>N6 钉的是 DONE-CONDITION 的观察面不变量,不是单条 CAS
+    /// 谓词</b>——单条谓词的鉴别力已由既有 T2/T3/A4/A5 承担;只删单条谓词时本测试仍绿(另一条自己挡住)。
+    /// </summary>
+    [Fact]
+    public async Task A_crashed_workers_late_writeback_cannot_advance_the_execution_a_second_time()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "n6");
+        var execution = await BuildExecutionAsync(db, s);
+
+        var now = DateTime.UtcNow;
+        var first = await ClaimAsync(db, execution.Id, "worker-a", now);
+        Assert.NotNull(first);
+        Assert.Equal(1, first.Fence);
+
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { LeaseExpiresAtUtc = now.AddMinutes(-1) })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+
+        var handlerB = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(summary: "b-ok"), WfNodeType.Webhook);
+        var dispatcherB = new WfNodeExecutionDispatcher(db, [handlerB], engine, TimeProvider.System);
+        var statusB = await dispatcherB.RunAsync(execution.Id, "worker-b", TimeSpan.FromMinutes(5), CancellationToken.None);
+        Assert.Equal(WfNodeExecutionStatus.Succeeded, statusB);
+
+        var afterB = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(2, afterB.Fence);
+        Assert.Equal(WfNodeExecutionStatus.Succeeded, afterB.Status);
+        var attemptsAfterB = await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).ToListAsync();
+        Assert.Single(attemptsAfterB);
+        var tokenAfterB = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
+        var instanceAfterB = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>().Where(i => i.Id == s.InstanceId).FirstAsync();
+        Assert.Equal(WfInstanceStatus.Approved, instanceAfterB.Status);
+        var instanceCompletedAfterB = await db.Queryable<WfHistory>()
+            .Where(h => h.InstanceId == s.InstanceId && h.EventType == WfHistoryEventType.InstanceCompleted)
+            .CountAsync();
+        Assert.Equal(1, instanceCompletedAfterB);
+
+        // 老 owner 迟到回写:fence=1,ResolveExecutionOutcome 此刻会先算出 Cancelled(instance 已非
+        // Running,陷阱 7),但 48004 来自其后的 CAS(Fence/Status 都不匹配),结论不变——不断言 outcome。
+        var ex = await Record.ExceptionAsync(() => engine.ExecuteAsync(
+            new NodeExecutionCompletedCmd
+            {
+                ExecutionId = execution.Id,
+                Fence = 1,
+                Result = WfNodeExecutionResult.Succeeded(summary: "a-late"),
+                HandlerType = "test",
+                StartedAtUtc = now,
+                EndedAtUtc = now.AddSeconds(1),
+            }));
+
+        var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.Succeeded, reloaded.Status);
+        Assert.Equal(2, reloaded.Fence);
+        Assert.Equal(2, reloaded.AttemptCount);
+        Assert.Equal(afterB.CompletedTimeUtc, reloaded.CompletedTimeUtc);
+
+        var attempts = await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).ToListAsync();
+        var attempt = Assert.Single(attempts);
+        Assert.Equal(2, attempt.AttemptNo);
+
+        Assert.Equal(1, await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).CountAsync());
+
+        var token = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
+        Assert.Equal(tokenAfterB.Status, token.Status);
+        Assert.Equal(tokenAfterB.NodeId, token.NodeId);
+        Assert.Equal(tokenAfterB.NodeVisitId, token.NodeVisitId);
+
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>().Where(i => i.Id == s.InstanceId).FirstAsync();
+        Assert.Equal(WfInstanceStatus.Approved, instance.Status);
+
+        var instanceCompletedAfter = await db.Queryable<WfHistory>()
+            .Where(h => h.InstanceId == s.InstanceId && h.EventType == WfHistoryEventType.InstanceCompleted)
+            .CountAsync();
+        Assert.Equal(1, instanceCompletedAfter); // 「只推进一次」最直白的证据。
+
+        var admin = Assert.IsType<AdminException>(ex);
+        Assert.Equal(48004, (int)admin.Code);
+    }
+
+    /// <summary>
+    /// 崩溃恢复 (b),领取方向:worker-a 经 <c>RunAsync</c> 跑完 Succeeded 后,终态回写不清租约列
+    /// (<see cref="WorkflowEngine.ClaimExecutionWritebackAsync"/> 终态分支的 <c>SetColumns</c> 只写 5 列,
+    /// 陷阱 2),此刻仍带着 worker-a 的租约——把它打到过去,worker-b 仍不得重新领取。本 Task 鉴别力最强的
+    /// 一条:对现有 338 条全绿的变异——从 <see cref="WfNodeExecutionStore.ClaimAsync"/> 领取谓词第三支删掉
+    /// <c>e.Status == WfNodeExecutionStatus.Running &amp;&amp;</c>(只留 <c>LeaseExpiresAtUtc &lt; nowUtc</c>)
+    /// ——对既有 T11 无效,因为 T11 预置的行从未被领取过,<c>LeaseExpiresAtUtc</c> 是 <c>null</c>,
+    /// <c>NULL &lt; now</c> 三值逻辑为假,T11 照绿。该变异下本测试会转红(<c>CallCount==1</c>、
+    /// <c>Fence==2</c>、<c>AttemptCount==2</c>、attempt 2 行)。
+    /// </summary>
+    [Fact]
+    public async Task A_completed_execution_is_never_reclaimed_even_after_its_lease_expires()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "n7");
+        var execution = await BuildExecutionAsync(db, s);
+
+        var handlerA = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(summary: "a-ok"), WfNodeType.Webhook);
+        var dispatcherA = new WfNodeExecutionDispatcher(db, [handlerA], engine, TimeProvider.System);
+        var statusA = await dispatcherA.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None);
+        Assert.Equal(WfNodeExecutionStatus.Succeeded, statusA);
+
+        var past = DateTime.UtcNow.AddMinutes(-1);
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { LeaseExpiresAtUtc = past })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+
+        var handlerB = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(), WfNodeType.Webhook);
+        var dispatcherB = new WfNodeExecutionDispatcher(db, [handlerB], engine, TimeProvider.System);
+        var statusB = await dispatcherB.RunAsync(execution.Id, "worker-b", TimeSpan.FromMinutes(5), CancellationToken.None);
+
+        Assert.Null(statusB);
+        Assert.Equal(0, handlerB.CallCount);
+
+        var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.Succeeded, reloaded.Status);
+        Assert.Equal(1, reloaded.Fence);
+        Assert.Equal(1, reloaded.AttemptCount);
+
+        Assert.Equal(1, await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).CountAsync());
+        Assert.Equal(1, await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).CountAsync());
+
+        var instance = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>().Where(i => i.Id == s.InstanceId).FirstAsync();
+        Assert.Equal(WfInstanceStatus.Approved, instance.Status);
+
+        var instanceCompletedCount = await db.Queryable<WfHistory>()
+            .Where(h => h.InstanceId == s.InstanceId && h.EventType == WfHistoryEventType.InstanceCompleted)
+            .CountAsync();
+        Assert.Equal(1, instanceCompletedCount);
     }
 
     // ────────────────────────── 脚手架 ──────────────────────────

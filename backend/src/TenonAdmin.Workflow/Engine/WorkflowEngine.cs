@@ -1461,7 +1461,9 @@ public class WorkflowEngine(
     /// <summary>
     /// outbox payload(§4.6 D6):不含 <see cref="WfNodeExecutionResult.OutputJson"/> 正文——handler 输出是
     /// PII/密钥泄漏面最大的一处,outbox 又是要投给进程外消费方的,正文进去等于把脱敏责任推给每个消费者;
-    /// 消费方要正文,用 <c>executionKey</c> 回查。走 <see cref="WfModelJson.Options"/>,不另起一份配置。
+    /// 消费方要正文,用 <c>executionKey</c> 回查。走 <see cref="WfModelJson.Options"/>,不另起一份配置——该
+    /// 配置带 <c>DefaultIgnoreCondition = WhenWritingNull</c>,故 <c>errorCode</c>/<c>summary</c>/
+    /// <c>outputHash</c> 为空时对应键<b>整个不存在</b>而非 <c>null</c>,消费方须按「键缺失 = 无值」解析。
     /// </summary>
     protected virtual string BuildExecutionOutboxPayload(
         WfNodeExecution execution,

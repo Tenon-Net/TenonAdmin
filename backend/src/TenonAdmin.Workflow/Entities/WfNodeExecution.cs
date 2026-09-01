@@ -24,8 +24,11 @@ namespace TenonAdmin.Workflow;
 /// <b>任何代码都不得把它们与 <c>*Utc</c> 列做比较或相减</b>。</para>
 /// <para>凡注释标「建表期预留、本轮零写入点」的列(<see cref="DeadlineAtUtc"/>/<see cref="HandlerType"/>/
 /// <see cref="HandlerVersion"/>/<see cref="InputHash"/>/<see cref="OutputHash"/>/<see cref="CompletedTimeUtc"/>/
-/// <see cref="ErrorCode"/>/<see cref="Summary"/>,共 8 列)都是<b>建表期一次造齐</b>的预留列:全部可空,
-/// 本轮零写入点,Task 6 填值。</para>
+/// <see cref="ErrorCode"/>/<see cref="Summary"/>,共 8 列)都是<b>建表期一次造齐</b>的预留列:全部可空。
+/// 其中 <see cref="HandlerType"/>/<see cref="CompletedTimeUtc"/>/<see cref="ErrorCode"/>/<see cref="Summary"/>
+/// 4 列已由 Task 6 起接上写入点(<see cref="WorkflowEngine.ClaimExecutionWritebackAsync"/> 回写),余
+/// <see cref="DeadlineAtUtc"/>/<see cref="HandlerVersion"/>/<see cref="InputHash"/>/<see cref="OutputHash"/>
+/// 4 列仍零写入点。</para>
 /// </summary>
 [SugarTable("wf_node_execution", TableDescription = "节点可靠执行记录")]
 [SugarIndex("uk_wf_node_exec_key", nameof(ExecutionKey), OrderByType.Asc, IsUnique = true)]
@@ -102,7 +105,7 @@ public class WfNodeExecution : BaseEntity
     [SugarColumn(ColumnDescription = "领取令牌(fence)")]
     public long Fence { get; set; }
 
-    /// <summary>Handler 类型标识;建表期预留,本轮零写入点。</summary>
+    /// <summary>Handler 类型标识;Task 6 起由 <see cref="WorkflowEngine.ClaimExecutionWritebackAsync"/> 回写。</summary>
     [SugarColumn(Length = 256, IsNullable = true, ColumnDescription = "Handler 类型标识")]
     public string? HandlerType { get; set; }
 
@@ -118,15 +121,15 @@ public class WfNodeExecution : BaseEntity
     [SugarColumn(Length = 64, IsNullable = true, ColumnDescription = "出参哈希")]
     public string? OutputHash { get; set; }
 
-    /// <summary>完成时刻(UTC);建表期预留,本轮零写入点。</summary>
+    /// <summary>完成时刻(UTC);Task 6 起由 <see cref="WorkflowEngine.ClaimExecutionWritebackAsync"/> 回写(仅终态分支写入)。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "完成时刻(UTC)")]
     public DateTime? CompletedTimeUtc { get; set; }
 
-    /// <summary>失败错误码;建表期预留,本轮零写入点。</summary>
+    /// <summary>失败错误码;Task 6 起由 <see cref="WorkflowEngine.ClaimExecutionWritebackAsync"/> 回写(仅终态分支写入)。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "失败错误码")]
     public int? ErrorCode { get; set; }
 
-    /// <summary>诊断摘要;建表期预留,本轮零写入点。</summary>
+    /// <summary>诊断摘要;Task 6 起由 <see cref="WorkflowEngine.ClaimExecutionWritebackAsync"/> 回写(仅终态分支写入)。</summary>
     [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "诊断摘要")]
     public string? Summary { get; set; }
 }
