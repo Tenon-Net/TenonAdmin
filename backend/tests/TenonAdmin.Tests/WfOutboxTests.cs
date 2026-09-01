@@ -34,6 +34,10 @@ public class WfOutboxTests
         Assert.Null(row.LastError);
         Assert.Equal(execution.Id, row.ExecutionId);
         Assert.Equal(WfOutboxStore.MessageTypeNodeExecutionCompleted, row.MessageType);
+
+        // 对外契约:MessageTypeNodeExecutionCompleted 是已发给进程外消费方的线上消息类型字符串,
+        // 消费者靠它路由/去重——这里红了是撤回产品代码改动,不是改这条期望值。
+        Assert.Equal("wf.node-execution.completed", WfOutboxStore.MessageTypeNodeExecutionCompleted);
     }
 
     /// <summary>#2 <c>MessageKey</c> = <c>{ExecutionKey}:{MessageType}</c>;换一个 messageType 产出新行。</summary>
@@ -57,6 +61,13 @@ public class WfOutboxTests
 
         Assert.NotEqual(first.Id, second.Id);
         Assert.Equal(2, await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).CountAsync());
+
+        // 上面两条断言只碰了 EnqueueAsync 的返回对象;这里从库读回,证明落库的 MessageKey 也是对的
+        // (返回对不代表存对——见 review5 疑点 1)。
+        var storedFirst = await db.Queryable<WfOutbox>().Where(o => o.Id == first.Id).FirstAsync();
+        Assert.Equal(execution.ExecutionKey + ":" + messageType, storedFirst!.MessageKey);
+        var storedSecond = await db.Queryable<WfOutbox>().Where(o => o.Id == second.Id).FirstAsync();
+        Assert.Equal(execution.ExecutionKey + ":" + otherType, storedSecond!.MessageKey);
     }
 
     /// <summary>#3 同 execution + 同 messageType 入队两次,幂等——第二次返回既有行,payload 是第一次那份。</summary>
@@ -180,6 +191,50 @@ public class WfOutboxTests
         Assert.Equal(2, rows.Count);
         Assert.Contains(rows, r => r.ExecutionId == executionA.Id);
         Assert.Contains(rows, r => r.ExecutionId == executionB.Id);
+
+        // rows 已经是从库读回的(上面的 ToListAsync),这里补的是对 MessageKey 值本身的读回断言——
+        // 前面 rowA.MessageKey/rowB.MessageKey 那两条只碰了返回对象(见 review5 疑点 1)。
+        var storedA = rows.Single(r => r.ExecutionId == executionA.Id);
+        var storedB = rows.Single(r => r.ExecutionId == executionB.Id);
+        Assert.Equal(executionA.ExecutionKey + ":" + messageType, storedA.MessageKey);
+        Assert.Equal(executionB.ExecutionKey + ":" + messageType, storedB.MessageKey);
+    }
+
+    /// <summary>#8 messageType 含 ':'(MessageKey 的分隔符)或全空白 → 抛在写库之前,零行落地(NormalizeMessageType 的两条拒绝性校验)。</summary>
+    [Fact]
+    public async Task Message_type_containing_the_key_separator_is_rejected()
+    {
+        using var f = new WorkflowAppFactory();
+        var (scope, db) = Open(f);
+        using var _ = scope;
+        var execution = NewExecution(UniqueKey());
+        await db.Insertable(execution).ExecuteCommandAsync();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            WfOutboxStore.EnqueueAsync(db, execution, "wf.node-execution:completed", "{}", DateTime.UtcNow, CancellationToken.None));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            WfOutboxStore.EnqueueAsync(db, execution, "   ", "{}", DateTime.UtcNow, CancellationToken.None));
+
+        Assert.Equal(0, await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).CountAsync());
+    }
+
+    /// <summary>#9 messageType 在拼进 MessageKey 前先 Trim();落库的 MessageKey/MessageType 都不带多余空格。</summary>
+    [Fact]
+    public async Task Message_type_is_trimmed_before_it_joins_the_key()
+    {
+        using var f = new WorkflowAppFactory();
+        var (scope, db) = Open(f);
+        using var _ = scope;
+        var execution = NewExecution(UniqueKey());
+        await db.Insertable(execution).ExecuteCommandAsync();
+
+        var enqueued = await WfOutboxStore.EnqueueAsync(
+            db, execution, "  wf.node-execution.completed  ", "{}", DateTime.UtcNow, CancellationToken.None);
+
+        var row = await db.Queryable<WfOutbox>().Where(o => o.Id == enqueued.Id).FirstAsync();
+        Assert.Equal(execution.ExecutionKey + ":wf.node-execution.completed", row!.MessageKey);
+        Assert.Equal("wf.node-execution.completed", row.MessageType);
     }
 
     // ────────────────────────── 脚手架 ──────────────────────────
