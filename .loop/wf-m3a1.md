@@ -41,14 +41,12 @@
 
 ## Status
 
-- 轮次: 5
+- 轮次: 6
 - max: 70
 - 当前任务: Task 2(`IWorkflowNodeHandler` SPI + Context/Result 类型 + FakeNodeHandler)
-- 当前阶段: plan 已完成
-- 上一轮: Round 5 — Task 2 **plan**(Opus general-purpose 子代理,39 次工具调用,11 分钟)。7 个决策点全部拍板,含语义契约点名的那一项(`Cancelled` **不进**结果枚举)。产出改动清单 **3 个新文件、0 个既有文件改动**,预期 279 → 291(+12)。plan 明确点出本 Task 最大越界风险是「顺手接引擎」(`EnterNodeOp` 对 `Webhook` 仍应抛 48008,那是正确的中间状态)。
-- 下一步: Round 6 — Task 2 **exec**。协调者派 `Agent(subagent_type="oh-my-claudecode:executor", model="sonnet")`,prompt 塞入本文件 `## Plan` 全文 + 两条闸门命令 + 十条陷阱(尤其陷阱 1「不改 `EnterNodeOp` 的 48008 分支」、陷阱 2「不碰 `WorkflowSetup.cs`」、陷阱 3「`FakeNodeHandler` 绝不进生产 DI」)。子代理跑完后协调者**亲自重跑**两条闸门(期望 291/291),并用 `git diff --stat` 核对**恰好 3 个新文件、0 deletion**。**不勾选**,不顺带做 Task 3。
-
-> ⚠ 过滤器口径提醒:台账 DONE-CONDITION 规定的过滤器是 `FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow`。若某子代理报的数字比预期少 1,先确认它是不是用了带命名空间前缀的变体(那个口径少 1 条)。**勾选与验收一律以台账那条为准。**
+- 当前阶段: exec 已完成,闸门已由协调者独立复跑
+- 上一轮: Round 6 — Task 2 **exec**(executor/sonnet,23 次工具调用)。commit `21085e1`,**3 个新文件 +329/-0,0 个既有文件改动**,与 Plan 改动清单精确一致、零偏差。协调者**独立复核**:①`git diff --stat` 确认 3 files / 全 insertion / 0 deletion;②逐条验证三个关键陷阱**均未踩**——`Engine/` 目录零改动(`EnterNodeOp` 的 Webhook→48008 分支原样保留,这是正确的中间状态)、`WorkflowSetup.cs` 零改动、`grep -rln FakeNodeHandler backend/src/` 命中 **0** 个文件(测试替身没漏进内核包);③重跑两条闸门:build **0 错误**,test **291/291 通过、失败 0**(基线 279 + 12 精确吻合)。
+- 下一步: Round 7 — Task 2 **review**。协调者派 `Agent(model="opus"`,不传 `subagent_type`,给全工具含 Edit)。prompt 要求:明确 declare「自审」;**注意本 Task 是纯类型定义,变异测试的着力点与 Task 1 不同**——重点变异 (a) `Result` 四个静态工厂的 `Type` 赋值(复制粘贴错位是这里最可能的静默 bug)、(b) 枚举数值与「无 0 值」、(c) `Result` 的私有构造、(d) Context 里塞一个 SqlSugar 实体属性看第 1 条反射断言是否转红、(e) `FakeNodeHandler` 的 `ThrowIfCancellationRequested` 删掉看第 6 条是否转红;并**重点审 12 条测试里有没有永远绿的空转**(plan 已列出「不值得写的」清单,核对 exec 有没有偷偷写进去)。手法照旧「先 grep 确认改了 → 跑测试 → `git checkout` 单文件复原」。**仍不勾选**。
 
 ## 已知起点(2026-09-01,M2c 收口 + 过渡步骤后)
 
@@ -353,3 +351,4 @@ dotnet test  backend/TenonAdmin.slnx --filter "FullyQualifiedName~Tests.Wf|Fully
 | 3 | review | Task 1 review 完成(Opus 自审 + 8 变异点 + 2 自加探针,26 分钟)。**0×P1**,2×P2,6×P3,4 条射程限制。转红的:M1(不生成 NodeVisitId)5/15、M2(生成不落库)4/15、M7a(ActorType 写死 Unknown)2/15、M7b(TokenId 写死 null)2/15 —— 生成点/落库/传递链均被真实覆盖。仍绿的:M3(原子递增改先读后写)、M5(去短事务)——单进程测不到并发,记 R1;M6(去 DefaultValue)——空库测不到存量升级,记 R2 并要求 Task 9 兜底;M4(去 ClearFilter)——原因与预判不同(后台无 HttpContext 时数据范围本就 Unrestricted),记 R3;M8(WfHisTask 改从 token 拷)——当前引擎下两种写法语义等价,升为 P2-1。协调者交叉验证工作区复原干净(status 只剩 TestResults/,diff 空,HEAD 仍 ca175a2)。**不勾选**,下一步 Round 4 修 P2-1/P2-2。 |
 | 4 | 修 Findings + 勾选 | P2-1/P2-2 均修完(executor/sonnet,commit `98c2837`,3 文件 +17/-9,**产品逻辑零改动**)。协调者独立复核:自己另做一次变异(`+1`→`+3`,刻意不同于子代理的 `+2`)确认 `Sequence_starts_at_one...` 在 :49 转红(失败 3/通过 5),单文件 checkout 复原后 `git diff` 空;重跑闸门 build **0 错误**、test **279/279 通过失败 0**。0×P1、0×未修 P2、闸门已跑 → **Task 1 勾选**。下一步 Round 5 Task 2 plan(IWorkflowNodeHandler SPI,纯类型定义不接引擎)。 |
 | 5 | plan | Task 2 plan 完成(Opus 子代理,39 次工具调用)。7 个决策点拍板:①`Cancelled` **不进**结果枚举——取消走 OCE,与 `TerminalFailure` 语义方向相反(前者「应被重新领取」/后者「永不重试」),合并会让 Task 6 分不出该不该重试;②Result 用 sealed class + 私有构造 + 四静态工厂,不用类型层次(§6.2 存四个扁平列,1:1 映射);③Context 14 字段,不泄漏实体/DB session,变量传原始 JSON、节点配置传既有 `WfNodeProps`;④接口键用 `WfNodeType` 枚举 + `TryAddEnumerable` 分发(同 `IAdminJob` 先例),无 `CanHandle`/keyed DI/抽象基类;⑤本 Task **零 DI 注册**,第一条注册线归 Task 8;⑥`FakeNodeHandler` 放测试程序集,绝不进内核包;⑦一个文件放 `Abstractions/`,不预建 `Execution/`。改动清单 **3 个新文件、0 既有改动**,预期 279→291。6 条新契约行已入 `## 语义契约`。下一步 Round 6 Task 2 exec。 |
+| 6 | exec | Task 2 exec 完成(executor/sonnet)。commit `21085e1` "feat(workflow): add IWorkflowNodeHandler SPI and node-execution types",**3 个新文件 +329/-0,0 既有文件改动**,零偏差。协调者独立复核:改动面精确;三条关键陷阱逐条验证均未踩(`Engine/` 零改动 → Webhook 仍走 48008;`WorkflowSetup.cs` 零改动 → 十件套仍 10 条;`FakeNodeHandler` 在 `backend/src/` 命中 0 文件 → 没漏进内核包);重跑闸门 build **0 错误**、test **291/291 通过失败 0**(279+12 精确吻合)。子代理另核实了三处 Plan 假设与实际代码一致(`WfNodeProps.WebhookUrl` 位置、`WfToken.NodeVisitId` 可空性、`ISqlSugarClient` 在 vendor `SqlSugar` 命名空间而 `PrimaryId` 在 `TenonAdmin.SqlSugar` —— 第 1 条反射断言两者都查)。**不勾选**,下一步 Round 7 Task 2 review。 |
