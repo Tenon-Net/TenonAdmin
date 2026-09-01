@@ -28,12 +28,15 @@ public class WfNodeExecutionAttemptTests
         Assert.NotNull(claimed);
 
         var started = DateTime.UtcNow;
+        var ended = started.AddSeconds(3); // 与 started 必须不等,否则测不出两个形参被互换
         var attempt = await WfNodeExecutionAttemptStore.AppendAsync(
-            db, claimed, WfNodeExecutionResult.Succeeded(summary: "ok"), started, started, CancellationToken.None);
+            db, claimed, WfNodeExecutionResult.Succeeded(summary: "ok"), started, ended, CancellationToken.None);
 
         Assert.Equal(1, attempt.AttemptNo);
         Assert.Equal(claimed.AttemptCount, attempt.AttemptNo);
         Assert.Equal(execution.Id, attempt.ExecutionId);
+        Assert.Equal(started, attempt.StartedAtUtc);
+        Assert.Equal(ended, attempt.EndedAtUtc);
     }
 
     /// <summary>#2 重试新增一行,不覆盖旧 attempt——第一行原样留存,第二行是新领取的 <c>AttemptNo = 2</c>。</summary>

@@ -61,7 +61,7 @@ public class WfNodeExecutionAttempt : BaseEntity
     public WfNodeExecutionResultType ResultType { get; set; }
 
     /// <summary>成功时的输出摘要(已截断至 512);失败/回退时为 null。</summary>
-    [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "输出摘要")]
+    [SugarColumn(Length = WfNodeExecutionAttemptStore.SummaryMaxLength, IsNullable = true, ColumnDescription = "输出摘要")]
     public string? OutputSummary { get; set; }
 
     /// <summary>输出正文的 SHA-256 小写 hex;正文本身不落库(§6.2)。<c>OutputJson == null</c> → 本列 null。</summary>
@@ -72,6 +72,6 @@ public class WfNodeExecutionAttempt : BaseEntity
     public int? ErrorCode { get; set; }
 
     /// <summary>失败/回退时的错误摘要(已截断至 512);成功时为 null。</summary>
-    [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "错误摘要")]
+    [SugarColumn(Length = WfNodeExecutionAttemptStore.SummaryMaxLength, IsNullable = true, ColumnDescription = "错误摘要")]
     public string? ErrorSummary { get; set; }
 }
