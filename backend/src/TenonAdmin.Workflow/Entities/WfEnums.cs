@@ -253,3 +253,54 @@ public enum WfHistoryActorType
     /// <summary>AI 代理触发(预留)</summary>
     Ai = 5,
 }
+
+/// <summary>
+/// 节点可靠执行记录状态(<c>wf_node_execution.Status</c>;M3a-1 Task 3)。
+/// <para><b>与 <c>WfNodeExecutionResultType</c>(Task 5/6 引入)是两个类型,不许合并、不许共用数值</b>——前者是本表的
+/// 生命周期状态,后者(Task 5/6 引入)是 handler 一次执行的结果分类,语义层面不同,合并只会制造「这个值到底
+/// 指哪张表」的歧义。</para>
+/// <para><b>刻意无 0 值</b>:与 <see cref="WfHistoryActorType.Unknown"/> = 0 的差别在于——那张表升级前有旧行
+/// 需要一个「未知」默认值兜底,本表是 M3a-1 新建的表,不存在升级前的旧行,没有「默认值该是什么」这个问题。</para>
+/// <para>状态转换图(Task 6 据此实现调度器,本 Task 只实现 <c>(insert) → Pending</c> 与
+/// <c>Pending/RetryScheduled/Running → Running</c> 三条领取边):</para>
+/// <code>
+/// (insert) ──────────────► Pending
+/// Pending ───── claim ───► Running
+/// RetryScheduled ─claim──► Running        (NextRetryAtUtc &lt;= now)
+/// Running ─── 租约过期 ──► Running        (重新领取;Fence + 1)
+/// Running ──────────────► Succeeded | RetryScheduled | ManualFallback | Failed | Cancelled
+/// Pending | RetryScheduled ─────────────► Cancelled
+/// Succeeded / ManualFallback / Failed / Cancelled = 终态,无出边
+/// </code>
+/// <para><c>Running → Running</c> 是合法自转移,<b>这正是 <see cref="WfNodeExecution.Fence"/> 存在的原因</b>:
+/// 老 owner 可能还活着(GC 停顿/网络分区未必等于进程已死),它的回写必须靠 fence 被拒,而不是靠「状态已经不是
+/// Running 了」——因为状态仍然是 Running。</para>
+/// </summary>
+public enum WfNodeExecutionStatus
+{
+    /// <summary>待领取</summary>
+    Pending = 1,
+
+    /// <summary>已被领取,租约持有中</summary>
+    Running = 2,
+
+    /// <summary>执行成功(终态)</summary>
+    Succeeded = 3,
+
+    /// <summary>失败但预算未耗尽,等待下次重试(可再被领取)</summary>
+    RetryScheduled = 4,
+
+    /// <summary>转人工兜底(终态)</summary>
+    ManualFallback = 5,
+
+    /// <summary>
+    /// 实例被外部撤销/终止,execution 作废(终态)。与 <see cref="Failed"/> 的差别:本值是外因(有人/有事件
+    /// 主动叫停),<see cref="Failed"/> 是内因(handler 自己判定/预算耗尽)。
+    /// </summary>
+    Cancelled = 6,
+
+    /// <summary>
+    /// 失败且永不再动(终态)。触发条件二选一:handler 返回 <c>TerminalFailure</c>,或重试预算耗尽。
+    /// </summary>
+    Failed = 7,
+}
