@@ -326,6 +326,10 @@ public class WfWebhookNodeHandlerTests
         Assert.Equal(ctx.InstanceId, root.GetProperty("instanceId").GetInt64());
         Assert.Equal(ctx.NodeId, root.GetProperty("nodeId").GetString());
         Assert.Equal(ctx.Attempt, root.GetProperty("attempt").GetInt32());
+        Assert.Equal(ctx.TokenId, root.GetProperty("tokenId").GetInt64());
+        Assert.Equal(ctx.NodeVisitId, root.GetProperty("nodeVisitId").GetInt64());
+        Assert.Equal(ctx.DefinitionVersionId, root.GetProperty("definitionVersionId").GetInt64());
+        Assert.Equal(ctx.BusinessKey, root.GetProperty("businessKey").GetString());
         Assert.False(root.TryGetProperty("variablesJson", out _)); // D5:PII 泄漏面,刻意不含
         Assert.False(root.TryGetProperty("variables", out _));
     }
@@ -410,21 +414,26 @@ public class WfWebhookNodeHandlerTests
     }
 
     [Fact]
-    public async Task A_pre_registered_handler_wins_over_the_built_in_one()
+    public void A_pre_registered_handler_wins_over_the_built_in_one()
     {
-        using var f = new WorkflowAppFactory
-        {
-            // Insert(0, …) 而非 Add(…):真判据是"先注册的赢"(WfNodeExecutionDispatcher.ResolveHandler 用
-            // FirstOrDefault,陷阱 11)。ConfigureTestServices 本身跑在 AddTenonAdminWorkflow 之后
-            // (ReplaceabilityTests.cs 已实测记明),故用 Insert 物理占到内置注册之前,而不是 Add 追加到之后。
-            Overrides = s => s.Insert(0, ServiceDescriptor.Scoped<IWorkflowNodeHandler>(
-                _ => new FakeNodeHandler(WfNodeExecutionResult.Succeeded(), WfNodeType.Webhook))),
-        };
-        using var scope = f.Services.CreateScope();
+        // 裸容器 + 真实消费者路径:消费者在 AddTenonAdminWorkflow 之前 AddScoped 自己的 handler
+        // (十件套 BuildProvider 同款姿势)。WorkflowAppFactory 的 Overrides 跑在 AddTenonAdminWorkflow
+        // 之后,Insert(0, …) 只是把顺序焊死在 DI 容器语义上,与 WorkflowSetup 里写了什么无关——鉴别力为零。
+        var services = new ServiceCollection();
+        var jobs = new AdminJobsOptions();
+        services.AddSingleton(jobs);
+        services.AddSingleton(new TenonAdmin.Services.JobHttpClient(jobs));
+        services.AddScoped<IWorkflowNodeHandler>(
+            _ => new FakeNodeHandler(WfNodeExecutionResult.Succeeded(), WfNodeType.Webhook));
+        services.AddTenonAdminWorkflow();
 
-        var handlers = scope.ServiceProvider.GetServices<IWorkflowNodeHandler>().ToList();
-        var winner = handlers.First(h => h.NodeType == WfNodeType.Webhook);
-        Assert.IsType<FakeNodeHandler>(winner);
+        using var sp = services.BuildServiceProvider();
+        using var scope = sp.CreateScope();
+        var handlers = scope.ServiceProvider.GetServices<IWorkflowNodeHandler>()
+            .Where(h => h.NodeType == WfNodeType.Webhook).ToList();
+
+        Assert.IsType<FakeNodeHandler>(handlers.First());   // 消费者胜出
+        Assert.IsType<WebhookNodeHandler>(handlers.Last()); // 内置仍在(TryAddEnumerable 是追加不是替换)
     }
 
     // ── I 组:事务边界(需 DB,D8)──────────────────────────────────────────────
