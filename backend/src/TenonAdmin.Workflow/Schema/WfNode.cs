@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace TenonAdmin.Workflow;
 
@@ -77,10 +78,43 @@ public sealed class WfNodeProps
     /// </summary>
     public List<WfFormFieldPerm>? FormPerms { get; set; }
 
-    // ── webhook (M3) ───────────────────────────────────────
+    // ── webhook (M3a-1 Task 8) ───────────────────────────────
 
     /// <summary>Webhook URL(仅 <see cref="WfNodeType.Webhook"/>)。</summary>
     public string? WebhookUrl { get; set; }
+
+    /// <summary>
+    /// HTTP 方法;<c>null</c> 默认 <c>POST</c>。白名单 <c>GET/POST/PUT/PATCH/DELETE/HEAD</c>
+    /// (大小写不敏感),不在表内由 <see cref="WebhookNodeHandler"/> 判 <c>TerminalFailure</c>/48030。
+    /// </summary>
+    public string? WebhookMethod { get; set; }
+
+    /// <summary>
+    /// 自定义请求头;每对经 <c>JobHttpFence.ValidateHeader</c> 校验,另拒绝 <c>Host</c>/<c>Content-Length</c>
+    /// 两个名字(见 <see cref="WebhookNodeHandler.BuildRequest"/> 类注释)。
+    /// </summary>
+    public Dictionary<string, string?>? WebhookHeaders { get; set; }
+
+    /// <summary>单次调用超时(秒);<c>null</c> 默认 30,钳到 <c>[1, 120]</c>(不报错)。</summary>
+    public int? WebhookTimeoutSeconds { get; set; }
+
+    /// <summary>
+    /// 失败兜底:<see cref="WfWebhookFailureAction.Fail"/>(默认)按分类表落 <c>Failed</c>/重试;
+    /// <see cref="WfWebhookFailureAction.Manual"/> 时本 handler 的每个 <c>TerminalFailure</c> 一律改吐
+    /// <c>ManualFallback</c>(错误码/摘要照旧)。
+    /// </summary>
+    public WfWebhookFailureAction? WebhookOnFailure { get; set; }
+}
+
+/// <summary>Webhook 失败兜底(节点 <c>props.webhookOnFailure</c>;M3a-1 Task 8)。JSON:<c>fail|manual</c>。</summary>
+[JsonConverter(typeof(CamelCaseEnumConverter))]
+public enum WfWebhookFailureAction
+{
+    /// <summary>按分类表落 Failed/重试(出厂默认)</summary>
+    Fail,
+
+    /// <summary>该 handler 的每个 TerminalFailure 一律改吐 ManualFallback</summary>
+    Manual,
 }
 
 /// <summary>发起范围一项(<c>props.initiatorScope[]</c>)。</summary>

@@ -64,6 +64,16 @@ public static class WorkflowSetup
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IApproverProvider, OrgLeaderApproverProvider>());
         services.TryAddScoped<IApproverResolver, DefaultApproverResolver>();
 
+        // 节点执行 SPI 的第一条注册线(M3a-1 Task 8)。HttpClient 取自内核的 JobHttpClient(单例,
+        // 带 SSRF 围栏),故本包不引 Microsoft.Extensions.Http、不建第二个客户端;围栏配置复用
+        // TenonAdmin:Jobs:Http。消费者可前置注册同 NodeType 的 IWorkflowNodeHandler 实现覆盖内置,
+        // 或继承 WebhookNodeHandler 覆写单步(类不 sealed)后前置注册子类。
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeHandler, WebhookNodeHandler>(
+            sp => new WebhookNodeHandler(
+                sp.GetRequiredService<TenonAdmin.Services.JobHttpClient>().Client,
+                sp.GetRequiredService<AdminJobsOptions>(),
+                sp.GetRequiredService<TimeProvider>())));
+
         // 引擎 + 表单挂载点(空操作默认);消费者前置同接口即可整体替换。
         // 发起校验 / 完结回写在引擎内调用;详情 API 透出 Model.FormComponent 供前端动态挂载。
         services.TryAddScoped<IWorkflowFormBinder, NoOpWorkflowFormBinder>();

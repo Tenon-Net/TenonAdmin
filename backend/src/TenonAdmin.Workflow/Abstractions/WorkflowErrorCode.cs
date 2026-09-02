@@ -94,6 +94,15 @@ public static class WorkflowErrorCode
     /// </summary>
     public const int RequestIdInvalid = 48028;
 
+    /// <summary>Webhook 远端返回非成功状态码(M3a-1 Task 8);args 可带 <c>status</c></summary>
+    public const int WebhookRequestFailed = 48029;
+
+    /// <summary>Webhook 配置缺陷(URL/method/header 非法或被围栏拒绝);socket 未开(M3a-1 Task 8)</summary>
+    public const int WebhookConfigInvalid = 48030;
+
+    /// <summary>Webhook 传输层故障(超时/DNS/连接/TLS 等,M3a-1 Task 8)</summary>
+    public const int WebhookTransportFailed = 48031;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }

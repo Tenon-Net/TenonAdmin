@@ -11648,6 +11648,13 @@ export interface components {
             nobodyTransferUserId?: null | number | string;
             formPerms?: null | components["schemas"]["WfFormFieldPerm"][];
             webhookUrl?: null | string;
+            webhookMethod?: null | string;
+            webhookHeaders?: null | {
+                [key: string]: string;
+            };
+            /** Format: int32 */
+            webhookTimeoutSeconds?: null | number | string;
+            webhookOnFailure?: null | components["schemas"]["WfWebhookFailureAction"];
         };
         /** @enum {unknown} */
         WfNodeType: "start" | "approval" | "cc" | "branch" | "parallel" | "webhook";
@@ -11730,6 +11737,8 @@ export interface components {
             /** Format: date-time */
             createTime?: string;
         };
+        /** @enum {unknown} */
+        WfWebhookFailureAction: "fail" | "manual" | null;
     };
     responses: never;
     parameters: never;
