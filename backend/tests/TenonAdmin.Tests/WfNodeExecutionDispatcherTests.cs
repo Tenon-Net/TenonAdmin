@@ -407,6 +407,30 @@ public class WfNodeExecutionDispatcherTests
         Assert.Equal(beforeLow.AddSeconds(30), lowReloaded.NextRetryAtUtc!.Value, TimeSpan.FromSeconds(5));
     }
 
+    [Fact]
+    public async Task Handler_supplied_retry_delay_in_range_is_used_exactly()
+    {
+        var fixedNow = new DateTimeOffset(2026, 7, 26, 0, 0, 0, TimeSpan.Zero);
+        var clock = new MutableTime(fixedNow);
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var bootstrapEngine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, bootstrapEngine, "t6inrange");
+        var execution = await BuildExecutionAsync(db, s, maxAttempts: 5);
+        var engine = ActivatorUtilities.CreateInstance<WorkflowEngine>(scope.ServiceProvider, clock);
+        var handler = new FakeNodeHandler(
+            WfNodeExecutionResult.RetryableFailure(retryAfter: TimeSpan.FromMinutes(7)), WfNodeType.Webhook);
+        var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, clock);
+
+        var status = await dispatcher.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None);
+
+        Assert.Equal(WfNodeExecutionStatus.RetryScheduled, status);
+        var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.RetryScheduled, reloaded.Status);
+        Assert.Equal(fixedNow.UtcDateTime.AddMinutes(7), reloaded.NextRetryAtUtc);
+    }
+
     /// <summary>
     /// 退避上界:<c>RetryAfter = 3650 天</c>——超出 <c>(0, 24h]</c> 的值被忽略,退回默认退避(而不是钳到 24h)。
     /// P3-2 从原 <c>Handler_supplied_retry_delay_is_clamped_at_both_ends</c> 拆出,断言逐字搬运。变异:同上界
@@ -691,20 +715,29 @@ public class WfNodeExecutionDispatcherTests
         var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
         var s = await StartAsync(f, db, engine, "t12");
         var execution = await BuildExecutionAsync(db, s, maxAttempts: 5);
+        var clock = new MutableTime(new DateTimeOffset(2026, 7, 26, 0, 0, 0, TimeSpan.Zero));
 
-        var handler1 = new FakeNodeHandler(WfNodeExecutionResult.RetryableFailure(summary: "first"), WfNodeType.Webhook);
-        var dispatcher1 = new WfNodeExecutionDispatcher(db, [handler1], engine, TimeProvider.System);
+        var handler1 = new FakeNodeHandler(WfNodeExecutionResult.RetryableFailure(summary: "first"), WfNodeType.Webhook)
+        {
+            OnExecute = () => clock.Advance(TimeSpan.FromSeconds(1)),
+        };
+        var dispatcher1 = new WfNodeExecutionDispatcher(db, [handler1], engine, clock);
         var status1 = await dispatcher1.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None);
         Assert.Equal(WfNodeExecutionStatus.RetryScheduled, status1);
 
-        // 直接把重试时刻推到过去,不建 FakeTimeProvider(语义契约 Task 3 定案原文的手法)。
+        // 直接把重试时刻推到过去,使用同一 MutableTime。先落局部变量,避免 zh-CN 下
+        // SqlSugar 把内联 DateTime 按区域格式化进 SQL(near "上午")。
+        var pastRetryAtUtc = clock.GetUtcNow().UtcDateTime.AddMinutes(-1);
         await db.Updateable<WfNodeExecution>()
-            .SetColumns(e => new WfNodeExecution { NextRetryAtUtc = DateTime.UtcNow.AddMinutes(-1) })
+            .SetColumns(e => new WfNodeExecution { NextRetryAtUtc = pastRetryAtUtc })
             .Where(e => e.Id == execution.Id)
             .ExecuteCommandAsync();
 
-        var handler2 = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(summary: "second"), WfNodeType.Webhook);
-        var dispatcher2 = new WfNodeExecutionDispatcher(db, [handler2], engine, TimeProvider.System);
+        var handler2 = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(summary: "second"), WfNodeType.Webhook)
+        {
+            OnExecute = () => clock.Advance(TimeSpan.FromSeconds(1)),
+        };
+        var dispatcher2 = new WfNodeExecutionDispatcher(db, [handler2], engine, clock);
         var status2 = await dispatcher2.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None);
         Assert.Equal(WfNodeExecutionStatus.Succeeded, status2);
 

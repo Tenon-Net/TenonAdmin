@@ -95,15 +95,16 @@ public class WfWebhookNodeHandlerTests
     [Fact]
     public async Task Retry_after_http_date_is_converted_to_a_delta()
     {
-        var date = DateTimeOffset.UtcNow.AddSeconds(60);
+        var fixedNow = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var clock = new MutableTime(fixedNow);
+        var date = fixedNow.AddSeconds(60);
         var transport = FakeTransport.Status((HttpStatusCode)503, retryAfter: date.UtcDateTime.ToString("R"));
-        var handler = NewHandler(transport);
+        var handler = NewHandler(transport, time: clock);
 
         var result = await handler.ExecuteAsync(Ctx(Props()), CancellationToken.None);
 
         Assert.Equal(WfNodeExecutionResultType.RetryableFailure, result.Type);
-        Assert.NotNull(result.RetryAfter);
-        Assert.InRange(result.RetryAfter!.Value, TimeSpan.FromSeconds(55), TimeSpan.FromSeconds(65));
+        Assert.Equal(TimeSpan.FromSeconds(60), result.RetryAfter);
     }
 
     [Fact]

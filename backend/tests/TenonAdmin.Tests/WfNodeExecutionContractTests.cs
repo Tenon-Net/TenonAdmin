@@ -49,8 +49,7 @@ public class WfNodeExecutionContractTests
         var execKey = UniqueKey();
         await db.Insertable(NewExecution(execKey)).ExecuteCommandAsync();
         var execFailure = await CatchAsync(() => db.Insertable(NewExecution(execKey)).ExecuteCommandAsync());
-        Assert.NotNull(execFailure);
-        Assert.Equal(1, await db.Queryable<WfNodeExecution>().Where(e => e.ExecutionKey == execKey).CountAsync());
+        var execCount = await db.Queryable<WfNodeExecution>().Where(e => e.ExecutionKey == execKey).CountAsync();
 
         // ── wf_outbox: uk_wf_outbox_message_key ──
         var executionA = NewExecution(UniqueKey());
@@ -60,17 +59,22 @@ public class WfNodeExecutionContractTests
         var sharedMessageKey = "e1-shared-message-key-" + Guid.NewGuid().ToString("N");
         await db.Insertable(NewOutbox(executionA.Id, sharedMessageKey)).ExecuteCommandAsync();
         var outboxFailure = await CatchAsync(() => db.Insertable(NewOutbox(executionB.Id, sharedMessageKey)).ExecuteCommandAsync());
-        Assert.NotNull(outboxFailure);
-        Assert.Equal(1, await db.Queryable<WfOutbox>().Where(o => o.MessageKey == sharedMessageKey).CountAsync());
+        var outboxCount = await db.Queryable<WfOutbox>().Where(o => o.MessageKey == sharedMessageKey).CountAsync();
 
         // ── wf_node_execution_attempt: uk_wf_node_exec_attempt_no ──
         var execution = NewExecution(UniqueKey());
         await db.Insertable(execution).ExecuteCommandAsync();
         await db.Insertable(NewAttempt(execution.Id, 1)).ExecuteCommandAsync();
         var attemptFailure = await CatchAsync(() => db.Insertable(NewAttempt(execution.Id, 1)).ExecuteCommandAsync());
+        var attemptCount = await db.Queryable<WfNodeExecutionAttempt>()
+            .Where(a => a.ExecutionId == execution.Id && a.AttemptNo == 1).CountAsync();
+
+        Assert.Equal(1, execCount);
+        Assert.Equal(1, outboxCount);
+        Assert.Equal(1, attemptCount);
+        Assert.NotNull(execFailure);
+        Assert.NotNull(outboxFailure);
         Assert.NotNull(attemptFailure);
-        Assert.Equal(1, await db.Queryable<WfNodeExecutionAttempt>()
-            .Where(a => a.ExecutionId == execution.Id && a.AttemptNo == 1).CountAsync());
     }
 
     /// <summary>
@@ -249,8 +253,8 @@ public class WfNodeExecutionContractTests
     /// <summary>
     /// E12 超长(600 字中文)摘要在到达数据库<b>之前</b>已被 C# 侧截断到 512(结 Task 4 挂给本 Task 的
     /// 「截断在真会抛的库上的效果」)。
-    /// <para><b>射程</b>:本条在 <b>SQLite 腿不具判别力</b>(T8)——去掉 <see cref="WfNodeExecutionAttemptStore.Truncate"/>
-    /// 后 SQLite 照单全收,只有 mysql(严格模式)/postgres/sqlserver 三腿会红。</para>
+    /// <para><b>射程</b>:SQLite 不执行数据库列宽/编码约束,但本条仍能判别 C# 侧的 <c>SummaryMaxLength</c> 截断防线:
+    /// 去掉 <see cref="WfNodeExecutionAttemptStore.Truncate"/> 后,SQLite 会因读回 600 而非 512 转红;其余三腿还会额外暴露数据库侧拒绝或截断差异。</para>
     /// </summary>
     [Fact]
     public async Task A_summary_longer_than_the_column_is_truncated_before_it_reaches_the_database()
