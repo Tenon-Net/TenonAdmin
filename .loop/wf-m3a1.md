@@ -41,11 +41,16 @@
 
 ## Status
 
-- 轮次: 37
+- 轮次: 38
 - max: 70
 - 当前任务: Task 10(验收 + 收尾)
-- 当前阶段: Task 10 plan 已完成;尚未实现、review、push 或勾选(9/10)
-- 上一轮: Round 37 — Task 10 **plan**(Codex `planner`)。原始计划落 `.omx/plans/round37-task10.md`(**16,936 bytes**,SHA256 `28304269072EFA30A8D42938053BE69F6FF0E2B98D0DDC394237668B5DC9FA93`,该目录被 `.gitignore` 忽略)。协调者读取全文并用代码/台账/实时 GitHub Actions 证据复核后转写到 `## Plan`。
+- 当前阶段: Task 10 pre-CI exec 已完成并通过本地闸门;独立 review 待做,未 push/未勾选(9/10)
+- 上一轮: Round 38 — Task 10 **pre-CI exec**(OMX ultrawork,3 个 `executor` 并行、三份互斥写集,协调者统一集成/验证)。commit `9cffb74`,**3 个测试文件 +56/-18**,产品代码/CI/docs/ledger/API/双前端零改动;Fact 计数 `WfNodeExecutionContractTests=13`、`WfWebhookNodeHandlerTests=22`、`WfNodeExecutionDispatcherTests=25`,原样 filter **410→411**。
+  **交付**:①E1 先采集三种唯一冲突异常与三组数据库 count,先断 count=1、最后断异常非空,不再让首个异常断言掩盖行数;②E12 注释精确拆成「SQLite 不守 DB 宽度,但能守 C# 512 预截断」;③Webhook HTTP-date Retry-After 用注入的 `MutableTime`,精确断 60s;④dispatcher 新增唯一 1 条 in-range Retry-After=7min 精确测试,只给完成回写用的 concrete `WorkflowEngine` + dispatcher 注入同一时钟;⑤T12 两次 handler 各推进 `MutableTime` 1s,重试时刻先落局部变量,消除时钟分辨率 flake。
+  **首次目标类运行抓到两处真问题并按根因修**:T12 把 `clock.GetUtcNow()` 内联进 `SetColumns` → zh-CN 下 SQLite `near "上午"`(T1 再现),改为局部变量;新 7min 测试只给 dispatcher 注入时钟、engine 仍系统时钟 → Actual 取当前系统时间,尝试把时钟覆盖到整个宿主又让认证建用户返回 40006。最终不污染宿主:发起阶段用正常 DI engine,仅回写阶段用 `ActivatorUtilities.CreateInstance<WorkflowEngine>(..., clock)`。
+  **五刀变异全部精确转红并复原**:M1 去 execution 唯一索引 → E1 首先报 `Expected 1/Actual 2`;M2 Webhook 改 `DateTimeOffset.UtcNow` → 精确 60s 断言红;M3 in-range 分支强制回默认 30s → 新测试报 `00:07:00` vs `00:00:30`;M4 T12 第一 handler 不推进时钟 → `StartedAtUtc == EndedAtUtc` 红;M5 `Truncate` 原样返回 → E12 `Expected 512/Actual 600`。所有 4 个临时产品文件最终 `git diff` 为 0。
+  **最终闸门(恢复态)**:Release build `--no-restore --no-incremental` **0 错误/13 既有警告**;三个目标类 **13/13、51/51、25/25**;原样 workflow filter **411/411**,失败 0、跳过 0;`git diff --check` 通过。前端/API 闸门 N/A(最终 diff 仅测试)。主树受跟踪文件干净,只保留既有未跟踪 `TestResults/`。本轮未 push,MySQL/PG/SqlServer current HEAD 仍未跑。
+- Round 37 plan 存档: Task 10 **plan**(Codex `planner`)。原始计划落 `.omx/plans/round37-task10.md`(**16,936 bytes**,SHA256 `28304269072EFA30A8D42938053BE69F6FF0E2B98D0DDC394237668B5DC9FA93`,该目录被 `.gitignore` 忽略)。协调者读取全文并用代码/台账/实时 GitHub Actions 证据复核后转写到 `## Plan`。
   **协调者纠正三处初版过宽/过时判断**:①Task 6 P3-2 的 T6 上下界早在 Task 7 commit `36a8cc0` 拆成两条独立 `[Fact]`,现 `WfNodeExecutionDispatcherTests.cs:391/416` 实证存在,只需台账关闭、不再改代码;②Task 6 P3-3 的四条失实注释也已由同一 commit 修好,现 `WfNodeExecution.cs:25-31/108/124/128/132` 已精确区分「4 列已写/4 列仍预留」,不再把该实体列入 Round 38 写集;③`PayloadVersion` 永久语义不能在四库首跑前凭 SQLite 提前宣布,故 `WfHistory.cs`/E11 最终注释/两份设计文档的该段全部后移到 CI 证据之后。
   **DONE 审计**:8 条字面条件中,原样 filter **410/410**、重放/崩溃恢复/事务外 Webhook/双 handler 四结果/无 API 面六类均有本地证据;Tasks 仍 9/10,两份设计文档尚未回写,四库矩阵当前分支证据为零。唯一硬外部门是把 current `dev` 发布后取得 SQLite/MySQL/PostgreSQL/SqlServer 四腿结果。
   **实时 CI 基线**:`gh` 已登录 `huguodong`;最新 main nightly `33679380440` 仅 PostgreSQL 腿因无关的 `FileLoggerTests.跨天换新文件_且不截断昨天的` 抛 `FileNotFoundException` 而 **1 failed/693 passed**,同次 sqlite/mysql/sqlserver/template-smoke 均绿。该信号只作既有/疑似 flaky 基线,不得拿来豁免任何 M3a-1 契约失败;旧 dev push `33454582264@4679467` 早于 M3a-1,也不是本里程碑证据。
@@ -75,7 +80,10 @@
 - Round 36 留给 Round 37 的计划清单(已完成): Round 37 — Task 10 **plan**。派 `planner` 读取台账全文与两个设计文档,先做 DONE-CONDITION/P3/射程限制/四库 CI 证据盘点,输出一次性收口方案与明确改动清单;必须决定 `PayloadVersion` 的永久语义、处理 `WfHistory.cs` 失实注释、纳入已挂账的便宜 P3 与契约文档回写,但不得擅自把 Task 8b/worker/M3a-2 扩进本里程碑。若四库真实 CI 信号需要 push `dev`,必须先取得用户明确授权;本轮未 push。
 
 
-- 下一步: Round 38 — Task 10 **pre-CI exec**。派 `executor`,写集严格限 3 个测试文件:`WfNodeExecutionContractTests.cs`(E1 断言顺序 + E12 注释)、`WfWebhookNodeHandlerTests.cs`(注入固定时钟并把 HTTP-date 60s 收紧成精确值)、`WfNodeExecutionDispatcherTests.cs`(新增 1 条 in-range Retry-After 精确测试 + T12 用可拨时钟消除分辨率 flake)。预期原样 filter **410 → 411**,不改产品代码/CI/docs/ledger/前端,不碰 E11。逐刀变异、Release build、三个目标类、原样 filter 全绿后提交,仍不 push、不勾 Task 10。
+- Round 37 留给 Round 38 的执行清单(已完成): Round 38 — Task 10 **pre-CI exec**。派 `executor`,写集严格限 3 个测试文件:`WfNodeExecutionContractTests.cs`(E1 断言顺序 + E12 注释)、`WfWebhookNodeHandlerTests.cs`(注入固定时钟并把 HTTP-date 60s 收紧成精确值)、`WfNodeExecutionDispatcherTests.cs`(新增 1 条 in-range Retry-After 精确测试 + T12 用可拨时钟消除分辨率 flake)。预期原样 filter **410 → 411**,不改产品代码/CI/docs/ledger/前端,不碰 E11。逐刀变异、Release build、三个目标类、原样 filter 全绿后提交,仍不 push、不勾 Task 10。
+
+
+- 下一步: Round 39 — Task 10 **pre-CI independent review**。派 `code-reviewer` 自审 commit `9cffb74` 对 `a2f625b`,只 review/变异、不 commit/push。重点:①E1 去任一唯一索引时必须先见 count 2,并确认 PG 自动提交后继续查询合法;②Webhook 固定时钟真守 `time.GetUtcNow`,不是常量自证;③7min 测试只替换回写 engine、无宿主认证副作用,变异 fallback/钳制均红;④T12 两行 attempt 都有确定正耗时且不再内联 DateTime;⑤E12 注释与 SQLite 600→512 证据一致;⑥三文件外零改动、Fact 只 +1、原样 411/411。报告落 `C:\Users\Shiny\AppData\Local\Temp\codex\tenon-admin-e12351c7\review10-preci-report.md`;0×P1/0×未修 P2 前不得进入 push 门,仍不勾 Task 10。
 
 
 ## 已知起点(2026-09-01,M2c 收口 + 过渡步骤后)
@@ -623,3 +631,4 @@ Round 38 必做变异(一刀一文件、确认落盘、单测转红、精确复�
 | 35 | review | Task 9 独立自审完成(Codex `code-reviewer`,报告 29,658 bytes,SHA256 `6D919864…0E534`)。结论 **REQUEST CHANGES:0×P1 / 3×P2 / 3×P3**。三条 P2 都是契约测试鉴别力缺口:E2 attempt 只断 `AppendAsync` 返回对象、没有数据库读回;E7 删除 outbox enqueue 后仍 1/1 绿;E11 用 `PayloadVersion is 0 or 1` 同时接受声明值与 SQLite 实测值。其余变异:E13 错实体类型精确红,E6 去 Running 谓词红,E7 去强制 throw 红,E1 计数 1→2 红,E12 去 C# 截断红。E8 的 PG `25P02` 写法静态成立但 PG 未跑;E5 matched-row 受 MySQL `UseAffectedRows` 配置约束。review 隔离树最终专项 13/13、build 0 错误/13 既有警告、变异全复原;协调者主树另跑专项 13/13,受跟踪文件干净。**仍不勾选**,下一步 Round 36 只修 3×P2,产品代码/CI/filter/测试条数均不改。 |
 | 36 | 修 Findings + 勾选 | Task 9 的 **3×P2 全修完**(executor,commit `1c8070f`,仅 `WfNodeExecutionContractTests.cs` +35/-13),条数仍 **410**、本文件 `[Fact]` 仍 **13**。E2 改为 attempt 数据库读回断言;E7 增加事务内 attempt/outbox 各 1 行的正向证据并保留回滚后各 0 行;E11 收紧为 SQLite 当前实测的精确 `PayloadVersion=0`,永久口径留 Task 10。协调者四刀独立变异全红且逐刀复原:写后篡改 summary、写后删 outbox、写后删 attempt、写后把 PayloadVersion 改 1;最终测试文件 blob 与 HEAD 完全一致。最终闸门:Release build **0 错误/13 既有警告**,Task 9 **13/13**,原样 workflow filter **410/410**;产品/API/前端/CI/filter 零改动,前端闸门不适用。MySQL/PG/SqlServer 尚未实跑,明确归 Task 10 四库验收;未 push。0×未修 P1/P2 → **Task 9 勾选(9/10)**。下一步 Round 37 Task 10 plan。 |
 | 37 | plan | Task 10 收口 plan 完成(planner 原稿 16,936 bytes 落 `.omx/plans/round37-task10.md`,协调者复核后转写)。DONE 审计确认:本地原样 filter 410/410 与重放/恢复/事务外调用/四结果均有证据;未满足的是 Task 10、两份文档、current HEAD 四库矩阵。协调者纠正初稿三处:Task 6 的 T6 拆分与 `WfNodeExecution` 注释都已在 `36a8cc0` 完成,不重复改;`PayloadVersion` 永久语义必须等四腿,不得预判。最新 main nightly `33679380440` 的 PG 红来自无关 FileLogger 测试(1 failed/693 passed),另三库绿,只作 baseline 不作 M3a-1 证据。计划固定为 pre-CI 三测试文件窄修 → 独立 review/fix → 单独用户 push 门 → 四库 CI → post-CI PayloadVersion/两文档 → final review/DONE。Round 38 预期只新增 1 条 in-range Retry-After Fact,410→411;不改产品/CI/docs/API,不 push、不勾 Task 10。 |
+| 38 | pre-CI exec | OMX ultrawork 三个 executor 按互斥文件并行编辑,协调者集成并修正两处首次失败。commit `9cffb74`,仅三测试文件 +56/-18,Fact **410→411**。E1 行数证据前置;Webhook HTTP-date 固定时钟精确 60s;新增 in-range Retry-After 7min;T12 可拨时钟;E12 注释收窄。首次运行暴露 T1 `near 上午`(内联 DateTime)与 dispatcher/engine 时钟不一致;最终用局部变量 + 仅构造 fixed-clock concrete engine 修复,不污染宿主认证。五刀变异全部红并复原:E1 count 2、Webhook 系统时钟、7min→30s、T12 零推进、E12 600→512。恢复态 build **0 错误/13 警告**,目标类 13/13+51/51+25/25,原样 filter **411/411**。产品/CI/docs/API/前端零改动,未 push。下一步 Round 39 独立 review,Task 10 仍未勾选。 |
