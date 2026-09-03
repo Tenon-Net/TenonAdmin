@@ -41,11 +41,13 @@
 
 ## Status
 
-- 轮次: 41
+- 轮次: 42
 - max: 70
 - 当前任务: Task 10(验收 + 收尾)
-- 当前阶段: MySQL N1 clock P2 已修并通过本地变异/闸门;独立 review 待做,PayloadVersion 仍阻塞
-- 上一轮: Round 41 — **fix MySQL N1 clock P2**。commit `1ced694`,仅 `WfNodeExecutionDispatcherTests.cs` **+13/-6**,不增测试条数。N1 发起仍用正常 DI engine;完成回写改用 `MutableTime` 驱动的 concrete `WorkflowEngine` + dispatcher,handler 推进 1s;把 execution `CompletedTimeUtc` 与 attempt start/end 从系统时钟容差/单边比较收紧为固定整秒精确值,保留正耗时断言。
+- 当前阶段: MySQL N1 P2 已独立 review 通过;仅 PayloadVersion 四库语义仍阻塞
+- 上一轮: Round 42 — `code-reviewer` 独立自审 commit `1ced694`,报告 `C:\Users\Shiny\AppData\Local\Temp\codex\tenon-admin-e12351c7\review10-mysql-clock-report.md`(**11,340 bytes**,SHA256 `93B40132306320EEC6E28BBC7AD00110FFD8FC5E910E015F193FA0B4F28B55DD`)。代码结论 **0×P1/0×P2**,仅 1 条工具 P3:当前环境无 C# LSP;Roslyn Release build 0 错误作权威类型检查,不阻塞。
+  三刀独立变异:handler 推进 0s → Expected 03:04:06/Actual 03:04:05;completion engine 改系统时钟 → Actual 2026 系统时间;dispatcher 改系统时钟 → attempt started 2026 而非 2030。均精确转红并恢复,文件 SHA 前后相同。最终 build **0 错误/13 警告**,dispatcher **25/25**,原样 filter **411/411**;tracked tree clean。P2-2 关闭。
+- Round 41 MySQL N1 fix 存档: **fix MySQL N1 clock P2**。commit `1ced694`,仅 `WfNodeExecutionDispatcherTests.cs` **+13/-6**,不增测试条数。N1 发起仍用正常 DI engine;完成回写改用 `MutableTime` 驱动的 concrete `WorkflowEngine` + dispatcher,handler 推进 1s;把 execution `CompletedTimeUtc` 与 attempt start/end 从系统时钟容差/单边比较收紧为固定整秒精确值,保留正耗时断言。
   **变异**:只把 N1 handler 的推进从 1s 改为 0,测试在 `CompletedTimeUtc` 报 `Expected 2030-01-02T03:04:06Z / Actual 03:04:05`,证明不是为 MySQL 删除语义。复原后 Release build **0 错误/13 警告**,dispatcher **25/25**,原样 workflow filter **411/411**。产品/CI/docs/API/前端零改动;尚未重新 push。
 - Round 40 四库 CI 存档: 用户明确回复「推送吧」后执行普通 `git push origin dev`,成功把 `9bd38cc..28405b9` 快进到远端(不 force)。GitHub Actions `backend-ci` run [`33718827942`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33718827942),HEAD `28405b96abf9492123a3e84ad145b2cd83911fbc`,四腿全部完成。
   **矩阵实证**:SQLite **1110/1110 绿**;PostgreSQL **1109/1110**(仅 E11 `Expected 0 / Actual 1`);SQL Server push/PR filter **117/118**(仅 E11同值分歧,且日志实证 `TEST_FILTER` 确含 `WfNodeExecutionContractTests`);MySQL **1108/1110**(E11同值分歧 + N1 `EndedAtUtc > StartedAtUtc` 为 false)。template-smoke 绿。其余当前 SHA 的 `contract-drift`/`docker-smoke`/`web-ci`/`web-react-ci` 也全部绿。
@@ -103,7 +105,10 @@
 - Round 40 留给 Round 41 的修复清单(已完成): Round 41 — **fix MySQL N1 clock P2**。只改 `backend/tests/TenonAdmin.Tests/WfNodeExecutionDispatcherTests.cs`:该 N1 用正常 bootstrap engine 发起,完成回写改用 `MutableTime` 驱动的 concrete `WorkflowEngine` + dispatcher,handler 推进 1s,精确断 attempt 正耗时/完成时间;不碰 E11/实体/docs/CI。做零推进变异、目标类、Release build、原样 411 后 commit,独立 review 再进入 PayloadVersion 决策/修复。
 
 
-- 下一步: Round 42 — **independent review MySQL N1 fix**。`code-reviewer` 只审 commit `1ced694` 对 `1d1492c`:确认 bootstrap/auth 未被固定时钟污染、真实 completion engine 路径、MySQL 秒精度可稳定保留 1s 差、zero-advance/system-time 两种变异转红、旧断言未削弱;重跑 build/dispatcher/原样 411。APPROVE 后关闭 CI P2-2,进入 PayloadVersion 决策;不 push。
+- Round 41 留给 Round 42 的审查清单(已完成): Round 42 — **independent review MySQL N1 fix**。`code-reviewer` 只审 commit `1ced694` 对 `1d1492c`:确认 bootstrap/auth 未被固定时钟污染、真实 completion engine 路径、MySQL 秒精度可稳定保留 1s 差、zero-advance/system-time 两种变异转红、旧断言未削弱;重跑 build/dispatcher/原样 411。APPROVE 后关闭 CI P2-2,进入 PayloadVersion 决策;不 push。
+
+
+- 下一步: **PayloadVersion 语义决策门**。推荐批准「legacy=0,new=1」:将 `WfHistory.PayloadVersion` 的 `DefaultValue` 从 `1` 改 `0`,保留 CLR initializer `=1`;E11 继续无条件断旧行 0,并同步注释。理由:新行唯一写入路径全靠 initializer=1;旧行没有版本化 payload,0 是诚实 sentinel;不改写 append-only 审计历史;四库补列可统一。若批准,下一轮与两份设计文档分开先做代码/测试 + 独立 review,再普通 push 复跑四腿。备选 SQLite 回填为 1 会引入方言迁移和历史改写,不推荐;DbType 条件分支拒绝。
 
 
 ## 已知起点(2026-09-01,M2c 收口 + 过渡步骤后)
@@ -610,7 +615,7 @@ Round 38 必做变异(一刀一文件、确认落盘、单测转红、精确复�
 ### Task 10 current-HEAD 四库 CI(Round 40)
 
 - [ ] **P2-1★｜`PayloadVersion` 存量补列在四库真实分歧,阻塞字面 DONE**:`backend-ci` run `33718827942` 实证 SQLite=0,MySQL/PostgreSQL/SQL Server=1;三条失败均为 `Legacy_rows_survive_re_adding_the_not_null_history_columns` 的 `Expected 0 / Actual 1`。这不是测试应兼容的多态,而是同一升级契约不一致。**推荐**:`DefaultValue=0` 只定义存量 sentinel,保留 CLR initializer=1 定义新事件版本;拒绝 DbType 条件分支。该元数据/语义改动须在明确决策后实施、四腿重跑后关闭。
-- [ ] **P2-2｜N1 的 attempt 正耗时断言在 MySQL 秒精度下翻红**:`A_successful_run_advances_the_token_and_completes_the_instance` 仅 `Assert.True(EndedAtUtc > StartedAtUtc)` 失败,同腿其余 1108 条绿;MySQL bare DateTime 只保留秒,相邻系统时钟调用被压成相等。**修法**:复用 Round 38 T12 的 `MutableTime` 手法,但只替换完成回写 engine/dispatcher,不污染 bootstrap/auth;handler 推进 1s,零推进变异必须红。
+- [x] **P2-2｜N1 的 attempt 正耗时断言在 MySQL 秒精度下翻红**:`A_successful_run_advances_the_token_and_completes_the_instance` 仅 `Assert.True(EndedAtUtc > StartedAtUtc)` 失败,同腿其余 1108 条绿;MySQL bare DateTime 只保留秒,相邻系统时钟调用被压成相等。**修法**:复用 Round 38 T12 的 `MutableTime` 手法,但只替换完成回写 engine/dispatcher,不污染 bootstrap/auth;handler 推进 1s,零推进变异必须红。 **(Round 41 commit `1ced694` 已修;Round 42 三种时钟变异均红,build/25/411 全绿。C# LSP 缺失作为工具 P3 记录,不影响 Roslyn 编译证据。)**
 
 **CI 证据边界**:SQLite 1110/1110;MySQL 1108/1110;PostgreSQL 1109/1110;SQL Server filter 117/118。main nightly 的 FileLogger 基线未在本次 current dev run 复现,不能再用它解释本次红。其余四个 push workflow 全绿。
 
@@ -663,3 +668,4 @@ Round 38 必做变异(一刀一文件、确认落盘、单测转红、精确复�
 | 39 | pre-CI independent review | `code-reviewer` 独立自审 commit `9cffb74`,报告 18,866 bytes,结论 **APPROVE:0×P1/0×P2/0×P3**。九刀变异全红并复原:三个唯一索引分别 Actual 2;Webhook 系统时钟;in-range 30s/24h;T12 两个 handler 分别零推进;Truncate 600。裁定 E1 的 PG auto-commit 写法合法、固定时钟非自证、7min 只替换回写 engine 不污染认证、T12 两行独立守门、E12 注释准确。最终 build 0 错误/13 警告,目标类 13/13+51/51+25/25,原样 filter **411/411**,tracked tree clean。关闭 7 条已修/已完成 P3。可进入 push 授权门,但未 push、未勾 Task 10。 |
 | 40 | push + 四库 CI | 用户明确授权后普通 push `dev` 成功(9bd38cc→28405b9),backend-ci run `33718827942` 完成。SQLite 1110/1110;PG 1109/1110、SQL Server filter 117/118 均只红 E11 PayloadVersion(Expected0/Actual1);MySQL 1108/1110 除 E11 外还红 N1 attempt 正耗时(MySQL 秒精度 start=end)。SQL Server 日志确认新契约类实际进入 TEST_FILTER。其余 contract-drift/docker-smoke/web-ci/web-react-ci/template-smoke 全绿。PayloadVersion 矩阵=SQLite0/其他三库1,探针成功暴露真实分歧;不做 DbType 分支。另记录用户级 Git `http.sslVerify=false` 安全风险,不擅改全局配置。Task 10 未勾选,下一步先窄修 MySQL N1,再处理 PayloadVersion 决策。 |
 | 41 | fix MySQL N1 P2 | commit `1ced694`,仅 N1 测试 +13/-6:正常 bootstrap engine + fixed-clock completion engine/dispatcher + handler 推进 1s,精确断 execution completed 与 attempt start/end。零推进变异报 03:04:06 vs 03:04:05;恢复态 build 0 错误/13 警告,dispatcher 25/25,原样 411/411。未 push,P2-2 等独立 review 后关闭;PayloadVersion P2-1 仍阻塞。 |
+| 42 | review MySQL N1 fix | 独立 code-reviewer 审 `1ced694`:0 P1/0 P2,仅 C# LSP 不可用的工具 P3;Release Roslyn 0 错误替代。三刀(零推进/completion system clock/dispatcher system clock)全部精确红并复原;build 0/13,dispatcher 25/25,原样 411/411,tracked clean。关闭 CI P2-2。剩余唯一阻塞=P2-1 PayloadVersion 四库分歧,进入语义决策门;未 push。 |
