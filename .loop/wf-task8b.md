@@ -33,15 +33,15 @@ EnterNodeOp 进入 Webhook
 
 ## State
 
-- status: `ACTIVE`
-- round: `18 / 40`
+- status: `DONE`
+- round: `19 / 40`
 - baseline: `961cf8dd77bca4d93c36718b6d71dbae7710490d`
 - baseline branch: `dev`
 - baseline remote divergence: `origin/dev...dev = 0 behind / 0 ahead`
 - push-authorized: `true`
 - protected untracked path: `backend/tests/TenonAdmin.Tests/TestResults/`
-- current task: T18 提交、推送与四库 CI
-- next: 普通 push `2aacff9` 到 `origin/dev`，等待并逐腿核对 SQLite/MySQL/PostgreSQL/SQL Server 和 companion checks。
+- current task: T19 最终收口
+- next: 无；Task 8b 已完成，保留受保护的 `TestResults` 未跟踪目录。
 
 ## Fixed decisions
 
@@ -94,8 +94,8 @@ EnterNodeOp 进入 Webhook
 - [x] **T15 独立 review**：让独立 reviewer 对事务边界、重复副作用、lease/fence、异常/取消、配置快照、四库 SQL、兼容性和文档真实性做审查；新增 P1/P2 必须插入本列表并修复。
 - [x] **T16 review 修复与复验**：修完所有 P1/P2，对承重测试做针对性 mutation/sabotage 验证并精确复原。
 - [x] **T17 最终本地验收**：复跑全部必需验证；若需要远端四库 CI 且无授权，将状态改为 `WAITING_FOR_PUSH_AUTH` 并记录待推 HEAD、diff、已跑证据和待跑 workflow。
-- [ ] **T18 提交、推送与四库 CI（需明确授权）**：按 Lore 协议形成小而原子的 commit，普通 push，逐腿核对 SQLite/MySQL/PostgreSQL/SQL Server 及 companion checks；未授权时不得勾选。
-- [ ] **T19 最终收口**：确认任务全勾选、无 P1/P2、四库绿、文档准确、本地与远端同步、受跟踪工作树干净，保护 TestResults，并将状态改为 `DONE`。
+- [x] **T18 提交、推送与四库 CI（需明确授权）**：按 Lore 协议形成小而原子的 commit，普通 push，逐腿核对 SQLite/MySQL/PostgreSQL/SQL Server 及 companion checks；未授权时不得勾选。
+- [x] **T19 最终收口**：确认任务全勾选、无 P1/P2、四库绿、文档准确、本地与远端同步、受跟踪工作树干净，保护 TestResults，并将状态改为 `DONE`。
 
 ## Per-round protocol
 
@@ -403,5 +403,13 @@ AttemptCount + 1             → token/history/outbox/人工 fallback 同事务
 ### Round 18 — T18 提交、推送与四库 CI
 
 - 用户在确认“推送之后等 CI”的流程后回复“继续”，视为对本任务执行 commit、普通 push 和 CI 等待的明确授权；不使用 force-push。
-- 已按 Lore 协议创建本地 commit `2aacff9`：`Close Task 8b automatic-node execution loop with bounded recovery`，包含 27 个 Task 8b 文件；受保护 `backend/tests/TenonAdmin.Tests/TestResults/` 未进入 commit。
-- 当前下一步是普通 push；push 成功后等待 workflow 终态，逐项核对 SQLite、MySQL、PostgreSQL、SQL Server 及 template/docker/contract companion checks。未取得远端结果前不勾选 T18、T19，不将本地验证或历史 run 代替当前 CI。
+- 已按 Lore 协议创建并普通 push commit `7f44087`：`Close Task 8b automatic-node execution loop with bounded recovery`，包含 27 个 Task 8b 文件；受保护 `backend/tests/TenonAdmin.Tests/TestResults/` 未进入 commit。
+- 对应 push 已触发并完成全部 workflow；backend run `33773751150` 的 `build-test (sqlite/mysql/postgres/sqlserver)` 与 `template-smoke` 全部 success；companion runs `33773751061`（web-ci）、`33773751068`（contract-drift）、`33773751166`（docker-smoke）、`33773751089`（web-react-ci）全部 success。远端结果已核对后进入 T19。
+
+### Round 19 — T19 最终收口
+
+- 已执行 Guard：状态为 `ACTIVE`、round `18 / 40`；已核对 `HEAD=7f44087` 已推送，远端 `dev` 与本地提交同步，未执行 force-push、reset 或 clean。
+- T1–T19 全部勾选；T15 review 的 P1/P2 已修复并经 T16 mutation/sabotage 验证，文档、CI filter、生产调度链和本地/远端测试证据一致。
+- 当前远端 CI 证据：SQLite、MySQL、PostgreSQL、SQL Server、template-smoke、web-ci、web-react-ci、contract-drift、docker-smoke 全部 `success`。SQL Server PR filter 已包含 Task 8b 六个关键测试类；nightly full-suite 规则未被削弱。
+- 最终 Git 边界：受跟踪文件工作树干净；唯一保留的未跟踪项是明确受保护的 `backend/tests/TenonAdmin.Tests/TestResults/`，没有被提交、删除或改写。无未关闭 P1/P2，未引入与 Task 8b 无关的改动。
+- T18/T19 已勾选，台账状态改为 `DONE`。后续不再修改本任务文件；Task 8c outbox consumer/transport 和 M3a-2 Webhook 设计器 UI 仍按既定边界延期。
