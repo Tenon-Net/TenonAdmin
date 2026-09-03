@@ -41,11 +41,13 @@
 
 ## Status
 
-- 轮次: 40
+- 轮次: 41
 - max: 70
 - 当前任务: Task 10(验收 + 收尾)
-- 当前阶段: current HEAD 四库 CI 已跑完并暴露 2 个阻塞项;Task 10 未勾选(9/10)
-- 上一轮: Round 40 — 用户明确回复「推送吧」后执行普通 `git push origin dev`,成功把 `9bd38cc..28405b9` 快进到远端(不 force)。GitHub Actions `backend-ci` run [`33718827942`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33718827942),HEAD `28405b96abf9492123a3e84ad145b2cd83911fbc`,四腿全部完成。
+- 当前阶段: MySQL N1 clock P2 已修并通过本地变异/闸门;独立 review 待做,PayloadVersion 仍阻塞
+- 上一轮: Round 41 — **fix MySQL N1 clock P2**。commit `1ced694`,仅 `WfNodeExecutionDispatcherTests.cs` **+13/-6**,不增测试条数。N1 发起仍用正常 DI engine;完成回写改用 `MutableTime` 驱动的 concrete `WorkflowEngine` + dispatcher,handler 推进 1s;把 execution `CompletedTimeUtc` 与 attempt start/end 从系统时钟容差/单边比较收紧为固定整秒精确值,保留正耗时断言。
+  **变异**:只把 N1 handler 的推进从 1s 改为 0,测试在 `CompletedTimeUtc` 报 `Expected 2030-01-02T03:04:06Z / Actual 03:04:05`,证明不是为 MySQL 删除语义。复原后 Release build **0 错误/13 警告**,dispatcher **25/25**,原样 workflow filter **411/411**。产品/CI/docs/API/前端零改动;尚未重新 push。
+- Round 40 四库 CI 存档: 用户明确回复「推送吧」后执行普通 `git push origin dev`,成功把 `9bd38cc..28405b9` 快进到远端(不 force)。GitHub Actions `backend-ci` run [`33718827942`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33718827942),HEAD `28405b96abf9492123a3e84ad145b2cd83911fbc`,四腿全部完成。
   **矩阵实证**:SQLite **1110/1110 绿**;PostgreSQL **1109/1110**(仅 E11 `Expected 0 / Actual 1`);SQL Server push/PR filter **117/118**(仅 E11同值分歧,且日志实证 `TEST_FILTER` 确含 `WfNodeExecutionContractTests`);MySQL **1108/1110**(E11同值分歧 + N1 `EndedAtUtc > StartedAtUtc` 为 false)。template-smoke 绿。其余当前 SHA 的 `contract-drift`/`docker-smoke`/`web-ci`/`web-react-ci` 也全部绿。
   **PayloadVersion 方言矩阵**:SQLite 存量补列读 **0**;MySQL/PostgreSQL/SQL Server 均读 **1**。探针履职成功,不是 flaky,不允许用 DbType 条件掩盖。全仓读取约定只有 `EventType + PayloadVersion`;新行由 CLR initializer 明确为 1;当前无产品逻辑依赖旧行必须为 1。推荐永久语义是「legacy row sentinel=0,new row=1」:把 `[SugarColumn(DefaultValue)]` 从 `"1"` 改 `"0"`、保留 initializer `=1`,使四库升级一致且不改写 append-only 历史。备选「SQLite 专项回填为 1」会引入方言迁移并改写旧审计行,不推荐;DbType 条件接受分歧明确拒绝。
   **MySQL 独立缺口**:`A_successful_run_advances_the_token_and_completes_the_instance` 在 `WfNodeExecutionDispatcherTests.cs:802` 因 MySQL `DateTime` 秒精度把相邻 start/end 压成相等而红。产品回写与其余断言正常;这是与 T12 相同的测试时钟问题,可直接用 `MutableTime` + handler 推进 1s 修复,无语义分叉。
@@ -98,7 +100,10 @@
 - Round 39 push 授权门(已获授权并执行): **push 授权门**。当前 `dev` 比 `origin/dev` ahead 62,tracked tree clean,唯一未跟踪 `backend/tests/TenonAdmin.Tests/TestResults/` 不提交。仅在用户明确授权后执行普通 `git push origin dev`(不 force),随后锁定该 HEAD 的 `backend-ci` run,逐腿读取 `build-test (sqlite/mysql/postgres/sqlserver)` 与 SQL Server `TEST_FILTER` 中 `WfNodeExecutionContractTests` 结果。未授权则停在此处;Task 10、`PayloadVersion`、两份设计文档均不得提前关闭。
 
 
-- 下一步: Round 41 — **fix MySQL N1 clock P2**。只改 `backend/tests/TenonAdmin.Tests/WfNodeExecutionDispatcherTests.cs`:该 N1 用正常 bootstrap engine 发起,完成回写改用 `MutableTime` 驱动的 concrete `WorkflowEngine` + dispatcher,handler 推进 1s,精确断 attempt 正耗时/完成时间;不碰 E11/实体/docs/CI。做零推进变异、目标类、Release build、原样 411 后 commit,独立 review 再进入 PayloadVersion 决策/修复。
+- Round 40 留给 Round 41 的修复清单(已完成): Round 41 — **fix MySQL N1 clock P2**。只改 `backend/tests/TenonAdmin.Tests/WfNodeExecutionDispatcherTests.cs`:该 N1 用正常 bootstrap engine 发起,完成回写改用 `MutableTime` 驱动的 concrete `WorkflowEngine` + dispatcher,handler 推进 1s,精确断 attempt 正耗时/完成时间;不碰 E11/实体/docs/CI。做零推进变异、目标类、Release build、原样 411 后 commit,独立 review 再进入 PayloadVersion 决策/修复。
+
+
+- 下一步: Round 42 — **independent review MySQL N1 fix**。`code-reviewer` 只审 commit `1ced694` 对 `1d1492c`:确认 bootstrap/auth 未被固定时钟污染、真实 completion engine 路径、MySQL 秒精度可稳定保留 1s 差、zero-advance/system-time 两种变异转红、旧断言未削弱;重跑 build/dispatcher/原样 411。APPROVE 后关闭 CI P2-2,进入 PayloadVersion 决策;不 push。
 
 
 ## 已知起点(2026-09-01,M2c 收口 + 过渡步骤后)
@@ -657,3 +662,4 @@ Round 38 必做变异(一刀一文件、确认落盘、单测转红、精确复�
 | 38 | pre-CI exec | OMX ultrawork 三个 executor 按互斥文件并行编辑,协调者集成并修正两处首次失败。commit `9cffb74`,仅三测试文件 +56/-18,Fact **410→411**。E1 行数证据前置;Webhook HTTP-date 固定时钟精确 60s;新增 in-range Retry-After 7min;T12 可拨时钟;E12 注释收窄。首次运行暴露 T1 `near 上午`(内联 DateTime)与 dispatcher/engine 时钟不一致;最终用局部变量 + 仅构造 fixed-clock concrete engine 修复,不污染宿主认证。五刀变异全部红并复原:E1 count 2、Webhook 系统时钟、7min→30s、T12 零推进、E12 600→512。恢复态 build **0 错误/13 警告**,目标类 13/13+51/51+25/25,原样 filter **411/411**。产品/CI/docs/API/前端零改动,未 push。下一步 Round 39 独立 review,Task 10 仍未勾选。 |
 | 39 | pre-CI independent review | `code-reviewer` 独立自审 commit `9cffb74`,报告 18,866 bytes,结论 **APPROVE:0×P1/0×P2/0×P3**。九刀变异全红并复原:三个唯一索引分别 Actual 2;Webhook 系统时钟;in-range 30s/24h;T12 两个 handler 分别零推进;Truncate 600。裁定 E1 的 PG auto-commit 写法合法、固定时钟非自证、7min 只替换回写 engine 不污染认证、T12 两行独立守门、E12 注释准确。最终 build 0 错误/13 警告,目标类 13/13+51/51+25/25,原样 filter **411/411**,tracked tree clean。关闭 7 条已修/已完成 P3。可进入 push 授权门,但未 push、未勾 Task 10。 |
 | 40 | push + 四库 CI | 用户明确授权后普通 push `dev` 成功(9bd38cc→28405b9),backend-ci run `33718827942` 完成。SQLite 1110/1110;PG 1109/1110、SQL Server filter 117/118 均只红 E11 PayloadVersion(Expected0/Actual1);MySQL 1108/1110 除 E11 外还红 N1 attempt 正耗时(MySQL 秒精度 start=end)。SQL Server 日志确认新契约类实际进入 TEST_FILTER。其余 contract-drift/docker-smoke/web-ci/web-react-ci/template-smoke 全绿。PayloadVersion 矩阵=SQLite0/其他三库1,探针成功暴露真实分歧;不做 DbType 分支。另记录用户级 Git `http.sslVerify=false` 安全风险,不擅改全局配置。Task 10 未勾选,下一步先窄修 MySQL N1,再处理 PayloadVersion 决策。 |
+| 41 | fix MySQL N1 P2 | commit `1ced694`,仅 N1 测试 +13/-6:正常 bootstrap engine + fixed-clock completion engine/dispatcher + handler 推进 1s,精确断 execution completed 与 attempt start/end。零推进变异报 03:04:06 vs 03:04:05;恢复态 build 0 错误/13 警告,dispatcher 25/25,原样 411/411。未 push,P2-2 等独立 review 后关闭;PayloadVersion P2-1 仍阻塞。 |
