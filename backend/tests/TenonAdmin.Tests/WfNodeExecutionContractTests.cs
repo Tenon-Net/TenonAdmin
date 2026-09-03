@@ -578,7 +578,7 @@ public class WfNodeExecutionContractTests
     /// E11 结 Task 1 的 R2:同一宿主内,①先插有数据的 <c>wf_instance</c>/<c>wf_history</c> 行,②
     /// <c>DropColumn</c> 砍掉 Task 1 加的四个非空列(退化成「M3a-1 上线前的老库」),③紧接着
     /// <c>InitTables</c> 补列(中间不插任何查询——T14:实体属性还在,砍列后任何 <c>Queryable</c> 都会失败),
-    /// ④断四列都回来了,且<b>旧行</b>读到 <c>DefaultValue</c> 对应的值。<b>这是本 Task 唯一真正的新方言面</b>:
+    /// ④断四列都回来了,且<b>旧行</b>读到永久约定的 legacy sentinel 值(四列均为 0)。<b>这是本 Task 唯一真正的新方言面</b>:
     /// CI 四条腿全是空库,<c>CREATE TABLE</c> 路径根本不读 <c>DefaultValue</c>;「有行的表上
     /// <c>ADD COLUMN NOT NULL</c>」这条路今天四条腿一条都走不到。<c>WorkflowAppFactory.DbPath</c> 是只读属性
     /// (T10),故不能像 <see cref="CodeFirstNullableUpgradeTests"/> 那样起第二个宿主,改用同宿主内直调。
@@ -624,21 +624,17 @@ public class WfNodeExecutionContractTests
             .Select(c => c.DbColumnName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Assert.Contains("HistorySeq", instanceCols);
 
-        // 旧行读到 DefaultValue 对应的值:Sequence=0、ActorType=Unknown(0)。
+        // 旧行读到永久约定的 legacy sentinel:Sequence=0、ActorType=Unknown(0)、PayloadVersion=0。
         var loadedHistory = await db.Queryable<WfHistory>().Where(h => h.Id == history.Id).FirstAsync();
         Assert.Equal(0, loadedHistory.Sequence);
         Assert.Equal(WfHistoryActorType.Unknown, loadedHistory.ActorType);
 
-        // PayloadVersion(DefaultValue="1")是全仓唯一一个 DefaultValue != "0" 的列(grep 核实)——Sequence/
-        // ActorType/HistorySeq 的 DefaultValue 恰好都是 "0",没法把「backfill 真写了 DefaultValue」与
-        // 「backfill 没写、列直接读到 CLR/SQL 默认值 0」这两种可能区分开,PayloadVersion 是本仓第一处能
-        // 拆开这两种解释的探针。★ 实测(本机 SQLite):旧行读到 <b>0</b>,不是声明的 <c>DefaultValue="1"</c>
-        // ——与 plan 阶段基于 <c>WfInstance.Version</c> 类注释的假设(旧行读到 1)不一致,是主动申报的偏离。
-        // <c>WfInstance.Version</c> 那段反编译注释本就写着「SQLite 例外……回填 UPDATE 照旧执行 → 旧行仍然
-        // 读到 0」,只是 Version 的 DefaultValue 恰好也是 "0" 而从未被人注意到这句话对非零 DefaultValue
-        // 意味着什么。mysql/postgres/sqlserver 三腿是否真的遵循 DefaultValue="1" 回填,本机没有这三种数据库,
-        // 未验证——这里钉住当前已观测到的跨方言诊断探针结果,不是永久业务语义;
-        // SQLite 读到 0 的事实不能用松散边界掩盖,其余方言仍交给 Task 10 在真机核实。
+        // 这个断言锁定声明本身，而非依赖 SQLite 对 ADD COLUMN 的 provider-specific 行为。
+        var payloadVersionColumn = typeof(WfHistory).GetProperty(nameof(WfHistory.PayloadVersion))!
+            .GetCustomAttributes(typeof(SugarColumn), inherit: false)
+            .Cast<SugarColumn>()
+            .Single();
+        Assert.Equal("0", payloadVersionColumn.DefaultValue);
         Assert.Equal(0, loadedHistory.PayloadVersion);
 
         var loadedInstance = await db.Queryable<WfInstance>().ClearFilter<IOrgScoped>()

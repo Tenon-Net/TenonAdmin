@@ -78,11 +78,11 @@ public class WfHistory : BaseEntity
     public long? ActorUserId { get; set; }
 
     /// <summary>
-    /// <see cref="PayloadJson"/> 的形状版本(M3a-1)。读取方按 <c>EventType + PayloadVersion</c> 解释载荷;
-    /// 没人显式写——C# 默认值 1 覆盖新行,<c>DefaultValue="1"</c> 覆盖旧行,只有某个
-    /// <see cref="WfHistoryEventType"/> 的 payload 形状将来变了,才在那一个写入点显式抬到 2。
-    /// Task 1 不动任何值。非空带默认列,同 <see cref="Sequence"/> 走三步升级序列。
+    /// <see cref="PayloadJson"/> 的形状版本(M3a-1)。新的 C# 实体行默认版本 1；<c>DefaultValue="0"</c>
+    /// 刻意作为跨所有方言将非空列加入存量行时的 legacy sentinel。读取方必须按
+    /// <c>EventType + PayloadVersion</c> 解释载荷，并同时接受 legacy 0 与 new 1；不得重写
+    /// append-only 的旧 history。未来载荷形状递增应在事件写入点完成。
     /// </summary>
-    [SugarColumn(ColumnDescription = "载荷形状版本", DefaultValue = "1")]
+    [SugarColumn(ColumnDescription = "载荷形状版本", DefaultValue = "0")]
     public int PayloadVersion { get; set; } = 1;
 }
