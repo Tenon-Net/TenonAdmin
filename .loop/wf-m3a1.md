@@ -41,11 +41,16 @@
 
 ## Status
 
-- 轮次: 36
+- 轮次: 37
 - max: 70
 - 当前任务: Task 10(验收 + 收尾)
-- 当前阶段: Task 9 的 3×P2 已修并通过独立变异/闸门,Task 9 已勾选(9/10)
-- 上一轮: Round 36 — Task 9 **修 Findings + 勾选**(Codex `executor`)。commit `1c8070f`,**仅 1 个允许文件 +35/-13**:`WfNodeExecutionContractTests.cs`;产品代码、CI/filter、共享脚手架、双前端、台账均零改动,`[Fact]` 仍 **13**。
+- 当前阶段: Task 10 plan 已完成;尚未实现、review、push 或勾选(9/10)
+- 上一轮: Round 37 — Task 10 **plan**(Codex `planner`)。原始计划落 `.omx/plans/round37-task10.md`(**16,936 bytes**,SHA256 `28304269072EFA30A8D42938053BE69F6FF0E2B98D0DDC394237668B5DC9FA93`,该目录被 `.gitignore` 忽略)。协调者读取全文并用代码/台账/实时 GitHub Actions 证据复核后转写到 `## Plan`。
+  **协调者纠正三处初版过宽/过时判断**:①Task 6 P3-2 的 T6 上下界早在 Task 7 commit `36a8cc0` 拆成两条独立 `[Fact]`,现 `WfNodeExecutionDispatcherTests.cs:391/416` 实证存在,只需台账关闭、不再改代码;②Task 6 P3-3 的四条失实注释也已由同一 commit 修好,现 `WfNodeExecution.cs:25-31/108/124/128/132` 已精确区分「4 列已写/4 列仍预留」,不再把该实体列入 Round 38 写集;③`PayloadVersion` 永久语义不能在四库首跑前凭 SQLite 提前宣布,故 `WfHistory.cs`/E11 最终注释/两份设计文档的该段全部后移到 CI 证据之后。
+  **DONE 审计**:8 条字面条件中,原样 filter **410/410**、重放/崩溃恢复/事务外 Webhook/双 handler 四结果/无 API 面六类均有本地证据;Tasks 仍 9/10,两份设计文档尚未回写,四库矩阵当前分支证据为零。唯一硬外部门是把 current `dev` 发布后取得 SQLite/MySQL/PostgreSQL/SqlServer 四腿结果。
+  **实时 CI 基线**:`gh` 已登录 `huguodong`;最新 main nightly `33679380440` 仅 PostgreSQL 腿因无关的 `FileLoggerTests.跨天换新文件_且不截断昨天的` 抛 `FileNotFoundException` 而 **1 failed/693 passed**,同次 sqlite/mysql/sqlserver/template-smoke 均绿。该信号只作既有/疑似 flaky 基线,不得拿来豁免任何 M3a-1 契约失败;旧 dev push `33454582264@4679467` 早于 M3a-1,也不是本里程碑证据。
+  **push 边界**:用户本轮「可以」按最近明确分支解释为授权继续 Task 10 plan,本轮未执行 push。真正 `git push origin dev` 仍放在本地 exec/review/fix 全绿之后单独确认,不在计划阶段提前发生。
+- Round 36 修 Findings 存档: Task 9 **修 Findings + 勾选**(Codex `executor`)。commit `1c8070f`,**仅 1 个允许文件 +35/-13**:`WfNodeExecutionContractTests.cs`;产品代码、CI/filter、共享脚手架、双前端、台账均零改动,`[Fact]` 仍 **13**。
   **3×P2 精确关闭**:①E2 的成功/失败 attempt 都按 `Id` 从数据库读回,对读回行断中文 summary、长度、SHA-256 hash/null;②E7 在健康事务内先从库断 attempt/outbox 各 1 行,故意 throw 后仍保留事务外各 0 行;③E11 移除 `0 or 1` 松界,无条件 `Assert.Equal(0, loadedHistory.PayloadVersion)`,邻近注释明确「当前方言诊断探针,非永久业务语义」。三个 P3 全未顺手修,射程守住。
   **协调者用与 executor 不同的四刀独立复验**:M-A 不改查询而在 insert 后把持久化 `OutputSummary` 篡改成 512 个「异」→ E2 在精确内容断言红(`结` vs `异`);M-B1 保留 enqueue、随后在同一事务内删除 outbox → E7 在新正向断言红(`Expected 1 / Actual 0`);M-B2 同形删除 attempt → E7 在另一条正向断言红;M-C 不改断言、在补列后把该存量历史行真实更新为 `PayloadVersion=1` → E11 在数据库读回处红(`Expected 0 / Actual 1`)。四刀逐一确认落盘、逐一复原;最终测试文件归一化 blob SHA 与 HEAD **完全相同**(`4c916820…9e7b`)。
   **最终闸门(协调者亲跑)**:Release build `--no-restore --no-incremental` **0 错误/13 既有警告**;Task 9 专项 **13/13**;原样 workflow filter `FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow` **410/410**,失败 0、跳过 0;`git diff --check` 通过。前端/API 面零改动,前端闸门不适用。受跟踪树干净,仅原有未跟踪 `TestResults/`。
@@ -67,7 +72,10 @@
 - Round 35 留给 Round 36 的修复清单(已完成): Round 36 — Task 9 **修 Findings**。派 `executor`,只改 `backend/tests/TenonAdmin.Tests/WfNodeExecutionContractTests.cs`,**产品代码/CI/filter/测试条数均不改**:P2-1 按 attempt `Id` 从库读回后断 Unicode/summary/hash;P2-2 在故意 throw 前于健康事务内先断 attempt/outbox 各 1 行,再保留事务外回滚后 0 行;P2-3 把 E11 收紧为无条件 `Assert.Equal(0, loadedHistory.PayloadVersion)` 并明确这是方言差异探针、非永久业务定案。修后必须分别证明「不插 attempt」「不 enqueue outbox」「PayloadVersion 读到 1」三种变异都会精确转红并复原,再跑 build + 原样 workflow filter;0×未修 P1/P2 才能勾 Task 9。P3 全部挂 Task 10,本轮不顺手扩大射程。
 
 
-- 下一步: Round 37 — Task 10 **plan**。派 `planner` 读取台账全文与两个设计文档,先做 DONE-CONDITION/P3/射程限制/四库 CI 证据盘点,输出一次性收口方案与明确改动清单;必须决定 `PayloadVersion` 的永久语义、处理 `WfHistory.cs` 失实注释、纳入已挂账的便宜 P3 与契约文档回写,但不得擅自把 Task 8b/worker/M3a-2 扩进本里程碑。若四库真实 CI 信号需要 push `dev`,必须先取得用户明确授权;本轮未 push。
+- Round 36 留给 Round 37 的计划清单(已完成): Round 37 — Task 10 **plan**。派 `planner` 读取台账全文与两个设计文档,先做 DONE-CONDITION/P3/射程限制/四库 CI 证据盘点,输出一次性收口方案与明确改动清单;必须决定 `PayloadVersion` 的永久语义、处理 `WfHistory.cs` 失实注释、纳入已挂账的便宜 P3 与契约文档回写,但不得擅自把 Task 8b/worker/M3a-2 扩进本里程碑。若四库真实 CI 信号需要 push `dev`,必须先取得用户明确授权;本轮未 push。
+
+
+- 下一步: Round 38 — Task 10 **pre-CI exec**。派 `executor`,写集严格限 3 个测试文件:`WfNodeExecutionContractTests.cs`(E1 断言顺序 + E12 注释)、`WfWebhookNodeHandlerTests.cs`(注入固定时钟并把 HTTP-date 60s 收紧成精确值)、`WfNodeExecutionDispatcherTests.cs`(新增 1 条 in-range Retry-After 精确测试 + T12 用可拨时钟消除分辨率 flake)。预期原样 filter **410 → 411**,不改产品代码/CI/docs/ledger/前端,不碰 E11。逐刀变异、Release build、三个目标类、原样 filter 全绿后提交,仍不 push、不勾 Task 10。
 
 
 ## 已知起点(2026-09-01,M2c 收口 + 过渡步骤后)
@@ -187,293 +195,136 @@
 
 ## Plan(当前任务的拆解;每进入新任务时由 plan 阶段的 Agent 重写,协调者转写进本节)
 
-> **当前任务:Task 9 —— 四库持久化契约套件。** 由 `plan-task9`(opus)于 Round 33 产出,协调者转写。
-> Task 1–8 的历史 Plan 已被覆盖,其定案沉淀在 `## 语义契约` 与 `## Findings` 里 —— **Task 8 的射程限制 R1–R11 已转写进 `## Findings`**,要读去那里读,不要在本节找。
+> **Task 10 / Round 37 定案。** 本节是执行约束,不是完成声明。阶段顺序固定为:`pre-CI exec → independent review → findings fix → 用户 push 门 → 四库 CI → post-CI 语义/文档 exec → final review/fix → DONE`。任何阶段失败均停在所属阶段,不靠放宽断言或改 DONE 条件收口。
 
-### §1 决策点
+### 1. 完成条件与证据边界
 
-#### D1｜文件落点与命名:**一个新文件**,`WfNodeExecutionContractTests.cs`
-
-**定案**:新建 `backend/tests/TenonAdmin.Tests/WfNodeExecutionContractTests.cs`,一个 `public class WfNodeExecutionContractTests`,13 条 `[Fact]`。**不拆多个文件**,**不往 `WfPersistenceContractTests.cs` 里塞**。
-
-**过滤器命中(不改过滤器写法)**:测试项目 namespace 是 `TenonAdmin.Tests`(`WfPersistenceContractTests.cs:9`、`WfNodeExecutionClaimTests.cs` 同),故 FQN = `TenonAdmin.Tests.WfNodeExecutionContractTests`,被 DONE-CONDITION 的 `FullyQualifiedName~Tests.Wf` 那一支命中。**过滤器写法一字不改。**
-
-**为什么不并进 `WfPersistenceContractTests.cs`**(这条曾是更省事的选项,值得写清代价):
-- 好处只有一个 —— 它**已经**在 sqlserver PR 腿的 `TEST_FILTER` 白名单里(`.github/workflows/backend-ci.yml:147`),塞进去等于零 CI 改动。
-- 代价:①该类的类注释(`WfPersistenceContractTests.cs:11-36`)通篇自述「M2c Task 8」,里面还写着 **F 段 3 条的存在理由是「今天那份名单里一个 `Wf*` 类都没有」**,而这句话在 Task 9 之后就不再成立;把 M3a-1 的东西混进去会让那段自述失真。②文件已 699 行,再加 13 条 → 约 1300 行,单文件导航成本明显上升。
-- 结论:**新文件 + 一行 `TEST_FILTER` 追加**(见 D3)。这一行是显式的、自带注释的,比「悄悄搭上别人的顺风车」更好审。
-
-#### D2｜四库怎么跑:**完全复用现有脚手架,零新脚手架**
-
-`TestDb`(`backend/tests/TenonAdmin.Tests/TestDb.cs`)按 `TENON_TEST_DBTYPE` 派生隔离库,四条腿分别是:
-
-| 腿 | 隔离手法 | 代码位置 |
+| DONE-CONDITION | 当前判定 | Task 10 结账证据 |
 |---|---|---|
-| Sqlite(默认) | 每个 factory 一个 temp 文件 `tenon-wf-it-{guid}.db` | `TestDb.cs:78`(`Data Source={sqliteFile}`)+ `WorkflowAppFactory.cs:13` |
-| MySql | `CREATE DATABASE IF NOT EXISTS tenon_it_<sha256[..16]>` | `TestDb.cs:58-63` |
-| SqlServer | `IF DB_ID(N'..') IS NULL CREATE DATABASE [..]` | `TestDb.cs:64-70` |
-| PostgreSQL | 查 `pg_database` → `CREATE DATABASE "<..>"`(PG 的 `CREATE DATABASE` 默认从 `template1` 拷贝,这就是它便宜的原因) | `TestDb.cs:71-77` |
+| `## Tasks` 全勾 | ❌ 未满足 | 仅最终四库/文档/review 全满足后由协调者勾 Task 10 |
+| 原样 workflow filter 绿 | ✅ 本地 410/410 | 每次代码改动后原样重跑;新增 1 条 in-range Retry-After 后预期 411,只增不减 |
+| 同 `ExecutionKey` 重放只推进一次 | ✅ 本地可构造部分 | 保留 N7/T13 + 三道防线变异证据;真实多 worker 交错列为射程限制,不伪造 E2E |
+| lease 过期可恢复且成功后不重复推进 | ✅ 本地 | 保留 N3–N7 与领取谓词/前置判定/CAS 变异证据 |
+| Webhook HTTP 在事务外 | ✅ 本地 | W-TX + 反向事务探针;不扩真网络/WireMock |
+| 四库契约套件四腿各绿 | ❌ 未满足 | 当前 HEAD 发布后 `build-test (sqlite/mysql/postgres/sqlserver)` 逐腿核对;SQL Server push 腿须实际执行新 filter 项 |
+| Fake/Webhook 四结果覆盖 | ✅ 本地,有射程说明 | Fake 四路径走 dispatcher;Webhook 四分类只 Succeeded 真走 dispatcher,其余复用同一结果落库链,不冒充四条 Webhook 全 E2E |
+| API/frontend drift | N/A | Task 10 禁止 API/DTO/schema/UI 改动;若实际 diff 触及则立即升级闸门,不能仍写 N/A |
+| 两份设计文档回写 | ❌ 未满足 | post-CI 阶段按 §5 完成,经独立 review 后才算满足 |
 
-`WorkflowAppFactory` 已经把 `TestDb.DbType` / `TestDb.ConnectionString(DbPath, DbPath)` 喂进宿主(`WorkflowAppFactory.cs:22-23`),**测试侧什么都不用做**:`new WorkflowAppFactory()` + `f.CreateClient()` 就是「当前腿的一个隔离库 + CodeFirst 建好全部 wf_* 表」。姿势逐字照 `WfNodeExecutionClaimTests.Open`(`:262-266`)。
+**CI 基线分离**:main nightly `33679380440@b28e1a9` 的 PostgreSQL 失败是 `FileLoggerTests.跨天换新文件_且不截断昨天的` 找不到 `/tmp/tenon-filelog-*/error/20260714.log`(1 failed/693 passed);同次另三库与 template-smoke 绿。它与 M3a-1 无关,但若 current dev CI 再现,报告必须同时列「M3a-1 契约类结果」与「仓库总腿结果」,不得混成一个结论。
 
-**不改 `TestDb.cs`、不改 `WorkflowAppFactory.cs`**。特别地:`WorkflowAppFactory.DbPath` 是**只读属性**(`public string DbPath { get; }`,`WorkflowAppFactory.cs:13`,无 `init`),所以 `CodeFirstNullableUpgradeTests` 那种「同库二次起宿主」的手法在工作流宿主上**做不到**,除非改这个共享文件 —— 本 Task **不改**,E11 改用同宿主内直调 `db.CodeFirst.InitTables(...)`(见 D5/§4)。
+### 2. Findings 全量处置表
 
-#### D3｜★ SqlServer PR 腿:**改 `TEST_FILTER`,追加一项**
-
-**定案**:在 `.github/workflows/backend-ci.yml:147` 的 `TEST_FILTER` 末尾追加 `|FullyQualifiedName~WfNodeExecutionContractTests`,并把上方注释段(`:132-146`)补一句说明第二个 `Wf*` 类为什么进名单。
-
-**哪些验收面是真方言敏感(值得进 PR 子集)**:
-- 列宽是否真能装满宽 + 中文是否变 `?` —— **SqlServer 特有面**(`SqlServerCodeFirstNvarchar = true`,`SqlSugarSetup.cs:293`;裸 `text` 非 Unicode 是 nightly #25 的先例)。
-- `CodeFirst_BigString` 长文本中文往返 —— 同上,Task 5 的 R5 明文挂账 Task 9。
-- T-SQL DDL:三张新表 + 三个索引(含唯一索引)在 SqlServer 上真被建出来 —— `wf_node_execution`/`wf_node_execution_attempt`/`wf_outbox` 是 M3a-1 全新的表,**SqlServer 上从没建过一次**。
-- 条件 UPDATE 的 affected-rows 与带 `DateTime` 参数的谓词 —— CI 注释自己就把「scheduler 的 DateTime equality CAS」列为 SqlServer 子集的理由之一(`:141-142`),lease/fence CAS 是同一形状。
-- 有行的表上 `ADD COLUMN ... NOT NULL DEFAULT`(E11)—— 这条**正是 SqlServer 最容易拒**的那个动作。
-
-**哪些留给夜间**:纯业务语义(dispatcher 的四条结果路径、ManualFallback 建任务、崩溃恢复端到端)—— 那些已经被 sqlite/mysql/postgres 三条**全量**腿在同一个 PR 上跑过,重复跑 SqlServer 只买时间不买信息。**故本 Task 只把新建的这一个契约类加进白名单,`WfNodeExecutionClaimTests`/`WfOutboxTests`/`WfNodeExecutionAttemptTests`/`WfNodeExecutionDispatcherTests` 一律不加**(顺带结掉 Task 3 review 的 P3-4 「归 Task 9 一并决定」:**决定是不加**,理由是本契约类已经把那几个类里真方言敏感的部分单独重写了一遍,加原类等于把 DB-agnostic 的部分也拖进去)。
-
-**代价(必须写清)**:
-- 每条测试 `new WorkflowAppFactory()` = 一个隔离库。CLAUDE.md 实测 SqlServer 上 **~20s/库**(85% 花在 `CodeFirst.InitTables` 的 23 条 DDL 上)。13 条 ≈ **+4~5 分钟**到 sqlserver PR 腿(该腿目前的测试部分约是 `WfPersistenceContractTests` 的 14 库 + 其余白名单类)。**是外推,不是实测**(见 §6 R6)。
-- 这会让 PR 上的 sqlserver check 变慢但**不改变绿/红语义**。若日后嫌慢,CLAUDE.md 与 workflow 注释都写明了正确动作:**去掉这一项让它回落 nightly**,而**不是加 `timeout-minutes`**(低于 ~90 分钟会把绿腿变红)。
-- 改 `.github/workflows/**` 不在 `backend-ci.yml` 的 `paths` 之外 —— 该 workflow 自己就监听 `.github/workflows/backend-ci.yml`,所以这次改动本身会触发一次完整矩阵,这是好事不是副作用。
-
-#### D4｜★ P3-2:**本 Task 不开口**,继续挂到 Task 10
-
-**定案:不动 `WfNodeExecutionDispatcherTests.cs`。** 它仍在禁碰清单里。
-
-理由(三条,按分量排):
-1. **不是同一射程。** P3-2 要钉的是「引擎 `ResolveRetryDelay`(`WorkflowEngine.cs:1452-1459`)在 `(0,24h]` 内真的采用 handler 给的 `RetryAfter`」—— 这是**纯业务策略**,DB-agnostic,四条腿跑它拿到的是同一条信息。本 Task 的主题是「同一套用例在四库上问数据库自己」。把一条与方言无关的断言塞进四库轮次,既不属于这一轮,也不会因为进了四库而变强。
-2. **开口的边际风险大于收益。** 该文件 24 条 `[Fact]`、1300 行,是 Task 6/7 全部不变量的承重点(fence 双谓词、崩溃恢复、迟到回写、ManualFallback 三条不自动放行)。exec 用的是 sonnet,历轮已有「顺手改别的」的记录(Round 31 裁定 exec 四处偏离)。为一条 3 行的断言解禁一个 1300 行的承重文件,**风险/收益比不划算**。
-3. **Task 10 本来就要开这个口。** 台账 Round 32 已把 P3-1/P3-2/P3-3/P3-5 + Task 6 的 P3-6 + Task 7 的 P3-3 一起挂到 Task 10 收口轮。P3-2 与 P3-1(`FixedTime` 改造)**是同一批要碰测试文件的活**,一次开口一起做,比分两轮各开一次口更省、也更好审。
-
-**给 Task 10 的交代**:P3-2 的补法已经在 Findings 里写死(加第三条,喂 `TimeSpan.FromMinutes(7)`,断 `NextRetryAtUtc`),本 Task **不改这个结论、不预支这个额度**。
-
-#### D5｜方言陷阱主动排查(逐条给证据或明说未验)
-
-| 排查项 | 结论 | 证据 / 说明 |
+| 来源 | 处置 | 本任务动作 |
 |---|---|---|
-| **布尔列在 PG/SqlServer 的谓词写法** | **读代码未发现新风险** | 三张新表全继承 `BaseEntity`(`WfNodeExecution.cs:38`、`WfNodeExecutionAttempt.cs:43`、`WfOutbox.cs:56`),`BaseEntity : AuditEntity, ISoftDelete`(`BaseEntity.cs:71`),全局软删过滤器是 `client.QueryFilter.AddTableFilter<ISoftDelete>(e => e.IsDelete == false)`(`SqlSugarSetup.cs:126`)—— 表达式树里是 `bool` 常量,SqlSugar 按方言各自生成,与仓内其它 `BaseEntity` 表**同一条路**。**但**:这三张表从未在 PG/SqlServer 上跑过一次(见 §6 R1),所以「同一条路」是读代码结论,不是实测结论。 |
-| **`DateTime`/`DateTimeOffset` 四库精度与时区** | **真风险,已成陷阱 T2/T9** | ①MySQL 上裸 `DateTime` 映射成**秒精度** `datetime` —— 台账 Task 1 P2-2 对 `BaseEntity.CreateTime`(`BaseEntity.cs:49`,无 `ColumnDataType`)实证过;四个 `*Utc` 列(`WfNodeExecution.cs` 的 `DeadlineAtUtc`/`NextRetryAtUtc`/`LeaseExpiresAtUtc`/`CompletedTimeUtc`)同样是裸 `DateTime`,**同样会被截到秒**。②SqlServer `datetime` 3.33ms 舍入。③SqlSugar 读回一律 `Kind.Unspecified`(`WfNodeExecutionDispatcher.cs:200-202` 的注释就是为此写的 `SpecifyKind`)。→ 所有时间断言用**整秒**值 + `TimeSpan.FromSeconds(1)` 容差重载(Task 3 P1-2 修复时已用过这个姿势),**绝不断 `Kind`**。 |
-| **`SetColumns` 内联表达式被区域格式化** | **真风险,已成陷阱 T1** | 语义契约明写 zh-CN 下内联 `DateTime`/`null` 会被格式化成 `near "下午"`。产品侧已经守住:`WfNodeExecutionStore.ClaimAsync:61` 的 `leaseUntilUtc`、`WorkflowEngine.ClaimExecutionWritebackAsync:1350-1360` 的 `nextRetryAtUtc`/`noOwner`/`noLease`/`completedTimeUtc` 全部先落局部变量。**本 Task 的 E5/E6 要自己写裸 `Updateable...SetColumns` 探针,同样必须先落局部变量** —— 这是最容易在本机 zh-CN 上当场炸的一条。 |
-| **唯一索引冲突抛的异常类型** | **四库不一致,已成陷阱 T3** | SQLite→`SqliteException`、MySQL→`MySqlException`、PG→`PostgresException`、SqlServer→`SqlException`。仓内两处同型测试都**只断 `Assert.NotNull(failure)` + 行数**,不断类型:`WfNodeExecutionClaimTests.cs:24-36`、`WfPersistenceContractTests.cs:113-127`。照抄。 |
-| **CAS `UPDATE ... WHERE` 的受影响行数语义** | **有已知方言分歧,但本仓不依赖它;仍写探针** | MySQL 有 matched / changed 两种口径(`UseAffectedRows`),CI 的连接串未设该参数(`backend-ci.yml:117`),MySqlConnector 默认返回 **matched**。逐条查过产品侧的三处 CAS:领取 UPDATE(`WfNodeExecutionStore.cs:64-77`)必带 `Fence + 1`/`AttemptCount + 1`,**值必变**;回写 CAS 两支(`WorkflowEngine.cs:1345-1375`)都带 `Status` 从 `Running` 变出去,**值也必变**。→ **今天不依赖 matched-vs-changed**。但 M2c 的 D1(`WfPersistenceContractTests.cs:309-359`)已立下「在真库上逐一问过去」的先例,而将来任何人给 CAS 加一个「值不变」的列就会踩上,**探针成本 3 行,写**(E5)。 |
-| **PG「语句报错中止整事务」(`25P02`)** | **真风险,已成陷阱 T4** | 产品侧三个 store 都**刻意不写 try/catch**(`WfNodeExecutionStore.cs:8-12`、`WfNodeExecutionAttemptStore.cs:22-25`、`WfOutboxStore.cs:16-21` 的类注释各自论证过)。故「事务内撞唯一键」的可观测结果在四库上应当一致(整事务回滚),但**只有 PG 上是「因为事务被中止」而非「因为我们主动回滚」**。E8 专门钉这条,且**冲突后不得在同一事务里继续查库**。 |
-| **手写 SQL 的标识符大小写** | **未验,但足以决定写法** | PG 把未加引号的标识符折叠成小写,而 SqlSugar 建的列名是属性名原样(`ResultType`/`ExecutionKey`,混合大小写)。→ **本 Task 一律不写裸 SQL**,全部走 `db.Queryable<T>()`/`db.Updateable<T>()` 让 SqlSugar 自己加引号。(仓内既有的 `db.Ado.GetInt("SELECT COUNT(*) FROM sys_menu")`(`SqlLoggingTests.cs:59`)之所以安全,是因为它只碰全小写表名、不碰列名。) |
-| **`MessageKey` 的排序规则大小写敏感性** | **★ 新发现的四库真分歧,未验** | `MessageKey = {ExecutionKey}:{MessageType}`(`WfOutboxStore.cs:49`),`MessageType` 是**消费者提供的 `string`**,`NormalizeMessageType` 只 `Trim()` + 拒空白 + 拒 `':'`(`WfOutboxStore.cs:70-79`),**大小写原样保留**。而 SqlServer 默认排序规则(`SQL_Latin1_General_CP1_CI_AS`)与 MySQL 默认 `utf8mb4_*_ci` **都是大小写不敏感**,SQLite/PG 区分。→ 两个只在大小写上不同的 `MessageType`,在 MySQL/SqlServer 上会**撞唯一索引**,在 SQLite/PG 上是两条独立消息。**这是一份对外契约上的四库行为分歧。** 处置:**不写「四库应当一致」的测试**(它必然在某两腿红),改为写进 §7 建议协调者收进 `## 语义契约`。**未在任何库上实测,属读代码 + 默认排序规则推断。** |
-| **索引键长度上限** | **读代码确认无风险** | SqlServer 900B:`SqlServerCodeFirstNvarchar = true`(`SqlSugarSetup.cs:293`)→ `ExecutionKey` 64 → nvarchar(64) = 128B;`MessageKey` 128 → 256B。MySQL utf8mb4 3072B:512B。attempt 的 `(ExecutionId, AttemptNo)` 是 (bigint, int) = 12B。全部远低于上限。 |
-| **三张新表在升级路径上会不会走 `ADD COLUMN`** | **不会,读代码确认** | 消费者从 M2c 升到 M3a-1 时这三张表**根本不存在** → `InitTables` 走 `CREATE TABLE` 整表新建。故「全表不写 `DefaultValue`」(`WfNodeExecution.cs:16-20` 的整段论证)在四库上没有升级面。**因此本 Task 不为这三张表写「有行加非空列」的测试**,那个测试只对 Task 1 的四个列有意义(E11)。 |
+| Task 5 P3-1 `LastError` 512 裸字面量 | **接受延期** | 当前无写入点,YAGNI;等真实消费者出现时再建共享常量 + 截断测试,本轮只在最终台账标已处置 |
+| Task 5 P3-2 outbox scan index 无测试 | **接受限制** | 性能索引无稳定行为断言,不硬凑测试 |
+| Task 6 P3-2 T6 前后段互相掩盖 | **已完成,补记账** | commit `36a8cc0` 已拆为下界/上界两条 Fact;Round 38 不再改 |
+| Task 6 P3-3 `WfNodeExecution` 4 条注释失真 | **已完成,补记账** | commit `36a8cc0` 已修;当前源码明写 4 列已写、4 列仍预留 |
+| Task 6 P3-5 outbox null 键被省略 | **文档收口** | 两份设计文档写清 `WhenWritingNull`:成功 payload 的 `errorCode/summary/outputHash` 键可不存在,不是 JSON null |
+| Task 6 P3-6 T12 时钟分辨率 flake | **Round 38 必修** | 同一现有 Fact 改用仓内 `MutableTime`,handler 回调推进时钟,精确保证 `EndedAtUtc > StartedAtUtc`;不新建时间抽象 |
+| Task 7 P3-3 N5 算术推论 | **接受/已记账** | 不加重复断言,最终关闭该 Finding |
+| Task 8 P3-1 注入 `TimeProvider` 零守门 | **Round 38 必修** | Webhook HTTP-date 测试用仓内固定/可拨时钟,断精确 60s;不用真实系统时钟范围 |
+| Task 8 P3-2 in-range Retry-After 零覆盖 | **Round 38 必修** | dispatcher 新增唯一 1 条 Fact,传 7min 并精确断 `NextRetryAtUtc`;明确打开该承重文件的窄写口 |
+| Task 8 P3-3 timeout 下界冗余 | **接受信息性限制** | 外部下界已有守门,不为产品纵深重复造测试 |
+| Task 8 P3-5 仅重试分支读 Retry-After | **文档收口** | 文档写成刻意语义,不加低价值“没有读取”测试 |
+| Task 9 P3-1 E1 断言顺序 | **Round 38 必修** | 先采集 3 个异常与 3 个 count,先断 count 再断异常,保证唯一索引丢失时行数证据不被先抛掩盖;不改条数 |
+| Task 9 P3-2 `PayloadVersion` 注释/永久语义 | **CI 后必决** | 见 §4;四腿前不改 `WfHistory.cs`、不放宽 E11 |
+| Task 9 P3-3 E12 SQLite 注释过宽 | **Round 38 必修** | 只改注释:SQLite 不证明 DB 宽度,但能证明 C# 512 预截断 |
 
-#### D6｜`ExecutionKey` 唯一性怎么测
+**长期 R/D/T 限制**全部保留并在最终文档/台账明确:真实多 worker 交错不可稳定构造;生产侧尚无 execution 建行/worker 调度;`MaxAttempts` 无生产来源;预算耗尽直接 Failed 与 `webhookOnFailure=manual` 不对称;未知异常在未来 worker 下可能活锁;DNS rebinding/真实 TLS/HTTP2/chunked/proxy 未测;前端设计器无 Webhook UI;八字段请求体无版本号;`OutputJson` 可装非 JSON 截断原文;MessageType/MessageKey 大小写受排序规则影响。它们不能偷偷升级成「已解决」,也不能反过来扩成本里程碑代码。
 
-- **索引建在哪、由谁建**:`[SugarIndex("uk_wf_node_exec_key", nameof(ExecutionKey), OrderByType.Asc, IsUnique = true)]`(`WfNodeExecution.cs:35`),CodeFirst 特性,由 `DatabaseInitializer.StartAsync` 的 `db.CodeFirst.InitTables(entityTypes)`(`DatabaseInitializer.cs:51`)建出来。**没有显式 DDL 脚本**,也没有「实体类型登记表」(语义契约 Task 4 记录:靠 `WorkflowSetup.cs:28` 的整程序集扫描)。
-- **并发插同 key 四库各抛什么**:见 D5 表第 4 行 —— 四种不同的驱动异常类型。
-- **断异常类型还是断行数**:**两者都不断类型,断「抛了」+ 断「库里只有一行」**。即 `Assert.NotNull(failure)` + `Assert.Equal(1, await db.Queryable<WfNodeExecution>().Where(e => e.ExecutionKey == key).CountAsync())`。行数那一句是**关键**:没有它,「索引压根没建出来但插入因别的原因失败」也能让测试绿。
-- **不构造真并发**:第二次插入在**自动提交**下发起(不进事务),这样 PG 上不会把后续查询卷进 aborted 事务(T4)。既有 `WfNodeExecutionClaimTests.cs:16-37` 就是这个姿势,照抄。
+### 3. Round 38 pre-CI 实现清单
 
-#### D7｜lease/fence CAS 竞争怎么测:**串行模拟 + 受控时间参数,不做真并发**
+**唯一允许写的 3 个文件**:
 
-- **真并发构造不出来**,承 Task 1 R1 与 Task 3 的先例:单进程 + 每测试一个隔离库,两个事务在同一行上交错的窗口没法稳定复现;硬造出来的多线程测试只会变成 flake。**如实记为射程限制(§6 R4),不拿「测不到」当「不用测」。**
-- **串行怎么才有鉴别力**:`ClaimAsync` 的三个析取支(`WfNodeExecutionStore.cs:74-76`)全部由**调用方传入的 `nowUtc`** 驱动(应用时间,不用数据库时间函数)。所以只要改 `nowUtc` 的取值就能把每个支各走一遍,不需要真的等。这正是 Task 3 定案「租约过期用应用时间」买来的可测性。
-- **四库上行为是否一致**:三个支里两个带 `DateTime` 比较。
-  - `NextRetryAtUtc <= nowUtc`:当列为 `NULL` 时,SQL 三值逻辑在四库上一致(`NULL <= x` 为 UNKNOWN → 不命中)。**读代码 + SQL 标准结论,四库未实测。**
-  - `LeaseExpiresAtUtc < nowUtc`:严格小于 + **MySQL 秒精度截断** → 若测试用毫秒级边界,MySQL 上会翻。→ E5 一律用**整分钟**边界。
-- **fence 侧**:回写 CAS 的双谓词 `Fence == fence && Status == Running`(`WorkflowEngine.cs:1370`)。E6 用裸 `Updateable<WfNodeExecution>` 直接复刻这条 WHERE(**不经引擎、不经 dispatcher**),断三种情形的 affected-rows:同 fence + Running → 1;陈旧 fence → 0;同 fence 但已非 Running → 0。这样它是一条**纯持久化契约**测试,不重复 dispatcher 的业务测试。
+1. `backend/tests/TenonAdmin.Tests/WfNodeExecutionContractTests.cs`
+   - E1:所有异常先 `Record.ExceptionAsync`,所有数据库 count 先读出;先断三个 count 都是 1,最后再断三个异常非空。不得删原语义。
+   - E12:仅精确拆分 SQLite 射程注释;产品 Store 不改。
+2. `backend/tests/TenonAdmin.Tests/WfWebhookNodeHandlerTests.cs`
+   - `Retry_after_http_date_is_converted_to_a_delta`:用固定 `2026-...Z` 时钟与相对 +60s HTTP-date,把 `NotNull + InRange(55s,65s)` 换成 `Assert.Equal(60s, ...)`。
+   - 优先复用测试程序集现有 `MutableTime`;若固定时钟更直白,只在本文件加最小 private `FixedTime`,不得引新包。
+3. `backend/tests/TenonAdmin.Tests/WfNodeExecutionDispatcherTests.cs`
+   - 新增 1 条 `Handler_supplied_retry_delay_inside_the_bounds_is_used`(名字可等价):`RetryAfter=7min`,固定时钟,精确断 `NextRetryAtUtc=now+7min`;不得复制四条结果 E2E。
+   - T12 现有 `Attempt_numbers...` 用现有 `MutableTime`;每次 handler `OnExecute` 推进已知时长,两次 dispatcher 共用同一时钟;更新推过去的 `NextRetryAtUtc` 也基于该时钟。保留 AttemptNo 与正向耗时断言。
 
-#### D8｜事务回滚不残留半推进状态怎么测
+**禁止写**:所有 `backend/src/**`、`.github/workflows/**`、`TestDb.cs`、`WorkflowAppFactory.cs`、`AdminAppFactory.cs`、`WorkflowReplaceabilityTests.cs`(必须仍 10 Fact)、`WfPersistenceContractTests.cs`、两份设计文档、`.loop`、双前端、API/schema、真实 `admin.db`、`TestResults/`。Round 38 预期只新增 1 条 Fact,原样 filter **410→411**。
 
-- **触发手法**:`db.Ado.UseTranAsync(async () => { ...; throw new InvalidOperationException("强制回滚,验证…"); })` → 断 `Assert.False(tran.IsSuccess)`,再在**事务之外**查库。仓内三处现成先例:`WfNodeExecutionClaimTests.cs:219-243`、`WfOutboxTests.cs:145`、`WfNodeExecutionAttemptTests.cs:198`。
-- **本 Task 的增量**:既有三条各只回滚**一张表**的一次写入。E7 在**同一个事务里**把三件事都做掉(execution 的 fence CAS 回写 + attempt 插入 + outbox 入队),再回滚 —— 这才是 §4.6「五件事同一短事务」在持久化层的契约,也是「不残留半推进状态」的字面含义。
-- **`db.Ado.IsAnyTran()`**:是仓内现成探针(`WfReceiptEngineTests.cs:332`,Task 6 T1 先例),但它答的是「此刻有没有活动事务」,用来钉「handler 不在事务内」。**本 Task 用不上它** —— 这里要证的是「回滚后库里什么都没有」,断库不断上下文。写清楚免得 exec 顺手塞进来。
+### 4. `PayloadVersion` 与四库 push/CI 门
 
-#### D9｜outbox 契约测什么(与 Task 5 已有的 9 条不重复)
+**首跑规则**:E11 保持当前无条件 `Assert.Equal(0, loadedHistory.PayloadVersion)`,绝不改回 `0 or 1`,绝不按 `TestDb.DbType` 分支。其职责是让真实方言分歧可见,不是先猜三腿。
 
-`WfOutboxTests` 的 9 条(`WfOutboxTests.cs:16-241`)覆盖:入队初值、`MessageKey` 派生、幂等、唯一索引、payload 往返、回滚不留痕、两个 execution 可同类型、`':'` 拒绝、`Trim`。**这些已经在 sqlite/mysql/postgres 三条全量腿上跑**(它们不在 sqlserver PR 子集里,只跑 nightly)。
+**push 前置**:Round 38 exec、独立 review、P1/P2 findings fix、所有本地闸门全绿且 tracked tree clean。到此由协调者展示待推 commit/远端差异并单独取得用户明确授权;计划阶段的「可以」不自动转成 push。授权命令固定为 `git push origin dev`,不强推、不建临时重写历史。
 
-本 Task **只加四库维度里它们看不见的那部分**:
-1. `PayloadJson` 的 `CodeFirst_BigString` 在四库上的**长文本 + 中文**往返(E4)—— Task 5 R5 明文挂账 Task 9,理由是「`WfOutboxTests` 不在 sqlserver 子集而契约类在」。
-2. `MessageType`(64)/`MessageKey`(128)/`LastError`(512)三列的**声明宽度真能装满宽 + 中文不变 `?`**(E3)。
-3. 唯一索引 `uk_wf_outbox_message_key` 与另外两张表的唯一索引一起验(E1)。
-4. 与 execution/attempt **同一事务回滚**(E7)。
-5. `WfOutboxStatus` 的数值语义(E10)。
+**GitHub Actions 证据**:`backend-ci.yml` 对触及 backend 的 `dev/main` push 与 PR 运行 `build-test` 四库矩阵(`fail-fast:false`)。sqlite/mysql/postgres 跑全量;sqlserver 在非 schedule 使用 `TEST_FILTER`,其中必须看到 `FullyQualifiedName~WfNodeExecutionContractTests`;nightly SQL Server 才跑全量。逐腿记录 run id、HEAD SHA、结论、Task 9 类结果/失败名,不能只看 workflow 总色。
 
-**不重做**:key 派生规则、幂等分支、`':'`/`Trim` 校验 —— 那些是 C# 侧领域逻辑,四库跑它零新信息。
+**永久语义决策**:
 
----
+- 四腿全为 `0`:定为「存量旧行 sentinel=0,新写事件 version=1」;不回写不可变历史。`WfHistory` 注释区分声明的 `DefaultValue=1` 与 SqlSugar CodeFirst 存量回填实测,读者按 `EventType + PayloadVersion` 同时识别 0/1。E11 保持 0。
+- 四腿全为 `1`:说明本机 SQLite 证据与 CI 环境不一致;先复现实质差异,确认依赖/建表路径后才把 E11/注释统一为 1,不凭一次绿改口径。
+- 任意分歧:保持无条件探针转红,逐腿记录观测,Task 10 不关闭。不得用 DbType 条件掩盖;手写迁移/回填属于需要另行批准的兼容性决定,本计划不静默加入。
 
-### §2 改动清单(文件级)
+当前 main nightly 的 FileLogger PostgreSQL 失败若在 dev 再现:单独标为 baseline/flaky 候选;只要 M3a-1 契约类自身全绿,先重跑该失败 job/测试确认。它不能掩盖 M3a-1 失败,也不能把 workflow 总红自动归责给本里程碑。
 
-#### 新增(1 个文件)
+### 5. post-CI 产品注释与文档回写
 
-| 文件 | 量级 | 内容 |
-|---|---|---|
-| `backend/tests/TenonAdmin.Tests/WfNodeExecutionContractTests.cs` | **约 600–750 行,13 条 `[Fact]`** | 类注释必须写死三件事:①本文件只写现有用例覆盖不到的东西(照 `WfPersistenceContractTests.cs:11-36` 的自述纪律);②**射程声明** —— 列宽/中文/BigString 三类断言在 SQLite 腿是**恒真断言**,`## DONE-CONDITION` 里的「四库」指四条 CI 腿跑同一套用例,**不是「本机能证明四库都对」**;③本文件已进 sqlserver PR 腿的 `TEST_FILTER`,新增测试会直接抬高那条腿的耗时,加之前先想清楚。 |
+只有 §4 四腿证据明确后才允许这一批:
 
-#### 修改(1 个文件,一行 + 一段注释)
+- `backend/src/TenonAdmin.Workflow/Entities/WfHistory.cs`:只改 `PayloadVersion` XML 注释,写实声明默认、存量行观测与读取兼容口径;不改列、初始化器、DDL 或业务逻辑。
+- `backend/tests/TenonAdmin.Tests/WfNodeExecutionContractTests.cs`:只把 E11 注释/期望同步到已裁定的单一口径;仍禁止 DbType 条件。
+- `docs/workflow/workflow-database-design-review-2026-08-24.md`:更新 §4.5–4.7、§6.1–6.3、§8、§9、§10/M3a、§11。
+- `docs/workflow/elsa3-slickflow-ai-reference-2026-08-23.md`:更新 §4.4–4.8、§5/M3a。
 
-| 文件 | 量级 | 内容 |
-|---|---|---|
-| `.github/workflows/backend-ci.yml` | **1 行改 + 约 4 行注释** | `:147` 的 `TEST_FILTER` 末尾追加 `\|FullyQualifiedName~WfNodeExecutionContractTests`;`:132-146` 的注释段补一句:第二个进名单的 `Wf*` 类,理由是 M3a-1 的三张新表 + lease/fence CAS 在 SqlServer 上零 PR 期覆盖,成本约 +13 个隔离库;嫌慢就删这一项回落 nightly,**不要加 `timeout-minutes`**。 |
+两份文档必须统一写清:
 
-#### ⛔ 禁碰文件清单
+1. `ExecutionKey = SHA-256(scopeKey,instanceId,tokenId,nodeVisitId,nodeId,definitionVersionId)` 的固定规范化组合与唯一约束。
+2. execution 状态机 `Pending/Running/RetryScheduled/Succeeded/ManualFallback/Cancelled/Failed` 的真实落库边界;lease owner/expiry、单调 fence、迟到 owner CAS 拒绝。
+3. handler 在事务外调用;attempt + execution 结果/推进 + history + outbox 在短事务内提交;attempt append-only;outbox 幂等键与 null 键省略。
+4. `IWorkflowNodeHandler` 不泄漏 DB session;四种显式 result;消费者预注册 handler 先赢,内置 Webhook 为后备。
+5. Webhook 配置 URL/method/headers/timeout/onFailure;2xx/408/429/5xx/3xx/4xx、取消、网络、围栏异常分类;Retry-After 仅对可重试响应读取。
+6. 外呼 body 恰好八字段:`executionKey,instanceId,tokenId,nodeVisitId,nodeId,definitionVersionId,businessKey,attempt`;**没有版本字段**,首发 YAGNI,变更必须显式版本化。
+7. 生产接线限制:当前无生产建 execution 行/无 worker 调 dispatcher,设计器无 Webhook UI;这不是 Task 10 偷补范围。未知异常活锁等风险保留。
+8. 四库实际 run/HEAD/结果、PayloadVersion 最终口径、MessageType 大小写与真实网络/并发射程。
 
-- **`backend/src/**` 全部** —— 本 Task **零产品代码改动、零 DDL、零新实体、零新列**。若 exec 发现非改不可,那是重大偏离,**必须停下来报告,不许自行改**。
-- `backend/tests/TenonAdmin.Tests/WfNodeExecutionDispatcherTests.cs` —— **P3-2 本轮不开口**(D4)。
-- `backend/tests/TenonAdmin.Tests/WorkflowReplaceabilityTests.cs` —— 必须保持 **10** 条 `[Fact]`。
-- `backend/tests/TenonAdmin.Tests/WfPersistenceContractTests.cs` —— M2c 资产,本轮一行不动(D1)。
-- `backend/tests/TenonAdmin.Tests/TestDb.cs`、`WorkflowAppFactory.cs`、`AdminAppFactory.cs` —— 共享脚手架,零改动(D2)。
-- 现有 **397** 条测试:**一条不许删、一条不许改**。本 Task 只**新增**。
-- `web/`、`web-react/` —— 本 Task 零 API 面改动,`gen:api` 不适用(见 §7)。
-- `.loop/wf-m3a1.md` —— 协调者落笔。
-- `docs/workflow/*.md` —— 回写设计文档是 **Task 10**。
+**继续禁止**:Task 8b/worker/HostedService/`EnterNodeOp` 接线、M3a-2 动态表单/动词封顶/并行分支/React 页、M3b AI、共享前端层、新审批动词、新依赖、新 API/DTO、Task 11。
 
----
+### 6. 验证、变异与 review
 
-### §3 实施步骤(有序,每步可独立验证)
+Round 38 定向命令:
 
-1. **建骨架 + 一条最便宜的测试**(E1)。新建文件、写类注释与射程声明、写 E1(三个唯一索引)。跑
-   `dotnet test backend/TenonAdmin.slnx --filter "FullyQualifiedName~WfNodeExecutionContractTests"` → 期望 **1 通过**。
-   *验证点*:文件真被过滤器命中(即命名与 namespace 对了)。
-2. **A 组:唯一性与索引**(E1 已完成)+ **E13**(三张表的列在四库上真被建齐)。跑同一过滤器 → **2 通过**。
-3. **B 组:列宽与编码**(E2 execution+attempt、E3 outbox、E4 outbox BigString、E12 C# 侧截断)。→ **6 通过**。
-   *验证点*:E12 必须在本机确认它**在 SQLite 上也红得起来**(断的是落库长度 512,与库无关);E2/E3/E4 在本机是恒真,注释里如实标注。
-4. **C 组:CAS 与 affected-rows**(E5 领取、E6 fence 回写)。→ **8 通过**。
-   *验证点*:两条都写裸 `SetColumns`,**先落局部变量**;本机 zh-CN 下跑通即证明没踩 `near "下午"`。
-5. **D 组:事务边界**(E7 三表同事务回滚、E8 事务内撞唯一键)。→ **10 通过**。
-   *验证点*:E8 的查库语句必须在 `UseTranAsync` **之外**(T4)。
-6. **E 组:时间与枚举**(E9 `*Utc` 往返、E10 枚举数值)。→ **12 通过**。
-   *验证点*:E9 用整秒值 + 1s 容差;E10 的谓词由**数据库**求值(`db.Queryable<T>().Where(...)`),不是 C# 侧过滤后再断。
-7. **F 组:存量升级**(E11,结 Task 1 的 R2)。→ **13 通过**。
-   *验证点*:同宿主内 `db.DbMaintenance.DropColumn` ×4 → `db.CodeFirst.InitTables(typeof(WfHistory), typeof(WfInstance))` → 旧行读回 `0 / Unknown(0) / 1 / 0`。手法照 `CodeFirstNullableUpgradeTests.cs:47-49` 的 DropColumn + `DatabaseInitializer.cs:51` 的 InitTables,但**不起第二个宿主**(D2)。
-8. **改 CI**:`backend-ci.yml` 的 `TEST_FILTER` 追加一项 + 注释。**不跑不了,只能靠读**;`yamllint` 无仓内先例,靠 diff 目视 + 保持单行不换行。
-9. **闸门(exec 必跑,协调者复跑)**:
-   - `dotnet build backend/TenonAdmin.slnx -c Release --no-incremental` → 期望 **0 错误 / 13 警告**(与基线持平;`--no-incremental` 是必须的,增量编译会漏报警告,Round 28–32 的教训)。
-   - `dotnet test backend/TenonAdmin.slnx --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"` → 期望 **410 通过 / 0 失败 / 0 跳过**(397 + 13)。
-   - **跑之前先看一眼 C: 盘剩余空间**(§5 T12)。
-   - 前端三条闸门(`npm run typecheck`/`lint`/`gen:api` SHA256)—— **本 Task 判定不适用**,理由见 §7。
+```powershell
+dotnet test backend/TenonAdmin.slnx -c Release --filter "FullyQualifiedName~WfNodeExecutionContractTests"
+dotnet test backend/TenonAdmin.slnx -c Release --filter "FullyQualifiedName~WfWebhookNodeHandlerTests"
+dotnet test backend/TenonAdmin.slnx -c Release --filter "FullyQualifiedName~WfNodeExecutionDispatcherTests"
+dotnet build backend/TenonAdmin.slnx -c Release --no-restore --no-incremental
+dotnet test backend/TenonAdmin.slnx --filter "FullyQualifiedName~Tests.Wf|FullyQualifiedName~Workflow"
+git diff --check
+```
 
----
+过滤器最后一条字面值不得改。报告 0 fail/0 skip 与真实 warning 数;不要把增量构建的 0 warning 当全量结论。前端/API 闸门预期 N/A,依据必须是最终 diff 零 API/DTO/schema/UI。
 
-### §4 测试清单
+Round 38 必做变异(一刀一文件、确认落盘、单测转红、精确复原):
 
-> 全部放进 `WfNodeExecutionContractTests.cs`。命名沿用仓内的英文句式(`Xxx_yyy_zzz`)。**预计条数:397 + 13 = 410**;**N 的区间:12–15**(下限:E13 与 E10 若 review 判为鉴别力不足可各减一条;上限:E2 若因列太多需要拆成 execution / attempt 两条,E7 若需要把「回滚后 execution 状态未变」单列,各加一条)。
+- E1:临时移除一个 unique index,确认 count 断言先提供 `Actual 2`;异常断言不得先掩盖。
+- Webhook clock:产品 `ReadRetryAfter` 临时改用系统时钟,固定时钟测试红。
+- in-range Retry-After:引擎临时无条件走默认 backoff,新 7min 测试红。
+- T12:去掉 handler 的时钟推进或把 ended 写回 started,正向耗时断言红。
+- E12:Store `Truncate` 临时原样返回,现有 600→512 测试红,证明注释所述 C# 防线。
 
-#### A 组 —— 唯一性与建表(2 条)
+所有产品文件变异只为验证,不得进入 commit。review 必须由独立 `code-reviewer` 重审精确写集、五刀鉴别力、所有 P3 disposition、文档事实与 CI 声称。0×P1/0×未修 P2 前不进 push 门。
 
-| # | 测试名 | 钉住什么 |
-|---|---|---|
-| **E1** | `The_three_execution_tables_enforce_their_unique_indexes` | 三个唯一索引在当前腿上**真被 CodeFirst 建了出来**:`uk_wf_node_exec_key`(同 `ExecutionKey` 插两行)、`uk_wf_outbox_message_key`(同 `MessageKey`)、`uk_wf_node_exec_attempt_no`(同 `(ExecutionId, AttemptNo)`)。三次都在**自动提交**下撞,每次断 `Assert.NotNull(failure)` **且** 断该键下行数 == 1。**不断异常类型**(T3)。 |
-| **E13** | `The_three_execution_tables_are_created_with_every_declared_column` | 用 `db.DbMaintenance.GetColumnInfosByTableName(table, false)` 取三张表的实际列名集合,逐一 `Assert.Contains` 实体上每个 `[SugarColumn]` 属性名。钉的是「某方言下 T-SQL DDL 少建了一列」这类只会在运行期以怪异错误现形的事故。姿势照 `CodeFirstNullableUpgradeTests.cs:61-68`。 |
+### 7. 阶段与提交边界
 
-#### B 组 —— 列宽与编码(4 条)
+1. **Round 38 pre-CI exec**:只改 §3 三个测试文件;建议 commit `test(workflow): harden final M3a-1 acceptance probes` + Lore trailers;不 push。
+2. **Round 39 independent review**:不勾 Task 10;产出 findings/变异报告。
+3. **Round 40 findings fix**(仅若有 P1/P2):只修 review 清单,重跑本地全闸门。
+4. **push authorization gate**:展示 `origin/dev..dev` 与提交清单,用户明确授权后才 `git push origin dev`;无授权则停在可发布状态。
+5. **四库 CI**:盯 current HEAD 四腿;方言失败进入窄修复 + review + 重新发布循环,不放宽断言。
+6. **post-CI exec**:只改 §5 注释/测试/两文档;建议 commit `docs(workflow): record final M3a-1 execution contracts`。若四库要求真实兼容修复,另立 `fix(workflow): ...` 且先审范围。
+7. **final review/fix**:复核文档与代码一致、所有 Findings 有明确关闭/接受/延期记录、所有 DONE 字面满足。
+8. **DONE**:协调者最后勾 Task 10、写四腿 run/HEAD/证据、确认 tracked tree clean 且 `TestResults/` 未提交;输出「✅ DONE — M3a-1 收口完成」。
 
-| # | 测试名 | 钉住什么 |
-|---|---|---|
-| **E2** | `Execution_and_attempt_columns_hold_their_declared_width_in_chinese` | `WfNodeExecution` 的 `ExecutionKey`(64)/`ScopeKey`(64)/`NodeId`(64)/`LeaseOwner`(128)/`HandlerType`(256)/`Summary`(512)/`OutputHash`(64),`WfNodeExecutionAttempt` 的 `OutputSummary`/`ErrorSummary`(各 `WfNodeExecutionAttemptStore.SummaryMaxLength`=512)/`OutputHash`(64):**写满宽 → 读回逐字相等**。凡是可以放中文的列(`Summary`/`OutputSummary`/`ErrorSummary`/`ScopeKey`/`LeaseOwner`/`HandlerType`)用**中文**填满,并 `Assert.DoesNotContain('?', ...)`(SqlServer 非 Unicode 列的经典症状,nightly #25)。`ExecutionKey`/`OutputHash` 是 hex,用 ASCII 填。 |
-| **E3** | `Outbox_columns_hold_their_declared_width_in_chinese` | 同上,针对 `WfOutbox` 的 `MessageType`(64)/`MessageKey`(128)/`LastError`(512)。`MessageKey` 直插(绕开 `EnqueueAsync`,因为它派生 key),`LastError` 用中文填满 512。 |
-| **E4** | `Outbox_payload_round_trips_chinese_and_long_bodies` | **结 Task 5 的 R5 挂账。** `WfOutbox.PayloadJson` 走 `CodeFirst_BigString`(`WfOutbox.cs:88`):塞一段 >8000 字符的中文 JSON,经 `WfOutboxStore.EnqueueAsync` 入库,读回逐字相等 + `Assert.DoesNotContain('?', ...)`。形状照 `WfPersistenceContractTests.Result_json_round_trips_chinese_and_long_payloads:173-192`。 |
-| **E12** | `A_summary_longer_than_the_column_is_truncated_before_it_reaches_the_database` | **结 Task 4 挂给 Task 9 的「截断在真会抛的库上的效果」。** 造一个 600 字**中文**摘要 → `WfNodeExecutionAttemptStore.AppendAsync` → 读回长度恰好 512 且是原文前 512 字。若哪天有人把 `Truncate`(`WfNodeExecutionAttemptStore.cs:79`)去掉:SQLite 照单全收(绿)、MySQL 严格模式抛、PG/SqlServer 抛 → **本机不具鉴别力,三条 CI 腿具**。注释如实写。 |
-
-#### C 组 —— CAS 与 affected-rows(2 条)
-
-| # | 测试名 | 钉住什么 |
-|---|---|---|
-| **E5** | `The_claim_update_reports_the_same_affected_rows_on_every_dialect` | ①`ClaimAsync` 命中 → 非 null(= 1 行);②租约窗口内再领 → null(= 0 行),`nowUtc` 用 **`now.AddMinutes(1)`** 而非毫秒级(T2);③租约过期后再领 → 非 null 且 `Fence` 递增;④**matched-vs-changed 探针**:裸 `Updateable<WfNodeExecution>().SetColumns(e => new WfNodeExecution { LeaseOwner = sameOwner })`(把列设成**它当前已有的值**)`.Where(e => e.Id == id)` → 断 `Assert.Equal(1, affected)`。第 ④ 条是唯一新信息,前三条是给 sqlserver PR 腿补的信号。**所有 `DateTime`/`string` 先落局部变量**(T1)。 |
-| **E6** | `The_fence_writeback_cas_reports_the_same_affected_rows_on_every_dialect` | 复刻 `WorkflowEngine.cs:1370` 的双谓词 `Fence == @fence && Status == Running`,**裸 `Updateable`,不经引擎**:①同 fence + `Running` → 1;②陈旧 fence(`fence - 1`)→ 0;③同 fence 但行已被改成 `Succeeded` → 0。三条各自证明双谓词里的一个谓词真在起作用。 |
-
-#### D 组 —— 事务边界(2 条)
-
-| # | 测试名 | 钉住什么 |
-|---|---|---|
-| **E7** | `A_rolled_back_writeback_leaves_no_half_advanced_state_in_any_of_the_three_tables` | 一个 `UseTranAsync` 里依次做:execution 的 fence CAS 回写(`Status → Succeeded`)+ `WfNodeExecutionAttemptStore.AppendAsync` + `WfOutboxStore.EnqueueAsync`,然后 `throw` → 断 `tran.IsSuccess == false`;事务外查库:execution 仍是 `Running`、`AttemptCount` 未变、attempt 表 0 行、outbox 表 0 行。**这是「不残留半推进状态」的字面契约**,现有三条各自只回滚一张表。 |
-| **E8** | `A_unique_conflict_inside_the_transaction_rolls_the_whole_writeback_back` | 事务内:先做 execution 的 fence CAS 回写(成功)→ 再插一行**与既有行同 `(ExecutionId, AttemptNo)`** 的 attempt(必撞唯一键,三个 store 都不 catch)→ 断 `tran.IsSuccess == false` 且 `tran.ErrorException` 非 null。**事务结束之后**才查库:execution 的 `Status` 仍是回写前的值。**PG 专项**:那里事务是被 `25P02` 中止的,其余三库是我们回滚的,可观测结果必须一致。**冲突后绝不在同一事务内继续查库**(T4)。 |
-
-#### E 组 —— 时间与枚举(2 条)
-
-| # | 测试名 | 钉住什么 |
-|---|---|---|
-| **E9** | `Utc_columns_round_trip_without_a_timezone_shift` | 四个 `*Utc` 列(`DeadlineAtUtc`/`NextRetryAtUtc`/`LeaseExpiresAtUtc`/`CompletedTimeUtc`)+ attempt 的 `StartedAtUtc`/`EndedAtUtc` + outbox 的 `AvailableAtUtc`:写入一个**整秒**的已知 UTC 值 → 读回 `Assert.Equal(expected, actual, TimeSpan.FromSeconds(1))`。**不断 `Kind`**(SqlSugar 一律读回 `Unspecified`,断它必假红,T9)。钉的是「某腿把列建成带时区类型 / 连接时区把值移走」这类 8 小时事故。 |
-| **E10** | `Persisted_enums_keep_their_declared_numeric_values` | 三个持久化枚举(`WfNodeExecutionStatus`、`WfNodeExecutionResultType`、`WfOutboxStatus`)以**数值语义**存储:插入已知成员后,用 **数据库侧谓词** 命中(`db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ResultType == WfNodeExecutionResultType.ManualFallback).CountAsync()` 等),再用一个**不该命中**的成员断 0。**鉴别力如实说明**:它能证明列以数值语义参与 SQL 比较、且值与 C# 侧一致,**不能证明列的物理类型**;C# 侧数值本身已由 `WfNodeHandlerContractTests` 钉住。这一条结掉 Task 2 射程表里「枚举数值真的进了 `attempt.ResultType` 列 —— 四库口径归 Task 9」。 |
-
-#### F 组 —— 存量库升级(1 条)
-
-| # | 测试名 | 钉住什么 |
-|---|---|---|
-| **E11** | `Legacy_rows_survive_re_adding_the_not_null_history_columns` | **结 Task 1 的 R2。** 同一宿主内:①直插一行 `WfInstance` + 一行 `WfHistory`(表变成非空);②`db.DbMaintenance.DropColumn` 砍掉 `wf_history` 的 `Sequence`/`ActorType`/`PayloadVersion` 与 `wf_instance` 的 `HistorySeq`(退化成「M3a-1 上线前的老库」);③`db.CodeFirst.InitTables(typeof(WfHistory), typeof(WfInstance))` 补列;④断四列都回来了(`GetColumnInfosByTableName`),且**旧行**读到 `Sequence == 0` / `ActorType == Unknown` / `PayloadVersion == 1` / `HistorySeq == 0` —— 即 `DefaultValue="0"/"0"/"1"/"0"`(`WfHistory.cs:66,73,86`、`WfInstance.cs:91`)真的在**有行的表上**生效。<br>**这条是本 Task 唯一真正的新方言面**:CI 四条腿全是空库,`CREATE TABLE` 路径根本不读 `DefaultValue`;「有行的表上 `ADD COLUMN NOT NULL`」这条路 **今天四条腿一条都走不到**。四列都不在任何索引里(`WfHistory.cs:11-12`、`WfInstance.cs:11-14`),DropColumn 安全。 |
-
----
-
-### §5 陷阱(编号,供后续轮次引用)
-
-- **T1｜`SetColumns` 里禁止内联 `DateTime` / `null` / 任何常量表达式。** zh-CN 下 SqlSugar 会把它按区域格式化成字面量拼进 SQL,炸出 `near "下午"`。E5/E6/E7/E8 都要写裸 `Updateable`,**每一个 `DateTime`、每一个要置空的 `null`、每一个字符串都先落局部变量**。产品侧的正确写法在 `WfNodeExecutionStore.cs:61` 与 `WorkflowEngine.cs:1350-1360`。**这是本机就会当场炸的一条,不会拖到 CI。**
-- **T2｜MySQL 上裸 `DateTime` 是秒精度。** 台账 Task 1 P2-2 对 `BaseEntity.CreateTime`(`BaseEntity.cs:49`)实证过;八个 `*Utc` 列同样是裸 `DateTime`。→ 所有时间边界用**整分钟**、所有时间相等断言用**整秒值 + `TimeSpan.FromSeconds(1)` 容差重载**。毫秒级边界会在 mysql 腿翻,而**本机 SQLite 永远绿**。
-- **T3｜唯一冲突的异常类型四库各异**(`SqliteException`/`MySqlException`/`PostgresException`/`SqlException`)。**只断「抛了」+「库里只剩一行」,永远不断异常类型、不断异常消息**。先例 `WfNodeExecutionClaimTests.cs:24-36`、`WfPersistenceContractTests.cs:113-127`。
-- **T4｜PG 上一条语句报错就把整事务置为 aborted(`25P02`)。** 冲突之后在**同一事务内**再查一次库,PG 上抛的是「事务已中止」,真因被盖掉。→ E8 的所有查库都在 `UseTranAsync` **之外**。产品侧之所以敢不写 try/catch,是因为三个 store 的类注释都论证过「半吊子的 catch 在 PG 上更糟」(`WfNodeExecutionStore.cs:8-12` 等)。
-- **T5｜不写裸 SQL。** PG 折叠未加引号的标识符为小写,而 SqlSugar 建的列名是属性名原样(`ResultType`、`ExecutionKey`)。全部走 `db.Queryable<T>()`/`db.Updateable<T>()`/`db.DbMaintenance.*`,让 SqlSugar 自己处理引号。(`SqlLoggingTests.cs:59` 的裸 SQL 之所以安全,是它只碰全小写表名。)
-- **T6｜列宽与中文断言在 SQLite 腿是恒真断言。** SQLite 的类型亲和性不执行列宽,也不区分 Unicode。M2c 的 Round 24 实测:把 `ResultJson` 声明改成 `Length = 200`,两条同型测试**依旧全绿**(`WfPersistenceContractTests.cs:29-36`)。→ E2/E3/E4 的注释必须写明「本机绿 ≠ 四库绿」,**不许把 SQLite 的绿当成证据往台账里写**。
-- **T7｜`MessageKey` 的大小写敏感性四库分歧(未验)。** MySQL/SqlServer 默认排序规则大小写**不**敏感,SQLite/PG 敏感;而 `MessageType` 是消费者提供的 `string`、`NormalizeMessageType` 只 `Trim()`(`WfOutboxStore.cs:70-79`)。→ **不要写一条「四库应当一致」的大小写测试**,它必然在某两腿红。处置见 §7 的建议契约条文。
-- **T8｜E12 在本机不具鉴别力。** 去掉 `Truncate` 后 SQLite 照单全收,只有 mysql(严格模式)/pg/sqlserver 三腿会红。注释如实写,别在报告里把它算成「本机验证过的防线」。
-- **T9｜不断 `DateTime.Kind`。** SqlSugar 读回一律 `Kind.Unspecified`(`WfNodeExecutionDispatcher.cs:200-202` 的注释就是为此写的)。断 `Kind == Utc` 会在四条腿上一起假红。E9 断的是**值不移位**,不是 Kind 被保留。
-- **T10｜`WorkflowAppFactory.DbPath` 是只读属性**(`WorkflowAppFactory.cs:13`,`{ get; }` 无 `init`),所以 `CodeFirstNullableUpgradeTests` 的「同库二次起宿主」手法在工作流宿主上做不到。→ E11 改用**同宿主内直调** `db.CodeFirst.InitTables(...)`(`DatabaseInitializer.cs:51` 同款调用)。**不要为了照抄那个先例去改共享脚手架。**
-- **T11｜每条测试一个隔离库,SqlServer 上 ~20s/库。** 13 条 ≈ +4~5 分钟到 sqlserver PR 腿。**别为了省事把测试写成互相依赖以复用一个库**(仓内零 `IClassFixture` 先例,引入新范式的代价高于省下的时间);也**别加 `timeout-minutes`**(CLAUDE.md 明文:低于 ~90 分钟会把绿腿变红)。真嫌慢的正确动作是从 `TEST_FILTER` 里删掉这一项,回落 nightly。
-- **T12｜先看磁盘再查代码。** 本 loop 已两次(Round 20、Round 32)因 temp 目录堆积 `tenon-wf-it-*` 一次性测试库把 C: 撑爆,症状是上百条 `SQLite Error 13: 'database or disk is full'` 伪装成代码回归。本 Task 新增 13 个建库的测试,**跑闸门前后各看一眼 C: 剩余空间**;清理时只删自己的 `tenon-wf-it-*`,**绝不碰真实 `admin.db`**。
-- **T13｜`PayloadJson` 禁止改成裸 `ColumnDataType = "text"`。** SqlServer 上非 Unicode,中文读回变 `???`(nightly #25)。E4 的断言里 `Assert.DoesNotContain('?', ...)` 是这条的守门,别省。
-- **T14｜E11 的 DropColumn 顺序。** 砍列之后、`InitTables` 之前,**任何**对 `WfHistory`/`WfInstance` 的 `Queryable` 都会失败(实体属性还在)。两步必须紧挨着,中间不插任何查询。宿主的调度器已关(`WorkflowAppFactory.cs:31`),不会有后台任务在这个窗口里碰这两张表。
-
----
-
-### §6 射程限制(如实记录,不拿「测不到」当「不用测」)
-
-- **R1｜★ 本机只有 SQLite 能真跑,而且 CI 从来没跑过任何 M3a-1 代码。**
-  实测:`git rev-list --left-right --count origin/dev...dev` = **`0 53`**,`origin/dev` 停在 `9bd38cc`(M2c 收口)。也就是说 **Task 1–8 的全部产出,连同本 Task 将要新增的 13 条,截至交付时在 mysql / postgres / sqlserver 三条腿上的证据是零。** 本机没有这三种数据库服务;项目记忆里的局域网虚拟机 `shiny@192.168.0.171`(密钥 `~/.ssh/tenon_vm`)能跑容器,但它上面跑着用户自己的服务(8080/6379/5432/3306 已占),且代码要经临时分支推过去。
-  **exec 阶段在本机能自证到的上限**:①编译过;②13 条在 SQLite 腿全绿(= **不假红**);③E1/E5/E6/E7/E8/E9/E10/E11/E12 这几条里**与方言无关的那一半**确实有鉴别力(变异可转红)。
-  **本机自证不了的**:E2/E3/E4(列宽与编码,SQLite 恒真,T6)、E8 的 PG 事务中止那一半(SQLite 上加不加 savepoint 都绿)、E12 的截断防线(T8)、E11 在 PG/SqlServer 上的 `ADD COLUMN NOT NULL` 真实行为(**这恰恰是这条测试存在的全部理由**)。
-  **纪律**:报告里凡涉及这几条,一律写「SQLite 腿绿,另三腿未跑」,**不许写成「四库跑绿」**。`## DONE-CONDITION` 的「四库契约套件在 CI 矩阵四腿各绿」这一条,**Task 9 交付时仍然是未满足**,由 Task 10 结账。
-- **R2｜真并发交错依然构造不出。** 承 Task 1 R1 与 Task 3 的先例:单进程 + 每测试独立库,两个事务在同一行上交错的窗口没法稳定复现。E5/E6 是**串行模拟 + 受控 `nowUtc`**,证明的是「谓词与影响行数在四库上的语义」,**不是**「两个 worker 真的抢同一行时只有一个赢」。后者今天仍只靠代码评审 + fence 的结构性论证兜住。Task 1 R1 点名的兜底(`docker-smoke.yml` 的 `multi` 腿加两副本真跑断言)**本 Task 不做**,仍挂 Task 10。
-- **R3｜`MessageKey` 大小写的四库分歧是读代码推断,未在任何库上实测。** 见 T7 / D5。本 Task **不写测试**,只建议写进语义契约(§7)。
-- **R4｜SqlServer PR 腿的实际增量耗时未测。** 「+4~5 分钟」是按 CLAUDE.md 记录的 ~20s/库外推 13 库得来的,**没有实测**。真值要等第一次 PR 上的 sqlserver 腿跑完才知道。CLAUDE.md 另有一条测量纪律:该腿基线自身波动 1.5×(2302–3514s),**单次 CI 跑分辨不了小于 ~50% 的变化** —— 所以「变慢了多少」这个问题在一次运行里是答不出来的。
-- **R5｜E10 的鉴别力有限。** 它证明列以**数值语义**参与数据库侧比较、且值与 C# 声明一致;**不能**证明列的物理类型(某腿若把枚举建成 `smallint` 而非 `int`,这条照绿)。C# 侧的数值本身由 `WfNodeHandlerContractTests` 钉住,本条只补「这些数值真的进了库、库也按数值理解」这一段。
-- **R6｜E13 只查列**在不在,**不查类型、不查宽度、不查可空性**。`GetColumnInfosByTableName` 能拿到更多信息,但把类型名断死会在四方言上各写一套映射表,那是比它防住的事故更大的维护面。宽度由 E2/E3 从行为侧覆盖。
-- **R7｜P3-2 在本 Task 之后依然零覆盖。** 「handler 吐出的 in-range `Retry-After` 真被引擎采用」全仓无测试(`WorkflowEngine.cs:1452-1459`),现有两条喂的都是区间外的值。本 Task **明确不开口**(D4),该缺口原样交给 Task 10。
-- **R8｜三张新表的「有行加非空列」路径本 Task 不测,且判定为不需要测。** 消费者从 M2c 升到 M3a-1 时这三张表根本不存在,`InitTables` 走 `CREATE TABLE`;`ADD COLUMN` 路径不可达。这是**读代码结论**(`DatabaseInitializer.cs:38-55` 的整程序集扫描 + CodeFirst 差异补列语义),不是实测。将来若给这三张表加**非空**列,那一轮必须自己补这条,不能引用本 Task。
-- **R9｜E11 只覆盖 Task 1 的四个列。** `wf_history.TokenId`/`NodeVisitId`/`ActorUserId` 是**可空**新列,升级路径上是单步 `ADD COLUMN NULL`(四库皆可,`WfHistory.RequestId` 的注释已实测记录过),不进本条。
-
----
-
-### §7 与台账语义契约的对齐检查
-
-#### 不冲突的部分(逐条核对过)
-
-| 契约条 | 本 Task 的关系 |
-|---|---|
-| `ExecutionKey` 构成(Task 3 定案)——「发包后不可逆契约,由 `WfExecutionKeyTests` 快照钉死」 | 本 Task **不碰 `WfExecutionKey`**,只在库侧验唯一索引。E1 用 `Guid.NewGuid().ToString("N")` 造 key(照 `WfNodeExecutionClaimTests.UniqueKey():259`),**不调 `Compute`**,故不会与快照测试重复也不会绑死构成。 |
-| lease/fence(Task 3 定案)——领取是一条条件 UPDATE、影响行数 1/0、返回 `null` 不抛 | E5 正面验这条,且用的是**同一个 `ClaimAsync`**,不复制它的 SQL。**一致。** |
-| `wf_node_execution` 基类与时间口径 —— 四个业务时间列一律 UTC;**不得把 local 的 `CreateTime`/`UpdateTime` 与 `*Utc` 列比较或相减** | E9 只在 `*Utc` 列之间断言,**一次都不碰 `CreateTime`/`UpdateTime`**。**一致。** |
-| 全表所有列一律不写 `DefaultValue`(Task 3/5 定案)+ 加列的四库方言(Task 1 定案:非空列必须带 `DefaultValue`) | 两条管的是**不同的事**:前者管**建表**(三张新表),后者管**加列**(Task 1 给 `wf_history`/`wf_instance` 加的四个非空列)。E11 测的是后者,**不构成对前者的挑战**。exec 若被这两条搞混,是本 Task 最可能出的一处误判,plan 在此明确定性。 |
-| attempt 不存输出正文 / outbox 存全文 | E4(outbox 存全文)与 E12(attempt 截断)分别验两侧,**方向相反是有意的**,不是矛盾。 |
-| 事务边界(短事务领取 → 事务外 handler → 短事务落结果) | E7/E8 只验「同一短事务的原子性」,**不重复** Task 6/7 已有的「handler 无活动事务」测试(那条用 `IsAnyTran()`,归 dispatcher 测试文件,本轮禁碰)。 |
-| 范围外条款 | 本 Task 零产品代码、零 DDL、零新实体、零新列、不碰 M3a-2/M3b/并行网关/共享层/审批动词。**一致。** |
-
-#### 前端闸门判定
-
-**本 Task 判定「不适用」,理由**:零产品代码改动 → 无新 HTTP 端点、无 DTO 变化 → OpenAPI 面不变。改动只有一个测试文件 + 一行 CI YAML。**按 `## DONE-CONDITION` 第 8 条的要求,这条要在 DONE 判定里如实注明「不适用,理由是本 Task 零 API 面改动」,而不是当作没跑。**
-
-#### 建议新写进 `## 语义契约` 的条文(供协调者转抄,共 2 条)
-
-> 以下两条是 plan 阶段的新定案 / 新发现,**建议协调者原文收进 `## 语义契约` 表格**,因为 `## Plan` 会在 Task 10 被重写。
-
-**条文一(四库契约套件的归属与 `TEST_FILTER` 纳入规则,Task 9 定案)**
-
-> 四库持久化契约按里程碑分文件:M2c 的在 `WfPersistenceContractTests`,M3a-1 的在 `WfNodeExecutionContractTests`,**两者都进 `.github/workflows/backend-ci.yml` 的 sqlserver push/PR `TEST_FILTER` 白名单**。纳入判据是「**该用例问的是数据库自己**(列宽/编码/索引/DDL/affected-rows/事务语义),而不是 DB-agnostic 的业务逻辑」—— 后者由 sqlite/mysql/postgres 三条全量腿在同一个 PR 上覆盖,再跑一遍 SqlServer 只买时间不买信息。`WfNodeExecutionClaimTests`/`WfOutboxTests`/`WfNodeExecutionAttemptTests`/`WfNodeExecutionDispatcherTests` **刻意不进白名单**(顺带结掉 Task 3 review 的 P3-4)。每进白名单一个类,sqlserver PR 腿就多 `测试条数 × ~20s` 的耗时(每条测试一个隔离库);**嫌慢的正确动作是从白名单里删掉那一项让它回落 nightly,绝不是加 `timeout-minutes`**(低于 ~90 分钟会把一条只是慢的绿腿变成红腿)。
-
-**条文二(`MessageType` 的大小写,Task 9 发现 —— ⚠ 未实测,建议标注为「待 CI 证实」)**
-
-> `WfOutbox.MessageKey = {ExecutionKey}:{MessageType}` 的唯一性**在四库上大小写敏感性不一致**:MySQL(`utf8mb4_*_ci`)与 SqlServer(`SQL_Latin1_General_CP1_CI_AS`)默认排序规则**大小写不敏感**,SQLite 与 PostgreSQL **敏感**。而 `MessageType` 是消费者提供的 `string`,`WfOutboxStore.NormalizeMessageType` 只做 `Trim()` + 拒空白 + 拒 `':'`,**大小写原样保留**。因此两个只在大小写上不同的 `MessageType`,在 MySQL/SqlServer 上会撞唯一索引、在 SQLite/PG 上是两条独立消息。**内核因此不承诺 `MessageType` 的大小写区分**;消费者应把 `MessageType` 当作**大小写不敏感**的标识使用(建议全小写,如内核自己的 `wf.node-execution.completed`,`WfOutboxStore.cs:24`)。**本条为读代码 + 默认排序规则推断,四库上未实测**;刻意不为它写测试 —— 一条「四库行为应当一致」的断言必然在某两腿红。若将来要消灭这个分歧,唯一干净的做法是在 `NormalizeMessageType` 里 `ToLowerInvariant()`,但那是**破坏性契约变更**(会改变已发出消息的 key),须走「新决策 + 说明为何推翻」。
-
----
-
-### 附:给协调者的两条流程建议(不是本 Task 的产出)
-
-1. **建议在 Task 9 review 绿之后、进 Task 10 之前,用 `AskUserQuestion` 问用户是否 push 一次**(`dev` 或临时分支)。理由:本地 `dev` 已领先 `origin/dev` **53 个 commit**,CI **从未跑过任何 M3a-1 代码**;而 `## DONE-CONDITION` 明写「四库契约套件在 CI 矩阵四腿各绿」。如果一直拖到 Task 10 才第一次拿 CI 信号,四腿一旦红,要在收口轮里同时处理「53 个 commit 的四库首跑」和「验收 + 回写文档」两件事。**不擅自 push** —— 台账 Loop 纪律写死「默认不 push,用户明确要求才 push」。
-2. **虚拟机是备选而非首选。** `shiny@192.168.0.171` 上 3306/5432/1433 的冲突可以靠容器映射到非默认宿主端口绕开(测试侧只需改 `TENON_TEST_MYSQL` 等环境变量里的端口,不改代码),但代码仍要经临时分支推过去,且拿到的信号是「一台机器上的三个库」而不是「CI 矩阵四腿」——**满足不了 DONE-CONDITION 的字面要求**。建议只在 CI 信号拿不到时当调试手段用。
+回滚只 revert 本任务原子 commit;禁止 `reset --hard`、`clean`、强推或删除用户/并行代理产物。磁盘满与 FileLogger flaky 必须先按基础设施证据归因,不得改业务代码遮盖。
 
 ## Tasks
 
@@ -771,3 +622,4 @@
 | 34 | exec | Task 9 exec 完成(executor/sonnet)。commit `227e774`,**2 文件 +702/-9**,与 Plan §2 **文件级精确一致**(新增 `WfNodeExecutionContractTests.cs` 689 行/**13 条**;`backend-ci.yml` 的 `TEST_FILTER` 追加一项 + 注释段重写)。**397 → 410**,正中预估。协调者复核:**`backend/src/**` 零改动**(「零产品代码」守住)、**禁碰清单命中 0**(`WfNodeExecutionDispatcherTests.cs` 未动 → D4「P3-2 不开口」守住)、**T1 逐处守住**(8 处 `SetColumns` 无一内联常量)、`[Fact]` **13** 十件套仍 **10**、`TEST_FILTER` 与既有 `WfPersistenceContractTests` 并列且保留了「嫌慢就删条目回落 nightly、**别加 `timeout-minutes`**」那句纪律。闸门:build `--no-incremental` **0 错误/13 警告**、test **410/410**(2m6s);**前端闸门判定「不适用」**(零 API 面改动)并如实注明理由;C: 盘 9.41 → 8.52 GB,未触 T12 水位。**★ exec 主动申报一处偏离,协调者独立复验属实**:E11 预期旧行读到 `PayloadVersion = 1`(声明 `DefaultValue="1"`),**SQLite 实测读到 `0`**;协调者不采信自述,自己把断言写死成 `Assert.Equal(1,…)` 重跑 → **`Expected: 1 / Actual: 0`**,确认是真实观测。**这条比自述更值得记**:`PayloadVersion` 是**全仓唯一 `DefaultValue != "0"` 的列**,而仓内 `WfInstance.cs:49-58` 那段反编译注释虽早写了「SQLite 例外……旧行仍然读到 0」,却写在一个 `DefaultValue="0"` 的列上、**区分不了「回填写了声明值」与「回填没生效」** —— `PayloadVersion` 是第一处能拆开两者的探针,实测**指向后者**,故 `WfHistory.cs:82` 的「`DefaultValue="1"` 覆盖旧行」**被实测否证**(不是产品 bug,无代码依赖它,但将来靠它区分升级前后旧行会踩坑)。**协调者不对处置下结论,留给 review**:exec 放宽成 `Assert.True(PayloadVersion is 0 or 1)` 避免三腿假红,但 `is 0 or 1` 对 `int` 列**几乎无鉴别力**(实测该腿值确定为 `0`),正是禁写清单点名的「**松散边界代替量值断言**」(Task 7 P2-2 原形),而四库契约套件的本职恰恰是方言分歧时转红。另:`%TEMP%` 尚有 791 个 `tenon-wf-it-*`(~522MB),exec **选择不清理**以免误删并行 agent 在用的库,协调者认可。**不勾选**,下一步 Round 35 review。 |
 | 35 | review | Task 9 独立自审完成(Codex `code-reviewer`,报告 29,658 bytes,SHA256 `6D919864…0E534`)。结论 **REQUEST CHANGES:0×P1 / 3×P2 / 3×P3**。三条 P2 都是契约测试鉴别力缺口:E2 attempt 只断 `AppendAsync` 返回对象、没有数据库读回;E7 删除 outbox enqueue 后仍 1/1 绿;E11 用 `PayloadVersion is 0 or 1` 同时接受声明值与 SQLite 实测值。其余变异:E13 错实体类型精确红,E6 去 Running 谓词红,E7 去强制 throw 红,E1 计数 1→2 红,E12 去 C# 截断红。E8 的 PG `25P02` 写法静态成立但 PG 未跑;E5 matched-row 受 MySQL `UseAffectedRows` 配置约束。review 隔离树最终专项 13/13、build 0 错误/13 既有警告、变异全复原;协调者主树另跑专项 13/13,受跟踪文件干净。**仍不勾选**,下一步 Round 36 只修 3×P2,产品代码/CI/filter/测试条数均不改。 |
 | 36 | 修 Findings + 勾选 | Task 9 的 **3×P2 全修完**(executor,commit `1c8070f`,仅 `WfNodeExecutionContractTests.cs` +35/-13),条数仍 **410**、本文件 `[Fact]` 仍 **13**。E2 改为 attempt 数据库读回断言;E7 增加事务内 attempt/outbox 各 1 行的正向证据并保留回滚后各 0 行;E11 收紧为 SQLite 当前实测的精确 `PayloadVersion=0`,永久口径留 Task 10。协调者四刀独立变异全红且逐刀复原:写后篡改 summary、写后删 outbox、写后删 attempt、写后把 PayloadVersion 改 1;最终测试文件 blob 与 HEAD 完全一致。最终闸门:Release build **0 错误/13 既有警告**,Task 9 **13/13**,原样 workflow filter **410/410**;产品/API/前端/CI/filter 零改动,前端闸门不适用。MySQL/PG/SqlServer 尚未实跑,明确归 Task 10 四库验收;未 push。0×未修 P1/P2 → **Task 9 勾选(9/10)**。下一步 Round 37 Task 10 plan。 |
+| 37 | plan | Task 10 收口 plan 完成(planner 原稿 16,936 bytes 落 `.omx/plans/round37-task10.md`,协调者复核后转写)。DONE 审计确认:本地原样 filter 410/410 与重放/恢复/事务外调用/四结果均有证据;未满足的是 Task 10、两份文档、current HEAD 四库矩阵。协调者纠正初稿三处:Task 6 的 T6 拆分与 `WfNodeExecution` 注释都已在 `36a8cc0` 完成,不重复改;`PayloadVersion` 永久语义必须等四腿,不得预判。最新 main nightly `33679380440` 的 PG 红来自无关 FileLogger 测试(1 failed/693 passed),另三库绿,只作 baseline 不作 M3a-1 证据。计划固定为 pre-CI 三测试文件窄修 → 独立 review/fix → 单独用户 push 门 → 四库 CI → post-CI PayloadVersion/两文档 → final review/DONE。Round 38 预期只新增 1 条 in-range Retry-After Fact,410→411;不改产品/CI/docs/API,不 push、不勾 Task 10。 |
