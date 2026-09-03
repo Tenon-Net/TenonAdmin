@@ -15,7 +15,7 @@
 | --- | --- | --- |
 | M1/M2b 人工审批 | 已兼容 | 现有模型足够，任务级 CAS 能防同一待办双批 |
 | M2c 请求幂等与四库终态保护 | 部分兼容 | 需要 operation receipt，并补实例/Token 级并发保护 |
-| M3a-1 Webhook/自动节点执行内核 | 已交付；四库 CI 基线通过，P1 修订待重跑 | 节点访问身份、execution、attempt、outbox、lease/fence 和 dispatcher 已落地；生产创建与后台 worker 接线仍待后续任务 |
+| M3a-1 Webhook/自动节点执行内核 | 已交付并通过最终四库 CI | 节点访问身份、execution、attempt、outbox、lease/fence 和 dispatcher 已落地；生产创建与后台 worker 接线仍待后续任务 |
 | M3b AI Decision | 尚未兼容 | 需要独立 AI decision 审计表，不能复用人工意见字段 |
 | 循环/并行网关 | 结构可扩展但未到位 | 多 Token 只是起点，尚缺节点访问、fork/join 身份 |
 
@@ -306,7 +306,7 @@ ScopeKey + CommandType + TargetType + TargetId + ActorUserId + RequestKey
 - 相同输入在四库与任何运行时得到同一 `IdentityHash`（快照用例）；
 - SQLite、MySQL、PostgreSQL、SQL Server 使用同一套契约用例。
 
-## 六、M3a-1：可靠自动节点执行（已交付；CI 基线通过，P1 修订待重跑）
+## 六、M3a-1：可靠自动节点执行（已交付并通过最终四库 CI）
 
 M3a-1 不扩充 `wf_task`，而是新增可靠执行 Module 的三张表，并把节点访问身份、handler SPI、领取、结果回写和 outbox 接到引擎事务边界上。实体与写入实现分别见 [`WfNodeExecution.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfNodeExecution.cs)、[`WfNodeExecutionAttempt.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfNodeExecutionAttempt.cs)、[`WfOutbox.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfOutbox.cs)、[`WfNodeExecutionStore.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionStore.cs)、[`WfNodeExecutionDispatcher.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionDispatcher.cs)。
 
@@ -513,7 +513,7 @@ TenonAdmin 通过 NuGet 和 CodeFirst 分发，迁移应优先采用可回滚的
 
 验证范围：只有 Webhook `Succeeded` 路径具备完整 dispatcher E2E；其他结果持久化使用 Fake handler 走相同路径。当前工作树中的 Webhook P1 修订及其测试（[`WfWebhookNodeHandlerTests.cs`](../../backend/tests/TenonAdmin.Tests/WfWebhookNodeHandlerTests.cs):125-255）覆盖了 DNS callback fence、发送/响应体读取共用分类、IOException/响应体自超时重试和外部取消传播；未覆盖真实 TLS/HTTP2/chunking/proxy 环境。handler 未预期异常在未来 worker 存在后可能导致租约过期、重复领取的 livelock，兜底策略尚待该轮决定。
 
-四库 CI 证据：[`run 33726264191`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33726264191)，基线为 HEAD `6bc895e`；SQLite `1110/1110`、MySQL `1110/1110`、PostgreSQL `1110/1110`，SQL Server 过滤子集 `118/118`。`contract-drift`、`docker-smoke`、`template-smoke` 同轮通过。该 run 发生在当前工作树这组 Webhook P1 修订之前，因此不能替代最终 CI 证据；必须在这些修订合入后重新运行最终 CI。Task 10 没有 API/DTO 变更。
+最终四库 CI 证据：[`run 33738099310`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33738099310)，HEAD `80f9c72`；SQLite `1116/1116`、MySQL `1116/1116`、PostgreSQL `1116/1116`，SQL Server 过滤子集 `118/118`。`contract-drift`、`docker-smoke`、`template-smoke` 同轮通过；该 run 已包含 DNS callback fence、响应体读取异常分类、外部取消与资源释放的最终 P1/P2 修订。Task 10 没有 API/DTO 变更。
 
 ### M3b
 
