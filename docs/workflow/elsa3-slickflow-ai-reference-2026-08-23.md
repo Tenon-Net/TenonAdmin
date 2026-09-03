@@ -11,7 +11,7 @@
 2. **Elsa 当前主仓是 Elsa Workflows 3。** 固定 commit 的核心源码面向 `net8.0;net9.0;net10.0`，仓库许可证为 MIT。该 commit 位于 3.8 release-candidate 之后的主线开发状态；官方 NuGet 当前稳定版仍是 3.7.1，因此不能把该 commit 简写成一个已发布的“3.8 正式版”。
 3. **Elsa AI 是 authoring/diagnostics copilot，不是运行时业务审批。** 它为工作流查询、诊断、创建设计稿和更新设计稿提供 AI 工具与提案治理；提案写入独立存储，不直接持久化工作流定义。源码中没有 AI 自动同意/拒绝业务审批任务的运行时活动。
 4. **Slickflow 有真正参与流程运行的 LLM/RAG/Agent 节点，但没有内置“AI 审批”。** AI 节点把模型响应写成流程变量；人工审批仍由 `ApprovalStatus`、任务完成和通过率逻辑处理。README/Wiki 中的 `confidence → human review`、`ApprovalDecisionAgent`、Human-in-the-Loop 是组合或文档示例，不是当前固定源码已经实现的内置路由或审批语义。
-5. TenonAdmin.Workflow 最值得吸收的是：Elsa 的 provider/tool/proposal 安全边界，以及 Slickflow 的 AI 节点、工具适配器和规则后处理思路。M3 应同时交付可靠自动节点执行层和最小 `AI Decision Node` 纵切；模型只生成 proposal，服务端 schema/policy 决定低风险自动放行或转人工，不让 LLM 直接调用同意/拒绝。RAG、Agent 和设计 Copilot 后置。
+5. TenonAdmin.Workflow 最值得吸收的是：Elsa 的 provider/tool/proposal 安全边界，以及 Slickflow 的 AI 节点、工具适配器和规则后处理思路。M3a-1 已交付可靠自动节点执行内核；`AI Decision Adapter` 属于后续 M3b，模型只生成 proposal，服务端 schema/policy 决定低风险自动放行或转人工，不让 LLM 直接调用同意/拒绝。RAG、Agent 和设计 Copilot 后置。
 
 ## 1. 固定基线、版本与许可证
 
@@ -198,77 +198,103 @@ Slickflow 把 AI 作为流程节点类型：[`AIServiceTypeEnum.cs#L12-L33`](htt
 ### 4.4 目标架构：一个可靠执行 Module，AI 只是 Adapter
 
 ```text
-Workflow Token/Agenda
-  → Reliable Automatic Node Execution Module
-      → WebhookNodeHandler Adapter
-      → FakeNodeHandler Adapter
-      → AiDecisionNodeHandler Adapter
-          → Context/Evidence Assembler
-          → Model Provider Adapter
-          → JSON Schema Validator
-          → Deterministic Approval Policy
-  → 原子保存 result / variables / history / outbox
+WfNodeExecution
+  → tx1: ClaimAsync（lease + fence + attempt）
+  → 事务外读取快照并调用 IWorkflowNodeHandler
+  → NodeExecutionCompletedCmd
+      → tx2: WorkflowEngine
+          → id + fence + Running CAS
+          → attempt + execution result + token/history/outbox
   → 继续流程或创建人工任务
 ```
 
-外部只暴露自动节点执行 Interface；provider、Prompt、RAG、tool calling、schema 修复和 policy 编排都藏在 AI Adapter 的 Implementation 内。这样删除该 Module 时，attempt、deadline、重试、fence、审计和故障恢复复杂度会重新散落到每一种机器节点，说明它具备足够 Depth；Webhook、AI 和测试 fake 共用后，产生真实 Leverage 与 Locality。
+当前交付的是这条可靠执行内核及节点 handler SPI：execution 的稳定身份、领取租约、fence、attempt、结果分类和终态 outbox 都在同一条装配链上。远程 handler 不持有工作流数据库事务；引擎只接收显式结果并负责状态推进。Webhook 是可替换的首个真实 handler，Fake handler 用于契约验证，AI 仍只是未来可接入的 Adapter，不属于内核本身。
+
+这不是一个已经接入生产流程的 worker 闭环：当前没有生产代码创建 `wf_node_execution` 行，也没有生产 worker 调用 dispatcher。`EnterNodeOp` 的 Webhook 接线与后台 worker 留在 Task 8b/后续里程碑；因此本节描述的是已验证的执行内核边界，不把未交付的调度入口写成现成功能。实现锚点为 [`WfNodeExecutionDispatcher`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionDispatcher.cs)（第 6–101 行）、[`WorkflowEngine.BeginNodeExecutionCompletedAsync`](../../backend/src/TenonAdmin.Workflow/Engine/WorkflowEngine.cs)（第 1182–1314 行）和 [`WorkflowSetup`](../../backend/src/TenonAdmin.Workflow/WorkflowSetup.cs)（第 67–75 行）。
 
 ### 4.5 自动节点 Interface 与结果语义
 
-后续实现任务可以从下面的最小 Interface 起步，命名可随仓内规范调整，但语义不可拆散：
+已交付的 SPI 以节点类型枚举分发，实际签名如下；不要把取消另造为结果枚举成员：
 
 ```csharp
 public interface IWorkflowNodeHandler
 {
-    string NodeType { get; }
+    WfNodeType NodeType { get; }
 
-    ValueTask<WfNodeExecutionResult> ExecuteAsync(
-        WfNodeExecutionContext context,
-        CancellationToken cancellationToken);
+    Task<WfNodeExecutionResult> ExecuteAsync(WfNodeExecutionContext context, CancellationToken cancellationToken);
 }
 ```
 
-- `WfNodeExecutionContext` 只包含不可变的租户/组织、流程定义版本、实例、token、节点配置快照、变量/证据快照、`ExecutionKey`、attempt、deadline；不泄漏 SqlSugar entity、数据库 session 或模型 SDK 类型。
-- `WfNodeExecutionResult` 只能是 `Succeeded`、`RetryableFailure`、`ManualFallback`、`TerminalFailure`/`Cancelled` 等显式结果；handler 返回结果，不直接推进 token、写任务状态或自行提交数据库事务。
-- `AiDecisionNodeHandler` 是这个 Seam 上的 Adapter。内部 provider Seam 至少有一个真实 OpenAI-compatible Adapter 和一个 deterministic fake Adapter 后再固定；不要先复制 Slickflow 的字符串 factory。
-- AI 输出变量使用版本化 schema，规则/policy 读取结构化字段，不从自然语言中二次猜测。
+- `WfNodeExecutionContext` 是 init-only 属性的快照容器，由 dispatcher 从 instance、token、definition version 和模型 JSON 组出，包含 `ExecutionKey`、节点身份、组织、`BusinessKey`、节点配置、变量、attempt 和绝对 `DeadlineAtUtc`；不包含 SqlSugar entity、数据库 session、`ISqlSugarClient` 或模型 SDK 类型。`NodeProps` 仍是可变对象，因此这里的 immutability 不是深层类型约束；dispatcher 独立反序列化模型，确保 handler 不共享引擎正在使用的活动模型树。实现见 [`IWorkflowNodeHandler.cs`](../../backend/src/TenonAdmin.Workflow/Abstractions/IWorkflowNodeHandler.cs)（第 81–128 行）和 [`WfNodeExecutionDispatcher.BuildContextAsync`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionDispatcher.cs)（第 110–176 行）。
+- `WfNodeExecutionResultType` 只有 `Succeeded`、`RetryableFailure`、`ManualFallback`、`TerminalFailure` 四类。`Cancelled` 是 `WfNodeExecutionStatus` 的行状态，不是 handler 返回值；外部取消通过 `CancellationToken`/`OperationCanceledException` 传播，实例或 token 已被撤销时由引擎丢弃迟到结果并落 `Cancelled`。
+- handler 只返回结果，不推进 token、不写任务状态、不自开数据库事务。`WfNodeExecutionResult` 的 `OutputJson`、`Summary`、`ErrorCode`、`RetryAfter` 由四个静态工厂约束其语义，随后投影到 attempt 和 execution 的扁平字段。
+- 可替换性是注册顺序契约：消费者先注册同一 `NodeType` 的实现，dispatcher 用 `GetServices<IWorkflowNodeHandler>()` 的首个匹配项；内置 Webhook 通过 `TryAddEnumerable` 留在后面作为 fallback。消费者也可以继承非 `sealed` 的 `WebhookNodeHandler` 覆写单步。AI 若接入，只能占据这个 Adapter Seam，不能进入核心状态机。
+
+#### Webhook Adapter 的已定规则
+
+`WebhookNodeHandler` 是当前唯一的生产实现代码，配置字段只有 URL、HTTP method、headers、单次 timeout 和 `onFailure`。method 缺省为 `POST`，允许 `GET/POST/PUT/PATCH/DELETE/HEAD`；URL、header 及 SSRF/CIDR 安全围栏复用 `JobHttpFence`，且拒绝 `Host`、`Content-Length` 和含控制字符的 header。timeout 缺省 30 秒并钳制到 `[1,120]`，同时受 context 的绝对 deadline 限制。实现见 [`WebhookNodeHandler.cs`](../../backend/src/TenonAdmin.Workflow/Providers/WebhookNodeHandler.cs)（第 43–105 行）和 [`WfNode.cs`](../../backend/src/TenonAdmin.Workflow/Schema/WfNode.cs)（第 81–117 行）。
+
+对非 `GET/HEAD` 请求，出站 body 的逻辑字段**恰好八个**，没有 `payloadVersion`：
+
+```json
+{
+  "executionKey": "0123456789abcdef...",
+  "instanceId": 1001,
+  "tokenId": 2001,
+  "nodeVisitId": 3001,
+  "nodeId": "notify",
+  "definitionVersionId": 4001,
+  "businessKey": "order-1001",
+  "attempt": 1
+}
+```
+
+实现按 `executionKey`、`instanceId`、`tokenId`、`nodeVisitId`、`nodeId`、`definitionVersionId`、`businessKey`、`attempt` 的顺序构造对象，并使用 `WfModelJson.Options` 序列化；因此可选空值遵循 `WhenWritingNull`，对应 JSON 键省略而不是写成 `null`。body 不带变量全文，也没有当前尚未定义的 payload 版本字段。源码为 [`WebhookNodeHandler.BuildRequestBody`](../../backend/src/TenonAdmin.Workflow/Providers/WebhookNodeHandler.cs)（第 154–173 行）和 [`WfModelJson.CreateOptions`](../../backend/src/TenonAdmin.Workflow/Schema/WfModel.cs)（第 59–69 行）。
+
+状态码和异常按“稍后原样重发是否可能成功”分类：2xx 为 `Succeeded`；408、423、425、429 及除 501 外的 5xx，加网络异常和 handler 自己的 HTTP timeout，为 `RetryableFailure`；3xx 不跟随重定向，501 和其余大多数 4xx 为 `TerminalFailure`。`JobHttpFenceBlockedException` 标记 DNS 解析结果全部命中围栏，即使它被包在嵌套的 `HttpRequestException` 中也仍判为安全围栏 terminal。发送请求与读取响应 body 共用同一分类边界：body 自身的 timeout、`HttpRequestException` 和 `IOException` 都是 `RetryableFailure`；外部 cancellation 仍原样传播，不伪装成业务结果。SSRF/安全围栏和其他配置错误在建请求阶段即为 terminal，不开 socket。`Retry-After` 只在 retryable response 上读取，同时支持 delta-seconds 和 HTTP-date；只有 `(0,24h]` 被引擎接受，越界或解析失败回退到指数退避。`onFailure=manual` 只把 terminal 转为 `ManualFallback`，不把 retryable 转人工；重试预算耗尽由引擎独立判定，manual 配置不接管或重置该分支。分类实现见 [`WebhookNodeHandler.ClassifyStatus`](../../backend/src/TenonAdmin.Workflow/Providers/WebhookNodeHandler.cs)（第 175–219 行）、[`WorkflowEngine.ResolveRetryDelay`](../../backend/src/TenonAdmin.Workflow/Engine/WorkflowEngine.cs)（第 1445–1459 行）和 [`WebhookNodeHandler.ApplyFailureAction`](../../backend/src/TenonAdmin.Workflow/Providers/WebhookNodeHandler.cs)（第 234–246 行）；DNS 围栏类型见 [`JobHttpFence.cs`](../../backend/src/TenonAdmin.Services/Jobs/JobHttpFence.cs)（第 7–8、116–122 行）。
 
 ### 4.6 持久化与恢复模型
 
-概念数据模型如下，具体表名留给实现需求定稿：
+本轮已落地的持久化模型如下；AI 专属 proposal/decision 表和模型字段不在本轮交付范围内：
 
 | 记录 | 必要字段 | 作用 |
 | --- | --- | --- |
-| `WfNodeExecution` | tenant/org、instance、token、node、definitionVersion、ExecutionKey、status、attempt、deadline、lease/fence、nextRetryAt、inputHash、outputHash | 每个机器节点的一次稳定逻辑执行；唯一键防止重复推进 |
-| `WfNodeExecutionAttempt` | executionId、attemptNo、provider/model/prompt/schema/policyVersion、started/ended、token/cost、result/error 摘要 | 保留每次真实外部调用，不把重试覆盖掉 |
-| `WfAiDecision` | executionId、proposal JSON、schema 校验、policy outcome、confidence、risk/evidence refs、人工推翻结果 | AI 决策审计、评测和后续优化事实源 |
-| `WfOutbox` | executionId、messageType、payloadHash、status、retry | 结果提交后可靠触发通知或外部副作用 |
+| `WfNodeExecution` | `ScopeKey`、instance、token、`NodeVisitId`、node、definition version、`ExecutionKey`、status、`AttemptCount`、lease owner/expiry、`Fence`、`NextRetryAtUtc` | 一个稳定逻辑 execution；`ExecutionKey` 唯一，防止重复推进 |
+| `WfNodeExecutionAttempt` | `ExecutionId`、`AttemptNo`、started/ended、result type、输出 hash/摘要、错误码/摘要 | append-only 保留每个已返回或 dispatcher 合成的结果；该行不保证发生过网络调用 |
+| `WfHistory` | `EventType`、token/node visit、`Sequence`、`PayloadJson`、`PayloadVersion` | 引擎历史与审计；自动节点结果提交和后续 token 操作在同一事务中写入 |
+| `WfOutbox` | `ExecutionId`、`MessageType`、`MessageKey`、全文 `PayloadJson`、status、`AvailableAtUtc` | 终态结果的可靠派发记录；消息键幂等 |
 
-建议状态机：`Pending → Running → Succeeded`；失败可进入 `RetryScheduled → Running`，策略或模型不确定进入 `ManualFallback`，取消/不可恢复错误进入 `Cancelled/Failed`。`ExecutionKey` 至少由租户、实例、token、节点、定义版本构成；同一个逻辑执行允许多次 attempt，但只允许一次结果推进流程。
+`WfExecutionKey.Compute` 的归一化规则是固定契约：`scopeKey` 为 null、空串或纯空白时使用 `"-"` 哨兵，否则只做 `Trim()`；`nodeVisitId` 缺省时同样使用 `"-"` 哨兵；`nodeId` 必填，拒绝 null/空白，做 `Trim()`。`scopeKey` 和 `nodeId` 都保留大小写，不做大小写折叠；两者含换行分隔符都直接拒绝。随后按 `scopeKey`、`instanceId`、`tokenId`、`nodeVisitId`、`nodeId`、`definitionVersionId` 固定顺序，以换行拼接后做 SHA-256，输出小写 hex。`wf_node_execution` 在 `ExecutionKey` 上建唯一索引。源码见 [`WfExecutionKey.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfExecutionKey.cs)（第 20–59 行）和 [`WfNodeExecution.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfNodeExecution.cs)（第 33–45 行）。
 
-固定执行时序：
+行状态只有 `Pending`、`Running`、`Succeeded`、`RetryScheduled`、`ManualFallback`、`Cancelled`、`Failed`。领取用短事务条件更新：`Pending`、到期的 `RetryScheduled`，或租约过期的 `Running` 才可领取；成功领取同时写 lease owner/expiry、`Fence + 1` 和 `AttemptCount + 1`。结果回写必须满足 `id + fence + Running` 三项 CAS；影响行数不是 1 就拒绝迟到结果。实现见 [`WfNodeExecutionStatus`](../../backend/src/TenonAdmin.Workflow/Entities/WfEnums.cs)（第 257–305 行）和 [`WfNodeExecutionStore.ClaimAsync`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionStore.cs)（第 35–82 行）。
 
-1. 短事务创建/领取 execution，CAS 更新 lease/fence 后提交；
-2. 事务外构建已授权证据快照并调用 provider，传 deadline、cancellation 和可用的 provider idempotency key；
-3. schema 校验失败不尝试从自然语言直接推进审批；可有限修复一次，仍失败则 `ManualFallback`；
-4. 服务端 policy 根据 proposal、流程配置和权限作确定性裁决；
-5. 短事务用 fence/CAS 原子保存 attempt、proposal、变量、历史、outbox，并推进 token 或创建人工任务；
-6. worker 崩溃后可重新领取。允许模型调用偶发重复，但状态副作用和流程推进必须幂等。
+固定执行时序已由 dispatcher 和引擎分成两段事务：
+
+1. tx1 只在事务内领取 execution；
+2. 提交后读取 instance/token/definition/model 快照，在无活动数据库事务的情况下调用 handler；
+3. handler 通过 `NodeExecutionCompletedCmd` 带回领取时的 `Fence` 和结果；
+4. tx2 先做 `id + fence + Running` 回写，再 append attempt；根据结果写 execution 状态，并把 token 推进、必要的历史和终态 outbox 放进同一引擎事务。`RetryScheduled` 不是终态，不入队 outbox；
+5. lease 过期后允许新 owner 重新领取，旧 owner 的结果因 fence/CAS 被拒。故障恢复依赖表状态，不依赖进程内内存。
+
+attempt 只追加不更新/删除，`AttemptNo` 直接取领取后的 `AttemptCount`。每个 handler 已返回的结果，或 dispatcher 在缺少 handler 时合成的结果，各落一行 attempt；如果 handler 在返回结果前崩溃或被外部取消，则 tx2 不启动，不写 attempt，也不表示发生过网络调用。outbox 的 `MessageKey` 为 `{ExecutionKey}:{MessageType}`，有唯一索引并由 `WfOutboxStore.EnqueueAsync` ensure-insert；`WfModelJson.Options` 的 `WhenWritingNull` 会省略空 payload 属性，不会序列化成 `null`。`WfHistory.PayloadVersion` 是永久语义：对仍在做父表迁移、首次加入该列的环境，`SugarColumn(DefaultValue = "0")` 在加列/回填阶段给存量行 legacy 0；如果父表迁移已经加过该列，之后再补写 `DefaultValue` 不会追溯性地应用，也不能借此重写旧 history。新建 `WfHistory` 行由 CLR 初始化器得到 1；读取必须按 `EventType + PayloadVersion` 解释，不能改写 append-only 的旧 history。对应源码为 [`WfNodeExecutionAttemptStore`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionAttemptStore.cs)（第 27–66 行）、[`WfOutboxStore`](../../backend/src/TenonAdmin.Workflow/Engine/WfOutboxStore.cs)（第 21–64 行）、[`WfHistory`](../../backend/src/TenonAdmin.Workflow/Entities/WfHistory.cs)（第 80–87 行）和 [`WfModelJson`](../../backend/src/TenonAdmin.Workflow/Schema/WfModel.cs)（第 41–69 行）。
+
+`WfOutboxStatus` 依次为 `Pending`、`Dispatching`、`Dispatched`、`Failed`。当前只实现入队：终态结果写入 `Pending`；消费者的领取、可见性超时重领、重试退避、`Dispatched`/`Failed` 终态转换和后台扫描仍是后续工作。状态定义见 [`WfEnums.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfEnums.cs)（第 308–340 行），实体与入队实现见 [`WfOutbox.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfOutbox.cs)（第 46–98 行）和 [`WfOutboxStore.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfOutboxStore.cs)（第 21–64 行）。
 
 ### 4.7 AI 审批安全不变量
 
-1. 模型输出永远不能直接修改 `WfTask`、`WfToken` 或调用 Approve/Reject/CompleteTask。
-2. V0 只允许“显式授权场景下的低风险自动放行”；AI 建议拒绝、低置信度、风险标记、证据不足和任何异常全部转人工，不自动拒绝。
-3. 自动放行必须同时满足：流程版本显式启用、租户 policy 允许、schema 有效、confidence 达标、无禁止风险、证据可追溯、execution fence 有效。
-4. Prompt、模型和 policy 都版本化；回放使用已保存 proposal + policy version，不重新调用模型伪造历史确定性。
-5. RAG 只返回调用者有权限读取的证据；保存引用和 hash，敏感正文按策略脱敏或不落审计。
-6. Agent 工具首批只读；写工具必须单独声明危险度、权限、租户、幂等和人工确认策略。审批写命令不注册为模型可调用工具。
-7. Provider 密钥不进流程定义、变量或日志；供应商 SDK 与配置只存在于 Adapter。
-8. 自动放行默认关闭。内核只交付 shadow mode 机制、指标采集与审计视图；开关按流程定义显式开启，放行阈值由消费者部署在自己的数据上校准，内核不提供“开箱即用”的阈值默认值。
+本轮先把 AI 仍是 Adapter 的边界落到可靠执行内核上：
+
+1. 任何 handler 都不能直接修改 `WfTask`、`WfToken` 或调用 Approve/Reject/CompleteTask；只能返回四类显式结果。结果能否推进流程由引擎的 fence/CAS 和状态机决定。
+2. 外部调用不在数据库事务中执行；取消传播、lease 到期和迟到结果由 dispatcher/引擎处理，不交给模型或 provider 自行解释。
+3. Webhook 的 URL、header、方法和超时先经过既有 `JobHttpFence`；SSRF/安全围栏或配置错误在开 socket 前返回 terminal，不能靠重试掩盖配置缺陷。
+4. `WebhookOnFailure = manual` 只把 `TerminalFailure` 转为 `ManualFallback`，不把网络/超时/限流这类 `RetryableFailure` 转成人工；重试预算耗尽由引擎独立判定，manual 不接管、重置或绕过该分支。
+5. AI 的 proposal、schema、policy、证据权限、shadow mode、人工兜底和阈值校准仍是 M3b 的未来 Adapter 责任；本轮没有 AI Decision 实现、设计 UI 或 API/DTO 变更。将来接入时，模型不得成为审批权威，自动放行也不能由模型自报 confidence 单独决定。
 
 ### 4.8 验收线与产品指标
 
-工程验收至少覆盖：同一 `ExecutionKey` 串行/并发重放只推进一次；worker 在调用前后崩溃可恢复；远程调用期间无工作流数据库长事务；无效 JSON、超时、限流、低置信度稳定转人工；provider fake 可覆盖成功/重试/人工 fallback；四库上的 execution 唯一约束、CAS/fence、事务回滚和 outbox 契约一致；跨租户证据与工具调用被拒绝。
+Round 46 的四库 CI 证据为 run [`33726264191`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33726264191)，HEAD `6bc895e`：SQLite `1110/1110`、MySQL `1110/1110`、PostgreSQL `1110/1110`，SQL Server 过滤集 `118/118`；`contract-drift`、`docker-smoke`、`template-smoke` 也为绿色。相关契约测试覆盖执行键、claim/fence、attempt、dispatcher、outbox、Webhook 分类与可替换注册，文件见 `backend/tests/TenonAdmin.Tests/WfExecutionKeyTests.cs`、`WfNodeExecutionClaimTests.cs`、`WfNodeExecutionAttemptTests.cs`、`WfNodeExecutionDispatcherTests.cs`、`WfOutboxTests.cs`、`WfWebhookNodeHandlerTests.cs` 和 `WorkflowReplaceabilityTests.cs`。该 run 早于当前 worktree 的最终 Webhook P1 修复，因此不能作为 DNS callback fence、body read 分类和相关取消边界的 CI 证据；最终 CI rerun pending。
+
+这些测试证明的是内核契约，不等于生产闭环已上线：没有生产代码创建 `wf_node_execution`，没有生产 worker 调用 dispatcher；`EnterNodeOp` 的 Webhook wiring 与 worker 仍是 Task 8b/后续工作。只有 Webhook `Succeeded` 走过完整 dispatcher E2E，其他结果的持久化路径使用 Fake handler。当前 worktree 已修复 DNS callback fence 的嵌套异常识别、body read 的 timeout/HTTP/IO 分类和外部取消传播，但真实 DNS rebinding callback E2E 仍未覆盖；真实 TLS/HTTP2/chunking/proxy 也未覆盖。`MessageType`/`MessageKey` 的大小写行为仍取决于数据库 collation，尚无统一 normalization 决定。`MaxAttempts` 虽有字段和判定，当前没有生产来源赋值，不能宣称重试预算已成为产品配置；未来 worker 上线前还必须决定未知 handler exception 的兜底，否则可能在 `Running` 租约反复过期后形成 livelock。M3a-2 的 Webhook 设计 UI 同样未交付。
 
 产品指标不再只看“支持多少节点”，而看人工触达率、平均审批时长、自动放行覆盖率、人工推翻率、错放/逃逸风险率、schema 失败率、fallback 率、provider 延迟与单次成本。首版必须有 shadow mode：只记录 AI proposal，不改变路由；达到场景级评测阈值后再打开低风险自动放行。
 
@@ -280,8 +306,8 @@ public interface IWorkflowNodeHandler
 | --- | --- | --- |
 | M2b | 不开发 AI。完成超时与通知可观测性。 | AI 失败最终仍要安全回退到人工/超时链路。 |
 | M2c | 不开发 AI。完成请求幂等、operation receipt 与多数据库契约测试。 | 未来任何自动动作都必须先有可靠的幂等与恢复语义。 |
-| M3a | 做通用可靠自动节点执行 Module，以 Webhook/测试 fake 为首批 Adapter。增加稳定执行键、attempt、deadline、retry、fence、结构化结果、变量/历史落库和 node-handler SPI。 | 这是 AI、Webhook 和其他外部节点共用的基石；先证明真实 Seam。 |
-| M3b | 同一里程碑交付最小 `AI Decision Node`：OpenAI-compatible + fake Adapter、结构化 proposal、schema/policy、shadow mode、低风险自动放行、人工 fallback、审计与限额。 | AI 处理审批是产品战略，不再作为无承诺的 M3+ 附件；仍通过 Adapter 接入，不污染核心状态机。 |
+| M3a | 已交付可靠自动节点执行内核：稳定 `ExecutionKey`、`WfNodeExecution` 状态机、lease/fence claim、append-only attempt、结构化结果、终态 outbox、dispatcher 和 `IWorkflowNodeHandler` SPI；Webhook handler 与 Fake handler 已用于验证。 | 内核边界和 replaceability 已证明；但没有生产 execution 创建、worker 或 `EnterNodeOp` Webhook wiring，M3a-2 设计 UI 也未交付。 |
+| M3b | 后续再通过 M3a SPI 接入 `AI Decision Adapter`：OpenAI-compatible/fake provider、结构化 proposal、schema/policy、shadow mode、人工 fallback、审计和限额。 | AI 不是本轮交付；它只能作为 Adapter，不能污染核心状态机或直接取得审批权。 |
 | M3+ | 增加证据/RAG Adapter、只读 Agent tools、更多 provider、评测集与灰度策略；设计/诊断 Copilot 最后做。 | 先证明 AI 能可靠减少人工触达，再扩展自主性和设计体验。 |
 
 推荐的最终链路是：
@@ -314,4 +340,4 @@ AI 生成预审 proposal
 | Tenon 最值得借鉴 | 工具策略、provider 隔离、proposal-only、审计 | AI 节点、工具 Adapter、变量输出、确定性规则后处理 |
 | 是否建议直接依赖 | 否 | 否 |
 
-因此，TenonAdmin.Workflow 不需要寻找或复制一个所谓“.NET AI 审批库”。正确路线是 M3a 建成可靠、可插拔的自动节点执行 Seam，M3b 随即交付受约束的 AI Decision Adapter：**AI 提 proposal，服务端作 schema 校验和确定性 policy，低风险可自动放行，其余由人处理。** RAG、Agent 和设计 Copilot 在这块基石稳定后扩展。
+因此，TenonAdmin.Workflow 不需要寻找或复制一个所谓“.NET AI 审批库”。当前已交付的是可靠、可插拔的自动节点执行 Seam；M3b 仍是后续的 AI Decision Adapter：**AI 只能提 proposal，服务端再作 schema 校验和确定性 policy。** RAG、Agent 和设计 Copilot 必须等生产 wiring、场景评测和安全边界明确后再扩展。

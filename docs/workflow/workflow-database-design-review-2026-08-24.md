@@ -1,8 +1,8 @@
 # TenonAdmin.Workflow 数据库字段设计评审
 
 > 文档入口：[`README.md`](./README.md)
-> 日期：2026-08-24
-> 评审基线：`dddf18f047a239c74752dac0879de333f01a9994`
+> 日期：2026-09-03（Round 46，post-CI）
+> 评审基线：`6bc895e`
 > 范围：当前 9 张 `wf_*` 表，以及 M2c、M3a、M3b 对持久化模型的新增要求
 
 ## 一、结论
@@ -15,7 +15,7 @@
 | --- | --- | --- |
 | M1/M2b 人工审批 | 已兼容 | 现有模型足够，任务级 CAS 能防同一待办双批 |
 | M2c 请求幂等与四库终态保护 | 部分兼容 | 需要 operation receipt，并补实例/Token 级并发保护 |
-| M3a Webhook/自动节点 | 尚未兼容 | 需要节点访问身份、execution、attempt、outbox 和 fence |
+| M3a-1 Webhook/自动节点执行内核 | 已交付；四库 CI 基线通过，P1 修订待重跑 | 节点访问身份、execution、attempt、outbox、lease/fence 和 dispatcher 已落地；生产创建与后台 worker 接线仍待后续任务 |
 | M3b AI Decision | 尚未兼容 | 需要独立 AI decision 审计表，不能复用人工意见字段 |
 | 循环/并行网关 | 结构可扩展但未到位 | 多 Token 只是起点，尚缺节点访问、fork/join 身份 |
 
@@ -216,23 +216,11 @@ EndReason
 > **`wf_task` 本身仍然物理删**——它承担的是另一个职责（改派/超时等路径依赖的隐式不变量「终态动作必删活跃 `wf_task`」，见 `ReassignTaskOpBase` 源码注释），与本表的历史留存无关。
 > 落点：`CompleteTaskOp`/`ReturnTaskOp`/`CancelInstanceOp`（删除 `Deleteable<WfTaskActor>()` 调用）。测试：`WfTaskAssignmentHistoryTests.cs`。
 
-### 4.5 Token 缺少节点访问身份
+### 4.5 Token 节点访问身份已落地（M3a-1）
 
-当前 `WfToken` 只有 `InstanceId/NodeId/Status`。即使允许同一实例存在多个 Token，也不能稳定区分：
+`WfToken` 现在保留 `InstanceId/NodeId/Status/Version/NodeVisitId`。`Version` 继续负责 token 级乐观锁；`NodeVisitId` 是一次节点访问的雪花 Id，不与版本号混用。`EnterNodeOp.ExecuteAsync` 在同一条更新中领取 token、生成新的 `NodeVisitId` 并写入 `NodeId`；停留期间的会签、转办和催办只推进 `Version`，不刷新访问 Id（[`WfToken.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfToken.cs):25-51、[`EnterNodeOp.cs`](../../backend/src/TenonAdmin.Workflow/Engine/Operations/EnterNodeOp.cs):27-47）。
 
-- 同一 Token 第一次和第二次进入同一节点；
-- 哪一次节点访问创建了某个任务、抄送或事件；
-- 自动节点恢复时面对的是旧访问还是新访问；
-- 并行分支属于哪次 fork、应在哪次 join 汇合。
-
-建议增加：
-
-```text
-wf_token.NodeVisitId long
-wf_token.Version     int
-```
-
-每次进入新节点时生成新的 `NodeVisitId`，在该节点停留期间保持不变。以下记录复制它：
+以下记录在创建时复制该访问 Id：
 
 ```text
 wf_task.NodeVisitId
@@ -242,47 +230,35 @@ wf_cc.NodeVisitId
 wf_node_execution.NodeVisitId
 ```
 
-`Version` 用于 CAS，`NodeVisitId` 用于稳定身份，两者职责不能混用。将来真正开发并行网关时，再根据已落地语义增加 `ParentTokenId/ForkId` 或独立 join 表。
+`WfNodeExecution.NodeVisitId` 目前可空，以兼容旧行；`ExecutionKey` 对缺失值使用哨兵。并行网关仍未实现，未来再根据真实 fork/join 语义增加 `ParentTokenId/ForkId` 或独立 join 表。
 
-### 4.6 `wf_history` 缺少可靠关联与顺序
+### 4.6 `wf_history` 关联、顺序与载荷版本已落地（M3a-1）
 
-当前事件只有：
+`WfHistory` 当前字段为：
 
 ```text
 InstanceId
 EventType
-NodeId
-PayloadJson
-CreateTime
+NodeId             nullable
+RequestId          nullable
+PayloadJson        nullable
+TokenId            nullable
+NodeVisitId        nullable
+Sequence           int not null
+ActorType
+ActorUserId        nullable
+PayloadVersion     int not null
 ```
 
-人工串行流程尚可使用；出现重复进节点、并行 Token、后台 worker 或 AI 决策后，只靠时间和雪花 ID 难以准确说明事件属于哪一次执行。
+`Sequence` 由 `WfHistorySequence.NextAsync` 在同一事务内推进 `wf_instance.HistorySeq` 后分配，从 1 起；升级前的存量行读到 0。`ActorType` 的旧行也读到 `0 (Unknown)`。当前实体只有实例和事件两个普通索引，没有额外的 `UNIQUE(InstanceId, Sequence)`；顺序唯一性由同事务内的计数器更新保证（[`WfHistory.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfHistory.cs):10-87、[`WfHistorySequence.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfHistorySequence.cs):17-45）。
 
-建议分阶段增加：
+`PayloadVersion` 的语义要特别区分两个默认值：本次提交之后首次加列的迁移使用 `SugarColumn(DefaultValue = "0")`，所以该次迁移产生的 legacy 行读为 `0`；如果某个环境已经在父版本中加过这列，则保留数据库现有值，不用本规则重写。新建 `WfHistory` 实体使用 CLR initializer `= 1`。读取方必须按 `EventType + PayloadVersion` 解释，并同时接受既有值与 new `1`；任何环境都不能重新运行或覆盖 append-only 旧 history。
 
-```text
-TokenId          nullable，兼容实例级事件
-NodeVisitId      nullable，兼容旧数据
-Sequence         实例内单调递增
-ActorType        Human/System/Timeout/AI/Worker
-ActorUserId      nullable
-RequestId        nullable
-PayloadVersion   int not null default 1
-```
+### 4.7 append-only 语义已由写入面收口（M3a-1）
 
-新数据对 `(InstanceId, Sequence)` 建唯一约束。`PayloadJson` 继续承载不同事件的细节，但读取方按 `EventType + PayloadVersion` 解释，不能把不带版本的 JSON 当永久契约。
+`WfHistory` 和 `WfNodeExecutionAttempt` 仍继承 `BaseEntity`，因此保留审计列，但正常写入面只追加：历史由 `WfExecutionContext.AppendHistoryAsync`/`WfHistorySequence` 写入，attempt 只暴露 `WfNodeExecutionAttemptStore.AppendAsync`，没有通用更新/删除路径。attempt 的唯一约束是 `(ExecutionId, AttemptNo)`，重试新增行，不覆盖旧行；输出正文不进 attempt，只保留输出 hash 与最多 512 字符摘要（[`WfNodeExecutionAttempt.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfNodeExecutionAttempt.cs):38-76、[`WfNodeExecutionAttemptStore.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionAttemptStore.cs):27-74）。
 
-### 4.7 append-only 语义目前只靠代码约定
-
-`wf_history` 和未来的 attempt/AI decision 都是只增事实，但当前 `WfHistory` 继承 `BaseEntity`，天然带 `UpdateTime/UpdateUserId/IsDelete`。这不是当前运行错误，却与 append-only 语义不完全一致。
-
-考虑到本项目通过 NuGet + CodeFirst 分发，已有字段的删除和基类替换会扩大消费者升级风险。建议：
-
-- 不删除现有字段；
-- 工作流 Module 不暴露历史记录的通用更新/删除 Interface；
-- 契约测试证明正常命令只追加历史；
-- 新建的 attempt/decision 记录从一开始采用只增写入路径；
-- 管理清理走明确的保留期策略，而不是普通软删除。
+`WfNodeExecution` 是可更新的执行状态表；`WfOutbox` 也是可更新的投递状态机，不应与 append-only 事实表混为一谈。两者都不把 `IsDelete` 当业务状态，保留期清理应走明确策略，而不是普通软删除。
 
 ## 五、M2c：operation receipt
 
@@ -330,73 +306,110 @@ ScopeKey + CommandType + TargetType + TargetId + ActorUserId + RequestKey
 - 相同输入在四库与任何运行时得到同一 `IdentityHash`（快照用例）；
 - SQLite、MySQL、PostgreSQL、SQL Server 使用同一套契约用例。
 
-## 六、M3a：可靠自动节点执行
+## 六、M3a-1：可靠自动节点执行（已交付；CI 基线通过，P1 修订待重跑）
 
-M3a 不扩充 `wf_task`，而新增可靠执行 Module 的持久化记录：
+M3a-1 不扩充 `wf_task`，而是新增可靠执行 Module 的三张表，并把节点访问身份、handler SPI、领取、结果回写和 outbox 接到引擎事务边界上。实体与写入实现分别见 [`WfNodeExecution.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfNodeExecution.cs)、[`WfNodeExecutionAttempt.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfNodeExecutionAttempt.cs)、[`WfOutbox.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfOutbox.cs)、[`WfNodeExecutionStore.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionStore.cs)、[`WfNodeExecutionDispatcher.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionDispatcher.cs)。
 
-### 6.1 `wf_node_execution`
+### 6.1 `wf_node_execution`：一次逻辑执行
 
 ```text
-ScopeKey/CreateOrgId
+ExecutionKey
+ScopeKey
 InstanceId
 TokenId
-NodeVisitId
+NodeVisitId        nullable
 NodeId
+NodeType
 DefinitionVersionId
-HandlerType
-HandlerVersion
-ExecutionKey
 Status
 AttemptCount
-DeadlineAtUtc
-NextRetryAtUtc
-LeaseOwner
-LeaseExpiresAtUtc
+MaxAttempts
+NextRetryAtUtc      nullable
+DeadlineAtUtc       nullable
+LeaseOwner          nullable
+LeaseExpiresAtUtc   nullable
 Fence
-InputHash
-OutputHash
-CompletedTimeUtc
+HandlerType        nullable
+HandlerVersion     nullable
+InputHash           nullable
+OutputHash          nullable
+CompletedTimeUtc    nullable
+ErrorCode          nullable
+Summary            nullable
 ```
 
-`ExecutionKey` 唯一。同一节点访问只允许一个逻辑 execution，但可以产生多次 attempt。稳定身份至少包含组织范围、实例、Token、`NodeVisitId`、节点和定义版本。
+以上是业务字段，另有 `BaseEntity` 的 `Id/CreateTime/CreateUserId/UpdateTime/UpdateUserId/IsDelete`。表约束为：`ExecutionKey` 长度 64，唯一索引名 `uk_wf_node_exec_key`；扫描索引名 `idx_wf_node_exec_scan`，列为 `(Status, NextRetryAtUtc)`。这是新表，字段不设置 `DefaultValue`；`Status` 初始为 `Pending`，`AttemptCount` 与 `Fence` 从 0 开始，`ScopeKey` 必须由 `WfIdentityHash.NormalizeScopeKey` 归一化后落库。
 
-### 6.2 `wf_node_execution_attempt`
+`ExecutionKey` 是固定契约：`scopeKey` 为 null/空串/纯空白时归一化为 `"-"` 哨兵；非空值只做 `Trim()`，保留原大小写。`nodeId` 做 `Trim()`，空白值直接拒绝；`ScopeKey` 或 `nodeId` 含 LF 分隔符也拒绝。缺失的 `NodeVisitId` 使用 `"-"`，存在时与 `InstanceId`、`TokenId`、`DefinitionVersionId` 一样使用不变文化十进制；六个字段严格按 `ScopeKey → InstanceId → TokenId → NodeVisitId → NodeId → DefinitionVersionId` 排列，以 LF 拼接，UTF-8 编码后计算 SHA-256，输出 64 位小写 hex（[`WfExecutionKey.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfExecutionKey.cs):25-59）。同一节点访问只允许一个逻辑 execution，但可以产生多次 attempt。
+
+`Status` 的实际枚举值和状态语义为：
+
+```text
+Pending | Running | Succeeded | RetryScheduled | ManualFallback | Cancelled | Failed
+```
+
+`Succeeded/ManualFallback/Cancelled/Failed` 是终态；`Running` 在租约过期后可自转移为 `Running`。其中 `RetryScheduled` 仅在 `NextRetryAtUtc` 到期后可重新领取。当前实体虽然有 `MaxAttempts`，但生产代码没有为它提供来源；在真实 worker 接线前必须补齐配置/模型来源，不能把它写成已经可用的生产预算。
+
+### 6.2 `wf_node_execution_attempt`：每次调用的追加事实
 
 ```text
 ExecutionId
 AttemptNo
 StartedAtUtc
 EndedAtUtc
-Provider
-Model
-PromptVersion
-SchemaVersion
-PolicyVersion
 ResultType
-OutputSummary
-ErrorCode
-ErrorSummary
-TokenUsage
-Cost
+OutputSummary      nullable
+OutputHash         nullable
+ErrorCode          nullable
+ErrorSummary       nullable
 ```
 
-attempt 必须保留每次真实调用，重试不能覆盖旧记录。输出正文、敏感字段和密钥不直接进入日志；保存必要摘要、hash 和受控引用。
+以上是业务字段，另有 `BaseEntity` 审计字段。`uk_wf_node_exec_attempt_no` 对 `(ExecutionId, AttemptNo)` 建唯一约束；`AttemptNo` 为 1 基，直接取领取后 execution 的 `AttemptCount`，不得在追加时再次加 1。`ResultType` 只有 `Succeeded/RetryableFailure/ManualFallback/TerminalFailure` 四种，输出正文不落库，只写 `OutputHash` 与最多 512 字符摘要；失败/回退写 `ErrorCode/ErrorSummary`。attempt 的口径是“每个已返回或由 dispatcher 合成的结果一行”，不是“每次真实外部调用一行”：无 handler 或开 socket 前的配置错误都能产生一条无网络调用的 attempt；handler 在返回结果前崩溃，或外部取消在返回结果前传播时，不产生 attempt。
 
-### 6.3 `wf_outbox`
+### 6.3 `wf_outbox`：终态通知
 
 ```text
 ExecutionId
 MessageType
 MessageKey
-PayloadJson/PayloadHash
+PayloadJson         nullable
 Status
 AttemptCount
 AvailableAtUtc
-LastError
-CompletedAtUtc
+LastError           nullable
+CompletedAtUtc     nullable
 ```
 
-结果、变量、历史和 outbox 在同一短事务提交。远程调用发生在事务外，worker 使用 lease/fence 防止过期 owner 覆盖新结果。
+以上是业务字段，另有 `BaseEntity` 审计字段。`uk_wf_outbox_message_key` 对 `MessageKey` 建唯一约束；扫描索引名 `idx_wf_outbox_scan`，列为 `(Status, AvailableAtUtc)`。`MessageKey` 由 `{ExecutionKey}:{MessageType}` 派生，`MessageType` 先 trim，不能为空且不得含 `:`；`PayloadJson` 保存完整正文，不用 `PayloadHash` 替代。当前 `MessageType/MessageKey` 的大小写比较依赖数据库 collation，尚未作统一大小写归一化决定。
+
+`WfOutboxStatus` 的四个值是 `Pending`、`Dispatching`、`Dispatched`、`Failed`。当前生产写入面只有 `WfOutboxStore.EnqueueAsync` 插入 `Pending`；`Dispatching` 的领取、`Dispatched`/`Failed` 的回写、重试退避和对应的 CAS 都是未来消费者任务，不能把状态枚举写成已实现的后台派发流程。
+
+`wf_outbox` 不设置 `LeaseOwner/LeaseExpiresAtUtc/Fence`；`AvailableAtUtc` 同时表示可投递时刻和可见性租约，消费者领取次数 `AttemptCount` 作为单调 fence，迟到回写必须用 `WHERE AttemptCount = @myAttemptCount` CAS。这是实体已经定下的消费者契约；领取、重投和实际派发 worker 尚未实现，不能把字段齐全写成消费闭环已经上线。
+
+引擎的执行结果 outbox payload 走 `WfModelJson.Options`；该配置启用 `WhenWritingNull`，所以 null 属性会被省略，不会序列化成 `"key": null`。Webhook 的出站请求体另有固定的 8 个字段：
+
+```text
+executionKey, instanceId, tokenId, nodeVisitId,
+nodeId, definitionVersionId, businessKey, attempt
+```
+
+当前没有 `payloadVersion` 字段；首版按 YAGNI 保持 8 字段，未来若破坏请求契约必须显式版本化。
+
+### 6.4 事务边界与 handler 契约
+
+dispatcher 的执行路径是固定三段（[`WfNodeExecutionDispatcher.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionDispatcher.cs):50-100）：
+
+1. **tx1 领取**：`WfNodeExecutionStore.ClaimAsync` 在 `UseTranAsync` 内执行条件 UPDATE 与读回。领取条件是 `Pending`、到期的 `RetryScheduled`，或租约已过期的 `Running`；领取时写入 lease owner/expiry，同时 `Fence + 1`、`AttemptCount + 1`。
+2. **事务外调用**：读取实例、token、定义版本和节点模型形成只读快照，构造 `IWorkflowNodeHandler` 的 context 后调用 handler。context 不包含 DB session 或 SqlSugar 实体；handler 只返回四种结果，不能推进 token、写任务状态或自行开事务（[`IWorkflowNodeHandler.cs`](../../backend/src/TenonAdmin.Workflow/Abstractions/IWorkflowNodeHandler.cs):81-147）。
+3. **tx2 回写**：`NodeExecutionCompletedCmd` 进入引擎的一条命令一个事务路径。先用 `Id + Fence + Status == Running` CAS 更新 execution；再追加 attempt，并把 execution 结果、token 推进、相关 history 和终态 outbox 原子提交（[`WorkflowEngine.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WorkflowEngine.cs):1196-1389）。CAS 影响行数不是 1 时，整笔 tx2 回滚，旧 owner 的迟到结果不会留下 attempt 或 outbox。
+
+成功沿现有 `TakeTransitionOp` 离开节点；`ManualFallback` 计划人工兜底，但只有节点存在 `assignee` 配置且解析出用户时才创建人工任务；未配置办理人来源或解析出 0 人时，不建任务、不自动放行，execution 保持 `ManualFallback`、token 原地停住（[`WfManualFallbackOp.cs`](../../backend/src/TenonAdmin.Workflow/Engine/Operations/WfManualFallbackOp.cs):17-52）。`RetryScheduled`、`Failed`、`Cancelled` 不推进 token。自动节点生命周期本身不另写一条 history，节点进出和人工兜底沿既有操作写入，失败/重试事实以 attempt 为准。
+
+### 6.5 Webhook 首个 handler 与验证边界
+
+Webhook 配置字段是 `URL/method/headers/timeout/onFailure`。`2xx` 返回 `Succeeded`；`408/423/425/429`、除 `501` 外的 `5xx`，以及网络异常、`HttpRequestException`、`IOException` 和 handler 自身超时返回 `RetryableFailure`；`3xx`（不跟随重定向）、`501` 和其余大多数 `4xx` 返回 `TerminalFailure`。发送请求和读取响应体在同一个分类范围内，因此响应体读取阶段的自超时、`HttpRequestException` 或 `IOException` 也按上述规则重试；其中 `JobHttpFenceBlockedException` 即使包在嵌套的 `HttpRequestException` 中仍识别为 SSRF/安全围栏终态。外部取消令牌直接传播，不转换为业务结果。`onFailure=manual` 只把 `TerminalFailure` 转成 `ManualFallback`，不把 retryable 变成人工；重试预算耗尽由引擎独立判定，manual 配置不接管或重置该分支（[`WebhookNodeHandler.cs`](../../backend/src/TenonAdmin.Workflow/Providers/WebhookNodeHandler.cs):51-119、188-267；[`JobHttpFence.cs`](../../backend/src/TenonAdmin.Services/Jobs/JobHttpFence.cs):7-8、110-135）。除这些明确分类的异常外，handler 没有 `catch (Exception)` 兜底，未预期异常继续逸出。
+
+`Retry-After` 只在 retryable response 上读取，支持 delta-seconds 和 HTTP-date；解析结果必须在 `(0, 24h]`，否则回退到引擎指数退避。消费者可前置注册同 `NodeType` 的 handler，前置实现胜出；内置 `WebhookNodeHandler` 保留为 fallback（[`WorkflowSetup.cs`](../../backend/src/TenonAdmin.Workflow/WorkflowSetup.cs):67-75）。
 
 时间相关的新字段统一采用 UTC 语义。即使 CLR 仍使用 `DateTime`，也要在命名、写入和测试中保证 `Kind/转换` 一致，避免多实例时区和夏令时影响 deadline、lease 与 retry。
 
@@ -433,23 +446,23 @@ CreateTime
 - 回放使用已保存 proposal 和 policy version，不重新调用模型伪造历史；
 - UI 将“系统执行/AI 决策”与“人的审批意见”分区展示，再按时间合并为完整审计视图。
 
-目标 execution/attempt/decision/outbox 模型见 [`elsa3-slickflow-ai-reference-2026-08-23.md` §4.4–§4.8](./elsa3-slickflow-ai-reference-2026-08-23.md#44-目标架构一个可靠执行-moduleai-只是-adapter)。
+目标 execution/attempt/decision/outbox 模型见 [`elsa3-slickflow-ai-reference-2026-08-23.md` §4.4–§4.8](./elsa3-slickflow-ai-reference-2026-08-23.md#_44-目标架构一个可靠执行-moduleai-只是-adapter)。
 
 ## 八、索引与唯一约束
 
-现有索引能覆盖基本页面，但后续实现应按真实查询补以下约束：
+现有索引与 M3a-1 新增约束以实体声明为准。当前关键项如下：
 
 | 表 | 建议索引/约束 | 目的 |
 | --- | --- | --- |
 | `wf_operation_receipt` | `UNIQUE(IdentityHash)` | 请求幂等 |
 | `wf_instance` | `(StarterUserId, Status, CreateTime)` | 我发起的分页与状态筛选 |
-| `wf_history` | `UNIQUE(InstanceId, Sequence)` | 实例内确定性事件顺序 |
+| `wf_history` | `(InstanceId, CreateTime)`、`(EventType)`；无 `UNIQUE(InstanceId, Sequence)` | 时间线与事件筛选；顺序由 `wf_instance.HistorySeq` 在事务内分配 |
 | `wf_his_task` | `(UserId, CreateTime)`、`(InstanceId, CreateTime)` | 已办和详情时间线 |
-| `wf_node_execution` | `UNIQUE(ExecutionKey)`、`(Status, NextRetryAtUtc)` | 防重复推进与 worker 领取 |
+| `wf_node_execution` | `UNIQUE(ExecutionKey)`、`(Status, NextRetryAtUtc)` | 防重复推进与领取扫描 |
 | `wf_node_execution_attempt` | `UNIQUE(ExecutionId, AttemptNo)` | 防 attempt 编号重复 |
 | `wf_outbox` | `UNIQUE(MessageKey)`、`(Status, AvailableAtUtc)` | 可靠派发与扫描 |
 
-办理人和抄送的唯一约束不能只用 `(TaskId, UserId)` 或 `(InstanceId, NodeId, UserId)` 草率实现。连续多级主管允许同一人在不同顺序重复出现，流程也可能再次进入同一节点；应先引入 assignment/node visit identity，再定义稳定唯一键。
+办理人和抄送的既有唯一约束不能只用 `(TaskId, UserId)` 或 `(InstanceId, NodeId, UserId)` 草率改写。连续多级主管允许同一人在不同顺序重复出现，流程也可能再次进入同一节点；`NodeVisitId` 已提供访问身份，但并行 fork/join 的最终唯一键仍留待 M3b/后续网关设计。
 
 ## 九、兼容升级策略
 
@@ -459,10 +472,12 @@ TenonAdmin 通过 NuGet 和 CodeFirst 分发，迁移应优先采用可回滚的
 2. 新增列先 nullable 或带跨数据库一致的默认值；
 3. `Version` 从 `0` 开始，旧行可直接回填；
 4. `CompletedTime` 对旧终态实例可从 `InstanceCompleted` 事件回填，无法确定时保持空；
-5. `NodeVisitId` 对旧历史保持 nullable，对升级后的新节点访问强制生成；
-6. 枚举只追加数值，不重排已有值；
-7. 不重命名或删除已发布字段；淘汰字段先停止写入，再跨版本处理；
-8. 每项约束使用同一套 provider-neutral 契约测试跑四库。
+5. `NodeVisitId` 对旧 token、任务、历史和抄送保持 nullable；升级后新进入节点时由 `EnterNodeOp` 生成，旧 token 不做后台回填；
+6. `wf_history.Sequence`、`ActorType` 和 `PayloadVersion` 的存量默认值通常都是 `0`；`PayloadVersion` 的 `SugarColumn(DefaultValue = "0")` 只适用于本次提交之后环境首次添加该列的迁移。已经在父版本中添加列的环境保留现有值，不重新运行或覆盖 append-only 旧 history。新建 `WfHistory` 实体的 CLR initializer 是 `1`；不要把数据库加列默认值 `0` 改写成 legacy backfill `1`；
+7. M3a-1 三张新表没有存量行升级，不设置 `DefaultValue`；新行按实体初始化值进入 `Pending` 等初始状态；
+8. 枚举只追加数值，不重排已有值；
+9. 不重命名或删除已发布字段；淘汰字段先停止写入，再跨版本处理；
+10. 每项约束使用同一套 provider-neutral 契约测试跑四库。
 
 ## 十、推荐开发顺序
 
@@ -486,12 +501,19 @@ TenonAdmin 通过 NuGet 和 CodeFirst 分发，迁移应优先采用可回滚的
 2. 增加 `AssignedTime/ActivatedTime/StartedTime`；
 3. 修正转办、会签和顺序审批的耗时语义。
 
-### M3a
+### M3a-1（已交付，2026-09-03）
 
-1. 引入 `NodeVisitId`，贯穿 Token、任务、历史、抄送和 execution；
-2. 为 `wf_history` 增加 Token、序号、actor 和 payload version；
-3. 新增 execution、attempt、outbox；
-4. 以 Fake Handler 和 Webhook Handler 验证稳定 execution key、retry、lease/fence 和崩溃恢复。
+1. `NodeVisitId` 已贯穿 token、任务、历史、抄送和 execution；
+2. `wf_history` 已具备 Token、访问 Id、实例序号、actor 和 payload version；
+3. `wf_node_execution`、`wf_node_execution_attempt`、`wf_outbox` 已按 §6 建表；
+4. execution key、retry、lease/fence、attempt 追加、outbox 幂等入队和 `NodeExecutionCompletedCmd` 原子回写已由 [`WfExecutionKeyTests.cs`](../../backend/tests/TenonAdmin.Tests/WfExecutionKeyTests.cs)、[`WfNodeExecutionContractTests.cs`](../../backend/tests/TenonAdmin.Tests/WfNodeExecutionContractTests.cs) 和 [`WfNodeExecutionDispatcherTests.cs`](../../backend/tests/TenonAdmin.Tests/WfNodeExecutionDispatcherTests.cs) 覆盖；
+5. Webhook 是首个真实 handler，Fake handler 覆盖其他结果类型的同一 dispatcher 回写路径。
+
+交付边界：当前没有生产代码在 `EnterNodeOp` 自动创建 `wf_node_execution` 行，也没有生产后台 worker 调用 dispatcher；这两项属于 Task 8b/后续里程碑。Webhook 配置设计 UI 属于 M3a-2，不在本轮数据库交付内。
+
+验证范围：只有 Webhook `Succeeded` 路径具备完整 dispatcher E2E；其他结果持久化使用 Fake handler 走相同路径。当前工作树中的 Webhook P1 修订及其测试（[`WfWebhookNodeHandlerTests.cs`](../../backend/tests/TenonAdmin.Tests/WfWebhookNodeHandlerTests.cs):125-255）覆盖了 DNS callback fence、发送/响应体读取共用分类、IOException/响应体自超时重试和外部取消传播；未覆盖真实 TLS/HTTP2/chunking/proxy 环境。handler 未预期异常在未来 worker 存在后可能导致租约过期、重复领取的 livelock，兜底策略尚待该轮决定。
+
+四库 CI 证据：[`run 33726264191`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33726264191)，基线为 HEAD `6bc895e`；SQLite `1110/1110`、MySQL `1110/1110`、PostgreSQL `1110/1110`，SQL Server 过滤子集 `118/118`。`contract-drift`、`docker-smoke`、`template-smoke` 同轮通过。该 run 发生在当前工作树这组 Webhook P1 修订之前，因此不能替代最终 CI 证据；必须在这些修订合入后重新运行最终 CI。Task 10 没有 API/DTO 变更。
 
 ### M3b
 
@@ -506,12 +528,12 @@ TenonAdmin 通过 NuGet 和 CodeFirst 分发，迁移应优先采用可回滚的
 
 ## 十一、最终判断
 
-现有模型的核心方向正确：人工审批状态是持久化事实，定义版本是不可变快照，业务状态留在消费方，AI 通过独立 Adapter 接入。这些决定都应保留。
+现有模型的核心方向正确：人工审批状态是持久化事实，定义版本是不可变快照，业务状态留在消费方，M3a-1 的机器执行通过独立 execution/attempt/outbox 事实链落库，AI 仍通过独立 Adapter 接入。这些决定都应保留。
 
-需要修正的是“有 Token 表就已经兼容所有后续执行”的预期。可靠演进还需要三类身份：
+M3a-1 的可靠执行内核已经交付并通过四库 CI，但不能把它表述成完整的生产自动节点闭环：当前没有生产代码创建 `wf_node_execution` 行，也没有生产 worker 调用 dispatcher；`EnterNodeOp` 的 Webhook 接线和 worker 属于 Task 8b/未来里程碑。可靠演进仍需区分三类身份：
 
 1. **请求身份**：`RequestId/operation receipt`，回答“这是不是同一次用户命令”；
 2. **节点访问身份**：`NodeVisitId`，回答“这是不是同一次流程图访问”；
 3. **机器执行身份**：`ExecutionKey/AttemptNo`，回答“这是不是同一次逻辑执行或同一次外部调用”。
 
-三类身份分开后，人工审批、重试、循环、并行、Webhook 和 AI 才不会互相误判。按本文顺序做增量迁移，当前 9 表可以继续作为稳定地基，无需更换 Workflow Module 的外部 Interface。
+三类身份分开后，人工审批、重试、循环、并行、Webhook 和 AI 才不会互相误判。按本文的增量迁移与接线边界继续推进，当前 9 表加 M3a-1 三张可靠执行表可以作为稳定地基，无需更换 Workflow Module 的外部 Interface。
