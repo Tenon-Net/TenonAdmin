@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -180,6 +181,133 @@ public class WfWebhookNodeHandlerTests
         Assert.Equal(48031, result.ErrorCode);
         Assert.False(string.IsNullOrEmpty(result.Summary));
         Assert.Contains("boom-connection-refused", result.Summary);
+    }
+
+    [Fact]
+    public async Task The_real_dns_fence_callback_is_a_terminal_config_failure_when_wrapped()
+    {
+        using var fenceHandler = TenonAdmin.Services.JobHttpFence.CreateHandler(new AdminJobsHttpOptions
+        {
+            BlockedCidrs = ["127.0.0.0/8", "::1/128"],
+        });
+        using var initialRequest = new HttpRequestMessage(HttpMethod.Get, "http://localhost/");
+        var context = (SocketsHttpConnectionContext)Activator.CreateInstance(
+            typeof(SocketsHttpConnectionContext), BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null, [new DnsEndPoint("localhost", 80), initialRequest], culture: null)!;
+        var callbackException = await Record.ExceptionAsync(async () =>
+            await fenceHandler.ConnectCallback!(context, CancellationToken.None));
+
+        var fence = Assert.IsType<TenonAdmin.Services.JobHttpFenceBlockedException>(callbackException);
+        var transport = FakeTransport.Throwing(new HttpRequestException("connect failed", fence));
+        var result = await NewHandler(transport).ExecuteAsync(Ctx(Props()), CancellationToken.None);
+
+        Assert.Equal(WfNodeExecutionResultType.TerminalFailure, result.Type);
+        Assert.Equal(48030, result.ErrorCode);
+        Assert.Contains("47009", result.Summary);
+    }
+
+    [Fact]
+    public async Task A_body_read_timeout_becomes_a_retryable_failure()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stream = new TestStream(async (_, ct) =>
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct);
+            return 0;
+        });
+        var transport = FakeTransport.Response(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(stream),
+        });
+        var task = NewHandler(transport).ExecuteAsync(
+            Ctx(new WfNodeProps { WebhookUrl = DefaultUrl, WebhookTimeoutSeconds = 1 }), CancellationToken.None);
+        await started.Task;
+
+        var result = await task;
+
+        Assert.Equal(WfNodeExecutionResultType.RetryableFailure, result.Type);
+        Assert.Equal(48031, result.ErrorCode);
+        Assert.True(stream.IsDisposed);
+    }
+
+    [Fact]
+    public async Task An_io_failure_while_reading_the_body_is_retryable_with_diagnostic()
+    {
+        var stream = new TestStream((_, _) => throw new IOException("body-read-failed"));
+        var transport = FakeTransport.Response(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(stream),
+        });
+        var result = await NewHandler(transport).ExecuteAsync(Ctx(Props()), CancellationToken.None);
+
+        Assert.Equal(WfNodeExecutionResultType.RetryableFailure, result.Type);
+        Assert.Equal(48031, result.ErrorCode);
+        Assert.Contains("body-read-failed", result.Summary);
+        Assert.True(stream.IsDisposed);
+    }
+
+    [Fact]
+    public async Task External_cancellation_during_body_read_escapes_without_a_result()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stream = new TestStream(async (_, ct) =>
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct);
+            return 0;
+        });
+        var transport = FakeTransport.Response(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(stream),
+        });
+        using var cts = new CancellationTokenSource();
+        var task = NewHandler(transport).ExecuteAsync(Ctx(Props()), cts.Token);
+        await started.Task;
+        cts.Cancel();
+
+        var ex = await Record.ExceptionAsync(() => task);
+
+        Assert.IsAssignableFrom<OperationCanceledException>(ex);
+        Assert.True(stream.IsDisposed);
+    }
+
+    [Fact]
+    public async Task Invalid_post_header_is_rejected_before_body_build_and_send()
+    {
+        var transport = FakeTransport.Status(HttpStatusCode.OK);
+        var handler = new BuildRequestProbe(new HttpClient(transport), new AdminJobsOptions(), TimeProvider.System);
+        var props = new WfNodeProps
+        {
+            WebhookUrl = DefaultUrl,
+            WebhookHeaders = new Dictionary<string, string?> { ["Content-Length"] = "1" },
+        };
+
+        var result = await handler.ExecuteAsync(Ctx(props), CancellationToken.None);
+
+        Assert.Equal(WfNodeExecutionResultType.TerminalFailure, result.Type);
+        Assert.Equal(48030, result.ErrorCode);
+        Assert.False(handler.BodyBuilt);
+        Assert.Equal(0, transport.SendCount);
+    }
+
+    [Fact]
+    public async Task A_successful_body_read_disposes_the_response_stream()
+    {
+        var stream = new TestStream((buffer, _) =>
+        {
+            "ok"u8.CopyTo(buffer.Span);
+            return ValueTask.FromResult(2);
+        });
+        var transport = FakeTransport.Response(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(stream),
+        });
+
+        var result = await NewHandler(transport).ExecuteAsync(Ctx(Props()), CancellationToken.None);
+
+        Assert.Equal(WfNodeExecutionResultType.Succeeded, result.Type);
+        Assert.True(stream.IsDisposed);
     }
 
     [Fact]
@@ -497,6 +625,8 @@ public class WfWebhookNodeHandlerTests
 
         public static FakeTransport Throwing(Exception ex) => new((_, _) => throw ex);
 
+        public static FakeTransport Response(HttpResponseMessage response) => new((_, _) => Task.FromResult(response));
+
         public static FakeTransport Hanging() => new(async (_, ct) =>
         {
             await Task.Delay(Timeout.Infinite, ct);
@@ -509,6 +639,46 @@ public class WfWebhookNodeHandlerTests
             LastRequest = request;
             OnSend?.Invoke();
             return await handle(request, cancellationToken);
+        }
+    }
+
+    private sealed class TestStream(Func<Memory<byte>, CancellationToken, ValueTask<int>> read) : Stream
+    {
+        public bool IsDisposed { get; private set; }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => 0;
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => read(buffer, cancellationToken);
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) IsDisposed = true;
+            base.Dispose(disposing);
+        }
+        public override ValueTask DisposeAsync()
+        {
+            IsDisposed = true;
+            Dispose(true);
+            GC.SuppressFinalize(this);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class BuildRequestProbe(HttpClient client, AdminJobsOptions jobs, TimeProvider time)
+        : WebhookNodeHandler(client, jobs, time)
+    {
+        public bool BodyBuilt { get; private set; }
+
+        protected override string BuildRequestBody(WfNodeExecutionContext context)
+        {
+            BodyBuilt = true;
+            return base.BuildRequestBody(context);
         }
     }
 

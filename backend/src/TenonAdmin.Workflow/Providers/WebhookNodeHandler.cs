@@ -79,10 +79,12 @@ public class WebhookNodeHandler(HttpClient client, AdminJobsOptions jobs, TimePr
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(timeout);
 
-            HttpResponseMessage response;
+            HttpResponseMessage? response = null;
             try
             {
                 response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                var excerpt = await ReadCappedAsync(response, jobs.Http.MaxResponseLogBytes, cts.Token);
+                return ApplyFailureAction(ClassifyStatus(response, excerpt), onFailure);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -94,15 +96,26 @@ public class WebhookNodeHandler(HttpClient client, AdminJobsOptions jobs, TimePr
             }
             catch (HttpRequestException ex)
             {
+                if (ContainsFenceException(ex))
+                {
+                    return ApplyFailureAction(
+                        WfNodeExecutionResult.TerminalFailure(
+                            WorkflowErrorCode.WebhookConfigInvalid, $"47009 {ex.Message}"),
+                        onFailure);
+                }
                 return ApplyFailureAction(
                     WfNodeExecutionResult.RetryableFailure(WorkflowErrorCode.WebhookTransportFailed, ex.Message),
                     onFailure);
             }
-
-            using (response)
+            catch (IOException ex)
             {
-                var excerpt = await ReadCappedAsync(response, jobs.Http.MaxResponseLogBytes, cts.Token);
-                return ApplyFailureAction(ClassifyStatus(response, excerpt), onFailure);
+                return ApplyFailureAction(
+                    WfNodeExecutionResult.RetryableFailure(WorkflowErrorCode.WebhookTransportFailed, ex.Message),
+                    onFailure);
+            }
+            finally
+            {
+                response?.Dispose();
             }
         }
     }
@@ -124,28 +137,42 @@ public class WebhookNodeHandler(HttpClient client, AdminJobsOptions jobs, TimePr
             throw new AdminException(ErrorCode.JobPropsInvalid,
                 new Dictionary<string, object?> { ["key"] = "method" }, $"不支持的 Webhook 方法:{methodName}");
         }
-        var method = new HttpMethod(methodName);
 
-        var request = new HttpRequestMessage(method, url);
-        if (method != HttpMethod.Get && method != HttpMethod.Head)
-            request.Content = new StringContent(BuildRequestBody(context), Encoding.UTF8, "application/json");
-
-        if (props?.WebhookHeaders is { Count: > 0 } headers)
+        if (props?.WebhookHeaders is { Count: > 0 } headersToValidate)
         {
-            foreach (var (name, value) in headers)
+            foreach (var (name, value) in headersToValidate)
             {
-                JobHttpFence.ValidateHeader(name, value);   // 拦 CRLF/控制字符走私
+                JobHttpFence.ValidateHeader(name, value);
                 if (string.Equals(name, "Host", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(name, "Content-Length", StringComparison.OrdinalIgnoreCase))
                 {
-                    // Host 决定连上之后落到哪个 vhost(IP 围栏管的是连到哪台机,不拒等于围栏漏一格);
-                    // Content-Length 由 TryAddWithoutValidation 写出与实际 body 不符的长度会造成请求走私。
                     throw new AdminException(ErrorCode.JobPropsInvalid,
                         new Dictionary<string, object?> { ["key"] = "headers" }, $"不允许自定义该请求头:{name}");
                 }
-                if (!request.Headers.TryAddWithoutValidation(name, value))
-                    request.Content?.Headers.TryAddWithoutValidation(name, value);
             }
+        }
+
+        var method = new HttpMethod(methodName);
+
+        var request = new HttpRequestMessage(method, url);
+        try
+        {
+            if (method != HttpMethod.Get && method != HttpMethod.Head)
+                request.Content = new StringContent(BuildRequestBody(context), Encoding.UTF8, "application/json");
+
+            if (props?.WebhookHeaders is { Count: > 0 } headers)
+            {
+                foreach (var (name, value) in headers)
+                {
+                    if (!request.Headers.TryAddWithoutValidation(name, value))
+                        request.Content?.Headers.TryAddWithoutValidation(name, value);
+                }
+            }
+        }
+        catch
+        {
+            request.Dispose();
+            throw;
         }
 
         return request;
@@ -245,6 +272,14 @@ public class WebhookNodeHandler(HttpClient client, AdminJobsOptions jobs, TimePr
         return WfNodeExecutionResult.ManualFallback(result.ErrorCode, result.Summary);
     }
 
+    private static bool ContainsFenceException(Exception ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+            if (current is JobHttpFenceBlockedException)
+                return true;
+        return false;
+    }
+
     /// <summary>
     /// 读响应体开头若干字节做摘要,照抄 <see cref="HttpAdminJob"/> 的 <c>ReadCappedAsync</c>——不能
     /// <c>ReadAsStreamAsync()</c> 整体读(一个吐 2GB 的端点会把宿主打 OOM),且必须净化控制字符
@@ -253,7 +288,7 @@ public class WebhookNodeHandler(HttpClient client, AdminJobsOptions jobs, TimePr
     private static async Task<string> ReadCappedAsync(HttpResponseMessage response, int maxBytes, CancellationToken cancellationToken)
     {
         if (maxBytes <= 0) return "";
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         var buffer = new byte[maxBytes];
         var read = 0;
         while (read < maxBytes)
