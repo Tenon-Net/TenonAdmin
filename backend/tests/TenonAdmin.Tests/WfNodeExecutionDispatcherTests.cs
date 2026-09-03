@@ -773,13 +773,18 @@ public class WfNodeExecutionDispatcherTests
         using var f = new WorkflowAppFactory();
         using var scope = f.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
-        var s = await StartAsync(f, db, engine, "n1");
+        var bootstrapEngine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, bootstrapEngine, "n1");
         var execution = await BuildExecutionAsync(db, s);
 
-        var beforeUtc = DateTime.UtcNow;
-        var handler = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(summary: "ok"), WfNodeType.Webhook);
-        var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, TimeProvider.System);
+        var clock = new MutableTime(new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero));
+        var beforeUtc = clock.GetUtcNow().UtcDateTime;
+        var handler = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(summary: "ok"), WfNodeType.Webhook)
+        {
+            OnExecute = () => clock.Advance(TimeSpan.FromSeconds(1)),
+        };
+        var engine = ActivatorUtilities.CreateInstance<WorkflowEngine>(scope.ServiceProvider, clock);
+        var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, clock);
 
         var status = await dispatcher.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None);
         Assert.Equal(WfNodeExecutionStatus.Succeeded, status);
@@ -791,7 +796,7 @@ public class WfNodeExecutionDispatcherTests
         Assert.Null(reloaded.ErrorCode);
         Assert.Null(reloaded.Summary);
         Assert.Equal(typeof(FakeNodeHandler).FullName, reloaded.HandlerType);
-        Assert.Equal(beforeUtc, reloaded.CompletedTimeUtc!.Value, TimeSpan.FromSeconds(10)); // 带容差断值,不是 NotNull。
+        Assert.Equal(beforeUtc.AddSeconds(1), reloaded.CompletedTimeUtc);
 
         var attempts = await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).ToListAsync();
         var attempt = Assert.Single(attempts);
@@ -799,6 +804,8 @@ public class WfNodeExecutionDispatcherTests
         Assert.Equal(WfNodeExecutionResultType.Succeeded, attempt.ResultType);
         Assert.Equal("ok", attempt.OutputSummary);
         Assert.Null(attempt.ErrorSummary);
+        Assert.Equal(beforeUtc, attempt.StartedAtUtc);
+        Assert.Equal(beforeUtc.AddSeconds(1), attempt.EndedAtUtc);
         Assert.True(attempt.EndedAtUtc > attempt.StartedAtUtc);
 
         var token = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
