@@ -41,11 +41,16 @@
 
 ## Status
 
-- 轮次: 39
+- 轮次: 40
 - max: 70
 - 当前任务: Task 10(验收 + 收尾)
-- 当前阶段: pre-CI independent review 已 APPROVE;等待用户明确授权 push dev,Task 10 未勾选(9/10)
-- 上一轮: Round 39 — Task 10 **pre-CI independent review**(`code-reviewer`,明确 declare 自审)。报告 `C:\Users\Shiny\AppData\Local\Temp\codex\tenon-admin-e12351c7\review10-preci-report.md`(**18,866 bytes**,SHA256 `C1D6D4CA153E1DEB62002CBE34BFB94528F8B5FAA129CEC182E11530BEE5E90B`)。结论 **APPROVE:0×P1 / 0×P2 / 0×P3**,可进入 push 授权门,但 review 本身不构成授权。
+- 当前阶段: current HEAD 四库 CI 已跑完并暴露 2 个阻塞项;Task 10 未勾选(9/10)
+- 上一轮: Round 40 — 用户明确回复「推送吧」后执行普通 `git push origin dev`,成功把 `9bd38cc..28405b9` 快进到远端(不 force)。GitHub Actions `backend-ci` run [`33718827942`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33718827942),HEAD `28405b96abf9492123a3e84ad145b2cd83911fbc`,四腿全部完成。
+  **矩阵实证**:SQLite **1110/1110 绿**;PostgreSQL **1109/1110**(仅 E11 `Expected 0 / Actual 1`);SQL Server push/PR filter **117/118**(仅 E11同值分歧,且日志实证 `TEST_FILTER` 确含 `WfNodeExecutionContractTests`);MySQL **1108/1110**(E11同值分歧 + N1 `EndedAtUtc > StartedAtUtc` 为 false)。template-smoke 绿。其余当前 SHA 的 `contract-drift`/`docker-smoke`/`web-ci`/`web-react-ci` 也全部绿。
+  **PayloadVersion 方言矩阵**:SQLite 存量补列读 **0**;MySQL/PostgreSQL/SQL Server 均读 **1**。探针履职成功,不是 flaky,不允许用 DbType 条件掩盖。全仓读取约定只有 `EventType + PayloadVersion`;新行由 CLR initializer 明确为 1;当前无产品逻辑依赖旧行必须为 1。推荐永久语义是「legacy row sentinel=0,new row=1」:把 `[SugarColumn(DefaultValue)]` 从 `"1"` 改 `"0"`、保留 initializer `=1`,使四库升级一致且不改写 append-only 历史。备选「SQLite 专项回填为 1」会引入方言迁移并改写旧审计行,不推荐;DbType 条件接受分歧明确拒绝。
+  **MySQL 独立缺口**:`A_successful_run_advances_the_token_and_completes_the_instance` 在 `WfNodeExecutionDispatcherTests.cs:802` 因 MySQL `DateTime` 秒精度把相邻 start/end 压成相等而红。产品回写与其余断言正常;这是与 T12 相同的测试时钟问题,可直接用 `MutableTime` + handler 推进 1s 修复,无语义分叉。
+  **环境提醒**:push 时 Git Credential Manager 明确警告 TLS certificate verification 被禁用;只读核实来源为用户级 `C:/Users/Shiny/.gitconfig http.sslVerify=false`。本任务不擅自改全局 Git 配置,但最终风险必须报告。
+- Round 39 pre-CI review 存档: Task 10 **pre-CI independent review**(`code-reviewer`,明确 declare 自审)。报告 `C:\Users\Shiny\AppData\Local\Temp\codex\tenon-admin-e12351c7\review10-preci-report.md`(**18,866 bytes**,SHA256 `C1D6D4CA153E1DEB62002CBE34BFB94528F8B5FAA129CEC182E11530BEE5E90B`)。结论 **APPROVE:0×P1 / 0×P2 / 0×P3**,可进入 push 授权门,但 review 本身不构成授权。
   **九刀独立变异**:三个 unique index 分别删除 → E1 依次在 count 断言报 Actual 2(`:72/:73/:74`),异常断言均未抢先;Webhook 改系统时钟 → 精确 60s 红;in-range 改默认 30s 与错误钳制 24h → 新测试分别报 7min vs 30s/24h;T12 第一与第二 handler 分别零推进 → 各自对应 attempt 的 start=end 红;`Truncate` 原样返回 → E12 512 vs 600 红。每刀落盘确认、专项运行、精确复原。
   **审查裁定**:E1 三次冲突均是独立自动提交语句,PG 上查询不会落在被 25P02 中止的显式事务内;Webhook 固定 HTTP-date 是整秒 UTC 且系统时钟变异已排除常量自证;7min 测试只为真实回写 `WorkflowEngine` 注入时钟,bootstrap/auth 仍走正常 DI;T12 两行 attempt 各有独立时钟守门,SetColumns 前已局部变量化;E12 注释与 SQLite 证据一致。三文件 hash 与 `9cffb74` 完全一致,review 后 tracked tree 干净。
   **review 最终闸门**:Release build **0 错误/13 既有警告**;三个目标类 **13/13、51/51、25/25**;原样 workflow filter **411/411**;`git diff --check` 通过。AST-grep 未安装,用等价静态扫描补足;LSP 对三文件 0 diagnostics(C# 编译为权威)。本机仍只证明 SQLite。
@@ -90,7 +95,10 @@
 - Round 38 留给 Round 39 的审查清单(已完成): Round 39 — Task 10 **pre-CI independent review**。派 `code-reviewer` 自审 commit `9cffb74` 对 `a2f625b`,只 review/变异、不 commit/push。重点:①E1 去任一唯一索引时必须先见 count 2,并确认 PG 自动提交后继续查询合法;②Webhook 固定时钟真守 `time.GetUtcNow`,不是常量自证;③7min 测试只替换回写 engine、无宿主认证副作用,变异 fallback/钳制均红;④T12 两行 attempt 都有确定正耗时且不再内联 DateTime;⑤E12 注释与 SQLite 600→512 证据一致;⑥三文件外零改动、Fact 只 +1、原样 411/411。报告落 `C:\Users\Shiny\AppData\Local\Temp\codex\tenon-admin-e12351c7\review10-preci-report.md`;0×P1/0×未修 P2 前不得进入 push 门,仍不勾 Task 10。
 
 
-- 下一步: **push 授权门**。当前 `dev` 比 `origin/dev` ahead 62,tracked tree clean,唯一未跟踪 `backend/tests/TenonAdmin.Tests/TestResults/` 不提交。仅在用户明确授权后执行普通 `git push origin dev`(不 force),随后锁定该 HEAD 的 `backend-ci` run,逐腿读取 `build-test (sqlite/mysql/postgres/sqlserver)` 与 SQL Server `TEST_FILTER` 中 `WfNodeExecutionContractTests` 结果。未授权则停在此处;Task 10、`PayloadVersion`、两份设计文档均不得提前关闭。
+- Round 39 push 授权门(已获授权并执行): **push 授权门**。当前 `dev` 比 `origin/dev` ahead 62,tracked tree clean,唯一未跟踪 `backend/tests/TenonAdmin.Tests/TestResults/` 不提交。仅在用户明确授权后执行普通 `git push origin dev`(不 force),随后锁定该 HEAD 的 `backend-ci` run,逐腿读取 `build-test (sqlite/mysql/postgres/sqlserver)` 与 SQL Server `TEST_FILTER` 中 `WfNodeExecutionContractTests` 结果。未授权则停在此处;Task 10、`PayloadVersion`、两份设计文档均不得提前关闭。
+
+
+- 下一步: Round 41 — **fix MySQL N1 clock P2**。只改 `backend/tests/TenonAdmin.Tests/WfNodeExecutionDispatcherTests.cs`:该 N1 用正常 bootstrap engine 发起,完成回写改用 `MutableTime` 驱动的 concrete `WorkflowEngine` + dispatcher,handler 推进 1s,精确断 attempt 正耗时/完成时间;不碰 E11/实体/docs/CI。做零推进变异、目标类、Release build、原样 411 后 commit,独立 review 再进入 PayloadVersion 决策/修复。
 
 
 ## 已知起点(2026-09-01,M2c 收口 + 过渡步骤后)
@@ -594,6 +602,14 @@ Round 38 必做变异(一刀一文件、确认落盘、单测转红、精确复�
 **review 排除的疑点与射程**:E13 通过「把 `wf_node_execution` 的期望类型错换成 `WfNodeExecutionAttempt`」在 helper `:678` 因缺 `ExecutionId` 转红,证明元数据非空且逐列检查;E8 冲突之后在 `UseTranAsync` 回调内无查询,回调返回后才查三表,PG `25P02` 写法成立但 PostgreSQL 尚未实跑;E5 第④支在当前 SQLite/CI MySQL 连接配置下钉 matched-row 语义,若未来启用 MySQL `UseAffectedRows=true` 会合法变成 0,届时须同步契约;CI 注释的 `~14 + ~13` 计数准确;commit 未改产品/API/前端且没有宣称 MySQL/PostgreSQL/SqlServer 已绿。
 
 
+### Task 10 current-HEAD 四库 CI(Round 40)
+
+- [ ] **P2-1★｜`PayloadVersion` 存量补列在四库真实分歧,阻塞字面 DONE**:`backend-ci` run `33718827942` 实证 SQLite=0,MySQL/PostgreSQL/SQL Server=1;三条失败均为 `Legacy_rows_survive_re_adding_the_not_null_history_columns` 的 `Expected 0 / Actual 1`。这不是测试应兼容的多态,而是同一升级契约不一致。**推荐**:`DefaultValue=0` 只定义存量 sentinel,保留 CLR initializer=1 定义新事件版本;拒绝 DbType 条件分支。该元数据/语义改动须在明确决策后实施、四腿重跑后关闭。
+- [ ] **P2-2｜N1 的 attempt 正耗时断言在 MySQL 秒精度下翻红**:`A_successful_run_advances_the_token_and_completes_the_instance` 仅 `Assert.True(EndedAtUtc > StartedAtUtc)` 失败,同腿其余 1108 条绿;MySQL bare DateTime 只保留秒,相邻系统时钟调用被压成相等。**修法**:复用 Round 38 T12 的 `MutableTime` 手法,但只替换完成回写 engine/dispatcher,不污染 bootstrap/auth;handler 推进 1s,零推进变异必须红。
+
+**CI 证据边界**:SQLite 1110/1110;MySQL 1108/1110;PostgreSQL 1109/1110;SQL Server filter 117/118。main nightly 的 FileLogger 基线未在本次 current dev run 复现,不能再用它解释本次红。其余四个 push workflow 全绿。
+
+
 ## Log
 
 | 轮次 | 阶段 | 摘要 |
@@ -640,3 +656,4 @@ Round 38 必做变异(一刀一文件、确认落盘、单测转红、精确复�
 | 37 | plan | Task 10 收口 plan 完成(planner 原稿 16,936 bytes 落 `.omx/plans/round37-task10.md`,协调者复核后转写)。DONE 审计确认:本地原样 filter 410/410 与重放/恢复/事务外调用/四结果均有证据;未满足的是 Task 10、两份文档、current HEAD 四库矩阵。协调者纠正初稿三处:Task 6 的 T6 拆分与 `WfNodeExecution` 注释都已在 `36a8cc0` 完成,不重复改;`PayloadVersion` 永久语义必须等四腿,不得预判。最新 main nightly `33679380440` 的 PG 红来自无关 FileLogger 测试(1 failed/693 passed),另三库绿,只作 baseline 不作 M3a-1 证据。计划固定为 pre-CI 三测试文件窄修 → 独立 review/fix → 单独用户 push 门 → 四库 CI → post-CI PayloadVersion/两文档 → final review/DONE。Round 38 预期只新增 1 条 in-range Retry-After Fact,410→411;不改产品/CI/docs/API,不 push、不勾 Task 10。 |
 | 38 | pre-CI exec | OMX ultrawork 三个 executor 按互斥文件并行编辑,协调者集成并修正两处首次失败。commit `9cffb74`,仅三测试文件 +56/-18,Fact **410→411**。E1 行数证据前置;Webhook HTTP-date 固定时钟精确 60s;新增 in-range Retry-After 7min;T12 可拨时钟;E12 注释收窄。首次运行暴露 T1 `near 上午`(内联 DateTime)与 dispatcher/engine 时钟不一致;最终用局部变量 + 仅构造 fixed-clock concrete engine 修复,不污染宿主认证。五刀变异全部红并复原:E1 count 2、Webhook 系统时钟、7min→30s、T12 零推进、E12 600→512。恢复态 build **0 错误/13 警告**,目标类 13/13+51/51+25/25,原样 filter **411/411**。产品/CI/docs/API/前端零改动,未 push。下一步 Round 39 独立 review,Task 10 仍未勾选。 |
 | 39 | pre-CI independent review | `code-reviewer` 独立自审 commit `9cffb74`,报告 18,866 bytes,结论 **APPROVE:0×P1/0×P2/0×P3**。九刀变异全红并复原:三个唯一索引分别 Actual 2;Webhook 系统时钟;in-range 30s/24h;T12 两个 handler 分别零推进;Truncate 600。裁定 E1 的 PG auto-commit 写法合法、固定时钟非自证、7min 只替换回写 engine 不污染认证、T12 两行独立守门、E12 注释准确。最终 build 0 错误/13 警告,目标类 13/13+51/51+25/25,原样 filter **411/411**,tracked tree clean。关闭 7 条已修/已完成 P3。可进入 push 授权门,但未 push、未勾 Task 10。 |
+| 40 | push + 四库 CI | 用户明确授权后普通 push `dev` 成功(9bd38cc→28405b9),backend-ci run `33718827942` 完成。SQLite 1110/1110;PG 1109/1110、SQL Server filter 117/118 均只红 E11 PayloadVersion(Expected0/Actual1);MySQL 1108/1110 除 E11 外还红 N1 attempt 正耗时(MySQL 秒精度 start=end)。SQL Server 日志确认新契约类实际进入 TEST_FILTER。其余 contract-drift/docker-smoke/web-ci/web-react-ci/template-smoke 全绿。PayloadVersion 矩阵=SQLite0/其他三库1,探针成功暴露真实分歧;不做 DbType 分支。另记录用户级 Git `http.sslVerify=false` 安全风险,不擅改全局配置。Task 10 未勾选,下一步先窄修 MySQL N1,再处理 PayloadVersion 决策。 |
