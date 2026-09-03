@@ -1,3 +1,4 @@
+using System.Globalization;
 using SqlSugar;
 using TenonAdmin.SqlSugar;
 
@@ -65,10 +66,72 @@ public class EnterNodeOp(WfNode node) : IWfOperation
                 await EnterBranchAsync(ctx, cancellationToken);
                 break;
 
+            case WfNodeType.Webhook:
+                await EnterWebhookAsync(ctx, cancellationToken);
+                break;
+
             default:
                 throw WorkflowErrorCode.Exception(WorkflowErrorCode.NodeTypeUnsupported,
                     new Dictionary<string, object?> { ["type"] = Node.Type.ToString() });
         }
+    }
+
+    /// <summary>
+    /// 进入 Webhook 只创建可靠执行占位，不在工作流事务内调用 handler 或发送 HTTP。
+    /// <see cref="WfNodeExecutionStore.EnsureAsync"/> 按稳定的 <c>ExecutionKey</c> 幂等复用同一次节点访问。
+    /// </summary>
+    protected virtual Task EnterWebhookAsync(
+        WfExecutionContext ctx,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var maxAttempts = ResolveMaxAttempts(ctx);
+
+        var scopeKey = WfIdentityHash.NormalizeScopeKey(
+            ctx.StarterOrgId?.ToString(CultureInfo.InvariantCulture));
+        var execution = new WfNodeExecution
+        {
+            ExecutionKey = WfExecutionKey.Compute(
+                scopeKey,
+                ctx.Instance.Id,
+                ctx.Token.Id,
+                ctx.Token.NodeVisitId,
+                Node.Id,
+                ctx.Instance.DefinitionVersionId),
+            ScopeKey = scopeKey,
+            InstanceId = ctx.Instance.Id,
+            TokenId = ctx.Token.Id,
+            NodeVisitId = ctx.Token.NodeVisitId,
+            NodeId = Node.Id,
+            NodeType = Node.Type,
+            DefinitionVersionId = ctx.Instance.DefinitionVersionId,
+            MaxAttempts = maxAttempts,
+        };
+
+        return WfNodeExecutionStore.EnsureAsync(ctx.Db, execution, cancellationToken);
+    }
+
+    /// <summary>
+    /// 解析并校验自动节点的总尝试次数。节点值优先，其次是工作流全局值；全局对象的默认值
+    /// 已经是内置安全默认值。非法节点 JSON 即使绕过发布接口，也必须在 execution 写入前阻断。
+    /// </summary>
+    protected virtual int ResolveMaxAttempts(WfExecutionContext ctx)
+    {
+        var maxAttempts = Node.Props?.MaxAttempts ?? ctx.Options.MaxAttempts;
+        if (WorkflowOptions.IsValidMaxAttempts(maxAttempts))
+            return maxAttempts;
+
+        throw WorkflowErrorCode.Exception(
+            WorkflowErrorCode.ModelInvalid,
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "maxAttemptsOutOfRange",
+                ["nodeId"] = Node.Id,
+                ["value"] = maxAttempts,
+                ["min"] = WorkflowOptions.MinMaxAttempts,
+                ["max"] = WorkflowOptions.MaxMaxAttempts,
+            });
     }
 
     /// <summary>解析审批人 → 建 wf_task + actors;空人按三级 nobody 策略。</summary>

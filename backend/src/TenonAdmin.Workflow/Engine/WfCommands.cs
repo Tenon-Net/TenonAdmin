@@ -236,3 +236,29 @@ public sealed class NodeExecutionCompletedCmd : IWfCommand
 
     public required DateTime EndedAtUtc { get; init; }
 }
+
+/// <summary>
+/// Execution 上下文已经确认永久损坏时的隔离命令。它仍由
+/// <see cref="IWorkflowEngine.ExecuteAsync"/> 在单一短事务内完成 fence CAS、attempt 和 outbox，
+/// 但不再尝试加载缺失的 instance/token/version/model，也不推进 Token。
+/// <para>
+/// 该命令只由 <see cref="WfNodeExecutionDispatcher"/> 在领取成功后的上下文加载边界发出；暂时性数据库/基础设施异常
+/// 不得伪装成此命令，仍保留 Running + lease 恢复语义。
+/// </para>
+/// </summary>
+public sealed class NodeExecutionQuarantinedCmd : IWfCommand
+{
+    public required long ExecutionId { get; init; }
+
+    /// <summary>领取时读回的 Fence；隔离回写必须通过同一旧 owner CAS。</summary>
+    public required long Fence { get; init; }
+
+    /// <summary>永久上下文错误的 terminal 结果；只接受 <see cref="WfNodeExecutionResultType.TerminalFailure"/>。</summary>
+    public required WfNodeExecutionResult Result { get; init; }
+
+    public string? HandlerType { get; init; }
+
+    public required DateTime StartedAtUtc { get; init; }
+
+    public required DateTime EndedAtUtc { get; init; }
+}

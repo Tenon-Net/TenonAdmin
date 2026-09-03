@@ -353,7 +353,7 @@ public class WfDefinitionService(
     /// </summary>
     protected virtual void ValidateNode(WfNode node, HashSet<string> seen, HashSet<string> providerKeys)
     {
-        if (node.Type is not (WfNodeType.Start or WfNodeType.Approval or WfNodeType.Cc or WfNodeType.Branch))
+        if (node.Type is not (WfNodeType.Start or WfNodeType.Approval or WfNodeType.Cc or WfNodeType.Branch or WfNodeType.Webhook))
         {
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.NodeTypeUnsupported,
                 new Dictionary<string, object?> { ["type"] = node.Type.ToString() });
@@ -373,6 +373,22 @@ public class WfDefinitionService(
 
         ValidateLength(node.Id, 64, "nodeId");
         ValidateLength(node.Name, 128, "nodeName");
+
+        if (node.Type == WfNodeType.Webhook
+            && node.Props?.MaxAttempts is { } maxAttempts
+            && !WorkflowOptions.IsValidMaxAttempts(maxAttempts))
+        {
+            throw WorkflowErrorCode.Exception(
+                WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?>
+                {
+                    ["reason"] = "maxAttemptsOutOfRange",
+                    ["nodeId"] = node.Id,
+                    ["value"] = maxAttempts,
+                    ["min"] = WorkflowOptions.MinMaxAttempts,
+                    ["max"] = WorkflowOptions.MaxMaxAttempts,
+                });
+        }
 
         if (!seen.Add(node.Id))
         {

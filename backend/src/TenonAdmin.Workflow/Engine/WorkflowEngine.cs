@@ -57,6 +57,9 @@ public class WorkflowEngine(
                     return DeserializeResult(hit);
             }
 
+            if (command is NodeExecutionQuarantinedCmd quarantined)
+                return await QuarantineNodeExecutionAsync(db, quarantined, cancellationToken);
+
             ctx = command switch
             {
                 StartInstanceCmd start => await BeginStartAsync(db, start, cancellationToken),
@@ -1168,7 +1171,7 @@ public class WorkflowEngine(
 
     /// <summary>
     /// <see cref="BeginNodeExecutionCompletedAsync"/> 的判定结果——<see cref="ResolveExecutionOutcome"/>
-    /// 纯函数算出、<see cref="ClaimExecutionWritebackAsync"/> 落库、<see cref="BuildExecutionOutboxPayload"/>
+    /// 纯函数算出、<see cref="ClaimExecutionWritebackAsync"/> 落库、<see cref="BuildExecutionOutboxPayload(WfNodeExecution,NodeExecutionCompletedCmd,WfNodeExecutionAttempt,WfExecutionOutcome)"/>
     /// 取用。<see cref="IsTerminal"/> 决定是否入队 outbox(§4.6:只在 execution 进终态时入队)。
     /// </summary>
     protected readonly record struct WfExecutionOutcome(
@@ -1312,6 +1315,99 @@ public class WorkflowEngine(
         }
 
         return ctx;
+    }
+
+    /// <summary>
+    /// 将已领取但无法再构造运行上下文的永久坏 execution 隔离为 Failed。
+    /// <para>
+    /// 这是 <see cref="BeginNodeExecutionCompletedAsync"/> 的窄旁路，不是第二套执行链：仍在引擎的同一
+    /// <see cref="IWorkflowEngine.ExecuteAsync"/> 事务中按旧 Fence CAS → attempt → Pending outbox 顺序提交。
+    /// 因为 instance/token/version/model 可能正是缺失原因，此处不读取它们、不跑 Agenda、不推进 Token。
+    /// </para>
+    /// </summary>
+    protected virtual async Task<WfEngineResult> QuarantineNodeExecutionAsync(
+        ISqlSugarClient db,
+        NodeExecutionQuarantinedCmd cmd,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (cmd.Result.Type != WfNodeExecutionResultType.TerminalFailure)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed,
+                new Dictionary<string, object?> { ["reason"] = "quarantineResultMustBeTerminal" });
+        }
+
+        var execution = await db.Queryable<WfNodeExecution>()
+            .Where(e => e.Id == cmd.ExecutionId)
+            .FirstAsync();
+        if (execution is null)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed,
+                new Dictionary<string, object?> { ["reason"] = "executionNotFound", ["executionId"] = cmd.ExecutionId });
+        }
+
+        var completedAtUtc = timeProvider.GetUtcNow().UtcDateTime;
+        var errorCode = cmd.Result.ErrorCode;
+        var summary = WfNodeExecutionAttemptStore.Truncate(cmd.Result.Summary);
+        string? noOwner = null;
+        DateTime? noLease = null;
+        DateTime? noRetry = null;
+        var handlerType = cmd.HandlerType is { Length: > 256 } h ? h[..256] : cmd.HandlerType;
+        var affected = await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution
+            {
+                Status = WfNodeExecutionStatus.Failed,
+                NextRetryAtUtc = noRetry,
+                LeaseOwner = noOwner,
+                LeaseExpiresAtUtc = noLease,
+                CompletedTimeUtc = completedAtUtc,
+                ErrorCode = errorCode,
+                Summary = summary,
+                HandlerType = handlerType,
+            })
+            .Where(e => e.Id == cmd.ExecutionId
+                        && e.Fence == cmd.Fence
+                        && e.Status == WfNodeExecutionStatus.Running)
+            .ExecuteCommandAsync();
+        if (affected != 1)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceStatusConflict,
+                new Dictionary<string, object?>
+                {
+                    ["reason"] = "executionFenceConflict",
+                    ["executionId"] = cmd.ExecutionId,
+                    ["fence"] = cmd.Fence,
+                });
+        }
+
+        var attempt = await WfNodeExecutionAttemptStore.AppendAsync(
+            db, execution, cmd.Result, cmd.StartedAtUtc, cmd.EndedAtUtc, cancellationToken);
+        var payload = BuildExecutionOutboxPayload(
+            execution,
+            cmd.Fence,
+            attempt,
+            new WfExecutionOutcome(
+                WfNodeExecutionStatus.Failed,
+                null,
+                completedAtUtc,
+                errorCode,
+                summary,
+                true));
+        await WfOutboxStore.EnqueueAsync(
+            db,
+            execution,
+            WfOutboxStore.MessageTypeNodeExecutionCompleted,
+            payload,
+            completedAtUtc,
+            cancellationToken);
+
+        return new WfEngineResult
+        {
+            InstanceId = execution.InstanceId,
+            // quarantine 的理由可能正是 instance 缺失；worker 不依赖这个返回值。这里不再做
+            // 一次无关的回读，避免成功写入 Failed/attempt/outbox 后又因诊断查询瞬时失败而抛出。
+            InstanceStatus = WfInstanceStatus.Running,
+        };
     }
 
     /// <summary>
@@ -1470,6 +1566,13 @@ public class WorkflowEngine(
         NodeExecutionCompletedCmd cmd,
         WfNodeExecutionAttempt attempt,
         WfExecutionOutcome outcome)
+        => BuildExecutionOutboxPayload(execution, cmd.Fence, attempt, outcome);
+
+    protected virtual string BuildExecutionOutboxPayload(
+        WfNodeExecution execution,
+        long fence,
+        WfNodeExecutionAttempt attempt,
+        WfExecutionOutcome outcome)
     {
         return System.Text.Json.JsonSerializer.Serialize(
             new
@@ -1484,7 +1587,7 @@ public class WorkflowEngine(
                 definitionVersionId = execution.DefinitionVersionId,
                 status = outcome.Status,
                 attemptNo = attempt.AttemptNo,
-                fence = cmd.Fence,
+                fence,
                 errorCode = outcome.ErrorCode,
                 summary = outcome.Summary,
                 outputHash = attempt.OutputHash,

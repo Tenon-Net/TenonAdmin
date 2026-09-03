@@ -136,19 +136,12 @@ jobs:
           # (schedule) as the net. Rename a class out of this list and it silently drops to nightly-only — not a coverage
           # hole, just delayed signal. Other legs and the nightly run are unfiltered.
           #
-          # WfPersistenceContractTests and WfNodeExecutionContractTests are the two Wf* classes in this list, and
-          # deliberately so: every other workflow test is DB-agnostic business logic already exercised by the three
-          # full legs, but that left the whole workflow package (including the M3a-1 reliable-execution tables —
-          # wf_node_execution / wf_node_execution_attempt / wf_outbox — added after WfPersistenceContractTests was
-          # written) with ZERO SqlServer coverage at PR time. WfPersistenceContractTests is the M2c four-database
-          # persistence contract; WfNodeExecutionContractTests is its M3a-1 counterpart — unique-index enforcement,
-          # long-text/Unicode round-trip, declared column widths, affected-rows semantics of the lease/fence CAS
-          # updates, transaction-boundary atomicity across the three new tables, and the nullable-upgrade columns
-          # Task 1 added to wf_history/wf_instance reading their DefaultValue on a non-empty table — so a
-          # "four-database contract" that skips one of the four at PR time would be self-defeating. Cost is ~14 + ~13
-          # isolated databases (each test builds its own), i.e. minutes, not the 40-60 of the full suite. If this leg
-          # ever gets visibly slower, drop either entry and it falls back to nightly — do NOT add timeout-minutes instead.
-          TEST_FILTER: ${{ (matrix.db == 'sqlserver' && github.event_name != 'schedule') && 'FullyQualifiedName~DataScopeTests|FullyQualifiedName~SoftDeleteAuditTests|FullyQualifiedName~OrgAuditEntityTests|FullyQualifiedName~SeedUpgradeTests|FullyQualifiedName~CodeFirstNullableUpgradeTests|FullyQualifiedName~RecycleBinTests|FullyQualifiedName~UserCrudTests|FullyQualifiedName~DictCrudTests|FullyQualifiedName~ReplaceabilityTests|FullyQualifiedName~ProductionBootstrapTests|FullyQualifiedName~JobElectionTests|FullyQualifiedName~JobClaimTests|FullyQualifiedName~JobSchedulerTests|FullyQualifiedName~WfPersistenceContractTests|FullyQualifiedName~WfNodeExecutionContractTests' || '' }}
+          # The workflow sidecar tests cover the M3a-1 reliable-execution tables (wf_node_execution /
+          # wf_node_execution_attempt / wf_outbox), including Task 8b's entry, worker, exception, recovery,
+          # production E2E, and retry-policy database-sensitive paths. Cost remains minutes rather than the 40-60
+          # minute full suite; if this leg ever gets visibly slower, trim a sidecar entry so it falls back to nightly
+          # — do NOT add timeout-minutes instead.
+          TEST_FILTER: ${{ (matrix.db == 'sqlserver' && github.event_name != 'schedule') && 'FullyQualifiedName~DataScopeTests|FullyQualifiedName~SoftDeleteAuditTests|FullyQualifiedName~OrgAuditEntityTests|FullyQualifiedName~SeedUpgradeTests|FullyQualifiedName~CodeFirstNullableUpgradeTests|FullyQualifiedName~RecycleBinTests|FullyQualifiedName~UserCrudTests|FullyQualifiedName~DictCrudTests|FullyQualifiedName~ReplaceabilityTests|FullyQualifiedName~ProductionBootstrapTests|FullyQualifiedName~JobElectionTests|FullyQualifiedName~JobClaimTests|FullyQualifiedName~JobSchedulerTests|FullyQualifiedName~WfPersistenceContractTests|FullyQualifiedName~WfNodeExecutionContractTests|FullyQualifiedName~WfNodeExecutionEntryTests|FullyQualifiedName~WfNodeExecutionWorkerTests|FullyQualifiedName~WfNodeExecutionExceptionTests|FullyQualifiedName~WfNodeExecutionRecoveryTests|FullyQualifiedName~WfNodeExecutionProductionE2ETests|FullyQualifiedName~WfNodeExecutionRetryPolicyTests' || '' }}
         run: |
           if [ -n "$TEST_FILTER" ]; then
             echo "SqlServer push/PR leg: dialect-sensitive subset only (full SqlServer suite runs nightly)"

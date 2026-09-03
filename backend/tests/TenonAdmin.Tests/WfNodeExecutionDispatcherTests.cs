@@ -178,6 +178,43 @@ public class WfNodeExecutionDispatcherTests
         Assert.Equal(48004, (int)admin.Code);
     }
 
+    [Fact]
+    public async Task Quarantine_writeback_requires_the_claim_fence_and_is_atomic()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var started = await StartAsync(f, db, engine, "quarantine-fence");
+        var execution = await BuildExecutionAsync(db, started);
+        var now = DateTime.UtcNow;
+        var claimed = await ClaimAsync(db, execution.Id, "worker-a", now);
+        Assert.NotNull(claimed);
+
+        var ex = await Assert.ThrowsAsync<AdminException>(() => engine.ExecuteAsync(
+            new NodeExecutionQuarantinedCmd
+            {
+                ExecutionId = execution.Id,
+                Fence = claimed!.Fence - 1,
+                Result = WfNodeExecutionResult.TerminalFailure(
+                    WorkflowErrorCode.InstanceNotFound,
+                    "上下文不可用(测试)"),
+                StartedAtUtc = now,
+                EndedAtUtc = now.AddSeconds(1),
+            }));
+
+        Assert.Equal(WorkflowErrorCode.InstanceStatusConflict, (int)ex.Code);
+        var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.Running, reloaded.Status);
+        Assert.Equal(claimed.Fence, reloaded.Fence);
+        Assert.Empty(await db.Queryable<WfNodeExecutionAttempt>()
+            .Where(a => a.ExecutionId == execution.Id)
+            .ToListAsync());
+        Assert.Empty(await db.Queryable<WfOutbox>()
+            .Where(o => o.ExecutionId == execution.Id)
+            .ToListAsync());
+    }
+
     // ── P1-1:RetryScheduled 分支的 fence CAS(与终态分支各自独立写,两条谓词都要各自守门)──────
 
     /// <summary>
@@ -887,16 +924,15 @@ public class WfNodeExecutionDispatcherTests
         Assert.Equal("failed", payload.GetProperty("status").GetString());
     }
 
-    // ── N3/N4:崩溃(handler 抛异常 / 抛 OCE)时什么都不写 ──────────────────────
+    // ── N3/N4:未知异常受控收敛 / OCE 保持取消语义 ─────────────────────────────
 
     /// <summary>
-    /// 崩溃替身(D1):handler 抛异常,tx2 从未开始,execution 停在 Running 持租约,0 行 attempt/outbox。
-    /// 变异:在 <see cref="WfNodeExecutionDispatcher.InvokeHandlerAsync"/> 外面包
-    /// <c>try { … } catch (Exception ex) { return TerminalFailure(...); }</c> → execution 变 Failed + 1 行
-    /// attempt + 1 行 outbox。
+    /// 未知非取消异常在 handler 调用边界收敛为受控 retryable 结果：tx2 正常提交一条 attempt、
+    /// execution 进入 RetryScheduled 并释放租约，不把异常正文写入审计。有限预算与最终 Failed
+    /// 的完整循环由 <see cref="WfNodeExecutionExceptionTests"/> 覆盖。
     /// </summary>
     [Fact]
-    public async Task A_crashing_handler_leaves_the_execution_running_and_writes_nothing()
+    public async Task An_unknown_handler_exception_is_converted_to_a_retryable_attempt()
     {
         using var f = new WorkflowAppFactory();
         using var scope = f.Services.CreateScope();
@@ -911,22 +947,28 @@ public class WfNodeExecutionDispatcherTests
         };
         var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, TimeProvider.System);
 
-        var beforeUtc = DateTime.UtcNow;
         var ex = await Record.ExceptionAsync(
             () => dispatcher.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None));
 
         Assert.Equal(1, handler.CallCount); // OnExecute 在 CallCount++ 之后调用,值必然是 1(D8)。
+        Assert.Null(ex);
 
         var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
-        Assert.Equal(WfNodeExecutionStatus.Running, reloaded.Status);
+        Assert.Equal(WfNodeExecutionStatus.RetryScheduled, reloaded.Status);
         Assert.Equal(1, reloaded.Fence);
         Assert.Equal(1, reloaded.AttemptCount);
-        Assert.Equal("worker-a", reloaded.LeaseOwner);
-        Assert.Equal(beforeUtc.AddMinutes(5), reloaded.LeaseExpiresAtUtc!.Value, TimeSpan.FromSeconds(10));
+        Assert.Null(reloaded.LeaseOwner);
+        Assert.Null(reloaded.LeaseExpiresAtUtc);
+        Assert.NotNull(reloaded.NextRetryAtUtc);
         Assert.Null(reloaded.CompletedTimeUtc);
         Assert.Null(reloaded.Summary);
 
-        Assert.Equal(0, await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).CountAsync());
+        var attempt = Assert.Single(await db.Queryable<WfNodeExecutionAttempt>()
+            .Where(a => a.ExecutionId == execution.Id)
+            .ToListAsync());
+        Assert.Equal(WfNodeExecutionResultType.RetryableFailure, attempt.ResultType);
+        Assert.Equal(48032, attempt.ErrorCode);
+        Assert.DoesNotContain("crash", attempt.ErrorSummary ?? "");
         Assert.Equal(0, await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).CountAsync());
 
         var token = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
@@ -937,8 +979,6 @@ public class WfNodeExecutionDispatcherTests
             .ClearFilter<IOrgScoped>().Where(i => i.Id == s.InstanceId).FirstAsync();
         Assert.Equal(WfInstanceStatus.Running, instance.Status);
 
-        // P3-1:异常类型断在最后——先钉副作用,免得变异下 ThrowsAsync 抢先抛出、把后面的行全部跳过。
-        Assert.IsType<InvalidOperationException>(ex);
     }
 
     /// <summary>
@@ -1007,10 +1047,10 @@ public class WfNodeExecutionDispatcherTests
 
         var handlerA = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(), WfNodeType.Webhook)
         {
-            OnExecute = () => throw new InvalidOperationException("crash"),
+            OnExecute = () => throw new OperationCanceledException(),
         };
         var dispatcherA = new WfNodeExecutionDispatcher(db, [handlerA], engine, TimeProvider.System);
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<OperationCanceledException>(
             () => dispatcherA.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None));
 
         var past = DateTime.UtcNow.AddMinutes(-1);

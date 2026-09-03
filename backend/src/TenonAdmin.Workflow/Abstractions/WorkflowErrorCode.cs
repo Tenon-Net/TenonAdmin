@@ -103,6 +103,9 @@ public static class WorkflowErrorCode
     /// <summary>Webhook 传输层故障(超时/DNS/连接/TLS 等,M3a-1 Task 8)</summary>
     public const int WebhookTransportFailed = 48031;
 
+    /// <summary>节点 handler 未分类异常(受控重试,摘要不含异常正文,Task 8b)</summary>
+    public const int NodeHandlerUnhandled = 48032;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }

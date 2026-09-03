@@ -11655,6 +11655,8 @@ export interface components {
             /** Format: int32 */
             webhookTimeoutSeconds?: null | number | string;
             webhookOnFailure?: null | components["schemas"]["WfWebhookFailureAction"];
+            /** Format: int32 */
+            maxAttempts?: null | number | string;
         };
         /** @enum {unknown} */
         WfNodeType: "start" | "approval" | "cc" | "branch" | "parallel" | "webhook";

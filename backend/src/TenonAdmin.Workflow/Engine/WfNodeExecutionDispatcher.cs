@@ -1,4 +1,7 @@
+using Microsoft.Extensions.Logging;
 using SqlSugar;
+using System.Text.Json;
+using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Workflow;
@@ -15,22 +18,22 @@ namespace TenonAdmin.Workflow;
 /// 3) tx2——<see cref="IWorkflowEngine.ExecuteAsync"/> 消化 <see cref="NodeExecutionCompletedCmd"/>,那本来
 /// 就是「一条 Cmd 一个 DB 事务」,于是 attempt/变量/历史/outbox/token 推进自动落在同一短事务里,dispatcher
 /// 不必自己再嵌一层。</para>
-/// <para><b>零 DI 注册、零新接口、零后台扫描循环</b>——与 <see cref="WfNodeExecutionStore"/>/
-/// <see cref="WfNodeExecutionAttemptStore"/>/<see cref="WfOutboxStore"/> 同款「零注册,调用方直接 <c>new</c>
-/// 或经 <c>ISqlSugarClient</c> 调用」。第一条注册线、Webhook 的 <c>EnterNodeOp</c> 接线、后台扫描 job 都是
-/// Task 8 的活——本轮生产侧一个 <see cref="IWorkflowNodeHandler"/> 实现都没有,注册一个解析不到任何实现的
-/// 服务等于死接线,也会让「十件套」(<c>WorkflowReplaceabilityTests</c>)的注释失真。类不 <c>sealed</c>、
+/// <para>领取后若 instance/token/definition version/model/node 快照被确认永久缺失或损坏,上下文加载边界发出
+/// <see cref="NodeExecutionQuarantinedCmd"/>;引擎只按旧 fence CAS 关闭 execution 并追加 terminal attempt/outbox,
+/// 不推进 Token。数据库/基础设施瞬时异常不走该旁路,仍交给 lease 恢复。</para>
+/// <para><b>零新接口、单一执行链</b>——store/attempt/outbox 仍保持零 DI 注册的静态写入工具；dispatcher
+/// 本身由 <see cref="WorkflowSetup"/> 以 scoped 注册，供 <see cref="WfNodeExecutionJob"/> 复用。Webhook
+/// 入口与后台扫描已接线，消费者仍可通过 handler 的既有注册顺序替换节点实现。类不 <c>sealed</c>、
 /// 方法全 <c>virtual</c>,可替换的缝留在调用方(消费者继承覆写单步,而不是复制整个类)。</para>
 /// <para><b>没有匹配的 handler 时不抛异常</b>:合成一个 <see cref="WfNodeExecutionResult.TerminalFailure"/>
 /// 走正常回写路径,execution 落 <see cref="WfNodeExecutionStatus.Failed"/>。抛异常的话 tx2 从不发生,行停在
 /// <see cref="WfNodeExecutionStatus.Running"/> 持租约,租约过期后被重新领取、再抛——无限活锁,且排查时
 /// attempt 表一行记录都没有。合成 <c>TerminalFailure</c> 让「装错包/漏注册」变成一行可查的 attempt + 一个
 /// 终态。</para>
-/// <para><b>handler 抛出的任何异常(含 <see cref="OperationCanceledException"/>)一律不 catch</b>——异常穿透
-/// 给调用方,tx2 从未开始,execution 行停在 <see cref="WfNodeExecutionStatus.Running"/> 持租约,租约到期后可
-/// 被重新领取(Task 7 的崩溃恢复路径)。取消语义上不等于 <c>TerminalFailure</c>(那是「永不重试」,取消是
-/// 「这次没跑完,应该被重新领取」),dispatcher 加一层兜底 catch 会把这两个方向相反的语义悄悄合并,同时把
-/// Task 8「把网络异常/超时映射成 RetryableFailure/TerminalFailure」的分类规则架空。</para>
+/// <para><b>handler 的未知非取消异常在调用边界受控收敛</b>——记录完整异常到 logger,向引擎返回固定
+/// <see cref="WorkflowErrorCode.NodeHandlerUnhandled"/> 的 <c>RetryableFailure</c> 和不含异常正文的安全摘要，
+/// 让 attempt/有限预算/最终终态仍可审计。任何 <see cref="OperationCanceledException"/> 仍原样穿透，
+/// tx2 不启动，execution 可在租约到期后重新领取；取消不被改写成业务结果。</para>
 /// <para><see cref="DateTimeOffset"/>(SPI)↔ <see cref="DateTime"/>(持久化列)的转换落点就在本类
 /// (<see cref="BuildContextAsync"/>):SqlSugar 读回的 <c>DateTime</c> 是 <c>Kind.Unspecified</c>,必须先
 /// <c>DateTime.SpecifyKind(x, DateTimeKind.Utc)</c> 再构造 <see cref="DateTimeOffset"/>,否则在非 UTC 机器
@@ -40,7 +43,8 @@ public class WfNodeExecutionDispatcher(
     ISqlSugarClient db,
     IEnumerable<IWorkflowNodeHandler> handlers,
     IWorkflowEngine engine,
-    TimeProvider time)
+    TimeProvider time,
+    ILogger<WfNodeExecutionDispatcher>? logger = null)
 {
     /// <summary>
     /// 跑一拍:领取 →(领不到即返回 <c>null</c>,不是错误)→ 事务外调 handler → 回写。返回回写后的最终
@@ -69,7 +73,40 @@ public class WfNodeExecutionDispatcher(
         var claimed = tran.Data;
 
         // 无事务:只读快照 + 组上下文;handler 调用不得落在任何事务里。
-        var context = await BuildContextAsync(claimed, leaseDuration, cancellationToken);
+        // 先记上下文加载开始时刻——永久坏 execution 也要有一条可审计 attempt。
+        var contextStartedAtUtc = time.GetUtcNow().UtcDateTime;
+        WfNodeExecutionContext context;
+        try
+        {
+            context = await BuildContextAsync(claimed, leaseDuration, cancellationToken);
+        }
+        catch (Exception ex) when (TryClassifyPermanentContextFailure(ex, out var errorCode))
+        {
+            logger?.LogError(
+                ex,
+                "工作流节点 execution 上下文永久无效，转入隔离终态。ExecutionId={ExecutionId} ErrorCode={ErrorCode} ExceptionType={ExceptionType}",
+                claimed.Id,
+                errorCode,
+                ex.GetType().Name);
+
+            var summary = WfNodeExecutionAttemptStore.Truncate(
+                $"节点 execution 上下文不可用，已隔离(错误码:{errorCode})");
+            await engine.ExecuteAsync(
+                new NodeExecutionQuarantinedCmd
+                {
+                    ExecutionId = claimed.Id,
+                    Fence = claimed.Fence,
+                    Result = WfNodeExecutionResult.TerminalFailure(errorCode, summary),
+                    StartedAtUtc = contextStartedAtUtc,
+                    EndedAtUtc = time.GetUtcNow().UtcDateTime,
+                },
+                cancellationToken);
+
+            return await db.Queryable<WfNodeExecution>()
+                .Where(e => e.Id == claimed.Id)
+                .Select(e => e.Status)
+                .FirstAsync();
+        }
 
         var handler = ResolveHandler(claimed);
         var startedAtUtc = time.GetUtcNow().UtcDateTime;
@@ -176,10 +213,55 @@ public class WfNodeExecutionDispatcher(
         };
     }
 
-    /// <summary>调 handler。<b>不 catch 任何异常</b>(含 <see cref="OperationCanceledException"/>)——见类注释。</summary>
-    protected virtual Task<WfNodeExecutionResult> InvokeHandlerAsync(
+    private static bool TryClassifyPermanentContextFailure(Exception exception, out int errorCode)
+    {
+        switch (exception)
+        {
+            case AdminException { Code: var code }
+                when code is (ErrorCode)WorkflowErrorCode.InstanceNotFound
+                    or (ErrorCode)WorkflowErrorCode.TokenNotFound
+                    or (ErrorCode)WorkflowErrorCode.DefinitionVersionNotFound
+                    or (ErrorCode)WorkflowErrorCode.ModelInvalid:
+                errorCode = (int)code;
+                return true;
+
+            case JsonException:
+                errorCode = WorkflowErrorCode.ModelInvalid;
+                return true;
+
+            default:
+                errorCode = 0;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// 调 handler。OCE 保持取消语义原样传播；其余未分类异常在这里转换为受控 retryable 结果，
+    /// 防止 worker 只反复过期 lease 而没有 attempt 审计。
+    /// </summary>
+    protected virtual async Task<WfNodeExecutionResult> InvokeHandlerAsync(
         IWorkflowNodeHandler handler,
         WfNodeExecutionContext context,
-        CancellationToken cancellationToken) =>
-        handler.ExecuteAsync(context, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await handler.ExecuteAsync(context, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger?.LogError(
+                ex,
+                "工作流节点 handler 出现未分类异常。ExecutionKey={ExecutionKey} NodeId={NodeId} ExceptionType={ExceptionType}",
+                context.ExecutionKey,
+                context.NodeId,
+                ex.GetType().Name);
+
+            var summary = WfNodeExecutionAttemptStore.Truncate(
+                $"节点 handler 出现未分类异常(异常类型:{ex.GetType().Name})");
+            return WfNodeExecutionResult.RetryableFailure(
+                WorkflowErrorCode.NodeHandlerUnhandled,
+                summary);
+        }
+    }
 }

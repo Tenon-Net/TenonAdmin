@@ -104,6 +104,12 @@ public sealed class WfNodeProps
     /// <c>ManualFallback</c>(错误码/摘要照旧)。
     /// </summary>
     public WfWebhookFailureAction? WebhookOnFailure { get; set; }
+
+    /// <summary>
+    /// 自动节点总尝试次数(含首次执行);<c>null</c> 时继承
+    /// <see cref="WorkflowOptions.MaxAttempts"/>。当前仅 Webhook 节点使用。
+    /// </summary>
+    public int? MaxAttempts { get; set; }
 }
 
 /// <summary>Webhook 失败兜底(节点 <c>props.webhookOnFailure</c>;M3a-1 Task 8)。JSON:<c>fail|manual</c>。</summary>

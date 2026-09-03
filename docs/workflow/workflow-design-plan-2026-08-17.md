@@ -363,7 +363,28 @@ AI 分成两条互不混用的能力线：
 
 ### 15.3 Webhook 按一等功能交付
 
-Webhook 节点不只是给 AI 铺路的试金石——“审批完结后可靠回调业务系统”本身是消费者高频刚需。M3a-1 交付带文档与配置 UI 的正式 Webhook 节点类型，使 M3a-1 成为可发布、可演示的独立里程碑，符合 §八“每个里程碑结束都是可发布的完整产品”原则。
+Webhook 节点不只是给 AI 铺路的试金石——“审批完结后可靠回调业务系统”本身是消费者高频刚需。M3a-1 已交付带可靠执行闭环和权威文档的正式 Webhook 节点类型，使它成为可发布、可演示的独立里程碑，符合 §八“每个里程碑结束都是可发布的完整产品”原则。Webhook 设计器 UI 仍属于 M3a-2，不在本轮范围内。
+
+#### Task 8b 生产闭环（已实现）
+
+Task 8b 将 Webhook 接入真实流程入口和既有后台调度体系，生产时序固定为：
+
+```text
+EnterNodeOp 进入 Webhook
+  → 同一工作流事务内生成 NodeVisitId 并 Ensure 唯一 WfNodeExecution(Pending)
+  → sys_job: wf-node-execution-scan 触发 WfNodeExecutionJob
+  → worker 领取 Pending / 到期 RetryScheduled / 过期 Running
+  → WfNodeExecutionDispatcher 在事务外调用 handler
+  → fence/CAS 回写 attempt、execution、history、outbox 和 Token
+```
+
+入口只创建或幂等复用 execution，不在数据库事务内发送 HTTP。worker 是现有 `IAdminJob`/`JobExecutor`/`JobSchedulerService` 的一个编译类任务，不新增通用 worker fleet；固定种子每 5 秒触发，扫描批量由 `TenonAdmin:Workflow:NodeExecutionScanBatchSize` 控制（默认 20、最大 1000），execution 租约由 `TenonAdmin:Workflow:NodeExecutionLeaseSeconds` 控制（默认 300 秒、最大 3600 秒），实际单赢家仍由 dispatcher 的 lease/fence CAS 决定。
+
+自动节点的总尝试次数（含首次执行）来源按以下优先级解析：节点 `props.maxAttempts` → `TenonAdmin:Workflow:MaxAttempts` → 内置默认 3。全局和节点值必须在 `[1,100]` 内，并在 execution 创建时固化；配置后续变化不影响既有 execution。未知非取消 handler 异常由 dispatcher 转成受控 `RetryableFailure/48032`，只把异常类型写进安全摘要，完整异常进入结构化日志；`OperationCanceledException` 仍原样传播。
+
+领取后如果 instance、token、definition version 或模型/节点快照已经永久缺失或损坏，dispatcher 不把这类数据错误当成可无限续租的暂时故障，而是发出内部 quarantine command。引擎在同一 tx2 中用旧 `Fence + Running` CAS 将 execution 置为 `Failed`、清除 lease、追加 terminal attempt 并幂等写入一条 `Pending` outbox；该旁路不读取缺失上下文、不推进 Token。数据库/基础设施瞬时异常仍原样退出，保留 lease 到期后的恢复路径。
+
+外部 Webhook 副作用的交付语义是 at-least-once：租约过期或 tx2 提交前崩溃都可能导致同一请求再次发送。消费者必须使用 `ExecutionKey` 作为幂等身份；本地 workflow 状态通过 fence/CAS 保证同一 execution 的 Token 最多推进一次。Task 8b 只在 execution 终态提交 `Pending` outbox，`Dispatching/Dispatched/Failed` 的消费、重投和传输闭环延期到 Task 8c。
 
 ### 15.4 M3b 自动放行默认关闭，阈值校准是消费者的责任
 

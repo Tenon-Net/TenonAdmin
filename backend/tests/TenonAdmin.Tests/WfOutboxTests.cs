@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using TenonAdmin.Workflow;
@@ -11,6 +12,18 @@ namespace TenonAdmin.Tests;
 /// </summary>
 public class WfOutboxTests
 {
+    [Fact]
+    public void Task_8b_exposes_only_pending_enqueue_and_no_consumer_state_machine()
+    {
+        var methods = typeof(WfOutboxStore)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(method => method.DeclaringType == typeof(WfOutboxStore))
+            .Select(method => method.Name)
+            .ToList();
+
+        Assert.Equal("EnqueueAsync", Assert.Single(methods));
+    }
+
     /// <summary>#1 入队后行立即 Pending 且可投,其余列取初值。</summary>
     [Fact]
     public async Task Enqueued_row_starts_pending_and_immediately_available()

@@ -5,8 +5,9 @@ namespace TenonAdmin.Workflow;
 
 /// <summary>
 /// 节点可靠执行记录(<c>wf_node_execution</c>,M3a-1 Task 3)——记录「某个 token 在某次访问某节点」的
-/// 一次可靠执行:领取(lease/fence)、重试预算、handler 身份与幂等哈希。本 Task 只交付「能领取、能占位」
-/// (<see cref="WfNodeExecutionStore"/>),<b>不接调度器</b>(归 Task 6),不建 attempt/outbox 表(归 Task 4/5)。
+/// 一次可靠执行:领取(lease/fence)、重试预算、handler 身份与幂等哈希。Task 8b 通过
+/// <see cref="WfNodeExecutionStore"/> 接入既有调度器，并由 dispatcher 写入 attempt/outbox；本实体仍只承载
+/// execution 的持久化事实，不复制 worker 或结果状态机。
 /// <para><b>刻意继承 <see cref="BaseEntity"/> 而非 <c>DataEntity</c></b>。<c>DataEntity</c> 带
 /// <see cref="IOrgScoped"/> 全局数据范围过滤器(只作用于 SELECT),而本表的读写方是<b>没有 HTTP 请求上下文的
 /// 后台 worker</b>——<c>IDataScopeContext</c> 是空的,<c>IOrgScoped</c> 过滤器会让扫描直接返回 0 行,症状是
@@ -77,7 +78,7 @@ public class WfNodeExecution : BaseEntity
     [SugarColumn(ColumnDescription = "已领取次数")]
     public int AttemptCount { get; set; }
 
-    [SugarColumn(ColumnDescription = "最大重试次数")]
+    [SugarColumn(ColumnDescription = "最大执行次数(含首次)")]
     public int MaxAttempts { get; set; }
 
     /// <summary>下次可重试时刻(UTC);仅 <see cref="WfNodeExecutionStatus.RetryScheduled"/> 有意义。</summary>

@@ -32,7 +32,7 @@ public static class WorkflowSetup
     }
 
     /// <summary>
-    /// 启用工作流 DI:<c>TryAdd</c> 注册 <see cref="WorkflowOptions"/> 与 SPI 占位(后续里程碑补齐引擎/服务/种子)。
+    /// 启用工作流 DI:<c>TryAdd</c> 注册 <see cref="WorkflowOptions"/>、引擎、可靠 execution worker 与其他 SPI。
     /// 消费者若要整体替换某 SPI,在本方法<strong>之前</strong>注册同接口即可胜出。
     /// </summary>
     /// <example>
@@ -49,6 +49,7 @@ public static class WorkflowSetup
 
         var options = configuration?.GetSection("TenonAdmin:Workflow").Get<WorkflowOptions>()
                       ?? new WorkflowOptions();
+        WorkflowOptionsValidation.Validate(options);
         services.TryAddSingleton(options);
         services.TryAddSingleton(TimeProvider.System);
 
@@ -78,6 +79,7 @@ public static class WorkflowSetup
         // 发起校验 / 完结回写在引擎内调用;详情 API 透出 Model.FormComponent 供前端动态挂载。
         services.TryAddScoped<IWorkflowFormBinder, NoOpWorkflowFormBinder>();
         services.TryAddScoped<IWorkflowEngine, WorkflowEngine>();
+        services.TryAddScoped<WfNodeExecutionDispatcher>();
 
         // 写操作幂等回执(M2c §14.2):引擎在事务内占位 / 命中 / 回填;消费者可前置注册同接口整体替换。
         services.TryAddScoped<IWfOperationReceiptService, WfOperationReceiptService>();
@@ -104,6 +106,8 @@ public static class WorkflowSetup
         // 调度器只派发 sys_job 表里 Status=Ready 的行,少了种子就是「装了包但超时永不触发」。
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, WfTimeoutJob>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WfTimeoutJobSeed>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, WfNodeExecutionJob>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WfNodeExecutionJobSeed>());
 
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WorkflowMenuSeed>());
 
