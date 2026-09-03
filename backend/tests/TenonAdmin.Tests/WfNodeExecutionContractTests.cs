@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using TenonAdmin.SqlSugar;
@@ -144,25 +146,35 @@ public class WfNodeExecutionContractTests
         Assert.DoesNotContain('?', loaded.Summary!);
 
         // attempt 的 OutputSummary/ErrorSummary(512,SummaryMaxLength)与 OutputHash(64,SHA-256 hex 天然定长)。
+        const string succeededOutputJson = "{\"a\":1}";
+        var expectedSucceededOutputSummary = new string('结', 512);
         var succeededAttempt = await WfNodeExecutionAttemptStore.AppendAsync(
-            db, claimed, WfNodeExecutionResult.Succeeded(outputJson: "{\"a\":1}", summary: new string('结', 512)),
+            db, claimed, WfNodeExecutionResult.Succeeded(outputJson: succeededOutputJson, summary: expectedSucceededOutputSummary),
             DateTime.UtcNow, DateTime.UtcNow, CancellationToken.None);
-        Assert.Equal(512, succeededAttempt.OutputSummary!.Length);
-        Assert.Equal(new string('结', 512), succeededAttempt.OutputSummary);
-        Assert.Equal(64, succeededAttempt.OutputHash!.Length);
-        Assert.DoesNotContain('?', succeededAttempt.OutputSummary);
+        var expectedSucceededOutputHash = Convert.ToHexStringLower(
+            SHA256.HashData(Encoding.UTF8.GetBytes(succeededOutputJson)));
+        var loadedSucceededAttempt = await db.Queryable<WfNodeExecutionAttempt>()
+            .Where(a => a.Id == succeededAttempt.Id).FirstAsync();
+        Assert.Equal(512, loadedSucceededAttempt.OutputSummary!.Length);
+        Assert.Equal(expectedSucceededOutputSummary, loadedSucceededAttempt.OutputSummary);
+        Assert.Equal(expectedSucceededOutputHash, loadedSucceededAttempt.OutputHash);
+        Assert.DoesNotContain('?', loadedSucceededAttempt.OutputSummary);
 
         var failedExecution = NewExecution(UniqueKey());
         await db.Insertable(failedExecution).ExecuteCommandAsync();
         var failedClaim = await WfNodeExecutionStore.ClaimAsync(
             db, failedExecution.Id, "worker-e2", DateTime.UtcNow, TimeSpan.FromMinutes(5), CancellationToken.None);
         Assert.NotNull(failedClaim);
+        var expectedFailedErrorSummary = new string('错', 512);
         var failedAttempt = await WfNodeExecutionAttemptStore.AppendAsync(
-            db, failedClaim, WfNodeExecutionResult.RetryableFailure(errorCode: 48001, summary: new string('错', 512)),
+            db, failedClaim, WfNodeExecutionResult.RetryableFailure(errorCode: 48001, summary: expectedFailedErrorSummary),
             DateTime.UtcNow, DateTime.UtcNow, CancellationToken.None);
-        Assert.Equal(512, failedAttempt.ErrorSummary!.Length);
-        Assert.Equal(new string('错', 512), failedAttempt.ErrorSummary);
-        Assert.DoesNotContain('?', failedAttempt.ErrorSummary);
+        var loadedFailedAttempt = await db.Queryable<WfNodeExecutionAttempt>()
+            .Where(a => a.Id == failedAttempt.Id).FirstAsync();
+        Assert.Equal(512, loadedFailedAttempt.ErrorSummary!.Length);
+        Assert.Equal(expectedFailedErrorSummary, loadedFailedAttempt.ErrorSummary);
+        Assert.Null(loadedFailedAttempt.OutputHash);
+        Assert.DoesNotContain('?', loadedFailedAttempt.ErrorSummary);
     }
 
     /// <summary>
@@ -376,6 +388,8 @@ public class WfNodeExecutionContractTests
             db, execution.Id, "worker-e7", DateTime.UtcNow, TimeSpan.FromMinutes(5), CancellationToken.None);
         Assert.NotNull(claimed);
 
+        var inTransactionAttemptCount = -1;
+        var inTransactionOutboxCount = -1;
         var tran = await db.Ado.UseTranAsync(async () =>
         {
             var succeeded = WfNodeExecutionStatus.Succeeded;
@@ -392,10 +406,19 @@ public class WfNodeExecutionContractTests
             await WfOutboxStore.EnqueueAsync(
                 db, claimed, WfOutboxStore.MessageTypeNodeExecutionCompleted, "{}", now, CancellationToken.None);
 
+            inTransactionAttemptCount = await db.Queryable<WfNodeExecutionAttempt>()
+                .Where(a => a.ExecutionId == claimed.Id).CountAsync();
+            inTransactionOutboxCount = await db.Queryable<WfOutbox>()
+                .Where(o => o.ExecutionId == claimed.Id).CountAsync();
+            Assert.Equal(1, inTransactionAttemptCount);
+            Assert.Equal(1, inTransactionOutboxCount);
+
             throw new InvalidOperationException("强制回滚,验证三表同事务不残留半推进状态。");
         });
 
         Assert.False(tran.IsSuccess);
+        Assert.Equal(1, inTransactionAttemptCount);
+        Assert.Equal(1, inTransactionOutboxCount);
 
         var loaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == claimed.Id).FirstAsync();
         Assert.Equal(WfNodeExecutionStatus.Running, loaded.Status);
@@ -610,10 +633,9 @@ public class WfNodeExecutionContractTests
         // <c>WfInstance.Version</c> 那段反编译注释本就写着「SQLite 例外……回填 UPDATE 照旧执行 → 旧行仍然
         // 读到 0」,只是 Version 的 DefaultValue 恰好也是 "0" 而从未被人注意到这句话对非零 DefaultValue
         // 意味着什么。mysql/postgres/sqlserver 三腿是否真的遵循 DefaultValue="1" 回填,本机没有这三种数据库,
-        // 未验证——为避免在未验证的三腿上把断言写死成某一个值而产生假红,这里接受两种观测值,把「SQLite 的 0
-        // 是否也是其余三库的真实值」这一判定交给 Task 10 在真机四库上核实后收紧成单值断言。
-        Assert.True(loadedHistory.PayloadVersion is 0 or 1,
-            $"PayloadVersion 应为 SQLite 的实测值 0,或声明的 DefaultValue=1;实际是 {loadedHistory.PayloadVersion}。");
+        // 未验证——这里钉住当前已观测到的跨方言诊断探针结果,不是永久业务语义;
+        // SQLite 读到 0 的事实不能用松散边界掩盖,其余方言仍交给 Task 10 在真机核实。
+        Assert.Equal(0, loadedHistory.PayloadVersion);
 
         var loadedInstance = await db.Queryable<WfInstance>().ClearFilter<IOrgScoped>()
             .Where(i => i.Id == instance.Id).FirstAsync();
