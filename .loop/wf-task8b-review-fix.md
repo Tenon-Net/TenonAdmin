@@ -2,12 +2,12 @@
 
 ## State
 
-- status: `LOCAL_VERIFIED`
-- round: `2 / 10`
-- baseline: `484e802a5f892c9b33b5d8cb4d4b4d3d5cf31477` (`dev`, Task 8b delivery + CI evidence)
+- status: `CI_FIX_LOCAL_VERIFIED`
+- round: `3 / 10`
+- baseline: `f49ce2df615ec4588bd1db58c67a43b39c7631ad` (`dev`, token-visit repair)
 - protected untracked path: `backend/tests/TenonAdmin.Tests/TestResults/`
-- current task: local repair complete; awaiting a user instruction to commit and/or push
-- next: if instructed, create one Lore-protocol commit with the repair, then push normally and wait for the database CI matrix; do not commit or push without a new explicit instruction.
+- current task: make the PostgreSQL scheduler-test timing correction atomic, commit, push, and await a fresh four-database matrix
+- next: run the full worker class and release build; then commit/push the test-only CI correction under the user's existing commit-and-push instruction.
 
 ## Review finding and fixed decision
 
@@ -49,6 +49,14 @@ The repair preserves current resubmit availability instead of rejecting a resubm
 - `git diff --check` passed; no temporary mutation marker or debug marker remains in the touched execution/test files.
 - The first post-fix reviewer found the lock-order and coverage gaps documented above; both were fixed. A final architecture verifier was requested but produced no usable result before its tool session ended, so it is not counted as independent approval.
 - Git boundary: no commit or push was attempted. The only non-task untracked path remains the protected `backend/tests/TenonAdmin.Tests/TestResults/`.
+
+## CI follow-up: PostgreSQL scheduler-test boundary
+
+- Commit `f49ce2d` was pushed normally. `contract-drift` and `docker-smoke` passed; backend SQLite, MySQL, SQL Server, and template-smoke passed. PostgreSQL was the only failure.
+- PostgreSQL log identified `WfNodeExecutionWorkerTests.Scheduler_tick_fires_the_seeded_worker_through_executor_and_handler_resolver`: expected job-log `Success`, actual `Skipped`.
+- Root cause: the test manually set `NextRunTime = DateTime.Now.AddMinutes(-1)`, exactly on `AdminJobsOptions.MisfireThresholdSeconds = 60`. The scheduler intentionally evaluates `now - expected > threshold` and the workflow seed intentionally uses `MisfireStrategy.Skip`; PostgreSQL timestamp precision made the row legitimately late enough to skip, while local SQLite timing often did not.
+- The test now uses `DateTime.Now.AddSeconds(-10)`: due enough to be dispatched, safely inside the 60-second non-misfire window. It does not alter scheduler production behavior, seed cadence, or configuration.
+- Focused scheduler test repeated **5/5** locally with exit code 0. Docker/PostgreSQL is unavailable in this Windows workspace, so PostgreSQL confirmation requires the fresh GitHub matrix; do not claim local PostgreSQL coverage.
 
 ## Scope boundaries
 

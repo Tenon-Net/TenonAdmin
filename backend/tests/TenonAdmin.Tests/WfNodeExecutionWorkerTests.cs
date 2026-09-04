@@ -199,7 +199,10 @@ public class WfNodeExecutionWorkerTests
             .FirstAsync();
         Assert.NotNull(job);
 
-        var due = DateTime.Now.AddMinutes(-1);
+        // 必须已到期以触发 scheduler，但不能恰好压在 60 秒 MisfireThreshold 的边界。
+        // PostgreSQL 的时间精度会让「一分钟前」稳定落进 Skip，而 SQLite 在本地常恰好不越界，
+        // 两者都不是本用例要验证的 worker/handler-resolver 链路。
+        var due = DateTime.Now.AddSeconds(-10);
         await db.Updateable<SysJob>()
             .SetColumns(j => new SysJob { NextRunTime = due })
             .Where(j => j.Id == job!.Id)
