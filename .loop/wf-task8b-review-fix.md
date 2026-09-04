@@ -2,12 +2,12 @@
 
 ## State
 
-- status: `CI_FIX_LOCAL_VERIFIED`
-- round: `3 / 10`
-- baseline: `f49ce2df615ec4588bd1db58c67a43b39c7631ad` (`dev`, token-visit repair)
+- status: `DONE`
+- round: `4 / 10`
+- baseline: `8b40b2849628cc458d2b87a631b6822dd8e25aed` (`dev`, PostgreSQL scheduler-test correction)
 - protected untracked path: `backend/tests/TenonAdmin.Tests/TestResults/`
-- current task: make the PostgreSQL scheduler-test timing correction atomic, commit, push, and await a fresh four-database matrix
-- next: run the full worker class and release build; then commit/push the test-only CI correction under the user's existing commit-and-push instruction.
+- current task: complete
+- next: none; Task 8b review repair and its four-database CI are closed.
 
 ## Review finding and fixed decision
 
@@ -57,6 +57,14 @@ The repair preserves current resubmit availability instead of rejecting a resubm
 - Root cause: the test manually set `NextRunTime = DateTime.Now.AddMinutes(-1)`, exactly on `AdminJobsOptions.MisfireThresholdSeconds = 60`. The scheduler intentionally evaluates `now - expected > threshold` and the workflow seed intentionally uses `MisfireStrategy.Skip`; PostgreSQL timestamp precision made the row legitimately late enough to skip, while local SQLite timing often did not.
 - The test now uses `DateTime.Now.AddSeconds(-10)`: due enough to be dispatched, safely inside the 60-second non-misfire window. It does not alter scheduler production behavior, seed cadence, or configuration.
 - Focused scheduler test repeated **5/5** locally with exit code 0. Docker/PostgreSQL is unavailable in this Windows workspace, so PostgreSQL confirmation requires the fresh GitHub matrix; do not claim local PostgreSQL coverage.
+
+## Final remote CI evidence
+
+- `8b40b28` was pushed normally after the test-only correction. Local and remote `dev` matched that commit before this evidence update.
+- Backend run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172) completed **success**: SQLite, MySQL, PostgreSQL, SQL Server, and template-smoke all passed. PostgreSQL specifically confirms that the seeded-worker scheduler test no longer crosses the misfire boundary.
+- Contract-drift run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095) completed **success**.
+- Docker smoke run [`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106) completed **success** for both single-replica and multi-replica checks.
+- The preceding `f49ce2d` backend run had one PostgreSQL failure and was superseded by `8b40b28`; its remaining SQLite/MySQL/SQL Server/template-smoke checks had passed. No open P1/P2 remains after the deterministic scheduler-fixture correction and the fresh all-green matrix.
 
 ## Scope boundaries
 
