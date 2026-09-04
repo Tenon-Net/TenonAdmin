@@ -384,7 +384,7 @@ EnterNodeOp 进入 Webhook
 
 领取后如果 instance、token、definition version 或模型/节点快照已经永久缺失或损坏，dispatcher 不把这类数据错误当成可无限续租的暂时故障，而是发出内部 quarantine command。引擎在同一 tx2 中用旧 `Fence + Running` CAS 将 execution 置为 `Failed`、清除 lease、追加 terminal attempt 并幂等写入一条 `Pending` outbox；该旁路不读取缺失上下文、不推进 Token。数据库/基础设施瞬时异常仍原样退出，保留 lease 到期后的恢复路径。
 
-外部 Webhook 副作用的交付语义是 at-least-once：租约过期或 tx2 提交前崩溃都可能导致同一请求再次发送。消费者必须使用 `ExecutionKey` 作为幂等身份；本地 workflow 状态通过 fence/CAS 保证同一 execution 的 Token 最多推进一次。Task 8b 只在 execution 终态提交 `Pending` outbox，`Dispatching/Dispatched/Failed` 的消费、重投和传输闭环延期到 Task 8c。
+外部 Webhook 副作用的交付语义是 at-least-once：租约过期或 tx2 提交前崩溃都可能导致同一请求再次发送。消费者必须使用 `ExecutionKey` 作为幂等身份；本地 workflow 状态通过 fence/CAS 保证同一 execution 的 Token 最多推进一次。重提复用同一 token 但会生成新的 `NodeVisitId`：为与完成 tx2 保持统一的 `execution → token` 锁顺序，引擎先在同一事务中将该 token 上全部 `Pending`/`RetryScheduled`/`Running` 的旧 execution 置为 `Cancelled`、清 lease/retry 并增加 Fence，再以 token CAS 取得重提权，随后从 start 进入新 visit；若 CAS 输掉，事务回滚先前的 invalidation。迟到 handler 的 tx2 因 `Status != Running` 与 Fence 失配整体回滚；回写还会核验 token 的节点/visit 仍与 execution 一致，旧结果不能推进新 traversal。Task 8b 只在 execution 终态提交 `Pending` outbox，`Dispatching/Dispatched/Failed` 的消费、重投和传输闭环延期到 Task 8c。
 
 ### 15.4 M3b 自动放行默认关闭，阈值校准是消费者的责任
 

@@ -212,6 +212,101 @@ public class WfNodeExecutionProductionE2ETests
             .ToListAsync());
     }
 
+    /// <summary>
+    /// 重提复用同一个 token，却必须使此前 visit 上正在事务外执行的节点 execution 失效。
+    /// 否则旧 handler 的迟到成功会拿着仍然有效的 execution fence，把新 traversal 的 token
+    /// 按旧节点的 next 推走。变异：删掉重提时的 active-execution invalidation → 此用例在旧行
+    /// 仍为 Running 处失败；删掉 <c>Status == Running</c> 回写条件 → 旧结果会推进 replacement visit。
+    /// </summary>
+    [Fact]
+    public async Task A_resubmit_invalidates_the_old_webhook_execution_before_its_late_result_can_advance_the_new_visit()
+    {
+        var handler = new BlockingNodeHandler();
+        using var f = new WorkflowAppFactory
+        {
+            Overrides = services => services.Insert(
+                0,
+                ServiceDescriptor.Scoped<IWorkflowNodeHandler>(_ => handler)),
+        };
+        _ = f.CreateClient();
+        using var workerScope = f.Services.CreateScope();
+        using var resubmitScope = f.Services.CreateScope();
+        var db = workerScope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+
+        var started = await StartPublishedWebhookAsync(workerScope.ServiceProvider, WebhookModel());
+        var oldExecution = await SingleExecutionAsync(db, started.InstanceId);
+        var workerTask = ResolveWorker(workerScope.ServiceProvider)
+            .ExecuteAsync(JobContext(), CancellationToken.None);
+        await handler.WaitUntilStartedAsync();
+        var stalePending = await InsertSupersededExecutionAsync(
+            db,
+            oldExecution,
+            oldExecution.NodeVisitId!.Value - 2,
+            WfNodeExecutionStatus.Pending,
+            fence: 0,
+            nextRetryAtUtc: null);
+        var staleRetry = await InsertSupersededExecutionAsync(
+            db,
+            oldExecution,
+            oldExecution.NodeVisitId!.Value - 3,
+            WfNodeExecutionStatus.RetryScheduled,
+            fence: 7,
+            nextRetryAtUtc: DateTime.UtcNow.AddHours(1));
+
+        try
+        {
+            var resubmitted = await resubmitScope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+                .ResubmitAsync(started.InstanceId, 1, null, null, cancellationToken: CancellationToken.None);
+            Assert.Equal(WfInstanceStatus.Running, resubmitted.InstanceStatus);
+
+            var oldAfterResubmit = await ReadExecutionAsync(db, oldExecution.Id);
+            Assert.Equal(WfNodeExecutionStatus.Cancelled, oldAfterResubmit.Status);
+            Assert.True(oldAfterResubmit.Fence > oldExecution.Fence);
+            Assert.Empty(await ReadAttemptsAsync(db, oldExecution.Id));
+            Assert.Empty(await ReadOutboxesAsync(db, oldExecution.Id));
+            await AssertSupersededByResubmitAsync(db, stalePending.Id, expectedFence: 1);
+            await AssertSupersededByResubmitAsync(db, staleRetry.Id, expectedFence: 8);
+
+            var replacement = Assert.Single(
+                await db.Queryable<WfNodeExecution>()
+                    .Where(e => e.InstanceId == started.InstanceId && e.Id != oldExecution.Id)
+                    .ToListAsync(),
+                e => e.Status == WfNodeExecutionStatus.Pending);
+            Assert.NotEqual(oldExecution.NodeVisitId, replacement.NodeVisitId);
+
+            var tokenAfterResubmit = await db.Queryable<WfToken>()
+                .Where(t => t.Id == oldExecution.TokenId)
+                .FirstAsync();
+            Assert.Equal(WfTokenStatus.Active, tokenAfterResubmit.Status);
+            Assert.Equal("webhook", tokenAfterResubmit.NodeId);
+            Assert.Equal(replacement.NodeVisitId, tokenAfterResubmit.NodeVisitId);
+
+            handler.Succeed();
+            await workerTask;
+
+            var tokenAfterLateResult = await db.Queryable<WfToken>()
+                .Where(t => t.Id == oldExecution.TokenId)
+                .FirstAsync();
+            Assert.Equal(tokenAfterResubmit.NodeId, tokenAfterLateResult.NodeId);
+            Assert.Equal(tokenAfterResubmit.NodeVisitId, tokenAfterLateResult.NodeVisitId);
+            Assert.Equal(tokenAfterResubmit.Version, tokenAfterLateResult.Version);
+            Assert.Empty(await ReadAttemptsAsync(db, oldExecution.Id));
+            Assert.Empty(await ReadOutboxesAsync(db, oldExecution.Id));
+
+            await RunWorkerAsync(workerScope.ServiceProvider);
+            Assert.Equal(2, handler.CallCount);
+            var replacementAfterRun = await ReadExecutionAsync(db, replacement.Id);
+            Assert.Equal(WfNodeExecutionStatus.Succeeded, replacementAfterRun.Status);
+            Assert.Equal(WfTokenStatus.Completed, await ReadTokenStatusAsync(db, oldExecution.TokenId));
+        }
+        finally
+        {
+            handler.Succeed();
+            if (!workerTask.IsCompleted)
+                await workerTask;
+        }
+    }
+
     private static WorkflowAppFactory NewFactory(SequenceTransport transport) => new()
     {
         Overrides = services => services.Insert(
@@ -294,6 +389,55 @@ public class WfNodeExecutionProductionE2ETests
         return execution!;
     }
 
+    private static async Task<WfNodeExecution> InsertSupersededExecutionAsync(
+        ISqlSugarClient db,
+        WfNodeExecution source,
+        long nodeVisitId,
+        WfNodeExecutionStatus status,
+        long fence,
+        DateTime? nextRetryAtUtc)
+    {
+        var row = new WfNodeExecution
+        {
+            ScopeKey = source.ScopeKey,
+            ExecutionKey = WfExecutionKey.Compute(
+                source.ScopeKey,
+                source.InstanceId,
+                source.TokenId,
+                nodeVisitId,
+                source.NodeId,
+                source.DefinitionVersionId),
+            InstanceId = source.InstanceId,
+            TokenId = source.TokenId,
+            NodeVisitId = nodeVisitId,
+            NodeId = source.NodeId,
+            NodeType = source.NodeType,
+            DefinitionVersionId = source.DefinitionVersionId,
+            Status = status,
+            Fence = fence,
+            MaxAttempts = source.MaxAttempts,
+            NextRetryAtUtc = nextRetryAtUtc,
+        };
+        await db.Insertable(row).ExecuteCommandAsync();
+        return row;
+    }
+
+    private static async Task AssertSupersededByResubmitAsync(
+        ISqlSugarClient db,
+        long executionId,
+        long expectedFence)
+    {
+        var execution = await ReadExecutionAsync(db, executionId);
+        Assert.Equal(WfNodeExecutionStatus.Cancelled, execution.Status);
+        Assert.Equal(expectedFence, execution.Fence);
+        Assert.Null(execution.LeaseOwner);
+        Assert.Null(execution.LeaseExpiresAtUtc);
+        Assert.Null(execution.NextRetryAtUtc);
+        Assert.NotNull(execution.CompletedTimeUtc);
+        Assert.Empty(await ReadAttemptsAsync(db, executionId));
+        Assert.Empty(await ReadOutboxesAsync(db, executionId));
+    }
+
     private static Task<WfNodeExecution> ReadExecutionAsync(ISqlSugarClient db, long id) =>
         db.Queryable<WfNodeExecution>().Where(e => e.Id == id).FirstAsync();
 
@@ -344,6 +488,30 @@ public class WfNodeExecutionProductionE2ETests
             CancellationToken cancellationToken = default) =>
             Task.FromException<WfEngineResult>(
                 new InvalidOperationException("模拟 Webhook 外呼完成后、tx2 提交前崩溃。"));
+    }
+
+    private sealed class BlockingNodeHandler : IWorkflowNodeHandler
+    {
+        private readonly TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<WfNodeExecutionResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public WfNodeType NodeType => WfNodeType.Webhook;
+
+        public int CallCount { get; private set; }
+
+        public Task<WfNodeExecutionResult> ExecuteAsync(
+            WfNodeExecutionContext context,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CallCount++;
+            started.TrySetResult();
+            return completion.Task;
+        }
+
+        public Task WaitUntilStartedAsync() => started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        public void Succeed() => completion.TrySetResult(WfNodeExecutionResult.Succeeded(summary: "late-ok"));
     }
 
     private static HttpResponseMessage Ok(string body) =>

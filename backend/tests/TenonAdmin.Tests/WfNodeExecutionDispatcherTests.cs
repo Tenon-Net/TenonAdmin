@@ -677,6 +677,50 @@ public class WfNodeExecutionDispatcherTests
         Assert.Equal(WfInstanceStatus.Cancelled, instance.Status);
     }
 
+    /// <summary>
+    /// execution fence 只证明 owner 仍拥有 execution 行；token 已进入新 visit 时，旧结果也不得拿当前
+    /// token 继续旧节点的 transition。这里直接模拟已提交的 token 重定位，避免把该防线只间接绑定在
+    /// Resubmit 的 active-execution invalidation 上。变异：移除 token visit 判定 → 旧成功结果会把 token
+    /// 推离 replacement visit，execution 也会错误落为 Succeeded。
+    /// </summary>
+    [Fact]
+    public async Task A_result_for_a_superseded_token_visit_is_cancelled_without_advancing_the_replacement_visit()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "t9-token-visit");
+        var execution = await BuildExecutionAsync(db, s);
+        var replacementVisitId = execution.NodeVisitId!.Value + 1;
+        var replacementVersion = s.Token.Version + 1;
+
+        var handler = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(summary: "late-ok"), WfNodeType.Webhook)
+        {
+            OnExecute = () => db.Updateable<WfToken>()
+                .SetColumns(t => new WfToken
+                {
+                    NodeVisitId = replacementVisitId,
+                    Version = replacementVersion,
+                })
+                .Where(t => t.Id == s.Token.Id && t.NodeVisitId == execution.NodeVisitId)
+                .ExecuteCommand(),
+        };
+        var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, TimeProvider.System);
+
+        var status = await dispatcher.RunAsync(execution.Id, "worker-a", TimeSpan.FromMinutes(5), CancellationToken.None);
+        Assert.Equal(WfNodeExecutionStatus.Cancelled, status);
+
+        var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.Cancelled, reloaded.Status);
+
+        var token = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
+        Assert.Equal(WfTokenStatus.Active, token.Status);
+        Assert.Equal("node1", token.NodeId);
+        Assert.Equal(replacementVisitId, token.NodeVisitId);
+        Assert.Equal(replacementVersion, token.Version);
+    }
+
     // ── T10:无注册 handler ────────────────────────────────────────────────
 
     /// <summary>

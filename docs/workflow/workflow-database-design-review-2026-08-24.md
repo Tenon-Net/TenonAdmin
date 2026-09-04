@@ -15,7 +15,7 @@
 | --- | --- | --- |
 | M1/M2b 人工审批 | 已兼容 | 现有模型足够，任务级 CAS 能防同一待办双批 |
 | M2c 请求幂等与四库终态保护 | 部分兼容 | 需要 operation receipt，并补实例/Token 级并发保护 |
-| M3a-1 Webhook/自动节点执行内核 | M3a-1 内核已通过最终四库 CI；Task 8b 当前本地验证 | 节点访问身份、execution、attempt、outbox、lease/fence、dispatcher、Webhook 入口和 `IAdminJob` worker 已落地；Task 8b 当前 HEAD 的四库 CI 尚待运行，outbox 消费与 Webhook 设计器 UI 仍分别属于 Task 8c/M3a-2 |
+| M3a-1 Webhook/自动节点执行内核 | M3a-1 内核与 Task 8b 均已通过最终四库 CI | 节点访问身份、execution、attempt、outbox、lease/fence、dispatcher、Webhook 入口和 `IAdminJob` worker 已落地；Task 8b 的 SQLite/MySQL/PostgreSQL/SQL Server、template-smoke、contract-drift、docker-smoke 和双前端 CI 均通过，outbox 消费与 Webhook 设计器 UI 仍分别属于 Task 8c/M3a-2 |
 | M3b AI Decision | 尚未兼容 | 需要独立 AI decision 审计表，不能复用人工意见字段 |
 | 循环/并行网关 | 结构可扩展但未到位 | 多 Token 只是起点，尚缺节点访问、fork/join 身份 |
 
@@ -349,6 +349,8 @@ Pending | Running | Succeeded | RetryScheduled | ManualFallback | Cancelled | Fa
 ```
 
 `Succeeded/ManualFallback/Cancelled/Failed` 是终态；`Running` 在租约过期后可自转移为 `Running`。其中 `RetryScheduled` 仅在 `NextRetryAtUtc` 到期后可重新领取。`MaxAttempts` 表示含首次执行的总尝试次数，生产来源按 `WfNodeProps.MaxAttempts` → `WorkflowOptions.MaxAttempts` → 内置默认 3 解析，值域为 `[1,100]`，并在 execution 创建时固化；之后配置变化不影响既有行。
+
+重提会复用 `WfToken`，却必须开始一次新的 `NodeVisitId`；它不是旧自动执行的延续。为避免与完成 tx2 的 `execution → token` 写锁顺序相反，重提在同一事务内先把该 token 上所有 `Pending`、`RetryScheduled`、`Running` execution 置为 `Cancelled`，清空 lease/retry 并将 Fence 加一，再以 token version CAS 获得重提权，然后才从 start 生成新的 visit；CAS 输掉时，事务回滚此前的 invalidation。旧 handler 即使已经在事务外返回，其 `Id + Fence + Running` tx2 也会整体回滚，因而不能追加 attempt/outbox 或推进新 visit 的 token。结果回写还要求当前 token 的 `InstanceId`、`NodeId` 和 `NodeVisitId` 与 execution 一致，作为重提之外 token 重定位动作的第二道防线。
 
 领取后发现 instance、token、definition version 或模型/节点快照永久缺失/损坏时，dispatcher 发出内部 quarantine command。引擎不再重复加载这段缺失上下文，而是在 tx2 中按 `Fence + Running` CAS 将 execution 置为 `Failed`、清空 lease、追加一条 `TerminalFailure` attempt，并写入一条 `Pending` outbox；不推进 Token。只有这类可证明的永久数据/模型错误走隔离终态，数据库或其他基础设施瞬时异常仍保持 `Running`，依赖 lease 到期恢复，不能把所有异常一概 terminal 化。
 

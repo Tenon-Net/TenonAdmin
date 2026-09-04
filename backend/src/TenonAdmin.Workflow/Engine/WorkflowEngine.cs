@@ -1135,7 +1135,21 @@ public class WorkflowEngine(
             LeaderChainByLevel = leaderChainByLevel,
         };
 
-        // 本事务的第一个写操作。输的那一边抛 48004(reason=tokenVersionConflict)→ 整事务回滚。
+        // 重提会复用同一 token 并从 start 生成新的 NodeVisitId。旧 visit 上可能仍有 Pending/
+        // RetryScheduled/Running 的自动 execution：若不在同一事务里先使其失效，事务外已返回的
+        // handler 会带着仍有效的 execution fence 回写，并按旧节点推进新 visit 的 token。
+        // 写锁顺序刻意与完成路径一致：execution → token。完成 tx2 先 fence-CAS execution，随后
+        // EnterNodeOp 才领取 token；若这里反过来先拿 token 再等 execution，两个事务会形成死锁环。
+        // token CAS 仍是重提并发胜负的唯一锚点：CAS 输掉时整个事务会回滚下面的 invalidation。
+        await InvalidateActiveNodeExecutionsForResubmitAsync(
+            db,
+            instance.Id,
+            token.Id,
+            timeProvider.GetUtcNow().UtcDateTime,
+            cancellationToken);
+
+        // 本事务的 token 级 CAS。输的那一边抛 48004(reason=tokenVersionConflict)→ 整事务回滚，
+        // 包括上面先拿到的 execution 行锁与 invalidation，故不会留下半取消状态。
         await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
 
         await db.Updateable(instance)
@@ -1155,6 +1169,45 @@ public class WorkflowEngine(
 
         agenda.Plan(new EnterNodeOp(model.Root));
         return ctx;
+    }
+
+    /// <summary>
+    /// 重提将同一 token 从头遍历前，使其此前 visit 上还活着的自动 execution 失效。
+    /// <para>这是 token 级 CAS 之后、重新进入 start 之前的同一工作流事务步骤：不写 attempt/outbox，
+    /// 因为这些行的 handler 结果可能尚未知晓；已在事务外运行的旧 handler 随后提交时会因
+    /// <c>Status != Running</c> 和新 Fence 双重条件失败，整笔 tx2(含 attempt/outbox/token)回滚。</para>
+    /// <para>只改活跃态，既有终态审计与 outbox 保持不动；<c>Cancelled</c> 是「该 token visit 已被
+    /// 重提 supersede」的 execution 行终态，而非把外部 <see cref="OperationCanceledException"/> 伪造成
+    /// 一条 handler attempt。</para>
+    /// </summary>
+    protected virtual async Task InvalidateActiveNodeExecutionsForResubmitAsync(
+        ISqlSugarClient db,
+        long instanceId,
+        long tokenId,
+        DateTime completedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string? noOwner = null;
+        DateTime? noLease = null;
+        DateTime? noRetry = null;
+
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution
+            {
+                Status = WfNodeExecutionStatus.Cancelled,
+                Fence = e.Fence + 1,
+                LeaseOwner = noOwner,
+                LeaseExpiresAtUtc = noLease,
+                NextRetryAtUtc = noRetry,
+                CompletedTimeUtc = completedAtUtc,
+            })
+            .Where(e => e.InstanceId == instanceId
+                        && e.TokenId == tokenId
+                        && (e.Status == WfNodeExecutionStatus.Pending
+                            || e.Status == WfNodeExecutionStatus.RetryScheduled
+                            || e.Status == WfNodeExecutionStatus.Running))
+            .ExecuteCommandAsync();
     }
 
     // ── M3a-1 Task 6:Execution dispatcher 回写(NodeExecutionCompletedCmd) ──────────────────
@@ -1501,7 +1554,9 @@ public class WorkflowEngine(
         WfNodeExecutionResult result,
         DateTime nowUtc)
     {
-        if (instance.Status != WfInstanceStatus.Running || token.Status != WfTokenStatus.Active)
+        if (instance.Status != WfInstanceStatus.Running
+            || token.Status != WfTokenStatus.Active
+            || !IsExecutionTokenVisitCurrent(execution, token))
             return new WfExecutionOutcome(WfNodeExecutionStatus.Cancelled, null, nowUtc, null, null, true);
 
         switch (result.Type)
@@ -1537,6 +1592,17 @@ public class WorkflowEngine(
                     new Dictionary<string, object?> { ["resultType"] = result.Type.ToString() });
         }
     }
+
+    /// <summary>
+    /// execution 的结果只属于创建它的 token visit。execution fence 证明的是「当前 owner 仍拥有该
+    /// execution 行」；本谓词补上「这个 token 仍在相同节点访问」的业务边界，防止重提或未来的 token
+    /// 重定位动作让旧结果推进新 traversal。
+    /// </summary>
+    protected virtual bool IsExecutionTokenVisitCurrent(WfNodeExecution execution, WfToken token) =>
+        token.Id == execution.TokenId
+        && token.InstanceId == execution.InstanceId
+        && token.NodeId == execution.NodeId
+        && token.NodeVisitId == execution.NodeVisitId;
 
     /// <summary>
     /// 重试退避:<see cref="WfNodeExecutionResult.RetryAfter"/> 在 <c>(0, 24h]</c> 内则用它;否则(含 <c>null</c>、

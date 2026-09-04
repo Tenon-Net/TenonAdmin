@@ -251,8 +251,8 @@ public class WfDefinitionService(
     }
 
     /// <summary>
-    /// 校验可发布模型(树语义,M2a):根为 start;节点类型限 start|approval|cc|branch
-    /// (Parallel/Webhook 仍被拒,M3 开放);节点 Id 跨整棵树(含分支臂内)非空且唯一;
+    /// 校验可发布模型(树语义,M2a/M3a-1):根为 start;节点类型限 start|approval|cc|branch|webhook
+    /// (Parallel 仍被拒);节点 Id 跨整棵树(含分支臂内)非空且唯一;
     /// branch 节点的臂配置合法(见 <see cref="ValidateBranch"/>);跳转目标引用完整
     /// (见 <see cref="ValidateNodeReferences"/>)。
     /// </summary>
