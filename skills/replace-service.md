@@ -31,7 +31,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 | `IDataScopeProvider` | `DataScopeProvider` | 定制数据范围规则 |
 | `IPermissionProvider` | `RbacPermissionProvider` | 定制权限检查逻辑 |
 
-完整列表见 `backend/src/TenonAdmin.Services/ServicesSetup.cs`，每一行 `TryAddScoped`/`TryAddSingleton` 都是可替换点。
+Services 层的注册见 `backend/src/TenonAdmin.Services/ServicesSetup.cs`；其他层的替换点看各自 `*Setup.cs` 中的 `TryAdd*`。
 
 ---
 
@@ -64,13 +64,13 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>());
 ```
 
-适用场景：只想改服务的某个步骤（如：登录后额外记日志、分页查询额外加过滤条件、新增前额外校验）。比整体替换更轻量——不用重新注入全部依赖。
+适用场景：只想改服务的某个步骤（如：登录后额外记日志、分页查询额外加过滤条件、新增前额外校验）。子类构造函数仍需把基类依赖传给 `base`；收益是复用其余业务步骤。
 
 ### 怎么找可覆写的步骤
 
 1. 打开目标 Service 源码（`backend/src/TenonAdmin.Services/`）
 2. 找 `virtual` 或 `protected virtual` 方法——这些就是可覆写点
-3. 覆写时先调 `base.Method()` 保留原逻辑，再追加自己的逻辑
+3. 要扩展原逻辑时调用 `base.Method()`；要替换该步骤时直接实现，避免原步骤产生重复副作用
 
 ---
 
@@ -93,14 +93,16 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 [Route("api/v1/sys/dict")]   // 与被禁用的内置 DictController 同路由
 public class CustomDictController : ControllerBase
 {
-    // 完全自定义的字典逻辑
+    [HttpGet]
+    [RolePermission]
+    public IActionResult List() => Ok(); // 完全自定义的字典逻辑仍须逐 action 鉴权
 }
 ```
 
 可禁用的模块名对应 Controller 上的 `[Module("Name")]` 标注。查看已有的模块名：
 
 ```bash
-grep -r '\[Module(' backend/src/TenonAdmin.AspNetCore/Controllers/
+rg '\[Module\(' backend/src/TenonAdmin.AspNetCore/Controllers/
 ```
 
 ---
@@ -124,7 +126,7 @@ builder.Services.TryAddEnumerable(
     ServiceDescriptor.Transient<ISeedData, ProductSeed>());
 ```
 
-**Id 规则**：种子行的固定 Id 必须落在**消费者保留区间 `[1000, 4095]`**（常量见 `TenonAdmin.Core.TenonSeedIds`：`ConsumerMin`=1000、`ConsumerMax`=4095）。`[1, 999]` 归内核内置种子，`4096+` 是雪花运行时发号区——越界或与其他种子撞号都会被启动检查（`DatabaseInitializer`）当场拒绝，应用起不来，不会静默吞掉。
+**Id 规则**：消费者种子固定 Id 从 `TenonSeedIds.ConsumerMin`（1000）起，并严格小于应用启动时 `SnowflakeIdGenerator.CurrentFloor()` 算出的动态雪花地板。`ConsumerMax` 只是历史兼容常量，不再是运行时上限。越界或与其他种子撞号都会被 `DatabaseInitializer` 当场拒绝。
 
 ---
 
@@ -147,7 +149,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 
 ## 验证可替换性
 
-框架有 5 个"六件套"测试锁定可替换性契约，位于 `backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs`。每个测试验证一种机制：
+框架有一组可替换性契约测试，位于 `backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs`：
 
 | 测试 | 验证的机制 |
 |---|---|

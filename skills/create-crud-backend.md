@@ -118,16 +118,21 @@ public class PositionService(IRepository<SysPosition> positions) : IPositionServ
 
     public virtual async Task<long> AddAsync(PositionInput input)
     {
-        // 唯一性检查：ClearFilter<ISoftDelete>() 纳入软删行
-        AdminException.ThrowIf(
-            await positions.AsQueryable().ClearFilter<ISoftDelete>()
-                .AnyAsync(p => p.Code == input.Code),
-            ErrorCode.PositionCodeExists);
+        var code = string.IsNullOrWhiteSpace(input.Code)
+            ? Guid.NewGuid().ToString("N")[..10]
+            : input.Code;
+
+        // 用户显式填了编码才查重；自动生成的编码由唯一索引兜底
+        if (!string.IsNullOrWhiteSpace(input.Code))
+            AdminException.ThrowIf(
+                await positions.AsQueryable().ClearFilter<ISoftDelete>()
+                    .AnyAsync(p => p.Code == code),
+                ErrorCode.PositionCodeExists);
 
         var position = new SysPosition
         {
             Name = input.Name,
-            Code = input.Code,
+            Code = code,
             Sort = input.Sort,
             Enabled = input.Enabled,
         };
@@ -163,7 +168,7 @@ public class PositionService(IRepository<SysPosition> positions) : IPositionServ
 
 ## 产出 4：ErrorCode
 
-文件：`backend/src/TenonAdmin.Core/ErrorCode.cs`（系统模块）或消费者自定义枚举（业务模块）。
+文件：`backend/src/TenonAdmin.Core/ErrorCode.cs`（系统模块）；业务模块把自选数字集中到常量类。
 
 ### 规则
 
@@ -213,10 +218,10 @@ services.TryAddScoped<IPositionService, PositionService>();
 消费者在自己的 `Program.cs` 或 Setup 扩展中注册：
 
 ```csharp
-builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.TryAddScoped<IProductService, ProductService>();
 ```
 
-业务模块用 `AddScoped` 即可（不需要 TryAdd，因为不存在被覆盖的场景）。
+生成的 `tenon-app` 也用 `TryAddScoped`，给宿主自己的服务保留替换接缝；确定不需要替换时 `AddScoped` 也可。
 
 ---
 
@@ -231,7 +236,7 @@ builder.Services.AddScoped<IProductService, ProductService>();
 - 主构造函数注入 `I{Module}Service`
 - 命名空间：系统模块 `TenonAdmin.AspNetCore`，业务模块自定
 - 每个 action 标 `[RolePermission]`（权限码 = 路由，后台菜单管理中按路由配权限）
-- 写操作可加 `[OperationLog("描述")]` 记录操作日志
+- 写操作默认会被全局过滤器记录；需要更易读的操作名时加 `[OperationLog("描述")]`
 - 返回值统一用 `Result<T>.Ok(...)` 包装
 
 ### HTTP 动词规范
@@ -272,13 +277,11 @@ public class PositionController(IPositionService positionService) : ControllerBa
 
     [HttpPost("add")]
     [RolePermission]
-    [OperationLog("新增职位")]
     public async Task<Result<long>> Add(PositionInput input) =>
         Result<long>.Ok(await positionService.AddAsync(input));
 
     [HttpPut("{id}")]
     [RolePermission]
-    [OperationLog("更新职位")]
     public async Task<Result<bool>> Update(long id, PositionInput input)
     {
         await positionService.UpdateAsync(id, input);
@@ -287,7 +290,6 @@ public class PositionController(IPositionService positionService) : ControllerBa
 
     [HttpDelete("{id}")]
     [RolePermission]
-    [OperationLog("删除职位")]
     public async Task<Result<bool>> Delete(long id)
     {
         await positionService.DeleteAsync(id);
@@ -376,7 +378,7 @@ public virtual async Task DeleteAsync(long id)
 
 ### 4. `[OperationLog]` 审计日志
 
-**所有写操作（增/改/删）都应加 `[OperationLog("描述")]`。** 读操作不加。系统内所有内置 Controller 的写端点都已标注此属性。操作日志过滤器会记录入参（密码等敏感字段自动脱敏）。
+全局 `OperationLogFilter` 默认记录所有已鉴权写操作，并自动脱敏敏感入参。`[OperationLog("描述")]` 只用于覆盖默认的路由标题，或让 GET 导出这类读操作也留痕；普通 CRUD 不必重复标注。
 
 ### 5. 缓存与事件总线
 
@@ -392,11 +394,13 @@ public virtual async Task DeleteAsync(long id)
 
 ## 检查清单
 
-完成所有产出后，运行以下验证：
+在拥有这些改动的 solution 中运行 build 与测试。内核系统模块使用：
 
 ```bash
 dotnet build backend/TenonAdmin.slnx -c Release
 dotnet test backend/TenonAdmin.slnx
 ```
+
+消费者业务模块改用自己的 solution/project；内核仓的测试不会加载消费者程序集。
 
 后端启动后，用 `/openapi/v1.json` 确认新端点已暴露，然后在所用的前端模板里执行 `npm run gen:api` 重新生成 `schema.d.ts`（`web/` 与 `web-react/` 各有同名脚本，刷你在用的那套即可）。

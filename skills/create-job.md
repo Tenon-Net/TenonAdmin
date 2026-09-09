@@ -81,17 +81,18 @@ internal sealed class ReconcileJobSeed : ISeedData<SysJob>
 ## 五、验证
 
 ```bash
-dotnet test backend/TenonAdmin.slnx --filter "FullyQualifiedName~Job"
-dotnet run --project backend/samples/MinimalHost     # 建任务 → 执行一次 → 看执行记录
+# 在拥有 ReconcileJob 的宿主 solution/project 中 build + test
+dotnet test <你的解决方案或测试项目>
+dotnet run --project <你的宿主项目>     # 建任务 → 执行一次 → 看执行记录
 ```
 
-写单元测试直接调 `ExecuteAsync`,不必启调度器:处理器是个普通 Scoped 服务,`JobExecutionContext` 是个可 `new` 的记录快照。要测调度行为(推格触发、misfire、重试)照抄 `backend/tests/TenonAdmin.Tests/JobEngineHost.cs` 的裸容器 + 可拨时钟成法。
+内核维护者改调度器时再跑 `dotnet test backend/TenonAdmin.slnx --filter "FullyQualifiedName~Job"`。业务处理器单测直接调 `ExecuteAsync`,不必启调度器:`JobExecutionContext` 是可 `new` 的记录快照。只有改动推格触发、misfire 或重试时，才参考 `backend/tests/TenonAdmin.Tests/JobEngineHost.cs` 的裸容器与可拨时钟。
 
 ## 六、常见的坑
 
 | 现象 | 原因 |
 |---|---|
-| 建任务时处理器下拉里没有你的类 | 忘了 `TryAddEnumerable` 注册,或消费者程序集没进 `options.ApplicationAssemblies` |
+| 建任务时处理器下拉里没有你的类 | 忘了用 `TryAddEnumerable` 把实现注册成 `IAdminJob`；处理器清单来自 DI，与 `ApplicationAssemblies` 无关 |
 | 任务一直「跳过」,一次都没执行 | 该任务有未闭合的执行记录(上次崩在中途)。主节点每拍会回收失联节点的孤儿行;本机崩溃后重启即恢复 |
 | 改了 cron 但没立刻生效 | 集群下别的副本是主节点,最长 `ReloadSeconds`(默认 30 秒)后重载 |
 | 超时设了却不生效 | 处理器没传取消令牌给下游(见第一节规矩 2) |

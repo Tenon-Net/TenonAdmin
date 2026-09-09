@@ -1,6 +1,6 @@
 # TenonAdmin Development Skills
 
-本目录包含 TenonAdmin 的开发规范文档（skills），帮助开发者（或 AI 助手）按照项目既定模式快速搭建模块，无需手动翻源码对着抄。
+本目录是 TenonAdmin 开发流程和示例的唯一维护位置。先核对当前源码与调用方，再选择任务需要的分支；示例不替代真实接口契约。
 
 这不是代码生成器——每个 skill 是一份规则说明 + 参考模板，AI 助手读取后根据你的需求生成符合规范的代码。
 
@@ -44,15 +44,21 @@
 
 ### Codex
 
-Codex **不扫** `.claude/skills/`。项目级 skill 要放在：
+标准 Codex 从 `.agents/skills/` 发现本仓的 11 个开发技能，使用 `$new-module`、`$write-docs` 等调用，也可按描述自动选择。`.claude/skills/` 是 Claude/Grok 的兼容入口，两者均引用本目录的流程，不复制规则。
 
 | 路径 | 作用 |
 |------|------|
-| `.agents/skills/<name>/SKILL.md` | 跨 agent 项目级（推荐） |
-| `.codex/skills/<name>/SKILL.md` | 仅 Codex 项目级 |
-| `~/.codex/skills/<name>/SKILL.md` | 用户全局 |
+| `.agents/skills/<name>/SKILL.md` | 标准 Codex 项目级发现入口 |
+| `~/.agents/skills/<name>/SKILL.md` | 标准 Codex 用户级入口 |
+| `.codex/skills/<name>/SKILL.md` | 当前 OMX 安装提供的编排技能；是否加载取决于宿主配置 |
 
-`tenon-release` 已在 `.agents/skills/tenon-release/` 与 `.codex/skills/tenon-release/` 各放一份包装，真源仍是 `skills/tenon-release.md`。装完或新增 skill 后**重启 Codex 会话**才会进列表。
+同一 Codex 可见范围内，每个名字保留一个入口，避免选择器出现重复项。Codex 会自动发现技能更新；当前会话未显示时再重启。发现规则见 [OpenAI 官方 skills 文档](https://developers.openai.com/codex/skills.md)。
+
+### 维护 AI 工作流
+
+根 [AGENTS.md](../AGENTS.md) 统一管理产品契约、执行、分工和权限边界；[CLAUDE.md](../CLAUDE.md) 仅导入该文件，供 Claude Code 加载。普通任务直接完成，按需读取技能；流程讨论不触发流程执行。OMX 运行时技能须检查实际宿主支持，配置和状态文件不是额外写入权限。
+
+`omx setup` 可能刷新 `.codex/skills`、角色提示和根 managed block。更新后检查差异，保留本仓修正；不要把 `--force` 重装当作无副作用验证。审计依据与验证方法见 [2026-09-07 审计](../docs/agents/instruction-audit-2026-09-07.md)。
 
 ### 其他 AI 工具
 

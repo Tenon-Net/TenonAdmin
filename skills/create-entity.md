@@ -26,7 +26,7 @@
    - `Length = N`：字符串长度（不标默认 nvarchar(max)）
    - `IsNullable = true`：可空字段
    - `ColumnDescription = "中文描述"`：列注释
-   - `ColumnDataType = "text"`：大文本等特殊类型
+   - `ColumnDataType = StaticConfig.CodeFirst_BigString`：跨方言 Unicode 大文本（SqlServer 为 `nvarchar(max)`）
 4. **命名**：属性用 PascalCase，字符串默认值 `= ""`，布尔默认值按业务需要
 5. **using**：`using SqlSugar;` + `using TenonAdmin.SqlSugar;`
 
@@ -96,7 +96,7 @@ public class BizProduct : DataEntity  // 继承 DataEntity 获得组织数据隔
 |---|---|---|
 | `string` | `Length = N` | 短文本（名称、编码等） |
 | `string?` | `Length = N, IsNullable = true` | 可选文本 |
-| `string` | `ColumnDataType = "text"` | 长文本（描述、备注） |
+| `string` | `ColumnDataType = StaticConfig.CodeFirst_BigString` | 长文本（描述、备注）；不要写裸 `"text"`，SqlServer 会丢中文 |
 | `int` | 默认 | 整数（排序、数量等） |
 | `decimal` | `DecimalDigits = 2` | 金额 |
 | `bool` | 默认 | 开关（启用/禁用） |

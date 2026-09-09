@@ -4,7 +4,7 @@
 
 为一个已有后端 API 创建完整的前端 CRUD 页面。前提:后端 CRUD 已完成(参考 `create-crud-backend.md`)。
 
-产出共 3 处文件改动。
+产出为 Types、API、页面与中英 i18n；系统模块修改共享文件，业务模块按下表新建独立文件。
 
 ## 第一步:确定模式
 
@@ -63,7 +63,7 @@ export interface SysPosition {
   createTime?: string
 }
 
-/** 职位新增/编辑入参(后端 PositionInput;增改同一份字段,code 编辑禁用)。 */
+/** 职位新增/编辑入参(后端 PositionInput;增改同一份字段)。 */
 export interface PositionInput {
   name: string
   code: string
@@ -299,7 +299,7 @@ export default function PositionPage() {
             <Input placeholder={t('position.name')} />
           </Form.Item>
           <Form.Item name="code" label={t('position.code')}>
-            {/* 岗位编码建后不可改(后端也拒);编辑时置灰 */}
+            {/* 这个页面选择建后不改岗位编码；属于 UI 约束 */}
             <Input disabled={editingId !== null} placeholder={t('position.codePlaceholder')} />
           </Form.Item>
           <Form.Item name="sort" label={t('position.sort')}>
