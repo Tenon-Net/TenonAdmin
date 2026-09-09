@@ -41,6 +41,8 @@
 
 ## Status
 
+> **后续覆盖注记（2026-09-04）**：Task 8b 已在本台账收口后由 [`wf-task8b-review-fix.md`](./wf-task8b-review-fix.md) 继续交付；review repair 后 backend run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172) 的 SQLite、MySQL、PostgreSQL、SQL Server 与 template-smoke 均通过，contract-drift run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095)、docker-smoke run [`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106) 也通过。本文 Round 50 及之前关于“未接生产 worker/Task 8b 禁止”的记载属于历史快照；Task 8b 只在 tx2 幂等写入 `Pending` outbox，Task 8c 才负责其领取、投递、重试、CAS 回写与 transport，且不阻塞已解锁的 M3b。
+
 - 轮次: 50
 - max: 70
 - 当前任务: M3a-1 已收口(Tasks 10/10)
@@ -49,7 +51,7 @@
   **最终本地证据**:Release build **0 错误/13 既有警告**;Webhook **57/57**;原样 workflow filter **417/417**;prose lint 扫 106 个 md 无违规;VitePress build 成功。产品终审 **APPROVE,0 P1/0 P2**(仅反射 .NET10 internal ctor 的维护性 P3,已在 Linux CI 通过);文档终审 **APPROVE,0 P1/0 P2/0 P3**。
   **最终 current-HEAD CI**:[run `33738099310`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33738099310),HEAD `80f9c72d26e3bd6667a6459ca8c07d8992103cbe`:SQLite/MySQL/PostgreSQL 各 **1116/1116**,SQL Server push filter **118/118**,template-smoke/contract-drift/docker-smoke 全绿。最终证据已写回两文档并 commit `2a9c2bf`。
   **DONE-CONDITION 逐项**:①Tasks **10/10**;②原样 filter 417/417;③ExecutionKey 重放只推进一次(N7/T13 + 三防线变异,真多 worker 交错射程已如实记录);④lease 过期重领/成功后不重复推进(N3–N7);⑤Webhook 外呼事务外(W-TX + 反向探针);⑥四库契约最终全绿;⑦Fake/Webhook 四结果均覆盖,Webhook 非 Succeeded 的 E2E 射程已注明;⑧最终 Task10 无新 HTTP endpoint/响应 DTO/API schema,故前端/API 闸门 N/A;Task8 当时的 typecheck/lint/vitest/双 schema hash 已绿。两份契约文档已回写并独立 review。
-  **诚实边界**:没有生产 execution 创建/worker/EnterNodeOp Webhook 接线,没有 MaxAttempts 生产来源,设计器 UI 属 M3a-2,AI 属 M3b;真实 DNS rebinding/TLS/HTTP2/chunking/proxy 与多 worker 真竞态仍是明确射程。outbox 仅 Pending enqueue 已实现,消费 worker/Dispatching/Dispatched/Failed 转换未实现。用户级 Git `http.sslVerify=false` 仍是本机安全风险,本任务未擅改全局配置。
+  **历史诚实边界（M3a-1 收口时；Task 8b 后续已覆盖生产接线、MaxAttempts 来源与未知异常收敛）**:当时没有生产 execution 创建/worker/EnterNodeOp Webhook 接线,当时没有 MaxAttempts 生产来源;设计器 UI 属 M3a-2,AI 属 M3b;真实 DNS rebinding/TLS/HTTP2/chunking/proxy 与多 worker 真竞态仍是明确射程。outbox 仅 Pending enqueue 已实现,消费 worker/Dispatching/Dispatched/Failed 转换未实现。用户级 Git `http.sslVerify=false` 仍是本机安全风险,本任务未擅改全局配置。
 - Round 43–44 PayloadVersion 存档: 用户批准推荐语义后,executor commit `bd788a5` 只改 `WfHistory.cs` + `WfNodeExecutionContractTests.cs`(**+13/-17**):`SugarColumn.DefaultValue 1→0`,CLR initializer 保持 1;E11 增加反射断言锁声明值 0并继续从库断旧行0,零 DbType 分支/松界。独立 code-reviewer 结论 **APPROVE,0×P1/0×P2**,唯一 P3 是 current commit 尚待四库重跑。
   **双侧守门**:executor 将 metadata 暂改回1 → E11 在 `Expected "0"/Actual "1"` 红;协调者另把 CLR initializer 1→0 → `WfHistoryIdentityTests` 的 12 条新历史全部 `Expected 1/Actual 0` 红。两刀均复原。恢复态 contract **13/13**、history identity **8/8**、原样 filter **411/411**、Release build **0错误/13警告**。review 确认旧行不回写、新行写入点沿用 initializer、append-only 语义未破坏。
   **兼容边界**:此前若某未发布环境已经用旧 metadata 跑过补列,其旧行可能已是1;本提交不逆向重写。M3a-1 尚未正式发版,最终文档会明确 sentinel 0 适用于本提交后执行的存量补列;公共 history output 当前不暴露 PayloadVersion 是既有 API 射程,本轮不扩 DTO。
@@ -122,7 +124,7 @@
 - Round 44 留给 Round 45 的 CI 清单(已完成): Round 45 — 普通 `git push origin dev`(用户已明确批准“实施、独立审查、再次推送并重跑四库”),锁定新 HEAD backend-ci;期望 E11 四腿旧行均0,MySQL N1 fixed-clock 通过。逐腿读测试名/计数,不得只看总色。四腿绿后再做两份设计文档 + 最终 Findings/DONE;任一仍红则停在对应根因。
 
 
-- 下一步: 无。最终 ledger/doc evidence commit 推送后确认 `dev...origin/dev` 同步;`backend/tests/TenonAdmin.Tests/TestResults/` 保持未跟踪且未提交。后续若启动 Task 8b/worker,必须重新裁定未知 handler exception 活锁、MaxAttempts 来源和 outbox 消费状态机,不得把本次收口当作那些功能已交付。
+- 下一步: 无。最终 ledger/doc evidence commit 推送后确认 `dev...origin/dev` 同步;`backend/tests/TenonAdmin.Tests/TestResults/` 保持未跟踪且未提交。当时若启动 Task 8b/worker,必须重新裁定未知 handler exception 活锁、MaxAttempts 来源和 outbox 消费状态机,不得把本次收口当作那些功能已交付。
 
 
 ## 已知起点(2026-09-01,M2c 收口 + 过渡步骤后)
@@ -220,7 +222,7 @@
 | **`WebhookMethod` 不在白名单** | `TerminalFailure` | 48030 | 见 D5。 |
 | **header 名/值含 CR/LF/控制字符,或名为 `Host`/`Content-Length`** | `TerminalFailure` | 48030 | 见 D5。 |
 | **响应体过大** | **不是错误** | — | 只读前 `AdminJobsHttpOptions.MaxResponseLogBytes`(默认 4096)字节做摘要就停(照 `HttpAdminJob.ReadCappedAsync`,`HttpAdminJob.cs:100-114`,含 NUL 净化——PG 的 text 列不收 `\0`),分类仍只看状态码。 |
-| **其它任何异常** | **不 catch,原样逸出** | — | 见 §6 R5:blanket `catch (Exception)` 会把「未预料的 bug」悄悄归成一种业务结果。本 Task 生产侧无 worker,活锁不可达;等真建 worker 那一轮再定「未知异常兜底」。 |
+| **其它任何异常** | **不 catch,原样逸出** | — | 见 §6 R5:blanket `catch (Exception)` 会把「未预料的 bug」悄悄归成一种业务结果。本 Task（M3a-1 收口时）生产侧无 worker,活锁不可达;当时预期等真建 worker 那一轮再定「未知异常兜底」。 |
 
 **`ManualFallback` 何时出现**:分类表里**没有任何一格**默认产出 `ManualFallback`。它由**节点配置**打开——`props.webhookOnFailure = "manual"` 时,**本 handler 本来要返回的每一个 `TerminalFailure` 一律改成 `ManualFallback`**(错误码与摘要照旧)。理由见 D3。
 
@@ -240,7 +242,7 @@
 
 **因此内核不承诺 `MessageType` 的大小写区分**;消费者应把它当作**大小写不敏感**的标识使用(建议全小写,如内核自己的 `wf.node-execution.completed`,`WfOutboxStore.cs:24`)。**本条为读代码 + 默认排序规则推断,四库上未实测**;**刻意不为它写测试** —— 一条「四库行为应当一致」的断言必然在某两腿红。若将来要消灭这个分歧,唯一干净的做法是在 `NormalizeMessageType` 里 `ToLowerInvariant()`,但那是**破坏性契约变更**(会改变已发出消息的 key),须走「新决策 + 说明为何推翻」。
 
-## Plan(当前任务的拆解;每进入新任务时由 plan 阶段的 Agent 重写,协调者转写进本节)
+## Plan（M3a-1 历史任务拆解/当前状态见顶部后续覆盖注记；每进入新任务时由 plan 阶段的 Agent 重写，协调者转写进本节）
 
 > **Task 10 / Round 37 定案。** 本节是执行约束,不是完成声明。阶段顺序固定为:`pre-CI exec → independent review → findings fix → 用户 push 门 → 四库 CI → post-CI 语义/文档 exec → final review/fix → DONE`。任何阶段失败均停在所属阶段,不靠放宽断言或改 DONE 条件收口。
 
@@ -279,7 +281,7 @@
 | Task 9 P3-2 `PayloadVersion` 注释/永久语义 | **CI 后必决** | 见 §4;四腿前不改 `WfHistory.cs`、不放宽 E11 |
 | Task 9 P3-3 E12 SQLite 注释过宽 | **Round 38 必修** | 只改注释:SQLite 不证明 DB 宽度,但能证明 C# 512 预截断 |
 
-**长期 R/D/T 限制**全部保留并在最终文档/台账明确:真实多 worker 交错不可稳定构造;生产侧尚无 execution 建行/worker 调度;`MaxAttempts` 无生产来源;预算耗尽直接 Failed 与 `webhookOnFailure=manual` 不对称;未知异常在未来 worker 下可能活锁;DNS rebinding/真实 TLS/HTTP2/chunked/proxy 未测;前端设计器无 Webhook UI;八字段请求体无版本号;`OutputJson` 可装非 JSON 截断原文;MessageType/MessageKey 大小写受排序规则影响。它们不能偷偷升级成「已解决」,也不能反过来扩成本里程碑代码。
+**长期 R/D/T 限制**全部保留并在最终文档/台账明确:真实多 worker 交错不可稳定构造;当时（M3a-1 收口时）生产侧尚无 execution 建行/worker 调度、`MaxAttempts` 无生产来源、未知异常在未来 worker 下可能活锁；Task 8b 已补生产接线与 `MaxAttempts` 来源，并以 `48032` 有限收敛未知异常;预算耗尽直接 Failed 与 `webhookOnFailure=manual` 不对称;DNS rebinding/真实 TLS/HTTP2/chunked/proxy 未测;前端设计器无 Webhook UI;八字段请求体无版本号;`OutputJson` 可装非 JSON 截断原文;MessageType/MessageKey 大小写受排序规则影响。它们不能偷偷升级成「已解决」,也不能反过来扩成本里程碑代码。
 
 ### 3. Round 38 pre-CI 实现清单
 
@@ -330,10 +332,10 @@
 4. `IWorkflowNodeHandler` 不泄漏 DB session;四种显式 result;消费者预注册 handler 先赢,内置 Webhook 为后备。
 5. Webhook 配置 URL/method/headers/timeout/onFailure;2xx/408/429/5xx/3xx/4xx、取消、网络、围栏异常分类;Retry-After 仅对可重试响应读取。
 6. 外呼 body 恰好八字段:`executionKey,instanceId,tokenId,nodeVisitId,nodeId,definitionVersionId,businessKey,attempt`;**没有版本字段**,首发 YAGNI,变更必须显式版本化。
-7. 生产接线限制:当前无生产建 execution 行/无 worker 调 dispatcher,设计器无 Webhook UI;这不是 Task 10 偷补范围。未知异常活锁等风险保留。
+7. 生产接线限制（M3a-1 收口时的历史边界）:无生产建 execution 行/无 worker 调 dispatcher,设计器无 Webhook UI;这不是 Task 10 偷补范围。未知异常活锁等风险保留。
 8. 四库实际 run/HEAD/结果、PayloadVersion 最终口径、MessageType 大小写与真实网络/并发射程。
 
-**继续禁止**:Task 8b/worker/HostedService/`EnterNodeOp` 接线、M3a-2 动态表单/动词封顶/并行分支/React 页、M3b AI、共享前端层、新审批动词、新依赖、新 API/DTO、Task 11。
+**当时（M3a-1 收口时）继续禁止**:Task 8b/worker/HostedService/`EnterNodeOp` 接线、M3a-2 动态表单/动词封顶/并行分支/React 页、M3b AI、共享前端层、新审批动词、新依赖、新 API/DTO、Task 11。
 
 ### 6. 验证、变异与 review
 
@@ -594,15 +596,15 @@ Round 38 必做变异(一刀一文件、确认落盘、单测转红、精确复�
 - [x] **P3-4(台账记账,协调者动作)★｜Plan §6 的 R1–R11 只活在会被覆写的 `## Plan` 里** —— `## Plan` 标题自带「每进入新任务时由 plan 阶段的 Agent 重写」,Task 9 的 plan 一落笔十一条全部蒸发。其中 **R5**(worker 那一轮必须重新定活锁问题)是 D4 挂账 Task 8b 的**前置条件**,**R10**(外呼请求体是无版本号的对外契约,Task 10 须回写设计文档)是 Task 10 的 DONE 判据依赖。**协调者已于本轮(Round 31)照 Task 1/Task 2 先例转写到下方表格,本条即时关闭。**
 - [x] **P3-5(挂账,不建议专门加测试)｜「`Retry-After` 只在重试分支读」这条刻意的不读没有测试**:把 `ReadRetryAfter(response)` 挪进终态或 2xx 分支不会有测试红(非重试结果的 `RetryAfter` 无人断言)。危害很低(引擎对非重试结果不读它),记录备查。 **(Round 46–48 已在两份设计文档写为刻意语义;低价值“不读取”测试不新增。)**
 
-#### Task 8 射程限制(R1–R11,自 `## Plan §6` 转写;review 已逐条与代码事实核对,**十一条全部如实,无夸大无隐瞒**)
+#### Task 8 射程限制（M3a-1 收口时的历史快照；后续状态见顶部覆盖注记；R1–R11 自 `## Plan §6` 转写，review 已逐条与代码事实核对，**十一条全部如实，无夸大无隐瞒**）
 
 | R | 内容 | review 核验证据 |
 |---|---|---|
-| **R1** | **「生产侧零调用点」只解除一半**:✅ DI 注册线 + `WebhookNodeHandler` 有了,W-DI1 证明可解析;❌ **仍无任何生产代码创建 `wf_node_execution` 行、无任何生产代码调用 `WfNodeExecutionDispatcher`**,`EnterNodeOp` 对 `Webhook` 仍落 `default:` 抛 48008。**「装了包就能自动跑 Webhook 节点」依旧零证据**,归 D4 挂账的 Task 8b / Task 10 | `grep -rn WfNodeExecutionDispatcher backend/src/` 只命中类定义 `:39` 与 `WebhookNodeHandler.cs:40` 注释里的一个 `<see cref>`;`grep WfNodeExecutionStore.EnsureAsync backend/src/` 只命中两处注释 cref。**「只解除一半」的措辞精确** |
-| **R2** | `MaxAttempts` 仍无生产写入方,所有测试里靠手填;「重试 3 次后落 `Failed`」端到端 Webhook 侧零覆盖 | 由 R1 的「零生产建行点」直接推出 |
+| **R1** | **「生产侧零调用点」（M3a-1 收口时的历史边界，后续由 Task 8b 覆盖）只解除一半**:✅ DI 注册线 + `WebhookNodeHandler` 有了,W-DI1 证明可解析;❌ **当时无任何生产代码创建 `wf_node_execution` 行、无任何生产代码调用 `WfNodeExecutionDispatcher`**,`EnterNodeOp` 对 `Webhook` 仍落 `default:` 抛 48008。**当时「装了包就能自动跑 Webhook 节点」依旧零证据**,归 D4 挂账的 Task 8b / Task 10 | `grep -rn WfNodeExecutionDispatcher backend/src/` 只命中类定义 `:39` 与 `WebhookNodeHandler.cs:40` 注释里的一个 `<see cref>`;`grep WfNodeExecutionStore.EnsureAsync backend/src/` 只命中两处注释 cref。**「只解除一半」的措辞精确** |
+| **R2** | `MaxAttempts` 在 M3a-1 收口时仍无生产写入方,所有测试里靠手填;「重试 3 次后落 `Failed`」端到端 Webhook 侧零覆盖 | 由 R1 的「零生产建行点」直接推出 |
 | **R3** | `webhookOnFailure = manual` **不覆盖「重试预算耗尽」**:`budgetExhausted` 分支直接判 `Failed`(`WorkflowEngine.cs:1417-1423`),handler 无从参与 → 同一节点「404 → 人工任务」而「超时 ×3 → 静默 `Failed`」。**是已知的不对称,不是遗漏**;修它要动引擎核心路径(禁碰),挂 Task 10 定夺 | `ApplyFailureAction` 只作用于 handler 自己的返回值,实证 |
 | **R4** | 「四条结果路径」是在 **handler 层**证明的,**只有 `Succeeded` 一条**(W-TX)真走完 dispatcher → 引擎 → 落库;其余三条那一段靠 Task 7 的 N1–N7 + T1–T13(用 `FakeNodeHandler` 走**同一段结果无关的代码**)。**刻意为之**,重放一遍是 4 条慢测试换 0 条新信息。**若 Task 10 认为 DONE-CONDITION 要求逐字端到端四条,须在 Task 10 补** | W-TX 是唯一过 dispatcher 的 Webhook 用例,断 `Status == Succeeded`;其余止于 handler 返回值 |
-| **R5** | **未预料异常不被捕获,生产上有活锁风险**:今天安全(生产侧无 worker,没人重领那行);等 Task 8b 建了 worker,「抛未知异常 → 行停 `Running` 持租约 → 重领 → 再抛」变成真实无限活锁。**建 worker 那一轮必须重新定这条** | `WfNodeExecutionDispatcher.cs` **零 `catch` 语句**(3 处 grep 命中全在 XML 注释 `:29`/`:32`/`:179`)。**review 判定:可接受的射程留白,不够 P2** —— 理由:①活锁在今天结构上**不可达**(零生产调用点,没有回路),②不写 `catch (Exception)` 是**契约**(`:29-33` 整段论证 + D2 表 B 末行),handler 加兜底 catch 才是违约,且 `W-X5` 把当前决定钉住了(将来要改必须先改掉那条测试,是**可见的蓄意动作**),③已指定结账人。**但前提是这条被转写出来** —— 若仍只活在 `## Plan` 里随 Task 9 蒸发,它就真的够到 P2 |
+| **R5** | **未预料异常不被捕获（M3a-1 收口时的历史边界，后续由 Task 8b 覆盖）**:当时安全(生产侧无 worker,没人重领那行);当时预期 Task 8b 建了 worker 后,「抛未知异常 → 行停 `Running` 持租约 → 重领 → 再抛」会变成真实无限活锁。**当时要求在建 worker 那一轮重新定这条** | `WfNodeExecutionDispatcher.cs` **零 `catch` 语句**(3 处 grep 命中全在 XML 注释 `:29`/`:32`/`:179`)。**review 判定:可接受的射程留白,不够 P2** —— 理由:①活锁在 M3a-1 收口时结构上**不可达**(零生产调用点,没有回路),②不写 `catch (Exception)` 是**契约**(`:29-33` 整段论证 + D2 表 B 末行),handler 加兜底 catch 才是违约,且 `W-X5` 把当时决定钉住了(将来要改必须先改掉那条测试,是**可见的蓄意动作**),③已指定结账人。**但前提是这条被转写出来** —— 若仍只活在 `## Plan` 里随 Task 9 蒸发,它就真的够到 P2 |
 | **R6** | SSRF 围栏只在本机 SQLite 腿、**只用字面 IP** 验过;**DNS rebinding 的真正防线(`ConnectCallback` 解析后复检,`JobHttpFence.cs:113-131`)零覆盖**——需要能控制解析结果的 DNS,测试环境造不出;既有 Jobs 测试是否覆盖了它,未核 | W-C3 用字面 `169.254.169.254`,走 `ValidateUrl` 静态分支(`JobHttpFence.cs:25`) |
 | **R7** | 真实网络行为零覆盖:TLS 协商、连接池复用、HTTP/2、分块传输、服务端提前关连接、代理环境变量全部测不到。与 `GitHubWeChatAuthProviderTests` 的射程同款,是「不引 WireMock、不真联网」的必然代价 | 全部 `FakeTransport : HttpMessageHandler`,零真实网络、零新测试包 |
 | **R8** | **前端零改动**:新增 4 个配置项**在设计器里没有任何 UI**,消费者只能直接编辑 `ModelJson` 或走后台接口。设计器表单归 **M3a-2(禁区)**;本 Task 只保证 `schema.d.ts` 里有这些字段的**类型** | commit 只含两个 `schema.d.ts` 各 +9,无 `.vue`/`.tsx` |

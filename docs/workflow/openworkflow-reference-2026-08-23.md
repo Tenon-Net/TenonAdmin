@@ -7,6 +7,8 @@
 > 本地参考仓：`C:\HuHuHu\参考项目\工作流\openworkflow`
 > 资料边界：只使用上述源码、仓内官方文档和官方 GitHub；未使用二手博客。参考仓是浅克隆且未安装 `node_modules`，本次做静态源码核验，未运行其测试。
 
+> **历史快照提示**：本文记录截至报告日期（2026-08-23）的历史调研基线；当前状态以本目录 [`README.md`](./README.md)、[`workflow-design-plan-2026-08-17.md`](./workflow-design-plan-2026-08-17.md)、当前代码与测试为准。文中关于 M2c 的 `RequestId/receipt`、`timeout job` 等“尚未落地”判断仅属于当时快照，不代表当前状态。
+
 ## 一、结论先行
 
 OpenWorkflow 是一个 **TypeScript 代码优先的 durable execution 框架**，不是 OA 人工审批引擎。它通过数据库里的 `workflow_runs`、`step_attempts`、`workflow_signals` 三类运行记录，加上 worker 租约和从头重放，把崩溃恢复、步骤重试、持久 sleep、外部 signal、子工作流藏在很小的 `step` Interface 后面。

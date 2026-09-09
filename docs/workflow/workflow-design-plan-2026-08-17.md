@@ -45,7 +45,7 @@ TenonAdmin.Workflow  (引用 TenonAdmin.AspNetCore)
                      + 控制器 AddApplicationPart + 种子(菜单/字典,Id 走包保留段)
 ```
 
-接线约定沿内核铁律:所有服务 `TryAdd*`、方法 `virtual`、模板方法拆小步;消费者在 `AddTenonAdmin()` 之前注册同接口即可整体替换(如换掉 `IApproverProvider` 接自家 HR 系统)。替换保证进"六件套"式测试(`WorkflowReplaceabilityTests`)。
+接线约定沿内核铁律:所有服务 `TryAdd*`、方法 `virtual`、模板方法拆小步;消费者在 `AddTenonAdmin()` 之前注册同接口即可整体替换(如换掉 `IApproverProvider` 接自家 HR 系统)。替换保证进"六件套"式测试(`WorkflowReplaceabilityTests`)。整体替换 `IWorkflowEngine` 属受信任的完全接管，消费者同时承担事务、幂等、fence、审计和 AI shadow-only 不变量；自定义节点 handler 也不得旁路写状态。
 
 ### 1.3 错误码与种子
 
@@ -200,7 +200,7 @@ POST /api/v1/workflow/task/approve|reject|return|transfer|delegate  // 各带意
 | **M2 正经审批产品** | 排他分支(结构化条件 + 可视化编辑器)+ 会签(一票否决)/或签(先表态即定局)+ 动词:退回(可配目标)/撤销/委托/催办 + 超时策略(`IAdminJob`:提醒/自动通过/自动拒绝)+ 空审批人三级可配 + 同一人去重 + SignalR 通知 | 仅 Vue:分支容器 + 条件编辑器 + 抄送独立列表 + 流程图回放(高亮已走路径) | 钉钉上一个典型报销流程(条件分支+会签+超时提醒)1:1 复刻;CCFlow 行为清单逐项过 |
 | **M2c 可靠性收口** | 所有写命令增加 `RequestId/IdempotencyKey` + 同事务操作回执；通知失败日志/指标；把超时领取、CAS、事务回滚和回执唯一性收成四库共享契约测试 | Vue 在一次提交生命周期内生成并复用 request key；刷新双前端 API 类型，但不提前 port React 工作流页面 | 同一请求串行/并发重放均返回第一次结果；超时与人工动作竞争只允许一个胜出；四库 CI 全绿 |
 | **M3a 通用性拉满 → GA 基石** | 简易动态表单(~10 控件)+ 字段权限矩阵 + 动词封顶:加签/减签/拿回/比例票签 + 长期委托规则 + 并行分支(多 token)+ Webhook 节点 + 可靠自动节点执行 Module（execution/attempt/deadline/retry/fence/outbox）+ 节点类型 SPI 对外文档化 | 表单设计器(单列)+ **React 模板整体 port** | **基础 GA 门槛:双模板 feature 对齐 + 文档站 guide 上线；远程节点无长事务、崩溃可恢复、同一 execution 只推进一次** |
-| **M3b AI Decision v0** | 以 M3a Seam 接入 AI Decision Adapter：OpenAI-compatible + fake Provider、结构化 proposal、schema/policy、shadow mode、低风险自动放行、人工 fallback、审计/脱敏/限额 | 双模板 AI 节点配置、proposal/证据/策略结果审计视图 | AI 不直接写任务状态；无效输出/低置信度/风险/异常全部转人工；场景评测达标后才能由 shadow 切自动放行 |
+| **M3b AI Decision v0** | M3b-0 已以 M3a Seam 交付 AI Decision Adapter：OpenAI-compatible + fake Provider、结构化 proposal、schema/policy、shadow-only、人工 fallback、审计/脱敏/限额；受控自动化仍属后续切片 | API 已提供脱敏的 proposal/证据/策略结果审计投影，复用实例参与者/监控权限；双模板设计器与独立管理页后置 | M3b-0 全程 shadow-only，AI 不自动批准、拒绝或推进 task/token；无效输出、低置信度、风险和异常均转人工 |
 | **M3+ AI 扩展/按需** | 证据与 RAG Adapter、只读 Agent tools、更多 Provider、评测集/灰度策略；AI 设计 Copilot、子流程、经典图模式、统计报表按真实需求进入 | — | AI 自动拒绝和写工具不进入首版；每项扩权单独做安全与审计验收 |
 
 ## 九、调研§九开放问题——决议
@@ -339,7 +339,9 @@ AI 分成两条互不混用的能力线：
 1. **运行时 AI Decision（Slickflow.AI 对照，M3b）**：在 M3a 节点 Interface 稳定后立即交付最小纵切，不再列为无承诺的 M3+。模型只能返回受 JSON schema 约束的 proposal（结论、分数、理由、证据引用）；服务端确定性 policy 再决定低风险自动放行或创建人工任务。V0 不自动拒绝。低置信度、风险标记、模型异常、超时、结构化输出校验失败一律转人工。模型不得直接调用 Approve/Reject，也不得在远程模型调用期间持有工作流数据库事务。
 2. **AI 流程设计/诊断 Copilot（Elsa 3 Weaver 对照）**：这是设计器/运维能力，不是执行节点。AI 生成或修改模型时只创建 proposal，经过权限过滤、脱敏、schema 校验、图 diff、用户 approve/apply 和完整 audit 后，才能写入定义草稿；不得直接发布流程或修改在途版本。
 
-两条线都不把模型 SDK、Prompt 或供应商配置耦合进 `TenonAdmin.Workflow`。Provider 类型留在 Adapter；审计只保存必要的模型/Prompt/schema/policy 版本、输入摘要、证据引用、结构化输出、耗时与 token/费用统计，敏感业务字段按配置脱敏。M3b AI Decision v0 是 AI 原生路线的战略交付；RAG、Agent、更多 Provider 与设计 Copilot 后置到 M3+。
+两条线都不把模型 SDK、Prompt 或供应商配置耦合进 `TenonAdmin.Workflow`。Provider 类型留在 Adapter；审计只保存必要的模型/Prompt/schema/policy 版本 hash、输入摘要、证据引用 hash、受限结构化结果、耗时与 token/费用统计，模型自由文本不落库。M3b AI Decision v0 是 AI 原生路线的战略交付；RAG、Agent、更多 Provider 与设计 Copilot 后置到 M3+。
+
+当前已交付的是 M3b-0 shadow-only 基础切片；上文“达到评测阈值后开放低风险自动放行”属于后续受控阶段，不代表当前实现已经取得自动审批权限。Round 19 验证已通过，下一项为 M3B0-17 独立代码/安全/简化审查。
 
 ## 十五、数据库评审增量与 M3a 切片定案（2026-08-24）
 

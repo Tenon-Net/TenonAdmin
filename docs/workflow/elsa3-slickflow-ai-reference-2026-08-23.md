@@ -11,7 +11,7 @@
 2. **Elsa 当前主仓是 Elsa Workflows 3。** 固定 commit 的核心源码面向 `net8.0;net9.0;net10.0`，仓库许可证为 MIT。该 commit 位于 3.8 release-candidate 之后的主线开发状态；官方 NuGet 当前稳定版仍是 3.7.1，因此不能把该 commit 简写成一个已发布的“3.8 正式版”。
 3. **Elsa AI 是 authoring/diagnostics copilot，不是运行时业务审批。** 它为工作流查询、诊断、创建设计稿和更新设计稿提供 AI 工具与提案治理；提案写入独立存储，不直接持久化工作流定义。源码中没有 AI 自动同意/拒绝业务审批任务的运行时活动。
 4. **Slickflow 有真正参与流程运行的 LLM/RAG/Agent 节点，但没有内置“AI 审批”。** AI 节点把模型响应写成流程变量；人工审批仍由 `ApprovalStatus`、任务完成和通过率逻辑处理。README/Wiki 中的 `confidence → human review`、`ApprovalDecisionAgent`、Human-in-the-Loop 是组合或文档示例，不是当前固定源码已经实现的内置路由或审批语义。
-5. TenonAdmin.Workflow 最值得吸收的是：Elsa 的 provider/tool/proposal 安全边界，以及 Slickflow 的 AI 节点、工具适配器和规则后处理思路。M3a-1 已交付可靠自动节点执行内核；`AI Decision Adapter` 属于后续 M3b，模型只生成 proposal，服务端 schema/policy 决定低风险自动放行或转人工，不让 LLM 直接调用同意/拒绝。RAG、Agent 和设计 Copilot 后置。
+5. TenonAdmin.Workflow 最值得吸收的是：Elsa 的 provider/tool/proposal 安全边界，以及 Slickflow 的 AI 节点、工具适配器和规则后处理思路。M3a-1 已交付可靠自动节点执行内核；M3b-0 已交付 shadow-only 的 `AI Decision Adapter` 基础闭环，模型只生成 proposal，服务端 schema/policy 校验后全部转人工，不让 LLM 直接调用同意/拒绝或推进流程。受控自动化、RAG、Agent 和设计 Copilot 后置。
 
 ## 1. 固定基线、版本与许可证
 
@@ -292,17 +292,23 @@ attempt 只追加不更新/删除，`AttemptNo` 直接取领取后的 `AttemptCo
 2. 外部调用不在数据库事务中执行；取消传播、lease 到期和迟到结果由 dispatcher/引擎处理，不交给模型或 provider 自行解释。
 3. Webhook 的 URL、header、方法和超时先经过既有 `JobHttpFence`；SSRF/安全围栏或配置错误在开 socket 前返回 terminal，不能靠重试掩盖配置缺陷。
 4. `WebhookOnFailure = manual` 只把 `TerminalFailure` 转为 `ManualFallback`，不把网络/超时/限流这类 `RetryableFailure` 转成人工；重试预算耗尽由引擎独立判定，manual 不接管、重置或绕过该分支。
-5. AI 的 proposal、schema、policy、证据权限、shadow mode、人工兜底和阈值校准仍是 M3b 的未来 Adapter 责任；本轮没有 AI Decision 实现、设计 UI 或 API/DTO 变更。将来接入时，模型不得成为审批权威，自动放行也不能由模型自报 confidence 单独决定。
+5. M3b-0 已把 AI 的 proposal、schema、policy、shadow mode、人工兜底和审计接入这条可靠执行链；模型仍不得成为审批权威，自动放行也不能由模型自报 confidence 单独决定。设计 UI、独立审计管理页和受控自动化仍属于后续切片。
 
 ### 4.8 验收线与产品指标
 
-M3a-1 内核的历史四库 CI 证据为 run [`33738099310`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33738099310)，HEAD `80f9c72`：SQLite `1116/1116`、MySQL `1116/1116`、PostgreSQL `1116/1116`，SQL Server 过滤集 `118/118`；`contract-drift`、`docker-smoke`、`template-smoke` 也为绿色。该 run 不包含 Task 8b。Task 8b 随后在 commit `7f44087` 的 CI 中通过 SQLite、MySQL、PostgreSQL、SQL Server、template-smoke、web-ci、web-react-ci、contract-drift 与 docker-smoke；对应 backend run 为 [`33773751150`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751150)。相关契约测试覆盖执行键、claim/fence、attempt、dispatcher、outbox、Webhook 分类、生产 worker 与可替换注册，文件见 `backend/tests/TenonAdmin.Tests/WfExecutionKeyTests.cs`、`WfNodeExecutionClaimTests.cs`、`WfNodeExecutionAttemptTests.cs`、`WfNodeExecutionDispatcherTests.cs`、`WfOutboxTests.cs`、`WfWebhookNodeHandlerTests.cs`、`WfNodeExecutionWorkerTests.cs` 和 `WfNodeExecutionProductionE2ETests.cs`。
+M3a-1 内核的历史四库 CI 证据为 run [`33738099310`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33738099310)，HEAD `80f9c72`：SQLite `1116/1116`、MySQL `1116/1116`、PostgreSQL `1116/1116`，SQL Server 过滤集 `118/118`；`contract-drift`、`docker-smoke`、`template-smoke` 也为绿色。该 run 不包含 Task 8b。Task 8b 初始交付的 CI 记录为 commit `7f44087` 对应 backend run [`33773751150`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751150)，保留作历史记录；review repair 后的最终 backend 证据更新为 run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)：SQLite、MySQL、PostgreSQL、SQL Server 与 template-smoke 均通过，contract-drift run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095)、docker-smoke run [`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106) 也均通过。相关契约测试覆盖执行键、claim/fence、attempt、dispatcher、outbox、Webhook 分类、生产 worker 与可替换注册，文件见 `backend/tests/TenonAdmin.Tests/WfExecutionKeyTests.cs`、`WfNodeExecutionClaimTests.cs`、`WfNodeExecutionAttemptTests.cs`、`WfNodeExecutionDispatcherTests.cs`、`WfOutboxTests.cs`、`WfWebhookNodeHandlerTests.cs`、`WfNodeExecutionWorkerTests.cs` 和 `WfNodeExecutionProductionE2ETests.cs`。
 
 这些测试现在同时证明可靠执行内核和 Task 8b 生产闭环：`EnterNodeOp` 创建 execution，固定 `wf-node-execution-scan` seed 经 `JobSchedulerService.TickAsync`、`JobExecutor` 和 `DefaultJobHandlerResolver` 调度 `WfNodeExecutionJob`，目标 E2E 覆盖 Webhook 成功、retry、terminal、manual fallback、事务外外呼和崩溃恢复；其他 dispatcher 结果仍由 Fake handler 补齐同一回写路径。永久上下文/模型错误会在同一 tx2 中按 fence CAS quarantine 为 `Failed`，留下 terminal attempt 和 `Pending` outbox，不推进 Token；瞬时基础设施错误仍保留 lease 恢复。`MaxAttempts` 来源为节点 `props.maxAttempts` → `TenonAdmin:Workflow:MaxAttempts` → 内置默认 3，值域 `[1,100]`，并在创建时快照；未知非取消 handler 异常使用 `48032` 有限收敛，OCE 原样传播。真实 DNS rebinding callback、TLS/HTTP2/chunking/proxy 仍未覆盖；`MessageType`/`MessageKey` 大小写行为仍取决于数据库 collation。Task 8b 只保证终态 `Pending` outbox 幂等入队，outbox consumer/transport 延期到 Task 8c；Webhook 设计器 UI 属于 M3a-2。
 
 产品指标不再只看“支持多少节点”，而看人工触达率、平均审批时长、自动放行覆盖率、人工推翻率、错放/逃逸风险率、schema 失败率、fallback 率、provider 延迟与单次成本。首版必须有 shadow mode：只记录 AI proposal，不改变路由；达到场景级评测阈值后再打开低风险自动放行。
 
 评测阈值属于部署方，不属于内核：TenonAdmin 以内核包分发、自身没有生产流量，各消费者的审批场景与单据分布互不相同。内核负责指标采集与审计视图，“何时由 shadow 切自动放行”是每个消费者按自己场景数据做的决定；产品文档必须明确这一责任边界，防止消费者拿默认配置直接开自动放行。
+
+### 4.9 M3b-0 已交付状态（2026-09-08）
+
+M3b-0 已交付 OpenAI-compatible/Fake Provider、结构化 proposal、服务端 schema/policy、AiDecision 节点、tx2 原子审计、人工兜底和脱敏审计读取 API。API 复用实例参与者与监控权限边界，只返回受限元数据、输入/证据 hash、风险标记、策略/兜底、token usage 和 shadow 标记；不返回 proposal 原文、原始变量、执行内部标识或 Provider 异常正文。
+
+该切片从 Provider 到流程落库始终是 shadow-only：AI 不自动批准、拒绝、完成 task 或推进 token，合法低风险 proposal 也会进入人工兜底。Task 8c 的 outbox consumer、transport、领取/投递/重试和状态回写仍未实现；当前只保证 Task 8b 的 `Pending` outbox 幂等入队。Round 19 已验证窄测 18/18、聚焦矩阵 313/313、Workflow Release build 0 warnings/0 errors、Vue/React typecheck/build，并经独立 verifier PASS；下一项为 M3B0-17 独立代码/安全/简化审查。
 
 ## 5. 建议开发阶段
 
@@ -311,7 +317,7 @@ M3a-1 内核的历史四库 CI 证据为 run [`33738099310`](https://github.com/
 | M2b | 不开发 AI。完成超时与通知可观测性。 | AI 失败最终仍要安全回退到人工/超时链路。 |
 | M2c | 不开发 AI。完成请求幂等、operation receipt 与多数据库契约测试。 | 未来任何自动动作都必须先有可靠的幂等与恢复语义。 |
 | M3a | 已交付可靠自动节点执行内核与 Task 8b 生产 Webhook 闭环：稳定 `ExecutionKey`、`WfNodeExecution` 状态机、lease/fence claim、append-only attempt、结构化结果、终态 `Pending` outbox、dispatcher、`IWorkflowNodeHandler` SPI、`EnterNodeOp` 入口和 `IAdminJob` worker。 | 目标 E2E 与本地 Release 验收已证明闭环；outbox consumer/transport 延期到 Task 8c，M3a-2 设计 UI 未交付。 |
-| M3b | 后续再通过 M3a SPI 接入 `AI Decision Adapter`：OpenAI-compatible/fake provider、结构化 proposal、schema/policy、shadow mode、人工 fallback、审计和限额。 | AI 不是本轮交付；它只能作为 Adapter，不能污染核心状态机或直接取得审批权。 |
+| M3b-0 | 已通过 M3a SPI 接入 `AI Decision Adapter`：OpenAI-compatible/fake provider、结构化 proposal、schema/policy、shadow-only、人工 fallback、审计和限额。 | Round 19 已完成目标验证；Task 8c consumer/transport、设计 UI 和受控自动化仍后置，AI 不能直接取得审批权。 |
 | M3+ | 增加证据/RAG Adapter、只读 Agent tools、更多 provider、评测集与灰度策略；设计/诊断 Copilot 最后做。 | 先证明 AI 能可靠减少人工触达，再扩展自主性和设计体验。 |
 
 推荐的最终链路是：
@@ -344,4 +350,4 @@ AI 生成预审 proposal
 | Tenon 最值得借鉴 | 工具策略、provider 隔离、proposal-only、审计 | AI 节点、工具 Adapter、变量输出、确定性规则后处理 |
 | 是否建议直接依赖 | 否 | 否 |
 
-因此，TenonAdmin.Workflow 不需要寻找或复制一个所谓“.NET AI 审批库”。当前已交付的是可靠、可插拔的自动节点执行 Seam；M3b 仍是后续的 AI Decision Adapter：**AI 只能提 proposal，服务端再作 schema 校验和确定性 policy。** RAG、Agent 和设计 Copilot 必须等生产 wiring、场景评测和安全边界明确后再扩展。
+因此，TenonAdmin.Workflow 不需要寻找或复制一个所谓“.NET AI 审批库”。当前已交付的是可靠、可插拔的自动节点执行 Seam 与 M3b-0 AI Decision Adapter：**AI 只能提 proposal，服务端再作 schema 校验和确定性 policy；M3b-0 全程 shadow-only，任何 proposal 都转人工。** 受控自动化、RAG、Agent 和设计 Copilot 必须等生产 wiring、场景评测和安全边界明确后再扩展。

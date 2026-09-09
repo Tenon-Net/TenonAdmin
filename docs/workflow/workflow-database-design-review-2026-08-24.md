@@ -1,7 +1,7 @@
 # TenonAdmin.Workflow 数据库字段设计评审
 
 > 文档入口：[`README.md`](./README.md)
-> 日期：2026-09-03（Round 46，post-CI）
+> 日期：2026-09-03（Round 46，post-CI；最终证据更新：2026-09-04）
 > 评审基线：`6bc895e`
 > 范围：当前 9 张 `wf_*` 表，以及 M2c、M3a、M3b 对持久化模型的新增要求
 
@@ -14,9 +14,9 @@
 | 能力 | 当前兼容性 | 判断 |
 | --- | --- | --- |
 | M1/M2b 人工审批 | 已兼容 | 现有模型足够，任务级 CAS 能防同一待办双批 |
-| M2c 请求幂等与四库终态保护 | 部分兼容 | 需要 operation receipt，并补实例/Token 级并发保护 |
-| M3a-1 Webhook/自动节点执行内核 | M3a-1 内核与 Task 8b 均已通过最终四库 CI | 节点访问身份、execution、attempt、outbox、lease/fence、dispatcher、Webhook 入口和 `IAdminJob` worker 已落地；Task 8b 的 SQLite/MySQL/PostgreSQL/SQL Server、template-smoke、contract-drift、docker-smoke 和双前端 CI 均通过，outbox 消费与 Webhook 设计器 UI 仍分别属于 Task 8c/M3a-2 |
-| M3b AI Decision | 尚未兼容 | 需要独立 AI decision 审计表，不能复用人工意见字段 |
+| M2c 请求幂等与四库终态保护 | 已兼容 | operation receipt、RequestId、实例/Token 级并发保护与四库契约测试均已交付 |
+| M3a-1 Webhook/自动节点执行内核 | M3a-1 内核与 Task 8b 均已通过最终验证 | 节点访问身份、execution、attempt、outbox、lease/fence、dispatcher、Webhook 入口和 `IAdminJob` worker 已落地；review-repair 最终证据为 backend-ci run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)（SQLite/MySQL/PostgreSQL/SQL Server 与 template-smoke 均通过）、contract-drift run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095) 和 docker-smoke run [`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106)；Task 8b 初始交付另有 web-ci run [`33773751061`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751061)、web-react-ci run [`33773751089`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751089) 成功，不能与 review-repair 最终三条 run 混同；outbox 消费与 Webhook 设计器 UI 仍分别属于 Task 8c/M3a-2 |
+| M3b AI Decision | M3b-0 已兼容 | 已有独立 AI decision 审计表、execution/attempt 接线、人工兜底与脱敏读取 API；M3b-0 全程 shadow-only，Task 8c outbox consumer/transport 仍未实现 |
 | 循环/并行网关 | 结构可扩展但未到位 | 多 Token 只是起点，尚缺节点访问、fork/join 身份 |
 
 优先级最高的两个地基是：
@@ -260,7 +260,7 @@ PayloadVersion     int not null
 
 `WfNodeExecution` 是可更新的执行状态表；`WfOutbox` 也是可更新的投递状态机，不应与 append-only 事实表混为一谈。两者都不把 `IsDelete` 当业务状态，保留期清理应走明确策略，而不是普通软删除。
 
-## 五、M2c：operation receipt
+## 五、M2c：operation receipt（已完成）
 
 M2c 新增 `wf_operation_receipt`，解决“第一次事务已成功，但 HTTP 响应丢失，客户端重试只能得到 TaskConflict”的问题。
 
@@ -306,7 +306,7 @@ ScopeKey + CommandType + TargetType + TargetId + ActorUserId + RequestKey
 - 相同输入在四库与任何运行时得到同一 `IdentityHash`（快照用例）；
 - SQLite、MySQL、PostgreSQL、SQL Server 使用同一套契约用例。
 
-## 六、M3a-1 与 Task 8b：可靠自动节点执行（内核四库已通过，Task 8b 当前待四库 CI）
+## 六、M3a-1 与 Task 8b：可靠自动节点执行（M3a-1 内核与 Task 8b 均已通过最终验证）
 
 M3a-1 不扩充 `wf_task`，而是新增可靠执行 Module 的三张表，并把节点访问身份、handler SPI、领取、结果回写和 outbox 接到引擎事务边界上。实体与写入实现分别见 [`WfNodeExecution.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfNodeExecution.cs)、[`WfNodeExecutionAttempt.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfNodeExecutionAttempt.cs)、[`WfOutbox.cs`](../../backend/src/TenonAdmin.Workflow/Entities/WfOutbox.cs)、[`WfNodeExecutionStore.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionStore.cs)、[`WfNodeExecutionDispatcher.cs`](../../backend/src/TenonAdmin.Workflow/Engine/WfNodeExecutionDispatcher.cs)。
 
@@ -423,6 +423,7 @@ AI 决策不写入人的 `wf_his_task.Comment`，新增 `wf_ai_decision`：
 
 ```text
 ExecutionId
+NodeId
 ProposalJson
 ProposalSchemaVersion
 SchemaValid
@@ -441,16 +442,18 @@ HumanOverrideOutcome
 CreateTime
 ```
 
+M3b-0 的审计写入不保存模型自由文本：reason code、rationale、risk flag、evidence id/source、Provider/Model 与 Prompt/Policy 版本均落为规范 `sha256:` 标识，读取端再次校验格式和数量；`NodeId` 用于区分同一实例中的多个 AI 节点，列表按 `CreateTime, Id` 还原发生顺序。实体继承 `AuditEntity`，不进入普通软删除/恢复表面。
+
 保持以下安全不变量：
 
 - 模型只生成 proposal；
 - 服务端 schema/policy 决定路由；
-- V0 只允许显式授权的低风险自动放行；
+- M3b-0 全程 shadow-only，任何 proposal 都转人工；受控低风险自动放行属于后续切片；
 - 自动拒绝、低置信度、风险标记、证据不足和异常全部转人工；
-- 回放使用已保存 proposal 和 policy version，不重新调用模型伪造历史；
+- 回放使用已保存的受限结构、hash 和 policy version 标识，不重新调用模型伪造历史；
 - UI 将“系统执行/AI 决策”与“人的审批意见”分区展示，再按时间合并为完整审计视图。
 
-目标 execution/attempt/decision/outbox 模型见 [`elsa3-slickflow-ai-reference-2026-08-23.md` §4.4–§4.8](./elsa3-slickflow-ai-reference-2026-08-23.md#_44-目标架构一个可靠执行-moduleai-只是-adapter)。
+目标 execution/attempt/decision/outbox 模型见 [`elsa3-slickflow-ai-reference-2026-08-23.md` §4.4–§4.8](./elsa3-slickflow-ai-reference-2026-08-23.md#44-目标架构一个可靠执行-moduleai-只是-adapter)。
 
 ## 八、索引与唯一约束
 
@@ -485,6 +488,8 @@ TenonAdmin 通过 NuGet 和 CodeFirst 分发，迁移应优先采用可回滚的
 
 ## 十、推荐开发顺序
 
+> 本节保留形成时的开发顺序；涉及已交付内容的段落属于“历史基线/后续已完成”，当前状态以上文和最新证据为准。
+
 ### M2b 收口（2026-08-24 提前项）
 
 1. 增加 `WfInstance.Version`、`WfToken.Version`，旧行回填 0；
@@ -492,7 +497,7 @@ TenonAdmin 通过 NuGet 和 CodeFirst 分发，迁移应优先采用可回滚的
 
 字段本身是可回填的增量迁移，成本极低；提前一个里程碑落地的收益是 M2b 的竞争语义从一开始就正确，而不是先按任务级 CAS 写一批测试、M2c 再改写一遍。
 
-### M2c
+### M2c（历史基线；后续已完成）
 
 1. 增加 `WfInstance.CompletedTime`；
 2. 新增 operation receipt，`IdentityHash` 构造规则按 §五 一次定死；
@@ -517,7 +522,7 @@ TenonAdmin 通过 NuGet 和 CodeFirst 分发，迁移应优先采用可回滚的
 
 验证范围：Task 8b 的生产 E2E 已覆盖 Webhook `Succeeded`、retry 后成功、terminal、manual fallback、事务外外呼和 tx2 提交前恢复；其他 dispatcher 结果仍由 Fake handler 补齐同一回写路径。当前工作树中的 Webhook 测试（[`WfWebhookNodeHandlerTests.cs`](../../backend/tests/TenonAdmin.Tests/WfWebhookNodeHandlerTests.cs)）覆盖 DNS callback fence、发送/响应体读取共用分类、IOException/响应体自超时重试和外部取消传播；未覆盖真实 TLS/HTTP2/chunking/proxy 环境。未知非取消 handler 异常现在由 dispatcher 以 `48032` 收敛为有限 retryable attempt，OCE 仍原样传播，避免 lease 无限活锁。
 
-M3a-1 的历史四库 CI 证据仍是 run [`33738099310`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33738099310)，HEAD `80f9c72`；它只证明 M3a-1 基线，不包含本 Task 8b 的当前本地改动。Task 8b 当前已在本地 Release build、workflow filter、目标 E2E 和双前端 schema/build 中验证；SQLite/MySQL/PostgreSQL/SQL Server 的当前 HEAD 四库证据仍需后续有授权的 CI run，不能用旧 run 代替。
+M3a-1 的历史基线四库 CI 证据仍是 run [`33738099310`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33738099310)，HEAD `80f9c72`；它只证明 M3a-1 基线，不包含 Task 8b，属于历史基线。Task 8b 在 review repair 后的最终证据为 run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)：SQLite、MySQL、PostgreSQL、SQL Server 四库与 template-smoke 均通过；contract-drift run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095)、docker-smoke run [`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106) 也均通过。此前仅本地验证的阶段性描述属于历史基线，已由上述结果覆盖。
 
 ### M3b
 
@@ -525,6 +530,10 @@ M3a-1 的历史四库 CI 证据仍是 run [`33738099310`](https://github.com/Ten
 2. 先跑 shadow mode；
 3. 达到评测阈值后开放低风险自动放行；
 4. 将人工推翻、fallback、schema 失败和成本纳入产品指标。
+
+M3b-0 已完成上述第 1 项及 shadow-only 基础闭环：AI 只生成 proposal，服务端完成 schema/policy 校验，在现有 execution/attempt/tx2 中追加脱敏审计并创建人工兜底任务。审计读取 API 复用实例参与者/监控权限，只返回元数据、hash、风险/证据引用、策略/兜底、token usage 和 shadow 标记，不返回 proposal 原文、原始变量、执行内部标识或 Provider 异常正文。任何 proposal 都不会自动批准、拒绝或推进 task/token。
+
+M3b-0 只保证终态 `Pending` outbox 的幂等入队，Task 8c 的 consumer、transport、领取/投递/重试和状态回写仍未实现。Round 19 的窄测 18/18、聚焦矩阵 313/313、Workflow Release build、双前端 typecheck/build 和独立 verifier 均通过；下一项为 M3B0-17 独立审查。
 
 ### 真正开发并行网关时
 
@@ -534,7 +543,7 @@ M3a-1 的历史四库 CI 证据仍是 run [`33738099310`](https://github.com/Ten
 
 现有模型的核心方向正确：人工审批状态是持久化事实，定义版本是不可变快照，业务状态留在消费方，M3a-1 的机器执行通过独立 execution/attempt/outbox 事实链落库，AI 仍通过独立 Adapter 接入。这些决定都应保留。
 
-M3a-1 的可靠执行内核与 Task 8b 的生产 Webhook 闭环已经在本地实现并通过目标验证，但当前 HEAD 尚未取得 Task 8b 的四库 CI 证据。`EnterNodeOp` 创建 execution、`WfNodeExecutionJob` 扫描和 dispatcher 的三段事务边界已经接通；outbox consumer/transport 仍是 Task 8c，Webhook 设计器 UI 仍是 M3a-2。可靠演进仍需区分三类身份：
+M3a-1 的可靠执行内核与 Task 8b 的生产 Webhook 闭环已经完成；review repair 后的最终四库 CI 与 template-smoke 证据为 run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)，contract-drift 与 docker-smoke 也分别在 run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095)、[`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106) 通过。原先的 Task 8b 四库证据缺口描述属于历史基线，已由上述结果覆盖。`EnterNodeOp` 创建 execution、`WfNodeExecutionJob` 扫描和 dispatcher 的三段事务边界已经接通；outbox consumer/transport 仍是 Task 8c，Webhook 设计器 UI 仍是 M3a-2。可靠演进仍需区分三类身份：
 
 1. **请求身份**：`RequestId/operation receipt`，回答“这是不是同一次用户命令”；
 2. **节点访问身份**：`NodeVisitId`，回答“这是不是同一次流程图访问”；

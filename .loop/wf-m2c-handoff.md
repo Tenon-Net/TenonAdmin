@@ -8,6 +8,8 @@
 - **M2c 未开始**:Tasks 1–10 全未勾;台账轮次 0;下一步 **Round 1 — Task 1 plan only**。
 - **严格执行 loop**:每个 Task 必须 plan → exec → review → 修 Findings → 勾选;**禁止跳过 review、禁止同轮勾选、禁止未跑闸门就勾选**。见台账 `## Loop 纪律`。
 
+> **历史 handoff 注记（2026-09-04）**：本文件是 M2c 开工前的历史快照，已过期；其中“M2c 未开始”已由后续任务覆盖，M2c 现已完成。当前状态以 `docs/workflow/README.md`、设计规划、当前代码与测试为准。
+
 ## 复制给新 agent 的提示词
 
 ```text

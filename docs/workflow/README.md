@@ -4,9 +4,17 @@
 
 ## 当前定位
 
-TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可信人工审批链，M3a 建立可靠机器节点执行 Module，M3b 交付 AI Decision v0，让机器处理低风险、人处理异常。它仍是可替换的审批卫星包，不扩张成通用自动化编排平台。
+TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可信人工审批链，M3a 建立可靠机器节点执行 Module，M3b-0 交付 shadow-only 的 AI Decision v0 基础闭环。它仍是可替换的审批卫星包，不扩张成通用自动化编排平台。
 
 共享领域术语仍保留在仓根 [`CONTEXT.md`](../../CONTEXT.md) 的“工作流”一节；它不是工作流专项文档，不从全仓领域词汇表中拆出。本目录负责完整设计和研究，`CONTEXT.md` 只保留跨任务必须统一的简短语义。
+
+## 当前交付状态（2026-09-08，M3b-0）
+
+M3b-0 已交付：AI Decision 已接入既有 execution、scheduler、worker、dispatcher 和 tx2 链路，Provider/proposal/policy、人工兜底和 append-only AI 审计均沿同一执行路径落库。内置执行链全程 **shadow-only**；AI 永不自动批准、拒绝、完成 task 或推进 token，低风险自动放行仍未开放。消费者整体替换 `IWorkflowEngine` 时属于受信任的完全接管，须自行维持事务、fence、审计与 shadow-only 不变量；自定义 handler 同样不得旁路写工作流状态。
+
+审计读取 API `GET /api/v1/workflow/instance/ai-decisions/{id}` 只返回受限元数据、输入 hash、模型文本/证据引用 hash、节点标识、策略/兜底结果、token usage 和 shadow 标记，不返回 proposal 原文、原始变量、执行内部标识或 Provider 异常正文。权限复用实例参与者与监控边界：发起人、办理人、抄送人和持有 `GET:/api/v1/workflow/instance/monitor` 权限的非参与者可读，路人拒绝。
+
+Task 8c 的 outbox consumer、transport、领取/投递/重试和状态回写仍未实现；M3b-0 只依赖 Task 8b 已有的 `Pending` 幂等入队。Round 19 的 18/18 窄测、313/313 聚焦矩阵、Workflow Release build、双前端 typecheck/build 和独立 verifier 均通过，详细命令与哈希见 [M3b-0 台账](../../.loop/wf-m3b0-ai-decision.md)。下一项是 M3B0-17 独立代码/安全/简化审查。
 
 ## 必读顺序
 
@@ -68,9 +76,9 @@ TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可�
 
 先阅读 AGENTS.md、CLAUDE.md、docs/workflow/README.md、workflow-database-design-review-2026-08-24.md 的 M3a 相关章节、elsa3-slickflow-ai-reference-2026-08-23.md §4.4–§4.8，以及 openworkflow-reference-2026-08-23.md 中 execution、attempt、lease/fence、retry、outbox 和恢复相关章节。存在 .codegraph 时先用 CodeGraph；固定参考 commit 未变化时不要重读外部项目。
 
-以当前代码和测试为事实源，设计并实现最小闭环：IWorkflowNodeHandler 扩展点、持久化 WfNodeExecution/Attempt、稳定 execution key、短事务 claim、lease + fencing token、可分类重试、outbox 唤醒、超时与崩溃恢复。先用 Fake Handler 和 Webhook Handler 验证执行框架，不在本阶段加入模型厂商耦合或让外部调用持有数据库事务。
+以当前代码和测试为事实源，设计并实现最小闭环：IWorkflowNodeHandler 扩展点、持久化 WfNodeExecution/Attempt、稳定 execution key、短事务 claim、lease + fencing token、可分类重试、tx2 幂等写入 `Pending` outbox、超时与崩溃恢复。Task 8b 只负责在 tx2 中幂等写入 `Pending` outbox，不领取或实际投递 outbox；`Pending → Dispatching → Dispatched/Failed` 的领取、投递、重试、CAS 回写与 transport 由 Task 8c 负责。Task 8c 不阻塞已解锁的 M3b。先用 Fake Handler 和 Webhook Handler 验证执行框架，不在本阶段加入模型厂商耦合或让外部调用持有数据库事务。
 
-测试必须证明：重复投递不重复产生业务副作用、过期 worker 不能覆盖新结果、进程在关键边界崩溃后可恢复、重试次数与最终状态可审计、人工任务原有语义不回归。同步数据库迁移和四库兼容性；契约变化时重新生成双前端 schema。把最终状态机和不变量回写到工作流文档，报告验证结果和 M3b 可复用的接口；不要自行提交或推送。
+测试必须证明：同一 execution 的重复执行不重复推进业务状态，外部投递携带稳定幂等键；过期 worker 不能覆盖新结果，进程在关键边界崩溃后可恢复，重试次数与最终状态可审计，人工任务原有语义不回归。outbox 的实际领取、投递、重试、CAS 回写与 transport 由 Task 8c 单独验收。同步数据库迁移和四库兼容性；契约变化时重新生成双前端 schema。把最终状态机和不变量回写到工作流文档，报告验证结果和 M3b 可复用的接口；不要自行提交或推送。
 ```
 
 ### M3b：AI Decision v0
@@ -80,7 +88,7 @@ TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可�
 
 先阅读 AGENTS.md、CLAUDE.md、docs/workflow/README.md、elsa3-slickflow-ai-reference-2026-08-23.md §4–§5，以及 workflow-design-plan-2026-08-17.md §14.3。存在 .codegraph 时先用 CodeGraph；固定参考 commit 未变化时不要重新调研参考仓。
 
-在 M3a 可靠执行层之上实现最小 AI 决策闭环：模型适配接口、Fake Provider 和一个 OpenAI-compatible Provider、结构化 proposal schema、服务端 policy 校验、shadow mode、置信度与风险阈值、人工兜底和完整审计。模型输出只能是 proposal，不能直接修改 task/token；v0 只允许低风险场景自动批准，不允许自动拒绝。自动放行默认关闭，阈值来自消费者部署在自己数据上的 shadow 评测，模型自报 confidence 不得单独作为放行条件。所有越权、解析失败、超时、低置信度、策略不匹配和敏感场景都必须确定性转人工。
+M3b-0 已在 M3a 可靠执行层之上交付最小 AI 决策闭环：模型适配接口、Fake Provider 和一个 OpenAI-compatible Provider、结构化 proposal schema、服务端 policy 校验、shadow-only、人工兜底和完整审计。模型输出只能是 proposal，不能直接修改 task/token；当前不自动批准或拒绝。后续受控自动化默认关闭，阈值来自消费者部署在自己数据上的 shadow 评测，模型自报 confidence 不得单独作为放行条件。所有越权、解析失败、超时、低置信度、策略不匹配和敏感场景都必须确定性转人工。
 
 测试覆盖结构化输出校验、策略路由、重复执行幂等、provider 故障、PII/secret 处理、tenant 隔离、审计重放，以及“模型不可直接推进流程”的安全不变量。先用 shadow 数据证明效果，再开放受控自动化。契约变化时重新生成双前端 schema，并把最终接口、阈值来源、审计字段和上线门槛回写到工作流文档；不要自行提交或推送。
 ```
