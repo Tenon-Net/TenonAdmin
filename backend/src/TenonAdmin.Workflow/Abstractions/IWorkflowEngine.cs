@@ -2,7 +2,8 @@ namespace TenonAdmin.Workflow;
 
 /// <summary>
 /// 工作流引擎入口(SPI)。一次 <see cref="ExecuteAsync"/> = 一条 Cmd = 一个 DB 事务 + Agenda 循环。
-/// 消费者可前置注册同接口整体替换内置引擎。
+/// 消费者可前置注册同接口整体替换内置引擎。整体替换属于受信任的完全接管：消费者同时负责事务、
+/// 幂等、fence、审计和 AI shadow-only 等内置安全不变量。
 /// </summary>
 public interface IWorkflowEngine
 {

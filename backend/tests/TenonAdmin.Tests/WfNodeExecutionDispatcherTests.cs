@@ -1,6 +1,9 @@
+using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SqlSugar;
 using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
@@ -176,6 +179,469 @@ public class WfNodeExecutionDispatcherTests
 
         var admin = Assert.IsType<AdminException>(ex);
         Assert.Equal(48004, (int)admin.Code);
+    }
+
+    /// <summary>
+    /// AI 节点的 tx2 第二层 shadow-only 防线：即使消费者替换 handler 返回 Succeeded，
+    /// 引擎也必须把结果安全收敛为 ManualFallback，不能推进 token/instance 或保存输出正文。
+    /// </summary>
+    [Fact]
+    public async Task AiDecision_tx2_forces_manual_fallback_when_handler_returns_succeeded()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "ai-shadow-guard");
+        var execution = await BuildExecutionAsync(db, s);
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { NodeType = WfNodeType.AiDecision })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfDefinitionVersion>()
+            .SetColumns(v => new WfDefinitionVersion { ModelJson = WfModelJson.Serialize(BuildAiModel(s.AssigneeUserId)) })
+            .Where(v => v.Id == s.DefinitionVersionId)
+            .ExecuteCommandAsync();
+
+        var handler = new FakeNodeHandler(
+            WfNodeExecutionResult.Succeeded(
+                outputJson: "{\"secret\":\"must-not-persist\"}",
+                summary: "must-not-persist"),
+            WfNodeType.AiDecision);
+        var dispatcher = new WfNodeExecutionDispatcher(db, [handler], engine, TimeProvider.System);
+        var tokenBefore = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
+
+        var status = await dispatcher.RunAsync(
+            execution.Id, "worker-ai-shadow", TimeSpan.FromMinutes(5), CancellationToken.None);
+
+        Assert.Equal(WfNodeExecutionStatus.ManualFallback, status);
+        var executionAfter = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.ManualFallback, executionAfter.Status);
+        Assert.DoesNotContain("must-not-persist", executionAfter.Summary ?? string.Empty, StringComparison.Ordinal);
+
+        var attempt = Assert.Single(await db.Queryable<WfNodeExecutionAttempt>()
+            .Where(a => a.ExecutionId == execution.Id).ToListAsync());
+        Assert.Equal(WfNodeExecutionResultType.ManualFallback, attempt.ResultType);
+        Assert.Null(attempt.OutputHash);
+        Assert.DoesNotContain("must-not-persist", attempt.ErrorSummary ?? string.Empty, StringComparison.Ordinal);
+
+        var tokenAfter = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
+        Assert.Equal(tokenBefore.Status, tokenAfter.Status);
+        Assert.Equal(tokenBefore.NodeId, tokenAfter.NodeId);
+        Assert.Equal(tokenBefore.NodeVisitId, tokenAfter.NodeVisitId);
+        var instanceAfter = await db.Queryable<WfInstance>()
+            .ClearFilter<IOrgScoped>().Where(i => i.Id == s.InstanceId).FirstAsync();
+        Assert.Equal(WfInstanceStatus.Running, instanceAfter.Status);
+    }
+
+    /// <summary>AI handler 返回的受限 outcome 必须原样进入完成命令，不能降级成 OutputJson 字符串。</summary>
+    [Fact]
+    public async Task AiDecision_handler_result_reaches_tx2_as_typed_outcome()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var realEngine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, realEngine, "ai-typed-handoff");
+        var execution = await BuildExecutionAsync(db, s);
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { NodeType = WfNodeType.AiDecision })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfDefinitionVersion>()
+            .SetColumns(v => new WfDefinitionVersion { ModelJson = WfModelJson.Serialize(BuildAiModel(s.AssigneeUserId)) })
+            .Where(v => v.Id == s.DefinitionVersionId)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfInstance>()
+            .SetColumns(i => new WfInstance { VariablesJson = "{\"amount\":12}" })
+            .Where(i => i.Id == s.InstanceId)
+            .ExecuteCommandAsync();
+
+        var handler = new AiDecisionNodeHandler(
+            new FakeAiDecisionProvider(),
+            new AiDecisionProposalParser(),
+            new AiDecisionPolicyEvaluator(new AiDecisionPolicyOptions()));
+        var probe = new CommandProbe();
+        var dispatcher = new WfNodeExecutionDispatcher(
+            db,
+            [handler],
+            new ProbingEngine(probe, realEngine),
+            TimeProvider.System);
+
+        _ = await dispatcher.RunAsync(
+            execution.Id, "worker-ai-typed", TimeSpan.FromMinutes(5), CancellationToken.None);
+
+        var command = Assert.IsType<NodeExecutionCompletedCmd>(probe.Last);
+        Assert.Equal(WfNodeExecutionResultType.ManualFallback, command.Result.Type);
+        var aiOutcome = Assert.IsType<AiDecisionOutcome>(command.Result.AiDecision);
+        Assert.Equal(AiDecisionFallbackReason.ShadowOnly, aiOutcome.FallbackReason);
+        Assert.NotNull(aiOutcome.Proposal);
+        Assert.DoesNotContain("amount", JsonSerializer.Serialize(command.Result), StringComparison.Ordinal);
+
+        var attempt = Assert.Single(await db.Queryable<WfNodeExecutionAttempt>()
+            .Where(a => a.ExecutionId == execution.Id).ToListAsync());
+        Assert.Equal(WfNodeExecutionResultType.ManualFallback, attempt.ResultType);
+        var audit = Assert.Single(await db.Queryable<WfAiDecision>().Where(x => x.ExecutionId == execution.Id).ToListAsync());
+        Assert.Equal(attempt.AttemptNo, audit.AttemptNo);
+        Assert.Equal(AiDecisionProviderResultType.Proposal, audit.ProviderResultType);
+        Assert.True(audit.SchemaValid);
+    }
+
+    [Fact]
+    public async Task AiDecision_completion_writes_typed_audit_with_attempt_outbox_and_manual_task()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "ai-audit");
+        var execution = await BuildExecutionAsync(db, s);
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { NodeType = WfNodeType.AiDecision })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfDefinitionVersion>()
+            .SetColumns(v => new WfDefinitionVersion { ModelJson = WfModelJson.Serialize(BuildAiModel(s.AssigneeUserId)) })
+            .Where(v => v.Id == s.DefinitionVersionId)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfInstance>()
+            .SetColumns(i => new WfInstance { VariablesJson = "{\"amount\":12,\"secret\":\"do-not-persist\"}" })
+            .Where(i => i.Id == s.InstanceId)
+            .ExecuteCommandAsync();
+
+        var beforeTaskCount = await db.Queryable<WfTask>().Where(t => t.InstanceId == s.InstanceId).CountAsync();
+        var beforeHistoryCount = await db.Queryable<WfHistory>().Where(h => h.InstanceId == s.InstanceId).CountAsync();
+        const string proposalJson =
+            "{\"schemaVersion\":\"1.0\",\"recommendation\":\"approve\",\"confidence\":0.95," +
+            "\"reasonCodes\":[\"POLICY_MATCH\"],\"rationale\":\"proposal only\"," +
+            "\"evidence\":[{\"id\":\"fake-evidence\",\"source\":\"fake-provider\"," +
+            "\"contentHash\":\"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\"}]," +
+            "\"riskFlags\":[]}";
+        var responseJson = JsonSerializer.Serialize(new
+        {
+            choices = new[]
+            {
+                new
+                {
+                    message = new { role = "assistant", content = proposalJson },
+                    finish_reason = "stop",
+                },
+            },
+            usage = new { prompt_tokens = 3, completion_tokens = 4, total_tokens = 7 },
+        });
+        using var httpClient = new HttpClient(new StaticAiResponseHandler(responseJson))
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+        var provider = new OpenAiCompatibleAiDecisionProvider(
+            httpClient,
+            new OpenAiCompatibleAiDecisionOptions
+            {
+                Enabled = true,
+                Endpoint = "https://compatible.example.test/v1/chat/completions",
+                Model = "integration-model",
+            },
+            TimeProvider.System);
+        var dispatcher = new WfNodeExecutionDispatcher(
+            db,
+            [new AiDecisionNodeHandler(provider, new AiDecisionProposalParser(),
+                new AiDecisionPolicyEvaluator(new AiDecisionPolicyOptions()))],
+            engine,
+            TimeProvider.System);
+
+        var status = await dispatcher.RunAsync(execution.Id, "worker-ai-audit", TimeSpan.FromMinutes(5), CancellationToken.None);
+
+        Assert.Equal(WfNodeExecutionStatus.ManualFallback, status);
+        var attempt = Assert.Single(await db.Queryable<WfNodeExecutionAttempt>()
+            .Where(a => a.ExecutionId == execution.Id).ToListAsync());
+        var audit = Assert.Single(await db.Queryable<WfAiDecision>()
+            .Where(a => a.ExecutionId == execution.Id).ToListAsync());
+        Assert.Equal(attempt.AttemptNo, audit.AttemptNo);
+        Assert.Equal(1, audit.AttemptNo);
+        Assert.Equal(AiDecisionProviderResultType.Proposal, audit.ProviderResultType);
+        AssertCanonicalHash(audit.Provider);
+        AssertCanonicalHash(audit.Model);
+        AssertCanonicalHash(audit.PromptVersion);
+        AssertCanonicalHash(audit.PolicyVersion);
+        Assert.DoesNotContain("openai-compatible", audit.Provider, StringComparison.Ordinal);
+        Assert.DoesNotContain("integration-model", audit.Model, StringComparison.Ordinal);
+        Assert.Equal(3, audit.PromptTokens);
+        Assert.Equal(4, audit.CompletionTokens);
+        Assert.Equal(7, audit.TotalTokens);
+        Assert.StartsWith("sha256:", audit.InputHash, StringComparison.Ordinal);
+        Assert.True(audit.SchemaValid);
+        Assert.Equal(AiDecisionPolicyClassification.ShadowCandidate, audit.PolicyClassification);
+        Assert.Equal(AiDecisionRecommendation.Approve, audit.Recommendation);
+        Assert.Equal(0.95m, audit.Confidence);
+        Assert.Equal(AiDecisionFallbackReason.ShadowOnly, audit.FallbackReason);
+        Assert.True(audit.ShadowMode);
+        Assert.DoesNotContain("do-not-persist", audit.ProposalJson ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("do-not-persist", audit.RiskFlagsJson ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("do-not-persist", audit.EvidenceRefsJson ?? string.Empty, StringComparison.Ordinal);
+
+        var outbox = Assert.Single(await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).ToListAsync());
+        Assert.Contains("manualFallback", outbox.PayloadJson ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("do-not-persist", outbox.PayloadJson ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(beforeTaskCount + 1, await db.Queryable<WfTask>().Where(t => t.InstanceId == s.InstanceId).CountAsync());
+        Assert.True(await db.Queryable<WfHistory>().Where(h => h.InstanceId == s.InstanceId).CountAsync() > beforeHistoryCount);
+    }
+
+    [Fact]
+    public async Task AiDecision_audit_is_append_only_across_two_claimed_attempts()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "ai-audit-retry");
+        var execution = await BuildExecutionAsync(db, s);
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { NodeType = WfNodeType.AiDecision })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfDefinitionVersion>()
+            .SetColumns(v => new WfDefinitionVersion { ModelJson = WfModelJson.Serialize(BuildAiModel(s.AssigneeUserId)) })
+            .Where(v => v.Id == s.DefinitionVersionId)
+            .ExecuteCommandAsync();
+
+        var now = DateTime.UtcNow;
+        var first = await ClaimAsync(db, execution.Id, "worker-ai-one", now);
+        Assert.NotNull(first);
+        var typed = await new AiDecisionNodeHandler(
+            new FakeAiDecisionProvider(), new AiDecisionProposalParser(), new AiDecisionPolicyEvaluator(new AiDecisionPolicyOptions()))
+            .ExecuteAsync(new WfNodeExecutionContext
+            {
+                ExecutionKey = execution.ExecutionKey,
+                InstanceId = execution.InstanceId,
+                TokenId = execution.TokenId,
+                NodeVisitId = execution.NodeVisitId,
+                NodeId = execution.NodeId,
+                NodeType = WfNodeType.AiDecision,
+                DefinitionVersionId = execution.DefinitionVersionId,
+                StarterUserId = s.StarterUserId,
+                NodeProps = BuildAiModel(s.AssigneeUserId).Root.Next!.Props,
+                VariablesJson = "{\"amount\":12}",
+                Attempt = 1,
+                DeadlineAtUtc = new DateTimeOffset(now.AddMinutes(5), TimeSpan.Zero),
+            }, CancellationToken.None);
+        await engine.ExecuteAsync(new NodeExecutionCompletedCmd
+        {
+            ExecutionId = execution.Id,
+            Fence = first!.Fence,
+            Result = typed,
+            HandlerType = typeof(AiDecisionNodeHandler).FullName,
+            StartedAtUtc = now,
+            EndedAtUtc = now.AddSeconds(1),
+        });
+
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution
+            {
+                Status = WfNodeExecutionStatus.Pending,
+                LeaseOwner = null,
+                LeaseExpiresAtUtc = null,
+                CompletedTimeUtc = null,
+            })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+        var second = await ClaimAsync(db, execution.Id, "worker-ai-two", now.AddMinutes(1));
+        Assert.NotNull(second);
+        await engine.ExecuteAsync(new NodeExecutionCompletedCmd
+        {
+            ExecutionId = execution.Id,
+            Fence = second!.Fence,
+            Result = typed,
+            HandlerType = typeof(AiDecisionNodeHandler).FullName,
+            StartedAtUtc = now.AddMinutes(1),
+            EndedAtUtc = now.AddMinutes(1).AddSeconds(1),
+        });
+
+        var audits = await db.Queryable<WfAiDecision>()
+            .Where(a => a.ExecutionId == execution.Id)
+            .OrderBy(a => a.AttemptNo)
+            .ToListAsync();
+        Assert.Equal(2, audits.Count);
+        Assert.Equal([1, 2], audits.Select(a => a.AttemptNo).ToArray());
+        Assert.Equal(audits[0].InputHash, audits[1].InputHash);
+    }
+
+    [Fact]
+    public async Task AiDecision_audit_failure_rolls_back_cas_attempt_outbox_and_task()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var bootstrapEngine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, bootstrapEngine, "ai-audit-rollback");
+        var execution = await BuildExecutionAsync(db, s);
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { NodeType = WfNodeType.AiDecision })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfDefinitionVersion>()
+            .SetColumns(v => new WfDefinitionVersion { ModelJson = WfModelJson.Serialize(BuildAiModel(s.AssigneeUserId)) })
+            .Where(v => v.Id == s.DefinitionVersionId)
+            .ExecuteCommandAsync();
+
+        var engine = ActivatorUtilities.CreateInstance<AuditFailingWorkflowEngine>(scope.ServiceProvider);
+        var now = DateTime.UtcNow;
+        var claimed = await ClaimAsync(db, execution.Id, "worker-ai-rollback", now);
+        Assert.NotNull(claimed);
+        var typed = await new AiDecisionNodeHandler(
+            new FakeAiDecisionProvider(), new AiDecisionProposalParser(), new AiDecisionPolicyEvaluator(new AiDecisionPolicyOptions()))
+            .ExecuteAsync(new WfNodeExecutionContext
+            {
+                ExecutionKey = execution.ExecutionKey,
+                InstanceId = execution.InstanceId,
+                TokenId = execution.TokenId,
+                NodeVisitId = execution.NodeVisitId,
+                NodeId = execution.NodeId,
+                NodeType = WfNodeType.AiDecision,
+                DefinitionVersionId = execution.DefinitionVersionId,
+                StarterUserId = s.StarterUserId,
+                NodeProps = BuildAiModel(s.AssigneeUserId).Root.Next!.Props,
+                VariablesJson = "{\"amount\":12}",
+                Attempt = 1,
+                DeadlineAtUtc = new DateTimeOffset(now.AddMinutes(5), TimeSpan.Zero),
+            }, CancellationToken.None);
+        var beforeTaskCount = await db.Queryable<WfTask>().Where(t => t.InstanceId == s.InstanceId).CountAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => engine.ExecuteAsync(new NodeExecutionCompletedCmd
+        {
+            ExecutionId = execution.Id,
+            Fence = claimed!.Fence,
+            Result = typed,
+            HandlerType = typeof(AiDecisionNodeHandler).FullName,
+            StartedAtUtc = now,
+            EndedAtUtc = now.AddSeconds(1),
+        }));
+
+        var after = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.Running, after.Status);
+        Assert.Equal(claimed.Fence, after.Fence);
+        Assert.Empty(await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).ToListAsync());
+        Assert.Empty(await db.Queryable<WfAiDecision>().Where(a => a.ExecutionId == execution.Id).ToListAsync());
+        Assert.Empty(await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).ToListAsync());
+        Assert.Equal(beforeTaskCount, await db.Queryable<WfTask>().Where(t => t.InstanceId == s.InstanceId).CountAsync());
+    }
+
+    [Fact]
+    public async Task AiDecision_manual_fallback_without_assignee_keeps_token_and_creates_no_task()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "ai-audit-no-assignee");
+        var execution = await BuildExecutionAsync(db, s);
+        var aiModel = BuildAiModel(s.AssigneeUserId);
+        aiModel.Root.Next!.Props!.Assignee = null;
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { NodeType = WfNodeType.AiDecision })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfDefinitionVersion>()
+            .SetColumns(v => new WfDefinitionVersion { ModelJson = WfModelJson.Serialize(aiModel) })
+            .Where(v => v.Id == s.DefinitionVersionId)
+            .ExecuteCommandAsync();
+
+        var beforeTaskCount = await db.Queryable<WfTask>().Where(t => t.InstanceId == s.InstanceId).CountAsync();
+        var tokenBefore = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
+        var dispatcher = new WfNodeExecutionDispatcher(
+            db,
+            [new AiDecisionNodeHandler(new FakeAiDecisionProvider(), new AiDecisionProposalParser(), new AiDecisionPolicyEvaluator(new AiDecisionPolicyOptions()))],
+            engine,
+            TimeProvider.System);
+
+        Assert.Equal(WfNodeExecutionStatus.ManualFallback,
+            await dispatcher.RunAsync(execution.Id, "worker-ai-no-assignee", TimeSpan.FromMinutes(5), CancellationToken.None));
+        Assert.Equal(beforeTaskCount, await db.Queryable<WfTask>().Where(t => t.InstanceId == s.InstanceId).CountAsync());
+        var tokenAfter = await db.Queryable<WfToken>().Where(t => t.Id == s.Token.Id).FirstAsync();
+        Assert.Equal(tokenBefore.NodeId, tokenAfter.NodeId);
+        Assert.Equal(tokenBefore.NodeVisitId, tokenAfter.NodeVisitId);
+        var audit = Assert.Single(await db.Queryable<WfAiDecision>()
+            .Where(a => a.ExecutionId == execution.Id).ToListAsync());
+        Assert.Equal(AiDecisionFallbackReason.AssigneeEmpty, audit.FallbackReason);
+    }
+
+    /// <summary>AI 迟到结果即使携带 typed outcome，也必须在 fence 失败时不留下任何三表副作用。</summary>
+    [Fact]
+    public async Task Stale_ai_typed_result_leaves_no_attempt_ai_audit_or_outbox()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "ai-stale-typed");
+        var execution = await BuildExecutionAsync(db, s);
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { NodeType = WfNodeType.AiDecision })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfDefinitionVersion>()
+            .SetColumns(v => new WfDefinitionVersion { ModelJson = WfModelJson.Serialize(BuildAiModel(s.AssigneeUserId)) })
+            .Where(v => v.Id == s.DefinitionVersionId)
+            .ExecuteCommandAsync();
+
+        var now = DateTime.UtcNow;
+        var first = await ClaimAsync(db, execution.Id, "worker-ai-old", now);
+        Assert.NotNull(first);
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { LeaseExpiresAtUtc = now.AddMinutes(-1) })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+        var second = await ClaimAsync(db, execution.Id, "worker-ai-new", now.AddMinutes(1));
+        Assert.NotNull(second);
+
+        var taskCountBefore = await db.Queryable<WfTask>().Where(t => t.InstanceId == s.InstanceId).CountAsync();
+        var actorCountBefore = await CountTaskActorsAsync(db, s.InstanceId);
+        var historyCountBefore = await db.Queryable<WfHistory>().Where(h => h.InstanceId == s.InstanceId).CountAsync();
+
+        var typedResult = await new AiDecisionNodeHandler(
+            new FakeAiDecisionProvider(),
+            new AiDecisionProposalParser(),
+            new AiDecisionPolicyEvaluator(new AiDecisionPolicyOptions()))
+            .ExecuteAsync(
+                new WfNodeExecutionContext
+                {
+                    ExecutionKey = execution.ExecutionKey,
+                    InstanceId = execution.InstanceId,
+                    TokenId = execution.TokenId,
+                    NodeVisitId = execution.NodeVisitId,
+                    NodeId = execution.NodeId,
+                    NodeType = WfNodeType.AiDecision,
+                    DefinitionVersionId = execution.DefinitionVersionId,
+                    StarterUserId = s.StarterUserId,
+                    NodeProps = BuildAiModel(s.AssigneeUserId).Root.Next!.Props,
+                    VariablesJson = "{\"amount\":12}",
+                    Attempt = 1,
+                    DeadlineAtUtc = new DateTimeOffset(now.AddMinutes(5), TimeSpan.Zero),
+                },
+                CancellationToken.None);
+        Assert.NotNull(typedResult.AiDecision);
+
+        var ex = await Assert.ThrowsAsync<AdminException>(() => engine.ExecuteAsync(
+            new NodeExecutionCompletedCmd
+            {
+                ExecutionId = execution.Id,
+                Fence = first!.Fence,
+                Result = typedResult,
+                HandlerType = typeof(AiDecisionNodeHandler).FullName,
+                StartedAtUtc = now,
+                EndedAtUtc = now.AddSeconds(1),
+            }));
+
+        Assert.Equal(48004, (int)ex.Code);
+        var reloaded = await db.Queryable<WfNodeExecution>().Where(e => e.Id == execution.Id).FirstAsync();
+        Assert.Equal(WfNodeExecutionStatus.Running, reloaded.Status);
+        Assert.Equal(second.Fence, reloaded.Fence);
+        Assert.Equal("worker-ai-new", reloaded.LeaseOwner);
+        Assert.Empty(await db.Queryable<WfNodeExecutionAttempt>().Where(a => a.ExecutionId == execution.Id).ToListAsync());
+        Assert.Empty(await db.Queryable<WfAiDecision>().Where(a => a.ExecutionId == execution.Id).ToListAsync());
+        Assert.Empty(await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).ToListAsync());
+        Assert.Equal(taskCountBefore, await db.Queryable<WfTask>().Where(t => t.InstanceId == s.InstanceId).CountAsync());
+        Assert.Equal(actorCountBefore, await CountTaskActorsAsync(db, s.InstanceId));
+        Assert.Equal(historyCountBefore, await db.Queryable<WfHistory>().Where(h => h.InstanceId == s.InstanceId).CountAsync());
     }
 
     [Fact]
@@ -543,6 +1009,55 @@ public class WfNodeExecutionDispatcherTests
         Assert.Contains(actors, a => a.UserId == s.AssigneeUserId);
 
         Assert.Equal(1, await db.Queryable<WfOutbox>().Where(o => o.ExecutionId == execution.Id).CountAsync());
+    }
+
+    [Fact]
+    public async Task AiDecision_audit_redacts_provider_controlled_free_text()
+    {
+        using var f = new WorkflowAppFactory();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var s = await StartAsync(f, db, engine, "ai-audit-redaction");
+        var execution = await BuildExecutionAsync(db, s);
+        await db.Updateable<WfNodeExecution>()
+            .SetColumns(e => new WfNodeExecution { NodeType = WfNodeType.AiDecision })
+            .Where(e => e.Id == execution.Id)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfDefinitionVersion>()
+            .SetColumns(v => new WfDefinitionVersion { ModelJson = WfModelJson.Serialize(BuildAiModel(s.AssigneeUserId)) })
+            .Where(v => v.Id == s.DefinitionVersionId)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfInstance>()
+            .SetColumns(i => new WfInstance { VariablesJson = "{\"amount\":12}" })
+            .Where(i => i.Id == s.InstanceId)
+            .ExecuteCommandAsync();
+
+        var dispatcher = new WfNodeExecutionDispatcher(
+            db,
+            [new AiDecisionNodeHandler(new SensitiveAiDecisionProvider(), new AiDecisionProposalParser(),
+                new AiDecisionPolicyEvaluator(new AiDecisionPolicyOptions()))],
+            engine,
+            TimeProvider.System);
+
+        Assert.Equal(WfNodeExecutionStatus.ManualFallback,
+            await dispatcher.RunAsync(execution.Id, "worker-ai-redaction", TimeSpan.FromMinutes(5), CancellationToken.None));
+
+        var audit = Assert.Single(await db.Queryable<WfAiDecision>()
+            .Where(a => a.ExecutionId == execution.Id).ToListAsync());
+        Assert.DoesNotContain("张三住在北京市海淀区", audit.ProposalJson ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("SSN_123456789", audit.ProposalJson ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("customer-home-address", audit.RiskFlagsJson ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("case-for-zhangsan", audit.EvidenceRefsJson ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("beijing-ledger", audit.EvidenceRefsJson ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("sha256:", audit.ProposalJson ?? string.Empty, StringComparison.Ordinal);
+        using var proposal = JsonDocument.Parse(audit.ProposalJson!);
+        AssertCanonicalHash(proposal.RootElement.GetProperty("reasonCodes")[0].GetString());
+        Assert.All(JsonSerializer.Deserialize<string[]>(audit.RiskFlagsJson!)!,
+            AssertCanonicalHash);
+        var evidence = JsonDocument.Parse(audit.EvidenceRefsJson!).RootElement[0];
+        AssertCanonicalHash(evidence.GetProperty("id").GetString());
+        AssertCanonicalHash(evidence.GetProperty("source").GetString());
     }
 
     /// <summary>
@@ -1390,6 +1905,119 @@ public class WfNodeExecutionDispatcherTests
         },
     };
 
+    private static WfModel BuildAiModel(long assigneeUserId) => new()
+    {
+        Root = new WfNode
+        {
+            Id = "start",
+            Type = WfNodeType.Start,
+            Next = new WfNode
+            {
+                Id = "node1",
+                Type = WfNodeType.AiDecision,
+                Props = new WfNodeProps
+                {
+                    Assignee = new WfAssignee
+                    {
+                        Provider = ApproverProviderKeys.User,
+                        Params = new Dictionary<string, JsonElement>
+                        {
+                            ["userIds"] = JsonSerializer.SerializeToElement(new[] { assigneeUserId }),
+                        },
+                    },
+                    AiInstructions = "Review the selected amount.",
+                    AiInputFields = ["amount"],
+                },
+                Next = null,
+            },
+        },
+    };
+
+    private sealed class CommandProbe
+    {
+        public IWfCommand? Last { get; private set; }
+
+        public void Record(IWfCommand command) => Last = command;
+    }
+
+    private sealed class ProbingEngine(CommandProbe probe, IWorkflowEngine inner) : IWorkflowEngine
+    {
+        public Task<WfEngineResult> ExecuteAsync(
+            IWfCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            probe.Record(command);
+            return inner.ExecuteAsync(command, cancellationToken);
+        }
+    }
+
+    private sealed class AuditFailingWorkflowEngine(
+        IRepository<WfInstance> instances,
+        IApproverResolver approverResolver,
+        IWorkflowFormBinder formBinder,
+        WorkflowOptions options,
+        TimeProvider timeProvider,
+        IWfConditionEvaluator conditionEvaluator,
+        IWorkflowNotifier notifier,
+        IWfOperationReceiptService receipts,
+        ILogger<WorkflowEngine> logger,
+        IIdGenerator idGenerator)
+        : WorkflowEngine(
+            instances,
+            approverResolver,
+            formBinder,
+            options,
+            timeProvider,
+            conditionEvaluator,
+            notifier,
+            receipts,
+            logger,
+            idGenerator)
+    {
+        protected override Task AppendAiDecisionAuditAsync(
+            ISqlSugarClient db,
+            WfNodeExecution execution,
+            WfNodeExecutionAttempt attempt,
+            AiDecisionOutcome outcome,
+            DateTime startedAtUtc,
+            DateTime endedAtUtc,
+            CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("audit write failed");
+    }
+
+    private sealed class SensitiveAiDecisionProvider : FakeAiDecisionProvider
+    {
+        protected override AiDecisionProviderResult CreateResult() => AiDecisionProviderResult.Proposal(
+            "{\"schemaVersion\":\"1.0\",\"recommendation\":\"approve\",\"confidence\":0.95," +
+            "\"reasonCodes\":[\"SSN_123456789\"],\"rationale\":\"张三住在北京市海淀区\"," +
+            "\"evidence\":[{\"id\":\"case-for-zhangsan\",\"source\":\"beijing-ledger\"," +
+            "\"contentHash\":\"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\"}]," +
+            "\"riskFlags\":[\"customer-home-address\"]}",
+            provider: "sensitive-test",
+            model: "test-model",
+            promptVersion: "v0");
+    }
+
+    private static void AssertCanonicalHash(string? value)
+    {
+        Assert.NotNull(value);
+        Assert.StartsWith("sha256:", value, StringComparison.Ordinal);
+        Assert.Equal(71, value.Length);
+        Assert.All(value["sha256:".Length..], character =>
+            Assert.True(character is (>= '0' and <= '9') or (>= 'a' and <= 'f')));
+    }
+
+    private sealed class StaticAiResponseHandler(string responseJson) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(responseJson, Encoding.UTF8, "application/json"),
+            });
+    }
+
     private static async Task<HttpClient> ClientFor(WorkflowAppFactory f, string account)
     {
         var client = f.CreateClient();
@@ -1412,6 +2040,17 @@ public class WfNodeExecutionDispatcherTests
         var env = await PostEnvelope(admin, "/api/v1/sys/user", body);
         Assert.Equal(0, env.GetProperty("code").GetInt32());
         return env.GetProperty("data").GetProperty("id").GetInt64();
+    }
+
+    private static async Task<int> CountTaskActorsAsync(ISqlSugarClient db, long instanceId)
+    {
+        var taskIds = await db.Queryable<WfTask>()
+            .Where(t => t.InstanceId == instanceId)
+            .Select(t => t.Id)
+            .ToListAsync();
+        return taskIds.Count == 0
+            ? 0
+            : await db.Queryable<WfTaskActor>().Where(a => taskIds.Contains(a.TaskId)).CountAsync();
     }
 
     private static async Task<JsonElement> PostEnvelope(HttpClient client, string path, object body) =>

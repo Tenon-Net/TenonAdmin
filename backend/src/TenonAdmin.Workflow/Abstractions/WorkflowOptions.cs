@@ -47,6 +47,12 @@ public sealed class WorkflowOptions
     public int NodeExecutionLeaseSeconds { get; set; } = DefaultNodeExecutionLeaseSeconds;
 
     /// <summary>
+    /// AI Decision 的服务端配置，对应 <c>TenonAdmin:Workflow:AiDecision</c>。V0 固定 shadow-only，
+    /// 不暴露任何自动放行开关。
+    /// </summary>
+    public AiDecisionOptions AiDecision { get; set; } = new();
+
+    /// <summary>
     /// 空审批人全局默认策略:<c>autoPass</c>(自动通过,出厂默认) /
     /// <c>transfer</c>(转指定人) / <c>block</c>(卡住并通知管理员)。
     /// </summary>
@@ -78,6 +84,130 @@ public sealed class WorkflowOptions
         value is >= MinMaxAttempts and <= MaxMaxAttempts;
 }
 
+/// <summary>AI Decision 的服务端配置根。V0 固定 shadow-only，不暴露任何自动放行开关。</summary>
+public sealed class AiDecisionOptions
+{
+    /// <summary>proposal 的服务端分类 policy，对应 <c>TenonAdmin:Workflow:AiDecision:Policy</c>。</summary>
+    public AiDecisionPolicyOptions Policy { get; set; } = new();
+
+    /// <summary>
+    /// OpenAI-compatible Chat Completions Provider 配置，对应
+    /// <c>TenonAdmin:Workflow:AiDecision:OpenAiCompatible</c>。
+    /// </summary>
+    public OpenAiCompatibleAiDecisionOptions OpenAiCompatible { get; set; } = new();
+}
+
+/// <summary>
+/// OpenAI-compatible <c>/v1/chat/completions</c> Provider 的最小 v0 配置。启用后仍只生成
+/// shadow-only proposal，绝不向模型授予推进工作流、批准或拒绝的权限。
+/// </summary>
+public sealed class OpenAiCompatibleAiDecisionOptions
+{
+    /// <summary>默认的 OpenAI Chat Completions 完整 endpoint。</summary>
+    public const string DefaultEndpoint = "https://api.openai.com/v1/chat/completions";
+
+    /// <summary>默认单次外呼超时（秒）。</summary>
+    public const int DefaultTimeoutSeconds = 30;
+
+    /// <summary>允许的最小单次外呼超时（秒）。</summary>
+    public const int MinimumTimeoutSeconds = 1;
+
+    /// <summary>允许的最大单次外呼超时（秒）。</summary>
+    public const int MaximumTimeoutSeconds = 120;
+
+    /// <summary>默认的外部响应总字节上限。</summary>
+    public const int DefaultResponseByteCap = 64 * 1024;
+
+    /// <summary>允许的最小外部响应总字节上限。</summary>
+    public const int MinimumResponseByteCap = 1024;
+
+    /// <summary>允许的最大外部响应总字节上限。</summary>
+    public const int MaximumResponseByteCap = 1024 * 1024;
+
+    /// <summary>是否启用真实 HTTP Provider；默认关闭并保持 fail-closed。</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>完整 Chat Completions endpoint；本地 compatible server 可自行指定。</summary>
+    public string Endpoint { get; set; } = DefaultEndpoint;
+
+    /// <summary>启用时必填的模型标识。</summary>
+    public string Model { get; set; } = "";
+
+    /// <summary>可选 Bearer API key；空白值不发送 Authorization，供本地 compatible server 使用。</summary>
+    public string? ApiKey { get; set; }
+
+    /// <summary>单次外呼超时（秒），会再被执行的绝对 deadline 收紧。</summary>
+    public int TimeoutSeconds { get; set; } = DefaultTimeoutSeconds;
+
+    /// <summary>流式读取外部响应时允许的总字节上限。</summary>
+    public int ResponseByteCap { get; set; } = DefaultResponseByteCap;
+
+    /// <summary>仅在受控本地环境显式开启时允许 HTTP endpoint；默认必须 HTTPS。</summary>
+    public bool AllowInsecureHttp { get; set; }
+
+    /// <summary>验证可安全发送的 Provider 配置；异常不回显 endpoint query 或 API key。</summary>
+    public void Validate()
+    {
+        if (TimeoutSeconds is < MinimumTimeoutSeconds or > MaximumTimeoutSeconds)
+        {
+            throw new ArgumentOutOfRangeException(nameof(TimeoutSeconds),
+                $"TimeoutSeconds 必须在 {MinimumTimeoutSeconds} 到 {MaximumTimeoutSeconds} 之间。");
+        }
+
+        if (ResponseByteCap is < MinimumResponseByteCap or > MaximumResponseByteCap)
+        {
+            throw new ArgumentOutOfRangeException(nameof(ResponseByteCap),
+                $"ResponseByteCap 必须在 {MinimumResponseByteCap} 到 {MaximumResponseByteCap} 之间。");
+        }
+
+        if (Enabled && string.IsNullOrWhiteSpace(Model))
+        {
+            throw new ArgumentException("启用 OpenAI-compatible Provider 时 Model 不能为空。", nameof(Model));
+        }
+
+        var endpoint = CreateValidatedEndpoint();
+        if (string.Equals(endpoint.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(ApiKey))
+        {
+            throw new ArgumentException("HTTP endpoint 不能携带 ApiKey。", nameof(ApiKey));
+        }
+
+        if (!string.IsNullOrWhiteSpace(ApiKey) && ApiKey.Any(char.IsControl))
+        {
+            throw new ArgumentException("ApiKey 不能包含控制字符。", nameof(ApiKey));
+        }
+    }
+
+    /// <summary>返回已验证的 endpoint；仅 adapter 使用，避免把 URI 解析策略复制到外呼路径。</summary>
+    internal Uri CreateValidatedEndpoint()
+    {
+        if (string.IsNullOrWhiteSpace(Endpoint)
+            || Endpoint.Any(char.IsControl)
+            || !Uri.TryCreate(Endpoint, UriKind.Absolute, out var endpoint)
+            || !endpoint.IsWellFormedOriginalString()
+            || string.IsNullOrEmpty(endpoint.Host)
+            || !string.IsNullOrEmpty(endpoint.UserInfo)
+            || !string.IsNullOrEmpty(endpoint.Fragment))
+        {
+            throw new ArgumentException("Endpoint 必须是无 userinfo 或 fragment 的绝对 HTTP/HTTPS URI。", nameof(Endpoint));
+        }
+
+        var isHttp = string.Equals(endpoint.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase);
+        var isHttps = string.Equals(endpoint.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+        if (!isHttp && !isHttps)
+        {
+            throw new ArgumentException("Endpoint 必须是无 userinfo 或 fragment 的绝对 HTTP/HTTPS URI。", nameof(Endpoint));
+        }
+
+        if (isHttp && !AllowInsecureHttp)
+        {
+            throw new ArgumentException("Endpoint 必须使用 HTTPS，除非显式允许 HTTP。", nameof(Endpoint));
+        }
+
+        return endpoint;
+    }
+}
+
 internal static class WorkflowOptionsValidation
 {
     public static void Validate(WorkflowOptions options)
@@ -102,6 +232,39 @@ internal static class WorkflowOptionsValidation
             throw new InvalidOperationException(
                 $"TenonAdmin:Workflow:NodeExecutionLeaseSeconds 配置无效:值为 {options.NodeExecutionLeaseSeconds}," +
                 $"必须在 1–{WorkflowOptions.MaxNodeExecutionLeaseSeconds} 秒之间。");
+        }
+
+        if (options.AiDecision is null)
+        {
+            throw new InvalidOperationException("TenonAdmin:Workflow:AiDecision 配置无效:不能为 null。");
+        }
+
+        if (options.AiDecision.Policy is null)
+        {
+            throw new InvalidOperationException("TenonAdmin:Workflow:AiDecision:Policy 配置无效:不能为 null。");
+        }
+
+        if (options.AiDecision.OpenAiCompatible is null)
+        {
+            throw new InvalidOperationException("TenonAdmin:Workflow:AiDecision:OpenAiCompatible 配置无效:不能为 null。");
+        }
+
+        try
+        {
+            options.AiDecision.Policy.Validate();
+        }
+        catch (ArgumentException)
+        {
+            throw new InvalidOperationException("TenonAdmin:Workflow:AiDecision:Policy 配置无效。");
+        }
+
+        try
+        {
+            options.AiDecision.OpenAiCompatible.Validate();
+        }
+        catch (ArgumentException)
+        {
+            throw new InvalidOperationException("TenonAdmin:Workflow:AiDecision:OpenAiCompatible 配置无效。");
         }
     }
 }

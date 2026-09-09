@@ -91,3 +91,19 @@ public interface IWfInstanceService
         string? requestId = null,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// AI Decision 审计读取边界。独立于实例服务替换，避免旧消费者替换 <see cref="IWfInstanceService"/>
+/// 后让已发布的审计端点在运行时才失败。
+/// </summary>
+/// <remarks>
+/// 替换实现即接管该端点的授权与脱敏，必须保留实例参与者、机构数据范围和只返回安全审计投影的边界。
+/// </remarks>
+public interface IWfAiDecisionAuditReader
+{
+    /// <summary>实例的脱敏 AI Decision 审计投影，按发生时间升序。</summary>
+    Task<IReadOnlyList<WfAiDecisionAuditOutput>> ListAiDecisionsAsync(
+        long instanceId,
+        long currentUserId,
+        CancellationToken cancellationToken = default);
+}

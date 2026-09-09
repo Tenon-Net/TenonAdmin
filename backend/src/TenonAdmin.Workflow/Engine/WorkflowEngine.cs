@@ -1302,13 +1302,16 @@ public class WorkflowEngine(
             starterOrgId = starter.OrgId;
 
         var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
-        var outcome = ResolveExecutionOutcome(execution, instance, token, cmd.Result, nowUtc);
+        // AI 节点的 shadow-only 约束必须在 tx2 入口再次执行，不能相信可替换 handler 的结果类型。
+        // 归一化后的结果同时用于 outcome 与 attempt，避免出现 execution 已人工兜底但 attempt 仍记成功的分裂状态。
+        var result = NormalizeExecutionResult(execution, cmd.Result);
+        var outcome = ResolveExecutionOutcome(execution, instance, token, result, nowUtc);
 
         // 本事务的第一个写操作,且必须在 AppendAsync 之前(见类注释)。
         await ClaimExecutionWritebackAsync(db, execution, cmd, outcome, cancellationToken);
 
         var attempt = await WfNodeExecutionAttemptStore.AppendAsync(
-            db, execution, cmd.Result, cmd.StartedAtUtc, cmd.EndedAtUtc, cancellationToken);
+            db, execution, result, cmd.StartedAtUtc, cmd.EndedAtUtc, cancellationToken);
 
         var agenda = new WfAgenda();
         var ctx = new WfExecutionContext
@@ -1335,6 +1338,25 @@ public class WorkflowEngine(
             LeaderChainByLevel = DeserializeLeaderChainsByLevel(instance.LeaderChainJson),
         };
 
+        IReadOnlyList<long>? aiFallbackUsers = null;
+        if (execution.NodeType == WfNodeType.AiDecision
+            && outcome.Status == WfNodeExecutionStatus.ManualFallback)
+        {
+            aiFallbackUsers = await WfManualFallbackOp.ResolveAssigneesAsync(ctx, node, cancellationToken);
+        }
+
+        AiDecisionOutcome? aiDecision = null;
+        if (execution.NodeType == WfNodeType.AiDecision)
+        {
+            aiDecision = result.AiDecision
+                ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed,
+                    new Dictionary<string, object?> { ["reason"] = "aiDecisionOutcomeMissing" });
+            if (aiFallbackUsers is { Count: 0 })
+                aiDecision = aiDecision.WithFallbackReason(AiDecisionFallbackReason.AssigneeEmpty);
+            await AppendAiDecisionAuditAsync(
+                db, execution, attempt, aiDecision, cmd.StartedAtUtc, cmd.EndedAtUtc, cancellationToken);
+        }
+
         // 终态才入队(§4.6):RetryScheduled 不是终态,不入队——MessageKey 天花板是「一个 (execution,type)
         // 一条消息」,一次 execution 最多进一次终态,"终态 ⇒ 恰好一条"是唯一自洽的规则。
         if (outcome.IsTerminal)
@@ -1353,7 +1375,9 @@ public class WorkflowEngine(
                 break;
 
             case WfNodeExecutionStatus.ManualFallback:
-                agenda.Plan(new WfManualFallbackOp(node));
+                agenda.Plan(execution.NodeType == WfNodeType.AiDecision
+                    ? new WfManualFallbackOp(node, aiFallbackUsers)
+                    : new WfManualFallbackOp(node));
                 break;
 
             case WfNodeExecutionStatus.RetryScheduled:
@@ -1368,6 +1392,117 @@ public class WorkflowEngine(
         }
 
         return ctx;
+    }
+
+    /// <summary>
+    /// 在 execution CAS 与 generic attempt 之后追加 AI 审计。这里仅从类型化、已校验的 outcome
+    /// 投影字段，绝不读取 handler 原始响应或变量 JSON；调用方仍在同一 tx2 中，任一失败都会回滚整笔写回。
+    /// </summary>
+    protected virtual async Task AppendAiDecisionAuditAsync(
+        ISqlSugarClient db,
+        WfNodeExecution execution,
+        WfNodeExecutionAttempt attempt,
+        AiDecisionOutcome outcome,
+        DateTime startedAtUtc,
+        DateTime endedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(execution);
+        ArgumentNullException.ThrowIfNull(attempt);
+        ArgumentNullException.ThrowIfNull(outcome);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var proposal = outcome.Proposal;
+        var proposalJson = proposal is null ? null : SerializeAiProposal(proposal);
+        bool? schemaValid = outcome.ProviderResultType == AiDecisionProviderResultType.Proposal
+            ? proposal is not null
+            : null;
+        var elapsed = endedAtUtc >= startedAtUtc ? endedAtUtc - startedAtUtc : TimeSpan.Zero;
+        var latencyMilliseconds = Math.Clamp((long)elapsed.TotalMilliseconds, 0L, 86_400_000L);
+
+        var row = new WfAiDecision
+        {
+            ExecutionId = execution.Id,
+            AttemptNo = attempt.AttemptNo,
+            InstanceId = execution.InstanceId,
+            NodeId = execution.NodeId,
+            ProviderResultType = outcome.ProviderResultType,
+            Provider = outcome.Provider is null ? null : AiDecisionSafeInputProjector.HashAuditValue(outcome.Provider),
+            Model = outcome.Model is null ? null : AiDecisionSafeInputProjector.HashAuditValue(outcome.Model),
+            InputHash = outcome.InputHash,
+            PromptVersion = outcome.PromptVersion is null
+                ? null
+                : AiDecisionSafeInputProjector.HashAuditValue(outcome.PromptVersion),
+            ProposalJson = proposalJson,
+            ProposalSchemaVersion = proposal?.SchemaVersion,
+            SchemaValid = schemaValid,
+            PolicyVersion = AiDecisionSafeInputProjector.HashAuditValue(outcome.PolicyVersion),
+            PolicyClassification = outcome.PolicyClassification,
+            Recommendation = outcome.Recommendation,
+            Confidence = proposal?.Confidence,
+            RiskFlagsJson = proposal is null
+                ? null
+                : System.Text.Json.JsonSerializer.Serialize(
+                    proposal.RiskFlags.Select(AiDecisionSafeInputProjector.HashAuditValue), WfModelJson.Options),
+            EvidenceRefsJson = proposal is null
+                ? null
+                : System.Text.Json.JsonSerializer.Serialize(
+                    proposal.Evidence.Select(e => new
+                    {
+                        id = AiDecisionSafeInputProjector.HashAuditValue(e.Id),
+                        source = AiDecisionSafeInputProjector.HashAuditValue(e.Source),
+                        contentHash = e.ContentHash,
+                    }),
+                    WfModelJson.Options),
+            LatencyMilliseconds = latencyMilliseconds,
+            PromptTokens = outcome.PromptTokens,
+            CompletionTokens = outcome.CompletionTokens,
+            TotalTokens = outcome.TotalTokens,
+            FallbackReason = outcome.FallbackReason,
+            ShadowMode = true,
+        };
+
+        await db.Insertable(row).ExecuteCommandAsync();
+    }
+
+    /// <summary>把已验证 proposal 投影成稳定的受限 JSON；不带 rationale 以外的上下文正文。</summary>
+    protected virtual string SerializeAiProposal(AiDecisionProposal proposal) =>
+        System.Text.Json.JsonSerializer.Serialize(new
+        {
+            schemaVersion = proposal.SchemaVersion,
+            recommendation = proposal.Recommendation,
+            confidence = proposal.Confidence,
+            reasonCodes = proposal.ReasonCodes.Select(AiDecisionSafeInputProjector.HashAuditValue),
+            rationale = AiDecisionSafeInputProjector.HashAuditValue(proposal.Rationale),
+            evidence = proposal.Evidence.Select(e => new
+            {
+                id = AiDecisionSafeInputProjector.HashAuditValue(e.Id),
+                source = AiDecisionSafeInputProjector.HashAuditValue(e.Source),
+                contentHash = e.ContentHash,
+            }),
+            riskFlags = proposal.RiskFlags.Select(AiDecisionSafeInputProjector.HashAuditValue),
+        }, WfModelJson.Options);
+
+    /// <summary>
+    /// tx2 的 AI shadow-only 防线。只有内置 handler 交出的「带类型化 outcome 的 ManualFallback」可原样通过；
+    /// 任何可替换 handler 的成功、重试、失败或未带 outcome 的回退都收敛为不含输出正文和不可信摘要的安全回退。
+    /// </summary>
+    protected virtual WfNodeExecutionResult NormalizeExecutionResult(
+        WfNodeExecution execution,
+        WfNodeExecutionResult result)
+    {
+        ArgumentNullException.ThrowIfNull(execution);
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (execution.NodeType != WfNodeType.AiDecision
+            || (result.Type == WfNodeExecutionResultType.ManualFallback && result.AiDecision is not null))
+        {
+            return result;
+        }
+
+        return WfNodeExecutionResult.AiManualFallback(
+            AiDecisionOutcome.ManualFallback(AiDecisionFallbackReason.ProviderFailure),
+            summary: "AI 决策结果无效，已转人工处理。");
     }
 
     /// <summary>

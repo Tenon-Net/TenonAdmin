@@ -251,7 +251,7 @@ public class WfDefinitionService(
     }
 
     /// <summary>
-    /// 校验可发布模型(树语义,M2a/M3a-1):根为 start;节点类型限 start|approval|cc|branch|webhook
+    /// 校验可发布模型(树语义,M2a/M3b-0):根为 start;节点类型限 start|approval|cc|branch|webhook|aiDecision
     /// (Parallel 仍被拒);节点 Id 跨整棵树(含分支臂内)非空且唯一;
     /// branch 节点的臂配置合法(见 <see cref="ValidateBranch"/>);跳转目标引用完整
     /// (见 <see cref="ValidateNodeReferences"/>)。
@@ -353,7 +353,8 @@ public class WfDefinitionService(
     /// </summary>
     protected virtual void ValidateNode(WfNode node, HashSet<string> seen, HashSet<string> providerKeys)
     {
-        if (node.Type is not (WfNodeType.Start or WfNodeType.Approval or WfNodeType.Cc or WfNodeType.Branch or WfNodeType.Webhook))
+        if (node.Type is not (WfNodeType.Start or WfNodeType.Approval or WfNodeType.Cc or WfNodeType.Branch
+            or WfNodeType.Webhook or WfNodeType.AiDecision))
         {
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.NodeTypeUnsupported,
                 new Dictionary<string, object?> { ["type"] = node.Type.ToString() });
@@ -374,7 +375,7 @@ public class WfDefinitionService(
         ValidateLength(node.Id, 64, "nodeId");
         ValidateLength(node.Name, 128, "nodeName");
 
-        if (node.Type == WfNodeType.Webhook
+        if (node.Type is WfNodeType.Webhook or WfNodeType.AiDecision
             && node.Props?.MaxAttempts is { } maxAttempts
             && !WorkflowOptions.IsValidMaxAttempts(maxAttempts))
         {
@@ -389,6 +390,9 @@ public class WfDefinitionService(
                     ["max"] = WorkflowOptions.MaxMaxAttempts,
                 });
         }
+
+        if (node.Type == WfNodeType.AiDecision)
+            ValidateAiDecisionNode(node, providerKeys);
 
         if (!seen.Add(node.Id))
         {
@@ -410,6 +414,89 @@ public class WfDefinitionService(
             }
         }
     }
+
+    /// <summary>
+    /// AI Decision 发布配置：只允许指令、显式输入字段白名单以及既有人工兜底/重试预算。
+    /// 不回显指令或字段原文，避免把可疑配置写入错误 envelope。
+    /// </summary>
+    protected virtual void ValidateAiDecisionNode(WfNode node, HashSet<string> providerKeys)
+    {
+        var props = node.Props;
+        if (props is not null && HasUnsupportedAiDecisionProps(props))
+            ThrowAiDecisionModelInvalid(node, "aiPropsUnsupported");
+
+        var instructions = props?.AiInstructions;
+        if (string.IsNullOrWhiteSpace(instructions))
+            ThrowAiDecisionModelInvalid(node, "aiInstructionsRequired");
+        if (instructions.Length > 2000)
+            ThrowAiDecisionModelInvalid(node, "aiInstructionsTooLong");
+        if (ContainsDisallowedControlCharacter(instructions, allowNewlines: true))
+            ThrowAiDecisionModelInvalid(node, "aiInstructionsControlChars");
+
+        var inputFields = props?.AiInputFields;
+        if (inputFields is not { Count: > 0 })
+            ThrowAiDecisionModelInvalid(node, "aiInputFieldsRequired");
+        if (inputFields.Count > 32)
+            ThrowAiDecisionModelInvalid(node, "aiInputFieldsTooMany");
+
+        var seenInputFields = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var inputField in inputFields)
+        {
+            if (string.IsNullOrWhiteSpace(inputField))
+                ThrowAiDecisionModelInvalid(node, "aiInputFieldBlank");
+            if (!string.Equals(inputField, inputField.Trim(), StringComparison.Ordinal))
+                ThrowAiDecisionModelInvalid(node, "aiInputFieldPadded");
+            if (inputField.Length > 64)
+                ThrowAiDecisionModelInvalid(node, "aiInputFieldTooLong");
+            if (ContainsDisallowedControlCharacter(inputField, allowNewlines: false))
+                ThrowAiDecisionModelInvalid(node, "aiInputFieldControlChars");
+            if (!seenInputFields.Add(inputField))
+                ThrowAiDecisionModelInvalid(node, "aiInputFieldDuplicate");
+        }
+
+        var provider = props?.Assignee?.Provider;
+        if (string.IsNullOrWhiteSpace(provider))
+            ThrowAiDecisionModelInvalid(node, "aiAssigneeProviderRequired");
+        if (provider.Length > 64)
+            ThrowAiDecisionModelInvalid(node, "aiAssigneeProviderTooLong");
+        if (!providerKeys.Contains(provider))
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ProviderNotRegistered,
+                new Dictionary<string, object?>
+                {
+                    ["reason"] = "aiAssigneeProviderNotRegistered",
+                    ["provider"] = provider,
+                    ["nodeId"] = node.Id,
+                });
+        }
+    }
+
+    /// <summary>
+    /// AI 节点只接受人工兜底、重试预算、指令与输入字段白名单。仅检查已映射且非空的已知字段，
+    /// 未知 JSON 字段仍沿用 schema v1 的忽略策略。
+    /// </summary>
+    protected virtual bool HasUnsupportedAiDecisionProps(WfNodeProps props) =>
+        typeof(WfNodeProps)
+            .GetProperties(System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.Public
+                | System.Reflection.BindingFlags.DeclaredOnly)
+            .Any(property => property.Name is not (
+                    nameof(WfNodeProps.Assignee)
+                    or nameof(WfNodeProps.MaxAttempts)
+                    or nameof(WfNodeProps.AiInstructions)
+                    or nameof(WfNodeProps.AiInputFields))
+                && property.GetValue(props) is not null);
+
+    [System.Diagnostics.CodeAnalysis.DoesNotReturn]
+    protected virtual void ThrowAiDecisionModelInvalid(WfNode node, string reason)
+    {
+        throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+            new Dictionary<string, object?> { ["reason"] = reason, ["nodeId"] = node.Id });
+    }
+
+    protected virtual bool ContainsDisallowedControlCharacter(string value, bool allowNewlines) =>
+        value.Any(character => char.IsControl(character)
+            && (!allowNewlines || character is not ('\r' or '\n')));
 
     /// <summary>
     /// branch 专属校验:臂非空(<c>branchNoArms</c>)、臂 Id 非空(<c>emptyArmId</c>)且本 branch 内唯一

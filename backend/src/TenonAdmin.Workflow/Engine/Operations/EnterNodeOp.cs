@@ -70,6 +70,10 @@ public class EnterNodeOp(WfNode node) : IWfOperation
                 await EnterWebhookAsync(ctx, cancellationToken);
                 break;
 
+            case WfNodeType.AiDecision:
+                await EnterAiDecisionAsync(ctx, cancellationToken);
+                break;
+
             default:
                 throw WorkflowErrorCode.Exception(WorkflowErrorCode.NodeTypeUnsupported,
                     new Dictionary<string, object?> { ["type"] = Node.Type.ToString() });
@@ -81,6 +85,19 @@ public class EnterNodeOp(WfNode node) : IWfOperation
     /// <see cref="WfNodeExecutionStore.EnsureAsync"/> 按稳定的 <c>ExecutionKey</c> 幂等复用同一次节点访问。
     /// </summary>
     protected virtual Task EnterWebhookAsync(
+        WfExecutionContext ctx,
+        CancellationToken cancellationToken)
+        => EnsureAutomaticExecutionAsync(ctx, cancellationToken);
+
+    /// <summary>
+    /// 进入 AI Decision 只创建可靠 execution 占位，实际 handler 仍由既有 worker/dispatcher 在事务外调用。
+    /// </summary>
+    protected virtual Task EnterAiDecisionAsync(
+        WfExecutionContext ctx,
+        CancellationToken cancellationToken)
+        => EnsureAutomaticExecutionAsync(ctx, cancellationToken);
+
+    private Task EnsureAutomaticExecutionAsync(
         WfExecutionContext ctx,
         CancellationToken cancellationToken)
     {

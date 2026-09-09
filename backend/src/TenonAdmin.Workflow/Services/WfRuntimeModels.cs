@@ -224,6 +224,42 @@ public record WfHistoryItemOutput
     public DateTime CreateTime { get; init; }
 }
 
+/// <summary>AI Decision 审计的脱敏读取投影;不包含 proposal 原文、变量或执行内部标识。</summary>
+public record WfAiDecisionAuditOutput
+{
+    public long Id { get; init; }
+    public string NodeId { get; init; } = "";
+    public int AttemptNo { get; init; }
+    public AiDecisionProviderResultType ProviderResultType { get; init; }
+    public string? Provider { get; init; }
+    public string? Model { get; init; }
+    public string? InputHash { get; init; }
+    public string? PromptVersion { get; init; }
+    public string? ProposalSchemaVersion { get; init; }
+    public bool? SchemaValid { get; init; }
+    public string? PolicyVersion { get; init; }
+    public AiDecisionPolicyClassification? PolicyClassification { get; init; }
+    public AiDecisionRecommendation? Recommendation { get; init; }
+    public decimal? Confidence { get; init; }
+    public IReadOnlyList<string> RiskFlags { get; init; } = [];
+    public IReadOnlyList<WfAiDecisionEvidenceRefOutput> EvidenceRefs { get; init; } = [];
+    public long? LatencyMilliseconds { get; init; }
+    public long? PromptTokens { get; init; }
+    public long? CompletionTokens { get; init; }
+    public long? TotalTokens { get; init; }
+    public AiDecisionFallbackReason FallbackReason { get; init; }
+    public bool ShadowMode { get; init; }
+    public DateTime CreateTime { get; init; }
+}
+
+/// <summary>AI 审计中的受限证据引用;不包含证据正文。</summary>
+public record WfAiDecisionEvidenceRefOutput
+{
+    public string Id { get; init; } = "";
+    public string Source { get; init; } = "";
+    public string ContentHash { get; init; } = "";
+}
+
 /// <summary>待办列表项。</summary>
 public record WfTodoItemOutput
 {

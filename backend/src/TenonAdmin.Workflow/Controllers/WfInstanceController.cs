@@ -14,6 +14,7 @@ namespace TenonAdmin.Workflow;
 [ActiveSession]
 public class WfInstanceController(
     IWfInstanceService instanceService,
+    IWfAiDecisionAuditReader aiDecisionAuditReader,
     ICurrentUser currentUser) : ControllerBase
 {
     private long CurrentUserId => currentUser.UserId ?? throw new AdminException(ErrorCode.TokenInvalid);
@@ -68,6 +69,14 @@ public class WfInstanceController(
         CancellationToken cancellationToken) =>
         Result<IReadOnlyList<WfHistoryItemOutput>>.Ok(
             await instanceService.ListHistoryAsync(id, CurrentUserId, cancellationToken));
+
+    /// <summary>AI Decision 脱敏审计投影(复用实例参与者/监控权限边界)</summary>
+    [HttpGet("ai-decisions/{id:long}")]
+    public async Task<Result<IReadOnlyList<WfAiDecisionAuditOutput>>> AiDecisions(
+        long id,
+        CancellationToken cancellationToken) =>
+        Result<IReadOnlyList<WfAiDecisionAuditOutput>>.Ok(
+            await aiDecisionAuditReader.ListAiDecisionsAsync(id, CurrentUserId, cancellationToken));
 
     /// <summary>实例详情(含 formComponent 挂载点 + 意见时间线 + 我的待办)</summary>
     [HttpGet("{id:long}")]

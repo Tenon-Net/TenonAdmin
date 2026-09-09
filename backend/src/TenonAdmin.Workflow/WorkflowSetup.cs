@@ -47,11 +47,62 @@ public static class WorkflowSetup
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var options = configuration?.GetSection("TenonAdmin:Workflow").Get<WorkflowOptions>()
-                      ?? new WorkflowOptions();
+        var workflowConfiguration = configuration?.GetSection("TenonAdmin:Workflow");
+        var options = workflowConfiguration?.Get<WorkflowOptions>() ?? new WorkflowOptions();
+        if (workflowConfiguration is not null)
+        {
+            var policyConfiguration = workflowConfiguration.GetSection("AiDecision:Policy");
+            var policy = options.AiDecision?.Policy;
+            if (policy is not null && policyConfiguration.Exists())
+            {
+                var highRiskFlags = policyConfiguration.GetSection(nameof(AiDecisionPolicyOptions.HighRiskFlags));
+                if (highRiskFlags.Exists())
+                    policy.HighRiskFlags = highRiskFlags.Get<string[]>() ?? [];
+
+                var allowedReasonCodes = policyConfiguration.GetSection(nameof(AiDecisionPolicyOptions.AllowedReasonCodes));
+                if (allowedReasonCodes.Exists())
+                    policy.AllowedReasonCodes = allowedReasonCodes.Get<string[]>() ?? [];
+            }
+        }
+
         WorkflowOptionsValidation.Validate(options);
         services.TryAddSingleton(options);
         services.TryAddSingleton(TimeProvider.System);
+
+        // AI Decision 的 provider/parser/policy 全部是可替换的事务外 SPI。未启用真实 adapter 时每个
+        // scope 新建 fail-closed provider；启用时只复用内核的 JobHttpClient，不引第二个 client/factory。
+        services.TryAddSingleton<IAiDecisionProposalParser, AiDecisionProposalParser>();
+        services.TryAddSingleton<IAiDecisionPolicyEvaluator>(sp =>
+        {
+            var resolvedOptions = sp.GetRequiredService<WorkflowOptions>();
+            WorkflowOptionsValidation.Validate(resolvedOptions);
+            return new AiDecisionPolicyEvaluator(resolvedOptions.AiDecision.Policy);
+        });
+        services.TryAddScoped<IAiDecisionProvider>(sp =>
+        {
+            var resolvedOptions = sp.GetRequiredService<WorkflowOptions>();
+            WorkflowOptionsValidation.Validate(resolvedOptions);
+            var openAiOptions = resolvedOptions.AiDecision.OpenAiCompatible;
+            if (!openAiOptions.Enabled)
+                return new FailClosedAiDecisionProvider();
+
+            var jobs = sp.GetRequiredService<AdminJobsOptions>();
+            try
+            {
+                TenonAdmin.Services.JobHttpFence.ValidateUrl(openAiOptions.Endpoint, jobs.Http);
+            }
+            catch (AdminException)
+            {
+                throw new InvalidOperationException(
+                    "TenonAdmin:Workflow:AiDecision:OpenAiCompatible:Endpoint 不符合 Jobs HTTP 围栏。");
+            }
+
+            return new OpenAiCompatibleAiDecisionProvider(
+                sp.GetRequiredService<TenonAdmin.Services.JobHttpClient>().Client,
+                openAiOptions,
+                sp.GetRequiredService<TimeProvider>());
+        });
+        services.TryAddScoped<AiDecisionNodeHandler>();
 
         // 审批人 SPI:多实现按 Key 分发(对齐 IAdminJob + IJobHandlerResolver)。
         // 消费者可前置注册同 Key 的 IApproverProvider 覆盖内置,或前置 IApproverResolver 整体替换分发。
@@ -68,14 +119,17 @@ public static class WorkflowSetup
         // 节点执行 SPI 的第一条注册线(M3a-1 Task 8)。HttpClient 取自内核的 JobHttpClient(单例,
         // 带 SSRF 围栏),故本包不引 Microsoft.Extensions.Http、不建第二个客户端;围栏配置复用
         // TenonAdmin:Jobs:Http。消费者可前置注册同 NodeType 的 IWorkflowNodeHandler 实现覆盖内置,
-        // 或继承 WebhookNodeHandler 覆写单步(类不 sealed)后前置注册子类。
+        // 或继承 WebhookNodeHandler 覆写单步(类不 sealed)后前置注册子类；这些实现是受信任的进程内代码，
+        // 必须遵守 handler 不旁路写状态/事务的契约。
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeHandler, WebhookNodeHandler>(
             sp => new WebhookNodeHandler(
                 sp.GetRequiredService<TenonAdmin.Services.JobHttpClient>().Client,
                 sp.GetRequiredService<AdminJobsOptions>(),
                 sp.GetRequiredService<TimeProvider>())));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeHandler, AiDecisionNodeHandler>());
 
-        // 引擎 + 表单挂载点(空操作默认);消费者前置同接口即可整体替换。
+        // 引擎 + 表单挂载点(空操作默认);消费者前置同接口即可整体替换。替换引擎属于完全接管，
+        // 消费者同时承担事务、fence、审计与 AI shadow-only 不变量。
         // 发起校验 / 完结回写在引擎内调用;详情 API 透出 Model.FormComponent 供前端动态挂载。
         services.TryAddScoped<IWorkflowFormBinder, NoOpWorkflowFormBinder>();
         services.TryAddScoped<IWorkflowEngine, WorkflowEngine>();
@@ -98,6 +152,7 @@ public static class WorkflowSetup
 
         // 发起 / 我发起的 / 详情(含 FormBinder 挂载点) / 事件流。
         services.TryAddScoped<IWfInstanceService, WfInstanceService>();
+        services.TryAddScoped<IWfAiDecisionAuditReader, WfInstanceService>();
 
         // 抄送列表(抄送≠待办);消费者前置同接口即可整体替换。
         services.TryAddScoped<IWfCcService, WfCcService>();

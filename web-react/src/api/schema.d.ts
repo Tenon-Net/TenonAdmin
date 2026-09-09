@@ -6875,6 +6875,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow/instance/ai-decisions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfWfAiDecisionAuditOutput"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfWfAiDecisionAuditOutput"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfWfAiDecisionAuditOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflow/instance/{id}": {
         parameters: {
             query?: never;
@@ -7388,6 +7427,10 @@ export interface components {
             /** @description 实际生效的初始口令明文(管理员显式指定的、或系统生成的) */
             initialPassword: string;
         };
+        AiDecisionFallbackReason: number;
+        AiDecisionPolicyClassification: number;
+        AiDecisionProviderResultType: number;
+        AiDecisionRecommendation: number;
         /**
          * @description 批量删除入参:目标 Id 集合。各模块的 `POST .../batch-delete` 端点统一收此形状,
          *     服务层 `DeleteBatchAsync` 复用单删的守卫/软删/失效逻辑逐个处理。空集合视为无操作。
@@ -9346,6 +9389,28 @@ export interface components {
             message?: null | string;
             /** @description 业务数据载荷 */
             data?: null | components["schemas"]["SysOrg"][];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyListOfWfAiDecisionAuditOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | components["schemas"]["WfAiDecisionAuditOutput"][];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -11345,6 +11410,44 @@ export interface components {
             avatar?: null | string;
             isSuperAdmin: boolean;
         };
+        WfAiDecisionAuditOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            nodeId?: string;
+            /** Format: int32 */
+            attemptNo?: number | string;
+            providerResultType?: components["schemas"]["AiDecisionProviderResultType"];
+            provider?: null | string;
+            model?: null | string;
+            inputHash?: null | string;
+            promptVersion?: null | string;
+            proposalSchemaVersion?: null | string;
+            schemaValid?: null | boolean;
+            policyVersion?: null | string;
+            policyClassification?: null | components["schemas"]["AiDecisionPolicyClassification"];
+            recommendation?: null | components["schemas"]["AiDecisionRecommendation"];
+            /** Format: double */
+            confidence?: null | number | string;
+            riskFlags?: string[];
+            evidenceRefs?: components["schemas"]["WfAiDecisionEvidenceRefOutput"][];
+            /** Format: int64 */
+            latencyMilliseconds?: null | number | string;
+            /** Format: int64 */
+            promptTokens?: null | number | string;
+            /** Format: int64 */
+            completionTokens?: null | number | string;
+            /** Format: int64 */
+            totalTokens?: null | number | string;
+            fallbackReason?: components["schemas"]["AiDecisionFallbackReason"];
+            shadowMode?: boolean;
+            /** Format: date-time */
+            createTime?: string;
+        };
+        WfAiDecisionEvidenceRefOutput: {
+            id?: string;
+            source?: string;
+            contentHash?: string;
+        };
         /** @enum {unknown} */
         WfApprovalMode: "any" | "all" | "seq" | null;
         WfAssignee: {
@@ -11657,9 +11760,11 @@ export interface components {
             webhookOnFailure?: null | components["schemas"]["WfWebhookFailureAction"];
             /** Format: int32 */
             maxAttempts?: null | number | string;
+            aiInstructions?: null | string;
+            aiInputFields?: null | string[];
         };
         /** @enum {unknown} */
-        WfNodeType: "start" | "approval" | "cc" | "branch" | "parallel" | "webhook";
+        WfNodeType: "start" | "approval" | "cc" | "branch" | "parallel" | "webhook" | "aiDecision";
         /** @enum {unknown} */
         WfRejectAction: "terminate" | "toNode" | null;
         /** @enum {unknown} */

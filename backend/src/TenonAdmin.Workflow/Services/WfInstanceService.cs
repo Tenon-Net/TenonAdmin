@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SqlSugar;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
@@ -17,11 +18,34 @@ public class WfInstanceService(
     IRepository<WfTask> tasks,
     IRepository<WfTaskActor> actors,
     IRepository<WfCc> ccs,
+    IRepository<WfAiDecision> aiDecisions,
     IRepository<SysUserRole> userRoles,
     IWorkflowEngine engine,
     ICurrentUser? currentUser = null,
-    IPermissionProvider? permissions = null) : IWfInstanceService
+    IPermissionProvider? permissions = null) : IWfInstanceService, IWfAiDecisionAuditReader
 {
+    private const int MaximumAiAuditJsonCharacters = AiDecisionProposalParser.MaximumJsonCharacters;
+
+    /// <summary>保留 M3b-0 前的构造签名，供继承内置服务的消费者继续编译。</summary>
+    public WfInstanceService(
+        IRepository<WfInstance> instances,
+        IRepository<WfDefinition> definitions,
+        IRepository<WfDefinitionVersion> versions,
+        IRepository<WfHistory> histories,
+        IRepository<WfHisTask> hisTasks,
+        IRepository<WfTask> tasks,
+        IRepository<WfTaskActor> actors,
+        IRepository<WfCc> ccs,
+        IRepository<SysUserRole> userRoles,
+        IWorkflowEngine engine,
+        ICurrentUser? currentUser = null,
+        IPermissionProvider? permissions = null)
+        : this(
+            instances, definitions, versions, histories, hisTasks, tasks, actors, ccs,
+            null!, userRoles, engine, currentUser, permissions)
+    {
+    }
+
     /// <summary>监控列表权限码 = 规范化路由,与 <c>[RolePermission]</c> 同一套。</summary>
     public const string MonitorPermission = "GET:/api/v1/workflow/instance/monitor";
 
@@ -366,6 +390,27 @@ public class WfInstanceService(
     }
 
     /// <inheritdoc />
+    public virtual async Task<IReadOnlyList<WfAiDecisionAuditOutput>> ListAiDecisionsAsync(
+        long instanceId,
+        long currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (aiDecisions is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.OperationFailed);
+        var instance = await RequireInstanceAsync(instanceId);
+        await EnsureParticipantAsync(instance, currentUserId, cancellationToken);
+
+        var rows = await aiDecisions.AsQueryable()
+            .Where(a => a.InstanceId == instanceId)
+            .OrderBy(a => a.CreateTime, OrderByType.Asc)
+            .OrderBy(a => a.Id, OrderByType.Asc)
+            .ToListAsync();
+
+        return rows.Select(MapAiDecisionAudit).ToList();
+    }
+
+    /// <inheritdoc />
     public virtual Task<WfEngineResult> CancelAsync(
         long instanceId,
         long callerUserId,
@@ -707,7 +752,10 @@ public class WfInstanceService(
         if (userId <= 0)
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceAccessDenied);
         if (await CanMonitorInstancesAsync(userId, cancellationToken))
-            return;
+        {
+            if (await instances.AsQueryable().Where(i => i.Id == instance.Id).AnyAsync())
+                return;
+        }
         if (instance.StarterUserId == userId)
             return;
 
@@ -742,4 +790,130 @@ public class WfInstanceService(
         DurationMs = h.DurationMs,
         CreateTime = h.CreateTime,
     };
+
+    protected virtual WfAiDecisionAuditOutput MapAiDecisionAudit(WfAiDecision row) => new()
+    {
+        Id = row.Id,
+        NodeId = row.NodeId,
+        AttemptNo = row.AttemptNo,
+        ProviderResultType = row.ProviderResultType,
+        Provider = ReadOptionalHash(row.Provider),
+        Model = ReadOptionalHash(row.Model),
+        InputHash = ReadOptionalHash(row.InputHash),
+        PromptVersion = ReadOptionalHash(row.PromptVersion),
+        ProposalSchemaVersion = row.ProposalSchemaVersion,
+        SchemaValid = row.SchemaValid,
+        PolicyVersion = ReadOptionalHash(row.PolicyVersion),
+        PolicyClassification = row.PolicyClassification,
+        Recommendation = row.Recommendation,
+        Confidence = row.Confidence,
+        RiskFlags = ReadStringArray(row.RiskFlagsJson),
+        EvidenceRefs = ReadEvidenceRefs(row.EvidenceRefsJson),
+        LatencyMilliseconds = row.LatencyMilliseconds,
+        PromptTokens = row.PromptTokens,
+        CompletionTokens = row.CompletionTokens,
+        TotalTokens = row.TotalTokens,
+        FallbackReason = row.FallbackReason,
+        ShadowMode = row.ShadowMode,
+        CreateTime = row.CreateTime,
+    };
+
+    private static IReadOnlyList<string> ReadStringArray(string? json)
+    {
+        if (json is null) return [];
+        if (string.IsNullOrWhiteSpace(json) || json.Length > MaximumAiAuditJsonCharacters)
+            throw AuditIntegrityException();
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+                throw AuditIntegrityException();
+
+            var values = document.RootElement.EnumerateArray().ToArray();
+            if (values.Length > AiDecisionProposalParser.MaximumRiskFlagCount
+                || values.Any(item => item.ValueKind != JsonValueKind.String
+                                      || !AiDecisionEvidence.IsValidContentHash(item.GetString())))
+                throw AuditIntegrityException();
+
+            var result = values.Select(item => item.GetString()!).ToArray();
+            if (result.Distinct(StringComparer.Ordinal).Count() != result.Length)
+                throw AuditIntegrityException();
+            return result;
+        }
+        catch (JsonException)
+        {
+            throw AuditIntegrityException();
+        }
+    }
+
+    private static IReadOnlyList<WfAiDecisionEvidenceRefOutput> ReadEvidenceRefs(string? json)
+    {
+        if (json is null) return [];
+        if (string.IsNullOrWhiteSpace(json) || json.Length > MaximumAiAuditJsonCharacters)
+            throw AuditIntegrityException();
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+                throw AuditIntegrityException();
+
+            var items = document.RootElement.EnumerateArray().ToArray();
+            if (items.Length > AiDecisionProposalParser.MaximumEvidenceCount
+                || items.Any(item => !IsValidEvidenceRef(item)))
+            {
+                throw AuditIntegrityException();
+            }
+
+            var result = items
+                .Select(item => new WfAiDecisionEvidenceRefOutput
+                {
+                    Id = item.GetProperty("id").GetString()!,
+                    Source = item.GetProperty("source").GetString()!,
+                    ContentHash = item.GetProperty("contentHash").GetString()!,
+                })
+                .ToArray();
+            if (result.Select(item => (item.Id, item.Source, item.ContentHash)).Distinct().Count() != result.Length)
+                throw AuditIntegrityException();
+            return result;
+        }
+        catch (JsonException)
+        {
+            throw AuditIntegrityException();
+        }
+    }
+
+    private static bool IsValidEvidenceRef(JsonElement item)
+    {
+        if (item.ValueKind != JsonValueKind.Object)
+            return false;
+
+        var properties = item.EnumerateObject().ToArray();
+        if (properties.Length != 3
+            || properties.Select(property => property.Name).Distinct(StringComparer.Ordinal).Count() != 3
+            || !item.TryGetProperty("id", out var id)
+            || !item.TryGetProperty("source", out var source)
+            || !item.TryGetProperty("contentHash", out var hash)
+            || id.ValueKind != JsonValueKind.String
+            || source.ValueKind != JsonValueKind.String
+            || hash.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        return AiDecisionEvidence.IsValidContentHash(id.GetString())
+               && AiDecisionEvidence.IsValidContentHash(source.GetString())
+               && AiDecisionEvidence.IsValidContentHash(hash.GetString());
+    }
+
+    private static string? ReadOptionalHash(string? value)
+    {
+        if (value is not null && !AiDecisionEvidence.IsValidContentHash(value))
+            throw AuditIntegrityException();
+        return value;
+    }
+
+    private static AdminException AuditIntegrityException() =>
+        WorkflowErrorCode.Exception(
+            WorkflowErrorCode.OperationFailed,
+            new Dictionary<string, object?> { ["reason"] = "aiAuditCorrupt" });
 }

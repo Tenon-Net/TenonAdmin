@@ -11,8 +11,8 @@ public sealed class CamelCaseEnumConverter() : JsonStringEnumConverter(JsonNamin
 
 /// <summary>
 /// 流程节点类型(schema <c>type</c>)。M1 仅启用 <see cref="Start"/> / <see cref="Approval"/> / <see cref="Cc"/>;
-/// <see cref="Branch"/> 属 M2;<see cref="Parallel"/> / <see cref="Webhook"/> 属 M3。包容网关永久不做。
-/// JSON 值为 camelCase:<c>start|approval|cc|branch|parallel|webhook</c>。
+/// <see cref="Branch"/> 属 M2;<see cref="Parallel"/> / <see cref="Webhook"/> / <see cref="AiDecision"/> 属 M3。
+/// JSON 值为 camelCase:<c>start|approval|cc|branch|parallel|webhook|aiDecision</c>。
 /// </summary>
 [JsonConverter(typeof(CamelCaseEnumConverter))]
 public enum WfNodeType
@@ -23,6 +23,7 @@ public enum WfNodeType
     Branch,
     Parallel,
     Webhook,
+    AiDecision,
 }
 
 /// <summary>审批签核模式(节点 <c>props.mode</c>)。M1 实际只用或签;会签/顺序会签 M2 启用。JSON:<c>any|all|seq</c>。</summary>

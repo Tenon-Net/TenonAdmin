@@ -21,33 +21,45 @@ namespace TenonAdmin.Workflow;
 /// <para><c>internal sealed</c>:生产内没有第二个调用方(<see cref="WorkflowEngine.BeginNodeExecutionCompletedAsync"/>
 /// 是唯一入口);要覆写的缝在被继承的 <see cref="EnterNodeOp.CreateTaskAsync"/> 上。</para>
 /// </summary>
-internal sealed class WfManualFallbackOp(WfNode node) : EnterNodeOp(node)
+internal sealed class WfManualFallbackOp(
+    WfNode node,
+    IReadOnlyList<long>? resolvedUsers = null) : EnterNodeOp(node)
 {
+    private readonly IReadOnlyList<long>? _resolvedUsers = resolvedUsers;
+
     public override async Task ExecuteAsync(WfExecutionContext ctx, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ctx.CurrentNode = Node;
 
-        var assignee = Node.Props?.Assignee;
+        var users = _resolvedUsers ?? await ResolveAssigneesAsync(ctx, Node, cancellationToken);
+
+        if (users.Count == 0)
+            return; // 解析出 0 人——同上,不建任务、也不自动放行。
+
+        await CreateTaskAsync(ctx, users, WfSignMode.Any, cancellationToken);
+    }
+
+    internal static async Task<IReadOnlyList<long>> ResolveAssigneesAsync(
+        WfExecutionContext ctx,
+        WfNode node,
+        CancellationToken cancellationToken)
+    {
+        var assignee = node.Props?.Assignee;
         var providerKey = assignee?.Provider;
         if (string.IsNullOrWhiteSpace(providerKey))
-            return; // 未配置办理人来源——不建任务、也不自动放行。
+            return [];
 
-        var users = await ctx.ApproverResolver.ResolveAsync(
+        return await ctx.ApproverResolver.ResolveAsync(
             providerKey,
             new ApproverResolveContext
             {
                 InitiatorUserId = ctx.Instance.StarterUserId,
                 InitiatorOrgId = ctx.StarterOrgId,
                 Params = assignee?.Params,
-                SelectedUserIds = ctx.GetSelectedUserIds(Node.Id),
+                SelectedUserIds = ctx.GetSelectedUserIds(node.Id),
                 LeaderChainByLevel = ctx.LeaderChainByLevel,
             },
             cancellationToken);
-
-        if (users.Count == 0)
-            return; // 解析出 0 人——同上,不建任务、也不自动放行。
-
-        await CreateTaskAsync(ctx, users, WfSignMode.Any, cancellationToken);
     }
 }

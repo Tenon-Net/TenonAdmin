@@ -68,6 +68,82 @@ public class WfNodeExecutionWorkerTests
     }
 
     [Fact]
+    public async Task Worker_dispatches_ai_decision_through_the_existing_handler_chain()
+    {
+        using var f = new WorkflowAppFactory();
+        _ = f.CreateClient();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var execution = await InsertAiExecutionAsync(db, 17);
+
+        var handlers = scope.ServiceProvider.GetServices<IWorkflowNodeHandler>().ToList();
+        Assert.Contains(handlers, h => h.NodeType == WfNodeType.AiDecision);
+
+        await ResolveWorker(scope.ServiceProvider).ExecuteAsync(JobContext(), CancellationToken.None);
+
+        Assert.Equal(WfNodeExecutionStatus.ManualFallback, await StatusAsync(db, execution.Id));
+        var attempt = Assert.Single(await db.Queryable<WfNodeExecutionAttempt>()
+            .Where(a => a.ExecutionId == execution.Id)
+            .ToListAsync());
+        Assert.Equal(WfNodeExecutionResultType.ManualFallback, attempt.ResultType);
+    }
+
+    [Fact]
+    public async Task Scheduler_fires_ai_decision_through_the_seeded_worker()
+    {
+        using var f = new WorkflowAppFactory();
+        _ = f.CreateClient();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var execution = await InsertAiExecutionAsync(db, 18);
+        var job = await db.Queryable<SysJob>()
+            .Where(j => j.Code == "wf-node-execution-scan")
+            .FirstAsync();
+        Assert.NotNull(job);
+
+        await db.Updateable<SysJob>()
+            .SetColumns(j => new SysJob { NextRunTime = DateTime.Now.AddSeconds(-10) })
+            .Where(j => j.Id == job!.Id)
+            .ExecuteCommandAsync();
+
+        await scope.ServiceProvider.GetRequiredService<JobSchedulerService>()
+            .TickAsync(CancellationToken.None);
+
+        var deadline = Environment.TickCount64 + 5_000;
+        List<SysJobLog> logs;
+        do
+        {
+            logs = await db.Queryable<SysJobLog>()
+                .Where(l => l.JobId == job!.Id)
+                .ToListAsync();
+            if (logs.Any(l => l.EndTime is not null))
+                break;
+            await Task.Delay(50);
+        } while (Environment.TickCount64 < deadline);
+
+        Assert.Contains(logs, log => log.EndTime is not null && log.RunStatus == JobRunStatus.Success);
+        Assert.Equal(WfNodeExecutionStatus.ManualFallback, await StatusAsync(db, execution.Id));
+    }
+
+    [Fact]
+    public async Task A_consumer_ai_handler_registered_first_is_the_one_dispatched()
+    {
+        var handler = new FakeNodeHandler(
+            WfNodeExecutionResult.ManualFallback(summary: "consumer-handler"),
+            WfNodeType.AiDecision);
+        using var f = NewFactory(handler);
+        _ = f.CreateClient();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var execution = await InsertAiExecutionAsync(db, 19);
+
+        await ResolveWorker(scope.ServiceProvider).ExecuteAsync(JobContext(), CancellationToken.None);
+
+        Assert.Equal(1, handler.CallCount);
+        Assert.Equal(WfNodeExecutionStatus.ManualFallback, await StatusAsync(db, execution.Id));
+    }
+
+    [Fact]
     public async Task Worker_does_not_process_more_than_the_configured_batch_size()
     {
         var handler = new FakeNodeHandler(WfNodeExecutionResult.Succeeded(summary: "ok"));
@@ -331,6 +407,55 @@ public class WfNodeExecutionWorkerTests
         return execution;
     }
 
+    private static async Task<WfNodeExecution> InsertAiExecutionAsync(ISqlSugarClient db, int tag)
+    {
+        var model = AiDecisionModel();
+        var version = new WfDefinitionVersion
+        {
+            DefinitionId = Random.Shared.NextInt64(1, long.MaxValue),
+            Version = 1,
+            ModelJson = WfModelJson.Serialize(model),
+        };
+        await db.Insertable(version).ExecuteCommandAsync();
+
+        var instance = new WfInstance
+        {
+            DefinitionVersionId = version.Id,
+            StarterUserId = 1,
+            Status = WfInstanceStatus.Running,
+            BusinessKey = $"worker-ai-{tag}",
+            VariablesJson = "{\"caseId\":\"case-123\"}",
+        };
+        await db.Insertable(instance).ExecuteCommandAsync();
+
+        var visitId = 20_000L + tag;
+        var token = new WfToken
+        {
+            InstanceId = instance.Id,
+            NodeId = "ai",
+            NodeVisitId = visitId,
+            Status = WfTokenStatus.Active,
+        };
+        await db.Insertable(token).ExecuteCommandAsync();
+
+        var scopeKey = WfIdentityHash.NormalizeScopeKey(null);
+        var execution = new WfNodeExecution
+        {
+            ExecutionKey = WfExecutionKey.Compute(
+                scopeKey, instance.Id, token.Id, visitId, "ai", version.Id),
+            ScopeKey = scopeKey,
+            InstanceId = instance.Id,
+            TokenId = token.Id,
+            NodeVisitId = visitId,
+            NodeId = "ai",
+            NodeType = WfNodeType.AiDecision,
+            DefinitionVersionId = version.Id,
+            MaxAttempts = 2,
+        };
+        await db.Insertable(execution).ExecuteCommandAsync();
+        return execution;
+    }
+
     private static async Task<WfNodeExecution> InsertExecutionWithMissingInstanceAsync(
         ISqlSugarClient db,
         int tag)
@@ -363,6 +488,26 @@ public class WfNodeExecutionWorkerTests
                 Type = WfNodeType.Webhook,
                 Name = "webhook",
                 Props = new WfNodeProps { WebhookUrl = "http://127.0.0.1:59999/webhook" },
+            },
+        },
+    };
+
+    private static WfModel AiDecisionModel() => new()
+    {
+        Root = new WfNode
+        {
+            Id = "start",
+            Type = WfNodeType.Start,
+            Next = new WfNode
+            {
+                Id = "ai",
+                Type = WfNodeType.AiDecision,
+                Name = "ai",
+                Props = new WfNodeProps
+                {
+                    AiInstructions = "Review the selected case.",
+                    AiInputFields = ["caseId"],
+                },
             },
         },
     };

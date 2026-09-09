@@ -7,7 +7,7 @@ using TenonAdmin.Workflow;
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// Task 8b T2 入口红测：Webhook 进入流程时必须在工作流事务内只创建/复用
+/// Task 8b/M3B0-10 入口契约：自动节点进入流程时必须在工作流事务内只创建/复用
 /// <c>wf_node_execution</c>，不能在入口事务里调用 handler。
 /// </summary>
 public class WfNodeExecutionEntryTests
@@ -58,6 +58,54 @@ public class WfNodeExecutionEntryTests
         Assert.Equal(WfNodeType.Webhook, execution.NodeType);
         Assert.Equal(
             WfExecutionKey.Compute("1", result.InstanceId, token.Id, token.NodeVisitId, "webhook", version.Id),
+            execution.ExecutionKey);
+    }
+
+    [Fact]
+    public async Task Entering_ai_decision_creates_one_pending_execution_without_invoking_a_handler()
+    {
+        var handler = new FakeNodeHandler(
+            WfNodeExecutionResult.Succeeded(summary: "must-not-run"),
+            WfNodeType.AiDecision);
+        using var f = new WorkflowAppFactory
+        {
+            Overrides = services => services.Insert(
+                0,
+                ServiceDescriptor.Scoped<IWorkflowNodeHandler>(_ => handler)),
+        };
+        _ = f.CreateClient();
+
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var engine = scope.ServiceProvider.GetRequiredService<IWorkflowEngine>();
+        var version = await InsertVersionAsync(db, AiDecisionModel());
+
+        var result = await engine.ExecuteAsync(new StartInstanceCmd
+        {
+            DefinitionVersionId = version.Id,
+            StarterUserId = 1,
+            StarterOrgId = 1,
+        });
+
+        Assert.Equal(WfInstanceStatus.Running, result.InstanceStatus);
+        Assert.Equal(0, handler.CallCount);
+
+        var token = await db.Queryable<WfToken>()
+            .Where(t => t.InstanceId == result.InstanceId && t.Status == WfTokenStatus.Active)
+            .FirstAsync();
+        Assert.NotNull(token);
+        Assert.Equal("ai", token!.NodeId);
+        Assert.NotNull(token.NodeVisitId);
+
+        var executions = await db.Queryable<WfNodeExecution>()
+            .Where(e => e.InstanceId == result.InstanceId)
+            .ToListAsync();
+        var execution = Assert.Single(executions);
+        Assert.Equal(WfNodeExecutionStatus.Pending, execution.Status);
+        Assert.Equal(WfNodeType.AiDecision, execution.NodeType);
+        Assert.Equal(2, execution.MaxAttempts);
+        Assert.Equal(
+            WfExecutionKey.Compute("1", result.InstanceId, token.Id, token.NodeVisitId, "ai", version.Id),
             execution.ExecutionKey);
     }
 
@@ -133,6 +181,27 @@ public class WfNodeExecutionEntryTests
                 Type = WfNodeType.Webhook,
                 Name = "webhook",
                 Props = new WfNodeProps { WebhookUrl = "http://127.0.0.1:59999/webhook" },
+            },
+        },
+    };
+
+    private static WfModel AiDecisionModel() => new()
+    {
+        Root = new WfNode
+        {
+            Id = "start",
+            Type = WfNodeType.Start,
+            Next = new WfNode
+            {
+                Id = "ai",
+                Type = WfNodeType.AiDecision,
+                Name = "ai",
+                Props = new WfNodeProps
+                {
+                    AiInstructions = "Review the selected case.",
+                    AiInputFields = ["caseId"],
+                    MaxAttempts = 2,
+                },
             },
         },
     };

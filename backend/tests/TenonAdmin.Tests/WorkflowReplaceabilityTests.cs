@@ -1,17 +1,21 @@
 using Microsoft.Extensions.DependencyInjection;
 using TenonAdmin.Core;
+using TenonAdmin.Services;
+using TenonAdmin.SqlSugar;
 using TenonAdmin.Workflow;
 
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// 工作流卫星包可替换性「十件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
-/// 十个 <c>TryAddScoped</c> 面:<see cref="IApproverResolver"/> /
+/// 工作流卫星包可替换性「十四件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
+/// 十四个 <c>TryAdd</c> SPI 面:<see cref="IApproverResolver"/> /
 /// <see cref="IWorkflowFormBinder"/> / <see cref="IWorkflowEngine"/> /
 /// <see cref="IWfConditionEvaluator"/> /
 /// <see cref="IWfDefinitionService"/> / <see cref="IWfTaskService"/> /
-/// <see cref="IWfInstanceService"/> / <see cref="IWorkflowNotifier"/> /
-/// <see cref="IWfCcService"/> / <see cref="IWfOperationReceiptService"/>。
+/// <see cref="IWfInstanceService"/> / <see cref="IWfAiDecisionAuditReader"/> / <see cref="IWorkflowNotifier"/> /
+/// <see cref="IWfCcService"/> / <see cref="IWfOperationReceiptService"/> /
+/// <see cref="IAiDecisionProvider"/> / <see cref="IAiDecisionProposalParser"/> /
+/// <see cref="IAiDecisionPolicyEvaluator"/>。
 /// <para>
 /// 真判据是<strong>前置</strong>注册即胜出(裸容器,不走 <c>ConfigureTestServices</c>+Replace):
 /// 把任一 <c>TryAdd</c> 退化成 <c>Add</c> → 内置后注册覆盖 → 对应本条红。
@@ -19,6 +23,9 @@ namespace TenonAdmin.Tests;
 /// </summary>
 public class WorkflowReplaceabilityTests
 {
+    private const string ConsumerParserInput = "consumer-parser-proposal";
+    private const string ConsumerEvidenceHash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
     /// <summary>变异:WorkflowSetup 里 IApproverResolver 的 TryAdd 改 Add → 本条红。</summary>
     [Fact]
     public async Task PreRegisteredApproverResolver_ShouldWinOverBuiltIn()
@@ -83,6 +90,35 @@ public class WorkflowReplaceabilityTests
         Assert.IsType<FakeInstanceService>(scope.ServiceProvider.GetRequiredService<IWfInstanceService>());
     }
 
+    [Fact]
+    public void WfInstanceService_preserves_the_pre_ai_audit_constructor()
+    {
+        Assert.NotNull(typeof(WfInstanceService).GetConstructor([
+            typeof(IRepository<WfInstance>),
+            typeof(IRepository<WfDefinition>),
+            typeof(IRepository<WfDefinitionVersion>),
+            typeof(IRepository<WfHistory>),
+            typeof(IRepository<WfHisTask>),
+            typeof(IRepository<WfTask>),
+            typeof(IRepository<WfTaskActor>),
+            typeof(IRepository<WfCc>),
+            typeof(IRepository<SysUserRole>),
+            typeof(IWorkflowEngine),
+            typeof(ICurrentUser),
+            typeof(IPermissionProvider),
+        ]));
+    }
+
+    /// <summary>变异:WorkflowSetup 里 IWfAiDecisionAuditReader 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredAiDecisionAuditReader_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s => s.AddScoped<IWfAiDecisionAuditReader, FakeAiDecisionAuditReader>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeAiDecisionAuditReader>(
+            scope.ServiceProvider.GetRequiredService<IWfAiDecisionAuditReader>());
+    }
+
     /// <summary>变异:WorkflowSetup 里 IWorkflowNotifier 的 TryAdd 改 Add → 本条红。</summary>
     [Fact]
     public async Task PreRegisteredWorkflowNotifier_ShouldWinOverBuiltIn()
@@ -112,6 +148,46 @@ public class WorkflowReplaceabilityTests
             scope.ServiceProvider.GetRequiredService<IWfOperationReceiptService>());
     }
 
+    /// <summary>变异:WorkflowSetup 里 IAiDecisionProvider 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredAiDecisionProvider_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s => s.AddScoped<IAiDecisionProvider, FakeAiDecisionProvider>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeAiDecisionProvider>(scope.ServiceProvider.GetRequiredService<IAiDecisionProvider>());
+    }
+
+    /// <summary>变异:WorkflowSetup 里 IAiDecisionProposalParser 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredAiDecisionProposalParser_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s =>
+            s.AddSingleton<IAiDecisionProposalParser, FakeAiDecisionProposalParser>());
+        await using var scope = sp.CreateAsyncScope();
+        var parser = scope.ServiceProvider.GetRequiredService<IAiDecisionProposalParser>();
+
+        Assert.IsType<FakeAiDecisionProposalParser>(parser);
+        var parsed = parser.Parse(ConsumerParserInput);
+        var proposal = Assert.IsType<AiDecisionProposal>(parsed.Proposal);
+        Assert.True(parsed.IsValid);
+        Assert.Equal(["CONSUMER_MATCH"], proposal.ReasonCodes);
+    }
+
+    /// <summary>变异:WorkflowSetup 里 IAiDecisionPolicyEvaluator 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredAiDecisionPolicyEvaluator_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s =>
+            s.AddSingleton<IAiDecisionPolicyEvaluator, FakeAiDecisionPolicyEvaluator>());
+        await using var scope = sp.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IAiDecisionPolicyEvaluator>();
+
+        Assert.IsType<FakeAiDecisionPolicyEvaluator>(evaluator);
+        var evaluation = evaluator.Evaluate(CreateConsumerProposal());
+        Assert.Equal(AiDecisionRecommendation.Approve, evaluation.Recommendation);
+        Assert.Equal(AiDecisionPolicyClassification.HighRisk, evaluation.Classification);
+    }
+
     /// <summary>
     /// 消费者前置注册 → <c>AddTenonAdminWorkflow</c> → 解析断言。
     /// 不启宿主、不挂 SqlSugar:只验 DI 描述符,不解析内置实现(它们依赖仓储)。
@@ -122,6 +198,34 @@ public class WorkflowReplaceabilityTests
         preRegister(services);
         services.AddTenonAdminWorkflow();
         return services.BuildServiceProvider();
+    }
+
+    private static AiDecisionProposal CreateConsumerProposal() => AiDecisionProposal.Create(
+        AiDecisionProposalParser.SupportedSchemaVersion,
+        AiDecisionRecommendation.Approve,
+        confidence: 0.95m,
+        reasonCodes: ["CONSUMER_MATCH"],
+        rationale: "consumer supplied proposal",
+        evidence: [AiDecisionEvidence.Create("consumer-evidence", "consumer-source", ConsumerEvidenceHash)],
+        riskFlags: []);
+
+    private sealed class FakeAiDecisionProposalParser : IAiDecisionProposalParser
+    {
+        public AiDecisionProposalParseResult Parse(string? json) =>
+            string.Equals(json, ConsumerParserInput, StringComparison.Ordinal)
+                ? AiDecisionProposalParseResult.Valid(CreateConsumerProposal())
+                : AiDecisionProposalParseResult.Invalid();
+    }
+
+    private sealed class FakeAiDecisionPolicyEvaluator : IAiDecisionPolicyEvaluator
+    {
+        public AiDecisionPolicyEvaluation Evaluate(AiDecisionProposal proposal)
+        {
+            ArgumentNullException.ThrowIfNull(proposal);
+            return AiDecisionPolicyEvaluation.Create(
+                proposal,
+                AiDecisionPolicyClassification.HighRisk);
+        }
     }
 
     private sealed class FakeOperationReceiptService : IWfOperationReceiptService
@@ -250,6 +354,15 @@ public class WorkflowReplaceabilityTests
             IReadOnlyDictionary<string, List<long>>? selectedUserIdsByNode, string? requestId = null,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+    }
+
+    private sealed class FakeAiDecisionAuditReader : IWfAiDecisionAuditReader
+    {
+        public Task<IReadOnlyList<WfAiDecisionAuditOutput>> ListAiDecisionsAsync(
+            long instanceId,
+            long currentUserId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<WfAiDecisionAuditOutput>>([]);
     }
 
     private sealed class FakeCcService : IWfCcService

@@ -48,6 +48,12 @@ public sealed class WfNodeExecutionResult
     /// <summary>仅 <see cref="WfNodeExecutionResultType.RetryableFailure"/> 有意义;<c>null</c> = 由 dispatcher 退避策略决定。</summary>
     public TimeSpan? RetryAfter { get; init; }
 
+    /// <summary>
+    /// AI Decision 的类型化 hand-off；仅 AI 专用的 <see cref="AiManualFallback(AiDecisionOutcome, int?, string?)"/>
+    /// 工厂可设置，因此不会出现 AI outcome 附在成功或重试结果上的矛盾状态。
+    /// </summary>
+    public AiDecisionOutcome? AiDecision { get; init; }
+
     public static WfNodeExecutionResult Succeeded(string? outputJson = null, string? summary = null) => new()
     {
         Type = WfNodeExecutionResultType.Succeeded,
@@ -69,6 +75,25 @@ public sealed class WfNodeExecutionResult
         ErrorCode = errorCode,
         Summary = summary,
     };
+
+    /// <summary>
+    /// AI 专用人工兜底工厂。固定写入 <see cref="WfNodeExecutionResultType.ManualFallback"/>，
+    /// 不给调用方选择 result type 的机会，保持 shadow-only hand-off 的类型一致性。
+    /// </summary>
+    internal static WfNodeExecutionResult AiManualFallback(
+        AiDecisionOutcome aiDecision,
+        int? errorCode = null,
+        string? summary = null)
+    {
+        ArgumentNullException.ThrowIfNull(aiDecision);
+        return new WfNodeExecutionResult
+        {
+            Type = WfNodeExecutionResultType.ManualFallback,
+            AiDecision = aiDecision,
+            ErrorCode = errorCode,
+            Summary = summary,
+        };
+    }
 
     public static WfNodeExecutionResult TerminalFailure(int? errorCode = null, string? summary = null) => new()
     {
@@ -138,6 +163,10 @@ public sealed class WfNodeExecutionContext
 /// <para>
 /// <b>handler 不得推进 token、不得写任务状态、不得自开数据库事务</b>(AI 基石 §4.5/§4.7)——只返回结果,
 /// 由 dispatcher 在短事务里落地。
+/// </para>
+/// <para>
+/// handler 是受信任的进程内扩展代码。内置引擎会把 AI handler 返回的非人工结果强制归一化，
+/// 但无法阻止违反本契约的扩展直接旁路写库；注册此类实现即由消费者承担这些旁路副作用的责任。
 /// </para>
 /// </summary>
 public interface IWorkflowNodeHandler

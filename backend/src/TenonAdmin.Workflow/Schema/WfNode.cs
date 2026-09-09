@@ -107,9 +107,17 @@ public sealed class WfNodeProps
 
     /// <summary>
     /// 自动节点总尝试次数(含首次执行);<c>null</c> 时继承
-    /// <see cref="WorkflowOptions.MaxAttempts"/>。当前仅 Webhook 节点使用。
+    /// <see cref="WorkflowOptions.MaxAttempts"/>。Webhook / AI Decision 节点使用。
     /// </summary>
     public int? MaxAttempts { get; set; }
+
+    // ── ai decision (M3b-0 Task 06) ───────────────────────────
+
+    /// <summary>供服务端 AI 审查使用的节点指令(仅 <see cref="WfNodeType.AiDecision"/>)。</summary>
+    public string? AiInstructions { get; set; }
+
+    /// <summary>允许送入 AI 审查的 <c>VariablesJson</c> 顶层字段名白名单(仅 <see cref="WfNodeType.AiDecision"/>)。</summary>
+    public List<string>? AiInputFields { get; set; }
 }
 
 /// <summary>Webhook 失败兜底(节点 <c>props.webhookOnFailure</c>;M3a-1 Task 8)。JSON:<c>fail|manual</c>。</summary>
