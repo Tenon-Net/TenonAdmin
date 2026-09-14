@@ -4,7 +4,7 @@ namespace TenonAdmin.Workflow;
 
 /// <summary>
 /// <c>wf_outbox</c> 的入队(M3a-1 Task 5)。<b>只暴露 <see cref="EnqueueAsync"/> 一个方法</b>——领取/回写/退避
-/// 归消费者任务(<see cref="WfOutboxStatus"/> 的状态图)。<c>public</c> 而不是 <c>internal</c>——全仓无
+/// 归 <see cref="WfOutboxConsumerStore"/> 与 <see cref="WfOutboxDispatcher"/>。<c>public</c> 而不是 <c>internal</c>——全仓无
 /// <c>InternalsVisibleTo</c>,与 <see cref="WfNodeExecutionStore"/>/<see cref="WfNodeExecutionAttemptStore"/>
 /// 同为 <c>public static</c>。<b>零 DI 注册</b>,调用方(Task 6 的回写短事务)直接经 <c>ISqlSugarClient</c>
 /// 调用,<b>事务由调用方起</b>,本方法不自开事务。

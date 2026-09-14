@@ -7,7 +7,7 @@
 
 ## 一、结论
 
-现有 9 表设计适合当前人工审批，定义、版本、实例、Token、活跃任务和历史记录的职责基本清楚，**不需要推倒重来**。通过增量字段和 `WfParallelArm` 已接入 M3a-1 与 M3a-2 Vue 的可靠执行、并行网关和安全读取投影；Task 8c 的 outbox consumer/transport 与完整 M3a-2 React port 仍未交付。React port 等当前 Vue、后端、契约和完整功能测试全部无失败后再启动。
+现有 9 表设计适合当前人工审批，定义、版本、实例、Token、活跃任务和历史记录的职责基本清楚，**不需要推倒重来**。通过增量字段和 `WfParallelArm` 已接入 M3a-1 与 M3a-2 Vue 的可靠执行、并行网关和安全读取投影；Task 8c 的 outbox consumer/transport 已于 2026-09-14 交付。完整 M3a-2 React port 仍未交付，等当前 Vue、后端、契约和完整功能测试全部无失败后再启动。
 
 分阶段判断如下：
 
@@ -15,9 +15,9 @@
 | --- | --- | --- |
 | M1/M2b 人工审批 | 已兼容 | 现有模型足够，任务级 CAS 能防同一待办双批 |
 | M2c 请求幂等与四库终态保护 | 已兼容 | operation receipt、RequestId、实例/Token 级并发保护与四库契约测试均已交付 |
-| M3a-1 Webhook/自动节点执行内核 | M3a-1 内核与 Task 8b 均已通过最终验证 | 节点访问身份、execution、attempt、outbox、lease/fence、dispatcher、Webhook 入口和 `IAdminJob` worker 已落地；review-repair 最终证据为 backend-ci run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)（SQLite/MySQL/PostgreSQL/SQL Server 与 template-smoke 均通过）、contract-drift run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095) 和 docker-smoke run [`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106)；Task 8b 初始交付另有 web-ci run [`33773751061`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751061)、web-react-ci run [`33773751089`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751089) 成功，不能与 review-repair 最终三条 run 混同；outbox 消费仍属于 Task 8c，Webhook 设计器已在 M3a-2 Vue 接入 |
+| M3a-1 Webhook/自动节点执行内核 | M3a-1 内核、Task 8b 与 Task 8c 均已通过本地验收 | 节点访问身份、execution、attempt、outbox 入队、lease/fence、dispatcher、Webhook 入口、`IAdminJob` execution worker，以及 outbox consumer/transport/死信重放已落地；review-repair 最终证据为 backend-ci run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)（SQLite/MySQL/PostgreSQL/SQL Server 与 template-smoke 均通过）、contract-drift run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095) 和 docker-smoke run [`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106)；Task 8b 初始交付另有 web-ci run [`33773751061`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751061)、web-react-ci run [`33773751089`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751089) 成功，不能与 review-repair 最终三条 run 混同；Task 8c 的四库证据走 `WorkflowAppFactory` + CI `TENON_TEST_DBTYPE`，Webhook 设计器已在 M3a-2 Vue 接入 |
 | M3a-2 Vue 表单、动词与并行 | 已兼容（T18–T23 已交付） | `WfParallelArm`、父子 Token、运行时安全投影、字段权限、加减签/拿回/长期委托和 Vue 设计器/回放均已落地；SQLite、MySQL、PostgreSQL、SQL Server 代表流程各 `29/29` 通过；完整功能测试全部无失败后再启动 React port |
-| M3b AI Decision | M3b-0 已兼容 | 已有独立 AI decision 审计表、execution/attempt 接线、人工兜底与脱敏读取 API；M3b-0 全程 shadow-only，Task 8c outbox consumer/transport 仍未实现 |
+| M3b AI Decision | M3b-0 已兼容 | 已有独立 AI decision 审计表、execution/attempt 接线、人工兜底与脱敏读取 API；M3b-0 全程 shadow-only。Task 8c outbox consumer/transport 已于 2026-09-14 补齐，不改变 AI shadow-only 边界 |
 | 循环/并行网关 | 并行已交付，循环仍未规划 | 并行 fork/join、父子 Token、arm 状态、CAS 恢复和四库代表流程已验证；不扩张为通用循环编排 |
 
 优先级最高的两个地基是：
@@ -387,9 +387,9 @@ CompletedAtUtc     nullable
 
 以上是业务字段，另有 `BaseEntity` 审计字段。`uk_wf_outbox_message_key` 对 `MessageKey` 建唯一约束；扫描索引名 `idx_wf_outbox_scan`，列为 `(Status, AvailableAtUtc)`。`MessageKey` 由 `{ExecutionKey}:{MessageType}` 派生，`MessageType` 先 trim，不能为空且不得含 `:`；`PayloadJson` 保存完整正文，不用 `PayloadHash` 替代。当前 `MessageType/MessageKey` 的大小写比较依赖数据库 collation，尚未作统一大小写归一化决定。
 
-`WfOutboxStatus` 的四个值是 `Pending`、`Dispatching`、`Dispatched`、`Failed`。Task 8b 的生产写入面只有 `WfOutboxStore.EnqueueAsync` 插入 `Pending`；`Dispatching` 的领取、`Dispatched`/`Failed` 的回写、重试退避和对应的 CAS 都延期到 Task 8c 的消费者任务，不能把状态枚举写成已实现的后台派发流程。Task 8b 的 `WfNodeExecutionJob` 只扫描并执行 `wf_node_execution`，不消费 `wf_outbox`。
+`WfOutboxStatus` 的四个值是 `Pending`、`Dispatching`、`Dispatched`、`Failed`。Task 8b 的生产写入面仍只有 `WfOutboxStore.EnqueueAsync` 插入 `Pending`。Task 8c 已落地领取、`Dispatched`/`Failed` 回写、退避、死信人工重放和 `wf-outbox-scan` 扫描；`WfNodeExecutionJob` 仍然只扫描 `wf_node_execution`，不消费 `wf_outbox`。
 
-`wf_outbox` 不设置 `LeaseOwner/LeaseExpiresAtUtc/Fence`；`AvailableAtUtc` 同时表示可投递时刻和可见性租约，消费者领取次数 `AttemptCount` 作为单调 fence，迟到回写必须用 `WHERE AttemptCount = @myAttemptCount` CAS。这是 Task 8c 的消费者契约；Task 8b 不实现领取、重投和实际 outbox 派发，不能把字段齐全写成消费闭环已经上线。
+`wf_outbox` 不设置 `LeaseOwner/LeaseExpiresAtUtc/Fence`；`AvailableAtUtc` 同时表示可投递时刻和可见性租约，消费者领取次数 `AttemptCount` 作为单调 fence，迟到回写必须用 `WHERE AttemptCount = @myAttemptCount AND Status = Dispatching` CAS。这是 Task 8c 已实现的消费者契约；Task 8b 仍然不领取、不重投、不实际派发。
 
 引擎的执行结果 outbox payload 走 `WfModelJson.Options`；该配置启用 `WhenWritingNull`，所以 null 属性会被省略，不会序列化成 `"key": null`。Webhook 的出站请求体另有固定的 8 个字段：
 
@@ -521,7 +521,7 @@ TenonAdmin 通过 NuGet 和 CodeFirst 分发，迁移应优先采用可回滚的
 4. execution key、retry、lease/fence、attempt 追加、outbox 幂等入队和 `NodeExecutionCompletedCmd` 原子回写已由 [`WfExecutionKeyTests.cs`](../../backend/tests/TenonAdmin.Tests/WfExecutionKeyTests.cs)、[`WfNodeExecutionContractTests.cs`](../../backend/tests/TenonAdmin.Tests/WfNodeExecutionContractTests.cs) 和 [`WfNodeExecutionDispatcherTests.cs`](../../backend/tests/TenonAdmin.Tests/WfNodeExecutionDispatcherTests.cs) 覆盖；
 5. Webhook 是首个真实 handler，Fake handler 覆盖其他结果类型的同一 dispatcher 回写路径。
 
-交付边界：Task 8b 已在 `EnterNodeOp` 中创建/幂等复用 `wf_node_execution`，并由 `WfNodeExecutionJob` 经现有 `IAdminJob` 调度体系调用 dispatcher；测试还通过固定 seed、`JobSchedulerService.TickAsync`、`JobExecutor` 和 `DefaultJobHandlerResolver` 贯通了真实调度触发链。Webhook 配置设计 UI 属于 M3a-2，不在本轮数据库交付内；`wf_outbox` 的真实 consumer/transport 仍延期到 Task 8c。
+交付边界：Task 8b 已在 `EnterNodeOp` 中创建/幂等复用 `wf_node_execution`，并由 `WfNodeExecutionJob` 经现有 `IAdminJob` 调度体系调用 dispatcher；测试还通过固定 seed、`JobSchedulerService.TickAsync`、`JobExecutor` 和 `DefaultJobHandlerResolver` 贯通了真实调度触发链。Webhook 配置设计 UI 属于 M3a-2，已在 Vue 接入。Task 8c 已为 `wf_outbox` 补齐 consumer/transport、死信监控 API 和 `wf-outbox-scan` worker。
 
 验证范围：Task 8b 的生产 E2E 已覆盖 Webhook `Succeeded`、retry 后成功、terminal、manual fallback、事务外外呼和 tx2 提交前恢复；其他 dispatcher 结果仍由 Fake handler 补齐同一回写路径。当前工作树中的 Webhook 测试（[`WfWebhookNodeHandlerTests.cs`](../../backend/tests/TenonAdmin.Tests/WfWebhookNodeHandlerTests.cs)）覆盖 DNS callback fence、发送/响应体读取共用分类、IOException/响应体自超时重试和外部取消传播；未覆盖真实 TLS/HTTP2/chunking/proxy 环境。未知非取消 handler 异常现在由 dispatcher 以 `48032` 收敛为有限 retryable attempt，OCE 仍原样传播，避免 lease 无限活锁。
 
@@ -536,7 +536,7 @@ M3a-1 的历史基线四库 CI 证据仍是 run [`33738099310`](https://github.c
 
 M3b-0 已完成上述第 1 项及 shadow-only 基础闭环：AI 只生成 proposal，服务端完成 schema/policy 校验，在现有 execution/attempt/tx2 中追加脱敏审计并创建人工兜底任务。审计读取 API 复用实例参与者/监控权限，只返回元数据、hash、风险/证据引用、策略/兜底、token usage 和 shadow 标记，不返回 proposal 原文、原始变量、执行内部标识或 Provider 异常正文。任何 proposal 都不会自动批准、拒绝或推进 task/token。
 
-M3b-0 只保证终态 `Pending` outbox 的幂等入队，Task 8c 的 consumer、transport、领取/投递/重试和状态回写仍未实现。M3B0-17 至 M3B0-20 及后续审查修复已经完成，最终聚焦矩阵 326/326 通过，代码与架构复核无 blocker；下一阶段为 M3a-2 Vue 产品面。
+M3b-0 交付时只保证终态 `Pending` outbox 的幂等入队。Task 8c 的 consumer、transport、领取/投递/重试、死信和人工重放已于 2026-09-14 补齐。M3B0-17 至 M3B0-20 及后续审查修复已经完成，最终聚焦矩阵 326/326 通过，代码与架构复核无 blocker。
 
 ### 并行网关实现收口（T17–T23，2026-09-10）
 
@@ -554,9 +554,9 @@ T18 已实现上述 nullable 字段、join 表、索引和发布校验，旧行�
 
 现有模型的核心方向正确：人工审批状态是持久化事实，定义版本是不可变快照，业务状态留在消费方，M3a-1 的机器执行通过独立 execution/attempt/outbox 事实链落库，AI 仍通过独立 Adapter 接入。这些决定都应保留。
 
-M3a-1 的可靠执行内核与 Task 8b 的生产 Webhook 闭环已经完成；review repair 后的最终四库 CI 与 template-smoke 证据为 run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)，contract-drift 与 docker-smoke 也分别在 run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095)、[`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106) 通过。原先的 Task 8b 四库证据缺口描述属于历史基线，已由上述结果覆盖。`EnterNodeOp` 创建 execution、`WfNodeExecutionJob` 扫描和 dispatcher 的三段事务边界已经接通；outbox consumer/transport 仍是 Task 8c，Webhook 设计器已在 M3a-2 Vue 接入。当前 M3a-2 Vue 的实现还固定了表单历史权限、提交后通知失败只记录 Warning 不回滚、并行退回目标恢复和安全 runtime projection；可靠演进仍需区分三类身份：
+M3a-1 的可靠执行内核与 Task 8b 的生产 Webhook 闭环已经完成；review repair 后的最终四库 CI 与 template-smoke 证据为 run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)，contract-drift 与 docker-smoke 也分别在 run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095)、[`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106) 通过。原先的 Task 8b 四库证据缺口描述属于历史基线，已由上述结果覆盖。`EnterNodeOp` 创建 execution、`WfNodeExecutionJob` 扫描和 dispatcher 的三段事务边界已经接通；Task 8c 已补齐 outbox consumer/transport，Webhook 设计器已在 M3a-2 Vue 接入。当前 M3a-2 Vue 的实现还固定了表单历史权限、提交后通知失败只记录 Warning 不回滚、并行退回目标恢复和安全 runtime projection；可靠演进仍需区分三类身份：
 
-截至 2026-09-14，M3a-2 Vue 的 T25A 修复及复审跟进已完成：拿回使用同一主 token 的最近本人审批、下游窗口和 task/token/instance CAS；Vue 详情按当前用户全部 pending task 合并字段权限并固定 `hidden > readonly > editable`；日期/时间和附件清空写入显式 `null`；长期委托在机构 scope 数据库锁下进行规则图校验，非唯一键基础设施异常原样传播；通用 payload hash 拒绝 null、旧回执摘要兼容、回填取消令牌和 HostedService 生命周期/可替换性也已复验；表单变量 ID 保持后端 `long` 雪花协议并兼容 JSON number/string，非法变量阻止提交，重提回写最新变量，加减签与撤销共享实例级 CAS，动态字典 OpenAPI 保持自由 JSON。最终 Vue 单元测试 `181/181`、后端相关聚焦 `48/48`、四数据库代表流程各 `29/29`，Release build `0 warning / 0 error`，契约漂移已通过；完整 Vue Playwright 的两个既有 MFA/RBAC 失败仍待功能测试收口。完整 M3a-2 React port、Task 8c 和 AI 自动放行仍不属于当前阶段，React port 必须等全部功能测试无失败后再启动。
+截至 2026-09-14，M3a-2 Vue 的 T25A 修复、功能测试收口和 Task 8c 均已完成：拿回使用同一主 token 的最近本人审批、下游窗口和 task/token/instance CAS；Vue 详情按当前用户全部 pending task 合并字段权限并固定 `hidden > readonly > editable`；日期/时间和附件清空写入显式 `null`；长期委托在机构 scope 数据库锁下进行规则图校验，非唯一键基础设施异常原样传播；通用 payload hash 拒绝 null、旧回执摘要兼容、回填取消令牌和 HostedService 生命周期/可替换性也已复验；表单变量 ID 保持后端 `long` 雪花协议并兼容 JSON number/string，非法变量阻止提交，重提回写最新变量，加减签与撤销共享实例级 CAS，动态字典 OpenAPI 保持自由 JSON。Vue 阶段证据为单元测试 `183/183`、完整 Playwright `16/16`、四数据库代表流程各 `29/29`。Task 8c 本地 SQLite 证据为聚焦 `68/68`、相关回归 `180/180`，Release build `0 warning / 0 error`，两套 `schema.d.ts` 已由真实 Host 重新生成且内容一致。完整 M3a-2 React port 和 AI 自动放行仍不属于当前阶段。
 
 1. **请求身份**：`RequestId/operation receipt`，回答“这是不是同一次用户命令”；
 2. **节点访问身份**：`NodeVisitId`，回答“这是不是同一次流程图访问”；

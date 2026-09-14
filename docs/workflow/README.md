@@ -8,23 +8,21 @@ TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可�
 
 共享领域术语仍保留在仓根 [`CONTEXT.md`](../../CONTEXT.md) 的“工作流”一节；它不是工作流专项文档，不从全仓领域词汇表中拆出。本目录负责完整设计和研究，`CONTEXT.md` 只保留跨任务必须统一的简短语义。
 
-## 当前交付状态（2026-09-14，M3a-2 Vue 已完成）
+## 当前交付状态（2026-09-14，M3a-2 Vue 与 Task 8c 已完成）
 
 M3b-0 已交付：AI Decision 已接入既有 execution、scheduler、worker、dispatcher 和 tx2 链路，Provider/proposal/policy、人工兜底和 append-only AI 审计均沿同一执行路径落库。内置执行链全程 **shadow-only**；AI 永不自动批准、拒绝、完成 task 或推进 token，低风险自动放行仍未开放。消费者整体替换 `IWorkflowEngine` 时属于受信任的完全接管，须自行维持事务、fence、审计与 shadow-only 不变量；自定义 handler 同样不得旁路写工作流状态。
 
 审计读取 API `GET /api/v1/workflow/instance/ai-decisions/{id}` 只返回受限元数据、输入 hash、模型文本/证据引用 hash、节点标识、策略/兜底结果、token usage 和 shadow 标记，不返回 proposal 原文、原始变量、执行内部标识或 Provider 异常正文。权限复用实例参与者与监控边界：发起人、办理人、抄送人和持有 `GET:/api/v1/workflow/instance/monitor` 权限的非参与者可读，路人拒绝。
 
-Task 8c 的 outbox consumer、transport、领取/投递/重试和状态回写仍未实现；M3b-0 只依赖 Task 8b 已有的 `Pending` 幂等入队。M3b-0 最终聚焦矩阵 326/326 通过，独立代码与架构复核无 blocker，详细证据见 [M3b-0 台账](../../.loop/wf-m3b0-ai-decision.md)。M3a-2 Vue 的 T01–T25A 已完成：Webhook 设计器、简易动态表单与字段权限、高级审批动词、并行分支、多 Token 回放和运行时安全投影已接入现有 Workflow 链路；四数据库代表流程各 `29/29` 通过，最新 Vue 单元测试 `181/181`，独立 `code-reviewer` 返回 `APPROVE`、`architect` 返回 `CLEAR`。本轮复审补齐表单变量 ID 的 number/string 兼容、非法变量阻止提交、重提表单回写、加减签与撤销 CAS 竞态以及动态字典 OpenAPI 契约；完整 Vue Playwright 的两个既有范围外失败仍为 MFA 绑定元素定位和 RBAC 重复成功消息严格定位；完整 M3a-2 仍等待 React port；任务证据见 [`m3a2-vue-task-plan-2026-09.md`](./m3a2-vue-task-plan-2026-09.md)。
+M3b-0 当时只依赖 Task 8b 的 `Pending` 幂等入队；Task 8c 已于 2026-09-14 补齐 `Pending → Dispatching → Dispatched/Failed` 的领取、可见性超时重领、`IWfOutboxTransport`、AttemptCount fence CAS、退避、死信和人工重放。默认 transport 是本地确认的 `NoOpWfOutboxTransport`，消费者可前置替换为 HTTP/MQ。`WfOutboxStore` 仍只暴露 `EnqueueAsync`。后台扫描走固定 `wf-outbox-scan` 任务，不扫描 `wf_node_execution`。死信监控 API 为 `GET /api/v1/workflow/outbox/page`（缺省 `Failed`）与 `POST /api/v1/workflow/outbox/{id}/replay`；本轮不开发前端 outbox 页面。M3b-0 最终聚焦矩阵 326/326 通过，独立代码与架构复核无 blocker，详细证据见 [M3b-0 台账](../../.loop/wf-m3b0-ai-decision.md)。M3a-2 Vue 的 T01–T25A 已完成：Webhook 设计器、简易动态表单与字段权限、高级审批动词、并行分支、多 Token 回放和运行时安全投影已接入现有 Workflow 链路；四数据库代表流程各 `29/29` 通过，最新 Vue 单元测试 `183/183`，独立 `code-reviewer` 返回 `APPROVE`、`architect` 返回 `CLEAR`。本轮复审补齐表单变量 ID 的 number/string 兼容、非法变量阻止提交、重提表单回写、加减签与撤销 CAS 竞态以及动态字典 OpenAPI 契约。2026-09-14 功能测试收口已消除此前完整 Vue Playwright 的 MFA/RBAC 失败，以及历史投影丢掉 `DuplicateApproverSkipped.userIds` 的后端回归。完整 M3a-2 仍等待后续 React port；本轮未进入 React 工作流页面、AI 自动放行或 M3+。Vue 阶段证据见 [`m3a2-vue-task-plan-2026-09.md`](./m3a2-vue-task-plan-2026-09.md)。Task 8c 最终语义见设计规划 §15.8。
 
 ## 接下来开发计划（2026-09-14）
 
-React 暂不启动。必须先让当前 Vue、后端、契约和完整功能测试全部无失败，再评估 React port；当前已知的 MFA/RBAC 测试失败也要先处理或明确关闭。
+Vue/后端功能测试收口与 Task 8c 已完成。React 工作流 port 现在可以启动，但**本轮未实现**；AI 自动放行和 M3+ 仍未开始。
 
-1. **功能测试收口**：补齐 Vue 工作流单元/组件、后端相关回归、四数据库代表流程、契约漂移和端到端验证，先消除现有失败。
-2. **React 工作流页面 port**：仅在第 1 项全部通过后，以 Vue 已稳定的 API、schema 和交互语义为输入，在 `web-react/` 独立实现定义设计器、表单运行时、实例详情和高级审批操作；不建立跨模板共享层，不手工编辑生成的 schema。
-3. **Task 8c outbox consumer**：实现 `Pending → Dispatching → Dispatched/Failed` 的领取、transport、租约/fence、重试、死信和人工重放；继续沿用稳定幂等键、短事务和四数据库契约测试。
-4. **M3b 受控自动化**：先用 shadow 评测集确定场景级阈值、人工推翻率和失败转人工规则，再设计默认关闭的受控放行；模型仍只能产生 proposal，不能直接推进 task/token。
-5. **M3+ 能力**：在上述基线稳定后，分别评估带来源版本的 RAG、只读受控 Agent tools 和只能生成草案的设计 Copilot；每个能力先完成权限、预算、提示注入防护、幂等副作用和离线评测。
+1. **React 工作流页面 port**：以已稳定的 Vue API、schema 和交互语义为输入，在 `web-react/` 独立实现定义设计器、表单运行时、实例详情和高级审批操作；不建立跨模板共享层，不手工编辑生成的 schema。
+2. **M3b 受控自动化**：先用 shadow 评测集确定场景级阈值、人工推翻率和失败转人工规则，再设计默认关闭的受控放行；模型仍只能产生 proposal，不能直接推进 task/token。
+3. **M3+ 能力**：在上述基线稳定后，分别评估带来源版本的 RAG、只读受控 Agent tools 和只能生成草案的设计 Copilot；每个能力先完成权限、预算、提示注入防护、幂等副作用和离线评测。
 
 ## 必读顺序
 
@@ -41,6 +39,7 @@ React 暂不启动。必须先让当前 Vue、后端、契约和完整功能测�
 | 继续 M2a/M2b | 设计规划 §13、§15.1（Version 字段提前项） | 总调研中对应产品参考 |
 | 开发 M2c 幂等与四库契约 | 数据库评审 §四、§五、§九、§十 | 设计规划 §14.2、§15.1、OpenWorkflow 报告 §4–§6 |
 | 开发 M3a-1 自动节点执行 | 设计规划 §15.2–§15.3、数据库评审 §四、§六、§八–§十 | AI 基石 §4.4–§4.8、OpenWorkflow 的 execution/lease/retry 部分 |
+| 开发 Task 8c outbox consumer | 设计规划 §15.8、数据库评审 outbox 状态机 | AI 基石 §4.6、现有 `WfOutbox*` 测试 |
 | 开发 M3a-2 Vue 主线（Webhook 设计器、表单/动词/并行） | M3a-2 Vue 任务计划、设计规划 §八、§15.2–§15.3 | 本地 goal 提示词；React port 后置 |
 | 开发 M3b AI Decision | AI 基石 §4–§5 | 设计规划 §14.3、§15.4 |
 | 开发 RAG/Agent/设计 Copilot | AI 基石 §2–§4 | 固定参考提交有变化时才增量复核源码 |
@@ -51,7 +50,7 @@ React 暂不启动。必须先让当前 Vue、后端、契约和完整功能测�
 
 下面的提示词可以直接交给后续 AI。优先使用“继续当前阶段”；只有已经明确要进入某个里程碑时，才使用对应的专项提示词。提示词要求先核对代码和测试，文档只负责约束方向，不能把规划中的能力误判为已经实现。
 
-当前阶段先读 [`m3a2-vue-task-plan-2026-09.md`](./m3a2-vue-task-plan-2026-09.md)，再使用 [`m3a2-vue-goal-prompt-2026-09.md`](./m3a2-vue-goal-prompt-2026-09.md) 启动 goal。React 工作流页面暂不在本轮范围，待 Vue 的 schema 与交互定稿后再单独安排 port。
+M3a-2 Vue 与 Task 8c 均已收口。下一产品切片是 React 工作流页面 port；AI 自动放行和 M3+ 仍后置。Vue 阶段记录仍见 [`m3a2-vue-task-plan-2026-09.md`](./m3a2-vue-task-plan-2026-09.md)。
 
 ### 继续当前阶段（推荐）
 
@@ -88,9 +87,9 @@ React 暂不启动。必须先让当前 Vue、后端、契约和完整功能测�
 
 先阅读 AGENTS.md、CLAUDE.md、docs/workflow/README.md、workflow-database-design-review-2026-08-24.md 的 M3a 相关章节、elsa3-slickflow-ai-reference-2026-08-23.md §4.4–§4.8，以及 openworkflow-reference-2026-08-23.md 中 execution、attempt、lease/fence、retry、outbox 和恢复相关章节。存在 .codegraph 时先用 CodeGraph；固定参考 commit 未变化时不要重读外部项目。
 
-以当前代码和测试为事实源，设计并实现最小闭环：IWorkflowNodeHandler 扩展点、持久化 WfNodeExecution/Attempt、稳定 execution key、短事务 claim、lease + fencing token、可分类重试、tx2 幂等写入 `Pending` outbox、超时与崩溃恢复。Task 8b 只负责在 tx2 中幂等写入 `Pending` outbox，不领取或实际投递 outbox；`Pending → Dispatching → Dispatched/Failed` 的领取、投递、重试、CAS 回写与 transport 由 Task 8c 负责。Task 8c 不阻塞已解锁的 M3b。先用 Fake Handler 和 Webhook Handler 验证执行框架，不在本阶段加入模型厂商耦合或让外部调用持有数据库事务。
+以当前代码和测试为事实源，设计并实现最小闭环：IWorkflowNodeHandler 扩展点、持久化 WfNodeExecution/Attempt、稳定 execution key、短事务 claim、lease + fencing token、可分类重试、tx2 幂等写入 `Pending` outbox、超时与崩溃恢复。Task 8b 只负责在 tx2 中幂等写入 `Pending` outbox，不领取或实际投递 outbox；`Pending → Dispatching → Dispatched/Failed` 的领取、投递、重试、CAS 回写与 transport 已由 Task 8c 交付。先用 Fake Handler 和 Webhook Handler 验证执行框架，不在本阶段加入模型厂商耦合或让外部调用持有数据库事务。
 
-测试必须证明：同一 execution 的重复执行不重复推进业务状态，外部投递携带稳定幂等键；过期 worker 不能覆盖新结果，进程在关键边界崩溃后可恢复，重试次数与最终状态可审计，人工任务原有语义不回归。outbox 的实际领取、投递、重试、CAS 回写与 transport 由 Task 8c 单独验收。同步数据库迁移和四库兼容性；契约变化时重新生成双前端 schema。把最终状态机和不变量回写到工作流文档，报告验证结果和 M3b 可复用的接口；不要自行提交或推送。
+测试必须证明：同一 execution 的重复执行不重复推进业务状态，外部投递携带稳定幂等键；过期 worker 不能覆盖新结果，进程在关键边界崩溃后可恢复，重试次数与最终状态可审计，人工任务原有语义不回归。Task 8c 已单独验收 outbox 的领取、投递、重试、CAS 回写与 transport。同步数据库迁移和四库兼容性；契约变化时重新生成双前端 schema。把最终状态机和不变量回写到工作流文档，报告验证结果和 M3b 可复用的接口；不要自行提交或推送。
 ```
 
 ### M3b：AI Decision v0
@@ -137,4 +136,4 @@ M3b-0 已在 M3a 可靠执行层之上交付最小 AI 决策闭环：模型适�
 - 外部文档只能证明产品方向；已交付能力以固定源码和可获取包为准。
 - AI 模型只生成 proposal，服务端 schema/policy 决定路由；模型不得直接修改任务或 token 状态。
 - 移动或重命名本目录文件时，全仓更新引用，并重新生成受 XML 注释影响的双前端 OpenAPI schema。
-M3a-2 Vue 的 T01–T25A 已完成：Webhook 设计器、简易动态表单与字段权限、高级审批动词、并行分支设计与多 Token 回放均已接入现有 Workflow 链路；四数据库代表流程验证共 `29/29` 通过，最终独立 `code-reviewer` 为 `APPROVE`、`architect` 为 `CLEAR`。完整 M3a-2 仍等待后续 React port；Task 8c、AI 自动放行和 M3+ 仍未开始。最终语义与证据见 [M3a-2 Vue 任务计划](./m3a2-vue-task-plan-2026-09.md)。
+M3a-2 Vue 的 T01–T25A 已完成：Webhook 设计器、简易动态表单与字段权限、高级审批动词、并行分支设计与多 Token 回放均已接入现有 Workflow 链路；四数据库代表流程验证共 `29/29` 通过，最终独立 `code-reviewer` 为 `APPROVE`、`architect` 为 `CLEAR`。2026-09-14 功能测试收口后 Vue Playwright `16/16`、后端 `1513/1513`。Task 8c outbox consumer/transport 已于同日补齐；完整 M3a-2 仍等待后续 React port，本轮未进入 React 工作流页面、AI 自动放行和 M3+。Vue 阶段证据见 [M3a-2 Vue 任务计划](./m3a2-vue-task-plan-2026-09.md)，outbox 最终语义见设计规划 §15.8。

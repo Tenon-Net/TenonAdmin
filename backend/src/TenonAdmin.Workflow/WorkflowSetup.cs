@@ -135,6 +135,9 @@ public static class WorkflowSetup
         services.TryAddScoped<IWorkflowFormBinder, NoOpWorkflowFormBinder>();
         services.TryAddScoped<IWorkflowEngine, WorkflowEngine>();
         services.TryAddScoped<WfNodeExecutionDispatcher>();
+        services.TryAddScoped<IWfOutboxTransport, NoOpWfOutboxTransport>();
+        services.TryAddScoped<WfOutboxDispatcher>();
+        services.TryAddScoped<IWfOutboxService, WfOutboxService>();
 
         // 写操作幂等回执(M2c §14.2):引擎在事务内占位 / 命中 / 回填;消费者可前置注册同接口整体替换。
         services.TryAddScoped<IWfOperationReceiptService, WfOperationReceiptService>();
@@ -168,6 +171,8 @@ public static class WorkflowSetup
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WfTimeoutJobSeed>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, WfNodeExecutionJob>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WfNodeExecutionJobSeed>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, WfOutboxJob>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WfOutboxJobSeed>());
 
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, WorkflowMenuSeed>());
 

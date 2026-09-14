@@ -8,7 +8,7 @@
 
 ## 已知基线（2026-09-09）
 
-- M3a-1 和 Task 8b 已交付 Webhook 可靠执行闭环；Task 8c 的 outbox consumer/transport 仍未实现。
+- M3a-1 和 Task 8b 已交付 Webhook 可靠执行闭环。本 Vue 计划开始时 Task 8c 尚未实现；该切片已于 2026-09-14 另开完成，见设计规划 §15.8。
 - M3b-0 已交付且保持 shadow-only，不能自动批准、拒绝、完成 task 或推进 token。
 - 后端已经接受并执行 Webhook 节点，[`WfNodeProps`](../../backend/src/TenonAdmin.Workflow/Schema/WfNode.cs#L81) 已有 `WebhookUrl`、`WebhookMethod`、`WebhookHeaders`、`WebhookTimeoutSeconds`、`WebhookOnFailure` 和 `MaxAttempts`。
 - Vue schema 已预留 `webhook`，但当前 [`createNode`](../../web/src/workflow/model.ts#L118)、新增节点菜单、节点卡、配置抽屉和发布前校验尚未启用；[`validateModel`](../../web/src/workflow/model.ts#L227) 仍将 Webhook 判为不支持。
@@ -81,7 +81,7 @@
 
 - status: `DONE`
 - current task: `无（M3a-2 Vue 阶段完成）`
-- next: `先完成全部 Vue/后端功能测试收口，再评估 React 工作流页面 port（不属于本 goal）`
+- next: `功能测试已收口；下一步是 React 工作流页面 port（不属于本 Vue 计划）。Task 8c 已另开切片完成，见设计规划 §15.8；M3+ 仍未开始`
 - completed: `25 / 25`
 
 ## 任务
@@ -234,3 +234,10 @@
 - **T25A 复审跟进（2026-09-14）**：针对阶段收口后的 review 反馈完成最小修复：内置表单用户/附件 ID 保持后端 `long` 雪花协议，同时兼容 JSON number 与十进制 string；重提内置表单恢复可编辑态、校验并回写最新变量；非法变量 JSON 或非对象根节点显示错误并阻止提交；加签/减签在任务 CAS 前复用实例级 CAS，与撤销共享竞争边界；OpenAPI 将 `WfFormField.props` 和 `WfAssignee.params` 生成为自由 JSON。AI Decision 只增加只读展示文案和 runtime 类型，不加入当前 Vue 设计器可插入集合，继续遵守 M3b-0 shadow-only 与本阶段范围。
   - 验证：Vue 全量 `33 files / 181 tests passed`；Vue/React typecheck、lint、build 通过；后端相关聚焦 `48 passed / 0 failed / 0 skipped`；`dotnet build backend/TenonAdmin.slnx -c Release --no-restore` 为 `0 warning / 0 error`；`git diff --check HEAD` 通过。真实 MinimalHost 输出确认 `WfFormField.props`、`WfAssignee.params` 为 `type=object` 且 `additionalProperties={}`，两套 schema 已重新生成且相应类型为 `[key: string]: unknown`。
   - 已知限制：`node scripts/check-contract-drift.mjs` 已完成真实 Host 启动和两套生成，但按脚本设计在未提交工作区相对 `HEAD` 存在预期 API/schema diff 时退出 1；提交本批次后可重新运行清零。完整 Vue Playwright 的既有 MFA/RBAC 两个范围外失败仍未纳入本阶段修复。
+
+- **功能测试收口（2026-09-14）**：本轮只收口现有 Vue/后端功能测试，不开发 React workflow port。以代码和测试为事实源修复三处真实失败，未删除断言、未 skip/only、未放宽 strict。
+  - MFA：`mfa-bind.spec.ts:9` 的 `input[readonly]` 超时根因是 Playwright 宿主默认 `Totp:Enabled=false`，`bind/start` 被 `NoPermission` 挡在第 1 步。不能把 Totp 做成整个 E2E 宿主地板，否则用户/角色高危写会触发 40024 再认证。改为建用户后打开运行时 `sys.security.totp.enabled`，用例结束后密码再认证再关闭；种子框使用 `.mfa-seed` 只读契约。
+  - RBAC：`rbac-permission.spec.ts:133` 的重复 `.n-message` 是连续两次「用户授权已保存」堆叠。产品在保存前 `destroyAll()` 只保留本动作结果；测试按该文案断言恰好一条，并要求角色行带「更多」、保存后抽屉关闭，避免与 UserPicker 用户行撞名。
+  - 历史投影：`WfAdjacentDedupTests` 发现 `DuplicateApproverSkipped` 的 `userIds` 数组被 runtime 白名单丢掉。补齐 `nodeId`/`userIds` 与原始值数组投影，秘密字段和嵌套对象仍拒绝。
+  - 验证矩阵（全部退出码 0）：`cd web && npm run test -- --run` → 34 files / 183 passed；`cd web && npm run test:e2e` → 16 passed；`cd web && npm run typecheck` / `lint` / `build` 通过；`dotnet test backend/TenonAdmin.slnx -c Release` → 1513 passed / 0 failed / 0 skipped；`dotnet build backend/TenonAdmin.slnx -c Release --no-restore` → 0 warning / 0 error；`node scripts/check-contract-drift.mjs` → contract in sync；`cd web-react && npm run typecheck` / `build` 通过；`git diff --check HEAD` 通过。未改 API/DTO/XML 注释，未手工编辑 `schema.d.ts`；`web-react/` 无工作流产品代码变化。
+  - 边界：表单用户/附件 ID 仍是后端 `long` 雪花；非法变量仍阻止提交；`hidden/readonly/editable`、RequestId/receipt、task/token/instance CAS、NodeVisitId、execution/lease/fence 和 AI shadow-only 未改。React 工作流页面、Task 8c、AI 自动放行和 M3+ 仍未开始；React port 只在本轮功能测试无失败之后才允许启动。

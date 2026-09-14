@@ -8,8 +8,8 @@ using TenonAdmin.Workflow;
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// 工作流卫星包可替换性「十六件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
-/// 十六个 <c>TryAdd</c> SPI 面:<see cref="IApproverResolver"/> /
+/// 工作流卫星包可替换性「十八件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
+/// 十八个 <c>TryAdd</c> SPI 面:<see cref="IApproverResolver"/> /
 /// <see cref="IWorkflowFormBinder"/> / <see cref="IWorkflowEngine"/> /
 /// <see cref="IWfConditionEvaluator"/> /
 /// <see cref="IWfDefinitionService"/> / <see cref="IWfTaskService"/> /
@@ -17,7 +17,8 @@ namespace TenonAdmin.Tests;
 /// <see cref="IWfCcService"/> / <see cref="IWfOperationReceiptService"/> /
 /// / <see cref="IWfDelegationService"/> / <see cref="IWfTaskSignService"/>
 /// <see cref="IAiDecisionProvider"/> / <see cref="IAiDecisionProposalParser"/> /
-/// <see cref="IAiDecisionPolicyEvaluator"/>。
+/// <see cref="IAiDecisionPolicyEvaluator"/> / <see cref="IWfOutboxTransport"/> /
+/// <see cref="IWfOutboxService"/>。
 /// <para>
 /// 真判据是<strong>前置</strong>注册即胜出(裸容器,不走 <c>ConfigureTestServices</c>+Replace):
 /// 把任一 <c>TryAdd</c> 退化成 <c>Add</c> → 内置后注册覆盖 → 对应本条红。
@@ -230,6 +231,24 @@ public class WorkflowReplaceabilityTests
         var evaluation = evaluator.Evaluate(CreateConsumerProposal());
         Assert.Equal(AiDecisionRecommendation.Approve, evaluation.Recommendation);
         Assert.Equal(AiDecisionPolicyClassification.HighRisk, evaluation.Classification);
+    }
+
+    /// <summary>变异:WorkflowSetup 里 IWfOutboxTransport 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredOutboxTransport_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s => s.AddScoped<IWfOutboxTransport, FakeOutboxTransport>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeOutboxTransport>(scope.ServiceProvider.GetRequiredService<IWfOutboxTransport>());
+    }
+
+    /// <summary>变异:WorkflowSetup 里 IWfOutboxService 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredOutboxService_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s => s.AddScoped<IWfOutboxService, FakeOutboxService>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeOutboxService>(scope.ServiceProvider.GetRequiredService<IWfOutboxService>());
     }
 
     /// <summary>
@@ -459,6 +478,28 @@ public class WorkflowReplaceabilityTests
             => throw new NotSupportedException();
         public Task MarkReadAsync(long ccId, long userId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+    }
+
+    private sealed class FakeOutboxTransport : IWfOutboxTransport
+    {
+        public Task<WfOutboxDispatchResult> DispatchAsync(
+            WfOutboxMessage message,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(WfOutboxDispatchResult.Succeeded("consumer"));
+    }
+
+    private sealed class FakeOutboxService : IWfOutboxService
+    {
+        public Task<PagedList<WfOutboxOutput>> PageAsync(
+            WfOutboxPageInput input,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<WfOutboxOutput> ReplayAsync(
+            long id,
+            string? requestId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeWorkflowNotifier : IWorkflowNotifier

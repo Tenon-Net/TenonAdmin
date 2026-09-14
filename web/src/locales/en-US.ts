@@ -1203,6 +1203,9 @@ export default {
       48041: 'Delegation rule is outside your organization or owner scope',
       48042: 'Request payload differs from the first operation',
       48043: 'Delegation rule was changed by another operation',
+      48044: 'Workflow outbox was not found or is outside your scope',
+      48045: 'This outbox cannot be replayed',
+      48046: 'Workflow outbox transport raised an unclassified error',
     },
   },
 

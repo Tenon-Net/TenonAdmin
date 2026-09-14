@@ -4,10 +4,9 @@ using TenonAdmin.SqlSugar;
 namespace TenonAdmin.Workflow;
 
 /// <summary>
-/// 可靠派发外发信箱(<c>wf_outbox</c>,M3a-1 Task 5)——execution 结果回写的同一短事务里入队待投递消息
-/// (§4.6 步骤 5),供进程外消费方(HTTP/MQ 等)拉取投递。本 Task 只交付
-/// <see cref="WfOutboxStore.EnqueueAsync"/>(写得进去、状态可查询);领取/重投/退避/终态四条状态边、
-/// 后台扫描 job 归消费者任务(见 <see cref="WfOutboxStatus"/> 的状态图)。
+/// 可靠派发外发信箱(<c>wf_outbox</c>,M3a-1 Task 5 / Task 8c)——execution 结果回写的同一短事务里入队待投递消息
+/// (§4.6 步骤 5),供进程外消费方(HTTP/MQ 等)投递。入队走 <see cref="WfOutboxStore.EnqueueAsync"/>;
+/// 领取/重投/退避/终态与后台扫描见 <see cref="WfOutboxConsumerStore"/> 与 <see cref="WfOutboxJob"/>。
 /// <para><b>刻意继承 <see cref="BaseEntity"/> 而非 <c>DataEntity</c></b>。<c>DataEntity</c> 带
 /// <see cref="IOrgScoped"/> 全局数据范围过滤器(只作用于 SELECT),而本表的读写方是<b>没有 HTTP 请求上下文的
 /// 后台 worker</b>——<c>IDataScopeContext</c> 为空会让扫描静默返回 0 行,症状伪装成「消息永远不投递」而不是
@@ -36,12 +35,11 @@ namespace TenonAdmin.Workflow;
 /// 才读这一行,只有正文能回答「我该发什么出去」;这与 attempt 表只存摘要+hash 的取舍方向相反且必须如此
 /// (两张表回答不同问题)。脱敏责任在<b>生产者</b>(入队方决定什么进消息),不在本表。<b>禁止</b>改成裸
 /// <c>ColumnDataType = "text"</c>——SqlServer 上非 Unicode,中文读回变 <c>???</c>(nightly #25 先例)。</para>
-/// <para><see cref="LastError"/> 写入方必须在 C# 侧截断到 512(外部错误文本是 trust boundary),本轮零写入点,
-/// 责任交代给消费者任务。<see cref="MessageKey"/> 的天花板:一个 <c>(execution, MessageType)</c> 只能有一条
+/// <para><see cref="LastError"/> 写入方必须在 C# 侧截断到 512(外部错误文本是 trust boundary)。Task 8c 的消费者
+/// 在可重试失败与死信上回写本列。<see cref="MessageKey"/> 的天花板:一个 <c>(execution, MessageType)</c> 只能有一条
 /// 消息;同一 execution 需要发两条同类型消息时,升级路径是在末尾追加 discriminator 段并给旧维度定哨兵。
-/// <see cref="LastError"/>/<see cref="CompletedAtUtc"/>/<see cref="WfOutboxStatus.Dispatching"/>/
-/// <see cref="WfOutboxStatus.Dispatched"/>/<see cref="WfOutboxStatus.Failed"/> 本轮零写入点,只保证列存在、
-/// 可读回。</para>
+/// <see cref="LastError"/>/<see cref="CompletedAtUtc"/> 以及 <see cref="WfOutboxStatus.Dispatching"/>/
+/// <see cref="WfOutboxStatus.Dispatched"/>/<see cref="WfOutboxStatus.Failed"/> 由 Task 8c 消费者写入。</para>
 /// </summary>
 [SugarTable("wf_outbox", TableDescription = "可靠派发外发信箱")]
 [SugarIndex("uk_wf_outbox_message_key", nameof(MessageKey), OrderByType.Asc, IsUnique = true)]
@@ -89,11 +87,11 @@ public class WfOutbox : BaseEntity
     [SugarColumn(ColumnDescription = "下次可投/租约到期时刻(UTC)")]
     public DateTime AvailableAtUtc { get; set; }
 
-    /// <summary>最近一次投递失败摘要;写入方必须 C# 侧截断到 512。本轮零写入点。</summary>
+    /// <summary>最近一次投递失败摘要;写入方必须 C# 侧截断到 512。</summary>
     [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "最近一次投递失败摘要")]
     public string? LastError { get; set; }
 
-    /// <summary>进入 <see cref="WfOutboxStatus.Dispatched"/>/<see cref="WfOutboxStatus.Failed"/> 终态的时刻(UTC);保留期清理作业的钩子。本轮零写入点。</summary>
+    /// <summary>进入 <see cref="WfOutboxStatus.Dispatched"/>/<see cref="WfOutboxStatus.Failed"/> 终态的时刻(UTC);保留期清理作业的钩子。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "终态时刻(UTC)")]
     public DateTime? CompletedAtUtc { get; set; }
 }

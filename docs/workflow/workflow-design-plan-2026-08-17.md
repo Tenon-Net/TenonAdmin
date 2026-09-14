@@ -406,7 +406,7 @@ AI 分成两条互不混用的能力线：
 
 依赖关系：`M2c → M3a-1 → M3b`；`M3a-2` 与 `M3b` 并行。GA 门槛不变（双模板 feature 对齐 + 文档站 guide + 远程节点无长事务/崩溃可恢复/同一 execution 只推进一次）。
 
-当前执行再分为两个交付阶段：先完成 **M3a-2 Vue**（Webhook 设计器、简易动态表单/字段权限、高级动词和并行分支），并先让 Vue、后端、契约及完整功能测试全部无失败，再做 **M3a-2 React port**。M3a-2 Vue 完成只关闭 Vue 阶段，不能宣称完整 M3a-2 或 GA 完成。Vue 阶段的稳定任务拆分见 [`m3a2-vue-task-plan-2026-09.md`](./m3a2-vue-task-plan-2026-09.md)。
+当前执行再分为两个交付阶段：先完成 **M3a-2 Vue**（Webhook 设计器、简易动态表单/字段权限、高级动词和并行分支），并先让 Vue、后端、契约及完整功能测试全部无失败，再做 **M3a-2 React port**。2026-09-14 功能测试收口已使该闸门为真，但本轮仍未实现 React port。M3a-2 Vue 完成只关闭 Vue 阶段，不能宣称完整 M3a-2 或 GA 完成。Vue 阶段的稳定任务拆分见 [`m3a2-vue-task-plan-2026-09.md`](./m3a2-vue-task-plan-2026-09.md)。
 
 ### 15.3 Webhook 按一等功能交付
 
@@ -431,7 +431,7 @@ EnterNodeOp 进入 Webhook
 
 领取后如果 instance、token、definition version 或模型/节点快照已经永久缺失或损坏，dispatcher 不把这类数据错误当成可无限续租的暂时故障，而是发出内部 quarantine command。引擎在同一 tx2 中用旧 `Fence + Running` CAS 将 execution 置为 `Failed`、清除 lease、追加 terminal attempt 并幂等写入一条 `Pending` outbox；该旁路不读取缺失上下文、不推进 Token。数据库/基础设施瞬时异常仍原样退出，保留 lease 到期后的恢复路径。
 
-外部 Webhook 副作用的交付语义是 at-least-once：租约过期或 tx2 提交前崩溃都可能导致同一请求再次发送。消费者必须使用 `ExecutionKey` 作为幂等身份；本地 workflow 状态通过 fence/CAS 保证同一 execution 的 Token 最多推进一次。重提复用同一 token 但会生成新的 `NodeVisitId`：为与完成 tx2 保持统一的 `execution → token` 锁顺序，引擎先在同一事务中将该 token 上全部 `Pending`/`RetryScheduled`/`Running` 的旧 execution 置为 `Cancelled`、清 lease/retry 并增加 Fence，再以 token CAS 取得重提权，随后从 start 进入新 visit；若 CAS 输掉，事务回滚先前的 invalidation。迟到 handler 的 tx2 因 `Status != Running` 与 Fence 失配整体回滚；回写还会核验 token 的节点/visit 仍与 execution 一致，旧结果不能推进新 traversal。Task 8b 只在 execution 终态提交 `Pending` outbox，`Dispatching/Dispatched/Failed` 的消费、重投和传输闭环延期到 Task 8c。
+外部 Webhook 副作用的交付语义是 at-least-once：租约过期或 tx2 提交前崩溃都可能导致同一请求再次发送。消费者必须使用 `ExecutionKey` 作为幂等身份；本地 workflow 状态通过 fence/CAS 保证同一 execution 的 Token 最多推进一次。重提复用同一 token 但会生成新的 `NodeVisitId`：为与完成 tx2 保持统一的 `execution → token` 锁顺序，引擎先在同一事务中将该 token 上全部 `Pending`/`RetryScheduled`/`Running` 的旧 execution 置为 `Cancelled`、清 lease/retry 并增加 Fence，再以 token CAS 取得重提权，随后从 start 进入新 visit；若 CAS 输掉，事务回滚先前的 invalidation。迟到 handler 的 tx2 因 `Status != Running` 与 Fence 失配整体回滚；回写还会核验 token 的节点/visit 仍与 execution 一致，旧结果不能推进新 traversal。Task 8b 仍只在 execution 终态提交 `Pending` outbox；Task 8c 已落地 `Dispatching/Dispatched/Failed` 的领取、transport、重投、死信和人工重放，详见 §15.8。
 
 ### 15.4 M3b 自动放行默认关闭，阈值校准是消费者的责任
 
@@ -548,11 +548,26 @@ TenonAdmin 以内核包分发，自身没有生产流量，shadow mode 的评测
 - **委托通知事务边界**：长期委托规则的领域写入、审计和 receipt 在事务提交后才触发通知。通知失败只记录结构化 `Warning`，不回滚已经提交的规则；receipt 重放不重复发送通知。
 - **委托并发与异常**：长期委托 Add/Update/Delete 在同一机构 scope 的数据库锚点写锁下读取规则图并写入；receipt/委托只有在确认唯一键冲突时才查询竞争记录，连接、权限和其他基础设施异常原样传播。
 - **并行退回**：退回离开并行区域时先取消旧 fork 的未完成臂及其子 token/task/execution，再恢复唯一 parked parent。恢复同时把数据库和内存中的 parent `NodeId` 设为退回目标节点，清空 `ForkId/PendingArmCount`，随后沿既有退回命令继续执行；重提再次进入并行节点时生成新的 `ForkId`。
-- **运行时安全投影**：发起、实例详情、待办和历史回放使用受限 runtime projection，只公开可运行的节点类型、名称、结构、字段权限和必要执行状态；Webhook 凭据、AI 指令、办理人参数及原始 `PayloadJson` 不进入这些读取模型。历史回放按 `Sequence → CreateTime → Id` 排序，并以 `ForkId + ArmId` 保持多 Token 语义。
+- **运行时安全投影**：发起、实例详情、待办和历史回放使用受限 runtime projection，只公开可运行的节点类型、名称、结构、字段权限和必要执行状态；Webhook 凭据、AI 指令、办理人参数及未白名单的原始 `PayloadJson` 不进入这些读取模型。历史回放按 `Sequence → CreateTime → Id` 排序，并以 `ForkId + ArmId` 保持多 Token 语义。去重事件 `DuplicateApproverSkipped` 的 `userIds` 是被跳过办理人的 `long` 雪花 Id 数组，属于白名单原始值，必须出现在历史投影中；未知键、秘密字段和嵌套对象/数组仍丢弃。
 - **表单 ID 表示**：表单 schema 不生成独立的表单 ID；`user` 控件中的用户 ID 和 `attachment` 控件中的 `SysFile.Id` 仍是后端 `long` 雪花 ID。当前雪花布局低于 JavaScript 安全整数上限，前端通常提交 JSON number；运行时同时接受十进制 JSON string 以兼容历史变量和通用 `int64` 客户端，解析后仍按 `long` 校验和查询。
 - **表单变量损坏处理**：变量 JSON 必须是对象；非法 JSON、数组/标量根节点、重复键和非法 ID 均拒绝提交或读取，不转换为空对象掩盖数据损坏。重提内置表单先按当前 schema 校验并保存最新变量；自定义 `formComponent` 继续由消费者负责其业务表单协议。
 - **OpenAPI 动态字典**：`WfFormField.props` 与 `WfAssignee.params` 是自由 JSON 对象，生成的两套 `schema.d.ts` 必须来自真实 Host，不能退化为 `Record<string, never>`，也不得手工编辑。
 
-T18–T23 已实现并验证；SQLite、MySQL、PostgreSQL、SQL Server 的代表流程各为 `29/29` 通过。T24/T25/T25A 的本地证据为 T25A 前置后端回归 `122/122`、最终修复后回执/回填/identity 聚焦 `33/33`、Vue 单元测试 `179/179`、Vue 工作流 E2E `1/1`、React typecheck/build 通过、Release build `0 warning / 0 error`；完整 Vue E2E 的其余两个失败来自既有 MFA 绑定元素定位和 RBAC 重复成功消息的严格定位，不属于 M3a-2 工作流用例。contract drift 已真实生成两套 schema 且字节一致，退出码 1 仅表示相对未提交 HEAD 存在预期 API/schema diff。最终独立 `code-reviewer` 为 `APPROVE`、`architect` 为 `CLEAR`。
+T18–T23 已实现并验证；SQLite、MySQL、PostgreSQL、SQL Server 的代表流程各为 `29/29` 通过。T24/T25/T25A 的本地证据为 T25A 前置后端回归 `122/122`、最终修复后回执/回填/identity 聚焦 `33/33`、独立 `code-reviewer` 为 `APPROVE`、`architect` 为 `CLEAR`。2026-09-14 功能测试收口后：Vue 单元测试 `183/183`、完整 Vue Playwright `16/16`、后端 Release `1513/1513`、Release build `0 warning / 0 error`、contract drift `in sync`、两套前端 typecheck/build 通过。此前 MFA `input[readonly]` 超时的根因是 E2E 未打开运行时 TOTP 总闸；RBAC 重复 `.n-message` 的根因是连续保存堆叠相同成功提示；历史投影曾丢掉去重 `userIds`。React 工作流 port 只在上述功能测试无失败后才允许启动；本轮未进入 React 工作流页面、AI 自动放行和 M3+。Task 8c 已另开切片完成，见 §15.8。
 
-当前阶段只关闭 **M3a-2 Vue**。React 工作流页面 port、Task 8c outbox consumer/transport、AI 自动放行和 M3+ 仍是后续范围。
+当前 Vue 产品面只关闭 **M3a-2 Vue**。React 工作流页面 port、AI 自动放行和 M3+ 仍是后续范围。
+
+### 15.8 Task 8c outbox consumer（2026-09-14）
+
+本节是 outbox 消费闭环的实现记录。入队契约不变：`WfOutboxStore` 仍然只暴露 `EnqueueAsync`，execution 终态 tx2 继续幂等插入 `Pending`。
+
+- **状态机**：`Pending → Dispatching`（领取：`AttemptCount + 1`，`AvailableAtUtc = now + 可见性超时`）；`Dispatching → Dispatching`（可见性超时后重领）；`Dispatching → Dispatched`（transport 成功，写 `CompletedAtUtc`）；`Dispatching → Pending`（可重试失败，`AvailableAtUtc = now + 退避`，写 `LastError`）；`Dispatching → Failed`（永久失败或预算耗尽）；`Failed → Pending`（人工重放，`AttemptCount = 0`）。`Dispatched` 无出边。
+- **Fence 与租约**：表不设 `LeaseOwner/LeaseExpiresAtUtc/Fence`。`AttemptCount` 就是 fence；回写必须 `WHERE AttemptCount = @mine AND Status = Dispatching`。影响 0 行视为迟到 owner，丢弃且不抛异常——transport 是 at-least-once，新 owner 会再投。可见性租约就是 `AvailableAtUtc`。领取谓词：`Status IN (Pending, Dispatching) AND AvailableAtUtc <= nowUtc`。领取的 UPDATE 与读回必须在同一事务里。
+- **事务边界**：tx1 领取；事务外调用 `IWfOutboxTransport`；tx2 按结果 Complete / ScheduleRetry / Fail。`OperationCanceledException` 原样穿透，行停在 `Dispatching`，超时后可重领。其他未分类 transport 异常收敛为可重试 `48046`，摘要只含异常类型。
+- **退避与预算**：`RetryAfter` 仅在 `(0, 24h]` 内采纳，否则 `30s << min(max(AttemptCount - 1, 0), 5)`。领取后若 `AttemptCount >= OutboxMaxAttempts`（配置 `TenonAdmin:Workflow:OutboxMaxAttempts`，默认 3、值域与 execution 相同 `[1,100]`），可重试失败也进死信。扫描批量 `OutboxScanBatchSize` 默认 20、最大 1000；可见性超时 `OutboxVisibilityTimeoutSeconds` 默认 60、最大 3600。写入 `DateTime`/`null` 必须先落局部变量再进 SqlSugar `SetColumns`。`LastError` 在 C# 侧截断到 512。
+- **默认 transport**：`NoOpWfOutboxTransport` 本地确认成功。消费者在 `AddTenonAdminWorkflow()` 之前注册同接口即可换成 HTTP/MQ；实现不得推进 task/token，也不得自行开工作流事务。生产调度器跑 `wf-outbox-scan` 后会把 `Pending` 打到 `Dispatched`；只跑 `WfNodeExecutionJob` 的测试仍可能看到 `Pending`。
+- **Worker**：`WfOutboxJob` + 种子 `wf-outbox-scan`（`TenonSeedIds.ConsumerMin + 47_002`），间隔 5 秒，`SerialSkip`，`SyncOnUpgrade=false`。扫描 `Pending` 和可见性已到期的 `Dispatching`，真正单赢家仍是 dispatcher 的 CAS。
+- **人工重放**：只接受 `Failed`。回执身份为 `(execution.ScopeKey, OutboxReplay, Outbox, outboxId, actor, requestId)`，不额外带 payload hash。同一 `requestId` 返回首次结果；并发第二人 `48045`。`Dispatching`/`Dispatched` 不可重放，卡住的 `Dispatching` 靠可见性超时重领。分页经 `wf_outbox → wf_node_execution → wf_instance` 走实例机构过滤器；行不存在或越权为 `48044`。
+- **本轮不做**：React 工作流页面、outbox 前端页、AI 自动放行、M3+。Vue 只补 `48044`/`48045`/`48046` 错误文案；双前端 `schema.d.ts` 由真实 Host 重新生成，禁止手改。
+
+本地 SQLite 证据：Task 8c 聚焦 `68/68`（`WfOutboxConsumerTests`/`WfOutboxDispatcherTests`/`WfOutboxWorkerTests` 加 `WfOutboxTests`/`WorkflowReplaceabilityTests`/`WfIdentityHashTests`），相关回归（含 `WfNodeExecution*` 与 `WfTakeBackTests`）`180/180`，Release build `0 warning / 0 error`。四数据库由 `WorkflowAppFactory` + CI `TENON_TEST_DBTYPE` 覆盖，本轮未在本地再跑四库。OpenAPI 已重新生成两套 `schema.d.ts`，内容一致。

@@ -80,6 +80,10 @@ public class WfIdentityHashTests
         var split = WfIdentityHash.Compute("ab", WfCommandType.Approve, WfTargetType.Task, 1L, 2L, "cd");
         var shifted = WfIdentityHash.Compute("a", WfCommandType.Approve, WfTargetType.Task, 1L, 2L, "bcd");
         Assert.NotEqual(split, shifted);
+
+        var replay = WfIdentityHash.Compute("o", WfCommandType.OutboxReplay, WfTargetType.Outbox, 1L, 2L, "k");
+        var deleteRule = WfIdentityHash.Compute("o", WfCommandType.DelegationRuleDelete, WfTargetType.DelegationRule, 1L, 2L, "k");
+        Assert.NotEqual(replay, deleteRule);
     }
 
     /// <summary>#6 前后空白归一化,但大小写<b>保留</b>(评审 §五:trim 后保持原大小写)。</summary>

@@ -27,6 +27,21 @@ public sealed class WorkflowOptions
     /// <summary>节点执行租约允许的最大时长(秒)。</summary>
     public const int MaxNodeExecutionLeaseSeconds = 3600;
 
+    /// <summary>outbox worker 每拍最多检视的消息数。</summary>
+    public const int DefaultOutboxScanBatchSize = 20;
+
+    /// <summary>outbox worker 扫描批量允许的最大值。</summary>
+    public const int MaxOutboxScanBatchSize = 1000;
+
+    /// <summary>outbox 领取可见性超时默认时长(秒)。</summary>
+    public const int DefaultOutboxVisibilityTimeoutSeconds = 60;
+
+    /// <summary>outbox 可见性超时允许的最大时长(秒)。</summary>
+    public const int MaxOutboxVisibilityTimeoutSeconds = 3600;
+
+    /// <summary>outbox 投递总尝试次数默认值(含首次投递)。</summary>
+    public const int DefaultOutboxMaxAttempts = DefaultMaxAttempts;
+
     /// <summary>
     /// 自动节点全局默认总尝试次数(含首次执行);节点 <c>props.maxAttempts</c> 可覆盖。
     /// 对应 <c>TenonAdmin:Workflow:MaxAttempts</c>，绑定期必须在
@@ -45,6 +60,25 @@ public sealed class WorkflowOptions
     /// <c>TenonAdmin:Workflow:NodeExecutionLeaseSeconds</c>。
     /// </summary>
     public int NodeExecutionLeaseSeconds { get; set; } = DefaultNodeExecutionLeaseSeconds;
+
+    /// <summary>
+    /// outbox worker 每拍最多扫描的消息数，对应
+    /// <c>TenonAdmin:Workflow:OutboxScanBatchSize</c>。
+    /// </summary>
+    public int OutboxScanBatchSize { get; set; } = DefaultOutboxScanBatchSize;
+
+    /// <summary>
+    /// outbox 单次领取的可见性超时(秒)，对应
+    /// <c>TenonAdmin:Workflow:OutboxVisibilityTimeoutSeconds</c>。
+    /// <c>AvailableAtUtc</c> 被推到 <c>now + 该值</c>，超时未回写即可被其他 worker 重领。
+    /// </summary>
+    public int OutboxVisibilityTimeoutSeconds { get; set; } = DefaultOutboxVisibilityTimeoutSeconds;
+
+    /// <summary>
+    /// outbox 投递总尝试次数(含首次)，对应
+    /// <c>TenonAdmin:Workflow:OutboxMaxAttempts</c>。耗尽后进入 <c>Failed</c> 死信。
+    /// </summary>
+    public int OutboxMaxAttempts { get; set; } = DefaultOutboxMaxAttempts;
 
     /// <summary>
     /// AI Decision 的服务端配置，对应 <c>TenonAdmin:Workflow:AiDecision</c>。V0 固定 shadow-only，
@@ -232,6 +266,27 @@ internal static class WorkflowOptionsValidation
             throw new InvalidOperationException(
                 $"TenonAdmin:Workflow:NodeExecutionLeaseSeconds 配置无效:值为 {options.NodeExecutionLeaseSeconds}," +
                 $"必须在 1–{WorkflowOptions.MaxNodeExecutionLeaseSeconds} 秒之间。");
+        }
+
+        if (options.OutboxScanBatchSize is < 1 or > WorkflowOptions.MaxOutboxScanBatchSize)
+        {
+            throw new InvalidOperationException(
+                $"TenonAdmin:Workflow:OutboxScanBatchSize 配置无效:值为 {options.OutboxScanBatchSize}," +
+                $"必须在 1–{WorkflowOptions.MaxOutboxScanBatchSize} 之间。");
+        }
+
+        if (options.OutboxVisibilityTimeoutSeconds is < 1 or > WorkflowOptions.MaxOutboxVisibilityTimeoutSeconds)
+        {
+            throw new InvalidOperationException(
+                $"TenonAdmin:Workflow:OutboxVisibilityTimeoutSeconds 配置无效:值为 {options.OutboxVisibilityTimeoutSeconds}," +
+                $"必须在 1–{WorkflowOptions.MaxOutboxVisibilityTimeoutSeconds} 秒之间。");
+        }
+
+        if (!WorkflowOptions.IsValidMaxAttempts(options.OutboxMaxAttempts))
+        {
+            throw new InvalidOperationException(
+                $"TenonAdmin:Workflow:OutboxMaxAttempts 配置无效:值为 {options.OutboxMaxAttempts}," +
+                $"必须在 {WorkflowOptions.MinMaxAttempts}–{WorkflowOptions.MaxMaxAttempts} 之间。");
         }
 
         if (options.AiDecision is null)

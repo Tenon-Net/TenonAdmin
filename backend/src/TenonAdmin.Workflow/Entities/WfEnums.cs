@@ -248,6 +248,9 @@ public enum WfCommandType
 
     /// <summary>删除长期委托规则</summary>
     DelegationRuleDelete = 14,
+
+    /// <summary>人工重放死信 outbox(Task 8c)</summary>
+    OutboxReplay = 15,
 }
 
 /// <summary>
@@ -270,6 +273,9 @@ public enum WfTargetType
 
     /// <summary>目标是长期委托规则</summary>
     DelegationRule = 4,
+
+    /// <summary>目标是 <c>wf_outbox</c> 行(人工重放死信)</summary>
+    Outbox = 5,
 }
 
 /// <summary>长期委托规则的 append-only 审计动作。</summary>
@@ -372,15 +378,16 @@ public enum WfNodeExecutionStatus
 /// <c>AvailableAtUtc</c>(可见性超时)一列兼任「下次可投时刻」与「租约到期」;老 owner 的迟到回写靠回写时
 /// CAS <c>AttemptCount</c>(单调、每次领取 +1)挡住,<c>AttemptCount</c> 就是 fence。领取谓词四库通用一条:
 /// <c>WHERE Status IN (Pending, Dispatching) AND AvailableAtUtc &lt;= @nowUtc</c>。</para>
-/// <para>状态转换图(本 Task 只落 <c>(insert) → Pending</c> 一条边,其余归消费者任务):</para>
+/// <para>状态转换图(Task 8b 只落 <c>(insert) → Pending</c>;Task 8c 落地其余边):</para>
 /// <code>
 /// (insert) ─────────────────────────► Pending          (AvailableAtUtc = nowUtc,立即可领)
 /// Pending        ─── claim ─────────► Dispatching       (AvailableAtUtc = now + 可见性超时;AttemptCount + 1)
 /// Dispatching    ─── 超时未回写 ────► Dispatching       (重新领取;AttemptCount + 1 —— 合法自转移)
 /// Dispatching    ─── 投递成功 ──────► Dispatched        (终态;CompletedAtUtc)
 /// Dispatching    ─── 可重试失败 ────► Pending           (AvailableAtUtc = now + 退避;LastError)
-/// Dispatching    ─── 预算耗尽/永久失败 ► Failed          (终态;CompletedAtUtc + LastError)
-/// Dispatched / Failed = 终态,无出边
+/// Dispatching    ─── 预算耗尽/永久失败 ► Failed          (CompletedAtUtc + LastError)
+/// Failed         ─── 人工重放 ──────► Pending          (AttemptCount=0;AvailableAtUtc = nowUtc)
+/// Dispatched = 终态,无出边；Failed 只有人工重放出边
 /// </code>
 /// <para><b>只追加、不重排</b>(与 <see cref="WfNodeExecutionStatus"/> 同款约束)。</para>
 /// </summary>
@@ -395,6 +402,6 @@ public enum WfOutboxStatus
     /// <summary>投递成功(终态)</summary>
     Dispatched = 3,
 
-    /// <summary>永久失败:预算耗尽或不可重试(终态)</summary>
+    /// <summary>永久失败:预算耗尽或不可重试(死信,仅人工重放可回到 Pending)</summary>
     Failed = 4,
 }

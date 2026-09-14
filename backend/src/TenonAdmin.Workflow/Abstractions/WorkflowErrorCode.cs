@@ -139,6 +139,15 @@ public static class WorkflowErrorCode
     /// <summary>长期委托规则版本或槽位竞争。</summary>
     public const int DelegationRuleConflict = 48043;
 
+    /// <summary>outbox 行不存在,或不在当前调用方的机构范围内。</summary>
+    public const int OutboxNotFound = 48044;
+
+    /// <summary>outbox 不是 Failed 死信,或领取 fence 已变化,不能重放。</summary>
+    public const int OutboxReplayNotAllowed = 48045;
+
+    /// <summary>outbox transport 未分类异常(受控重试,摘要不含异常正文,Task 8c)。</summary>
+    public const int OutboxTransportUnhandled = 48046;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }

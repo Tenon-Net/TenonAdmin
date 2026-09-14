@@ -49,6 +49,8 @@ internal sealed class WorkflowMenuSeed : ISeedData<SysMenu>
         new() { Id = RootId + 29, ParentId = TodoId, Type = MenuType.Button, Title = "审批-拿回", Permission = "POST:/api/v1/workflow/task/take-back", Sort = 6, Enabled = true },
         new() { Id = MonitorId, ParentId = RootId, Type = MenuType.Menu, Title = "流程监控", Permission = "", Path = "/workflow/monitor", Component = "workflow/monitor/index", Icon = "ph:monitor-duotone", Sort = 7, Enabled = true, Visible = true },
         new() { Id = RootId + 13, ParentId = MonitorId, Type = MenuType.Button, Title = "流程监控-分页", Permission = "GET:/api/v1/workflow/instance/monitor", Sort = 1, Enabled = true },
+        new() { Id = RootId + 41, ParentId = MonitorId, Type = MenuType.Button, Title = "流程监控-outbox 分页", Permission = "GET:/api/v1/workflow/outbox/page", Sort = 2, Enabled = true },
+        new() { Id = RootId + 42, ParentId = MonitorId, Type = MenuType.Button, Title = "流程监控-outbox 重放", Permission = "POST:/api/v1/workflow/outbox/{id}/replay", Sort = 3, Enabled = true },
         new() { Id = DelegationId, ParentId = RootId, Type = MenuType.Menu, Title = "长期委托", Permission = "", Path = "/workflow/delegation", Component = "workflow/delegation/index", Icon = "ph:arrows-left-right-duotone", Sort = 8, Enabled = true, Visible = true },
         new() { Id = DelegationId + 1, ParentId = DelegationId, Type = MenuType.Button, Title = "长期委托-分页", Permission = "GET:/api/v1/workflow/delegation/page", Sort = 1, Enabled = true },
         new() { Id = DelegationId + 2, ParentId = DelegationId, Type = MenuType.Button, Title = "长期委托-新增", Permission = "POST:/api/v1/workflow/delegation/add", Sort = 2, Enabled = true },
