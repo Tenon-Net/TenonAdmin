@@ -81,7 +81,7 @@
 
 - status: `DONE`
 - current task: `无（M3a-2 Vue 阶段完成）`
-- next: `后续阶段：React 工作流页面 port（不属于本 goal）`
+- next: `先完成全部 Vue/后端功能测试收口，再评估 React 工作流页面 port（不属于本 goal）`
 - completed: `25 / 25`
 
 ## 任务

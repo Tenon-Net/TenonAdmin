@@ -18,12 +18,13 @@ Task 8c 的 outbox consumer、transport、领取/投递/重试和状态回写仍
 
 ## 接下来开发计划（2026-09-14）
 
-按以下顺序推进，每一项单独验收并保持当前阶段边界：
+React 暂不启动。必须先让当前 Vue、后端、契约和完整功能测试全部无失败，再评估 React port；当前已知的 MFA/RBAC 测试失败也要先处理或明确关闭。
 
-1. **React 工作流页面 port**：以 Vue 已稳定的 API、schema 和交互语义为输入，在 `web-react/` 独立实现定义设计器、表单运行时、实例详情和高级审批操作；不建立跨模板共享层，不手工编辑生成的 schema。
-2. **Task 8c outbox consumer**：实现 `Pending → Dispatching → Dispatched/Failed` 的领取、transport、租约/fence、重试、死信和人工重放；继续沿用稳定幂等键、短事务和四数据库契约测试。
-3. **M3b 受控自动化**：先用 shadow 评测集确定场景级阈值、人工推翻率和失败转人工规则，再设计默认关闭的受控放行；模型仍只能产生 proposal，不能直接推进 task/token。
-4. **M3+ 能力**：在上述基线稳定后，分别评估带来源版本的 RAG、只读受控 Agent tools 和只能生成草案的设计 Copilot；每个能力先完成权限、预算、提示注入防护、幂等副作用和离线评测。
+1. **功能测试收口**：补齐 Vue 工作流单元/组件、后端相关回归、四数据库代表流程、契约漂移和端到端验证，先消除现有失败。
+2. **React 工作流页面 port**：仅在第 1 项全部通过后，以 Vue 已稳定的 API、schema 和交互语义为输入，在 `web-react/` 独立实现定义设计器、表单运行时、实例详情和高级审批操作；不建立跨模板共享层，不手工编辑生成的 schema。
+3. **Task 8c outbox consumer**：实现 `Pending → Dispatching → Dispatched/Failed` 的领取、transport、租约/fence、重试、死信和人工重放；继续沿用稳定幂等键、短事务和四数据库契约测试。
+4. **M3b 受控自动化**：先用 shadow 评测集确定场景级阈值、人工推翻率和失败转人工规则，再设计默认关闭的受控放行；模型仍只能产生 proposal，不能直接推进 task/token。
+5. **M3+ 能力**：在上述基线稳定后，分别评估带来源版本的 RAG、只读受控 Agent tools 和只能生成草案的设计 Copilot；每个能力先完成权限、预算、提示注入防护、幂等副作用和离线评测。
 
 ## 必读顺序
 
