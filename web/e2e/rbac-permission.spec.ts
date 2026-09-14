@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { login as loginAs, enterApp, enterFirstAppIfNeeded, sidebarLeafNames, SYSTEM_APP, ADMIN_ACCOUNT, ADMIN_PASSWORD } from './helpers'
+import { login as loginAs, enterApp, enterFirstAppIfNeeded, sidebarLeafNames, expectAppMessage, SYSTEM_APP, ADMIN_ACCOUNT, ADMIN_PASSWORD } from './helpers'
 
 /**
  * RBAC 权限端到端测试:验证角色-菜单授权 + 角色-用户授权的完整流程。
@@ -31,9 +31,10 @@ async function gotoRolePage(page: Page) {
 
 /** 在角色列表中找到指定角色行的"更多"按钮并点击。 */
 async function clickRoleMoreButton(page: Page, roleName: string) {
-  // NDataTable 用 div 不用 tr
-  const row = page.locator('.n-data-table-tr').filter({ hasText: roleName })
-  await expect(row).toBeVisible({ timeout: 5_000 })
+  // 授权用户抽屉里的用户行也可能含角色名(种子用户「仅本人数据」),必须落到带「更多」的角色表行。
+  const row = page.locator('.n-data-table-tr').filter({ hasText: roleName }).filter({ hasText: /更多|More/i })
+  await expect(row).toHaveCount(1, { timeout: 5_000 })
+  await expect(row).toBeVisible()
   await row.getByText(/更多|More/i).click()
 }
 
@@ -77,7 +78,7 @@ test.describe('RBAC 权限', () => {
 
     // 保存
     await drawer.getByText(/保存|Save/i).click()
-    await expect(page.locator('.n-message')).toContainText(/保存|saved/i, { timeout: 5_000 })
+    await expectAppMessage(page, /授权已保存|Grants saved/)
 
     // ③ 退出,以 scope_all 用户重新登录
     await logout(page)
@@ -160,8 +161,8 @@ test.describe('RBAC 权限', () => {
     // ③ 保存
     const confirmBtn = picker.locator('button').filter({ hasText: /确定|Confirm/ })
     await confirmBtn.click()
-    await expect(page.locator('.n-message')).toBeVisible({ timeout: 5_000 })
-    await page.waitForTimeout(1000)
+    await expectAppMessage(page, /用户授权已保存|User grants saved/)
+    await expect(picker).toBeHidden({ timeout: 5_000 })
 
     // ④ 重新打开验证回显
     await clickRoleMoreButton(page, '仅本人数据')
@@ -180,6 +181,6 @@ test.describe('RBAC 权限', () => {
     await expect(picker2.locator('.selected-item')).toHaveCount(initialCount, { timeout: 3_000 })
     const confirmBtn2 = picker2.locator('button').filter({ hasText: /确定|Confirm/ })
     await confirmBtn2.click()
-    await expect(page.locator('.n-message')).toBeVisible({ timeout: 5_000 })
+    await expectAppMessage(page, /用户授权已保存|User grants saved/)
   })
 })

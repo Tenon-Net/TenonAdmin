@@ -30,6 +30,7 @@ public class WfInstanceService(
         "action", "toUserId", "targetNodeId", "fromNodeId", "comment", "payloadHash",
         "eventName", "forkId", "armId", "armName", "isDefault", "parentTokenId", "childTokenId",
         "parentNodeVisitId", "childEntryNodeVisitId", "reason", "status", "arms",
+        "nodeId", "userIds",
     };
 
     protected sealed record CurrentTaskSnapshot(long TaskId, long TokenId, long? NodeVisitId, string NodeId);
@@ -499,11 +500,22 @@ public class WfInstanceService(
                 continue;
             }
 
-            if (property.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))
+            if (property.Value.ValueKind == JsonValueKind.Array)
+            {
+                if (IsPrimitiveHistoryArray(property.Value))
+                    projected[property.Name] = property.Value;
+                continue;
+            }
+
+            if (property.Value.ValueKind != JsonValueKind.Object)
                 projected[property.Name] = property.Value;
         }
         return projected;
     }
+
+    /// <summary>允许 <c>userIds</c> 这类雪花 Id 数组;嵌套对象/数组仍拒绝,避免把内部结构透出。</summary>
+    private static bool IsPrimitiveHistoryArray(JsonElement array) =>
+        array.EnumerateArray().All(item => item.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array));
 
     /// <inheritdoc />
     public virtual async Task<IReadOnlyList<WfAiDecisionAuditOutput>> ListAiDecisionsAsync(

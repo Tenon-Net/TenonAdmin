@@ -222,6 +222,8 @@ async function onUserConfirm(ids: number[]) {
   if (userRoleId.value === null) return
   try {
     await roleApi.setUsers(userRoleId.value, ids)
+    // 连续保存时替换上一条同类成功提示,避免两条“用户授权已保存”同时挂在页面上。
+    message.destroyAll()
     message.success(t('role.grantUsersSaved'))
   } catch (e) {
     message.error(translateError(e))

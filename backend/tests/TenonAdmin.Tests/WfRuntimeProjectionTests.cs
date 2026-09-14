@@ -40,6 +40,15 @@ public class WfRuntimeProjectionTests
                 PayloadJson = "{\"operator\":\"internal-user\",\"secret\":\"history-secret\"}",
                 Sequence = 999,
             }).ExecuteCommandAsync();
+            await db.Insertable(new WfHistory
+            {
+                InstanceId = instanceId,
+                EventType = WfHistoryEventType.DuplicateApproverSkipped,
+                NodeId = "approval",
+                TokenId = token?.Id,
+                PayloadJson = "{\"userIds\":[11,22],\"secret\":\"history-secret\",\"nested\":[{\"x\":1}]}",
+                Sequence = 1000,
+            }).ExecuteCommandAsync();
         }
 
         var detail = await GetEnvelope(admin, $"/api/v1/workflow/instance/{instanceId}");
@@ -53,6 +62,14 @@ public class WfRuntimeProjectionTests
         var historyItems = history.GetProperty("data").EnumerateArray().ToList();
         var injected = Assert.Single(historyItems, item => item.GetProperty("sequence").GetInt32() == 999);
         Assert.Equal(JsonValueKind.Null, injected.GetProperty("payloadJson").ValueKind);
+        var skipped = Assert.Single(historyItems, item => item.GetProperty("sequence").GetInt32() == 1000);
+        using (var payload = JsonDocument.Parse(skipped.GetProperty("payloadJson").GetString()!))
+        {
+            Assert.Equal(new[] { 11L, 22L },
+                payload.RootElement.GetProperty("userIds").EnumerateArray().Select(x => x.GetInt64()).ToArray());
+            Assert.False(payload.RootElement.TryGetProperty("secret", out _));
+            Assert.False(payload.RootElement.TryGetProperty("nested", out _));
+        }
         foreach (var item in history.GetProperty("data").EnumerateArray())
             Assert.DoesNotContain("history-secret", item.GetRawText(), StringComparison.Ordinal);
 

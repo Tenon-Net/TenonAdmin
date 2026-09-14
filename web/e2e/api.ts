@@ -65,3 +65,37 @@ export async function seedForceTotpUser(request: APIRequestContext): Promise<{
   })
   return { account, password, userId }
 }
+
+const TOTP_FEATURE_KEY = 'sys.security.totp.enabled'
+
+/** 运行时打开/关闭 TOTP 总闸。须在 RequireReauth 尚未生效时打开;关闭前先密码再认证。 */
+export async function setTotpFeatureEnabled(
+  request: APIRequestContext,
+  token: string,
+  enabled: boolean,
+): Promise<void> {
+  const res = await request.put(`${apiBase()}/api/v1/sys/config/batch`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: [{ configKey: TOTP_FEATURE_KEY, configValue: enabled ? 'true' : 'false' }],
+  })
+  const env = await readEnvelope<boolean>(res)
+  if (env.code !== 0) {
+    throw new Error(`set totp feature failed: code=${env.code} msg=${env.msg}`)
+  }
+}
+
+/** 高危写 40024 后用当前管理员密码完成短时再认证。 */
+export async function apiReauthWithPassword(
+  request: APIRequestContext,
+  token: string,
+  password = ADMIN_PASSWORD,
+): Promise<void> {
+  const res = await request.post(`${apiBase()}/api/v1/auth/reauth`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { method: 'password', password },
+  })
+  const env = await readEnvelope<boolean>(res)
+  if (env.code !== 0) {
+    throw new Error(`reauth failed: code=${env.code} msg=${env.msg}`)
+  }
+}
