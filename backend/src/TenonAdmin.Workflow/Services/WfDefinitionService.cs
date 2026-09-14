@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using SqlSugar;
 using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
@@ -251,14 +254,14 @@ public class WfDefinitionService(
     }
 
     /// <summary>
-    /// 校验可发布模型(树语义,M2a/M3b-0):根为 start;节点类型限 start|approval|cc|branch|webhook|aiDecision
-    /// (Parallel 仍被拒);节点 Id 跨整棵树(含分支臂内)非空且唯一;
-    /// branch 节点的臂配置合法(见 <see cref="ValidateBranch"/>);跳转目标引用完整
+    /// 校验可发布模型(树语义,M2a/M3b-0):根为 start;节点类型限 start|approval|cc|branch|parallel|webhook|aiDecision;
+    /// 节点 Id 跨整棵树(含分支臂内)非空且唯一;branch/parallel 节点的臂配置合法
+    /// (见 <see cref="ValidateBranch"/>/<see cref="ValidateParallel"/>);跳转目标引用完整
     /// (见 <see cref="ValidateNodeReferences"/>)。
     /// </summary>
     protected virtual void ValidateModelForPublish(WfModel model)
     {
-        if (model.Root.Type != WfNodeType.Start)
+        if (model.Root is null || model.Root.Type != WfNodeType.Start)
         {
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
                 new Dictionary<string, object?> { ["reason"] = "rootNotStart" });
@@ -266,10 +269,335 @@ public class WfDefinitionService(
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var providerKeys = approverProviders.Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
-        ValidateLength(model.FormComponent, 256, "formComponent");
         ValidateChain(model.Root, seen, providerKeys);
+        ValidateFormModel(model);
         ValidateNodeReferences(model);
     }
+
+    private const int FormSchemaMaxBytes = 64 * 1024;
+    private const int FormSchemaMaxFields = 50;
+
+    /// <summary>
+    /// 内置表单发布校验(M3):表单 schema 与消费者挂载点互斥;旧的无 schema 模型保留。
+    /// 只有 approval 节点在存在内置 schema 时解释 formPerms,避免破坏 M1/M2 草案。
+    /// </summary>
+    protected virtual void ValidateFormModel(WfModel model)
+    {
+        var formComponent = model.FormComponent?.Trim();
+        model.FormComponent = string.IsNullOrEmpty(formComponent) ? null : formComponent;
+        if (formComponent is not null)
+        {
+            ValidateLength(formComponent, 256, "formComponent");
+            if (ContainsDisallowedControlCharacter(formComponent, allowNewlines: false))
+                ThrowFormModelInvalid("formComponentControlChars");
+        }
+
+        var schema = model.FormSchema;
+        if (schema is null) return;
+        if (formComponent is not null)
+            ThrowFormModelInvalid("formSchemaAndComponentMutuallyExclusive");
+
+        var serialized = JsonSerializer.Serialize(schema, WfModelJson.Options);
+        if (Encoding.UTF8.GetByteCount(serialized) > FormSchemaMaxBytes)
+            ThrowFormModelInvalid("formSchemaTooLarge");
+        if (schema.Version != WfModelJson.CurrentVersion)
+            ThrowFormModelInvalid("formSchemaVersionInvalid");
+        if (schema.Fields is not { Count: > 0 })
+            ThrowFormModelInvalid("formSchemaFieldsRequired");
+        if (schema.Fields.Count > FormSchemaMaxFields)
+            ThrowFormModelInvalid("formSchemaFieldsTooMany");
+
+        var fieldKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var field in schema.Fields)
+        {
+            ValidateFormField(field);
+            if (!fieldKeys.Add(field.Key))
+                ThrowFormModelInvalid("formFieldKeyDuplicate");
+        }
+
+        foreach (var node in WfModelIndex.Build(model).Nodes)
+        {
+            if (node.Type != WfNodeType.Approval || node.Props?.FormPerms is null) continue;
+            var permissionKeys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var permission in node.Props.FormPerms)
+            {
+                if (permission is null)
+                    ThrowFormModelInvalid("formPermInvalid", node);
+                if (!permissionKeys.Add(permission.Field))
+                    ThrowFormModelInvalid("formPermFieldDuplicate", node);
+                if (!fieldKeys.Contains(permission.Field))
+                    ThrowFormModelInvalid("formPermFieldUnknown", node);
+                if (permission.Access is not (WfFormPermAccess.Hidden or WfFormPermAccess.Readonly or WfFormPermAccess.Editable))
+                    ThrowFormModelInvalid("formPermAccessInvalid", node);
+            }
+        }
+    }
+
+    protected virtual void ValidateFormField(WfFormField? field)
+    {
+        if (field is null)
+            ThrowFormModelInvalid("formFieldInvalid");
+        if (string.IsNullOrEmpty(field.Key) || field.Key.Length > 64 || !IsFormFieldKey(field.Key))
+            ThrowFormModelInvalid("formFieldKeyInvalid");
+
+        field.Label = field.Label?.Trim() ?? "";
+        if (field.Label.Length is < 1 or > 128 || ContainsDisallowedControlCharacter(field.Label, allowNewlines: false))
+            ThrowFormModelInvalid("formFieldLabelInvalid");
+
+        if (field.Placeholder is not null)
+        {
+            field.Placeholder = field.Placeholder.Trim();
+            if (field.Placeholder.Length > 256 || ContainsDisallowedControlCharacter(field.Placeholder, allowNewlines: false))
+                ThrowFormModelInvalid("formFieldPlaceholderInvalid");
+            if (field.Placeholder.Length == 0) field.Placeholder = null;
+        }
+
+        ValidateFormFieldProps(field);
+    }
+
+    protected virtual void ValidateFormFieldProps(WfFormField field)
+    {
+        if (field.Type is not (WfFormFieldType.Text or WfFormFieldType.Textarea or WfFormFieldType.Number
+            or WfFormFieldType.Money or WfFormFieldType.Date or WfFormFieldType.Datetime or WfFormFieldType.Select
+            or WfFormFieldType.MultiSelect or WfFormFieldType.User or WfFormFieldType.Attachment))
+            ThrowFormModelInvalid("formFieldTypeInvalid");
+
+        var props = field.Props;
+        if (props is null || props.Count == 0)
+        {
+            if (field.Type is WfFormFieldType.Select or WfFormFieldType.MultiSelect)
+                ThrowFormModelInvalid("formFieldOptionsRequired");
+            return;
+        }
+
+        var allowed = field.Type switch
+        {
+            WfFormFieldType.Text => new[] { "maxLength" },
+            WfFormFieldType.Textarea => new[] { "maxLength", "rows" },
+            WfFormFieldType.Number => new[] { "min", "max", "precision" },
+            WfFormFieldType.Money => new[] { "min", "max" },
+            WfFormFieldType.Date or WfFormFieldType.Datetime => new[] { "min", "max" },
+            WfFormFieldType.Select or WfFormFieldType.MultiSelect => new[] { "options", "maxSelected" },
+            WfFormFieldType.User => new[] { "multiple", "maxSelected" },
+            WfFormFieldType.Attachment => new[] { "multiple", "maxCount", "accept", "maxSizeMb" },
+            _ => null,
+        };
+        if (allowed is null) ThrowFormModelInvalid("formFieldTypeInvalid");
+        foreach (var key in props.Keys)
+        {
+            if (!allowed!.Contains(key, StringComparer.Ordinal))
+                ThrowFormModelInvalid("formFieldPropUnknown");
+        }
+
+        switch (field.Type)
+        {
+            case WfFormFieldType.Text:
+                ValidateOptionalInt(props, "maxLength", 1, 256);
+                break;
+            case WfFormFieldType.Textarea:
+                ValidateOptionalInt(props, "maxLength", 1, 4000);
+                ValidateOptionalInt(props, "rows", 2, 8);
+                break;
+            case WfFormFieldType.Number:
+                ValidateNumericRange(props, money: false);
+                ValidateOptionalInt(props, "precision", 0, 6);
+                break;
+            case WfFormFieldType.Money:
+                ValidateNumericRange(props, money: true);
+                break;
+            case WfFormFieldType.Date:
+                ValidateDateRange(props);
+                break;
+            case WfFormFieldType.Datetime:
+                ValidateDateTimeRange(props);
+                break;
+            case WfFormFieldType.Select:
+            case WfFormFieldType.MultiSelect:
+                var optionCount = ValidateOptions(props);
+                if (field.Type == WfFormFieldType.MultiSelect)
+                    ValidateOptionalInt(props, "maxSelected", 1, Math.Min(100, optionCount));
+                else if (props.ContainsKey("maxSelected"))
+                    ThrowFormModelInvalid("formFieldPropInvalid");
+                break;
+            case WfFormFieldType.User:
+                ValidateUserProps(props);
+                break;
+            case WfFormFieldType.Attachment:
+                ValidateAttachmentProps(props);
+                break;
+        }
+    }
+
+    private static bool IsFormFieldKey(string key) =>
+        char.IsAsciiLetter(key[0]) && key[1..].All(character => char.IsAsciiLetterOrDigit(character) || character == '_');
+
+    protected virtual void ValidateOptionalInt(
+        IReadOnlyDictionary<string, JsonElement> props,
+        string key,
+        int min,
+        int max)
+    {
+        if (!props.TryGetValue(key, out var value)) return;
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var number) || number < min || number > max)
+            ThrowFormModelInvalid("formFieldPropInvalid");
+    }
+
+    protected virtual void ValidateNumericRange(IReadOnlyDictionary<string, JsonElement> props, bool money)
+    {
+        decimal? min = ReadOptionalDecimal(props, "min", money);
+        decimal? max = ReadOptionalDecimal(props, "max", money);
+        if (min.HasValue && max.HasValue && min > max)
+            ThrowFormModelInvalid("formFieldRangeInvalid");
+    }
+
+    private static decimal? ReadOptionalDecimal(
+        IReadOnlyDictionary<string, JsonElement> props,
+        string key,
+        bool money)
+    {
+        if (!props.TryGetValue(key, out var value)) return null;
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetDecimal(out var number))
+            throw FormValidationException("formFieldPropInvalid");
+        if (money && decimal.Round(number, 2) != number)
+            throw FormValidationException("formFieldPropInvalid");
+        return number;
+    }
+
+    protected virtual void ValidateDateRange(IReadOnlyDictionary<string, JsonElement> props)
+    {
+        var min = ReadOptionalDate(props, "min");
+        var max = ReadOptionalDate(props, "max");
+        if (min.HasValue && max.HasValue && min > max)
+            ThrowFormModelInvalid("formFieldRangeInvalid");
+    }
+
+    protected virtual void ValidateDateTimeRange(IReadOnlyDictionary<string, JsonElement> props)
+    {
+        var min = ReadOptionalDateTime(props, "min");
+        var max = ReadOptionalDateTime(props, "max");
+        if (min.HasValue && max.HasValue && min > max)
+            ThrowFormModelInvalid("formFieldRangeInvalid");
+    }
+
+    private static DateOnly? ReadOptionalDate(IReadOnlyDictionary<string, JsonElement> props, string key)
+    {
+        if (!props.TryGetValue(key, out var value)) return null;
+        if (value.ValueKind != JsonValueKind.String
+            || !DateOnly.TryParseExact(value.GetString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            throw FormValidationException("formFieldPropInvalid");
+        return date;
+    }
+
+    private static DateTimeOffset? ReadOptionalDateTime(IReadOnlyDictionary<string, JsonElement> props, string key)
+    {
+        if (!props.TryGetValue(key, out var value)) return null;
+        var text = value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        var separator = text?.IndexOf('T', StringComparison.Ordinal) ?? -1;
+        var timePart = separator >= 0 ? text![(separator + 1)..] : "";
+        var hasOffset = timePart.EndsWith('Z') || timePart.Contains('+') || timePart.Contains('-');
+        if (text is null || separator < 0 || !hasOffset
+            || !DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dateTime))
+            throw FormValidationException("formFieldPropInvalid");
+        return dateTime;
+    }
+
+    protected virtual int ValidateOptions(IReadOnlyDictionary<string, JsonElement> props)
+    {
+        if (!props.TryGetValue("options", out var value) || value.ValueKind != JsonValueKind.Array)
+            ThrowFormModelInvalid("formFieldOptionsRequired");
+        var options = value.EnumerateArray().ToArray();
+        if (options.Length is < 1 or > 100)
+            ThrowFormModelInvalid("formFieldOptionsInvalid");
+        var values = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var option in options)
+        {
+            if (option.ValueKind != JsonValueKind.Object)
+                ThrowFormModelInvalid("formFieldOptionsInvalid");
+            var properties = option.EnumerateObject().ToArray();
+            if (properties.Length != 2)
+                ThrowFormModelInvalid("formFieldOptionsInvalid");
+            JsonElement? label = null;
+            JsonElement? optionValue = null;
+            foreach (var property in properties)
+            {
+                if (property.NameEquals("label") && label is null)
+                    label = property.Value;
+                else if (property.NameEquals("value") && optionValue is null)
+                    optionValue = property.Value;
+                else
+                    ThrowFormModelInvalid("formFieldOptionsInvalid");
+            }
+            if (label is null || optionValue is null
+                || label.Value.ValueKind != JsonValueKind.String || optionValue.Value.ValueKind != JsonValueKind.String)
+                ThrowFormModelInvalid("formFieldOptionsInvalid");
+            var labelText = label.Value.GetString()?.Trim() ?? "";
+            var valueText = optionValue.Value.GetString()?.Trim() ?? "";
+            if (labelText.Length is < 1 or > 128 || valueText.Length is < 1 or > 64
+                || ContainsDisallowedControlCharacter(labelText, false)
+                || ContainsDisallowedControlCharacter(valueText, false))
+                ThrowFormModelInvalid("formFieldOptionsInvalid");
+            if (!values.Add(valueText))
+                ThrowFormModelInvalid("formFieldOptionDuplicate");
+        }
+        return options.Length;
+    }
+
+    protected virtual void ValidateUserProps(IReadOnlyDictionary<string, JsonElement> props)
+    {
+        var multiple = ReadOptionalBool(props, "multiple") ?? false;
+        if (props.ContainsKey("maxSelected"))
+        {
+            if (!multiple) ThrowFormModelInvalid("formFieldPropInvalid");
+            ValidateOptionalInt(props, "maxSelected", 1, 100);
+        }
+    }
+
+    protected virtual void ValidateAttachmentProps(IReadOnlyDictionary<string, JsonElement> props)
+    {
+        var multiple = ReadOptionalBool(props, "multiple") ?? false;
+        if (props.TryGetValue("maxCount", out var maxCount))
+        {
+            ValidateOptionalInt(props, "maxCount", 1, 20);
+            if (!multiple && maxCount.GetInt32() != 1) ThrowFormModelInvalid("formFieldPropInvalid");
+        }
+        if (props.TryGetValue("accept", out var accept))
+        {
+            var acceptText = accept.ValueKind == JsonValueKind.String ? accept.GetString() : null;
+            if (acceptText is null || acceptText.Length > 256
+                || ContainsDisallowedControlCharacter(acceptText, false)
+                || !IsAttachmentAccept(acceptText))
+                ThrowFormModelInvalid("formFieldPropInvalid");
+        }
+        ValidateOptionalInt(props, "maxSizeMb", 1, 100);
+    }
+
+    private static bool IsAttachmentAccept(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return true;
+        var tokens = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return tokens.Length > 0 && tokens.All(token => token.Length > 1
+            && token[0] == '.' && token[1..].All(char.IsAsciiLetterOrDigit));
+    }
+
+    private static bool? ReadOptionalBool(IReadOnlyDictionary<string, JsonElement> props, string key)
+    {
+        if (!props.TryGetValue(key, out var value)) return null;
+        if (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False)
+            throw FormValidationException("formFieldPropInvalid");
+        return value.GetBoolean();
+    }
+
+    private static AdminException FormValidationException(string reason) =>
+        WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+            new Dictionary<string, object?> { ["reason"] = reason });
+
+    [System.Diagnostics.CodeAnalysis.DoesNotReturn]
+    protected virtual void ThrowFormModelInvalid(string reason, WfNode? node = null) =>
+        throw WorkflowErrorCode.Exception(
+            WorkflowErrorCode.ModelInvalid,
+            node is null
+                ? new Dictionary<string, object?> { ["reason"] = reason }
+                : new Dictionary<string, object?> { ["reason"] = reason, ["nodeId"] = node.Id });
 
     /// <summary>
     /// 跳转目标与超时目标的引用完整性(M2b):<c>onReject=toNode</c> ⇒ <see cref="WfNodeProps.RejectToNodeId"/>
@@ -290,6 +618,7 @@ public class WfDefinitionService(
             if (node.Props?.OnReject == WfRejectAction.ToNode)
             {
                 RequireNodeReference(index, node, node.Props.RejectToNodeId, "rejectToNodeId");
+                ValidateRejectParallelBoundary(index, node, node.Props.RejectToNodeId!);
             }
 
             if (node.Props?.ReturnPolicy == WfReturnPolicy.Node)
@@ -309,6 +638,25 @@ public class WfDefinitionService(
                         ["nodeId"] = node.Id,
                     });
             }
+        }
+    }
+
+    /// <summary>拒绝跳转不得进入、离开或跨越并行臂。</summary>
+    protected virtual void ValidateRejectParallelBoundary(WfModelIndex index, WfNode node, string targetNodeId)
+    {
+        var sourceParallel = index.FindEnclosingParallel(node.Id);
+        var targetParallel = index.FindEnclosingParallel(targetNodeId);
+        var sourceArm = index.FindEnclosingParallelArm(node.Id);
+        var targetArm = index.FindEnclosingParallelArm(targetNodeId);
+        if (!ReferenceEquals(sourceParallel, targetParallel) || !ReferenceEquals(sourceArm, targetArm))
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?>
+                {
+                    ["reason"] = "rejectToNodeOutsideParallelArm",
+                    ["nodeId"] = node.Id,
+                    ["targetNodeId"] = targetNodeId,
+                });
         }
     }
 
@@ -344,6 +692,10 @@ public class WfDefinitionService(
             {
                 ValidateBranch(n, seen, providerKeys);
             }
+            else if (n.Type == WfNodeType.Parallel)
+            {
+                ValidateParallel(n, seen, providerKeys);
+            }
         }
     }
 
@@ -353,7 +705,7 @@ public class WfDefinitionService(
     /// </summary>
     protected virtual void ValidateNode(WfNode node, HashSet<string> seen, HashSet<string> providerKeys)
     {
-        if (node.Type is not (WfNodeType.Start or WfNodeType.Approval or WfNodeType.Cc or WfNodeType.Branch
+        if (node.Type is not (WfNodeType.Start or WfNodeType.Approval or WfNodeType.Cc or WfNodeType.Branch or WfNodeType.Parallel
             or WfNodeType.Webhook or WfNodeType.AiDecision))
         {
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.NodeTypeUnsupported,
@@ -366,6 +718,18 @@ public class WfDefinitionService(
                 new Dictionary<string, object?> { ["reason"] = "conditionsOnNonBranch", ["nodeId"] = node.Id });
         }
 
+        if (node.Type != WfNodeType.Parallel && node.ParallelArms is not null)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "parallelArmsOnNonParallel", ["nodeId"] = node.Id });
+        }
+
+        if (node.Type == WfNodeType.Parallel && node.Conditions is not null)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "conditionsOnParallel", ["nodeId"] = node.Id });
+        }
+
         if (string.IsNullOrWhiteSpace(node.Id))
         {
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
@@ -374,6 +738,41 @@ public class WfDefinitionService(
 
         ValidateLength(node.Id, 64, "nodeId");
         ValidateLength(node.Name, 128, "nodeName");
+
+        if (node.Type != WfNodeType.AiDecision && node.Props?.AllPassRatio is { } ratio)
+        {
+            if (node.Type != WfNodeType.Approval)
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?>
+                    {
+                        ["reason"] = "allPassRatioUnsupported",
+                        ["nodeId"] = node.Id,
+                    });
+            }
+
+            if (node.Props.Mode == WfApprovalMode.All && ratio is < 1 or > 100)
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?>
+                    {
+                        ["reason"] = "allPassRatioOutOfRange",
+                        ["nodeId"] = node.Id,
+                    });
+            }
+
+            if ((node.Props.Mode == WfApprovalMode.Seq
+                 || node.Props.Assignee?.Provider == ApproverProviderKeys.MultiLeader)
+                && ratio != 100)
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?>
+                    {
+                        ["reason"] = "sequentialAllPassRatioInvalid",
+                        ["nodeId"] = node.Id,
+                    });
+            }
+        }
 
         if (node.Type is WfNodeType.Webhook or WfNodeType.AiDecision
             && node.Props?.MaxAttempts is { } maxAttempts
@@ -553,6 +952,48 @@ public class WfDefinitionService(
         {
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
                 new Dictionary<string, object?> { ["reason"] = "branchDefaultArmCount", ["nodeId"] = branch.Id });
+        }
+    }
+
+    /// <summary>并行节点至少两臂,臂 Id 在节点内非空且唯一,并递归校验臂内节点。</summary>
+    protected virtual void ValidateParallel(WfNode parallel, HashSet<string> seen, HashSet<string> providerKeys)
+    {
+        if (parallel.ParallelArms is not { Count: >= 2 } arms)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "parallelArmCountInvalid", ["nodeId"] = parallel.Id });
+        }
+
+        var armIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var arm in arms)
+        {
+            if (string.IsNullOrWhiteSpace(arm.Id))
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?> { ["reason"] = "emptyParallelArmId", ["nodeId"] = parallel.Id });
+            }
+
+            ValidateLength(arm.Id, 64, "armId");
+            ValidateLength(arm.Name, 128, "armName");
+            if (!armIds.Add(arm.Id))
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?>
+                    {
+                        ["reason"] = "duplicateParallelArmId", ["nodeId"] = parallel.Id, ["armId"] = arm.Id,
+                    });
+            }
+
+            ValidateChain(arm.Next, seen, providerKeys);
+        }
+
+        var index = WfModelIndex.Build(new WfModel { Root = parallel });
+        if (index.Nodes.Any(node => node.Type == WfNodeType.Parallel
+            && !ReferenceEquals(node, parallel)
+            && index.FindEnclosingParallel(node.Id) is not null))
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                new Dictionary<string, object?> { ["reason"] = "nestedParallel", ["nodeId"] = parallel.Id });
         }
     }
 

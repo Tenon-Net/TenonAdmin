@@ -308,7 +308,7 @@ M3a-1 内核的历史四库 CI 证据为 run [`33738099310`](https://github.com/
 
 M3b-0 已交付 OpenAI-compatible/Fake Provider、结构化 proposal、服务端 schema/policy、AiDecision 节点、tx2 原子审计、人工兜底和脱敏审计读取 API。API 复用实例参与者与监控权限边界，只返回受限元数据、输入/证据 hash、风险标记、策略/兜底、token usage 和 shadow 标记；不返回 proposal 原文、原始变量、执行内部标识或 Provider 异常正文。
 
-该切片从 Provider 到流程落库始终是 shadow-only：AI 不自动批准、拒绝、完成 task 或推进 token，合法低风险 proposal 也会进入人工兜底。Task 8c 的 outbox consumer、transport、领取/投递/重试和状态回写仍未实现；当前只保证 Task 8b 的 `Pending` outbox 幂等入队。Round 19 已验证窄测 18/18、聚焦矩阵 313/313、Workflow Release build 0 warnings/0 errors、Vue/React typecheck/build，并经独立 verifier PASS；下一项为 M3B0-17 独立代码/安全/简化审查。
+该切片从 Provider 到流程落库始终是 shadow-only：AI 不自动批准、拒绝、完成 task 或推进 token，合法低风险 proposal 也会进入人工兜底。Task 8c 的 outbox consumer、transport、领取/投递/重试和状态回写仍未实现；当前只保证 Task 8b 的 `Pending` outbox 幂等入队。M3B0-17 至 M3B0-20 及后续审查修复已经完成，最终聚焦矩阵 326/326 通过，代码与架构复核无 blocker；下一阶段为 M3a-2 Vue 产品面。
 
 ## 5. 建议开发阶段
 

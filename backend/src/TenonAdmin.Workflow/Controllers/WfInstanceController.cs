@@ -62,7 +62,7 @@ public class WfInstanceController(
         Result<PagedList<WfInstanceListItemOutput>>.Ok(
             await instanceService.PageMonitorAsync(input, cancellationToken));
 
-    /// <summary>事件流(按时间升序)</summary>
+    /// <summary>事件流(按实例内 Sequence 升序,旧序号再按时间/Id)</summary>
     [HttpGet("history/{id:long}")]
     public async Task<Result<IReadOnlyList<WfHistoryItemOutput>>> History(
         long id,

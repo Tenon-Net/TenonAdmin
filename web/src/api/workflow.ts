@@ -8,6 +8,7 @@ import type {
   WfDoneItem,
   WfEngineResult,
   WfInstanceDetail,
+  WfHistoryItem,
   WfInstanceListItem,
   WfStartableDefinition,
   WfStartableDefinitionDetail,
@@ -15,6 +16,8 @@ import type {
   WfTaskActionInput,
   WfTodoItem,
   WfCcItem,
+  WfDelegationRule,
+  WfDelegationRuleInput,
 } from '@/types/workflow'
 
 export const wfDefinitionApi = {
@@ -89,6 +92,11 @@ export const wfInstanceApi = {
     client
       .GET('/api/v1/workflow/instance/{id}', { params: { path: { id } } })
       .then((r) => unwrap<WfInstanceDetail>(r)),
+
+  history: (id: number) =>
+    client
+      .GET('/api/v1/workflow/instance/history/{id}', { params: { path: { id } } })
+      .then((r) => unwrap<WfHistoryItem[]>(r)),
 
   page: (params: {
     page: number
@@ -197,9 +205,54 @@ export const wfTaskApi = {
       .POST('/api/v1/workflow/task/delegate', { body })
       .then((r) => unwrap<WfEngineResult>(r)),
 
+  addSign: (body: WfTaskActionInput) =>
+    client
+      .POST('/api/v1/workflow/task/add-sign', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
+  removeSign: (body: WfTaskActionInput) =>
+    client
+      .POST('/api/v1/workflow/task/remove-sign', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
+  takeBack: (body: WfTaskActionInput) =>
+    client
+      .POST('/api/v1/workflow/task/take-back', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
   urge: (body: WfTaskActionInput) =>
     client
       .POST('/api/v1/workflow/task/urge', { body })
+      .then((r) => unwrap<boolean>(r)),
+}
+
+export const wfDelegationApi = {
+  page: (params: { page: number; pageSize: number; originalUserId?: number; enabled?: boolean }) =>
+    client
+      .GET('/api/v1/workflow/delegation/page', {
+        params: {
+          query: {
+            ...pageParams(params),
+            OriginalUserId: params.originalUserId,
+            Enabled: params.enabled,
+          },
+        },
+      })
+      .then((r) => toPage<WfDelegationRule>(r)),
+
+  add: (body: WfDelegationRuleInput) =>
+    client.POST('/api/v1/workflow/delegation/add', { body }).then((r) => unwrap<WfDelegationRule>(r)),
+
+  update: (id: number, body: WfDelegationRuleInput) =>
+    client
+      .PUT('/api/v1/workflow/delegation/{id}', { params: { path: { id } }, body })
+      .then((r) => unwrap<WfDelegationRule>(r)),
+
+  remove: (id: number, requestId: string) =>
+    client
+      .DELETE('/api/v1/workflow/delegation/{id}', {
+        params: { path: { id }, query: { requestId } },
+      })
       .then((r) => unwrap<boolean>(r)),
 }
 

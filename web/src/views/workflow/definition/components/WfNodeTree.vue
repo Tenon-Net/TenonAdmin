@@ -3,19 +3,20 @@
 import { computed } from 'vue'
 import {
   addBranchArm,
+  addParallelArm,
   cloneNode,
   createNode,
   findNode,
   insertAfter,
   insertIntoBranchArm,
+  insertIntoParallelArm,
   removeBranchArm,
+  removeParallelArm,
   removeNode,
 } from '@/workflow/model'
-import type { WfModel, WfNode, WfNodeType } from '@/workflow/schema'
+import type { WfInsertableNodeType, WfModel, WfNode } from '@/workflow/schema'
 import WfNodeChain from './WfNodeChain.vue'
 import '../../wf-identity.css'
-
-type InsertableNodeType = Extract<WfNodeType, 'approval' | 'cc' | 'branch'>
 
 const props = defineProps<{
   model: WfModel
@@ -55,7 +56,7 @@ function onSelect(nodeId: string) {
   if (node) emit('select', node)
 }
 
-function onAddAfter(afterId: string, type: InsertableNodeType) {
+function onAddAfter(afterId: string, type: WfInsertableNodeType) {
   if (props.readonly) return
   const root = cloneNode(props.model.root)
   const node = createNode(type)
@@ -64,11 +65,12 @@ function onAddAfter(afterId: string, type: InsertableNodeType) {
   emit('select', node)
 }
 
-function onAddAtArmHead(branchId: string, armId: string, type: InsertableNodeType) {
+function onAddAtArmHead(ownerId: string, armId: string, type: WfInsertableNodeType) {
   if (props.readonly) return
   const root = cloneNode(props.model.root)
   const node = createNode(type)
-  if (!insertIntoBranchArm(root, branchId, armId, node)) return
+  if (!insertIntoBranchArm(root, ownerId, armId, node)
+    && !insertIntoParallelArm(root, ownerId, armId, node)) return
   bump(root)
   emit('select', node)
 }
@@ -80,28 +82,28 @@ function onRemoveNode(nodeId: string) {
   bump(root)
 }
 
-function onAddArm(branchId: string) {
+function onAddArm(ownerId: string) {
   if (props.readonly) return
   const root = cloneNode(props.model.root)
-  const branch = findNode(root, branchId)
-  if (!branch || !addBranchArm(branch)) return
+  const owner = findNode(root, ownerId)
+  if (!owner || (!addBranchArm(owner) && !addParallelArm(owner))) return
   bump(root)
 }
 
-function onRemoveArm(branchId: string, armId: string) {
+function onRemoveArm(ownerId: string, armId: string) {
   if (props.readonly) return
   const root = cloneNode(props.model.root)
-  const branch = findNode(root, branchId)
-  if (!branch || !removeBranchArm(branch, armId)) return
+  const owner = findNode(root, ownerId)
+  if (!owner || (!removeBranchArm(owner, armId) && !removeParallelArm(owner, armId))) return
   bump(root)
 }
 
-function onRenameArm(branchId: string, armId: string, name: string) {
+function onRenameArm(ownerId: string, armId: string, name: string) {
   if (props.readonly) return
   const root = cloneNode(props.model.root)
-  const branch = findNode(root, branchId)
-  if (branch?.type !== 'branch') return
-  const arm = branch.conditions?.find((item) => item.id === armId)
+  const owner = findNode(root, ownerId)
+  const arms = owner?.type === 'branch' ? owner.conditions : owner?.type === 'parallel' ? owner.parallelArms : undefined
+  const arm = arms?.find((item) => item.id === armId)
   if (!arm) return
   arm.name = name
   bump(root)

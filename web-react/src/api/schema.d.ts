@@ -6624,6 +6624,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow/delegation/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    OriginalUserId?: number | string;
+                    Enabled?: boolean;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfWfDelegationRuleOutput"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfWfDelegationRuleOutput"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfWfDelegationRuleOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/delegation/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfDelegationRuleInput"];
+                    "text/json": components["schemas"]["WfDelegationRuleInput"];
+                    "application/*+json": components["schemas"]["WfDelegationRuleInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                        "application/json": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                        "text/json": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/delegation/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfDelegationRuleInput"];
+                    "text/json": components["schemas"]["WfDelegationRuleInput"];
+                    "application/*+json": components["schemas"]["WfDelegationRuleInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                        "application/json": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                        "text/json": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: {
+                    requestId?: string;
+                };
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflow/instance/startable": {
         parameters: {
             query?: never;
@@ -7341,6 +7498,135 @@ export interface paths {
         trace?: never;
     };
     "/api/v1/workflow/task/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/add-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/remove-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/take-back": {
         parameters: {
             query?: never;
             header?: never;
@@ -8720,6 +9006,34 @@ export interface components {
          * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
          *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
          */
+        PagedListOfWfDelegationRuleOutput: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["WfDelegationRuleOutput"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
         PagedListOfWfDoneItemOutput: {
             /**
              * Format: int32
@@ -9994,6 +10308,27 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfPagedListOfWfDelegationRuleOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfWfDelegationRuleOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfPagedListOfWfDoneItemOutput: {
             /**
              * Format: int32
@@ -10386,6 +10721,27 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["WfDefinitionDetailOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfWfDelegationRuleOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["WfDelegationRuleOutput"];
         };
         /**
          * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
@@ -11452,7 +11808,9 @@ export interface components {
         WfApprovalMode: "any" | "all" | "seq" | null;
         WfAssignee: {
             provider?: string;
-            params?: null | Record<string, never>;
+            params?: {
+                [key: string]: unknown;
+            };
         };
         WfBranchArm: {
             id?: string;
@@ -11504,6 +11862,16 @@ export interface components {
         WfConditionLogic: "and" | "or" | null;
         /** @enum {unknown} */
         WfConditionOp: "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "in" | "notIn" | "contains" | "empty" | "notEmpty" | null;
+        WfCurrentTaskOutput: {
+            /** Format: int64 */
+            taskId?: number | string;
+            /** Format: int64 */
+            tokenId?: number | string;
+            /** Format: int64 */
+            nodeVisitId?: null | number | string;
+            nodeId?: string;
+            nodeName?: null | string;
+        };
         WfDefinition: {
             name?: string;
             icon?: null | string;
@@ -11575,6 +11943,37 @@ export interface components {
             /** Format: int64 */
             publishUserId?: null | number | string;
         };
+        WfDelegationRuleInput: {
+            /** Format: int64 */
+            originalUserId?: number | string;
+            /** Format: int64 */
+            delegateUserId?: number | string;
+            enabled?: boolean;
+            /** Format: date-time */
+            startsAt?: string;
+            /** Format: date-time */
+            endsAt?: string;
+            requestId?: null | string;
+        };
+        WfDelegationRuleOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: int64 */
+            scopeOrgId?: number | string;
+            /** Format: int64 */
+            originalUserId?: number | string;
+            /** Format: int64 */
+            delegateUserId?: number | string;
+            originalUserName?: null | string;
+            delegateUserName?: null | string;
+            enabled?: boolean;
+            /** Format: date-time */
+            startsAt?: string;
+            /** Format: date-time */
+            endsAt?: string;
+            /** Format: int32 */
+            version?: number | string;
+        };
         WfDoneItemOutput: {
             /** Format: int64 */
             hisTaskId?: number | string;
@@ -11585,7 +11984,15 @@ export interface components {
             action?: components["schemas"]["WfTaskAction"];
             comment?: null | string;
             /** Format: int64 */
+            originalUserId?: null | number | string;
+            /** Format: int64 */
+            delegationRuleId?: null | number | string;
+            /** Format: int64 */
+            delegationScopeOrgId?: null | number | string;
+            /** Format: int64 */
             transferToUserId?: null | number | string;
+            /** Format: int64 */
+            targetUserId?: null | number | string;
             /** Format: int64 */
             definitionId?: number | string;
             definitionName?: string;
@@ -11611,7 +12018,9 @@ export interface components {
             type?: components["schemas"]["WfFormFieldType"];
             required?: boolean;
             placeholder?: null | string;
-            props?: null | Record<string, never>;
+            props?: {
+                [key: string]: unknown;
+            };
         };
         WfFormFieldPerm: {
             field?: string;
@@ -11633,10 +12042,18 @@ export interface components {
             nodeName?: null | string;
             /** Format: int64 */
             userId?: number | string;
+            /** Format: int64 */
+            originalUserId?: null | number | string;
+            /** Format: int64 */
+            delegationRuleId?: null | number | string;
+            /** Format: int64 */
+            delegationScopeOrgId?: null | number | string;
             action?: components["schemas"]["WfTaskAction"];
             comment?: null | string;
             /** Format: int64 */
             transferToUserId?: null | number | string;
+            /** Format: int64 */
+            targetUserId?: null | number | string;
             /** Format: int64 */
             durationMs?: number | string;
             /** Format: date-time */
@@ -11646,8 +12063,14 @@ export interface components {
         WfHistoryItemOutput: {
             /** Format: int64 */
             id?: number | string;
+            /** Format: int32 */
+            sequence?: number | string;
             eventType?: components["schemas"]["WfHistoryEventType"];
             nodeId?: null | string;
+            /** Format: int64 */
+            tokenId?: null | number | string;
+            /** Format: int64 */
+            nodeVisitId?: null | number | string;
             payloadJson?: null | string;
             /** Format: date-time */
             createTime?: string;
@@ -11681,12 +12104,17 @@ export interface components {
             /** Format: date-time */
             createTime?: string;
             myPendingTask?: null | components["schemas"]["WfTodoItemOutput"];
+            myPendingTasks?: components["schemas"]["WfTodoItemOutput"][];
             hisTasks?: components["schemas"]["WfHisTaskOutput"][];
-            model?: null | components["schemas"]["WfModel"];
+            model?: null | components["schemas"]["WfRuntimeModelOutput"];
             visitedNodeIds?: string[];
             currentNodeIds?: string[];
             /** Format: int64 */
             currentTaskId?: null | number | string;
+            currentTasks?: components["schemas"]["WfCurrentTaskOutput"][];
+            parallelForks?: components["schemas"]["WfParallelForkOutput"][];
+            /** Format: int64 */
+            myTakeBackTaskId?: null | number | string;
         };
         WfInstanceListItemOutput: {
             /** Format: int64 */
@@ -11732,6 +12160,7 @@ export interface components {
             name?: string;
             props?: null | components["schemas"]["WfNodeProps"];
             conditions?: null | components["schemas"]["WfBranchArm"][];
+            parallelArms?: null | components["schemas"]["WfParallelArmDefinition"][];
             next?: null | components["schemas"]["WfNode"];
         };
         WfNodeProps: {
@@ -11765,15 +12194,91 @@ export interface components {
         };
         /** @enum {unknown} */
         WfNodeType: "start" | "approval" | "cc" | "branch" | "parallel" | "webhook" | "aiDecision";
+        WfParallelArmDefinition: {
+            id?: string;
+            name?: string;
+            next?: null | components["schemas"]["WfNode"];
+        };
+        WfParallelArmOutput: {
+            /** Format: int64 */
+            forkId?: number | string;
+            armId?: string;
+            /** Format: int64 */
+            parentTokenId?: number | string;
+            /** Format: int64 */
+            childTokenId?: null | number | string;
+            status?: components["schemas"]["WfParallelArmStatus"];
+            /** Format: int64 */
+            parentNodeVisitId?: number | string;
+            /** Format: int64 */
+            childEntryNodeVisitId?: null | number | string;
+            currentNodeId?: null | string;
+            currentNodeName?: null | string;
+            childTokenStatus?: null | components["schemas"]["WfTokenStatus"];
+            reason?: null | string;
+        };
+        WfParallelArmStatus: number;
+        WfParallelForkOutput: {
+            /** Format: int64 */
+            forkId?: number | string;
+            /** Format: int64 */
+            parentTokenId?: number | string;
+            /** Format: int64 */
+            parentNodeVisitId?: number | string;
+            nodeId?: null | string;
+            nodeName?: null | string;
+            parentTokenStatus?: components["schemas"]["WfTokenStatus"];
+            /** Format: int32 */
+            pendingArmCount?: number | string;
+            status?: components["schemas"]["WfParallelForkStatus"];
+            arms?: components["schemas"]["WfParallelArmOutput"][];
+        };
+        WfParallelForkStatus: number;
         /** @enum {unknown} */
         WfRejectAction: "terminate" | "toNode" | null;
         /** @enum {unknown} */
         WfReturnPolicy: "prev" | "any" | "node" | null;
+        WfRuntimeAssigneeOutput: {
+            provider?: string;
+        };
+        WfRuntimeBranchArmOutput: {
+            id?: string;
+            name?: string;
+            isDefault?: boolean;
+            next?: null | components["schemas"]["WfRuntimeNodeOutput"];
+        };
+        WfRuntimeModelOutput: {
+            /** Format: int32 */
+            version?: number | string;
+            root?: components["schemas"]["WfRuntimeNodeOutput"];
+            formSchema?: null | components["schemas"]["WfFormSchema"];
+            formComponent?: null | string;
+        };
+        WfRuntimeNodeOutput: {
+            id?: string;
+            type?: components["schemas"]["WfNodeType"];
+            name?: string;
+            props?: null | components["schemas"]["WfRuntimeNodePropsOutput"];
+            conditions?: null | components["schemas"]["WfRuntimeBranchArmOutput"][];
+            parallelArms?: null | components["schemas"]["WfRuntimeParallelArmOutput"][];
+            next?: null | components["schemas"]["WfRuntimeNodeOutput"];
+        };
+        WfRuntimeNodePropsOutput: {
+            assignee?: null | components["schemas"]["WfRuntimeAssigneeOutput"];
+            returnPolicy?: null | components["schemas"]["WfReturnPolicy"];
+            buttonLabels?: null | components["schemas"]["WfButtonLabels"];
+            formPerms?: null | components["schemas"]["WfFormFieldPerm"][];
+        };
+        WfRuntimeParallelArmOutput: {
+            id?: string;
+            name?: string;
+            next?: null | components["schemas"]["WfRuntimeNodeOutput"];
+        };
         WfSignMode: number;
         WfStartableDefinitionDetailOutput: {
             /** Format: int64 */
             definitionVersionId?: number | string;
-            model?: components["schemas"]["WfModel"];
+            model?: components["schemas"]["WfRuntimeModelOutput"];
             /** Format: int64 */
             id?: number | string;
             name?: string;
@@ -11808,6 +12313,7 @@ export interface components {
             /** Format: int64 */
             taskId?: number | string;
             comment?: null | string;
+            variablesJson?: null | string;
             /** Format: int64 */
             toUserId?: number | string;
             targetNodeId?: null | string;
@@ -11844,6 +12350,7 @@ export interface components {
             /** Format: date-time */
             createTime?: string;
         };
+        WfTokenStatus: number;
         /** @enum {unknown} */
         WfWebhookFailureAction: "fail" | "manual" | null;
     };

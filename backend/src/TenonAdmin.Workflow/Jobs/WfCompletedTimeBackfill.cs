@@ -10,16 +10,14 @@ namespace TenonAdmin.Workflow;
 /// <see cref="WfHistoryEventType.InstanceCompleted"/> 事件时间补齐(数据库评审 §九 #4)。
 /// <para><b>为什么是自动跑而不是「文档里的一条手工升级命令」</b>:内核卖点是三行 <c>Program.cs</c>,
 /// 手工步骤等于不会被执行,那列就永远是空的 —— 等于没做。</para>
-/// <para><b>存在性守卫兜住注册顺序</b>:<c>AddTenonAdminWorkflow</c> 通常在 <c>AddTenonAdmin</c> 之前调用,
-/// 本服务因此会排在内核的建表 <c>DatabaseInitializer</c> <b>前面</b>启动。全新库:表不存在 → 跳过
-/// (本就没有旧行要回填)。升级库:首次启动时列还没加 → 跳过,同一次启动里建表器补上列 →
-/// <b>下次重启自愈</b>。用「晚一次重启」换掉「跨包去改内核 HostedService 顺序」的耦合,划算。</para>
+/// <para><b>启动顺序</b>:由宿主生命周期的 <c>StartedAsync</c> 阶段调用,保证内核的
+/// <c>DatabaseInitializer</c> 已完成后再检查表和列。全新库或建表关闭时没有可回填内容,直接跳过。</para>
 /// <para><b>幂等</b>:条件恒含 <c>CompletedTime == null</c>,跑第二遍 0 行;没有 <c>InstanceCompleted</c>
 /// 事件可依据的旧行<b>保持空</b>(评审 §九 #4 的原话:无法确定时保持空)。</para>
 /// </summary>
 internal sealed class WfCompletedTimeBackfill(
     ISqlSugarClient db,
-    ILogger<WfCompletedTimeBackfill> logger) : IHostedService
+    ILogger<WfCompletedTimeBackfill> logger) : IWfCompletedTimeBackfill
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -65,9 +63,26 @@ internal sealed class WfCompletedTimeBackfill(
             filled += await db.Updateable<WfInstance>()
                 .SetColumns(i => new WfInstance { CompletedTime = completed })
                 .Where(i => i.Id == row.InstanceId && i.CompletedTime == null)
-                .ExecuteCommandAsync();
+                .ExecuteCommandAsync(cancellationToken);
         }
 
         return filled;
     }
+}
+
+/// <summary>把可替换的回填实现接入宿主生命周期,使升级回填在数据库初始化后运行且重复注册幂等。</summary>
+internal sealed class WfCompletedTimeBackfillHostedService(
+    IWfCompletedTimeBackfill backfill) : IHostedLifecycleService
+{
+    public Task StartingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StartedAsync(CancellationToken cancellationToken) => backfill.StartAsync(cancellationToken);
+
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StopAsync(CancellationToken cancellationToken) => backfill.StopAsync(cancellationToken);
+
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

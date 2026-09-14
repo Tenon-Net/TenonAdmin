@@ -14,6 +14,7 @@ public sealed class WfOperationIdentity
         long targetId,
         long actorUserId,
         string requestKey,
+        string? payloadHash,
         string identityHash)
     {
         ScopeKey = scopeKey;
@@ -22,6 +23,7 @@ public sealed class WfOperationIdentity
         TargetId = targetId;
         ActorUserId = actorUserId;
         RequestKey = requestKey;
+        PayloadHash = payloadHash;
         IdentityHash = identityHash;
     }
 
@@ -40,6 +42,9 @@ public sealed class WfOperationIdentity
     /// <summary>已 <c>Trim()</c> 的客户端 request key。</summary>
     public string RequestKey { get; }
 
+    /// <summary>可选的请求参数摘要;只用于命中回执后的参数冲突检查。</summary>
+    public string? PayloadHash { get; }
+
     /// <summary>上述六维的 SHA-256 小写 hex;<c>wf_operation_receipt</c> 的唯一键。</summary>
     public string IdentityHash { get; }
 
@@ -50,7 +55,8 @@ public sealed class WfOperationIdentity
         WfTargetType targetType,
         long targetId,
         long actorUserId,
-        string requestKey) =>
+        string requestKey,
+        string? payloadHash = null) =>
         new(
             WfIdentityHash.NormalizeScopeKey(scopeKey),
             commandType,
@@ -58,5 +64,6 @@ public sealed class WfOperationIdentity
             targetId,
             actorUserId,
             WfIdentityHash.NormalizeRequestKey(requestKey),
+            payloadHash,
             WfIdentityHash.Compute(scopeKey, commandType, targetType, targetId, actorUserId, requestKey));
 }

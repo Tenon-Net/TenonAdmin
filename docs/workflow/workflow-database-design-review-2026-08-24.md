@@ -7,7 +7,7 @@
 
 ## 一、结论
 
-现有 9 表设计适合当前人工审批，定义、版本、实例、Token、活跃任务和历史记录的职责基本清楚，**不需要推倒重来**。它能通过增加字段和新表继续演进，但不能理解为“已经无需迁移地兼容可靠自动节点、并行网关和 AI 审批”。
+现有 9 表设计适合当前人工审批，定义、版本、实例、Token、活跃任务和历史记录的职责基本清楚，**不需要推倒重来**。通过增量字段和 `WfParallelArm` 已接入 M3a-1 与 M3a-2 Vue 的可靠执行、并行网关和安全读取投影；Task 8c 的 outbox consumer/transport 与完整 M3a-2 React port 仍未交付。
 
 分阶段判断如下：
 
@@ -15,9 +15,10 @@
 | --- | --- | --- |
 | M1/M2b 人工审批 | 已兼容 | 现有模型足够，任务级 CAS 能防同一待办双批 |
 | M2c 请求幂等与四库终态保护 | 已兼容 | operation receipt、RequestId、实例/Token 级并发保护与四库契约测试均已交付 |
-| M3a-1 Webhook/自动节点执行内核 | M3a-1 内核与 Task 8b 均已通过最终验证 | 节点访问身份、execution、attempt、outbox、lease/fence、dispatcher、Webhook 入口和 `IAdminJob` worker 已落地；review-repair 最终证据为 backend-ci run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)（SQLite/MySQL/PostgreSQL/SQL Server 与 template-smoke 均通过）、contract-drift run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095) 和 docker-smoke run [`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106)；Task 8b 初始交付另有 web-ci run [`33773751061`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751061)、web-react-ci run [`33773751089`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751089) 成功，不能与 review-repair 最终三条 run 混同；outbox 消费与 Webhook 设计器 UI 仍分别属于 Task 8c/M3a-2 |
+| M3a-1 Webhook/自动节点执行内核 | M3a-1 内核与 Task 8b 均已通过最终验证 | 节点访问身份、execution、attempt、outbox、lease/fence、dispatcher、Webhook 入口和 `IAdminJob` worker 已落地；review-repair 最终证据为 backend-ci run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)（SQLite/MySQL/PostgreSQL/SQL Server 与 template-smoke 均通过）、contract-drift run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095) 和 docker-smoke run [`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106)；Task 8b 初始交付另有 web-ci run [`33773751061`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751061)、web-react-ci run [`33773751089`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33773751089) 成功，不能与 review-repair 最终三条 run 混同；outbox 消费仍属于 Task 8c，Webhook 设计器已在 M3a-2 Vue 接入 |
+| M3a-2 Vue 表单、动词与并行 | 已兼容（T18–T23 已交付） | `WfParallelArm`、父子 Token、运行时安全投影、字段权限、加减签/拿回/长期委托和 Vue 设计器/回放均已落地；SQLite、MySQL、PostgreSQL、SQL Server 代表流程各 `29/29` 通过；完整 M3a-2 仍等待 React port |
 | M3b AI Decision | M3b-0 已兼容 | 已有独立 AI decision 审计表、execution/attempt 接线、人工兜底与脱敏读取 API；M3b-0 全程 shadow-only，Task 8c outbox consumer/transport 仍未实现 |
-| 循环/并行网关 | 结构可扩展但未到位 | 多 Token 只是起点，尚缺节点访问、fork/join 身份 |
+| 循环/并行网关 | 并行已交付，循环仍未规划 | 并行 fork/join、父子 Token、arm 状态、CAS 恢复和四库代表流程已验证；不扩张为通用循环编排 |
 
 优先级最高的两个地基是：
 
@@ -230,7 +231,7 @@ wf_cc.NodeVisitId
 wf_node_execution.NodeVisitId
 ```
 
-`WfNodeExecution.NodeVisitId` 目前可空，以兼容旧行；`ExecutionKey` 对缺失值使用哨兵。并行网关仍未实现，未来再根据真实 fork/join 语义增加 `ParentTokenId/ForkId` 或独立 join 表。
+`WfNodeExecution.NodeVisitId` 目前可空，以兼容旧行；`ExecutionKey` 对缺失值使用哨兵。T17 冻结并行存储后，T18 已落地 `WfToken` 的 nullable `ParentTokenId/ForkId/PendingArmCount`、父 token `WaitingJoin`、子 token `Active` 和以 `(ForkId, ArmId)` 为主键的 `WfParallelArm`，记录父子 token、arm 状态/版本、父/子节点访问身份和原因。旧串行行三列保持 null；发布校验、索引及四库代表流程已在 T18–T23 验证。
 
 ### 4.6 `wf_history` 关联、顺序与载荷版本已落地（M3a-1）
 
@@ -468,8 +469,10 @@ M3b-0 的审计写入不保存模型自由文本：reason code、rationale、ris
 | `wf_node_execution` | `UNIQUE(ExecutionKey)`、`(Status, NextRetryAtUtc)` | 防重复推进与领取扫描 |
 | `wf_node_execution_attempt` | `UNIQUE(ExecutionId, AttemptNo)` | 防 attempt 编号重复 |
 | `wf_outbox` | `UNIQUE(MessageKey)`、`(Status, AvailableAtUtc)` | 可靠派发与扫描 |
+| `wf_token` | `(ParentTokenId, ForkId, Status)` | 并行父子 token、fork 收敛与恢复扫描 |
+| `wf_parallel_arm` | `PRIMARY KEY(ForkId, ArmId)`、`(ParentTokenId, Status)` | 每个并行臂只完成一次并支持父 fork 回放 |
 
-办理人和抄送的既有唯一约束不能只用 `(TaskId, UserId)` 或 `(InstanceId, NodeId, UserId)` 草率改写。连续多级主管允许同一人在不同顺序重复出现，流程也可能再次进入同一节点；`NodeVisitId` 已提供访问身份，但并行 fork/join 的最终唯一键仍留待 M3b/后续网关设计。
+办理人和抄送的既有唯一约束不能只用 `(TaskId, UserId)` 或 `(InstanceId, NodeId, UserId)` 草率改写。连续多级主管允许同一人在不同顺序重复出现，流程也可能再次进入同一节点；`NodeVisitId` 提供访问身份，并行臂则使用已落地的 `(ForkId, ArmId)` 唯一键。
 
 ## 九、兼容升级策略
 
@@ -533,17 +536,27 @@ M3a-1 的历史基线四库 CI 证据仍是 run [`33738099310`](https://github.c
 
 M3b-0 已完成上述第 1 项及 shadow-only 基础闭环：AI 只生成 proposal，服务端完成 schema/policy 校验，在现有 execution/attempt/tx2 中追加脱敏审计并创建人工兜底任务。审计读取 API 复用实例参与者/监控权限，只返回元数据、hash、风险/证据引用、策略/兜底、token usage 和 shadow 标记，不返回 proposal 原文、原始变量、执行内部标识或 Provider 异常正文。任何 proposal 都不会自动批准、拒绝或推进 task/token。
 
-M3b-0 只保证终态 `Pending` outbox 的幂等入队，Task 8c 的 consumer、transport、领取/投递/重试和状态回写仍未实现。Round 19 的窄测 18/18、聚焦矩阵 313/313、Workflow Release build、双前端 typecheck/build 和独立 verifier 均通过；下一项为 M3B0-17 独立审查。
+M3b-0 只保证终态 `Pending` outbox 的幂等入队，Task 8c 的 consumer、transport、领取/投递/重试和状态回写仍未实现。M3B0-17 至 M3B0-20 及后续审查修复已经完成，最终聚焦矩阵 326/326 通过，代码与架构复核无 blocker；下一阶段为 M3a-2 Vue 产品面。
 
-### 真正开发并行网关时
+### 并行网关实现收口（T17–T23，2026-09-10）
 
-根据已经实现的 fork/join 语义决定 `ParentTokenId/ForkId` 或 join 表，不在当前阶段建立通用并行执行 Seam。
+T17 已冻结方案，不再保留未来二选一：
+
+- 定义使用至少 2 个、`id` 唯一的 `parallelArms[]`，每臂只有 `id/name/next`，允许空臂；`parallel.next` 是 join 后继，不复用 `conditions`，禁止嵌套并行。一次并行节点访问只生成一个 `ForkId`。
+- `WfToken.ParentTokenId/ForkId/PendingArmCount` 均 nullable；父 token 为 `WaitingJoin`，非空臂子 token 为 `Active`。`WfParallelArm` 的主键为 `(ForkId, ArmId)`，字段为 `ParentTokenId/ChildTokenId/Status/Version/ParentNodeVisitId/ChildEntryNodeVisitId/Reason`；空臂没有 child token，直接 `Completed`。
+- arm 完成事务 CAS 子 token 和 arm，并原子递减父 `PendingArmCount`；只有完成 `1 → 0` 且命中父 `WaitingJoin + ForkId + Version` CAS 的事务执行 join。Repeatable Read 下失败者用新事务和新版本重试，迟到/重复完成不再递减或推进；全部为空时在 fork 事务内直接 join。
+- `terminate reject` 和实例 `cancel` 取消父子 token、未完成 arm、活跃 task/execution；`toNode` 仅可留在同一 `ForkId + ArmId`，跨臂和从外部发布到臂内均拒绝。`return` 取消 fork 后仅恢复 parked parent 为唯一 `Active` token并清空 `ForkId/PendingArmCount`；`resubmit` 从 start 重走，新并行访问生成新 `ForkId`。
+- 人工、Webhook、AI 共用既有执行链；retry、shadow、manual fallback 或人工任务未完成不 join。历史追加 `fork/armComplete/join/cancel`，payload 带 fork、arm、父子 token 和父子 visit 身份，按 `ForkId + ArmId + Sequence` 回放。
+
+T18 已实现上述 nullable 字段、join 表、索引和发布校验，旧行保持 null；T19 实现运行时，T20 验证竞争与恢复，T21–T22 完成 Vue 设计器和多 Token 回放，T23/T23A 在 SQLite、MySQL、PostgreSQL、SQL Server 上验证同一代表流程。四库各 `29/29` 通过。并行退回取消旧 fork 后只恢复 parked parent，并把数据库与内存 `NodeId` 同时恢复到退回目标；运行时读取使用安全投影，避免返回 Webhook 凭据、AI 指令、办理人参数和原始历史 payload。
 
 ## 十一、最终判断
 
 现有模型的核心方向正确：人工审批状态是持久化事实，定义版本是不可变快照，业务状态留在消费方，M3a-1 的机器执行通过独立 execution/attempt/outbox 事实链落库，AI 仍通过独立 Adapter 接入。这些决定都应保留。
 
-M3a-1 的可靠执行内核与 Task 8b 的生产 Webhook 闭环已经完成；review repair 后的最终四库 CI 与 template-smoke 证据为 run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)，contract-drift 与 docker-smoke 也分别在 run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095)、[`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106) 通过。原先的 Task 8b 四库证据缺口描述属于历史基线，已由上述结果覆盖。`EnterNodeOp` 创建 execution、`WfNodeExecutionJob` 扫描和 dispatcher 的三段事务边界已经接通；outbox consumer/transport 仍是 Task 8c，Webhook 设计器 UI 仍是 M3a-2。可靠演进仍需区分三类身份：
+M3a-1 的可靠执行内核与 Task 8b 的生产 Webhook 闭环已经完成；review repair 后的最终四库 CI 与 template-smoke 证据为 run [`33828658172`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658172)，contract-drift 与 docker-smoke 也分别在 run [`33828658095`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658095)、[`33828658106`](https://github.com/Tenon-Net/TenonAdmin/actions/runs/33828658106) 通过。原先的 Task 8b 四库证据缺口描述属于历史基线，已由上述结果覆盖。`EnterNodeOp` 创建 execution、`WfNodeExecutionJob` 扫描和 dispatcher 的三段事务边界已经接通；outbox consumer/transport 仍是 Task 8c，Webhook 设计器已在 M3a-2 Vue 接入。当前 M3a-2 Vue 的实现还固定了表单历史权限、提交后通知失败只记录 Warning 不回滚、并行退回目标恢复和安全 runtime projection；可靠演进仍需区分三类身份：
+
+截至 2026-09-13，M3a-2 Vue 的 T25A 修复已完成：拿回使用同一主 token 的最近本人审批、下游窗口和 task/token/instance CAS；Vue 详情按当前用户全部 pending task 合并字段权限并固定 `hidden > readonly > editable`；日期/时间和附件清空写入显式 `null`；长期委托在机构 scope 数据库锁下进行规则图校验，非唯一键基础设施异常原样传播；通用 payload hash 拒绝 null、旧回执摘要兼容、回填取消令牌和 HostedService 生命周期/可替换性也已复验。T25A 前置后端回归 `122/122`、最终修复后回执/回填/identity 聚焦 `33/33`、Vue 单元测试 `179/179`、四数据库代表流程各 `29/29`；独立 `code-reviewer` 为 `APPROVE`、`architect` 为 `CLEAR`。完整 M3a-2 React port、Task 8c 和 AI 自动放行仍不属于当前阶段。
 
 1. **请求身份**：`RequestId/operation receipt`，回答“这是不是同一次用户命令”；
 2. **节点访问身份**：`NodeVisitId`，回答“这是不是同一次流程图访问”；

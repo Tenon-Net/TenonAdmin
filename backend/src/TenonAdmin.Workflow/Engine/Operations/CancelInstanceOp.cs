@@ -15,26 +15,7 @@ public class CancelInstanceOp : IWfOperation
         // (领取语句用的 SetColumns 走条件更新路径,不触发只认整对象更新的审计 AOP;见 ClaimInstanceAsync)。
         await ctx.ClaimInstanceAsync(WfInstanceStatus.Running, cancellationToken);
         await ctx.WriteInstanceTerminalStatusAsync(WfInstanceStatus.Cancelled, cancellationToken);
-
-        await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
-        ctx.Token.Status = WfTokenStatus.Cancelled;
-        await ctx.Db.Updateable(ctx.Token)
-            .UpdateColumns(t => new { t.Status, t.UpdateTime, t.UpdateUserId })
-            .ExecuteCommandAsync();
-
-        var activeTask = await ctx.Db.Queryable<WfTask>()
-            .Where(t => t.TokenId == ctx.Token.Id)
-            .FirstAsync();
-        if (activeTask is not null)
-        {
-            // actor 行保留为分配历史(数据库评审 §4.4,不物理删——理由见 CompleteTaskOp.CloseTaskAsync);
-            // task 行仍物理删,承担的是不同职责(见 ReassignTaskOpBase 的不变量注释)。
-            await ctx.Db.Updateable<WfTaskActor>()
-                .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Skipped })
-                .Where(a => a.TaskId == activeTask.Id)
-                .ExecuteCommandAsync();
-            await ctx.Db.Deleteable<WfTask>().In(activeTask.Id).ExecuteCommandAsync();
-        }
+        await ParallelControlOps.CancelInstanceRuntimeAsync(ctx, "instanceCancelled", cancellationToken);
 
         await ctx.AppendHistoryAsync(
             WfHistoryEventType.InstanceCompleted,

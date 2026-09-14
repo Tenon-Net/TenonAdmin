@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { WfApprovalMode, WfModel } from './schema'
+import { createParallelNode } from './model'
 
 import {
   WF_CONDITION_OPERATOR_META,
@@ -17,6 +18,22 @@ import {
 } from './configuration'
 
 describe('workflow node configuration', () => {
+  it('renames a parallel node without changing its arms or join successor', () => {
+    const parallel = createParallelNode({ id: 'parallel', next: { id: 'join', type: 'cc', name: 'Join', next: null } })
+    parallel.parallelArms![0]!.name = 'Finance'
+    const model: WfModel = {
+      version: 1,
+      root: { id: 'start', type: 'start', name: 'Start', next: parallel },
+    }
+
+    const result = applyNodeConfiguration(model, 'parallel', { type: 'parallel', name: 'Parallel review' })
+
+    expect(result?.root.next).toMatchObject({ id: 'parallel', type: 'parallel', name: 'Parallel review', next: { id: 'join' } })
+    expect(result?.root.next?.parallelArms?.[0]?.name).toBe('Finance')
+    expect(result?.root.next?.parallelArms).toHaveLength(2)
+    expect(model.root.next?.name).toBe('')
+  })
+
   it('publishes one typed classifier for every condition operator', () => {
     expect(WF_CONDITION_OPERATOR_META.map(({ op }) => op)).toEqual([
       'eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'in', 'notIn', 'contains', 'empty', 'notEmpty',
@@ -154,10 +171,45 @@ describe('workflow node configuration', () => {
       nobody: 'autoPass',
       onReject: 'terminate',
       returnPolicy: 'prev',
-      formPerms: [],
+      allPassRatio: 100,
     })
+    expect(result?.root.next?.props?.formPerms).toBeUndefined()
     expect(JSON.stringify(model)).toBe(snapshot)
     expect(result).not.toBe(model)
+  })
+
+  it('round-trips an all-sign ratio and clears it for any-sign', () => {
+    const model: WfModel = {
+      version: 1,
+      root: {
+        id: 'start', type: 'start', name: 'Start',
+        next: { id: 'approval', type: 'approval', name: 'Approval', props: { allPassRatio: 75 }, next: null },
+      },
+    }
+    const config = {
+      type: 'approval', name: 'Approval', assignee: { provider: 'user', params: { userIds: [1, 2] } },
+      mode: 'all', allPassRatio: 75, returnPolicy: 'prev', onReject: 'terminate',
+    } satisfies WfEditorNodeConfig
+
+    const all = applyNodeConfiguration(model, 'approval', config)
+    expect(JSON.parse(JSON.stringify(all))?.root.next.props.allPassRatio).toBe(75)
+    expect(applyNodeConfiguration(all!, 'approval', { ...config, mode: 'any' })?.root.next?.props?.allPassRatio).toBeUndefined()
+  })
+
+  it('rejects invalid all-sign ratios and sequential ratios below 100', () => {
+    const model: WfModel = {
+      version: 1,
+      root: { id: 'start', type: 'start', name: 'Start', next: { id: 'approval', type: 'approval', name: 'Approval', next: null } },
+    }
+    const config = {
+      type: 'approval', name: 'Approval', assignee: { provider: 'user', params: { userIds: [1, 2] } },
+      mode: 'all', allPassRatio: 75, returnPolicy: 'prev', onReject: 'terminate',
+    } satisfies WfEditorNodeConfig
+
+    expect(applyNodeConfiguration(model, 'approval', { ...config, allPassRatio: 0 })).toBeNull()
+    expect(applyNodeConfiguration(model, 'approval', { ...config, allPassRatio: 101 })).toBeNull()
+    expect(applyNodeConfiguration(model, 'approval', { ...config, allPassRatio: 50.5 })).toBeNull()
+    expect(applyNodeConfiguration(model, 'approval', { ...config, mode: 'seq' })).toBeNull()
   })
 
   it('rejects a configuration whose discriminant does not match the target node', () => {
@@ -386,6 +438,89 @@ describe('workflow node configuration', () => {
     expect(model.root.next?.props).toBeUndefined()
   })
 
+  it('round-trips all webhook fields without clearing existing props or sharing headers', () => {
+    const model: WfModel = {
+      version: 1,
+      root: {
+        id: 'start',
+        type: 'start',
+        name: 'Start',
+        next: {
+          id: 'webhook',
+          type: 'webhook',
+          name: 'Old webhook',
+          props: { webhookUrl: 'https://old.example/hook', formPerms: [{ field: 'amount' }] },
+          next: null,
+        },
+      },
+    }
+    const headers = { Authorization: 'Bearer token', 'X-Trace': null }
+
+    const result = applyNodeConfiguration(model, 'webhook', {
+      type: 'webhook',
+      name: 'Notify CRM',
+      webhookUrl: 'https://example.com/hooks/workflow',
+      webhookMethod: 'PATCH',
+      webhookHeaders: headers,
+      webhookTimeoutSeconds: 45,
+      webhookOnFailure: 'manual',
+      maxAttempts: 5,
+    })
+
+    expect(result?.root.next).toMatchObject({
+      name: 'Notify CRM',
+      props: {
+        webhookUrl: 'https://example.com/hooks/workflow',
+        webhookMethod: 'PATCH',
+        webhookHeaders: { Authorization: 'Bearer token', 'X-Trace': null },
+        webhookTimeoutSeconds: 45,
+        webhookOnFailure: 'manual',
+        maxAttempts: 5,
+        formPerms: [{ field: 'amount' }],
+      },
+    })
+    expect(result?.root.next?.props?.webhookHeaders).not.toBe(headers)
+    headers.Authorization = 'changed'
+    expect(result?.root.next?.props?.webhookHeaders?.Authorization).toBe('Bearer token')
+    expect(model.root.next?.props?.webhookUrl).toBe('https://old.example/hook')
+  })
+
+  it('rejects invalid webhook values before writing the model', () => {
+    const model: WfModel = {
+      version: 1,
+      root: {
+        id: 'start',
+        type: 'start',
+        name: 'Start',
+        next: { id: 'webhook', type: 'webhook', name: 'Webhook', next: null },
+      },
+    }
+    const valid = {
+      type: 'webhook',
+      name: 'Webhook',
+      webhookUrl: 'https://example.com/hook',
+      webhookMethod: 'POST',
+      webhookHeaders: {},
+      webhookTimeoutSeconds: 30,
+      webhookOnFailure: 'fail',
+      maxAttempts: 3,
+    } satisfies WfEditorNodeConfig
+    const invalid = [
+      { ...valid, webhookUrl: 'ftp://example.com/hook' },
+      { ...valid, webhookMethod: 'TRACE' },
+      { ...valid, webhookTimeoutSeconds: 0 },
+      { ...valid, webhookTimeoutSeconds: 121 },
+      { ...valid, webhookOnFailure: 'retry' },
+      { ...valid, maxAttempts: 0 },
+      { ...valid, maxAttempts: 101 },
+    ]
+
+    for (const config of invalid) {
+      expect(applyNodeConfiguration(model, 'webhook', config as WfEditorNodeConfig)).toBeNull()
+    }
+    expect(model.root.next?.props).toBeUndefined()
+  })
+
   it('finds a deeply nested branch and rejects unknown node or arm ids without partial writes', () => {
     const nestedExpr = createConditionGroup('or')
     const model: WfModel = {
@@ -447,5 +582,28 @@ describe('workflow node configuration', () => {
       },
     })).toBeNull()
     expect(JSON.stringify(model)).toBe(snapshot)
+  })
+
+  it('saves a built-in form through the start seam and rejects both form modes together', () => {
+    const model: WfModel = {
+      version: 1,
+      formComponent: 'views/old/form',
+      root: { id: 'start', type: 'start', name: 'Start', next: null },
+    }
+    const formSchema = {
+      version: 1 as const,
+      fields: [{ key: 'reason', label: ' 原因 ', type: 'text' as const, required: true, props: { maxLength: 100 } }],
+    }
+
+    const result = applyNodeConfiguration(model, 'start', {
+      type: 'start', name: 'Start', formComponent: null, formSchema, initiatorScope: [],
+    })
+
+    expect(result?.formComponent).toBeNull()
+    expect(result?.formSchema?.fields[0]?.label).toBe('原因')
+    expect(model.formComponent).toBe('views/old/form')
+    expect(applyNodeConfiguration(model, 'start', {
+      type: 'start', name: 'Start', formComponent: 'views/custom/form', formSchema, initiatorScope: [],
+    })).toBeNull()
   })
 })

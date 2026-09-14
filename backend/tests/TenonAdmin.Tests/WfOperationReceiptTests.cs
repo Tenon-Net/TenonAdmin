@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
+using TenonAdmin.SqlSugar;
 using TenonAdmin.Workflow;
 
 namespace TenonAdmin.Tests;
@@ -164,6 +165,23 @@ public class WfOperationReceiptTests
             () => svc.CommitAsync(Identity(requestKey: "never-reserved"), 0, "{}"));
     }
 
+    [Fact]
+    public async Task Non_unique_insert_errors_are_not_treated_as_receipt_replays()
+    {
+        using var f = new WorkflowAppFactory();
+        var (scope, svc, _) = Open(f);
+        using var _ = scope;
+        var id = Identity(requestKey: "req-infrastructure-error");
+        Assert.Null(await svc.TryBeginAsync(id));
+        await svc.CommitAsync(id, 0, "{}");
+
+        var repo = scope.ServiceProvider.GetRequiredService<IRepository<WfOperationReceipt>>();
+        var faulting = new NonUniqueFailureReceiptService(repo);
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => faulting.TryBeginAsync(id));
+        Assert.Equal("simulated database failure", failure.Message);
+    }
+
     /// <summary>
     /// #7 同源钉子:值对象算出的 hash 必须与 <see cref="WfIdentityHash.Compute"/> 逐参数一致 ——
     /// 两条路径一旦分叉,入库诊断列就与唯一键对不上。
@@ -179,5 +197,19 @@ public class WfOperationReceiptTests
             id.IdentityHash);
         Assert.Equal("org-9", id.ScopeKey);
         Assert.Equal("rk", id.RequestKey);
+    }
+
+    private sealed class NonUniqueFailureReceiptService(IRepository<WfOperationReceipt> receipts)
+        : WfOperationReceiptService(receipts)
+    {
+        protected override Task<WfOperationReceipt?> FindAsync(
+            string identityHash,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<WfOperationReceipt?>(null);
+
+        protected override Task<int> InsertPlaceholderAsync(
+            WfOperationIdentity identity,
+            CancellationToken cancellationToken) =>
+            Task.FromException<int>(new InvalidOperationException("simulated database failure"));
     }
 }

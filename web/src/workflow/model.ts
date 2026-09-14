@@ -2,12 +2,13 @@
  * 钉钉树模型操作(框架无关)。M2a 支持串行主链与 branch 条件臂子链。
  */
 import {
-  WF_M2A_NODE_TYPES,
+  WF_M3A2_NODE_TYPES,
   WF_MODEL_VERSION,
   type WfBranchArm,
   type WfModel,
   type WfNode,
-  type WfNodeType,
+  type WfParallelArm,
+  type WfInsertableNodeType,
 } from './schema'
 
 let _seq = 0
@@ -15,12 +16,17 @@ let _seq = 0
 interface WfWalkFrame {
   node: WfNode
   previous: WfNode | null
+  parallelArm: WfParallelArm | null
   replace: (replacement: WfNode | null) => void
 }
 
-/** 确定性 DFS:当前主链节点 → conditions 顺序下的各臂子链 → 当前节点的主链后继。 */
+/** 确定性 DFS:当前主链节点 → 各臂子链 → 当前节点的 join/主链后继。 */
 function walkTree(root: WfNode, visit: (frame: WfWalkFrame) => boolean): boolean {
-  function walkChain(first: WfNode | null | undefined, setFirst: (node: WfNode | null) => void): boolean {
+  function walkChain(
+    first: WfNode | null | undefined,
+    setFirst: (node: WfNode | null) => void,
+    parallelArm: WfParallelArm | null = null,
+  ): boolean {
     let previous: WfNode | null = null
     let current = first ?? null
     while (current) {
@@ -28,6 +34,7 @@ function walkTree(root: WfNode, visit: (frame: WfWalkFrame) => boolean): boolean
       if (visit({
         node: current,
         previous,
+        parallelArm,
         replace: (replacement) => {
           if (previous) previous.next = replacement
           else setFirst(replacement)
@@ -35,7 +42,12 @@ function walkTree(root: WfNode, visit: (frame: WfWalkFrame) => boolean): boolean
       })) return true
       if (current.type === 'branch') {
         for (const arm of current.conditions ?? []) {
-          if (walkChain(arm.next, (replacement) => { arm.next = replacement })) return true
+          if (walkChain(arm.next, (replacement) => { arm.next = replacement }, parallelArm)) return true
+        }
+      }
+      if (current.type === 'parallel') {
+        for (const arm of current.parallelArms ?? []) {
+          if (walkChain(arm.next, (replacement) => { arm.next = replacement }, arm)) return true
         }
       }
       previous = current
@@ -115,9 +127,48 @@ export function createBranchNode(partial?: Partial<WfNode>): WfNode {
   }
 }
 
-export function createNode(type: Extract<WfNodeType, 'approval' | 'cc' | 'branch'>): WfNode {
+export function createParallelArm(partial?: Partial<WfParallelArm>): WfParallelArm {
+  return {
+    id: partial?.id ?? newNodeId('parm'),
+    name: partial?.name ?? '',
+    next: partial?.next ?? null,
+  }
+}
+
+export function createParallelNode(partial?: Partial<WfNode>): WfNode {
+  return {
+    id: partial?.id ?? newNodeId('par'),
+    type: 'parallel',
+    name: partial?.name ?? '',
+    props: partial?.props,
+    parallelArms: partial?.parallelArms ?? [createParallelArm(), createParallelArm()],
+    next: partial?.next ?? null,
+  }
+}
+
+export function createWebhookNode(partial?: Partial<WfNode>): WfNode {
+  return {
+    id: partial?.id ?? newNodeId('wh'),
+    type: 'webhook',
+    name: partial?.name ?? '',
+    props: {
+      webhookUrl: '',
+      webhookMethod: 'POST',
+      webhookHeaders: {},
+      webhookTimeoutSeconds: 30,
+      webhookOnFailure: 'fail',
+      maxAttempts: 3,
+      ...partial?.props,
+    },
+    next: partial?.next ?? null,
+  }
+}
+
+export function createNode(type: WfInsertableNodeType): WfNode {
   if (type === 'approval') return createApprovalNode()
   if (type === 'cc') return createCcNode()
+  if (type === 'parallel') return createParallelNode()
+  if (type === 'webhook') return createWebhookNode()
   return createBranchNode()
 }
 
@@ -141,6 +192,21 @@ export function removeBranchArm(branch: WfNode, armId: string): boolean {
   const index = branch.conditions.findIndex((arm) => arm.id === armId)
   if (index < 0 || branch.conditions[index]!.isDefault) return false
   branch.conditions.splice(index, 1)
+  return true
+}
+
+export function addParallelArm(parallel: WfNode, partial?: Partial<WfParallelArm>): WfParallelArm | null {
+  if (parallel.type !== 'parallel') return null
+  const arm = createParallelArm(partial)
+  ;(parallel.parallelArms ??= []).push(arm)
+  return arm
+}
+
+export function removeParallelArm(parallel: WfNode, armId: string): boolean {
+  if (parallel.type !== 'parallel' || !parallel.parallelArms) return false
+  const index = parallel.parallelArms.findIndex((arm) => arm.id === armId)
+  if (index < 0) return false
+  parallel.parallelArms.splice(index, 1)
   return true
 }
 
@@ -185,6 +251,16 @@ export function insertIntoBranchArm(root: WfNode, branchId: string, armId: strin
   return true
 }
 
+export function insertIntoParallelArm(root: WfNode, parallelId: string, armId: string, node: WfNode): boolean {
+  const parallel = findNode(root, parallelId)
+  if (parallel?.type !== 'parallel') return false
+  const arm = parallel.parallelArms?.find((item) => item.id === armId)
+  if (!arm) return false
+  node.next = arm.next ?? null
+  arm.next = node
+  return true
+}
+
 /** 删除非 start 节点;找不到或试图删 start 则 false。 */
 export function removeNode(root: WfNode, nodeId: string): boolean {
   if (root.id === nodeId) return false
@@ -218,8 +294,19 @@ export interface WfModelIssue {
     | 'duplicateArmId'
     | 'branchArmWithoutExpr'
     | 'branchDefaultArmCount'
+    | 'parallelArmCount'
+    | 'emptyParallelArmId'
+    | 'duplicateParallelArmId'
+    | 'nestedParallel'
+    | 'parallelRejectTargetOutsideArm'
+    | 'allPassRatioInvalid'
+    | 'webhookUrlInvalid'
+    | 'webhookMethodInvalid'
+    | 'webhookTimeoutOutOfRange'
+    | 'maxAttemptsOutOfRange'
   nodeId?: string
   armId?: string
+  targetNodeId?: string
   type?: string
 }
 
@@ -230,8 +317,18 @@ export function validateModel(model: WfModel): WfModelIssue[] {
     issues.push({ code: 'rootNotStart' })
     return issues
   }
+  const frames: Array<Pick<WfWalkFrame, 'node' | 'parallelArm'>> = []
+  walkTree(model.root, ({ node, parallelArm }) => {
+    frames.push({ node, parallelArm })
+    return false
+  })
+  const nodeParallelArms = new Map<string, WfParallelArm | null>()
+  for (const { node, parallelArm } of frames) {
+    if (!nodeParallelArms.has(node.id)) nodeParallelArms.set(node.id, parallelArm)
+  }
+
   const seen = new Set<string>()
-  for (const node of flattenChain(model.root)) {
+  for (const { node, parallelArm } of frames) {
     if (!node.id?.trim()) {
       issues.push({ code: 'emptyNodeId', nodeId: node.id })
       continue
@@ -240,7 +337,7 @@ export function validateModel(model: WfModel): WfModelIssue[] {
       issues.push({ code: 'duplicateNodeId', nodeId: node.id })
     }
     seen.add(node.id)
-    if (!WF_M2A_NODE_TYPES.has(node.type)) {
+    if (!WF_M3A2_NODE_TYPES.has(node.type)) {
       issues.push({ code: 'unsupportedType', nodeId: node.id, type: node.type })
     }
     if (node.type !== 'branch' && node.conditions && node.conditions.length > 0) {
@@ -266,6 +363,66 @@ export function validateModel(model: WfModel): WfModelIssue[] {
         if (arms.filter((arm) => arm.isDefault).length !== 1) {
           issues.push({ code: 'branchDefaultArmCount', nodeId: node.id })
         }
+      }
+    }
+    if (node.type === 'parallel') {
+      if (parallelArm) issues.push({ code: 'nestedParallel', nodeId: node.id })
+      const arms = node.parallelArms ?? []
+      if (arms.length < 2) {
+        issues.push({ code: 'parallelArmCount', nodeId: node.id })
+      }
+      const armIds = new Set<string>()
+      for (const arm of arms) {
+        if (!arm.id?.trim()) {
+          issues.push({ code: 'emptyParallelArmId', nodeId: node.id })
+        } else if (armIds.has(arm.id)) {
+          issues.push({ code: 'duplicateParallelArmId', nodeId: node.id, armId: arm.id })
+        }
+        armIds.add(arm.id)
+      }
+    }
+    const rejectTargetId = node.props?.onReject === 'toNode' ? node.props.rejectToNodeId : undefined
+    if (rejectTargetId && nodeParallelArms.has(rejectTargetId)) {
+      const targetArm = nodeParallelArms.get(rejectTargetId)!
+      if (parallelArm !== targetArm && (parallelArm !== null || targetArm !== null)) {
+        issues.push({
+          code: 'parallelRejectTargetOutsideArm',
+          nodeId: node.id,
+          armId: parallelArm?.id,
+          targetNodeId: rejectTargetId,
+        })
+      }
+    }
+    if (node.type === 'approval') {
+      const mode = node.props?.mode ?? 'any'
+      const ratio = node.props?.allPassRatio
+      if (
+        (mode === 'all' && ratio !== undefined && (!Number.isInteger(ratio) || ratio < 1 || ratio > 100))
+        || (mode === 'seq' && ratio !== undefined && ratio !== 100)
+      ) issues.push({ code: 'allPassRatioInvalid', nodeId: node.id })
+    }
+    if (node.type === 'webhook') {
+      const props = node.props
+      let url: URL | null = null
+      try {
+        url = new URL(props?.webhookUrl ?? '')
+      } catch {
+        // 交给下方统一产出可区分 issue。
+      }
+      if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+        issues.push({ code: 'webhookUrlInvalid', nodeId: node.id })
+      }
+      const method = (props?.webhookMethod ?? 'POST').trim().toUpperCase()
+      if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].includes(method)) {
+        issues.push({ code: 'webhookMethodInvalid', nodeId: node.id })
+      }
+      const timeout = props?.webhookTimeoutSeconds
+      if (timeout !== undefined && (!Number.isInteger(timeout) || timeout < 1 || timeout > 120)) {
+        issues.push({ code: 'webhookTimeoutOutOfRange', nodeId: node.id })
+      }
+      const maxAttempts = props?.maxAttempts
+      if (maxAttempts !== undefined && (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 100)) {
+        issues.push({ code: 'maxAttemptsOutOfRange', nodeId: node.id })
       }
     }
   }

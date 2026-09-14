@@ -2,7 +2,7 @@
 
 > 文档入口：[`README.md`](./README.md)
 
-日期:2026-08-17。前置材料:[`workflow-engine-research-2026-08-10.md`](./workflow-engine-research-2026-08-10.md)(调研)、本地参考库 `C:\HuHuHu\参考项目\工作流\SUMMARY.md` 与各仓 `_TENON_REF.md`。本文把调研收敛为**可开工的设计决策**;2026-08-17 经磨盘八问逐条裁决(见§十),2026-08-23 在不翻转审批内核的前提下把 AI Decision 上调为 M3b 战略交付。
+日期:2026-08-17。前置材料:[`workflow-engine-research-2026-08-10.md`](./workflow-engine-research-2026-08-10.md)(调研)、本地参考库 `../参考项目/工作流/SUMMARY.md` 与各仓 `_TENON_REF.md`。本文把调研收敛为**可开工的设计决策**;2026-08-17 经磨盘八问逐条裁决(见§十),2026-08-23 在不翻转审批内核的前提下把 AI Decision 上调为 M3b 战略交付。
 
 ## 〇、决策总览(一屏版)
 
@@ -145,6 +145,49 @@ Controller → WfTaskService.ApproveAsync()          (virtual,可覆写)
 2. **业务管理员腿(M3)——简易动态表单,做在包内不拆包**:~10 种控件(文本/数字/金额/日期/单多选/人员/附件…)、单列排布、JSON schema 渲染,让不写代码的管理员建"表单+审批"流程;审批节点上按字段配可见/可编辑(`formPerms`)。**做在包内的原因**:字段权限是表单与审批链的耦合点,拆包会把耦合变成跨包契约。
 
 **永久不做**:布局设计器、公式/联动、子表——要这些的场景走挂载点自写表单页。这条线挡住 CCFlow"表单引擎与流程引擎绑死"的复杂度,也躲开 wflow/jsonflow"设计器开源、引擎商业"的陷阱。
+
+### 5.1 简易动态表单契约（T05 定稿，2026-09-09）
+
+`formSchema` 是定义级内置表单，`formComponent` 是消费者自定义表单挂载点。二者只能选一个，也可以都没有；两者同时存在属于模型错误。没有表单时 `formSchema = null`、`formComponent = null`，节点上的 `formPerms` 不产生运行时效果。`formComponent` 只保存消费者页面的相对路径，去除首尾空白后最多 256 字符且不得含控制字符；服务端不探测消费者程序集或前端文件是否存在。
+
+内置表单固定使用现有 10 个 `WfFormFieldType`：`text`、`textarea`、`number`、`money`、`date`、`datetime`、`select`、`multiSelect`、`user`、`attachment`。schema 版本固定为 `1`；字段按数组顺序单列展示，数组顺序就是展示和提交顺序。一个 schema 至少有 1 个字段、最多 50 个字段，整个 JSON 不超过 64 KiB。删除最后一个字段时设计器将 schema 置为 `null`，不保存空表单对象。
+
+字段公共契约如下：
+
+| 字段 | 契约 |
+|---|---|
+| `key` | 机器键，必须匹配 ASCII 正则 `^[A-Za-z][A-Za-z0-9_]{0,63}$`；大小写敏感；同一 schema 内必须精确唯一。它是变量 JSON、条件表达式引用和 `formPerms.field` 的稳定身份，改名等同于删旧字段再建新字段。 |
+| `label` | 展示名，去除首尾空白后长度 1–128；不得含控制字符。 |
+| `required` | 布尔值，缺省为 `false`。发起态和可编辑办理态校验必填；隐藏或只读字段不因该标记制造无法填写的任务，服务端保留已有值。 |
+| `placeholder` | 可选字符串；空字符串按未设置处理，去除首尾空白后最多 256 字符，不得含控制字符。它只提供提示，不是默认值。 |
+| `props` | 可选对象；`null`、缺省和空对象使用该控件的默认值。除下表列出的键外不得出现未知键，不能把字符串化 JSON 再嵌套一层。 |
+
+`props` 的类型专属键和边界如下。表中未列出的键一律拒绝；数值必须是有限 JSON number，整数字段必须是整数。
+
+| 类型 | `props` |
+|---|---|
+| `text` | `maxLength` 可选，整数 1–256，缺省 256。 |
+| `textarea` | `maxLength` 可选，整数 1–4000，缺省 4000；`rows` 可选，整数 2–8，缺省 4。 |
+| `number` | `min`、`max`、`precision` 均可选；`precision` 为整数 0–6，且 `min <= max`。 |
+| `money` | `min`、`max` 可选且 `min <= max`；提交值固定为最多 2 位小数，不提供货币符号或汇率配置。 |
+| `date` | `min`、`max` 可选，格式严格为 `YYYY-MM-DD` 且 `min <= max`。 |
+| `datetime` | `min`、`max` 可选，必须是可解析的 ISO 8601 时间且 `min <= max`；保存时保留带时区的字符串。 |
+| `select` | 必须有 `options`，数量 1–100；每项为 `{label,value}`，`label` 1–128 字符、`value` 1–64 字符，`value` 精确唯一。 |
+| `multiSelect` | 同 `select`；`maxSelected` 可选，整数 1–100，且不能超过选项数。 |
+| `user` | `multiple` 可选布尔值，缺省 `false`；`maxSelected` 仅在 `multiple=true` 时可用，整数 1–100，缺省 20。单选提交一个正用户 Id，多选提交不重复的正用户 Id 数组。 |
+| `attachment` | `multiple` 可选布尔值，缺省 `false`；`maxCount` 可选整数 1–20（单选固定为 1）；`accept` 可选字符串最多 256 字符；`maxSizeMb` 可选整数 1–100，缺省 10。文件实际类型、大小和存储权限仍由文件服务端强制。 |
+
+字段权限只在 `approval` 节点解释，保留现有 `hidden`、`readonly`、`editable` 三值。`formPerms` 缺省或没有某字段时默认为 `editable`；不要求为每个字段写一行。相同 `field` 出现两次属于发布模型错误，不能采用最后一项覆盖；当内置 schema 存在时，引用不存在的字段也属于发布模型错误。`hidden` 不渲染且客户端提交的同名值被服务端丢弃，`readonly` 渲染但办理人不能修改，`editable` 允许修改；`required` 只对当前允许编辑的字段执行输入校验。发起态不使用审批节点权限矩阵，所有未被消费者表单自行约束的内置字段按 schema 规则处理。
+
+为兼容 M1/M2 草案，`formSchema = null` 或使用 `formComponent` 时，`formPerms` 不参与内置表单运行时；旧定义中的已有数组原样保留但不赋予权限效果，设计器不会继续生成它。只有 `approval + formSchema` 的组合才执行上述未知字段和重复字段发布校验；非审批节点的 `formPerms` 同样不生效。内置 schema 与消费者 `formComponent` 不可叠加，不能借 `formPerms` 约束消费者自定义字段。
+
+服务端必须强制 schema 版本、组合关系、JSON 大小、字段数量、键/标签/占位符长度与字符集、键唯一性、控件类型、专属 props 的未知键和数值/选项边界、`formPerms` 的重复/未知字段规则，以及发起和办理时的类型、必填、访问级别和文件安全校验。前端负责单列编辑器、即时提示、控件默认值、排序和可用选项展示；前端校验只是体验优化，不能替代服务端校验。发布时将 `WfModel.FormSchema` 按同一 canonical JSON 同步写入版本的 `FormSchema` 快照；已发布版本和在途实例只读该快照。
+
+### 5.2 Vue 内置表单运行时值（T08 定稿，2026-09-09）
+
+发起态从已发布版本的 `formSchema` 按字段顺序渲染单列表单，编辑值写入 `variablesJson` 对象；查看态反序列化同一对象并以只读控件回放。文本、选项和日期值保持字符串，数字/金额保持 JSON number；`datetime` 保存带时区的 ISO 8601 字符串。人员保存正用户 Id（单选为一个值，多选为不重复数组），附件保存文件服务返回的正文件 Id（单选为一个值，多选为不重复数组），不把 `storagePath` 写入业务变量。
+
+Vue 在发起提交前执行必填、类型、范围、选项、人员 Id 和附件 Id 校验；该校验只改善交互，服务端仍是最终边界。变量 JSON 根不是对象或无法解析时，运行时显示数据错误并阻止提交，不把损坏数据转换为空对象；合法的未知变量键在编辑过程中保留。`formComponent` 与 `formSchema` 的组合仍由服务端拒绝，前端入口在异常双配置时优先保留消费者挂载点，避免内置表单静默替代业务组件。
 
 ## 六、前端设计(UI 选型的最终答案)
 
@@ -341,7 +384,7 @@ AI 分成两条互不混用的能力线：
 
 两条线都不把模型 SDK、Prompt 或供应商配置耦合进 `TenonAdmin.Workflow`。Provider 类型留在 Adapter；审计只保存必要的模型/Prompt/schema/policy 版本 hash、输入摘要、证据引用 hash、受限结构化结果、耗时与 token/费用统计，模型自由文本不落库。M3b AI Decision v0 是 AI 原生路线的战略交付；RAG、Agent、更多 Provider 与设计 Copilot 后置到 M3+。
 
-当前已交付的是 M3b-0 shadow-only 基础切片；上文“达到评测阈值后开放低风险自动放行”属于后续受控阶段，不代表当前实现已经取得自动审批权限。Round 19 验证已通过，下一项为 M3B0-17 独立代码/安全/简化审查。
+当前已交付的是 M3b-0 shadow-only 基础切片；上文“达到评测阈值后开放低风险自动放行”属于后续受控阶段，不代表当前实现已经取得自动审批权限。M3B0-17 至 M3B0-20 及后续审查修复已经完成，最终聚焦矩阵 326/326 通过，代码与架构复核无 blocker；下一阶段为 M3a-2 Vue 产品面。
 
 ## 十五、数据库评审增量与 M3a 切片定案（2026-08-24）
 
@@ -362,6 +405,8 @@ AI 分成两条互不混用的能力线：
 | **M3a-2 产品面** | 简易动态表单 + 字段权限矩阵、动词封顶（加签/减签/拿回/比例票签 + 长期委托）、并行分支（多 token）、React 模板整体 port | 与 M3b 并行推进，只挡 GA |
 
 依赖关系：`M2c → M3a-1 → M3b`；`M3a-2` 与 `M3b` 并行。GA 门槛不变（双模板 feature 对齐 + 文档站 guide + 远程节点无长事务/崩溃可恢复/同一 execution 只推进一次）。
+
+当前执行再分为两个交付阶段：先完成 **M3a-2 Vue**（Webhook 设计器、简易动态表单/字段权限、高级动词和并行分支），待 Vue schema 与交互稳定后再做 **M3a-2 React port**。M3a-2 Vue 完成只关闭 Vue 阶段，不能宣称完整 M3a-2 或 GA 完成。Vue 阶段的稳定任务拆分见 [`m3a2-vue-task-plan-2026-09.md`](./m3a2-vue-task-plan-2026-09.md)。
 
 ### 15.3 Webhook 按一等功能交付
 
@@ -396,3 +441,118 @@ TenonAdmin 以内核包分发，自身没有生产流量，shadow mode 的评测
 - 自动放行**默认关闭**，按流程定义显式开启；内核不提供“开箱即用”的放行阈值默认值；
 - 消费者必须先在自己的数据上跑 shadow 达标，“何时由 shadow 切自动放行”是每个部署自己的决定；
 - 模型自报 `confidence` 只作记录与事后评测，不单独作为放行条件——policy 主判据是可确定性核验的 `reasonCodes`、`riskFlags` 与证据完整性（细则见 AI 基石 §4.2、§4.7）。
+
+### 15.5 M3 高级审批动词语义矩阵（T11，2026-09-09）
+
+本节冻结 M3a-2 Vue 的五个高级动词。后续实现可以增加存储字段和适配层，但不能改变调用者、状态机、审计、幂等和并发语义。这里的“权限”始终是两道门：规范化路由权限码 + 动词自己的业务资格；超级管理员没有绕过业务资格的隐式后门。
+
+#### 共同规则
+
+- **状态范围**：比例票签、加签、减签和拿回只作用于 `Running` 实例的当前人工审批任务；终态实例、已删除任务、非 `Pending` 的调用者和不属于当前实例的目标统一拒绝。并行多 Token 尚未定稿前，拿回只接受当前单 Token 主链；T17 再单独定义并行语义。
+- **并发锚**：只改变当前待办办理人的动作先用 `wf_task.Version` CAS；会改变 token 位置或实例状态的动作必须在同一事务内依次使用 task、token、instance 的期望状态 + 版本 CAS。任何 CAS 失败返回 `TaskConflict (48007)`，事务不留下半条历史或通知。
+- **历史**：人工动作追加 `wf_his_task`，流程事件追加 `wf_history`；两者只追加不改写。`AddSign`/`RemoveSign` 不伪装成 `Transfer`，`TakeBack` 不删除原审批记录。新增事件值只能追加，不能重排已有 `WfHistoryEventType` 数值。
+- **通知**：事务提交后才调用现有 `IWorkflowNotifier`/`IRealtimePublisher`；不新建 `SysNotice` 通道。回执重放不重复发通知；失败按现有结构化日志与指标规则记录，不回滚已提交领域状态。
+- **RequestId/receipt**：所有用户触发的五类动作及长期委托规则变更都必须走同事务 `TryBeginAsync` → 领域变更 → `CommitAsync`。同一 scope、命令、目标、操作者和 request key 的重试原样返回第一次成功结果；业务失败回滚且不留回执。动作的目标用户/规则窗口等参数必须纳入规范化请求摘要，摘要不一致返回 `RequestIdConflict`，绝不把不同动作当重试执行。`Urge` 的既有“可重复、无 receipt”语义不改变。
+- **权限码与错误码**：实现使用独立路由权限 `POST:/api/v1/workflow/task/add-sign`、`POST:/api/v1/workflow/task/remove-sign`、`POST:/api/v1/workflow/task/take-back`，长期委托规则管理使用独立的规则路由权限；业务错误不复用一次性 `DelegateTargetInvalid (48026)`。新增错误码预留为 `48035 SignNotAllowed`、`48036 SignTargetInvalid`、`48037 TakeBackNotAllowed`、`48038 DelegationRuleNotFound`、`48039 DelegationRuleInvalid`、`48040 DelegationCycle`、`48041 DelegationScopeDenied`、`48042 RequestPayloadConflict`、`48043 DelegationRuleConflict`。`TaskConflict (48007)` 仍专用于任务/实例/token 竞争。
+
+#### 比例票签
+
+比例只对 `mode=all` 的会签生效；`mode=any` 继续一票通过，忽略比例；`mode=sequential` 不允许小于 100 的比例。`allPassRatio` 缺省值为 100，因而现有会签行为保持不变。
+
+| 项目 | 冻结语义 |
+|---|---|
+| 调用者 | 当前任务的任一 `Pending` 审批人，沿用 `Approve/Reject` 的权限与办理资格。 |
+| 分母与门槛 | 当前 `NodeVisitId` 上所有未 `Skipped` 的审批 actor（`Waiting`、`Pending`、`Done` 都计入）为分母；所需同意数为 `ceil(分母 × allPassRatio / 100)`，最小为 1。被加签/减签后在同一事务按新 actor 集合重算。 |
+| 提前通过 | `Done` 的同意数达到门槛立即关闭当前 task，推进 token；已满足门槛的后续动作因 task CAS 失败。 |
+| 提前失败 | `同意数 + 尚未表态的非 Skipped actor 数 < 门槛` 时立即失败并终止/按既有拒绝路由处理；因此 100% 会签任一拒绝即失败，低比例会签只有在无法达到门槛时才失败。 |
+| 影响与审计 | `Approve/Reject` 各写一条既有 `WfHisTask` 和 `TaskCompleted` 事件；未达门槛的同意仍推进 token 版本，避免与撤销竞争无 CAS 保护。比例计算不产生新 token。 |
+
+#### 加签
+
+| 项目 | 冻结语义 |
+|---|---|
+| 调用者与状态 | 当前 task 的 `Pending` 审批人，且实例仍为 `Running`；一次命令只加一名用户，重复目标拒绝。 |
+| 目标 | 已启用、与调用者处于同一租户/机构范围的用户；不得是自己、现有 actor、已 `Done` 的历史办理人或无效用户。 |
+| actor/task/token | `Any/All` 新 actor 为 `Pending` 并增加比例分母；`Sequential` 新 actor 追加到末位并先为 `Waiting`。只递增 task 版本；不移动 token、不改变实例状态。 |
+| 历史与通知 | 追加 `WfHisTask.Action=AddSign`，并在结构化载荷中记录 caller、target、NodeVisitId、原/新分母和门槛；追加 sign-change 流程事件。提交后只给新增办理人发送待办通知，并刷新当前参与者。 |
+| 失败 | 目标非法用 `SignTargetInvalid (48036)`；调用者、实例或 task 状态不符用 `SignNotAllowed (48035)`；CAS 竞争用 `TaskConflict (48007)`。 |
+
+#### 减签
+
+| 项目 | 冻结语义 |
+|---|---|
+| 调用者与目标 | 调用者仍须是当前 task 的 `Pending` 审批人；目标只能是本 task 的 `Pending` 或 `Waiting` actor，不能是 `Done/Skipped`，也不能移除自己。一次命令只减一名用户。 |
+| 最后一人保护 | 减除后至少保留一名未 `Skipped` actor；`Sequential` 不得移除当前唯一 `Pending` actor。目标是最后一名可办理人时返回 `SignTargetInvalid`，不留下空 task。 |
+| actor/task/token | 目标 actor 翻为 `Skipped`，task 版本递增；token 不移动。按剩余 actor 重算比例门槛，若已达到门槛则在本事务内完成 task 并推进 token，否则保持当前 task。 |
+| 历史与通知 | 追加 `WfHisTask.Action=RemoveSign` 与结构化目标/门槛载荷，追加 sign-change 事件；提交后通知被移除人刷新权限，并刷新剩余办理人。 |
+| 失败 | 资格/状态不符用 `SignNotAllowed`，目标不合法或最后一人保护用 `SignTargetInvalid`，CAS 竞争用 `TaskConflict`。 |
+
+#### 拿回
+
+“拿回”是审批人撤回自己刚刚通过的节点，不是发起人撤销，也不是退回后重提；三者不共用资格或状态码。
+
+| 项目 | 冻结语义 |
+|---|---|
+| 调用者与目标 | `Running` 实例中，调用者必须是自己最近一次 `Approve` 的人工审批人。目标不由客户端任意指定，只能是该条审批记录对应的上一节点访问；同一节点重开也生成新的 `NodeVisitId`。界面只展示这一合法目标。 |
+| 时间窗口 | 调用者通过后，目标下游不得出现任何新的人工表态、转办、一次性委托、加减签或机器 execution/outbox 终态；下游只创建了待办不算表态。任一后续动作已发生，返回 `TakeBackNotAllowed (48037)`。已拒绝、已终态或无自己的最近通过记录同样拒绝。 |
+| actor/task/token | 在同一事务中 CAS 当前下游 task 并关闭其 actor，CAS token/instance 后回到目标节点重新进入；旧审批和下游历史保留，生成新的访问、task 和办理人解析结果，变量快照不回滚。 |
+| 历史与通知 | 追加 caller 的 `WfHisTask.Action=TakeBack`、原 task/目标 node/新 NodeVisitId 载荷和 take-back 事件；提交后通知被关闭的下游办理人，并按新 task 的既有规则通知目标节点办理人。 |
+| 失败与幂等 | 资格、时间窗、目标或非主链状态不符用 `TakeBackNotAllowed`；task/token/instance CAS 竞争用 `TaskConflict`；重试复用同一 receipt，不重复回退或通知。 |
+
+#### 长期委托
+
+长期委托独立于现有 `IWfTaskService.DelegateAsync`：后者仍是“只委托这一件待办”的一次性动作，不读取规则、不改写为长期委托。
+
+| 项目 | 冻结语义 |
+|---|---|
+| 调用者与范围 | 规则所有者只能管理自己在当前租户/机构 scope 内的规则；管理员必须持有独立规则管理权限，且只能管理同一 scope。规则管理不是审批 task 动作，不因持有 task 权限自动获得。 |
+| 规则形状 | 每个原责任人在一个 scope 只允许一个有效规则槽：`OriginalUserId → DelegateUserId`、`Enabled`、UTC `[StartsAt, EndsAt)`（`StartsAt < EndsAt`）。自委托、无效用户、跨 scope、空窗口和冲突窗口拒绝；启停与删除均保留规则历史。软删规则重新启用时复用原 `RuleId`，并分别保留删除与启用审计。 |
+| 链式与循环 | 解析只做一跳：原责任人命中规则后得到有效 delegate，不递归套用 delegate 的规则；因此 A→B、B→C 时 A 的任务交给 B。规则写入/启用时沿当前有效图检测自环和环路，发现环路返回 `DelegationCycle (48040)`，不保存或启用。 |
+| actor/task/token | 规则只在节点创建 actor 时生效；有效期外或 disabled 回退原责任人。有效规则把 actor 指派给 delegate，同时在 assignment snapshot/历史中保留 `OriginalUserId`、`DelegateUserId`、RuleId 和 scope。对既有 task 不追溯改派，task/token 不因规则启停而移动；按有效 delegate 去重，避免重复 Pending actor。 |
+| 历史与通知 | 节点任务创建/办理历史记录原责任人和实际办理人，规则变更另写规则审计；提交后待办只通知实际 delegate，规则启停通知规则所有者和 delegate。规则变化不为已经创建的 task 重新发通知。 |
+| 幂等与并发 | 创建用 scope + owner + request key 的规则变更 receipt，更新/启停/删除用 RuleId + owner + request key；重试必须先按完整 identity 命中 receipt 并原样返回首次结果，再检查当前规则实体状态。因此原 identity 在规则 disabled 或软删后仍可重放，软删规则的新 request 仍返回 `DelegationRuleNotFound`。规则行使用版本 CAS，同一 owner 的两个更新只允许一个胜出。规则解析是节点创建事务内的只读快照，不另开事务、不持有远程调用。 |
+| 错误 | 不存在/已删除规则用 `DelegationRuleNotFound (48038)`；窗口、用户或重复槽非法用 `DelegationRuleInvalid (48039)`；循环用 `DelegationCycle (48040)`；scope 越权用 `DelegationScopeDenied (48041)`；规则更新 CAS 竞争用 `DelegationRuleConflict (48043)`，不能静默覆盖。 |
+
+### 15.6 M3a-2 并行 fork/join 语义与数据模型（T17，2026-09-09）
+
+本节冻结并行节点的最小契约；T17 只定稿，不实现字段、表、校验或运行时。
+
+#### 定义与身份
+
+- 并行节点使用 `parallelArms[]`，每臂只有 `id/name/next`；节点自身的 `parallel.next` 是 join 后唯一后继。发布时要求至少 2 臂、同一并行节点内 `id` 非空且唯一；`next` 可空，表示空臂。并行臂不复用排他分支的 `conditions`，臂内禁止再出现并行节点。
+- 每次访问并行节点只生成一次 `ForkId`；同一访问的重试必须复用它，新的访问（包括重提后重新走到该节点）才生成新的 `ForkId`。父 token 保留该次 `ParentNodeVisitId`，作为 fork 历史和回放身份。
+- `WfToken` 增加 nullable `ParentTokenId/ForkId/PendingArmCount`。fork 后父 token 停在并行节点并置为 `WaitingJoin`，`PendingArmCount` 为未完成臂数；非空臂各创建一个 `Active` 子 token，子 token 的 `ParentTokenId/ForkId` 指向本次 fork。旧串行 token 三列均为 null。
+- 新增 `WfParallelArm`，以 `(ForkId, ArmId)` 为主键，字段为 `ParentTokenId`、nullable `ChildTokenId`、`Status`、`Version`、`ParentNodeVisitId`、nullable `ChildEntryNodeVisitId`、nullable `Reason`。状态只需 `Active/Completed/Cancelled`；空臂不创建 child token，直接以 `Completed` 写入，`ChildTokenId/ChildEntryNodeVisitId` 为 null。
+
+#### 完成与汇合
+
+- 人工、Webhook 和 AI 节点继续共用现有 task/execution → Agenda → token 执行链。retry、AI shadow、manual fallback 或人工任务未完成时，该臂仍为 `Active`，不得参与 join。
+- 非空臂到达末端时，在同一事务内 CAS 子 token `Active → Completed`、CAS 对应 arm `Active → Completed`，并原子递减父 token 的 `PendingArmCount`。迟到或重复完成因 child/arm CAS 失败只读取既有结果，不重复递减或推进。
+- 只有完成者将 `PendingArmCount` 从 `1 → 0`，且同时命中父 token `Status=WaitingJoin + ForkId + Version` CAS，才有权把父 token 恢复为 `Active` 并推进到 `parallel.next`；其余竞争者退出。递减和 join 都以数据库条件更新为准，Repeatable Read 下 CAS 失败者必须在新事务读取新版本后重试，不能依赖旧快照判断“尚未归零”，避免丢失唤醒。
+- fork 创建时若所有臂均为空，在同一事务内写完 `Completed` arm、令父 token 完成 `1 → 0` join 并进入 `parallel.next`，不留下 `WaitingJoin`。混合空臂只把空臂计为已完成，等待其余臂。
+
+#### 控制动作、历史与阶段边界
+
+- `reject` 的 `terminate` 策略终止实例，并在同一事务取消本 fork 的父/兄弟子 token、未完成 arm、活跃 task 和 execution。`toNode` 只能跳到当前 `ForkId + ArmId` 内的节点；跨臂目标及从 fork 外发布到臂内的目标在发布时拒绝。
+- 实例 `cancel` 取消父子 token、未完成 arm 以及活跃 task/execution。`return` 离开当前并行区域时先取消整个 fork，再只恢复 parked parent 为唯一 `Active` token，并清空其 `ForkId/PendingArmCount` 后执行既有退回；不得保留孤儿子 token。退回后的 `resubmit` 从 start 重走，走到新的并行访问时生成新 `ForkId`。
+- `wf_history` 追加 `fork/armComplete/join/cancel` 事件；payload 至少包含 `ForkId/ArmId/ParentTokenId/ChildTokenId/ParentNodeVisitId/ChildEntryNodeVisitId` 及状态/原因。回放以 `ForkId + ArmId + Sequence` 归组和排序，不用当前 token 状态反推旧 fork。
+- T18 实现 schema、字段、表、索引、迁移和发布校验；T19 实现 fork/join 运行时；T20 验证竞争与崩溃恢复。T17 不宣称上述实现或四数据库契约已经通过。
+
+### 15.7 M3a-2 Vue 最终实现语义（2026-09-13）
+
+本节是 T25A 收口后的实现记录，和上面的冻结契约一起作为当前事实源。
+
+- **表单历史权限**：有当前待办时按当前节点的 `formPerms` 渲染；历史办理人没有当前待办时，按其历史办理任务对应节点的权限渲染；发起人、抄送人和监控者按当前节点或终态已访问节点回退。`hidden` 字段不返回或不渲染，`readonly` 只能查看，`editable` 才能修改；服务端仍负责合并变量、过滤隐藏值和校验恶意提交。
+- **Vue 权限与清空**：实例详情按当前用户全部 pending task 的适用节点合并字段权限，冲突时固定取 `hidden > readonly > editable`；内置日期/时间控件清空时写入显式 `null`，与附件清空保持同一删除语义，序列化后由服务端合并并持久化。
+- **拿回资格**：调用者必须是同一主 token 上最近一次本人 `Approve` 的办理人；下游动作窗口按该 token 判断，目标 task、token 和实例依次 CAS，详情只从当前用户全部 pending task 投影合法 `MyTakeBackTaskId`。
+- **委托通知事务边界**：长期委托规则的领域写入、审计和 receipt 在事务提交后才触发通知。通知失败只记录结构化 `Warning`，不回滚已经提交的规则；receipt 重放不重复发送通知。
+- **委托并发与异常**：长期委托 Add/Update/Delete 在同一机构 scope 的数据库锚点写锁下读取规则图并写入；receipt/委托只有在确认唯一键冲突时才查询竞争记录，连接、权限和其他基础设施异常原样传播。
+- **并行退回**：退回离开并行区域时先取消旧 fork 的未完成臂及其子 token/task/execution，再恢复唯一 parked parent。恢复同时把数据库和内存中的 parent `NodeId` 设为退回目标节点，清空 `ForkId/PendingArmCount`，随后沿既有退回命令继续执行；重提再次进入并行节点时生成新的 `ForkId`。
+- **运行时安全投影**：发起、实例详情、待办和历史回放使用受限 runtime projection，只公开可运行的节点类型、名称、结构、字段权限和必要执行状态；Webhook 凭据、AI 指令、办理人参数及原始 `PayloadJson` 不进入这些读取模型。历史回放按 `Sequence → CreateTime → Id` 排序，并以 `ForkId + ArmId` 保持多 Token 语义。
+- **表单 ID 表示**：表单 schema 不生成独立的表单 ID；`user` 控件中的用户 ID 和 `attachment` 控件中的 `SysFile.Id` 仍是后端 `long` 雪花 ID。当前雪花布局低于 JavaScript 安全整数上限，前端通常提交 JSON number；运行时同时接受十进制 JSON string 以兼容历史变量和通用 `int64` 客户端，解析后仍按 `long` 校验和查询。
+- **表单变量损坏处理**：变量 JSON 必须是对象；非法 JSON、数组/标量根节点、重复键和非法 ID 均拒绝提交或读取，不转换为空对象掩盖数据损坏。重提内置表单先按当前 schema 校验并保存最新变量；自定义 `formComponent` 继续由消费者负责其业务表单协议。
+- **OpenAPI 动态字典**：`WfFormField.props` 与 `WfAssignee.params` 是自由 JSON 对象，生成的两套 `schema.d.ts` 必须来自真实 Host，不能退化为 `Record<string, never>`，也不得手工编辑。
+
+T18–T23 已实现并验证；SQLite、MySQL、PostgreSQL、SQL Server 的代表流程各为 `29/29` 通过。T24/T25/T25A 的本地证据为 T25A 前置后端回归 `122/122`、最终修复后回执/回填/identity 聚焦 `33/33`、Vue 单元测试 `179/179`、Vue 工作流 E2E `1/1`、React typecheck/build 通过、Release build `0 warning / 0 error`；完整 Vue E2E 的其余两个失败来自既有 MFA 绑定元素定位和 RBAC 重复成功消息的严格定位，不属于 M3a-2 工作流用例。contract drift 已真实生成两套 schema 且字节一致，退出码 1 仅表示相对未提交 HEAD 存在预期 API/schema diff。最终独立 `code-reviewer` 为 `APPROVE`、`architect` 为 `CLEAR`。
+
+当前阶段只关闭 **M3a-2 Vue**。React 工作流页面 port、Task 8c outbox consumer/transport、AI 自动放行和 M3+ 仍是后续范围。

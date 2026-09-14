@@ -5,7 +5,7 @@ using TenonAdmin.Core;
 namespace TenonAdmin.Workflow;
 
 /// <summary>
-/// 审批任务端点(设计方案 §七):待办 / 已办 + 同意 / 拒绝 / 转办 / 委托 / 催办 / 退回,共 8 条。
+/// 审批任务端点(设计方案 §七):待办 / 已办 + 基础办理动词与独立加签 / 减签端点。
 /// 全部 <c>[ActiveSession]</c>——办理人取自令牌,不接受任意 userId。
 /// </summary>
 [ApiController]
@@ -13,6 +13,7 @@ namespace TenonAdmin.Workflow;
 [ActiveSession]
 public class WfTaskController(
     IWfTaskService taskService,
+    IWfTaskSignService signService,
     ICurrentUser currentUser) : ControllerBase
 {
     private long CurrentUserId => currentUser.UserId ?? throw new AdminException(ErrorCode.TokenInvalid);
@@ -38,20 +39,36 @@ public class WfTaskController(
     [OperationLog("审批同意")]
     public async Task<Result<WfEngineResult>> Approve(
         WfTaskActionInput input,
-        CancellationToken cancellationToken) =>
-        Result<WfEngineResult>.Ok(
-            await taskService.ApproveAsync(
-                input.TaskId, CurrentUserId, input.Comment, input.RequestId, cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        if (input.VariablesJson is not null && taskService is not IWfFormTaskService)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.FormRuntimeUnavailable);
+
+        var result = taskService is IWfFormTaskService formTaskService
+            ? await formTaskService.ApproveWithVariablesAsync(
+                input.TaskId, CurrentUserId, input.Comment, input.RequestId, cancellationToken, input.VariablesJson)
+            : await taskService.ApproveAsync(
+                input.TaskId, CurrentUserId, input.Comment, input.RequestId, cancellationToken);
+        return Result<WfEngineResult>.Ok(result);
+    }
 
     /// <summary>拒绝</summary>
     [HttpPost("reject")]
     [OperationLog("审批拒绝")]
     public async Task<Result<WfEngineResult>> Reject(
         WfTaskActionInput input,
-        CancellationToken cancellationToken) =>
-        Result<WfEngineResult>.Ok(
-            await taskService.RejectAsync(
-                input.TaskId, CurrentUserId, input.Comment, input.RequestId, cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        if (input.VariablesJson is not null && taskService is not IWfFormTaskService)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.FormRuntimeUnavailable);
+
+        var result = taskService is IWfFormTaskService formTaskService
+            ? await formTaskService.RejectWithVariablesAsync(
+                input.TaskId, CurrentUserId, input.Comment, input.RequestId, cancellationToken, input.VariablesJson)
+            : await taskService.RejectAsync(
+                input.TaskId, CurrentUserId, input.Comment, input.RequestId, cancellationToken);
+        return Result<WfEngineResult>.Ok(result);
+    }
 
     /// <summary>转办</summary>
     [HttpPost("transfer")]
@@ -93,4 +110,37 @@ public class WfTaskController(
         Result<WfEngineResult>.Ok(
             await taskService.ReturnAsync(
                 input.TaskId, CurrentUserId, input.TargetNodeId, input.Comment, input.RequestId, cancellationToken));
+
+    /// <summary>加签(追加一名当前节点办理人)</summary>
+    [HttpPost("add-sign")]
+    [RolePermission]
+    [OperationLog("审批加签")]
+    public async Task<Result<WfEngineResult>> AddSign(
+        WfTaskActionInput input,
+        CancellationToken cancellationToken) =>
+        Result<WfEngineResult>.Ok(
+            await signService.AddSignAsync(
+                input.TaskId, CurrentUserId, input.ToUserId, input.Comment, input.RequestId, cancellationToken));
+
+    /// <summary>减签(移除一名尚未表态的当前节点办理人)</summary>
+    [HttpPost("remove-sign")]
+    [RolePermission]
+    [OperationLog("审批减签")]
+    public async Task<Result<WfEngineResult>> RemoveSign(
+        WfTaskActionInput input,
+        CancellationToken cancellationToken) =>
+        Result<WfEngineResult>.Ok(
+            await signService.RemoveSignAsync(
+                input.TaskId, CurrentUserId, input.ToUserId, input.Comment, input.RequestId, cancellationToken));
+
+    /// <summary>拿回自己最近通过的审批并重入原节点</summary>
+    [HttpPost("take-back")]
+    [RolePermission]
+    [OperationLog("审批拿回")]
+    public async Task<Result<WfEngineResult>> TakeBack(
+        WfTaskActionInput input,
+        CancellationToken cancellationToken) =>
+        Result<WfEngineResult>.Ok(
+            await signService.TakeBackAsync(
+                input.TaskId, CurrentUserId, input.Comment, input.RequestId, cancellationToken));
 }

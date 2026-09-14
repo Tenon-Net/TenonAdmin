@@ -3,12 +3,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
-import type { WfNode, WfNodeType } from '@/workflow/schema'
+import type { WfInsertableNodeType, WfNode } from '@/workflow/schema'
 import WfAddNode from './WfAddNode.vue'
 import WfNodeCard from './WfNodeCard.vue'
 import '../../wf-identity.css'
-
-type InsertableNodeType = Extract<WfNodeType, 'approval' | 'cc' | 'branch'>
 
 const props = defineProps<{
   root: WfNode | null | undefined
@@ -18,11 +16,12 @@ const props = defineProps<{
   readonly?: boolean
   visitedSet?: Set<string>
   currentSet?: Set<string>
+  allowParallel?: boolean
 }>()
 const emit = defineEmits<{
   select: [nodeId: string]
-  'add-after': [afterId: string, type: InsertableNodeType]
-  'add-at-arm-head': [branchId: string, armId: string, type: InsertableNodeType]
+  'add-after': [afterId: string, type: WfInsertableNodeType]
+  'add-at-arm-head': [branchId: string, armId: string, type: WfInsertableNodeType]
   'remove-node': [nodeId: string]
   'add-arm': [branchId: string]
   'remove-arm': [branchId: string, armId: string]
@@ -42,37 +41,23 @@ const chain = computed(() => {
   return nodes
 })
 
+interface WfDisplayArm {
+  id: string
+  name: string
+  next?: WfNode | null
+  isDefault?: boolean
+}
+
+function armsFor(node: WfNode): WfDisplayArm[] {
+  if (node.type === 'branch') return node.conditions ?? []
+  if (node.type === 'parallel') return node.parallelArms ?? []
+  return []
+}
+
 function renameArm(branchId: string, armId: string, event: Event) {
   emit('rename-arm', branchId, armId, (event.target as HTMLInputElement).value)
 }
 
-function forwardSelect(nodeId: string) {
-  emit('select', nodeId)
-}
-
-function forwardAddAfter(afterId: string, type: InsertableNodeType) {
-  emit('add-after', afterId, type)
-}
-
-function forwardAddAtArmHead(branchId: string, armId: string, type: InsertableNodeType) {
-  emit('add-at-arm-head', branchId, armId, type)
-}
-
-function forwardRemoveNode(nodeId: string) {
-  emit('remove-node', nodeId)
-}
-
-function forwardAddArm(branchId: string) {
-  emit('add-arm', branchId)
-}
-
-function forwardRemoveArm(branchId: string, armId: string) {
-  emit('remove-arm', branchId, armId)
-}
-
-function forwardRenameArm(branchId: string, armId: string, name: string) {
-  emit('rename-arm', branchId, armId, name)
-}
 </script>
 
 <template>
@@ -89,23 +74,32 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
         @remove="emit('remove-node', node.id)"
       />
 
-      <section v-if="node.type === 'branch'" class="wf-branch" :aria-label="t('workflow.node.branch')">
+      <section
+        v-if="node.type === 'branch' || node.type === 'parallel'"
+        class="wf-branch"
+        :class="{ 'wf-parallel': node.type === 'parallel' }"
+        :aria-label="t(`workflow.node.${node.type}`)"
+      >
         <div class="wf-branch-toolbar">
-          <span>{{ t('workflow.designer.armCount', { count: node.conditions?.length ?? 0 }) }}</span>
+          <span>
+            {{ node.type === 'parallel'
+              ? t('workflow.designer.parallelArmCount', { count: armsFor(node).length })
+              : t('workflow.designer.armCount', { count: armsFor(node).length }) }}
+          </span>
           <button
             v-if="!readonly"
             type="button"
             class="wf-arm-action wf-arm-add"
-            :aria-label="t('workflow.designer.addArm')"
+            :aria-label="t(node.type === 'parallel' ? 'workflow.designer.addParallelArm' : 'workflow.designer.addArm')"
             @click="emit('add-arm', node.id)"
           >
             <AppIcon icon="ph:plus-bold" :size="13" />
-            <span>{{ t('workflow.designer.addArm') }}</span>
+            <span>{{ t(node.type === 'parallel' ? 'workflow.designer.addParallelArm' : 'workflow.designer.addArm') }}</span>
           </button>
         </div>
 
         <div class="wf-branch-arms">
-          <article v-for="arm in node.conditions ?? []" :key="arm.id" class="wf-arm">
+          <article v-for="arm in armsFor(node)" :key="arm.id" class="wf-arm">
             <header class="wf-arm-head">
               <input
                 v-if="!readonly"
@@ -131,7 +125,11 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
             </header>
 
             <div class="wf-arm-body">
-              <WfAddNode v-if="!readonly" @add="(type) => emit('add-at-arm-head', node.id, arm.id, type)" />
+              <WfAddNode
+                v-if="!readonly"
+                :allow-parallel="node.type !== 'parallel' && allowParallel"
+                @add="(type) => emit('add-at-arm-head', node.id, arm.id, type)"
+              />
               <WfNodeChain
                 v-if="arm.next"
                 :root="arm.next"
@@ -140,14 +138,15 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
                 :readonly="readonly"
                 :visited-set="visitedSet"
                 :current-set="currentSet"
+                :allow-parallel="node.type !== 'parallel' && allowParallel"
                 :terminal="false"
-                @select="forwardSelect"
-                @add-after="forwardAddAfter"
-                @add-at-arm-head="forwardAddAtArmHead"
-                @remove-node="forwardRemoveNode"
-                @add-arm="forwardAddArm"
-                @remove-arm="forwardRemoveArm"
-                @rename-arm="forwardRenameArm"
+                @select="(nodeId) => emit('select', nodeId)"
+                @add-after="(afterId, type) => emit('add-after', afterId, type)"
+                @add-at-arm-head="(branchId, armId, type) => emit('add-at-arm-head', branchId, armId, type)"
+                @remove-node="(nodeId) => emit('remove-node', nodeId)"
+                @add-arm="(branchId) => emit('add-arm', branchId)"
+                @remove-arm="(branchId, armId) => emit('remove-arm', branchId, armId)"
+                @rename-arm="(branchId, armId, name) => emit('rename-arm', branchId, armId, name)"
               />
               <div class="wf-arm-merge">
                 <span class="wf-arm-merge-dot" />
@@ -158,7 +157,7 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
         </div>
       </section>
 
-      <WfAddNode v-if="!readonly" @add="(type) => emit('add-after', node.id, type)" />
+      <WfAddNode v-if="!readonly" :allow-parallel="allowParallel" @add="(type) => emit('add-after', node.id, type)" />
     </div>
 
     <div v-if="terminal" class="wf-chain-terminal">
@@ -185,6 +184,9 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--color-bg-container) 92%, var(--color-primary-light));
   box-shadow: var(--shadow-1);
+}
+.wf-parallel {
+  background: color-mix(in srgb, var(--color-bg-container) 92%, var(--color-warning-bg));
 }
 .wf-branch::before {
   content: '';
@@ -333,5 +335,8 @@ function forwardRenameArm(branchId: string, armId: string, name: string) {
 
 :global(html[data-theme='dark']) .wf-branch {
   background: color-mix(in srgb, var(--color-bg-container) 90%, var(--color-primary-light));
+}
+:global(html[data-theme='dark']) .wf-parallel {
+  background: color-mix(in srgb, var(--color-bg-container) 90%, var(--color-warning-bg));
 }
 </style>

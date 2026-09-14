@@ -37,18 +37,18 @@ public class ReturnTaskOp(
 
         // 读 ActivatedTime 在先(数据库评审 §4.3),不改变下面 CAS 的判定条件与并发语义,只额外取一次快照
         // 给 DurationMs/StartedTime 用;读不到不代表并发失败,下面的 CAS 才是唯一裁判。
-        var activatedTime = await ctx.Db.Queryable<WfTaskActor>()
+        var actor = await ctx.Db.Queryable<WfTaskActor>()
             .Where(a => a.TaskId == Task.Id && a.UserId == UserId && a.Status == WfActorStatus.Pending
                         && a.ActorType == WfActorType.Approver)
-            .Select(a => a.ActivatedTime)
             .FirstAsync();
 
         // 仅当前 Pending 办理人可退回(顺序会签的 Waiting 后手不可)。
-        var claimed = await ctx.Db.Updateable<WfTaskActor>()
-            .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Skipped })
-            .Where(a => a.TaskId == Task.Id && a.UserId == UserId && a.Status == WfActorStatus.Pending
-                        && a.ActorType == WfActorType.Approver)
-            .ExecuteCommandAsync();
+        var claimed = actor is null
+            ? 0
+            : await ctx.Db.Updateable<WfTaskActor>()
+                .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Skipped })
+                .Where(a => a.Id == actor.Id && a.Status == WfActorStatus.Pending)
+                .ExecuteCommandAsync();
         if (claimed != 1)
         {
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.TaskConflict,
@@ -66,7 +66,7 @@ public class ReturnTaskOp(
                          new Dictionary<string, object?> { ["nodeId"] = resolvedTargetId });
 
         var now = ctx.TimeProvider.GetLocalNow().DateTime;
-        var durationMs = Math.Max(0, (long)(now - (activatedTime ?? Task.CreateTime)).TotalMilliseconds);
+        var durationMs = Math.Max(0, (long)(now - (actor?.ActivatedTime ?? Task.CreateTime)).TotalMilliseconds);
         await ctx.Db.Insertable(new WfHisTask
         {
             InstanceId = Task.InstanceId,
@@ -75,10 +75,13 @@ public class ReturnTaskOp(
             TaskId = Task.Id,
             TokenId = Task.TokenId,
             UserId = UserId,
+            OriginalUserId = actor?.OriginalUserId,
+            DelegationRuleId = actor?.DelegationRuleId,
+            DelegationScopeOrgId = actor?.DelegationScopeOrgId,
             Action = WfTaskAction.Return,
             Comment = Comment,
             DurationMs = durationMs,
-            StartedTime = activatedTime,
+            StartedTime = actor?.ActivatedTime,
             NodeVisitId = Task.NodeVisitId,
         }).ExecuteCommandAsync();
 
@@ -91,17 +94,37 @@ public class ReturnTaskOp(
         await ctx.AppendHistoryAsync(
             WfHistoryEventType.TaskReturned,
             Task.NodeId,
-            new { fromNodeId = Task.NodeId, targetNodeId = target.Id },
+            new
+            {
+                fromNodeId = Task.NodeId,
+                targetNodeId = target.Id,
+                comment = Comment,
+                payloadHash = ctx.RequestPayloadHash,
+            },
             cancellationToken);
 
         // 关闭当前活跃任务:全部 actor(不限 Pending——顺序会签的 Waiting 后手也要清)标 Skipped,保留为
         // 分配历史(数据库评审 §4.4,同 CompleteTaskOp.CloseTaskAsync 的决定——不物理删,详细理由见那边的
         // 注释)→ 物理删 task 行(承担的是另一个职责,见 ReassignTaskOpBase 的不变量注释)。
-        await ctx.Db.Updateable<WfTaskActor>()
-            .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Skipped })
+        var actorIds = await ctx.Db.Queryable<WfTaskActor>()
             .Where(a => a.TaskId == Task.Id)
-            .ExecuteCommandAsync();
+            .Select(a => a.Id)
+            .ToListAsync(cancellationToken);
+        if (actorIds.Count > 0)
+        {
+            await ctx.Db.Updateable<WfTaskActor>()
+                .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Skipped })
+                .Where(a => actorIds.Contains(a.Id))
+                .ExecuteCommandAsync(cancellationToken);
+        }
         await ctx.Db.Deleteable<WfTask>().In(Task.Id).ExecuteCommandAsync();
+
+        if (ctx.Token.ParentTokenId is not null && ctx.Token.ForkId is not null)
+        {
+            await ctx.ClaimInstanceAsync(WfInstanceStatus.Running, cancellationToken);
+            await ParallelControlOps.ReturnForkAsync(ctx, target.Id, "returned", cancellationToken);
+            return;
+        }
 
         // token 回退;Status 不变(仍 Active——退回后原实例保持 Running,不是完结),故领取的期望状态与
         // 目标状态都是 Active,双条件 CAS 只推进版本。顺序照旧「先抢任务、再动 token」:上面那段任务级

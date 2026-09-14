@@ -16,6 +16,137 @@ public class WfAiDecisionNodeDefinitionTests
     private static readonly string[] DefaultInputFields = ["amount", "department"];
 
     [Fact]
+    public async Task Dynamic_form_all_field_types_publish_and_form_schema_snapshot_matches_model()
+    {
+        using var factory = new WorkflowAppFactory();
+        var admin = await ClientFor(factory, "superAdmin");
+        var fields = new[]
+        {
+            Field("text", WfFormFieldType.Text, Props(("maxLength", 64)), required: true, placeholder: "请输入"),
+            Field("textarea", WfFormFieldType.Textarea, Props(("maxLength", 1000), ("rows", 6))),
+            Field("number", WfFormFieldType.Number, Props(("min", -1.5), ("max", 10.5), ("precision", 2))),
+            Field("money", WfFormFieldType.Money, Props(("min", 0), ("max", 9999.99))),
+            Field("date", WfFormFieldType.Date, Props(("min", "2026-01-01"), ("max", "2026-12-31"))),
+            Field("datetime", WfFormFieldType.Datetime, Props(("min", "2026-01-01T00:00:00+08:00"), ("max", "2026-12-31T23:59:59+08:00"))),
+            Field("select", WfFormFieldType.Select, Props(("options", Options(2)))),
+            Field("multiSelect", WfFormFieldType.MultiSelect, Props(("options", Options(3)), ("maxSelected", 2))),
+            Field("user", WfFormFieldType.User, Props(("multiple", true), ("maxSelected", 20))),
+            Field("attachment", WfFormFieldType.Attachment, Props(("multiple", true), ("maxCount", 5), ("accept", ".pdf,.png"), ("maxSizeMb", 10))),
+        };
+
+        var definitionId = await AddDefinition(admin, "完整动态表单", DynamicFormModel(fields, [new() { Field = "text", Access = WfFormPermAccess.Readonly }]));
+        var published = await PostEnvelope(admin, "/api/v1/workflow/definition/publish", new { id = definitionId });
+
+        Assert.Equal(0, published.GetProperty("code").GetInt32());
+        var versions = await GetEnvelope(admin, $"/api/v1/workflow/definition/versions/{definitionId}");
+        var row = versions.GetProperty("data")[0];
+        using var model = JsonDocument.Parse(row.GetProperty("modelJson").GetString()!);
+        using var schema = JsonDocument.Parse(row.GetProperty("formSchema").GetString()!);
+        Assert.True(JsonElement.DeepEquals(model.RootElement.GetProperty("formSchema"), schema.RootElement));
+        Assert.Equal(10, schema.RootElement.GetProperty("fields").GetArrayLength());
+        Assert.False(schema.RootElement.GetProperty("fields")[1].GetProperty("required").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("schemaAndComponent", "formSchemaAndComponentMutuallyExclusive")]
+    [InlineData("schemaVersion", "formSchemaVersionInvalid")]
+    [InlineData("fieldsEmpty", "formSchemaFieldsRequired")]
+    [InlineData("fieldsTooMany", "formSchemaFieldsTooMany")]
+    [InlineData("schemaTooLarge", "formSchemaTooLarge")]
+    [InlineData("keyInvalid", "formFieldKeyInvalid")]
+    [InlineData("keyDuplicate", "formFieldKeyDuplicate")]
+    [InlineData("labelBlank", "formFieldLabelInvalid")]
+    [InlineData("labelTooLong", "formFieldLabelInvalid")]
+    [InlineData("labelControl", "formFieldLabelInvalid")]
+    [InlineData("placeholderTooLong", "formFieldPlaceholderInvalid")]
+    [InlineData("placeholderControl", "formFieldPlaceholderInvalid")]
+    [InlineData("typeUnknown", "formFieldTypeInvalid")]
+    [InlineData("propUnknown", "formFieldPropUnknown")]
+    [InlineData("textMaxLength", "formFieldPropInvalid")]
+    [InlineData("textareaRows", "formFieldPropInvalid")]
+    [InlineData("numberPrecision", "formFieldPropInvalid")]
+    [InlineData("numberRange", "formFieldRangeInvalid")]
+    [InlineData("moneyRange", "formFieldRangeInvalid")]
+    [InlineData("dateFormat", "formFieldPropInvalid")]
+    [InlineData("dateRange", "formFieldRangeInvalid")]
+    [InlineData("datetimeFormat", "formFieldPropInvalid")]
+    [InlineData("datetimeRange", "formFieldRangeInvalid")]
+    [InlineData("selectOptionsMissing", "formFieldOptionsRequired")]
+    [InlineData("selectOptionsEmpty", "formFieldOptionsInvalid")]
+    [InlineData("selectOptionInvalid", "formFieldOptionsInvalid")]
+    [InlineData("selectOptionDuplicate", "formFieldOptionDuplicate")]
+    [InlineData("multiSelectMax", "formFieldPropInvalid")]
+    [InlineData("userSingleMax", "formFieldPropInvalid")]
+    [InlineData("attachmentSingleCount", "formFieldPropInvalid")]
+    [InlineData("attachmentAccept", "formFieldPropInvalid")]
+    [InlineData("attachmentAcceptMime", "formFieldPropInvalid")]
+    [InlineData("formPermDuplicate", "formPermFieldDuplicate")]
+    [InlineData("formPermUnknown", "formPermFieldUnknown")]
+    public async Task Dynamic_form_publish_rejects_each_contract_violation(string violation, string reason)
+    {
+        using var factory = new WorkflowAppFactory();
+        var admin = await ClientFor(factory, "superAdmin");
+
+        await AssertPublishRejected(
+            admin,
+            $"动态表单非法-{violation}",
+            InvalidDynamicFormModel(violation),
+            WorkflowErrorCode.ModelInvalid,
+            reason);
+    }
+
+    [Fact]
+    public async Task Dynamic_form_legacy_shapes_and_trimmed_component_remain_publishable()
+    {
+        using var factory = new WorkflowAppFactory();
+        var admin = await ClientFor(factory, "superAdmin");
+        var models = new object[]
+        {
+            DynamicFormModel(null, [new() { Field = "legacy", Access = WfFormPermAccess.Hidden }]),
+            DynamicFormModel(null, [new() { Field = "legacy", Access = WfFormPermAccess.Hidden }], " views/biz/leave/form "),
+            DynamicFormModel([Field("known", WfFormFieldType.Text)], nodeType: WfNodeType.Cc,
+                formPerms: [new() { Field = "missing" }, new() { Field = "missing" }]),
+        };
+
+        foreach (var (model, index) in models.Select((model, index) => (model, index)))
+        {
+            var definitionId = await AddDefinition(admin, $"兼容动态表单-{index}", model);
+            var published = await PostEnvelope(admin, "/api/v1/workflow/definition/publish", new { id = definitionId });
+            Assert.Equal(0, published.GetProperty("code").GetInt32());
+
+            if (index == 1)
+            {
+                var versions = await GetEnvelope(admin, $"/api/v1/workflow/definition/versions/{definitionId}");
+                var snapshot = Assert.IsType<WfModel>(WfModelJson.Deserialize(versions.GetProperty("data")[0].GetProperty("modelJson").GetString()!));
+                Assert.Equal("views/biz/leave/form", snapshot.FormComponent);
+                Assert.NotNull(snapshot.Root.Next?.Props?.FormPerms);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Dynamic_form_malformed_collection_items_are_model_errors()
+    {
+        using var factory = new WorkflowAppFactory();
+        var admin = await ClientFor(factory, "superAdmin");
+        var cases = new[]
+        {
+            ("空字段项", "formFieldInvalid", RawModel("""
+                {"version":1,"formSchema":{"version":1,"fields":[null]},"root":{"id":"start","type":"start","name":"","next":null}}
+                """)),
+            ("选项重复 JSON 键", "formFieldOptionsInvalid", RawModel("""
+                {"version":1,"formSchema":{"version":1,"fields":[{"key":"choice","label":"选择","type":"select","props":{"options":[{"label":"A","value":"a","label":"B"}]}}]},"root":{"id":"start","type":"start","name":"","next":null}}
+                """)),
+            ("空字段权限项", "formPermInvalid", RawModel("""
+                {"version":1,"formSchema":{"version":1,"fields":[{"key":"title","label":"标题","type":"text"}]},"root":{"id":"start","type":"start","name":"","next":{"id":"review","type":"approval","name":"审核","props":{"assignee":{"provider":"initiator","params":{}},"formPerms":[null]}}}}
+                """)),
+        };
+
+        foreach (var (name, reason, model) in cases)
+            await AssertPublishRejected(admin, $"动态表单损坏-{name}", model, WorkflowErrorCode.ModelInvalid, reason);
+    }
+
+    [Fact]
     public async Task AiDecision_with_initiator_fallback_publishes()
     {
         using var factory = new WorkflowAppFactory();
@@ -329,6 +460,107 @@ public class WfAiDecisionNodeDefinitionTests
         foreach (var forbiddenName in new[] { "AutoApprove", "AutoReject", "ShadowMode", "Provider", "Model", "Endpoint", "ApiKey" })
             Assert.False(declaredProps.ContainsKey(forbiddenName), $"Unexpected public AI node prop: {forbiddenName}");
     }
+
+    private static object InvalidDynamicFormModel(string violation)
+    {
+        var fields = new List<WfFormField> { Field("field", WfFormFieldType.Text) };
+        List<WfFormFieldPerm>? formPerms = null;
+        string? formComponent = null;
+        var version = 1;
+
+        switch (violation)
+        {
+            case "schemaAndComponent": formComponent = "views/biz/form"; break;
+            case "schemaVersion": version = 2; break;
+            case "fieldsEmpty": fields = []; break;
+            case "fieldsTooMany": fields = Enumerable.Range(0, 51).Select(i => Field($"field{i}", WfFormFieldType.Text)).ToList(); break;
+            case "schemaTooLarge":
+                fields = Enumerable.Range(0, 50).Select(i => Field($"field{i}", WfFormFieldType.Select,
+                    Props(("options", Enumerable.Range(0, 100).Select(j => new { label = new string('界', 128), value = $"v{i}_{j}" }).ToArray())))).ToList();
+                break;
+            case "keyInvalid": fields[0].Key = "1 invalid"; break;
+            case "keyDuplicate": fields.Add(Field("field", WfFormFieldType.Text)); break;
+            case "labelBlank": fields[0].Label = " \t "; break;
+            case "labelTooLong": fields[0].Label = new string('l', 129); break;
+            case "labelControl": fields[0].Label = "label\u0001"; break;
+            case "placeholderTooLong": fields[0].Placeholder = new string('p', 257); break;
+            case "placeholderControl": fields[0].Placeholder = "hint\u0001"; break;
+            case "typeUnknown": fields[0].Type = (WfFormFieldType)99; break;
+            case "propUnknown": fields[0].Props = Props(("rows", 3)); break;
+            case "textMaxLength": fields[0].Props = Props(("maxLength", 0)); break;
+            case "textareaRows": fields[0] = Field("field", WfFormFieldType.Textarea, Props(("rows", 9))); break;
+            case "numberPrecision": fields[0] = Field("field", WfFormFieldType.Number, Props(("precision", 1.5))); break;
+            case "numberRange": fields[0] = Field("field", WfFormFieldType.Number, Props(("min", 2), ("max", 1))); break;
+            case "moneyRange": fields[0] = Field("field", WfFormFieldType.Money, Props(("min", 2), ("max", 1))); break;
+            case "dateFormat": fields[0] = Field("field", WfFormFieldType.Date, Props(("min", "2026-1-1"))); break;
+            case "dateRange": fields[0] = Field("field", WfFormFieldType.Date, Props(("min", "2026-02-01"), ("max", "2026-01-01"))); break;
+            case "datetimeFormat": fields[0] = Field("field", WfFormFieldType.Datetime, Props(("min", "tomorrow"))); break;
+            case "datetimeRange": fields[0] = Field("field", WfFormFieldType.Datetime, Props(("min", "2026-02-01T00:00:00Z"), ("max", "2026-01-01T00:00:00Z"))); break;
+            case "selectOptionsMissing": fields[0] = Field("field", WfFormFieldType.Select); break;
+            case "selectOptionsEmpty": fields[0] = Field("field", WfFormFieldType.Select, Props(("options", Array.Empty<object>()))); break;
+            case "selectOptionInvalid": fields[0] = Field("field", WfFormFieldType.Select, Props(("options", new[] { new { label = " ", value = "v" } }))); break;
+            case "selectOptionDuplicate": fields[0] = Field("field", WfFormFieldType.Select, Props(("options", new[] { new { label = "A", value = "v" }, new { label = "B", value = "v" } }))); break;
+            case "multiSelectMax": fields[0] = Field("field", WfFormFieldType.MultiSelect, Props(("options", Options(2)), ("maxSelected", 3))); break;
+            case "userSingleMax": fields[0] = Field("field", WfFormFieldType.User, Props(("multiple", false), ("maxSelected", 2))); break;
+            case "attachmentSingleCount": fields[0] = Field("field", WfFormFieldType.Attachment, Props(("multiple", false), ("maxCount", 2))); break;
+            case "attachmentAccept": fields[0] = Field("field", WfFormFieldType.Attachment, Props(("accept", new string('a', 257)))); break;
+            case "attachmentAcceptMime": fields[0] = Field("field", WfFormFieldType.Attachment, Props(("accept", "image/*"))); break;
+            case "formPermDuplicate": formPerms = [new() { Field = "field" }, new() { Field = "field" }]; break;
+            case "formPermUnknown": formPerms = [new() { Field = "missing" }]; break;
+            default: throw new ArgumentOutOfRangeException(nameof(violation));
+        }
+
+        return DynamicFormModel(fields, formPerms, formComponent, formSchemaVersion: version);
+    }
+
+    private static object DynamicFormModel(
+        IReadOnlyCollection<WfFormField>? fields,
+        IReadOnlyCollection<WfFormFieldPerm>? formPerms = null,
+        string? formComponent = null,
+        WfNodeType nodeType = WfNodeType.Approval,
+        int formSchemaVersion = 1) => new
+        {
+            version = 1,
+            formSchema = fields is null ? null : new { version = formSchemaVersion, fields },
+            formComponent,
+            root = new
+            {
+                id = "start",
+                type = "start",
+                name = "",
+                next = new
+                {
+                    id = "review",
+                    type = JsonSerializer.SerializeToElement(nodeType, WfModelJson.Options),
+                    name = "审核",
+                    props = new { assignee = Assignee("initiator"), formPerms },
+                },
+            },
+        };
+
+    private static WfFormField Field(
+        string key,
+        WfFormFieldType type,
+        Dictionary<string, JsonElement>? props = null,
+        bool required = false,
+        string? placeholder = null) => new()
+        {
+            Key = key,
+            Label = $"字段 {key}",
+            Type = type,
+            Required = required,
+            Placeholder = placeholder,
+            Props = props,
+        };
+
+    private static Dictionary<string, JsonElement> Props(params (string Key, object? Value)[] values) =>
+        values.ToDictionary(pair => pair.Key, pair => JsonSerializer.SerializeToElement(pair.Value, WfModelJson.Options));
+
+    private static object[] Options(int count) =>
+        Enumerable.Range(1, count).Select(i => (object)new { label = $"选项 {i}", value = $"v{i}" }).ToArray();
+
+    private static JsonElement RawModel(string json) =>
+        JsonSerializer.Deserialize<JsonElement>(json);
 
     private static object AiDecisionModel(
         string? instructions = DefaultInstructions,

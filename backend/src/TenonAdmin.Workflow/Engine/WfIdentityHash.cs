@@ -68,6 +68,18 @@ public static class WfIdentityHash
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
     }
 
+    /// <summary>为同一 request key 的参数摘要生成稳定哈希。</summary>
+    public static string ComputePayloadHash(long targetUserId, string? comment) =>
+        ComputePayloadHash(
+            targetUserId.ToString(CultureInfo.InvariantCulture) + Separator + (comment ?? ""));
+
+    /// <summary>为包含表单或其它命令载荷的回执摘要生成 SHA-256。</summary>
+    public static string ComputePayloadHash(string payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
+    }
+
     /// <summary>
     /// 归一化 <c>ScopeKey</c>:null / 空串 / 纯空白 → <see cref="ScopeSentinel"/>,否则 <c>Trim()</c>(保留大小写)。
     /// <para><b>落库的 <c>ScopeKey</c> 必须用本方法的返回值</b> —— 一边存原值、一边用归一化值算 hash,

@@ -581,6 +581,16 @@ public class WfPersistenceContractTests
                 ? Task.FromResult<WfOperationReceipt?>(null)
                 : base.FindAsync(identityHash, cancellationToken);
         }
+
+        protected override Task<WfOperationReceipt?> FindCommittedAsync(
+            string identityHash,
+            CancellationToken cancellationToken)
+        {
+            calls++;
+            return calls <= blindCalls
+                ? Task.FromResult<WfOperationReceipt?>(null)
+                : base.FindCommittedAsync(identityHash, cancellationToken);
+        }
     }
 
     private static WfOperationIdentity Identity(string requestKey) =>

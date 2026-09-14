@@ -106,6 +106,39 @@ public static class WorkflowErrorCode
     /// <summary>节点 handler 未分类异常(受控重试,摘要不含异常正文,Task 8b)</summary>
     public const int NodeHandlerUnhandled = 48032;
 
+    /// <summary>内置表单提交值不符合已发布 schema 或引用了不存在的文件。</summary>
+    public const int FormValueInvalid = 48033;
+
+    /// <summary>消费者替换的任务服务未实现内置表单变量扩展,不能安全接收表单提交。</summary>
+    public const int FormRuntimeUnavailable = 48034;
+
+    /// <summary>当前用户、实例或任务状态不允许加签/减签。</summary>
+    public const int SignNotAllowed = 48035;
+
+    /// <summary>加签/减签目标用户非法或会移除最后一名办理人。</summary>
+    public const int SignTargetInvalid = 48036;
+
+    /// <summary>加签/减签请求的参数与已存在回执不一致。</summary>
+    public const int RequestPayloadConflict = 48042;
+
+    /// <summary>当前用户没有可拿回的最近审批，或拿回窗口已经关闭。</summary>
+    public const int TakeBackNotAllowed = 48037;
+
+    /// <summary>长期委托规则不存在。</summary>
+    public const int DelegationRuleNotFound = 48038;
+
+    /// <summary>长期委托规则参数非法或已有规则槽。</summary>
+    public const int DelegationRuleInvalid = 48039;
+
+    /// <summary>长期委托规则会形成自委托或环路。</summary>
+    public const int DelegationCycle = 48040;
+
+    /// <summary>长期委托规则超出当前用户的机构或所有者范围。</summary>
+    public const int DelegationScopeDenied = 48041;
+
+    /// <summary>长期委托规则版本或槽位竞争。</summary>
+    public const int DelegationRuleConflict = 48043;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }

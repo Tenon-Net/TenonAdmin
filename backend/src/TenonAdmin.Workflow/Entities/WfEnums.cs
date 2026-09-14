@@ -43,6 +43,17 @@ public enum WfTokenStatus
 
     /// <summary>已取消(退回/终止等)</summary>
     Cancelled = 3,
+
+    /// <summary>并行父 token 已停泊,等待各臂汇合</summary>
+    WaitingJoin = 4,
+}
+
+/// <summary>并行臂状态(<c>wf_parallel_arm.Status</c>)。</summary>
+public enum WfParallelArmStatus
+{
+    Active = 1,
+    Completed = 2,
+    Cancelled = 3,
 }
 
 /// <summary>签核模式(<c>wf_task.SignMode</c>;schema 节点 <c>props.mode</c>)。M1 实际只用或签;会签/顺序 M2 启用。</summary>
@@ -164,6 +175,24 @@ public enum WfHistoryEventType
 
     /// <summary>主动退回(办理人把 token 向后跳到目标节点,关闭当前待办后等发起人重提)</summary>
     TaskReturned = 14,
+
+    /// <summary>加签或减签改变当前办理人集合。</summary>
+    SignChanged = 15,
+
+    /// <summary>审批人拿回自己最近完成的审批。</summary>
+    TakeBack = 16,
+
+    /// <summary>并行节点创建一次 fork。</summary>
+    ParallelFork = 17,
+
+    /// <summary>并行臂完成。</summary>
+    ParallelArmCompleted = 18,
+
+    /// <summary>并行父 token 完成汇合。</summary>
+    ParallelJoined = 19,
+
+    /// <summary>并行 fork 被取消。</summary>
+    ParallelCancelled = 20,
 }
 
 /// <summary>
@@ -201,6 +230,24 @@ public enum WfCommandType
 
     /// <summary>发起人重提(<see cref="ResubmitInstanceCmd"/>)</summary>
     Resubmit = 8,
+
+    /// <summary>加签(<see cref="AddSignTaskCmd"/>)</summary>
+    AddSign = 9,
+
+    /// <summary>减签(<see cref="RemoveSignTaskCmd"/>)</summary>
+    RemoveSign = 10,
+
+    /// <summary>拿回(<see cref="TakeBackTaskCmd"/>)</summary>
+    TakeBack = 11,
+
+    /// <summary>新增长期委托规则</summary>
+    DelegationRuleAdd = 12,
+
+    /// <summary>更新长期委托规则</summary>
+    DelegationRuleUpdate = 13,
+
+    /// <summary>删除长期委托规则</summary>
+    DelegationRuleDelete = 14,
 }
 
 /// <summary>
@@ -220,6 +267,19 @@ public enum WfTargetType
     /// 没有 InstanceId 可锚,`(定义版本 + 发起人 + request key)` 足以定死一次发起。
     /// </summary>
     DefinitionVersion = 3,
+
+    /// <summary>目标是长期委托规则</summary>
+    DelegationRule = 4,
+}
+
+/// <summary>长期委托规则的 append-only 审计动作。</summary>
+public enum WfDelegationRuleChangeType
+{
+    Created = 1,
+    Updated = 2,
+    Enabled = 3,
+    Disabled = 4,
+    Deleted = 5,
 }
 
 /// <summary>

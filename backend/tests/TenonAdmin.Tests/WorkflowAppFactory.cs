@@ -10,7 +10,13 @@ namespace TenonAdmin.Tests;
 /// <summary>仅工作流集成测试启用卫星包,避免共享 TestHost 为无关测试建 wf_* 表。</summary>
 public sealed class WorkflowAppFactory : WebApplicationFactory<workflowhost::WorkflowProgram>
 {
-    public string DbPath { get; } = Path.Combine(Path.GetTempPath(), $"tenon-wf-it-{Guid.NewGuid():N}.db");
+    public string DbPath { get; init; } = Path.Combine(Path.GetTempPath(), $"tenon-wf-it-{Guid.NewGuid():N}.db");
+
+    /// <summary>是否为当前测试库重置模板;并发测试的第二个宿主复用首个宿主已建好的库。</summary>
+    public bool ResetDatabase { get; init; } = true;
+
+    /// <summary>可选的 Snowflake WorkerId;并发测试的第二个宿主使用不同机器号。</summary>
+    public int? WorkerId { get; init; }
 
     /// <summary>每测试的服务覆盖(ConfigureTestServices;仿 <see cref="AdminAppFactory.Overrides"/>)。</summary>
     public Action<IServiceCollection>? Overrides { get; init; }
@@ -19,7 +25,9 @@ public sealed class WorkflowAppFactory : WebApplicationFactory<workflowhost::Wor
     {
         builder.UseEnvironment("Development");
         builder.UseSetting("TenonAdmin:Database:DbType", TestDb.DbType);
-        builder.UseSetting("TenonAdmin:Database:ConnectionString", TestDb.ConnectionString(DbPath, DbPath, "workflow"));
+        builder.UseSetting("TenonAdmin:Database:ConnectionString", TestDb.ConnectionString(DbPath, DbPath, "workflow", ResetDatabase));
+        if (WorkerId is { } workerId)
+            builder.UseSetting("TenonAdmin:Id:WorkerId", workerId.ToString());
         if (TestDb.SchemaTemplateEnabled && Overrides is null && !TestDb.IsSchemaTemplateInitialization)
         {
             builder.UseSetting("TenonAdmin:Database:EnableCodeFirst", "false");

@@ -1,4 +1,5 @@
 using SqlSugar;
+using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Workflow;
 
@@ -10,12 +11,16 @@ public class CompleteTaskOp(
     WfTask task,
     long userId,
     WfTaskAction action,
-    string? comment) : IWfOperation
+    string? comment,
+    string? submittedVariablesJson = null,
+    bool allowAnyFileOwner = false) : IWfOperation
 {
     protected WfTask Task { get; } = task;
     protected long UserId { get; } = userId;
     protected WfTaskAction Action { get; } = action;
     protected string? Comment { get; } = comment;
+    protected string? SubmittedVariablesJson { get; } = submittedVariablesJson;
+    protected bool AllowAnyFileOwner { get; } = allowAnyFileOwner;
 
     public virtual async Task ExecuteAsync(WfExecutionContext ctx, CancellationToken cancellationToken)
     {
@@ -39,20 +44,24 @@ public class CompleteTaskOp(
         }
         Task.Version++;
 
+        // 关闭任务会把剩余 Pending/Waiting actor 翻为 Skipped。先取主键快照,再写 actor/HistorySeq;
+        // SQL Server 上不能在持有 actor 行写锁后反向扫描 actor 表,否则并行臂会形成锁环。
+        var remainingActorIds = await FindRemainingActorIdsAsync(ctx, Task.Id, cancellationToken);
+
         // 读 ActivatedTime 在先(数据库评审 §4.3):不改变下面 CAS 的判定条件与并发语义,只是额外取一次
         // 快照,给 DurationMs/StartedTime 用。读不到不代表并发失败——下面的 CAS 才是唯一裁判。
-        var activatedTime = await ctx.Db.Queryable<WfTaskActor>()
+        var actor = await ctx.Db.Queryable<WfTaskActor>()
             .Where(a => a.TaskId == Task.Id && a.UserId == UserId && a.Status == WfActorStatus.Pending
                         && a.ActorType == WfActorType.Approver)
-            .Select(a => a.ActivatedTime)
             .FirstAsync();
 
         // 仅当前 Pending 办理人可翻 Done;顺序审批的后级仍是 Waiting。
-        var claimed = await ctx.Db.Updateable<WfTaskActor>()
-            .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Done })
-            .Where(a => a.TaskId == Task.Id && a.UserId == UserId && a.Status == WfActorStatus.Pending
-                        && a.ActorType == WfActorType.Approver)
-            .ExecuteCommandAsync();
+        var claimed = actor is null
+            ? 0
+            : await ctx.Db.Updateable<WfTaskActor>()
+                .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Done })
+                .Where(a => a.Id == actor.Id && a.Status == WfActorStatus.Pending)
+                .ExecuteCommandAsync();
         if (claimed != 1)
         {
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.TaskConflict,
@@ -64,8 +73,10 @@ public class CompleteTaskOp(
                        new Dictionary<string, object?> { ["nodeId"] = Task.NodeId });
         ctx.CurrentNode = node;
 
+        await ApplyFormValuesAsync(ctx, node, cancellationToken);
+
         var now = ctx.TimeProvider.GetLocalNow().DateTime;
-        var durationMs = Math.Max(0, (long)(now - (activatedTime ?? Task.CreateTime)).TotalMilliseconds);
+        var durationMs = Math.Max(0, (long)(now - (actor?.ActivatedTime ?? Task.CreateTime)).TotalMilliseconds);
         await ctx.Db.Insertable(new WfHisTask
         {
             InstanceId = Task.InstanceId,
@@ -74,10 +85,13 @@ public class CompleteTaskOp(
             TaskId = Task.Id,
             TokenId = Task.TokenId,
             UserId = UserId,
+            OriginalUserId = actor?.OriginalUserId,
+            DelegationRuleId = actor?.DelegationRuleId,
+            DelegationScopeOrgId = actor?.DelegationScopeOrgId,
             Action = Action,
             Comment = Comment,
             DurationMs = durationMs,
-            StartedTime = activatedTime,
+            StartedTime = actor?.ActivatedTime,
             NodeVisitId = Task.NodeVisitId,
         }).ExecuteCommandAsync();
 
@@ -87,10 +101,24 @@ public class CompleteTaskOp(
             new { taskId = Task.Id, userId = UserId, action = Action.ToString() },
             cancellationToken);
 
+        if (Action == WfTaskAction.Reject && Task.SignMode != WfSignMode.All)
+        {
+            await CloseTaskAsync(ctx, Task, skipRemaining: true, cancellationToken, remainingActorIds);
+            await RejectInstanceAsync(ctx, node, cancellationToken);
+            return;
+        }
+
         if (Action == WfTaskAction.Reject)
         {
-            await CloseTaskAsync(ctx, skipRemaining: true, cancellationToken);
-            await RejectInstanceAsync(ctx, node, cancellationToken);
+            var (_, impossible) = await EvaluateAllAsync(ctx, Task, node, cancellationToken);
+            if (impossible)
+            {
+                await CloseTaskAsync(ctx, Task, skipRemaining: true, cancellationToken, remainingActorIds);
+                await RejectInstanceAsync(ctx, node, cancellationToken);
+                return;
+            }
+
+            await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
             return;
         }
 
@@ -110,8 +138,46 @@ public class CompleteTaskOp(
             return; // 顺序/会签未满票:待办仍在,Agenda 空 → 等人
         }
 
-        await CloseTaskAsync(ctx, skipRemaining: true, cancellationToken);
+        await CloseTaskAsync(ctx, Task, skipRemaining: true, cancellationToken, remainingActorIds);
         ctx.Agenda.Plan(new TakeTransitionOp(node));
+    }
+
+    /// <summary>在办理事务内按发布快照合并内置表单值;旧表单路径保持原变量语义。</summary>
+    protected virtual async Task ApplyFormValuesAsync(
+        WfExecutionContext ctx,
+        WfNode node,
+        CancellationToken cancellationToken)
+    {
+        if (ctx.Model.FormSchema is null || !string.IsNullOrWhiteSpace(ctx.Model.FormComponent)) return;
+
+        WfInstance source = ctx.Instance;
+        if (SubmittedVariablesJson is not null)
+        {
+            // 会签不同 actor 可以同时提交;实例版本 CAS 让变量合并基于最新快照,避免后写请求覆盖先写请求。
+            await ctx.ClaimInstanceAsync(WfInstanceStatus.Running, cancellationToken);
+            source = await ctx.Db.Queryable<WfInstance>()
+                .ClearFilter<IOrgScoped>()
+                .Where(i => i.Id == ctx.Instance.Id)
+                .FirstAsync()
+                ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceNotFound);
+        }
+
+        var next = await WfFormRuntime.ApplyAsync(
+            ctx.Db,
+            enabled: true,
+            schema: ctx.Model.FormSchema,
+            currentJson: source.VariablesJson,
+            submittedJson: SubmittedVariablesJson,
+            permissions: node.Type == WfNodeType.Approval ? node.Props?.FormPerms : null,
+            cancellationToken: cancellationToken,
+            actorUserId: UserId,
+            allowAnyFileOwner: AllowAnyFileOwner);
+        if (SubmittedVariablesJson is null) return;
+
+        ctx.Instance.VariablesJson = next;
+        await ctx.Db.Updateable(ctx.Instance)
+            .UpdateColumns(i => new { i.VariablesJson, i.UpdateTime, i.UpdateUserId })
+            .ExecuteCommandAsync();
     }
 
     /// <summary>或签立刻通过;顺序晋级下一位;会签看是否还有 Pending。</summary>
@@ -160,18 +226,49 @@ public class CompleteTaskOp(
 
             case WfSignMode.All:
             default:
-                var pending = await ctx.Db.Queryable<WfTaskActor>()
-                    .Where(a => a.TaskId == Task.Id && a.Status == WfActorStatus.Pending
-                                && a.ActorType == WfActorType.Approver)
-                    .AnyAsync();
-                return !pending;
+                var (passed, _) = await EvaluateAllAsync(ctx, Task, ctx.CurrentNode!, cancellationToken);
+                return passed;
         }
     }
 
-    protected virtual async Task CloseTaskAsync(
+    /// <summary>按当前节点访问的有效审批人重算会签门槛与剩余可达票数。</summary>
+    internal static async Task<(bool Passed, bool Impossible)> EvaluateAllAsync(
         WfExecutionContext ctx,
-        bool skipRemaining,
+        WfTask task,
+        WfNode node,
         CancellationToken cancellationToken)
+    {
+        var statuses = await ctx.Db.Queryable<WfTaskActor>()
+            .Where(a => a.TaskId == task.Id && a.ActorType == WfActorType.Approver
+                        && a.Status != WfActorStatus.Skipped)
+            .Select(a => a.Status)
+            .ToListAsync();
+        var approvals = await ctx.Db.Queryable<WfHisTask>()
+            .Where(h => h.TaskId == task.Id && h.NodeVisitId == task.NodeVisitId
+                        && h.Action == WfTaskAction.Approve)
+            .CountAsync();
+        var remaining = statuses.Count(status => status is WfActorStatus.Pending or WfActorStatus.Waiting);
+        var ratio = node.Props?.AllPassRatio ?? 100;
+        var required = Math.Max(1, (int)(((long)statuses.Count * ratio + 99) / 100));
+        return (approvals >= required, approvals + remaining < required);
+    }
+
+    internal static Task<List<long>> FindRemainingActorIdsAsync(
+        WfExecutionContext ctx,
+        long taskId,
+        CancellationToken cancellationToken) =>
+        ctx.Db.Queryable<WfTaskActor>()
+            .Where(a => a.TaskId == taskId
+                        && (a.Status == WfActorStatus.Pending || a.Status == WfActorStatus.Waiting))
+            .Select(a => a.Id)
+            .ToListAsync(cancellationToken);
+
+    internal static async Task CloseTaskAsync(
+        WfExecutionContext ctx,
+        WfTask task,
+        bool skipRemaining,
+        CancellationToken cancellationToken,
+        List<long>? remainingActorIds = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (skipRemaining)
@@ -179,11 +276,15 @@ public class CompleteTaskOp(
             // Pending(或签/会签未行动的候选人)与 Waiting(顺序会签尚未轮到的候选人)都要给一个终态,
             // 否则 Waiting 行会永远卡在「尚未轮到」——数据库评审 §4.4 要求分配历史必须完整、不能有
             // 「查不出最终去向」的行。
-            await ctx.Db.Updateable<WfTaskActor>()
-                .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Skipped })
-                .Where(a => a.TaskId == Task.Id
-                            && (a.Status == WfActorStatus.Pending || a.Status == WfActorStatus.Waiting))
-                .ExecuteCommandAsync();
+            remainingActorIds ??= await FindRemainingActorIdsAsync(ctx, task.Id, cancellationToken);
+            if (remainingActorIds.Count > 0)
+            {
+                await ctx.Db.Updateable<WfTaskActor>()
+                    .SetColumns(a => new WfTaskActor { Status = WfActorStatus.Skipped })
+                    .Where(a => remainingActorIds.Contains(a.Id)
+                                && (a.Status == WfActorStatus.Pending || a.Status == WfActorStatus.Waiting))
+                    .ExecuteCommandAsync(cancellationToken);
+            }
         }
 
         // 办理人分配历史(数据库评审 §4.4)不再物理删 —— 二选一里选了「保留 wf_task_actor,关闭只翻状态」:
@@ -192,7 +293,7 @@ public class CompleteTaskOp(
         // 还在不在」判活跃,keep 下来零风险;换新表反而要多一套实体/仓储/可替换性面,对已有信息纯属复制。
         // wf_task 本身仍然物理删——它承担的是另一个职责:改派/超时等路径的隐式不变量「终态动作必删活跃
         // wf_task」(见 ReassignTaskOpBase 的详细注释),与本表的历史留存无关,不能一并保留。
-        await ctx.Db.Deleteable<WfTask>().In(Task.Id).ExecuteCommandAsync();
+        await ctx.Db.Deleteable<WfTask>().In(task.Id).ExecuteCommandAsync();
     }
 
     /// <summary>
@@ -226,11 +327,7 @@ public class CompleteTaskOp(
         await ctx.ClaimInstanceAsync(WfInstanceStatus.Running, cancellationToken);
         await ctx.WriteInstanceTerminalStatusAsync(WfInstanceStatus.Rejected, cancellationToken);
 
-        await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
-        ctx.Token.Status = WfTokenStatus.Cancelled;
-        await ctx.Db.Updateable(ctx.Token)
-            .UpdateColumns(t => new { t.Status, t.UpdateTime, t.UpdateUserId })
-            .ExecuteCommandAsync();
+        await ParallelControlOps.CancelInstanceRuntimeAsync(ctx, "rejected", cancellationToken);
 
         await ctx.AppendHistoryAsync(
             WfHistoryEventType.InstanceCompleted,

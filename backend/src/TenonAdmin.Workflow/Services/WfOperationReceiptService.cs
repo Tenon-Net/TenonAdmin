@@ -10,6 +10,7 @@ namespace TenonAdmin.Workflow;
 /// </summary>
 public class WfOperationReceiptService(IRepository<WfOperationReceipt> receipts) : IWfOperationReceiptService
 {
+
     /// <inheritdoc />
     public virtual async Task<WfOperationReceipt?> TryBeginAsync(
         WfOperationIdentity identity,
@@ -31,14 +32,15 @@ public class WfOperationReceiptService(IRepository<WfOperationReceipt> receipts)
                 await ReleaseNestedAsync(cancellationToken);
             return null;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException
+                                   && WfDatabaseExceptionClassifier.IsUniqueConstraintViolation(ex))
         {
-            // 唯一索引冲突 = 同一 identity 的另一个请求刚提交。**不解析各库错误码**(四库方言不同,
-            // 解析它是方言陷阱):再查一次,查到就是那个赢家的回执;查不到说明异常另有原因,原样抛。
+            // 唯一索引冲突 = 同一 identity 的另一个请求刚提交:再查一次,查到就是那个赢家的回执;
+            // 查不到说明竞争事务尚未可见,原样抛出冲突本身。
             // PG 上这次 SELECT 之所以还能执行,全靠下面这一步先回滚到点(否则整事务已 aborted)。
             if (nested)
                 await RollbackNestedAsync(cancellationToken);
-            var winner = await FindAsync(identity.IdentityHash, cancellationToken);
+            var winner = await FindCommittedAsync(identity.IdentityHash, cancellationToken);
             if (winner is not null)
                 return winner;
             throw;
@@ -54,8 +56,8 @@ public class WfOperationReceiptService(IRepository<WfOperationReceipt> receipts)
     /// 而且那个新异常还会<b>顶替</b>原始的唯一冲突异常抛出去,连诊断线索一并丢掉。SQLite / MySQL / SqlServer
     /// 的语句级错误不中止事务,这两条语句对它们纯属多余;SqlServer 的语法本就不同(<c>SAVE TRANSACTION</c> /
     /// <c>ROLLBACK TRANSACTION</c>),写全等于替三个不需要它的方言各付一份代价。<b>这不是性能取舍——PG 的事务
-    /// 中止语义没有可移植替代</b>,躲不掉的这一处,写出来比藏起来便宜。上面那句「不解析各库错误码」的决定仍然
-    /// 有效并保留:本分支判的是<b>方言身份</b>,不是错误码。</para>
+    /// 中止语义没有可移植替代</b>,躲不掉的这一处,写出来比藏起来便宜。唯一冲突的识别集中在
+    /// <see cref="WfDatabaseExceptionClassifier"/>:仅接受四种驱动的明确唯一约束错误码,未知错误不进入恢复路径。</para>
     /// <para><c>IsAnyTran</c> 守卫的原因:PG 的 <c>SAVEPOINT</c> 只能用在事务块里,自动提交模式下发它会直接
     /// 报错;而在那种模式下语句失败本就不会中止任何东西,也就不需要它。</para>
     /// </summary>
@@ -127,6 +129,26 @@ public class WfOperationReceiptService(IRepository<WfOperationReceipt> receipts)
             .Where(r => r.IdentityHash == identityHash)
             .FirstAsync(cancellationToken)!;
 
+    /// <summary>
+    /// 在唯一冲突后读取赢家。
+    /// <para>MySQL 默认可重复读会把第一次 <see cref="FindAsync"/> 固定成快照;
+    /// 等待竞争事务提交后,同一连接的第二次普通 SELECT 仍看不到赢家,所以该方言用独立连接读取。
+    /// SQL Server 的失败 INSERT 可能仍持有唯一键锁,必须留在原事务连接上读取;PostgreSQL 则先回滚
+    /// savepoint 后在原连接读取。</para>
+    /// </summary>
+    protected virtual async Task<WfOperationReceipt?> FindCommittedAsync(
+        string identityHash,
+        CancellationToken cancellationToken)
+    {
+        if (receipts.Db.CurrentConnectionConfig.DbType != DbType.MySql)
+            return await FindAsync(identityHash, cancellationToken);
+
+        using var isolated = receipts.Db.CopyNew();
+        return await isolated.Queryable<WfOperationReceipt>()
+            .Where(r => r.IdentityHash == identityHash)
+            .FirstAsync(cancellationToken)!;
+    }
+
     /// <summary>插入占位行(结果列留空,等 <see cref="CommitAsync"/> 回填)。</summary>
     protected virtual Task<int> InsertPlaceholderAsync(
         WfOperationIdentity identity,
@@ -140,5 +162,6 @@ public class WfOperationReceiptService(IRepository<WfOperationReceipt> receipts)
             ActorUserId = identity.ActorUserId,
             RequestKey = identity.RequestKey,
             IdentityHash = identity.IdentityHash,
+            PayloadHash = identity.PayloadHash,
         }).ExecuteCommandAsync(cancellationToken);
 }

@@ -57,4 +57,39 @@ public class WfDefaultNotifier(IRealtimePublisher realtimePublisher) : IWorkflow
                 cancellationToken);
         }
     }
+
+    /// <inheritdoc />
+    public virtual async Task TaskRecalledAsync(
+        WfNotifyContext ctx,
+        long taskId,
+        IReadOnlyList<long> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var userId in userIds)
+        {
+            await realtimePublisher.NotifyUserAsync(
+                userId,
+                "workflow-task-recalled",
+                new { ctx.InstanceId, taskId, ctx.NodeId },
+                cancellationToken);
+        }
+    }
+
+    /// <inheritdoc />
+    public virtual async Task TaskSignChangedAsync(
+        WfNotifyContext ctx,
+        long taskId,
+        WfTaskAction action,
+        IReadOnlyList<long> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var userId in userIds)
+        {
+            await realtimePublisher.NotifyUserAsync(
+                userId,
+                "workflow-task-sign-changed",
+                new { ctx.InstanceId, taskId, action = action.ToString(), ctx.NodeId },
+                cancellationToken);
+        }
+    }
 }

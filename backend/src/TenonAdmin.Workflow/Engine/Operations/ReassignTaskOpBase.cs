@@ -127,6 +127,9 @@ public abstract class ReassignTaskOpBase(
             TaskId = Task.Id,
             TokenId = Task.TokenId,
             UserId = UserId,
+            OriginalUserId = fromActor.OriginalUserId,
+            DelegationRuleId = fromActor.DelegationRuleId,
+            DelegationScopeOrgId = fromActor.DelegationScopeOrgId,
             Action = HistoryAction,
             Comment = Comment,
             DurationMs = durationMs,
@@ -139,6 +142,9 @@ public abstract class ReassignTaskOpBase(
         {
             TaskId = Task.Id,
             UserId = ToUserId,
+            OriginalUserId = fromActor.OriginalUserId,
+            DelegationRuleId = fromActor.DelegationRuleId,
+            DelegationScopeOrgId = fromActor.DelegationScopeOrgId,
             ActorType = WfActorType.Approver,
             Status = WfActorStatus.Pending,
             Sort = fromActor.Sort,
@@ -154,6 +160,8 @@ public abstract class ReassignTaskOpBase(
                 userId = UserId,
                 action = HistoryAction.ToString(),
                 toUserId = ToUserId,
+                comment = Comment,
+                payloadHash = ctx.RequestPayloadHash,
             },
             cancellationToken);
 

@@ -25,4 +25,19 @@ public interface IWorkflowNotifier
         long? fromUserId,
         IReadOnlyList<long> toUserIds,
         CancellationToken cancellationToken = default);
+
+    /// <summary>拿回关闭下游待办后,通知原办理人刷新待办。</summary>
+    Task TaskRecalledAsync(
+        WfNotifyContext ctx,
+        long taskId,
+        IReadOnlyList<long> userIds,
+        CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    /// <summary>加签/减签后通知受影响的办理人刷新待办。</summary>
+    Task TaskSignChangedAsync(
+        WfNotifyContext ctx,
+        long taskId,
+        WfTaskAction action,
+        IReadOnlyList<long> userIds,
+        CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

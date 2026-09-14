@@ -29,6 +29,12 @@ const tone = computed(() => {
       return 'cc'
     case 'branch':
       return 'branch'
+    case 'parallel':
+      return 'parallel'
+    case 'webhook':
+      return 'webhook'
+    case 'aiDecision':
+      return 'ai-decision'
     default:
       return 'end'
   }
@@ -44,6 +50,12 @@ const icon = computed(() => {
       return 'ph:paper-plane-tilt'
     case 'branch':
       return 'ph:git-branch'
+    case 'parallel':
+      return 'ph:git-merge'
+    case 'webhook':
+      return 'ph:webhooks-logo'
+    case 'aiDecision':
+      return 'ph:robot'
     default:
       return 'ph:flag'
   }
@@ -62,6 +74,14 @@ const body = computed(() => {
   if (n.type === 'branch') {
     return { text: t('workflow.designer.armCount', { count: n.conditions?.length ?? 0 }), empty: false }
   }
+  if (n.type === 'parallel') {
+    return { text: t('workflow.designer.parallelArmCount', { count: n.parallelArms?.length ?? 0 }), empty: false }
+  }
+  if (n.type === 'webhook') {
+    const url = n.props?.webhookUrl?.trim()
+    return { text: url || t('workflow.node.placeholder.webhook'), empty: !url }
+  }
+  if (n.type === 'aiDecision') return { text: t('workflow.node.placeholder.aiDecision'), empty: false }
 
   const placeholder =
     n.type === 'cc' ? t('workflow.node.placeholder.cc') : t('workflow.node.placeholder.approval')
@@ -176,6 +196,9 @@ const body = computed(() => {
 .wf-card.is-approval { --wf-head: var(--wf-approval); }
 .wf-card.is-cc { --wf-head: var(--wf-cc); }
 .wf-card.is-branch { --wf-head: var(--color-primary); }
+.wf-card.is-parallel { --wf-head: var(--color-warning); }
+.wf-card.is-webhook { --wf-head: var(--color-info); }
+.wf-card.is-ai-decision { --wf-head: var(--color-primary); }
 .wf-card.is-end { --wf-head: var(--wf-end); }
 
 .wf-card:not(.is-readonly):hover {

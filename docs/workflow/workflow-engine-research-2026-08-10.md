@@ -223,7 +223,7 @@ JNPF 是**合同交付的商业产品**(福建引迈)。仓根没有 Apache/MIT/
 
 ## 七、OpenWorkflow——可靠执行层专项对照（2026-08-23）
 
-本地浅克隆：`C:\HuHuHu\参考项目\工作流\openworkflow`；对照提交 `46dcc85d230bb54894dc4bab022a1ce34cc11c13`，包版本 `0.9.2`，Apache-2.0。分仓笔记：`openworkflow/_TENON_REF.md`；详细源码对照另见 [`openworkflow-reference-2026-08-23.md`](./openworkflow-reference-2026-08-23.md)。
+本地浅克隆：`../参考项目/工作流/openworkflow`；对照提交 `46dcc85d230bb54894dc4bab022a1ce34cc11c13`，包版本 `0.9.2`，Apache-2.0。分仓笔记：`openworkflow/_TENON_REF.md`；详细源码对照另见 [`openworkflow-reference-2026-08-23.md`](./openworkflow-reference-2026-08-23.md)。
 
 它是 TypeScript durable/resumable workflow 框架，不是审批产品。工作流以代码函数定义，worker 从数据库领取 run，每次从头重放函数；完成过的 `step.run` 从 `step_attempts` 返回缓存结果，新步骤才执行。`step.sleep`、子工作流和 `waitForSignal` 会持久化挂起，`availableAt` 同时承担唤醒时间与 worker 租约，SQLite/Postgres 是 `Backend` 的两个 Adapter。
 

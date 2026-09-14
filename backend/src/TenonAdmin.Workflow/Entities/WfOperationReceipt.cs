@@ -51,6 +51,10 @@ public class WfOperationReceipt : BaseEntity
     [SugarColumn(Length = 64, ColumnDescription = "幂等标识哈希(SHA-256 小写 hex)")]
     public string IdentityHash { get; set; } = "";
 
+    /// <summary>同一 request key 的业务参数摘要;旧回执为空。</summary>
+    [SugarColumn(Length = 64, IsNullable = true, ColumnDescription = "请求参数摘要哈希")]
+    public string? PayloadHash { get; set; }
+
     /// <summary>首次执行的结果码;<c>0</c> = 成功。</summary>
     [SugarColumn(ColumnDescription = "首次执行结果码(0=成功)")]
     public int ResultCode { get; set; }

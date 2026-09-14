@@ -1,10 +1,12 @@
 using System.Net;
 using System.Reflection;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,6 +15,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
 using TenonAdmin.SqlSugar;
@@ -262,7 +265,27 @@ public static class TenonAdminSetup
         services.AddHostedService<SecurityStartupDiagnosticHostedService>();
 
         // ── 内置 OpenAPI 文档(§13.6 契约源)+ 健康检查(§12:/health 存活 + /health/ready 依赖就绪)──
-        services.AddOpenApi();          // 产出 /openapi/v1.json;内置控制器显式 Result<T> → 契约含信封(裸返回端点见 ResultEnvelopeFilter 契约提示)
+        services.AddOpenApi(options =>
+        {
+            options.AddSchemaTransformer((schema, context, _) =>
+            {
+                var type = context.JsonTypeInfo.Type;
+                if (type == typeof(JsonElement))
+                {
+                    schema.Type = null;
+                    schema.AdditionalPropertiesAllowed = true;
+                    schema.AdditionalProperties = null;
+                }
+                else if (type == typeof(Dictionary<string, JsonElement>)
+                         || type == typeof(IReadOnlyDictionary<string, JsonElement>))
+                {
+                    schema.Type = JsonSchemaType.Object;
+                    schema.AdditionalPropertiesAllowed = true;
+                    schema.AdditionalProperties = new OpenApiSchema();
+                }
+                return Task.CompletedTask;
+            });
+        });          // 产出 /openapi/v1.json;内置控制器显式 Result<T> → 契约含信封(裸返回端点见 ResultEnvelopeFilter 契约提示)
         services.AddHealthChecks()
             .AddCheck<DatabaseHealthCheck>("db", tags: ["ready"])
             .AddCheck<CacheHealthCheck>("cache", tags: ["ready"])

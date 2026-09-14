@@ -19,7 +19,8 @@ public class WfTaskService(
     IRepository<WfDefinitionVersion> versions,
     IRepository<WfHistory> histories,
     IWorkflowNotifier notifier,
-    ILogger<WfTaskService> logger) : IWfTaskService
+    ILogger<WfTaskService> logger,
+    ICurrentUser? currentUser = null) : IWfTaskService, IWfFormTaskService
 {
     /// <inheritdoc />
     public virtual async Task<PagedList<WfTodoItemOutput>> PageTodoAsync(
@@ -96,7 +97,7 @@ public class WfTaskService(
                 DefinitionName = defName,
                 BusinessKey = instance.BusinessKey,
                 StarterUserId = instance.StarterUserId,
-                VariablesJson = instance.VariablesJson,
+                VariablesJson = ProjectTaskVariables(ver, task.NodeId, instance.VariablesJson),
                 CreateTime = task.CreateTime,
             });
         }
@@ -137,7 +138,7 @@ public class WfTaskService(
         string? comment = null,
         string? requestId = null,
         CancellationToken cancellationToken = default)
-        => CompleteAsync(taskId, userId, WfTaskAction.Approve, comment, requestId, cancellationToken);
+        => CompleteAsync(taskId, userId, WfTaskAction.Approve, comment, requestId, cancellationToken, null);
 
     /// <inheritdoc />
     public virtual Task<WfEngineResult> RejectAsync(
@@ -146,7 +147,27 @@ public class WfTaskService(
         string? comment = null,
         string? requestId = null,
         CancellationToken cancellationToken = default)
-        => CompleteAsync(taskId, userId, WfTaskAction.Reject, comment, requestId, cancellationToken);
+        => CompleteAsync(taskId, userId, WfTaskAction.Reject, comment, requestId, cancellationToken, null);
+
+    /// <inheritdoc />
+    public virtual Task<WfEngineResult> ApproveWithVariablesAsync(
+        long taskId,
+        long userId,
+        string? comment = null,
+        string? requestId = null,
+        CancellationToken cancellationToken = default,
+        string? variablesJson = null)
+        => CompleteAsync(taskId, userId, WfTaskAction.Approve, comment, requestId, cancellationToken, variablesJson);
+
+    /// <inheritdoc />
+    public virtual Task<WfEngineResult> RejectWithVariablesAsync(
+        long taskId,
+        long userId,
+        string? comment = null,
+        string? requestId = null,
+        CancellationToken cancellationToken = default,
+        string? variablesJson = null)
+        => CompleteAsync(taskId, userId, WfTaskAction.Reject, comment, requestId, cancellationToken, variablesJson);
 
     /// <inheritdoc />
     public virtual Task<WfEngineResult> TransferAsync(
@@ -295,7 +316,8 @@ public class WfTaskService(
         WfTaskAction action,
         string? comment,
         string? requestId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? variablesJson)
     {
         if (action is not (WfTaskAction.Approve or WfTaskAction.Reject))
         {
@@ -310,6 +332,8 @@ public class WfTaskService(
                 UserId = userId,
                 Action = action,
                 Comment = comment,
+                VariablesJson = variablesJson,
+                AllowAnyFileOwner = currentUser?.IsSuperAdmin == true,
                 RequestId = requestId,
             },
             cancellationToken);
@@ -408,7 +432,11 @@ public class WfTaskService(
                 NodeName = h.NodeName,
                 Action = h.Action,
                 Comment = h.Comment,
+                OriginalUserId = h.OriginalUserId,
+                DelegationRuleId = h.DelegationRuleId,
+                DelegationScopeOrgId = h.DelegationScopeOrgId,
                 TransferToUserId = h.TransferToUserId,
+                TargetUserId = h.TargetUserId,
                 DefinitionId = defId,
                 DefinitionName = defName,
                 BusinessKey = instance?.BusinessKey,
@@ -447,6 +475,17 @@ public class WfTaskService(
         }
 
         return index?.Find(nodeId)?.Name;
+    }
+
+    private static string? ProjectTaskVariables(
+        WfDefinitionVersion? version,
+        string nodeId,
+        string? variablesJson)
+    {
+        if (version is null) return null;
+        var model = WfModelJson.Deserialize(version.ModelJson);
+        var node = model is null ? null : WfModelIndex.Build(model).Find(nodeId);
+        return WfFormRuntime.ProjectVisibleJson(model?.FormSchema, variablesJson, node?.Props?.FormPerms);
     }
 
     protected static PagedList<WfTodoItemOutput> EmptyTodoPage(WfTaskPageInput input) => new()

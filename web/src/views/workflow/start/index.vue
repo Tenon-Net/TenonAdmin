@@ -24,7 +24,8 @@ import { wfInstanceApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import type { WfStartableDefinitionDetail } from '@/types/workflow'
 import { flattenChain } from '@/workflow/model'
-import type { WfModel } from '@/workflow/schema'
+import { projectWfRuntimeModel } from '@/workflow/formSchema'
+import type { WfFormSchema } from '@/workflow/schema'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
 import WfFormMount from '../components/WfFormMount.vue'
 
@@ -43,6 +44,9 @@ const submitting = ref(false)
 const defsLoading = ref(false)
 const defOptions = ref<{ label: string; value: number }[]>([])
 const formComponent = ref<string | null>(null)
+const formSchema = ref<WfFormSchema | null>(null)
+const runtimeVariablesJson = ref<string | null>(null)
+const formRuntimeRef = ref<{ validate: () => boolean } | null>(null)
 const snapshot = ref<WfStartableDefinitionDetail | null>(null)
 const requestKey = useRequestKey()
 
@@ -63,8 +67,9 @@ const rules: FormRules = {
 }
 
 const hasFormMount = computed(() => !!formComponent.value?.trim())
+const hasBuiltinForm = computed(() => !!formSchema.value?.fields.length)
 const selfSelectNodes = computed(() => {
-  const model = snapshot.value?.model as WfModel | undefined
+  const model = projectWfRuntimeModel(snapshot.value?.model)
   if (!model?.root) return []
   return flattenChain(model.root).filter((n) => n.props?.assignee?.provider === 'selfSelect')
 })
@@ -81,10 +86,10 @@ function coerceValue(raw: string): unknown {
 }
 
 function serializeVars(rows: VarRow[]): string | null {
-  const obj: Record<string, unknown> = {}
+  const obj: Record<string, unknown> = Object.create(null) as Record<string, unknown>
   for (const row of rows) {
     const k = row.key.trim()
-    if (!k) continue
+    if (!k || k === '__proto__') continue
     obj[k] = coerceValue(row.value)
   }
   return Object.keys(obj).length ? JSON.stringify(obj) : null
@@ -105,6 +110,8 @@ async function loadPublishedDefs() {
 
 async function onDefinitionChange(id: number | null) {
   formComponent.value = null
+  formSchema.value = null
+  runtimeVariablesJson.value = null
   snapshot.value = null
   form.selectedUserIdsByNode = {}
   form.varRows = [{ key: '', value: '' }]
@@ -113,6 +120,7 @@ async function onDefinitionChange(id: number | null) {
     const detail = await wfInstanceApi.startableDetail(id)
     snapshot.value = detail
     formComponent.value = detail.model?.formComponent ?? detail.formComponent ?? null
+    formSchema.value = projectWfRuntimeModel(detail.model)?.formSchema ?? null
   } catch (e) {
     message.error(translateError(e))
   }
@@ -140,13 +148,14 @@ async function submit() {
     return
   }
   if (!form.definitionId) return
+  if (hasBuiltinForm.value && !formRuntimeRef.value?.validate()) return
 
   submitting.value = true
   try {
     const body = {
       definitionId: form.definitionId!,
       businessKey: form.businessKey.trim() || null,
-      variablesJson: variablesJson.value,
+      variablesJson: hasBuiltinForm.value ? runtimeVariablesJson.value : variablesJson.value,
       selectedUserIdsByNode: Object.fromEntries(
         selfSelectNodes.value
           .map((node) => [node.id, form.selectedUserIdsByNode[node.id] ?? []] as const)
@@ -191,7 +200,7 @@ function removeVarRow(i: number) {
       <n-form-item :label="t('workflow.start.businessKey')">
         <n-input v-model:value="form.businessKey" :placeholder="t('workflow.start.businessKeyHint')" />
       </n-form-item>
-      <n-form-item :label="t('workflow.start.variables')">
+      <n-form-item v-if="!hasBuiltinForm" :label="t('workflow.start.variables')">
         <div class="wf-kv">
           <div v-for="(row, i) in form.varRows" :key="i" class="wf-kv-row">
             <n-input v-model:value="row.key" :placeholder="t('workflow.start.varKey')" />
@@ -221,12 +230,15 @@ function removeVarRow(i: number) {
     </n-form>
 
     <WfFormMount
-      v-if="hasFormMount"
+      v-if="hasFormMount || hasBuiltinForm"
+      ref="formRuntimeRef"
       :form-component="formComponent"
+      :form-schema="formSchema"
       mode="start"
       :definition-id="form.definitionId ?? undefined"
       :business-key="form.businessKey || null"
-      :variables-json="variablesJson"
+      :variables-json="hasBuiltinForm ? runtimeVariablesJson : variablesJson"
+      @variables-change="runtimeVariablesJson = $event"
     />
 
     <n-space style="margin-top: 16px">

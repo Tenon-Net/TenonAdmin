@@ -29,6 +29,18 @@ public class WfHisTask : BaseEntity
     [SugarColumn(ColumnDescription = "办理人用户 Id")]
     public long UserId { get; set; }
 
+    /// <summary>长期委托前的原责任人快照。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "委托前原责任人 Id")]
+    public long? OriginalUserId { get; set; }
+
+    /// <summary>生成本次办理 actor 的长期委托规则 Id。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "长期委托规则 Id")]
+    public long? DelegationRuleId { get; set; }
+
+    /// <summary>长期委托规则机构快照。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "长期委托机构 Id")]
+    public long? DelegationScopeOrgId { get; set; }
+
     [SugarColumn(ColumnDescription = "动作(1 同意 / 2 拒绝 / 3 转办 / …)")]
     public WfTaskAction Action { get; set; }
 
@@ -54,6 +66,10 @@ public class WfHisTask : BaseEntity
     /// <summary>转办 / 委托目标用户 Id(仅 Transfer 与 Delegate 时有值)。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "转办目标用户 Id")]
     public long? TransferToUserId { get; set; }
+
+    /// <summary>加签 / 减签目标用户 Id;不复用转办目标字段。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "加减签目标用户 Id")]
+    public long? TargetUserId { get; set; }
 
     /// <summary>
     /// <see cref="WfToken.NodeVisitId"/> 的拷贝(M3a-1);从 <c>Task.NodeVisitId</c>(活跃待办行)取,

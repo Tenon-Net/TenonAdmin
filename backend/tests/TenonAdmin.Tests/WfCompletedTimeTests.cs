@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using SqlSugar;
 using TenonAdmin.SqlSugar;
@@ -21,6 +22,26 @@ namespace TenonAdmin.Tests;
 public class WfCompletedTimeTests
 {
     private const string Password = "Test@123456";
+
+    [Fact]
+    public async Task Completed_time_backfill_is_replaceable()
+    {
+        var replacement = new FakeBackfill();
+        using var host = new HostBuilder()
+            .ConfigureServices(services =>
+            {
+                services.TryAddSingleton<IWfCompletedTimeBackfill>(replacement);
+                services.AddTenonAdminWorkflow();
+                services.AddTenonAdminWorkflow();
+            })
+            .Build();
+
+        await host.StartAsync();
+
+        Assert.Same(replacement, host.Services.GetRequiredService<IWfCompletedTimeBackfill>());
+        Assert.Equal(1, replacement.StartCount);
+        await host.StopAsync();
+    }
 
     /// <summary>
     /// 同意到底:审批前实例 Running 且完结时间为<b>空</b>,同意后进 Approved 且完结时间落在发起之后。
@@ -217,14 +238,11 @@ public class WfCompletedTimeTests
     }
 
     /// <summary>
-    /// 手动跑一遍回填服务。它是 <c>internal</c>(不是扩展点,没必要为测试放开),故按类型名从已注册的
-    /// <see cref="IHostedService"/> 里取;取不到就是被改名或漏注册了,断言当场报出来。
+    /// 手动跑一遍回填服务。实现是 <c>internal</c>,测试通过公开替换 seam 取回并执行。
     /// </summary>
     private static async Task RunBackfillAsync(WorkflowAppFactory f)
     {
-        var backfill = f.Services.GetServices<IHostedService>()
-            .FirstOrDefault(s => s.GetType().Name == "WfCompletedTimeBackfill");
-        Assert.NotNull(backfill);
+        var backfill = f.Services.GetRequiredService<IWfCompletedTimeBackfill>();
         await backfill.StartAsync(CancellationToken.None);
     }
 
@@ -348,4 +366,17 @@ public class WfCompletedTimeTests
 
     private static async Task<JsonElement> PostEnvelope(HttpClient client, string path, object body) =>
         await (await client.PostJson(path, body)).ReadEnvelope();
+
+    private sealed class FakeBackfill : IWfCompletedTimeBackfill
+    {
+        public int StartCount { get; private set; }
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            StartCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
 }

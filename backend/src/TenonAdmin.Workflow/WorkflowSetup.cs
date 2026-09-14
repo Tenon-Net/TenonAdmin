@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using TenonAdmin.Core;
 using TenonAdmin.SqlSugar;
 
@@ -137,6 +138,8 @@ public static class WorkflowSetup
 
         // 写操作幂等回执(M2c §14.2):引擎在事务内占位 / 命中 / 回填;消费者可前置注册同接口整体替换。
         services.TryAddScoped<IWfOperationReceiptService, WfOperationReceiptService>();
+        services.TryAddScoped<IWfDelegationService, WfDelegationService>();
+        services.TryAddScoped<IWfDelegationNotifier, WfDelegationNotifier>();
 
         // 分支条件求值(结构化 JSON,非脚本);消费者可前置注册同接口整体替换。
         services.TryAddScoped<IWfConditionEvaluator, WfConditionEvaluator>();
@@ -146,6 +149,8 @@ public static class WorkflowSetup
 
         // 待办/已办 + 审批动词(同意/拒绝/转办)。
         services.TryAddScoped<IWfTaskService, WfTaskService>();
+        // 高级签核动作独立授权/替换；默认复用同一个任务服务实例。
+        services.TryAddScoped<IWfTaskSignService, WfTaskSignService>();
 
         // 定义 CRUD + 发布/版本。
         services.TryAddScoped<IWfDefinitionService, WfDefinitionService>();
@@ -169,7 +174,8 @@ public static class WorkflowSetup
         // 升级回填:给加列前就已终态的旧实例补 CompletedTime。带存在性守卫,全新库/列还没加时静默跳过
         // (为什么不是文档里的手工步骤、守卫怎么兜住注册顺序,见 WfCompletedTimeBackfill 的类注释)。
         // 不能做成 ISeedData —— 那套机制只插不改(HasData() 是声明式同步签名),做不了 UPDATE。
-        services.AddHostedService<WfCompletedTimeBackfill>();
+        services.TryAddSingleton<IWfCompletedTimeBackfill, WfCompletedTimeBackfill>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, WfCompletedTimeBackfillHostedService>());
 
         return services;
     }

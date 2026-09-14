@@ -17,6 +17,18 @@ public class WfTaskActor : BaseEntity
     [SugarColumn(ColumnDescription = "办理人用户 Id")]
     public long UserId { get; set; }
 
+    /// <summary>长期委托前的原责任人；普通 actor 为空。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "委托前原责任人 Id")]
+    public long? OriginalUserId { get; set; }
+
+    /// <summary>生成本 actor 的长期委托规则 Id。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "长期委托规则 Id")]
+    public long? DelegationRuleId { get; set; }
+
+    /// <summary>长期委托规则机构快照。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "长期委托机构 Id")]
+    public long? DelegationScopeOrgId { get; set; }
+
     [SugarColumn(ColumnDescription = "类型(1 审批 / 2 抄送)")]
     public WfActorType ActorType { get; set; } = WfActorType.Approver;
 

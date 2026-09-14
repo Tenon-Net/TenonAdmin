@@ -5,24 +5,41 @@ namespace TenonAdmin.Workflow;
 /// <see cref="WfExecutionContext.ResolveMergeTarget"/> 向上找外层 branch 的 <c>Next</c>,嵌套分支一路上溯)
 /// → 进入下一节点或完结实例。树遍历全部委托 ctx/<see cref="WfModelIndex"/>,本类不做。
 /// </summary>
-public class TakeTransitionOp(WfNode fromNode) : IWfOperation
+public class TakeTransitionOp(WfNode fromNode, WfToken? forcedToken = null) : IWfOperation
 {
     protected WfNode FromNode { get; } = fromNode;
+
+    private WfToken? ForcedToken { get; } = forcedToken;
 
     public virtual async Task ExecuteAsync(WfExecutionContext ctx, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (ForcedToken is not null)
+            ctx.Token = ForcedToken;
 
         await ctx.AppendHistoryAsync(WfHistoryEventType.NodeLeave, FromNode.Id, cancellationToken: cancellationToken);
 
         var next = ctx.ResolveMergeTarget(FromNode);
+        if (ctx.Token is { ParentTokenId: not null, ForkId: not null } child)
+        {
+            var index = WfModelIndex.Build(ctx.Model);
+            var parallel = index.FindEnclosingParallel(FromNode.Id);
+            var arm = index.FindEnclosingParallelArm(FromNode.Id);
+            var nextParallel = next is null ? null : index.FindEnclosingParallel(next.Id);
+            if (parallel is not null && arm is not null && nextParallel?.Id != parallel.Id)
+            {
+                ctx.Agenda.Plan(new CompleteParallelArmOp(parallel, arm, child));
+                return;
+            }
+        }
+
         if (next is null)
         {
             await CompleteInstanceAsync(ctx, WfInstanceStatus.Approved, cancellationToken);
             return;
         }
 
-        ctx.Agenda.Plan(new EnterNodeOp(next));
+        ctx.Agenda.Plan(new EnterNodeOp(next, forcedToken: ctx.Token));
     }
 
     /// <summary>实例完结:翻状态、收 token、历史、表单挂载点回写。</summary>

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h, nextTick, ref, type App } from 'vue'
 import { createI18n } from 'vue-i18n'
 
@@ -6,6 +6,8 @@ import type { WfConditionExpr, WfModel } from '@/workflow/schema'
 import { createConditionGroup, createConditionLeaf } from '@/workflow/configuration'
 import WfConditionEditor from './WfConditionEditor.vue'
 import WfConfigDrawer from './WfConfigDrawer.vue'
+
+vi.mock('@/components/AppIcon.vue', () => ({ default: { render: () => null } }))
 
 let app: App<Element> | undefined
 
@@ -57,10 +59,10 @@ function mountEditor(expression: WfConditionExpr): HTMLElement {
   return host
 }
 
-function mountDrawer(model: WfModel): HTMLElement {
+function mountDrawer(model: WfModel, nodeId = 'branch'): HTMLElement {
   const host = document.createElement('div')
   document.body.append(host)
-  app = createApp(WfConfigDrawer, { show: true, model, nodeId: 'branch' })
+  app = createApp(WfConfigDrawer, { show: true, model, nodeId })
   app.use(createI18n({
     legacy: false,
     locale: 'en-US',
@@ -68,7 +70,15 @@ function mountDrawer(model: WfModel): HTMLElement {
       'en-US': {
         common: { cancel: 'Cancel', save: 'Save', delete: 'Delete' },
         workflow: {
-          designer: { configTitle: 'Settings · {name}', nodeName: 'Node name', armName: 'Arm' },
+          designer: { configTitle: 'Settings · {name}', nodeName: 'Node name', armName: 'Arm', advanced: 'Advanced' },
+          node: { webhook: 'Webhook' },
+          webhook: {
+            url: 'Webhook URL', urlPlaceholder: 'https://example.com/hook', urlInvalid: 'Invalid URL',
+            method: 'Method', timeoutSeconds: 'Timeout', timeoutRange: 'Invalid timeout',
+            onFailure: 'Failure policy', headers: 'Headers', headerName: 'Name', headerValue: 'Value',
+            addHeader: 'Add header', removeHeader: 'Remove header', maxAttempts: 'Maximum attempts',
+            maxAttemptsRange: 'Invalid attempts', failure: { fail: 'Fail workflow', manual: 'Manual handling' },
+          },
           condition: {
             defaultHint: 'Default arm',
             logicLabel: 'Condition logic',
@@ -158,5 +168,26 @@ describe('WfConditionEditor disclosure', () => {
     const armItems = directItems(armCollapse!)
     expect(armItems).toHaveLength(3)
     expect(armItems.filter((item) => item.classList.contains('n-collapse-item--active'))).toEqual([armItems[1]])
+  })
+
+  it('keeps webhook headers and attempts in Advanced with five default fields', async () => {
+    const model: WfModel = {
+      version: 1,
+      root: {
+        id: 'start', type: 'start', name: 'Start',
+        next: { id: 'webhook', type: 'webhook', name: 'Webhook', next: null },
+      },
+    }
+    mountDrawer(model, 'webhook')
+    await nextTick()
+    await nextTick()
+
+    expect(document.body.querySelectorAll('.n-form > .n-form-item')).toHaveLength(5)
+    const advanced = document.body.querySelector('.wf-advanced')
+    advanced?.querySelector<HTMLElement>('.n-collapse-item__header-main')?.click()
+    await nextTick()
+    await nextTick()
+    expect(advanced?.textContent).toContain('Headers')
+    expect(advanced?.textContent).toContain('Maximum attempts')
   })
 })

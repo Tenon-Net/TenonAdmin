@@ -69,6 +69,215 @@ public class WfReceiptEngineTests
             .CountAsync());
     }
 
+    [Fact]
+    public async Task Same_start_request_id_with_a_different_payload_returns_a_conflict()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        var starterId = await AddUser(admin, "wf-rcp-payload-start-starter");
+        var approverId = await AddUser(admin, "wf-rcp-payload-start-approver");
+        var definitionId = await Publish(admin, "回执-发起载荷", SingleApprovalModel(approverId));
+        var starter = await ClientFor(f, "wf-rcp-payload-start-starter");
+
+        var first = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new
+        {
+            definitionId,
+            businessKey = "payload-a",
+            variablesJson = "{\"amount\":1}",
+            requestId = "req-payload-start",
+        });
+        Assert.Equal(0, first.GetProperty("code").GetInt32());
+
+        var conflict = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new
+        {
+            definitionId,
+            businessKey = "payload-b",
+            variablesJson = "{\"amount\":2}",
+            requestId = "req-payload-start",
+        });
+        Assert.Equal(WorkflowErrorCode.RequestPayloadConflict, conflict.GetProperty("code").GetInt32());
+        _ = starterId;
+    }
+
+    [Fact]
+    public async Task Legacy_receipt_without_payload_hash_still_replays()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        await AddUser(admin, "wf-rcp-legacy-payload-starter");
+        var approverId = await AddUser(admin, "wf-rcp-legacy-payload-approver");
+        var definitionId = await Publish(admin, "回执-旧摘要兼容", SingleApprovalModel(approverId));
+        var starter = await ClientFor(f, "wf-rcp-legacy-payload-starter");
+        var body = new
+        {
+            definitionId,
+            businessKey = "legacy-payload",
+            variablesJson = "{\"amount\":1}",
+            requestId = "req-legacy-payload",
+        };
+
+        var first = await PostEnvelope(starter, "/api/v1/workflow/instance/start", body);
+        Assert.Equal(0, first.GetProperty("code").GetInt32());
+
+        using (var scope = f.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            var receipt = await db.Queryable<WfOperationReceipt>()
+                .Where(r => r.RequestKey == body.requestId)
+                .FirstAsync();
+            Assert.NotNull(receipt);
+            await db.Updateable<WfOperationReceipt>()
+                .SetColumns(r => new WfOperationReceipt { PayloadHash = null })
+                .Where(r => r.Id == receipt.Id)
+                .ExecuteCommandAsync();
+        }
+
+        var replay = await PostEnvelope(starter, "/api/v1/workflow/instance/start", body);
+        Assert.Equal(0, replay.GetProperty("code").GetInt32());
+        Assert.Equal(first.GetProperty("data").GetRawText(), replay.GetProperty("data").GetRawText());
+    }
+
+    [Fact]
+    public async Task Same_approval_request_id_with_different_form_values_returns_a_conflict()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        await AddUser(admin, "wf-rcp-payload-approve-starter");
+        var approverId = await AddUser(admin, "wf-rcp-payload-approve-approver");
+        var definitionId = await Publish(admin, "回执-办理载荷", SingleApprovalModel(approverId));
+        var starter = await ClientFor(f, "wf-rcp-payload-approve-starter");
+        var approver = await ClientFor(f, "wf-rcp-payload-approve-approver");
+
+        var started = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
+        var taskId = started.GetProperty("data").GetProperty("createdTaskId").GetInt64();
+        var first = await PostEnvelope(approver, "/api/v1/workflow/task/approve", new
+        {
+            taskId,
+            variablesJson = "{\"amount\":1}",
+            requestId = "req-payload-approve",
+        });
+        Assert.Equal(0, first.GetProperty("code").GetInt32());
+
+        var conflict = await PostEnvelope(approver, "/api/v1/workflow/task/approve", new
+        {
+            taskId,
+            variablesJson = "{\"amount\":2}",
+            requestId = "req-payload-approve",
+        });
+        Assert.Equal(WorkflowErrorCode.RequestPayloadConflict, conflict.GetProperty("code").GetInt32());
+    }
+
+    [Fact]
+    public async Task Same_resubmit_request_id_with_different_values_returns_a_conflict()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        await AddUser(admin, "wf-rcp-payload-resubmit-starter");
+        var approverId = await AddUser(admin, "wf-rcp-payload-resubmit-approver");
+        var definitionId = await Publish(admin, "回执-重提载荷", ReturnableModel(approverId));
+        var starter = await ClientFor(f, "wf-rcp-payload-resubmit-starter");
+        var approver = await ClientFor(f, "wf-rcp-payload-resubmit-approver");
+
+        var started = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
+        var instanceId = started.GetProperty("data").GetProperty("instanceId").GetInt64();
+        var taskId = started.GetProperty("data").GetProperty("createdTaskId").GetInt64();
+        Assert.Equal(0, (await PostEnvelope(approver, "/api/v1/workflow/task/return", new { taskId }))
+            .GetProperty("code").GetInt32());
+
+        var first = await PostEnvelope(starter, "/api/v1/workflow/instance/resubmit", new
+        {
+            instanceId,
+            variablesJson = "{\"amount\":1}",
+            requestId = "req-payload-resubmit",
+        });
+        Assert.Equal(0, first.GetProperty("code").GetInt32());
+        var conflict = await PostEnvelope(starter, "/api/v1/workflow/instance/resubmit", new
+        {
+            instanceId,
+            variablesJson = "{\"amount\":2}",
+            requestId = "req-payload-resubmit",
+        });
+        Assert.Equal(WorkflowErrorCode.RequestPayloadConflict, conflict.GetProperty("code").GetInt32());
+    }
+
+    [Fact]
+    public async Task Transfer_delegate_and_return_replay_only_with_the_same_payload()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        await AddUser(admin, "wf-rcp-actions-starter");
+        var aId = await AddUser(admin, "wf-rcp-actions-a");
+        var bId = await AddUser(admin, "wf-rcp-actions-b");
+        var cId = await AddUser(admin, "wf-rcp-actions-c");
+        var definitionId = await Publish(admin, "回执-改派动作载荷", ReturnableModel(aId));
+
+        var starter = await ClientFor(f, "wf-rcp-actions-starter");
+        var a = await ClientFor(f, "wf-rcp-actions-a");
+        var b = await ClientFor(f, "wf-rcp-actions-b");
+        var c = await ClientFor(f, "wf-rcp-actions-c");
+        var started = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
+        var taskId = started.GetProperty("data").GetProperty("createdTaskId").GetInt64();
+
+        await AssertReplayAndConflict(
+            a, "/api/v1/workflow/task/transfer",
+            new { taskId, toUserId = bId, comment = "转给B", requestId = "req-transfer-payload" },
+            new { taskId, toUserId = cId, comment = "转给B", requestId = "req-transfer-payload" });
+        await AssertReplayAndConflict(
+            b, "/api/v1/workflow/task/delegate",
+            new { taskId, toUserId = cId, comment = "请B代办", requestId = "req-delegate-payload" },
+            new { taskId, toUserId = cId, comment = "换个意见", requestId = "req-delegate-payload" });
+        await AssertReplayAndConflict(
+            c, "/api/v1/workflow/task/return",
+            new { taskId, comment = "退回修改", requestId = "req-return-payload" },
+            new { taskId, comment = "改成别的意见", requestId = "req-return-payload" });
+
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var events = await db.Queryable<WfHistory>()
+            .Where(h => h.InstanceId == started.GetProperty("data").GetProperty("instanceId").GetInt64()
+                        && h.RequestId != null)
+            .ToListAsync();
+        Assert.Contains(events, h => h.RequestId == "req-transfer-payload"
+            && HasPayload(h.PayloadJson, "toUserId", bId, "comment", "转给B"));
+        Assert.Contains(events, h => h.RequestId == "req-delegate-payload"
+            && HasPayload(h.PayloadJson, "toUserId", cId, "comment", "请B代办"));
+        Assert.Contains(events, h => h.EventType == WfHistoryEventType.TaskReturned
+            && HasPayload(h.PayloadJson, "targetNodeId", "start", "comment", "退回修改"));
+    }
+
+    private static bool HasPayload(string? json, string firstName, long firstValue, string commentName, string comment)
+    {
+        using var payload = JsonDocument.Parse(json!);
+        var root = payload.RootElement;
+        return root.GetProperty(firstName).GetInt64() == firstValue
+            && root.GetProperty(commentName).GetString() == comment
+            && root.GetProperty("payloadHash").GetString() is { Length: > 0 };
+    }
+
+    private static bool HasPayload(string? json, string firstName, string firstValue, string commentName, string comment)
+    {
+        using var payload = JsonDocument.Parse(json!);
+        var root = payload.RootElement;
+        return root.GetProperty(firstName).GetString() == firstValue
+            && root.GetProperty(commentName).GetString() == comment
+            && root.GetProperty("payloadHash").GetString() is { Length: > 0 };
+    }
+
+    private static async Task AssertReplayAndConflict(
+        HttpClient client,
+        string path,
+        object firstBody,
+        object conflictBody)
+    {
+        var first = await PostEnvelope(client, path, firstBody);
+        var replay = await PostEnvelope(client, path, firstBody);
+        var conflict = await PostEnvelope(client, path, conflictBody);
+        Assert.Equal(0, first.GetProperty("code").GetInt32());
+        Assert.Equal(0, replay.GetProperty("code").GetInt32());
+        Assert.Equal(first.GetProperty("data").GetRawText(), replay.GetProperty("data").GetRawText());
+        Assert.Equal(WorkflowErrorCode.RequestPayloadConflict, conflict.GetProperty("code").GetInt32());
+    }
+
     /// <summary>
     /// 终态重试:实例已完结后同 key 再发 → 返回第一次的结果(`instanceStatus = Approved`),
     /// **不是** `TaskConflict`。这正是台账 `## DONE-CONDITION` 那条「不再只报冲突码当丢响应重试的唯一出口」。
@@ -490,6 +699,34 @@ public class WfReceiptEngineTests
                     },
                     next = (object?)null,
                 },
+            },
+        },
+    };
+
+    private static object ReturnableModel(long userId) => new
+    {
+        version = 1,
+        root = new
+        {
+            id = "start",
+            type = "start",
+            name = "",
+            next = new
+            {
+                id = "node1",
+                type = "approval",
+                name = "node1",
+                props = new
+                {
+                    assignee = new
+                    {
+                        provider = "user",
+                        @params = new Dictionary<string, object> { ["userIds"] = new[] { userId } },
+                    },
+                    mode = "any",
+                    returnPolicy = "prev",
+                },
+                next = (object?)null,
             },
         },
     };

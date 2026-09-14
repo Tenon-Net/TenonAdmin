@@ -31,10 +31,10 @@ public abstract class WfWriteCmd : IWfCommand
     public string? RequestId
     {
         get => _requestId;
-        init => _requestId = Normalize(value);
+        init => _requestId = NormalizeRequestId(value);
     }
 
-    private static string? Normalize(string? value)
+    internal static string? NormalizeRequestId(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
 
@@ -83,8 +83,12 @@ public sealed class StartInstanceCmd : WfWriteCmd
 
     public string? VariablesJson { get; init; }
 
+    /// <summary>发起用户是否为超级管理员,用于表单附件引用的文件权限边界。</summary>
+    public bool AllowAnyFileOwner { get; init; }
+
     /// <summary>按节点 Id 提交发起人自选审批人(仅 selfSelect Provider)。</summary>
     public IReadOnlyDictionary<string, List<long>>? SelectedUserIdsByNode { get; init; }
+
 }
 
 /// <summary>
@@ -100,6 +104,12 @@ public sealed class CompleteTaskCmd : WfWriteCmd
     public required WfTaskAction Action { get; init; }
 
     public string? Comment { get; init; }
+
+    /// <summary>内置表单办理值 JSON;空值表示沿用实例当前值。</summary>
+    public string? VariablesJson { get; init; }
+
+    /// <summary>办理用户是否为超级管理员,用于表单附件引用的文件权限边界。</summary>
+    public bool AllowAnyFileOwner { get; init; }
 }
 
 /// <summary>
@@ -132,6 +142,39 @@ public sealed class DelegateTaskCmd : WfWriteCmd
 
     /// <summary>委托目标用户。</summary>
     public required long ToUserId { get; init; }
+
+    public string? Comment { get; init; }
+}
+
+/// <summary>加签/减签命令共用字段。</summary>
+public abstract class SignTaskCmd : WfWriteCmd
+{
+    public required long TaskId { get; init; }
+    public required long UserId { get; init; }
+    public required long TargetUserId { get; init; }
+    public string? Comment { get; init; }
+}
+
+/// <summary>给当前审批任务追加一名办理人;不推进 token。</summary>
+public sealed class AddSignTaskCmd : SignTaskCmd
+{
+}
+
+/// <summary>从当前审批任务移除一名尚未表态的办理人;必要时推进已达门槛的会签。</summary>
+public sealed class RemoveSignTaskCmd : SignTaskCmd
+{
+}
+
+/// <summary>
+/// 拿回:当前办理人撤回自己最近通过的审批,关闭其后的当前待办并重新进入原审批节点。
+/// 客户端不指定目标节点,目标从本人最近一条有效 Approve 历史解析。
+/// </summary>
+public sealed class TakeBackTaskCmd : WfWriteCmd
+{
+    public required long TaskId { get; init; }
+
+    /// <summary>当前请求用户;必须是原审批记录的办理人。</summary>
+    public required long UserId { get; init; }
 
     public string? Comment { get; init; }
 }
@@ -208,6 +251,9 @@ public sealed class ResubmitInstanceCmd : WfWriteCmd
     public string? VariablesJson { get; init; }
 
     public IReadOnlyDictionary<string, List<long>>? SelectedUserIdsByNode { get; init; }
+
+    /// <summary>发起人是否为超级管理员，用于重提时的表单附件所有权边界。</summary>
+    public bool AllowAnyFileOwner { get; init; }
 }
 
 /// <summary>

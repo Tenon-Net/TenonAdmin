@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
 using TenonAdmin.SqlSugar;
@@ -7,13 +8,14 @@ using TenonAdmin.Workflow;
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// 工作流卫星包可替换性「十四件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
-/// 十四个 <c>TryAdd</c> SPI 面:<see cref="IApproverResolver"/> /
+/// 工作流卫星包可替换性「十六件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
+/// 十六个 <c>TryAdd</c> SPI 面:<see cref="IApproverResolver"/> /
 /// <see cref="IWorkflowFormBinder"/> / <see cref="IWorkflowEngine"/> /
 /// <see cref="IWfConditionEvaluator"/> /
 /// <see cref="IWfDefinitionService"/> / <see cref="IWfTaskService"/> /
 /// <see cref="IWfInstanceService"/> / <see cref="IWfAiDecisionAuditReader"/> / <see cref="IWorkflowNotifier"/> /
 /// <see cref="IWfCcService"/> / <see cref="IWfOperationReceiptService"/> /
+/// / <see cref="IWfDelegationService"/> / <see cref="IWfTaskSignService"/>
 /// <see cref="IAiDecisionProvider"/> / <see cref="IAiDecisionProposalParser"/> /
 /// <see cref="IAiDecisionPolicyEvaluator"/>。
 /// <para>
@@ -79,6 +81,48 @@ public class WorkflowReplaceabilityTests
         await using var sp = BuildProvider(s => s.AddScoped<IWfTaskService, FakeTaskService>());
         await using var scope = sp.CreateAsyncScope();
         Assert.IsType<FakeTaskService>(scope.ServiceProvider.GetRequiredService<IWfTaskService>());
+    }
+
+    /// <summary>变异:WorkflowSetup 里 IWfDelegationService 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredDelegationService_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s => s.AddScoped<IWfDelegationService, FakeDelegationService>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeDelegationService>(scope.ServiceProvider.GetRequiredService<IWfDelegationService>());
+    }
+
+    /// <summary>变异:WorkflowSetup 里 IWfTaskSignService 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredTaskSignService_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s => s.AddScoped<IWfTaskSignService, FakeTaskSignService>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeTaskSignService>(scope.ServiceProvider.GetRequiredService<IWfTaskSignService>());
+    }
+
+    [Theory]
+    [InlineData(false, WfTaskAction.Approve)]
+    [InlineData(true, WfTaskAction.Reject)]
+    public async Task BuiltInTaskService_ShouldPassVariablesToCompleteTaskCmd(
+        bool reject,
+        WfTaskAction expectedAction)
+    {
+        var engine = new FakeEngine();
+        IWfFormTaskService service = new WfTaskService(
+            engine,
+            null!, null!, null!, null!, null!, null!, null!, null!,
+            NullLogger<WfTaskService>.Instance);
+
+        const string variablesJson = "{\"amount\":42}";
+        if (reject)
+            await service.RejectWithVariablesAsync(1, 2, variablesJson: variablesJson);
+        else
+            await service.ApproveWithVariablesAsync(1, 2, variablesJson: variablesJson);
+
+        var command = Assert.IsType<CompleteTaskCmd>(engine.LastCommand);
+        Assert.Equal(expectedAction, command.Action);
+        Assert.Equal(variablesJson, command.VariablesJson);
     }
 
     /// <summary>变异:WorkflowSetup 里 IWfInstanceService 的 TryAdd 改 Add → 本条红。</summary>
@@ -259,8 +303,17 @@ public class WorkflowReplaceabilityTests
 
     private sealed class FakeEngine : IWorkflowEngine
     {
+        public IWfCommand? LastCommand { get; private set; }
+
         public Task<WfEngineResult> ExecuteAsync(IWfCommand command, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        {
+            LastCommand = command;
+            return Task.FromResult(new WfEngineResult
+            {
+                InstanceId = 1,
+                InstanceStatus = WfInstanceStatus.Running,
+            });
+        }
     }
 
     private sealed class FakeConditionEvaluator : IWfConditionEvaluator
@@ -353,6 +406,40 @@ public class WorkflowReplaceabilityTests
             long instanceId, long callerUserId, string? variablesJson,
             IReadOnlyDictionary<string, List<long>>? selectedUserIdsByNode, string? requestId = null,
             CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class FakeDelegationService : IWfDelegationService
+    {
+        public Task<PagedList<WfDelegationRuleOutput>> PageAsync(
+            WfDelegationRulePageInput input, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public Task<WfDelegationRuleOutput> AddAsync(
+            WfDelegationRuleInput input, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public Task<WfDelegationRuleOutput> UpdateAsync(
+            long id, WfDelegationRuleInput input, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public Task DeleteAsync(long id, string? requestId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<WfDelegationAssignment>> ResolveAsync(
+            IReadOnlyList<long> originalUserIds, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class FakeTaskSignService : IWfTaskSignService
+    {
+        public Task<WfEngineResult> AddSignAsync(
+            long taskId, long userId, long targetUserId, string? comment = null,
+            string? requestId = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public Task<WfEngineResult> RemoveSignAsync(
+            long taskId, long userId, long targetUserId, string? comment = null,
+            string? requestId = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public Task<WfEngineResult> TakeBackAsync(
+            long taskId, long userId, string? comment = null,
+            string? requestId = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 

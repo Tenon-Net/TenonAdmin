@@ -106,6 +106,25 @@ public class WfIdentityHashTests
         Assert.Matches(new Regex("^[0-9a-f]{64}$"), hash);
     }
 
+    [Fact]
+    public void Payload_hash_does_not_change_operation_identity()
+    {
+        var withoutPayload = WfOperationIdentity.Create(
+            "org", WfCommandType.AddSign, WfTargetType.Task, 9L, 10L, "request");
+        var withPayload = WfOperationIdentity.Create(
+            "org", WfCommandType.AddSign, WfTargetType.Task, 9L, 10L, "request", "payload-b");
+
+        Assert.Equal(withoutPayload.IdentityHash, withPayload.IdentityHash);
+        Assert.Null(withoutPayload.PayloadHash);
+        Assert.Equal("payload-b", withPayload.PayloadHash);
+    }
+
+    [Fact]
+    public void Null_payload_is_rejected()
+    {
+        Assert.Throws<ArgumentNullException>(() => WfIdentityHash.ComputePayloadHash(null!));
+    }
+
     /// <summary>含分隔符的输入必须显式拒绝,不能悄悄拼出歧义 identity。</summary>
     [Fact]
     public void Values_containing_the_separator_are_rejected()

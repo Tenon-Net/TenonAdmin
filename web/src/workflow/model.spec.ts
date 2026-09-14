@@ -4,18 +4,25 @@ import {
   cloneModel,
   cloneNode,
   addBranchArm,
+  addParallelArm,
   createApprovalNode,
   createBranchNode,
   createCcNode,
   createDefaultModel,
+  createNode,
+  createParallelNode,
+  createWebhookNode,
   findNode,
   flattenChain,
   insertAfter,
   insertIntoBranchArm,
+  insertIntoParallelArm,
   removeNode,
   removeBranchArm,
+  removeParallelArm,
   validateModel,
 } from './model'
+import type { WfNode, WfParallelArm } from './schema'
 
 describe('workflow/model M1 chain', () => {
   it('createDefaultModel is start-only', () => {
@@ -234,7 +241,7 @@ describe('workflow/model M2a tree', () => {
     })
   })
 
-  it('rejects conditions on non-branch nodes and keeps M3 node types unsupported', () => {
+  it('rejects conditions on non-branch nodes and accepts parallel as a supported type', () => {
     const model = createDefaultModel()
     const approval = createApprovalNode({ id: 'approval' })
     approval.conditions = [
@@ -246,7 +253,210 @@ describe('workflow/model M2a tree', () => {
     model.root.next = approval
 
     expect(validateModel(model)).toContainEqual({ code: 'conditionsOnNonBranch', nodeId: 'approval' })
-    expect(validateModel(model)).toContainEqual({ code: 'unsupportedType', nodeId: 'parallel', type: 'parallel' })
-    expect(validateModel(model)).toContainEqual({ code: 'unsupportedType', nodeId: 'webhook', type: 'webhook' })
+    expect(validateModel(model)).not.toContainEqual({ code: 'unsupportedType', nodeId: 'parallel', type: 'parallel' })
+  })
+})
+
+describe('workflow/model M3a-2 parallel schema', () => {
+  it('creates parallel nodes with two editable arms and mutates only their local chains', () => {
+    const parallel = createParallelNode({ id: 'parallel' })
+    expect(parallel.parallelArms).toHaveLength(2)
+    expect(parallel.parallelArms?.every((arm) => arm.next === null)).toBe(true)
+    expect(createNode('parallel').type).toBe('parallel')
+
+    const added = addParallelArm(parallel, { id: 'extra', name: 'Extra' })
+    expect(added?.next).toBeNull()
+    expect(parallel.parallelArms).toHaveLength(3)
+    expect(removeParallelArm(parallel, 'extra')).toBe(true)
+    expect(removeParallelArm(parallel, 'missing')).toBe(false)
+
+    const model = createDefaultModel()
+    const join = createCcNode({ id: 'join' })
+    parallel.next = join
+    model.root.next = parallel
+    const approval = createApprovalNode({ id: 'arm-approval' })
+    expect(insertIntoParallelArm(model.root, 'parallel', parallel.parallelArms![0]!.id, approval)).toBe(true)
+    expect(parallel.parallelArms![0]!.next).toBe(approval)
+    expect(parallel.next).toBe(join)
+    expect(insertIntoParallelArm(model.root, 'missing', 'arm', createCcNode())).toBe(false)
+  })
+
+  it('flattens arms before the join successor and accepts empty arms', () => {
+    const emptyArm: WfParallelArm = { id: 'empty', name: '空臂', next: null }
+    const join = createCcNode({ id: 'join' })
+    const parallel: WfNode = {
+      id: 'parallel',
+      type: 'parallel',
+      name: '并行审批',
+      parallelArms: [
+        { id: 'finance', name: '财务', next: createApprovalNode({ id: 'finance-approval' }) },
+        emptyArm,
+      ],
+      next: join,
+    }
+    const model = createDefaultModel()
+    model.root.next = parallel
+
+    expect(flattenChain(model.root).map((node) => node.id)).toEqual([
+      'start', 'parallel', 'finance-approval', 'join',
+    ])
+    expect(validateModel(model)).toEqual([])
+  })
+
+  it('reports distinguishable arm count, empty id, and duplicate id issues', () => {
+    const model = createDefaultModel()
+    const parallel: WfNode = {
+      id: 'parallel',
+      type: 'parallel',
+      name: '',
+      parallelArms: [{ id: 'only', name: '', next: null }],
+      next: null,
+    }
+    model.root.next = parallel
+
+    expect(validateModel(model)).toContainEqual({ code: 'parallelArmCount', nodeId: 'parallel' })
+
+    parallel.parallelArms = [
+      { id: '  ', name: '', next: null },
+      { id: 'valid', name: '', next: null },
+    ]
+    expect(validateModel(model)).toContainEqual({ code: 'emptyParallelArmId', nodeId: 'parallel' })
+
+    parallel.parallelArms[0]!.id = 'valid'
+    expect(validateModel(model)).toContainEqual({
+      code: 'duplicateParallelArmId',
+      nodeId: 'parallel',
+      armId: 'valid',
+    })
+  })
+
+  it('distinguishes nested parallel nodes from reject targets outside the current arm', () => {
+    const nested: WfNode = {
+      id: 'nested',
+      type: 'parallel',
+      name: '',
+      parallelArms: [
+        { id: 'nested-a', name: '', next: null },
+        { id: 'nested-b', name: '', next: null },
+      ],
+      next: null,
+    }
+    const source = createApprovalNode({
+      id: 'source',
+      props: { onReject: 'toNode', rejectToNodeId: 'other-arm' },
+      next: nested,
+    })
+    const parallel: WfNode = {
+      id: 'parallel',
+      type: 'parallel',
+      name: '',
+      parallelArms: [
+        { id: 'a', name: '', next: source },
+        { id: 'b', name: '', next: createApprovalNode({ id: 'other-arm' }) },
+      ],
+      next: null,
+    }
+    const model = createDefaultModel()
+    model.root.next = parallel
+
+    expect(validateModel(model)).toContainEqual({ code: 'nestedParallel', nodeId: 'nested' })
+    expect(validateModel(model)).toContainEqual({
+      code: 'parallelRejectTargetOutsideArm',
+      nodeId: 'source',
+      armId: 'a',
+      targetNodeId: 'other-arm',
+    })
+  })
+})
+
+describe('workflow/model approval ratio', () => {
+  it('defaults missing ratios to 100 and rejects invalid all or sequential ratios', () => {
+    const model = createDefaultModel()
+    const approval = createApprovalNode({ id: 'approval', props: { mode: 'all' } })
+    model.root.next = approval
+
+    expect(validateModel(model)).toEqual([])
+    approval.props!.allPassRatio = 0
+    expect(validateModel(model)).toContainEqual({ code: 'allPassRatioInvalid', nodeId: 'approval' })
+    approval.props!.mode = 'seq'
+    approval.props!.allPassRatio = 75
+    expect(validateModel(model)).toContainEqual({ code: 'allPassRatioInvalid', nodeId: 'approval' })
+    approval.props!.mode = 'any'
+    expect(validateModel(model)).toEqual([])
+  })
+})
+
+describe('workflow/model M3a-2 webhook', () => {
+  it('creates an insertable webhook with backend defaults and all six props', () => {
+    const webhook = createWebhookNode({ id: 'webhook' })
+
+    expect(webhook).toEqual({
+      id: 'webhook',
+      type: 'webhook',
+      name: '',
+      props: {
+        webhookUrl: '',
+        webhookMethod: 'POST',
+        webhookHeaders: {},
+        webhookTimeoutSeconds: 30,
+        webhookOnFailure: 'fail',
+        maxAttempts: 3,
+      },
+      next: null,
+    })
+    expect(createNode('webhook').type).toBe('webhook')
+  })
+
+  it('preserves webhook props through clone and JSON round trips', () => {
+    const model = createDefaultModel()
+    model.root.next = createWebhookNode({
+      id: 'webhook',
+      props: {
+        webhookUrl: 'https://example.com/hooks/order',
+        webhookMethod: 'PATCH',
+        webhookHeaders: { Authorization: 'Bearer token', 'X-Trace': null },
+        webhookTimeoutSeconds: 45,
+        webhookOnFailure: 'manual',
+        maxAttempts: 8,
+      },
+    })
+
+    expect(cloneModel(model)).toEqual(model)
+    expect(JSON.parse(JSON.stringify(model))).toEqual(model)
+    expect(validateModel(model)).toEqual([])
+  })
+
+  it('reports distinguishable issues for invalid webhook settings', () => {
+    const model = createDefaultModel()
+    model.root.next = createWebhookNode({
+      id: 'webhook',
+      props: {
+        webhookUrl: 'ftp://example.com/hook',
+        webhookMethod: 'TRACE',
+        webhookHeaders: {},
+        webhookTimeoutSeconds: 0,
+        webhookOnFailure: 'fail',
+        maxAttempts: 101,
+      },
+    })
+
+    expect(validateModel(model)).toEqual([
+      { code: 'webhookUrlInvalid', nodeId: 'webhook' },
+      { code: 'webhookMethodInvalid', nodeId: 'webhook' },
+      { code: 'webhookTimeoutOutOfRange', nodeId: 'webhook' },
+      { code: 'maxAttemptsOutOfRange', nodeId: 'webhook' },
+    ])
+  })
+
+  it('keeps legacy start, approval, cc, and branch models valid', () => {
+    const model = createDefaultModel()
+    const approval = createApprovalNode({ id: 'approval' })
+    const cc = createCcNode({ id: 'cc' })
+    const branch = createBranchNode({ id: 'branch' })
+    model.root.next = approval
+    approval.next = cc
+    cc.next = branch
+
+    expect(validateModel(model)).toEqual([])
   })
 })

@@ -4,7 +4,7 @@
 > 调研日期：2026-08-23
 > OpenWorkflow 基线：`openworkflowdev/openworkflow@46dcc85d230bb54894dc4bab022a1ce34cc11c13`（提交时间 `2026-08-21T23:48:32Z`，包版本 `0.9.2`）
 > TenonAdmin 基线：`2ee061d0edfb1d63f4ccb34bfe0f81439a05afe9`
-> 本地参考仓：`C:\HuHuHu\参考项目\工作流\openworkflow`
+> 本地参考仓：`../参考项目/工作流/openworkflow`
 > 资料边界：只使用上述源码、仓内官方文档和官方 GitHub；未使用二手博客。参考仓是浅克隆且未安装 `node_modules`，本次做静态源码核验，未运行其测试。
 
 > **历史快照提示**：本文记录截至报告日期（2026-08-23）的历史调研基线；当前状态以本目录 [`README.md`](./README.md)、[`workflow-design-plan-2026-08-17.md`](./workflow-design-plan-2026-08-17.md)、当前代码与测试为准。文中关于 M2c 的 `RequestId/receipt`、`timeout job` 等“尚未落地”判断仅属于当时快照，不代表当前状态。

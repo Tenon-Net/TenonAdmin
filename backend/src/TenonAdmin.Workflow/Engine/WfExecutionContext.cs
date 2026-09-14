@@ -14,6 +14,8 @@ public sealed class WfExecutionContext
     public required ISqlSugarClient Db { get; init; }
     public required WfAgenda Agenda { get; init; }
     public required IApproverResolver ApproverResolver { get; init; }
+    /// <summary>长期委托解析；旧的直接构造测试上下文可为空，生产引擎始终注入内置实现。</summary>
+    public IWfDelegationService? Delegation { get; init; }
     public required IWorkflowFormBinder FormBinder { get; init; }
     public required WorkflowOptions Options { get; init; }
     public required TimeProvider TimeProvider { get; init; }
@@ -41,6 +43,9 @@ public sealed class WfExecutionContext
     /// <c>BeginXxxAsync</c> 却忘了带上"变成**编译错误**,而不是一条悄悄丢了身份的历史。</para>
     /// </summary>
     public required string? RequestId { get; init; }
+
+    /// <summary>本次写操作的请求参数摘要;无请求键时为空。</summary>
+    public string? RequestPayloadHash { get; set; }
 
     /// <summary>
     /// 本次命令写进每一条 <see cref="WfHistory.ActorType"/> 的行为者类型(M3a-1)。<b>刻意声明成
@@ -75,6 +80,12 @@ public sealed class WfExecutionContext
     /// <see cref="Notifier"/>——避免提交失败仍推送、或推送先于提交落盘导致客户端读到脏数据)。
     /// </summary>
     public List<(WfNotifyContext Ctx, IReadOnlyList<long> UserIds)> PendingTaskAssignedNotifications { get; } = [];
+
+    /// <summary>待派发的「下游待办被拿回」通知,事务提交后由引擎统一派发。</summary>
+    public List<(WfNotifyContext Ctx, long TaskId, IReadOnlyList<long> UserIds)> PendingTaskRecalledNotifications { get; } = [];
+
+    /// <summary>待派发的「加签/减签」通知,事务提交后由引擎统一派发。</summary>
+    public List<(WfNotifyContext Ctx, long TaskId, WfTaskAction Action, IReadOnlyList<long> UserIds)> PendingTaskSignChangedNotifications { get; } = [];
 
     /// <summary>待派发的「实例完结」通知,语义同 <see cref="PendingTaskAssignedNotifications"/>。</summary>
     public WfNotifyContext? PendingInstanceCompletedNotification { get; set; }

@@ -1,19 +1,18 @@
 <script setup lang="ts">
-// 节点间大圆加号;Popover 提供 M2a 可插入的审批/抄送/条件分支。
+// 节点间大圆加号;Popover 提供当前可插入节点。
 import { ref } from 'vue'
 import { NPopover } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
-import type { WfNodeType } from '@/workflow/schema'
+import type { WfInsertableNodeType } from '@/workflow/schema'
 import '../../wf-identity.css'
 
-type InsertableNodeType = Extract<WfNodeType, 'approval' | 'cc' | 'branch'>
-
-const emit = defineEmits<{ add: [type: InsertableNodeType] }>()
+const emit = defineEmits<{ add: [type: WfInsertableNodeType] }>()
+defineProps<{ allowParallel?: boolean }>()
 const { t } = useI18n()
 const open = ref(false)
 
-function pick(type: InsertableNodeType) {
+function pick(type: WfInsertableNodeType) {
   open.value = false
   emit('add', type)
 }
@@ -39,6 +38,14 @@ function pick(type: InsertableNodeType) {
         <button type="button" class="wf-add-item" @click="pick('branch')">
           <span class="wf-add-icon is-branch"><AppIcon icon="ph:git-branch" :size="22" /></span>
           <span class="wf-add-label">{{ t('workflow.node.branch') }}</span>
+        </button>
+        <button v-if="allowParallel !== false" type="button" class="wf-add-item" @click="pick('parallel')">
+          <span class="wf-add-icon is-parallel"><AppIcon icon="ph:git-merge" :size="22" /></span>
+          <span class="wf-add-label">{{ t('workflow.node.parallel') }}</span>
+        </button>
+        <button type="button" class="wf-add-item" @click="pick('webhook')">
+          <span class="wf-add-icon is-webhook"><AppIcon icon="ph:webhooks-logo" :size="22" /></span>
+          <span class="wf-add-label">{{ t('workflow.node.webhook') }}</span>
         </button>
       </div>
     </n-popover>
@@ -131,6 +138,8 @@ function pick(type: InsertableNodeType) {
 .wf-add-icon.is-approval { color: var(--wf-approval); }
 .wf-add-icon.is-cc { color: var(--wf-cc); }
 .wf-add-icon.is-branch { color: var(--color-primary); }
+.wf-add-icon.is-parallel { color: var(--color-warning); }
+.wf-add-icon.is-webhook { color: var(--color-info); }
 .wf-add-label {
   font-size: var(--font-size-sm);
   font-weight: 500;

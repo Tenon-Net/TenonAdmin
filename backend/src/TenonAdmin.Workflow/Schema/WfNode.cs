@@ -22,6 +22,9 @@ public sealed class WfNode
     /// <summary>条件分支臂(仅 <see cref="WfNodeType.Branch"/>);须恰好一条 <see cref="WfBranchArm.IsDefault"/>。</summary>
     public List<WfBranchArm>? Conditions { get; set; }
 
+    /// <summary>并行臂(仅 <see cref="WfNodeType.Parallel"/>);至少两臂,臂内禁止再嵌套并行节点。</summary>
+    public List<WfParallelArmDefinition>? ParallelArms { get; set; }
+
     /// <summary>串行后继;末节点为 <c>null</c>。branch 的汇合后继也走此字段。</summary>
     public WfNode? Next { get; set; }
 }
@@ -192,6 +195,16 @@ public sealed class WfBranchArm
     public bool IsDefault { get; set; }
 
     /// <summary>本臂子链;可 <c>null</c>(直接汇合到 branch.next)。</summary>
+    public WfNode? Next { get; set; }
+}
+
+/// <summary>并行节点的一条臂(<c>parallelArms[]</c>);空臂的 <see cref="Next"/> 为 <c>null</c>。</summary>
+public sealed class WfParallelArmDefinition
+{
+    public string Id { get; set; } = "";
+
+    public string Name { get; set; } = "";
+
     public WfNode? Next { get; set; }
 }
 

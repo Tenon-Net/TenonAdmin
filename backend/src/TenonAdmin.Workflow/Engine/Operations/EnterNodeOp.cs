@@ -8,7 +8,10 @@ namespace TenonAdmin.Workflow;
 /// token 进入节点:<c>start</c> 立即转移;<c>approval</c> 建待办后停顿;
 /// <c>cc</c> 写抄送后继续;<c>next==null</c> 的完结由 <see cref="TakeTransitionOp"/> 处理。
 /// </summary>
-public class EnterNodeOp(WfNode node) : IWfOperation
+public class EnterNodeOp(
+    WfNode node,
+    long? forcedNodeVisitId = null,
+    WfToken? forcedToken = null) : IWfOperation
 {
     /// <summary>
     /// <see cref="ResolveDueTime"/> 允许的最大超时小时数(10 年)。<see cref="WfTimeout.Hours"/> 是
@@ -20,9 +23,15 @@ public class EnterNodeOp(WfNode node) : IWfOperation
 
     protected WfNode Node { get; } = node;
 
+    private long? ForcedNodeVisitId { get; } = forcedNodeVisitId;
+
+    private WfToken? ForcedToken { get; } = forcedToken;
+
     public virtual async Task ExecuteAsync(WfExecutionContext ctx, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (ForcedToken is not null)
+            ctx.Token = ForcedToken;
         ctx.CurrentNode = Node;
 
         // token 级 CAS,必须留在**本方法**的第一个写操作位置:换节点就是状态推进,先抢锁再留痕。
@@ -39,7 +48,7 @@ public class EnterNodeOp(WfNode node) : IWfOperation
 
         // 每次进新节点生成一次访问 Id(M3a-1),与 NodeId 同一条 UPDATE 落库;停留期间的写路径(未满票的
         // ClaimTokenAsync、转办、催办)不经过本 Op,只推 Version,本列因此天然「停留期间不变」。
-        ctx.Token.NodeVisitId = ctx.IdGenerator.NextId();
+        ctx.Token.NodeVisitId = ForcedNodeVisitId ?? ctx.IdGenerator.NextId();
         ctx.Token.NodeId = Node.Id;
         await ctx.Db.Updateable(ctx.Token)
             .UpdateColumns(t => new { t.NodeId, t.NodeVisitId, t.UpdateTime, t.UpdateUserId })
@@ -51,7 +60,7 @@ public class EnterNodeOp(WfNode node) : IWfOperation
         {
             case WfNodeType.Start:
                 // 发起人节点不等人,立刻走向后继。
-                ctx.Agenda.Plan(new TakeTransitionOp(Node));
+                ctx.Agenda.Plan(new TakeTransitionOp(Node, ctx.Token));
                 break;
 
             case WfNodeType.Approval:
@@ -64,6 +73,10 @@ public class EnterNodeOp(WfNode node) : IWfOperation
 
             case WfNodeType.Branch:
                 await EnterBranchAsync(ctx, cancellationToken);
+                break;
+
+            case WfNodeType.Parallel:
+                ctx.Agenda.Plan(new ForkParallelOp(Node, ctx.Token));
                 break;
 
             case WfNodeType.Webhook:
@@ -243,7 +256,7 @@ public class EnterNodeOp(WfNode node) : IWfOperation
                 cancellationToken);
         }
 
-        ctx.Agenda.Plan(new TakeTransitionOp(Node));
+        ctx.Agenda.Plan(new TakeTransitionOp(Node, ctx.Token));
     }
 
     /// <summary>
@@ -270,12 +283,12 @@ public class EnterNodeOp(WfNode node) : IWfOperation
 
         if (arm.Next is null)
         {
-            ctx.Agenda.Plan(new TakeTransitionOp(Node));
+            ctx.Agenda.Plan(new TakeTransitionOp(Node, ctx.Token));
             return;
         }
 
         await ctx.AppendHistoryAsync(WfHistoryEventType.NodeLeave, Node.Id, cancellationToken: cancellationToken);
-        ctx.Agenda.Plan(new EnterNodeOp(arm.Next));
+        ctx.Agenda.Plan(new EnterNodeOp(arm.Next, forcedToken: ctx.Token));
     }
 
     /// <summary>
@@ -311,7 +324,7 @@ public class EnterNodeOp(WfNode node) : IWfOperation
         switch (action)
         {
             case WfNobodyAction.AutoPass:
-                ctx.Agenda.Plan(new TakeTransitionOp(Node));
+                ctx.Agenda.Plan(new TakeTransitionOp(Node, ctx.Token));
                 return;
 
             case WfNobodyAction.Transfer:
@@ -336,9 +349,29 @@ public class EnterNodeOp(WfNode node) : IWfOperation
         WfExecutionContext ctx,
         IReadOnlyList<long> userIds,
         WfSignMode signMode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<WfDelegationAssignment>? resolvedAssignments = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var assignments = resolvedAssignments?.ToList()
+            ?? (ctx.Delegation is null
+                ? userIds.Select(id => new WfDelegationAssignment(id, null, null, null)).ToList()
+                : (await ctx.Delegation.ResolveAsync(userIds, cancellationToken)).ToList());
+        // 同一任务的实际办理人必须唯一；保留第一次 assignment 的委托审计快照。
+        var effective = new List<WfDelegationAssignment>(assignments.Count);
+        var effectiveUserIds = new HashSet<long>();
+        foreach (var assignment in assignments)
+        {
+            if (!effectiveUserIds.Add(assignment.UserId))
+                continue;
+            effective.Add(assignment);
+        }
+        if (effective.Count == 0)
+        {
+            await ApplyNobodyAsync(ctx, cancellationToken);
+            return;
+        }
+
         var task = new WfTask
         {
             InstanceId = ctx.Instance.Id,
@@ -352,14 +385,17 @@ public class EnterNodeOp(WfNode node) : IWfOperation
         await ctx.Db.Insertable(task).ExecuteCommandAsync();
 
         var now = ctx.TimeProvider.GetLocalNow().DateTime;
-        var actors = new List<WfTaskActor>(userIds.Count);
-        for (var i = 0; i < userIds.Count; i++)
+        var actors = new List<WfTaskActor>(effective.Count);
+        for (var i = 0; i < effective.Count; i++)
         {
             var startsPending = signMode != WfSignMode.Sequential || i == 0;
             actors.Add(new WfTaskActor
             {
                 TaskId = task.Id,
-                UserId = userIds[i],
+                UserId = effective[i].UserId,
+                OriginalUserId = effective[i].OriginalUserId,
+                DelegationRuleId = effective[i].DelegationRuleId,
+                DelegationScopeOrgId = effective[i].ScopeOrgId,
                 ActorType = WfActorType.Approver,
                 Status = startsPending ? WfActorStatus.Pending : WfActorStatus.Waiting,
                 Sort = signMode == WfSignMode.Sequential ? i + 1 : 0,
@@ -373,11 +409,24 @@ public class EnterNodeOp(WfNode node) : IWfOperation
         await ctx.AppendHistoryAsync(
             WfHistoryEventType.TaskCreated,
             Node.Id,
-            new { taskId = task.Id, userIds, signMode = signMode.ToString() },
+            new
+            {
+                taskId = task.Id,
+                assignments = effective.Select(a => new
+                {
+                    userId = a.UserId,
+                    originalUserId = a.OriginalUserId,
+                    delegationRuleId = a.DelegationRuleId,
+                    scopeOrgId = a.ScopeOrgId,
+                }),
+                signMode = signMode.ToString(),
+            },
             cancellationToken);
 
         ctx.CreatedTaskId = task.Id;
-        var pendingUserIds = signMode == WfSignMode.Sequential ? userIds.Take(1).ToList() : userIds;
+        var pendingUserIds = signMode == WfSignMode.Sequential
+            ? effective.Take(1).Select(a => a.UserId).ToList()
+            : effective.Select(a => a.UserId).ToList();
         ctx.NewAssigneeUserIds.AddRange(pendingUserIds);
 
         ctx.PendingTaskAssignedNotifications.Add((
@@ -425,29 +474,32 @@ public class EnterNodeOp(WfNode node) : IWfOperation
         WfSignMode signMode,
         CancellationToken cancellationToken)
     {
+        var assignments = ctx.Delegation is null
+            ? users.Select(id => new WfDelegationAssignment(id, null, null, null)).ToList()
+            : (await ctx.Delegation.ResolveAsync(users, cancellationToken)).ToList();
         var adjacentApproved = await ResolveAdjacentApprovedUserIdsAsync(ctx, cancellationToken);
-        if (adjacentApproved.Count == 0 || !users.Any(adjacentApproved.Contains))
+        if (adjacentApproved.Count == 0 || !assignments.Any(a => adjacentApproved.Contains(a.UserId)))
         {
-            await CreateTaskAsync(ctx, users, signMode, cancellationToken);
+            await CreateTaskAsync(ctx, users, signMode, cancellationToken, assignments);
             return;
         }
 
-        var skipped = users.Where(adjacentApproved.Contains).ToList();
-        var remaining = users.Where(u => !adjacentApproved.Contains(u)).ToList();
+        var skipped = assignments.Where(a => adjacentApproved.Contains(a.UserId)).ToList();
+        var remaining = assignments.Where(a => !adjacentApproved.Contains(a.UserId)).ToList();
 
         await ctx.AppendHistoryAsync(
             WfHistoryEventType.DuplicateApproverSkipped,
             Node.Id,
-            new { nodeId = Node.Id, userIds = skipped },
+            new { nodeId = Node.Id, userIds = skipped.Select(a => a.UserId) },
             cancellationToken);
 
         if (remaining.Count == 0)
         {
-            ctx.Agenda.Plan(new TakeTransitionOp(Node));
+            ctx.Agenda.Plan(new TakeTransitionOp(Node, ctx.Token));
             return;
         }
 
-        await CreateTaskAsync(ctx, remaining, signMode, cancellationToken);
+        await CreateTaskAsync(ctx, remaining.Select(a => a.UserId).ToList(), signMode, cancellationToken, remaining);
     }
 
     /// <summary>
@@ -459,7 +511,7 @@ public class EnterNodeOp(WfNode node) : IWfOperation
     /// 向后跳,跳转目标往往正是最近一条 Approve 行所在的节点——若沿用它当基线,回退目标会被判成「已审过」
     /// 而整节点自动通过,拒绝路由退化成空操作、重提「从头重走」跳过已批节点。故本方法只认最近一次跳转
     /// <b>之后</b>的 Approve 行:跳转之前批过的节点在回退后必须重新审。跳转下界取同表的
-    /// <see cref="WfTaskAction.Reject"/>/<see cref="WfTaskAction.Return"/> 行(两者都由跳转发起方在同一事务里
+    /// <see cref="WfTaskAction.Reject"/>/<see cref="WfTaskAction.Return"/>/<see cref="WfTaskAction.TakeBack"/> 行(都由跳转发起方在同一事务里
     /// 先写入 <c>wf_his_task</c>,重提则必然前置一次 Return),不跨表比较雪花 Id。</para>
     /// </summary>
     protected virtual async Task<IReadOnlySet<long>> ResolveAdjacentApprovedUserIdsAsync(
@@ -470,11 +522,12 @@ public class EnterNodeOp(WfNode node) : IWfOperation
             .Where(h => h.InstanceId == ctx.Instance.Id && h.TokenId == ctx.Token.Id
                         && (h.Action == WfTaskAction.Approve
                             || h.Action == WfTaskAction.Reject
-                            || h.Action == WfTaskAction.Return))
+                            || h.Action == WfTaskAction.Return
+                            || h.Action == WfTaskAction.TakeBack))
             .OrderBy(h => h.Id, OrderByType.Desc)
             .ToListAsync();
 
-        // 倒序遇到的第一条 Reject/Return 行就是最近一次向后跳转,它及更早的行一律不参与基线。
+        // 倒序遇到的第一条 Reject/Return/TakeBack 行就是最近一次向后跳转,它及更早的行一律不参与基线。
         var sinceLastJump = rows.TakeWhile(h => h.Action == WfTaskAction.Approve).ToList();
         if (sinceLastJump.Count == 0)
             return new HashSet<long>();

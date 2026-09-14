@@ -5,7 +5,7 @@ namespace TenonAdmin.Workflow;
 
 /// <summary>
 /// 运行 token(<c>wf_token</c>)——实例在图上的执行指针。一期串行≈每实例 1 活跃 token;
-/// 并行网关(M3)启用后多 token,<b>表结构先到位</b>。
+/// 并行网关(M3)启用后多 token;并行列先通过 CodeFirst 到位,运行时留在 T19。
 /// </summary>
 [SugarTable("wf_token", TableDescription = "流程运行 token")]
 [SugarIndex("idx_wf_token_instance", nameof(InstanceId), OrderByType.Asc)]
@@ -49,4 +49,16 @@ public class WfToken : BaseEntity
     /// </summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "节点访问 Id")]
     public long? NodeVisitId { get; set; }
+
+    /// <summary>并行子 token 对应的父 token;旧串行行为空。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "并行父 token Id")]
+    public long? ParentTokenId { get; set; }
+
+    /// <summary>本次并行访问 Id;旧串行行为空。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "并行 fork Id")]
+    public long? ForkId { get; set; }
+
+    /// <summary>并行父 token 尚未完成的臂数;非父 token 与旧行为空。</summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "待完成并行臂数")]
+    public int? PendingArmCount { get; set; }
 }

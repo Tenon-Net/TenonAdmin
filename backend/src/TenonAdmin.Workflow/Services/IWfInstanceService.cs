@@ -55,7 +55,7 @@ public interface IWfInstanceService
         long currentUserId,
         CancellationToken cancellationToken = default);
 
-    /// <summary>实例事件流(<c>wf_history</c>,按时间升序)。</summary>
+    /// <summary>实例事件流(<c>wf_history</c>,按实例内 Sequence 升序;旧序号为 0 时再按时间/Id)。</summary>
     Task<IReadOnlyList<WfHistoryItemOutput>> ListHistoryAsync(
         long instanceId,
         long currentUserId,

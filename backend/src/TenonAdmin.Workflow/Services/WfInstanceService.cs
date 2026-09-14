@@ -25,6 +25,14 @@ public class WfInstanceService(
     IPermissionProvider? permissions = null) : IWfInstanceService, IWfAiDecisionAuditReader
 {
     private const int MaximumAiAuditJsonCharacters = AiDecisionProposalParser.MaximumJsonCharacters;
+    private static readonly HashSet<string> HistoryPayloadFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "action", "toUserId", "targetNodeId", "fromNodeId", "comment", "payloadHash",
+        "eventName", "forkId", "armId", "armName", "isDefault", "parentTokenId", "childTokenId",
+        "parentNodeVisitId", "childEntryNodeVisitId", "reason", "status", "arms",
+    };
+
+    protected sealed record CurrentTaskSnapshot(long TaskId, long TokenId, long? NodeVisitId, string NodeId);
 
     /// <summary>保留 M3b-0 前的构造签名，供继承内置服务的消费者继续编译。</summary>
     public WfInstanceService(
@@ -117,7 +125,7 @@ public class WfInstanceService(
             Version = version.Version,
             FormComponent = model.FormComponent,
             DefinitionVersionId = version.Id,
-            Model = model,
+            Model = WfRuntimeModelProjector.Project(model)!,
         };
     }
 
@@ -151,6 +159,7 @@ public class WfInstanceService(
                 StarterOrgId = starterOrgId,
                 BusinessKey = businessKey,
                 VariablesJson = input.VariablesJson,
+                AllowAnyFileOwner = currentUser?.IsSuperAdmin == true,
                 SelectedUserIdsByNode = input.SelectedUserIdsByNode,
                 RequestId = input.RequestId,
             },
@@ -311,6 +320,7 @@ public class WfInstanceService(
             .Where(d => d.Id == version.DefinitionId)
             .FirstAsync();
         var model = WfModelJson.Deserialize(version.ModelJson);
+        var modelIndex = model is null ? null : WfModelIndex.Build(model);
 
         var his = await hisTasks.AsQueryable()
             .Where(h => h.InstanceId == instance.Id)
@@ -319,6 +329,7 @@ public class WfInstanceService(
 
         var events = await histories.AsQueryable()
             .Where(h => h.InstanceId == instance.Id)
+            .OrderBy(h => h.Sequence, OrderByType.Asc)
             .OrderBy(h => h.CreateTime, OrderByType.Asc)
             .OrderBy(h => h.Id, OrderByType.Asc)
             .ToListAsync();
@@ -326,8 +337,20 @@ public class WfInstanceService(
         var currentTasks = await tasks.AsQueryable()
             .Where(t => t.InstanceId == instance.Id)
             .OrderBy(t => t.Id)
-            .Select(t => new { t.Id, t.NodeId })
+            .Select(t => new { t.Id, t.NodeId, t.TokenId, t.NodeVisitId })
             .ToListAsync();
+        var runtimeTokens = await instances.Db.Queryable<WfToken>()
+            .Where(t => t.InstanceId == instance.Id)
+            .OrderBy(t => t.Id)
+            .ToListAsync();
+        var runtimeTokenIds = runtimeTokens.Select(t => t.Id).ToList();
+        var runtimeArms = runtimeTokenIds.Count == 0
+            ? new List<WfParallelArm>()
+            : await instances.Db.Queryable<WfParallelArm>()
+                .Where(arm => runtimeTokenIds.Contains(arm.ParentTokenId))
+                .OrderBy(arm => arm.ForkId, OrderByType.Asc)
+                .OrderBy(arm => arm.ArmId, OrderByType.Asc)
+                .ToListAsync();
         var currentNodeIds = currentTasks
             .Select(t => t.NodeId)
             .Where(id => !string.IsNullOrWhiteSpace(id))
@@ -335,11 +358,48 @@ public class WfInstanceService(
             .ToList();
         long? currentTaskId = currentTasks.Count > 0 ? currentTasks[0].Id : null;
 
-        WfTodoItemOutput? myPending = null;
+        IReadOnlyList<WfTodoItemOutput> myPendingTasks = [];
         if (currentUserId > 0 && instance.Status == WfInstanceStatus.Running)
         {
-            myPending = await FindMyPendingAsync(instance.Id, currentUserId, def?.Name ?? "", version.DefinitionId, cancellationToken);
+            myPendingTasks = await FindMyPendingTasksAsync(
+                instance,
+                currentUserId,
+                def?.Name ?? "",
+                version.DefinitionId,
+                model,
+                cancellationToken);
         }
+        var viewerHistoryNodeIds = his
+            .Where(item => item.UserId == currentUserId)
+            .Select(item => item.NodeId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var permissionNodeIds = myPendingTasks.Count > 0
+            ? myPendingTasks
+                .Select(task => task.NodeId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.Ordinal)
+                .ToList()
+            : viewerHistoryNodeIds.Count > 0
+                ? viewerHistoryNodeIds
+                : currentNodeIds.Count > 0
+                    ? currentNodeIds
+                    : his.Select(item => item.NodeId).ToList();
+        var viewPermissions = ResolveFormPermissions(model, permissionNodeIds);
+        var myPending = myPendingTasks.FirstOrDefault();
+        var currentTaskSnapshots = currentTasks
+            .Select(task => new CurrentTaskSnapshot(task.Id, task.TokenId, task.NodeVisitId, task.NodeId))
+            .ToList();
+        var myTakeBackTaskId = currentUserId > 0
+            ? await FindMyTakeBackTaskIdAsync(
+                currentUserId,
+                his,
+                currentTaskSnapshots,
+                model,
+                instance.Id,
+                cancellationToken)
+            : null;
 
         return new WfInstanceDetailOutput
         {
@@ -351,15 +411,26 @@ public class WfInstanceService(
             BusinessKey = instance.BusinessKey,
             StarterUserId = instance.StarterUserId,
             Status = instance.Status,
-            VariablesJson = instance.VariablesJson,
+            VariablesJson = WfFormRuntime.ProjectVisibleJson(model?.FormSchema, instance.VariablesJson, viewPermissions),
             FormComponent = model?.FormComponent,
             CreateTime = instance.CreateTime,
             MyPendingTask = myPending,
+            MyPendingTasks = myPendingTasks,
             HisTasks = his.Select(MapHisTask).ToList(),
-            Model = model,
+            Model = WfRuntimeModelProjector.Project(model),
             VisitedNodeIds = CollectVisitedNodeIds(events),
             CurrentNodeIds = currentNodeIds,
             CurrentTaskId = currentTaskId,
+            CurrentTasks = currentTaskSnapshots.Select(task => new WfCurrentTaskOutput
+            {
+                TaskId = task.TaskId,
+                TokenId = task.TokenId,
+                NodeVisitId = task.NodeVisitId,
+                NodeId = task.NodeId,
+                NodeName = modelIndex?.Find(task.NodeId)?.Name,
+            }).ToList(),
+            ParallelForks = MapParallelForks(model, runtimeTokens, runtimeArms, events),
+            MyTakeBackTaskId = myTakeBackTaskId,
         };
     }
 
@@ -375,6 +446,7 @@ public class WfInstanceService(
 
         var list = await histories.AsQueryable()
             .Where(h => h.InstanceId == instanceId)
+            .OrderBy(h => h.Sequence, OrderByType.Asc)
             .OrderBy(h => h.CreateTime, OrderByType.Asc)
             .OrderBy(h => h.Id, OrderByType.Asc)
             .ToListAsync();
@@ -382,11 +454,55 @@ public class WfInstanceService(
         return list.Select(h => new WfHistoryItemOutput
         {
             Id = h.Id,
+            Sequence = h.Sequence,
             EventType = h.EventType,
             NodeId = h.NodeId,
-            PayloadJson = h.PayloadJson,
+            TokenId = h.TokenId,
+            NodeVisitId = h.NodeVisitId,
+            PayloadJson = ProjectHistoryPayload(h.PayloadJson),
             CreateTime = h.CreateTime,
         }).ToList();
+    }
+
+    private static string? ProjectHistoryPayload(string? payloadJson)
+    {
+        if (string.IsNullOrWhiteSpace(payloadJson)) return null;
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            var projected = ProjectHistoryObject(document.RootElement);
+            return projected.Count == 0 ? null : JsonSerializer.Serialize(projected, WfModelJson.Options);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static Dictionary<string, JsonElement> ProjectHistoryObject(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return [];
+
+        var projected = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!HistoryPayloadFields.Contains(property.Name)) continue;
+            if (property.NameEquals("arms"))
+            {
+                if (property.Value.ValueKind != JsonValueKind.Array) continue;
+                var arms = property.Value.EnumerateArray()
+                    .Select(ProjectHistoryObject)
+                    .Where(arm => arm.Count > 0)
+                    .ToArray();
+                if (arms.Length > 0)
+                    projected[property.Name] = JsonSerializer.SerializeToElement(arms, WfModelJson.Options);
+                continue;
+            }
+
+            if (property.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))
+                projected[property.Name] = property.Value;
+        }
+        return projected;
     }
 
     /// <inheritdoc />
@@ -440,6 +556,7 @@ public class WfInstanceService(
                 CallerUserId = callerUserId,
                 VariablesJson = variablesJson,
                 SelectedUserIdsByNode = selectedUserIdsByNode,
+                AllowAnyFileOwner = currentUser?.IsSuperAdmin == true,
                 RequestId = requestId,
             },
             cancellationToken);
@@ -535,7 +652,9 @@ public class WfInstanceService(
                 Version = verNo,
                 BusinessKey = i.BusinessKey,
                 Status = i.Status,
-                VariablesJson = i.VariablesJson,
+                VariablesJson = ver is not null && WfModelJson.Deserialize(ver.ModelJson)?.FormSchema is null
+                    ? i.VariablesJson
+                    : null,
                 StarterUserId = i.StarterUserId,
                 CreateTime = i.CreateTime,
             };
@@ -558,50 +677,145 @@ public class WfInstanceService(
         long definitionId,
         CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
         var instance = await instances.AsQueryable()
             .ClearFilter<IOrgScoped>()
             .Where(i => i.Id == instanceId)
             .FirstAsync();
         if (instance is null)
             return null;
+        var version = await versions.AsQueryable()
+            .Where(v => v.Id == instance.DefinitionVersionId)
+            .FirstAsync(cancellationToken);
+        var model = version is null ? null : WfModelJson.Deserialize(version.ModelJson);
+        return (await FindMyPendingTasksAsync(
+            instance, userId, definitionName, definitionId, model, cancellationToken)).FirstOrDefault();
+    }
 
+    /// <summary>查当前用户在本实例上的全部 Pending 审批待办，按 actor Id 稳定排序。</summary>
+    protected virtual async Task<IReadOnlyList<WfTodoItemOutput>> FindMyPendingTasksAsync(
+        WfInstance instance,
+        long userId,
+        string definitionName,
+        long definitionId,
+        WfModel? model,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         var activeTasks = await tasks.AsQueryable()
-            .Where(t => t.InstanceId == instanceId)
-            .ToListAsync();
+            .Where(t => t.InstanceId == instance.Id)
+            .ToListAsync(cancellationToken);
         if (activeTasks.Count == 0)
-            return null;
+            return [];
 
-        var taskIds = activeTasks.Select(t => t.Id).ToList();
-        var actor = await actors.AsQueryable()
+        var taskMap = activeTasks.ToDictionary(task => task.Id);
+        var taskIds = activeTasks.Select(task => task.Id).ToList();
+        var pendingActors = await actors.AsQueryable()
             .Where(a => taskIds.Contains(a.TaskId)
                         && a.UserId == userId
                         && a.ActorType == WfActorType.Approver
                         && a.Status == WfActorStatus.Pending)
             .OrderBy(a => a.Id, OrderByType.Asc)
-            .FirstAsync();
-        if (actor is null)
-            return null;
+            .ToListAsync(cancellationToken);
+        var modelIndex = model is null ? null : WfModelIndex.Build(model);
 
-        var task = activeTasks.First(t => t.Id == actor.TaskId);
-        var nodeName = await ResolveNodeName(instance.DefinitionVersionId, task.NodeId);
+        return pendingActors
+            .Where(actor => taskMap.ContainsKey(actor.TaskId))
+            .Select(actor =>
+            {
+                var task = taskMap[actor.TaskId];
+                return new WfTodoItemOutput
+                {
+                    TaskId = task.Id,
+                    ActorId = actor.Id,
+                    InstanceId = instance.Id,
+                    NodeId = task.NodeId,
+                    NodeName = modelIndex?.Find(task.NodeId)?.Name,
+                    SignMode = task.SignMode,
+                    DueTime = task.DueTime,
+                    DefinitionId = definitionId,
+                    DefinitionName = definitionName,
+                    BusinessKey = instance.BusinessKey,
+                    StarterUserId = instance.StarterUserId,
+                    VariablesJson = WfFormRuntime.ProjectVisibleJson(
+                        model?.FormSchema,
+                        instance.VariablesJson,
+                        ResolveFormPermissions(model, [task.NodeId])),
+                    CreateTime = task.CreateTime,
+                };
+            })
+            .ToList();
+    }
 
-        return new WfTodoItemOutput
+    protected virtual async Task<long?> FindMyTakeBackTaskIdAsync(
+        long userId,
+        IReadOnlyList<WfHisTask> history,
+        IReadOnlyList<CurrentTaskSnapshot> currentTasks,
+        WfModel? model,
+        long instanceId,
+        CancellationToken cancellationToken)
+    {
+        var index = model is null ? null : WfModelIndex.Build(model);
+        foreach (var task in currentTasks)
         {
-            TaskId = task.Id,
-            ActorId = actor.Id,
-            InstanceId = instanceId,
-            NodeId = task.NodeId,
-            NodeName = nodeName,
-            SignMode = task.SignMode,
-            DueTime = task.DueTime,
-            DefinitionId = definitionId,
-            DefinitionName = definitionName,
-            BusinessKey = instance.BusinessKey,
-            StarterUserId = instance.StarterUserId,
-            VariablesJson = instance.VariablesJson,
-            CreateTime = task.CreateTime,
-        };
+            var token = await instances.Db.Queryable<WfToken>()
+                .Where(token => token.Id == task.TokenId && token.InstanceId == instanceId)
+                .FirstAsync(cancellationToken);
+            if (token is null || token.Status != WfTokenStatus.Active
+                || token.ParentTokenId is not null || token.ForkId is not null)
+                continue;
+
+            var approval = history
+                .Where(item => item.TokenId == task.TokenId
+                               && item.UserId == userId
+                               && item.Action == WfTaskAction.Approve)
+                .OrderByDescending(item => item.Id)
+                .FirstOrDefault();
+            if (approval?.NodeVisitId is not { } approvalVisitId
+                || approvalVisitId == task.NodeVisitId
+                || index?.Find(approval.NodeId)?.Type != WfNodeType.Approval)
+                continue;
+            if (history.Any(item => item.TokenId == task.TokenId && item.Id > approval.Id))
+                continue;
+
+            var executions = await instances.Db.Queryable<WfNodeExecution>()
+                .Where(execution => execution.InstanceId == instanceId
+                                    && execution.TokenId == task.TokenId
+                                    && execution.NodeVisitId != approvalVisitId
+                                    && execution.CreateTime >= approval.CreateTime)
+                .Select(execution => new { execution.Id, execution.Status })
+                .ToListAsync(cancellationToken);
+            if (executions.Any(execution => execution.Status is WfNodeExecutionStatus.Succeeded
+                or WfNodeExecutionStatus.ManualFallback
+                or WfNodeExecutionStatus.Cancelled
+                or WfNodeExecutionStatus.Failed))
+                continue;
+
+            var executionIds = executions.Select(execution => execution.Id).ToList();
+            if (executionIds.Count > 0 && await instances.Db.Queryable<WfOutbox>()
+                    .Where(outbox => executionIds.Contains(outbox.ExecutionId)
+                                     && (outbox.Status == WfOutboxStatus.Dispatched
+                                         || outbox.Status == WfOutboxStatus.Failed))
+                    .AnyAsync(cancellationToken))
+                continue;
+
+            return task.TaskId;
+        }
+        return null;
+    }
+
+    private static IReadOnlyList<WfFormFieldPerm> ResolveFormPermissions(
+        WfModel? model,
+        IEnumerable<string> nodeIds)
+    {
+        if (model?.FormSchema is null) return [];
+        var index = WfModelIndex.Build(model);
+        return nodeIds
+            .Select(index.Find)
+            .Where(node => node?.Type == WfNodeType.Approval)
+            .SelectMany(node => node!.Props?.FormPerms ?? [])
+            .GroupBy(permission => permission.Field, StringComparer.Ordinal)
+            .Select(group => group.OrderBy(permission => permission.Access).First())
+            .ToList();
     }
 
     /// <summary>按 <see cref="WfModelIndex"/>(含分支臂内节点)解析节点名——不写第三次主链线性扫描。</summary>
@@ -786,10 +1000,110 @@ public class WfInstanceService(
         UserId = h.UserId,
         Action = h.Action,
         Comment = h.Comment,
+        OriginalUserId = h.OriginalUserId,
+        DelegationRuleId = h.DelegationRuleId,
+        DelegationScopeOrgId = h.DelegationScopeOrgId,
         TransferToUserId = h.TransferToUserId,
+        TargetUserId = h.TargetUserId,
         DurationMs = h.DurationMs,
         CreateTime = h.CreateTime,
     };
+
+    protected virtual IReadOnlyList<WfParallelForkOutput> MapParallelForks(
+        WfModel? model,
+        IReadOnlyList<WfToken> runtimeTokens,
+        IReadOnlyList<WfParallelArm> runtimeArms,
+        IReadOnlyList<WfHistory> events)
+    {
+        if (runtimeArms.Count == 0) return [];
+
+        var tokenMap = runtimeTokens.ToDictionary(token => token.Id);
+        var forkNodeIds = new Dictionary<long, string?>();
+        foreach (var item in events.Where(item => item.EventType == WfHistoryEventType.ParallelFork))
+        {
+            if (string.IsNullOrWhiteSpace(item.PayloadJson)
+                || !TryReadForkId(item.PayloadJson, out var forkId))
+                continue;
+            forkNodeIds[forkId] = item.NodeId;
+        }
+
+        var index = model is null ? null : WfModelIndex.Build(model);
+        return runtimeArms
+            .GroupBy(arm => arm.ForkId)
+            .OrderBy(group => group.Key)
+            .Select(group =>
+            {
+                var rows = group.ToList();
+                var parent = tokenMap.GetValueOrDefault(rows[0].ParentTokenId);
+                var status = rows.Any(row => row.Status == WfParallelArmStatus.Active)
+                    ? WfParallelForkStatus.Waiting
+                    : rows.All(row => row.Status == WfParallelArmStatus.Completed)
+                        ? WfParallelForkStatus.Joined
+                        : WfParallelForkStatus.Cancelled;
+                var isCurrentFork = parent?.ForkId == group.Key;
+                var activeArmCount = rows.Count(row => row.Status == WfParallelArmStatus.Active);
+                var nodeId = forkNodeIds.GetValueOrDefault(group.Key);
+                var node = nodeId is null ? null : index?.Find(nodeId);
+                return new WfParallelForkOutput
+                {
+                    ForkId = group.Key,
+                    ParentTokenId = rows[0].ParentTokenId,
+                    ParentNodeVisitId = rows[0].ParentNodeVisitId,
+                    NodeId = nodeId,
+                    NodeName = node?.Name,
+                    // 父 token 会被下一次重提复用；旧 fork 不能读取它当前代次的状态。
+                    ParentTokenStatus = isCurrentFork
+                        ? parent!.Status
+                        : status switch
+                        {
+                            WfParallelForkStatus.Waiting => WfTokenStatus.WaitingJoin,
+                            WfParallelForkStatus.Joined => WfTokenStatus.Active,
+                            _ => WfTokenStatus.Cancelled,
+                        },
+                    PendingArmCount = isCurrentFork
+                        ? parent!.PendingArmCount ?? activeArmCount
+                        : activeArmCount,
+                    Status = status,
+                    Arms = rows.Select(row =>
+                    {
+                        var child = row.ChildTokenId is { } childId
+                            ? tokenMap.GetValueOrDefault(childId)
+                            : null;
+                        var childNode = child is null ? null : index?.Find(child.NodeId);
+                        return new WfParallelArmOutput
+                        {
+                            ForkId = row.ForkId,
+                            ArmId = row.ArmId,
+                            ParentTokenId = row.ParentTokenId,
+                            ChildTokenId = row.ChildTokenId,
+                            Status = row.Status,
+                            ParentNodeVisitId = row.ParentNodeVisitId,
+                            ChildEntryNodeVisitId = row.ChildEntryNodeVisitId,
+                            CurrentNodeId = child?.NodeId,
+                            CurrentNodeName = childNode?.Name,
+                            ChildTokenStatus = child?.Status,
+                            Reason = row.Reason,
+                        };
+                    }).ToList(),
+                };
+            })
+            .ToList();
+    }
+
+    private static bool TryReadForkId(string payloadJson, out long forkId)
+    {
+        forkId = 0;
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            return document.RootElement.TryGetProperty("forkId", out var value)
+                   && value.TryGetInt64(out forkId);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     protected virtual WfAiDecisionAuditOutput MapAiDecisionAudit(WfAiDecision row) => new()
     {
