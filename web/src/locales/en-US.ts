@@ -1206,6 +1206,7 @@ export default {
       48044: 'Workflow outbox was not found or is outside your scope',
       48045: 'This outbox cannot be replayed',
       48046: 'Workflow outbox transport raised an unclassified error',
+      48047: 'Workflow outbox transport is not configured',
     },
   },
 

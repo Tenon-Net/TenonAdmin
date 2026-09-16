@@ -106,9 +106,10 @@ public class WfOutboxConsumerTests
         var reloaded = await db.Queryable<WfOutbox>().Where(o => o.Id == row.Id).FirstAsync();
         Assert.Equal(WfOutboxStatus.Pending, reloaded.Status);
         Assert.Equal("timeout", reloaded.LastError);
-        Assert.Equal(retryAt, reloaded.AvailableAtUtc);
+        AssertUtcClose(retryAt, reloaded.AvailableAtUtc);
 
-        var due = await ClaimAsync(db, row.Id, retryAt, TimeSpan.FromMinutes(1));
+        // 四库时间列精度不同,到期边界允许一个秒级量化窗口。
+        var due = await ClaimAsync(db, row.Id, retryAt.AddSeconds(1), TimeSpan.FromMinutes(1));
         Assert.NotNull(due);
         Assert.Equal(2, due.AttemptCount);
     }
@@ -140,7 +141,7 @@ public class WfOutboxConsumerTests
             db, second.Id, second.AttemptCount, later, CancellationToken.None));
         loaded = await db.Queryable<WfOutbox>().Where(o => o.Id == row.Id).FirstAsync();
         Assert.Equal(WfOutboxStatus.Dispatched, loaded.Status);
-        Assert.Equal(later, loaded.CompletedAtUtc);
+        AssertUtcClose(later, loaded.CompletedAtUtc);
         Assert.Null(loaded.LastError);
     }
 
@@ -151,7 +152,8 @@ public class WfOutboxConsumerTests
         var (scope, db) = Open(f);
         using var _ = scope;
         var now = DateTime.UtcNow;
-        var dispatched = await EnqueueAsync(db, "wf.node-execution.completed", now);
+        var enqueueAt = now.AddSeconds(-2);
+        var dispatched = await EnqueueAsync(db, "wf.node-execution.completed", enqueueAt);
         var claimed = await ClaimAsync(db, dispatched.Id, now, TimeSpan.FromMinutes(1));
         Assert.True(await WfOutboxConsumerStore.CompleteAsync(
             db, claimed!.Id, claimed.AttemptCount, now, CancellationToken.None));
@@ -159,7 +161,7 @@ public class WfOutboxConsumerTests
         Assert.False(await WfOutboxConsumerStore.ReplayFailedAsync(
             db, dispatched.Id, now, CancellationToken.None));
 
-        var failed = await EnqueueAsync(db, "wf.node-execution.webhook-sent", now);
+        var failed = await EnqueueAsync(db, "wf.node-execution.webhook-sent", enqueueAt);
         var failClaim = await ClaimAsync(db, failed.Id, now, TimeSpan.FromMinutes(1));
         Assert.True(await WfOutboxConsumerStore.FailAsync(
             db, failClaim!.Id, failClaim.AttemptCount, now, "dead", CancellationToken.None));
@@ -172,7 +174,7 @@ public class WfOutboxConsumerTests
         Assert.Equal(0, replayed.AttemptCount);
         Assert.Null(replayed.LastError);
         Assert.Null(replayed.CompletedAtUtc);
-        Assert.Equal(now.AddMinutes(11), replayed.AvailableAtUtc);
+        AssertUtcClose(now.AddMinutes(11), replayed.AvailableAtUtc);
     }
 
     [Fact]
@@ -232,7 +234,13 @@ public class WfOutboxConsumerTests
         };
         await db.Insertable(execution).ExecuteCommandAsync();
         return await WfOutboxStore.EnqueueAsync(
-            db, execution, messageType, "{\"ok\":true}", nowUtc ?? DateTime.UtcNow, CancellationToken.None);
+            db, execution, messageType, "{\"ok\":true}", nowUtc ?? DateTime.UtcNow.AddSeconds(-2), CancellationToken.None);
+    }
+
+    private static void AssertUtcClose(DateTime expected, DateTime? actual)
+    {
+        Assert.True(actual.HasValue);
+        Assert.InRange((actual.Value - expected).Duration(), TimeSpan.Zero, TimeSpan.FromSeconds(1));
     }
 
     private static Task<WfOutbox?> ClaimAsync(

@@ -144,7 +144,7 @@ public class WfOutboxDispatcherTests
     }
 
     [Fact]
-    public async Task Built_in_noop_transport_dispatches_pending_rows()
+    public async Task Built_in_noop_transport_does_not_fake_delivery()
     {
         using var f = new WorkflowAppFactory();
         var (scope, db) = Open(f);
@@ -152,8 +152,10 @@ public class WfOutboxDispatcherTests
         var row = await EnqueueAsync(db);
         var dispatcher = scope.ServiceProvider.GetRequiredService<WfOutboxDispatcher>();
 
-        Assert.Equal(WfOutboxStatus.Dispatched, await dispatcher.RunAsync(row.Id, CancellationToken.None));
+        Assert.Equal(WfOutboxStatus.Failed, await dispatcher.RunAsync(row.Id, CancellationToken.None));
         Assert.IsType<NoOpWfOutboxTransport>(scope.ServiceProvider.GetRequiredService<IWfOutboxTransport>());
+        var reloaded = await db.Queryable<WfOutbox>().Where(o => o.Id == row.Id).FirstAsync();
+        Assert.Contains("未配置真实 outbox transport", reloaded.LastError);
     }
 
     private static WfOutboxDispatcher CreateDispatcher(
@@ -180,7 +182,7 @@ public class WfOutboxDispatcherTests
         };
         await db.Insertable(execution).ExecuteCommandAsync();
         return await WfOutboxStore.EnqueueAsync(
-            db, execution, messageType, "{\"ok\":true}", DateTime.UtcNow, CancellationToken.None);
+            db, execution, messageType, "{\"ok\":true}", DateTime.UtcNow.AddSeconds(-2), CancellationToken.None);
     }
 
     private static (IServiceScope Scope, ISqlSugarClient Db) Open(WorkflowAppFactory f)

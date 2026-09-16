@@ -48,9 +48,10 @@ public class WfOutboxWorkerTests
         using var scope = f.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         var now = DateTime.UtcNow;
+        var enqueueAt = now.AddSeconds(-2);
 
-        var pending = await EnqueueAsync(db, 1, now);
-        var expired = await EnqueueAsync(db, 2, now);
+        var pending = await EnqueueAsync(db, 1, enqueueAt);
+        var expired = await EnqueueAsync(db, 2, enqueueAt);
         var claimed = await WfOutboxConsumerStore.ClaimAsync(
             db, expired.Id, now, TimeSpan.FromMinutes(1), CancellationToken.None);
         Assert.NotNull(claimed);
@@ -59,7 +60,7 @@ public class WfOutboxWorkerTests
             .SetColumns(o => new WfOutbox { AvailableAtUtc = expiredAt })
             .Where(o => o.Id == expired.Id)
             .ExecuteCommandAsync();
-        var future = await EnqueueAsync(db, 3, now);
+        var future = await EnqueueAsync(db, 3, enqueueAt);
         var futureClaim = await WfOutboxConsumerStore.ClaimAsync(
             db, future.Id, now, TimeSpan.FromMinutes(1), CancellationToken.None);
         Assert.True(await WfOutboxConsumerStore.ScheduleRetryAsync(
@@ -270,7 +271,7 @@ public class WfOutboxWorkerTests
         };
         await db.Insertable(execution).ExecuteCommandAsync();
         return await WfOutboxStore.EnqueueAsync(
-            db, execution, WfOutboxStore.MessageTypeNodeExecutionCompleted, "{}", nowUtc ?? DateTime.UtcNow, CancellationToken.None);
+            db, execution, WfOutboxStore.MessageTypeNodeExecutionCompleted, "{}", nowUtc ?? DateTime.UtcNow.AddSeconds(-2), CancellationToken.None);
     }
 
     private static async Task<WfOutbox> EnqueueVisibleAsync(ISqlSugarClient db, int tag)
@@ -297,7 +298,7 @@ public class WfOutboxWorkerTests
         };
         await db.Insertable(execution).ExecuteCommandAsync();
         return await WfOutboxStore.EnqueueAsync(
-            db, execution, WfOutboxStore.MessageTypeNodeExecutionCompleted, "{}", DateTime.UtcNow, CancellationToken.None);
+            db, execution, WfOutboxStore.MessageTypeNodeExecutionCompleted, "{}", DateTime.UtcNow.AddSeconds(-2), CancellationToken.None);
     }
 
     private static async Task<WfOutbox> EnqueueFailedVisibleAsync(ISqlSugarClient db)

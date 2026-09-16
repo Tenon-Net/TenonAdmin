@@ -71,7 +71,7 @@ public sealed class WfOutboxMessage
 }
 
 /// <summary>
-/// outbox 外部投递 SPI。内置默认是本地确认(无外部通道);消费者前置注册同接口即可换成 HTTP/MQ。
+/// outbox 外部投递 SPI。内置默认会明确失败(无外部通道);消费者前置注册同接口即可换成 HTTP/MQ。
 /// 调用发生在事务外;实现不得推进 task/token,也不得自行开工作流事务。
 /// </summary>
 public interface IWfOutboxTransport

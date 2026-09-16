@@ -148,6 +148,9 @@ public static class WorkflowErrorCode
     /// <summary>outbox transport 未分类异常(受控重试,摘要不含异常正文,Task 8c)。</summary>
     public const int OutboxTransportUnhandled = 48046;
 
+    /// <summary>未配置真实 outbox transport；默认实现不会伪造外部投递成功。</summary>
+    public const int OutboxTransportNotConfigured = 48047;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }
