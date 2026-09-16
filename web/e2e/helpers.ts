@@ -99,7 +99,8 @@ const LEAF = `${SIDE} .n-menu-item-content:not(:has(.n-menu-item-content__arrow)
  * 按下标取,这类歧义从根上不存在。
  */
 export async function sidebarLeaves(page: Page): Promise<{ name: string; item: Locator }[]> {
-  await page.waitForLoadState('networkidle')
+  // 应用壳可能保持长连接/轮询,`networkidle` 会把已渲染页面误判为永不完成。
+  await expect(page.locator(SIDE)).toBeVisible({ timeout: 10_000 })
   // 展开一层会露出下一层目录,重复到没有可展开的为止(种子菜单树只有 2 层,给个上限防死循环;
   // 真超过 3 层会静默漏掉更深的,当前数据到不了那儿)
   for (let pass = 0; pass < 3; pass++) {

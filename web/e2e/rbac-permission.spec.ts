@@ -25,7 +25,6 @@ async function logout(page: Page) {
 /** 导航到角色管理页。 */
 async function gotoRolePage(page: Page) {
   await page.goto('/system/role')
-  await page.waitForLoadState('networkidle')
   await expect(page.locator('.n-data-table')).toBeVisible({ timeout: 10_000 })
 }
 
