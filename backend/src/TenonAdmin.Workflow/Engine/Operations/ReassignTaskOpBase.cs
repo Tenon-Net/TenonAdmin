@@ -44,7 +44,7 @@ public abstract class ReassignTaskOpBase(
         }
 
         var targetEnabled = await ctx.Db.Queryable<TenonAdmin.Services.SysUser>()
-            .Where(u => u.Id == ToUserId && u.Enabled)
+            .Where(u => u.Id == ToUserId && u.Enabled == true)
             .AnyAsync();
         if (!targetEnabled)
         {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TenonAdmin.Core;
 using TenonAdmin.Workflow;
 
 namespace TenonAdmin.Tests;
@@ -168,27 +169,23 @@ public class WfConditionEvaluatorTests
         Assert.True(Eval(Leaf("missing", WfConditionOp.Empty, null), vars)); // 唯独 empty/notEmpty 把缺失当空
     }
 
-    // ── 烂 variablesJson:不抛异常,一律 false(empty 例外为 true) ──
+    // ── 烂 variablesJson:拒绝提交/读取,不静默落默认臂 ──
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
     [InlineData("{ 烂 JSON")]
     [InlineData("[1,2]")] // 根不是 object
-    public void Malformed_variables_json_never_throws_and_non_empty_ops_return_false(string? variablesJson)
+    [InlineData("{\"v\":1,\"v\":2}")] // 重复键
+    public void Malformed_variables_json_throws_business_error(string variablesJson)
     {
         var expr = Leaf("v", WfConditionOp.Eq, 100);
-        var exception = Record.Exception(() => Eval(expr, variablesJson));
-        Assert.Null(exception);
-        Assert.False(Eval(expr, variablesJson));
+        var exception = Assert.Throws<AdminException>(() => Eval(expr, variablesJson));
+        Assert.Equal((ErrorCode)WorkflowErrorCode.FormValueInvalid, exception.Code);
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("{ 烂 JSON")]
-    [InlineData("[1,2]")]
-    public void Malformed_variables_json_empty_op_returns_true(string? variablesJson)
+    public void Empty_variables_json_is_still_treated_as_no_fields(string? variablesJson)
     {
         var expr = Leaf("v", WfConditionOp.Empty, null);
         Assert.True(Eval(expr, variablesJson));
@@ -247,17 +244,16 @@ public class WfConditionEvaluatorTests
         Assert.False(Eval(expr, amount1)); // amount=1 在 [1,2] → notIn 为 false
     }
 
-    // ── P1:落单 UTF-16 代理项 → JsonDocument.Parse 抛 ArgumentException(非 JsonException),不能穿透 ──
+    // ── P1:落单 UTF-16 代理项 → 拒绝损坏变量 ──
 
     [Fact]
-    public void Malformed_variables_json_with_lone_utf16_surrogate_never_throws()
+    public void Malformed_variables_json_with_lone_utf16_surrogate_throws_business_error()
     {
         const string variablesJson = "{\"v\":\"\ud83d\"}"; // 落单高位代理项,不是合法 UTF-16 文本
         var expr = Leaf("v", WfConditionOp.Eq, "x");
 
-        var exception = Record.Exception(() => Eval(expr, variablesJson));
-        Assert.Null(exception);
-        Assert.False(Eval(expr, variablesJson));
+        var exception = Assert.Throws<AdminException>(() => Eval(expr, variablesJson));
+        Assert.Equal((ErrorCode)WorkflowErrorCode.FormValueInvalid, exception.Code);
     }
 
     // ── LooseEqualsNumberString 零覆盖补齐:数字↔字符串宽松比较、字符串↔字符串、布尔↔布尔 ──

@@ -192,18 +192,40 @@ public class WfFormRuntimeTests
     }
 
     [Fact]
-    public async Task Definitions_without_builtin_schema_keep_legacy_variables_unchanged()
+    public async Task Definitions_without_builtin_schema_keep_valid_variables_unchanged()
     {
         using var factory = new WorkflowAppFactory();
         var client = await ClientFor(factory, "superAdmin");
 
         var noSchemaId = await Publish(client, "无 schema", LegacyModel());
-        var noSchema = await Start(client, noSchemaId, "[1,2]");
-        Assert.Equal("[1,2]", await VariablesOf(client, noSchema.GetProperty("instanceId").GetInt64()));
+        var noSchema = await Start(client, noSchemaId, "{\"legacy\":1}");
+        Assert.Equal("{\"legacy\":1}", await VariablesOf(client, noSchema.GetProperty("instanceId").GetInt64()));
 
         var componentId = await Publish(client, "自定义表单", LegacyModel("views/legacy/form"));
-        var component = await Start(client, componentId, "{legacy");
-        Assert.Equal("{legacy", await VariablesOf(client, component.GetProperty("instanceId").GetInt64()));
+        var component = await Start(client, componentId, "{\"legacy\":2}");
+        Assert.Equal("{\"legacy\":2}", await VariablesOf(client, component.GetProperty("instanceId").GetInt64()));
+
+        var invalid = await PostEnvelope(client, "/api/v1/workflow/instance/start", new
+        {
+            definitionId = componentId,
+            variablesJson = "{legacy",
+        });
+        Assert.Equal(WorkflowErrorCode.FormValueInvalid, invalid.GetProperty("code").GetInt32());
+
+        foreach (var variablesJson in new[] { "[1]", "{\"legacy\":1,\"legacy\":2}" })
+        {
+            var rejected = await PostEnvelope(client, "/api/v1/workflow/instance/start", new
+            {
+                definitionId = noSchemaId,
+                variablesJson,
+            });
+            Assert.Equal(WorkflowErrorCode.FormValueInvalid, rejected.GetProperty("code").GetInt32());
+        }
+
+        var corrupted = await Start(client, noSchemaId, "{\"legacy\":3}");
+        await SetVariables(factory, corrupted.GetProperty("instanceId").GetInt64(), "{\"legacy\":1,\"legacy\":2}");
+        var readFailure = await GetEnvelope(client, $"/api/v1/workflow/instance/{corrupted.GetProperty("instanceId").GetInt64()}");
+        Assert.Equal(WorkflowErrorCode.FormValueInvalid, readFailure.GetProperty("code").GetInt32());
     }
 
     [Fact]

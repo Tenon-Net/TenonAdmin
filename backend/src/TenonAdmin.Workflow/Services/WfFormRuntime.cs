@@ -22,9 +22,17 @@ internal static class WfFormRuntime
         long actorUserId = 0,
         bool allowAnyFileOwner = false)
     {
-        if (!enabled) return submittedJson ?? currentJson;
+        if (!enabled)
+        {
+            ValidateObjectJson(submittedJson ?? currentJson);
+            return submittedJson ?? currentJson;
+        }
 
-        if (schema is null) return submittedJson ?? currentJson;
+        if (schema is null)
+        {
+            ValidateObjectJson(submittedJson ?? currentJson);
+            return submittedJson ?? currentJson;
+        }
 
         var current = ParseObject(currentJson);
         var submitted = ParseObject(submittedJson);
@@ -108,7 +116,11 @@ internal static class WfFormRuntime
         string? currentJson,
         IEnumerable<WfFormFieldPerm>? permissions)
     {
-        if (schema is null || string.IsNullOrWhiteSpace(currentJson)) return currentJson;
+        if (schema is null || string.IsNullOrWhiteSpace(currentJson))
+        {
+            ValidateObjectJson(currentJson);
+            return currentJson;
+        }
 
         // 存量变量损坏必须显式失败，不能把诊断性数据伪装成空值返回给调用方。
         var values = ParseObject(currentJson);
@@ -128,6 +140,8 @@ internal static class WfFormRuntime
         return visible.Count == 0 ? null : JsonSerializer.Serialize(visible, WfModelJson.Options);
     }
 
+    internal static void ValidateObjectJson(string? json) => ParseObject(json);
+
     private static Dictionary<string, JsonElement> ParseObject(string? json)
     {
         var result = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
@@ -144,7 +158,7 @@ internal static class WfFormRuntime
                     ThrowInvalid(property.Name, "duplicateKey");
             }
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or ArgumentException)
         {
             ThrowInvalid(null, "jsonInvalid");
         }

@@ -9,7 +9,8 @@ public class WfCcService(
     IRepository<WfCc> ccs,
     IRepository<WfInstance> instances,
     IRepository<WfDefinition> definitions,
-    IRepository<WfDefinitionVersion> versions) : IWfCcService
+    IRepository<WfDefinitionVersion> versions,
+    TimeProvider? timeProvider = null) : IWfCcService
 {
     /// <inheritdoc />
     public virtual async Task<PagedList<WfCcItemOutput>> PageMineAsync(
@@ -25,7 +26,7 @@ public class WfCcService(
 
         var page = await ccs.AsQueryable()
             .Where(c => c.UserId == userId)
-            .WhereIF(input.OnlyUnread == true, c => !c.IsRead)
+            .WhereIF(input.OnlyUnread == true, c => c.IsRead == false)
             .WhereIF(scopedInstanceIds is not null, c => scopedInstanceIds!.Contains(c.InstanceId))
             .ToPagedListAsync(input, q => q.OrderBy(c => c.Id, OrderByType.Desc));
 
@@ -52,7 +53,7 @@ public class WfCcService(
             return;
 
         row.IsRead = true;
-        row.ReadTime = DateTime.Now;
+        row.ReadTime = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
         await ccs.UpdateAsync(row);
     }
 

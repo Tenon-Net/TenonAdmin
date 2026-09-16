@@ -26,7 +26,7 @@ public abstract class ApproverProviderBase(IRepository<SysUser> users) : IApprov
             return [];
 
         var enabled = await Users.AsQueryable()
-            .Where(u => ordered.Contains(u.Id) && u.Enabled)
+            .Where(u => ordered.Contains(u.Id) && u.Enabled == true)
             .Select(u => u.Id)
             .ToListAsync();
 

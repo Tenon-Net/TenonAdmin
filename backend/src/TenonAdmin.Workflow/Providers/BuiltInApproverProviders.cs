@@ -123,7 +123,7 @@ public class PositionApproverProvider(IRepository<SysUser> users) : ApproverProv
 
         var orgId = ApproverParamReader.GetLong(context.Params, "orgId");
         var query = Users.AsQueryable()
-            .Where(u => u.PositionId == positionId && u.Enabled);
+            .Where(u => u.PositionId == positionId && u.Enabled == true);
         if (orgId is long oid && oid > 0)
             query = query.Where(u => u.OrgId == oid);
 

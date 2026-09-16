@@ -106,8 +106,7 @@ public sealed class WfNodeExecutionResult
 /// <summary>
 /// 一次节点执行的输入上下文(M3a-1)——投影自 <see cref="WfInstance"/>/<see cref="WfToken"/>/<see cref="WfNode"/>,
 /// <b>不含 SqlSugar 实体本身、不含 <c>ISqlSugarClient</c></b>(硬约束,有结构化断言守着)。
-/// <para><see cref="VariablesJson"/> 原样透传前端发起时提交的摘要变量,后端从不校验——措辞与语义对齐
-/// <see cref="IWfConditionEvaluator"/>:实现必须对烂 JSON 免疫。</para>
+/// <para><see cref="VariablesJson"/> 是已通过入口 JSON object 校验的摘要变量;handler 仍须按节点白名单读取。</para>
 /// <para><see cref="NodeProps"/> 是 dispatcher 自己反序列化出的快照实例,handler 只读;<b>dispatcher 不得
 /// 把引擎内部那棵活树(<c>ctx.Model</c>)上的节点对象直接递进来</b>——<see cref="WfNodeProps"/> setter 可写,
 /// 与「不可变快照」字面不符,这条纪律是唯一的保障,靠代码审查兜住,不是类型系统强制。</para>

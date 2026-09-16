@@ -7,10 +7,8 @@ namespace TenonAdmin.Workflow;
 /// <see cref="IWfConditionEvaluator"/> 默认实现:结构化条件树求值,模板方法拆成一串小步,
 /// 消费者可继承覆写单步(如自定义 <see cref="LooseEquals"/> 的宽松比较规则)。
 /// <para>
-/// 变量源 = <c>wf_instance.VariablesJson</c>,发起时由前端原样提交、后端从不校验
-/// (<c>WfInstanceService.StartAsync</c> 直接透传 <c>input.VariablesJson</c>),因此本类
-/// 全程对烂 JSON 免疫:任何解析失败 / 字段缺失 / 类型不确定,一律返回 <c>false</c>,不抛异常,
-/// 让分支落到设计器强制配置的默认臂。
+/// 变量源 = <c>wf_instance.VariablesJson</c>。变量入口先拒绝非法 JSON、重复键和非 object
+/// 根节点；字段缺失或类型不确定仍按 <c>false</c> 处理，让分支落到设计器强制配置的默认臂。
 /// </para>
 /// </summary>
 public class WfConditionEvaluator : IWfConditionEvaluator
@@ -21,43 +19,43 @@ public class WfConditionEvaluator : IWfConditionEvaluator
     /// <inheritdoc />
     public virtual bool Evaluate(WfConditionExpr? expr, string? variablesJson)
     {
-        if (expr is null) return false;
-
         // JsonElement 的有效期绑定其 JsonDocument;必须在整个求值过程中保活 doc,
         // 不能把 doc.RootElement 传出本方法后再 dispose。
         using var doc = ParseVariables(variablesJson);
+        if (expr is null) return false;
+
         var root = doc?.RootElement ?? default;
         return EvaluateExpr(expr, root, depth: 0);
     }
 
     /// <summary>
-    /// 解析 <c>VariablesJson</c>。variablesJson 为 null/空白/非法 JSON/根不是 object 时,
-    /// 一律返回 <c>null</c>(= 视作「无任何字段」),不抛异常。
+    /// 解析 <c>VariablesJson</c>。variablesJson 为 null/空白时返回 null；非法 JSON、重复键或根不是
+    /// object 时抛出业务错误，避免把损坏变量静默当成默认分支。
     /// </summary>
     protected virtual JsonDocument? ParseVariables(string? variablesJson)
     {
         if (string.IsNullOrWhiteSpace(variablesJson)) return null;
+
+        WfFormRuntime.ValidateObjectJson(variablesJson);
 
         JsonDocument doc;
         try
         {
             doc = JsonDocument.Parse(variablesJson);
         }
-        catch (Exception)
+        catch (JsonException ex)
         {
-            // 烂 JSON(发起时前端提交、后端从不校验)→ 视作无字段,不能让求值炸掉整单发起事务。
-            // 这里故意接 Exception 而不是只接 JsonException:字符串含落单 UTF-16 代理项时
-            // JsonDocument.Parse 抛的是 ArgumentException("Cannot transcode invalid UTF-16 string…"),
-            // 不是 JsonException;求值跑在引擎的 DB 事务里,任何未捕获异常都会炸掉整单发起,
-            // 接口硬契约是「求值不抛异常」,宁可捕宽一点也不能漏。
-            return null;
+            throw WorkflowErrorCode.Exception(
+                WorkflowErrorCode.FormValueInvalid,
+                new Dictionary<string, object?> { ["reason"] = "jsonInvalid", ["detail"] = ex.GetType().Name });
         }
 
         if (doc.RootElement.ValueKind != JsonValueKind.Object)
         {
-            // 根不是 object(如数组/标量/null)→ 视作无字段。
             doc.Dispose();
-            return null;
+            throw WorkflowErrorCode.Exception(
+                WorkflowErrorCode.FormValueInvalid,
+                new Dictionary<string, object?> { ["reason"] = "objectRequired" });
         }
 
         return doc;

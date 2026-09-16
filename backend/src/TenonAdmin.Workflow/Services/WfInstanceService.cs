@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using SqlSugar;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
@@ -22,7 +23,9 @@ public class WfInstanceService(
     IRepository<SysUserRole> userRoles,
     IWorkflowEngine engine,
     ICurrentUser? currentUser = null,
-    IPermissionProvider? permissions = null) : IWfInstanceService, IWfAiDecisionAuditReader
+    IPermissionProvider? permissions = null,
+    TimeProvider? timeProvider = null,
+    ILogger<WfInstanceService>? logger = null) : IWfInstanceService, IWfAiDecisionAuditReader
 {
     private const int MaximumAiAuditJsonCharacters = AiDecisionProposalParser.MaximumJsonCharacters;
     private static readonly HashSet<string> HistoryPayloadFields = new(StringComparer.OrdinalIgnoreCase)
@@ -51,7 +54,7 @@ public class WfInstanceService(
         IPermissionProvider? permissions = null)
         : this(
             instances, definitions, versions, histories, hisTasks, tasks, actors, ccs,
-            null!, userRoles, engine, currentUser, permissions)
+            null!, userRoles, engine, currentUser, permissions, null, null)
     {
     }
 
@@ -460,12 +463,12 @@ public class WfInstanceService(
             NodeId = h.NodeId,
             TokenId = h.TokenId,
             NodeVisitId = h.NodeVisitId,
-            PayloadJson = ProjectHistoryPayload(h.PayloadJson),
+            PayloadJson = ProjectHistoryPayload(h.Id, h.PayloadJson),
             CreateTime = h.CreateTime,
         }).ToList();
     }
 
-    private static string? ProjectHistoryPayload(string? payloadJson)
+    private string? ProjectHistoryPayload(long historyId, string? payloadJson)
     {
         if (string.IsNullOrWhiteSpace(payloadJson)) return null;
         try
@@ -476,6 +479,7 @@ public class WfInstanceService(
         }
         catch (JsonException)
         {
+            logger?.LogWarning("工作流历史载荷损坏，已隐藏。HistoryId={HistoryId}", historyId);
             return null;
         }
     }
@@ -586,11 +590,11 @@ public class WfInstanceService(
         if (userId <= 0) return;
 
         var unread = await ccs.AsQueryable()
-            .Where(c => c.InstanceId == instanceId && c.UserId == userId && !c.IsRead)
+            .Where(c => c.InstanceId == instanceId && c.UserId == userId && c.IsRead == false)
             .ToListAsync();
         if (unread.Count == 0) return;
 
-        var now = DateTime.Now;
+        var now = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
         foreach (var row in unread)
         {
             row.IsRead = true;

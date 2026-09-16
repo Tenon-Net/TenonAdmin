@@ -31,6 +31,16 @@ public class TakeBackTaskOp(
         if (target is null || target.Type != WfNodeType.Approval)
             throw NotAllowed("targetNotApproval");
 
+        // 任务级 CAS 先于关闭 actor,与同一当前待办上的审批/改派/加减签互斥。
+        var taskClaimed = await ctx.Db.Updateable<WfTask>()
+            .SetColumns(t => new WfTask { Version = Task.Version + 1 })
+            .Where(t => t.Id == Task.Id && t.Version == Task.Version)
+            .ExecuteCommandAsync(cancellationToken);
+        if (taskClaimed != 1)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TaskConflict,
+                new Dictionary<string, object?> { ["taskId"] = Task.Id });
+        Task.Version++;
+
         // 任何更晚的人工历史都关闭拿回窗口。当前 task 只允许被创建,不属于人工动作。
         var downstreamAction = await ctx.Db.Queryable<WfHisTask>()
             .Where(h => h.InstanceId == ctx.Instance.Id
@@ -52,16 +62,6 @@ public class TakeBackTaskOp(
             .ToListAsync(cancellationToken);
         var recalledUserIds = recalledActors.Select(actor => actor.UserId).ToList();
         var remainingActorIds = recalledActors.Select(actor => actor.Id).ToList();
-
-        // 任务级 CAS 先于关闭 actor,与同一当前待办上的审批/改派/加减签互斥。
-        var taskClaimed = await ctx.Db.Updateable<WfTask>()
-            .SetColumns(t => new WfTask { Version = Task.Version + 1 })
-            .Where(t => t.Id == Task.Id && t.Version == Task.Version)
-            .ExecuteCommandAsync(cancellationToken);
-        if (taskClaimed != 1)
-            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TaskConflict,
-                new Dictionary<string, object?> { ["taskId"] = Task.Id });
-        Task.Version++;
 
         await ctx.ClaimTokenAsync(WfTokenStatus.Active, cancellationToken);
 

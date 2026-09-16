@@ -97,7 +97,7 @@ public class WfDelegationService(
                         IsDelete = false,
                         Version = oldVersion + 1,
                     })
-                    .Where(r => r.Id == existing.Id && r.Version == oldVersion && r.IsDelete)
+                    .Where(r => r.Id == existing.Id && r.Version == oldVersion && r.IsDelete == true)
                     .ExecuteCommandAsync(cancellationToken);
                 if (affected != 1)
                     throw Conflict(existing.Id);
@@ -194,7 +194,7 @@ public class WfDelegationService(
                     EndsAt = input.EndsAt,
                     Version = oldVersion + 1,
                 })
-                .Where(r => r.Id == id && r.Version == oldVersion && !r.IsDelete)
+                .Where(r => r.Id == id && r.Version == oldVersion && r.IsDelete == false)
                 .ExecuteCommandAsync(cancellationToken);
             if (affected != 1)
                 throw Conflict(id);
@@ -240,7 +240,7 @@ public class WfDelegationService(
             var oldVersion = rule.Version;
             var affected = await rules.Db.Updateable<WfDelegationRule>()
                 .SetColumns(r => new WfDelegationRule { IsDelete = true, Version = oldVersion + 1 })
-                .Where(r => r.Id == id && r.Version == oldVersion && !r.IsDelete)
+                .Where(r => r.Id == id && r.Version == oldVersion && r.IsDelete == false)
                 .ExecuteCommandAsync(cancellationToken);
             if (affected != 1)
                 throw Conflict(id);
@@ -273,7 +273,7 @@ public class WfDelegationService(
         var candidates = await rules.AsQueryable()
             .Where(r => ids.Contains(r.OriginalUserId)
                         && ownerOrgIds.Contains(r.ScopeOrgId)
-                        && r.Enabled
+                        && r.Enabled == true
                         && r.StartsAt <= now
                         && r.EndsAt > now)
             .ToListAsync(cancellationToken);
@@ -281,7 +281,7 @@ public class WfDelegationService(
         var enabledTargets = targetIds.Count == 0
             ? []
             : await users.AsQueryable()
-                .Where(u => targetIds.Contains(u.Id) && u.Enabled)
+                .Where(u => targetIds.Contains(u.Id) && u.Enabled == true)
                 .Select(u => new { u.Id, u.OrgId })
                 .ToListAsync(cancellationToken);
         var enabledTargetMap = enabledTargets.ToDictionary(u => u.Id, u => u.OrgId);
@@ -458,7 +458,7 @@ public class WfDelegationService(
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.DelegationCycle);
 
         var edges = await rules.AsQueryable()
-            .Where(r => r.ScopeOrgId == scope && r.Enabled)
+            .Where(r => r.ScopeOrgId == scope && r.Enabled == true)
             .WhereIF(exceptId.HasValue, r => r.Id != exceptId!.Value)
             .Select(r => new { r.OriginalUserId, r.DelegateUserId })
             .ToListAsync(cancellationToken);
