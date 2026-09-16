@@ -81,7 +81,7 @@
 
 - status: `DONE`
 - current task: `无（M3a-2 Vue 阶段完成；预览版门禁见下方 2026-09-15 证据）`
-- next: `本地四库/Redis/HTTP transport/Vue 已绿，预览版门禁可闭合。下一步产品切片仍是 React 工作流页面 port（不属于本 Vue 计划）。Task 8c 已另开切片完成，见设计规划 §15.8；M3+ 仍未开始`
+- next: `菜单已拆分：业务中心=审批中心(员工)、系统=流程管理(治理)；schema≥6。下一步产品切片仍是 React 工作流页面 port（不属于本 Vue 计划）。M3+ 仍未开始`
 - completed: `25 / 25`
 
 ## 任务

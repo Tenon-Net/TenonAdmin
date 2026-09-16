@@ -26,7 +26,8 @@
 | 术语 | 定义 |
 |---|---|
 | 工作流 | 本仓语境 = **AI 原生审批**，不是通用自动化编排平台。M1–M2 先完成可信人工审批链，M3a 建可靠机器节点执行，M3b 用 AI Decision 处理低风险、人工接异常。卫星包 `TenonAdmin.Workflow`,不进内核。完整文档入口:`docs/workflow/README.md`。 |
-| 审批中心 | 工作流菜单目录(`WorkflowMenuSeed` 根 Id=48000,Sort=6)。**挂内置「系统」模块(`ModuleId=1`)**,不挂「业务中心」(示例可删;模块下有菜单则 `ModuleService.DeleteAsync` 拒删,卫星包不得锁死内核 demo)。树里混着两类受众:流程定义=管理员后台配置;发起/待办=全体员工自助。M1 不解这个张力,独立 module 待 M2。菜单管理可改顶级 `ModuleId`,但 `SyncOnUpgrade` 升级会刷回 1(IgnoreColumns 只有审计字段,不含 `ModuleId`;内核 `DefaultMenuSeed` 同样如此)。 |
+| 审批中心 | 员工日常审批菜单目录(`WorkflowMenuSeed` 根 Id=`48050`)。**挂示例「业务中心」模块(`ModuleId=2`)**:发起流程 / 待我审批 / 抄送我的 / 我发起的 / 我已办的。普通员工只授权本目录即可进业务中心,不必获得「系统」应用。注意:业务中心下有菜单时 `ModuleService.DeleteAsync` 会拒删该模块。 |
+| 流程管理 | 流程治理菜单目录(`WorkflowMenuSeed` 根 Id=`48000`)。**挂内置「系统」模块(`ModuleId=1`)**:流程定义 / 设计器(隐藏路由) / 流程监控 / 长期委托。面向流程管理员与超管。`SyncOnUpgrade` 会按种子刷回上述归属(IgnoreColumns 不含 `ModuleId`/`ParentId`)。 |
 | Webhook 节点 | M3a 首个机器节点 Adapter:流转到达后由可靠执行 Module 调用消费者配置的 HTTP 地址,结果写回流程变量。与 AI Decision 共用 execution/attempt/deadline/fence/outbox 和节点 Interface。 |
 | AI Decision 节点 | M3b 战略节点:模型只生成结构化 proposal；服务端 schema/policy 决定低风险自动放行或转人工。V0 不自动拒绝，异常/低置信度/风险一律转人工，模型不得直接调用审批命令。 |
 | 节点类型 SPI | 节点类型体系可扩展的约定:内置类型之外,消费者可注册自定义节点类型而不改内核。Webhook、AI 和测试 fake 只跨同一个 Interface；完整通用编排平台仍不做。 |

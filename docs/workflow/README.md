@@ -8,6 +8,8 @@ TenonAdmin.Workflow 以 **AI 原生审批**为产品方向：M1–M2 建立可�
 
 共享领域术语仍保留在仓根 [`CONTEXT.md`](../../CONTEXT.md) 的“工作流”一节；它不是工作流专项文档，不从全仓领域词汇表中拆出。本目录负责完整设计和研究，`CONTEXT.md` 只保留跨任务必须统一的简短语义。
 
+**菜单归属（schema ≥ 6）**：员工侧「审批中心」挂 **业务中心**；治理侧「流程管理」挂 **系统**。测试人员入口见 [`vue-preview-qa-guide.md`](./vue-preview-qa-guide.md)。
+
 ## 当前交付状态（2026-09-14，M3a-2 Vue 与 Task 8c 已完成）
 
 M3b-0 已交付：AI Decision 已接入既有 execution、scheduler、worker、dispatcher 和 tx2 链路，Provider/proposal/policy、人工兜底和 append-only AI 审计均沿同一执行路径落库。内置执行链全程 **shadow-only**；AI 永不自动批准、拒绝、完成 task 或推进 token，低风险自动放行仍未开放。消费者整体替换 `IWorkflowEngine` 时属于受信任的完全接管，须自行维持事务、fence、审计与 shadow-only 不变量；自定义 handler 同样不得旁路写工作流状态。
@@ -47,15 +49,17 @@ Vue/后端功能测试收口与 Task 8c 已完成。React 工作流 port 可以�
 ## 必读顺序
 
 1. [`workflow-design-plan-2026-08-17.md`](./workflow-design-plan-2026-08-17.md) — 当前产品决策、Schema、数据模型、运行时语义、M1–M3+ 里程碑。**继续开发时先读这份。**
-2. [`workflow-database-design-review-2026-08-24.md`](./workflow-database-design-review-2026-08-24.md) — 当前 9 表兼容性评审：保留项、实例/Token CAS、NodeVisitId、办理人历史，以及 M2c/M3a/M3b 的目标表与迁移顺序。**修改工作流字段或开发 M2c/M3a 时必读。**
-3. [`elsa3-slickflow-ai-reference-2026-08-23.md`](./elsa3-slickflow-ai-reference-2026-08-23.md) — AI 工作流实施基线。§3 固化 Slickflow 调用链，§4 固化 Tenon 的 Module、Interface、execution/attempt/AI decision/outbox、安全不变量与验收线，§5 固化阶段安排。**开发 M3a/M3b 时必读。**
-4. [`openworkflow-reference-2026-08-23.md`](./openworkflow-reference-2026-08-23.md) — 可靠执行参考：幂等、持久化唤醒、lease/fence、attempt、重试与崩溃恢复。**开发 M2c/M3a 时按需读。**
-5. [`workflow-engine-research-2026-08-10.md`](./workflow-engine-research-2026-08-10.md) — 完整选型与参考项目调研，保留“为什么这样设计”的证据。日常实现不必通读。
+2. [`vue-preview-qa-guide.md`](./vue-preview-qa-guide.md) — **测试人员**：本地启动、菜单地图、推荐冒烟路径与已知边界。
+3. [`workflow-database-design-review-2026-08-24.md`](./workflow-database-design-review-2026-08-24.md) — 当前 9 表兼容性评审：保留项、实例/Token CAS、NodeVisitId、办理人历史，以及 M2c/M3a/M3b 的目标表与迁移顺序。**修改工作流字段或开发 M2c/M3a 时必读。**
+4. [`elsa3-slickflow-ai-reference-2026-08-23.md`](./elsa3-slickflow-ai-reference-2026-08-23.md) — AI 工作流实施基线。§3 固化 Slickflow 调用链，§4 固化 Tenon 的 Module、Interface、execution/attempt/AI decision/outbox、安全不变量与验收线，§5 固化阶段安排。**开发 M3a/M3b 时必读。**
+5. [`openworkflow-reference-2026-08-23.md`](./openworkflow-reference-2026-08-23.md) — 可靠执行参考：幂等、持久化唤醒、lease/fence、attempt、重试与崩溃恢复。**开发 M2c/M3a 时按需读。**
+6. [`workflow-engine-research-2026-08-10.md`](./workflow-engine-research-2026-08-10.md) — 完整选型与参考项目调研，保留“为什么这样设计”的证据。日常实现不必通读。
 
 ## 按任务读取
 
 | 任务 | 先读 | 再读 |
 | --- | --- | --- |
+| 手工验收 Vue 预览版 | [`vue-preview-qa-guide.md`](./vue-preview-qa-guide.md) | 设计规划 §八（按需） |
 | 继续 M2a/M2b | 设计规划 §13、§15.1（Version 字段提前项） | 总调研中对应产品参考 |
 | 开发 M2c 幂等与四库契约 | 数据库评审 §四、§五、§九、§十 | 设计规划 §14.2、§15.1、OpenWorkflow 报告 §4–§6 |
 | 开发 M3a-1 自动节点执行 | 设计规划 §15.2–§15.3、数据库评审 §四、§六、§八–§十 | AI 基石 §4.4–§4.8、OpenWorkflow 的 execution/lease/retry 部分 |
