@@ -80,8 +80,8 @@
 ## 状态
 
 - status: `DONE`
-- current task: `无（M3a-2 Vue 阶段完成）`
-- next: `功能测试已收口；下一步是 React 工作流页面 port（不属于本 Vue 计划）。Task 8c 已另开切片完成，见设计规划 §15.8；M3+ 仍未开始`
+- current task: `无（M3a-2 Vue 阶段完成；预览版门禁见下方 2026-09-15 证据）`
+- next: `本地四库/Redis/HTTP transport/Vue 已绿，预览版门禁可闭合。下一步产品切片仍是 React 工作流页面 port（不属于本 Vue 计划）。Task 8c 已另开切片完成，见设计规划 §15.8；M3+ 仍未开始`
 - completed: `25 / 25`
 
 ## 任务
@@ -228,7 +228,7 @@
   - 契约：`node scripts/check-contract-drift.mjs` 真实启动 MinimalHost 并重新生成两套 `schema.d.ts`，两文件字节一致；退出码 `1` 仅表示相对未提交 HEAD 存在本阶段预期 API/schema 差异，未手工编辑生成文件。
   - E2E 边界：Vue 全量 Playwright 为 `14 passed / 2 failed`；两个失败分别是既有 MFA 绑定的 `input[readonly]` 定位超时和 RBAC 用例对重复 `.n-message` 的严格定位，新增 `e2e/workflow-m3a2.spec.ts` 在修复后再次 `1/1` 通过。Vue build 输出依赖注释和大 chunk 提示，但退出码为 0。
   - 审查：此前的 `code-reviewer`/`architect` 结果只覆盖 T25 初始范围，不覆盖随后追加的 T25A；拿回资格、Vue 联合类型、附件未知所有者和并发环竞态 blocker 均已修复并有回归证据，T25A 负责最终复审。
-  - 阶段边界：仅声明 **M3a-2 Vue 阶段完成**；`web-react/` 只有真实 contract drift 生成文件变化，React 工作流 port、Task 8c outbox consumer/transport、AI 自动放行和 M3+ 留待后续。
+  - 阶段边界：仅声明 **M3a-2 Vue 阶段完成**；`web-react/` 只有真实 contract drift 生成文件变化，React 工作流 port、AI 自动放行和 M3+ 留待后续；Task 8c 已另开切片完成。
 - [x] **T25A（2026-09-13，完成）**：最终审查发现并修复 Transfer/Delegate/Return payload hash 参数冲突、Vue 表单联合类型、runtime projection 完整模型强转和历史 payload 脱敏问题；补充修复通用 payload hash 的 null 输入、旧回执 `PayloadHash=null` 兼容、回填取消令牌，以及回填 HostedService 的可替换性、生命周期顺序和重复注册。最终证据为既有后端聚焦 `122/122`、最终修复后回执/回填/identity 聚焦 `33/33`、Vue `33 files/179 tests`、Vue typecheck/lint/build、React typecheck/build、工作流 Playwright `1 passed`、完整 Vue Playwright `14 passed/2 failed`；两个失败是既有、范围外且已接受限制：`mfa-bind.spec.ts:9` 的 `input[readonly]` 定位超时，`rbac-permission.spec.ts:133` 的重复 `.n-message` 严格定位。`code-reviewer` 返回 `APPROVE`，`architect` 返回 `CLEAR`。
 
 - **T25A 复审跟进（2026-09-14）**：针对阶段收口后的 review 反馈完成最小修复：内置表单用户/附件 ID 保持后端 `long` 雪花协议，同时兼容 JSON number 与十进制 string；重提内置表单恢复可编辑态、校验并回写最新变量；非法变量 JSON 或非对象根节点显示错误并阻止提交；加签/减签在任务 CAS 前复用实例级 CAS，与撤销共享竞争边界；OpenAPI 将 `WfFormField.props` 和 `WfAssignee.params` 生成为自由 JSON。AI Decision 只增加只读展示文案和 runtime 类型，不加入当前 Vue 设计器可插入集合，继续遵守 M3b-0 shadow-only 与本阶段范围。
@@ -239,5 +239,15 @@
   - MFA：`mfa-bind.spec.ts:9` 的 `input[readonly]` 超时根因是 Playwright 宿主默认 `Totp:Enabled=false`，`bind/start` 被 `NoPermission` 挡在第 1 步。不能把 Totp 做成整个 E2E 宿主地板，否则用户/角色高危写会触发 40024 再认证。改为建用户后打开运行时 `sys.security.totp.enabled`，用例结束后密码再认证再关闭；种子框使用 `.mfa-seed` 只读契约。
   - RBAC：`rbac-permission.spec.ts:133` 的重复 `.n-message` 是连续两次「用户授权已保存」堆叠。产品在保存前 `destroyAll()` 只保留本动作结果；测试按该文案断言恰好一条，并要求角色行带「更多」、保存后抽屉关闭，避免与 UserPicker 用户行撞名。
   - 历史投影：`WfAdjacentDedupTests` 发现 `DuplicateApproverSkipped` 的 `userIds` 数组被 runtime 白名单丢掉。补齐 `nodeId`/`userIds` 与原始值数组投影，秘密字段和嵌套对象仍拒绝。
-  - 验证矩阵（全部退出码 0）：`cd web && npm run test -- --run` → 34 files / 183 passed；`cd web && npm run test:e2e` → 16 passed；`cd web && npm run typecheck` / `lint` / `build` 通过；`dotnet test backend/TenonAdmin.slnx -c Release` → 1513 passed / 0 failed / 0 skipped；`dotnet build backend/TenonAdmin.slnx -c Release --no-restore` → 0 warning / 0 error；`node scripts/check-contract-drift.mjs` → contract in sync；`cd web-react && npm run typecheck` / `build` 通过；`git diff --check HEAD` 通过。未改 API/DTO/XML 注释，未手工编辑 `schema.d.ts`；`web-react/` 无工作流产品代码变化。
-  - 边界：表单用户/附件 ID 仍是后端 `long` 雪花；非法变量仍阻止提交；`hidden/readonly/editable`、RequestId/receipt、task/token/instance CAS、NodeVisitId、execution/lease/fence 和 AI shadow-only 未改。React 工作流页面、Task 8c、AI 自动放行和 M3+ 仍未开始；React port 只在本轮功能测试无失败之后才允许启动。
+  - 验证矩阵（全部退出码 0）：`cd web && npm run test -- --run` → 34 files / 183 passed；`cd web && npm run test:e2e` → 16 passed；`cd web && npm run typecheck` / `lint` / `build` 通过；`dotnet test backend/TenonAdmin.slnx -c Release` → 1536 passed / 0 failed / 0 skipped；`dotnet build backend/TenonAdmin.slnx -c Release --no-restore` → 0 warning / 0 error；`node scripts/check-contract-drift.mjs` → contract in sync；`cd web-react && npm run typecheck` / `build` 通过；`git diff --check HEAD` 通过。未改 API/DTO/XML 注释，未手工编辑 `schema.d.ts`；`web-react/` 无工作流产品代码变化。
+  - 边界：表单用户/附件 ID 仍是后端 `long` 雪花；非法变量仍阻止提交；`hidden/readonly/editable`、RequestId/receipt、task/token/instance CAS、NodeVisitId、execution/lease/fence 和 AI shadow-only 未改。React 工作流页面、AI 自动放行和 M3+ 仍未开始；Task 8c 已另开切片完成；React port 只在本轮功能测试无失败之后才允许启动。
+
+- **预览版发布门禁（2026-09-15）**：不开发 React、不提交/推送/打 tag。保护既有工作区改动（含 `TakeBackTaskOp` CAS 提前与模板库模式）。新增测试专用 `WfOutboxHttpTransportTests.cs`（最小 HTTP transport + 本地 endpoint）。
+  - Release build：`dotnet build backend/TenonAdmin.slnx -c Release` → 0 warning / 0 error。
+  - 四库（MySQL/PostgreSQL **未**并行）：SQLite 全量 `1540/0/0`，约 3 m 36 s（墙钟 ~220 s）；MySQL `TENON_TEST_MYSQL_TEMPLATE=1` → `1540/0/0`，约 5 m 29 s（墙钟 ~332 s）；PostgreSQL `TENON_TEST_POSTGRESQL_TEMPLATE=1` → `1540/0/0`，约 6 m 7 s（墙钟 ~371 s）。
+  - SQL Server（2026-09-15 续跑）：容器 `ExitCode=137` 后 `docker start` 恢复，`sa` 登录成功；清理残留库；`TENON_TEST_SQLSERVER_TEMPLATE=1` + 四片并行（本机需 `fs.inotify.max_user_instances=1024`，默认 128 会让四进程 FileSystemWatcher 失败）。四片合计 1540：`407+342+428+363`；墙钟约 42 m。初跑 3 失败（`HttpListener` Start 失败后复用同一实例 ×2、`CodeFirstNullableUpgrade` 并行压力 ×1）；已修 listener（每次尝试新建 + PID 错开端口），串行复跑 → `5/5`（~3.3 m），**有效 1540/1540**。
+  - Redis：`redis-cli ping` → `PONG`；全量/契约测后容器仍正常。
+  - 真实 transport：`WfOutboxHttpTransportTests` → `4 passed`——HTTP 投递 `Pending→Dispatching→Dispatched`；失败→`Failed`→replay→再成功；同 `MessageKey` 重复投递业务计数保持 1；默认 NoOp 失败语义未改。
+  - Vue：`npm run lint` / `typecheck` / `build` 通过；`npm test -- --run` → 34 files / 183 passed；工作流 E2E 四文件 → `5 passed`（约 1.9 m）。
+  - Contract drift：本轮无 Controllers/DTO/OpenAPI 变更，`schema.d.ts` 相对 HEAD 无 diff，未重跑 drift 脚本。
+  - 结论：Vue 预览版在本地四库 + Redis + HTTP transport + Vue 检查上已具备发布条件。未执行版本 bump、CHANGELOG 定版、commit、push、merge main 或打 tag。

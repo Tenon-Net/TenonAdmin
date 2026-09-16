@@ -219,16 +219,21 @@ Vue 在发起提交前执行必填、类型、范围、选项、人员 Id 和附
 - 审批中心:待我审批 / 我发起的 / 我已办的 / 抄送我的(`[ActiveSession]` 端点)
 - 审批详情:进度时间线 + 意见记录 + 业务表单挂载点 + 操作按钮组
 
-## 七、API 面(草案,权限码即路由)
+## 七、API 面(权限码即路由)
 
 ```
-POST /api/v1/workflow/definition/add|update|publish|disable
-GET  /api/v1/workflow/definition/page|{id}|versions/{id}
-POST /api/v1/workflow/instance/start          // businessKey + 摘要变量
-POST /api/v1/workflow/instance/withdraw/{id}  // 撤销(仅当无任何节点被审批过)
-GET  /api/v1/workflow/instance/page|{id}|history/{id}
+POST /api/v1/workflow/definition/add|update|publish|disable // [RolePermission]
+GET  /api/v1/workflow/definition/page|{id}|versions/{id}   // [RolePermission]
+POST /api/v1/workflow/instance/start          // [ActiveSession],businessKey + 摘要变量
+POST /api/v1/workflow/instance/cancel         // [ActiveSession],仅发起人且无人审批
+POST /api/v1/workflow/instance/resubmit       // [ActiveSession],仅发起人按退回规则重提
+GET  /api/v1/workflow/instance/startable|page|{id}|history/{id} // [ActiveSession]
+GET  /api/v1/workflow/instance/monitor        // [ActiveSession]+[RolePermission]
 GET  /api/v1/workflow/task/todo|done|cc       // [ActiveSession]
-POST /api/v1/workflow/task/approve|reject|return|transfer|delegate  // 各带意见
+POST /api/v1/workflow/task/approve|reject|return|transfer|delegate|urge // [ActiveSession]
+POST /api/v1/workflow/task/add-sign|remove-sign|take-back // [ActiveSession]+[RolePermission]
+GET/POST/PUT/DELETE /api/v1/workflow/delegation/* // [ActiveSession]+[RolePermission]
+GET/POST /api/v1/workflow/outbox/*             // [ActiveSession]+[RolePermission]
 ```
 
 裸返回 DTO 走信封过滤器;业务错误抛 `AdminException`(48xxx 段)。
@@ -553,7 +558,7 @@ TenonAdmin 以内核包分发，自身没有生产流量，shadow mode 的评测
 - **表单变量损坏处理**：变量 JSON 必须是对象；非法 JSON、数组/标量根节点、重复键和非法 ID 均拒绝提交或读取，不转换为空对象掩盖数据损坏。重提内置表单先按当前 schema 校验并保存最新变量；自定义 `formComponent` 继续由消费者负责其业务表单协议。
 - **OpenAPI 动态字典**：`WfFormField.props` 与 `WfAssignee.params` 是自由 JSON 对象，生成的两套 `schema.d.ts` 必须来自真实 Host，不能退化为 `Record<string, never>`，也不得手工编辑。
 
-T18–T23 已实现并验证；SQLite、MySQL、PostgreSQL、SQL Server 的代表流程各为 `29/29` 通过。T24/T25/T25A 的本地证据为 T25A 前置后端回归 `122/122`、最终修复后回执/回填/identity 聚焦 `33/33`、独立 `code-reviewer` 为 `APPROVE`、`architect` 为 `CLEAR`。2026-09-14 功能测试收口后：Vue 单元测试 `183/183`、完整 Vue Playwright `16/16`、后端 Release `1513/1513`、Release build `0 warning / 0 error`、contract drift `in sync`、两套前端 typecheck/build 通过。此前 MFA `input[readonly]` 超时的根因是 E2E 未打开运行时 TOTP 总闸；RBAC 重复 `.n-message` 的根因是连续保存堆叠相同成功提示；历史投影曾丢掉去重 `userIds`。React 工作流 port 只在上述功能测试无失败后才允许启动；本轮未进入 React 工作流页面、AI 自动放行和 M3+。Task 8c 已另开切片完成，见 §15.8。
+T18–T23 已实现并验证；SQLite、MySQL、PostgreSQL、SQL Server 的代表流程各为 `29/29` 通过。T24/T25/T25A 的本地证据为 T25A 前置后端回归 `122/122`、最终修复后回执/回填/identity 聚焦 `33/33`、独立 `code-reviewer` 为 `APPROVE`、`architect` 为 `CLEAR`。2026-09-14 功能测试收口后：Vue 单元测试 `183/183`、完整 Vue Playwright `16/16`、后端 Release `1536/1536`、Release build `0 warning / 0 error`、contract drift `in sync`、两套前端 typecheck/build 通过。此前 MFA `input[readonly]` 超时的根因是 E2E 未打开运行时 TOTP 总闸；RBAC 重复 `.n-message` 的根因是连续保存堆叠相同成功提示；历史投影曾丢掉去重 `userIds`。React 工作流 port 只在上述功能测试无失败后才允许启动；本轮未进入 React 工作流页面、AI 自动放行和 M3+。Task 8c 已另开切片完成，见 §15.8。
 
 当前 Vue 产品面只关闭 **M3a-2 Vue**。React 工作流页面 port、AI 自动放行和 M3+ 仍是后续范围。
 
@@ -565,7 +570,7 @@ T18–T23 已实现并验证；SQLite、MySQL、PostgreSQL、SQL Server 的代�
 - **Fence 与租约**：表不设 `LeaseOwner/LeaseExpiresAtUtc/Fence`。`AttemptCount` 就是 fence；回写必须 `WHERE AttemptCount = @mine AND Status = Dispatching`。影响 0 行视为迟到 owner，丢弃且不抛异常——transport 是 at-least-once，新 owner 会再投。可见性租约就是 `AvailableAtUtc`。领取谓词：`Status IN (Pending, Dispatching) AND AvailableAtUtc <= nowUtc`。领取的 UPDATE 与读回必须在同一事务里。
 - **事务边界**：tx1 领取；事务外调用 `IWfOutboxTransport`；tx2 按结果 Complete / ScheduleRetry / Fail。`OperationCanceledException` 原样穿透，行停在 `Dispatching`，超时后可重领。其他未分类 transport 异常收敛为可重试 `48046`，摘要只含异常类型。
 - **退避与预算**：`RetryAfter` 仅在 `(0, 24h]` 内采纳，否则 `30s << min(max(AttemptCount - 1, 0), 5)`。领取后若 `AttemptCount >= OutboxMaxAttempts`（配置 `TenonAdmin:Workflow:OutboxMaxAttempts`，默认 3、值域与 execution 相同 `[1,100]`），可重试失败也进死信。扫描批量 `OutboxScanBatchSize` 默认 20、最大 1000；可见性超时 `OutboxVisibilityTimeoutSeconds` 默认 60、最大 3600。写入 `DateTime`/`null` 必须先落局部变量再进 SqlSugar `SetColumns`。`LastError` 在 C# 侧截断到 512。
-- **默认 transport**：`NoOpWfOutboxTransport` 本地确认成功。消费者在 `AddTenonAdminWorkflow()` 之前注册同接口即可换成 HTTP/MQ；实现不得推进 task/token，也不得自行开工作流事务。生产调度器跑 `wf-outbox-scan` 后会把 `Pending` 打到 `Dispatched`；只跑 `WfNodeExecutionJob` 的测试仍可能看到 `Pending`。
+- **默认 transport**：`NoOpWfOutboxTransport` 明确返回终态失败，不伪造外部投递成功。消费者在 `AddTenonAdminWorkflow()` 之前注册同接口即可换成 HTTP/MQ；实现不得推进 task/token，也不得自行开工作流事务。生产调度器跑 `wf-outbox-scan` 后，未替换 transport 的消息进入 `Failed`，由监控 API 暴露；只跑 `WfNodeExecutionJob` 的测试仍可能看到 `Pending`。
 - **Worker**：`WfOutboxJob` + 种子 `wf-outbox-scan`（`TenonSeedIds.ConsumerMin + 47_002`），间隔 5 秒，`SerialSkip`，`SyncOnUpgrade=false`。扫描 `Pending` 和可见性已到期的 `Dispatching`，真正单赢家仍是 dispatcher 的 CAS。
 - **人工重放**：只接受 `Failed`。回执身份为 `(execution.ScopeKey, OutboxReplay, Outbox, outboxId, actor, requestId)`，不额外带 payload hash。同一 `requestId` 返回首次结果；并发第二人 `48045`。`Dispatching`/`Dispatched` 不可重放，卡住的 `Dispatching` 靠可见性超时重领。分页经 `wf_outbox → wf_node_execution → wf_instance` 走实例机构过滤器；行不存在或越权为 `48044`。
 - **本轮不做**：React 工作流页面、outbox 前端页、AI 自动放行、M3+。Vue 只补 `48044`/`48045`/`48046` 错误文案；双前端 `schema.d.ts` 由真实 Host 重新生成，禁止手改。

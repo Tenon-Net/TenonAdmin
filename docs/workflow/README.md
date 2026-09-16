@@ -14,11 +14,31 @@ M3b-0 已交付：AI Decision 已接入既有 execution、scheduler、worker、d
 
 审计读取 API `GET /api/v1/workflow/instance/ai-decisions/{id}` 只返回受限元数据、输入 hash、模型文本/证据引用 hash、节点标识、策略/兜底结果、token usage 和 shadow 标记，不返回 proposal 原文、原始变量、执行内部标识或 Provider 异常正文。权限复用实例参与者与监控边界：发起人、办理人、抄送人和持有 `GET:/api/v1/workflow/instance/monitor` 权限的非参与者可读，路人拒绝。
 
-M3b-0 当时只依赖 Task 8b 的 `Pending` 幂等入队；Task 8c 已于 2026-09-14 补齐 `Pending → Dispatching → Dispatched/Failed` 的领取、可见性超时重领、`IWfOutboxTransport`、AttemptCount fence CAS、退避、死信和人工重放。默认 transport 是本地确认的 `NoOpWfOutboxTransport`，消费者可前置替换为 HTTP/MQ。`WfOutboxStore` 仍只暴露 `EnqueueAsync`。后台扫描走固定 `wf-outbox-scan` 任务，不扫描 `wf_node_execution`。死信监控 API 为 `GET /api/v1/workflow/outbox/page`（缺省 `Failed`）与 `POST /api/v1/workflow/outbox/{id}/replay`；本轮不开发前端 outbox 页面。M3b-0 最终聚焦矩阵 326/326 通过，独立代码与架构复核无 blocker，详细证据见 [M3b-0 台账](../../.loop/wf-m3b0-ai-decision.md)。M3a-2 Vue 的 T01–T25A 已完成：Webhook 设计器、简易动态表单与字段权限、高级审批动词、并行分支、多 Token 回放和运行时安全投影已接入现有 Workflow 链路；四数据库代表流程各 `29/29` 通过，最新 Vue 单元测试 `183/183`，独立 `code-reviewer` 返回 `APPROVE`、`architect` 返回 `CLEAR`。本轮复审补齐表单变量 ID 的 number/string 兼容、非法变量阻止提交、重提表单回写、加减签与撤销 CAS 竞态以及动态字典 OpenAPI 契约。2026-09-14 功能测试收口已消除此前完整 Vue Playwright 的 MFA/RBAC 失败，以及历史投影丢掉 `DuplicateApproverSkipped.userIds` 的后端回归。完整 M3a-2 仍等待后续 React port；本轮未进入 React 工作流页面、AI 自动放行或 M3+。Vue 阶段证据见 [`m3a2-vue-task-plan-2026-09.md`](./m3a2-vue-task-plan-2026-09.md)。Task 8c 最终语义见设计规划 §15.8。
+M3b-0 当时只依赖 Task 8b 的 `Pending` 幂等入队；Task 8c 已于 2026-09-14 补齐 `Pending → Dispatching → Dispatched/Failed` 的领取、可见性超时重领、`IWfOutboxTransport`、AttemptCount fence CAS、退避、死信和人工重放。默认 transport 是明确失败的 `NoOpWfOutboxTransport`，生产消费者必须在 `AddTenonAdminWorkflow()` 前替换为 HTTP/MQ transport。`WfOutboxStore` 仍只暴露 `EnqueueAsync`。后台扫描走固定 `wf-outbox-scan` 任务，不扫描 `wf_node_execution`。死信监控 API 为 `GET /api/v1/workflow/outbox/page`（缺省 `Failed`）与 `POST /api/v1/workflow/outbox/{id}/replay`；本轮不开发前端 outbox 页面。M3b-0 最终聚焦矩阵 326/326 通过，独立代码与架构复核无 blocker，详细证据见 [M3b-0 台账](../../.loop/wf-m3b0-ai-decision.md)。M3a-2 Vue 的 T01–T25A 已完成：Webhook 设计器、简易动态表单与字段权限、高级审批动词、并行分支、多 Token 回放和运行时安全投影已接入现有 Workflow 链路；四数据库代表流程各 `29/29` 通过，最新 Vue 单元测试 `183/183`，独立 `code-reviewer` 返回 `APPROVE`、`architect` 返回 `CLEAR`。本轮复审补齐表单变量 ID 的 number/string 兼容、非法变量阻止提交、重提表单回写、加减签与撤销 CAS 竞态以及动态字典 OpenAPI 契约。2026-09-14 功能测试收口已消除此前完整 Vue Playwright 的 MFA/RBAC 失败，以及历史投影丢掉 `DuplicateApproverSkipped.userIds` 的后端回归。完整 M3a-2 仍等待后续 React port；本轮未进入 React 工作流页面、AI 自动放行或 M3+。Vue 阶段证据见 [`m3a2-vue-task-plan-2026-09.md`](./m3a2-vue-task-plan-2026-09.md)。Task 8c 最终语义见设计规划 §15.8。
 
-## 接下来开发计划（2026-09-14）
+## 接下来开发计划（2026-09-15）
 
-Vue/后端功能测试收口与 Task 8c 已完成。React 工作流 port 现在可以启动，但**本轮未实现**；AI 自动放行和 M3+ 仍未开始。
+发布前约定：`NoOpWfOutboxTransport` 仅用于未接入外部通道的开发环境，运行时会明确写入 `Failed`；生产消费者必须在 `AddTenonAdminWorkflow()` 前注册真实 HTTP/MQ transport。
+
+### 预览版发布门禁（2026-09-15 本地验收）
+
+本轮在当前工作区候选改动上执行（含 `TakeBackTaskOp` 任务级 CAS 提前与 PostgreSQL/MySQL 模板库模式），**未**改版本号、**未** commit/push/打 tag，**未**开发 React。
+
+| 门禁 | 结果 |
+| --- | --- |
+| Release build | `dotnet build backend/TenonAdmin.slnx -c Release` → 0 warning / 0 error |
+| SQLite 全量 | `1540 passed / 0 failed / 0 skipped`，约 3 m 36 s（墙钟 ~220 s；含新增 HTTP transport 4 测） |
+| MySQL 全量 | `TENON_TEST_MYSQL_TEMPLATE=1` → `1540 / 0 / 0`，约 5 m 29 s（墙钟 ~332 s） |
+| PostgreSQL 全量 | `TENON_TEST_POSTGRESQL_TEMPLATE=1` → `1540 / 0 / 0`，约 6 m 7 s（墙钟 ~371 s） |
+| SQL Server 全量 | 已恢复容器并闭合。`docker start tenon-t23-sqlserver` 后 `sa` 可登录；清掉崩溃残留 `tenon_*` 库；`TENON_TEST_SQLSERVER_TEMPLATE=1` + 本机四片并行（先把 `fs.inotify.max_user_instances` 提到 1024，否则四进程会撞 128 上限）。四片合计 **1540** 用例：片 1 `407/0/0`（~39.7 m）、片 2 初跑 `340/2/0`、片 3 `428/0/0`（~42.2 m）、片 4 初跑 `362/1/0`；墙钟约 42 m。3 个失败均为环境竞态（`HttpListener` 端口重试复用已 disposed 实例 ×2、`CodeFirstNullableUpgrade` 并行压力 ×1）；已修 listener（每次尝试新建 + 按 PID 错开端口），串行复跑 `WfOutboxHttpTransportTests` + 该 CodeFirst 用例 → **5/5** 通过（~3.3 m）。容器复跑后仍 `running`。**有效 1540/1540**。 |
+| Redis | `docker exec tenon-t23-redis redis-cli ping` → `PONG`；契约测试后容器仍 `running`/`OOMKilled=false` |
+| 真实 HTTP transport | 测试专用 `WfOutboxHttpTransportTests`（本地 `HttpListener` endpoint + `IWfOutboxTransport`，不改 `NoOp` 默认失败语义、不向核心包加依赖）：`Pending→Dispatching→Dispatched`；失败入 `Failed` 后 replay 再投递成功；同 `MessageKey` 重复投递业务计数仍为 1；未注册时内置 NoOp 仍明确 `Failed`。`4/4` 通过。 |
+| Vue | `lint` / `typecheck` / `build` 通过；单元 `34 files / 183 passed`；工作流 Playwright `e2e/workflow-{layout,m2a,m2b,m3a2}.spec.ts` → `5 passed` |
+| Contract drift | 本轮门禁未改 Controllers/DTO/OpenAPI 面；`schema.d.ts` 相对 HEAD 无变更，未重跑 `check-contract-drift.mjs` |
+
+浏览器 E2E 仍主要覆盖登录相关既有用例、分支、基础动词和 Webhook 发布；动态表单权限、并行多 Token、加减签/拿回/长期委托仍以后端回归为主。Vue 预览版发布条件：**本地四库 + Redis + HTTP transport + Vue 检查已绿**（SQL Server 以模板库四片 + 失败用例串行复跑闭合）。
+
+Vue/后端功能测试收口与 Task 8c 已完成。React 工作流 port 可以启动，但**本轮未实现**；AI 自动放行和 M3+ 仍未开始。
 
 1. **React 工作流页面 port**：以已稳定的 Vue API、schema 和交互语义为输入，在 `web-react/` 独立实现定义设计器、表单运行时、实例详情和高级审批操作；不建立跨模板共享层，不手工编辑生成的 schema。
 2. **M3b 受控自动化**：先用 shadow 评测集确定场景级阈值、人工推翻率和失败转人工规则，再设计默认关闭的受控放行；模型仍只能产生 proposal，不能直接推进 task/token。
@@ -136,4 +156,4 @@ M3b-0 已在 M3a 可靠执行层之上交付最小 AI 决策闭环：模型适�
 - 外部文档只能证明产品方向；已交付能力以固定源码和可获取包为准。
 - AI 模型只生成 proposal，服务端 schema/policy 决定路由；模型不得直接修改任务或 token 状态。
 - 移动或重命名本目录文件时，全仓更新引用，并重新生成受 XML 注释影响的双前端 OpenAPI schema。
-M3a-2 Vue 的 T01–T25A 已完成：Webhook 设计器、简易动态表单与字段权限、高级审批动词、并行分支设计与多 Token 回放均已接入现有 Workflow 链路；四数据库代表流程验证共 `29/29` 通过，最终独立 `code-reviewer` 为 `APPROVE`、`architect` 为 `CLEAR`。2026-09-14 功能测试收口后 Vue Playwright `16/16`、后端 `1513/1513`。Task 8c outbox consumer/transport 已于同日补齐；完整 M3a-2 仍等待后续 React port，本轮未进入 React 工作流页面、AI 自动放行和 M3+。Vue 阶段证据见 [M3a-2 Vue 任务计划](./m3a2-vue-task-plan-2026-09.md)，outbox 最终语义见设计规划 §15.8。
+M3a-2 Vue 的 T01–T25A 已完成：Webhook 设计器、简易动态表单与字段权限、高级审批动词、并行分支设计与多 Token 回放均已接入现有 Workflow 链路；四数据库代表流程验证共 `29/29` 通过，最终独立 `code-reviewer` 为 `APPROVE`、`architect` 为 `CLEAR`。2026-09-14 功能测试收口后 Vue Playwright `16/16`、后端 `1536/1536`。Task 8c outbox consumer/transport 已于同日补齐；完整 M3a-2 仍等待后续 React port，本轮未进入 React 工作流页面、AI 自动放行和 M3+。Vue 阶段证据见 [M3a-2 Vue 任务计划](./m3a2-vue-task-plan-2026-09.md)，outbox 最终语义见设计规划 §15.8。
