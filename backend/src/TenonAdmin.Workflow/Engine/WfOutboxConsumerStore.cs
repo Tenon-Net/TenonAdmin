@@ -116,8 +116,10 @@ public static class WfOutboxConsumerStore
             cancellationToken);
 
     /// <summary>
-    /// 人工重放死信:<c>Failed → Pending</c>,<c>AttemptCount</c> 归零,<c>AvailableAtUtc = nowUtc</c>。
+    /// 人工重放死信:<c>Failed → Pending</c>,<c>AttemptCount</c> 归零,<c>AvailableAtUtc</c> 立即可领。
     /// 只认 <see cref="WfOutboxStatus.Failed"/>;并发第二人影响 0 行。
+    /// <para><c>AvailableAtUtc</c> 先落到秒边界:MySQL <c>datetime</c> 常无小数秒,直接写
+    /// <c>nowUtc</c> 可能被四舍五入到下一秒,紧随其后的 Claim(<c>AvailableAtUtc &lt;= now</c>) 会 miss。</para>
     /// </summary>
     public static async Task<bool> ReplayFailedAsync(
         ISqlSugarClient db,
@@ -130,12 +132,13 @@ public static class WfOutboxConsumerStore
         var failed = WfOutboxStatus.Failed;
         string? noError = null;
         DateTime? noCompleted = null;
+        var dueAtUtc = FloorUtcSeconds(nowUtc);
         var affected = await db.Updateable<WfOutbox>()
             .SetColumns(o => new WfOutbox
             {
                 Status = pending,
                 AttemptCount = 0,
-                AvailableAtUtc = nowUtc,
+                AvailableAtUtc = dueAtUtc,
                 LastError = noError,
                 CompletedAtUtc = noCompleted,
             })
@@ -143,6 +146,10 @@ public static class WfOutboxConsumerStore
             .ExecuteCommandAsync();
         return affected == 1;
     }
+
+    /// <summary>UTC 时刻向下取整到秒,供写入无小数秒的 datetime 列且仍满足「立即可领」。</summary>
+    internal static DateTime FloorUtcSeconds(DateTime utc) =>
+        new(utc.Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond, DateTimeKind.Utc);
 
     /// <summary>
     /// transport <c>RetryAfter</c> 在 <c>(0, 24h]</c> 内则用它,否则

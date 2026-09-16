@@ -68,6 +68,12 @@ public class WfOutboxHttpTransportTests
         Assert.Equal(0, replay.GetProperty("code").GetInt32());
         Assert.Equal((int)WfOutboxStatus.Pending, replay.GetProperty("data").GetProperty("status").GetInt32());
 
+        // 与入队用例一致:把可领时刻推到过去,避开 datetime 秒级舍入边界(见 ReplayFailedAsync 注释)
+        await db.Updateable<WfOutbox>()
+            .SetColumns(o => new WfOutbox { AvailableAtUtc = DateTime.UtcNow.AddSeconds(-2) })
+            .Where(o => o.Id == row.Id)
+            .ExecuteCommandAsync();
+
         Assert.Equal(WfOutboxStatus.Dispatched, await CreateDispatcher(db, transport).RunAsync(row.Id, CancellationToken.None));
         Assert.Equal(1, endpoint.AppliedCount(row.MessageKey));
         var loaded = await db.Queryable<WfOutbox>().Where(o => o.Id == row.Id).FirstAsync();
