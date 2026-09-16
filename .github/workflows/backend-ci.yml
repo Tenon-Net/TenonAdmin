@@ -120,6 +120,7 @@ jobs:
 
       # Unit + integration tests (WebApplicationFactory). The DB is selected via env vars (see tests/TestDb.cs):
       #   sqlite leg → each test gets its own temp .db file; mysql leg → each test copies a schema template into its own DB;
+      #   postgres leg → ordinary host tests clone their own DB from one per-process template;
       #   sqlserver leg → ordinary host tests restore their own DB from one per-shard template.
       #   (derived from DbPath, auto-created/dropped). Includes the §8 replaceability six-piece suite +
       #   data-scope + auth/authorization/rate-limit regression tests.
@@ -138,6 +139,8 @@ jobs:
           TENON_TEST_SQLSERVER_BACKUP_DIR: ${{ matrix.db == 'sqlserver' && '/var/opt/mssql/data' || '' }}
           # The PostgreSQL base string omits Database (connects to the maintenance DB postgres to create the isolated DB; TestDb appends Database after creating it).
           TENON_TEST_POSTGRESQL: ${{ matrix.db == 'postgres' && 'Server=127.0.0.1;Port=5432;User ID=postgres;Password=postgres;' || '' }}
+          # PostgreSQL clones isolated test databases from a single CodeFirst/seeded template.
+          TENON_TEST_POSTGRESQL_TEMPLATE: ${{ matrix.db == 'postgres' && '1' || '' }}
           # Gate switch for the Redis contract tests (runs on every leg: it's DB-independent, and running it a few extra times only costs a few seconds).
           TENON_TEST_REDIS: 127.0.0.1:6379
           # SQL Server 的隔离库初始化成本高；当前 CodeFirst 已有事务，不能继续把历史逐条刷盘
@@ -152,7 +155,7 @@ jobs:
           #
           # 保留全部既有方言/事务/fence 回归；按实际发现的方法分到四个独立 runner，
           # 每片有自己的 SQL Server。nightly 先无过滤发现，再分片，四片并集仍为全量。
-          TEST_FILTER: ${{ (matrix.db == 'sqlserver' && github.event_name != 'schedule') && 'FullyQualifiedName~DataScopeTests|FullyQualifiedName~SoftDeleteAuditTests|FullyQualifiedName~OrgAuditEntityTests|FullyQualifiedName~SeedUpgradeTests|FullyQualifiedName~CodeFirstNullableUpgradeTests|FullyQualifiedName~RecycleBinTests|FullyQualifiedName~UserCrudTests|FullyQualifiedName~DictCrudTests|FullyQualifiedName~ReplaceabilityTests|FullyQualifiedName~ProductionBootstrapTests|FullyQualifiedName~JobElectionTests|FullyQualifiedName~JobClaimTests|FullyQualifiedName~JobSchedulerTests|FullyQualifiedName~WfPersistenceContractTests|FullyQualifiedName~WfNodeExecutionContractTests|FullyQualifiedName~WfAiDecisionPersistenceContractTests|FullyQualifiedName~WfNodeExecutionEntryTests|FullyQualifiedName~WfNodeExecutionWorkerTests|FullyQualifiedName~WfNodeExecutionExceptionTests|FullyQualifiedName~WfNodeExecutionRecoveryTests|FullyQualifiedName~WfNodeExecutionProductionE2ETests|FullyQualifiedName~WfNodeExecutionRetryPolicyTests|FullyQualifiedName~WfParallelRuntimeTests|FullyQualifiedName~WfParallelPublishValidationTests|FullyQualifiedName~WfParallelPersistenceContractTests' || '' }}
+          TEST_FILTER: ${{ (matrix.db == 'sqlserver' && github.event_name != 'schedule') && 'FullyQualifiedName~DataScopeTests|FullyQualifiedName~SoftDeleteAuditTests|FullyQualifiedName~OrgAuditEntityTests|FullyQualifiedName~SeedUpgradeTests|FullyQualifiedName~CodeFirstNullableUpgradeTests|FullyQualifiedName~RecycleBinTests|FullyQualifiedName~UserCrudTests|FullyQualifiedName~DictCrudTests|FullyQualifiedName~ReplaceabilityTests|FullyQualifiedName~ProductionBootstrapTests|FullyQualifiedName~JobElectionTests|FullyQualifiedName~JobClaimTests|FullyQualifiedName~JobSchedulerTests|FullyQualifiedName~WfPersistenceContractTests|FullyQualifiedName~WfNodeExecutionContractTests|FullyQualifiedName~WfAiDecisionPersistenceContractTests|FullyQualifiedName~WfNodeExecutionEntryTests|FullyQualifiedName~WfNodeExecutionWorkerTests|FullyQualifiedName~WfNodeExecutionExceptionTests|FullyQualifiedName~WfNodeExecutionRecoveryTests|FullyQualifiedName~WfNodeExecutionProductionE2ETests|FullyQualifiedName~WfNodeExecutionRetryPolicyTests|FullyQualifiedName~WfParallelRuntimeTests|FullyQualifiedName~WfParallelPublishValidationTests|FullyQualifiedName~WfParallelPersistenceContractTests|FullyQualifiedName~WfOutboxDispatcherTests|FullyQualifiedName~WfOutboxWorkerTests|FullyQualifiedName~WfOutboxTests|FullyQualifiedName~WfOutboxConsumerTests' || '' }}
         run: |
           if [ "${{ matrix.db }}" = sqlserver ]; then
             python3 scripts/test-backend-shard.py --shard "${{ matrix.shard }}" --count 4 \

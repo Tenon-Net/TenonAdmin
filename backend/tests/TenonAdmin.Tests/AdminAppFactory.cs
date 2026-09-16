@@ -32,7 +32,7 @@ public sealed class AdminAppFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(EnvironmentName);
-        // SQL Server/MySQL 可选模板库:普通开发测试从模板复制,显式同库重启/生产闸门用例保留原始初始化路径。
+        // SQL Server/MySQL/PostgreSQL 可选模板库:普通开发测试从模板复制,显式同库重启/生产闸门用例保留原始初始化路径。
         builder.UseSetting("TenonAdmin:Database:DbType", TestDb.DbType);
         var useSchemaTemplate = EnvironmentName == "Development" &&
             Overrides is null &&

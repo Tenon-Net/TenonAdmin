@@ -15,6 +15,10 @@ Tests against MySQL (matches the CI matrix leg) via env vars:
 ```bash
 TENON_TEST_DBTYPE=MySql TENON_TEST_MYSQL="Server=127.0.0.1;Port=3306;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;" dotnet test backend/TenonAdmin.slnx
 ```
+PostgreSQL 本地/CI 测试建议启用模板库克隆，避免每个宿主重复 CodeFirst：
+```bash
+TENON_TEST_DBTYPE=PostgreSQL TENON_TEST_POSTGRESQL="Server=127.0.0.1;Port=5432;User ID=postgres;Password=postgres;" TENON_TEST_POSTGRESQL_TEMPLATE=1 dotnet test backend/TenonAdmin.slnx
+```
 SQL Server 测试不要直接串行执行整套 `dotnet test`：CI 通过 `TENON_TEST_SQLSERVER_TEMPLATE=1` 先初始化一次模板库，普通 WebApplicationFactory 测试从模板备份恢复独立测试库，避免重复 CodeFirst；需要验证 CodeFirst、生产闸门或同库重启的测试仍走原始路径。按 CI 的方式用 `scripts/test-backend-shard.py --shard 1..4 --count 4` 并行跑四片；CI 已默认采用该分片路径。
 
 Frontend (run from `web/`):
