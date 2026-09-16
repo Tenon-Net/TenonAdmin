@@ -203,76 +203,83 @@ public class JobExecutor(
         };
         await db.Insertable(log).ExecuteCommandAsync();   // AOP 填雪花 Id/CreateTime
 
-        var handler = await resolver.ResolveAsync(job.HandlerName, scope.ServiceProvider);
-        if (handler is null)
-        {
-            var missing = $"处理器未注册:{job.HandlerName}(47005 语义;编译类处理器需 TryAddEnumerable 注册,GET /handlers 可查清单)";
-            await CloseLogAsync(log.Id, JobRunStatus.Failed, 0, null, missing);
-            return (JobRunStatus.Failed, missing, false);   // 重试也不会凭空长出处理器
-        }
-
+        // 插行后立刻登记:WaitForLogs 能看见行时就必须能 TryCancelLocal,否则解析 handler 的空窗会让本机 kill 偶发 miss
         using var killCts = new CancellationTokenSource();
-        using var timeoutCts = job.TimeoutSeconds > 0 ? new CancellationTokenSource(TimeSpan.FromSeconds(job.TimeoutSeconds)) : null;
-        using var linked = timeoutCts is null
-            ? CancellationTokenSource.CreateLinkedTokenSource(killCts.Token)
-            : CancellationTokenSource.CreateLinkedTokenSource(killCts.Token, timeoutCts.Token);
         _running[log.Id] = new RunRegistration(job.Id, killCts);
         using var pollStop = new CancellationTokenSource();
-        // 同 FireAndTrack 的 SuppressFlow 理由:轮询与处理器执行并发,必须各占一个 SqlSugarScope 上下文
-        Task pollTask;
-        using (ExecutionContext.SuppressFlow())
-        {
-            pollTask = Task.Run(() => PollKillFlagAsync(log.Id, killCts, pollStop.Token));
-        }
-
-        var stopwatch = Stopwatch.StartNew();
-        var messages = new StringBuilder();
-        var context = new JobExecutionContext
-        {
-            JobId = job.Id,
-            JobCode = job.Code,
-            JobName = job.Name,
-            FireInstanceId = fireInstanceId,
-            RetryIndex = retryIndex,
-            FireMode = fireMode,
-            ScheduledTime = log.ScheduledTime,
-            FireTime = startedAt,
-            Properties = ParseProps(job.PropsJson, messages),
-            Log = text => AppendCapped(messages, text),
-        };
-
+        Task? pollTask = null;
         try
         {
-            await handler.ExecuteAsync(context, linked.Token);
-            // 处理器可能压根没观察令牌(SqlSugar 的 Ado 执行就是这样):await 正常返回不等于没超时。
-            // 返回后复查取消状态,否则一条跑过头的 SQL 会被记成 Success,超时与 kill 对它双双失效。
-            if (linked.IsCancellationRequested)
+            var handler = await resolver.ResolveAsync(job.HandlerName, scope.ServiceProvider);
+            if (handler is null)
             {
-                var (lateStatus, lateNote) = Interpret(job, timeoutCts, ignoredToken: true);
-                await CloseLogAsync(log.Id, lateStatus, stopwatch.ElapsedMilliseconds, Render(messages), lateNote);
-                return (lateStatus, lateNote, false);
+                var missing = $"处理器未注册:{job.HandlerName}(47005 语义;编译类处理器需 TryAddEnumerable 注册,GET /handlers 可查清单)";
+                await CloseLogAsync(log.Id, JobRunStatus.Failed, 0, null, missing);
+                return (JobRunStatus.Failed, missing, false);   // 重试也不会凭空长出处理器
             }
-            await CloseLogAsync(log.Id, JobRunStatus.Success, stopwatch.ElapsedMilliseconds, Render(messages), null);
-            return (JobRunStatus.Success, null, false);
-        }
-        catch (OperationCanceledException) when (linked.IsCancellationRequested)
-        {
-            var (status, note) = Interpret(job, timeoutCts, ignoredToken: false);
-            await CloseLogAsync(log.Id, status, stopwatch.ElapsedMilliseconds, Render(messages), note);
-            return (status, note, false);
-        }
-        catch (Exception ex)
-        {
-            var error = Cap(ex.ToString(), 8192);
-            await CloseLogAsync(log.Id, JobRunStatus.Failed, stopwatch.ElapsedMilliseconds, Render(messages), error);
-            return (JobRunStatus.Failed, ex.Message, true);
+
+            using var timeoutCts = job.TimeoutSeconds > 0 ? new CancellationTokenSource(TimeSpan.FromSeconds(job.TimeoutSeconds)) : null;
+            using var linked = timeoutCts is null
+                ? CancellationTokenSource.CreateLinkedTokenSource(killCts.Token)
+                : CancellationTokenSource.CreateLinkedTokenSource(killCts.Token, timeoutCts.Token);
+            // 同 FireAndTrack 的 SuppressFlow 理由:轮询与处理器执行并发,必须各占一个 SqlSugarScope 上下文
+            using (ExecutionContext.SuppressFlow())
+            {
+                pollTask = Task.Run(() => PollKillFlagAsync(log.Id, killCts, pollStop.Token));
+            }
+
+            var stopwatch = Stopwatch.StartNew();
+            var messages = new StringBuilder();
+            var context = new JobExecutionContext
+            {
+                JobId = job.Id,
+                JobCode = job.Code,
+                JobName = job.Name,
+                FireInstanceId = fireInstanceId,
+                RetryIndex = retryIndex,
+                FireMode = fireMode,
+                ScheduledTime = log.ScheduledTime,
+                FireTime = startedAt,
+                Properties = ParseProps(job.PropsJson, messages),
+                Log = text => AppendCapped(messages, text),
+            };
+
+            try
+            {
+                await handler.ExecuteAsync(context, linked.Token);
+                // 处理器可能压根没观察令牌(SqlSugar 的 Ado 执行就是这样):await 正常返回不等于没超时。
+                // 返回后复查取消状态,否则一条跑过头的 SQL 会被记成 Success,超时与 kill 对它双双失效。
+                if (linked.IsCancellationRequested)
+                {
+                    var (lateStatus, lateNote) = Interpret(job, timeoutCts, ignoredToken: true);
+                    await CloseLogAsync(log.Id, lateStatus, stopwatch.ElapsedMilliseconds, Render(messages), lateNote);
+                    return (lateStatus, lateNote, false);
+                }
+                await CloseLogAsync(log.Id, JobRunStatus.Success, stopwatch.ElapsedMilliseconds, Render(messages), null);
+                return (JobRunStatus.Success, null, false);
+            }
+            catch (OperationCanceledException) when (linked.IsCancellationRequested)
+            {
+                var (status, note) = Interpret(job, timeoutCts, ignoredToken: false);
+                await CloseLogAsync(log.Id, status, stopwatch.ElapsedMilliseconds, Render(messages), note);
+                return (status, note, false);
+            }
+            catch (Exception ex)
+            {
+                var error = Cap(ex.ToString(), 8192);
+                await CloseLogAsync(log.Id, JobRunStatus.Failed, stopwatch.ElapsedMilliseconds, Render(messages), error);
+                return (JobRunStatus.Failed, ex.Message, true);
+            }
         }
         finally
         {
             _running.TryRemove(log.Id, out _);
             pollStop.Cancel();
-            try { await pollTask; }
-            catch { /* 轮询收尾异常不外传 */ }
+            if (pollTask is not null)
+            {
+                try { await pollTask; }
+                catch { /* 轮询收尾异常不外传 */ }
+            }
         }
     }
 

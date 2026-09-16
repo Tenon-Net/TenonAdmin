@@ -72,8 +72,7 @@ public class FileLoggerTests : IDisposable
         {
             var logger = provider.CreateLogger("Demo");
             logger.LogError("今天的日志");
-            Flush(provider);
-
+            // 入队日期已定格;即使消费线程在 Advance 之后才写盘,也应落进 20260714
             _time.Advance(TimeSpan.FromDays(1));
             logger.LogError("明天的日志");
         }
