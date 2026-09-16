@@ -102,12 +102,30 @@ function updateUser(field: WfFormField, value: unknown) {
 
 function dateValue(field: WfFormField): string | null {
   const value = stringValue(field)
-  return value || null
+  if (!value) return null
+  // Naive DatePicker strictParse 要求 format(parse(v))===v；异地时区字符串需先归一到本地偏移
+  if (field.type === 'datetime') return toLocalDatetimeValue(value)
+  return value
 }
 
 function updateDate(field: WfFormField, value: string | [string, string] | null) {
   if (Array.isArray(value)) return
   updateValue(field, value || null)
+}
+
+/** 将任意带时区 ISO 转为当前本地时区下可被 Naive value-format XXX 严格回环的字符串。 */
+function toLocalDatetimeValue(value: string): string | null {
+  const ms = Date.parse(value)
+  if (!Number.isFinite(ms)) return null
+  const d = new Date(ms)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const ymd = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  const hms = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  const offsetMin = -d.getTimezoneOffset()
+  if (offsetMin === 0) return `${ymd}T${hms}Z`
+  const sign = offsetMin > 0 ? '+' : '-'
+  const abs = Math.abs(offsetMin)
+  return `${ymd}T${hms}${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
 }
 
 function numericPrecision(field: WfFormField): number | undefined {
