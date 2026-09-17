@@ -169,6 +169,23 @@ public class WfSignTests
             item => item.GetProperty("taskId").GetInt64() == taskId);
     }
 
+    [Fact]
+    public async Task Super_admin_can_add_sign_across_org_scope()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        await GrantSignPermissions(f);
+        var targetId = await AddUser(admin, "wf-sign-sa-target");
+        var definitionId = await Publish(admin, "加签-超管跨机构", SingleModel(1));
+        var start = await PostEnvelope(admin, "/api/v1/workflow/instance/start", new { definitionId });
+        Assert.Equal(0, start.GetProperty("code").GetInt32());
+        var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
+
+        var result = await PostEnvelope(admin, "/api/v1/workflow/task/add-sign",
+            new { taskId, toUserId = targetId, requestId = "wf-sign-sa-cross-org" });
+        Assert.Equal(0, result.GetProperty("code").GetInt32());
+    }
+
     private static object SingleModel(long userId) => Model("any", userId);
 
     private static object AllModel(long a, long b, int? ratio = null)

@@ -8,7 +8,7 @@ import WfAddNode from './WfAddNode.vue'
 import WfNodeCard from './WfNodeCard.vue'
 import '../../wf-identity.css'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   root: WfNode | null | undefined
   selectedId?: string | null
   errorSet: Set<string>
@@ -16,8 +16,11 @@ const props = defineProps<{
   readonly?: boolean
   visitedSet?: Set<string>
   currentSet?: Set<string>
+  /** 设计器默认可插并行;并行臂内递归会显式传 false 禁止嵌套。 */
   allowParallel?: boolean
-}>()
+}>(), {
+  allowParallel: true,
+})
 const emit = defineEmits<{
   select: [nodeId: string]
   'add-after': [afterId: string, type: WfInsertableNodeType]

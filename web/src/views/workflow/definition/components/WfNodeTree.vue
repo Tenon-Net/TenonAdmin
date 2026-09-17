@@ -119,6 +119,7 @@ function onRenameArm(ownerId: string, armId: string, name: string) {
       :readonly="readonly"
       :visited-set="visitedSet"
       :current-set="currentSet"
+      allow-parallel
       terminal
       @select="onSelect"
       @add-after="onAddAfter"

@@ -8,7 +8,8 @@ import type { WfInsertableNodeType } from '@/workflow/schema'
 import '../../wf-identity.css'
 
 const emit = defineEmits<{ add: [type: WfInsertableNodeType] }>()
-defineProps<{ allowParallel?: boolean }>()
+/** 默认展示并行;仅并行臂内由父链显式传 false。未传时不能落成 false(Vue 布尔缺省会吞掉菜单项)。 */
+withDefaults(defineProps<{ allowParallel?: boolean }>(), { allowParallel: true })
 const { t } = useI18n()
 const open = ref(false)
 

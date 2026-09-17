@@ -40,7 +40,14 @@ internal abstract class SignTaskOp(
             .ToListAsync();
         var caller = users.FirstOrDefault(u => u.Id == callerId);
         var target = users.FirstOrDefault(u => u.Id == targetId);
-        if (target is null || !target.Enabled || caller is null || caller.OrgId != target.OrgId)
+        if (target is null || !target.Enabled || caller is null)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.SignTargetInvalid,
+                new Dictionary<string, object?> { ["targetUserId"] = targetId, ["reason"] = "userUnavailableOrOutOfScope" });
+        }
+
+        // 超管可跨机构加减签(种子超管 OrgId 常为 null);普通用户须同机构。
+        if (!caller.IsSuperAdmin && caller.OrgId != target.OrgId)
         {
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.SignTargetInvalid,
                 new Dictionary<string, object?> { ["targetUserId"] = targetId, ["reason"] = "userUnavailableOrOutOfScope" });
