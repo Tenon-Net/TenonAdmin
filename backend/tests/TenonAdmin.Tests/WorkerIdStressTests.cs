@@ -80,6 +80,10 @@ public class WorkerIdStressTests
         foreach (var d in dirs)
             Directory.CreateDirectory(d);
 
+        // 先建库再并行领槽。PostgreSQL 的 CREATE DATABASE 不是 IF NOT EXISTS,
+        // 八路同时 TestDb.ConnectionString 会撞 pg_database_datname_index。
+        _ = TestDb.ConnectionString(identity, dbFile);
+
         var providers = new ServiceProvider[hosts];
         var errors = new ConcurrentBag<Exception>();
         try
