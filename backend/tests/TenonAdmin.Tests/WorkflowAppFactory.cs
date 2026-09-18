@@ -28,6 +28,7 @@ public sealed class WorkflowAppFactory : WebApplicationFactory<workflowhost::Wor
         builder.UseSetting("TenonAdmin:Database:ConnectionString", TestDb.ConnectionString(DbPath, DbPath, "workflow", ResetDatabase));
         if (WorkerId is { } workerId)
             builder.UseSetting("TenonAdmin:Id:WorkerId", workerId.ToString());
+        builder.UseSetting("TenonAdmin:Id:WorkerIdLockDir", AdminAppFactory.WorkerIdLockDirFor(DbPath));
         if (TestDb.SchemaTemplateEnabled && Overrides is null && !TestDb.IsSchemaTemplateInitialization)
         {
             builder.UseSetting("TenonAdmin:Database:EnableCodeFirst", "false");
@@ -49,6 +50,10 @@ public sealed class WorkflowAppFactory : WebApplicationFactory<workflowhost::Wor
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        if (disposing && !TestDb.IsSchemaTemplateInitialization) TestDb.Cleanup(DbPath, DbPath);
+        if (disposing && !TestDb.IsSchemaTemplateInitialization)
+        {
+            TestDb.Cleanup(DbPath, DbPath);
+            AdminAppFactory.TryDeleteWorkerIdLockDir(DbPath);
+        }
     }
 }

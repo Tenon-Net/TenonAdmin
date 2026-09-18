@@ -50,9 +50,30 @@ public static class SqlSugarSetup
         IEnumerable<AdminDatabaseConnectionOptions>? additionalDatabases = null)
     {
         // ── ID 生成器:雪花默认实现(用户可换,见 IIdGenerator)──────────────
-        // WorkerId 从 TenonAdmin:Id:WorkerId 注入(默认 0);多实例水平扩展须为每实例配不同值,否则同毫秒撞号(P2-20)
+        // 显式 WorkerId(含 0)直接用;未配时若有 IWorkerIdSlotClaimer(Services 层)先在库表领槽,
+        // 否则只抢同机文件锁。WorkerIdAssignment 必须单例根住,避免 FileStream 被回收提前放锁。
+        services.TryAddSingleton(sp =>
+        {
+            var opts = sp.GetService<AdminIdOptions>();
+            var log = (sp.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance).CreateLogger("TenonAdmin.Id");
+            WorkerIdLockDirFallback onFallback = (preferred, fallback) =>
+                log.LogWarning(
+                    "机器号锁目录 {Preferred} 不可用,退到 {Fallback}。该目录可能被临时文件清理删掉锁文件,同机多进程仍有撞号风险。请设置 TenonAdmin:Id:WorkerIdLockDir,或给首选目录写权限。",
+                    preferred, fallback);
+
+            var claimer = sp.GetService<IWorkerIdSlotClaimer>();
+            if (claimer is not null)
+            {
+                var contentRoot = sp.GetService<IHostEnvironment>()?.ContentRootPath;
+                db.ConnectionString = ResolveSqlitePath(db.DbType, db.ConnectionString, contentRoot);
+                EnsureSqliteDirectory(db.DbType, db.ConnectionString);
+                return claimer.Claim(opts, onFallback);
+            }
+
+            return WorkerIdAssignment.Resolve(opts, onFallback);
+        });
         services.TryAddSingleton<IIdGenerator>(sp =>
-            new SnowflakeIdGenerator(sp.GetService<AdminIdOptions>()?.WorkerId ?? 0, sp.GetService<TimeProvider>()));
+            new SnowflakeIdGenerator(sp.GetRequiredService<WorkerIdAssignment>().WorkerId, sp.GetService<TimeProvider>()));
 
         // ── 数据范围环境载体(§6):授权管道写入、全局过滤器读取;AsyncLocal 单例 ──
         services.TryAddSingleton<IDataScopeContext, DataScopeContext>();

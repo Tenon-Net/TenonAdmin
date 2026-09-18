@@ -47,7 +47,7 @@ TenonAdmin             元包:只引用 AspNetCore,消费方装它一个即可�
 
 - 一个 `SqlSugarScope` 单例。全局查询过滤器自动做**软删除**（`ISoftDelete`）和**数据范围**（`IOrgScoped` / `DataEntity` 按当前请求解析的机构集过滤）。
 - AOP 在插入/更新时自动填审计字段：雪花 `Id`、`CreateTime`、`CreateUserId`、`CreateOrgId`、`UpdateTime`、`UpdateUserId`。其中 `CreateOrgId` 是数据范围的锚点。业务代码只管业务字段。
-- 雪花 `WorkerId` 来自 `TenonAdmin:Id:WorkerId`（默认 0），**水平扩展时每实例必须不同**，否则同毫秒发号会撞主键。
+- 雪花 `WorkerId` 来自 `TenonAdmin:Id:WorkerId`。同机不配时文件锁自动错开；**水平扩展时每实例必须不同**，否则同毫秒发号会撞主键。
 
 ---
 

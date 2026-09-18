@@ -6,11 +6,18 @@ namespace TenonAdmin.Core;
 public class AdminIdOptions
 {
     /// <summary>
-    /// 机器号(0–63)。<b>单机部署不配即可</b>(回落 0);<b>多实例水平扩展时必须为每个实例配置不同值</b>,
-    /// 否则不同实例同毫秒发号会撞 Id(主键冲突/数据错插)。对应 <c>TenonAdmin:Id:WorkerId</c>。
-    /// <para><c>null</c> = 未显式配置。之所以要能区分"没配"与"配成 0",是为了在<b>明显的多实例意图</b>
-    /// (<c>Cache:Provider=Redis</c>)下没给机器号时<b>启动即抛</b>——把一个静默的主键冲突换成一条可读的启动错误。
-    /// 显式写 <c>0</c> 即视为运维已知情,放行。</para>
+    /// 机器号(0–63)。<b>单机部署不配即可</b>:同机多进程由 <see cref="WorkerIdLease"/> 用文件锁自动错开;
+    /// <b>跨机器/跨容器必须为每个实例配置不同值</b>,否则不同实例同毫秒发号会撞 Id。
+    /// 对应 <c>TenonAdmin:Id:WorkerId</c>。
+    /// <para><c>null</c> = 未显式配置：同机抢文件锁，共享库则在 <c>sys_worker_lease</c> 上从 0 试到 63
+    /// 谁插入成功谁用谁。显式写 <c>0</c> 不再自动换号，只登记该号；与另一个活实例撞号则启动失败。</para>
     /// </summary>
     public int? WorkerId { get; set; }
+
+    /// <summary>
+    /// 同机文件锁目录,对应 <c>TenonAdmin:Id:WorkerIdLockDir</c>。
+    /// 空则用 <see cref="WorkerIdLease.PreferredLockDir"/>,写不进去再退
+    /// <see cref="WorkerIdLease.FallbackLockDir"/>。
+    /// </summary>
+    public string? WorkerIdLockDir { get; set; }
 }

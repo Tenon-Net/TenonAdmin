@@ -14,6 +14,9 @@ namespace TenonAdmin.Core;
 /// 落在 JS <c>Number.MAX_SAFE_INTEGER</c> 内,前端按数字解析 long 主键不丢精度(对齐 Yitter 默认布局)。
 /// 千万不要为了更多机器/更高吞吐把低位加宽:22 bit 布局(经典 Twitter)的 ID 从纪元起 25 天就越过 2^53,
 /// 前端 JSON 解析即精度损坏。要加宽只能先让后端把 long 序列化成字符串。</b></para>
+/// <para>唯一性靠三件事:进程内一把锁加毫秒内序列;<see cref="WorkerIdLease"/> 在启动时用文件锁
+/// 抢机器号(同机进程不会同号);跨机器/跨容器必须显式配 <c>TenonAdmin:Id:WorkerId</c> 并靠库表租约拦住同号。
+/// <b>一个进程只能有一个实例</b>:两个实例各算各的序列,同毫秒会撞号。</para>
 /// <para>时钟安全:注入 <see cref="TimeProvider"/>(可测试,设计 §12);检测到时钟回拨时,
 /// 小幅(≤5ms,NTP 微调级)自旋等待追平,大幅回拨直接抛异常拒绝发号——绝不发出可能重复的 ID。</para>
 /// </summary>
@@ -23,7 +26,8 @@ public class SnowflakeIdGenerator : IIdGenerator
     private const int WORKER_ID_BITS = 6;
     private const int SEQUENCE_BITS = 6;
 
-    private const long MAX_WORKER_ID = (1L << WORKER_ID_BITS) - 1;   // 63
+    /// <summary>机器号上限 63。<see cref="WorkerIdLease"/> 抢槽循环用它做上界。</summary>
+    public const long MaxWorkerId = (1L << WORKER_ID_BITS) - 1;
     private const long SEQUENCE_MASK = (1L << SEQUENCE_BITS) - 1;    // 63
     private const int WORKER_ID_SHIFT = SEQUENCE_BITS;               // 机器号左移 6
     private const int TIMESTAMP_SHIFT = SEQUENCE_BITS + WORKER_ID_BITS; // 时间戳左移 12
@@ -65,14 +69,14 @@ public class SnowflakeIdGenerator : IIdGenerator
     private long _sequence;                   // 当前毫秒内已发序列
 
     /// <param name="workerId">
-    /// 机器号(0–63)。单机部署用默认 0 即可;多实例部署时必须为每个实例配置不同值,
-    /// 否则同毫秒可能撞号(由 AspNetCore 层从 <c>TenonAdmin:Id:WorkerId</c> 配置注入)。
+    /// 机器号(0–63)。DI 路径由组合根传入:显式 <c>TenonAdmin:Id:WorkerId</c>,
+    /// 或 <see cref="WorkerIdLease"/> 抢到的槽位。
     /// </param>
     /// <param name="timeProvider">时间源,默认系统时钟;测试时可注入 FakeTimeProvider</param>
     public SnowflakeIdGenerator(long workerId = 0, TimeProvider? timeProvider = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(workerId);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(workerId, MAX_WORKER_ID);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(workerId, MaxWorkerId);
         _workerId = workerId;
         _time = timeProvider ?? TimeProvider.System;
     }

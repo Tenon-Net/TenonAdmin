@@ -20,10 +20,11 @@ public sealed class WorkerIdLeaseGuard(
     AdminIdOptions idOptions,
     AdminJobsOptions jobsOptions,
     ILogger<WorkerIdLeaseGuard> logger,
-    TimeProvider? time = null) : IHostedService, IDisposable
+    TimeProvider? time = null,
+    WorkerIdAssignment? assignment = null) : IHostedService, IDisposable
 {
     private readonly TimeProvider _time = time ?? TimeProvider.System;
-    private readonly string _instanceToken = Guid.NewGuid().ToString("N")[..8];
+    private string _instanceToken = Guid.NewGuid().ToString("N")[..8];
     private CancellationTokenSource? _cts;
     private Task? _heartbeatTask;
     private int _workerId;
@@ -36,7 +37,9 @@ public sealed class WorkerIdLeaseGuard(
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        _workerId = idOptions.WorkerId ?? 0;
+        _workerId = (int)(assignment?.WorkerId ?? idOptions.WorkerId ?? 0);
+        if (!string.IsNullOrEmpty(assignment?.InstanceToken))
+            _instanceToken = assignment.InstanceToken;
         var machineName = Environment.MachineName;
         _nodeName = $"{machineName}#{_workerId}@{_instanceToken}";
         var pid = Environment.ProcessId;

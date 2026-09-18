@@ -9,8 +9,7 @@ namespace TenonAdmin.Tests;
 
 /// <summary>
 /// 独立 Worker 的组合根(scheduling-ledger §10.2):装配得出调度器、WorkerId 守卫、租约参数守卫。
-/// Worker 是「API 停了任务照跑」的官方配方,消费者默认用不到——但一旦用,它就是多实例形态,
-/// 机器号同号会在同毫秒撞主键,所以守卫比 API 侧更严(API 可能真是单实例,Worker 不可能)。
+/// Worker 是「API 停了任务照跑」的官方配方。未显式 WorkerId 时与 API 共用文件锁抢号。
 /// </summary>
 public class WorkerSetupTests
 {
@@ -51,15 +50,27 @@ public class WorkerSetupTests
     }
 
     [Fact]
-    public void Worker_without_explicit_worker_id_throws()
+    public void Worker_without_explicit_worker_id_acquires_file_lock()
     {
-        var settings = Baseline("ignored.db");
+        var dbFile = Path.Combine(Path.GetTempPath(), $"tenon-worker-{Guid.NewGuid():N}.db");
+        var lockDir = AdminAppFactory.WorkerIdLockDirFor(dbFile);
+        var settings = Baseline(dbFile);
         settings.Remove("TenonAdmin:Id:WorkerId");
-        var services = new ServiceCollection();
-        services.AddLogging();
+        settings["TenonAdmin:Id:WorkerIdLockDir"] = lockDir;
 
-        var ex = Assert.Throws<InvalidOperationException>(() => services.AddTenonAdminWorker(Config(settings)));
-        Assert.Contains("WorkerId", ex.Message);
+        var builder = Host.CreateApplicationBuilder();
+        builder.Configuration.AddInMemoryCollection(settings);
+        builder.Services.AddTenonAdminWorker(builder.Configuration);
+        using (var host = builder.Build())
+        {
+            var assignment = host.Services.GetRequiredService<WorkerIdAssignment>();
+            Assert.Equal(0, assignment.WorkerId);
+            Assert.NotNull(assignment.Lease);
+            Assert.True(host.Services.GetRequiredService<IIdGenerator>().NextId() > 0);
+        }
+
+        TestDb.Cleanup(dbFile, dbFile);
+        AdminAppFactory.TryDeleteWorkerIdLockDir(dbFile);
     }
 
     [Fact]

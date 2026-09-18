@@ -13,20 +13,19 @@ namespace TenonAdmin.Services;
 /// (照抄 <c>samples/WorkerHost</c>,Program.cs 也是三行)。</para>
 /// <para>为什么需要它:选项 POCO 的 <c>AddSingleton</c> 目前全内联在 AspNetCore 层的 <c>TenonAdminSetup</c> 里,
 /// 纯 Services 宿主无处复用——本方法就是那段装配的 Worker 版。</para>
+/// <para>同机未配 WorkerId 时与 API 共用文件锁抢号;跨机仍靠显式配置 + 库表租约。</para>
 /// </summary>
 public static class WorkerSetup
 {
     /// <summary>
     /// 装配一个只跑调度器的 Worker:绑定 <c>TenonAdmin</c> 配置节 → 注册 Services 层依赖的各选项 POCO →
     /// 数据层 + 领域服务(其中就包含 <see cref="JobSchedulerService"/> 的托管注册)。
+    /// <para>未显式配置 <c>TenonAdmin:Id:WorkerId</c> 时由 <see cref="WorkerIdLease"/> 在同机抢一个空闲槽
+    /// (API 已占 0 则 Worker 落到 1)。跨机器仍应显式配号,库表租约会拦住同号。</para>
     /// </summary>
     /// <param name="services">宿主的服务集合</param>
     /// <param name="configuration">宿主配置(读 <c>TenonAdmin</c> 节)</param>
     /// <param name="configure">代码侧覆写(在绑定之后、注册之前生效)</param>
-    /// <exception cref="InvalidOperationException">
-    /// 未显式配置 <c>TenonAdmin:Id:WorkerId</c> 时直接抛——Worker 天然是多实例形态(至少与一个 API 副本同时在跑),
-    /// 雪花机器号同号会让不同进程在同毫秒发出相同 Id、撞主键。这比 API 侧的 Redis 守卫更严:API 可能真是单实例,Worker 不可能。
-    /// </exception>
     public static IServiceCollection AddTenonAdminWorker(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -36,10 +35,6 @@ public static class WorkerSetup
         configuration.GetSection("TenonAdmin").Bind(options);
         configure?.Invoke(options);
 
-        if (options.Id.WorkerId is null)
-            throw new InvalidOperationException(
-                "Worker 进程必须显式配置 TenonAdmin:Id:WorkerId(0–63,与所有 API 副本及其它 Worker 互不相同)。" +
-                "Worker 天然是多实例形态,机器号同号会让不同进程在同毫秒发出相同的雪花 Id、撞主键。");
         // 与 AddTenonAdmin 共用:租约、正数项、HTTP 围栏 CIDR——Worker 才是真正执行任务的一侧,不能漏
         AdminJobsOptionsValidation.Validate(options.Jobs);
 

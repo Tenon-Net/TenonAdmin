@@ -72,7 +72,7 @@ builder.Services.AddTenonAdminWorker(builder.Configuration);
 await builder.Build().RunAsync();
 ```
 
-Worker 的配置有三条纪律：`TenonAdmin:Id:WorkerId` 必须显式给且与所有其它进程不同（不给直接拒绝启动）、建表与种子关掉（schema 归 API 侧所有）、时区与 API 一致。
+Worker 的配置有三条纪律：`TenonAdmin:Id:WorkerId` 与所有其它进程不同（同机未配时文件锁自动抢号；跨机仍要显式给）、建表与种子关掉（schema 归 API 侧所有）、时区与 API 一致。
 
 ## 同一个时刻，全集群只跑一次
 

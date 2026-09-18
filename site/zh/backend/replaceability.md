@@ -21,8 +21,9 @@ services.TryAddScoped<IUserService, UserService>();
 
 ```csharp
 // backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs
+services.TryAddSingleton(sp => WorkerIdAssignment.Resolve(sp.GetService<AdminIdOptions>()));
 services.TryAddSingleton<IIdGenerator>(sp =>
-    new SnowflakeIdGenerator(sp.GetService<AdminIdOptions>()?.WorkerId ?? 0, sp.GetService<TimeProvider>()));
+    new SnowflakeIdGenerator(sp.GetRequiredService<WorkerIdAssignment>().WorkerId, sp.GetService<TimeProvider>()));
 services.TryAdd(ServiceDescriptor.Scoped(typeof(IRepository<>), typeof(SqlSugarRepository<>)));
 ```
 

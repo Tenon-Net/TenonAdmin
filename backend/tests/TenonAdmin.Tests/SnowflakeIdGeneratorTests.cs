@@ -18,6 +18,20 @@ public class SnowflakeIdGeneratorTests
     }
 
     [Fact]
+    public void Parallel_burst_ids_are_unique()
+    {
+        var gen = new SnowflakeIdGenerator(workerId: 0);
+        var ids = new long[120_000];
+        Parallel.For(0, ids.Length, new ParallelOptions { MaxDegreeOfParallelism = 32 }, i =>
+        {
+            ids[i] = gen.NextId();
+        });
+
+        Assert.Equal(ids.Length, ids.Distinct().Count());
+        Assert.All(ids, id => Assert.True(id > 0 && id < JsMaxSafeInteger));
+    }
+
+    [Fact]
     public void Ids_today_are_js_safe_and_unique()
     {
         var gen = new SnowflakeIdGenerator(workerId: 63); // 最大机器号,低位取满
@@ -46,5 +60,12 @@ public class SnowflakeIdGeneratorTests
     public void Worker_id_out_of_range_throws(long workerId)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new SnowflakeIdGenerator(workerId));
+    }
+
+    [Fact]
+    public void Max_worker_id_is_six_bits()
+    {
+        Assert.Equal(63, SnowflakeIdGenerator.MaxWorkerId);
+        _ = new SnowflakeIdGenerator(SnowflakeIdGenerator.MaxWorkerId);
     }
 }

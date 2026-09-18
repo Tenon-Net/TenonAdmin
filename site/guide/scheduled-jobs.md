@@ -72,7 +72,7 @@ builder.Services.AddTenonAdminWorker(builder.Configuration);
 await builder.Build().RunAsync();
 ```
 
-A worker has three configuration rules: `TenonAdmin:Id:WorkerId` must be set explicitly and differ from every other process (it refuses to start otherwise), table creation and seeding must be off (the API owns the schema), and its timezone must match the API's.
+A worker has three configuration rules: `TenonAdmin:Id:WorkerId` must differ from every other process (unset on the same machine, a file lock claims a free slot; across machines still set it explicitly), table creation and seeding must be off (the API owns the schema), and its timezone must match the API's.
 
 ## One occurrence, one run, cluster-wide
 

@@ -43,7 +43,7 @@ The frontend `web` service runs Caddy. Swap the site label in `web/Caddyfile` fr
 | **Named volumes, not bind mounts** | The image runs as a non-root user. A named volume inherits ownership from the image directory on first mount, so the container can write to it; a bind mount overrides that with the host's ownership, and the app simply can't write to SQLite or the upload directory. `app-data` and `upload-data` in `docker-compose.yml` are both named volumes. |
 | **No `HEALTHCHECK` in the image** | The `aspnet` runtime image has neither `curl` nor `wget`, so a health-check instruction would just always fail. Health checking is left to the orchestration layer, probing `/health` (liveness) and `/health/ready` (DB + cache). |
 | **`.dockerignore` is a security item** | A dev machine's `data/` may hold a real `admin.db` and a JWT signing key auto-generated in development (`dev-jwt.key`). The repo-root `.dockerignore` excludes it — without it, a single `COPY . .` bakes the signing key into an image layer, and once the image is pushed, anyone can forge a super-admin token. |
-| **Change `WorkerId` per replica** | Each instance needs a distinct value in 0–63, or same-millisecond issuance collides on the primary key; configuring Redis without giving it explicitly also refuses startup on the spot. See "Multiple replicas and WorkerId" below. |
+| **Change `WorkerId` per replica** | Each instance needs a distinct value in 0–63, or same-millisecond issuance collides on the primary key. Unset values claim a free `sys_worker_lease` slot; the same configured number refuses the second instance. See "Multiple replicas and WorkerId" below. |
 
 ## Multiple replicas and WorkerId
 
@@ -71,7 +71,7 @@ Set `TenonAdmin:Cache:Provider=Redis` + `Cache:RedisConnectionString` and all of
 
 ### A distinct `WorkerId` per replica
 
-The snowflake generator's machine bit comes from `TenonAdmin:Id:WorkerId` (0–63). A single instance can leave it unset (falls back to 0); but if two replicas both take 0, generating IDs in the same millisecond collides on the primary key — a data-corruption-level bug, and a silent one. The kernel is no longer silent about this: once `Cache:Provider=Redis` is configured (a clear signal of multi-instance intent) without an **explicit** `WorkerId`, startup throws outright, naming `TenonAdmin:Id:WorkerId` and the 0–63 range. Writing `0` explicitly is taken as you knowing what you're doing, and let through.
+The snowflake generator's machine bit comes from `TenonAdmin:Id:WorkerId` (0–63). On one machine, leaving it unset lets a file lock hand the next process a different slot; **that lock does nothing in containers**, so an unset value claims the next free row in shared `sys_worker_lease` (insert 0, then 1, …) — never a random draw. Two replicas configured with the same number: the second will not boot. Compose still should pin the numbers so they survive restarts.
 
 - **compose**: `--scale app=2` can't give replicas different environment variables, so split it into multiple explicit `app` services each configured on its own — `app2` in `docker-compose.scale.yml` explicitly sets `TenonAdmin__Id__WorkerId: "1"`, different from `app`'s `0`.
 - **k8s**: use a StatefulSet and inject from the Pod name's ordinal (`app-0`/`app-1`); a Deployment's random Pod names can't give you a stable ordinal.

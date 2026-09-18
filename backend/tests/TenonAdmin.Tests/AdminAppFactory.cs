@@ -48,6 +48,8 @@ public sealed class AdminAppFactory : WebApplicationFactory<Program>
             builder.UseSetting("TenonAdmin:Database:EnableCodeFirst", "false");
             builder.UseSetting("TenonAdmin:Database:EnableSeed", "false");
         }
+        // 每个工厂独立锁目录:未配 WorkerId 时文件锁会去抢机器级默认路径,并行测试会打满 64 槽。
+        builder.UseSetting("TenonAdmin:Id:WorkerIdLockDir", WorkerIdLockDirFor(DbPath));
         builder.UseSetting("TenonAdmin:Seed:AdminPassword", "Test@123456");
         // 固定 >=32 字节 JWT 密钥:避免各测试并发写同一 ./data/dev-jwt.key 文件
         builder.UseSetting("TenonAdmin:Jwt:SecretKey", "tenon-integration-test-signing-key-please-keep-32plus");
@@ -62,8 +64,32 @@ public sealed class AdminAppFactory : WebApplicationFactory<Program>
 
     protected override void Dispose(bool disposing)
     {
-        base.Dispose(disposing);   // 先释放宿主(关闭 SqlSugar 连接),再清理库
+        base.Dispose(disposing);   // 先释放宿主(关闭 SqlSugar 连接 / 文件锁),再清理库
         if (disposing && DeleteDbOnDispose)
+        {
             TestDb.Cleanup(DbPath, DbPath);   // SQLite 删文件 / MySQL 删库
+            TryDeleteWorkerIdLockDir(DbPath);
+        }
+    }
+
+    internal static string WorkerIdLockDirFor(string dbPath)
+    {
+        var full = Path.GetFullPath(dbPath);
+        var dir = Path.GetDirectoryName(full) ?? Path.GetTempPath();
+        return Path.Combine(dir, Path.GetFileNameWithoutExtension(full) + "-workerid");
+    }
+
+    internal static void TryDeleteWorkerIdLockDir(string dbPath)
+    {
+        var lockDir = WorkerIdLockDirFor(dbPath);
+        try
+        {
+            if (Directory.Exists(lockDir))
+                Directory.Delete(lockDir, recursive: true);
+        }
+        catch
+        {
+            /* 句柄未放干净时留给临时目录清理 */
+        }
     }
 }

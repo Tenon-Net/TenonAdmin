@@ -43,7 +43,7 @@ TenonAdmin__Seed__AdminPassword: ${TENON_ADMIN_PASSWORD:-Tenon@123456}
 | **具名卷，不要 bind mount** | 镜像里跑的是非 root 用户。具名卷首次挂载会从镜像目录继承属主，容器写得进去；bind mount 会用宿主属主覆盖，应用直接写不了 SQLite / 上传目录。`docker-compose.yml` 里 `app-data`、`upload-data` 都是具名卷。 |
 | **镜像里没有 `HEALTHCHECK`** | `aspnet` 运行时镜像既没有 `curl` 也没有 `wget`，写了健康检查指令只会恒失败。健康检查交给编排层探 `/health`（存活）与 `/health/ready`（DB + 缓存）。 |
 | **`.dockerignore` 是安全项** | 开发机的 `data/` 里可能躺着真实的 `admin.db` 和开发期自动生成的 JWT 签名密钥（`dev-jwt.key`）。仓库根的 `.dockerignore` 把它排除掉。没有它，一次 `COPY . .` 就能把签名密钥烤进镜像层，镜像一推，谁都能伪造超管令牌。 |
-| **多副本改 `WorkerId`** | 每实例 0–63 必须各不相同，否则同毫秒发号撞主键；配了 Redis 却没显式给还会当场拒绝启动。详见下面「多副本与 WorkerId」。 |
+| **多副本改 `WorkerId`** | 每实例 0–63 必须各不相同，否则同毫秒发号撞主键。不配时共享库会领空闲槽；写成同一个号，后到的起不来。详见下面「多副本与 WorkerId」。 |
 
 ## 多副本与 WorkerId
 
@@ -71,7 +71,7 @@ bash scripts/smoke-multi-replica.sh http://localhost:8080   # 逐条验证下面
 
 ### 每个副本一个不同的 `WorkerId`
 
-雪花发号器的机器位来自 `TenonAdmin:Id:WorkerId`，取值 0–63。单实例不配也没事，回落到 0。可两个副本都拿 0，同一毫秒各自发号就会撞主键，这是数据损坏级的事故，而且悄无声息。内核对这一条不再沉默。一旦你配了 `Cache:Provider=Redis`，那是明显的多实例意图，却没有**显式**给出 `WorkerId`，启动就直接抛错，点名到 `TenonAdmin:Id:WorkerId` 和 0–63 范围。显式写 `0` 视为你知情，放行。
+雪花发号器的机器位来自 `TenonAdmin:Id:WorkerId`，取值 0–63。同机不配时文件锁换号；**容器里文件锁帮不上忙**，改在共享库 `sys_worker_lease` 上领空闲槽（插 0 失败就插 1），不随机。显式写成同一个号，后到的副本起不来。compose 里仍建议把号写死，重启才稳。
 
 - **compose**：`--scale app=2` 给不了各副本不同的环境变量，所以拆成多个显式的 `app` 服务各配各的。`docker-compose.scale.yml` 里 `app2` 就显式给了 `TenonAdmin__Id__WorkerId: "1"`，与 `app` 的 `0` 不同。
 - **k8s**：用 StatefulSet，从 Pod 名字的序号注入，比如 `app-0`、`app-1`。Deployment 的随机 Pod 名给不了稳定序号。
