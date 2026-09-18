@@ -15,14 +15,15 @@ import { Alert } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { WfInstanceStatus } from '@/types/workflow'
 import { parseWfFormValuesResult, serializeWfFormValues } from '@/workflow/formRuntime'
+import type { WfId } from '@/workflow/id'
 import type { WfFormFieldPerm, WfFormSchema } from '@/workflow/schema'
 import { WfBuiltinForm, type WfBuiltinFormHandle, type WfFormMode } from './WfBuiltinForm'
 
 /** 消费者业务表单组件收到的 props;新增项必须同步 Vue 侧,否则两套模板的挂载点契约会漂移。 */
 export interface WfFormComponentProps {
   mode: WfFormMode
-  definitionId?: number
-  instanceId?: number
+  definitionId?: WfId
+  instanceId?: WfId
   businessKey?: string | null
   variablesJson?: string | null
   status?: WfInstanceStatus
@@ -66,8 +67,8 @@ export interface WfFormMountProps {
   formSchema?: WfFormSchema | null
   mode: WfFormMode
   permissions?: WfFormFieldPerm[] | null
-  definitionId?: number
-  instanceId?: number
+  definitionId?: WfId
+  instanceId?: WfId
   businessKey?: string | null
   variablesJson?: string | null
   status?: WfInstanceStatus

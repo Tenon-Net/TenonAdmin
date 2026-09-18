@@ -4,9 +4,15 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import '@/locales'
 import { ApiError } from '@/api'
 import { createApprovalNode, createDefaultModel } from '@/workflow/model'
-import type { WfInstanceDetail } from '@/types/workflow'
+import type { WfId } from '@/workflow/id'
+import type { WfHistoryItem, WfInstanceDetail } from '@/types/workflow'
 
 vi.mock('@/components/AppIcon', () => ({ AppIcon: () => null }))
+vi.mock('@/components/UserSelect', () => ({
+  UserSelect: ({ mode, onChange }: { mode?: string; onChange?: (value: WfId | WfId[]) => void }) => (
+    <button type="button" onClick={() => onChange?.(mode === 'multiple' ? [321] : 321)}>choose-users</button>
+  ),
+}))
 vi.mock('@/api', async () => {
   class FakeApiError extends Error {
     code: number
@@ -74,7 +80,7 @@ const model = (() => {
   return built
 })()
 
-function pendingTask(taskId: number, nodeName: string, nodeId = 'ap1') {
+function pendingTask(taskId: WfId, nodeName: string, nodeId = 'ap1') {
   return { taskId, nodeId, nodeName, instanceId: 5, definitionId: 9, definitionName: '请假' }
 }
 
@@ -97,8 +103,9 @@ function detailOf(over: Partial<WfInstanceDetail> = {}): WfInstanceDetail {
   } as WfInstanceDetail
 }
 
-function mount(detail: WfInstanceDetail) {
+function mount(detail: WfInstanceDetail, loadedHistory: WfHistoryItem[] = []) {
   vi.mocked(wfInstanceApi.get).mockResolvedValue(detail)
+  vi.mocked(wfInstanceApi.history).mockResolvedValue(loadedHistory)
   render(<AntdApp><WfInstanceDetailPage /></AntdApp>)
 }
 
@@ -145,6 +152,17 @@ describe('WfInstanceDetailPage 动词', () => {
     expect(typeof body.requestId).toBe('string')
   })
 
+  it('19 位 taskId 提交时保持十进制字符串', async () => {
+    const taskId = '9223372036854775807'
+    mount(detailOf({ myPendingTasks: [pendingTask(taskId, '经理审批')] }))
+
+    fireEvent.click(await screen.findByRole('button', { name: /同\s*意/ }))
+    fireEvent.click(okButton())
+
+    await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalled())
+    expect(vi.mocked(wfTaskApi.approve).mock.calls[0]![0].taskId).toBe(taskId)
+  })
+
   it('多条待办不替用户挑目标:未选就提交被挡住,不发请求', async () => {
     mount(detailOf({ myPendingTasks: [pendingTask(77, 'A 臂审批'), pendingTask(78, 'B 臂审批')] }))
 
@@ -154,6 +172,18 @@ describe('WfInstanceDetailPage 动词', () => {
 
     await waitFor(() => expect(screen.getByText('请选择一个目标任务')).toBeTruthy())
     expect(wfTaskApi.approve).not.toHaveBeenCalled()
+  })
+
+  it('多条待办显式选择后把动作提交到目标 task', async () => {
+    mount(detailOf({ myPendingTasks: [pendingTask(77, 'A 臂审批'), pendingTask(78, 'B 臂审批')] }))
+
+    fireEvent.click(await screen.findByRole('button', { name: /同\s*意/ }))
+    fireEvent.mouseDown(document.querySelector('.ant-modal .ant-select-content')!)
+    fireEvent.click(await screen.findByTitle(/B 臂审批.*#78/))
+    fireEvent.click(okButton())
+
+    await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalled())
+    expect(vi.mocked(wfTaskApi.approve).mock.calls[0]![0]).toMatchObject({ taskId: 78 })
   })
 
   it('转办未选人时被挡住,不发请求', async () => {
@@ -189,6 +219,22 @@ describe('WfInstanceDetailPage 动词', () => {
     fireEvent.click(okButton())
     await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(3))
     expect(vi.mocked(wfTaskApi.approve).mock.calls[2]![0].requestId).not.toBe(first)
+  }, 10_000)
+
+  it('网络失败后编辑载荷会为下一次请求换键', async () => {
+    mount(detailOf({ myPendingTasks: [pendingTask(77, '经理审批')] }))
+    vi.mocked(wfTaskApi.approve).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+    fireEvent.click(await screen.findByRole('button', { name: /同\s*意/ }))
+    fireEvent.click(okButton())
+    await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(1))
+    await waitOkIdle()
+    const first = vi.mocked(wfTaskApi.approve).mock.calls[0]![0].requestId
+
+    fireEvent.change(screen.getByPlaceholderText('填写意见(可选)'), { target: { value: '修改后的意见' } })
+    fireEvent.click(okButton())
+    await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(wfTaskApi.approve).mock.calls[1]![0].requestId).not.toBe(first)
   })
 
   it('拿回只在服务端给出 myTakeBackTaskId 时出现,并打在那条 task 上', async () => {
@@ -205,6 +251,7 @@ describe('WfInstanceDetailPage 动词', () => {
     mount(detailOf({}))
     await screen.findByRole('button', { name: /撤\s*销/ })
     expect(screen.queryByRole('button', { name: /拿\s*回/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /重新提交/ })).toBeNull()
   })
 
   it('已有同意记录后不再给撤销入口,催办仍在', async () => {
@@ -227,16 +274,109 @@ describe('WfInstanceDetailPage 动词', () => {
     expect(vi.mocked(wfTaskApi.urge).mock.calls[0]![0]).toEqual({ taskId: 90 })
   })
 
-  it('重提在没有待办时出现,带上当前变量 JSON 与请求键', async () => {
-    mount(detailOf({ variablesJson: '{"days":3}' }))
+  it('当前任务与催办目标标签显示 NodeVisitId', async () => {
+    mount(detailOf({
+      currentTasks: [
+        { taskId: '9000000000000000001', tokenId: '9000000000000000002', nodeVisitId: '9000000000000000003', nodeId: 'ap1', nodeName: '经理审批' },
+        { taskId: '9000000000000000004', tokenId: '9000000000000000005', nodeVisitId: '9000000000000000006', nodeId: 'ap2', nodeName: '财务审批' },
+      ],
+    }))
+
+    expect(await screen.findByText(/NodeVisit #9000000000000000003/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /催\s*办/ }))
+    fireEvent.mouseDown(document.querySelector('.ant-modal .ant-select-content')!)
+    expect(await screen.findByTitle(/NodeVisit #9000000000000000006/)).toBeTruthy()
+  })
+
+  it('退回事件是最新生命周期且无活动并行分叉时显示重提', async () => {
+    mount(detailOf({ variablesJson: '{"days":3}' }), [
+      { id: 1, eventType: 12, sequence: 3 },
+      { id: 2, eventType: 14, sequence: 4 },
+    ] as WfHistoryItem[])
 
     fireEvent.click(await screen.findByRole('button', { name: /重新提交/ }))
     fireEvent.click(okButton())
 
     await waitFor(() => expect(wfInstanceApi.resubmit).toHaveBeenCalled())
     expect(vi.mocked(wfInstanceApi.resubmit).mock.calls[0]![0]).toMatchObject({
-      instanceId: 5,
+      instanceId: '5',
       variablesJson: '{"days":3}',
     })
+  })
+
+  it('最近一次生命周期是已重提时不再显示重提', async () => {
+    mount(detailOf(), [
+      { id: 1, eventType: 14, sequence: 4 },
+      { id: 2, eventType: 12, sequence: 5 },
+    ] as WfHistoryItem[])
+    await screen.findByRole('button', { name: /撤\s*销/ })
+    expect(screen.queryByRole('button', { name: /重新提交/ })).toBeNull()
+  })
+
+  it('重提表单忽略历史 hidden/readonly 权限并提交发起人自选人员', async () => {
+    const withForm = createDefaultModel()
+    withForm.formSchema = {
+      version: 1,
+      fields: [{ key: 'title', label: '标题', type: 'text', required: true }],
+    }
+    withForm.root.next = createApprovalNode({
+      id: 'ap1',
+      name: '经理审批',
+      props: {
+        assignee: { provider: 'selfSelect' },
+        formPerms: [{ field: 'title', access: 'hidden' }],
+      },
+    })
+    mount(detailOf({
+      model: withForm as WfInstanceDetail['model'],
+      variablesJson: '{"title":"原值"}',
+      visitedNodeIds: ['start', 'ap1'],
+      hisTasks: [{ id: 9, nodeId: 'ap1', action: 2, userId: 100 }],
+    }), [{ id: 2, eventType: 14, sequence: 4 }] as WfHistoryItem[])
+
+    fireEvent.click(await screen.findByRole('button', { name: /重新提交/ }))
+    const titleInputs = await screen.findAllByLabelText('标题')
+    expect(titleInputs).toHaveLength(1)
+    expect(titleInputs[0]).toHaveProperty('disabled', false)
+    fireEvent.change(titleInputs[0]!, { target: { value: '重提值' } })
+    fireEvent.click(screen.getByRole('button', { name: 'choose-users' }))
+    fireEvent.click(okButton())
+
+    await waitFor(() => expect(wfInstanceApi.resubmit).toHaveBeenCalled())
+    expect(vi.mocked(wfInstanceApi.resubmit).mock.calls[0]![0]).toMatchObject({
+      instanceId: '5',
+      variablesJson: '{"title":"重提值"}',
+      selectedUserIdsByNode: { ap1: [321] },
+    })
+  })
+
+  it('活动中的并行分叉阻止重提', async () => {
+    mount(detailOf({
+      parallelForks: [{ forkId: 1, nodeId: 'pa1', status: 1, arms: [] }],
+    }), [{ id: 2, eventType: 14, sequence: 4 }] as WfHistoryItem[])
+    await screen.findByRole('button', { name: /撤\s*销/ })
+    expect(screen.queryByRole('button', { name: /重新提交/ })).toBeNull()
+  })
+
+  it('回放非空并行分叉与各臂当前节点、状态和原因', async () => {
+    mount(detailOf({
+      parallelForks: [{
+        forkId: 10,
+        nodeId: 'pa1',
+        nodeName: '并行会签',
+        pendingArmCount: 1,
+        status: 1,
+        arms: [
+          { forkId: 10, armId: 'finance', childTokenId: 21, status: 1, currentNodeId: 'ap-fin', currentNodeName: '财务审批' },
+          { forkId: 10, armId: 'legal', childTokenId: 22, status: 3, reason: '条件不满足' },
+        ],
+      }],
+    }))
+
+    expect(await screen.findByText('并行会签')).toBeTruthy()
+    expect(screen.getByText(/财务审批.*#21/)).toBeTruthy()
+    expect(screen.getByText('条件不满足')).toBeTruthy()
+    expect(screen.getByText('finance')).toBeTruthy()
+    expect(screen.getByText('legal')).toBeTruthy()
   })
 })

@@ -4,13 +4,30 @@ export interface WfVarRow {
   value?: string
 }
 
-/** 'true'/'false' → 布尔,纯数字串 → 数字,其余原样(空串保留空串)。 */
+/** 十进制文本规范形：去整数前导零、去小数尾零，并把所有负零归一为 0。 */
+function canonicalDecimal(value: string): string {
+  const negative = value.startsWith('-')
+  const unsigned = negative ? value.slice(1) : value
+  const [integerPart, fractionPart] = unsigned.split('.')
+  const integer = integerPart!.replace(/^0+(?=\d)/, '')
+  const fraction = fractionPart?.replace(/0+$/, '') ?? ''
+  const magnitude = fraction ? `${integer}.${fraction}` : integer
+  return negative && magnitude !== '0' ? `-${magnitude}` : magnitude
+}
+
+/** 'true'/'false' → 布尔；仅当 JSON number 的可见文本无精度损失时才转数字。 */
 export function coerceVarValue(raw: string | undefined): unknown {
   const s = (raw ?? '').trim()
   if (s === '') return ''
   if (s === 'true') return true
   if (s === 'false') return false
-  if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s)
+  if (/^-?\d+(?:\.\d+)?$/.test(s)) {
+    const canonical = canonicalDecimal(s)
+    const value = Number(s)
+    if (!Number.isFinite(value) || String(value) !== canonical) return raw
+    if (canonical === '0') return 0
+    return canonical.includes('.') || Number.isSafeInteger(value) ? value : raw
+  }
   return raw
 }
 

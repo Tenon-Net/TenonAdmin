@@ -98,13 +98,13 @@ export interface WfAssignee {
 
 export interface WfInitiatorScopeItem {
   type: 'user' | 'role' | 'org' | string
-  id: number
+  id: number | string
 }
 
 export interface WfTimeout {
   hours: number
   action: WfTimeoutAction
-  transferUserId?: number
+  transferUserId?: number | string
 }
 
 export interface WfButtonLabels {
@@ -128,7 +128,7 @@ export interface WfNodeProps {
   timeout?: WfTimeout
   buttonLabels?: WfButtonLabels
   nobody?: WfNobodyAction
-  nobodyTransferUserId?: number
+  nobodyTransferUserId?: number | string
   /** 审批节点字段权限;缺失项按 editable 处理。 */
   formPerms?: WfFormFieldPerm[]
   webhookUrl?: string
@@ -182,7 +182,7 @@ export interface WfModel {
   formSchema?: WfFormSchema | null
   formComponent?: string | null
   nobody?: WfNobodyAction | null
-  nobodyTransferUserId?: number | null
+  nobodyTransferUserId?: number | string | null
 }
 
 /** M1 可编辑的节点类型(不含 start 的「新增」)。 */

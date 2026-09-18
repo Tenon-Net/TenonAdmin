@@ -29,6 +29,7 @@ import { wfInstanceApi, wfTaskApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import { mergeWfFormPermissions } from '@/workflow/formRuntime'
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
+import { normalizeWfId, wfIdEquals, type WfId } from '@/workflow/id'
 import { findNode, flattenChain } from '@/workflow/model'
 import {
   formatDateTime,
@@ -92,8 +93,33 @@ const HISTORY_EVENT: Record<number, string> = {
 
 interface ActionFormValues {
   comment?: string
-  toUserId?: number
+  toUserId?: WfId
   targetNodeId?: string
+  selectedUserIdsByNode?: Record<string, WfId[] | undefined>
+}
+
+interface ResubmitEligibility {
+  isStarter: boolean
+  isRunning: boolean
+  currentTasks: readonly unknown[]
+  pendingTasks: readonly unknown[]
+  history: readonly Pick<WfHistoryItem, 'eventType' | 'sequence' | 'createTime' | 'id'>[]
+  forks: readonly { status?: number | string | null }[]
+}
+
+/** 只有最近一次重提之后又发生过退回,且实例确实停在可重提态时才允许发起人重提。 */
+export function canResubmitInstance({
+  isStarter, isRunning, currentTasks, pendingTasks, history, forks,
+}: ResubmitEligibility): boolean {
+  if (!isStarter || !isRunning || currentTasks.length > 0 || pendingTasks.length > 0) return false
+  if (forks.some((fork) => Number(fork.status) === 1)) return false
+  const lifecycle = history
+    .filter((item) => Number(item.eventType) === 12 || Number(item.eventType) === 14)
+    .sort((a, b) =>
+      Number(a.sequence ?? 0) - Number(b.sequence ?? 0)
+      || String(a.createTime ?? '').localeCompare(String(b.createTime ?? ''))
+      || String(a.id ?? '').localeCompare(String(b.id ?? '')))
+  return Number(lifecycle.at(-1)?.eventType) === 14
 }
 
 export default function WfInstanceDetailPage() {
@@ -109,22 +135,23 @@ export default function WfInstanceDetailPage() {
   // useRequestKey 是工厂(键存在闭包里)不是 hook:useRef 固定住首个实例,否则每次渲染都换一把新键。
   const requestKey = useRef(useRequestKey()).current
 
-  const uid = Number(id)
+  const uid = normalizeWfId(id)
   const [loading, setLoading] = useState(false)
   const [detail, setDetail] = useState<WfInstanceDetail | null>(null)
   const [history, setHistory] = useState<WfHistoryItem[]>([])
   const [formVariablesJson, setFormVariablesJson] = useState<string | null>(null)
-  const [selectedPendingTaskId, setSelectedPendingTaskId] = useState<number | null>(null)
-  const [urgeTaskId, setUrgeTaskId] = useState<number | null>(null)
+  const [selectedPendingTaskId, setSelectedPendingTaskId] = useState<WfId | null>(null)
+  const [urgeTaskId, setUrgeTaskId] = useState<WfId | null>(null)
   const [action, setAction] = useState<ActionKind | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [actionForm] = Form.useForm<ActionFormValues>()
   const formRuntimeRef = useRef<WfFormMountHandle | null>(null)
+  const resubmitFormRuntimeRef = useRef<WfFormMountHandle | null>(null)
   // uid 连换或动作后重载时,只认最后一次请求的结果。
   const seqRef = useRef(0)
 
-  const load = useCallback(async (instanceId: number) => {
-    if (!Number.isFinite(instanceId) || instanceId <= 0) return
+  const load = useCallback(async (instanceId: WfId | null) => {
+    if (instanceId === null) return
     const seq = ++seqRef.current
     setLoading(true)
     try {
@@ -140,7 +167,7 @@ export default function WfInstanceDetailPage() {
         ? loaded.myPendingTasks
         : loaded.myPendingTask ? [loaded.myPendingTask] : []
       // 只有一条待办才自动锁定目标;多条(并行多臂)留空,强制用户显式选一条,不做实例级兜底。
-      setSelectedPendingTaskId(pending.length === 1 ? Number(pending[0]!.taskId) : null)
+      setSelectedPendingTaskId(pending.length === 1 ? normalizeWfId(pending[0]!.taskId) : null)
     } catch (e) {
       if (seq !== seqRef.current) return
       message.error(translateError(e))
@@ -170,13 +197,13 @@ export default function WfInstanceDetailPage() {
   const forks = detail?.parallelForks ?? []
   const hisTasks = useMemo(() => detail?.hisTasks ?? [], [detail])
 
-  const selectedPendingTask = myPendingTasks.find((task) => Number(task.taskId) === selectedPendingTaskId)
+  const selectedPendingTask = myPendingTasks.find((task) => wfIdEquals(task.taskId, selectedPendingTaskId))
 
   const isStarter = useMemo(() => {
     const starter = detail?.starterUserId
     if (starter == null) return false
     if (myUserId == null) return true
-    return Number(starter) === Number(myUserId)
+    return String(starter) === String(myUserId)
   }, [detail, myUserId])
 
   const isRunning = Number(detail?.status) === 1
@@ -195,7 +222,7 @@ export default function WfInstanceDetailPage() {
 
   const formSchema = replayModel?.formSchema ?? null
   const formMountPath = detail?.formComponent ?? detail?.model?.formComponent ?? null
-  const formMode = myPendingTasks.length > 0 || action === 'resubmit' ? 'approve' as const : 'view' as const
+  const formMode = myPendingTasks.length > 0 ? 'approve' as const : 'view' as const
 
   // 字段权限:有待办时取各待办节点的 formPerms;否则回看我经手过的审批节点,按 hidden > readonly > editable 合并。
   const formPermissions = useMemo<WfFormFieldPerm[] | null>(() => {
@@ -206,7 +233,7 @@ export default function WfInstanceDetailPage() {
           ...(currentNode?.type === 'approval' ? [currentNode.id] : []),
           ...(detail?.visitedNodeIds ?? []),
           ...hisTasks
-            .filter((task) => Number(task.userId) === Number(myUserId))
+            .filter((task) => task.userId != null && myUserId != null && String(task.userId) === String(myUserId))
             .map((task) => task.nodeId)
             .filter((nodeId): nodeId is string => !!nodeId),
         ]
@@ -229,10 +256,26 @@ export default function WfInstanceDetailPage() {
       .map((node) => ({ label: node.name?.trim() || t(`workflow.node.${node.type}`), value: node.id }))
   }, [replayModel, detail, currentNodeId, t])
 
+  const selfSelectNodes = useMemo(
+    () => (replayModel?.root
+      ? flattenChain(replayModel.root).filter((node) => node.props?.assignee?.provider === 'selfSelect')
+      : []),
+    [replayModel],
+  )
+
   const canUrge = isStarter && isRunning && currentTasks.length > 0
   const canCancel = isStarter && isRunning && !hasApproveHistory
-  const canResubmit = isStarter && isRunning && myPendingTasks.length === 0
-  const canTakeBack = isRunning && Number(detail?.myTakeBackTaskId ?? 0) > 0 && Number(myUserId ?? 0) > 0
+  const canResubmit = canResubmitInstance({
+    isStarter,
+    isRunning,
+    currentTasks,
+    pendingTasks: myPendingTasks,
+    history,
+    forks,
+  })
+  const canTakeBack = isRunning
+    && normalizeWfId(detail?.myTakeBackTaskId) !== null
+    && normalizeWfId(myUserId) !== null
 
   const btnText = (kind: keyof WfButtonLabels, fallbackKey: string) =>
     buttonLabels[kind]?.trim() || t(fallbackKey)
@@ -256,26 +299,26 @@ export default function WfInstanceDetailPage() {
 
   function openAction(kind: ActionKind) {
     actionForm.resetFields()
-    setUrgeTaskId(kind === 'urge' ? Number(currentTasks[0]?.taskId ?? 0) || null : null)
+    setUrgeTaskId(kind === 'urge' ? normalizeWfId(currentTasks[0]?.taskId) : null)
     // 催办不进 receipt,不生成也不结算请求键;其余动作每次打开都换新键。
     if (kind !== 'urge') requestKey.reset()
     setAction(kind)
   }
 
-  function taskIdFor(kind: ActionKind): number {
+  function taskIdFor(kind: ActionKind): WfId | 0 {
     if (kind === 'cancel' || kind === 'resubmit') return 0
-    if (kind === 'urge') return Number(urgeTaskId ?? 0)
-    if (kind === 'takeBack') return Number(detail?.myTakeBackTaskId ?? 0)
-    return Number(selectedPendingTaskId ?? 0)
+    if (kind === 'urge') return urgeTaskId ?? 0
+    if (kind === 'takeBack') return normalizeWfId(detail?.myTakeBackTaskId) ?? 0
+    return selectedPendingTaskId ?? 0
   }
 
   async function submitAction() {
     const kind = action
     if (!kind) return
     const values = actionForm.getFieldsValue()
-    const toUserId = Number(values.toUserId ?? 0)
+    const toUserId = normalizeWfId(values.toUserId)
 
-    if (USER_ACTIONS.includes(kind) && !(toUserId > 0)) {
+    if (USER_ACTIONS.includes(kind) && toUserId === null) {
       message.warning(t(`workflow.detail.${kind}Required`))
       return
     }
@@ -283,10 +326,11 @@ export default function WfInstanceDetailPage() {
       message.warning(t('workflow.detail.returnTargetRequired'))
       return
     }
-    if (VARIABLE_ACTIONS.includes(kind) && formRuntimeRef.current?.validate() === false) return
+    const runtimeRef = kind === 'resubmit' ? resubmitFormRuntimeRef : formRuntimeRef
+    if (VARIABLE_ACTIONS.includes(kind) && runtimeRef.current?.validate() === false) return
 
     const taskId = taskIdFor(kind)
-    if (kind !== 'cancel' && kind !== 'resubmit' && taskId <= 0) {
+    if (kind !== 'cancel' && kind !== 'resubmit' && normalizeWfId(taskId) === null) {
       message.warning(t('workflow.detail.taskRequired'))
       return
     }
@@ -297,7 +341,7 @@ export default function WfInstanceDetailPage() {
       const body = {
         taskId,
         comment: values.comment?.trim() || null,
-        toUserId: toUserId || 0,
+        toUserId: toUserId ?? 0,
         targetNodeId: values.targetNodeId ?? null,
         requestId,
         ...(VARIABLE_ACTIONS.includes(kind) ? { variablesJson: formVariablesJson } : {}),
@@ -312,8 +356,16 @@ export default function WfInstanceDetailPage() {
         if (kind === 'removeSign') return wfTaskApi.removeSign(body)
         if (kind === 'takeBack') return wfTaskApi.takeBack(body)
         if (kind === 'urge') return wfTaskApi.urge({ taskId })
-        if (kind === 'cancel') return wfInstanceApi.cancel({ instanceId: uid, requestId })
-        return wfInstanceApi.resubmit({ instanceId: uid, variablesJson: formVariablesJson, requestId })
+        if (kind === 'cancel') return wfInstanceApi.cancel({ instanceId: uid!, requestId })
+        const picked = selfSelectNodes
+          .map((node) => [node.id, values.selectedUserIdsByNode?.[node.id] ?? []] as const)
+          .filter(([, ids]) => ids.length > 0)
+        return wfInstanceApi.resubmit({
+          instanceId: uid!,
+          variablesJson: formVariablesJson,
+          selectedUserIdsByNode: Object.fromEntries(picked),
+          requestId,
+        })
       }
       // urge 不进 receipt(语义契约既定),不生成/不结算 key;其余动作按结果 settle 复用/丢弃 requestKey。
       const api = async (): Promise<unknown> => {
@@ -340,7 +392,7 @@ export default function WfInstanceDetailPage() {
     `${task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')} · #${task.taskId}`
 
   const currentTaskText = (task: WfCurrentTask) =>
-    `${task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')} · #${task.taskId} · ${t('workflow.detail.parallel.token')} #${task.tokenId}`
+    `${task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')} · #${task.taskId} · ${t('workflow.detail.parallel.token')} #${task.tokenId}${task.nodeVisitId == null ? '' : ` · NodeVisit #${task.nodeVisitId}`}`
 
   const userFallback = (userId: number | string | null | undefined) =>
     userId == null || userId === '' ? '' : t('workflow.detail.userFallback', { id: userId })
@@ -497,17 +549,20 @@ export default function WfInstanceDetailPage() {
           {formMountPath || formSchema ? (
             <Card size="small" title={t('workflow.detail.form')}>
               <WfFormMount
-                ref={formRuntimeRef}
+                ref={action === 'resubmit' ? undefined : formRuntimeRef}
                 formComponent={formMountPath}
                 formSchema={formSchema}
                 mode={formMode}
                 permissions={formPermissions}
-                definitionId={detail.definitionId == null ? undefined : Number(detail.definitionId)}
-                instanceId={detail.id == null ? undefined : Number(detail.id)}
+                definitionId={detail.definitionId}
+                instanceId={detail.id}
                 businessKey={detail.businessKey}
                 variablesJson={formVariablesJson}
                 status={detail.status}
-                onVariablesChange={setFormVariablesJson}
+                onVariablesChange={(next) => {
+                  requestKey.reset()
+                  setFormVariablesJson(next)
+                }}
               />
             </Card>
           ) : null}
@@ -586,7 +641,7 @@ export default function WfInstanceDetailPage() {
         onCancel={() => setAction(null)}
         destroyOnHidden
       >
-        <Form form={actionForm} layout="vertical">
+        <Form form={actionForm} layout="vertical" onValuesChange={() => requestKey.reset()}>
           {action && USER_ACTIONS.includes(action) ? (
             <Form.Item name="toUserId" label={t(`workflow.detail.${action}User`)}>
               <UserSelect placeholder={t(`workflow.detail.${action}User`)} />
@@ -598,8 +653,11 @@ export default function WfInstanceDetailPage() {
               <Select
                 value={selectedPendingTaskId}
                 placeholder={t('workflow.detail.targetTask')}
-                options={myPendingTasks.map((task) => ({ label: pendingTaskText(task), value: Number(task.taskId) }))}
-                onChange={setSelectedPendingTaskId}
+                options={myPendingTasks.map((task) => ({ label: pendingTaskText(task), value: task.taskId }))}
+                onChange={(next: WfId) => {
+                  requestKey.reset()
+                  setSelectedPendingTaskId(next)
+                }}
               />
             </Form.Item>
           ) : null}
@@ -609,8 +667,11 @@ export default function WfInstanceDetailPage() {
               <Select
                 value={urgeTaskId}
                 placeholder={t('workflow.detail.targetTask')}
-                options={currentTasks.map((task) => ({ label: currentTaskText(task), value: Number(task.taskId) }))}
-                onChange={setUrgeTaskId}
+                options={currentTasks.map((task) => ({ label: currentTaskText(task), value: task.taskId }))}
+                onChange={(next: WfId) => {
+                  requestKey.reset()
+                  setUrgeTaskId(next)
+                }}
               />
             </Form.Item>
           ) : null}
@@ -619,6 +680,38 @@ export default function WfInstanceDetailPage() {
             <Form.Item name="targetNodeId" label={t('workflow.detail.returnTarget')} required>
               <Select placeholder={t('workflow.detail.returnTarget')} options={returnTargetOptions} />
             </Form.Item>
+          ) : null}
+
+          {action === 'resubmit' ? (
+            <>
+              {(formMountPath || formSchema) ? (
+                <WfFormMount
+                  ref={resubmitFormRuntimeRef}
+                  formComponent={formMountPath}
+                  formSchema={formSchema}
+                  mode="start"
+                  permissions={null}
+                  definitionId={detail?.definitionId}
+                  instanceId={detail?.id}
+                  businessKey={detail?.businessKey}
+                  variablesJson={formVariablesJson}
+                  status={detail?.status}
+                  onVariablesChange={(next) => {
+                    requestKey.reset()
+                    setFormVariablesJson(next)
+                  }}
+                />
+              ) : null}
+              {selfSelectNodes.map((node) => (
+                <Form.Item
+                  key={node.id}
+                  name={['selectedUserIdsByNode', node.id]}
+                  label={node.name || t('workflow.start.selfSelect')}
+                >
+                  <UserSelect mode="multiple" placeholder={t('workflow.start.selfSelectHint')} />
+                </Form.Item>
+              ))}
+            </>
           ) : null}
 
           {action && !NO_COMMENT_ACTIONS.includes(action) ? (

@@ -11,6 +11,7 @@ import { useHasPerm } from '@/stores/auth'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import { cloneModel, createDefaultModel, validateModel } from '@/workflow/model'
+import { normalizeWfId, type WfId } from '@/workflow/id'
 import { DEF_STATUS } from '@/workflow/statusLabels'
 import type { WfDefinitionInput } from '@/types/workflow'
 import type { WfModel, WfNode } from '@/workflow/schema'
@@ -51,7 +52,7 @@ export default function WfDesignerPage() {
   const [form] = Form.useForm<DesignerFormValues>()
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [defId, setDefId] = useState<number | null>(null)
+  const [defId, setDefId] = useState<WfId | null>(null)
   const [status, setStatus] = useState<number | null>(null)
   const [model, setModel] = useState<WfModel>(createDefaultModel())
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -61,11 +62,9 @@ export default function WfDesignerPage() {
   const [zoom, setZoom] = useState(100)
   const canvasRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
+  const loadSeqRef = useRef(0)
 
-  const queryId = useMemo(() => {
-    const n = Number(searchParams.get('id'))
-    return Number.isFinite(n) && n > 0 ? n : null
-  }, [searchParams])
+  const queryId = useMemo(() => normalizeWfId(searchParams.get('id')), [searchParams])
 
   const errorIds = useMemo(
     () => new Set(validateModel(model).map((issue) => issue.nodeId).filter(Boolean) as string[]),
@@ -73,26 +72,39 @@ export default function WfDesignerPage() {
   )
 
   const load = useCallback(
-    async (id: number) => {
+    async (id: WfId) => {
+      const seq = ++loadSeqRef.current
       setLoading(true)
       try {
         const detail = await wfDefinitionApi.get(id)
-        setDefId(Number(detail.id))
+        if (seq !== loadSeqRef.current) return
+        setDefId(normalizeWfId(detail.id))
         setStatus(detail.status == null ? null : Number(detail.status))
         setModel(cloneModel((detail.model as WfModel | undefined) ?? createDefaultModel()))
         form.setFieldsValue({ name: detail.name ?? '', groupName: detail.groupName ?? '' })
       } catch (e) {
-        message.error(translateError(e))
+        if (seq === loadSeqRef.current) message.error(translateError(e))
       } finally {
-        setLoading(false)
+        if (seq === loadSeqRef.current) setLoading(false)
       }
     },
     [form, message],
   )
 
   useEffect(() => {
+    // 详情页按 pathname 缓存，query 变化时必须先清掉上一份定义，避免“新建”误改旧草稿。
+    loadSeqRef.current += 1
+    setLoading(false)
+    setDefId(null)
+    setStatus(null)
+    setModel(createDefaultModel())
+    setSelectedId(null)
+    setDrawerOpen(false)
+    setNewName('')
+    setZoom(100)
+    form.resetFields()
     if (queryId) void load(queryId)
-  }, [queryId, load])
+  }, [queryId, load, form])
 
   /** 适配画布:按未缩放尺寸算比例,只缩不放(超出可视区才动)。 */
   const fitZoom = () => {
@@ -156,7 +168,7 @@ export default function WfDesignerPage() {
     }
     setSaving(true)
     try {
-      const id = Number(await wfDefinitionApi.add({ name, model: createDefaultModel() as WfDefinitionInput['model'] }))
+      const id = await wfDefinitionApi.add({ name, model: createDefaultModel() as WfDefinitionInput['model'] })
       navigate(`/workflow/definition/designer?id=${id}`, { replace: true })
     } catch (e) {
       message.error(translateError(e))
@@ -188,10 +200,13 @@ export default function WfDesignerPage() {
             </Form>
             <Space size={8}>
               {statusTag ? <Tag color={statusTag.color}>{t(statusTag.key)}</Tag> : null}
-              <Button icon={<AppIcon icon="ph:floppy-disk" size={16} />} loading={saving} onClick={() => void save()}>
-                {t('common.save')}
-              </Button>
-              {has('POST:/api/v1/workflow/definition/publish') && (
+              {has('POST:/api/v1/workflow/definition/update') && (
+                <Button icon={<AppIcon icon="ph:floppy-disk" size={16} />} loading={saving} onClick={() => void save()}>
+                  {t('common.save')}
+                </Button>
+              )}
+              {has('POST:/api/v1/workflow/definition/update')
+                && has('POST:/api/v1/workflow/definition/publish') && (
                 <Button type="primary" icon={<AppIcon icon="ph:paper-plane-tilt" size={16} />} loading={saving} onClick={() => void publish()}>
                   {t('workflow.designer.publish')}
                 </Button>
@@ -204,18 +219,20 @@ export default function WfDesignerPage() {
       {defId === null && !loading ? (
         <Card size="small">
           <Empty description={t('workflow.designer.needId')}>
-            <Space size={8}>
-              <Input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onPressEnter={() => void createDraft()}
-                placeholder={t('workflow.designer.name')}
-                style={{ width: 260 }}
-              />
-              <Button type="primary" loading={saving} onClick={() => void createDraft()}>
-                {t('workflow.designer.create')}
-              </Button>
-            </Space>
+            {has('POST:/api/v1/workflow/definition/add') ? (
+              <Space size={8}>
+                <Input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onPressEnter={() => void createDraft()}
+                  placeholder={t('workflow.designer.name')}
+                  style={{ width: 260 }}
+                />
+                <Button type="primary" loading={saving} onClick={() => void createDraft()}>
+                  {t('workflow.designer.create')}
+                </Button>
+              </Space>
+            ) : null}
           </Empty>
         </Card>
       ) : (

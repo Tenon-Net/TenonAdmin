@@ -51,7 +51,7 @@ export default function WfDefinitionPage() {
     (r: WfDefinitionRow) => {
       confirm({
         content: t('workflow.definition.publishConfirm', { name: r.name ?? '' }),
-        action: () => wfDefinitionApi.publish(Number(r.id)),
+        action: () => wfDefinitionApi.publish(r.id!),
         successMsg: t('workflow.definition.publishOk'),
       }).then((ok) => { if (ok) reload() })
     },
@@ -62,7 +62,7 @@ export default function WfDefinitionPage() {
     (r: WfDefinitionRow) => {
       confirm({
         content: t('workflow.definition.disableConfirm', { name: r.name ?? '' }),
-        action: () => wfDefinitionApi.disable(Number(r.id)),
+        action: () => wfDefinitionApi.disable(r.id!),
         successMsg: t('workflow.definition.disableOk'),
       }).then((ok) => { if (ok) reload() })
     },
@@ -73,7 +73,7 @@ export default function WfDefinitionPage() {
     (r: WfDefinitionRow) => {
       confirm({
         content: t('workflow.definition.deleteConfirm', { name: r.name ?? '' }),
-        action: () => wfDefinitionApi.remove(Number(r.id)),
+        action: () => wfDefinitionApi.remove(r.id!),
       }).then((ok) => { if (ok) reload() })
     },
     [confirm, t, reload],

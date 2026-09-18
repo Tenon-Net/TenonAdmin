@@ -21,6 +21,7 @@ import {
   type WfWebhookMethod,
 } from '@/workflow/configuration'
 import { serializeWfFormSchema, validateWfFormSchema } from '@/workflow/formSchema'
+import { normalizeWfId, type WfId } from '@/workflow/id'
 import { findNode, flattenChain } from '@/workflow/model'
 import type {
   WfApprovalMode,
@@ -52,13 +53,13 @@ export interface WfConfigDrawerForm {
   mode: WfApprovalMode
   allPassRatio: number
   level: number
-  userIds: number[]
-  roleId: number | null
-  positionId: number | null
-  positionOrgId: number | null
-  initiatorUserIds: number[]
-  initiatorRoleIds: number[]
-  initiatorOrgIds: number[]
+  userIds: WfId[]
+  roleId: WfId | null
+  positionId: WfId | null
+  positionOrgId: WfId | null
+  initiatorUserIds: WfId[]
+  initiatorRoleIds: WfId[]
+  initiatorOrgIds: WfId[]
   armExpressions: Record<string, WfConditionExpr>
   returnPolicy: WfReturnPolicy
   returnToNodeId: string | null
@@ -66,7 +67,7 @@ export interface WfConfigDrawerForm {
   rejectToNodeId: string | null
   timeoutHours: number
   timeoutAction: WfTimeoutAction
-  timeoutTransferUserId: number | null
+  timeoutTransferUserId: WfId | null
   labelApprove: string
   labelReject: string
   labelReturn: string
@@ -115,13 +116,12 @@ export function loadDrawerForm(model: WfModel, node: WfNode): WfConfigDrawerForm
     allPassRatio: node.props?.allPassRatio ?? 100,
     level: Number(params.level ?? 1) || 1,
     userIds: Array.isArray(ids)
-      ? ids.map(Number).filter((x) => x > 0)
-      : params.userId ? [Number(params.userId)] : [],
-    roleId: params.roleId != null
-      ? Number(params.roleId)
-      : Array.isArray(params.roleIds) ? Number(params.roleIds[0]) : null,
-    positionId: params.positionId != null ? Number(params.positionId) : null,
-    positionOrgId: params.orgId != null ? Number(params.orgId) : null,
+      ? ids.map(normalizeWfId).filter((id): id is WfId => id !== null)
+      : normalizeWfId(params.userId) == null ? [] : [normalizeWfId(params.userId)!],
+    roleId: normalizeWfId(params.roleId)
+      ?? (Array.isArray(params.roleIds) ? normalizeWfId(params.roleIds[0]) : null),
+    positionId: normalizeWfId(params.positionId),
+    positionOrgId: normalizeWfId(params.orgId),
     initiatorUserIds: scope.filter((x) => x.type === 'user').map((x) => x.id),
     initiatorRoleIds: scope.filter((x) => x.type === 'role').map((x) => x.id),
     initiatorOrgIds: scope.filter((x) => x.type === 'org').map((x) => x.id),
@@ -424,14 +424,14 @@ export function WfConfigDrawer({ open, model, nodeId, onOpenChange, onModelChang
             <ApiSelect
               mode="multiple" allowClear fetch={fetchRoles}
               value={form.initiatorRoleIds}
-              onChange={(value: number[]) => set({ initiatorRoleIds: value ?? [] })}
+              onChange={(value: WfId[]) => set({ initiatorRoleIds: value ?? [] })}
             />
           </Form.Item>
           <Form.Item label={t('workflow.designer.initiatorOrgs')} extra={t('workflow.designer.initiatorScopeHint')}>
             <OrgTreeSelect
               multiple treeCheckable allowClear
               value={form.initiatorOrgIds}
-              onChange={(value: number[]) => set({ initiatorOrgIds: value ?? [] })}
+              onChange={(value: WfId[]) => set({ initiatorOrgIds: value ?? [] })}
             />
           </Form.Item>
           <Form.Item label={t('workflow.form.mode')}>
@@ -462,7 +462,7 @@ export function WfConfigDrawer({ open, model, nodeId, onOpenChange, onModelChang
           <OrgTreeSelect
             allowClear
             value={form.positionOrgId ?? undefined}
-            onChange={(value: number | null) => set({ positionOrgId: value ?? null })}
+            onChange={(value: WfId | null) => set({ positionOrgId: value ?? null })}
           />
         </Form.Item>
       ) : null}
@@ -529,7 +529,7 @@ export function WfConfigDrawer({ open, model, nodeId, onOpenChange, onModelChang
               <UserSelect
                 allowClear
                 value={form.timeoutTransferUserId ?? undefined}
-                onChange={(value: number | null) => set({ timeoutTransferUserId: value ?? null })}
+                onChange={(value: WfId | null) => set({ timeoutTransferUserId: value ?? null })}
               />
             </Form.Item>
           ) : null}
@@ -618,7 +618,7 @@ export function WfConfigDrawer({ open, model, nodeId, onOpenChange, onModelChang
             <UserSelect
               mode="multiple" allowClear
               value={form.initiatorUserIds}
-              onChange={(value: number[]) => set({ initiatorUserIds: value ?? [] })}
+              onChange={(value: WfId[]) => set({ initiatorUserIds: value ?? [] })}
             />
           </Form.Item>
         ) : node.type === 'branch' ? (
@@ -681,7 +681,7 @@ export function WfConfigDrawer({ open, model, nodeId, onOpenChange, onModelChang
                 <UserSelect
                   mode="multiple" placeholder={t('workflow.designer.users')}
                   value={form.userIds}
-                  onChange={(value: number[]) => set({ userIds: value ?? [] })}
+                  onChange={(value: WfId[]) => set({ userIds: value ?? [] })}
                 />
               </Form.Item>
             ) : form.provider === 'leader' || form.provider === 'multiLeader' ? (
@@ -693,7 +693,7 @@ export function WfConfigDrawer({ open, model, nodeId, onOpenChange, onModelChang
                 <ApiSelect
                   fetch={fetchRoles} placeholder={t('workflow.designer.role')}
                   value={form.roleId ?? undefined}
-                  onChange={(value: number | null) => set({ roleId: value ?? null })}
+                  onChange={(value: WfId | null) => set({ roleId: value ?? null })}
                 />
               </Form.Item>
             ) : form.provider === 'position' ? (
@@ -701,7 +701,7 @@ export function WfConfigDrawer({ open, model, nodeId, onOpenChange, onModelChang
                 <ApiSelect
                   fetch={fetchPositions} placeholder={t('workflow.designer.position')}
                   value={form.positionId ?? undefined}
-                  onChange={(value: number | null) => set({ positionId: value ?? null })}
+                  onChange={(value: WfId | null) => set({ positionId: value ?? null })}
                 />
               </Form.Item>
             ) : null}

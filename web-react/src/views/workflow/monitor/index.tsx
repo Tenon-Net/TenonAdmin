@@ -8,6 +8,7 @@ import type { ProColumns } from '@ant-design/pro-components'
 import { DataTable, type PageFetcher } from '@/components/DataTable'
 import { UserSelect } from '@/components/UserSelect'
 import { wfInstanceApi } from '@/api/workflow'
+import { normalizeWfId } from '@/workflow/id'
 import { formatDateTime, instanceStatusColor, normalizeInstanceStatus } from '@/workflow/statusLabels'
 import type { WfInstanceListItem } from '@/types/workflow'
 
@@ -24,9 +25,9 @@ export default function WfMonitorPage() {
       pageSize: q.pageSize,
       status: typeof q.status === 'number' ? q.status : undefined,
       businessKey: typeof q.businessKey === 'string' ? q.businessKey : undefined,
-      starterUserId: typeof q.starterUserId === 'number' ? q.starterUserId : undefined,
-      actorUserId: typeof q.actorUserId === 'number' ? q.actorUserId : undefined,
-      ccUserId: typeof q.ccUserId === 'number' ? q.ccUserId : undefined,
+      starterUserId: normalizeWfId(q.starterUserId) ?? undefined,
+      actorUserId: normalizeWfId(q.actorUserId) ?? undefined,
+      ccUserId: normalizeWfId(q.ccUserId) ?? undefined,
     })
 
   const openDetail = useCallback(

@@ -122,7 +122,7 @@ Vue 源码是本阶段的**规格**而不是外部参考项目：可以逐行对
 
 - [x] **T16 内置表单运行时与挂载点**：`WfBuiltinForm.tsx` 实现 10 种控件的发起态可编辑渲染、提交前校验和查看态只读回放；`WfFormMount.tsx` 在内置 schema 与消费者 `formComponent` 之间选择。人员复用 `UserSelect`、附件复用 `FileUpload` 且只存文件 Id、日期用 antd `DatePicker`。用户/附件 Id 保持后端 `long` 雪花协议，同时兼容 JSON number 与十进制 string。
 - [x] **T17 字段权限执行**：把 `hidden/readonly/editable` 应用到发起、办理和查看；多条适用权限按 `hidden > readonly > editable` 合并。覆盖未知字段、缺失权限、旧定义默认行为和只读控件不可编辑。前端不承担服务端已强制的安全校验，但不能把隐藏字段渲染出来。
-- [x] **T18 表单端到端与单测**：用包含必填、选项、人员、附件和多审批节点字段权限的示例走通设计 → 发布 → 发起 → 办理 → 详情回放；补 `WfBuiltinForm.spec.tsx`、`WfFormMount.spec.tsx`、`WfFormDesigner.spec.tsx`。非法变量 JSON 或非对象根节点必须显示错误并阻止提交；重提时表单恢复可编辑并回写最新变量。
+- [x] **T18 表单聚焦验证与单测**：用组件测试覆盖必填、选项、人员、附件、多审批节点字段权限及重提回写；补 `WfBuiltinForm.spec.tsx`、`WfFormMount.spec.tsx`、`WfFormDesigner.spec.tsx`。非法变量 JSON 或非对象根节点必须显示错误并阻止提交；重提时表单恢复可编辑并回写最新变量。浏览器级只验证代表性工作流，不把这组聚焦测试表述为完整端到端覆盖。
 
 ### E. 审批动词与并行回放
 
@@ -183,4 +183,5 @@ Vue 源码是本阶段的**规格**而不是外部参考项目：可以逐行对
   - 抖动记录：首轮全量单测与全量 e2e 并发时 `designer.spec.tsx` 的缩放用例 5s 超时，单独复跑 4 passed；判为机器负载导致，非产品缺陷。
 - **T26（2026-09-17）**：本文件状态改 `DONE`、`26 / 26`；`docs/workflow/README.md` 把 React port 从「未开始」改为产品面完成、可声明完整 M3a-2 的前端对等；[复制/重写清单](./m3a2-react-port-inventory-2026-09.md) §5 同步现状。
   - 残留风险收口（2026-09-18）：①独立审查：bugbot 无 blocker；architect **CLEAR**（formSchema 双模板同步、雪花 Id、模块分区 e2e、MFA/OAuth 夹具）；②`mfa-bind`/`oauth-callback` 已修（TOTP 运行时总闸 + unread-count mock），本机 Playwright 绿；③Vue 侧：m2a/m2b 补业务中心切换、`formSchema` 关多选清 `maxSelected`、`WfBuiltinForm` 附件雪花不再 `Number()` 截断。CI 多副本/SQL Server 矩阵仍未作为本机门禁重跑。
+  - 二次审查修正（2026-09-18）：React 工作流 int64 Id 全链路保真，补齐请求键载荷变更重置、设计器发布组合权限与加载竞态、双模板精度安全十进制转换、NodeVisitId 标签及聚焦用例超时。`web-react` 工作流子集连续两轮及最终复核均为 **19 files / 154 passed**，`web` 工作流纯逻辑为 **5 files / 71 passed**；两端 `typecheck`、`lint` 均通过。
   - 未声明也不得声明：GA、AI 自动放行、M3b 受控自动化、M3+ 均未开始。

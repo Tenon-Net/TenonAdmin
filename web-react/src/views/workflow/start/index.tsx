@@ -9,6 +9,7 @@ import { UserSelect } from '@/components/UserSelect'
 import { wfInstanceApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
+import { normalizeWfId, wfIdEquals, type WfId } from '@/workflow/id'
 import { flattenChain } from '@/workflow/model'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
 import type { WfStartableDefinitionDetail } from '@/types/workflow'
@@ -16,10 +17,10 @@ import { WfFormMount, type WfFormMountHandle } from '../components/WfFormMount'
 import { serializeVars, type WfVarRow } from './startForm'
 
 interface StartFormValues {
-  definitionId?: number
+  definitionId?: WfId
   businessKey?: string
   varRows?: WfVarRow[]
-  selectedUserIdsByNode?: Record<string, number[] | undefined>
+  selectedUserIdsByNode?: Record<string, WfId[] | undefined>
 }
 
 export default function WfStartPage() {
@@ -32,23 +33,30 @@ export default function WfStartPage() {
   const requestKey = useRef(useRequestKey()).current
 
   const [form] = Form.useForm<StartFormValues>()
-  const [defOptions, setDefOptions] = useState<{ label: string; value: number }[]>([])
+  const [defOptions, setDefOptions] = useState<{ label: string; value: WfId }[]>([])
   const [defsLoading, setDefsLoading] = useState(false)
   const [snapshot, setSnapshot] = useState<WfStartableDefinitionDetail | null>(null)
+  const [snapshotLoading, setSnapshotLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [runtimeVariablesJson, setRuntimeVariablesJson] = useState<string | null>(null)
   const formRuntimeRef = useRef<WfFormMountHandle | null>(null)
+  const definitionSeqRef = useRef(0)
 
   const loadDefinition = useCallback(
-    async (id: number | undefined) => {
+    async (id: WfId | undefined) => {
+      const seq = ++definitionSeqRef.current
       setSnapshot(null)
+      setSnapshotLoading(!!id)
       setRuntimeVariablesJson(null)
       form.setFieldsValue({ varRows: [{}], selectedUserIdsByNode: {} })
       if (!id) return
       try {
-        setSnapshot(await wfInstanceApi.startableDetail(id))
+        const loaded = await wfInstanceApi.startableDetail(id)
+        if (seq === definitionSeqRef.current) setSnapshot(loaded)
       } catch (e) {
-        message.error(translateError(e))
+        if (seq === definitionSeqRef.current) message.error(translateError(e))
+      } finally {
+        if (seq === definitionSeqRef.current) setSnapshotLoading(false)
       }
     },
     [form, message],
@@ -60,11 +68,13 @@ export default function WfStartPage() {
       .startable()
       .then((defs) => {
         setDefOptions(
-          defs.map((d) => ({ label: d.name ?? '', value: Number(d.id) })).filter((o) => o.value > 0),
+          defs
+            .map((d) => ({ label: d.name ?? '', value: normalizeWfId(d.id) }))
+            .filter((o): o is { label: string; value: WfId } => o.value !== null),
         )
         // ?definitionId= 预选:定义列表到位后再落值,免得 Select 显示一个还没有选项的 id。
-        const preset = Number(searchParams.get('definitionId'))
-        if (Number.isFinite(preset) && preset > 0) {
+        const preset = normalizeWfId(searchParams.get('definitionId'))
+        if (preset !== null) {
           form.setFieldValue('definitionId', preset)
           void loadDefinition(preset)
         }
@@ -84,6 +94,9 @@ export default function WfStartPage() {
   const kvVariablesJson = useMemo(() => serializeVars(varRows ?? []), [varRows])
   // getFieldValue 在渲染期读不到后续变化,业务键要跟着输入走就得 useWatch 订阅。
   const businessKey = Form.useWatch('businessKey', form)
+  const selectedDefinitionId = Form.useWatch('definitionId', form)
+  const snapshotMatchesSelection =
+    !!selectedDefinitionId && wfIdEquals(snapshot?.id, selectedDefinitionId)
 
   /** 发起人自选审批人的节点:每个节点一个多选人员框,提交时按 nodeId 归拢。 */
   const selfSelectNodes = useMemo(
@@ -94,6 +107,7 @@ export default function WfStartPage() {
   const submit = async () => {
     const v = await form.validateFields().catch(() => null)
     if (!v?.definitionId) return
+    if (!snapshotMatchesSelection || !wfIdEquals(v.definitionId, selectedDefinitionId)) return
     if (hasBuiltinForm && formRuntimeRef.current?.validate() === false) return
 
     setSubmitting(true)
@@ -121,7 +135,14 @@ export default function WfStartPage() {
 
   return (
     <Card title={t('workflow.start.title')} size="small">
-      <Form form={form} labelCol={{ span: 5 }} wrapperCol={{ span: 19 }} style={{ maxWidth: 720 }} initialValues={{ varRows: [{}] }}>
+      <Form
+        form={form}
+        labelCol={{ span: 5 }}
+        wrapperCol={{ span: 19 }}
+        style={{ maxWidth: 720 }}
+        initialValues={{ varRows: [{}] }}
+        onValuesChange={() => requestKey.reset()}
+      >
         <Form.Item
           name="definitionId" label={t('workflow.start.definition')}
           rules={[{ required: true, message: t('workflow.start.definitionRequired') }]}
@@ -132,7 +153,7 @@ export default function WfStartPage() {
             allowClear
             showSearch={{ optionFilterProp: 'label' }}
             placeholder={t('workflow.start.definitionPlaceholder')}
-            onChange={(id: number | undefined) => void loadDefinition(id)}
+            onChange={(id: WfId | undefined) => void loadDefinition(id)}
           />
         </Form.Item>
 
@@ -189,16 +210,24 @@ export default function WfStartPage() {
             formComponent={formComponent}
             formSchema={formSchema}
             mode="start"
-            definitionId={snapshot?.id == null ? undefined : Number(snapshot.id)}
+            definitionId={snapshot?.id}
             businessKey={businessKey || null}
             variablesJson={hasBuiltinForm ? runtimeVariablesJson : kvVariablesJson}
-            onVariablesChange={setRuntimeVariablesJson}
+            onVariablesChange={(next) => {
+              requestKey.reset()
+              setRuntimeVariablesJson(next)
+            }}
           />
         </div>
       ) : null}
 
       <Space style={{ marginTop: 16 }}>
-        <Button type="primary" loading={submitting} onClick={() => void submit()}>
+        <Button
+          type="primary"
+          loading={submitting}
+          disabled={snapshotLoading || !snapshotMatchesSelection}
+          onClick={() => void submit()}
+        >
           {t('workflow.start.submit')}
         </Button>
       </Space>

@@ -204,6 +204,7 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
             id={id} mode="multiple" disabled={disabled} placeholder={placeholder}
             value={Array.isArray(valueOf(field)) ? (valueOf(field) as string[]) : []}
             options={optionsOf(field)}
+            maxCount={field.props?.maxSelected}
             maxTagCount={field.props?.maxSelected}
             onChange={(next: string[]) => updateValue(field, next)}
           />

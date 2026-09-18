@@ -38,7 +38,8 @@ export async function openAppPicker(page: Page) {
 
 export async function enterApp(page: Page, title: RegExp) {
   const cards = await openAppPicker(page)
-  const card = cards.filter({ hasText: title })
+  // title 只匹配卡片内的应用名称节点；直接 hasText 会把 code/“设为默认”也拼进全文，锚定正则永远匹配不到。
+  const card = cards.filter({ has: page.getByText(title) })
   await expect(card).toHaveCount(1)
   await card.click()
   await expect(page).not.toHaveURL(/\/module/, { timeout: 10_000 })

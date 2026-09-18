@@ -27,6 +27,24 @@ const schema: WfFormSchema = {
     { key: 'days', label: '天数', required: false, type: 'number', props: { min: 1, max: 30 } },
     { key: 'reason', label: '原因', required: false, type: 'textarea', props: { rows: 3 } },
     { key: 'kind', label: '类型', required: false, type: 'select', props: { options: [{ label: '年假', value: 'annual' }] } },
+    { key: 'amount', label: '金额', required: false, type: 'money', props: { min: 0, max: 10000 } },
+    { key: 'beginDate', label: '开始日期', required: false, type: 'date' },
+    { key: 'beginAt', label: '开始时间', required: false, type: 'datetime' },
+    {
+      key: 'tags',
+      label: '标签',
+      required: false,
+      type: 'multiSelect',
+      props: {
+        maxSelected: 2,
+        options: [
+          { label: '甲', value: 'a' },
+          { label: '乙', value: 'b' },
+          { label: '丙', value: 'c' },
+        ],
+      },
+    },
+    { key: 'owner', label: '负责人', required: false, type: 'user', props: { multiple: false } },
     { key: 'proof', label: '附件', required: false, type: 'attachment', props: { multiple: false } },
   ],
 }
@@ -59,6 +77,13 @@ function Host({ mode, permissions, initial = {} }: {
 const values = () => JSON.parse(screen.getByTestId('values').textContent || '{}') as WfFormValues
 
 describe('WfBuiltinForm', () => {
+  it('10 种控件都至少渲染一次', () => {
+    render(<Host mode="start" />)
+    for (const label of ['标题', '天数', '原因', '类型', '金额', '开始日期', '开始时间', '标签', '负责人', '附件']) {
+      expect(screen.getByText(label)).toBeTruthy()
+    }
+  })
+
   it('发起态写值经 onChange 上抛,按字段键归位', () => {
     render(<Host mode="start" />)
     fireEvent.change(screen.getByLabelText('标题'), { target: { value: '年假申请' } })
@@ -119,5 +144,16 @@ describe('WfBuiltinForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /close/i }))
     expect(values()).toEqual({ proof: null })
     expect(screen.getByRole('button', { name: 'fake-upload' })).toBeTruthy()
+  })
+
+  it('多选字段按 maxSelected 限制选择数量', () => {
+    render(<Host mode="start" />)
+    const selector = document.querySelector('#wf-field-tags')?.closest('.ant-select')?.querySelector('.ant-select-content')
+    expect(selector).toBeTruthy()
+    for (const option of ['甲', '乙', '丙']) {
+      fireEvent.mouseDown(selector!)
+      fireEvent.click(document.querySelector(`.ant-select-dropdown:not(.ant-select-dropdown-hidden) [title="${option}"]`)!)
+    }
+    expect(values().tags).toEqual(['a', 'b'])
   })
 })

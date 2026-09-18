@@ -76,12 +76,28 @@ const selfSelectNodes = computed(() => {
 
 const variablesJson = computed(() => serializeVars(form.varRows))
 
+function canonicalDecimal(value: string): string {
+  const negative = value.startsWith('-')
+  const unsigned = negative ? value.slice(1) : value
+  const [integerPart, fractionPart] = unsigned.split('.')
+  const integer = integerPart!.replace(/^0+(?=\d)/, '')
+  const fraction = fractionPart?.replace(/0+$/, '') ?? ''
+  const magnitude = fraction ? `${integer}.${fraction}` : integer
+  return negative && magnitude !== '0' ? `-${magnitude}` : magnitude
+}
+
 function coerceValue(raw: string): unknown {
   const s = raw.trim()
   if (s === '') return ''
   if (s === 'true') return true
   if (s === 'false') return false
-  if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s)
+  if (/^-?\d+(?:\.\d+)?$/.test(s)) {
+    const canonical = canonicalDecimal(s)
+    const value = Number(s)
+    if (!Number.isFinite(value) || String(value) !== canonical) return raw
+    if (canonical === '0') return 0
+    return canonical.includes('.') || Number.isSafeInteger(value) ? value : raw
+  }
   return raw
 }
 

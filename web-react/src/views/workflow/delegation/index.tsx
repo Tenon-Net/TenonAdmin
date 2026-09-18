@@ -15,12 +15,14 @@ import { useHasPerm } from '@/stores/auth'
 import { wfDelegationApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
+import { normalizeWfId, type WfId } from '@/workflow/id'
 import { formatDateTime } from '@/workflow/statusLabels'
 import type { WfDelegationRule } from '@/types/workflow'
+import { createDeleteRequestKeys } from './deleteRequestKeys'
 
 interface DelegationFormValues {
-  originalUserId?: number
-  delegateUserId?: number
+  originalUserId?: WfId
+  delegateUserId?: WfId
   enabled: boolean
   startsAt: Dayjs
   endsAt: Dayjs
@@ -39,27 +41,27 @@ export default function WfDelegationPage() {
 
   // useRequestKey 是工厂(键存在闭包里)不是 hook:用 useRef 固定住首个实例,否则每次渲染都换一把新键。
   const requestKey = useRef(useRequestKey()).current
-  // 删除的 requestId 按行缓存:删失败后重试要复用同一把键,成功后才丢弃。
-  const deleteKeys = useRef(new Map<number, string>()).current
+  // 每行独立维护 requestId:网络无定论复用,业务失败或成功后下一次尝试换键。
+  const deleteKeys = useRef(createDeleteRequestKeys()).current
 
   const fetchRules: PageFetcher<WfDelegationRule> = (q) =>
     wfDelegationApi.page({
       page: q.page,
       pageSize: q.pageSize,
-      originalUserId: typeof q.originalUserId === 'number' ? q.originalUserId : undefined,
+      originalUserId: normalizeWfId(q.originalUserId) ?? undefined,
       enabled: typeof q.enabled === 'boolean' ? q.enabled : undefined,
     })
 
   const [form] = Form.useForm<DelegationFormValues>()
   const [open, setOpen] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<WfId | null>(null)
 
   const openForm = useCallback(
     (row?: WfDelegationRule) => {
-      setEditingId(row?.id == null ? null : Number(row.id))
+      setEditingId(normalizeWfId(row?.id))
       form.setFieldsValue({
-        originalUserId: row?.originalUserId == null ? undefined : Number(row.originalUserId),
-        delegateUserId: row?.delegateUserId == null ? undefined : Number(row.delegateUserId),
+        originalUserId: normalizeWfId(row?.originalUserId) ?? undefined,
+        delegateUserId: normalizeWfId(row?.delegateUserId) ?? undefined,
         enabled: row?.enabled ?? true,
         startsAt: row?.startsAt ? dayjs(row.startsAt) : dayjs(),
         endsAt: row?.endsAt ? dayjs(row.endsAt) : dayjs().add(DEFAULT_WINDOW_DAYS, 'day'),
@@ -95,16 +97,23 @@ export default function WfDelegationPage() {
 
   const handleDelete = useCallback(
     (row: WfDelegationRule) => {
-      const id = Number(row.id)
-      const requestId = deleteKeys.get(id) ?? `delete-${id}-${Date.now()}`
-      deleteKeys.set(id, requestId)
+      const id = normalizeWfId(row.id)
+      if (id === null) return
       confirm({
         content: t('workflow.delegation.deleteConfirm'),
-        action: () => wfDelegationApi.remove(id, requestId),
+        action: async () => {
+          try {
+            const result = await wfDelegationApi.remove(id, deleteKeys.value(id))
+            deleteKeys.settle(id, 'success')
+            return result
+          } catch (e) {
+            deleteKeys.settle(id, classifyOutcome(e))
+            throw e
+          }
+        },
         successMsg: t('workflow.delegation.deleted'),
       }).then((ok) => {
         if (!ok) return
-        deleteKeys.delete(id)
         reload()
       })
     },
@@ -185,7 +194,13 @@ export default function WfDelegationPage() {
         confirmText={t('workflow.delegation.save')}
         onConfirm={save}
       >
-        <Form form={form} labelCol={{ span: 7 }} wrapperCol={{ span: 17 }} style={{ marginTop: 12 }}>
+        <Form
+          form={form}
+          labelCol={{ span: 7 }}
+          wrapperCol={{ span: 17 }}
+          style={{ marginTop: 12 }}
+          onValuesChange={() => requestKey.reset()}
+        >
           <Form.Item
             name="originalUserId" label={t('workflow.delegation.originalUser')}
             rules={[{ required: true, message: t('workflow.delegation.required') }]}

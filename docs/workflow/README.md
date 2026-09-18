@@ -38,7 +38,7 @@ M3b-0 当时只依赖 Task 8b 的 `Pending` 幂等入队；Task 8c 已于 2026-0
 | Vue | `lint` / `typecheck` / `build` 通过；单元 `34 files / 183 passed`；工作流 Playwright `e2e/workflow-{layout,m2a,m2b,m3a2}.spec.ts` → `5 passed` |
 | Contract drift | 本轮门禁未改 Controllers/DTO/OpenAPI 面；`schema.d.ts` 相对 HEAD 无变更，未重跑 `check-contract-drift.mjs` |
 
-浏览器 E2E 仍主要覆盖登录相关既有用例、分支、基础动词和 Webhook 发布；动态表单权限、并行多 Token、加减签/拿回/长期委托仍以后端回归为主。Vue 预览版发布条件：**本地四库 + Redis + HTTP transport + Vue 检查已绿**（SQL Server 以模板库四片 + 失败用例串行复跑闭合）。
+浏览器 E2E 覆盖代表性工作流（登录相关既有用例、分支、基础动词和 Webhook 发布），不等于高级组合的穷举覆盖；动态表单权限、高级动词、并行多 Token 与长期委托由聚焦前端组件测试和后端回归共同覆盖。Vue 预览版发布条件：**本地四库 + Redis + HTTP transport + Vue 检查已绿**（SQL Server 以模板库四片 + 失败用例串行复跑闭合）。
 
 Vue/后端功能测试收口、Task 8c 与 React 工作流 port 均已完成；AI 自动放行和 M3+ 仍未开始。
 
