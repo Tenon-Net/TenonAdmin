@@ -133,12 +133,23 @@ function numericPrecision(field: WfFormField): number | undefined {
   return field.type === 'number' && field.props ? field.props.precision : undefined
 }
 
+/**
+ * 附件 Id 是后端 long 雪花:JSON 既可能给 number 也可能给十进制 string。
+ * 判定与 formRuntime 内部的 isPositiveId 同规则,但**不做 Number() 强转** ——
+ * 19 位雪花过一遍 Number() 就掉精度,存回去是另一个文件。
+ */
+function normalizeId(raw: unknown): number | string | null {
+  if (typeof raw === 'number') return Number.isSafeInteger(raw) && raw > 0 ? raw : null
+  if (typeof raw === 'string' && /^[1-9]\d*$/.test(raw.trim())) return raw.trim()
+  return null
+}
+
 function attachmentIds(field: WfFormField): Array<number | string> {
   const value = valueFor(field)
   const raw = field.type === 'attachment' && field.props?.multiple === true
     ? Array.isArray(value) ? value : []
     : [value]
-  return raw.filter((id): id is number | string => typeof id === 'number' || typeof id === 'string')
+  return raw.map(normalizeId).filter((id): id is number | string => id !== null)
 }
 
 function attachmentMaxCount(field: WfFormField): number {
@@ -146,20 +157,20 @@ function attachmentMaxCount(field: WfFormField): number {
 }
 
 function updateAttachment(field: WfFormField, output: FileUploadOutput) {
-  const id = Number(output.id)
-  if (!Number.isSafeInteger(id) || id <= 0) return
+  const id = normalizeId(output.id)
+  if (id === null) return
   if (field.type !== 'attachment' || field.props?.multiple !== true) {
     updateValue(field, id)
     return
   }
   const maxCount = field.props?.maxCount ?? 20
-  const ids = attachmentIds(field).map(Number).filter((value) => Number.isSafeInteger(value) && value > 0)
-  if (!ids.includes(id)) updateValue(field, [...ids, id].slice(0, maxCount))
+  const ids = attachmentIds(field)
+  if (!ids.some((current) => String(current) === String(id))) updateValue(field, [...ids, id].slice(0, maxCount))
 }
 
 function removeAttachment(field: WfFormField, id: number | string) {
   const ids = attachmentIds(field).filter((current) => String(current) !== String(id))
-  updateValue(field, field.type === 'attachment' && field.props?.multiple === true ? ids.map(Number) : null)
+  updateValue(field, field.type === 'attachment' && field.props?.multiple === true ? ids : null)
 }
 
 function validate(): boolean {

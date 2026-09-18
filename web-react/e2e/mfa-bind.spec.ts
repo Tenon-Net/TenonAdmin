@@ -1,39 +1,45 @@
 import { expect, test } from '@playwright/test'
-import { seedForceTotpUser } from './api'
+import { apiAdminToken, apiReauthWithPassword, seedForceTotpUser, setTotpFeatureEnabled } from './api'
 import { computeTotp } from './totp'
 
 /**
- * 真实后端:建用户 → 浏览器自助绑定(账号+密码) → TOTP 完成 → 恢复码展示。
- * 宿主需 TenonAdmin:Security:Totp:Enabled=true。
+ * 真实后端:建用户 → 打开运行时 TOTP 总闸 → 浏览器自助绑定 → TOTP 完成 → 恢复码展示。
+ * 不能把 Totp:Enabled 做成整个 Playwright 宿主地板,否则用户/角色高危写会全部触发 40024 再认证。
  */
 test('MFA bind: self-service account+password → authenticator → recovery codes', async ({ page, request }) => {
   test.setTimeout(60_000)
   const { account, password } = await seedForceTotpUser(request)
+  const admin = await apiAdminToken(request)
+  await setTotpFeatureEnabled(request, admin, true)
+  try {
+    await page.goto(`/mfa/bind?account=${encodeURIComponent(account)}`)
+    await expect(page.getByText(/绑定|Bind|Authenticator|认证器/i).first()).toBeVisible()
 
-  await page.goto(`/mfa/bind?account=${encodeURIComponent(account)}`)
-  await expect(page.getByText(/绑定|Bind|Authenticator|认证器/i).first()).toBeVisible()
+    const accountField = page.getByLabel(/账号|account/i)
+    if (!(await accountField.inputValue()).trim()) {
+      await accountField.fill(account)
+    }
+    await page.getByLabel(/当前密码|password/i).fill(password)
+    await page.getByRole('button', { name: /继\s*续|begin|开始/i }).click()
 
-  const accountField = page.getByLabel(/账号|account/i)
-  if (!(await accountField.inputValue()).trim()) {
-    await accountField.fill(account)
+    const seedInput = page.locator('input[readonly]').filter({ hasNot: page.locator('[type="password"]') }).first()
+    await expect(seedInput).toBeVisible({ timeout: 15_000 })
+    const seed = (await seedInput.inputValue()).trim()
+    expect(seed.length).toBeGreaterThan(10)
+
+    const code = computeTotp(seed)
+    await page.getByLabel(/动态口令|authenticator|code/i).fill(code)
+    await page.getByRole('button', { name: /验证并完成|complete|完成/i }).click()
+
+    await expect(page.getByText('保存恢复码')).toBeVisible({ timeout: 15_000 })
+    const recovery = page.locator('textarea:not([aria-hidden="true"])')
+    await expect(recovery).toBeVisible()
+    const text = await recovery.inputValue()
+    expect(text.split(/\r?\n/).filter((l) => l.trim().length > 0).length).toBeGreaterThanOrEqual(1)
+  } finally {
+    await apiReauthWithPassword(request, admin)
+    await setTotpFeatureEnabled(request, admin, false)
   }
-  await page.getByLabel(/当前密码|password/i).fill(password)
-  await page.getByRole('button', { name: /继\s*续|begin|开始/i }).click()
-
-  const seedInput = page.locator('input[readonly]').filter({ hasNot: page.locator('[type="password"]') }).first()
-  await expect(seedInput).toBeVisible({ timeout: 15_000 })
-  const seed = (await seedInput.inputValue()).trim()
-  expect(seed.length).toBeGreaterThan(10)
-
-  const code = computeTotp(seed)
-  await page.getByLabel(/动态口令|authenticator|code/i).fill(code)
-  await page.getByRole('button', { name: /验证并完成|complete|完成/i }).click()
-
-  await expect(page.getByText('保存恢复码')).toBeVisible({ timeout: 15_000 })
-  const recovery = page.locator('textarea:not([aria-hidden="true"])')
-  await expect(recovery).toBeVisible()
-  const text = await recovery.inputValue()
-  expect(text.split(/\r?\n/).filter((l) => l.trim().length > 0).length).toBeGreaterThanOrEqual(1)
 })
 
 test('MFA bind: empty recoveryCodes never shows success screen', async ({ page }) => {
@@ -57,7 +63,8 @@ test('MFA bind: empty recoveryCodes never shows success screen', async ({ page }
   await page.getByLabel(/账号|account/i).fill('e2euser')
   await page.getByLabel(/当前密码|password/i).fill('whatever')
   await page.getByRole('button', { name: /继\s*续|begin|开始/i }).click()
-  await expect(page.getByText('将此帐户添加到认证器应用，然后输入当前动态口令。')).toBeVisible({ timeout: 10_000 })
+  // BindPage 的设置态提示是 mfaBind.scanSetupHint(扫码) + manualSetupHint(手动),不是 setupHint。
+  await expect(page.getByText('用 Google Authenticator、Microsoft Authenticator 等应用扫描下方二维码。')).toBeVisible({ timeout: 10_000 })
 
   await page.getByLabel(/动态口令|code/i).fill('123456')
   await page.getByRole('button', { name: /验证并完成|complete|完成/i }).click()

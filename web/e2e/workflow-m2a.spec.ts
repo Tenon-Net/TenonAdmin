@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-import { enterApp, login, SYSTEM_APP } from './helpers'
+import { enterBusinessApp, enterSystemApp, login } from './helpers'
 
 const DESIGNER_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2a-01-designer-published.png', import.meta.url))
 const HIGH_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2a-02-high-approved.png', import.meta.url))
@@ -76,8 +76,9 @@ test('M2a branch definition routes high amount to approval and low amount to def
   const highBusinessKey = `M2A-HIGH-${suffix}`
   const defaultBusinessKey = `M2A-DEFAULT-${suffix}`
 
+  // 治理页在「系统」应用下;先切应用再开路由,否则动态路由里根本没有这一条。
   await login(page)
-  await enterApp(page, SYSTEM_APP)
+  await enterSystemApp(page)
   await page.goto('/workflow/definition/designer')
   await expect(page.getByText(/未打开流程|No workflow opened/i)).toBeVisible()
 
@@ -146,6 +147,8 @@ test('M2a branch definition routes high amount to approval and low amount to def
   await expect(page.locator('.wf-card.is-approval')).toContainText(APPROVAL_NAME)
   await page.screenshot({ path: DESIGNER_SHOT, fullPage: true })
 
+  // 员工侧在「业务中心」:不切应用直开 /workflow/start 会 404。
+  await enterBusinessApp(page)
   const highInstanceId = await startInstance(page, definitionName, highBusinessKey, HIGH_AMOUNT)
   await expect(page.locator('.n-descriptions').getByText(/审批中|Running/i)).toBeVisible()
   await expect(page.getByRole('button', { name: /同意|Approve/i })).toBeVisible()

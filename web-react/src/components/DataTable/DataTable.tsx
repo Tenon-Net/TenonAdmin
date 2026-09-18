@@ -41,6 +41,11 @@ export interface DataTableProps<T extends Record<string, any>> {
    * (如用户页左机构树 → `params={{ orgId }}`)。ProTable 深比较,传新对象字面量不会自旋。
    */
   params?: Record<string, unknown>
+  /**
+   * `false` 收起整张搜索卡。**没有任何可搜索列时必须传** —— ProTable 的 FormRender 不看列数,
+   * 全列 `search:false` 也照样渲染一张只剩「查询/重置」按钮的空卡(对齐 Vue ProTable 无搜索列即不出搜索区)。
+   */
+  search?: false
 }
 
 /** 暴露给调用方的句柄(增删改后刷新)——只给 `reload`,不外泄 pro-components 的 `ActionType`。 */
@@ -49,7 +54,7 @@ export interface DataTableHandle {
 }
 
 function DataTableInner<T extends Record<string, any>>(
-  { columns, fetcher, persistKey, rowKey = 'id', toolbar, rowSelection, onRowClick, activeRowKey, params }: DataTableProps<T>,
+  { columns, fetcher, persistKey, rowKey = 'id', toolbar, rowSelection, onRowClick, activeRowKey, params, search }: DataTableProps<T>,
   ref: React.ForwardedRef<DataTableHandle>,
 ) {
   const actionRef = useRef<ActionType | undefined>(undefined)
@@ -66,7 +71,7 @@ function DataTableInner<T extends Record<string, any>>(
       rowClassName={activeRowKey == null ? undefined : (record) => (record[rowKey] === activeRowKey ? 'data-table-active-row' : '')}
       columnsState={persistKey ? { persistenceKey: `protable:${persistKey}`, persistenceType: 'localStorage' } : undefined}
       params={params}
-      search={{ labelWidth: 'auto' }}
+      search={search === false ? false : { labelWidth: 'auto' }}
       // 搜索区与表格分成两张有边框卡(对齐 Vue ProTable 的 .pro-table-search / .pro-table-card);
       // 不开则两块无边框区浮在页面底色上、视觉连成一片。
       cardBordered

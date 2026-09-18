@@ -1,0 +1,684 @@
+/* ---- from WfAddNode.vue ---- */
+.wf-add {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 220px;
+  padding: 18px 0 26px;
+  flex-shrink: 0;
+}
+.wf-add::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 2px;
+  height: 100%;
+  background: #c8c9cc;
+  z-index: 0;
+}
+.wf-add-btn {
+  position: relative;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--wf-accent);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(24, 26, 42, 0.16);
+  transition: transform 0.28s cubic-bezier(0.645, 0.045, 0.355, 1), box-shadow var(--transition-base);
+}
+.wf-add-btn:hover {
+  transform: scale(1.28);
+  box-shadow: 0 8px 18px rgba(24, 26, 42, 0.16);
+}
+.wf-add-btn:active {
+  transform: scale(1);
+}
+.wf-add-btn:focus-visible {
+  outline: 2px solid var(--wf-accent);
+  outline-offset: 3px;
+}
+
+.wf-add-grid {
+  width: min(360px, calc(100vw - 64px));
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 8px;
+}
+.wf-add-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-fill);
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text-primary);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+.wf-add-item:hover {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-1);
+}
+.wf-add-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--color-bg-container);
+  border: 1px solid var(--color-border);
+}
+.wf-add-icon.is-approval { color: var(--wf-approval); }
+.wf-add-icon.is-cc { color: var(--wf-cc); }
+.wf-add-icon.is-branch { color: var(--color-primary); }
+.wf-add-icon.is-parallel { color: var(--color-warning); }
+.wf-add-icon.is-webhook { color: var(--color-info); }
+.wf-add-label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+html[data-theme='dark'] .wf-add::before {
+  background: #5a5c64;
+}
+
+/* ---- from WfNodeCard.vue ---- */
+/* 类型色:发起鲜绿 / 审批橙 / 抄送蓝 / 结束炭灰。跟 tokens 并存,只用于节点身份。 */
+.wf-card {
+  --wf-head: var(--color-text-secondary);
+  width: 220px;
+  position: relative;
+  border-radius: 8px;
+  background: var(--color-bg-container);
+  box-shadow: 0 1px 4px rgba(24, 26, 42, 0.08);
+  cursor: pointer;
+  text-align: left;
+  outline: none;
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+.wf-card:not(.is-root)::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-style: solid;
+  border-width: 8px 6px 0;
+  border-color: #c8c9cc transparent transparent;
+}
+.wf-card.is-start { --wf-head: var(--wf-start); }
+.wf-card.is-approval { --wf-head: var(--wf-approval); }
+.wf-card.is-cc { --wf-head: var(--wf-cc); }
+.wf-card.is-branch { --wf-head: var(--color-primary); }
+.wf-card.is-parallel { --wf-head: var(--color-warning); }
+.wf-card.is-webhook { --wf-head: var(--color-info); }
+.wf-card.is-ai-decision { --wf-head: var(--color-primary); }
+.wf-card.is-end { --wf-head: var(--wf-end); }
+
+.wf-card:not(.is-readonly):hover {
+  box-shadow: var(--shadow-1), 0 0 0 1px color-mix(in srgb, var(--wf-head) 45%, transparent);
+}
+.wf-card.is-readonly {
+  cursor: default;
+}
+.wf-card.is-visited:not(.is-current) {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wf-head) 55%, transparent);
+}
+.wf-card.is-current {
+  box-shadow: var(--shadow-1), 0 0 0 2px var(--wf-head);
+}
+.wf-card.is-dimmed {
+  opacity: 0.42;
+}
+.wf-card.is-active {
+  box-shadow: var(--shadow-1), 0 0 0 2px var(--wf-head);
+}
+.wf-card.is-error {
+  box-shadow: 0 0 0 2px var(--color-danger);
+}
+.wf-card:focus-visible {
+  box-shadow: var(--shadow-1), 0 0 0 2px var(--color-primary);
+}
+
+.wf-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px 8px 0 0;
+  background: var(--wf-head);
+  color: #fff;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  line-height: 1;
+}
+.wf-card-head-icon { flex-shrink: 0; }
+.wf-card-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-card-del {
+  margin-left: auto;
+  color: #fff !important;
+  opacity: 0;
+  flex-shrink: 0;
+}
+.wf-card:hover .wf-card-del,
+.wf-card:focus-within .wf-card-del { opacity: 0.9; }
+
+.wf-card-body {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 10px 12px 12px;
+  gap: 8px;
+}
+.wf-card-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-sm);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.wf-card-text.is-empty {
+  color: var(--color-text-tertiary);
+}
+.wf-card-arrow {
+  flex-shrink: 0;
+  color: var(--color-text-disabled);
+}
+.wf-card-warn {
+  position: absolute;
+  right: -28px;
+  top: 18px;
+  color: var(--color-danger);
+  display: flex;
+}
+
+html[data-theme='dark'] .wf-card:not(.is-root)::before {
+  border-top-color: #5a5c64;
+}
+
+/* ---- from WfNodeChain.vue ---- */
+.wf-chain,
+.wf-chain-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: max-content;
+}
+
+.wf-branch {
+  position: relative;
+  margin-top: var(--space-24);
+  padding: var(--space-12) var(--space-16) var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-bg-container) 92%, var(--color-primary-light));
+  box-shadow: var(--shadow-1);
+}
+.wf-parallel {
+  background: color-mix(in srgb, var(--color-bg-container) 92%, var(--color-warning-bg));
+}
+.wf-branch::before {
+  content: '';
+  position: absolute;
+  top: calc(-1 * var(--space-24));
+  left: 50%;
+  width: 2px;
+  height: var(--space-24);
+  transform: translateX(-50%);
+  background: var(--color-border-strong);
+}
+.wf-branch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  min-height: var(--space-32);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+.wf-branch-arms {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-16);
+  padding-top: var(--space-8);
+}
+.wf-arm {
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: calc(220px + var(--space-32));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-container);
+}
+.wf-arm-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: var(--space-32);
+  padding: var(--space-4) var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-fill);
+}
+.wf-arm-name {
+  flex: 1;
+  min-width: 0;
+  height: calc(var(--space-24) + 2px);
+  padding: 0 var(--space-8);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+}
+.wf-arm-name:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-container);
+}
+.wf-arm-name:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-bg-container);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+.wf-arm-default {
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-8);
+  border-radius: 999px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+}
+.wf-arm-action {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+.wf-arm-action:hover {
+  background: var(--color-fill-hover);
+  color: var(--color-text-primary);
+}
+.wf-arm-action:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.wf-arm-add {
+  min-height: calc(var(--space-24) + 2px);
+  padding: 0 var(--space-8);
+  color: var(--color-primary);
+}
+.wf-arm-remove {
+  width: calc(var(--space-24) + 2px);
+  height: calc(var(--space-24) + 2px);
+  flex-shrink: 0;
+}
+.wf-arm-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: calc(5 * var(--space-24) + var(--space-4));
+  padding: 0 var(--space-16) var(--space-16);
+}
+.wf-arm-merge,
+.wf-chain-terminal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.04em;
+}
+.wf-arm-merge {
+  position: relative;
+  width: 100%;
+  padding-top: var(--space-24);
+}
+.wf-arm-merge::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: var(--space-24);
+  transform: translateX(-50%);
+  background: var(--color-border-strong);
+}
+.wf-arm-merge-dot,
+.wf-chain-terminal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--wf-end);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--wf-end) 16%, transparent);
+}
+.wf-chain-terminal {
+  margin-top: calc(-1 * var(--space-8));
+}
+
+html[data-theme='dark'] .wf-branch {
+  background: color-mix(in srgb, var(--color-bg-container) 90%, var(--color-primary-light));
+}
+html[data-theme='dark'] .wf-parallel {
+  background: color-mix(in srgb, var(--color-bg-container) 90%, var(--color-warning-bg));
+}
+
+/* ---- from WfNodeTree.vue ---- */
+.wf-tree {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: min-content;
+  padding: 28px 48px 64px;
+}
+
+/* ---- from WfConfigDrawer.vue ---- */
+.w-full { width: 100%; }
+.wf-advanced {
+  margin-top: 4px;
+}
+.wf-advanced-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.wf-advanced .n-collapse-item__header {
+  padding: 8px 0;
+}
+.wf-advanced .n-collapse-item__content-inner {
+  padding-top: 8px;
+}
+.wf-branch-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+.wf-branch-condition-title {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+.wf-branch-default-hint {
+  padding: var(--space-8);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-body);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.wf-parallel-hint {
+  margin: 0;
+  padding: var(--space-12);
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-bg);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.wf-form-permissions {
+  padding-bottom: var(--space-8);
+}
+.wf-webhook-headers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  width: 100%;
+}
+.wf-webhook-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: var(--space-8);
+  align-items: center;
+}
+
+/* ---- from WfConditionEditor.vue ---- */
+.wf-condition {
+  min-width: 0;
+}
+.wf-condition.is-group {
+  padding: var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-body);
+}
+.wf-condition-toolbar,
+.wf-condition-actions,
+.wf-condition-child {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+.wf-condition-toolbar {
+  justify-content: space-between;
+}
+.wf-logic-select {
+  width: 104px;
+}
+.wf-condition-action,
+.wf-condition-delete {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+.wf-condition-action {
+  padding: var(--space-4);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+}
+.wf-condition-delete {
+  flex: 0 0 auto;
+  padding: var(--space-4) var(--space-8);
+  color: var(--color-danger);
+  font-size: var(--font-size-md);
+}
+.wf-condition-action:focus-visible,
+.wf-condition-delete:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.wf-condition-children {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+  padding-left: var(--space-8);
+  border-left: 1px solid var(--color-border-strong);
+}
+.wf-condition-child {
+  align-items: flex-start;
+}
+.wf-condition-child-editor {
+  flex: 1;
+}
+.wf-condition-child-summary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-condition-empty,
+.wf-condition-no-value {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+.wf-condition-empty {
+  margin-top: var(--space-8);
+}
+.wf-condition-leaf {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  gap: var(--space-8);
+}
+.wf-condition-value,
+.wf-condition-no-value {
+  grid-column: 1 / -1;
+}
+.wf-condition-value {
+  width: 100%;
+}
+
+/* ---- from WfFormDesigner.vue ---- */
+.wf-form-designer, .wf-form-field { display: flex; flex-direction: column; gap: var(--space-12); }
+.wf-form-toolbar { display: flex; gap: var(--space-8); align-items: center; }
+.wf-form-type-select { flex: 1; }
+.wf-form-count { color: var(--color-text-tertiary); font-size: var(--font-size-sm); }
+.wf-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-12); }
+.wf-form-option { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--space-8); margin-bottom: var(--space-8); }
+.wf-form-errors { color: var(--color-danger); font-size: var(--font-size-sm); }
+
+/* ---- from designer.vue ---- */
+.wf-page.is-editing .detail-title {
+  display: none;
+}
+.wf-page .detail-actions {
+  margin-left: 0;
+  flex: 1;
+  min-width: 0;
+}
+.wf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+.wf-name {
+  width: 280px;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+}
+.wf-name .n-input__input-el {
+  font-weight: 600;
+}
+
+.wf-spin {
+  display: block;
+}
+.wf-spin .n-spin-content {
+  min-height: calc(100vh - 168px);
+}
+
+.wf-canvas-wrap {
+  position: relative;
+  min-height: calc(100vh - 168px);
+}
+.wf-canvas {
+  min-height: calc(100vh - 168px);
+  height: calc(100vh - 168px);
+  background: var(--color-bg-body);
+  border-radius: var(--radius-lg);
+  overflow: auto;
+}
+
+.wf-stage {
+  display: flex;
+  justify-content: center;
+  width: max-content;
+  min-width: 100%;
+}
+.wf-stage-inner {
+  display: inline-block;
+}
+
+.wf-zoom {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-2);
+}
+.wf-zoom-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.wf-zoom-btn:hover:not(:disabled) {
+  background: var(--color-fill-hover);
+  color: var(--color-text-primary);
+}
+.wf-zoom-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.wf-zoom-pct {
+  min-width: 48px;
+  text-align: center;
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+.wf-zoom-fit {
+  margin-left: 2px;
+}
+
+.wf-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 80px 16px;
+  color: var(--color-text-secondary);
+}
+.wf-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: var(--color-fill);
+  color: var(--color-text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wf-empty-title {
+  margin: 0 0 8px;
+  max-width: 420px;
+  text-align: center;
+  line-height: 1.6;
+}
+

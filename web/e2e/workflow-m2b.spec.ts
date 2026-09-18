@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-import { enterApp, login, SYSTEM_APP } from './helpers'
+import { enterBusinessApp, enterSystemApp, login } from './helpers'
 
 const RETURN_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2b-01-return.png', import.meta.url))
 const CANCEL_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2b-02-cancel.png', import.meta.url))
@@ -111,8 +111,9 @@ test('M2b verbs: return, cancel, urge, cc read, mine and done', async ({ page })
   const cancelKey = `M2B-CAN-${suffix}`
   const urgeKey = `M2B-URG-${suffix}`
 
+  // 治理页在「系统」应用下;先切应用再开路由,否则动态路由里根本没有这一条。
   await login(page)
-  await enterApp(page, SYSTEM_APP)
+  await enterSystemApp(page)
 
   await page.goto('/workflow/definition/designer')
   await expect(page.getByText(/未打开流程|No workflow opened/i)).toBeVisible()
@@ -148,6 +149,9 @@ test('M2b verbs: return, cancel, urge, cc read, mine and done', async ({ page })
   await configureAssignee(page, drawer, /全部数据/)
   await saveDrawer(page, drawer)
   await publishDefinition(page)
+
+  // 员工侧(发起/抄送/我发起的/我已办的)在「业务中心」:不切应用直开这些路由会 404。
+  await enterBusinessApp(page)
 
   await startInstance(page, selfDef, returnKey)
   await expect(page.getByRole('button', { name: /^(退回|Return)$/i })).toBeVisible()

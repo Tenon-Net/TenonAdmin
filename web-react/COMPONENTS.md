@@ -16,6 +16,7 @@
 - **rowSelection**:受控,原样透传给内层 `Table`;不给则无勾选列。批量删除页配 `useBatchDelete` 的 `selectedKeys`/`setSelectedKeys` 绑 `rowSelection={{selectedRowKeys, onChange}}`(范例:`role`)。
 - **onRowClick / activeRowKey**:主从页左栏点行 → 右栏联动。给了 `onRowClick` 才有指针手型 + 点击态;行内交互控件(开关/按钮)的 render 里须自行 `stopPropagation`,否则点它会冒泡触发行点击。`activeRowKey` 命中的行套 `.data-table-active-row`(`DataTable.css`),做选中高亮(范例:`dict`)。
 - **params**:透传给 ProTable 的 `params`,变化即自动 reload 回第 1 页,给侧栏/主从筛选用(如用户页左机构树 → `params={{orgId}}`)。ProTable 深比较,传新对象字面量不会自旋。
+- **search**:只接 `false`,收起整张搜索卡。**无任何可搜索列的页必须传** —— ProTable 的 `FormRender` 不看列数,全列 `search:false` 时照样渲染一张只剩「查询/重置」的空卡(Vue 侧 ProTable 无搜索列即不出搜索区,传 `false` 才是对齐)。范例:`workflow/todo`。
 - **句柄**:`ref` 拿到的 `DataTableHandle` 只暴露 `reload()`(增删改后手动刷新),不外泄 pro-components 的 `ActionType`。
 
 `<TreeTable columns data loading? rowKey? expandedRowKeys onExpandedRowKeysChange toolbar? persistKey?>`(`src/components/DataTable/TreeTable.tsx`):

@@ -415,7 +415,7 @@ AI 分成两条互不混用的能力线：
 
 依赖关系：`M2c → M3a-1 → M3b`；`M3a-2` 与 `M3b` 并行。GA 门槛不变（双模板 feature 对齐 + 文档站 guide + 远程节点无长事务/崩溃可恢复/同一 execution 只推进一次）。
 
-当前执行再分为两个交付阶段：先完成 **M3a-2 Vue**（Webhook 设计器、简易动态表单/字段权限、高级动词和并行分支），并先让 Vue、后端、契约及完整功能测试全部无失败，再做 **M3a-2 React port**。2026-09-14 功能测试收口已使该闸门为真，但本轮仍未实现 React port。M3a-2 Vue 完成只关闭 Vue 阶段，不能宣称完整 M3a-2 或 GA 完成。Vue 阶段的稳定任务拆分见 [`m3a2-vue-task-plan-2026-09.md`](./m3a2-vue-task-plan-2026-09.md)。
+当前执行再分为两个交付阶段：先完成 **M3a-2 Vue**（Webhook 设计器、简易动态表单/字段权限、高级动词和并行分支），并先让 Vue、后端、契约及完整功能测试全部无失败，再做 **M3a-2 React port**。2026-09-14 功能测试收口已使该闸门为真；**M3a-2 React port 已于 2026-09-17 收口**（T01–T26，证据见 [`m3a2-react-task-plan-2026-09.md`](./m3a2-react-task-plan-2026-09.md)），双模板工作流产品面对齐，完整 M3a-2 成立，但 GA 仍未达成、AI 自动放行仍未开放。Vue 阶段的稳定任务拆分见 [`m3a2-vue-task-plan-2026-09.md`](./m3a2-vue-task-plan-2026-09.md)。
 
 ### 15.3 Webhook 按一等功能交付
 
@@ -564,7 +564,7 @@ TenonAdmin 以内核包分发，自身没有生产流量，shadow mode 的评测
 
 T18–T23 已实现并验证；SQLite、MySQL、PostgreSQL、SQL Server 的代表流程各为 `29/29` 通过。T24/T25/T25A 的本地证据为 T25A 前置后端回归 `122/122`、最终修复后回执/回填/identity 聚焦 `33/33`、独立 `code-reviewer` 为 `APPROVE`、`architect` 为 `CLEAR`。2026-09-14 功能测试收口后：Vue 单元测试 `183/183`、完整 Vue Playwright `16/16`、后端 Release `1536/1536`、Release build `0 warning / 0 error`、contract drift `in sync`、两套前端 typecheck/build 通过。此前 MFA `input[readonly]` 超时的根因是 E2E 未打开运行时 TOTP 总闸；RBAC 重复 `.n-message` 的根因是连续保存堆叠相同成功提示；历史投影曾丢掉去重 `userIds`。React 工作流 port 只在上述功能测试无失败后才允许启动；本轮未进入 React 工作流页面、AI 自动放行和 M3+。Task 8c 已另开切片完成，见 §15.8。
 
-当前 Vue 产品面只关闭 **M3a-2 Vue**。React 工作流页面 port、AI 自动放行和 M3+ 仍是后续范围。
+Vue 与 React 两套模板的 M3a-2 产品面均已关闭（React port 于 2026-09-17 收口），**完整 M3a-2 成立**；AI 自动放行、M3b 受控自动化和 M3+ 仍是后续范围，GA 未声明。
 
 ### 15.8 Task 8c outbox consumer（2026-09-14）
 

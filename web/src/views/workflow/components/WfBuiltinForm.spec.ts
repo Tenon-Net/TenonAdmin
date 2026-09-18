@@ -9,6 +9,8 @@ import WfBuiltinForm from './WfBuiltinForm.vue'
 vi.mock('@/components/UserSelect/index.vue', () => ({
   default: defineComponent({ render: () => h('div', { 'data-testid': 'user-select' }) }),
 }))
+/** 上传桩回什么 Id 由用例定:后端 long 雪花在 JSON 里既可能是 number 也可能是十进制 string。 */
+let uploadedId: number | string = 12
 vi.mock('@/components/FileUpload/index.vue', () => ({
   default: defineComponent({
     props: { max: Number },
@@ -16,7 +18,7 @@ vi.mock('@/components/FileUpload/index.vue', () => ({
     setup: (props, { emit }) => () => h('button', {
       'data-testid': 'file-upload',
       'data-max': String(props.max ?? ''),
-      onClick: () => emit('uploaded', { id: 12 }),
+      onClick: () => emit('uploaded', { id: uploadedId }),
     }, 'upload'),
   }),
 }))
@@ -25,6 +27,7 @@ let app: App<Element> | undefined
 afterEach(() => {
   app?.unmount()
   app = undefined
+  uploadedId = 12
   document.body.replaceChildren()
 })
 
@@ -152,6 +155,36 @@ describe('WfBuiltinForm', () => {
     expect(values.value).toEqual({ files: [12] })
     expect(host.textContent).toContain('12')
     expect(host.querySelector('[data-testid="file-upload"]')?.getAttribute('data-max')).toBe('1')
+  })
+
+  it('keeps a decimal-string snowflake attachment id intact instead of coercing it', async () => {
+    uploadedId = '1500000000000000001'
+    const schema: WfFormSchema = {
+      version: 1,
+      fields: [field('attachment', 'file', { multiple: false, maxCount: 1 })],
+    }
+    const values = ref<Record<string, unknown>>({})
+    const runtime = ref<{ validate: () => boolean } | null>(null)
+    const host = document.createElement('div')
+    document.body.append(host)
+    app = createApp(defineComponent({
+      setup: () => () => h(WfBuiltinForm, {
+        ref: runtime,
+        schema,
+        modelValue: values.value,
+        mode: 'start',
+        'onUpdate:modelValue': (next: Record<string, unknown>) => { values.value = next },
+      }),
+    }))
+    app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
+    app.mount(host)
+    await nextTick()
+
+    host.querySelector<HTMLButtonElement>('[data-testid="file-upload"]')!.click()
+    await nextTick()
+    expect(values.value).toEqual({ file: '1500000000000000001' })
+    expect(host.textContent).toContain('1500000000000000001')
+    expect(runtime.value?.validate()).toBe(true)
   })
 
   it('clears a single attachment with an explicit null value', async () => {
