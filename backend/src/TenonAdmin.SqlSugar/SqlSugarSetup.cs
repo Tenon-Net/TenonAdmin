@@ -49,6 +49,10 @@ public static class SqlSugarSetup
         IEnumerable<Assembly>? entityAssemblies = null,
         IEnumerable<AdminDatabaseConnectionOptions>? additionalDatabases = null)
     {
+        // 只调本方法、不经 AddTenonAdmin 的宿主(大量测试)也要把选项放进容器,
+        // 否则 Services 层的 DbWorkerIdSlotClaimer 解析不到 AdminDatabaseOptions。
+        services.TryAddSingleton(db);
+
         // ── ID 生成器:雪花默认实现(用户可换,见 IIdGenerator)──────────────
         // 显式 WorkerId(含 0)直接用;未配时若有 IWorkerIdSlotClaimer(Services 层)先在库表领槽,
         // 否则只抢同机文件锁。WorkerIdAssignment 必须单例根住,避免 FileStream 被回收提前放锁。
