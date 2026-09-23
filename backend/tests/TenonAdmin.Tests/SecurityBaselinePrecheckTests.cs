@@ -57,7 +57,8 @@ public class SecurityBaselinePrecheckTests
         string? redisConn = null,
         bool requireTls = false,
         string? dataProtectionKey = null,
-        string environment = "Production")
+        string environment = "Production",
+        ICacheProvider? actualCache = null)
     {
         var security = new AdminSecurityOptions
         {
@@ -82,9 +83,9 @@ public class SecurityBaselinePrecheckTests
             new AdminJwtOptions());
 
         // Level3 预检会看运行时 ICacheProvider 类型名是否含 Redis;测 ok 路径时注入假 Redis 实现
-        ICacheProvider? runtimeCache = string.Equals(cacheProvider, "Redis", StringComparison.OrdinalIgnoreCase)
+        ICacheProvider runtimeCache = actualCache ?? (string.Equals(cacheProvider, "Redis", StringComparison.OrdinalIgnoreCase)
             ? new FakeRedisCacheProvider()
-            : new FakeMemoryCacheProvider();
+            : new FakeMemoryCacheProvider());
 
         return new SecurityBaselinePrecheckService(
             accessor,
@@ -98,13 +99,13 @@ public class SecurityBaselinePrecheckTests
     }
 
     /// <summary>声明完整 ISecureCacheCapabilities 的假分布式缓存(不依赖类名)。</summary>
-    private sealed class FakeRedisCacheProvider : ICacheProvider, ISecureCacheCapabilities
+    private sealed class FakeRedisCacheProvider(Task<(bool Ok, string Message)>? probe = null) : ICacheProvider, ISecureCacheCapabilities
     {
         public bool IsDistributed => true;
         public bool HasAuthenticationConfigured => true;
         public bool HasTlsConfigured => true;
         public Task<(bool Ok, string Message)> ProbeAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult((true, "fake PING ok"));
+            probe ?? Task.FromResult((true, "fake PING ok"));
 
         public Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) =>
             Task.FromResult(default(T));
@@ -128,6 +129,29 @@ public class SecurityBaselinePrecheckTests
             Task.FromResult(0L);
         public Task<T?> GetAndRemoveAsync<T>(string key, CancellationToken cancellationToken = default) =>
             Task.FromResult(default(T));
+    }
+
+    [Fact]
+    public async Task Cache_probe_yields_without_blocking_the_calling_thread()
+    {
+        var probe = new TaskCompletionSource<(bool Ok, string Message)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = Make(SecurityProfile.Level3, cacheProvider: "Redis",
+            actualCache: new FakeRedisCacheProvider(probe.Task));
+        Task<SecurityBaselinePrecheckResult>? pending = null;
+        // 单独线程防止回归为同步阻塞时挂死测试；finally 始终释放探针。
+        var returned = Task.Run(() => { pending = service.RunAsync(); });
+        try
+        {
+            await returned.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.NotNull(pending);
+            Assert.False(pending.IsCompleted);
+        }
+        finally { probe.TrySetResult((true, "delayed PING ok")); }
+        await returned;
+        Assert.NotNull(pending);
+        var result = await pending;
+        Assert.Equal(SecurityBaselineCheckStatus.Pass,
+            result.Checks.Single(c => c.Id == SecurityBaselinePrecheckConstants.CheckRedisActual).Status);
     }
 
     [Theory]

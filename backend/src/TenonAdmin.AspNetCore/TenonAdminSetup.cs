@@ -257,8 +257,6 @@ public static class TenonAdminSetup
         services.TryAddSingleton<RuntimeRateLimit>();
         services.AddHostedService(sp => sp.GetRequiredService<RuntimeRateLimit>());
 
-        // ── 历史 Level3 注册位(ADR 0006:告警/启动 fail-closed/ready 预检已退役为空操作;后续可删)──
-        services.AddHostedService<SecurityProfileWarningHostedService>();
         services.TryAddSingleton<AuthCookieService>(); // Cookie/CSRF 服务;启用条件见会话选项瘦身
         services.AddHostedService<SecurityStartupDiagnosticHostedService>();
 

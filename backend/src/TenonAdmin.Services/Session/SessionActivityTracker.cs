@@ -41,10 +41,11 @@ public class SessionActivityTracker(
             var lastWrite = await cache.GetAsync<DateTime?>(throttleKey, cancellationToken);
             if (lastWrite is null || (now - lastWrite.Value).TotalSeconds >= throttleSec)
             {
-                await sessions.Db.Updateable<SysSession>()
+                var updated = await sessions.Db.Updateable<SysSession>()
                     .SetColumns(s => s.LastActivityAt == now)
-                    .Where(s => s.SessionId == sessionId)
+                    .Where(s => s.SessionId == sessionId && s.RevokedAt == null && s.ExpiresAt > now)
                     .ExecuteCommandAsync();
+                if (updated == 0) return false;
                 await cache.SetAsync(throttleKey, now, TimeSpan.FromSeconds(throttleSec * 2), cancellationToken);
             }
 

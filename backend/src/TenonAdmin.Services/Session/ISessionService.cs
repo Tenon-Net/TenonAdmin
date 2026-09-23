@@ -11,7 +11,7 @@ public interface ISessionService
     /// <summary>登录成功后开会话:落库 + 落缓存 + 存刷新令牌哈希;按单端/限并发策略吊销旧会话。</summary>
     Task OpenAsync(SysUser user, string sessionId, TokenPair pair);
 
-    /// <summary>会话是否活跃(热路径:先读缓存,未命中查库回填)。强退/登出/过期后即为 false。</summary>
+    /// <summary>会话是否活跃(数据库校验吊销与有效期，缓存辅助活动时间)。强退/登出/过期后即为 false。</summary>
     Task<bool> IsActiveAsync(string sessionId);
 
     /// <summary>用刷新令牌换发新令牌对:校验 + 轮换(旧置 Used)+ 复用检测(重放整会话吊销)。失败抛 40007。</summary>

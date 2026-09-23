@@ -97,15 +97,17 @@ public class OrgService(
 
         var entity = await GetAsync(id);
         await ValidateLeaderAsync(input.LeaderUserId);
+        // 编辑时未提供编码则保留原值，避免把可选输入写入非空唯一列。
+        var code = string.IsNullOrWhiteSpace(input.Code) ? entity.Code : input.Code;
         // 改编码时排除自身查重(纳入软删行)
         AdminException.ThrowIf(
-            input.Code != entity.Code &&
-            await orgs.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(o => o.Code == input.Code && o.Id != id),
+            code != entity.Code &&
+            await orgs.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(o => o.Code == code && o.Id != id),
             ErrorCode.OrgCodeExists);
 
         entity.ParentId = input.ParentId;
         entity.Name = input.Name;
-        entity.Code = input.Code;
+        entity.Code = code;
         entity.Category = input.Category;
         entity.Sort = input.Sort;
         entity.Enabled = input.Enabled;

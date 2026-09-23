@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace TenonAdmin.Core;
 
 /// <summary>
@@ -45,7 +47,7 @@ public class AdminException : Exception
     }
 
     /// <summary>便捷抛出:条件成立即抛。写法 <c>AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);</c></summary>
-    public static void ThrowIf(bool condition, ErrorCode code, IReadOnlyDictionary<string, object?>? args = null)
+    public static void ThrowIf([DoesNotReturnIf(true)] bool condition, ErrorCode code, IReadOnlyDictionary<string, object?>? args = null)
     {
         if (condition) throw new AdminException(code, args);
     }

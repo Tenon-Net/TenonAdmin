@@ -92,6 +92,21 @@ public class OrgCrudTests
         Assert.Equal("改名后", got.GetProperty("data").GetProperty("name").GetString());
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Update_without_code_preserves_existing_code(string? code)
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+        var id = await AddOrg(admin, "保留编码", code: "KEEP_CODE");
+        var updated = await (await admin.PutJson($"/api/v1/sys/org/{id}",
+            new { parentId = 0, name = "改名后", code, enabled = true })).ReadEnvelope();
+        Assert.Equal(0, updated.GetProperty("code").GetInt32());
+        Assert.Equal("KEEP_CODE", (await Get(admin, id)).GetProperty("data").GetProperty("code").GetString());
+    }
+
     [Fact]
     public async Task Delete_org_with_children_returns_OrgHasChildren()
     {

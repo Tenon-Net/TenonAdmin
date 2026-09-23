@@ -18,6 +18,9 @@ public static class ServicesSetup
     /// <returns>原服务集合</returns>
     public static IServiceCollection AddTenonAdminServices(this IServiceCollection services)
     {
+        // 在本层其它后台服务启动前验证替换缓存的原子操作契约，不连接外部缓存。
+        services.AddHostedService<CacheContractValidator>();
+
         // 统一时间源(§12):AspNetCore 层也 TryAdd 同一个,这里再兜一次,让本层单独装配也能自洽(测试可换 Fake)
         services.TryAddSingleton(TimeProvider.System);
 

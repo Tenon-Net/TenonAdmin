@@ -27,7 +27,7 @@ public class SecurityBaselinePrecheckService(
         {
             CheckProfile(),
             CheckRedisProvider(),
-            CheckActualCacheProvider(),
+            await CheckActualCacheProviderAsync(cancellationToken),
             CheckRedisAuth(),
             CheckRedisTls(),
             CheckSecretProtectorKey(),
@@ -164,10 +164,22 @@ public class SecurityBaselinePrecheckService(
                 critical: true);
         }
 
+        return Item(SecurityBaselinePrecheckConstants.CheckRedisActual, "Cache Implementation",
+            SecurityBaselineCheckStatus.Pass, "分布式缓存能力声明完整。", "无需处理。", critical);
+    }
+
+    /// <summary>保留同步能力检查扩展点，网络探针异步执行。</summary>
+    protected virtual async Task<SecurityBaselinePrecheckItem> CheckActualCacheProviderAsync(CancellationToken cancellationToken)
+    {
+        var check = CheckActualCacheProvider();
+        if (!profile.IsLevel3 || check.Status != SecurityBaselineCheckStatus.Pass
+            || cacheProvider is not ISecureCacheCapabilities caps)
+            return check;
+
         // 探针:连不通时 fail-closed(测试可用假实现返回 Ok)
         try
         {
-            var probe = caps.ProbeAsync().GetAwaiter().GetResult();
+            var probe = await caps.ProbeAsync(cancellationToken);
             if (!probe.Ok)
             {
                 return Item(
@@ -185,7 +197,11 @@ public class SecurityBaselinePrecheckService(
                 SecurityBaselineCheckStatus.Pass,
                 $"分布式缓存能力声明与探针通过({probe.Message})。",
                 "无需处理。",
-                critical);
+                critical: true);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
