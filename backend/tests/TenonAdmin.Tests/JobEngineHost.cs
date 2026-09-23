@@ -141,6 +141,18 @@ internal sealed class TestJobScheduler(
     ILogger<JobSchedulerService> logger)
     : JobSchedulerService(db, executor, eventBus, options, idOptions, dbOptions, idGenerator, time, logger)
 {
+    public Func<Task>? BeforeClaimAsync { get; set; }
+
+    protected override async Task<bool> ClaimAsync(SysJob job, DateTime expected, DateTime? next, DateTime now)
+    {
+        if (BeforeClaimAsync is { } beforeClaim)
+        {
+            BeforeClaimAsync = null;
+            await beforeClaim();
+        }
+        return await base.ClaimAsync(job, expected, next, now);
+    }
+
     public Task<bool> ClaimForTestAsync(SysJob job, DateTime expected, DateTime? next, DateTime now)
         => ClaimAsync(job, expected, next, now);
 }

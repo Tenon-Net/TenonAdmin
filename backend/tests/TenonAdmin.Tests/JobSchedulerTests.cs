@@ -22,7 +22,11 @@ public class JobSchedulerTests : IAsyncLifetime
     {
         _dbFile = Path.Combine(Path.GetTempPath(), $"tenon-{_id}.db");
         _host = new JobEngineHost(_id, _dbFile, "node-a", _clock,
-            configure: s => s.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, OkJob>()));
+            configure: s =>
+            {
+                s.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, OkJob>());
+                s.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, SlowJob>());
+            });
         _host.InitTables();
     }
 
@@ -33,6 +37,12 @@ public class JobSchedulerTests : IAsyncLifetime
             context.Log?.Invoke("ok");
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class SlowJob : IAdminJob
+    {
+        public Task ExecuteAsync(JobExecutionContext context, CancellationToken cancellationToken)
+            => Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
     }
 
     [Fact]
@@ -88,6 +98,45 @@ public class JobSchedulerTests : IAsyncLifetime
         var row = await _host.ReadJobAsync(job.Id);
         Assert.Equal(1, row.NumberOfRuns);
         Assert.True(row.NextRunTime > _host.Now);
+    }
+
+    [Fact]
+    public async Task Due_job_reserves_capacity_before_claim()
+    {
+        var previous = _host.Jobs.MaxConcurrentRuns;
+        _host.Jobs.MaxConcurrentRuns = 1;
+        try
+        {
+            var due = await _host.InsertJobAsync(OkName);
+            var manual = await _host.InsertJobAsync(typeof(SlowJob).FullName!, j =>
+            {
+                j.NextRunTime = _host.Now.AddHours(1);
+                j.ConcurrencyMode = JobConcurrencyMode.Parallel;
+            });
+            var scheduler = _host.NewScheduler();
+            JobFireResult? competingResult = null;
+            scheduler.BeforeClaimAsync = async () =>
+            {
+                Task compete;
+                using (ExecutionContext.SuppressFlow())
+                {
+                    compete = Task.Run(() =>
+                        competingResult = _host.Executor.TryFireAndTrack(manual, _host.Now, JobFireMode.Manual, out _));
+                }
+                await compete;
+            };
+
+            await scheduler.TickAsync();
+
+            Assert.Equal(JobFireResult.LimitReached, competingResult);
+            var logs = await _host.WaitForLogsAsync(due.Id, l => l.Any(x => x.RunStatus == JobRunStatus.Success));
+            Assert.Single(logs);
+            Assert.Equal(1, (await _host.ReadJobAsync(due.Id)).NumberOfRuns);
+        }
+        finally
+        {
+            _host.Jobs.MaxConcurrentRuns = previous;
+        }
     }
 
     [Fact]

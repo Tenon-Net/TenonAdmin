@@ -32,9 +32,19 @@ public class JobExecutor(
     private readonly ConcurrentDictionary<long, int> _busyJobs = new();              // jobId → 本机在飞次数(SerialSkip 的同机即时视图)
     private readonly CancellationTokenSource _drainCts = new();                       // drain 硬停:唤醒重试等待
     private readonly object _fireGate = new();                                       // SerialSkip 占位 + 全局容量 + 开 fire 的原子区
+    private readonly AsyncLocal<FireReservation?> _ambientReservation = new();        // 调度领取跨 await 保留本次容量
     private volatile bool _draining;
 
     private sealed record RunRegistration(long JobId, CancellationTokenSource KillCts);
+
+    private sealed class FireReservation(JobExecutor owner, long fireInstanceId) : IDisposable
+    {
+        public long FireInstanceId { get; } = fireInstanceId;
+        public TaskCompletionSource<bool> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool Converted { get; set; }
+        public bool Released { get; set; }
+        public void Dispose() => owner.ReleaseReservation(this);
+    }
 
     /// <summary>
     /// 本机是否正在跑该任务。SerialSkip 的库查询是 check-then-act:领取到插 Running 行之间有窗口
@@ -65,23 +75,65 @@ public class JobExecutor(
             : Task.CompletedTask;
 
     /// <summary>
+    /// 为调度领取预留一个全局执行槽。预留立即计入 <see cref="InFlightCount"/>，领取失败时释放；
+    /// 领取成功后同一异步调用流的 <see cref="TryFireAndTrack"/> 消费该槽，避免两步之间被手动执行抢走容量。
+    /// </summary>
+    public virtual JobFireResult TryReserveFire(out IDisposable? lease)
+    {
+        lease = null;
+        lock (_fireGate)
+        {
+            if (_draining) return JobFireResult.Draining;
+            if (_fires.Count >= options.MaxConcurrentRuns) return JobFireResult.LimitReached;
+            if (_ambientReservation.Value is { } current)
+            {
+                if (!current.Converted && !current.Released)
+                    throw new InvalidOperationException("当前异步调用流已有任务执行槽预留。");
+                _ambientReservation.Value = null;
+            }
+
+            var reservation = new FireReservation(this, idGenerator.NextId());
+            _fires[reservation.FireInstanceId] = reservation.Completion.Task;
+            _ambientReservation.Value = reservation;
+            lease = reservation;
+            return JobFireResult.Started;
+        }
+    }
+
+    /// <summary>
     /// 原子地完成「SerialSkip 本地占位 + 全局容量预留 + 创建 fire task」。
     /// 服务层不应在调用前自行做可被并发绕过的分离检查;跨节点 SerialSkip 仍需查库未闭合行。
     /// </summary>
     public virtual JobFireResult TryFireAndTrack(SysJob job, DateTime scheduledTime, JobFireMode fireMode, out Task? fireTask)
     {
         fireTask = null;
-        long fireInstanceId;
+        FireReservation reservation;
         Task task;
         lock (_fireGate)
         {
-            if (_draining) return JobFireResult.Draining;
-            if (job.ConcurrencyMode == JobConcurrencyMode.SerialSkip && _busyJobs.ContainsKey(job.Id))
+            reservation = _ambientReservation.Value!;
+            if (reservation is { Converted: true } or { Released: true })
+            {
+                _ambientReservation.Value = null;
+                reservation = null!;
+            }
+            if (reservation is null)
+            {
+                if (_draining) return JobFireResult.Draining;
+                if (job.ConcurrencyMode == JobConcurrencyMode.SerialSkip && _busyJobs.ContainsKey(job.Id))
+                    return JobFireResult.AlreadyRunning;
+                if (_fires.Count >= options.MaxConcurrentRuns) return JobFireResult.LimitReached;
+                reservation = new FireReservation(this, idGenerator.NextId());
+                _fires[reservation.FireInstanceId] = reservation.Completion.Task;
+            }
+            else if (job.ConcurrencyMode == JobConcurrencyMode.SerialSkip && _busyJobs.ContainsKey(job.Id))
+            {
+                ReleaseReservation(reservation);
                 return JobFireResult.AlreadyRunning;
-            if (_fires.Count >= options.MaxConcurrentRuns)
-                return JobFireResult.LimitReached;
+            }
 
-            fireInstanceId = idGenerator.NextId();
+            _ambientReservation.Value = null;
+            reservation.Converted = true;
             _busyJobs.AddOrUpdate(job.Id, 1, (_, n) => n + 1);   // 同步登记:SerialSkip 检查立刻看得见
             // SuppressFlow 是必须的:SqlSugarScope 按 AsyncLocal 上下文隔离连接,而 ExecutionContext 会流进
             // Task.Run——不掐断,fire 任务与调度循环共用同一连接,并发查询直接炸 reader。
@@ -95,25 +147,36 @@ public class JobExecutor(
                 {
                     try
                     {
-                        await RunFireAsync(job, scheduledTime, fireMode, fireInstanceId);
+                        await RunFireAsync(job, scheduledTime, fireMode, reservation.FireInstanceId);
                     }
                     finally
                     {
                         lock (_fireGate)
                         {
-                            _fires.TryRemove(fireInstanceId, out Task? _);
+                            _fires.TryRemove(reservation.FireInstanceId, out Task? _);
                             _busyJobs.AddOrUpdate(jobId, 0, (_, n) => n - 1);
                             _busyJobs.TryRemove(new KeyValuePair<long, int>(jobId, 0));
+                            reservation.Released = true;
                         }
+                        reservation.Completion.TrySetResult(true);
                     }
                 });
             }
-            _fires[fireInstanceId] = task;
-            // check-then-add 复查:登记与 drain 置位非原子,极窄窗口内溜进来的 fire 在此被追认并取消
-            if (_draining) _drainCts.Cancel();
         }
         fireTask = task;
         return JobFireResult.Started;
+    }
+
+    private void ReleaseReservation(FireReservation reservation)
+    {
+        lock (_fireGate)
+        {
+            if (ReferenceEquals(_ambientReservation.Value, reservation)) _ambientReservation.Value = null;
+            if (reservation.Converted || reservation.Released) return;
+            reservation.Released = true;
+            _fires.TryRemove(reservation.FireInstanceId, out Task? _);
+        }
+        reservation.Completion.TrySetResult(true);
     }
 
     /// <summary>终止本机在跑的一次执行(kill 端点的快路径;执行在别的节点时走 KillRequested 旗标轮询)。</summary>
@@ -130,8 +193,12 @@ public class JobExecutor(
     /// </summary>
     public virtual async Task DrainAsync(CancellationToken hardStop)
     {
-        _draining = true;
-        var pending = _fires.Values.ToArray();
+        Task[] pending;
+        lock (_fireGate)
+        {
+            _draining = true;
+            pending = _fires.Values.ToArray();
+        }
         if (pending.Length == 0) return;
         try
         {
