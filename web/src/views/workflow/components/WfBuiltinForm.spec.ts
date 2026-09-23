@@ -28,14 +28,23 @@ vi.mock('@/components/UserSelect/index.vue', () => ({
 }))
 /** 上传桩回什么 Id 由用例定:后端 long 雪花在 JSON 里既可能是 number 也可能是十进制 string。 */
 let uploadedId: number | string = 12
+let uploadedFileSize = 1
 vi.mock('@/components/FileUpload/index.vue', () => ({
   default: defineComponent({
-    props: { max: Number },
+    props: { max: Number, onBeforeUpload: Function },
     emits: ['uploaded'],
     setup: (props, { emit }) => () => h('button', {
       'data-testid': 'file-upload',
       'data-max': String(props.max ?? ''),
-      onClick: () => emit('uploaded', { id: uploadedId }),
+      onClick: () => {
+        const file = new File([new Uint8Array(uploadedFileSize)], 'attachment.bin')
+        const allowed = props.onBeforeUpload?.({ file: { file } })
+        if (allowed instanceof Promise) {
+          void allowed.then((result) => { if (result !== false) emit('uploaded', { id: uploadedId }) })
+        } else if (allowed !== false) {
+          emit('uploaded', { id: uploadedId })
+        }
+      },
     }, 'upload'),
   }),
 }))
@@ -45,6 +54,7 @@ afterEach(() => {
   app?.unmount()
   app = undefined
   uploadedId = 12
+  uploadedFileSize = 1
   messageError.mockClear()
   messageWarning.mockClear()
   triggerBlobDownload.mockClear()
@@ -206,6 +216,34 @@ describe('WfBuiltinForm', () => {
     expect(values.value).toEqual({ file: '1500000000000000001' })
     expect(host.textContent).toContain('1500000000000000001')
     expect(runtime.value?.validate()).toBe(true)
+  })
+
+  it('rejects an attachment over the field limit before upload', async () => {
+    uploadedFileSize = 1024 * 1024 + 1
+    const schema: WfFormSchema = {
+      version: 1,
+      fields: [field('attachment', 'file', { maxSizeMb: 1 })],
+    }
+    const values = ref<Record<string, unknown>>({})
+    const host = document.createElement('div')
+    document.body.append(host)
+    app = createApp(defineComponent({
+      setup: () => () => h(WfBuiltinForm, {
+        schema,
+        modelValue: values.value,
+        mode: 'start',
+        'onUpdate:modelValue': (next: Record<string, unknown>) => { values.value = next },
+      }),
+    }))
+    app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
+    app.mount(host)
+
+    host.querySelector<HTMLButtonElement>('[data-testid="file-upload"]')!.click()
+    await nextTick()
+    await nextTick()
+
+    expect(values.value).toEqual({})
+    expect(messageError).toHaveBeenCalledWith('文件超出大小限制')
   })
 
   it('clears a single attachment with an explicit null value', async () => {

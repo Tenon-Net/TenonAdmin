@@ -30,17 +30,17 @@ const ctxX = ref(0)
 const ctxY = ref(0)
 const ctxTab = ref<TabItem>()
 const ctxOptions = computed<DropdownOption[]>(() => [
-  { label: t('tabs.refresh'), key: 'refresh', icon: renderIcon('ph:arrow-clockwise') },
+  { label: t('tabs.refresh'), key: 'refresh', icon: renderIcon('lucide:rotate-cw') },
   // 应用首页(affix)恒固定,不提供固定/取消项;其余标签可用户手动固定。
   {
     label: ctxTab.value?.pinned ? t('tabs.unpin') : t('tabs.pin'),
-    key: 'pin', icon: renderIcon('ph:push-pin'), disabled: ctxTab.value?.affix,
+    key: 'pin', icon: renderIcon('lucide:pin'), disabled: ctxTab.value?.affix,
   },
-  { label: t('tabs.close'), key: 'close', icon: renderIcon('ph:x'), disabled: ctxTab.value?.affix || ctxTab.value?.pinned },
-  { label: t('tabs.closeOthers'), key: 'others', icon: renderIcon('ph:arrows-in-line-horizontal') },
-  { label: t('tabs.closeLeft'), key: 'left', icon: renderIcon('ph:arrow-line-left') },
-  { label: t('tabs.closeRight'), key: 'right', icon: renderIcon('ph:arrow-line-right') },
-  { label: t('tabs.closeAll'), key: 'all', icon: renderIcon('ph:list-dashes') },
+  { label: t('tabs.close'), key: 'close', icon: renderIcon('lucide:x'), disabled: ctxTab.value?.affix || ctxTab.value?.pinned },
+  { label: t('tabs.closeOthers'), key: 'others', icon: renderIcon('lucide:minimize-2') },
+  { label: t('tabs.closeLeft'), key: 'left', icon: renderIcon('lucide:arrow-left-to-line') },
+  { label: t('tabs.closeRight'), key: 'right', icon: renderIcon('lucide:arrow-right-to-line') },
+  { label: t('tabs.closeAll'), key: 'all', icon: renderIcon('lucide:list-x') },
 ])
 
 function onContext(e: MouseEvent, item: TabItem) {
@@ -95,10 +95,10 @@ watch(activePath, () => {
           <Icon v-if="item.icon" :icon="item.icon" :width="15" class="chip-icon" />
           <span class="chip-label">{{ tabTitle(item) }}</span>
           <!-- 固定标签(用户 pin)显示图钉、不显示关闭 X;应用首页 affix 两者都不显示 -->
-          <Icon v-if="item.pinned" icon="ph:push-pin-fill" :width="12" class="chip-pin" />
+          <Icon v-if="item.pinned" icon="lucide:pin" :width="12" class="chip-pin" />
           <Icon
             v-else-if="!item.affix"
-            icon="ph:x"
+            icon="lucide:x"
             :width="13"
             class="chip-close"
             role="button"

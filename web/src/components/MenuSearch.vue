@@ -90,7 +90,7 @@ onKeyStroke('Enter', (e) => {
   <n-modal v-model:show="show" transform-origin="center">
     <div class="palette">
       <div class="search">
-        <Icon icon="ph:magnifying-glass" :width="18" class="sicon" />
+        <Icon icon="lucide:search" :width="18" class="sicon" />
         <n-input
           ref="inputRef"
           v-model:value="q"

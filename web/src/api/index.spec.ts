@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { unwrap, ApiError, fileDownloadHttpError, fileDownloadJsonError } from './index'
+import { unwrap, toPage, ApiError, fileDownloadHttpError, fileDownloadJsonError } from './index'
 
 // 零 mock:直接手工构造 openapi-fetch 返回形状 { data, error, response },测 unwrap 的分支覆盖。
 describe('unwrap', () => {
@@ -76,6 +76,21 @@ describe('unwrap', () => {
       expect(err.code).toBe(422)
       expect(err.message).toBe('field invalid')
     }
+  })
+
+  it.each([undefined, null, {}, { data: null }])('拒绝畸形成功信封: %j', (data) => {
+    expect(() => unwrap({ data, response: new Response(null, { status: 200 }) })).toThrow('Malformed API response')
+  })
+
+  it('拒绝畸形分页数据', () => {
+    expect(() => toPage({
+      data: { code: 0, data: { items: null, total: '1' } },
+      response: new Response(null, { status: 200 }),
+    })).toThrow('Malformed paged API response')
+    expect(() => toPage({
+      data: { code: 0 },
+      response: new Response(null, { status: 200 }),
+    })).toThrow('Malformed paged API response')
   })
 })
 

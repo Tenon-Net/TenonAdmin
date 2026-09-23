@@ -141,7 +141,7 @@ watch(
     <!-- 顶栏 -->
     <header class="header" :class="{ 'header--static': !app.fixedHeader }">
       <n-button v-if="isMobile" quaternary circle class="hbg" :aria-label="t('app.openMenu')" @click="mobileOpen = true">
-        <Icon icon="ph:list" :width="20" />
+        <Icon icon="lucide:list" :width="20" />
       </n-button>
       <div class="apph">
         <AppHeader :show-collapse="showCollapse" :show-brand="headerShowBrand" :top-menu="headerTopMenu" />

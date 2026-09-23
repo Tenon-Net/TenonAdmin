@@ -54,7 +54,7 @@ const fmtTime = (s?: string | null) => (s ?? '').replace('T', ' ').slice(0, 16)
     <!-- 欢迎横幅(与 workbench 同语法:btnGrad 头像 + 主副标题) -->
     <div class="banner">
       <div class="avatar" :style="avatarStyle">
-        <Icon icon="ph:user" :width="26" color="#fff" />
+        <Icon icon="lucide:user" :width="26" color="#fff" />
       </div>
       <div>
         <div class="hi">{{ t('biz.welcome', { name: user.userInfo?.name ?? user.userInfo?.account ?? '' }) }}</div>
@@ -65,7 +65,7 @@ const fmtTime = (s?: string | null) => (s ?? '').replace('T', ' ').slice(0, 16)
     <n-card :title="t('biz.quick')" :bordered="true">
       <div v-if="quick.length" class="quick">
         <n-button v-for="m in quick" :key="m.id" secondary @click="router.push(m.path!)">
-          <template #icon><AppIcon :icon="m.icon || 'ph:squares-four'" :size="16" /></template>
+          <template #icon><AppIcon :icon="m.icon || 'lucide:layout-grid'" :size="16" /></template>
           {{ m.title }}
         </n-button>
       </div>

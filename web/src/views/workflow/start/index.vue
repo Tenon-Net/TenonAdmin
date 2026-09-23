@@ -42,6 +42,7 @@ const message = useMessage()
 const formRef = ref<FormInst | null>(null)
 const submitting = ref(false)
 const defsLoading = ref(false)
+const detailLoading = ref(false)
 const defOptions = ref<{ label: string; value: number }[]>([])
 const formComponent = ref<string | null>(null)
 const formSchema = ref<WfFormSchema | null>(null)
@@ -49,6 +50,7 @@ const runtimeVariablesJson = ref<string | null>(null)
 const formRuntimeRef = ref<{ validate: () => boolean } | null>(null)
 const snapshot = ref<WfStartableDefinitionDetail | null>(null)
 const requestKey = useRequestKey()
+let detailRequest = 0
 
 const form = reactive({
   definitionId: null as number | null,
@@ -125,20 +127,25 @@ async function loadPublishedDefs() {
 }
 
 async function onDefinitionChange(id: number | null) {
+  const request = ++detailRequest
   formComponent.value = null
   formSchema.value = null
   runtimeVariablesJson.value = null
   snapshot.value = null
   form.selectedUserIdsByNode = {}
   form.varRows = [{ key: '', value: '' }]
+  detailLoading.value = !!id
   if (!id) return
   try {
     const detail = await wfInstanceApi.startableDetail(id)
+    if (request !== detailRequest) return
     snapshot.value = detail
     formComponent.value = detail.model?.formComponent ?? detail.formComponent ?? null
     formSchema.value = projectWfRuntimeModel(detail.model)?.formSchema ?? null
   } catch (e) {
-    message.error(translateError(e))
+    if (request === detailRequest) message.error(translateError(e))
+  } finally {
+    if (request === detailRequest) detailLoading.value = false
   }
 }
 
@@ -158,6 +165,7 @@ onMounted(async () => {
 })
 
 async function submit() {
+  if (detailLoading.value || !snapshot.value) return
   try {
     await formRef.value?.validate()
   } catch {
@@ -258,7 +266,7 @@ function removeVarRow(i: number) {
     />
 
     <n-space style="margin-top: 16px">
-      <n-button type="primary" :loading="submitting" @click="submit">
+      <n-button type="primary" :loading="submitting" :disabled="detailLoading || !snapshot" @click="submit">
         {{ t('workflow.start.submit') }}
       </n-button>
     </n-space>

@@ -12,6 +12,7 @@ import {
   NTag,
   useMessage,
   type SelectOption,
+  type UploadSettledFileInfo,
 } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import FileUpload from '@/components/FileUpload/index.vue'
@@ -183,6 +184,13 @@ function attachmentIds(field: WfFormField): Array<number | string> {
 
 function attachmentMaxCount(field: WfFormField): number {
   return field.type === 'attachment' && field.props?.multiple === true ? (field.props.maxCount ?? 20) : 1
+}
+
+function beforeAttachmentUpload(field: WfFormField, { file }: { file: UploadSettledFileInfo }): boolean {
+  const maxSizeMb = field.type === 'attachment' ? field.props?.maxSizeMb : undefined
+  if (!file.file || !maxSizeMb || file.file.size <= maxSizeMb * 1024 * 1024) return true
+  message.error(t('error.file.tooLarge'))
+  return false
 }
 
 function attachmentKey(id: number | string) {
@@ -429,6 +437,7 @@ defineExpose({ validate })
           :accept="field.props?.accept"
           :multiple="field.props?.multiple === true"
           :max="attachmentMaxCount(field) - attachmentIds(field).length"
+          :on-before-upload="beforeAttachmentUpload.bind(null, field)"
           :show-file-list="true"
           @uploaded="updateAttachment(field, $event)"
         />
