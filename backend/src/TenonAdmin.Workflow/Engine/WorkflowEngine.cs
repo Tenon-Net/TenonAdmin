@@ -10,18 +10,6 @@ namespace TenonAdmin.Workflow;
 /// 内置引擎:一条 Cmd → 一个 DB 事务 → Agenda 循环直至空。
 /// 方法拆成 <c>virtual</c> 小步,消费者可继承覆写单步或前置 <c>TryAdd</c> 整体替换。
 /// </summary>
-/// <remarks>
-/// M2a 有意的源码级破坏性变更:主构造函数新增 <paramref name="conditionEvaluator"/> 参数(分支求值 SPI,
-/// 供 <see cref="EnterNodeOp"/> 选臂用)。M2b 同理追加 <paramref name="notifier"/> 参数(通知 SPI,
-/// 供各 Op 建任务 / 实例完结 / 转办后调用)。前置 <c>TryAdd</c> 整体替换 <see cref="IWorkflowEngine"/>
-/// 的消费者不受影响(<see cref="IWorkflowEngine"/> 契约本身没动);<b>继承</b> <see cref="WorkflowEngine"/>
-/// 的消费者需要在自己的 <c>base(...)</c> 调用里补上这些参数。不为兼容加 <c>[Obsolete]</c> 双构造函数。
-/// M2c 第三次同样的追加:<paramref name="receipts"/>(写操作幂等回执 SPI,供 <see cref="ExecuteAsync"/>
-/// 在事务开头查/占位、成功后回填),以及 <paramref name="logger"/>(通知失败此前完全无声,见
-/// <see cref="DispatchPendingNotificationsAsync"/>)。M3a-1 第四次同样的追加:
-/// <paramref name="idGenerator"/>(<see cref="EnterNodeOp"/> 生成 <see cref="WfToken.NodeVisitId"/> 用的
-/// 雪花发号器,内核既有 <see cref="IIdGenerator"/>,不新造发号机制)。
-/// </remarks>
 public class WorkflowEngine(
     IRepository<WfInstance> instances,
     IApproverResolver approverResolver,

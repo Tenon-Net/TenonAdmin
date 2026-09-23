@@ -6,15 +6,9 @@ namespace TenonAdmin.Workflow;
 /// 审批任务服务:待办 / 已办两个列表 + 同意 / 拒绝 / 转办 / 委托 / 催办 / 退回六个动词。
 /// Controller 调本接口 → 引擎 Cmd;实现方法全 <c>virtual</c>,消费者可继承覆写单步或前置
 /// <c>TryAdd</c> 整体替换。
+/// <para>所有 <c>requestId</c> 参数均为可选幂等键;同一次用户动作的重试应携带同一个值,
+/// 归一化与校验见 <see cref="WfWriteCmd.RequestId"/>。</para>
 /// </summary>
-/// <remarks>
-/// M2b 期间本接口**逐轮新增方法**,是有意的源码级破坏性变更:Task 2 加
-/// <see cref="UrgeAsync"/>、Task 5 加 <see cref="ReturnAsync"/>、Task 6 加 <see cref="DelegateAsync"/>。
-/// 前置 <c>TryAdd</c> 自行实现 <see cref="IWfTaskService"/> 的消费者每轮都要同步补上新方法,
-/// 否则编译失败;继承 <see cref="WfTaskService"/> 的消费者不受影响(新方法有内置实现)。
-/// 不为兼容给接口加默认实现——那会让消费者静默漏掉新动词的准入校验,比编译失败更难发现。
-/// M2b 收口后接口形状即冻结,后续动词(M3 的加减签 / 长期委托等)另开接口。
-/// </remarks>
 public interface IWfTaskService
 {
     /// <summary>我的待办分页(<c>wf_task_actor</c> Pending Approver)。</summary>
@@ -30,11 +24,6 @@ public interface IWfTaskService
         CancellationToken cancellationToken = default);
 
     /// <summary>同意待办并推进(或签一票 / 顺序下一位 / 会签计票)。</summary>
-    /// <remarks>
-    /// <c>requestId</c> 是幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见
-    /// <see cref="WfWriteCmd.RequestId"/>。写在 <c>remarks</c> 而非 <c>param</c>:本接口其余参数均无
-    /// <c>param</c> 标记,只给一个参数加会触发 CS1573(“有些有、有些没有”)。
-    /// </remarks>
     Task<WfEngineResult> ApproveAsync(
         long taskId,
         long userId,
@@ -42,12 +31,7 @@ public interface IWfTaskService
         string? requestId = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>拒绝待办;M1 一律终止实例(节点 onReject=toNode 属 M2)。</summary>
-    /// <remarks>
-    /// <c>requestId</c> 是幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见
-    /// <see cref="WfWriteCmd.RequestId"/>。写在 <c>remarks</c> 而非 <c>param</c>:本接口其余参数均无
-    /// <c>param</c> 标记,只给一个参数加会触发 CS1573(“有些有、有些没有”)。
-    /// </remarks>
+    /// <summary>拒绝待办;按节点 <see cref="WfNodeProps.OnReject"/> 终止实例或回退到指定节点。</summary>
     Task<WfEngineResult> RejectAsync(
         long taskId,
         long userId,
@@ -56,11 +40,6 @@ public interface IWfTaskService
         CancellationToken cancellationToken = default);
 
     /// <summary>任务级转办:把待办交给 <paramref name="toUserId"/>,不推进 token。</summary>
-    /// <remarks>
-    /// <c>requestId</c> 是幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见
-    /// <see cref="WfWriteCmd.RequestId"/>。写在 <c>remarks</c> 而非 <c>param</c>:本接口其余参数均无
-    /// <c>param</c> 标记,只给一个参数加会触发 CS1573(“有些有、有些没有”)。
-    /// </remarks>
     Task<WfEngineResult> TransferAsync(
         long taskId,
         long userId,
@@ -74,13 +53,8 @@ public interface IWfTaskService
     /// 机制与 <see cref="TransferAsync"/> 同构,区别是 <c>wf_his_task</c> 记
     /// <see cref="WfTaskAction.Delegate"/>——转办是把活儿交出去,委托是请人代办。
     /// 实例发起人无权委托他人的待办(认领不到 Pending actor → <c>TaskConflict</c>);
-    /// 允许链式委托,不设次数上限。长期委托规则属 M3,不在本方法语义内。
+    /// 允许链式委托,不设次数上限。本方法不创建长期委托规则。
     /// </summary>
-    /// <remarks>
-    /// <c>requestId</c> 是幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见
-    /// <see cref="WfWriteCmd.RequestId"/>。写在 <c>remarks</c> 而非 <c>param</c>:本接口其余参数均无
-    /// <c>param</c> 标记,只给一个参数加会触发 CS1573(“有些有、有些没有”)。
-    /// </remarks>
     Task<WfEngineResult> DelegateAsync(
         long taskId,
         long userId,
@@ -103,11 +77,6 @@ public interface IWfTaskService
     /// <see cref="TransferAsync"/> 那样继续等人——关闭当前待办、token 回退,等发起人重提。
     /// <paramref name="targetNodeId"/> 仅 <see cref="WfReturnPolicy.Any"/> 策略有意义,其余策略忽略。
     /// </summary>
-    /// <remarks>
-    /// <c>requestId</c> 是幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见
-    /// <see cref="WfWriteCmd.RequestId"/>。写在 <c>remarks</c> 而非 <c>param</c>:本接口其余参数均无
-    /// <c>param</c> 标记,只给一个参数加会触发 CS1573(“有些有、有些没有”)。
-    /// </remarks>
     Task<WfEngineResult> ReturnAsync(
         long taskId,
         long userId,

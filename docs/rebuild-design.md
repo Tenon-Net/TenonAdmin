@@ -1,7 +1,8 @@
 # SimpleAdmin 重构设计方案 —— 开源企业级小型管理系统
 
-> 状态:设计稿 v3(2026-07,并入 `补充.txt`/`补充2.txt` 及 GPT 评审 `rebuild-design-review.md` 的 MVP 收敛与修正)
-> **本文件是设计单源**(已从旧仓迁入,2026-07-06);开发进度与任务队列见同目录 `dev-plan.md`。
+> 状态:早期设计记录 v3(2026-07),保留方案演变背景,未同步全部后续决策。
+> 当前产品契约见 [AGENTS.md](../AGENTS.md),架构参考见 [repository-reference.md](agents/repository-reference.md),后续决策见 [ADR](adr/)。本文不能作为当前实现清单。
+> 已被取代的方案包括 React 的 shadcn/ui 选型(现为 Ant Design 6,见 [React 模板台账](react-template-ledger.md))及「不用 SignalR」(现为可选增强,见 [ADR 0003](adr/0003-realtime-signalr.md))。
 > 项目名已定:**TenonAdmin**(中文名:榫卯 Admin —— 榫卯互锁、不假钉铆,喻零第三方依赖、模块可拆换)。
 > GitHub 组织沿用既有 **`DotNet-MoYu`**;NuGet ID `TenonAdmin.*` 已验证空闲(2026-07)。
 >

@@ -3,14 +3,11 @@ using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Services;
 
-/// <summary>
-/// <see cref="IOrgService"/> 默认实现。机构树本身不做环检测(设计上只禁止"父指向自己"这一种一步环),
-/// 更复杂的多级环由前端拼树时天然规避(找不到父节点的机构不会出现在树上)。
-/// </summary>
+/// <summary><see cref="IOrgService"/> 默认实现。</summary>
 public class OrgService(
     IRepository<SysOrg> orgs,
     IRbacService rbac,
-    // QA08+QA10: trailing optional params (§5.3 replaceability)
+    // 可选依赖置尾，保持既有消费者的构造调用兼容。
     IDataScopeContext? dataScope = null,
     ICurrentUser? currentUser = null,
     IRepository<SysUser>? userRepo = null) : IOrgService
@@ -23,7 +20,7 @@ public class OrgService(
         var scope = dataScope?.Current;
         if (scope is null || scope.IsUnrestricted) return all;
 
-        // QA08: non-superadmin sees only orgs in scope + their ancestor chain (structural nodes for tree display)
+        // 范围内机构需要附带祖先节点，前端才能组成完整树。
         var scopeIds = scope.OrgIds.ToHashSet();
         var ancestorIds = new HashSet<long>();
         var byId = all.ToDictionary(o => o.Id);
@@ -47,7 +44,7 @@ public class OrgService(
     /// <inheritdoc />
     public virtual async Task<long> AddAsync(OrgInput input)
     {
-        // QA08: non-superadmin must add under an org within their scope
+        // 指定父机构时，非超级管理员只能选择数据范围内的机构。
         ValidateOrgInScope(input.ParentId == 0 ? null : input.ParentId);
 
         if (input.ParentId != 0)
@@ -63,7 +60,7 @@ public class OrgService(
         }
         else
         {
-            // 编码唯一(库有 idx_sys_org_code 唯一索引):无前置查重会撞约束抛原生 500;查重纳入软删行(P1-10)
+            // 编码唯一(库有 idx_sys_org_code 唯一索引):无前置查重会撞约束抛原生 500;查重纳入软删行。
             AdminException.ThrowIf(
                 await orgs.AsQueryable().ClearFilter<ISoftDelete>().AnyAsync(o => o.Code == code),
                 ErrorCode.OrgCodeExists);
@@ -88,10 +85,10 @@ public class OrgService(
     /// <inheritdoc />
     public virtual async Task UpdateAsync(long id, OrgInput input)
     {
-        // QA08: non-superadmin can only update orgs whose ParentId is in scope
+        // 指定父机构时，非超级管理员只能选择数据范围内的机构。
         ValidateOrgInScope(input.ParentId == 0 ? null : input.ParentId);
 
-        // 父指向自己是非法父级,用专用码 OrgInvalidParent(42008),不再复用语义不符的 OrgNotFound(P2-12)
+        // 父指向自己是非法父级,用专用码 OrgInvalidParent(42008),不复用语义不符的 OrgNotFound。
         AdminException.ThrowIf(input.ParentId == id, ErrorCode.OrgInvalidParent);
         // 父指向自己的后代 → 成环:整支子树脱离根、从机构树 UI 消失且无法在 UI 修复。只挡"父指向自己"不够,
         // 得挡整条向下的路径(A→B→C,把 A 的父改成 C 同样成环)。仅在真的换父时才查树,避免每次改资料都拉全表。
@@ -121,11 +118,11 @@ public class OrgService(
     /// <inheritdoc />
     public virtual async Task DeleteAsync(long id)
     {
-        // QA08: non-superadmin can only delete orgs within their scope
+        // 非超级管理员只能删除数据范围内的机构。
         ValidateOrgInScope(id);
 
         AdminException.ThrowIf(await orgs.AnyAsync(o => o.ParentId == id), ErrorCode.OrgHasChildren);
-        // QA10: block delete if any non-deleted user still belongs to this org
+        // 仍有未删除用户归属该机构时禁止删除。
         if (userRepo is not null)
             AdminException.ThrowIf(await userRepo.AnyAsync(u => u.OrgId == id), ErrorCode.OrgHasUsers);
         await orgs.DeleteAsync(id);
@@ -180,8 +177,8 @@ public class OrgService(
     }
 
     /// <summary>
-    /// QA08: validate that the given org is within the caller's data scope.
-    /// Superadmin and unrestricted scope bypass; null means root-level (allowed for superadmin only when restricted).
+    /// 校验机构是否在当前调用者的数据范围内。
+    /// 超级管理员和无限制范围直接放行；<c>null</c> 表示根级。
     /// </summary>
     protected virtual void ValidateOrgInScope(long? orgId)
     {

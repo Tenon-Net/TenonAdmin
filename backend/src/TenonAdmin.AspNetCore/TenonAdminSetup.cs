@@ -31,6 +31,11 @@ public static class TenonAdminSetup
     /// <summary>内置 CORS 命名策略名(由 <see cref="TenonAdminMiddlewareStartupFilter"/> 在管道前段应用)</summary>
     public const string CorsPolicyName = "TenonAdmin";
 
+    /// <summary>注册 TenonAdmin 的配置、数据访问、领域服务和 ASP.NET Core 集成。</summary>
+    /// <param name="services">服务集合</param>
+    /// <param name="configuration">宿主配置</param>
+    /// <param name="configure">可选的代码配置</param>
+    /// <returns>原服务集合</returns>
     public static IServiceCollection AddTenonAdmin(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -104,10 +109,10 @@ public static class TenonAdminSetup
             }));
         }
 
-        // ── 当前用户 + 数据范围环境(§6):HTTP 侧实现在此先注册,压过 SqlSugar 层的 AsyncLocal 兜底 ──
+        // ── 当前用户 + 数据范围环境(§6):HTTP 侧实现在此先注册,压过 SqlSugar 层的 AsyncLocal 实现 ──
         services.AddHttpContextAccessor();
         services.TryAddSingleton<ICurrentUser, HttpContextCurrentUser>();
-        // HttpContext.Items 版数据范围载体(避免授权过滤器里 AsyncLocal 不回流的陷阱);非 HTTP 场景回退 AsyncLocal
+        // HttpContext.Items 版数据范围载体,避免授权过滤器里 AsyncLocal 不回流的陷阱
         services.TryAddSingleton<IDataScopeContext, HttpContextDataScopeContext>();
 
         // ── 数据层 + 领域服务(实体程序集在此登记,§5.7 注册模型)──────────────
@@ -287,6 +292,9 @@ public static class TenonAdminSetup
         return services;
     }
 
+    /// <summary>映射 TenonAdmin 控制器、可选实时 Hub、OpenAPI 和健康检查端点。</summary>
+    /// <param name="endpoints">端点路由生成器</param>
+    /// <returns>原端点路由生成器</returns>
     public static IEndpointRouteBuilder MapTenonAdmin(this IEndpointRouteBuilder endpoints)
     {
         // 内置控制器路由(认证、探针;后续模块的控制器自动包含)。

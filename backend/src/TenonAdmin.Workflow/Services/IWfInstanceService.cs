@@ -5,6 +5,8 @@ namespace TenonAdmin.Workflow;
 /// <summary>
 /// 流程实例运行态:发起 / 我发起的分页 / 详情(含 FormBinder 挂载点) / 事件流。
 /// 方法全 <c>virtual</c>;消费者可继承覆写或前置 <c>TryAdd</c> 整体替换。
+/// <para>所有 <c>requestId</c> 参数均为可选幂等键;同一次用户动作的重试应携带同一个值,
+/// 归一化与校验见 <see cref="WfWriteCmd.RequestId"/>。</para>
 /// </summary>
 public interface IWfInstanceService
 {
@@ -62,11 +64,6 @@ public interface IWfInstanceService
         CancellationToken cancellationToken = default);
 
     /// <summary>撤销实例:仅发起人、仅无人已批的 Running 实例可撤销。</summary>
-    /// <remarks>
-    /// <c>requestId</c> 是幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见
-    /// <see cref="WfWriteCmd.RequestId"/>。写在 <c>remarks</c> 而非 <c>param</c>:本接口其余参数均无
-    /// <c>param</c> 标记,只给一个参数加会触发 CS1573(“有些有、有些没有”)。
-    /// </remarks>
     Task<WfEngineResult> CancelAsync(
         long instanceId,
         long callerUserId,
@@ -78,11 +75,6 @@ public interface IWfInstanceService
     /// (连已批过的节点也重新审),复用同一实例行;可选带新的 <paramref name="variablesJson"/> /
     /// <paramref name="selectedUserIdsByNode"/> 覆盖原发起时提交的值。
     /// </summary>
-    /// <remarks>
-    /// <c>requestId</c> 是幂等请求键(可空):同一次用户动作的重试携带同一个值。归一化与校验见
-    /// <see cref="WfWriteCmd.RequestId"/>。写在 <c>remarks</c> 而非 <c>param</c>:本接口其余参数均无
-    /// <c>param</c> 标记,只给一个参数加会触发 CS1573(“有些有、有些没有”)。
-    /// </remarks>
     Task<WfEngineResult> ResubmitAsync(
         long instanceId,
         long callerUserId,

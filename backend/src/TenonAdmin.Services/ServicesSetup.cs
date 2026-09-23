@@ -13,6 +13,9 @@ namespace TenonAdmin.Services;
 /// </summary>
 public static class ServicesSetup
 {
+    /// <summary>注册 TenonAdmin 领域服务的默认实现;消费者可在此前注册自定义实现。</summary>
+    /// <param name="services">服务集合</param>
+    /// <returns>原服务集合</returns>
     public static IServiceCollection AddTenonAdminServices(this IServiceCollection services)
     {
         // 统一时间源(§12):AspNetCore 层也 TryAdd 同一个,这里再兜一次,让本层单独装配也能自洽(测试可换 Fake)

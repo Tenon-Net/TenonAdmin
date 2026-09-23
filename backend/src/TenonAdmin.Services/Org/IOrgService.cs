@@ -16,7 +16,7 @@ public interface IOrgService
     /// <summary>新增机构,返回新 Id;若指定了父机构则校验其存在</summary>
     Task<long> AddAsync(OrgInput input);
 
-    /// <summary>更新机构;不允许把父机构设成自身(会造成环)</summary>
+    /// <summary>更新机构;不允许把父机构设成自身或任意后代节点(会造成环)</summary>
     Task UpdateAsync(long id, OrgInput input);
 
     /// <summary>删除机构(软删除);若仍有子机构挂靠则拒绝(需先移除或迁移子机构)</summary>
@@ -26,6 +26,7 @@ public interface IOrgService
     /// 复制机构子树(含目标节点及其全部后代),整支克隆挂到源节点的同级下,返回新根 Id。
     /// 用于按既有结构快速搭建相似机构(如连锁网点)。克隆节点编码追加 <c>-copy</c> 后缀去重(编码唯一约束)。
     /// </summary>
+    /// <param name="id">要复制的机构 Id</param>
     /// <param name="newName">克隆根节点名称;留空则追加"-副本"后缀</param>
     Task<long> CopyAsync(long id, string? newName = null);
 }

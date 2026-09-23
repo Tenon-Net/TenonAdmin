@@ -29,7 +29,7 @@ export function readCookie(name: string): string {
   return ''
 }
 
-/** 写请求是否需要附 CSRF(有可读 CSRF Cookie 即附;无 Cookie 时与非 Level3 行为一致)。 */
+/** 写请求是否需要附 CSRF(有可读 CSRF Cookie 即附;无 Cookie 时不附)。 */
 function isMutating(method: string): boolean {
   const m = method.toUpperCase()
   return m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS'

@@ -317,7 +317,7 @@ export interface paths {
         put?: never;
         /**
          * 刷新令牌换发新令牌对(轮换 + 复用检测,§15)。匿名:访问令牌可能已过期,凭刷新令牌换发。
-         *     Level3:body 可空,从 `tenon_rt` Cookie 读取;成功后轮换 Cookie/CSRF。
+         *     Cookie 会话模式下 body 可空,从 `tenon_rt` Cookie 读取;成功后轮换 Cookie/CSRF。
          */
         post: {
             parameters: {
@@ -362,7 +362,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 登出:吊销当前会话(sid 取自令牌)。仅需认证,不挂具体权限码。Level3 同时清 Cookie。 */
+        /** 登出:吊销当前会话(sid 取自令牌)。仅需认证,不挂具体权限码。Cookie 会话模式下同时清 Cookie。 */
         post: {
             parameters: {
                 query?: never;
@@ -1569,7 +1569,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 一次性票据换令牌(登录回调后前端调用;票据无效/过期/已用抛 40014)。Level3 同步写 Cookie/CSRF。 */
+        /** 一次性票据换令牌(登录回调后前端调用;票据无效/过期/已用抛 40014)。Cookie 会话模式下同步写 Cookie/CSRF。 */
         post: {
             parameters: {
                 query?: never;
@@ -3591,7 +3591,7 @@ export interface paths {
                 };
             };
         };
-        /** 改自己的资料(姓名) */
+        /** 修改自己的资料。 */
         put: {
             parameters: {
                 query?: never;
@@ -3680,7 +3680,7 @@ export interface paths {
         };
         /**
          * 取自己当前生效的权限码集合(= 规范化路由,如 `POST:/api/v1/sys/user`)。
-         *     前端 `v-auth` 据此做按钮级显隐;超管无角色故返回空集(前端 fail-open 显示全部,服务端 sadm 绕过兜底)。
+         *     空集不代表超管;前端须结合独立的 IsSuperAdmin 标志判断按钮显隐,服务端仍独立鉴权。
          */
         get: {
             parameters: {
@@ -3797,10 +3797,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * 看自己的活跃会话列表(个人视角"我的登录设备")。会话数受并发上限约束(个位数),单页 100 绰绰有余不分页;
-         *     IsCurrent 按令牌 sid 比对,标记本次请求所用会话。
-         */
+        /** 查看自己的活跃会话;IsCurrent 按令牌 sid 标记本次请求所用会话。 */
         get: {
             parameters: {
                 query?: never;

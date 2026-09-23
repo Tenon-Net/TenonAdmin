@@ -10,8 +10,7 @@ namespace TenonAdmin.Workflow;
 public sealed class CamelCaseEnumConverter() : JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: true);
 
 /// <summary>
-/// 流程节点类型(schema <c>type</c>)。M1 仅启用 <see cref="Start"/> / <see cref="Approval"/> / <see cref="Cc"/>;
-/// <see cref="Branch"/> 属 M2;<see cref="Parallel"/> / <see cref="Webhook"/> / <see cref="AiDecision"/> 属 M3。
+/// 流程节点类型(schema <c>type</c>)。
 /// JSON 值为 camelCase:<c>start|approval|cc|branch|parallel|webhook|aiDecision</c>。
 /// </summary>
 [JsonConverter(typeof(CamelCaseEnumConverter))]
@@ -26,7 +25,7 @@ public enum WfNodeType
     AiDecision,
 }
 
-/// <summary>审批签核模式(节点 <c>props.mode</c>)。M1 实际只用或签;会签/顺序会签 M2 启用。JSON:<c>any|all|seq</c>。</summary>
+/// <summary>审批签核模式(节点 <c>props.mode</c>)。JSON:<c>any|all|seq</c>。</summary>
 [JsonConverter(typeof(CamelCaseEnumConverter))]
 public enum WfApprovalMode
 {
@@ -48,7 +47,7 @@ public enum WfRejectAction
     ToNode,
 }
 
-/// <summary>退回策略(节点 <c>props.returnPolicy</c>;M2)。JSON:<c>prev|any|node</c>。</summary>
+/// <summary>退回策略(节点 <c>props.returnPolicy</c>)。JSON:<c>prev|any|node</c>。</summary>
 [JsonConverter(typeof(CamelCaseEnumConverter))]
 public enum WfReturnPolicy
 {
@@ -57,7 +56,7 @@ public enum WfReturnPolicy
     Node,
 }
 
-/// <summary>超时动作(节点 <c>props.timeout.action</c>;M2)。JSON:<c>remind|autoPass|autoReject|transfer</c>。</summary>
+/// <summary>超时动作(节点 <c>props.timeout.action</c>)。JSON:<c>remind|autoPass|autoReject|transfer</c>。</summary>
 [JsonConverter(typeof(CamelCaseEnumConverter))]
 public enum WfTimeoutAction
 {
@@ -104,7 +103,7 @@ public enum WfConditionOp
     NotEmpty,
 }
 
-/// <summary>简易动态表单控件类型(M3;<see cref="WfFormSchema"/> 预留)。</summary>
+/// <summary>简易动态表单控件类型。</summary>
 [JsonConverter(typeof(CamelCaseEnumConverter))]
 public enum WfFormFieldType
 {
@@ -120,7 +119,7 @@ public enum WfFormFieldType
     Attachment,
 }
 
-/// <summary>节点字段权限(<c>formPerms[].access</c>;M3 启用,M1 存空数组)。</summary>
+/// <summary>节点字段权限(<c>formPerms[].access</c>)。</summary>
 [JsonConverter(typeof(CamelCaseEnumConverter))]
 public enum WfFormPermAccess
 {

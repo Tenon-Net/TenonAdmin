@@ -8,8 +8,7 @@ namespace TenonAdmin.Workflow;
 /// 存入 <see cref="WfDefinitionVersion.ModelJson"/>;发布即版本快照,实例永远跑发布时的副本。
 /// </summary>
 /// <remarks>
-/// M1 节点:<c>start | approval | cc</c> 纯串行。<c>formSchema</c> / 节点 <c>formPerms</c> 字段已预留空值,
-/// 避免 M3 加列或改 schema 形状。序列化须走 <see cref="WfModelJson"/>,保证枚举 camelCase 与草案一致。
+/// 序列化须走 <see cref="WfModelJson"/>,保证枚举 camelCase 与 schema 一致。
 /// </remarks>
 public sealed class WfModel
 {
@@ -20,8 +19,8 @@ public sealed class WfModel
     public WfNode Root { get; set; } = new() { Type = WfNodeType.Start };
 
     /// <summary>
-    /// M3 简易动态表单控件描述;M1/M2 恒 <c>null</c>。
-    /// 与实体列 <see cref="WfDefinitionVersion.FormSchema"/> 同步预留。
+    /// 简易动态表单控件描述。
+    /// 与实体列 <see cref="WfDefinitionVersion.FormSchema"/> 保存相同内容。
     /// </summary>
     public WfFormSchema? FormSchema { get; set; }
 

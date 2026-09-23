@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 流程设计器 MVP(M1):串行审批+抄送 + 配置抽屉 + 灰底可缩放画布。
+ * 流程定义设计器:配置审批、抄送、分支、并行和自动节点。
  * 菜单 component 填 `workflow/definition/designer`;通过 `?id=` 打开已有定义,
  * 无 id 时可新建草稿后进入编辑。
  */

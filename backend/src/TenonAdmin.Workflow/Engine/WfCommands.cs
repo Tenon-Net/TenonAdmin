@@ -131,7 +131,7 @@ public sealed class TransferTaskCmd : WfWriteCmd
 
 /// <summary>
 /// 任务级委托(一次性):当前办理人把这一件待办指给别人代办。机制与 <see cref="TransferTaskCmd"/>
-/// 同构,只在 <c>wf_his_task</c> 记 <see cref="WfTaskAction.Delegate"/>;长期委托规则属 M3,不在此列。
+/// 同构,只在 <c>wf_his_task</c> 记 <see cref="WfTaskAction.Delegate"/>;本命令不创建长期委托规则。
 /// </summary>
 public sealed class DelegateTaskCmd : WfWriteCmd
 {

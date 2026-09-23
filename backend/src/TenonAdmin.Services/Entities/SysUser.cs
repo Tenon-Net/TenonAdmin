@@ -3,10 +3,7 @@ using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Services;
 
-/// <summary>
-/// 用户表(设计 §16)。认证闭环最小字段集;
-/// 组织/职位/头像等字段随组织模块(M1 后续纵切)增补——CodeFirst 会自动补列,先窄后宽零成本。
-/// </summary>
+/// <summary>用户。</summary>
 [SugarTable("sys_user", TableDescription = "用户")]
 [SugarIndex("idx_sys_user_account", nameof(Account), OrderByType.Asc, IsUnique = true)]
 public class SysUser : BaseEntity
@@ -42,7 +39,7 @@ public class SysUser : BaseEntity
     [SugarColumn(Length = 512, ColumnDescription = "头像", IsNullable = true)]
     public string? Avatar { get; set; }
 
-    /// <summary>主属机构 Id(设计 §4"用户...主属机构");可空(超管/未分配)。数据范围以此为用户列表的机构维度(T3)。</summary>
+    /// <summary>主属机构 Id;可空(超管/未分配)。数据范围以此为用户列表的机构维度。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "主属机构 Id")]
     public long? OrgId { get; set; }
 
@@ -84,10 +81,7 @@ public class SysUser : BaseEntity
     [SugarColumn(IsNullable = true, ColumnDescription = "最后改密时间")]
     public DateTime? LastPasswordChangeTime { get; set; }
 
-    /// <summary>
-    /// 最近一次成功登录时间(Level3 闲置账号治理锚点)。
-    /// 首次启用 Level3 时对存量启用用户以启用时刻初始化,避免历史缺失导致批量停用。
-    /// </summary>
+    /// <summary>最近一次成功登录时间。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "最近成功登录时间")]
     public DateTime? LastSuccessfulLoginAt { get; set; }
 

@@ -54,8 +54,8 @@ public class AuthCookieService(AdminSecurityOptions security, IHostEnvironment e
     }
 
     /// <summary>
-    /// 解析刷新令牌:优先请求体;Level3 且 body 空时读 Cookie。
-    /// 非 Level3 绝不读 Cookie(兼容旧客户端)。
+    /// 解析刷新令牌:优先请求体;Cookie 会话模式且请求体为空时读 Cookie。
+    /// 未启用 Cookie 会话时不读取 Cookie。
     /// </summary>
     public string ResolveRefreshToken(HttpContext http, string? bodyRefreshToken)
     {

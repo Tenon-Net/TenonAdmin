@@ -4,8 +4,8 @@ using TenonAdmin.SqlSugar;
 namespace TenonAdmin.Workflow;
 
 /// <summary>
-/// 完成待办计票(M1:或签一票通过 / 顺序下一位 / 会签全票预留)。
-/// 通过则 <see cref="TakeTransitionOp"/>;拒绝则终止实例。
+/// 完成待办计票:处理或签、顺序审批和会签。
+/// 通过则继续流转;拒绝按节点配置终止实例或回退到指定节点。
 /// </summary>
 public class CompleteTaskOp(
     WfTask task,

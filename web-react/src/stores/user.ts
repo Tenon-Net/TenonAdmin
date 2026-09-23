@@ -23,12 +23,12 @@ export interface UserState {
   userInfo: UserInfo | null
   /**
    * 会话模式。
-   * - `body`(默认/非 Level3):access+refresh 可持久化到 localStorage
-   * - `cookie`(Level3):access 仅内存;refresh 走 HttpOnly Cookie,不得落盘
+   * - `body`(默认):access+refresh 可持久化到 localStorage
+   * - `cookie`:access 仅内存;refresh 走 HttpOnly Cookie,不得落盘
    * - null:尚未建立会话(或旧持久化数据未声明模式)
    */
   sessionMode: SessionMode | null
-  /** Level3 双提交 CSRF 是否启用(登录/刷新出参驱动)。 */
+  /** 双提交 CSRF 是否启用(登录/刷新出参驱动)。 */
   csrfRequired: boolean
   /** 用登录/刷新出参落地会话。 */
   setSession: (data: LoginOutput) => void
