@@ -87,11 +87,12 @@ public sealed class AiDecisionNodeHandler : IWorkflowNodeHandler
         }
 
         // parser / policy 是进程内契约。其未分类异常交给 dispatcher 统一记录，不能伪装成 Provider 故障。
-        return HandleProviderResult(providerResult, request.InputHash);
+        return HandleProviderResult(providerResult, request);
     }
 
-    private WfNodeExecutionResult HandleProviderResult(AiDecisionProviderResult? providerResult, string? inputHash)
+    private WfNodeExecutionResult HandleProviderResult(AiDecisionProviderResult? providerResult, AiDecisionProviderRequest request)
     {
+        var inputHash = request.InputHash;
         if (providerResult is null)
         {
             return CreateManualFallback(
@@ -104,7 +105,7 @@ public sealed class AiDecisionNodeHandler : IWorkflowNodeHandler
         return providerResult.Type switch
         {
             AiDecisionProviderResultType.Proposal when providerResult.ProposalJson is not null =>
-                HandleProposal(providerResult, inputHash),
+                HandleProposal(providerResult, request),
             AiDecisionProviderResultType.TimedOut =>
                 CreateManualFallback(
                     AiDecisionFallbackReason.ProviderTimeout,
@@ -121,8 +122,9 @@ public sealed class AiDecisionNodeHandler : IWorkflowNodeHandler
         };
     }
 
-    private WfNodeExecutionResult HandleProposal(AiDecisionProviderResult providerResult, string? inputHash)
+    private WfNodeExecutionResult HandleProposal(AiDecisionProviderResult providerResult, AiDecisionProviderRequest request)
     {
+        var inputHash = request.InputHash;
         var parsed = _parser.Parse(providerResult.ProposalJson);
         if (!parsed.IsValid || parsed.Proposal is null)
         {
@@ -134,7 +136,7 @@ public sealed class AiDecisionNodeHandler : IWorkflowNodeHandler
                 providerResult);
         }
 
-        var evaluation = _policy.Evaluate(parsed.Proposal);
+        var evaluation = _policy.Evaluate(parsed.Proposal, request.Inputs);
         var fallbackReason = evaluation.Classification switch
         {
             AiDecisionPolicyClassification.ShadowCandidate => AiDecisionFallbackReason.ShadowOnly,
@@ -144,6 +146,7 @@ public sealed class AiDecisionNodeHandler : IWorkflowNodeHandler
             AiDecisionPolicyClassification.HighRisk => AiDecisionFallbackReason.HighRisk,
             AiDecisionPolicyClassification.EvidenceInsufficient => AiDecisionFallbackReason.EvidenceInsufficient,
             AiDecisionPolicyClassification.DisallowedReason => AiDecisionFallbackReason.DisallowedReason,
+            AiDecisionPolicyClassification.BusinessRuleMismatch => AiDecisionFallbackReason.BusinessRuleMismatch,
             _ => AiDecisionFallbackReason.ProviderFailure,
         };
 

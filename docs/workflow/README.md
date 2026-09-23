@@ -67,6 +67,9 @@ Vue/后端功能测试收口、Task 8c 与 React 工作流 port 均已完成；A
 | 开发 M3a-2 Vue 主线（Webhook 设计器、表单/动词/并行） | M3a-2 Vue 任务计划、设计规划 §八、§15.2–§15.3 | 本地 goal 提示词；React port 后置 |
 | 维护 M3a-2 React 工作流页面（port 已完成） | [M3a-2 React 任务计划](./m3a2-react-task-plan-2026-09.md)、[复制/重写清单](./m3a2-react-port-inventory-2026-09.md) | `web-react/COMPONENTS.md`、对应 Vue 实现作为规格；设计规划 §15.5–§15.6 |
 | 开发 M3b AI Decision | AI 基石 §4–§5 | 设计规划 §14.3、§15.4 |
+| 费用报销 AI Decision 离线评测 | [`expense-ai-decision-eval-v0.md`](./expense-ai-decision-eval-v0.md) | 不改变 shadow-only；先读 AI 基石 §4 与设计规划 §15.4 |
+| 准备真实报销样本与人工标注 | [采集与标注规范](./expense-ai-decision-real-sample-spec.md)、[空白模板](./expense-ai-decision-real-sample-template.json) | [本地采集检查](../../scripts/check_expense_collection.py)；先确认真实制度、字段来源与脱敏，尚不支持真实批次导入 |
+| 尚无真实数据，演练报销采集流程 | [模拟演练](./expense-ai-decision-simulation.md) | 六条虚构案例，使用独立 `--simulation` 检查，不调用模型 |
 | 开发 RAG/Agent/设计 Copilot | AI 基石 §2–§4 | 固定参考提交有变化时才增量复核源码 |
 | 修改 `wf_*` 字段、索引或迁移 | 数据库评审全文 | 当前实体、四库契约测试和设计规划 |
 | 查选型缘由或许可证 | 总调研 | 对应专项报告 |

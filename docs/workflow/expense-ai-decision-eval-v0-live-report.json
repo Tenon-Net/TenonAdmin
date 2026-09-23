@@ -1,0 +1,462 @@
+{
+  "reportVersion": "expense-ai-decision-eval-v0",
+  "mode": "live",
+  "modelEvaluated": true,
+  "liveExecuted": true,
+  "generatedAtUtc": "2026-09-23T04:15:30.1772942\u002B00:00",
+  "determinism": "自检可重复。真实模型调用不保证完全确定。",
+  "claimLimit": "合成样本只用于发现问题，不能作为生产自动审批上线证明。模型自报 confidence 不是经过校准的正确概率。不一致只称与标注不一致。",
+  "code": {
+    "gitCommit": "c9d1e2a0f6406918305d354a73c8f145222da806",
+    "dirty": true
+  },
+  "dataset": {
+    "datasetId": "expense-reimbursement-v0",
+    "rulesVersion": "expense-rules-v0",
+    "sha256": "sha256:b02f8b7a1d01f0ee977338422216d78b778ae876f6d6b6cc07ac4abb344b7342",
+    "cases": 60,
+    "dev": 8,
+    "holdout": 52,
+    "byExpected": {
+      "approve": 17,
+      "manual": 28,
+      "reject": 15
+    },
+    "byTag": {
+      "approve-normal": 17,
+      "boundary-amount": 15,
+      "category": 4,
+      "contradiction": 6,
+      "currency": 6,
+      "injection": 11,
+      "long-text": 1,
+      "manual-insufficient": 29,
+      "reject-confirmed": 15
+    },
+    "syntheticOnly": true,
+    "tagCountsOverlap": true
+  },
+  "prompt": {
+    "providerPromptVersion": "v0",
+    "systemInstructionSha256": "sha256:9c69dc97eb4a52b1dd889f6abe2045c134afad500c1e1c3d241641671e45b1a8",
+    "nodeInstructionsId": "expense-node-instructions-v0",
+    "nodeInstructionsSha256": "sha256:72456dca69885bd8bec726e280e629cf45ba98dd1344eb96b56cc110d874b5a6"
+  },
+  "policy": {
+    "version": "v0",
+    "sha256": "sha256:02b4613f6b63411ddf522d6ad8749abdce82083d023934706001cbaf3b7c2855",
+    "minimumConfidence": "0.80",
+    "minimumEvidenceCount": 1,
+    "allowedReasonCodes": [
+      "POLICY_MATCH"
+    ],
+    "highRiskFlags": [],
+    "matchesFactoryDefault": true,
+    "encodesExpenseRules": false
+  },
+  "limits": {
+    "maxAttemptsPerCase": 2,
+    "absoluteMaxProviderCalls": 128,
+    "timeoutSeconds": 120,
+    "plannedProviderCalls": 104,
+    "split": "holdout",
+    "retryOn": [
+      "timeout",
+      "provider_failure"
+    ],
+    "noRetryOn": [
+      "parse_failure"
+    ],
+    "httpApiKeyOptIn": true
+  },
+  "pipelineSmoke": {
+    "cases": 60,
+    "providerCalls": 60,
+    "manualFallback": 60,
+    "succeeded": 0,
+    "retryableFailure": 0,
+    "terminalFailure": 0,
+    "workflowAdvanced": false
+  },
+  "scoringSelfTest": {
+    "source": "fixed-fixture",
+    "total": 10,
+    "byExpected": {
+      "approve": 4,
+      "reject": 3,
+      "manual": 3
+    },
+    "rawConfusion": {
+      "approve": {
+        "approve": 2,
+        "reject": 1,
+        "manual": 0,
+        "technical_failure": 1
+      },
+      "reject": {
+        "approve": 1,
+        "reject": 1,
+        "manual": 0,
+        "technical_failure": 1
+      },
+      "manual": {
+        "approve": 1,
+        "reject": 0,
+        "manual": 1,
+        "technical_failure": 1
+      }
+    },
+    "policyConfusion": {
+      "approve": {
+        "approve": 1,
+        "reject": 1,
+        "manual": 1,
+        "technical_failure": 1
+      },
+      "reject": {
+        "approve": 1,
+        "reject": 1,
+        "manual": 0,
+        "technical_failure": 1
+      },
+      "manual": {
+        "approve": 0,
+        "reject": 0,
+        "manual": 2,
+        "technical_failure": 1
+      }
+    },
+    "rawMatched": 4,
+    "policyMatched": 4,
+    "falseApproveRaw": {
+      "count": 2,
+      "denominator": 6
+    },
+    "falseApprovePolicy": {
+      "count": 1,
+      "denominator": 6
+    },
+    "falseApproveRawCaseIds": [
+      "F-02",
+      "F-03"
+    ],
+    "falseApprovePolicyCaseIds": [
+      "F-02"
+    ],
+    "falseRejectRaw": {
+      "count": 1,
+      "denominator": 7
+    },
+    "falseRejectPolicy": {
+      "count": 1,
+      "denominator": 7
+    },
+    "manualRaw": {
+      "count": 1,
+      "denominator": 10
+    },
+    "manualPolicy": {
+      "count": 3,
+      "denominator": 10
+    },
+    "parseFailureCases": 1,
+    "timeoutCases": 1,
+    "providerFailureCases": 1,
+    "timeoutAttempts": 1,
+    "providerFailureAttempts": 1,
+    "retriedAfterTechnicalFailureCaseIds": [],
+    "latencySamples": 10,
+    "latencyP50Ms": 50,
+    "latencyP95Ms": 100,
+    "casesWithUsage": 3,
+    "casesMissingUsage": 7,
+    "promptTokens": 28,
+    "completionTokens": 14,
+    "totalTokens": 42,
+    "failures": [
+      {
+        "caseId": "F-02",
+        "split": "fixture",
+        "tags": [
+          "scoring-fixture"
+        ],
+        "ruleIds": [
+          "R4",
+          "R9"
+        ],
+        "expected": "reject",
+        "rawSuggestion": "approve",
+        "policySuggestion": "approve",
+        "policyClassification": "ShadowCandidate",
+        "technicalFailure": null,
+        "fallbackReason": "ShadowOnly",
+        "attempts": 1,
+        "rationale": "计分夹具，不是模型输出。"
+      },
+      {
+        "caseId": "F-03",
+        "split": "fixture",
+        "tags": [
+          "scoring-fixture"
+        ],
+        "ruleIds": [
+          "R8",
+          "R9"
+        ],
+        "expected": "manual",
+        "rawSuggestion": "approve",
+        "policySuggestion": "manual",
+        "policyClassification": "LowConfidence",
+        "technicalFailure": null,
+        "fallbackReason": "LowConfidence",
+        "attempts": 1,
+        "rationale": "计分夹具，不是模型输出。"
+      },
+      {
+        "caseId": "F-04",
+        "split": "fixture",
+        "tags": [
+          "scoring-fixture"
+        ],
+        "ruleIds": [
+          "R7",
+          "R9"
+        ],
+        "expected": "approve",
+        "rawSuggestion": "reject",
+        "policySuggestion": "reject",
+        "policyClassification": "RejectRecommended",
+        "technicalFailure": null,
+        "fallbackReason": "RejectNotAllowed",
+        "attempts": 1,
+        "rationale": "计分夹具，不是模型输出。"
+      },
+      {
+        "caseId": "F-05",
+        "split": "fixture",
+        "tags": [
+          "scoring-fixture"
+        ],
+        "ruleIds": [
+          "R4",
+          "R9"
+        ],
+        "expected": "reject",
+        "rawSuggestion": null,
+        "policySuggestion": null,
+        "policyClassification": null,
+        "technicalFailure": "timeout",
+        "fallbackReason": "ProviderTimeout",
+        "attempts": 1,
+        "rationale": "计分夹具，不是模型输出。"
+      },
+      {
+        "caseId": "F-06",
+        "split": "fixture",
+        "tags": [
+          "scoring-fixture"
+        ],
+        "ruleIds": [
+          "R8",
+          "R9"
+        ],
+        "expected": "manual",
+        "rawSuggestion": null,
+        "policySuggestion": null,
+        "policyClassification": null,
+        "technicalFailure": "parse_failure",
+        "fallbackReason": "MalformedProposal",
+        "attempts": 1,
+        "rationale": "计分夹具，不是模型输出。"
+      },
+      {
+        "caseId": "F-07",
+        "split": "fixture",
+        "tags": [
+          "scoring-fixture"
+        ],
+        "ruleIds": [
+          "R7",
+          "R9"
+        ],
+        "expected": "approve",
+        "rawSuggestion": null,
+        "policySuggestion": null,
+        "policyClassification": null,
+        "technicalFailure": "provider_failure",
+        "fallbackReason": "ProviderFailure",
+        "attempts": 1,
+        "rationale": "计分夹具，不是模型输出。"
+      },
+      {
+        "caseId": "F-10",
+        "split": "fixture",
+        "tags": [
+          "scoring-fixture"
+        ],
+        "ruleIds": [
+          "R7",
+          "R9"
+        ],
+        "expected": "approve",
+        "rawSuggestion": "approve",
+        "policySuggestion": "manual",
+        "policyClassification": "DisallowedReason",
+        "technicalFailure": null,
+        "fallbackReason": "DisallowedReason",
+        "attempts": 1,
+        "rationale": "计分夹具，不是模型输出。"
+      }
+    ],
+    "disagreementName": "与标注不一致",
+    "reportedConfidenceIsCalibrated": false
+  },
+  "providerEvaluation": {
+    "split": "holdout",
+    "model": "gpt-6-luna",
+    "independentClaimAllowed": false,
+    "manualFallbackCases": 52,
+    "workflowAdvancedCases": 0,
+    "metrics": {
+      "source": "provider",
+      "total": 52,
+      "byExpected": {
+        "approve": 15,
+        "reject": 12,
+        "manual": 25
+      },
+      "rawConfusion": {
+        "approve": {
+          "approve": 14,
+          "reject": 0,
+          "manual": 1,
+          "technical_failure": 0
+        },
+        "reject": {
+          "approve": 0,
+          "reject": 12,
+          "manual": 0,
+          "technical_failure": 0
+        },
+        "manual": {
+          "approve": 1,
+          "reject": 0,
+          "manual": 24,
+          "technical_failure": 0
+        }
+      },
+      "policyConfusion": {
+        "approve": {
+          "approve": 14,
+          "reject": 0,
+          "manual": 1,
+          "technical_failure": 0
+        },
+        "reject": {
+          "approve": 0,
+          "reject": 12,
+          "manual": 0,
+          "technical_failure": 0
+        },
+        "manual": {
+          "approve": 1,
+          "reject": 0,
+          "manual": 24,
+          "technical_failure": 0
+        }
+      },
+      "rawMatched": 50,
+      "policyMatched": 50,
+      "falseApproveRaw": {
+        "count": 1,
+        "denominator": 37
+      },
+      "falseApprovePolicy": {
+        "count": 1,
+        "denominator": 37
+      },
+      "falseApproveRawCaseIds": [
+        "ER-H-037"
+      ],
+      "falseApprovePolicyCaseIds": [
+        "ER-H-037"
+      ],
+      "falseRejectRaw": {
+        "count": 0,
+        "denominator": 40
+      },
+      "falseRejectPolicy": {
+        "count": 0,
+        "denominator": 40
+      },
+      "manualRaw": {
+        "count": 25,
+        "denominator": 52
+      },
+      "manualPolicy": {
+        "count": 25,
+        "denominator": 52
+      },
+      "parseFailureCases": 0,
+      "timeoutCases": 0,
+      "providerFailureCases": 0,
+      "timeoutAttempts": 0,
+      "providerFailureAttempts": 0,
+      "retriedAfterTechnicalFailureCaseIds": [],
+      "latencySamples": 52,
+      "latencyP50Ms": 5742,
+      "latencyP95Ms": 7654,
+      "casesWithUsage": 52,
+      "casesMissingUsage": 0,
+      "promptTokens": 99788,
+      "completionTokens": 11512,
+      "totalTokens": 111300,
+      "failures": [
+        {
+          "caseId": "ER-H-010",
+          "split": "holdout",
+          "tags": [
+            "approve-normal",
+            "boundary-amount"
+          ],
+          "ruleIds": [
+            "R7",
+            "R9"
+          ],
+          "expected": "approve",
+          "rawSuggestion": "manual",
+          "policySuggestion": "manual",
+          "policyClassification": "ManualRequested",
+          "technicalFailure": null,
+          "fallbackReason": "ManualRequested",
+          "attempts": 1,
+          "rationale": "办公用品金额恰好 1000 元，属于可通过上界。"
+        },
+        {
+          "caseId": "ER-H-037",
+          "split": "holdout",
+          "tags": [
+            "category",
+            "manual-insufficient"
+          ],
+          "ruleIds": [
+            "R3",
+            "R8",
+            "R9"
+          ],
+          "expected": "manual",
+          "rawSuggestion": "approve",
+          "policySuggestion": "approve",
+          "policyClassification": "ShadowCandidate",
+          "technicalFailure": null,
+          "fallbackReason": "ShadowOnly",
+          "attempts": 1,
+          "rationale": "交通费不是词表中的交通，转人工。"
+        }
+      ],
+      "disagreementName": "与标注不一致",
+      "reportedConfidenceIsCalibrated": false
+    }
+  },
+  "coverageBoundary": "离线评测直接调用 AiDecisionNodeHandler.ExecuteAsync，复用其中的安全输入投影、Provider、proposal 解析和 policy。不经过工作流调度、租约、事务落库、outbox 或 HTTP 围栏。返回值必须是人工兜底；建议标签不授予批准、拒绝或推进 task/token 的权限。"
+}

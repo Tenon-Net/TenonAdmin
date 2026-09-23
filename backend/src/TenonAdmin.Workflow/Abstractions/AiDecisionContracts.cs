@@ -24,6 +24,11 @@ public interface IAiDecisionProposalParser
 public interface IAiDecisionPolicyEvaluator
 {
     AiDecisionPolicyEvaluation Evaluate(AiDecisionProposal proposal);
+
+    /// <summary>接收与 Provider 相同的安全投影；默认委托旧入口，兼容消费者已有实现。</summary>
+    AiDecisionPolicyEvaluation Evaluate(
+        AiDecisionProposal proposal,
+        IReadOnlyDictionary<string, JsonElement> inputs) => Evaluate(proposal);
 }
 
 /// <summary>
@@ -447,6 +452,7 @@ public enum AiDecisionPolicyClassification
     HighRisk = 5,
     EvidenceInsufficient = 6,
     DisallowedReason = 7,
+    BusinessRuleMismatch = 8,
 }
 
 /// <summary>shadow-only hand-off 的人工兜底原因。</summary>
@@ -463,6 +469,7 @@ public enum AiDecisionFallbackReason
     ProviderTimeout = 9,
     ProviderFailure = 10,
     AssigneeEmpty = 11,
+    BusinessRuleMismatch = 12,
 }
 
 /// <summary>policy 保留模型建议，同时给出服务端决定的分类。</summary>
@@ -504,7 +511,8 @@ public sealed class AiDecisionPolicyEvaluation
                 or AiDecisionPolicyClassification.LowConfidence
                 or AiDecisionPolicyClassification.HighRisk
                 or AiDecisionPolicyClassification.EvidenceInsufficient
-                or AiDecisionPolicyClassification.DisallowedReason,
+                or AiDecisionPolicyClassification.DisallowedReason
+                or AiDecisionPolicyClassification.BusinessRuleMismatch,
             AiDecisionRecommendation.Reject => classification == AiDecisionPolicyClassification.RejectRecommended,
             AiDecisionRecommendation.Manual => classification == AiDecisionPolicyClassification.ManualRequested,
             _ => false,

@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace TenonAdmin.Workflow;
 
 /// <summary>
@@ -116,6 +118,15 @@ public class AiDecisionPolicyEvaluator : IAiDecisionPolicyEvaluator
         _highRiskFlags = new HashSet<string>(options.HighRiskFlags, StringComparer.Ordinal);
         _allowedReasonCodes = new HashSet<string>(options.AllowedReasonCodes, StringComparer.Ordinal);
         _version = options.Version;
+    }
+
+    /// <summary>出厂实现不解释业务字段；场景实现可在此校验安全投影，旧的 virtual 扩展仍生效。</summary>
+    public virtual AiDecisionPolicyEvaluation Evaluate(
+        AiDecisionProposal proposal,
+        IReadOnlyDictionary<string, JsonElement> inputs)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        return Evaluate(proposal);
     }
 
     /// <summary>

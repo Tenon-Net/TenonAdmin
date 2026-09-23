@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>TenonAdmin.Tools.ExpenseAiDecisionEval</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Description>费用报销 AI Decision 的离线评测入口。不进入 NuGet 包，不改变 shadow-only。</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TenonAdmin.Workflow\TenonAdmin.Workflow.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="ExpenseAiDecisionPolicyEvaluator.cs" LogicalName="ExpensePolicyImplementation.ExpenseAiDecisionPolicyEvaluator.cs" />
+    <EmbeddedResource Include="ExpenseEvalOracle.cs" LogicalName="ExpensePolicyImplementation.ExpenseEvalOracle.cs" />
+    <EmbeddedResource Include="ExpenseEvalScenario.cs" LogicalName="ExpensePolicyImplementation.ExpenseEvalScenario.cs" />
+    <EmbeddedResource Include="..\..\src\TenonAdmin.Workflow\Abstractions\AiDecisionContracts.cs" LogicalName="ExpensePolicyImplementation.AiDecisionContracts.cs" />
+    <EmbeddedResource Include="..\..\src\TenonAdmin.Workflow\Providers\AiDecisionNodeHandler.cs" LogicalName="ExpensePolicyImplementation.AiDecisionNodeHandler.cs" />
+    <EmbeddedResource Include="..\..\src\TenonAdmin.Workflow\Providers\AiDecisionPolicyEvaluator.cs" LogicalName="ExpensePolicyImplementation.AiDecisionPolicyEvaluator.cs" />
+    <EmbeddedResource Include="..\..\src\TenonAdmin.Workflow\Providers\AiDecisionProposalParser.cs" LogicalName="ExpensePolicyImplementation.AiDecisionProposalParser.cs" />
+    <EmbeddedResource Include="..\..\src\TenonAdmin.Workflow\Providers\AiDecisionSafeInputProjector.cs" LogicalName="ExpensePolicyImplementation.AiDecisionSafeInputProjector.cs" />
+  </ItemGroup>
+</Project>

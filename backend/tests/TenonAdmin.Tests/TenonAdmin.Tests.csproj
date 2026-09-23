@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\src\TenonAdmin.Caching.Redis\TenonAdmin.Caching.Redis.csproj" />
     <ProjectReference Include="..\..\src\TenonAdmin.Excel\TenonAdmin.Excel.csproj" />
     <ProjectReference Include="..\..\src\TenonAdmin.Workflow\TenonAdmin.Workflow.csproj" />
+    <ProjectReference Include="..\..\tools\ExpenseAiDecisionEval\ExpenseAiDecisionEval.csproj" />
     <ProjectReference Include="..\TenonAdmin.TestHost\TenonAdmin.TestHost.csproj" />
     <ProjectReference Include="..\TenonAdmin.WorkflowTestHost\TenonAdmin.WorkflowTestHost.csproj" Aliases="workflowhost" />
   </ItemGroup>
