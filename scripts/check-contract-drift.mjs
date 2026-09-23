@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const apiUrl = (process.env.TENON_CONTRACT_URL ?? `http://127.0.0.1:${process.env.TENON_CONTRACT_PORT ?? '5101'}`).replace(/\/+$/, '')
-const generator = fileURLToPath(new URL('./gen-api.mjs', import.meta.url))
 let host
 let hostLog = ''
 
@@ -87,12 +86,12 @@ async function main() {
 
   const generationEnv = { ...process.env, TENON_API_TARGET: apiUrl }
   console.log('[contract] regenerating web/src/api/schema.d.ts')
-  if ((await run(process.execPath, [generator], `${root}/web`, generationEnv)) !== 0) {
+  if ((await run(process.execPath, ['scripts/gen-api.mjs'], `${root}/web`, generationEnv)) !== 0) {
     fail('web schema generation failed')
   }
 
   console.log('[contract] regenerating web-react/src/api/schema.d.ts')
-  if ((await run(process.execPath, [generator], `${root}/web-react`, generationEnv)) !== 0) {
+  if ((await run(process.execPath, ['scripts/gen-api.mjs'], `${root}/web-react`, generationEnv)) !== 0) {
     fail('web-react schema generation failed')
   }
 

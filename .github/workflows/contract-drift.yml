@@ -14,7 +14,8 @@ on:
       - 'web-react/package-lock.json'
       - '.github/workflows/contract-drift.yml'
       - 'scripts/check-contract-drift.mjs'
-      - 'scripts/gen-api.mjs'
+      - 'web/scripts/gen-api.mjs'
+      - 'web-react/scripts/gen-api.mjs'
   pull_request:
     paths:
       - 'backend/**'
@@ -26,7 +27,8 @@ on:
       - 'web-react/package-lock.json'
       - '.github/workflows/contract-drift.yml'
       - 'scripts/check-contract-drift.mjs'
-      - 'scripts/gen-api.mjs'
+      - 'web/scripts/gen-api.mjs'
+      - 'web-react/scripts/gen-api.mjs'
 
 jobs:
   drift:
