@@ -105,4 +105,22 @@ describe('OrgPage 接线', () => {
     expect(cell.props.children[0]).toBeFalsy() // 编辑钮
     expect(cell.props.children[1]).toBeFalsy() // 更多下拉
   })
+
+  it('复制提交中禁用取消,完成后关闭并重拉', async () => {
+    let release!: () => void
+    runMock.mockImplementation(() => new Promise<boolean>((resolve) => { release = () => resolve(true) }))
+    mount()
+    await waitFor(() => expect(captured.columns).toBeTruthy())
+    const cell = callRender(captured.columns!.find((c) => c.key === 'op')!, FLAT[0])
+    ;(cell.props.children[1] as AnyEl).props.menu.onClick({ key: 'copy' })
+
+    fireEvent.click(await screen.findByRole('button', { name: /确\s*定/ }))
+    const cancel = screen.getByRole('button', { name: /取\s*消/ }) as HTMLButtonElement
+    await waitFor(() => expect(cancel.disabled).toBe(true))
+    fireEvent.click(cancel)
+    expect(screen.getByText('复制机构')).toBeTruthy()
+
+    release()
+    await waitFor(() => expect(vi.mocked(orgApi.list).mock.calls.length).toBeGreaterThan(1))
+  })
 })

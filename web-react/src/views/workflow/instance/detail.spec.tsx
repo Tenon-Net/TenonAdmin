@@ -152,6 +152,25 @@ describe('WfInstanceDetailPage 动词', () => {
     expect(typeof body.requestId).toBe('string')
   })
 
+  it('办理提交中禁用取消,完成后才关闭', async () => {
+    let release!: () => void
+    vi.mocked(wfTaskApi.approve).mockImplementationOnce(() => new Promise((resolve) => {
+      release = () => resolve({ instanceId: 5, instanceStatus: 1 })
+    }))
+    mount(detailOf({ myPendingTasks: [pendingTask(77, '经理审批')] }))
+
+    fireEvent.click(await screen.findByRole('button', { name: /同\s*意/ }))
+    fireEvent.click(okButton())
+    const cancel = screen.getByRole('button', { name: /取\s*消/ }) as HTMLButtonElement
+    await waitFor(() => expect(cancel.disabled).toBe(true))
+    fireEvent.click(cancel)
+    expect(screen.getByPlaceholderText('填写意见(可选)')).toBeTruthy()
+
+    release()
+    await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(vi.mocked(wfInstanceApi.get).mock.calls.length).toBeGreaterThan(1))
+  })
+
   it('19 位 taskId 提交时保持十进制字符串', async () => {
     const taskId = '9223372036854775807'
     mount(detailOf({ myPendingTasks: [pendingTask(taskId, '经理审批')] }))

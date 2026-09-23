@@ -15,7 +15,7 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "typecheck": "tsc --noEmit",
-    "gen:api": "node ../scripts/gen-api.mjs",
+    "gen:api": "node scripts/gen-api.mjs",
     "gen:icons": "node scripts/generate-icon-subset.mjs"
   },
   "dependencies": {

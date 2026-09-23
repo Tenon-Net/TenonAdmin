@@ -41,6 +41,7 @@ export function ReauthModal() {
   }
 
   async function confirm() {
+    if (submitting) return
     if (method === 'totp' && !totpCode.trim()) {
       message.warning(t('reauth.totpRequired'))
       return
@@ -70,16 +71,18 @@ export function ReauthModal() {
       okText={t('reauth.confirm')}
       cancelText={t('common.cancel')}
       confirmLoading={submitting}
-      maskClosable={false}
+      cancelButtonProps={{ disabled: submitting }}
+      mask={{ closable: false }}
       keyboard={!submitting}
+      closable={!submitting}
       onOk={() => void confirm()}
-      onCancel={() => finish(false)}
+      onCancel={() => { if (!submitting) finish(false) }}
       destroyOnHidden
     >
       <p style={{ margin: '0 0 12px', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
         {t('reauth.hint')}
       </p>
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <Space orientation="vertical" style={{ width: '100%' }} size="middle">
         <div>
           <div style={{ marginBottom: 6 }}>{t('reauth.method')}</div>
           <Radio.Group

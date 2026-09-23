@@ -13,7 +13,11 @@ vi.mock('@/api', async (orig) => {
     },
     configApi: { siteInfo: vi.fn() },
     // providers 默认空数组(SSO 区不显);不 mock 会走真 fetch 打网络(air-gap 违规)。
-    externalAuthApi: { ...actual.externalAuthApi, providers: vi.fn(() => Promise.resolve([])) },
+    externalAuthApi: {
+      ...actual.externalAuthApi,
+      providers: vi.fn(() => Promise.resolve([])),
+      claimPendingLink: vi.fn(),
+    },
   }
 })
 
@@ -42,6 +46,7 @@ const smsSendMock = vi.mocked(authApi.smsLoginSend)
 const smsLoginMock = vi.mocked(authApi.smsLogin)
 const challengeLoginMock = vi.mocked(authApi.smsChallengeLogin)
 const challengeResendMock = vi.mocked(authApi.smsChallengeResend)
+const claimPendingLinkMock = vi.mocked(externalAuthApi.claimPendingLink)
 
 const SITE = {
   title: '榫卯后台', subtitle: '', copyright: '', copyrightUrl: '', logo: '',
@@ -61,7 +66,7 @@ const SESSION = {
  * 与 `api/client.spec.ts` 里那个是同一类:`resetModules` 造出的是**两套并行的模块图**,
  * 跨图读写永远对不上。
  */
-async function mount(site = SITE) {
+async function mount(site = SITE, entry = '/') {
   providersMock.mockResolvedValue([])
   vi.resetModules()
   // 先钉当前模块图里的桩,再挂页面(load 在 useEffect,渲染前必须已 mockResolved)
@@ -73,7 +78,7 @@ async function mount(site = SITE) {
   const { useSiteStore } = await import('@/stores/site')
   store.setState({ accessToken: '', refreshToken: '', userInfo: null })
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[entry]}>
       <AntdApp>
         <Page />
       </AntdApp>
@@ -103,6 +108,7 @@ beforeEach(() => {
   smsLoginMock.mockReset()
   challengeLoginMock.mockReset()
   challengeResendMock.mockReset()
+  claimPendingLinkMock.mockReset()
   navigate.mockClear() // 它是本文件自己的 vi.fn(),不在上面三个里;漏清会让"失败不跳转"吃到上一条的调用
   localStorage.clear()
 })
@@ -320,6 +326,25 @@ describe('提交', () => {
 
     await waitFor(() => expect(screen.getByText('请输入账号和密码')).toBeTruthy())
     expect(loginMock).not.toHaveBeenCalled()
+  })
+
+  it('现场绑定提交中禁用跳过,请求完成后才进入首页', async () => {
+    let release!: () => void
+    claimPendingLinkMock.mockImplementation(() => new Promise<boolean>((resolve) => { release = () => resolve(true) }))
+    loginMock.mockResolvedValue(SESSION)
+    await mount(SITE, '/login?pendingLink=claim-1')
+    fireEvent.change(screen.getByPlaceholderText('请输入密码'), { target: { value: 'Aa123456' } })
+    submit()
+
+    const confirm = await screen.findByRole('button', { name: /确认绑定/ })
+    fireEvent.click(confirm)
+    const skip = screen.getByRole('button', { name: /仅登录，不绑定/ }) as HTMLButtonElement
+    await waitFor(() => expect(skip.disabled).toBe(true))
+    fireEvent.click(skip)
+    expect(navigate).not.toHaveBeenCalled()
+
+    release()
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/', { replace: true }))
   })
 })
 

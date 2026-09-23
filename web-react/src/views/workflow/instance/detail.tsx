@@ -634,11 +634,14 @@ export default function WfInstanceDetailPage() {
         title={action ? t(`workflow.detail.${action}`) : undefined}
         width={480}
         confirmLoading={submitting}
-        maskClosable={!submitting}
+        mask={{ closable: !submitting }}
+        keyboard={!submitting}
+        closable={!submitting}
+        cancelButtonProps={{ disabled: submitting }}
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
         onOk={() => void submitAction()}
-        onCancel={() => setAction(null)}
+        onCancel={() => { if (!submitting) setAction(null) }}
         destroyOnHidden
       >
         <Form form={actionForm} layout="vertical" onValuesChange={() => requestKey.reset()}>
