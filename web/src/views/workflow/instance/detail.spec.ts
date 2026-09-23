@@ -4,10 +4,11 @@ import { createI18n } from 'vue-i18n'
 import zhCN from '@/locales/zh-CN'
 import Detail from './detail.vue'
 
-const { getInstance, getHistory, takeBack, runConfirm } = vi.hoisted(() => ({
+const { getInstance, getHistory, takeBack, approve, runConfirm } = vi.hoisted(() => ({
   getInstance: vi.fn(),
   getHistory: vi.fn(),
   takeBack: vi.fn(),
+  approve: vi.fn(),
   runConfirm: vi.fn(),
 }))
 
@@ -21,7 +22,7 @@ vi.mock('vue-router', () => ({
 }))
 vi.mock('@/api/workflow', () => ({
   wfInstanceApi: { get: getInstance, history: getHistory },
-  wfTaskApi: { takeBack },
+  wfTaskApi: { takeBack, approve },
 }))
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ run: runConfirm }) }))
 vi.mock('@/composables/useTabTitle', () => ({ useTabTitle: () => vi.fn() }))
@@ -59,9 +60,9 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-async function mountDetail(detail: Record<string, unknown>) {
+async function mountDetail(detail: Record<string, unknown>, history: unknown[] = []) {
   getInstance.mockResolvedValueOnce(detail)
-  getHistory.mockResolvedValueOnce([])
+  getHistory.mockResolvedValueOnce(history)
   const host = document.createElement('div')
   document.body.append(host)
   app = createApp(Detail, { id: 1 })
@@ -292,4 +293,101 @@ describe('workflow instance detail variables', () => {
     expect(takeBack).toHaveBeenCalledWith(expect.objectContaining({ taskId: 201 }))
     expect(takeBack).not.toHaveBeenCalledWith(expect.objectContaining({ taskId: 999 }))
   })
+
+  it('shows the latest return reason, target and current node', async () => {
+    const host = await mountDetail({
+      id: 1,
+      definitionName: '请假',
+      status: 1,
+      currentTasks: [{ taskId: 9, tokenId: 1, nodeId: 'approval', nodeName: '主管' }],
+      hisTasks: [
+        { id: 1, action: 1, comment: '同意了', nodeName: '初审', createTime: '2026-09-01T00:00:00', userId: 2 },
+        { id: 2, action: 4, comment: '材料不全', nodeName: '主管', createTime: '2026-09-02T00:00:00', userId: 3 },
+      ],
+      model: { version: 1, root: { id: 'start', type: 'start', name: '发起人', next: null } },
+    }, [
+      { id: 8, eventType: 14, payloadJson: JSON.stringify({ targetNodeId: 'start', comment: '材料不全' }) },
+    ])
+
+    expect(host.textContent).toContain('退回原因')
+    expect(host.textContent).toContain('材料不全')
+    expect(host.textContent).toContain('退回到 发起人')
+    expect(host.textContent).toContain('当前节点')
+    expect(host.textContent).toContain('主管')
+    expect(host.textContent).toContain('审批意见')
+    expect(host.textContent).toContain('同意了')
+  })
+
+  it('shows a retryable error when loading fails and does not pretend the detail exists', async () => {
+    getInstance.mockRejectedValueOnce(new Error('boom'))
+    getHistory.mockResolvedValueOnce([])
+    const host = document.createElement('div')
+    document.body.append(host)
+    app = createApp(Detail, { id: 1 })
+    app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
+    app.mount(host)
+    await nextTick()
+    await nextTick()
+
+    expect(host.textContent).toContain('审批详情加载失败')
+    expect(host.textContent).not.toContain('基本信息')
+
+    getInstance.mockResolvedValueOnce({ id: 1, definitionName: '请假', status: 1, hisTasks: [] })
+    getHistory.mockResolvedValueOnce([])
+    clickText(host, '重试')
+    await expect.poll(() => host.textContent).toContain('请假')
+  })
+
+  it('keeps the comment when submit fails and ignores a second click until the first settles', async () => {
+    let release: (value: boolean) => void = () => {}
+    approve.mockImplementation(() => new Promise(() => {}))
+    runConfirm.mockImplementation((action: () => Promise<unknown>) => {
+      void action()
+      return new Promise<boolean>((resolve) => { release = resolve })
+    })
+    const host = await mountDetail({
+      id: 1,
+      definitionName: '请假',
+      status: 1,
+      hisTasks: [],
+      myPendingTasks: [{ taskId: 5, instanceId: 1, nodeId: 'approval', nodeName: '主管' }],
+    })
+    clickText(host, '同意')
+    await nextTick()
+    const textarea = document.body.querySelector('textarea')
+    expect(textarea).toBeTruthy()
+    setNativeValue(textarea!, '请补充附件')
+    await nextTick()
+
+    const confirm = buttonByText(document.body, '确定')
+    confirm.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    confirm.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await nextTick()
+    expect(approve).toHaveBeenCalledTimes(1)
+    expect(approve).toHaveBeenCalledWith(expect.objectContaining({ comment: '请补充附件', taskId: 5 }))
+    expect(document.body.querySelector('textarea')?.value).toBe('请补充附件')
+
+    getInstance.mockClear()
+    release(false)
+    await nextTick()
+    await nextTick()
+    expect(document.body.querySelector('textarea')?.value).toBe('请补充附件')
+    expect(getInstance).not.toHaveBeenCalled()
+  })
 })
+
+function buttonByText(root: ParentNode, text: string) {
+  const button = Array.from(root.querySelectorAll('button')).find((item) => item.textContent?.trim() === text)
+  expect(button).toBeTruthy()
+  return button!
+}
+
+function clickText(root: ParentNode, text: string) {
+  buttonByText(root, text).dispatchEvent(new MouseEvent('click', { bubbles: true }))
+}
+
+function setNativeValue(el: HTMLTextAreaElement, value: string) {
+  const proto = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
+  proto?.set?.call(el, value)
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+}

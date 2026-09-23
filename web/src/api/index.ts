@@ -1,5 +1,6 @@
 import { client } from './client'
 import type { components } from './schema'
+import { fileNameFromContentDisposition } from '@/utils/download'
 import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, CronPreviewOutput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, DuplicateStrategy, FileUploadOutput, ImportCommitResult, ImportPreview, ImportRow, JobDashboard, JobHandlersOutput, JobInput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, ServerInfoOutput, SysConfig, SysDictItem, SysDictType, SysExceptionLog, SysFile, SysJob, SysJobLog, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
@@ -689,6 +690,56 @@ export const dictAdminApi = {
   itemBatchRemove: (ids: number[]) => client.POST('/api/v1/sys/dict/item/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
 }
 
+export interface FileDownload {
+  blob: Blob
+  fileName: string
+  contentType: string
+}
+
+/** 非 2xx 下载:优先用失败信封里的业务码(41001 无权限),否则退回 HTTP 状态。 */
+export function fileDownloadHttpError(response: Response, error: unknown): ApiError {
+  const env = (error && typeof error === 'object' ? error : {}) as Envelope
+  if (typeof env.code === 'number') return new ApiError(env.code, env.msgKey, env.args, env.message)
+  const message = typeof error === 'string' && error.trim() ? error : response.statusText
+  return new ApiError(response.status, undefined, undefined, message)
+}
+
+/** HTTP 200 但 body 是业务失败信封时抛 ApiError;普通文本返回 null。 */
+export function fileDownloadJsonError(text: string): ApiError | null {
+  if (!text.trim().startsWith('{')) return null
+  try {
+    const env = JSON.parse(text) as Envelope
+    if (typeof env.code === 'number' && env.code !== 0) {
+      return new ApiError(env.code, env.msgKey, env.args, env.message)
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+async function fetchFileDownload(id: number | string): Promise<FileDownload> {
+  const r = await client.GET('/api/v1/sys/file/{id}/download', {
+    params: { path: { id } },
+    parseAs: 'blob',
+  })
+  if (!r.response.ok) throw fileDownloadHttpError(r.response, r.error)
+  let blob = r.data as Blob
+  const headerType = r.response.headers.get('content-type') ?? blob.type ?? ''
+  const contentType = headerType.split(';')[0]?.trim().toLowerCase() || 'application/octet-stream'
+  if (contentType.includes('json') || contentType.startsWith('text/')) {
+    const text = await blob.text()
+    const failure = fileDownloadJsonError(text)
+    if (failure) throw failure
+    blob = new Blob([text], { type: contentType })
+  }
+  return {
+    blob,
+    fileName: fileNameFromContentDisposition(r.response.headers.get('content-disposition'), `file-${id}`),
+    contentType,
+  }
+}
+
 export const fileApi = {
   /** 文件分页;搜索键 originalName → 后端 FileName 模糊过滤。 */
   page: (params: { page: number; pageSize: number; originalName?: string }) =>
@@ -709,12 +760,13 @@ export const fileApi = {
         },
       })
       .then((r) => unwrap<FileUploadOutput>(r)),
-  /** 下载:parseAs blob 取原始字节(非信封,不套 unwrap);Bearer 由 client 拦截器自动带。 */
-  download: (id: number) =>
-    client.GET('/api/v1/sys/file/{id}/download', { params: { path: { id } }, parseAs: 'blob' }).then((r) => {
-      if (!r.response.ok) throw new ApiError(r.response.status, undefined, undefined, r.response.statusText)
-      return r.data as Blob
-    }),
+  /**
+   * 下载原始字节。403 等失败信封保留业务 code/msgKey(审批附件要区分无权限与文件不存在);
+   * HTTP 200 + JSON 信封(FileNotFound 等)不能当成文件流。
+   */
+  download: (id: number | string) => fetchFileDownload(id).then((file) => file.blob),
+  /** 下载并带上文件名与媒体类型,供审批附件预览。雪花 Id 保持 string,避免 Number() 丢精度。 */
+  fetchDownload: (id: number | string) => fetchFileDownload(id),
   remove: (id: number) =>
     client.DELETE('/api/v1/sys/file/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 批量软删除文件记录(物理文件保留)。 */

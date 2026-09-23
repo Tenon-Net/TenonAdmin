@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { unwrap, ApiError } from './index'
+import { unwrap, ApiError, fileDownloadHttpError, fileDownloadJsonError } from './index'
 
 // 零 mock:直接手工构造 openapi-fetch 返回形状 { data, error, response },测 unwrap 的分支覆盖。
 describe('unwrap', () => {
@@ -76,5 +76,25 @@ describe('unwrap', () => {
       expect(err.code).toBe(422)
       expect(err.message).toBe('field invalid')
     }
+  })
+})
+
+describe('file download errors', () => {
+  it('keeps the business code on a 403 envelope instead of collapsing to HTTP status', () => {
+    const err = fileDownloadHttpError(
+      new Response(null, { status: 403, statusText: 'Forbidden' }),
+      { code: 41001, msgKey: 'error.perm.denied', message: 'denied' },
+    )
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.code).toBe(41001)
+    expect(err.msgKey).toBe('error.perm.denied')
+  })
+
+  it('reads a 200 JSON envelope as a business failure and ignores real file text', () => {
+    const missing = fileDownloadJsonError('{"code":44004,"msgKey":"error.file.notFound"}')
+    expect(missing?.code).toBe(44004)
+    expect(missing?.msgKey).toBe('error.file.notFound')
+    expect(fileDownloadJsonError('not-json')).toBeNull()
+    expect(fileDownloadJsonError('{"code":0}')).toBeNull()
   })
 })

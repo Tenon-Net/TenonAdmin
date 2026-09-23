@@ -6,13 +6,16 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  NAlert,
   NButton,
   NCard,
   NDescriptions,
   NDescriptionsItem,
   NEmpty,
+  NFormItem,
   NInput,
   NModal,
+  NResult,
   NSelect,
   NSpace,
   NTag,
@@ -67,6 +70,8 @@ const uid = computed(() => Number(props.id ?? route.params.id))
 
 const user = useUserStore()
 const loading = ref(false)
+const loadError = ref<string | null>(null)
+let loadSeq = 0
 const detail = ref<WfInstanceDetail | null>(null)
 const history = ref<WfHistoryItem[]>([])
 const formVariablesJson = ref<string | null>(null)
@@ -191,6 +196,50 @@ function btnText(kind: keyof WfButtonLabels, fallbackKey: string) {
 
 const title = computed(() => detail.value?.definitionName || t('workflow.detail.title'))
 
+const currentNodeSummary = computed(() => {
+  const names = currentTasks.value
+    .map((task) => task.nodeName || task.nodeId)
+    .filter((name): name is string => Boolean(name))
+  return names.length ? [...new Set(names)].join('、') : ''
+})
+
+const latestHisTask = computed(() => {
+  const items = detail.value?.hisTasks ?? []
+  return items.length ? items[items.length - 1] : null
+})
+
+const returnNotice = computed(() => (Number(latestHisTask.value?.action) === 4 ? latestHisTask.value : null))
+
+const returnTargetLabel = computed(() => {
+  if (!returnNotice.value) return ''
+  for (let i = history.value.length - 1; i >= 0; i -= 1) {
+    const item = history.value[i]
+    if (!item || Number(item.eventType) !== 14 || !item.payloadJson) continue
+    try {
+      const payload = JSON.parse(item.payloadJson) as { targetNodeId?: unknown }
+      if (typeof payload.targetNodeId !== 'string' || !payload.targetNodeId) return ''
+      const model = replayModel.value
+      const node = model ? findNode(model.root, payload.targetNodeId) : null
+      return node?.name?.trim() || payload.targetNodeId
+    } catch {
+      return ''
+    }
+  }
+  return ''
+})
+
+const commentFieldLabel = computed(() => {
+  if (actionKind.value === 'return') return t('workflow.detail.returnReason')
+  if (actionKind.value === 'reject') return t('workflow.detail.rejectReason')
+  return t('workflow.detail.commentLabel')
+})
+
+const commentPlaceholder = computed(() => (
+  actionKind.value === 'return' ? t('workflow.detail.returnReasonHint') : t('workflow.detail.commentHint')
+))
+
+const canRetryLoad = computed(() => Number.isFinite(uid.value) && uid.value > 0)
+
 function statusLabel(s: WfInstanceStatus | undefined): string {
   const key = normalizeStatus(s)
   return t(`workflow.status.${key}`, String(s ?? ''))
@@ -268,6 +317,12 @@ function parallelArmTagType(status: WfParallelArm['status']): 'default' | 'succe
   return 'info'
 }
 
+function commentCaption(action: WfTaskAction | undefined): string {
+  if (action === 4) return t('workflow.detail.returnReason')
+  if (action === 2) return t('workflow.detail.rejectReason')
+  return t('workflow.detail.commentLabel')
+}
+
 function historyEventLabel(item: WfHistoryItem): string {
   const key: Record<number, string> = {
     1: 'instanceStarted',
@@ -339,14 +394,29 @@ const variableRows = computed((): VarPair[] => {
   return [{ key: '', value: json }]
 })
 
+function resetActionDraft() {
+  actionForm.comment = ''
+  actionForm.toUserId = null
+  actionForm.targetNodeId = null
+}
+
 async function load(id: number) {
-  if (!Number.isFinite(id) || id <= 0) return
+  const seq = ++loadSeq
+  if (!Number.isFinite(id) || id <= 0) {
+    detail.value = null
+    history.value = []
+    loadError.value = t('workflow.detail.loadInvalid')
+    loading.value = false
+    return
+  }
   loading.value = true
+  loadError.value = null
   try {
     const [loaded, loadedHistory] = await Promise.all([
       wfInstanceApi.get(id),
       wfInstanceApi.history(id),
     ])
+    if (seq !== loadSeq) return
     detail.value = loaded
     history.value = loadedHistory
     selectedPendingTaskId.value = myPendingTasks.value[0]?.taskId == null
@@ -355,11 +425,14 @@ async function load(id: number) {
     formVariablesJson.value = detail.value.variablesJson ?? null
     if (!isInline.value) setTabTitle(detail.value.definitionName ?? '')
   } catch (e) {
-    message.error(translateError(e))
+    if (seq !== loadSeq) return
+    const text = translateError(e)
+    message.error(text)
     detail.value = null
     history.value = []
+    loadError.value = text
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -369,22 +442,34 @@ watch(selectedPendingTask, (task) => {
     targetTaskId.value = task?.taskId == null ? null : Number(task.taskId)
 })
 
-watch(uid, (id) => void load(id), { immediate: true })
+watch(uid, (id) => {
+  actionShow.value = false
+  resetActionDraft()
+  void load(id)
+}, { immediate: true })
+
+/** 只接受本模块列表路径,避免 query 把返回做成外链。 */
+function listPathFromQuery(): string {
+  const from = route.query.from
+  if (typeof from !== 'string' || !from.startsWith('/workflow/') || from.includes('://') || from.includes('\\')) {
+    return '/workflow/todo'
+  }
+  return from
+}
 
 function onBack() {
   if (isInline.value) {
     emit('back')
     return
   }
-  const listPath = '/workflow/todo'
+  const listPath = listPathFromQuery()
   void router.push(listPath).then(() => tabs.removeTab(route.path))
 }
 
 function openAction(kind: ActionKind) {
+  if (actionSubmitting.value) return
+  if (actionKind.value !== kind) resetActionDraft()
   actionKind.value = kind
-  actionForm.comment = ''
-  actionForm.toUserId = null
-  actionForm.targetNodeId = null
   targetTaskId.value = kind === 'urge' || kind === 'takeBack'
     ? kind === 'takeBack'
       ? Number(detail.value?.myTakeBackTaskId ?? 0) || null
@@ -396,7 +481,15 @@ function openAction(kind: ActionKind) {
 
 const actionTitle = computed(() => t(`workflow.detail.${actionKind.value}`))
 
+function onCommentKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault()
+    void submitAction()
+  }
+}
+
 async function submitAction() {
+  if (actionSubmitting.value) return
   const kind = actionKind.value
   if ((kind === 'transfer' || kind === 'delegate') && (!actionForm.toUserId || actionForm.toUserId <= 0)) {
     message.warning(t(kind === 'delegate' ? 'workflow.detail.delegateRequired' : 'workflow.detail.transferRequired'))
@@ -410,7 +503,10 @@ async function submitAction() {
     message.warning(t('workflow.detail.returnTargetRequired'))
     return
   }
-  if ((kind === 'approve' || kind === 'reject' || kind === 'resubmit') && formRuntimeRef.value?.validate() === false) return
+  if ((kind === 'approve' || kind === 'reject' || kind === 'resubmit') && formRuntimeRef.value?.validate() === false) {
+    message.warning(t('workflow.detail.formInvalid'))
+    return
+  }
 
   actionSubmitting.value = true
   try {
@@ -462,6 +558,7 @@ async function submitAction() {
     const ok = await run(api, t('common.success'))
     if (ok) {
       actionShow.value = false
+      resetActionDraft()
       await load(uid.value)
     }
   } finally {
@@ -518,7 +615,23 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
       </n-space>
     </template>
 
+    <n-result
+      v-if="!detail && loadError && !loading"
+      status="error"
+      :title="t('workflow.detail.loadFailed')"
+      :description="loadError"
+    >
+      <template #footer>
+        <n-button v-if="canRetryLoad" type="primary" @click="load(uid)">{{ t('workflow.detail.retry') }}</n-button>
+      </template>
+    </n-result>
+
     <template v-if="detail">
+      <n-alert v-if="returnNotice" type="warning" :bordered="false" :title="t('workflow.detail.returnReason')">
+        {{ returnNotice.comment?.trim() || t('workflow.detail.returnReasonEmpty') }}
+        <div v-if="returnTargetLabel">{{ t('workflow.detail.returnTo', { name: returnTargetLabel }) }}</div>
+      </n-alert>
+
       <n-card size="small" :bordered="false" :title="t('workflow.detail.summary')">
         <n-descriptions label-placement="left" :column="2" size="small">
           <n-descriptions-item :label="t('workflow.detail.definition')">
@@ -529,6 +642,9 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
             <n-tag size="small" :type="statusType(detail.status)" :bordered="false">
               {{ statusLabel(detail.status) }}
             </n-tag>
+          </n-descriptions-item>
+          <n-descriptions-item v-if="currentNodeSummary" :label="t('workflow.detail.currentNode')">
+            {{ currentNodeSummary }}
           </n-descriptions-item>
           <n-descriptions-item :label="t('workflow.detail.businessKey')">
             {{ detail.businessKey || '—' }}
@@ -636,7 +752,10 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
                   {{ actionLabel(item.action) }}
                 </n-tag>
               </div>
-              <blockquote v-if="item.comment" class="wf-comment">{{ item.comment }}</blockquote>
+              <blockquote v-if="item.comment" class="wf-comment">
+                <span class="wf-comment-label">{{ commentCaption(item.action) }}</span>
+                {{ item.comment }}
+              </blockquote>
               <div v-if="transferText(item)" class="wf-meta">
                 {{ t('workflow.detail.transferTo', { name: transferText(item) }) }}
               </div>
@@ -673,12 +792,15 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
       preset="card"
       :title="actionTitle"
       style="width: 440px"
+      :closable="!actionSubmitting"
+      :close-on-esc="!actionSubmitting"
       :mask-closable="!actionSubmitting"
     >
       <n-space vertical style="width: 100%">
         <UserSelect
           v-if="actionKind === 'transfer' || actionKind === 'delegate' || actionKind === 'addSign' || actionKind === 'removeSign'"
           v-model:value="actionForm.toUserId"
+          :disabled="actionSubmitting"
           :placeholder="actionKind === 'delegate'
             ? t('workflow.detail.delegateUser')
             : actionKind === 'addSign'
@@ -690,31 +812,41 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
         <n-select
           v-if="requiresPendingTask && myPendingTasks.length > 1"
           v-model:value="selectedPendingTaskId"
+          :disabled="actionSubmitting"
           :options="myPendingTasks.map((task) => ({ label: pendingTaskText(task), value: Number(task.taskId) }))"
           :placeholder="t('workflow.detail.targetTask')"
         />
         <n-select
           v-if="actionKind === 'urge' && currentTasks.length > 1"
           v-model:value="targetTaskId"
+          :disabled="actionSubmitting"
           :options="currentTasks.map((task) => ({ label: currentTaskText(task), value: Number(task.taskId) }))"
           :placeholder="t('workflow.detail.targetTask')"
         />
         <n-select
           v-if="actionKind === 'return' && returnPolicy === 'any'"
           v-model:value="actionForm.targetNodeId"
+          :disabled="actionSubmitting"
           :options="returnTargetOptions"
           :placeholder="t('workflow.detail.returnTarget')"
         />
-        <n-input
+        <n-form-item
           v-if="actionKind !== 'urge' && actionKind !== 'cancel' && actionKind !== 'resubmit'"
-          v-model:value="actionForm.comment"
-          type="textarea"
-          :rows="3"
-          :placeholder="t('workflow.detail.commentHint')"
-        />
+          :label="commentFieldLabel"
+          :show-feedback="false"
+        >
+          <n-input
+            v-model:value="actionForm.comment"
+            type="textarea"
+            :rows="3"
+            :disabled="actionSubmitting"
+            :placeholder="commentPlaceholder"
+            @keydown="onCommentKeydown"
+          />
+        </n-form-item>
         <n-space justify="end">
           <n-button :disabled="actionSubmitting" @click="actionShow = false">{{ t('common.cancel') }}</n-button>
-          <n-button type="primary" :loading="actionSubmitting" @click="submitAction">{{ t('common.confirm') }}</n-button>
+          <n-button type="primary" :loading="actionSubmitting" :disabled="actionSubmitting" @click="submitAction">{{ t('common.confirm') }}</n-button>
         </n-space>
       </n-space>
     </n-modal>
@@ -764,6 +896,12 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+}
+.wf-comment-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
 }
 .wf-meta {
   margin-top: 6px;

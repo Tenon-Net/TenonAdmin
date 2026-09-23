@@ -3,7 +3,7 @@
  * 我已办的。菜单 component 填 `workflow/done/index`。
  * 行点击或「查看」进实例详情(`/workflow/instance/:id/detail`)。
  */
-import { h, ref } from 'vue'
+import { h, onActivated, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -19,8 +19,21 @@ const tableRef = ref<ProTableInst<WfDoneItem>>()
 
 function openDetail(r: WfDoneItem) {
   if (r.instanceId == null) return
-  void router.push(`/workflow/instance/${r.instanceId}/detail`)
+  void router.push({
+    path: `/workflow/instance/${r.instanceId}/detail`,
+    query: { from: '/workflow/done' },
+  })
 }
+
+// 列表被 keep-alive 缓存。首次激活交给 ProTable 自己拉数,回到本页时重拉。
+const skipRefresh = ref(true)
+onActivated(() => {
+  if (skipRefresh.value) {
+    skipRefresh.value = false
+    return
+  }
+  void tableRef.value?.refresh()
+})
 
 /** 与 detail.vue 同一套实例状态 / 动作数字表,不另起体系。 */
 function normalizeStatus(s: WfInstanceStatus | undefined): string {
@@ -104,6 +117,13 @@ const columns: ProTableColumn<WfDoneItem>[] = [
       ),
   },
   { key: 'createTime', title: () => t('workflow.done.createTime'), width: 170, format: 'datetime' },
+  {
+    key: 'comment',
+    title: () => t('workflow.done.comment'),
+    minWidth: 180,
+    ellipsis: { tooltip: true },
+    render: (r) => r.comment?.trim() || '—',
+  },
   {
     key: 'op',
     title: () => t('common.operation'),

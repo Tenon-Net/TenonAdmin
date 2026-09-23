@@ -993,13 +993,16 @@ public class WfInstanceService(
             .Where(t => t.InstanceId == instance.Id)
             .Select(t => t.Id)
             .ToListAsync();
+        // 长期委托把 Pending 行的 UserId 改成受托人,原责任人只留在 OriginalUserId。
+        // 提交仍只认受托人;原责任人要能看自己被委托出去的单,否则规则一生效就 48015。
         if (taskIds.Count > 0 && await actors.AsQueryable()
                 .AnyAsync(a => taskIds.Contains(a.TaskId)
-                               && a.UserId == userId
                                && a.ActorType == WfActorType.Approver
-                               && a.Status == WfActorStatus.Pending))
+                               && a.Status == WfActorStatus.Pending
+                               && (a.UserId == userId || a.OriginalUserId == userId)))
             return;
-        if (await hisTasks.AnyAsync(h => h.InstanceId == instance.Id && h.UserId == userId))
+        if (await hisTasks.AnyAsync(h => h.InstanceId == instance.Id
+                                         && (h.UserId == userId || h.OriginalUserId == userId)))
             return;
         if (await ccs.AnyAsync(c => c.InstanceId == instance.Id && c.UserId == userId))
             return;

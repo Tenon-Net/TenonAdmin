@@ -841,26 +841,37 @@ public class WorkflowEngine(
         }
 
         if (await db.Queryable<WfHisTask>()
-                .AnyAsync(h => h.InstanceId == instance.Id && h.Action == WfTaskAction.Approve))
+                .AnyAsync(h => h.InstanceId == instance.Id && h.Action == WfTaskAction.Approve, cancellationToken))
         {
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.CancelNotAllowed,
                 new Dictionary<string, object?> { ["reason"] = "alreadyApproved" });
         }
 
-        var token = await db.Queryable<WfToken>()
-            .Where(t => t.InstanceId == instance.Id && t.Status == WfTokenStatus.Active)
-            .FirstAsync();
-        if (token is null)
-            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TokenNotFound);
-
         var version = await db.Queryable<WfDefinitionVersion>()
             .Where(v => v.Id == instance.DefinitionVersionId)
-            .FirstAsync();
+            .FirstAsync(cancellationToken);
         if (version is null)
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionVersionNotFound);
 
         var model = WfModelJson.Deserialize(version.ModelJson)
                     ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid);
+
+        // 版本必须在「无人同意」复查之前拍下来,并且一直用到 token CAS。
+        // 中间如果重读,读提交会看到并发同意提交后的新版本,WHERE version=@new 仍然命中。
+        var observedTokens = await db.Queryable<WfToken>()
+            .Where(t => t.InstanceId == instance.Id
+                        && (t.Status == WfTokenStatus.Active || t.Status == WfTokenStatus.WaitingJoin))
+            .ToListAsync(cancellationToken);
+        if (await db.Queryable<WfHisTask>()
+                .AnyAsync(h => h.InstanceId == instance.Id && h.Action == WfTaskAction.Approve, cancellationToken))
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.CancelNotAllowed,
+                new Dictionary<string, object?> { ["reason"] = "alreadyApproved" });
+        }
+
+        var token = observedTokens.FirstOrDefault(t => t.Status == WfTokenStatus.Active);
+        if (token is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TokenNotFound);
 
         var agenda = new WfAgenda();
         var ctx = new WfExecutionContext
@@ -880,6 +891,7 @@ public class WorkflowEngine(
             IdGenerator = idGenerator,
             Instance = instance,
             Token = token,
+            CancelTokenSnapshot = observedTokens,
             Model = model,
             DefinitionVersion = version,
             SelectedUserIdsByNode = DeserializeSelectedUsers(instance.SelectedUserIdsJson),

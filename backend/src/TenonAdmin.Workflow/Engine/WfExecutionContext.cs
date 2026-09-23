@@ -24,6 +24,14 @@ public sealed class WfExecutionContext
 
     public required WfInstance Instance { get; set; }
     public required WfToken Token { get; set; }
+
+    /// <summary>
+    /// 撤销准入当时看到的活跃/待汇合 token。
+    /// 内置撤销的 token CAS 必须用这份 <see cref="WfToken.Version"/>,不能在删除待办前重读:
+    /// 读提交下重读会拿到并发同意已经推进的版本,条件更新仍然命中,实例变成 Cancelled 的同时还留着 Approve 历史。
+    /// 未设置时(拒绝收口等)仍当场读取。
+    /// </summary>
+    public List<WfToken>? CancelTokenSnapshot { get; set; }
     public required WfModel Model { get; init; }
     public required WfDefinitionVersion DefinitionVersion { get; init; }
 

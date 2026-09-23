@@ -1,19 +1,24 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import {
+  NButton,
   NDatePicker,
   NForm,
   NFormItem,
   NInput,
   NInputNumber,
+  NModal,
   NSelect,
-  NSpace,
   NTag,
+  useMessage,
   type SelectOption,
 } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import FileUpload from '@/components/FileUpload/index.vue'
 import UserSelect from '@/components/UserSelect/index.vue'
+import { fileApi } from '@/api'
+import { triggerBlobDownload } from '@/utils/download'
+import { translateError } from '@/utils/error'
 import type { FileUploadOutput } from '@/types/api'
 import type { WfFormField, WfFormFieldPerm, WfFormOption, WfFormSchema } from '@/workflow/schema'
 import {
@@ -33,9 +38,33 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [value: WfFormValues] }>()
 
 const { t } = useI18n()
+const message = useMessage()
 const values = reactive<WfFormValues>({ ...props.modelValue })
 const issues = ref<WfFormValueIssue[]>([])
 const visibleFields = computed(() => props.schema.fields.filter((field) => !isHidden(field)))
+
+/** 本次会话里刚上传的文件才带原始名和签名直链;已保存的表单只有雪花 Id。 */
+const attachmentMeta = reactive<Record<string, { name?: string; viewUrl?: string }>>({})
+const attachmentBusy = ref<Record<string, 'preview' | 'download'>>({})
+const attachmentErrors = ref<Record<string, string>>({})
+const previewShow = ref(false)
+const previewTitle = ref('')
+const previewUrl = ref('')
+const previewKind = ref<'image' | 'pdf' | null>(null)
+const previewId = ref<string | null>(null)
+let previewObjectUrl: string | null = null
+
+const PREVIEW_BY_EXT: Record<string, 'image' | 'pdf'> = {
+  png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', bmp: 'image', pdf: 'pdf',
+}
+const PREVIEW_BY_MIME: Record<string, 'image' | 'pdf'> = {
+  'image/png': 'image',
+  'image/jpeg': 'image',
+  'image/gif': 'image',
+  'image/webp': 'image',
+  'image/bmp': 'image',
+  'application/pdf': 'pdf',
+}
 
 watch(
   () => props.modelValue,
@@ -156,9 +185,134 @@ function attachmentMaxCount(field: WfFormField): number {
   return field.type === 'attachment' && field.props?.multiple === true ? (field.props.maxCount ?? 20) : 1
 }
 
+function attachmentKey(id: number | string) {
+  return String(id)
+}
+
+function rememberAttachment(output: FileUploadOutput) {
+  const id = normalizeId(output.id)
+  if (id === null) return
+  const key = attachmentKey(id)
+  const name = output.originalName?.trim()
+  const viewUrl = output.viewUrl?.trim()
+  attachmentMeta[key] = {
+    name: name || attachmentMeta[key]?.name,
+    viewUrl: viewUrl || attachmentMeta[key]?.viewUrl,
+  }
+}
+
+function attachmentLabel(id: number | string) {
+  return attachmentMeta[attachmentKey(id)]?.name || attachmentKey(id)
+}
+
+function extensionOf(name: string) {
+  const index = name.lastIndexOf('.')
+  return index >= 0 ? name.slice(index + 1).toLowerCase() : ''
+}
+
+function isAttachmentBusy(id: number | string) {
+  return attachmentBusy.value[attachmentKey(id)] != null
+}
+
+function setAttachmentError(id: number | string, text: string | null) {
+  const key = attachmentKey(id)
+  const next = { ...attachmentErrors.value }
+  if (text) next[key] = text
+  else delete next[key]
+  attachmentErrors.value = next
+}
+
+function clearPreviewUrl() {
+  if (previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl)
+    previewObjectUrl = null
+  }
+  previewUrl.value = ''
+  previewKind.value = null
+  previewId.value = null
+}
+
+watch(previewShow, (show) => {
+  if (!show) clearPreviewUrl()
+})
+onBeforeUnmount(clearPreviewUrl)
+
+function showPreview(id: number | string, kind: 'image' | 'pdf', url: string, owned: boolean) {
+  const previous = previewObjectUrl
+  previewObjectUrl = owned ? url : null
+  previewId.value = attachmentKey(id)
+  previewKind.value = kind
+  previewUrl.value = url
+  previewTitle.value = attachmentLabel(id)
+  previewShow.value = true
+  // 先换 src 再释放旧 blob,避免 img 在空地址上误报加载失败。
+  if (previous && previous !== url) URL.revokeObjectURL(previous)
+}
+
+function onPreviewMediaError() {
+  if (!previewShow.value) return
+  const id = previewId.value
+  previewShow.value = false
+  const text = t('workflow.form.attachmentFailed')
+  if (id) setAttachmentError(id, text)
+  message.error(text)
+}
+
+async function withAttachmentJob(id: number | string, kind: 'preview' | 'download', job: () => Promise<void>) {
+  const key = attachmentKey(id)
+  if (attachmentBusy.value[key]) return
+  attachmentBusy.value = { ...attachmentBusy.value, [key]: kind }
+  setAttachmentError(id, null)
+  try {
+    await job()
+  } catch (e) {
+    const text = translateError(e)
+    setAttachmentError(id, text)
+    message.error(text)
+  } finally {
+    const next = { ...attachmentBusy.value }
+    delete next[key]
+    attachmentBusy.value = next
+  }
+}
+
+async function previewAttachment(id: number | string) {
+  await withAttachmentJob(id, 'preview', async () => {
+    const meta = attachmentMeta[attachmentKey(id)]
+    const namedKind = meta?.name ? PREVIEW_BY_EXT[extensionOf(meta.name)] : undefined
+    // 签名直链只能在已知安全后缀时内联;svg/html 不走这里。
+    if (meta?.viewUrl && namedKind) {
+      showPreview(id, namedKind, meta.viewUrl, false)
+      return
+    }
+    const file = await fileApi.fetchDownload(id)
+    if (!attachmentMeta[attachmentKey(id)]?.name && file.fileName) {
+      attachmentMeta[attachmentKey(id)] = { ...meta, name: file.fileName, viewUrl: meta?.viewUrl }
+    }
+    const kind = PREVIEW_BY_MIME[file.contentType] ?? (file.fileName ? PREVIEW_BY_EXT[extensionOf(file.fileName)] : undefined)
+    if (!kind) {
+      const text = t('workflow.form.previewUnsupported')
+      setAttachmentError(id, text)
+      message.warning(text)
+      return
+    }
+    showPreview(id, kind, URL.createObjectURL(file.blob), true)
+  })
+}
+
+async function downloadAttachment(id: number | string) {
+  await withAttachmentJob(id, 'download', async () => {
+    const file = await fileApi.fetchDownload(id)
+    const meta = attachmentMeta[attachmentKey(id)]
+    if (file.fileName) attachmentMeta[attachmentKey(id)] = { ...meta, name: meta?.name || file.fileName }
+    triggerBlobDownload(file.blob, file.fileName || attachmentLabel(id))
+  })
+}
+
 function updateAttachment(field: WfFormField, output: FileUploadOutput) {
   const id = normalizeId(output.id)
   if (id === null) return
+  rememberAttachment(output)
   if (field.type !== 'attachment' || field.props?.multiple !== true) {
     updateValue(field, id)
     return
@@ -268,7 +422,7 @@ defineExpose({ validate })
         :disabled="!canEdit(field)"
         @update:value="updateUser(field, $event)"
       />
-      <template v-else-if="field.type === 'attachment'">
+      <div v-else-if="field.type === 'attachment'" class="wf-attachments">
         <FileUpload
           v-if="canEdit(field) && attachmentIds(field).length < attachmentMaxCount(field)"
           :key="`${field.key}:${attachmentIds(field).join(',')}`"
@@ -278,14 +432,49 @@ defineExpose({ validate })
           :show-file-list="true"
           @uploaded="updateAttachment(field, $event)"
         />
-        <n-space v-if="attachmentIds(field).length" :size="8">
-          <n-tag v-for="id in attachmentIds(field)" :key="String(id)" size="small" :closable="canEdit(field)" @close="removeAttachment(field, id)">{{ id }}
-          </n-tag>
-        </n-space>
-        <span v-else-if="!canEdit(field)">—</span>
-      </template>
+        <div v-for="id in attachmentIds(field)" :key="String(id)" class="wf-attachment-row">
+          <n-tag size="small" :closable="canEdit(field)" @close="removeAttachment(field, id)">{{ attachmentLabel(id) }}</n-tag>
+          <n-button
+            size="tiny"
+            quaternary
+            type="primary"
+            :loading="attachmentBusy[String(id)] === 'preview'"
+            :disabled="isAttachmentBusy(id)"
+            @click="previewAttachment(id)"
+          >{{ t('workflow.form.preview') }}</n-button>
+          <n-button
+            size="tiny"
+            quaternary
+            :loading="attachmentBusy[String(id)] === 'download'"
+            :disabled="isAttachmentBusy(id)"
+            @click="downloadAttachment(id)"
+          >{{ t('workflow.form.download') }}</n-button>
+          <span v-if="attachmentErrors[String(id)]" class="wf-attachment-error" role="alert">{{ attachmentErrors[String(id)] }}</span>
+        </div>
+        <span v-if="!attachmentIds(field).length && !canEdit(field)">—</span>
+      </div>
     </n-form-item>
   </n-form>
+  <n-modal
+    v-model:show="previewShow"
+    preset="card"
+    :title="previewTitle || t('workflow.form.preview')"
+    style="width: min(880px, 92vw)"
+  >
+    <img
+      v-if="previewKind === 'image'"
+      :src="previewUrl"
+      :alt="previewTitle"
+      class="wf-attachment-preview"
+      @error="onPreviewMediaError"
+    />
+    <iframe
+      v-else-if="previewKind === 'pdf'"
+      :src="previewUrl"
+      :title="previewTitle || t('workflow.form.preview')"
+      class="wf-attachment-preview-frame"
+    />
+  </n-modal>
 </template>
 
 <style scoped>
@@ -294,5 +483,32 @@ defineExpose({ validate })
 }
 .w-full {
   width: 100%;
+}
+.wf-attachments {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+.wf-attachment-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.wf-attachment-error {
+  flex-basis: 100%;
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+}
+.wf-attachment-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  margin: 0 auto;
+}
+.wf-attachment-preview-frame {
+  width: 100%;
+  height: 70vh;
+  border: 0;
 }
 </style>

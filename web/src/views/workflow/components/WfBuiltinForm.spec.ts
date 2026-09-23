@@ -1,10 +1,27 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h, nextTick, ref, type App } from 'vue'
 import { createI18n } from 'vue-i18n'
+import { ApiError, fileApi } from '@/api'
 import zhCN from '@/locales/zh-CN'
 import { createWfFormField } from '@/workflow/formSchema'
 import type { WfFormField, WfFormSchema } from '@/workflow/schema'
 import WfBuiltinForm from './WfBuiltinForm.vue'
+
+const messageError = vi.hoisted(() => vi.fn())
+const messageWarning = vi.hoisted(() => vi.fn())
+const triggerBlobDownload = vi.hoisted(() => vi.fn())
+
+vi.mock('naive-ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('naive-ui')>()
+  return {
+    ...actual,
+    useMessage: () => ({ error: messageError, warning: messageWarning, success: vi.fn() }),
+  }
+})
+vi.mock('@/utils/download', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/download')>()
+  return { ...actual, triggerBlobDownload }
+})
 
 vi.mock('@/components/UserSelect/index.vue', () => ({
   default: defineComponent({ render: () => h('div', { 'data-testid': 'user-select' }) }),
@@ -28,6 +45,10 @@ afterEach(() => {
   app?.unmount()
   app = undefined
   uploadedId = 12
+  messageError.mockClear()
+  messageWarning.mockClear()
+  triggerBlobDownload.mockClear()
+  vi.restoreAllMocks()
   document.body.replaceChildren()
 })
 
@@ -277,7 +298,76 @@ describe('WfBuiltinForm', () => {
     await nextTick()
     expect(values.value).toEqual({ subject: 'original' })
   })
+
+  it('reports a forbidden download without dropping the attachment id', async () => {
+    vi.spyOn(fileApi, 'fetchDownload').mockRejectedValue(new ApiError(41001, 'error.perm.denied', undefined, 'denied'))
+    const host = mountAttachment('11')
+    clickText(host, '下载')
+    await nextTick()
+    await nextTick()
+    expect(host.textContent).toContain('无权限访问')
+    expect(host.textContent).toContain('11')
+    expect(messageError).toHaveBeenCalledWith('无权限访问')
+  })
+
+  it('keeps a single in-flight download and saves the server file name', async () => {
+    let release: (value: { blob: Blob; fileName: string; contentType: string }) => void = () => {}
+    const blob = new Blob(['pdf'], { type: 'application/pdf' })
+    const fetchDownload = vi.spyOn(fileApi, 'fetchDownload').mockImplementation(
+      () => new Promise((resolve) => { release = resolve }),
+    )
+    const host = mountAttachment('11')
+    clickText(host, '下载')
+    clickText(host, '下载')
+    await nextTick()
+    expect(fetchDownload).toHaveBeenCalledTimes(1)
+    expect(fetchDownload).toHaveBeenCalledWith('11')
+    release({ blob, fileName: '请假.pdf', contentType: 'application/pdf' })
+    await nextTick()
+    await nextTick()
+    expect(triggerBlobDownload).toHaveBeenCalledWith(blob, '请假.pdf')
+  })
+
+  it('explains when a file cannot be previewed instead of rendering it', async () => {
+    vi.spyOn(fileApi, 'fetchDownload').mockResolvedValue({
+      blob: new Blob(['PK'], { type: 'application/zip' }),
+      fileName: 'leave.zip',
+      contentType: 'application/zip',
+    })
+    const host = mountAttachment(9)
+    clickText(host, '预览')
+    await nextTick()
+    await nextTick()
+    expect(host.textContent).toContain('此类型不能在线预览，请下载后查看')
+    expect(triggerBlobDownload).not.toHaveBeenCalled()
+    expect(document.body.querySelector('iframe, img.wf-attachment-preview')).toBeNull()
+  })
 })
+
+function mountAttachment(id: number | string) {
+  const host = document.createElement('div')
+  document.body.append(host)
+  const schema: WfFormSchema = {
+    version: 1,
+    fields: [field('attachment', 'file', { multiple: false, maxCount: 1 })],
+  }
+  app = createApp(defineComponent({
+    setup: () => () => h(WfBuiltinForm, {
+      schema,
+      modelValue: { file: id },
+      mode: 'view',
+    }),
+  }))
+  app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
+  app.mount(host)
+  return host
+}
+
+function clickText(host: ParentNode, text: string) {
+  const button = Array.from(host.querySelectorAll('button')).find((item) => item.textContent?.includes(text))
+  expect(button).toBeTruthy()
+  button!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+}
 
 function field(
   type: WfFormField['type'],

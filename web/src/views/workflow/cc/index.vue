@@ -3,7 +3,7 @@
  * 抄送我的。菜单 component 填 `workflow/cc/index`。
  * 行点「查看」进实例详情;详情 GET 会把该用户本实例未读行标已读。
  */
-import { h, ref } from 'vue'
+import { h, onActivated, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -18,8 +18,21 @@ const message = useMessage()
 const tableRef = ref<ProTableInst<WfCcItem>>()
 
 function openDetail(r: WfCcItem) {
-  void router.push(`/workflow/instance/${r.instanceId}/detail`)
+  void router.push({
+    path: `/workflow/instance/${r.instanceId}/detail`,
+    query: { from: '/workflow/cc' },
+  })
 }
+
+// 打开详情会标已读,但本页被 keep-alive。回到本页时重拉已读状态和总数。
+const skipRefresh = ref(true)
+onActivated(() => {
+  if (skipRefresh.value) {
+    skipRefresh.value = false
+    return
+  }
+  void tableRef.value?.refresh()
+})
 
 const columns: ProTableColumn<WfCcItem>[] = [
   { key: 'definitionName', title: () => t('workflow.cc.definition'), minWidth: 160, ellipsis: { tooltip: true } },

@@ -3,7 +3,7 @@
  * 我发起的。菜单 component 填 `workflow/mine/index`。
  * 行点击或「查看」进实例详情(`/workflow/instance/:id/detail`)。
  */
-import { h, ref } from 'vue'
+import { h, onActivated, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -19,8 +19,21 @@ const tableRef = ref<ProTableInst<WfInstanceListItem>>()
 
 function openDetail(r: WfInstanceListItem) {
   if (r.id == null) return
-  void router.push(`/workflow/instance/${r.id}/detail`)
+  void router.push({
+    path: `/workflow/instance/${r.id}/detail`,
+    query: { from: '/workflow/mine' },
+  })
 }
+
+// 撤销/重提后实例状态会变,本页被 keep-alive。回到本页时重拉。
+const skipRefresh = ref(true)
+onActivated(() => {
+  if (skipRefresh.value) {
+    skipRefresh.value = false
+    return
+  }
+  void tableRef.value?.refresh()
+})
 
 /** 与 detail.vue 同一套实例状态数字表,不另起体系。 */
 function normalizeStatus(s: WfInstanceStatus | undefined): string {

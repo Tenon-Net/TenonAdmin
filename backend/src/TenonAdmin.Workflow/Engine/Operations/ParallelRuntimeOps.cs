@@ -306,11 +306,15 @@ internal static class ParallelControlOps
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var tokens = await ctx.Db.Queryable<WfToken>()
-            .Where(token => token.InstanceId == ctx.Instance.Id
-                            && (token.Status == WfTokenStatus.Active
-                                || token.Status == WfTokenStatus.WaitingJoin))
-            .ToListAsync(cancellationToken);
+        // 撤销带了准入时的版本快照时禁止重读。重读会在读提交下改用并发同意已经写过的 Version,
+        // 随后的 CAS 仍返回 1 行,Cancelled 与 Approve 历史就会一起提交。
+        var tokens = ctx.CancelTokenSnapshot is { Count: > 0 } snapshot
+            ? snapshot
+            : await ctx.Db.Queryable<WfToken>()
+                .Where(token => token.InstanceId == ctx.Instance.Id
+                                && (token.Status == WfTokenStatus.Active
+                                    || token.Status == WfTokenStatus.WaitingJoin))
+                .ToListAsync(cancellationToken);
         var parentById = tokens.ToDictionary(token => token.Id);
         var arms = tokens.Count == 0
             ? []

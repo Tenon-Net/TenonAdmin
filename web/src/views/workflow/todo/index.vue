@@ -3,7 +3,7 @@
  * 待我审批列表。菜单 component 填 `workflow/todo/index`。
  * 行点「办理」进实例详情(`/workflow/instance/:id/detail`)。
  */
-import { h, ref } from 'vue'
+import { h, onActivated, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -18,8 +18,21 @@ const message = useMessage()
 const tableRef = ref<ProTableInst<WfTodoItem>>()
 
 function openDetail(r: WfTodoItem) {
-  void router.push(`/workflow/instance/${r.instanceId}/detail`)
+  void router.push({
+    path: `/workflow/instance/${r.instanceId}/detail`,
+    query: { from: '/workflow/todo' },
+  })
 }
+
+// 列表被 keep-alive 缓存。首次激活交给 ProTable 自己拉数,从详情办理完再回来时重拉行和总数。
+const skipRefresh = ref(true)
+onActivated(() => {
+  if (skipRefresh.value) {
+    skipRefresh.value = false
+    return
+  }
+  void tableRef.value?.refresh()
+})
 
 function isOverdue(r: WfTodoItem) {
   if (!r.dueTime) return false
