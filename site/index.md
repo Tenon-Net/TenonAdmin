@@ -26,6 +26,11 @@ features:
   - icon: 🏢
     title: Multi-Org Data Permissions
     details: Five built-in data scopes, enforced automatically via ORM global filters — business queries never need manual org-filter conditions.
+  - icon: 🔀
+    title: Approval Workflows Preview
+    details: An optional package adds workflow design, submission, and approval, with pages in both Vue and React templates.
+    link: /guide/workflow
+    linkText: Run your first approval
   - icon: 🔭
     title: A Real Reference App
     details: The live demo runs tenon-example, a separate open-source consumer app — install the package, add a CRM module, ship it, every step reproducible. Three accounts open the same list and see 214, 128, and 42 rows, with no organization filter anywhere in the query code.

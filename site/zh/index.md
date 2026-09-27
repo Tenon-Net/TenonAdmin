@@ -26,6 +26,11 @@ features:
   - icon: 🏢
     title: 多组织数据权限
     details: 内置五种数据范围，靠 ORM 全局过滤器自动隔离。业务查询不用手写机构过滤条件。
+  - icon: 🔀
+    title: 审批工作流预览版
+    details: 可选包提供流程设计、发起与审批，Vue 和 React 模板都有对应页面。
+    link: /zh/guide/workflow
+    linkText: 跑通一次审批
   - icon: 🔭
     title: 有真实参考应用
     details: 在线演示跑的是独立开源的消费者应用 tenon-example：装包、加一个 CRM 模块、部署上线，全过程可复现。三个账号打开同一张列表看到 214、128、42 条，而查询代码里没有一行机构过滤。
