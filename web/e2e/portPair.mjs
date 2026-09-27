@@ -1,9 +1,10 @@
 /**
- * E2E 端口协调:探测 + 跨进程锁文件(pid),减少并行 run 争用。
+ * E2E 端口协调:探测 + 跨进程锁文件(pid + run token),减少并行 run 争用。
  * CI=true 时必须由工作流注入 TENON_E2E_API_PORT / TENON_E2E_WEB_PORT,缺失直接失败。
  * 与 web-react/e2e/portPair.mjs 同构(模板零共享,故意复制)。
  */
 import { createServer } from 'node:net'
+import { randomUUID } from 'node:crypto'
 import {
   openSync,
   writeSync,
@@ -14,6 +15,8 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+
+const lockOwner = process.env.TENON_E2E_LOCK_OWNER ??= randomUUID()
 
 function isPidAlive(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false
@@ -30,8 +33,13 @@ function tryClaimLock(port) {
   try {
     if (existsSync(lockPath)) {
       const raw = readFileSync(lockPath, 'utf8')
-      const pid = parseInt(String(raw).split(/\r?\n/)[0], 10)
-      if (isPidAlive(pid)) return null
+      const [pidLine, , existingOwner] = String(raw).split(/\r?\n/)
+      const pid = parseInt(pidLine, 10)
+      if (isPidAlive(pid)) {
+        // Playwright worker 会重载配置；同一 run 继承 token 后借用父进程的锁。
+        if (existingOwner === lockOwner) return { port, release: () => {} }
+        return null
+      }
       try {
         unlinkSync(lockPath)
       } catch {
@@ -39,7 +47,7 @@ function tryClaimLock(port) {
       }
     }
     const fd = openSync(lockPath, 'wx')
-    writeSync(fd, `${process.pid}\n${Date.now()}\n`)
+    writeSync(fd, `${process.pid}\n${Date.now()}\n${lockOwner}\n`)
     closeSync(fd)
     const release = () => {
       try {
