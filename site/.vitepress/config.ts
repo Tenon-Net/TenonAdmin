@@ -20,6 +20,7 @@ const enGuideSidebar = [
       { text: 'Add a Frontend Page', link: '/guide/frontend-page' },
       { text: 'Wire Import/Export on Your Entity', link: '/guide/import-export' },
       { text: 'Scheduled Jobs', link: '/guide/scheduled-jobs' },
+      { text: 'Approval Workflows (Preview)', link: '/guide/workflow' },
     ],
   },
   {
@@ -231,6 +232,7 @@ const zhGuideSidebar = [
       { text: '加一个前端页面', link: '/zh/guide/frontend-page' },
       { text: '给自己的实体接导入导出', link: '/zh/guide/import-export' },
       { text: '定时任务', link: '/zh/guide/scheduled-jobs' },
+      { text: '审批工作流（预览版）', link: '/zh/guide/workflow' },
     ],
   },
   {
