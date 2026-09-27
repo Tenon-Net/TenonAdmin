@@ -1,0 +1,59 @@
+name: frontend-e2e
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'backend/**'
+      - 'web/**'
+      - 'web-react/**'
+      - '.github/workflows/frontend-e2e.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'web/**'
+      - 'web-react/**'
+      - '.github/workflows/frontend-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  critical-interactions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [web, web-react]
+    defaults:
+      run:
+        working-directory: ${{ matrix.template }}
+    env:
+      TENON_E2E_API_PORT: '25100'
+      TENON_E2E_WEB_PORT: '35100'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ matrix.template }}/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # 每套模板独立启动临时数据库与宿主，覆盖真实权限及模块切换交互。
+      - run: npx playwright test e2e/module-switch.spec.ts e2e/rbac-permission.spec.ts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-${{ matrix.template }}
+          path: ${{ matrix.template }}/test-results/
+          retention-days: 7

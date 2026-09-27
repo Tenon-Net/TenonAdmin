@@ -72,7 +72,9 @@ public sealed class FileLoggerProvider : ILoggerProvider
 
     private void Enqueue(LogLevel level, string line)
     {
-        if (!_channel.Writer.TryWrite(new Entry(level, line)))
+        // 日期在入队时定格:消费线程可能在拨钟/跨天后才写盘,若用消费时刻会把「昨天」的行写进今天的文件
+        var date = DateOnly.FromDateTime(_time.GetLocalNow().DateTime);
+        if (!_channel.Writer.TryWrite(new Entry(level, line, date)))
             Interlocked.Increment(ref _dropped);
     }
 
@@ -99,10 +101,12 @@ public sealed class FileLoggerProvider : ILoggerProvider
                     if (writer is null) continue;               // 该目录不可写,已降级
                     if (dropped > 0)
                     {
-                        writer.Write($"[dropped {dropped} messages: 日志队列已满({QueueCapacity}),写盘跟不上产出速度]");
+                        writer.Write(
+                            $"[dropped {dropped} messages: 日志队列已满({QueueCapacity}),写盘跟不上产出速度]",
+                            entry.Date);
                         dropped = 0;
                     }
-                    writer.Write(entry.Line);
+                    writer.Write(entry.Line, entry.Date);
                     touched.Add(writer);
                 }
 
@@ -126,7 +130,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
     {
         if (!writers.TryGetValue(dirName, out var writer))
         {
-            writer = new LevelWriter(Path.Combine(_root, dirName), _workerSuffix, _options, _time);
+            writer = new LevelWriter(Path.Combine(_root, dirName), _workerSuffix, _options);
             writers[dirName] = writer;
         }
         return writer.Disabled ? null : writer;
@@ -142,7 +146,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
         _ => "trace",
     };
 
-    private readonly record struct Entry(LogLevel Level, string Line);
+    private readonly record struct Entry(LogLevel Level, string Line, DateOnly Date);
 
     /// <summary>格式化 + 入队,仅此而已。跑在业务线程上,所以这里一行 IO 都不能有。</summary>
     private sealed class FileLogger(FileLoggerProvider provider, string category) : ILogger
@@ -185,7 +189,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
     /// <para><b>永远 append,绝不截断。</b>MoYu 的同类实现换文件时走 <c>append: false</c> → <c>SetLength(0)</c>,
     /// 跨天重启/多实例/手工恢复时会把已存在的日期文件<b>清零</b>。这里不提供"覆盖"这个脚枪。</para>
     /// </summary>
-    private sealed class LevelWriter(string dir, string suffix, AdminFileLogOptions options, TimeProvider time) : IDisposable
+    private sealed class LevelWriter(string dir, string suffix, AdminFileLogOptions options) : IDisposable
     {
         private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);   // 带 BOM 的话每个新文件头都是 EF BB BF,cat 出来一段乱码
 
@@ -199,7 +203,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
         /// <summary>目录/文件打不开(容器非 root、卷权限不对)→ 降级为不写盘。已在 stderr 吼过一声,不会静默消失。</summary>
         internal bool Disabled { get; private set; }
 
-        public void Write(string line)
+        public void Write(string line, DateOnly date)
         {
             if (Disabled) return;
 
@@ -208,12 +212,11 @@ public sealed class FileLoggerProvider : ILoggerProvider
                 _initialized = true;
                 try { Directory.CreateDirectory(dir); }
                 catch (Exception ex) { Fail($"日志目录 {dir} 创建失败", ex, fatal: true); return; }
-                Roll(Today());
+                Roll(date);
             }
 
-            var today = Today();
-            if (today != _date)
-                Roll(today);                                            // 跨天:换文件 + 顺手清过期
+            if (date != _date)
+                Roll(date);                                             // 跨天:换文件 + 顺手清过期(按入队日期,非消费时刻)
             else if (options.MaxFileSizeMb > 0 && _stream is { } s && s.Length >= (long)options.MaxFileSizeMb * 1024 * 1024)
                 Open(_seq + 1);                                         // 超限:续写下一卷,序号单调递增
 
@@ -248,8 +251,6 @@ public sealed class FileLoggerProvider : ILoggerProvider
             Close();
             Disabled = true;
         }
-
-        private DateOnly Today() => DateOnly.FromDateTime(time.GetLocalNow().DateTime);
 
         private void Roll(DateOnly date)
         {

@@ -134,7 +134,9 @@ The fixed 12 low-order bits (6 for machine + 6 for sequence) weren't chosen arbi
 
 Those same 12 bits also carve out the seeds' territory: `id = milliseconds-from-epoch × 4096 + low bits`, so a snowflake can never issue a number below 4096, and `[1, 999]` is safely reserved for the kernel's built-in seeds on that basis. Consumers allocate their numbers from `1000` up, but the ceiling isn't a hardcoded number — on startup, `DatabaseInitializer` computes "the smallest snowflake Id obtainable from this moment on" (`SnowflakeIdGenerator.CurrentFloor()`), and any seed Id strictly below that value can never collide with an Id this instance actually generates from now on, since the clock only moves forward. On startup, `DatabaseInitializer` verifies that every seed Id falls within this dynamic ceiling and isn't reused within a single entity: an out-of-range Id (which a snowflake would sooner or later catch up to and collide with on the primary key) or a duplicate (whose idempotent existence check would silently skip the later row as "already present") both throw at startup, and CI carries cases that catch this class of error before the host even boots.
 
-The worker number comes from config `TenonAdmin:Id:WorkerId` (default 0, range 0–63):
+The worker number comes from config `TenonAdmin:Id:WorkerId` (range 0–63). Left unset, a file lock on the same machine claims the next free slot (`worker-00.lock` onward): an IIS overlapping recycle or a second local process takes 1 while the old one still holds 0. The default lock directory is `%ProgramData%\TenonAdmin\workerid` on Windows and `/var/lock/tenonadmin/workerid` on Linux, falling back to the temp directory if that isn't writable, or `TenonAdmin:Id:WorkerIdLockDir` if you set one. Release closes the handle and does not delete the file.
+
+File locks do not work across machines or containers — each has its own disk. Left unset, the kernel inserts into shared `sys_worker_lease` from 0 through 63 and keeps the first slot that succeeds — no random draw. A second instance configured with the same number will not boot. On k8s you can still inject a StatefulSet pod ordinal so the number survives restarts.
 
 ```json
 {
@@ -143,11 +145,5 @@ The worker number comes from config `TenonAdmin:Id:WorkerId` (default 0, range 0
   }
 }
 ```
-
-::: danger Every instance must differ under horizontal scaling
-For a single-machine deployment, leaving it unset (falling back to 0) is fine. **When scaling horizontally across multiple instances, each instance must be configured with a different `WorkerId`** — otherwise two instances issuing IDs in the same millisecond will collide on the primary key. If two machines share the same `WorkerId`, the 6 bits that encode the machine number in the ID are identical on both. If the sequence bits also happen to start from the same count within that same millisecond, the two resulting 64-bit numbers come out byte-for-byte identical. This is a data-corruption-class problem, and it happens silently by default.
-
-The kernel provides one line of defense: if Redis caching is chosen (a clear sign of multi-instance intent) but `WorkerId` isn't set explicitly, startup throws immediately — turning a silent primary-key collision into a readable startup error. For a genuinely single-instance deployment, set it to `0` explicitly to signal intent; on k8s, a StatefulSet's pod ordinal can be injected.
-:::
 
 On clock safety: `SnowflakeIdGenerator` takes an injected `TimeProvider` (testable). On detecting a clock rollback, it spin-waits briefly (≤5ms, NTP-adjustment scale) to catch back up; on a large rollback, it throws outright and refuses to issue an ID — it never issues an ID that might be a duplicate.

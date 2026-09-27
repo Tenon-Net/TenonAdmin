@@ -1,7 +1,7 @@
 # MarkdownEditor / MarkdownView
 
 通知公告的 Markdown 编辑与渲染,封 [`md-editor-v3`](https://github.com/imzbf/md-editor-v3)。跟随应用明暗主题(`useAppStore().isDark`)。
-**存 Markdown 纯文本**(不存 HTML)→ 展示端 `MarkdownView` 用库自带渲染器,无 `v-html` XSS 面。
+**存 Markdown 纯文本**(不存 HTML),展示端 `MarkdownView` 仍会生成 HTML,因此全局接入库自带 `XSSPlugin`,并使用已修复围栏语言注入的 `md-editor-v3` 版本。
 
 ## MarkdownEditor(编辑)
 

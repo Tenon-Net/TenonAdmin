@@ -13,8 +13,25 @@ import { expect, type Locator, type Page } from '@playwright/test'
 export const ADMIN_ACCOUNT = process.env.TENON_E2E_ACCOUNT ?? 'superAdmin'
 export const ADMIN_PASSWORD = process.env.TENON_E2E_PASSWORD ?? 'Aa123456'
 
+/**
+ * 断言本动作产生的成功/错误文案。Naive UI 会堆叠 .n-message,不能对整类做 strict 单节点断言;
+ * 必须按本动作文案过滤,并要求当前只剩这一条——叠两条相同成功提示是产品错误,不是测试该放宽。
+ */
+export async function expectAppMessage(page: Page, text: RegExp, timeout = 5_000) {
+  const toast = page.locator('.n-message').filter({ hasText: text })
+  await expect(toast).toHaveCount(1, { timeout })
+  await expect(toast).toBeVisible()
+}
+
 /** 内置「系统」应用的标题——`/workbench` 与 `/system/*` 都挂在它下面。 */
 export const SYSTEM_APP = /^系统$|^System$/
+
+/**
+ * 示例「业务中心」应用的标题——工作流员工侧(`/workflow/start|todo|cc|mine|done`)挂在它下面。
+ * 工作流菜单**跨两个应用**(`WorkflowMenuSeed`:治理页在 system、员工页在 business),
+ * 而动态路由只从当前应用的菜单树生成:在系统应用里直开 `/workflow/start` 会落 404。
+ */
+export const BUSINESS_APP = /^业务中心$|^Business$/
 
 /** 登录。验证码若开着,直接从内联 SVG 的 <text> 里抠字符——SvgCaptchaProvider 自己就说了"防人不防机"。 */
 export async function login(page: Page, account = ADMIN_ACCOUNT, password = ADMIN_PASSWORD) {
@@ -41,8 +58,15 @@ export async function login(page: Page, account = ADMIN_ACCOUNT, password = ADMI
  * 单应用用户登录会被直接送进唯一那个应用,再调本函数就是在等一颗永远不会出现的按钮。
  */
 export async function openAppPicker(page: Page) {
+  const switcher = page.getByRole('button', { name: /切换应用|switch app/i })
+  // 登录后的落点由用户的「默认应用」决定:可能直接是选择页,也可能是某个应用壳。
+  // 重定向中间态读 URL 会误判成「在应用里」,然后去等一颗选择页上永不出现的切换按钮。
+  await Promise.race([
+    page.waitForURL(/\/module/, { timeout: 15_000 }).catch(() => {}),
+    switcher.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {}),
+  ])
   if (!/\/module/.test(page.url())) {
-    await page.getByRole('button', { name: /切换应用|switch app/i }).click()
+    await switcher.click()
   }
   await expect(page).toHaveURL(/\/module/)
   const cards = page.locator('.card')
@@ -61,6 +85,16 @@ export async function enterApp(page: Page, title: RegExp) {
   await card.click()
   // 进应用必然离开选择页(落到该应用首页);还停在 /module 就是没进去——别让后续断言在假现场上跑
   await expect(page, `点了 ${title} 但没进应用`).not.toHaveURL(/\/module/, { timeout: 10_000 })
+}
+
+/** 进「系统」应用:流程定义、设计器、流程监控、长期委托都挂在它下面。 */
+export async function enterSystemApp(page: Page) {
+  await enterApp(page, SYSTEM_APP)
+}
+
+/** 进「业务中心」应用:发起、待办、抄送、我发起的、我已办的都挂在它下面。 */
+export async function enterBusinessApp(page: Page) {
+  await enterApp(page, BUSINESS_APP)
 }
 
 /**
@@ -89,7 +123,8 @@ const LEAF = `${SIDE} .n-menu-item-content:not(:has(.n-menu-item-content__arrow)
  * 按下标取,这类歧义从根上不存在。
  */
 export async function sidebarLeaves(page: Page): Promise<{ name: string; item: Locator }[]> {
-  await page.waitForLoadState('networkidle')
+  // 应用壳可能保持长连接/轮询,`networkidle` 会把已渲染页面误判为永不完成。
+  await expect(page.locator(SIDE)).toBeVisible({ timeout: 10_000 })
   // 展开一层会露出下一层目录,重复到没有可展开的为止(种子菜单树只有 2 层,给个上限防死循环;
   // 真超过 3 层会静默漏掉更深的,当前数据到不了那儿)
   for (let pass = 0; pass < 3; pass++) {

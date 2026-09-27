@@ -8,8 +8,8 @@ namespace TenonAdmin.AspNetCore;
 
 /// <summary>
 /// 认证端点(设计 §4 认证模块 / §15 会话模型)。标准 [ApiController]——可按模块禁用后由用户同路由接管(设计 §5.4)。
-/// Level3:refresh 进 HttpOnly Cookie,body 仅 accessToken;双提交 CSRF 由中间件校验。
-/// 非 Level3:零变化,body 下发 refreshToken。
+/// Cookie 会话模式下 refresh 进入 HttpOnly Cookie,body 仅返回 accessToken,双提交 CSRF 由中间件校验;
+/// body 模式直接返回 refreshToken。
 /// </summary>
 [ApiController]
 [Route("api/v1/auth")]
@@ -71,7 +71,7 @@ public class AuthController(IAuthService auth, ICaptchaService captcha, AuthCook
 
     /// <summary>
     /// 刷新令牌换发新令牌对(轮换 + 复用检测,§15)。匿名:访问令牌可能已过期,凭刷新令牌换发。
-    /// Level3:body 可空,从 <c>tenon_rt</c> Cookie 读取;成功后轮换 Cookie/CSRF。
+    /// Cookie 会话模式下 body 可空,从 <c>tenon_rt</c> Cookie 读取;成功后轮换 Cookie/CSRF。
     /// </summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
@@ -82,7 +82,7 @@ public class AuthController(IAuthService auth, ICaptchaService captcha, AuthCook
         return Result<LoginOutput>.Ok(cookies.ApplyAuthCookies(HttpContext, output));
     }
 
-    /// <summary>登出:吊销当前会话(sid 取自令牌)。仅需认证,不挂具体权限码。Level3 同时清 Cookie。</summary>
+    /// <summary>登出:吊销当前会话(sid 取自令牌)。仅需认证,不挂具体权限码。Cookie 会话模式下同时清 Cookie。</summary>
     [HttpPost("logout")]
     [Authorize]
     public async Task<Result<bool>> Logout()

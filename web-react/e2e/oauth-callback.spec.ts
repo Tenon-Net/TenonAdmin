@@ -19,6 +19,8 @@ async function mockPortalBootstrap(page: Page) {
   await page.route('**/api/v1/personal/profile', (route) => route.fulfill({
     json: envelope({ id: 7, account: 'oauth-user', name: 'OAuth User', isSuperAdmin: false }),
   }))
+  // 应用壳的通知铃铛一进门就拉未读数;不打桩会打真后端,401 会把刚建立的会话清掉。
+  await page.route('**/api/v1/sys/notice/unread-count', (route) => route.fulfill({ json: envelope(0) }))
 }
 
 test('OAuth callback is public and returns mapped failures to sign-in', async ({ page }) => {
@@ -64,7 +66,6 @@ test('OAuth binding callback returns an authenticated user to account bindings',
   await mockPortalBootstrap(page)
   await page.route('**/api/v1/auth/external/providers', (route) => route.fulfill({ json: envelope([]) }))
   await page.route('**/api/v1/auth/external/bindings', (route) => route.fulfill({ json: envelope([]) }))
-  await page.route('**/api/v1/sys/notice/unread-count', (route) => route.fulfill({ json: envelope(0) }))
 
   await page.goto('/oauth/callback?bind=github')
 

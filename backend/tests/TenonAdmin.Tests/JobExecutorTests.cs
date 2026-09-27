@@ -259,6 +259,52 @@ public class JobExecutorTests : IAsyncLifetime
         Assert.True(cancelled);
     }
 
+    [Fact]
+    public async Task Reserved_slot_blocks_manual_fire_and_claim_failure_releases_it()
+    {
+        var previous = _host.Jobs.MaxConcurrentRuns;
+        _host.Jobs.MaxConcurrentRuns = 1;
+        try
+        {
+            var job = await _host.InsertJobAsync(typeof(SlowJob).FullName!, j => j.ConcurrencyMode = JobConcurrencyMode.Parallel);
+
+            Assert.Equal(JobFireResult.Started, _host.Executor.TryReserveFire(out var reservation));
+            Assert.Equal(1, _host.Executor.InFlightCount);
+            Task<JobFireResult> competing;
+            using (ExecutionContext.SuppressFlow())
+            {
+                competing = Task.Run(() =>
+                    _host.Executor.TryFireAndTrack(job, _host.Now, JobFireMode.Manual, out _));
+            }
+            Assert.Equal(JobFireResult.LimitReached, await competing);
+
+            reservation!.Dispose();
+            Assert.Equal(0, _host.Executor.InFlightCount);
+        }
+        finally
+        {
+            _host.Jobs.MaxConcurrentRuns = previous;
+        }
+    }
+
+    [Fact]
+    public async Task Drain_waits_for_reserved_fire_and_allows_it_to_start()
+    {
+        var job = await _host.InsertJobAsync(typeof(OkJob).FullName!);
+        Assert.Equal(JobFireResult.Started, _host.Executor.TryReserveFire(out var reservation));
+
+        var drain = _host.Executor.DrainAsync(CancellationToken.None);
+        Assert.False(drain.IsCompleted);
+        Assert.Equal(
+            JobFireResult.Started,
+            _host.Executor.TryFireAndTrack(job, _host.Now, JobFireMode.Schedule, out var fire));
+
+        await fire!;
+        await drain;
+        reservation!.Dispose();
+        Assert.Equal(0, _host.Executor.InFlightCount);
+    }
+
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync()

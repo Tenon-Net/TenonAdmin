@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onMounted, reactive, ref } from 'vue'
+import { computed, h, onMounted, reactive, ref, unref } from 'vue'
 import { NButton, NEmpty, NInput, NTree, useMessage } from 'naive-ui'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import { useI18n } from 'vue-i18n'
@@ -81,7 +81,7 @@ function addUsers(users: UserItem[]) {
 }
 
 function addChecked() {
-  const rows = (tableRef.value as any)?.tableData?.filter((r: UserItem) => checkedKeys.value.includes(r.id)) ?? []
+  const rows = unref(tableRef.value?.rows)?.filter((r) => checkedKeys.value.includes(r.id)) ?? []
   addUsers(rows)
   checkedKeys.value = []
 }

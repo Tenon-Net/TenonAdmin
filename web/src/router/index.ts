@@ -60,7 +60,9 @@ router.beforeEach(async (to) => {
   }
 
   // 公开的 OAuth 回调和 MFA 绑定/恢复页不能被登录守卫送回登录页。
-  if (to.meta.public) return true
+  // catch-all 404 也标记为 public,但 F5/深链首次解析时它只是动态路由
+  // 尚未恢复的临时匹配，不能在这里提前放行。
+  if (to.meta.public && to.name !== 'not-found') return true
 
   if (!user.isLoggedIn) return { path: '/login', replace: true }
 
@@ -85,7 +87,14 @@ router.beforeEach(async (to) => {
       // 目标是 '/' 时不能 return to.fullPath——那是重定向到自身,'/' 已无静态 redirect,会被判成无限重定向。
       // 此刻菜单树已就绪,直接给出首页。
       if (to.path === '/') return { path: auth.homePath, replace: true }
-      return to.fullPath // 重解析当前 URL(此时动态路由已就绪)
+      // 动态路由是在本次导航的守卫中追加的。仅返回同一个 path 可能继续沿用
+      // 本次导航已解析出的 catch-all 记录；先用更新后的 matcher 解析一次，再
+      // 按动态路由名返回，确保当前深链真正重新匹配。
+      const resolved = router.resolve(to.fullPath)
+      if (resolved.name && resolved.name !== 'not-found') {
+        return { name: resolved.name, params: resolved.params, query: to.query, hash: to.hash, replace: true }
+      }
+      return { path: to.path, query: to.query, hash: to.hash, replace: true }
     } catch {
       user.clear()
       return { path: '/login', replace: true }

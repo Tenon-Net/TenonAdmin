@@ -4,9 +4,9 @@ using TenonAdmin.Core;
 namespace TenonAdmin.AspNetCore;
 
 /// <summary>
-/// Level3 双提交 CSRF 中间件:当请求携带 refresh Cookie 时,
+/// Cookie 会话的双提交 CSRF 中间件:当请求携带 refresh Cookie 时,
 /// 对状态改变方法(POST/PUT/PATCH/DELETE)强制校验 <c>X-Tenon-CSRF</c> 与 <c>tenon_csrf</c> Cookie。
-/// 非 Level3 / 纯 Bearer(无 refresh Cookie)直通,零行为变化。
+/// 未启用 Cookie 会话或仅使用 Bearer(无 refresh Cookie)时直接放行。
 /// </summary>
 internal sealed class CsrfMiddleware(RequestDelegate next, AuthCookieService cookies)
 {

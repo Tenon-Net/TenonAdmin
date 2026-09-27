@@ -1,14 +1,11 @@
 namespace TenonAdmin.Core;
 
 /// <summary>
-/// 服务端→客户端实时推送通道(设计 §14 实时通知)。内核只定义抽象、不带任何长连接实现
-/// (运行时依赖纪律:仅 SqlSugarCore + Microsoft.*);默认实现是<b>空操作</b>(<c>NoopRealtimePublisher</c>,
-/// 关闭实时时业务代码照调不误)。AspNetCore 层在 <c>TenonAdmin:Realtime:Enabled</c> 开启时注册
-/// 基于 SignalR 的真实现(SignalR 属 ASP.NET Core 共享框架,零新增 NuGet)。
-/// <para>用途:公告发布即时推「notice-changed」让各端刷新未读角标(替代 30s 轮询);会话吊销即时推
-/// 「force-logout」把被踢用户立刻登出(替代惰性 401)。二者均<b>纯推送</b>,不定义客户端可调方法。</para>
-/// <para>接自有实时通道(如 WebSocket 网关 / MQ 扇出):实现本接口并在 <c>AddTenonAdmin()</c> 之前注册即接管
-/// (TryAdd 前置替换,§5.2)。多副本要即时跨副本时,给内置 SignalR 叠 Redis backplane(消费者侧)。</para>
+/// 可替换的服务端推送通道。默认实现为空操作;启用实时通知时由 AspNetCore 层注册 SignalR 实现。
+/// <para>推送用于提前触发未读刷新和会话下线;客户端仍保留轮询,服务端仍在请求时校验会话,
+/// 以覆盖实时关闭、断线或跨副本未送达。此通道不定义客户端可调方法。</para>
+/// <para>消费者在 <c>AddTenonAdmin()</c> 之前注册本接口即可接管。内置实现只向本副本连接推送,
+/// 跨副本即时推送需由消费者配置 SignalR backplane。</para>
 /// </summary>
 public interface IRealtimePublisher
 {

@@ -13,8 +13,14 @@ namespace TenonAdmin.Services;
 /// </summary>
 public static class ServicesSetup
 {
+    /// <summary>注册 TenonAdmin 领域服务的默认实现;消费者可在此前注册自定义实现。</summary>
+    /// <param name="services">服务集合</param>
+    /// <returns>原服务集合</returns>
     public static IServiceCollection AddTenonAdminServices(this IServiceCollection services)
     {
+        // 在本层其它后台服务启动前验证替换缓存的原子操作契约，不连接外部缓存。
+        services.AddHostedService<CacheContractValidator>();
+
         // 统一时间源(§12):AspNetCore 层也 TryAdd 同一个,这里再兜一次,让本层单独装配也能自洽(测试可换 Fake)
         services.TryAddSingleton(TimeProvider.System);
 
@@ -178,7 +184,8 @@ public static class ServicesSetup
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, SqlAdminJob>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, JobLogCleanupJob>());
 
-        // QA27: WorkerId 数据库租约守卫——防止多实例配相同 WorkerId 导致雪花 Id 碰撞
+        // 未配 WorkerId 时在 sys_worker_lease 领空闲槽(跨容器);守卫再用同一个号续租
+        services.TryAddSingleton<IWorkerIdSlotClaimer, DbWorkerIdSlotClaimer>();
         services.AddHostedService<WorkerIdLeaseGuard>();
 
         // 个人中心(§4,T8):当前用户对自己账号的读改(看/改资料、验旧改密)

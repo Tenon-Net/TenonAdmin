@@ -1,3 +1,6 @@
+using System.Net;
+using System.Text.Json;
+
 namespace TenonAdmin.Tests;
 
 /// <summary>认证全流程集成(§8 覆盖点 1):登录 / 错误密码 / 刷新 / 失败锁定。经真实 HTTP 管道。</summary>
@@ -20,6 +23,26 @@ public class AuthFlowTests
         var j = await (await f.CreateClient().PostJson("/api/v1/auth/login",
             new { account = "superAdmin", password = "nope" })).ReadEnvelope();
         Assert.Equal(40001, j.GetProperty("code").GetInt32());
+    }
+
+    [Fact]
+    public async Task Login_empty_credentials_is_indistinguishable_from_wrong_password()
+    {
+        using var f = new AdminAppFactory();
+        var j = await (await f.CreateClient().PostJson("/api/v1/auth/login",
+            new { account = "", password = "" })).ReadEnvelope();
+        // 空账号与密码错误同一业务码,避免用响应区分「账号不存在」
+        Assert.Equal(40001, j.GetProperty("code").GetInt32());
+        Assert.Equal(JsonValueKind.Null, j.GetProperty("data").ValueKind);
+    }
+
+    [Fact]
+    public async Task Logout_without_token_is_401_and_40006()
+    {
+        using var f = new AdminAppFactory();
+        var resp = await f.CreateClient().PostJson("/api/v1/auth/logout", new { });
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+        Assert.Equal(40006, (await resp.ReadEnvelope()).GetProperty("code").GetInt32());
     }
 
     [Fact]

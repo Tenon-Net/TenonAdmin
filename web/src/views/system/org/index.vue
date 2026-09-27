@@ -14,6 +14,7 @@ import DictSelect from '@/components/DictSelect/index.vue'
 import DictTag from '@/components/DictTag/index.vue'
 import FormContainer from '@/components/FormContainer/index.vue'
 import OrgTreeSelect from '@/components/OrgTreeSelect/index.vue'
+import UserSelect from '@/components/UserSelect/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { orgApi } from '@/api'
@@ -68,6 +69,7 @@ interface OrgForm {
   category: string | null
   sort: number
   enabled: boolean
+  leaderUserId: number | null
 }
 const show = ref(false)
 const formRef = ref<FormInst | null>(null)
@@ -75,11 +77,19 @@ const editingId = ref<number | null>(null)
 const rules: FormRules = {
   name: { required: true, whitespace: true, message: () => t('org.nameRequired'), trigger: ['input', 'blur'] },
 }
-const blank = (): OrgForm => ({ parentId: 0, name: '', code: '', category: null, sort: 0, enabled: true })
+const blank = (): OrgForm => ({ parentId: 0, name: '', code: '', category: null, sort: 0, enabled: true, leaderUserId: null })
 const form = reactive<OrgForm>(blank())
 
 // 行数据 → 完整入参:openEdit 回填与 StatusSwitch 行内改状态共用(后端无独立启停端点,均走全量 update)。
-const toInput = (r: SysOrg): OrgInput => ({ parentId: r.parentId, name: r.name, code: r.code, category: r.category ?? null, sort: r.sort, enabled: r.enabled })
+const toInput = (r: SysOrg): OrgInput => ({
+  parentId: r.parentId,
+  name: r.name,
+  code: r.code,
+  category: r.category ?? null,
+  sort: r.sort,
+  enabled: r.enabled,
+  leaderUserId: r.leaderUserId ?? null,
+})
 
 function openAdd(parentId = 0) {
   editingId.value = null
@@ -254,6 +264,9 @@ const columns: ProTableColumn<Tree<SysOrg>>[] = [
         </n-form-item>
         <n-form-item :label="t('org.sort')">
           <n-input-number v-model:value="form.sort" :min="0" style="width: 160px" />
+        </n-form-item>
+        <n-form-item :label="t('org.leader')">
+          <UserSelect v-model:value="form.leaderUserId" clearable :placeholder="t('org.leaderPlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('common.status')">
           <n-switch v-model:value="form.enabled" />

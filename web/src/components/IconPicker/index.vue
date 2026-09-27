@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // tenon 图标选择器:复用 npm 包的 IconPicker,仅把 tenon 的 i18n 文案注入 labels(包本身不带 i18n 框架)。
-// 图标集/本地 SVG 由 main.ts 的 setupIcons() 全局注册;这里不传 collections,复用全局注册顺序(ph 为首/默认页)。
+// 图标集/本地 SVG 由 main.ts 的 setupIcons() 全局注册;这里不传 collections,复用全局注册顺序(Lucide 为首/默认页)。
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { IconPicker } from 'tenon-naive-iconify-picker'
@@ -29,12 +29,12 @@ const labels = computed(() => ({
 </script>
 
 <template>
-  <!-- 选择器 chrome 用 ph(已预热,离线优先);tenon 语言包驱动全部文案 -->
+  <!-- 选择器 chrome 用已预热的 Lucide;完整图标集仍在对应 Tab 按需加载。 -->
   <IconPicker
     v-model="model"
     :labels="labels"
     :clearable="clearable"
-    search-icon="ph:magnifying-glass"
-    clear-icon="ph:x"
+    search-icon="lucide:search"
+    clear-icon="lucide:x"
   />
 </template>

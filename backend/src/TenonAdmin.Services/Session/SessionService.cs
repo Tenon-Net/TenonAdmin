@@ -6,7 +6,7 @@ using TenonAdmin.SqlSugar;
 namespace TenonAdmin.Services;
 
 /// <summary>
-/// <see cref="ISessionService"/> 默认实现(设计 §15)。会话落库(源) + 落缓存(热路径),
+/// <see cref="ISessionService"/> 默认实现(设计 §15)。会话落库(授权依据) + 落缓存(活动时间),
 /// 刷新令牌只存哈希;轮换用条件更新(仅当仍 Active 才置 Used)兼作并发保护,复用即整会话吊销。
 /// 时间统一走 UTC(<see cref="TimeProvider"/>),避免本地/UTC 混用导致过期判断错乱。
 /// <para><b>无进程内锁</b>:单端/限并发的名额收敛采「先插入、再收敛」(见 <see cref="EnforceConcurrencyAsync"/>)——
@@ -86,11 +86,17 @@ public class SessionService(
     /// <inheritdoc />
     public virtual async Task<bool> IsActiveAsync(string sessionId)
     {
+        // 吊销状态始终以数据库为准：并发中的旧缓存写入可能发生在吊销清缓存之后。
+        var session = await sessions.GetFirstAsync(s => s.SessionId == sessionId);
+        if (session is null || session.RevokedAt != null || session.ExpiresAt <= Now) return false;
+        var absolute = session.AbsoluteExpiresAt == default ? session.ExpiresAt : session.AbsoluteExpiresAt;
+        if (absolute <= Now) return false;
+
         var key = CacheKeys.Session(sessionId);
         var cached = await cache.GetAsync<SessionCacheInfo>(key);
         if (cached is not null)
         {
-            if (!IsSessionStillValid(cached.ExpiresAt, cached.AbsoluteExpiresAt, cached.LastActivityAt, cached.IdleMinutes))
+            if (!IsSessionStillValid(session.ExpiresAt, absolute, cached.LastActivityAt, cached.IdleMinutes))
                 return false;
             // 活动回写:Level3 失败关闭
             if (activity is not null)
@@ -102,10 +108,6 @@ public class SessionService(
         }
 
         // 未命中:查库判定(可能是被驱逐、或本进程没缓存过),活跃则回填
-        var session = await sessions.GetFirstAsync(s => s.SessionId == sessionId);
-        if (session is null || session.RevokedAt != null || session.ExpiresAt <= Now) return false;
-
-        var absolute = session.AbsoluteExpiresAt == default ? session.ExpiresAt : session.AbsoluteExpiresAt;
         var user = await users.GetByIdAsync(session.UserId);
         var isMfa = user is not null && IsMfaUser(user);
         var idleMinutes = ResolveIdleMinutes(isMfa);
@@ -152,13 +154,6 @@ public class SessionService(
         var absolute = session.AbsoluteExpiresAt == default ? session.ExpiresAt : session.AbsoluteExpiresAt;
         if (absolute <= Now) throw new AdminException(ErrorCode.RefreshTokenInvalid);
 
-        // 原子轮换:仅当仍 Active 才置 Used;rowsAffected==0 说明已被并发轮换,按无效处理
-        var rotated = await refreshTokens.Db.Updateable<SysRefreshToken>()
-            .SetColumns(t => t.Status == RefreshTokenStatus.Used)
-            .Where(t => t.Id == rt.Id && t.Status == RefreshTokenStatus.Active)
-            .ExecuteCommandAsync();
-        if (rotated == 0) throw new AdminException(ErrorCode.RefreshTokenInvalid);
-
         // 用同一 SessionId 签发新令牌对(会话延续,不新建);令牌时长运行时可配,且不得突破绝对窗
         var (accessMin, refreshMin) = await policy.GetSessionTtlAsync();
         var maxRemain = absolute - Now;
@@ -173,24 +168,36 @@ public class SessionService(
             accessTtl, refreshTtl);
         var expiresAt = Min(pair.RefreshExpiresAt.UtcDateTime, absolute);
 
-        await refreshTokens.InsertAsync(new SysRefreshToken
-        {
-            SessionId = rt.SessionId,
-            UserId = user.Id,
-            TokenHash = Sha256Hex(pair.RefreshToken),
-            ExpiresAt = expiresAt,
-            Status = RefreshTokenStatus.Active,
-        });
-
-        // 滑动续期:会话过期跟到新刷新令牌过期(仍不超过绝对窗),缓存同步刷新
         var isMfa = IsMfaUser(user);
         var idleMinutes = ResolveIdleMinutes(isMfa);
         var lastAct = Now;
-        await sessions.Db.Updateable<SysSession>()
-            .SetColumns(s => s.ExpiresAt == expiresAt)
-            .SetColumns(s => s.LastActivityAt == lastAct)
-            .Where(s => s.SessionId == rt.SessionId)
-            .ExecuteCommandAsync();
+        // 与吊销保持 session → token 的写入顺序；续期、消费旧票据、创建新票据必须一起提交。
+        var result = await sessions.Db.Ado.UseTranAsync(async () =>
+        {
+            var renewed = await sessions.Db.Updateable<SysSession>()
+                .SetColumns(s => s.ExpiresAt == expiresAt)
+                .SetColumns(s => s.LastActivityAt == lastAct)
+                .Where(s => s.SessionId == rt.SessionId && s.RevokedAt == null && s.ExpiresAt > lastAct)
+                .WhereIF(session.AbsoluteExpiresAt != default, s => s.AbsoluteExpiresAt > lastAct)
+                .ExecuteCommandAsync();
+            if (renewed == 0) throw new AdminException(ErrorCode.RefreshTokenInvalid);
+
+            var rotated = await refreshTokens.Db.Updateable<SysRefreshToken>()
+                .SetColumns(t => t.Status == RefreshTokenStatus.Used)
+                .Where(t => t.Id == rt.Id && t.Status == RefreshTokenStatus.Active && t.ExpiresAt > lastAct)
+                .ExecuteCommandAsync();
+            if (rotated == 0) throw new AdminException(ErrorCode.RefreshTokenInvalid);
+
+            await refreshTokens.InsertAsync(new SysRefreshToken
+            {
+                SessionId = rt.SessionId,
+                UserId = user.Id,
+                TokenHash = Sha256Hex(pair.RefreshToken),
+                ExpiresAt = expiresAt,
+                Status = RefreshTokenStatus.Active,
+            });
+        });
+        if (!result.IsSuccess) throw result.ErrorException;
         await CacheActiveAsync(rt.SessionId, user.Id, expiresAt, absolute, lastAct, idleMinutes, isMfa);
 
         // 若签发结果的 RefreshExpiresAt 晚于绝对窗,收紧出参(前端/Cookie 以服务端为准)
@@ -205,14 +212,18 @@ public class SessionService(
     /// <inheritdoc />
     public virtual async Task RevokeAsync(string sessionId)
     {
-        await sessions.Db.Updateable<SysSession>()
-            .SetColumns(s => s.RevokedAt == Now)
-            .Where(s => s.SessionId == sessionId && s.RevokedAt == null)
-            .ExecuteCommandAsync();
-        await refreshTokens.Db.Updateable<SysRefreshToken>()
-            .SetColumns(t => t.Status == RefreshTokenStatus.Revoked)
-            .Where(t => t.SessionId == sessionId && t.Status == RefreshTokenStatus.Active)
-            .ExecuteCommandAsync();
+        var result = await sessions.Db.Ado.UseTranAsync(async () =>
+        {
+            await sessions.Db.Updateable<SysSession>()
+                .SetColumns(s => s.RevokedAt == Now)
+                .Where(s => s.SessionId == sessionId && s.RevokedAt == null)
+                .ExecuteCommandAsync();
+            await refreshTokens.Db.Updateable<SysRefreshToken>()
+                .SetColumns(t => t.Status == RefreshTokenStatus.Revoked)
+                .Where(t => t.SessionId == sessionId && t.Status == RefreshTokenStatus.Active)
+                .ExecuteCommandAsync();
+        });
+        if (!result.IsSuccess) throw result.ErrorException;
         await cache.RemoveAsync(CacheKeys.Session(sessionId));   // 缓存移除 → 下次校验查库得吊销 → 401
         await cache.RemoveAsync(CacheKeys.SessionActivityThrottle(sessionId));
         // 吊销该会话上的 reauth 窗口(避免跨会话复用后 sid 已死仍残留——按 sid 清)

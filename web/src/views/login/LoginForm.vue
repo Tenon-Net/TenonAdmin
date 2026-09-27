@@ -11,7 +11,6 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useSite } from '@/composables/useSite'
 import { resetRouter } from '@/router'
-import { btnGrad, glowSh } from '@/theme/mix'
 import { translateError } from '@/utils/error'
 import { splitLoginProviders, PREVIEW_ALL_SSO_BRANDS, previewAllBrandProviders } from '@/utils/oauthBrand'
 import TenonLogo from '@/components/TenonLogo.vue'
@@ -139,8 +138,9 @@ onMounted(async () => {
   }
 })
 
-// 英雄按钮:accent 派生渐变 + 发光(仅登录页/英雄区)。
-const heroStyle = computed(() => ({ background: btnGrad(app.accent), boxShadow: glowSh(app.accent) }))
+// 主按钮取 accent 实心。层级由 48px 高 + 600 字重 + 独占整行给足,不靠渐变和光晕;
+// 与 web-react 的平面主色按钮对齐(渐变只留给头像,见 DESIGN.md §7.1)。
+const heroStyle = computed(() => ({ background: app.accent }))
 
 // 第三方登录:默认后端 providers 驱动;PREVIEW_ALL_SSO_BRANDS 时铺全品牌图(图标验收)。
 const ssoProviders = ref<{ code: string; displayName: string; icon?: string | null }[]>([])
@@ -717,9 +717,7 @@ async function onSmsSubmit() {
   font-size: var(--font-size-md);
   font-weight: 600;
   cursor: pointer;
-  transition:
-    transform var(--transition-fast),
-    box-shadow var(--transition-fast);
+  transition: transform var(--transition-fast);
 }
 .hero-btn:hover {
   transform: translateY(-2px);

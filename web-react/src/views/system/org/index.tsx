@@ -3,7 +3,7 @@
 // filterTree 是浅拷贝,故 StatusSwitch 成功后**重拉整树**而非写行(写浅拷贝的祖先行不会回源树,开关会弹回)。
 // 照 B11 范式:纯逻辑抽 orgForm.ts(变异钉),本页只接线。
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { App, Button, Dropdown, Form, Input, InputNumber, Modal, Space, Switch, Tooltip, type MenuProps } from 'antd'
+import { App, Button, Dropdown, Form, Input, InputNumber, Space, Switch, Tooltip, type MenuProps } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { ProColumns } from '@ant-design/pro-components'
 import { AppIcon } from '@/components/AppIcon'
@@ -94,7 +94,6 @@ export default function OrgPage() {
   const [copyId, setCopyId] = useState(0)
   const [copySourceName, setCopySourceName] = useState('')
   const [copyName, setCopyName] = useState('')
-  const [copyLoading, setCopyLoading] = useState(false)
 
   const openCopy = useCallback((r: SysOrg) => {
     setCopyId(r.id)
@@ -103,10 +102,9 @@ export default function OrgPage() {
     setCopyOpen(true)
   }, [])
   const confirmCopy = async () => {
-    setCopyLoading(true)
     const ok = await run(() => orgApi.copy(copyId, { name: copyName }), t('org.copied'))
-    setCopyLoading(false)
-    if (ok) { setCopyOpen(false); void load() }
+    if (ok) await load()
+    return ok
   }
 
   const handleDelete = useCallback((r: SysOrg) => {
@@ -226,18 +224,16 @@ export default function OrgPage() {
         </Form>
       </FormContainer>
 
-      <Modal
+      <FormContainer
         open={copyOpen}
-        onCancel={() => setCopyOpen(false)}
-        onOk={confirmCopy}
-        confirmLoading={copyLoading}
+        onOpenChange={setCopyOpen}
+        onConfirm={confirmCopy}
+        variant="modal"
         title={t('org.copyTitle')}
-        okText={t('common.confirm')}
-        cancelText={t('common.cancel')}
       >
         <p style={{ margin: '0 0 12px' }}>{t('org.copyConfirm', { name: copySourceName })}</p>
         <Input value={copyName} onChange={(e) => setCopyName(e.target.value)} placeholder={t('org.copyNameLabel')} />
-      </Modal>
+      </FormContainer>
     </>
   )
 }

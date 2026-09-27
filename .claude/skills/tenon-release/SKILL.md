@@ -1,6 +1,6 @@
 ---
 name: tenon-release
-description: TenonAdmin（榫卯）专用发版流程——定版、CHANGELOG、双前端 version bump、文档站 site/.vitepress 导航徽章、本地验绿、合 main、打 v* tag、盯 backend-release、改 GitHub Release 说明。当用户在本仓要发版、发布 TenonAdmin、tenon-release、打 tag、推 NuGet、准备 X.Y.Z 时使用。勿用于其他项目。
+description: 发布 TenonAdmin 版本：定版、变更日志、前端与站点版本、验证、标签和 NuGet；仅用于本仓发版。
 ---
 
-读仓库根目录的 `skills/tenon-release.md` 并严格按它执行。它是单一真源，本文件只是入口包装。人类操作手册与节奏说明见 `docs/releasing.md`。
+阅读仓库的 [tenon-release 流程](../../../skills/tenon-release.md)，按当前任务选择相关分支。该文档是规则与示例的唯一维护位置。

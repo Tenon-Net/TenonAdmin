@@ -134,7 +134,9 @@ public class DeviceService(IRepository<Device> repo) : IDeviceService
 
 这 12 bit 也划出了种子的地盘：`id = 相对纪元毫秒数 × 4096 + 低位`，雪花永远发不出小于 4096 的号，`[1, 999]` 因此可以放心留给内核内置种子。消费方从 `1000` 起取号，上限不是写死的数字。`DatabaseInitializer` 启动时会现算一次「此刻起雪花号最小会是多少」（`SnowflakeIdGenerator.CurrentFloor()`），严格小于它的种子 Id，从这一刻起就再也不会被这台实例真实发出的雪花号追上，因为时钟只会往前走。启动时校验两件事：每个种子 Id 都落在这个动态上限之内，同一实体上不重复。越界的号迟早被雪花追上撞主键，撞号的行会被幂等判存当「已存在」静默跳过。两种情况一律启动即抛，CI 也有对应用例把它们拦在宿主启动之前。
 
-机器号从配置 `TenonAdmin:Id:WorkerId` 注入（默认 0，范围 0–63）：
+机器号从配置 `TenonAdmin:Id:WorkerId` 注入（范围 0–63）。不配时，同机用文件锁抢 `worker-00.lock` 起的空闲槽：IIS 重叠回收、本机开两份，旧进程占 0、新进程落到 1，不会两个都拿 0。锁目录默认在 Windows 的 `%ProgramData%\TenonAdmin\workerid`、Linux 的 `/var/lock/tenonadmin/workerid`，写不进去再退到临时目录，也可用 `TenonAdmin:Id:WorkerIdLockDir` 指定。释放只关句柄、不删文件。
+
+跨机器、跨容器各有各的磁盘，文件锁帮不上忙。没填 `WorkerId` 时，内核在共享库的 `sys_worker_lease` 上从 0 插到 63，谁插入成功谁用谁，不随机。两个实例硬写成同一个号，后到的起不来。k8s 仍可用 StatefulSet 的 Pod 序号写进配置，重启号不变。
 
 ```json
 {
@@ -143,11 +145,5 @@ public class DeviceService(IRepository<Device> repo) : IDeviceService
   }
 }
 ```
-
-::: danger 水平扩展每实例必须不同
-单机部署不配即可（回落 0）。**多实例水平扩展时必须为每个实例配置不同的 `WorkerId`**，否则不同实例同毫秒发号会撞主键。两台机器的 `WorkerId` 一样，ID 里代表机器号的那 6 bit 就完全相同。只要同一毫秒里序列号也凑巧从头对齐，拼出来的 64 位数字就会一模一样。这是数据损坏级的问题，且默认静默发生。
-
-内核给了一道防线：选了 Redis 缓存（明显的多实例意图）却没显式设置 `WorkerId` 时，启动即抛，把一个静默的主键冲突换成一条可读的启动错误。单实例请显式配 `0` 以示知情。k8s 场景可用 StatefulSet 的 Pod 序号注入。
-:::
 
 时钟安全上，`SnowflakeIdGenerator` 注入了 `TimeProvider`，这样可以测试。检测到时钟回拨时，小幅回拨（≤5ms，属于 NTP 微调级别）会自旋等待追平；大幅回拨则直接抛异常，拒绝发号。宁可不发，也绝不发出可能重复的 ID。

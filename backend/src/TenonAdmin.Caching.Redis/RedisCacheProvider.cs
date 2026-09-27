@@ -106,10 +106,14 @@ public class RedisCacheProvider : ICacheProvider, ISecureCacheCapabilities, IDis
     public virtual async Task<long> IncrementAsync(string key, TimeSpan? expiry = null, CancellationToken cancellationToken = default)
     {
         var full = Prefixed(key);
-        var next = await Database.StringIncrementAsync(full);
-        if (expiry is { } e && e > TimeSpan.Zero)
-            await Database.KeyExpireAsync(full, e);
-        return next;
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expiry is not { } ttl || ttl <= TimeSpan.Zero)
+            return await Database.StringIncrementAsync(full);
+
+        // 计数与滑动过期一起提交，避免进程中断留下永久锁定计数。
+        const string script = "local n = redis.call('INCR', KEYS[1]); redis.call('PEXPIRE', KEYS[1], ARGV[1]); return n";
+        return (long)await Database.ScriptEvaluateAsync(script, [new RedisKey(full)],
+            [(RedisValue)checked((long)Math.Ceiling(ttl.TotalMilliseconds))]);
     }
 
     /// <inheritdoc />

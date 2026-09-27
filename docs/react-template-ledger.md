@@ -33,7 +33,7 @@
 
 **边界**:它是 Umi Max 4 + Tailwind v4 + ProLayout,我们是 **Vite + antd 原生 `Layout` 自建 + 无 Tailwind**。参考页面结构与 v6 用法,**不是它的框架选型**——别把 Umi 的约定式路由、`useModel`、Tailwind 类名带进来。
 
-按既有约定:提组件设计前把它与 soybean-admin / XiHan(`参考项目\admin\`)、SimpleAdmin 一并过一遍,别只照一家抄。
+按既有约定:提组件设计前把它与 soybean-admin / XiHan(`../参考项目/admin/`)、SimpleAdmin 一并过一遍,别只照一家抄。
 
 ## 批次 R · 重置与自包含化
 

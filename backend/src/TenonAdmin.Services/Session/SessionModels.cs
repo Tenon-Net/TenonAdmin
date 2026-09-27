@@ -2,7 +2,7 @@ using TenonAdmin.Core;
 
 namespace TenonAdmin.Services;
 
-/// <summary>会话缓存值(热路径:每请求校验会话是否活跃,免每次查库)</summary>
+/// <summary>会话活动缓存值；吊销与有效期每次以数据库为准，缓存只辅助闲置策略和活动回写</summary>
 public record SessionCacheInfo
 {
     public required long UserId { get; init; }

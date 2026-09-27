@@ -24,7 +24,7 @@ permissions:
 
 # 只保留最新一次部署,取消进行中的旧部署
 concurrency:
-  group: pages
+  group: pages-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'deploy' }}
   cancel-in-progress: true
 
 jobs:

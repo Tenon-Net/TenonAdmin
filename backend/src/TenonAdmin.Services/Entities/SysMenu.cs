@@ -4,11 +4,10 @@ using TenonAdmin.SqlSugar;
 namespace TenonAdmin.Services;
 
 /// <summary>
-/// 菜单/权限表(设计 §16)——目录/页面/按钮三级树(<see cref="MenuType"/>)。
+/// 菜单/权限表——目录/页面/按钮三级树(<see cref="MenuType"/>)。
 /// <para>关键字段 <see cref="Permission"/>:节点绑定的<b>规范化路由权限码</b>(如 <c>GET:/api/v1/ping</c>),
-/// 与 <c>[RolePermission]</c> 授权管道算出的码一致——不手写 <c>"sys:user:add"</c> 之类魔法串(设计 §6)。
+/// 与 <c>[RolePermission]</c> 授权管道算出的码一致——不手写 <c>"sys:user:add"</c> 之类魔法串。
 /// 角色勾选菜单即完成配权,用户权限码 = 所属角色菜单的 Permission 并集。</para>
-/// <para>前端展示字段(Path/Component/Icon/Visible 等)随 M2 前端接入时增列——CodeFirst 只增不改,先窄后宽。</para>
 /// </summary>
 [SugarTable("sys_menu", TableDescription = "菜单/权限")]
 public class SysMenu : BaseEntity
@@ -43,7 +42,7 @@ public class SysMenu : BaseEntity
     [SugarColumn(IsNullable = true, ColumnDescription = "所属模块 Id(仅顶级目录设置)")]
     public long? ModuleId { get; set; }
 
-    // ── 前端展示字段(M2 动态路由用;后端授权不依赖这些)──────────────────────
+    // 前端动态路由展示字段；后端授权不依赖这些字段。
     /// <summary>前端路由路径(页面节点用;目录/按钮可空)</summary>
     [SugarColumn(Length = 256, IsNullable = true, ColumnDescription = "前端路由路径")]
     public string? Path { get; set; }

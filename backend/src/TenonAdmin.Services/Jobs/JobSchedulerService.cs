@@ -325,37 +325,52 @@ public class JobSchedulerService(
             var expected = job.NextRunTime!.Value;
             var isMisfire = (now - expected).TotalSeconds > options.MisfireThresholdSeconds;
             var next = JobTrigger.ComputeNext(job, now);
-            if (!await ClaimAsync(job, expected, next, now))
-            {
-                await RefreshSingleAsync(job);   // 被别的节点领走 / 行被改:单行回读
-                continue;
-            }
-            job.NextRunTime = next;
-            if (next is null) _cache.Remove(job);   // 无未来时刻:OneShot 由执行器收尾,其余由下轮重载判死
 
-            if (isMisfire && job.MisfireStrategy == JobMisfireStrategy.Skip)
+            // 跳过型 misfire 不执行,无需占执行槽;其余触发先占槽再领取,避免领取后被并发手动执行抢满容量。
+            IDisposable? reservation = null;
+            if (!isMisfire || job.MisfireStrategy != JobMisfireStrategy.Skip)
             {
-                await InsertMissedSkippedLogAsync(job, expected, now);
-                continue;
+                var reserveResult = executor.TryReserveFire(out reservation);
+                if (reserveResult is JobFireResult.LimitReached or JobFireResult.Draining)
+                {
+                    logger.LogWarning("在飞执行数已达上限或宿主排水中,本拍停止领取(47013 语义)。");
+                    break;
+                }
             }
-            var fireMode = isMisfire ? JobFireMode.Misfire : JobFireMode.Schedule;
-            // 跨节点:库里未闭合行(含别的副本)仍须查;本机 SerialSkip/容量由 TryFire 原子占位,避免 check-then-act
-            if (job.ConcurrencyMode == JobConcurrencyMode.SerialSkip
-                && await db.Queryable<SysJobLog>().AnyAsync(l => l.JobId == job.Id && l.EndTime == null))
+            using (reservation)
             {
-                await InsertSerialSkippedLogAsync(job, expected, now);
-                continue;
-            }
-            var fireResult = executor.TryFireAndTrack(job, expected, fireMode, out _);
-            if (fireResult == JobFireResult.AlreadyRunning)
-            {
-                await InsertSerialSkippedLogAsync(job, expected, now);
-                continue;
-            }
-            if (fireResult is JobFireResult.LimitReached or JobFireResult.Draining)
-            {
-                logger.LogWarning("在飞执行数已达上限或宿主排水中,本拍停止领取(47013 语义)。");
-                break;
+                if (!await ClaimAsync(job, expected, next, now))
+                {
+                    await RefreshSingleAsync(job);   // 被别的节点领走 / 行被改:单行回读
+                    continue;
+                }
+                job.NextRunTime = next;
+                if (next is null) _cache.Remove(job);   // 无未来时刻:OneShot 由执行器收尾,其余由下轮重载判死
+
+                if (isMisfire && job.MisfireStrategy == JobMisfireStrategy.Skip)
+                {
+                    await InsertMissedSkippedLogAsync(job, expected, now);
+                    continue;
+                }
+                var fireMode = isMisfire ? JobFireMode.Misfire : JobFireMode.Schedule;
+                // 跨节点:库里未闭合行(含别的副本)仍须查;本机 SerialSkip/容量由 TryFire 原子占位,避免 check-then-act
+                if (job.ConcurrencyMode == JobConcurrencyMode.SerialSkip
+                    && await db.Queryable<SysJobLog>().AnyAsync(l => l.JobId == job.Id && l.EndTime == null))
+                {
+                    await InsertSerialSkippedLogAsync(job, expected, now);
+                    continue;
+                }
+                var fireResult = executor.TryFireAndTrack(job, expected, fireMode, out _);
+                if (fireResult == JobFireResult.AlreadyRunning)
+                {
+                    await InsertSerialSkippedLogAsync(job, expected, now);
+                    continue;
+                }
+                if (fireResult is JobFireResult.LimitReached or JobFireResult.Draining)
+                {
+                    logger.LogWarning("在飞执行数已达上限或宿主排水中,本拍停止领取(47013 语义)。");
+                    break;
+                }
             }
         }
     }

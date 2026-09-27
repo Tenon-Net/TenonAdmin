@@ -7,8 +7,9 @@ import vue from '@vitejs/plugin-vue'
 // 版本号 = package.json 的 version,构建期注入前端(登录页页脚展示)。打包即固化,不走后端配置。
 const appVersion = JSON.parse(readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8')).version
 
-// CORS 默认 deny-all,浏览器只与 :5173 通信,/api 与 /openapi 由 dev proxy 反代到后端。
+// CORS 默认 deny-all,浏览器只与 :5175 通信,/api 与 /openapi 由 dev proxy 反代到后端。
 // 后端 dev 端口默认 5100(避开 macOS AirPlay 占的 5000);dev.sh 经 TENON_API_TARGET 覆盖。
+// Vue 用 5175,避开本机常被占用的 5173;React 模板仍默认 5174。
 const apiTarget = process.env.TENON_API_TARGET ?? 'http://localhost:5100'
 
 export default defineConfig({
@@ -31,7 +32,8 @@ export default defineConfig({
     dedupe: ['vue', 'naive-ui', '@iconify/vue'],
   },
   server: {
-    port: 5173,
+    host: true,
+    port: 5175,
     // 与 web-react 相同：端口被占时必须失败，禁止静默挪到 5174 去顶掉 React 或连上别的 Vite 应用。
     strictPort: true,
     proxy: {
@@ -42,7 +44,7 @@ export default defineConfig({
   },
   // vite preview(产物预览)不继承 server.proxy,这里配同一套;低内存机上用 build+preview 代替 dev 跑整站。
   preview: {
-    port: 5173,
+    port: 5175,
     // 与 server 同理：预览被占端口时必须失败，禁止静默挪端口连错应用（见 QA02 / Round 17）。
     strictPort: true,
     proxy: {

@@ -45,7 +45,7 @@ const authMiddleware: Middleware = {
   onRequest({ request }) {
     const token = useUserStore.getState().accessToken
     if (token) request.headers.set('Authorization', `Bearer ${token}`)
-    // Level3:状态改变写请求(及任何带 refresh Cookie 的 POST)需双提交 CSRF
+    // Cookie 会话的状态改变请求需双提交 CSRF;无 Cookie 时 attachCsrf 不附请求头
     attachCsrf(request.headers)
     return request
   },
@@ -57,7 +57,7 @@ async function doRefresh(): Promise<boolean> {
   // body 模式必须持有 refresh;cookie 模式 refresh 在 HttpOnly Cookie,本地可为空
   if (!cookie && !user.refreshToken) return false
 
-  // bare 不挂 auth/refresh 中间件;手动补 CSRF(Level3 刷新自身也是状态改变 + 带 Cookie)
+  // bare 不挂 auth/refresh 中间件;手动补 Cookie 会话刷新所需的 CSRF
   const headers: Record<string, string> = {}
   const csrf = readCsrfCookie()
   if (csrf) headers[AUTH_CSRF_HEADER] = csrf

@@ -1,4 +1,5 @@
 // 接口出参领域类型(与后端 DTO 对齐)。API 层用它标注 unwrap<T> 的返回,视图直接消费。
+import type { components } from '@/api/schema'
 import type { AppModule } from './menu'
 
 /** 登录/刷新出参(后端 LoginOutput)。 */
@@ -331,6 +332,7 @@ export interface SysOrg {
   category?: string | null
   sort: number
   enabled: boolean
+  leaderUserId?: number | null
   createTime?: string
 }
 
@@ -342,6 +344,7 @@ export interface OrgInput {
   category?: string | null
   sort: number
   enabled: boolean
+  leaderUserId?: number | null
 }
 
 /** 职位行(后端 SysPosition)。int64 收敛为 number。 */
@@ -426,12 +429,8 @@ export interface AddUserOutput {
   initialPassword: string
 }
 
-/** 一条可授权路由(后端 PermissionRouteItem);喂菜单表单权限码下拉,code 即写进 SysMenu.Permission 的值。 */
-export interface PermissionRouteItem {
-  code: string
-  method: string
-  path: string
-}
+/** 一条可授权路由;生成契约已完整表达该 DTO,直接引用以消除双重真源。 */
+export type PermissionRouteItem = components['schemas']['PermissionRouteItem']
 
 /** 更新用户入参(后端 UpdateUserInput;无 account/password。roleIds 由 detail 原样带回避免清空)。 */
 export interface UpdateUserInput {

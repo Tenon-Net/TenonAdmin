@@ -6,9 +6,8 @@ using TenonAdmin.Services;
 namespace TenonAdmin.AspNetCore;
 
 /// <summary>
-/// 个人中心端点(设计 §4,T8)。<c>[ActiveSession]</c>——任何已登录用户可用,<b>无需具体权限码</b>,
-/// 但与受权限保护的端点同源每请求校验会话活性:被强退/登出后即 401(不再靠令牌自然过期,P2-1);
-/// 一切操作限当前登录用户自己(userId 取自令牌,不接受任意 Id)。
+/// 个人中心端点。<c>[ActiveSession]</c> 校验会话活性,无需具体权限码;
+/// 所有操作限当前用户,userId 取自令牌。
 /// </summary>
 [ApiController]
 [Route("api/v1/personal")]
@@ -23,7 +22,7 @@ public class PersonalController(IPersonalService personal, IMenuService menu, IP
     public async Task<Result<UserProfile>> GetProfile() =>
         Result<UserProfile>.Ok(await personal.GetProfileAsync(CurrentUserId));
 
-    /// <summary>改自己的资料(姓名)</summary>
+    /// <summary>修改自己的资料。</summary>
     [HttpPut("profile")]
     [OperationLog("修改个人资料")]
     public async Task<Result<bool>> UpdateProfile(UpdateProfileInput input)
@@ -43,7 +42,7 @@ public class PersonalController(IPersonalService personal, IMenuService menu, IP
 
     /// <summary>
     /// 取自己当前生效的权限码集合(= 规范化路由,如 <c>POST:/api/v1/sys/user</c>)。
-    /// 前端 <c>v-auth</c> 据此做按钮级显隐;超管无角色故返回空集(前端 fail-open 显示全部,服务端 sadm 绕过兜底)。
+    /// 空集不代表超管;前端须结合独立的 IsSuperAdmin 标志判断按钮显隐,服务端仍独立鉴权。
     /// </summary>
     [HttpGet("permissions")]
     public async Task<Result<IReadOnlyCollection<string>>> GetPermissions() =>
@@ -60,8 +59,7 @@ public class PersonalController(IPersonalService personal, IMenuService menu, IP
         Result<IReadOnlyList<MenuNode>>.Ok(await menu.GetMyMenuTreeAsync(CurrentUserId, currentUser.IsSuperAdmin, moduleId));
 
     /// <summary>
-    /// 看自己的活跃会话列表(个人视角"我的登录设备")。会话数受并发上限约束(个位数),单页 100 绰绰有余不分页;
-    /// IsCurrent 按令牌 sid 比对,标记本次请求所用会话。
+    /// 查看自己的活跃会话;IsCurrent 按令牌 sid 标记本次请求所用会话。
     /// </summary>
     [HttpGet("sessions")]
     public async Task<Result<IReadOnlyList<MySessionItem>>> GetSessions()

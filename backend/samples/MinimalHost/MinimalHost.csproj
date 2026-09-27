@@ -10,5 +10,7 @@
     <ProjectReference Include="..\..\src\TenonAdmin.Auth.WeChat\TenonAdmin.Auth.WeChat.csproj" />
     <!-- 可选卫星包:xlsx 导入导出。须在 AddTenonAdmin() 之前调 AddTenonAdminExcel()(见 Program.cs)。 -->
     <ProjectReference Include="..\..\src\TenonAdmin.Excel\TenonAdmin.Excel.csproj" />
+    <!-- 可选卫星包:人工审批工作流。须 AddTenonAdminWorkflow + UseWorkflow(见 Program.cs)。 -->
+    <ProjectReference Include="..\..\src\TenonAdmin.Workflow\TenonAdmin.Workflow.csproj" />
   </ItemGroup>
 </Project>

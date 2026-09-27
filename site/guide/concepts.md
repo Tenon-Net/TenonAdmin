@@ -47,7 +47,7 @@ An authenticated request flows through, in order:
 
 - A single `SqlSugarScope` singleton; global query filters automatically apply **soft delete** (`ISoftDelete`) and **data scope** (`IOrgScoped` / `DataEntity` filtered by the org set resolved for the current request).
 - AOP auto-fills audit fields on insert/update: snowflake `Id`, `CreateTime`, `CreateUserId`, `CreateOrgId` (the data-scope anchor), `UpdateTime`, `UpdateUserId`. Business code only needs to set business fields.
-- The snowflake `WorkerId` comes from `TenonAdmin:Id:WorkerId` (default 0); **it must differ per instance when scaling horizontally**, or IDs generated in the same millisecond will collide.
+- The snowflake `WorkerId` comes from `TenonAdmin:Id:WorkerId`. Unset on one machine, a file lock spreads processes across slots; **it must differ per instance when scaling horizontally**, or IDs generated in the same millisecond will collide.
 
 ---
 

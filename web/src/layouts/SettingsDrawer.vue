@@ -59,13 +59,13 @@ const transitionOptions = computed(() => [
           <n-divider title-placement="left">{{ t('settings.themeMode') }}</n-divider>
           <n-radio-group v-model:value="app.themeScheme" size="small" class="seg">
             <n-radio-button value="light">
-              <Icon icon="ph:sun" class="ri" />{{ t('app.light') }}
+              <Icon icon="lucide:sun" class="ri" />{{ t('app.light') }}
             </n-radio-button>
             <n-radio-button value="dark">
-              <Icon icon="ph:moon-stars" class="ri" />{{ t('app.dark') }}
+              <Icon icon="lucide:moon-star" class="ri" />{{ t('app.dark') }}
             </n-radio-button>
             <n-radio-button value="auto">
-              <Icon icon="ph:circle-half" class="ri" />{{ t('settings.auto') }}
+              <Icon icon="lucide:monitor" class="ri" />{{ t('settings.auto') }}
             </n-radio-button>
           </n-radio-group>
 
@@ -82,7 +82,7 @@ const transitionOptions = computed(() => [
               :aria-pressed="app.accent === c"
               @click="app.setAccent(c)"
             >
-              <Icon v-if="app.accent === c" icon="ph:check-bold" class="tick" />
+              <Icon v-if="app.accent === c" icon="lucide:check" class="tick" />
             </button>
           </div>
           <n-color-picker
@@ -158,12 +158,12 @@ const transitionOptions = computed(() => [
       <template #footer>
         <div class="footer-actions">
           <n-button v-if="showCopyConfig" block tertiary @click="copyConfig">
-            <Icon icon="ph:clipboard-text" class="ri" />{{ t('settings.copyConfig') }}
+            <Icon icon="lucide:clipboard" class="ri" />{{ t('settings.copyConfig') }}
           </n-button>
           <n-popconfirm @positive-click="app.resetSettings()">
             <template #trigger>
               <n-button block secondary>
-                <Icon icon="ph:arrow-counter-clockwise" class="ri" />{{ t('common.reset') }}
+                <Icon icon="lucide:rotate-ccw" class="ri" />{{ t('common.reset') }}
               </n-button>
             </template>
             {{ t('settings.resetConfirm') }}

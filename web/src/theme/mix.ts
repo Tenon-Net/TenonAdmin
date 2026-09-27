@@ -60,12 +60,13 @@ export function rgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
-/** 英雄主按钮渐变(仅登录页 / 欢迎横幅 / 头像)。 */
+/**
+ * 头像填充渐变(仅欢迎横幅的占位头像)。
+ *
+ * 曾经也铺在登录页主按钮上、外加一圈 `glowSh` 光晕,两者已移除:按钮的层级靠尺寸和字重就够,
+ * 渐变+光晕只是装饰,且 accent→紫→粉这组配色是通用模板脸。留在头像是因为那里装饰即内容
+ * (52px 圆形占位头像),且跟随 accent 换色。
+ */
 export function btnGrad(accent: string): string {
   return `linear-gradient(135deg, ${accent} 0%, ${mix(accent, '#8B5CF6', 0.55)} 55%, ${mix(accent, '#EC4899', 0.62)} 100%)`
-}
-
-/** 英雄按钮发光阴影。 */
-export function glowSh(accent: string): string {
-  return `0 6px 20px ${rgba(accent, 0.42)}`
 }

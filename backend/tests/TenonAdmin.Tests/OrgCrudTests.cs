@@ -92,6 +92,21 @@ public class OrgCrudTests
         Assert.Equal("改名后", got.GetProperty("data").GetProperty("name").GetString());
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Update_without_code_preserves_existing_code(string? code)
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+        var id = await AddOrg(admin, "保留编码", code: "KEEP_CODE");
+        var updated = await (await admin.PutJson($"/api/v1/sys/org/{id}",
+            new { parentId = 0, name = "改名后", code, enabled = true })).ReadEnvelope();
+        Assert.Equal(0, updated.GetProperty("code").GetInt32());
+        Assert.Equal("KEEP_CODE", (await Get(admin, id)).GetProperty("data").GetProperty("code").GetString());
+    }
+
     [Fact]
     public async Task Delete_org_with_children_returns_OrgHasChildren()
     {
@@ -128,5 +143,46 @@ public class OrgCrudTests
 
         var got = await Get(admin, 999999999);
         Assert.Equal((int)ErrorCode.OrgNotFound, got.GetProperty("code").GetInt32());
+    }
+
+    [Fact]
+    public async Task Leader_must_exist_and_be_enabled()
+    {
+        using var f = new AdminAppFactory();
+        var admin = await SuperAdminClient(f);
+
+        var missing = await (await admin.PostJson("/api/v1/sys/org/add", new
+        {
+            parentId = 0,
+            name = "无效负责人",
+            code = "BAD_LEADER_MISSING",
+            category = "",
+            sort = 0,
+            enabled = true,
+            leaderUserId = 9_999_999L,
+        })).ReadEnvelope();
+        Assert.Equal((int)ErrorCode.UserNotFound, missing.GetProperty("code").GetInt32());
+
+        var disabledUser = await (await admin.PostJson("/api/v1/sys/user", new
+        {
+            account = "disabled-org-leader",
+            password = "Test@123456",
+            name = "停用负责人",
+            enabled = false,
+            orgId = 1,
+            roleIds = Array.Empty<long>(),
+        })).ReadEnvelope();
+        var disabledId = disabledUser.GetProperty("data").GetProperty("id").GetInt64();
+        var disabled = await (await admin.PostJson("/api/v1/sys/org/add", new
+        {
+            parentId = 0,
+            name = "停用负责人机构",
+            code = "BAD_LEADER_DISABLED",
+            category = "",
+            sort = 0,
+            enabled = true,
+            leaderUserId = disabledId,
+        })).ReadEnvelope();
+        Assert.Equal((int)ErrorCode.AccountDisabled, disabled.GetProperty("code").GetInt32());
     }
 }

@@ -121,7 +121,7 @@ beforeEach(() => {
   // `Cannot read properties of undefined (reading 'setItem')`,和 location 毫无关系。
   const mineAssigned: string[] = []
   assigned = mineAssigned
-  // document.cookie 供 Level3 双提交 CSRF 读取
+  // document.cookie 供 Cookie 会话的双提交 CSRF 读取
   let cookieJar = ''
   Object.defineProperty(globalThis, 'document', {
     configurable: true,

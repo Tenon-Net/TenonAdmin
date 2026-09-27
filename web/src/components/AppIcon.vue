@@ -8,5 +8,5 @@ defineProps<{ icon?: string; size?: number | string }>()
 
 <template>
   <!-- 兜底与 useLayoutMenu.renderIcon 一致,保证 rail/折叠态也有图标 -->
-  <OfflineIcon :icon="icon" :size="size ?? 18" fallback="ph:dot-outline-duotone" />
+  <OfflineIcon :icon="icon" :size="size ?? 18" fallback="lucide:dot" />
 </template>

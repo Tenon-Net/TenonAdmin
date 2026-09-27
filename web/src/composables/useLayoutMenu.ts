@@ -17,7 +17,7 @@ function openIfExternal(key: string): boolean {
 }
 
 // 无图标兜底:rail/折叠态的 n-menu 只画图标,缺图标会渲染成空槽“消失”(§组织管理),故永不返回 undefined。
-function renderIcon(name: string | undefined, fallback = 'ph:dot-outline-duotone') {
+function renderIcon(name: string | undefined, fallback = 'lucide:dot') {
   return () => h(Icon, { icon: name || fallback, width: 18, height: 18 })
 }
 
@@ -34,7 +34,7 @@ function toOptions(nodes: MenuNode[]): MenuOption[] {
       if (n.type === MenuType.Catalog) {
         const children = toOptions(n.children ?? [])
         if (!children.length) return null
-        return { label: trTitle(n.title), key: `cat-${n.id}`, icon: renderIcon(n.icon, 'ph:folder-duotone'), children }
+        return { label: trTitle(n.title), key: `cat-${n.id}`, icon: renderIcon(n.icon, 'lucide:folder'), children }
       }
       return { label: trTitle(n.title), key: n.path ?? `menu-${n.id}`, icon: renderIcon(n.icon) }
     })

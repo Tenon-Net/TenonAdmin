@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # dev.sh - 一条命令启动后端 + 两个前端模板开发环境（macOS / Linux，对应 Windows 的 dev.bat）
 # 后端 http://localhost:5100（MinimalHost）
-#   web (Vue)  http://localhost:5173（Vite）
+#   web (Vue)  http://localhost:5175（Vite）
 #   web-react  http://localhost:5174（Vite）—— 两个模板各占一个端口,可同时对照
 # 后端使用 5100 而非 5000：macOS 的 AirPlay 接收器默认占用 5000。
 # 用法：在仓库根目录运行 ./dev.sh    停止运行 ./stop.sh
@@ -26,7 +26,7 @@ echo "[api] 启动后端 http://localhost:$API_PORT ..."
     dotnet run --no-launch-profile --project samples/MinimalHost ) > .dev/api.log 2>&1 &
 echo $! > .dev/api.pid
 
-echo "[web] 启动 Vue 前端 http://localhost:5173 ..."
+echo "[web] 启动 Vue 前端 http://localhost:5175 ..."
 ( cd web && npm install && npm run dev ) > .dev/web.log 2>&1 &
 echo $! > .dev/web.pid
 

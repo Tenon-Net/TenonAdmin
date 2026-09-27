@@ -10,9 +10,8 @@ namespace TenonAdmin.SqlSugar;
 /// <summary>
 /// 首启数据库初始化(IHostedService,应用启动时执行一次):
 /// 确保 SQLite 目录 → CodeFirst 建表(扫描已登记程序集的全部 [SugarTable] 实体)→ 执行全部种子。
-/// <para>建表与种子都幂等:表已存在则按实体差异补列(SqlSugar CodeFirst 语义,不删列不改窄);
-/// 种子按主键判存只插缺失行(见 <see cref="ISeedData{TEntity}"/>)。
-/// 生产环境的建表开关策略见设计 §12(EnableCodeFirstInProduction,接入宿主环境判断时启用)。</para>
+/// <para>建表幂等:表已存在则按实体差异补列(SqlSugar CodeFirst 语义,不删列不改窄)。
+/// 生产环境仅在显式启用 <see cref="AdminDatabaseOptions.EnableCodeFirstInProduction"/> 时执行 CodeFirst。</para>
 /// </summary>
 internal sealed class DatabaseInitializer(
     ISqlSugarClient db,
@@ -27,7 +26,7 @@ internal sealed class DatabaseInitializer(
     {
         EnsureSqliteDirectory();
 
-        // 生产建表安全闸门(§12/§4.1):生产环境即便 EnableCodeFirst=true,也需显式 EnableCodeFirstInProduction 才建表——
+        // 生产环境即便 EnableCodeFirst=true,也需显式 EnableCodeFirstInProduction 才建表——
         // 生产库通常 DBA 手工维护,应用不应擅自 ALTER。非生产环境不受此约束。
         var codeFirstAllowed = options.EnableCodeFirst
             && (!env.IsProduction() || options.EnableCodeFirstInProduction);

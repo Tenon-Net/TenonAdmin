@@ -167,7 +167,7 @@ public class ExternalAuthController(
         }
     }
 
-    /// <summary>一次性票据换令牌(登录回调后前端调用;票据无效/过期/已用抛 40014)。Level3 同步写 Cookie/CSRF。</summary>
+    /// <summary>一次性票据换令牌(登录回调后前端调用;票据无效/过期/已用抛 40014)。Cookie 会话模式下同步写 Cookie/CSRF。</summary>
     [HttpPost("exchange")]
     [AllowAnonymous]
     public async Task<Result<LoginOutput>> Exchange(ExternalExchangeInput input, CancellationToken cancellationToken)

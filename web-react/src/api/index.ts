@@ -222,11 +222,7 @@ export const mfaApi = {
     client.POST('/api/v1/sys/mfa/clear', { body }).then((r) => unwrap<void>(r)),
 }
 
-export interface ExternalProvider {
-  code: string
-  displayName: string
-  icon?: string | null
-}
+export type ExternalProvider = components['schemas']['ExternalProviderItem']
 
 export interface ExternalProviderAdmin extends ExternalProvider {
   enabled: boolean

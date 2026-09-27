@@ -1,10 +1,12 @@
 using System.Net;
 using System.Reflection;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,6 +15,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 using TenonAdmin.Core;
 using TenonAdmin.Services;
 using TenonAdmin.SqlSugar;
@@ -28,6 +31,11 @@ public static class TenonAdminSetup
     /// <summary>内置 CORS 命名策略名(由 <see cref="TenonAdminMiddlewareStartupFilter"/> 在管道前段应用)</summary>
     public const string CorsPolicyName = "TenonAdmin";
 
+    /// <summary>注册 TenonAdmin 的配置、数据访问、领域服务和 ASP.NET Core 集成。</summary>
+    /// <param name="services">服务集合</param>
+    /// <param name="configuration">宿主配置</param>
+    /// <param name="configure">可选的代码配置</param>
+    /// <returns>原服务集合</returns>
     public static IServiceCollection AddTenonAdmin(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -62,15 +70,8 @@ public static class TenonAdminSetup
         AdminJobsOptionsValidation.Validate(options.Jobs);
         services.AddSingleton(options.Jobs);
 
-        // ── 雪花机器号(§12):多副本同号 = 同毫秒发号撞主键。这是数据损坏级的问题,而它今天静默发生 ──
-        //   没有可靠的"我是不是多副本"信号,但选了 Redis 缓存基本等同于宣告多实例意图
-        //   (进程内缓存在多副本下根本不成立:强退失效、权限陈旧、锁定计数翻倍)。
-        //   故 Redis + 未显式给机器号 → 启动即抛。显式写 0 即视为知情,放行。
-        if (string.Equals(options.Cache.Provider, "Redis", StringComparison.OrdinalIgnoreCase) && options.Id.WorkerId is null)
-            throw new InvalidOperationException(
-                "已配置 Redis 缓存(多实例部署),但未显式设置 TenonAdmin:Id:WorkerId。" +
-                "水平扩展时每个实例必须配一个互不相同的机器号(0–63),否则不同实例同毫秒发号会撞主键。" +
-                "单实例请显式配 0 以示知情;k8s 可用 StatefulSet 的 Pod 序号注入。");
+        // ── 雪花机器号:未显式配时由 IWorkerIdSlotClaimer 在 sys_worker_lease 领空闲槽,
+        //    同机再加文件锁。不再因 Redis 未配号就拒启动——领槽本身就能避免同号。
         services.AddSingleton(options.Id);
         services.TryAddSingleton(TimeProvider.System);          // 统一时间源(§12),测试可换 Fake
 
@@ -108,10 +109,10 @@ public static class TenonAdminSetup
             }));
         }
 
-        // ── 当前用户 + 数据范围环境(§6):HTTP 侧实现在此先注册,压过 SqlSugar 层的 AsyncLocal 兜底 ──
+        // ── 当前用户 + 数据范围环境(§6):HTTP 侧实现在此先注册,压过 SqlSugar 层的 AsyncLocal 实现 ──
         services.AddHttpContextAccessor();
         services.TryAddSingleton<ICurrentUser, HttpContextCurrentUser>();
-        // HttpContext.Items 版数据范围载体(避免授权过滤器里 AsyncLocal 不回流的陷阱);非 HTTP 场景回退 AsyncLocal
+        // HttpContext.Items 版数据范围载体,避免授权过滤器里 AsyncLocal 不回流的陷阱
         services.TryAddSingleton<IDataScopeContext, HttpContextDataScopeContext>();
 
         // ── 数据层 + 领域服务(实体程序集在此登记,§5.7 注册模型)──────────────
@@ -256,13 +257,31 @@ public static class TenonAdminSetup
         services.TryAddSingleton<RuntimeRateLimit>();
         services.AddHostedService(sp => sp.GetRequiredService<RuntimeRateLimit>());
 
-        // ── 历史 Level3 注册位(ADR 0006:告警/启动 fail-closed/ready 预检已退役为空操作;后续可删)──
-        services.AddHostedService<SecurityProfileWarningHostedService>();
         services.TryAddSingleton<AuthCookieService>(); // Cookie/CSRF 服务;启用条件见会话选项瘦身
         services.AddHostedService<SecurityStartupDiagnosticHostedService>();
 
         // ── 内置 OpenAPI 文档(§13.6 契约源)+ 健康检查(§12:/health 存活 + /health/ready 依赖就绪)──
-        services.AddOpenApi();          // 产出 /openapi/v1.json;内置控制器显式 Result<T> → 契约含信封(裸返回端点见 ResultEnvelopeFilter 契约提示)
+        services.AddOpenApi(options =>
+        {
+            options.AddSchemaTransformer((schema, context, _) =>
+            {
+                var type = context.JsonTypeInfo.Type;
+                if (type == typeof(JsonElement))
+                {
+                    schema.Type = null;
+                    schema.AdditionalPropertiesAllowed = true;
+                    schema.AdditionalProperties = null;
+                }
+                else if (type == typeof(Dictionary<string, JsonElement>)
+                         || type == typeof(IReadOnlyDictionary<string, JsonElement>))
+                {
+                    schema.Type = JsonSchemaType.Object;
+                    schema.AdditionalPropertiesAllowed = true;
+                    schema.AdditionalProperties = new OpenApiSchema();
+                }
+                return Task.CompletedTask;
+            });
+        });          // 产出 /openapi/v1.json;内置控制器显式 Result<T> → 契约含信封(裸返回端点见 ResultEnvelopeFilter 契约提示)
         services.AddHealthChecks()
             .AddCheck<DatabaseHealthCheck>("db", tags: ["ready"])
             .AddCheck<CacheHealthCheck>("cache", tags: ["ready"])
@@ -271,6 +290,9 @@ public static class TenonAdminSetup
         return services;
     }
 
+    /// <summary>映射 TenonAdmin 控制器、可选实时 Hub、OpenAPI 和健康检查端点。</summary>
+    /// <param name="endpoints">端点路由生成器</param>
+    /// <returns>原端点路由生成器</returns>
     public static IEndpointRouteBuilder MapTenonAdmin(this IEndpointRouteBuilder endpoints)
     {
         // 内置控制器路由(认证、探针;后续模块的控制器自动包含)。

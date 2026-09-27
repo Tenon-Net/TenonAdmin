@@ -118,6 +118,7 @@ R1–R6 全部处置。闸门先红后绿的证据在下面这张表里 —— *
 - ~~**密码过期策略**~~ —— **已实现(2026-07-16)**:`SysUser.LastPasswordChangeTime` + 运行时配置 `sys.security.password.expireDays`(默认 0=关闭);null 回填 = 存量用户首次登录时回填当时时间、过期窗口从那一刻起算(不会上线当天全员被判过期);过期仅置 `MustChangePassword`(现成通道,不拦登录),自助改密清标志并重置窗口。测试 `PasswordExpiryTests`。
 - **T-D5 RoutePrefix / Version 配置化**。深耦合鉴权路径(权限码 = 路由),需引入 Core 的 `PermissionCode` 规范化 helper 供过滤器与种子共用。低频低价值,明确后置。
 - **T-D6 验证码更多类型**。`ICaptchaProvider` 已有 SVG / 算术(`MathCaptchaProvider`)/ 笔画拼图(`PathCaptchaProvider`)三种实现。滑块 / 行为码仍后置 —— **YAGNI 未解除,先确认真有人要**,否则不做。
+- **IP 归属地 / UA 精解重新评估(2026-08-10)**。UA 精解已用零依赖方案解决(`web/src/utils/ua.ts` 前端正则启发式,浏览器+系统一眼可辨,`web-react/` 同款)。IP 归属地需要卫星包 + `IP2Region.Net`/`ip2region.xdb` 离线库(~11MB,且随 IP 段重新分配持续过时,非一次性成本),当前无真实用户诉求 —— **YAGNI 未解除,先确认真有人要**,否则不做。
 - ~~**T-D7 文件引用关系**~~ —— **已根治(2026-07-17,`3f4dd58`,零 DDL)**:秒传命中改「一引用一行」,各引用方独立记录互删不影响;`FileGcService` 删盘前查同 `StoragePath` 是否仍有他行,末个引用回收时才真删盘。
 - `BaseEntity` 是否 POCO 化进 Core(§5.6)—— Phase 2a 结论:收益低,维持现状。
 

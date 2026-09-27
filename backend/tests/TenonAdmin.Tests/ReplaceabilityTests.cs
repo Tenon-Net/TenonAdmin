@@ -70,7 +70,7 @@ public class ReplaceabilityTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(new AdminCacheOptions());
-        services.AddSingleton(new AdminIdOptions());
+        services.AddSingleton(new AdminIdOptions { WorkerId = 0 });
         services.AddSingleton(new AdminJobsOptions());
         // 消费者的前置注册(在 AddTenonAdmin* 之前)
         services.AddScoped<IJobService, FakeJobService>();
@@ -100,7 +100,7 @@ public class ReplaceabilityTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(new AdminCacheOptions());
-        services.AddSingleton(new AdminIdOptions());
+        services.AddSingleton(new AdminIdOptions { WorkerId = 0 });
         services.AddSingleton(new AdminJobsOptions());
         services.AddSingleton<IPasswordHasher, FakeHasher>();
         services.AddScoped<IAuthService, FakeAuthService>();

@@ -115,6 +115,26 @@ public class RedisCacheTests
     }
 
     [Fact]
+    public async Task Concurrent_increment_preserves_count_and_sets_expiry()
+    {
+        if (SkipWithoutRedis()) return;
+        using var cache = NewProvider();
+        using var connection = await StackExchange.Redis.ConnectionMultiplexer.ConnectAsync(RedisConn!);
+        var key = "atomic-expiry:" + Guid.NewGuid().ToString("N");
+        try
+        {
+            var results = await Task.WhenAll(Enumerable.Range(0, 32)
+                .Select(_ => cache.IncrementAsync(key, TimeSpan.FromMinutes(1))));
+            Assert.Equal(32, results.Distinct().Count());
+            Assert.Equal(32, await cache.GetAsync<long>(key));
+            var ttl = await connection.GetDatabase().KeyTimeToLiveAsync("tenontest:" + key);
+            Assert.NotNull(ttl);
+            Assert.InRange(ttl.Value, TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1));
+        }
+        finally { await cache.RemoveAsync(key); }
+    }
+
+    [Fact]
     public async Task GetAndRemove_ConsumesOnce()
     {
         if (SkipWithoutRedis()) return;

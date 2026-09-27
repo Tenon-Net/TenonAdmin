@@ -1,6 +1,6 @@
 # 非标准页面模板 (Page Variants)
 
-`create-crud-frontend.md` 覆盖了最常见的 flat ProTable CRUD（Position 模式）。本文档补充三种常见变体，模式差异较大，不能硬套 flat CRUD。
+`create-crud-frontend.md` 覆盖了最常见的 flat ProTable CRUD（Position 模式）。本文档补充树表、主从分栏、侧栏筛选和详情页四种变体。
 
 > **本文各变体均为 `web/`（Vue）实现**。`web-react/` 侧没有单独的变体 skill：树表参考 `web-react/src/components/TreeTable.tsx` 及机构/菜单页（`views/system/org`、`views/system/menu`），详情页参考 `DetailPage.tsx`；组件契约见 `web-react/COMPONENTS.md`。
 
@@ -80,7 +80,7 @@ watch(filteredTree, (t) => (expandedKeys.value = expandableIds(t)), { immediate:
 - 表单中的"上级节点"用 `OrgTreeSelect` 组件，需传 `:exclude-subtree-of="editingId"` 防止选自己/子孙为父（成环）
 - NDropdown 适合收纳多个操作（编辑/新增子节点/删除），避免操作列过宽
 
-**参考源码：** `web/src/views/system/org/index.vue`（276 行）
+**参考源码：** `web/src/views/system/org/index.vue`
 
 ---
 
@@ -181,7 +181,7 @@ const { checkedKeys: itemCheckedKeys, hasSelection: itemHasSelection, run: itemB
 - 竞态守卫：`loadItems` 中 await 回来后要验证选中状态没变
 - 如果主从数据影响全局缓存（如字典），每次写操作后调 `invalidate()`
 
-**参考源码：** `web/src/views/system/dict/index.vue`（386 行）
+**参考源码：** `web/src/views/system/dict/index.vue`
 
 ---
 
@@ -292,7 +292,7 @@ watch(
 - 同时 watch `tableRef`：首次加载时表格实例可能还没挂载，需要等实例就绪后再设参数
 - 新增/编辑的 Input 类型可能不同（`AddUserInput` vs `UpdateUserInput`），根据业务需要决定是否拆分
 
-**参考源码：** `web/src/views/system/user/index.vue`（515 行）
+**参考源码：** `web/src/views/system/user/index.vue`
 
 ---
 

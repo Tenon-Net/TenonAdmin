@@ -183,7 +183,7 @@ function switchMode() {
             <n-qr-code :value="bind.otpauthUri" :size="200" error-correction-level="M" />
           </div>
           <n-form-item :label="t('mfa.manualKey')">
-            <n-input :value="bind.seed" readonly>
+            <n-input class="mfa-seed" :value="bind.seed" readonly>
               <template #suffix>
                 <n-button text type="primary" @click="copy(bind.seed)">{{ t('mfa.copy') }}</n-button>
               </template>
@@ -191,7 +191,7 @@ function switchMode() {
           </n-form-item>
           <p class="mfa-manual-hint">{{ t('mfa.manualSetupHint') }}</p>
           <n-form-item :label="t('mfa.authenticatorCode')">
-            <n-input v-model:value="bind.totpCode" :maxlength="6" autocomplete="one-time-code" />
+            <n-input class="mfa-totp-code" v-model:value="bind.totpCode" :maxlength="6" autocomplete="one-time-code" />
           </n-form-item>
           <n-button type="primary" block :loading="loading" @click="completeBind">{{ t('mfa.completeBind') }}</n-button>
         </n-form>

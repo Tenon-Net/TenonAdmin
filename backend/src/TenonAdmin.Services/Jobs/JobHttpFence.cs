@@ -4,6 +4,9 @@ using TenonAdmin.Core;
 
 namespace TenonAdmin.Services;
 
+/// <summary>表示 DNS 解析结果全部被 Jobs HTTP 围栏拦截的连接拒绝。</summary>
+public sealed class JobHttpFenceBlockedException(string message) : HttpRequestException(message);
+
 /// <summary>
 /// HTTP 任务的 SSRF 围栏(scheduling-ledger §7.1):仅 http/https、主机白名单、CIDR 黑名单。
 /// <b>两次校验</b>:入库时(JobService)+ 执行时;域名解析后的 IP 在 <see cref="CreateHandler"/> 的
@@ -115,7 +118,7 @@ public static class JobHttpFence
             var addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, cancellationToken);
             var allowed = addresses.Where(a => !IsBlocked(a, http.BlockedCidrs)).ToArray();
             if (allowed.Length == 0)
-                throw new HttpRequestException(
+                throw new JobHttpFenceBlockedException(
                     $"目标 {context.DnsEndPoint.Host} 解析后的地址全部命中围栏黑名单(DNS rebinding 防护,47009 语义)");
             var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
             try

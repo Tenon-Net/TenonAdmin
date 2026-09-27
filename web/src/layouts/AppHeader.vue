@@ -78,14 +78,14 @@ const renderUserIcon = (name: string, color?: string) => () =>
 
 // 下拉:个人中心 / 清除缓存 / 退出;五块能力进 /personal 二级壳(见 PersonalLayout)。
 const userOptions = computed<DropdownOption[]>(() => [
-  { label: t('app.personalCenter'), key: 'personal', icon: renderUserIcon('ph:user') },
-  { label: t('app.clearCache'), key: 'clearCache', icon: renderUserIcon('ph:broom') },
+  { label: t('app.personalCenter'), key: 'personal', icon: renderUserIcon('lucide:user') },
+  { label: t('app.clearCache'), key: 'clearCache', icon: renderUserIcon('lucide:brush-cleaning') },
   { type: 'divider', key: 'd1' },
   // 对齐 React danger:true —— 退出用危险色突出,避免与普通项同权。
   {
     label: t('app.logout'),
     key: 'logout',
-    icon: renderUserIcon('ph:sign-out', 'var(--color-danger)'),
+    icon: renderUserIcon('lucide:log-out', 'var(--color-danger)'),
     props: { style: 'color: var(--color-danger)' },
   },
 ])
@@ -122,7 +122,7 @@ async function logout() {
   <div class="bar">
     <div class="left">
       <n-button v-if="showCollapse" quaternary circle :aria-label="t('app.collapse')" @click="app.toggleCollapsed()">
-        <Icon :icon="app.collapsed ? 'ph:list' : 'ph:sidebar-simple'" :width="20" />
+        <Icon :icon="app.collapsed ? 'lucide:list' : 'lucide:panel-left'" :width="20" />
       </n-button>
       <div v-if="showBrand" class="brand">
         <TenonLogo :size="26" />
@@ -168,7 +168,7 @@ async function logout() {
       <n-tooltip>
         <template #trigger>
           <n-button quaternary circle class="mobile-hide" @click="searchOpen = true">
-            <Icon icon="ph:magnifying-glass" :width="18" />
+            <Icon icon="lucide:search" :width="18" />
           </n-button>
         </template>
         {{ t('app.search') }} (Ctrl+K)
@@ -177,7 +177,7 @@ async function logout() {
       <n-tooltip>
         <template #trigger>
           <n-button quaternary circle class="mobile-hide" @click="toggleFullscreen()">
-            <Icon :icon="isFullscreen ? 'ph:arrows-in' : 'ph:arrows-out'" :width="18" />
+            <Icon :icon="isFullscreen ? 'lucide:minimize' : 'lucide:maximize'" :width="18" />
           </n-button>
         </template>
         {{ isFullscreen ? t('app.exitFullscreen') : t('app.fullscreen') }}
@@ -186,7 +186,7 @@ async function logout() {
       <n-tooltip>
         <template #trigger>
           <n-button quaternary circle @click="app.toggleDark()">
-            <Icon :icon="app.isDark ? 'ph:moon-stars' : 'ph:sun'" :width="18" />
+            <Icon :icon="app.isDark ? 'lucide:moon-star' : 'lucide:sun'" :width="18" />
           </n-button>
         </template>
         {{ app.isDark ? t('app.dark') : t('app.light') }}
@@ -194,14 +194,14 @@ async function logout() {
 
       <n-dropdown :options="localeOptions" @select="onLocale">
         <n-button quaternary circle class="mobile-hide" :aria-label="t('app.language')">
-          <Icon icon="ph:translate" :width="18" />
+          <Icon icon="lucide:languages" :width="18" />
         </n-button>
       </n-dropdown>
 
       <n-tooltip>
         <template #trigger>
           <n-button quaternary circle class="mobile-hide" @click="settingsOpen = true">
-            <Icon icon="ph:gear-six" :width="18" />
+            <Icon icon="lucide:settings" :width="18" />
           </n-button>
         </template>
         {{ t('app.settings') }}
@@ -211,7 +211,7 @@ async function logout() {
       <n-tooltip v-if="auth.modules.length > 1">
         <template #trigger>
           <n-button quaternary circle :aria-label="t('app.switchModule')" @click="router.push('/module')">
-            <Icon icon="ph:squares-four" :width="18" />
+            <Icon icon="lucide:layout-grid" :width="18" />
           </n-button>
         </template>
         {{ t('app.switchModule') }}
@@ -223,7 +223,7 @@ async function logout() {
         <n-button quaternary :aria-label="t('app.profile')">
           <!-- 有头像用头像(profile 页可传),没有回落原图标;头像来源见 stores/user.ts 的 avatar 注释 -->
           <n-avatar v-if="user.userInfo?.avatar" round :size="22" :src="user.userInfo.avatar" />
-          <Icon v-else icon="ph:user-circle" :width="20" />
+          <Icon v-else icon="lucide:circle-user" :width="20" />
           <span class="uname mobile-hide">{{ user.userInfo?.name ?? user.userInfo?.account ?? '' }}</span>
         </n-button>
       </n-dropdown>

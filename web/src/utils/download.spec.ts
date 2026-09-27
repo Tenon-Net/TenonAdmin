@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { triggerBlobDownload } from './download'
+import { fileNameFromContentDisposition, triggerBlobDownload } from './download'
 
 // 导入向导的「下载模板」「下载错误报告」与列表页的「导出」都走这一步(excel-ledger G6)。
 // 浏览器实走验过一次,但那一趟走完就没了;这条每次 CI 都跑。
@@ -36,5 +36,17 @@ describe('triggerBlobDownload', () => {
     expect(anchor!.click).toHaveBeenCalled() // 不点 → 什么都不会下载,红
     expect(revokeSpy).toHaveBeenCalledWith('blob:mock-url') // 漏 revoke → 内存泄漏,红
     expect(document.body.contains(anchor!)).toBe(false) // 用完从 DOM 移除
+  })
+})
+
+describe('fileNameFromContentDisposition', () => {
+  it('prefers RFC 5987 filename* and falls back when the header is missing or broken', () => {
+    expect(fileNameFromContentDisposition(null, 'file-1')).toBe('file-1')
+    expect(fileNameFromContentDisposition(
+      "attachment; filename=\"fallback.txt\"; filename*=UTF-8''%E8%AF%B7%E5%81%87.pdf",
+      'file-1',
+    )).toBe('请假.pdf')
+    expect(fileNameFromContentDisposition('attachment; filename="leave.docx"', 'file-1')).toBe('leave.docx')
+    expect(fileNameFromContentDisposition('attachment; filename*=UTF-8\'\'%E0%A4', 'file-1')).toBe('file-1')
   })
 })

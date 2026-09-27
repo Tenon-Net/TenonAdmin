@@ -29,6 +29,9 @@ public interface ISeedData;
 /// <para>实现类支持构造注入(如 <c>IPasswordHasher</c>、<c>TenonAdminOptions</c>),注册为 <c>ISeedData</c> 的 DI 多实现。
 /// <b>内核不扫描程序集找种子</b>——框架种子与用户种子都得显式注册(<c>options.ApplicationAssemblies</c> 只管实体建表与控制器挂载,
 /// 不管种子)。忘了注册的后果是种子<b>静默不执行</b>,没有任何报错。</para>
+/// <para><b>种子实体不能声明 C# <c>required</c> 成员</b>:<c>new()</c> 约束由 SqlSugar 的 CRUD 泛型入口传导
+/// (全部要求 <c>class, new()</c>),含 required 成员的类型不满足(CS9040)。必填字符串用非空默认值表达,
+/// 详见 <c>IRepository&lt;TEntity&gt;</c> 的类型注释。</para>
 /// </summary>
 public interface ISeedData<out TEntity> : ISeedData where TEntity : AuditEntity, new()
 {

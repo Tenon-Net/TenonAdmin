@@ -36,10 +36,10 @@ function num(v: number | undefined) {
 }
 
 const stats = computed(() => [
-  { key: 'roles', icon: 'ph:shield-duotone', value: num(summary.value?.roles), color: 'var(--color-primary)' },
-  { key: 'users', icon: 'ph:users-duotone', value: num(summary.value?.users), color: 'var(--color-success)' },
-  { key: 'perms', icon: 'ph:key-duotone', value: num(summary.value?.perms), color: 'var(--color-warning)' },
-  { key: 'online', icon: 'ph:broadcast-duotone', value: num(summary.value?.onlineSessions), color: 'var(--color-danger)' },
+  { key: 'roles', icon: 'lucide:shield', value: num(summary.value?.roles), color: 'var(--color-primary)' },
+  { key: 'users', icon: 'lucide:users', value: num(summary.value?.users), color: 'var(--color-success)' },
+  { key: 'perms', icon: 'lucide:key', value: num(summary.value?.perms), color: 'var(--color-warning)' },
+  { key: 'online', icon: 'lucide:radio-tower', value: num(summary.value?.onlineSessions), color: 'var(--color-danger)' },
 ])
 
 const trendDays = computed(() => summary.value?.trendDays ?? [])
@@ -60,7 +60,7 @@ const distribution = computed(() => [
     <!-- 欢迎横幅(英雄区:btnGrad 头像)-->
     <div class="banner">
       <div class="avatar" :style="avatarStyle">
-        <Icon icon="ph:user" :width="26" color="#fff" />
+        <Icon icon="lucide:user" :width="26" color="#fff" />
       </div>
       <div>
         <div class="hi">{{ t('workbench.welcome', { name: user.userInfo?.name ?? '' }) }}</div>

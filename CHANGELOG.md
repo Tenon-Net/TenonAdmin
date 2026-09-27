@@ -15,6 +15,19 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.7.0-preview.1 - 2026-09-27
+
+### Added
+
+- Added a workflow engine and Vue/React interfaces for design, organization-leader and branched approvals, delegation, timeouts, CC, monitoring, and history.
+- Added idempotent workflow commands and replay, operation receipts, extensible node handlers, leased execution and retry history, an outbox, and Webhook nodes.
+- Added shadow-only AI decision nodes and an OpenAI-compatible provider; decisions are evaluated and audited but never approve automatically. Added expense-decision evaluation and sample-collection tools.
+
+### Fixed
+
+- Hardened workflow approval concurrency, participant isolation, stale Webhook results, and MySQL outbox replay; an unset outbox transport now fails explicitly.
+- Fixed job-capacity reservation, unique WorkerId allocation and dead-process lease recovery, session revocation and cache atomicity, Markdown rendering, and asynchronous frontend interactions.
+
 ## 0.6.0 - 2026-08-12
 
 A 36-finding QA sweep of the kernel, closed in five batches. Most of it is authorization boundaries: the data-scope guarantee that only ever covered business `DataEntity` tables now also covers user, org and file management, and the role system grew an explicit delegation boundary so a non-superadmin holding the role menu can no longer mint themselves a privileged role.

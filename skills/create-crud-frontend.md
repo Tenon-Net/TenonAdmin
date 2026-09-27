@@ -4,7 +4,7 @@
 
 > **本文是 `web/`（Vue 3 + Naive UI）版**；`web-react/`（React 19 + antd 6）用 `create-crud-frontend-react.md`。两套模板零共享、各自维护是产品决定（`docs/react-template-ledger.md`），别把一边的写法搬到另一边。
 
-产出共 3 处文件改动。
+产出为 Types、API、页面与中英 i18n；系统模块修改共享文件，业务模块按下表新建独立文件。
 
 ## 第一步：确定模式
 
@@ -183,12 +183,14 @@ import FormContainer from '@/components/FormContainer/index.vue'
 import StatusSwitch from '@/components/StatusSwitch/index.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { positionApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import type { PositionInput, SysPosition } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
+const authStore = useAuthStore()
 const tableRef = ref<ProTableInst<SysPosition>>()
 
 // 行数据 → 入参(StatusSwitch 行内改状态 + openEdit 回填共用)
@@ -207,6 +209,7 @@ const columns: ProTableColumn<SysPosition>[] = [
     render: (r) =>
       h(StatusSwitch, {
         value: r.enabled,
+        disabled: !authStore.hasPerm('PUT:/api/v1/sys/position/{id}'),
         request: (next: boolean) =>
           positionApi.update(r.id, { ...toInput(r), enabled: next }),
         'onUpdate:value': (v: boolean) => { r.enabled = v },
@@ -220,11 +223,13 @@ const columns: ProTableColumn<SysPosition>[] = [
     hideInSetting: true,
     render: (r) =>
       h(NSpace, { size: 4, wrapItem: false }, () => [
-        h(NButton, {
-          size: 'small', quaternary: true, type: 'primary',
-          onClick: () => openEdit(r),
-        }, () => t('common.edit')),
-        h(NPopconfirm, {
+        authStore.hasPerm('PUT:/api/v1/sys/position/{id}')
+          ? h(NButton, {
+              size: 'small', quaternary: true, type: 'primary',
+              onClick: () => openEdit(r),
+            }, () => t('common.edit'))
+          : null,
+        authStore.hasPerm('DELETE:/api/v1/sys/position/{id}') ? h(NPopconfirm, {
           onPositiveClick: () =>
             run(() => positionApi.remove(r.id), t('position.deleted'))
               .then((ok) => { if (ok) tableRef.value?.refresh() }),
@@ -233,7 +238,7 @@ const columns: ProTableColumn<SysPosition>[] = [
             size: 'small', quaternary: true, type: 'error',
           }, () => t('common.delete')),
           default: () => t('position.deleteConfirm', { name: r.name }),
-        }),
+        }) : null,
       ]),
   },
 ]
@@ -330,11 +335,12 @@ async function save() {
 
 #### StatusSwitch（无独立启停端点时）
 
-走全量 update：
+走全量 update，并用权限 store 置灰：
 
 ```typescript
 render: (r) => h(StatusSwitch, {
   value: r.enabled,
+  disabled: !authStore.hasPerm('PUT:/api/v1/sys/xxx/{id}'),
   request: (next: boolean) => api.update(r.id, { ...toInput(r), enabled: next }),
   'onUpdate:value': (v: boolean) => { r.enabled = v },
 })

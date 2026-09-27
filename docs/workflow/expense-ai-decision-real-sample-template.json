@@ -1,0 +1,136 @@
+{
+  "schemaVersion": "expense-real-collection-v1",
+  "recordKind": "template",
+  "batch": {
+    "datasetId": null,
+    "datasetVersion": null,
+    "supersedes": null,
+    "changeReason": null,
+    "policy": {
+      "reference": null,
+      "version": null,
+      "effectiveFrom": null,
+      "effectiveUntil": null,
+      "rulesTableRef": null,
+      "confirmedBy": null,
+      "confirmedAtUtc": null
+    },
+    "dataUse": {
+      "ownerId": null,
+      "permittedPurpose": null,
+      "storageRef": null,
+      "retentionUntil": null,
+      "permittedProviderProcessing": null
+    },
+    "sampling": {
+      "population": null,
+      "windowStart": null,
+      "windowEnd": null,
+      "method": null,
+      "strata": [],
+      "targetCount": null,
+      "exclusionLogRef": null
+    },
+    "splitPlan": {
+      "groupingMethod": null,
+      "seed": null,
+      "devProportion": null,
+      "assignedBy": null,
+      "assignedAtUtc": null,
+      "holdoutStatus": "not_frozen",
+      "exposureLogRef": null
+    },
+    "freeze": {
+      "frozenAtUtc": null,
+      "splitManifestSha256": null,
+      "inputsSha256": null,
+      "labelsSha256": null,
+      "gitCommit": null,
+      "extractionVersion": null,
+      "deIdentificationVersion": null,
+      "modelId": null,
+      "systemInstructionSha256": null,
+      "nodeInstructionsSha256": null,
+      "policyVersion": null,
+      "policyImplementationSha256": null
+    }
+  },
+  "samples": [
+    {
+      "caseId": null,
+      "dataOrigin": null,
+      "leakageGroupId": null,
+      "split": "unassigned",
+      "samplingStratum": null,
+      "tags": [],
+      "snapshot": {
+        "availableAtUtc": null,
+        "capturedAtUtc": null,
+        "sourceRef": null,
+        "modelInput": {},
+        "fieldProvenance": [
+          {
+            "field": null,
+            "availability": null,
+            "sourceKind": null,
+            "sourceSystem": null,
+            "sourceField": null,
+            "evidenceRefs": [],
+            "availableAtUtc": null,
+            "verificationMethod": null,
+            "verifiedBy": null
+          }
+        ]
+      },
+      "annotations": {
+        "reviewerA": {
+          "reviewerId": null,
+          "label": null,
+          "ruleIds": [],
+          "rationale": null,
+          "evidenceRefs": [],
+          "labeledAtUtc": null,
+          "modelOutputVisible": null,
+          "laterOutcomeVisible": null
+        },
+        "reviewerB": {
+          "reviewerId": null,
+          "label": null,
+          "ruleIds": [],
+          "rationale": null,
+          "evidenceRefs": [],
+          "labeledAtUtc": null,
+          "modelOutputVisible": null,
+          "laterOutcomeVisible": null
+        },
+        "adjudication": {
+          "status": "pending",
+          "label": null,
+          "ruleIds": [],
+          "rationale": null,
+          "evidenceRefs": [],
+          "adjudicatorId": null,
+          "resolvedAtUtc": null
+        }
+      },
+      "humanOutcome": {
+        "decision": "unknown",
+        "decidedAtUtc": null,
+        "decisionRef": null,
+        "reason": null,
+        "additionalEvidenceUsed": null,
+        "policyExceptionApplied": null,
+        "modelSuggestionSeen": null
+      },
+      "quality": {
+        "redaction": {
+          "status": "pending",
+          "reviewerId": null,
+          "reviewedAtUtc": null
+        },
+        "scoringStatus": "pending",
+        "exclusionReason": null
+      }
+    }
+  ]
+}

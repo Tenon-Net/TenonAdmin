@@ -317,7 +317,7 @@ export interface paths {
         put?: never;
         /**
          * 刷新令牌换发新令牌对(轮换 + 复用检测,§15)。匿名:访问令牌可能已过期,凭刷新令牌换发。
-         *     Level3:body 可空,从 `tenon_rt` Cookie 读取;成功后轮换 Cookie/CSRF。
+         *     Cookie 会话模式下 body 可空,从 `tenon_rt` Cookie 读取;成功后轮换 Cookie/CSRF。
          */
         post: {
             parameters: {
@@ -362,7 +362,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 登出:吊销当前会话(sid 取自令牌)。仅需认证,不挂具体权限码。Level3 同时清 Cookie。 */
+        /** 登出:吊销当前会话(sid 取自令牌)。仅需认证,不挂具体权限码。Cookie 会话模式下同时清 Cookie。 */
         post: {
             parameters: {
                 query?: never;
@@ -1569,7 +1569,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 一次性票据换令牌(登录回调后前端调用;票据无效/过期/已用抛 40014)。Level3 同步写 Cookie/CSRF。 */
+        /** 一次性票据换令牌(登录回调后前端调用;票据无效/过期/已用抛 40014)。Cookie 会话模式下同步写 Cookie/CSRF。 */
         post: {
             parameters: {
                 query?: never;
@@ -3591,7 +3591,7 @@ export interface paths {
                 };
             };
         };
-        /** 改自己的资料(姓名) */
+        /** 修改自己的资料。 */
         put: {
             parameters: {
                 query?: never;
@@ -3680,7 +3680,7 @@ export interface paths {
         };
         /**
          * 取自己当前生效的权限码集合(= 规范化路由,如 `POST:/api/v1/sys/user`)。
-         *     前端 `v-auth` 据此做按钮级显隐;超管无角色故返回空集(前端 fail-open 显示全部,服务端 sadm 绕过兜底)。
+         *     空集不代表超管;前端须结合独立的 IsSuperAdmin 标志判断按钮显隐,服务端仍独立鉴权。
          */
         get: {
             parameters: {
@@ -3797,10 +3797,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * 看自己的活跃会话列表(个人视角"我的登录设备")。会话数受并发上限约束(个位数),单页 100 绰绰有余不分页;
-         *     IsCurrent 按令牌 sid 比对,标记本次请求所用会话。
-         */
+        /** 查看自己的活跃会话;IsCurrent 按令牌 sid 标记本次请求所用会话。 */
         get: {
             parameters: {
                 query?: never;
@@ -6219,6 +6216,1541 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow/cc/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    DefinitionId?: number | string;
+                    OnlyUnread?: boolean;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfWfCcItemOutput"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfWfCcItemOutput"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfWfCcItemOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/cc/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfCcMarkReadInput"];
+                    "text/json": components["schemas"]["WfCcMarkReadInput"];
+                    "application/*+json": components["schemas"]["WfCcMarkReadInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/definition/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    Name?: string;
+                    GroupName?: string;
+                    Status?: components["schemas"]["WfDefinitionStatus"];
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfWfDefinition"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfWfDefinition"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfWfDefinition"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/definition/versions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfWfDefinitionVersionOutput"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfWfDefinitionVersionOutput"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfWfDefinitionVersionOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/definition/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfDefinitionDetailOutput"];
+                        "application/json": components["schemas"]["ResultOfWfDefinitionDetailOutput"];
+                        "text/json": components["schemas"]["ResultOfWfDefinitionDetailOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/definition/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfDefinitionInput"];
+                    "text/json": components["schemas"]["WfDefinitionInput"];
+                    "application/*+json": components["schemas"]["WfDefinitionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOflong"];
+                        "application/json": components["schemas"]["ResultOflong"];
+                        "text/json": components["schemas"]["ResultOflong"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/definition/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfDefinitionInput"];
+                    "text/json": components["schemas"]["WfDefinitionInput"];
+                    "application/*+json": components["schemas"]["WfDefinitionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/definition/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfDefinitionIdInput"];
+                    "text/json": components["schemas"]["WfDefinitionIdInput"];
+                    "application/*+json": components["schemas"]["WfDefinitionIdInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfint"];
+                        "application/json": components["schemas"]["ResultOfint"];
+                        "text/json": components["schemas"]["ResultOfint"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/definition/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfDefinitionIdInput"];
+                    "text/json": components["schemas"]["WfDefinitionIdInput"];
+                    "application/*+json": components["schemas"]["WfDefinitionIdInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/delegation/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    OriginalUserId?: number | string;
+                    Enabled?: boolean;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfWfDelegationRuleOutput"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfWfDelegationRuleOutput"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfWfDelegationRuleOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/delegation/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfDelegationRuleInput"];
+                    "text/json": components["schemas"]["WfDelegationRuleInput"];
+                    "application/*+json": components["schemas"]["WfDelegationRuleInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                        "application/json": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                        "text/json": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/delegation/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfDelegationRuleInput"];
+                    "text/json": components["schemas"]["WfDelegationRuleInput"];
+                    "application/*+json": components["schemas"]["WfDelegationRuleInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                        "application/json": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                        "text/json": components["schemas"]["ResultOfWfDelegationRuleOutput"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: {
+                    requestId?: string;
+                };
+                header?: never;
+                path: {
+                    id: number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/startable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfWfStartableDefinitionOutput"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfWfStartableDefinitionOutput"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfWfStartableDefinitionOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/startable/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfStartableDefinitionDetailOutput"];
+                        "application/json": components["schemas"]["ResultOfWfStartableDefinitionDetailOutput"];
+                        "text/json": components["schemas"]["ResultOfWfStartableDefinitionDetailOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfStartInput"];
+                    "text/json": components["schemas"]["WfStartInput"];
+                    "application/*+json": components["schemas"]["WfStartInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    Status?: components["schemas"]["WfInstanceStatus"];
+                    DefinitionId?: number | string;
+                    BusinessKey?: string;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfWfInstanceListItemOutput"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfWfInstanceListItemOutput"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfWfInstanceListItemOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    StarterUserId?: number | string;
+                    ActorUserId?: number | string;
+                    CcUserId?: number | string;
+                    Status?: components["schemas"]["WfInstanceStatus"];
+                    DefinitionId?: number | string;
+                    BusinessKey?: string;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfWfInstanceListItemOutput"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfWfInstanceListItemOutput"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfWfInstanceListItemOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/history/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfWfHistoryItemOutput"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfWfHistoryItemOutput"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfWfHistoryItemOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/ai-decisions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfIReadOnlyListOfWfAiDecisionAuditOutput"];
+                        "application/json": components["schemas"]["ResultOfIReadOnlyListOfWfAiDecisionAuditOutput"];
+                        "text/json": components["schemas"]["ResultOfIReadOnlyListOfWfAiDecisionAuditOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfInstanceDetailOutput"];
+                        "application/json": components["schemas"]["ResultOfWfInstanceDetailOutput"];
+                        "text/json": components["schemas"]["ResultOfWfInstanceDetailOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfInstanceCancelInput"];
+                    "text/json": components["schemas"]["WfInstanceCancelInput"];
+                    "application/*+json": components["schemas"]["WfInstanceCancelInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfInstanceResubmitInput"];
+                    "text/json": components["schemas"]["WfInstanceResubmitInput"];
+                    "application/*+json": components["schemas"]["WfInstanceResubmitInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/outbox/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    Status?: components["schemas"]["WfOutboxStatus"];
+                    MessageType?: string;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfWfOutboxOutput"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfWfOutboxOutput"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfWfOutboxOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/outbox/{id}/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: {
+                    requestId?: string;
+                };
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfOutboxOutput"];
+                        "application/json": components["schemas"]["ResultOfWfOutboxOutput"];
+                        "text/json": components["schemas"]["ResultOfWfOutboxOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/todo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    DefinitionId?: number | string;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfWfTodoItemOutput"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfWfTodoItemOutput"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfWfTodoItemOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    DefinitionId?: number | string;
+                    Current?: number | string;
+                    Size?: number | string;
+                    SortField?: string;
+                    SortOrder?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfPagedListOfWfDoneItemOutput"];
+                        "application/json": components["schemas"]["ResultOfPagedListOfWfDoneItemOutput"];
+                        "text/json": components["schemas"]["ResultOfPagedListOfWfDoneItemOutput"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/delegate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/urge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfboolean"];
+                        "application/json": components["schemas"]["ResultOfboolean"];
+                        "text/json": components["schemas"]["ResultOfboolean"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/add-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/remove-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/task/take-back": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfTaskActionInput"];
+                    "text/json": components["schemas"]["WfTaskActionInput"];
+                    "application/*+json": components["schemas"]["WfTaskActionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6263,6 +7795,10 @@ export interface components {
             /** @description 实际生效的初始口令明文(管理员显式指定的、或系统生成的) */
             initialPassword: string;
         };
+        AiDecisionFallbackReason: number;
+        AiDecisionPolicyClassification: number;
+        AiDecisionProviderResultType: number;
+        AiDecisionRecommendation: number;
         /**
          * @description 批量删除入参:目标 Id 集合。各模块的 `POST .../batch-delete` 端点统一收此形状,
          *     服务层 `DeleteBatchAsync` 复用单删的守卫/软删/失效逻辑逐个处理。空集合视为无操作。
@@ -6805,6 +8341,7 @@ export interface components {
             /** Format: date-time */
             nextRunTime: string;
         };
+        JsonElement: unknown;
         /** @description 登录入参。验证码字段在 `Security:Captcha:Enabled` 关闭时可不传(默认关)。 */
         LoginInput: {
             /** @description 登录账号 */
@@ -7037,6 +8574,11 @@ export interface components {
             sort?: number | string;
             /** @description 是否启用 */
             enabled?: boolean;
+            /**
+             * Format: int64
+             * @description 机构负责人用户 Id(可空;软引用 sys_user)
+             */
+            leaderUserId?: null | number | string;
         };
         /**
          * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
@@ -7485,6 +9027,202 @@ export interface components {
             pages?: number | string;
             /** @description 当前页数据 */
             items?: components["schemas"]["UserItem"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
+        PagedListOfWfCcItemOutput: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["WfCcItemOutput"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
+        PagedListOfWfDefinition: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["WfDefinition"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
+        PagedListOfWfDelegationRuleOutput: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["WfDelegationRuleOutput"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
+        PagedListOfWfDoneItemOutput: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["WfDoneItemOutput"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
+        PagedListOfWfInstanceListItemOutput: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["WfInstanceListItemOutput"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
+        PagedListOfWfOutboxOutput: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["WfOutboxOutput"][];
+        };
+        /**
+         * @description 分页结果模型(设计 §5.7)——所有分页查询的统一返回。ORM 中立(放 Core),
+         *     SqlSugar 侧的 `ToPagedListAsync` 扩展负责把查询物化成它。
+         */
+        PagedListOfWfTodoItemOutput: {
+            /**
+             * Format: int32
+             * @description 当前页码(从 1 起)
+             */
+            current?: number | string;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number | string;
+            /**
+             * Format: int32
+             * @description 总记录数
+             */
+            total?: number | string;
+            /**
+             * Format: int32
+             * @description 总页数(向上取整;Size 为 0 时为 0)
+             */
+            pages?: number | string;
+            /** @description 当前页数据 */
+            items?: components["schemas"]["WfTodoItemOutput"][];
         };
         /** @description 密码复杂度策略(运行时可配置,见 ISecurityPolicyProvider)。 */
         PasswordPolicy: {
@@ -8083,6 +9821,94 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfIReadOnlyListOfWfAiDecisionAuditOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | components["schemas"]["WfAiDecisionAuditOutput"][];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyListOfWfDefinitionVersionOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | components["schemas"]["WfDefinitionVersionOutput"][];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyListOfWfHistoryItemOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | components["schemas"]["WfHistoryItemOutput"][];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfIReadOnlyListOfWfStartableDefinitionOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            /** @description 业务数据载荷 */
+            data?: null | components["schemas"]["WfStartableDefinitionOutput"][];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfJobDashboardOutput: {
             /**
              * Format: int32
@@ -8550,6 +10376,153 @@ export interface components {
          *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
          *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
          */
+        ResultOfPagedListOfWfCcItemOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfWfCcItemOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfPagedListOfWfDefinition: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfWfDefinition"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfPagedListOfWfDelegationRuleOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfWfDelegationRuleOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfPagedListOfWfDoneItemOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfWfDoneItemOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfPagedListOfWfInstanceListItemOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfWfInstanceListItemOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfPagedListOfWfOutboxOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfWfOutboxOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfPagedListOfWfTodoItemOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["PagedListOfWfTodoItemOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
         ResultOfPasswordPolicy: {
             /**
              * Format: int32
@@ -8858,6 +10831,132 @@ export interface components {
             /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
             message?: null | string;
             data?: null | components["schemas"]["UserProfile"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfWfDefinitionDetailOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["WfDefinitionDetailOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfWfDelegationRuleOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["WfDelegationRuleOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfWfEngineResult: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["WfEngineResult"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfWfInstanceDetailOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["WfInstanceDetailOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfWfOutboxOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["WfOutboxOutput"];
+        };
+        /**
+         * @description 统一返回模型(设计 §6/§13.2)——所有接口的响应外壳。
+         *     字段分工:Code 给机器判断;MsgKey+Args 给前端 i18n 渲染;
+         *     Message 是后端兜底文案(非浏览器调用方降级用,浏览器端应忽略它);Data 为业务载荷。<example>
+         *     成功:`{ "code": 0, "msgKey": "common.success", "data": {...} }`<br />
+         *     失败:`{ "code": 40001, "msgKey": "error.auth.passwordWrong", "args": {}, "message": "...", "data": null }`</example>
+         */
+        ResultOfWfStartableDefinitionDetailOutput: {
+            /**
+             * Format: int32
+             * @description 业务码,0 为成功,其余见 ErrorCode 分段
+             */
+            code?: number | string;
+            /** @description 语义键(前端 i18n 语言包的键),如 `error.auth.passwordWrong` */
+            msgKey?: null | string;
+            /** @description 文案插值参数,与语言包模板占位符对应;无参数时为 null(序列化省略) */
+            args?: null | Record<string, never>;
+            /** @description 兜底文案(仅降级用途,浏览器端一律走 MsgKey 翻译) */
+            message?: null | string;
+            data?: null | components["schemas"]["WfStartableDefinitionDetailOutput"];
         };
         /** @description 角色新增/编辑入参(增改共用同一份字段)。 */
         RoleInput: {
@@ -9546,6 +11645,12 @@ export interface components {
             /** Format: int32 */
             sort?: number | string;
             enabled?: boolean;
+            /**
+             * Format: int64
+             * @description 机构负责人用户 Id;可空(未指定)。软引用 `sys_user`,无导航属性。
+             *     工作流「机构负责人」审批人 Provider 读此字段(`docs/workflow/workflow-design-plan-2026-08-17.md`)。
+             */
+            leaderUserId?: null | number | string;
             isDelete?: boolean;
             /** Format: date-time */
             createTime?: string;
@@ -9813,6 +11918,613 @@ export interface components {
             avatar?: null | string;
             isSuperAdmin: boolean;
         };
+        WfAiDecisionAuditOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            nodeId?: string;
+            /** Format: int32 */
+            attemptNo?: number | string;
+            providerResultType?: components["schemas"]["AiDecisionProviderResultType"];
+            provider?: null | string;
+            model?: null | string;
+            inputHash?: null | string;
+            promptVersion?: null | string;
+            proposalSchemaVersion?: null | string;
+            schemaValid?: null | boolean;
+            policyVersion?: null | string;
+            policyClassification?: null | components["schemas"]["AiDecisionPolicyClassification"];
+            recommendation?: null | components["schemas"]["AiDecisionRecommendation"];
+            /** Format: double */
+            confidence?: null | number | string;
+            riskFlags?: string[];
+            evidenceRefs?: components["schemas"]["WfAiDecisionEvidenceRefOutput"][];
+            /** Format: int64 */
+            latencyMilliseconds?: null | number | string;
+            /** Format: int64 */
+            promptTokens?: null | number | string;
+            /** Format: int64 */
+            completionTokens?: null | number | string;
+            /** Format: int64 */
+            totalTokens?: null | number | string;
+            fallbackReason?: components["schemas"]["AiDecisionFallbackReason"];
+            shadowMode?: boolean;
+            /** Format: date-time */
+            createTime?: string;
+        };
+        WfAiDecisionEvidenceRefOutput: {
+            id?: string;
+            source?: string;
+            contentHash?: string;
+        };
+        /** @enum {unknown} */
+        WfApprovalMode: "any" | "all" | "seq" | null;
+        WfAssignee: {
+            provider?: string;
+            params?: {
+                [key: string]: unknown;
+            };
+        };
+        WfBranchArm: {
+            id?: string;
+            name?: string;
+            expr?: null | components["schemas"]["WfConditionExpr"];
+            isDefault?: boolean;
+            next?: null | components["schemas"]["WfNode"];
+        };
+        WfButtonLabels: {
+            approve?: null | string;
+            reject?: null | string;
+            return?: null | string;
+            transfer?: null | string;
+            delegate?: null | string;
+            urge?: null | string;
+        };
+        WfCcItemOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: int64 */
+            instanceId?: number | string;
+            nodeId?: string;
+            nodeName?: null | string;
+            /** Format: int64 */
+            definitionId?: number | string;
+            definitionName?: string;
+            businessKey?: null | string;
+            instanceStatus?: components["schemas"]["WfInstanceStatus"];
+            /** Format: int64 */
+            starterUserId?: number | string;
+            isRead?: boolean;
+            /** Format: date-time */
+            readTime?: null | string;
+            /** Format: date-time */
+            createTime?: string;
+        };
+        WfCcMarkReadInput: {
+            /** Format: int64 */
+            id?: number | string;
+        };
+        WfConditionExpr: {
+            field?: null | string;
+            op?: null | components["schemas"]["WfConditionOp"];
+            value?: null | components["schemas"]["JsonElement"];
+            logic?: null | components["schemas"]["WfConditionLogic"];
+            children?: null | components["schemas"]["WfConditionExpr"][];
+        };
+        /** @enum {unknown} */
+        WfConditionLogic: "and" | "or" | null;
+        /** @enum {unknown} */
+        WfConditionOp: "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "in" | "notIn" | "contains" | "empty" | "notEmpty" | null;
+        WfCurrentTaskOutput: {
+            /** Format: int64 */
+            taskId?: number | string;
+            /** Format: int64 */
+            tokenId?: number | string;
+            /** Format: int64 */
+            nodeVisitId?: null | number | string;
+            nodeId?: string;
+            nodeName?: null | string;
+        };
+        WfDefinition: {
+            name?: string;
+            icon?: null | string;
+            groupName?: null | string;
+            status?: components["schemas"]["WfDefinitionStatus"];
+            /** Format: int32 */
+            currentVersion?: number | string;
+            /**
+             * Format: int64
+             * @description 归属机构 Id(数据范围锚点)= 创建者当时所属机构。插入时由审计 AOP 从 `ICurrentUser.OrgId`(令牌 org claim)自动填充,
+             *     T3 数据范围过滤器按它 + 当前用户的范围规则决定行可见性。为 null 表示不受机构范围约束(系统内建数据、或创建者无归属机构)。
+             */
+            createOrgId?: null | number | string;
+            isDelete?: boolean;
+            /** Format: date-time */
+            createTime?: string;
+            /** Format: int64 */
+            createUserId?: null | number | string;
+            /** Format: date-time */
+            updateTime?: null | string;
+            /** Format: int64 */
+            updateUserId?: null | number | string;
+            /** Format: int64 */
+            id?: number | string;
+        };
+        WfDefinitionDetailOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            name?: string;
+            icon?: null | string;
+            groupName?: null | string;
+            status?: components["schemas"]["WfDefinitionStatus"];
+            /** Format: int32 */
+            currentVersion?: number | string;
+            /** Format: date-time */
+            createTime?: string;
+            /** Format: int64 */
+            createUserId?: null | number | string;
+            /** Format: date-time */
+            updateTime?: null | string;
+            /** Format: int64 */
+            updateUserId?: null | number | string;
+            model?: components["schemas"]["WfModel"];
+        };
+        WfDefinitionIdInput: {
+            /** Format: int64 */
+            id?: number | string;
+        };
+        WfDefinitionInput: {
+            /** Format: int64 */
+            id?: number | string;
+            name?: string;
+            icon?: null | string;
+            groupName?: null | string;
+            model?: null | components["schemas"]["WfModel"];
+        };
+        WfDefinitionStatus: number;
+        WfDefinitionVersionOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: int64 */
+            definitionId?: number | string;
+            /** Format: int32 */
+            version?: number | string;
+            modelJson?: string;
+            formSchema?: null | string;
+            /** Format: date-time */
+            publishTime?: null | string;
+            /** Format: int64 */
+            publishUserId?: null | number | string;
+        };
+        WfDelegationRuleInput: {
+            /** Format: int64 */
+            originalUserId?: number | string;
+            /** Format: int64 */
+            delegateUserId?: number | string;
+            enabled?: boolean;
+            /** Format: date-time */
+            startsAt?: string;
+            /** Format: date-time */
+            endsAt?: string;
+            requestId?: null | string;
+        };
+        WfDelegationRuleOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: int64 */
+            scopeOrgId?: number | string;
+            /** Format: int64 */
+            originalUserId?: number | string;
+            /** Format: int64 */
+            delegateUserId?: number | string;
+            originalUserName?: null | string;
+            delegateUserName?: null | string;
+            enabled?: boolean;
+            /** Format: date-time */
+            startsAt?: string;
+            /** Format: date-time */
+            endsAt?: string;
+            /** Format: int32 */
+            version?: number | string;
+        };
+        WfDoneItemOutput: {
+            /** Format: int64 */
+            hisTaskId?: number | string;
+            /** Format: int64 */
+            instanceId?: number | string;
+            nodeId?: string;
+            nodeName?: null | string;
+            action?: components["schemas"]["WfTaskAction"];
+            comment?: null | string;
+            /** Format: int64 */
+            originalUserId?: null | number | string;
+            /** Format: int64 */
+            delegationRuleId?: null | number | string;
+            /** Format: int64 */
+            delegationScopeOrgId?: null | number | string;
+            /** Format: int64 */
+            transferToUserId?: null | number | string;
+            /** Format: int64 */
+            targetUserId?: null | number | string;
+            /** Format: int64 */
+            definitionId?: number | string;
+            definitionName?: string;
+            businessKey?: null | string;
+            instanceStatus?: components["schemas"]["WfInstanceStatus"];
+            /** Format: int64 */
+            starterUserId?: number | string;
+            /** Format: date-time */
+            createTime?: string;
+        };
+        WfEngineResult: {
+            /** Format: int64 */
+            instanceId: number | string;
+            instanceStatus: components["schemas"]["WfInstanceStatus"];
+            /** Format: int64 */
+            createdTaskId?: null | number | string;
+            newAssigneeUserIds?: (number | string)[];
+            newCcUserIds?: (number | string)[];
+        };
+        WfFormField: {
+            key?: string;
+            label?: string;
+            type?: components["schemas"]["WfFormFieldType"];
+            required?: boolean;
+            placeholder?: null | string;
+            props?: {
+                [key: string]: unknown;
+            };
+        };
+        WfFormFieldPerm: {
+            field?: string;
+            access?: components["schemas"]["WfFormPermAccess"];
+        };
+        /** @enum {unknown} */
+        WfFormFieldType: "text" | "textarea" | "number" | "money" | "date" | "datetime" | "select" | "multiSelect" | "user" | "attachment";
+        /** @enum {unknown} */
+        WfFormPermAccess: "hidden" | "readonly" | "editable";
+        WfFormSchema: {
+            /** Format: int32 */
+            version?: number | string;
+            fields?: components["schemas"]["WfFormField"][];
+        };
+        WfHisTaskOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            nodeId?: string;
+            nodeName?: null | string;
+            /** Format: int64 */
+            userId?: number | string;
+            /** Format: int64 */
+            originalUserId?: null | number | string;
+            /** Format: int64 */
+            delegationRuleId?: null | number | string;
+            /** Format: int64 */
+            delegationScopeOrgId?: null | number | string;
+            action?: components["schemas"]["WfTaskAction"];
+            comment?: null | string;
+            /** Format: int64 */
+            transferToUserId?: null | number | string;
+            /** Format: int64 */
+            targetUserId?: null | number | string;
+            /** Format: int64 */
+            durationMs?: number | string;
+            /** Format: date-time */
+            createTime?: string;
+        };
+        WfHistoryEventType: number;
+        WfHistoryItemOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: int32 */
+            sequence?: number | string;
+            eventType?: components["schemas"]["WfHistoryEventType"];
+            nodeId?: null | string;
+            /** Format: int64 */
+            tokenId?: null | number | string;
+            /** Format: int64 */
+            nodeVisitId?: null | number | string;
+            payloadJson?: null | string;
+            /** Format: date-time */
+            createTime?: string;
+        };
+        WfInitiatorScopeItem: {
+            type?: string;
+            /** Format: int64 */
+            id?: number | string;
+        };
+        WfInstanceCancelInput: {
+            /** Format: int64 */
+            instanceId?: number | string;
+            requestId?: null | string;
+        };
+        WfInstanceDetailOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: int64 */
+            definitionId?: number | string;
+            definitionName?: string;
+            /** Format: int64 */
+            definitionVersionId?: number | string;
+            /** Format: int32 */
+            version?: number | string;
+            businessKey?: null | string;
+            /** Format: int64 */
+            starterUserId?: number | string;
+            status?: components["schemas"]["WfInstanceStatus"];
+            variablesJson?: null | string;
+            formComponent?: null | string;
+            /** Format: date-time */
+            createTime?: string;
+            myPendingTask?: null | components["schemas"]["WfTodoItemOutput"];
+            myPendingTasks?: components["schemas"]["WfTodoItemOutput"][];
+            hisTasks?: components["schemas"]["WfHisTaskOutput"][];
+            model?: null | components["schemas"]["WfRuntimeModelOutput"];
+            visitedNodeIds?: string[];
+            currentNodeIds?: string[];
+            /** Format: int64 */
+            currentTaskId?: null | number | string;
+            currentTasks?: components["schemas"]["WfCurrentTaskOutput"][];
+            parallelForks?: components["schemas"]["WfParallelForkOutput"][];
+            /** Format: int64 */
+            myTakeBackTaskId?: null | number | string;
+        };
+        WfInstanceListItemOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: int64 */
+            definitionId?: number | string;
+            definitionName?: string;
+            /** Format: int32 */
+            version?: number | string;
+            businessKey?: null | string;
+            status?: components["schemas"]["WfInstanceStatus"];
+            variablesJson?: null | string;
+            /** Format: int64 */
+            starterUserId?: number | string;
+            /** Format: date-time */
+            createTime?: string;
+        };
+        WfInstanceResubmitInput: {
+            /** Format: int64 */
+            instanceId?: number | string;
+            variablesJson?: null | string;
+            selectedUserIdsByNode?: null | {
+                [key: string]: (number | string)[];
+            };
+            requestId?: null | string;
+        };
+        WfInstanceStatus: number;
+        WfModel: {
+            /** Format: int32 */
+            version?: number | string;
+            root?: components["schemas"]["WfNode"];
+            formSchema?: null | components["schemas"]["WfFormSchema"];
+            formComponent?: null | string;
+            nobody?: null | components["schemas"]["WfNobodyAction"];
+            /** Format: int64 */
+            nobodyTransferUserId?: null | number | string;
+        };
+        /** @enum {unknown} */
+        WfNobodyAction: "autoPass" | "transfer" | "block" | null;
+        WfNode: {
+            id?: string;
+            type?: components["schemas"]["WfNodeType"];
+            name?: string;
+            props?: null | components["schemas"]["WfNodeProps"];
+            conditions?: null | components["schemas"]["WfBranchArm"][];
+            parallelArms?: null | components["schemas"]["WfParallelArmDefinition"][];
+            next?: null | components["schemas"]["WfNode"];
+        };
+        WfNodeProps: {
+            initiatorScope?: null | components["schemas"]["WfInitiatorScopeItem"][];
+            assignee?: null | components["schemas"]["WfAssignee"];
+            mode?: null | components["schemas"]["WfApprovalMode"];
+            /** Format: int32 */
+            allPassRatio?: null | number | string;
+            onReject?: null | components["schemas"]["WfRejectAction"];
+            rejectToNodeId?: null | string;
+            returnPolicy?: null | components["schemas"]["WfReturnPolicy"];
+            returnToNodeId?: null | string;
+            timeout?: null | components["schemas"]["WfTimeout"];
+            buttonLabels?: null | components["schemas"]["WfButtonLabels"];
+            nobody?: null | components["schemas"]["WfNobodyAction"];
+            /** Format: int64 */
+            nobodyTransferUserId?: null | number | string;
+            formPerms?: null | components["schemas"]["WfFormFieldPerm"][];
+            webhookUrl?: null | string;
+            webhookMethod?: null | string;
+            webhookHeaders?: null | {
+                [key: string]: string;
+            };
+            /** Format: int32 */
+            webhookTimeoutSeconds?: null | number | string;
+            webhookOnFailure?: null | components["schemas"]["WfWebhookFailureAction"];
+            /** Format: int32 */
+            maxAttempts?: null | number | string;
+            aiInstructions?: null | string;
+            aiInputFields?: null | string[];
+        };
+        /** @enum {unknown} */
+        WfNodeType: "start" | "approval" | "cc" | "branch" | "parallel" | "webhook" | "aiDecision";
+        WfOutboxOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: int64 */
+            executionId?: number | string;
+            /** Format: int64 */
+            instanceId?: number | string;
+            messageType?: string;
+            messageKey?: string;
+            payloadJson?: null | string;
+            status?: components["schemas"]["WfOutboxStatus"];
+            /** Format: int32 */
+            attemptCount?: number | string;
+            /** Format: date-time */
+            availableAtUtc?: string;
+            lastError?: null | string;
+            /** Format: date-time */
+            completedAtUtc?: null | string;
+        };
+        WfOutboxStatus: number;
+        WfParallelArmDefinition: {
+            id?: string;
+            name?: string;
+            next?: null | components["schemas"]["WfNode"];
+        };
+        WfParallelArmOutput: {
+            /** Format: int64 */
+            forkId?: number | string;
+            armId?: string;
+            /** Format: int64 */
+            parentTokenId?: number | string;
+            /** Format: int64 */
+            childTokenId?: null | number | string;
+            status?: components["schemas"]["WfParallelArmStatus"];
+            /** Format: int64 */
+            parentNodeVisitId?: number | string;
+            /** Format: int64 */
+            childEntryNodeVisitId?: null | number | string;
+            currentNodeId?: null | string;
+            currentNodeName?: null | string;
+            childTokenStatus?: null | components["schemas"]["WfTokenStatus"];
+            reason?: null | string;
+        };
+        WfParallelArmStatus: number;
+        WfParallelForkOutput: {
+            /** Format: int64 */
+            forkId?: number | string;
+            /** Format: int64 */
+            parentTokenId?: number | string;
+            /** Format: int64 */
+            parentNodeVisitId?: number | string;
+            nodeId?: null | string;
+            nodeName?: null | string;
+            parentTokenStatus?: components["schemas"]["WfTokenStatus"];
+            /** Format: int32 */
+            pendingArmCount?: number | string;
+            status?: components["schemas"]["WfParallelForkStatus"];
+            arms?: components["schemas"]["WfParallelArmOutput"][];
+        };
+        WfParallelForkStatus: number;
+        /** @enum {unknown} */
+        WfRejectAction: "terminate" | "toNode" | null;
+        /** @enum {unknown} */
+        WfReturnPolicy: "prev" | "any" | "node" | null;
+        WfRuntimeAssigneeOutput: {
+            provider?: string;
+        };
+        WfRuntimeBranchArmOutput: {
+            id?: string;
+            name?: string;
+            isDefault?: boolean;
+            next?: null | components["schemas"]["WfRuntimeNodeOutput"];
+        };
+        WfRuntimeModelOutput: {
+            /** Format: int32 */
+            version?: number | string;
+            root?: components["schemas"]["WfRuntimeNodeOutput"];
+            formSchema?: null | components["schemas"]["WfFormSchema"];
+            formComponent?: null | string;
+        };
+        WfRuntimeNodeOutput: {
+            id?: string;
+            type?: components["schemas"]["WfNodeType"];
+            name?: string;
+            props?: null | components["schemas"]["WfRuntimeNodePropsOutput"];
+            conditions?: null | components["schemas"]["WfRuntimeBranchArmOutput"][];
+            parallelArms?: null | components["schemas"]["WfRuntimeParallelArmOutput"][];
+            next?: null | components["schemas"]["WfRuntimeNodeOutput"];
+        };
+        WfRuntimeNodePropsOutput: {
+            assignee?: null | components["schemas"]["WfRuntimeAssigneeOutput"];
+            returnPolicy?: null | components["schemas"]["WfReturnPolicy"];
+            buttonLabels?: null | components["schemas"]["WfButtonLabels"];
+            formPerms?: null | components["schemas"]["WfFormFieldPerm"][];
+        };
+        WfRuntimeParallelArmOutput: {
+            id?: string;
+            name?: string;
+            next?: null | components["schemas"]["WfRuntimeNodeOutput"];
+        };
+        WfSignMode: number;
+        WfStartableDefinitionDetailOutput: {
+            /** Format: int64 */
+            definitionVersionId?: number | string;
+            model?: components["schemas"]["WfRuntimeModelOutput"];
+            /** Format: int64 */
+            id?: number | string;
+            name?: string;
+            icon?: null | string;
+            groupName?: null | string;
+            /** Format: int32 */
+            version?: number | string;
+            formComponent?: null | string;
+        };
+        WfStartableDefinitionOutput: {
+            /** Format: int64 */
+            id?: number | string;
+            name?: string;
+            icon?: null | string;
+            groupName?: null | string;
+            /** Format: int32 */
+            version?: number | string;
+            formComponent?: null | string;
+        };
+        WfStartInput: {
+            /** Format: int64 */
+            definitionId?: number | string;
+            businessKey?: null | string;
+            variablesJson?: null | string;
+            selectedUserIdsByNode?: null | {
+                [key: string]: (number | string)[];
+            };
+            requestId?: null | string;
+        };
+        WfTaskAction: number;
+        WfTaskActionInput: {
+            /** Format: int64 */
+            taskId?: number | string;
+            comment?: null | string;
+            variablesJson?: null | string;
+            /** Format: int64 */
+            toUserId?: number | string;
+            targetNodeId?: null | string;
+            requestId?: null | string;
+        };
+        WfTimeout: {
+            /** Format: int32 */
+            hours?: number | string;
+            action?: components["schemas"]["WfTimeoutAction"];
+            /** Format: int64 */
+            transferUserId?: null | number | string;
+        };
+        /** @enum {unknown} */
+        WfTimeoutAction: "remind" | "autoPass" | "autoReject" | "transfer";
+        WfTodoItemOutput: {
+            /** Format: int64 */
+            taskId?: number | string;
+            /** Format: int64 */
+            actorId?: number | string;
+            /** Format: int64 */
+            instanceId?: number | string;
+            nodeId?: string;
+            nodeName?: null | string;
+            signMode?: components["schemas"]["WfSignMode"];
+            /** Format: date-time */
+            dueTime?: null | string;
+            /** Format: int64 */
+            definitionId?: number | string;
+            definitionName?: string;
+            businessKey?: null | string;
+            /** Format: int64 */
+            starterUserId?: number | string;
+            variablesJson?: null | string;
+            /** Format: date-time */
+            createTime?: string;
+        };
+        WfTokenStatus: number;
+        /** @enum {unknown} */
+        WfWebhookFailureAction: "fail" | "manual" | null;
     };
     responses: never;
     parameters: never;

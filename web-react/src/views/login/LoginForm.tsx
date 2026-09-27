@@ -176,6 +176,7 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
   }
 
   function skipPendingBind() {
+    if (pendingClaimBusy) return
     setPendingConfirmOpen(false)
     setPendingClaimToken('')
     message.success(t('login.success'))
@@ -328,7 +329,7 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
           showIcon
           className="lf-pending-alert"
           style={{ marginBottom: 16, borderRadius: 10, textAlign: 'left' }}
-          message={t('oauth.pendingLinkTitle', { name: pendingProviderLabel })}
+          title={t('oauth.pendingLinkTitle', { name: pendingProviderLabel })}
           description={t('oauth.pendingLinkHint', { name: pendingProviderLabel })}
         />
       ) : null}
@@ -339,8 +340,10 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
         okText={t('oauth.pendingLinkConfirmOk')}
         cancelText={t('oauth.pendingLinkConfirmSkip')}
         confirmLoading={pendingClaimBusy}
+        cancelButtonProps={{ disabled: pendingClaimBusy }}
+        keyboard={!pendingClaimBusy}
         closable={false}
-        maskClosable={false}
+        mask={{ closable: false }}
         onOk={() => void confirmPendingBind()}
         onCancel={skipPendingBind}
       >

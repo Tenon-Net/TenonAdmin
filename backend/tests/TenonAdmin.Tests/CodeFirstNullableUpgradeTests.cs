@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
+using TenonAdmin.Core;
 using TenonAdmin.Services;
 using TenonAdmin.SqlSugar;
 
@@ -21,6 +22,7 @@ public class CodeFirstNullableUpgradeTests
     {
         var dbPath = Path.Combine(Path.GetTempPath(), $"tenon-nullable-upg-{Guid.NewGuid():N}.db");
 
+        TokenPair? legacyPair = null;
         try
         {
             // 1) 正常首启:建表 + 种子 → sys_user 已有行(超管等)
@@ -30,18 +32,14 @@ public class CodeFirstNullableUpgradeTests
                 using var scope = v1.Services.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
                 var users = scope.ServiceProvider.GetRequiredService<IRepository<SysUser>>();
-                var sessions = scope.ServiceProvider.GetRequiredService<IRepository<SysSession>>();
 
                 var seedAdmin = await users.GetFirstAsync(u => u.IsSuperAdmin);
                 Assert.NotNull(seedAdmin);
-                await sessions.InsertAsync(new SysSession
-                {
-                    SessionId = LegacySessionId,
-                    UserId = seedAdmin!.Id,
-                    Account = seedAdmin.Account,
-                    ExpiresAt = DateTime.UtcNow.AddMinutes(10),
-                    AbsoluteExpiresAt = DateTime.UtcNow.AddMinutes(10),
-                });
+                legacyPair = scope.ServiceProvider.GetRequiredService<ITokenProvider>().Create(
+                    new TokenSubject(seedAdmin.Id, seedAdmin.Account, LegacySessionId, seedAdmin.IsSuperAdmin),
+                    TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
+                await scope.ServiceProvider.GetRequiredService<ISessionService>()
+                    .OpenAsync(seedAdmin, LegacySessionId, legacyPair);
 
                 // 2) 退化成「功能上线前的老库」:砍掉本版演进列(模拟升级前结构)
                 db.DbMaintenance.DropColumn("sys_user", "ForceTotp");
@@ -79,6 +77,9 @@ public class CodeFirstNullableUpgradeTests
             Assert.NotNull(legacySession);
             Assert.Equal(default, legacySession!.AbsoluteExpiresAt);
             Assert.True(await sessionService.IsActiveAsync(LegacySessionId));
+            Assert.NotNull(legacyPair);
+            var refreshed = await sessionService.RefreshAsync(legacyPair.RefreshToken);
+            Assert.NotEqual(legacyPair.RefreshToken, refreshed.Pair.RefreshToken);
         }
         finally
         {

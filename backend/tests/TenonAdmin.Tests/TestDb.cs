@@ -13,6 +13,10 @@ namespace TenonAdmin.Tests;
 /// <item><c>TENON_TEST_DBTYPE=MySql</c> + <c>TENON_TEST_MYSQL=</c>(不含 Database 的服务器连接串)。</item>
 /// <item><c>TENON_TEST_DBTYPE=SqlServer</c> + <c>TENON_TEST_SQLSERVER=</c>(不含 Database 的服务器连接串,
 /// 需带 <c>TrustServerCertificate=True;Encrypt=False</c> —— MDS 4.x 默认加密且本地无受信证书)。</item>
+/// <item><c>TENON_TEST_SQLSERVER_TEMPLATE=1</c> 时,普通 WebApplicationFactory 测试从模板备份恢复;
+/// <c>TENON_TEST_SQLSERVER_BACKUP_DIR</c> 为 SQL Server 容器内可写目录(默认 <c>/var/opt/mssql/data</c>)。</item>
+/// <item><c>TENON_TEST_MYSQL_TEMPLATE=1</c> 时,普通 WebApplicationFactory 测试从一次性 CodeFirst 模板复制表结构和种子数据。</item>
+/// <item><c>TENON_TEST_POSTGRESQL_TEMPLATE=1</c> 时,普通 WebApplicationFactory 测试从一次性 CodeFirst 模板克隆数据库。</item>
 /// </list>
 /// <para>库隔离:库名由 <c>identity</c> 确定性派生——同 identity → 同库(支持"同库二次启动"的幂等用例),
 /// 不同 identity → 各自独立库。建库/删库经原始 <see cref="MySqlConnection"/> / <see cref="SqlConnection"/>
@@ -20,6 +24,20 @@ namespace TenonAdmin.Tests;
 /// </summary>
 internal static class TestDb
 {
+    private static readonly object SqlServerTemplateGate = new();
+    private static readonly Dictionary<string, string> SqlServerTemplateBackups = new(StringComparer.Ordinal);
+    private static readonly object MySqlTemplateGate = new();
+    private static readonly Dictionary<string, MySqlTemplateSchema> MySqlTemplateSchemas = new(StringComparer.Ordinal);
+    private static readonly object PostgreSqlTemplateGate = new();
+    private static readonly HashSet<string> PostgreSqlTemplates = new(StringComparer.Ordinal);
+    private static readonly string SqlServerTemplateProcessId = $"{Environment.ProcessId}_{Guid.NewGuid():N}";
+    private static string? sqlServerTemplateInitializing;
+    private static string? mySqlTemplateInitializing;
+    private static string? postgreSqlTemplateInitializing;
+    private static bool sqlServerTemplateCleanupRegistered;
+
+    private sealed record MySqlTemplateSchema(IReadOnlyList<(string TableName, string CreateSql)> Tables);
+
     public static bool UseMySql =>
         string.Equals(Environment.GetEnvironmentVariable("TENON_TEST_DBTYPE"), "MySql", StringComparison.OrdinalIgnoreCase);
 
@@ -44,7 +62,32 @@ internal static class TestDb
     /// <summary>当前腿的 DbType 字符串(直接喂给 <c>AdminDatabaseOptions.DbType</c> / 配置)。</summary>
     public static string DbType => UseMySql ? "MySql" : UseSqlServer ? "SqlServer" : UsePostgreSql ? "PostgreSQL" : "Sqlite";
 
-    /// <summary>隔离库名(由 identity 派生,合法标识符、稳定;MySQL 与 SqlServer 共用规则)。</summary>
+    /// <summary>SQL Server 是否启用模板库优化(默认关闭,避免改变普通本地测试行为)。</summary>
+    public static bool SqlServerTemplateEnabled => UseSqlServer &&
+        IsTrue(Environment.GetEnvironmentVariable("TENON_TEST_SQLSERVER_TEMPLATE"));
+
+    /// <summary>MySQL 是否启用模板库优化(默认关闭,避免改变普通本地测试行为)。</summary>
+    public static bool MySqlTemplateEnabled => UseMySql &&
+        IsTrue(Environment.GetEnvironmentVariable("TENON_TEST_MYSQL_TEMPLATE"));
+
+    public static bool PostgreSqlTemplateEnabled => UsePostgreSql &&
+        IsTrue(Environment.GetEnvironmentVariable("TENON_TEST_POSTGRESQL_TEMPLATE"));
+
+    /// <summary>当前数据库腿是否启用模板库优化。</summary>
+    public static bool SchemaTemplateEnabled => SqlServerTemplateEnabled || MySqlTemplateEnabled || PostgreSqlTemplateEnabled;
+
+    /// <summary>当前是否正在由模板宿主初始化模板库。</summary>
+    public static bool IsSchemaTemplateInitialization =>
+        sqlServerTemplateInitializing is not null || mySqlTemplateInitializing is not null || postgreSqlTemplateInitializing is not null;
+
+    /// <summary>判断当前工厂是否就是正在初始化的指定模板宿主,避免并行测试误接入模板库。</summary>
+    public static bool IsSchemaTemplateInitializationFor(string templateKind, string databaseName) =>
+        (string.Equals(sqlServerTemplateInitializing, templateKind, StringComparison.Ordinal) ||
+         string.Equals(mySqlTemplateInitializing, templateKind, StringComparison.Ordinal) ||
+         string.Equals(postgreSqlTemplateInitializing, templateKind, StringComparison.Ordinal)) &&
+        string.Equals(databaseName, TemplateDbName(templateKind), StringComparison.Ordinal);
+
+    /// <summary>隔离库名(由 identity 派生,合法标识符、稳定;各数据库共用规则)。</summary>
     private static string DbName(string identity) =>
         "tenon_it_" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))[..16].ToLowerInvariant();
 
@@ -75,17 +118,92 @@ internal static class TestDb
         return $"Data Source={sqliteFile}";
     }
 
+    /// <summary>
+    /// 模板模式的连接串。模板只由指定宿主 CodeFirst 一次,测试库从模板复制;
+    /// <paramref name="reset"/> 为 false 时保留同 identity 的已有库,兼容同库重启契约。
+    /// </summary>
+    public static string ConnectionString(string identity, string sqliteFile, string templateKind, bool reset = true)
+    {
+        if (SqlServerTemplateEnabled) return SqlServerTemplateConnectionString(identity, templateKind, reset);
+        if (MySqlTemplateEnabled) return MySqlTemplateConnectionString(identity, templateKind, reset);
+        if (PostgreSqlTemplateEnabled) return PostgreSqlTemplateConnectionString(identity, templateKind, reset);
+        return ConnectionString(identity, sqliteFile);
+    }
+
+    private static string MySqlTemplateConnectionString(string identity, string templateKind, bool reset)
+    {
+        lock (MySqlTemplateGate)
+        {
+            if (mySqlTemplateInitializing is not null)
+            {
+                if (!string.Equals(mySqlTemplateInitializing, templateKind, StringComparison.Ordinal))
+                    throw new InvalidOperationException("MySQL 模板初始化期间不能切换模板类型。");
+                return MySqlDatabaseConnection(TemplateDbName(templateKind));
+            }
+
+            EnsureMySqlTemplate(templateKind);
+            var db = DbName(identity);
+            if (reset || !MySqlDatabaseExists(db))
+                RestoreMySqlDatabase(db, templateKind, MySqlTemplateSchemas[templateKind]);
+            return MySqlDatabaseConnection(db);
+        }
+    }
+
+    private static string PostgreSqlTemplateConnectionString(string identity, string templateKind, bool reset)
+    {
+        lock (PostgreSqlTemplateGate)
+        {
+            if (postgreSqlTemplateInitializing is not null)
+            {
+                if (!string.Equals(postgreSqlTemplateInitializing, templateKind, StringComparison.Ordinal))
+                    throw new InvalidOperationException("PostgreSQL 模板初始化期间不能切换模板类型。");
+                return PostgreSqlConnection(TemplateDbName(templateKind));
+            }
+
+            EnsurePostgreSqlTemplate(templateKind);
+            var db = DbName(identity);
+            if (reset || !PostgreSqlDatabaseExists(db))
+                RestorePostgreSqlDatabase(db, templateKind);
+            return PostgreSqlConnection(db);
+        }
+    }
+
+    private static string SqlServerTemplateConnectionString(string identity, string templateKind, bool reset)
+    {
+        lock (SqlServerTemplateGate)
+        {
+            if (sqlServerTemplateInitializing is not null)
+            {
+                if (!string.Equals(sqlServerTemplateInitializing, templateKind, StringComparison.Ordinal))
+                    throw new InvalidOperationException("SQL Server 模板初始化期间不能切换模板类型。");
+                return SqlServerConnection(TemplateDbName(templateKind));
+            }
+
+            EnsureSqlServerTemplate(templateKind);
+            var db = DbName(identity);
+            if (reset || !SqlServerDatabaseExists(db))
+                RestoreSqlServerDatabase(db, SqlServerTemplateBackups[templateKind]);
+            return SqlServerConnection(db);
+        }
+    }
+
     /// <summary>清理:SQLite 删文件;MySQL/SqlServer 删库(尽力而为)。</summary>
     public static void Cleanup(string identity, string sqliteFile)
     {
         if (UseMySql)
-            try { ExecMySql($"DROP DATABASE IF EXISTS `{DbName(identity)}`;"); } catch { /* 尽力而为 */ }
+            try
+            {
+                var db = DbName(identity);
+                ClearMySqlPool(db);
+                ExecMySql($"DROP DATABASE IF EXISTS {MySqlIdentifier(db)};");
+            }
+            catch { /* 尽力而为 */ }
         else if (UseSqlServer)
             try
             {
-                // 释放连接池对目标库的占用,否则活动连接会阻塞 DROP;再断开其余会话后删库。
-                SqlConnection.ClearAllPools();
+                // 释放目标库连接池;ALTER DATABASE 的 ROLLBACK IMMEDIATE 再处理仍存活的会话。
                 var db = DbName(identity);
+                ClearSqlServerPool(db);
                 ExecSqlServer($"IF DB_ID(N'{db}') IS NOT NULL BEGIN ALTER DATABASE [{db}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{db}]; END");
             }
             catch { /* 尽力而为 */ }
@@ -119,6 +237,357 @@ internal static class TestDb
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
+    }
+
+    private static string SqlServerConnection(string db) => $"{SqlServerBase.TrimEnd(';')};Database={db};";
+
+    private static string MySqlDatabaseConnection(string db) => $"{MySqlBase.TrimEnd(';')};Database={db};";
+
+    private static string PostgreSqlConnection(string db) => $"{PostgreSqlBase.TrimEnd(';')};Database={db};";
+
+    private static void ClearMySqlPool(string db)
+    {
+        using var conn = new MySqlConnection(MySqlDatabaseConnection(db));
+        MySqlConnection.ClearPool(conn);
+    }
+
+    private static void EnsureSqlServerTemplate(string templateKind)
+    {
+        if (SqlServerTemplateBackups.ContainsKey(templateKind)) return;
+
+        var templateDb = TemplateDbName(templateKind);
+        CreateSqlServerDatabase(templateDb);
+        sqlServerTemplateInitializing = templateKind;
+        try
+        {
+            if (string.Equals(templateKind, "workflow", StringComparison.Ordinal))
+            {
+                using var factory = new WorkflowAppFactory();
+                _ = factory.CreateClient();
+            }
+            else
+            {
+                using var factory = new AdminAppFactory { DbPath = templateDb, DeleteDbOnDispose = false };
+                _ = factory.CreateClient();
+            }
+
+            var backup = SqlServerTemplateBackupPath(templateKind);
+            BackupSqlServerDatabase(templateDb, backup);
+            SqlServerTemplateBackups[templateKind] = backup;
+            RegisterTemplateCleanup();
+        }
+        finally
+        {
+            sqlServerTemplateInitializing = null;
+        }
+    }
+
+    private static void EnsureMySqlTemplate(string templateKind)
+    {
+        if (MySqlTemplateSchemas.ContainsKey(templateKind)) return;
+
+        var templateDb = TemplateDbName(templateKind);
+        CreateMySqlDatabase(templateDb);
+        mySqlTemplateInitializing = templateKind;
+        try
+        {
+            if (string.Equals(templateKind, "workflow", StringComparison.Ordinal))
+            {
+                using var factory = new WorkflowAppFactory();
+                _ = factory.CreateClient();
+            }
+            else
+            {
+                using var factory = new AdminAppFactory { DbPath = templateDb, DeleteDbOnDispose = false };
+                _ = factory.CreateClient();
+            }
+
+            MySqlTemplateSchemas[templateKind] = ReadMySqlTemplateSchema(templateDb);
+            RegisterTemplateCleanup();
+        }
+        finally
+        {
+            mySqlTemplateInitializing = null;
+        }
+    }
+
+    private static void EnsurePostgreSqlTemplate(string templateKind)
+    {
+        if (PostgreSqlTemplates.Contains(templateKind)) return;
+
+        var templateDb = TemplateDbName(templateKind);
+        DropPostgreSqlDatabase(templateDb);
+        CreatePostgreSqlDatabase(templateDb);
+        postgreSqlTemplateInitializing = templateKind;
+        try
+        {
+            if (string.Equals(templateKind, "workflow", StringComparison.Ordinal))
+            {
+                using var factory = new WorkflowAppFactory { DbPath = templateDb, ResetDatabase = false };
+                _ = factory.CreateClient();
+            }
+            else
+            {
+                using var factory = new AdminAppFactory { DbPath = templateDb, DeleteDbOnDispose = false };
+                _ = factory.CreateClient();
+            }
+            PostgreSqlTemplates.Add(templateKind);
+            RegisterTemplateCleanup();
+        }
+        finally
+        {
+            postgreSqlTemplateInitializing = null;
+        }
+    }
+
+    private static void RestorePostgreSqlDatabase(string db, string templateKind)
+    {
+        DropPostgreSqlDatabase(db);
+        TerminatePostgreSqlConnections(TemplateDbName(templateKind));
+        ExecPostgreSql($"CREATE DATABASE {PostgreSqlIdentifier(db)} TEMPLATE {PostgreSqlIdentifier(TemplateDbName(templateKind))};");
+    }
+
+    private static void CreatePostgreSqlDatabase(string db) =>
+        ExecPostgreSql($"CREATE DATABASE {PostgreSqlIdentifier(db)};");
+
+    private static void DropPostgreSqlDatabase(string db)
+    {
+        TerminatePostgreSqlConnections(db);
+        ExecPostgreSql($"DROP DATABASE IF EXISTS {PostgreSqlIdentifier(db)};");
+    }
+
+    private static void TerminatePostgreSqlConnections(string db)
+    {
+        NpgsqlConnection.ClearAllPools();
+        ExecPostgreSql($"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{SqlLiteral(db)}' AND pid <> pg_backend_pid();");
+    }
+
+    private static bool PostgreSqlDatabaseExists(string db) =>
+        ExecPostgreSqlScalar($"SELECT 1 FROM pg_database WHERE datname = '{SqlLiteral(db)}'") is not null;
+
+    private static MySqlTemplateSchema ReadMySqlTemplateSchema(string templateDb)
+    {
+        using var conn = new MySqlConnection(MySqlDatabaseConnection(templateDb));
+        conn.Open();
+        using var tablesCommand = conn.CreateCommand();
+        tablesCommand.CommandText = "SELECT TABLE_NAME FROM information_schema.TABLES " +
+                                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' " +
+                                    "ORDER BY TABLE_NAME;";
+        var tableNames = new List<string>();
+        using (var tables = tablesCommand.ExecuteReader())
+        {
+            while (tables.Read()) tableNames.Add(tables.GetString(0));
+        }
+
+        var schemas = new List<(string, string)>(tableNames.Count);
+        foreach (var tableName in tableNames)
+        {
+            using var createCommand = conn.CreateCommand();
+            createCommand.CommandText = $"SHOW CREATE TABLE {MySqlIdentifier(templateDb)}.{MySqlIdentifier(tableName)};";
+            using var create = createCommand.ExecuteReader();
+            if (!create.Read()) throw new InvalidOperationException($"无法读取 MySQL 模板表结构:{tableName}");
+            schemas.Add((tableName, create.GetString(1)));
+        }
+
+        if (schemas.Count == 0) throw new InvalidOperationException("MySQL 模板库没有可复制的表。");
+        return new MySqlTemplateSchema(schemas);
+    }
+
+    private static void RestoreMySqlDatabase(string db, string templateKind, MySqlTemplateSchema schema)
+    {
+        DropMySqlDatabase(db);
+        CreateMySqlDatabase(db);
+
+        using var conn = new MySqlConnection(MySqlDatabaseConnection(db));
+        conn.Open();
+        using var command = conn.CreateCommand();
+        command.CommandTimeout = 300;
+        command.CommandText = "SET FOREIGN_KEY_CHECKS = 0;";
+        command.ExecuteNonQuery();
+
+        foreach (var (_, createSql) in schema.Tables)
+        {
+            command.CommandText = createSql;
+            command.ExecuteNonQuery();
+        }
+
+        foreach (var (tableName, _) in schema.Tables)
+        {
+            command.CommandText = $"INSERT INTO {MySqlIdentifier(tableName)} SELECT * FROM " +
+                                  $"{MySqlIdentifier(TemplateDbName(templateKind))}.{MySqlIdentifier(tableName)};";
+            command.ExecuteNonQuery();
+        }
+
+        command.CommandText = "SET FOREIGN_KEY_CHECKS = 1;";
+        command.ExecuteNonQuery();
+    }
+
+    private static void CreateMySqlDatabase(string db)
+    {
+        ExecMySql($"CREATE DATABASE IF NOT EXISTS {MySqlIdentifier(db)} CHARACTER SET utf8mb4;");
+    }
+
+    private static void DropMySqlDatabase(string db)
+    {
+        ExecMySql($"DROP DATABASE IF EXISTS {MySqlIdentifier(db)};");
+    }
+
+    private static bool MySqlDatabaseExists(string db)
+    {
+        using var conn = new MySqlConnection(MySqlBase);
+        conn.Open();
+        using var command = conn.CreateCommand();
+        command.CommandText = "SELECT 1 FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = @db LIMIT 1;";
+        command.Parameters.AddWithValue("@db", db);
+        return command.ExecuteScalar() is not null;
+    }
+
+    private static string TemplateDbName(string templateKind) =>
+        DbName($"template:{SqlServerTemplateProcessId}:{templateKind}");
+
+    private static string SqlServerTemplateBackupPath(string templateKind) =>
+        Path.Combine(
+            Environment.GetEnvironmentVariable("TENON_TEST_SQLSERVER_BACKUP_DIR") ?? "/var/opt/mssql/data",
+            $"tenon-template-{SqlServerTemplateProcessId}-{templateKind}.bak");
+
+    private static void CreateSqlServerDatabase(string db)
+    {
+        ExecSqlServer($"IF DB_ID(N'{SqlLiteral(db)}') IS NULL CREATE DATABASE {SqlIdentifier(db)};");
+    }
+
+    private static bool SqlServerDatabaseExists(string db)
+    {
+        using var conn = new SqlConnection(SqlServerBase);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT CASE WHEN DB_ID(@db) IS NULL THEN 0 ELSE 1 END;";
+        cmd.Parameters.AddWithValue("@db", db);
+        return Convert.ToInt32(cmd.ExecuteScalar()) != 0;
+    }
+
+    private static void BackupSqlServerDatabase(string db, string backup)
+    {
+        using var conn = new SqlConnection(SqlServerBase);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandTimeout = 300;
+        cmd.CommandText = $"BACKUP DATABASE {SqlIdentifier(db)} TO DISK = N'{SqlLiteral(backup)}' " +
+                          "WITH COPY_ONLY, INIT, CHECKSUM, COMPRESSION;";
+        cmd.ExecuteNonQuery();
+    }
+
+    private static void RestoreSqlServerDatabase(string db, string backup)
+    {
+        ClearSqlServerPool(db);
+        using var conn = new SqlConnection(SqlServerBase);
+        conn.Open();
+
+        if (SqlServerDatabaseExists(db))
+        {
+            using var singleUser = conn.CreateCommand();
+            singleUser.CommandText = $"ALTER DATABASE {SqlIdentifier(db)} SET SINGLE_USER WITH ROLLBACK IMMEDIATE;";
+            singleUser.ExecuteNonQuery();
+        }
+
+        var files = ReadSqlServerBackupFiles(conn, backup);
+        var dataIndex = 0;
+        var logIndex = 0;
+        var moves = new List<string>(files.Count);
+        foreach (var file in files)
+        {
+            var index = file.Type == 'L' ? logIndex++ : dataIndex++;
+            var suffix = index == 0 ? "" : $"_{index}";
+            var extension = file.Type == 'L' ? ".ldf" : ".mdf";
+            var destination = Path.Combine(
+                Environment.GetEnvironmentVariable("TENON_TEST_SQLSERVER_BACKUP_DIR") ?? "/var/opt/mssql/data",
+                $"{db}{suffix}{extension}");
+            moves.Add($"MOVE N'{SqlLiteral(file.LogicalName)}' TO N'{SqlLiteral(destination)}'");
+        }
+
+        if (dataIndex == 0 || logIndex == 0)
+            throw new InvalidOperationException("SQL Server 模板备份缺少数据文件或日志文件。");
+
+        using var restore = conn.CreateCommand();
+        restore.CommandTimeout = 300;
+        restore.CommandText = $"RESTORE DATABASE {SqlIdentifier(db)} FROM DISK = N'{SqlLiteral(backup)}' " +
+                              $"WITH REPLACE, RECOVERY, {string.Join(", ", moves)};";
+        restore.ExecuteNonQuery();
+
+        using var multiUser = conn.CreateCommand();
+        multiUser.CommandText = $"ALTER DATABASE {SqlIdentifier(db)} SET MULTI_USER;";
+        multiUser.ExecuteNonQuery();
+    }
+
+    private static void ClearSqlServerPool(string db)
+    {
+        using var conn = new SqlConnection(SqlServerConnection(db));
+        SqlConnection.ClearPool(conn);
+    }
+
+    private static List<(string LogicalName, char Type)> ReadSqlServerBackupFiles(SqlConnection conn, string backup)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandTimeout = 300;
+        cmd.CommandText = $"RESTORE FILELISTONLY FROM DISK = N'{SqlLiteral(backup)}';";
+        using var reader = cmd.ExecuteReader();
+        var files = new List<(string, char)>();
+        var logicalName = reader.GetOrdinal("LogicalName");
+        var type = reader.GetOrdinal("Type");
+        while (reader.Read())
+            files.Add((reader.GetString(logicalName), reader.GetString(type)[0]));
+        return files;
+    }
+
+    private static string SqlIdentifier(string value) => $"[{value.Replace("]", "]]", StringComparison.Ordinal)}]";
+
+    private static string MySqlIdentifier(string value) => $"`{value.Replace("`", "``", StringComparison.Ordinal)}`";
+
+    private static string PostgreSqlIdentifier(string value) => $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+
+    private static string SqlLiteral(string value) => value.Replace("'", "''", StringComparison.Ordinal);
+
+    private static bool IsTrue(string? value) => value is "1" or "true" or "True" or "TRUE";
+
+    private static void RegisterTemplateCleanup()
+    {
+        if (sqlServerTemplateCleanupRegistered) return;
+        sqlServerTemplateCleanupRegistered = true;
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => CleanupSqlServerTemplates();
+    }
+
+    private static void CleanupSqlServerTemplates()
+    {
+        lock (SqlServerTemplateGate)
+        {
+            foreach (var (kind, backup) in SqlServerTemplateBackups)
+            {
+                try
+                {
+                    var db = TemplateDbName(kind);
+                    ClearSqlServerPool(db);
+                    ExecSqlServer($"IF DB_ID(N'{SqlLiteral(db)}') IS NOT NULL BEGIN ALTER DATABASE {SqlIdentifier(db)} SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE {SqlIdentifier(db)}; END");
+                }
+                catch { /* 进程退出时尽力清理 */ }
+
+                try
+                {
+                    ExecSqlServer($"EXEC master.dbo.xp_delete_file 0, N'{SqlLiteral(backup)}', N'bak';");
+                }
+                catch { /* 部分 SQL Server 环境禁用扩展过程,容器销毁时一并清理 */ }
+            }
+
+            foreach (var templateKind in MySqlTemplateSchemas.Keys)
+            {
+                try { DropMySqlDatabase(TemplateDbName(templateKind)); }
+                catch { /* 进程退出时尽力清理 */ }
+            }
+
+            foreach (var templateKind in PostgreSqlTemplates)
+            {
+                try { DropPostgreSqlDatabase(TemplateDbName(templateKind)); }
+                catch { /* 进程退出时尽力清理 */ }
+            }
+        }
     }
 
     // PG 必须连到某个已存在的库才能建/删其它库,统一连维护库 postgres。

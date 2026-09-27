@@ -7,8 +7,8 @@
 参照 `Modules/` 下的 SampleDoc 四件套(实体 / IService / Service / Controller),复制改名:
 
 1. **实体**:机构数据隔离继承 `DataEntity`,全局表继承 `BaseEntity`;`[SugarTable("biz_xxx")]`,唯一字段加 `[SugarIndex]`。审计字段(Id/CreateTime/CreateOrgId 等)由 AOP 自动填充,**不要重复定义**。启动时 CodeFirst 自动建表,没有迁移脚本。
-2. **Service**:主构造注入 `IRepository<T>`;方法一律 `virtual`;业务错误抛 `AdminException((ErrorCode)自选数字)`——构造只收内核 `ErrorCode` 类型,自选数字**从 60000 起步**强转传入,集中成常量类防散落;前端语言包加 `error.code.<数字>` 键即可翻译。唯一性查重用 `.ClearFilter<ISoftDelete>()` 把软删行纳入,否则撞库上唯一索引。
-3. **Controller**:`[ApiController]` + `[Route("api/v1/biz/xxx")]`;每个 action 挂 `[RolePermission]`;写操作加 `[OperationLog("描述")]`;返回 `Result<T>.Ok(...)`(裸返回也会被信封过滤器包上)。
+2. **Service**:主构造注入 `IRepository<T>`;需要给宿主留覆写点的方法才标 `virtual`;业务错误可抛 `AdminException((ErrorCode)自选数字)`——构造只收内核 `ErrorCode` 类型,自选数字**从 60000 起步**强转传入,集中成常量类防散落;前端语言包加 `error.code.<数字>` 键即可翻译。唯一性查重用 `.ClearFilter<ISoftDelete>()` 把软删行纳入,否则撞库上唯一索引。
+3. **Controller**:`[ApiController]` + `[Route("api/v1/biz/xxx")]`;每个 action 挂 `[RolePermission]`;写操作会被全局过滤器自动记入操作日志,需要可读标题时再加 `[OperationLog("描述")]`;可返回 `Result<T>.Ok(...)` 或让信封过滤器包装裸返回。
 4. **注册**:`Program.cs` 追加一行 `builder.Services.TryAddScoped<IXxxService, XxxService>();`。`ApplicationAssemblies` 已挂本程序集 → 实体自动建表、控制器自动挂路由;**缺这一挂,表不建、接口 404**。
 
 ## 铁律(违反即坏)

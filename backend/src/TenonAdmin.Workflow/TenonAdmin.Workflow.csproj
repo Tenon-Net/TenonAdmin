@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 可选卫星包:人工审批工作流。装它并调 AddTenonAdminWorkflow + UseWorkflow 即启用;
+       元包 TenonAdmin 不引用本包——装了才有。引用 AspNetCore 以挂控制器与复用内核管道。 -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>TenonAdmin 工作流可选包:审批定义/引擎/待办与设计器配套 API;AddTenonAdminWorkflow + UseWorkflow 启用(TryAdd 可替换)。</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TenonAdmin.AspNetCore\TenonAdmin.AspNetCore.csproj" />
+  </ItemGroup>
+</Project>

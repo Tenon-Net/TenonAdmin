@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT_DIR=$(git rev-parse --show-toplevel)
+cd "$ROOT_DIR"
+
+ZERO_SHA=0000000000000000000000000000000000000000
+needs_contract_check=0
+
+while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
+  [ -n "${local_sha:-}" ] || continue
+  [ "$local_sha" = "$ZERO_SHA" ] && continue
+
+  if [ "$remote_sha" = "$ZERO_SHA" ]; then
+    root_commit=$(git rev-list --max-parents=0 "$local_sha" | tail -n 1)
+    range="$root_commit..$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+
+  if git diff --name-only "$range" -- \
+    | grep -Eq '^(backend/|web/(src/api/schema\.d\.ts|package\.json|package-lock\.json)$|web-react/(src/api/schema\.d\.ts|package\.json|package-lock\.json)$)'; then
+    needs_contract_check=1
+    break
+  fi
+done
+
+if [ "$needs_contract_check" -eq 1 ]; then
+  echo "[pre-push] backend/API changes detected; checking generated contracts"
+  exec node "$ROOT_DIR/scripts/check-contract-drift.mjs"
+fi

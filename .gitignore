@@ -55,5 +55,14 @@ backend/scratchpad/
 *.sync-conflict-*
 ~syncthing~*
 
-## /loop 任务账本（跨轮记忆，操作态，不提交）
-.loop/
+## /loop 任务账本随仓库走，换电脑可接着做。
+.omx-state-locks/
+.omx-state-locks.identity.json
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/skills/
+!.codex/skills/**
+.codex/skills/.system/**
+!.codex/prompts/
+!.codex/prompts/**
