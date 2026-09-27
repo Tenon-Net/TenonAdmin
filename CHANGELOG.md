@@ -15,11 +15,18 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.7.0-preview.1 - 2026-09-27
+
+### Added
+
+- Added a workflow engine and Vue/React interfaces for design, organization-leader and branched approvals, delegation, timeouts, CC, monitoring, and history.
+- Added idempotent workflow commands and replay, operation receipts, extensible node handlers, leased execution and retry history, an outbox, and Webhook nodes.
+- Added shadow-only AI decision nodes and an OpenAI-compatible provider; decisions are evaluated and audited but never approve automatically. Added expense-decision evaluation and sample-collection tools.
+
 ### Fixed
 
-- **Unset snowflake `WorkerId` no longer silently shares 0.** Same-machine processes exclusive-lock `worker-00.lock`…`worker-63.lock`. Across a shared database, `sys_worker_lease` is inserted from 0 through 63 and the first successful row wins — not a random draw, not a release/version hash. Redis no longer refuses to start when the value is omitted; two instances that both *configure* the same number still fail fast. `WorkerIdLeaseGuard` renews the assigned slot, not `WorkerId ?? 0`. `AddTenonAdminSqlSugar` now `TryAdd`s `AdminDatabaseOptions` so data-layer-only hosts (and tests that skip `AddTenonAdmin`) can still resolve the slot claimer.
-
-- **A killed instance no longer blocks its own restart for a full lease TTL.** `WorkerIdLeaseGuard` releases the `WorkerId` lease on graceful shutdown, but a process that is killed outright — Visual Studio "Stop Debugging", `kill -9`, a container restart — never runs `StopAsync`, so the next start hit its own leftover lease and refused to boot with *"WorkerId N 已被节点 … 租约持有"* until that lease expired (30 s at the default `Jobs:HeartbeatSeconds`). `sys_worker_lease` now records the holder's host name, and the guard checks whether the holding process is still alive: a lease left behind by an exited process **on the same host** is taken over immediately. A holder that is still running, or one on any other host, still fails fast exactly as before — a remote pid says nothing about a remote process, so it is always treated as alive. Takeover is a conditional update, so two instances racing to reclaim the same dead lease cannot both win. The very first claim — when no lease row exists yet — is covered the same way: `WorkerId` carries a unique index, so an instance that loses the insert re-reads and retries instead of crashing startup with the raw constraint violation (QA27 follow-up).
+- Hardened workflow approval concurrency, participant isolation, stale Webhook results, and MySQL outbox replay; an unset outbox transport now fails explicitly.
+- Fixed job-capacity reservation, unique WorkerId allocation and dead-process lease recovery, session revocation and cache atomicity, Markdown rendering, and asynchronous frontend interactions.
 
 ## 0.6.0 - 2026-08-12
 
