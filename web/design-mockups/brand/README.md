@@ -1,15 +1,15 @@
 # Tenon 品牌图标 · 交付说明
 
-主色 **#646CFF**。图形为「透榫」——竖榫贯入横梁，圆角图块。
+主色 **#646CFF**。图形延续「滚筒刷 × T」轮廓，使用几何直线和轻微圆角底座。
 
 ## 文件清单
 
 矢量（首选，任意尺寸清晰）
-- `tenon-logo.svg` — 完整应用图标（紫底白榫），固定配色
+- `tenon-logo.svg` — 完整应用图标（靛蓝底白色标记），固定配色
 - `tenon-logo-dark.svg` — 深色背景版本（用于深色模式）
 - `tenon-mark.svg` — 仅图形，使用 `currentColor`，颜色随 CSS `color` 变化
 
-位图（PNG，透明外的固定紫底）
+位图（PNG，固定靛蓝底）
 - `favicon-16.png` / `favicon-32.png` / `favicon-48.png` — 浏览器标签
 - `icon-64.png` / `icon-128.png` / `icon-192.png` / `icon-512.png` — 通用/PWA
 - `apple-touch-icon.png` — 180×180，iOS 主屏
@@ -38,9 +38,8 @@
 
 ```jsx
 export const TenonMark = (props) => (
-  <svg viewBox="0 0 120 120" width="1em" height="1em" aria-label="Tenon" {...props}>
-    <rect x="16" y="27" width="88" height="26" rx="6" fill="currentColor" fillOpacity="0.5" />
-    <rect x="47" y="27" width="26" height="76" rx="6" fill="currentColor" />
+  <svg viewBox="8 8 48 48" width="1em" height="1em" aria-label="Tenon" {...props}>
+    <path d="M12 12H52V24H48V20H44V52H32V28H40V20H36V24H12Z" fill="currentColor" />
   </svg>
 );
 // <TenonMark style={{ color: '#646CFF', fontSize: 32 }} />
