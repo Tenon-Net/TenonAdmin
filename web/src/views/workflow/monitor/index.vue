@@ -3,11 +3,11 @@
  * 流程监控。菜单 component 填 `workflow/monitor/index`。
  * 参与筛选是业务过滤,不是数据权限;行点击进同一详情。
  */
-import { h, ref } from 'vue'
+import { h } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
-import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
+import { ProTable, type ProTableColumn } from 'tenon-naive-pro-table'
 import UserSelect from '@/components/UserSelect/index.vue'
 import { wfInstanceApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
@@ -16,7 +16,6 @@ import type { WfInstanceListItem, WfInstanceStatus } from '@/types/workflow'
 const { t } = useI18n()
 const router = useRouter()
 const message = useMessage()
-const tableRef = ref<ProTableInst<WfInstanceListItem>>()
 
 function openDetail(r: WfInstanceListItem) {
   if (r.id == null) return
@@ -170,7 +169,6 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
 
 <template>
   <ProTable
-    ref="tableRef"
     storage-key="workflow-monitor"
     row-key="id"
     :columns="columns"

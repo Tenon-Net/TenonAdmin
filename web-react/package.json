@@ -3,6 +3,14 @@
   "version": "0.7.0-preview.1",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "overrides": {
+    "@redocly/openapi-core": {
+      "js-yaml": "4.3.2"
+    }
+  },
   "scripts": {
     "predev": "npm run gen:icons",
     "dev": "vite",
@@ -19,39 +27,39 @@
     "gen:icons": "node scripts/generate-icon-subset.mjs"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.3.2",
-    "@ant-design/pro-components": "^3.1.14-2",
+    "@ant-design/icons": "^6.3.4",
+    "@ant-design/pro-components": "^3.1.14-7",
     "@iconify/react": "^6.0.2",
-    "@microsoft/signalr": "^10.0.0",
-    "antd": "^6.5.1",
-    "dayjs": "^1.11.11",
-    "echarts": "^5.6.0",
-    "highlight.js": "^11.11.1",
+    "@microsoft/signalr": "^10.0.11",
+    "antd": "^6.6.5",
+    "dayjs": "^1.11.23",
+    "echarts": "^6.1.0",
+    "highlight.js": "^11.12.0",
     "i18next": "^25.10.10",
-    "md-editor-rt": "^6.5.4",
-    "openapi-fetch": "^0.13.5",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "md-editor-rt": "^6.5.6",
+    "openapi-fetch": "^0.13.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "react-i18next": "^16.6.6",
-    "react-router-dom": "^7.18.1",
-    "zustand": "^5.0.14"
+    "react-router-dom": "^7.18.4",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@iconify-json/ant-design": "^1.2.8",
+    "@iconify-json/ant-design": "^1.2.9",
     "@iconify-json/ep": "^1.2.4",
-    "@iconify-json/lucide": "^1.2.118",
+    "@iconify-json/lucide": "^1.2.137",
     "@iconify-json/ph": "^1.2.2",
-    "@playwright/test": "^1.61.1",
-    "@testing-library/react": "^16.3.2",
-    "@types/node": "^22.13.0",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.2.0",
-    "happy-dom": "^20.11.0",
+    "@playwright/test": "^1.63.0",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "happy-dom": "^20.14.5",
     "openapi-typescript": "^7.6.1",
-    "oxlint": "^1.73.0",
-    "typescript": "^5.7.3",
-    "vite": "^6.0.11",
-    "vitest": "^4.1.10"
+    "oxlint": "1.74.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.1",
+    "vitest": "^4.1.11"
   }
 }
