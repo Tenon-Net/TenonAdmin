@@ -15,6 +15,12 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+### Added
+
+- Added the optional `TenonAdmin.Integration` package for third-party integration: integration apps with API keys that can be issued, rotated with an overlap window, expired and revoked; default-deny open API endpoints with declared data scopes, per-app rate limits, a separate OpenAPI document and inbound call records; outbound calls to configured targets with address checks, per-call credentials and no automatic retries; and reliable delivery enqueued in the business transaction, dispatched under leases, recovered according to the partner's deduplication and query capabilities, with reconciliation, alerts and audited manual actions. The Vue and React templates both include the management pages.
+- Added `dotnet new tenon-app --integration`, the `IntegrationSample` consumer sample with the `IntegrationMockPartner` local third party, the `wire-integration` skill, and the third-party integration guide.
+- Added `ISkipOperationLogMetadata` so endpoints can opt out of user operation logs; open API endpoints use it to record inbound calls instead.
+
 ## 0.7.0-preview.1 - 2026-09-27
 
 ### Added

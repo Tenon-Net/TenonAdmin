@@ -30,7 +30,13 @@ public class RateLimitTests
     }
 
     private static AdminAppFactory Enabled() =>
-        new() { Settings = new Dictionary<string, string?> { ["TenonAdmin:Security:RateLimit:Enabled"] = "true" } };
+        new()
+        {
+            Settings = new Dictionary<string, string?> { ["TenonAdmin:Security:RateLimit:Enabled"] = "true" },
+            // 固定窗口计数按整分钟换键;测试不能碰巧跨窗,否则第二次请求也会放行。
+            Overrides = services => services.AddSingleton<TimeProvider>(
+                new MutableTime(new DateTimeOffset(2030, 1, 1, 0, 0, 1, TimeSpan.Zero))),
+        };
 
     [Fact]
     public async Task Auth_endpoint_returns_429_envelope_after_exceeding_limit()

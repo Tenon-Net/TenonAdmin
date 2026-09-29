@@ -5,6 +5,7 @@ using TenonAdmin.Auth.WeChat;
 using TenonAdmin.Auth.WeCom;
 using TenonAdmin.Caching.Redis;
 using TenonAdmin.Excel;
+using TenonAdmin.Integration;
 using TenonAdmin.Workflow;
 
 // 验收基准(设计 §3.1):去掉那行可选包,就是三行、零配置即跑。
@@ -30,7 +31,15 @@ builder.Services.AddTenonAdminExcel();
 // 可选卫星包:人工审批工作流。AddTenonAdminWorkflow 做 TryAdd;UseWorkflow 把本程序集挂进 CodeFirst/控制器。
 builder.Services.AddTenonAdminWorkflow(builder.Configuration);
 
-builder.Services.AddTenonAdmin(builder.Configuration, o => o.UseWorkflow());
+// 可选卫星包:第三方系统接入(接入应用与开放接口、出站调用、可靠投递)。AddTenonAdminIntegration 做 TryAdd;
+// UseIntegration 把本程序集挂进 CodeFirst/控制器。不调这两行即无相关表、端点、菜单与后台任务。
+builder.Services.AddTenonAdminIntegration(builder.Configuration);
+
+builder.Services.AddTenonAdmin(builder.Configuration, o =>
+{
+    o.UseWorkflow();
+    o.UseIntegration();
+});
 var app = builder.Build();
 app.MapTenonAdmin();
 app.Run();

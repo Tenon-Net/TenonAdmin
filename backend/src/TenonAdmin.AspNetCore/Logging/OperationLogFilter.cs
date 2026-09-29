@@ -22,7 +22,7 @@ internal sealed class OperationLogFilter(ILogService logService, TimeProvider ti
         var marker = context.ActionDescriptor.EndpointMetadata.OfType<OperationLogAttribute>().FirstOrDefault();
         if (!ShouldLog(context, marker))
         {
-            await next();   // 读操作/匿名端点:直通,不产生日志
+            await next();   // 读操作/匿名端点/自带专用审计的端点:直通,不产生日志
             return;
         }
 
@@ -49,8 +49,10 @@ internal sealed class OperationLogFilter(ILogService logService, TimeProvider ti
     }
 
     /// <summary>
-    /// 是否记录本次动作。安全默认:<b>写操作一律记</b>,只放行两类——
+    /// 是否记录本次动作。安全默认:<b>写操作一律记</b>,只放行三类——
     /// <list type="bullet">
+    /// <item>自带专用审计的端点(元数据含 <see cref="ISkipOperationLogMetadata"/>,如开放接口的调用记录):不重复记成「无操作人的用户操作」。
+    ///   本条优先于 <see cref="OperationLogAttribute"/> 标注。</item>
     /// <item>读操作(GET/HEAD/OPTIONS):无审计价值,且列表分页会瞬间把日志表刷爆。
     ///   确需留痕的读(如导出)显式挂 <see cref="OperationLogAttribute"/> 即可,标注优先于本规则。</item>
     /// <item>匿名端点(登录/刷新/验证码):已有登录日志专门留痕,入参还含明文口令,不重复记。</item>
@@ -58,6 +60,8 @@ internal sealed class OperationLogFilter(ILogService logService, TimeProvider ti
     /// </summary>
     private static bool ShouldLog(ActionExecutingContext context, OperationLogAttribute? marker)
     {
+        // 端点自带专用审计(如开放接口调用记录):不再重复记成「无操作人的用户操作」
+        if (context.ActionDescriptor.EndpointMetadata.OfType<ISkipOperationLogMetadata>().Any()) return false;
         if (marker is not null) return true;   // 显式标注:一律记(含极少数需留痕的 GET)
 
         var method = context.HttpContext.Request.Method;

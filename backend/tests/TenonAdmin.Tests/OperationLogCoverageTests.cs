@@ -1,5 +1,16 @@
+using System.Net;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ApplicationParts;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.Extensions.DependencyInjection;
+using SqlSugar;
+using TenonAdmin.AspNetCore;
+using TenonAdmin.Core;
+using TenonAdmin.Services;
 
 namespace TenonAdmin.Tests;
 
@@ -86,4 +97,51 @@ public class OperationLogCoverageTests
         Assert.False(HasEntry(logs, "GET", "/api/v1/sys/user/page"), "读操作不该进操作日志");
         Assert.False(HasEntry(logs, "POST", "/api/v1/auth/login"), "登录不该进操作日志(已有登录日志)");
     }
+
+    [Fact]
+    public async Task Endpoints_with_their_own_audit_stay_out_even_when_marked()
+    {
+        using var f = new AdminAppFactory
+        {
+            Overrides = s => s.AddControllers().ConfigureApplicationPartManager(m => m.FeatureProviders.Add(new ProbeControllers())),
+        };
+        var anon = f.CreateClient();
+        Assert.Equal(HttpStatusCode.OK, (await anon.PostAsync("/api/v1/test/oplog-probe/audited", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await anon.PostAsync("/api/v1/test/oplog-probe/marked", null)).StatusCode);
+
+        using var scope = f.Services.CreateScope();
+        var paths = await scope.ServiceProvider.GetRequiredService<ISqlSugarClient>().Queryable<SysOpLog>().Select(l => l.Path).ToListAsync();
+        Assert.Contains("/api/v1/test/oplog-probe/marked", paths);           // 对照:同样挂 [OperationLog] 的写操作照常留痕
+        Assert.DoesNotContain("/api/v1/test/oplog-probe/audited", paths);    // 端点自带专用审计:连 [OperationLog] 标注也压过
+    }
+
+    /// <summary>只把探针控制器挂进宿主(不把整个测试程序集当应用部件)。</summary>
+    private sealed class ProbeControllers : IApplicationFeatureProvider<ControllerFeature>
+    {
+        public void PopulateFeature(IEnumerable<ApplicationPart> parts, ControllerFeature feature)
+        {
+            var probe = IntrospectionExtensions.GetTypeInfo(typeof(OperationLogProbeController));
+            if (!feature.Controllers.Contains(probe)) feature.Controllers.Add(probe);
+        }
+    }
+}
+
+/// <summary>操作日志豁免(<see cref="ISkipOperationLogMetadata"/>)的探针端点,只在上面的用例里经特性提供者挂入。</summary>
+[ApiController]
+[Route("api/v1/test/oplog-probe")]
+[AllowAnonymous]
+public class OperationLogProbeController : ControllerBase
+{
+    [HttpPost("audited")]
+    [OperationLog("自带审计的写操作")]
+    [OwnAudit]
+    public Result<bool> Audited() => Result<bool>.Ok(true);
+
+    [HttpPost("marked")]
+    [OperationLog("普通标注的写操作")]
+    public Result<bool> Marked() => Result<bool>.Ok(true);
+
+    /// <summary>端点已有等价的专用审计。</summary>
+    [AttributeUsage(AttributeTargets.Method)]
+    public sealed class OwnAuditAttribute : Attribute, ISkipOperationLogMetadata;
 }

@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/samples/">
+    <Project Path="samples/IntegrationMockPartner/IntegrationMockPartner.csproj" />
+    <Project Path="samples/IntegrationSample/IntegrationSample.csproj" />
     <Project Path="samples/MinimalHost/MinimalHost.csproj" />
     <Project Path="samples/WorkerHost/WorkerHost.csproj" />
   </Folder>
@@ -12,6 +14,7 @@
     <Project Path="src/TenonAdmin.Caching.Redis/TenonAdmin.Caching.Redis.csproj" />
     <Project Path="src/TenonAdmin.Core/TenonAdmin.Core.csproj" />
     <Project Path="src/TenonAdmin.Excel/TenonAdmin.Excel.csproj" />
+    <Project Path="src/TenonAdmin.Integration/TenonAdmin.Integration.csproj" />
     <Project Path="src/TenonAdmin.Services/TenonAdmin.Services.csproj" />
     <Project Path="src/TenonAdmin.SqlSugar/TenonAdmin.SqlSugar.csproj" />
     <Project Path="src/TenonAdmin.Workflow/TenonAdmin.Workflow.csproj" />
@@ -24,5 +27,6 @@
     <Project Path="tests/TenonAdmin.Tests/TenonAdmin.Tests.csproj" />
     <Project Path="tests/TenonAdmin.TestHost/TenonAdmin.TestHost.csproj" />
     <Project Path="tests/TenonAdmin.WorkflowTestHost/TenonAdmin.WorkflowTestHost.csproj" />
+    <Project Path="tests/TenonAdmin.IntegrationTestHost/TenonAdmin.IntegrationTestHost.csproj" />
   </Folder>
 </Solution>

@@ -20,6 +20,13 @@
 - 想替换内核内置行为:在 `AddTenonAdmin()` **之前**注册同接口实现(内核全部 `TryAdd`,你的注册优先),或继承服务类覆写单个 `virtual` 步骤。不要 fork 内核。
 - 配置都在 `appsettings.json` 的 `TenonAdmin` 节;生产必配 `Jwt:SecretKey`;横向扩容时每实例 `Id:WorkerId` 必须不同,否则雪花 Id 冲突。
 
+## 第三方接入(引用了 TenonAdmin.Integration 时)
+
+- 开放接口:控制器挂 `[OpenApi]` 与 `[OpenApiDataScope(...)]`,路由以 `api/open/v{n}/` 开头,只返回专门的 DTO,不直接返回实体。端点默认拒绝,由管理员在「接入应用」里逐个授权。
+- 调第三方:继承 `OutboundAdapterBase`(普通调用)或 `DeliveryAdapterBase`(可靠投递),不要自己 new `HttpClient`;秘密不进 `appsettings.json`。
+- 数据库事务里不做网络调用。要与业务原子的外呼,在同一事务里调 `IDeliveryOutbox.EnqueueAsync` 入队;`SupportsIdempotency` 只在对方确实按幂等标识去重时才返回 true。
+- 详见 `Integrations/README.md`(用 `--integration` 生成时才有)与内核仓库 `skills/wire-integration.md`。
+
 ## 详版指南
 
 - 内核仓库 `skills/`(新模块全流程 / 建实体 / 后端 CRUD / 前端页面 / 替换服务):https://github.com/Tenon-Net/TenonAdmin/tree/main/skills

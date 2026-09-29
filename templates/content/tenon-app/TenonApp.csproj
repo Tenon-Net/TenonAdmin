@@ -9,6 +9,10 @@
   <ItemGroup>
     <!-- 元包:一引全栈(Core + SqlSugar + Services + AspNetCore)。 -->
     <PackageReference Include="TenonAdmin" Version="TENON_PKG_VERSION" />
+<!--#if (integration) -->
+    <!-- 第三方接入:开放接口、普通第三方调用与可靠投递(Integrations/ 下是示例)。 -->
+    <PackageReference Include="TenonAdmin.Integration" Version="TENON_PKG_VERSION" />
+<!--#endif -->
   </ItemGroup>
 
 </Project>

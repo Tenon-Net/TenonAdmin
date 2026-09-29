@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using TenonAdmin.AspNetCore;
 using TenonAdmin.Core;
@@ -38,4 +39,4 @@ public class SampleDocController(ISampleDocService svc) : ControllerBase
 }
 
 /// <summary>示例业务入参</summary>
-public record SampleDocInput(string Title);
+public record SampleDocInput([Required, StringLength(128)] string Title);

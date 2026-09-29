@@ -265,6 +265,11 @@ internal static class TestDb
                 using var factory = new WorkflowAppFactory();
                 _ = factory.CreateClient();
             }
+            else if (string.Equals(templateKind, "integration", StringComparison.Ordinal))
+            {
+                using var factory = new IntegrationAppFactory();
+                _ = factory.CreateClient();
+            }
             else
             {
                 using var factory = new AdminAppFactory { DbPath = templateDb, DeleteDbOnDispose = false };
@@ -296,6 +301,11 @@ internal static class TestDb
                 using var factory = new WorkflowAppFactory();
                 _ = factory.CreateClient();
             }
+            else if (string.Equals(templateKind, "integration", StringComparison.Ordinal))
+            {
+                using var factory = new IntegrationAppFactory();
+                _ = factory.CreateClient();
+            }
             else
             {
                 using var factory = new AdminAppFactory { DbPath = templateDb, DeleteDbOnDispose = false };
@@ -324,6 +334,11 @@ internal static class TestDb
             if (string.Equals(templateKind, "workflow", StringComparison.Ordinal))
             {
                 using var factory = new WorkflowAppFactory { DbPath = templateDb, ResetDatabase = false };
+                _ = factory.CreateClient();
+            }
+            else if (string.Equals(templateKind, "integration", StringComparison.Ordinal))
+            {
+                using var factory = new IntegrationAppFactory { DbPath = templateDb, ResetDatabase = false };
                 _ = factory.CreateClient();
             }
             else

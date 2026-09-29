@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:integration": "playwright test -c playwright.integration.config.ts",
     "gen:api": "node scripts/gen-api.mjs"
   },
   "dependencies": {
