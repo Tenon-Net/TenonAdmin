@@ -6,7 +6,7 @@ hero:
   text: Full RBAC in three lines of code
   tagline: A zero-config, extensible ASP.NET Core admin-system kernel with built-in RBAC and data permissions
   image:
-    src: /icon-128.png
+    src: /icon-512.png
     alt: TenonAdmin
   actions:
     - theme: brand

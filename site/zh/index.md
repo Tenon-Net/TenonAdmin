@@ -6,7 +6,7 @@ hero:
   text: 三行代码接入完整 RBAC
   tagline: 零配置起步，RBAC、数据权限内置，架构还能按需替换扩展
   image:
-    src: /icon-128.png
+    src: /icon-512.png
     alt: TenonAdmin
   actions:
     - theme: brand
