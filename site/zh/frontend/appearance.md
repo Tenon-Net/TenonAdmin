@@ -21,14 +21,16 @@ TenonAdmin 的外观由 CSS 自定义属性驱动，不是组件 props。`web/sr
 
 同一个 store 里还有两个用户可调的开关，和 `themeScheme` 一起持久化：
 
-- `accent`：品牌主色，从 6 个候选里选（`web/src/theme/accents.ts`：靛蓝 `#646CFF` 默认，另有紫、青、粉、橙、绿）。换主色即重算 `--color-primary*`。
+- `accent`：界面主色，从 7 个候选里选（`web/src/theme/accents.ts`：品牌深蓝 `#0052D4` 默认，并保留原来的靛蓝、紫、青、粉、橙、绿）。换主色即重算 `--color-primary*`。
 - `density`：`'comfortable'` / `'compact'`，落到 `<html>` 的 `data-density`，联动表格行高与卡片内边距。
 
 ## 从 token 到 Naive UI
 
 手写 CSS 直接读 tokens，但 Naive UI 组件不认 CSS 变量，它要一个 JS 对象 `GlobalThemeOverrides`。桥在 `buildThemeOverrides()`，也就是 `web/src/theme/naive-theme.ts`。它用 `getComputedStyle` 把同一批 CSS 变量读出来，映到 Naive 的 `common.*`：`primaryColor`←`--color-primary`、`bodyColor`←`--color-bg-body`、`borderRadius`←`--radius-md`，依此类推。两边读的是同一份值，所以手写样式和 Naive 组件永远不会各显各的色。
 
-主色是唯一不直接读、而是算出来的一档。6 个候选主色，不可能每个都在 `tokens.css` 里预写 hover/pressed/light 四态。所以只存一个 `accent`，其余状态由 `mix(a, b, t)` 派生。`mix` 在 `web/src/theme/mix.ts`，把两色按 `t∈[0,1]` 线性插值。亮色这样算：`hover = mix(primary, #FFF, .16)`、`pressed = mix(primary, #000, .18)`。暗色不一样，先把 accent 往白里提亮一档 `mix(accent, #FFF, .18)`，再往下派生，免得靛蓝压在深底上发闷。
+主色是唯一不直接读、而是算出来的一档。7 个候选主色，不可能每个都在 `tokens.css` 里预写 hover/pressed/light 四态。所以只存一个 `accent`，其余状态由 `mix(a, b, t)` 派生。`mix` 在 `web/src/theme/mix.ts`，把两色按 `t∈[0,1]` 线性插值。亮色这样算：`hover = mix(primary, #FFF, .16)`、`pressed = mix(primary, #000, .18)`。暗色不一样，先把 accent 往白里提亮一档 `mix(accent, #FFF, .18)`，再往下派生，免得深蓝压在深底上发闷。
+
+产品徽标和菜单图标是两套素材。`/tenon-mark.png` 是从 `Tenon-Net/Tenon-Brand` 同步的透明品牌图，侧栏与登录页直接使用；favicon、Apple Touch 与 PWA 图标使用同源的浅色底板版。它们随 TenonAdmin 按 Apache-2.0 分发，不进入下面的 Iconify/SVG 注册流程，也不跟随用户选择的 accent 改色。
 
 这些都落地在 `web/src/composables/useTheme.ts` 的 `useTheme()` 里，盯着 `app.isDark`、`accent`、`density` 三样，任意一个变就动手。往 `<html>` 打 `data-theme` 和 `data-density`，把派生出的 `--color-primary*` 写进 `document.documentElement`，让消费 token 的手写 CSS 立即换色，再重建 Naive 的 `themeOverrides`。`App.vue` 把结果接到 `<n-config-provider :theme-overrides>`，包住整个应用。
 

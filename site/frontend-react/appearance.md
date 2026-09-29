@@ -23,7 +23,7 @@ None of the admin's appearance lives in component props. Colors flow down throug
 
 Two more user-facing knobs live in the same store, persisted alongside `themeScheme`:
 
-- `accent` — the brand color, chosen from 6 candidates (`web-react/src/theme/accents.ts`: indigo `#646CFF` by default, plus purple, cyan, pink, orange, green). Changing the accent recomputes `--color-primary*`.
+- `accent` — the interface accent, chosen from 7 candidates (`web-react/src/theme/accents.ts`: brand blue `#0052D4` by default, with the existing indigo, purple, cyan, pink, orange, and green choices retained). Changing the accent recomputes `--color-primary*`.
 - `density` — `'comfortable'` / `'compact'`, applied along two paths. One stamps `data-density` onto `<html>`, driving the hand-written shell's page padding and card spacing (`web-react/src/styles/chrome.css`); the other folds antd's `compactAlgorithm` into the theme, tightening the components' own metrics. `compactAlgorithm` doesn't touch table row height, so `cellPaddingBlock` is given separately to cover it.
 
 ## Site-wide grayscale (mourning mode)
@@ -40,7 +40,9 @@ antd and Naive differ hard in two places here. First, numeric tokens want a **nu
 
 The fill scale needs care. Beyond hover, the design system also defines a **pressed** state (`--color-fill-active`), one place where the two templates diverge on purpose: antd's filled buttons and search boxes wire rest / hover / pressed to `colorFillTertiary` / `colorFillSecondary` / `colorFill`, and with only two steps a press gives no feedback; the Naive side doesn't need this step. Each fill token also has to be given together with its antd alias partner, or the same page sprouts two grays.
 
-The accent is the one value that isn't read directly but computed. There's no way to pre-write four states for all 6 candidates in `tokens.css`, so only the one `accent` is stored and the rest are derived by `mix(a, b, t)` (`web-react/src/theme/mix.ts`, a linear interpolation of two colors by `t∈[0,1]`, the same magic numbers as Vue). In light, `hover = mix(primary, #FFF, .16)` and `pressed = mix(primary, #000, .18)`; in dark, the accent is first lightened one step toward white before deriving the rest, so indigo doesn't come out muddy against a dark background.
+The accent is the one value that isn't read directly but computed. There's no way to pre-write four states for all 7 candidates in `tokens.css`, so only the one `accent` is stored and the rest are derived by `mix(a, b, t)` (`web-react/src/theme/mix.ts`, a linear interpolation of two colors by `t∈[0,1]`, the same magic numbers as Vue). In light, `hover = mix(primary, #FFF, .16)` and `pressed = mix(primary, #000, .18)`; in dark, the accent is first lightened one step toward white before deriving the rest, so the deep blue doesn't come out muddy against a dark background.
+
+The product mark and menu icons are separate assets. `/tenon-mark.png` is the transparent brand artwork synced from `Tenon-Net/Tenon-Brand` and used directly in the sidebar and sign-in screen; the favicon, Apple Touch icon, and PWA icons use its light-backed variant. They are distributed with TenonAdmin under Apache-2.0, stay outside the Iconify/SVG registration path below, and do not change with the user's accent choice.
 
 This all lands in `useAntdTheme()` (`web-react/src/theme/useAntdTheme.ts`), where a `useLayoutEffect` watches `dark`, `accent`, `density` in a fixed order: first stamp `data-theme` / `data-density` onto `<html>`, because `getComputedStyle` reads the values under the current theme, and reading before flipping picks up the previous palette, always one step behind; then rebuild the antd config; finally write antd's **resolved** accent back into `--color-primary*`, for the hand-written styles (layout shell, login page) that bypass antd.
 

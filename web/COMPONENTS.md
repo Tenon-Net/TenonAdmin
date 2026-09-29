@@ -94,3 +94,5 @@ tenon 内接入约定:
 ## IconPicker / AppIcon(tenon-naive-iconify-picker)
 
 离线优先图标选择与渲染,初始化与包装见 `src/lib/icons.ts` 顶部注释、`src/components/IconPicker/index.vue`、`src/components/AppIcon.vue`。
+
+品牌徽标由 `TenonLogo.vue` 渲染 `/tenon-mark.png`,素材来自 `Tenon-Net/Tenon-Brand`;它不走 IconPicker/AppIcon,也不随用户选择的 accent 改色。

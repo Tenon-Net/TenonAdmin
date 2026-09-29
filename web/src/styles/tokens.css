@@ -28,11 +28,11 @@
   --color-gray-50:  #F0F0F0;  /* 页面背景底(corporate base-200 柔化) */
   --color-white:    #FFFFFF;
 
-  /* ── 原语:品牌主色(靛蓝,与 Logo #646CFF 一致;四档态;运行时由 useTheme 按 accent 重写)── */
-  --color-primary:         #646CFF;  /* 默认态 · 主按钮 / 链接 / 选中 */
-  --color-primary-hover:   #7D84FF;  /* 悬浮 hover · 加亮一档 */
-  --color-primary-pressed: #5259D1;  /* 按下 pressed / active */
-  --color-primary-light:   #F0F0FF;  /* 浅底 · 选中背景 / 标签底 */
+  /* ── 品牌主色备用值；运行时由 useTheme 按 accent 重写 ── */
+  --color-primary:         #0052D4;  /* 默认态 · 主按钮 / 链接 / 选中 */
+  --color-primary-hover:   #296EDB;  /* 悬浮 hover · 加亮一档 */
+  --color-primary-pressed: #0043AE;  /* 按下 pressed / active */
+  --color-primary-light:   #E6EEFB;  /* 浅底 · 选中背景 / 标签底 */
 
   /* ── 原语:语义色(base + 浅底 light-bg,亮色;corporate 语义色,
         warning/error 原值偏浅、按正文可读加深一档)─────────────── */
@@ -106,10 +106,10 @@
    ══════════════════════════════════════════════════════════ */
 :root[data-theme="dark"] {
   /* 主色(靛蓝暗底提亮一档;运行时由 useTheme 按 accent 重写) */
-  --color-primary:         #8B91FF;
-  --color-primary-hover:   #A2A7FF;
-  --color-primary-pressed: #767CF0;
-  --color-primary-light:   #2D3154;
+  --color-primary:         #2E71DC;
+  --color-primary-hover:   #4F88E2;
+  --color-primary-pressed: #265DB4;
+  --color-primary-light:   #232F42;
 
   /* 语义色(business;error 原值过暗、提亮一档保可读) */
   --color-success:    #6BB187;  --color-success-bg: #2F3D35;

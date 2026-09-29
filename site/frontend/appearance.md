@@ -21,14 +21,16 @@ The `app` store's (`web/src/stores/app.ts`) `themeScheme` has three states: `'li
 
 Two more user-facing knobs live in the same store, persisted alongside `themeScheme`:
 
-- `accent` — the brand color, chosen from 6 candidates (`web/src/theme/accents.ts`: indigo `#646CFF` by default, plus purple, cyan, pink, orange, green). Changing the accent recomputes `--color-primary*`.
+- `accent` — the interface accent, chosen from 7 candidates (`web/src/theme/accents.ts`: brand blue `#0052D4` by default, with the existing indigo, purple, cyan, pink, orange, and green choices retained). Changing the accent recomputes `--color-primary*`.
 - `density` — `'comfortable'` / `'compact'`, applied as `data-density` on `<html>`, driving table row height and card padding.
 
 ## From tokens to Naive UI
 
 Hand-written CSS reads the tokens directly, but Naive UI components don't understand CSS variables — they want a JS object (`GlobalThemeOverrides`). `buildThemeOverrides()` (`web/src/theme/naive-theme.ts`) reads that same batch of CSS variables out with `getComputedStyle` and maps them onto Naive's `common.*` (`primaryColor` ← `--color-primary`, `bodyColor` ← `--color-bg-body`, `borderRadius` ← `--radius-md`, and so on). Both sides read the same values, so hand-written styles and Naive components never drift into different colors.
 
-The accent is the one value that isn't read directly but computed. There's no way to pre-write hover/pressed/light states for all 6 accent candidates in `tokens.css`, so only the one `accent` is stored and the other states are derived by `mix(a, b, t)` (`web/src/theme/mix.ts`, a linear interpolation of two colors by `t∈[0,1]`): in light, `hover = mix(primary, #FFF, .16)` and `pressed = mix(primary, #000, .18)`; in dark, the accent is first lightened one step toward white (`mix(accent, #FFF, .18)`) before deriving the rest, so indigo doesn't come out muddy against a dark background.
+The accent is the one value that isn't read directly but computed. There's no way to pre-write hover/pressed/light states for all 7 accent candidates in `tokens.css`, so only the one `accent` is stored and the other states are derived by `mix(a, b, t)` (`web/src/theme/mix.ts`, a linear interpolation of two colors by `t∈[0,1]`): in light, `hover = mix(primary, #FFF, .16)` and `pressed = mix(primary, #000, .18)`; in dark, the accent is first lightened one step toward white (`mix(accent, #FFF, .18)`) before deriving the rest, so the deep blue doesn't come out muddy against a dark background.
+
+The product mark and menu icons are separate assets. `/tenon-mark.png` is the transparent brand artwork synced from `Tenon-Net/Tenon-Brand` and used directly in the sidebar and sign-in screen; the favicon, Apple Touch icon, and PWA icons use its light-backed variant. They are distributed with TenonAdmin under Apache-2.0, stay outside the Iconify/SVG registration path below, and do not change with the user's accent choice.
 
 It all comes together in `useTheme()` (`web/src/composables/useTheme.ts`): it watches `app.isDark` / `accent` / `density`, and on any change stamps `data-theme` / `data-density` onto `<html>`, writes the derived `--color-primary*` into `document.documentElement` (so token-consuming hand-written CSS reskins instantly), and rebuilds Naive's `themeOverrides`. `App.vue` wires the result into `<n-config-provider :theme-overrides>`, wrapping the whole app.
 

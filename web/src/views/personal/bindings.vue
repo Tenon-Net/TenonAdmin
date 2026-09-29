@@ -212,7 +212,7 @@ function cardClass(row: BindingRow) {
 .bind-summary-num {
   font-size: 18px;
   font-weight: 700;
-  color: var(--color-primary, #646cff);
+  color: var(--color-primary, #0052d4);
   font-variant-numeric: tabular-nums;
 }
 .bind-summary-sep {
