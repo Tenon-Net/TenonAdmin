@@ -1,35 +1,35 @@
-<!-- Keep in sync with README.zh-CN.md (canonical) -->
+<!-- 本文件与中文基准版 README.zh-CN.md 保持同步 -->
 
 English | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
 <p align="center">
-  <img src="web/design-mockups/brand/icon-128.png" width="80" height="80" alt="TenonAdmin">
+  <img src="web/design-mockups/brand/icon-128.png" width="96" height="96" alt="TenonAdmin">
 </p>
 
 <h1 align="center">TenonAdmin</h1>
 
-<p align="center">
-  <em>Three lines of code to add a complete, extensible RBAC access-management layer to your ASP.NET Core project.</em>
-</p>
+<p align="center"><strong>Add an admin framework with RBAC and data permissions to your ASP.NET Core project in three lines of code.</strong></p>
+
+<p align="center">NuGet packages · Replaceable services and business extensions · Vue and React frontends</p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="License"></a>
-  <a href="https://github.com/Tenon-Net/TenonAdmin/stargazers"><img src="https://img.shields.io/github/stars/Tenon-Net/TenonAdmin" alt="Stars"></a>
-  <a href="https://github.com/Tenon-Net/TenonAdmin/network/members"><img src="https://img.shields.io/github/forks/Tenon-Net/TenonAdmin" alt="Forks"></a>
-  <a href="https://www.nuget.org/packages/TenonAdmin"><img src="https://img.shields.io/nuget/v/TenonAdmin" alt="NuGet"></a>
+  <a href="https://www.nuget.org/packages/TenonAdmin"><img src="https://img.shields.io/nuget/v/TenonAdmin" alt="NuGet version"></a>
   <img src="https://img.shields.io/badge/.NET-10-512BD4" alt=".NET 10">
-  <a href="https://github.com/Tenon-Net/TenonAdmin/actions"><img src="https://img.shields.io/github/actions/workflow/status/Tenon-Net/TenonAdmin/backend-ci.yml?branch=dev" alt="Build"></a>
+  <a href="https://github.com/Tenon-Net/TenonAdmin/actions/workflows/backend-ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Tenon-Net/TenonAdmin/backend-ci.yml?branch=dev" alt="Backend build status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="Apache License 2.0"></a>
 </p>
 
 <p align="center">
-  <a href="https://tenonadmin.52moyu.net/login"><strong>🔗 Live Demo</strong></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://tenon.52moyu.net"><strong>📖 Docs</strong></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="CHANGELOG.md"><strong>📋 Changelog</strong></a>
+  <a href="#quick-start"><strong>Quick start</strong></a> ·
+  <a href="https://tenonadmin.52moyu.net/login"><strong>Live demo</strong></a> ·
+  <a href="https://tenon.52moyu.net/"><strong>Documentation</strong></a>
 </p>
 
----
+## About TenonAdmin
 
-## 🎨 What is this?
+TenonAdmin is an admin framework for ASP.NET Core. It packages users, roles, menus, organization data permissions, dictionaries, configuration, operation logs, and file management as NuGet packages. The frontend comes in Vue and React versions.
 
-TenonAdmin packages the common back-office machinery as NuGet packages. Users, roles, menus, multi-org data permissions, dictionaries, config, operation logs, file uploads — everything every back office ends up rebuilding — comes in via `dotnet add package`. Three lines in `Program.cs` give you a complete admin API:
+Install the `TenonAdmin` package, then register its services and map its endpoints in `Program.cs`:
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration);
@@ -37,143 +37,220 @@ var app = builder.Build();
 app.MapTenonAdmin();
 ```
 
-- **Runs by default** — zero-config start: tables auto-created, seed data loaded, SQLite as the fallback. First run doesn't even need a database server.
-- **Replace what you don't like** — every built-in service is interface-based and registered with `TryAdd`. Register your own implementation and the built-in one steps aside. No forking.
-- **Upgrading = bumping a package version** — bug fixes and new features arrive as package updates; your business code doesn't move.
+The framework handles shared administration features, while the application project owns business entities, services, and pages. Replace services through interfaces or inherit a built-in service and override its processing steps. Framework updates ship as NuGet package versions; the changelog documents compatibility changes.
 
-The usual approach is cloning a template repo: hundreds of files become yours to maintain, business code and framework code end up tangled together, and when the framework ships a new version you're stuck merging diffs by hand. TenonAdmin flips that — the common machinery is a package dependency, and your business code stays your business code.
+- **Start with SQLite:** The first run creates the database and tables, then loads seed data.
+- **Customize services:** Dependency injection and `virtual` methods let the application replace a service or one of its processing steps. Custom code remains in the application project.
+- **Upgrade packages:** NuGet delivers fixes and features. Follow the changelog when a release includes compatibility changes.
+- **Choose a frontend:** Use Vue 3 with Naive UI or React 19 with Ant Design 6. Both include table, form, and permission components for business pages.
 
-The frontend is covered too: **two feature-equivalent templates** (Vue and React). Pick whichever feels right and use it as the starting point of your own project.
+## Quick start
 
-## 🗺️ Runtime architecture
+The backend requires the .NET 10 SDK. The frontends require Node.js 22.12+.
 
-Primary request path: dual SPA templates → Host (with SignalR) → auth & data-scope → domain services → SqlSugar → DB. Side path: in-kernel job scheduler, plus an optional standalone Worker process.
+### Add TenonAdmin to an existing project
 
-<p align="center">
-  <a href="docs/architecture/tenon-runtime.en.architecture.html">
-    <img src="docs/architecture/tenon-runtime.en.readme.png" alt="TenonAdmin runtime architecture" width="100%">
-  </a>
-</p>
-
-<p align="center">
-  <a href="docs/architecture/tenon-runtime.en.architecture.html"><strong>Open interactive architecture diagram</strong></a>
-</p>
-
-## 🔭 Want to see the finished thing first?
-
-The [live demo](https://tenonadmin.52moyu.net/login) isn't the kernel's own sample host. It's a separate consumer app, **[tenon-example](https://github.com/Tenon-Net/tenon-example)**: installs the package from NuGet, `degit`s the frontend template, adds a CRM business module, and ships to production. Source is fully open — that's what your code looks like after you adopt it.
-
-The login page has four one-click buttons. Three of those accounts open the same customer list and see 214, 128, and 42 rows, and the `CustomerService` behind it contains no organization filter at all — the data-permission global filter attaches that outside your business code. [One query, three numbers](https://github.com/Tenon-Net/tenon-example/blob/dev/docs/showcase-multi-org-data-scope.md) walks through where.
-
-## 🚀 Quick Start
-
-### Requirements
-
-- .NET 10 SDK
-- Node.js 20+ (only if you run a frontend template)
-
-### Take it for a spin
-
-Clone the repo, then one command for the backend:
-
-```bash
-dotnet run --project backend/samples/MinimalHost
-```
-
-First startup creates the database and tables, loads seed data, and prints a randomly generated super-admin password to the console (account `superAdmin`). API is up at http://localhost:5100.
-
-Pick a frontend (or run both — the ports don't clash):
-
-```bash
-cd web && npm install && npm run dev            # Vue → http://localhost:5173
-cd web-react && npm install && npm run dev      # React → http://localhost:5174
-```
-
-Open the browser, log in with the credentials from the console, and there's your full back office. On Windows it's even lazier: double-click `dev.bat` in the repo root and the backend plus both frontends start in one go.
-
-### Plug it into your own project
+Install the framework from your ASP.NET Core project directory:
 
 ```bash
 dotnet add package TenonAdmin
 ```
 
-Add the three lines above to `Program.cs`, and JWT auth, RBAC, data permissions, and every management endpoint register themselves on startup. Different database? One config block:
+Add the service registration and endpoint mapping shown above to `Program.cs`, keeping the application's existing creation and startup code. The framework registers JWT authentication, RBAC, data permissions, and the administration APIs.
 
-```jsonc
-// appsettings.json
-"TenonAdmin": {
-  "Database": {
-    "DbType": "MySql",          // Sqlite / MySql / SqlServer / PostgreSQL
-    "ConnectionString": "..."
-  }
-}
+See the [getting started guide](https://tenon.52moyu.net/guide/getting-started) for database configuration and integration steps. New projects can use the guide's `dotnet new tenon-app` template to create a backend host.
+
+### Run the complete sample
+
+Clone the repository and start the backend:
+
+```bash
+git clone https://github.com/Tenon-Net/TenonAdmin.git
+cd TenonAdmin
+dotnet run --project backend/samples/MinimalHost
 ```
 
-### Don't like a built-in implementation? Swap it
+The backend runs at http://localhost:5100. The sample uses SQLite. On the first run, it creates the database and tables, loads seed data, and prints a random password for `superAdmin` to the console.
 
-Every built-in service is interface-based and registered with `TryAdd` — register yours first and the built-in one steps aside:
+Open another terminal at the repository root and start one frontend.
 
-```csharp
-// e.g. swap the password hashing algorithm: register yours before AddTenonAdmin
-builder.Services.AddSingleton<IPasswordHasher, MyPasswordHasher>();
-builder.Services.AddTenonAdmin(builder.Configuration);
+**Vue** — http://localhost:5173
+
+```bash
+cd web
+npm install
+npm run dev
 ```
 
-It goes finer than that: long service methods are split into small `virtual` steps, so you can subclass a built-in service and override just the one step you care about instead of copying the whole method. And this replaceability isn't a slogan — a dedicated set of contract tests locks it in place.
+**React** — http://localhost:5174
 
-## ✨ Backend features
+```bash
+cd web-react
+npm install
+npm run dev
+```
 
-- **Auth** — Account/password + captcha, JWT + refresh-token rotation, login lockout, online sessions & force-logout; optional TOTP self-enrollment / Cookie sessions (off by default — see `docs/agents/security-optional-config.md`). Not an MLPS certification product
-- **RBAC** — Roles, three-level menus (directory / page / button), button-level permission codes, role-menu authorization
-- **Data permissions** — All / this org / org & children / self only / custom orgs, enforced by ORM global filters — zero filtering code in your business logic
-- **Multi-app portal** — App management, independent menu trees, app selection & switching
-- **Organization** — Org tree, positions, multi-role users with a primary org
-- **Notifications** — In-app notices & announcements, targetable to everyone / roles / users
-- **Dictionary & config** — Dict types + items + key-value config, cached with event-driven invalidation
-- **Logging** — Auto-recorded operation logs with sensitive-input masking
-- **File management** — Upload/download, size limits, extension whitelist, path-traversal protection
-- **Import/export** — xlsx import wizard (preview, per-cell validation, dedupe, partial commit) and column-pickable export, from the optional `TenonAdmin.Excel` package — skip it and publish size doesn't grow by a byte
-- **Scheduled jobs** — a scheduler in the kernel, with no new dependency and no extra process: cron (six fields, seconds first, `L`/`W`/`#` included), fixed interval or one-shot triggers; write an `IAdminJob` class for the payload, or write no code at all and configure an HTTP call. Replicas elect a leader through a database lease, so one dying doesn't stop the schedule — conditional updates prevent duplicate claims, while a crash between claiming and execution can still lose an occurrence. Business side effects must be idempotent
-- **Multi-database** — SQLite (default) / MySQL / SQL Server / PostgreSQL; switching is a config change
-- **Multi-replica** — Optional Redis cache, cross-replica rate-limit counters, per-replica snowflake worker IDs — scales out without surprises
-- **Restrained dependencies** — Core packages depend only on SqlSugarCore + Microsoft.* at runtime; no third-party framework zoo dumped into your project
+Sign in as `superAdmin` with the password from the console. On Windows, run `dev.bat` from the repository root to start the backend and both frontends.
 
-## 🖥️ Frontend: two official templates, pick one
+## Features
 
-The same backend contract ships with two fully independent frontend templates — take whichever stack you're comfortable with:
+### Replace services and extend your application
 
-| | `web/` | `web-react/` |
-|---|---|---|
-| Framework | Vue 3 + Naive UI | React 19 + Ant Design 6 |
-| State / routing | Pinia + vue-router | zustand + react-router |
-| i18n | vue-i18n | react-i18next |
-| Dev port | :5173 | :5174 |
+Services such as password hashing and file storage are provided through interfaces. Register your implementation before `AddTenonAdmin`, and the framework uses it in place of the built-in implementation. To change one processing step, inherit the built-in service and override the corresponding `virtual` method.
 
-Zero sharing is deliberate: the two templates never import from each other — not even a utility function. Take one and you only carry that one's dependencies; delete the other and nothing happens. Features were ported page by page, so both sides have:
+Service implementations remain in the application project, while NuGet packages maintain the framework code. Contract tests cover service replacement and business entity and controller discovery. See the [service replacement example](skills/replace-service.md).
 
-- **Contract-generated API** — OpenAPI → `schema.d.ts`, type-safe end to end; change an endpoint and the frontend fails to compile
-- **Dynamic routing** — Backend menu tree drives route registration; multi-app portal with seamless switching
-- **Button-level permissions** — `v-auth` directive in Vue, `<Can>` component in React, same permission codes
-- **Column-driven tables** — One `columns` array drives the search form, dict rendering, and column settings
-- **Design tokens + light/dark themes** — Four-layer CSS variable tokens, follows the system or toggles manually
-- **Three login-page skins** — Switchable out of the box, style-isolated
-- **In-house component library** — FormContainer (modal/drawer two-in-one), StatusSwitch (pessimistic-update toggle), dict suite, OrgTreeSelect, FileUpload (chunked / resumable / instant), PasswordStrength, ImportWizard, chart wrappers, and more — implemented once per template
+### Authorize endpoints and scope data
 
-## 🧩 Repository layout
+When users open the same customer list, their role's data scope determines which records they receive. When a business entity implements `IOrgScoped` or inherits `DataEntity`, SqlSugar global filters add organization conditions to its queries. The business service owns the query, and the framework applies the data scope.
 
-| Directory | What it is |
-|---|---|
-| `backend/` | .NET 10 kernel (9 NuGet packages) + sample host + tests |
-| `web/` | Vue 3 + Naive UI frontend template, self-contained |
-| `web-react/` | React 19 + Ant Design 6 frontend template, self-contained |
-| `templates/` | `dotnet new tenon-app` project template |
-| `site/` | Docs site source (VitePress, zh/en) |
-| `docs/` | Design docs and development records |
+Menus, actions, and backend endpoints use permission codes composed of the HTTP method and route. Endpoint authorization controls available operations, while data scopes control the business records a user can access.
 
-## 📋 Project status
+### Choose Vue or React
 
-**The API may still change before 1.0** — breaking changes are called out in the [changelog](CHANGELOG.md). Development happens on the `dev` branch; issues and PRs welcome.
+The Vue template uses Vue 3 and Naive UI. The React template uses React 19 and Ant Design 6. Each template owns its dependencies, routes, state, and components, and both connect to the same backend APIs.
 
-## 📄 License
+API types are generated from OpenAPI. Business pages can reuse search tables, forms, dictionaries, organization and user selectors, file uploads, import wizards, and other components.
 
-[Apache License 2.0](LICENSE)
+### Build approval workflows
+
+The process designer supports approval steps, conditional branches, parallel branches, carbon copies, dynamic forms, and field permissions for each step. The approval interface supports starting requests, pending and completed work, return, withdrawal, transfer, delegation, adding or removing approvers, and reminders.
+
+Runtime records include approval history, timeout actions, and execution retries. AI decision evaluation supports OpenAI-compatible model services and records results for review and audit. The approval process controls decisions and workflow progression.
+
+### Connect external systems
+
+Open APIs manage application credentials, endpoint authorization, and business data scopes for callers. External calls manage destination addresses, credentials, and call records for services the application invokes.
+
+For operations that require delivery guarantees, the application can commit business data and a delivery record in the same database transaction, then send the message in the background. Follow-up handling can retry, query the result, or request manual review according to the receiver's idempotency and result-query support. Each attempt is recorded.
+
+### Vibe Coding: follow project conventions
+
+The repository provides [development skills](skills/README.md) for entities, CRUD, service replacement, scheduled jobs, import and export, and system integration. Each skill defines task steps, code references, and validation requirements.
+
+AI assistants use these instructions to apply the project's entity base classes, service interfaces, permission rules, and frontend components when generating a business module. Developers review the business rules and generated code.
+
+## Feature matrix
+
+| Category | Capabilities |
+| --- | --- |
+| Authentication and sessions | Account and password, captcha, JWT and refresh-token rotation, online sessions, and forced sign-out; Cookie sessions, SMS sign-in, and external sign-in can be enabled through configuration |
+| Authentication security | Login lockout, rate limiting, TOTP, recovery codes, account MFA policies, and identity verification for sensitive operations |
+| Permissions and organizations | Roles, menus, action permissions, organization tree, and positions; all, current organization, current organization and descendants, current user, and selected organizations as data scopes |
+| Administration | Multi-application portal, dictionaries, configuration, announcements, SignalR messages, operation logs, sensitive-input masking, audit fields, and recycle bin |
+| Files and Excel | Upload and download, signed access, chunked upload, resumable upload, and instant upload; import templates, data preview, cell validation, duplicate detection, error reports, and export column selection |
+| Approval workflows | Process design, dynamic forms, field permissions for each step, approval handling, timeout actions, Webhooks, runtime monitoring, and AI decision evaluation |
+| System integration | Application credentials, open API authorization, business data scopes, application rate limiting, external calls, transactional delivery records, and processing logs |
+| Scheduled jobs | Six-field cron, fixed intervals, and one-time triggers; code, HTTP, and SQL jobs, with SQL execution enabled through configuration; timeouts, retries, logs, failure alerts, and a standalone Worker |
+| Frontend templates | Vue 3 + Naive UI and React 19 + Ant Design 6; Chinese and English, light and dark themes, layout settings, business components, and OpenAPI type generation |
+| Data and deployment | SQLite, MySQL, SQL Server, and PostgreSQL; CodeFirst, multiple database connections, Redis shared cache, database leases, multiple replicas, Docker, and health checks |
+| Development tools | Backend project template and AI development skills; Vue ProTable and IconPicker npm packages |
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%" align="center"><a href="docs/screenshots/vue-admin.png"><img src="docs/screenshots/vue-admin.png" alt="Vue user management" width="480"></a><br>Vue user management</td>
+    <td width="50%" align="center"><a href="docs/screenshots/react-admin.png"><img src="docs/screenshots/react-admin.png" alt="React user management" width="480"></a><br>React user management</td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><a href="docs/screenshots/workflow-designer.png"><img src="docs/screenshots/workflow-designer.png" alt="Workflow designer" width="480"></a><br>Workflow designer</td>
+    <td width="50%" align="center"><a href="docs/screenshots/workflow-approval.png"><img src="docs/screenshots/workflow-approval.png" alt="Approval details" width="480"></a><br>Approval details</td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><a href="docs/screenshots/role-permissions.png"><img src="docs/screenshots/role-permissions.png" alt="Role permissions" width="480"></a><br>Role permissions</td>
+    <td width="50%" align="center"><a href="docs/screenshots/integration-apps.png"><img src="docs/screenshots/integration-apps.png" alt="Integration applications" width="480"></a><br>Integration applications</td>
+  </tr>
+</table>
+
+<details>
+<summary>More pages</summary>
+
+<table>
+  <tr>
+    <td width="50%" align="center"><a href="docs/screenshots/org-management.png"><img src="docs/screenshots/org-management.png" alt="Organization management" width="480"></a><br>Organization management</td>
+    <td width="50%" align="center"><a href="docs/screenshots/dictionary.png"><img src="docs/screenshots/dictionary.png" alt="Dictionary management" width="480"></a><br>Dictionary management</td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><a href="docs/screenshots/file-management.png"><img src="docs/screenshots/file-management.png" alt="File management" width="480"></a><br>File management</td>
+    <td width="50%" align="center"><a href="docs/screenshots/scheduled-jobs.png"><img src="docs/screenshots/scheduled-jobs.png" alt="Scheduled jobs" width="480"></a><br>Scheduled jobs</td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><a href="docs/screenshots/workflow-pending.png"><img src="docs/screenshots/workflow-pending.png" alt="Pending approvals" width="480"></a><br>Pending approvals</td>
+    <td width="50%" align="center"><a href="docs/screenshots/delivery-tasks.png"><img src="docs/screenshots/delivery-tasks.png" alt="Reliable delivery" width="480"></a><br>Reliable delivery</td>
+  </tr>
+</table>
+
+</details>
+
+## Live demo and example project
+
+[Open the live demo](https://tenonadmin.52moyu.net/login) · [View the example project](https://github.com/Tenon-Net/tenon-example)
+
+The demo runs as a separate application, `tenon-example`. Its backend integrates the framework through NuGet, its frontend is based on an admin template, and its business code includes a CRM module.
+
+Use the business accounts on the sign-in page to open the customer list and observe how organization and data scopes affect the query result. See [One query, three numbers](https://github.com/Tenon-Net/tenon-example/blob/dev/docs/showcase-multi-org-data-scope.md) for the sample's business query and permission configuration.
+
+## Repository layout
+
+```text
+TenonAdmin/
+├── backend/                           # .NET backend
+│   ├── src/                           # NuGet package source
+│   │   ├── TenonAdmin/                # Installation entry point; references the ASP.NET Core integration package
+│   │   ├── TenonAdmin.Core/           # Interfaces, configuration, results, and error codes
+│   │   ├── TenonAdmin.SqlSugar/       # Data access, table creation, and global filters
+│   │   ├── TenonAdmin.Services/       # Administration entities, business services, and seed data
+│   │   ├── TenonAdmin.AspNetCore/     # Authentication, controllers, and host integration
+│   │   ├── TenonAdmin.Workflow/       # Approval workflows
+│   │   ├── TenonAdmin.Integration/    # Open APIs, external calls, and reliable delivery
+│   │   ├── TenonAdmin.Excel/          # Excel import and export
+│   │   ├── TenonAdmin.Caching.Redis/  # Redis cache
+│   │   └── TenonAdmin.Auth.*/         # GitHub, WeCom, DingTalk, and WeChat sign-in
+│   ├── samples/                       # Sample hosts
+│   │   ├── MinimalHost/               # Administration API sample
+│   │   ├── WorkerHost/                # Standalone job process
+│   │   ├── IntegrationSample/         # System integration sample
+│   │   └── IntegrationMockPartner/    # Mock partner for the integration sample
+│   ├── tests/                         # Backend tests and test hosts
+│   ├── Directory.Packages.props       # Backend dependency versions
+│   └── TenonAdmin.slnx                # Backend solution
+├── web/                               # Vue 3 + Naive UI admin template
+├── web-react/                         # React 19 + Ant Design 6 admin template
+├── templates/                         # dotnet new project template
+├── skills/                            # AI development skills and reference templates
+├── site/                              # Documentation site
+├── docs/                              # Architecture, deployment, screenshots, and development references
+├── scripts/                           # Contract checks, tests, and validation scripts
+├── .github/workflows/                 # CI and release workflows
+├── docker-compose.yml                 # Container deployment configuration
+├── docker-compose.scale.yml           # Multiple-replica deployment configuration
+└── LICENSE                            # Apache License 2.0
+```
+
+`web/` and `web-react/` maintain their own dependencies and build configuration. A business project references the backend packages through NuGet and uses one frontend template as its starting point.
+
+## Documentation
+
+| Task | Reference |
+| --- | --- |
+| Add TenonAdmin to a project | [Getting started](https://tenon.52moyu.net/guide/getting-started) |
+| Develop business features | [Development skills and reference templates](skills/README.md) · [Vue components](web/COMPONENTS.md) · [React components](web-react/COMPONENTS.md) |
+| Replace services | [Service replacement](skills/replace-service.md) |
+| Add workflows and external systems | [Approval workflows](https://tenon.52moyu.net/guide/workflow) · [System integration](https://tenon.52moyu.net/guide/integration) · [Excel import and export](skills/wire-import-export.md) |
+| Understand the architecture | [Architecture](https://tenon.52moyu.net/backend/architecture) · [Runtime architecture diagram](docs/architecture/tenon-runtime.en.architecture.html) |
+| Deploy and upgrade | [Deployment guide](docs/deployment.md) · [Changelog](CHANGELOG.md) |
+
+## Contributing
+
+Development takes place on the `dev` branch. Report problems through [GitHub Issues](https://github.com/Tenon-Net/TenonAdmin/issues) and submit code changes as pull requests to `dev`.
+
+## Copyright and license
+
+Copyright © Tenon-Net
+
+This project is licensed under the [Apache License 2.0](LICENSE), which permits commercial use, modification, and distribution.
+
+When distributing this project or a derivative work, include a copy of the license, mark changed files, and retain applicable copyright, patent, trademark, and attribution notices in distributed source code. Follow Section 4 of the license for attribution notices from a NOTICE file.
+
+Third-party components and assets remain subject to their respective licenses.
