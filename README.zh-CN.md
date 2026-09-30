@@ -3,7 +3,7 @@
 [English](README.md) | 简体中文 | [日本語](README.ja.md)
 
 <p align="center">
-  <img src="web/design-mockups/brand/icon-128.png" width="96" height="96" alt="TenonAdmin">
+  <img src="site/public/tenon-mark.png" width="96" height="96" alt="TenonAdmin">
 </p>
 
 <h1 align="center">TenonAdmin</h1>
