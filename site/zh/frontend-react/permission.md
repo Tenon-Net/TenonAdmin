@@ -2,16 +2,32 @@
 
 没权限的按钮不会渲染出来。React 没有指令系统，Vue 的 `v-auth` 到这边成了一个组件 `<Can>`：命中权限码就渲染子节点，不命中返回 `null`，按钮不进虚拟 DOM。授权状态存在哪、判定怎么算，决定了这套门控怎么搭起来。
 
+> 前置：先完成[入门教程的普通角色授权](/zh/frontend-react/getting-started#_5-给普通角色补齐访问权)。
+
+## 先给刷新按钮加一道门
+
+在教程页导入 `Can`，再包住刷新按钮：
+
+```tsx
+<Can code="GET:/api/v1/sys/position/page">
+  <Button loading={loading} onClick={() => void load()}>刷新</Button>
+</Can>
+```
+
+有岗位查询权限时按钮渲染；撤掉权限并重新登录后，`<Can>` 返回 `null`。直接请求接口仍必须收到 403。`<Can>` 改善操作体验，服务端才是权限边界。
+
+[![在角色权限树中同时检查菜单与接口权限](/screenshots/role-permissions.png)](/screenshots/role-permissions.png)
+
 ## 全景：两个 store，按持久化需求拆分
 
-- **`user` store**（`src/stores/user.ts`）：`accessToken`、`refreshToken`、`userInfo`（`userId`、`account`、`name`、`avatar`、`mustChangePassword`），加 `isLoggedIn` 选择器和 `setSession`/`clear` action。用 zustand 的 persist 落 `localStorage`，`partialize` 白名单只放这三项，等价于 Vue 侧的 `persist: true`。刷新页面还留着登录态。
+- **`user` store**（`src/stores/user.ts`）：保存令牌、会话模式、CSRF 标记和用户资料。body 会话持久化 access/refresh 与资料；Cookie 会话只持久化模式、CSRF 标记和资料，access 留在内存，refresh 只存在 HttpOnly Cookie。
 - **`auth` store**（`src/stores/auth.ts`）：`modules`、`currentModuleId`、`defaultModuleId`、`menuTree`、`permissionCodes`、`permissionsLoaded`、`isSuperAdmin`、`routesReady`。判定逻辑走 `hasPerm` 纯函数和 `useHasPerm` hook，不是 Vue 那种 store getter。persist 的 `partialize` 只落 `currentModuleId` 一项。
 
-这么拆是因为两边生命周期不一样。令牌和用户资料要扛住刷新，否则「保持登录」无从谈起。权限码、菜单树、`routesReady` 相反，每次应用启动都得重新拉。`routesReady` 尤其不能持久化：动态路由只活在 router 的内存里，一旦它被存成 `true`，刷新就会跳过路由重建，每条动态路由都变 404。`currentModuleId` 是唯一例外，持久化它是为了让 F5 或深链先恢复「上次在哪个应用」，剩下的再由守卫调 `useModule().enterInitial()` 重新拉（见[门户与守卫](/zh/frontend-react/portal-guards)）。
+两边生命周期不同。body 会话靠持久化令牌维持登录；Cookie 会话刷新后用 HttpOnly refresh Cookie 静默换取新的 access。权限码、菜单树和 `routesReady` 每次启动都要重新拉取，因为动态路由只存在于内存。若持久化 `routesReady: true`，刷新会跳过重建并让动态页面落到 404。`currentModuleId` 单独保留，用于恢复上次应用，再由守卫拉取其余授权状态。
 
 ## `<Can>`：没有指令，用组件包门控
 
-React 里门控是个组件，不是指令。`v-auth` 那种「挂在元素上、由框架在挂载时跑一次」的机制 React 没有，取而代之的是把要保护的内容当 children 塞进 `<Can>`：
+React 没有指令系统，因此把受保护内容作为 children 放进 `<Can>`：
 
 ```tsx
 // web-react/src/components/Can.tsx
@@ -34,9 +50,9 @@ export function Can({ code, every = false, children }: { code: string | string[]
 </Can>
 ```
 
-不命中时 `<Can>` 返回 `null`，React 根本不渲染这棵子树，按钮从头到尾没进过 DOM。效果和 Vue `v-auth` 的物理移除 DOM 一样：没权限的按钮不在页面里，靠改客户端状态或开发者工具都「变」不出来。机制不一样：Vue 先把节点挂上再 `el.remove()` 删掉，React 是压根不创建这个节点。
+不命中时 `<Can>` 返回 `null`，React 不会渲染这棵子树，按钮也不会进入 DOM。Vue 的 `v-auth` 保留节点并切换 `display`，React 则从一开始就不创建节点。两边都会在授权状态变化后重新判定。
 
-还有一处行为差别。`v-auth` 只实现了 `mounted` 钩子，挂载后权限再变不会重判；`<Can>` 靠 `useHasPerm()` 订阅 store，权限码一变就重渲染、跟着改显隐。正常登录时权限一次拉齐，这点差别多数时候碰不到，但它真实存在。
+`<Can>` 通过 `useHasPerm()` 订阅权限相关字段，权限码变化会触发重新渲染。Vue 侧通过 `watchEffect` 达到同样效果，只是更新现有 DOM 节点的显示状态。
 
 别把 `<Can>` 当安全边界。真正的授权判定始终在服务端，后端的 `[RolePermission]` 过滤器才是权威。这个组件只管 UX，把用户用不了的按钮挡在视线外。
 
@@ -73,7 +89,7 @@ export function hasPerm(
 const has = useHasPerm()
 ```
 
-用户管理页把这些判据抽进 `userForm.ts`，让它们能被单测钉住：
+用户管理页把组合判据放进 `userForm.ts`，操作列只消费最终的 `true` 或 `false`：
 
 ```ts
 // web-react/src/views/system/user/userForm.ts
@@ -129,6 +145,10 @@ const moreItems = ([
 
 ## 权限码约定
 
-权限码就是规范化后的路由本身，形如 `{METHOD}:/{路由模板}`，例如 `GET:/api/v1/ping`。没有另一套独立字符串要你去对齐。前端登录进门户时，`useModule().enterInitial()` 并行发两个请求：`GET /personal/permissions` 拉当前用户的权限码集合，存进 `authStore.permissionCodes`；`GET /personal/profile` 拿超管标记，存进 `authStore.isSuperAdmin`。两个都成功才把 `permissionsLoaded` 置真，只要有一个失败，就按普通用户、按 fail-closed 处理，绝不往越权那侧倒。
+权限码就是规范化后的路由本身，形如 `{METHOD}:/{路由模板}`，例如 `GET:/api/v1/ping`，没有另一套独立字符串要对齐。前端进入门户时，`enterInitial()` 并行发两个请求：`GET /personal/permissions` 拉权限码集合，成功后把 `permissionsLoaded` 置真；请求失败则保留 `false`，普通权限门控按 fail-closed 隐藏。`GET /personal/profile` 提供超管标记，失败时沿用登录响应里的用户快照，没有快照才按普通用户处理。
 
 既然权限码就是路由，前端也没必要自造一套权限词汇，两端分工因此很清楚：前端只按码决定按钮的显隐与禁用，后端才计算并强制同一个码。后端怎么把路由归一化成权限码、`[RolePermission]` 又怎么校验会话与授权，见[请求管线](/zh/backend/request-pipeline)。想围绕授权环节做替换，比如换权限计算、换会话校验，那部分设计见[可替换性模型](/zh/backend/replaceability)。
+
+## 用两个账号验收
+
+准备一个拥有目标权限的角色和一个没有该权限的角色。前者应看到按钮并能完成操作；后者不应看到普通操作按钮，受保护的状态开关应保持禁用。随后直接调用同一个后端接口，确认无权限账号仍返回 403。界面检查证明 `<Can>`、render 谓词和禁用态没有漏铺，直接请求则证明安全边界仍在服务端。

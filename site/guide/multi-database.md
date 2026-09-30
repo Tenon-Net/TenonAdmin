@@ -1,6 +1,6 @@
 # Configure Multiple Databases (Multi-ConfigId)
 
-The main database is still `TenonAdmin:Database`. To attach a log store, legacy database, or read replica, add `TenonAdmin:AdditionalDatabases` and call `db.AsTenant().GetConnection("name")`.
+Use multiple database connections when the backend needs an existing business database, a reporting store, or a separate log database. `TenonAdmin:Database` is the main connection. Each `AdditionalDatabases` entry adds a connection, and `ConfigId` is the name used to select it in code.
 
 This is not the same as [switching dialect](/guide/getting-started) in Quick Start. Switching dialect keeps **one** connection and changes SQLite to MySQL. Here you run **several connections in the same process**.
 
@@ -137,6 +137,8 @@ If you `TryAddSingleton<ISqlSugarClient>` **before** `AddTenonAdmin`, the built-
 
 ## Minimal example: split audit log
 
+Use this log table to verify a secondary connection in development. You own its schema; use your migration process for production table creation.
+
 Use the `Audit` config block above.
 
 Entity (**not** in `ApplicationAssemblies`):
@@ -168,6 +170,8 @@ await audit.Insertable(new AuditLog
     CreateTime = DateTime.Now,
 }).ExecuteCommandAsync();
 ```
+
+After inserting, query `biz_audit_log` through `GetConnection("Audit")` and confirm the record with `Message` equal to `hello` exists. Check that the main database did not create the same table. If it did, look for a secondary entity accidentally included in `ApplicationAssemblies`.
 
 ## Related pages
 

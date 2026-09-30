@@ -4,6 +4,14 @@ A backend response arrives in one of two shapes, but a caller only ever wants on
 
 How a request goes out with its types and token belongs to the [request layer](/frontend-react/request); this picks up the moment a response lands back in your hands.
 
+> Prerequisite: make the [position request in the tutorial](/frontend-react/getting-started#_4-add-the-real-endpoint-and-its-types) succeed once.
+
+## Observe one success and one failure
+
+Open the position response in the network panel. On success, the HTTP 200 JSON envelope contains `code: 0`, while the component receives the paged object inside `data`. Switch the browser network panel to Offline and click Refresh; the page enters `catch` and gives the result of `translateError(e)` to `Alert`.
+
+The business component handles only two paths: render typed data, or catch a displayable error. `unwrap` and `ApiError` reduce the raw response shapes to those outcomes.
+
 ## `unwrap` and `ApiError`
 
 The API functions in `web-react/src/api/index.ts` are hand-written. `gen:api` only produces the types in `schema.d.ts`; the bodies you write yourself, and almost all of them end in `.then(r => unwrap<T>(r))`. Here `r` is the raw result `client.GET/POST(...)` resolves to, always shaped `{ data, error, response }` — that is openapi-fetch's own convention, not something TenonAdmin invented. Paged endpoints end in `toPage`, which still calls `unwrap` internally. Only file downloads differ: they use `parseAs: 'blob'`, so the response is not an envelope at all and a plain `response.ok` check is enough.
@@ -130,7 +138,7 @@ export function translateError(err: unknown): string {
 }
 ```
 
-The `te` here is not i18next's built-in `i18n.exists()`; it is a hand-written helper in `web-react/src/locales/index.ts`. They differ only on **subtree keys**, but that difference lands straight in the user's face. Should a backend msgKey happen to be a path pointing at a whole subtree, like `error.auth`, `i18n.exists('error.auth')` says `true`, while `t('error.auth')` returns an English debug line: `key 'error.auth' returned an object instead of string.` Using `exists()` would pop that debug line at the user as if it were the message. `te` is implemented as `i18n.exists(key) && typeof i18n.t(key, { returnObjects: true }) === 'string'`, returns `false` for a subtree, and falls back to the backend's own text. The Vue side never worries about this cell, because vue-i18n's `te` has that semantic natively; here it is assembled out of i18next, so it needs a deliberate guard.
+The `te` here is not i18next's built-in `i18n.exists()`; it is a helper in `web-react/src/locales/index.ts`. The difference appears for **subtree keys**. `i18n.exists('error.auth')` returns true for the whole object, after which `t('error.auth')` produces the debug text `key 'error.auth' returned an object instead of string.` The helper additionally requires the resolved value to be a string, so a subtree returns false and error display falls back to backend text. vue-i18n's `te` already has this behavior; the React template supplies it explicitly.
 
 The full path of a `FileTooLarge` (44002) therefore runs:
 
@@ -161,5 +169,9 @@ The word "running" is the whole point. `gen:api` fetches online through openapi-
 ::: warning
 `schema.d.ts` is a generated artifact — don't hand-edit it. Any change is overwritten the next time `gen:api` runs. To adjust a type, change the backend endpoint or DTO and regenerate.
 :::
+
+## How to verify a contract change
+
+A complete backend API change produces three observable results: regenerated `schema.d.ts` contains the new path or DTO, its callers pass type checking, and a real request still returns an envelope with a numeric `code`. Trigger one business error as well; the UI should show localized text rather than a raw msgKey or `Malformed API response`. The backend consistency test does not cover React's error keys, so this runtime check is required on this template.
 
 How the envelope itself is assembled on the backend, and where the `Result<T>` that `unwrap` consumes gets wrapped on, belong to the [request pipeline](/backend/request-pipeline) page. `web-react/` and the Vue template talk to the same backend and the same `ErrorCode` set, so this contract layer is isomorphic across both; for why each template keeps its own copy instead of sharing a layer, see [frontend templates](/guide/frontend-templates).

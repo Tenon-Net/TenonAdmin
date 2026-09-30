@@ -1,6 +1,6 @@
 # 替换内置服务
 
-你想改内核的某个行为：换掉密码哈希算法、给登录流程插一步、把内置字典模块整块换成自己的。不用 fork，也不用复制内核代码。
+默认文件存储、登录流程或字典接口不符合业务需要时，可以在自己的宿主项目中注册扩展实现。先确定要改变的范围，再选择替换服务、覆写步骤或接管路由，避免为一个局部需求复制整套框架代码。
 
 你要改的范围有多大，决定走哪条路：
 
@@ -8,15 +8,15 @@
 - **只改流程里的一步**（比如登录后多记一笔、账密校验改走 LDAP）→ 继承内置服务，覆写那一个 `virtual` 方法。
 - **整块内置模块都不要、想自己接管**（比如字典模块的接口完全不合用）→ 禁用它的控制器，用自己的控制器占同一条路由。
 
-还有一件相关的事：给你自己的业务表灌初始数据，走消费方种子。四种都在下面。
+示例中的注册代码放在自己的 `Program.cs`，扩展类放在业务项目的独立文件中。初始数据通过种子注册，方法见末尾。
 
-这几条路为什么成立？靠的是三条约束：`TryAdd` 先到者胜、`virtual` 拆步、程序集挂载，外加锁死它们的「六件套」测试。原理见[可替换性模型](/zh/backend/replaceability)。
+框架通过接口注册、可覆写方法和程序集发现支持这些扩展。需要了解设计约束时，参考[可替换性模型](/zh/backend/replaceability)。
 
 ## 换掉整个服务：抢在 AddTenonAdmin 之前注册
 
 内核所有内置服务都用 `TryAdd*` 注册，语义是「容器里已有同接口就不再添加」。所以你只要在 `AddTenonAdmin()` **之前**把自己的实现注册进去，内核那行 `TryAdd` 检测到坑已被占，就自动让位。
 
-以换密码哈希算法为例：
+下面用密码哈希接口说明注册方式。算法部分为占位示意，不能直接运行；实际替换还需要兼容已有密码哈希，并验证旧账号仍能登录。
 
 ```csharp
 // 消费方 Program.cs
@@ -33,7 +33,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 ```
 
 ::: warning 顺序反了会静默失效
-写在 `AddTenonAdmin()` **后面**，内置实现已经占了坑，你的 `TryAdd` 会被跳过。它不报错，替换却没生效。要不受顺序影响，用 `builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>())`，它是「覆盖已有注册」，写在 `AddTenonAdmin()` 之后也照样赢。
+如果使用 `TryAdd*` 注册替换服务，放在 `AddTenonAdmin()` 后面会因已有默认注册而跳过。上例使用的 `AddSingleton` 与 `TryAddSingleton` 语义不同，不能一概说晚注册都失效。推荐统一在内核之前注册替换；已注册后需要显式替换时，使用 `Replace(ServiceDescriptor...)` 并匹配原服务生命周期。
 :::
 
 常见的替换点：
@@ -45,7 +45,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 | `IFileStorage` | `LocalFileStorage` | 换 OSS / S3 |
 | `IAuthService` | `AuthService` | 定制整套登录流程 |
 | `IDataScopeProvider` | `DataScopeProvider` | 定制数据范围规则 |
-| `IIdGenerator` | `SnowflakeIdGenerator` | 换数据库自增 / GUID v7 |
+| `IIdGenerator` | `SnowflakeIdGenerator` | 定制符合现有 `long` 主键契约的发号策略 |
 
 大部分替换点就是 `backend/src/TenonAdmin.Services/ServicesSetup.cs` 里每一行 `TryAdd`。数据层与宿主层还各有一批，比如 `IIdGenerator` 注册在 `backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs`。那里注册的每个接口都是可替换点。
 
@@ -62,8 +62,13 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 public sealed class MyAuthService(
     IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens,
     ISessionService sessions, ILogService logService, ILoginLockService loginLock,
-    ICaptchaService captcha, ISecurityPolicyProvider policy, ISmsOtpService smsOtp)
-    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp)
+    ICaptchaService captcha, ISecurityPolicyProvider policy, ISmsOtpService smsOtp,
+    IEnumerable<IExternalAuthProvider>? externalProviders = null,
+    ISysUserExternalService? externalBindings = null, IRbacService? rbac = null,
+    TimeProvider? time = null, IMfaPolicyService? mfaPolicy = null,
+    IMfaChallengeService? mfaChallenge = null, AdminSecurityOptions? security = null)
+    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp,
+        externalProviders, externalBindings, rbac, time, mfaPolicy, mfaChallenge, security)
 {
     protected override LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) =>
         base.BuildLoginOutput(user, pair) with { Name = $"{user.Name}({user.Account})" };
@@ -74,7 +79,9 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>());
 ```
 
-找可覆写的步骤，就是打开目标服务源码，搜 `protected virtual`。那几个方法就是给你留的口子。覆写时先调 `base.Xxx()` 保留原逻辑，再追加自己的。继承一步而不是复制整段，好处很直接：升级内核时，基类那步的上游修复你会自动吃到。不会因为抄了旧版方法体而错过它。
+在目标服务中查找 `protected virtual` 方法，选择与需求对应的一步。上例先调用基类方法，再调整显示名称，保留其余结果字段。构造函数也转发基类的可选依赖，包括外部登录和 MFA 服务，避免扩展时意外跳过既有安全处理。
+
+是否调用 `base.Xxx()` 取决于这一步是追加行为还是整体替换。升级后对照基类签名，并验证登录、刷新令牌和已启用的 MFA 流程。
 
 ## 整块模块不要：禁用 + 接管路由
 
@@ -96,9 +103,9 @@ builder.Services.AddTenonAdmin(builder.Configuration, o =>
 public class CustomDictController : ControllerBase { /* 你的字典逻辑 */ }
 ```
 
-能被禁的只有带 `[Module("Name")]` 标注的控制器，目前是这六个：`Dict`、`Upload`、`Notice`、`Log`、`Config`、`Dashboard`。`Upload` 稍微特殊：字面上禁的是文件控制器 `/api/v1/sys/file`，模块名和路由并不一致。身份认证、用户、机构、角色、菜单、门户这些控制器没有这个标注。没有开关能把它们关掉，因为关了整个系统就登不进去了。
+只有标记 `[Module("Name")]` 的控制器能通过此配置禁用，例如 `Dict`、`Upload`、`Notice`、`Log`、`Config`、`Dashboard`、`Job`。以当前版本的控制器标记为准。`Upload` 对应文件路由 `/api/v1/sys/file`，配置值使用模块名，不是路由。认证、用户、机构、角色、菜单和门户等基础控制器没有该关闭开关。
 
-别把 `Api.DisabledModules` 和门户里的「应用/模块」搞混，后者对应的是 `SysModule` 那张表。前者是编译期的路由开关，后者是运行时数据，也有自己的护栏。内置的 `system` 应用承载着全部管理页，想通过管理接口停用它会被拒，错误码 42013。原因很直接：门户会因此失联，且没有 UI 恢复入口。还挂着菜单的应用也不许删，错误码 42023。删了的话，那些顶级目录的 `ModuleId` 会悬空，整棵子树从门户消失。
+别把 `Api.DisabledModules` 和门户里的「应用/模块」搞混，后者对应的是 `SysModule` 那张表。前者是启动时的路由开关，后者是运行时数据，也有自己的护栏。内置的 `system` 应用承载着全部管理页，想通过管理接口停用它会被拒，错误码 42013。原因很直接：门户会因此失联，且没有 UI 恢复入口。还挂着菜单的应用也不许删，错误码 42023。删了的话，那些顶级目录的 `ModuleId` 会悬空，整棵子树从门户消失。
 
 ## 给自己的实体播种：消费方种子
 
@@ -117,10 +124,12 @@ public class ProductSeed : ISeedData<BizProduct>
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, ProductSeed>());
 ```
 
-种子行的固定 Id 必须落在消费方保留区间 `Id ≥ 1000`。下界常量是 `TenonAdmin.Core.TenonSeedIds.ConsumerMin`（=1000），`[1, 999]` 归内核内置种子。上限不是写死的数字，而是启动时刻算出的雪花地板（`SnowflakeIdGenerator.CurrentFloor()`）：严格小于它，就永远不会被此后真实产生的雪花号撞上，今天这个地板已经是 15 位数量级，足够编任意语义化的号段。`Id = 0`，或不低于这个地板，都会被启动检查当场拒绝，应用直接起不来，不会静默吞掉，这个检查在 `DatabaseInitializer` 里。但落进内核段 `[1, 999]` 不会报错。运行时不区分谁是消费方，这条下界只能靠自觉。挑号务必从 `TenonSeedIds.ConsumerMin` 起，撞了内核将来的号，代价是升级时主键冲突，而且无法回退。
+为业务种子分配固定 ID 时，从 `TenonAdmin.Core.TenonSeedIds.ConsumerMin`（1000）开始，并低于 `SnowflakeIdGenerator.CurrentFloor()` 返回的运行时发号下界。`[1, 999]` 留给内置种子；运行时无法区分种子来自哪个项目，这段保留范围仍需开发者遵守。
+
+启动检查会拒绝 `Id = 0`、超出运行时下界或同实体重复的编号。不要复用历史种子 ID，避免升级时与已有记录冲突。
 
 ::: warning 忘了注册是静默不执行
 内核不扫描程序集找种子。`options.ApplicationAssemblies` 只管实体建表和控制器挂载，不碰种子。种子必须显式注册，漏了这行，种子就不跑，也没有任何报错。
 :::
 
-`ApplicationAssemblies` 那行是消费方接入的总开关，它同时让你的实体加入 CodeFirst 建表、让你的控制器进同一 MVC 管道。完整链路见[端到端加一个业务模块](/zh/guide/business-module)。真要动手替换前，看一眼 `backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs`。它的五个用例把上面四种机制逐一验成了契约。照着它们的写法，给自己的替换补一层回归测试，最稳。
+验证替换时，先通过正常入口调用服务，确认扩展逻辑确实执行，再检查原有权限和错误处理。接管路由时，在 OpenAPI 中确认原控制器已移除、自己的端点已出现；种子则应在首次启动插入，重启后不重复。`ReplaceabilityTests.cs` 提供回归测试参考，完整业务接入见[添加业务模块](/zh/guide/business-module)。

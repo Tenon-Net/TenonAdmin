@@ -1,6 +1,6 @@
 # 常见问题
 
-内核对可预期的配置错误会点名到具体的配置项、表、列，不甩一句笼统异常。建表闸门、`WorkerId` 缺配这类问题，顺着报错原文读通常比翻文档快。下面收的是报错帮不上忙的那几件：装完包、第一次把内核跑起来时最容易卡住的事。
+登录失败时，先确认启动方式和密码来源；启动失败时，先查看日志中点名的配置项、表或列。下面按常见现象给出排查步骤，涉及数据恢复的操作请先区分本地实验环境和需要保留数据的环境。
 
 ## 首次启动该用什么账号密码登录？
 
@@ -30,11 +30,13 @@
 
 ## 忘了看首启那次日志，随机密码找不回了怎么办？
 
-找不回。密码写进库时就已经哈希，没有明文可捞。要么直接改库里那条超管记录的密码哈希，要么清掉 `sys_user`（或直接删库）让种子重新播一次。重播时配好 `Seed:AdminPassword`，这次就用你指定的值，不再随机。
+数据库保存的是密码哈希，无法还原明文。已有可用管理员账号时，请通过管理界面重置密码；种子配置只影响首次建号，不能重置现有账号。
+
+仅限不需要保留数据的本地实验环境，可以停止应用、删除本地 SQLite 数据库后重新初始化，并在启动前设置 `Seed:AdminPassword`。需要保留数据的环境不要清空 `sys_user` 或删库；没有可用管理员时，先备份，再由系统维护人员制定账号恢复方案。
 
 ## `appsettings.Development.json` 为什么不在仓库里？
 
-它被 `.gitignore` 排除了，不在版本库里。缺它不影响启动：默认 SQLite + CodeFirst 会自己把库和表长出来，启动时按实体类自动建表，不用手写建表 SQL。里面放的是数据库连接串、JWT 密钥这类本地凭证，不该进 git。要固定超管密码或者落别的本地凭证，从 `backend/samples/MinimalHost/appsettings.Development.json.example` 拷一份改名即可。
+它被 `.gitignore` 排除了，不在版本库里。缺它不影响启动：默认 SQLite 与 CodeFirst 会创建数据库和表，启动时按实体类自动建表，不用手写建表 SQL。里面放的是数据库连接串、JWT 密钥这类本地凭证，不该进 git。要固定超管密码或者落别的本地凭证，从 `backend/samples/MinimalHost/appsettings.Development.json.example` 拷一份改名即可。
 
 ## 换库、gen:api、代理、健康检查这些去哪找
 
@@ -49,4 +51,4 @@
 | `/health` 和 `/health/ready` 分别探什么、`/openapi` 生产 404 是不是漏了 | [部署指南](/zh/guide/deployment/) 的上线自检 |
 | 多副本启动报 `WorkerId` 相关错误 | [容器化部署](/zh/guide/deployment/docker) |
 
-表里都没有，去仓库 [issue](https://github.com/Tenon-Net/TenonAdmin/issues) 搜关键字。开新 issue 时把 .NET / Node 版本、`TenonAdmin:Database:DbType`、单实例还是多副本、完整报错堆栈一并带上，能省一轮来回。
+表里都没有，去仓库 [issue](https://github.com/Tenon-Net/TenonAdmin/issues) 搜关键字。开新 issue 时把 .NET / Node 版本、`TenonAdmin:Database:DbType`、单实例还是多副本、脱敏后的报错堆栈一并带上，能省一轮来回。

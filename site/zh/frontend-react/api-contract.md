@@ -4,6 +4,14 @@
 
 请求怎么带着类型和令牌发出去，归 [请求层](/zh/frontend-react/request)；这里从响应回到手里那一刻接手。
 
+> 前置：先让[入门教程的岗位查询](/zh/frontend-react/getting-started#_4-再接上真实接口和类型)成功返回一次。
+
+## 先看成功和失败两种结果
+
+在网络面板打开岗位查询响应。成功时，HTTP 200 的 JSON 外层包含 `code: 0`，组件最终拿到 `data` 中的分页对象。把浏览器切到离线模式再点「刷新」，页面会进入 `catch`，并把 `translateError(e)` 的结果交给 `Alert`。
+
+业务组件只处理两条路：渲染强类型数据，或捕获一个可展示错误。下面的 `unwrap` 与 `ApiError` 负责把原始响应收拢成这两种结果。
+
 ## `unwrap` 与 `ApiError`
 
 `web-react/src/api/index.ts` 里的 API 函数是手写的。`gen:api` 只生成 `schema.d.ts` 的类型，函数体自己写，绝大多数最后落在 `.then(r => unwrap<T>(r))`。这里的 `r` 是 `client.GET/POST(...)` 直接 resolve 出来的原始结果，形状固定是 `{ data, error, response }`，这是 openapi-fetch 的约定，不是 TenonAdmin 定的。分页端点落在 `toPage`，内部仍旧调 `unwrap`；只有文件下载不一样，它走 `parseAs: 'blob'`，响应根本不是信封，自己判 `response.ok` 就够。
@@ -130,7 +138,7 @@ export function translateError(err: unknown): string {
 }
 ```
 
-这里的 `te` 不是 i18next 自带的 `i18n.exists()`，是 `web-react/src/locales/index.ts` 里手写的一格。差别只在**子树键**上，却会直接烧到用户脸上：后端 msgKey 万一恰好是 `error.auth` 这种指向一整棵子树的路径，`i18n.exists('error.auth')` 说 `true`，而 `t('error.auth')` 返回的是一句英文 debug 文本 `key 'error.auth' returned an object instead of string.`。用 `exists()` 就会把这句 debug 文本当文案弹给用户。`te` 的实现是 `i18n.exists(key) && typeof i18n.t(key, { returnObjects: true }) === 'string'`，对子树返回 `false`，于是退回后端原文。Vue 侧不必操心这一格，因为 vue-i18n 的 `te` 天生就是这个语义；React 这边是拿 i18next 拼出来的，所以要专门守。
+这里的 `te` 不是 i18next 自带的 `i18n.exists()`，而是 `web-react/src/locales/index.ts` 的辅助函数。差别在**子树键**：`i18n.exists('error.auth')` 会对整个对象返回 `true`，随后 `t('error.auth')` 得到调试文本 `key 'error.auth' returned an object instead of string.`。`te` 还要求取出的值是字符串，因此对子树返回 `false`，让错误提示退回后端原文。vue-i18n 的 `te` 已经具备这一语义，React 侧需要显式补上。
 
 一个 `FileTooLarge`（44002）的完整链路于是这样：
 
@@ -161,5 +169,9 @@ npm run gen:api
 ::: warning
 `schema.d.ts` 是生成产物，不要手改。改了它，下次一跑 `gen:api` 就被覆盖。要调整类型，去改后端的接口或 DTO，再重新生成。
 :::
+
+## 怎样确认契约改动完整
+
+一次后端接口改动完成后，应当同时看到三件事：重新生成的 `schema.d.ts` 反映了新路径或 DTO，调用处通过类型检查，真实请求返回的仍是带数字 `code` 的信封。再触发一次业务错误，界面应显示翻译后的提示，而不是裸 `msgKey` 或 `Malformed API response`。React 侧没有覆盖错误键的后端一致性测试，因此这次运行期检查不能省略。
 
 信封本身在后端怎么拼出来、`unwrap` 消费的 `Result<T>` 到底在哪一步套上，归 [请求管线](/zh/backend/request-pipeline) 那页。`web-react/` 和 Vue 模板对接的是同一个后端、同一套 `ErrorCode`，所以这层契约两边同构；两个模板为什么各留一份而不抽公共层，见 [前端模板](/zh/guide/frontend-templates)。

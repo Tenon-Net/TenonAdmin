@@ -1,27 +1,86 @@
 # 快速开始
 
-你大概已经开了另一个窗口，准备先把数据库装上。不用装：克隆完仓库直接 `dotnet run`，控制台就打出一串超管密码，浏览器能登进去。SQLite 文件、表结构、种子数据全是内核首启自己长出来的，配置一行没写。
+首次体验可以直接运行仓库中的示例。后端默认使用 SQLite，并在首次启动时创建数据库、表和管理员账号，无需另外安装数据库服务。启动后端和一套前端后，就能在浏览器中登录后台。
 
-::: tip 前提条件
-- .NET 10 SDK
-- 想连前端一起跑，再装 Node.js（建议 20+）
-:::
+需要 .NET 10 SDK 和 Git；运行前端建议使用 Node.js 22.12 或更高版本。前后端请使用配套版本，扩展包与 `TenonAdmin` 保持相同版本。正式发布记录见[更新日志](/zh/changelog)，`dev` 分支可能包含尚未发布的功能。
 
 ## 先把示例跑起来
 
-仓库自带一个最小化示例宿主 `backend/samples/MinimalHost`，它的 `Program.cs` 只有几行接线。克隆仓库后直接运行：
+在终端执行以下命令。后续后端命令都从仓库根目录运行：
 
 ```bash
+git clone --branch dev --single-branch https://github.com/Tenon-Net/TenonAdmin.git
+cd TenonAdmin
 dotnet run --project backend/samples/MinimalHost
 ```
 
-首次启动会自动做三件事。先用默认 SQLite 建表，走 CodeFirst（按实体类自动建表，不用手写建表 SQL），库文件落在 `backend/samples/MinimalHost/data/` 下。再写入种子数据，也就是菜单、角色和超级管理员账号。最后监听 `http://localhost:5100`。这个端口在 `launchSettings.json` 里写死，为的是避开 macOS 上 AirPlay 占用的 5000。
+保持这个终端运行。看到 `http://localhost:5100` 的监听信息，表示后端已启动。SQLite 数据库保存在 `backend/samples/MinimalHost/data/` 下；表和初始菜单、角色由框架创建。
 
-本地想一键起前后端，仓库根的 `dev.bat` 会分两个窗口拉起 MinimalHost 和前端 Vite，首次运行还顺带装好前端依赖。停的时候用 `stop.bat`。
+首次创建管理员账号时，控制台会显示账号 `superAdmin` 和随机密码。**密码只在创建账号的那次启动显示，请先保存。** 如果数据库已有用户，重启不会生成新密码，也不会覆盖已有账号。
 
-## 确认三个探针
+## 启动前端并登录 {#顺手起前端}
 
-服务起来后，先确认这三个端点都通：
+另开一个终端，从仓库根目录选择一套前端。Vue 使用 Naive UI，React 使用 Ant Design；两套连接同一个后端，任选其一即可。
+
+::: code-group
+
+```bash [Vue (web/)]
+cd web
+npm install
+npm run dev
+```
+
+```bash [React (web-react/)]
+cd web-react
+npm install
+npm run dev
+```
+
+:::
+
+Vue 打开 `http://localhost:5175`，React 打开 `http://localhost:5174`。使用 `superAdmin` 和刚保存的密码登录，登录后修改初始密码。能进入后台并打开菜单，说明前后端已连通。
+
+登录后，从左侧菜单进入用户管理。下图中的用户是示例数据，首次启动时只需确认自己的管理员账号能够显示；筛选区和新增按钮是后续业务页面会复用的布局。
+
+[![Vue 用户管理页面，点击查看原图](/screenshots/vue-admin.png)](/screenshots/vue-admin.png)
+
+开发服务器会把 `/api` 和 `/openapi` 请求转发到后端 `:5100`，本地无需配置跨域。后端地址不同时，通过 `TENON_API_TARGET` 调整代理目标。若登录失败，先确认后端终端仍在运行，再核对密码来源；详细排查见[常见问题](/zh/faq)。
+
+接下来，了解[核心概念](/zh/guide/concepts)，或直接[添加业务模块](/zh/guide/business-module)。如果要把模板作为自己项目的起点，参考[选择前端模板](/zh/guide/frontend-templates)和[同步上游](/zh/guide/sync-fork)。下面的接口调试与配置说明可在需要时查阅。
+
+## 三行代码接进你自己的项目
+
+上面跑的是仓库自带示例。真要把内核接进你自己的 ASP.NET Core 项目，先装元包：
+
+```bash
+dotnet add package TenonAdmin
+```
+
+下面是完整的最小启动代码。已有项目请将服务注册放在 `Build()` 之前，将端点映射放在 `Run()` 之前：
+
+```csharp
+using TenonAdmin.AspNetCore;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddTenonAdmin(builder.Configuration);
+var app = builder.Build();
+app.MapTenonAdmin();
+
+app.Run();
+```
+
+`AddTenonAdmin` 负责绑配置，把 JWT、RBAC、数据权限、日志这些服务全注册上。`MapTenonAdmin` 负责挂路由、健康检查，还有 OpenAPI 文档，后者只在 dev 下挂。默认走 SQLite，零配置就能跑。
+
+单实例开发可以使用默认内存缓存。准备部署多个实例时，按[容器化与多副本](/zh/guide/deployment/docker)接入 Redis，并核对服务注册顺序、共享存储与实例编号。
+
+想要更细粒度的依赖控制，可以只引某一层，比如 `.AspNetCore`、`.Services`、`.SqlSugar`、`.Core`。这些包为什么这么分层、「可替换」到底怎么替，归[核心概念](/zh/guide/concepts)讲透，这里先把它跑起来就够。
+
+> 1.0 之前 API 仍可能调整，破坏性变更会在[更新日志](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)里明确标出。开发在 `dev` 分支进行。
+
+## 检查后端与接口描述 {#确认三个探针}
+
+需要确认后端状态或排查连接问题时，可以检查以下端点：
 
 ```bash
 # 存活探针,只看进程在不在,不碰任何依赖
@@ -34,7 +93,7 @@ curl http://localhost:5100/health/ready
 curl http://localhost:5100/openapi/v1.json
 ```
 
-前两个应该返回 `Healthy`。`/openapi/v1.json` 返回一大坨 JSON，后面生成前端类型要用到它。这个端点生产环境不挂载，线上请求它拿到 404 是预期行为，不是漏配。
+前两个应该返回 `Healthy`。`/openapi/v1.json` 返回OpenAPI 接口描述 JSON，后面生成前端类型要用到它。这个端点生产环境不挂载，线上请求它拿到 404 是预期行为，不是漏配。
 
 ## 登录，调第一个接口
 
@@ -54,7 +113,7 @@ curl http://localhost:5100/openapi/v1.json
 账号固定是 `superAdmin`，把这串密码抄下来。
 
 ::: warning 随机密码只打印一次
-没记下来也别慌。本地实验环境里，删掉 `backend/samples/MinimalHost/data` 下的数据库文件，重新 `dotnet run`，空库会重新播种。生产库不能这么清。那边要么先配好固定密码（见下），要么登录后立刻改密。
+仅限不需要保留数据的本地实验环境：删掉 `backend/samples/MinimalHost/data` 下的数据库文件，重新 `dotnet run`，空库会重新播种。生产库不能这么清。需要保留数据时，请使用已有管理员账号执行密码重置；恢复前先备份。
 :::
 
 有时候你想要一个自己说了算的固定密码，比如团队共享、CI、反复删库重来这些场景。做法是把 `backend/samples/MinimalHost/appsettings.Development.json.example` 拷成 `appsettings.Development.json`，再填上 `Seed:AdminPassword`：
@@ -63,7 +122,7 @@ curl http://localhost:5100/openapi/v1.json
 { "TenonAdmin": { "Seed": { "AdminAccount": "superAdmin", "AdminPassword": "你的密码" } } }
 ```
 
-这个文件装的是本地凭证，被 `.gitignore` 排除，不会进版本库。配了它，启动日志就不再打印随机密码，你直接用自己设的账号密码登。还要注意，种子只认空库。库里只要已经有任意用户，改这里也不会覆盖已存在的账号。真要重置，只能删库重来。
+这个文件装的是本地凭证，被 `.gitignore` 排除，不会进版本库。配了它，启动日志就不再打印随机密码，你直接用自己设的账号密码登。还要注意，种子只认空库。库里只要已经有任意用户，改这里也不会覆盖已存在的账号。已有账号的密码应通过密码修改或重置流程处理，不能靠修改种子配置重置。
 
 默认没开图形验证码（`Security:Captcha:Enabled` 默认关），登录只要账号密码：
 
@@ -92,70 +151,7 @@ curl http://localhost:5100/api/v1/ping \
 { "code": 0, "data": { "pong": true, "account": "superAdmin", "at": "2026-07-...T..." } }
 ```
 
-不带令牌，或者令牌过期、被吊销，拿到的都是 `401`，用的是标准信封，`code=40006`。超管带着令牌里的 `sadm` 声明，自动绕过后续的 `[RolePermission]` 权限码校验。普通用户就没这待遇，得先在菜单管理里挂上对应路由，再到角色管理里授权，才调得通同一个接口，挂路由、授权这一整套流程在[新建业务模块](/zh/guide/business-module)里有完整示范。
-
-## 三行代码接进你自己的项目
-
-上面跑的是仓库自带示例。真要把内核接进你自己的 ASP.NET Core 项目，先装元包：
-
-```bash
-dotnet add package TenonAdmin
-```
-
-最新正式版是 `0.6.0`；`0.7.0-preview.1` 是已发布的预览版，包含可选的[审批工作流](/zh/guide/workflow)。核心接入只有三行：
-
-```csharp
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddTenonAdmin(builder.Configuration);
-var app = builder.Build();
-app.MapTenonAdmin();
-
-app.Run();
-```
-
-`AddTenonAdmin` 负责绑配置，把 JWT、RBAC、数据权限、日志这些服务全注册上。`MapTenonAdmin` 负责挂路由、健康检查，还有 OpenAPI 文档，后者只在 dev 下挂。默认走 SQLite，零配置就能跑。
-
-想跨副本共享会话和缓存，也就是多实例部署，得额外装 `TenonAdmin.Caching.Redis`，并且在 `AddTenonAdmin` **之前**调 `AddTenonAdminRedisCache(builder.Configuration)`。为什么要抢在前面？内核的可替换服务都用 `TryAdd` 注册，谁先注册谁赢。晚于 `AddTenonAdmin`，就抢不过内置的进程内缓存了。没配 `Cache:Provider=Redis` 的时候这行是空操作，单实例开发不受影响。
-
-想要更细粒度的依赖控制，可以只引某一层，比如 `.AspNetCore`、`.Services`、`.SqlSugar`、`.Core`。这些包为什么这么分层、「可替换」到底怎么替，归[核心概念](/zh/guide/concepts)讲透，这里先把它跑起来就够。
-
-> 1.0 之前 API 仍可能调整，破坏性变更会在[更新日志](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md)里明确标出。开发在 `dev` 分支进行。
-
-## 顺手起前端
-
-前端有两套官方模板，都连同一个后端：`web/` 是 Vue 3 加 Naive UI，`web-react/` 是 React 19 加 Ant Design，功能对齐，挑顺手的栈就行。`web/` 起在 `5173`，`web-react/` 起在 `5174`：
-
-::: code-group
-
-```bash [Vue (web/)]
-cd web
-npm install
-npm run dev
-```
-
-```bash [React (web-react/)]
-cd web-react
-npm install
-npm run dev
-```
-
-:::
-
-内置的反向代理会把 `/api` 和 `/openapi` 原样转发到后端 `:5100`，想换转发目标用环境变量 `TENON_API_TARGET` 覆盖。这么一来浏览器眼里只有一个源，本地开发不用配跨域。打开对应端口，用同一个超管账号密码登录，就能看到完整后台。
-
-前端重新生成 API 类型用 `npm run gen:api`，这条命令要求后端正在跑，因为它是从运行中的 `/openapi/v1.json` 抓契约，不是离线生成。两套模板各在自己目录下跑 `gen:api`。
-
-::: tip 想拿它当一次性脚手架（soybean / vite 那种）？
-上面 `cd` 进目录是「克隆仓库、跟着上游升级」的路子，也是推荐路径，前端会跟着走 NuGet 升级的后端契约同步演化。只想要一份拷贝、完全自己维护，就用 degit 拉一份无 `.git` 历史的快照当起点，选哪套拉哪套：
-
-```bash
-npx degit Tenon-Net/TenonAdmin/web my-web        # Vue 模板
-npx degit Tenon-Net/TenonAdmin/web-react my-web  # React 模板
-```
-
-代价明确：**没有升级通道**。上游修了 bug，得自己读 diff 手动搬，快照也会跟走 NuGet 升级的后端契约越漂越远。想持续吃上游修复，别走快照，走[同步 Fork 与上游](/zh/guide/sync-fork)；两套模板的区别与选型见[选择前端模板](/zh/guide/frontend-templates)。
-:::
+未携带有效令牌，或令牌已过期、会话已吊销时，接口返回 `401`，标准响应中的错误码为 `40006`。超级管理员通过 `sadm` 声明绕过角色权限检查；普通用户则需要在菜单管理中配置对应路由，并通过角色获得授权。完整操作见[新建业务模块](/zh/guide/business-module)。
 
 ## 换掉默认数据库
 

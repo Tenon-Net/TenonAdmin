@@ -1,6 +1,6 @@
 # 数据层与审计
 
-业务代码里查订单的那一行，既不写 `IsDelete == false`，也不写机构条件，可这两个条件都进了最终的 SQL。填进去的是 `SqlSugarSetup`：整个进程只有一个 `SqlSugarScope`，过滤器和审计 AOP 在它构造时一次挂上，此后无处可漏。
+业务代码只写订单条件，软删除和机构范围也会进入最终 SQL；插入时，主键和审计字段同样自动补齐。`SqlSugarSetup` 把这些规则一次挂到进程内的 `SqlSugarScope` 上。业务服务因此只处理业务字段，但绕过仓储或清除过滤器时，也必须明确接手这些保护。
 
 ## 一个 `SqlSugarScope` 单例
 
@@ -31,6 +31,8 @@ client.QueryFilter.AddTableFilter<ISoftDelete>(e => e.IsDelete == false);
 ```
 
 已删数据对所有查询天然不可见。确需查已删数据时用 `.ClearFilter<ISoftDelete>()` 显式解除。
+
+如果列表里出现已删除记录，先检查实体是否实现 `ISoftDelete`，再检查查询是否调用过 `ClearFilter`。过滤器按接口匹配；只有一个同名 `IsDelete` 属性并不会自动启用软删除。
 
 ### 数据范围
 
@@ -85,7 +87,7 @@ client.Aop.DataExecuting = (_, info) =>
 
 ## 实体基类
 
-业务实体按**要哪几样能力**挑基类。五个基类叠成一条链，每往下一层多一样：
+业务实体先按数据是否需要机构隔离、删除后是否需要恢复来选基类。选错不会只影响字段多少：它还会改变查询过滤和 `DeleteAsync` 的行为。五个基类叠成一条链，每往下一层多一种能力：
 
 ```text
 PrimaryId          只有主键 Id
@@ -103,7 +105,7 @@ PrimaryId          只有主键 Id
 | `DataEntity` | 有 | 有 | 有 | 需要「本机构 / 本机构及以下 / 仅本人 / 自定义」隔离的业务表 |
 | `OrgAuditEntity` | 有 | 无 | 有 | 要机构隔离、又确需真删的表 |
 
-**没有软删除的那两个，仓储 `DeleteAsync` 是物理删除**，行从库里移除，没有回收站，也没有 `RestoreAsync`。挑基类前先问这张表要不要回收站。
+选择时先问两件事：数据是否要按机构隔离，删除后是否要恢复。需要两者就用 `DataEntity`；只需要软删除用 `BaseEntity`；需要机构隔离但必须物理删除才用 `OrgAuditEntity`。**没有软删除的那两个，仓储 `DeleteAsync` 是物理删除**，行从库里移除，没有回收站，也没有 `RestoreAsync`。
 
 机构隔离的两个基类（`DataEntity` / `OrgAuditEntity`）都吃写路径守卫。仓储的 `UpdateAsync`/`DeleteAsync` 对 `IOrgScoped` 实体内置了范围检查，越权改删他机构的行会被拒，返回 0 行。
 

@@ -1,6 +1,6 @@
 # Deployment: Choose a Route, Then Clear the Security Baseline
 
-You've already got it running locally via `dotnet new tenon-app` (or three lines of `Program.cs`), and now you need to ship it to a server. `npm run dev` works because the Vite dev server reverse-proxies `/api` and `/openapi` to the backend (`web/vite.config.ts`) — that proxy layer only exists during development. The build output `web/dist` is a pile of static files, and who hosts it and how it finds the backend are the two questions going live has to answer.
+After the app runs locally, deployment requires frontend hosting, a backend service, and production configuration. The development Vite proxy is not part of the build output, so the server must route API requests to the backend explicitly. Examples below use Vue’s `web/`; React uses `web-react/`, with its build output in its own `dist/` directory.
 
 ## Pick a hosting route
 
@@ -15,10 +15,6 @@ The four options differ on just two points: who hosts the frontend build, and wh
 
 Same-origin (A, B) is the easy path: `web/dist` requests the backend same-origin by default (`baseUrl` in `src/api/client.ts` is empty, and paths already include `/api/v1`), so no CORS. Only Route C has frontend and backend on different origins, and only then do both sides need CORS configured.
 
-::: tip Where the old "Route D" went
-The Docker route, along with multi-replica deployment, has been folded into [Containers & Multi-Replica](/guide/deployment/docker) — there's no separate "Route D" anymore. For containers, go straight to that page.
-:::
-
 The first step is the same for all four routes: build the frontend first:
 
 ```bash
@@ -29,7 +25,7 @@ npm run build     # output goes to web/dist/
 
 ## The security baseline you must clear before going live
 
-Whichever route you pick, none of the following can be dodged in production. For several of them the kernel "refuses to start unless satisfied," rather than running the process with the risk baked in.
+Choose a hosting route, then configure each item below. Missing requirements such as a JWT secret prevent startup; upload storage, proxy trust, and cache propagation also need verification through real requests.
 
 | Setting | Why it must be dealt with |
 |---|---|
@@ -62,14 +58,16 @@ Production has a table-creation safety gate: when `ASPNETCORE_ENVIRONMENT=Produc
 It defaults to false and governs two things:
 
 - **First deploy to production against an empty database**: the tables don't exist yet, so the seed has nowhere to write. Either turn this on temporarily to let it create the tables and write the seed (you can turn it off again once created), or have a DBA create the tables named in the startup error first, then start.
-- **Adding columns on a kernel-version upgrade**: a new kernel version may add columns to its own tables (adding fields is routine; dropping or narrowing columns never happens). Either turn this on for this startup to let it fill them in (CodeFirst only adds columns — never drops or narrows them — so it's safe for existing data), or have a DBA `ALTER TABLE ... ADD COLUMN` by hand for the tables and columns named in the error.
+- **Adding columns on a kernel-version upgrade**: a new kernel version may add columns to its own tables (adding fields is routine; dropping or narrowing columns never happens). Either turn this on for this startup to let it fill them in (CodeFirst only adds columns — never drops or narrows them — but backup and migration validation are still required), or have a DBA `ALTER TABLE ... ADD COLUMN` by hand for the tables and columns named in the error.
 
 ::: tip Why evolved columns are nullable
 Columns the kernel **adds to existing tables** always use a nullable database column (`IsNullable`). SQL Server cannot `ADD` a `NOT NULL` column without a default to a table that already has rows; after a nullable add, old rows are `NULL` and the read path treats that as the default (e.g. MFA flags become false, absolute expiry falls back to session `ExpiresAt`). New properties may use `T?`, but a released public property keeps its CLR type and locks the ORM's default-value mapping with a regression test. If a DBA adds the column by hand, prefer nullable too unless you also supply a `DEFAULT` and backfill existing rows.
 :::
 
 ::: warning Not letting it through fails at startup by name — this is deliberate
-Neither scenario starts up broken: an empty database with missing tables throws an error naming the tables (`...but the following tables the seed needs to write to don't exist: sys_schema_version, ...`), and an upgrade with missing columns throws an error naming the columns (`schema is behind the current entities; the following table is missing columns: sys_user(Avatar)`) — just take one of the two options it tells you. The reason it would rather blow up at startup is that letting it slide means the process comes up fine and only blows up at the driver layer's "column doesn't exist" the first time that table is queried — an error with no table name and no column name, leaving no one able to tell what to ALTER. The guard only checks for missing columns, not changes to type / length / nullability: a DBA who deliberately widened a `varchar` or added their own column won't be flagged.
+Startup checks name missing tables or columns. A missing table message contains `种子要写的表在库中不存在`; a missing column message contains `库表结构落后于当前实体`. Correct the schema before restarting so the failure does not first surface during a business request.
+
+The check covers missing columns, not changes to types, lengths, or nullability. Review database migrations separately; passing startup validation does not prove full schema compatibility.
 :::
 
 On the first seed write, if `TenonAdmin:Seed:AdminPassword` isn't explicitly configured, the console prints a random super-admin password once (16 characters, shown just that once) — be sure to keep it. To fix the account and password, configure it.
@@ -79,12 +77,12 @@ On the first seed write, if `TenonAdmin:Seed:AdminPassword` isn't explicitly con
 Seeding is insert-only by default (existence checked by primary key), so seed rows the kernel **adds** (a new menu, a new config item) flow into your database automatically after an upgrade — nothing to do. Rows the kernel **changes** (moving a permission button under a different page, adding an icon to a built-in module) are driven by the `sys_schema_version` version gate: once the kernel bumps the seed version, the next startup refreshes the built-in rows of the two structural tables — the menu tree and modules — back to the new shape, then writes the version number back.
 
 ::: warning Your edits to built-in menus get refreshed away on upgrade
-Title / order / icon edits you made to **built-in menus** in the menu-management page are refreshed back to the kernel's values on a kernel upgrade (those rows belong to the kernel). Menus you added yourself are unaffected. The config center (`sys_config`), dictionaries, users, and role grants are your data — an upgrade doesn't touch a single row of it.
+When an upgrade synchronizes built-in structural seeds, framework values can overwrite your edits to built-in menu titles, ordering, and icons. Custom menus are outside those built-in rows. Configuration, dictionaries, users, and role grants follow their own data-maintenance rules; review target-version migration notes and back up before deployment.
 :::
 
 ## Post-go-live self-check
 
-Three curls confirm the whole chain works:
+First check the process, dependencies, and API routing with these requests, then sign in through the frontend to verify business access:
 
 ```bash
 curl https://<your-domain>/health         # Healthy: process alive
@@ -100,6 +98,6 @@ One last easy false alarm: a 404 on `/openapi/v1.json` in production is expected
 
 ## Rolling back
 
-There's no dedicated rollback script — rolling back means redeploying the previous version. A NuGet consumer points the package reference back at the previous version number; a Docker deployment switches the image tag back and runs `docker compose up -d`. The database doesn't need to roll back with it: CodeFirst only adds columns, never drops or narrows them, so a column the older code doesn't know about just sits there unused.
+Before rollback, check whether the old version can read the current schema and data, and prepare backups of the database and uploaded files. NuGet applications need a build using the older packages; container deployments need the older image. Additive schema changes help compatibility but do not make business migrations, seed changes, or external-service changes reversible. Rehearse rollback in a test environment before production.
 
 What you genuinely can't undo is the publish step itself. Once a tag is pushed, it has already triggered `backend-release` to push a package to nuget.org — a package can be unlisted, never deleted. The full cadence is in the [changelog](/changelog) and the [release runbook](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/releasing.md). Rolling back rewinds the instance you deployed, not a package that's already out the door.

@@ -1,6 +1,6 @@
 # 定时任务
 
-写一个类、实现一个方法，它就能被后台界面按 cron 调起来。调度器随 `AddTenonAdmin()` 跑在 API 进程里，不装包、不配置、不多起进程。
+日报生成、定期清理和接口巡检等工作，可以交给定时任务执行。默认调度器随 `AddTenonAdmin()` 运行在 API 进程内；业务处理器实现 `IAdminJob`，注册后即可在管理界面选择。下面的示例只写一条执行日志，用来确认调度链路，实际生成日报的逻辑需要调用自己的业务服务。
 
 ```csharp
 public class DailyReportJob : IAdminJob
@@ -18,7 +18,12 @@ public class DailyReportJob : IAdminJob
 builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, DailyReportJob>());
 ```
 
-剩下的在界面里做：新建任务、载荷选「编译类」，处理器下拉里就有它。
+在自己的 `Program.cs` 注册处理器并重启后端。进入任务管理，新建「编译类」任务并选择该处理器，先手动执行一次，再配置执行时间。执行记录中应出现成功状态和示例日志；找不到处理器时，先检查注册代码是否已执行。
+
+
+任务列表中先看「状态」确认是否启用，再看运行统计判断是否执行成功。点击任务的执行记录查看失败原因；手动执行后，也应回到记录确认结果。截图为示例任务，点击可放大。
+
+[![任务列表与执行统计](/screenshots/scheduled-jobs.png)](/screenshots/scheduled-jobs.png)
 
 ## 处理器的三种形态
 
@@ -30,9 +35,9 @@ builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, DailyRepor
 | HTTP | 属性包的 `url` / `method` / `headers` / `body` | 触发别的服务的接口，或者健康巡检 |
 | SQL | 属性包的 `sql` | 一次性数据订正，**默认关闭** |
 
-**属性包是参数的唯一入口。** 它是一张字符串字典，存在任务行上，执行时经 `context.Properties` 交给处理器。Furion 在 2026 年 5 月删掉框架级 HttpJob 时给出的结论就是这个：属性包配上二十行的 `IJob`，比框架替你猜参数好用。
+属性包是一张保存在任务记录中的字符串字典，执行时通过 `context.Properties` 传给处理器。适合放报表日期、目标地址等任务参数；需要数据库或其他业务服务时，通过依赖注入获取。
 
-SQL 任务的开关是 `TenonAdmin:Jobs:Sql:Enabled`，默认 `false`。打开它等于承认一件事：**能编辑任务的人就有了 DBA 权限**。
+SQL 任务的开关是 `TenonAdmin:Jobs:Sql:Enabled`，默认 `false`。打开它等于承认一件事：任务会使用配置的数据库账号执行 SQL，编辑权限必须按该账号的能力严格控制。
 
 ## cron 是 6 段，秒在最前面
 
@@ -50,7 +55,7 @@ SQL 任务的开关是 `TenonAdmin:Jobs:Sql:Enabled`，默认 `false`。打开�
 
 前端的 CronEditor 逐段给出「每 / 区间 / 步长 / 指定」四种填法，底下实时预览未来五次执行时刻。它调的是 `POST /api/v1/sys/job/preview-cron`，任何登录用户都能用，不必单独授权。
 
-## 时刻可以填秒，但秒级监控要付学费
+## 执行频率与日志保留 {#时刻可以填秒-但秒级监控要付学费}
 
 间隔任务的下限是 5 秒，填 4 会被 `47004` 拒。cron 的秒段允许写 `*`，预览区会给一句警告但不拦，后果是一个每秒执行的任务一天就是 8.6 万行执行记录。
 
@@ -60,11 +65,11 @@ SQL 任务的开关是 `TenonAdmin:Jobs:Sql:Enabled`，默认 `false`。打开�
 
 「不能随着后端停止而停止」这句需求要拆成三层看：
 
-**任务不因重启而丢。** 触发配置和下次执行时刻都在库里，进程重启后接着算。停机期间错过的时刻按任务上的错过策略处理：默认 `Skip` 不补跑、直接推进到未来；选 `FireOnceNow` 则补跑一次，错过再多也只补一次。停机三天的日报任务补三份没有意义。
+**任务不因重启而丢。** 触发配置和下次执行时刻都在库里，进程重启后接着算。停机期间错过的时刻按任务上的错过策略处理：默认 `Skip` 不补跑、直接推进到未来；选 `FireOnceNow` 则补跑一次，错过再多也只补一次。如果业务要求补齐每一天的数据，需要在业务逻辑中按日期检查和补算。
 
 **一个副本挂了，另一个接手。** 两个 API 副本都跑调度器，靠 `sys_job_lock` 上的租约选主，只有主节点扫表。主节点失联后，备节点最迟 40 秒接管（租约 30 秒 + 心跳 10 秒）。这一层要服务器数据库，SQLite 撑不住两个进程同时写。
 
-**API 停了任务照跑。** 进程内的调度器物理上不可能比进程活得久，这半句只能靠第二个进程。照抄 `backend/samples/WorkerHost`，`Program.cs` 是三行：
+**API 停止后仍需执行任务。** 使用独立 Worker 进程运行调度器，并与 API 连接同一个数据库。参考 `backend/samples/WorkerHost`，最小启动代码如下：
 
 ```csharp
 var builder = Host.CreateApplicationBuilder(args);
@@ -87,6 +92,8 @@ WHERE Id=@id AND NextRunTime=@expected AND Status=1
 
 多副本形态下这条由容器冒烟测试验收：建一个 5 秒任务、等它跑几轮、断言计划时刻两两互异，然后杀掉主副本，断言任务没停、主节点已易主。
 
+领取保证的是同一计划时刻不会被多个节点同时领取。任务失败重试、人工重跑或外部请求超时，仍可能重复执行业务操作；付款、发消息等有副作用的任务应按业务键实现幂等。
+
 ## 任务失败之后
 
 每条任务各自配失败处理，四件套：
@@ -100,7 +107,7 @@ WHERE Id=@id AND NextRunTime=@expected AND Status=1
 
 崩溃态要人工在界面上重新启用才恢复，这是刻意的：一条已经连败十次的任务，继续每五分钟失败一次只会淹没日志。告警也只在跨过阈值那一次发出。
 
-**任务实现必须真异步。** `Thread.Sleep`、`.Result`、`.Wait()` 会占死线程池线程，八个这样的任务同时在飞就能让整个进程失去响应。在飞上限 `MaxConcurrentRuns` 是兜底，不是解药。
+任务处理器应使用异步 I/O，并响应 `CancellationToken`。避免 `Thread.Sleep`、`.Result` 和 `.Wait()` 阻塞线程池；`MaxConcurrentRuns` 限制同时执行的任务数量，不能消除同步阻塞造成的资源占用。
 
 ## 部署前要确认的三件事
 

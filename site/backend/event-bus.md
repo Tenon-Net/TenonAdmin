@@ -1,6 +1,8 @@
 # Event Bus
 
-After `DictService.InvalidateAsync` invalidates a dictionary's cache, it also broadcasts a `DictChangedEvent`. Who cares, and what they do about it, is none of `DictService`'s business — and it doesn't need to be.
+Use the event bus when one completed action must notify other modules in the same process without making the publisher depend on its receivers. After `DictService.InvalidateAsync` clears a dictionary cache, it broadcasts `DictChangedEvent`; it neither knows who subscribed nor waits for handlers to finish.
+
+This fits cache invalidation, logging, and lightweight coordination. It does not fit orders, billing, or cross-replica work that must be delivered. The default implementation has no persistence or retry, so unhandled events disappear when the process stops.
 
 ## Contract
 
@@ -23,7 +25,9 @@ The kernel's default registration, `ChannelEventBus`, is built on an unbounded `
 - **A single subscriber's exception is isolated to itself.** The dispatch loop swallows it internally — no rethrow, no retry, and it never takes down other subscribers or later events. `Core` has no `ILogger`, so logging the exception is each subscriber's own responsibility inside its `try/catch`.
 - **No cross-replica delivery.** Under multiple instances, an event published on replica A never reaches a subscriber on replica B — the same limitation as the in-process cache.
 
-## Using it
+<a id="using-it"></a>
+
+## Subscribe, publish, and unsubscribe
 
 The kernel ships an end-to-end sample out of the box: `CacheChangeLogSubscriber` (an `IHostedService` that subscribes on start and unsubscribes on stop) listens for dictionary and config change events and logs them. Its purpose is to prove the bus actually works end to end, and along the way it shows what an extension point here looks like:
 
@@ -44,6 +48,8 @@ dict.Dispose();
 ```
 
 `IEventBus` is registered `Singleton` — the same lifetime as the other stateless services (the hasher, the captcha generator, cache providers).
+
+To verify the wiring, modify a dictionary and look for the `CacheChangeLogSubscriber` entry. If the publisher returned but no log appears, check that the subscriber started as a hosted service and that the `IDisposable` returned by `Subscribe` was not disposed early. Subscriber failures never flow back to the publisher, so each handler must log its own failures.
 
 ## Replacing it: cross-process fan-out
 

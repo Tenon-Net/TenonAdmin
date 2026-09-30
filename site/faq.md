@@ -1,6 +1,6 @@
 # FAQ
 
-Read the error text first. When the kernel can see a misconfiguration coming — a blocked table-creation gate, a missing `WorkerId` — it names the exact config key, table or column rather than throwing something generic, and following it is usually quicker than coming here. The questions below are the ones the error text cannot answer: what most often goes wrong right after you install the package and start the kernel for the first time.
+If sign-in fails, first check how you started the application and where its password comes from. If startup fails, look for a named configuration key, table, or column in the log. The questions below cover common symptoms. Before recovering data, distinguish disposable local environments from those whose data must be kept.
 
 ## What account and password do I log in with on first startup?
 
@@ -30,7 +30,9 @@ Only leaving it empty (the default) takes the random-generation path. The seed r
 
 ## I missed the first-startup log — how do I recover the random password?
 
-You can't. It was hashed on the way into the database; there is no plaintext to recover. Either edit the password hash on that super-admin record directly, or clear `sys_user` (or drop the database) and let the seed run again. Set `Seed:AdminPassword` before that replay and it uses your value instead of a random one.
+The database stores a password hash, so the plaintext cannot be recovered. If another administrator account is available, reset the password through the management interface. Seed configuration affects initial account creation and cannot reset an existing account.
+
+Only in a disposable local environment, stop the app, remove the local SQLite database, and initialize it again after setting `Seed:AdminPassword`. Do not clear `sys_user` or delete a database whose data must be retained. If no administrator is available, back up the database and have the system maintainer arrange account recovery.
 
 ## Why isn't `appsettings.Development.json` in the repo?
 
@@ -49,4 +51,4 @@ Each of these has its own page with the full detail; here are just the symptoms 
 | What `/health` and `/health/ready` each probe, and whether a production 404 on `/openapi` means something's missing | The go-live self-check in the [Deployment guide](/guide/deployment/) |
 | A multi-replica startup errors with something about `WorkerId` | [Containers & Multi-Replica](/guide/deployment/docker) |
 
-Nothing in the table fits? Search the repo's [issues](https://github.com/Tenon-Net/TenonAdmin/issues) for keywords. When you open a new one, bring your .NET / Node version, `TenonAdmin:Database:DbType`, whether it's single-instance or multi-replica, and the full error stack — it saves a round trip.
+Nothing in the table fits? Search the repo's [issues](https://github.com/Tenon-Net/TenonAdmin/issues) for keywords. When you open a new one, bring your .NET / Node version, `TenonAdmin:Database:DbType`, whether it's single-instance or multi-replica, and a redacted error stack — it saves a round trip.

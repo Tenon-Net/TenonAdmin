@@ -2,7 +2,7 @@
 
 你在菜单管理里加一条菜单、填好组件路径、保存，它就成了一个能点进去的页面，也就是说，这中间没有一张你手写的路由表。前端的路由来自两个互不相干的源：构建期就定死的**静态壳**，和登录后按当前应用的菜单树在运行时重建出来的**动态路由**。
 
-门户怎么决定进哪个应用、守卫怎么把这两侧缝起来，这页不讲，那是[多应用门户与守卫](/zh/frontend/portal-guards)的事。
+门户怎样选择应用、守卫怎样连接静态与动态路由，详见[多应用门户与守卫](/zh/frontend/portal-guards)。这里聚焦路由的来源、注册和缓存。
 
 ```text
 staticRoutes(router/routes.ts)          buildRoutesForModule(useAuthMenu.ts)
@@ -19,6 +19,14 @@ staticRoutes(router/routes.ts)          buildRoutesForModule(useAuthMenu.ts)
 ```
 
 静态那一侧在两次部署之间从不变化。动态那一侧完全由当前选中的应用返回的菜单树决定。所以不同用户、不同角色、不同应用，挂在 `layout` 下的那批路由都各不相同。
+
+> 前置：先完成[入门教程的菜单接通步骤](/zh/frontend/getting-started#_3-用菜单把文件变成路由)。
+
+## 先验证一次动态路由
+
+打开教程中的「岗位预览」，复制地址栏里的 `/example/position-preview`，再刷新浏览器。页面仍能回来，说明登录恢复后菜单树被重新拉取，组件路径又一次映射到了 `src/views/example/position-preview/index.vue`。接着在菜单管理里对照组件路径，确认它没有 `src/views/` 前缀和 `.vue` 后缀。
+
+这次操作已经包含动态路由的三个输入：菜单记录给出 URL，组件路径找到文件，当前应用决定这条菜单是否进入路由表。下面再拆开静态壳、动态注册和缓存机制。
 
 ## 静态路由
 
@@ -47,7 +55,7 @@ export const staticRoutes: RouteRecordRaw[] = [
 
 - **`/` 不设静态 `redirect`。** `redirect` 在路由 resolve 阶段就求值，早于全局守卫。那时菜单树很可能还没建好，算出来的落点必然是错的。`/` 真正落到哪由 `router.beforeEach` 里的守卫决定（见[多应用门户与守卫](/zh/frontend/portal-guards)）。
 - **404 挂在壳内，而非顶层。** 打错一个 URL 时侧边栏、标签栏、退出按钮照样在，不会把人甩到一个光秃秃的页面外面去。
-- **`/personal/notice` 和 `/personal/sessions` 是静态路由，不是菜单项。** 两者在后端都走 `[ActiveSession]`，任何登录用户都能读，不需要具体权限码。做成菜单反而麻烦，得先播种它，再给每个角色都授权一遍，纯属多余功课。入口分别在两处：顶栏通知铃铛的「查看全部」链接，还有顶栏用户下拉。
+- **`/personal/notice` 和 `/personal/sessions` 是静态路由，不是菜单项。** 两者在后端都走 `[ActiveSession]`，任何登录用户都能读，不需要具体权限码。若改成菜单项，就必须额外播种并给每个角色授权，却不会增加访问控制能力。入口分别在顶栏通知铃铛的「查看全部」链接和顶栏用户下拉。
 
 ## 动态路由：菜单树→真实路由
 
@@ -155,8 +163,12 @@ export function namedPage(name: string, loader: AsyncComponentLoader) {
 
 `stores/tabs.ts` 在这基础上补了一道保险：它的 `cachedNames` getter 只保留 `router.hasRoute(n)` 为真的标签。菜单重建之后，某个旧标签对应的路由还没被重新注册，那一小段窗口期里 `keep-alive` 就不会去匹配一个还不存在的名字。`refreshTab(name)` 通过设置 `excludeName` 并递增 `reloadKey` 强制来一次真实的重挂载（绕开缓存），`default.vue` 监听 `reloadKey` 短暂地 `v-if` 卸载再恢复路由出口来实现这一点。
 
-::: tip 这两样东西不在这里
-路由链路里没有进度条（不用 NProgress 或类似的库）。文档标题也不是守卫设置的。它只在 `App.vue` 挂载时设一次，标题变化时由站点配置页再设一次，不会随每次导航联动。
+::: tip 导航反馈与页面标题
+路由开始、完成和失败时会驱动 `lib/loadingBar`，为懒加载与 F5 路由重建提供反馈。文档标题不随导航变化，只在 `App.vue` 挂载和站点配置更新时设置。
 :::
+
+## 新页面接通后的检查
+
+给新视图配置菜单后，先从侧栏进入一次，再复制地址并刷新。两次都应落到同一页面，说明菜单路径、组件路径和深链重建都正确。把组件路径临时改错时，页面应显示缺失组件及其路径，而不是无上下文的 404。最后在列表里输入一个未提交的筛选条件，切换标签再回来；普通菜单页应保留状态，标为 `noCache` 的详情页则应重新加载。
 
 要从零把这套链路走一遍：建视图组件、种一条菜单、把组件路径填对，看[加一个前端页面](/zh/guide/frontend-page)。

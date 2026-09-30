@@ -1,6 +1,6 @@
 # Multi-Org Data Scope
 
-Data scope carries the whole org-filtering burden on behalf of business code, and that is where the kernel makes its name. It answers one question: given the same endpoint and the same SQL, why do different users see different rows? The answer sits in a global query filter, which trims results automatically by the **effective org set** resolved for the current request.
+The same customer list can show one region to a regional manager and only self-created records to a salesperson. Business queries do not need separate SQL for each role. The kernel merges a user's roles into an **effective organization set**, then applies it through a global query filter. The business entity must carry the data-scope anchor, and writes should use the built-in repository to receive the same protection.
 
 ## Five data-scope types
 
@@ -122,11 +122,21 @@ var orders = await orderRepo.AsQueryable()
 
 With the exact same code, a user with `All` scope sees every pending order, a user with `Org` scope sees only their own org's, and a `Self`-scoped user sees only what they created — the difference comes entirely from the `DataScopeResult` resolved earlier in the request; not a single line of business logic changes.
 
-You can click through what this looks like in a real project. The customer list in the reference app [tenon-example](https://github.com/Tenon-Net/tenon-example) is written exactly like the snippet above, and three accounts logging into the [live demo](https://tenonadmin.52moyu.net/login) see 214, 128, and 42 rows respectively.
+The customer list in the [tenon-example](https://github.com/Tenon-Net/tenon-example) reference application uses the same pattern. Follow its entity base class, query, and role-scope configuration to see the complete call path.
 
 ::: warning Write-path guard
 The global filter only applies to **queries (SELECT)** — not to primary-key-based `Updateable` / `Deleteable`. To cover this, the `SqlSugarRepository` repository has a built-in write-path guard for `UpdateAsync` / `DeleteAsync` on `IOrgScoped` entities: before writing, it queries through the scope-filtered path to confirm the target row is within the current scope; attempting to modify/delete a row from another org is rejected (returns 0 rows). Writes that bypass the repository via the `Db.Updateable/Deleteable` escape hatch aren't covered by this guard and must validate ownership themselves.
 :::
+
+## How to verify data scope
+
+Call the same list endpoint with two ordinary accounts that have different scopes. Their row counts or result sets should differ, while a super-admin or `All` account should see the complete set. If every account sees the same result, check these three points:
+
+1. The business entity inherits `DataEntity` or implements `IOrgScoped`.
+2. Audit AOP populated `CreateOrgId` on newly inserted rows.
+3. The endpoint passes through `[RolePermission]`, which writes the request's `IDataScopeContext` before the query runs.
+
+If reads are correct but updates or deletes still cross scope boundaries, check whether the write bypasses the repository and calls `Db.Updateable` or `Db.Deleteable` directly.
 
 ## Context carrier: why not `AsyncLocal`
 

@@ -1,6 +1,6 @@
 # Backend Standards (.NET 10 kernel)
 
-Check your work against this list before and after touching backend code — every item is a hard rule already implemented in the kernel. To see why a rule is what it is, follow its link into the corresponding deep-dive; for fuller positive/negative examples, see [`docs/coding-standards.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/coding-standards.md) in the repo.
+Start with the sections that match the change, then check the related rules again before committing. For a new entity, focus on Entities, Data access, and Seed data. For an endpoint, use Controllers and Error handling. For a replacement point, use Replaceability and DI wiring. Every item is an implemented kernel constraint; the links explain the mechanism, and [`docs/coding-standards.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/coding-standards.md) provides fuller positive and negative examples.
 
 ::: tip First principle
 The kernel ships as NuGet packages, so a consumer can replace any part without touching the source. Any newly added replaceable service is registered with `TryAdd*`, backed by an interface, and split into `virtual` steps — this is a hard constraint, not a suggestion. See the [replaceability model](/backend/replaceability) for the mechanism.
@@ -80,7 +80,7 @@ If a `DataEntity` row's `CreateOrgId` isn't set, org-scoped queries always retur
 ## Naming / organization
 
 - Namespaces follow directories; one type per file; suffixes `Sys*` for entities, `I*` for interfaces, `*Service`/`*Provider`/`*Filter`/`*Attribute`.
-- Nullable reference types enabled; new code's time access goes through the injected `TimeProvider` (testable), never a bare `DateTime.Now`. The password-expiry path (`AuthService`/`UserService`/`PersonalService`), the SMS daily-cap day bucket, and the schema-version stamp all route through it now too — `SessionService` was always the pattern to follow, the rest have caught up. One bare call is left on purpose: `SchemaVersionSeed`'s first-install timestamp is a static seed row with no DI clock to inject.
+- Nullable reference types are enabled. New code reads time through an injected `TimeProvider` instead of calling `DateTime.Now`, keeping expiry, rate-limit, and scheduling logic testable. `SchemaVersionSeed`'s first-install timestamp is an existing exception because the static seed row has no DI clock to inject.
 
 ## Package management
 
@@ -91,3 +91,12 @@ If a `DataEntity` row's `CreateOrgId` isn't set, org-scoped queries always retur
 - Public types/members use `/// <summary>` to state responsibility and boundaries; reference design-doc section numbers (`§N`/`TN`) for key trade-offs.
 - Inline comments explain only WHY (concurrency, transaction ordering, edge cases, cross-dialect pitfalls), not WHAT; in Chinese, matching the existing code.
 - Deliberately simplified or capped implementations are flagged with `// ponytail:` noting the limit and the upgrade path.
+
+## Minimum loop before committing
+
+1. Verify the real call path, rather than only resolving a service or unit-testing a helper.
+2. For backend behavior changes, run the affected test class and then a Release build.
+3. When the OpenAPI contract changes, regenerate both Vue and React schemas and run the contract-drift check.
+4. For DI, assembly scanning, or controller mounting changes, also run `ReplaceabilityTests`.
+
+See the [Contributing Guide](/community/contributing) for exact commands and the database matrix.

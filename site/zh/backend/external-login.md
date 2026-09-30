@@ -2,23 +2,35 @@
 
 第一次用企业微信扫码进来的人会被拒绝，报 `OAuthAccountNotBound`：默认策略如此，不是配错了。内核一贯的立场是账号只由管理员开，没有自注册，外部身份也照这条办。要让 SSO 自己开户，得按 provider 显式打开那个开关。
 
-## 三个 provider，两种打包方式
+<a id='三个-provider-两种打包方式'></a>
+
+## 五个 provider，两种打包方式
 
 | provider | 装在哪 | 对接方式 |
 | --- | --- | --- |
 | `oidc` | 内核内置（AspNetCore 层） | 标准 OIDC，通吃 Keycloak、Entra、Authing、Auth0 |
 | `wecom` | 可选包 `TenonAdmin.Auth.WeCom` | 企业微信 PC 扫码 / 网页授权 |
 | `dingtalk` | 可选包 `TenonAdmin.Auth.DingTalk` | 钉钉 PC 扫码 / 网页授权 |
+| `github` | 可选包 `TenonAdmin.Auth.GitHub` | GitHub OAuth App |
+| `wechat` | 可选包 `TenonAdmin.Auth.WeChat` | 微信开放平台网站应用登录 |
 
-内置 OIDC 零新增依赖：发现文档、JWKS、`id_token` 验签全用 JwtBearer 已经传递进来的 `Microsoft.IdentityModel.*`。两个厂商包各自只引 `Core` 加 Microsoft.\*，用裸 `HttpClient` 对接厂商 API。所以它们能独立发版，也不会把厂商 SDK 拖进内核。
+内置 OIDC 的发现文档、JWKS 和 `id_token` 验签复用 JwtBearer 已带来的 `Microsoft.IdentityModel.*`。四个厂商包都只引 `Core` 与 Microsoft.\*，通过 `HttpClient` 对接厂商 API，不会把厂商 SDK 带进内核。
 
-两个可选包还是老规矩，在 `AddTenonAdmin()` 之前注册。它们按 `Code` 和内置 provider 并存：
+按需要安装和注册厂商包，不必同时接入四家。所选扩展应在 `AddTenonAdmin()` 之前注册，并按 `Code` 与内置 OIDC 并存；下面列出各包的注册入口：
 
 ```csharp
 builder.Services.AddTenonAdminWeComAuth(builder.Configuration);
 builder.Services.AddTenonAdminDingTalkAuth(builder.Configuration);
+builder.Services.AddTenonAdminGitHubAuth(builder.Configuration);
+builder.Services.AddTenonAdminWeChatAuth(builder.Configuration);
 builder.Services.AddTenonAdmin(builder.Configuration);
 ```
+
+## 上线前先定开户策略
+
+企业内部系统通常先选「拒绝自动开户」：管理员创建本地账号并分配角色、机构，用户再绑定外部身份。这样第一次扫码得到 `40016` 是预期结果，也能避免未知身份自动获得系统访问权。
+
+只有身份提供方已经承担入职、离职和组织治理时，才适合打开 JIT 自动开户。打开前必须同时配置默认角色和默认机构，并用一个从未登录过的测试身份走完首次登录，确认新账号落在预期权限范围内。`provisioning` 只负责是否建号，不会替项目判断应该授予哪些业务权限。
 
 ## 配置分两处放
 
@@ -105,6 +117,8 @@ curl -X POST http://localhost:5100/api/v1/auth/external/exchange \
 ```
 
 票据一次性：`exchange` 内部用 `GetAndRemoveAsync` 原子取删，重复换第二次会拿到 `OAuthStateInvalid`（40014）。
+
+联调时按重定向链逐段判断：`authorize` 没有 302，检查 provider 是否启用；IdP 没有回到 `callback`，检查回调地址；回到了前端却换不到令牌，检查 ticket 是否已被消费或缓存是否在多副本间共享。不要用 `fetch` 直接调用前两个浏览器跳转端点。
 
 ## 错误码
 

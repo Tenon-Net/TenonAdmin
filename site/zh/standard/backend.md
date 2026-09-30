@@ -1,6 +1,6 @@
 # 后端规范（.NET 10 内核）
 
-改后端代码前后对着这份清单核一遍，每条都是内核里已落地的硬规则。想知道某条为什么这么定，点链接看对应那页的详解。更完整的正反例见仓库 [`docs/coding-standards.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/coding-standards.md)。
+先根据改动找到对应章节，再在提交前检查一次关联规则。新增实体重点看「实体、数据访问、种子数据」，新增端点看「控制器、错误处理」，替换能力看「可替换性、DI 装配」。每条都是内核已落地的约束；链接提供原因和完整机制，更完整的正反例见仓库 [`docs/coding-standards.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/coding-standards.md)。
 
 ::: tip 第一原则
 内核以 NuGet 分发，消费方不改源码就能替换任一部件。凡新增可替换服务，一律 `TryAdd*` 注册、接口背书、方法拆 `virtual` 步。这三条没有例外。机制见 [可替换性模型](/zh/backend/replaceability)。
@@ -80,7 +80,7 @@
 ## 命名 / 组织
 
 - 命名空间随目录；一类型一文件；后缀 `Sys*` 实体、`I*` 接口、`*Service`/`*Provider`/`*Filter`/`*Attribute`。
-- 启用可空引用类型。新代码的时间统一走注入的 `TimeProvider`（可测试），不用 `DateTime.Now` 裸调。密码过期路径（`AuthService`/`UserService`/`PersonalService`）、短信验证码的每日计数分桶、还有建库时的 schema 版本戳，现在也都收口到这条路上了。`SessionService` 一直是参考写法，其余几处只是跟上了它。还剩一处裸调是故意留的：`SchemaVersionSeed` 的首次建库时间戳是条静态种子行，没有 DI 时钟可注入。
+- 启用可空引用类型。新代码通过注入的 `TimeProvider` 取时间，避免直接调用 `DateTime.Now`，让过期、限流和调度逻辑可测试。`SchemaVersionSeed` 的首次建库时间戳是静态种子行，没有可注入的 DI 时钟，是现有例外。
 
 ## 包管理
 
@@ -91,3 +91,12 @@
 - 公共类型/成员用 `/// <summary>` 说清职责与边界；关键取舍引设计文档节号（`§N`/`TN`）。
 - 行内注释只解释 WHY（并发、事务顺序、边界、跨方言坑），不复述 WHAT；中文，与既有代码一致。
 - 刻意简化 / 有上限的实现用 `// ponytail:` 标注上限与升级路径。
+
+## 提交前的最小闭环
+
+1. 从真实调用路径验证改动，不只解析服务或单测一个辅助方法。
+2. 后端行为改动至少跑受影响的测试类，再执行 Release 构建。
+3. OpenAPI 契约变化时重新生成 Vue 与 React 两份 schema，并运行契约漂移检查。
+4. DI、程序集扫描或控制器挂载变化时补跑 `ReplaceabilityTests`。
+
+具体命令和数据库矩阵见[贡献指南](/zh/community/contributing)。

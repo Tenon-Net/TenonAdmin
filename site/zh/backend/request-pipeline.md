@@ -22,6 +22,17 @@ HTTP 请求
              AdminException / ErrorCode → 信封(数字码,不下发文案)
 ```
 
+## 按响应现象定位
+
+| 现象 | 先检查哪一关 |
+| --- | --- |
+| 未登录或令牌失效，返回 401 | ① JWT 签名、有效期与 claim |
+| 登录正常但接口报无权限 | ② 路由模板生成的权限码、角色权限缓存与会话状态 |
+| 接口能进，但不同机构看到的数据不对 | ③ 实体的 `IOrgScoped` 标记、`CreateOrgId` 与数据范围上下文 |
+| 运行时响应有 `data`，生成类型却没有 | ④ 控制器是否显式声明 `Result<T>` |
+
+按顺序排查可以避免把授权问题误判成数据问题。前三关发生在控制器动作之前；业务方法没有执行时，先不要从 SQL 或返回 DTO 入手。
+
 ## ① 认证：Microsoft JWT Bearer
 
 内核直接用 `Microsoft.AspNetCore.Authentication.JwtBearer`，不自己造一套认证栈。装配在 `TenonAdminSetup.cs`：

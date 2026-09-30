@@ -2,6 +2,12 @@
 
 后台的外观没有一处写在组件 props 里。颜色经一层 CSS 变量下发，图标在启动时一次性离线注册好。换主色、补暗色、塞自己的 SVG，改的都只是这两处的输入。
 
+> 前置：先完成[入门教程的岗位预览页](/zh/frontend/getting-started)。
+
+## 先让一段业务样式跟着主题变化
+
+在教程页加入使用 `--color-text-secondary`、`--color-primary-light` 和 `--color-primary` 的提示块，再从设置抽屉切换亮色、暗色和主色。提示应始终可读，并随主色变化。若改成固定灰阶或十六进制颜色，暗色下就可能失去对比度。下面的 token 分层解释了为什么角色令牌能自动适配。
+
 ## 四层 token，业务只碰角色令牌
 
 TenonAdmin 的外观由 CSS 自定义属性驱动，不是组件 props。`web/src/styles/tokens.css` 把所有变量分成四层：
@@ -77,3 +83,7 @@ import AppIcon from '@/components/AppIcon.vue'
 ::: tip 选择器完整 API
 这里只讲图标在应用里怎么接入。选择器组件本身由独立包提供。多图标库 Tab、注册本地 SVG、`labels`/i18n、`v-model` 约定，这些完整 API 见 [IconPicker](/zh/components/icon-picker)。
 :::
+
+## 改完后怎样检查
+
+外观改动至少要经过亮色、暗色和刷新后三种状态。切换主色时，Naive UI 按钮与手写布局应使用同一主色；切到暗色后，正文、边框和弹层仍需清楚可辨；刷新页面后，手动选择的主题和密度应保留。新增图标还要断网刷新一次，确认菜单、面包屑和选择器都能从本地资源渲染，而不是依赖开发机的网络缓存。

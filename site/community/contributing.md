@@ -1,8 +1,6 @@
 # Contributing Guide
 
-A PR opened against `main` gets sent back: `main` only receives release merges, and day-to-day work goes to `dev`. There are a few rules like that one — none of them live in the code, and you meet them by tripping over them.
-
-TenonAdmin has two halves: `backend/` (.NET 10 kernel + sample host + tests) and `web/` (Vue 3 + Naive UI admin template), and you can change either independently or both together.
+Start by choosing the affected product area and the correct target branch. Day-to-day PRs go to `dev`, then run the checks owned by the backend, Vue template, or React template. `main` only receives release merges. An OpenAPI change affects both frontend contracts even when the feature work starts in only one area.
 
 ## Before you start
 
@@ -11,6 +9,8 @@ TenonAdmin has two halves: `backend/` (.NET 10 kernel + sample host + tests) and
 - File bugs / feature requests through one of the three GitHub Issue templates (Bug report / Feature request / Question) — the repo has blank issues disabled. **Do not** open a public issue for a security vulnerability; see "Security issues" below.
 
 ## Local development environment
+
+TenonAdmin has three independently maintained parts: `backend/` is the .NET 10 kernel, `web/` is the Vue + Naive UI template, and `web-react/` is the React + Ant Design template. Both frontends consume the same API without sharing source code.
 
 Backend (run from the repo root; the solution file is `.slnx`, not `.sln`):
 
@@ -27,20 +27,30 @@ Running tests against MySQL (matches one leg of the CI matrix):
 TENON_TEST_DBTYPE=MySql TENON_TEST_MYSQL="Server=127.0.0.1;Port=3306;User ID=root;Password=root;AllowPublicKeyRetrieval=true;SSL Mode=None;" dotnet test backend/TenonAdmin.slnx
 ```
 
-Frontend (run from the `web/` directory):
+Vue frontend (run from `web/`, development port 5175):
 
 ```bash
-npm run dev          # Vite, :5173, proxies /api and /openapi to backend :5100 (override with TENON_API_TARGET)
+npm run dev          # Vite, proxies /api and /openapi to backend :5100 (override with TENON_API_TARGET)
 npm run build         # vue-tsc --noEmit && vite build
 npm run lint          # oxlint (lint:fix to autofix)
 npm run typecheck     # vue-tsc --noEmit
 npm run gen:api       # regenerate src/api/schema.d.ts from a running backend's /openapi/v1.json
 ```
 
-If running both sides separately is a hassle, `dev.bat` at the repo root launches backend + frontend together in two separate windows (installing `web/` dependencies on first run); `stop.bat` stops them.
+React frontend (run from `web-react/`, development port 5174):
+
+```bash
+npm run dev
+npm run lint
+npm test
+npm run build       # tsc --noEmit && vite build
+npm run gen:api
+```
+
+To start all three services together, run `./dev.sh` on macOS/Linux or `dev.bat` on Windows from the repository root. Stop them with `./stop.sh` or `stop.bat`. The scripts start the backend on 5100, React on 5174, and Vue on 5175, with separate logs under `.dev/`.
 
 ::: warning Don't hand-edit schema.d.ts
-`web/src/api/schema.d.ts` is a contract file generated from the backend's OpenAPI. If you change an endpoint, run `npm run gen:api` first (requires the backend to be running) — don't hand-write this file.
+`web/src/api/schema.d.ts` and `web-react/src/api/schema.d.ts` are both generated from backend OpenAPI and must not be hand-edited. After an endpoint change, run `node scripts/check-contract-drift.mjs` from the repository root; it starts the host and regenerates both schemas.
 :::
 
 ## Centralized package versioning
@@ -60,13 +70,15 @@ refactor(services): split login flow into virtual steps
 
 Common `type` values: `feat` / `fix` / `docs` / `refactor` / `test` / `chore`. `scope` is usually `web` / `backend`, or a more specific module name.
 
-## Running tests: both legs need to be green
+<a id="running-tests-both-legs-need-to-be-green"></a>
+
+## Run every affected check
 
 CI (`backend-ci.yml`) runs build + test on push/PR touching `backend/**`, across a database matrix of `[sqlite, mysql, sqlserver, postgres]`. The matrix sets `fail-fast: false`, so one red leg never hides the others. Alongside it runs a Redis service container, covering the contract-test portion of `RedisCacheTests`, and a `template-smoke` job that verifies `dotnet new tenon-app` can restore + build cleanly — the first command a consumer runs after getting the package. Before touching `backend/**`, at minimum get the default SQLite leg and the MySQL leg green locally. `TestDb.cs` derives an isolated database per test from env vars like `TENON_TEST_DBTYPE`, so tests don't interfere with each other.
 
-Frontend CI (`web-ci.yml`) runs `npm ci` → `npm run lint` → `npm test` (vitest) → `npm run build` on push/PR touching `web/**` (build already includes `vue-tsc` type checking, so there's no need to run `typecheck` separately).
+Vue CI (`web-ci.yml`) runs lint, Vitest, and build for changes under `web/**`. React CI (`web-react-ci.yml`) runs lint, sharded Vitest, build, and a development-server smoke check for `web-react/**`. The templates trigger independently; backend OpenAPI changes also run `contract-drift.yml` against both generated schemas.
 
-A third one is `docker-smoke.yml`, and its path filter overlaps both of the above, so whichever half you touch will pull it in. The `single` job brings up one container and checks that an empty database gets its tables, seed data lands, tokens are issued, and the reverse proxy holds. The `multi` job brings up two replicas and checks what only two replicas can reveal: force-logout crossing replicas, lockout and rate-limit thresholds not doubling, machine IDs not colliding, and the real client IP still recoverable.
+`docker-smoke.yml` watches backend and Vue container paths. Its `single` job verifies empty-database setup, seeding, token issuance, and the reverse proxy. Its `multi` job uses two replicas to verify cross-replica logout, lockout and rate-limit counts, machine IDs, and the real client IP. Browser integration for both Vue and React is covered by `frontend-e2e.yml`.
 
 ::: tip The six-piece test suite is a contract, not an ordinary test
 `ReplaceabilityTests` (the "six-piece set" from the design doc) locks in the replaceability guarantees around TryAdd coverage, virtual-method overriding, and business-assembly mounting. For the full, current list of exactly what the six-piece set guarantees, see [The Replaceability Model](/backend/replaceability). When you change DI registration or `TenonAdminSetup`-related code and this suite goes red, it usually means you've broken a consumer's replacement path — don't bypass or delete the tests; figure out which guarantee got broken first.
@@ -77,7 +89,7 @@ A third one is `docker-smoke.yml`, and its path filter overlaps both of the abov
 1. Branch off `dev` for your feature.
 2. Keep each change focused on one thing; follow the commit conventions above.
 3. Run the build/test/lint for the relevant side locally.
-4. Open a PR targeting `dev`. CI must be fully green: `backend-ci` / `web-ci` fire based on which half changed, and `docker-smoke` fires for both.
+4. Open a PR targeting `dev`. Checks trigger by path, including `backend-ci`, `web-ci`, `web-react-ci`, `contract-drift`, `frontend-e2e`, and container smoke tests. Use the required checks that actually appear on the PR as the source of truth.
 5. If you're using Claude Code or another AI agent to help develop, the repo has conventions for issue triage, domain docs, and business-development skills — see [Agent Skills and AI-Assisted Development](./agent-skills).
 
 ## Security issues

@@ -95,7 +95,8 @@ The toolbar's add / bulk-delete buttons work the same way via the `v-auth` direc
 
 `storage-key` decides which localStorage key holds the column settings and density (prefixed `protable:`); name it uniformly as `{module}-{page}`, e.g. `sys-position`, `sys-user`.
 
-## Tree tables: static-data mode, and its four traps
+<a id="tree-tables-static-data-mode-and-its-four-traps"></a>
+## Tree tables: four boundaries of static-data mode
 
 Hierarchical trees like orgs and menus have no pagination — you pull the whole thing back at once and lay it out yourself, so both the org page (`org/index.vue`) and the menu page (`menu/index.vue`) run in **static-data mode**. A flat, paginated list still uses the `fetcher` mode above, which hands paging and search off to it:
 
@@ -141,3 +142,7 @@ Sorting and collapsible search need `^0.3.1`; 0.3.0 has a known issue — row dr
 To develop against the package's source, `NPT_LOCAL=1 npm run dev` links directly to the sibling repo (see `web/vite.config.ts`); the loop is the same as the icon package's: edit source → publish a patch version → bump.
 
 The package's full prop, event, and escape-hatch slot reference is authoritative in the [README](https://github.com/Tenon-Net/tenon-naive-pro-table/blob/main/README.zh-CN.md); this page covers only how it's wired into the TenonAdmin template.
+
+## Checks for a completed list page
+
+Verify the first page, the next page, and one search condition. The `fetcher` should receive `{ page, pageSize, ...filters }`, and its `items` and `total` should drive pagination correctly. Change column visibility or density and reload; the setting should return under the page's unique `storage-key`. For a tree table, also test default expansion, a search hit whose ancestors must remain visible, and a row switch that reloads data after success. Finally, switch languages and confirm that search, reset, and column-settings copy changes together.

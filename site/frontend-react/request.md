@@ -1,6 +1,14 @@
 # The HTTP request layer
 
-The request layer is just two things: one openapi-fetch client and the two middlewares bolted onto it. Every method signature on that client is derived from the backend's OpenAPI contract, so paths, query params, request bodies, and response shapes are all typed end to end. The auth middleware does one thing — attach the token before a request goes out. The hard part is the second one: an expired token has to stay completely invisible to business code, so a 401 triggers an automatic refresh and replay, and the caller never sees a single error.
+Every API call goes through one openapi-fetch client and three middlewares, with method signatures generated from the backend's OpenAPI contract. The auth middleware attaches the token and CSRF proof, the refresh middleware replaces an expired token after 401 and replays the request, and the reauthentication middleware handles 403 + 40024 before a sensitive operation. React views call the API without reimplementing those security flows.
+
+> Prerequisite: complete the [endpoint step in the tutorial](/frontend-react/getting-started#_4-add-the-real-endpoint-and-its-types).
+
+## Trace one position request first
+
+Open the browser network panel, then visit Position Preview. Select `/api/v1/sys/position/page` and confirm that the query contains `Current=1` and `Size=20`, the headers carry the current access token, and the response envelope has a numeric `code`. Clicking Refresh should add exactly one request to the same path.
+
+The page assembled neither a URL nor a token. The complete request comes from `positionApi → client → middleware → fetch`; the sections below explain that chain from the generated contract outward.
 
 ## Panorama
 
@@ -11,7 +19,7 @@ The request layer is just two things: one openapi-fetch client and the two middl
 src/api/schema.d.ts        generated types (paths, do not hand-edit)
   │
   ▼
-src/api/client.ts          typed openapi-fetch client + auth/refresh middleware
+src/api/client.ts          typed client + auth/refresh/reauth middleware
   │
   ▼
 src/api/index.ts           API functions grouped by domain, one shape: client.X(...).then((r) => unwrap<T>(r))
@@ -32,21 +40,22 @@ npm run gen:api   # openapi-typescript http://localhost:5100/openapi/v1.json -o 
 - `src/api/schema.d.ts` is a **generated artifact** — don't hand-edit it. When a backend endpoint or DTO changes, regenerate; anything you edit by hand is silently overwritten on the next run.
 - The client's `createClient<paths>()` uses that file as its type source. So on every `client.GET/POST/PUT/DELETE` call, the whole chain — path params, query params, request body, response shape — is typed off the backend's real contract.
 
-## The typed client and its two middlewares
+<a id="the-typed-client-and-its-two-middlewares"></a>
+## The typed client and its three middlewares
 
 ```ts
 const baseUrl = import.meta.env.VITE_API_BASE ?? ''
 const rawTransport = globalThis.fetch
-const client = createClient<paths>({ baseUrl, fetch: rawTransport })
+const client = createClient<paths>({ baseUrl, fetch: rawTransport, credentials: 'include' })
 // Refresh-only client: no middleware attached, so a 401 on the refresh request itself has no way to recurse.
-const bare = createClient<paths>({ baseUrl, fetch: rawTransport })
+const bare = createClient<paths>({ baseUrl, fetch: rawTransport, credentials: 'include' })
 ```
 
 `baseUrl` defaults to empty. The schema's path keys already carry `/api/v1`, and `/api` is same-origin; in dev Vite proxies it to the backend, in production a reverse proxy or the backend's own static hosting takes over. You only set `VITE_API_BASE` when the frontend and the API genuinely live on different origins.
 
-`rawTransport` grabs the native `globalThis.fetch` and holds onto it. Both clients use it as their underlying transport, and the replay calls it directly too — not through `client` — so the two middlewares never run a second time on the replayed request.
+`rawTransport` grabs the native `globalThis.fetch` and holds onto it. Both clients use it as their underlying transport, and the replay calls it directly too — not through `client` — so the attached middleware chain never runs a second time on the replayed request.
 
-Both middlewares are attached to `client` only, not to `bare` (see below), in the order `authMiddleware` then `refreshMiddleware`.
+`credentials: 'include'` lets cookie sessions carry the HttpOnly refresh cookie. All three middlewares attach only to `client`, in auth, refresh, reauthentication order; `bare` is reserved for refresh calls.
 
 ### The auth middleware
 
@@ -55,12 +64,13 @@ const authMiddleware: Middleware = {
   onRequest({ request }) {
     const token = useUserStore.getState().accessToken
     if (token) request.headers.set('Authorization', `Bearer ${token}`)
+    attachCsrf(request.headers)
     return request
   },
 }
 ```
 
-The token is read from the store at the moment the request goes out, not read once at module load and cached. That way every request picks up the freshest token, including one that was just refreshed. Reading happens through `useUserStore.getState()`, not the store's hook form: the middleware runs outside React's render, where you can't call a hook, and zustand's `getState()` reads the current value synchronously from outside a component.
+The token is read through `useUserStore.getState()` when the request leaves, so every request receives the latest value. Middleware runs outside React rendering and cannot call hooks; Zustand's `getState()` provides the synchronous component-external read. `attachCsrf()` also copies the readable `tenon_csrf` cookie into `X-Tenon-CSRF`; with no cookie, it adds no header.
 
 ### The 401 refresh middleware, and why the replay needs a clone
 
@@ -112,18 +122,24 @@ On a 401, in order:
      return refreshing
    }
    ```
-3. **Refresh fails** (no refreshToken, network error, non-zero `code`, or missing `data`): clear the session, then `gotoLogin()` does a full-page `window.location.assign('/login')`. Using `window.location` rather than a router navigation means `client.ts` never imports the router, so there's no static circular dependency between them; a full reload after the token dies also wipes the stale in-memory state on the way out.
-4. **Refresh succeeds**: rebuild the request from the clone saved before it went out, attach the freshly refreshed token, and replay it through the bare **`rawTransport(retry)`**. GET/HEAD had no clone, so the original request is used directly. Going through `client.GET/POST(...)` again is deliberately avoided: that would rerun both middlewares on the replay, and if the new token were also rejected, another 401 would recurse into the next refresh.
+3. **Refresh fails** (body mode has no refresh token, the network fails, `code` is non-zero, or `data` is absent): clear user and authorization state, then let `gotoLogin()` perform a full-page `window.location.assign('/login')`. `client.ts` therefore never imports the router and cannot form a static cycle. An empty local refresh token is normal in cookie mode because that token lives in an HttpOnly cookie.
+4. **Refresh succeeds**: rebuild the request from the clone saved before it went out, attach the freshly refreshed token, and replay it through the bare **`rawTransport(retry)`**. GET/HEAD had no clone, so the original request is used directly. Going through `client.GET/POST(...)` again is deliberately avoided: that would rerun the middleware chain on the replay, and if the new token were also rejected, another 401 would recurse into the next refresh.
 
 ### Why `doRefresh` uses `bare`, not `client`
 
 ```ts
 async function doRefresh(): Promise<boolean> {
   const user = useUserStore.getState()
-  if (!user.refreshToken) return false
+  const cookie = isCookieSession(user)
+  if (!cookie && !user.refreshToken) return false
+
+  const headers: Record<string, string> = {}
+  const csrf = readCsrfCookie()
+  if (csrf) headers[AUTH_CSRF_HEADER] = csrf
 
   const { data, error } = await bare.POST('/api/v1/auth/refresh', {
-    body: { refreshToken: user.refreshToken },
+    body: { refreshToken: cookie ? '' : user.refreshToken },
+    headers,
   })
   const envelope = data as { code?: number; data?: unknown } | undefined
   if (error || !envelope || envelope.code !== 0 || !envelope.data) return false
@@ -134,6 +150,10 @@ async function doRefresh(): Promise<boolean> {
 ```
 
 `bare` is a second `openapi-fetch` client built from the same schema, but with no middleware attached. Running the refresh through `bare` can't recurse: even if the refresh itself fails — the `refreshToken` has also expired and the endpoint answers 401 — that 401 never reaches `refreshMiddleware.onResponse`, because `bare` has no middleware chain to recurse through. The URL check in `onResponse` that skips `/auth/refresh` and `/auth/login` is only a second line of defense, incidentally covering a login failure made through `client`. The real reason the refresh request can't recurse is that it's simply not on `client`'s middleware chain.
+
+### The 403 reauthentication middleware
+
+Some sensitive endpoints answer with 403 and business code 40024 to require another proof of identity. `reauthMiddleware` handles only that response, calls `requestReauth()`, and replays the saved request once after success. The replay carries `X-Tenon-Reauth-Retry: 1`, preventing a second 40024 from creating a loop. Cancellation or failure leaves the original response intact. It shares the request clone captured by the refresh middleware, so a sensitive operation with a body does not lose data on retry.
 
 ## The dev proxy and CORS
 
@@ -161,5 +181,9 @@ What happens without this proxy? The typed client's requests and the `gen:api` s
 ::: tip There is no proxy in production
 The `npm run dev` proxy exists only during development. A production build is plain static files in `web-react/dist`, and how requests reach the backend is something you solve at deploy time: the backend hosts the frontend assets, or nginx/Caddy reverse-proxies them — both same-origin, no CORS to configure. Only when the frontend and backend are truly cross-origin — the frontend on a CDN, the backend on its own domain — do you touch `TenonAdmin:Api:Cors:AllowedOrigins`; see [Deployment route C: true cross-origin](/guide/deployment/route-c).
 :::
+
+## Verify the request path in the browser
+
+After login, open the browser network panel and perform one protected read and one write. The read should carry the latest `Authorization` header; in cookie-session mode the write should also carry `X-Tenon-CSRF`. Expire the access token and repeat the request: the panel should show one refresh followed by a successful replay of the original request, even when several requests fail concurrently. If refresh fails, the Zustand session should clear and the browser should perform a full-page return to login rather than retain stale state and keep issuing 401 responses.
 
 For the full server config and local aliases, see [Project structure and startup](/frontend-react/structure).

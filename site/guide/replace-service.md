@@ -1,6 +1,6 @@
 # Replace Built-in Services
 
-You want to change some behavior of the kernel — swap the password-hashing algorithm, slot a step into the login flow, replace the built-in dictionary module wholesale with your own. This page lays out which routes there are and how to take each one. No fork, no copying kernel code.
+When default storage, sign-in behavior, or dictionary endpoints do not fit your business, register extensions in your own host project. Identify the scope of the change, then choose service replacement, a method override, or route takeover without copying the framework for a local requirement.
 
 How big your change is decides which route you take:
 
@@ -8,15 +8,15 @@ How big your change is decides which route you take:
 - **Change just one step in a flow** (log something extra after login, route credential checks through LDAP) → subclass the built-in service and override that one `virtual` method.
 - **Drop a whole built-in module and take it over yourself** (the dictionary module's API doesn't fit at all) → disable its controller and claim the same route with your own controller.
 
-And one related thing: seeding your own business tables with initial data, via consumer seeds. All four are below.
+Put registration code in your own `Program.cs` and extension classes in separate business-project files. Register initial data through seeds, as shown at the end.
 
-This page covers *how* to replace; why these routes work at all (the three constraints — `TryAdd` first-registration-wins, the `virtual` step split, and assembly mounting — plus the "six-piece" tests that lock them in) is in [The Replaceability Model](/backend/replaceability).
+Interfaces, overridable methods, and assembly discovery support these extensions. See [The Replaceability Model](/backend/replaceability) for the design constraints.
 
 ## Replace an entire service: register ahead of AddTenonAdmin
 
 Every built-in service in the kernel is registered with `TryAdd*` — meaning "if the container already has this interface, don't add it." So all you do is register your own implementation *before* `AddTenonAdmin()`, and when the kernel's `TryAdd` sees the slot already taken, it steps aside automatically.
 
-Take swapping the password-hashing algorithm:
+The password-hashing interface illustrates registration. Algorithm bodies are placeholders and are not runnable. A real replacement must handle existing password hashes and verify that old accounts can still sign in.
 
 ```csharp
 // Consumer Program.cs
@@ -33,7 +33,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 ```
 
 ::: warning The wrong order fails silently
-Put it *after* `AddTenonAdmin()` and the built-in implementation has already taken the slot, so your `TryAdd` is skipped — no error, but the replacement doesn't take. To be order-independent, use `builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>())`, which "overrides an existing registration" and wins even when written after `AddTenonAdmin()`.
+A replacement registered with `TryAdd*` after `AddTenonAdmin()` is skipped because the default is already present. The example uses `AddSingleton`, whose behavior differs from `TryAddSingleton`; not all late registrations are silently ignored. Prefer registering replacements before the kernel. For an explicit replacement afterward, use `Replace(ServiceDescriptor...)` with the original service lifetime.
 :::
 
 Common replacement points:
@@ -45,7 +45,7 @@ Common replacement points:
 | `IFileStorage` | `LocalFileStorage` | For OSS / S3 |
 | `IAuthService` | `AuthService` | To customize the whole login flow |
 | `IDataScopeProvider` | `DataScopeProvider` | To customize data-scope rules |
-| `IIdGenerator` | `SnowflakeIdGenerator` | For DB auto-increment / GUID v7 |
+| `IIdGenerator` | `SnowflakeIdGenerator` | Customize ID generation within the existing `long` key contract |
 
 Most replacement points are every `TryAdd` line in `backend/src/TenonAdmin.Services/ServicesSetup.cs`. The data layer and host layer each have their own batch too — `IIdGenerator`, for instance, is registered in `backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs`. Every interface registered in any of these is a replacement point.
 
@@ -60,8 +60,13 @@ Replacing the whole service means re-injecting all of its dependencies, and most
 public sealed class MyAuthService(
     IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens,
     ISessionService sessions, ILogService logService, ILoginLockService loginLock,
-    ICaptchaService captcha, ISecurityPolicyProvider policy, ISmsOtpService smsOtp)
-    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp)
+    ICaptchaService captcha, ISecurityPolicyProvider policy, ISmsOtpService smsOtp,
+    IEnumerable<IExternalAuthProvider>? externalProviders = null,
+    ISysUserExternalService? externalBindings = null, IRbacService? rbac = null,
+    TimeProvider? time = null, IMfaPolicyService? mfaPolicy = null,
+    IMfaChallengeService? mfaChallenge = null, AdminSecurityOptions? security = null)
+    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp,
+        externalProviders, externalBindings, rbac, time, mfaPolicy, mfaChallenge, security)
 {
     protected override LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) =>
         base.BuildLoginOutput(user, pair) with { Name = $"{user.Name}({user.Account})" };
@@ -72,7 +77,9 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 builder.Services.Replace(ServiceDescriptor.Scoped<IAuthService, MyAuthService>());
 ```
 
-To find overridable steps, open the target service's source and search `protected virtual` — those methods are the openings left for you. When overriding, call `base.Xxx()` first to keep the original logic, then append your own. The payoff of overriding one step instead of copying the whole block: on a kernel upgrade you automatically pick up upstream fixes to that base step, rather than missing them because you copied an old version of the method body.
+Find the relevant `protected virtual` method in the target service. This example calls the base method before changing the display name, preserving the other result fields. Its constructor also forwards optional dependencies, including external-login and MFA services, to avoid accidentally bypassing existing security behavior.
+
+Whether to call `base.Xxx()` depends on whether you are adding behavior or replacing the entire step. After upgrading, compare the base signature and verify sign-in, token refresh, and any enabled MFA flow.
 
 ## Drop a whole module: disable + take over the route
 
@@ -94,9 +101,9 @@ The disabled controller's routes are no longer registered, the original endpoint
 public class CustomDictController : ControllerBase { /* your dictionary logic */ }
 ```
 
-Only controllers annotated with `[Module("Name")]` can be disabled, currently these six: `Dict`, `Upload` (literally what's disabled is the file controller `/api/v1/sys/file` — the module name isn't the route), `Notice`, `Log`, `Config`, `Dashboard`. The auth, user, org, role, menu, and portal controllers don't carry this annotation — there's no switch to turn them off, because turning them off would lock everyone out of the whole system.
+Only controllers marked with `[Module("Name")]` can be disabled this way, including `Dict`, `Upload`, `Notice`, `Log`, `Config`, `Dashboard`, and `Job`. Check the selected version’s controller annotations. `Upload` maps to file routes under `/api/v1/sys/file`; configure the module name, not the route. Core authentication, user, organization, role, menu, and portal controllers do not have this switch.
 
-Don't confuse `Api.DisabledModules` with the portal's "apps/modules" (the `SysModule` table): the former is a build-time route switch, the latter is runtime data. The latter has its own guardrails — the built-in `system` app hosts all the admin pages, and disabling it through the management API is refused (error code 42013 — the portal would be cut off with no UI path to recover); an app that still has menus attached can't be deleted (42023, or those top-level directories' `ModuleId` would dangle and the whole subtree would vanish from the portal).
+Don't confuse `Api.DisabledModules` with the portal's "apps/modules" (the `SysModule` table): the former is a startup route switch, the latter is runtime data. The latter has its own guardrails — the built-in `system` app hosts all the admin pages, and disabling it through the management API is refused (error code 42013 — the portal would be cut off with no UI path to recover); an app that still has menus attached can't be deleted (42023, or those top-level directories' `ModuleId` would dangle and the whole subtree would vanish from the portal).
 
 ## Seed your own entities: consumer seeds
 
@@ -115,10 +122,12 @@ public class ProductSeed : ISeedData<BizProduct>
 builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<ISeedData, ProductSeed>());
 ```
 
-A seed row's fixed Id must fall within the consumer-reserved range **`Id >= 1000`** (the lower bound is the constant `TenonAdmin.Core.TenonSeedIds.ConsumerMin`; `[1, 999]` belongs to the kernel's built-in seeds). The ceiling isn't a hardcoded number — it's the live snowflake floor computed at startup (`SnowflakeIdGenerator.CurrentFloor()`): stay strictly below it and this Id can never collide with a snowflake Id this instance generates from now on, and today that floor is already a 15-digit number, plenty of room for any semantic numbering scheme. `Id = 0`, or anything at or above that floor, is rejected on the spot by the startup check (`DatabaseInitializer`), and the app won't start rather than swallowing it silently. Landing inside the kernel's own `[1, 999]` range, though, doesn't throw — the runtime has no way to tell a consumer's seed from the kernel's, so that lower bound is on the honor system alone. Always pick numbers starting from `TenonSeedIds.ConsumerMin`; collide with a number the kernel claims later and the cost is a primary-key conflict on upgrade, with no way back.
+Allocate fixed business seed IDs from `TenonAdmin.Core.TenonSeedIds.ConsumerMin` (1000), below the runtime ID floor returned by `SnowflakeIdGenerator.CurrentFloor()`. Reserve `[1, 999]` for built-in seeds. The runtime cannot identify which project owns a seed, so developers must respect that reserved range.
+
+Startup validation rejects `Id = 0`, IDs at or above the runtime floor, and duplicate IDs for the same entity. Do not reuse historical seed IDs, which may conflict with existing records during upgrades.
 
 ::: warning Forgetting to register means it silently never runs
 The kernel doesn't scan assemblies for seeds (`options.ApplicationAssemblies` only handles entity table creation and controller mounting — it doesn't touch seeds). Seeds must be registered explicitly; miss this line and the seed doesn't run, with no error either.
 :::
 
-That `ApplicationAssemblies` line is the master switch for consumer wiring: it both joins your entities into CodeFirst table creation and brings your controllers into the same MVC pipeline — for the full chain, see [Add a Business Module](/guide/business-module). Before you actually start replacing anything, the five cases in `backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` verify each of the four mechanisms above as a contract; following their shape to add a regression test around your own replacement is the safest bet.
+Verify replacements through normal application entry points: confirm the extension runs and that existing permissions and error handling still work. For route takeover, check OpenAPI for removal of the original controller and presence of your endpoints. Seeds should insert on first startup without duplicating rows after restart. `ReplaceabilityTests.cs` provides regression-test examples; see [Add a Business Module](/guide/business-module) for full integration.

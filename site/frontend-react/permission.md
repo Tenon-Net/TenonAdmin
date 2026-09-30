@@ -2,16 +2,32 @@
 
 A button the user has no right to never renders. React has no directive system, so Vue's `v-auth` becomes a component here, `<Can>`: it renders its children on a matching permission code and returns `null` otherwise, so the button never enters the virtual DOM. How this gate is built comes down to two things — where the authorization state lives, and how the decision is computed.
 
+> Prerequisite: complete the [regular-role grant in the tutorial](/frontend-react/getting-started#_5-grant-access-to-a-regular-role).
+
+## Gate the Refresh button first
+
+Import `Can` in the tutorial page and wrap its Refresh button:
+
+```tsx
+<Can code="GET:/api/v1/sys/position/page">
+  <Button loading={loading} onClick={() => void load()}>Refresh</Button>
+</Can>
+```
+
+The button renders with the position query permission and disappears after that permission is removed and the account signs in again. A direct request must still receive 403. `<Can>` shapes the interaction; the server remains the authorization boundary.
+
+[![Check both the menu and endpoint permission in the role tree; the UI is Chinese](/screenshots/role-permissions.png)](/screenshots/role-permissions.png)
+
 ## The big picture: two stores, split by what persists
 
-- **`user` store** (`src/stores/user.ts`) — `accessToken`, `refreshToken`, `userInfo` (`userId`, `account`, `name`, `avatar`, `mustChangePassword`), plus the `isLoggedIn` selector and the `setSession`/`clear` actions. Persisted to `localStorage` through zustand's persist, with a `partialize` allowlist holding just those three keys — equivalent to Vue's `persist: true`. That's what keeps you logged in across a refresh.
+- **`user` store** (`src/stores/user.ts`) — holds tokens, session mode, the CSRF flag, and profile data. Body sessions persist access/refresh tokens and profile data. Cookie sessions persist only mode, the CSRF flag, and profile data; access stays in memory and refresh stays in an HttpOnly cookie.
 - **`auth` store** (`src/stores/auth.ts`) — `modules`, `currentModuleId`, `defaultModuleId`, `menuTree`, `permissionCodes`, `permissionsLoaded`, `isSuperAdmin`, `routesReady`. The decision runs through the `hasPerm` pure function and the `useHasPerm` hook, not a Vue-style store getter. Its persist `partialize` keeps only `currentModuleId`.
 
-The split exists because the two sides have different lifetimes. Tokens and profile have to survive a refresh, or "stay logged in" means nothing. Permission codes, the menu tree, and `routesReady` are the opposite: re-fetched on every app boot. `routesReady` especially must not be persisted — dynamic routes live only in the router's memory, and once it's stored as `true`, a refresh skips the route rebuild and every dynamic route 404s. `currentModuleId` is the one exception; persisting it lets an F5 or a deep link first restore "which app you were last in," with the guard re-fetching everything else via `useModule().enterInitial()` (see [Portal and guards](/frontend-react/portal-guards)).
+The stores have different lifetimes. A body session survives reload through persisted tokens; a cookie session uses its HttpOnly refresh cookie to obtain a new access token. Permission codes, the menu tree, and `routesReady` reload on every boot because dynamic routes exist only in memory. Persisting `routesReady: true` would skip reconstruction and send dynamic pages to 404. `currentModuleId` alone survives so the guard can restore the previous app before loading the remaining authorization state.
 
 ## `<Can>`: no directive, gate with a component
 
-Gating in React is a component, not a directive. There's no equivalent to `v-auth`, the "attach to an element, run once on mount" mechanism; instead you pass the content to protect as `children` into `<Can>`:
+React has no directive system, so protected content is passed as `children` to `<Can>`:
 
 ```tsx
 // web-react/src/components/Can.tsx
@@ -34,9 +50,9 @@ A single string is the common form; it also takes an array of codes: OR by defau
 </Can>
 ```
 
-On a miss `<Can>` returns `null`, React never renders the subtree, and the button never enters the DOM. The effect matches Vue's `v-auth` physical DOM removal: a button without permission isn't on the page, and can't be "conjured up" by tampering with client state or dev tools. The mechanism differs — Vue mounts the node and then calls `el.remove()`, while React simply never creates it.
+On a miss, `<Can>` returns `null`, so React never renders the subtree and the button never enters the DOM. Vue's `v-auth` retains the node and toggles `display`; React does not create it. Both reevaluate when authorization state changes.
 
-One behavioral difference is worth naming. `v-auth` implements only a `mounted` hook, so a permission change after mount is never re-evaluated; `<Can>` subscribes to the store through `useHasPerm()`, so a change in permission codes re-renders it and flips visibility accordingly. A normal login fetches permissions once up front, so this rarely comes up in practice, but it's a real distinction.
+`<Can>` subscribes to permission fields through `useHasPerm()`, so a code change rerenders the gate. Vue reaches the same result through `watchEffect`, updating the visibility of its existing DOM node.
 
 Don't mistake `<Can>` for a security boundary. The real authorization decision always happens server-side; the backend's `[RolePermission]` filter is the authority. This component is UX only, keeping buttons the user can't use out of sight.
 
@@ -73,7 +89,7 @@ Grab the predicate once at the top of the component:
 const has = useHasPerm()
 ```
 
-The user page extracts these predicates into `userForm.ts` so they can be pinned by unit tests:
+The user page keeps these combined predicates in `userForm.ts`, leaving the operation column to consume a final boolean:
 
 ```ts
 // web-react/src/views/system/user/userForm.ts
@@ -129,6 +145,10 @@ Not every gate is a hide. A button like an enable/disable switch is better disab
 
 ## The permission-code convention
 
-A permission code is the normalized route itself — `{METHOD}:/{route template}` (e.g. `GET:/api/v1/ping`) — with no separate string vocabulary to keep in sync. When the frontend logs into the portal, `useModule().enterInitial()` fires two requests in parallel: `GET /personal/permissions` fetches the current user's code set (stored in `authStore.permissionCodes`), and `GET /personal/profile` fetches the super-admin flag (stored in `authStore.isSuperAdmin`). Only when both succeed does `permissionsLoaded` go true; if either fails, the user is treated as ordinary and fail-closed, never erring toward over-permission.
+A permission code is the normalized route itself — `{METHOD}:/{route template}` (for example, `GET:/api/v1/ping`) — with no separate vocabulary to synchronize. On portal entry, `enterInitial()` runs two requests in parallel. `GET /personal/permissions` fetches the code set and sets `permissionsLoaded` only on success; a failure leaves it false, so ordinary permission gates fail closed. `GET /personal/profile` supplies the super-admin flag. If that request fails, the store retains the user snapshot from login, or treats the account as ordinary when no snapshot exists.
 
 Since the permission code *is* the route, the frontend has no reason to invent its own permission vocabulary, and the division between the two ends is clean: the frontend only decides button show/hide and disable by code, while the backend computes and enforces that same code. How it normalizes a route into a permission code, and how `[RolePermission]` validates the session and the grant, is in the [Request Pipeline](/backend/request-pipeline). The design around swapping the authorization step — a different permission computation, a different session check — is in the [Replaceability Model](/backend/replaceability).
+
+## Verify with two accounts
+
+Use one role that has the target permission and one that does not. The first should see the action and complete it; the second should not see ordinary action buttons, while protected status switches should remain disabled. Then call the same backend endpoint directly and confirm that the unprivileged account still receives 403. The UI check covers `<Can>`, render predicates, and disabled states; the direct request proves that enforcement remains on the server.

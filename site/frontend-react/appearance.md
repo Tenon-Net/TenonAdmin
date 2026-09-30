@@ -2,6 +2,12 @@
 
 None of the admin's appearance lives in component props. Colors flow down through one layer of CSS variables and are bridged into antd; icons are picked out by scanning the source at build time, so only the ones you actually use get bundled. Reskinning, adding a dark palette, or slotting in an icon all change the inputs to these two mechanisms.
 
+> Prerequisite: complete the [Position Preview tutorial](/frontend-react/getting-started).
+
+## Make one business style follow the theme first
+
+Add a note to the tutorial page using `--color-text-secondary`, `--color-primary-light`, and `--color-primary`. Switch light mode, dark mode, the accent, and density in the settings drawer. The note and surrounding antd components should change together. The sections below explain how CSS role tokens bridge into antd tokens.
+
 ## Four token layers; business code touches only the role tokens
 
 `web-react` and `web` share the same design-token spec — they only consume it differently. `web-react/src/styles/tokens.css` splits every CSS custom property into four layers:
@@ -30,7 +36,7 @@ Two more user-facing knobs live in the same store, persisted alongside `themeSch
 
 Grayscale is a standalone switch, unlike the ones above: it never enters the antd theme at all. `useDocumentGrayscale()` (`web-react/src/theme/useDocumentGrayscale.ts`) maps `app.grayscale` to a `data-gray` attribute on `<html>`, and `html[data-gray] { filter: grayscale(1) }` in `web-react/src/styles/chrome.css` desaturates the whole page — used on days of mourning and the like.
 
-It's a separate effect, deliberately kept out of the theme bridge's dependencies. Grayscale is just a CSS filter that changes no antd token; folding it in would rebuild the entire `ConfigProvider` on every toggle for nothing. Extracting it into its own hook, rather than inlining it in `App`, is so the DOM side-effect can be unit-tested.
+It uses a separate effect and stays outside the theme bridge's dependencies. Grayscale is only a CSS filter and changes no antd token, so toggling it updates the `<html>` attribute without rebuilding the entire `ConfigProvider`.
 
 ## From tokens to antd
 
@@ -90,3 +96,7 @@ A file like `src/assets/svg/star.svg` becomes selectable as `local:star`.
 The value contract is a single string: `prefix:name` (e.g. `ph:folder`) or `local:name`, empty string meaning unset, controlled (`value` / `onChange`), droppable straight into an antd `Form.Item`. Tab order follows `COLLECTIONS`: `ph` (Phosphor, first and default), `lucide`, `ep`, `ant-design`, plus one tab for local SVGs. Opening or switching a tab loads that set's icon names — built-in sets lazily, the local set synchronously — rendering at most 300 per page and prompting you to keep typing to narrow it down beyond that.
 
 The picker's copy goes through react-i18next (`iconPicker.*` keys) and switches with the language. For how to add those keys, see [Internationalization](/frontend-react/i18n).
+
+## How to check an appearance change
+
+Review an appearance change in light mode, dark mode, compact density, and after a reload. antd controls and hand-written layout CSS should share the same accent, while grayscale should affect presentation without resetting the theme or form state. After adding a static icon, use the normal dev or build flow and confirm that the generated subset contains it. For an icon supplied by backend menu data, open it once while offline and verify that its set loads from a local chunk. Theme, density, and grayscale choices should all survive reload.

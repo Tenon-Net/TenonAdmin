@@ -1,8 +1,24 @@
 # 项目结构与启动
 
-`app.use(pinia)` 一旦排到 `app.use(router)` 后面，路由守卫就读不到 store。`web/` 这一侧的规矩多半藏在这种顺序里，不在额外的约定层里。想知道什么在哪、什么时候跑，翻文件就能得到答案。
+第一次进入 `web/`，先把模板跑起来，再顺着入口文件定位目录。这样看到 `api/`、`router/`、`stores/` 时，每个名字都能对应到浏览器里已经发生的动作。
 
 数据权限、可替换性这类设计取舍见[核心概念](/zh/guide/concepts)；API 调用、权限、状态、i18n 这类写页面的具体约定见[前端规范](/zh/standard/frontend)。
+
+> 前置：还没有接通过页面时，先完成 [Vue 前端入门](/zh/frontend/getting-started)。
+
+## 先运行，再定位入口
+
+从仓库根目录启动 Vue 模板：
+
+```bash
+npm --prefix web run dev
+```
+
+打开终端打印的地址并登录。浏览器里的侧栏来自 `layouts/`，当前页面来自 `views/`，网络请求经过 `api/`，刷新后恢复登录与菜单则依赖 `stores/` 和 `router/`。
+
+[![Vue 界面与源码目录的对应关系](/screenshots/vue-admin.png)](/screenshots/vue-admin.png)
+
+接着打开 `web/src/main.ts`。从上往下找到 Pinia、router、`v-auth`、ProTable 默认值、图标和 Markdown 的初始化，再看最后的 `app.mount('#app')`。这条顺序就是目录表的运行时版本：Pinia 必须先于 router 安装，否则守卫读取 store 时容器还不存在。
 
 ## 目录结构
 
@@ -10,13 +26,13 @@
 
 | 目录 | 职责 |
 |---|---|
-| `api/` | `client.ts`（类型化的 `openapi-fetch` 封装）+ `index.ts`（按域分组的接口调用）+ 生成的 `schema.d.ts` |
+| `api/` | `client.ts`（类型化客户端及认证、刷新、再认证中间件）+ `index.ts`（按域分组的接口调用）+ 生成的 `schema.d.ts` |
 | `assets/` | 静态资源（SVG 等） |
 | `components/` | 可复用组件（ProTable、FormContainer、Dict* 系列等，详见 `web/COMPONENTS.md`） |
 | `composables/` | 与 UI 库无关的 `use*` 逻辑 |
 | `directives/` | 自定义指令：`auth.ts` 定义 `v-auth` |
 | `layouts/` | 布局壳：顶栏、侧栏、标签页、设置抽屉 |
-| `lib/` | 小型初始化工具：`icons.ts` 导出 `setupIcons()` |
+| `lib/` | 全局初始化工具：离线图标注册与 Markdown XSS 过滤接线 |
 | `locales/` | i18n 资源与 `i18n` 实例（`index.ts`） |
 | `router/` | 静态路由（`routes.ts`）+ 动态路由注入（`index.ts`） |
 | `stores/` | Pinia 状态（`app`、`user`、`tabs` 等） |
@@ -44,6 +60,7 @@ app.directive('auth', vAuth)
 
 app.provide(PRO_TABLE_DEFAULTS, createProTableDefaults({ labels: computed(...) }))
 setupIcons()
+setupMarkdown()
 app.mount('#app')
 ```
 
@@ -52,7 +69,8 @@ app.mount('#app')
 3. 全局注册 **`v-auth` 指令**（`directives/auth.ts`），它按权限码控制元素显隐。
 4. **ProTable 默认配置**：给 `PRO_TABLE_DEFAULTS` 提供一份 `computed` 的 labels（搜索、重置、刷新、密度、列设置等），内部读 `i18n.global.t`。因为是 `computed` 且订阅了当前语言，切换语言时所有表格的文案会立即更新。各页面于是不用手动传 `:labels`。
 5. **`setupIcons()`** 注册离线图标集与本地 SVG，并预热 `ph` 图标集。这一步是非阻塞的：注册完成后 `<Icon>` 从本地数据渲染，不会命中外部 CDN。
-6. **挂载**到 `#app`。
+6. **`setupMarkdown()`** 在首次渲染前挂上通知 Markdown 的 XSS 过滤，并关闭不需要的联网扩展。
+7. **挂载**到 `#app`。
 
 `main.ts` 顶部还引入了 `styles/tokens.css` 和 `styles/index.css` 两份样式表，它们在上述流程执行之前就已加载。
 
@@ -65,13 +83,13 @@ app.mount('#app')
 
 ## Dev 代理
 
-`vite.config.ts` 做了代理，让浏览器只跟 `:5173` 通信：
+`vite.config.ts` 做了代理，让浏览器只跟 `:5175` 通信：
 
 ```ts
 const apiTarget = process.env.TENON_API_TARGET ?? 'http://localhost:5100'
 
 server: {
-  port: 5173,
+  port: 5175,
   proxy: {
     '/api': { target: apiTarget, changeOrigin: true },
     '/openapi': { target: apiTarget, changeOrigin: true },
@@ -93,7 +111,7 @@ server: {
 
 | 脚本 | 命令 |
 |---|---|
-| `npm run dev` | `vite`：dev server,`:5173` |
+| `npm run dev` | `vite`：dev server，默认 `:5175`；若终端显示不同地址，以终端为准 |
 | `npm run build` | `vue-tsc --noEmit && vite build` |
 | `npm run preview` | `vite preview` |
 | `npm run lint` | `oxlint` |
@@ -109,7 +127,11 @@ server: {
 
 | 脚本 | 作用 |
 |---|---|
-| `dev.bat` | 开两个窗口：后端（`dotnet run --project samples/MinimalHost`，`:5100`）和前端（`npm install && npm run dev`，`:5173`） |
-| `stop.bat` | 结束占用 `5100`、`5173` 端口的进程 |
+| `dev.bat` | 启动后端（`:5100`）、Vue（`:5175`）和 React（`:5174`） |
+| `stop.bat` | 当前脚本仍处理 `5100`、`5173`、`5174`；若 Vue 的 `:5175` 仍在运行，请在启动它的终端结束进程 |
+
+## 第一次运行的完成标准
+
+启动成功不只看终端没有报错。默认地址是 `http://localhost:5175`，若 Vite 终端显示不同监听地址，以终端为准。登录后应能进入菜单页面，网络请求从同一前端源的 `/api/...` 发出并由代理转到后端；切换语言或主题后刷新，选择仍应保留。做到这些，入口装配、开发代理和持久化 store 才算同时工作。
 
 这套结构跑通之后，往下一页是[路由](/zh/frontend/routing)：后端菜单树怎么拼成路由表。再往后是[请求流程](/zh/frontend/request)，一次接口请求怎么走过类型化客户端。

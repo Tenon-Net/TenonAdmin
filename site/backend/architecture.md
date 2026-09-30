@@ -1,6 +1,6 @@
 # Layered Architecture and Package Dependencies
 
-TenonAdmin is composed of nine NuGet packages; the five forming the core chain may only depend downward — upper layers can reference lower ones, never the reverse. Reverse that direction in any one layer and both replaceability and the dependency boundary collapse together. The other four all hang off `Core` as optional side-branches outside that chain.
+Most applications only need the `TenonAdmin` meta-package and one call to `AddTenonAdmin()`. The package layout matters when you want only the data layer, add an optional capability, or diagnose a dependency conflict. Five core packages depend downward. Redis, Excel, and four login packages depend only on `Core`, while the workflow package depends on `AspNetCore`. The meta-package does not pull in these optional capabilities.
 
 ## The core chain — five packages
 
@@ -17,20 +17,22 @@ TenonAdmin.AspNetCore  Host integration: AddTenonAdmin / MapTenonAdmin, JWT, [Ro
 TenonAdmin             Meta-package: references AspNetCore only. Consumers install this one package and transitively pull in the whole stack.
 ```
 
-Off to the side, all four optional packages depend only on `Core` — none of Core/SqlSugar/Services/AspNetCore reference any of them back:
+Six lightweight extension packages depend only on `Core`, and the core chain does not reference them back:
 
 ```text
 TenonAdmin.Caching.Redis   Optional: RedisCacheProvider (StackExchange.Redis-backed ICacheProvider), opt-in via
                             AddTenonAdminRedisCache(configuration) called *before* AddTenonAdmin().
-TenonAdmin.Auth.WeCom      Optional: an IExternalLoginProvider implementation for WeCom QR-code login.
-TenonAdmin.Auth.DingTalk   Optional: an IExternalLoginProvider implementation for DingTalk QR-code login.
+TenonAdmin.Auth.WeCom      Optional: an IExternalAuthProvider implementation for WeCom QR-code login.
+TenonAdmin.Auth.DingTalk   Optional: an IExternalAuthProvider implementation for DingTalk QR-code login.
+TenonAdmin.Auth.GitHub     Optional: an IExternalAuthProvider implementation for GitHub OAuth Apps.
+TenonAdmin.Auth.WeChat     Optional: an IExternalAuthProvider implementation for WeChat Open Platform.
 TenonAdmin.Excel           Optional: xlsx read/write and template generation with dropdowns, opt-in via
                             AddTenonAdminExcel() called *before* AddTenonAdmin().
    ↑
 TenonAdmin.Core
 ```
 
-Neither login satellite package carries a single third-party runtime dependency beyond Microsoft.* — the dependency red line holds for optional packages too, not just the core chain.
+All four login packages reference only `Core` and Microsoft.*; none brings in a vendor SDK. `TenonAdmin.Workflow` is a different kind of optional package. It references `TenonAdmin.AspNetCore` to reuse controllers and the request pipeline, and becomes active only after `AddTenonAdminWorkflow()` and `UseWorkflow()` are called.
 
 Responsibilities and dependency direction per layer:
 
@@ -42,13 +44,28 @@ Responsibilities and dependency direction per layer:
 | `TenonAdmin.AspNetCore` | JWT, authorization filters, built-in controllers, global filters, `AddTenonAdmin` | Services, SqlSugar, Core | Microsoft.AspNetCore.* |
 | `TenonAdmin` (meta-package) | Aggregation entry point | AspNetCore | — |
 | `TenonAdmin.Caching.Redis` (optional) | `RedisCacheProvider` — Redis-backed `ICacheProvider` | Core only | StackExchange.Redis |
-| `TenonAdmin.Auth.WeCom` (optional) | `IExternalLoginProvider` for WeCom QR-code login | Core only | Microsoft.* only |
-| `TenonAdmin.Auth.DingTalk` (optional) | `IExternalLoginProvider` for DingTalk QR-code login | Core only | Microsoft.* only |
+| `TenonAdmin.Auth.WeCom` (optional) | `IExternalAuthProvider` for WeCom QR-code login | Core only | Microsoft.* only |
+| `TenonAdmin.Auth.DingTalk` (optional) | `IExternalAuthProvider` for DingTalk QR-code login | Core only | Microsoft.* only |
+| `TenonAdmin.Auth.GitHub` (optional) | `IExternalAuthProvider` for GitHub OAuth Apps | Core only | Microsoft.* only |
+| `TenonAdmin.Auth.WeChat` (optional) | `IExternalAuthProvider` for WeChat Open Platform | Core only | Microsoft.* only |
 | `TenonAdmin.Excel` (optional) | `IExcelReader`/`IExcelWriter`/`IExcelTemplateBuilder` for xlsx | Core only | MiniExcel, DocumentFormat.OpenXml |
+| `TenonAdmin.Workflow` (optional) | Approval definitions, engine, tasks, and designer APIs | AspNetCore | Microsoft.AspNetCore.* |
+| `TenonAdmin.Integration` (optional) | Application credentials, open APIs, outbound calls, and reliable delivery | AspNetCore | Microsoft.AspNetCore.* |
+
+System integration uses the separate optional `TenonAdmin.Integration` package, which depends on `AspNetCore` and is not included by the meta-package. With a release containing this module, call `AddTenonAdminIntegration()` before `AddTenonAdmin`, and call `UseIntegration()` in the kernel options callback. Follow [System Integration](/guide/integration) for applications, credentials, and delivery tasks.
+
+## Choose an entry point by use case
+
+- **Build a complete admin application:** install `TenonAdmin`. It transitively brings in the core chain and is the path used by the quick start and business-module examples.
+- **Use only data access:** install `TenonAdmin.SqlSugar` directly and call `AddTenonAdminSqlSugar()`. This does not register JWT, controllers, or host filters.
+- **Add Redis, external login, or Excel:** keep the meta-package, install the matching optional package, and call its registration method. Registrations that use `TryAdd` to replace a built-in interface belong before `AddTenonAdmin()`.
+- **Enable workflow:** install `TenonAdmin.Workflow`, register `AddTenonAdminWorkflow()`, and call `UseWorkflow()` in the `AddTenonAdmin` options callback. The meta-package does not enable it automatically.
+
+The resulting service container is the quickest check: a complete host resolves built-in controllers; a data-only container resolves `ISqlSugarClient` and `IRepository<>` without authentication or MVC services.
 
 `TenonAdmin.Caching.Redis` doesn't introduce a new mechanism — it's the kernel's `TryAdd` replaceability, applied to the cache provider. A consumer calls `AddTenonAdminRedisCache(configuration)` before `AddTenonAdmin()`, which `TryAddSingleton`s a `RedisCacheProvider` that wins the race and replaces the kernel's default in-process `MemoryCacheProvider`. Skip the call, or don't set `TenonAdmin:Cache:Provider=Redis`, and the kernel's in-process default keeps working unchanged.
 
-`TenonAdmin.Excel` takes the same route: the three codecs the kernel registers by default are all `MissingExcelProvider`, and the first call throws `ErrorCode.ExcelProviderMissing` (`46001`). Install the package and call `AddTenonAdminExcel()` before `AddTenonAdmin()`, and `TryAdd` lands on the real implementations instead. Skip the package and the publish output doesn't grow by a byte. Wiring it up: [Wire Import/Export on Your Entity](/guide/import-export).
+`TenonAdmin.Excel` takes the same route. Without the optional package, all three default codecs throw `ErrorCode.ExcelProviderMissing` (`46001`). Install the package and call `AddTenonAdminExcel()` before `AddTenonAdmin()` to register the real implementations. Applications that do not use import/export do not carry its runtime dependencies. See [Wire Import/Export on Your Entity](/guide/import-export).
 
 ::: tip Entities live in Services, not in SqlSugar
 The data layer only provides `IRepository<>` and entity base classes; the concrete `Sys*` business entities are defined in `TenonAdmin.Services`. This follows from the dependency direction: entities need to reference domain concepts, and the data layer cannot depend upward on the domain layer.
@@ -66,7 +83,7 @@ Each layer's DI wiring is a static extension method, named to match the layer:
 - `ServicesSetup.AddTenonAdminServices()` — `backend/src/TenonAdmin.Services/ServicesSetup.cs`
 - `TenonAdminSetup.AddTenonAdmin()` — `backend/src/TenonAdmin.AspNetCore/TenonAdminSetup.cs`
 
-`AddTenonAdmin` is the composition root: it binds configuration first, then calls down through each layer. It's the only thing consumers see.
+`AddTenonAdmin` is the composition root for a complete host: it binds configuration first, then calls down through each layer. A normal business application uses this one entry point instead of calling every lower-level Setup separately.
 
 ```csharp
 // backend/samples/MinimalHost/Program.cs — three lines, zero config, full stack
@@ -95,7 +112,9 @@ services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()
 services.AddTenonAdminServices();
 ```
 
-Incidentally, each layer can be assembled independently: `AddTenonAdminSqlSugar` is a public entry point, callable on its own against a bare container (used by tests, and by consumers who only need the data layer). Because of this, it resolves optional dependencies with `GetService` rather than `GetRequiredService` internally — no logger factory means it silently doesn't log, rather than turning into a required dependency that prevents startup.
+Each layer can be assembled independently. A data-only application can call `AddTenonAdminSqlSugar` on its container without registering JWT, controllers, or other host features. The data layer therefore resolves optional dependencies with `GetService`; without a logger factory, it simply emits no logs instead of failing startup.
+
+<a id="how-a-consumers-entities-and-controllers-plug-in"></a>
 
 ## How a consumer's entities and controllers plug in
 

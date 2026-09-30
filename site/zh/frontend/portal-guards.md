@@ -2,6 +2,14 @@
 
 登录后进哪个应用，由一道阶梯逐级判定：记住的、唯一的、默认的，一个都不成立，才弹选择器让用户自己挑。一个用户可能同时被授权好几个应用（模块），进哪个不能写死，得按当前用户现算。
 
+> 前置：先完成[入门教程](/zh/frontend/getting-started)，并保留「岗位预览」菜单。
+
+## 先从三个入口进入同一页面
+
+依次做三次：从侧栏点击「岗位预览」、复制 URL 后刷新、退出登录后把该 URL 直接贴回地址栏。前两次应回到同一页面；第三次先去登录，登录完成后再由当前应用的菜单恢复目标。若账号有多个应用，再从九宫格切换一次，确认不含该菜单的应用不会保留旧页面标签。
+
+这三个入口分别触发普通导航、硬刷新重建和未登录拦截。下面的 `enterInitial` 与 `beforeEach` 就是在保证它们最后落到同一套授权后的菜单状态。
+
 ## 登录之后进哪个应用：enterInitial
 
 TenonAdmin 的外壳是个多应用门户：每个用户被授权若干个应用，右上角有个九宫格选择器随时切换。登录后或硬刷新后，决定「直接进某个应用」还是「弹选择器」的，是 `composables/useModule.ts` 里的 `enterInitial()`：
@@ -11,13 +19,17 @@ async function enterInitial(): Promise<EnterResult> {
   const [{ modules, defaultModuleId }, perm, profile] = await Promise.all([
     personalApi.modules(),
     personalApi.permissions().then((codes) => ({ ok: true, codes })).catch(() => ({ ok: false, codes: [] as string[] })),
-    personalApi.profile().then((p) => ({ sadm: p.isSuperAdmin })).catch(() => ({ sadm: false })),
+    personalApi.profile()
+      .then((p) => ({ sadm: p.isSuperAdmin, avatar: p.avatar ?? null }))
+      .catch(() => ({ sadm: useUserStore().userInfo?.isSuperAdmin ?? false, avatar: null })),
   ])
   auth.modules = modules
   auth.defaultModuleId = defaultModuleId ?? null
   auth.permissionCodes = perm.codes
   auth.permissionsLoaded = perm.ok
   auth.isSuperAdmin = profile.sadm
+  const user = useUserStore()
+  if (user.userInfo) user.userInfo.avatar = profile.avatar
   if (modules.length === 0) return { chooser: true }
   const remembered = auth.currentModuleId
   if (remembered && modules.some((m) => m.id === remembered)) return enter(remembered)
@@ -27,7 +39,7 @@ async function enterInitial(): Promise<EnterResult> {
 }
 ```
 
-模块列表、权限码、超管标记，三者并行拉取。后两者都是失败即收紧。`personalApi.permissions()` 一旦失败，`permissionsLoaded` 就留在 `false`。这时 `v-auth` 指令把它当成「藏起来」，而不是在拿不准的时候放行。`profile` 拉不到就按普通用户处理，不会把谁误当成超管。这一步不阻断进门户。权限拿不到你照样能进，只是除超管外的所有按钮先按「没权限」处理。超管例外，它走 `hasPerm` 里 `isSuperAdmin` 那条 fail-open 分支，权限码拉不到也照显，最后有服务端的 `sadm` 兜底。
+模块列表、权限码和个人资料并行拉取。`personalApi.permissions()` 失败时，`permissionsLoaded` 保持 `false`，`v-auth` 会隐藏普通权限按钮。`profile` 失败时沿用登录响应里的超管快照；没有快照才按普通用户处理。两种辅助请求失败都不会阻断门户，只会让前端使用已有的可信状态或更保守的默认值。服务端的 `sadm` claim 与权限过滤器仍然负责最终授权。
 
 拉完这些数据，`enterInitial` 走一个「进哪个应用」的判定阶梯，自上而下，第一个命中的赢：
 
@@ -37,7 +49,7 @@ async function enterInitial(): Promise<EnterResult> {
 - **配了默认应用**（`defaultModuleId`，可在选择页用 `setDefault` 设定）且它在列表里 → 直接进。
 - **以上都不满足** → 弹选择器。
 
-切换应用走的是另一条路。`switchModule(moduleId)` 先重新 `enter()` 一次，重建那个应用的动态路由。`enter()` 内部就是调一次[路由与动态菜单](/zh/frontend/routing)那页讲过的 `buildRoutesForModule(moduleId)`。接着清空标签页 store，换了应用，标签栏理应从零开始。最后把当前路由替换成新应用自己的 `homePath`。`homePath` 是 auth store 的一个 getter。它优先取模块自己的 `defaultRoute`，没有就退到菜单树的第一个叶子，再没有就兜底回 `/module`。一个菜单都没配的应用根本没有首页可言。这种时候把人送回选择器，好过让他撞上一个不属于本应用的路径吃 404。
+切换应用走另一条路径。`switchModule(moduleId)` 先重新调用 `enter()`，通过[路由与动态菜单](/zh/frontend/routing)中的 `buildRoutesForModule(moduleId)` 重建目标应用的动态路由；随后清空标签页 store，并把当前路由替换成目标应用的 `homePath`。`homePath` 优先取模块的 `defaultRoute`，没有则取菜单树的第一个叶子，再没有就回到 `/module`。没有菜单的应用不存在可进入的首页，返回选择器能避免跳到不属于该应用的路径。
 
 ## 守卫：每次导航都要过一遍 beforeEach
 
@@ -48,7 +60,13 @@ router.beforeEach(async (to) => {
   const user = useUserStore()
   const auth = useAuthStore()
 
+  if (!user.accessToken && (user.cookieSession || user.refreshToken)) {
+    const ok = await ensureAccessToken()
+    if (!ok) user.clear()
+  }
+
   if (to.name === 'login') return user.isLoggedIn ? { path: '/', replace: true } : true
+  if (to.meta.public && to.name !== 'not-found') return true
   if (!user.isLoggedIn) return { path: '/login', replace: true }
 
   if (user.userInfo?.mustChangePassword) {
@@ -62,7 +80,11 @@ router.beforeEach(async (to) => {
       if (res.chooser) return to.name === 'module' ? true : { path: '/module', replace: true }
       if (to.name === 'module') return true
       if (to.path === '/') return { path: auth.homePath, replace: true }
-      return to.fullPath
+      const resolved = router.resolve(to.fullPath)
+      if (resolved.name && resolved.name !== 'not-found') {
+        return { name: resolved.name, params: resolved.params, query: to.query, hash: to.hash, replace: true }
+      }
+      return { path: to.path, query: to.query, hash: to.hash, replace: true }
     } catch {
       user.clear()
       return { path: '/login', replace: true }
@@ -74,15 +96,17 @@ router.beforeEach(async (to) => {
 })
 ```
 
-它按顺序把四件事料理掉：
+它按顺序处理五种状态：
 
-**登录跳转。** 已登录的人再访问 `/login` 会被弹回 `/`；未登录的人访问除 `/login` 外的任何地方，都会被送去 `/login`。`/login` 是唯一免认证页。
+**恢复 Cookie 会话。** Level 3 Cookie 会话的 access token 只在内存中，F5 后会消失。守卫先根据持久化的 `cookieSession` 标记，通过 HttpOnly refresh Cookie 静默换取新的 access，再判断是否登录。body 会话的令牌已经从本地存储水合，这一步会立即通过。
+
+**公开页与登录跳转。** `/login`、OAuth 回调和 MFA 绑定/恢复页可以在动态路由未就绪时访问。已登录的人访问普通登录页会回到 `/`；带 `pendingLink` 或 `totpChallenge` 的登录流程会清理残留会话并留在登录页。catch-all 404 虽标记为 public，却不能提前放行，否则动态深链在重建前会被误判成 404。
 
 **强制改密。** `mustChangePassword` 一旦为真，除了 `/personal/password` 本身，任何导航都被拦下、重定向到那里。这个标志是管理员建号或重置密码后首登带上的。这一判定刻意放在下面的动态路由重建**之前**。为什么？改密页是静态路由，不依赖菜单树就能渲染，先放行它，能避免「重建 → 选应用 → 又被弹回改密页」这种绕圈。改密成功后现有流程会强制登出重登，标志由后端清零。
 
-**刷新 / 深链的重建。** 动态路由只活在 router 的内存路由表里，不持久化。硬刷新或者直接打开一条深链时，`auth.routesReady` 必然是 `false`，任何 `menu-{id}` 路由都还没注册。守卫一检测到这点，就在这里把 `enterInitial()` 调进来。它既重建路由，又填好 `auth.modules`。所以门户的判定和守卫的重建，其实共用这同一次调用。拿到结果，守卫再决定去向。结果是选择器，就去 `/module`。要是本来就去 `/module`，直接放行，因为渲染选择页要的数据这时已经齐了。这种情况不能弹回 `/`，否则默认应用一旦设定，就再没入口去改它。目标是 `/`，就直接给出 `auth.homePath`。其余情况，重新返回 `to.fullPath`，让同一个 URL 在路由建好之后再解析一次。万一 `enterInitial()` 抛错，直接清空登录态送回 `/login`，不把用户晾在一个搭了一半的页面上。
+**刷新 / 深链的重建。** 动态路由只存在于 router 内存。硬刷新或直接打开深链时，`routesReady` 为 `false`，守卫调用 `enterInitial()` 重建路由并填充模块数据。选择器结果落到 `/module`，根路径落到 `homePath`。普通深链则用更新后的 matcher 执行 `router.resolve(to.fullPath)`；若匹配到真实动态路由，就按路由名重新进入，否则按原路径重试。这样不会沿用本次导航开始时解析出的 catch-all 记录。重建失败会清空登录态并返回登录页。
 
-这里有两个位置不返回 `to.fullPath`，值得留意。第一个，目标是 `/` 的时候。返回 `to.fullPath` 等于重定向到自身，而 `/` 已经没有静态 `redirect` 了，Vue Router 会判成无限重定向。另一个坑更隐蔽。这段重建逻辑不能用 `to.meta.public` 提前短路。因为一条还没注册的动态路由会先命中 catch-all(404)，而它带着 `public` 标记。真按 `public` 放行，用户看到的就是一个错的 404，而不是重建后的正确页面。
+根路径不能按自身重试，否则 Vue Router 会判成无限重定向。公开页判断也不能无条件放行 `not-found`，因为它可能只是动态路由恢复前临时命中的 catch-all。
 
 **`/` 永远落到 `auth.homePath`。** 路由已经就绪的正常导航里，访问 `/` 同样交给守卫算首页。这条判断不能写成 `layout` 路由上的静态 `redirect`，原因和上面一样。`redirect` 在 resolve 阶段求值，早于这个守卫。那时候菜单树还没准备好，`homePath` 自然也没有，算出来的落点必然是错的。
 
@@ -96,5 +120,9 @@ router.afterEach((to) => {
   useTabsStore().addTab(to)
 })
 ```
+
+## 用四种入口验收守卫
+
+守卫改动后至少走四条路径：未登录时直达业务深链应回到登录页；被要求改密的账号只能进入密码页；只有一个应用的账号登录后应直接进入该应用；有多个应用且没有可用默认项时应停在选择器。最后在一个动态页面上刷新浏览器，页面应在路由重建后回到原地址，而不是先落到 404。这样能同时覆盖登录态、强制改密、应用选择和深链恢复。
 
 要是你找的是动态路由本身怎么从菜单树长出来的，去[路由与动态菜单](/zh/frontend/routing)。`buildRoutesForModule` 怎么把每个菜单节点的 `component` 字符串换成真实的懒加载组件，`namedPage` 又怎么给它一个稳定身份、好让 `keep-alive` 认得出，都在那页。门户「进哪个应用」的决策，还有守卫每次导航时怎么把它调进来，到这里就讲完了。

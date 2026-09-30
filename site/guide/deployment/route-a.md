@@ -1,6 +1,6 @@
 # Route A: Monolithic Deployment
 
-One process, one port, frontend and backend on the same origin. That is the whole of Route A, and everything else follows from it: no CORS to think about, no reverse proxy to stand up. For an internal system this is usually far enough, and only two things need wiring — the two lines that serve the static build, and where the upload directory lives.
+A monolithic deployment lets ASP.NET Core serve both the admin interface and APIs, useful for internal systems managed as one process. Frontend and backend share an origin, so CORS is unnecessary. Complete [production configuration](/guide/deployment/) before hosting the frontend below; keep uploads outside the static directory.
 
 1. Copy `web/dist/*` into the host project's `wwwroot/`.
 2. Add two lines of **plain ASP.NET Core** code to your own `Program.cs` (the kernel doesn't manage frontend hosting, so there's no `MapTenonAdminSpa`-style wrapper):
@@ -27,5 +27,5 @@ The upload root defaults to `./wwwroot/upload`, while uploaded files are normall
 If you only wanted to host this directory to make **images display**, you **don't need to**: the kernel has a signed direct link, `GET /api/v1/sys/file/{id}/view?sig=…` (the upload endpoint hands it to you directly in the `viewUrl` field) — anonymously fetchable but the signature can't be forged, so `<img src>` works fine while the whole upload directory stays locked down.
 :::
 
-Once running: `/` is the frontend, `/api/v1/**` is the backend, `/health` is the probe — same origin, no CORS.
+After deployment, open `/`, sign in, and refresh a business page to check the route fallback. `/health/ready` should return `Healthy`. Confirm that uploaded files remain accessible only through protected downloads or signed links, not anonymous `/upload/...` URLs. For React, replace `web/dist` with `web-react/dist` in the steps.
 

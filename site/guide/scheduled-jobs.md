@@ -1,6 +1,6 @@
 # Scheduled Jobs
 
-Write a class, implement one method, and the admin UI can drive it on a cron. The scheduler runs inside your API process as part of `AddTenonAdmin()` — no package to install, nothing to configure, no extra process.
+Use scheduled jobs for reports, periodic cleanup, and endpoint checks. The default scheduler runs inside the API process through `AddTenonAdmin()`. Implement and register `IAdminJob` to make a handler available in the management interface. This example only writes a log entry to verify scheduling; call your own business service to generate a real report.
 
 ```csharp
 public class DailyReportJob : IAdminJob
@@ -18,7 +18,12 @@ One line to register it, the same path the kernel's own handlers take:
 builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, DailyReportJob>());
 ```
 
-The rest happens in the UI: create a job, pick the "compiled" payload kind, and your handler is in the dropdown.
+Register the handler in your own `Program.cs` and restart the backend. In job management, create a compiled job and select the handler. Run it manually once before configuring its schedule. The run history should show success and the sample log entry; if the handler is missing, check that registration ran.
+
+
+In the job list, check whether a job is enabled, then inspect the execution statistics. Open its run history to diagnose failures and confirm manual runs. This Chinese-interface screenshot contains sample jobs; click to enlarge.
+
+[![Scheduled jobs and execution statistics](/screenshots/scheduled-jobs.png)](/screenshots/scheduled-jobs.png)
 
 ## Three kinds of payload
 
@@ -30,9 +35,9 @@ Besides compiled handlers there are two more, both created by filling in a form:
 | HTTP | Property bag's `url` / `method` / `headers` / `body` | Poking another service's endpoint, health sweeps |
 | SQL | Property bag's `sql` | One-off data fixes, **off by default** |
 
-**The property bag is the only way in.** It's a string dictionary stored on the job row and handed to the handler through `context.Properties`. This is the same conclusion Furion reached when it deleted its framework-level HttpJob in May 2026: a property bag plus a twenty-line `IJob` beats a framework guessing your parameters.
+The property bag is a string dictionary stored with the job and passed through `context.Properties`. Use it for task parameters such as report dates or target addresses. Obtain database access and other business services through dependency injection.
 
-SQL jobs are gated by `TenonAdmin:Jobs:Sql:Enabled`, `false` by default. Turning it on admits one thing: **whoever can edit a job now has DBA rights**.
+SQL jobs are gated by `TenonAdmin:Jobs:Sql:Enabled`, `false` by default. Turning it on admits one thing: jobs execute SQL with the configured database account, so restrict job editing according to that account’s privileges.
 
 ## Cron has six fields, seconds first
 
@@ -50,7 +55,7 @@ sec min hour day month dow
 
 The frontend's CronEditor offers every / range / step / specific per field, with a live preview of the next five occurrences underneath. It calls `POST /api/v1/sys/job/preview-cron`, available to any signed-in user, so it needs no permission of its own.
 
-## Second-level precision has a price
+## Execution frequency and log retention {#second-level-precision-has-a-price}
 
 Interval jobs bottom out at 5 seconds; 4 is rejected with `47004`. A cron may put `*` in the seconds field — the preview warns but doesn't block, because a job firing every second writes 86,400 run records a day.
 
@@ -60,11 +65,11 @@ Retention lives in the config center under `sys.job.logRetentionDays`, 30 days b
 
 "Jobs must not stop when the backend stops" is really three separate requirements:
 
-**A restart doesn't lose jobs.** Trigger configuration and the next run time live in the database, so a restarted process picks up where it left off. Occurrences missed during downtime follow the job's misfire strategy: `Skip` (the default) advances to the next future time without catching up, `FireOnceNow` catches up exactly once no matter how many were missed. Three days of downtime does not warrant three daily reports.
+**A restart doesn't lose jobs.** Trigger configuration and the next run time live in the database, so a restarted process picks up where it left off. Occurrences missed during downtime follow the job's misfire strategy: `Skip` (the default) advances to the next future time without catching up, `FireOnceNow` catches up exactly once no matter how many were missed. If the business requires every missed day to be covered, check and backfill those dates in your business logic.
 
 **One replica dies, another takes over.** Both API replicas run a scheduler and elect a leader through a lease on `sys_job_lock`; only the leader scans. When a leader goes silent the standby takes over within 40 seconds (30s lease + 10s heartbeat). This layer needs a server database — SQLite won't hold up under two writing processes.
 
-**Jobs keep running with the API down.** An in-process scheduler cannot outlive its process, so this half needs a second one. Copy `backend/samples/WorkerHost`; `Program.cs` is three lines:
+**Jobs must continue while the API is down.** Run the scheduler in a separate Worker process connected to the same database as the API. See `backend/samples/WorkerHost`; its minimal startup is:
 
 ```csharp
 var builder = Host.CreateApplicationBuilder(args);
@@ -87,6 +92,8 @@ One affected row means go. An old leader that wakes from a twenty-second GC paus
 
 For the multi-replica shape a container smoke test signs this off: create a 5-second job, let it run a few rounds, assert the scheduled times are pairwise distinct, then kill the leading replica and assert the job kept running and leadership moved.
 
+Claiming prevents multiple nodes from claiming the same scheduled occurrence. Retries, manual runs, and external request timeouts can still repeat business operations. Make side effects such as payments or messages idempotent using business keys.
+
 ## After a job fails
 
 Failure handling is per job, four knobs:
@@ -100,7 +107,7 @@ Failure handling is per job, four knobs:
 
 Recovering from panic requires re-enabling the job by hand, deliberately: a job that has failed ten times in a row will only drown the log by failing every five minutes. The alert fires once, on the crossing.
 
-**A job implementation has to be genuinely async.** `Thread.Sleep`, `.Result` and `.Wait()` pin thread-pool threads, and eight such jobs in flight can stall the whole process. The `MaxConcurrentRuns` cap is a backstop, not a cure.
+Use asynchronous I/O and observe `CancellationToken` in job handlers. Avoid blocking thread-pool threads with `Thread.Sleep`, `.Result`, or `.Wait()`. `MaxConcurrentRuns` limits concurrent runs but does not remove resource consumption caused by blocking.
 
 ## Three things to settle before deploying
 

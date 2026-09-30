@@ -91,4 +91,8 @@ It's a standalone package, so it also installs into any other Vue 3 + Naive UI p
 npm i tenon-naive-iconify-picker
 ```
 
+## Checks after integration
+
+Pick a built-in icon in the menu form and save it; the sidebar and table preview should render the same stored string. Then add `src/assets/svg/check.svg`, restart the dev server, and confirm that `local:check` appears. Finally, switch the browser network panel to offline and reload. Registered icons and local SVGs should still render; only an unregistered online-fallback icon may fail. These checks cover the storage contract, local SVG registration, and the offline boundary.
+
 For the full props list (`collections` / `localIcons` / `cap` / `clearable`, etc.), the `OfflineIcon` API, and SSR/Nuxt notes, see the [package README](https://github.com/Tenon-Net/tenon-naive-iconify-picker/blob/main/README.zh-CN.md).

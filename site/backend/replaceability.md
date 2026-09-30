@@ -1,6 +1,6 @@
 # Replaceability Model
 
-Replaceability is the kernel's central concern: every service is interface-backed, long methods are split into `virtual` steps, and everything is registered with `TryAdd`, so a consumer can replace any single piece without forking. This is embodied in three constraints, locked down as a contract by the "six-piece set" of `ReplaceabilityTests`.
+Every service is interface-backed, long methods are split into `virtual` steps, and built-ins use `TryAdd`, so an application can replace one piece without forking. Choose the path by the size of the change: replace a whole interface with an early DI registration; change one step by overriding a `virtual` method; own a built-in route by disabling that module before mounting a controller; add entities and endpoints through `ApplicationAssemblies`. These paths can be combined without editing kernel source.
 
 ## Constraint one: `TryAdd` registration, first registrant wins
 
@@ -43,22 +43,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 
 Long service methods are broken into a series of `virtual` steps (the template-method pattern). When a consumer wants to change behavior, they subclass the built-in service and override **just one step**, rather than copying the entire method.
 
-Take `AuthService` as an example — "assembling the login output" is an independent `virtual` step in the login flow, which a consumer can override by subclassing:
-
-```csharp
-// backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs
-// Override the login-output assembly step: the primary constructor passes the base class's 8 dependencies straight through, adding only this one overriding method
-private sealed class OverridingAuthService(
-    IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens, ISessionService sessions,
-    ILogService logService, ILoginLockService loginLock, ICaptchaService captcha, ISecurityPolicyProvider policy)
-    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy)
-{
-    protected override LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) =>
-        base.BuildLoginOutput(user, pair) with { Name = "OVERRIDDEN" };
-}
-```
-
-The rest of the login flow (captcha validation, failure lockout, password verification, token issuance, session creation) runs entirely through the base class's original logic — only output assembly is replaced. Overriding one step versus copying the whole method matters: when the kernel is upgraded, the former doesn't miss an upstream fix because you copied an old method body.
+`AuthService.BuildLoginOutput` is one example: a subclass can change only login-output assembly while validation, lockout, token, and session steps continue through the base implementation. Authentication subclasses carry an additional security rule: their constructor must forward every capability dependency accepted by the current base class. External login, time, and TOTP dependencies are optional trailing parameters for source compatibility; omitting them still compiles but disables those steps. Use the current constructor and `ReplaceabilityTests.OverridingAuthService` as the source of truth instead of copying an old parameter list.
 
 ## Constraint three: business assembly mounting
 
@@ -76,7 +61,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 
 ## The "six-piece set" locks these down as a contract
 
-`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` is the regression lock for the replaceability mechanism. The "six-piece set" name dates back to the original six cases — since then, SMS, email, realtime push, and external login each grew their own replaceable surface and picked up a matching test, so the file locks down nine cases today. The test names are deliberately fixed by design, verifying the three constraints above as a contract, not as ordinary tests:
+`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` verifies replaceability as a public contract. It currently covers nine paths, including service replacement, single-step overrides, external providers, module takeover, and consumer seed data:
 
 | Test | What it locks down |
 | --- | --- |
@@ -113,7 +98,7 @@ AdminException.ThrowIf(
     ErrorCode.ModuleHasMenus);
 ```
 
-That menu-checking query deliberately goes through the `modules.Db` escape hatch instead of adding an `IRepository<SysMenu>` to the constructor — adding a parameter to the primary constructor would break source compatibility for consumers who subclass this class. Refusing to change a subclass's signature even just to add a gate is the replaceability constraint constraining itself. Both are locked down by `ModuleProtectionTests`, which isn't part of the six-piece set above.
+The menu check uses the existing repository's `modules.Db` instead of adding `IRepository<SysMenu>` to the primary constructor, which would break source compatibility for consumer subclasses. `ModuleProtectionTests` verifies both protections.
 
 ## The full pattern for a consumer replacing a service
 
@@ -133,5 +118,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 ```
 
 The kernel registers `IPasswordHasher` with `TryAddSingleton`, so with your registration already in the container, the built-in `Pbkdf2PasswordHasher` never gets added. To swap the snowflake ID generator for a database auto-increment or GUID v7, implement `IIdGenerator` and register it up front the same way; to change just one step of a service rather than the whole thing, subclass it and override that one `virtual` step.
+
+After startup, resolve the target interface once and confirm that its runtime type is your implementation, then exercise one real business path. Reading the registration code alone is not enough: reversing the order still lets the application start while silently keeping the built-in implementation, and forgetting to disable a module only fails when a request finally hits the duplicate route.
 
 The step-by-step moves and pitfalls for all four paths — wholesale replacement, overriding a single step, disable-and-take-over, and consumer seed data — are collected in [Replacing Built-in Services](/guide/replace-service); this page only explains why these replacement points hold up.

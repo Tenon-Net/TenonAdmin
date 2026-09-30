@@ -21,6 +21,14 @@ fixed at build time, unchanged between deploys.   re-derived whenever menuTree c
 
 "Derived" is the load-bearing word. The Vue side hangs each dynamic route with an imperative `router.addRoute`, and after a rebuild it has to re-resolve the current URL by hand. Here the routes are a pure function of `menuTree`, and `useRoutes(routes)` re-matches automatically as `menuTree` changes — there's no window where "the route is mounted but the current URL hasn't re-matched."
 
+> Prerequisite: complete the [menu step in the tutorial](/frontend-react/getting-started#_3-turn-the-file-into-a-route-with-a-menu).
+
+## Verify one dynamic route first
+
+Open Position Preview, copy `/example/position-preview`, and reload. Returning to the same page proves that `menuTree` returned after session restoration and `useRoutes` derived the route again. In Menu Management, confirm that the component path corresponds exactly to `src/views/example/position-preview/index.tsx` while omitting the prefix and suffix.
+
+That observation contains all three route inputs: the menu supplies the URL, the component path locates the file, and the current application supplies the menu tree. The sections below explain how the static shell, descriptors, and `RouteObject` construction divide the work.
+
 ## Static routes
 
 Static routes come in two tiers. The outer tier lives in `App.tsx`: `/login` and `/oauth/callback` are public pages, everything else under `/*` goes to `<Protected>`. Inside the protected area sits a second tier:
@@ -70,7 +78,7 @@ menuToRouteDescriptors(tree, hasView): RouteDescriptor[]
 //   missing → a diagnosable MissingRoute
 ```
 
-The split exists so the decision can be unit-tested without dragging in react-router. `menuToRouteDescriptors` holds the only real branching in the dynamic-route path, and it never touches `import.meta.glob` or `console` directly: `hasView` (does the component exist) and `warn` (alert on a missing component) are both injected as parameters. That's what makes the "should a missing component still get a route, and should it warn" branch assertable.
+The layers have different jobs. `menuToRouteDescriptors` decides whether a node becomes a page, iframe, external link, missing component, or no route. `buildRoutes` then materializes the descriptor as a react-router `RouteObject`. The `hasView` lookup and missing-component `warn` callback arrive as parameters, so the decision layer does not depend on `import.meta.glob` or `console`.
 
 ### The component path is the file path
 
@@ -132,5 +140,9 @@ The convention does not turn existing overlays into pages. Logs still use a Draw
 ::: tip Two things that aren't here
 There's no progress bar in the routing path (no NProgress or similar library). `document.title` isn't set per-navigation by a guard either: it's set once when `App` loads the site config, and again by the system-config page when the site title changes, never in step with each navigation.
 :::
+
+## Checks for a newly connected page
+
+After assigning a menu to a new view, enter it from the sidebar, then copy its URL and reload; both paths should reach the same page. Temporarily use a bad component path and confirm that the diagnostic page shows the missing path instead of silently dropping the menu or returning only 404. Enter an unsaved filter on a normal list page, switch tabs, and return; the state should remain. A `detail.tsx` page should instead fetch fresh data after leaving and revisiting. An external link should open a new tab, while an iframe menu should remain inside the application shell.
 
 To walk one chain end to end from scratch, start with [Structure & Assembly](/frontend-react/structure); the side-by-side comparison of the two templates is in [Frontend Templates](/guide/frontend-templates).

@@ -1,6 +1,6 @@
 # Data Layer and Auditing
 
-The line of business code that queries orders writes neither `IsDelete == false` nor any org condition, yet both conditions reach the final SQL. `SqlSugarSetup` put them there: the whole process holds a single `SqlSugarScope`, and its query filters and audit AOP are attached once when it's constructed, so from then on nothing slips past them.
+Business code writes only the order condition, yet soft-delete and organization predicates still reach the final SQL. Inserts likewise receive their primary key and audit fields automatically. `SqlSugarSetup` attaches these rules once to the process-wide `SqlSugarScope`. Services can focus on business fields, but code that bypasses the repository or clears a filter must take over the corresponding protection explicitly.
 
 ## One `SqlSugarScope` singleton
 
@@ -31,6 +31,8 @@ client.QueryFilter.AddTableFilter<ISoftDelete>(e => e.IsDelete == false);
 ```
 
 Deleted data is naturally invisible to every query. To query deleted data when genuinely needed, explicitly lift the filter with `.ClearFilter<ISoftDelete>()`.
+
+If deleted rows appear in a list, first check that the entity implements `ISoftDelete`, then look for a call to `ClearFilter`. Filters match interfaces; merely having a property named `IsDelete` does not enable soft deletion.
 
 ### Data scope
 
@@ -85,7 +87,7 @@ client.Aop.DataExecuting = (_, info) =>
 
 ## Entity base classes
 
-Business entities pick a base class by **which capabilities they need**. Five base classes form a chain, each level adding one more:
+Choose a business entity's base class by whether the data needs organization isolation and whether deleted rows must be recoverable. A wrong choice changes query filtering and `DeleteAsync` behavior, not just the available fields. Five base classes form a chain, each level adding one capability:
 
 ```text
 PrimaryId          primary key Id only
@@ -103,7 +105,7 @@ PrimaryId          primary key Id only
 | `DataEntity` | Yes | Yes | Yes | Business tables needing "current org / current org and below / self only / custom" isolation |
 | `OrgAuditEntity` | Yes | No | Yes | Tables that need org isolation but also genuinely need real deletes |
 
-**For the two without soft delete, the repository's `DeleteAsync` is a physical delete** — the row is removed from the database, no recycle bin, no `RestoreAsync`. Ask whether a table needs a recycle bin before picking its base class.
+Ask two questions first: must the data be isolated by organization, and must a deletion be recoverable? Use `DataEntity` for both, `BaseEntity` for soft deletion alone, and `OrgAuditEntity` only when organization isolation is required but deletion must be physical. **For the two classes without soft delete, the repository's `DeleteAsync` is a physical delete**: the row leaves the database, with no recycle bin or `RestoreAsync`.
 
 Both org-isolated base classes (`DataEntity` / `OrgAuditEntity`) get the write-path guard: the repository's `UpdateAsync`/`DeleteAsync` has a built-in scope check for `IOrgScoped` entities, and modifying/deleting a row from another org is rejected, returning 0 rows.
 

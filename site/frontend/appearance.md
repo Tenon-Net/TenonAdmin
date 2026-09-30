@@ -1,6 +1,12 @@
 # Theme & Icons
 
-Reskinning the admin with a new brand color, adding a dark palette, or slotting in a few of your own icons touches fewer places than you'd think. The whole look is driven by one layer of CSS variables, and icons are registered offline once at startup — this page explains those two mechanisms so you know where to change things, and why only there.
+The admin's appearance does not live in component props. Colors flow through one layer of CSS variables, while icons are registered offline once at startup. A new accent, a dark palette, or a local SVG changes the inputs to those two mechanisms.
+
+> Prerequisite: complete the [Position Preview tutorial](/frontend/getting-started).
+
+## Make one business style follow the theme first
+
+Add a note to the tutorial page using `--color-text-secondary`, `--color-primary-light`, and `--color-primary`. Switch light mode, dark mode, and the accent in the settings drawer. The note should remain readable and follow the accent. A fixed gray or hex color can lose contrast in dark mode; the token layers below explain why role tokens adapt.
 
 ## Four token layers; business code touches only the role tokens
 
@@ -77,3 +83,7 @@ import AppIcon from '@/components/AppIcon.vue'
 ::: tip The picker's full API
 This only covers how icons are wired into the app. The picker component itself — multi-library tabs, registering local SVGs, `labels`/i18n, the `v-model` contract — is provided by a standalone package; for its API, see [IconPicker](/components/icon-picker).
 :::
+
+## How to check an appearance change
+
+Review an appearance change in light mode, dark mode, and after a reload. When the accent changes, Naive UI controls and hand-written layout CSS should use the same color. Text, borders, and overlays must remain legible in dark mode, and a manually selected theme and density must survive reload. For a new icon, reload once while offline and confirm that the menu, breadcrumb, and picker render it from local assets rather than a development-machine network cache.

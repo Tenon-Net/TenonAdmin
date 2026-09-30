@@ -1,6 +1,6 @@
 # 配置多数据库（多 ConfigId）
 
-主库仍是 `TenonAdmin:Database` 那一条。要再挂日志库、遗留库、只读副本，写 `TenonAdmin:AdditionalDatabases`，用 `db.AsTenant().GetConnection("名字")` 访问。
+需要访问已有业务库、报表库或独立日志库时，可以在同一个后端进程中配置多个数据库连接。`TenonAdmin:Database` 是主库；`AdditionalDatabases` 中的每项是一个额外连接，`ConfigId` 是代码选择连接时使用的名字。
 
 这和[快速开始](/zh/guide/getting-started)里的「换方言」不是一回事：换方言是**一条连接**从 SQLite 改成 MySQL；这里是**同进程多条连接同时在线**。
 
@@ -71,7 +71,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, opt =>
 | `ConfigId` | 是 | — | 连接名。全局唯一（大小写不敏感）；**不能**叫 `TenonAdmin`（主库保留，`tenonadmin` 也会拒） |
 | `DbType` | 是 | `Sqlite` | `Sqlite` / `MySql` / `SqlServer` / `PostgreSQL` |
 | `ConnectionString` | 是 | — | 连接串。SQLite 相对路径按 ContentRoot 解析，并自动建父目录 |
-| `ApplySoftDeleteFilter` | 否 | `false` | 是否挂软删过滤。遗留库常无 `IsDelete`，误开会查炸 |
+| `ApplySoftDeleteFilter` | 否 | `false` | 是否挂软删过滤。遗留库常无 `IsDelete`，误开会因缺少字段而查询失败 |
 | `ApplyDataScopeFilter` | 否 | `false` | 是否挂机构数据范围。外部库通常关 |
 | `ApplyAuditAop` | 否 | `false` | 是否自动填雪花 Id 和审计字段。**关时插入必须自己给主键** |
 | `SlowSqlMillis` | 否 | `0` | 慢 SQL 阈值（毫秒）；`≤0` 关闭。失败 SQL 的 Error 日志始终开 |
@@ -137,6 +137,8 @@ public class AuditWriter(ISqlSugarClient db, IIdGenerator ids)
 
 ## 最小示例：日志拆库
 
+在开发环境验证额外连接时，可以使用下面的日志表。副库表结构由你维护，生产环境请按自己的迁移流程建表。
+
 **配置**见上文 `Audit` 那一段。
 
 **实体**（不要登记进 `ApplicationAssemblies`）：
@@ -168,6 +170,8 @@ await audit.Insertable(new AuditLog
     CreateTime = DateTime.Now,
 }).ExecuteCommandAsync();
 ```
+
+写入后，用 `GetConnection("Audit")` 查询 `biz_audit_log`，应能找到 `Message` 为 `hello` 的记录。再确认主库没有误建同名表；若表出现在主库，检查副库实体是否误加到了 `ApplicationAssemblies`。
 
 ## 和数据层其它机制的关系
 

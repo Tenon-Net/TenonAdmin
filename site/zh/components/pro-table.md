@@ -95,7 +95,8 @@ authStore.hasPerm('PUT:/api/v1/sys/position/{id}')
 
 `storage-key` 决定列设置和密度存到 localStorage 的哪个键（前缀 `protable:`），命名统一用 `{模块}-{页面}`，如 `sys-position`、`sys-user`。
 
-## 树表：静态数据模式，坑不少
+<a id='树表-静态数据模式-坑不少'></a>
+## 树表：静态数据模式的四个边界
 
 机构、菜单这类带层级的树表没有分页，一次把整棵拉回来自己摆，走**静态 data 模式**，对应 `org/index.vue` 和 `menu/index.vue`。平铺分页的列表仍用上面的 `fetcher`，翻页搜索都交给它：
 
@@ -141,3 +142,7 @@ authStore.hasPerm('PUT:/api/v1/sys/position/{id}')
 要连着包的源码调，用 `NPT_LOCAL=1 npm run dev` 直连兄弟仓库，配置见 `web/vite.config.ts`。回路和图标包一样：改源码 → 发补丁版 → bump。
 
 包的完整 prop、事件与逃生口 slot 以 [README](https://github.com/Tenon-Net/tenon-naive-pro-table/blob/main/README.zh-CN.md) 为准。本页只覆盖它在 TenonAdmin 模板里的接法。
+
+## 列表页完成后的检查
+
+先验证第一页、下一页和一个搜索条件，确认 `fetcher` 收到 `{ page, pageSize, ...条件 }`，返回的 `items` 与 `total` 能正确驱动分页。再修改列显隐或密度并刷新，设置应按唯一 `storage-key` 恢复。树表还要检查默认展开、搜索命中祖先链，以及行内开关成功后重新拉取数据。最后切换中英文，搜索、重置和列设置文案应一起变化。

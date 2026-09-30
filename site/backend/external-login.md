@@ -2,23 +2,35 @@
 
 The first time someone scans in through WeCom, they get rejected with `OAuthAccountNotBound`. That's the default policy, not a misconfiguration. The kernel's standing position is that accounts are provisioned by an admin, never self-registered — and external identity follows the same rule. To let SSO provision accounts on its own, the switch has to be turned on explicitly, per provider.
 
-## Three providers, two packaging models
+<a id='three-providers-two-packaging-models'></a>
+
+## Five providers, two packaging models
 
 | Provider | Where it lives | How it connects |
 | --- | --- | --- |
 | `oidc` | Built into the kernel (AspNetCore layer) | Standard OIDC — works with Keycloak, Entra, Authing, Auth0, and anything else that speaks the protocol |
 | `wecom` | Optional package `TenonAdmin.Auth.WeCom` | WeCom desktop QR / web authorization |
 | `dingtalk` | Optional package `TenonAdmin.Auth.DingTalk` | DingTalk desktop QR / web authorization |
+| `github` | Optional package `TenonAdmin.Auth.GitHub` | GitHub OAuth App |
+| `wechat` | Optional package `TenonAdmin.Auth.WeChat` | WeChat Open Platform website login |
 
-Built-in OIDC adds zero new dependencies: discovery document, JWKS, and `id_token` signature verification all ride on the `Microsoft.IdentityModel.*` stack that JwtBearer already pulls in. Each vendor package depends only on `Core` plus Microsoft.\*, talking to the vendor's API over a bare `HttpClient`. That's what lets them ship on their own release cadence without dragging a vendor SDK into the kernel.
+Built-in OIDC reuses the `Microsoft.IdentityModel.*` stack already brought in by JwtBearer for discovery, JWKS, and `id_token` verification. All four vendor packages depend only on `Core` plus Microsoft.\* and call vendor APIs through `HttpClient`, without bringing vendor SDKs into the kernel.
 
-The two optional packages follow the usual rule — register before `AddTenonAdmin()`. They coexist with the built-in provider, keyed by `Code`:
+Install and register only the vendor packages you need. Register selected extensions before `AddTenonAdmin()`; they coexist with built-in OIDC, keyed by `Code`. The registration entry points are:
 
 ```csharp
 builder.Services.AddTenonAdminWeComAuth(builder.Configuration);
 builder.Services.AddTenonAdminDingTalkAuth(builder.Configuration);
+builder.Services.AddTenonAdminGitHubAuth(builder.Configuration);
+builder.Services.AddTenonAdminWeChatAuth(builder.Configuration);
 builder.Services.AddTenonAdmin(builder.Configuration);
 ```
+
+## Decide the provisioning policy before launch
+
+An internal system will usually start with automatic provisioning disabled. An administrator creates the local account, assigns roles and an organization, and the user then binds an external identity. Under this policy, `40016` on the first scan is expected and prevents an unknown identity from gaining access automatically.
+
+Enable JIT provisioning only when the identity provider already governs joiners, leavers, and organization membership. Set both the default roles and default organization first, then complete a first login with an identity that has never signed in and verify the resulting permissions. `provisioning` decides whether to create an account; it cannot decide which business permissions are safe for your application.
 
 ## Configuration lives in two places
 
@@ -105,6 +117,8 @@ The response envelope has the same shape as [password login](/guide/getting-star
 ```
 
 The ticket is single-use — `exchange` consumes it via an atomic `GetAndRemoveAsync`, and a second exchange attempt gets `OAuthStateInvalid` (40014).
+
+Diagnose integration one redirect at a time. If `authorize` does not return a 302, check whether the provider is enabled. If the IdP never reaches `callback`, check the registered callback URI. If the browser reaches the frontend but token exchange fails, check whether the ticket was already consumed and whether replicas share the same cache. Do not call the first two browser-redirect endpoints with `fetch`.
 
 ## Error codes
 

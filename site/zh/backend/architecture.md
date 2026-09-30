@@ -1,6 +1,6 @@
 # 架构分层与包依赖
 
-TenonAdmin 一共九个 NuGet 包。其中五个构成核心链条，依赖方向只能自上而下：上层能引下层，下层永远看不见上层。哪一层把这个方向反转，可替换性和依赖红线就一起垮掉。剩下四个只挂在 `Core` 旁边，是主链之外的可选支线。
+大多数项目只需要安装 `TenonAdmin` 元包，再调用 `AddTenonAdmin()`。只有准备单独使用数据层、接入可选能力，或者排查依赖冲突时，才需要关心各个包如何分层。五个核心包只向下依赖；Redis、Excel 和四个登录包只依赖 `Core`，工作流包则依赖 `AspNetCore`。元包不会自动引入这些可选能力。
 
 ## 核心链条：五个包
 
@@ -17,20 +17,22 @@ TenonAdmin.AspNetCore  宿主集成:AddTenonAdmin / MapTenonAdmin、JWT、[RoleP
 TenonAdmin             元包:只引用 AspNetCore。消费方装这一个,即传递引入整条栈。
 ```
 
-四个旁支都只依赖 `Core`，而 Core/SqlSugar/Services/AspNetCore 都不会反过来引用它们：
+六个轻量扩展包只依赖 `Core`，核心链不会反向引用它们：
 
 ```text
 TenonAdmin.Caching.Redis   可选包:RedisCacheProvider(基于 StackExchange.Redis 的 ICacheProvider 实现),
                             消费方在 AddTenonAdmin() *之前* 调用 AddTenonAdminRedisCache(configuration) 即可启用。
 TenonAdmin.Auth.WeCom      可选包:企业微信扫码登录的 IExternalAuthProvider 实现。
 TenonAdmin.Auth.DingTalk   可选包:钉钉扫码登录的 IExternalAuthProvider 实现。
+TenonAdmin.Auth.GitHub     可选包:GitHub OAuth App 登录的 IExternalAuthProvider 实现。
+TenonAdmin.Auth.WeChat     可选包:微信开放平台登录的 IExternalAuthProvider 实现。
 TenonAdmin.Excel           可选包:xlsx 读写与带下拉的模板生成,消费方在 AddTenonAdmin() *之前*
                             调用 AddTenonAdminExcel() 即可启用。
    ↑
 TenonAdmin.Core
 ```
 
-两个登录可选包连第三方运行时依赖都没有，只引 Microsoft.*。依赖红线对可选包同样成立。
+四个登录可选包只引 `Core` 和 Microsoft.*，没有厂商 SDK。`TenonAdmin.Workflow` 是另一类可选包：它需要复用控制器和请求管线，因此引用 `TenonAdmin.AspNetCore`，安装后调用 `AddTenonAdminWorkflow()` 与 `UseWorkflow()` 才启用。
 
 各层职责与依赖方向：
 
@@ -44,11 +46,26 @@ TenonAdmin.Core
 | `TenonAdmin.Caching.Redis`（可选） | `RedisCacheProvider`：Redis 版 `ICacheProvider` | 仅 Core | StackExchange.Redis |
 | `TenonAdmin.Auth.WeCom`（可选） | 企业微信扫码登录的 `IExternalAuthProvider` | 仅 Core | 仅 Microsoft.* |
 | `TenonAdmin.Auth.DingTalk`（可选） | 钉钉扫码登录的 `IExternalAuthProvider` | 仅 Core | 仅 Microsoft.* |
+| `TenonAdmin.Auth.GitHub`（可选） | GitHub OAuth App 登录的 `IExternalAuthProvider` | 仅 Core | 仅 Microsoft.* |
+| `TenonAdmin.Auth.WeChat`（可选） | 微信开放平台登录的 `IExternalAuthProvider` | 仅 Core | 仅 Microsoft.* |
 | `TenonAdmin.Excel`（可选） | xlsx 读写与模板生成的 `IExcelReader`/`IExcelWriter`/`IExcelTemplateBuilder` | 仅 Core | MiniExcel、DocumentFormat.OpenXml |
+| `TenonAdmin.Workflow`（可选） | 审批定义、引擎、待办与设计器 API | AspNetCore | Microsoft.AspNetCore.* |
+| `TenonAdmin.Integration`（可选） | 应用凭据、开放接口、出站调用与可靠投递 | AspNetCore | Microsoft.AspNetCore.* |
+
+系统集成使用独立的 `TenonAdmin.Integration` 可选包，依赖 `AspNetCore`，不由元包自动引入。安装包含该模块的发行版本后，在 `AddTenonAdmin` 前调用 `AddTenonAdminIntegration()`，并在内核的配置回调中调用 `UseIntegration()`。应用、凭据和发送任务的操作见[系统集成](/zh/guide/integration)。
+
+## 按使用场景选入口
+
+- **开发完整管理后台**：安装 `TenonAdmin`。它会传递引入完整核心链条，也是快速开始和业务模块示例采用的方式。
+- **只要数据访问能力**：直接安装 `TenonAdmin.SqlSugar`，调用 `AddTenonAdminSqlSugar()`。此时不会注册 JWT、控制器和宿主过滤器。
+- **接入 Redis、外部登录或 Excel**：保留元包，再安装对应可选包，并调用它的注册方法。依赖 `TryAdd` 接管内置接口的注册应放在 `AddTenonAdmin()` 之前。
+- **启用工作流**：额外安装 `TenonAdmin.Workflow`，注册 `AddTenonAdminWorkflow()` 并在 `AddTenonAdmin` 的配置回调中调用 `UseWorkflow()`。元包不会默认启用它。
+
+判断是否选对很直接：完整宿主应能解析内置控制器；只装数据层的容器应能解析 `ISqlSugarClient` 和 `IRepository<>`，却不会出现认证或 MVC 服务。
 
 `TenonAdmin.Caching.Redis` 没有引入新机制，就是把内核那套 `TryAdd` 可替换性套用在缓存提供者上。消费方在 `AddTenonAdmin()` 之前调用 `AddTenonAdminRedisCache(configuration)`。它内部用 `TryAddSingleton` 注册 `RedisCacheProvider`，抢先赢下注册，替换掉内核默认的进程内 `MemoryCacheProvider`。不调用这个方法，或者没把 `TenonAdmin:Cache:Provider` 配成 `Redis`，内核的进程内默认实现照常工作，不受影响。
 
-`TenonAdmin.Excel` 走的是同一条路：内核默认注册的三个 codec 全是 `MissingExcelProvider`，一调就抛 `ErrorCode.ExcelProviderMissing`（`46001`）。装了包并在 `AddTenonAdmin()` 之前调用 `AddTenonAdminExcel()`，`TryAdd` 才轮到真实现。不装包，发布产物一个字节都不涨。接法见[给自己的实体接导入导出](/zh/guide/import-export)。
+`TenonAdmin.Excel` 走同一条路：未安装可选包时，三个默认 codec 都会抛 `ErrorCode.ExcelProviderMissing`（`46001`）。安装包并在 `AddTenonAdmin()` 之前调用 `AddTenonAdminExcel()` 后，真实实现才会进入容器。未使用导入导出的项目不需要携带它的运行时依赖。接法见[给自己的实体接导入导出](/zh/guide/import-export)。
 
 ::: tip 实体住在 Services，不在 SqlSugar
 数据层只提供 `IRepository<>` 和实体基类，具体的 `Sys*` 业务实体定义在 `TenonAdmin.Services`。原因是依赖方向：实体需要引用领域概念，而数据层不能反过来依赖领域层。
@@ -66,7 +83,7 @@ TenonAdmin.Core
 - `ServicesSetup.AddTenonAdminServices()`：`backend/src/TenonAdmin.Services/ServicesSetup.cs`
 - `TenonAdminSetup.AddTenonAdmin()`：`backend/src/TenonAdmin.AspNetCore/TenonAdminSetup.cs`
 
-`AddTenonAdmin` 是组合根：它先绑定配置，再逐层向下调用。消费方看到的只有它。
+`AddTenonAdmin` 是完整宿主的组合根：它先绑定配置，再逐层向下调用。普通业务项目只需要这个入口，不必分别调用下层的 Setup。
 
 ```csharp
 // backend/samples/MinimalHost/Program.cs —— 三行零配置起全站
@@ -95,7 +112,7 @@ services.AddTenonAdminSqlSugar(options.Database, [.. entityAssemblies.Distinct()
 services.AddTenonAdminServices();
 ```
 
-每层其实都能独立装配。`AddTenonAdminSqlSugar` 是公开入口，不必等 `AddTenonAdmin` 整体登场，在裸容器上单独调用也行；测试用的就是这条路径，只装数据层，不带 JWT、控制器这些用不上的宿主集成。正因为调用方可能只是这样一个裸容器，它内部对可选依赖用的是 `GetService`，不是 `GetRequiredService`：没有日志工厂就静默不打，不会凭空多出一个必需依赖，把本该独立跑起来的数据层卡在起不来。
+每层都能独立装配。只需要数据访问时，可以在容器上直接调用 `AddTenonAdminSqlSugar`，不注册 JWT、控制器等宿主能力。数据层因此用 `GetService` 获取可选依赖；没有日志工厂时只是不输出日志，不会阻止数据层启动。
 
 ## 消费方的实体和控制器如何挂进来
 

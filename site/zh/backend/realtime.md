@@ -1,6 +1,6 @@
 # 实时通知
 
-实时通知默认是关的，`TenonAdmin:Realtime:Enabled` 给的默认值就是 `false`。关着的时候，整套系统行为不变：公告角标照样 30 秒轮询一次，被强退的人也照样等到下次请求才吃 401。开启只是把这两处从「最终一致」提成「即时」，所以它是增强，不是新契约。
+只有公告角标和强制下线需要即时到达时，才需要开启实时通知。默认的 `TenonAdmin:Realtime:Enabled=false` 已有完整降级路径：公告每 30 秒轮询，被强退的会话在下一次请求时收到 401。开启 SignalR 会缩短等待时间，不会改变业务接口或数据来源。
 
 ## 开关与配置
 
@@ -103,8 +103,12 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 
 dev 环境下 Vite 要代理 `/hub` 并打开 `ws: true`，这一条已经在 `web/vite.config.ts` 里。
 
-## 没做的验证
+<a id='没做的验证'></a>
+
+## 如何验收
+
+开启后先访问 Hub 路径：未带令牌应返回 401，而不是 404。再用两个浏览器会话验证两个结果：发布公告后未读角标立即刷新；在在线用户页踢掉其中一个会话时，只有被踢的会话退出。多副本部署还要让发布方和接收方落到不同副本，才能证明 backplane 生效。
 
 测试工程没有引 `Microsoft.AspNetCore.SignalR.Client` 去跑真的 `HubConnection`。单测锁的是接线：默认走 Noop、`RevokeAsync` 与 `PublishAsync` 会触发推送、开启后 Hub 返 401 而非 404、关闭后返 404、以及六件套的可替换性。
 
-推送全链路是用一次性 Node 脚本直连 `MinimalHost` 冒烟过的，不在 CI 里。改动这一块时心里有数：接线有测试兜着，传输层没有。
+推送全链路曾用一次性 Node 脚本直连 `MinimalHost` 冒烟验证，但不在 CI 里。修改 Hub、代理或客户端连接代码后，需要补做上面的浏览器验收；现有自动化测试只能证明接线，不能证明传输层。

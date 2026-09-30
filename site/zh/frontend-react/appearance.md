@@ -2,6 +2,12 @@
 
 后台的外观没有一处写在组件 props 里。颜色由一层 CSS 变量下发，再桥接给 antd；图标在构建期扫描源码，只把用到的那些打进包。换主色、补暗色、加图标，改的都是这两处的输入。
 
+> 前置：先完成[入门教程的岗位预览页](/zh/frontend-react/getting-started)。
+
+## 先让一段业务样式跟着主题变化
+
+在教程页加入使用 `--color-text-secondary`、`--color-primary-light` 和 `--color-primary` 的提示块，再从设置抽屉切换亮色、暗色、主色和密度。提示与周围 antd 组件应一起变化。下面再看 CSS 角色令牌怎样桥接到 antd token。
+
 ## 四层 token，业务只碰角色令牌
 
 `web-react` 与 `web` 共享同一份设计令牌规范，只是消费方式不同。`web-react/src/styles/tokens.css` 把所有 CSS 自定义属性分成四层：
@@ -30,7 +36,7 @@
 
 灰阶是一个独立开关，和上面几项不同：它根本不进 antd 主题。`useDocumentGrayscale()`（`web-react/src/theme/useDocumentGrayscale.ts`）把 `app.grayscale` 映射成 `<html>` 上的 `data-gray` 属性，`web-react/src/styles/chrome.css` 里的 `html[data-gray] { filter: grayscale(1) }` 据此给整页去色，用在哀悼日这类场景。
 
-它单独成一条 effect，故意不进主题桥的依赖。灰阶只是一层 CSS filter，不改任何 antd token，混进去只会让「切灰阶」白白重建整棵 `ConfigProvider`。抽成一个 hook 而不是内联在 `App` 里，是为了能单测这个 DOM 副作用。
+它单独使用一个 effect，不进入主题桥的依赖。灰阶只是 CSS filter，不改变 antd token；切换灰阶只更新 `<html>` 属性，不需要重建整棵 `ConfigProvider`。
 
 ## 从 token 到 antd
 
@@ -60,7 +66,7 @@ antd 和 Naive 这里有两处硬差别。一是数值 token 收的是**数字**
 
 运行时分两条路。`setupIcons()`（`web-react/src/lib/icons.ts`）在 `main.tsx` 里调一次，把生成的子集同步注册进 `@iconify/react/offline`，首屏图标立即可渲染。完整的四套集合仍在，作为按需懒加载的 chunk（每套一个 `import('@iconify-json/<prefix>/icons.json')`），两种情形才拉：一是后端某个菜单配了子集之外的图标，`ensureIconLoaded` 按前缀补载那一整套；二是选择器打开某个 Tab，要枚举该集全部图标名。
 
-于是首屏只背真正用到的图标，气隙部署下渲染任何已注册图标都不触网；后端临时配一个子集外的图标也不会开天窗，那一套会在用到时懒加载补上。
+因此首屏只包含实际用到的图标。气隙部署下，已注册图标不会触网；后端临时配置子集之外的图标时，对应离线集合会按需加载。
 
 ## 在组件里用图标
 
@@ -90,3 +96,7 @@ import.meta.glob('/src/assets/svg/*.svg', { query: '?raw', import: 'default', ea
 值契约是一个字符串：`prefix:name`（如 `ph:folder`）或 `local:name`，空串表示未选，受控（`value` / `onChange`），可直接放进 antd 的 `Form.Item`。Tab 顺序即 `COLLECTIONS`：`ph`（Phosphor，首个也是默认）、`lucide`、`ep`、`ant-design`，外加本地 SVG 一个 Tab。打开或切 Tab 时按前缀加载该集图标名，内置集懒加载、本地集同步取，单页最多渲染 300 个，超出提示继续输入缩小范围。
 
 选择器文案走 react-i18next（`iconPicker.*` 键），跟着语言切换。加键约定见 [国际化](/zh/frontend-react/i18n)。
+
+## 改完后怎样检查
+
+外观改动至少要经过亮色、暗色、紧凑密度和刷新后四种状态。antd 控件与手写布局应使用同一主色，灰阶开关只改变页面显示，不应重置主题或表单状态。新增静态图标后运行正常的 dev 或 build 流程，确认生成子集包含它；后端菜单图标则要在断网环境打开一次，验证按需加载来自本地 chunk。刷新后，主题、密度和灰阶选择都应保留。

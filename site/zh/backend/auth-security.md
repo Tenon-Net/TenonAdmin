@@ -4,6 +4,16 @@
 
 上线前哪些必须改、哪些能放着用默认值，交给[部署指南的安全基线](/zh/guide/deployment/)列清单。这里只讲这些机制本身怎么运作。
 
+## 先按部署阶段做选择
+
+| 场景 | 必须处理 | 可以按需开启 |
+| --- | --- | --- |
+| 本地开发 | 保存首启随机密码；开发 JWT 密钥会自动落在 `data/dev-jwt.key` | 图形验证码、短信、TOTP、Cookie 会话 |
+| 单副本生产 | 配置至少 32 字节的 JWT 密钥，接真实短信发送器后才能开启短信能力 | 登录锁定阈值、密码过期、TOTP、Cookie 会话 |
+| 多副本生产 | 完成单副本项，并使用共享缓存承载锁定、验证码和会话热数据 | SignalR backplane 与更严格的并发会话策略 |
+
+安全开关分两类：`appsettings` 或环境变量控制部署底线，`sys.security.*` 控制运行时策略。表格里带 Options 路径的配置通常需要重启；配置中心里的运行时键改完立即生效。
+
 ## JWT 令牌
 
 访问令牌图的是短平快：一个短命 JWT，签发之后不落库。真正需要长期看管的是刷新令牌。服务端只存它的哈希，支持轮换和吊销，这套逻辑在 `Core/Security/ITokenProvider.cs` 里。配置项都在 `TenonAdmin:Jwt`（`AdminJwtOptions`）下：
@@ -49,7 +59,7 @@
 | `...:Captcha:Enabled` | `false` | 是否启用登录验证码 |
 | `...:Captcha:Type` | `char` | `char`（字符 SVG）/ `path`（描边字形）/ `math`（算术） |
 
-默认是关的。为什么敢关？三行代码跑起来的 API，得直接就能登录。账号级的登录锁定已经挡住了暴力破解的主攻方向。验证码只是浏览器侧再加一道保险，Web 模板和生产环境按需自己打开。
+验证码默认关闭，保证零配置示例可以直接登录。账号级登录锁定仍会限制连续密码错误；验证码是浏览器登录页的附加保护，生产部署可按暴露范围和攻击风险开启。
 
 运行时还能用 `SysConfig` 覆盖，改完立即生效，不用重启。`sys.security.captcha.enabled` 管要不要强制校验，`sys.security.captcha.type` 管发哪一种。缺配置时都回退到 Options 默认值。
 
@@ -77,26 +87,9 @@ AdminException.ThrowIf(!string.Equals(stored, code, StringComparison.OrdinalIgno
 二次验证怎么走？密码这一侧全部过关之后（锁定 → 验证码 → 账密 → 策略），`AuthService.CheckSmsSecondFactorAsync` 才会接手。它开一张缓存挑战票据，**绑定的是用户 id，不是手机号**，然后发码。前端收到的是 `SmsCodeRequired`（40009）这个信令，意思是「还差一步」，`args` 里带着 `challengeId`/`phoneMask`/倒计时这些参数。后半程走 `POST /api/v1/auth/login/sms`（以及 `/resend`）。`/login` 接口本身的请求/响应契约没有变。40009 只是个信令，不是失败，也不计入登录锁定的失败次数。
 
 ::: warning 二次验证只对绑定了手机号的用户生效
-开关打开了，没绑手机号的用户会不会登不进去？不会，**照样凭密码直登**。这是故意的，不是漏做。全局开关一旦打开，就绝不能把任何人锁在系统外面。种子超管本来就没有手机号，存量用户里没绑手机号的也大有人在。想让某个账号必须走二次验证？给它绑一个手机号就行，个人资料页或者用户管理里都能绑。
+开关打开后，**没有绑定手机号的用户仍可凭密码登录**。这个默认行为避免全局开关把种子超管和存量账号锁在系统外。要让某个账号使用短信二次验证，先在个人资料或用户管理中绑定手机号。
 
-如果你想要更严格的语义，「没手机号就不让登」，覆写一步就够：
-
-```csharp
-public sealed class StrictAuthService(
-    IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens,
-    ISessionService sessions, ILogService logService, ILoginLockService loginLock,
-    ICaptchaService captcha, ISecurityPolicyProvider policy, ISmsOtpService smsOtp)
-    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp)
-{
-    protected override async Task CheckSmsSecondFactorAsync(SysUser user)
-    {
-        // 内核默认对无手机号用户直通;严格模式改为拒登
-        if (await smsOtp.IsMfaEnabledAsync() && string.IsNullOrWhiteSpace(user.Phone))
-            throw new AdminException(ErrorCode.AccountDisabled);
-        await base.CheckSmsSecondFactorAsync(user);
-    }
-}
-```
+如果项目要求「没手机号就不让登录」，可以继承 `AuthService` 并覆写 `CheckSmsSecondFactorAsync`。实现时必须把基类当前的全部认证依赖继续传入，尤其是 `IMfaPolicyService`、`IMfaChallengeService` 和 `AdminSecurityOptions`；省略这些尾随可选依赖会让 TOTP 检查直接放行。认证服务仍在演进，动手前应以当前 `AuthService` 构造函数为准，不要复制旧文档里的构造参数列表。
 :::
 
 **免密登录呢？** `POST /api/v1/auth/sms/send` 发码，`POST /api/v1/auth/sms/login` 拿手机号加验证码换令牌。发码这一步会联动图形验证码的开关：验证码开着时，发码端点也一并受保护。**防的是枚举**：不管手机号是不存在、重复还是被停用，拿到的响应外形都和真实路径一模一样，连冷却都照做，只是从来不会真的发码。后续校验统一报 `SmsCodeExpired`，不告诉你到底是哪种情况。
@@ -115,7 +108,7 @@ public sealed class StrictAuthService(
 
 验证码的消费方式和图形验证码一个套路：**原子取删**，用一次就废，防重放。而且**只存缓存**，不建表，零 DDL。冷却时间和每日计数，默认内存缓存下按实例各算各的，和登录锁定一个道理。装上 Redis 包，就变成全局共享。
 
-谁来真正发这条短信？内核只定义了一个 `ISmsSender` 接口，自己不接厂商。默认实现是 `LoggingSmsSender`，把验证码写进后端日志，开发阶段够用，生产环境显然不能这么干。在 `AddTenonAdmin()` **之前**注册一个真实厂商的实现就能接管。`purpose` 参数是 `mfa` 还是 `login`，映射到厂商那边的模板 id：
+内核通过 `ISmsSender` 发送短信，不绑定具体厂商。默认的 `LoggingSmsSender` 只把验证码写入后端日志，仅用于开发。生产环境必须在 `AddTenonAdmin()` **之前**注册真实实现，并将 `purpose` 的 `mfa`、`login` 映射到对应厂商模板：
 
 ```csharp
 builder.Services.AddSingleton<ISmsSender, AliyunSmsSender>();   // 你的实现
@@ -174,7 +167,7 @@ TOTP 种子走 `ISecretProtector` 信封加密，不是全库字段加密产品�
 
 ## 邮件通道
 
-内核给邮件也备了一个抽象 `IEmailSender`，和 `ISmsSender` 一个路数。眼下**没有任何内置功能真的在用它**。这是先立好的通道，等以后邮件验证码登录、通知邮件这类功能落地时直接拿来用，不用再补一次可替换性设计。
+`IEmailSender` 目前只是可替换的发送通道，**没有内置业务功能调用它**。配置 SMTP 不会自动产生验证码邮件或通知；只有消费方代码显式注入并调用这个接口时才会发信。
 
 配置在 `TenonAdmin:Email`（`AdminEmailOptions`）下，只看一个字段就决定用哪个实现：
 
@@ -237,7 +230,7 @@ public virtual async Task RevokeAsync(string sessionId)
 | `...:Session:IdleMinutesNormal` / `IdleMinutesMfa` | `0` | 闲置超时（分）；`0` = 不启用 |
 | `...:Session:AbsoluteHours` | `0` | 绝对最长小时；`0` = 仅随 refresh |
 
-同一个人挤爆并发会话上限，该踢谁？这里用的是「**先插入、再收敛**」：新会话先插进数据库，收敛动作在那之后才做。这样一来，并发发生的两个登录都能看到对方那一行，各自算出的都是同一个「只保留最新 N 个」的答案，自然收敛到一致结果，不需要额外协调。为什么不用进程内锁？锁只在单个进程里有效。换成多副本部署，一个副本锁着，另一个副本照样能把同一个名额抢走，锁挡不住跨副本的并发。
+并发会话采用「先插入、再收敛」：新会话先落库，再统一保留最新 N 个。并发登录都能看到对方的会话行，最终会计算出相同结果。这种做法不依赖进程内锁，因此在多副本下仍能收敛；单进程锁无法约束另一个副本。
 
 刷新令牌用过一次之后再出现，说明什么？只有一种解释：重放。处理很干脆：直接吊销整个会话，哪怕因此把真正的用户也一起下线，安全优先。轮换这一步用的是条件更新，只有当前状态还是 `Active` 才会被置成 `Used`，顺带也当了一层并发保护。这段逻辑在 `SessionService.RefreshAsync` 里。
 
@@ -259,23 +252,11 @@ public virtual async Task RevokeAsync(string sessionId)
 
 这里有个坑得注意：`LastPasswordChangeTime` 是后加的字段，存量用户身上很可能是 null。真正判过期之前，系统会先给这些 null 锚点回填成当前时间，过期窗口从升级后的首次登录才开始算。不这么处理会怎样？开启策略的当天，一大批没有锚点的老用户会被一起判定过期，集体卡在改密页上，等于误伤全体存量用户。已经替换过 `ISecurityPolicyProvider` 的二开代码不受影响。新增的 `GetPasswordExpireDaysAsync` 带了一个默认接口实现，默认返回 0。旧实现不改也能编译通过，效果等同于关闭这条策略。
 
-**改密码的时候，允许改成上一个用过的密码吗？** 默认不行，但能开。把 `sys.security.password.historyCount` 调成 N，系统就会记住最近 N 个用过的口令。种子默认是 `0`。改密时拿新口令挨个比一下，撞上了就拒，抛 `ErrorCode.PasswordReused`（42025）。「当前口令」要单独判一次，为什么？历史表刚打开的时候是空的，光靠历史记录挡不住「改成当前正在用的这个」这种打擦边球的操作。`IPasswordHistoryService` 只存哈希，复用的是 `SysUser.Password` 那一套 `IPasswordHasher`。校验时逐条 `Verify(明文,哈希)`。每次写入之后，立刻把这个用户的历史记录裁到最新 N 条，多余的硬删掉，表不会随时间无限膨胀。
+密码历史由 `sys.security.password.historyCount` 控制，默认 `0` 表示关闭。设为 N 后，系统拒绝最近 N 个已用口令，返回 `ErrorCode.PasswordReused`（42025）；当前口令会单独校验，因为刚启用策略时历史表可能还是空的。`IPasswordHistoryService` 只保存哈希，并在每次写入后删除超出 N 条的旧记录。
 
-写入的位置有三处：自助改密（`PersonalService`），管理员建号，管理员重置密码（后两者都在 `UserService`）。后两处只记录、不校验：管理员指定的初始口令，不受「不能与历史重复」这条约束。这三处有一个共同的写法：都把 `IPasswordHistoryService` 声明成**默认为 `null` 的可选构造参数**：
+自助改密会校验并记录历史；管理员建号和重置密码只记录，不拒绝管理员指定的初始口令。`IPasswordHistoryService` 在 `PersonalService` 和 `UserService` 中是默认 `null` 的可选构造参数，因此旧的消费方子类仍能编译；未注入时等同于关闭历史策略。自定义子类若要保留这项能力，应继续转发该依赖。
 
-```csharp
-public class PersonalService(
-    /* ...既有依赖... */
-    IPasswordHistoryService? passwordHistory = null) : IPersonalService
-{
-    // 策略关闭或消费方未注入时,?. 直接短路成空操作,不抛也不查
-    await (passwordHistory?.EnsureNotReusedAsync(userId, input.NewPassword) ?? Task.CompletedTask);
-}
-```
-
-这么写是专门为可替换性让路的。参数带了默认值，继承 `PersonalService`/`UserService` 的二开子类，主构造器**不用跟着改**，旧的调用点照样编译通过，效果等同于「历史策略关闭」。反过来想，要是这里改成必需参数会怎样？内核往后每加一个可选的安全策略，所有下游子类的构造函数签名就得跟着改一遍。这个代价，谁都不想付。
-
-**新建用户或者重置密码，给的初始口令从哪来？** 配置项是 `TenonAdmin:Security:DefaultInitialPassword`，默认是 `null`。这时候系统会按账号现生成一个密码学随机的强口令，不用写死的默认密码。为什么较真到这个地步？「随公开 NuGet 包分发一个固定默认口令」是一个已知的凭据弱点，谁都能翻源码找到它，等于给每个用这个内核的项目开了同一把后门钥匙。重置密码的时候，这个随机口令会原样返回给管理员，由管理员当场转达给用户。
+`TenonAdmin:Security:DefaultInitialPassword` 控制新建用户和重置密码时的初始口令，默认 `null`。未配置时，系统为每次操作生成密码学随机的强口令，并只在响应中交给管理员转达。生产环境不应在公开包或配置模板中固定一套所有账号共用的默认口令。
 
 ::: tip 首次启动的超管口令
 配了 `TenonAdmin:Seed:AdminPassword` 就用配置里给的值；没配（默认情况）就随机生成一个，并且**在启动日志里醒目打印一次**。只有真正建号的那一次启动才会打印，后面再启动就不打了。打印一个已经失效的随机密码只会误导人，没有意义。

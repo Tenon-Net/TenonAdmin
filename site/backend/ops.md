@@ -2,6 +2,16 @@
 
 Once the system's running, an admin keeps needing to answer three questions: is this machine still healthy, what was that 500 a minute ago, and does the cache need clearing. The kernel gives each question its own small endpoint. What they share is that they're **read-only diagnostics or a single targeted action, not business features** — so all three can be switched off as a group via `Api.DisabledModules` without touching anything else.
 
+## Where to start when something goes wrong
+
+| Symptom | Start with | What to decide next |
+| --- | --- | --- |
+| Pages are broadly slow and resources may be exhausted | Server monitor | Inspect one CPU, memory, and disk snapshot; move to an external monitor for trends |
+| A request returns 500 | Exception log | Use `TraceId` to join the record to application logs from the same request |
+| A direct database edit does not appear in the UI | Cache management | Clear the matching type; if the symptom remains, inspect the database and application logs |
+
+These endpoints do not replace alerts, metrics collection, or a logging platform. They provide the first diagnostic evidence after an administrator has already noticed a problem.
+
 ## Server monitor
 
 `GET /api/v1/sys/monitor/server` returns a one-shot snapshot of the process and host: CPU, memory, disk, runtime info. All of it comes straight from the BCL (`Process`/`GC`/`DriveInfo`/`RuntimeInformation`) — zero dependencies, nothing written to the database. It's a **snapshot**, not a time series; historical trends are out of scope for the kernel.
@@ -65,10 +75,8 @@ public virtual Task<long> RebuildPortalAsync(CancellationToken cancellationToken
     cache.IncrementAsync(CacheKeys.PortalGeneration, cancellationToken: cancellationToken);
 ```
 
-None of these four actions come up in normal operation — a real authorization change or dict/config edit already invalidates the matching cache on its own. This page is an escape hatch for **out-of-band** scenarios: someone edited the database directly, bypassing the API, and now the cache and the database disagree — that's when an admin needs to clear it by hand. Every button on the frontend requires a second confirmation, and a toast reports how many entries got cleared afterward. It's built for "infrequent, deliberate action," not a daily-driver control panel.
-
-If you actually get a "the database changed but the page didn't" report, it's most likely the out-of-band scenario described above: a write that went through the API already invalidated the matching cache on its own, so these four buttons aren't the fix for that. Click the clear button matching the data type in question — the symptom usually disappears on the spot. If it's still there afterward, the problem isn't the cache; go back to the database or the application logs.
+Normal authorization, dictionary, and configuration writes invalidate their caches automatically. These four actions mainly cover out-of-band changes such as direct database edits. Each frontend button requires confirmation and reports the number of cleared entries. If the page is still stale after clearing the matching type, continue with the database and application logs; the cache is unlikely to be the cause.
 
 ::: tip The kernel has no field-level change log (a DiffLog)
-The operation log already records every write request's full input JSON, who did it, when, and the result code. The audit columns cover every row — `CreateUserId`/`UpdateUserId`/`UpdateTime`. Soft-deleted rows are still there to query. Field-level "what was it before, what is it after" was evaluated and deliberately left out of the core. The reason is the write path: `IRepository<>` has no single choke point for writes — Insert/Update/Delete each call SqlSugar directly, so adding a hook would mean adding it to all six methods. And this kind of before-image auditing is inherently a need-it-or-you-don't feature — a consumer who wants it can wire up SqlSugar's own `Aop.OnDiffLogEvent` directly; the kernel doesn't need to do it for them.
+The kernel records request-level operation logs and row-level audit fields, but it does not retain complete before-and-after field snapshots. Applications that require field-level auditing can wire up SqlSugar's `Aop.OnDiffLogEvent` and decide which entities, fields, and retention period belong in that log.
 :::

@@ -1,6 +1,6 @@
 # Agent Skills 与 AI 辅助开发
 
-让 agent 写一个 CRUD 模块，代码多半能跑，却不太像这个仓库里其它模块的写法。两组约定就是拿来消这个差的，分界线是你要它改谁的代码：
+AI 助手只有读到仓库契约、领域词汇和对应开发流程，产出的模块才会和现有代码接得上。开始前先判断任务属于内核维护还是消费方业务开发，再把对应入口交给助手：
 
 - **参与 TenonAdmin 本体开发**：docs/agents/ 下的一组文档。
 - **在 TenonAdmin 之上开发业务模块**：`skills/` 下的一组开发规范文档，教 agent 按项目既定模式建实体、建 CRUD、替换服务。
@@ -31,11 +31,11 @@ Issue 分诊用五个规范化标签，标签串就是角色名本身，取值�
 |---|---|
 | `needs-triage` | 维护者还没评估过 |
 | `needs-info` | 等报告人补充信息 |
-| `ready-for-agent` | 需求已经描述清楚，可以丢给 AFK agent 直接做 |
+| `ready-for-agent` | 需求、边界和验收标准清楚，可交给自动化代理执行 |
 | `ready-for-human` | 需要人工实现 |
 | `wontfix` | 不会处理 |
 
-想找能自动化跑掉的任务，挑 `ready-for-agent` 标签的 issue 最省心。
+自动化代理应优先选择 `ready-for-agent`，其余标签仍需要维护者判断或报告人补充信息。
 
 ## 领域文档：CONTEXT.md + docs/adr
 
@@ -44,8 +44,8 @@ Issue 分诊用五个规范化标签，标签串就是角色名本身，取值�
 - 仓库根目录的 `CONTEXT.md`。多上下文场景下换成 `CONTEXT-MAP.md`，它指向各上下文各自的 `CONTEXT.md`。
 - `docs/adr/` 下和当前改动区域相关的 ADR。
 
-::: tip 这两样目前还不存在，这是正常状态
-TenonAdmin 现在还没有 `CONTEXT.md` 或 `docs/adr/`，因为按约定它们是「懒创建」的。只有当 `/domain-modeling` 之类的 skill 真的需要落地某个术语或某条决策时，才会建。文件不存在不代表约定不存在，也不需要因此要求先补文档。
+::: tip 按改动范围读取，不必全量加载
+仓库根目录已经有 `CONTEXT.md`，`docs/adr/` 也记录了实时通知、外部登录、定时任务和可选安全等决策。先读 `CONTEXT.md`，再只选与当前改动直接相关的 ADR；没有关联 ADR 时继续工作，不需要为凑流程新建一份。
 :::
 
 如果你的产出里用到领域名词，比如 issue 标题、重构提案、测试名，就要和 `CONTEXT.md` 里的术语保持一致，别在文档已经明确定义的地方随意换用近义词。这些内容和已有 ADR 冲突时，要显式指出来，不能悄悄用新方案覆盖旧决策。
@@ -60,22 +60,24 @@ TenonAdmin 现在还没有 `CONTEXT.md` 或 `docs/adr/`，因为按约定它们�
 | `create-entity` | 创建 SqlSugar 实体类 | 新建表、新建实体 |
 | `create-crud-backend` | 创建后端 CRUD 全套 | Models + Interface + Service + ErrorCode + DI + Controller |
 | `create-crud-frontend` | 创建前端 CRUD 页面 | Types + API + Vue 页面（ProTable + FormContainer） |
+| `create-crud-frontend-react` | 创建 React CRUD 页面 | Types + API + React 页面（DataTable + FormContainer + `<Can>`） |
 | `replace-service` | 替换/扩展内置服务 | 定制登录流程、换密码哈希、覆写服务步骤 |
 | `wire-import-export` | 给自己的实体接导入导出 | 装 `TenonAdmin.Excel`、档案、六个端点、菜单取号 |
+| `create-job` | 给业务模块加定时任务 | `IAdminJob`、HTTP/SQL 任务、后台配置与验证 |
 | `create-page-variant` | 非标准页面模板 | 树表、主从分栏、侧栏筛选 |
 
-**Claude Code** 下这些 skill 已经包装成 `.claude/skills/` 下的斜杠命令，直接输入 `/new-module`、`/create-entity`、`/create-crud-backend`、`/create-crud-frontend`、`/replace-service`、`/wire-import-export`、`/create-page-variant` 即可。也支持自然语言自动触发，比如直接说「帮我创建一个产品实体」。其它 AI 工具没有斜杠命令机制，在对话里直接引用文件路径就行，比如「参考 skills/create-entity.md，帮我创建一个 BizProduct 实体」。
+Claude Code 从 `.claude/skills/` 发现斜杠命令；Codex 从 `.agents/skills/` 发现 `$new-module`、`$create-entity` 等技能。两套入口都只引用 `skills/` 下的同一份流程。其它 AI 工具没有技能发现机制时，直接在对话中给出文件路径，例如「参考 `skills/create-entity.md`，帮我创建一个 BizProduct 实体」。完整命令清单以 [`skills/README.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/skills/README.md) 为准。
 
-新增一个完整 CRUD 模块，标准顺序是下面三步。`/new-module` 会把它们串起来一次跑完，想分步来就单独调用：
+新增一个完整 CRUD 模块，标准顺序是下面三步。`new-module` 会把它们串起来一次跑完，想分步来就单独调用：
 
 1. `/create-entity`：建实体
 2. `/create-crud-backend`：建后端（含菜单种子数据）
-3. `/create-crud-frontend`：建前端（含 i18n）
+3. 按模板选 `create-crud-frontend` 或 `create-crud-frontend-react`：建前端（含 i18n）
 
 上面这三步连同 `new-module`，都会区分两种模式：**系统模块**是内核维护者用的，**业务模块**是消费方二开用的。两种模式生成的代码位置和命名规则不一样，用之前先说清楚是哪种场景。`replace-service` 只面向消费方，`create-page-variant` 只按页面形态分变体，都没有这条分叉。
 
 ## 参考
 
-- 根目录 [`CLAUDE.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/CLAUDE.md) 的「Agent skills」一节是这些约定的索引入口。
+- 根目录 [`AGENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/AGENTS.md) 是仓库指令的唯一来源；`CLAUDE.md` 只负责导入它。
 - 想自己手动走一遍替换/扩展内置服务的流程（而不是让 agent 按 `replace-service` skill 生成），见 [替换内置服务](/zh/guide/replace-service)。
 - 想了解怎么跑测试、怎么提 PR，见 [贡献指南](./contributing)。

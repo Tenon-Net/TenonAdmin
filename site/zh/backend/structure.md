@@ -1,8 +1,19 @@
 # 项目结构与启动
 
-`TenonAdmin.TestHost` 名字像测试项目，却一个断言都没有：它的活是演一个消费方。注册进 `options.ApplicationAssemblies` 后，它的实体、种子、控制器全走一遍外部工程的挂载路径。`src/` 之外的项目连示例宿主都是这个路数，读的不是测试，是别人怎么用这套内核。
+第一次进仓库，先按目的找目录：运行内核看 `samples/MinimalHost`，理解发布内容看 `src/`，验证扩展方式看 `tests/TenonAdmin.TestHost`。后者虽然放在 tests 下，却是在模拟真实的消费方；它的实体、种子和控制器都通过 `ApplicationAssemblies` 接入，没有走内部捷径。
 
 至于依赖方向、可替换性、请求管道这些设计上的「为什么」，都放在[架构](/zh/backend/architecture)一页展开。
+
+## 从哪里开始读
+
+| 目标 | 先看 | 能确认什么 |
+| --- | --- | --- |
+| 本地启动并调用 API | `samples/MinimalHost/Program.cs` | 完整宿主最少需要哪些注册与映射 |
+| 在自己的程序集加实体和控制器 | `tests/TenonAdmin.TestHost` | 外部程序集如何建表并进入同一条 MVC 管线 |
+| 修改内核能力 | `src/` 对应包 | 代码应落在哪一层，是否越过依赖边界 |
+| 跑回归测试 | `tests/TenonAdmin.Tests` | 哪些行为已经由自动化用例锁定 |
+
+如果只是使用 NuGet 包开发业务，通常读前两行就够。`Directory.*.props` 和数据库测试矩阵主要服务于贡献内核源码。
 
 ## 解决方案结构
 
@@ -11,7 +22,7 @@
 | 文件夹 | 内容 |
 | --- | --- |
 | `samples/` | `MinimalHost`：零配置示例宿主，用于本地开发与手工验证 |
-| `src/` | 九个正式发版的包 |
+| `src/` | 内核与可选扩展包 |
 | `tests/` | `TenonAdmin.Tests`（测试套件）与 `TenonAdmin.TestHost`（一个最小化的消费方宿主） |
 
 `src/` 下的包在[架构](/zh/backend/architecture)页有详细展开，这里只做定位：
@@ -25,6 +36,9 @@
 | `TenonAdmin` | 元包：装这一个即拉起整条内核（AspNetCore + Services + SqlSugar + Core） |
 | `TenonAdmin.Caching.Redis` | 可选包：基于 `StackExchange.Redis` 的 `ICacheProvider` 实现，在 `AddTenonAdmin()` 之前调用即启用 |
 | `TenonAdmin.Excel` | 可选包：xlsx 读写与带下拉的模板生成，在 `AddTenonAdmin()` 之前调用即启用，不装则相关接口返回 `46001` |
+| `TenonAdmin.Auth.WeCom` / `DingTalk` / `GitHub` / `WeChat` | 可选登录包：分别接入企业微信、钉钉、GitHub 和微信开放平台 |
+| `TenonAdmin.Workflow` | 可选工作流包：审批定义、引擎、待办与设计器 API，需注册服务并在内核配置回调中启用 |
+| `TenonAdmin.Integration` | 可选系统集成包：应用凭据、开放接口、出站调用与可靠投递；使用包含该模块的配套版本，接入见[系统集成](/zh/guide/integration) |
 
 ## 中心化包版本管理
 
@@ -86,9 +100,9 @@ app.Run();
 | `Upload` | `AdminUploadOptions` | 存储根目录、大小上限、后缀白名单 |
 | `Api` | `AdminApiOptions` | 禁用模块列表 |
 | `DemoMode` | `bool` | `false`：为 `true` 时仅放行 GET/HEAD/OPTIONS，其余写请求一律以错误码 `41002` 拒绝 |
-| `Id` | `AdminIdOptions` | `WorkerId`：默认为 `null`（回落为 0）；多实例水平扩展时必须为每个实例显式配置 |
+| `Id` | `AdminIdOptions` | `WorkerId` 默认为 `null`：完整宿主会自动领取可用槽位；显式配置时范围为 0–63 |
 | `Logging` | `AdminLoggingOptions` | 文件日志诊断，默认关闭 |
 
 `ApplicationAssemblies` 是个例外。它是代码侧设置的 `List<Assembly>`（如上面示例宿主与 `TestHost` 的代码片段所示），不从配置绑定，因为程序集引用没法从 JSON 里来。
 
-摸清了结构，下一步自然是看这几个包如何装配到一起。[架构分层与包依赖](/zh/backend/architecture)从依赖方向讲起；构建、测试的 CLI 命令则在[贡献指南](/zh/community/contributing)里。
+要判断代码该放在哪个包，继续看[架构分层与包依赖](/zh/backend/architecture)；准备修改并提交内核时，再按[贡献指南](/zh/community/contributing)运行构建和测试命令。

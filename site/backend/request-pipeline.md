@@ -22,6 +22,17 @@ HTTP request
              AdminException / ErrorCode → envelope (numeric code, never localized text)
 ```
 
+## Diagnose by response symptom
+
+| Symptom | Gate to inspect first |
+| --- | --- |
+| Anonymous or expired request returns 401 | ① JWT signature, lifetime, and claims |
+| Login works but the endpoint reports no permission | ② Permission code derived from the route template, role cache, and session state |
+| The endpoint runs but organization-specific rows are wrong | ③ The entity's `IOrgScoped` marker, `CreateOrgId`, and data-scope context |
+| Runtime JSON contains `data`, but generated types do not | ④ Whether the controller explicitly declares `Result<T>` |
+
+Following the gates in order keeps an authorization failure from being mistaken for a data problem. The first three gates run before the controller action; if the business method never executes, do not start with SQL or the response DTO.
+
 ## ① Authentication: Microsoft JWT Bearer
 
 The kernel uses `Microsoft.AspNetCore.Authentication.JwtBearer` directly, without building its own auth stack. Wired up in `TenonAdminSetup.cs`:

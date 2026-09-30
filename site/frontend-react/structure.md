@@ -1,8 +1,24 @@
 # Project Structure & Startup
 
-Move `@/styles/tokens.css` after `import App`, and the theme bridge can no longer read the color variables: `getComputedStyle` comes back empty, antd's colors quietly fall back to their defaults, and nothing warns you. A lot of the rules on the `web-react/` side are import-order rules like this one — they're not written down anywhere, so opening the file is the only way to find them.
+Run the template once before reading its folders. Each directory then maps to an action you have already seen in the browser: layout, page rendering, requests, session restoration, or route construction.
 
 Which template to pick, and what each ships, is in [Frontend templates](/guide/frontend-templates); the per-page conventions are spread across [Request flow](/frontend-react/request), [Permissions](/frontend-react/permission), and [i18n](/frontend-react/i18n). This page covers only the foundation.
+
+> Prerequisite: if you have not connected a page yet, complete the [React frontend tutorial](/frontend-react/getting-started) first.
+
+## Run first, then locate the entry point
+
+Start the React template from the repository root:
+
+```bash
+npm --prefix web-react run dev
+```
+
+Open the printed URL and sign in. The sidebar comes from `layouts/`, the active page from `views/`, network calls pass through `api/`, and reload recovery depends on `stores/` and `router/`.
+
+[![React UI mapped to source directories; the interface is Chinese](/screenshots/react-admin.png)](/screenshots/react-admin.png)
+
+Now open `web-react/src/main.tsx`. Locate the token CSS import, stores, icon and Markdown setup, and the final React root. The order matters: moving `@/styles/tokens.css` after `App` leaves the theme bridge reading empty CSS variables, so antd quietly falls back to default colors.
 
 ## Directory layout
 
@@ -10,16 +26,16 @@ All paths below are relative to `web-react/src/`.
 
 | Directory | Responsibility |
 |---|---|
-| `api/` | `client.ts` (typed `openapi-fetch` wrapper with auth and refresh middleware) + `index.ts` (endpoint calls grouped by domain) + generated `schema.d.ts` |
+| `api/` | `client.ts` (typed client plus auth, refresh, and reauthentication middleware) + `index.ts` (endpoint calls grouped by domain) + generated `schema.d.ts` |
 | `assets/` | Static assets: `svg/` (local SVGs) and `icons.generated.json` (the offline icon subset produced by `gen:icons` at build time, not hand-written) |
 | `components/` | Reusable components (DataTable, FormContainer, Can, the Dict* family, and more — see `web-react/COMPONENTS.md`) |
-| `composables/` | Module-level logic that is UI-library-agnostic and not bound to a component lifecycle: `useModule` (portal decisions, a router-free async function), `useRealtime` (SignalR connection + unread pub/sub) |
+| `composables/` | Module-level logic independent of component lifecycles: portal entry and switching, plus the SignalR connection and unread-message pub/sub |
 | `hooks/` | React hooks that need component context: `useConfirm` (confirm dialog + result toast, backed by antd's `App.useApp`), `useBatchDelete` (selection state + batch delete) |
 | `layouts/` | The layout shell: header, sidebar, tabs, settings drawer, menu search, notice bell |
 | `lib/` | One-time setup and runtime bases: `icons` (offline icon registration), `markdown` (md-editor-rt XSS wiring), `echarts` (on-demand chart registration) |
-| `locales/` | i18n resources (`zh-CN.ts`, `en-US.ts`) and the i18next instance (`index.ts`); `ext/` is the consumer extension slot that upstream never writes to, so it never conflicts on sync |
+| `locales/` | i18n resources and the i18next instance; business copy belongs under `ext/`, reducing same-file conflicts during upstream sync |
 | `router/` | `buildRoutes` (menu tree → `RouteObject`), `menuRoutes` (menu-route decisions), `detailRoutes` (convention-based detail routes), `Protected` (the guard component), `MissingRoute` |
-| `stores/` | zustand stores (`app`, `auth`, `user`, `dict`, `site`, `tabs`), all persisted |
+| `stores/` | Zustand stores (`app`, `auth`, `user`, `dict`, `site`, `tabs`), with each store persisting only fields whose lifecycle requires it |
 | `styles/` | `tokens.css` (design tokens), `chrome.css` (layout-shell bare CSS + reset), `code.css` (code-block highlight colors) |
 | `theme/` | The antd theme bridge: `antd-theme` (builds the `ThemeConfig`), `useAntdTheme` (the hook that stamps `data-*` and rebuilds the theme), `accents`/`mix` (accent candidates and color mixing), `useDocumentGrayscale` (mourning grayscale, a standalone CSS filter) |
 | `types/` | Hand-written domain types (`menu.ts`, `api.ts`) that the UI consumes instead of the verbose openapi-generated types |
@@ -109,7 +125,7 @@ server: {
 },
 ```
 
-The port is 5174, not Vue's 5173, so both templates can run side by side. `strictPort: true` is deliberate. By default Vite slips silently to the next free port when one is taken. 5173 and 5174 sit right next to each other, so a slip means anything hard-coded to 5174 connects to the other app instead — no error, just someone else's page. Refusing to start is the safer failure.
+React uses 5174 and Vue uses 5175, so both templates can run side by side. `strictPort: true` is deliberate. By default, Vite silently moves to the next free port when 5174 is occupied. A browser shortcut or script pinned to 5174 would then reach the process already holding that port instead of this template. Refusing to start makes the conflict visible.
 
 The backend dev port defaults to 5100. To point at a different backend instance, set `TENON_API_TARGET` before starting Vite. The backend's CORS is deny-all by default, so same-origin access in local dev rides entirely on this proxy. The `/hub` entry is the one extra over Vue's config: it proxies SignalR's WebSocket, which is how realtime notifications arrive.
 
@@ -147,7 +163,11 @@ The repo root also holds two batch scripts that manage the whole set at once:
 
 | Script | Effect |
 |---|---|
-| `dev.bat` | Opens three windows: backend (`:5100`), `web` (Vue, `:5173`), and `web-react` (`:5174`), each running `npm install && npm run dev` |
-| `stop.bat` | Stops the frontend and backend processes started by `dev.bat` |
+| `dev.bat` | Opens three windows: backend (`:5100`), `web` (Vue, `:5175`), and `web-react` (`:5174`), each running `npm install && npm run dev` |
+| `stop.bat` | Currently targets `5100`, `5173`, and `5174`; if Vue remains on `:5175`, stop it from the terminal that launched it |
+
+## What counts as a successful first run
+
+The browser should open `http://localhost:5174` and reach a menu page after login. Network requests should leave as `:5174/api/...`, real-time notifications should connect through `:5174/hub`, and a selected language, theme, or density should survive reload. The development console should show no duplicate-initialization failure caused by StrictMode. Those observations confirm that bootstrap, the proxy, and persisted Zustand state are working together.
 
 Once this structure runs, the next page is [Routing](/frontend-react/routing): how the backend menu tree derives the route table. After that comes [Request flow](/frontend-react/request), how a single API call travels through the typed client.

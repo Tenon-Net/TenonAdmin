@@ -21,6 +21,14 @@ between deploys.                          hard refresh.
 
 The static side never changes between deploys. The dynamic side is driven entirely by the menu tree the currently-selected app returns — different users, different roles, different apps all end up with a different set of routes hanging off `layout`.
 
+> Prerequisite: complete the [menu step in the tutorial](/frontend/getting-started#_3-turn-the-file-into-a-route-with-a-menu).
+
+## Verify one dynamic route first
+
+Open Position Preview, copy `/example/position-preview` from the address bar, and reload. Returning to the same page proves that the app fetched the menu tree again and mapped its component path back to `src/views/example/position-preview/index.vue`. In Menu Management, confirm that the stored component omits both the `src/views/` prefix and the `.vue` suffix.
+
+That one observation contains all three inputs to a dynamic route: the menu supplies the URL, the component path locates the file, and the current application decides whether the menu enters the route table. The sections below separate the static shell, dynamic registration, and caching.
+
 ## Static routes
 
 `router/routes.ts` defines exactly one top-level tree:
@@ -156,8 +164,12 @@ Static or dynamic, every page component is wrapped through `namedPage`, giving i
 
 `stores/tabs.ts` adds a safety net on top of this: its `cachedNames` getter filters the tab list down to those where `router.hasRoute(n)` is true, so during the brief window after a menu rebuild — when an old tab's route hasn't been re-registered yet — `keep-alive` is never asked to match a name that doesn't exist. `refreshTab(name)` forces a genuine remount (bypassing the cache) by setting `excludeName` and bumping `reloadKey`; `default.vue` watches `reloadKey` and briefly `v-if`-unmounts the router outlet before restoring it.
 
-::: tip Two things you won't find here
-There's no progress bar anywhere in the routing pipeline (no NProgress or similar). And the document title isn't set by a guard — it's set once when `App.vue` mounts, and again by the site-config page when the title changes, never per-navigation.
+::: tip Navigation feedback and document title
+Route start, completion, and failure drive `lib/loadingBar`, providing feedback during lazy loading and F5 route reconstruction. The document title does not follow navigation; `App.vue` sets it on mount and the site-config page updates it when configuration changes.
 :::
+
+## Checks for a newly connected page
+
+After assigning a menu to a new view, enter it from the sidebar, then copy its URL and reload. Both paths should reach the same page, proving that the menu path, component path, and deep-link rebuild agree. Temporarily use a bad component path and confirm that the diagnostic page shows the missing path instead of a context-free 404. Finally, enter an unsaved filter value, switch tabs, and return: a normal menu page should retain it, while a `noCache` detail page should load fresh.
 
 To walk this whole pipeline from scratch — create the view component, seed a menu, get the component path right — see [Add a Frontend Page](/guide/frontend-page).

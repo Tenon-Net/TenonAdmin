@@ -35,6 +35,8 @@ Distilled from the repo's actual commit history — pick the closest semantic ma
 | `ci` | CI/CD pipeline, release process |
 | `chore` | Maintenance chores: dependency bumps, ignore-rule tweaks, regenerating artifacts — nothing that changes behavior |
 
+When the choice is unclear, ask what a user can observe. Use `feat` for a new capability, `fix` for corrected behavior, and `refactor` when external behavior stays the same. Documentation-only and test-only changes use `docs` and `test`; build mechanics and CI configuration use `build` and `ci`. Choose by the change's meaning rather than the file extension: correcting a factual error in documentation is still `docs`, while a build-script defect may be `build` or `fix` depending on the primary change being recorded.
+
 ## Real examples (from this repo's history)
 
 ```

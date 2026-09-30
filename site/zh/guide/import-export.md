@@ -1,12 +1,12 @@
 # 给自己的实体接导入导出
 
-装 `TenonAdmin.Excel`、写一份档案、在资源控制器上挂六个端点，业务表就能走 xlsx 导入导出。不装这个包，凡要读写 xlsx 的调用一律返回 `46001`，部署体积也不会多一个字节。
+给业务列表增加 Excel 导入导出时，需要分别确定允许读写的列、行校验规则和访问权限。`TenonAdmin.Excel` 提供 xlsx 读写，Profile 描述业务列，导入执行器负责预览、校验和提交。列表与导出应使用相同的数据范围。
 
 实体和 CRUD 还没有的话，先走[加一个业务模块](/zh/guide/business-module)。Agent 施工用的逐步清单在仓库 `skills/wire-import-export.md`。
 
 ## 先装卫星包，再调内核
 
-`TenonAdmin` 元包不引用 Excel。默认 codec 是 `MissingExcelProvider`：读写、生成模板都会抛 `ErrorCode.ExcelProviderMissing`（码 `46001`）。这是可选性的定义。
+在自己的后端项目安装与 `TenonAdmin` 相同版本的 Excel 扩展。未安装时，默认 `MissingExcelProvider` 会在读写或生成模板时返回 `ErrorCode.ExcelProviderMissing`（`46001`），可据此检查扩展是否注册成功。
 
 ```bash
 dotnet add package TenonAdmin.Excel
@@ -87,7 +87,7 @@ xlsx 走 `File(...)`，不进 `Result<T>` 信封。带筛选、选列、字典 v
 
 ## 导入：实现 IImportProfile
 
-编排在内核 `IImportRunner`（解析 → 映射 → 校验 → 判重 → 落库）。你写的档案只声明列、业务键、行级校验、查重、落一行。完整范本是 `UserImportProfile`（字典、按名查外键、机构越权、走 `IUserService` 落库）。最小形状如下：
+导入执行器 `IImportRunner` 负责解析、映射、校验、判重和提交。业务 Profile 声明列与业务键，并实现业务校验、批量查重和单行保存。下面是接口结构示意，省略的方法需要按业务实现；完整参考是 `UserImportProfile`，包括字典、外键、机构权限与通过业务服务保存的处理。
 
 ```csharp
 public class SampleDocImportProfile(IRepository<SampleDoc> repo, ISampleDocService docs) : IImportProfile
@@ -141,4 +141,8 @@ public class SampleDocImportProfile(IRepository<SampleDoc> repo, ISampleDocServi
 
 ## 库为什么是 MiniExcel + OpenXml
 
-曾考虑 Magicodes.IE，实测后弃用：依赖闭包带原生库，校验够不到运行期字典表，错误信息还是英文串，和「错误只带数字码、文案在前端」冲突。现用 MiniExcel 做读写、DocumentFormat.OpenXml **只**生成带下拉的模板，二者都是纯托管，现有 ASP.NET 镜像不用改。细节与依赖表见仓库 `docs/excel-ledger.md` §2。
+MiniExcel 负责 xlsx 读写，DocumentFormat.OpenXml 用于生成带字典下拉的模板。两者均为托管依赖，现有 ASP.NET 运行时镜像无需额外安装原生组件。业务校验仍由 Profile 和导入执行器完成，不能依赖 Excel 下拉阻止非法输入。
+
+## 验证导入与导出
+
+用普通用户准备包含有效行、重复业务键和无效字典值的文件。预览应指出错误，提交时服务端仍应校验；将预览结果再次校验，不能把已转换的字典值误判为非法。导出后对照同一筛选条件与数据范围检查记录，确认没有只导出当前分页，也没有其他机构的越权数据。

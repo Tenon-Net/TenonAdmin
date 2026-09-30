@@ -37,7 +37,7 @@
 
 「离线优先」不是说组件能离线跑，而是说**你注册进来的图标集，渲染时只读打进包里的本地数据，永远不碰 `api.iconify.design`**。每一套图标在你的构建里都是一个独立的懒加载 chunk，也就是 `@iconify-json/<prefix>`。第一次点开它的 Tab、或第一次渲染这套里的图标时，才拉进来。
 
-代价是体积。每注册一套就多一个 chunk，大集不便宜：Phosphor 约 946 KB gz、Lucide 约 85 KB gz。所以按需注册，别一口气全塞进去。换来的是：部署环境不联网、或出口被限时，图标表现和联网时完全一致。包还留了一条在线兜底：你手输一个没注册过的 Iconify 名字，联网时会临时在线加载。那是应急，不是常态。
+离线集合会增加构建体积：每注册一套就多一个 chunk，Phosphor 约 946 KB gz、Lucide 约 85 KB gz。因此只注册业务实际使用的集合。这样即使部署环境不能联网，已注册图标的表现仍与联网环境一致。包还保留在线兜底，手动输入未注册的 Iconify 名称时可以临时加载；它适合排查或临时使用，不应成为生产菜单的依赖。
 
 ## 注册更多图标集
 
@@ -92,5 +92,9 @@ tenon 把这一步并进了 `setupIcons()` 的 `localIcons` 选项，扫的就�
 ```bash
 npm i tenon-naive-iconify-picker
 ```
+
+## 接入完成后的检查
+
+在菜单表单中选择一个内置图标并保存，侧栏与表格回显应使用同一个字符串值。再加入一个 `src/assets/svg/check.svg`，重启 dev 后应出现 `local:check`。最后在浏览器网络面板切到离线状态并刷新，已注册图标和本地 SVG 仍应显示；只有未注册的在线兜底图标可以失败。这样能同时验证存储契约、本地 SVG 注册和离线边界。
 
 完整 props（`collections` / `localIcons` / `cap` / `clearable` 等）、`OfflineIcon` 的 API，以及 SSR / Nuxt 注意事项，见 [包 README](https://github.com/Tenon-Net/tenon-naive-iconify-picker/blob/main/README.zh-CN.md)。

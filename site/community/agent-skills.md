@@ -1,6 +1,6 @@
 # Agent Skills and AI-Assisted Development
 
-The gap is never correctness. Ask an agent for a CRUD module and you will usually get something that runs; what you won't get is something shaped like the rest of this repo. Two sets of conventions close that gap, and which one applies depends on whose code the agent is touching:
+An AI assistant needs the repository contracts, domain vocabulary, and matching development workflow before its code will fit the existing system. First decide whether the task changes the kernel or builds a consumer business module, then point the assistant at the matching entry point:
 
 - **Contributing to TenonAdmin itself** — a set of docs under `docs/agents/` specifying how agents should read issues, apply triage labels, and read domain background.
 - **Building business modules on top of TenonAdmin** — a set of development-standard docs under `skills/` that teach an agent to create entities, build CRUD, and replace services following the project's established patterns, whether you're a kernel maintainer adding a system module or a consumer building on top of it in your own project.
@@ -33,11 +33,11 @@ Issue triage uses five normalized labels, where the label string is the role nam
 |---|---|
 | `needs-triage` | Not yet evaluated by a maintainer |
 | `needs-info` | Waiting on the reporter for more information |
-| `ready-for-agent` | Requirement is clearly described and can be handed straight to an AFK agent |
+| `ready-for-agent` | Requirements, boundaries, and acceptance criteria are clear enough for automated execution |
 | `ready-for-human` | Needs a human to implement |
 | `wontfix` | Won't be addressed |
 
-For tasks that can be automated, issues labeled `ready-for-agent` are the easiest pick.
+Automated agents should start with `ready-for-agent`; the other labels still require maintainer judgment or more information from the reporter.
 
 ## Domain docs: CONTEXT.md + docs/adr
 
@@ -46,8 +46,8 @@ Before exploring the code, an agent should first read (see [`docs/agents/domain.
 - `CONTEXT.md` at the repo root (or `CONTEXT-MAP.md` in multi-context scenarios, pointing to each context's own `CONTEXT.md`);
 - ADRs under `docs/adr/` relevant to the area being changed.
 
-::: tip These two don't exist yet — that's expected
-TenonAdmin doesn't have a `CONTEXT.md` or `docs/adr/` yet — by convention they're created "lazily," only when a skill like `/domain-modeling` actually needs to record a term or a decision. Their absence doesn't mean the convention doesn't exist, and it's not a reason to demand the docs be backfilled first.
+::: tip Read only what the change needs
+The repository already has a root `CONTEXT.md`, and `docs/adr/` records decisions for realtime, external login, scheduling, and optional security, among others. Read `CONTEXT.md` first, then select only the ADRs directly related to the change. If no ADR applies, continue without creating one merely to satisfy a process.
 :::
 
 If your output uses domain terminology (issue titles, refactor proposals, test names), keep it consistent with the terms in `CONTEXT.md` rather than swapping in near-synonyms where a term is already clearly defined; if your output conflicts with an existing ADR, call out the conflict explicitly rather than silently overriding the prior decision with a new approach.
@@ -62,22 +62,24 @@ This set of docs targets "building business features on top of TenonAdmin" — w
 | `create-entity` | Create a SqlSugar entity class | New table, new entity |
 | `create-crud-backend` | Create a full backend CRUD set | Models + Interface + Service + ErrorCode + DI + Controller |
 | `create-crud-frontend` | Create a frontend CRUD page | Types + API + Vue page (ProTable + FormContainer) |
+| `create-crud-frontend-react` | Create a React CRUD page | Types + API + React page (DataTable + FormContainer + `<Can>`) |
 | `replace-service` | Replace/extend a built-in service | Customize login flow, swap password hashing, override service steps |
 | `wire-import-export` | Wire import/export on your entity | Install `TenonAdmin.Excel`, profiles, six endpoints, menu Ids |
+| `create-job` | Add a scheduled job to a business module | `IAdminJob`, HTTP/SQL jobs, admin configuration, and verification |
 | `create-page-variant` | Non-standard page templates | Tree tables, master-detail split, sidebar filters |
 
-Under **Claude Code**, these skills are already wrapped as slash commands under `.claude/skills/` — just type `/new-module`, `/create-entity`, `/create-crud-backend`, `/create-crud-frontend`, `/replace-service`, `/wire-import-export`, or `/create-page-variant`. They also support natural-language auto-triggering, e.g. just saying "help me create a Product entity." Other AI tools don't have a slash-command mechanism, so reference the file path directly in the conversation instead — e.g. "refer to skills/create-entity.md and help me create a BizProduct entity."
+Claude Code discovers slash commands under `.claude/skills/`; Codex discovers `$new-module`, `$create-entity`, and the other project skills under `.agents/skills/`. Both entry-point sets refer to the same workflows under `skills/`. For an AI tool without skill discovery, provide the file path directly, for example: "Use `skills/create-entity.md` to create a BizProduct entity." Treat [`skills/README.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/skills/README.md) as the current command list.
 
-Standard order for adding a complete new CRUD module (`/new-module` chains these three into a single run; call them individually if you want to go step by step):
+The standard order for a complete CRUD module is below. `new-module` chains the steps in one run; invoke them individually when you want to work step by step:
 
 1. `/create-entity` — create the entity
 2. `/create-crud-backend` — build the backend (including menu seed data)
-3. `/create-crud-frontend` — build the frontend (including i18n)
+3. Choose `create-crud-frontend` or `create-crud-frontend-react` for the selected template, including i18n
 
 Those three steps and `new-module` all distinguish between **system module** (kernel maintainer) and **business module** (consumer extension) modes, with different generated code locations and naming rules, so be clear about which scenario applies before using them. `replace-service` targets consumers only, and `create-page-variant` splits by page shape, so neither has that fork.
 
 ## Reference
 
-- The "Agent skills" section of the root [`CLAUDE.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/CLAUDE.md) is the index entry point for these conventions.
+- Root [`AGENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/AGENTS.md) is the single source of repository instructions; `CLAUDE.md` only imports it.
 - To walk through replacing/extending a built-in service by hand (rather than having an agent generate it via the `replace-service` skill), see [Replacing Built-in Services](/guide/replace-service).
 - For how to run tests and submit PRs, see the [Contributing Guide](./contributing).

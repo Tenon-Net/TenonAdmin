@@ -1,6 +1,16 @@
 # Authentication and Security
 
-The kernel turns login, tokens, sessions, brute-force protection, and log redaction into default behavior — the services started by three lines of `Program.cs` already come with all of these, no extra wiring needed. Most policies come in two layers: a deployment-time Options default, plus a `SysConfig` that can override it at runtime (change configuration, not code — and no redeploy). This page covers the mechanism and config keys of each policy; for the pre-launch, line-by-line check of which ones you must change and which can stay at their defaults, see the [security baseline in the deployment guide](/guide/deployment/) — that page is the checklist, this one is the mechanism.
+Login, tokens, sessions, brute-force protection, and log redaction are active in the service started by the three-line `Program.cs`; they need no extra wiring. Most policies have a deployment-time Options default and a `SysConfig` runtime override. Use the [deployment security baseline](/guide/deployment/) as the pre-launch checklist; the sections below explain how each mechanism behaves.
+
+## Choose by deployment stage first
+
+| Scenario | Required work | Optional controls |
+| --- | --- | --- |
+| Local development | Save the generated first-start password; the development JWT key is persisted at `data/dev-jwt.key` | Captcha, SMS, TOTP, cookie sessions |
+| Single-replica production | Configure a JWT key of at least 32 bytes; connect a real SMS sender before enabling SMS features | Lockout thresholds, password expiry, TOTP, cookie sessions |
+| Multi-replica production | Complete the single-replica items and use shared cache for lockout, verification codes, and session hot data | SignalR backplane and stricter concurrent-session policy |
+
+Security settings have two roles: `appsettings` or environment variables set deployment boundaries, while `sys.security.*` keys control runtime policy. Settings shown with an Options path normally require a restart; runtime keys changed through the configuration UI take effect immediately.
 
 ## JWT tokens
 
@@ -72,24 +82,7 @@ Two independent features, both **off by default**, toggleable at runtime from th
 ::: warning The second factor only applies to users with a bound phone
 A user **without a phone number signs in with password alone even when the switch is on**. This is deliberate, not a bug: flipping a global switch must never be able to lock anyone out of the system — the seeded super admin has no phone, and neither may existing users. To enforce MFA for an account, bind a phone number to it (profile page or user management).
 
-Consumers who want the strict interpretation ("no phone = no login") override exactly one step:
-
-```csharp
-public sealed class StrictAuthService(
-    IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens,
-    ISessionService sessions, ILogService logService, ILoginLockService loginLock,
-    ICaptchaService captcha, ISecurityPolicyProvider policy, ISmsOtpService smsOtp)
-    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy, smsOtp)
-{
-    protected override async Task CheckSmsSecondFactorAsync(SysUser user)
-    {
-        // Kernel default lets phone-less users through; strict mode rejects them instead
-        if (await smsOtp.IsMfaEnabledAsync() && string.IsNullOrWhiteSpace(user.Phone))
-            throw new AdminException(ErrorCode.AccountDisabled);
-        await base.CheckSmsSecondFactorAsync(user);
-    }
-}
-```
+If the application requires "no phone, no login," derive from `AuthService` and override `CheckSmsSecondFactorAsync`. The derived constructor must continue forwarding every active authentication dependency, especially `IMfaPolicyService`, `IMfaChallengeService`, and `AdminSecurityOptions`. Omitting those optional trailing dependencies makes TOTP checks pass through. Authentication continues to evolve, so use the current `AuthService` constructor as the source of truth instead of copying an older parameter list from documentation.
 :::
 
 **Passwordless sign-in**: `POST /api/v1/auth/sms/send` issues the code (honors the image-captcha toggle, so enabling captcha also guards this endpoint), `POST /api/v1/auth/sms/login` exchanges phone + code for tokens. **Anti-enumeration**: an unknown, duplicate, or disabled phone number gets the exact same success-shaped response — cooldown included — it just never sends anything; verification then fails with the generic `SmsCodeExpired`. A side effect worth knowing: **users sharing a duplicate phone number are silently excluded from passwordless sign-in** (resolution requires exactly one enabled match); the kernel doesn't unique-index `Phone` (existing data may hold duplicates), so keep phone numbers unique at entry time if you rely on this feature.
@@ -165,7 +158,7 @@ Optional idle / absolute caps (default `0` = off): `Session:IdleMinutesNormal`, 
 
 ## Email channel
 
-The kernel ships the same kind of abstraction for email, `IEmailSender`, mirroring `ISmsSender` — and **no built-in feature actually uses it yet**. It's a channel wired up ahead of time, so email verification codes or notification emails can plug straight into it later without a fresh replaceability design pass.
+`IEmailSender` is currently only a replaceable delivery channel. **No built-in business feature calls it.** Configuring SMTP does not automatically create verification emails or notifications; mail is sent only when consumer code explicitly injects and calls this interface.
 
 Configuration lives under `TenonAdmin:Email` (`AdminEmailOptions`); a single field decides which implementation is active:
 
@@ -249,6 +242,10 @@ If unmet, throws `ErrorCode.PasswordTooWeak`, with `args` carrying the specific 
 **Password aging (off by default).** Beyond complexity, there's a runtime-configurable expiry policy: `sys.security.password.expireDays` (seeded to `0` = never expires; only enabled when >0). At login step 4, `AuthService.CheckPasswordExpiryAsync` takes `SysUser.LastPasswordChangeTime` plus the valid-days count and compares it against the current time — **expiry doesn't block login**; it only sets that user's `MustChangePassword` to true in the DB and returns it in the login response, so the frontend forces a redirect to the change-password page (the same signal as an admin password reset). A successful self-service password change refreshes `LastPasswordChangeTime`, clears the flag, and restarts the expiry window from zero.
 
 `LastPasswordChangeTime` is a field added later, so existing users may have it as null. Before actually judging expiry, a null anchor is backfilled with the current time first, so the window starts from the first login after the upgrade — otherwise, on the day the policy is switched on, a batch of old users with no anchor would all be judged expired at once and collectively stuck on the change-password page. Consumer code that has replaced `ISecurityPolicyProvider` isn't affected: the newly added `GetPasswordExpireDaysAsync` ships with a default interface implementation returning 0, so an old implementation still compiles unchanged and behaves as if the policy is off.
+
+Password history is controlled by `sys.security.password.historyCount`; `0` disables it. With a value of N, the system rejects the N most recently used passwords with `ErrorCode.PasswordReused` (42025). The current password is checked separately because the history table may still be empty when the policy is first enabled. `IPasswordHistoryService` stores hashes only and trims older rows after each write.
+
+Self-service password changes validate and record history. Administrator-created and reset passwords are recorded but are not rejected against history. `IPasswordHistoryService` is an optional, default-null constructor dependency in `PersonalService` and `UserService`, so existing consumer subclasses still compile; omitting it behaves as if history were disabled. A custom subclass should keep forwarding the dependency when this policy must remain active.
 
 **Default initial password** (`TenonAdmin:Security:DefaultInitialPassword`): defaults to `null` → when creating a user or resetting a password, a cryptographically random strong password is generated per account, closing off the known weakness of "a fixed default password shipped in a public NuGet package." A password reset returns the random password to the admin to relay on the spot.
 

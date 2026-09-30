@@ -3,10 +3,10 @@ layout: home
 
 hero:
   name: TenonAdmin
-  text: Full RBAC in three lines of code
-  tagline: A zero-config, extensible ASP.NET Core admin-system kernel with built-in RBAC and data permissions
+  text: Admin features for ASP.NET Core
+  tagline: Install accounts, roles, and data permissions through NuGet; build business features in your project with Vue or React
   image:
-    src: /icon-128.png
+    src: /tenon-mark.png
     alt: TenonAdmin
   actions:
     - theme: brand
@@ -22,26 +22,31 @@ hero:
 features:
   - icon: 🧩
     title: Pluggable Architecture
-    details: Every built-in service is interface-registered and overridable step by step — swap any piece without forking, upgrade without conflicts.
+    details: Customize sign-in or file storage through interfaces and overridable methods. Keep business code separate and check compatibility against release notes when upgrading.
   - icon: 🏢
     title: Multi-Org Data Permissions
-    details: Five built-in data scopes, enforced automatically via ORM global filters — business queries never need manual org-filter conditions.
+    details: Let employees see their own customers and managers see their department’s records. Supported queries apply data-scope filters; raw SQL needs its own permission checks.
   - icon: 🔀
-    title: Approval Workflows Preview
+    title: Approval Workflows
     details: An optional package adds workflow design, submission, and approval, with pages in both Vue and React templates.
     link: /guide/workflow
     linkText: Run your first approval
+  - icon: 🔗
+    title: System Integration
+    details: Register external applications, grant API access, and track outbound delivery through delivery tasks.
+    link: /guide/integration
+    linkText: Connect an external system
   - icon: 🔭
     title: A Real Reference App
-    details: The live demo runs tenon-example, a separate open-source consumer app — install the package, add a CRM module, ship it, every step reproducible. Three accounts open the same list and see 214, 128, and 42 rows, with no organization filter anywhere in the query code.
+    details: The separate tenon-example app shows package installation, CRM development, and deployment. Follow its entities, endpoints, and pages to learn how a complete feature fits together.
     link: https://github.com/Tenon-Net/tenon-example
     linkText: See how it's written
   - icon: ⚡
     title: Zero-Config Startup
-    details: SQLite by default auto-creates tables and writes seed data, printing the super-admin password once on first startup; switching databases is a single config change.
+    details: The local sample uses SQLite and creates tables, menus, and an administrator account on first startup. Try the admin interface without installing a database server.
   - icon: 📦
     title: Minimal Dependencies
-    details: Runtime depends only on SqlSugar and Microsoft.* official libraries — Redis, object storage, etc. are opt-in.
+    details: Core runtime dependencies are limited to SqlSugar and Microsoft.*. Add optional packages such as Excel and workflows when your application needs them.
   - icon: 🔐
     title: Auth & Security
     details: JWT auth, login lockout, rate limiting, forced logout, and log redaction are on by default; three CAPTCHA styles ship built in and switch on when you want them.
@@ -55,6 +60,19 @@ features:
     linkText: Browse the components
   - icon: 🤖
     title: Assisted-Development Skills
-    details: Workflows like adding entities, scaffolding CRUD, and swapping services are written up as standard skills — AI assistants or developers follow them to generate standards-compliant code.
+    details: Development Skills provide steps and checks for entities, endpoints, pages, and service extensions. Developers and AI assistants can use them as references; verify business rules and permissions after generation.
     link: /community/agent-skills
     linkText: Browse the skills
+---
+
+## Start with your goal
+
+| What you want to do | Recommended starting point |
+|---|---|
+| Try the admin interface | [Quick Start](/guide/getting-started): run the sample and sign in |
+| Evaluate it for your project | [Core Concepts](/guide/concepts): understand framework and business responsibilities |
+| Build a first feature | [Business Module](/guide/business-module) → [Frontend Page](/guide/frontend-page) |
+| Customize a default implementation | [Replace Built-in Services](/guide/replace-service) |
+| Deploy or upgrade | [Deployment](/guide/deployment/) and the [Changelog](/changelog) |
+
+For frontend work, start with [Vue](/frontend/getting-started) or [React](/frontend-react/getting-started): build a small page using an existing API, then connect menus and permissions. To connect an external business system, start with [System Integration](/guide/integration).

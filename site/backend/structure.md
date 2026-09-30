@@ -1,8 +1,19 @@
 # Project Structure & Startup
 
-There are two projects under `tests/`, and only one of them runs tests. The other, `TenonAdmin.TestHost`, is a consumer in disguise: it registers itself into `options.ApplicationAssemblies` so that its entities, seeds and controllers all travel the consumer mounting path. Whether the kernel can really be consumed from outside is what it exists to prove.
+Start from your goal when you first open the repository: run the kernel from `samples/MinimalHost`, inspect published code under `src/`, and study extension wiring in `tests/TenonAdmin.TestHost`. Despite its location, TestHost models a real consumer. Its entities, seeds, and controllers all enter through `ApplicationAssemblies`; it has no internal shortcut.
 
 The design *why* — dependency direction, replaceability, the request pipeline — is unpacked on the [Architecture](/backend/architecture) page.
+
+## Where to start reading
+
+| Goal | Start with | What it confirms |
+| --- | --- | --- |
+| Start locally and call the API | `samples/MinimalHost/Program.cs` | The minimum registration and mapping for a complete host |
+| Add entities and controllers from your own assembly | `tests/TenonAdmin.TestHost` | How an external assembly joins CodeFirst and the same MVC pipeline |
+| Change a kernel capability | The matching package under `src/` | Which layer owns the code and whether the dependency boundary remains intact |
+| Run regression tests | `tests/TenonAdmin.Tests` | Which behaviors are already protected by automated tests |
+
+If you only consume the NuGet packages to build business features, the first two rows are usually enough. `Directory.*.props` and the database test matrix mainly matter when contributing to the kernel itself.
 
 ## Solution layout
 
@@ -11,7 +22,7 @@ The design *why* — dependency direction, replaceability, the request pipeline 
 | Folder | Contents |
 | --- | --- |
 | `samples/` | `MinimalHost` — the zero-config sample host used for local dev and manual verification |
-| `src/` | The nine shipped packages |
+| `src/` | Kernel and optional extension packages |
 | `tests/` | `TenonAdmin.Tests` (the test suite) and `TenonAdmin.TestHost` (a minimal consumer host) |
 
 `src/` holds the packages described in depth on the [Architecture](/backend/architecture) page — here's just enough to orient you:
@@ -25,6 +36,9 @@ The design *why* — dependency direction, replaceability, the request pipeline 
 | `TenonAdmin` | Meta-package: installing this alone pulls in the whole kernel (AspNetCore + Services + SqlSugar + Core) |
 | `TenonAdmin.Caching.Redis` | Optional: `StackExchange.Redis`-backed `ICacheProvider`, opt-in before `AddTenonAdmin()` |
 | `TenonAdmin.Excel` | Optional: xlsx read/write and templates with dropdowns, opt-in before `AddTenonAdmin()`; without it those endpoints return `46001` |
+| `TenonAdmin.Auth.WeCom` / `DingTalk` / `GitHub` / `WeChat` | Optional login packages for WeCom, DingTalk, GitHub, and WeChat Open Platform |
+| `TenonAdmin.Workflow` | Optional workflow package for definitions, engine, tasks, and designer APIs; requires service registration and kernel options wiring |
+| `TenonAdmin.Integration` | Optional system integration: application credentials, open APIs, outbound calls, and reliable delivery; use a matching release containing this module and follow [System Integration](/guide/integration) |
 
 ## Central package versioning
 
@@ -86,9 +100,9 @@ Everything binds from the `TenonAdmin` section of `appsettings.json` into `Tenon
 | `Upload` | `AdminUploadOptions` | storage root, size cap, extension allowlist |
 | `Api` | `AdminApiOptions` | disabled-module list |
 | `DemoMode` | `bool` | `false` — when `true`, only GET/HEAD/OPTIONS are allowed, all writes rejected with error code `41002` |
-| `Id` | `AdminIdOptions` | `WorkerId` — `null` by default (falls back to 0); must be set explicitly per instance when horizontally scaled |
+| `Id` | `AdminIdOptions` | `WorkerId` defaults to `null`: a complete host claims an available slot automatically; explicit values range from 0 to 63 |
 | `Logging` | `AdminLoggingOptions` | file logging diagnostics, off by default |
 
 `ApplicationAssemblies` is the one exception — a `List<Assembly>` set in code (as shown in the sample host and `TestHost` snippets above), not bound from configuration, since assembly references can't come from JSON.
 
-With the structure mapped, the natural next step is to see how these packages assemble together — [Layered Architecture and Package Dependencies](/backend/architecture) starts from the dependency direction; the CLI commands for building and testing live in [Contributing](/community/contributing).
+To decide which package should own a change, continue with [Layered Architecture and Package Dependencies](/backend/architecture). When you are ready to modify and submit the kernel, use the build and test commands in [Contributing](/community/contributing).

@@ -1,12 +1,12 @@
 # Wire Import/Export on Your Entity
 
-Install `TenonAdmin.Excel`, write a profile, and hang six endpoints on the resource controller — that is enough for xlsx import/export on a business table. Without the package, every call that reads or writes xlsx returns `46001`, and publish size does not grow by a single byte.
+Adding Excel import/export to a business list requires defining allowed columns, row validation, and permissions. `TenonAdmin.Excel` handles xlsx files, profiles describe business columns, and the import runner handles preview, validation, and commit. Lists and exports must apply the same data scope.
 
 If the entity and CRUD do not exist yet, start with [Add a Business Module](/guide/business-module). The step-by-step agent checklist lives in `skills/wire-import-export.md` in the repo.
 
 ## Install the satellite package, then the kernel
 
-The `TenonAdmin` meta-package does **not** reference Excel. The default codecs are `MissingExcelProvider`: read, write, and template generation all throw `ErrorCode.ExcelProviderMissing` (`46001`). That is what “optional” means.
+Install the Excel extension at the same version as `TenonAdmin` in your backend project. Without it, `MissingExcelProvider` returns `ErrorCode.ExcelProviderMissing` (`46001`) for file reading, writing, and template generation; use that code to diagnose missing registration.
 
 ```bash
 dotnet add package TenonAdmin.Excel
@@ -87,7 +87,7 @@ If the list uses `ToPagedListAsync`, extract the query into `BuildListQuery` sha
 
 ## Import: implement IImportProfile
 
-Orchestration lives in the kernel `IImportRunner` (parse → map → validate → dedupe → commit). Your profile only declares columns, business keys, row validation, bulk key lookup, and commit-one-row. The full sample is `UserImportProfile` (dict, name-based FK, org scope, commit via `IUserService`). Minimal shape:
+`IImportRunner` orchestrates parsing, mapping, validation, duplicate detection, and commit. Your profile declares columns and business keys and implements business validation, bulk duplicate checks, and row persistence. The following is an interface sketch: implement the omitted methods for your business. `UserImportProfile` is a complete reference covering dictionaries, foreign keys, organization permissions, and saving through a business service.
 
 ```csharp
 public class SampleDocImportProfile(IRepository<SampleDoc> repo, ISampleDocService docs) : IImportProfile
@@ -141,4 +141,8 @@ Every `[RolePermission]` endpoint needs a menu button whose `Permission` is `MET
 
 ## Why MiniExcel + OpenXml
 
-Magicodes.IE was considered and rejected after measurement: native assets in the dependency closure, compile-time attributes that cannot see runtime dict tables, and English error strings that fight “numeric ErrorCode only, copy on the frontend.” MiniExcel handles read/write; DocumentFormat.OpenXml is used **only** to build templates with dropdowns. Both are pure managed code — the stock ASP.NET image needs no change. Full dependency table: `docs/excel-ledger.md` §2.
+MiniExcel reads and writes xlsx files, while DocumentFormat.OpenXml builds templates with dictionary dropdowns. Both are managed dependencies and need no extra native components in the ASP.NET runtime image. Profiles and the runner still enforce business validation; Excel dropdowns do not prevent invalid input by themselves.
+
+## Verify import and export
+
+As a regular user, prepare a file containing valid rows, duplicate business keys, and invalid dictionary values. Preview should identify errors, and commit must validate again. Revalidating preview output must accept values already converted from dictionary labels. Compare exported records against the same filters and data scope, checking that export is not limited to the current page and contains no unauthorized organizations’ records.

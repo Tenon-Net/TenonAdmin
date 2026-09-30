@@ -1,8 +1,24 @@
 # 项目结构与启动
 
-`@/styles/tokens.css` 要是排到 `import App` 后面，主题桥就读不到颜色变量了：`getComputedStyle` 拿到的全是空值，antd 的颜色会悄悄掉回默认色，也不报错提醒你。`web-react/` 这边不少规矩就是这种导入顺序，没写在任何文档里，只能翻文件才知道。
+第一次进入 `web-react/`，先把模板跑起来，再顺着入口文件定位目录。这样看到 `api/`、`router/`、`stores/` 时，每个名字都能对应到浏览器里已经发生的动作。
 
 两套模板怎么取舍、各自装了什么见[前端模板对比](/zh/guide/frontend-templates)；写页面的具体约定散在[请求流程](/zh/frontend-react/request)、[权限](/zh/frontend-react/permission)、[国际化](/zh/frontend-react/i18n)几页，这里只讲地基。
+
+> 前置：还没有接通过页面时，先完成 [React 前端入门](/zh/frontend-react/getting-started)。
+
+## 先运行，再定位入口
+
+从仓库根目录启动 React 模板：
+
+```bash
+npm --prefix web-react run dev
+```
+
+打开终端打印的地址并登录。浏览器里的侧栏来自 `layouts/`，当前页面来自 `views/`，网络请求经过 `api/`，刷新后恢复登录与菜单则依赖 `stores/` 和 `router/`。
+
+[![React 界面与源码目录的对应关系](/screenshots/react-admin.png)](/screenshots/react-admin.png)
+
+接着打开 `web-react/src/main.tsx`，找到 token CSS、store、图标与 Markdown 初始化，再看最后的 React root。这里的顺序会影响运行结果：`@/styles/tokens.css` 若排到 `App` 后面，主题桥读取 CSS 变量时会得到空值，antd 随后静默退回默认色。
 
 ## 目录结构
 
@@ -10,16 +26,16 @@
 
 | 目录 | 职责 |
 |---|---|
-| `api/` | `client.ts`（类型化的 `openapi-fetch` 封装，带鉴权与刷新中间件）+ `index.ts`（按域分组的接口调用）+ 生成的 `schema.d.ts` |
+| `api/` | `client.ts`（类型化客户端及认证、刷新、再认证中间件）+ `index.ts`（按域分组的接口调用）+ 生成的 `schema.d.ts` |
 | `assets/` | 静态资源：`svg/`（本地 SVG）与 `icons.generated.json`（`gen:icons` 构建期生成的离线图标子集，非手写） |
 | `components/` | 可复用组件（DataTable、FormContainer、Can、Dict* 系列等，详见 `web-react/COMPONENTS.md`） |
-| `composables/` | 与 UI 库无关、不绑组件生命周期的模块级逻辑：`useModule`（门户决策，router-free 纯 async 函数）、`useRealtime`（SignalR 长连接 + 未读 pub/sub） |
+| `composables/` | 不依赖组件生命周期的模块级逻辑：门户进入与切换、SignalR 长连接及未读消息发布订阅 |
 | `hooks/` | 需要组件上下文的 React hook：`useConfirm`（二次确认 + 结果 toast，内部用 antd `App.useApp`）、`useBatchDelete`（勾选态 + 批量删除） |
 | `layouts/` | 布局壳：顶栏、侧栏、标签页、设置抽屉、菜单搜索、通知铃铛 |
 | `lib/` | 一次性初始化与运行时基座：`icons`（离线图标注册）、`markdown`（md-editor-rt 的 XSS 过滤接线）、`echarts`（按需注册图种） |
-| `locales/` | i18n 资源（`zh-CN.ts`、`en-US.ts`）与 i18next 实例（`index.ts`）；`ext/` 是消费者扩展位，上游不写，同步时零冲突 |
+| `locales/` | i18n 资源与 i18next 实例；业务文案放入 `ext/`，可减少同步上游时修改同一文件的冲突 |
 | `router/` | `buildRoutes`（菜单树 → `RouteObject`）、`menuRoutes`（菜单路由决策）、`detailRoutes`（约定式详情路由）、`Protected`（守卫组件）、`MissingRoute` |
-| `stores/` | zustand 状态（`app`、`auth`、`user`、`dict`、`site`、`tabs`），均持久化 |
+| `stores/` | Zustand 状态（`app`、`auth`、`user`、`dict`、`site`、`tabs`），各 store 按生命周期选择持久化字段 |
 | `styles/` | `tokens.css`（设计令牌）、`chrome.css`（布局壳裸 CSS + reset）、`code.css`（代码块高亮配色） |
 | `theme/` | antd 主题桥：`antd-theme`（构建 `ThemeConfig`）、`useAntdTheme`（落 `data-*` 并重建主题的 hook）、`accents`/`mix`（强调色候选与混色）、`useDocumentGrayscale`（哀悼灰阶，独立 CSS filter） |
 | `types/` | 手写领域类型（`menu.ts`、`api.ts`），UI 层消费它而不直接用 openapi 生成的 verbose 类型 |
@@ -109,7 +125,7 @@ server: {
 },
 ```
 
-端口是 5174，不是 Vue 版的 5173，两个模板要能同时跑着对照。`strictPort: true` 是刻意加的：默认情况下端口被占就静默挪到下一个。5173 和 5174 挨在一起，一挪走，写死 5174 的脚本就会连到另一个应用上，拿到的不是报错，是别人的页面。宁可直接起不来。
+React 使用 5174，Vue 使用 5175，两个模板可以同时运行。`strictPort: true` 是刻意加的：默认情况下，5174 被占后 Vite 会静默挪到下一个空闲端口。浏览器书签或脚本若仍指向 5174，就会连到占用该端口的进程。直接拒绝启动，端口冲突才不会被掩盖。
 
 后端 dev 端口默认 5100。要指向别的后端实例，启动 Vite 前设 `TENON_API_TARGET` 即可。后端 CORS 默认 deny-all，本地能同源访问全靠这层代理。`/hub` 那条比 Vue 版多出来，反代 SignalR 的 WebSocket，实时通知走它。
 
@@ -147,7 +163,11 @@ server: {
 
 | 脚本 | 作用 |
 |---|---|
-| `dev.bat` | 开三个窗口：后端（`:5100`）、`web`（Vue，`:5173`）、`web-react`（`:5174`），各自 `npm install && npm run dev` |
-| `stop.bat` | 结束 `dev.bat` 起的前后端进程 |
+| `dev.bat` | 开三个窗口：后端（`:5100`）、`web`（Vue，`:5175`）、`web-react`（`:5174`），各自 `npm install && npm run dev` |
+| `stop.bat` | 当前脚本处理 `5100`、`5173`、`5174`；若 Vue 的 `:5175` 仍在运行，请在启动它的终端结束进程 |
+
+## 第一次运行的完成标准
+
+浏览器应能打开 `http://localhost:5174`，登录后进入一个菜单页面；网络请求从 `:5174/api/...` 发出，实时通知通过 `:5174/hub` 建立；切换语言、主题或密度后刷新，选择仍应保留。开发控制台不应出现 StrictMode 引起的重复初始化错误。做到这些，入口装配、代理和 Zustand 持久化才算一起工作。
 
 这套结构跑通之后，往下一页是[路由](/zh/frontend-react/routing)：后端菜单树怎么派生成路由表。再往后是[请求流程](/zh/frontend-react/request)，一次接口请求怎么走过类型化客户端。

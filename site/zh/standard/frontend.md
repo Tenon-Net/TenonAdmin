@@ -1,6 +1,6 @@
 # 前端规范（Vue 3 + Naive UI）
 
-写页面、调接口前对着这份清单核一遍。栈是 `<script setup>` + Naive UI + Pinia（持久化）+ vue-router + vue-i18n + VueUse，路径别名 `@` → `src`。整体架构翻 [核心概念](/zh/guide/concepts)；组件怎么用、设计系统长什么样，去仓库的 [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md) 和 [`web/DESIGN.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/DESIGN.md) 找。
+开发 Vue 页面时，先复用现有 API 包装、路由约定和组件，再补业务代码。这样生成类型、权限、国际化和主题才能沿用同一套契约。技术栈是 `<script setup>` + Naive UI + Pinia + vue-router + vue-i18n + VueUse，路径别名为 `@` → `src`。整体架构见[核心概念](/zh/guide/concepts)，组件和视觉约束分别以 [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md) 与 [`web/DESIGN.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/DESIGN.md) 为准。
 
 ## 目录落点
 
@@ -71,8 +71,8 @@
 
 ```bash
 npm run lint        # oxlint(lint:fix 自动修)
-npm run typecheck   # vue-tsc --noEmit
+npm test            # vitest run
 npm run build       # vue-tsc --noEmit && vite build
 ```
 
-三者都通过才算完成，不要只跑其中一个就认为没问题。
+三者分别覆盖静态规则、行为回归和类型加产物构建。只改类型定义且需要快速反馈时可先跑 `npm run typecheck`，最终仍以 `npm run build` 为准；后端 OpenAPI 变化还要先运行 `npm run gen:api`。

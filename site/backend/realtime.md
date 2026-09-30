@@ -1,6 +1,6 @@
 # Realtime Notifications
 
-Realtime is off by default — `TenonAdmin:Realtime:Enabled` defaults to `false`, and with it off the system behaves exactly as it always has: the notice badge still polls every 30 seconds, and a force-logged-out session still waits for its next request to hit a 401. Turning it on only upgrades those two paths from eventually-consistent to instant. It's a UX enhancement layered on top of the existing contract, not a new one.
+Enable realtime only when notice badges and forced logout must arrive immediately. The default, `TenonAdmin:Realtime:Enabled=false`, already has a complete fallback: notices poll every 30 seconds, and a revoked session receives 401 on its next request. SignalR shortens that delay without changing the business APIs or their source of truth.
 
 ## Toggle & configuration
 
@@ -103,8 +103,12 @@ A failed initial connection is **silent by design**. When the backend has realti
 
 In dev, Vite needs to proxy `/hub` with `ws: true` — that's already set up in `web/vite.config.ts`.
 
-## What isn't verified
+<a id="what-isn-t-verified"></a>
+
+## How to verify it
+
+After enabling realtime, request the Hub path without a token. It should return 401 rather than 404. Then use two browser sessions to verify two outcomes: publishing a notice refreshes the unread badge immediately, and revoking one session from the online-users page logs out only that session. In a multi-replica deployment, put the publisher and receiver on different replicas to prove that the backplane works.
 
 The test project deliberately doesn't pull in `Microsoft.AspNetCore.SignalR.Client` to drive a real `HubConnection`. The unit tests lock down the wiring: default resolves to Noop, `RevokeAsync` and `PublishAsync` trigger a push, the hub returns 401 (not 404) once enabled and 404 once disabled, and the six-piece replaceability contract holds.
 
-The full push path has been smoke-tested with a one-off Node script talking directly to `MinimalHost`, but that isn't part of CI. Go in knowing the split: the wiring has tests behind it, the transport layer doesn't.
+The full push path has been smoke-tested with a one-off Node script talking directly to `MinimalHost`, but that is not part of CI. After changing the Hub, proxy, or client connection code, repeat the browser checks above. Existing automated tests prove the wiring, not the transport layer.

@@ -1,10 +1,10 @@
 # Choosing a Frontend Template
 
-One backend, two frontends: `web/` is Vue 3 with Naive UI, `web-react/` is React 19 with Ant Design. Both speak the same OpenAPI contract, and login, menus, permissions, and CRUD are aligned feature for feature. Which one you pick comes down to the stack your team already knows.
+Both Vue and React templates connect to the same TenonAdmin backend. Choose the stack your team knows: `web/` uses Vue 3 and Naive UI, while `web-react/` uses React 19 and Ant Design. Each can be installed, developed, and deployed independently.
 
 ## One Backend, Two Frontends
 
-Both templates generate their typed client from the backend's `/openapi/v1.json`, run the same `gen:api`, and share the same error codes, data permissions, and dynamic menus. The only visible difference is the component library — Naive UI on one side, Ant Design on the other. The dev ports are deliberately different too, so `5173` and `5174` can run at once and be compared side by side.
+Each template runs its own `npm run gen:api` to generate API types from `/openapi/v1.json`. They use the same backend permissions and error contract, while components, state management, and page implementations are maintained separately. Development ports `5175` and `5174` allow side-by-side comparison.
 
 | | Vue template | React template |
 |---|---|---|
@@ -12,17 +12,23 @@ Both templates generate their typed client from the backend's `/openapi/v1.json`
 | Stack | Vue 3 + Naive UI | React 19 + Ant Design |
 | State management | Pinia | Zustand |
 | Table wrapper | ProTable | DataTable |
-| Dev port | `5173` | `5174` |
+| Dev port | `5175` | `5174` |
 
-Implementation details for each — routing, portal guards, the request layer, permissions, i18n, theming — live in their own deep-dive sections: [Vue docs](/frontend/structure) and [React docs](/frontend-react/structure).
+After choosing a template, follow the [Vue tutorial](/frontend/getting-started) or [React tutorial](/frontend-react/getting-started): create a static page, connect its menu, load API data, and grant permissions. Then consult the routing, request, localization, and theme references as needed.
+
+After signing in, user management looks like this. Choose a feature on the left, filter and inspect records in the center, and add, import, or export above the table. The templates use different components while sharing backend permissions. These screenshots show the Chinese interface; click to enlarge.
+
+[![Vue · Naive UI](/screenshots/vue-admin.png)](/screenshots/vue-admin.png)
+
+[![React · Ant Design](/screenshots/react-admin.png)](/screenshots/react-admin.png)
 
 ## Which One
 
-Start with the team. If you write Vue day to day, take `web/`; if React is your habit, take `web-react/` — that alone settles it for most people. The two are feature-aligned, so there's no "pick this one and lose a capability" trade-off to agonize over.
+Base the choice on team experience and existing components. Vue teams can use the Vue template; teams using React and Ant Design can choose React. Check the pages and components you need in the selected release before adopting it.
 
-No strong preference? Take the Vue one. It's the default template shipped with the kernel, it's what `dev.bat` and the Quick Start bring up first, and there are more people around to lend a hand when something breaks.
+If you have no preference, run the Vue sample first, then compare component usage with the live demo or local React template. Choosing a frontend does not change the backend permission model.
 
-The two templates are self-contained and never reference each other, so you leave with only the one you picked, and the other doesn't tag along. That's a deliberate product decision: one template is one complete starting point you can run, change, and ship on its own. The cost is the maintainers': the same copy and the same design token get maintained twice, once on each side. But that's the repo's side of things — what lands in your hands is always one clean, complete template.
+The templates do not import each other. Install dependencies, build, and deploy only the one you choose. Use that template’s own components and conventions when adding pages.
 
 ## degit One, Make It Yours
 
@@ -40,4 +46,4 @@ npx degit Tenon-Net/TenonAdmin/web-react my-web
 
 :::
 
-That snapshot is entirely yours to change however you like. The trade-off is no upgrade channel: upstream fixes are yours to read off the diff and reapply by hand. To keep pulling upstream fixes, don't snapshot — follow [Syncing Your Fork](/guide/sync-fork), whose seams exist to keep merge conflicts near zero.
+A snapshot suits projects that maintain their frontend independently, but it does not retain upstream Git history, so later fixes need manual migration. Use [Syncing Your Fork](/guide/sync-fork) to merge updates through Git instead. In either case, check frontend and backend version compatibility.

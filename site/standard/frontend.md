@@ -1,6 +1,6 @@
 # Frontend Standards (Vue 3 + Naive UI)
 
-Check your work against this list before writing a page or wiring up an API. The stack is `<script setup>` + Naive UI + Pinia (persisted) + vue-router + vue-i18n + VueUse, with path alias `@` → `src`; see [Core Concepts](/guide/concepts) for the overall architecture, [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md) for component usage, and [`web/DESIGN.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/DESIGN.md) for the design system.
+When building a Vue page, reuse the existing API wrappers, routing conventions, and components before adding business code. That keeps generated types, permissions, localization, and theming on the same contract. The stack is `<script setup>` + Naive UI + Pinia + vue-router + vue-i18n + VueUse, with path alias `@` → `src`. See [Core Concepts](/guide/concepts) for the architecture, [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md) for components, and [`web/DESIGN.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/DESIGN.md) for visual rules.
 
 ## Where things go
 
@@ -25,6 +25,7 @@ Check your work against this list before writing a page or wiring up an API. The
 - `router/routes.ts` holds only static routes (login, error, shell/layout); the real menu tree is fetched from the backend after login and injected as dynamic routes (in-memory only, never persisted).
 - A menu node's `component` string (e.g. `system/user/index`) maps to `/src/views/system/user/index.vue`; a route's `name = menu-${id}`, mounted under `layout`.
 - Logout / app switching uses `registerDynamic` / `resetRouter` to add/remove dynamic routes precisely, not resetting the whole route tree.
+- External-link menus (`path` is a URL and `component` is empty) and iframe menus (`component` is a URL) reuse existing fields rather than adding menu types. A `views/**/detail.vue` file becomes a conventional `/<module>/:id/detail` route and uses `DetailPage` with `useTabTitle()`. See [routing and dynamic menus](/frontend/routing) for both conventions.
 
 ::: danger Don't persist routesReady / menuTree
 Persisting them skips the refresh-rebuild flow and sends you straight to a 404 after a refresh — these two pieces of state must live in memory only. See [routing & dynamic menus](/frontend/routing) for the rebuild mechanism.
@@ -39,6 +40,7 @@ Persisting them skips the refresh-rebuild flow and sends you straight to a 404 a
 
 - Named `use*`, returning reactive refs and methods.
 - List pages uniformly use `tenon-naive-pro-table`'s `ProTable` in remote mode: pass it `:fetcher` with the signature `(p: { page, pageSize, ...params }) => Promise<{ items, total }>`, and ProTable manages pagination and loading itself.
+- Existing composables include `useConfirm` for confirmations, `useTabTitle` for detail-page tab titles, and `useRealtime` for SignalR. Use their source comments and `web/COMPONENTS.md` before creating another wrapper.
 
 ## Button-level permissions
 
@@ -52,7 +54,7 @@ Persisting them skips the refresh-rebuild flow and sends you straight to a 404 a
 ## Shared components
 
 - The admin backend has **no component-demo menu**; component usage is consolidated in [`web/COMPONENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/web/COMPONENTS.md) — read it before writing a page to avoid reinventing the wheel, and update it when you add a new general-purpose component.
-- Existing ones include ProTable / FormContainer / `useConfirm` / StatusSwitch / the dict components (DictSelect, DictTag) / OrgTreeSelect / FileUpload (`chunked` for resumable upload) / ApiSelect (from which UserSelect derives) / UserPicker / PasswordStrength / Chart / CodeBlock / MarkdownEditor / IconPicker, and more — treat `web/COMPONENTS.md` as the authoritative full list, and see each component's own `README.md` for its detailed API.
+- Existing ones include ProTable / FormContainer / `useConfirm` / StatusSwitch / the dict components (DictSelect, DictTag) / OrgTreeSelect / FileUpload (`chunked` for resumable upload) / ApiSelect (from which UserSelect derives) / UserPicker / PasswordStrength / Chart / CodeBlock / MarkdownEditor / DetailPage / IconPicker, and more. Treat `web/COMPONENTS.md` as the authoritative full list, and see each component's own `README.md` for its detailed API.
 
 ## i18n
 
@@ -69,8 +71,8 @@ Persisting them skips the refresh-rebuild flow and sends you straight to a 404 a
 
 ```bash
 npm run lint        # oxlint (lint:fix to autofix)
-npm run typecheck   # vue-tsc --noEmit
+npm test            # vitest run
 npm run build       # vue-tsc --noEmit && vite build
 ```
 
-Only when all three pass is it done — don't run just one and assume you're fine.
+These cover static rules, behavior regressions, and type-checking plus the production bundle. Use `npm run typecheck` for fast feedback on type-only work, but keep `npm run build` as the final check. If the backend OpenAPI changed, run `npm run gen:api` first.

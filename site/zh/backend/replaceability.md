@@ -2,6 +2,8 @@
 
 内核注册内置服务时不写 `Add*`，一律写 `TryAdd*`。就靠这一个前缀，你不必 fork 也能换掉密码哈希、缓存、登录流程里的某一步。做法是抢在 `AddTenonAdmin()` 前面注册自己的实现。
 
+先按改动范围选路径：整个接口都要换，用前置 DI 注册；只改服务流程的一步，继承实现并覆写 `virtual` 方法；要占用内置模块的原路由，先禁用模块再挂自己的控制器；只增加实体和端点，把业务程序集加入 `ApplicationAssemblies`。四条路径可以组合，但都不要求修改内核源码。
+
 ## 约束一：`TryAdd` 注册，先到者胜
 
 内置服务一律用 `TryAdd*` 注册，不用 `Add*`。`TryAdd` 的语义是「容器里已经有同一个接口的注册，就不再添加」。所以消费方只要在 `AddTenonAdmin()` **之前**注册同一个接口，自己的实现就胜出，内置的那个被跳过。不过这条只适用于单实现的接口。`ICaptchaProvider`、`ISeedData` 这类走的是 `TryAddEnumerable`，按实现类型防重，语义是「入集」，不是「替换」。你前置注册的滑块验证码，会和内置那三种一起入集。最后选中哪一个，另由 `TenonAdmin:Security:Captcha:Type` 决定。
@@ -43,22 +45,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 
 长的服务方法被拆成若干 `virtual` 小步骤，用的是模板方法模式。消费方想改行为，就继承内置服务，只重写**其中一步**，而不是整段复制方法。
 
-以 `AuthService` 为例。登录流程里「组装登录出参」是一个独立的 `virtual` 步骤，消费方继承后只重写它：
-
-```csharp
-// backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs
-// 覆写登录出参组装步骤:主构造器把基类的 8 个依赖原样透传,只多这一个覆写方法
-private sealed class OverridingAuthService(
-    IRepository<SysUser> users, IPasswordHasher hasher, ITokenProvider tokens, ISessionService sessions,
-    ILogService logService, ILoginLockService loginLock, ICaptchaService captcha, ISecurityPolicyProvider policy)
-    : AuthService(users, hasher, tokens, sessions, logService, loginLock, captcha, policy)
-{
-    protected override LoginOutput BuildLoginOutput(SysUser user, TokenPair pair) =>
-        base.BuildLoginOutput(user, pair) with { Name = "OVERRIDDEN" };
-}
-```
-
-登录流程里校验码、失败锁定、密码验证、签发令牌、建会话这几步，全部走基类原逻辑，只有出参组装被替换。继承一步，还是复制整段？升级内核的时候，前者不会因为你抄了旧版方法体而错过上游的修复。
+以 `AuthService.BuildLoginOutput` 为例，子类可以只重写登录出参组装，其余校验、锁定、令牌和会话步骤继续走基类。继承认证服务时还有一条安全约束：构造函数必须把当前基类的全部能力依赖继续传入。`AuthService` 的外部登录、时钟和 TOTP 依赖采用尾随可选参数来保持源码兼容，省略它们虽然能编译，却会关闭对应步骤。以当前构造函数和 `ReplaceabilityTests.OverridingAuthService` 为准，不要复制旧参数列表。
 
 ## 约束三：业务程序集挂载
 
@@ -76,7 +63,7 @@ builder.Services.AddTenonAdmin(builder.Configuration, options =>
 
 ## 「六件套」把这些锁成契约
 
-`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` 是可替换机制的回归锁。「六件套」这名字定在最初那六个用例上，后来可替换的点变多了，短信、邮件、实时推送、外部登录先后长出各自的用例，现在这份回归锁一共锁着九条。用例名照设计写死，把上面三条约束当契约来验证，不是普通测试：
+`backend/tests/TenonAdmin.Tests/ReplaceabilityTests.cs` 把可替换性当作公开契约验证。目前覆盖九条路径，包括服务替换、单步覆写、外部 provider、模块接管和消费方种子：
 
 | 测试 | 锁定什么 |
 | --- | --- |
@@ -113,7 +100,7 @@ AdminException.ThrowIf(
     ErrorCode.ModuleHasMenus);
 ```
 
-这条校验查询特意走 `modules.Db` 逃生舱，不在构造器里加 `IRepository<SysMenu>`。为什么？给主构造器加参数，会破坏继承本类的消费方的源码兼容。连加一道闸都不肯改子类签名，这正是可替换性约束在自我约束。这两处都由 `ModuleProtectionTests` 锁定，不在上面的六件套里。
+校验菜单时直接使用已有仓储的 `modules.Db`，避免给主构造器增加 `IRepository<SysMenu>` 后破坏消费方子类的源码兼容。这两条保护由 `ModuleProtectionTests` 验证。
 
 ## 消费方替换一个服务的完整写法
 
@@ -133,5 +120,7 @@ builder.Services.AddTenonAdmin(builder.Configuration);
 ```
 
 内核对 `IPasswordHasher` 用的是 `TryAddSingleton`。所以容器里已经有你的注册，内置的 `Pbkdf2PasswordHasher` 就不会再进来。想把雪花 ID 换成数据库自增或者 GUID v7？一样是实现 `IIdGenerator` 再前置注册。想改某个服务的一个环节、而不是整体？就继承它，重写那个 `virtual` 步骤。
+
+启动后先从容器解析一次目标接口，确认得到的是自定义类型，再跑一条真实业务路径。只检查注册代码不够：注册顺序写反时应用仍能启动，只会继续使用内置实现；禁用模块漏配时也要等请求命中重复路由才会报错。
 
 整体替换、覆写单步、禁用接管、消费方种子，这四条路的分步操作和踩坑，都收在[替换内置服务](/zh/guide/replace-service)里。本页只解释这些替换点为什么立得住。

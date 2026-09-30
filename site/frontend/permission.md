@@ -1,13 +1,29 @@
 # Frontend Permissions
 
-Every action button wants to show or hide by permission: the people with the right see it, the people without it never get the button at all — they can't click it, so they can't click it and eat a 403. The frontend collapses this rule into a single decision, then applies it to pages two ways — the `v-auth` directive in templates, and the `hasPerm` getter called directly inside render functions. To see how it fits together, start with where the authorization state lives: two Pinia stores, split by their different persistence needs.
+An action button stays hidden when the user lacks its permission, so the UI never starts a flow that must end in 403. Template buttons, row actions, and status switches all need to apply the same decision, even though they use different Vue APIs.
+
+> Prerequisite: complete the [regular-role grant in the tutorial](/frontend/getting-started#_5-grant-access-to-a-regular-role).
+
+## Gate the Refresh button first
+
+Change the tutorial's Refresh button to:
+
+```vue
+<n-button v-auth="'GET:/api/v1/sys/position/page'" :loading="loading" @click="load">
+  Refresh
+</n-button>
+```
+
+The button appears for an account with the position query permission and disappears after that permission is removed and the account signs in again. A direct request must still receive 403. `v-auth` avoids a guaranteed failure in the UI, while the server rejects unauthorized access.
+
+[![Check both the menu and endpoint permission in the role tree; the UI is Chinese](/screenshots/role-permissions.png)](/screenshots/role-permissions.png)
 
 ## The big picture: two stores, split by what persists
 
-- **`user` store** (`src/stores/user.ts`) — `accessToken`, `refreshToken`, `userInfo` (`userId`, `account`, `name`, `mustChangePassword`), plus the `isLoggedIn` getter and the `setSession`/`clear` actions. Declared `persist: true` — **the whole store** goes to `localStorage`, which is what keeps you logged in across a refresh.
+- **`user` store** (`src/stores/user.ts`) — holds tokens, session mode, and profile data. Body sessions persist access/refresh tokens and profile data. Cookie sessions persist only the `cookieSession` marker: access stays in memory, refresh stays in an HttpOnly cookie, and neither token enters Web Storage.
 - **`auth` store** (`src/stores/auth.ts`) — `modules`, `currentModuleId`, `defaultModuleId`, `menuTree`, `permissionCodes`, `permissionsLoaded`, `isSuperAdmin`, `routesReady`, plus the `homePath` and `hasPerm` getters. Declared `persist: { pick: ['currentModuleId'] }` — **only `currentModuleId` is persisted**.
 
-The split exists because the two sides have different lifetimes. Tokens and profile have to survive a refresh (otherwise "stay logged in" means nothing). Permission codes, the menu tree, and `routesReady` are the opposite — re-fetched every time the app boots: dynamic routes live only in the router's memory, and once `routesReady` is persisted as `true`, a refresh would skip the route rebuild and every dynamic route would 404. `currentModuleId` is the one exception — it's persisted so an F5 or a deep link can first restore "which app you were last in," and then the guard re-fetches everything else via `useModule().enterInitial()`.
+The two stores have different lifetimes. A body session survives reload through persisted tokens; a cookie session keeps only its marker and silently obtains a new access token from the HttpOnly refresh cookie. Permission codes, the menu tree, and `routesReady` reload on every boot because dynamic routes exist only in router memory. Persisting `routesReady: true` would skip reconstruction and send dynamic pages to 404. `currentModuleId` alone survives so the app can restore the previous module before `enterInitial()` fetches the remaining authorization state.
 
 ## `v-auth`: the button-level directive in templates
 
@@ -42,7 +58,7 @@ The directive value is the permission code for the endpoint behind that button. 
 <n-button v-auth.and="['a', 'b']">shown only if a AND b match</n-button>
 ```
 
-The directive implements only a `mounted` hook — permission changes after mount don't trigger re-evaluation. On mount it takes the codes to `authStore.hasPerm`, and on a fail it calls `el.remove()` outright:
+On mount, the directive creates a `watchEffect` that observes `authStore.hasPerm`. It reevaluates when permissions finish loading or change, and disposes the subscription on unmount:
 
 ```ts
 export const vAuth: Directive<HTMLElement, string | string[]> = {
@@ -50,13 +66,20 @@ export const vAuth: Directive<HTMLElement, string | string[]> = {
     const auth = useAuthStore()
     const need = binding.value
     const mode = binding.modifiers.and ? 'every' : 'some'
-    const ok = Array.isArray(need) ? need[mode]((c) => auth.hasPerm(c)) : auth.hasPerm(need)
-    if (!ok) el.remove()
+    const stop = watchEffect(() => {
+      const ok = Array.isArray(need) ? need[mode]((c) => auth.hasPerm(c)) : auth.hasPerm(need)
+      el.style.display = ok ? '' : 'none'
+    })
+    stopHandles.set(el, stop)
+  },
+  unmounted(el) {
+    stopHandles.get(el)?.()
+    stopHandles.delete(el)
   },
 }
 ```
 
-**It physically removes the DOM node** — not `display: none`, not the kind of `v-if` conditional hiding that can be re-triggered. A button without permission simply doesn't exist in the DOM, and can't be "conjured up" by tampering with client-side state or dev tools. But don't mistake this for a security boundary: the real authorization decision always happens server-side (the backend's `[RolePermission]` filter is the authority), and this directive is UX only, keeping buttons the user can't use out of sight.
+The directive uses `display: none` so the node can become visible when permission state changes. The node remains in the DOM, so it cannot be a security boundary. Real authorization always runs on the server in the `[RolePermission]` filter; the directive controls presentation only.
 
 ## `hasPerm`: super admin passes / not-loaded hides / exact match
 
@@ -72,11 +95,11 @@ Three states:
 
 1. **Super admin (`isSuperAdmin`) → fail-open.** Everything is shown, echoing the `sadm`-claim bypass in the backend's `[RolePermission]`.
 2. **Permission codes not loaded yet (`permissionsLoaded === false`) → fail-closed.** Every gated button is hidden. This isn't a corner case to wave off. The guard `await`s `enterInitial`, so a normal login never actually passes through a flicker window where permissions aren't in yet — what fail-closed really guards against is `/personal/permissions` failing to fetch at all. When you genuinely don't know whether a user has a permission, wrongly saying "yes" is far worse than wrongly saying "no." If "not loaded" were treated as "has permission," every gated button (including the ones the user has no rights to) would flash into view and then vanish. Fail-closed guarantees the user only ever sees buttons they can use — no flash of forbidden UI.
-3. **Loaded regular user → exact match against `permissionCodes`.** An empty `permissionCodes` (a user with no grants at all) can never match any code, so gated buttons all stay hidden. This also seals off an old bug: an "empty set" was once mistakenly treated as "super admin"; now the two are carried by entirely separate fields (`isSuperAdmin` and `permissionCodes`), so an empty permission set can't accidentally unlock everything.
+3. **Loaded regular user → exact match against `permissionCodes`.** An empty set means no grants and cannot match a permission code. Super-admin status lives in the separate `isSuperAdmin` field and must never be inferred from whether the permission set is empty.
 
 ## Spreading the gate across every action button
 
-`v-auth` is template syntax — it only works inside `<template>`. But a list page's inline row actions — edit, delete, copy, reset password, force-logout, restore — are assembled with `h()` inside a column's `render` function, out of the directive's reach. These buttons used to show up for users without permission too, only eating a 403 server-side once clicked; the org page had no gating at all. List pages, tree-table pages, and menu management's own button editor (`ButtonManager.vue`) have all had their operation columns spread with the same decision: render calls `authStore.hasPerm(code)` directly, `h()`-ing the button on a hit and returning `null` on a miss. Same rule behind it as the directive, just imperative instead of declarative.
+`v-auth` is template syntax and works only inside `<template>`. Inline row actions such as edit, delete, copy, reset password, force logout, and restore are assembled with `h()` in a column `render` function, outside the directive's reach. Those render functions call `authStore.hasPerm(code)` directly: a match creates the button and a miss returns `null`. The API differs, but both paths use the same store decision.
 
 The user-management page's operations column is the canonical form:
 
@@ -127,6 +150,10 @@ h(StatusSwitch, {
 
 ## The permission-code convention
 
-A permission code is the normalized route itself — `{METHOD}:/{route template}` (e.g. `GET:/api/v1/ping`) — and there's no separate string vocabulary to keep in sync. When the frontend logs into the portal, `useModule().enterInitial()` calls `GET /personal/permissions` in parallel to fetch the current user's code set (stored in `authStore.permissionCodes`) and `GET /personal/profile` to get the super-admin flag (stored in `authStore.isSuperAdmin`); only if both succeed does `permissionsLoaded` go true, and if either fails the user is treated as ordinary, fail-closed, never erring toward over-permission.
+A permission code is the normalized route itself — `{METHOD}:/{route template}` (for example, `GET:/api/v1/ping`) — so there is no second vocabulary to synchronize. On portal entry, `useModule().enterInitial()` runs two requests in parallel. `GET /personal/permissions` fetches the code set and sets `permissionsLoaded` only on success; a failure leaves it false, so ordinary permission gates fail closed. `GET /personal/profile` supplies the super-admin flag. If that request fails, the store retains the user snapshot from login, or treats the account as ordinary when no snapshot exists.
 
 Since the permission code *is* the route, the frontend has no reason to invent its own permission vocabulary. This also draws the line between the two ends cleanly: the frontend only decides button show/hide and disable by code, while the backend computes and enforces that same code — how it normalizes a route into a permission code, and how `[RolePermission]` validates the session and the grant, is in the [Request Pipeline](/backend/request-pipeline); the design around swapping the authorization step (a different permission computation, a different session check) is in the [Replaceability Model](/backend/replaceability).
+
+## Verify with two accounts
+
+Use one role that has the target permission and one that does not. The first should see the action and complete it; the second should not see ordinary action buttons, while protected status switches should remain disabled. Then call the same backend endpoint directly and confirm that the unprivileged account still receives 403. The UI check finds missing gates, while the direct request proves that enforcement remains on the server.

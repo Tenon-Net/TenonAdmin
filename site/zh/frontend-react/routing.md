@@ -20,6 +20,14 @@ web-react 的路由表是一个从菜单树派生出来的普通数组，交给 
 
 「派生」这个词是关键。Vue 那边动态路由靠 `router.addRoute` 一条条命令式挂上去，重建后当前 URL 还得手动重解析。React 这边路由是 `menuTree` 的纯函数结果，`useRoutes(routes)` 随 `menuTree` 变化自动重新匹配，不存在「路由挂上了、当前 URL 却没重新匹配」的空窗。
 
+> 前置：先完成[入门教程的菜单接通步骤](/zh/frontend-react/getting-started#_3-用菜单把文件变成路由)。
+
+## 先验证一次动态路由
+
+打开教程中的「岗位预览」，复制 `/example/position-preview`，再刷新浏览器。页面仍能回来，说明恢复会话后 `menuTree` 重新到位，`useRoutes` 又从它派生出了同一条路由。去菜单管理对照组件路径，它应恰好对应 `src/views/example/position-preview/index.tsx`，但不包含前缀和后缀。
+
+这次操作已经包含路由构建的三个输入：菜单给 URL，组件路径找文件，当前应用提供菜单树。下面再解释静态壳、描述符和 `RouteObject` 怎样分工。
+
 ## 静态路由
 
 静态路由分两层。最外层在 `App.tsx`：`/login` 和 `/oauth/callback` 是公开页，其余全部 `/*` 交给 `<Protected>`。受保护区里再排一层：
@@ -69,7 +77,7 @@ menuToRouteDescriptors(tree, hasView): RouteDescriptor[]
 //   missing → 可诊断的 MissingRoute
 ```
 
-分开是为了让决策能脱离 react-router 单测。`menuToRouteDescriptors` 是动态路由里唯一有真实分支的一块，它不直接摸 `import.meta.glob` 和 `console`：判断组件在不在的 `hasView`、组件缺失时告警的 `warn` 都从参数注入。这样「缺组件要不要留一条路由、要不要告警」这条分支才断言得了。
+两层的职责不同：`menuToRouteDescriptors` 只判断节点应该成为页面、iframe、外链、缺失组件还是被忽略；`buildRoutes` 再把描述符落成 react-router 的 `RouteObject`。判断组件是否存在的 `hasView` 与缺失告警的 `warn` 通过参数传入，因此决策层不依赖 `import.meta.glob` 或 `console`。
 
 ### 组件路径就是文件路径，下拉不靠手敲
 
@@ -112,7 +120,7 @@ iframe 这边 React 省了 Vue 的一处小心思。Vue 版把 URL 存进 `route
 
 ## 页面缓存：手写的 keep-alive
 
-React 没有 Vue `<keep-alive>` 的对等物，`KeepAliveOutlet` 是手搓的一套。它拿一个 `Map<path, 元素>` 把「该缓存」的已开标签常驻挂载，非活动页用 `display:none` 藏起来、不卸载。切走再切回，组件树还在，状态、滚动位置、没提交的表单都保留。`noCache` 的页（详情等瞬时页）不进这个 Map，走 live 渲染：离开即卸载，复访重挂、重新拉数据。标签被关掉时，它的缓存条目按 `aliveKeys` 逐出。
+React 没有 Vue `<keep-alive>` 的对等物，模板用 `KeepAliveOutlet` 实现缓存。它以 `Map<path, 元素>` 保存需要缓存的已开标签，非活动页用 `display:none` 隐藏而不卸载。切走再切回时，组件树、滚动位置和未提交表单仍在。标记为 `noCache` 的详情等瞬时页不进入这个 Map，离开即卸载，复访时重新挂载并取数。标签关闭后，对应缓存按 `aliveKeys` 逐出。
 
 和 Vue 最大的差别在「按什么匹配缓存」。Vue 的 `<keep-alive :include>` 按组件的 `name` 匹配，而 `src/views/**` 下几十个 `index.vue` 推断出的 `name` 会撞车、也对不上路由名，Vue 只好用 `namedPage` 给每个页面补一个等于路由名的显式 `name`。React 这边缓存直接按路由 `path` 存进 `Map`，`path` 本来就唯一，那套 `namedPage` 的具名机制整个用不上。
 
@@ -131,5 +139,9 @@ React 没有 Vue `<keep-alive>` 的对等物，`KeepAliveOutlet` 是手搓的一
 ::: tip 这两样东西不在这里
 路由链路里没有进度条（不用 NProgress 或类似的库）。`document.title` 也不由守卫按导航设，只在 `App` 启动拉站点配置时设一次，站点标题改了再由系统配置页设一次，不随每次导航联动。
 :::
+
+## 新页面接通后的检查
+
+给新视图配置菜单后，先从侧栏进入，再复制地址并刷新；两次都应落到同一页面。把组件路径临时改错时，页面应显示缺失路径，而不是静默丢菜单或只给 404。普通列表页输入一个未提交筛选条件，切换标签再回来，状态应保留；`detail.tsx` 页面离开后再访问则应重新取数。外链应打开新标签，iframe 菜单应留在应用壳内，这两种配置不要互换。
 
 想从零把一条链路走通，先看[目录与装配](/zh/frontend-react/structure)；两个模板的整体对照在[前端模板](/zh/guide/frontend-templates)。

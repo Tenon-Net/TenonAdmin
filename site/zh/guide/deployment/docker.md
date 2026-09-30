@@ -1,6 +1,6 @@
 # 容器化与多副本
 
-容器里的后端直接跑生产环境（`ASPNETCORE_ENVIRONMENT=Production`），开发期 `dotnet run` 默默替你兜底的那几项，到这里全要求显式给出。所以一条 `docker compose up`，等于把上线首启预演了一遍。
+仓库提供 Docker Compose 示例，将数据库、Redis、后端和前端一起启动，适合在本地验证完整部署链路。后端使用 Production 环境，因此需要显式配置密钥、数据库初始化和持久化存储。示例中的默认密码仅用于本地体验，正式部署前必须替换。
 
 ::: tip 这套 compose 是给谁用的
 仓库根的 `Dockerfile` 是从**源码**构建示例宿主 `MinimalHost`，给内核自己的 CI 用。你要是 NuGet 消费方，那用另一份。`dotnet new tenon-app` 生成的目录里已经带了一份 `Dockerfile`，它从 NuGet 装内核、构建你自己的 host，直接用就行，下面的步骤照样适用。
@@ -20,7 +20,7 @@ curl http://127.0.0.1:8081/health/ready    # 后端调试口,只绑回环,原因
 docker compose logs app                    # 首启信息
 ```
 
-`app` 跑的是 `ASPNETCORE_ENVIRONMENT=Production`，这是刻意的。生产有三道硬门槛。JWT 密钥必须显式给，不给就落进开发密钥模式，每个副本各签各的，随机 401。空库首次上生产必须显式允许建表，因为内核默认不自动 ALTER 生产库。上传根必须挪出 `wwwroot`。`docker-compose.yml` 把这三项都写成了环境变量，照抄改成你自己的值就行。少配一条会怎样？你会拿到一条点名到配置项的启动错误，读得懂。这比「进程照常起、直到第一次写库才炸在驱动层」好排查得多。这三道门槛，连同升级时的建表、补列细节，[部署概览](/zh/guide/deployment/)里讲全。
+`app` 使用 `ASPNETCORE_ENVIRONMENT=Production`。未配置 JWT 密钥会拒绝启动；空库需要先建表或显式允许生产建表；上传目录要持久化，并在启用静态托管时放到 `wwwroot` 外。仓库的 `docker-compose.yml` 已提供演示配置，实际部署请按[部署概览](/zh/guide/deployment/)核对。
 
 首次登录的超管账号是 `superAdmin`。密码呢？compose 里这一行给了答案：
 
@@ -40,14 +40,14 @@ TenonAdmin__Seed__AdminPassword: ${TENON_ADMIN_PASSWORD:-Tenon@123456}
 
 | 点 | 为什么 |
 |---|---|
-| **具名卷，不要 bind mount** | 镜像里跑的是非 root 用户。具名卷首次挂载会从镜像目录继承属主，容器写得进去；bind mount 会用宿主属主覆盖，应用直接写不了 SQLite / 上传目录。`docker-compose.yml` 里 `app-data`、`upload-data` 都是具名卷。 |
+| **确认数据卷可写** | 镜像里跑的是非 root 用户。具名卷首次挂载会从镜像目录继承属主，容器写得进去；bind mount 使用宿主目录权限，需要确保容器用户有权写入 SQLite 和上传目录。`docker-compose.yml` 里 `app-data`、`upload-data` 都是具名卷。 |
 | **镜像里没有 `HEALTHCHECK`** | `aspnet` 运行时镜像既没有 `curl` 也没有 `wget`，写了健康检查指令只会恒失败。健康检查交给编排层探 `/health`（存活）与 `/health/ready`（DB + 缓存）。 |
 | **`.dockerignore` 是安全项** | 开发机的 `data/` 里可能躺着真实的 `admin.db` 和开发期自动生成的 JWT 签名密钥（`dev-jwt.key`）。仓库根的 `.dockerignore` 把它排除掉。没有它，一次 `COPY . .` 就能把签名密钥烤进镜像层，镜像一推，谁都能伪造超管令牌。 |
 | **多副本改 `WorkerId`** | 每实例 0–63 必须各不相同，否则同毫秒发号撞主键。不配时共享库会领空闲槽；写成同一个号，后到的起不来。详见下面「多副本与 WorkerId」。 |
 
 ## 多副本与 WorkerId
 
-起第二个副本之前，下面几条一条都不能少。少了大多不会报错，只会开始悄悄做错事。唯一会当场拦你的是 WorkerId。仓库里有现成的双副本叠加层，也是 CI 里真跑的那套：
+准备多副本部署时，需要同时处理共享缓存、实例编号、代理信任和共享文件存储。先在测试环境使用仓库的双副本配置验证，再应用到生产：
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --build
@@ -58,7 +58,7 @@ bash scripts/smoke-multi-replica.sh http://localhost:8080   # 逐条验证下面
 
 ### 缓存换成 Redis，这是前提不是优化
 
-单副本留 `Memory` 能跑，那是进程内缓存。可进程内缓存意味着副本 A 上的失效永远传不到副本 B。后果不是「慢一点」，是安全功能直接失灵，而且失灵窗口是天级：
+`Memory` 只在当前进程中保存状态。多个副本使用各自内存时，一个副本撤销会话或权限，另一个副本仍可能使用旧缓存，直到过期。下面列出需要验证的跨副本行为：
 
 | 表现 | 细节 |
 |---|---|
@@ -67,7 +67,7 @@ bash scripts/smoke-multi-replica.sh http://localhost:8080   # 逐条验证下面
 | **锁定 / 限流阈值翻倍** | 登录失败计数、限流计数各副本各数各的：`MaxFailCount=5` 两副本就成了 10，认证桶 20/min 成了 40/min。 |
 | **验证码必失败** | 一次性票据发在 A、验在 B,B 上没有这个键。 |
 
-配上 `TenonAdmin:Cache:Provider=Redis` + `Cache:RedisConnectionString`，以上全部自动修好。失效走的是共享缓存键空间，不是事件总线，业务代码零改动。
+自有宿主需安装 `TenonAdmin.Caching.Redis`，在 `AddTenonAdmin()` 之前调用 `AddTenonAdminRedisCache(builder.Configuration)`，再配置 `TenonAdmin:Cache:Provider=Redis` 和 `Cache:RedisConnectionString`。仓库示例已注册该扩展。各副本使用同一共享缓存后，才能共享会话、权限失效和计数状态；上线前仍需运行多副本验证。
 
 ### 每个副本一个不同的 `WorkerId`
 
@@ -99,7 +99,7 @@ ports:
 CodeFirst 建表加写种子是「检查后插入」，不是原子操作。两个副本同时首启，会有一个撞唯一键崩掉。compose 里给 `app2` 加了 `depends_on: app: condition: service_healthy`，等第一个副本把表和种子都写完，再启动第二个，零代码解决。k8s 上换个做法，用 init job 或 migration job 先把库建好，再放开副本。
 
 ::: warning 上传目录必须是共享可写卷
-`LocalFileStorage`、`ChunkStorage` 写的是本地盘。compose 里两个副本共享同一个 `upload-data` 具名卷，天然没问题。可 k8s 上就不一定了。如果每个 Pod 用独立 PVC，A 传的文件在 B 上会直接 404。分片上传更是必然 `ChunkMissing`，因为分片散落在不同 Pod，合并必然缺片。多副本要么给上传根挂一个 RWX（ReadWriteMany）共享卷，要么前置替换 `IFileStorage`，改成对象存储，比如 S3、OSS。
+`LocalFileStorage` 与 `ChunkStorage` 使用本地磁盘。多副本需要共享完整文件和临时分片目录，否则请求切换到另一副本时可能遇到文件不存在或 `ChunkMissing`。仓库 Compose 使用共享的 `upload-data` 具名卷；Kubernetes 可采用 RWX（ReadWriteMany）共享卷。替换 `IFileStorage` 为对象存储时，仍需单独解决 `ChunkStorage` 的分片共享，不能只替换最终文件存储。
 :::
 
 不想上容器的话，[部署概览](/zh/guide/deployment/)还给了单体、反向代理、真跨源三条托管路线，上线后的健康检查与自检清单也在那里。

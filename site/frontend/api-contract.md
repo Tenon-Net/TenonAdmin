@@ -1,6 +1,14 @@
 # Adapting to the Backend: Response Contract & Error Codes
 
-Every generated API function has to end by turning the backend's response into either a usable value or a displayable error. This page covers how that collapse works: how `unwrap` tolerates the two response shapes, how pagination is converted, and how a numeric error code ends up as the sentence the user actually reads.
+Every generated API function must produce one of two outcomes for its caller: a usable value or an error ready for display. `unwrap` is the single boundary that enforces that rule, so a malformed backend response fails at the API layer instead of leaking `undefined` into a view.
+
+> Prerequisite: make the [position request in the tutorial](/frontend/getting-started#_4-add-the-real-endpoint-and-its-types) succeed once.
+
+## Observe one success and one failure
+
+Open the position response in the network panel. On success, the HTTP 200 JSON envelope contains `code: 0`, while the page ultimately receives the paged object inside `data`. Now switch the browser network panel to Offline and click Refresh; the tutorial page enters `catch` and renders the result of `translateError(e)` in its error alert.
+
+A business component therefore handles only two paths: render typed data, or catch a displayable error. `unwrap` and `ApiError` form the boundary that reduces the backend's response shapes to those two paths.
 
 ## `unwrap` and `ApiError`
 
@@ -17,8 +25,10 @@ export function unwrap<T>(res: { data?: unknown; error?: unknown; response: Resp
     const pd = error as { title?: string; detail?: string }
     throw new ApiError(response.status, undefined, undefined, pd.title ?? pd.detail ?? response.statusText)
   }
-  const env = (data ?? {}) as Envelope
-  if (typeof env.code === 'number' && env.code !== 0) {
+  if (!data || typeof data !== 'object') throw malformedResponse(response)
+  const env = data as Envelope
+  if (typeof env.code !== 'number') throw malformedResponse(response)
+  if (env.code !== 0) {
     throw new ApiError(env.code, env.msgKey, env.args, env.message)
   }
   return env.data as T
@@ -29,6 +39,8 @@ The two response shapes correspond to two layers of the backend:
 
 - **Business envelope** — `Result<T>` (`{ code, msgKey, args, data }`), used on 2xx and on business-level failures like missing permission (403) or an invalid token (401): `code !== 0` throws an `ApiError` carrying the backend's numeric code and `msgKey`.
 - **ProblemDetails** — ASP.NET's own error shape (`{ title, detail, ... }`, no `code` field), for cases the framework rejects before business code ever runs: model-validation failures (400), unhandled exceptions (500). These get wrapped into an `ApiError` built from the HTTP status plus `title`/`detail`.
+
+A third case must fail early: the body is not an object, or the envelope has no numeric `code`. That means the live response no longer matches the generated contract, so `unwrap` throws `Malformed API response` rather than letting a downstream view continue with `undefined`.
 
 `ApiError` carries enough for both display and programmatic handling:
 
@@ -135,5 +147,9 @@ The key word is "running": `gen:api` uses openapi-typescript's live fetch, not a
 ::: warning
 `schema.d.ts` is a generated artifact — don't hand-edit it; the next `gen:api` run overwrites it. To adjust types, change the backend endpoint/DTO and regenerate.
 :::
+
+## How to verify a contract change
+
+A complete backend API change produces three observable results: regenerated `schema.d.ts` contains the new path or DTO, its callers pass type checking, and a real request still returns an envelope with a numeric `code`. Trigger one business error as well; the UI should show localized text rather than a raw msgKey or `Malformed API response`. The first two checks cover the compile-time contract, while the last covers the runtime envelope and error mapping.
 
 How the envelope itself is assembled on the backend — authentication, `[RolePermission]`, data-scope filtering, and where the `Result<T>` this page's `unwrap` consumes gets wrapped on — is the subject of the [Request Pipeline](/backend/request-pipeline).

@@ -2,6 +2,14 @@
 
 生成出来的每个 API 函数，最后都得把后端的响应收成一样东西：要么一个能用的值，要么一个能展示的错误。这件事全站只有一个地方在做。它得同时应付两种响应形状：业务信封带着一个数字错误码，框架的 ProblemDetails 却连码都没有。
 
+> 前置：先让[入门教程的岗位查询](/zh/frontend/getting-started#_4-再接上真实接口和类型)成功返回一次。
+
+## 先看成功和失败两种结果
+
+在网络面板打开岗位查询的响应。成功时，HTTP 200 的 JSON 外层包含 `code: 0`，页面最终拿到的是 `data` 里的分页对象。然后把浏览器切到离线模式并点击「刷新」；教程页会进入 `catch`，把 `translateError(e)` 的结果显示在红色提示中。
+
+业务组件因此只处理两条路：拿到强类型数据继续渲染，或捕获一个可翻译的错误。`unwrap` 和 `ApiError` 正是把后端多种响应形状收拢成这两条路的边界。
+
 ## `unwrap` 与 `ApiError`
 
 `src/api/index.ts` 里的 API 函数是手写的。`gen:api` 只生成 `schema.d.ts` 的类型，函数得自己写。它们绝大多数最后落在 `.then(r => unwrap<T>(r))` 上。这里的 `r` 就是 `client.GET/POST(...)` 直接 resolve 出来的原始结果，形状固定是 `{ data, error, response }`，这是 openapi-fetch 自己的约定，不是 TenonAdmin 发明的。分页端点落在 `toPage`，但它内部仍旧调 `unwrap`。只有文件下载不一样，它走 `parseAs: 'blob'`，响应根本不是信封，自己判 `response.ok` 就行。`unwrap` 就是容忍后端两种响应形状的那个地方。它把两种情况都收拢成一个 `T`，或者一个抛出的 `ApiError`：
@@ -17,8 +25,10 @@ export function unwrap<T>(res: { data?: unknown; error?: unknown; response: Resp
     const pd = error as { title?: string; detail?: string }
     throw new ApiError(response.status, undefined, undefined, pd.title ?? pd.detail ?? response.statusText)
   }
-  const env = (data ?? {}) as Envelope
-  if (typeof env.code === 'number' && env.code !== 0) {
+  if (!data || typeof data !== 'object') throw malformedResponse(response)
+  const env = data as Envelope
+  if (typeof env.code !== 'number') throw malformedResponse(response)
+  if (env.code !== 0) {
     throw new ApiError(env.code, env.msgKey, env.args, env.message)
   }
   return env.data as T
@@ -29,6 +39,8 @@ export function unwrap<T>(res: { data?: unknown; error?: unknown; response: Resp
 
 - **业务信封**：`Result<T>`，形状是 `{ code, msgKey, args, data }`。2xx 正常响应走它，缺权限（403）、令牌无效（401）这类业务级失败也走它。判据很简单：`code !== 0` 就抛出一个 `ApiError`，带上后端的数字码和 `msgKey`。
 - **ProblemDetails**：ASP.NET 框架自己的错误形状，长这样 `{ title, detail, ... }`，没有 `code` 字段。它对应的是业务代码根本没跑起来、就被框架拦下的情况，比如模型校验失败（400）、未处理异常（500）。这类会被包装成一个 `ApiError`，由 HTTP 状态码加 `title`/`detail` 拼出来。
+
+还有第三种情况需要尽早暴露：响应体不是对象，或者业务信封没有数字 `code`。这说明实际响应已经偏离生成契约，`unwrap` 会抛出 `Malformed API response`，避免下游拿着 `undefined` 继续运行。
 
 `ApiError` 携带的信息够展示也够程序化判断：
 
@@ -135,5 +147,9 @@ npm run gen:api
 ::: warning
 `schema.d.ts` 是生成产物，不要手改。改了它，下次一跑 `gen:api` 就被覆盖。要调整类型，去改后端的接口或 DTO，再重新生成。
 :::
+
+## 怎样确认契约改动完整
+
+一次后端接口改动完成后，应当同时看到三件事：重新生成的 `schema.d.ts` 反映了新路径或 DTO，调用处通过类型检查，真实请求返回的仍是带数字 `code` 的信封。再触发一次业务错误，界面应显示翻译后的提示，而不是裸 `msgKey` 或 `Malformed API response`。前两项证明编译期契约一致，后一项证明运行期信封与错误文案也接通了。
 
 信封本身在后端怎么拼出来，归 [请求管线](/zh/backend/request-pipeline) 那页：认证、`[RolePermission]`、数据范围过滤，还有这页 `unwrap` 消费的 `Result<T>` 到底在哪一步套上。

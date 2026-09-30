@@ -9,18 +9,20 @@ const enGuideSidebar = [
     text: 'Get Started',
     items: [
       { text: 'Quick Start', link: '/guide/getting-started' },
-      { text: 'Choosing a Frontend Template', link: '/guide/frontend-templates' },
       { text: 'Core Concepts', link: '/guide/concepts' },
+      { text: 'Choosing a Frontend Template', link: '/guide/frontend-templates' },
     ],
   },
   {
     text: 'Build a Business Module',
     items: [
       { text: 'Add a Business Module (Backend)', link: '/guide/business-module' },
-      { text: 'Add a Frontend Page', link: '/guide/frontend-page' },
+      { text: 'Add a Vue Page', link: '/guide/frontend-page' },
+      { text: 'Add a React Page', link: '/frontend-react/getting-started' },
       { text: 'Wire Import/Export on Your Entity', link: '/guide/import-export' },
       { text: 'Scheduled Jobs', link: '/guide/scheduled-jobs' },
-      { text: 'Approval Workflows (Preview)', link: '/guide/workflow' },
+      { text: 'Approval Workflows', link: '/guide/workflow' },
+      { text: 'System Integration', link: '/guide/integration' },
     ],
   },
   {
@@ -57,15 +59,15 @@ const enThemeConfig = {
     {
       text: 'Frontend',
       items: [
-        { text: 'Vue (web/)', link: '/frontend/structure' },
-        { text: 'React (web-react/)', link: '/frontend-react/structure' },
+        { text: 'Vue (web/)', link: '/frontend/getting-started' },
+        { text: 'React (web-react/)', link: '/frontend-react/getting-started' },
       ],
     },
     { text: 'Components', link: '/components/' },
     { text: 'Standards', link: '/standard/backend' },
     { text: 'Community', link: '/community/contributing' },
     { text: 'Live Demo', link: 'https://tenonadmin.52moyu.net/login' },
-    { text: '0.7.0-preview.1', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
+    { text: 'Releases', link: '/changelog' },
   ],
   sidebar: {
     '/guide/': enGuideSidebar,
@@ -109,6 +111,7 @@ const enThemeConfig = {
       {
         text: 'Get Started',
         items: [
+          { text: 'Build Your First Page', link: '/frontend/getting-started' },
           { text: 'Project Structure & Startup', link: '/frontend/structure' },
         ],
       },
@@ -116,7 +119,6 @@ const enThemeConfig = {
         text: 'Routing & Menus',
         items: [
           { text: 'Routing & Dynamic Menus', link: '/frontend/routing' },
-          { text: 'Multi-App Portal & Router Guards', link: '/frontend/portal-guards' },
         ],
       },
       {
@@ -134,9 +136,10 @@ const enThemeConfig = {
         ],
       },
       {
-        text: 'Appearance',
+        text: 'Customization & Advanced Navigation',
         items: [
           { text: 'Theme & Icons', link: '/frontend/appearance' },
+          { text: 'Multi-App Portal & Router Guards', link: '/frontend/portal-guards' },
         ],
       },
     ],
@@ -144,6 +147,7 @@ const enThemeConfig = {
       {
         text: 'Get Started',
         items: [
+          { text: 'Build Your First Page', link: '/frontend-react/getting-started' },
           { text: 'Project Structure & Startup', link: '/frontend-react/structure' },
         ],
       },
@@ -151,7 +155,6 @@ const enThemeConfig = {
         text: 'Routing & Menus',
         items: [
           { text: 'Routing & Dynamic Menus', link: '/frontend-react/routing' },
-          { text: 'Multi-App Portal & Router Guards', link: '/frontend-react/portal-guards' },
         ],
       },
       {
@@ -169,9 +172,10 @@ const enThemeConfig = {
         ],
       },
       {
-        text: 'Appearance',
+        text: 'Customization & Advanced Navigation',
         items: [
           { text: 'Theme & Icons', link: '/frontend-react/appearance' },
+          { text: 'Multi-App Portal & Router Guards', link: '/frontend-react/portal-guards' },
         ],
       },
     ],
@@ -221,18 +225,20 @@ const zhGuideSidebar = [
     text: '上手',
     items: [
       { text: '快速开始', link: '/zh/guide/getting-started' },
-      { text: '选择前端模板', link: '/zh/guide/frontend-templates' },
       { text: '核心概念', link: '/zh/guide/concepts' },
+      { text: '选择前端模板', link: '/zh/guide/frontend-templates' },
     ],
   },
   {
     text: '开发业务模块',
     items: [
-      { text: '加一个业务模块(后端)', link: '/zh/guide/business-module' },
-      { text: '加一个前端页面', link: '/zh/guide/frontend-page' },
+      { text: '添加业务模块（后端）', link: '/zh/guide/business-module' },
+      { text: '添加 Vue 页面', link: '/zh/guide/frontend-page' },
+      { text: '添加 React 页面', link: '/zh/frontend-react/getting-started' },
       { text: '给自己的实体接导入导出', link: '/zh/guide/import-export' },
       { text: '定时任务', link: '/zh/guide/scheduled-jobs' },
-      { text: '审批工作流（预览版）', link: '/zh/guide/workflow' },
+      { text: '审批工作流', link: '/zh/guide/workflow' },
+      { text: '系统集成', link: '/zh/guide/integration' },
     ],
   },
   {
@@ -246,10 +252,10 @@ const zhGuideSidebar = [
   {
     text: '上线',
     items: [
-      { text: '安全基线与选路线', link: '/zh/guide/deployment/' },
-      { text: '路线 A:单体部署', link: '/zh/guide/deployment/route-a' },
-      { text: '路线 B:反向代理(nginx 或 Caddy)', link: '/zh/guide/deployment/route-b' },
-      { text: '路线 C:真跨源(CDN)', link: '/zh/guide/deployment/route-c' },
+      { text: '选择部署方式与生产配置', link: '/zh/guide/deployment/' },
+      { text: '路线 A：单体部署', link: '/zh/guide/deployment/route-a' },
+      { text: '路线 B：反向代理（nginx 或 Caddy）', link: '/zh/guide/deployment/route-b' },
+      { text: '路线 C：跨源部署（CDN）', link: '/zh/guide/deployment/route-c' },
       { text: '容器化与多副本', link: '/zh/guide/deployment/docker' },
     ],
   },
@@ -269,15 +275,15 @@ const zhThemeConfig = {
     {
       text: '前端',
       items: [
-        { text: 'Vue（web/）', link: '/zh/frontend/structure' },
-        { text: 'React（web-react/）', link: '/zh/frontend-react/structure' },
+        { text: 'Vue（web/）', link: '/zh/frontend/getting-started' },
+        { text: 'React（web-react/）', link: '/zh/frontend-react/getting-started' },
       ],
     },
     { text: '组件', link: '/zh/components/' },
     { text: '规范', link: '/zh/standard/backend' },
     { text: '参与', link: '/zh/community/contributing' },
     { text: '在线预览', link: 'https://tenonadmin.52moyu.net/login' },
-    { text: '0.7.0-preview.1', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' },
+    { text: '版本记录', link: '/zh/changelog' },
   ],
   sidebar: {
     '/zh/guide/': zhGuideSidebar,
@@ -321,6 +327,7 @@ const zhThemeConfig = {
       {
         text: '入门',
         items: [
+          { text: '从零接通第一个页面', link: '/zh/frontend/getting-started' },
           { text: '项目结构与启动', link: '/zh/frontend/structure' },
         ],
       },
@@ -328,7 +335,6 @@ const zhThemeConfig = {
         text: '路由与菜单',
         items: [
           { text: '路由与动态菜单', link: '/zh/frontend/routing' },
-          { text: '多应用门户与路由守卫', link: '/zh/frontend/portal-guards' },
         ],
       },
       {
@@ -346,9 +352,10 @@ const zhThemeConfig = {
         ],
       },
       {
-        text: '外观',
+        text: '外观与进阶导航',
         items: [
           { text: '主题与图标', link: '/zh/frontend/appearance' },
+          { text: '多应用门户与路由守卫', link: '/zh/frontend/portal-guards' },
         ],
       },
     ],
@@ -356,6 +363,7 @@ const zhThemeConfig = {
       {
         text: '入门',
         items: [
+          { text: '从零接通第一个页面', link: '/zh/frontend-react/getting-started' },
           { text: '项目结构与启动', link: '/zh/frontend-react/structure' },
         ],
       },
@@ -363,7 +371,6 @@ const zhThemeConfig = {
         text: '路由与菜单',
         items: [
           { text: '路由与动态菜单', link: '/zh/frontend-react/routing' },
-          { text: '多应用门户与路由守卫', link: '/zh/frontend-react/portal-guards' },
         ],
       },
       {
@@ -381,9 +388,10 @@ const zhThemeConfig = {
         ],
       },
       {
-        text: '外观',
+        text: '外观与进阶导航',
         items: [
           { text: '主题与图标', link: '/zh/frontend-react/appearance' },
+          { text: '多应用门户与路由守卫', link: '/zh/frontend-react/portal-guards' },
         ],
       },
     ],
@@ -442,10 +450,10 @@ export default defineConfig({
   lastUpdated: true,
   cleanUrls: true,
   head: [
-    ['link', { rel: 'icon', href: '/icon-128.png' }],
+    ['link', { rel: 'icon', href: '/tenon-mark.png' }],
   ],
   themeConfig: {
-    logo: '/icon-128.png',
+    logo: '/tenon-mark.png',
     socialLinks: [
       { icon: 'github', link: 'https://github.com/Tenon-Net/TenonAdmin' },
     ],
@@ -457,14 +465,14 @@ export default defineConfig({
     root: {
       label: 'English',
       lang: 'en',
-      description: 'A zero-config, extensible RBAC admin-system kernel for ASP.NET Core — three lines to integrate.',
+      description: 'Add accounts, roles, and data permissions to ASP.NET Core through NuGet. Build business features with Vue or React.',
       themeConfig: enThemeConfig,
     },
     zh: {
       label: '简体中文',
       lang: 'zh-CN',
       link: '/zh/',
-      description: '三行代码,为 ASP.NET Core 项目接入一套完整、可扩展的 RBAC 权限管理。',
+      description: '通过 NuGet 为 ASP.NET Core 项目接入账号、角色和数据权限，使用 Vue 或 React 开发自己的业务。',
       themeConfig: zhThemeConfig,
     },
   },

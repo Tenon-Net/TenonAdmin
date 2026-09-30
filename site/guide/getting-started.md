@@ -1,27 +1,86 @@
 # Quick Start
 
-That database you were about to go install: you don't need it. Clone the repo, `dotnet run`, and the console prints a super-admin password you can log straight in with. The SQLite file, the tables, and the seed data all get created on the kernel's first startup, with not a line of configuration written.
+Run the repository sample to try TenonAdmin locally. The backend uses SQLite and creates the database, tables, and administrator account on first startup, so you do not need a separate database server. Start the backend and one frontend to sign in through your browser.
 
-::: tip Prerequisites
-- .NET 10 SDK
-- Node.js (20+ recommended), if you also want to run the frontend
-:::
+Install the .NET 10 SDK and Git. Node.js 22.12 or later is recommended for the frontend. Use matching frontend and backend releases, and keep extension packages at the same version as `TenonAdmin`. See the [changelog](/changelog) for releases; the `dev` branch may include unreleased features.
 
 ## Run the sample first
 
-The repo ships a minimal sample host, `backend/samples/MinimalHost`, whose `Program.cs` is only a few lines of wiring. After cloning the repo, just run it:
+Run these commands in a terminal. Subsequent backend commands use the repository root as their working directory:
 
 ```bash
+git clone --branch dev --single-branch https://github.com/Tenon-Net/TenonAdmin.git
+cd TenonAdmin
 dotnet run --project backend/samples/MinimalHost
 ```
 
-On first startup it does three things automatically: creates tables via the default SQLite (CodeFirst — tables are generated from the entity classes, no hand-written DDL; the database file lands under `backend/samples/MinimalHost/data/`), writes seed data (menus, roles, the super-admin account), and then listens on `http://localhost:5100` (that port is hard-coded in `launchSettings.json`, dodging the 5000 that AirPlay squats on macOS).
+Keep this terminal running. The listening message for `http://localhost:5100` confirms that the backend has started. SQLite data lives under `backend/samples/MinimalHost/data/`; the framework creates tables, initial menus, and roles.
 
-To start backend and frontend together locally, use `dev.bat` at the repo root — it brings up MinimalHost and the frontend Vite in two separate windows (installing frontend dependencies on the first run); `stop.bat` stops them.
+When the administrator account is first created, the console shows `superAdmin` and a random password. **Save it now: it is displayed only during account creation.** If users already exist in the database, restarting does not generate a new password or overwrite their accounts.
 
-## Verify the three probes
+## Start the frontend and sign in {#run-the-frontend-while-you-re-at-it}
 
-Once the service is up, confirm all three endpoints respond:
+Open another terminal at the repository root and choose one frontend. Vue uses Naive UI and React uses Ant Design. Both connect to the same backend; you only need one.
+
+::: code-group
+
+```bash [Vue (web/)]
+cd web
+npm install
+npm run dev
+```
+
+```bash [React (web-react/)]
+cd web-react
+npm install
+npm run dev
+```
+
+:::
+
+Open `http://localhost:5175` for Vue or `http://localhost:5174` for React. Sign in as `superAdmin` using the password you saved, then change the initial password. Reaching the admin interface and opening its menus confirms that the frontend can reach the backend.
+
+After signing in, open User Management from the sidebar. The users below are sample data; on a fresh installation, confirm that your administrator appears. Later tutorials reuse this filter-and-table layout. The screenshot shows the Chinese interface.
+
+[![Vue user management; click for full-size image](/screenshots/vue-admin.png)](/screenshots/vue-admin.png)
+
+The development server forwards `/api` and `/openapi` to backend port `5100`, so local development needs no CORS configuration. Use `TENON_API_TARGET` if your backend runs elsewhere. If sign-in fails, check that the backend is still running and that you used the correct password source; see [FAQ](/faq).
+
+Continue with [Core Concepts](/guide/concepts) or [Add a Business Module](/guide/business-module). To use a frontend as your own project, see [Choosing a Frontend Template](/guide/frontend-templates) and [Syncing Your Fork](/guide/sync-fork). The remaining API checks and configuration steps are optional references.
+
+## Integrate into your own project in three lines
+
+What you ran above is the sample bundled with the repo. To actually wire the kernel into your own ASP.NET Core project, first install the meta-package:
+
+```bash
+dotnet add package TenonAdmin
+```
+
+The following is a complete minimal startup file. In an existing project, register services before `Build()` and map endpoints before `Run()`:
+
+```csharp
+using TenonAdmin.AspNetCore;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddTenonAdmin(builder.Configuration);
+var app = builder.Build();
+app.MapTenonAdmin();
+
+app.Run();
+```
+
+`AddTenonAdmin` binds configuration and registers all the services — JWT, RBAC, data permissions, logging, and the rest; `MapTenonAdmin` mounts the routes, health checks, and (in dev) the OpenAPI docs. It runs on the default SQLite, zero-config.
+
+The default memory cache is sufficient for single-instance development. Before deploying multiple instances, follow [Containers & Multiple Replicas](/guide/deployment/docker) to configure Redis, registration order, shared storage, and instance IDs.
+
+If you need finer-grained control over dependencies, you can reference a single layer instead (`.AspNetCore` / `.Services` / `.SqlSugar` / `.Core`). Why the packages are layered this way, and what "replaceable" actually means in practice, are covered in full in [Core Concepts](/guide/concepts); this page is only about getting it running.
+
+> The API may still change before 1.0; breaking changes are marked clearly in the [Changelog](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md). Development happens on the `dev` branch.
+
+## Check backend health and API descriptions {#verify-the-three-probes}
+
+To check backend status or diagnose a connection problem, request these endpoints:
 
 ```bash
 # Liveness probe — only checks the process is up, touches no dependencies
@@ -34,7 +93,7 @@ curl http://localhost:5100/health/ready
 curl http://localhost:5100/openapi/v1.json
 ```
 
-The first two should return `Healthy`. `/openapi/v1.json` returns a big blob of JSON that you'll use later to generate the frontend types; this endpoint isn't mounted in production, so a 404 against it there is expected behavior, not a missing setting.
+The first two should return `Healthy`. `/openapi/v1.json` returns an OpenAPI JSON description that you'll use later to generate the frontend types; this endpoint isn't mounted in production, so a 404 against it there is expected behavior, not a missing setting.
 
 ## Log in and call your first endpoint
 
@@ -54,7 +113,7 @@ The seed runs once, only when the `sys_user` table is empty. Running MinimalHost
 The account is always `superAdmin`; copy that password string down.
 
 ::: warning The random password is printed only once
-Didn't catch it? Don't panic — in a local experimentation environment, delete the database file under `backend/samples/MinimalHost/data` and `dotnet run` again; an empty database reseeds. You can't wipe a production database like that — there you either configure a fixed password up front (see below) or change the password immediately after logging in.
+Only in a disposable local environment, delete the database file under `backend/samples/MinimalHost/data` and `dotnet run` again; an empty database reseeds. You can't wipe a production database like that — use an existing administrator to reset the password and back up data before recovery.
 :::
 
 Want a fixed password you control (shared across a team, CI, repeated wipe-and-reseed)? Copy `backend/samples/MinimalHost/appsettings.Development.json.example` to `appsettings.Development.json` and fill in `Seed:AdminPassword`:
@@ -63,7 +122,7 @@ Want a fixed password you control (shared across a team, CI, repeated wipe-and-r
 { "TenonAdmin": { "Seed": { "AdminAccount": "superAdmin", "AdminPassword": "your-password" } } }
 ```
 
-This file is excluded by `.gitignore` (it holds local credentials) and won't enter version control. With it set, the startup log no longer prints a random password, and you just log in with the account and password you chose. Note that the seed only recognizes an empty database: once any user exists, changing this won't overwrite the existing account — to reset, you have to wipe the database and start over.
+This file is excluded by `.gitignore` (it holds local credentials) and won't enter version control. With it set, the startup log no longer prints a random password, and you just log in with the account and password you chose. Note that the seed only recognizes an empty database: once any user exists, changing this won't overwrite the existing account — use the password change or reset flow for an existing account rather than editing seed configuration.
 
 The image captcha is off by default (`Security:Captcha:Enabled` defaults to off), so login only needs an account and password:
 
@@ -92,70 +151,7 @@ Response:
 { "code": 0, "data": { "pong": true, "account": "superAdmin", "at": "2026-07-...T..." } }
 ```
 
-Without a token — or with an expired or revoked one — you get a `401` (standard envelope, `code=40006`). The super admin (the `sadm` claim in the token) automatically bypasses the subsequent `[RolePermission]` permission-code check; a regular user first has to attach the matching route in menu management and grant it in role management before they can call the same endpoint — the full write-up of that chain is in [Add a Business Module](/guide/business-module).
-
-## Integrate into your own project in three lines
-
-What you ran above is the sample bundled with the repo. To actually wire the kernel into your own ASP.NET Core project, first install the meta-package:
-
-```bash
-dotnet add package TenonAdmin
-```
-
-The latest stable release is `0.6.0`; the published `0.7.0-preview.1` adds optional [approval workflows](/guide/workflow). The core integration is just three lines:
-
-```csharp
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddTenonAdmin(builder.Configuration);
-var app = builder.Build();
-app.MapTenonAdmin();
-
-app.Run();
-```
-
-`AddTenonAdmin` binds configuration and registers all the services — JWT, RBAC, data permissions, logging, and the rest; `MapTenonAdmin` mounts the routes, health checks, and (in dev) the OpenAPI docs. It runs on the default SQLite, zero-config.
-
-To share sessions and cache across replicas (multi-instance deployment), also install `TenonAdmin.Caching.Redis` and call `AddTenonAdminRedisCache(builder.Configuration)` **before** `AddTenonAdmin` — the kernel's replaceable services are registered with `TryAdd`, first registration wins, so anything after `AddTenonAdmin` can't outrun the built-in in-process cache. Without `Cache:Provider=Redis` configured, that line is a no-op, so single-instance development is unaffected.
-
-If you need finer-grained control over dependencies, you can reference a single layer instead (`.AspNetCore` / `.Services` / `.SqlSugar` / `.Core`). Why the packages are layered this way, and what "replaceable" actually means in practice, are covered in full in [Core Concepts](/guide/concepts); this page is only about getting it running.
-
-> The API may still change before 1.0; breaking changes are marked clearly in the [Changelog](https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md). Development happens on the `dev` branch.
-
-## Run the frontend while you're at it
-
-There are two official frontend templates, both against the same backend: `web/` is Vue 3 with Naive UI, `web-react/` is React 19 with Ant Design. They're feature-aligned, so pick whichever stack suits you — `web/` runs on `5173`, `web-react/` on `5174`:
-
-::: code-group
-
-```bash [Vue (web/)]
-cd web
-npm install
-npm run dev
-```
-
-```bash [React (web-react/)]
-cd web-react
-npm install
-npm run dev
-```
-
-:::
-
-The built-in reverse proxy forwards `/api` and `/openapi` verbatim to the backend on `:5100` (override the target with the `TENON_API_TARGET` environment variable), so as far as the browser is concerned there's a single origin and local development needs no CORS. Open the matching port, log in with the same super-admin account and password, and you'll see the full admin UI.
-
-When the frontend regenerates its API types (`npm run gen:api`), the backend must be running — it pulls the contract from a live `/openapi/v1.json`, not offline. Each template has its own `gen:api`, run from its own directory.
-
-::: tip Want it as a one-off scaffold (the soybean / vite kind)?
-The `cd` into a directory above is the "clone the repo, track upstream" path — recommended, since the frontend then evolves in lockstep with the NuGet-versioned backend contract. If you just want a copy to own and maintain yourself, degit a snapshot with no `.git` history as your starting point, whichever template you chose:
-
-```bash
-npx degit Tenon-Net/TenonAdmin/web my-web        # Vue template
-npx degit Tenon-Net/TenonAdmin/web-react my-web  # React template
-```
-
-The trade-off is explicit: **no upgrade channel**. Upstream fixes are yours to read off the diff and reapply by hand, and the snapshot drifts from the NuGet-versioned backend contract. To keep pulling upstream fixes, don't snapshot — follow [Syncing Your Fork](/guide/sync-fork); for how the two templates differ and which to pick, see [Choosing a Frontend Template](/guide/frontend-templates).
-:::
+Without a valid token, or when the token has expired or the session has been revoked, the endpoint returns `401` with error code `40006` in the standard response. The super administrator’s `sadm` claim bypasses role permission checks. Regular users need the route configured in menu management and granted through a role; see [Add a Business Module](/guide/business-module).
 
 ## Swap out the default database
 
