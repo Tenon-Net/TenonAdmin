@@ -1,4 +1,4 @@
-<!-- 本文件为 README 的中文基准版；README.md、README.ja.md 以本文件为准同步 -->
+<!-- 中文基准版；README.md、README.ja.md 与本文件保持同步。 -->
 
 [English](README.md) | 简体中文 | [日本語](README.ja.md)
 
@@ -8,28 +8,30 @@
 
 <h1 align="center">TenonAdmin</h1>
 
-<p align="center"><strong>三行代码，为 ASP.NET Core 项目接入包含 RBAC 与数据权限的后台管理框架。</strong></p>
+<p align="center"><strong>三行代码，为 ASP.NET Core 项目接入后台管理框架。</strong></p>
 
-<p align="center">NuGet 安装 · 服务替换与业务扩展 · Vue / React 双前端</p>
+<p align="center">NuGet 安装 · 业务独立开发 · Vue / React 双前端</p>
 
 <p align="center">
   <a href="https://www.nuget.org/packages/TenonAdmin"><img src="https://img.shields.io/nuget/v/TenonAdmin" alt="NuGet 版本"></a>
   <img src="https://img.shields.io/badge/.NET-10-512BD4" alt=".NET 10">
-  <a href="https://github.com/Tenon-Net/TenonAdmin/actions/workflows/backend-ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Tenon-Net/TenonAdmin/backend-ci.yml?branch=dev" alt="后端构建状态"></a>
+  <a href="https://github.com/Tenon-Net/TenonAdmin/actions/workflows/backend-ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Tenon-Net/TenonAdmin/backend-ci.yml?branch=dev" alt="dev 后端构建状态"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="Apache License 2.0"></a>
 </p>
 
 <p align="center">
-  <a href="#快速开始"><strong>快速开始</strong></a> ·
-  <a href="https://tenonadmin.52moyu.net/login"><strong>在线演示</strong></a> ·
-  <a href="https://tenon.52moyu.net/zh/"><strong>文档</strong></a>
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#界面预览">界面预览</a> ·
+  <a href="https://tenonadmin.52moyu.net/login">在线演示</a> ·
+  <a href="https://tenon.52moyu.net/zh/">开发文档</a> ·
+  <a href="CHANGELOG.md">更新日志</a>
 </p>
 
-## 框架介绍
+## 介绍
 
-TenonAdmin 是面向 ASP.NET Core 的后台管理框架，将用户、角色、菜单、组织数据权限、字典、配置、操作日志和文件管理封装为 NuGet 包，前端提供 Vue 和 React 两套模板。
+TenonAdmin 是一个面向 ASP.NET Core 的后台管理框架，提供用户、角色、菜单、组织、数据权限等常用功能，配套 Vue 和 React 两套管理界面。适合用来开发企业内部系统、运营后台，也可以接入已有的 .NET 项目。
 
-安装 `TenonAdmin` 包，在 `Program.cs` 中注册服务并映射端点：
+通过 NuGet 安装 `TenonAdmin` 后，在 `Program.cs` 中完成核心接入：
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration);
@@ -37,44 +39,77 @@ var app = builder.Build();
 app.MapTenonAdmin();
 ```
 
-框架负责通用管理功能，应用项目承载业务实体、服务和页面。通过接口替换服务，或继承内置服务修改处理步骤，可以调整框架行为。框架更新通过 NuGet 版本交付，兼容性变更见更新日志。
+框架负责注册登录认证、角色权限、数据权限和管理 API。默认使用 SQLite，首次启动会创建数据库、表和初始账号，不需要先搭建数据库服务。完整启动代码和前端运行步骤见[快速开始](#快速开始)。
 
-- **SQLite 起步**：首次运行创建数据库和表，加载种子数据。
-- **服务定制**：通过依赖注入和 `virtual` 方法替换服务或处理步骤，定制代码放在应用项目中。
-- **包版本升级**：通过 NuGet 获取修复和新功能，按更新日志处理兼容性变更。
-- **前端模板**：选择 Vue 3 + Naive UI 或 React 19 + Ant Design 6，使用配套的表格、表单和权限组件开发业务页面。
+客户、订单等业务实体、接口和页面写在自己的项目中。需要调整登录流程、文件存储或权限规则时，可以通过扩展接口定制；后端框架通过 NuGet 更新，业务代码与框架源码分开维护。
+
+## 主要特点
+
+### 在自己的项目中开发业务，也能调整框架行为
+
+开发客户管理模块时，可以复用已有的账号、角色、菜单和文件管理，在应用项目中编写客户实体、业务接口和管理页面。业务代码不必直接写进框架源码，项目中的其他业务逻辑也可以继续保留。
+
+遇到内置实现不适合的地方，例如文件需要存到对象存储，或登录成功后需要补充业务信息，可以替换相应服务，或继承内置服务，只修改需要调整的步骤。框架提供对应的接口和可覆写方法，不需要为了改一个处理步骤而复制整套实现。
+
+后端框架的修复和新功能通过 NuGet 版本提供。升级时查看更新日志，按需调整扩展代码和前端接口，具体示例见[服务替换与扩展](skills/replace-service.md)。
+
+### 控制能做什么，也控制能看到哪些数据
+
+角色权限决定用户能访问哪些菜单、按钮和接口，数据权限决定他能查询哪些业务记录。例如，同一张客户列表，可以让部门负责人查看本部门的数据，让上级负责人查看部门及下级的数据，也可以为跨部门协作指定可访问的组织。
+
+业务实体接入框架的数据范围约定后，使用框架支持的查询方式，就能按当前用户的角色应用过滤规则。客户查询仍然写在业务服务中，权限范围由框架统一处理；原生 SQL 和自定义数据访问需要另行落实权限检查。
+
+仓库的独立示例项目用客户列表演示了不同账号看到不同数据的效果，参见[多组织数据权限示例](https://github.com/Tenon-Net/tenon-example/blob/dev/docs/showcase-multi-org-data-scope.md)。
+
+### Vue 和 React，按团队习惯选择
+
+Vue 版本使用 Vue 3 和 Naive UI，React 版本使用 React 19 和 Ant Design 6。两套前端连接同一套后端 API，开发业务时选择其中一套即可。
+
+新增页面可以复用表格、表单、字典选择、组织与用户选择、文件上传和权限组件。例如，客户列表的筛选、分页、编辑弹窗和按钮权限，可以沿用现有页面与组件的组织方式，不必每个模块重新搭一遍。
+
+API 类型可以从后端 OpenAPI 生成，接口变更后同步更新。两套前端各自维护依赖和组件，详细用法分别放在 [Vue 组件文档](web/COMPONENTS.md)和 [React 组件文档](web-react/COMPONENTS.md)中。
+
+### 按业务需要接入审批流程
+
+审批工作流通过可选包提供。可以在流程设计器中配置审批人、条件分支、并行分支和抄送，给表单字段设置各节点的查看与编辑权限。流程发布后，用户可以发起申请、处理待办，并查看审批进度和办理记录。
+
+审批端提供退回、撤销、转办、委托和加减签等操作，流程管理员可以查看运行状态、超时和重试记录。工作流使用同一套后端 API，Vue 和 React 均提供对应界面。
+
+使用时需要安装并注册 `TenonAdmin.Workflow`，并与 `TenonAdmin` 保持相同版本。其中的 AI 评估用于记录参考结果，不会自动同意、拒绝或推进审批。接入步骤与配置说明见[审批工作流文档](https://tenon.52moyu.net/zh/guide/workflow)。
+
+### 给 AI 编程助手提供项目开发约定
+
+仓库提供新增模块、实体、接口、前端页面、服务扩展和导入导出等开发 Skills，包含实现步骤、参考代码与检查要求。使用 AI 编程助手时，可以让它先读取相关说明，再按项目的实体、服务、权限和组件约定编写代码。
+
+例如，可以这样描述一个业务需求：
+
+> 参考 `skills/new-module.md`，新增产品管理模块，包含产品名称、编码、分类和启用状态，支持分类筛选、导入导出，并接入菜单和按钮权限。
+
+这些 Skills 是开发说明和参考模板，不是独立的代码生成器。生成后仍需核对业务规则、权限和测试结果，入口见[开发 Skills](skills/README.md)。
 
 ## 快速开始
 
-后端需要 .NET 10 SDK，前端需要 Node.js 22.12+。
+后端需要 .NET 10 SDK，前端建议使用 Node.js 22.12 或更高版本。首次体验可以运行仓库示例；准备接入业务时，使用下方的独立项目接入方式。
 
-### 接入现有项目
+> 前端模板应与后端版本配套，扩展包与 `TenonAdmin` 使用相同版本。升级前请查看[更新日志](CHANGELOG.md)。
 
-在 ASP.NET Core 项目目录中安装框架：
+### 先运行完整示例
 
-```bash
-dotnet add package TenonAdmin
-```
-
-将上面的服务注册和端点映射加入 `Program.cs`，保留项目的应用创建与启动代码。JWT 认证、RBAC、数据权限及管理 API 由框架注册。
-
-数据库配置和接入步骤见[接入指南](https://tenon.52moyu.net/zh/guide/getting-started)。新项目可以使用指南中的 `dotnet new tenon-app` 模板创建后端宿主。
-
-### 运行完整示例
-
-克隆仓库并启动后端：
+克隆 `dev` 分支并启动后端：
 
 ```bash
-git clone https://github.com/Tenon-Net/TenonAdmin.git
+git clone --branch dev --single-branch https://github.com/Tenon-Net/TenonAdmin.git
 cd TenonAdmin
 dotnet run --project backend/samples/MinimalHost
 ```
 
-后端地址为 http://localhost:5100。示例采用 SQLite，首次启动创建数据库和表、加载种子数据，并在控制台打印 `superAdmin` 的随机密码。
+后端运行在 `http://localhost:5100`。示例默认使用 SQLite，首次初始化时自动建表，并创建 `superAdmin` 账号。
 
-在另一个终端中，从仓库根目录选择一套前端启动。
+控制台会打印初始随机密码，**只在首次创建账号时显示**。保存这串密码，用于后面的登录。
 
-**Vue** — http://localhost:5173
+另开一个终端，从仓库根目录选择一套前端启动。
+
+**Vue：**
 
 ```bash
 cd web
@@ -82,7 +117,9 @@ npm install
 npm run dev
 ```
 
-**React** — http://localhost:5174
+打开 `http://localhost:5173`，使用 `superAdmin` 和控制台中的密码登录。
+
+**React：**
 
 ```bash
 cd web-react
@@ -90,160 +127,162 @@ npm install
 npm run dev
 ```
 
-使用 `superAdmin` 和控制台中的密码登录。Windows 用户可以运行根目录的 `dev.bat`，启动后端和两套前端。
+打开 `http://localhost:5174`，使用同一账号登录。两套前端任选其一，后端只需启动一次。登录后请及时修改初始密码。
 
-## 特色功能
+### 接入自己的 ASP.NET Core 项目
 
-### 替换服务，扩展业务
+在项目目录中安装后端包：
 
-密码哈希、文件存储等服务通过接口提供。将自己的实现注册在 `AddTenonAdmin` 之前，框架会使用该实现。需要修改某个处理步骤时，可以继承内置服务，覆盖对应的 `virtual` 方法。
+```bash
+dotnet add package TenonAdmin
+```
 
-服务实现放在应用项目中，框架代码由 NuGet 包维护。服务替换、业务实体发现和控制器发现有契约测试覆盖。[查看服务替换示例](skills/replace-service.md)。
+新建宿主的最小 `Program.cs` 如下：
 
-### 接口授权与数据范围
+```csharp
+using TenonAdmin.AspNetCore;
 
-用户访问同一张客户列表，查询结果由角色的数据范围决定。业务实体实现 `IOrgScoped` 或继承 `DataEntity` 后，SqlSugar 全局过滤器会为查询附加组织条件。业务服务负责查询逻辑，框架负责应用数据范围。
+var builder = WebApplication.CreateBuilder(args);
 
-菜单、按钮和后端接口使用 HTTP 方法与路由组成的权限码。接口访问权限控制操作入口，数据范围控制用户能访问的业务记录。
+// TenonAdmin 的核心接入
+builder.Services.AddTenonAdmin(builder.Configuration);
+var app = builder.Build();
+app.MapTenonAdmin();
 
-### Vue 和 React，选你熟悉的
+app.Run();
+```
 
-Vue 模板采用 Vue 3 和 Naive UI，React 模板采用 React 19 和 Ant Design 6。两套模板拥有各自的依赖、路由、状态和组件，连接同一套后端 API。
+`AddTenonAdmin` 注册框架服务，`MapTenonAdmin` 接入管理 API。已有项目应将这两处调用合并到原来的启动流程中，保留自己的配置、服务和业务路由。
 
-API 类型从 OpenAPI 生成。业务页面可以复用搜索表格、表单、字典、组织与用户选择、文件上传和导入向导等组件。
+管理界面使用配套的 Vue 或 React 模板，按所选后端版本接入。默认数据库为 SQLite；改用 MySQL、SQL Server 或 PostgreSQL 时，通过数据库配置指定类型和连接地址。
 
-### 审批工作流
-
-通过流程设计器配置审批节点、条件分支、并行分支和抄送，设置动态表单与节点字段权限。审批端提供发起、待办、已办、退回、撤销、转办、委托、加减签和催办。
-
-运行记录包含审批历史、超时动作和执行重试信息。AI 决策评估支持兼容 OpenAI 的模型服务，结果用于审批参考与审计；审批决定和流程推进由审批流程控制。
-
-### 第三方系统集成
-
-开放接口面向调用方管理应用凭据、接口授权和业务数据范围。第三方调用面向外部服务管理目标地址、凭据和调用记录。
-
-需要保障投递的业务，可以把业务数据与投递记录放在同一数据库事务中提交，由后台发送。后续处理依据接收方的幂等和结果查询能力，选择重试、查询或人工核对，并记录每次尝试。
-
-### Vibe Coding：按项目约定写业务
-
-仓库提供实体、CRUD、服务替换、定时任务、导入导出和系统集成等[开发技能](skills/README.md)，包含任务步骤、代码参考和验证要求。
-
-AI 助手据此使用项目的实体基类、服务接口、权限规则和前端组件，生成业务模块。业务规则和生成结果由开发者审查。
+数据库设置、新建项目模板以及接入已有应用的步骤见[接入指南](https://tenon.52moyu.net/zh/guide/getting-started)。Excel、外部登录、Redis 和工作流等扩展按需安装，并按各自文档完成注册和配置。
 
 ## 功能一览
 
-| 分类 | 功能 |
+| 分类 | 主要功能 |
 | --- | --- |
-| 认证与会话 | 账号密码、图形验证码、JWT 与刷新令牌轮换、在线会话、强制下线；Cookie 会话、短信登录和外部登录按配置接入 |
-| 认证安全 | 登录锁定、请求限流、TOTP、恢复码、账号 MFA 策略与高敏操作身份验证 |
-| 权限与组织 | 角色、菜单、按钮权限、组织树、岗位；全量、所属组织、所属组织及下级、本人、自定义组织五种数据范围 |
-| 日常管理 | 多应用门户、字典、配置、通知公告、SignalR 消息推送、操作日志、敏感输入脱敏、审计字段与回收站 |
-| 文件与 Excel | 上传下载、签名访问、分片上传、断点续传、秒传；导入模板、数据预览、单元格校验、查重、错误报告和导出列选择 |
-| 审批工作流 | 流程设计、动态表单、节点字段权限、审批处理、超时动作、Webhook、运行监控与 AI 决策评估 |
-| 系统集成 | 应用凭据、开放接口授权、业务数据范围、应用限流、第三方调用、事务内投递记录与处理日志 |
-| 定时任务 | 六段 cron、固定间隔、单次触发；代码、HTTP 和 SQL 任务，SQL 执行需配置开启；超时、重试、日志、失败告警与独立 Worker |
-| 前端模板 | Vue 3 + Naive UI、React 19 + Ant Design 6；中英文、明暗主题、布局设置、业务组件与 OpenAPI 类型生成 |
-| 数据与部署 | SQLite、MySQL、SQL Server、PostgreSQL；CodeFirst、多数据库连接、Redis 共享缓存、数据库租约、多副本部署、Docker 与健康检查 |
-| 开发工具 | 后端项目模板、AI 开发技能；Vue ProTable 与 IconPicker 独立 npm 包 |
+| 用户与组织 | 用户、角色、组织树、岗位，在线会话与强制下线 |
+| 权限管理 | 菜单、按钮、接口权限；全部、所属组织、所属组织及下级、本人和自定义组织数据范围 |
+| 登录与安全 | 账号密码、验证码、登录锁定、请求限流；按配置启用多因素认证，按需接入短信和外部登录 |
+| 日常管理 | 多应用门户、字典、配置、通知公告、消息推送、操作日志与回收站 |
+| 文件管理 | 上传下载、签名访问、分片上传、断点续传与秒传 |
+| Excel 导入导出（可选包） | 导入模板、数据预览、单元格校验、查重、错误报告与导出列选择 |
+| 定时任务 | 定时、固定间隔和单次执行；代码、HTTP 和 SQL 任务，运行日志、超时、失败重试与告警；SQL 执行需要配置开启 |
+| 审批工作流（可选包） | 流程设计、动态表单、节点字段权限、审批办理、超时处理与运行记录 |
+| 前端支持 | Vue 与 React 两套模板，中英文、明暗主题、布局设置、业务组件与 OpenAPI 类型生成 |
+| 数据与部署 | SQLite、MySQL、SQL Server、PostgreSQL，多数据库连接、独立任务进程、Docker、健康检查与 Redis 缓存扩展 |
+
+生产环境配置和多副本部署见[部署指南](docs/deployment.md)。工作流向外部系统投递消息时，需要接入实际发送实现，具体要求见[工作流文档](https://tenon.52moyu.net/zh/guide/workflow)。
 
 ## 界面预览
 
+点击图片查看原图。
+
+<!-- 每行两张，使用仓库中的等比缩略图；新增截图时继续追加 <tr>，并同步原图与缩略图。 -->
 <table>
   <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/vue-admin.png"><img src="docs/screenshots/vue-admin.png" alt="Vue 用户管理" width="480"></a><br>Vue 用户管理</td>
-    <td width="50%" align="center"><a href="docs/screenshots/react-admin.png"><img src="docs/screenshots/react-admin.png" alt="React 用户管理" width="480"></a><br>React 用户管理</td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/vue-admin.png"><img src="docs/screenshots/thumbs/vue-admin.png" alt="Vue 用户管理" width="480"></a>
+      <br>Vue 用户管理
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/react-admin.png"><img src="docs/screenshots/thumbs/react-admin.png" alt="React 用户管理" width="480"></a>
+      <br>React 用户管理
+    </td>
   </tr>
   <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/workflow-designer.png"><img src="docs/screenshots/workflow-designer.png" alt="流程设计器" width="480"></a><br>流程设计器</td>
-    <td width="50%" align="center"><a href="docs/screenshots/workflow-approval.png"><img src="docs/screenshots/workflow-approval.png" alt="审批详情" width="480"></a><br>审批详情</td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/role-permissions.png"><img src="docs/screenshots/thumbs/role-permissions.png" alt="角色权限" width="480"></a>
+      <br>角色权限
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/org-management.png"><img src="docs/screenshots/thumbs/org-management.png" alt="组织管理" width="480"></a>
+      <br>组织管理
+    </td>
   </tr>
   <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/role-permissions.png"><img src="docs/screenshots/role-permissions.png" alt="角色权限" width="480"></a><br>角色权限</td>
-    <td width="50%" align="center"><a href="docs/screenshots/integration-apps.png"><img src="docs/screenshots/integration-apps.png" alt="接入应用" width="480"></a><br>接入应用</td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/dictionary.png"><img src="docs/screenshots/thumbs/dictionary.png" alt="字典管理" width="480"></a>
+      <br>字典管理
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/file-management.png"><img src="docs/screenshots/thumbs/file-management.png" alt="文件管理" width="480"></a>
+      <br>文件管理
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/scheduled-jobs.png"><img src="docs/screenshots/thumbs/scheduled-jobs.png" alt="定时任务" width="480"></a>
+      <br>定时任务
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/workflow-pending.png"><img src="docs/screenshots/thumbs/workflow-pending.png" alt="审批待办" width="480"></a>
+      <br>审批待办
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/workflow-designer.png"><img src="docs/screenshots/thumbs/workflow-designer.png" alt="流程设计器" width="480"></a>
+      <br>流程设计器
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/workflow-approval.png"><img src="docs/screenshots/thumbs/workflow-approval.png" alt="审批详情" width="480"></a>
+      <br>审批详情
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/integration-apps.png"><img src="docs/screenshots/thumbs/integration-apps.png" alt="接入应用" width="480"></a>
+      <br>接入应用＊
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/delivery-tasks.png"><img src="docs/screenshots/thumbs/delivery-tasks.png" alt="可靠投递" width="480"></a>
+      <br>可靠投递＊
+    </td>
   </tr>
 </table>
+
+＊接入应用与可靠投递保留原 README 中的界面截图，对应实现尚未在本稿依据的 `dev` 快照中确认；这两张截图不代表当前分支已包含系统集成功能。
+
+## 文档与业务示例
+
+[tenon-example](https://github.com/Tenon-Net/tenon-example) 是一个独立业务项目：后端通过 NuGet 使用 TenonAdmin，前端基于管理端模板，业务部分包含 CRM 模块。需要了解框架之外的业务代码怎么组织，可以从这个项目开始。
+
+[在线演示](https://tenonadmin.52moyu.net/login) 使用该项目独立部署，功能随示例项目版本更新；体验当前 `dev` 分支时，以本地运行的仓库示例为准。
+
+| 要做的事 | 文档 |
+| --- | --- |
+| 接入框架与配置数据库 | [快速开始](https://tenon.52moyu.net/zh/guide/getting-started) |
+| 新增业务模块 | [模块开发说明](skills/new-module.md) · [全部开发 Skills](skills/README.md) |
+| 开发前端页面 | [Vue 组件](web/COMPONENTS.md) · [React 组件](web-react/COMPONENTS.md) |
+| 调整内置服务 | [服务替换与扩展](skills/replace-service.md) |
+| 添加导入导出和审批 | [Excel 导入导出](skills/wire-import-export.md) · [审批工作流](https://tenon.52moyu.net/zh/guide/workflow) |
+| 了解后端结构 | [架构说明](https://tenon.52moyu.net/zh/backend/architecture) |
+| 部署与升级 | [部署指南](docs/deployment.md) · [更新日志](CHANGELOG.md) |
 
 <details>
-<summary>查看其他页面</summary>
-
-<table>
-  <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/org-management.png"><img src="docs/screenshots/org-management.png" alt="组织管理" width="480"></a><br>组织管理</td>
-    <td width="50%" align="center"><a href="docs/screenshots/dictionary.png"><img src="docs/screenshots/dictionary.png" alt="字典管理" width="480"></a><br>字典管理</td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/file-management.png"><img src="docs/screenshots/file-management.png" alt="文件管理" width="480"></a><br>文件管理</td>
-    <td width="50%" align="center"><a href="docs/screenshots/scheduled-jobs.png"><img src="docs/screenshots/scheduled-jobs.png" alt="定时任务" width="480"></a><br>定时任务</td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/workflow-pending.png"><img src="docs/screenshots/workflow-pending.png" alt="审批待办" width="480"></a><br>审批待办</td>
-    <td width="50%" align="center"><a href="docs/screenshots/delivery-tasks.png"><img src="docs/screenshots/delivery-tasks.png" alt="可靠投递" width="480"></a><br>可靠投递</td>
-  </tr>
-</table>
-
-</details>
-
-## 在线体验与示例项目
-
-[打开在线演示](https://tenonadmin.52moyu.net/login) · [查看示例项目源码](https://github.com/Tenon-Net/tenon-example)
-
-演示站点使用独立应用 `tenon-example`：后端通过 NuGet 接入框架，前端基于管理端模板，业务部分包含 CRM 模块。
-
-使用登录页中的业务账号访问客户列表，可以观察组织与数据范围对查询结果的影响。示例中的业务查询和权限配置见[同一个查询，三个数字](https://github.com/Tenon-Net/tenon-example/blob/dev/docs/showcase-multi-org-data-scope.md)。
-
-## 仓库目录
+<summary>仓库目录</summary>
 
 ```text
 TenonAdmin/
-├── backend/                           # .NET 后端
-│   ├── src/                           # NuGet 包源码
-│   │   ├── TenonAdmin/                # 安装入口，引用 ASP.NET Core 集成包
-│   │   ├── TenonAdmin.Core/           # 接口、配置、结果与错误码
-│   │   ├── TenonAdmin.SqlSugar/       # 数据访问、建表与全局过滤器
-│   │   ├── TenonAdmin.Services/       # 管理实体、业务服务与种子数据
-│   │   ├── TenonAdmin.AspNetCore/     # 认证、控制器与宿主集成
-│   │   ├── TenonAdmin.Workflow/       # 审批工作流
-│   │   ├── TenonAdmin.Integration/    # 开放接口、第三方调用与可靠投递
-│   │   ├── TenonAdmin.Excel/          # Excel 导入导出
-│   │   ├── TenonAdmin.Caching.Redis/  # Redis 缓存
-│   │   └── TenonAdmin.Auth.*/         # GitHub、企业微信、钉钉、微信登录
-│   ├── samples/                       # 示例宿主
-│   │   ├── MinimalHost/               # 后台 API 示例
-│   │   ├── WorkerHost/                # 独立任务进程
-│   │   ├── IntegrationSample/         # 系统集成示例
-│   │   └── IntegrationMockPartner/    # 集成示例的模拟对接方
-│   ├── tests/                         # 后端测试与测试宿主
-│   ├── Directory.Packages.props       # 后端依赖版本
-│   └── TenonAdmin.slnx                # 后端解决方案
-├── web/                               # Vue 3 + Naive UI 管理端模板
-├── web-react/                         # React 19 + Ant Design 6 管理端模板
-├── templates/                         # dotnet new 项目模板
-├── skills/                            # AI 开发技能与参考模板
-├── site/                              # 文档站点
-├── docs/                              # 架构、部署、截图与开发参考
-├── scripts/                           # 契约检查、测试与验证脚本
-├── .github/workflows/                 # CI 与发布工作流
-├── docker-compose.yml                 # 容器部署配置
-├── docker-compose.scale.yml           # 多副本部署配置
-└── LICENSE                            # Apache-2.0 许可证
+├── backend/
+│   ├── src/          后端 NuGet 包源码
+│   ├── samples/      示例宿主与独立任务进程
+│   └── tests/        后端测试
+├── web/              Vue 管理端
+├── web-react/        React 管理端
+├── templates/        后端项目模板
+├── skills/           开发说明与参考代码
+├── site/             文档站点
+└── docs/             架构、部署和开发参考
 ```
 
-`web/` 和 `web-react/` 各自维护依赖与构建配置。业务项目通过 NuGet 引用后端包，选择一套前端模板作为开发起点。
-
-## 文档与进阶
-
-| 要做的事 | 参考文档 |
-| --- | --- |
-| 接入项目 | [接入指南](https://tenon.52moyu.net/zh/guide/getting-started) |
-| 开发业务 | [开发技能与参考模板](skills/README.md) · [Vue 组件](web/COMPONENTS.md) · [React 组件](web-react/COMPONENTS.md) |
-| 替换服务 | [服务替换](skills/replace-service.md) |
-| 接入审批与外部系统 | [审批工作流](https://tenon.52moyu.net/zh/guide/workflow) · [系统集成](https://tenon.52moyu.net/zh/guide/integration) · [Excel 导入导出](skills/wire-import-export.md) |
-| 了解架构 | [架构说明](https://tenon.52moyu.net/zh/backend/architecture) · [运行时架构图](docs/architecture/tenon-runtime.zh-CN.architecture.html) |
-| 部署与升级 | [部署指南](docs/deployment.md) · [更新日志](CHANGELOG.md) |
+</details>
 
 ## 参与贡献
 
-开发分支为 `dev`。问题反馈通过 [GitHub Issues](https://github.com/Tenon-Net/TenonAdmin/issues) 提交，代码改动向 `dev` 提交 PR。
+开发在 `dev` 分支进行。发现问题请提交 [Issue](https://github.com/Tenon-Net/TenonAdmin/issues)，附上使用版本、复现步骤和相关日志；代码改动向 `dev` 提交 PR。
 
 ## 版权与许可证
 

@@ -1,4 +1,4 @@
-<!-- 本文件与中文基准版 README.zh-CN.md 保持同步 -->
+<!-- 本文件与中文基准版 README.zh-CN.md 保持同步。 -->
 
 [English](README.md) | [简体中文](README.zh-CN.md) | 日本語
 
@@ -8,28 +8,30 @@
 
 <h1 align="center">TenonAdmin</h1>
 
-<p align="center"><strong>3 行のコードで、ASP.NET Core プロジェクトに RBAC とデータ権限を備えた管理画面フレームワークを導入します。</strong></p>
+<p align="center"><strong>3 行のコードで、ASP.NET Core プロジェクトに管理画面フレームワークを導入。</strong></p>
 
-<p align="center">NuGet による導入 · サービスの差し替えと業務拡張 · Vue / React の 2 種類のフロントエンド</p>
+<p align="center">NuGet で導入 · 業務コードは自分のプロジェクトで管理 · Vue / React のフロントエンド</p>
 
 <p align="center">
   <a href="https://www.nuget.org/packages/TenonAdmin"><img src="https://img.shields.io/nuget/v/TenonAdmin" alt="NuGet バージョン"></a>
   <img src="https://img.shields.io/badge/.NET-10-512BD4" alt=".NET 10">
-  <a href="https://github.com/Tenon-Net/TenonAdmin/actions/workflows/backend-ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Tenon-Net/TenonAdmin/backend-ci.yml?branch=dev" alt="バックエンドのビルド状況"></a>
+  <a href="https://github.com/Tenon-Net/TenonAdmin/actions/workflows/backend-ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Tenon-Net/TenonAdmin/backend-ci.yml?branch=dev" alt="dev バックエンドのビルド状況"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="Apache License 2.0"></a>
 </p>
 
 <p align="center">
-  <a href="#クイックスタート"><strong>クイックスタート</strong></a> ·
-  <a href="https://tenonadmin.52moyu.net/login"><strong>オンラインデモ</strong></a> ·
-  <a href="https://tenon.52moyu.net/"><strong>ドキュメント</strong></a>
+  <a href="#クイックスタート">クイックスタート</a> ·
+  <a href="#スクリーンショット">スクリーンショット</a> ·
+  <a href="https://tenonadmin.52moyu.net/login">オンラインデモ</a> ·
+  <a href="https://tenon.52moyu.net/">ドキュメント</a> ·
+  <a href="CHANGELOG.md">更新履歴</a>
 </p>
 
-## フレームワーク概要
+## 概要
 
-TenonAdmin は ASP.NET Core 向けの管理画面フレームワークです。ユーザー、ロール、メニュー、組織のデータ権限、辞書、設定、操作ログ、ファイル管理を NuGet パッケージとして提供し、管理画面には Vue と React の 2 種類のテンプレートを用意しています。
+TenonAdmin は ASP.NET Core 向けの管理画面フレームワークです。ユーザー、ロール、メニュー、組織、データ権限などの共通機能と、Vue と React の 2 種類の管理画面を提供します。社内業務システムや運用管理画面の開発に使えるほか、既存の .NET プロジェクトにも導入できます。
 
-`TenonAdmin` パッケージをインストールし、`Program.cs` でサービスとエンドポイントを登録します。
+NuGet で `TenonAdmin` をインストールし、`Program.cs` に次のコードを追加します。
 
 ```csharp
 builder.Services.AddTenonAdmin(builder.Configuration);
@@ -37,44 +39,77 @@ var app = builder.Build();
 app.MapTenonAdmin();
 ```
 
-フレームワークは管理機能を担当し、アプリケーションプロジェクトは業務エンティティ、サービス、画面を持ちます。インターフェースによるサービスの差し替えや、組み込みサービスの継承による処理ステップの変更に対応します。フレームワークの更新は NuGet のバージョンとして配布し、互換性に関する変更は更新履歴に記載します。
+認証、ロール権限、データ権限、管理 API の登録はフレームワークが行います。既定では SQLite を使用し、初回起動時にデータベース、テーブル、初期アカウントを作成するため、先にデータベースサーバーを用意する必要はありません。起動コード全体とフロントエンドの実行手順は[クイックスタート](#クイックスタート)にあります。
 
-- **SQLite で開始**：初回起動時にデータベースとテーブルを作成し、シードデータを読み込みます。
-- **サービスのカスタマイズ**：依存性注入と `virtual` メソッドにより、サービスまたは処理ステップを差し替えます。カスタマイズしたコードはアプリケーションプロジェクトに置きます。
-- **パッケージの更新**：修正と機能は NuGet から取得し、互換性に関する変更は更新履歴に従って対応します。
-- **フロントエンドテンプレート**：Vue 3 + Naive UI または React 19 + Ant Design 6 を選び、付属のテーブル、フォーム、権限コンポーネントで業務画面を開発します。
+顧客や注文などの業務エンティティ、API、画面は、自分のプロジェクトで開発します。ログイン処理、ファイル保存、権限ルールは拡張インターフェースで変更できます。バックエンドの更新は NuGet で受け取り、業務コードはフレームワークのソースと分けて管理します。
+
+## 主な特徴
+
+### 自分のプロジェクトで業務を開発し、フレームワークの動作も調整
+
+顧客管理モジュールを開発する場合、既存のアカウント、ロール、メニュー、ファイル管理を再利用し、顧客エンティティ、業務 API、管理画面をアプリケーションプロジェクトに実装します。業務コードをフレームワークのソースに書き込む必要はなく、既存の業務ロジックもそのまま残せます。
+
+ファイルをオブジェクトストレージに保存したい場合や、ログイン結果に業務情報を追加したい場合は、対応するサービスを差し替えるか、組み込みサービスを継承して必要な処理だけを変更できます。インターフェースとオーバーライド可能なメソッドが用意されているため、一つの処理を変えるために実装全体をコピーする必要はありません。
+
+バックエンドの修正や新機能は NuGet のバージョンとして提供されます。更新時は更新履歴を確認し、必要に応じて拡張コードやフロントエンドの API 呼び出しを調整してください。具体例は[サービスの差し替えと拡張](skills/replace-service.md)にあります。
+
+### 操作できる機能と、参照できるデータを制御
+
+ロール権限は、ユーザーが使えるメニュー、ボタン、API を決めます。データ権限は、参照できる業務レコードの範囲を決めます。同じ顧客一覧でも、部門責任者には自部門のデータ、上位の責任者には配下の部門を含むデータを表示でき、部門をまたぐ業務では参照可能な組織を個別に指定できます。
+
+業務エンティティをデータ範囲の規約に合わせると、対応するクエリには現在のユーザーのロールに応じたフィルターが適用されます。顧客の検索処理は業務サービスに置き、データ範囲はフレームワークで処理します。直接実行する SQL や独自のデータアクセスには、別途権限チェックが必要です。
+
+独立したサンプルアプリでは、顧客一覧を使ってアカウントごとの表示データの違いを確認できます。[複数組織のデータ権限サンプル](https://github.com/Tenon-Net/tenon-example/blob/dev/docs/showcase-multi-org-data-scope.md)を参照してください。
+
+### チームに合わせて Vue と React を選択
+
+Vue 版は Vue 3 と Naive UI、React 版は React 19 と Ant Design 6 を使用します。両方とも同じバックエンド API に接続するため、業務アプリではどちらか一方を選べます。
+
+新しい画面では、テーブル、フォーム、辞書選択、組織・ユーザー選択、ファイルアップロード、権限制御のコンポーネントを再利用できます。例えば、顧客一覧の絞り込み、ページング、編集ダイアログ、ボタン権限は既存の画面とコンポーネントに沿って実装でき、モジュールごとに作り直す必要はありません。
+
+API の型はバックエンドの OpenAPI から生成でき、API の変更に合わせて更新できます。各フロントエンドは依存関係とコンポーネントを個別に管理します。詳細は [Vue コンポーネント](web/COMPONENTS.md)と [React コンポーネント](web-react/COMPONENTS.md)のドキュメントにあります。
+
+### 業務に合わせて承認フローを追加
+
+承認ワークフローはオプションパッケージとして提供します。フローデザイナーで承認者、条件分岐、並列分岐、通知先を設定し、各ステップでフォーム項目を閲覧・編集できる範囲を指定できます。フローを公開すると、ユーザーは申請の提出、承認待ちタスクの処理、進捗や処理履歴の確認ができます。
+
+承認画面では、差し戻し、取り下げ、担当者変更、委任、承認者の追加・削除に対応します。フロー管理者は実行状態、タイムアウト、再試行の記録を確認できます。Vue と React の両方に、同じバックエンド API を使うワークフロー画面があります。
+
+`TenonAdmin` と同じバージョンの `TenonAdmin.Workflow` をインストールして登録してください。AI 評価は参考用の結果を記録するもので、自動で承認、却下、フローの進行を行うことはありません。導入と設定は[ワークフローのドキュメント](https://tenon.52moyu.net/guide/workflow)にあります。
+
+### AI コーディングアシスタントに開発規約を共有
+
+リポジトリには、モジュール、エンティティ、API、画面、サービス拡張、インポート・エクスポートなどの開発 Skills を用意しています。実装手順、参考コード、確認項目を含むため、AI コーディングアシスタントに先に読ませることで、プロジェクトのエンティティ、サービス、権限、コンポーネントの規約に沿ったコード作成を進められます。
+
+例えば、次のように依頼できます。
+
+> `skills/new-module.md` を参照し、製品名、コード、分類、有効状態を持つ製品管理モジュールを追加してください。分類による絞り込み、インポート・エクスポート、メニューとボタンの権限も含めてください。
+
+Skills は開発手順と参考テンプレートであり、独立したコードジェネレーターではありません。生成後は業務ルール、権限、テスト結果を確認してください。一覧は[開発 Skills](skills/README.md)にあります。
 
 ## クイックスタート
 
-バックエンドには .NET 10 SDK、フロントエンドには Node.js 22.12+ が必要です。
+バックエンドには .NET 10 SDK が必要です。フロントエンドには Node.js 22.12 以降を推奨します。まずリポジトリのサンプルを動かし、業務に組み込む際は下記の独立プロジェクトへの導入手順を使ってください。
 
-### 既存プロジェクトへの導入
-
-ASP.NET Core プロジェクトのディレクトリでフレームワークをインストールします。
-
-```bash
-dotnet add package TenonAdmin
-```
-
-上記のサービス登録とエンドポイントのマッピングを `Program.cs` に追加し、プロジェクト側のアプリケーション作成処理と起動処理は残します。JWT 認証、RBAC、データ権限、管理 API はフレームワークが登録します。
-
-データベース設定と導入手順は[導入ガイド](https://tenon.52moyu.net/guide/getting-started)を参照してください。新規プロジェクトでは、ガイドに記載された `dotnet new tenon-app` テンプレートでバックエンドホストを作成できます。
+> フロントエンドのテンプレートはバックエンドのバージョンに合わせ、拡張パッケージは `TenonAdmin` と同じバージョンを使ってください。更新前に[更新履歴](CHANGELOG.md)を確認してください。
 
 ### サンプル一式を実行
 
-リポジトリをクローンしてバックエンドを起動します。
+`dev` ブランチをクローンしてバックエンドを起動します。
 
 ```bash
-git clone https://github.com/Tenon-Net/TenonAdmin.git
+git clone --branch dev --single-branch https://github.com/Tenon-Net/TenonAdmin.git
 cd TenonAdmin
 dotnet run --project backend/samples/MinimalHost
 ```
 
-バックエンドの URL は http://localhost:5100 です。サンプルは SQLite を使用し、初回起動時にデータベースとテーブルを作成してシードデータを読み込み、`superAdmin` のランダムなパスワードをコンソールに表示します。
+バックエンドは `http://localhost:5100` で動作します。サンプルは既定で SQLite を使用し、初回の初期化時にテーブルと `superAdmin` アカウントを作成します。
+
+初期のランダムなパスワードは、**アカウントを最初に作成したときだけ**コンソールに表示されます。ログインに使うため、保存してください。
 
 別のターミナルを開き、リポジトリのルートから使用するフロントエンドを起動します。
 
-**Vue** — http://localhost:5173
+**Vue：**
 
 ```bash
 cd web
@@ -82,7 +117,9 @@ npm install
 npm run dev
 ```
 
-**React** — http://localhost:5174
+`http://localhost:5173` を開き、`superAdmin` とコンソールのパスワードでログインします。
+
+**React：**
 
 ```bash
 cd web-react
@@ -90,160 +127,162 @@ npm install
 npm run dev
 ```
 
-`superAdmin` とコンソールに表示されたパスワードでログインします。Windows では、ルートディレクトリの `dev.bat` を実行すると、バックエンドと 2 種類のフロントエンドが起動します。
+`http://localhost:5174` を開き、同じアカウントでログインします。フロントエンドはどちらか一方でよく、バックエンドを複数起動する必要はありません。ログイン後は初期パスワードを変更してください。
 
-## 設計と機能
+### 自分の ASP.NET Core プロジェクトに導入
 
-### サービスを差し替え、業務を拡張
+プロジェクトのディレクトリでバックエンドパッケージをインストールします。
 
-パスワードハッシュやファイルストレージなどのサービスはインターフェースを介して提供します。独自実装を `AddTenonAdmin` より前に登録すると、その実装を使用します。処理ステップを変更する場合は、組み込みサービスを継承し、該当する `virtual` メソッドをオーバーライドします。
+```bash
+dotnet add package TenonAdmin
+```
 
-サービス実装はアプリケーションプロジェクトに置き、フレームワークのコードは NuGet パッケージで管理します。サービスの差し替え、業務エンティティの検出、コントローラーの検出は契約テストで確認しています。[サービス差し替えの例](skills/replace-service.md)を参照してください。
+新しいホストの最小構成の `Program.cs` は次のとおりです。
 
-### API 認可とデータ範囲
+```csharp
+using TenonAdmin.AspNetCore;
 
-同じ顧客一覧にアクセスしても、クエリ結果はロールに設定されたデータ範囲によって変わります。業務エンティティが `IOrgScoped` を実装するか `DataEntity` を継承すると、SqlSugar のグローバルフィルターがクエリに組織条件を追加します。業務サービスがクエリを定義し、フレームワークがデータ範囲を適用します。
+var builder = WebApplication.CreateBuilder(args);
 
-メニュー、ボタン、バックエンド API では、HTTP メソッドとルートを組み合わせた権限コードを使用します。API のアクセス権限は操作の可否を制御し、データ範囲はユーザーが参照できる業務レコードを制御します。
+// TenonAdmin 的核心接入
+builder.Services.AddTenonAdmin(builder.Configuration);
+var app = builder.Build();
+app.MapTenonAdmin();
 
-### Vue と React から選ぶ
+app.Run();
+```
 
-Vue テンプレートは Vue 3 と Naive UI、React テンプレートは React 19 と Ant Design 6 を使用します。それぞれが依存関係、ルート、状態、コンポーネントを持ち、同じバックエンド API に接続します。
+`AddTenonAdmin` はフレームワークのサービスを登録し、`MapTenonAdmin` は管理 API を追加します。既存プロジェクトでは、この 2 か所の呼び出しを元の起動処理に組み込み、アプリケーションの設定、サービス、業務ルートは残してください。
 
-API 型は OpenAPI から生成します。業務画面では、検索テーブル、フォーム、辞書、組織とユーザーの選択、ファイルアップロード、インポートウィザードなどのコンポーネントを利用できます。
+管理画面にはバックエンドのバージョンに合った Vue または React のテンプレートを使います。既定のデータベースは SQLite です。MySQL、SQL Server、PostgreSQL を使う場合は、設定でデータベースの種類と接続文字列を指定します。
 
-### 承認ワークフロー
-
-フロー設計画面で承認ステップ、条件分岐、並列分岐、CC を設定し、動的フォームとステップごとの項目権限を定義します。承認画面は、開始、承認待ち、処理済み、差し戻し、取り消し、転送、委任、承認者の追加と削除、督促に対応します。
-
-実行記録には承認履歴、タイムアウト時の処理、実行の再試行情報が含まれます。AI 判断の評価は OpenAI 互換のモデルサービスに対応し、結果を承認時の参考情報と監査記録に使用します。承認結果とフローの進行は承認ワークフローが制御します。
-
-### 外部システム連携
-
-公開 API では、呼び出し元のアプリケーション資格情報、API 権限、業務データ範囲を管理します。外部呼び出しでは、接続先 URL、資格情報、呼び出し記録を管理します。
-
-配信を保証する必要がある業務では、業務データと配信レコードを同じデータベーストランザクションでコミットし、バックグラウンドで送信できます。後続処理では、受信側の冪等性と結果照会への対応に応じて、再試行、結果照会、手動確認を選択し、各試行を記録します。
-
-### Vibe Coding：プロジェクト規約に沿って業務コードを書く
-
-リポジトリには、エンティティ、CRUD、サービスの差し替え、定期ジョブ、インポートとエクスポート、システム連携などの[開発スキル](skills/README.md)があり、作業手順、コードの参照先、検証要件を定義しています。
-
-AI アシスタントは、プロジェクトのエンティティ基底クラス、サービスインターフェース、権限規則、フロントエンドコンポーネントに従って業務モジュールを生成します。業務規則と生成結果は開発者が確認します。
+データベース設定、新規プロジェクトのテンプレート、既存アプリへの導入手順は[導入ガイド](https://tenon.52moyu.net/guide/getting-started)にあります。Excel、外部ログイン、Redis、ワークフローの拡張は必要に応じてインストールし、各ドキュメントに従って登録と設定を行ってください。
 
 ## 機能一覧
 
-| 分類 | 機能 |
+| 分類 | 主な機能 |
 | --- | --- |
-| 認証とセッション | アカウントとパスワード、画像 CAPTCHA、JWT とリフレッシュトークンのローテーション、オンラインセッション、強制ログアウト。Cookie セッション、SMS ログイン、外部ログインは設定により導入 |
-| 認証セキュリティ | ログインロック、リクエストのレート制限、TOTP、リカバリーコード、アカウント MFA ポリシー、機密性の高い操作での本人確認 |
-| 権限と組織 | ロール、メニュー、ボタン権限、組織ツリー、役職。全データ、自組織、自組織と配下、本人のみ、指定組織の 5 種類のデータ範囲 |
-| 管理機能 | マルチアプリポータル、辞書、設定、通知、SignalR メッセージ配信、操作ログ、機密入力のマスキング、監査フィールド、ゴミ箱 |
-| ファイルと Excel | アップロード、ダウンロード、署名付きアクセス、分割アップロード、再開、同一ファイルの即時アップロード。インポートテンプレート、データプレビュー、セル検証、重複チェック、エラーレポート、エクスポート列の選択 |
-| 承認ワークフロー | フロー設計、動的フォーム、ステップごとの項目権限、承認処理、タイムアウト時の処理、Webhook、実行監視、AI 判断の評価 |
-| システム連携 | アプリケーション資格情報、公開 API の権限、業務データ範囲、アプリケーション単位のレート制限、外部呼び出し、トランザクション内の配信レコード、処理ログ |
-| 定期ジョブ | 6 フィールド cron、固定間隔、1 回限りの実行。コード、HTTP、SQL ジョブ。SQL 実行は設定による有効化が必要。タイムアウト、再試行、ログ、失敗アラート、独立 Worker |
-| フロントエンドテンプレート | Vue 3 + Naive UI、React 19 + Ant Design 6。中国語と英語、ライトとダークのテーマ、レイアウト設定、業務コンポーネント、OpenAPI 型生成 |
-| データとデプロイ | SQLite、MySQL、SQL Server、PostgreSQL。CodeFirst、複数データベース接続、Redis 共有キャッシュ、データベースリース、複数レプリカ構成、Docker、ヘルスチェック |
-| 開発ツール | バックエンドプロジェクトテンプレート、AI 開発スキル。Vue ProTable と IconPicker の独立 npm パッケージ |
+| ユーザーと組織 | ユーザー、ロール、組織ツリー、役職、オンラインセッション、強制ログアウト |
+| 権限管理 | メニュー、ボタン、API の権限。全データ、所属組織、所属組織と配下の組織、本人、指定組織のデータ範囲 |
+| ログインとセキュリティ | アカウントとパスワード、画像認証、ログインロック、リクエスト制限。設定による多要素認証、必要に応じた SMS・外部ログイン連携 |
+| 日常の管理 | 複数アプリのポータル、辞書、設定、お知らせ、プッシュ通知、操作ログ、ごみ箱 |
+| ファイル管理 | アップロードとダウンロード、署名付きアクセス、分割アップロード、再開可能なアップロード、既存ファイルの即時アップロード |
+| Excel インポート・エクスポート（オプション） | 取込テンプレート、取込データの確認、セル単位の検証、重複チェック、エラーレポート、出力列の選択 |
+| 定期ジョブ | スケジュール、一定間隔、単発の実行。コード・HTTP・SQL ジョブ、実行ログ、タイムアウト、再試行、失敗通知。SQL 実行は設定で有効化が必要 |
+| 承認ワークフロー（オプション） | フロー設計、動的フォーム、ステップごとの項目権限、承認処理、タイムアウト処理、実行履歴 |
+| フロントエンド | Vue と React のテンプレート、中国語・英語、ライト・ダークテーマ、レイアウト設定、業務コンポーネント、OpenAPI 型生成 |
+| データとデプロイ | SQLite、MySQL、SQL Server、PostgreSQL、複数データベース接続、独立したジョブプロセス、Docker、ヘルスチェック、Redis キャッシュ拡張 |
 
-## 画面プレビュー
+本番環境の設定と複数レプリカの構成は[デプロイガイド](docs/deployment.md)を参照してください。ワークフローから外部システムにメッセージを送る場合は、実際に送信する実装が必要です。詳細は[ワークフローのドキュメント](https://tenon.52moyu.net/guide/workflow)にあります。
 
+## スクリーンショット
+
+画像をクリックすると原寸で表示できます。
+
+<!-- 每行两张，使用仓库中的等比缩略图；新增截图时继续追加 <tr>，并同步原图与缩略图。 -->
 <table>
   <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/vue-admin.png"><img src="docs/screenshots/vue-admin.png" alt="Vue ユーザー管理" width="480"></a><br>Vue ユーザー管理</td>
-    <td width="50%" align="center"><a href="docs/screenshots/react-admin.png"><img src="docs/screenshots/react-admin.png" alt="React ユーザー管理" width="480"></a><br>React ユーザー管理</td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/vue-admin.png"><img src="docs/screenshots/thumbs/vue-admin.png" alt="Vue ユーザー管理" width="480"></a>
+      <br>Vue ユーザー管理
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/react-admin.png"><img src="docs/screenshots/thumbs/react-admin.png" alt="React ユーザー管理" width="480"></a>
+      <br>React ユーザー管理
+    </td>
   </tr>
   <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/workflow-designer.png"><img src="docs/screenshots/workflow-designer.png" alt="フロー設計" width="480"></a><br>フロー設計</td>
-    <td width="50%" align="center"><a href="docs/screenshots/workflow-approval.png"><img src="docs/screenshots/workflow-approval.png" alt="承認詳細" width="480"></a><br>承認詳細</td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/role-permissions.png"><img src="docs/screenshots/thumbs/role-permissions.png" alt="ロール権限" width="480"></a>
+      <br>ロール権限
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/org-management.png"><img src="docs/screenshots/thumbs/org-management.png" alt="組織管理" width="480"></a>
+      <br>組織管理
+    </td>
   </tr>
   <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/role-permissions.png"><img src="docs/screenshots/role-permissions.png" alt="ロール権限" width="480"></a><br>ロール権限</td>
-    <td width="50%" align="center"><a href="docs/screenshots/integration-apps.png"><img src="docs/screenshots/integration-apps.png" alt="連携アプリ" width="480"></a><br>連携アプリ</td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/dictionary.png"><img src="docs/screenshots/thumbs/dictionary.png" alt="辞書管理" width="480"></a>
+      <br>辞書管理
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/file-management.png"><img src="docs/screenshots/thumbs/file-management.png" alt="ファイル管理" width="480"></a>
+      <br>ファイル管理
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/scheduled-jobs.png"><img src="docs/screenshots/thumbs/scheduled-jobs.png" alt="定期ジョブ" width="480"></a>
+      <br>定期ジョブ
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/workflow-pending.png"><img src="docs/screenshots/thumbs/workflow-pending.png" alt="承認待ち" width="480"></a>
+      <br>承認待ち
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/workflow-designer.png"><img src="docs/screenshots/thumbs/workflow-designer.png" alt="フローデザイナー" width="480"></a>
+      <br>フローデザイナー
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/workflow-approval.png"><img src="docs/screenshots/thumbs/workflow-approval.png" alt="承認の詳細" width="480"></a>
+      <br>承認の詳細
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/integration-apps.png"><img src="docs/screenshots/thumbs/integration-apps.png" alt="接続アプリ" width="480"></a>
+      <br>接続アプリ＊
+    </td>
+    <td width="50%" align="center" valign="top">
+      <a href="docs/screenshots/delivery-tasks.png"><img src="docs/screenshots/thumbs/delivery-tasks.png" alt="確実な配信" width="480"></a>
+      <br>確実な配信＊
+    </td>
   </tr>
 </table>
+
+＊接続アプリと確実な配信の画像は、元の README から引き継いだものです。この文章の確認に使用した `dev` のスナップショットでは対応する実装を確認できていないため、この 2 枚は現在のブランチにシステム連携機能が含まれることを示すものではありません。
+
+## ドキュメントと業務サンプル
+
+[tenon-example](https://github.com/Tenon-Net/tenon-example) は独立した業務アプリです。バックエンドは NuGet で TenonAdmin を利用し、フロントエンドは管理画面テンプレートを基にしています。業務コードには CRM モジュールが含まれます。フレームワークの外で業務コードをどう構成するかを知るには、このプロジェクトが参考になります。
+
+[オンラインデモ](https://tenonadmin.52moyu.net/login) はこのアプリを別途デプロイしたもので、機能はサンプルアプリのバージョンに従います。現在の `dev` ブランチを試す場合は、リポジトリのサンプルをローカルで実行してください。
+
+| 目的 | ドキュメント |
+| --- | --- |
+| フレームワークの導入とデータベース設定 | [クイックスタート](https://tenon.52moyu.net/guide/getting-started) |
+| 業務モジュールの追加 | [モジュール開発](skills/new-module.md) · [開発 Skills 一覧](skills/README.md) |
+| フロントエンド画面の開発 | [Vue コンポーネント](web/COMPONENTS.md) · [React コンポーネント](web-react/COMPONENTS.md) |
+| 組み込みサービスの調整 | [サービスの差し替えと拡張](skills/replace-service.md) |
+| インポート・エクスポートと承認の追加 | [Excel インポート・エクスポート](skills/wire-import-export.md) · [承認ワークフロー](https://tenon.52moyu.net/guide/workflow) |
+| バックエンド構造の確認 | [アーキテクチャ](https://tenon.52moyu.net/backend/architecture) |
+| デプロイと更新 | [デプロイガイド](docs/deployment.md) · [更新履歴](CHANGELOG.md) |
 
 <details>
-<summary>その他の画面を見る</summary>
-
-<table>
-  <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/org-management.png"><img src="docs/screenshots/org-management.png" alt="組織管理" width="480"></a><br>組織管理</td>
-    <td width="50%" align="center"><a href="docs/screenshots/dictionary.png"><img src="docs/screenshots/dictionary.png" alt="辞書管理" width="480"></a><br>辞書管理</td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/file-management.png"><img src="docs/screenshots/file-management.png" alt="ファイル管理" width="480"></a><br>ファイル管理</td>
-    <td width="50%" align="center"><a href="docs/screenshots/scheduled-jobs.png"><img src="docs/screenshots/scheduled-jobs.png" alt="定期ジョブ" width="480"></a><br>定期ジョブ</td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><a href="docs/screenshots/workflow-pending.png"><img src="docs/screenshots/workflow-pending.png" alt="承認待ち" width="480"></a><br>承認待ち</td>
-    <td width="50%" align="center"><a href="docs/screenshots/delivery-tasks.png"><img src="docs/screenshots/delivery-tasks.png" alt="信頼性のある配信" width="480"></a><br>信頼性のある配信</td>
-  </tr>
-</table>
-
-</details>
-
-## オンラインデモとサンプルプロジェクト
-
-[オンラインデモを開く](https://tenonadmin.52moyu.net/login) · [サンプルプロジェクトのソースコードを見る](https://github.com/Tenon-Net/tenon-example)
-
-デモサイトは独立したアプリケーション `tenon-example` を使用しています。バックエンドは NuGet でフレームワークを導入し、フロントエンドは管理画面テンプレートを基に構成し、業務部分には CRM モジュールが含まれます。
-
-ログイン画面に記載された業務アカウントで顧客一覧にアクセスすると、組織とデータ範囲がクエリ結果に与える影響を確認できます。サンプルの業務クエリと権限設定は[同じクエリ、3 つの数値](https://github.com/Tenon-Net/tenon-example/blob/dev/docs/showcase-multi-org-data-scope.md)を参照してください。
-
-## リポジトリ構成
+<summary>リポジトリ構成</summary>
 
 ```text
 TenonAdmin/
-├── backend/                           # .NET バックエンド
-│   ├── src/                           # NuGet パッケージのソースコード
-│   │   ├── TenonAdmin/                # 導入点。ASP.NET Core 統合パッケージを参照
-│   │   ├── TenonAdmin.Core/           # インターフェース、設定、結果、エラーコード
-│   │   ├── TenonAdmin.SqlSugar/       # データアクセス、テーブル作成、グローバルフィルター
-│   │   ├── TenonAdmin.Services/       # 管理エンティティ、業務サービス、シードデータ
-│   │   ├── TenonAdmin.AspNetCore/     # 認証、コントローラー、ホスト統合
-│   │   ├── TenonAdmin.Workflow/       # 承認ワークフロー
-│   │   ├── TenonAdmin.Integration/    # 公開 API、外部呼び出し、信頼性のある配信
-│   │   ├── TenonAdmin.Excel/          # Excel インポートとエクスポート
-│   │   ├── TenonAdmin.Caching.Redis/  # Redis キャッシュ
-│   │   └── TenonAdmin.Auth.*/         # GitHub、WeCom、DingTalk、WeChat ログイン
-│   ├── samples/                       # サンプルホスト
-│   │   ├── MinimalHost/               # 管理 API のサンプル
-│   │   ├── WorkerHost/                # 独立したジョブプロセス
-│   │   ├── IntegrationSample/         # システム連携のサンプル
-│   │   └── IntegrationMockPartner/    # 連携サンプルの模擬接続先
-│   ├── tests/                         # バックエンドテストとテストホスト
-│   ├── Directory.Packages.props       # バックエンド依存関係のバージョン
-│   └── TenonAdmin.slnx                # バックエンドソリューション
-├── web/                               # Vue 3 + Naive UI 管理画面テンプレート
-├── web-react/                         # React 19 + Ant Design 6 管理画面テンプレート
-├── templates/                         # dotnet new プロジェクトテンプレート
-├── skills/                            # AI 開発スキルと参照テンプレート
-├── site/                              # ドキュメントサイト
-├── docs/                              # アーキテクチャ、デプロイ、スクリーンショット、開発資料
-├── scripts/                           # 契約チェック、テスト、検証スクリプト
-├── .github/workflows/                 # CI とリリースワークフロー
-├── docker-compose.yml                 # コンテナデプロイ設定
-├── docker-compose.scale.yml           # 複数レプリカ構成の設定
-└── LICENSE                            # Apache-2.0 ライセンス
+├── backend/
+│   ├── src/          バックエンド NuGet パッケージのソース
+│   ├── samples/      サンプルホストと独立したジョブプロセス
+│   └── tests/        バックエンドのテスト
+├── web/              Vue 管理画面
+├── web-react/        React 管理画面
+├── templates/        バックエンドのプロジェクトテンプレート
+├── skills/           開発手順と参考コード
+├── site/             ドキュメントサイト
+└── docs/             アーキテクチャ、デプロイ、開発資料
 ```
 
-`web/` と `web-react/` は、それぞれ依存関係とビルド設定を管理します。業務プロジェクトは NuGet でバックエンドパッケージを参照し、フロントエンドテンプレートの一方を開発の起点として使用します。
-
-## ドキュメント
-
-| 目的 | 参照先 |
-| --- | --- |
-| プロジェクトへの導入 | [導入ガイド](https://tenon.52moyu.net/guide/getting-started) |
-| 業務機能の開発 | [開発スキルと参照テンプレート](skills/README.md) · [Vue コンポーネント](web/COMPONENTS.md) · [React コンポーネント](web-react/COMPONENTS.md) |
-| サービスの差し替え | [サービスの差し替え](skills/replace-service.md) |
-| 承認と外部システムの導入 | [承認ワークフロー](https://tenon.52moyu.net/guide/workflow) · [システム連携](https://tenon.52moyu.net/guide/integration) · [Excel インポートとエクスポート](skills/wire-import-export.md) |
-| アーキテクチャの確認 | [アーキテクチャ](https://tenon.52moyu.net/backend/architecture) · [ランタイム構成図](docs/architecture/tenon-runtime.ja.architecture.html) |
-| デプロイと更新 | [デプロイガイド](docs/deployment.md) · [更新履歴](CHANGELOG.md) |
+</details>
 
 ## コントリビューション
 
-開発ブランチは `dev` です。不具合は [GitHub Issues](https://github.com/Tenon-Net/TenonAdmin/issues) で報告し、コードの変更は `dev` 向けの PR として提出してください。
+開発は `dev` ブランチで行います。不具合は [Issue](https://github.com/Tenon-Net/TenonAdmin/issues) で報告し、使用バージョン、再現手順、関連ログを添えてください。コードの変更は `dev` 向けの PR として提出してください。
 
 ## 著作権とライセンス
 
