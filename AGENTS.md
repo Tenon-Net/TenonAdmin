@@ -25,7 +25,7 @@ Read only the references relevant to the task:
 | React pages/components | [web-react/COMPONENTS.md](web-react/COMPONENTS.md), [React architecture](docs/agents/repository-reference.md#frontend-architecture-web-react); use stable zustand selectors and Ant Design 6 APIs |
 | CI, database test performance, template packaging | [Repository reference: CI](docs/agents/repository-reference.md#ci); preserve multi-replica smoke coverage and nightly full SQL Server coverage |
 | New module, entity, CRUD, jobs, import/export, service replacement | Select the recipe in [skills/README.md](skills/README.md); complete modules start at [new-module](skills/new-module.md) |
-| Any `site/` page | [skills/write-docs.md](skills/write-docs.md): Chinese source, English translation, prose checks |
+| `site/` pages or root `README*.md`: writing, editing, translation | [skills/write-docs.md](skills/write-docs.md): voice, scope, README presentation, translation and validation |
 | Release/version/tag/NuGet | [skills/tenon-release.md](skills/tenon-release.md); human runbook: [docs/releasing.md](docs/releasing.md) |
 | Domain terminology or architecture decisions | [docs/agents/domain.md](docs/agents/domain.md); existing `CONTEXT.md` and relevant ADRs |
 | GitHub issues/PRDs or triage | [issue tracker](docs/agents/issue-tracker.md), [label mapping](docs/agents/triage-labels.md) |

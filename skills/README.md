@@ -18,7 +18,7 @@
 | [wire-integration.md](wire-integration.md) | **给业务接第三方系统** | 开放接口(应用凭据、授权、数据范围)、普通第三方调用、事务内可靠投递;装 `TenonAdmin.Integration` |
 | [create-job.md](create-job.md) | **给自己的模块加定时任务** | 写 `IAdminJob`、注册一行、后台建任务或写种子;HTTP/SQL 任务与五个常见坑 |
 | [create-page-variant.md](create-page-variant.md) | 非标准页面模板 | 树表、主从分栏、侧栏筛选 |
-| [write-docs.md](write-docs.md) | **文档写作规范** | 写或改 `site/` 下任何一页；中英双语的口吻、标点、开头、破折号 + 闸门 |
+| [write-docs.md](write-docs.md) | **文档写作规范** | 写或改 `site/` 页面及根目录 README；语气、功能边界、README 呈现、多语言同步与验证 |
 | [tenon-release.md](tenon-release.md) | **TenonAdmin 发版**（`/tenon-release`） | 定版 → CHANGELOG → 双前端 + 文档站徽章 → 验绿 → 合 main → 打 tag → 盯 CI / 改 Release 说明 |
 
 ## 使用方式
