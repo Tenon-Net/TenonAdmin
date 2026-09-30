@@ -49,14 +49,27 @@ public class SqlLoggingTests
         var log = new CaptureLoggerProvider();
         using var f = new AdminAppFactory
         {
-            // 1ms 阈值:让任何一次真实往返都够格。跑一批语句,只要有一条被判为慢就算数
+            // 用执行前钩子明确制造超过阈值的耗时，不依赖查询速度或机器负载。
             Settings = new Dictionary<string, string?> { ["TenonAdmin:Database:SlowSqlMillis"] = "1" },
             Overrides = s => s.AddSingleton<ILoggerProvider>(log),
         };
         using var scope = f.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
 
-        for (var i = 0; i < 50; i++) db.Ado.GetInt("SELECT COUNT(*) FROM sys_menu");
+        var onExecuting = db.CurrentConnectionConfig.AopEvents.OnLogExecuting;
+        db.Aop.OnLogExecuting = (sql, parameters) =>
+        {
+            onExecuting?.Invoke(sql, parameters);
+            Thread.Sleep(20);
+        };
+        try
+        {
+            db.Ado.GetInt("SELECT COUNT(*) FROM sys_menu");
+        }
+        finally
+        {
+            db.Aop.OnLogExecuting = onExecuting;
+        }
 
         Assert.Contains(log.Entries, e =>
             e.Level == LogLevel.Warning && e.Text.Contains("sys_menu", StringComparison.Ordinal));
