@@ -25,7 +25,7 @@ Use a matching TenonAdmin release that contains the system integration module, a
 
 ## Step 1: Install and enable the module
 
-For a new project, run `dotnet new tenon-app --integration -n PartnerAdmin`. The template references `TenonAdmin.Integration`, completes the two wiring steps below, and generates an `Integrations/` directory with open API, plain outbound call, and reliable delivery examples.
+For a new project, install the matching template release with `dotnet new install TenonAdmin.Templates`, then run `dotnet new tenon-app --integration -n PartnerAdmin`. The template references `TenonAdmin.Integration`, completes the two wiring steps below, and generates an `Integrations/` directory with open API, plain outbound call, and reliable delivery examples.
 
 Install the optional package in the consumer project:
 

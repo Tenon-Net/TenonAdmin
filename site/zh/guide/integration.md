@@ -25,7 +25,7 @@
 
 ## 第一步：安装并启用模块
 
-新项目可以直接运行 `dotnet new tenon-app --integration -n PartnerAdmin`。模板会引用 `TenonAdmin.Integration`、完成下面两步接线，并生成包含开放接口、普通出站调用和可靠投递示例的 `Integrations/` 目录。
+新项目先用 `dotnet new install TenonAdmin.Templates` 安装配套版本的模板，再运行 `dotnet new tenon-app --integration -n PartnerAdmin`。模板会引用 `TenonAdmin.Integration`、完成下面两步接线，并生成包含开放接口、普通出站调用和可靠投递示例的 `Integrations/` 目录。
 
 在消费方项目中安装可选包：
 

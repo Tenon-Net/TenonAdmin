@@ -15,11 +15,28 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.7.0 - 2026-09-30
+
 ### Added
 
 - Added the optional `TenonAdmin.Integration` package for third-party integration: integration apps with API keys that can be issued, rotated with an overlap window, expired and revoked; default-deny open API endpoints with declared data scopes, per-app rate limits, a separate OpenAPI document and inbound call records; outbound calls to configured targets with address checks, per-call credentials and no automatic retries; and reliable delivery enqueued in the business transaction, dispatched under leases, recovered according to the partner's deduplication and query capabilities, with reconciliation, alerts and audited manual actions. The Vue and React templates both include the management pages.
 - Added `dotnet new tenon-app --integration`, the `IntegrationSample` consumer sample with the `IntegrationMockPartner` local third party, the `wire-integration` skill, and the third-party integration guide.
 - Added `ISkipOperationLogMetadata` so endpoints can opt out of user operation logs; open API endpoints use it to record inbound calls instead.
+- Added a workflow engine and Vue/React interfaces for design, organization-leader and branched approvals, delegation, timeouts, CC, monitoring, and history.
+- Added idempotent workflow commands and replay, operation receipts, extensible node handlers, leased execution and retry history, an outbox, and Webhook nodes.
+- Added shadow-only AI decision nodes and an OpenAI-compatible provider; decisions are evaluated and audited but never approve automatically. Added expense-decision evaluation and sample-collection tools.
+
+### Changed
+
+- Rebuilt the bilingual documentation around practical learning paths, with separate Vue and React first-page tutorials, system integration guidance, and real application screenshots.
+- Adopted the Tenon-Brand blue artwork across both frontends, the documentation site, and NuGet package icons.
+- Upgraded both frontend templates to Vite 8 and refreshed their dependencies. Use Node.js 22.12 or later for development and builds.
+
+### Fixed
+
+- Hardened workflow approval concurrency, participant isolation, stale Webhook results, and MySQL outbox replay; an unset outbox transport now fails explicitly.
+- Fixed job-capacity reservation, unique WorkerId allocation and dead-process lease recovery, session revocation and cache atomicity, Markdown rendering, and asynchronous frontend interactions.
+- Fixed the Vue workflow monitor build error caused by an unused table reference, stabilized job cancellation and slow SQL logging tests, and allowed Playwright workers to borrow their run port leases.
 
 ## 0.7.0-preview.1 - 2026-09-27
 

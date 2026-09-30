@@ -1,6 +1,6 @@
 # 架构分层与包依赖
 
-大多数项目只需要安装 `TenonAdmin` 元包，再调用 `AddTenonAdmin()`。只有准备单独使用数据层、接入可选能力，或者排查依赖冲突时，才需要关心各个包如何分层。五个核心包只向下依赖；Redis、Excel 和四个登录包只依赖 `Core`，工作流包则依赖 `AspNetCore`。元包不会自动引入这些可选能力。
+大多数项目只需要安装 `TenonAdmin` 元包，再调用 `AddTenonAdmin()`。只有准备单独使用数据层、接入可选能力，或者排查依赖冲突时，才需要关心各个包如何分层。五个核心包只向下依赖；Redis、Excel 和四个登录包组成六个仅依赖 `Core` 的轻量扩展。Workflow 与 Integration 会添加控制器并复用宿主管线，因此都依赖 `AspNetCore`。元包不会自动引入这些可选能力。
 
 ## 核心链条：五个包
 
@@ -32,7 +32,7 @@ TenonAdmin.Excel           可选包:xlsx 读写与带下拉的模板生成,消�
 TenonAdmin.Core
 ```
 
-四个登录可选包只引 `Core` 和 Microsoft.*，没有厂商 SDK。`TenonAdmin.Workflow` 是另一类可选包：它需要复用控制器和请求管线，因此引用 `TenonAdmin.AspNetCore`，安装后调用 `AddTenonAdminWorkflow()` 与 `UseWorkflow()` 才启用。
+上面的六个轻量扩展都只依赖 `Core`。四个登录包只使用 Microsoft.*，不引入厂商 SDK；Redis 和 Excel 只增加各自能力所需的库。`TenonAdmin.Workflow` 与 `TenonAdmin.Integration` 属于宿主级可选包，两者都引用 `TenonAdmin.AspNetCore` 来添加控制器并复用请求管线，并且都要完成各自的注册与 `Use*()` 调用后才会启用。
 
 各层职责与依赖方向：
 

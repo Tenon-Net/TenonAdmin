@@ -1,6 +1,6 @@
 # Layered Architecture and Package Dependencies
 
-Most applications only need the `TenonAdmin` meta-package and one call to `AddTenonAdmin()`. The package layout matters when you want only the data layer, add an optional capability, or diagnose a dependency conflict. Five core packages depend downward. Redis, Excel, and four login packages depend only on `Core`, while the workflow package depends on `AspNetCore`. The meta-package does not pull in these optional capabilities.
+Most applications only need the `TenonAdmin` meta-package and one call to `AddTenonAdmin()`. The package layout matters when you want only the data layer, add an optional capability, or diagnose a dependency conflict. Five core packages depend downward. Six lightweight extensions—Redis, Excel, and four login packages—depend only on `Core`; Workflow and Integration depend on `AspNetCore` because they add controllers and reuse the host pipeline. The meta-package does not pull in these optional capabilities.
 
 ## The core chain — five packages
 
@@ -32,7 +32,7 @@ TenonAdmin.Excel           Optional: xlsx read/write and template generation wit
 TenonAdmin.Core
 ```
 
-All four login packages reference only `Core` and Microsoft.*; none brings in a vendor SDK. `TenonAdmin.Workflow` is a different kind of optional package. It references `TenonAdmin.AspNetCore` to reuse controllers and the request pipeline, and becomes active only after `AddTenonAdminWorkflow()` and `UseWorkflow()` are called.
+The six lightweight extensions above depend on `Core` only. The four login packages use Microsoft.* instead of vendor SDKs; Redis and Excel add only their capability-specific libraries. `TenonAdmin.Workflow` and `TenonAdmin.Integration` are host-level optional packages: both reference `TenonAdmin.AspNetCore` to add controllers and reuse the request pipeline, and each requires its own registration and `Use*()` call before it becomes active.
 
 Responsibilities and dependency direction per layer:
 

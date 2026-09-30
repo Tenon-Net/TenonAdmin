@@ -162,7 +162,7 @@ app.Run();
 
 管理画面にはバックエンドのバージョンに合った Vue または React のテンプレートを使います。既定のデータベースは SQLite です。MySQL、SQL Server、PostgreSQL を使う場合は、設定でデータベースの種類と接続文字列を指定します。
 
-データベース設定、新規プロジェクトのテンプレート、既存アプリへの導入手順は[導入ガイド](https://tenon.52moyu.net/guide/getting-started)にあります。Excel、外部ログイン、Redis、ワークフローの拡張は必要に応じてインストールし、各ドキュメントに従って登録と設定を行ってください。
+データベース設定、新規プロジェクトのテンプレート、既存アプリへの導入手順は[導入ガイド](https://tenon.52moyu.net/guide/getting-started)にあります。Excel、外部ログイン、Redis、ワークフロー、`TenonAdmin.Integration` の拡張は必要に応じてインストールし、各ドキュメントに従って登録と設定を行ってください。システム連携パッケージは `TenonAdmin` メタパッケージには含まれません。アプリケーション資格情報、公開 API、外部呼び出し、確実な配信の有効化手順は[システム連携](https://tenon.52moyu.net/guide/integration)を参照してください。
 
 ## 機能一覧
 
@@ -176,6 +176,7 @@ app.Run();
 | Excel インポート・エクスポート（オプション） | 取込テンプレート、取込データの確認、セル単位の検証、重複チェック、エラーレポート、出力列の選択 |
 | 定期ジョブ | スケジュール、一定間隔、単発の実行。コード・HTTP・SQL ジョブ、実行ログ、タイムアウト、再試行、失敗通知。SQL 実行は設定で有効化が必要 |
 | 承認ワークフロー（オプション） | フロー設計、動的フォーム、ステップごとの項目権限、承認処理、タイムアウト処理、実行履歴 |
+| システム連携（オプション） | アプリケーション資格情報と API キー、公開エンドポイントとデータ範囲の権限、外部呼び出し履歴、再試行と手動処理に対応した確実な配信 |
 | フロントエンド | Vue と React のテンプレート、中国語・英語、ライト・ダークテーマ、レイアウト設定、業務コンポーネント、OpenAPI 型生成 |
 | データとデプロイ | SQLite、MySQL、SQL Server、PostgreSQL、複数データベース接続、独立したジョブプロセス、Docker、ヘルスチェック、Redis キャッシュ拡張 |
 
@@ -240,16 +241,16 @@ app.Run();
   <tr>
     <td width="50%" align="center" valign="top">
       <a href="docs/screenshots/integration-apps.png"><img src="docs/screenshots/thumbs/integration-apps.png" alt="接続アプリ" width="480"></a>
-      <br>接続アプリ＊
+      <br>接続アプリ
     </td>
     <td width="50%" align="center" valign="top">
       <a href="docs/screenshots/delivery-tasks.png"><img src="docs/screenshots/thumbs/delivery-tasks.png" alt="確実な配信" width="480"></a>
-      <br>確実な配信＊
+      <br>確実な配信
     </td>
   </tr>
 </table>
 
-＊接続アプリと確実な配信の画像は、元の README から引き継いだものです。この文章の確認に使用した `dev` のスナップショットでは対応する実装を確認できていないため、この 2 枚は現在のブランチにシステム連携機能が含まれることを示すものではありません。
+この 2 枚は現在の `TenonAdmin.Integration` モジュールを示しています。左は接続アプリの管理画面と資格情報・権限への入口、右は確実な配信タスクと試行履歴です。オプションパッケージの導入から一連の動作確認までは[システム連携](https://tenon.52moyu.net/guide/integration)を参照してください。
 
 ## ドキュメントと業務サンプル
 

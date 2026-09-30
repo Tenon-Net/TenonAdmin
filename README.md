@@ -162,7 +162,7 @@ app.Run();
 
 Use the matching Vue or React template for the admin interface. SQLite is the default database. To use MySQL, SQL Server, or PostgreSQL, set the database type and connection string in configuration.
 
-See the [getting started guide](https://tenon.52moyu.net/guide/getting-started) for database settings, the project template, and integration with existing applications. Install Excel, external login, Redis, and workflow extensions as needed, then register and configure them according to their documentation.
+See the [getting started guide](https://tenon.52moyu.net/guide/getting-started) for database settings, the project template, and integration with existing applications. Install Excel, external login, Redis, workflow, and `TenonAdmin.Integration` extensions as needed, then register and configure them according to their documentation. The Integration package is separate from the `TenonAdmin` meta-package; follow [System Integration](https://tenon.52moyu.net/guide/integration) to enable its application credentials, open APIs, outbound calls, and reliable delivery.
 
 ## Feature overview
 
@@ -176,6 +176,7 @@ See the [getting started guide](https://tenon.52moyu.net/guide/getting-started) 
 | Excel import/export (optional package) | Import templates, data inspection, cell validation, duplicate detection, error reports, and export column selection |
 | Scheduled jobs | Scheduled, fixed-interval, and one-time execution; code, HTTP, and SQL jobs, with logs, timeouts, retries, and failure alerts; SQL execution must be enabled in configuration |
 | Approval workflows (optional package) | Process design, dynamic forms, field permissions per step, approval handling, timeout handling, and runtime records |
+| System integration (optional package) | Application credentials and API keys, open endpoint and data-scope grants, outbound call records, and reliable delivery with retries and manual resolution |
 | Frontend support | Vue and React templates, Chinese and English, light and dark themes, layout settings, business components, and OpenAPI type generation |
 | Data and deployment | SQLite, MySQL, SQL Server, PostgreSQL, multiple database connections, a standalone Worker, Docker, health checks, and a Redis cache extension |
 
@@ -240,16 +241,16 @@ Click an image to view it at full size.
   <tr>
     <td width="50%" align="center" valign="top">
       <a href="docs/screenshots/integration-apps.png"><img src="docs/screenshots/thumbs/integration-apps.png" alt="Application integrations" width="480"></a>
-      <br>Application integrations＊
+      <br>Application integrations
     </td>
     <td width="50%" align="center" valign="top">
       <a href="docs/screenshots/delivery-tasks.png"><img src="docs/screenshots/thumbs/delivery-tasks.png" alt="Reliable delivery" width="480"></a>
-      <br>Reliable delivery＊
+      <br>Reliable delivery
     </td>
   </tr>
 </table>
 
-＊The application integration and reliable delivery screenshots are retained from the original README. Their implementations have not been confirmed in the `dev` snapshot used for this text; these two images do not indicate that the current branch includes system integration features.
+These screenshots show the current `TenonAdmin.Integration` module: integration application management and its credential and permission entry points on the left, and reliable-delivery tasks and attempt records on the right. Follow [System Integration](https://tenon.52moyu.net/guide/integration) to install the optional package and run the complete flow.
 
 ## Documentation and business example
 

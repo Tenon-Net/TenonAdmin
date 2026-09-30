@@ -162,7 +162,7 @@ app.Run();
 
 管理界面使用配套的 Vue 或 React 模板，按所选后端版本接入。默认数据库为 SQLite；改用 MySQL、SQL Server 或 PostgreSQL 时，通过数据库配置指定类型和连接地址。
 
-数据库设置、新建项目模板以及接入已有应用的步骤见[接入指南](https://tenon.52moyu.net/zh/guide/getting-started)。Excel、外部登录、Redis 和工作流等扩展按需安装，并按各自文档完成注册和配置。
+数据库设置、新建项目模板以及接入已有应用的步骤见[接入指南](https://tenon.52moyu.net/zh/guide/getting-started)。Excel、外部登录、Redis、工作流和 `TenonAdmin.Integration` 等扩展按需安装，并按各自文档完成注册和配置。系统集成包不在 `TenonAdmin` 元包中，应用凭据、开放接口、出站调用与可靠投递的启用步骤见[系统集成](https://tenon.52moyu.net/zh/guide/integration)。
 
 ## 功能一览
 
@@ -176,6 +176,7 @@ app.Run();
 | Excel 导入导出（可选包） | 导入模板、数据预览、单元格校验、查重、错误报告与导出列选择 |
 | 定时任务 | 定时、固定间隔和单次执行；代码、HTTP 和 SQL 任务，运行日志、超时、失败重试与告警；SQL 执行需要配置开启 |
 | 审批工作流（可选包） | 流程设计、动态表单、节点字段权限、审批办理、超时处理与运行记录 |
+| 系统集成（可选包） | 应用凭据与 API Key、开放接口和数据范围授权、出站调用记录，以及支持重试和人工处理的可靠投递 |
 | 前端支持 | Vue 与 React 两套模板，中英文、明暗主题、布局设置、业务组件与 OpenAPI 类型生成 |
 | 数据与部署 | SQLite、MySQL、SQL Server、PostgreSQL，多数据库连接、独立任务进程、Docker、健康检查与 Redis 缓存扩展 |
 
@@ -240,16 +241,16 @@ app.Run();
   <tr>
     <td width="50%" align="center" valign="top">
       <a href="docs/screenshots/integration-apps.png"><img src="docs/screenshots/thumbs/integration-apps.png" alt="接入应用" width="480"></a>
-      <br>接入应用＊
+      <br>接入应用
     </td>
     <td width="50%" align="center" valign="top">
       <a href="docs/screenshots/delivery-tasks.png"><img src="docs/screenshots/thumbs/delivery-tasks.png" alt="可靠投递" width="480"></a>
-      <br>可靠投递＊
+      <br>可靠投递
     </td>
   </tr>
 </table>
 
-＊接入应用与可靠投递保留原 README 中的界面截图，对应实现尚未在本稿依据的 `dev` 快照中确认；这两张截图不代表当前分支已包含系统集成功能。
+两张截图对应当前 `TenonAdmin.Integration` 模块：左侧是接入应用管理及其凭据、权限入口，右侧是可靠投递任务与尝试记录。安装可选包并跑通完整链路的步骤见[系统集成](https://tenon.52moyu.net/zh/guide/integration)。
 
 ## 文档与业务示例
 

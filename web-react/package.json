@@ -1,6 +1,6 @@
 {
   "name": "tenon-admin-web-react",
-  "version": "0.7.0-preview.1",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "engines": {
