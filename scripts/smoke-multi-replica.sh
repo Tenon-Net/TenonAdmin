@@ -15,6 +15,7 @@ set -uo pipefail
 BASE="${1:-http://localhost:8080}"
 ADMIN_PASSWORD="${TENON_ADMIN_PASSWORD:-Tenon@123456}"
 FAILURES=0
+COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.scale.yml)
 
 pass() { echo "  ✅ $1"; }
 fail() { echo "  ❌ $1"; FAILURES=$((FAILURES + 1)); }
@@ -161,7 +162,7 @@ echo "== 4. The real client IP is captured after the reverse proxy =="
 # Without parsing X-Forwarded-For, every request appears to come from the Caddy container's
 # single IP: all users would share one rate-limit bucket, and the IP column in the login log
 # would be nothing but proxy addresses (audit trail voided).
-PROXY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q web)" 2>/dev/null)
+PROXY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$("${COMPOSE[@]}" ps -q web)" 2>/dev/null)
 LOG_IP=$(curl -s "$BASE/api/v1/sys/log/login/page?Current=1&Size=1" -H "Authorization: Bearer $ADMIN_TOKEN" | json data.items.0.ip)
 if [ -z "$PROXY_IP" ]; then
   echo "  ⚠️  Could not get the Caddy container's IP, skipping this check (not counted as a pass)"
@@ -255,7 +256,7 @@ except Exception:
 import sys,json
 nodes = json.load(sys.stdin)['data']['nodes']
 print(next((n['nodeName'] for n in nodes if n['isLeader']), ''))")
-    LEADER_SVC=$(docker compose ps --format '{{.Service}} {{.Name}}' 2>/dev/null | while read -r svc name; do
+    LEADER_SVC=$("${COMPOSE[@]}" ps --format '{{.Service}} {{.Name}}' 2>/dev/null | while read -r svc name; do
       case "$svc" in app|app2)
         wid=$(docker exec "$name" printenv TenonAdmin__Id__WorkerId 2>/dev/null)
         [ -n "$wid" ] && [ "${LEADER##*#}" = "$wid" ] && echo "$svc"
@@ -266,7 +267,7 @@ print(next((n['nodeName'] for n in nodes if n['isLeader']), ''))")
     else
       BEFORE=$(curl -s "$BASE/api/v1/sys/job/log/page?JobId=$JOB_ID&Size=1" -H "Authorization: Bearer $ADMIN_TOKEN" | json data.total)
       echo "  (stopping the leader '$LEADER_SVC', then waiting 50s for the standby to take over: lease 30s + heartbeat 10s)"
-      docker compose stop "$LEADER_SVC" >/dev/null 2>&1
+      "${COMPOSE[@]}" stop "$LEADER_SVC" >/dev/null 2>&1
       sleep 50
       # After stop, Caddy may still briefly route to the dead upstream (empty body / 502). Retry
       # until we get a real JSON envelope so a proxy blip is not reported as "standby never took over".
@@ -290,7 +291,7 @@ except Exception:
       [ -n "$NEW_LEADER" ] && [ "$NEW_LEADER" != "$LEADER" ] \
         && pass "Leadership moved from '$LEADER' to '$NEW_LEADER'" \
         || fail "Leader is still reported as '$NEW_LEADER' -- the lease was never taken over"
-      docker compose start "$LEADER_SVC" >/dev/null 2>&1
+      "${COMPOSE[@]}" start "$LEADER_SVC" >/dev/null 2>&1
     fi
     curl -s -X DELETE "$BASE/api/v1/sys/job/$JOB_ID" -H "Authorization: Bearer $ADMIN_TOKEN" >/dev/null
   fi
@@ -307,8 +308,8 @@ PROBE_CODE=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/v1/integration/ap
 if [ "$PROBE_CODE" = "404" ]; then
   echo "  ⚠️  TenonAdmin.Integration is not enabled on this host, skipping (not counted as a pass)"
 else
-  APP_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q app)" 2>/dev/null)
-  APP2_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q app2)" 2>/dev/null)
+  APP_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$("${COMPOSE[@]}" ps -q app)" 2>/dev/null)
+  APP2_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$("${COMPOSE[@]}" ps -q app2)" 2>/dev/null)
   if [ -z "$APP_IP" ] || [ -z "$APP2_IP" ]; then
     fail "Could not get both replicas' container IPs -- cannot test cross-replica propagation directly"
   else
