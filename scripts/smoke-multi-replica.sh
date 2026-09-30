@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Dual-replica smoke test: verifies the batch-6 guarantees that **only surface when two
-# replicas are online at the same time**. Running a single replica ten thousand times would
-# never reveal these issues, so this script is the only real evidence for this batch.
+# Dual-replica smoke test: verifies the batch-6 guarantees, plus (§7) the third-party
+# integration module's, that **only surface when two replicas are online at the same time**.
+# Running a single replica ten thousand times would never reveal these issues, so this script
+# is the only real evidence for them.
 #
 # Usage (bring the stack up first):
 #   docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --build
@@ -292,6 +293,98 @@ except Exception:
       docker compose start "$LEADER_SVC" >/dev/null 2>&1
     fi
     curl -s -X DELETE "$BASE/api/v1/sys/job/$JOB_ID" -H "Authorization: Bearer $ADMIN_TOKEN" >/dev/null
+  fi
+fi
+
+echo "== 7. Integration module: an app's grant, enable and credential state reaches every replica immediately =="
+# Same guarantee as section 1 (sessions), for a different table: itg_app / itg_app_grant /
+# itg_app_credential are read straight from the database on every open-API request, with no
+# in-process cache (docs/third-party-integration-implementation.md §4.3) -- so a change an
+# admin makes against replica A must be visible to a partner's very next call, even when that
+# call happens to land on replica B. Skipped, not failed, on a host without the module (its
+# admin API 404s), so this script stays usable against a plain deployment too.
+PROBE_CODE=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/v1/integration/app/page?Current=1&Size=1" -H "Authorization: Bearer $ADMIN_TOKEN")
+if [ "$PROBE_CODE" = "404" ]; then
+  echo "  ⚠️  TenonAdmin.Integration is not enabled on this host, skipping (not counted as a pass)"
+else
+  APP_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q app)" 2>/dev/null)
+  APP2_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q app2)" 2>/dev/null)
+  if [ -z "$APP_IP" ] || [ -z "$APP2_IP" ]; then
+    fail "Could not get both replicas' container IPs -- cannot test cross-replica propagation directly"
+  else
+    A="http://$APP_IP:8080"; B="http://$APP2_IP:8080"
+    # 只读状态变更后的第一次响应;不得用重试掩盖短暂的旧授权。
+    whoami_code() {
+      curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$1/api/open/v1/whoami" -H "X-Api-Key: $2"
+    }
+    # 管理写入固定发往 A,同时验证 HTTP 和业务码;失败时不输出可能含新凭据的响应。
+    itg_admin() {
+      local response payload='{}'
+      if [ $# -ge 3 ]; then payload="$3"; fi
+      response=$(curl -fsS --max-time 10 -X "$1" "$A$2" -H 'Content-Type: application/json' \
+        -H "Authorization: Bearer $ADMIN_TOKEN" -d "$payload") || return 1
+      [ "$(echo "$response" | json code)" = "0" ] || return 1
+      echo "$response"
+    }
+    # 第 6 段刚重启过一个副本;只在开始业务断言前等待就绪。
+    for replica in "$A" "$B"; do
+      for _try in $(seq 1 30); do
+        curl -fsS --max-time 2 "$replica/health/ready" > /dev/null && break
+        sleep 1
+      done
+    done
+    ROOT_ORG=$(itg_admin GET /api/v1/sys/org/list | python3 -c "
+import sys, json
+orgs = json.load(sys.stdin)['data']
+print(next(o['id'] for o in orgs if not o.get('parentId')))")
+    ITG_CODE="smoke-itg-$RANDOM"
+    ITG_ID=$(itg_admin POST /api/v1/integration/app \
+      "{\"code\":\"$ITG_CODE\",\"name\":\"smoke\",\"ownerOrgId\":$ROOT_ORG}" | json data)
+    KEY=$(itg_admin POST "/api/v1/integration/app/$ITG_ID/credentials" '{}' | json data.apiKey)
+    if [ -z "$ITG_ID" ] || [ -z "$KEY" ]; then
+      fail "Could not create a smoke integration app or issue its credential"
+    else
+      [ "$(whoami_code "$B" "$KEY")" = "403" ] \
+        && pass "Replica B denies the ungranted whoami endpoint before any grant (403)" \
+        || fail "Replica B did not deny the ungranted endpoint -- expected 403"
+
+      if itg_admin PUT "/api/v1/integration/app/$ITG_ID/grants" '{"permissions":["GET:/api/open/v1/whoami"]}' > /dev/null; then
+        [ "$(whoami_code "$B" "$KEY")" = "200" ] \
+          && pass "A grant made on replica A is honored by replica B on its very next request" \
+          || fail "Replica B rejected the first request after the grant on replica A"
+      else
+        fail "Grant on replica A failed"
+      fi
+
+      if itg_admin POST "/api/v1/integration/app/$ITG_ID/disable" '{}' > /dev/null; then
+        [ "$(whoami_code "$B" "$KEY")" = "401" ] \
+          && pass "Disabling the app on replica A is honored by replica B immediately (401)" \
+          || fail "Replica B accepted the first request after disabling on replica A"
+      else
+        fail "Disable on replica A failed"
+      fi
+
+      # 先重新启用并证明这把凭据在两端有效,再独立验证撤销,避免停用掩盖撤销失效。
+      if itg_admin POST "/api/v1/integration/app/$ITG_ID/enable" '{}' > /dev/null \
+        && [ "$(whoami_code "$A" "$KEY")" = "200" ] \
+        && [ "$(whoami_code "$B" "$KEY")" = "200" ]; then
+        CRED_ID=$(itg_admin GET "/api/v1/integration/app/$ITG_ID/credentials" | json data.0.id)
+        if [ -n "$CRED_ID" ] && itg_admin POST "/api/v1/integration/app/$ITG_ID/credentials/$CRED_ID/revoke" '{}' > /dev/null; then
+          [ "$(whoami_code "$A" "$KEY")" = "401" ] \
+            && pass "Revoking on replica A is honored by A on its first request" \
+            || fail "Replica A accepted the credential it just revoked"
+          [ "$(whoami_code "$B" "$KEY")" = "401" ] \
+            && pass "Revoking on replica A is honored by B on its first request" \
+            || fail "Replica B accepted a credential revoked on replica A"
+        else
+          fail "Credential revocation on replica A failed"
+        fi
+      else
+        fail "Could not prove the enabled app's credential works on both replicas before revocation"
+      fi
+
+      itg_admin DELETE "/api/v1/integration/app/$ITG_ID" > /dev/null || fail "Smoke app cleanup failed"
+    fi
   fi
 fi
 

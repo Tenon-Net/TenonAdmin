@@ -18,6 +18,8 @@ const backendOutput = `${join(tmpdir(), `tenon-admin-e2e-build-${randomUUID()}`)
 
 export default defineConfig({
   testDir: './e2e',
+  // 出站调用 / 可靠投递用例依赖消费者示例后端,由 playwright.integration.config.ts 单独运行
+  testIgnore: /integration-delivery\.spec\.ts/,
   timeout: 30_000,
   fullyParallel: false,
   workers: 1,
@@ -36,6 +38,9 @@ export default defineConfig({
         ASPNETCORE_ENVIRONMENT: 'Development',
         TenonAdmin__Database__ConnectionString: `Data Source=${databaseFile}`,
         TenonAdmin__Seed__AdminPassword: adminPassword,
+        // 认证端点按 IP 每分钟限流(默认 20 次);整套用例连续登录会随时间窗口偶发 429 卡在登录页。
+        // 与后端测试工厂同一做法:e2e 宿主关限流,限流行为由后端 RateLimit* 测试覆盖。
+        TenonAdmin__Security__RateLimit__Enabled: 'false',
       },
     },
     {

@@ -63,6 +63,7 @@ Issue 分诊用五个规范化标签，标签串就是角色名本身，取值�
 | `create-crud-frontend-react` | 创建 React CRUD 页面 | Types + API + React 页面（DataTable + FormContainer + `<Can>`） |
 | `replace-service` | 替换/扩展内置服务 | 定制登录流程、换密码哈希、覆写服务步骤 |
 | `wire-import-export` | 给自己的实体接导入导出 | 装 `TenonAdmin.Excel`、档案、六个端点、菜单取号 |
+| `wire-integration` | 给业务接第三方系统 | 装 `TenonAdmin.Integration`、开放接口、普通调用、事务内可靠投递 |
 | `create-job` | 给业务模块加定时任务 | `IAdminJob`、HTTP/SQL 任务、后台配置与验证 |
 | `create-page-variant` | 非标准页面模板 | 树表、主从分栏、侧栏筛选 |
 

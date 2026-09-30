@@ -1,4 +1,4 @@
-// 6 主色候选(design_handoff §可配置项)。默认 = 第一个靛蓝 #646CFF(与品牌 Logo / React 模板一致)。
-export const ACCENTS = ['#646CFF', '#7C5CFF', '#0EA5E9', '#EC4899', '#F97316', '#10B981'] as const
+// 默认品牌蓝；保留旧靛蓝选项，兼容已保存的主色偏好。
+export const ACCENTS = ['#0052D4', '#7C5CFF', '#0EA5E9', '#EC4899', '#F97316', '#10B981', '#646CFF'] as const
 
 export type Accent = (typeof ACCENTS)[number]

@@ -6,7 +6,7 @@ hero:
   text: 为 ASP.NET Core 项目接入后台管理
   tagline: 通过 NuGet 接入账号、角色和数据权限，在自己的项目中开发业务，前端可选 Vue 或 React
   image:
-    src: /tenon-mark.png
+    src: /icon-512.png
     alt: TenonAdmin
   actions:
     - theme: brand

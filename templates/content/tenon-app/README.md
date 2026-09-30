@@ -33,3 +33,7 @@ dotnet run
 4. 在 `Program.cs` 追加一行 `builder.Services.TryAddScoped<I{实体}Service, {实体}Service>();`。
 
 实体在本程序集内,`AddTenonAdmin(..., o => o.ApplicationAssemblies.Add(...))` 已登记 → 自动建表、控制器自动挂路由。**权限码 = 规范化路由**(如 `GET:/api/v1/sample/doc`),普通用户经角色-菜单授权;超管放行。
+
+## 第三方接入(可选)
+
+生成时加 `--integration`:项目多引用 `TenonAdmin.Integration`,`Program.cs` 接好模块,`Integrations/` 下是开放接口、普通第三方调用和事务内可靠投递的示例,哪些代码要按对方协议改、三个流程怎么跑通,见 `Integrations/README.md`。已经生成的项目要补上,按文档站[第三方接入](https://tenon.52moyu.net/zh/guide/integration)的两步接线即可。

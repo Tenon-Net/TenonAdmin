@@ -42,7 +42,7 @@ export function useAntdTheme(opts: ThemeOpts): ThemeConfig {
     //
     // 这里**不能**直接写共享层的种子色。分工是:共享层只管「accent → 种子」,色阶归各 UI 库 ——
     // 而 antd 的 `darkAlgorithm` 会拿种子再生成一整条暗色调色板,`colorPrimary` 是派生结果而非种子。
-    // 实测 accent #646CFF:暗色种子 #8086FF,antd 实际用 #7075DC。若这里写种子,同一页面上
+    // 暗色下 antd 会把种子色再次派生成最终主色。若这里写种子,同一页面上
     // 「antd 按钮」和「用 var(--color-primary) 的元素」会是**两种紫** —— 亮色下恰好相等,只有暗色露馅。
     // 以 antd 为准,模板内部才自洽。两个模板暗色主色因此不同,这是有意的:各 UI 库有各自的主题体系。
     const t = theme.getDesignToken(next)

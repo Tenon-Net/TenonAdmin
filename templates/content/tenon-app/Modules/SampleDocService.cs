@@ -17,6 +17,8 @@ public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
     /// <inheritdoc />
     public virtual async Task<long> CreateAsync(string title)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(title.Length, 128);
         var doc = new SampleDoc { Title = title };
         await repo.InsertAsync(doc);
         return doc.Id;
@@ -29,6 +31,8 @@ public class SampleDocService(IRepository<SampleDoc> repo) : ISampleDocService
     /// <inheritdoc />
     public virtual async Task<bool> RenameAsync(long id, string title)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(title.Length, 128);
         var doc = await repo.GetByIdAsync(id);   // 越权/不存在 → null(经范围过滤)
         if (doc is null) return false;
         doc.Title = title;

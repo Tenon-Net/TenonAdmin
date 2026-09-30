@@ -12,5 +12,7 @@
     <ProjectReference Include="..\..\src\TenonAdmin.Excel\TenonAdmin.Excel.csproj" />
     <!-- 可选卫星包:人工审批工作流。须 AddTenonAdminWorkflow + UseWorkflow(见 Program.cs)。 -->
     <ProjectReference Include="..\..\src\TenonAdmin.Workflow\TenonAdmin.Workflow.csproj" />
+    <!-- 可选卫星包:第三方系统接入。须 AddTenonAdminIntegration + UseIntegration(见 Program.cs)。 -->
+    <ProjectReference Include="..\..\src\TenonAdmin.Integration\TenonAdmin.Integration.csproj" />
   </ItemGroup>
 </Project>

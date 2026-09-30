@@ -65,6 +65,7 @@ This set of docs targets "building business features on top of TenonAdmin" — w
 | `create-crud-frontend-react` | Create a React CRUD page | Types + API + React page (DataTable + FormContainer + `<Can>`) |
 | `replace-service` | Replace/extend a built-in service | Customize login flow, swap password hashing, override service steps |
 | `wire-import-export` | Wire import/export on your entity | Install `TenonAdmin.Excel`, profiles, six endpoints, menu Ids |
+| `wire-integration` | Connect your business to third-party systems | Install `TenonAdmin.Integration`, open API, plain calls, transactional reliable delivery |
 | `create-job` | Add a scheduled job to a business module | `IAdminJob`, HTTP/SQL jobs, admin configuration, and verification |
 | `create-page-variant` | Non-standard page templates | Tree tables, master-detail split, sidebar filters |
 

@@ -1,0 +1,14 @@
+{
+  // 复制为 appsettings.Development.json(已被 .gitignore 忽略)。也可以改用环境变量:
+  //   TenonAdmin__Integration__Outbound__Targets__partner__Secret=partner-secret
+  // 或用户机密:dotnet user-secrets set "TenonAdmin:Integration:Outbound:Targets:partner:Secret" "partner-secret"
+  "TenonAdmin": {
+    "Integration": {
+      "Outbound": {
+        "Targets": {
+          "partner": { "Secret": "partner-secret" }
+        }
+      }
+    }
+  }
+}

@@ -16,6 +16,9 @@ internal static class AuthProbe
     public static Task<HttpClient> SuperAdmin(WorkflowAppFactory f) =>
         SuperAdmin(() => f.CreateClient());
 
+    public static Task<HttpClient> SuperAdmin(IntegrationAppFactory f) =>
+        SuperAdmin(() => f.CreateClient());
+
     private static async Task<HttpClient> SuperAdmin(Func<HttpClient> createClient)
     {
         var c = createClient();
@@ -28,6 +31,9 @@ internal static class AuthProbe
         PingOnly(f.Services, () => f.CreateClient());
 
     public static Task<HttpClient> PingOnly(WorkflowAppFactory f) =>
+        PingOnly(f.Services, () => f.CreateClient());
+
+    public static Task<HttpClient> PingOnly(IntegrationAppFactory f) =>
         PingOnly(f.Services, () => f.CreateClient());
 
     private static async Task<HttpClient> PingOnly(IServiceProvider services, Func<HttpClient> createClient)

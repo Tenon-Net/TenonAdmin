@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- 第三方接入集成测试宿主:扮演「消费者」,启用 TenonAdmin.Integration 并提供最小开放端点、范围策略与测试适配器。 -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TenonAdmin.AspNetCore\TenonAdmin.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\TenonAdmin.Integration\TenonAdmin.Integration.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 可选卫星包:第三方系统接入(接入应用与开放接口 / 普通出站调用 / 可靠投递)。
+       装它并调 AddTenonAdminIntegration + UseIntegration 即启用;元包 TenonAdmin 不引用本包——装了才有。
+       引用 AspNetCore 以挂控制器、独立认证方案并复用内核管道;不新增第三方依赖。 -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>TenonAdmin 第三方接入可选包:接入应用与 API Key、开放接口授权与数据范围、出站调用与可靠投递;AddTenonAdminIntegration + UseIntegration 启用(TryAdd 可替换)。</Description>
+    <!-- 本包调用 AddOpenApi 注册独立开放文档;AspNetCore.OpenApi 的 XML 注释生成器以拦截器实现,
+         该包只经内核传递引用、其 props 不会替本工程打开拦截器命名空间,故在此显式登记。 -->
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Microsoft.AspNetCore.OpenApi.Generated</InterceptorsNamespaces>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TenonAdmin.AspNetCore\TenonAdmin.AspNetCore.csproj" />
+  </ItemGroup>
+</Project>

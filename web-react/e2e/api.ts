@@ -1,4 +1,4 @@
-import type { APIRequestContext } from '@playwright/test'
+import type { APIRequestContext, APIResponse } from '@playwright/test'
 import { ADMIN_ACCOUNT, ADMIN_PASSWORD } from './helpers'
 
 /** Set by playwright.config.ts to the unique host URL for this run. */
@@ -47,6 +47,48 @@ export async function apiCreateUser(
     throw new Error(`create user failed: code=${env.code} msg=${env.msg}`)
   }
   return env.data.id
+}
+
+/**
+ * 建只读用户:新角色只挂 `menuIds`(菜单及其查看按钮),再以该用户身份经接口改掉初始口令
+ * (管理员建号强制首登改密),返回可直接走界面登录的账号口令。`prefix` 拼角色编码与账号,`name` 作角色名前缀与姓名。
+ */
+export async function apiCreateViewOnlyUser(
+  request: APIRequestContext,
+  token: string,
+  input: { prefix: string; name: string; menuIds: number[] },
+): Promise<{ account: string; password: string }> {
+  const stamp = Date.now().toString(36)
+  const account = `${input.prefix}_view_${stamp}`
+  const initialPassword = 'ViewOnly@123'
+  const password = 'ViewOnly@456'
+  const headers = { Authorization: `Bearer ${token}` }
+  const ok = async <T>(step: string, res: APIResponse) => {
+    const env = await readEnvelope<T>(res)
+    if (env.code !== 0) throw new Error(`${step} failed: code=${env.code} msg=${env.msg}`)
+    return env.data as T
+  }
+
+  const roleId = await ok<number>('create role', await request.post(`${apiBase()}/api/v1/sys/role/add`, {
+    headers,
+    data: { name: `${input.name}-${stamp}`, code: `${input.prefix}-view-${stamp}`, sort: 99, enabled: true },
+  }))
+  await ok('assign role menus', await request.put(`${apiBase()}/api/v1/sys/role/menu`, {
+    headers,
+    data: { roleId, menuIds: input.menuIds },
+  }))
+  await ok('create user', await request.post(`${apiBase()}/api/v1/sys/user`, {
+    headers,
+    data: { account, name: input.name, password: initialPassword, enabled: true, forceTotp: false, roleIds: [roleId] },
+  }))
+  const { accessToken } = await ok<{ accessToken: string }>('user login', await request.post(`${apiBase()}/api/v1/auth/login`, {
+    data: { account, password: initialPassword },
+  }))
+  await ok('change password', await request.put(`${apiBase()}/api/v1/personal/password`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    data: { oldPassword: initialPassword, newPassword: password },
+  }))
+  return { account, password }
 }
 
 /** 建 ForceTotp 用户供自助绑定 e2e(ADR 0006:无邀请)。宿主须启用 Totp:Enabled。 */

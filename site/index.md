@@ -6,7 +6,7 @@ hero:
   text: Admin features for ASP.NET Core
   tagline: Install accounts, roles, and data permissions through NuGet; build business features in your project with Vue or React
   image:
-    src: /tenon-mark.png
+    src: /icon-512.png
     alt: TenonAdmin
   actions:
     - theme: brand

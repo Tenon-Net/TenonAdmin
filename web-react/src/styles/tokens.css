@@ -26,11 +26,11 @@
   --color-gray-50:  #F7F8FA;  /* 页面背景底 */
   --color-white:    #FFFFFF;
 
-  /* ── 原语:品牌主色(明快现代靛蓝,四档态)──────────────────── */
-  --color-primary:         #646CFF;  /* 默认态 · 主按钮 / 链接 / 选中 */
-  --color-primary-hover:   #7D84FF;  /* 悬浮 hover · 加亮一档 */
-  --color-primary-pressed: #5259D1;  /* 按下 pressed / active */
-  --color-primary-light:   #F0F0FF;  /* 浅底 · 选中背景 / 标签底 */
+  /* ── 品牌主色备用值；运行时由 antd 主题重写 ── */
+  --color-primary:         #0052D4;  /* 默认态 · 主按钮 / 链接 / 选中 */
+  --color-primary-hover:   #296EDB;  /* 悬浮 hover · 加亮一档 */
+  --color-primary-pressed: #0043AE;  /* 按下 pressed / active */
+  --color-primary-light:   #E6EEFB;  /* 浅底 · 选中背景 / 标签底 */
 
   /* ── 原语:语义色(base + 浅底 light-bg,亮色)─────────────── */
   --color-success:        #18A058;
@@ -117,10 +117,10 @@
    ══════════════════════════════════════════════════════════ */
 :root[data-theme="dark"] {
   /* 主色(暗底提亮一档) */
-  --color-primary:         #8B91FF;
-  --color-primary-hover:   #A2A7FF;
-  --color-primary-pressed: #767CF0;
-  --color-primary-light:   #2D3154;
+  --color-primary:         #2E71DC;
+  --color-primary-hover:   #4F88E2;
+  --color-primary-pressed: #265DB4;
+  --color-primary-light:   #223049;
 
   /* 语义色(暗底 base + 浅底) */
   --color-success:    #52B882;  --color-success-bg: #16291E;

@@ -29,7 +29,7 @@
 
 同一个 store 里还有两个用户可调、和 `themeScheme` 一起持久化的开关：
 
-- `accent`：品牌主色，从 6 个候选里选（`web-react/src/theme/accents.ts`：靛蓝 `#646CFF` 默认，另有紫、青、粉、橙、绿）。换主色即重算 `--color-primary*`。
+- `accent`：界面主色，从 7 个候选里选（`web-react/src/theme/accents.ts`：品牌深蓝 `#0052D4` 默认，并保留原来的靛蓝、紫、青、粉、橙、绿）。换主色即重算 `--color-primary*`。
 - `density`：`'comfortable'` / `'compact'`，走两条路。一条打到 `<html>` 的 `data-density`，联动手写壳的页内边距与卡片间距（`web-react/src/styles/chrome.css`）；另一条把 antd 的 `compactAlgorithm` 叠进主题，收紧组件自身的尺寸。表格行高 `compactAlgorithm` 不管，另给了 `cellPaddingBlock` 补上。
 
 ## 全站灰阶（哀悼模式）
@@ -46,7 +46,9 @@ antd 和 Naive 这里有两处硬差别。一是数值 token 收的是**数字**
 
 填充阶要留神。设计系统在 hover 之外还给了一档**按下**态（`--color-fill-active`），这是两个模板有意分叉的一处：antd 的 filled 按钮和搜索框把静息、hover、按下三态分别接到 `colorFillTertiary`、`colorFillSecondary`、`colorFill`，只有两档的话按下去毫无反馈；Naive 侧不需要这一档。每个填充 token 还得连同它的 antd alias 伙伴一起给，否则同一页会冒出两种灰。
 
-主色是唯一不直接读、而是算出来的一档。6 个候选不可能每个都在 `tokens.css` 预写四态，所以只存一个 `accent`，其余由 `mix(a, b, t)` 派生（`web-react/src/theme/mix.ts`，两色按 `t∈[0,1]` 线性插值，和 Vue 版同一套魔数）。亮色下 `hover = mix(primary, #FFF, .16)`、`pressed = mix(primary, #000, .18)`；暗色先把 accent 往白里提亮一档再往下派生，免得靛蓝压在深底上发闷。
+主色是唯一不直接读、而是算出来的一档。7 个候选不可能每个都在 `tokens.css` 预写四态，所以只存一个 `accent`，其余由 `mix(a, b, t)` 派生（`web-react/src/theme/mix.ts`，两色按 `t∈[0,1]` 线性插值，和 Vue 版同一套魔数）。亮色下 `hover = mix(primary, #FFF, .16)`、`pressed = mix(primary, #000, .18)`；暗色先把 accent 往白里提亮一档再往下派生，免得深蓝压在深底上发闷。
+
+产品徽标和菜单图标是两套素材。`/tenon-mark.png` 是从 `Tenon-Net/Tenon-Brand` 同步的透明品牌图，侧栏与登录页直接使用；favicon、Apple Touch 与 PWA 图标使用同源的浅色底板版。它们随 TenonAdmin 按 Apache-2.0 分发，不进入下面的 Iconify/SVG 注册流程，也不跟随用户选择的 accent 改色。
 
 这些落地在 `useAntdTheme()`（`web-react/src/theme/useAntdTheme.ts`），用 `useLayoutEffect` 盯着 `dark`、`accent`、`density`，顺序是死的：先把 `data-theme` / `data-density` 打到 `<html>`，因为 `getComputedStyle` 读的是当前主题下的值，先读后翻就会拿到上一套配色、永远慢一拍；再重建 antd 配置；最后把 antd **最终解析出来的**主色写回 `--color-primary*`，供不经 antd 的手写样式（布局壳、登录页）消费。
 

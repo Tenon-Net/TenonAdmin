@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- 本地可控的「第三方系统」:无商业账号也能演示认证、按幂等键去重、结果查询、响应丢失与异步受理。
+       第三方接入示例与集成测试共用;测试以 Kestrel 随机端口在进程内宿主它(见 MockPartnerServer.Build)。 -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>TenonAdmin.Samples.MockPartner</RootNamespace>
+  </PropertyGroup>
+</Project>

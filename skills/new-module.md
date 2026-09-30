@@ -33,7 +33,7 @@
 7. **菜单/权限接线**:
    - 系统模块:`DefaultMenuSeed` 加页面节点 + 权限按钮。
    - 消费者:菜单管理 UI 建节点,`component` 填 `views/` 相对路径(如 `biz/product/index`),动态路由自动注册,**不写任何路由代码**。
-8. **可选加挂**:这个模块要定时跑点什么(对账、清理、推送)→ `create-job.md`;要 xlsx 导入导出 → `wire-import-export.md`。两者都不改动上面任何一步的产出,是纯加法。
+8. **可选加挂**:这个模块要定时跑点什么(对账、清理、推送)→ `create-job.md`;要 xlsx 导入导出 → `wire-import-export.md`;要让第三方系统调它、或它要调第三方 → `wire-integration.md`。三者都不改动上面任何一步的产出,是纯加法。
 9. **验证**(依赖步骤顺序运行；根据资源情况并行独立检查):
    - 内核跑 `dotnet build backend/TenonAdmin.slnx -c Release` 和相关测试；消费者构建/测试自己的项目。步骤 3 已通过且相关代码未变时复用证据，跨模块改动或 CI 要求再扩大范围。
    - `cd web && npm run typecheck && npm run lint`(React 模板:`cd web-react`,命令同名)

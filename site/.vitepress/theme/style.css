@@ -6,11 +6,11 @@
 
 :root {
   /* ── 品牌色(对比度感知:brand-1 用于链接/强调文字,取深一档保 AA)── */
-  --vp-c-brand-1: #5259d1;
-  --vp-c-brand-2: #646cff;
-  --vp-c-brand-3: #646cff;
-  --vp-c-brand-soft: rgba(100, 108, 255, 0.14);
-  --vp-c-brand-softer: rgba(100, 108, 255, 0.08);
+  --vp-c-brand-1: #0043ae;
+  --vp-c-brand-2: #0052d4;
+  --vp-c-brand-3: #0052d4;
+  --vp-c-brand-soft: rgba(0, 82, 212, 0.14);
+  --vp-c-brand-softer: rgba(0, 82, 212, 0.08);
 
   /* ── 背景 ── */
   --vp-c-bg: #ffffff;
@@ -45,23 +45,23 @@
 
   /* ── 渐变 hero(落地 DESIGN.md 的 btnGrad,预算好的 hex)── */
   --vp-home-hero-name-color: transparent;
-  --vp-home-hero-name-background: linear-gradient(135deg, #646cff 0%, #7963fa 55%, #b856c0 100%);
-  --vp-home-hero-image-background-image: linear-gradient(135deg, rgba(100, 108, 255, 0.5), rgba(184, 86, 192, 0.5));
+  --vp-home-hero-name-background: linear-gradient(135deg, #0052d4 0%, #087cd9 55%, #16abc0 100%);
+  --vp-home-hero-image-background-image: linear-gradient(135deg, rgba(0, 82, 212, 0.5), rgba(22, 171, 192, 0.5));
   --vp-home-hero-image-filter: blur(56px);
 
   /* ── 按钮品牌态描边随主色 ── */
   --vp-button-brand-border: transparent;
-  --vp-button-brand-bg: #646cff;
-  --vp-button-brand-hover-bg: #7d84ff;
-  --vp-button-brand-active-bg: #5259d1;
+  --vp-button-brand-bg: #0052d4;
+  --vp-button-brand-hover-bg: #296edb;
+  --vp-button-brand-active-bg: #0043ae;
 }
 
 .dark {
-  --vp-c-brand-1: #8b91ff;
-  --vp-c-brand-2: #a2a7ff;
-  --vp-c-brand-3: #8b91ff;
-  --vp-c-brand-soft: rgba(139, 145, 255, 0.16);
-  --vp-c-brand-softer: rgba(139, 145, 255, 0.1);
+  --vp-c-brand-1: #4f88e2;
+  --vp-c-brand-2: #74a1e8;
+  --vp-c-brand-3: #4f88e2;
+  --vp-c-brand-soft: rgba(79, 136, 226, 0.16);
+  --vp-c-brand-softer: rgba(79, 136, 226, 0.1);
 
   --vp-c-bg: #16181d;
   --vp-c-bg-alt: #1f2229;
@@ -82,9 +82,9 @@
 
   --vp-nav-bg-color: rgba(31, 34, 41, 0.82);
 
-  --vp-button-brand-bg: #8b91ff;
-  --vp-button-brand-hover-bg: #a2a7ff;
-  --vp-button-brand-active-bg: #767cf0;
+  --vp-button-brand-bg: #2e71dc;
+  --vp-button-brand-hover-bg: #4f88e2;
+  --vp-button-brand-active-bg: #265db4;
 }
 
 /* ── 顶栏毛玻璃(对 tokens 的 --color-header-bg + blur(12px))── */

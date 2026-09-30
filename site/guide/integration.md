@@ -4,6 +4,8 @@ When an ERP, warehouse system, or partner platform needs to call your business A
 
 This guide follows one complete path: create a partner application, issue a credential, grant only the required endpoints and data scopes, test with the separate OpenAPI document, and observe one delivery task through completion.
 
+When you are implementing open endpoints, custom data scopes, outbound clients, or delivery adapters, use the [System Integration Technical Reference](./integration-reference.md) alongside this tutorial.
+
 ## Choose the right capability first
 
 The following four concepts solve different problems. Separating them prevents machine credentials from being confused with user roles or admin navigation.
@@ -22,6 +24,8 @@ Use a matching TenonAdmin release that contains the system integration module, a
 :::
 
 ## Step 1: Install and enable the module
+
+For a new project, run `dotnet new tenon-app --integration -n PartnerAdmin`. The template references `TenonAdmin.Integration`, completes the two wiring steps below, and generates an `Integrations/` directory with open API, plain outbound call, and reliable delivery examples.
 
 Install the optional package in the consumer project:
 
@@ -99,6 +103,8 @@ Complete these actions before closing the dialog:
 
 Use rotation when changing keys. The system issues a new credential and can keep the old one valid for an overlap window. Revoke the old credential after the caller switches. If compromise is suspected, revoke it immediately instead of waiting for expiry.
 
+Issuing, rotating, or extending a credential widens or preserves application access, so only a super admin may perform these actions. A regular administrator receives `41003` even with the matching button permission. Revocation is a stop-loss action and can be delegated through button permissions.
+
 ## Step 4: Grant endpoints and data scopes
 
 A credential proves which application is calling; it does not grant business access by itself. Open the application's endpoint and data permissions and apply least privilege at two levels:
@@ -113,6 +119,8 @@ A credential proves which application is calling; it does not grant business acc
 | Custom scope | Partner code, tenant, warehouse, or another business partition | Select values supplied by the business scope policy |
 
 Admin sign-in, portal menus, and user roles do not count as integration authorization. An integration application is evaluated only from its endpoint grants, data scopes, enabled state, and credential state.
+
+Granting endpoints, binding data scopes, enabling an application, or changing its owning organization widens or restores access and is restricted to super admins. Regular administrators with the corresponding read permission may inspect existing configuration but cannot widen application access through button permissions.
 
 ## Step 5: Test with the separate OpenAPI document
 

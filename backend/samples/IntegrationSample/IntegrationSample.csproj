@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- 第三方接入消费者示例(合作方工单):开放接口、普通第三方调用、事务内可靠投递与安全恢复。
+       配合本地可控第三方 IntegrationMockPartner 运行,无需任何商业账号。 -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>TenonAdmin.Samples.Integration</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TenonAdmin\TenonAdmin.csproj" />
+    <ProjectReference Include="..\..\src\TenonAdmin.Integration\TenonAdmin.Integration.csproj" />
+  </ItemGroup>
+</Project>

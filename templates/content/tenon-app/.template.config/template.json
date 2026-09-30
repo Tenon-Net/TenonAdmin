@@ -28,8 +28,21 @@
       "datatype": "bool",
       "defaultValue": "false",
       "description": "为 true 时跳过创建后自动 dotnet restore。"
+    },
+    "integration": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "为 true 时接入第三方接入模块(TenonAdmin.Integration),并生成 Integrations/ 示例:开放接口、普通第三方调用与事务内可靠投递。"
     }
   },
+  "sources": [
+    {
+      "modifiers": [
+        { "condition": "(!integration)", "exclude": [ "Integrations/**" ] }
+      ]
+    }
+  ],
   "postActions": [
     {
       "condition": "(!skipRestore)",

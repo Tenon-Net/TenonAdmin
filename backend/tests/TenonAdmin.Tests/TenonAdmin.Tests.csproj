@@ -21,6 +21,9 @@
     <ProjectReference Include="..\..\tools\ExpenseAiDecisionEval\ExpenseAiDecisionEval.csproj" />
     <ProjectReference Include="..\TenonAdmin.TestHost\TenonAdmin.TestHost.csproj" />
     <ProjectReference Include="..\TenonAdmin.WorkflowTestHost\TenonAdmin.WorkflowTestHost.csproj" Aliases="workflowhost" />
+    <ProjectReference Include="..\..\src\TenonAdmin.Integration\TenonAdmin.Integration.csproj" />
+    <ProjectReference Include="..\TenonAdmin.IntegrationTestHost\TenonAdmin.IntegrationTestHost.csproj" Aliases="integrationhost" />
+    <ProjectReference Include="..\..\samples\IntegrationMockPartner\IntegrationMockPartner.csproj" />
   </ItemGroup>
 
   <ItemGroup>

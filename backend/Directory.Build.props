@@ -38,7 +38,7 @@
   </PropertyGroup>
 
   <!-- 每个打包项目都带仓库根 README 作包说明页 + 包图标;非打包项目此 None 为空操作。
-       图标源是 web/design-mockups/brand/tenon-logo.svg —— NuGet 只认 png/jpg,故这里放光栅化后的副本。 -->
+       图标源是 Tenon-Brand 的浅色版 PNG，按 Apache-2.0 随包分发。 -->
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="\" Visible="false" />
     <None Include="$(MSBuildThisFileDirectory)tenon-icon.png" Pack="true" PackagePath="\" Visible="false" />
