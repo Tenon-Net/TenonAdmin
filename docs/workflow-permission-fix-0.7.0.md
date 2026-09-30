@@ -101,16 +101,34 @@ dotnet test backend/TenonAdmin.slnx -c Release --no-build --no-restore \
 
 回归使用真实工作流宿主、真实菜单种子和 RBAC/Session/DataScope 服务。存量升级 fixture 在同一保留数据库中恢复 0.7.0 的四个原码与版本 `8`，保留账户、角色、授权、定义及已发布快照，再启动两次验证；共享 MemoryCacheProvider 模拟跨宿主保留的旧权限缓存，不把删库当作升级。只替换缓存存储，不替换权限提供器或安全检查。
 
-## 验证范围与剩余风险
+## 首次修复验证范围与剩余风险
 
-本次数据库集成实测为 SQLite；未实测 MySQL、PostgreSQL、SQL Server 的存量升级，也未连接真实 Redis。缓存逻辑键隔离已用跨宿主保留的真实 MemoryCacheProvider 验证，Redis 适配器共用这些逻辑键。未直接访问用户生产库或 tenon-example 的数据库，未使用发布后的正式 NuGet 包复验。浏览器实测覆盖 Vue 普通管理员设计器；React 通过相关单元、类型检查和构建，未做浏览器复验。
+以下为首次修复验证阶段的范围；0.7.1 发版的全量检查见后文。本次数据库集成实测为 SQLite；未实测 MySQL、PostgreSQL、SQL Server 的存量升级，也未连接真实 Redis。缓存逻辑键隔离已用跨宿主保留的真实 MemoryCacheProvider 验证，Redis 适配器共用这些逻辑键。未直接访问用户生产库或 tenon-example 的数据库，未使用发布后的正式 NuGet 包复验。浏览器实测覆盖 Vue 普通管理员设计器；React 通过相关单元、类型检查和构建，未做浏览器复验。
 
 两套 Vite 构建仍提示部分 chunk 过大，Vue 另提示已有 WfFormMount 动静态导入并存；构建均成功，此次未调整无关打包结构。OpenAPI 与控制器路由未改，生成 schema 未手改。
 
 ## 正式包复验
 
-代码涉及 `TenonAdmin.Workflow`（种子）、`TenonAdmin.SqlSugar`（种子版本）及 `TenonAdmin.Core`（权限缓存键）。正式发布需使用统一新版本发布这三个包，并更新其依赖链 `TenonAdmin.Services`、`TenonAdmin.AspNetCore` 和元包 `TenonAdmin`，避免消费者只更新 Workflow 却仍使用旧种子版本或缓存键。仓库发布工作流通常统一发布所有包；本次未执行发布或修改版本号。
+代码涉及 `TenonAdmin.Workflow`（种子）、`TenonAdmin.SqlSugar`（种子版本）及 `TenonAdmin.Core`（权限缓存键）。正式发布需使用统一新版本发布这三个包，并更新其依赖链 `TenonAdmin.Services`、`TenonAdmin.AspNetCore` 和元包 `TenonAdmin`，避免消费者只更新 Workflow 却仍使用旧种子版本或缓存键。仓库发布工作流通常统一发布所有包；首次修复验证阶段未发布或修改版本号；该修复随后纳入 0.7.1 发布。
 
 `TenonAdmin.Caching.Redis` 本次仅修改键示例注释，缓存运行行为由 Core 的新逻辑键生效，不需要修改 Redis 适配器。
 
 tenon-example 复验时更新正式 `TenonAdmin` / `TenonAdmin.Workflow` 引用并核对传递依赖版本，保留原库和原角色授权，按迁移说明启动，再以普通管理员完整执行设计器闭环。只需要同步其采用的前端模板的两处权限字符串，不复制控制器、替换权限提供器或修改业务代码。
+
+## 0.7.1 发布前全量验证
+
+在独立发布工作树中串行执行以下检查，保留全部原断言和安全检查：
+
+| 命令 | 实际结果 |
+| --- | --- |
+| `dotnet restore backend/TenonAdmin.slnx` | 成功 |
+| `dotnet build backend/TenonAdmin.slnx -c Release --no-restore` | 成功，0 警告、0 错误 |
+| `TENON_TEST_REDIS=<本机临时 Redis 地址> dotnet test backend/TenonAdmin.slnx -c Release --no-build --no-restore` | 1841/1841 通过，0 失败、0 跳过；含全部 8 个 RedisCacheTests |
+| `cd web && npm run lint && npm test && npm run build` | 成功，206/206 测试通过；构建包含类型检查 |
+| `cd web-react && npm run lint`、依次 `npx vitest run --shard=1/3` 至 `3/3`、`npm run build` | 成功，302 + 356 + 307 = 965 个测试通过；构建包含类型检查 |
+| `cd site && npm run lint:prose:selftest && npm run lint:prose && npm run docs:build` | 成功，116 个 Markdown 文件 prose 检查通过 |
+| `TENON_CONTRACT_PORT=39071 node scripts/check-contract-drift.mjs` | 成功，两套自动生成的 schema 与提交一致 |
+
+React 首次执行时，跨工作树依赖软链接被 Vite 文件访问限制拒绝；改为工作树内依赖后完整重跑全部分片，未放宽文件访问限制。站点首次构建发现 CHANGELOG 的仓库相对链接在站点导入页中失效，改为对应发布 tag 的 GitHub 链接后完整重跑。
+
+真实 Redis 的全量缓存集成测试已补齐；上述存量升级场景仍以 SQLite 和跨宿主 MemoryCacheProvider 验证，其他数据库存量升级、真实 Redis 下升级闭环及 React 浏览器尚未实测。发布工作流另设不可跳过的模板 restore/build 与 OpenAPI 归档闸门，本机未安装 PowerShell，因此模板 smoke 由该 CI 执行。

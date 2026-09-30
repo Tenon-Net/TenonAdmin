@@ -15,9 +15,18 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.7.1 - 2026-09-30
+
 ### Fixed
 
-- 修复普通管理员已获工作流菜单授权后，定义详情、版本历史、删除及 outbox 重放仍因路由约束权限码漂移而返回 403 的问题；同步 Vue/React 按钮权限，升级结构种子并隔离旧权限缓存，保留已有角色授权。升级步骤与验证记录见 [修复记录](docs/workflow-permission-fix-0.7.0.md)。
+- 修复普通管理员已获工作流菜单授权后，定义详情、版本历史、删除及 outbox 重放仍因路由约束权限码漂移而返回 403 的问题；同步 Vue/React 按钮权限，升级结构种子并隔离旧权限缓存，保留已有角色授权。升级步骤与验证记录见 [修复记录](https://github.com/Tenon-Net/TenonAdmin/blob/v0.7.1/docs/workflow-permission-fix-0.7.0.md)。
+- 修复多副本 Docker smoke 加载 Compose 文件的方式。
+
+升级到 0.7.1 前须先停止所有旧版副本，避免旧版将结构种子回刷；启用种子时自动更新已有菜单并保留角色授权。关闭种子的部署须按修复记录更新四条菜单权限码，并同步所用前端模板。
+
+### Changed
+
+- README 使用当前品牌标识。
 
 ## 0.7.0 - 2026-09-30
 
