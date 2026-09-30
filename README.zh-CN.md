@@ -3,7 +3,7 @@
 [English](README.md) | 简体中文 | [日本語](README.ja.md)
 
 <p align="center">
-  <img src="web/design-mockups/brand/icon-128.png" width="96" height="96" alt="TenonAdmin">
+  <img src="web/design-mockups/brand/tenon-mark.png" width="96" height="96" alt="TenonAdmin">
 </p>
 
 <h1 align="center">TenonAdmin</h1>
@@ -13,8 +13,14 @@
 <p align="center">NuGet 安装 · 业务独立开发 · Vue / React 双前端</p>
 
 <p align="center">
-  <a href="https://www.nuget.org/packages/TenonAdmin"><img src="https://img.shields.io/nuget/v/TenonAdmin" alt="NuGet 版本"></a>
+  <a href="https://www.nuget.org/packages/TenonAdmin"><img src="https://img.shields.io/badge/NuGet-0.7.0-004880?logo=nuget&logoColor=white" alt="NuGet 0.7.0"></a>
   <img src="https://img.shields.io/badge/.NET-10-512BD4" alt=".NET 10">
+  <img src="https://img.shields.io/badge/ASP.NET_Core-512BD4?logo=dotnet&logoColor=white" alt="ASP.NET Core">
+  <img src="https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white" alt="Vue 3">
+  <img src="https://img.shields.io/badge/Naive_UI-Vue-36AD6A" alt="Naive UI">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=20232A" alt="React 19">
+  <img src="https://img.shields.io/badge/Ant_Design-6-0170FE?logo=antdesign&logoColor=white" alt="Ant Design 6">
+  <img src="https://img.shields.io/badge/SqlSugar-ORM-2F6F9F" alt="SqlSugar ORM">
   <a href="https://github.com/Tenon-Net/TenonAdmin/actions/workflows/backend-ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Tenon-Net/TenonAdmin/backend-ci.yml?branch=dev" alt="dev 后端构建状态"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tenon-Net/TenonAdmin" alt="Apache License 2.0"></a>
 </p>

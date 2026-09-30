@@ -9,10 +9,13 @@
 - `tenon-logo-dark.svg` — 深色背景版本（用于深色模式）
 - `tenon-mark.svg` — 仅图形，使用 `currentColor`，颜色随 CSS `color` 变化
 
-位图（PNG，透明外的固定紫底）
+位图（PNG）
 - `favicon-16.png` / `favicon-32.png` / `favicon-48.png` — 浏览器标签
 - `icon-64.png` / `icon-128.png` / `icon-192.png` / `icon-512.png` — 通用/PWA
 - `apple-touch-icon.png` — 180×180，iOS 主屏
+- `tenon-mark.png` — 来自 [Tenon-Net/Tenon-Brand](https://github.com/Tenon-Net/Tenon-Brand) 的品牌图形，用于 README；随本项目按 Apache License 2.0 分发
+
+通用/PWA 图标使用固定紫底，`tenon-mark.png` 使用透明背景。
 
 其他
 - `favicon.ico` — 老浏览器兼容（内含 16/32/48）
