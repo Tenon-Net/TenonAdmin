@@ -15,6 +15,21 @@ namespace TenonAdmin.Tests;
 /// </summary>
 public class PermissionCodeConsistencyTests
 {
+    [Theory]
+    [InlineData(null, "GET:/")]
+    [InlineData("/API/Items/{ID}", "GET:/api/items/{id}")]
+    [InlineData("api/items/{Key:long:min(1)}", "GET:/api/items/{key:long:min(1)}")]
+    [InlineData("api/items/{id:long?}", "GET:/api/items/{id:long?}")]
+    [InlineData("api/items/{id:long=1}", "GET:/api/items/{id:long=1}")]
+    [InlineData("api/items/{*path}", "GET:/api/items/{*path}")]
+    [InlineData("api/items/{**path}", "GET:/api/items/{**path}")]
+    public void Permission_codes_preserve_parameter_names_and_route_policies(string? route, string expected)
+    {
+        Assert.Equal(expected, PermissionCode.Build("get", route));
+        Assert.NotEqual(PermissionCode.Build("GET", "api/items/{id:long}"),
+            PermissionCode.Build("GET", "api/items/{id:guid}"));
+    }
+
     [Fact]
     public void Every_seeded_permission_code_maps_to_a_real_endpoint()
     {

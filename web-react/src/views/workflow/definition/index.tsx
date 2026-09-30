@@ -128,14 +128,14 @@ export default function WfDefinitionPage() {
             has('POST:/api/v1/workflow/definition/disable') && Number(r.status) !== DEF_STATUS.DISABLED
               ? { key: 'disable', label: t('workflow.definition.disable') }
               : null,
-            has('DELETE:/api/v1/workflow/definition/{id}')
+            has('DELETE:/api/v1/workflow/definition/{id:long}')
               ? { key: 'delete', label: t('common.delete'), danger: true }
               : null,
           ].filter((o): o is { key: string; label: string; danger?: boolean } => o !== null)
 
           return (
             <Space size={0}>
-              {has('GET:/api/v1/workflow/definition/{id}') && (
+              {has('GET:/api/v1/workflow/definition/{id:long}') && (
                 <Button type="link" size="small" onClick={() => openDesigner(r)}>{t('workflow.definition.design')}</Button>
               )}
               {items.length > 0 && (

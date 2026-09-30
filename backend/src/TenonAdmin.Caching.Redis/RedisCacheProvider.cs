@@ -7,7 +7,7 @@ namespace TenonAdmin.Caching.Redis;
 /// <summary>
 /// <see cref="ICacheProvider"/> 的 Redis 实现(可选包 <c>TenonAdmin.Caching.Redis</c>):
 /// 用 StackExchange.Redis 把热数据放进共享 Redis,替代进程内 <c>MemoryCacheProvider</c>,支持多实例共享缓存。
-/// <para>逻辑键统一追加 <see cref="AdminCacheOptions.KeyPrefix"/> 前缀(如 <c>tenon:perm:123</c>,对应设计 §15 命名);
+/// <para>逻辑键统一追加 <see cref="AdminCacheOptions.KeyPrefix"/> 前缀(如 <c>tenon:perm:123:v2</c>,对应设计 §15 命名);
 /// 与其它服务共享同一 Redis 实例时按前缀隔离命名空间,调用方不关心前缀。</para>
 /// <para>值用 System.Text.Json 序列化(进程外必然涉及序列化;缓存的 DTO 均为序列化友好的 record/POCO)。
 /// 连接<b>惰性</b>建立且 <c>AbortOnConnectFail=false</c>:构造时不连库(DI 注册期不依赖活跃 Redis),

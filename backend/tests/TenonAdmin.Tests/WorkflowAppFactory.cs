@@ -15,6 +15,9 @@ public sealed class WorkflowAppFactory : WebApplicationFactory<workflowhost::Wor
     /// <summary>是否为当前测试库重置模板;并发测试的第二个宿主复用首个宿主已建好的库。</summary>
     public bool ResetDatabase { get; init; } = true;
 
+    /// <summary>释放宿主时是否删除测试库；升级测试关闭后可由后续宿主复用同一库。</summary>
+    public bool DeleteDbOnDispose { get; init; } = true;
+
     /// <summary>可选的 Snowflake WorkerId;并发测试的第二个宿主使用不同机器号。</summary>
     public int? WorkerId { get; init; }
 
@@ -52,7 +55,8 @@ public sealed class WorkflowAppFactory : WebApplicationFactory<workflowhost::Wor
         base.Dispose(disposing);
         if (disposing && !TestDb.IsSchemaTemplateInitialization)
         {
-            TestDb.Cleanup(DbPath, DbPath);
+            if (DeleteDbOnDispose)
+                TestDb.Cleanup(DbPath, DbPath);
             AdminAppFactory.TryDeleteWorkerIdLockDir(DbPath);
         }
     }

@@ -125,7 +125,7 @@ describe('WfDesignerPage', () => {
 
   it('仅有发布权限但没有更新权限时隐藏发布按钮', async () => {
     testState.has.mockImplementation((code) =>
-      code === 'GET:/api/v1/workflow/definition/{id}'
+      code === 'GET:/api/v1/workflow/definition/{id:long}'
       || code === 'POST:/api/v1/workflow/definition/publish')
     mount(validModel())
 

@@ -5,7 +5,7 @@ namespace TenonAdmin.Core;
 /// <para>默认实现 <c>MemoryCacheProvider</c>(进程内 <c>IMemoryCache</c>);
 /// 装可选包 <c>TenonAdmin.Caching.Redis</c> 后前置注册 <c>RedisCacheProvider</c> 即整体替换,
 /// 换成分布式缓存、多实例共享。</para>
-/// <para>约定:传入的是<b>逻辑键</b>(如 <c>perm:123</c>,见 <see cref="CacheKeys"/>);
+/// <para>约定:传入的是<b>逻辑键</b>(如 <c>perm:123:v2</c>,见 <see cref="CacheKeys"/>);
 /// 实现统一追加 <c>Cache:KeyPrefix</c> 前缀(共享 Redis 实例时按前缀隔离命名空间),调用方不关心前缀。</para>
 /// </summary>
 public interface ICacheProvider

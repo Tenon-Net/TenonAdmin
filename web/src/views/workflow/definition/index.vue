@@ -117,13 +117,13 @@ const columns: ProTableColumn<WfDefinitionRow>[] = [
         authStore.hasPerm('POST:/api/v1/workflow/definition/disable') && Number(r.status) !== DISABLED
           ? { key: 'disable', label: t('workflow.definition.disable') }
           : null,
-        authStore.hasPerm('DELETE:/api/v1/workflow/definition/{id}')
+        authStore.hasPerm('DELETE:/api/v1/workflow/definition/{id:long}')
           ? { key: 'delete', label: t('common.delete') }
           : null,
       ].filter((o): o is { key: string; label: string } => o !== null)
 
       return h(NSpace, { size: 2, wrapItem: false }, () => [
-        authStore.hasPerm('GET:/api/v1/workflow/definition/{id}')
+        authStore.hasPerm('GET:/api/v1/workflow/definition/{id:long}')
           ? h(
               NButton,
               { size: 'small', quaternary: true, type: 'primary', onClick: () => openDesigner(r) },
