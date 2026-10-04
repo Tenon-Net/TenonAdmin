@@ -1,6 +1,6 @@
 ---
 name: analyze
-description: "[OMX] Run read-only deep repository analysis and return a ranked synthesis with explicit confidence, concrete file references, and clear evidence-vs-inference boundaries. Use when a user says 'analyze', 'investigate', 'why does', 'what's causing', or needs grounded cross-file explanation before any changes are proposed."
+description: "[OMX] 只读调查跨文件的行为、原因或架构问题，提供源码证据与不确定性。单文件查找无需此流程。"
 ---
 
 # Analyze — Read-Only Deep Analysis
@@ -19,7 +19,7 @@ Do not use it for edits, implementation, a new product plan, a simple one-file l
 
 ## Inputs and method
 
-1. Restate the question and define the evidence-backed scope.
+1. Identify the question and the smallest evidence-backed scope.
 2. Identify the smallest files, tests, configs, and docs likely to answer it.
 3. Read direct code paths and contracts first; trace boundaries only as far as needed.
 4. Compare competing explanations, rank them by support, and mark unresolved points.
@@ -27,7 +27,7 @@ Do not use it for edits, implementation, a new product plan, a simple one-file l
 
 ## Evidence discipline
 
-Label every material claim as one of:
+清楚区分以下三类信息；可在相关句子中说明，无需为每条结论添加固定标签：
 
 - **Evidence** — directly shown by code, tests, generated artifacts, configuration, or docs.
 - **Inference** — a reasoned conclusion drawn from cited evidence.
@@ -37,29 +37,7 @@ Prefer direct paths and independent corroboration over contextual clues. Never p
 
 ## Output contract
 
-Answer the asked question first and use this shape:
-
-### Question
-Restated question, briefly.
-
-### Ranked synthesis
-| Rank | Explanation | Confidence | Basis |
-|------|-------------|------------|-------|
-| 1 | ... | High / Medium / Low | strongest supporting evidence |
-| 2 | ... | High / Medium / Low | why it trails |
-| 3 | ... | High / Medium / Low | why it remains possible |
-
-### Evidence
-- `path/to/file:line-line` — direct observation.
-- `path/to/file:line-line` — corroborating observation.
-
-### Inference
-- What the evidence most strongly implies.
-- Why weaker alternatives were down-ranked.
-
-### Unknowns / limits
-- What the repository does not establish.
-- The next discriminating read-only probe, when useful.
+先回答问题，随后提供支持关键结论的文件与行号、推断依据和未解决的不确定性。仅有多个竞争解释时按证据强弱排序；表格和分节按内容需要使用。证据不足时指出最小的下一步调查，不为填充模板而扩大范围。
 
 ## Stop conditions
 

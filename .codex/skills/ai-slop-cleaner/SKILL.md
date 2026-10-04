@@ -39,13 +39,13 @@ Classify before changing:
 
 Resolve relevant fallback findings first, then select the applicable passes, one smell at a time:
 **Pass 1: Dead code deletion**; **Pass 2: Duplicate removal**; **Pass 3: Naming/error
-handling cleanup**; **Pass 4: Test reinforcement**. Re-run targeted verification after
-each pass and avoid unrelated refactors. Prefer deletion/existing utilities; no new
+handling cleanup**; **Pass 4: Test reinforcement**. 按行为变化与风险组织验证：可合并验证同一影响面的清理；复用仍有效的检查结果，新增修改、失败或未解决风险才触发重跑或扩大检查。保持范围内的回归覆盖。
+Prefer deletion/existing utilities; no new
 abstractions or dependencies unless explicitly required.
 
 ## Evidence/output contract
 
-Report:
+以下为复杂清理的可选报告示例；局部清理只需说明改动、验证证据和剩余风险：
 
 ```text
 AI SLOP CLEANUP REPORT

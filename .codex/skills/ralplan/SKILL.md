@@ -69,7 +69,7 @@ The consensus workflow:
    c. Return to Architect review
    d. Return to Critic evaluation
    e. Repeat this loop until Critic returns `APPROVE` or 5 iterations are reached
-   f. If 5 iterations are reached without `APPROVE`, present the best version to the user
+   f. 达到 5 次仍未获 `APPROVE` 时，保存当前方案、审查证据和未解决项，明确规划未通过，不进入执行。由 Autopilot 监督时，将失败交回父流程，通过其状态写入接口记录 `active:false`、`current_phase:"failed"` 及原因，保留交接产物；新一轮由新的明确 Autopilot 请求启动，不能以普通 `continue` 重置迭代上限。
 6. On Critic approval, persist the execution-ready planning artifacts and sequential Architect→Critic evidence. In standalone interactive Ralplan, present the requested future execution lane. Inside Autopilot, the existing explicit `$autopilot` invocation authorizes the supervised transition to its defining next stage, `$ultragoal`; persist an Autopilot-owned `ralplan_execution_handoff` bound to the same session and review cycle.
 7. Record `ralplan_execution_handoff` with `{authorized: true, reason, authorized_at, session_id, review_cycle, source: "autopilot"|"user"}`. `source:"autopilot"` is valid only for a supervised active Autopilot run whose current phase is `ralplan`; it does not claim host-consensus authority.
 8. Transition to `$ultragoal` after the durable plan, sequential approvals, and bound execution handoff exist. Do not implement directly inside Ralplan.

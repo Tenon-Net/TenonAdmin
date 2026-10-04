@@ -24,7 +24,7 @@ The chain is not a list of optional hints and Autopilot is not an alias for dire
 <Default_Chain>
 Run or resume these stages in order:
 
-1. **`deep-interview`** — clarify intent, scope, non-goals, constraints, acceptance criteria, and unresolved decisions. Produce a durable requirements/specification handoff. Deep Interview is a real stage; do not replace it with a one-question check or skip it merely because the task looks actionable.
+1. **`deep-interview`** — 核对目标、范围、non-goals、决策边界、约束和验收条件，产出持久需求交接。已有完整规格可在该阶段核对后复用；按 deep-interview 的 profile 与 readiness gates 决定是否提问。记录真实来源及完成理由，不跳过阶段、不编造问答，也不为走流程重新采访。
 2. **`ralplan`** — turn the clarified requirements into an execution-ready consensus plan with architecture, sequencing, test, and verification guidance. Preserve review evidence as lifecycle evidence, not host-issued security authority.
 3. **`ultragoal`** — execute the approved plan through durable goals and ledger receipts, implementation, focused verification, cleanup, review, and terminal evidence.
 
@@ -69,7 +69,7 @@ omx state write --input '{"mode":"autopilot","active":true,"current_phase":"deep
 
 Stage transitions:
 
-- **`deep-interview -> ralplan`**: require a durable clarified requirements/specification artifact and a non-empty completion rationale. Preserve same-session question evidence when a question surface was used.
+- **`deep-interview -> ralplan`**: require a durable clarified requirements/specification artifact and a non-empty completion rationale. Preserve same-session question evidence when a question surface was used. 复用规格时仍需核对并记录 `deep_interview_gate.status:"complete"`、`rationale` 和规范的 `handoff_artifacts.deep_interview`；零新增问答不等于跳过 gate，也不替代任何执行权限证明。
 - **`ralplan -> ultragoal`**: require durable planning artifacts, sequential Architect then Critic approvals, and a session/review-cycle-bound `ralplan_execution_handoff`. For supervised Autopilot, the explicit Autopilot request is the source of that bound handoff. Ordinary progression MUST NOT depend on a host-issued consensus receipt; missing host provenance is not a blocker.
 - **`ultragoal -> complete`**: require durable goal/ledger completion receipts and fresh verification evidence matching the requested outcome.
 - **review/QA loopback**: keep Autopilot active, set `current_phase:"ralplan"`, and persist `return_to_ralplan_reason` plus the findings.

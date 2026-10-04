@@ -1,6 +1,6 @@
 ---
 name: deep-interview
-description: "[OMX] Socratic deep interview with mathematical ambiguity gating before execution"
+description: "[OMX] 系统梳理目标、范围、取舍与验收条件的需求访谈；单个缺失信息使用普通澄清。"
 argument-hint: "[--quick|--standard|--deep] [--autoresearch] <idea or vague description>"
 ---
 
@@ -9,17 +9,17 @@ Deep Interview is an intent-first Socratic clarification loop before planning or
 </Purpose>
 
 <Use_When>
-- The request is broad, ambiguous, or missing concrete acceptance criteria
+- 用户需要系统梳理相互关联的目标、范围、取舍与验收条件
 - The user says "deep interview", "interview me", "ask me everything", "don't assume", or "ouroboros"
 - The user wants to avoid misaligned implementation from underspecified requirements
-- You need a requirements artifact before handing off to `ralplan`, `autopilot`, `ultragoal`, or `team`
+- 活动工作流要求需求交接阶段；完整的既有规格可按下文复用
 </Use_When>
 
 <Do_Not_Use_When>
 - The request already has concrete file/symbol targets and clear acceptance criteria
 - The user explicitly asks to skip planning/interview and execute immediately
 - The user asks for lightweight brainstorming only (use `plan` instead)
-- A complete PRD/plan already exists and execution should start
+- 已有完整 PRD/plan 且用户要求直接执行；若活动 Autopilot 要求此阶段，则核对并复用规格后交接
 </Do_Not_Use_When>
 
 <Why_This_Exists>
@@ -45,15 +45,14 @@ If no flag is provided, use **Standard**.
 - Ask ONE question per round (never batch multiple interview rounds into one `questions[]` form)
 - Ask about intent and boundaries before implementation detail
 - Target the weakest clarity dimension each round after applying the stage-priority rules below
-- Treat every answer as a claim to pressure-test before moving on: the next question should usually demand evidence or examples, expose a hidden assumption, force a tradeoff or boundary, or reframe root cause vs symptom
-- Do not rotate to a new clarity dimension just for coverage when the current answer is still vague; stay on the same thread until one layer deeper, one assumption clearer, or one boundary tighter
-- Before crystallizing, complete at least one explicit pressure pass that revisits an earlier answer with a deeper, assumption-focused, or tradeoff-focused follow-up
+- Quick / Standard 只追问会改变实现或验收的缺口；答案已明确时继续收敛，不逐条要求用户举证。
+- Deep 模式才要求至少一次明确的 pressure pass，追问关键假设或取舍；可复用当前任务已完成且仍有效的追问证据。
 - Gather codebase facts via `explore` before asking user about internals
 - `omx explore` is deprecated. Use normal repository inspection tools/subagents for simple read-only brownfield fact gathering; use `omx sparkshell` only for explicit shell-native read-only evidence, and keep ambiguous or non-shell-only investigation on the richer normal path.
 - Always run a preflight context intake before the first interview question
-- For brownfield work, preflight must include doc/context grounding before user-facing questions: inspect applicable `AGENTS.md` files, README/getting-started docs, relevant `docs/` contracts/plans/ADRs, existing `.omx/context/` snapshots, and any project-local glossary/context files such as `CONTEXT.md` or `CONTEXT-MAP.md` when present.
+- Brownfield preflight 先读取适用的 `AGENTS.md` 与目标附近的代码或契约；仅在存在相关缺口时查阅 README、ADR、术语表或历史快照，可复用未变化的已读材料。
 - Treat existing repo language as evidence, not authority: if the user uses a fuzzy, overloaded, or conflicting term, surface the specific doc/code wording and ask which meaning should govern before implementation.
-- Cross-check user claims about current behavior against code or documented contracts when discoverable. If docs and code disagree, ask a confirmation question that names both sources instead of silently choosing one.
+- 核对可查明的当前行为；文档与代码冲突时说明证据，只有无法从既有需求确定预期且会改变结果时才提问。
 - Use scenario-based edge-case grilling when relationships, boundaries, or handoff behavior are unclear: invent one concrete scenario that stresses the ambiguous boundary, then ask one focused question about the expected outcome.
 - Durable docs, glossary, ADR, or memory updates are opt-in and public-safe only. Deep-interview may recommend such updates in the handoff summary, but must not automatically create or dump public docs from interview transcripts unless the user explicitly chooses that as in-scope.
 - If initial context is oversized, read accessible source documents in bounded portions and record a faithful prompt-safe summary with source references. Ask the user only for inaccessible material or a decision-bearing ambiguity that cannot be resolved from those sources.
@@ -61,16 +60,16 @@ If no flag is provided, use **Standard**.
 - The summary must preserve goals, constraints, success criteria, non-goals, decision boundaries, and references to any full source documents so downstream consumers receive a prompt-safe but faithful context
 - Keep total prompt payloads within a safe budget by summarizing or trimming retained history; preserve newest/highest-signal answers and never let raw oversized context crowd out the current question
 - Reduce user effort: ask only the highest-leverage unresolved question, and never ask the user for codebase facts that can be discovered directly
-- For brownfield work, prefer evidence-backed confirmation questions such as "I found X in Y. Should this change follow that pattern?"
+- 提问时给出相关仓库证据与待决定的具体取舍；符合既有授权的常规实现选择可直接说明并继续。
 - Route facts before judgment in the Ouroboros style: before presenting a user-facing interview round, classify whether the needed information is a discoverable fact, a fact needing confirmation, or a human decision. The interview is with the human for judgment, not for facts the agent can inspect.
 - When unresolved ambiguity depends on current external best practices, official/upstream guidance, standards, or version-aware behavior, use `$best-practice-research` as the bounded evidence wrapper before crystallizing requirements or handing off to planning/execution.
 - Use these transcript/spec labels only; never use them as `omx question` `source` values, and never replace the runtime `source: "deep-interview"` contract for user-facing deep-interview questions:
   - `[from-code][auto-confirmed]` — exact, high-confidence codebase facts from manifests/configs or direct source evidence, with no prescription attached.
-  - `[from-code]` — codebase findings that are useful but inferred, pattern-based, or low/medium confidence and therefore need a confirmation-style user-facing round before being treated as settled.
+  - `[from-code]` — 仓库推断或模式证据，注明置信度；优先补充可查证据，只将影响结果且无法自行确定的决策交给用户。
   - `[from-research]` — externally sourced facts such as API limits, compatibility, or public documentation; facts only, not decisions.
   - `[from-user]` — goals, preferences, business logic, scope, non-goals, acceptance criteria, tradeoffs, and any decision-bearing interpretation.
 - Treat `[from-code][auto-confirmed]` and other non-user fact discoveries as context/transcript updates, not interview rounds: do not call `omx question`, do not create a pending deep-interview question obligation, and do not increment the user-facing round number for facts the agent can safely establish.
-- Auto-confirm only descriptive facts. If a finding implies what the new feature should do, which pattern it should follow, which tradeoff to accept, or what should stay in/out of scope, route the entire decision-bearing question to the user as `[from-user]` even when code or research facts are available.
+- 用户决定产品范围与实质取舍；已明确的需求和授权仍然有效。常规技术选择依据仓库契约解决，不能仅因发现可用模式就再次请求确认。
 - In attached-tmux Codex CLI, deep-interview uses `omx question` as the required OMX-owned structured questioning path for every interview round
 - When invoking `omx question` through attached-tmux Bash/tool paths, preserve the leader-pane return target by prefixing the command with `OMX_QUESTION_RETURN_PANE=$TMUX_PANE` (or a concrete `%pane` value)
 - If you launch `omx question` in a background terminal, immediately wait for that background terminal to finish and read its JSON answer before scoring ambiguity, asking another round, or handing off
@@ -105,11 +104,7 @@ If no flag is provided, use **Standard**.
    - Relevant repo docs/rules/context inspected
    - Terminology or doc/code conflicts found
    - Prompt-safe initial-context summary status (`not_needed`, `needed`, or `recorded`)
-5. For brownfield tasks, inspect the applicable documentation/rule surface before the first user-facing round. Prefer exact, nearby sources over broad scans:
-   - governing `AGENTS.md` files and template/runtime instruction surfaces that apply to the touched paths
-   - README/getting-started docs and relevant docs under `docs/`, especially contracts, plans, ADR-like records, and workflow docs
-   - existing `.omx/context/` snapshots, `.omx/specs/`, and planning artifacts relevant to the slug
-   - project-local glossary/context files such as `CONTEXT.md`, `CONTEXT-MAP.md`, or context-specific docs when they exist
+5. 按 Execution Policy 中的 preflight 范围收集证据，不把文档目录当作必读清单。
 6. Save snapshot to `.omx/context/{slug}-{timestamp}.md` (UTC `YYYYMMDDTHHMMSSZ`) and reference it in mode state.
 
 ## Phase 1: Initialize
@@ -146,7 +141,11 @@ If no flag is provided, use **Standard**.
 
 ## Phase 2: Socratic Interview Loop
 
-Repeat until ambiguity `<= threshold`, the pressure pass is complete, the readiness gates are explicit, the user exits with warning, or max rounds are reached. This is a stop condition: below threshold, do not open a new ordinary interview branch.
+先依据当前需求和证据评分；达到阈值且 readiness gates 明确时即可收敛。只有 Deep 模式要求 pressure pass。否则围绕实质缺口提问，直到满足条件、用户退出或达到轮次上限；低于阈值后不再开启普通追问分支。
+
+### 复用完整规格
+
+若已有规格覆盖目标、范围、Non-goals、Decision Boundaries、约束和验收条件，核对其与当前任务和代码的一致性。Quick / Standard 可在零新增问答下完成本阶段；Deep 仍须有有效的 pressure pass 证据。记录真实的来源、核对结果与完成理由，生成或更新规范的交接产物；`rounds` 如实为空，不编造用户回答或授权。存在未解决的实质缺口时继续访谈。
 
 ### 2a) Generate next question
 If oversized context lacks a faithful recorded summary, finish bounded source reading and summarization first. If essential source material is inaccessible, ask one focused question for it and wait. Score and hand off only after the summary is recorded.
@@ -164,7 +163,7 @@ Target the lowest-scoring dimension, but respect stage priority:
 - **Stage 2 — Feasibility:** Constraints, Success Criteria
 - **Stage 3 — Brownfield grounding:** Context Clarity (brownfield only)
 
-Follow-up pressure ladder after each answer:
+Deep 模式的追问工具；Quick / Standard 仅在存在具体决策缺口时选用：
 1. Ask for a concrete example, counterexample, or evidence signal behind the latest claim
 2. Probe the hidden assumption, dependency, or belief that makes the claim true
 3. Force a boundary or tradeoff: what would you explicitly not do, defer, or reject?
@@ -172,9 +171,9 @@ Follow-up pressure ladder after each answer:
 5. Stress-test the boundary with one concrete scenario or edge case when a relationship or handoff remains ambiguous
 6. If the answer still describes symptoms, reframe toward essence / root cause before moving on
 
-Prefer staying on the same thread for multiple rounds when it has the highest leverage. Breadth without pressure is not progress.
+仅当下一问仍会改变结果时继续当前话题。
 
-Maintain a **Breadth Ledger** across independent ambiguity tracks: scope, constraints, outputs, verification, brownfield integration, and any user-mentioned deliverable tracks. The ledger is a guard, not a mandatory rotation rule: stay deep on the current thread until it has been pressure-tested, then zoom out only when another material track remains unresolved and would change execution.
+在 **Breadth Ledger** 中记录范围、约束、输出、验证和集成的未解决项；只处理会改变执行结果的缺口，不轮流补问已明确的维度。
 
 Maintain a **Docs/Terminology Ledger** for brownfield interviews:
 - repo docs/rules/context sources inspected, with path references
@@ -191,7 +190,7 @@ Detailed dimensions:
 - Success Criteria Clarity — how completion will be judged
 - Context Clarity — existing codebase understanding (brownfield only)
 
-`Non-goals` and `Decision Boundaries` are mandatory readiness gates. Ask about them early and keep revisiting them until they are explicit.
+`Non-goals` 和 `Decision Boundaries` 是必需 readiness gates；可以引用既有明确需求，仅在缺失或冲突时询问。
 
 ### 2b) Ask the question
 Use the surface-appropriate structured questioning path for every interview round. In attached-tmux sessions, use OMX-owned structured questioning via `omx question` (this is the required structured-question equivalent and required `AskUserQuestion` equivalent for deep-interview). Outside tmux, use native structured input when available; otherwise ask exactly one concise plain-text question and wait for the answer. Present:
@@ -224,9 +223,9 @@ Brownfield: `ambiguity = 1 - (intent × 0.25 + outcome × 0.20 + scope × 0.20 +
 Readiness gate:
 - `Non-goals` must be explicit
 - `Decision Boundaries` must be explicit
-- A pressure pass must be complete: at least one earlier answer has been revisited with an evidence, assumption, or tradeoff follow-up
+- 仅 Deep 模式要求完成 pressure pass；其他模式以剩余问题是否会改变执行结果为准
 - A practical closure audit must pass: remaining questions would not change execution materially; unresolved material decisions still require a focused closure question
-- If either gate is unresolved, or the pressure pass is incomplete, continue below threshold only with a final closure question that names the unresolved gate and would materially change execution.
+- 若必需 gate 未解决，或 Deep 模式的 pressure pass 缺失，仅围绕该缺口提出收敛问题；已满足的 gate 不重复确认。
 - Treat a low ambiguity score as permission to audit closure, not permission to keep drilling indefinitely. If remaining uncertainty would not change implementation, crystallize the spec instead of opening a new branch.
 - If ambiguity is `<= 0.10`, another user-facing question is allowed only as that final closure question; otherwise crystallize immediately.
 
@@ -237,15 +236,14 @@ Show weighted breakdown table, readiness-gate status (`Non-goals`, `Decision Bou
 Append round result and updated scores via `omx state write --input '<json>' --json`. Do not write `{mode}-state.json` directly and do not use the read-only MCP state projection as a writer.
 
 ### 2f) Round controls
-- Do not offer early exit before the first explicit assumption probe and one persistent follow-up have happened
-- Apply a **Dialectic Rhythm Guard**: track consecutive non-user fact discoveries and confirmation-style answers (`[from-code][auto-confirmed]`, `[from-code]`, or `[from-research]`). After 3 consecutive non-user or confirmation answers, the next material user-facing round must solicit direct human judgment (`[from-user]`) unless the closure audit says the interview is ready to crystallize.
-- Round 4+: allow explicit early exit with risk warning
+- 用户可随时结束访谈；区分“已满足完成条件”和“带未解决项退出”，不能把退出当作执行授权。
+- 查明仓库事实不占用户问答轮次，也不触发为了调整问答比例而追加的问题。
 - Soft warning at profile midpoint (e.g., round 3/6/10 depending on profile)
 - Hard cap at profile `max_rounds`; never treat this cap as a desired interview length or quota
 
 ## Phase 3: Challenge Modes (assumption stress tests)
 
-Use each mode once when applicable. These are normal escalation tools, not rare rescue moves:
+按未解决的假设、术语或范围问题选择下列工具，不因达到某个轮次自动追加问题：
 
 - **Contrarian** (round 2+ or immediately when an answer rests on an untested assumption): challenge core assumptions
 - **Terminologist** (brownfield, whenever a key term is fuzzy, overloaded, or conflicts with repo docs/code): force a canonical meaning against existing project language before implementation
@@ -256,12 +254,12 @@ Track used modes in state to prevent repetition.
 
 ## Phase 4: Crystallize Artifacts
 
-When threshold is met (or user exits with warning / hard cap):
+达到阈值并满足 readiness gates 时生成可执行规格；用户提前退出或达到上限时也可保存产物，但未解决的实质缺口必须标为待定，不得宣称已完成需求交接。
 
 1. Write interview transcript summary to:
    - `.omx/interviews/{slug}-{timestamp}.md`
      (kept for ralph PRD compatibility)
-2. Write execution-ready spec to:
+2. 将规格及其就绪状态写入：
    - `.omx/specs/deep-interview-{slug}.md`
 
 Spec should include:
@@ -277,7 +275,7 @@ Spec should include:
 - Constraints
 - Testable acceptance criteria
 - Assumptions exposed + resolutions
-- Pressure-pass findings (which answer was revisited, and what changed)
+- Pressure-pass findings（仅实际进行过时记录；其他情况注明不适用）
 - Brownfield evidence vs inference notes for any repository-grounded confirmation questions
 - Docs/Terminology Ledger with inspected repo docs/rules/context, term conflicts, and any doc/code mismatch decisions
 - Scenario/edge-case pressure findings that materially shaped scope or acceptance criteria
@@ -332,7 +330,7 @@ Retired entrypoints are not execution alternatives. In App, check the selected s
 <Escalation_And_Stop_Conditions>
 - User says stop/cancel/abort -> persist state and stop
 - Ambiguity stalls for 3 rounds (+/- 0.05) -> force Ontologist mode once
-- Max rounds reached -> proceed with explicit residual-risk warning
+- 达到轮次上限 -> 输出未解决项；未满足 readiness gates 时不宣称规格可执行，也不自动交接执行
 - All dimensions >= 0.9 -> allow early crystallization even before max rounds
 </Escalation_And_Stop_Conditions>
 
@@ -342,9 +340,8 @@ Retired entrypoints are not execution alternatives. In App, check the selected s
 - [ ] Ambiguity score shown each round
 - [ ] Intent-first stage priority used before implementation detail
 - [ ] Weakest-dimension targeting used within the active stage
-- [ ] At least one explicit assumption probe happened before crystallization
-- [ ] At least one persistent follow-up / pressure pass deepened a prior answer
-- [ ] Challenge modes triggered at thresholds (when applicable)
+- [ ] Deep 模式已有至少一次明确的假设追问 / pressure pass；Quick / Standard 不以问答数量作为完成条件
+- [ ] Challenge modes 仅用于实际存在的决策缺口
 - [ ] Transcript written to `.omx/interviews/{slug}-{timestamp}.md`
 - [ ] Spec written to `.omx/specs/deep-interview-{slug}.md`
 - [ ] Brownfield questions use evidence-backed confirmation when applicable

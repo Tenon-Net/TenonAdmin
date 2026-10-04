@@ -62,6 +62,10 @@
 
 `omx setup` 可能刷新 `.codex/skills`、角色提示和根 managed block。更新后检查差异，保留本仓修正；不要把 `--force` 重装当作无副作用验证。审计依据与验证方法见 [2026-09-07 审计](../docs/agents/instruction-audit-2026-09-07.md)。
 
+验证仓库入口、链接和标记使用 `node scripts/check-agent-guidance.mjs`。需要核对用户级或插件级技能时，可重复传入 `--skill-root <目录>`；例如 `node scripts/check-agent-guidance.mjs --skill-root "$HOME/.agents/skills"`。只选择当前启用的技能来源，不扫描所有插件缓存版本；该脚本检查候选目录的重名与元数据，不替代宿主的启用状态、插件命名空间或 YAML 语义校验。
+
+普通 `$code-review` 报告指定范围的问题；`$code-review --merge-ready` 或活动流程要求时才加载双代理合并门禁。本机用户级 Standards / Spec 审查使用 `$spec-review`，避免与仓库入口同名。按需参考拆分与本机配置修正见 [2026-10-04 增量审计](../docs/agents/instruction-audit-2026-10-04.md)。
+
 ### 其他 AI 工具
 
 在对话中引用对应文件：

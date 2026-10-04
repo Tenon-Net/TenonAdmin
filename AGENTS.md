@@ -16,9 +16,9 @@ TenonAdmin (榫卯) is a distributable .NET 10 admin kernel shipped as NuGet pac
 
 ## Task context
 
-Read only the references relevant to the task:
+按当前任务需要的契约、模式或验证方式查阅下表中的相关章节；可复用本轮已读且未变化的上下文。局部文案或格式修改只需目标文件及其适用约束。
 
-| Task | Read before editing |
+| Task | 按需参考 |
 | --- | --- |
 | Backend services, DI, auth, database, bootstrap | [Repository reference: backend](docs/agents/repository-reference.md#backend-architecture) and relevant tests/callers |
 | Vue pages/components | [web/COMPONENTS.md](web/COMPONENTS.md), [web/DESIGN.md](web/DESIGN.md), [Vue architecture](docs/agents/repository-reference.md#frontend-architecture-web) |
@@ -81,7 +81,8 @@ Explicit `$name` invocations run left-to-right and override implicit routing. Ho
 | --- | --- |
 | Clear implementation or focused fix | Execute directly |
 | Lightweight plan or plan review | `$plan` |
-| Material ambiguity in requirements or decision boundaries | `$deep-interview` |
+| 单个会改变结果的缺失信息 | 提出一个聚焦问题，继续不依赖答案的工作 |
+| 需要系统梳理目标、范围和取舍，或明确要求深度访谈 | `$deep-interview` |
 | Architecture consensus | `$ralplan` |
 | Explicit hands-off orchestration | `$autopilot`: `$deep-interview → $ralplan → $ultragoal` |
 | Durable multi-goal execution | `$ultragoal` |
