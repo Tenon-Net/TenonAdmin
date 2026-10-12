@@ -720,10 +720,10 @@ async function onSmsSubmit() {
   transition: transform var(--transition-fast);
 }
 .hero-btn:hover {
-  transform: translateY(-2px);
+  transform: translateY(calc(var(--motion-distance) * -0.25));
 }
 .hero-btn:active {
-  transform: translateY(0);
+  transform: scale(var(--motion-press-scale));
 }
 .hero-btn:disabled {
   opacity: 0.7;

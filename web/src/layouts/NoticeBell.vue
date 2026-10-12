@@ -193,7 +193,7 @@ fetchUnread()
   padding: 12px 16px;
   cursor: pointer;
   border-top: 1px solid var(--n-divider-color, rgba(128, 128, 128, 0.15));
-  transition: background-color 0.2s;
+  transition: background-color var(--transition-base);
 }
 .notice-item:hover {
   background-color: rgba(128, 128, 128, 0.08);

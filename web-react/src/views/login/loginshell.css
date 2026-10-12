@@ -39,8 +39,9 @@
   font-weight: 600;
   color: rgba(255, 255, 255, 0.62);
   transition:
-    color 0.2s,
-    background 0.2s;
+    color var(--motion-duration-base),
+    background var(--motion-duration-base),
+    transform var(--motion-duration-feedback);
 }
 .skin-seg {
   padding: 6px 16px;
@@ -65,4 +66,8 @@
 .skin-seg.active {
   background: var(--color-primary);
   color: #fff;
+}
+.skin-seg:active,
+.tool-btn:active {
+  transform: scale(var(--motion-press-scale));
 }

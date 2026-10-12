@@ -3,7 +3,7 @@ import { derivePrimary } from '@/theme/mix'
 
 // `Density` 归 app store(与 Vue 侧一致:类型跟着它的持久化字段走,不跟着消费方走)。
 // 这里转口一下,免得主题桥的使用者为了一个类型去 import store。
-import type { Density } from '@/stores/app'
+import type { Density, MotionMode } from '@/stores/app'
 
 export type { Density }
 
@@ -51,6 +51,15 @@ export interface ThemeOpts {
   dark: boolean
   accent: string
   density: Density
+  motionMode?: MotionMode
+}
+
+/**
+ * rc-motion 依赖 animationend/transitionend 提交弹层关闭状态；Chromium 对 0ms 动画不会稳定派发该事件。
+ * off 档只给 antd 内部生命周期留 1ms，裸 CSS 与自有 WAAPI 仍使用 motion.css 的 0ms。
+ */
+export function motionDurationForAntd(raw: string, lifecycle: string, mode?: MotionMode): string {
+  return raw && lifecycle && mode === 'off' ? lifecycle : raw
 }
 
 /**
@@ -64,6 +73,8 @@ export interface ThemeOpts {
  */
 export function buildAntdTheme(opts: ThemeOpts): ThemeConfig {
   const p = derivePrimary(opts.accent, opts.dark, v('--color-bg-container') || undefined)
+  const lifecycleDuration = v('--motion-duration-lifecycle')
+  const motionDuration = (name: string) => motionDurationForAntd(v(name), lifecycleDuration, opts.motionMode)
 
   // 暗色/亮色二选一,紧凑档再叠一层。antd 的 algorithm 支持数组,按顺序合成。
   const algorithm = [opts.dark ? theme.darkAlgorithm : theme.defaultAlgorithm]
@@ -142,6 +153,13 @@ export function buildAntdTheme(opts: ThemeOpts): ThemeConfig {
       fontFamily: v('--font-family-base'),
       fontFamilyCode: v('--font-family-mono'),
 
+      // Ant Design 6 官方 motion 时长与自有组件同读 motion.css，避免两套参数漂移。
+      // 不动态切换 theme.motion：rc-motion 在 appear/leave 中途从 true 变 false 会丢失受控弹层节点。
+      // off / 系统 reduce 仍由同一组变量决定，再由桥接函数留 1ms 让动画引擎可靠提交最终可见态。
+      motionDurationFast: motionDuration('--motion-duration-feedback'),
+      motionDurationMid: motionDuration('--motion-duration-base'),
+      motionDurationSlow: motionDuration('--motion-duration-panel-enter'),
+
       // v6 是 boxShadow/Secondary/Tertiary,**不是** Naive 那套 boxShadow1/2/3。
       // antd 默认 boxShadow 与 boxShadowSecondary 是**同一个**模板,我们给三档不同的值属于**故意**分开
       //(设计系统就是三级)。**这里原先写着"已登记豁免"——那是假的**:EXEMPT 里从来只有
@@ -166,6 +184,13 @@ export function buildAntdTheme(opts: ThemeOpts): ThemeConfig {
     components: {
       // 卡片圆角走 lg(12);常规控件走 token.borderRadius(md=10)。
       Card: defined({ borderRadiusLG: num(v('--radius-lg')) }),
+      // Modal 主 zoom 默认读 Mid、Drawer 面板读 Slow；局部都对齐面板进入参数。
+      // 退出的独立时长由 FormContainer rootClassName 下的 antd leave class 覆写（组件 token 不分进/出）。
+      Modal: defined({
+        motionDurationMid: motionDuration('--motion-duration-panel-enter'),
+        motionDurationSlow: motionDuration('--motion-duration-panel-enter'),
+      }),
+      Drawer: defined({ motionDurationSlow: motionDuration('--motion-duration-panel-enter') }),
       // compactAlgorithm 不管表格行高,单元格纵向内边距要另给。
       Table: opts.density === 'compact' ? { cellPaddingBlock: 8, cellPaddingBlockSM: 6 } : {},
       // 侧栏菜单不画自己的右边线(竖向唯一分隔线属主是 .shell-aside 的 border-right,否则交界处双线)。

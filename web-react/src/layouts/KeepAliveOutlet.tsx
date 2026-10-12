@@ -1,7 +1,53 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { useLocation, useOutlet } from 'react-router-dom'
 import { useTabsStore, aliveKeys } from '@/stores/tabs'
 import { useAppStore } from '@/stores/app'
+import { CachedPageActiveProvider } from './CachedPageActive'
+import { useEntranceMotion } from '@/motion/runtime'
+
+function PageFrame({ active, path, scrollTop, resetScroll, preserveScroll = true, children }: {
+  active: boolean
+  path: string
+  scrollTop: Map<string, number>
+  resetScroll: Set<string>
+  preserveScroll?: boolean
+  children: ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const transition = useAppStore((s) => s.pageTransition)
+  useEntranceMotion(ref, { active, pageTransition: true, translate: transition === 'fade-slide' })
+
+  // 隐藏页不能继续持有焦点；浏览器在它再次 display:block 时会把焦点元素滚入视野，覆盖显式恢复的位置。
+  useLayoutEffect(() => {
+    if (active) return
+    const focused = document.activeElement
+    if (focused instanceof HTMLElement && ref.current?.contains(focused)) focused.blur()
+  }, [active])
+
+  // .shell-page 是唯一滚动容器。失活先保存，激活再恢复；新页从 0 开始，缓存恢复不重挂。
+  useLayoutEffect(() => {
+    if (!active) return
+    const scroller = ref.current?.closest<HTMLElement>('.shell-page')
+    if (!scroller) return
+    scroller.scrollTop = !preserveScroll || resetScroll.has(path) ? 0 : (scrollTop.get(path) ?? 0)
+    resetScroll.delete(path)
+    const save = () => {
+      if (preserveScroll && !resetScroll.has(path)) scrollTop.set(path, scroller.scrollTop)
+    }
+    scroller.addEventListener('scroll', save, { passive: true })
+    return () => {
+      // 浏览器可能已因旧页 display:none 把共享 scroller clamp 到 0；最后位置已由 scroll 事件实时保存。
+      scroller.removeEventListener('scroll', save)
+      if (!preserveScroll || resetScroll.has(path)) scrollTop.delete(path)
+    }
+  }, [active, path, preserveScroll, resetScroll, scrollTop])
+
+  return (
+    <div ref={ref} style={{ height: '100%', display: active ? undefined : 'none' }}>
+      <CachedPageActiveProvider active={active}>{children}</CachedPageActiveProvider>
+    </div>
+  )
+}
 
 /**
  * 页面缓存容器(替代 Vue `<keep-alive>`,React 无对等物)。
@@ -12,7 +58,7 @@ import { useAppStore } from '@/stores/app'
  * 递增一个本地"版本号"并删其缓存 → 下次渲染该页 div 的 `key` 变化 → React 卸载重挂(拿到新版本号),再 clearExclude。
  * 单靠 delete 缓存不足以重挂:同一 key 的元素 React 会复用 fiber、状态不清;必须换 key 才强制重挂。
  *
- * // ponytail: 不做 activated/deactivated 钩子;隐藏页的 effect/定时器仍在跑,页面若需感知激活再加 useTabActive()。
+ * CachedPageActiveProvider 只广播可见性，不改变缓存节点 identity；需暂停副作用的组件可用 useCachedPageActive()。
  */
 export function KeepAliveOutlet() {
   const outlet = useOutlet()
@@ -20,19 +66,19 @@ export function KeepAliveOutlet() {
   const tabs = useTabsStore((s) => s.tabs)
   const reloadKey = useTabsStore((s) => s.reloadKey)
   const excludeKey = useTabsStore((s) => s.excludeKey)
-  const transition = useAppStore((s) => s.pageTransition)
   const cache = useRef(new Map<string, ReactNode>())
   const bumps = useRef(new Map<string, number>()) // path → 版本号,刷新时 +1 换 div key 强制重挂
+  const scrollTop = useRef(new Map<string, number>())
+  const resetScroll = useRef(new Set<string>())
   const alive = aliveKeys(tabs)
-  // 页面切换动画:只给"当前可见"页挂 CSS animation 类。用 animation 而非 transition ——
-  // 页 div 由 display:none→block 时 CSS animation 会重跑(transition 跨 display 不触发),故切走切回即入场,不 remount、不动缓存。
-  const animClass = transition === 'none' ? undefined : `page-anim-${transition}`
 
   // refreshTab:换版本号 + 删缓存 → 触发重挂;随后复位 excludeKey。
   useEffect(() => {
     if (!excludeKey) return
     bumps.current.set(excludeKey, (bumps.current.get(excludeKey) ?? 0) + 1)
     cache.current.delete(excludeKey)
+    scrollTop.current.delete(excludeKey)
+    resetScroll.current.add(excludeKey)
     useTabsStore.getState().clearExclude()
   }, [reloadKey, excludeKey])
 
@@ -45,27 +91,31 @@ export function KeepAliveOutlet() {
     if (!alive.includes(key)) {
       cache.current.delete(key)
       bumps.current.delete(key) // 逐出时连版本号一并回收,免得 bumps 随开关标签只增不减
+      scrollTop.current.delete(key)
+      resetScroll.current.add(key)
     }
   }
 
   return (
     <>
       {[...cache.current.entries()].map(([key, node]) => (
-        <div
+        <PageFrame
           key={`${key}:${bumps.current.get(key) ?? 0}`}
-          className={key === pathname ? animClass : undefined}
-          style={{ height: '100%', display: key === pathname ? undefined : 'none' }}
+          active={key === pathname}
+          path={key}
+          scrollTop={scrollTop.current}
+          resetScroll={resetScroll.current}
         >
           {node}
-        </div>
+        </PageFrame>
       ))}
       {/* noCache / 尚未入缓存的当前页:live 渲染(离开即卸载,复访重挂拉新)。
           带同一套版本键 → refreshTab 对 noCache 当前页也能重挂(对齐 Vue 靠 rvShow 统一重挂当前页;
           缓存页走上面的 key 分支,noCache 页缓存里没有、只能靠这里的 key 才刷得动)。 */}
       {outlet && !cache.current.has(pathname) && (
-        <div key={`${pathname}:live:${bumps.current.get(pathname) ?? 0}`} className={animClass} style={{ height: '100%' }}>
+        <PageFrame key={`${pathname}:live:${bumps.current.get(pathname) ?? 0}`} active path={pathname} scrollTop={scrollTop.current} resetScroll={resetScroll.current} preserveScroll={false}>
           {outlet}
-        </div>
+        </PageFrame>
       )}
     </>
   )

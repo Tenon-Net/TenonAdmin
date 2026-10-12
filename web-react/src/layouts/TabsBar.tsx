@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Dropdown, type MenuProps } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -11,11 +11,13 @@ import './tabsbar.css'
  * store 返回导航目标,这里(有 useNavigate)负责导航。affix(应用首页)/pinned 不显示关闭 X。
  */
 export function TabsBar() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const tabs = useTabsStore((s) => s.tabs)
+  const language = i18n.resolvedLanguage ?? i18n.language
   const stripRef = useRef<HTMLDivElement>(null)
+  const markerRef = useRef<HTMLDivElement>(null)
 
   const nav = (next: string | null) => {
     if (next) navigate(next)
@@ -54,9 +56,38 @@ export function TabsBar() {
     stripRef.current?.querySelector('.tab-chip.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [activeKey])
 
+  // 自有 chip 的几何信息驱动选中标记，不依赖 antd Dropdown 的内部 DOM。
+  useLayoutEffect(() => {
+    const strip = stripRef.current
+    const marker = markerRef.current
+    if (!strip || !marker) return
+    let frame = 0
+    const update = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const active = strip.querySelector<HTMLElement>('.tab-chip.active')
+        marker.style.opacity = active ? '1' : '0'
+        if (!active) return
+        marker.style.width = `${active.offsetWidth}px`
+        marker.style.transform = `translateX(${active.offsetLeft}px)`
+      })
+    }
+    update()
+    strip.addEventListener('scroll', update, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    observer?.observe(strip)
+    strip.querySelectorAll<HTMLElement>('.tab-chip').forEach((chip) => observer?.observe(chip))
+    return () => {
+      cancelAnimationFrame(frame)
+      strip.removeEventListener('scroll', update)
+      observer?.disconnect()
+    }
+  }, [activeKey, language, tabs])
+
   return (
     <div className="tabsbar">
       <div ref={stripRef} className="tab-strip">
+        <div ref={markerRef} className="tabs-active-marker" aria-hidden="true" />
         {tabs.map((tab) => (
           <Dropdown key={tab.path} menu={{ items: ctxItems(tab), onClick: ({ key }) => onCtx(tab, key) }} trigger={['contextMenu']}>
             {/* chip 是可点非按钮元素:补 role/tabindex/键盘激活,键盘用户也能切换(右键菜单是鼠标专属)。 */}

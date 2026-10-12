@@ -1,0 +1,70 @@
+:root {
+  --motion-duration-feedback: 120ms;
+  --motion-duration-base: 200ms;
+  --motion-duration-page-enter: 200ms;
+  --motion-duration-page-exit: 140ms;
+  --motion-duration-panel-enter: 260ms;
+  --motion-duration-panel-exit: 180ms;
+  /* rc-motion 依赖结束事件清理弹层容器；0ms 在 Chromium 中不会稳定派发，内部生命周期保留 1ms。 */
+  --motion-duration-lifecycle: 1ms;
+  --motion-stagger-step: 30ms;
+  --motion-stagger-cap: 90ms;
+  --motion-distance: 8px;
+  --motion-press-scale: 0.98;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  /* 兼容既有组件；新代码直接使用上面的语义变量。 */
+  --transition-fast: var(--motion-duration-feedback) var(--motion-ease-standard);
+  --transition-base: var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+:root[data-motion='light'] {
+  --motion-duration-feedback: 90ms;
+  --motion-duration-base: 120ms;
+  --motion-duration-page-enter: 120ms;
+  --motion-duration-page-exit: 90ms;
+  --motion-duration-panel-enter: 160ms;
+  --motion-duration-panel-exit: 120ms;
+  --motion-stagger-step: 0ms;
+  --motion-stagger-cap: 0ms;
+  --motion-distance: 0px;
+  --motion-press-scale: 1;
+}
+
+:root[data-motion='off'] {
+  --motion-duration-feedback: 0ms;
+  --motion-duration-base: 0ms;
+  --motion-duration-page-enter: 0ms;
+  --motion-duration-page-exit: 0ms;
+  --motion-duration-panel-enter: 0ms;
+  --motion-duration-panel-exit: 0ms;
+  --motion-stagger-step: 0ms;
+  --motion-stagger-cap: 0ms;
+  --motion-distance: 0px;
+  --motion-press-scale: 1;
+}
+
+/* 后台不可见时只暂停装饰循环，加载 spinner 仍用于表达进行中状态。 */
+:root[data-document-hidden] .aurora-bg,
+:root[data-document-hidden] .aurora .orb,
+:root[data-document-hidden] .aurora .stars,
+:root[data-document-hidden] .aurora .halo,
+:root[data-document-hidden] .aurora .glass-card::after,
+:root[data-document-hidden] .split-panel-aurora {
+  animation-play-state: paused !important;
+}
+
+:root[data-motion='light'] .aurora-bg,
+:root[data-motion='light'] .aurora .orb,
+:root[data-motion='light'] .aurora .stars,
+:root[data-motion='light'] .aurora .halo,
+:root[data-motion='light'] .aurora .glass-card::after,
+:root[data-motion='light'] .split-panel-aurora,
+:root[data-motion='off'] .aurora-bg,
+:root[data-motion='off'] .aurora .orb,
+:root[data-motion='off'] .aurora .stars,
+:root[data-motion='off'] .aurora .halo,
+:root[data-motion='off'] .aurora .glass-card::after,
+:root[data-motion='off'] .split-panel-aurora {
+  animation: none !important;
+}

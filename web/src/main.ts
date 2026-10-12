@@ -9,6 +9,7 @@ import { vAuth } from './directives/auth'
 import { setupIcons } from './lib/icons'
 import { setupMarkdown } from './lib/markdown'
 import './styles/tokens.css'
+import './styles/motion.css'
 import './styles/index.css'
 
 const pinia = createPinia()

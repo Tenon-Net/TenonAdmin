@@ -13,15 +13,16 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 type Listener = (e: { matches: boolean }) => void
 
 function stubMatchMedia(initial: boolean) {
-  const seen: { query?: string; listeners: Listener[] } = { listeners: [] }
+  const seen: { queries: string[]; listeners: Record<string, Listener[]> } = { queries: [], listeners: {} }
   vi.stubGlobal('matchMedia', (query: string) => {
-    seen.query = query
+    seen.queries.push(query)
+    const listeners = seen.listeners[query] ??= []
     return {
       matches: initial,
-      addEventListener: (_t: string, fn: Listener) => seen.listeners.push(fn),
+      addEventListener: (_t: string, fn: Listener) => listeners.push(fn),
       removeEventListener: (_t: string, fn: Listener) => {
-        const i = seen.listeners.indexOf(fn)
-        if (i >= 0) seen.listeners.splice(i, 1)
+        const i = listeners.indexOf(fn)
+        if (i >= 0) listeners.splice(i, 1)
       },
     }
   })
@@ -29,6 +30,7 @@ function stubMatchMedia(initial: boolean) {
 }
 
 afterEach(() => {
+  localStorage.clear()
   vi.unstubAllGlobals()
   vi.resetModules()
 })
@@ -38,7 +40,8 @@ describe('系统深浅色桥', () => {
     const seen = stubMatchMedia(false)
     vi.resetModules()
     await import('./app')
-    expect(seen.query).toBe('(prefers-color-scheme: dark)')
+    expect(seen.queries).toContain('(prefers-color-scheme: dark)')
+    expect(seen.queries).toContain('(prefers-reduced-motion: reduce)')
   })
 
   it('初始 matches 进 systemDark,且 auto 档据它解析', async () => {
@@ -54,10 +57,36 @@ describe('系统深浅色桥', () => {
     vi.resetModules()
     const { useAppStore, isDark } = await import('./app')
     expect(useAppStore.getState().systemDark).toBe(false)
-    expect(seen.listeners).toHaveLength(1)
+    const listeners = seen.listeners['(prefers-color-scheme: dark)']!
+    expect(listeners).toHaveLength(1)
 
-    seen.listeners[0]!({ matches: true }) // 模拟用户在系统里切到暗色
+    listeners[0]!({ matches: true }) // 模拟用户在系统里切到暗色
     expect(useAppStore.getState().systemDark).toBe(true)
     expect(isDark(useAppStore.getState())).toBe(true)
+  })
+
+  it('系统减少动态效果实时覆盖用户档位', async () => {
+    const seen = stubMatchMedia(false)
+    vi.resetModules()
+    const { useAppStore, effectiveMotionMode } = await import('./app')
+    useAppStore.getState().setSetting('motionMode', 'standard')
+    const listeners = seen.listeners['(prefers-reduced-motion: reduce)']!
+    expect(effectiveMotionMode(useAppStore.getState())).toBe('standard')
+    listeners[0]!({ matches: true })
+    expect(useAppStore.getState().systemReducedMotion).toBe(true)
+    expect(effectiveMotionMode(useAppStore.getState())).toBe('off')
+  })
+
+  it('遗留持久化字段不能覆盖浏览器当前的减少动效偏好', async () => {
+    for (const reduced of [false, true]) {
+      stubMatchMedia(reduced)
+      localStorage.setItem('app', JSON.stringify({
+        state: { motionMode: 'light', systemReducedMotion: !reduced }, version: 0,
+      }))
+      vi.resetModules()
+      const { useAppStore, effectiveMotionMode } = await import('./app')
+      expect(useAppStore.getState().systemReducedMotion).toBe(reduced)
+      expect(effectiveMotionMode(useAppStore.getState())).toBe(reduced ? 'off' : 'light')
+    }
   })
 })

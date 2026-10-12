@@ -24,7 +24,7 @@
   inset: 0;
   pointer-events: none;
   background: radial-gradient(340px 340px at var(--mx) var(--my), var(--spot), transparent 60%);
-  transition: background 0.12s ease-out;
+  transition: background var(--motion-duration-feedback) ease-out;
 }
 .spotlight .card {
   position: relative;
@@ -36,12 +36,12 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-3);
-  animation: spotlight-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: spotlight-fade-up var(--motion-duration-panel-enter) var(--motion-ease-standard) both;
 }
 @keyframes spotlight-fade-up {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(var(--motion-distance));
   }
   to {
     opacity: 1;

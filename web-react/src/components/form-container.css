@@ -1,0 +1,88 @@
+/* antd 组件 token 不区分 enter / leave；在公开 rootClassName 范围内只改既有 motion class 的时长。 */
+.form-container-motion .ant-fade-enter,
+.form-container-motion .ant-fade-appear {
+  animation-duration: var(--motion-duration-panel-enter) !important;
+}
+
+.form-container-motion .ant-fade-leave {
+  animation-duration: var(--motion-duration-panel-exit) !important;
+  animation-timing-function: var(--motion-ease-exit) !important;
+}
+
+@keyframes form-container-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-distance)) scale(var(--motion-press-scale));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes form-container-panel-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(var(--motion-distance)) scale(var(--motion-press-scale));
+  }
+}
+
+/* 替换 antd 同一 zoom motion 的 keyframes，避免其 scale(0) 绕过 light 的无缩放契约。 */
+.form-container-motion .ant-zoom-enter,
+.form-container-motion .ant-zoom-appear {
+  animation-duration: var(--motion-duration-panel-enter) !important;
+}
+.form-container-motion .ant-zoom-enter-active,
+.form-container-motion .ant-zoom-appear-active {
+  animation-name: form-container-panel-enter !important;
+  animation-timing-function: var(--motion-ease-standard) !important;
+}
+.form-container-motion .ant-zoom-leave {
+  animation-duration: var(--motion-duration-panel-exit) !important;
+}
+.form-container-motion .ant-zoom-leave-active {
+  animation-name: form-container-panel-exit !important;
+  animation-timing-function: var(--motion-ease-exit) !important;
+}
+
+.form-container-motion .ant-drawer-mask-motion-enter-active,
+.form-container-motion [class*='ant-drawer-panel-motion-'][class*='-enter-active'] {
+  transition-duration: var(--motion-duration-panel-enter) !important;
+}
+
+.form-container-motion .ant-drawer-mask-motion-leave-active,
+.form-container-motion [class*='ant-drawer-panel-motion-'][class*='-leave-active'] {
+  transition-duration: var(--motion-duration-panel-exit) !important;
+  transition-timing-function: var(--motion-ease-exit) !important;
+}
+
+/* light/off 保留 Drawer 的淡入淡出，去掉 antd 默认整屏 100% 位移。 */
+:root[data-motion='light'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-enter'],
+:root[data-motion='light'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-appear'],
+:root[data-motion='light'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-leave'],
+:root[data-motion='off'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-enter'],
+:root[data-motion='off'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-appear'],
+:root[data-motion='off'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-leave'] {
+  transform: none !important;
+  transition-property: opacity !important;
+}
+
+/* 明确定义 light 面板透明度两端，不能依赖 antd 当前实现的 0.7 → 1。 */
+:root[data-motion='light'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-enter']:not([class*='-enter-active']),
+:root[data-motion='light'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-appear']:not([class*='-appear-active']) {
+  opacity: 0 !important;
+}
+:root[data-motion='light'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-enter-active'],
+:root[data-motion='light'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-appear-active'] {
+  opacity: 1 !important;
+}
+:root[data-motion='light'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-leave']:not([class*='-leave-active']) {
+  opacity: 1 !important;
+}
+:root[data-motion='light'] .form-container-motion [class*='ant-drawer-panel-motion-'][class*='-leave-active'] {
+  opacity: 0 !important;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type CSSProperties } from 'react'
-import { useAppStore, isDark } from '@/stores/app'
+import { effectiveMotionMode, useAppStore, isDark } from '@/stores/app'
 import { mix, rgba } from '@/theme/mix'
 import { LoginForm } from '../LoginForm'
 import './spotlight.css'
@@ -11,20 +11,23 @@ import './spotlight.css'
 export function Spotlight() {
   const accent = useAppStore((s) => s.accent)
   const dark = useAppStore(isDark)
+  const motionMode = useAppStore(effectiveMotionMode)
   const rootRef = useRef<HTMLDivElement>(null)
 
   // 光晕跟随指针:直接写根元素 `--mx`/`--my`,绕过 React state —— 每次 mousemove 不重渲染整棵登录表单
   // (对齐 Vue 的 ref 驱动细粒度更新)。初始位置在 CSS(.spotlight 的 --mx/--my 默认),故首帧就有光晕。
   useEffect(() => {
     const el = rootRef.current
+    if (motionMode !== 'standard') return
     if (!el) return
     const onMove = (e: MouseEvent) => {
+      if (document.hidden) return
       el.style.setProperty('--mx', (e.clientX / window.innerWidth) * 100 + '%')
       el.style.setProperty('--my', (e.clientY / window.innerHeight) * 100 + '%')
     }
     window.addEventListener('mousemove', onMove, { passive: true })
     return () => window.removeEventListener('mousemove', onMove)
-  }, [])
+  }, [motionMode])
 
   // 只有随 accent/明暗变的取色进 inline style(不随鼠标变);--mx/--my 由上面的 ref 直写。
   const vars = {

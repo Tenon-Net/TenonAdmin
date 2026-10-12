@@ -113,7 +113,7 @@
 .split-form-inner {
   width: 100%;
   max-width: 340px;
-  animation: split-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: split-fade-up var(--motion-duration-panel-enter) var(--motion-ease-standard) both;
 }
 .split-greet {
   font-size: 26px;
@@ -148,7 +148,7 @@
 @keyframes split-fade-up {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(var(--motion-distance));
   }
   to {
     opacity: 1;

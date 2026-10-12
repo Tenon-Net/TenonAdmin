@@ -82,7 +82,8 @@ export async function enterApp(page: Page, title: RegExp) {
   await openAppPicker(page)
   const card = page.locator('.card').filter({ has: page.locator('.name', { hasText: title }) })
   await expect(card, `选择页上没有匹配 ${title} 的应用`).toHaveCount(1)
-  await card.click()
+  // 直接激活卡片自身，避免窄屏坐标命中「设为默认」子按钮。
+  await card.press('Enter')
   // 进应用必然离开选择页(落到该应用首页);还停在 /module 就是没进去——别让后续断言在假现场上跑
   await expect(page, `点了 ${title} 但没进应用`).not.toHaveURL(/\/module/, { timeout: 10_000 })
 }

@@ -200,7 +200,7 @@ async function logout() {
 
       <n-tooltip>
         <template #trigger>
-          <n-button quaternary circle class="mobile-hide" @click="settingsOpen = true">
+          <n-button quaternary circle class="mobile-hide" :aria-label="t('app.settings')" @click="settingsOpen = true">
             <Icon icon="lucide:settings" :width="18" />
           </n-button>
         </template>

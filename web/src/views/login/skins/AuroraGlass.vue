@@ -69,15 +69,15 @@ const glassTheme = computed<GlobalThemeOverrides>(() =>
 
 <template>
   <div class="aurora" :class="{ light: !app.isDark }" :style="vars">
-    <div class="aurora-bg" />
-    <div class="stars" />
-    <div class="orb orb-1" />
-    <div class="orb orb-2" />
-    <div class="orb orb-3" />
+    <div class="aurora-bg motion-decorative" />
+    <div class="stars motion-decorative" />
+    <div class="orb orb-1 motion-decorative" />
+    <div class="orb orb-2 motion-decorative" />
+    <div class="orb orb-3 motion-decorative" />
     <div class="aurora-content">
-      <div class="halo" />
+      <div class="halo motion-decorative" />
       <n-config-provider :theme="naiveTheme" :theme-overrides="glassTheme" :inherit-theme-overrides="false">
-        <div class="glass-card">
+        <div class="glass-card motion-decorative">
           <LoginForm />
         </div>
       </n-config-provider>

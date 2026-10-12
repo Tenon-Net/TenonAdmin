@@ -9,6 +9,7 @@ import { jobApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { JobDashboard, JobNodeItem, JobUpcomingItem } from '@/types/api'
 import { buildJobTrendOption, heartbeatAge } from './jobMonitorFormat'
+import { useCachedPageActive } from '@/layouts/CachedPageActive'
 
 const metric: CSSProperties = { fontSize: 28, fontWeight: 600, lineHeight: 1.2 }
 const sub: CSSProperties = { marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary, #999)' }
@@ -21,9 +22,11 @@ export default function JobMonitorPage() {
   const { message } = App.useApp()
   const [data, setData] = useState<JobDashboard | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const active = useCachedPageActive()
 
   // 15s 轮询;组件卸载清定时器 + alive 旗标掐掉迟到的 setState。
   useEffect(() => {
+    if (!active) return
     let alive = true
     const load = async () => {
       try {
@@ -41,7 +44,7 @@ export default function JobMonitorPage() {
       alive = false
       clearInterval(timer)
     }
-  }, [message])
+  }, [active, message])
 
   const trendOption = useMemo(
     () =>

@@ -1,0 +1,123 @@
+/**
+ * 动效参数唯一来源。业务按语义使用 --motion-*，旧组件可继续消费兼容别名。
+ * data-motion 由 app.effectiveMotionMode 写入，系统减少动态效果会直接得到 off。
+ */
+:root {
+  --motion-duration-feedback: 120ms;
+  --motion-duration-base: 200ms;
+  --motion-duration-page-enter: 200ms;
+  --motion-duration-page-exit: 140ms;
+  --motion-duration-panel-enter: 260ms;
+  --motion-duration-panel-exit: 180ms;
+  --motion-stagger-step: 30ms;
+  --motion-stagger-cap: 90ms;
+  --motion-distance: 8px;
+  --motion-press-scale: 0.98;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* 兼容现有消费点，数值仍只在本文件定义。 */
+  --transition-fast: var(--motion-duration-feedback) var(--motion-ease-standard);
+  --transition-base: var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+:root[data-motion='light'] {
+  --motion-duration-feedback: 90ms;
+  --motion-duration-base: 120ms;
+  --motion-duration-page-enter: 120ms;
+  --motion-duration-page-exit: 90ms;
+  --motion-duration-panel-enter: 160ms;
+  --motion-duration-panel-exit: 120ms;
+  --motion-stagger-step: 0ms;
+  --motion-stagger-cap: 0ms;
+  --motion-distance: 0px;
+  --motion-press-scale: 1;
+}
+
+:root[data-motion='off'] {
+  --motion-duration-feedback: 0ms;
+  --motion-duration-base: 0ms;
+  --motion-duration-page-enter: 0ms;
+  --motion-duration-page-exit: 0ms;
+  --motion-duration-panel-enter: 0ms;
+  --motion-duration-panel-exit: 0ms;
+  --motion-stagger-step: 0ms;
+  --motion-stagger-cap: 0ms;
+  --motion-distance: 0px;
+  --motion-press-scale: 1;
+}
+
+/* 页面切换沿用 Vue Transition + KeepAlive，只统一节奏与位移。 */
+.fade-enter-active,
+.fade-slide-enter-active {
+  transition:
+    opacity var(--motion-duration-page-enter) var(--motion-ease-standard),
+    transform var(--motion-duration-page-enter) var(--motion-ease-standard);
+}
+.fade-leave-active,
+.fade-slide-leave-active {
+  transition:
+    opacity var(--motion-duration-page-exit) var(--motion-ease-exit),
+    transform var(--motion-duration-page-exit) var(--motion-ease-exit);
+}
+.fade-enter-from,
+.fade-leave-to,
+.fade-slide-enter-from,
+.fade-slide-leave-to {
+  opacity: 0;
+}
+.fade-slide-enter-from {
+  transform: translateX(var(--motion-distance));
+}
+.fade-slide-leave-to {
+  transform: translateX(calc(var(--motion-distance) * -1));
+}
+
+/* FormContainer 通过组件公开的 class 入口调整 Naive UI 自带过渡，不接管焦点/遮罩/滚动锁。 */
+:root .motion-form-panel.fade-in-scale-up-transition-enter-active,
+:root .motion-form-panel[class*='slide-in-from-'][class*='-transition-enter-active'] {
+  transition-duration: var(--motion-duration-panel-enter) !important;
+}
+:root .motion-form-panel.fade-in-scale-up-transition-leave-active,
+:root .motion-form-panel[class*='slide-in-from-'][class*='-transition-leave-active'] {
+  transition-duration: var(--motion-duration-panel-exit) !important;
+}
+:root .motion-form-panel.fade-in-scale-up-transition-enter-from,
+:root .motion-form-panel.fade-in-scale-up-transition-leave-to {
+  transform: translateY(var(--motion-distance)) scale(var(--motion-press-scale));
+}
+:root[data-motion='light'] .motion-form-panel[class*='slide-in-from-'][class*='-transition-enter-from'],
+:root[data-motion='light'] .motion-form-panel[class*='slide-in-from-'][class*='-transition-leave-to'] {
+  opacity: 0;
+  transform: none;
+}
+:root[data-motion='light'] .motion-form-panel[class*='slide-in-from-'][class*='-transition-enter-active'],
+:root[data-motion='light'] .motion-form-panel[class*='slide-in-from-'][class*='-transition-leave-active'] {
+  transition-property: opacity !important;
+}
+
+/* off 时组件库过渡也立即落到终态；加载 spinner 不在这些选择器内。 */
+:root[data-motion='off'] [class*='-transition-enter-active'],
+:root[data-motion='off'] [class*='-transition-leave-active'] {
+  transition-duration: 0ms !important;
+  animation-duration: 0ms !important;
+}
+
+/* 登录背景等装饰性循环在轻量/关闭时禁用，后台页仅暂停以便恢复。 */
+:root[data-motion='light'] .motion-decorative,
+:root[data-motion='light'] .motion-decorative::before,
+:root[data-motion='light'] .motion-decorative::after,
+:root[data-motion='off'] .motion-decorative,
+:root[data-motion='off'] .motion-decorative::before,
+:root[data-motion='off'] .motion-decorative::after {
+  animation: none !important;
+}
+:root[data-document-hidden] .motion-decorative,
+:root[data-document-hidden] .motion-decorative::before,
+:root[data-document-hidden] .motion-decorative::after {
+  animation-play-state: paused !important;
+}
+
+:root[data-motion='off'] .motion-entrance {
+  animation: none !important;
+}

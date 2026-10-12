@@ -2,6 +2,14 @@
 
 > 约定:后台不设组件演示菜单,组件用法统一沉淀在本文件。完整 API 见各包 README。
 
+## 动效约定
+
+- 参数与降级只从 `src/styles/motion.css` 获取；CSS 使用 `--motion-*` 语义变量，JS 动画通过 `getComputedStyle` 读取同一变量，禁止另写毫秒常量。
+- 页面切换沿用布局内的 `Transition + KeepAlive`；展示页首次内容入场用 `useFirstMountMotion`，只接少量主区块。数据更新、分页和 KeepAlive 恢复不得重播。
+- 弹窗/抽屉沿用 Naive UI 的焦点、键盘、遮罩和滚动锁，通过 `FormContainer` 的公开 class 与生命周期扩展，不操作组件库内部 DOM。
+- 组件拥有的动画、监听器、观察器需在停用或卸载时清理；页面隐藏时暂停装饰性循环，切换到 `light/off` 时立即落到最终状态，业务状态不得依赖动画结束事件。
+- 表格行、普通信息卡和持续更新区域不添加批量错峰；加载 spinner 属于必要状态反馈，`off` 模式仍保留。
+
 ## ProTable(tenon-naive-pro-table)
 
 列驱动表格:`columns` 数组同时驱动搜索表单、字典渲染与列设置;`fetcher` 是唯一后端契约。

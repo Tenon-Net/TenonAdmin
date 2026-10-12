@@ -1,9 +1,11 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
+import { StrictMode } from 'react'
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react'
 import { App as AntdApp } from 'antd'
 import '@/locales' // t() 要真文案
 import { useAppStore, type FormStyle } from '@/stores/app'
 import { FormContainer, shouldCloseAfterConfirm } from './FormContainer'
+import { CachedPageActiveProvider } from '@/layouts/CachedPageActive'
 
 const okBtn = () => screen.getByRole('button', { name: /确\s*定/ })
 const cancelBtn = () => screen.getByRole('button', { name: /取\s*消/ })
@@ -109,5 +111,18 @@ describe('FormContainer 行为', () => {
     )
     expect(baseElement.querySelector('.ant-drawer')).toBeTruthy()
     expect(baseElement.querySelector('.ant-modal')).toBeNull()
+  })
+
+  it('缓存页失活时关闭打开的表单，StrictMode 重跑也只通知一次', async () => {
+    const onOpenChange = vi.fn()
+    render(
+      <StrictMode>
+        <CachedPageActiveProvider active={false}>
+          <FormContainer open onOpenChange={onOpenChange} title="x"><div>表单体</div></FormContainer>
+        </CachedPageActiveProvider>
+      </StrictMode>,
+    )
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledTimes(1))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })

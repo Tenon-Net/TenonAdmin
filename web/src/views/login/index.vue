@@ -125,8 +125,8 @@ const active = computed(() => LOGIN_SKINS.find((s) => s.id === skin.value) ?? LO
   font-weight: 600;
   color: rgba(255, 255, 255, 0.62);
   transition:
-    color 0.2s,
-    background 0.2s;
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 .tool-btn:hover {
   color: #fff;
@@ -157,8 +157,8 @@ const active = computed(() => LOGIN_SKINS.find((s) => s.id === skin.value) ?? LO
   font-weight: 600;
   color: rgba(255, 255, 255, 0.62);
   transition:
-    color 0.2s,
-    background 0.2s;
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 .skin-seg:hover {
   color: #fff;

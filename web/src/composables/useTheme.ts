@@ -1,4 +1,4 @@
-import { ref, watch, type Ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { darkTheme, type GlobalTheme, type GlobalThemeOverrides } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { buildThemeOverrides } from '@/theme/naive-theme'
@@ -30,13 +30,27 @@ export function useTheme() {
     const el = document.documentElement
     el.setAttribute('data-theme', app.isDark ? 'dark' : '')
     el.setAttribute('data-density', app.density)
+    el.setAttribute('data-motion', app.effectiveMotionMode)
     el.toggleAttribute('data-gray', app.grayscale) // 灰阶滤镜(styles/index.css)
     applyPrimaryVars()
     naiveTheme.value = app.isDark ? darkTheme : null
     overrides.value = buildThemeOverrides({ dark: app.isDark, accent: app.accent })
   }
 
-  watch([() => app.isDark, () => app.accent, () => app.density, () => app.grayscale], apply, { immediate: true })
+  watch(
+    [() => app.isDark, () => app.accent, () => app.density, () => app.grayscale, () => app.effectiveMotionMode],
+    apply,
+    { immediate: true },
+  )
+
+  function applyVisibility() {
+    document.documentElement.toggleAttribute('data-document-hidden', document.hidden)
+  }
+  onMounted(() => {
+    applyVisibility()
+    document.addEventListener('visibilitychange', applyVisibility)
+  })
+  onBeforeUnmount(() => document.removeEventListener('visibilitychange', applyVisibility))
 
   return { overrides, naiveTheme }
 }

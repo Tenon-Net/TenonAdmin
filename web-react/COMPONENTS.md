@@ -77,6 +77,16 @@
 
 `src/layouts/LayoutShell.tsx` 用原生 antd `<Watermark content={...}>` 包内容区,`content` 由 `app.watermark` 开关 + `app.watermarkText` 拼「用户名 · 自定义文本」;`content` 恒挂、开关关闭时传空串(不 remount 内容区,否则 KeepAlive 缓存全丢)。局部水印同法直接用 `<Watermark>`。
 
+## 动效与缓存页生命周期
+
+- 动效参数唯一来源是 `src/styles/motion.css`。产品代码使用 `--motion-duration-*`、`--motion-stagger-*`、`--motion-distance`、`--motion-press-scale`，不要在组件里复制毫秒数。JS 动画通过 `getComputedStyle` 读取这些变量。
+- `app.motionMode` 有 `standard / light / off` 三档；系统 `prefers-reduced-motion` 生效时强制解析为 `off`。根节点以 `data-motion` 暴露有效档位，以 `data-document-hidden` 暂停登录页装饰循环。`off` 不关闭加载 spinner。
+- `pageTransition='none'` 只关闭页面切换和页面内容首次入场，不影响按钮反馈、弹层等其它动效。工作台三个主区块只在首次挂载时入场，数据更新和 KeepAlive 恢复不重播。
+- 页面切换由 `KeepAliveOutlet` 接入；展示页少量主区块用 `useEntranceMotion(ref, { once: true, stagger: true, pageTransition: true })`，直接子区块标记 `data-motion-item`。弹窗/抽屉用 `FormContainer`，简单状态反馈用 CSS 语义变量，不叠加第二套动画。
+- 缓存页需要暂停副作用时使用 `useCachedPageActive()`。它只广播活跃状态，不改变缓存节点 identity；`FormContainer` 已内建失活关闭。自有动画必须在失活、页面隐藏、卸载和 StrictMode effect 清理时取消。
+- TabsBar 的 `.tabs-active-marker` 只读取自有 `.tab-chip` 几何，监听 resize / scroll / 动态标签变化；不要依赖 antd Dropdown 内部 DOM。
+- 表格行、普通信息卡和持续更新区域不添加批量错峰；悬停反馈仅用于可点击内容，业务状态不得依赖动画结束事件。
+
 ## 可加但先不加(设计已备案,别提前造)
 
 - ApiSelect/DictSelect/UserSelect 的 loading 圈;UserPicker 中间表批量勾选(待批量删除页需要时统一补);FormContainer 的 `onBeforeClose`;StatusSwitch 泛型值/乐观模式。
