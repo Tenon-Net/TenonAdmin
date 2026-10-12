@@ -129,12 +129,14 @@ export function participantState(participant: WfTaskParticipant, round: WfApprov
   action?: WfHisTask['action']
 } {
   const history = participantHistory(participant, round)
-  // 终态任务会把整轮 actor 收口为 Skipped；有同 task 的实际动作时，以动作事实为准。
-  if (!round.current && history?.action != null) return { key: 'handled', action: history.action }
-  if (!round.current && Number(participant.status) <= ACTOR_STATUS.pending) return { key: 'skipped' }
-  if (Number(participant.status) === ACTOR_STATUS.waiting) return { key: 'waiting' }
-  if (Number(participant.status) === ACTOR_STATUS.pending) return { key: 'pending' }
-  if (Number(participant.status) === ACTOR_STATUS.skipped) return { key: 'skipped' }
+  const status = Number(participant.status)
+  // 转办/委托后原 actor 会在当前任务中变为 Skipped；同任务已有实际动作时仍展示动作事实。
+  // 当前 Pending/Waiting 代表真实待办状态，优先级高于历史动作。
+  if (round.current && status === ACTOR_STATUS.waiting) return { key: 'waiting' }
+  if (round.current && status === ACTOR_STATUS.pending) return { key: 'pending' }
+  if (history?.action != null) return { key: 'handled', action: history.action }
+  if (!round.current && status <= ACTOR_STATUS.pending) return { key: 'skipped' }
+  if (status === ACTOR_STATUS.skipped) return { key: 'skipped' }
   return { key: 'handled', action: history?.action }
 }
 

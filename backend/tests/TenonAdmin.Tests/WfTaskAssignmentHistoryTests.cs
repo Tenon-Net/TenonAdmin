@@ -55,6 +55,102 @@ public class WfTaskAssignmentHistoryTests
             Assert.NotNull(task.Participants[1].ActivatedTime);
     }
 
+    [Theory]
+    [InlineData("all")]
+    [InlineData("seq")]
+    public async Task Nobody_transfer_keeps_actual_any_mode_after_task_closes(string configuredMode)
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        var starterId = await AddUser(admin, $"wf-mode-fallback-{configuredMode}-starter");
+        var fallbackId = await AddUser(admin, $"wf-mode-fallback-{configuredMode}-actor");
+        var definitionId = await Publish(
+            admin,
+            $"实际模式-{configuredMode}",
+            NobodyTransferApprovalModel(configuredMode, fallbackId));
+        var starter = await ClientFor(f, $"wf-mode-fallback-{configuredMode}-starter");
+        var fallback = await ClientFor(f, $"wf-mode-fallback-{configuredMode}-actor");
+        var instanceId = await Start(starter, definitionId);
+        var taskId = await PendingTaskIdFor(f, instanceId);
+
+        using (var scope = f.Services.CreateScope())
+        {
+            var current = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+                .GetAsync(instanceId, starterId);
+            Assert.Equal(WfApprovalMode.Any, Assert.Single(current.CurrentTasks).ApprovalMode);
+        }
+
+        var approve = await PostEnvelope(fallback, "/api/v1/workflow/task/approve", new { taskId });
+        Assert.Equal(0, approve.GetProperty("code").GetInt32());
+
+        using (var scope = f.Services.CreateScope())
+        {
+            var completed = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+                .GetAsync(instanceId, starterId);
+            Assert.Empty(completed.CurrentTasks);
+            Assert.Equal(WfApprovalMode.Any, Assert.Single(completed.PastTasks).ApprovalMode);
+
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            await db.Updateable<WfHistory>()
+                .SetColumns(item => new WfHistory { PayloadVersion = 0 })
+                .Where(item => item.InstanceId == instanceId
+                               && item.EventType == WfHistoryEventType.TaskCreated)
+                .ExecuteCommandAsync();
+            var versionZero = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+                .GetAsync(instanceId, starterId);
+            Assert.Equal(WfApprovalMode.Any, Assert.Single(versionZero.PastTasks).ApprovalMode);
+        }
+    }
+
+    [Fact]
+    public async Task Invalid_or_legacy_task_created_mode_falls_back_to_bound_model_mode()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        var starterId = await AddUser(admin, "wf-mode-legacy-starter");
+        var aId = await AddUser(admin, "wf-mode-legacy-a");
+        var bId = await AddUser(admin, "wf-mode-legacy-b");
+        var definitionId = await Publish(admin, "旧载荷模式", ApprovalModel("all", aId, bId));
+        var starter = await ClientFor(f, "wf-mode-legacy-starter");
+        var a = await ClientFor(f, "wf-mode-legacy-a");
+        var b = await ClientFor(f, "wf-mode-legacy-b");
+        var instanceId = await Start(starter, definitionId);
+        var taskId = await PendingTaskIdFor(f, instanceId);
+
+        Assert.Equal(0, (await PostEnvelope(a, "/api/v1/workflow/task/approve", new { taskId }))
+            .GetProperty("code").GetInt32());
+        Assert.Equal(0, (await PostEnvelope(b, "/api/v1/workflow/task/approve", new { taskId }))
+            .GetProperty("code").GetInt32());
+
+        var payloadCases = new (string Payload, int Version)[]
+        {
+            ($"{{\"taskId\":{taskId}}}", 0),
+            ($"{{\"taskId\":{taskId},\"signMode\":\"Unknown\"}}", 1),
+            ($"{{\"taskId\":{taskId},\"signMode\":0}}", 1),
+            ($"{{\"taskId\":{taskId},\"signMode\":\"1\"}}", 1),
+            ($"{{\"taskId\":{taskId},\"signMode\":null}}", 1),
+            ($"{{\"taskId\":\"{taskId}\",\"signMode\":\"Any\"}}", 1),
+            ("{\"signMode\":\"Any\"}", 1),
+            ("{", 1),
+            ($"{{\"taskId\":{taskId},\"signMode\":\"Any\"}}", 2),
+        };
+
+        foreach (var (payload, version) in payloadCases)
+        {
+            using var scope = f.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            await db.Updateable<WfHistory>()
+                .SetColumns(item => new WfHistory { PayloadJson = payload, PayloadVersion = version })
+                .Where(item => item.InstanceId == instanceId
+                               && item.EventType == WfHistoryEventType.TaskCreated)
+                .ExecuteCommandAsync();
+
+            var detail = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+                .GetAsync(instanceId, starterId);
+            Assert.Equal(WfApprovalMode.All, Assert.Single(detail.PastTasks).ApprovalMode);
+        }
+    }
+
     [Fact]
     public async Task Instance_detail_projects_closed_any_task_as_a_separate_past_round()
     {
@@ -366,6 +462,35 @@ public class WfTaskAssignmentHistoryTests
                         @params = new Dictionary<string, object> { ["userIds"] = userIds },
                     },
                     mode,
+                },
+                next = (object?)null,
+            },
+        },
+    };
+
+    private static object NobodyTransferApprovalModel(string mode, long fallbackUserId) => new
+    {
+        version = 1,
+        root = new
+        {
+            id = "start",
+            type = "start",
+            name = "",
+            next = new
+            {
+                id = "approve-1",
+                type = "approval",
+                name = "审批",
+                props = new
+                {
+                    assignee = new
+                    {
+                        provider = "user",
+                        @params = new Dictionary<string, object> { ["userIds"] = Array.Empty<long>() },
+                    },
+                    mode,
+                    nobody = "transfer",
+                    nobodyTransferUserId = fallbackUserId,
                 },
                 next = (object?)null,
             },

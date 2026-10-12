@@ -186,6 +186,51 @@ describe('WfInstanceDetailPage 动词', () => {
     expect(screen.getAllByText('无需处理').length).toBeGreaterThan(0)
   })
 
+  it.each([
+    [3, '转办'],
+    [6, '委托'],
+  ] as const)('当前轮详情将原办理人显示为实际动作 %s', async (action, label) => {
+    mount(detailOf({
+      visitedNodeIds: ['start', 'ap1'],
+      currentTasks: [{
+        taskId: 91,
+        tokenId: 10,
+        nodeVisitId: 102,
+        nodeId: 'ap1',
+        nodeName: '经理审批',
+        approvalMode: 'any',
+        participants: [
+          { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+          { actorId: 2, userId: 102, displayName: '李四', status: 1, sort: 1 },
+        ],
+      }],
+      hisTasks: [{
+        id: 10,
+        taskId: 91,
+        tokenId: 10,
+        nodeVisitId: 102,
+        nodeId: 'ap1',
+        nodeName: '经理审批',
+        userId: 101,
+        operatorName: '张三',
+        action,
+        createTime: '2026-01-01T01:00:00Z',
+      }],
+    }))
+
+    await waitFor(() => expect(document.querySelector('[data-wf-node-id="ap1"]')).toBeTruthy())
+    const card = document.querySelector<HTMLElement>('[data-wf-node-id="ap1"]')!
+    fireEvent.click(card)
+    await waitFor(() => expect(document.querySelector('[data-wf-approval-detail="ap1"]')).toBeTruthy())
+
+    const people = [...document.querySelectorAll<HTMLElement>('.wf-approval-person')]
+    const original = people.find((row) => row.textContent?.includes('张三'))
+    const pending = people.find((row) => row.textContent?.includes('李四'))
+    expect(original?.textContent).toContain(label)
+    expect(original?.textContent).not.toContain('无需处理')
+    expect(pending?.textContent).toContain('待审批')
+  })
+
   it('多条待办未选目标时不借用 currentNodeIds[0] 的自定义按钮文案', async () => {
     const dual = createDefaultModel()
     const armA = createApprovalNode({

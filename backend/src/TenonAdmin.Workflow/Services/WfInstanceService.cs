@@ -50,7 +50,8 @@ public class WfInstanceService(
         string NodeId,
         string? NodeName,
         DateTime CreateTime,
-        long SortId);
+        long SortId,
+        WfApprovalMode? ApprovalMode = null);
 
     /// <summary>保留 M3b-0 前的构造签名，供继承内置服务的消费者继续编译。</summary>
     public WfInstanceService(
@@ -505,7 +506,9 @@ public class WfInstanceService(
                 NodeId = task.NodeId,
                 NodeName = task.NodeName ?? modelIndex?.Find(task.NodeId)?.Name,
                 CreatedTime = task.CreateTime,
-                ApprovalMode = ResolveModelApprovalMode(modelIndex?.Find(task.NodeId)),
+                // TaskCreated 记录的是本轮真正落库的签核模式（例如无人转交固定创建 Any）。
+                // 旧事件没有 signMode 或载荷无效时，才按实例绑定版本中的节点配置兼容展示。
+                ApprovalMode = task.ApprovalMode ?? ResolveModelApprovalMode(modelIndex?.Find(task.NodeId)),
                 Participants = pastActorsByTask.GetValueOrDefault(task.TaskId, [])
                     .Select(actor => MapTaskParticipant(actor, userNames))
                     .ToList(),
@@ -1192,7 +1195,8 @@ public class WfInstanceService(
 
         foreach (var item in events.Where(item => item.EventType == WfHistoryEventType.TaskCreated))
         {
-            if (!TryReadPositiveTaskId(item, out var taskId) || currentIds.Contains(taskId))
+            if (!TryReadTaskCreatedPayload(item, out var taskId, out var approvalMode)
+                || currentIds.Contains(taskId))
                 continue;
             anchors[taskId] = new PastTaskAnchor(
                 taskId,
@@ -1201,7 +1205,8 @@ public class WfInstanceService(
                 item.NodeId ?? "",
                 null,
                 item.CreateTime,
-                item.Id);
+                item.Id,
+                approvalMode);
         }
 
         foreach (var item in his.Where(item => item.TaskId is > 0 && !currentIds.Contains(item.TaskId.Value)))
@@ -1292,6 +1297,52 @@ public class WfInstanceService(
                    && property.ValueKind == JsonValueKind.Number
                    && property.TryGetInt64(out taskId)
                    && taskId > 0;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 读取 TaskCreated 的任务标识及实际签核模式。版本 0/1 的旧载荷允许缺少 signMode，
+    /// 此时只建立任务锚点并由调用方回退到绑定模型；类型错误、未知枚举或数值枚举均不采信模式。
+    /// </summary>
+    protected virtual bool TryReadTaskCreatedPayload(
+        WfHistory item,
+        out long taskId,
+        out WfApprovalMode? approvalMode)
+    {
+        taskId = 0;
+        approvalMode = null;
+        if (item.PayloadVersion is not (0 or 1) || string.IsNullOrWhiteSpace(item.PayloadJson))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(item.PayloadJson);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("taskId", out var taskProperty)
+                || taskProperty.ValueKind != JsonValueKind.Number
+                || !taskProperty.TryGetInt64(out taskId)
+                || taskId <= 0)
+                return false;
+
+            if (!root.TryGetProperty("signMode", out var modeProperty))
+                return true;
+            if (modeProperty.ValueKind != JsonValueKind.String)
+                return true;
+
+            var signMode = modeProperty.GetString() switch
+            {
+                nameof(WfSignMode.Any) => WfSignMode.Any,
+                nameof(WfSignMode.All) => WfSignMode.All,
+                nameof(WfSignMode.Sequential) => WfSignMode.Sequential,
+                _ => (WfSignMode?)null,
+            };
+            if (signMode is not null)
+                approvalMode = MapApprovalMode(signMode.Value);
+            return true;
         }
         catch (JsonException)
         {

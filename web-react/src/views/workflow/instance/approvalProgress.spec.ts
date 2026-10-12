@@ -105,6 +105,58 @@ describe('approvalProgress', () => {
     ])
   })
 
+  it.each([
+    [3, 'transfer'],
+    [6, 'delegate'],
+  ] as const)('当前轮原办理人已执行 %s 时显示实际动作', (action, normalized) => {
+    const current = task({
+      participants: [
+        { actorId: 11, userId: 101, displayName: '张三', status: 3, sort: 0 },
+        { actorId: 12, userId: 102, displayName: '李四', status: 1, sort: 1 },
+        { actorId: 13, userId: 103, displayName: '王五', status: 0, sort: 2 },
+      ],
+    })
+    const history = [{
+      id: 201,
+      taskId: 1,
+      tokenId: 10,
+      nodeVisitId: 100,
+      nodeId: 'approve',
+      userId: 101,
+      action,
+    }] as WfHisTask[]
+
+    const progress = buildApprovalProgress([current], [], history).get('approve')!
+    expect(approvalCardGroups(progress)).toEqual([
+      { key: 'handled', items: [{ name: '张三', action: normalized }] },
+      { key: 'pending', items: [{ name: '李四', action: undefined }] },
+      { key: 'waiting', items: [{ name: '王五', action: undefined }] },
+    ])
+  })
+
+  it.each([
+    [1, 3, 'pending'],
+    [0, 6, 'waiting'],
+  ] as const)('当前轮状态 %s 优先于同用户已有动作', (status, action, expected) => {
+    const current = task({
+      participants: [{ actorId: 11, userId: 101, displayName: '张三', status, sort: 0 }],
+    })
+    const history = [{
+      id: 201,
+      taskId: 1,
+      tokenId: 10,
+      nodeVisitId: 100,
+      nodeId: 'approve',
+      userId: 101,
+      action,
+    }] as WfHisTask[]
+
+    const progress = buildApprovalProgress([current], [], history).get('approve')!
+    expect(approvalCardGroups(progress)).toEqual([
+      { key: expected, items: [{ name: '张三', action: undefined }] },
+    ])
+  })
+
   it('旧历史缺失任务和访问标识时逐条保留，不猜测为同一轮', () => {
     const history = [
       { id: 1, nodeId: 'approve', userId: 101, action: 1 },

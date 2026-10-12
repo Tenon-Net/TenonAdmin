@@ -19,19 +19,34 @@ export type ApprovalRound = {
   history: WfHisTask[]
 }
 
+function idKey(value: number | string | null | undefined): string {
+  return value == null ? '' : String(value)
+}
+
+function visitRoundKey(
+  nodeId: string | null | undefined,
+  tokenId: number | string | null | undefined,
+  nodeVisitId: number | string | null | undefined,
+): string | null {
+  if (!nodeId || tokenId == null || nodeVisitId == null) return null
+  return `visit:${nodeId}:${idKey(tokenId)}:${idKey(nodeVisitId)}`
+}
+
 function historyRoundKey(item: WfHisTask): string {
-  if (item.taskId != null) return `task:${item.taskId}`
-  if (item.nodeVisitId != null) return `visit:${item.tokenId ?? 'unknown'}:${item.nodeVisitId}`
+  if (item.taskId != null) return `task:${idKey(item.taskId)}`
+  const visitKey = visitRoundKey(item.nodeId, item.tokenId, item.nodeVisitId)
+  if (visitKey) return visitKey
   return `legacy:${item.id ?? `${item.nodeId}:${item.createTime ?? ''}`}`
 }
 
 function taskRoundKey(task: WfCurrentTask | WfPastTask): string {
-  if (task.taskId != null) return `task:${task.taskId}`
-  if (task.nodeVisitId != null) return `visit:${task.tokenId ?? 'unknown'}:${task.nodeVisitId}`
+  if (task.taskId != null) return `task:${idKey(task.taskId)}`
+  const visitKey = visitRoundKey(task.nodeId, task.tokenId, task.nodeVisitId)
+  if (visitKey) return visitKey
   return `task:unknown:${task.tokenId ?? 'unknown'}:${task.nodeId ?? 'unknown'}`
 }
 
-/** 按节点访问组织当前及历史轮次；旧记录缺少关联字段时保持独立，不猜测归属。 */
+/** 按节点访问组织当前及历史轮次；旧记录仅在完整访问标识唯一匹配时归并，否则保持独立。 */
 export function approvalRounds(
   nodeId: string,
   currentTasks: WfCurrentTask[],
@@ -39,10 +54,19 @@ export function approvalRounds(
   history: WfHisTask[],
 ): ApprovalRound[] {
   const rounds = new Map<string, ApprovalRound>()
+  const roundsByVisit = new Map<string, ApprovalRound[]>()
+
+  const indexVisit = (task: WfCurrentTask | WfPastTask, round: ApprovalRound) => {
+    const visitKey = visitRoundKey(task.nodeId, task.tokenId, task.nodeVisitId)
+    if (!visitKey) return
+    const candidates = roundsByVisit.get(visitKey) ?? []
+    if (!candidates.includes(round)) candidates.push(round)
+    roundsByVisit.set(visitKey, candidates)
+  }
 
   for (const task of currentTasks.filter((item) => item.nodeId === nodeId)) {
     const key = taskRoundKey(task)
-    rounds.set(key, {
+    const round: ApprovalRound = {
       key,
       current: true,
       taskId: task.taskId,
@@ -52,13 +76,19 @@ export function approvalRounds(
       createdTime: task.createdTime,
       participants: [...(task.participants ?? [])].sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0)),
       history: [],
-    })
+    }
+    rounds.set(key, round)
+    indexVisit(task, round)
   }
 
   for (const task of pastTasks.filter((item) => item.nodeId === nodeId)) {
     const key = taskRoundKey(task)
-    if (rounds.has(key)) continue
-    rounds.set(key, {
+    const existing = rounds.get(key)
+    if (existing) {
+      indexVisit(task, existing)
+      continue
+    }
+    const round: ApprovalRound = {
       key,
       current: false,
       taskId: task.taskId,
@@ -68,12 +98,16 @@ export function approvalRounds(
       createdTime: task.createdTime,
       participants: [...(task.participants ?? [])].sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0)),
       history: [],
-    })
+    }
+    rounds.set(key, round)
+    indexVisit(task, round)
   }
 
   for (const item of history.filter((entry) => entry.nodeId === nodeId)) {
     const key = historyRoundKey(item)
-    const round = rounds.get(key) ?? {
+    const visitCandidates = item.taskId == null ? roundsByVisit.get(key) ?? [] : []
+    const matchedRound = rounds.get(key) ?? (visitCandidates.length === 1 ? visitCandidates[0] : undefined)
+    const round = matchedRound ?? {
       key,
       current: false,
       taskId: item.taskId,
@@ -85,7 +119,7 @@ export function approvalRounds(
       history: [],
     }
     round.history.push(item)
-    rounds.set(key, round)
+    if (!matchedRound) rounds.set(key, round)
   }
 
   for (const round of rounds.values()) {

@@ -51,6 +51,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       # 每套模板独立启动临时数据库与宿主，覆盖真实权限及模块切换交互。
       - run: npx playwright test e2e/module-switch.spec.ts e2e/rbac-permission.spec.ts
+      - name: Approval participants and round progress
+        run: npx playwright test e2e/workflow-participants.spec.ts
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

@@ -156,4 +156,51 @@ describe('WfNodeTree', () => {
     expect(card.textContent).not.toContain('张三')
     expect(card.getAttribute('role')).toBe('button')
   })
+
+  it.each([
+    [3, '转办'],
+    [6, '委托'],
+  ] as const)('当前轮节点摘要展示原办理人的实际动作 %s', (action, label) => {
+    const approval = createApprovalNode({ id: 'ap1', name: '经理审批' })
+    const progress: WfApprovalNodeProgress = {
+      nodeId: 'ap1',
+      nodeName: '经理审批',
+      currentRounds: [{
+        key: 'task:9',
+        current: true,
+        task: {
+          taskId: 9,
+          tokenId: 1,
+          nodeVisitId: 11,
+          nodeId: 'ap1',
+          nodeName: '经理审批',
+          approvalMode: 'any',
+          participants: [
+            { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+            { actorId: 2, userId: 102, displayName: '李四', status: 1, sort: 1 },
+          ],
+        },
+        history: [{ id: 1, taskId: 9, nodeId: 'ap1', userId: 101, action }],
+      }],
+      pastRounds: [],
+    }
+
+    render(
+      <WfNodeTree
+        model={modelWith(approval)}
+        readonly
+        visitedIds={['start', 'ap1']}
+        currentIds={['ap1']}
+        runtimeProgress={new Map([['ap1', progress]])}
+        onInspectApproval={() => {}}
+        onModelChange={() => {}}
+        onSelect={() => {}}
+      />,
+    )
+
+    const card = document.querySelector<HTMLElement>('[data-wf-node-id="ap1"]')!
+    expect(card.textContent).toContain(`已处理张三 · ${label}`)
+    expect(card.textContent).toContain('待审批李四')
+    expect(card.textContent).not.toContain('无需处理张三')
+  })
 })

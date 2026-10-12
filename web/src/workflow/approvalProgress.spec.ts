@@ -38,6 +38,78 @@ describe('workflow approval progress', () => {
     expect(rounds.map((item) => item.key)).toEqual(['task:10', 'task:11'])
   })
 
+  it.each(['current', 'past'] as const)('merges taskless history into the unique %s task visit', (source) => {
+    const task = {
+      taskId: '7',
+      tokenId: '2',
+      nodeVisitId: '70',
+      nodeId: 'approval',
+      participants: [],
+    }
+    const currentTasks = source === 'current' ? [task] : []
+    const pastTasks = source === 'past' ? [task] : []
+    const rounds = approvalRounds('approval', currentTasks, pastTasks, [
+      { id: 1, taskId: null, tokenId: 2, nodeVisitId: 70, nodeId: 'approval', userId: 1, action: 1 },
+    ])
+
+    expect(rounds).toHaveLength(1)
+    expect(rounds[0]).toMatchObject({ taskId: '7', current: source === 'current' })
+    expect(rounds[0]?.history.map((item) => item.id)).toEqual([1])
+  })
+
+  it('does not choose between multiple tasks with the same visit identity', () => {
+    const rounds = approvalRounds('approval', [], [
+      { taskId: 10, tokenId: 1, nodeVisitId: 100, nodeId: 'approval', participants: [] },
+      { taskId: 11, tokenId: 1, nodeVisitId: 100, nodeId: 'approval', participants: [] },
+    ], [
+      { id: 1, taskId: null, tokenId: 1, nodeVisitId: 100, nodeId: 'approval', userId: 1, action: 1 },
+    ])
+
+    expect(rounds).toHaveLength(3)
+    expect(rounds.find((item) => item.key === 'visit:approval:1:100')?.history).toHaveLength(1)
+    expect(rounds.filter((item) => item.taskId != null).every((item) => item.history.length === 0)).toBe(true)
+  })
+
+  it.each([
+    { tokenId: null, nodeVisitId: 100 },
+    { tokenId: 1, nodeVisitId: null },
+  ])('keeps history independent when visit identity is incomplete: %o', ({ tokenId, nodeVisitId }) => {
+    const rounds = approvalRounds('approval', [], [
+      { taskId: 10, tokenId: 1, nodeVisitId: 100, nodeId: 'approval', participants: [] },
+    ], [
+      { id: 1, taskId: null, tokenId, nodeVisitId, nodeId: 'approval', userId: 1, action: 1 },
+    ])
+
+    expect(rounds).toHaveLength(2)
+    expect(rounds.find((item) => item.taskId === 10)?.history).toEqual([])
+    expect(rounds.find((item) => item.key === 'legacy:1')?.history).toHaveLength(1)
+  })
+
+  it('does not merge taskless history across a different token or node', () => {
+    const rounds = approvalRounds('approval', [], [
+      { taskId: 10, tokenId: 1, nodeVisitId: 100, nodeId: 'approval', participants: [] },
+      { taskId: 11, tokenId: 2, nodeVisitId: 100, nodeId: 'other', participants: [] },
+    ], [
+      { id: 1, taskId: null, tokenId: 2, nodeVisitId: 100, nodeId: 'approval', userId: 1, action: 1 },
+      { id: 2, taskId: null, tokenId: 1, nodeVisitId: 100, nodeId: 'other', userId: 2, action: 1 },
+    ])
+
+    expect(rounds).toHaveLength(2)
+    expect(rounds.find((item) => item.taskId === 10)?.history).toEqual([])
+    expect(rounds.find((item) => item.key === 'visit:approval:2:100')?.history).toHaveLength(1)
+  })
+
+  it('matches numeric and string task ids as the same round', () => {
+    const rounds = approvalRounds('approval', [], [
+      { taskId: '10', tokenId: 1, nodeVisitId: 100, nodeId: 'approval', participants: [] },
+    ], [
+      { id: 1, taskId: 10, tokenId: 1, nodeVisitId: 100, nodeId: 'approval', userId: 1, action: 1 },
+    ])
+
+    expect(rounds).toHaveLength(1)
+    expect(rounds[0]?.history).toHaveLength(1)
+  })
+
   it('uses task creation time to keep a newer actionless cancelled round before an older approved round', () => {
     const rounds = approvalRounds('approval', [], [
       {

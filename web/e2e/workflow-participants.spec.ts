@@ -148,9 +148,18 @@ test('并行节点各自展示人员，转交后更新实际待办人', async ({
     taskId: instance.currentTasks!.find((task) => task.nodeId === 'dept')!.taskId, toUserId: people[2]!.id, comment: '由王五处理',
   })
   await page.reload()
-  await expect(nodeCard(page, '部门审批')).toContainText('王五')
+  const transferredCard = nodeCard(page, '部门审批')
+  await expect(transferredCard).toContainText('王五')
+  await expect(transferredCard).toContainText('张三 转办')
+  await expect(transferredCard).not.toContainText('无需处理')
   await expect(nodeCard(page, '财务审批')).toContainText('李四')
   await page.screenshot({ path: info.outputPath('parallel-transfer.png'), fullPage: true, animations: 'disabled' })
+  await transferredCard.click()
+  const dialog = page.getByTestId('wf-approval-progress-modal')
+  const currentPeople = dialog.locator('.is-current .wf-progress-person')
+  await expect(currentPeople.filter({ hasText: '张三' })).toContainText('转办')
+  await expect(currentPeople.filter({ hasText: '张三' })).not.toContainText('无需处理')
+  await expect(currentPeople.filter({ hasText: '王五' })).toContainText('待审批')
 })
 
 
