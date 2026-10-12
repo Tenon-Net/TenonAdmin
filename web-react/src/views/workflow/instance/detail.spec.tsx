@@ -118,6 +118,39 @@ beforeEach(() => vi.clearAllMocks())
 afterEach(cleanup)
 
 describe('WfInstanceDetailPage 动词', () => {
+  it.each(['all', 'seq'] as const)('历史模式未知时不采用节点配置 %s，仍显示参与人与动作', async (configuredMode) => {
+    const historicalModel = createDefaultModel()
+    historicalModel.root.next = createApprovalNode({ id: 'ap1', name: '经理审批' })
+    historicalModel.root.next.props!.mode = configuredMode
+    mount(detailOf({
+      model: { version: historicalModel.version, root: historicalModel.root },
+      status: 2,
+      currentNodeIds: [],
+      visitedNodeIds: ['start', 'ap1'],
+      pastTasks: [{
+        taskId: 80, tokenId: 10, nodeVisitId: 100, nodeId: 'ap1',
+        approvalMode: null,
+        participants: [{ actorId: 1, userId: 101, displayName: '张三', status: 2, sort: 0 }],
+      }],
+      hisTasks: [{
+        id: 9, taskId: 80, tokenId: 10, nodeVisitId: 100, nodeId: 'ap1',
+        userId: 101, operatorName: '张三', action: 1, comment: '兜底办理完成',
+      }],
+    }))
+
+    await waitFor(() => expect(document.querySelector('[data-wf-node-id="ap1"]')).toBeTruthy())
+    fireEvent.click(document.querySelector<HTMLElement>('[data-wf-node-id="ap1"]')!)
+    await waitFor(() => expect(document.querySelector('[data-wf-approval-detail="ap1"]')).toBeTruthy())
+    fireEvent.click(screen.getByText('历史轮次（1）'))
+    fireEvent.click(await screen.findByText('第 1 轮'))
+    const modal = document.querySelector<HTMLElement>('[data-wf-approval-detail="ap1"]')!
+    await waitFor(() => expect(modal.querySelector('.wf-approval-person')).toBeTruthy())
+    expect(modal.querySelector('.wf-approval-person')?.textContent).toContain('张三')
+    expect(modal.querySelector('.wf-approval-person')?.textContent).toContain('同意')
+    expect(modal.textContent).toContain('兜底办理完成')
+    expect(modal.textContent).not.toContain('审批方式')
+  })
+
   it('节点卡展示当前人员，明细将当前轮与历史轮分开', async () => {
     mount(detailOf({
       currentTasks: [{

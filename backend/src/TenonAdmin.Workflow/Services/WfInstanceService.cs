@@ -507,8 +507,8 @@ public class WfInstanceService(
                 NodeName = task.NodeName ?? modelIndex?.Find(task.NodeId)?.Name,
                 CreatedTime = task.CreateTime,
                 // TaskCreated 记录的是本轮真正落库的签核模式（例如无人转交固定创建 Any）。
-                // 旧事件没有 signMode 或载荷无效时，才按实例绑定版本中的节点配置兼容展示。
-                ApprovalMode = task.ApprovalMode ?? ResolveModelApprovalMode(modelIndex?.Find(task.NodeId)),
+                // 旧事件缺失或无法验证模式时保持未知，不用设计配置推断实际历史模式。
+                ApprovalMode = task.ApprovalMode,
                 Participants = pastActorsByTask.GetValueOrDefault(task.TaskId, [])
                     .Select(actor => MapTaskParticipant(actor, userNames))
                     .ToList(),
@@ -1306,7 +1306,7 @@ public class WfInstanceService(
 
     /// <summary>
     /// 读取 TaskCreated 的任务标识及实际签核模式。版本 0/1 的旧载荷允许缺少 signMode，
-    /// 此时只建立任务锚点并由调用方回退到绑定模型；类型错误、未知枚举或数值枚举均不采信模式。
+    /// 此时只建立任务锚点并保留未知模式；类型错误、未知枚举或数值枚举均不采信模式。
     /// </summary>
     protected virtual bool TryReadTaskCreatedPayload(
         WfHistory item,

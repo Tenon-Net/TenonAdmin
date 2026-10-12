@@ -102,29 +102,36 @@ public class WfTaskAssignmentHistoryTests
         }
     }
 
-    [Fact]
-    public async Task Invalid_or_legacy_task_created_mode_falls_back_to_bound_model_mode()
+    [Theory]
+    [InlineData("all")]
+    [InlineData("seq")]
+    public async Task Invalid_or_legacy_task_created_mode_stays_unknown_after_nobody_transfer(string configuredMode)
     {
         using var f = new WorkflowAppFactory();
         var admin = await ClientFor(f, "superAdmin");
         var starterId = await AddUser(admin, "wf-mode-legacy-starter");
         var aId = await AddUser(admin, "wf-mode-legacy-a");
-        var bId = await AddUser(admin, "wf-mode-legacy-b");
-        var definitionId = await Publish(admin, "旧载荷模式", ApprovalModel("all", aId, bId));
+        var definitionId = await Publish(
+            admin, "旧载荷模式", NobodyTransferApprovalModel(configuredMode, aId));
         var starter = await ClientFor(f, "wf-mode-legacy-starter");
         var a = await ClientFor(f, "wf-mode-legacy-a");
-        var b = await ClientFor(f, "wf-mode-legacy-b");
         var instanceId = await Start(starter, definitionId);
         var taskId = await PendingTaskIdFor(f, instanceId);
 
         Assert.Equal(0, (await PostEnvelope(a, "/api/v1/workflow/task/approve", new { taskId }))
             .GetProperty("code").GetInt32());
-        Assert.Equal(0, (await PostEnvelope(b, "/api/v1/workflow/task/approve", new { taskId }))
-            .GetProperty("code").GetInt32());
+
+        using (var scope = f.Services.CreateScope())
+        {
+            var completed = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+                .GetAsync(instanceId, starterId);
+            Assert.Equal(WfApprovalMode.Any, Assert.Single(completed.PastTasks).ApprovalMode);
+        }
 
         var payloadCases = new (string Payload, int Version)[]
         {
             ($"{{\"taskId\":{taskId}}}", 0),
+            ($"{{\"taskId\":{taskId}}}", 1),
             ($"{{\"taskId\":{taskId},\"signMode\":\"Unknown\"}}", 1),
             ($"{{\"taskId\":{taskId},\"signMode\":0}}", 1),
             ($"{{\"taskId\":{taskId},\"signMode\":\"1\"}}", 1),
@@ -147,7 +154,13 @@ public class WfTaskAssignmentHistoryTests
 
             var detail = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
                 .GetAsync(instanceId, starterId);
-            Assert.Equal(WfApprovalMode.All, Assert.Single(detail.PastTasks).ApprovalMode);
+            var past = Assert.Single(detail.PastTasks);
+            Assert.Null(past.ApprovalMode);
+            Assert.Equal(taskId, past.TaskId);
+            Assert.Equal(aId, Assert.Single(past.Participants).UserId);
+            var action = Assert.Single(detail.HisTasks);
+            Assert.Equal(aId, action.UserId);
+            Assert.Equal(WfTaskAction.Approve, action.Action);
         }
     }
 

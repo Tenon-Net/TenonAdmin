@@ -23,6 +23,26 @@ function mountProgress(rounds: ApprovalRound[]) {
 }
 
 describe('workflow approval progress details', () => {
+  it('hides an unknown historical mode while preserving participants and actions', () => {
+    const host = mountProgress([{
+      key: 'task:40',
+      current: false,
+      taskId: 40,
+      approvalMode: null,
+      participants: [{ actorId: 1, userId: 1, displayName: '张三', status: 2, sort: 1 }],
+      history: [{
+        id: 1, taskId: 40, nodeId: 'approval', userId: 1, operatorName: '张三',
+        action: 1, comment: '兜底办理完成',
+      }],
+    }])
+
+    expect(host.querySelector('.wf-progress-person')?.textContent).toContain('张三')
+    expect(host.querySelector('.wf-progress-person')?.textContent).toContain('同意')
+    expect(host.querySelector('.wf-progress-action')?.textContent).toContain('兜底办理完成')
+    expect(host.textContent).not.toContain('或签')
+    expect(host.textContent).not.toContain('会签')
+  })
+
   it('shows proven historical actions before the closed actor status', () => {
     const host = mountProgress([{
       key: 'task:10',
