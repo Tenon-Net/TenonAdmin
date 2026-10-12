@@ -161,6 +161,8 @@ public static class WorkflowSetup
         // 发起 / 我发起的 / 详情(含 FormBinder 挂载点) / 事件流。
         services.TryAddScoped<IWfInstanceService, WfInstanceService>();
         services.TryAddScoped<IWfAiDecisionAuditReader, WfInstanceService>();
+        // 监控页的强制转办 / 终止 / 跳过。独立接口,替换实例服务不会卸掉干预。
+        services.TryAddScoped<IWfAdminInterventionService, WfAdminInterventionService>();
 
         // 抄送列表(抄送≠待办);消费者前置同接口即可整体替换。
         services.TryAddScoped<IWfCcService, WfCcService>();

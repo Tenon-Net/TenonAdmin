@@ -69,6 +69,9 @@ public class WorkflowEngine(
                 RemoveSignTaskCmd removeSign => await BeginSignAsync(db, removeSign, add: false, cancellationToken: cancellationToken),
                 TakeBackTaskCmd takeBack => await BeginTakeBackAsync(db, takeBack, cancellationToken),
                 CancelInstanceCmd cancel => await BeginCancelAsync(db, cancel, cancellationToken),
+                AdminForceTransferCmd force => await BeginAdminForceTransferAsync(db, force, cancellationToken),
+                AdminTerminateCmd terminate => await BeginAdminTerminateAsync(db, terminate, cancellationToken),
+                AdminSkipNodeCmd skip => await BeginAdminSkipAsync(db, skip, cancellationToken),
                 ReturnTaskCmd ret => await BeginReturnAsync(db, ret, cancellationToken),
                 ResubmitInstanceCmd resubmit => await BeginResubmitAsync(db, resubmit, cancellationToken),
                 TimeoutFireCmd timeout => await BeginTimeoutAsync(db, timeout, cancellationToken),
@@ -181,6 +184,21 @@ public class WorkflowEngine(
             CancelInstanceCmd cancel => WfOperationIdentity.Create(
                 null, WfCommandType.Cancel, WfTargetType.Instance,
                 cancel.InstanceId, cancel.CallerUserId, key),
+
+            AdminForceTransferCmd force => WfOperationIdentity.Create(
+                null, WfCommandType.AdminForceTransfer, WfTargetType.Instance,
+                force.InstanceId, force.AdminUserId, key,
+                PayloadHash(new { force.ToUserId, force.Reason, force.NodeId })),
+
+            AdminTerminateCmd terminate => WfOperationIdentity.Create(
+                null, WfCommandType.AdminTerminate, WfTargetType.Instance,
+                terminate.InstanceId, terminate.AdminUserId, key,
+                PayloadHash(new { terminate.Reason })),
+
+            AdminSkipNodeCmd skip => WfOperationIdentity.Create(
+                null, WfCommandType.AdminSkipNode, WfTargetType.Instance,
+                skip.InstanceId, skip.AdminUserId, key,
+                PayloadHash(new { skip.Reason, skip.NodeId })),
 
             ResubmitInstanceCmd resubmit => WfOperationIdentity.Create(
                 null, WfCommandType.Resubmit, WfTargetType.Instance,
@@ -900,6 +918,131 @@ public class WorkflowEngine(
 
         agenda.Plan(new CancelInstanceOp());
         return ctx;
+    }
+
+    /// <summary>管理员强制转办:加载运行中实例的一个活跃 token,入队补建或改派。</summary>
+    protected virtual async Task<WfExecutionContext> BeginAdminForceTransferAsync(
+        ISqlSugarClient db, AdminForceTransferCmd cmd, CancellationToken cancellationToken)
+    {
+        var ctx = await LoadAdminContextAsync(
+            db, cmd.InstanceId, cmd.AdminUserId, cmd.RequestId, cmd.NodeId,
+            requireUniqueToken: true, cancellationToken);
+        ctx.Agenda.Plan(new AdminForceTransferOp(cmd.ToUserId, cmd.Reason));
+        return ctx;
+    }
+
+    /// <summary>管理员终止:加载运行中实例,入队终止操作。多个活跃 token 一并收掉。</summary>
+    protected virtual async Task<WfExecutionContext> BeginAdminTerminateAsync(
+        ISqlSugarClient db, AdminTerminateCmd cmd, CancellationToken cancellationToken)
+    {
+        var ctx = await LoadAdminContextAsync(
+            db, cmd.InstanceId, cmd.AdminUserId, cmd.RequestId, nodeId: null,
+            requireUniqueToken: false, cancellationToken);
+        ctx.Agenda.Plan(new AdminTerminateOp(cmd.Reason));
+        return ctx;
+    }
+
+    /// <summary>管理员跳过阻断节点:只针对一个活跃 token。</summary>
+    protected virtual async Task<WfExecutionContext> BeginAdminSkipAsync(
+        ISqlSugarClient db, AdminSkipNodeCmd cmd, CancellationToken cancellationToken)
+    {
+        var ctx = await LoadAdminContextAsync(
+            db, cmd.InstanceId, cmd.AdminUserId, cmd.RequestId, cmd.NodeId,
+            requireUniqueToken: true, cancellationToken);
+        ctx.Agenda.Plan(new AdminSkipNodeOp(cmd.Reason));
+        return ctx;
+    }
+
+    /// <summary>
+    /// 加载管理员干预要用的运行态。机构数据范围与监控列表一致,不跨机构清过滤器。
+    /// <paramref name="requireUniqueToken"/> 为真时:传了节点就找那个活跃 token,否则必须恰好一个。
+    /// </summary>
+    protected virtual async Task<WfExecutionContext> LoadAdminContextAsync(
+        ISqlSugarClient db,
+        long instanceId,
+        long adminUserId,
+        string? requestId,
+        string? nodeId,
+        bool requireUniqueToken,
+        CancellationToken cancellationToken)
+    {
+        var instance = await db.Queryable<WfInstance>()
+            .Where(i => i.Id == instanceId)
+            .FirstAsync(cancellationToken);
+        if (instance is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceNotFound);
+        if (instance.Status != WfInstanceStatus.Running)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceStatusConflict);
+
+        var version = await db.Queryable<WfDefinitionVersion>()
+            .Where(v => v.Id == instance.DefinitionVersionId)
+            .FirstAsync(cancellationToken);
+        if (version is null)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionVersionNotFound);
+
+        var model = WfModelJson.Deserialize(version.ModelJson)
+                    ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid);
+
+        var observedTokens = await db.Queryable<WfToken>()
+            .Where(t => t.InstanceId == instance.Id
+                        && (t.Status == WfTokenStatus.Active || t.Status == WfTokenStatus.WaitingJoin))
+            .ToListAsync(cancellationToken);
+        var active = observedTokens.Where(t => t.Status == WfTokenStatus.Active).ToList();
+        if (active.Count == 0)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.TokenNotFound);
+
+        var named = string.IsNullOrWhiteSpace(nodeId) ? null : nodeId.Trim();
+        WfToken token;
+        if (named is not null)
+        {
+            token = active.FirstOrDefault(t => t.NodeId == named)
+                    ?? throw WorkflowErrorCode.Exception(
+                        WorkflowErrorCode.AdminInterventionNotAllowed,
+                        new Dictionary<string, object?> { ["reason"] = "nodeNotActive", ["nodeId"] = named });
+        }
+        else if (!requireUniqueToken)
+        {
+            token = active[0];
+        }
+        else if (active.Count == 1)
+        {
+            token = active[0];
+        }
+        else
+        {
+            throw WorkflowErrorCode.Exception(
+                WorkflowErrorCode.AdminInterventionNotAllowed,
+                new Dictionary<string, object?> { ["reason"] = "ambiguousNode" });
+        }
+
+        var starter = await db.Queryable<TenonAdmin.Services.SysUser>()
+            .Where(u => u.Id == instance.StarterUserId)
+            .FirstAsync(cancellationToken);
+
+        return new WfExecutionContext
+        {
+            Db = db,
+            Agenda = new WfAgenda(),
+            ApproverResolver = approverResolver,
+            Delegation = delegation,
+            FormBinder = formBinder,
+            Options = options,
+            TimeProvider = timeProvider,
+            ConditionEvaluator = conditionEvaluator,
+            Notifier = notifier,
+            RequestId = requestId,
+            ActorType = WfHistoryActorType.Human,
+            ActorUserId = adminUserId,
+            IdGenerator = idGenerator,
+            Instance = instance,
+            Token = token,
+            CancelTokenSnapshot = observedTokens,
+            Model = model,
+            DefinitionVersion = version,
+            SelectedUserIdsByNode = DeserializeSelectedUsers(instance.SelectedUserIdsJson),
+            StarterOrgId = starter?.OrgId,
+            LeaderChainByLevel = DeserializeLeaderChainsByLevel(instance.LeaderChainJson),
+        };
     }
 
     /// <summary>退回:加载运行态 → 入队 ReturnTaskOp(关闭当前待办、token 回退,Agenda 留空等重提)。</summary>

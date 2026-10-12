@@ -6216,6 +6216,135 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow/instance/force-transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfAdminForceTransferInput"];
+                    "text/json": components["schemas"]["WfAdminForceTransferInput"];
+                    "application/*+json": components["schemas"]["WfAdminForceTransferInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/terminate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfAdminTerminateInput"];
+                    "text/json": components["schemas"]["WfAdminTerminateInput"];
+                    "application/*+json": components["schemas"]["WfAdminTerminateInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/instance/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WfAdminSkipNodeInput"];
+                    "text/json": components["schemas"]["WfAdminSkipNodeInput"];
+                    "application/*+json": components["schemas"]["WfAdminSkipNodeInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ResultOfWfEngineResult"];
+                        "application/json": components["schemas"]["ResultOfWfEngineResult"];
+                        "text/json": components["schemas"]["ResultOfWfEngineResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflow/cc/page": {
         parameters: {
             query?: never;
@@ -13930,6 +14059,28 @@ export interface components {
             isSuperAdmin: boolean;
         };
         WfActorStatus: number;
+        WfAdminForceTransferInput: {
+            /** Format: int64 */
+            instanceId?: number | string;
+            /** Format: int64 */
+            toUserId?: number | string;
+            reason?: null | string;
+            nodeId?: null | string;
+            requestId?: null | string;
+        };
+        WfAdminSkipNodeInput: {
+            /** Format: int64 */
+            instanceId?: number | string;
+            reason?: null | string;
+            nodeId?: null | string;
+            requestId?: null | string;
+        };
+        WfAdminTerminateInput: {
+            /** Format: int64 */
+            instanceId?: number | string;
+            reason?: null | string;
+            requestId?: null | string;
+        };
         WfAiDecisionAuditOutput: {
             /** Format: int64 */
             id?: number | string;

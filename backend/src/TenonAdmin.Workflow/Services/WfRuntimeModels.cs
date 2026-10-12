@@ -186,6 +186,47 @@ public record WfTaskActionInput
     // 故控制器**不给催办透传**——催办可重复,不做幂等(见台账 ## 语义契约)。
 }
 
+/// <summary>管理员强制转办入参。</summary>
+public record WfAdminForceTransferInput
+{
+    public long InstanceId { get; init; }
+
+    public long ToUserId { get; init; }
+
+    /// <summary>干预原因,必填,去空白后不超过 512 字。</summary>
+    public string? Reason { get; init; }
+
+    /// <summary>并行时指定节点 Id;单活跃节点可空。</summary>
+    public string? NodeId { get; init; }
+
+    public string? RequestId { get; init; }
+}
+
+/// <summary>管理员终止实例入参。</summary>
+public record WfAdminTerminateInput
+{
+    public long InstanceId { get; init; }
+
+    /// <summary>终止原因,必填。</summary>
+    public string? Reason { get; init; }
+
+    public string? RequestId { get; init; }
+}
+
+/// <summary>管理员跳过阻断节点入参。</summary>
+public record WfAdminSkipNodeInput
+{
+    public long InstanceId { get; init; }
+
+    /// <summary>跳过原因,必填。</summary>
+    public string? Reason { get; init; }
+
+    /// <summary>并行时指定节点 Id;单活跃节点可空。</summary>
+    public string? NodeId { get; init; }
+
+    public string? RequestId { get; init; }
+}
+
 /// <summary>撤销流程入参。</summary>
 public record WfInstanceCancelInput
 {

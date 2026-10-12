@@ -33,7 +33,7 @@ public class WfInstanceService(
         "action", "toUserId", "targetNodeId", "fromNodeId", "comment", "payloadHash",
         "eventName", "forkId", "armId", "armName", "isDefault", "parentTokenId", "childTokenId",
         "parentNodeVisitId", "childEntryNodeVisitId", "reason", "status", "arms",
-        "nodeId", "nodeName", "userIds",
+        "nodeId", "nodeName", "userIds", "adminUserId",
     };
 
     protected sealed record CurrentTaskSnapshot(

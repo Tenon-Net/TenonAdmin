@@ -148,6 +148,27 @@ export const wfInstanceApi = {
       })
       .then((r) => toPage<WfInstanceListItem>(r)),
 
+  forceTransfer: (body: {
+    instanceId: number
+    toUserId: number
+    reason: string
+    nodeId?: string | null
+    requestId?: string | null
+  }) =>
+    client
+      .POST('/api/v1/workflow/instance/force-transfer', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
+  terminate: (body: { instanceId: number; reason: string; requestId?: string | null }) =>
+    client
+      .POST('/api/v1/workflow/instance/terminate', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
+  skip: (body: { instanceId: number; reason: string; nodeId?: string | null; requestId?: string | null }) =>
+    client
+      .POST('/api/v1/workflow/instance/skip', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
   cancel: (body: WfInstanceCancelInput) =>
     client
       .POST('/api/v1/workflow/instance/cancel', { body })

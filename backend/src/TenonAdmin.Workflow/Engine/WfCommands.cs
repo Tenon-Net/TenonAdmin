@@ -308,3 +308,48 @@ public sealed class NodeExecutionQuarantinedCmd : IWfCommand
 
     public required DateTime EndedAtUtc { get; init; }
 }
+
+/// <summary>
+/// 管理员强制转办:把当前活跃节点交给指定的启用用户。
+/// 节点上已有待办时换掉 Pending/Waiting 办理人;阻断节点没有待办时补建一件待办。不推进 token。
+/// </summary>
+public sealed class AdminForceTransferCmd : WfWriteCmd
+{
+    public required long InstanceId { get; init; }
+
+    public required long AdminUserId { get; init; }
+
+    public required long ToUserId { get; init; }
+
+    /// <summary>干预原因,写入历史与办理记录。空白与超长在操作内拒绝。</summary>
+    public string? Reason { get; init; }
+
+    /// <summary>并行分支上指定节点;只有一个活跃 token 时可以不传。</summary>
+    public string? NodeId { get; init; }
+}
+
+/// <summary>管理员终止运行中的实例。原因必填。状态记为 <see cref="WfInstanceStatus.Terminated"/>,不是发起人撤销。</summary>
+public sealed class AdminTerminateCmd : WfWriteCmd
+{
+    public required long InstanceId { get; init; }
+
+    public required long AdminUserId { get; init; }
+
+    public string? Reason { get; init; }
+}
+
+/// <summary>
+/// 管理员跳过阻断节点:仅当该节点没有活跃待办(空审批人阻断)时离开节点并进入后继。
+/// 仍有待办时拒绝,避免绕过正在审批的人;那种情况用强制转办。
+/// </summary>
+public sealed class AdminSkipNodeCmd : WfWriteCmd
+{
+    public required long InstanceId { get; init; }
+
+    public required long AdminUserId { get; init; }
+
+    public string? Reason { get; init; }
+
+    /// <summary>并行分支上指定节点;只有一个活跃 token 时可以不传。</summary>
+    public string? NodeId { get; init; }
+}

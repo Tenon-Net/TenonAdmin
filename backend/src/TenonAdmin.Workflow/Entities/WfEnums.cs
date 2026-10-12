@@ -132,6 +132,15 @@ public enum WfTaskAction
 
     /// <summary>空审批人:自动通过、转交或阻断。没有对应的待办行。</summary>
     Nobody = 11,
+
+    /// <summary>管理员强制转办(含给阻断节点补建待办)。办理人是管理员,不是原审批人。</summary>
+    AdminTransfer = 12,
+
+    /// <summary>管理员跳过阻断节点。没有对应的待办行。</summary>
+    AdminSkip = 13,
+
+    /// <summary>管理员终止实例。</summary>
+    AdminTerminate = 14,
 }
 
 /// <summary>append-only 事件流类型(<c>wf_history.EventType</c>)。</summary>
@@ -199,6 +208,12 @@ public enum WfHistoryEventType
 
     /// <summary>空审批人已按策略处理(自动通过 / 转交 / 阻断)。</summary>
     NobodyHandled = 21,
+
+    /// <summary>管理员把当前节点强制转给指定用户(含阻断节点补建待办)。</summary>
+    AdminForceTransferred = 22,
+
+    /// <summary>管理员跳过没有待办的阻断节点。</summary>
+    AdminSkipped = 23,
 }
 
 /// <summary>
@@ -257,6 +272,15 @@ public enum WfCommandType
 
     /// <summary>人工重放死信 outbox(Task 8c)</summary>
     OutboxReplay = 15,
+
+    /// <summary>管理员强制转办(<see cref="AdminForceTransferCmd"/>)</summary>
+    AdminForceTransfer = 16,
+
+    /// <summary>管理员终止实例(<see cref="AdminTerminateCmd"/>)</summary>
+    AdminTerminate = 17,
+
+    /// <summary>管理员跳过阻断节点(<see cref="AdminSkipNodeCmd"/>)</summary>
+    AdminSkipNode = 18,
 }
 
 /// <summary>

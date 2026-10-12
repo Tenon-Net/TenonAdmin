@@ -355,6 +355,9 @@ function actionLabel(a: WfTaskAction | undefined): string {
     9: 'removeSign',
     10: 'takeBack',
     11: 'nobody',
+    12: 'adminTransfer',
+    13: 'adminSkip',
+    14: 'adminTerminate',
   }
   const key = map[a] ?? 'unknown'
   return t(`workflow.action.${key}`, String(a))
@@ -397,6 +400,7 @@ function parallelArmTagType(status: WfParallelArm['status']): 'default' | 'succe
 function commentCaption(action: WfTaskAction | undefined): string {
   if (action === 4) return t('workflow.detail.returnReason')
   if (action === 2) return t('workflow.detail.rejectReason')
+  if (action === 12 || action === 13 || action === 14) return t('workflow.detail.adminReason')
   return t('workflow.detail.commentLabel')
 }
 
@@ -416,6 +420,8 @@ function historyEventLabel(item: WfHistoryItem): string {
     19: 'parallelJoined',
     20: 'parallelCancelled',
     21: 'nobodyHandled',
+    22: 'adminForceTransferred',
+    23: 'adminSkipped',
   }
   return t(`workflow.detail.historyEvent.${key[Number(item.eventType)] ?? 'unknown'}`, {
     type: item.eventType ?? '—',

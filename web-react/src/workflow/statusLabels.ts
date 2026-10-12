@@ -21,6 +21,9 @@ const TASK_ACTION: Record<number, string> = {
   9: 'removeSign',
   10: 'takeBack',
   11: 'nobody',
+  12: 'adminTransfer',
+  13: 'adminSkip',
+  14: 'adminTerminate',
 }
 
 export function normalizeInstanceStatus(s: WfInstanceStatus | undefined): string {

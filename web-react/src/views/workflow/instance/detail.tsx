@@ -94,6 +94,8 @@ const HISTORY_EVENT: Record<number, string> = {
   19: 'parallelJoined',
   20: 'parallelCancelled',
   21: 'nobodyHandled',
+  22: 'adminForceTransferred',
+  23: 'adminSkipped',
 }
 
 interface ActionFormValues {
