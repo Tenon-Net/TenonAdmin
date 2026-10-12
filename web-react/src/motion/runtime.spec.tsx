@@ -4,6 +4,8 @@ import { useRef } from 'react'
 import { useAppStore } from '@/stores/app'
 import { useEntranceMotion, useMotionRuntime } from './runtime'
 import motionCss from '@/styles/motion.css?raw'
+import shellCss from '@/layouts/shell.css?raw'
+import formContainerCss from '@/components/form-container.css?raw'
 
 const nativeAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate')
 let motionStyle: HTMLStyleElement
@@ -21,7 +23,7 @@ function EntranceProbe({ active = true, once = false }: { active?: boolean; once
 
 beforeEach(() => {
   motionStyle = document.createElement('style')
-  motionStyle.textContent = motionCss
+  motionStyle.textContent = `${motionCss}\n${shellCss}\n${formContainerCss}`
   document.head.appendChild(motionStyle)
   useAppStore.setState({ motionMode: 'standard', systemReducedMotion: false, pageTransition: 'fade' })
   const root = document.documentElement
@@ -46,6 +48,37 @@ describe('motion runtime', () => {
     expect(document.documentElement.dataset.motion).toBe('light')
     act(() => useAppStore.setState({ systemReducedMotion: true }))
     expect(document.documentElement.dataset.motion).toBe('off')
+  })
+
+  it('侧栏与执行中的弹层实时采用 standard/light/off 的真实 CSS 时长', () => {
+    render(<RuntimeProbe />)
+    const aside = document.createElement('aside')
+    aside.className = 'shell-aside'
+    const formRoot = document.createElement('div')
+    formRoot.className = 'form-container-motion'
+    const modal = document.createElement('div')
+    modal.className = 'ant-zoom-enter'
+    const drawer = document.createElement('div')
+    drawer.className = 'ant-drawer-panel-motion-right-enter-active'
+    formRoot.append(modal, drawer)
+    document.body.append(aside, formRoot)
+
+    expect(getComputedStyle(aside).transitionDuration).toBe('200ms')
+    expect(getComputedStyle(modal).animationDuration).toBe('260ms')
+    expect(getComputedStyle(drawer).transitionDuration).toBe('260ms')
+
+    act(() => useAppStore.setState({ motionMode: 'light' }))
+    expect(getComputedStyle(aside).transitionDuration).toBe('120ms')
+    expect(getComputedStyle(modal).animationDuration).toBe('160ms')
+    expect(getComputedStyle(drawer).transitionDuration).toBe('160ms')
+
+    act(() => useAppStore.setState({ systemReducedMotion: true }))
+    expect(getComputedStyle(aside).transitionDuration).toBe('0ms')
+    expect(getComputedStyle(modal).animationDuration).toBe('0ms')
+    expect(getComputedStyle(drawer).transitionDuration).toBe('0ms')
+
+    aside.remove()
+    formRoot.remove()
   })
 
   it('完成、设置变化和卸载都会取消自有 WAAPI；首次内容缓存恢复不重播', () => {

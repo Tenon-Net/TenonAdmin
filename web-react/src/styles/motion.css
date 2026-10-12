@@ -5,6 +5,8 @@
   --motion-duration-page-exit: 140ms;
   --motion-duration-panel-enter: 260ms;
   --motion-duration-panel-exit: 180ms;
+  /* rc-motion 依赖结束事件清理弹层容器；0ms 在 Chromium 中不会稳定派发，内部生命周期保留 1ms。 */
+  --motion-duration-lifecycle: 1ms;
   --motion-stagger-step: 30ms;
   --motion-stagger-cap: 90ms;
   --motion-distance: 8px;

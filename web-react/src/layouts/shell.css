@@ -35,7 +35,9 @@
   overflow: hidden;
   border-right: 1px solid var(--color-border);
   background: var(--color-bg-container);
-  transition: width 0.2s ease;
+  transition-property: width;
+  transition-duration: var(--motion-duration-base);
+  transition-timing-function: var(--motion-ease-standard);
 }
 /* 左侧混合:一级 rail 固定窄 + 二级列铺满 */
 .shell-aside--mix {

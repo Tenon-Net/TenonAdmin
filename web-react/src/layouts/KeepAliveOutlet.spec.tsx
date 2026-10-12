@@ -117,4 +117,18 @@ describe('KeepAliveOutlet', () => {
     fireEvent.click(screen.getByText('go C'))
     expect(scroller.scrollTop).toBe(0) // noCache 复访是新页，不继承旧滚动
   })
+
+  it('关闭缓存标签会清理滚动位置，重新打开从顶部开始', () => {
+    mount('/a')
+    const scroller = document.querySelector<HTMLElement>('.shell-page')!
+    scroller.scrollTop = 68
+    fireEvent.scroll(scroller)
+    fireEvent.click(screen.getByText('go B'))
+
+    act(() => useTabsStore.getState().removeTab('/a', '/b'))
+    act(() => useTabsStore.getState().addTab(T('/a')))
+    fireEvent.click(screen.getByText('go A'))
+
+    expect(scroller.scrollTop).toBe(0)
+  })
 })

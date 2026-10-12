@@ -11,7 +11,11 @@ import { useLayoutMenu } from '@/composables/useLayoutMenu'
 import { useTabsStore } from '@/stores/tabs'
 import { useSite } from '@/composables/useSite'
 import { useRealtime } from '@/composables/useRealtime'
-import { createPageScrollMemory, restorePageScrollBeforePaint } from '@/composables/pageScrollMemory'
+import {
+  createPageScrollMemory,
+  restorePageScrollBeforePaint,
+  shouldPreservePageScroll,
+} from '@/composables/pageScrollMemory'
 import AppHeader from './AppHeader.vue'
 import SideNav from './components/SideNav.vue'
 import TabsBar from './TabsBar.vue'
@@ -96,7 +100,7 @@ const pageRef = ref<HTMLElement>()
 const scrollMemory = createPageScrollMemory()
 let displayedPageKey = activeKey.value
 function restorePageScroll(key: string) {
-  if (pageRef.value) pageRef.value.scrollTop = scrollMemory.read(key)
+  if (pageRef.value) pageRef.value.scrollTop = scrollMemory.read(key, shouldPreservePageScroll(tabs.tabs, key))
   displayedPageKey = key
 }
 function preparePageScroll() {
@@ -108,7 +112,13 @@ function preparePageScroll() {
 }
 watch(activeKey, () => {
   // 快速 A→B→C 时 B 可能尚未进入；只给实际仍显示的 A 记位置，避免用 A 的 scrollTop 污染 B。
-  if (pageRef.value && displayedPageKey) scrollMemory.save(displayedPageKey, pageRef.value.scrollTop)
+  if (pageRef.value && displayedPageKey) {
+    scrollMemory.save(
+      displayedPageKey,
+      pageRef.value.scrollTop,
+      shouldPreservePageScroll(tabs.tabs, displayedPageKey),
+    )
+  }
 })
 watch(
   () => tabs.tabs.map((tab) => tab.path),
@@ -125,18 +135,29 @@ function onMobileSelect(key: string) {
   mobileOpen.value = false
 }
 
-// 刷新标签:store 置 excludeName(逐出缓存)+ 递增 reloadKey;这里 v-if 关开一次令当前页重挂,再放行缓存。
+// 刷新标签:store 置目标 route name 到 excludeName；缓存与滚动都按该目标逐出。
+// 只有刷新当前标签才需 v-if 关开重挂，右键刷新后台标签不得扰动当前页。
 const rvShow = ref(true)
 watch(
   () => tabs.reloadKey,
   async () => {
-    scrollMemory.reset(activeKey.value)
-    if (pageRef.value) pageRef.value.scrollTop = 0
-    rvShow.value = false
+    const excludedName = tabs.excludeName
+    const targetKey = tabs.tabs.find((tab) => tab.name === excludedName)?.path
+    if (targetKey) scrollMemory.reset(targetKey)
+
+    const refreshesActivePage = targetKey === activeKey.value
+    if (refreshesActivePage) {
+      if (pageRef.value) pageRef.value.scrollTop = 0
+      rvShow.value = false
+    }
+
+    // 先让 keep-alive 消费 excludeName 并逐出目标实例，再恢复当前页/放行缓存。
     await nextTick()
-    rvShow.value = true
-    await nextTick()
-    tabs.excludeName = ''
+    if (refreshesActivePage) {
+      rvShow.value = true
+      await nextTick()
+    }
+    if (tabs.excludeName === excludedName) tabs.excludeName = ''
   },
 )
 </script>

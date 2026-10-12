@@ -3,7 +3,7 @@
 // 形态默认跟随全局偏好(app.formStyle,设置抽屉可切),variant 按实例覆盖。
 // onConfirm 协议:返回 Promise → 确认钮自动 loading;reject 或 resolve(false) → 不关闭
 // (n-form 校验放 onConfirm 首行,失败 reject 即挡住关闭);其余情况自动关。
-import { computed, onDeactivated, ref } from 'vue'
+import { computed, onDeactivated, ref, useId, watch } from 'vue'
 import { NModal, NDrawer, NDrawerContent, NButton, NSpace } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useWindowSize } from '@vueuse/core'
@@ -30,6 +30,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const app = useAppStore()
+const motionPanelId = useId()
 
 const mode = computed(() => props.variant ?? app.formStyle)
 const loading = ref(false)
@@ -39,6 +40,18 @@ const w = computed(() => Math.min(props.width ?? 560, Math.round(winW.value * 0.
 // 提交中禁止任何途径关闭(esc/遮罩/关闭钮/取消钮),防提交中途关闭导致状态错乱。
 const canClose = computed(() => !loading.value)
 const maskClose = computed(() => (props.maskClosable ?? false) && !loading.value)
+
+// CSS 变量会改变后续过渡时长，但浏览器不会重算已经启动的 CSS Transition。
+// 策略中途变化时只完成本实例公开面板节点自身的过渡，让 Naive UI 正常收到结束事件并收尾遮罩/滚动锁。
+function finishRunningPanelMotion() {
+  const panel = Array.from(document.querySelectorAll<HTMLElement>('.motion-form-panel'))
+    .find((element) => element.dataset.formMotionId === motionPanelId)
+  for (const animation of panel?.getAnimations() ?? []) {
+    if (animation.playState === 'running' || animation.pending) animation.finish()
+  }
+}
+
+watch(() => app.effectiveMotionMode, finishRunningPanelMotion)
 
 async function handleConfirm() {
   if (!props.onConfirm) {
@@ -71,6 +84,7 @@ onDeactivated(() => {
     :close-on-esc="canClose"
     :mask-closable="maskClose"
     class="motion-form-panel"
+    :data-form-motion-id="motionPanelId"
     transform-origin="center"
     :style="{ width: `${w}px` }"
     @after-enter="props.onAfterEnter"
@@ -99,6 +113,7 @@ onDeactivated(() => {
     :close-on-esc="canClose"
     :mask-closable="maskClose"
     class="motion-form-panel"
+    :data-form-motion-id="motionPanelId"
     @after-enter="props.onAfterEnter"
     @after-leave="props.onAfterLeave"
   >

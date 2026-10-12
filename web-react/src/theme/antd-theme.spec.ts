@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { theme } from 'antd'
-import { defined, num, buildAntdTheme } from './antd-theme'
+import { defined, num, buildAntdTheme, motionDurationForAntd } from './antd-theme'
 // `?raw` 取文本而不是让它进文档 —— 下面「无 tokens.css」那一组验的正是"样式没进文档"的失败模式,
 // 顶层 import 会把它污染掉。需要样式的那一组自己在 beforeAll 里注 <style>。
 // (`?raw` 拿到空串的话说明 vitest 的 `css` 开关是关的,见 vite.config.ts 里的说明;下面有自检。)
 import tokensCss from '@/styles/tokens.css?raw'
+import motionCss from '@/styles/motion.css?raw'
 // antd 的 alias 源码,用来把「X 恒等于 Y」的不变量**全量抽出来**而不是逐个手写。
 // 用 `?raw` 而不是 `node:fs`:`@types/node` 一旦进 program,`process`/`__dirname` 就在**所有**
 // 浏览器源码里也可用了(三重斜线引用挡不住,全局声明不是文件级的),tsconfig 里那条守卫当场失效。
@@ -40,6 +41,48 @@ describe('defined', () => {
   })
 })
 
+describe('motionDurationForAntd', () => {
+  it('standard/light 保留统一参数，off 只给 rc-motion 留可靠收尾的 1ms', () => {
+    expect(motionDurationForAntd('200ms', '1ms', 'standard')).toBe('200ms')
+    expect(motionDurationForAntd('120ms', '1ms', 'light')).toBe('120ms')
+    expect(motionDurationForAntd('0ms', '1ms', 'off')).toBe('1ms')
+  })
+
+  it('样式未加载时保持空值，由 defined 丢弃而不污染 antd 默认令牌', () => {
+    expect(motionDurationForAntd('', '', 'off')).toBe('')
+  })
+})
+
+describe('antd motion token 桥', () => {
+  let style: HTMLStyleElement
+
+  beforeAll(() => {
+    style = document.createElement('style')
+    style.textContent = motionCss
+    document.head.appendChild(style)
+  })
+  afterAll(() => {
+    style.remove()
+    document.documentElement.removeAttribute('data-motion')
+  })
+
+  it('off 时 seed 与 Modal/Drawer 组件覆盖都使用生命周期时长', () => {
+    document.documentElement.dataset.motion = 'off'
+    const cfg = buildAntdTheme({ dark: false, accent: '#646CFF', density: 'comfortable', motionMode: 'off' })
+    expect(cfg.token).toMatchObject({ motionDurationFast: '1ms', motionDurationMid: '1ms', motionDurationSlow: '1ms' })
+    expect(cfg.components?.Modal).toMatchObject({ motionDurationMid: '1ms', motionDurationSlow: '1ms' })
+    expect(cfg.components?.Drawer).toMatchObject({ motionDurationSlow: '1ms' })
+  })
+
+  it('light 时 seed 与组件覆盖保留统一参数值', () => {
+    document.documentElement.dataset.motion = 'light'
+    const cfg = buildAntdTheme({ dark: false, accent: '#646CFF', density: 'comfortable', motionMode: 'light' })
+    expect(cfg.token).toMatchObject({ motionDurationFast: '90ms', motionDurationMid: '120ms', motionDurationSlow: '160ms' })
+    expect(cfg.components?.Modal).toMatchObject({ motionDurationMid: '160ms', motionDurationSlow: '160ms' })
+    expect(cfg.components?.Drawer).toMatchObject({ motionDurationSlow: '160ms' })
+  })
+})
+
 // 这一组**不加载 tokens.css**,验的正是"样式没进文档"那个失败模式。
 describe('buildAntdTheme(无 tokens.css)', () => {
   it('CSS 变量全空时只下发主色,其余键根本不出现', () => {
@@ -58,6 +101,13 @@ describe('buildAntdTheme(无 tokens.css)', () => {
     expect(roomy.algorithm).toHaveLength(1)
     expect(compact.algorithm).toHaveLength(2)
     expect(theme.getDesignToken(compact).controlHeight).toBeLessThan(theme.getDesignToken(roomy).controlHeight)
+  })
+
+  it('切换动效档位不关闭 rc-motion 引擎', () => {
+    const standard = buildAntdTheme({ dark: false, accent: '#646CFF', density: 'comfortable', motionMode: 'standard' })
+    const off = buildAntdTheme({ dark: false, accent: '#646CFF', density: 'comfortable', motionMode: 'off' })
+    expect(standard.token).not.toHaveProperty('motion')
+    expect(off.token).not.toHaveProperty('motion')
   })
 })
 
