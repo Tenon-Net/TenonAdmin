@@ -22,6 +22,7 @@ const props = defineProps<{
   model: WfModel
   selectedId?: string | null
   errorIds?: Set<string> | string[]
+  errorMessages?: Record<string, string>
   readonly?: boolean
   visitedIds?: Set<string> | string[]
   currentIds?: Set<string> | string[]
@@ -132,6 +133,7 @@ function onRenameArm(ownerId: string, armId: string, name: string) {
       :root="model.root"
       :selected-id="selectedId"
       :error-set="errorSet"
+      :error-messages="errorMessages"
       :readonly="readonly"
       :visited-set="visitedSet"
       :current-set="currentSet"

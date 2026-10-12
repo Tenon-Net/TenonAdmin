@@ -168,7 +168,7 @@ describe('workflow node configuration', () => {
     expect(result?.root.next?.props).toMatchObject({
       assignee: { provider: 'user', params: { userIds: [7, 8] } },
       mode,
-      nobody: 'autoPass',
+      nobody: 'block',
       onReject: 'terminate',
       returnPolicy: 'prev',
       allPassRatio: 100,

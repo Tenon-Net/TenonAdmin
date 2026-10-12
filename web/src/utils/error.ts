@@ -38,6 +38,16 @@ export function translateError(err: unknown): string {
     return t('error._fallback')
   }
   if (err instanceof ApiError) {
+    const reason = typeof err.args?.reason === 'string' ? err.args.reason : ''
+    const issueKey = reason ? `workflow.designer.issue.${reason}` : ''
+    if (issueKey && i18n.global.te(issueKey)) {
+      const message = t(issueKey)
+      const nodeId = err.args?.nodeId
+      if (nodeId != null && String(nodeId) && i18n.global.te('workflow.designer.issue.onNode')) {
+        return t('workflow.designer.issue.onNode', { nodeId: String(nodeId), message })
+      }
+      return message
+    }
     if (err.msgKey && i18n.global.te(err.msgKey)) return t(err.msgKey)
     // 无 msgKey 时用数字码兜底(下载失败信封偶发只有 code)
     if (!err.msgKey && CODE_MSG_KEY[err.code] && i18n.global.te(CODE_MSG_KEY[err.code])) {

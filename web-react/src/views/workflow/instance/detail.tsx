@@ -93,6 +93,7 @@ const HISTORY_EVENT: Record<number, string> = {
   18: 'parallelArmCompleted',
   19: 'parallelJoined',
   20: 'parallelCancelled',
+  21: 'nobodyHandled',
 }
 
 interface ActionFormValues {
@@ -127,7 +128,7 @@ export function canResubmitInstance({
 }
 
 export default function WfInstanceDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { message } = App.useApp()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -408,6 +409,19 @@ export default function WfInstanceDetailPage() {
     userId == null || userId === '' ? '' : t('workflow.detail.userFallback', { id: userId })
   const operatorName = (name: string | null | undefined, userId: number | string | null | undefined) =>
     name?.trim() || (Number(userId) > 0 ? userFallback(userId) : t('workflow.detail.approvalProgress.system'))
+  const nobodySummary = (item: { nodeName?: string | null; nodeId?: string | null; comment?: string | null; transferToUserName?: string | null; transferToUserId?: number | string | null }) => {
+    const [action, reason] = String(item.comment ?? '').split('|')
+    const node = item.nodeName || item.nodeId || ''
+    const reasonKey = `workflow.detail.nobody.reason.${reason}`
+    const reasonText = reason && i18n.exists(reasonKey) ? t(reasonKey) : t('workflow.detail.nobody.reason.noResolvedUsers')
+    const target = item.transferToUserName || (item.transferToUserId != null ? userFallback(item.transferToUserId) : '') || t('workflow.detail.approvalProgress.system')
+    const actionText = action === 'autoPass'
+      ? t('workflow.detail.nobody.action.autoPass')
+      : action === 'transfer'
+        ? t('workflow.detail.nobody.action.transfer', { name: target })
+        : t('workflow.detail.nobody.action.block')
+    return t('workflow.detail.nobody.summary', { node, reason: reasonText, action: actionText })
+  }
 
   const hasActions = myPendingTasks.length > 0 || canUrge || canCancel || canResubmit || canTakeBack
 
@@ -598,8 +612,10 @@ export default function WfInstanceDetailPage() {
                         </Tag>
                         <Typography.Text type="secondary">{formatDateTime(item.createTime)}</Typography.Text>
                       </Space>
-                      {item.comment ? <Typography.Text>{item.comment}</Typography.Text> : null}
-                      {item.transferToUserId != null ? (
+                      {Number(item.action) === 11 ? (
+                        <Typography.Text>{nobodySummary(item)}</Typography.Text>
+                      ) : item.comment ? <Typography.Text>{item.comment}</Typography.Text> : null}
+                      {Number(item.action) !== 11 && item.transferToUserId != null ? (
                         <Typography.Text type="secondary">
                           {t('workflow.detail.transferTo', { name: item.transferToUserName || userFallback(item.transferToUserId) })}
                         </Typography.Text>

@@ -11,6 +11,7 @@ const props = defineProps<{
   node: WfNode
   active?: boolean
   error?: boolean
+  errorMessage?: string
   readonly?: boolean
   visited?: boolean
   current?: boolean
@@ -178,7 +179,8 @@ const body = computed(() => {
       </span>
       <AppIcon v-if="!readonly || runtimeInspectable" icon="ph:caret-right" :size="14" class="wf-card-arrow" />
     </div>
-    <div v-if="error" class="wf-card-warn" :title="t('workflow.designer.invalid')">
+    <p v-if="error && errorMessage" class="wf-card-error">{{ errorMessage }}</p>
+    <div v-if="error" class="wf-card-warn" :title="errorMessage || t('workflow.designer.invalid')">
       <AppIcon icon="ph:warning-circle" :size="18" />
     </div>
   </div>
@@ -313,6 +315,13 @@ const body = computed(() => {
 .wf-card-arrow {
   flex-shrink: 0;
   color: var(--color-text-disabled);
+}
+.wf-card-error {
+  margin: 0;
+  padding: 0 10px 8px;
+  color: var(--color-danger);
+  font-size: 12px;
+  line-height: 1.4;
 }
 .wf-card-warn {
   position: absolute;

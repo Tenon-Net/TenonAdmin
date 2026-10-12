@@ -27,6 +27,12 @@ public class EnterNodeOp(
 
     private WfToken? ForcedToken { get; } = forcedToken;
 
+    /// <summary>正在按空审批人策略转交,避免转交目标再次解析为空时递归。</summary>
+    private bool _applyingNobody;
+
+    /// <summary>本次空审批人原因,调用 <see cref="ApplyNobodyAsync"/> 前赋值,并写入历史。</summary>
+    private string _nobodyReason = "noResolvedUsers";
+
     public virtual async Task ExecuteAsync(WfExecutionContext ctx, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -171,6 +177,7 @@ public class EnterNodeOp(
         var providerKey = assignee?.Provider;
         if (string.IsNullOrWhiteSpace(providerKey))
         {
+            _nobodyReason = "noAssignee";
             await ApplyNobodyAsync(ctx, cancellationToken);
             return;
         }
@@ -189,6 +196,7 @@ public class EnterNodeOp(
 
         if (users.Count == 0)
         {
+            _nobodyReason = "noResolvedUsers";
             await ApplyNobodyAsync(ctx, cancellationToken);
             return;
         }
@@ -317,13 +325,22 @@ public class EnterNodeOp(
         return defaultArm;
     }
 
-    /// <summary>空审批人:节点 &gt; 流程 &gt; 全局。</summary>
+    /// <summary>
+    /// 空审批人:节点 &gt; 流程 &gt; 全局。三种结果都先记历史再动作:
+    /// 显式 <c>autoPass</c> 才离开节点;<c>transfer</c> 转给仍启用的指定人;
+    /// 其余(含出厂默认 <c>block</c>、未配置转交人、转交人停用)停在当前节点,不建待办、不抛异常,
+    /// 这样记录能随本命令提交。抛异常会回滚整笔事务,审批记录和已完成的前序同意都会消失。
+    /// </summary>
     protected virtual async Task ApplyNobodyAsync(WfExecutionContext ctx, CancellationToken cancellationToken)
     {
+        if (_applyingNobody)
+            return;
+
         var action = ResolveNobody(ctx);
         switch (action)
         {
             case WfNobodyAction.AutoPass:
+                await RecordNobodyAsync(ctx, "autoPass", _nobodyReason, null, cancellationToken);
                 ctx.Agenda.Plan(new TakeTransitionOp(Node, ctx.Token));
                 return;
 
@@ -333,16 +350,70 @@ public class EnterNodeOp(
                           ?? 0;
                 if (uid <= 0)
                 {
-                    throw WorkflowErrorCode.Exception(WorkflowErrorCode.NobodyBlocked,
-                        new Dictionary<string, object?> { ["nodeId"] = Node.Id, ["reason"] = "transferWithoutUser" });
+                    await RecordNobodyAsync(ctx, "block", "transferWithoutUser", null, cancellationToken);
+                    return;
                 }
-                await CreateTaskAsync(ctx, [uid], WfSignMode.Any, cancellationToken);
+
+                var enabled = await ctx.Db.Queryable<TenonAdmin.Services.SysUser>()
+                    .Where(u => u.Id == uid && u.Enabled == true)
+                    .AnyAsync();
+                if (!enabled)
+                {
+                    await RecordNobodyAsync(ctx, "block", "transferUserUnavailable", uid, cancellationToken);
+                    return;
+                }
+
+                await RecordNobodyAsync(ctx, "transfer", _nobodyReason, uid, cancellationToken);
+                _applyingNobody = true;
+                try
+                {
+                    await CreateTaskAsync(ctx, [uid], WfSignMode.Any, cancellationToken);
+                }
+                finally
+                {
+                    _applyingNobody = false;
+                }
                 return;
 
             default:
-                throw WorkflowErrorCode.Exception(WorkflowErrorCode.NobodyBlocked,
-                    new Dictionary<string, object?> { ["nodeId"] = Node.Id });
+                await RecordNobodyAsync(ctx, "block", _nobodyReason, null, cancellationToken);
+                return;
         }
+    }
+
+    /// <summary>
+    /// 空审批人历史:事件流记节点与原因,<c>wf_his_task</c> 用意见 <c>{action}|{reason}</c> 给审批记录页。
+    /// 办理人记 0,表示系统处理,没有对应待办。
+    /// </summary>
+    private async Task RecordNobodyAsync(
+        WfExecutionContext ctx,
+        string action,
+        string reason,
+        long? toUserId,
+        CancellationToken cancellationToken)
+    {
+        var nodeName = string.IsNullOrWhiteSpace(Node.Name) ? Node.Id : Node.Name;
+        await ctx.Db.Insertable(new WfHisTask
+        {
+            InstanceId = ctx.Instance.Id,
+            NodeId = Node.Id,
+            NodeName = nodeName,
+            TokenId = ctx.Token.Id,
+            UserId = 0,
+            Action = WfTaskAction.Nobody,
+            Comment = $"{action}|{reason}",
+            DurationMs = 0,
+            TransferToUserId = toUserId,
+            NodeVisitId = ctx.Token.NodeVisitId,
+        }).ExecuteCommandAsync();
+
+        await ctx.AppendHistoryAsync(
+            WfHistoryEventType.NobodyHandled,
+            Node.Id,
+            toUserId is null
+                ? new { nodeId = Node.Id, nodeName, action, reason }
+                : (object)new { nodeId = Node.Id, nodeName, action, reason, toUserId },
+            cancellationToken);
     }
 
     protected virtual async Task CreateTaskAsync(
@@ -368,6 +439,9 @@ public class EnterNodeOp(
         }
         if (effective.Count == 0)
         {
+            if (_applyingNobody)
+                return;
+            _nobodyReason = "noResolvedUsers";
             await ApplyNobodyAsync(ctx, cancellationToken);
             return;
         }
@@ -550,9 +624,9 @@ public class EnterNodeOp(
     protected static WfNobodyAction ParseNobody(string? raw) =>
         raw?.Trim().ToLowerInvariant() switch
         {
+            "autopass" => WfNobodyAction.AutoPass,
             "transfer" => WfNobodyAction.Transfer,
-            "block" => WfNobodyAction.Block,
-            _ => WfNobodyAction.AutoPass,
+            _ => WfNobodyAction.Block,
         };
 
     /// <summary>schema mode → 实体枚举;multiLeader 强制顺序(CONTEXT 连续多级主管)。</summary>

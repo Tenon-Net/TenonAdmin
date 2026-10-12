@@ -11,11 +11,11 @@ import { useI18n } from 'vue-i18n'
 import DetailPage from '@/components/DetailPage/index.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useTabTitle } from '@/composables/useTabTitle'
-import { useConfirm } from '@/composables/useConfirm'
+import { ApiError } from '@/api'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import type { WfDefinitionInput } from '@/types/workflow'
-import { cloneModel, createDefaultModel, validateModel } from '@/workflow/model'
+import { cloneModel, createDefaultModel, validateModel, type WfModelIssue } from '@/workflow/model'
 import type { WfModel, WfNode } from '@/workflow/schema'
 import WfNodeTree from './components/WfNodeTree.vue'
 import WfConfigDrawer from './components/WfConfigDrawer.vue'
@@ -24,12 +24,11 @@ const ZOOM_MIN = 50
 const ZOOM_MAX = 200
 const ZOOM_STEP = 10
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const setTabTitle = useTabTitle()
-const { run } = useConfirm()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -45,10 +44,27 @@ const zoom = ref(100)
 const canvasRef = ref<HTMLElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
 
-const errorIds = computed(() => {
-  const issues = validateModel(model.value)
-  return new Set(issues.map((i) => i.nodeId).filter(Boolean) as string[])
+const serverNodeErrors = ref<Record<string, string>>({})
+
+function issueText(issue: WfModelIssue): string {
+  const key = `workflow.designer.issue.${issue.code}`
+  const message = te(key) ? t(key) : t('workflow.designer.invalid')
+  return issue.nodeId ? t('workflow.designer.issue.onNode', { nodeId: issue.nodeId, message }) : message
+}
+
+const errorMessages = computed(() => {
+  const map: Record<string, string> = {}
+  for (const issue of validateModel(model.value)) {
+    if (!issue.nodeId || map[issue.nodeId]) continue
+    const key = `workflow.designer.issue.${issue.code}`
+    map[issue.nodeId] = te(key) ? t(key) : t('workflow.designer.invalid')
+  }
+  return { ...map, ...serverNodeErrors.value }
 })
+
+const errorIds = computed(() => new Set(Object.keys(errorMessages.value)))
+
+watch(model, () => { serverNodeErrors.value = {} }, { deep: true })
 
 const zoomLabel = computed(() => `${zoom.value}%`)
 
@@ -119,7 +135,7 @@ async function save(): Promise<boolean> {
   if (!defId.value) return false
   const issues = validateModel(model.value)
   if (issues.length) {
-    message.warning(t('workflow.designer.invalid'))
+    message.warning(issues.map(issueText).join('；'))
     return false
   }
   saving.value = true
@@ -142,9 +158,17 @@ async function save(): Promise<boolean> {
 
 async function publish() {
   if (!defId.value) return
+  serverNodeErrors.value = {}
   if (!await save()) return
-  const ok = await run(() => wfDefinitionApi.publish(defId.value!), t('workflow.designer.published'))
-  if (ok) await load(defId.value)
+  try {
+    await wfDefinitionApi.publish(defId.value)
+    message.success(t('workflow.designer.published'))
+    await load(defId.value)
+  } catch (e) {
+    const nodeId = e instanceof ApiError ? String(e.args?.nodeId ?? '') : ''
+    if (nodeId) serverNodeErrors.value = { [nodeId]: translateError(e) }
+    message.error(translateError(e))
+  }
 }
 
 async function createDraft() {
@@ -227,6 +251,7 @@ function onBack() {
                 :model="model"
                 :selected-id="selectedId"
                 :error-ids="errorIds"
+                :error-messages="errorMessages"
                 @update:model="model = $event"
                 @select="onSelect"
               />

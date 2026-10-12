@@ -129,6 +129,9 @@ public enum WfTaskAction
 
     /// <summary>拿回(M3)</summary>
     TakeBack = 10,
+
+    /// <summary>空审批人:自动通过、转交或阻断。没有对应的待办行。</summary>
+    Nobody = 11,
 }
 
 /// <summary>append-only 事件流类型(<c>wf_history.EventType</c>)。</summary>
@@ -193,6 +196,9 @@ public enum WfHistoryEventType
 
     /// <summary>并行 fork 被取消。</summary>
     ParallelCancelled = 20,
+
+    /// <summary>空审批人已按策略处理(自动通过 / 转交 / 阻断)。</summary>
+    NobodyHandled = 21,
 }
 
 /// <summary>

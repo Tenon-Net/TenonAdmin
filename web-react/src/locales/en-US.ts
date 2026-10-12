@@ -1588,6 +1588,12 @@ export default {
       labelUrge: 'Urge label',
       advanced: 'Advanced',
       invalid: 'Invalid flow structure',
+      issue: {
+        assigneeRequired: 'No approver configured',
+        assigneeUsersRequired: 'Choose at least one member',
+        assigneeUserUnavailable: 'The assigned user does not exist or is disabled',
+        onNode: '{nodeId}: {message}',
+      },
       zoom: 'Canvas zoom',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
@@ -1921,6 +1927,21 @@ export default {
         parallelArmCompleted: 'Parallel arm completed',
         parallelJoined: 'Parallel joined',
         parallelCancelled: 'Parallel cancelled',
+        nobodyHandled: 'No approver',
+      },
+      nobody: {
+        summary: '{node}: {reason}; {action}',
+        action: {
+          autoPass: 'Automatically approved by the system',
+          transfer: 'Reassigned to {name}',
+          block: 'Blocked; approval did not continue',
+        },
+        reason: {
+          noAssignee: 'No approver configured',
+          noResolvedUsers: 'No available approver',
+          transferWithoutUser: 'No transfer target configured',
+          transferUserUnavailable: 'The transfer target does not exist or is disabled',
+        },
       },
       parallel: {
         title: 'Parallel branches',
@@ -1953,6 +1974,7 @@ export default {
       addSign: 'Add sign',
       removeSign: 'Remove sign',
       takeBack: 'Take back',
+      nobody: 'No approver',
       unknown: 'Action',
     },
   },

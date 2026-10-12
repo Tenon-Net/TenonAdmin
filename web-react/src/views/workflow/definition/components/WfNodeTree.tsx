@@ -23,6 +23,7 @@ export interface WfNodeTreeProps {
   model: WfModel
   selectedId?: string | null
   errorIds?: Set<string> | string[]
+  errorMessages?: Record<string, string>
   readonly?: boolean
   visitedIds?: Set<string> | string[]
   currentIds?: Set<string> | string[]
@@ -38,7 +39,7 @@ function toSet(ids: Set<string> | string[] | undefined): Set<string> {
 }
 
 export function WfNodeTree({
-  model, selectedId, errorIds, readonly, visitedIds, currentIds, runtimeProgress, onInspectApproval,
+  model, selectedId, errorIds, errorMessages, readonly, visitedIds, currentIds, runtimeProgress, onInspectApproval,
   onModelChange, onSelect,
 }: WfNodeTreeProps) {
   const errorSet = useMemo(() => toSet(errorIds), [errorIds])
@@ -115,6 +116,7 @@ export function WfNodeTree({
         root={model.root}
         selectedId={selectedId}
         errorSet={errorSet}
+        errorMessages={errorMessages}
         readonly={readonly}
         visitedSet={visitedSet}
         currentSet={currentSet}

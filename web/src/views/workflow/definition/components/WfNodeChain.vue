@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
   root: WfNode | null | undefined
   selectedId?: string | null
   errorSet: Set<string>
+  errorMessages?: Record<string, string>
   terminal?: boolean
   readonly?: boolean
   visitedSet?: Set<string>
@@ -73,6 +74,7 @@ function renameArm(branchId: string, armId: string, event: Event) {
         :node="node"
         :active="selectedId === node.id"
         :error="errorSet.has(node.id)"
+        :error-message="errorMessages?.[node.id]"
         :readonly="readonly"
         :visited="visitedSet?.has(node.id) ?? false"
         :current="currentSet?.has(node.id) ?? false"
@@ -144,6 +146,7 @@ function renameArm(branchId: string, armId: string, event: Event) {
                 :root="arm.next"
                 :selected-id="selectedId"
                 :error-set="errorSet"
+                :error-messages="errorMessages"
                 :readonly="readonly"
                 :visited-set="visitedSet"
                 :current-set="currentSet"

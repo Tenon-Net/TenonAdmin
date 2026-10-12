@@ -97,6 +97,7 @@ export interface WfNodeCardProps {
   node: WfNode
   active?: boolean
   error?: boolean
+  errorMessage?: string
   readonly?: boolean
   visited?: boolean
   current?: boolean
@@ -107,7 +108,7 @@ export interface WfNodeCardProps {
 }
 
 export function WfNodeCard({
-  node, active, error, readonly, visited, current, runtimeProgress, onInspect, onSelect, onRemove,
+  node, active, error, errorMessage, readonly, visited, current, runtimeProgress, onInspect, onSelect, onRemove,
 }: WfNodeCardProps) {
   const { t } = useTranslation()
   const body = nodeCardBody(node, t)
@@ -217,8 +218,9 @@ export function WfNodeCard({
         )}
         {!readonly || canInspect ? <AppIcon icon="ph:caret-right" size={14} className="wf-card-arrow" /> : null}
       </div>
+      {error && errorMessage ? <p className="wf-card-error">{errorMessage}</p> : null}
       {error ? (
-        <div className="wf-card-warn" title={t('workflow.designer.invalid')}>
+        <div className="wf-card-warn" title={errorMessage || t('workflow.designer.invalid')}>
           <AppIcon icon="ph:warning-circle" size={18} />
         </div>
       ) : null}

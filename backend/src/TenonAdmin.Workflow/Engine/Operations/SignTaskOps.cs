@@ -161,7 +161,8 @@ internal sealed class AddSignTaskOp(WfTask task, long userId, long targetUserId,
         await EnsureCallerAndTargetScopeAsync(ctx, UserId, TargetUserId, cancellationToken);
         var caller = await RequirePendingCallerAsync(ctx, cancellationToken);
         var alreadyActor = await ctx.Db.Queryable<WfTaskActor>()
-            .Where(a => a.TaskId == Task.Id && a.UserId == TargetUserId && a.ActorType == WfActorType.Approver)
+            .Where(a => a.TaskId == Task.Id && a.UserId == TargetUserId && a.ActorType == WfActorType.Approver
+                        && (a.Status == WfActorStatus.Pending || a.Status == WfActorStatus.Waiting))
             .AnyAsync(cancellationToken);
         if (alreadyActor)
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.SignTargetInvalid,
@@ -236,7 +237,8 @@ internal sealed class RemoveSignTaskOp(WfTask task, long userId, long targetUser
         await RequirePendingCallerAsync(ctx, cancellationToken);
         var target = await ctx.Db.Queryable<WfTaskActor>()
             .Where(a => a.TaskId == Task.Id && a.UserId == TargetUserId
-                        && a.ActorType == WfActorType.Approver)
+                        && a.ActorType == WfActorType.Approver
+                        && (a.Status == WfActorStatus.Pending || a.Status == WfActorStatus.Waiting))
             .FirstAsync(cancellationToken);
         if (target is null || target.Status is WfActorStatus.Done or WfActorStatus.Skipped)
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.SignTargetInvalid,

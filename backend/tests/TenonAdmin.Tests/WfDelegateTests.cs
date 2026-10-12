@@ -129,15 +129,9 @@ public class WfDelegateTests
     }
 
     /// <summary>
-    /// 链式委托(A→B→C)是**定案允许**的,不是漏做限制:被委托人拿到的是普通 Pending actor,不带
-    /// 「你是被委托来的」标记位,所有办理人动词对他一视同仁。
-    /// <para><b>「不设次数/深度上限」这条定案的唯一安全依据就钉在本用例的第三跳上</b>:C 再委托回 A 或 B
-    /// 一律被 <c>alreadyActor</c> 拦下——因为
-    /// <c>ReassignTaskOpBase</c> 那条「目标已是本待办任一 Approver」查询**只看 actor 行存在性、不看
-    /// <see cref="WfActorStatus"/></c>,被委托走的人 actor 行仍在(只是翻成 <c>Skipped</c>)。
-    /// 链长因此 ≤ 本待办参与过的人数,环路走不成,无界增长不存在,所以才不需要次数上限。
-    /// 若有人给该查询加上 <c>Status != Skipped</c>(看着像修「B 收到误委托后不能还给 A」的合理 bug 修复),
-    /// A→B→A→B→… 立刻变成无界循环、每跳往永不清理的 <c>wf_his_task</c> 插一行 —— 本段断言就是那道闸门。</para>
+    /// 链式委托(A→B→C)是定案允许的:被委托人拿到的是普通 Pending actor。
+    /// 已经标成 <see cref="WfActorStatus.Skipped"/> 的前手不再算当前办理人,可以再被委托回来。
+    /// 仍在 Pending/Waiting 的办理人继续由 <see cref="Delegate_to_existing_actor_is_rejected"/> 拒绝。
     /// </summary>
     [Fact]
     public async Task Delegate_chain_hands_todo_along_without_limit()
@@ -173,21 +167,15 @@ public class WfDelegateTests
 
         Assert.Equal(2, await HisTaskCount(f, instanceId, WfTaskAction.Delegate));
 
-        // 第三跳:C 想把待办委托回链上任何一位前手,两个方向都必须撞 alreadyActor。
-        foreach (var backTo in new[] { aId, bId })
-        {
-            var bounced = await PostEnvelope(c, "/api/v1/workflow/task/delegate",
-                new { taskId, toUserId = backTo });
-            Assert.Equal(WorkflowErrorCode.DelegateTargetInvalid, bounced.GetProperty("code").GetInt32());
-            Assert.Equal("alreadyActor", bounced.GetProperty("args").GetProperty("reason").GetString());
-        }
+        // 第三跳:C 把待办委托回已跳过的 A。Skipped 不再占坑。
+        var bounced = await PostEnvelope(c, "/api/v1/workflow/task/delegate", new { taskId, toUserId = aId });
+        Assert.Equal(0, bounced.GetProperty("code").GetInt32());
 
-        // 拒绝后无中间态:待办还在 C 手里,前手没被重新唤醒,也没多出委托历史行。
-        var cTodoAfter = Assert.Single(await TodoItemsFor(c, instanceId));
-        Assert.Equal(taskId, cTodoAfter.GetProperty("taskId").GetInt64());
-        Assert.Empty(await TodoItemsFor(a, instanceId));
+        var aTodo = Assert.Single(await TodoItemsFor(a, instanceId));
+        Assert.Equal(taskId, aTodo.GetProperty("taskId").GetInt64());
         Assert.Empty(await TodoItemsFor(b, instanceId));
-        Assert.Equal(2, await HisTaskCount(f, instanceId, WfTaskAction.Delegate));
+        Assert.Empty(await TodoItemsFor(c, instanceId));
+        Assert.Equal(3, await HisTaskCount(f, instanceId, WfTaskAction.Delegate));
     }
 
     /// <summary>

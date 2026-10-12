@@ -81,7 +81,7 @@ export function createApprovalNode(partial?: Partial<WfNode>): WfNode {
     props: {
       assignee: { provider: 'leader', params: { level: 1 } },
       mode: 'any',
-      nobody: 'autoPass',
+      nobody: 'block',
       returnPolicy: 'prev',
       formPerms: [],
       ...partial?.props,
@@ -299,6 +299,8 @@ export interface WfModelIssue {
     | 'duplicateParallelArmId'
     | 'nestedParallel'
     | 'parallelRejectTargetOutsideArm'
+    | 'assigneeRequired'
+    | 'assigneeUsersRequired'
     | 'allPassRatioInvalid'
     | 'webhookUrlInvalid'
     | 'webhookMethodInvalid'
@@ -308,6 +310,19 @@ export interface WfModelIssue {
   armId?: string
   targetNodeId?: string
   type?: string
+}
+
+/** 指定成员里的正整数用户 Id。数字字符串也认。 */
+function positiveUserIds(params: Record<string, unknown> | undefined): number[] {
+  if (!params) return []
+  const raw = params.userIds ?? params.userId
+  const items = Array.isArray(raw) ? raw : raw == null ? [] : [raw]
+  const ids: number[] = []
+  for (const item of items) {
+    const n = typeof item === 'number' ? item : typeof item === 'string' ? Number(item) : Number.NaN
+    if (Number.isInteger(n) && n > 0) ids.push(n)
+  }
+  return ids
 }
 
 /** 与后端 ValidateModelForPublish 对齐的前端校验(保存前可选用)。 */
@@ -391,6 +406,13 @@ export function validateModel(model: WfModel): WfModelIssue[] {
           armId: parallelArm?.id,
           targetNodeId: rejectTargetId,
         })
+      }
+    }
+    if (node.type === 'approval' || node.type === 'cc') {
+      const provider = node.props?.assignee?.provider?.trim()
+      if (!provider) issues.push({ code: 'assigneeRequired', nodeId: node.id })
+      else if (provider === 'user' && positiveUserIds(node.props?.assignee?.params).length === 0) {
+        issues.push({ code: 'assigneeUsersRequired', nodeId: node.id })
       }
     }
     if (node.type === 'approval') {

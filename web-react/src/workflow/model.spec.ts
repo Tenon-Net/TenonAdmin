@@ -39,7 +39,7 @@ describe('workflow/model M1 chain', () => {
     expect(insertAfter(m.root, m.root.id, ap)).toBe(true)
     expect(insertAfter(m.root, ap.id, cc)).toBe(true)
     expect(flattenChain(m.root).map((n) => n.type)).toEqual(['start', 'approval', 'cc'])
-    expect(validateModel(m)).toEqual([])
+    expect(validateModel(m)).toEqual([{ code: 'assigneeUsersRequired', nodeId: cc.id }])
   })
 
   it('removeNode cannot delete start', () => {
@@ -190,7 +190,10 @@ describe('workflow/model M2a tree', () => {
     const model = createDefaultModel()
     const branch = createBranchNode({ id: 'branch' })
     branch.conditions![0]!.next = createApprovalNode({ id: 'shared' })
-    branch.next = createCcNode({ id: 'merge' })
+    branch.next = createCcNode({
+      id: 'merge',
+      props: { assignee: { provider: 'user', params: { userIds: [1] } } },
+    })
     model.root.next = branch
 
     expect(validateModel(model)).toEqual([])
@@ -282,7 +285,10 @@ describe('workflow/model M3a-2 parallel schema', () => {
 
   it('flattens arms before the join successor and accepts empty arms', () => {
     const emptyArm: WfParallelArm = { id: 'empty', name: '空臂', next: null }
-    const join = createCcNode({ id: 'join' })
+    const join = createCcNode({
+      id: 'join',
+      props: { assignee: { provider: 'user', params: { userIds: ['8'] } } },
+    })
     const parallel: WfNode = {
       id: 'parallel',
       type: 'parallel',
@@ -450,12 +456,43 @@ describe('workflow/model M3a-2 webhook', () => {
   it('keeps legacy start, approval, cc, and branch models valid', () => {
     const model = createDefaultModel()
     const approval = createApprovalNode({ id: 'approval' })
-    const cc = createCcNode({ id: 'cc' })
+    const cc = createCcNode({
+      id: 'cc',
+      props: { assignee: { provider: 'user', params: { userIds: [1] } } },
+    })
     const branch = createBranchNode({ id: 'branch' })
     model.root.next = approval
     approval.next = cc
     cc.next = branch
 
     expect(validateModel(model)).toEqual([])
+  })
+
+  it('rejects an approval or cc node that has no usable assignee', () => {
+    const model = createDefaultModel()
+    model.root.next = {
+      id: 'bare',
+      type: 'approval',
+      name: '空审批',
+      props: {},
+      next: createCcNode({ id: 'empty-cc' }),
+    }
+    expect(validateModel(model)).toEqual([
+      { code: 'assigneeRequired', nodeId: 'bare' },
+      { code: 'assigneeUsersRequired', nodeId: 'empty-cc' },
+    ])
+
+    model.root.next = createApprovalNode({
+      id: 'members',
+      props: { assignee: { provider: 'user', params: { userId: '0' } } },
+    })
+    expect(validateModel(model)).toEqual([{ code: 'assigneeUsersRequired', nodeId: 'members' }])
+
+    model.root.next = createApprovalNode({
+      id: 'leader',
+      props: { assignee: { provider: 'leader', params: { level: 1 } } },
+    })
+    expect(validateModel(model)).toEqual([])
+    expect(createApprovalNode().props?.nobody).toBe('block')
   })
 })

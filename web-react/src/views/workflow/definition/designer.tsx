@@ -6,11 +6,11 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppIcon } from '@/components/AppIcon'
 import { DetailPage } from '@/components/DetailPage'
-import { useConfirm } from '@/hooks/useConfirm'
 import { useHasPerm } from '@/stores/auth'
+import { ApiError } from '@/api'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
-import { cloneModel, createDefaultModel, validateModel } from '@/workflow/model'
+import { cloneModel, createDefaultModel, validateModel, type WfModelIssue } from '@/workflow/model'
 import { normalizeWfId, type WfId } from '@/workflow/id'
 import { DEF_STATUS } from '@/workflow/statusLabels'
 import type { WfDefinitionInput } from '@/types/workflow'
@@ -42,9 +42,9 @@ function clampZoom(value: number): number {
 }
 
 export default function WfDesignerPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { message } = App.useApp()
-  const { run } = useConfirm()
+  const [serverNodeErrors, setServerNodeErrors] = useState<Record<string, string>>({})
   const has = useHasPerm()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -66,10 +66,25 @@ export default function WfDesignerPage() {
 
   const queryId = useMemo(() => normalizeWfId(searchParams.get('id')), [searchParams])
 
-  const errorIds = useMemo(
-    () => new Set(validateModel(model).map((issue) => issue.nodeId).filter(Boolean) as string[]),
-    [model],
-  )
+  const issueText = (issue: WfModelIssue) => {
+    const key = `workflow.designer.issue.${issue.code}`
+    const message = i18n.exists(key) ? t(key) : t('workflow.designer.invalid')
+    return issue.nodeId ? t('workflow.designer.issue.onNode', { nodeId: issue.nodeId, message }) : message
+  }
+
+  const errorMessages = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const issue of validateModel(model)) {
+      if (!issue.nodeId || map[issue.nodeId]) continue
+      const key = `workflow.designer.issue.${issue.code}`
+      map[issue.nodeId] = i18n.exists(key) ? t(key) : t('workflow.designer.invalid')
+    }
+    return { ...map, ...serverNodeErrors }
+  }, [i18n, model, serverNodeErrors, t])
+
+  const errorIds = useMemo(() => new Set(Object.keys(errorMessages)), [errorMessages])
+
+  useEffect(() => { setServerNodeErrors({}) }, [model])
 
   const load = useCallback(
     async (id: WfId) => {
@@ -130,8 +145,9 @@ export default function WfDesignerPage() {
     if (!defId) return false
     const v = await form.validateFields().catch(() => null)
     if (!v) return false
-    if (validateModel(model).length) {
-      message.warning(t('workflow.designer.invalid'))
+    const issues = validateModel(model)
+    if (issues.length) {
+      message.warning(issues.map(issueText).join('；'))
       return false
     }
     setSaving(true)
@@ -154,9 +170,17 @@ export default function WfDesignerPage() {
 
   const publish = async () => {
     if (!defId) return
+    setServerNodeErrors({})
     if (!(await save())) return
-    const ok = await run(() => wfDefinitionApi.publish(defId), t('workflow.designer.published'))
-    if (ok) await load(defId)
+    try {
+      await wfDefinitionApi.publish(defId)
+      message.success(t('workflow.designer.published'))
+      await load(defId)
+    } catch (e) {
+      const nodeId = e instanceof ApiError ? String(e.args?.nodeId ?? '') : ''
+      if (nodeId) setServerNodeErrors({ [nodeId]: translateError(e) })
+      message.error(translateError(e))
+    }
   }
 
   /** 空态建草稿:add 拿到 id 后就地打开(带 `?id=`),不跳回列表再点一次「设计」。 */
@@ -245,6 +269,7 @@ export default function WfDesignerPage() {
                   model={model}
                   selectedId={selectedId}
                   errorIds={errorIds}
+                  errorMessages={errorMessages}
                   onModelChange={setModel}
                   onSelect={onSelect}
                 />

@@ -1309,6 +1309,12 @@ export default {
       labelUrge: '催办按钮',
       advanced: '高级',
       invalid: '流程结构不合法,请检查节点',
+      issue: {
+        assigneeRequired: '未配置办理人',
+        assigneeUsersRequired: '指定成员不能为空',
+        assigneeUserUnavailable: '指定的办理人不存在或已停用',
+        onNode: '{nodeId}：{message}',
+      },
       zoom: '画布缩放',
       zoomIn: '放大',
       zoomOut: '缩小',
@@ -1657,6 +1663,21 @@ export default {
         parallelArmCompleted: '并行臂完成',
         parallelJoined: '并行汇合',
         parallelCancelled: '并行取消',
+        nobodyHandled: '空审批人',
+      },
+      nobody: {
+        summary: '{node}：{reason}，{action}',
+        action: {
+          autoPass: '系统自动通过',
+          transfer: '已转交给 {name}',
+          block: '流程已阻断，未继续审批',
+        },
+        reason: {
+          noAssignee: '未配置办理人',
+          noResolvedUsers: '没有解析到可用办理人',
+          transferWithoutUser: '未配置转交人',
+          transferUserUnavailable: '转交人不存在或已停用',
+        },
       },
       parallel: {
         title: '并行分支',
@@ -1689,6 +1710,7 @@ export default {
       addSign: '加签',
       removeSign: '减签',
       takeBack: '拿回',
+      nobody: '空审批人',
       unknown: '操作',
     },
   },

@@ -158,9 +158,9 @@ public class WfTaskAssignmentHistoryTests
             Assert.Null(past.ApprovalMode);
             Assert.Equal(taskId, past.TaskId);
             Assert.Equal(aId, Assert.Single(past.Participants).UserId);
-            var action = Assert.Single(detail.HisTasks);
+            var action = Assert.Single(detail.HisTasks, item => item.Action == WfTaskAction.Approve);
             Assert.Equal(aId, action.UserId);
-            Assert.Equal(WfTaskAction.Approve, action.Action);
+            Assert.Contains(detail.HisTasks, item => item.Action == WfTaskAction.Nobody && item.NodeId == "approve-1");
         }
     }
 
@@ -496,11 +496,7 @@ public class WfTaskAssignmentHistoryTests
                 name = "审批",
                 props = new
                 {
-                    assignee = new
-                    {
-                        provider = "user",
-                        @params = new Dictionary<string, object> { ["userIds"] = Array.Empty<long>() },
-                    },
+                    assignee = new { provider = "leader", @params = new { level = 1 } },
                     mode,
                     nobody = "transfer",
                     nobodyTransferUserId = fallbackUserId,

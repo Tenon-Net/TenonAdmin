@@ -59,7 +59,7 @@ type ActionKind = 'approve' | 'reject' | 'transfer' | 'return' | 'delegate' | 'a
 const props = defineProps<{ id?: number | string }>()
 const emit = defineEmits<{ back: [] }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
@@ -354,6 +354,7 @@ function actionLabel(a: WfTaskAction | undefined): string {
     8: 'addSign',
     9: 'removeSign',
     10: 'takeBack',
+    11: 'nobody',
   }
   const key = map[a] ?? 'unknown'
   return t(`workflow.action.${key}`, String(a))
@@ -414,6 +415,7 @@ function historyEventLabel(item: WfHistoryItem): string {
     18: 'parallelArmCompleted',
     19: 'parallelJoined',
     20: 'parallelCancelled',
+    21: 'nobodyHandled',
   }
   return t(`workflow.detail.historyEvent.${key[Number(item.eventType)] ?? 'unknown'}`, {
     type: item.eventType ?? '—',
@@ -439,7 +441,22 @@ function userFallback(id?: number | string | null, name?: string | null) {
   return t('workflow.detail.userFallback', { id })
 }
 
+function nobodySummary(item: WfHisTask): string {
+  const [action, reason] = String(item.comment ?? '').split('|')
+  const node = item.nodeName || item.nodeId || ''
+  const reasonKey = `workflow.detail.nobody.reason.${reason}`
+  const reasonText = reason && te(reasonKey) ? t(reasonKey) : t('workflow.detail.nobody.reason.noResolvedUsers')
+  const target = transferText(item) || t('workflow.detail.approvalProgress.system')
+  const actionText = action === 'autoPass'
+    ? t('workflow.detail.nobody.action.autoPass')
+    : action === 'transfer'
+      ? t('workflow.detail.nobody.action.transfer', { name: target })
+      : t('workflow.detail.nobody.action.block')
+  return t('workflow.detail.nobody.summary', { node, reason: reasonText, action: actionText })
+}
+
 function operatorText(item: WfHisTask) {
+  if (Number(item.action) === 11) return t('workflow.detail.approvalProgress.system')
   const operator = userFallback(item.userId, item.operatorName)
   return item.isAutomatic
     ? t('workflow.detail.approvalProgress.automaticActor', { name: operator })
@@ -832,11 +849,14 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
                   {{ actionLabel(item.action) }}
                 </n-tag>
               </div>
-              <blockquote v-if="item.comment" class="wf-comment">
+              <blockquote v-if="Number(item.action) === 11" class="wf-comment">
+                {{ nobodySummary(item) }}
+              </blockquote>
+              <blockquote v-else-if="item.comment" class="wf-comment">
                 <span class="wf-comment-label">{{ commentCaption(item.action) }}</span>
                 {{ item.comment }}
               </blockquote>
-              <div v-if="transferText(item)" class="wf-meta">
+              <div v-if="Number(item.action) !== 11 && transferText(item)" class="wf-meta">
                 {{ t('workflow.detail.transferTo', { name: transferText(item) }) }}
               </div>
               <div v-if="signTargetText(item)" class="wf-meta">

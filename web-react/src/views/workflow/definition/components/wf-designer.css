@@ -248,6 +248,13 @@ html[data-theme='dark'] .wf-add::before {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.wf-card-error {
+  margin: 0;
+  padding: 0 10px 8px;
+  color: var(--color-danger);
+  font-size: 12px;
+  line-height: 1.4;
+}
 .wf-card-warn {
   position: absolute;
   right: -28px;
