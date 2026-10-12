@@ -40,6 +40,7 @@ import type {
   WfInstanceStatus,
   WfParallelArm,
   WfParallelFork,
+  WfPastTask,
   WfTaskAction,
   WfTodoItem,
 } from '@/types/workflow'
@@ -48,8 +49,10 @@ import { projectWfRuntimeModel } from '@/workflow/formSchema'
 import { findNode, flattenChain } from '@/workflow/model'
 import { mergeWfFormPermissions } from '@/workflow/formRuntime'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
+import { ACTOR_STATUS, approvalRounds, participantGroups } from '@/workflow/approvalProgress'
 import WfFormMount from '../components/WfFormMount.vue'
 import WfNodeTree from '../definition/components/WfNodeTree.vue'
+import WfApprovalProgress from './components/WfApprovalProgress.vue'
 
 type ActionKind = 'approve' | 'reject' | 'transfer' | 'return' | 'delegate' | 'addSign' | 'removeSign' | 'takeBack' | 'urge' | 'cancel' | 'resubmit'
 
@@ -86,6 +89,7 @@ const replayModel = computed(() => projectWfRuntimeModel(detail.value?.model))
 const visitedIds = computed(() => detail.value?.visitedNodeIds ?? [])
 const currentIds = computed(() => detail.value?.currentNodeIds ?? [])
 const currentTasks = computed<WfCurrentTask[]>(() => detail.value?.currentTasks ?? [])
+const pastTasks = computed<WfPastTask[]>(() => detail.value?.pastTasks ?? [])
 const myPendingTasks = computed<WfTodoItem[]>(() => {
   if (detail.value?.myPendingTasks?.length) return detail.value.myPendingTasks as WfTodoItem[]
   return detail.value?.myPendingTask ? [detail.value.myPendingTask as WfTodoItem] : []
@@ -197,11 +201,83 @@ function btnText(kind: keyof WfButtonLabels, fallbackKey: string) {
 const title = computed(() => detail.value?.definitionName || t('workflow.detail.title'))
 
 const currentNodeSummary = computed(() => {
-  const names = currentTasks.value
-    .map((task) => task.nodeName || task.nodeId)
-    .filter((name): name is string => Boolean(name))
-  return names.length ? [...new Set(names)].join('、') : ''
+  return currentTasks.value.map((task) => {
+    const node = task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')
+    const pending = (task.participants ?? [])
+      .filter((person) => Number(person.status) === ACTOR_STATUS.pending)
+      .map((person) => userFallback(person.userId, person.displayName))
+    return pending.length
+      ? `${node}：${pending.join('、')}`
+      : node
+  }).join('；')
 })
+
+const approvalDetailShow = ref(false)
+const approvalDetailNodeId = ref('')
+const approvalDetailNodeName = ref('')
+
+const approvalDetailRounds = computed(() => approvalRounds(
+  approvalDetailNodeId.value,
+  currentTasks.value,
+  pastTasks.value,
+  detail.value?.hisTasks ?? [],
+))
+
+function participantNames(items: NonNullable<WfCurrentTask['participants']>) {
+  const names = items.map((item) => userFallback(item.userId, item.displayName))
+  if (names.length <= 2) return names.join('、')
+  return t('workflow.detail.approvalProgress.morePeople', {
+    names: names.slice(0, 2).join('、'),
+    count: names.length - 2,
+  })
+}
+
+const runtimeInspectableIds = computed(() => new Set([
+  ...currentTasks.value.map((task) => task.nodeId),
+  ...pastTasks.value.map((task) => task.nodeId),
+  ...(detail.value?.hisTasks ?? []).map((item) => item.nodeId),
+].filter((id): id is string => Boolean(id))))
+
+const runtimeLines = computed<Record<string, string[]>>(() => {
+  const result: Record<string, string[]> = {}
+  for (const nodeId of runtimeInspectableIds.value) {
+    const rounds = approvalRounds(nodeId, currentTasks.value, pastTasks.value, detail.value?.hisTasks ?? [])
+    const current = rounds.filter((round) => round.current)
+    const visible = current.length ? current : rounds.slice(0, 1)
+    const actedUsers = new Set(visible.flatMap((round) => round.history.map((item) => String(item.userId))))
+    const people = visible.flatMap((round) => round.participants.filter((person) => {
+      const status = Number(person.status)
+      return status === ACTOR_STATUS.pending
+        || status === ACTOR_STATUS.waiting
+        || !actedUsers.has(String(person.userId))
+    }))
+    const groups = participantGroups(people, current.length > 0)
+    const lines: string[] = []
+    const handled = visible.flatMap((round) => round.history.map((item) => `${operatorText(item) || t('workflow.detail.approvalProgress.system')} ${actionLabel(item.action)}`))
+    const handledWithoutHistory = visible.flatMap((round) => participantGroups(round.participants, round.current).done
+      .filter((person) => !actedUsers.has(String(person.userId)))
+      .map((person) => `${userFallback(person.userId, person.displayName)} ${t('workflow.detail.approvalProgress.status.done')}`))
+    handled.push(...handledWithoutHistory)
+    if (handled.length) lines.push(handled.length <= 2
+      ? handled.join('、')
+      : t('workflow.detail.approvalProgress.morePeople', { names: handled.slice(0, 2).join('、'), count: handled.length - 2 }))
+    if (groups.pending.length) lines.push(`${t('workflow.detail.approvalProgress.status.pending')}：${participantNames(groups.pending)}`)
+    if (groups.waiting.length) lines.push(`${t('workflow.detail.approvalProgress.status.waiting')}：${participantNames(groups.waiting)}`)
+    if (groups.skipped.length) lines.push(`${t('workflow.detail.approvalProgress.status.skipped')}：${participantNames(groups.skipped)}`)
+    if (!lines.length && visible.some((round) => round.history.length)) {
+      const actions = visible.flatMap((round) => round.history).slice(-2)
+      lines.push(...actions.map((item) => `${operatorText(item) || t('workflow.detail.approvalProgress.system')} · ${actionLabel(item.action)}`))
+    }
+    result[nodeId] = lines.length ? lines : [t('workflow.detail.approvalProgress.noParticipants')]
+  }
+  return result
+})
+
+function openApprovalDetail(node: { id: string; name?: string | null }) {
+  approvalDetailNodeId.value = node.id
+  approvalDetailNodeName.value = node.name?.trim() || t('workflow.node.approval')
+  approvalDetailShow.value = true
+}
 
 const latestHisTask = computed(() => {
   const items = detail.value?.hisTasks ?? []
@@ -345,11 +421,15 @@ function historyEventLabel(item: WfHistoryItem): string {
 }
 
 function currentTaskText(task: WfCurrentTask) {
-  return `${task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')} · #${task.taskId} · ${t('workflow.detail.parallel.token')} #${task.tokenId}`
+  const node = task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')
+  const pending = (task.participants ?? [])
+    .filter((person) => Number(person.status) === ACTOR_STATUS.pending)
+    .map((person) => userFallback(person.userId, person.displayName))
+  return pending.length ? `${node}：${pending.join('、')}` : node
 }
 
 function pendingTaskText(task: WfTodoItem) {
-  return `${task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')} · #${task.taskId}`
+  return task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')
 }
 
 function userFallback(id?: number | string | null, name?: string | null) {
@@ -360,8 +440,10 @@ function userFallback(id?: number | string | null, name?: string | null) {
 }
 
 function operatorText(item: WfHisTask) {
-  const named = (item as WfHisTask & { operatorName?: string | null }).operatorName
-  return userFallback(item.userId, named)
+  const operator = userFallback(item.userId, item.operatorName)
+  return item.isAutomatic
+    ? t('workflow.detail.approvalProgress.automaticActor', { name: operator })
+    : operator
 }
 
 function transferText(item: WfHisTask) {
@@ -674,12 +756,10 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
             readonly
             :visited-ids="visitedIds"
             :current-ids="currentIds"
+            :runtime-lines="runtimeLines"
+            :runtime-inspectable-ids="runtimeInspectableIds"
+            @inspect="openApprovalDetail"
           />
-          <div v-if="currentTasks.length" class="wf-current-tasks">
-            <div v-for="task in currentTasks" :key="task.taskId" class="wf-current-task">
-              {{ currentTaskText(task) }}
-            </div>
-          </div>
         </div>
       </n-card>
 
@@ -706,7 +786,7 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
               {{ parallelArmStatusLabel(arm.status) }}
             </n-tag>
             <span v-if="arm.currentNodeId" class="wf-meta">
-              {{ arm.currentNodeName || arm.currentNodeId }} · {{ t('workflow.detail.parallel.token') }} #{{ arm.childTokenId }}
+              {{ arm.currentNodeName || arm.currentNodeId }}
             </span>
             <span v-else class="wf-meta">{{ t('workflow.detail.parallel.emptyArm') }}</span>
             <span v-if="arm.reason" class="wf-meta">{{ arm.reason }}</span>
@@ -768,24 +848,37 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
         <n-empty v-else :description="t('workflow.detail.noHistory')" size="small" />
       </n-card>
 
-      <n-card size="small" :bordered="false" :title="t('workflow.detail.eventTimeline')" style="margin-top: 12px">
-        <n-timeline v-if="history.length">
-          <n-timeline-item
-            v-for="item in history"
-            :key="item.id"
-            :title="historyEventLabel(item)"
-            :time="formatTime(item.createTime)"
-          >
-            <div class="wf-meta">
-              #{{ item.sequence || '—' }} · {{ t('workflow.detail.parallel.token') }} #{{ item.tokenId ?? '—' }}
-              · NodeVisit #{{ item.nodeVisitId ?? '—' }}
-              <span v-if="item.nodeId"> · {{ item.nodeId }}</span>
-            </div>
-          </n-timeline-item>
-        </n-timeline>
-        <n-empty v-else :description="t('workflow.detail.noEventHistory')" size="small" />
+      <n-card size="small" :bordered="false" style="margin-top: 12px">
+        <details class="wf-event-details">
+          <summary>{{ t('workflow.detail.eventTimeline') }}</summary>
+          <n-timeline v-if="history.length" style="margin-top: 12px">
+            <n-timeline-item
+              v-for="item in history"
+              :key="item.id"
+              :title="historyEventLabel(item)"
+              :time="formatTime(item.createTime)"
+            >
+              <div class="wf-meta">
+                #{{ item.sequence || '—' }} · {{ t('workflow.detail.parallel.token') }} #{{ item.tokenId ?? '—' }}
+                · NodeVisit #{{ item.nodeVisitId ?? '—' }}
+                <span v-if="item.nodeId"> · {{ item.nodeId }}</span>
+              </div>
+            </n-timeline-item>
+          </n-timeline>
+          <n-empty v-else :description="t('workflow.detail.noEventHistory')" size="small" />
+        </details>
       </n-card>
     </template>
+
+    <n-modal
+      v-model:show="approvalDetailShow"
+      preset="card"
+      :title="t('workflow.detail.approvalProgress.title', { name: approvalDetailNodeName })"
+      style="width: min(680px, calc(100vw - 32px))"
+      data-testid="wf-approval-progress-modal"
+    >
+      <WfApprovalProgress :rounds="approvalDetailRounds" />
+    </n-modal>
 
     <n-modal
       v-model:show="actionShow"
@@ -911,15 +1004,10 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
 .wf-replay {
   overflow: auto;
 }
-.wf-current-tasks,
 .wf-fork {
   display: grid;
   gap: 8px;
 }
-.wf-current-tasks {
-  margin: 0 12px 12px;
-}
-.wf-current-task,
 .wf-arm {
   padding: 8px 10px;
   border-radius: var(--radius-sm);
@@ -941,5 +1029,10 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
 .wf-arm-name {
   min-width: 96px;
   color: var(--color-text-primary);
+}
+.wf-event-details > summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-weight: 600;
 }
 </style>

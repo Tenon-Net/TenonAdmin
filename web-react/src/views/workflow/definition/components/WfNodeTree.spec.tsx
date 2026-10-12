@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@/locales'
-import { createBranchNode, createDefaultModel, createParallelNode, findNode, flattenChain } from '@/workflow/model'
+import { createApprovalNode, createBranchNode, createDefaultModel, createParallelNode, findNode, flattenChain } from '@/workflow/model'
 import type { WfModel, WfNode } from '@/workflow/schema'
+import type { WfApprovalNodeProgress } from '../../instance/approvalProgress'
 import { WfNodeTree } from './WfNodeTree'
 
 vi.mock('@/components/AppIcon', () => ({ AppIcon: () => null }))
@@ -112,5 +113,47 @@ describe('WfNodeTree', () => {
     expect(screen.getByText('默认')).toBeTruthy()
     // 两条臂里只有非默认臂带删除钮(节点卡的删除钮 aria-label 也是「删除」,故按类名定位)。
     expect(document.querySelectorAll('.wf-arm-remove')).toHaveLength(1)
+  })
+
+  it('退回后不在当前路径的下游节点显示未开始，仍保留历史查看入口', () => {
+    const approval = createApprovalNode({ id: 'ap1', name: '经理审批' })
+    const progress: WfApprovalNodeProgress = {
+      nodeId: 'ap1',
+      nodeName: '经理审批',
+      currentRounds: [],
+      pastRounds: [{
+        key: 'task:8',
+        current: false,
+        task: {
+          taskId: 8,
+          tokenId: 1,
+          nodeVisitId: 10,
+          nodeId: 'ap1',
+          nodeName: '经理审批',
+          approvalMode: 'any',
+          participants: [{ actorId: 1, userId: 101, displayName: '张三', status: 2, sort: 0 }],
+        },
+        history: [],
+      }],
+    }
+    const model = modelWith(approval)
+
+    render(
+      <WfNodeTree
+        model={model}
+        readonly
+        visitedIds={['start']}
+        currentIds={[]}
+        runtimeProgress={new Map([['ap1', progress]])}
+        onInspectApproval={() => {}}
+        onModelChange={() => {}}
+        onSelect={() => {}}
+      />,
+    )
+
+    const card = document.querySelector<HTMLElement>('[data-wf-node-id="ap1"]')!
+    expect(card.textContent).toContain('未开始')
+    expect(card.textContent).not.toContain('张三')
+    expect(card.getAttribute('role')).toBe('button')
   })
 })

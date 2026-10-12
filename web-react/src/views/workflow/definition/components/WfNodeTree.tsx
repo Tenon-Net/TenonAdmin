@@ -14,6 +14,7 @@ import {
   removeNode,
 } from '@/workflow/model'
 import type { WfInsertableNodeType, WfModel, WfNode } from '@/workflow/schema'
+import type { WfApprovalNodeProgress } from '../../instance/approvalProgress'
 import { WfNodeChain } from './WfNodeChain'
 import './wf-designer.css'
 import '../../wf-identity.css'
@@ -25,6 +26,8 @@ export interface WfNodeTreeProps {
   readonly?: boolean
   visitedIds?: Set<string> | string[]
   currentIds?: Set<string> | string[]
+  runtimeProgress?: ReadonlyMap<string, WfApprovalNodeProgress>
+  onInspectApproval?: (progress: WfApprovalNodeProgress) => void
   onModelChange: (model: WfModel) => void
   onSelect: (node: WfNode) => void
 }
@@ -35,7 +38,8 @@ function toSet(ids: Set<string> | string[] | undefined): Set<string> {
 }
 
 export function WfNodeTree({
-  model, selectedId, errorIds, readonly, visitedIds, currentIds, onModelChange, onSelect,
+  model, selectedId, errorIds, readonly, visitedIds, currentIds, runtimeProgress, onInspectApproval,
+  onModelChange, onSelect,
 }: WfNodeTreeProps) {
   const errorSet = useMemo(() => toSet(errorIds), [errorIds])
   const visitedSet = useMemo(() => toSet(visitedIds), [visitedIds])
@@ -114,6 +118,8 @@ export function WfNodeTree({
         readonly={readonly}
         visitedSet={visitedSet}
         currentSet={currentSet}
+        runtimeProgress={runtimeProgress}
+        onInspectApproval={onInspectApproval}
         // 顶层链恒可插并行(臂内由 WfNodeChain 自己降级);漏传即等于菜单缺项,Vue 侧踩过。
         allowParallel
         terminal

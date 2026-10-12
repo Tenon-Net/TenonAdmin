@@ -25,10 +25,13 @@ const props = defineProps<{
   readonly?: boolean
   visitedIds?: Set<string> | string[]
   currentIds?: Set<string> | string[]
+  runtimeLines?: Record<string, string[]>
+  runtimeInspectableIds?: Set<string> | string[]
 }>()
 const emit = defineEmits<{
   'update:model': [WfModel]
   select: [node: WfNode]
+  inspect: [node: WfNode]
 }>()
 
 const errorSet = computed(() => {
@@ -46,6 +49,13 @@ const currentSet = computed(() => {
   return props.currentIds instanceof Set ? props.currentIds : new Set(props.currentIds)
 })
 
+const runtimeInspectableSet = computed(() => {
+  if (!props.runtimeInspectableIds) return new Set<string>()
+  return props.runtimeInspectableIds instanceof Set
+    ? props.runtimeInspectableIds
+    : new Set(props.runtimeInspectableIds)
+})
+
 function bump(root: WfNode) {
   emit('update:model', { ...props.model, root })
 }
@@ -54,6 +64,12 @@ function onSelect(nodeId: string) {
   if (props.readonly) return
   const node = findNode(props.model.root, nodeId)
   if (node) emit('select', node)
+}
+
+function onInspect(nodeId: string) {
+  if (!props.readonly) return
+  const node = findNode(props.model.root, nodeId)
+  if (node) emit('inspect', node)
 }
 
 function onAddAfter(afterId: string, type: WfInsertableNodeType) {
@@ -119,6 +135,8 @@ function onRenameArm(ownerId: string, armId: string, name: string) {
       :readonly="readonly"
       :visited-set="visitedSet"
       :current-set="currentSet"
+      :runtime-lines="runtimeLines"
+      :runtime-inspectable-ids="runtimeInspectableSet"
       allow-parallel
       terminal
       @select="onSelect"
@@ -128,6 +146,7 @@ function onRenameArm(ownerId: string, armId: string, name: string) {
       @add-arm="onAddArm"
       @remove-arm="onRemoveArm"
       @rename-arm="onRenameArm"
+      @inspect="onInspect"
     />
   </div>
 </template>

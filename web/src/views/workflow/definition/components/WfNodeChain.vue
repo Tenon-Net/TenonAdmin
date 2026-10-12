@@ -16,6 +16,8 @@ const props = withDefaults(defineProps<{
   readonly?: boolean
   visitedSet?: Set<string>
   currentSet?: Set<string>
+  runtimeLines?: Record<string, string[]>
+  runtimeInspectableIds?: Set<string>
   /** 设计器默认可插并行;并行臂内递归会显式传 false 禁止嵌套。 */
   allowParallel?: boolean
 }>(), {
@@ -29,6 +31,7 @@ const emit = defineEmits<{
   'add-arm': [branchId: string]
   'remove-arm': [branchId: string, armId: string]
   'rename-arm': [branchId: string, armId: string, name: string]
+  inspect: [nodeId: string]
 }>()
 
 const { t } = useI18n()
@@ -73,8 +76,11 @@ function renameArm(branchId: string, armId: string, event: Event) {
         :readonly="readonly"
         :visited="visitedSet?.has(node.id) ?? false"
         :current="currentSet?.has(node.id) ?? false"
+        :runtime-lines="runtimeLines?.[node.id]"
+        :runtime-inspectable="runtimeInspectableIds?.has(node.id) ?? false"
         @select="emit('select', node.id)"
         @remove="emit('remove-node', node.id)"
+        @inspect="emit('inspect', node.id)"
       />
 
       <section
@@ -141,6 +147,8 @@ function renameArm(branchId: string, armId: string, event: Event) {
                 :readonly="readonly"
                 :visited-set="visitedSet"
                 :current-set="currentSet"
+                :runtime-lines="runtimeLines"
+                :runtime-inspectable-ids="runtimeInspectableIds"
                 :allow-parallel="node.type !== 'parallel' && allowParallel"
                 :terminal="false"
                 @select="(nodeId) => emit('select', nodeId)"
@@ -150,6 +158,7 @@ function renameArm(branchId: string, armId: string, event: Event) {
                 @add-arm="(branchId) => emit('add-arm', branchId)"
                 @remove-arm="(branchId, armId) => emit('remove-arm', branchId, armId)"
                 @rename-arm="(branchId, armId, name) => emit('rename-arm', branchId, armId, name)"
+                @inspect="(nodeId) => emit('inspect', nodeId)"
               />
               <div class="wf-arm-merge">
                 <span class="wf-arm-merge-dot" />

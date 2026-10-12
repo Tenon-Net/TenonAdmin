@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
+using TenonAdmin.Core;
 using TenonAdmin.Workflow;
 
 namespace TenonAdmin.Tests;
@@ -15,6 +16,105 @@ namespace TenonAdmin.Tests;
 public class WfTaskAssignmentHistoryTests
 {
     private const string Password = "Test@123456";
+
+    [Theory]
+    [InlineData("any", WfApprovalMode.Any, false)]
+    [InlineData("all", WfApprovalMode.All, false)]
+    [InlineData("seq", WfApprovalMode.Seq, true)]
+    public async Task Instance_detail_projects_current_approval_mode_participants_and_names(
+        string mode,
+        WfApprovalMode expectedMode,
+        bool secondWaits)
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        var starterId = await AddUser(admin, $"wf-projection-{mode}-starter");
+        var aId = await AddUser(admin, $"wf-projection-{mode}-a");
+        var bId = await AddUser(admin, $"wf-projection-{mode}-b");
+        var definitionId = await Publish(
+            admin, $"人员投影-{mode}", ApprovalModel(mode, aId, bId));
+        var starter = await ClientFor(f, $"wf-projection-{mode}-starter");
+        var instanceId = await Start(starter, definitionId);
+
+        using var scope = f.Services.CreateScope();
+        var detail = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+            .GetAsync(instanceId, starterId);
+        var task = Assert.Single(detail.CurrentTasks);
+        Assert.Equal(expectedMode, task.ApprovalMode);
+        Assert.Equal(new[] { aId, bId }, task.Participants.Select(item => item.UserId));
+        Assert.Equal($"wf-projection-{mode}-a", task.Participants[0].DisplayName);
+        Assert.Equal($"wf-projection-{mode}-b", task.Participants[1].DisplayName);
+        Assert.Equal(WfActorStatus.Pending, task.Participants[0].Status);
+        Assert.Equal(
+            secondWaits ? WfActorStatus.Waiting : WfActorStatus.Pending,
+            task.Participants[1].Status);
+        Assert.NotNull(task.Participants[0].ActivatedTime);
+        if (secondWaits)
+            Assert.Null(task.Participants[1].ActivatedTime);
+        else
+            Assert.NotNull(task.Participants[1].ActivatedTime);
+    }
+
+    [Fact]
+    public async Task Instance_detail_projects_closed_any_task_as_a_separate_past_round()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        var starterId = await AddUser(admin, "wf-projection-past-starter");
+        var aId = await AddUser(admin, "wf-projection-past-a");
+        var bId = await AddUser(admin, "wf-projection-past-b");
+        var outsiderId = await AddUser(admin, "wf-projection-past-outsider");
+        var definitionId = await Publish(admin, "人员投影-历史轮次", ApprovalModel("any", aId, bId));
+        var starter = await ClientFor(f, "wf-projection-past-starter");
+        var approver = await ClientFor(f, "wf-projection-past-a");
+        var instanceId = await Start(starter, definitionId);
+        var taskId = await PendingTaskIdFor(f, instanceId);
+
+        using (var deniedScope = f.Services.CreateScope())
+        {
+            var denied = await Assert.ThrowsAsync<AdminException>(() =>
+                deniedScope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+                    .GetAsync(instanceId, outsiderId));
+            Assert.Equal(WorkflowErrorCode.InstanceAccessDenied, (int)denied.Code);
+        }
+
+        var approve = await PostEnvelope(approver, "/api/v1/workflow/task/approve", new { taskId });
+        Assert.Equal(0, approve.GetProperty("code").GetInt32());
+
+        using var scope = f.Services.CreateScope();
+        var detail = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+            .GetAsync(instanceId, starterId);
+        Assert.Empty(detail.CurrentTasks);
+        var past = Assert.Single(detail.PastTasks);
+        Assert.Equal(taskId, past.TaskId);
+        Assert.Equal(WfApprovalMode.Any, past.ApprovalMode);
+        Assert.Equal(WfActorStatus.Done, past.Participants.Single(item => item.UserId == aId).Status);
+        Assert.Equal(WfActorStatus.Skipped, past.Participants.Single(item => item.UserId == bId).Status);
+        Assert.Equal("wf-projection-past-a", past.Participants.Single(item => item.UserId == aId).DisplayName);
+
+        var history = Assert.Single(detail.HisTasks);
+        Assert.Equal(taskId, history.TaskId);
+        Assert.True(history.TokenId > 0);
+        Assert.True(history.NodeVisitId > 0);
+        Assert.Equal("wf-projection-past-a", history.OperatorName);
+        Assert.False(history.IsAutomatic);
+
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        await db.Updateable<WfHisTask>()
+            .SetColumns(item => new WfHisTask { TokenId = null })
+            .Where(item => item.Id == history.Id)
+            .ExecuteCommandAsync();
+        await db.Updateable<WfHistory>()
+            .SetColumns(item => new WfHistory { TokenId = null })
+            .Where(item => item.InstanceId == instanceId
+                           && item.EventType == WfHistoryEventType.TaskCreated)
+            .ExecuteCommandAsync();
+        var legacyDetail = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+            .GetAsync(instanceId, starterId);
+        var legacyPast = Assert.Single(legacyDetail.PastTasks);
+        Assert.Null(legacyPast.TokenId);
+        Assert.Equal(2, legacyPast.Participants.Count);
+    }
 
     [Fact]
     public async Task Any_mode_retains_non_acting_candidates_as_skipped_after_close()
@@ -134,7 +234,7 @@ public class WfTaskAssignmentHistoryTests
     {
         using var f = new WorkflowAppFactory();
         var admin = await ClientFor(f, "superAdmin");
-        await AddUser(admin, "wf-hist-cancel-starter");
+        var starterId = await AddUser(admin, "wf-hist-cancel-starter");
         var aId = await AddUser(admin, "wf-hist-cancel-a");
         var bId = await AddUser(admin, "wf-hist-cancel-b");
         var definitionId = await Publish(admin, "分配历史-撤销", SequentialApprovalModel(aId, bId));
@@ -152,6 +252,15 @@ public class WfTaskAssignmentHistoryTests
         // a 是 Pending 被撤销打断,b 从未晋级(Waiting)——两者都要落 Skipped,都不能物理消失。
         Assert.Equal(WfActorStatus.Skipped, actors.Single(x => x.UserId == aId).Status);
         Assert.Equal(WfActorStatus.Skipped, actors.Single(x => x.UserId == bId).Status);
+
+        using var scope = f.Services.CreateScope();
+        var detail = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+            .GetAsync(instanceId, starterId);
+        Assert.Empty(detail.HisTasks);
+        var past = Assert.Single(detail.PastTasks);
+        Assert.Equal(taskId, past.TaskId);
+        Assert.NotNull(past.CreatedTime);
+        Assert.All(past.Participants, item => Assert.Equal(WfActorStatus.Skipped, item.Status));
     }
 
     [Fact]
@@ -159,7 +268,7 @@ public class WfTaskAssignmentHistoryTests
     {
         using var f = new WorkflowAppFactory();
         var admin = await ClientFor(f, "superAdmin");
-        await AddUser(admin, "wf-hist-transfer-starter");
+        var starterId = await AddUser(admin, "wf-hist-transfer-starter");
         var aId = await AddUser(admin, "wf-hist-transfer-a");
         var bId = await AddUser(admin, "wf-hist-transfer-b");
         var definitionId = await Publish(admin, "分配历史-转办", AnyApprovalModel(aId));
@@ -179,6 +288,23 @@ public class WfTaskAssignmentHistoryTests
         var bActor = afterTransfer.Single(x => x.UserId == bId);
         Assert.Equal(WfActorStatus.Pending, bActor.Status);
         Assert.NotNull(bActor.ActivatedTime);
+
+        using (var scope = f.Services.CreateScope())
+        {
+            var detail = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+                .GetAsync(instanceId, starterId);
+            var current = Assert.Single(detail.CurrentTasks);
+            Assert.Equal("wf-hist-transfer-b",
+                current.Participants.Single(item => item.UserId == bId).DisplayName);
+            var transferHistory = Assert.Single(
+                detail.HisTasks, item => item.Action == WfTaskAction.Transfer);
+            Assert.Equal(taskId, transferHistory.TaskId);
+            Assert.Equal(aId, transferHistory.UserId);
+            Assert.Equal("wf-hist-transfer-a", transferHistory.OperatorName);
+            Assert.Equal(bId, transferHistory.TransferToUserId);
+            Assert.Equal("wf-hist-transfer-b", transferHistory.TransferToUserName);
+            Assert.False(transferHistory.IsAutomatic);
+        }
 
         var approveB = await PostEnvelope(b, "/api/v1/workflow/task/approve", new { taskId });
         Assert.Equal(0, approveB.GetProperty("code").GetInt32());
@@ -213,6 +339,33 @@ public class WfTaskAssignmentHistoryTests
                         @params = new Dictionary<string, object> { ["userIds"] = userIds },
                     },
                     mode = "any",
+                },
+                next = (object?)null,
+            },
+        },
+    };
+
+    private static object ApprovalModel(string mode, params long[] userIds) => new
+    {
+        version = 1,
+        root = new
+        {
+            id = "start",
+            type = "start",
+            name = "",
+            next = new
+            {
+                id = "approve-1",
+                type = "approval",
+                name = "审批",
+                props = new
+                {
+                    assignee = new
+                    {
+                        provider = "user",
+                        @params = new Dictionary<string, object> { ["userIds"] = userIds },
+                    },
+                    mode,
                 },
                 next = (object?)null,
             },

@@ -257,7 +257,7 @@ describe('workflow instance detail variables', () => {
     expect(host.textContent).toContain('arm-a')
     expect(host.textContent).toContain('臂 A')
     expect(host.textContent).toContain('等待汇合')
-    expect(host.textContent).toContain('Token #11')
+    expect(host.textContent).not.toContain('Token #11')
   })
 
   it('sends take-back to a concrete current task instead of the legacy first-task field', async () => {
@@ -316,6 +316,28 @@ describe('workflow instance detail variables', () => {
     expect(host.textContent).toContain('主管')
     expect(host.textContent).toContain('审批意见')
     expect(host.textContent).toContain('同意了')
+  })
+
+  it('labels automatic approval history as system handling', async () => {
+    const host = await mountDetail({
+      id: 1,
+      definitionName: '自动审批',
+      status: 2,
+      hisTasks: [{
+        id: 1,
+        taskId: 9,
+        nodeId: 'approval',
+        nodeName: '主管审批',
+        userId: 2,
+        operatorName: '张三',
+        isAutomatic: true,
+        action: 1,
+        createTime: '2026-09-02T00:00:00',
+      }],
+    })
+
+    expect(host.textContent).toContain('系统自动处理（代张三）')
+    expect(host.textContent).toContain('同意')
   })
 
   it('shows a retryable error when loading fails and does not pretend the detail exists', async () => {

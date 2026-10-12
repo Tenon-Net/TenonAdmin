@@ -1,0 +1,29 @@
+.wf-current-approvals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+  padding: var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-fill);
+}
+
+.wf-approval-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wf-approval-list > li {
+  min-width: 0;
+  padding: var(--space-8) 0;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.wf-approval-list > li:last-child {
+  border-block-end: 0;
+}

@@ -134,6 +134,10 @@ html[data-theme='dark'] .wf-add::before {
 .wf-card.is-readonly {
   cursor: default;
 }
+.wf-card.is-readonly[data-wf-runtime-progress='true'] {
+  width: 268px;
+  cursor: pointer;
+}
 .wf-card.is-visited:not(.is-current) {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--wf-head) 55%, transparent);
 }
@@ -174,6 +178,11 @@ html[data-theme='dark'] .wf-add::before {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.wf-card-state {
+  flex-shrink: 0;
+  opacity: 0.88;
+  font-weight: 400;
+}
 .wf-card-del {
   margin-left: auto;
   color: #fff !important;
@@ -208,6 +217,36 @@ html[data-theme='dark'] .wf-add::before {
 .wf-card-arrow {
   flex-shrink: 0;
   color: var(--color-text-disabled);
+}
+.wf-card-body.is-runtime {
+  align-items: flex-start;
+  min-height: 58px;
+}
+.wf-card-progress {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.wf-card-progress-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px;
+  align-items: baseline;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-sm);
+}
+.wf-card-progress-label {
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+.wf-card-progress-row.is-pending .wf-card-progress-label { color: var(--color-primary); }
+.wf-card-progress-names {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .wf-card-warn {
   position: absolute;

@@ -3,6 +3,7 @@ import type { FocusEvent, KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AppIcon } from '@/components/AppIcon'
 import type { WfInsertableNodeType, WfNode } from '@/workflow/schema'
+import type { WfApprovalNodeProgress } from '../../instance/approvalProgress'
 import { WfAddNode } from './WfAddNode'
 import { WfNodeCard } from './WfNodeCard'
 import './wf-designer.css'
@@ -24,6 +25,8 @@ export interface WfNodeChainProps {
   readonly?: boolean
   visitedSet?: Set<string>
   currentSet?: Set<string>
+  runtimeProgress?: ReadonlyMap<string, WfApprovalNodeProgress>
+  onInspectApproval?: (progress: WfApprovalNodeProgress) => void
   /** 设计器默认可插并行;并行臂内递归显式传 false 禁止嵌套。 */
   allowParallel?: boolean
   onSelect: (nodeId: string) => void
@@ -54,7 +57,8 @@ function armsFor(node: WfNode): WfDisplayArm[] {
 
 export function WfNodeChain(props: WfNodeChainProps) {
   const {
-    root, selectedId, errorSet, terminal, readonly, visitedSet, currentSet, allowParallel = true,
+    root, selectedId, errorSet, terminal, readonly, visitedSet, currentSet, runtimeProgress, onInspectApproval,
+    allowParallel = true,
     onSelect, onAddAfter, onAddAtArmHead, onRemoveNode, onAddArm, onRemoveArm, onRenameArm,
   } = props
   const { t } = useTranslation()
@@ -77,6 +81,10 @@ export function WfNodeChain(props: WfNodeChainProps) {
               readonly={readonly}
               visited={visitedSet?.has(node.id) ?? false}
               current={currentSet?.has(node.id) ?? false}
+              runtimeProgress={runtimeProgress?.get(node.id)}
+              onInspect={runtimeProgress?.has(node.id)
+                ? () => onInspectApproval?.(runtimeProgress.get(node.id)!)
+                : undefined}
               onSelect={() => onSelect(node.id)}
               onRemove={() => onRemoveNode(node.id)}
             />

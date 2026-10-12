@@ -14,8 +14,10 @@ const props = defineProps<{
   readonly?: boolean
   visited?: boolean
   current?: boolean
+  runtimeLines?: string[]
+  runtimeInspectable?: boolean
 }>()
-defineEmits<{ select: []; remove: [] }>()
+defineEmits<{ select: []; remove: []; inspect: [] }>()
 
 const { t } = useI18n()
 
@@ -66,6 +68,13 @@ const title = computed(() => props.node.name || t(`workflow.node.${props.node.ty
 /** 正文摘要;未配办理人时显示对应空态占位。 */
 const body = computed(() => {
   const n = props.node
+  if (props.readonly && n.type === 'approval') {
+    if (!props.current && !props.visited) {
+      return { text: t('workflow.detail.approvalProgress.notStarted'), empty: true }
+    }
+    if (props.runtimeLines?.length) return { text: props.runtimeLines.join('\n'), empty: false }
+    return { text: t('workflow.detail.approvalProgress.noParticipants'), empty: false }
+  }
   if (n.type === 'start') {
     const scope = n.props?.initiatorScope ?? []
     if (!scope.length) return { text: t('workflow.node.placeholder.start'), empty: false }
@@ -134,11 +143,13 @@ const body = computed(() => {
       'is-current': readonly && current,
       'is-dimmed': readonly && !visited && !current,
     }]"
-    :role="readonly ? undefined : 'button'"
-    :tabindex="readonly ? undefined : 0"
-    @click="readonly ? undefined : $emit('select')"
-    @keydown.enter.self="readonly ? undefined : $emit('select')"
-    @keydown.space.self.prevent="readonly ? undefined : $emit('select')"
+    :role="readonly && !runtimeInspectable ? undefined : 'button'"
+    :tabindex="readonly && !runtimeInspectable ? undefined : 0"
+    :data-node-id="node.id"
+    :data-runtime-inspectable="runtimeInspectable ? 'true' : undefined"
+    @click="readonly ? (runtimeInspectable ? $emit('inspect') : undefined) : $emit('select')"
+    @keydown.enter.self="readonly ? (runtimeInspectable ? $emit('inspect') : undefined) : $emit('select')"
+    @keydown.space.self.prevent="readonly ? (runtimeInspectable ? $emit('inspect') : undefined) : $emit('select')"
   >
     <div class="wf-card-head">
       <AppIcon :icon="icon" :size="14" class="wf-card-head-icon" />
@@ -158,9 +169,14 @@ const body = computed(() => {
         {{ t('common.delete') }}
       </n-tooltip>
     </div>
-    <div class="wf-card-body">
-      <span class="wf-card-text" :class="{ 'is-empty': body.empty }">{{ body.text }}</span>
-      <AppIcon icon="ph:caret-right" :size="14" class="wf-card-arrow" />
+    <div class="wf-card-body" :class="{ 'is-runtime': readonly && node.type === 'approval' }">
+      <span class="wf-card-text" :class="{ 'is-empty': body.empty, 'is-runtime': readonly && node.type === 'approval' }">
+        <template v-if="readonly && node.type === 'approval' && (current || visited) && runtimeLines?.length">
+          <span v-for="(line, index) in runtimeLines" :key="index" class="wf-card-runtime-line" data-testid="wf-node-runtime-line">{{ line }}</span>
+        </template>
+        <template v-else>{{ body.text }}</template>
+      </span>
+      <AppIcon v-if="!readonly || runtimeInspectable" icon="ph:caret-right" :size="14" class="wf-card-arrow" />
     </div>
     <div v-if="error" class="wf-card-warn" :title="t('workflow.designer.invalid')">
       <AppIcon icon="ph:warning-circle" :size="18" />
@@ -207,6 +223,7 @@ const body = computed(() => {
 .wf-card.is-readonly {
   cursor: default;
 }
+.wf-card.is-readonly[data-runtime-inspectable='true'] { cursor: pointer; }
 .wf-card.is-visited:not(.is-current) {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--wf-head) 55%, transparent);
 }
@@ -263,6 +280,9 @@ const body = computed(() => {
   padding: 10px 12px 12px;
   gap: 8px;
 }
+.wf-card-body.is-runtime {
+  align-items: flex-start;
+}
 .wf-card-text {
   flex: 1;
   min-width: 0;
@@ -274,6 +294,18 @@ const body = computed(() => {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+.wf-card-text.is-runtime {
+  display: grid;
+  gap: 2px;
+  overflow: visible;
+  white-space: normal;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+.wf-card-runtime-line {
+  display: block;
+  overflow-wrap: anywhere;
 }
 .wf-card-text.is-empty {
   color: var(--color-text-tertiary);

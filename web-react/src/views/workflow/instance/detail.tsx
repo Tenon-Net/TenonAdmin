@@ -5,6 +5,7 @@ import {
   App,
   Button,
   Card,
+  Collapse,
   Descriptions,
   Empty,
   Form,
@@ -43,6 +44,9 @@ import type { WfButtonLabels, WfFormFieldPerm } from '@/workflow/schema'
 import type { WfCurrentTask, WfHistoryItem, WfInstanceDetail, WfTodoItem } from '@/types/workflow'
 import { WfFormMount, type WfFormMountHandle } from '../components/WfFormMount'
 import { WfNodeTree } from '../definition/components/WfNodeTree'
+import { CurrentApprovalSummary, WfApprovalDetailModal } from './WfApprovalProgress'
+import { buildApprovalProgress, type WfApprovalNodeProgress } from './approvalProgress'
+import './approval-progress.css'
 
 type ActionKind =
   | 'approve' | 'reject' | 'transfer' | 'return' | 'delegate'
@@ -144,6 +148,7 @@ export default function WfInstanceDetailPage() {
   const [urgeTaskId, setUrgeTaskId] = useState<WfId | null>(null)
   const [action, setAction] = useState<ActionKind | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [inspectedProgress, setInspectedProgress] = useState<WfApprovalNodeProgress | null>(null)
   const [actionForm] = Form.useForm<ActionFormValues>()
   const formRuntimeRef = useRef<WfFormMountHandle | null>(null)
   const resubmitFormRuntimeRef = useRef<WfFormMountHandle | null>(null)
@@ -193,9 +198,14 @@ export default function WfInstanceDetailPage() {
     return detail?.myPendingTask ? [detail.myPendingTask] : []
   }, [detail])
 
-  const currentTasks = detail?.currentTasks ?? []
+  const currentTasks = useMemo(() => detail?.currentTasks ?? [], [detail])
+  const pastTasks = useMemo(() => detail?.pastTasks ?? [], [detail])
   const forks = detail?.parallelForks ?? []
   const hisTasks = useMemo(() => detail?.hisTasks ?? [], [detail])
+  const approvalProgress = useMemo(
+    () => buildApprovalProgress(currentTasks, pastTasks, hisTasks),
+    [currentTasks, pastTasks, hisTasks],
+  )
 
   const selectedPendingTask = myPendingTasks.find((task) => wfIdEquals(task.taskId, selectedPendingTaskId))
 
@@ -396,6 +406,8 @@ export default function WfInstanceDetailPage() {
 
   const userFallback = (userId: number | string | null | undefined) =>
     userId == null || userId === '' ? '' : t('workflow.detail.userFallback', { id: userId })
+  const operatorName = (name: string | null | undefined, userId: number | string | null | undefined) =>
+    name?.trim() || (Number(userId) > 0 ? userFallback(userId) : t('workflow.detail.approvalProgress.system'))
 
   const hasActions = myPendingTasks.length > 0 || canUrge || canCancel || canResubmit || canTakeBack
 
@@ -464,6 +476,7 @@ export default function WfInstanceDetailPage() {
                 { key: 'createTime', label: t('workflow.detail.createTime'), children: formatDateTime(detail.createTime) },
               ]}
             />
+            <CurrentApprovalSummary tasks={currentTasks} />
             {variableRows.length > 0 && !formSchema ? (
               <Descriptions
                 size="small" column={1} style={{ marginTop: 12 }}
@@ -484,18 +497,12 @@ export default function WfInstanceDetailPage() {
                   readonly
                   visitedIds={detail.visitedNodeIds ?? []}
                   currentIds={detail.currentNodeIds ?? []}
+                  runtimeProgress={approvalProgress}
+                  onInspectApproval={setInspectedProgress}
                   onModelChange={() => {}}
                   onSelect={() => {}}
                 />
               </div>
-              {currentTasks.length > 0 ? (
-                <List
-                  size="small"
-                  dataSource={currentTasks}
-                  rowKey={(task) => String(task.taskId)}
-                  renderItem={(task) => <List.Item>{currentTaskText(task)}</List.Item>}
-                />
-              ) : null}
             </Card>
           ) : null}
 
@@ -572,12 +579,19 @@ export default function WfInstanceDetailPage() {
               <Timeline
                 items={hisTasks.map((item) => ({
                   color: TIMELINE_COLOR[taskActionColor(item.action)] ?? 'gray',
-                  children: (
+                  content: (
                     <Space orientation="vertical" size={4}>
                       <Space size={8} wrap>
                         <strong>{item.nodeName || item.nodeId}</strong>
-                        {userFallback(item.userId) ? (
-                          <Typography.Text type="secondary">{userFallback(item.userId)}</Typography.Text>
+                        <Typography.Text type="secondary">
+                          {item.isAutomatic
+                            ? t('workflow.detail.approvalProgress.automatic')
+                            : operatorName(item.operatorName, item.userId)}
+                        </Typography.Text>
+                        {item.isAutomatic && Number(item.userId) > 0 ? (
+                          <Typography.Text type="secondary">
+                            {t('workflow.detail.approvalProgress.onBehalfOf', { name: operatorName(item.operatorName, item.userId) })}
+                          </Typography.Text>
                         ) : null}
                         <Tag color={taskActionColor(item.action)}>
                           {t(`workflow.action.${normalizeTaskAction(item.action)}`)}
@@ -587,12 +601,12 @@ export default function WfInstanceDetailPage() {
                       {item.comment ? <Typography.Text>{item.comment}</Typography.Text> : null}
                       {item.transferToUserId != null ? (
                         <Typography.Text type="secondary">
-                          {t('workflow.detail.transferTo', { name: userFallback(item.transferToUserId) })}
+                          {t('workflow.detail.transferTo', { name: item.transferToUserName || userFallback(item.transferToUserId) })}
                         </Typography.Text>
                       ) : null}
                       {item.targetUserId != null ? (
                         <Typography.Text type="secondary">
-                          {t('workflow.detail.signTarget', { name: userFallback(item.targetUserId) })}
+                          {t('workflow.detail.signTarget', { name: item.targetUserName || userFallback(item.targetUserId) })}
                         </Typography.Text>
                       ) : null}
                     </Space>
@@ -604,28 +618,30 @@ export default function WfInstanceDetailPage() {
             )}
           </Card>
 
-          <Card size="small" title={t('workflow.detail.eventTimeline')}>
-            {history.length > 0 ? (
-              <List
-                size="small"
-                dataSource={history}
-                rowKey={(item) => String(item.id)}
-                renderItem={(item) => (
-                  <List.Item>
-                    <Space size={8} wrap>
-                      <span>{t(`workflow.detail.historyEvent.${HISTORY_EVENT[Number(item.eventType)] ?? 'unknown'}`, { type: item.eventType ?? '—' })}</span>
-                      <Typography.Text type="secondary">
-                        {`#${item.sequence || '—'} · ${t('workflow.detail.parallel.token')} #${item.tokenId ?? '—'} · NodeVisit #${item.nodeVisitId ?? '—'}${item.nodeId ? ` · ${item.nodeId}` : ''}`}
-                      </Typography.Text>
-                      <Typography.Text type="secondary">{formatDateTime(item.createTime)}</Typography.Text>
-                    </Space>
-                  </List.Item>
-                )}
-              />
-            ) : (
-              <Empty description={t('workflow.detail.noEventHistory')} />
-            )}
-          </Card>
+          <Collapse
+            items={[{
+              key: 'eventTimeline',
+              label: t('workflow.detail.eventTimeline'),
+              children: history.length > 0 ? (
+                <List
+                  size="small"
+                  dataSource={history}
+                  rowKey={(item) => String(item.id)}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <Space size={8} wrap>
+                        <span>{t(`workflow.detail.historyEvent.${HISTORY_EVENT[Number(item.eventType)] ?? 'unknown'}`, { type: item.eventType ?? '—' })}</span>
+                        <Typography.Text type="secondary">
+                          {`#${item.sequence || '—'} · ${t('workflow.detail.parallel.token')} #${item.tokenId ?? '—'} · NodeVisit #${item.nodeVisitId ?? '—'}${item.nodeId ? ` · ${item.nodeId}` : ''}`}
+                        </Typography.Text>
+                        <Typography.Text type="secondary">{formatDateTime(item.createTime)}</Typography.Text>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              ) : <Empty description={t('workflow.detail.noEventHistory')} />,
+            }]}
+          />
         </Space>
       ) : null}
 
@@ -724,6 +740,11 @@ export default function WfInstanceDetailPage() {
           ) : null}
         </Form>
       </Modal>
+      <WfApprovalDetailModal
+        progress={inspectedProgress}
+        open={inspectedProgress !== null}
+        onClose={() => setInspectedProgress(null)}
+      />
     </DetailPage>
   )
 }

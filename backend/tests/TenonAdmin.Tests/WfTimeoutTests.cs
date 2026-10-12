@@ -274,6 +274,10 @@ public class WfTimeoutTests
         Assert.Equal(0, approve.GetProperty("code").GetInt32());
         Assert.Equal((int)WfInstanceStatus.Approved,
             approve.GetProperty("data").GetProperty("instanceStatus").GetInt32());
+        var detail = await GetEnvelope(starter, $"/api/v1/workflow/instance/{instanceId}");
+        var humanApproval = Assert.Single(
+            detail.GetProperty("data").GetProperty("hisTasks").EnumerateArray().ToList());
+        Assert.False(humanApproval.GetProperty("isAutomatic").GetBoolean());
     }
 
     // ── 三、AutoPass / AutoReject ───────────────────────────────────────
@@ -312,6 +316,7 @@ public class WfTimeoutTests
         var hisTask = Assert.Single(detail.GetProperty("data").GetProperty("hisTasks").EnumerateArray().ToList());
         Assert.Equal((int)WfTaskAction.Approve, hisTask.GetProperty("action").GetInt32());
         Assert.Equal(aId, hisTask.GetProperty("userId").GetInt64());
+        Assert.True(hisTask.GetProperty("isAutomatic").GetBoolean());
         Assert.False(string.IsNullOrWhiteSpace(hisTask.GetProperty("comment").GetString()));
 
         Assert.Equal(1, await HistoryCount(f, instanceId, WfHistoryEventType.TimeoutFired));
@@ -452,6 +457,9 @@ public class WfTimeoutTests
         Assert.Equal(WfInstanceStatus.Rejected, await InstanceStatus(f, instanceId));
         Assert.Equal(1, await HisTaskCount(f, instanceId, WfTaskAction.Reject));
         Assert.Equal(0, await HisTaskCount(f, instanceId, WfTaskAction.Approve));
+        var detail = await GetEnvelope(starter, $"/api/v1/workflow/instance/{instanceId}");
+        var rejected = Assert.Single(detail.GetProperty("data").GetProperty("hisTasks").EnumerateArray().ToList());
+        Assert.True(rejected.GetProperty("isAutomatic").GetBoolean());
     }
 
     /// <summary>
@@ -537,6 +545,10 @@ public class WfTimeoutTests
         Assert.Null(await DueTimeOf(f, taskId));
         Assert.Equal(1, await HisTaskCount(f, instanceId, WfTaskAction.Transfer));
         Assert.Equal(1, await HistoryCount(f, instanceId, WfHistoryEventType.TimeoutFired));
+        var detail = await GetEnvelope(starter, $"/api/v1/workflow/instance/{instanceId}");
+        var transferred = Assert.Single(
+            detail.GetProperty("data").GetProperty("hisTasks").EnumerateArray().ToList());
+        Assert.True(transferred.GetProperty("isAutomatic").GetBoolean());
 
         // 第二次扫描必须**压根扫不到**这件待办。断言扫描日志而不只是「没多出行」是有意的:
         // 不清 DueTime 时第二拍的现象不是「多一行」而是**每拍静默失败一次**(目标已是 actor →

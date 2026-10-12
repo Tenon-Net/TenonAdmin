@@ -277,6 +277,9 @@ public record WfInstanceDetailOutput
     /// <summary>当前实例的全部活跃任务(含并行臂上的 task/token 身份)。</summary>
     public IReadOnlyList<WfCurrentTaskOutput> CurrentTasks { get; init; } = [];
 
+    /// <summary>由本实例历史动作锚定的已结束任务快照，不包含活跃任务。</summary>
+    public IReadOnlyList<WfPastTaskOutput> PastTasks { get; init; } = [];
+
     /// <summary>按 fork 归组的并行运行态;旧串行实例为空。</summary>
     public IReadOnlyList<WfParallelForkOutput> ParallelForks { get; init; } = [];
 
@@ -307,6 +310,38 @@ public record WfCurrentTaskOutput
     public long? NodeVisitId { get; init; }
     public string NodeId { get; init; } = "";
     public string? NodeName { get; init; }
+    public DateTime? CreatedTime { get; init; }
+    /// <summary>审批模式；非审批类任务可为空。</summary>
+    public WfApprovalMode? ApprovalMode { get; init; }
+    /// <summary>当前任务实际分配的审批人，不包含抄送人。</summary>
+    public IReadOnlyList<WfTaskParticipantOutput> Participants { get; init; } = [];
+}
+
+/// <summary>当前审批任务的实际办理人及进度。</summary>
+public record WfTaskParticipantOutput
+{
+    public long ActorId { get; init; }
+    public long UserId { get; init; }
+    public string? DisplayName { get; init; }
+    public long? OriginalUserId { get; init; }
+    public string? OriginalDisplayName { get; init; }
+    public WfActorStatus Status { get; init; }
+    public int Sort { get; init; }
+    public DateTime? ActivatedTime { get; init; }
+}
+
+/// <summary>由实例历史可靠锚定的已结束任务及其保留办理人。</summary>
+public record WfPastTaskOutput
+{
+    public long TaskId { get; init; }
+    /// <summary>旧历史可能尚未记录 token Id。</summary>
+    public long? TokenId { get; init; }
+    public long? NodeVisitId { get; init; }
+    public string NodeId { get; init; } = "";
+    public string? NodeName { get; init; }
+    public DateTime? CreatedTime { get; init; }
+    public WfApprovalMode? ApprovalMode { get; init; }
+    public IReadOnlyList<WfTaskParticipantOutput> Participants { get; init; } = [];
 }
 
 /// <summary>一次并行 fork 的回放投影。</summary>
@@ -450,17 +485,26 @@ public record WfNotifyContext
 public record WfHisTaskOutput
 {
     public long Id { get; init; }
+    public long? TaskId { get; init; }
+    public long? TokenId { get; init; }
+    public long? NodeVisitId { get; init; }
     public string NodeId { get; init; } = "";
     public string? NodeName { get; init; }
     public long UserId { get; init; }
+    public string? OperatorName { get; init; }
+    /// <summary>动作是否由可靠的超时事件自动触发。</summary>
+    public bool IsAutomatic { get; init; }
     public long? OriginalUserId { get; init; }
+    public string? OriginalUserName { get; init; }
     public long? DelegationRuleId { get; init; }
     public long? DelegationScopeOrgId { get; init; }
     public WfTaskAction Action { get; init; }
     public string? Comment { get; init; }
     public long? TransferToUserId { get; init; }
+    public string? TransferToUserName { get; init; }
     /// <summary>加签 / 减签目标用户 Id。</summary>
     public long? TargetUserId { get; init; }
+    public string? TargetUserName { get; init; }
     public long DurationMs { get; init; }
     public DateTime CreateTime { get; init; }
 }

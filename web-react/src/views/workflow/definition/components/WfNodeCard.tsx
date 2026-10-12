@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { AppIcon } from '@/components/AppIcon'
 import type { WfNode, WfNodeType } from '@/workflow/schema'
+import { approvalCardGroups, type WfApprovalNodeProgress } from '../../instance/approvalProgress'
 import './wf-designer.css'
 import '../../wf-identity.css'
 
@@ -99,14 +100,21 @@ export interface WfNodeCardProps {
   readonly?: boolean
   visited?: boolean
   current?: boolean
+  runtimeProgress?: WfApprovalNodeProgress
+  onInspect?: () => void
   onSelect?: () => void
   onRemove?: () => void
 }
 
-export function WfNodeCard({ node, active, error, readonly, visited, current, onSelect, onRemove }: WfNodeCardProps) {
+export function WfNodeCard({
+  node, active, error, readonly, visited, current, runtimeProgress, onInspect, onSelect, onRemove,
+}: WfNodeCardProps) {
   const { t } = useTranslation()
   const body = nodeCardBody(node, t)
   const title = node.name || t(`workflow.node.${node.type}`)
+  const canInspect = readonly && node.type === 'approval' && !!runtimeProgress
+  const onCurrentPath = !!visited || !!current
+  const runtimeGroups = runtimeProgress && onCurrentPath ? approvalCardGroups(runtimeProgress) : []
 
   const classes = [
     'wf-card',
@@ -122,7 +130,13 @@ export function WfNodeCard({ node, active, error, readonly, visited, current, on
 
   // 只认卡片自身的按键(Vue 侧 `.self`):正文里的删除钮/输入不应触发选中。
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (readonly || event.target !== event.currentTarget) return
+    if (event.target !== event.currentTarget) return
+    if (canInspect && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')) {
+      event.preventDefault()
+      onInspect?.()
+      return
+    }
+    if (readonly) return
     if (event.key === 'Enter') onSelect?.()
     else if (event.key === ' ' || event.key === 'Spacebar') {
       event.preventDefault()
@@ -139,14 +153,25 @@ export function WfNodeCard({ node, active, error, readonly, visited, current, on
   return (
     <div
       className={classes}
-      role={readonly ? undefined : 'button'}
-      tabIndex={readonly ? undefined : 0}
-      onClick={readonly ? undefined : () => onSelect?.()}
+      role={!readonly || canInspect ? 'button' : undefined}
+      tabIndex={!readonly || canInspect ? 0 : undefined}
+      data-wf-node-id={node.id}
+      data-wf-runtime-progress={runtimeProgress ? 'true' : undefined}
+      onClick={canInspect ? onInspect : readonly ? undefined : () => onSelect?.()}
       onKeyDown={onKeyDown}
     >
       <div className="wf-card-head">
         <AppIcon icon={ICONS[node.type] ?? 'ph:flag'} size={14} className="wf-card-head-icon" />
         <span className="wf-card-title">{title}</span>
+        {runtimeProgress ? (
+          <span className="wf-card-state">
+            {onCurrentPath && runtimeProgress.currentRounds.length > 0
+              ? t('workflow.status.running')
+              : onCurrentPath
+                ? t('workflow.detail.approvalProgress.status.handled')
+                : t('workflow.detail.approvalProgress.notStarted')}
+          </span>
+        ) : null}
         {!readonly && node.type !== 'start' ? (
           <Tooltip title={t('common.delete')}>
             <Button
@@ -160,9 +185,37 @@ export function WfNodeCard({ node, active, error, readonly, visited, current, on
           </Tooltip>
         ) : null}
       </div>
-      <div className="wf-card-body">
-        <span className={`wf-card-text${body.empty ? ' is-empty' : ''}`}>{body.text}</span>
-        <AppIcon icon="ph:caret-right" size={14} className="wf-card-arrow" />
+      <div className={`wf-card-body${readonly && node.type === 'approval' ? ' is-runtime' : ''}`}>
+        {readonly && node.type === 'approval' ? (
+          <div className="wf-card-progress">
+            {runtimeGroups.length > 0 ? runtimeGroups.slice(0, 3).map((group) => (
+              <div key={group.key} className={`wf-card-progress-row is-${group.key}`}>
+                <span className="wf-card-progress-label">
+                  {t(`workflow.detail.approvalProgress.status.${group.key}`)}
+                </span>
+                <span className="wf-card-progress-names">
+                  {group.items.slice(0, 2).map((item) => (
+                    `${item.automatic
+                      ? t('workflow.detail.approvalProgress.automatic')
+                      : item.name || t('workflow.detail.approvalProgress.system')}${item.automatic && item.name
+                      ? ` (${t('workflow.detail.approvalProgress.onBehalfOf', { name: item.name })})`
+                      : ''}${item.action ? ` · ${t(`workflow.action.${item.action}`)}` : ''}`
+                  )).join('、')}
+                  {group.items.length > 2 ? t('workflow.detail.approvalProgress.more', { n: group.items.length - 2 }) : ''}
+                </span>
+              </div>
+            )) : (
+              <span className="wf-card-text is-empty">
+                {visited
+                  ? t('workflow.detail.approvalProgress.noRoundData')
+                  : t('workflow.detail.approvalProgress.notStarted')}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className={`wf-card-text${body.empty ? ' is-empty' : ''}`}>{body.text}</span>
+        )}
+        {!readonly || canInspect ? <AppIcon icon="ph:caret-right" size={14} className="wf-card-arrow" /> : null}
       </div>
       {error ? (
         <div className="wf-card-warn" title={t('workflow.designer.invalid')}>

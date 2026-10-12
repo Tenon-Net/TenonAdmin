@@ -36,7 +36,21 @@ public class WfInstanceService(
         "nodeId", "userIds",
     };
 
-    protected sealed record CurrentTaskSnapshot(long TaskId, long TokenId, long? NodeVisitId, string NodeId);
+    protected sealed record CurrentTaskSnapshot(
+        long TaskId,
+        long TokenId,
+        long? NodeVisitId,
+        string NodeId,
+        WfApprovalMode ApprovalMode = WfApprovalMode.Any,
+        DateTime? CreatedTime = null);
+    protected sealed record PastTaskAnchor(
+        long TaskId,
+        long? TokenId,
+        long? NodeVisitId,
+        string NodeId,
+        string? NodeName,
+        DateTime CreateTime,
+        long SortId);
 
     /// <summary>保留 M3b-0 前的构造签名，供继承内置服务的消费者继续编译。</summary>
     public WfInstanceService(
@@ -341,8 +355,29 @@ public class WfInstanceService(
         var currentTasks = await tasks.AsQueryable()
             .Where(t => t.InstanceId == instance.Id)
             .OrderBy(t => t.Id)
-            .Select(t => new { t.Id, t.NodeId, t.TokenId, t.NodeVisitId })
+            .Select(t => new { t.Id, t.NodeId, t.TokenId, t.NodeVisitId, t.SignMode, t.CreateTime })
             .ToListAsync();
+        var currentTaskIds = currentTasks.Select(task => task.Id).ToList();
+        var currentActors = currentTaskIds.Count == 0
+            ? []
+            : await actors.AsQueryable()
+                .Where(actor => currentTaskIds.Contains(actor.TaskId)
+                                && actor.ActorType == WfActorType.Approver)
+                .OrderBy(actor => actor.TaskId, OrderByType.Asc)
+                .OrderBy(actor => actor.Sort, OrderByType.Asc)
+                .OrderBy(actor => actor.Id, OrderByType.Asc)
+                .ToListAsync();
+        var pastTaskAnchors = BuildPastTaskAnchors(his, events, currentTaskIds);
+        var pastTaskIds = pastTaskAnchors.Select(item => item.TaskId).Distinct().ToList();
+        var pastActors = pastTaskIds.Count == 0
+            ? []
+            : await actors.AsQueryable()
+                .Where(actor => pastTaskIds.Contains(actor.TaskId)
+                                && actor.ActorType == WfActorType.Approver)
+                .OrderBy(actor => actor.TaskId, OrderByType.Asc)
+                .OrderBy(actor => actor.Sort, OrderByType.Asc)
+                .OrderBy(actor => actor.Id, OrderByType.Asc)
+                .ToListAsync();
         var runtimeTokens = await instances.Db.Queryable<WfToken>()
             .Where(t => t.InstanceId == instance.Id)
             .OrderBy(t => t.Id)
@@ -393,7 +428,9 @@ public class WfInstanceService(
         var viewPermissions = ResolveFormPermissions(model, permissionNodeIds);
         var myPending = myPendingTasks.FirstOrDefault();
         var currentTaskSnapshots = currentTasks
-            .Select(task => new CurrentTaskSnapshot(task.Id, task.TokenId, task.NodeVisitId, task.NodeId))
+            .Select(task => new CurrentTaskSnapshot(
+                task.Id, task.TokenId, task.NodeVisitId, task.NodeId,
+                MapApprovalMode(task.SignMode), task.CreateTime))
             .ToList();
         var myTakeBackTaskId = currentUserId > 0
             ? await FindMyTakeBackTaskIdAsync(
@@ -404,6 +441,27 @@ public class WfInstanceService(
                 instance.Id,
                 cancellationToken)
             : null;
+        var userIds = his.SelectMany(item => new long?[]
+            {
+                item.UserId,
+                item.OriginalUserId,
+                item.TransferToUserId,
+                item.TargetUserId,
+            })
+            .Concat(currentActors.Concat(pastActors)
+                .SelectMany(actor => new long?[] { actor.UserId, actor.OriginalUserId }))
+            .Where(id => id is > 0)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+        var userNames = await ResolveUserDisplayNamesAsync(userIds, cancellationToken);
+        var automaticHisTaskIds = ResolveAutomaticHisTaskIds(his, events);
+        var actorsByTask = currentActors
+            .GroupBy(actor => actor.TaskId)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<WfTaskActor>)group.ToList());
+        var pastActorsByTask = pastActors
+            .GroupBy(actor => actor.TaskId)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<WfTaskActor>)group.ToList());
 
         return new WfInstanceDetailOutput
         {
@@ -420,7 +478,8 @@ public class WfInstanceService(
             CreateTime = instance.CreateTime,
             MyPendingTask = myPending,
             MyPendingTasks = myPendingTasks,
-            HisTasks = his.Select(MapHisTask).ToList(),
+            HisTasks = his.Select(item => EnrichHisTask(
+                MapHisTask(item), userNames, automaticHisTaskIds.Contains(item.Id))).ToList(),
             Model = WfRuntimeModelProjector.Project(model),
             VisitedNodeIds = CollectVisitedNodeIds(events),
             CurrentNodeIds = currentNodeIds,
@@ -432,6 +491,24 @@ public class WfInstanceService(
                 NodeVisitId = task.NodeVisitId,
                 NodeId = task.NodeId,
                 NodeName = modelIndex?.Find(task.NodeId)?.Name,
+                CreatedTime = task.CreatedTime,
+                ApprovalMode = task.ApprovalMode,
+                Participants = actorsByTask.GetValueOrDefault(task.TaskId, [])
+                    .Select(actor => MapTaskParticipant(actor, userNames))
+                    .ToList(),
+            }).ToList(),
+            PastTasks = pastTaskAnchors.Select(task => new WfPastTaskOutput
+            {
+                TaskId = task.TaskId,
+                TokenId = task.TokenId,
+                NodeVisitId = task.NodeVisitId,
+                NodeId = task.NodeId,
+                NodeName = task.NodeName ?? modelIndex?.Find(task.NodeId)?.Name,
+                CreatedTime = task.CreateTime,
+                ApprovalMode = ResolveModelApprovalMode(modelIndex?.Find(task.NodeId)),
+                Participants = pastActorsByTask.GetValueOrDefault(task.TaskId, [])
+                    .Select(actor => MapTaskParticipant(actor, userNames))
+                    .ToList(),
             }).ToList(),
             ParallelForks = MapParallelForks(model, runtimeTokens, runtimeArms, events),
             MyTakeBackTaskId = myTakeBackTaskId,
@@ -1014,6 +1091,9 @@ public class WfInstanceService(
     protected virtual WfHisTaskOutput MapHisTask(WfHisTask h) => new()
     {
         Id = h.Id,
+        TaskId = h.TaskId,
+        TokenId = h.TokenId,
+        NodeVisitId = h.NodeVisitId,
         NodeId = h.NodeId,
         NodeName = h.NodeName,
         UserId = h.UserId,
@@ -1027,6 +1107,226 @@ public class WfInstanceService(
         DurationMs = h.DurationMs,
         CreateTime = h.CreateTime,
     };
+
+    /// <summary>批量解析运行时需要展示的用户姓名，避免按办理人逐条查询。</summary>
+    protected virtual async Task<IReadOnlyDictionary<long, string>> ResolveUserDisplayNamesAsync(
+        IReadOnlyCollection<long> userIds,
+        CancellationToken cancellationToken)
+    {
+        if (userIds.Count == 0)
+            return new Dictionary<long, string>();
+
+        var ids = userIds.Distinct().ToList();
+        var rows = await instances.Db.Queryable<SysUser>()
+            .Where(user => ids.Contains(user.Id))
+            .Select(user => new { user.Id, user.Name })
+            .ToListAsync(cancellationToken);
+        return rows
+            .Where(user => !string.IsNullOrWhiteSpace(user.Name))
+            .ToDictionary(user => user.Id, user => user.Name);
+    }
+
+    /// <summary>投影当前审批任务的实际办理人。</summary>
+    protected virtual WfTaskParticipantOutput MapTaskParticipant(
+        WfTaskActor actor,
+        IReadOnlyDictionary<long, string> userNames) => new()
+    {
+        ActorId = actor.Id,
+        UserId = actor.UserId,
+        DisplayName = userNames.GetValueOrDefault(actor.UserId),
+        OriginalUserId = actor.OriginalUserId,
+        OriginalDisplayName = actor.OriginalUserId is { } originalUserId
+            ? userNames.GetValueOrDefault(originalUserId)
+            : null,
+        Status = actor.Status,
+        Sort = actor.Sort,
+        ActivatedTime = actor.ActivatedTime,
+    };
+
+    /// <summary>把持久态签核模式映射为公开模型的字符串枚举。</summary>
+    protected virtual WfApprovalMode MapApprovalMode(WfSignMode mode) => mode switch
+    {
+        WfSignMode.All => WfApprovalMode.All,
+        WfSignMode.Sequential => WfApprovalMode.Seq,
+        _ => WfApprovalMode.Any,
+    };
+
+    /// <summary>从实例绑定版本解析历史审批任务的模式；非审批节点不推测。</summary>
+    protected virtual WfApprovalMode? ResolveModelApprovalMode(WfNode? node)
+    {
+        if (node?.Type != WfNodeType.Approval)
+            return null;
+        return node.Props?.Mode ?? WfApprovalMode.Any;
+    }
+
+    /// <summary>为历史动作补充当前用户目录中的展示名和可靠的自动处理标识。</summary>
+    protected virtual WfHisTaskOutput EnrichHisTask(
+        WfHisTaskOutput output,
+        IReadOnlyDictionary<long, string> userNames,
+        bool isAutomatic) => output with
+    {
+        OperatorName = userNames.GetValueOrDefault(output.UserId),
+        IsAutomatic = isAutomatic,
+        OriginalUserName = output.OriginalUserId is { } originalUserId
+            ? userNames.GetValueOrDefault(originalUserId)
+            : null,
+        TransferToUserName = output.TransferToUserId is { } transferToUserId
+            ? userNames.GetValueOrDefault(transferToUserId)
+            : null,
+        TargetUserName = output.TargetUserId is { } targetUserId
+            ? userNames.GetValueOrDefault(targetUserId)
+            : null,
+    };
+
+    /// <summary>
+    /// 组合历史动作与 TaskCreated 事件生成已结束任务锚点。事件必须属于当前实例查询结果，且载荷版本与
+    /// taskId 形状均受校验；旧 HisTask 只有 TaskId 时仍保留，token 可为空。
+    /// </summary>
+    protected virtual IReadOnlyList<PastTaskAnchor> BuildPastTaskAnchors(
+        IReadOnlyList<WfHisTask> his,
+        IReadOnlyList<WfHistory> events,
+        IReadOnlyCollection<long> currentTaskIds)
+    {
+        var currentIds = currentTaskIds.ToHashSet();
+        var anchors = new Dictionary<long, PastTaskAnchor>();
+
+        foreach (var item in events.Where(item => item.EventType == WfHistoryEventType.TaskCreated))
+        {
+            if (!TryReadPositiveTaskId(item, out var taskId) || currentIds.Contains(taskId))
+                continue;
+            anchors[taskId] = new PastTaskAnchor(
+                taskId,
+                item.TokenId,
+                item.NodeVisitId,
+                item.NodeId ?? "",
+                null,
+                item.CreateTime,
+                item.Id);
+        }
+
+        foreach (var item in his.Where(item => item.TaskId is > 0 && !currentIds.Contains(item.TaskId.Value)))
+        {
+            var taskId = item.TaskId!.Value;
+            if (anchors.TryGetValue(taskId, out var anchor))
+            {
+                anchors[taskId] = anchor with
+                {
+                    TokenId = anchor.TokenId ?? item.TokenId,
+                    NodeVisitId = anchor.NodeVisitId ?? item.NodeVisitId,
+                    NodeId = string.IsNullOrWhiteSpace(anchor.NodeId) ? item.NodeId : anchor.NodeId,
+                    NodeName = item.NodeName ?? anchor.NodeName,
+                };
+                continue;
+            }
+
+            anchors[taskId] = new PastTaskAnchor(
+                taskId,
+                item.TokenId,
+                item.NodeVisitId,
+                item.NodeId,
+                item.NodeName,
+                item.CreateTime,
+                item.Id);
+        }
+
+        return anchors.Values
+            .OrderBy(item => item.CreateTime)
+            .ThenBy(item => item.SortId)
+            .ToList();
+    }
+
+    /// <summary>
+    /// TaskCompleted 事件与 HisTask 按同一 task/user/action 的序位一一对应；仅事件明确标记 Timeout 时
+    /// 标为自动。若旧数据缺事件或数量不一致，则整组保持未知，避免把人工动作误标为自动。
+    /// </summary>
+    protected virtual IReadOnlySet<long> ResolveAutomaticHisTaskIds(
+        IReadOnlyList<WfHisTask> his,
+        IReadOnlyList<WfHistory> events)
+    {
+        var completed = events
+            .Where(item => item.EventType == WfHistoryEventType.TaskCompleted)
+            .Select(item => TryReadCompletedTaskKey(item, out var key)
+                ? (Valid: true, Key: key, Event: item)
+                : (Valid: false, Key: default((long TaskId, long UserId, WfTaskAction Action)), Event: item))
+            .Where(item => item.Valid)
+            .GroupBy(item => item.Key)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(item => item.Event.Sequence)
+                    .ThenBy(item => item.Event.CreateTime)
+                    .ThenBy(item => item.Event.Id)
+                    .Select(item => item.Event)
+                    .ToList());
+        var history = his
+            .Where(item => item.TaskId is > 0)
+            .GroupBy(item => (item.TaskId!.Value, item.UserId, item.Action))
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(item => item.CreateTime).ThenBy(item => item.Id).ToList());
+        var result = new HashSet<long>();
+
+        foreach (var (key, rows) in history)
+        {
+            if (!completed.TryGetValue(key, out var matchingEvents) || matchingEvents.Count != rows.Count)
+                continue;
+            for (var index = 0; index < rows.Count; index++)
+            {
+                if (matchingEvents[index].ActorType == WfHistoryActorType.Timeout)
+                    result.Add(rows[index].Id);
+            }
+        }
+
+        return result;
+    }
+
+    private static bool TryReadPositiveTaskId(WfHistory item, out long taskId)
+    {
+        taskId = 0;
+        if (item.PayloadVersion is not (0 or 1) || string.IsNullOrWhiteSpace(item.PayloadJson))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(item.PayloadJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty("taskId", out var property)
+                   && property.ValueKind == JsonValueKind.Number
+                   && property.TryGetInt64(out taskId)
+                   && taskId > 0;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryReadCompletedTaskKey(
+        WfHistory item,
+        out (long TaskId, long UserId, WfTaskAction Action) key)
+    {
+        key = default;
+        if (!TryReadPositiveTaskId(item, out var taskId))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(item.PayloadJson!);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("userId", out var userProperty)
+                || userProperty.ValueKind != JsonValueKind.Number
+                || !userProperty.TryGetInt64(out var userId)
+                || userId <= 0
+                || !root.TryGetProperty("action", out var actionProperty)
+                || actionProperty.ValueKind != JsonValueKind.String
+                || !Enum.TryParse<WfTaskAction>(actionProperty.GetString(), false, out var action)
+                || !Enum.IsDefined(action))
+                return false;
+            key = (taskId, userId, action);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     protected virtual IReadOnlyList<WfParallelForkOutput> MapParallelForks(
         WfModel? model,

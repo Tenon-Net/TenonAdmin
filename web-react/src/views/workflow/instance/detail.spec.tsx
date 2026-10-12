@@ -118,6 +118,74 @@ beforeEach(() => vi.clearAllMocks())
 afterEach(cleanup)
 
 describe('WfInstanceDetailPage 动词', () => {
+  it('节点卡展示当前人员，明细将当前轮与历史轮分开', async () => {
+    mount(detailOf({
+      currentTasks: [{
+        taskId: 90,
+        tokenId: 10,
+        nodeVisitId: 101,
+        nodeId: 'ap1',
+        nodeName: '经理审批',
+        approvalMode: 'seq',
+        participants: [
+          { actorId: 1, userId: 101, displayName: '李四', status: 1, sort: 1, activatedTime: '2026-01-01T01:00:00Z' },
+          { actorId: 2, userId: 102, displayName: '王五', status: 0, sort: 2 },
+        ],
+      }],
+      pastTasks: [{
+        taskId: 80,
+        tokenId: 10,
+        nodeVisitId: 100,
+        nodeId: 'ap1',
+        nodeName: '经理审批',
+        approvalMode: 'any',
+        participants: [
+          { actorId: 3, userId: 103, displayName: '张三', status: 2, sort: 1 },
+          { actorId: 4, userId: 104, displayName: '赵六', status: 3, sort: 2 },
+        ],
+      }],
+      hisTasks: [{
+        id: 9,
+        taskId: 80,
+        tokenId: 10,
+        nodeVisitId: 100,
+        nodeId: 'ap1',
+        nodeName: '经理审批',
+        userId: 103,
+        operatorName: '张三',
+        isAutomatic: true,
+        action: 1,
+        comment: '同意办理',
+        createTime: '2025-12-31T10:00:00Z',
+      }],
+    }))
+
+    const summary = await screen.findByText('当前待审批')
+    const summaryBox = summary.closest('[data-wf-current-approvals]')
+    expect(summaryBox?.textContent).toContain('李四')
+    expect(summaryBox?.textContent).not.toContain('王五')
+
+    const card = document.querySelector<HTMLElement>('[data-wf-node-id="ap1"][data-wf-runtime-progress="true"]')!
+    expect(card.textContent).toContain('待审批')
+    expect(card.textContent).toContain('等待轮到')
+    fireEvent.click(card)
+
+    await waitFor(() => expect(document.querySelector('[data-wf-approval-detail="ap1"]')).toBeTruthy())
+    const modal = document.querySelector<HTMLElement>('[data-wf-approval-detail="ap1"]')!
+    expect(modal.textContent).toContain('当前轮次')
+    expect(modal.textContent).toContain('李四')
+    expect(modal.textContent).toContain('王五')
+    expect(modal.textContent).toContain('历史轮次（1）')
+    expect(modal.textContent).not.toContain('Task #90')
+
+    fireEvent.click(screen.getByText('历史轮次（1）'))
+    fireEvent.click(await screen.findByText('第 1 轮'))
+    await waitFor(() => expect(modal.textContent).toContain('张三'))
+    expect(modal.textContent).toContain('赵六')
+    expect(modal.textContent).toContain('系统自动处理')
+    expect(screen.getAllByText('无需处理').length).toBeGreaterThan(0)
+  })
+
   it('多条待办未选目标时不借用 currentNodeIds[0] 的自定义按钮文案', async () => {
     const dual = createDefaultModel()
     const armA = createApprovalNode({
@@ -293,15 +361,16 @@ describe('WfInstanceDetailPage 动词', () => {
     expect(vi.mocked(wfTaskApi.urge).mock.calls[0]![0]).toEqual({ taskId: 90 })
   })
 
-  it('当前任务与催办目标标签显示 NodeVisitId', async () => {
+  it('当前任务默认隐藏技术编号，催办目标仍用 NodeVisitId 消歧', async () => {
     mount(detailOf({
       currentTasks: [
-        { taskId: '9000000000000000001', tokenId: '9000000000000000002', nodeVisitId: '9000000000000000003', nodeId: 'ap1', nodeName: '经理审批' },
-        { taskId: '9000000000000000004', tokenId: '9000000000000000005', nodeVisitId: '9000000000000000006', nodeId: 'ap2', nodeName: '财务审批' },
+        { taskId: '9000000000000000001', tokenId: '9000000000000000002', nodeVisitId: '9000000000000000003', nodeId: 'ap1', nodeName: '经理审批', approvalMode: 'any', participants: [] },
+        { taskId: '9000000000000000004', tokenId: '9000000000000000005', nodeVisitId: '9000000000000000006', nodeId: 'ap2', nodeName: '财务审批', approvalMode: 'any', participants: [] },
       ],
     }))
 
-    expect(await screen.findByText(/NodeVisit #9000000000000000003/)).toBeTruthy()
+    expect(await screen.findByText('当前待审批')).toBeTruthy()
+    expect(screen.queryByText(/NodeVisit #9000000000000000003/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /催\s*办/ }))
     fireEvent.mouseDown(document.querySelector('.ant-modal .ant-select-content')!)
     expect(await screen.findByTitle(/NodeVisit #9000000000000000006/)).toBeTruthy()

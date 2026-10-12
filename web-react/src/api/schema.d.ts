@@ -13929,6 +13929,7 @@ export interface components {
             avatar?: null | string;
             isSuperAdmin: boolean;
         };
+        WfActorStatus: number;
         WfAiDecisionAuditOutput: {
             /** Format: int64 */
             id?: number | string;
@@ -14034,6 +14035,10 @@ export interface components {
             nodeVisitId?: null | number | string;
             nodeId?: string;
             nodeName?: null | string;
+            /** Format: date-time */
+            createdTime?: null | string;
+            approvalMode?: null | components["schemas"]["WfApprovalMode"];
+            participants?: components["schemas"]["WfTaskParticipantOutput"][];
         };
         WfDefinition: {
             name?: string;
@@ -14201,12 +14206,21 @@ export interface components {
         WfHisTaskOutput: {
             /** Format: int64 */
             id?: number | string;
+            /** Format: int64 */
+            taskId?: null | number | string;
+            /** Format: int64 */
+            tokenId?: null | number | string;
+            /** Format: int64 */
+            nodeVisitId?: null | number | string;
             nodeId?: string;
             nodeName?: null | string;
             /** Format: int64 */
             userId?: number | string;
+            operatorName?: null | string;
+            isAutomatic?: boolean;
             /** Format: int64 */
             originalUserId?: null | number | string;
+            originalUserName?: null | string;
             /** Format: int64 */
             delegationRuleId?: null | number | string;
             /** Format: int64 */
@@ -14215,8 +14229,10 @@ export interface components {
             comment?: null | string;
             /** Format: int64 */
             transferToUserId?: null | number | string;
+            transferToUserName?: null | string;
             /** Format: int64 */
             targetUserId?: null | number | string;
+            targetUserName?: null | string;
             /** Format: int64 */
             durationMs?: number | string;
             /** Format: date-time */
@@ -14275,6 +14291,7 @@ export interface components {
             /** Format: int64 */
             currentTaskId?: null | number | string;
             currentTasks?: components["schemas"]["WfCurrentTaskOutput"][];
+            pastTasks?: components["schemas"]["WfPastTaskOutput"][];
             parallelForks?: components["schemas"]["WfParallelForkOutput"][];
             /** Format: int64 */
             myTakeBackTaskId?: null | number | string;
@@ -14417,6 +14434,20 @@ export interface components {
             arms?: components["schemas"]["WfParallelArmOutput"][];
         };
         WfParallelForkStatus: number;
+        WfPastTaskOutput: {
+            /** Format: int64 */
+            taskId?: number | string;
+            /** Format: int64 */
+            tokenId?: null | number | string;
+            /** Format: int64 */
+            nodeVisitId?: null | number | string;
+            nodeId?: string;
+            nodeName?: null | string;
+            /** Format: date-time */
+            createdTime?: null | string;
+            approvalMode?: null | components["schemas"]["WfApprovalMode"];
+            participants?: components["schemas"]["WfTaskParticipantOutput"][];
+        };
         /** @enum {unknown} */
         WfRejectAction: "terminate" | "toNode" | null;
         /** @enum {unknown} */
@@ -14501,6 +14532,21 @@ export interface components {
             toUserId?: number | string;
             targetNodeId?: null | string;
             requestId?: null | string;
+        };
+        WfTaskParticipantOutput: {
+            /** Format: int64 */
+            actorId?: number | string;
+            /** Format: int64 */
+            userId?: number | string;
+            displayName?: null | string;
+            /** Format: int64 */
+            originalUserId?: null | number | string;
+            originalDisplayName?: null | string;
+            status?: components["schemas"]["WfActorStatus"];
+            /** Format: int32 */
+            sort?: number | string;
+            /** Format: date-time */
+            activatedTime?: null | string;
         };
         WfTimeout: {
             /** Format: int32 */

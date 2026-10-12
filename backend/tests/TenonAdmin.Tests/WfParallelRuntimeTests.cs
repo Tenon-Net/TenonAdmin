@@ -153,6 +153,14 @@ public class WfParallelRuntimeTests
         Assert.Equal(WfParallelForkStatus.Cancelled, fork.Status);
         Assert.All(fork.Arms, arm => Assert.Equal(WfParallelArmStatus.Cancelled, arm.Status));
         Assert.Empty(detail.CurrentTasks);
+        Assert.Single(detail.PastTasks);
+        Assert.All(detail.PastTasks, task =>
+        {
+            Assert.NotNull(task.CreatedTime);
+            Assert.NotEmpty(task.Participants);
+            Assert.All(task.Participants,
+                participant => Assert.Equal(WfActorStatus.Skipped, participant.Status));
+        });
         Assert.Contains(await service.ListHistoryAsync(started.InstanceId, 1),
             item => item.EventType == WfHistoryEventType.ParallelCancelled);
     }
