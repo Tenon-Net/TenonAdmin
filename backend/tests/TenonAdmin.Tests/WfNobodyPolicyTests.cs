@@ -33,7 +33,11 @@ public class WfNobodyPolicyTests
         Assert.Equal("leader", row.NodeId);
         Assert.Contains("\"action\":\"block\"", row.PayloadJson);
         Assert.Contains("\"reason\":\"noResolvedUsers\"", row.PayloadJson);
-        Assert.Contains("部门主管", row.PayloadJson);
+        using (var payload = JsonDocument.Parse(row.PayloadJson!))
+        {
+            Assert.Equal("部门主管", payload.RootElement.GetProperty("nodeName").GetString());
+            Assert.Equal("leader", payload.RootElement.GetProperty("nodeId").GetString());
+        }
 
         var his = Assert.Single(tasks);
         Assert.Equal(WfTaskAction.Nobody, his.Action);

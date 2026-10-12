@@ -31,10 +31,10 @@ public class WfRemovedActorTests
         var instanceId = start.GetProperty("data").GetProperty("instanceId").GetInt64();
         var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        Assert.Equal(0, (await PostEnvelope(a, "/api/v1/workflow/task/add-sign", new { taskId, toUserId = bId })).GetProperty("code").GetInt32());
-        Assert.Equal(0, (await PostEnvelope(a, "/api/v1/workflow/task/remove-sign", new { taskId, toUserId = bId })).GetProperty("code").GetInt32());
-        Assert.Equal(0, (await PostEnvelope(a, "/api/v1/workflow/task/add-sign", new { taskId, toUserId = bId })).GetProperty("code").GetInt32());
-        Assert.Equal(0, (await PostEnvelope(a, "/api/v1/workflow/task/remove-sign", new { taskId, toUserId = bId })).GetProperty("code").GetInt32());
+        Assert.Equal(0, (await PostEnvelope(a, "/api/v1/workflow/task/add-sign", new { taskId, toUserId = bId, requestId = "wf-actor-add-1" })).GetProperty("code").GetInt32());
+        Assert.Equal(0, (await PostEnvelope(a, "/api/v1/workflow/task/remove-sign", new { taskId, toUserId = bId, requestId = "wf-actor-remove-1" })).GetProperty("code").GetInt32());
+        Assert.Equal(0, (await PostEnvelope(a, "/api/v1/workflow/task/add-sign", new { taskId, toUserId = bId, requestId = "wf-actor-add-2" })).GetProperty("code").GetInt32());
+        Assert.Equal(0, (await PostEnvelope(a, "/api/v1/workflow/task/remove-sign", new { taskId, toUserId = bId, requestId = "wf-actor-remove-2" })).GetProperty("code").GetInt32());
 
         var delegated = await PostEnvelope(a, "/api/v1/workflow/task/delegate", new { taskId, toUserId = bId });
         Assert.Equal(0, delegated.GetProperty("code").GetInt32());
@@ -87,7 +87,7 @@ public class WfRemovedActorTests
         var start = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
         var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var added = await PostEnvelope(a, "/api/v1/workflow/task/add-sign", new { taskId, toUserId = bId });
+        var added = await PostEnvelope(a, "/api/v1/workflow/task/add-sign", new { taskId, toUserId = bId, requestId = "wf-pending-add" });
         Assert.Equal(WorkflowErrorCode.SignTargetInvalid, added.GetProperty("code").GetInt32());
         Assert.Equal("alreadyActor", added.GetProperty("args").GetProperty("reason").GetString());
 

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { App as AntdApp } from 'antd'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import '@/locales'
-import { createApprovalNode, createDefaultModel, createParallelNode } from '@/workflow/model'
+import { createApprovalNode, createCcNode, createDefaultModel, createParallelNode } from '@/workflow/model'
 import type { WfModel } from '@/workflow/schema'
 
 const testState = vi.hoisted(() => ({
@@ -90,6 +90,14 @@ describe('WfDesignerPage', () => {
     expect(screen.getByText('50%')).toBeTruthy()
     expect(screen.getByRole('button', { name: '缩小' })).toHaveProperty('disabled', true)
   }, 10_000)
+
+  it('空抄送成员会标在节点上', async () => {
+    const model = createDefaultModel()
+    model.root.next = createCcNode({ id: 'cc1', name: '抄送人事' })
+    mount(model)
+    expect(await screen.findByText('指定成员不能为空')).toBeTruthy()
+    expect(screen.getByText('抄送人事')).toBeTruthy()
+  })
 
   it('结构非法时保存被挡住,不发更新请求', async () => {
     mount(invalidModel())
