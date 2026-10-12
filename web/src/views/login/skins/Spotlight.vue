@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed } from 'vue'
 import { useAppStore } from '@/stores/app'
+import { useStandardPointerMotion } from '@/composables/useStandardPointerMotion'
 import { mix, rgba } from '@/theme/mix'
 import LoginForm from '../LoginForm.vue'
 
@@ -13,8 +14,7 @@ function onMove(e: MouseEvent) {
   mx.value = (e.clientX / window.innerWidth) * 100
   my.value = (e.clientY / window.innerHeight) * 100
 }
-onMounted(() => window.addEventListener('mousemove', onMove, { passive: true }))
-onBeforeUnmount(() => window.removeEventListener('mousemove', onMove))
+useStandardPointerMotion(onMove)
 
 const vars = computed(() => ({
   '--mx': mx.value + '%',
@@ -30,7 +30,7 @@ const vars = computed(() => ({
   <div class="spotlight" :style="vars">
     <div class="mesh" />
     <div class="spot" />
-    <div class="card">
+    <div class="card motion-entrance">
       <LoginForm />
     </div>
   </div>
@@ -59,7 +59,7 @@ const vars = computed(() => ({
   inset: 0;
   pointer-events: none;
   background: radial-gradient(340px 340px at var(--mx) var(--my), var(--spot), transparent 60%);
-  transition: background 0.12s ease-out;
+  transition: background var(--transition-fast);
 }
 .card {
   position: relative;
@@ -71,12 +71,12 @@ const vars = computed(() => ({
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-3);
-  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fade-up var(--motion-duration-panel-enter) var(--motion-ease-standard) both;
 }
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(var(--motion-distance));
   }
   to {
     opacity: 1;

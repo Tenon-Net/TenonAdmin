@@ -9,6 +9,7 @@
   flex-shrink: 0;
 }
 .tab-strip {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -20,7 +21,25 @@
 .tab-strip::-webkit-scrollbar {
   display: none;
 }
+.tabs-active-marker {
+  position: absolute;
+  z-index: 0;
+  bottom: 5px;
+  left: 0;
+  height: 30px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md, 6px);
+  background: var(--color-primary-light);
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    transform var(--motion-duration-base) var(--motion-ease-standard),
+    width var(--motion-duration-base) var(--motion-ease-standard),
+    opacity var(--motion-duration-feedback) var(--motion-ease-standard);
+}
 .tab-chip {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -35,16 +54,16 @@
   cursor: pointer;
   user-select: none;
   transition:
-    color 0.15s,
-    background 0.15s,
-    border-color 0.15s;
+    color var(--motion-duration-feedback) var(--motion-ease-standard),
+    background var(--motion-duration-feedback) var(--motion-ease-standard),
+    border-color var(--motion-duration-feedback) var(--motion-ease-standard);
 }
 .tab-chip:hover {
   color: var(--color-text-primary);
 }
 .tab-chip.active {
-  background: var(--color-primary-light);
-  border-color: var(--color-primary);
+  background: transparent;
+  border-color: transparent;
   color: var(--color-primary);
 }
 .tab-chip:focus-visible,

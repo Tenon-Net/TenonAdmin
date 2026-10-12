@@ -41,6 +41,7 @@ describe('resetSettings', () => {
     s.setAccent('#123456')
     s.setDensity('compact')
     s.setLayoutMode('horizontal')
+    s.setSetting('motionMode', 'off')
 
     useAppStore.getState().resetSettings()
 
@@ -49,6 +50,7 @@ describe('resetSettings', () => {
     expect(after.accent).toBe(ACCENTS[0])
     expect(after.density).toBe('comfortable')
     expect(after.layoutMode).toBe('vertical')
+    expect(after.motionMode).toBe('standard')
     expect(after.locale).toBe('en-US') // 未被重置
     expect(after.collapsed).toBe(true) // 未被重置
   })
@@ -87,6 +89,12 @@ describe('persist merge 迁移', () => {
       expect(useAppStore.getState().layoutMode, `${m} 是合法值,不该被 merge 回落`).toBe(m)
     }
   })
+
+  it('非法 motionMode 水合时回落 standard', async () => {
+    localStorage.setItem('app', JSON.stringify({ state: { motionMode: 'maximum' }, version: 0 }))
+    await useAppStore.persist.rehydrate()
+    expect(useAppStore.getState().motionMode).toBe('standard')
+  })
 })
 
 // Vue 侧没有对应用例。`systemDark` 落盘不会有任何即时症状:只有"用户改了系统主题 + 下次打开"
@@ -111,7 +119,7 @@ describe('持久化白名单', () => {
     const saved = JSON.parse(localStorage.getItem('app')!).state
     expect(Object.keys(saved).sort()).toEqual([
       'accent', 'collapsed', 'density', 'fixedHeader', 'formStyle', 'grayscale', 'layoutMode',
-      'locale', 'pageTransition', 'showBreadcrumb', 'showTabs', 'themeScheme', 'watermark', 'watermarkText',
+      'locale', 'motionMode', 'pageTransition', 'showBreadcrumb', 'showTabs', 'themeScheme', 'watermark', 'watermarkText',
     ])
 
     // **漂移守卫**:Vue 的 `persist: true` 自动覆盖任何新增 state 字段,而这里的 partialize 是手写字面量。

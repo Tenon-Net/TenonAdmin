@@ -5,9 +5,10 @@ import antdZhCN from 'antd/locale/zh_CN'
 import antdEnUS from 'antd/locale/en_US'
 import { useAntdTheme } from '@/theme/useAntdTheme'
 import { useDocumentGrayscale } from '@/theme/useDocumentGrayscale'
-import { useAppStore, isDark } from '@/stores/app'
+import { useAppStore, effectiveMotionMode, isDark } from '@/stores/app'
 import { useSiteStore } from '@/stores/site'
 import { ReauthModal } from '@/components/ReauthModal'
+import { useMotionRuntime } from '@/motion/runtime'
 const LoginPage = lazy(() => import('@/views/login/LoginPage'))
 const CallbackPage = lazy(() => import('@/views/oauth/CallbackPage'))
 const MfaBindPage = lazy(() => import('@/views/mfa/BindPage'))
@@ -28,8 +29,10 @@ export default function App() {
   const accent = useAppStore((s) => s.accent)
   const density = useAppStore((s) => s.density)
   const locale = useAppStore((s) => s.locale)
+  const motionMode = useAppStore(effectiveMotionMode)
 
-  const themeConfig = useAntdTheme({ dark, accent, density })
+  useMotionRuntime()
+  const themeConfig = useAntdTheme({ dark, accent, density, motionMode })
   // data-theme/data-density 由 useAntdTheme 打;灰阶单独一条(不进 antd 主题依赖)。见该 hook 注释。
   useDocumentGrayscale()
 

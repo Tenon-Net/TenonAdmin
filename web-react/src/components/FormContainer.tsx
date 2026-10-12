@@ -1,7 +1,9 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, Drawer, Modal, Space } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useAppStore, type FormStyle } from '@/stores/app'
+import { useCachedPageActive } from '@/layouts/CachedPageActive'
+import './form-container.css'
 
 /**
  * onConfirm 协议:跑完 onConfirm 后**是否关闭**。抽成纯函数,变异钉住 `!== false` 与 catch→false 两处判定。
@@ -45,7 +47,7 @@ export interface FormContainerProps {
  * 弹窗/抽屉二合一表单容器:消化 CRUD 页「saving state + 手写 footer + Modal 包装」样板。
  * 形态默认跟随全局偏好(app.formStyle),variant 按实例覆盖。**onConfirm owns loading + close**:
  * 确认钮自动 loading,提交中禁止一切关闭途径(esc/遮罩/关闭钮/取消钮),防中途关闭致状态错乱。
- * 对齐 Vue 侧 FormContainer;keep-alive 页签切走强制收起那一段留到 D1(标签页容器落地时)。
+ * 对齐 Vue 侧 FormContainer；缓存页失活时通过 useCachedPageActive 强制收起，避免隐藏页残留弹层。
  */
 export function FormContainer({
   open, onOpenChange, title, variant, width, onConfirm, confirmText, cancelText, maskClosable, centered, children,
@@ -53,6 +55,19 @@ export function FormContainer({
   const { t } = useTranslation()
   const mode = useAppStore((s) => variant ?? s.formStyle)
   const [loading, setLoading] = useState(false)
+  const active = useCachedPageActive()
+  const inactiveCloseSent = useRef(false)
+
+  useEffect(() => {
+    if (active || !open) {
+      inactiveCloseSent.current = false
+      return
+    }
+    if (!inactiveCloseSent.current) {
+      inactiveCloseSent.current = true
+      onOpenChange(false)
+    }
+  }, [active, onOpenChange, open])
 
   const close = () => { if (!loading) onOpenChange(false) }
   async function handleConfirm() {
@@ -72,6 +87,7 @@ export function FormContainer({
   if (mode === 'modal') {
     return (
       <Modal
+        rootClassName="form-container-motion"
         open={open}
         title={title}
         width={w}
@@ -93,6 +109,7 @@ export function FormContainer({
   }
   return (
     <Drawer
+      rootClassName="form-container-motion"
       open={open}
       title={title}
       size={w}

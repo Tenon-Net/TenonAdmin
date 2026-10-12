@@ -77,27 +77,3 @@ a {
 html[data-gray] {
   filter: grayscale(1);
 }
-
-/* 页面切换动画(default.vue 的 <transition :name="app.pageTransition">)。 */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition:
-    opacity 0.24s ease,
-    transform 0.24s ease;
-}
-.fade-slide-enter-from {
-  opacity: 0;
-  transform: translateX(16px);
-}
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateX(-16px);
-}

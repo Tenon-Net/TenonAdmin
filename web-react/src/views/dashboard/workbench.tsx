@@ -1,6 +1,6 @@
 // 系统工作台首页(builtin 应用,菜单 component=dashboard/workbench)。欢迎横幅 + 4 统计卡 + 趋势/分布两图。
 // 统计取不到不糊用户一脸红:catch 静默 → 计数显 —、图空,页面其余照常。图 option 纯逻辑抽 chartOptions.ts(变异钉)。
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card, Col, Row } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { AppIcon } from '@/components/AppIcon'
@@ -11,6 +11,8 @@ import { btnGrad } from '@/theme/mix'
 import { dashboardApi } from '@/api'
 import type { DashboardSummary } from '@/types/api'
 import { buildLineOption, buildPieOption, num } from './chartOptions'
+import { useCachedPageActive } from '@/layouts/CachedPageActive'
+import { useEntranceMotion } from '@/motion/runtime'
 import './dashboard.css'
 
 export default function Workbench() {
@@ -19,6 +21,12 @@ export default function Workbench() {
   const accent = useAppStore((s) => s.accent)
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const active = useCachedPageActive()
+  const viewRef = useRef<HTMLDivElement>(null)
+  useEntranceMotion(viewRef, {
+    active, once: true, stagger: true, pageTransition: true,
+    durationVar: '--motion-duration-panel-enter',
+  })
 
   useEffect(() => {
     dashboardApi
@@ -53,8 +61,8 @@ export default function Workbench() {
   )
 
   return (
-    <div className="dash-view">
-      <div className="dash-banner">
+    <div ref={viewRef} className="dash-view">
+      <div className="dash-banner" data-motion-item>
         <div className="dash-avatar" style={{ background: btnGrad(accent) }}>
           <AppIcon icon="ph:user" size={26} style={{ color: '#fff' }} />
         </div>
@@ -64,7 +72,7 @@ export default function Workbench() {
         </div>
       </div>
 
-      <Row gutter={[16, 16]}>
+      <Row gutter={[16, 16]} data-motion-item>
         {stats.map((s) => (
           <Col key={s.key} xs={24} sm={12} lg={6}>
             <Card>
@@ -82,7 +90,7 @@ export default function Workbench() {
         ))}
       </Row>
 
-      <Row gutter={[16, 16]}>
+      <Row gutter={[16, 16]} data-motion-item>
         <Col xs={24} lg={12}>
           <Card title={t('workbench.trendTitle')}>
             <Chart option={trendOption} loading={loading} height={300} />

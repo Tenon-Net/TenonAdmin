@@ -23,6 +23,9 @@ const props = defineProps<{
   cancelText?: string
   /** 默认 false:表单防误触丢输入 */
   maskClosable?: boolean
+  /** Naive UI 官方过渡生命周期扩展点。 */
+  onAfterEnter?: () => void
+  onAfterLeave?: () => void
 }>()
 
 const { t } = useI18n()
@@ -67,7 +70,11 @@ onDeactivated(() => {
     :closable="canClose"
     :close-on-esc="canClose"
     :mask-closable="maskClose"
+    class="motion-form-panel"
+    transform-origin="center"
     :style="{ width: `${w}px` }"
+    @after-enter="props.onAfterEnter"
+    @after-leave="props.onAfterLeave"
   >
     <template v-if="$slots['header-extra']" #header-extra>
       <slot name="header-extra" />
@@ -85,7 +92,16 @@ onDeactivated(() => {
     </template>
   </n-modal>
 
-  <n-drawer v-else v-model:show="show" :width="w" :close-on-esc="canClose" :mask-closable="maskClose">
+  <n-drawer
+    v-else
+    v-model:show="show"
+    :width="w"
+    :close-on-esc="canClose"
+    :mask-closable="maskClose"
+    class="motion-form-panel"
+    @after-enter="props.onAfterEnter"
+    @after-leave="props.onAfterLeave"
+  >
     <n-drawer-content :title="title" :closable="canClose" :native-scrollbar="false">
       <!-- n-drawer-content 无 header-extra 原生槽:业务传了才自拼 #header(标题 + 附加区并排) -->
       <template v-if="$slots['header-extra']" #header>

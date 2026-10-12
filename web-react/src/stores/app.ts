@@ -7,6 +7,7 @@ export type FormStyle = 'modal' | 'drawer'
 export type Locale = 'zh-CN' | 'en-US'
 export type ThemeScheme = 'light' | 'dark' | 'auto'
 export type PageTransition = 'fade' | 'fade-slide' | 'none'
+export type MotionMode = 'standard' | 'light' | 'off'
 export type LayoutMode =
   | 'vertical'
   | 'vertical-mix'
@@ -35,6 +36,7 @@ const DEFAULTS = {
   showTabs: true,
   fixedHeader: true,
   pageTransition: 'fade' as PageTransition,
+  motionMode: 'standard' as MotionMode,
   grayscale: false,
   watermark: false,
   watermarkText: '',
@@ -45,6 +47,8 @@ const DEFAULTS = {
 // 系统深浅色偏好。Vue 侧是 VueUse 的 `usePreferredDark()`(模块级建一次监听),这里换等价的裸 matchMedia。
 // 放模块级而不是 hook 里:`isDark` 要能在组件外(路由守卫、主题桥)同步读到。
 const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null
+const motionMq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null
+export const MOTION_MODES: MotionMode[] = ['standard', 'light', 'off']
 
 /** 外观项的类型 = DEFAULTS 的形状,免得同一组字段写两遍(加一项只改 DEFAULTS)。 */
 type AppSettings = typeof DEFAULTS
@@ -57,6 +61,8 @@ export interface AppState extends AppSettings {
    * 的用户在首帧看到上次那一侧。由下面的 matchMedia 监听推入。
    */
   systemDark: boolean
+  /** 系统减少动态效果偏好；设备实时状态，不持久化。 */
+  systemReducedMotion: boolean
   setThemeScheme: (s: ThemeScheme) => void
   toggleDark: () => void
   setAccent: (hex: string) => void
@@ -75,6 +81,10 @@ export interface AppState extends AppSettings {
 export const isDark = (s: Pick<AppState, 'themeScheme' | 'systemDark'>): boolean =>
   s.themeScheme === 'auto' ? s.systemDark : s.themeScheme === 'dark'
 
+/** 系统减少动态效果优先于用户档位。 */
+export const effectiveMotionMode = (s: Pick<AppState, 'motionMode' | 'systemReducedMotion'>): MotionMode =>
+  s.systemReducedMotion ? 'off' : s.motionMode
+
 /** UI 偏好:主题模式 / 主色 / 密度 / 布局 / 界面开关 / 折叠 / 语言。持久化(localStorage key "app")。 */
 export const useAppStore = create<AppState>()(
   persist(
@@ -83,6 +93,7 @@ export const useAppStore = create<AppState>()(
       collapsed: false,
       locale: 'zh-CN' as Locale,
       systemDark: mq?.matches ?? false,
+      systemReducedMotion: motionMq?.matches ?? false,
       setThemeScheme: (s) => set({ themeScheme: s }),
       // 顶栏快捷切换:在当前生效的深浅色基础上翻到明确的一侧(auto + 系统暗 → light)。
       toggleDark: () => set((s) => ({ themeScheme: isDark(s) ? 'light' : 'dark' })),
@@ -115,6 +126,7 @@ export const useAppStore = create<AppState>()(
         showTabs: s.showTabs,
         fixedHeader: s.fixedHeader,
         pageTransition: s.pageTransition,
+        motionMode: s.motionMode,
         grayscale: s.grayscale,
         watermark: s.watermark,
         watermarkText: s.watermarkText,
@@ -128,7 +140,10 @@ export const useAppStore = create<AppState>()(
       // 想改还得回头 setState,而那时 `useAppStore` 尚在 TDZ 里(同步 storage 下水合发生在 create 内部)。
       merge: (persisted, current) => {
         const s = { ...current, ...(persisted as Partial<AppState>) }
+        // 设备实时偏好不能被遗留的持久化字段覆盖。
+        s.systemReducedMotion = current.systemReducedMotion
         if (!LAYOUT_MODES.includes(s.layoutMode)) s.layoutMode = 'vertical'
+        if (!MOTION_MODES.includes(s.motionMode)) s.motionMode = 'standard'
         return s
       },
     },
@@ -138,6 +153,11 @@ export const useAppStore = create<AppState>()(
 // 系统主题实时跟随:auto 档下用户在系统里切深浅色,页面立刻跟着翻。
 const onSystemThemeChange = (e: MediaQueryListEvent) => useAppStore.setState({ systemDark: e.matches })
 mq?.addEventListener('change', onSystemThemeChange)
+const onSystemMotionChange = (e: MediaQueryListEvent) => useAppStore.setState({ systemReducedMotion: e.matches })
+motionMq?.addEventListener('change', onSystemMotionChange)
 // dev 下 Vite 每次热更新都会重跑本模块、再挂一个监听,旧的指向旧 store 实例且无人摘除,
 // 随编辑次数线性累积。生产构建里这段被摇掉。
-if (import.meta.hot) import.meta.hot.dispose(() => mq?.removeEventListener('change', onSystemThemeChange))
+if (import.meta.hot) import.meta.hot.dispose(() => {
+  mq?.removeEventListener('change', onSystemThemeChange)
+  motionMq?.removeEventListener('change', onSystemMotionChange)
+})

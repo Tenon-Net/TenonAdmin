@@ -44,13 +44,15 @@ function mount(start = '/a') {
   render(
     <MemoryRouter initialEntries={[start]}>
       <Nav />
-      <Routes>
-        <Route element={<KeepAliveOutlet />}>
-          <Route path="/a" element={<StatefulPage label="A" />} />
-          <Route path="/b" element={<StatefulPage label="B" />} />
-          <Route path="/c" element={<StatefulPage label="C" />} />
-        </Route>
-      </Routes>
+      <div className="shell-page">
+        <Routes>
+          <Route element={<KeepAliveOutlet />}>
+            <Route path="/a" element={<StatefulPage label="A" />} />
+            <Route path="/b" element={<StatefulPage label="B" />} />
+            <Route path="/c" element={<StatefulPage label="C" />} />
+          </Route>
+        </Routes>
+      </div>
     </MemoryRouter>,
   )
 }
@@ -89,5 +91,30 @@ describe('KeepAliveOutlet', () => {
     act(() => useTabsStore.getState().refreshTab('/a'))
     expect(screen.queryByDisplayValue('要被刷掉')).toBeNull() // 重挂 → 状态清空
     expect(useTabsStore.getState().excludeKey).toBe('') // 刷新后已复位
+  })
+
+  it('按 pathname 保存滚动位置；新页与刷新页从顶部开始', () => {
+    mount('/a')
+    const scroller = document.querySelector<HTMLElement>('.shell-page')!
+    const input = screen.getByLabelText('A-input')
+    input.focus()
+    expect(document.activeElement).toBe(input)
+    scroller.scrollTop = 73
+    fireEvent.scroll(scroller) // 活跃期实时保存；浏览器在失活 cleanup 前可能已把 DOM scrollTop clamp 到 0
+    fireEvent.click(screen.getByText('go B'))
+    expect(document.activeElement).not.toBe(input) // 隐藏焦点元素复显时会触发浏览器自动滚动，失活必须先 blur
+    expect(scroller.scrollTop).toBe(0)
+    scroller.scrollTop = 42
+    fireEvent.scroll(scroller)
+    fireEvent.click(screen.getByText('go A'))
+    expect(scroller.scrollTop).toBe(73)
+    act(() => useTabsStore.getState().refreshTab('/a'))
+    expect(scroller.scrollTop).toBe(0)
+    fireEvent.click(screen.getByText('go C'))
+    scroller.scrollTop = 91
+    fireEvent.scroll(scroller)
+    fireEvent.click(screen.getByText('go A'))
+    fireEvent.click(screen.getByText('go C'))
+    expect(scroller.scrollTop).toBe(0) // noCache 复访是新页，不继承旧滚动
   })
 })

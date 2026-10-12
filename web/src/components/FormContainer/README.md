@@ -14,6 +14,8 @@
 | `confirmText` | `string` | `t('common.confirm')` | 确认钮文案 |
 | `cancelText` | `string` | `t('common.cancel')` | 取消钮文案 |
 | `maskClosable` | `boolean` | `false` | 表单防误触丢输入,默认点遮罩不关 |
+| `onAfterEnter` | `() => void` | — | Naive UI 面板进入完成后的正式扩展点 |
+| `onAfterLeave` | `() => void` | — | Naive UI 面板退出完成后的正式扩展点 |
 
 ## Slots
 
@@ -58,6 +60,7 @@ async function save() {
 
 - keep-alive 页签切走时容器 `onDeactivated` 自动收起弹层,业务无需处理。这是**有意的行为变化**:改造前裸 n-modal 会残留在新页签上方(teleport 到 body,输入保留但遮罩错位);容器选择收起换取不残留,代价是切页丢弹层内未保存输入。
 - 弹窗/抽屉默认都是关闭即销毁(`display-directive: 'if'` 语义),每次打开是干净表单;要保活透传 `display-directive="show"`。
+- 面板继续由 Naive UI 管理焦点、键盘、遮罩和滚动锁;统一动效仅经容器 class 与公开生命周期接入,业务不要覆盖内部 DOM 的 transform。
 
 ## 可加但先不加
 

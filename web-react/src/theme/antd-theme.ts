@@ -3,7 +3,7 @@ import { derivePrimary } from '@/theme/mix'
 
 // `Density` 归 app store(与 Vue 侧一致:类型跟着它的持久化字段走,不跟着消费方走)。
 // 这里转口一下,免得主题桥的使用者为了一个类型去 import store。
-import type { Density } from '@/stores/app'
+import type { Density, MotionMode } from '@/stores/app'
 
 export type { Density }
 
@@ -51,6 +51,7 @@ export interface ThemeOpts {
   dark: boolean
   accent: string
   density: Density
+  motionMode?: MotionMode
 }
 
 /**
@@ -142,6 +143,12 @@ export function buildAntdTheme(opts: ThemeOpts): ThemeConfig {
       fontFamily: v('--font-family-base'),
       fontFamilyCode: v('--font-family-mono'),
 
+      // Ant Design 6 官方 motion seed/alias token。时长与自有组件同读 motion.css，避免两套参数漂移。
+      motion: opts.motionMode === undefined ? undefined : opts.motionMode !== 'off',
+      motionDurationFast: v('--motion-duration-feedback'),
+      motionDurationMid: v('--motion-duration-base'),
+      motionDurationSlow: v('--motion-duration-panel-enter'),
+
       // v6 是 boxShadow/Secondary/Tertiary,**不是** Naive 那套 boxShadow1/2/3。
       // antd 默认 boxShadow 与 boxShadowSecondary 是**同一个**模板,我们给三档不同的值属于**故意**分开
       //(设计系统就是三级)。**这里原先写着"已登记豁免"——那是假的**:EXEMPT 里从来只有
@@ -166,6 +173,13 @@ export function buildAntdTheme(opts: ThemeOpts): ThemeConfig {
     components: {
       // 卡片圆角走 lg(12);常规控件走 token.borderRadius(md=10)。
       Card: defined({ borderRadiusLG: num(v('--radius-lg')) }),
+      // Modal 主 zoom 默认读 Mid、Drawer 面板读 Slow；局部都对齐面板进入参数。
+      // 退出的独立时长由 FormContainer rootClassName 下的 antd leave class 覆写（组件 token 不分进/出）。
+      Modal: defined({
+        motionDurationMid: v('--motion-duration-panel-enter'),
+        motionDurationSlow: v('--motion-duration-panel-enter'),
+      }),
+      Drawer: defined({ motionDurationSlow: v('--motion-duration-panel-enter') }),
       // compactAlgorithm 不管表格行高,单元格纵向内边距要另给。
       Table: opts.density === 'compact' ? { cellPaddingBlock: 8, cellPaddingBlockSM: 6 } : {},
       // 侧栏菜单不画自己的右边线(竖向唯一分隔线属主是 .shell-aside 的 border-right,否则交界处双线)。

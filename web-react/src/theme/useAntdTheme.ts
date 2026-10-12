@@ -21,7 +21,7 @@ import { buildAntdTheme, type ThemeOpts } from './antd-theme'
  * B3 落 Zustand 后,入参改从 `app` store 取;这一层的逻辑不变。
  */
 export function useAntdTheme(opts: ThemeOpts): ThemeConfig {
-  const { dark, accent, density } = opts
+  const { dark, accent, density, motionMode } = opts
   // 初值故意是空对象,**不在这里先算一遍**:首次渲染时 `data-theme` 还没打上,算出来的必然是亮色变量。
   // 今天初值 dark=false 恰好对得上,但 B3 接上持久化偏好后,偏好为暗色的用户首帧会得到
   // 「亮色变量 + darkAlgorithm」这种四不像,整棵 ConfigProvider 白渲染一遍再被下面覆盖。
@@ -36,7 +36,7 @@ export function useAntdTheme(opts: ThemeOpts): ThemeConfig {
     el.setAttribute('data-density', density)
 
     // ② 重建 antd 配置(新对象,触发 ConfigProvider 重渲染)
-    const next = buildAntdTheme({ dark, accent, density })
+    const next = buildAntdTheme({ dark, accent, density, motionMode })
 
     // ③ 把 **antd 最终解析出来的**主色写回 CSS 变量,供不经 antd 的裸 CSS 消费(布局壳、登录页那些手写样式)。
     //
@@ -52,7 +52,7 @@ export function useAntdTheme(opts: ThemeOpts): ThemeConfig {
     el.style.setProperty('--color-primary-light', t.colorPrimaryBg)
 
     setConfig(next)
-  }, [dark, accent, density])
+  }, [dark, accent, density, motionMode])
 
   return config
 }

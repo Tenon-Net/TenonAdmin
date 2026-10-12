@@ -89,7 +89,10 @@ function label(m: LayoutMode) {
   background: var(--color-bg-container);
   box-shadow: 0 1px 3px rgba(20, 27, 45, 0.1), 0 0 0 2px transparent;
   cursor: pointer;
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+.card:active {
+  transform: scale(var(--motion-press-scale));
 }
 .cell:hover .card {
   box-shadow: 0 1px 3px rgba(20, 27, 45, 0.1), 0 0 0 2px var(--color-primary);

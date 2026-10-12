@@ -41,7 +41,8 @@ export async function enterApp(page: Page, title: RegExp) {
   // title 只匹配卡片内的应用名称节点；直接 hasText 会把 code/“设为默认”也拼进全文，锚定正则永远匹配不到。
   const card = cards.filter({ has: page.getByText(title) })
   await expect(card).toHaveCount(1)
-  await card.click()
+  // 直接激活卡片自身，避免窄屏坐标命中「设为默认」子按钮。
+  await card.press('Enter')
   await expect(page).not.toHaveURL(/\/module/, { timeout: 10_000 })
 }
 

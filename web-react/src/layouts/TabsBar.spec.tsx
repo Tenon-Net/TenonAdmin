@@ -25,7 +25,7 @@ afterEach(() => {
 })
 
 function mount(start = '/a') {
-  render(
+  return render(
     <AntdApp>
       <MemoryRouter initialEntries={[start]}>
         <TabsBar />
@@ -36,6 +36,10 @@ function mount(start = '/a') {
 }
 
 describe('TabsBar', () => {
+  it('渲染自有连续选中标记', () => {
+    const { container } = mount('/a')
+    expect(container.querySelector('.tabs-active-marker')).toBeTruthy()
+  })
   it('渲染所有标签 chip', () => {
     mount()
     expect(screen.getByText('AA')).toBeTruthy()

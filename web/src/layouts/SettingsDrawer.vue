@@ -53,7 +53,7 @@ const transitionOptions = computed(() => [
 <template>
   <n-drawer v-model:show="show" :width="drawerWidth" placement="right">
     <n-drawer-content :title="t('settings.title')" closable :native-scrollbar="false">
-      <n-tabs type="segment" size="small" animated class="tabs">
+      <n-tabs type="segment" size="small" :animated="app.effectiveMotionMode === 'standard'" class="tabs">
         <!-- 外观 -->
         <n-tab-pane name="appearance" :tab="t('settings.tabAppearance')">
           <n-divider title-placement="left">{{ t('settings.themeMode') }}</n-divider>
@@ -98,6 +98,17 @@ const transitionOptions = computed(() => [
             <n-radio-button value="comfortable">{{ t('app.comfortable') }}</n-radio-button>
             <n-radio-button value="compact">{{ t('app.compact') }}</n-radio-button>
           </n-radio-group>
+          <n-divider title-placement="left">{{ t('settings.motionMode') }}</n-divider>
+          <n-radio-group v-model:value="app.motionMode" size="small" class="seg" :aria-label="t('settings.motionMode')">
+            <n-radio-button value="standard">{{ t('settings.motionStandard') }}</n-radio-button>
+            <n-radio-button value="light">{{ t('settings.motionLight') }}</n-radio-button>
+            <n-radio-button value="off">{{ t('settings.motionOff') }}</n-radio-button>
+          </n-radio-group>
+          <div v-if="app.effectiveMotionMode === 'off' && app.motionMode !== 'off'" class="setting-hint">
+            {{ t('settings.motionSystemReduced', {
+              mode: t(app.motionMode === 'standard' ? 'settings.motionStandard' : 'settings.motionLight'),
+            }) }}
+          </div>
         </n-tab-pane>
 
         <!-- 布局 -->
@@ -178,6 +189,11 @@ const transitionOptions = computed(() => [
 .tabs {
   height: 100%;
 }
+.setting-hint {
+  margin-top: 8px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
 .footer-actions {
   display: flex;
   flex-direction: column;
@@ -189,7 +205,7 @@ const transitionOptions = computed(() => [
   font-size: 15px;
 }
 
-/* 满宽三等分分段控件(主题模式 / 密度) */
+/* 满宽等分分段控件(主题模式 / 密度 / 动效模式) */
 .seg {
   display: flex;
   width: 100%;
@@ -222,10 +238,13 @@ const transitionOptions = computed(() => [
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 .dot:hover {
   transform: scale(1.12);
+}
+.dot:active {
+  transform: scale(var(--motion-press-scale));
 }
 .dot.on {
   transform: scale(1.1);

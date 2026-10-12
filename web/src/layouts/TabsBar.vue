@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, nextTick, ref, watch } from 'vue'
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NDropdown, NScrollbar, type DropdownOption } from 'naive-ui'
 import { Icon } from '@iconify/vue'
@@ -9,10 +9,45 @@ import { useTabsStore, type TabItem } from '@/stores/tabs'
 const tabs = useTabsStore()
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const activePath = computed(() => route.path)
 const stripRef = ref<HTMLElement>()
+const tabsbarRef = ref<HTMLElement>()
+const indicatorReady = ref(false)
+const indicatorStyle = ref({ width: '0px', transform: 'translateX(0px)' })
+let resizeObserver: ResizeObserver | undefined
+let scrollContainer: HTMLElement | undefined
+let measureFrame = 0
+
+function measureIndicator() {
+  cancelAnimationFrame(measureFrame)
+  measureFrame = requestAnimationFrame(() => {
+    const strip = stripRef.value
+    const chip = Array.from(strip?.querySelectorAll<HTMLElement>('.chip') ?? []).find(
+      (element) => element.dataset.tabPath === activePath.value,
+    )
+    if (!strip || !chip) {
+      indicatorReady.value = false
+      return
+    }
+    indicatorStyle.value = {
+      width: `${chip.offsetWidth}px`,
+      transform: `translateX(${chip.offsetLeft}px)`,
+    }
+    indicatorReady.value = true
+  })
+}
+
+async function syncIndicatorTargets() {
+  await nextTick()
+  resizeObserver?.disconnect()
+  if (stripRef.value) {
+    resizeObserver?.observe(stripRef.value)
+    stripRef.value.querySelectorAll('.chip').forEach((chip) => resizeObserver?.observe(chip))
+  }
+  measureIndicator()
+}
 
 function tabTitle(item: TabItem) {
   return item.title.includes('.') ? t(item.title) : item.title
@@ -69,20 +104,45 @@ function onCtxSelect(key: string) {
 
 // 激活标签滚入视野
 watch(activePath, () => {
-  nextTick(() => stripRef.value?.querySelector('.chip.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
+  nextTick(() => {
+    stripRef.value?.querySelector('.chip.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    measureIndicator()
+  })
+})
+watch([() => tabs.tabs.map((tab) => `${tab.path}:${tab.title}`).join('|'), locale], syncIndicatorTargets)
+
+onMounted(() => {
+  resizeObserver = new ResizeObserver(measureIndicator)
+  scrollContainer = tabsbarRef.value?.querySelector<HTMLElement>('.n-scrollbar-container') ?? undefined
+  scrollContainer?.addEventListener('scroll', measureIndicator, { passive: true })
+  window.addEventListener('resize', measureIndicator, { passive: true })
+  void syncIndicatorTargets()
+})
+onBeforeUnmount(() => {
+  cancelAnimationFrame(measureFrame)
+  resizeObserver?.disconnect()
+  scrollContainer?.removeEventListener('scroll', measureIndicator)
+  window.removeEventListener('resize', measureIndicator)
 })
 </script>
 
 <template>
-  <div class="tabsbar">
+  <div ref="tabsbarRef" class="tabsbar">
     <n-scrollbar x-scrollable>
       <div ref="stripRef" class="strip">
+        <span
+          class="tab-active-indicator"
+          :class="{ ready: indicatorReady }"
+          :style="indicatorStyle"
+          aria-hidden="true"
+        />
         <!-- chip 与关闭 X 均为可点非按钮元素:补 role/tabindex/键盘激活,键盘用户也能切换/关闭标签(右键菜单是鼠标专属) -->
         <div
           v-for="item in tabs.tabs"
           :key="item.path"
           class="chip"
           :class="{ active: item.path === activePath }"
+          :data-tab-path="item.path"
           role="button"
           tabindex="0"
           @click="onClick(item)"
@@ -134,12 +194,32 @@ watch(activePath, () => {
   border-bottom: 1px solid var(--color-border);
 }
 .strip {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 5px 0;
 }
+.tab-active-indicator {
+  position: absolute;
+  top: 5px;
+  left: 0;
+  height: 30px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-light);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--motion-duration-base) var(--motion-ease-standard),
+    width var(--motion-duration-base) var(--motion-ease-standard),
+    opacity var(--motion-duration-feedback) var(--motion-ease-standard);
+}
+.tab-active-indicator.ready {
+  opacity: 1;
+}
 .chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -153,18 +233,18 @@ watch(activePath, () => {
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
-  transition:
-    color 0.15s,
-    background 0.15s,
-    border-color 0.15s;
+  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
 .chip:hover {
   color: var(--color-text-primary);
 }
 .chip.active {
-  background: var(--color-primary-light);
-  border-color: var(--color-primary);
+  background: transparent;
+  border-color: transparent;
   color: var(--color-primary);
+}
+.chip:active {
+  transform: scale(var(--motion-press-scale));
 }
 .chip:focus-visible,
 .chip-close:focus-visible {

@@ -10,6 +10,7 @@ import { dashboardApi } from '@/api'
 import type { DashboardSummary } from '@/types/api'
 import LineChart from '@/components/Chart/LineChart.vue'
 import PieChart from '@/components/Chart/PieChart.vue'
+import { useFirstMountMotion } from '@/composables/useFirstMountMotion'
 
 const { t } = useI18n()
 const user = useUserStore()
@@ -19,6 +20,10 @@ const avatarStyle = computed(() => ({ background: btnGrad(app.accent) }))
 
 const summary = ref<DashboardSummary | null>(null)
 const loading = ref(true)
+const bannerRef = ref<HTMLElement>()
+const statsRef = ref<HTMLElement>()
+const chartsRef = ref<HTMLElement>()
+useFirstMountMotion([bannerRef, statsRef, chartsRef])
 
 onMounted(async () => {
   try {
@@ -58,7 +63,7 @@ const distribution = computed(() => [
 <template>
   <div class="view">
     <!-- 欢迎横幅(英雄区:btnGrad 头像)-->
-    <div class="banner">
+    <div ref="bannerRef" class="banner">
       <div class="avatar" :style="avatarStyle">
         <Icon icon="lucide:user" :width="26" color="#fff" />
       </div>
@@ -68,36 +73,40 @@ const distribution = computed(() => [
       </div>
     </div>
 
-    <n-grid :cols="'1 s:2 l:4'" responsive="screen" :x-gap="16" :y-gap="16">
-      <n-gi v-for="s in stats" :key="s.key">
-        <n-card :bordered="true">
-          <div class="stat">
-            <div class="stat-ico" :style="{ color: s.color }"><Icon :icon="s.icon" :width="28" /></div>
-            <div>
-              <div class="stat-val tabular">{{ s.value }}</div>
-              <div class="stat-label">{{ t(`workbench.${s.key}`) }}</div>
+    <div ref="statsRef">
+      <n-grid :cols="'1 s:2 l:4'" responsive="screen" :x-gap="16" :y-gap="16">
+        <n-gi v-for="s in stats" :key="s.key">
+          <n-card :bordered="true">
+            <div class="stat">
+              <div class="stat-ico" :style="{ color: s.color }"><Icon :icon="s.icon" :width="28" /></div>
+              <div>
+                <div class="stat-val tabular">{{ s.value }}</div>
+                <div class="stat-label">{{ t(`workbench.${s.key}`) }}</div>
+              </div>
             </div>
-          </div>
-        </n-card>
-      </n-gi>
-    </n-grid>
+          </n-card>
+        </n-gi>
+      </n-grid>
+    </div>
 
-    <n-grid :cols="'1 l:2'" responsive="screen" :x-gap="16" :y-gap="16">
-      <n-gi>
-        <n-card :title="t('workbench.trendTitle')" :bordered="true">
-          <n-spin :show="loading">
-            <LineChart :categories="trendDays" :series="trendSeries" />
-          </n-spin>
-        </n-card>
-      </n-gi>
-      <n-gi>
-        <n-card :title="t('workbench.distributionTitle')" :bordered="true">
-          <n-spin :show="loading">
-            <PieChart :data="distribution" />
-          </n-spin>
-        </n-card>
-      </n-gi>
-    </n-grid>
+    <div ref="chartsRef">
+      <n-grid :cols="'1 l:2'" responsive="screen" :x-gap="16" :y-gap="16">
+        <n-gi>
+          <n-card :title="t('workbench.trendTitle')" :bordered="true">
+            <n-spin :show="loading">
+              <LineChart :categories="trendDays" :series="trendSeries" />
+            </n-spin>
+          </n-card>
+        </n-gi>
+        <n-gi>
+          <n-card :title="t('workbench.distributionTitle')" :bordered="true">
+            <n-spin :show="loading">
+              <PieChart :data="distribution" />
+            </n-spin>
+          </n-card>
+        </n-gi>
+      </n-grid>
+    </div>
   </div>
 </template>
 

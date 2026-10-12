@@ -26,7 +26,7 @@ const vars = computed(() => ({
   <div class="split" :style="vars">
     <!-- 左:品牌面板(窄屏隐藏)-->
     <div class="panel">
-      <div class="panel-aurora" />
+      <div class="panel-aurora motion-decorative" />
       <div class="panel-inner">
         <div class="logo">
           <!-- 站点 logo:后台配了图片地址用 <img>,否则回退内置矢量 logo(与登录卡品牌行一致) -->
@@ -49,7 +49,7 @@ const vars = computed(() => ({
     <!-- 右:全高工作区(居中表单 + 版权页脚);主题/语言切换在外壳全局工具药丸 -->
     <div class="form-wrap">
       <div class="mid">
-        <div class="form-inner">
+        <div class="form-inner motion-entrance">
           <p class="greet">{{ t('login.welcome') }}</p>
           <p class="greet-sub">{{ t('login.welcomeSub') }}</p>
           <LoginForm :show-logo="false" :show-title="false" :show-footer="false" />
@@ -183,7 +183,7 @@ const vars = computed(() => ({
 .form-inner {
   width: 100%;
   max-width: 340px;
-  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fade-up var(--motion-duration-panel-enter) var(--motion-ease-standard) both;
 }
 .greet {
   font-size: 26px;
@@ -218,7 +218,7 @@ const vars = computed(() => ({
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(var(--motion-distance));
   }
   to {
     opacity: 1;

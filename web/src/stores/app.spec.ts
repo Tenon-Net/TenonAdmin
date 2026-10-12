@@ -7,12 +7,20 @@ import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 // 第一次 import '@vueuse/core' 时(即 './app' 的顶层 import),这必然早于本文件自己的顶层代码
 // 跑到——所以工厂没法写回一个在本文件顶层声明的普通变量(TDZ)。用 vi.hoisted 建一个立即可用的
 // 容器规避;容器内的真 ref 则在工厂里动态 import('vue') 现造(vue 此时已被 pinia 等间接加载过)。
-const holder = vi.hoisted(() => ({ ref: undefined as unknown as Ref<boolean> }))
+const holder = vi.hoisted(() => ({
+  dark: undefined as unknown as Ref<boolean>,
+  reducedMotion: undefined as unknown as Ref<'reduce' | 'no-preference'>,
+}))
 vi.mock('@vueuse/core', async (importOriginal) => {
   const { ref } = await import('vue')
-  holder.ref = ref(false)
+  holder.dark = ref(false)
+  holder.reducedMotion = ref('no-preference')
   const actual = await importOriginal<typeof import('@vueuse/core')>()
-  return { ...actual, usePreferredDark: () => holder.ref }
+  return {
+    ...actual,
+    usePreferredDark: () => holder.dark,
+    usePreferredReducedMotion: () => holder.reducedMotion,
+  }
 })
 
 import { useAppStore } from './app'
@@ -20,7 +28,8 @@ import { ACCENTS } from '@/theme/accents'
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  holder.ref.value = false
+  holder.dark.value = false
+  holder.reducedMotion.value = 'no-preference'
 })
 
 describe('useAppStore.isDark', () => {
@@ -28,23 +37,23 @@ describe('useAppStore.isDark', () => {
     const app = useAppStore()
     expect(app.themeScheme).toBe('auto')
     expect(app.isDark).toBe(false)
-    holder.ref.value = true
+    holder.dark.value = true
     expect(app.isDark).toBe(true)
   })
 
   it('显式 dark/light 覆盖系统偏好', () => {
     const app = useAppStore()
-    holder.ref.value = false
+    holder.dark.value = false
     app.setThemeScheme('dark')
     expect(app.isDark).toBe(true)
-    holder.ref.value = true
+    holder.dark.value = true
     app.setThemeScheme('light')
     expect(app.isDark).toBe(false)
   })
 
   it('toggleDark 在当前生效侧基础上翻(auto + 系统暗 → light)', () => {
     const app = useAppStore()
-    holder.ref.value = true // auto 下当前生效侧是暗
+    holder.dark.value = true // auto 下当前生效侧是暗
     app.toggleDark()
     expect(app.themeScheme).toBe('light')
   })
@@ -59,6 +68,7 @@ describe('useAppStore.resetSettings', () => {
     app.setAccent('#123456')
     app.setDensity('compact')
     app.setLayoutMode('horizontal')
+    app.motionMode = 'off'
 
     app.resetSettings()
 
@@ -66,8 +76,23 @@ describe('useAppStore.resetSettings', () => {
     expect(app.accent).toBe(ACCENTS[0])
     expect(app.density).toBe('comfortable')
     expect(app.layoutMode).toBe('vertical')
+    expect(app.motionMode).toBe('standard')
     expect(app.locale).toBe('en-US') // 未被重置
     expect(app.collapsed).toBe(true) // 未被重置
+  })
+})
+
+describe('useAppStore.effectiveMotionMode', () => {
+  it('跟随应用设置,但系统减少动态效果始终降级为 off', () => {
+    const app = useAppStore()
+    app.motionMode = 'light'
+    expect(app.effectiveMotionMode).toBe('light')
+
+    holder.reducedMotion.value = 'reduce'
+    expect(app.effectiveMotionMode).toBe('off')
+
+    app.motionMode = 'standard'
+    expect(app.effectiveMotionMode).toBe('off')
   })
 })
 
@@ -109,5 +134,15 @@ describe('useAppStore persist.afterHydrate 迁移', () => {
     localStorage.setItem('app', JSON.stringify({ layoutMode: 'horizontal' })) // 合法值
     const app2 = mountAppStore(createPinia())
     expect(app2.layoutMode).toBe('horizontal') // 合法值不被 afterHydrate 动
+  })
+
+  it('非法 motionMode 回落 standard,合法值保留', () => {
+    vi.stubGlobal('localStorage', makeMemoryStorage())
+
+    localStorage.setItem('app', JSON.stringify({ motionMode: 'full' }))
+    expect(mountAppStore(createPinia()).motionMode).toBe('standard')
+
+    localStorage.setItem('app', JSON.stringify({ motionMode: 'light' }))
+    expect(mountAppStore(createPinia()).motionMode).toBe('light')
   })
 })

@@ -1,15 +1,17 @@
 import { defineStore } from 'pinia'
-import { usePreferredDark } from '@vueuse/core'
+import { usePreferredDark, usePreferredReducedMotion } from '@vueuse/core'
 import { ACCENTS } from '@/theme/accents'
 
 // 模块级:建一次 matchMedia 监听;isDark getter 内响应式读取 → auto 下随系统实时翻。
 const prefersDark = usePreferredDark()
+const prefersReducedMotion = usePreferredReducedMotion()
 
 export type Density = 'comfortable' | 'compact'
 export type FormStyle = 'modal' | 'drawer'
 export type Locale = 'zh-CN' | 'en-US'
 export type ThemeScheme = 'light' | 'dark' | 'auto'
 export type PageTransition = 'fade' | 'fade-slide' | 'none'
+export type MotionMode = 'standard' | 'light' | 'off'
 export type LayoutMode =
   | 'vertical'
   | 'vertical-mix'
@@ -38,6 +40,7 @@ const DEFAULTS = {
   showTabs: true,
   fixedHeader: true,
   pageTransition: 'fade' as PageTransition,
+  motionMode: 'standard' as MotionMode,
   grayscale: false,
   watermark: false,
   watermarkText: '',
@@ -56,6 +59,10 @@ export const useAppStore = defineStore('app', {
     // auto 时按系统深浅色实时解析(prefersDark 是响应式 ref,getter 是 computed → 随之更新)。
     isDark(state): boolean {
       return state.themeScheme === 'auto' ? prefersDark.value : state.themeScheme === 'dark'
+    },
+    /** 系统减少动态效果优先于应用内设置。 */
+    effectiveMotionMode(state): MotionMode {
+      return prefersReducedMotion.value === 'reduce' ? 'off' : state.motionMode
     },
   },
   actions: {
@@ -97,6 +104,7 @@ export const useAppStore = defineStore('app', {
     afterHydrate: ({ store }) => {
       if (!LAYOUT_MODES.includes(store.layoutMode)) store.layoutMode = 'vertical'
       if (!(ACCENTS as readonly string[]).includes(store.accent)) store.accent = ACCENTS[0]
+      if (!(['standard', 'light', 'off'] as const).includes(store.motionMode)) store.motionMode = 'standard'
     },
   },
 })

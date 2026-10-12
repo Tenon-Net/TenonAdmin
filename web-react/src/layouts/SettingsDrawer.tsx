@@ -2,7 +2,7 @@ import { type ReactNode } from 'react'
 import { App, Button, ColorPicker, Divider, Drawer, Input, Popconfirm, Segmented, Select, Switch, Tabs } from 'antd'
 import { CheckOutlined, CopyOutlined, DesktopOutlined, MoonOutlined, ReloadOutlined, SunOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { useAppStore, type Density, type FormStyle, type PageTransition, type ThemeScheme } from '@/stores/app'
+import { useAppStore, type Density, type FormStyle, type MotionMode, type PageTransition, type ThemeScheme } from '@/stores/app'
 import { ACCENTS } from '@/theme/accents'
 import { LayoutModeCards } from './LayoutModeCards'
 import './settings-drawer.css'
@@ -28,6 +28,8 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
   const themeScheme = useAppStore((s) => s.themeScheme)
   const accent = useAppStore((s) => s.accent)
   const density = useAppStore((s) => s.density)
+  const motionMode = useAppStore((s) => s.motionMode)
+  const systemReducedMotion = useAppStore((s) => s.systemReducedMotion)
   const showBreadcrumb = useAppStore((s) => s.showBreadcrumb)
   const showTabs = useAppStore((s) => s.showTabs)
   const fixedHeader = useAppStore((s) => s.fixedHeader)
@@ -99,6 +101,25 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
           { value: 'compact', label: t('app.compact') },
         ]}
       />
+
+      <Divider titlePlacement="start">{t('settings.motionMode')}</Divider>
+      <Segmented
+        block
+        value={motionMode}
+        onChange={(v) => setSetting('motionMode', v as MotionMode)}
+        options={[
+          { value: 'standard', label: t('settings.motionStandard') },
+          { value: 'light', label: t('settings.motionLight') },
+          { value: 'off', label: t('settings.motionOff') },
+        ]}
+      />
+      {systemReducedMotion && motionMode !== 'off' ? (
+        <div className="setting-hint">
+          {t('settings.motionSystemReduced', {
+            mode: t(motionMode === 'standard' ? 'settings.motionStandard' : 'settings.motionLight'),
+          })}
+        </div>
+      ) : null}
     </div>
   )
 
