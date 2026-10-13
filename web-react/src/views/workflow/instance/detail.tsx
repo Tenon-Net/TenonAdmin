@@ -159,6 +159,7 @@ export default function WfInstanceDetailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [inspectedProgress, setInspectedProgress] = useState<WfApprovalNodeProgress | null>(null)
   const [actionForm] = Form.useForm<ActionFormValues>()
+  const pickedUserId = Form.useWatch('toUserId', actionForm)
   const formRuntimeRef = useRef<WfFormMountHandle | null>(null)
   const resubmitFormRuntimeRef = useRef<WfFormMountHandle | null>(null)
   // uid 连换或动作后重载时,只认最后一次请求的结果。
@@ -337,6 +338,10 @@ export default function WfInstanceDetailPage() {
     return [{ key: '', value: json }]
   }, [formVariablesJson])
 
+  const blockStarter = action === 'transfer' || action === 'delegate' || action === 'addSign'
+  const starterDisabledIds = blockStarter && detail?.starterUserId != null ? [detail.starterUserId] : []
+  const starterPicked = blockStarter && wfIdEquals(normalizeWfId(pickedUserId), normalizeWfId(detail?.starterUserId))
+
   function openAction(kind: ActionKind) {
     actionForm.resetFields()
     setUrgeTaskId(kind === 'urge' ? normalizeWfId(currentTasks[0]?.taskId) : null)
@@ -360,6 +365,10 @@ export default function WfInstanceDetailPage() {
 
     if (USER_ACTIONS.includes(kind) && toUserId === null) {
       message.warning(t(`workflow.detail.${kind}Required`))
+      return
+    }
+    if ((kind === 'transfer' || kind === 'delegate' || kind === 'addSign') && wfIdEquals(toUserId, normalizeWfId(detail?.starterUserId))) {
+      message.error(t('workflow.detail.issue.starterNotAllowed'))
       return
     }
     if (kind === 'return' && returnPolicy === 'any' && !values.targetNodeId) {
@@ -420,8 +429,9 @@ export default function WfInstanceDetailPage() {
         }
       }
       const ok = await run(api, t('common.success'))
+      if (!ok) return
       setAction(null)
-      if (ok && uid) await load(uid)
+      if (uid) await load(uid)
     } finally {
       setSubmitting(false)
     }
@@ -734,8 +744,18 @@ export default function WfInstanceDetailPage() {
       >
         <Form form={actionForm} layout="vertical" onValuesChange={() => requestKey.reset()}>
           {action && USER_ACTIONS.includes(action) ? (
-            <Form.Item name="toUserId" label={t(`workflow.detail.${action}User`)}>
-              <UserSelect source="workflow" placeholder={t(`workflow.detail.${action}User`)} />
+            <Form.Item
+              name="toUserId"
+              label={t(`workflow.detail.${action}User`)}
+              validateStatus={starterPicked ? 'error' : undefined}
+              help={starterPicked ? t('workflow.detail.issue.starterNotAllowed') : undefined}
+            >
+              <UserSelect
+                source="workflow"
+                placeholder={t(`workflow.detail.${action}User`)}
+                disabledIds={starterDisabledIds}
+                disabledSuffix={t('workflow.detail.issue.starterNotAllowed')}
+              />
             </Form.Item>
           ) : null}
 

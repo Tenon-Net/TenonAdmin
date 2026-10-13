@@ -47,6 +47,30 @@ public class WfParticipantLookupTests
     }
 
     [Fact]
+    public async Task Participant_page_hides_builtin_data_scope_fixture_accounts()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        var realId = await AddUser(admin, "wf-real-actor", "真实办理人");
+        var actor = await ClientFor(f, "wf-real-actor");
+
+        foreach (var keyword in new[] { "全部数据", "本机构数据", "本机构及以下", "仅本人数据", "自定义范围" })
+        {
+            var scoped = await (await actor.GetAsync(
+                $"/api/v1/workflow/participant/page?Current=1&Size=20&Keyword={Uri.EscapeDataString(keyword)}")).ReadEnvelope();
+            Assert.Equal(0, scoped.GetProperty("code").GetInt32());
+            Assert.Empty(scoped.GetProperty("data").GetProperty("items").EnumerateArray());
+        }
+
+        var real = await (await actor.GetAsync(
+            "/api/v1/workflow/participant/page?Current=1&Size=20&Keyword=wf-real")).ReadEnvelope();
+        Assert.Equal(0, real.GetProperty("code").GetInt32());
+        var items = real.GetProperty("data").GetProperty("items").EnumerateArray().ToList();
+        Assert.Contains(items, item => item.GetProperty("id").GetInt64() == realId
+                                        && item.GetProperty("account").GetString() == "wf-real-actor");
+    }
+
+    [Fact]
     public async Task Transfer_delegate_and_add_sign_reject_the_starter()
     {
         using var f = new WorkflowAppFactory();

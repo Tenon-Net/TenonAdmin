@@ -116,8 +116,20 @@ const isStarter = computed(() => {
   const me = user.userInfo?.userId
   if (starter == null) return false
   if (me == null) return true
-  return Number(starter) === Number(me)
+  return sameUser(starter, me)
 })
+
+function sameUser(left: number | string | null | undefined, right: number | string | null | undefined) {
+  if (left == null || right == null || left === '' || right === '') return false
+  return String(left) === String(right)
+}
+
+const blockStarter = computed(() =>
+  actionKind.value === 'transfer' || actionKind.value === 'delegate' || actionKind.value === 'addSign',
+)
+const starterDisabledIds = computed(() =>
+  blockStarter.value && detail.value?.starterUserId != null ? [detail.value.starterUserId] : [],
+)
 
 const isRunning = computed(() => Number(detail.value?.status) === 1)
 
@@ -675,6 +687,10 @@ async function submitAction() {
     message.warning(t(kind === 'addSign' ? 'workflow.detail.addSignRequired' : 'workflow.detail.removeSignRequired'))
     return
   }
+  if ((kind === 'transfer' || kind === 'delegate' || kind === 'addSign') && sameUser(actionForm.toUserId, detail.value?.starterUserId)) {
+    message.error(t('workflow.detail.issue.starterNotAllowed'))
+    return
+  }
   if (kind === 'return' && returnPolicy.value === 'any' && !actionForm.targetNodeId) {
     message.warning(t('workflow.detail.returnTargetRequired'))
     return
@@ -993,6 +1009,8 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
           v-model:value="actionForm.toUserId"
           source="workflow"
           :disabled="actionSubmitting"
+          :disabled-ids="starterDisabledIds"
+          :disabled-suffix="t('workflow.detail.issue.starterNotAllowed')"
           :placeholder="actionKind === 'delegate'
             ? t('workflow.detail.delegateUser')
             : actionKind === 'addSign'
@@ -1001,6 +1019,13 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
                 ? t('workflow.detail.removeSignUser')
                 : t('workflow.detail.transferUser')"
         />
+        <n-alert
+          v-if="blockStarter && sameUser(actionForm.toUserId, detail?.starterUserId)"
+          type="warning"
+          :show-icon="false"
+        >
+          {{ t('workflow.detail.issue.starterNotAllowed') }}
+        </n-alert>
         <n-select
           v-if="requiresPendingTask && myPendingTasks.length > 1"
           v-model:value="selectedPendingTaskId"

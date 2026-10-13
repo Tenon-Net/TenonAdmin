@@ -11,6 +11,19 @@ public class WfParticipantLookupService(IRepository<SysUser> users) : IWfPartici
     /// <summary>选择器单页上限,避免一次拉全员。</summary>
     public const int MaxPageSize = 50;
 
+    /// <summary>
+    /// 内置数据范围演示账号(<c>DefaultUserSeed</c>)。姓名和账号都是范围名称,
+    /// 混进办理人选择器会看起来像「全部数据 / 仅本人数据」这类范围选项。
+    /// </summary>
+    internal static readonly string[] DataScopeFixtureAccounts =
+    [
+        "全部数据",
+        "本机构数据",
+        "本机构及以下",
+        "仅本人数据",
+        "自定义范围",
+    ];
+
     /// <inheritdoc />
     public virtual async Task<PagedList<WfParticipantCandidateOutput>> PageAsync(
         WfParticipantLookupInput input,
@@ -18,9 +31,10 @@ public class WfParticipantLookupService(IRepository<SysUser> users) : IWfPartici
     {
         cancellationToken.ThrowIfCancellationRequested();
         var keyword = string.IsNullOrWhiteSpace(input.Keyword) ? null : input.Keyword.Trim();
+        var hiddenAccounts = DataScopeFixtureAccounts;
         var size = input.Size <= 0 ? 20 : Math.Min(input.Size, MaxPageSize);
         var page = await users.AsQueryable()
-            .Where(u => u.Enabled == true)
+            .Where(u => u.Enabled == true && !hiddenAccounts.Contains(u.Account))
             .WhereIF(keyword is not null, u => u.Name.Contains(keyword!) || u.Account.Contains(keyword!))
             .OrderBy(u => u.Id, OrderByType.Asc)
             .Select(u => new { u.Id, u.Name, u.Account })

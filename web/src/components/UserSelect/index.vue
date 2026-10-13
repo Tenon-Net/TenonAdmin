@@ -7,12 +7,17 @@ import type { SelectOption } from 'naive-ui'
 import ApiSelect from '@/components/ApiSelect/index.vue'
 import { userApi } from '@/api'
 import { wfParticipantApi } from '@/api/workflow'
+import { toParticipantOption } from './options'
 
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<{
   orgId?: number | null
   pageSize?: number
   source?: 'admin' | 'workflow'
+  /** 仍出现在列表里,但不可选。转办/委托用来挡住发起人。 */
+  disabledIds?: Array<number | string | null | undefined>
+  /** 禁用项标签后缀,通常是已翻译的原因。 */
+  disabledSuffix?: string
 }>(), { pageSize: 50, source: 'admin' })
 
 async function fetch(keyword: string): Promise<SelectOption[]> {
@@ -22,7 +27,11 @@ async function fetch(keyword: string): Promise<SelectOption[]> {
       pageSize: props.pageSize,
       keyword: keyword || undefined,
     })
-    return items.map((u) => ({ label: `${u.name}(${u.account})`, value: u.id }))
+    return items.flatMap((u) =>
+      u.id == null || !u.name || !u.account
+        ? []
+        : [toParticipantOption({ id: u.id, name: u.name, account: u.account }, props.disabledIds, props.disabledSuffix)],
+    )
   }
   const { items } = await userApi.page({
     page: 1,
@@ -32,7 +41,12 @@ async function fetch(keyword: string): Promise<SelectOption[]> {
   })
   return items.map((u) => ({ label: `${u.name}(${u.account})`, value: u.id }))
 }
-const reloadOn = computed(() => props.orgId) // 部门过滤变化 → 重新拉
+// 部门过滤、或转办里「发起人不可选」名单变化 → 重新拉,避免首屏还没拿到发起人 id 时把人放成可选。
+const reloadOn = computed(() =>
+  props.source === 'workflow'
+    ? `${props.disabledSuffix ?? ''}|${(props.disabledIds ?? []).filter((id) => id != null && id !== '').join(',')}`
+    : props.orgId,
+)
 </script>
 
 <template>

@@ -9,6 +9,11 @@ describe('translateError', () => {
     expect(translateError(err)).toBe('账号或密码错误')
   })
 
+  it('转办选中发起人时展示 starterNotAllowed 文案', () => {
+    const err = new ApiError(48010, 'error.code.48010', { reason: 'starterNotAllowed', toUserId: 9 }, 'error.code.48010')
+    expect(translateError(err)).toBe('不能选择发起人，否则申请人可以审批自己的单据')
+  })
+
   it('数字 ErrorCode(CellError) → 按码查 i18n', () => {
     expect(translateError(46005)).toBe('该单元格为必填项')
     expect(translateError(46001)).toContain('Excel')
