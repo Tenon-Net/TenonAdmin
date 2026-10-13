@@ -48,6 +48,7 @@ import type { WfButtonLabels, WfFormFieldPerm, WfFormSchema, WfReturnPolicy } fr
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
 import { findNode, flattenChain } from '@/workflow/model'
 import { runtimeStatusKey } from '@/workflow/runtimeStatus'
+import { canResubmitInstance } from '@/workflow/resubmit'
 import { mergeWfFormPermissions } from '@/workflow/formRuntime'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
 import { ACTOR_STATUS, approvalRounds, participantGroups } from '@/workflow/approvalProgress'
@@ -183,9 +184,14 @@ const canUrge = computed(() =>
 
 const canCancel = computed(() => isStarter.value && isRunning.value && !hasApproveHistory.value)
 
-const canResubmit = computed(() =>
-  isStarter.value && isRunning.value && myPendingTasks.value.length === 0,
-)
+const canResubmit = computed(() => canResubmitInstance({
+  isStarter: isStarter.value,
+  isRunning: isRunning.value,
+  currentTasks: currentTasks.value,
+  pendingTasks: myPendingTasks.value,
+  history: history.value,
+  forks: detail.value?.parallelForks ?? [],
+}))
 
 const canTakeBack = computed(() => {
   const me = Number(user.userInfo?.userId ?? 0)
@@ -677,11 +683,9 @@ async function submitAction() {
       }
     }
     const ok = await run(api, t('common.success'))
-    if (ok) {
-      actionShow.value = false
-      resetActionDraft()
-      await load(uid.value)
-    }
+    actionShow.value = false
+    resetActionDraft()
+    if (ok) await load(uid.value)
   } finally {
     actionSubmitting.value = false
   }
@@ -699,7 +703,7 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
 <template>
   <DetailPage :title="title" :loading="loading" @back="onBack">
     <template v-if="detail && (myPendingTasks.length || canUrge || canCancel || canResubmit || canTakeBack)" #actions>
-      <n-space>
+      <div class="wf-action-bar">
         <n-button v-if="myPendingTasks.length" type="primary" @click="openAction('approve')">
           {{ btnText('approve', 'workflow.detail.approve') }}
         </n-button>
@@ -733,7 +737,7 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
         <n-button v-if="canResubmit" type="primary" @click="openAction('resubmit')">
           {{ t('workflow.detail.resubmit') }}
         </n-button>
-      </n-space>
+      </div>
     </template>
 
     <n-result
@@ -997,6 +1001,11 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
 </template>
 
 <style scoped>
+.wf-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .wf-vars {
   margin: 12px 0 0;
   padding: 10px 12px;

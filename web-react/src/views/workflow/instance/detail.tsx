@@ -394,10 +394,9 @@ export default function WfInstanceDetailPage() {
           throw e
         }
       }
-      if (await run(api, t('common.success'))) {
-        setAction(null)
-        await load(uid)
-      }
+      const ok = await run(api, t('common.success'))
+      setAction(null)
+      if (ok && uid) await load(uid)
     } finally {
       setSubmitting(false)
     }
