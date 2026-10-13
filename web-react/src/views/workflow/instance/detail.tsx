@@ -496,6 +496,13 @@ export default function WfInstanceDetailPage() {
                   children: `${detail.definitionName ?? '—'}${detail.version ? ` (v${detail.version})` : ''}`,
                 },
                 {
+                  key: 'starter', label: t('workflow.detail.starter'),
+                  children: detail.starterName?.trim()
+                    || (detail.starterUserId != null && detail.starterUserId !== ''
+                      ? t('workflow.detail.userFallback', { id: detail.starterUserId })
+                      : '—'),
+                },
+                {
                   key: 'status', label: t('common.status'),
                   children: (
                     <Tag color={runtimeStatusKey(detail) ? 'gold' : instanceStatusColor(detail.status)}>

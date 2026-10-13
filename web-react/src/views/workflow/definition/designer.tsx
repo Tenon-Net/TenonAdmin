@@ -58,6 +58,8 @@ export default function WfDesignerPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [newName, setNewName] = useState('')
+  // 设计器不编辑图标,保存时原样带回,避免更新接口把已有图标写成空。
+  const [icon, setIcon] = useState<string | null>(null)
 
   const [zoom, setZoom] = useState(100)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -97,6 +99,7 @@ export default function WfDesignerPage() {
         setStatus(detail.status == null ? null : Number(detail.status))
         setModel(cloneModel((detail.model as WfModel | undefined) ?? createDefaultModel()))
         form.setFieldsValue({ name: detail.name ?? '', groupName: detail.groupName ?? '' })
+        setIcon(detail.icon ?? null)
       } catch (e) {
         if (seq === loadSeqRef.current) message.error(translateError(e))
       } finally {
@@ -116,6 +119,7 @@ export default function WfDesignerPage() {
     setSelectedId(null)
     setDrawerOpen(false)
     setNewName('')
+    setIcon(null)
     setZoom(100)
     form.resetFields()
     if (queryId) void load(queryId)
@@ -156,6 +160,7 @@ export default function WfDesignerPage() {
         id: defId,
         name: v.name?.trim() || t('workflow.designer.untitled'),
         groupName: v.groupName?.trim() || null,
+        icon,
         model: model as WfDefinitionInput['model'],
       })
       message.success(t('common.success'))

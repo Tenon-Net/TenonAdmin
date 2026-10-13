@@ -317,6 +317,10 @@ public record WfInstanceDetailOutput
     public int Version { get; init; }
     public string? BusinessKey { get; init; }
     public long StarterUserId { get; init; }
+
+    /// <summary>发起人展示名。跨机构办理人没有用户管理权限时,详情仍要能认出申请人。</summary>
+    public string? StarterName { get; init; }
+
     public WfInstanceStatus Status { get; init; }
     public string? VariablesJson { get; init; }
 

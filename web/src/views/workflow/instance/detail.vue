@@ -208,6 +208,12 @@ function btnText(kind: keyof WfButtonLabels, fallbackKey: string) {
 
 const title = computed(() => detail.value?.definitionName || t('workflow.detail.title'))
 
+const starterLabel = computed(() => {
+  const name = detail.value?.starterName?.trim()
+  if (name) return name
+  return userFallback(detail.value?.starterUserId) || '—'
+})
+
 const blockedNodeNames = computed(() => {
   const root = projectWfRuntimeModel(detail.value?.model)?.root
   return (detail.value?.blockedNodeIds ?? [])
@@ -551,7 +557,7 @@ async function load(id: number) {
       ? null
       : Number(myPendingTasks.value[0].taskId)
     formVariablesJson.value = detail.value.variablesJson ?? null
-    if (!isInline.value) setTabTitle(detail.value.definitionName ?? '')
+    if (!isInline.value) setTabTitle(detail.value.definitionName || t('workflow.detail.title'))
   } catch (e) {
     if (seq !== loadSeq) return
     const text = translateError(e)
@@ -771,6 +777,9 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
           <n-descriptions-item :label="t('workflow.detail.definition')">
             {{ detail.definitionName }}
             <span v-if="detail.version"> (v{{ detail.version }})</span>
+          </n-descriptions-item>
+          <n-descriptions-item :label="t('workflow.detail.starter')">
+            {{ starterLabel }}
           </n-descriptions-item>
           <n-descriptions-item :label="t('common.status')">
             <n-tag size="small" :type="statusType(detail)" :bordered="false">

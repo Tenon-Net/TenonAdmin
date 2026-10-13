@@ -1599,6 +1599,7 @@ export default {
       title: 'Approval detail',
       summary: 'Summary',
       definition: 'Workflow',
+      starter: 'Applicant',
       businessKey: 'Business key',
       createTime: 'Started at',
       currentNode: 'Current node',

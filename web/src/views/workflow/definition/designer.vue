@@ -34,6 +34,9 @@ const loading = ref(false)
 const saving = ref(false)
 const defId = ref<number | null>(null)
 const name = ref('')
+// 设计器不编辑分组和图标,保存时必须原样带回,否则更新接口会把它们写成空。
+const groupName = ref<string | null>(null)
+const icon = ref<string | null>(null)
 const model = ref<WfModel>(createDefaultModel())
 const selectedId = ref<string | null>(null)
 const drawerShow = ref(false)
@@ -104,6 +107,8 @@ async function load(id: number) {
     const detail = await wfDefinitionApi.get(id)
     defId.value = Number(detail.id)
     name.value = detail.name ?? ''
+    groupName.value = detail.groupName ?? null
+    icon.value = detail.icon ?? null
     model.value = cloneModel((detail.model as unknown as WfModel | undefined) ?? createDefaultModel())
     setTabTitle(detail.name ?? '')
   } catch (e) {
@@ -143,6 +148,8 @@ async function save(): Promise<boolean> {
     await wfDefinitionApi.update({
       id: defId.value,
       name: name.value.trim() || t('workflow.designer.untitled'),
+      groupName: groupName.value,
+      icon: icon.value,
       model: model.value as unknown as WfDefinitionInput['model'],
     })
     message.success(t('common.success'))

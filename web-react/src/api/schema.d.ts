@@ -14520,6 +14520,7 @@ export interface components {
             businessKey?: null | string;
             /** Format: int64 */
             starterUserId?: number | string;
+            starterName?: null | string;
             status?: components["schemas"]["WfInstanceStatus"];
             variablesJson?: null | string;
             formComponent?: null | string;

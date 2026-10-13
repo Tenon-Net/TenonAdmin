@@ -50,7 +50,7 @@ function deferred<T>() {
 }
 
 function mount(model: WfModel) {
-  vi.mocked(wfDefinitionApi.get).mockResolvedValue({ id: 7, name: '请假', groupName: 'HR', status: 0, model } as never)
+  vi.mocked(wfDefinitionApi.get).mockResolvedValue({ id: 7, name: '请假', groupName: 'HR', icon: 'ph:tree-structure', status: 0, model } as never)
   return render(<AntdApp><WfDesignerPage /></AntdApp>)
 }
 
@@ -114,7 +114,9 @@ describe('WfDesignerPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
     await waitFor(() => expect(wfDefinitionApi.update).toHaveBeenCalled())
-    expect(vi.mocked(wfDefinitionApi.update).mock.calls[0]![0]).toMatchObject({ id: 7, name: '请假', groupName: 'HR' })
+    expect(vi.mocked(wfDefinitionApi.update).mock.calls[0]![0]).toMatchObject({
+      id: 7, name: '请假', groupName: 'HR', icon: 'ph:tree-structure',
+    })
   })
 
   it('缺少定义写权限时隐藏保存和空态新建控件', async () => {

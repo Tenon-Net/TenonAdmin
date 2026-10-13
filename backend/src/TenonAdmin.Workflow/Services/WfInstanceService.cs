@@ -338,9 +338,10 @@ public class WfInstanceService(
             .FirstAsync()
             ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionVersionNotFound);
 
+        // 链式 ClearFilter<A>().ClearFilter<B>() 会互相覆盖,第二次只清掉软删,机构范围仍在。
+        // 定义常由超管创建(CreateOrgId 为空),受限办理人因此查不到名称,详情标题变成空白。
         var def = await definitions.AsQueryable()
-            .ClearFilter<IOrgScoped>()
-            .ClearFilter<ISoftDelete>()
+            .ClearFilter<IOrgScoped, ISoftDelete>()
             .Where(d => d.Id == version.DefinitionId)
             .FirstAsync();
         var model = WfModelJson.Deserialize(version.ModelJson);
@@ -458,6 +459,8 @@ public class WfInstanceService(
                 .SelectMany(actor => new long?[] { actor.UserId, actor.OriginalUserId }))
             .Where(id => id is > 0)
             .Select(id => id!.Value)
+            .Append(instance.StarterUserId)
+            .Where(id => id > 0)
             .Distinct()
             .ToList();
         var userNames = await ResolveUserDisplayNamesAsync(userIds, cancellationToken);
@@ -478,6 +481,7 @@ public class WfInstanceService(
             Version = version.Version,
             BusinessKey = instance.BusinessKey,
             StarterUserId = instance.StarterUserId,
+            StarterName = userNames.GetValueOrDefault(instance.StarterUserId),
             Status = instance.Status,
             VariablesJson = WfFormRuntime.ProjectVisibleJson(model?.FormSchema, instance.VariablesJson, viewPermissions),
             FormComponent = model?.FormComponent,

@@ -1604,6 +1604,7 @@ export default {
       title: '审批详情',
       summary: '基本信息',
       definition: '流程',
+      starter: '发起人',
       businessKey: '业务键',
       createTime: '发起时间',
       currentNode: '当前节点',
