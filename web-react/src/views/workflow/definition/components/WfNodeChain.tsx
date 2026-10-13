@@ -150,7 +150,7 @@ export function WfNodeChain(props: WfNodeChainProps) {
                             allowParallel={armAllowParallel}
                             onAdd={(type) => onAddAtArmHead(node.id, arm.id, type)}
                           />
-                        ) : null}
+                        ) : arm.next ? <div className="wf-link" aria-hidden="true" /> : null}
                         {arm.next ? (
                           <WfNodeChain
                             {...props}
@@ -172,7 +172,7 @@ export function WfNodeChain(props: WfNodeChainProps) {
 
             {!readonly ? (
               <WfAddNode allowParallel={allowParallel} onAdd={(type) => onAddAfter(node.id, type)} />
-            ) : null}
+            ) : <div className="wf-link" aria-hidden="true" />}
           </div>
         )
       })}
