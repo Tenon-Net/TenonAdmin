@@ -70,6 +70,13 @@ function actionLabel(a: WfTaskAction | undefined): string {
     4: 'return',
     5: 'withdraw',
     6: 'delegate',
+    8: 'addSign',
+    9: 'removeSign',
+    10: 'takeBack',
+    11: 'nobody',
+    12: 'adminTransfer',
+    13: 'adminSkip',
+    14: 'adminTerminate',
   }
   const key = map[a] ?? 'unknown'
   return t(`workflow.action.${key}`, String(a))
@@ -84,6 +91,20 @@ function actionTagType(a: WfTaskAction | undefined): 'default' | 'success' | 'er
 
 const columns: ProTableColumn<WfDoneItem>[] = [
   { key: 'definitionName', title: () => t('workflow.done.definition'), minWidth: 160, ellipsis: { tooltip: true } },
+  {
+    key: 'starterName',
+    title: () => t('workflow.done.starter'),
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (r) => r.starterName?.trim() || '—',
+  },
+  {
+    key: 'summary',
+    title: () => t('workflow.done.summary'),
+    minWidth: 180,
+    ellipsis: { tooltip: true },
+    render: (r) => r.summary?.trim() || '—',
+  },
   {
     key: 'nodeName',
     title: () => t('workflow.done.node'),

@@ -1549,6 +1549,8 @@ export default {
     },
     done: {
       definition: '流程',
+      starter: '发起人',
+      summary: '摘要',
       node: '办理节点',
       action: '动作',
       businessKey: '业务键',

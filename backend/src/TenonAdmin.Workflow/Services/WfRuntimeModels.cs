@@ -568,6 +568,10 @@ public record WfDoneItemOutput
     public string? BusinessKey { get; init; }
     public WfInstanceStatus InstanceStatus { get; init; }
     public long StarterUserId { get; init; }
+    public string? StarterName { get; init; }
+
+    /// <summary>表单摘要,与待办列表同一套「标签：值」。</summary>
+    public string? Summary { get; init; }
     public DateTime CreateTime { get; init; }
 }
 

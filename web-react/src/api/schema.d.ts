@@ -14413,6 +14413,8 @@ export interface components {
             instanceStatus?: components["schemas"]["WfInstanceStatus"];
             /** Format: int64 */
             starterUserId?: number | string;
+            starterName?: null | string;
+            summary?: null | string;
             /** Format: date-time */
             createTime?: string;
         };

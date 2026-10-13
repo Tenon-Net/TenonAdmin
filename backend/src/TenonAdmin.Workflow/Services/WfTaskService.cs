@@ -441,18 +441,22 @@ public class WfTaskService(
                 .Where(d => defIds.Contains(d.Id))
                 .ToListAsync())
             .ToDictionary(d => d.Id);
+        var starterNames = await WfListText.UserNamesAsync(
+            instances.Db, instanceMap.Values.Select(i => i.StarterUserId), cancellationToken);
 
         var items = page.Items.Select(h =>
         {
             instanceMap.TryGetValue(h.InstanceId, out var instance);
             long defId = 0;
             var defName = "";
+            WfModel? model = null;
             var status = instance?.Status ?? WfInstanceStatus.Running;
             if (instance is not null && versionMap.TryGetValue(instance.DefinitionVersionId, out var ver))
             {
                 defId = ver.DefinitionId;
                 if (defMap.TryGetValue(ver.DefinitionId, out var def))
                     defName = def.Name;
+                model = WfModelJson.Deserialize(ver.ModelJson);
             }
 
             return new WfDoneItemOutput
@@ -473,6 +477,8 @@ public class WfTaskService(
                 BusinessKey = instance?.BusinessKey,
                 InstanceStatus = status,
                 StarterUserId = instance?.StarterUserId ?? 0,
+                StarterName = instance is null ? null : starterNames.GetValueOrDefault(instance.StarterUserId),
+                Summary = WfListText.Summarize(model, instance?.VariablesJson),
                 CreateTime = h.CreateTime,
             };
         }).ToList();

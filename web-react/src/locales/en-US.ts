@@ -1826,6 +1826,8 @@ export default {
     },
     done: {
       definition: 'Workflow',
+      starter: 'Applicant',
+      summary: 'Summary',
       node: 'Node',
       action: 'Action',
       businessKey: 'Business key',
