@@ -10,6 +10,7 @@ import { useHasPerm } from '@/stores/auth'
 import { ApiError } from '@/api'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
+import { withDesignerNodeName } from '@/workflow/designerError'
 import { cloneModel, createDefaultModel, findNode, validateModel, type WfModelIssue } from '@/workflow/model'
 import { normalizeWfId, type WfId } from '@/workflow/id'
 import { DEF_STATUS } from '@/workflow/statusLabels'
@@ -168,7 +169,7 @@ export default function WfDesignerPage() {
       if (!options?.quiet) message.success(t('common.success'))
       return true
     } catch (e) {
-      message.error(translateError(e))
+      message.error(translateError(withDesignerNodeName(e, model.root)))
       return false
     } finally {
       setSaving(false)
@@ -184,9 +185,10 @@ export default function WfDesignerPage() {
       message.success(t('workflow.designer.published'))
       await load(defId)
     } catch (e) {
+      const named = withDesignerNodeName(e, model.root)
       const nodeId = e instanceof ApiError ? String(e.args?.nodeId ?? '') : ''
-      if (nodeId) setServerNodeErrors({ [nodeId]: translateError(e) })
-      message.error(translateError(e))
+      if (nodeId) setServerNodeErrors({ [nodeId]: translateError(named) })
+      message.error(translateError(named))
     }
   }
 

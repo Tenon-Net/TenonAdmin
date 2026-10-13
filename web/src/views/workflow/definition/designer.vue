@@ -14,6 +14,7 @@ import { useTabTitle } from '@/composables/useTabTitle'
 import { ApiError } from '@/api'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
+import { withDesignerNodeName } from '@/workflow/designerError'
 import type { WfDefinitionInput } from '@/types/workflow'
 import { cloneModel, createDefaultModel, findNode, validateModel, type WfModelIssue } from '@/workflow/model'
 import type { WfModel, WfNode } from '@/workflow/schema'
@@ -158,7 +159,7 @@ async function save(options?: { quiet?: boolean }): Promise<boolean> {
     setTabTitle(name.value)
     return true
   } catch (e) {
-    message.error(translateError(e))
+    message.error(translateError(withDesignerNodeName(e, model.value.root)))
     return false
   } finally {
     saving.value = false
@@ -175,9 +176,10 @@ async function publish() {
     message.success(t('workflow.designer.published'))
     await load(defId.value)
   } catch (e) {
+    const named = withDesignerNodeName(e, model.value.root)
     const nodeId = e instanceof ApiError ? String(e.args?.nodeId ?? '') : ''
-    if (nodeId) serverNodeErrors.value = { [nodeId]: translateError(e) }
-    message.error(translateError(e))
+    if (nodeId) serverNodeErrors.value = { [nodeId]: translateError(named) }
+    message.error(translateError(named))
   }
 }
 
