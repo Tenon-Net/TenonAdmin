@@ -60,8 +60,9 @@ export function validateWfFormValues(
       } else {
         const props = (field.props as { min?: number; max?: number; precision?: number } | null | undefined) ?? {}
         const precision = field.type === 'money' ? 2 : props.precision
+        const min = props.min ?? (field.type === 'money' ? 0 : undefined)
         if (precision !== undefined && !hasAtMostDecimals(value, precision)) issues.push({ key: field.key, code: 'valueInvalid' })
-        else if ((props.min !== undefined && value < props.min) || (props.max !== undefined && value > props.max)) {
+        else if ((min !== undefined && value < min) || (props.max !== undefined && value > props.max)) {
           issues.push({ key: field.key, code: 'rangeInvalid' })
         }
       }

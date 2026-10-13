@@ -168,7 +168,8 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
         return (
           <InputNumber
             id={id} value={numberValue(field)} disabled={disabled} placeholder={placeholder}
-            min={field.props?.min} max={field.props?.max} precision={numericPrecision(field)}
+            min={field.type === 'money' ? (field.props?.min ?? 0) : field.props?.min}
+            max={field.props?.max} precision={numericPrecision(field)}
             style={{ width: '100%' }}
             onChange={(next) => updateValue(field, next ?? null)}
           />

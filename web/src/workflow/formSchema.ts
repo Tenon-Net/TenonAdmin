@@ -105,7 +105,7 @@ const defaults: { [T in WfFormFieldType]: WfFormFieldPropsByType[T] } = {
   text: { maxLength: 256 },
   textarea: { maxLength: 4000, rows: 4 },
   number: { precision: 0 },
-  money: {},
+  money: { min: 0 },
   date: {},
   datetime: {},
   select: { options: [{ label: '选项 1', value: 'option1' }] },

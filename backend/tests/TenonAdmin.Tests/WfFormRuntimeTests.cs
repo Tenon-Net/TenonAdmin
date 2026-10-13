@@ -48,6 +48,36 @@ public class WfFormRuntimeTests
     }
 
     [Fact]
+    public async Task Money_without_min_rejects_negative_on_start_and_resubmit()
+    {
+        using var factory = new WorkflowAppFactory();
+        var admin = await ClientFor(factory, "superAdmin");
+        var approverId = await AddUser(admin, "wf-money-approver");
+        var definitionId = await Publish(admin, "金额非负", MoneyModel(approverId));
+        var starter = await ClientFor(factory, "superAdmin");
+
+        var negative = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new
+        {
+            definitionId,
+            variablesJson = """{"amount":-1}""",
+        });
+        AssertFormError(negative, "amount", "rangeInvalid");
+
+        var started = await Start(starter, definitionId, """{"amount":12.5}""");
+        var instanceId = started.GetProperty("instanceId").GetInt64();
+        var taskId = started.GetProperty("createdTaskId").GetInt64();
+        var approver = await ClientFor(factory, "wf-money-approver");
+        Assert.Equal(0, (await PostEnvelope(approver, "/api/v1/workflow/task/return", new { taskId })).GetProperty("code").GetInt32());
+
+        var resubmit = await PostEnvelope(starter, "/api/v1/workflow/instance/resubmit", new
+        {
+            instanceId,
+            variablesJson = """{"amount":-0.01}""",
+        });
+        AssertFormError(resubmit, "amount", "rangeInvalid");
+    }
+
+    [Fact]
     public async Task Start_rejects_values_with_the_wrong_schema_type()
     {
         using var factory = new WorkflowAppFactory();
@@ -352,6 +382,35 @@ public class WfFormRuntimeTests
         new { field = "readonlyValue", access = "readonly" },
         new { field = "editableRequired", access = "editable" },
     ]);
+
+    private static object MoneyModel(long approverId) => new
+    {
+        version = 1,
+        formSchema = new
+        {
+            version = 1,
+            fields = new[] { new { key = "amount", label = "金额", type = "money", required = true } },
+        },
+        root = new
+        {
+            id = "start",
+            type = "start",
+            name = "发起",
+            next = new
+            {
+                id = "approval",
+                type = "approval",
+                name = "审批",
+                props = new
+                {
+                    assignee = new { provider = "user", @params = new { userIds = new[] { approverId } } },
+                    mode = "any",
+                    returnPolicy = "prev",
+                },
+                next = (object?)null,
+            },
+        },
+    };
 
     private static object TextModel() => Model(new
     {

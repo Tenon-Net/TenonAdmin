@@ -382,7 +382,7 @@ defineExpose({ validate })
       <n-input-number
         v-else-if="field.type === 'number' || field.type === 'money'"
         :value="numberValue(field)"
-        :min="field.props?.min"
+        :min="field.type === 'money' ? (field.props?.min ?? 0) : field.props?.min"
         :max="field.props?.max"
         :precision="numericPrecision(field)"
         :placeholder="field.placeholder ?? undefined"

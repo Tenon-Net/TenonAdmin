@@ -81,6 +81,7 @@ const detail = ref<WfInstanceDetail | null>(null)
 const history = ref<WfHistoryItem[]>([])
 const formVariablesJson = ref<string | null>(null)
 const formRuntimeRef = ref<{ validate: () => boolean } | null>(null)
+const resubmitFormRef = ref<{ validate: () => boolean } | null>(null)
 const targetTaskId = ref<number | null>(null)
 const selectedPendingTaskId = ref<number | null>(null)
 
@@ -630,7 +631,8 @@ async function submitAction() {
     message.warning(t('workflow.detail.returnTargetRequired'))
     return
   }
-  if ((kind === 'approve' || kind === 'reject' || kind === 'resubmit') && formRuntimeRef.value?.validate() === false) {
+  const runtime = kind === 'resubmit' ? resubmitFormRef.value : formRuntimeRef.value
+  if ((kind === 'approve' || kind === 'reject' || kind === 'resubmit') && runtime?.validate() === false) {
     message.warning(t('workflow.detail.formInvalid'))
     return
   }
@@ -976,6 +978,20 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
           :disabled="actionSubmitting"
           :options="returnTargetOptions"
           :placeholder="t('workflow.detail.returnTarget')"
+        />
+        <WfFormMount
+          v-if="actionKind === 'resubmit' && (formMountPath || formSchema)"
+          ref="resubmitFormRef"
+          :form-component="formMountPath"
+          :form-schema="formSchema"
+          mode="start"
+          :permissions="null"
+          :definition-id="detail?.definitionId == null ? undefined : Number(detail.definitionId)"
+          :instance-id="detail?.id == null ? undefined : Number(detail.id)"
+          :business-key="detail?.businessKey"
+          :variables-json="formVariablesJson"
+          :status="detail?.status"
+          @variables-change="formVariablesJson = $event"
         />
         <n-form-item
           v-if="actionKind !== 'urge' && actionKind !== 'cancel' && actionKind !== 'resubmit'"
