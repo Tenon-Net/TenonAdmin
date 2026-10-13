@@ -74,6 +74,8 @@ public class WfTaskService(
                 .ToListAsync())
             .ToDictionary(d => d.Id);
         var modelCache = new Dictionary<long, WfModelIndex?>();
+        var starterNames = await WfListText.UserNamesAsync(
+            instances.Db, instanceMap.Values.Select(i => i.StarterUserId), cancellationToken);
 
         var items = new List<WfTodoItemOutput>(actorPage.Items.Count);
         foreach (var actor in actorPage.Items)
@@ -86,6 +88,7 @@ public class WfTaskService(
             versionMap.TryGetValue(instance.DefinitionVersionId, out var ver);
             var defId = ver?.DefinitionId ?? 0;
             var defName = defId > 0 && defMap.TryGetValue(defId, out var def) ? def.Name : "";
+            var visibleVariables = ProjectTaskVariables(ver, task.NodeId, instance.VariablesJson);
 
             items.Add(new WfTodoItemOutput
             {
@@ -100,7 +103,11 @@ public class WfTaskService(
                 DefinitionName = defName,
                 BusinessKey = instance.BusinessKey,
                 StarterUserId = instance.StarterUserId,
-                VariablesJson = ProjectTaskVariables(ver, task.NodeId, instance.VariablesJson),
+                StarterName = starterNames.GetValueOrDefault(instance.StarterUserId),
+                Summary = WfListText.Summarize(
+                    ver is null ? null : WfModelJson.Deserialize(ver.ModelJson),
+                    visibleVariables),
+                VariablesJson = visibleVariables,
                 CreateTime = task.CreateTime,
             });
         }

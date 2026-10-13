@@ -167,6 +167,13 @@ public record WfCcItemOutput
     public string? BusinessKey { get; init; }
     public WfInstanceStatus InstanceStatus { get; init; }
     public long StarterUserId { get; init; }
+
+    /// <summary>发起人展示名。</summary>
+    public string? StarterName { get; init; }
+
+    /// <summary>表单前几项已填内容。</summary>
+    public string? Summary { get; init; }
+
     public bool IsRead { get; init; }
     public DateTime? ReadTime { get; init; }
     public DateTime CreateTime { get; init; }
@@ -293,6 +300,13 @@ public record WfInstanceListItemOutput
     public WfInstanceStatus Status { get; init; }
     public string? VariablesJson { get; init; }
     public long StarterUserId { get; init; }
+
+    /// <summary>发起人展示名。</summary>
+    public string? StarterName { get; init; }
+
+    /// <summary>表单前几项已填内容，供列表扫一眼。</summary>
+    public string? Summary { get; init; }
+
     public DateTime CreateTime { get; init; }
 
     /// <summary>没有待办、停在审批/抄送节点的节点 Id。</summary>
@@ -522,6 +536,13 @@ public record WfTodoItemOutput
     public string DefinitionName { get; init; } = "";
     public string? BusinessKey { get; init; }
     public long StarterUserId { get; init; }
+
+    /// <summary>发起人展示名。</summary>
+    public string? StarterName { get; init; }
+
+    /// <summary>按当前节点权限投影后的表单摘要。</summary>
+    public string? Summary { get; init; }
+
     public string? VariablesJson { get; init; }
     public DateTime CreateTime { get; init; }
 }

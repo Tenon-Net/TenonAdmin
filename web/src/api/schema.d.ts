@@ -14248,6 +14248,8 @@ export interface components {
             instanceStatus?: components["schemas"]["WfInstanceStatus"];
             /** Format: int64 */
             starterUserId?: number | string;
+            starterName?: null | string;
+            summary?: null | string;
             isRead?: boolean;
             /** Format: date-time */
             readTime?: null | string;
@@ -14556,6 +14558,8 @@ export interface components {
             variablesJson?: null | string;
             /** Format: int64 */
             starterUserId?: number | string;
+            starterName?: null | string;
+            summary?: null | string;
             /** Format: date-time */
             createTime?: string;
             blockedNodeIds?: string[];
@@ -14838,6 +14842,8 @@ export interface components {
             businessKey?: null | string;
             /** Format: int64 */
             starterUserId?: number | string;
+            starterName?: null | string;
+            summary?: null | string;
             variablesJson?: null | string;
             /** Format: date-time */
             createTime?: string;

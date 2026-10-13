@@ -408,6 +408,13 @@ export default function WfInstanceDetailPage() {
   const currentTaskText = (task: WfCurrentTask) =>
     `${task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')} · #${task.taskId} · ${t('workflow.detail.parallel.token')} #${task.tokenId}${task.nodeVisitId == null ? '' : ` · NodeVisit #${task.nodeVisitId}`}`
 
+  const nodeTitle = (nodeId?: string | null, nodeName?: string | null) => {
+    const named = nodeName?.trim()
+    if (named) return named
+    const fromModel = nodeId && replayModel ? findNode(replayModel.root, nodeId)?.name?.trim() : ''
+    return fromModel || t('workflow.detail.parallel.unknown')
+  }
+
   const userFallback = (userId: number | string | null | undefined) =>
     userId == null || userId === '' ? '' : t('workflow.detail.userFallback', { id: userId })
   const operatorName = (name: string | null | undefined, userId: number | string | null | undefined) =>
@@ -620,7 +627,7 @@ export default function WfInstanceDetailPage() {
                   content: (
                     <Space orientation="vertical" size={4}>
                       <Space size={8} wrap>
-                        <strong>{item.nodeName || item.nodeId}</strong>
+                        <strong>{nodeTitle(item.nodeId, item.nodeName)}</strong>
                         <Typography.Text type="secondary">
                           {item.isAutomatic
                             ? t('workflow.detail.approvalProgress.automatic')
@@ -672,7 +679,7 @@ export default function WfInstanceDetailPage() {
                       <Space size={8} wrap>
                         <span>{t(`workflow.detail.historyEvent.${HISTORY_EVENT[Number(item.eventType)] ?? 'unknown'}`, { type: item.eventType ?? '—' })}</span>
                         <Typography.Text type="secondary">
-                          {`#${item.sequence || '—'} · ${t('workflow.detail.parallel.token')} #${item.tokenId ?? '—'} · NodeVisit #${item.nodeVisitId ?? '—'}${item.nodeId ? ` · ${item.nodeId}` : ''}`}
+                          {`#${item.sequence || '—'} · ${t('workflow.detail.parallel.token')} #${item.tokenId ?? '—'} · NodeVisit #${item.nodeVisitId ?? '—'}${item.nodeId ? ` · ${nodeTitle(item.nodeId)}` : ''}`}
                         </Typography.Text>
                         <Typography.Text type="secondary">{formatDateTime(item.createTime)}</Typography.Text>
                       </Space>

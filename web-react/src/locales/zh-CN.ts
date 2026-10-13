@@ -1797,6 +1797,8 @@ export default {
     },
     todo: {
       definition: '流程',
+      starter: '发起人',
+      summary: '摘要',
       node: '当前节点',
       businessKey: '业务键',
       createTime: '到达时间',
@@ -1808,6 +1810,8 @@ export default {
     },
     cc: {
       definition: '流程',
+      starter: '发起人',
+      summary: '摘要',
       node: '抄送节点',
       businessKey: '业务键',
       createTime: '送达时间',
@@ -1819,6 +1823,8 @@ export default {
     },
     mine: {
       definition: '流程',
+      starter: '发起人',
+      summary: '摘要',
       version: '版本',
       businessKey: '业务键',
       createTime: '发起时间',

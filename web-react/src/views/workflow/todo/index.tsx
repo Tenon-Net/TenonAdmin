@@ -31,8 +31,16 @@ export default function WfTodoPage() {
     () => [
       { title: t('workflow.todo.definition'), dataIndex: 'definitionName', minWidth: 160, ellipsis: true, search: false },
       {
+        title: t('workflow.todo.starter'), dataIndex: 'starterName', width: 120, ellipsis: true, search: false,
+        render: (_, r) => r.starterName?.trim() || '—',
+      },
+      {
+        title: t('workflow.todo.summary'), dataIndex: 'summary', minWidth: 200, ellipsis: true, search: false,
+        render: (_, r) => r.summary?.trim() || '—',
+      },
+      {
         title: t('workflow.todo.node'), dataIndex: 'nodeName', width: 140, ellipsis: true, search: false,
-        render: (_, r) => r.nodeName || r.nodeId,
+        render: (_, r) => r.nodeName || '—',
       },
       {
         title: t('common.status'), key: 'status', width: 96, search: false,

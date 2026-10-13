@@ -113,7 +113,7 @@ export default function WfMonitorPage() {
       {
         title: t('workflow.monitor.starter'), dataIndex: 'starterUserId', width: 140,
         formItemRender: () => <UserSelect source="workflow" placeholder={t('workflow.monitor.starter')} />,
-        render: (_, r) => (r.starterUserId == null ? '—' : t('workflow.detail.userFallback', { id: r.starterUserId })),
+        render: (_, r) => r.starterName?.trim() || '—',
       },
       {
         title: t('workflow.monitor.actor'), dataIndex: 'actorUserId', hideInTable: true, hideInSetting: true,

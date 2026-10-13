@@ -15,7 +15,7 @@ import { ApiError } from '@/api'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import type { WfDefinitionInput } from '@/types/workflow'
-import { cloneModel, createDefaultModel, validateModel, type WfModelIssue } from '@/workflow/model'
+import { cloneModel, createDefaultModel, findNode, validateModel, type WfModelIssue } from '@/workflow/model'
 import type { WfModel, WfNode } from '@/workflow/schema'
 import WfNodeTree from './components/WfNodeTree.vue'
 import WfConfigDrawer from './components/WfConfigDrawer.vue'
@@ -52,7 +52,9 @@ const serverNodeErrors = ref<Record<string, string>>({})
 function issueText(issue: WfModelIssue): string {
   const key = `workflow.designer.issue.${issue.code}`
   const message = te(key) ? t(key) : t('workflow.designer.invalid')
-  return issue.nodeId ? t('workflow.designer.issue.onNode', { nodeId: issue.nodeId, message }) : message
+  if (!issue.nodeId) return message
+  const nodeName = findNode(model.value.root, issue.nodeId)?.name?.trim() || issue.nodeId
+  return t('workflow.designer.issue.onNode', { nodeId: nodeName, message })
 }
 
 const errorMessages = computed(() => {

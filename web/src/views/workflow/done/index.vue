@@ -89,7 +89,7 @@ const columns: ProTableColumn<WfDoneItem>[] = [
     title: () => t('workflow.done.node'),
     width: 140,
     ellipsis: { tooltip: true },
-    render: (r) => r.nodeName || r.nodeId,
+    render: (r) => r.nodeName || '—',
   },
   {
     key: 'action',

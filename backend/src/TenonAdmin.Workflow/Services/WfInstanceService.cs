@@ -738,6 +738,9 @@ public class WfInstanceService(
                 .ToListAsync())
             .ToDictionary(d => d.Id);
 
+        var starterNames = await WfListText.UserNamesAsync(
+            instances.Db, page.Items.Select(i => i.StarterUserId), cancellationToken);
+
         var instanceIds = page.Items.Select(i => i.Id).ToList();
         var tokenRows = await instances.Db.Queryable<WfToken>()
             .Where(token => instanceIds.Contains(token.InstanceId))
@@ -778,6 +781,8 @@ public class WfInstanceService(
                 Status = i.Status,
                 VariablesJson = model?.FormSchema is null ? i.VariablesJson : null,
                 StarterUserId = i.StarterUserId,
+                StarterName = starterNames.GetValueOrDefault(i.StarterUserId),
+                Summary = WfListText.Summarize(model, i.VariablesJson),
                 CreateTime = i.CreateTime,
                 BlockedNodeIds = pause.BlockedNodeIds,
                 ReturnedToStarter = pause.ReturnedToStarter,

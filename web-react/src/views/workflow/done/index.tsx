@@ -35,7 +35,7 @@ export default function WfDonePage() {
       { title: t('workflow.done.definition'), dataIndex: 'definitionName', minWidth: 160, ellipsis: true, search: false },
       {
         title: t('workflow.done.node'), dataIndex: 'nodeName', width: 140, ellipsis: true, search: false,
-        render: (_, r) => r.nodeName || r.nodeId,
+        render: (_, r) => r.nodeName || '—',
       },
       {
         title: t('workflow.done.action'), dataIndex: 'action', width: 96, search: false,

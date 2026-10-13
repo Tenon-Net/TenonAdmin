@@ -469,6 +469,14 @@ function pendingTaskText(task: WfTodoItem) {
   return task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')
 }
 
+function nodeTitle(nodeId?: string | null, nodeName?: string | null) {
+  const named = nodeName?.trim()
+  if (named) return named
+  const root = replayModel.value?.root
+  const fromModel = nodeId && root ? findNode(root, nodeId)?.name?.trim() : ''
+  return fromModel || t('workflow.detail.parallel.unknown')
+}
+
 function userFallback(id?: number | string | null, name?: string | null) {
   const n = name?.trim()
   if (n) return n
@@ -883,7 +891,7 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
             v-for="item in detail.hisTasks"
             :key="item.id"
             :type="timelineType(item)"
-            :title="item.nodeName || item.nodeId"
+            :title="nodeTitle(item.nodeId, item.nodeName)"
             :time="formatTime(item.createTime)"
           >
             <div class="wf-rec">
@@ -925,7 +933,7 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
               <div class="wf-meta">
                 #{{ item.sequence || '—' }} · {{ t('workflow.detail.parallel.token') }} #{{ item.tokenId ?? '—' }}
                 · NodeVisit #{{ item.nodeVisitId ?? '—' }}
-                <span v-if="item.nodeId"> · {{ item.nodeId }}</span>
+                <span v-if="item.nodeId"> · {{ nodeTitle(item.nodeId) }}</span>
               </div>
             </n-timeline-item>
           </n-timeline>

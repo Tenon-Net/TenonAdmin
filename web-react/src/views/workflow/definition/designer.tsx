@@ -10,7 +10,7 @@ import { useHasPerm } from '@/stores/auth'
 import { ApiError } from '@/api'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
-import { cloneModel, createDefaultModel, validateModel, type WfModelIssue } from '@/workflow/model'
+import { cloneModel, createDefaultModel, findNode, validateModel, type WfModelIssue } from '@/workflow/model'
 import { normalizeWfId, type WfId } from '@/workflow/id'
 import { DEF_STATUS } from '@/workflow/statusLabels'
 import type { WfDefinitionInput } from '@/types/workflow'
@@ -71,7 +71,9 @@ export default function WfDesignerPage() {
   const issueText = (issue: WfModelIssue) => {
     const key = `workflow.designer.issue.${issue.code}`
     const message = i18n.exists(key) ? t(key) : t('workflow.designer.invalid')
-    return issue.nodeId ? t('workflow.designer.issue.onNode', { nodeId: issue.nodeId, message }) : message
+    if (!issue.nodeId) return message
+    const nodeName = findNode(model.root, issue.nodeId)?.name?.trim() || issue.nodeId
+    return t('workflow.designer.issue.onNode', { nodeId: nodeName, message })
   }
 
   const errorMessages = useMemo(() => {

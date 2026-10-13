@@ -116,14 +116,19 @@ public class WfCcService(
                     .ToListAsync())
                 .ToDictionary(d => d.Id);
 
+        var modelByVersion = new Dictionary<long, WfModel>();
         var nodeNameByVersion = new Dictionary<long, Dictionary<string, string?>>();
         foreach (var ver in versionRows)
         {
             var model = WfModelJson.Deserialize(ver.ModelJson);
             if (model is null) continue;
+            modelByVersion[ver.Id] = model;
             nodeNameByVersion[ver.Id] = WfModelIndex.Build(model).Nodes
                 .ToDictionary(n => n.Id, n => string.IsNullOrWhiteSpace(n.Name) ? (string?)null : n.Name);
         }
+
+        var starterNames = await WfListText.UserNamesAsync(
+            instances.Db, instanceMap.Values.Select(i => i.StarterUserId), cancellationToken);
 
         var items = page.Items.Select(c =>
         {
@@ -131,6 +136,7 @@ public class WfCcService(
             var defId = 0L;
             var defName = "";
             string? nodeName = null;
+            string? summary = null;
             if (inst is not null && versionMap.TryGetValue(inst.DefinitionVersionId, out var ver))
             {
                 defId = ver.DefinitionId;
@@ -138,6 +144,13 @@ public class WfCcService(
                     defName = def.Name;
                 if (nodeNameByVersion.TryGetValue(ver.Id, out var names))
                     names.TryGetValue(c.NodeId, out nodeName);
+                if (modelByVersion.TryGetValue(ver.Id, out var model))
+                {
+                    var node = WfModelIndex.Build(model).Find(c.NodeId);
+                    var visible = WfFormRuntime.ProjectVisibleJson(
+                        model.FormSchema, inst.VariablesJson, node?.Props?.FormPerms);
+                    summary = WfListText.Summarize(model, visible);
+                }
             }
 
             return new WfCcItemOutput
@@ -151,6 +164,8 @@ public class WfCcService(
                 BusinessKey = inst?.BusinessKey,
                 InstanceStatus = inst?.Status ?? 0,
                 StarterUserId = inst?.StarterUserId ?? 0,
+                StarterName = inst is null ? null : starterNames.GetValueOrDefault(inst.StarterUserId),
+                Summary = summary,
                 IsRead = c.IsRead,
                 ReadTime = c.ReadTime,
                 CreateTime = c.CreateTime,

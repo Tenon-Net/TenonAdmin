@@ -67,6 +67,20 @@ function statusType(row: WfInstanceListItem | undefined): 'default' | 'info' | '
 const columns: ProTableColumn<WfInstanceListItem>[] = [
   { key: 'definitionName', title: () => t('workflow.mine.definition'), minWidth: 160, ellipsis: { tooltip: true } },
   {
+    key: 'starterName',
+    title: () => t('workflow.mine.starter'),
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (r) => r.starterName?.trim() || '—',
+  },
+  {
+    key: 'summary',
+    title: () => t('workflow.mine.summary'),
+    minWidth: 200,
+    ellipsis: { tooltip: true },
+    render: (r) => r.summary?.trim() || '—',
+  },
+  {
     key: 'version',
     title: () => t('workflow.mine.version'),
     width: 80,

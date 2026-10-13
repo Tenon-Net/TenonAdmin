@@ -1790,6 +1790,8 @@ export default {
     },
     todo: {
       definition: 'Workflow',
+      starter: 'Applicant',
+      summary: 'Summary',
       node: 'Node',
       businessKey: 'Business key',
       createTime: 'Arrived',
@@ -1801,6 +1803,8 @@ export default {
     },
     cc: {
       definition: 'Workflow',
+      starter: 'Applicant',
+      summary: 'Summary',
       node: 'CC node',
       businessKey: 'Business key',
       createTime: 'Sent at',
@@ -1812,6 +1816,8 @@ export default {
     },
     mine: {
       definition: 'Workflow',
+      starter: 'Applicant',
+      summary: 'Summary',
       version: 'Version',
       businessKey: 'Business key',
       createTime: 'Started at',

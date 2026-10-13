@@ -29,6 +29,14 @@ export default function WfMinePage() {
     () => [
       { title: t('workflow.mine.definition'), dataIndex: 'definitionName', minWidth: 160, ellipsis: true, search: false },
       {
+        title: t('workflow.mine.starter'), dataIndex: 'starterName', width: 120, ellipsis: true, search: false,
+        render: (_, r) => r.starterName?.trim() || '—',
+      },
+      {
+        title: t('workflow.mine.summary'), dataIndex: 'summary', minWidth: 200, ellipsis: true, search: false,
+        render: (_, r) => r.summary?.trim() || '—',
+      },
+      {
         title: t('workflow.mine.version'), dataIndex: 'version', width: 80, align: 'center', search: false,
         render: (_, r) => (r.version == null ? '—' : `v${r.version}`),
       },

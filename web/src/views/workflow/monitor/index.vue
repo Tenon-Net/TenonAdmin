@@ -148,7 +148,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
           },
         }),
     },
-    render: (r) => (r.starterUserId == null ? '—' : t('workflow.detail.userFallback', { id: r.starterUserId })),
+    render: (r) => r.starterName?.trim() || '—',
   },
   {
     key: 'actorUserId',

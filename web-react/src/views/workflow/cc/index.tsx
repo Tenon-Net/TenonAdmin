@@ -25,8 +25,16 @@ export default function WfCcPage() {
     () => [
       { title: t('workflow.cc.definition'), dataIndex: 'definitionName', minWidth: 160, ellipsis: true, search: false },
       {
+        title: t('workflow.cc.starter'), dataIndex: 'starterName', width: 120, ellipsis: true, search: false,
+        render: (_, r) => r.starterName?.trim() || '—',
+      },
+      {
+        title: t('workflow.cc.summary'), dataIndex: 'summary', minWidth: 200, ellipsis: true, search: false,
+        render: (_, r) => r.summary?.trim() || '—',
+      },
+      {
         title: t('workflow.cc.node'), dataIndex: 'nodeName', width: 140, ellipsis: true, search: false,
-        render: (_, r) => r.nodeName || r.nodeId,
+        render: (_, r) => r.nodeName || '—',
       },
       {
         title: t('workflow.cc.readState'), dataIndex: 'isRead', width: 88, search: false,

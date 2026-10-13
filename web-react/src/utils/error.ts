@@ -48,9 +48,10 @@ export function translateError(err: unknown): string {
     const issueKey = reason ? `workflow.designer.issue.${reason}` : ''
     if (issueKey && te(issueKey)) {
       const message = t(issueKey)
-      const nodeId = err.args?.nodeId
-      if (nodeId != null && String(nodeId) && te('workflow.designer.issue.onNode')) {
-        return t('workflow.designer.issue.onNode', { nodeId: String(nodeId), message })
+      const nodeName = typeof err.args?.nodeName === 'string' ? err.args.nodeName.trim() : ''
+      const nodeId = nodeName || (err.args?.nodeId == null ? '' : String(err.args.nodeId))
+      if (nodeId && te('workflow.designer.issue.onNode')) {
+        return t('workflow.designer.issue.onNode', { nodeId, message })
       }
       return message
     }
