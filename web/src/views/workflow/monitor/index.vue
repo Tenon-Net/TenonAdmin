@@ -12,6 +12,7 @@ import UserSelect from '@/components/UserSelect/index.vue'
 import { wfInstanceApi } from '@/api/workflow'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
+import { defaultMonitorNodeId, monitorNodeOptions } from './nodes'
 import type { WfInstanceListItem, WfInstanceStatus } from '@/types/workflow'
 import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 
@@ -57,14 +58,8 @@ function openAdmin(kind: AdminKind, row: WfInstanceListItem, event: MouseEvent) 
   nodesLoading.value = true
   void wfInstanceApi.get(Number(row.id)).then((detail) => {
     if (seq !== nodeSeq) return
-    const seen = new Set<string>()
-    activeNodes.value = (detail.currentTasks ?? []).flatMap((task) => {
-      const id = task.nodeId?.trim()
-      if (!id || seen.has(id)) return []
-      seen.add(id)
-      return [{ id, name: task.nodeName?.trim() || id }]
-    })
-    nodeId.value = activeNodes.value.length === 1 ? activeNodes.value[0]!.id : null
+    activeNodes.value = monitorNodeOptions(detail)
+    nodeId.value = defaultMonitorNodeId(activeNodes.value)
   }).catch((e) => {
     if (seq === nodeSeq) message.error(translateError(e))
   }).finally(() => {
@@ -84,7 +79,7 @@ async function submitAdmin() {
     message.warning(t('workflow.monitor.admin.issue.targetRequired'))
     return
   }
-  if (adminKind.value !== 'terminate' && activeNodes.value.length > 1 && !nodeId.value) {
+  if (adminKind.value !== 'terminate' && activeNodes.value.length > 0 && !nodeId.value) {
     message.warning(t('workflow.monitor.admin.issue.ambiguousNode'))
     return
   }
@@ -316,7 +311,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
         <UserSelect v-model:value="toUserId" source="workflow" :placeholder="t('workflow.monitor.targetUser')" />
       </n-form-item>
       <n-form-item
-        v-if="adminKind !== 'terminate' && activeNodes.length > 1"
+        v-if="adminKind !== 'terminate'"
         :label="t('workflow.monitor.nodeId')"
         required
       >

@@ -14,6 +14,7 @@ import { normalizeWfId } from '@/workflow/id'
 import { formatDateTime, instanceStatusColor, normalizeInstanceStatus } from '@/workflow/statusLabels'
 import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 import { translateError } from '@/utils/error'
+import { defaultMonitorNodeId, monitorNodeOptions } from './nodes'
 import type { WfInstanceListItem } from '@/types/workflow'
 
 /** 实例状态 1–5(与 statusLabels 的数字表同源)。 */
@@ -72,15 +73,9 @@ export default function WfMonitorPage() {
     setNodesLoading(true)
     void wfInstanceApi.get(Number(target.id)).then((detail) => {
       if (seq !== nodeSeq.current) return
-      const seen = new Set<string>()
-      const nodes = (detail.currentTasks ?? []).flatMap((task) => {
-        const id = task.nodeId?.trim()
-        if (!id || seen.has(id)) return []
-        seen.add(id)
-        return [{ id, name: task.nodeName?.trim() || id }]
-      })
+      const nodes = monitorNodeOptions(detail)
       setActiveNodes(nodes)
-      setNodeId(nodes.length === 1 ? nodes[0]!.id : null)
+      setNodeId(defaultMonitorNodeId(nodes))
     }).catch((e) => {
       if (seq === nodeSeq.current) message.error(translateError(e))
     }).finally(() => {
@@ -105,7 +100,7 @@ export default function WfMonitorPage() {
       message.warning(t('workflow.monitor.admin.issue.targetRequired'))
       return
     }
-    if (kind !== 'terminate' && activeNodes.length > 1 && !nodeId) {
+    if (kind !== 'terminate' && activeNodes.length > 0 && !nodeId) {
       message.warning(t('workflow.monitor.admin.issue.ambiguousNode'))
       return
     }
@@ -230,7 +225,7 @@ export default function WfMonitorPage() {
               />
             </Form.Item>
           ) : null}
-          {kind !== 'terminate' && activeNodes.length > 1 ? (
+          {kind !== 'terminate' ? (
             <Form.Item label={t('workflow.monitor.nodeId')} required>
               <Select
                 loading={nodesLoading}
