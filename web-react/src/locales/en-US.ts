@@ -13,6 +13,7 @@ export default {
     add: 'Add',
     edit: 'Edit',
     delete: 'Delete',
+    deleted: 'Deleted',
     save: 'Save',
     submit: 'Submit',
     format: 'Format',

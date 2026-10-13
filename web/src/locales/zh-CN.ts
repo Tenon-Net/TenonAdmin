@@ -14,6 +14,7 @@ export default {
     add: '新增',
     edit: '编辑',
     delete: '删除',
+    deleted: '已删除',
     save: '保存',
     submit: '提交',
     format: '格式化',
