@@ -149,6 +149,7 @@ public class WfInstanceService(
             FormComponent = model.FormComponent,
             DefinitionVersionId = version.Id,
             Model = WfRuntimeModelProjector.Project(model)!,
+            MayBlockWithoutApprover = WfRuntimePause.MayBlockWithoutApprover(model),
         };
     }
 
@@ -395,11 +396,11 @@ public class WfInstanceService(
                 .OrderBy(arm => arm.ForkId, OrderByType.Asc)
                 .OrderBy(arm => arm.ArmId, OrderByType.Asc)
                 .ToListAsync();
-        var currentNodeIds = currentTasks
-            .Select(t => t.NodeId)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+        var pause = WfRuntimePause.Describe(
+            model,
+            runtimeTokens,
+            currentTasks.Select(task => (task.TokenId, task.NodeId)));
+        var currentNodeIds = pause.CurrentNodeIds.ToList();
         long? currentTaskId = currentTasks.Count > 0 ? currentTasks[0].Id : null;
 
         IReadOnlyList<WfTodoItemOutput> myPendingTasks = [];
@@ -488,6 +489,9 @@ public class WfInstanceService(
             Model = WfRuntimeModelProjector.Project(model),
             VisitedNodeIds = CollectVisitedNodeIds(events),
             CurrentNodeIds = currentNodeIds,
+            BlockedNodeIds = pause.BlockedNodeIds,
+            ReturnedToStarter = pause.ReturnedToStarter,
+            HasPendingTask = pause.HasPendingTask,
             CurrentTaskId = currentTaskId,
             CurrentTasks = currentTaskSnapshots.Select(task => new WfCurrentTaskOutput
             {
@@ -730,19 +734,35 @@ public class WfInstanceService(
                 .ToListAsync())
             .ToDictionary(d => d.Id);
 
+        var instanceIds = page.Items.Select(i => i.Id).ToList();
+        var tokenRows = await instances.Db.Queryable<WfToken>()
+            .Where(token => instanceIds.Contains(token.InstanceId))
+            .ToListAsync(cancellationToken);
+        var taskRows = await tasks.AsQueryable()
+            .Where(task => instanceIds.Contains(task.InstanceId))
+            .Select(task => new { task.InstanceId, task.TokenId, task.NodeId })
+            .ToListAsync(cancellationToken);
+
         var items = page.Items.Select(i =>
         {
             versionMap.TryGetValue(i.DefinitionVersionId, out var ver);
             var defName = "";
             var defId = 0L;
             var verNo = 0;
+            WfModel? model = null;
             if (ver is not null)
             {
                 defId = ver.DefinitionId;
                 verNo = ver.Version;
                 if (defMap.TryGetValue(ver.DefinitionId, out var def))
                     defName = def.Name;
+                model = WfModelJson.Deserialize(ver.ModelJson);
             }
+
+            var pause = WfRuntimePause.Describe(
+                model,
+                tokenRows.Where(token => token.InstanceId == i.Id),
+                taskRows.Where(task => task.InstanceId == i.Id).Select(task => (task.TokenId, task.NodeId)));
 
             return new WfInstanceListItemOutput
             {
@@ -752,11 +772,12 @@ public class WfInstanceService(
                 Version = verNo,
                 BusinessKey = i.BusinessKey,
                 Status = i.Status,
-                VariablesJson = ver is not null && WfModelJson.Deserialize(ver.ModelJson)?.FormSchema is null
-                    ? i.VariablesJson
-                    : null,
+                VariablesJson = model?.FormSchema is null ? i.VariablesJson : null,
                 StarterUserId = i.StarterUserId,
                 CreateTime = i.CreateTime,
+                BlockedNodeIds = pause.BlockedNodeIds,
+                ReturnedToStarter = pause.ReturnedToStarter,
+                HasPendingTask = pause.HasPendingTask,
             };
         }).ToList();
 

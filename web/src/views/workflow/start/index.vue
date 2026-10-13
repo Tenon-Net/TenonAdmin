@@ -234,6 +234,9 @@ function removeVarRow(i: number) {
           :placeholder="t('workflow.start.definitionPlaceholder')"
         />
       </n-form-item>
+      <n-alert v-if="snapshot?.mayBlockWithoutApprover" type="warning" :bordered="false" style="margin-bottom: 12px">
+        {{ t('workflow.start.mayBlock') }}
+      </n-alert>
       <n-form-item :label="t('workflow.start.businessKey')">
         <n-input v-model:value="form.businessKey" :placeholder="t('workflow.start.businessKeyHint')" />
       </n-form-item>

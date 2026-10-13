@@ -1492,6 +1492,7 @@ export default {
       selfSelectHint: '仅 selfSelect 节点需要',
       submit: '提交发起',
       started: '已发起',
+      mayBlock: '如果某个节点找不到审批人，流程会停在那里，需要管理员处理。',
     },
     definition: {
       name: '流程名称',
@@ -1629,6 +1630,8 @@ export default {
       adminReason: '干预原因',
       rejectReason: '拒绝意见',
       returnReason: '退回原因',
+      blockedHint: '节点「{name}」没有可用审批人，流程已暂停，请联系管理员处理。',
+      returnedHint: '流程已退回，请修改后重新提交。',
       returnReasonEmpty: '未填写退回原因',
       returnReasonHint: '填写退回原因（可选，会显示在审批记录中）',
       returnTo: '退回到 {name}',
@@ -1722,6 +1725,9 @@ export default {
     },
     status: {
       running: '审批中',
+      blocked: '已阻断',
+      blockedPartial: '审批中（有节点已阻断）',
+      returned: '已退回',
       approved: '已通过',
       rejected: '已拒绝',
       cancelled: '已撤销',

@@ -1,7 +1,7 @@
 // 发起流程页。菜单 component 填 `workflow/start/index`;可选 `?definitionId=` 预选已发布定义。
 // 业务表单走 WfFormMount:定义有内置 formSchema 就渲染运行时表单,否则挂消费者 formComponent。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Card, Form, Input, Select, Space } from 'antd'
+import { Alert, App, Button, Card, Form, Input, Select, Space } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppIcon } from '@/components/AppIcon'
@@ -171,6 +171,10 @@ export default function WfStartPage() {
             onChange={(id: WfId | undefined) => void loadDefinition(id)}
           />
         </Form.Item>
+
+        {snapshot?.mayBlockWithoutApprover ? (
+          <Alert type="warning" showIcon style={{ marginBottom: 12 }} title={t('workflow.start.mayBlock')} />
+        ) : null}
 
         <Form.Item name="businessKey" label={t('workflow.start.businessKey')}>
           <Input placeholder={t('workflow.start.businessKeyHint')} />

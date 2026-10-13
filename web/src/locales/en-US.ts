@@ -1487,6 +1487,7 @@ export default {
       selfSelectHint: 'Only for selfSelect nodes',
       submit: 'Submit',
       started: 'Started',
+      mayBlock: 'If a node has no approver, the request stops there until an administrator steps in.',
     },
     definition: {
       name: 'Name',
@@ -1624,6 +1625,8 @@ export default {
       adminReason: 'Intervention reason',
       rejectReason: 'Rejection comment',
       returnReason: 'Return reason',
+      blockedHint: '“{name}” has no approver, so the request is paused. Ask an administrator to step in.',
+      returnedHint: 'This request was returned. Update it and submit again.',
       returnReasonEmpty: 'No return reason was provided',
       returnReasonHint: 'Return reason (optional, shown in the history)',
       returnTo: 'Returned to {name}',
@@ -1717,6 +1720,9 @@ export default {
     },
     status: {
       running: 'Running',
+      blocked: 'Blocked',
+      blockedPartial: 'Running (a node is blocked)',
+      returned: 'Returned',
       approved: 'Approved',
       rejected: 'Rejected',
       cancelled: 'Cancelled',

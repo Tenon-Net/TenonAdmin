@@ -1769,6 +1769,7 @@ export default {
       selfSelectHint: 'Only for selfSelect nodes',
       submit: 'Submit',
       started: 'Started',
+      mayBlock: 'If a node has no approver, the request stops there until an administrator steps in.',
     },
     definition: {
       name: 'Name',
@@ -1918,6 +1919,8 @@ export default {
       commentHint: 'Comment (optional)',
       transferUser: 'Transfer to',
       transferRequired: 'Please pick a user',
+      blockedHint: '“{name}” has no approver, so the request is paused. Ask an administrator to step in.',
+      returnedHint: 'This request was returned. Update it and submit again.',
       issue: {
         starterNotAllowed: 'The applicant cannot be selected, or they could approve their own request',
       },
@@ -1985,6 +1988,9 @@ export default {
     },
     status: {
       running: 'Running',
+      blocked: 'Blocked',
+      blockedPartial: 'Running (a node is blocked)',
+      returned: 'Returned',
       approved: 'Approved',
       rejected: 'Rejected',
       cancelled: 'Cancelled',

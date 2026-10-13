@@ -47,6 +47,7 @@ import type {
 import type { WfButtonLabels, WfFormFieldPerm, WfFormSchema, WfReturnPolicy } from '@/workflow/schema'
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
 import { findNode, flattenChain } from '@/workflow/model'
+import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 import { mergeWfFormPermissions } from '@/workflow/formRuntime'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
 import { ACTOR_STATUS, approvalRounds, participantGroups } from '@/workflow/approvalProgress'
@@ -200,7 +201,21 @@ function btnText(kind: keyof WfButtonLabels, fallbackKey: string) {
 
 const title = computed(() => detail.value?.definitionName || t('workflow.detail.title'))
 
+const blockedNodeNames = computed(() => {
+  const root = projectWfRuntimeModel(detail.value?.model)?.root
+  return (detail.value?.blockedNodeIds ?? [])
+    .map((id) => (root ? findNode(root, id)?.name : '') || id)
+    .join('、')
+})
+
 const currentNodeSummary = computed(() => {
+  if (currentTasks.value.length === 0) {
+    const root = projectWfRuntimeModel(detail.value?.model)?.root
+    return (detail.value?.currentNodeIds ?? [])
+      .map((id) => (root ? findNode(root, id)?.name : '') || id)
+      .filter(Boolean)
+      .join('；')
+  }
   return currentTasks.value.map((task) => {
     const node = task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')
     const pending = (task.participants ?? [])
@@ -316,13 +331,14 @@ const commentPlaceholder = computed(() => (
 
 const canRetryLoad = computed(() => Number.isFinite(uid.value) && uid.value > 0)
 
-function statusLabel(s: WfInstanceStatus | undefined): string {
-  const key = normalizeStatus(s)
-  return t(`workflow.status.${key}`, String(s ?? ''))
+function statusLabel(row: { status?: WfInstanceStatus; returnedToStarter?: boolean; blockedNodeIds?: string[]; hasPendingTask?: boolean } | undefined): string {
+  const key = row ? runtimeStatusKey(row) ?? normalizeStatus(row.status) : 'unknown'
+  return t(`workflow.status.${key}`)
 }
 
-function statusType(s: WfInstanceStatus | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
-  const key = normalizeStatus(s)
+function statusType(row: { status?: WfInstanceStatus; returnedToStarter?: boolean; blockedNodeIds?: string[]; hasPendingTask?: boolean } | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
+  if (row && runtimeStatusKey(row)) return 'warning'
+  const key = normalizeStatus(row?.status)
   if (key === 'approved') return 'success'
   if (key === 'rejected' || key === 'terminated') return 'error'
   if (key === 'cancelled') return 'warning'
@@ -732,6 +748,13 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
     </n-result>
 
     <template v-if="detail">
+      <n-alert v-if="detail.returnedToStarter" type="warning" :bordered="false">
+        {{ t('workflow.detail.returnedHint') }}
+      </n-alert>
+      <n-alert v-else-if="detail.blockedNodeIds?.length" type="warning" :bordered="false">
+        {{ t('workflow.detail.blockedHint', { name: blockedNodeNames }) }}
+      </n-alert>
+
       <n-alert v-if="returnNotice" type="warning" :bordered="false" :title="t('workflow.detail.returnReason')">
         {{ returnNotice.comment?.trim() || t('workflow.detail.returnReasonEmpty') }}
         <div v-if="returnTargetLabel">{{ t('workflow.detail.returnTo', { name: returnTargetLabel }) }}</div>
@@ -744,8 +767,8 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
             <span v-if="detail.version"> (v{{ detail.version }})</span>
           </n-descriptions-item>
           <n-descriptions-item :label="t('common.status')">
-            <n-tag size="small" :type="statusType(detail.status)" :bordered="false">
-              {{ statusLabel(detail.status) }}
+            <n-tag size="small" :type="statusType(detail)" :bordered="false">
+              {{ statusLabel(detail) }}
             </n-tag>
           </n-descriptions-item>
           <n-descriptions-item v-if="currentNodeSummary" :label="t('workflow.detail.currentNode')">

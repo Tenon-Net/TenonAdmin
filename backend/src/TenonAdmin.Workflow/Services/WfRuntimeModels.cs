@@ -49,6 +49,9 @@ public record WfStartableDefinitionDetailOutput : WfStartableDefinitionOutput
 {
     public long DefinitionVersionId { get; init; }
     public WfRuntimeModelOutput Model { get; init; } = new();
+
+    /// <summary>某个审批节点在找不到人时会停住,发起页据此提醒申请人。</summary>
+    public bool MayBlockWithoutApprover { get; init; }
 }
 
 /// <summary>
@@ -291,6 +294,15 @@ public record WfInstanceListItemOutput
     public string? VariablesJson { get; init; }
     public long StarterUserId { get; init; }
     public DateTime CreateTime { get; init; }
+
+    /// <summary>没有待办、停在审批/抄送节点的节点 Id。</summary>
+    public IReadOnlyList<string> BlockedNodeIds { get; init; } = [];
+
+    /// <summary>已退回发起节点,等待发起人修改后重提。</summary>
+    public bool ReturnedToStarter { get; init; }
+
+    /// <summary>仍有待办。与阻断节点同时为真表示只有部分节点停住。</summary>
+    public bool HasPendingTask { get; init; }
 }
 
 /// <summary>
@@ -333,8 +345,17 @@ public record WfInstanceDetailOutput
     /// </summary>
     public IReadOnlyList<string> VisitedNodeIds { get; init; } = [];
 
-    /// <summary>当前活跃待办所在节点(token 停顿处)。</summary>
+    /// <summary>当前活跃待办或停顿 token 所在节点。</summary>
     public IReadOnlyList<string> CurrentNodeIds { get; init; } = [];
+
+    /// <summary>没有待办、停在审批/抄送节点的节点 Id。</summary>
+    public IReadOnlyList<string> BlockedNodeIds { get; init; } = [];
+
+    /// <summary>已退回发起节点,等待发起人修改后重提。</summary>
+    public bool ReturnedToStarter { get; init; }
+
+    /// <summary>仍有待办。与阻断节点同时存在时表示只有部分节点停住。</summary>
+    public bool HasPendingTask { get; init; }
 
     /// <summary>当前活跃任务 Id(发起人催办用;可空=无待办)。</summary>
     public long? CurrentTaskId { get; init; }

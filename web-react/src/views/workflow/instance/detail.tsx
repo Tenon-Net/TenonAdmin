@@ -2,6 +2,7 @@
 // 约定式路由:views/workflow/instance/detail.tsx → /workflow/instance/:id/detail。对应 Vue 侧 instance/detail.vue。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -32,6 +33,7 @@ import { mergeWfFormPermissions } from '@/workflow/formRuntime'
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
 import { normalizeWfId, wfIdEquals, type WfId } from '@/workflow/id'
 import { findNode, flattenChain } from '@/workflow/model'
+import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 import {
   formatDateTime,
   instanceStatusColor,
@@ -472,6 +474,20 @@ export default function WfInstanceDetailPage() {
     >
       {detail ? (
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+          {detail.returnedToStarter ? (
+            <Alert type="warning" showIcon title={t('workflow.detail.returnedHint')} />
+          ) : null}
+          {(detail.blockedNodeIds?.length ?? 0) > 0 ? (
+            <Alert
+              type="warning"
+              showIcon
+              title={t('workflow.detail.blockedHint', {
+                name: (detail.blockedNodeIds ?? [])
+                  .map((id) => (replayModel ? findNode(replayModel.root, id)?.name : '') || id)
+                  .join('、'),
+              })}
+            />
+          ) : null}
           <Card size="small" title={t('workflow.detail.summary')}>
             <Descriptions
               size="small" column={2}
@@ -483,8 +499,8 @@ export default function WfInstanceDetailPage() {
                 {
                   key: 'status', label: t('common.status'),
                   children: (
-                    <Tag color={instanceStatusColor(detail.status)}>
-                      {t(`workflow.status.${normalizeInstanceStatus(detail.status)}`)}
+                    <Tag color={runtimeStatusKey(detail) ? 'gold' : instanceStatusColor(detail.status)}>
+                      {t(`workflow.status.${runtimeStatusKey(detail) ?? normalizeInstanceStatus(detail.status)}`)}
                     </Tag>
                   ),
                 },

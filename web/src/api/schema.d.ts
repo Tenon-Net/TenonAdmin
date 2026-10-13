@@ -14531,6 +14531,9 @@ export interface components {
             model?: null | components["schemas"]["WfRuntimeModelOutput"];
             visitedNodeIds?: string[];
             currentNodeIds?: string[];
+            blockedNodeIds?: string[];
+            returnedToStarter?: boolean;
+            hasPendingTask?: boolean;
             /** Format: int64 */
             currentTaskId?: null | number | string;
             currentTasks?: components["schemas"]["WfCurrentTaskOutput"][];
@@ -14554,6 +14557,9 @@ export interface components {
             starterUserId?: number | string;
             /** Format: date-time */
             createTime?: string;
+            blockedNodeIds?: string[];
+            returnedToStarter?: boolean;
+            hasPendingTask?: boolean;
         };
         WfInstanceResubmitInput: {
             /** Format: int64 */
@@ -14742,6 +14748,7 @@ export interface components {
             /** Format: int64 */
             definitionVersionId?: number | string;
             model?: components["schemas"]["WfRuntimeModelOutput"];
+            mayBlockWithoutApprover?: boolean;
             /** Format: int64 */
             id?: number | string;
             name?: string;

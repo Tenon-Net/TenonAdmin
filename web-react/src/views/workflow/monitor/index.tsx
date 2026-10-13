@@ -12,6 +12,7 @@ import { wfInstanceApi } from '@/api/workflow'
 import { useHasPerm } from '@/stores/auth'
 import { normalizeWfId } from '@/workflow/id'
 import { formatDateTime, instanceStatusColor, normalizeInstanceStatus } from '@/workflow/statusLabels'
+import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 import { translateError } from '@/utils/error'
 import type { WfInstanceListItem } from '@/types/workflow'
 
@@ -133,7 +134,9 @@ export default function WfMonitorPage() {
           options: STATUS_VALUES.map((v) => ({ label: t(`workflow.status.${normalizeInstanceStatus(v)}`), value: v })),
         },
         render: (_, r) => (
-          <Tag color={instanceStatusColor(r.status)}>{t(`workflow.status.${normalizeInstanceStatus(r.status)}`)}</Tag>
+          <Tag color={runtimeStatusKey(r) ? 'gold' : instanceStatusColor(r.status)}>
+            {t(`workflow.status.${runtimeStatusKey(r) ?? normalizeInstanceStatus(r.status)}`)}
+          </Tag>
         ),
       },
       {

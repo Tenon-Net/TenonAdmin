@@ -13,6 +13,7 @@ import { wfInstanceApi } from '@/api/workflow'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import type { WfInstanceListItem, WfInstanceStatus } from '@/types/workflow'
+import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -104,12 +105,14 @@ function normalizeStatus(s: WfInstanceStatus | undefined): string {
   return map[s] ?? 'unknown'
 }
 
-function statusLabel(s: WfInstanceStatus | undefined): string {
-  return t(`workflow.status.${normalizeStatus(s)}`, String(s ?? ''))
+function statusLabel(row: WfInstanceListItem | undefined): string {
+  const key = row ? runtimeStatusKey(row) ?? normalizeStatus(row.status) : 'unknown'
+  return t(`workflow.status.${key}`)
 }
 
-function statusType(s: WfInstanceStatus | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
-  const key = normalizeStatus(s)
+function statusType(row: WfInstanceListItem | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
+  if (row && runtimeStatusKey(row)) return 'warning'
+  const key = normalizeStatus(row?.status)
   if (key === 'approved') return 'success'
   if (key === 'rejected' || key === 'terminated') return 'error'
   if (key === 'cancelled') return 'warning'
@@ -212,7 +215,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       { label: () => t('workflow.status.terminated'), value: 5 },
     ],
     render: (r) =>
-      h(NTag, { size: 'small', type: statusType(r.status), bordered: false }, () => statusLabel(r.status)),
+      h(NTag, { size: 'small', type: statusType(r), bordered: false }, () => statusLabel(r)),
   },
   { key: 'createTime', title: () => t('workflow.monitor.createTime'), width: 170, format: 'datetime' },
   {
