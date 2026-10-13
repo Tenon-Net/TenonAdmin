@@ -1756,6 +1756,7 @@ export default {
       definition: 'Workflow',
       definitionPlaceholder: 'Select a published workflow',
       definitionRequired: 'Please select a workflow',
+      unavailable: '{name} ({detail})',
       businessKey: 'Business key',
       businessKeyHint: 'Optional business document key',
       variables: 'Summary variables',

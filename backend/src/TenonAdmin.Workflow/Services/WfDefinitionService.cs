@@ -285,53 +285,8 @@ public class WfDefinitionService(
         WfModel model,
         CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        var refs = new List<(string? NodeId, long UserId)>();
-        foreach (var node in WfModelIndex.Build(model).Nodes)
-        {
-            if (node.Props?.NobodyTransferUserId is long transferUserId and > 0)
-                refs.Add((node.Id, transferUserId));
-
-            if (node.Type is not (WfNodeType.Approval or WfNodeType.Cc))
-                continue;
-            if (!string.Equals(node.Props?.Assignee?.Provider, ApproverProviderKeys.User, StringComparison.Ordinal))
-                continue;
-
-            foreach (var userId in PositiveUserIds(node.Props?.Assignee?.Params))
-                refs.Add((node.Id, userId));
-        }
-
-        if (model.NobodyTransferUserId is long modelTransferUserId and > 0)
-            refs.Add((null, modelTransferUserId));
-        if (refs.Count == 0)
-            return;
-
-        var ids = refs.Select(item => item.UserId).Distinct().ToList();
-        var enabledIds = await db.Queryable<SysUser>()
-            .Where(user => ids.Contains(user.Id) && user.Enabled == true)
-            .Select(user => user.Id)
-            .ToListAsync(cancellationToken);
-        var enabled = enabledIds.ToHashSet();
-        foreach (var (nodeId, userId) in refs)
-        {
-            if (enabled.Contains(userId))
-                continue;
-
-            var args = new Dictionary<string, object?>
-            {
-                ["reason"] = "assigneeUserUnavailable",
-                ["userId"] = userId,
-            };
-            if (!string.IsNullOrEmpty(nodeId))
-                args["nodeId"] = nodeId;
-            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid, args);
-        }
+        await WfAssigneeRules.EnsureEnabledUsersAsync(db, model, cancellationToken);
     }
-
-    private static IEnumerable<long> PositiveUserIds(Dictionary<string, JsonElement>? parameters) =>
-        ApproverParamReader.GetLongList(parameters, "userIds", "userId")
-            .Where(id => id > 0)
-            .Distinct();
 
     private const int FormSchemaMaxBytes = 64 * 1024;
     private const int FormSchemaMaxFields = 50;
@@ -861,24 +816,14 @@ public class WfDefinitionService(
         var provider = node.Props?.Assignee?.Provider;
         if (node.Type is WfNodeType.Approval or WfNodeType.Cc)
         {
-            if (string.IsNullOrWhiteSpace(provider))
-            {
-                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
-                    new Dictionary<string, object?> { ["reason"] = "assigneeRequired", ["nodeId"] = node.Id });
-            }
+            WfAssigneeRules.EnsureConfigured(node);
+            provider = node.Props!.Assignee!.Provider!;
 
             ValidateLength(provider, 64, "provider");
             if (!providerKeys.Contains(provider))
             {
                 throw WorkflowErrorCode.Exception(WorkflowErrorCode.ProviderNotRegistered,
-                    new Dictionary<string, object?> { ["provider"] = provider, ["nodeId"] = node.Id });
-            }
-
-            if (string.Equals(provider, ApproverProviderKeys.User, StringComparison.Ordinal)
-                && !PositiveUserIds(node.Props?.Assignee?.Params).Any())
-            {
-                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
-                    new Dictionary<string, object?> { ["reason"] = "assigneeUsersRequired", ["nodeId"] = node.Id });
+                    new Dictionary<string, object?> { ["provider"] = provider, ["nodeId"] = node.Id, ["nodeName"] = node.Name });
             }
         }
     }

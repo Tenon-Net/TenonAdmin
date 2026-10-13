@@ -8,11 +8,12 @@ import { AppIcon } from '@/components/AppIcon'
 import { UserSelect } from '@/components/UserSelect'
 import { wfInstanceApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
+import { te } from '@/locales'
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
 import { normalizeWfId, wfIdEquals, type WfId } from '@/workflow/id'
 import { flattenChain } from '@/workflow/model'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
-import type { WfStartableDefinitionDetail } from '@/types/workflow'
+import type { WfStartableDefinition, WfStartableDefinitionDetail } from '@/types/workflow'
 import { WfFormMount, type WfFormMountHandle } from '../components/WfFormMount'
 import { serializeVars, type WfVarRow } from './startForm'
 
@@ -21,6 +22,21 @@ interface StartFormValues {
   businessKey?: string
   varRows?: WfVarRow[]
   selectedUserIdsByNode?: Record<string, WfId[] | undefined>
+}
+
+function startableOption(d: WfStartableDefinition, translate: (key: string, values?: Record<string, string>) => string) {
+  const value = normalizeWfId(d.id)
+  if (value === null) return null
+  const reason = d.unavailableReason
+  const issueKey = reason ? `workflow.designer.issue.${reason}` : ''
+  const message = issueKey && te(issueKey) ? translate(issueKey) : ''
+  const node = (d.unavailableNodeName || d.unavailableNodeId || '').trim()
+  const detail = node && message ? `${node}：${message}` : message || node
+  return {
+    label: detail ? translate('workflow.start.unavailable', { name: d.name ?? '', detail }) : (d.name ?? ''),
+    value,
+    disabled: Boolean(reason),
+  }
 }
 
 export default function WfStartPage() {
@@ -33,7 +49,7 @@ export default function WfStartPage() {
   const requestKey = useRef(useRequestKey()).current
 
   const [form] = Form.useForm<StartFormValues>()
-  const [defOptions, setDefOptions] = useState<{ label: string; value: WfId }[]>([])
+  const [defOptions, setDefOptions] = useState<{ label: string; value: WfId; disabled?: boolean }[]>([])
   const [defsLoading, setDefsLoading] = useState(false)
   const [snapshot, setSnapshot] = useState<WfStartableDefinitionDetail | null>(null)
   const [snapshotLoading, setSnapshotLoading] = useState(false)
@@ -67,11 +83,10 @@ export default function WfStartPage() {
     wfInstanceApi
       .startable()
       .then((defs) => {
-        setDefOptions(
-          defs
-            .map((d) => ({ label: d.name ?? '', value: normalizeWfId(d.id) }))
-            .filter((o): o is { label: string; value: WfId } => o.value !== null),
-        )
+        setDefOptions(defs.flatMap((d) => {
+          const option = startableOption(d, t)
+          return option ? [option] : []
+        }))
         // ?definitionId= 预选:定义列表到位后再落值,免得 Select 显示一个还没有选项的 id。
         const preset = normalizeWfId(searchParams.get('definitionId'))
         if (preset !== null) {
@@ -81,7 +96,7 @@ export default function WfStartPage() {
       })
       .catch((e: unknown) => message.error(translateError(e)))
       .finally(() => setDefsLoading(false))
-  }, [form, loadDefinition, message, searchParams])
+  }, [form, loadDefinition, message, searchParams, t])
 
   const runtimeModel = useMemo(() => projectWfRuntimeModel(snapshot?.model), [snapshot])
   const formComponent = snapshot?.model?.formComponent ?? snapshot?.formComponent ?? null

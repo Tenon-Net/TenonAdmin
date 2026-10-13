@@ -112,6 +112,7 @@ public class WfInstanceService(
                         ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionVersionNotFound);
             if (!CanStart(model, userId, orgId, roleIds))
                 continue;
+            var unavailable = await DescribeUnavailableAsync(model, cancellationToken);
             result.Add(new WfStartableDefinitionOutput
             {
                 Id = def.Id,
@@ -120,6 +121,9 @@ public class WfInstanceService(
                 GroupName = def.GroupName,
                 Version = snapshot.Version,
                 FormComponent = model.FormComponent,
+                UnavailableReason = unavailable.Reason,
+                UnavailableNodeId = unavailable.NodeId,
+                UnavailableNodeName = unavailable.NodeName,
             });
         }
 
@@ -968,8 +972,32 @@ public class WfInstanceService(
                 new Dictionary<string, object?> { ["definitionId"] = definitionId });
         }
 
+        // 发布校验上线前留下的空办理人/失效用户,发起时同样拒绝。
+        WfAssigneeRules.EnsureConfigured(model);
+        await WfAssigneeRules.EnsureEnabledUsersAsync(instances.Db, model, cancellationToken);
+
         return (def, version, model);
     }
+
+    /// <summary>旧快照办理人不合法时返回原因,不中断发起列表。</summary>
+    private async Task<(string? Reason, string? NodeId, string? NodeName)> DescribeUnavailableAsync(
+        WfModel model,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            WfAssigneeRules.EnsureConfigured(model);
+            await WfAssigneeRules.EnsureEnabledUsersAsync(instances.Db, model, cancellationToken);
+            return (null, null, null);
+        }
+        catch (AdminException ex) when ((int)ex.Code == WorkflowErrorCode.ModelInvalid)
+        {
+            return (Arg(ex, "reason"), Arg(ex, "nodeId"), Arg(ex, "nodeName"));
+        }
+    }
+
+    private static string? Arg(AdminException ex, string key) =>
+        ex.Args is not null && ex.Args.TryGetValue(key, out var value) ? value?.ToString() : null;
 
     protected virtual async Task<HashSet<long>> GetRoleIdsAsync(
         long userId,

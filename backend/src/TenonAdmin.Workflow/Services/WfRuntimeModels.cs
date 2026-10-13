@@ -33,6 +33,15 @@ public record WfStartableDefinitionOutput
     public string? GroupName { get; init; }
     public int Version { get; init; }
     public string? FormComponent { get; init; }
+
+    /// <summary>当前发布版本不能发起时的原因;空表示可以发起。</summary>
+    public string? UnavailableReason { get; init; }
+
+    /// <summary>不能发起时的节点 Id。</summary>
+    public string? UnavailableNodeId { get; init; }
+
+    /// <summary>不能发起时的节点名称,给发起页展示。</summary>
+    public string? UnavailableNodeName { get; init; }
 }
 
 /// <summary>当前用户可发起的已发布版本快照。</summary>

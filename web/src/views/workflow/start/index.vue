@@ -22,7 +22,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import UserSelect from '@/components/UserSelect/index.vue'
 import { wfInstanceApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
-import type { WfStartableDefinitionDetail } from '@/types/workflow'
+import type { WfStartableDefinition, WfStartableDefinitionDetail } from '@/types/workflow'
 import { flattenChain } from '@/workflow/model'
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
 import type { WfFormSchema } from '@/workflow/schema'
@@ -34,7 +34,7 @@ interface VarRow {
   value: string
 }
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
@@ -43,7 +43,7 @@ const formRef = ref<FormInst | null>(null)
 const submitting = ref(false)
 const defsLoading = ref(false)
 const detailLoading = ref(false)
-const defOptions = ref<{ label: string; value: number }[]>([])
+const defOptions = ref<{ label: string; value: number; disabled?: boolean }[]>([])
 const formComponent = ref<string | null>(null)
 const formSchema = ref<WfFormSchema | null>(null)
 const runtimeVariablesJson = ref<string | null>(null)
@@ -113,11 +113,24 @@ function serializeVars(rows: VarRow[]): string | null {
   return Object.keys(obj).length ? JSON.stringify(obj) : null
 }
 
+function startableOption(d: WfStartableDefinition) {
+  const reason = d.unavailableReason
+  const issueKey = reason ? `workflow.designer.issue.${reason}` : ''
+  const message = issueKey && te(issueKey) ? t(issueKey) : ''
+  const node = (d.unavailableNodeName || d.unavailableNodeId || '').trim()
+  const detail = node && message ? `${node}：${message}` : message || node
+  return {
+    label: detail ? t('workflow.start.unavailable', { name: d.name ?? '', detail }) : (d.name ?? ''),
+    value: Number(d.id),
+    disabled: Boolean(reason),
+  }
+}
+
 async function loadPublishedDefs() {
   defsLoading.value = true
   try {
     defOptions.value = (await wfInstanceApi.startable())
-      .map((d) => ({ label: d.name ?? '', value: Number(d.id) }))
+      .map((d) => startableOption(d))
       .filter((d) => d.value > 0)
   } catch (e) {
     message.error(translateError(e))

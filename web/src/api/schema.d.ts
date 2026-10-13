@@ -14750,6 +14750,9 @@ export interface components {
             /** Format: int32 */
             version?: number | string;
             formComponent?: null | string;
+            unavailableReason?: null | string;
+            unavailableNodeId?: null | string;
+            unavailableNodeName?: null | string;
         };
         WfStartableDefinitionOutput: {
             /** Format: int64 */
@@ -14760,6 +14763,9 @@ export interface components {
             /** Format: int32 */
             version?: number | string;
             formComponent?: null | string;
+            unavailableReason?: null | string;
+            unavailableNodeId?: null | string;
+            unavailableNodeName?: null | string;
         };
         WfStartInput: {
             /** Format: int64 */

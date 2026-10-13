@@ -1763,6 +1763,7 @@ export default {
       definition: '流程',
       definitionPlaceholder: '选择已发布流程',
       definitionRequired: '请选择流程',
+      unavailable: '{name}（{detail}）',
       businessKey: '业务键',
       businessKeyHint: '可选,关联业务单据',
       variables: '摘要变量',
