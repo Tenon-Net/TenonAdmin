@@ -1742,7 +1742,7 @@ export default {
       running: '审批中',
       blocked: '已阻断',
       blockedPartial: '审批中（有节点已阻断）',
-      returned: '已退回',
+      returned: '退回发起人',
       approved: '已通过',
       rejected: '已拒绝',
       cancelled: '已撤销',

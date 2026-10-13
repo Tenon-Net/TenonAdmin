@@ -1,4 +1,4 @@
-/** 列表和详情把「审批中」拆成阻断、部分阻断、已退回。 */
+/** 列表和详情把「审批中」拆成阻断、部分阻断、退回发起人。 */
 export function runtimeStatusKey(row: {
   status?: number | string | null
   returnedToStarter?: boolean | null

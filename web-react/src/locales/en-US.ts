@@ -2005,7 +2005,7 @@ export default {
       running: 'Running',
       blocked: 'Blocked',
       blockedPartial: 'Running (a node is blocked)',
-      returned: 'Returned',
+      returned: 'Returned to starter',
       approved: 'Approved',
       rejected: 'Rejected',
       cancelled: 'Cancelled',
