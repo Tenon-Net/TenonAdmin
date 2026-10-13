@@ -82,9 +82,22 @@ function updateValue(field: WfFormField, value: unknown) {
   if (!canEdit(field)) return
   if (value === undefined) delete values[field.key]
   else values[field.key] = value
-  issues.value = issues.value.filter((issue) => issue.key !== field.key)
   const next = { ...values }
+  // 金额/数字不再被控件静默夹到最小值;越界立刻标出,而不是等提交。
+  if (field.type === 'number' || field.type === 'money') revalidateField(field, next)
+  else issues.value = issues.value.filter((issue) => issue.key !== field.key)
   emit('update:modelValue', next)
+}
+
+function revalidateField(field: WfFormField, snapshot: WfFormValues) {
+  const found = validateWfFormValues(props.schema, snapshot, props.mode === 'start' ? undefined : props.permissions)
+    .filter((issue) => issue.key === field.key)
+  issues.value = [...issues.value.filter((issue) => issue.key !== field.key), ...found]
+}
+
+function onFieldBlur(field: WfFormField) {
+  if (!canEdit(field)) return
+  revalidateField(field, { ...values })
 }
 
 function fieldIssue(field: WfFormField): WfFormValueIssue | undefined {
@@ -377,6 +390,7 @@ defineExpose({ validate })
         :placeholder="field.placeholder ?? undefined"
         :disabled="!canEdit(field)"
         @update:value="updateValue(field, $event)"
+        @blur="onFieldBlur(field)"
       />
       <n-input
         v-else-if="field.type === 'textarea'"
@@ -387,17 +401,17 @@ defineExpose({ validate })
         :placeholder="field.placeholder ?? undefined"
         :disabled="!canEdit(field)"
         @update:value="updateValue(field, $event)"
+        @blur="onFieldBlur(field)"
       />
       <n-input-number
         v-else-if="field.type === 'number' || field.type === 'money'"
         :value="numberValue(field)"
-        :min="field.type === 'money' ? (field.props?.min ?? 0) : field.props?.min"
-        :max="field.props?.max"
         :precision="numericPrecision(field)"
         :placeholder="field.placeholder ?? undefined"
         :disabled="!canEdit(field)"
         class="w-full"
         @update:value="updateValue(field, $event)"
+        @blur="onFieldBlur(field)"
       />
       <n-date-picker
         v-else-if="field.type === 'date'"

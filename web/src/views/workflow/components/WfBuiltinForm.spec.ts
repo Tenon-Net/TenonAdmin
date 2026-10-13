@@ -112,6 +112,45 @@ describe('WfBuiltinForm', () => {
     expect(host.textContent).toContain('请填写此字段')
   })
 
+  it('金额可以输入负数并标出越界,清空必填事由在失焦时标错', async () => {
+    const schema: WfFormSchema = {
+      version: 1,
+      fields: [
+        field('money', 'amount', { min: 0 }, true),
+        field('textarea', 'reason', { rows: 3 }, true),
+      ],
+    }
+    const values = ref<Record<string, unknown>>({ amount: 8000, reason: '差旅' })
+    const host = document.createElement('div')
+    document.body.append(host)
+    app = createApp(defineComponent({
+      setup: () => () => h(WfBuiltinForm, {
+        schema,
+        modelValue: values.value,
+        mode: 'start',
+        'onUpdate:modelValue': (next: Record<string, unknown>) => { values.value = next },
+      }),
+    }))
+    app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
+    app.mount(host)
+    await nextTick()
+
+    const amount = host.querySelector<HTMLInputElement>('.n-input-number input')!
+    expect(amount.hasAttribute('min')).toBe(false)
+    values.value = { ...values.value, amount: -5 }
+    await nextTick()
+    amount.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+    await nextTick()
+    expect(host.textContent).toContain('字段值超出范围')
+
+    const reason = host.querySelector('textarea')!
+    values.value = { ...values.value, reason: '' }
+    await nextTick()
+    reason.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+    await nextTick()
+    expect(host.textContent).toContain('请填写此字段')
+  })
+
   it('applies approval permissions and defaults missing permissions to editable', async () => {
     const schema: WfFormSchema = {
       version: 1,

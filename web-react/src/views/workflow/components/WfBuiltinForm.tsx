@@ -1,6 +1,6 @@
 // 内置表单运行时:10 种控件的可编辑渲染、提交前校验与只读回放。对应 Vue 侧 WfBuiltinForm.vue。
 // 受控组件:值住在 WfFormMount,这里只负责「能不能改」「怎么渲染」「校验结果落到哪个字段」。
-import { forwardRef, useImperativeHandle, useState } from 'react'
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
 import { Button, DatePicker, Form, Input, InputNumber, Select, Space, Tag, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
@@ -63,6 +63,8 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
 ) {
   const { t } = useTranslation()
   const [issues, setIssues] = useState<WfFormValueIssue[]>([])
+  const valueRef = useRef(value)
+  valueRef.current = value
 
   const canEdit = (field: WfFormField) =>
     mode === 'start' || (mode === 'approve' && formFieldAccess(field.key, permissions) === 'editable')
@@ -70,13 +72,27 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
   const isHidden = (field: WfFormField) =>
     mode !== 'start' && formFieldAccess(field.key, permissions) === 'hidden'
 
+  function replaceFieldIssue(field: WfFormField, snapshot: WfFormValues) {
+    const found = validateWfFormValues(schema, snapshot, mode === 'start' ? undefined : permissions)
+      .filter((issue) => issue.key === field.key)
+    setIssues((prev) => [...prev.filter((issue) => issue.key !== field.key), ...found])
+  }
+
   function updateValue(field: WfFormField, next: unknown) {
     if (!canEdit(field)) return
     const values: WfFormValues = { ...value }
     if (next === undefined) delete values[field.key]
     else values[field.key] = next
-    setIssues((prev) => prev.filter((issue) => issue.key !== field.key))
+    valueRef.current = values
+    // 金额/数字不再被控件静默夹到最小值;越界立刻标出,而不是等提交。
+    if (field.type === 'number' || field.type === 'money') replaceFieldIssue(field, values)
+    else setIssues((prev) => prev.filter((issue) => issue.key !== field.key))
     onChange(values)
+  }
+
+  function onFieldBlur(field: WfFormField) {
+    if (!canEdit(field)) return
+    replaceFieldIssue(field, valueRef.current)
   }
 
   useImperativeHandle(ref, () => ({
@@ -164,6 +180,7 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
             maxLength={field.props?.maxLength ?? 256}
             styles={readOnlyText ? { input: readOnlyText } : undefined}
             onChange={(e) => updateValue(field, e.target.value)}
+            onBlur={() => onFieldBlur(field)}
           />
         )
       case 'textarea':
@@ -173,6 +190,7 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
             rows={field.props?.rows ?? 4} maxLength={field.props?.maxLength ?? 4000}
             styles={readOnlyText ? { textarea: readOnlyText } : undefined}
             onChange={(e) => updateValue(field, e.target.value)}
+            onBlur={() => onFieldBlur(field)}
           />
         )
       case 'number':
@@ -180,11 +198,11 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
         return (
           <InputNumber
             id={id} value={numberValue(field)} disabled={disabled} placeholder={placeholder}
-            min={field.type === 'money' ? (field.props?.min ?? 0) : field.props?.min}
-            max={field.props?.max} precision={numericPrecision(field)}
+            precision={numericPrecision(field)}
             style={{ width: '100%' }}
             styles={readOnlyText ? { input: readOnlyText } : undefined}
             onChange={(next) => updateValue(field, next ?? null)}
+            onBlur={() => onFieldBlur(field)}
           />
         )
       case 'date':
