@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { NButton } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { isKnownPagePath } from '@/router/knownPage'
 
+const route = useRoute()
 const router = useRouter()
 const app = useAppStore()
 const { t } = useI18n()
+const denied = computed(() => isKnownPagePath(route.path))
 </script>
 
 <template>
   <div class="nf">
-    <div class="code" :style="{ color: app.accent }">404</div>
-    <div class="msg">{{ t('notFound.desc') }}</div>
+    <div class="code" :style="{ color: app.accent }">{{ denied ? '403' : '404' }}</div>
+    <div class="msg">{{ denied ? t('forbidden.desc') : t('notFound.desc') }}</div>
     <n-button type="primary" @click="router.replace('/')">{{ t('notFound.back') }}</n-button>
   </div>
 </template>

@@ -43,6 +43,9 @@ export default {
     back: 'Back to workbench',
     component: 'Configuration error: menu component "{component}" was not found.',
   },
+  forbidden: {
+    desc: 'You do not have permission to open this page',
+  },
   userPicker: {
     title: 'Select users',
     available: 'Available',

@@ -53,6 +53,9 @@ export default {
     back: '返回工作台',
     component: '配置错误:未找到菜单组件“{component}”。',
   },
+  forbidden: {
+    desc: '没有访问权限',
+  },
   app: {
     theme: '主题',
     dark: '暗色',

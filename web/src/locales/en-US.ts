@@ -41,6 +41,9 @@ export default {
     desc: 'Page not found',
     back: 'Back to workbench',
   },
+  forbidden: {
+    desc: 'You do not have permission to open this page',
+  },
   missingRoute: {
     title: 'Menu page unavailable',
     message: 'The component path configured for “{title}” does not exist: {component}',

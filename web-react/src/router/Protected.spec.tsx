@@ -97,6 +97,14 @@ describe('守卫③:F5 深链 → enterInitial 重建后渲染目标页', () => 
     expect(screen.getByRole('button', { name: '返回工作台' })).toBeTruthy()
   })
 
+  it('直接打开未授权的流程设计器 → 403(而不是 404)', async () => {
+    login()
+    mountAt('/workflow/definition/designer')
+    expect(await screen.findByText('没有访问权限')).toBeTruthy()
+    expect(screen.getByText('403')).toBeTruthy()
+    expect(screen.queryByText('页面不存在')).toBeNull()
+  })
+
   it('多应用无记住无默认(chooser)→ 落 /module 选择器', async () => {
     login()
     modulesMock.mockResolvedValue({ modules: [{ id: 3, code: 'a', title: 'A', sort: 0 }, { id: 8, code: 'b', title: 'B', sort: 0 }], defaultModuleId: null })
