@@ -138,7 +138,7 @@ function onSelect(node: WfNode) {
   drawerShow.value = true
 }
 
-async function save(): Promise<boolean> {
+async function save(options?: { quiet?: boolean }): Promise<boolean> {
   if (!defId.value) return false
   const issues = validateModel(model.value)
   if (issues.length) {
@@ -154,7 +154,7 @@ async function save(): Promise<boolean> {
       icon: icon.value,
       model: model.value as unknown as WfDefinitionInput['model'],
     })
-    message.success(t('common.success'))
+    if (!options?.quiet) message.success(t('common.success'))
     setTabTitle(name.value)
     return true
   } catch (e) {
@@ -168,7 +168,8 @@ async function save(): Promise<boolean> {
 async function publish() {
   if (!defId.value) return
   serverNodeErrors.value = {}
-  if (!await save()) return
+  // 发布成功自己有提示,这里不再叠一条「操作成功」。
+  if (!await save({ quiet: true })) return
   try {
     await wfDefinitionApi.publish(defId.value)
     message.success(t('workflow.designer.published'))
@@ -223,7 +224,7 @@ function onBack() {
           :placeholder="t('workflow.designer.name')"
         />
         <n-space :size="8">
-          <n-button :loading="saving" @click="save">
+          <n-button :loading="saving" @click="save()">
             <template #icon><AppIcon icon="ph:floppy-disk" :size="16" /></template>
             {{ t('common.save') }}
           </n-button>

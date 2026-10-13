@@ -1257,7 +1257,7 @@ export default {
       untitled: 'Untitled workflow',
       name: 'Workflow name',
       nameRequired: 'Please enter a workflow name',
-      needId: 'No workflow opened. Create a draft below, or open with ?id=.',
+      needId: 'No workflow is open. Enter a name to create one, or open one from the workflow list.',
       create: 'Create draft',
       publish: 'Publish',
       published: 'Published',
@@ -1668,6 +1668,7 @@ export default {
         technical: 'Technical details',
         system: 'System',
         automaticActor: 'Automatically handled (for {name})',
+        ratio: 'Approved {done}/{total}',
         status: {
           waiting: 'Waiting for turn',
           pending: 'Pending',

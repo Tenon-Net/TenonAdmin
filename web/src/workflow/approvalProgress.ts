@@ -134,6 +134,19 @@ export function approvalRounds(
   })
 }
 
+const COUNTERSIGN_MODES = new Set(['all', 'seq', '2', '3'])
+
+/** 会签/顺序会签的已同意人数。少于两人、或签、以及已跳过的人不计入。 */
+export function countersignProgress(round: ApprovalRound): { done: number; total: number } | null {
+  if (!COUNTERSIGN_MODES.has(String(round.approvalMode ?? ''))) return null
+  const active = round.participants.filter((item) => Number(item.status) !== ACTOR_STATUS.skipped)
+  if (active.length < 2) return null
+  return {
+    done: active.filter((item) => Number(item.status) === ACTOR_STATUS.done).length,
+    total: active.length,
+  }
+}
+
 export function participantHistory(round: ApprovalRound, participant: WfTaskParticipant): WfHisTask | undefined {
   const matches = round.history.filter((item) => String(item.userId) === String(participant.userId))
   return matches.at(-1)

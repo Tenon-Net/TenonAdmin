@@ -101,9 +101,9 @@ function pick(type: WfInsertableNodeType) {
 }
 
 .wf-add-grid {
-  width: min(360px, calc(100vw - 64px));
+  width: min(400px, calc(100vw - 48px));
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 .wf-add-item {
@@ -144,6 +144,7 @@ function pick(type: WfInsertableNodeType) {
 .wf-add-label {
   font-size: var(--font-size-sm);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 :global(html[data-theme='dark']) .wf-add::before {

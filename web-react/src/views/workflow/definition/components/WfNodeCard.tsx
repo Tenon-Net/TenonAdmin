@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { AppIcon } from '@/components/AppIcon'
 import type { WfNode, WfNodeType } from '@/workflow/schema'
-import { approvalCardGroups, type WfApprovalNodeProgress } from '../../instance/approvalProgress'
+import { approvalCardGroups, countersignProgress, type WfApprovalNodeProgress } from '../../instance/approvalProgress'
 import './wf-designer.css'
 import '../../wf-identity.css'
 
@@ -116,6 +116,9 @@ export function WfNodeCard({
   const canInspect = readonly && node.type === 'approval' && !!runtimeProgress
   const onCurrentPath = !!visited || !!current
   const runtimeGroups = runtimeProgress && onCurrentPath ? approvalCardGroups(runtimeProgress) : []
+  const countersign = runtimeProgress?.currentRounds
+    .map((round) => countersignProgress(round))
+    .find((item) => item != null)
 
   const classes = [
     'wf-card',
@@ -189,6 +192,11 @@ export function WfNodeCard({
       <div className={`wf-card-body${readonly && node.type === 'approval' ? ' is-runtime' : ''}`}>
         {readonly && node.type === 'approval' ? (
           <div className="wf-card-progress">
+            {countersign ? (
+              <div className="wf-card-progress-row is-handled">
+                <span className="wf-card-progress-label">{t('workflow.detail.approvalProgress.ratio', countersign)}</span>
+              </div>
+            ) : null}
             {runtimeGroups.length > 0 ? runtimeGroups.slice(0, 3).map((group) => (
               <div key={group.key} className={`wf-card-progress-row is-${group.key}`}>
                 <span className="wf-card-progress-label">

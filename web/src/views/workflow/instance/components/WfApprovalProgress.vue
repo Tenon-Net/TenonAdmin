@@ -2,7 +2,7 @@
 import { NEmpty, NTag } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import type { WfHisTask, WfTaskParticipant } from '@/types/workflow'
-import { ACTOR_STATUS, participantHistory, type ApprovalRound } from '@/workflow/approvalProgress'
+import { ACTOR_STATUS, countersignProgress, participantHistory, type ApprovalRound } from '@/workflow/approvalProgress'
 
 const props = defineProps<{
   rounds: ApprovalRound[]
@@ -95,6 +95,11 @@ function participantAction(round: ApprovalRound, person: WfTaskParticipant) {
   return participantHistory(round, person)
 }
 
+function ratioText(round: ApprovalRound) {
+  const ratio = countersignProgress(round)
+  return ratio ? t('workflow.detail.approvalProgress.ratio', ratio) : ''
+}
+
 function modeLabel(mode: ApprovalRound['approvalMode']) {
   const key: Record<string, string> = { any: 'any', all: 'all', seq: 'seq' }
   return mode == null ? '' : t(`workflow.mode.${key[String(mode)] ?? String(mode)}`, String(mode))
@@ -127,6 +132,7 @@ function signTarget(item: WfHisTask) {
           <n-tag v-if="modeLabel(round.approvalMode)" size="small" :bordered="false">
             {{ modeLabel(round.approvalMode) }}
           </n-tag>
+          <span v-if="ratioText(round)" class="wf-progress-ratio">{{ ratioText(round) }}</span>
         </header>
         <div class="wf-progress-people">
           <div v-for="person in round.participants" :key="person.actorId" class="wf-progress-person">
@@ -174,6 +180,7 @@ function signTarget(item: WfHisTask) {
       <details v-else class="wf-progress-round">
         <summary class="wf-progress-round-head">
           <strong>{{ roundLabel(round) }}</strong>
+          <span v-if="ratioText(round)" class="wf-progress-ratio">{{ ratioText(round) }}</span>
           <span>{{ formatTime(round.history.at(-1)?.createTime ?? round.createdTime) }}</span>
         </summary>
         <div class="wf-progress-people">
@@ -231,6 +238,7 @@ function signTarget(item: WfHisTask) {
   flex-wrap: wrap;
 }
 .wf-progress-round-head { cursor: pointer; color: var(--color-text-primary); }
+.wf-progress-ratio { color: var(--color-text-secondary); font-size: var(--font-size-xs); }
 .wf-progress-round-head > span,
 .wf-progress-person-status time,
 .wf-progress-action-head time { color: var(--color-text-tertiary); font-size: var(--font-size-xs); }

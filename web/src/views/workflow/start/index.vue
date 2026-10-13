@@ -224,7 +224,7 @@ function removeVarRow(i: number) {
 
 <template>
   <n-card :title="t('workflow.start.title')" :bordered="false" size="small">
-    <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" label-width="120" style="max-width: 640px">
+    <n-form ref="formRef" :model="form" :rules="rules" label-placement="top" style="max-width: 640px">
       <n-form-item :label="t('workflow.start.definition')" path="definitionId">
         <n-select
           v-model:value="form.definitionId"

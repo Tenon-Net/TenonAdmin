@@ -146,8 +146,8 @@ export default function WfDesignerPage() {
     setDrawerOpen(true)
   }
 
-  /** 保存草稿。返回是否成功(发布前先存一次)。结构非法时不提交。 */
-  const save = async (): Promise<boolean> => {
+  /** 保存草稿。返回是否成功(发布前先存一次)。结构非法时不提交。quiet 时不弹成功提示,避免和发布提示叠在一起。 */
+  const save = async (options?: { quiet?: boolean }): Promise<boolean> => {
     if (!defId) return false
     const v = await form.validateFields().catch(() => null)
     if (!v) return false
@@ -165,7 +165,7 @@ export default function WfDesignerPage() {
         icon,
         model: model as WfDefinitionInput['model'],
       })
-      message.success(t('common.success'))
+      if (!options?.quiet) message.success(t('common.success'))
       return true
     } catch (e) {
       message.error(translateError(e))
@@ -178,7 +178,7 @@ export default function WfDesignerPage() {
   const publish = async () => {
     if (!defId) return
     setServerNodeErrors({})
-    if (!(await save())) return
+    if (!(await save({ quiet: true }))) return
     try {
       await wfDefinitionApi.publish(defId)
       message.success(t('workflow.designer.published'))

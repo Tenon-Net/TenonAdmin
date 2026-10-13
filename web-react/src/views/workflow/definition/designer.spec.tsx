@@ -76,7 +76,7 @@ describe('WfDesignerPage', () => {
     testState.query = ''
     view.rerender(<AntdApp><WfDesignerPage /></AntdApp>)
 
-    expect(await screen.findByText(/尚未打开流程/)).toBeTruthy()
+    expect(await screen.findByText(/还没有打开流程/)).toBeTruthy()
     expect(screen.queryByText('经理审批')).toBeNull()
     expect((screen.getByPlaceholderText('流程名称') as HTMLInputElement).value).toBe('')
   })
@@ -128,7 +128,7 @@ describe('WfDesignerPage', () => {
     cleanup()
     testState.query = ''
     render(<AntdApp><WfDesignerPage /></AntdApp>)
-    expect(await screen.findByText(/尚未打开流程/)).toBeTruthy()
+    expect(await screen.findByText(/还没有打开流程/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /创\s*建/ })).toBeNull()
     expect(screen.queryByPlaceholderText('流程名称')).toBeNull()
   })

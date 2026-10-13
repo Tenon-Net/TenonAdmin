@@ -1262,7 +1262,7 @@ export default {
       untitled: '未命名流程',
       name: '流程名称',
       nameRequired: '请填写流程名称',
-      needId: '尚未打开流程。填写名称新建草稿,或从列表带 id 进入。',
+      needId: '还没有打开流程。输入名称即可新建，也可以从流程列表进入。',
       create: '新建草稿',
       publish: '发布',
       published: '已发布',
@@ -1673,6 +1673,7 @@ export default {
         technical: '技术信息',
         system: '系统',
         automaticActor: '系统自动处理（代{name}）',
+        ratio: '已同意 {done}/{total}',
         status: {
           waiting: '等待轮到',
           pending: '待审批',

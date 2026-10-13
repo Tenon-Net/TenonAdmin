@@ -8,6 +8,7 @@ import {
   Card,
   Collapse,
   Descriptions,
+  Dropdown,
   Empty,
   Form,
   Input,
@@ -18,6 +19,7 @@ import {
   Tag,
   Timeline,
   Typography,
+  type MenuProps,
 } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -25,6 +27,7 @@ import { Can } from '@/components/Can'
 import { DetailPage } from '@/components/DetailPage'
 import { UserSelect } from '@/components/UserSelect'
 import { useConfirm } from '@/hooks/useConfirm'
+import { useHasPerm } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
 import { useUserStore } from '@/stores/user'
 import { wfInstanceApi, wfTaskApi } from '@/api/workflow'
@@ -133,6 +136,7 @@ export function canResubmitInstance({
 
 export default function WfInstanceDetailPage() {
   const { t, i18n } = useTranslation()
+  const hasPerm = useHasPerm()
   const { message } = App.useApp()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -295,6 +299,22 @@ export default function WfInstanceDetailPage() {
   const btnText = (kind: keyof WfButtonLabels, fallbackKey: string) =>
     buttonLabels[kind]?.trim() || t(fallbackKey)
 
+  // 同意、拒绝、退回留在外面;转办、委托、加签、减签和催办收进「更多」。
+  const moreItems: NonNullable<MenuProps['items']> = []
+  if (myPendingTasks.length > 0) {
+    moreItems.push(
+      { key: 'transfer', label: btnText('transfer', 'workflow.detail.transfer') },
+      { key: 'delegate', label: btnText('delegate', 'workflow.detail.delegate') },
+    )
+    if (hasPerm('POST:/api/v1/workflow/task/add-sign')) {
+      moreItems.push({ key: 'addSign', label: t('workflow.detail.addSign') })
+    }
+    if (hasPerm('POST:/api/v1/workflow/task/remove-sign')) {
+      moreItems.push({ key: 'removeSign', label: t('workflow.detail.removeSign') })
+    }
+    if (canUrge) moreItems.push({ key: 'urge', label: btnText('urge', 'workflow.detail.urge') })
+  }
+
   const variableRows = useMemo(() => {
     const json = formVariablesJson
     if (!json?.trim()) return []
@@ -452,14 +472,14 @@ export default function WfInstanceDetailPage() {
                   {btnText('reject', 'workflow.detail.reject')}
                 </Button>
                 <Button onClick={() => openAction('return')}>{btnText('return', 'workflow.detail.return')}</Button>
-                <Button onClick={() => openAction('transfer')}>{btnText('transfer', 'workflow.detail.transfer')}</Button>
-                <Button onClick={() => openAction('delegate')}>{btnText('delegate', 'workflow.detail.delegate')}</Button>
-                <Can code="POST:/api/v1/workflow/task/add-sign">
-                  <Button onClick={() => openAction('addSign')}>{t('workflow.detail.addSign')}</Button>
-                </Can>
-                <Can code="POST:/api/v1/workflow/task/remove-sign">
-                  <Button onClick={() => openAction('removeSign')}>{t('workflow.detail.removeSign')}</Button>
-                </Can>
+                {moreItems.length > 0 ? (
+                  <Dropdown
+                    menu={{ items: moreItems, onClick: ({ key }) => openAction(key as ActionKind) }}
+                    trigger={['click']}
+                  >
+                    <Button>{t('common.more')}</Button>
+                  </Dropdown>
+                ) : null}
               </>
             ) : null}
             {canTakeBack ? (
@@ -467,7 +487,7 @@ export default function WfInstanceDetailPage() {
                 <Button onClick={() => openAction('takeBack')}>{t('workflow.detail.takeBack')}</Button>
               </Can>
             ) : null}
-            {canUrge ? (
+            {canUrge && myPendingTasks.length === 0 ? (
               <Button onClick={() => openAction('urge')}>{btnText('urge', 'workflow.detail.urge')}</Button>
             ) : null}
             {canCancel ? <Button onClick={() => openAction('cancel')}>{t('workflow.detail.cancel')}</Button> : null}

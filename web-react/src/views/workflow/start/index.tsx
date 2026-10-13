@@ -152,9 +152,8 @@ export default function WfStartPage() {
     <Card title={t('workflow.start.title')} size="small">
       <Form
         form={form}
-        labelCol={{ span: 5 }}
-        wrapperCol={{ span: 19 }}
-        style={{ maxWidth: 720 }}
+        layout="vertical"
+        style={{ maxWidth: 640 }}
         initialValues={{ varRows: [{}] }}
         onValuesChange={() => requestKey.reset()}
       >

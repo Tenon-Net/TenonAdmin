@@ -11,6 +11,7 @@ import {
   NCard,
   NDescriptions,
   NDescriptionsItem,
+  NDropdown,
   NEmpty,
   NFormItem,
   NInput,
@@ -29,6 +30,7 @@ import UserSelect from '@/components/UserSelect/index.vue'
 import { useTabTitle } from '@/composables/useTabTitle'
 import { useConfirm } from '@/composables/useConfirm'
 import { useTabsStore } from '@/stores/tabs'
+import { useAuthStore } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
 import { wfInstanceApi, wfTaskApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
@@ -51,7 +53,7 @@ import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 import { canResubmitInstance } from '@/workflow/resubmit'
 import { mergeWfFormPermissions } from '@/workflow/formRuntime'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
-import { ACTOR_STATUS, approvalRounds, participantGroups } from '@/workflow/approvalProgress'
+import { ACTOR_STATUS, approvalRounds, countersignProgress, participantGroups } from '@/workflow/approvalProgress'
 import WfFormMount from '../components/WfFormMount.vue'
 import WfNodeTree from '../definition/components/WfNodeTree.vue'
 import WfApprovalProgress from './components/WfApprovalProgress.vue'
@@ -74,6 +76,7 @@ const isInline = computed(() => props.id != null)
 const uid = computed(() => Number(props.id ?? route.params.id))
 
 const user = useUserStore()
+const auth = useAuthStore()
 const loading = ref(false)
 const loadError = ref<string | null>(null)
 let loadSeq = 0
@@ -206,6 +209,27 @@ function btnText(kind: keyof WfButtonLabels, fallbackKey: string) {
   return custom || t(fallbackKey)
 }
 
+/** 同意、拒绝、退回留在外面;转办、委托、加签、减签和催办收进「更多」。 */
+const moreActions = computed(() => {
+  if (!myPendingTasks.value.length) return []
+  const items: { key: ActionKind; label: string }[] = [
+    { key: 'transfer', label: btnText('transfer', 'workflow.detail.transfer') },
+    { key: 'delegate', label: btnText('delegate', 'workflow.detail.delegate') },
+  ]
+  if (auth.hasPerm('POST:/api/v1/workflow/task/add-sign')) {
+    items.push({ key: 'addSign', label: t('workflow.detail.addSign') })
+  }
+  if (auth.hasPerm('POST:/api/v1/workflow/task/remove-sign')) {
+    items.push({ key: 'removeSign', label: t('workflow.detail.removeSign') })
+  }
+  if (canUrge.value) items.push({ key: 'urge', label: btnText('urge', 'workflow.detail.urge') })
+  return items
+})
+
+function onMoreAction(key: string) {
+  openAction(key as ActionKind)
+}
+
 const title = computed(() => detail.value?.definitionName || t('workflow.detail.title'))
 
 const starterLabel = computed(() => {
@@ -296,6 +320,11 @@ const runtimeLines = computed<Record<string, string[]>>(() => {
       const actions = visible.flatMap((round) => round.history).slice(-2)
       lines.push(...actions.map((item) => `${operatorText(item) || t('workflow.detail.approvalProgress.system')} · ${actionLabel(item.action)}`))
     }
+    const ratioLines = current.flatMap((round) => {
+      const ratio = countersignProgress(round)
+      return ratio ? [t('workflow.detail.approvalProgress.ratio', ratio)] : []
+    })
+    if (ratioLines.length) lines.unshift(...ratioLines)
     result[nodeId] = lines.length ? lines : [t('workflow.detail.approvalProgress.noParticipants')]
   }
   return result
@@ -729,22 +758,13 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
         <n-button v-if="myPendingTasks.length" @click="openAction('return')">
           {{ btnText('return', 'workflow.detail.return') }}
         </n-button>
-        <n-button v-if="myPendingTasks.length" @click="openAction('transfer')">
-          {{ btnText('transfer', 'workflow.detail.transfer') }}
-        </n-button>
-        <n-button v-if="myPendingTasks.length" @click="openAction('delegate')">
-          {{ btnText('delegate', 'workflow.detail.delegate') }}
-        </n-button>
-        <n-button v-if="myPendingTasks.length" v-auth="'POST:/api/v1/workflow/task/add-sign'" @click="openAction('addSign')">
-          {{ t('workflow.detail.addSign') }}
-        </n-button>
-        <n-button v-if="myPendingTasks.length" v-auth="'POST:/api/v1/workflow/task/remove-sign'" @click="openAction('removeSign')">
-          {{ t('workflow.detail.removeSign') }}
-        </n-button>
+        <n-dropdown v-if="moreActions.length" trigger="click" :options="moreActions" @select="onMoreAction">
+          <n-button>{{ t('common.more') }}</n-button>
+        </n-dropdown>
         <n-button v-if="canTakeBack" v-auth="'POST:/api/v1/workflow/task/take-back'" @click="openAction('takeBack')">
           {{ t('workflow.detail.takeBack') }}
         </n-button>
-        <n-button v-if="canUrge" @click="openAction('urge')">
+        <n-button v-if="canUrge && !myPendingTasks.length" @click="openAction('urge')">
           {{ btnText('urge', 'workflow.detail.urge') }}
         </n-button>
         <n-button v-if="canCancel" @click="openAction('cancel')">
