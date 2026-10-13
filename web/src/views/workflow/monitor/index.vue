@@ -5,7 +5,7 @@
  */
 import { computed, h, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NButton, NEmpty, NForm, NFormItem, NInput, NModal, NSpace, NTag, useMessage } from 'naive-ui'
+import { NButton, NEmpty, NForm, NFormItem, NInput, NModal, NSelect, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import UserSelect from '@/components/UserSelect/index.vue'
@@ -32,8 +32,11 @@ const adminKind = ref<AdminKind>('terminate')
 const adminRow = ref<WfInstanceListItem | null>(null)
 const reason = ref('')
 const toUserId = ref<number | null>(null)
-const nodeId = ref('')
+const nodeId = ref<string | null>(null)
+const activeNodes = ref<{ id: string; name: string }[]>([])
+const nodesLoading = ref(false)
 const submitting = ref(false)
+let nodeSeq = 0
 const modalTitle = computed(() => t(`workflow.monitor.${adminKind.value === 'transfer' ? 'forceTransfer' : adminKind.value}`))
 
 function isRunning(r: WfInstanceListItem) {
@@ -46,8 +49,27 @@ function openAdmin(kind: AdminKind, row: WfInstanceListItem, event: MouseEvent) 
   adminRow.value = row
   reason.value = ''
   toUserId.value = null
-  nodeId.value = ''
+  nodeId.value = null
+  activeNodes.value = []
   showAdmin.value = true
+  if (kind === 'terminate' || row.id == null) return
+  const seq = ++nodeSeq
+  nodesLoading.value = true
+  void wfInstanceApi.get(Number(row.id)).then((detail) => {
+    if (seq !== nodeSeq) return
+    const seen = new Set<string>()
+    activeNodes.value = (detail.currentTasks ?? []).flatMap((task) => {
+      const id = task.nodeId?.trim()
+      if (!id || seen.has(id)) return []
+      seen.add(id)
+      return [{ id, name: task.nodeName?.trim() || id }]
+    })
+    nodeId.value = activeNodes.value.length === 1 ? activeNodes.value[0]!.id : null
+  }).catch((e) => {
+    if (seq === nodeSeq) message.error(translateError(e))
+  }).finally(() => {
+    if (seq === nodeSeq) nodesLoading.value = false
+  })
 }
 
 async function submitAdmin() {
@@ -62,10 +84,14 @@ async function submitAdmin() {
     message.warning(t('workflow.monitor.admin.issue.targetRequired'))
     return
   }
+  if (adminKind.value !== 'terminate' && activeNodes.value.length > 1 && !nodeId.value) {
+    message.warning(t('workflow.monitor.admin.issue.ambiguousNode'))
+    return
+  }
   submitting.value = true
   try {
     const instanceId = Number(row.id)
-    const node = nodeId.value.trim() || null
+    const node = nodeId.value?.trim() || null
     if (adminKind.value === 'transfer') {
       await wfInstanceApi.forceTransfer({
         instanceId,
@@ -289,8 +315,17 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       <n-form-item v-if="adminKind === 'transfer'" :label="t('workflow.monitor.targetUser')" required>
         <UserSelect v-model:value="toUserId" source="workflow" :placeholder="t('workflow.monitor.targetUser')" />
       </n-form-item>
-      <n-form-item v-if="adminKind !== 'terminate'" :label="t('workflow.monitor.nodeId')">
-        <n-input v-model:value="nodeId" clearable />
+      <n-form-item
+        v-if="adminKind !== 'terminate' && activeNodes.length > 1"
+        :label="t('workflow.monitor.nodeId')"
+        required
+      >
+        <n-select
+          v-model:value="nodeId"
+          :loading="nodesLoading"
+          :options="activeNodes.map((node) => ({ label: node.name, value: node.id }))"
+          :placeholder="t('workflow.monitor.nodeId')"
+        />
       </n-form-item>
       <n-form-item :label="t('workflow.monitor.reason')" required>
         <n-input v-model:value="reason" type="textarea" :maxlength="512" show-count />
@@ -299,7 +334,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
     <template #footer>
       <n-space justify="end">
         <n-button @click="showAdmin = false">{{ t('common.cancel') }}</n-button>
-        <n-button type="primary" :loading="submitting" @click="submitAdmin">{{ t('common.confirm') }}</n-button>
+        <n-button type="primary" :loading="submitting" :disabled="nodesLoading" @click="submitAdmin">{{ t('common.confirm') }}</n-button>
       </n-space>
     </template>
   </n-modal>

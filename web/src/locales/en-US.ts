@@ -1568,7 +1568,7 @@ export default {
       reason: 'Reason',
       reasonRequired: 'Enter a reason',
       targetUser: 'Assign to',
-      nodeId: 'Node (required when parallel)',
+      nodeId: 'Node',
       admin: {
         issue: {
           reasonRequired: 'Enter a reason for this intervention',

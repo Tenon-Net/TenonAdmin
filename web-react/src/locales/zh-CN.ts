@@ -1856,7 +1856,7 @@ export default {
       reason: '原因',
       reasonRequired: '请填写原因',
       targetUser: '转给',
-      nodeId: '节点（并行时填写）',
+      nodeId: '办理节点',
       admin: {
         issue: {
           reasonRequired: '请填写干预原因',

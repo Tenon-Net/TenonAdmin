@@ -2,7 +2,7 @@
 // 参与筛选(发起人/办理人/抄送人)是业务过滤,不是数据权限;行点击进同一实例详情。
 // 运行中的实例可以强制转办、终止或跳过阻断节点,按钮各自对应一条权限码。
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { App, Button, Form, Input, Modal, Space, Tag } from 'antd'
+import { App, Button, Form, Input, Modal, Select, Space, Tag } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import type { ProColumns } from '@ant-design/pro-components'
@@ -35,8 +35,11 @@ export default function WfMonitorPage() {
   const [row, setRow] = useState<WfInstanceListItem | null>(null)
   const [reason, setReason] = useState('')
   const [toUserId, setToUserId] = useState<number | string | null>(null)
-  const [nodeId, setNodeId] = useState('')
+  const [nodeId, setNodeId] = useState<string | null>(null)
+  const [activeNodes, setActiveNodes] = useState<{ id: string; name: string }[]>([])
+  const [nodesLoading, setNodesLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const nodeSeq = useRef(0)
 
   const fetchMonitor: PageFetcher<WfInstanceListItem> = (q) =>
     wfInstanceApi.monitor({
@@ -62,8 +65,28 @@ export default function WfMonitorPage() {
     setRow(target)
     setReason('')
     setToUserId(null)
-    setNodeId('')
-  }, [])
+    setNodeId(null)
+    setActiveNodes([])
+    if (next === 'terminate' || target.id == null) return
+    const seq = ++nodeSeq.current
+    setNodesLoading(true)
+    void wfInstanceApi.get(Number(target.id)).then((detail) => {
+      if (seq !== nodeSeq.current) return
+      const seen = new Set<string>()
+      const nodes = (detail.currentTasks ?? []).flatMap((task) => {
+        const id = task.nodeId?.trim()
+        if (!id || seen.has(id)) return []
+        seen.add(id)
+        return [{ id, name: task.nodeName?.trim() || id }]
+      })
+      setActiveNodes(nodes)
+      setNodeId(nodes.length === 1 ? nodes[0]!.id : null)
+    }).catch((e) => {
+      if (seq === nodeSeq.current) message.error(translateError(e))
+    }).finally(() => {
+      if (seq === nodeSeq.current) setNodesLoading(false)
+    })
+  }, [message])
 
   const closeAdmin = useCallback(() => {
     if (submitting) return
@@ -82,10 +105,14 @@ export default function WfMonitorPage() {
       message.warning(t('workflow.monitor.admin.issue.targetRequired'))
       return
     }
+    if (kind !== 'terminate' && activeNodes.length > 1 && !nodeId) {
+      message.warning(t('workflow.monitor.admin.issue.ambiguousNode'))
+      return
+    }
     setSubmitting(true)
     try {
       const instanceId = Number(row.id)
-      const node = nodeId.trim() || null
+      const node = nodeId?.trim() || null
       if (kind === 'transfer') {
         await wfInstanceApi.forceTransfer({ instanceId, toUserId: Number(userId), reason: text, nodeId: node })
       } else if (kind === 'terminate') {
@@ -101,7 +128,7 @@ export default function WfMonitorPage() {
     } finally {
       setSubmitting(false)
     }
-  }, [kind, message, nodeId, reason, row, t, toUserId])
+  }, [activeNodes.length, kind, message, nodeId, reason, row, t, toUserId])
 
   const columns = useMemo<ProColumns<WfInstanceListItem>[]>(
     () => [
@@ -186,6 +213,7 @@ export default function WfMonitorPage() {
         open={kind != null}
         title={kind ? t(`workflow.monitor.${titleKey}`) : ''}
         confirmLoading={submitting}
+        okButtonProps={{ disabled: nodesLoading }}
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
         onCancel={closeAdmin}
@@ -202,9 +230,15 @@ export default function WfMonitorPage() {
               />
             </Form.Item>
           ) : null}
-          {kind !== 'terminate' ? (
-            <Form.Item label={t('workflow.monitor.nodeId')}>
-              <Input value={nodeId} allowClear onChange={(e) => setNodeId(e.target.value)} />
+          {kind !== 'terminate' && activeNodes.length > 1 ? (
+            <Form.Item label={t('workflow.monitor.nodeId')} required>
+              <Select
+                loading={nodesLoading}
+                value={nodeId ?? undefined}
+                placeholder={t('workflow.monitor.nodeId')}
+                options={activeNodes.map((node) => ({ label: node.name, value: node.id }))}
+                onChange={(value) => setNodeId(value)}
+              />
             </Form.Item>
           ) : null}
           <Form.Item label={t('workflow.monitor.reason')} required>
