@@ -88,10 +88,13 @@ public record WfRuntimeNodePropsOutput
     public IReadOnlyList<WfFormFieldPerm>? FormPerms { get; init; }
 }
 
-/// <summary>仅公开办理人 provider，不公开 provider 参数。</summary>
+/// <summary>仅公开办理人 provider 和已解析的指定成员姓名，不公开 provider 参数或用户 Id。</summary>
 public record WfRuntimeAssigneeOutput
 {
     public string Provider { get; init; } = "";
+
+    /// <summary>指定成员的显示名，顺序与配置一致。没有可显示的姓名时为 null。</summary>
+    public IReadOnlyList<string>? DisplayNames { get; init; }
 }
 
 public record WfRuntimeBranchArmOutput

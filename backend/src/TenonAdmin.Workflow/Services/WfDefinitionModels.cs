@@ -59,6 +59,9 @@ public record WfDefinitionDetailOutput
 
     /// <summary>草稿模型(Version=0);从未保存过模型时为默认 start 根。</summary>
     public WfModel Model { get; init; } = new();
+
+    /// <summary>草稿里指定成员的用户 Id（字符串键）到姓名。只给设计器显示，不写回模型。</summary>
+    public IReadOnlyDictionary<string, string>? ParticipantNames { get; init; }
 }
 
 /// <summary>已发布版本列表项(含完整 ModelJson,供版本历史/回看)。</summary>

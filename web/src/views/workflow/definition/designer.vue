@@ -15,6 +15,7 @@ import { ApiError } from '@/api'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import { withDesignerNodeName } from '@/workflow/designerError'
+import { rememberParticipantNames } from '@/workflow/participantNames'
 import type { WfDefinitionInput } from '@/types/workflow'
 import { cloneModel, createDefaultModel, findNode, validateModel, type WfModelIssue } from '@/workflow/model'
 import type { WfModel, WfNode } from '@/workflow/schema'
@@ -112,6 +113,7 @@ async function load(id: number) {
     name.value = detail.name ?? ''
     groupName.value = detail.groupName ?? null
     icon.value = detail.icon ?? null
+    rememberParticipantNames(detail.participantNames)
     model.value = cloneModel((detail.model as unknown as WfModel | undefined) ?? createDefaultModel())
     setTabTitle(detail.name ?? '')
   } catch (e) {

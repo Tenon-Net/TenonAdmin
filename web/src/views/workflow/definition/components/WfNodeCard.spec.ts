@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, type App } from 'vue'
 import { createI18n } from 'vue-i18n'
 import zhCN from '@/locales/zh-CN'
+import { clearParticipantNames, rememberParticipantName } from '@/workflow/participantNames'
 import WfNodeCard from './WfNodeCard.vue'
 
 vi.mock('@/components/AppIcon.vue', () => ({ default: { render: () => null } }))
@@ -12,6 +13,7 @@ afterEach(() => {
   app?.unmount()
   app = undefined
   document.body.replaceChildren()
+  clearParticipantNames()
 })
 
 function mountCard(props: Record<string, unknown>, onInspect = vi.fn(), onSelect = vi.fn()) {
@@ -72,5 +74,36 @@ describe('workflow node runtime card', () => {
     expect(card?.textContent).not.toContain('张三 同意')
     card?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(onInspect).toHaveBeenCalledOnce()
+  })
+
+  it('shows cc recipient names from the designer directory and from runtime display names', () => {
+    rememberParticipantName('858', '赵抄送')
+    const designer = mountCard({
+      node: {
+        id: 'cc1',
+        type: 'cc',
+        name: '抄送',
+        props: { assignee: { provider: 'user', params: { userIds: ['858'] } } },
+        next: null,
+      },
+    })
+    expect(designer.host.textContent).toContain('赵抄送')
+    expect(designer.host.textContent).not.toContain('指定成员')
+    expect(designer.host.textContent).not.toContain('请选择抄送人')
+    designer.host.remove()
+    app?.unmount()
+
+    const runtime = mountCard({
+      readonly: true,
+      node: {
+        id: 'cc1',
+        type: 'cc',
+        name: '抄送',
+        props: { assignee: { provider: 'user', params: { userNames: ['赵抄送', '李四'] } } },
+        next: null,
+      },
+    })
+    expect(runtime.host.textContent).toContain('赵抄送、李四')
+    expect(runtime.host.textContent).not.toContain('请选择抄送人')
   })
 })

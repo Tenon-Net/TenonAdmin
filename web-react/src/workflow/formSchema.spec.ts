@@ -26,6 +26,28 @@ describe('workflow form schema', () => {
     expect(model?.root.next?.type).toBe('aiDecision')
   })
 
+  it('keeps cc recipient display names and drops assignee ids', () => {
+    const model = projectWfRuntimeModel({
+      version: 1,
+      root: {
+        id: 'start',
+        type: 'start',
+        name: '发起',
+        next: {
+          id: 'cc1',
+          type: 'cc',
+          name: '抄送',
+          props: { assignee: { provider: 'user', displayNames: [' 赵抄送 ', '李四', ''] } },
+        },
+      },
+    })
+
+    expect(model?.root.next?.props?.assignee).toEqual({
+      provider: 'user',
+      params: { userNames: ['赵抄送', '李四'] },
+    })
+  })
+
   it('creates all ten controls with backend-aligned editable props', () => {
     expect(WF_FORM_FIELD_TYPES.map((type) => [type, createWfFormField(type).props])).toEqual([
       ['text', { maxLength: 256 }],

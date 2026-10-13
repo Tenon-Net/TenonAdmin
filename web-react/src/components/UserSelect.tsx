@@ -2,6 +2,7 @@ import { ApiSelect, type ApiFetch, type ApiSelectOption, type ApiSelectProps } f
 import { userApi } from '@/api'
 import { wfParticipantApi } from '@/api/workflow'
 import type { UserItem } from '@/types/api'
+import { rememberParticipantName } from '@/workflow/participantNames'
 
 /** 用户 → 选项:label「姓名(账号)」,value=id。纯逻辑,变异钉。 */
 export function toUserOption(u: UserItem): ApiSelectOption {
@@ -52,14 +53,18 @@ export function UserSelect({
   const fetch: ApiFetch = async (keyword) => {
     if (source === 'workflow') {
       const { items } = await wfParticipantApi.page({ page: 1, pageSize, keyword: keyword || undefined })
-      return items.flatMap((u) =>
-        u.id == null || !u.name || !u.account
-          ? []
-          : [toParticipantOption({ id: u.id, name: u.name, account: u.account }, disabledIds, disabledSuffix)],
-      )
+      return items.flatMap((u) => {
+        if (u.id == null || !u.name || !u.account) return []
+        rememberParticipantName(u.id, u.name)
+        return [toParticipantOption({ id: u.id, name: u.name, account: u.account }, disabledIds, disabledSuffix)]
+      })
     }
     const { items } = await userApi.page({ page: 1, pageSize, name: keyword || undefined, orgId: orgId ?? undefined })
-    return items.map(toUserOption)
+    return items.flatMap((u) => {
+      if (u.id == null || !u.name) return []
+      rememberParticipantName(u.id, u.name)
+      return [toUserOption(u)]
+    })
   }
   return (
     <ApiSelect

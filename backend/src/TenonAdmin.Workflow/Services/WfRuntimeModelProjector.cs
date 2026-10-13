@@ -3,49 +3,61 @@ namespace TenonAdmin.Workflow;
 /// <summary>把内部发布模型投影为运行时客户端允许读取的最小模型。</summary>
 internal static class WfRuntimeModelProjector
 {
-    public static WfRuntimeModelOutput? Project(WfModel? model) => model is null
+    public static WfRuntimeModelOutput? Project(
+        WfModel? model,
+        IReadOnlyDictionary<long, string>? userNames = null) => model is null
         ? null
         : new WfRuntimeModelOutput
         {
             Version = model.Version,
-            Root = ProjectNode(model.Root),
+            Root = ProjectNode(model.Root, userNames),
             FormSchema = model.FormSchema,
             FormComponent = model.FormComponent,
         };
 
-    private static WfRuntimeNodeOutput ProjectNode(WfNode node) => new()
+    private static WfRuntimeNodeOutput ProjectNode(WfNode node, IReadOnlyDictionary<long, string>? userNames) => new()
     {
         Id = node.Id,
         Type = node.Type,
         Name = node.Name,
-        Props = ProjectProps(node.Props),
-        Conditions = node.Conditions?.ConvertAll(ProjectBranchArm),
-        ParallelArms = node.ParallelArms?.ConvertAll(ProjectParallelArm),
-        Next = node.Next is null ? null : ProjectNode(node.Next),
+        Props = ProjectProps(node.Props, userNames),
+        Conditions = node.Conditions?.ConvertAll(arm => ProjectBranchArm(arm, userNames)),
+        ParallelArms = node.ParallelArms?.ConvertAll(arm => ProjectParallelArm(arm, userNames)),
+        Next = node.Next is null ? null : ProjectNode(node.Next, userNames),
     };
 
-    private static WfRuntimeBranchArmOutput ProjectBranchArm(WfBranchArm arm) => new()
+    private static WfRuntimeBranchArmOutput ProjectBranchArm(
+        WfBranchArm arm,
+        IReadOnlyDictionary<long, string>? userNames) => new()
     {
         Id = arm.Id,
         Name = arm.Name,
         IsDefault = arm.IsDefault,
-        Next = arm.Next is null ? null : ProjectNode(arm.Next),
+        Next = arm.Next is null ? null : ProjectNode(arm.Next, userNames),
     };
 
-    private static WfRuntimeParallelArmOutput ProjectParallelArm(WfParallelArmDefinition arm) => new()
+    private static WfRuntimeParallelArmOutput ProjectParallelArm(
+        WfParallelArmDefinition arm,
+        IReadOnlyDictionary<long, string>? userNames) => new()
     {
         Id = arm.Id,
         Name = arm.Name,
-        Next = arm.Next is null ? null : ProjectNode(arm.Next),
+        Next = arm.Next is null ? null : ProjectNode(arm.Next, userNames),
     };
 
-    private static WfRuntimeNodePropsOutput? ProjectProps(WfNodeProps? props) => props is null
+    private static WfRuntimeNodePropsOutput? ProjectProps(
+        WfNodeProps? props,
+        IReadOnlyDictionary<long, string>? userNames) => props is null
         ? null
         : new WfRuntimeNodePropsOutput
         {
             Assignee = props.Assignee is null
                 ? null
-                : new WfRuntimeAssigneeOutput { Provider = props.Assignee.Provider },
+                : new WfRuntimeAssigneeOutput
+                {
+                    Provider = props.Assignee.Provider,
+                    DisplayNames = WfAssigneeDisplay.NamesFor(props.Assignee, userNames),
+                },
             ReturnPolicy = props.ReturnPolicy,
             ButtonLabels = props.ButtonLabels is null
                 ? null

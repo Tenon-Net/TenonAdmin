@@ -42,7 +42,17 @@ public class WfDefinitionService(
         cancellationToken.ThrowIfCancellationRequested();
         var def = await RequireDefinitionAsync(id);
         var draft = await GetOrCreateDraftAsync(def.Id, cancellationToken);
-        return MapDetail(def, draft);
+        var detail = MapDetail(def, draft);
+        var names = await WfListText.UserNamesAsync(
+            definitions.Db,
+            WfAssigneeDisplay.CollectUserIds(detail.Model),
+            cancellationToken);
+        return detail with
+        {
+            ParticipantNames = names.ToDictionary(
+                pair => pair.Key.ToString(CultureInfo.InvariantCulture),
+                pair => pair.Value),
+        };
     }
 
     /// <inheritdoc />

@@ -14328,6 +14328,9 @@ export interface components {
             /** Format: int64 */
             updateUserId?: null | number | string;
             model?: components["schemas"]["WfModel"];
+            participantNames?: null | {
+                [key: string]: string;
+            };
         };
         WfDefinitionIdInput: {
             /** Format: int64 */
@@ -14716,6 +14719,7 @@ export interface components {
         WfReturnPolicy: "prev" | "any" | "node" | null;
         WfRuntimeAssigneeOutput: {
             provider?: string;
+            displayNames?: null | string[];
         };
         WfRuntimeBranchArmOutput: {
             id?: string;

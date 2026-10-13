@@ -148,7 +148,12 @@ public class WfInstanceService(
             Version = version.Version,
             FormComponent = model.FormComponent,
             DefinitionVersionId = version.Id,
-            Model = WfRuntimeModelProjector.Project(model)!,
+            Model = WfRuntimeModelProjector.Project(
+                model,
+                await WfListText.UserNamesAsync(
+                    definitions.Db,
+                    WfAssigneeDisplay.CollectUserIds(model),
+                    cancellationToken))!,
             MayBlockWithoutApprover = WfRuntimePause.MayBlockWithoutApprover(model),
         };
     }
@@ -463,6 +468,7 @@ public class WfInstanceService(
             .Where(id => id is > 0)
             .Select(id => id!.Value)
             .Append(instance.StarterUserId)
+            .Concat(WfAssigneeDisplay.CollectUserIds(model))
             .Where(id => id > 0)
             .Distinct()
             .ToList();
@@ -493,7 +499,7 @@ public class WfInstanceService(
             MyPendingTasks = myPendingTasks,
             HisTasks = his.Select(item => EnrichHisTask(
                 MapHisTask(item), userNames, automaticHisTaskIds.Contains(item.Id))).ToList(),
-            Model = WfRuntimeModelProjector.Project(model),
+            Model = WfRuntimeModelProjector.Project(model, userNames),
             VisitedNodeIds = CollectVisitedNodeIds(events),
             CurrentNodeIds = currentNodeIds,
             BlockedNodeIds = pause.BlockedNodeIds,
