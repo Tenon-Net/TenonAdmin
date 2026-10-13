@@ -4,6 +4,7 @@ import {
   parseWfFormValues,
   parseWfFormValuesResult,
   mergeWfFormPermissions,
+  observerHiddenFields,
   serializeWfFormValues,
   validateWfFormValues,
   type WfFormValues,
@@ -60,6 +61,18 @@ describe('workflow form runtime values', () => {
   it('reports required fields before type checks', () => {
     const schema: WfFormSchema = { version: 1, fields: [field('text', 'name', undefined, true)] }
     expect(validateWfFormValues(schema, {})).toEqual([{ key: 'name', code: 'required' }])
+  })
+
+  it('hides an observer field only when every approval node hides it', () => {
+    const open = { type: 'approval', props: { formPerms: [{ field: 'amount', access: 'readonly' as const }, { field: 'reason', access: 'hidden' as const }] } }
+    const closed = { type: 'approval', props: { formPerms: [{ field: 'amount', access: 'hidden' as const }, { field: 'reason', access: 'hidden' as const }] } }
+    expect(observerHiddenFields([open, closed], ['amount', 'reason'])).toEqual([
+      { field: 'reason', access: 'hidden' },
+    ])
+    expect(observerHiddenFields([closed], ['amount', 'reason'])).toEqual([
+      { field: 'amount', access: 'hidden' },
+      { field: 'reason', access: 'hidden' },
+    ])
   })
 
   it('merges parallel permissions from most restrictive to least restrictive', () => {

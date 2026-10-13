@@ -327,8 +327,10 @@ public class WfFormRuntimeTests
         var values = ParseValues(replayData);
         Assert.Equal("最终标题", values.GetProperty("title").GetString());
         Assert.Equal("travel", values.GetProperty("category").GetString());
-        Assert.False(values.TryGetProperty("reviewer", out _));
-        Assert.False(values.TryGetProperty("attachment", out _));
+        // 发起人不是任一审批节点的办理人。字段只在每个审批节点都隐藏时才从详情拿掉,
+        // 所以复审仍可读的 reviewer、初审未隐藏的 attachment 要留在表单里。
+        Assert.Equal(1, values.GetProperty("reviewer").GetInt64());
+        Assert.Equal(attachmentId, values.GetProperty("attachment").GetInt64());
         Assert.Contains("approval1", replayData.GetProperty("visitedNodeIds").EnumerateArray().Select(x => x.GetString()));
         Assert.Contains("approval2", replayData.GetProperty("visitedNodeIds").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal(2, replayData.GetProperty("hisTasks").GetArrayLength());
@@ -362,6 +364,31 @@ public class WfFormRuntimeTests
 
         var detail = await GetEnvelope(admin, $"/api/v1/workflow/instance/{start.GetProperty("instanceId").GetInt64()}");
         Assert.Equal(JsonValueKind.Null, detail.GetProperty("data").GetProperty("variablesJson").ValueKind);
+    }
+
+    [Fact]
+    public async Task Observer_sees_form_values_when_only_one_parallel_arm_hides_them()
+    {
+        using var factory = new WorkflowAppFactory();
+        var admin = await ClientFor(factory, "superAdmin");
+        var visibleId = await AddUser(admin, "wf-form-visible-observer");
+        var hiddenId = await AddUser(admin, "wf-form-hidden-observer");
+        var definitionId = await Publish(admin, "观察者可见金额", ObserverParallelModel(visibleId, hiddenId));
+        var started = await Start(admin, definitionId, """{"amount":8000,"reason":"差旅"}""");
+        var instanceId = started.GetProperty("instanceId").GetInt64();
+
+        var observer = await GetEnvelope(admin, $"/api/v1/workflow/instance/{instanceId}");
+        var values = ParseValues(observer.GetProperty("data"));
+        Assert.Equal(8000, values.GetProperty("amount").GetDecimal());
+        Assert.Equal("差旅", values.GetProperty("reason").GetString());
+
+        var visible = await ClientFor(factory, "wf-form-visible-observer");
+        var visibleDetail = await GetEnvelope(visible, $"/api/v1/workflow/instance/{instanceId}");
+        Assert.Equal(8000, ParseValues(visibleDetail.GetProperty("data")).GetProperty("amount").GetDecimal());
+
+        var hidden = await ClientFor(factory, "wf-form-hidden-observer");
+        var hiddenDetail = await GetEnvelope(hidden, $"/api/v1/workflow/instance/{instanceId}");
+        Assert.Equal(JsonValueKind.Null, hiddenDetail.GetProperty("data").GetProperty("variablesJson").ValueKind);
     }
 
     private static object PermissionModel() => Model(new
@@ -559,6 +586,80 @@ public class WfFormRuntimeTests
             },
         };
     }
+
+    private static object ObserverParallelModel(long visibleUserId, long hiddenUserId) => new
+    {
+        version = 1,
+        formSchema = new
+        {
+            version = 1,
+            fields = new object[]
+            {
+                new { key = "amount", label = "金额", type = "money", required = true },
+                new { key = "reason", label = "事由", type = "textarea", required = true },
+            },
+        },
+        root = new
+        {
+            id = "start",
+            type = "start",
+            name = "发起",
+            next = new
+            {
+                id = "parallel",
+                type = "parallel",
+                name = "并行",
+                parallelArms = new object[]
+                {
+                    new
+                    {
+                        id = "visible-arm",
+                        name = "可见",
+                        next = new
+                        {
+                            id = "visible-approval",
+                            type = "approval",
+                            name = "可见审批",
+                            props = new
+                            {
+                                assignee = new { provider = "user", @params = new { userIds = new[] { visibleUserId } } },
+                                mode = "any",
+                                formPerms = new[]
+                                {
+                                    new { field = "amount", access = "readonly" },
+                                    new { field = "reason", access = "readonly" },
+                                },
+                            },
+                            next = (object?)null,
+                        },
+                    },
+                    new
+                    {
+                        id = "hidden-arm",
+                        name = "隐藏",
+                        next = new
+                        {
+                            id = "hidden-approval",
+                            type = "approval",
+                            name = "隐藏审批",
+                            props = new
+                            {
+                                assignee = new { provider = "user", @params = new { userIds = new[] { hiddenUserId } } },
+                                mode = "any",
+                                formPerms = new[]
+                                {
+                                    new { field = "amount", access = "hidden" },
+                                    new { field = "reason", access = "hidden" },
+                                },
+                            },
+                            next = (object?)null,
+                        },
+                    },
+                },
+                next = (object?)null,
+            },
+        },
+    };
 
     private static object LegacyModel(string? formComponent = null) => Model(
         formSchema: null,

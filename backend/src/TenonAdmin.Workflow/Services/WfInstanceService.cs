@@ -421,18 +421,21 @@ public class WfInstanceService(
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        var permissionNodeIds = myPendingTasks.Count > 0
+        var ownNodeIds = myPendingTasks.Count > 0
             ? myPendingTasks
                 .Select(task => task.NodeId)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
                 .Distinct(StringComparer.Ordinal)
                 .ToList()
-            : viewerHistoryNodeIds.Count > 0
-                ? viewerHistoryNodeIds
-                : currentNodeIds.Count > 0
-                    ? currentNodeIds
-                    : his.Select(item => item.NodeId).ToList();
-        var viewPermissions = ResolveFormPermissions(model, permissionNodeIds);
+            : viewerHistoryNodeIds;
+        // 办理人只受自己节点的字段权限约束(多节点时隐藏优先)。
+        // 发起人、监控人和抄送人没有自己的审批节点:任一适用节点没把字段标成隐藏,详情就要带回原值。
+        // 否则列表摘要能看到「金额：8000」,业务表单却只剩空标签。
+        var viewPermissions = ownNodeIds.Count > 0
+            ? ResolveFormPermissions(model, ownNodeIds)
+            : ResolveObserverFormPermissions(
+                model,
+                currentNodeIds.Count > 0 ? currentNodeIds : his.Select(item => item.NodeId));
         var myPending = myPendingTasks.FirstOrDefault();
         var currentTaskSnapshots = currentTasks
             .Select(task => new CurrentTaskSnapshot(
@@ -947,6 +950,38 @@ public class WfInstanceService(
             .Select(group => group.OrderBy(permission => permission.Access).First())
             .ToList();
     }
+
+    /// <summary>
+    /// 观察者没有自己的审批节点。字段只在每个适用审批节点都明确隐藏时才从详情里拿掉;
+    /// 没写权限的节点按可编辑处理,不能被另一臂的隐藏项连带清空。
+    /// </summary>
+    private static IReadOnlyList<WfFormFieldPerm> ResolveObserverFormPermissions(
+        WfModel? model,
+        IEnumerable<string> nodeIds)
+    {
+        if (model?.FormSchema is null) return [];
+        var index = WfModelIndex.Build(model);
+        var approvalNodes = nodeIds
+            .Select(index.Find)
+            .Where(node => node?.Type == WfNodeType.Approval)
+            .Select(node => node!)
+            .ToList();
+        if (approvalNodes.Count == 0) return [];
+
+        return model.FormSchema.Fields
+            .Where(field => approvalNodes.All(node =>
+                AccessOf(field.Key, node.Props?.FormPerms) == WfFormPermAccess.Hidden))
+            .Select(field => new WfFormFieldPerm
+            {
+                Field = field.Key,
+                Access = WfFormPermAccess.Hidden,
+            })
+            .ToList();
+    }
+
+    private static WfFormPermAccess AccessOf(string field, IReadOnlyCollection<WfFormFieldPerm>? permissions) =>
+        permissions?.FirstOrDefault(permission => permission is not null && permission.Field == field)?.Access
+        ?? WfFormPermAccess.Editable;
 
     /// <summary>按 <see cref="WfModelIndex"/>(含分支臂内节点)解析节点名——不写第三次主链线性扫描。</summary>
     protected virtual async Task<string?> ResolveNodeName(long definitionVersionId, string nodeId)

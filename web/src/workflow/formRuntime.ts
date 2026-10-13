@@ -166,6 +166,24 @@ export function formFieldValue(field: WfFormField, values: WfFormValues): unknow
 
 const formPermissionRank: Record<WfFormPermAccess, number> = { hidden: 0, readonly: 1, editable: 2 }
 
+/**
+ * 观察者(没有自己的待办或审批历史)的字段权限。
+ * 只有每个适用审批节点都明确写成 hidden 时才隐藏;没写权限的节点视为可编辑。
+ */
+export function observerHiddenFields(
+  nodes: ReadonlyArray<{ type?: string; props?: { formPerms?: WfFormFieldPerm[] | null } | null } | null | undefined>,
+  fieldKeys: readonly string[],
+): WfFormFieldPerm[] {
+  const approval = nodes.filter((node) => node?.type === 'approval')
+  if (approval.length === 0) return []
+  return fieldKeys.flatMap((field) => {
+    const hiddenEverywhere = approval.every((node) =>
+      (node?.props?.formPerms ?? []).some((permission) =>
+        permission.field === field && (permission.access ?? 'editable') === 'hidden'))
+    return hiddenEverywhere ? [{ field, access: 'hidden' as const }] : []
+  })
+}
+
 export function mergeWfFormPermissions(
   ...permissionSets: Array<readonly WfFormFieldPerm[] | null | undefined>
 ): WfFormFieldPerm[] {

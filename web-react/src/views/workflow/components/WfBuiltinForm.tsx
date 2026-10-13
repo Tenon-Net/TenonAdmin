@@ -94,12 +94,19 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
 
   function stringValue(field: WfFormField): string | undefined {
     const raw = valueOf(field)
-    return typeof raw === 'string' ? raw : undefined
+    if (typeof raw === 'string') return raw
+    if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw)
+    return undefined
   }
 
   function numberValue(field: WfFormField): number | null {
     const raw = valueOf(field)
-    return typeof raw === 'number' ? raw : null
+    if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+    if (typeof raw === 'string' && raw.trim() !== '') {
+      const parsed = Number(raw)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    return null
   }
 
   function attachmentIds(field: WfFormField): Array<number | string> {
@@ -146,12 +153,16 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
   function control(field: WfFormField, id: string) {
     const disabled = !canEdit(field)
     const placeholder = field.placeholder ?? undefined
+    const readOnlyText = disabled
+      ? { color: 'var(--color-text-primary)', WebkitTextFillColor: 'var(--color-text-primary)' }
+      : undefined
     switch (field.type) {
       case 'text':
         return (
           <Input
             id={id} value={stringValue(field)} disabled={disabled} placeholder={placeholder}
             maxLength={field.props?.maxLength ?? 256}
+            styles={readOnlyText ? { input: readOnlyText } : undefined}
             onChange={(e) => updateValue(field, e.target.value)}
           />
         )
@@ -160,6 +171,7 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
           <Input.TextArea
             id={id} value={stringValue(field)} disabled={disabled} placeholder={placeholder}
             rows={field.props?.rows ?? 4} maxLength={field.props?.maxLength ?? 4000}
+            styles={readOnlyText ? { textarea: readOnlyText } : undefined}
             onChange={(e) => updateValue(field, e.target.value)}
           />
         )
@@ -171,6 +183,7 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
             min={field.type === 'money' ? (field.props?.min ?? 0) : field.props?.min}
             max={field.props?.max} precision={numericPrecision(field)}
             style={{ width: '100%' }}
+            styles={readOnlyText ? { input: readOnlyText } : undefined}
             onChange={(next) => updateValue(field, next ?? null)}
           />
         )

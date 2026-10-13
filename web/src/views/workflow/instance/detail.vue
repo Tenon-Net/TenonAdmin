@@ -51,7 +51,7 @@ import { projectWfRuntimeModel } from '@/workflow/formSchema'
 import { findNode, flattenChain } from '@/workflow/model'
 import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 import { canResubmitInstance } from '@/workflow/resubmit'
-import { mergeWfFormPermissions } from '@/workflow/formRuntime'
+import { mergeWfFormPermissions, observerHiddenFields } from '@/workflow/formRuntime'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
 import { ACTOR_STATUS, approvalRounds, countersignProgress, participantGroups } from '@/workflow/approvalProgress'
 import WfFormMount from '../components/WfFormMount.vue'
@@ -148,22 +148,27 @@ const formMode = computed(() => selectedPendingTask.value || actionKind.value ==
 const formPermissions = computed<WfFormFieldPerm[] | null>(() => {
   const model = replayModel.value
   if (!model) return null
-  const nodeIds = myPendingTasks.value.length > 0
+  const ownNodeIds = myPendingTasks.value.length > 0
     ? myPendingTasks.value.map((task) => task.nodeId).filter((id): id is string => Boolean(id))
-    : [
-        ...(currentNode.value?.type === 'approval' ? [currentNode.value.id] : []),
-        ...(detail.value?.visitedNodeIds ?? []),
-        ...(detail.value?.hisTasks ?? [])
-          .filter((task) => Number(task.userId) === Number(user.userInfo?.userId))
-          .map((task) => task.nodeId)
-          .filter((id): id is string => Boolean(id)),
-      ]
-  const permissions = nodeIds
-    .map((id) => findNode(model.root, id))
-    .filter((node) => node?.type === 'approval')
-    .flatMap((node) => node?.props?.formPerms ?? [])
-  const merged = mergeWfFormPermissions(permissions)
-  return merged.length ? merged : null
+    : (detail.value?.hisTasks ?? [])
+        .filter((task) => Number(task.userId) === Number(user.userInfo?.userId))
+        .map((task) => task.nodeId)
+        .filter((id): id is string => Boolean(id))
+  if (ownNodeIds.length > 0) {
+    const permissions = ownNodeIds
+      .map((id) => findNode(model.root, id))
+      .filter((node) => node?.type === 'approval')
+      .flatMap((node) => node?.props?.formPerms ?? [])
+    const merged = mergeWfFormPermissions(permissions)
+    return merged.length ? merged : null
+  }
+  const currentIds = detail.value?.currentNodeIds ?? []
+  const candidateIds = currentIds.length > 0 ? currentIds : (detail.value?.visitedNodeIds ?? [])
+  const hidden = observerHiddenFields(
+    candidateIds.map((id) => findNode(model.root, id)),
+    model.formSchema?.fields.map((field) => field.key) ?? [],
+  )
+  return hidden.length ? hidden : null
 })
 
 const buttonLabels = computed<WfButtonLabels>(() => currentNode.value?.props?.buttonLabels ?? {})
@@ -728,9 +733,10 @@ async function submitAction() {
       }
     }
     const ok = await run(api, t('common.success'))
+    if (!ok) return
     actionShow.value = false
     resetActionDraft()
-    if (ok) await load(uid.value)
+    await load(uid.value)
   } finally {
     actionSubmitting.value = false
   }

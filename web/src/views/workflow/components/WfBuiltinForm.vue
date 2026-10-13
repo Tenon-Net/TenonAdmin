@@ -70,10 +70,12 @@ const PREVIEW_BY_MIME: Record<string, 'image' | 'pdf'> = {
 watch(
   () => props.modelValue,
   (next) => {
-    for (const key of Object.keys(values)) delete values[key]
-    Object.assign(values, next)
+    const incoming = { ...next }
+    for (const key of Object.keys(values)) {
+      if (!(key in incoming)) delete values[key]
+    }
+    Object.assign(values, incoming)
   },
-  { deep: true },
 )
 
 function updateValue(field: WfFormField, value: unknown) {
@@ -100,12 +102,19 @@ function valueFor(field: WfFormField): unknown {
 
 function numberValue(field: WfFormField): number | null {
   const value = valueFor(field)
-  return typeof value === 'number' ? value : null
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
 }
 
 function stringValue(field: WfFormField): string | null {
   const value = valueFor(field)
-  return typeof value === 'string' ? value : null
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return null
 }
 
 function options(field: WfFormField): WfFormOption[] {
@@ -489,6 +498,13 @@ defineExpose({ validate })
 <style scoped>
 .wf-builtin-form {
   width: 100%;
+}
+/* 查看态控件是 disabled,默认禁用色太浅,已填的金额/事由看起来像空的。 */
+.wf-builtin-form :deep(.n-input.n-input--disabled .n-input__input-el),
+.wf-builtin-form :deep(.n-input.n-input--disabled .n-input__textarea-el),
+.wf-builtin-form :deep(.n-input-number.n-input-number--disabled .n-input__input-el) {
+  color: var(--color-text-primary);
+  -webkit-text-fill-color: var(--color-text-primary);
 }
 .w-full {
   width: 100%;

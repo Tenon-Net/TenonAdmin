@@ -32,7 +32,7 @@ import { useTabsStore } from '@/stores/tabs'
 import { useUserStore } from '@/stores/user'
 import { wfInstanceApi, wfTaskApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
-import { mergeWfFormPermissions } from '@/workflow/formRuntime'
+import { mergeWfFormPermissions, observerHiddenFields } from '@/workflow/formRuntime'
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
 import { normalizeWfId, wfIdEquals, type WfId } from '@/workflow/id'
 import { findNode, flattenChain } from '@/workflow/model'
@@ -243,26 +243,31 @@ export default function WfInstanceDetailPage() {
   const formMountPath = detail?.formComponent ?? detail?.model?.formComponent ?? null
   const formMode = myPendingTasks.length > 0 ? 'approve' as const : 'view' as const
 
-  // 字段权限:有待办时取各待办节点的 formPerms;否则回看我经手过的审批节点,按 hidden > readonly > editable 合并。
+  // 办理人只看自己节点的字段权限。没有待办也没有审批历史的人按观察者处理:不是每个节点都隐藏的字段保持可见。
   const formPermissions = useMemo<WfFormFieldPerm[] | null>(() => {
     if (!replayModel) return null
-    const nodeIds = myPendingTasks.length > 0
+    const ownNodeIds = myPendingTasks.length > 0
       ? myPendingTasks.map((task) => task.nodeId).filter((nodeId): nodeId is string => !!nodeId)
-      : [
-          ...(currentNode?.type === 'approval' ? [currentNode.id] : []),
-          ...(detail?.visitedNodeIds ?? []),
-          ...hisTasks
-            .filter((task) => task.userId != null && myUserId != null && String(task.userId) === String(myUserId))
-            .map((task) => task.nodeId)
-            .filter((nodeId): nodeId is string => !!nodeId),
-        ]
-    const permissions = nodeIds
-      .map((nodeId) => findNode(replayModel.root, nodeId))
-      .filter((node) => node?.type === 'approval')
-      .flatMap((node) => node?.props?.formPerms ?? [])
-    const merged = mergeWfFormPermissions(permissions)
-    return merged.length ? merged : null
-  }, [replayModel, myPendingTasks, currentNode, detail, hisTasks, myUserId])
+      : hisTasks
+          .filter((task) => task.userId != null && myUserId != null && String(task.userId) === String(myUserId))
+          .map((task) => task.nodeId)
+          .filter((nodeId): nodeId is string => !!nodeId)
+    if (ownNodeIds.length > 0) {
+      const permissions = ownNodeIds
+        .map((nodeId) => findNode(replayModel.root, nodeId))
+        .filter((node) => node?.type === 'approval')
+        .flatMap((node) => node?.props?.formPerms ?? [])
+      const merged = mergeWfFormPermissions(permissions)
+      return merged.length ? merged : null
+    }
+    const currentIds = detail?.currentNodeIds ?? []
+    const candidateIds = currentIds.length > 0 ? currentIds : (detail?.visitedNodeIds ?? [])
+    const hidden = observerHiddenFields(
+      candidateIds.map((nodeId) => findNode(replayModel.root, nodeId)),
+      replayModel.formSchema?.fields.map((field) => field.key) ?? [],
+    )
+    return hidden.length ? hidden : null
+  }, [replayModel, myPendingTasks, detail, hisTasks, myUserId])
 
   const buttonLabels: WfButtonLabels = currentNode?.props?.buttonLabels ?? {}
   const returnPolicy = currentNode?.props?.returnPolicy

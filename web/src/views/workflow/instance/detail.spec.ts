@@ -28,6 +28,7 @@ vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ run: runConfir
 vi.mock('@/composables/useTabTitle', () => ({ useTabTitle: () => vi.fn() }))
 vi.mock('@/stores/tabs', () => ({ useTabsStore: () => ({ removeTab: vi.fn() }) }))
 vi.mock('@/stores/user', () => ({ useUserStore: () => ({ userInfo: { userId: 1 } }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ hasPerm: () => false }) }))
 vi.mock('@/components/DetailPage/index.vue', () => ({
   default: defineComponent({
     setup: (_, { slots }) => () => h('div', [slots.actions?.(), slots.default?.()]),
@@ -208,6 +209,45 @@ describe('workflow instance detail variables', () => {
 
     expect(host.textContent).toContain('公开内容')
     expect(host.textContent).not.toContain('secret')
+  })
+
+  it('keeps observer form values when only one current node hides the field', async () => {
+    const host = await mountDetail({
+      id: 1,
+      definitionId: 1,
+      definitionName: '报销',
+      status: 1,
+      variablesJson: JSON.stringify({ amount: 8000, reason: '差旅' }),
+      currentNodeIds: ['finance', 'hr'],
+      visitedNodeIds: ['finance', 'hr'],
+      hisTasks: [],
+      model: {
+        version: 1,
+        formSchema: {
+          version: 1,
+          fields: [
+            { key: 'amount', label: '金额', type: 'money', required: true },
+            { key: 'reason', label: '事由', type: 'textarea', required: true },
+          ],
+        },
+        root: {
+          id: 'finance',
+          type: 'approval',
+          name: '财务',
+          props: { formPerms: [{ field: 'amount', access: 'readonly' }, { field: 'reason', access: 'readonly' }] },
+          next: {
+            id: 'hr',
+            type: 'approval',
+            name: '人事',
+            props: { formPerms: [{ field: 'amount', access: 'hidden' }, { field: 'reason', access: 'hidden' }] },
+            next: null,
+          },
+        },
+      },
+    })
+
+    expect(host.textContent).toContain('金额8000')
+    expect(host.textContent).toContain('事由差旅')
   })
 
   it('replays parallel arm state and ordered event identity', async () => {
