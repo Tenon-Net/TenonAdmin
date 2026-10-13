@@ -1640,6 +1640,7 @@ export default {
       transferRequired: '请选择转办对象',
       issue: {
         starterNotAllowed: '不能选择发起人，否则申请人可以审批自己的单据',
+        urgeTooSoon: '催办过于频繁，请 {seconds} 秒后再试',
       },
       delegateUser: '委托给',
       delegateRequired: '请选择委托对象',

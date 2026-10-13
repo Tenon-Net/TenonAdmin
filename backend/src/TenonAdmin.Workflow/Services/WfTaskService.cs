@@ -20,8 +20,11 @@ public class WfTaskService(
     IRepository<WfHistory> histories,
     IWorkflowNotifier notifier,
     ILogger<WfTaskService> logger,
-    ICurrentUser? currentUser = null) : IWfTaskService, IWfFormTaskService
+    ICurrentUser? currentUser = null,
+    TimeProvider? timeProvider = null) : IWfTaskService, IWfFormTaskService
 {
+    /// <summary>同一发起人对同一实例的催办间隔。</summary>
+    public static readonly TimeSpan UrgeCooldown = TimeSpan.FromMinutes(5);
     /// <inheritdoc />
     public virtual async Task<PagedList<WfTodoItemOutput>> PageTodoAsync(
         long userId,
@@ -243,6 +246,27 @@ public class WfTaskService(
 
         if (toUserIds.Count == 0)
             return;
+
+        var clock = timeProvider ?? TimeProvider.System;
+        var latestUrge = await histories.AsQueryable()
+            .Where(history => history.InstanceId == instance.Id
+                              && history.EventType == WfHistoryEventType.TaskUrged
+                              && history.ActorUserId == callerUserId)
+            .OrderBy(history => history.CreateTime, OrderByType.Desc)
+            .FirstAsync();
+        if (latestUrge is not null)
+        {
+            var elapsed = clock.GetLocalNow().DateTime - latestUrge.CreateTime;
+            if (elapsed < UrgeCooldown)
+            {
+                var retryAfterSeconds = Math.Max(1, (int)Math.Ceiling((UrgeCooldown - elapsed).TotalSeconds));
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.UrgeNotAllowed, new Dictionary<string, object?>
+                {
+                    ["reason"] = "urgeTooSoon",
+                    ["retryAfterSeconds"] = retryAfterSeconds,
+                });
+            }
+        }
 
         await WfHistorySequence.WriteSystemRowAsync(histories.Db, new WfHistory
         {

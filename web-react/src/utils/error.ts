@@ -57,7 +57,10 @@ export function translateError(err: unknown): string {
     const adminKey = reason ? `workflow.monitor.admin.issue.${reason}` : ''
     if (adminKey && te(adminKey)) return t(adminKey)
     const detailKey = reason ? `workflow.detail.issue.${reason}` : ''
-    if (detailKey && te(detailKey)) return t(detailKey)
+    if (detailKey && te(detailKey)) {
+      const seconds = err.args?.retryAfterSeconds
+      return seconds != null ? t(detailKey, { seconds: String(seconds) }) : t(detailKey)
+    }
     if (err.msgKey && te(err.msgKey)) return t(err.msgKey)
     // 无 msgKey 时用数字码兜底(下载失败信封偶发只有 code)
     if (!err.msgKey && CODE_MSG_KEY[err.code] && te(CODE_MSG_KEY[err.code])) {

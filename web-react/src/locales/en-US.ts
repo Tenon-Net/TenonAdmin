@@ -1923,6 +1923,7 @@ export default {
       returnedHint: 'This request was returned. Update it and submit again.',
       issue: {
         starterNotAllowed: 'The applicant cannot be selected, or they could approve their own request',
+        urgeTooSoon: 'Please wait {seconds} seconds before urging again',
       },
       delegateUser: 'Delegate to',
       delegateRequired: 'Please pick a delegate',
