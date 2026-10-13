@@ -124,7 +124,7 @@ export default function WfDelegationPage() {
     () => [
       {
         title: t('workflow.delegation.originalUser'), dataIndex: 'originalUserId', minWidth: 170,
-        formItemRender: () => <UserSelect placeholder={t('workflow.delegation.originalUser')} />,
+        formItemRender: () => <UserSelect source="workflow" placeholder={t('workflow.delegation.originalUser')} />,
         render: (_, r) => r.originalUserName || `#${r.originalUserId}`,
       },
       {
@@ -206,13 +206,13 @@ export default function WfDelegationPage() {
             rules={[{ required: true, message: t('workflow.delegation.required') }]}
           >
             {/* 原责任人建后不可改(改了就是另一条规则) */}
-            <UserSelect disabled={editingId !== null} placeholder={t('workflow.delegation.originalUser')} />
+            <UserSelect source="workflow" disabled={editingId !== null} placeholder={t('workflow.delegation.originalUser')} />
           </Form.Item>
           <Form.Item
             name="delegateUserId" label={t('workflow.delegation.delegateUser')}
             rules={[{ required: true, message: t('workflow.delegation.required') }]}
           >
-            <UserSelect placeholder={t('workflow.delegation.delegateUser')} />
+            <UserSelect source="workflow" placeholder={t('workflow.delegation.delegateUser')} />
           </Form.Item>
           <Form.Item
             name="startsAt" label={t('workflow.delegation.startsAt')}

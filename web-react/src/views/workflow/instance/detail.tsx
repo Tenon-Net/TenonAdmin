@@ -681,7 +681,7 @@ export default function WfInstanceDetailPage() {
         <Form form={actionForm} layout="vertical" onValuesChange={() => requestKey.reset()}>
           {action && USER_ACTIONS.includes(action) ? (
             <Form.Item name="toUserId" label={t(`workflow.detail.${action}User`)}>
-              <UserSelect placeholder={t(`workflow.detail.${action}User`)} />
+              <UserSelect source="workflow" placeholder={t(`workflow.detail.${action}User`)} />
             </Form.Item>
           ) : null}
 
@@ -745,7 +745,7 @@ export default function WfInstanceDetailPage() {
                   name={['selectedUserIdsByNode', node.id]}
                   label={node.name || t('workflow.start.selfSelect')}
                 >
-                  <UserSelect mode="multiple" placeholder={t('workflow.start.selfSelectHint')} />
+                  <UserSelect source="workflow" mode="multiple" placeholder={t('workflow.start.selfSelectHint')} />
                 </Form.Item>
               ))}
             </>

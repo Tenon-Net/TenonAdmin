@@ -197,7 +197,7 @@ export default function WfStartPage() {
             name={['selectedUserIdsByNode', node.id]}
             label={node.name || t('workflow.start.selfSelect')}
           >
-            <UserSelect mode="multiple" placeholder={t('workflow.start.selfSelectHint')} />
+            <UserSelect source="workflow" mode="multiple" placeholder={t('workflow.start.selfSelectHint')} />
           </Form.Item>
         ))}
 

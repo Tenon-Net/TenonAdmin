@@ -158,6 +158,10 @@ internal sealed class AddSignTaskOp(WfTask task, long userId, long targetUserId,
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.SignTargetInvalid,
                 new Dictionary<string, object?> { ["targetUserId"] = TargetUserId });
 
+        if (TargetUserId == ctx.Instance.StarterUserId)
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.SignTargetInvalid,
+                new Dictionary<string, object?> { ["targetUserId"] = TargetUserId, ["reason"] = "starterNotAllowed" });
+
         await EnsureCallerAndTargetScopeAsync(ctx, UserId, TargetUserId, cancellationToken);
         var caller = await RequirePendingCallerAsync(ctx, cancellationToken);
         var alreadyActor = await ctx.Db.Queryable<WfTaskActor>()

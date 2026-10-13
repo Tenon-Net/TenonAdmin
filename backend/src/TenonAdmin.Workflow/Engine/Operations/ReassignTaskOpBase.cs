@@ -43,6 +43,13 @@ public abstract class ReassignTaskOpBase(
                 new Dictionary<string, object?> { ["toUserId"] = ToUserId });
         }
 
+        // 转给发起人会让申请人审批自己的单。转办和委托都走这里。
+        if (ToUserId == ctx.Instance.StarterUserId)
+        {
+            throw WorkflowErrorCode.Exception(TargetInvalidErrorCode,
+                new Dictionary<string, object?> { ["toUserId"] = ToUserId, ["reason"] = "starterNotAllowed" });
+        }
+
         var targetEnabled = await ctx.Db.Queryable<TenonAdmin.Services.SysUser>()
             .Where(u => u.Id == ToUserId && u.Enabled == true)
             .AnyAsync();

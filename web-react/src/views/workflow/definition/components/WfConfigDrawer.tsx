@@ -526,7 +526,7 @@ export function WfConfigDrawer({ open, model, nodeId, onOpenChange, onModelChang
           ) : null}
           {form.timeoutHours > 0 && form.timeoutAction === 'transfer' ? (
             <Form.Item label={t('workflow.designer.timeoutTransfer')}>
-              <UserSelect
+              <UserSelect source="workflow"
                 allowClear
                 value={form.timeoutTransferUserId ?? undefined}
                 onChange={(value: WfId | null) => set({ timeoutTransferUserId: value ?? null })}
@@ -615,7 +615,7 @@ export function WfConfigDrawer({ open, model, nodeId, onOpenChange, onModelChang
 
         {node.type === 'start' ? (
           <Form.Item label={t('workflow.designer.initiatorUsers')}>
-            <UserSelect
+            <UserSelect source="workflow"
               mode="multiple" allowClear
               value={form.initiatorUserIds}
               onChange={(value: WfId[]) => set({ initiatorUserIds: value ?? [] })}
@@ -678,7 +678,7 @@ export function WfConfigDrawer({ open, model, nodeId, onOpenChange, onModelChang
             </Form.Item>
             {form.provider === 'user' ? (
               <Form.Item label={t('workflow.designer.users')}>
-                <UserSelect
+                <UserSelect source="workflow"
                   mode="multiple" placeholder={t('workflow.designer.users')}
                   value={form.userIds}
                   onChange={(value: WfId[]) => set({ userIds: value ?? [] })}

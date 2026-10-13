@@ -422,7 +422,7 @@ defineExpose({ validate })
         :disabled="!canEdit(field)"
         @update:value="updateValue(field, $event)"
       />
-      <UserSelect
+      <UserSelect source="workflow"
         v-else-if="field.type === 'user'"
         :value="userValue(field)"
         :multiple="userMultiple(field)"

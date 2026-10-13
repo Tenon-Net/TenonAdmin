@@ -1924,6 +1924,9 @@ export default {
       commentHint: '填写意见(可选)',
       transferUser: '转办给',
       transferRequired: '请选择转办对象',
+      issue: {
+        starterNotAllowed: '不能选择发起人，否则申请人可以审批自己的单据',
+      },
       delegateUser: '委托给',
       delegateRequired: '请选择委托对象',
       addSignUser: '加签给',

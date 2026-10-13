@@ -163,6 +163,8 @@ public static class WorkflowSetup
         services.TryAddScoped<IWfAiDecisionAuditReader, WfInstanceService>();
         // 监控页的强制转办 / 终止 / 跳过。独立接口,替换实例服务不会卸掉干预。
         services.TryAddScoped<IWfAdminInterventionService, WfAdminInterventionService>();
+        // 办理人选人。独立于系统用户分页,普通审批人没有用户管理权限也能选。
+        services.TryAddScoped<IWfParticipantLookupService, WfParticipantLookupService>();
 
         // 抄送列表(抄送≠待办);消费者前置同接口即可整体替换。
         services.TryAddScoped<IWfCcService, WfCcService>();

@@ -1634,6 +1634,9 @@ export default {
       formInvalid: '请先修正表单中的错误，已填写的意见会保留',
       transferUser: '转办给',
       transferRequired: '请选择转办对象',
+      issue: {
+        starterNotAllowed: '不能选择发起人，否则申请人可以审批自己的单据',
+      },
       delegateUser: '委托给',
       delegateRequired: '请选择委托对象',
       addSignUser: '加签给',

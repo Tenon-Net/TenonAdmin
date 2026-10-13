@@ -401,7 +401,7 @@ const title = computed(() => {
 
         <template v-if="node.type === 'start'">
           <n-form-item :label="t('workflow.designer.initiatorUsers')">
-            <UserSelect v-model:value="form.initiatorUserIds" multiple clearable />
+            <UserSelect source="workflow" v-model:value="form.initiatorUserIds" multiple clearable />
           </n-form-item>
         </template>
 
@@ -452,7 +452,7 @@ const title = computed(() => {
           </n-form-item>
 
           <n-form-item v-if="form.provider === 'user'" :label="t('workflow.designer.users')">
-            <UserSelect v-model:value="form.userIds" multiple :placeholder="t('workflow.designer.users')" />
+            <UserSelect source="workflow" v-model:value="form.userIds" multiple :placeholder="t('workflow.designer.users')" />
           </n-form-item>
           <n-form-item v-else-if="form.provider === 'leader' || form.provider === 'multiLeader'" :label="t('workflow.designer.level')">
             <n-input-number v-model:value="form.level" :min="1" :max="20" class="w-full" />
@@ -548,7 +548,7 @@ const title = computed(() => {
                 v-if="form.timeoutHours > 0 && form.timeoutAction === 'transfer'"
                 :label="t('workflow.designer.timeoutTransfer')"
               >
-                <UserSelect v-model:value="form.timeoutTransferUserId" />
+                <UserSelect source="workflow" v-model:value="form.timeoutTransferUserId" />
               </n-form-item>
               <n-form-item :label="t('workflow.designer.labelApprove')">
                 <n-input v-model:value="form.labelApprove" :placeholder="t('workflow.detail.approve')" />

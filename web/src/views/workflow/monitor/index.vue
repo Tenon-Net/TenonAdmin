@@ -135,6 +135,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       label: () => t('workflow.monitor.starter'),
       render: ({ value, setValue, search }) =>
         h(UserSelect, {
+          source: 'workflow',
           value: value as number | null,
           clearable: true,
           placeholder: t('workflow.monitor.starter'),
@@ -157,6 +158,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       label: () => t('workflow.monitor.actor'),
       render: ({ value, setValue, search }) =>
         h(UserSelect, {
+          source: 'workflow',
           value: value as number | null,
           clearable: true,
           placeholder: t('workflow.monitor.actor'),
@@ -178,6 +180,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       label: () => t('workflow.monitor.cc'),
       render: ({ value, setValue, search }) =>
         h(UserSelect, {
+          source: 'workflow',
           value: value as number | null,
           clearable: true,
           placeholder: t('workflow.monitor.cc'),
@@ -281,7 +284,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
   >
     <n-form>
       <n-form-item v-if="adminKind === 'transfer'" :label="t('workflow.monitor.targetUser')" required>
-        <UserSelect v-model:value="toUserId" :placeholder="t('workflow.monitor.targetUser')" />
+        <UserSelect v-model:value="toUserId" source="workflow" :placeholder="t('workflow.monitor.targetUser')" />
       </n-form-item>
       <n-form-item v-if="adminKind !== 'terminate'" :label="t('workflow.monitor.nodeId')">
         <n-input v-model:value="nodeId" clearable />

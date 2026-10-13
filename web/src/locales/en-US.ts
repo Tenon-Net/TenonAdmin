@@ -1629,6 +1629,9 @@ export default {
       formInvalid: 'Fix the form errors first. Your comment is kept.',
       transferUser: 'Transfer to',
       transferRequired: 'Please pick a user',
+      issue: {
+        starterNotAllowed: 'The applicant cannot be selected, or they could approve their own request',
+      },
       delegateUser: 'Delegate to',
       delegateRequired: 'Please pick a delegate',
       addSignUser: 'Add signer',

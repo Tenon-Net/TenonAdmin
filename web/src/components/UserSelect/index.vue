@@ -1,15 +1,29 @@
 <script setup lang="ts">
-// 人员选择器:基于 ApiSelect,fetch=userApi.page(name 搜索 + 可选 orgId 部门过滤)。
+// 人员选择器:基于 ApiSelect。
+// source=admin 走用户管理分页(需权限);source=workflow 走审批选人,只返回启用用户的姓名和账号。
 // 选项 label 为「姓名(账号)」,value 为用户 id。单/多选、placeholder 等一切经 $attrs 透传。
 import { computed } from 'vue'
 import type { SelectOption } from 'naive-ui'
 import ApiSelect from '@/components/ApiSelect/index.vue'
 import { userApi } from '@/api'
+import { wfParticipantApi } from '@/api/workflow'
 
 defineOptions({ inheritAttrs: false })
-const props = withDefaults(defineProps<{ orgId?: number | null; pageSize?: number }>(), { pageSize: 50 })
+const props = withDefaults(defineProps<{
+  orgId?: number | null
+  pageSize?: number
+  source?: 'admin' | 'workflow'
+}>(), { pageSize: 50, source: 'admin' })
 
 async function fetch(keyword: string): Promise<SelectOption[]> {
+  if (props.source === 'workflow') {
+    const { items } = await wfParticipantApi.page({
+      page: 1,
+      pageSize: props.pageSize,
+      keyword: keyword || undefined,
+    })
+    return items.map((u) => ({ label: `${u.name}(${u.account})`, value: u.id }))
+  }
   const { items } = await userApi.page({
     page: 1,
     pageSize: props.pageSize,

@@ -186,6 +186,21 @@ public record WfTaskActionInput
     // 故控制器**不给催办透传**——催办可重复,不做幂等(见台账 ## 语义契约)。
 }
 
+/// <summary>办理人选择器查询。只按姓名或账号搜索仍启用的用户。</summary>
+public record WfParticipantLookupInput : PageInputBase
+{
+    /// <summary>姓名或账号关键字;空白表示不按关键字过滤。</summary>
+    public string? Keyword { get; init; }
+}
+
+/// <summary>办理人候选项。只含选择器需要的字段,不含手机、邮箱和角色。</summary>
+public record WfParticipantCandidateOutput
+{
+    public long Id { get; init; }
+    public string Name { get; init; } = "";
+    public string Account { get; init; } = "";
+}
+
 /// <summary>管理员强制转办入参。</summary>
 public record WfAdminForceTransferInput
 {

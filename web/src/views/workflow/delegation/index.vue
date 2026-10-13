@@ -151,10 +151,10 @@ const columns: ProTableColumn<WfDelegationRule>[] = [
   <n-modal v-model:show="modalOpen" preset="card" style="width: 520px" :title="editingId == null ? t('workflow.delegation.add') : t('workflow.delegation.edit')">
     <n-form label-placement="left" label-width="110">
       <n-form-item :label="t('workflow.delegation.originalUser')">
-        <UserSelect v-model:value="form.originalUserId" :disabled="editingId != null" />
+        <UserSelect source="workflow" v-model:value="form.originalUserId" :disabled="editingId != null" />
       </n-form-item>
       <n-form-item :label="t('workflow.delegation.delegateUser')">
-        <UserSelect v-model:value="form.delegateUserId" />
+        <UserSelect source="workflow" v-model:value="form.delegateUserId" />
       </n-form-item>
       <n-form-item :label="t('workflow.delegation.startsAt')">
         <n-date-picker v-model:value="form.startsAt" type="datetime" clearable />

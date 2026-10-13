@@ -8,12 +8,12 @@ using TenonAdmin.Workflow;
 namespace TenonAdmin.Tests;
 
 /// <summary>
-/// 工作流卫星包可替换性「十九件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
-/// 十九个 <c>TryAdd</c> SPI 面:<see cref="IApproverResolver"/> /
+/// 工作流卫星包可替换性「二十件套」——锁 <see cref="WorkflowSetup.AddTenonAdminWorkflow"/> 里
+/// 二十个 <c>TryAdd</c> SPI 面:<see cref="IApproverResolver"/> /
 /// <see cref="IWorkflowFormBinder"/> / <see cref="IWorkflowEngine"/> /
 /// <see cref="IWfConditionEvaluator"/> /
 /// <see cref="IWfDefinitionService"/> / <see cref="IWfTaskService"/> /
-/// <see cref="IWfInstanceService"/> / <see cref="IWfAdminInterventionService"/> / <see cref="IWfAiDecisionAuditReader"/> / <see cref="IWorkflowNotifier"/> /
+/// <see cref="IWfInstanceService"/> / <see cref="IWfAdminInterventionService"/> / <see cref="IWfParticipantLookupService"/> / <see cref="IWfAiDecisionAuditReader"/> / <see cref="IWorkflowNotifier"/> /
 /// <see cref="IWfCcService"/> / <see cref="IWfOperationReceiptService"/> /
 /// / <see cref="IWfDelegationService"/> / <see cref="IWfTaskSignService"/>
 /// <see cref="IAiDecisionProvider"/> / <see cref="IAiDecisionProposalParser"/> /
@@ -171,6 +171,16 @@ public class WorkflowReplaceabilityTests
         await using var sp = BuildProvider(s => s.AddScoped<IWorkflowNotifier, FakeWorkflowNotifier>());
         await using var scope = sp.CreateAsyncScope();
         Assert.IsType<FakeWorkflowNotifier>(scope.ServiceProvider.GetRequiredService<IWorkflowNotifier>());
+    }
+
+    /// <summary>变异:WorkflowSetup 里 IWfParticipantLookupService 的 TryAdd 改 Add → 本条红。</summary>
+    [Fact]
+    public async Task PreRegisteredParticipantLookupService_ShouldWinOverBuiltIn()
+    {
+        await using var sp = BuildProvider(s => s.AddScoped<IWfParticipantLookupService, FakeParticipantLookupService>());
+        await using var scope = sp.CreateAsyncScope();
+        Assert.IsType<FakeParticipantLookupService>(
+            scope.ServiceProvider.GetRequiredService<IWfParticipantLookupService>());
     }
 
     /// <summary>变异:WorkflowSetup 里 IWfAdminInterventionService 的 TryAdd 改 Add → 本条红。</summary>
@@ -523,6 +533,14 @@ public class WorkflowReplaceabilityTests
             WfNotifyContext ctx, long taskId, long? fromUserId, IReadOnlyList<long> toUserIds,
             CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+    }
+
+    private sealed class FakeParticipantLookupService : IWfParticipantLookupService
+    {
+        public Task<PagedList<WfParticipantCandidateOutput>> PageAsync(
+            WfParticipantLookupInput input,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeAdminInterventionService : IWfAdminInterventionService

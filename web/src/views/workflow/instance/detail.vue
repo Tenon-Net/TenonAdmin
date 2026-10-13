@@ -919,6 +919,7 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
         <UserSelect
           v-if="actionKind === 'transfer' || actionKind === 'delegate' || actionKind === 'addSign' || actionKind === 'removeSign'"
           v-model:value="actionForm.toUserId"
+          source="workflow"
           :disabled="actionSubmitting"
           :placeholder="actionKind === 'delegate'
             ? t('workflow.detail.delegateUser')

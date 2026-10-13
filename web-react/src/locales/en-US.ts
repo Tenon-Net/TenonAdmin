@@ -1917,6 +1917,9 @@ export default {
       commentHint: 'Comment (optional)',
       transferUser: 'Transfer to',
       transferRequired: 'Please pick a user',
+      issue: {
+        starterNotAllowed: 'The applicant cannot be selected, or they could approve their own request',
+      },
       delegateUser: 'Delegate to',
       delegateRequired: 'Please pick a delegate',
       addSignUser: 'Add signer',

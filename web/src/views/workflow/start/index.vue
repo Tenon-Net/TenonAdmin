@@ -246,6 +246,7 @@ function removeVarRow(i: number) {
         :label="node.name || t('workflow.start.selfSelect')"
       >
         <UserSelect
+          source="workflow"
           v-model:value="form.selectedUserIdsByNode[node.id]"
           multiple
           :placeholder="t('workflow.start.selfSelectHint')"

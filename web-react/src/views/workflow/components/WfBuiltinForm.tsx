@@ -213,7 +213,7 @@ export const WfBuiltinForm = forwardRef<WfBuiltinFormHandle, WfBuiltinFormProps>
         const multiple = field.props?.multiple === true
         const raw = valueOf(field)
         return (
-          <UserSelect
+          <UserSelect source="workflow"
             id={id} disabled={disabled} placeholder={placeholder}
             mode={multiple ? 'multiple' : undefined}
             value={multiple ? (Array.isArray(raw) ? (raw as Array<number | string>) : []) : ((raw as number | string | undefined) ?? undefined)}

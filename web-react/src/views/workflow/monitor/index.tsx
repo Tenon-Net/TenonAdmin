@@ -111,16 +111,16 @@ export default function WfMonitorPage() {
       },
       {
         title: t('workflow.monitor.starter'), dataIndex: 'starterUserId', width: 140,
-        formItemRender: () => <UserSelect placeholder={t('workflow.monitor.starter')} />,
+        formItemRender: () => <UserSelect source="workflow" placeholder={t('workflow.monitor.starter')} />,
         render: (_, r) => (r.starterUserId == null ? '—' : t('workflow.detail.userFallback', { id: r.starterUserId })),
       },
       {
         title: t('workflow.monitor.actor'), dataIndex: 'actorUserId', hideInTable: true, hideInSetting: true,
-        formItemRender: () => <UserSelect placeholder={t('workflow.monitor.actor')} />,
+        formItemRender: () => <UserSelect source="workflow" placeholder={t('workflow.monitor.actor')} />,
       },
       {
         title: t('workflow.monitor.cc'), dataIndex: 'ccUserId', hideInTable: true, hideInSetting: true,
-        formItemRender: () => <UserSelect placeholder={t('workflow.monitor.cc')} />,
+        formItemRender: () => <UserSelect source="workflow" placeholder={t('workflow.monitor.cc')} />,
       },
       {
         title: t('workflow.monitor.businessKey'), dataIndex: 'businessKey', width: 140, ellipsis: true,
@@ -192,7 +192,7 @@ export default function WfMonitorPage() {
         <Form layout="vertical">
           {kind === 'transfer' ? (
             <Form.Item label={t('workflow.monitor.targetUser')} required>
-              <UserSelect
+              <UserSelect source="workflow"
                 value={toUserId ?? undefined}
                 placeholder={t('workflow.monitor.targetUser')}
                 onChange={(value) => setToUserId(value as number | string | null)}
