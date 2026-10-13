@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { NGrid, NGi, NCard, NSpin } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
@@ -65,7 +65,7 @@ const distribution = computed(() => [
     <!-- 欢迎横幅(英雄区:btnGrad 头像)-->
     <div ref="bannerRef" class="banner">
       <div class="avatar" :style="avatarStyle">
-        <Icon icon="lucide:user" :width="26" color="#fff" />
+        <AppIcon icon="lucide:user" :size="26" color="#fff" />
       </div>
       <div>
         <div class="hi">{{ t('workbench.welcome', { name: user.userInfo?.name ?? '' }) }}</div>
@@ -78,7 +78,7 @@ const distribution = computed(() => [
         <n-gi v-for="s in stats" :key="s.key">
           <n-card :bordered="true">
             <div class="stat">
-              <div class="stat-ico" :style="{ color: s.color }"><Icon :icon="s.icon" :width="28" /></div>
+              <div class="stat-ico" :style="{ color: s.color }"><AppIcon :icon="s.icon" :size="28" /></div>
               <div>
                 <div class="stat-val tabular">{{ s.value }}</div>
                 <div class="stat-label">{{ t(`workbench.${s.key}`) }}</div>

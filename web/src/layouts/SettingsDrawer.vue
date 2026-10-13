@@ -15,7 +15,7 @@ import {
   NButton,
 } from 'naive-ui'
 import { computed } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { useMessage } from 'naive-ui'
 import { useWindowSize, useClipboard } from '@vueuse/core'
@@ -59,13 +59,13 @@ const transitionOptions = computed(() => [
           <n-divider title-placement="left">{{ t('settings.themeMode') }}</n-divider>
           <n-radio-group v-model:value="app.themeScheme" size="small" class="seg">
             <n-radio-button value="light">
-              <Icon icon="lucide:sun" class="ri" />{{ t('app.light') }}
+              <AppIcon icon="lucide:sun" class="ri" />{{ t('app.light') }}
             </n-radio-button>
             <n-radio-button value="dark">
-              <Icon icon="lucide:moon-star" class="ri" />{{ t('app.dark') }}
+              <AppIcon icon="lucide:moon-star" class="ri" />{{ t('app.dark') }}
             </n-radio-button>
             <n-radio-button value="auto">
-              <Icon icon="lucide:monitor" class="ri" />{{ t('settings.auto') }}
+              <AppIcon icon="lucide:monitor" class="ri" />{{ t('settings.auto') }}
             </n-radio-button>
           </n-radio-group>
 
@@ -82,7 +82,7 @@ const transitionOptions = computed(() => [
               :aria-pressed="app.accent === c"
               @click="app.setAccent(c)"
             >
-              <Icon v-if="app.accent === c" icon="lucide:check" class="tick" />
+              <AppIcon v-if="app.accent === c" icon="lucide:check" class="tick" />
             </button>
           </div>
           <n-color-picker
@@ -169,12 +169,12 @@ const transitionOptions = computed(() => [
       <template #footer>
         <div class="footer-actions">
           <n-button v-if="showCopyConfig" block tertiary @click="copyConfig">
-            <Icon icon="lucide:clipboard" class="ri" />{{ t('settings.copyConfig') }}
+            <AppIcon icon="lucide:clipboard" class="ri" />{{ t('settings.copyConfig') }}
           </n-button>
           <n-popconfirm @positive-click="app.resetSettings()">
             <template #trigger>
               <n-button block secondary>
-                <Icon icon="lucide:rotate-ccw" class="ri" />{{ t('common.reset') }}
+                <AppIcon icon="lucide:rotate-ccw" class="ri" />{{ t('common.reset') }}
               </n-button>
             </template>
             {{ t('settings.resetConfirm') }}

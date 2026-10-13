@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterView } from 'vue-router'
 import { NWatermark, NDrawer, NDrawerContent, NButton } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, type LayoutMode } from '@/stores/app'
@@ -191,7 +191,7 @@ watch(
     <!-- 顶栏 -->
     <header class="header" :class="{ 'header--static': !app.fixedHeader }">
       <n-button v-if="isMobile" quaternary circle class="hbg" :aria-label="t('app.openMenu')" @click="mobileOpen = true">
-        <Icon icon="lucide:list" :width="20" />
+        <AppIcon icon="lucide:list" :size="20" />
       </n-button>
       <div class="apph">
         <AppHeader :show-collapse="showCollapse" :show-brand="headerShowBrand" :top-menu="headerTopMenu" />

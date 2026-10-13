@@ -35,4 +35,16 @@ describe('setupIcons', () => {
 
     await vi.waitFor(() => expect(host.querySelector('svg')).not.toBeNull())
   })
+
+  it('does not call the network when an icon is missing from the bundle', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    setupIcons()
+    const host = document.createElement('div')
+    document.body.append(host)
+    app = createApp({ render: () => h(Icon, { icon: 'mdi:home' }) })
+    app.mount(host)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(fetchSpy).not.toHaveBeenCalled()
+    fetchSpy.mockRestore()
+  })
 })

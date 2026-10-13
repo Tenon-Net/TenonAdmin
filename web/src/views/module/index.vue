@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NSpin, NTag, useMessage } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
@@ -58,7 +58,7 @@ async function setDefault(id: number) {
       <h1>{{ t('module.choose') }}</h1>
       <!-- 从应用内点九宫格进来的(路由已就绪)才给返回;登录直落选择页时无处可返。 -->
       <n-button v-if="auth.routesReady" text size="small" class="back" @click="router.back()">
-        <Icon icon="ph:arrow-left" :width="16" />
+        <AppIcon icon="ph:arrow-left" :size="16" />
         <span style="margin-left: 4px">{{ t('module.back') }}</span>
       </n-button>
     </div>
@@ -82,7 +82,7 @@ async function setDefault(id: number) {
           @keydown.enter="pick(m.id)"
           @keydown.space.prevent="pick(m.id)"
         >
-          <div class="ico"><Icon :icon="m.icon || 'ph:app-window-duotone'" :width="28" /></div>
+          <div class="ico"><AppIcon :icon="m.icon || 'ph:app-window-duotone'" :size="28" /></div>
           <div class="body">
             <div class="name">{{ m.title }}</div>
             <div class="code">{{ m.code }}</div>

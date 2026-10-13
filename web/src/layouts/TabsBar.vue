@@ -2,7 +2,7 @@
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NDropdown, NScrollbar, type DropdownOption } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { useTabsStore, type TabItem } from '@/stores/tabs'
 
@@ -57,7 +57,7 @@ function onClick(item: TabItem) {
 }
 
 function renderIcon(name: string) {
-  return () => h(Icon, { icon: name, width: 16 })
+  return () => h(AppIcon, { icon: name, size: 16 })
 }
 
 const ctxShow = ref(false)
@@ -152,14 +152,14 @@ onBeforeUnmount(() => {
           @mousedown.middle.prevent
           @auxclick.middle.prevent="tabs.removeTab(item.path)"
         >
-          <Icon v-if="item.icon" :icon="item.icon" :width="15" class="chip-icon" />
+          <AppIcon v-if="item.icon" :icon="item.icon" :size="15" class="chip-icon" />
           <span class="chip-label">{{ tabTitle(item) }}</span>
           <!-- 固定标签(用户 pin)显示图钉、不显示关闭 X;应用首页 affix 两者都不显示 -->
-          <Icon v-if="item.pinned" icon="lucide:pin" :width="12" class="chip-pin" />
-          <Icon
+          <AppIcon v-if="item.pinned" icon="lucide:pin" :size="12" class="chip-pin" />
+          <AppIcon
             v-else-if="!item.affix"
             icon="lucide:x"
-            :width="13"
+            :size="13"
             class="chip-close"
             role="button"
             tabindex="0"

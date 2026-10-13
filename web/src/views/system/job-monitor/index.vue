@@ -4,7 +4,7 @@
 // onUnmounted 兜底清定时器,防组件销毁后计时器泄漏还在发请求。
 import { computed, h, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
 import { NGrid, NGi, NCard, NSpin, NTag, NDataTable, useMessage, type DataTableColumns } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
 import BaseChart from '@/components/Chart/index.vue'
 import type { EChartsOption } from 'echarts'
@@ -115,7 +115,7 @@ const nodeColumns: DataTableColumns<JobNodeItem> = [
       <n-gi v-for="s in stats" :key="s.key">
         <n-card :bordered="true">
           <div class="stat">
-            <div class="stat-ico" :style="{ color: s.color }"><Icon :icon="s.icon" :width="28" /></div>
+            <div class="stat-ico" :style="{ color: s.color }"><AppIcon :icon="s.icon" :size="28" /></div>
             <div>
               <div class="stat-val tabular">{{ s.value }}</div>
               <div class="stat-label">{{ t(`job.monitor.${s.key}`) }}</div>
