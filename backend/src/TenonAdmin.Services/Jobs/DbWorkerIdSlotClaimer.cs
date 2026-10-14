@@ -23,7 +23,7 @@ public sealed class DbWorkerIdSlotClaimer(
             return WorkerIdAssignment.Resolve(options, onFallback);
 
         var client = OpenBareClient();
-        client.CodeFirst.InitTables<SysWorkerLease>();
+        RetryOnLockConflict(() => { client.CodeFirst.InitTables<SysWorkerLease>(); return true; }, onExhausted: null);
 
         var machine = Environment.MachineName;
         var pid = Environment.ProcessId;
@@ -32,7 +32,10 @@ public sealed class DbWorkerIdSlotClaimer(
 
         for (var n = 0; n <= SnowflakeIdGenerator.MaxWorkerId; n++)
         {
-            if (!TryOwnSlot(client, n, machine, pid, ttl, token))
+            var slot = n;
+            // 多宿主同时抢槽时 MySQL 可能把某条 INSERT 选为死锁牺牲者(1213)。该语句已被整句回滚、不留行,
+            // 原样重试同一槽最多 MaxLockConflictAttempts 次;仍冲突就当没抢到、继续下一个槽(跳槽不影响唯一性)。
+            if (!RetryOnLockConflict(() => TryOwnSlot(client, slot, machine, pid, ttl, token), onExhausted: false))
                 continue;
 
             var file = WorkerIdLease.TryAcquire(n, options.WorkerIdLockDir, onFallback);
@@ -50,6 +53,45 @@ public sealed class DbWorkerIdSlotClaimer(
         throw new InvalidOperationException(
             $"机器号 0–{SnowflakeIdGenerator.MaxWorkerId} 在 sys_worker_lease 上已被占满，拒绝发号以避免重复。" +
             "请检查是否有实例未退出，或为各实例显式配置不同的 TenonAdmin:Id:WorkerId。");
+    }
+
+    internal const int MaxLockConflictAttempts = 3;
+
+    private static bool RetryOnLockConflict(Func<bool> action, bool? onExhausted)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return action();
+            }
+            catch (Exception ex) when (IsLockConflict(ex))
+            {
+                if (attempt >= MaxLockConflictAttempts)
+                {
+                    if (onExhausted is { } fallback)
+                        return fallback;
+                    throw;
+                }
+                Thread.Sleep(Random.Shared.Next(10, 50) * attempt);
+            }
+        }
+    }
+
+    /// <summary>死锁 / 锁等待超时:MySQL 1213(SQLSTATE 40001)/1205,PostgreSQL 40P01,SQL Server 1205(按消息)。</summary>
+    public static bool IsLockConflict(Exception ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+        {
+            if (e is System.Data.Common.DbException db
+                && db.SqlState is "40001" or "40P01")
+                return true;
+            if (e.Message.Contains("Deadlock found when trying to get lock", StringComparison.OrdinalIgnoreCase)
+                || e.Message.Contains("Lock wait timeout exceeded", StringComparison.OrdinalIgnoreCase)
+                || e.Message.Contains("was deadlocked on lock", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private ISqlSugarClient OpenBareClient()
