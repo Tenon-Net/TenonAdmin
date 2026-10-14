@@ -16,7 +16,7 @@ public class WfTaskSignService(IWorkflowEngine engine) : IWfTaskSignService
             TaskId = taskId,
             UserId = userId,
             TargetUserId = targetUserId,
-            Comment = comment,
+            Comment = WfCommentRules.NormalizeOptional(comment),
             RequestId = requestId,
         }, cancellationToken);
 
@@ -33,7 +33,7 @@ public class WfTaskSignService(IWorkflowEngine engine) : IWfTaskSignService
             TaskId = taskId,
             UserId = userId,
             TargetUserId = targetUserId,
-            Comment = comment,
+            Comment = WfCommentRules.NormalizeOptional(comment),
             RequestId = requestId,
         }, cancellationToken);
 
@@ -48,7 +48,7 @@ public class WfTaskSignService(IWorkflowEngine engine) : IWfTaskSignService
         {
             TaskId = taskId,
             UserId = userId,
-            Comment = comment,
+            Comment = WfCommentRules.NormalizeOptional(comment),
             RequestId = requestId,
         }, cancellationToken);
 }

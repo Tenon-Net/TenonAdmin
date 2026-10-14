@@ -379,6 +379,10 @@ export default function WfInstanceDetailPage() {
       message.warning(t(kind === 'return' ? 'workflow.detail.returnReasonHint' : 'workflow.detail.commentRequired'))
       return
     }
+    if ((values.comment?.trim().length ?? 0) > 1000) {
+      message.warning(t('workflow.detail.commentTooLong'))
+      return
+    }
     const runtimeRef = kind === 'resubmit' ? resubmitFormRuntimeRef : formRuntimeRef
     if (VARIABLE_ACTIONS.includes(kind) && runtimeRef.current?.validate() === false) return
 
@@ -841,6 +845,8 @@ export default function WfInstanceDetailPage() {
             >
               <Input.TextArea
                 rows={3}
+                maxLength={1000}
+                showCount
                 placeholder={action === 'return'
                   ? t('workflow.detail.returnReasonHint')
                   : action === 'reject'
