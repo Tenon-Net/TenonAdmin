@@ -95,7 +95,7 @@ public class WfCompletedTimeTests
         var instanceId = start.GetProperty("data").GetProperty("instanceId").GetInt64();
         var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var reject = await PostEnvelope(approver, "/api/v1/workflow/task/reject", new { taskId });
+        var reject = await PostEnvelope(approver, "/api/v1/workflow/task/reject", new { taskId, comment = "办理意见" });
         Assert.Equal(0, reject.GetProperty("code").GetInt32());
 
         var done = await InstanceOf(f, instanceId);
@@ -129,7 +129,7 @@ public class WfCompletedTimeTests
         Assert.Equal(0, approve.GetProperty("code").GetInt32());
         var secondTaskId = approve.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var reject = await PostEnvelope(b, "/api/v1/workflow/task/reject", new { taskId = secondTaskId });
+        var reject = await PostEnvelope(b, "/api/v1/workflow/task/reject", new { taskId = secondTaskId, comment = "办理意见" });
         Assert.Equal(0, reject.GetProperty("code").GetInt32());
 
         var routed = await InstanceOf(f, instanceId);

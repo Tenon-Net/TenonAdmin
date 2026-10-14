@@ -226,14 +226,15 @@ public class WfParticipantIsolationTests
         }
         _ = viewUrl;
 
-        Assert.Equal(WorkflowErrorCode.TaskConflict, CodeOf(await Post(outsiderHr, "/api/v1/workflow/task/transfer", new { taskId, toUserId = starterId })));
-        Assert.Equal(WorkflowErrorCode.TaskConflict, CodeOf(await Post(outsiderHr, "/api/v1/workflow/task/delegate", new { taskId, toUserId = starterId })));
+        // 转给发起人在办理人 CAS 之前就被拒绝,所以不是 TaskConflict。
+        Assert.Equal(WorkflowErrorCode.TransferTargetInvalid, CodeOf(await Post(outsiderHr, "/api/v1/workflow/task/transfer", new { taskId, toUserId = starterId })));
+        Assert.Equal(WorkflowErrorCode.DelegateTargetInvalid, CodeOf(await Post(outsiderHr, "/api/v1/workflow/task/delegate", new { taskId, toUserId = starterId })));
 
         foreach (var client in new[] { outsiderHr, outsiderBe, wide, principal, cc, monitorHr, childApprover, starter })
         {
             Assert.Equal(WorkflowErrorCode.TaskConflict, CodeOf(await Post(client, "/api/v1/workflow/task/approve", new { taskId })));
-            Assert.Equal(WorkflowErrorCode.TaskConflict, CodeOf(await Post(client, "/api/v1/workflow/task/reject", new { taskId })));
-            Assert.Equal(WorkflowErrorCode.TaskConflict, CodeOf(await Post(client, "/api/v1/workflow/task/return", new { taskId })));
+            Assert.Equal(WorkflowErrorCode.TaskConflict, CodeOf(await Post(client, "/api/v1/workflow/task/reject", new { taskId, comment = "办理意见" })));
+            Assert.Equal(WorkflowErrorCode.TaskConflict, CodeOf(await Post(client, "/api/v1/workflow/task/return", new { taskId, comment = "办理意见" })));
             // 目标用户不在调用者数据范围内时,转办/委托会先返回目标非法,到不了办理人 CAS。两种都是拒绝。
             var transferred = CodeOf(await Post(client, "/api/v1/workflow/task/transfer", new { taskId, toUserId = childApproverId }));
             Assert.Contains(transferred, new[] { WorkflowErrorCode.TaskConflict, WorkflowErrorCode.TransferTargetInvalid });

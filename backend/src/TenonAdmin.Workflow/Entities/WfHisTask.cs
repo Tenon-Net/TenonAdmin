@@ -44,7 +44,7 @@ public class WfHisTask : BaseEntity
     [SugarColumn(ColumnDescription = "动作(1 同意 / 2 拒绝 / 3 转办 / …)")]
     public WfTaskAction Action { get; set; }
 
-    [SugarColumn(Length = 512, IsNullable = true, ColumnDescription = "审批意见")]
+    [SugarColumn(Length = WfCommentRules.MaxLength, IsNullable = true, ColumnDescription = "审批意见")]
     public string? Comment { get; set; }
 
     /// <summary>

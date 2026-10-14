@@ -201,6 +201,29 @@ describe('workflow/model M2a tree', () => {
     expect(validateModel(model)).toContainEqual({ code: 'duplicateNodeId', nodeId: 'shared' })
   })
 
+  it('rejects condition fields missing from the form schema', () => {
+    const model = createDefaultModel()
+    const branch = createBranchNode({ id: 'branch' })
+    const armId = branch.conditions![0]!.id
+    branch.conditions![0]!.expr = {
+      logic: 'and',
+      children: [{ field: 'amount', op: 'gt', value: 100 }],
+    }
+    model.root.next = branch
+    model.formSchema = {
+      version: 1,
+      fields: [{ key: 'reason', label: '事由', type: 'text', required: false }],
+    }
+    expect(validateModel(model)).toContainEqual({ code: 'conditionFieldUnknown', nodeId: 'branch', armId })
+
+    branch.conditions![0]!.expr = { field: 'reason', op: 'eq', value: 'ok' }
+    expect(validateModel(model)).toEqual([])
+
+    model.formSchema = null
+    branch.conditions![0]!.expr = { field: 'amount', op: 'gt', value: 100 }
+    expect(validateModel(model)).toEqual([])
+  })
+
   it('requires branch arms and exactly one default arm', () => {
     const model = createDefaultModel()
     const branch = createBranchNode({ id: 'branch' })
@@ -381,6 +404,8 @@ describe('workflow/model approval ratio', () => {
     model.root.next = approval
 
     expect(validateModel(model)).toEqual([])
+    approval.props!.allPassRatio = null as unknown as number
+    expect(validateModel(model)).toEqual([])
     approval.props!.allPassRatio = 0
     expect(validateModel(model)).toContainEqual({ code: 'allPassRatioInvalid', nodeId: 'approval' })
     approval.props!.mode = 'seq'
@@ -388,6 +413,44 @@ describe('workflow/model approval ratio', () => {
     expect(validateModel(model)).toContainEqual({ code: 'allPassRatioInvalid', nodeId: 'approval' })
     approval.props!.mode = 'any'
     expect(validateModel(model)).toEqual([])
+  })
+
+  it('accepts a countersign inside a condition branch when the ratio is null', () => {
+    const model = createDefaultModel()
+    const countersign = createApprovalNode({
+      id: 'finance',
+      name: '财务会签',
+      props: {
+        assignee: { provider: 'user', params: { userIds: [101, 102] } },
+        mode: 'all',
+        allPassRatio: null as unknown as number,
+      },
+    })
+    model.root.next = createBranchNode({
+      id: 'amount-branch',
+      name: '金额',
+      conditions: [
+        {
+          id: 'gt-5000',
+          name: '大于5000',
+          isDefault: false,
+          expr: { field: 'amount', op: 'gt', value: 5000 },
+          next: countersign,
+        },
+        { id: 'default', name: '默认', isDefault: true, expr: null, next: null },
+      ],
+    })
+    model.formSchema = {
+      version: 1,
+      fields: [{ key: 'amount', label: '金额', type: 'money', required: true }],
+    }
+
+    expect(validateModel(model)).toEqual([])
+    countersign.props!.mode = 'seq'
+    expect(validateModel(model)).toEqual([])
+    countersign.props!.allPassRatio = 0
+    countersign.props!.mode = 'all'
+    expect(validateModel(model)).toContainEqual({ code: 'allPassRatioInvalid', nodeId: 'finance' })
   })
 })
 

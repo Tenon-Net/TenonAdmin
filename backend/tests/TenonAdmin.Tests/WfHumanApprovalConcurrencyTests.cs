@@ -226,7 +226,7 @@ public class WfHumanApprovalConcurrencyTests
         var taskId = moved.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
         var returner = await ClientFor(f, "wf-ha-return-b");
-        var returnTask = PostSafe(returner, "/api/v1/workflow/task/return", new { taskId });
+        var returnTask = PostSafe(returner, "/api/v1/workflow/task/return", new { taskId, comment = "办理意见" });
         await gate.WaitEnteredAsync();
         CallResult approve;
         try

@@ -181,7 +181,7 @@ public class WfReceiptEngineTests
         var started = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
         var instanceId = started.GetProperty("data").GetProperty("instanceId").GetInt64();
         var taskId = started.GetProperty("data").GetProperty("createdTaskId").GetInt64();
-        Assert.Equal(0, (await PostEnvelope(approver, "/api/v1/workflow/task/return", new { taskId }))
+        Assert.Equal(0, (await PostEnvelope(approver, "/api/v1/workflow/task/return", new { taskId, comment = "办理意见" }))
             .GetProperty("code").GetInt32());
 
         var first = await PostEnvelope(starter, "/api/v1/workflow/instance/resubmit", new
@@ -336,7 +336,7 @@ public class WfReceiptEngineTests
 
         // 待办已随同意关闭,所以拒绝按正常业务规则失败。**关键是它没有被幂等成功**。
         var reject = await PostEnvelope(
-            a, "/api/v1/workflow/task/reject", new { taskId, requestId = "req-action-001" });
+            a, "/api/v1/workflow/task/reject", new { taskId, requestId = "req-action-001", comment = "办理意见" });
         Assert.NotEqual(0, reject.GetProperty("code").GetInt32());
     }
 

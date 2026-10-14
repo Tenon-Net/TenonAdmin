@@ -44,6 +44,18 @@ public class WfParticipantLookupTests
             Assert.False(item.TryGetProperty("email", out _));
             Assert.False(item.TryGetProperty("password", out _));
         });
+
+        var byPageSize = await (await actor.GetAsync(
+            "/api/v1/workflow/participant/page?Current=1&pageSize=3")).ReadEnvelope();
+        Assert.Equal(0, byPageSize.GetProperty("code").GetInt32());
+        Assert.Equal(3, byPageSize.GetProperty("data").GetProperty("size").GetInt32());
+        Assert.Equal(3, byPageSize.GetProperty("data").GetProperty("items").GetArrayLength());
+
+        var bySize = await (await actor.GetAsync(
+            "/api/v1/workflow/participant/page?Current=1&Size=3")).ReadEnvelope();
+        Assert.Equal(0, bySize.GetProperty("code").GetInt32());
+        Assert.Equal(3, bySize.GetProperty("data").GetProperty("size").GetInt32());
+        Assert.Equal(3, bySize.GetProperty("data").GetProperty("items").GetArrayLength());
     }
 
     [Fact]

@@ -327,7 +327,7 @@ public class WfTaskAssignmentHistoryTests
         // c 此刻仍是 Waiting——b 还没轮到,c 更没轮到。
         Assert.Equal(WfActorStatus.Waiting, (await ActorsOf(f, taskId)).Single(x => x.UserId == cId).Status);
 
-        var rejectB = await PostEnvelope(b, "/api/v1/workflow/task/reject", new { taskId });
+        var rejectB = await PostEnvelope(b, "/api/v1/workflow/task/reject", new { taskId, comment = "办理意见" });
         Assert.Equal(0, rejectB.GetProperty("code").GetInt32());
 
         var actors = await ActorsOf(f, taskId);

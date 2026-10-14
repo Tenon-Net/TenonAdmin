@@ -34,7 +34,7 @@ public class WorkflowM2RegressionTests
         Assert.Equal((int)WfInstanceStatus.Running,
             firstApprove.GetProperty("data").GetProperty("instanceStatus").GetInt32());
 
-        var secondReject = await PostEnvelope(second, "/api/v1/workflow/task/reject", new { taskId });
+        var secondReject = await PostEnvelope(second, "/api/v1/workflow/task/reject", new { taskId, comment = "办理意见" });
         Assert.Equal(0, secondReject.GetProperty("code").GetInt32());
         Assert.Equal((int)WfInstanceStatus.Rejected,
             secondReject.GetProperty("data").GetProperty("instanceStatus").GetInt32());

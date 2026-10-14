@@ -67,7 +67,7 @@ public class WfFormRuntimeTests
         var instanceId = started.GetProperty("instanceId").GetInt64();
         var taskId = started.GetProperty("createdTaskId").GetInt64();
         var approver = await ClientFor(factory, "wf-money-approver");
-        Assert.Equal(0, (await PostEnvelope(approver, "/api/v1/workflow/task/return", new { taskId })).GetProperty("code").GetInt32());
+        Assert.Equal(0, (await PostEnvelope(approver, "/api/v1/workflow/task/return", new { taskId, comment = "办理意见" })).GetProperty("code").GetInt32());
 
         var resubmit = await PostEnvelope(starter, "/api/v1/workflow/instance/resubmit", new
         {

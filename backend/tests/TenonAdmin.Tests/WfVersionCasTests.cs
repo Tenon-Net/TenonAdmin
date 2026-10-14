@@ -142,7 +142,7 @@ public class WfVersionCasTests
         var instanceId = start.GetProperty("data").GetProperty("instanceId").GetInt64();
         var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var reject = await PostEnvelope(approver, "/api/v1/workflow/task/reject", new { taskId });
+        var reject = await PostEnvelope(approver, "/api/v1/workflow/task/reject", new { taskId, comment = "办理意见" });
         Assert.Equal(0, reject.GetProperty("code").GetInt32());
 
         Assert.Equal(1, await InstanceVersion(f, instanceId));
@@ -206,7 +206,7 @@ public class WfVersionCasTests
         Assert.Equal(2, await TokenVersion(f, instanceId));
 
         // 退回:ReturnTaskOp 领取一次(状态仍 Active,只推进版本);无先例故 prev 策略退化到 start。
-        var ret = await PostEnvelope(a, "/api/v1/workflow/task/return", new { taskId });
+        var ret = await PostEnvelope(a, "/api/v1/workflow/task/return", new { taskId, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
         Assert.Equal(3, await TokenVersion(f, instanceId));
         Assert.Equal(WfTokenStatus.Active, await TokenStatus(f, instanceId));
@@ -373,7 +373,7 @@ public class WfVersionCasTests
         var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
         // 退回一次,把实例带进「Running + 无活跃待办」= 重提的唯一入口。
-        var ret = await PostEnvelope(a, "/api/v1/workflow/task/return", new { taskId });
+        var ret = await PostEnvelope(a, "/api/v1/workflow/task/return", new { taskId, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
         Assert.Equal(3, await TokenVersion(f, instanceId));
         Assert.Equal("start", await TokenNodeId(f, instanceId));

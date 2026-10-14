@@ -148,7 +148,7 @@ public class WfTaskService(
         string? comment = null,
         string? requestId = null,
         CancellationToken cancellationToken = default)
-        => CompleteAsync(taskId, userId, WfTaskAction.Approve, comment, requestId, cancellationToken, null);
+        => CompleteAsync(taskId, userId, WfTaskAction.Approve, WfCommentRules.NormalizeOptional(comment), requestId, cancellationToken, null);
 
     /// <inheritdoc />
     public virtual Task<WfEngineResult> RejectAsync(
@@ -157,7 +157,7 @@ public class WfTaskService(
         string? comment = null,
         string? requestId = null,
         CancellationToken cancellationToken = default)
-        => CompleteAsync(taskId, userId, WfTaskAction.Reject, comment, requestId, cancellationToken, null);
+        => CompleteAsync(taskId, userId, WfTaskAction.Reject, WfCommentRules.Require(comment), requestId, cancellationToken, null);
 
     /// <inheritdoc />
     public virtual Task<WfEngineResult> ApproveWithVariablesAsync(
@@ -167,7 +167,7 @@ public class WfTaskService(
         string? requestId = null,
         CancellationToken cancellationToken = default,
         string? variablesJson = null)
-        => CompleteAsync(taskId, userId, WfTaskAction.Approve, comment, requestId, cancellationToken, variablesJson);
+        => CompleteAsync(taskId, userId, WfTaskAction.Approve, WfCommentRules.NormalizeOptional(comment), requestId, cancellationToken, variablesJson);
 
     /// <inheritdoc />
     public virtual Task<WfEngineResult> RejectWithVariablesAsync(
@@ -177,7 +177,7 @@ public class WfTaskService(
         string? requestId = null,
         CancellationToken cancellationToken = default,
         string? variablesJson = null)
-        => CompleteAsync(taskId, userId, WfTaskAction.Reject, comment, requestId, cancellationToken, variablesJson);
+        => CompleteAsync(taskId, userId, WfTaskAction.Reject, WfCommentRules.Require(comment), requestId, cancellationToken, variablesJson);
 
     /// <inheritdoc />
     public virtual Task<WfEngineResult> TransferAsync(
@@ -194,7 +194,7 @@ public class WfTaskService(
                 TaskId = taskId,
                 UserId = userId,
                 ToUserId = toUserId,
-                Comment = comment,
+                Comment = WfCommentRules.NormalizeOptional(comment),
                 RequestId = requestId,
             },
             cancellationToken);
@@ -215,7 +215,7 @@ public class WfTaskService(
                 TaskId = taskId,
                 UserId = userId,
                 ToUserId = toUserId,
-                Comment = comment,
+                Comment = WfCommentRules.NormalizeOptional(comment),
                 RequestId = requestId,
             },
             cancellationToken);
@@ -334,7 +334,7 @@ public class WfTaskService(
                 TaskId = taskId,
                 UserId = userId,
                 TargetNodeId = targetNodeId,
-                Comment = comment,
+                Comment = WfCommentRules.Require(comment),
                 RequestId = requestId,
             },
             cancellationToken);

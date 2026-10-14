@@ -68,6 +68,7 @@ public class WfDefinitionService(
         var db = definitions.Db;
         var tran = await db.Ado.UseTranAsync(async () =>
         {
+            await EnsureUniqueNameAsync(db, name, 0);
             var def = new WfDefinition
             {
                 Name = name,
@@ -115,6 +116,7 @@ public class WfDefinitionService(
             var def = await db.Queryable<WfDefinition>().InSingleAsync(input.Id)
                       ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionNotFound);
 
+            await EnsureUniqueNameAsync(db, name, def.Id);
             def.Name = name;
             def.Icon = input.Icon;
             def.GroupName = input.GroupName;
@@ -175,6 +177,27 @@ public class WfDefinitionService(
                         ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid);
             ValidateModelForPublish(model);
             await ValidateAssigneeUsersAsync(db, model, cancellationToken);
+
+            if (def.CurrentVersion >= 1)
+            {
+                var published = await db.Queryable<WfDefinitionVersion>()
+                    .Where(v => v.DefinitionId == def.Id && v.Version == def.CurrentVersion)
+                    .FirstAsync();
+                if (published is not null && SamePublishedModel(published.ModelJson, model))
+                {
+                    // 停用后没有单独的启用接口，内容没变时只把状态拨回已发布。
+                    if (def.Status == WfDefinitionStatus.Disabled)
+                    {
+                        def.Status = WfDefinitionStatus.Published;
+                        await db.Updateable(def)
+                            .UpdateColumns(d => new { d.Status, d.UpdateTime, d.UpdateUserId })
+                            .ExecuteCommandAsync();
+                        return def.CurrentVersion;
+                    }
+
+                    throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionUnchanged);
+                }
+            }
 
             var nextVersion = def.CurrentVersion + 1;
             var snapshot = new WfDefinitionVersion
@@ -283,7 +306,18 @@ public class WfDefinitionService(
         var providerKeys = approverProviders.Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
         ValidateChain(model.Root, seen, providerKeys);
         ValidateFormModel(model);
+        EnsureApprovalNode(model);
         ValidateNodeReferences(model);
+    }
+
+    /// <summary>可发布模型至少要有一个审批节点。抄送、Webhook 或只有发起节点不够。</summary>
+    protected virtual void EnsureApprovalNode(WfModel model)
+    {
+        if (WfModelIndex.Build(model).Nodes.Any(node => node.Type == WfNodeType.Approval))
+            return;
+
+        throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+            new Dictionary<string, object?> { ["reason"] = "approvalRequired" });
     }
 
     /// <summary>
@@ -354,6 +388,45 @@ public class WfDefinitionService(
                 if (permission.Access is not (WfFormPermAccess.Hidden or WfFormPermAccess.Readonly or WfFormPermAccess.Editable))
                     ThrowFormModelInvalid("formPermAccessInvalid", node);
             }
+        }
+
+        ValidateConditionFields(model, fieldKeys);
+    }
+
+    /// <summary>
+    /// 有内置表单时，条件分支只能引用 schema 里的字段。大小写按字段键原样比较。
+    /// 没有 schema 的旧模型仍允许自由变量。
+    /// </summary>
+    protected virtual void ValidateConditionFields(WfModel model, HashSet<string> fieldKeys)
+    {
+        foreach (var node in WfModelIndex.Build(model).Nodes)
+        {
+            if (node.Conditions is not { Count: > 0 } arms) continue;
+            foreach (var arm in arms)
+            {
+                if (arm.Expr is not null)
+                    ValidateConditionExpr(node, arm.Expr, fieldKeys);
+            }
+        }
+    }
+
+    protected virtual void ValidateConditionExpr(WfNode node, WfConditionExpr expr, HashSet<string> fieldKeys)
+    {
+        if (!string.IsNullOrEmpty(expr.Field) && !fieldKeys.Contains(expr.Field))
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid, new Dictionary<string, object?>
+            {
+                ["reason"] = "conditionFieldUnknown",
+                ["nodeId"] = node.Id,
+                ["field"] = expr.Field,
+            });
+        }
+
+        if (expr.Children is null) return;
+        foreach (var child in expr.Children)
+        {
+            if (child is not null)
+                ValidateConditionExpr(node, child, fieldKeys);
         }
     }
 
@@ -1052,6 +1125,32 @@ public class WfDefinitionService(
         };
         await versions.InsertAsync(draft);
         return draft;
+    }
+
+    /// <summary>发布快照与校验后的草稿是否是同一份模型。比较规范化 JSON，不看属性顺序。</summary>
+    protected virtual bool SamePublishedModel(string? publishedJson, WfModel draft)
+    {
+        if (string.IsNullOrWhiteSpace(publishedJson))
+            return false;
+        var published = WfModelJson.Deserialize(publishedJson);
+        return published is not null
+            && WfModelJson.Serialize(published) == WfModelJson.Serialize(draft);
+    }
+
+    /// <summary>
+    /// 当前数据范围内，未删除定义的名称按去空白后的原文精确匹配，不能与另一条重复。
+    /// 软删行不参与比较，所以删掉之后可以再用同一个名字。
+    /// </summary>
+    protected virtual async Task EnsureUniqueNameAsync(ISqlSugarClient db, string name, long excludeId)
+    {
+        var exists = await db.Queryable<WfDefinition>()
+            .Where(d => d.Name == name && d.Id != excludeId)
+            .AnyAsync();
+        if (exists)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionNameExists,
+                new Dictionary<string, object?> { ["name"] = name });
+        }
     }
 
     protected virtual string NormalizeName(string? name)

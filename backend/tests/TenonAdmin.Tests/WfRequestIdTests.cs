@@ -209,7 +209,7 @@ public class WfRequestIdTests
 
         // 退回:prev 策略无先例 → 退到 start,实例仍 Running、无活跃待办。
         var returned = await PostEnvelope(
-            c, "/api/v1/workflow/task/return", new { taskId, requestId = "req-return-001" });
+            c, "/api/v1/workflow/task/return", new { taskId, requestId = "req-return-001", comment = "办理意见" });
         Assert.Equal(0, returned.GetProperty("code").GetInt32());
         Assert.Equal("req-return-001", Assert.IsType<ReturnTaskCmd>(probe.Last).RequestId);
 
@@ -222,7 +222,7 @@ public class WfRequestIdTests
 
         // 拒绝:与同意共用 CompleteTaskCmd,但走的是 Controller 上**另一处**透传。
         var reject = await PostEnvelope(
-            a, "/api/v1/workflow/task/reject", new { taskId = retryTaskId, requestId = "req-reject-001" });
+            a, "/api/v1/workflow/task/reject", new { taskId = retryTaskId, requestId = "req-reject-001", comment = "办理意见" });
         Assert.Equal(0, reject.GetProperty("code").GetInt32());
         var rejectCmd = Assert.IsType<CompleteTaskCmd>(probe.Last);
         Assert.Equal(WfTaskAction.Reject, rejectCmd.Action);

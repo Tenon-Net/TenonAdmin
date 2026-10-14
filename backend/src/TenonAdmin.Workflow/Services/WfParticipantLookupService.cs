@@ -32,7 +32,8 @@ public class WfParticipantLookupService(IRepository<SysUser> users) : IWfPartici
         cancellationToken.ThrowIfCancellationRequested();
         var keyword = string.IsNullOrWhiteSpace(input.Keyword) ? null : input.Keyword.Trim();
         var hiddenAccounts = DataScopeFixtureAccounts;
-        var size = input.Size <= 0 ? 20 : Math.Min(input.Size, MaxPageSize);
+        var requested = input.PageSize is > 0 ? input.PageSize.Value : input.Size;
+        var size = requested <= 0 ? 20 : Math.Min(requested, MaxPageSize);
         var page = await users.AsQueryable()
             .Where(u => u.Enabled == true && !hiddenAccounts.Contains(u.Account))
             .WhereIF(keyword is not null, u => u.Name.Contains(keyword!) || u.Account.Contains(keyword!))

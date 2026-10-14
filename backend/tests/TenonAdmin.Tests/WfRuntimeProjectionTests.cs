@@ -146,15 +146,22 @@ public class WfRuntimeProjectionTests
             name = "发起",
             next = new
             {
-                id = "cc1",
-                type = "cc",
-                name = "抄送",
-                props = new
+                id = "approval",
+                type = "approval",
+                name = "审批",
+                props = new { assignee = new { provider = "initiator", @params = new { } }, mode = "any" },
+                next = new
                 {
-                    assignee = new
+                    id = "cc1",
+                    type = "cc",
+                    name = "抄送",
+                    props = new
                     {
-                        provider = "user",
-                        @params = new Dictionary<string, object> { ["userIds"] = new[] { recipientId } },
+                        assignee = new
+                        {
+                            provider = "user",
+                            @params = new Dictionary<string, object> { ["userIds"] = new[] { recipientId } },
+                        },
                     },
                 },
             },
