@@ -310,7 +310,7 @@ describe('WfInstanceDetailPage 动词', () => {
     const cancel = screen.getByRole('button', { name: /取\s*消/ }) as HTMLButtonElement
     await waitFor(() => expect(cancel.disabled).toBe(true))
     fireEvent.click(cancel)
-    expect(screen.getByPlaceholderText('填写意见(可选)')).toBeTruthy()
+    expect(screen.getByPlaceholderText('填写意见（可选，最多 1000 字）')).toBeTruthy()
 
     release()
     await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(1))
@@ -397,7 +397,7 @@ describe('WfInstanceDetailPage 动词', () => {
     await waitOkIdle()
     const first = vi.mocked(wfTaskApi.approve).mock.calls[0]![0].requestId
 
-    fireEvent.change(screen.getByPlaceholderText('填写意见(可选)'), { target: { value: '修改后的意见' } })
+    fireEvent.change(screen.getByPlaceholderText('填写意见（可选，最多 1000 字）'), { target: { value: '修改后的意见' } })
     fireEvent.click(okButton())
     await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(2))
     expect(vi.mocked(wfTaskApi.approve).mock.calls[1]![0].requestId).not.toBe(first)
