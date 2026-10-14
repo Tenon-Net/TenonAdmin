@@ -4,8 +4,9 @@ import { Button, Tooltip } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { AppIcon } from '@/components/AppIcon'
+import { useParticipantNames } from '@/workflow/participantNames'
 import type { WfNode, WfNodeType } from '@/workflow/schema'
-import { approvalCardGroups, type WfApprovalNodeProgress } from '../../instance/approvalProgress'
+import { approvalCardGroups, countersignProgress, type WfApprovalNodeProgress } from '../../instance/approvalProgress'
 import './wf-designer.css'
 import '../../wf-identity.css'
 
@@ -35,8 +36,34 @@ export interface WfNodeCardBody {
   empty: boolean
 }
 
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => typeof item === 'string' && item.trim() ? [item.trim()] : [])
+}
+
+/** 优先用运行时下发的姓名；设计器只有用户 Id 时再查本地姓名表。 */
+function recipientNames(params: Record<string, unknown>, known?: Record<string, string>): string | null {
+  const embedded = stringList(params.userNames)
+  if (embedded.length) return embedded.join('、')
+  const ids = Array.isArray(params.userIds)
+    ? params.userIds
+    : params.userId != null
+      ? [params.userId]
+      : []
+  const resolved = ids.flatMap((id) => {
+    if (id == null || id === '') return []
+    const name = known?.[String(id)]?.trim()
+    return name ? [name] : []
+  })
+  return resolved.length ? resolved.join('、') : null
+}
+
 /** 节点正文摘要。纯函数(只依赖 node 与翻译器),与 Vue 侧 `body` computed 同语义。 */
-export function nodeCardBody(node: WfNode, t: TFunction): WfNodeCardBody {
+export function nodeCardBody(
+  node: WfNode,
+  t: TFunction,
+  participantNames?: Record<string, string>,
+): WfNodeCardBody {
   if (node.type === 'start') {
     const scope = node.props?.initiatorScope ?? []
     if (!scope.length) return { text: t('workflow.node.placeholder.start'), empty: false }
@@ -65,6 +92,9 @@ export function nodeCardBody(node: WfNode, t: TFunction): WfNodeCardBody {
 
   switch (assignee.provider) {
     case 'user': {
+      const named = recipientNames(params, participantNames)
+      if (named) return { text: named, empty: false }
+      // 姓名还没解析到时保留人数，避免已配置的节点看起来像没选人。
       const ids = Array.isArray(params.userIds)
         ? params.userIds
         : params.userId != null
@@ -97,6 +127,7 @@ export interface WfNodeCardProps {
   node: WfNode
   active?: boolean
   error?: boolean
+  errorMessage?: string
   readonly?: boolean
   visited?: boolean
   current?: boolean
@@ -107,14 +138,18 @@ export interface WfNodeCardProps {
 }
 
 export function WfNodeCard({
-  node, active, error, readonly, visited, current, runtimeProgress, onInspect, onSelect, onRemove,
+  node, active, error, errorMessage, readonly, visited, current, runtimeProgress, onInspect, onSelect, onRemove,
 }: WfNodeCardProps) {
   const { t } = useTranslation()
-  const body = nodeCardBody(node, t)
+  const participantNames = useParticipantNames()
+  const body = nodeCardBody(node, t, participantNames)
   const title = node.name || t(`workflow.node.${node.type}`)
   const canInspect = readonly && node.type === 'approval' && !!runtimeProgress
   const onCurrentPath = !!visited || !!current
   const runtimeGroups = runtimeProgress && onCurrentPath ? approvalCardGroups(runtimeProgress) : []
+  const countersign = runtimeProgress?.currentRounds
+    .map((round) => countersignProgress(round))
+    .find((item) => item != null)
 
   const classes = [
     'wf-card',
@@ -188,6 +223,11 @@ export function WfNodeCard({
       <div className={`wf-card-body${readonly && node.type === 'approval' ? ' is-runtime' : ''}`}>
         {readonly && node.type === 'approval' ? (
           <div className="wf-card-progress">
+            {countersign ? (
+              <div className="wf-card-progress-row is-handled">
+                <span className="wf-card-progress-label">{t('workflow.detail.approvalProgress.ratio', countersign)}</span>
+              </div>
+            ) : null}
             {runtimeGroups.length > 0 ? runtimeGroups.slice(0, 3).map((group) => (
               <div key={group.key} className={`wf-card-progress-row is-${group.key}`}>
                 <span className="wf-card-progress-label">
@@ -217,8 +257,9 @@ export function WfNodeCard({
         )}
         {!readonly || canInspect ? <AppIcon icon="ph:caret-right" size={14} className="wf-card-arrow" /> : null}
       </div>
+      {error && errorMessage ? <p className="wf-card-error">{errorMessage}</p> : null}
       {error ? (
-        <div className="wf-card-warn" title={t('workflow.designer.invalid')}>
+        <div className="wf-card-warn" title={errorMessage || t('workflow.designer.invalid')}>
           <AppIcon icon="ph:warning-circle" size={18} />
         </div>
       ) : null}

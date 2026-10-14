@@ -3,19 +3,111 @@
  * 流程监控。菜单 component 填 `workflow/monitor/index`。
  * 参与筛选是业务过滤,不是数据权限;行点击进同一详情。
  */
-import { h } from 'vue'
+import { computed, h, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NButton, NEmpty, NSpace, NTag, useMessage } from 'naive-ui'
+import { NButton, NEmpty, NForm, NFormItem, NInput, NModal, NSelect, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
-import { ProTable, type ProTableColumn } from 'tenon-naive-pro-table'
+import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import UserSelect from '@/components/UserSelect/index.vue'
 import { wfInstanceApi } from '@/api/workflow'
+import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
+import { defaultMonitorNodeId, monitorNodeOptions } from './nodes'
 import type { WfInstanceListItem, WfInstanceStatus } from '@/types/workflow'
+import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 
 const { t } = useI18n()
 const router = useRouter()
 const message = useMessage()
+const authStore = useAuthStore()
+const tableRef = ref<ProTableInst<WfInstanceListItem>>()
+
+type AdminKind = 'transfer' | 'terminate' | 'skip'
+const adminPerm: Record<AdminKind, string> = {
+  transfer: 'POST:/api/v1/workflow/instance/force-transfer',
+  terminate: 'POST:/api/v1/workflow/instance/terminate',
+  skip: 'POST:/api/v1/workflow/instance/skip',
+}
+const showAdmin = ref(false)
+const adminKind = ref<AdminKind>('terminate')
+const adminRow = ref<WfInstanceListItem | null>(null)
+const reason = ref('')
+const toUserId = ref<number | null>(null)
+const nodeId = ref<string | null>(null)
+const activeNodes = ref<{ id: string; name: string }[]>([])
+const nodesLoading = ref(false)
+const submitting = ref(false)
+let nodeSeq = 0
+const modalTitle = computed(() => t(`workflow.monitor.${adminKind.value === 'transfer' ? 'forceTransfer' : adminKind.value}`))
+
+function isRunning(r: WfInstanceListItem) {
+  return Number(r.status) === 1
+}
+
+function openAdmin(kind: AdminKind, row: WfInstanceListItem, event: MouseEvent) {
+  event.stopPropagation()
+  adminKind.value = kind
+  adminRow.value = row
+  reason.value = ''
+  toUserId.value = null
+  nodeId.value = null
+  activeNodes.value = []
+  showAdmin.value = true
+  if (kind === 'terminate' || row.id == null) return
+  const seq = ++nodeSeq
+  nodesLoading.value = true
+  void wfInstanceApi.get(Number(row.id)).then((detail) => {
+    if (seq !== nodeSeq) return
+    activeNodes.value = monitorNodeOptions(detail)
+    nodeId.value = defaultMonitorNodeId(activeNodes.value)
+  }).catch((e) => {
+    if (seq === nodeSeq) message.error(translateError(e))
+  }).finally(() => {
+    if (seq === nodeSeq) nodesLoading.value = false
+  })
+}
+
+async function submitAdmin() {
+  const row = adminRow.value
+  if (row?.id == null) return
+  const text = reason.value.trim()
+  if (!text) {
+    message.warning(t('workflow.monitor.reasonRequired'))
+    return
+  }
+  if (adminKind.value === 'transfer' && toUserId.value == null) {
+    message.warning(t('workflow.monitor.admin.issue.targetRequired'))
+    return
+  }
+  if (adminKind.value !== 'terminate' && activeNodes.value.length > 0 && !nodeId.value) {
+    message.warning(t('workflow.monitor.admin.issue.ambiguousNode'))
+    return
+  }
+  submitting.value = true
+  try {
+    const instanceId = Number(row.id)
+    const node = nodeId.value?.trim() || null
+    if (adminKind.value === 'transfer') {
+      await wfInstanceApi.forceTransfer({
+        instanceId,
+        toUserId: Number(toUserId.value),
+        reason: text,
+        nodeId: node,
+      })
+    } else if (adminKind.value === 'terminate') {
+      await wfInstanceApi.terminate({ instanceId, reason: text })
+    } else {
+      await wfInstanceApi.skip({ instanceId, reason: text, nodeId: node })
+    }
+    message.success(t('common.success'))
+    showAdmin.value = false
+    await tableRef.value?.refresh()
+  } catch (e) {
+    message.error(translateError(e))
+  } finally {
+    submitting.value = false
+  }
+}
 
 function openDetail(r: WfInstanceListItem) {
   if (r.id == null) return
@@ -34,12 +126,14 @@ function normalizeStatus(s: WfInstanceStatus | undefined): string {
   return map[s] ?? 'unknown'
 }
 
-function statusLabel(s: WfInstanceStatus | undefined): string {
-  return t(`workflow.status.${normalizeStatus(s)}`, String(s ?? ''))
+function statusLabel(row: WfInstanceListItem | undefined): string {
+  const key = row ? runtimeStatusKey(row) ?? normalizeStatus(row.status) : 'unknown'
+  return t(`workflow.status.${key}`)
 }
 
-function statusType(s: WfInstanceStatus | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
-  const key = normalizeStatus(s)
+function statusType(row: WfInstanceListItem | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
+  if (row && runtimeStatusKey(row)) return 'warning'
+  const key = normalizeStatus(row?.status)
   if (key === 'approved') return 'success'
   if (key === 'rejected' || key === 'terminated') return 'error'
   if (key === 'cancelled') return 'warning'
@@ -65,6 +159,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       label: () => t('workflow.monitor.starter'),
       render: ({ value, setValue, search }) =>
         h(UserSelect, {
+          source: 'workflow',
           value: value as number | null,
           clearable: true,
           placeholder: t('workflow.monitor.starter'),
@@ -74,7 +169,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
           },
         }),
     },
-    render: (r) => (r.starterUserId == null ? '—' : t('workflow.detail.userFallback', { id: r.starterUserId })),
+    render: (r) => r.starterName?.trim() || '—',
   },
   {
     key: 'actorUserId',
@@ -87,6 +182,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       label: () => t('workflow.monitor.actor'),
       render: ({ value, setValue, search }) =>
         h(UserSelect, {
+          source: 'workflow',
           value: value as number | null,
           clearable: true,
           placeholder: t('workflow.monitor.actor'),
@@ -108,6 +204,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       label: () => t('workflow.monitor.cc'),
       render: ({ value, setValue, search }) =>
         h(UserSelect, {
+          source: 'workflow',
           value: value as number | null,
           clearable: true,
           placeholder: t('workflow.monitor.cc'),
@@ -139,36 +236,58 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       { label: () => t('workflow.status.terminated'), value: 5 },
     ],
     render: (r) =>
-      h(NTag, { size: 'small', type: statusType(r.status), bordered: false }, () => statusLabel(r.status)),
+      h(NTag, { size: 'small', type: statusType(r), bordered: false }, () => statusLabel(r)),
   },
   { key: 'createTime', title: () => t('workflow.monitor.createTime'), width: 170, format: 'datetime' },
   {
     key: 'op',
     title: () => t('common.operation'),
-    width: 100,
+    width: 280,
     hideInSetting: true,
     render: (r) =>
-      h(NSpace, { size: 4, wrapItem: false }, () => [
-        h(
-          NButton,
-          {
-            size: 'small',
-            quaternary: true,
-            type: 'primary',
-            onClick: (e: MouseEvent) => {
-              e.stopPropagation()
-              openDetail(r)
+      h(NSpace, { size: 4, wrapItem: false }, () => {
+        const buttons = [
+          h(
+            NButton,
+            {
+              size: 'small',
+              quaternary: true,
+              type: 'primary',
+              onClick: (e: MouseEvent) => {
+                e.stopPropagation()
+                openDetail(r)
+              },
             },
-          },
-          () => t('workflow.monitor.view'),
-        ),
-      ]),
+            () => t('workflow.monitor.view'),
+          ),
+        ]
+        if (isRunning(r)) {
+          const kinds: AdminKind[] = ['transfer', 'terminate', 'skip']
+          for (const kind of kinds) {
+            if (!authStore.hasPerm(adminPerm[kind])) continue
+            buttons.push(
+              h(
+                NButton,
+                {
+                  size: 'small',
+                  quaternary: true,
+                  type: kind === 'terminate' ? 'error' : 'warning',
+                  onClick: (e: MouseEvent) => openAdmin(kind, r, e),
+                },
+                () => t(`workflow.monitor.${kind === 'transfer' ? 'forceTransfer' : kind}`),
+              ),
+            )
+          }
+        }
+        return buttons
+      }),
   },
 ]
 </script>
 
 <template>
   <ProTable
+    ref="tableRef"
     storage-key="workflow-monitor"
     row-key="id"
     :columns="columns"
@@ -180,4 +299,38 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       <n-empty :description="t('workflow.monitor.empty')" size="small" />
     </template>
   </ProTable>
+
+  <n-modal
+    v-model:show="showAdmin"
+    preset="card"
+    :title="modalTitle"
+    style="width: min(480px, calc(100vw - 32px))"
+  >
+    <n-form>
+      <n-form-item v-if="adminKind === 'transfer'" :label="t('workflow.monitor.targetUser')" required>
+        <UserSelect v-model:value="toUserId" source="workflow" :placeholder="t('workflow.monitor.targetUser')" />
+      </n-form-item>
+      <n-form-item
+        v-if="adminKind !== 'terminate'"
+        :label="t('workflow.monitor.nodeId')"
+        required
+      >
+        <n-select
+          v-model:value="nodeId"
+          :loading="nodesLoading"
+          :options="activeNodes.map((node) => ({ label: node.name, value: node.id }))"
+          :placeholder="t('workflow.monitor.nodeId')"
+        />
+      </n-form-item>
+      <n-form-item :label="t('workflow.monitor.reason')" required>
+        <n-input v-model:value="reason" type="textarea" :maxlength="512" show-count />
+      </n-form-item>
+    </n-form>
+    <template #footer>
+      <n-space justify="end">
+        <n-button @click="showAdmin = false">{{ t('common.cancel') }}</n-button>
+        <n-button type="primary" :loading="submitting" :disabled="nodesLoading" @click="submitAdmin">{{ t('common.confirm') }}</n-button>
+      </n-space>
+    </template>
+  </n-modal>
 </template>

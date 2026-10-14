@@ -5,7 +5,7 @@
 // 消费者拿模板后把后两张卡换成自己的业务统计;别造写死的假数字。
 import { computed, onMounted, ref } from 'vue'
 import { NCard, NButton, NList, NListItem, NEmpty } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
@@ -15,7 +15,6 @@ import { btnGrad } from '@/theme/mix'
 import { noticeApi } from '@/api'
 import type { NoticeMineItem } from '@/types/api'
 import type { MenuNode } from '@/types/menu'
-import AppIcon from '@/components/AppIcon.vue'
 
 const { t } = useI18n()
 const user = useUserStore()
@@ -54,7 +53,7 @@ const fmtTime = (s?: string | null) => (s ?? '').replace('T', ' ').slice(0, 16)
     <!-- 欢迎横幅(与 workbench 同语法:btnGrad 头像 + 主副标题) -->
     <div class="banner">
       <div class="avatar" :style="avatarStyle">
-        <Icon icon="lucide:user" :width="26" color="#fff" />
+        <AppIcon icon="lucide:user" :size="26" color="#fff" />
       </div>
       <div>
         <div class="hi">{{ t('biz.welcome', { name: user.userInfo?.name ?? user.userInfo?.account ?? '' }) }}</div>

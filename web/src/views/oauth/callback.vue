@@ -10,7 +10,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { NSpin } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { externalAuthApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
@@ -116,7 +116,7 @@ onMounted(async () => {
       <p class="oauth-msg">{{ t('oauth.processing') }}</p>
     </div>
     <div v-else class="oauth-box">
-      <Icon icon="ph:warning-circle-duotone" class="oauth-err-icon" />
+      <AppIcon icon="ph:warning-circle-duotone" class="oauth-err-icon" />
       <p class="oauth-msg">{{ errorText }}</p>
       <p class="oauth-sub">{{ t('oauth.backToLogin') }}</p>
     </div>

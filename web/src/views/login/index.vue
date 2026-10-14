@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { NTooltip } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { LOGIN_SKINS, DEFAULT_SKIN } from './skins'
@@ -57,7 +57,7 @@ const active = computed(() => LOGIN_SKINS.find((s) => s.id === skin.value) ?? LO
               :aria-label="app.isDark ? t('app.light') : t('app.dark')"
               @click="app.toggleDark()"
             >
-              <Icon :icon="app.isDark ? 'ph:moon-stars' : 'ph:sun'" :width="18" />
+              <AppIcon :icon="app.isDark ? 'ph:moon-stars' : 'ph:sun'" :size="18" />
             </button>
           </template>
           {{ app.isDark ? t('app.light') : t('app.dark') }}

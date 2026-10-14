@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using SqlSugar;
 using TenonAdmin.Core;
+using TenonAdmin.Services;
 using TenonAdmin.SqlSugar;
 
 namespace TenonAdmin.Workflow;
@@ -41,7 +42,17 @@ public class WfDefinitionService(
         cancellationToken.ThrowIfCancellationRequested();
         var def = await RequireDefinitionAsync(id);
         var draft = await GetOrCreateDraftAsync(def.Id, cancellationToken);
-        return MapDetail(def, draft);
+        var detail = MapDetail(def, draft);
+        var names = await WfListText.UserNamesAsync(
+            definitions.Db,
+            WfAssigneeDisplay.CollectUserIds(detail.Model),
+            cancellationToken);
+        return detail with
+        {
+            ParticipantNames = names.ToDictionary(
+                pair => pair.Key.ToString(CultureInfo.InvariantCulture),
+                pair => pair.Value),
+        };
     }
 
     /// <inheritdoc />
@@ -163,6 +174,7 @@ public class WfDefinitionService(
             var model = WfModelJson.Deserialize(draft.ModelJson)
                         ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid);
             ValidateModelForPublish(model);
+            await ValidateAssigneeUsersAsync(db, model, cancellationToken);
 
             var nextVersion = def.CurrentVersion + 1;
             var snapshot = new WfDefinitionVersion
@@ -272,6 +284,18 @@ public class WfDefinitionService(
         ValidateChain(model.Root, seen, providerKeys);
         ValidateFormModel(model);
         ValidateNodeReferences(model);
+    }
+
+    /// <summary>
+    /// 指定成员和空审批人转交目标必须是仍启用的用户。结构是否配了办理人由
+    /// <see cref="ValidateNode"/> 同步判定;这里只查库,并且放在发布事务里。
+    /// </summary>
+    protected virtual async Task ValidateAssigneeUsersAsync(
+        ISqlSugarClient db,
+        WfModel model,
+        CancellationToken cancellationToken)
+    {
+        await WfAssigneeRules.EnsureEnabledUsersAsync(db, model, cancellationToken);
     }
 
     private const int FormSchemaMaxBytes = 64 * 1024;
@@ -802,14 +826,14 @@ public class WfDefinitionService(
         var provider = node.Props?.Assignee?.Provider;
         if (node.Type is WfNodeType.Approval or WfNodeType.Cc)
         {
-            if (!string.IsNullOrWhiteSpace(provider))
+            WfAssigneeRules.EnsureConfigured(node);
+            provider = node.Props!.Assignee!.Provider!;
+
+            ValidateLength(provider, 64, "provider");
+            if (!providerKeys.Contains(provider))
             {
-                ValidateLength(provider, 64, "provider");
-                if (!providerKeys.Contains(provider))
-                {
-                    throw WorkflowErrorCode.Exception(WorkflowErrorCode.ProviderNotRegistered,
-                        new Dictionary<string, object?> { ["provider"] = provider, ["nodeId"] = node.Id });
-                }
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ProviderNotRegistered,
+                    new Dictionary<string, object?> { ["provider"] = provider, ["nodeId"] = node.Id, ["nodeName"] = node.Name });
             }
         }
     }

@@ -74,7 +74,7 @@ public class WfListContractTests
         var b = await ClientFor(f, "wf-list-done-b");
 
         var startedA = await PostEnvelope(starterA, "/api/v1/workflow/instance/start",
-            new { definitionId });
+            new { definitionId, variablesJson = "{\"amount\":8000}" });
         Assert.Equal(0, startedA.GetProperty("code").GetInt32());
         var aInstanceId = startedA.GetProperty("data").GetProperty("instanceId").GetInt64();
         var aTaskId = startedA.GetProperty("data").GetProperty("createdTaskId").GetInt64();
@@ -91,6 +91,8 @@ public class WfListContractTests
         var aRow = Assert.Single(aItems);
         Assert.Equal(aInstanceId, aRow.GetProperty("instanceId").GetInt64());
         Assert.Equal((int)WfTaskAction.Approve, aRow.GetProperty("action").GetInt32());
+        Assert.Equal("wf-list-done-starter-a", aRow.GetProperty("starterName").GetString());
+        Assert.Equal("amount：8000", aRow.GetProperty("summary").GetString());
 
         var bDone = await GetEnvelope(b, "/api/v1/workflow/task/done?Current=1&Size=20");
         Assert.Equal(0, bDone.GetProperty("code").GetInt32());

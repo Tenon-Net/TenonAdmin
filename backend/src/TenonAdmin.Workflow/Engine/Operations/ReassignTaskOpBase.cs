@@ -43,6 +43,13 @@ public abstract class ReassignTaskOpBase(
                 new Dictionary<string, object?> { ["toUserId"] = ToUserId });
         }
 
+        // 转给发起人会让申请人审批自己的单。转办和委托都走这里。
+        if (ToUserId == ctx.Instance.StarterUserId)
+        {
+            throw WorkflowErrorCode.Exception(TargetInvalidErrorCode,
+                new Dictionary<string, object?> { ["toUserId"] = ToUserId, ["reason"] = "starterNotAllowed" });
+        }
+
         var targetEnabled = await ctx.Db.Queryable<TenonAdmin.Services.SysUser>()
             .Where(u => u.Id == ToUserId && u.Enabled == true)
             .AnyAsync();
@@ -52,9 +59,10 @@ public abstract class ReassignTaskOpBase(
                 new Dictionary<string, object?> { ["toUserId"] = ToUserId, ["reason"] = "userUnavailable" });
         }
 
-        // 目标已是本待办任一 Approver → 拒绝(避免重复 Pending / 搅乱顺序签)。
+        // 只拒绝当前仍要处理的办理人。减签/转办留下的 Skipped 行不再占坑,否则人被移出后永远加不回来。
         var targetExists = await ctx.Db.Queryable<WfTaskActor>()
-            .Where(a => a.TaskId == Task.Id && a.UserId == ToUserId && a.ActorType == WfActorType.Approver)
+            .Where(a => a.TaskId == Task.Id && a.UserId == ToUserId && a.ActorType == WfActorType.Approver
+                        && (a.Status == WfActorStatus.Pending || a.Status == WfActorStatus.Waiting))
             .AnyAsync();
         if (targetExists)
         {

@@ -44,6 +44,24 @@ export function translateError(err: unknown): string {
     return t('error._fallback')
   }
   if (err instanceof ApiError) {
+    const reason = typeof err.args?.reason === 'string' ? err.args.reason : ''
+    const issueKey = reason ? `workflow.designer.issue.${reason}` : ''
+    if (issueKey && te(issueKey)) {
+      const message = t(issueKey)
+      const nodeName = typeof err.args?.nodeName === 'string' ? err.args.nodeName.trim() : ''
+      const nodeId = nodeName || (err.args?.nodeId == null ? '' : String(err.args.nodeId))
+      if (nodeId && te('workflow.designer.issue.onNode')) {
+        return t('workflow.designer.issue.onNode', { nodeId, message })
+      }
+      return message
+    }
+    const adminKey = reason ? `workflow.monitor.admin.issue.${reason}` : ''
+    if (adminKey && te(adminKey)) return t(adminKey)
+    const detailKey = reason ? `workflow.detail.issue.${reason}` : ''
+    if (detailKey && te(detailKey)) {
+      const seconds = err.args?.retryAfterSeconds
+      return seconds != null ? t(detailKey, { seconds: String(seconds) }) : t(detailKey)
+    }
     if (err.msgKey && te(err.msgKey)) return t(err.msgKey)
     // 无 msgKey 时用数字码兜底(下载失败信封偶发只有 code)
     if (!err.msgKey && CODE_MSG_KEY[err.code] && te(CODE_MSG_KEY[err.code])) {

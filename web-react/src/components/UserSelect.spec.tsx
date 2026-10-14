@@ -13,7 +13,7 @@ vi.mock('./ApiSelect', () => ({
 vi.mock('@/api', () => ({ userApi: { page: vi.fn() } }))
 
 import { userApi } from '@/api'
-import { UserSelect, toUserOption } from './UserSelect'
+import { UserSelect, toParticipantOption, toUserOption } from './UserSelect'
 
 const u = (id: number, name: string, account: string) => ({ id, name, account }) as UserItem
 
@@ -26,6 +26,20 @@ afterEach(() => {
 describe('toUserOption(纯逻辑)', () => {
   it('label「姓名(账号)」,value=id', () => {
     expect(toUserOption(u(5, '张三', 'zhangsan'))).toEqual({ label: '张三(zhangsan)', value: 5 })
+  })
+})
+
+describe('toParticipantOption', () => {
+  it('发起人禁用并附上原因,雪花 id 按字符串比较', () => {
+    expect(toParticipantOption(
+      { id: '858924034068480', name: '张申请', account: 'zhang-apply' },
+      ['858924034068480'],
+      '不能选择发起人，否则申请人可以审批自己的单据',
+    )).toEqual({
+      label: '张申请(zhang-apply)（不能选择发起人，否则申请人可以审批自己的单据）',
+      value: '858924034068480',
+      disabled: true,
+    })
   })
 })
 

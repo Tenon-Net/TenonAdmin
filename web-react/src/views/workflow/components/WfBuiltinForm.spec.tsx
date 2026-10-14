@@ -90,6 +90,35 @@ describe('WfBuiltinForm', () => {
     expect(values()).toEqual({ title: '年假申请' })
   })
 
+  it('金额输入 -5 显示越界错误,清空必填事由在失焦时显示错误', () => {
+    function Resubmit() {
+      const [formValues, setFormValues] = useState<WfFormValues>({ amount: 8000, reason: '差旅' })
+      const resubmitSchema: WfFormSchema = {
+        version: 1,
+        fields: [
+          { key: 'amount', label: '金额', required: true, type: 'money', props: { min: 0 } },
+          { key: 'reason', label: '事由', required: true, type: 'textarea', props: { rows: 3 } },
+        ],
+      }
+      return (
+        <AntdApp>
+          <WfBuiltinForm schema={resubmitSchema} value={formValues} mode="start" onChange={setFormValues} />
+          <output data-testid="resubmit-values">{JSON.stringify(formValues)}</output>
+        </AntdApp>
+      )
+    }
+    render(<Resubmit />)
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '-5' } })
+    expect(screen.getByText('字段值超出范围')).toBeTruthy()
+    expect(JSON.parse(screen.getByTestId('resubmit-values').textContent || '{}').amount).toBe(-5)
+
+    const reason = screen.getByLabelText('事由')
+    fireEvent.change(reason, { target: { value: '' } })
+    expect(screen.queryByText('请填写此字段')).toBeNull()
+    fireEvent.blur(reason)
+    expect(screen.getByText('请填写此字段')).toBeTruthy()
+  })
+
   it('必填为空时 validate 失败并把错误落到该字段', () => {
     render(<Host mode="start" />)
     fireEvent.click(screen.getByRole('button', { name: 'do-validate' }))

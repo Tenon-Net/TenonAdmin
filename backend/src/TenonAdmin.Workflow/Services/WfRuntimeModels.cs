@@ -33,6 +33,15 @@ public record WfStartableDefinitionOutput
     public string? GroupName { get; init; }
     public int Version { get; init; }
     public string? FormComponent { get; init; }
+
+    /// <summary>当前发布版本不能发起时的原因;空表示可以发起。</summary>
+    public string? UnavailableReason { get; init; }
+
+    /// <summary>不能发起时的节点 Id。</summary>
+    public string? UnavailableNodeId { get; init; }
+
+    /// <summary>不能发起时的节点名称,给发起页展示。</summary>
+    public string? UnavailableNodeName { get; init; }
 }
 
 /// <summary>当前用户可发起的已发布版本快照。</summary>
@@ -40,6 +49,9 @@ public record WfStartableDefinitionDetailOutput : WfStartableDefinitionOutput
 {
     public long DefinitionVersionId { get; init; }
     public WfRuntimeModelOutput Model { get; init; } = new();
+
+    /// <summary>某个审批节点在找不到人时会停住,发起页据此提醒申请人。</summary>
+    public bool MayBlockWithoutApprover { get; init; }
 }
 
 /// <summary>
@@ -76,10 +88,13 @@ public record WfRuntimeNodePropsOutput
     public IReadOnlyList<WfFormFieldPerm>? FormPerms { get; init; }
 }
 
-/// <summary>仅公开办理人 provider，不公开 provider 参数。</summary>
+/// <summary>仅公开办理人 provider 和已解析的指定成员姓名，不公开 provider 参数或用户 Id。</summary>
 public record WfRuntimeAssigneeOutput
 {
     public string Provider { get; init; } = "";
+
+    /// <summary>指定成员的显示名，顺序与配置一致。没有可显示的姓名时为 null。</summary>
+    public IReadOnlyList<string>? DisplayNames { get; init; }
 }
 
 public record WfRuntimeBranchArmOutput
@@ -155,6 +170,13 @@ public record WfCcItemOutput
     public string? BusinessKey { get; init; }
     public WfInstanceStatus InstanceStatus { get; init; }
     public long StarterUserId { get; init; }
+
+    /// <summary>发起人展示名。</summary>
+    public string? StarterName { get; init; }
+
+    /// <summary>表单前几项已填内容。</summary>
+    public string? Summary { get; init; }
+
     public bool IsRead { get; init; }
     public DateTime? ReadTime { get; init; }
     public DateTime CreateTime { get; init; }
@@ -184,6 +206,62 @@ public record WfTaskActionInput
 
     // 催办(urge)与本 DTO 共用:字段收得到,但催办不进引擎(UrgeAsync 只追加事件 + 推通知),
     // 故控制器**不给催办透传**——催办可重复,不做幂等(见台账 ## 语义契约)。
+}
+
+/// <summary>办理人选择器查询。只按姓名或账号搜索仍启用的用户。</summary>
+public record WfParticipantLookupInput : PageInputBase
+{
+    /// <summary>姓名或账号关键字;空白表示不按关键字过滤。</summary>
+    public string? Keyword { get; init; }
+}
+
+/// <summary>办理人候选项。只含选择器需要的字段,不含手机、邮箱和角色。</summary>
+public record WfParticipantCandidateOutput
+{
+    public long Id { get; init; }
+    public string Name { get; init; } = "";
+    public string Account { get; init; } = "";
+}
+
+/// <summary>管理员强制转办入参。</summary>
+public record WfAdminForceTransferInput
+{
+    public long InstanceId { get; init; }
+
+    public long ToUserId { get; init; }
+
+    /// <summary>干预原因,必填,去空白后不超过 512 字。</summary>
+    public string? Reason { get; init; }
+
+    /// <summary>并行时指定节点 Id;单活跃节点可空。</summary>
+    public string? NodeId { get; init; }
+
+    public string? RequestId { get; init; }
+}
+
+/// <summary>管理员终止实例入参。</summary>
+public record WfAdminTerminateInput
+{
+    public long InstanceId { get; init; }
+
+    /// <summary>终止原因,必填。</summary>
+    public string? Reason { get; init; }
+
+    public string? RequestId { get; init; }
+}
+
+/// <summary>管理员跳过阻断节点入参。</summary>
+public record WfAdminSkipNodeInput
+{
+    public long InstanceId { get; init; }
+
+    /// <summary>跳过原因,必填。</summary>
+    public string? Reason { get; init; }
+
+    /// <summary>并行时指定节点 Id;单活跃节点可空。</summary>
+    public string? NodeId { get; init; }
+
+    public string? RequestId { get; init; }
 }
 
 /// <summary>撤销流程入参。</summary>
@@ -225,7 +303,23 @@ public record WfInstanceListItemOutput
     public WfInstanceStatus Status { get; init; }
     public string? VariablesJson { get; init; }
     public long StarterUserId { get; init; }
+
+    /// <summary>发起人展示名。</summary>
+    public string? StarterName { get; init; }
+
+    /// <summary>表单前几项已填内容，供列表扫一眼。</summary>
+    public string? Summary { get; init; }
+
     public DateTime CreateTime { get; init; }
+
+    /// <summary>没有待办、停在审批/抄送节点的节点 Id。</summary>
+    public IReadOnlyList<string> BlockedNodeIds { get; init; } = [];
+
+    /// <summary>已退回发起节点,等待发起人修改后重提。</summary>
+    public bool ReturnedToStarter { get; init; }
+
+    /// <summary>仍有待办。与阻断节点同时为真表示只有部分节点停住。</summary>
+    public bool HasPendingTask { get; init; }
 }
 
 /// <summary>
@@ -240,6 +334,10 @@ public record WfInstanceDetailOutput
     public int Version { get; init; }
     public string? BusinessKey { get; init; }
     public long StarterUserId { get; init; }
+
+    /// <summary>发起人展示名。跨机构办理人没有用户管理权限时,详情仍要能认出申请人。</summary>
+    public string? StarterName { get; init; }
+
     public WfInstanceStatus Status { get; init; }
     public string? VariablesJson { get; init; }
 
@@ -268,8 +366,17 @@ public record WfInstanceDetailOutput
     /// </summary>
     public IReadOnlyList<string> VisitedNodeIds { get; init; } = [];
 
-    /// <summary>当前活跃待办所在节点(token 停顿处)。</summary>
+    /// <summary>当前活跃待办或停顿 token 所在节点。</summary>
     public IReadOnlyList<string> CurrentNodeIds { get; init; } = [];
+
+    /// <summary>没有待办、停在审批/抄送节点的节点 Id。</summary>
+    public IReadOnlyList<string> BlockedNodeIds { get; init; } = [];
+
+    /// <summary>已退回发起节点,等待发起人修改后重提。</summary>
+    public bool ReturnedToStarter { get; init; }
+
+    /// <summary>仍有待办。与阻断节点同时存在时表示只有部分节点停住。</summary>
+    public bool HasPendingTask { get; init; }
 
     /// <summary>当前活跃任务 Id(发起人催办用;可空=无待办)。</summary>
     public long? CurrentTaskId { get; init; }
@@ -432,6 +539,13 @@ public record WfTodoItemOutput
     public string DefinitionName { get; init; } = "";
     public string? BusinessKey { get; init; }
     public long StarterUserId { get; init; }
+
+    /// <summary>发起人展示名。</summary>
+    public string? StarterName { get; init; }
+
+    /// <summary>按当前节点权限投影后的表单摘要。</summary>
+    public string? Summary { get; init; }
+
     public string? VariablesJson { get; init; }
     public DateTime CreateTime { get; init; }
 }
@@ -457,6 +571,10 @@ public record WfDoneItemOutput
     public string? BusinessKey { get; init; }
     public WfInstanceStatus InstanceStatus { get; init; }
     public long StarterUserId { get; init; }
+    public string? StarterName { get; init; }
+
+    /// <summary>表单摘要,与待办列表同一套「标签：值」。</summary>
+    public string? Summary { get; init; }
     public DateTime CreateTime { get; init; }
 }
 

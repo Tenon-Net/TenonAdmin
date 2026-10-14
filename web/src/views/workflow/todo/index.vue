@@ -43,11 +43,25 @@ function isOverdue(r: WfTodoItem) {
 const columns: ProTableColumn<WfTodoItem>[] = [
   { key: 'definitionName', title: () => t('workflow.todo.definition'), minWidth: 160, ellipsis: { tooltip: true } },
   {
+    key: 'starterName',
+    title: () => t('workflow.todo.starter'),
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (r) => r.starterName?.trim() || '—',
+  },
+  {
+    key: 'summary',
+    title: () => t('workflow.todo.summary'),
+    minWidth: 200,
+    ellipsis: { tooltip: true },
+    render: (r) => r.summary?.trim() || '—',
+  },
+  {
     key: 'nodeName',
     title: () => t('workflow.todo.node'),
     width: 140,
     ellipsis: { tooltip: true },
-    render: (r) => r.nodeName || r.nodeId,
+    render: (r) => r.nodeName || '—',
   },
   {
     key: 'status',

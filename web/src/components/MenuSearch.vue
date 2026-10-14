@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { NModal, NInput, NScrollbar, NEmpty } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { onKeyStroke } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useMenuFlat, type MenuLeaf } from '@/composables/useMenuFlat'
@@ -90,7 +90,7 @@ onKeyStroke('Enter', (e) => {
   <n-modal v-model:show="show" transform-origin="center">
     <div class="palette">
       <div class="search">
-        <Icon icon="lucide:search" :width="18" class="sicon" />
+        <AppIcon icon="lucide:search" :size="18" class="sicon" />
         <n-input
           ref="inputRef"
           v-model:value="q"
@@ -109,7 +109,7 @@ onKeyStroke('Enter', (e) => {
             @click="go(item)"
             @mouseenter="cursor = i"
           >
-            <Icon v-if="item.icon" :icon="item.icon" :width="18" class="iicon" />
+            <AppIcon v-if="item.icon" :icon="item.icon" :size="18" class="iicon" />
             <span class="ititle" v-html="highlight(item.display)" />
             <span class="ipath">{{ item.breadcrumb.join(' / ') }}</span>
           </div>

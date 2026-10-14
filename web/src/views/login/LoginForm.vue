@@ -2,7 +2,7 @@
 import { reactive, ref, computed, onMounted, onBeforeUnmount, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NAlert, NForm, NFormItem, NInput, NCheckbox, NModal, NDropdown, useMessage, type DropdownOption } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { authApi, externalAuthApi, ApiError } from '@/api'
 import type { LoginOutput } from '@/types/api'
@@ -415,7 +415,7 @@ async function onSmsSubmit() {
       <n-form @keyup.enter="onSubmit">
         <n-form-item :label="t('login.smsCode')" path="code">
           <n-input v-model:value="mfa.code" :placeholder="t('login.smsCodePlaceholder')" size="large" :maxlength="6">
-            <template #prefix><Icon icon="ph:chat-circle-text" /></template>
+            <template #prefix><AppIcon icon="ph:chat-circle-text" /></template>
           </n-input>
         </n-form-item>
         <div class="row lf-between">
@@ -437,7 +437,7 @@ async function onSmsSubmit() {
       <n-form @keyup.enter="onSubmit">
         <n-form-item :label="t('login.totpCode')" path="code">
           <n-input v-model:value="totp.code" :placeholder="t('login.totpPlaceholder')" size="large" :maxlength="6">
-            <template #prefix><Icon icon="ph:shield-check" /></template>
+            <template #prefix><AppIcon icon="ph:shield-check" /></template>
           </n-input>
         </n-form-item>
         <div class="row lf-between">
@@ -456,7 +456,7 @@ async function onSmsSubmit() {
         <template v-if="mode === 'account'">
           <n-form-item :label="t('login.account')" path="account">
             <n-input v-model:value="model.account" :placeholder="t('login.accountPlaceholder')" size="large">
-              <template #prefix><Icon icon="ph:user" /></template>
+              <template #prefix><AppIcon icon="ph:user" /></template>
             </n-input>
           </n-form-item>
           <n-form-item :label="t('login.password')" path="password">
@@ -467,14 +467,14 @@ async function onSmsSubmit() {
               :placeholder="t('login.passwordPlaceholder')"
               size="large"
             >
-              <template #prefix><Icon icon="ph:lock" /></template>
+              <template #prefix><AppIcon icon="ph:lock" /></template>
             </n-input>
           </n-form-item>
         </template>
         <template v-else>
           <n-form-item :label="t('login.phone')" path="phone">
             <n-input v-model:value="smsModel.phone" :placeholder="t('login.phonePlaceholder')" size="large" :maxlength="20">
-              <template #prefix><Icon icon="ph:device-mobile" /></template>
+              <template #prefix><AppIcon icon="ph:device-mobile" /></template>
             </n-input>
           </n-form-item>
         </template>
@@ -486,7 +486,7 @@ async function onSmsSubmit() {
               size="large"
               @keyup.enter="onSubmit"
             >
-              <template #prefix><Icon icon="ph:shield-check" /></template>
+              <template #prefix><AppIcon icon="ph:shield-check" /></template>
             </n-input>
             <!-- SVG 来自本站后端;点击重取一张(一次性票据) -->
             <button type="button" class="lf-captcha-img" :title="t('login.captchaPlaceholder')" @click="loadCaptcha" v-html="captchaSvg" />
@@ -495,7 +495,7 @@ async function onSmsSubmit() {
         <n-form-item v-if="mode === 'sms'" :label="t('login.smsCode')" path="code">
           <div class="lf-captcha">
             <n-input v-model:value="smsModel.code" :placeholder="t('login.smsCodePlaceholder')" size="large" :maxlength="6">
-              <template #prefix><Icon icon="ph:chat-circle-text" /></template>
+              <template #prefix><AppIcon icon="ph:chat-circle-text" /></template>
             </n-input>
             <button type="button" class="lf-send-btn" :disabled="countdown > 0" @click="onSendSmsCode">
               {{ countdown > 0 ? t('login.resendAfter', { s: countdown }) : t('login.sendCode') }}
@@ -542,7 +542,7 @@ async function onSmsSubmit() {
               :aria-label="t('login.moreMethods')"
               @click.prevent
             >
-              <Icon icon="ph:dots-three-bold" :width="18" />
+              <AppIcon icon="ph:dots-three-bold" :size="18" />
             </a>
           </n-dropdown>
         </div>

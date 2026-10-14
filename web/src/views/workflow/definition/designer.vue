@@ -11,11 +11,13 @@ import { useI18n } from 'vue-i18n'
 import DetailPage from '@/components/DetailPage/index.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useTabTitle } from '@/composables/useTabTitle'
-import { useConfirm } from '@/composables/useConfirm'
+import { ApiError } from '@/api'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
+import { withDesignerNodeName } from '@/workflow/designerError'
+import { rememberParticipantNames } from '@/workflow/participantNames'
 import type { WfDefinitionInput } from '@/types/workflow'
-import { cloneModel, createDefaultModel, validateModel } from '@/workflow/model'
+import { cloneModel, createDefaultModel, findNode, validateModel, type WfModelIssue } from '@/workflow/model'
 import type { WfModel, WfNode } from '@/workflow/schema'
 import WfNodeTree from './components/WfNodeTree.vue'
 import WfConfigDrawer from './components/WfConfigDrawer.vue'
@@ -24,17 +26,19 @@ const ZOOM_MIN = 50
 const ZOOM_MAX = 200
 const ZOOM_STEP = 10
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const setTabTitle = useTabTitle()
-const { run } = useConfirm()
 
 const loading = ref(false)
 const saving = ref(false)
 const defId = ref<number | null>(null)
 const name = ref('')
+// 设计器不编辑分组和图标,保存时必须原样带回,否则更新接口会把它们写成空。
+const groupName = ref<string | null>(null)
+const icon = ref<string | null>(null)
 const model = ref<WfModel>(createDefaultModel())
 const selectedId = ref<string | null>(null)
 const drawerShow = ref(false)
@@ -45,10 +49,29 @@ const zoom = ref(100)
 const canvasRef = ref<HTMLElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
 
-const errorIds = computed(() => {
-  const issues = validateModel(model.value)
-  return new Set(issues.map((i) => i.nodeId).filter(Boolean) as string[])
+const serverNodeErrors = ref<Record<string, string>>({})
+
+function issueText(issue: WfModelIssue): string {
+  const key = `workflow.designer.issue.${issue.code}`
+  const message = te(key) ? t(key) : t('workflow.designer.invalid')
+  if (!issue.nodeId) return message
+  const nodeName = findNode(model.value.root, issue.nodeId)?.name?.trim() || issue.nodeId
+  return t('workflow.designer.issue.onNode', { nodeId: nodeName, message })
+}
+
+const errorMessages = computed(() => {
+  const map: Record<string, string> = {}
+  for (const issue of validateModel(model.value)) {
+    if (!issue.nodeId || map[issue.nodeId]) continue
+    const key = `workflow.designer.issue.${issue.code}`
+    map[issue.nodeId] = te(key) ? t(key) : t('workflow.designer.invalid')
+  }
+  return { ...map, ...serverNodeErrors.value }
 })
+
+const errorIds = computed(() => new Set(Object.keys(errorMessages.value)))
+
+watch(model, () => { serverNodeErrors.value = {} }, { deep: true })
 
 const zoomLabel = computed(() => `${zoom.value}%`)
 
@@ -88,6 +111,9 @@ async function load(id: number) {
     const detail = await wfDefinitionApi.get(id)
     defId.value = Number(detail.id)
     name.value = detail.name ?? ''
+    groupName.value = detail.groupName ?? null
+    icon.value = detail.icon ?? null
+    rememberParticipantNames(detail.participantNames)
     model.value = cloneModel((detail.model as unknown as WfModel | undefined) ?? createDefaultModel())
     setTabTitle(detail.name ?? '')
   } catch (e) {
@@ -115,11 +141,11 @@ function onSelect(node: WfNode) {
   drawerShow.value = true
 }
 
-async function save(): Promise<boolean> {
+async function save(options?: { quiet?: boolean }): Promise<boolean> {
   if (!defId.value) return false
   const issues = validateModel(model.value)
   if (issues.length) {
-    message.warning(t('workflow.designer.invalid'))
+    message.warning(issues.map(issueText).join('；'))
     return false
   }
   saving.value = true
@@ -127,13 +153,15 @@ async function save(): Promise<boolean> {
     await wfDefinitionApi.update({
       id: defId.value,
       name: name.value.trim() || t('workflow.designer.untitled'),
+      groupName: groupName.value,
+      icon: icon.value,
       model: model.value as unknown as WfDefinitionInput['model'],
     })
-    message.success(t('common.success'))
+    if (!options?.quiet) message.success(t('common.success'))
     setTabTitle(name.value)
     return true
   } catch (e) {
-    message.error(translateError(e))
+    message.error(translateError(withDesignerNodeName(e, model.value.root)))
     return false
   } finally {
     saving.value = false
@@ -142,9 +170,19 @@ async function save(): Promise<boolean> {
 
 async function publish() {
   if (!defId.value) return
-  if (!await save()) return
-  const ok = await run(() => wfDefinitionApi.publish(defId.value!), t('workflow.designer.published'))
-  if (ok) await load(defId.value)
+  serverNodeErrors.value = {}
+  // 发布成功自己有提示,这里不再叠一条「操作成功」。
+  if (!await save({ quiet: true })) return
+  try {
+    await wfDefinitionApi.publish(defId.value)
+    message.success(t('workflow.designer.published'))
+    await load(defId.value)
+  } catch (e) {
+    const named = withDesignerNodeName(e, model.value.root)
+    const nodeId = e instanceof ApiError ? String(e.args?.nodeId ?? '') : ''
+    if (nodeId) serverNodeErrors.value = { [nodeId]: translateError(named) }
+    message.error(translateError(named))
+  }
 }
 
 async function createDraft() {
@@ -190,7 +228,7 @@ function onBack() {
           :placeholder="t('workflow.designer.name')"
         />
         <n-space :size="8">
-          <n-button :loading="saving" @click="save">
+          <n-button :loading="saving" @click="save()">
             <template #icon><AppIcon icon="ph:floppy-disk" :size="16" /></template>
             {{ t('common.save') }}
           </n-button>
@@ -227,6 +265,7 @@ function onBack() {
                 :model="model"
                 :selected-id="selectedId"
                 :error-ids="errorIds"
+                :error-messages="errorMessages"
                 @update:model="model = $event"
                 @select="onSelect"
               />

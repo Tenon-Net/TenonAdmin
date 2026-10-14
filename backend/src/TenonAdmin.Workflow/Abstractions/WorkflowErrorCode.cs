@@ -151,6 +151,13 @@ public static class WorkflowErrorCode
     /// <summary>未配置真实 outbox transport；默认实现不会伪造外部投递成功。</summary>
     public const int OutboxTransportNotConfigured = 48047;
 
+    /// <summary>
+    /// 管理员干预不允许。args.reason:
+    /// reasonRequired / reasonTooLong / targetRequired / userUnavailable / alreadyActor /
+    /// ambiguousNode / nodeNotActive / notApprovalNode / taskStillOpen。
+    /// </summary>
+    public const int AdminInterventionNotAllowed = 48048;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }

@@ -69,6 +69,7 @@ public enum WfTimeoutAction
 /// <summary>
 /// 空审批人策略(节点 <c>props.nobody</c> / 流程默认 / <see cref="WorkflowOptions.Nobody"/>)。
 /// 三级可配:节点 &gt; 流程默认 &gt; 全局配置。JSON:<c>autoPass|transfer|block</c>。
+/// 未配置时出厂默认 <see cref="Block"/>;只有显式写成 <see cref="AutoPass"/> 才会自动通过。
 /// </summary>
 [JsonConverter(typeof(CamelCaseEnumConverter))]
 public enum WfNobodyAction

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { App as AntdApp } from 'antd'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import '@/locales'
-import { createApprovalNode, createDefaultModel, createParallelNode } from '@/workflow/model'
+import { createApprovalNode, createCcNode, createDefaultModel, createParallelNode } from '@/workflow/model'
 import type { WfModel } from '@/workflow/schema'
 
 const testState = vi.hoisted(() => ({
@@ -50,7 +50,7 @@ function deferred<T>() {
 }
 
 function mount(model: WfModel) {
-  vi.mocked(wfDefinitionApi.get).mockResolvedValue({ id: 7, name: '请假', groupName: 'HR', status: 0, model } as never)
+  vi.mocked(wfDefinitionApi.get).mockResolvedValue({ id: 7, name: '请假', groupName: 'HR', icon: 'ph:tree-structure', status: 0, model } as never)
   return render(<AntdApp><WfDesignerPage /></AntdApp>)
 }
 
@@ -76,7 +76,7 @@ describe('WfDesignerPage', () => {
     testState.query = ''
     view.rerender(<AntdApp><WfDesignerPage /></AntdApp>)
 
-    expect(await screen.findByText(/尚未打开流程/)).toBeTruthy()
+    expect(await screen.findByText(/还没有打开流程/)).toBeTruthy()
     expect(screen.queryByText('经理审批')).toBeNull()
     expect((screen.getByPlaceholderText('流程名称') as HTMLInputElement).value).toBe('')
   })
@@ -90,6 +90,14 @@ describe('WfDesignerPage', () => {
     expect(screen.getByText('50%')).toBeTruthy()
     expect(screen.getByRole('button', { name: '缩小' })).toHaveProperty('disabled', true)
   }, 10_000)
+
+  it('空抄送成员会标在节点上', async () => {
+    const model = createDefaultModel()
+    model.root.next = createCcNode({ id: 'cc1', name: '抄送人事' })
+    mount(model)
+    expect(await screen.findByText('指定成员不能为空')).toBeTruthy()
+    expect(screen.getByText('抄送人事')).toBeTruthy()
+  })
 
   it('结构非法时保存被挡住,不发更新请求', async () => {
     mount(invalidModel())
@@ -106,7 +114,9 @@ describe('WfDesignerPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
     await waitFor(() => expect(wfDefinitionApi.update).toHaveBeenCalled())
-    expect(vi.mocked(wfDefinitionApi.update).mock.calls[0]![0]).toMatchObject({ id: 7, name: '请假', groupName: 'HR' })
+    expect(vi.mocked(wfDefinitionApi.update).mock.calls[0]![0]).toMatchObject({
+      id: 7, name: '请假', groupName: 'HR', icon: 'ph:tree-structure',
+    })
   })
 
   it('缺少定义写权限时隐藏保存和空态新建控件', async () => {
@@ -118,7 +128,7 @@ describe('WfDesignerPage', () => {
     cleanup()
     testState.query = ''
     render(<AntdApp><WfDesignerPage /></AntdApp>)
-    expect(await screen.findByText(/尚未打开流程/)).toBeTruthy()
+    expect(await screen.findByText(/还没有打开流程/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /创\s*建/ })).toBeNull()
     expect(screen.queryByPlaceholderText('流程名称')).toBeNull()
   })

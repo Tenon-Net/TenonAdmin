@@ -116,7 +116,7 @@ public class WfUrgeTests
     }
 
     [Fact]
-    public async Task Urge_is_repeatable_without_rate_limit()
+    public async Task Urge_is_rejected_inside_the_cooldown()
     {
         var capturing = new WorkflowNotifierTests.CapturingWorkflowNotifier();
         using var f = new WorkflowAppFactory
@@ -137,9 +137,11 @@ public class WfUrgeTests
         var first = await PostEnvelope(starter, "/api/v1/workflow/task/urge", new { taskId });
         Assert.Equal(0, first.GetProperty("code").GetInt32());
         var second = await PostEnvelope(starter, "/api/v1/workflow/task/urge", new { taskId });
-        Assert.Equal(0, second.GetProperty("code").GetInt32());
+        Assert.Equal(WorkflowErrorCode.UrgeNotAllowed, second.GetProperty("code").GetInt32());
+        Assert.Equal("urgeTooSoon", second.GetProperty("args").GetProperty("reason").GetString());
+        Assert.True(second.GetProperty("args").GetProperty("retryAfterSeconds").GetInt32() > 0);
 
-        Assert.Equal(2, capturing.TaskUrgedCalls.Count);
+        Assert.Single(capturing.TaskUrgedCalls);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { formatDateTime, normalizeTaskAction, taskActionColor } from '@/workflow/statusLabels'
 import type { WfCurrentTask } from '@/types/workflow'
 import {
+  countersignProgress,
   participantHistory,
   participantName,
   participantState,
@@ -28,6 +29,7 @@ function RoundContent({ round }: { round: WfApprovalRound }) {
     const participantHandled = participants.some((participant) => String(participant.userId) === String(item.userId))
     return !participantHandled || ![1, 2].includes(Number(item.action))
   })
+  const ratio = countersignProgress(round)
 
   return (
     <Space orientation="vertical" size={10} style={{ width: '100%' }}>
@@ -36,6 +38,9 @@ function RoundContent({ round }: { round: WfApprovalRound }) {
           {t('workflow.detail.approvalProgress.modeLabel')}：
           {t(`workflow.detail.approvalProgress.mode.${approvalModeKey(round.task.approvalMode)}`)}
         </Typography.Text>
+      ) : null}
+      {ratio ? (
+        <Typography.Text>{t('workflow.detail.approvalProgress.ratio', ratio)}</Typography.Text>
       ) : null}
       {participants.length > 0 ? (
         <ul className="wf-approval-list">
@@ -210,12 +215,14 @@ export function CurrentApprovalSummary({ tasks }: { tasks: readonly WfCurrentTas
       <Space orientation="vertical" size={4} style={{ width: '100%' }}>
         {approvalTasks.map((task) => {
           const pending = (task.participants ?? []).filter((person) => Number(person.status) === PENDING_STATUS)
+          const ratio = countersignProgress({ key: String(task.taskId), current: true, task, history: [] })
           return (
             <Space key={String(task.taskId)} size={8} wrap>
               <Tag color="processing">{task.nodeName || task.nodeId}</Tag>
               <span>{pending.length
                 ? pending.map(participantName).join('、')
                 : t('workflow.detail.approvalProgress.processing')}</span>
+              {ratio ? <span>{t('workflow.detail.approvalProgress.ratio', ratio)}</span> : null}
             </Space>
           )
         })}

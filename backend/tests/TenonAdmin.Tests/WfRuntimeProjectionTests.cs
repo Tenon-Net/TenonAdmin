@@ -101,6 +101,81 @@ public class WfRuntimeProjectionTests
         Assert.Equal(WorkflowErrorCode.FormValueInvalid, detail.GetProperty("code").GetInt32());
     }
 
+    [Fact]
+    public async Task Runtime_and_designer_show_cc_recipient_names_without_leaking_ids()
+    {
+        using var factory = new WorkflowAppFactory();
+        var admin = await ClientFor(factory, "superAdmin");
+        var recipientId = await AddUser(admin, "wf-cc-display", "赵抄送");
+        var definitionId = await Publish(admin, "抄送显示姓名", CcModel(recipientId));
+
+        var definition = await GetEnvelope(admin, $"/api/v1/workflow/definition/{definitionId}");
+        Assert.Equal(0, definition.GetProperty("code").GetInt32());
+        Assert.Equal(
+            "赵抄送",
+            definition.GetProperty("data").GetProperty("participantNames").GetProperty(recipientId.ToString()).GetString());
+        Assert.Contains("userIds", definition.GetProperty("data").GetProperty("model").GetRawText(), StringComparison.Ordinal);
+
+        var startable = await GetEnvelope(admin, $"/api/v1/workflow/instance/startable/{definitionId}");
+        Assert.Equal(0, startable.GetProperty("code").GetInt32());
+        AssertRecipientNamesOnly(startable.GetProperty("data").GetProperty("model"), recipientId);
+
+        var started = await PostEnvelope(admin, "/api/v1/workflow/instance/start", new { definitionId });
+        Assert.Equal(0, started.GetProperty("code").GetInt32());
+        var instanceId = started.GetProperty("data").GetProperty("instanceId").GetInt64();
+        var detail = await GetEnvelope(admin, $"/api/v1/workflow/instance/{instanceId}");
+        Assert.Equal(0, detail.GetProperty("code").GetInt32());
+        AssertRecipientNamesOnly(detail.GetProperty("data").GetProperty("model"), recipientId);
+    }
+
+    private static void AssertRecipientNamesOnly(JsonElement model, long recipientId)
+    {
+        var json = model.GetRawText();
+        Assert.Contains("赵抄送", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("userIds", json, StringComparison.Ordinal);
+        Assert.DoesNotContain(recipientId.ToString(), json, StringComparison.Ordinal);
+    }
+
+    private static object CcModel(long recipientId) => new
+    {
+        version = 1,
+        root = new
+        {
+            id = "start",
+            type = "start",
+            name = "发起",
+            next = new
+            {
+                id = "cc1",
+                type = "cc",
+                name = "抄送",
+                props = new
+                {
+                    assignee = new
+                    {
+                        provider = "user",
+                        @params = new Dictionary<string, object> { ["userIds"] = new[] { recipientId } },
+                    },
+                },
+            },
+        },
+    };
+
+    private static async Task<long> AddUser(HttpClient admin, string account, string name)
+    {
+        var env = await PostEnvelope(admin, "/api/v1/sys/user", new Dictionary<string, object?>
+        {
+            ["account"] = account,
+            ["password"] = Password,
+            ["name"] = name,
+            ["enabled"] = true,
+            ["orgId"] = 1,
+            ["roleIds"] = new[] { 2L },
+        });
+        Assert.Equal(0, env.GetProperty("code").GetInt32());
+        return env.GetProperty("data").GetProperty("id").GetInt64();
+    }
+
     private static object SensitiveModel() => new
     {
         version = 1,

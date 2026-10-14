@@ -12,7 +12,7 @@ import {
   useMessage,
   type DropdownOption,
 } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useFullscreen } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, type Locale } from '@/stores/app'
@@ -74,7 +74,7 @@ function onLocale(key: string) {
 // 下拉图标(对齐 React LayoutShell 用户菜单:个人中心 / 清除缓存 / 退出)。
 // color 用于危险项(退出)整行红字+红图标,对应 antd Menu danger。
 const renderUserIcon = (name: string, color?: string) => () =>
-  h(Icon, { icon: name, width: 16, style: color ? { color } : undefined })
+  h(AppIcon, { icon: name, size: 16, style: color ? { color } : undefined })
 
 // 下拉:个人中心 / 清除缓存 / 退出;五块能力进 /personal 二级壳(见 PersonalLayout)。
 const userOptions = computed<DropdownOption[]>(() => [
@@ -122,7 +122,7 @@ async function logout() {
   <div class="bar">
     <div class="left">
       <n-button v-if="showCollapse" quaternary circle :aria-label="t('app.collapse')" @click="app.toggleCollapsed()">
-        <Icon :icon="app.collapsed ? 'lucide:list' : 'lucide:panel-left'" :width="20" />
+        <AppIcon :icon="app.collapsed ? 'lucide:list' : 'lucide:panel-left'" :size="20" />
       </n-button>
       <div v-if="showBrand" class="brand">
         <TenonLogo :size="26" />
@@ -168,7 +168,7 @@ async function logout() {
       <n-tooltip>
         <template #trigger>
           <n-button quaternary circle class="mobile-hide" @click="searchOpen = true">
-            <Icon icon="lucide:search" :width="18" />
+            <AppIcon icon="lucide:search" :size="18" />
           </n-button>
         </template>
         {{ t('app.search') }} (Ctrl+K)
@@ -177,7 +177,7 @@ async function logout() {
       <n-tooltip>
         <template #trigger>
           <n-button quaternary circle class="mobile-hide" @click="toggleFullscreen()">
-            <Icon :icon="isFullscreen ? 'lucide:minimize' : 'lucide:maximize'" :width="18" />
+            <AppIcon :icon="isFullscreen ? 'lucide:minimize' : 'lucide:maximize'" :size="18" />
           </n-button>
         </template>
         {{ isFullscreen ? t('app.exitFullscreen') : t('app.fullscreen') }}
@@ -186,7 +186,7 @@ async function logout() {
       <n-tooltip>
         <template #trigger>
           <n-button quaternary circle @click="app.toggleDark()">
-            <Icon :icon="app.isDark ? 'lucide:moon-star' : 'lucide:sun'" :width="18" />
+            <AppIcon :icon="app.isDark ? 'lucide:moon-star' : 'lucide:sun'" :size="18" />
           </n-button>
         </template>
         {{ app.isDark ? t('app.dark') : t('app.light') }}
@@ -194,14 +194,14 @@ async function logout() {
 
       <n-dropdown :options="localeOptions" @select="onLocale">
         <n-button quaternary circle class="mobile-hide" :aria-label="t('app.language')">
-          <Icon icon="lucide:languages" :width="18" />
+          <AppIcon icon="lucide:languages" :size="18" />
         </n-button>
       </n-dropdown>
 
       <n-tooltip>
         <template #trigger>
           <n-button quaternary circle class="mobile-hide" :aria-label="t('app.settings')" @click="settingsOpen = true">
-            <Icon icon="lucide:settings" :width="18" />
+            <AppIcon icon="lucide:settings" :size="18" />
           </n-button>
         </template>
         {{ t('app.settings') }}
@@ -211,7 +211,7 @@ async function logout() {
       <n-tooltip v-if="auth.modules.length > 1">
         <template #trigger>
           <n-button quaternary circle :aria-label="t('app.switchModule')" @click="router.push('/module')">
-            <Icon icon="lucide:layout-grid" :width="18" />
+            <AppIcon icon="lucide:layout-grid" :size="18" />
           </n-button>
         </template>
         {{ t('app.switchModule') }}
@@ -223,7 +223,7 @@ async function logout() {
         <n-button quaternary :aria-label="t('app.profile')">
           <!-- 有头像用头像(profile 页可传),没有回落原图标;头像来源见 stores/user.ts 的 avatar 注释 -->
           <n-avatar v-if="user.userInfo?.avatar" round :size="22" :src="user.userInfo.avatar" />
-          <Icon v-else icon="lucide:circle-user" :width="20" />
+          <AppIcon v-else icon="lucide:circle-user" :size="20" />
           <span class="uname mobile-hide">{{ user.userInfo?.name ?? user.userInfo?.account ?? '' }}</span>
         </n-button>
       </n-dropdown>

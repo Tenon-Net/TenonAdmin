@@ -197,6 +197,9 @@ internal static class WfFormRuntime
                 if (precision is not null && decimal.Round(number, precision.Value) != number)
                     ThrowInvalid(field.Key, "valueInvalid");
                 var min = ReadDecimal(props, "min");
+                // 金额没写下限时按非负处理;要允许退款负数就显式配置 min。
+                if (field.Type == WfFormFieldType.Money && min is null)
+                    min = 0;
                 var max = ReadDecimal(props, "max");
                 if (min is not null && number < min || max is not null && number > max)
                     ThrowInvalid(field.Key, "rangeInvalid");

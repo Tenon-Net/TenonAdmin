@@ -11,6 +11,7 @@ import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pr
 import { wfInstanceApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import type { WfInstanceListItem, WfInstanceStatus } from '@/types/workflow'
+import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -48,12 +49,14 @@ function normalizeStatus(s: WfInstanceStatus | undefined): string {
   return map[s] ?? 'unknown'
 }
 
-function statusLabel(s: WfInstanceStatus | undefined): string {
-  return t(`workflow.status.${normalizeStatus(s)}`, String(s ?? ''))
+function statusLabel(row: WfInstanceListItem | undefined): string {
+  const key = row ? runtimeStatusKey(row) ?? normalizeStatus(row.status) : 'unknown'
+  return t(`workflow.status.${key}`)
 }
 
-function statusType(s: WfInstanceStatus | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
-  const key = normalizeStatus(s)
+function statusType(row: WfInstanceListItem | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
+  if (row && runtimeStatusKey(row)) return 'warning'
+  const key = normalizeStatus(row?.status)
   if (key === 'approved') return 'success'
   if (key === 'rejected' || key === 'terminated') return 'error'
   if (key === 'cancelled') return 'warning'
@@ -63,6 +66,20 @@ function statusType(s: WfInstanceStatus | undefined): 'default' | 'info' | 'succ
 
 const columns: ProTableColumn<WfInstanceListItem>[] = [
   { key: 'definitionName', title: () => t('workflow.mine.definition'), minWidth: 160, ellipsis: { tooltip: true } },
+  {
+    key: 'starterName',
+    title: () => t('workflow.mine.starter'),
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (r) => r.starterName?.trim() || '—',
+  },
+  {
+    key: 'summary',
+    title: () => t('workflow.mine.summary'),
+    minWidth: 200,
+    ellipsis: { tooltip: true },
+    render: (r) => r.summary?.trim() || '—',
+  },
   {
     key: 'version',
     title: () => t('workflow.mine.version'),
@@ -82,7 +99,7 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
     title: () => t('common.status'),
     width: 96,
     render: (r) =>
-      h(NTag, { size: 'small', type: statusType(r.status), bordered: false }, () => statusLabel(r.status)),
+      h(NTag, { size: 'small', type: statusType(r), bordered: false }, () => statusLabel(r)),
   },
   { key: 'createTime', title: () => t('workflow.mine.createTime'), width: 170, format: 'datetime' },
   {

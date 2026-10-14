@@ -18,6 +18,7 @@ import type {
   WfCcItem,
   WfDelegationRule,
   WfDelegationRuleInput,
+  WfParticipantCandidate,
 } from '@/types/workflow'
 
 export const wfDefinitionApi = {
@@ -144,6 +145,27 @@ export const wfInstanceApi = {
       })
       .then((r) => toPage<WfInstanceListItem>(r)),
 
+  forceTransfer: (body: {
+    instanceId: number
+    toUserId: number
+    reason: string
+    nodeId?: string | null
+    requestId?: string | null
+  }) =>
+    client
+      .POST('/api/v1/workflow/instance/force-transfer', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
+  terminate: (body: { instanceId: number; reason: string; requestId?: string | null }) =>
+    client
+      .POST('/api/v1/workflow/instance/terminate', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
+  skip: (body: { instanceId: number; reason: string; nodeId?: string | null; requestId?: string | null }) =>
+    client
+      .POST('/api/v1/workflow/instance/skip', { body })
+      .then((r) => unwrap<WfEngineResult>(r)),
+
   cancel: (body: { instanceId: number; comment?: string | null; requestId?: string | null }) =>
     client
       .POST('/api/v1/workflow/instance/cancel', { body })
@@ -254,6 +276,21 @@ export const wfDelegationApi = {
         params: { path: { id }, query: { requestId } },
       })
       .then((r) => unwrap<boolean>(r)),
+}
+
+export const wfParticipantApi = {
+  /** 审批选人:启用用户的 id / 姓名 / 账号。登录即可,不要求用户管理权限。 */
+  page: (params: { page: number; pageSize: number; keyword?: string }) =>
+    client
+      .GET('/api/v1/workflow/participant/page', {
+        params: {
+          query: {
+            ...pageParams(params),
+            Keyword: params.keyword,
+          },
+        },
+      })
+      .then((r) => toPage<WfParticipantCandidate>(r)),
 }
 
 export const wfCcApi = {

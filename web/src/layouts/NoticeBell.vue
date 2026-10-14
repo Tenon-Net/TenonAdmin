@@ -8,7 +8,7 @@ import {
   NPopover, NBadge, NButton, NTag, NEllipsis, NScrollbar, NText, NEmpty, NModal, NSpin,
   useMessage,
 } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { noticeApi } from '@/api'
@@ -109,7 +109,7 @@ fetchUnread()
     <template #trigger>
       <n-badge :value="unread" :max="99" :show="unread > 0">
         <n-button quaternary circle :aria-label="t('app.notice.title')">
-          <Icon icon="lucide:bell" :width="18" />
+          <AppIcon icon="lucide:bell" :size="18" />
         </n-button>
       </n-badge>
     </template>
@@ -118,7 +118,7 @@ fetchUnread()
       <div class="notice-head">
         <span class="notice-title">{{ t('app.notice.title') }}</span>
         <n-button text size="tiny" :disabled="unread === 0" @click="markAllRead">
-          <template #icon><Icon icon="lucide:check-check" :width="15" /></template>
+          <template #icon><AppIcon icon="lucide:check-check" :size="15" /></template>
           {{ t('app.notice.markAllRead') }}
         </n-button>
       </div>
@@ -147,7 +147,7 @@ fetchUnread()
       <div class="notice-foot">
         <n-button text size="small" @click="viewAll">
           {{ t('app.notice.viewAll') }}
-          <template #icon><Icon icon="lucide:arrow-right" :width="14" /></template>
+          <template #icon><AppIcon icon="lucide:arrow-right" :size="14" /></template>
         </n-button>
       </div>
     </div>

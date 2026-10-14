@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
   root: WfNode | null | undefined
   selectedId?: string | null
   errorSet: Set<string>
+  errorMessages?: Record<string, string>
   terminal?: boolean
   readonly?: boolean
   visitedSet?: Set<string>
@@ -73,6 +74,7 @@ function renameArm(branchId: string, armId: string, event: Event) {
         :node="node"
         :active="selectedId === node.id"
         :error="errorSet.has(node.id)"
+        :error-message="errorMessages?.[node.id]"
         :readonly="readonly"
         :visited="visitedSet?.has(node.id) ?? false"
         :current="currentSet?.has(node.id) ?? false"
@@ -139,11 +141,14 @@ function renameArm(branchId: string, armId: string, event: Event) {
                 :allow-parallel="node.type !== 'parallel' && allowParallel"
                 @add="(type) => emit('add-at-arm-head', node.id, arm.id, type)"
               />
+              <!-- 回放没有加号,仍要留出连线,否则下一张卡的箭头会压住上一张。 -->
+              <div v-else-if="arm.next" class="wf-link" aria-hidden="true" />
               <WfNodeChain
                 v-if="arm.next"
                 :root="arm.next"
                 :selected-id="selectedId"
                 :error-set="errorSet"
+                :error-messages="errorMessages"
                 :readonly="readonly"
                 :visited-set="visitedSet"
                 :current-set="currentSet"
@@ -170,6 +175,7 @@ function renameArm(branchId: string, armId: string, event: Event) {
       </section>
 
       <WfAddNode v-if="!readonly" :allow-parallel="allowParallel" @add="(type) => emit('add-after', node.id, type)" />
+      <div v-else class="wf-link" aria-hidden="true" />
     </div>
 
     <div v-if="terminal" class="wf-chain-terminal">
@@ -222,8 +228,24 @@ function renameArm(branchId: string, armId: string, event: Event) {
 .wf-branch-arms {
   display: flex;
   align-items: stretch;
-  gap: var(--space-16);
+  gap: var(--space-24);
   padding-top: var(--space-8);
+}
+.wf-link {
+  position: relative;
+  width: 220px;
+  height: 36px;
+  flex-shrink: 0;
+}
+.wf-link::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  background: #c8c9cc;
 }
 .wf-arm {
   flex: 0 0 auto;
@@ -306,7 +328,8 @@ function renameArm(branchId: string, armId: string, event: Event) {
   flex-direction: column;
   align-items: center;
   min-height: calc(5 * var(--space-24) + var(--space-4));
-  padding: 0 var(--space-16) var(--space-16);
+  /* 错误角标画在卡片外侧,臂内留出位置,避免和相邻分支叠在一起。 */
+  padding: 0 36px var(--space-16);
 }
 .wf-arm-merge,
 .wf-chain-terminal {
@@ -345,6 +368,9 @@ function renameArm(branchId: string, armId: string, event: Event) {
   margin-top: calc(-1 * var(--space-8));
 }
 
+:global(html[data-theme='dark']) .wf-link::before {
+  background: #5a5c64;
+}
 :global(html[data-theme='dark']) .wf-branch {
   background: color-mix(in srgb, var(--color-bg-container) 90%, var(--color-primary-light));
 }

@@ -203,4 +203,31 @@ describe('WfNodeTree', () => {
     expect(card.textContent).toContain('待审批李四')
     expect(card.textContent).not.toContain('无需处理张三')
   })
+
+  it('只读回放在节点之间留连线,编辑态仍用加号', () => {
+    const approval = createApprovalNode({ id: 'ap1', name: '经理审批' })
+    const { rerender } = render(
+      <WfNodeTree
+        model={modelWith(approval)}
+        readonly
+        visitedIds={['start', 'ap1']}
+        currentIds={['ap1']}
+        onInspectApproval={() => {}}
+        onModelChange={() => {}}
+        onSelect={() => {}}
+      />,
+    )
+    expect(document.querySelectorAll('.wf-link').length).toBeGreaterThanOrEqual(2)
+    expect(document.querySelector('.wf-add-btn')).toBeNull()
+
+    rerender(
+      <WfNodeTree
+        model={modelWith(approval)}
+        onModelChange={() => {}}
+        onSelect={() => {}}
+      />,
+    )
+    expect(document.querySelector('.wf-link')).toBeNull()
+    expect(document.querySelectorAll('.wf-add-btn').length).toBeGreaterThan(0)
+  })
 })

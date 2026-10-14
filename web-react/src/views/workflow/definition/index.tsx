@@ -74,6 +74,7 @@ export default function WfDefinitionPage() {
       confirm({
         content: t('workflow.definition.deleteConfirm', { name: r.name ?? '' }),
         action: () => wfDefinitionApi.remove(r.id!),
+        successMsg: t('common.deleted'),
       }).then((ok) => { if (ok) reload() })
     },
     [confirm, t, reload],

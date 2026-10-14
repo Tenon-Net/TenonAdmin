@@ -1,6 +1,6 @@
 import { computed, h, ref, watch } from 'vue'
 import type { MenuOption } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { createSharedComposable } from '@vueuse/core'
 import { router } from '@/router'
 import { useAuthStore } from '@/stores/auth'
@@ -18,7 +18,7 @@ function openIfExternal(key: string): boolean {
 
 // 无图标兜底:rail/折叠态的 n-menu 只画图标,缺图标会渲染成空槽“消失”(§组织管理),故永不返回 undefined。
 function renderIcon(name: string | undefined, fallback = 'lucide:dot') {
-  return () => h(Icon, { icon: name || fallback, width: 18, height: 18 })
+  return () => h(AppIcon, { icon: name || fallback, size: 18 })
 }
 
 // 与 useMenuFlat/TabsBar/MenuSearch 同约定:标题含 '.' 视为 i18n key——侧栏此前是四个渲染面中

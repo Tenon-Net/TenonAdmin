@@ -354,7 +354,8 @@ describe('WfInstanceDetailPage 动词', () => {
   it('转办未选人时被挡住,不发请求', async () => {
     mount(detailOf({ myPendingTasks: [pendingTask(77, '经理审批')] }))
 
-    fireEvent.click(await screen.findByRole('button', { name: /转\s*办/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /更\s*多/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /转\s*办/ }))
     fireEvent.click(okButton())
 
     await waitFor(() => expect(screen.getByText('请选择转办对象')).toBeTruthy())

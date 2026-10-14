@@ -150,6 +150,19 @@ export function progressParticipants(progress: WfApprovalNodeProgress): WfTaskPa
     .sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0))
 }
 
+const COUNTERSIGN_MODES = new Set(['all', 'seq', '2', '3'])
+
+/** 会签/顺序会签的已同意人数。少于两人、或签、以及已跳过的人不计入。 */
+export function countersignProgress(round: WfApprovalRound): { done: number; total: number } | null {
+  if (!COUNTERSIGN_MODES.has(String(round.task?.approvalMode ?? ''))) return null
+  const active = (round.task?.participants ?? []).filter((item) => Number(item.status) !== ACTOR_STATUS.skipped)
+  if (active.length < 2) return null
+  return {
+    done: active.filter((item) => Number(item.status) === ACTOR_STATUS.done).length,
+    total: active.length,
+  }
+}
+
 export function approvalCardGroups(progress: WfApprovalNodeProgress): Array<{
   key: 'pending' | 'waiting' | 'handled' | 'skipped'
   items: Array<{ name: string; action?: string; automatic?: boolean }>

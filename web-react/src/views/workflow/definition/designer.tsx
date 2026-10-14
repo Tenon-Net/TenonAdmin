@@ -6,11 +6,13 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppIcon } from '@/components/AppIcon'
 import { DetailPage } from '@/components/DetailPage'
-import { useConfirm } from '@/hooks/useConfirm'
 import { useHasPerm } from '@/stores/auth'
+import { ApiError } from '@/api'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
-import { cloneModel, createDefaultModel, validateModel } from '@/workflow/model'
+import { withDesignerNodeName } from '@/workflow/designerError'
+import { rememberParticipantNames } from '@/workflow/participantNames'
+import { cloneModel, createDefaultModel, findNode, validateModel, type WfModelIssue } from '@/workflow/model'
 import { normalizeWfId, type WfId } from '@/workflow/id'
 import { DEF_STATUS } from '@/workflow/statusLabels'
 import type { WfDefinitionInput } from '@/types/workflow'
@@ -42,9 +44,9 @@ function clampZoom(value: number): number {
 }
 
 export default function WfDesignerPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { message } = App.useApp()
-  const { run } = useConfirm()
+  const [serverNodeErrors, setServerNodeErrors] = useState<Record<string, string>>({})
   const has = useHasPerm()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -58,6 +60,8 @@ export default function WfDesignerPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [newName, setNewName] = useState('')
+  // 设计器不编辑图标,保存时原样带回,避免更新接口把已有图标写成空。
+  const [icon, setIcon] = useState<string | null>(null)
 
   const [zoom, setZoom] = useState(100)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -66,10 +70,27 @@ export default function WfDesignerPage() {
 
   const queryId = useMemo(() => normalizeWfId(searchParams.get('id')), [searchParams])
 
-  const errorIds = useMemo(
-    () => new Set(validateModel(model).map((issue) => issue.nodeId).filter(Boolean) as string[]),
-    [model],
-  )
+  const issueText = (issue: WfModelIssue) => {
+    const key = `workflow.designer.issue.${issue.code}`
+    const message = i18n.exists(key) ? t(key) : t('workflow.designer.invalid')
+    if (!issue.nodeId) return message
+    const nodeName = findNode(model.root, issue.nodeId)?.name?.trim() || issue.nodeId
+    return t('workflow.designer.issue.onNode', { nodeId: nodeName, message })
+  }
+
+  const errorMessages = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const issue of validateModel(model)) {
+      if (!issue.nodeId || map[issue.nodeId]) continue
+      const key = `workflow.designer.issue.${issue.code}`
+      map[issue.nodeId] = i18n.exists(key) ? t(key) : t('workflow.designer.invalid')
+    }
+    return { ...map, ...serverNodeErrors }
+  }, [i18n, model, serverNodeErrors, t])
+
+  const errorIds = useMemo(() => new Set(Object.keys(errorMessages)), [errorMessages])
+
+  useEffect(() => { setServerNodeErrors({}) }, [model])
 
   const load = useCallback(
     async (id: WfId) => {
@@ -80,8 +101,10 @@ export default function WfDesignerPage() {
         if (seq !== loadSeqRef.current) return
         setDefId(normalizeWfId(detail.id))
         setStatus(detail.status == null ? null : Number(detail.status))
+        rememberParticipantNames(detail.participantNames)
         setModel(cloneModel((detail.model as WfModel | undefined) ?? createDefaultModel()))
         form.setFieldsValue({ name: detail.name ?? '', groupName: detail.groupName ?? '' })
+        setIcon(detail.icon ?? null)
       } catch (e) {
         if (seq === loadSeqRef.current) message.error(translateError(e))
       } finally {
@@ -101,6 +124,7 @@ export default function WfDesignerPage() {
     setSelectedId(null)
     setDrawerOpen(false)
     setNewName('')
+    setIcon(null)
     setZoom(100)
     form.resetFields()
     if (queryId) void load(queryId)
@@ -125,13 +149,14 @@ export default function WfDesignerPage() {
     setDrawerOpen(true)
   }
 
-  /** 保存草稿。返回是否成功(发布前先存一次)。结构非法时不提交。 */
-  const save = async (): Promise<boolean> => {
+  /** 保存草稿。返回是否成功(发布前先存一次)。结构非法时不提交。quiet 时不弹成功提示,避免和发布提示叠在一起。 */
+  const save = async (options?: { quiet?: boolean }): Promise<boolean> => {
     if (!defId) return false
     const v = await form.validateFields().catch(() => null)
     if (!v) return false
-    if (validateModel(model).length) {
-      message.warning(t('workflow.designer.invalid'))
+    const issues = validateModel(model)
+    if (issues.length) {
+      message.warning(issues.map(issueText).join('；'))
       return false
     }
     setSaving(true)
@@ -140,12 +165,13 @@ export default function WfDesignerPage() {
         id: defId,
         name: v.name?.trim() || t('workflow.designer.untitled'),
         groupName: v.groupName?.trim() || null,
+        icon,
         model: model as WfDefinitionInput['model'],
       })
-      message.success(t('common.success'))
+      if (!options?.quiet) message.success(t('common.success'))
       return true
     } catch (e) {
-      message.error(translateError(e))
+      message.error(translateError(withDesignerNodeName(e, model.root)))
       return false
     } finally {
       setSaving(false)
@@ -154,9 +180,18 @@ export default function WfDesignerPage() {
 
   const publish = async () => {
     if (!defId) return
-    if (!(await save())) return
-    const ok = await run(() => wfDefinitionApi.publish(defId), t('workflow.designer.published'))
-    if (ok) await load(defId)
+    setServerNodeErrors({})
+    if (!(await save({ quiet: true }))) return
+    try {
+      await wfDefinitionApi.publish(defId)
+      message.success(t('workflow.designer.published'))
+      await load(defId)
+    } catch (e) {
+      const named = withDesignerNodeName(e, model.root)
+      const nodeId = e instanceof ApiError ? String(e.args?.nodeId ?? '') : ''
+      if (nodeId) setServerNodeErrors({ [nodeId]: translateError(named) })
+      message.error(translateError(named))
+    }
   }
 
   /** 空态建草稿:add 拿到 id 后就地打开(带 `?id=`),不跳回列表再点一次「设计」。 */
@@ -245,6 +280,7 @@ export default function WfDesignerPage() {
                   model={model}
                   selectedId={selectedId}
                   errorIds={errorIds}
+                  errorMessages={errorMessages}
                   onModelChange={setModel}
                   onSelect={onSelect}
                 />

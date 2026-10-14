@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { NButton, NTooltip } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
+import { participantNames } from '@/workflow/participantNames'
 import type { WfNode } from '@/workflow/schema'
 import '../../wf-identity.css'
 
@@ -11,6 +12,7 @@ const props = defineProps<{
   node: WfNode
   active?: boolean
   error?: boolean
+  errorMessage?: string
   readonly?: boolean
   visited?: boolean
   current?: boolean
@@ -20,6 +22,28 @@ const props = defineProps<{
 defineEmits<{ select: []; remove: []; inspect: [] }>()
 
 const { t } = useI18n()
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => typeof item === 'string' && item.trim() ? [item.trim()] : [])
+}
+
+/** 优先用运行时下发的姓名；设计器只有用户 Id 时再查本地姓名表。都没有才退回占位。 */
+function recipientNames(params: Record<string, unknown>, known: Record<string, string>): string | null {
+  const embedded = stringList(params.userNames)
+  if (embedded.length) return embedded.join('、')
+  const ids = Array.isArray(params.userIds)
+    ? params.userIds
+    : params.userId != null
+      ? [params.userId]
+      : []
+  const resolved = ids.flatMap((id) => {
+    if (id == null || id === '') return []
+    const name = known[String(id)]?.trim()
+    return name ? [name] : []
+  })
+  return resolved.length ? resolved.join('、') : null
+}
 
 const tone = computed(() => {
   switch (props.node.type) {
@@ -102,6 +126,9 @@ const body = computed(() => {
 
   switch (a.provider) {
     case 'user': {
+      const named = recipientNames(params, participantNames)
+      if (named) return { text: named, empty: false }
+      // 姓名还没解析到时保留人数，避免已配置的节点看起来像没选人。
       const ids = Array.isArray(params.userIds)
         ? params.userIds
         : params.userId != null
@@ -178,7 +205,8 @@ const body = computed(() => {
       </span>
       <AppIcon v-if="!readonly || runtimeInspectable" icon="ph:caret-right" :size="14" class="wf-card-arrow" />
     </div>
-    <div v-if="error" class="wf-card-warn" :title="t('workflow.designer.invalid')">
+    <p v-if="error && errorMessage" class="wf-card-error">{{ errorMessage }}</p>
+    <div v-if="error" class="wf-card-warn" :title="errorMessage || t('workflow.designer.invalid')">
       <AppIcon icon="ph:warning-circle" :size="18" />
     </div>
   </div>
@@ -313,6 +341,13 @@ const body = computed(() => {
 .wf-card-arrow {
   flex-shrink: 0;
   color: var(--color-text-disabled);
+}
+.wf-card-error {
+  margin: 0;
+  padding: 0 10px 8px;
+  color: var(--color-danger);
+  font-size: 12px;
+  line-height: 1.4;
 }
 .wf-card-warn {
   position: absolute;

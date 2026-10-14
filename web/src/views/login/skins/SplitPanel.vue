@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Icon } from '@iconify/vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useSite } from '@/composables/useSite'
@@ -40,7 +40,7 @@ const vars = computed(() => ({
         <p class="sub">{{ site.subtitle || t('login.subtitle') }}</p>
         <ul class="points">
           <li v-for="p in points" :key="p">
-            <Icon icon="ph:check-circle-duotone" :width="18" :style="{ color: app.accent }" />{{ p }}
+            <AppIcon icon="ph:check-circle-duotone" :size="18" :style="{ color: app.accent }" />{{ p }}
           </li>
         </ul>
       </div>

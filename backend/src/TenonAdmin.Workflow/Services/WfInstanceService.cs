@@ -33,7 +33,7 @@ public class WfInstanceService(
         "action", "toUserId", "targetNodeId", "fromNodeId", "comment", "payloadHash",
         "eventName", "forkId", "armId", "armName", "isDefault", "parentTokenId", "childTokenId",
         "parentNodeVisitId", "childEntryNodeVisitId", "reason", "status", "arms",
-        "nodeId", "userIds",
+        "nodeId", "nodeName", "userIds", "adminUserId",
     };
 
     protected sealed record CurrentTaskSnapshot(
@@ -112,6 +112,7 @@ public class WfInstanceService(
                         ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionVersionNotFound);
             if (!CanStart(model, userId, orgId, roleIds))
                 continue;
+            var unavailable = await DescribeUnavailableAsync(model, cancellationToken);
             result.Add(new WfStartableDefinitionOutput
             {
                 Id = def.Id,
@@ -120,6 +121,9 @@ public class WfInstanceService(
                 GroupName = def.GroupName,
                 Version = snapshot.Version,
                 FormComponent = model.FormComponent,
+                UnavailableReason = unavailable.Reason,
+                UnavailableNodeId = unavailable.NodeId,
+                UnavailableNodeName = unavailable.NodeName,
             });
         }
 
@@ -144,7 +148,13 @@ public class WfInstanceService(
             Version = version.Version,
             FormComponent = model.FormComponent,
             DefinitionVersionId = version.Id,
-            Model = WfRuntimeModelProjector.Project(model)!,
+            Model = WfRuntimeModelProjector.Project(
+                model,
+                await WfListText.UserNamesAsync(
+                    definitions.Db,
+                    WfAssigneeDisplay.CollectUserIds(model),
+                    cancellationToken))!,
+            MayBlockWithoutApprover = WfRuntimePause.MayBlockWithoutApprover(model),
         };
     }
 
@@ -333,9 +343,10 @@ public class WfInstanceService(
             .FirstAsync()
             ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionVersionNotFound);
 
+        // 链式 ClearFilter<A>().ClearFilter<B>() 会互相覆盖,第二次只清掉软删,机构范围仍在。
+        // 定义常由超管创建(CreateOrgId 为空),受限办理人因此查不到名称,详情标题变成空白。
         var def = await definitions.AsQueryable()
-            .ClearFilter<IOrgScoped>()
-            .ClearFilter<ISoftDelete>()
+            .ClearFilter<IOrgScoped, ISoftDelete>()
             .Where(d => d.Id == version.DefinitionId)
             .FirstAsync();
         var model = WfModelJson.Deserialize(version.ModelJson);
@@ -391,11 +402,11 @@ public class WfInstanceService(
                 .OrderBy(arm => arm.ForkId, OrderByType.Asc)
                 .OrderBy(arm => arm.ArmId, OrderByType.Asc)
                 .ToListAsync();
-        var currentNodeIds = currentTasks
-            .Select(t => t.NodeId)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+        var pause = WfRuntimePause.Describe(
+            model,
+            runtimeTokens,
+            currentTasks.Select(task => (task.TokenId, task.NodeId)));
+        var currentNodeIds = pause.CurrentNodeIds.ToList();
         long? currentTaskId = currentTasks.Count > 0 ? currentTasks[0].Id : null;
 
         IReadOnlyList<WfTodoItemOutput> myPendingTasks = [];
@@ -415,18 +426,21 @@ public class WfInstanceService(
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        var permissionNodeIds = myPendingTasks.Count > 0
+        var ownNodeIds = myPendingTasks.Count > 0
             ? myPendingTasks
                 .Select(task => task.NodeId)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
                 .Distinct(StringComparer.Ordinal)
                 .ToList()
-            : viewerHistoryNodeIds.Count > 0
-                ? viewerHistoryNodeIds
-                : currentNodeIds.Count > 0
-                    ? currentNodeIds
-                    : his.Select(item => item.NodeId).ToList();
-        var viewPermissions = ResolveFormPermissions(model, permissionNodeIds);
+            : viewerHistoryNodeIds;
+        // 办理人只受自己节点的字段权限约束(多节点时隐藏优先)。
+        // 发起人、监控人和抄送人没有自己的审批节点:任一适用节点没把字段标成隐藏,详情就要带回原值。
+        // 否则列表摘要能看到「金额：8000」,业务表单却只剩空标签。
+        var viewPermissions = ownNodeIds.Count > 0
+            ? ResolveFormPermissions(model, ownNodeIds)
+            : ResolveObserverFormPermissions(
+                model,
+                currentNodeIds.Count > 0 ? currentNodeIds : his.Select(item => item.NodeId));
         var myPending = myPendingTasks.FirstOrDefault();
         var currentTaskSnapshots = currentTasks
             .Select(task => new CurrentTaskSnapshot(
@@ -453,6 +467,9 @@ public class WfInstanceService(
                 .SelectMany(actor => new long?[] { actor.UserId, actor.OriginalUserId }))
             .Where(id => id is > 0)
             .Select(id => id!.Value)
+            .Append(instance.StarterUserId)
+            .Concat(WfAssigneeDisplay.CollectUserIds(model))
+            .Where(id => id > 0)
             .Distinct()
             .ToList();
         var userNames = await ResolveUserDisplayNamesAsync(userIds, cancellationToken);
@@ -473,6 +490,7 @@ public class WfInstanceService(
             Version = version.Version,
             BusinessKey = instance.BusinessKey,
             StarterUserId = instance.StarterUserId,
+            StarterName = userNames.GetValueOrDefault(instance.StarterUserId),
             Status = instance.Status,
             VariablesJson = WfFormRuntime.ProjectVisibleJson(model?.FormSchema, instance.VariablesJson, viewPermissions),
             FormComponent = model?.FormComponent,
@@ -481,9 +499,12 @@ public class WfInstanceService(
             MyPendingTasks = myPendingTasks,
             HisTasks = his.Select(item => EnrichHisTask(
                 MapHisTask(item), userNames, automaticHisTaskIds.Contains(item.Id))).ToList(),
-            Model = WfRuntimeModelProjector.Project(model),
+            Model = WfRuntimeModelProjector.Project(model, userNames),
             VisitedNodeIds = CollectVisitedNodeIds(events),
             CurrentNodeIds = currentNodeIds,
+            BlockedNodeIds = pause.BlockedNodeIds,
+            ReturnedToStarter = pause.ReturnedToStarter,
+            HasPendingTask = pause.HasPendingTask,
             CurrentTaskId = currentTaskId,
             CurrentTasks = currentTaskSnapshots.Select(task => new WfCurrentTaskOutput
             {
@@ -726,19 +747,38 @@ public class WfInstanceService(
                 .ToListAsync())
             .ToDictionary(d => d.Id);
 
+        var starterNames = await WfListText.UserNamesAsync(
+            instances.Db, page.Items.Select(i => i.StarterUserId), cancellationToken);
+
+        var instanceIds = page.Items.Select(i => i.Id).ToList();
+        var tokenRows = await instances.Db.Queryable<WfToken>()
+            .Where(token => instanceIds.Contains(token.InstanceId))
+            .ToListAsync(cancellationToken);
+        var taskRows = await tasks.AsQueryable()
+            .Where(task => instanceIds.Contains(task.InstanceId))
+            .Select(task => new { task.InstanceId, task.TokenId, task.NodeId })
+            .ToListAsync(cancellationToken);
+
         var items = page.Items.Select(i =>
         {
             versionMap.TryGetValue(i.DefinitionVersionId, out var ver);
             var defName = "";
             var defId = 0L;
             var verNo = 0;
+            WfModel? model = null;
             if (ver is not null)
             {
                 defId = ver.DefinitionId;
                 verNo = ver.Version;
                 if (defMap.TryGetValue(ver.DefinitionId, out var def))
                     defName = def.Name;
+                model = WfModelJson.Deserialize(ver.ModelJson);
             }
+
+            var pause = WfRuntimePause.Describe(
+                model,
+                tokenRows.Where(token => token.InstanceId == i.Id),
+                taskRows.Where(task => task.InstanceId == i.Id).Select(task => (task.TokenId, task.NodeId)));
 
             return new WfInstanceListItemOutput
             {
@@ -748,11 +788,14 @@ public class WfInstanceService(
                 Version = verNo,
                 BusinessKey = i.BusinessKey,
                 Status = i.Status,
-                VariablesJson = ver is not null && WfModelJson.Deserialize(ver.ModelJson)?.FormSchema is null
-                    ? i.VariablesJson
-                    : null,
+                VariablesJson = model?.FormSchema is null ? i.VariablesJson : null,
                 StarterUserId = i.StarterUserId,
+                StarterName = starterNames.GetValueOrDefault(i.StarterUserId),
+                Summary = WfListText.Summarize(model, i.VariablesJson),
                 CreateTime = i.CreateTime,
+                BlockedNodeIds = pause.BlockedNodeIds,
+                ReturnedToStarter = pause.ReturnedToStarter,
+                HasPendingTask = pause.HasPendingTask,
             };
         }).ToList();
 
@@ -914,6 +957,38 @@ public class WfInstanceService(
             .ToList();
     }
 
+    /// <summary>
+    /// 观察者没有自己的审批节点。字段只在每个适用审批节点都明确隐藏时才从详情里拿掉;
+    /// 没写权限的节点按可编辑处理,不能被另一臂的隐藏项连带清空。
+    /// </summary>
+    private static IReadOnlyList<WfFormFieldPerm> ResolveObserverFormPermissions(
+        WfModel? model,
+        IEnumerable<string> nodeIds)
+    {
+        if (model?.FormSchema is null) return [];
+        var index = WfModelIndex.Build(model);
+        var approvalNodes = nodeIds
+            .Select(index.Find)
+            .Where(node => node?.Type == WfNodeType.Approval)
+            .Select(node => node!)
+            .ToList();
+        if (approvalNodes.Count == 0) return [];
+
+        return model.FormSchema.Fields
+            .Where(field => approvalNodes.All(node =>
+                AccessOf(field.Key, node.Props?.FormPerms) == WfFormPermAccess.Hidden))
+            .Select(field => new WfFormFieldPerm
+            {
+                Field = field.Key,
+                Access = WfFormPermAccess.Hidden,
+            })
+            .ToList();
+    }
+
+    private static WfFormPermAccess AccessOf(string field, IReadOnlyCollection<WfFormFieldPerm>? permissions) =>
+        permissions?.FirstOrDefault(permission => permission is not null && permission.Field == field)?.Access
+        ?? WfFormPermAccess.Editable;
+
     /// <summary>按 <see cref="WfModelIndex"/>(含分支臂内节点)解析节点名——不写第三次主链线性扫描。</summary>
     protected virtual async Task<string?> ResolveNodeName(long definitionVersionId, string nodeId)
     {
@@ -968,8 +1043,32 @@ public class WfInstanceService(
                 new Dictionary<string, object?> { ["definitionId"] = definitionId });
         }
 
+        // 发布校验上线前留下的空办理人/失效用户,发起时同样拒绝。
+        WfAssigneeRules.EnsureConfigured(model);
+        await WfAssigneeRules.EnsureEnabledUsersAsync(instances.Db, model, cancellationToken);
+
         return (def, version, model);
     }
+
+    /// <summary>旧快照办理人不合法时返回原因,不中断发起列表。</summary>
+    private async Task<(string? Reason, string? NodeId, string? NodeName)> DescribeUnavailableAsync(
+        WfModel model,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            WfAssigneeRules.EnsureConfigured(model);
+            await WfAssigneeRules.EnsureEnabledUsersAsync(instances.Db, model, cancellationToken);
+            return (null, null, null);
+        }
+        catch (AdminException ex) when ((int)ex.Code == WorkflowErrorCode.ModelInvalid)
+        {
+            return (Arg(ex, "reason"), Arg(ex, "nodeId"), Arg(ex, "nodeName"));
+        }
+    }
+
+    private static string? Arg(AdminException ex, string key) =>
+        ex.Args is not null && ex.Args.TryGetValue(key, out var value) ? value?.ToString() : null;
 
     protected virtual async Task<HashSet<long>> GetRoleIdsAsync(
         long userId,

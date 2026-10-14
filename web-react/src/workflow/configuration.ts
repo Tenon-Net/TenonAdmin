@@ -242,7 +242,7 @@ export function applyNodeConfiguration(
     assignee: JSON.parse(JSON.stringify(config.assignee)) as WfAssignee,
     mode,
     allPassRatio: mode === 'any' ? undefined : allPassRatio,
-    nobody: 'autoPass',
+    nobody: 'block',
     nobodyTransferUserId: undefined,
     onReject: config.onReject,
     rejectToNodeId: config.onReject === 'toNode' ? config.rejectToNodeId : undefined,

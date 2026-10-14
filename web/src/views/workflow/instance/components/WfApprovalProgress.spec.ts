@@ -77,6 +77,25 @@ describe('workflow approval progress details', () => {
     expect(host.querySelector('.wf-progress-person')?.textContent).toContain('待审批')
   })
 
+  it('shows how many countersign approvers have agreed', () => {
+    const host = mountProgress([{
+      key: 'task:50',
+      current: true,
+      taskId: 50,
+      approvalMode: 'all',
+      participants: [
+        { actorId: 1, userId: 1, displayName: '张三', status: 2, sort: 1 },
+        { actorId: 2, userId: 2, displayName: '李四', status: 1, sort: 2 },
+        { actorId: 3, userId: 3, displayName: '王五', status: 0, sort: 3 },
+      ],
+      history: [],
+    }])
+
+    expect(host.textContent).toContain('已同意 1/3')
+    expect(host.textContent).toContain('待审批')
+    expect(host.textContent).toContain('等待轮到')
+  })
+
   it('labels automatic history as system handling instead of a manual user action', () => {
     const host = mountProgress([{
       key: 'task:30',

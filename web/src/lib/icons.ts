@@ -12,6 +12,7 @@
 // │      → GitHub Actions Trusted Publishing 经 OIDC 自动发布(零密钥、自带 provenance)。
 // │   3) tenon 升级:`npm i tenon-naive-iconify-picker@latest`,取消 NIP_LOCAL,对真实 dist 冒烟后提交。
 // └──────────────────────────────────────────────────────────────────────────────┘
+import { _api } from '@iconify/vue'
 import { lucideCollection, setupIconPicker, type IconCollection, type IconifyJSON } from 'tenon-naive-iconify-picker'
 
 // 增删默认离线集:装/卸 `@iconify-json/<prefix>`,并在此加/删一行同 prefix 的 loader。
@@ -25,6 +26,9 @@ const collections: IconCollection[] = [
 
 /** 首屏调用一次:注册离线集 + 本地 SVG(src/assets/svg/*.svg),预热 Lucide(非阻塞)。 */
 export function setupIcons(): void {
+  // 布局和登录页如果直接用了在线 Icon，缺图标时会打 api.iconify.design / simplesvg / unisvg。
+  // 内网打不开这些主机。这里换成必失败的本地响应，图标只走已打包的集合。
+  _api.setFetch(() => Promise.resolve(new Response('', { status: 404 })))
   setupIconPicker({
     collections,
     localIcons: import.meta.glob('/src/assets/svg/*.svg', { query: '?raw', import: 'default', eager: true }) as Record<string, string>,

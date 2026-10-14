@@ -80,7 +80,12 @@ function projectRuntimeParallelArm(value: unknown): NonNullable<WfNode['parallel
 function projectRuntimeProps(value: unknown): WfNodeProps | undefined {
   if (!isRecord(value)) return undefined
   const props: WfNodeProps = {}
-  if (isRecord(value.assignee) && typeof value.assignee.provider === 'string') props.assignee = { provider: value.assignee.provider }
+  if (isRecord(value.assignee) && typeof value.assignee.provider === 'string') {
+    const names = stringList(value.assignee.displayNames)
+    props.assignee = names.length
+      ? { provider: value.assignee.provider, params: { userNames: names } }
+      : { provider: value.assignee.provider }
+  }
   if (value.returnPolicy === 'prev' || value.returnPolicy === 'any' || value.returnPolicy === 'node') props.returnPolicy = value.returnPolicy
   if (isRecord(value.buttonLabels)) {
     const labels: WfButtonLabels = {}
@@ -97,6 +102,11 @@ function projectRuntimeProps(value: unknown): WfNodeProps | undefined {
   return props
 }
 
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => typeof item === 'string' && item.trim() ? [item.trim()] : [])
+}
+
 function isWfNodeType(value: unknown): value is WfNodeType {
   return value === 'start' || value === 'approval' || value === 'cc' || value === 'branch' || value === 'parallel' || value === 'webhook' || value === 'aiDecision'
 }
@@ -105,7 +115,7 @@ const defaults: { [T in WfFormFieldType]: WfFormFieldPropsByType[T] } = {
   text: { maxLength: 256 },
   textarea: { maxLength: 4000, rows: 4 },
   number: { precision: 0 },
-  money: {},
+  money: { min: 0 },
   date: {},
   datetime: {},
   select: { options: [{ label: '选项 1', value: 'option1' }] },

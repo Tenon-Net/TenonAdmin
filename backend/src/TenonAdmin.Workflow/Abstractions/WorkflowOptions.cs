@@ -87,10 +87,11 @@ public sealed class WorkflowOptions
     public AiDecisionOptions AiDecision { get; set; } = new();
 
     /// <summary>
-    /// 空审批人全局默认策略:<c>autoPass</c>(自动通过,出厂默认) /
-    /// <c>transfer</c>(转指定人) / <c>block</c>(卡住并通知管理员)。
+    /// 空审批人全局默认策略:<c>block</c>(停在当前节点并记入历史,出厂默认) /
+    /// <c>transfer</c>(转指定人) / <c>autoPass</c>(仅显式选择时自动通过)。
+    /// 节点 <c>props.nobody</c> 与流程 <c>nobody</c> 优先于本项。未识别的值按 <c>block</c> 处理。
     /// </summary>
-    public string Nobody { get; set; } = "autoPass";
+    public string Nobody { get; set; } = "block";
 
     /// <summary>
     /// <see cref="WfTimeoutJob"/> 单次扫描的**处理**上限。每条要开一个引擎事务(读实例/版本 + CAS +

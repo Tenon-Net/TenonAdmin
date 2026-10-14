@@ -21,6 +21,7 @@ export interface WfNodeChainProps {
   root?: WfNode | null
   selectedId?: string | null
   errorSet: Set<string>
+  errorMessages?: Record<string, string>
   terminal?: boolean
   readonly?: boolean
   visitedSet?: Set<string>
@@ -57,7 +58,7 @@ function armsFor(node: WfNode): WfDisplayArm[] {
 
 export function WfNodeChain(props: WfNodeChainProps) {
   const {
-    root, selectedId, errorSet, terminal, readonly, visitedSet, currentSet, runtimeProgress, onInspectApproval,
+    root, selectedId, errorSet, errorMessages, terminal, readonly, visitedSet, currentSet, runtimeProgress, onInspectApproval,
     allowParallel = true,
     onSelect, onAddAfter, onAddAtArmHead, onRemoveNode, onAddArm, onRemoveArm, onRenameArm,
   } = props
@@ -78,6 +79,7 @@ export function WfNodeChain(props: WfNodeChainProps) {
               node={node}
               active={selectedId === node.id}
               error={errorSet.has(node.id)}
+              errorMessage={errorMessages?.[node.id]}
               readonly={readonly}
               visited={visitedSet?.has(node.id) ?? false}
               current={currentSet?.has(node.id) ?? false}
@@ -148,7 +150,7 @@ export function WfNodeChain(props: WfNodeChainProps) {
                             allowParallel={armAllowParallel}
                             onAdd={(type) => onAddAtArmHead(node.id, arm.id, type)}
                           />
-                        ) : null}
+                        ) : arm.next ? <div className="wf-link" aria-hidden="true" /> : null}
                         {arm.next ? (
                           <WfNodeChain
                             {...props}
@@ -170,7 +172,7 @@ export function WfNodeChain(props: WfNodeChainProps) {
 
             {!readonly ? (
               <WfAddNode allowParallel={allowParallel} onAdd={(type) => onAddAfter(node.id, type)} />
-            ) : null}
+            ) : <div className="wf-link" aria-hidden="true" />}
           </div>
         )
       })}

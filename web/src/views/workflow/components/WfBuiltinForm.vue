@@ -70,19 +70,34 @@ const PREVIEW_BY_MIME: Record<string, 'image' | 'pdf'> = {
 watch(
   () => props.modelValue,
   (next) => {
-    for (const key of Object.keys(values)) delete values[key]
-    Object.assign(values, next)
+    const incoming = { ...next }
+    for (const key of Object.keys(values)) {
+      if (!(key in incoming)) delete values[key]
+    }
+    Object.assign(values, incoming)
   },
-  { deep: true },
 )
 
 function updateValue(field: WfFormField, value: unknown) {
   if (!canEdit(field)) return
   if (value === undefined) delete values[field.key]
   else values[field.key] = value
-  issues.value = issues.value.filter((issue) => issue.key !== field.key)
   const next = { ...values }
+  // 金额/数字不再被控件静默夹到最小值;越界立刻标出,而不是等提交。
+  if (field.type === 'number' || field.type === 'money') revalidateField(field, next)
+  else issues.value = issues.value.filter((issue) => issue.key !== field.key)
   emit('update:modelValue', next)
+}
+
+function revalidateField(field: WfFormField, snapshot: WfFormValues) {
+  const found = validateWfFormValues(props.schema, snapshot, props.mode === 'start' ? undefined : props.permissions)
+    .filter((issue) => issue.key === field.key)
+  issues.value = [...issues.value.filter((issue) => issue.key !== field.key), ...found]
+}
+
+function onFieldBlur(field: WfFormField) {
+  if (!canEdit(field)) return
+  revalidateField(field, { ...values })
 }
 
 function fieldIssue(field: WfFormField): WfFormValueIssue | undefined {
@@ -100,12 +115,19 @@ function valueFor(field: WfFormField): unknown {
 
 function numberValue(field: WfFormField): number | null {
   const value = valueFor(field)
-  return typeof value === 'number' ? value : null
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
 }
 
 function stringValue(field: WfFormField): string | null {
   const value = valueFor(field)
-  return typeof value === 'string' ? value : null
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return null
 }
 
 function options(field: WfFormField): WfFormOption[] {
@@ -368,6 +390,7 @@ defineExpose({ validate })
         :placeholder="field.placeholder ?? undefined"
         :disabled="!canEdit(field)"
         @update:value="updateValue(field, $event)"
+        @blur="onFieldBlur(field)"
       />
       <n-input
         v-else-if="field.type === 'textarea'"
@@ -378,17 +401,17 @@ defineExpose({ validate })
         :placeholder="field.placeholder ?? undefined"
         :disabled="!canEdit(field)"
         @update:value="updateValue(field, $event)"
+        @blur="onFieldBlur(field)"
       />
       <n-input-number
         v-else-if="field.type === 'number' || field.type === 'money'"
         :value="numberValue(field)"
-        :min="field.props?.min"
-        :max="field.props?.max"
         :precision="numericPrecision(field)"
         :placeholder="field.placeholder ?? undefined"
         :disabled="!canEdit(field)"
         class="w-full"
         @update:value="updateValue(field, $event)"
+        @blur="onFieldBlur(field)"
       />
       <n-date-picker
         v-else-if="field.type === 'date'"
@@ -422,7 +445,7 @@ defineExpose({ validate })
         :disabled="!canEdit(field)"
         @update:value="updateValue(field, $event)"
       />
-      <UserSelect
+      <UserSelect source="workflow"
         v-else-if="field.type === 'user'"
         :value="userValue(field)"
         :multiple="userMultiple(field)"
@@ -489,6 +512,13 @@ defineExpose({ validate })
 <style scoped>
 .wf-builtin-form {
   width: 100%;
+}
+/* 查看态控件是 disabled,默认禁用色太浅,已填的金额/事由看起来像空的。 */
+.wf-builtin-form :deep(.n-input.n-input--disabled .n-input__input-el),
+.wf-builtin-form :deep(.n-input.n-input--disabled .n-input__textarea-el),
+.wf-builtin-form :deep(.n-input-number.n-input-number--disabled .n-input__input-el) {
+  color: var(--color-text-primary);
+  -webkit-text-fill-color: var(--color-text-primary);
 }
 .w-full {
   width: 100%;

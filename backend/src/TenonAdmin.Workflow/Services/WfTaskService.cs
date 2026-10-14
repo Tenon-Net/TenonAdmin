@@ -20,8 +20,11 @@ public class WfTaskService(
     IRepository<WfHistory> histories,
     IWorkflowNotifier notifier,
     ILogger<WfTaskService> logger,
-    ICurrentUser? currentUser = null) : IWfTaskService, IWfFormTaskService
+    ICurrentUser? currentUser = null,
+    TimeProvider? timeProvider = null) : IWfTaskService, IWfFormTaskService
 {
+    /// <summary>同一发起人对同一实例的催办间隔。</summary>
+    public static readonly TimeSpan UrgeCooldown = TimeSpan.FromMinutes(5);
     /// <inheritdoc />
     public virtual async Task<PagedList<WfTodoItemOutput>> PageTodoAsync(
         long userId,
@@ -71,6 +74,8 @@ public class WfTaskService(
                 .ToListAsync())
             .ToDictionary(d => d.Id);
         var modelCache = new Dictionary<long, WfModelIndex?>();
+        var starterNames = await WfListText.UserNamesAsync(
+            instances.Db, instanceMap.Values.Select(i => i.StarterUserId), cancellationToken);
 
         var items = new List<WfTodoItemOutput>(actorPage.Items.Count);
         foreach (var actor in actorPage.Items)
@@ -83,6 +88,7 @@ public class WfTaskService(
             versionMap.TryGetValue(instance.DefinitionVersionId, out var ver);
             var defId = ver?.DefinitionId ?? 0;
             var defName = defId > 0 && defMap.TryGetValue(defId, out var def) ? def.Name : "";
+            var visibleVariables = ProjectTaskVariables(ver, task.NodeId, instance.VariablesJson);
 
             items.Add(new WfTodoItemOutput
             {
@@ -97,7 +103,11 @@ public class WfTaskService(
                 DefinitionName = defName,
                 BusinessKey = instance.BusinessKey,
                 StarterUserId = instance.StarterUserId,
-                VariablesJson = ProjectTaskVariables(ver, task.NodeId, instance.VariablesJson),
+                StarterName = starterNames.GetValueOrDefault(instance.StarterUserId),
+                Summary = WfListText.Summarize(
+                    ver is null ? null : WfModelJson.Deserialize(ver.ModelJson),
+                    visibleVariables),
+                VariablesJson = visibleVariables,
                 CreateTime = task.CreateTime,
             });
         }
@@ -243,6 +253,27 @@ public class WfTaskService(
 
         if (toUserIds.Count == 0)
             return;
+
+        var clock = timeProvider ?? TimeProvider.System;
+        var latestUrge = await histories.AsQueryable()
+            .Where(history => history.InstanceId == instance.Id
+                              && history.EventType == WfHistoryEventType.TaskUrged
+                              && history.ActorUserId == callerUserId)
+            .OrderBy(history => history.CreateTime, OrderByType.Desc)
+            .FirstAsync();
+        if (latestUrge is not null)
+        {
+            var elapsed = clock.GetLocalNow().DateTime - latestUrge.CreateTime;
+            if (elapsed < UrgeCooldown)
+            {
+                var retryAfterSeconds = Math.Max(1, (int)Math.Ceiling((UrgeCooldown - elapsed).TotalSeconds));
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.UrgeNotAllowed, new Dictionary<string, object?>
+                {
+                    ["reason"] = "urgeTooSoon",
+                    ["retryAfterSeconds"] = retryAfterSeconds,
+                });
+            }
+        }
 
         await WfHistorySequence.WriteSystemRowAsync(histories.Db, new WfHistory
         {
@@ -410,18 +441,22 @@ public class WfTaskService(
                 .Where(d => defIds.Contains(d.Id))
                 .ToListAsync())
             .ToDictionary(d => d.Id);
+        var starterNames = await WfListText.UserNamesAsync(
+            instances.Db, instanceMap.Values.Select(i => i.StarterUserId), cancellationToken);
 
         var items = page.Items.Select(h =>
         {
             instanceMap.TryGetValue(h.InstanceId, out var instance);
             long defId = 0;
             var defName = "";
+            WfModel? model = null;
             var status = instance?.Status ?? WfInstanceStatus.Running;
             if (instance is not null && versionMap.TryGetValue(instance.DefinitionVersionId, out var ver))
             {
                 defId = ver.DefinitionId;
                 if (defMap.TryGetValue(ver.DefinitionId, out var def))
                     defName = def.Name;
+                model = WfModelJson.Deserialize(ver.ModelJson);
             }
 
             return new WfDoneItemOutput
@@ -442,6 +477,8 @@ public class WfTaskService(
                 BusinessKey = instance?.BusinessKey,
                 InstanceStatus = status,
                 StarterUserId = instance?.StarterUserId ?? 0,
+                StarterName = instance is null ? null : starterNames.GetValueOrDefault(instance.StarterUserId),
+                Summary = WfListText.Summarize(model, instance?.VariablesJson),
                 CreateTime = h.CreateTime,
             };
         }).ToList();

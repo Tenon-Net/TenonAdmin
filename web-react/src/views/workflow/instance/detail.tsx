@@ -2,11 +2,13 @@
 // 约定式路由:views/workflow/instance/detail.tsx → /workflow/instance/:id/detail。对应 Vue 侧 instance/detail.vue。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Card,
   Collapse,
   Descriptions,
+  Dropdown,
   Empty,
   Form,
   Input,
@@ -17,6 +19,7 @@ import {
   Tag,
   Timeline,
   Typography,
+  type MenuProps,
 } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -24,14 +27,16 @@ import { Can } from '@/components/Can'
 import { DetailPage } from '@/components/DetailPage'
 import { UserSelect } from '@/components/UserSelect'
 import { useConfirm } from '@/hooks/useConfirm'
+import { useHasPerm } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
 import { useUserStore } from '@/stores/user'
 import { wfInstanceApi, wfTaskApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
-import { mergeWfFormPermissions } from '@/workflow/formRuntime'
+import { mergeWfFormPermissions, observerHiddenFields } from '@/workflow/formRuntime'
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
 import { normalizeWfId, wfIdEquals, type WfId } from '@/workflow/id'
 import { findNode, flattenChain } from '@/workflow/model'
+import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 import {
   formatDateTime,
   instanceStatusColor,
@@ -93,6 +98,9 @@ const HISTORY_EVENT: Record<number, string> = {
   18: 'parallelArmCompleted',
   19: 'parallelJoined',
   20: 'parallelCancelled',
+  21: 'nobodyHandled',
+  22: 'adminForceTransferred',
+  23: 'adminSkipped',
 }
 
 interface ActionFormValues {
@@ -127,7 +135,8 @@ export function canResubmitInstance({
 }
 
 export default function WfInstanceDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const hasPerm = useHasPerm()
   const { message } = App.useApp()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -150,6 +159,7 @@ export default function WfInstanceDetailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [inspectedProgress, setInspectedProgress] = useState<WfApprovalNodeProgress | null>(null)
   const [actionForm] = Form.useForm<ActionFormValues>()
+  const pickedUserId = Form.useWatch('toUserId', actionForm)
   const formRuntimeRef = useRef<WfFormMountHandle | null>(null)
   const resubmitFormRuntimeRef = useRef<WfFormMountHandle | null>(null)
   // uid 连换或动作后重载时,只认最后一次请求的结果。
@@ -234,26 +244,31 @@ export default function WfInstanceDetailPage() {
   const formMountPath = detail?.formComponent ?? detail?.model?.formComponent ?? null
   const formMode = myPendingTasks.length > 0 ? 'approve' as const : 'view' as const
 
-  // 字段权限:有待办时取各待办节点的 formPerms;否则回看我经手过的审批节点,按 hidden > readonly > editable 合并。
+  // 办理人只看自己节点的字段权限。没有待办也没有审批历史的人按观察者处理:不是每个节点都隐藏的字段保持可见。
   const formPermissions = useMemo<WfFormFieldPerm[] | null>(() => {
     if (!replayModel) return null
-    const nodeIds = myPendingTasks.length > 0
+    const ownNodeIds = myPendingTasks.length > 0
       ? myPendingTasks.map((task) => task.nodeId).filter((nodeId): nodeId is string => !!nodeId)
-      : [
-          ...(currentNode?.type === 'approval' ? [currentNode.id] : []),
-          ...(detail?.visitedNodeIds ?? []),
-          ...hisTasks
-            .filter((task) => task.userId != null && myUserId != null && String(task.userId) === String(myUserId))
-            .map((task) => task.nodeId)
-            .filter((nodeId): nodeId is string => !!nodeId),
-        ]
-    const permissions = nodeIds
-      .map((nodeId) => findNode(replayModel.root, nodeId))
-      .filter((node) => node?.type === 'approval')
-      .flatMap((node) => node?.props?.formPerms ?? [])
-    const merged = mergeWfFormPermissions(permissions)
-    return merged.length ? merged : null
-  }, [replayModel, myPendingTasks, currentNode, detail, hisTasks, myUserId])
+      : hisTasks
+          .filter((task) => task.userId != null && myUserId != null && String(task.userId) === String(myUserId))
+          .map((task) => task.nodeId)
+          .filter((nodeId): nodeId is string => !!nodeId)
+    if (ownNodeIds.length > 0) {
+      const permissions = ownNodeIds
+        .map((nodeId) => findNode(replayModel.root, nodeId))
+        .filter((node) => node?.type === 'approval')
+        .flatMap((node) => node?.props?.formPerms ?? [])
+      const merged = mergeWfFormPermissions(permissions)
+      return merged.length ? merged : null
+    }
+    const currentIds = detail?.currentNodeIds ?? []
+    const candidateIds = currentIds.length > 0 ? currentIds : (detail?.visitedNodeIds ?? [])
+    const hidden = observerHiddenFields(
+      candidateIds.map((nodeId) => findNode(replayModel.root, nodeId)),
+      replayModel.formSchema?.fields.map((field) => field.key) ?? [],
+    )
+    return hidden.length ? hidden : null
+  }, [replayModel, myPendingTasks, detail, hisTasks, myUserId])
 
   const buttonLabels: WfButtonLabels = currentNode?.props?.buttonLabels ?? {}
   const returnPolicy = currentNode?.props?.returnPolicy
@@ -290,6 +305,22 @@ export default function WfInstanceDetailPage() {
   const btnText = (kind: keyof WfButtonLabels, fallbackKey: string) =>
     buttonLabels[kind]?.trim() || t(fallbackKey)
 
+  // 同意、拒绝、退回留在外面;转办、委托、加签、减签和催办收进「更多」。
+  const moreItems: NonNullable<MenuProps['items']> = []
+  if (myPendingTasks.length > 0) {
+    moreItems.push(
+      { key: 'transfer', label: btnText('transfer', 'workflow.detail.transfer') },
+      { key: 'delegate', label: btnText('delegate', 'workflow.detail.delegate') },
+    )
+    if (hasPerm('POST:/api/v1/workflow/task/add-sign')) {
+      moreItems.push({ key: 'addSign', label: t('workflow.detail.addSign') })
+    }
+    if (hasPerm('POST:/api/v1/workflow/task/remove-sign')) {
+      moreItems.push({ key: 'removeSign', label: t('workflow.detail.removeSign') })
+    }
+    if (canUrge) moreItems.push({ key: 'urge', label: btnText('urge', 'workflow.detail.urge') })
+  }
+
   const variableRows = useMemo(() => {
     const json = formVariablesJson
     if (!json?.trim()) return []
@@ -306,6 +337,10 @@ export default function WfInstanceDetailPage() {
     }
     return [{ key: '', value: json }]
   }, [formVariablesJson])
+
+  const blockStarter = action === 'transfer' || action === 'delegate' || action === 'addSign'
+  const starterDisabledIds = blockStarter && detail?.starterUserId != null ? [detail.starterUserId] : []
+  const starterPicked = blockStarter && wfIdEquals(normalizeWfId(pickedUserId), normalizeWfId(detail?.starterUserId))
 
   function openAction(kind: ActionKind) {
     actionForm.resetFields()
@@ -330,6 +365,10 @@ export default function WfInstanceDetailPage() {
 
     if (USER_ACTIONS.includes(kind) && toUserId === null) {
       message.warning(t(`workflow.detail.${kind}Required`))
+      return
+    }
+    if ((kind === 'transfer' || kind === 'delegate' || kind === 'addSign') && wfIdEquals(toUserId, normalizeWfId(detail?.starterUserId))) {
+      message.error(t('workflow.detail.issue.starterNotAllowed'))
       return
     }
     if (kind === 'return' && returnPolicy === 'any' && !values.targetNodeId) {
@@ -389,10 +428,10 @@ export default function WfInstanceDetailPage() {
           throw e
         }
       }
-      if (await run(api, t('common.success'))) {
-        setAction(null)
-        await load(uid)
-      }
+      const ok = await run(api, t('common.success'))
+      if (!ok) return
+      setAction(null)
+      if (uid) await load(uid)
     } finally {
       setSubmitting(false)
     }
@@ -404,10 +443,30 @@ export default function WfInstanceDetailPage() {
   const currentTaskText = (task: WfCurrentTask) =>
     `${task.nodeName || task.nodeId || t('workflow.detail.parallel.unknown')} · #${task.taskId} · ${t('workflow.detail.parallel.token')} #${task.tokenId}${task.nodeVisitId == null ? '' : ` · NodeVisit #${task.nodeVisitId}`}`
 
+  const nodeTitle = (nodeId?: string | null, nodeName?: string | null) => {
+    const named = nodeName?.trim()
+    if (named) return named
+    const fromModel = nodeId && replayModel ? findNode(replayModel.root, nodeId)?.name?.trim() : ''
+    return fromModel || t('workflow.detail.parallel.unknown')
+  }
+
   const userFallback = (userId: number | string | null | undefined) =>
     userId == null || userId === '' ? '' : t('workflow.detail.userFallback', { id: userId })
   const operatorName = (name: string | null | undefined, userId: number | string | null | undefined) =>
     name?.trim() || (Number(userId) > 0 ? userFallback(userId) : t('workflow.detail.approvalProgress.system'))
+  const nobodySummary = (item: { nodeName?: string | null; nodeId?: string | null; comment?: string | null; transferToUserName?: string | null; transferToUserId?: number | string | null }) => {
+    const [action, reason] = String(item.comment ?? '').split('|')
+    const node = item.nodeName || item.nodeId || ''
+    const reasonKey = `workflow.detail.nobody.reason.${reason}`
+    const reasonText = reason && i18n.exists(reasonKey) ? t(reasonKey) : t('workflow.detail.nobody.reason.noResolvedUsers')
+    const target = item.transferToUserName || (item.transferToUserId != null ? userFallback(item.transferToUserId) : '') || t('workflow.detail.approvalProgress.system')
+    const actionText = action === 'autoPass'
+      ? t('workflow.detail.nobody.action.autoPass')
+      : action === 'transfer'
+        ? t('workflow.detail.nobody.action.transfer', { name: target })
+        : t('workflow.detail.nobody.action.block')
+    return t('workflow.detail.nobody.summary', { node, reason: reasonText, action: actionText })
+  }
 
   const hasActions = myPendingTasks.length > 0 || canUrge || canCancel || canResubmit || canTakeBack
 
@@ -428,14 +487,14 @@ export default function WfInstanceDetailPage() {
                   {btnText('reject', 'workflow.detail.reject')}
                 </Button>
                 <Button onClick={() => openAction('return')}>{btnText('return', 'workflow.detail.return')}</Button>
-                <Button onClick={() => openAction('transfer')}>{btnText('transfer', 'workflow.detail.transfer')}</Button>
-                <Button onClick={() => openAction('delegate')}>{btnText('delegate', 'workflow.detail.delegate')}</Button>
-                <Can code="POST:/api/v1/workflow/task/add-sign">
-                  <Button onClick={() => openAction('addSign')}>{t('workflow.detail.addSign')}</Button>
-                </Can>
-                <Can code="POST:/api/v1/workflow/task/remove-sign">
-                  <Button onClick={() => openAction('removeSign')}>{t('workflow.detail.removeSign')}</Button>
-                </Can>
+                {moreItems.length > 0 ? (
+                  <Dropdown
+                    menu={{ items: moreItems, onClick: ({ key }) => openAction(key as ActionKind) }}
+                    trigger={['click']}
+                  >
+                    <Button>{t('common.more')}</Button>
+                  </Dropdown>
+                ) : null}
               </>
             ) : null}
             {canTakeBack ? (
@@ -443,7 +502,7 @@ export default function WfInstanceDetailPage() {
                 <Button onClick={() => openAction('takeBack')}>{t('workflow.detail.takeBack')}</Button>
               </Can>
             ) : null}
-            {canUrge ? (
+            {canUrge && myPendingTasks.length === 0 ? (
               <Button onClick={() => openAction('urge')}>{btnText('urge', 'workflow.detail.urge')}</Button>
             ) : null}
             {canCancel ? <Button onClick={() => openAction('cancel')}>{t('workflow.detail.cancel')}</Button> : null}
@@ -456,6 +515,20 @@ export default function WfInstanceDetailPage() {
     >
       {detail ? (
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+          {detail.returnedToStarter ? (
+            <Alert type="warning" showIcon title={t('workflow.detail.returnedHint')} />
+          ) : null}
+          {(detail.blockedNodeIds?.length ?? 0) > 0 ? (
+            <Alert
+              type="warning"
+              showIcon
+              title={t('workflow.detail.blockedHint', {
+                name: (detail.blockedNodeIds ?? [])
+                  .map((id) => (replayModel ? findNode(replayModel.root, id)?.name : '') || id)
+                  .join('、'),
+              })}
+            />
+          ) : null}
           <Card size="small" title={t('workflow.detail.summary')}>
             <Descriptions
               size="small" column={2}
@@ -465,10 +538,17 @@ export default function WfInstanceDetailPage() {
                   children: `${detail.definitionName ?? '—'}${detail.version ? ` (v${detail.version})` : ''}`,
                 },
                 {
+                  key: 'starter', label: t('workflow.detail.starter'),
+                  children: detail.starterName?.trim()
+                    || (detail.starterUserId != null && detail.starterUserId !== ''
+                      ? t('workflow.detail.userFallback', { id: detail.starterUserId })
+                      : '—'),
+                },
+                {
                   key: 'status', label: t('common.status'),
                   children: (
-                    <Tag color={instanceStatusColor(detail.status)}>
-                      {t(`workflow.status.${normalizeInstanceStatus(detail.status)}`)}
+                    <Tag color={runtimeStatusKey(detail) ? 'gold' : instanceStatusColor(detail.status)}>
+                      {t(`workflow.status.${runtimeStatusKey(detail) ?? normalizeInstanceStatus(detail.status)}`)}
                     </Tag>
                   ),
                 },
@@ -582,7 +662,7 @@ export default function WfInstanceDetailPage() {
                   content: (
                     <Space orientation="vertical" size={4}>
                       <Space size={8} wrap>
-                        <strong>{item.nodeName || item.nodeId}</strong>
+                        <strong>{nodeTitle(item.nodeId, item.nodeName)}</strong>
                         <Typography.Text type="secondary">
                           {item.isAutomatic
                             ? t('workflow.detail.approvalProgress.automatic')
@@ -598,8 +678,10 @@ export default function WfInstanceDetailPage() {
                         </Tag>
                         <Typography.Text type="secondary">{formatDateTime(item.createTime)}</Typography.Text>
                       </Space>
-                      {item.comment ? <Typography.Text>{item.comment}</Typography.Text> : null}
-                      {item.transferToUserId != null ? (
+                      {Number(item.action) === 11 ? (
+                        <Typography.Text>{nobodySummary(item)}</Typography.Text>
+                      ) : item.comment ? <Typography.Text>{item.comment}</Typography.Text> : null}
+                      {Number(item.action) !== 11 && item.transferToUserId != null ? (
                         <Typography.Text type="secondary">
                           {t('workflow.detail.transferTo', { name: item.transferToUserName || userFallback(item.transferToUserId) })}
                         </Typography.Text>
@@ -632,7 +714,7 @@ export default function WfInstanceDetailPage() {
                       <Space size={8} wrap>
                         <span>{t(`workflow.detail.historyEvent.${HISTORY_EVENT[Number(item.eventType)] ?? 'unknown'}`, { type: item.eventType ?? '—' })}</span>
                         <Typography.Text type="secondary">
-                          {`#${item.sequence || '—'} · ${t('workflow.detail.parallel.token')} #${item.tokenId ?? '—'} · NodeVisit #${item.nodeVisitId ?? '—'}${item.nodeId ? ` · ${item.nodeId}` : ''}`}
+                          {`#${item.sequence || '—'} · ${t('workflow.detail.parallel.token')} #${item.tokenId ?? '—'} · NodeVisit #${item.nodeVisitId ?? '—'}${item.nodeId ? ` · ${nodeTitle(item.nodeId)}` : ''}`}
                         </Typography.Text>
                         <Typography.Text type="secondary">{formatDateTime(item.createTime)}</Typography.Text>
                       </Space>
@@ -662,8 +744,18 @@ export default function WfInstanceDetailPage() {
       >
         <Form form={actionForm} layout="vertical" onValuesChange={() => requestKey.reset()}>
           {action && USER_ACTIONS.includes(action) ? (
-            <Form.Item name="toUserId" label={t(`workflow.detail.${action}User`)}>
-              <UserSelect placeholder={t(`workflow.detail.${action}User`)} />
+            <Form.Item
+              name="toUserId"
+              label={t(`workflow.detail.${action}User`)}
+              validateStatus={starterPicked ? 'error' : undefined}
+              help={starterPicked ? t('workflow.detail.issue.starterNotAllowed') : undefined}
+            >
+              <UserSelect
+                source="workflow"
+                placeholder={t(`workflow.detail.${action}User`)}
+                disabledIds={starterDisabledIds}
+                disabledSuffix={t('workflow.detail.issue.starterNotAllowed')}
+              />
             </Form.Item>
           ) : null}
 
@@ -727,7 +819,7 @@ export default function WfInstanceDetailPage() {
                   name={['selectedUserIdsByNode', node.id]}
                   label={node.name || t('workflow.start.selfSelect')}
                 >
-                  <UserSelect mode="multiple" placeholder={t('workflow.start.selfSelectHint')} />
+                  <UserSelect source="workflow" mode="multiple" placeholder={t('workflow.start.selfSelectHint')} />
                 </Form.Item>
               ))}
             </>
