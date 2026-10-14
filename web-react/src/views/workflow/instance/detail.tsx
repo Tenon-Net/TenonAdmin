@@ -261,8 +261,12 @@ export default function WfInstanceDetailPage() {
       const merged = mergeWfFormPermissions(permissions)
       return merged.length ? merged : null
     }
-    const currentIds = detail?.currentNodeIds ?? []
-    const candidateIds = currentIds.length > 0 ? currentIds : (detail?.visitedNodeIds ?? [])
+    // 阻断节点没有办理人,不能用它的隐藏权限把已提交的金额/事由抠掉。
+    const blockedIds = new Set(detail?.blockedNodeIds ?? [])
+    const visibleNodeIds = (ids: readonly string[] | null | undefined) =>
+      (ids ?? []).filter((nodeId) => !blockedIds.has(nodeId))
+    const currentIds = visibleNodeIds(detail?.currentNodeIds)
+    const candidateIds = currentIds.length > 0 ? currentIds : visibleNodeIds(detail?.visitedNodeIds)
     const hidden = observerHiddenFields(
       candidateIds.map((nodeId) => findNode(replayModel.root, nodeId)),
       replayModel.formSchema?.fields.map((field) => field.key) ?? [],

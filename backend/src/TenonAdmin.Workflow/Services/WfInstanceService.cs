@@ -439,11 +439,18 @@ public class WfInstanceService(
         // 办理人只受自己节点的字段权限约束(多节点时隐藏优先)。
         // 发起人、监控人和抄送人没有自己的审批节点:任一适用节点没把字段标成隐藏,详情就要带回原值。
         // 否则列表摘要能看到「金额：8000」,业务表单却只剩空标签。
+        // 阻断节点上没有办理人。它的隐藏权限不能把发起人/管理员的业务表单清空,
+        // 否则列表摘要仍有「金额：8000」,详情里金额和事由却是空的。
+        var blockedIds = pause.BlockedNodeIds.ToHashSet(StringComparer.Ordinal);
+        var observerNodeIds = (currentNodeIds.Count > 0
+                ? currentNodeIds
+                : his.Select(item => item.NodeId).Where(id => !string.IsNullOrWhiteSpace(id)))
+            .Where(id => !blockedIds.Contains(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
         var viewPermissions = ownNodeIds.Count > 0
             ? ResolveFormPermissions(model, ownNodeIds)
-            : ResolveObserverFormPermissions(
-                model,
-                currentNodeIds.Count > 0 ? currentNodeIds : his.Select(item => item.NodeId));
+            : ResolveObserverFormPermissions(model, observerNodeIds);
         var myPending = myPendingTasks.FirstOrDefault();
         var currentTaskSnapshots = currentTasks
             .Select(task => new CurrentTaskSnapshot(

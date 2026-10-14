@@ -211,6 +211,51 @@ describe('workflow instance detail variables', () => {
     expect(host.textContent).not.toContain('secret')
   })
 
+  it('keeps submitted form values when the only current node is blocked and hides them', async () => {
+    const host = await mountDetail({
+      id: 1,
+      definitionId: 1,
+      definitionName: '报销',
+      status: 1,
+      starterUserId: 1,
+      variablesJson: JSON.stringify({ amount: 8000, reason: '差旅' }),
+      currentNodeIds: ['leader'],
+      visitedNodeIds: ['start', 'leader'],
+      blockedNodeIds: ['leader'],
+      hisTasks: [{ userId: 0, nodeId: 'leader', action: 11 }],
+      model: {
+        version: 1,
+        formSchema: {
+          version: 1,
+          fields: [
+            { key: 'amount', label: '金额', type: 'money', required: true },
+            { key: 'reason', label: '事由', type: 'textarea', required: true },
+          ],
+        },
+        root: {
+          id: 'start',
+          type: 'start',
+          name: '发起',
+          next: {
+            id: 'leader',
+            type: 'approval',
+            name: '直属主管V2',
+            props: {
+              formPerms: [
+                { field: 'amount', access: 'hidden' },
+                { field: 'reason', access: 'hidden' },
+              ],
+            },
+            next: null,
+          },
+        },
+      },
+    })
+
+    expect(host.textContent).toContain('金额8000')
+    expect(host.textContent).toContain('事由差旅')
+  })
+
   it('keeps observer form values when only one current node hides the field', async () => {
     const host = await mountDetail({
       id: 1,

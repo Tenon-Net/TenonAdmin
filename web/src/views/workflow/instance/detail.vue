@@ -174,8 +174,12 @@ const formPermissions = computed<WfFormFieldPerm[] | null>(() => {
     const merged = mergeWfFormPermissions(permissions)
     return merged.length ? merged : null
   }
-  const currentIds = detail.value?.currentNodeIds ?? []
-  const candidateIds = currentIds.length > 0 ? currentIds : (detail.value?.visitedNodeIds ?? [])
+  // 阻断节点没有办理人,不能用它的隐藏权限把已提交的金额/事由抠掉。
+  const blockedIds = new Set(detail.value?.blockedNodeIds ?? [])
+  const visibleNodeIds = (ids: readonly string[] | null | undefined) =>
+    (ids ?? []).filter((nodeId) => !blockedIds.has(nodeId))
+  const openCurrentIds = visibleNodeIds(detail.value?.currentNodeIds)
+  const candidateIds = openCurrentIds.length > 0 ? openCurrentIds : visibleNodeIds(detail.value?.visitedNodeIds)
   const hidden = observerHiddenFields(
     candidateIds.map((id) => findNode(model.root, id)),
     model.formSchema?.fields.map((field) => field.key) ?? [],

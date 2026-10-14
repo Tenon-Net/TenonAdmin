@@ -525,6 +525,43 @@ describe('WfInstanceDetailPage 动词', () => {
     expect(screen.queryByRole('button', { name: /重新提交/ })).toBeNull()
   })
 
+  it('阻断实例没有待办时仍回放金额和事由', async () => {
+    const withForm = createDefaultModel()
+    withForm.formSchema = {
+      version: 1,
+      fields: [
+        { key: 'amount', label: '金额', type: 'money', required: true },
+        { key: 'reason', label: '事由', type: 'textarea', required: true },
+      ],
+    }
+    withForm.root.next = createApprovalNode({
+      id: 'leader',
+      name: '直属主管V2',
+      props: {
+        assignee: { provider: 'leader' },
+        formPerms: [
+          { field: 'amount', access: 'hidden' },
+          { field: 'reason', access: 'hidden' },
+        ],
+      },
+    })
+    mount(detailOf({
+      model: withForm as WfInstanceDetail['model'],
+      starterUserId: 100,
+      variablesJson: JSON.stringify({ amount: 8000, reason: '差旅' }),
+      currentNodeIds: ['leader'],
+      visitedNodeIds: ['start', 'leader'],
+      blockedNodeIds: ['leader'],
+      currentTasks: [],
+      myPendingTasks: [],
+      hisTasks: [{ id: 1, nodeId: 'leader', action: 11, userId: 0, isAutomatic: true }],
+    }))
+
+    const amount = await screen.findByLabelText('金额')
+    expect((amount as HTMLInputElement).value).toMatch(/^8000(\.00)?$/)
+    expect(screen.getByLabelText('事由')).toHaveProperty('value', '差旅')
+  })
+
   it('回放非空并行分叉与各臂当前节点、状态和原因', async () => {
     mount(detailOf({
       parallelForks: [{

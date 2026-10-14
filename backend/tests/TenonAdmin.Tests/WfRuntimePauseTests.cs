@@ -38,6 +38,37 @@ public class WfRuntimePauseTests
     }
 
     [Fact]
+    public async Task Blocked_instance_keeps_form_values_for_starter_and_admin()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        await AddUser(admin, "wf-pause-form-starter");
+        var definitionId = await Publish(admin, "阻断仍可见表单", BlockedFormModel());
+        var starter = await ClientFor(f, "wf-pause-form-starter");
+
+        var start = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new
+        {
+            definitionId,
+            variablesJson = """{"amount":8000,"reason":"差旅"}""",
+        });
+        Assert.Equal(0, start.GetProperty("code").GetInt32());
+        var instanceId = start.GetProperty("data").GetProperty("instanceId").GetInt64();
+
+        foreach (var client in new[] { starter, admin })
+        {
+            var detail = await (await client.GetAsync($"/api/v1/workflow/instance/{instanceId}")).ReadEnvelope();
+            Assert.Equal(0, detail.GetProperty("code").GetInt32());
+            var data = detail.GetProperty("data");
+            Assert.Equal("leader", Assert.Single(data.GetProperty("blockedNodeIds").EnumerateArray()).GetString());
+            Assert.False(data.GetProperty("hasPendingTask").GetBoolean());
+            using var values = JsonDocument.Parse(data.GetProperty("variablesJson").GetString()!);
+            Assert.Equal(8000, values.RootElement.GetProperty("amount").GetDecimal());
+            Assert.Equal("差旅", values.RootElement.GetProperty("reason").GetString());
+            Assert.Equal(2, data.GetProperty("model").GetProperty("formSchema").GetProperty("fields").GetArrayLength());
+        }
+    }
+
+    [Fact]
     public async Task Return_to_the_starter_is_marked_on_detail_and_in_my_list()
     {
         using var f = new WorkflowAppFactory();
@@ -78,6 +109,39 @@ public class WfRuntimePauseTests
                 {
                     assignee = new { provider = "leader", @params = new { level = 1 } },
                     mode = "any",
+                },
+                next = (object?)null,
+            },
+        },
+    };
+
+    private static object BlockedFormModel() => new
+    {
+        version = 1,
+        formSchema = new
+        {
+            version = 1,
+            fields = new object[]
+            {
+                new { key = "amount", label = "金额", type = "money", required = true },
+                new { key = "reason", label = "事由", type = "textarea", required = true },
+            },
+        },
+        root = new
+        {
+            id = "start", type = "start", name = "发起",
+            next = new
+            {
+                id = "leader", type = "approval", name = "直属主管V2",
+                props = new
+                {
+                    assignee = new { provider = "leader", @params = new { level = 1 } },
+                    mode = "any",
+                    formPerms = new object[]
+                    {
+                        new { field = "amount", access = "hidden" },
+                        new { field = "reason", access = "hidden" },
+                    },
                 },
                 next = (object?)null,
             },
