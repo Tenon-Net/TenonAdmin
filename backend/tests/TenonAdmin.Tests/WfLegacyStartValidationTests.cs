@@ -12,7 +12,7 @@ public class WfLegacyStartValidationTests
     private const string Password = "Test@123456";
 
     [Fact]
-    public async Task Legacy_empty_approver_is_flagged_and_cannot_start()
+    public async Task Legacy_empty_approver_is_hidden_from_startable_and_cannot_start()
     {
         using var f = new WorkflowAppFactory();
         var admin = await ClientFor(f, "superAdmin");
@@ -22,10 +22,9 @@ public class WfLegacyStartValidationTests
 
         var list = await (await starter.GetAsync("/api/v1/workflow/instance/startable")).ReadEnvelope();
         Assert.Equal(0, list.GetProperty("code").GetInt32());
-        var item = Assert.Single(list.GetProperty("data").EnumerateArray(), row => row.GetProperty("id").GetInt64() == definitionId);
-        Assert.Equal("assigneeRequired", item.GetProperty("unavailableReason").GetString());
-        Assert.Equal("apm-empty", item.GetProperty("unavailableNodeId").GetString());
-        Assert.Equal("空审批", item.GetProperty("unavailableNodeName").GetString());
+        Assert.DoesNotContain(
+            list.GetProperty("data").EnumerateArray(),
+            row => row.GetProperty("id").GetInt64() == definitionId);
 
         var start = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
         Assert.Equal(WorkflowErrorCode.ModelInvalid, start.GetProperty("code").GetInt32());

@@ -113,6 +113,9 @@ public class WfInstanceService(
             if (!CanStart(model, userId, orgId, roleIds))
                 continue;
             var unavailable = await DescribeUnavailableAsync(model, cancellationToken);
+            // 已发布版本办理人不合法时不出现在发起列表里。详情和发起接口仍返回 48002。
+            if (unavailable.Reason is not null)
+                continue;
             result.Add(new WfStartableDefinitionOutput
             {
                 Id = def.Id,
