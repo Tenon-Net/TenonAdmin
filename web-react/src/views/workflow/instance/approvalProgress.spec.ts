@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WfCurrentTask, WfHisTask } from '@/types/workflow'
-import { approvalCardGroups, buildApprovalProgress, participantHistory } from './approvalProgress'
+import { approvalCardGroups, buildApprovalProgress, countersignProgress, participantHistory } from './approvalProgress'
 
 function task(over: Partial<WfCurrentTask>): WfCurrentTask {
   return {
@@ -276,4 +276,103 @@ describe('approvalProgress', () => {
       { key: 'skipped', items: [{ name: '张三', action: undefined }] },
     ])
   })
+
+  it('拒绝后会签继续时已同意数不增加', () => {
+    const round = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 2, sort: 0 },
+      { actorId: 2, userId: 102, displayName: '李四', status: 1, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 0, sort: 2 },
+    ], [{ id: 1, actorId: 1, userId: 101, action: 2 }])
+    expect(countersignProgress(round)).toEqual({ done: 0, total: 3 })
+    expect(progressRatio(round)).toEqual({ done: 0, total: 3 })
+  })
+
+  it('同意和拒绝混合时只计同意，且节点卡与详情一致', () => {
+    const round = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 2, sort: 0 },
+      { actorId: 2, userId: 102, displayName: '李四', status: 2, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [
+      { id: 1, actorId: 1, userId: 101, action: 1 },
+      { id: 2, actorId: 2, userId: 102, action: 2 },
+    ])
+    expect(countersignProgress(round)).toEqual({ done: 1, total: 3 })
+    expect(progressRatio(round)).toEqual(countersignProgress(round))
+  })
+
+  it('未达全员门槛时仍按同意动作而不是已处理人数计数', () => {
+    const round = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 2, sort: 0 },
+      { actorId: 2, userId: 102, displayName: '李四', status: 2, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [{ id: 1, actorId: 1, userId: 101, action: 1 }])
+    expect(countersignProgress(round)).toEqual({ done: 1, total: 3 })
+  })
+
+  it('加签、减签、转办和重新加入后按有效办理人与同意动作计数', () => {
+    const added = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 2, sort: 0 },
+      { actorId: 2, userId: 102, displayName: '李四', status: 1, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [
+      { id: 1, actorId: 1, userId: 101, action: 1 },
+      { id: 2, actorId: 1, userId: 101, action: 8 },
+    ])
+    expect(countersignProgress(added)).toEqual({ done: 1, total: 3 })
+
+    const removed = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+      { actorId: 2, userId: 102, displayName: '李四', status: 1, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [
+      { id: 1, actorId: 1, userId: 101, action: 1 },
+      { id: 2, actorId: 2, userId: 102, action: 9 },
+    ])
+    expect(countersignProgress(removed)).toEqual({ done: 1, total: 2 })
+
+    const transferred = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+      { actorId: 4, userId: 104, displayName: '赵六', status: 1, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [{ id: 1, actorId: 1, userId: 101, action: 3 }])
+    expect(countersignProgress(transferred)).toEqual({ done: 0, total: 2 })
+
+    const rejoined = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+      { actorId: 5, userId: 101, displayName: '张三', status: 2, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [
+      { id: 1, actorId: 1, userId: 101, action: 3 },
+      { id: 2, actorId: 5, userId: 101, action: 1 },
+    ])
+    expect(countersignProgress(rejoined)).toEqual({ done: 1, total: 2 })
+    expect(progressRatio(rejoined)).toEqual({ done: 1, total: 2 })
+  })
 })
+
+function countersignRound(
+  participants: NonNullable<WfCurrentTask['participants']>,
+  history: WfHisTask[],
+) {
+  const current = task({
+    approvalMode: 'all',
+    participants,
+  })
+  const rows = history.map((item) => ({
+    taskId: 1,
+    tokenId: 10,
+    nodeVisitId: 100,
+    nodeId: 'approve',
+    ...item,
+  })) as WfHisTask[]
+  return buildApprovalProgress([current], [], rows).get('approve')!.currentRounds[0]!
+}
+
+function progressRatio(round: ReturnType<typeof countersignRound>) {
+  const progress = buildApprovalProgress(
+    round.task ? [round.task as WfCurrentTask] : [],
+    [],
+    round.history,
+  ).get(round.task?.nodeId ?? '')
+  return progress?.currentRounds.map((item) => countersignProgress(item)).find((item) => item != null) ?? null
+}

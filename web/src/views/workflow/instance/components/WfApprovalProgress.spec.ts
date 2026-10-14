@@ -112,12 +112,31 @@ describe('workflow approval progress details', () => {
         { actorId: 2, userId: 2, displayName: '李四', status: 1, sort: 2 },
         { actorId: 3, userId: 3, displayName: '王五', status: 0, sort: 3 },
       ],
-      history: [],
+      history: [{ id: 1, taskId: 50, nodeId: 'approval', actorId: 1, userId: 1, action: 1 }],
     }])
 
     expect(host.textContent).toContain('已同意 1/3')
     expect(host.textContent).toContain('待审批')
     expect(host.textContent).toContain('等待轮到')
+  })
+
+  it('does not count a rejection toward the agreed total', () => {
+    const host = mountProgress([{
+      key: 'task:51',
+      current: true,
+      taskId: 51,
+      nodeVisitId: 510,
+      approvalMode: 'all',
+      participants: [
+        { actorId: 1, userId: 1, displayName: '张三', status: 2, sort: 1 },
+        { actorId: 2, userId: 2, displayName: '李四', status: 1, sort: 2 },
+        { actorId: 3, userId: 3, displayName: '王五', status: 0, sort: 3 },
+      ],
+      history: [{ id: 1, taskId: 51, nodeVisitId: 510, nodeId: 'approval', actorId: 1, userId: 1, action: 2, comment: '不同意' }],
+    }])
+
+    expect(host.textContent).toContain('已同意 0/3')
+    expect(host.textContent).toContain('不同意')
   })
 
   it('labels automatic history as system handling instead of a manual user action', () => {

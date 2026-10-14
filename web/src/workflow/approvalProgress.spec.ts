@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { approvalRounds, participantGroups, participantHistory } from './approvalProgress'
+import { approvalRounds, countersignProgress, participantGroups, participantHistory } from './approvalProgress'
 
 describe('workflow approval progress', () => {
   it('keeps current and previous visits separate for the same node', () => {
@@ -238,4 +238,101 @@ describe('workflow approval progress', () => {
     expect(participantHistory(round, round.participants[1]!)).toBeUndefined()
     expect(round.history.map((item) => item.action)).toEqual([3, 1])
   })
+
+  it('does not count a rejection as an agreement while countersign continues', () => {
+    const round = countersignRound([
+      { actorId: 1, userId: 1, status: 2, sort: 1 },
+      { actorId: 2, userId: 2, status: 1, sort: 2 },
+      { actorId: 3, userId: 3, status: 0, sort: 3 },
+    ], [
+      { id: 1, actorId: 1, userId: 1, action: 2, comment: '不同意' },
+    ])
+    expect(countersignProgress(round)).toEqual({ done: 0, total: 3 })
+  })
+
+  it('counts approvals and ignores rejections in the same round', () => {
+    const round = countersignRound([
+      { actorId: 1, userId: 1, status: 2, sort: 1 },
+      { actorId: 2, userId: 2, status: 2, sort: 2 },
+      { actorId: 3, userId: 3, status: 1, sort: 3 },
+    ], [
+      { id: 1, actorId: 1, userId: 1, action: 1, comment: '同意' },
+      { id: 2, actorId: 2, userId: 2, action: 2, comment: '拒绝' },
+    ])
+    expect(countersignProgress(round)).toEqual({ done: 1, total: 3 })
+  })
+
+  it('keeps the approved count below a partial threshold instead of counting every handled person', () => {
+    const round = countersignRound([
+      { actorId: 1, userId: 1, status: 2, sort: 1 },
+      { actorId: 2, userId: 2, status: 2, sort: 2 },
+      { actorId: 3, userId: 3, status: 1, sort: 3 },
+    ], [
+      { id: 1, actorId: 1, userId: 1, action: 1 },
+    ])
+    expect(countersignProgress(round)).toEqual({ done: 1, total: 3 })
+  })
+
+  it('adjusts the approved count after add, remove, transfer, and rejoin', () => {
+    const added = countersignRound([
+      { actorId: 1, userId: 1, status: 2, sort: 1 },
+      { actorId: 2, userId: 2, status: 1, sort: 2 },
+      { actorId: 3, userId: 3, status: 1, sort: 3 },
+    ], [
+      { id: 1, actorId: 1, userId: 1, action: 1 },
+      { id: 2, actorId: 1, userId: 1, action: 8 },
+    ])
+    expect(countersignProgress(added)).toEqual({ done: 1, total: 3 })
+
+    const removed = countersignRound([
+      { actorId: 1, userId: 1, status: 3, sort: 1 },
+      { actorId: 2, userId: 2, status: 1, sort: 2 },
+      { actorId: 3, userId: 3, status: 1, sort: 3 },
+    ], [
+      { id: 1, actorId: 1, userId: 1, action: 1, comment: '先同意' },
+      { id: 2, actorId: 2, userId: 2, action: 9 },
+    ])
+    expect(countersignProgress(removed)).toEqual({ done: 1, total: 2 })
+
+    const transferred = countersignRound([
+      { actorId: 1, userId: 1, status: 3, sort: 1 },
+      { actorId: 4, userId: 4, status: 1, sort: 2 },
+      { actorId: 3, userId: 3, status: 1, sort: 3 },
+    ], [
+      { id: 1, actorId: 1, userId: 1, action: 3 },
+    ])
+    expect(countersignProgress(transferred)).toEqual({ done: 0, total: 2 })
+
+    const rejoined = countersignRound([
+      { actorId: 1, userId: 1, status: 3, sort: 1 },
+      { actorId: 5, userId: 1, status: 2, sort: 2 },
+      { actorId: 3, userId: 3, status: 1, sort: 3 },
+    ], [
+      { id: 1, actorId: 1, userId: 1, action: 3, comment: '转出' },
+      { id: 2, actorId: 5, userId: 1, action: 1, comment: '重新同意' },
+    ])
+    expect(countersignProgress(rejoined)).toEqual({ done: 1, total: 2 })
+  })
 })
+
+function countersignRound(
+  participants: ApprovalParticipant[],
+  history: Array<Record<string, unknown>>,
+) {
+  return approvalRounds('approval', [{
+    taskId: 50,
+    tokenId: 5,
+    nodeVisitId: 500,
+    nodeId: 'approval',
+    approvalMode: 'all',
+    participants,
+  }], [], history.map((item) => ({
+    taskId: 50,
+    tokenId: 5,
+    nodeVisitId: 500,
+    nodeId: 'approval',
+    ...item,
+  })))[0]!
+}
+
+type ApprovalParticipant = NonNullable<Parameters<typeof approvalRounds>[1][number]['participants']>[number]

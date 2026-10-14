@@ -135,14 +135,23 @@ export function approvalRounds(
 }
 
 const COUNTERSIGN_MODES = new Set(['all', 'seq', '2', '3'])
+const APPROVE_ACTION = 1
 
-/** 会签/顺序会签的已同意人数。少于两人、或签、以及已跳过的人不计入。 */
+/** 本轮同意动作。拒绝不算；访问标识不一致的同意不混入这一轮。 */
+function countsAsApproval(round: ApprovalRound, item: WfHisTask): boolean {
+  if (Number(item.action) !== APPROVE_ACTION) return false
+  if (round.taskId != null && item.taskId != null && idKey(item.taskId) !== idKey(round.taskId)) return false
+  if (round.nodeVisitId != null && idKey(item.nodeVisitId) !== idKey(round.nodeVisitId)) return false
+  return true
+}
+
+/** 会签/顺序会签的已同意人数。分母是未跳过的有效办理人，分子只计本轮同意动作。 */
 export function countersignProgress(round: ApprovalRound): { done: number; total: number } | null {
   if (!COUNTERSIGN_MODES.has(String(round.approvalMode ?? ''))) return null
   const active = round.participants.filter((item) => Number(item.status) !== ACTOR_STATUS.skipped)
   if (active.length < 2) return null
   return {
-    done: active.filter((item) => Number(item.status) === ACTOR_STATUS.done).length,
+    done: round.history.filter((item) => countsAsApproval(round, item)).length,
     total: active.length,
   }
 }
