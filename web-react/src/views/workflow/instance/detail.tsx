@@ -258,8 +258,8 @@ export default function WfInstanceDetailPage() {
         .map((nodeId) => findNode(replayModel.root, nodeId))
         .filter((node) => node?.type === 'approval')
         .flatMap((node) => node?.props?.formPerms ?? [])
-      const merged = mergeWfFormPermissions(permissions)
-      return merged.length ? merged : null
+      // 空权限表表示节点没有授予任何可编辑字段,不能退回「全部可改」。
+      return mergeWfFormPermissions(permissions)
     }
     // 阻断节点没有办理人,不能用它的隐藏权限把已提交的金额/事由抠掉。
     const blockedIds = new Set(detail?.blockedNodeIds ?? [])

@@ -525,6 +525,31 @@ describe('WfInstanceDetailPage 动词', () => {
     expect(screen.queryByRole('button', { name: /重新提交/ })).toBeNull()
   })
 
+  it('审批人详情默认只读,节点授予 editable 的字段才可改', async () => {
+    const withForm = createDefaultModel()
+    withForm.formSchema = {
+      version: 1,
+      fields: [
+        { key: 'amount', label: '金额', type: 'money', required: true },
+        { key: 'reason', label: '事由', type: 'textarea', required: true },
+      ],
+    }
+    withForm.root.next = createApprovalNode({
+      id: 'ap1',
+      name: '经理审批',
+      props: { formPerms: [{ field: 'amount', access: 'editable' }] },
+    })
+    mount(detailOf({
+      model: withForm as WfInstanceDetail['model'],
+      variablesJson: JSON.stringify({ amount: 8000, reason: '差旅' }),
+      myPendingTasks: [pendingTask(70, '经理审批')],
+      currentTasks: [{ taskId: 70, tokenId: 1, nodeId: 'ap1', nodeName: '经理审批' }],
+    }))
+
+    expect(await screen.findByLabelText('金额')).toHaveProperty('disabled', false)
+    expect(screen.getByLabelText('事由')).toHaveProperty('disabled', true)
+  })
+
   it('阻断实例没有待办时仍回放金额和事由', async () => {
     const withForm = createDefaultModel()
     withForm.formSchema = {

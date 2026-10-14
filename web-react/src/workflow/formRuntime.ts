@@ -204,12 +204,14 @@ export function formFieldAccess(
   field: string,
   permissions?: WfFormFieldPerm[] | null,
 ): WfFormPermAccess {
-  return permissions
-    ?.filter((permission) => permission.field === field)
-    .reduce<WfFormPermAccess>(
-      (best, permission) => formPermissionRank[permission.access ?? 'editable'] < formPermissionRank[best]
-        ? permission.access ?? 'editable'
-        : best,
-      'editable',
-    ) ?? 'editable'
+  // 未传权限(发起校验)仍按可编辑。节点给出了权限表时,没点名的字段保持只读。
+  if (permissions == null) return 'editable'
+  const matches = permissions.filter((permission) => permission.field === field)
+  if (matches.length === 0) return 'readonly'
+  return matches.reduce<WfFormPermAccess>(
+    (best, permission) => formPermissionRank[permission.access ?? 'editable'] < formPermissionRank[best]
+      ? permission.access ?? 'editable'
+      : best,
+    'editable',
+  )
 }
