@@ -131,6 +131,8 @@ export interface WfNodeCardProps {
   readonly?: boolean
   visited?: boolean
   current?: boolean
+  /** 空审批人阻断:不要再画成橙色「已处理」。 */
+  blocked?: boolean
   runtimeProgress?: WfApprovalNodeProgress
   onInspect?: () => void
   onSelect?: () => void
@@ -138,7 +140,7 @@ export interface WfNodeCardProps {
 }
 
 export function WfNodeCard({
-  node, active, error, errorMessage, readonly, visited, current, runtimeProgress, onInspect, onSelect, onRemove,
+  node, active, error, errorMessage, readonly, visited, current, blocked, runtimeProgress, onInspect, onSelect, onRemove,
 }: WfNodeCardProps) {
   const { t } = useTranslation()
   const participantNames = useParticipantNames()
@@ -158,9 +160,10 @@ export function WfNodeCard({
     error ? 'is-error' : '',
     node.type === 'start' ? 'is-root' : '',
     readonly ? 'is-readonly' : '',
+    readonly && blocked ? 'is-blocked' : '',
     readonly && visited ? 'is-visited' : '',
     readonly && current ? 'is-current' : '',
-    readonly && !visited && !current ? 'is-dimmed' : '',
+    readonly && !visited && !current && !blocked ? 'is-dimmed' : '',
   ].filter(Boolean).join(' ')
 
   // 只认卡片自身的按键(Vue 侧 `.self`):正文里的删除钮/输入不应触发选中。
@@ -192,19 +195,22 @@ export function WfNodeCard({
       tabIndex={!readonly || canInspect ? 0 : undefined}
       data-wf-node-id={node.id}
       data-wf-runtime-progress={runtimeProgress ? 'true' : undefined}
+      data-wf-blocked={blocked ? 'true' : undefined}
       onClick={canInspect ? onInspect : readonly ? undefined : () => onSelect?.()}
       onKeyDown={onKeyDown}
     >
       <div className="wf-card-head">
         <AppIcon icon={ICONS[node.type] ?? 'ph:flag'} size={14} className="wf-card-head-icon" />
         <span className="wf-card-title">{title}</span>
-        {runtimeProgress ? (
+        {runtimeProgress || blocked ? (
           <span className="wf-card-state">
-            {onCurrentPath && runtimeProgress.currentRounds.length > 0
-              ? t('workflow.status.running')
-              : onCurrentPath
-                ? t('workflow.detail.approvalProgress.status.handled')
-                : t('workflow.detail.approvalProgress.notStarted')}
+            {blocked
+              ? t('workflow.status.blocked')
+              : onCurrentPath && runtimeProgress && runtimeProgress.currentRounds.length > 0
+                ? t('workflow.status.running')
+                : onCurrentPath
+                  ? t('workflow.detail.approvalProgress.status.handled')
+                  : t('workflow.detail.approvalProgress.notStarted')}
           </span>
         ) : null}
         {!readonly && node.type !== 'start' ? (
@@ -228,7 +234,11 @@ export function WfNodeCard({
                 <span className="wf-card-progress-label">{t('workflow.detail.approvalProgress.ratio', countersign)}</span>
               </div>
             ) : null}
-            {runtimeGroups.length > 0 ? runtimeGroups.slice(0, 3).map((group) => (
+            {blocked ? (
+              <div className="wf-card-progress-row is-blocked" data-testid="wf-node-blocked">
+                <span className="wf-card-progress-label">{t('workflow.status.blocked')}</span>
+              </div>
+            ) : runtimeGroups.length > 0 ? runtimeGroups.slice(0, 3).map((group) => (
               <div key={group.key} className={`wf-card-progress-row is-${group.key}`}>
                 <span className="wf-card-progress-label">
                   {t(`workflow.detail.approvalProgress.status.${group.key}`)}

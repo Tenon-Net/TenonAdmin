@@ -310,7 +310,7 @@ describe('WfInstanceDetailPage 动词', () => {
     const cancel = screen.getByRole('button', { name: /取\s*消/ }) as HTMLButtonElement
     await waitFor(() => expect(cancel.disabled).toBe(true))
     fireEvent.click(cancel)
-    expect(screen.getByPlaceholderText('填写意见(可选)')).toBeTruthy()
+    expect(screen.getByPlaceholderText('填写意见（可选，最多 1000 字）')).toBeTruthy()
 
     release()
     await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(1))
@@ -397,7 +397,7 @@ describe('WfInstanceDetailPage 动词', () => {
     await waitOkIdle()
     const first = vi.mocked(wfTaskApi.approve).mock.calls[0]![0].requestId
 
-    fireEvent.change(screen.getByPlaceholderText('填写意见(可选)'), { target: { value: '修改后的意见' } })
+    fireEvent.change(screen.getByPlaceholderText('填写意见（可选，最多 1000 字）'), { target: { value: '修改后的意见' } })
     fireEvent.click(okButton())
     await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(2))
     expect(vi.mocked(wfTaskApi.approve).mock.calls[1]![0].requestId).not.toBe(first)
@@ -523,6 +523,68 @@ describe('WfInstanceDetailPage 动词', () => {
     }), [{ id: 2, eventType: 14, sequence: 4 }] as WfHistoryItem[])
     await screen.findByRole('button', { name: /撤\s*销/ })
     expect(screen.queryByRole('button', { name: /重新提交/ })).toBeNull()
+  })
+
+  it('审批人详情默认只读,节点授予 editable 的字段才可改', async () => {
+    const withForm = createDefaultModel()
+    withForm.formSchema = {
+      version: 1,
+      fields: [
+        { key: 'amount', label: '金额', type: 'money', required: true },
+        { key: 'reason', label: '事由', type: 'textarea', required: true },
+      ],
+    }
+    withForm.root.next = createApprovalNode({
+      id: 'ap1',
+      name: '经理审批',
+      props: { formPerms: [{ field: 'amount', access: 'editable' }] },
+    })
+    mount(detailOf({
+      model: withForm as WfInstanceDetail['model'],
+      variablesJson: JSON.stringify({ amount: 8000, reason: '差旅' }),
+      myPendingTasks: [pendingTask(70, '经理审批')],
+      currentTasks: [{ taskId: 70, tokenId: 1, nodeId: 'ap1', nodeName: '经理审批' }],
+    }))
+
+    expect(await screen.findByLabelText('金额')).toHaveProperty('disabled', false)
+    expect(screen.getByLabelText('事由')).toHaveProperty('disabled', true)
+  })
+
+  it('阻断实例没有待办时仍回放金额和事由', async () => {
+    const withForm = createDefaultModel()
+    withForm.formSchema = {
+      version: 1,
+      fields: [
+        { key: 'amount', label: '金额', type: 'money', required: true },
+        { key: 'reason', label: '事由', type: 'textarea', required: true },
+      ],
+    }
+    withForm.root.next = createApprovalNode({
+      id: 'leader',
+      name: '直属主管V2',
+      props: {
+        assignee: { provider: 'leader' },
+        formPerms: [
+          { field: 'amount', access: 'hidden' },
+          { field: 'reason', access: 'hidden' },
+        ],
+      },
+    })
+    mount(detailOf({
+      model: withForm as WfInstanceDetail['model'],
+      starterUserId: 100,
+      variablesJson: JSON.stringify({ amount: 8000, reason: '差旅' }),
+      currentNodeIds: ['leader'],
+      visitedNodeIds: ['start', 'leader'],
+      blockedNodeIds: ['leader'],
+      currentTasks: [],
+      myPendingTasks: [],
+      hisTasks: [{ id: 1, nodeId: 'leader', action: 11, userId: 0, isAutomatic: true }],
+    }))
+
+    const amount = await screen.findByLabelText('金额')
+    expect((amount as HTMLInputElement).value).toMatch(/^8000(\.00)?$/)
+    expect(screen.getByLabelText('事由')).toHaveProperty('value', '差旅')
   })
 
   it('回放非空并行分叉与各臂当前节点、状态和原因', async () => {

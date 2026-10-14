@@ -61,6 +61,22 @@ describe('workflow node runtime card', () => {
     expect(onSelect).toHaveBeenCalledOnce()
   })
 
+  it('renders a blocked approval node with a blocked label instead of the empty-approver line', () => {
+    const { host } = mountCard({
+      readonly: true,
+      visited: true,
+      current: true,
+      blocked: true,
+      runtimeLines: ['系统 空审批人'],
+      runtimeInspectable: true,
+    })
+    const card = host.querySelector<HTMLElement>('[data-node-id="approval"]')
+    expect(card?.classList.contains('is-blocked')).toBe(true)
+    expect(card?.getAttribute('data-blocked')).toBe('true')
+    expect(card?.textContent).toContain('已阻断')
+    expect(card?.textContent).not.toContain('空审批人')
+  })
+
   it('keeps a downstream node not started after return while retaining access to old details', () => {
     const { host, onInspect } = mountCard({
       readonly: true,

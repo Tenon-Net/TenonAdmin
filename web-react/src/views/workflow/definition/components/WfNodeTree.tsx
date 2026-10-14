@@ -27,6 +27,7 @@ export interface WfNodeTreeProps {
   readonly?: boolean
   visitedIds?: Set<string> | string[]
   currentIds?: Set<string> | string[]
+  blockedIds?: Set<string> | string[]
   runtimeProgress?: ReadonlyMap<string, WfApprovalNodeProgress>
   onInspectApproval?: (progress: WfApprovalNodeProgress) => void
   onModelChange: (model: WfModel) => void
@@ -39,12 +40,13 @@ function toSet(ids: Set<string> | string[] | undefined): Set<string> {
 }
 
 export function WfNodeTree({
-  model, selectedId, errorIds, errorMessages, readonly, visitedIds, currentIds, runtimeProgress, onInspectApproval,
+  model, selectedId, errorIds, errorMessages, readonly, visitedIds, currentIds, blockedIds, runtimeProgress, onInspectApproval,
   onModelChange, onSelect,
 }: WfNodeTreeProps) {
   const errorSet = useMemo(() => toSet(errorIds), [errorIds])
   const visitedSet = useMemo(() => toSet(visitedIds), [visitedIds])
   const currentSet = useMemo(() => toSet(currentIds), [currentIds])
+  const blockedSet = useMemo(() => toSet(blockedIds), [blockedIds])
 
   const bump = (root: WfNode) => onModelChange({ ...model, root })
 
@@ -120,6 +122,7 @@ export function WfNodeTree({
         readonly={readonly}
         visitedSet={visitedSet}
         currentSet={currentSet}
+        blockedSet={blockedSet}
         runtimeProgress={runtimeProgress}
         onInspectApproval={onInspectApproval}
         // 顶层链恒可插并行(臂内由 WfNodeChain 自己降级);漏传即等于菜单缺项,Vue 侧踩过。

@@ -141,6 +141,7 @@ html[data-theme='dark'] .wf-link::before {
 }
 .wf-card.is-start { --wf-head: var(--wf-start); }
 .wf-card.is-approval { --wf-head: var(--wf-approval); }
+.wf-card.is-blocked { --wf-head: var(--wf-blocked); }
 .wf-card.is-cc { --wf-head: var(--wf-cc); }
 .wf-card.is-branch { --wf-head: var(--color-primary); }
 .wf-card.is-parallel { --wf-head: var(--color-warning); }
@@ -262,6 +263,7 @@ html[data-theme='dark'] .wf-link::before {
   white-space: nowrap;
 }
 .wf-card-progress-row.is-pending .wf-card-progress-label { color: var(--color-primary); }
+.wf-card-progress-row.is-blocked .wf-card-progress-label { color: var(--wf-blocked); font-weight: 600; }
 .wf-card-progress-names {
   overflow: hidden;
   color: var(--color-text-primary);

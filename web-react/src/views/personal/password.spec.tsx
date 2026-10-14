@@ -16,12 +16,20 @@ const mount = () => render(<AntdApp><PasswordPage /></AntdApp>)
 const fill = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
 
 beforeEach(() => {
+  // 成功提示的自动关闭定时器会在 happy-dom 拆掉 window 之后触发,变成未处理的 window is not defined。
+  // shouldAdvanceTime 让 waitFor 仍能按真实时间推进。
+  vi.useFakeTimers({ shouldAdvanceTime: true })
   navigateMock.mockReset()
   vi.spyOn(personalApi, 'updatePassword').mockResolvedValue(true)
   vi.spyOn(authApi, 'logout').mockResolvedValue(true)
   useUserStore.setState({ accessToken: 't', refreshToken: 'r', userInfo: { userId: 1, account: 'a', name: 'n', mustChangePassword: false } })
 })
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => {
+  cleanup()
+  vi.clearAllTimers()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('PasswordPage', () => {
   it('提交成功 → updatePassword + 登出 + 清会话 + 跳登录', async () => {

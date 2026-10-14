@@ -55,12 +55,17 @@ function Probe() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  conn.start.mockImplementation(() => Promise.resolve())
   localStorage.clear()
   useAuthStore.getState().reset()
   useUserStore.getState().clear()
   Object.keys(handlers).forEach((k) => delete handlers[k])
 })
-afterEach(cleanup)
+afterEach(async () => {
+  cleanup()
+  // release() 把 stop 推迟到下一个任务;这里等它跑完,避免单例连到下一条用例。
+  await new Promise((resolve) => setTimeout(resolve, 0))
+})
 
 // SignalR 连接的传输层依赖真 Hub、happy-dom 无从测;但注册进 conn.on 的回调可测(见下)。
 describe('noticeBus', () => {
@@ -127,6 +132,26 @@ describe('useRealtime force-logout', () => {
     expect(useUserStore.getState().accessToken).toBe('')
     expect(navigate).toHaveBeenCalledWith('/login', { replace: true })
     expect(warning).not.toHaveBeenCalled()
+  })
+
+  it('协商未完成时卸载再挂载不会停连接', async () => {
+    let releaseStart!: () => void
+    conn.start.mockImplementation(() => new Promise<void>((resolve) => {
+      releaseStart = resolve
+    }))
+    useUserStore.setState({ accessToken: 't', refreshToken: 'r', userInfo: { userId: 1, account: 'a', name: 'n', mustChangePassword: false } })
+
+    const first = render(createElement(AntdApp, null, createElement(MemoryRouter, null, createElement(Probe))))
+    expect(conn.start).toHaveBeenCalledTimes(1)
+    first.unmount()
+    const second = render(createElement(AntdApp, null, createElement(MemoryRouter, null, createElement(Probe))))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(conn.stop).not.toHaveBeenCalled()
+    expect(conn.start).toHaveBeenCalledTimes(1)
+
+    second.unmount()
+    releaseStart()
+    await vi.waitFor(() => expect(conn.stop).toHaveBeenCalledTimes(1))
   })
 
   it('非自愿 force-logout 仍提示强制下线', () => {

@@ -26,6 +26,7 @@ export interface WfNodeChainProps {
   readonly?: boolean
   visitedSet?: Set<string>
   currentSet?: Set<string>
+  blockedSet?: Set<string>
   runtimeProgress?: ReadonlyMap<string, WfApprovalNodeProgress>
   onInspectApproval?: (progress: WfApprovalNodeProgress) => void
   /** 设计器默认可插并行;并行臂内递归显式传 false 禁止嵌套。 */
@@ -58,7 +59,7 @@ function armsFor(node: WfNode): WfDisplayArm[] {
 
 export function WfNodeChain(props: WfNodeChainProps) {
   const {
-    root, selectedId, errorSet, errorMessages, terminal, readonly, visitedSet, currentSet, runtimeProgress, onInspectApproval,
+    root, selectedId, errorSet, errorMessages, terminal, readonly, visitedSet, currentSet, blockedSet, runtimeProgress, onInspectApproval,
     allowParallel = true,
     onSelect, onAddAfter, onAddAtArmHead, onRemoveNode, onAddArm, onRemoveArm, onRenameArm,
   } = props
@@ -83,6 +84,7 @@ export function WfNodeChain(props: WfNodeChainProps) {
               readonly={readonly}
               visited={visitedSet?.has(node.id) ?? false}
               current={currentSet?.has(node.id) ?? false}
+              blocked={blockedSet?.has(node.id) ?? false}
               runtimeProgress={runtimeProgress?.get(node.id)}
               onInspect={runtimeProgress?.has(node.id)
                 ? () => onInspectApproval?.(runtimeProgress.get(node.id)!)

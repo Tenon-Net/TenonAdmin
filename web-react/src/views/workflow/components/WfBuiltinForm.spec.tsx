@@ -142,8 +142,15 @@ describe('WfBuiltinForm', () => {
     expect(screen.queryByLabelText('天数')).toBeNull()
     const title = screen.getByLabelText('标题')
     expect(title).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText('原因')).toHaveProperty('disabled', true)
     fireEvent.change(title, { target: { value: '偷改' } })
     expect(values()).toEqual({ title: '原值', days: 3 })
+  })
+
+  it('办理态未授权的字段只读,显式 editable 才可改', () => {
+    render(<Host mode="approve" permissions={[{ field: 'title', access: 'editable' }]} />)
+    expect(screen.getByLabelText('标题')).toHaveProperty('disabled', false)
+    expect(screen.getByLabelText('原因')).toHaveProperty('disabled', true)
   })
 
   it('办理态只校验 editable 字段:必填但 readonly 的空字段不拦提交', () => {

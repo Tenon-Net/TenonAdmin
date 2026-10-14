@@ -26,11 +26,21 @@ export const noticeBus = {
 
 // 进程内单例连接:鉴权外壳挂载一次即建一条;重复 start 幂等(已连不再建)。
 let connection: HubConnection | null = null
+// 进行中的 start()。协商还没结束就 stop(),@microsoft/signalr 会以 Error 打出
+// "The connection was stopped during negotiation."(HttpConnection 在协商返回后发现状态已是 Disconnecting)。
+let starting: Promise<void> | null = null
+// React StrictMode 会在 effect 里同步卸载再挂上。dev server 的 /hub 代理(ws:true)和 accessTokenFactory 都是好的,
+// 这条错误来自卸载时把还在协商的连接停掉。推迟到下一个任务:马上重新 start 就取消停止,沿用同一条连接。
+let releaseTimer: ReturnType<typeof setTimeout> | null = null
 // 主动登出/改密重登:后端 Logout 也走 RevokeAsync → 推 force-logout;本页应静默,勿弹「您已被强制下线」。
 // 其它同会话标签页仍会收到推送并提示。下次 start 清零。
 let voluntaryLogout = false
 
 function start(onForceLogout: Listener, onNoticeChanged: Listener): void {
+  if (releaseTimer) {
+    clearTimeout(releaseTimer)
+    releaseTimer = null
+  }
   if (connection || !useUserStore.getState().accessToken) return
   voluntaryLogout = false
   try {
@@ -46,28 +56,57 @@ function start(onForceLogout: Listener, onNoticeChanged: Listener): void {
     conn.on('notice-changed', onNoticeChanged)
 
     connection = conn
-    conn.start().catch(() => {
-      // 初次连接失败(后端未开启实时 → Hub 404):静默退回未读轮询兜底 + 下次请求 401 惰性登出,不重试刷屏。
-      // withAutomaticReconnect 只在「连过又断」后重连,不重试初次 start,故不会对已关实时的后端反复叩门。
-      // 归属判断:仅当单例仍指向本连接才置空 —— StrictMode 双挂载下,本连接被 stop 中止后的 reject 不能抹掉后一次挂载已建的活连接。
-      if (connection === conn) connection = null
+    const pending = conn.start().then(
+      () => undefined,
+      () => {
+        // 初次连接失败(后端未开启实时 → Hub 404):静默退回未读轮询兜底 + 下次请求 401 惰性登出,不重试刷屏。
+        // withAutomaticReconnect 只在「连过又断」后重连,不重试初次 start,故不会对已关实时的后端反复叩门。
+        // 归属判断:仅当单例仍指向本连接才置空 —— 这次连接被停掉后的 reject 不能抹掉后一次挂载已建的活连接。
+        if (connection === conn) connection = null
+      },
+    )
+    starting = pending
+    void pending.finally(() => {
+      if (starting === pending) starting = null
     })
   } catch {
     // build()/withUrl() 可同步抛(URL 无法解析等):实时是纯增强,静默退回轮询兜底,绝不拖垮鉴权外壳。
     connection = null
+    starting = null
   }
 }
 
 async function stop(): Promise<void> {
-  const c = connection
+  if (releaseTimer) {
+    clearTimeout(releaseTimer)
+    releaseTimer = null
+  }
+  const pending = starting
+  const current = connection
   connection = null
-  if (c) {
+  starting = null
+  if (pending) {
     try {
-      await c.stop()
+      await pending
     } catch {
-      /* 停止失败无害 */
+      /* start 失败已在上面处理 */
     }
   }
+  if (!current) return
+  try {
+    await current.stop()
+  } catch {
+    /* 停止失败无害 */
+  }
+}
+
+/** 外壳卸载时调用。等一个任务,给 StrictMode 的重新挂载机会取消这次停止。 */
+function release(): void {
+  if (releaseTimer) clearTimeout(releaseTimer)
+  releaseTimer = setTimeout(() => {
+    releaseTimer = null
+    void stop()
+  }, 0)
 }
 
 /**
@@ -104,7 +143,7 @@ export function useRealtime(): void {
       },
       () => noticeBus.emit(),
     )
-    return () => void stop()
+    return () => release()
     // 一次性捕获挂载时的 navigate/message/t:鉴权外壳整个会话只挂一次,与 Vue setup 同款(切换语言后强制下线走旧语言文案,可接受)。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

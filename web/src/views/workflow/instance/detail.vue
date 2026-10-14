@@ -171,11 +171,15 @@ const formPermissions = computed<WfFormFieldPerm[] | null>(() => {
       .map((id) => findNode(model.root, id))
       .filter((node) => node?.type === 'approval')
       .flatMap((node) => node?.props?.formPerms ?? [])
-    const merged = mergeWfFormPermissions(permissions)
-    return merged.length ? merged : null
+    // 空权限表表示节点没有授予任何可编辑字段,不能退回「全部可改」。
+    return mergeWfFormPermissions(permissions)
   }
-  const currentIds = detail.value?.currentNodeIds ?? []
-  const candidateIds = currentIds.length > 0 ? currentIds : (detail.value?.visitedNodeIds ?? [])
+  // 阻断节点没有办理人,不能用它的隐藏权限把已提交的金额/事由抠掉。
+  const blockedIds = new Set(detail.value?.blockedNodeIds ?? [])
+  const visibleNodeIds = (ids: readonly string[] | null | undefined) =>
+    (ids ?? []).filter((nodeId) => !blockedIds.has(nodeId))
+  const openCurrentIds = visibleNodeIds(detail.value?.currentNodeIds)
+  const candidateIds = openCurrentIds.length > 0 ? openCurrentIds : visibleNodeIds(detail.value?.visitedNodeIds)
   const hidden = observerHiddenFields(
     candidateIds.map((id) => findNode(model.root, id)),
     model.formSchema?.fields.map((field) => field.key) ?? [],
@@ -879,6 +883,7 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
             readonly
             :visited-ids="visitedIds"
             :current-ids="currentIds"
+            :blocked-ids="detail.blockedNodeIds ?? []"
             :runtime-lines="runtimeLines"
             :runtime-inspectable-ids="runtimeInspectableIds"
             @inspect="openApprovalDetail"

@@ -17,6 +17,7 @@ const props = withDefaults(defineProps<{
   readonly?: boolean
   visitedSet?: Set<string>
   currentSet?: Set<string>
+  blockedSet?: Set<string>
   runtimeLines?: Record<string, string[]>
   runtimeInspectableIds?: Set<string>
   /** 设计器默认可插并行;并行臂内递归会显式传 false 禁止嵌套。 */
@@ -78,6 +79,7 @@ function renameArm(branchId: string, armId: string, event: Event) {
         :readonly="readonly"
         :visited="visitedSet?.has(node.id) ?? false"
         :current="currentSet?.has(node.id) ?? false"
+        :blocked="blockedSet?.has(node.id) ?? false"
         :runtime-lines="runtimeLines?.[node.id]"
         :runtime-inspectable="runtimeInspectableIds?.has(node.id) ?? false"
         @select="emit('select', node.id)"
@@ -152,6 +154,7 @@ function renameArm(branchId: string, armId: string, event: Event) {
                 :readonly="readonly"
                 :visited-set="visitedSet"
                 :current-set="currentSet"
+                :blocked-set="blockedSet"
                 :runtime-lines="runtimeLines"
                 :runtime-inspectable-ids="runtimeInspectableIds"
                 :allow-parallel="node.type !== 'parallel' && allowParallel"

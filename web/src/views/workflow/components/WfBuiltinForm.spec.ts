@@ -151,7 +151,7 @@ describe('WfBuiltinForm', () => {
     expect(host.textContent).toContain('请填写此字段')
   })
 
-  it('applies approval permissions and defaults missing permissions to editable', async () => {
+  it('keeps approval fields read-only unless the node grants editable', async () => {
     const schema: WfFormSchema = {
       version: 1,
       fields: [
@@ -183,9 +183,31 @@ describe('WfBuiltinForm', () => {
     const inputs = host.querySelectorAll<HTMLInputElement>('input')
     expect(host.querySelectorAll('.n-form-item')).toHaveLength(2)
     expect(inputs[0]?.disabled).toBe(true)
-    expect(inputs[1]?.disabled).toBe(false)
-    expect(runtime.value?.validate()).toBe(false)
+    expect(inputs[1]?.disabled).toBe(true)
+    expect(runtime.value?.validate()).toBe(true)
 
+    app.unmount()
+    values.value = {}
+    app = createApp(defineComponent({
+      setup: () => () => h(WfBuiltinForm, {
+        ref: runtime,
+        schema,
+        modelValue: values.value,
+        mode: 'approve',
+        permissions: [
+          { field: 'hidden', access: 'hidden' },
+          { field: 'readonly', access: 'readonly' },
+          { field: 'editable', access: 'editable' },
+        ],
+      }),
+    }))
+    app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
+    app.mount(host)
+    await nextTick()
+
+    const granted = host.querySelectorAll<HTMLInputElement>('input')
+    expect(granted[1]?.disabled).toBe(false)
+    expect(runtime.value?.validate()).toBe(false)
     values.value = { editable: 'ok' }
     await nextTick()
     expect(runtime.value?.validate()).toBe(true)

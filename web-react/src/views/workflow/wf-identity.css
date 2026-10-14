@@ -6,6 +6,8 @@
 :root {
   --wf-start: #12b886;
   --wf-approval: #ff8f2b;
+  /* 阻断节点不用审批橙,避免和「已处理」彩头混在一起。 */
+  --wf-blocked: #e03131;
   --wf-cc: #2b8aff;
   --wf-end: #555a66;
   /* 加号等画布强调色:跟抄送蓝同源,不跟 Tenon 主色紫 */
@@ -15,6 +17,7 @@
 html[data-theme='dark'] {
   --wf-start: #2dd4a0;
   --wf-approval: #ffa857;
+  --wf-blocked: #ff6b6b;
   --wf-cc: #5aadff;
   --wf-end: #b8bcc6;
   --wf-accent: #5aadff;

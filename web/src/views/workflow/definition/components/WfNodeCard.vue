@@ -16,6 +16,7 @@ const props = defineProps<{
   readonly?: boolean
   visited?: boolean
   current?: boolean
+  blocked?: boolean
   runtimeLines?: string[]
   runtimeInspectable?: boolean
 }>()
@@ -93,6 +94,7 @@ const title = computed(() => props.node.name || t(`workflow.node.${props.node.ty
 const body = computed(() => {
   const n = props.node
   if (props.readonly && n.type === 'approval') {
+    if (props.blocked) return { text: t('workflow.status.blocked'), empty: false }
     if (!props.current && !props.visited) {
       return { text: t('workflow.detail.approvalProgress.notStarted'), empty: true }
     }
@@ -166,13 +168,15 @@ const body = computed(() => {
       'is-error': error,
       'is-root': node.type === 'start',
       'is-readonly': readonly,
+      'is-blocked': readonly && blocked,
       'is-visited': readonly && visited,
       'is-current': readonly && current,
-      'is-dimmed': readonly && !visited && !current,
+      'is-dimmed': readonly && !visited && !current && !blocked,
     }]"
     :role="readonly && !runtimeInspectable ? undefined : 'button'"
     :tabindex="readonly && !runtimeInspectable ? undefined : 0"
     :data-node-id="node.id"
+    :data-blocked="blocked ? 'true' : undefined"
     :data-runtime-inspectable="runtimeInspectable ? 'true' : undefined"
     @click="readonly ? (runtimeInspectable ? $emit('inspect') : undefined) : $emit('select')"
     @keydown.enter.self="readonly ? (runtimeInspectable ? $emit('inspect') : undefined) : $emit('select')"
@@ -181,6 +185,7 @@ const body = computed(() => {
     <div class="wf-card-head">
       <AppIcon :icon="icon" :size="14" class="wf-card-head-icon" />
       <span class="wf-card-title">{{ title }}</span>
+      <span v-if="readonly && blocked" class="wf-card-state">{{ t('workflow.status.blocked') }}</span>
       <n-tooltip v-if="!readonly && node.type !== 'start'">
         <template #trigger>
           <n-button
@@ -198,7 +203,10 @@ const body = computed(() => {
     </div>
     <div class="wf-card-body" :class="{ 'is-runtime': readonly && node.type === 'approval' }">
       <span class="wf-card-text" :class="{ 'is-empty': body.empty, 'is-runtime': readonly && node.type === 'approval' }">
-        <template v-if="readonly && node.type === 'approval' && (current || visited) && runtimeLines?.length">
+        <template v-if="readonly && blocked">
+          <span class="wf-card-runtime-line" data-testid="wf-node-blocked">{{ t('workflow.status.blocked') }}</span>
+        </template>
+        <template v-else-if="readonly && node.type === 'approval' && (current || visited) && runtimeLines?.length">
           <span v-for="(line, index) in runtimeLines" :key="index" class="wf-card-runtime-line" data-testid="wf-node-runtime-line">{{ line }}</span>
         </template>
         <template v-else>{{ body.text }}</template>
@@ -238,6 +246,7 @@ const body = computed(() => {
 }
 .wf-card.is-start { --wf-head: var(--wf-start); }
 .wf-card.is-approval { --wf-head: var(--wf-approval); }
+.wf-card.is-blocked { --wf-head: var(--wf-blocked); }
 .wf-card.is-cc { --wf-head: var(--wf-cc); }
 .wf-card.is-branch { --wf-head: var(--color-primary); }
 .wf-card.is-parallel { --wf-head: var(--color-warning); }
@@ -291,6 +300,10 @@ const body = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.wf-card-state {
+  flex-shrink: 0;
+  font-weight: 400;
 }
 .wf-card-del {
   margin-left: auto;
