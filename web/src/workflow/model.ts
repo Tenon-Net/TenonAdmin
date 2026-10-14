@@ -301,6 +301,7 @@ export interface WfModelIssue {
     | 'parallelRejectTargetOutsideArm'
     | 'assigneeRequired'
     | 'assigneeUsersRequired'
+    | 'conditionFieldUnknown'
     | 'allPassRatioInvalid'
     | 'webhookUrlInvalid'
     | 'webhookMethodInvalid'
@@ -325,6 +326,13 @@ function positiveUserIds(params: Record<string, unknown> | undefined): number[] 
   return ids
 }
 
+/** 有表单字段时，条件只能引用这些键。没有 schema 的旧模型不在这里拦截。 */
+function conditionUsesUnknownField(expr: WfBranchArm['expr'], keys: Set<string>): boolean {
+  if (!expr) return false
+  if (expr.field && !keys.has(expr.field)) return true
+  return (expr.children ?? []).some((child) => conditionUsesUnknownField(child, keys))
+}
+
 /** 与后端 ValidateModelForPublish 对齐的前端校验(保存前可选用)。 */
 export function validateModel(model: WfModel): WfModelIssue[] {
   const issues: WfModelIssue[] = []
@@ -342,6 +350,9 @@ export function validateModel(model: WfModel): WfModelIssue[] {
     if (!nodeParallelArms.has(node.id)) nodeParallelArms.set(node.id, parallelArm)
   }
 
+  const schemaKeys = model.formSchema?.fields?.length
+    ? new Set(model.formSchema.fields.map((field) => field.key))
+    : null
   const seen = new Set<string>()
   for (const { node, parallelArm } of frames) {
     if (!node.id?.trim()) {
@@ -373,6 +384,9 @@ export function validateModel(model: WfModel): WfModelIssue[] {
           armIds.add(arm.id)
           if (!arm.isDefault && arm.expr == null) {
             issues.push({ code: 'branchArmWithoutExpr', nodeId: node.id, armId: arm.id })
+          }
+          if (schemaKeys && conditionUsesUnknownField(arm.expr, schemaKeys)) {
+            issues.push({ code: 'conditionFieldUnknown', nodeId: node.id, armId: arm.id })
           }
         }
         if (arms.filter((arm) => arm.isDefault).length !== 1) {

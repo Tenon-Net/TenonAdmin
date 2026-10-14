@@ -201,6 +201,29 @@ describe('workflow/model M2a tree', () => {
     expect(validateModel(model)).toContainEqual({ code: 'duplicateNodeId', nodeId: 'shared' })
   })
 
+  it('rejects condition fields missing from the form schema', () => {
+    const model = createDefaultModel()
+    const branch = createBranchNode({ id: 'branch' })
+    const armId = branch.conditions![0]!.id
+    branch.conditions![0]!.expr = {
+      logic: 'and',
+      children: [{ field: 'amount', op: 'gt', value: 100 }],
+    }
+    model.root.next = branch
+    model.formSchema = {
+      version: 1,
+      fields: [{ key: 'reason', label: '事由', type: 'text', required: false }],
+    }
+    expect(validateModel(model)).toContainEqual({ code: 'conditionFieldUnknown', nodeId: 'branch', armId })
+
+    branch.conditions![0]!.expr = { field: 'reason', op: 'eq', value: 'ok' }
+    expect(validateModel(model)).toEqual([])
+
+    model.formSchema = null
+    branch.conditions![0]!.expr = { field: 'amount', op: 'gt', value: 100 }
+    expect(validateModel(model)).toEqual([])
+  })
+
   it('requires branch arms and exactly one default arm', () => {
     const model = createDefaultModel()
     const branch = createBranchNode({ id: 'branch' })

@@ -1316,6 +1316,8 @@ export default {
         assigneeRequired: 'No approver configured',
         assigneeUsersRequired: 'Choose at least one member',
         assigneeUserUnavailable: 'The assigned user does not exist or is disabled',
+        approvalRequired: 'Add at least one approval node',
+        conditionFieldUnknown: 'A condition uses a field that is not on the form',
         onNode: '{nodeId}: {message}',
       },
       zoom: 'Canvas zoom',

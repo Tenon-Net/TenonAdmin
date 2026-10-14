@@ -1607,6 +1607,8 @@ export default {
         assigneeRequired: '未配置办理人',
         assigneeUsersRequired: '指定成员不能为空',
         assigneeUserUnavailable: '指定的办理人不存在或已停用',
+        approvalRequired: '至少需要一个审批节点',
+        conditionFieldUnknown: '条件引用了表单中不存在的字段',
         onNode: '{nodeId}：{message}',
       },
       zoom: '画布缩放',

@@ -306,7 +306,18 @@ public class WfDefinitionService(
         var providerKeys = approverProviders.Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
         ValidateChain(model.Root, seen, providerKeys);
         ValidateFormModel(model);
+        EnsureApprovalNode(model);
         ValidateNodeReferences(model);
+    }
+
+    /// <summary>可发布模型至少要有一个审批节点。抄送、Webhook 或只有发起节点不够。</summary>
+    protected virtual void EnsureApprovalNode(WfModel model)
+    {
+        if (WfModelIndex.Build(model).Nodes.Any(node => node.Type == WfNodeType.Approval))
+            return;
+
+        throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+            new Dictionary<string, object?> { ["reason"] = "approvalRequired" });
     }
 
     /// <summary>
@@ -377,6 +388,45 @@ public class WfDefinitionService(
                 if (permission.Access is not (WfFormPermAccess.Hidden or WfFormPermAccess.Readonly or WfFormPermAccess.Editable))
                     ThrowFormModelInvalid("formPermAccessInvalid", node);
             }
+        }
+
+        ValidateConditionFields(model, fieldKeys);
+    }
+
+    /// <summary>
+    /// 有内置表单时，条件分支只能引用 schema 里的字段。大小写按字段键原样比较。
+    /// 没有 schema 的旧模型仍允许自由变量。
+    /// </summary>
+    protected virtual void ValidateConditionFields(WfModel model, HashSet<string> fieldKeys)
+    {
+        foreach (var node in WfModelIndex.Build(model).Nodes)
+        {
+            if (node.Conditions is not { Count: > 0 } arms) continue;
+            foreach (var arm in arms)
+            {
+                if (arm.Expr is not null)
+                    ValidateConditionExpr(node, arm.Expr, fieldKeys);
+            }
+        }
+    }
+
+    protected virtual void ValidateConditionExpr(WfNode node, WfConditionExpr expr, HashSet<string> fieldKeys)
+    {
+        if (!string.IsNullOrEmpty(expr.Field) && !fieldKeys.Contains(expr.Field))
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid, new Dictionary<string, object?>
+            {
+                ["reason"] = "conditionFieldUnknown",
+                ["nodeId"] = node.Id,
+                ["field"] = expr.Field,
+            });
+        }
+
+        if (expr.Children is null) return;
+        foreach (var child in expr.Children)
+        {
+            if (child is not null)
+                ValidateConditionExpr(node, child, fieldKeys);
         }
     }
 

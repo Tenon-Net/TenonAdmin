@@ -534,6 +534,15 @@ public class WfAiDecisionNodeDefinitionTests
                     type = JsonSerializer.SerializeToElement(nodeType, WfModelJson.Options),
                     name = "审核",
                     props = new { assignee = Assignee("initiator"), formPerms },
+                    next = nodeType == WfNodeType.Approval
+                        ? null
+                        : (object)new
+                        {
+                            id = "approval",
+                            type = "approval",
+                            name = "审批",
+                            props = new { assignee = Assignee("initiator"), mode = "any" },
+                        },
                 },
             },
         };
@@ -603,7 +612,13 @@ public class WfAiDecisionNodeDefinitionTests
                     name = "AI 审查",
                     props,
                     conditions,
-                    next = (object?)null,
+                    next = new
+                    {
+                        id = "after-ai",
+                        type = "approval",
+                        name = "人工确认",
+                        props = new { assignee = new { provider = "initiator", @params = new { } }, mode = "any" },
+                    },
                 },
             },
         };

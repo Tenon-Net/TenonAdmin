@@ -70,7 +70,11 @@ public class WfAssigneePublishTests
         await AssertPublishRejected(
             admin,
             "抄送成员为空",
-            Chain(Node("cc", "cc1", UserAssignee(Array.Empty<long>()))),
+            Chain(Node(
+                "approval",
+                "ap",
+                new { assignee = new { provider = "initiator", @params = new { } }, mode = "any" },
+                Node("cc", "cc1", UserAssignee(Array.Empty<long>())))),
             "assigneeUsersRequired",
             "cc1");
     }
