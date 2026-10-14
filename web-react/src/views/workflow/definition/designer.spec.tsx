@@ -11,12 +11,27 @@ const testState = vi.hoisted(() => ({
 }))
 
 vi.mock('@/components/AppIcon', () => ({ AppIcon: () => null }))
-vi.mock('@/api', () => ({
-  userApi: { page: vi.fn().mockResolvedValue({ items: [], total: 0 }) },
-  roleApi: { page: vi.fn().mockResolvedValue({ items: [], total: 0 }) },
-  positionApi: { page: vi.fn().mockResolvedValue({ items: [], total: 0 }) },
-  orgApi: { list: vi.fn().mockResolvedValue([]) },
-}))
+vi.mock('@/api', () => {
+  class ApiError extends Error {
+    code: number
+    msgKey?: string
+    args?: Record<string, unknown>
+    constructor(code: number, msgKey?: string, args?: Record<string, unknown>, message?: string) {
+      super(message ?? msgKey ?? `Error ${code}`)
+      this.name = 'ApiError'
+      this.code = code
+      this.msgKey = msgKey
+      this.args = args
+    }
+  }
+  return {
+    ApiError,
+    userApi: { page: vi.fn().mockResolvedValue({ items: [], total: 0 }) },
+    roleApi: { page: vi.fn().mockResolvedValue({ items: [], total: 0 }) },
+    positionApi: { page: vi.fn().mockResolvedValue({ items: [], total: 0 }) },
+    orgApi: { list: vi.fn().mockResolvedValue([]) },
+  }
+})
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
   useSearchParams: () => [new URLSearchParams(testState.query)],
@@ -27,6 +42,7 @@ vi.mock('@/api/workflow', () => ({
   wfDefinitionApi: { get: vi.fn(), update: vi.fn().mockResolvedValue(true), publish: vi.fn().mockResolvedValue(true), add: vi.fn() },
 }))
 
+import { ApiError } from '@/api'
 import { wfDefinitionApi } from '@/api/workflow'
 import WfDesignerPage from './designer'
 
@@ -131,6 +147,23 @@ describe('WfDesignerPage', () => {
     expect(await screen.findByText(/还没有打开流程/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /创\s*建/ })).toBeNull()
     expect(screen.queryByPlaceholderText('流程名称')).toBeNull()
+  })
+
+  it('内容没有变化时用警告提示,其它发布失败仍是错误', async () => {
+    vi.mocked(wfDefinitionApi.publish)
+      .mockRejectedValueOnce(new ApiError(48052, 'error.code.48052'))
+      .mockRejectedValueOnce(new ApiError(48001, 'error.code.48001'))
+    mount(validModel())
+    await screen.findByText('经理审批')
+
+    fireEvent.click(screen.getByRole('button', { name: /发\s*布/ }))
+    const unchanged = await screen.findByText('流程内容没有变化，不会生成新版本')
+    expect(unchanged.closest('.ant-message-warning')).toBeTruthy()
+    expect(document.querySelector('.ant-message-error')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /发\s*布/ }))
+    const failed = await screen.findByText('流程版本不存在或模型无效')
+    expect(failed.closest('.ant-message-error')).toBeTruthy()
   })
 
   it('仅有发布权限但没有更新权限时隐藏发布按钮', async () => {

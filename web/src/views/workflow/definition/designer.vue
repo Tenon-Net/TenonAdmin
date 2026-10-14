@@ -181,7 +181,9 @@ async function publish() {
     const named = withDesignerNodeName(e, model.value.root)
     const nodeId = e instanceof ApiError ? String(e.args?.nodeId ?? '') : ''
     if (nodeId) serverNodeErrors.value = { [nodeId]: translateError(named) }
-    message.error(translateError(named))
+    // 内容没变不会生成新版本,这是提示而不是失败。
+    const notice = e instanceof ApiError && e.code === 48052 ? message.warning : message.error
+    notice(translateError(named))
   }
 }
 
