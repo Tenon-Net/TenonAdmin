@@ -585,6 +585,7 @@ export default function WfInstanceDetailPage() {
                   readonly
                   visitedIds={detail.visitedNodeIds ?? []}
                   currentIds={detail.currentNodeIds ?? []}
+                  blockedIds={detail.blockedNodeIds ?? []}
                   runtimeProgress={approvalProgress}
                   onInspectApproval={setInspectedProgress}
                   onModelChange={() => {}}

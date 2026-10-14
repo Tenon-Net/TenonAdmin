@@ -26,6 +26,7 @@ const props = defineProps<{
   readonly?: boolean
   visitedIds?: Set<string> | string[]
   currentIds?: Set<string> | string[]
+  blockedIds?: Set<string> | string[]
   runtimeLines?: Record<string, string[]>
   runtimeInspectableIds?: Set<string> | string[]
 }>()
@@ -48,6 +49,11 @@ const visitedSet = computed(() => {
 const currentSet = computed(() => {
   if (!props.currentIds) return new Set<string>()
   return props.currentIds instanceof Set ? props.currentIds : new Set(props.currentIds)
+})
+
+const blockedSet = computed(() => {
+  if (!props.blockedIds) return new Set<string>()
+  return props.blockedIds instanceof Set ? props.blockedIds : new Set(props.blockedIds)
 })
 
 const runtimeInspectableSet = computed(() => {
@@ -137,6 +143,7 @@ function onRenameArm(ownerId: string, armId: string, name: string) {
       :readonly="readonly"
       :visited-set="visitedSet"
       :current-set="currentSet"
+      :blocked-set="blockedSet"
       :runtime-lines="runtimeLines"
       :runtime-inspectable-ids="runtimeInspectableSet"
       allow-parallel

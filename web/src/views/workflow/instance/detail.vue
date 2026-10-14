@@ -879,6 +879,7 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
             readonly
             :visited-ids="visitedIds"
             :current-ids="currentIds"
+            :blocked-ids="detail.blockedNodeIds ?? []"
             :runtime-lines="runtimeLines"
             :runtime-inspectable-ids="runtimeInspectableIds"
             @inspect="openApprovalDetail"

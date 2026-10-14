@@ -204,6 +204,48 @@ describe('WfNodeTree', () => {
     expect(card.textContent).not.toContain('无需处理张三')
   })
 
+  it('阻断节点不再画成已处理的空审批人', () => {
+    const approval = createApprovalNode({ id: 'ap1', name: '直属主管V2' })
+    const progress: WfApprovalNodeProgress = {
+      nodeId: 'ap1',
+      nodeName: '直属主管V2',
+      currentRounds: [],
+      pastRounds: [{
+        key: 'history:1',
+        current: false,
+        history: [{
+          id: 1,
+          nodeId: 'ap1',
+          nodeName: '直属主管V2',
+          userId: 0,
+          action: 11,
+          isAutomatic: true,
+        }],
+      }],
+    }
+
+    render(
+      <WfNodeTree
+        model={modelWith(approval)}
+        readonly
+        visitedIds={['start', 'ap1']}
+        currentIds={['ap1']}
+        blockedIds={['ap1']}
+        runtimeProgress={new Map([['ap1', progress]])}
+        onInspectApproval={() => {}}
+        onModelChange={() => {}}
+        onSelect={() => {}}
+      />,
+    )
+
+    const card = document.querySelector<HTMLElement>('[data-wf-node-id="ap1"]')!
+    expect(card.classList.contains('is-blocked')).toBe(true)
+    expect(card.getAttribute('data-wf-blocked')).toBe('true')
+    expect(card.textContent).toContain('已阻断')
+    expect(card.textContent).not.toContain('已处理')
+    expect(card.textContent).not.toContain('空审批人')
+  })
+
   it('只读回放在节点之间留连线,编辑态仍用加号', () => {
     const approval = createApprovalNode({ id: 'ap1', name: '经理审批' })
     const { rerender } = render(
