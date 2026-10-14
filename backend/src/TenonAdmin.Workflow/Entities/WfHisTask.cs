@@ -29,6 +29,13 @@ public class WfHisTask : BaseEntity
     [SugarColumn(ColumnDescription = "办理人用户 Id")]
     public long UserId { get; set; }
 
+    /// <summary>
+    /// 产生该动作的 <c>wf_task_actor</c> 主键。同一用户重新加入后会有新的分配行，
+    /// 审批记录必须按这行区分，不能只按用户 Id 取最后一条。管理员代操作和升级前的旧记录为空。
+    /// </summary>
+    [SugarColumn(IsNullable = true, ColumnDescription = "办理人分配 Id")]
+    public long? ActorId { get; set; }
+
     /// <summary>长期委托前的原责任人快照。</summary>
     [SugarColumn(IsNullable = true, ColumnDescription = "委托前原责任人 Id")]
     public long? OriginalUserId { get; set; }

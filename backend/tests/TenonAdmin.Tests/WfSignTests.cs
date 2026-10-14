@@ -186,6 +186,49 @@ public class WfSignTests
         Assert.Equal(0, result.GetProperty("code").GetInt32());
     }
 
+    [Fact]
+    public async Task Rejoined_assignee_history_stays_on_each_actor()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        await GrantSignPermissions(f);
+        var starterId = await AddUser(admin, "wf-sign-rejoin-starter");
+        var aId = await AddUser(admin, "wf-sign-rejoin-a");
+        var bId = await AddUser(admin, "wf-sign-rejoin-b");
+        var definitionId = await Publish(admin, "重新加入-动作归属", Model("any", aId));
+        var starter = await ClientFor(f, "wf-sign-rejoin-starter");
+        var a = await ClientFor(f, "wf-sign-rejoin-a");
+        var b = await ClientFor(f, "wf-sign-rejoin-b");
+
+        var start = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
+        var instanceId = start.GetProperty("data").GetProperty("instanceId").GetInt64();
+        var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
+
+        Assert.Equal(0, (await PostEnvelope(a, "/api/v1/workflow/task/transfer", new { taskId, toUserId = bId }))
+            .GetProperty("code").GetInt32());
+        Assert.Equal(0, (await PostEnvelope(b, "/api/v1/workflow/task/add-sign",
+            new { taskId, toUserId = aId, comment = "加回", requestId = "wf-sign-rejoin-add" }))
+            .GetProperty("code").GetInt32());
+        var approved = await PostEnvelope(a, "/api/v1/workflow/task/approve", new { taskId, comment = "再次同意" });
+        Assert.Equal(0, approved.GetProperty("code").GetInt32());
+
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<global::SqlSugar.ISqlSugarClient>();
+        var actors = await db.Queryable<WfTaskActor>().Where(x => x.TaskId == taskId).ToListAsync();
+        var assignments = actors.Where(x => x.UserId == aId).OrderBy(x => x.Id).ToList();
+        Assert.Equal(2, assignments.Count);
+        Assert.Equal(WfActorStatus.Skipped, assignments[0].Status);
+        Assert.Equal(WfActorStatus.Done, assignments[1].Status);
+
+        var detail = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>().GetAsync(instanceId, starterId);
+        var transfer = Assert.Single(detail.HisTasks, item => item.Action == WfTaskAction.Transfer);
+        var approve = Assert.Single(detail.HisTasks, item => item.Action == WfTaskAction.Approve);
+        Assert.Equal(assignments[0].Id, transfer.ActorId);
+        Assert.Equal(assignments[1].Id, approve.ActorId);
+        Assert.Equal("再次同意", approve.Comment);
+        Assert.NotEqual(transfer.ActorId, approve.ActorId);
+    }
+
     private static object SingleModel(long userId) => Model("any", userId);
 
     private static object AllModel(long a, long b, int? ratio = null)

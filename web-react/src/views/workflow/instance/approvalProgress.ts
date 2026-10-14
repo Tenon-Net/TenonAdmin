@@ -116,12 +116,32 @@ export function buildApprovalProgress(
   return byNode
 }
 
+function sameId(left: number | string | null | undefined, right: number | string | null | undefined): boolean {
+  return left != null && left !== '' && right != null && right !== '' && String(left) === String(right)
+}
+
+function latestHistory(items: WfHisTask[]): WfHisTask | undefined {
+  return [...items].sort(compareHistory).at(-1)
+}
+
+/**
+ * 同一用户可以有多条分配。有分配身份时只认这一条；旧历史没有分配身份时，
+ * 仅在该用户于本轮唯一时才关联，避免把后一次同意套到先前跳过的记录上。
+ */
 export function participantHistory(
   participant: WfTaskParticipant,
   round: WfApprovalRound,
 ): WfHisTask | undefined {
+  const linked = round.history.filter((item) => sameId(item.actorId, participant.actorId))
+  if (linked.length) return latestHistory(linked)
+  if (round.history.some((item) => item.actorId != null) && participant.actorId != null) return undefined
+
+  const participants = round.task?.participants ?? []
   const userId = idKey(participant.userId)
-  return [...round.history].reverse().find((item) => idKey(item.userId) === userId)
+  const sameUser = participants.filter((item) => idKey(item.userId) === userId)
+  const unlinked = round.history.filter((item) => item.actorId == null && idKey(item.userId) === userId)
+  if (sameUser.length === 1 && unlinked.length === 1) return unlinked[0]
+  return undefined
 }
 
 export function participantState(participant: WfTaskParticipant, round: WfApprovalRound): {
@@ -163,6 +183,29 @@ export function countersignProgress(round: WfApprovalRound): { done: number; tot
   }
 }
 
+function appendUnattributedHistory(
+  rounds: readonly WfApprovalRound[],
+  groups: Map<'pending' | 'waiting' | 'handled' | 'skipped', Array<{ name: string; action?: string; automatic?: boolean }>>,
+) {
+  for (const round of rounds) {
+    const participants = round.task?.participants ?? []
+    const claimed = new Set(
+      participants
+        .map((participant) => participantHistory(participant, round))
+        .filter((item): item is WfHisTask => item != null),
+    )
+    for (const item of round.history) {
+      if (claimed.has(item)) continue
+      const name = item.operatorName?.trim() || (Number(item.userId) > 0 ? `#${item.userId}` : '')
+      groups.set('handled', [...(groups.get('handled') ?? []), {
+        name,
+        action: normalizeTaskAction(item.action),
+        ...(item.isAutomatic ? { automatic: true } : {}),
+      }])
+    }
+  }
+}
+
 export function approvalCardGroups(progress: WfApprovalNodeProgress): Array<{
   key: 'pending' | 'waiting' | 'handled' | 'skipped'
   items: Array<{ name: string; action?: string; automatic?: boolean }>
@@ -182,6 +225,7 @@ export function approvalCardGroups(progress: WfApprovalNodeProgress): Array<{
         groups.set(state.key, [...(groups.get(state.key) ?? []), item])
       })
     })
+    appendUnattributedHistory(progress.currentRounds, groups)
     return (['handled', 'pending', 'waiting', 'skipped'] as const)
       .map((key) => ({ key, items: groups.get(key) ?? [] }))
       .filter((group) => group.items.length > 0)
@@ -190,7 +234,7 @@ export function approvalCardGroups(progress: WfApprovalNodeProgress): Array<{
   const latest = progress.pastRounds.at(-1)
   if (!latest) return []
   if (latest.task?.participants?.length) {
-    const groups = new Map<'handled' | 'skipped', Array<{ name: string; action?: string; automatic?: boolean }>>()
+    const groups = new Map<'pending' | 'waiting' | 'handled' | 'skipped', Array<{ name: string; action?: string; automatic?: boolean }>>()
     latest.task.participants.forEach((participant) => {
       const state = participantState(participant, latest)
       const key = state.key === 'handled' ? 'handled' : 'skipped'
@@ -201,6 +245,7 @@ export function approvalCardGroups(progress: WfApprovalNodeProgress): Array<{
         ...(participantHistory(participant, latest)?.isAutomatic ? { automatic: true } : {}),
       }])
     })
+    appendUnattributedHistory([latest], groups)
     return (['handled', 'skipped'] as const)
       .map((key) => ({ key, items: groups.get(key) ?? [] }))
       .filter((group) => group.items.length > 0)

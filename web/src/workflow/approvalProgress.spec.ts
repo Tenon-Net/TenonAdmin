@@ -164,4 +164,78 @@ describe('workflow approval progress', () => {
     ])[0]!
     expect(participantHistory(round, round.participants[0]!)?.action).toBe(1)
   })
+
+  it('does not reuse a later approval on an earlier skipped assignment of the same user', () => {
+    const round = approvalRounds('approval', [], [{
+      taskId: 10,
+      nodeId: 'approval',
+      approvalMode: 'all',
+      participants: [
+        { actorId: 1, userId: 7, displayName: '张三', status: 3, sort: 1 },
+        { actorId: 2, userId: 8, displayName: '李四', status: 2, sort: 2 },
+        { actorId: 3, userId: 7, displayName: '张三', status: 2, sort: 3 },
+      ],
+    }], [
+      { id: 1, taskId: 10, nodeId: 'approval', actorId: 1, userId: 7, action: 3, comment: '转给李四', createTime: '2026-10-01T10:00:00' },
+      { id: 2, taskId: 10, nodeId: 'approval', actorId: 3, userId: 7, action: 1, comment: '再次同意', createTime: '2026-10-01T11:00:00' },
+    ])[0]!
+
+    expect(participantHistory(round, round.participants[0]!)).toMatchObject({ action: 3, comment: '转给李四', createTime: '2026-10-01T10:00:00' })
+    expect(participantHistory(round, round.participants[2]!)).toMatchObject({ action: 1, comment: '再次同意', createTime: '2026-10-01T11:00:00' })
+    expect(participantHistory(round, round.participants[0]!)?.comment).not.toBe('再次同意')
+  })
+
+  it('keeps a removed assignment skipped after the same user is added back and approves', () => {
+    const round = approvalRounds('approval', [], [{
+      taskId: 11,
+      nodeId: 'approval',
+      participants: [
+        { actorId: 1, userId: 7, displayName: '张三', status: 3, sort: 1 },
+        { actorId: 2, userId: 8, displayName: '李四', status: 2, sort: 2 },
+        { actorId: 3, userId: 7, displayName: '张三', status: 2, sort: 3 },
+      ],
+    }], [
+      { id: 1, taskId: 11, nodeId: 'approval', actorId: 2, userId: 8, action: 9, comment: '减签', createTime: '2026-10-01T10:00:00' },
+      { id: 2, taskId: 11, nodeId: 'approval', actorId: 3, userId: 7, action: 1, comment: '补同意', createTime: '2026-10-01T11:00:00' },
+    ])[0]!
+
+    expect(participantHistory(round, round.participants[0]!)).toBeUndefined()
+    expect(participantHistory(round, round.participants[2]!)).toMatchObject({ action: 1, comment: '补同意' })
+    expect(round.history.map((item) => item.comment)).toEqual(['减签', '补同意'])
+  })
+
+  it('keeps a rejoined assignment pending instead of inheriting the previous action', () => {
+    const round = approvalRounds('approval', [{
+      taskId: 12,
+      nodeId: 'approval',
+      participants: [
+        { actorId: 1, userId: 7, displayName: '张三', status: 3, sort: 1 },
+        { actorId: 3, userId: 7, displayName: '张三', status: 1, sort: 2 },
+      ],
+    }], [], [
+      { id: 1, taskId: 12, nodeId: 'approval', actorId: 2, userId: 8, action: 9, comment: '减掉', createTime: '2026-10-01T10:00:00' },
+    ])[0]!
+
+    expect(participantHistory(round, round.participants[1]!)).toBeUndefined()
+    expect(round.participants[1]?.status).toBe(1)
+    expect(round.history).toHaveLength(1)
+  })
+
+  it('does not guess which assignment owns old history that has no actor id', () => {
+    const round = approvalRounds('approval', [], [{
+      taskId: 13,
+      nodeId: 'approval',
+      participants: [
+        { actorId: 1, userId: 7, displayName: '张三', status: 3, sort: 1 },
+        { actorId: 3, userId: 7, displayName: '张三', status: 2, sort: 2 },
+      ],
+    }], [
+      { id: 1, taskId: 13, nodeId: 'approval', userId: 7, action: 3, comment: '旧转办', createTime: '2026-10-01T10:00:00' },
+      { id: 2, taskId: 13, nodeId: 'approval', userId: 7, action: 1, comment: '旧同意', createTime: '2026-10-01T11:00:00' },
+    ])[0]!
+
+    expect(participantHistory(round, round.participants[0]!)).toBeUndefined()
+    expect(participantHistory(round, round.participants[1]!)).toBeUndefined()
+    expect(round.history.map((item) => item.action)).toEqual([3, 1])
+  })
 })

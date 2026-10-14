@@ -147,9 +147,29 @@ export function countersignProgress(round: ApprovalRound): { done: number; total
   }
 }
 
+function sameId(left: number | string | null | undefined, right: number | string | null | undefined): boolean {
+  return left != null && left !== '' && right != null && right !== '' && String(left) === String(right)
+}
+
+function latestHistory(items: WfHisTask[]): WfHisTask | undefined {
+  return [...items].sort((a, b) => (a.createTime ?? '').localeCompare(b.createTime ?? '')
+    || idKey(a.id).localeCompare(idKey(b.id))).at(-1)
+}
+
+/**
+ * 同一用户可以有多条分配。有分配身份时只认这一条；旧历史没有分配身份时，
+ * 仅在该用户于本轮唯一时才关联，避免把后一次同意套到先前跳过的记录上。
+ */
 export function participantHistory(round: ApprovalRound, participant: WfTaskParticipant): WfHisTask | undefined {
-  const matches = round.history.filter((item) => String(item.userId) === String(participant.userId))
-  return matches.at(-1)
+  const linked = round.history.filter((item) => sameId(item.actorId, participant.actorId))
+  if (linked.length) return latestHistory(linked)
+  if (round.history.some((item) => item.actorId != null) && participant.actorId != null) return undefined
+
+  const userId = idKey(participant.userId)
+  const sameUser = round.participants.filter((item) => idKey(item.userId) === userId)
+  const unlinked = round.history.filter((item) => item.actorId == null && idKey(item.userId) === userId)
+  if (sameUser.length === 1 && unlinked.length === 1) return unlinked[0]
+  return undefined
 }
 
 export function participantGroups(participants: WfTaskParticipant[], active = true) {

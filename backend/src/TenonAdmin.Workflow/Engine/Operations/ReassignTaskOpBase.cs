@@ -135,6 +135,7 @@ public abstract class ReassignTaskOpBase(
             TaskId = Task.Id,
             TokenId = Task.TokenId,
             UserId = UserId,
+            ActorId = fromActor.Id,
             OriginalUserId = fromActor.OriginalUserId,
             DelegationRuleId = fromActor.DelegationRuleId,
             DelegationScopeOrgId = fromActor.DelegationScopeOrgId,

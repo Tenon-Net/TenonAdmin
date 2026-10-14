@@ -14467,6 +14467,8 @@ export interface components {
             nodeName?: null | string;
             /** Format: int64 */
             userId?: number | string;
+            /** Format: int64 */
+            actorId?: null | number | string;
             operatorName?: null | string;
             isAutomatic?: boolean;
             /** Format: int64 */

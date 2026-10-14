@@ -85,6 +85,7 @@ public class CompleteTaskOp(
             TaskId = Task.Id,
             TokenId = Task.TokenId,
             UserId = UserId,
+            ActorId = actor?.Id,
             OriginalUserId = actor?.OriginalUserId,
             DelegationRuleId = actor?.DelegationRuleId,
             DelegationScopeOrgId = actor?.DelegationScopeOrgId,

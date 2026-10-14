@@ -77,6 +77,30 @@ describe('workflow approval progress details', () => {
     expect(host.querySelector('.wf-progress-person')?.textContent).toContain('待审批')
   })
 
+  it('keeps a later approval off the earlier skipped assignment of the same user', () => {
+    const host = mountProgress([{
+      key: 'task:60',
+      current: false,
+      taskId: 60,
+      participants: [
+        { actorId: 1, userId: 7, displayName: '张三', status: 3, sort: 1 },
+        { actorId: 2, userId: 8, displayName: '李四', status: 2, sort: 2 },
+        { actorId: 3, userId: 7, displayName: '张三', status: 2, sort: 3 },
+      ],
+      history: [
+        { id: 1, taskId: 60, nodeId: 'approval', actorId: 1, userId: 7, operatorName: '张三', action: 3, comment: '转给李四', createTime: '2026-10-01T10:00:00' },
+        { id: 2, taskId: 60, nodeId: 'approval', actorId: 3, userId: 7, operatorName: '张三', action: 1, comment: '再次同意', createTime: '2026-10-01T11:00:00' },
+      ],
+    }])
+
+    const rows = [...host.querySelectorAll('.wf-progress-person')]
+    expect(rows[0]?.textContent).toContain('转办')
+    expect(rows[0]?.textContent).not.toContain('同意')
+    expect(rows[2]?.textContent).toContain('同意')
+    expect(host.textContent).toContain('转给李四')
+    expect(host.textContent).toContain('再次同意')
+  })
+
   it('shows how many countersign approvers have agreed', () => {
     const host = mountProgress([{
       key: 'task:50',

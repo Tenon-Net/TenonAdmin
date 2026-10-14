@@ -25,9 +25,15 @@ function RoundContent({ round }: { round: WfApprovalRound }) {
   const { t } = useTranslation()
   const participants = [...(round.task?.participants ?? [])]
     .sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0))
+  const attributedIds = new Set(
+    participants
+      .map((participant) => participantHistory(participant, round)?.id)
+      .filter((id) => id != null)
+      .map((id) => String(id)),
+  )
   const detailHistory = round.history.filter((item) => {
-    const participantHandled = participants.some((participant) => String(participant.userId) === String(item.userId))
-    return !participantHandled || ![1, 2].includes(Number(item.action))
+    const shownOnAssignee = attributedIds.has(String(item.id)) && [1, 2].includes(Number(item.action))
+    return !shownOnAssignee
   })
   const ratio = countersignProgress(round)
 

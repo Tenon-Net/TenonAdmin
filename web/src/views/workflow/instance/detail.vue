@@ -53,7 +53,7 @@ import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 import { canResubmitInstance } from '@/workflow/resubmit'
 import { mergeWfFormPermissions, observerHiddenFields } from '@/workflow/formRuntime'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
-import { ACTOR_STATUS, approvalRounds, countersignProgress, participantGroups } from '@/workflow/approvalProgress'
+import { ACTOR_STATUS, approvalRounds, countersignProgress, participantGroups, participantHistory } from '@/workflow/approvalProgress'
 import WfFormMount from '../components/WfFormMount.vue'
 import WfNodeTree from '../definition/components/WfNodeTree.vue'
 import WfApprovalProgress from './components/WfApprovalProgress.vue'
@@ -317,18 +317,20 @@ const runtimeLines = computed<Record<string, string[]>>(() => {
     const rounds = approvalRounds(nodeId, currentTasks.value, pastTasks.value, detail.value?.hisTasks ?? [])
     const current = rounds.filter((round) => round.current)
     const visible = current.length ? current : rounds.slice(0, 1)
-    const actedUsers = new Set(visible.flatMap((round) => round.history.map((item) => String(item.userId))))
+    const coveredActors = new Set(visible.flatMap((round) => round.participants
+      .filter((person) => participantHistory(round, person))
+      .map((person) => String(person.actorId))))
     const people = visible.flatMap((round) => round.participants.filter((person) => {
       const status = Number(person.status)
       return status === ACTOR_STATUS.pending
         || status === ACTOR_STATUS.waiting
-        || !actedUsers.has(String(person.userId))
+        || !coveredActors.has(String(person.actorId))
     }))
     const groups = participantGroups(people, current.length > 0)
     const lines: string[] = []
     const handled = visible.flatMap((round) => round.history.map((item) => `${operatorText(item) || t('workflow.detail.approvalProgress.system')} ${actionLabel(item.action)}`))
     const handledWithoutHistory = visible.flatMap((round) => participantGroups(round.participants, round.current).done
-      .filter((person) => !actedUsers.has(String(person.userId)))
+      .filter((person) => !coveredActors.has(String(person.actorId)))
       .map((person) => `${userFallback(person.userId, person.displayName)} ${t('workflow.detail.approvalProgress.status.done')}`))
     handled.push(...handledWithoutHistory)
     if (handled.length) lines.push(handled.length <= 2

@@ -409,6 +409,7 @@ public class WfTaskAssignmentHistoryTests
                 detail.HisTasks, item => item.Action == WfTaskAction.Transfer);
             Assert.Equal(taskId, transferHistory.TaskId);
             Assert.Equal(aId, transferHistory.UserId);
+            Assert.Equal(afterTransfer.Single(x => x.UserId == aId).Id, transferHistory.ActorId);
             Assert.Equal("wf-hist-transfer-a", transferHistory.OperatorName);
             Assert.Equal(bId, transferHistory.TransferToUserId);
             Assert.Equal("wf-hist-transfer-b", transferHistory.TransferToUserName);
