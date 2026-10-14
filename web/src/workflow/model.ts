@@ -326,6 +326,16 @@ function positiveUserIds(params: Record<string, unknown> | undefined): number[] 
   return ids
 }
 
+/**
+ * 会签比例。缺省和 JSON null 都表示没填，后端同样放过。
+ * 填了但不是 1–100 的整数才算不合法。
+ */
+function readAllPassRatio(value: unknown): number | undefined {
+  if (value == null || value === '') return undefined
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+  return Number.isFinite(n) ? n : Number.NaN
+}
+
 /** 有表单字段时，条件只能引用这些键。没有 schema 的旧模型不在这里拦截。 */
 function conditionUsesUnknownField(expr: WfBranchArm['expr'], keys: Set<string>): boolean {
   if (!expr) return false
@@ -431,7 +441,7 @@ export function validateModel(model: WfModel): WfModelIssue[] {
     }
     if (node.type === 'approval') {
       const mode = node.props?.mode ?? 'any'
-      const ratio = node.props?.allPassRatio
+      const ratio = readAllPassRatio(node.props?.allPassRatio)
       if (
         (mode === 'all' && ratio !== undefined && (!Number.isInteger(ratio) || ratio < 1 || ratio > 100))
         || (mode === 'seq' && ratio !== undefined && ratio !== 100)

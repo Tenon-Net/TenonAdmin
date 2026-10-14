@@ -1319,6 +1319,7 @@ export default {
         assigneeUserUnavailable: 'The assigned user does not exist or is disabled',
         approvalRequired: 'Add at least one approval node',
         conditionFieldUnknown: 'A condition uses a field that is not on the form',
+        allPassRatioInvalid: 'The approval threshold must be an integer from 1 to 100. Sequential approval only allows 100',
         onNode: '{nodeId}: {message}',
       },
       zoom: 'Canvas zoom',

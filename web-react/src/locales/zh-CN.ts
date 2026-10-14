@@ -1610,6 +1610,7 @@ export default {
         assigneeUserUnavailable: '指定的办理人不存在或已停用',
         approvalRequired: '至少需要一个审批节点',
         conditionFieldUnknown: '条件引用了表单中不存在的字段',
+        allPassRatioInvalid: '会签通过比例必须为 1–100 的整数；顺序会签仅允许 100',
         onNode: '{nodeId}：{message}',
       },
       zoom: '画布缩放',
