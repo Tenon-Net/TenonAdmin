@@ -67,4 +67,21 @@ describe('workflow start definition loading', () => {
 
     expect(host.querySelector('[data-testid="form-component"]')?.textContent).toBe('form-b')
   })
+
+  it('renders the may-block notice as a resolved alert', async () => {
+    const warnings: string[] = []
+    startableDetail.mockResolvedValue({ mayBlockWithoutApprover: true, model: null, formComponent: null })
+    const host = document.createElement('div')
+    document.body.append(host)
+    app = createApp(StartPage)
+    app.config.warnHandler = (msg) => warnings.push(msg)
+    app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
+    app.mount(host)
+
+    host.querySelector<HTMLButtonElement>('[data-testid="definition-1"]')!.click()
+    await vi.waitFor(() => {
+      expect(host.querySelector('.n-alert')?.textContent).toContain('如果某个节点找不到审批人')
+    })
+    expect(warnings.join('\n')).not.toContain('n-alert')
+  })
 })
