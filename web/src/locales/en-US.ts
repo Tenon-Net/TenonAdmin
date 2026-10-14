@@ -1218,6 +1218,7 @@ export default {
       48047: 'Workflow outbox transport is not configured',
       48048: 'This administrator intervention is not allowed',
       48049: 'Reject and return require a comment',
+      48051: 'A process with this name already exists',
       49001: 'The integration credential is invalid or no longer active',
       49002: 'The integration app is not granted this endpoint',
       49003: 'The integration app has no binding for the data scope this endpoint declares',

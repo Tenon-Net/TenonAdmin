@@ -161,6 +161,9 @@ public static class WorkflowErrorCode
     /// <summary>拒绝或退回没有填写意见。</summary>
     public const int CommentRequired = 48049;
 
+    /// <summary>同一数据范围内已有未删除的同名流程定义。</summary>
+    public const int DefinitionNameExists = 48051;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }

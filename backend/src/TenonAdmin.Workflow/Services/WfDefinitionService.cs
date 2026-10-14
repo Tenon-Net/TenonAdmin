@@ -68,6 +68,7 @@ public class WfDefinitionService(
         var db = definitions.Db;
         var tran = await db.Ado.UseTranAsync(async () =>
         {
+            await EnsureUniqueNameAsync(db, name, 0);
             var def = new WfDefinition
             {
                 Name = name,
@@ -115,6 +116,7 @@ public class WfDefinitionService(
             var def = await db.Queryable<WfDefinition>().InSingleAsync(input.Id)
                       ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionNotFound);
 
+            await EnsureUniqueNameAsync(db, name, def.Id);
             def.Name = name;
             def.Icon = input.Icon;
             def.GroupName = input.GroupName;
@@ -1052,6 +1054,22 @@ public class WfDefinitionService(
         };
         await versions.InsertAsync(draft);
         return draft;
+    }
+
+    /// <summary>
+    /// 当前数据范围内，未删除定义的名称按去空白后的原文精确匹配，不能与另一条重复。
+    /// 软删行不参与比较，所以删掉之后可以再用同一个名字。
+    /// </summary>
+    protected virtual async Task EnsureUniqueNameAsync(ISqlSugarClient db, string name, long excludeId)
+    {
+        var exists = await db.Queryable<WfDefinition>()
+            .Where(d => d.Name == name && d.Id != excludeId)
+            .AnyAsync();
+        if (exists)
+        {
+            throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionNameExists,
+                new Dictionary<string, object?> { ["name"] = name });
+        }
     }
 
     protected virtual string NormalizeName(string? name)
