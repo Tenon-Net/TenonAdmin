@@ -131,7 +131,7 @@ public class WfNodeVisitIdTests
         Assert.Equal(0, approve1.GetProperty("code").GetInt32());
         var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var reject = await PostEnvelope(b, "/api/v1/workflow/task/reject", new { taskId = task2Id });
+        var reject = await PostEnvelope(b, "/api/v1/workflow/task/reject", new { taskId = task2Id, comment = "办理意见" });
         Assert.Equal(0, reject.GetProperty("code").GetInt32());
         Assert.Equal((int)WfInstanceStatus.Running,
             reject.GetProperty("data").GetProperty("instanceStatus").GetInt32());
@@ -262,7 +262,7 @@ public class WfNodeVisitIdTests
             var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
             var expected = (await db.Queryable<WfTask>().Where(t => t.Id == task2Id).FirstAsync()).NodeVisitId;
 
-            var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id });
+            var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id, comment = "办理意见" });
             Assert.Equal(0, ret.GetProperty("code").GetInt32());
 
             var hisTask = await db.Queryable<WfHisTask>()
@@ -304,7 +304,7 @@ public class WfNodeVisitIdTests
         Assert.Equal(0, approve1.GetProperty("code").GetInt32());
         var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id });
+        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
 
         var resubmit = await PostEnvelope(starter, "/api/v1/workflow/instance/resubmit", new { instanceId });

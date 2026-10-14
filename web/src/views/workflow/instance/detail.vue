@@ -384,9 +384,12 @@ const commentFieldLabel = computed(() => {
   return t('workflow.detail.commentLabel')
 })
 
-const commentPlaceholder = computed(() => (
-  actionKind.value === 'return' ? t('workflow.detail.returnReasonHint') : t('workflow.detail.commentHint')
-))
+const commentRequired = computed(() => actionKind.value === 'reject' || actionKind.value === 'return')
+const commentPlaceholder = computed(() => {
+  if (actionKind.value === 'return') return t('workflow.detail.returnReasonHint')
+  if (actionKind.value === 'reject') return t('workflow.detail.commentRequired')
+  return t('workflow.detail.commentHint')
+})
 
 const canRetryLoad = computed(() => Number.isFinite(uid.value) && uid.value > 0)
 
@@ -693,6 +696,10 @@ async function submitAction() {
   }
   if (kind === 'return' && returnPolicy.value === 'any' && !actionForm.targetNodeId) {
     message.warning(t('workflow.detail.returnTargetRequired'))
+    return
+  }
+  if ((kind === 'reject' || kind === 'return') && !actionForm.comment.trim()) {
+    message.warning(t(kind === 'return' ? 'workflow.detail.returnReasonHint' : 'workflow.detail.commentRequired'))
     return
   }
   const runtime = kind === 'resubmit' ? resubmitFormRef.value : formRuntimeRef.value
@@ -1064,6 +1071,7 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
         <n-form-item
           v-if="actionKind !== 'urge' && actionKind !== 'cancel' && actionKind !== 'resubmit'"
           :label="commentFieldLabel"
+          :required="commentRequired"
           :show-feedback="false"
         >
           <n-input

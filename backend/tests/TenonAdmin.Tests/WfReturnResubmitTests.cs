@@ -39,7 +39,7 @@ public class WfReturnResubmitTests
         Assert.Equal(0, approve1.GetProperty("code").GetInt32());
         var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id });
+        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
         Assert.Equal((int)WfInstanceStatus.Running,
             ret.GetProperty("data").GetProperty("instanceStatus").GetInt32());
@@ -88,7 +88,7 @@ public class WfReturnResubmitTests
         var instanceId = start.GetProperty("data").GetProperty("instanceId").GetInt64();
         var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var ret = await PostEnvelope(a, "/api/v1/workflow/task/return", new { taskId });
+        var ret = await PostEnvelope(a, "/api/v1/workflow/task/return", new { taskId, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
         Assert.Equal((int)WfInstanceStatus.Running,
             ret.GetProperty("data").GetProperty("instanceStatus").GetInt32());
@@ -127,7 +127,7 @@ public class WfReturnResubmitTests
         Assert.Equal(0, approve1.GetProperty("code").GetInt32());
         var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id });
+        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
         Assert.Equal("node1", await ActiveTokenNodeId(f, instanceId));
         Assert.Equal("node1", await ReturnedTargetNodeId(starter, instanceId));
@@ -169,7 +169,7 @@ public class WfReturnResubmitTests
         Assert.Equal((int)WfInstanceStatus.Running,
             approve2.GetProperty("data").GetProperty("instanceStatus").GetInt32());
 
-        var ret = await PostEnvelope(c, "/api/v1/workflow/task/return", new { taskId = task2Id });
+        var ret = await PostEnvelope(c, "/api/v1/workflow/task/return", new { taskId = task2Id, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
         Assert.Equal("node1", await ActiveTokenNodeId(f, instanceId));
         Assert.Equal("node1", await ReturnedTargetNodeId(starter, instanceId));
@@ -201,7 +201,7 @@ public class WfReturnResubmitTests
         var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
         var ret = await PostEnvelope(b, "/api/v1/workflow/task/return",
-            new { taskId = task2Id, targetNodeId = "node1" });
+            new { taskId = task2Id, targetNodeId = "node1", comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
         Assert.Equal("node1", await ActiveTokenNodeId(f, instanceId));
         Assert.Equal("node1", await ReturnedTargetNodeId(starter, instanceId));
@@ -224,7 +224,7 @@ public class WfReturnResubmitTests
         Assert.Equal(0, start.GetProperty("code").GetInt32());
         var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var ret = await PostEnvelope(a, "/api/v1/workflow/task/return", new { taskId });
+        var ret = await PostEnvelope(a, "/api/v1/workflow/task/return", new { taskId, comment = "办理意见" });
         Assert.Equal(WorkflowErrorCode.ReturnNotAllowed, ret.GetProperty("code").GetInt32());
         Assert.Equal("policyNotConfigured", ret.GetProperty("args").GetProperty("reason").GetString());
     }
@@ -272,7 +272,7 @@ public class WfReturnResubmitTests
         Assert.Equal(0, approve1.GetProperty("code").GetInt32());
         var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id });
+        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id, comment = "办理意见" });
         Assert.Equal(WorkflowErrorCode.ReturnNotAllowed, ret.GetProperty("code").GetInt32());
         Assert.Equal("targetNotConfigured", ret.GetProperty("args").GetProperty("reason").GetString());
     }
@@ -302,7 +302,7 @@ public class WfReturnResubmitTests
 
         // node3 是模型里真实存在的节点(FindNode 能解析),但本实例从未走到过——必须被"已走节点"校验拦下。
         var ret = await PostEnvelope(b, "/api/v1/workflow/task/return",
-            new { taskId = task2Id, targetNodeId = "node3" });
+            new { taskId = task2Id, targetNodeId = "node3", comment = "办理意见" });
         Assert.Equal(WorkflowErrorCode.ReturnNotAllowed, ret.GetProperty("code").GetInt32());
     }
 
@@ -343,7 +343,7 @@ public class WfReturnResubmitTests
         Assert.Equal(0, approve2.GetProperty("code").GetInt32());
         var task3Id = approve2.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var ret = await PostEnvelope(c, "/api/v1/workflow/task/return", new { taskId = task3Id });
+        var ret = await PostEnvelope(c, "/api/v1/workflow/task/return", new { taskId = task3Id, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
 
         var resubmit = await PostEnvelope(starter, "/api/v1/workflow/instance/resubmit", new { instanceId });
@@ -387,7 +387,7 @@ public class WfReturnResubmitTests
         Assert.Equal(0, approve1.GetProperty("code").GetInt32());
         var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id });
+        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
 
         var resubmit = await PostEnvelope(starter, "/api/v1/workflow/instance/resubmit", new { instanceId });
@@ -429,7 +429,7 @@ public class WfReturnResubmitTests
         Assert.Equal(0, approve1.GetProperty("code").GetInt32());
         var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id });
+        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
 
         var resubmit = await PostEnvelope(starter, "/api/v1/workflow/instance/resubmit", new { instanceId });
@@ -467,7 +467,7 @@ public class WfReturnResubmitTests
         Assert.Equal(0, approve1.GetProperty("code").GetInt32());
         var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id });
+        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
 
         var resubmit = await PostEnvelope(a, "/api/v1/workflow/instance/resubmit", new { instanceId });
@@ -523,7 +523,7 @@ public class WfReturnResubmitTests
         Assert.Equal(0, approve1.GetProperty("code").GetInt32());
         var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id });
+        var ret = await PostEnvelope(b, "/api/v1/workflow/task/return", new { taskId = task2Id, comment = "办理意见" });
         Assert.Equal(0, ret.GetProperty("code").GetInt32());
 
         const string newVariablesJson = "{\"amount\":999}";

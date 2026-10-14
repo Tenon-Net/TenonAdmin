@@ -51,7 +51,7 @@ public class WfRuntimePauseTests
         var start = await PostEnvelope(starter, "/api/v1/workflow/instance/start", new { definitionId });
         var instanceId = start.GetProperty("data").GetProperty("instanceId").GetInt64();
         var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
-        Assert.Equal(0, (await PostEnvelope(approver, "/api/v1/workflow/task/return", new { taskId })).GetProperty("code").GetInt32());
+        Assert.Equal(0, (await PostEnvelope(approver, "/api/v1/workflow/task/return", new { taskId, comment = "办理意见" })).GetProperty("code").GetInt32());
 
         var detail = await (await starter.GetAsync($"/api/v1/workflow/instance/{instanceId}")).ReadEnvelope();
         var data = detail.GetProperty("data");

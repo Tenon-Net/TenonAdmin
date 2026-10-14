@@ -166,7 +166,7 @@ public class WfAllPassRatioTests
         PostEnvelope(client, "/api/v1/workflow/task/approve", new { taskId });
 
     private static Task<JsonElement> Reject(HttpClient client, long taskId) =>
-        PostEnvelope(client, "/api/v1/workflow/task/reject", new { taskId });
+        PostEnvelope(client, "/api/v1/workflow/task/reject", new { taskId, comment = "办理意见" });
 
     private static async Task<WfInstanceStatus> InstanceStatus(WorkflowAppFactory f, long instanceId)
     {

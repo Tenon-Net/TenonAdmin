@@ -29,7 +29,7 @@ public class WfRejectRoutingTests
         Assert.Equal(0, start.GetProperty("code").GetInt32());
         var taskId = start.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var reject = await PostEnvelope(approver, "/api/v1/workflow/task/reject", new { taskId });
+        var reject = await PostEnvelope(approver, "/api/v1/workflow/task/reject", new { taskId, comment = "办理意见" });
         Assert.Equal(0, reject.GetProperty("code").GetInt32());
         Assert.Equal((int)WfInstanceStatus.Rejected,
             reject.GetProperty("data").GetProperty("instanceStatus").GetInt32());
@@ -72,7 +72,7 @@ public class WfRejectRoutingTests
         Assert.Equal(0, approve2.GetProperty("code").GetInt32());
         var task3Id = approve2.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var reject = await PostEnvelope(c, "/api/v1/workflow/task/reject", new { taskId = task3Id });
+        var reject = await PostEnvelope(c, "/api/v1/workflow/task/reject", new { taskId = task3Id, comment = "办理意见" });
         Assert.Equal(0, reject.GetProperty("code").GetInt32());
         Assert.Equal((int)WfInstanceStatus.Running,
             reject.GetProperty("data").GetProperty("instanceStatus").GetInt32());
@@ -111,7 +111,7 @@ public class WfRejectRoutingTests
         Assert.Equal(0, approve1.GetProperty("code").GetInt32());
         var task2Id = approve1.GetProperty("data").GetProperty("createdTaskId").GetInt64();
 
-        var reject = await PostEnvelope(b, "/api/v1/workflow/task/reject", new { taskId = task2Id });
+        var reject = await PostEnvelope(b, "/api/v1/workflow/task/reject", new { taskId = task2Id, comment = "办理意见" });
         Assert.Equal(0, reject.GetProperty("code").GetInt32());
         Assert.Equal((int)WfInstanceStatus.Running,
             reject.GetProperty("data").GetProperty("instanceStatus").GetInt32());

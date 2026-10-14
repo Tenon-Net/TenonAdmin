@@ -158,6 +158,9 @@ public static class WorkflowErrorCode
     /// </summary>
     public const int AdminInterventionNotAllowed = 48048;
 
+    /// <summary>拒绝或退回没有填写意见。</summary>
+    public const int CommentRequired = 48049;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }

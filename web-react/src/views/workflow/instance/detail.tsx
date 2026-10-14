@@ -375,6 +375,10 @@ export default function WfInstanceDetailPage() {
       message.warning(t('workflow.detail.returnTargetRequired'))
       return
     }
+    if ((kind === 'reject' || kind === 'return') && !values.comment?.trim()) {
+      message.warning(t(kind === 'return' ? 'workflow.detail.returnReasonHint' : 'workflow.detail.commentRequired'))
+      return
+    }
     const runtimeRef = kind === 'resubmit' ? resubmitFormRuntimeRef : formRuntimeRef
     if (VARIABLE_ACTIONS.includes(kind) && runtimeRef.current?.validate() === false) return
 
@@ -826,8 +830,23 @@ export default function WfInstanceDetailPage() {
           ) : null}
 
           {action && !NO_COMMENT_ACTIONS.includes(action) ? (
-            <Form.Item name="comment" label={t('workflow.detail.commentHint')}>
-              <Input.TextArea rows={3} placeholder={t('workflow.detail.commentHint')} />
+            <Form.Item
+              name="comment"
+              label={action === 'return'
+                ? t('workflow.detail.returnReasonHint')
+                : action === 'reject'
+                  ? t('workflow.detail.commentRequired')
+                  : t('workflow.detail.commentHint')}
+              required={action === 'reject' || action === 'return'}
+            >
+              <Input.TextArea
+                rows={3}
+                placeholder={action === 'return'
+                  ? t('workflow.detail.returnReasonHint')
+                  : action === 'reject'
+                    ? t('workflow.detail.commentRequired')
+                    : t('workflow.detail.commentHint')}
+              />
             </Form.Item>
           ) : null}
         </Form>
