@@ -1580,6 +1580,7 @@ export default {
       skip: 'Skip node',
       reason: 'Reason',
       reasonRequired: 'Enter a reason',
+      unsafeId: 'The id lost precision and was not submitted',
       targetUser: 'Assign to',
       nodeId: 'Node',
       admin: {

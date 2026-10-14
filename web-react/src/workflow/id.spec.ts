@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isPositiveWfId, normalizeWfId, wfIdEquals } from './id'
+import { isPositiveWfId, normalizeWfId, wfIdEquals, workflowPathId } from './id'
 
 describe('workflow id', () => {
   it('接受安全正整数并拒绝不安全或非正数', () => {
@@ -12,6 +12,7 @@ describe('workflow id', () => {
     const id = '9223372036854775807'
     expect(normalizeWfId(id)).toBe(id)
     expect(isPositiveWfId(id)).toBe(true)
+    expect(workflowPathId('9007199254740993') as unknown).toBe('9007199254740993')
     expect(normalizeWfId('0')).toBeNull()
     expect(normalizeWfId(' 42 ')).toBeNull()
   })

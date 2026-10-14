@@ -1585,6 +1585,7 @@ export default {
       skip: '跳过节点',
       reason: '原因',
       reasonRequired: '请填写原因',
+      unsafeId: '编号已丢失精度，未提交',
       targetUser: '转给',
       nodeId: '办理节点',
       admin: {
