@@ -162,16 +162,19 @@ public class CompleteTaskOp(
                 ?? throw WorkflowErrorCode.Exception(WorkflowErrorCode.InstanceNotFound);
         }
 
+        var approval = node.Type == WfNodeType.Approval;
         var next = await WfFormRuntime.ApplyAsync(
             ctx.Db,
             enabled: true,
             schema: ctx.Model.FormSchema,
             currentJson: source.VariablesJson,
             submittedJson: SubmittedVariablesJson,
-            permissions: node.Type == WfNodeType.Approval ? node.Props?.FormPerms : null,
+            permissions: approval ? node.Props?.FormPerms : null,
             cancellationToken: cancellationToken,
             actorUserId: UserId,
-            allowAnyFileOwner: AllowAnyFileOwner);
+            allowAnyFileOwner: AllowAnyFileOwner,
+            // 同意和拒绝共用这里。审批节点只接受发布快照里明确标成 editable 的字段。
+            explicitEditableOnly: approval);
         if (SubmittedVariablesJson is null) return;
 
         ctx.Instance.VariablesJson = next;

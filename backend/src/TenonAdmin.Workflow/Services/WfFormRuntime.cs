@@ -20,7 +20,8 @@ internal static class WfFormRuntime
         IReadOnlyCollection<WfFormFieldPerm>? permissions,
         CancellationToken cancellationToken,
         long actorUserId = 0,
-        bool allowAnyFileOwner = false)
+        bool allowAnyFileOwner = false,
+        bool explicitEditableOnly = false)
     {
         if (!enabled)
         {
@@ -45,23 +46,23 @@ internal static class WfFormRuntime
                 if (!current.ContainsKey(key)) ThrowInvalid(key, "unknownField");
                 continue;
             }
+
+            // 审批上下文里没被明确授权的字段直接跳过,避免 null、空串或未传把原值清掉。
+            if (!Writable(key, permissions, explicitEditableOnly)) continue;
             values[key] = value;
         }
 
         foreach (var field in schema.Fields)
         {
-            if (AccessOf(field.Key, permissions) is WfFormPermAccess.Hidden or WfFormPermAccess.Readonly)
-            {
-                if (current.TryGetValue(field.Key, out var original)) values[field.Key] = original;
-                else values.Remove(field.Key);
-            }
+            if (Writable(field.Key, permissions, explicitEditableOnly)) continue;
+            if (current.TryGetValue(field.Key, out var original)) values[field.Key] = original;
+            else values.Remove(field.Key);
         }
 
         var attachmentRefs = new List<(WfFormField Field, long Id, bool CheckOwner)>();
         foreach (var field in schema.Fields)
         {
-            var access = AccessOf(field.Key, permissions);
-            if (access != WfFormPermAccess.Editable) continue;
+            if (!Writable(field.Key, permissions, explicitEditableOnly)) continue;
             if (!values.TryGetValue(field.Key, out var value)) value = default;
             IReadOnlySet<long> previousIds = current.TryGetValue(field.Key, out var previous)
                 ? AttachmentIds(previous, field)
@@ -104,6 +105,23 @@ internal static class WfFormRuntime
         return values.Count == 0
             ? null
             : JsonSerializer.Serialize(values, WfModelJson.Options);
+    }
+
+    /// <summary>
+    /// 发起和重提不传权限表,缺省仍是可编辑。审批必须显式打开 <paramref name="explicitEditableOnly"/>:
+    /// 权限表缺失、为空、字段未列出,或同一字段里还有更严的 readonly/hidden,都不可写。
+    /// </summary>
+    private static bool Writable(
+        string field,
+        IReadOnlyCollection<WfFormFieldPerm>? permissions,
+        bool explicitEditableOnly)
+    {
+        if (!explicitEditableOnly)
+            return AccessOf(field, permissions) == WfFormPermAccess.Editable;
+
+        if (permissions is null) return false;
+        var matches = permissions.Where(permission => permission is not null && permission.Field == field).ToArray();
+        return matches.Length > 0 && matches.All(permission => permission.Access == WfFormPermAccess.Editable);
     }
 
     private static WfFormPermAccess AccessOf(string field, IReadOnlyCollection<WfFormFieldPerm>? permissions) =>
