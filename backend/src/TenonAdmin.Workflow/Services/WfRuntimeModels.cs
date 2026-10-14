@@ -213,6 +213,12 @@ public record WfParticipantLookupInput : PageInputBase
 {
     /// <summary>姓名或账号关键字;空白表示不按关键字过滤。</summary>
     public string? Keyword { get; init; }
+
+    /// <summary>
+    /// 与 <see cref="PageInputBase.Size"/> 同义。查询串里的 <c>pageSize</c> 绑到这里，
+    /// 避免只传 pageSize 时落回默认 20。
+    /// </summary>
+    public int? PageSize { get; init; }
 }
 
 /// <summary>办理人候选项。只含选择器需要的字段,不含手机、邮箱和角色。</summary>

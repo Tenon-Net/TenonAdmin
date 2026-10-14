@@ -7418,6 +7418,7 @@ export interface paths {
             parameters: {
                 query?: {
                     Keyword?: string;
+                    PageSize?: number | string;
                     Current?: number | string;
                     Size?: number | string;
                     SortField?: string;
