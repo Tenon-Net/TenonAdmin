@@ -301,6 +301,7 @@ export interface WfModelIssue {
     | 'parallelRejectTargetOutsideArm'
     | 'assigneeRequired'
     | 'assigneeUsersRequired'
+    | 'approvalRequired'
     | 'conditionFieldUnknown'
     | 'allPassRatioInvalid'
     | 'webhookUrlInvalid'
@@ -471,6 +472,10 @@ export function validateModel(model: WfModel): WfModelIssue[] {
         issues.push({ code: 'maxAttemptsOutOfRange', nodeId: node.id })
       }
     }
+  }
+  // 发起、抄送和分支/并行骨架不算执行内容。臂内的审批、Webhook、AI 决策算。
+  if (!frames.some(({ node }) => node.type === 'approval' || node.type === 'webhook' || node.type === 'aiDecision')) {
+    issues.push({ code: 'approvalRequired' })
   }
   return issues
 }

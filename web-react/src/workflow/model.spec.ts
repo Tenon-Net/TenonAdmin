@@ -29,7 +29,36 @@ describe('workflow/model M1 chain', () => {
     expect(m.version).toBe(1)
     expect(m.root.type).toBe('start')
     expect(m.root.next).toBeNull()
-    expect(validateModel(m)).toEqual([])
+    expect(validateModel(m)).toEqual([{ code: 'approvalRequired' }])
+  })
+
+  it('accepts webhook and ai decision without an approval node', () => {
+    const webhook = createDefaultModel()
+    webhook.root.next = createWebhookNode({
+      id: 'webhook',
+      props: { webhookUrl: 'https://example.com/hook' },
+    })
+    expect(validateModel(webhook)).toEqual([])
+
+    const ai = createDefaultModel()
+    ai.root.next = { id: 'ai', type: 'aiDecision', name: 'AI', next: null }
+    expect(validateModel(ai)).toEqual([])
+
+    const ccOnly = createDefaultModel()
+    ccOnly.root.next = createCcNode({
+      id: 'cc',
+      props: { assignee: { provider: 'user', params: { userIds: [1] } } },
+    })
+    expect(validateModel(ccOnly)).toEqual([{ code: 'approvalRequired' }])
+
+    const branched = createDefaultModel()
+    const branch = createBranchNode({ id: 'branch' })
+    branch.conditions![0]!.next = createWebhookNode({
+      id: 'arm-webhook',
+      props: { webhookUrl: 'https://example.com/hook' },
+    })
+    branched.root.next = branch
+    expect(validateModel(branched)).toEqual([])
   })
 
   it('insert approval then cc keeps serial order', () => {
@@ -210,6 +239,7 @@ describe('workflow/model M2a tree', () => {
       children: [{ field: 'amount', op: 'gt', value: 100 }],
     }
     model.root.next = branch
+    branch.next = createApprovalNode({ id: 'approval' })
     model.formSchema = {
       version: 1,
       fields: [{ key: 'reason', label: '事由', type: 'text', required: false }],

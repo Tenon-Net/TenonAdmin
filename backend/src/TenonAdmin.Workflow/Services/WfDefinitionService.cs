@@ -310,10 +310,14 @@ public class WfDefinitionService(
         ValidateNodeReferences(model);
     }
 
-    /// <summary>可发布模型至少要有一个审批节点。抄送、Webhook 或只有发起节点不够。</summary>
+    /// <summary>
+    /// 没有实际执行内容的流程不能发布。审批、Webhook、AI 决策都算;
+    /// 只有发起、抄送,或分支/并行骨架,不够。臂内节点按整棵树计算。
+    /// </summary>
     protected virtual void EnsureApprovalNode(WfModel model)
     {
-        if (WfModelIndex.Build(model).Nodes.Any(node => node.Type == WfNodeType.Approval))
+        if (WfModelIndex.Build(model).Nodes.Any(node =>
+                node.Type is WfNodeType.Approval or WfNodeType.Webhook or WfNodeType.AiDecision))
             return;
 
         throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
