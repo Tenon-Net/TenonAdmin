@@ -1,6 +1,7 @@
 /** 工作流 API：路径与协议 DTO 均来自真实后端生成的 schema.d.ts。 */
 import { client } from './client'
 import { pageParams, toPage, unwrap } from './index'
+import { workflowPathId, type WfId } from '@/workflow/id'
 import type {
   WfDefinitionDetail,
   WfDefinitionInput,
@@ -89,9 +90,9 @@ export const wfInstanceApi = {
       .POST('/api/v1/workflow/instance/start', { body })
       .then((r) => unwrap<WfEngineResult>(r)),
 
-  get: (id: number) =>
+  get: (id: WfId) =>
     client
-      .GET('/api/v1/workflow/instance/{id}', { params: { path: { id } } })
+      .GET('/api/v1/workflow/instance/{id}', { params: { path: { id: workflowPathId(id) } } })
       .then((r) => unwrap<WfInstanceDetail>(r)),
 
   history: (id: number) =>
@@ -146,8 +147,8 @@ export const wfInstanceApi = {
       .then((r) => toPage<WfInstanceListItem>(r)),
 
   forceTransfer: (body: {
-    instanceId: number
-    toUserId: number
+    instanceId: WfId
+    toUserId: WfId
     reason: string
     nodeId?: string | null
     requestId?: string | null
@@ -156,12 +157,12 @@ export const wfInstanceApi = {
       .POST('/api/v1/workflow/instance/force-transfer', { body })
       .then((r) => unwrap<WfEngineResult>(r)),
 
-  terminate: (body: { instanceId: number; reason: string; requestId?: string | null }) =>
+  terminate: (body: { instanceId: WfId; reason: string; requestId?: string | null }) =>
     client
       .POST('/api/v1/workflow/instance/terminate', { body })
       .then((r) => unwrap<WfEngineResult>(r)),
 
-  skip: (body: { instanceId: number; reason: string; nodeId?: string | null; requestId?: string | null }) =>
+  skip: (body: { instanceId: WfId; reason: string; nodeId?: string | null; requestId?: string | null }) =>
     client
       .POST('/api/v1/workflow/instance/skip', { body })
       .then((r) => unwrap<WfEngineResult>(r)),

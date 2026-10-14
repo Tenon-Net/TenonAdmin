@@ -1608,7 +1608,7 @@ export default {
         assigneeRequired: '未配置办理人',
         assigneeUsersRequired: '指定成员不能为空',
         assigneeUserUnavailable: '指定的办理人不存在或已停用',
-        approvalRequired: '至少需要一个审批节点',
+        approvalRequired: '流程至少要有一个审批、Webhook 或 AI 决策节点',
         conditionFieldUnknown: '条件引用了表单中不存在的字段',
         allPassRatioInvalid: '会签通过比例必须为 1–100 的整数；顺序会签仅允许 100',
         onNode: '{nodeId}：{message}',
@@ -1868,6 +1868,7 @@ export default {
       skip: '跳过节点',
       reason: '原因',
       reasonRequired: '请填写原因',
+      unsafeId: '编号已丢失精度，未提交',
       targetUser: '转给',
       nodeId: '办理节点',
       admin: {

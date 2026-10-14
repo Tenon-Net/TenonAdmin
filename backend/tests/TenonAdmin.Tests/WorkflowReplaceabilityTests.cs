@@ -117,13 +117,15 @@ public class WorkflowReplaceabilityTests
 
         const string variablesJson = "{\"amount\":42}";
         if (reject)
-            await service.RejectWithVariablesAsync(1, 2, variablesJson: variablesJson);
+            await service.RejectWithVariablesAsync(1, 2, comment: "不同意", variablesJson: variablesJson);
         else
             await service.ApproveWithVariablesAsync(1, 2, variablesJson: variablesJson);
 
         var command = Assert.IsType<CompleteTaskCmd>(engine.LastCommand);
         Assert.Equal(expectedAction, command.Action);
         Assert.Equal(variablesJson, command.VariablesJson);
+        if (reject)
+            Assert.Equal("不同意", command.Comment);
     }
 
     /// <summary>变异:WorkflowSetup 里 IWfInstanceService 的 TryAdd 改 Add → 本条红。</summary>

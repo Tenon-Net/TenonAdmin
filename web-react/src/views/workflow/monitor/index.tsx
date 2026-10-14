@@ -68,10 +68,11 @@ export default function WfMonitorPage() {
     setToUserId(null)
     setNodeId(null)
     setActiveNodes([])
-    if (next === 'terminate' || target.id == null) return
+    const instanceId = normalizeWfId(target.id)
+    if (next === 'terminate' || instanceId == null) return
     const seq = ++nodeSeq.current
     setNodesLoading(true)
-    void wfInstanceApi.get(Number(target.id)).then((detail) => {
+    void wfInstanceApi.get(instanceId).then((detail) => {
       if (seq !== nodeSeq.current) return
       const nodes = monitorNodeOptions(detail)
       setActiveNodes(nodes)
@@ -95,9 +96,16 @@ export default function WfMonitorPage() {
       message.warning(t('workflow.monitor.reasonRequired'))
       return
     }
+    const instanceId = normalizeWfId(row.id)
+    if (instanceId == null) {
+      message.warning(t('workflow.monitor.unsafeId'))
+      return
+    }
     const userId = normalizeWfId(toUserId)
     if (kind === 'transfer' && userId == null) {
-      message.warning(t('workflow.monitor.admin.issue.targetRequired'))
+      message.warning(t(toUserId == null
+        ? 'workflow.monitor.admin.issue.targetRequired'
+        : 'workflow.monitor.unsafeId'))
       return
     }
     if (kind !== 'terminate' && activeNodes.length > 0 && !nodeId) {
@@ -106,10 +114,10 @@ export default function WfMonitorPage() {
     }
     setSubmitting(true)
     try {
-      const instanceId = Number(row.id)
       const node = nodeId?.trim() || null
       if (kind === 'transfer') {
-        await wfInstanceApi.forceTransfer({ instanceId, toUserId: Number(userId), reason: text, nodeId: node })
+        if (userId == null) return
+        await wfInstanceApi.forceTransfer({ instanceId, toUserId: userId, reason: text, nodeId: node })
       } else if (kind === 'terminate') {
         await wfInstanceApi.terminate({ instanceId, reason: text })
       } else {

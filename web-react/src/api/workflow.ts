@@ -23,7 +23,7 @@ import type {
   WfDelegationRuleInput,
   WfParticipantCandidate,
 } from '@/types/workflow'
-import type { WfId } from '@/workflow/id'
+import { workflowPathId, type WfId } from '@/workflow/id'
 
 export const wfDefinitionApi = {
   page: (params: {
@@ -95,7 +95,7 @@ export const wfInstanceApi = {
 
   get: (id: WfId) =>
     client
-      .GET('/api/v1/workflow/instance/{id}', { params: { path: { id: id as number } } })
+      .GET('/api/v1/workflow/instance/{id}', { params: { path: { id: workflowPathId(id) } } })
       .then((r) => unwrap<WfInstanceDetail>(r)),
 
   history: (id: WfId) =>
@@ -150,8 +150,8 @@ export const wfInstanceApi = {
       .then((r) => toPage<WfInstanceListItem>(r)),
 
   forceTransfer: (body: {
-    instanceId: number
-    toUserId: number
+    instanceId: WfId
+    toUserId: WfId
     reason: string
     nodeId?: string | null
     requestId?: string | null
@@ -160,12 +160,12 @@ export const wfInstanceApi = {
       .POST('/api/v1/workflow/instance/force-transfer', { body })
       .then((r) => unwrap<WfEngineResult>(r)),
 
-  terminate: (body: { instanceId: number; reason: string; requestId?: string | null }) =>
+  terminate: (body: { instanceId: WfId; reason: string; requestId?: string | null }) =>
     client
       .POST('/api/v1/workflow/instance/terminate', { body })
       .then((r) => unwrap<WfEngineResult>(r)),
 
-  skip: (body: { instanceId: number; reason: string; nodeId?: string | null; requestId?: string | null }) =>
+  skip: (body: { instanceId: WfId; reason: string; nodeId?: string | null; requestId?: string | null }) =>
     client
       .POST('/api/v1/workflow/instance/skip', { body })
       .then((r) => unwrap<WfEngineResult>(r)),

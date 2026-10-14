@@ -116,12 +116,32 @@ export function buildApprovalProgress(
   return byNode
 }
 
+function sameId(left: number | string | null | undefined, right: number | string | null | undefined): boolean {
+  return left != null && left !== '' && right != null && right !== '' && String(left) === String(right)
+}
+
+function latestHistory(items: WfHisTask[]): WfHisTask | undefined {
+  return [...items].sort(compareHistory).at(-1)
+}
+
+/**
+ * 同一用户可以有多条分配。有分配身份时只认这一条；旧历史没有分配身份时，
+ * 仅在该用户于本轮唯一时才关联，避免把后一次同意套到先前跳过的记录上。
+ */
 export function participantHistory(
   participant: WfTaskParticipant,
   round: WfApprovalRound,
 ): WfHisTask | undefined {
+  const linked = round.history.filter((item) => sameId(item.actorId, participant.actorId))
+  if (linked.length) return latestHistory(linked)
+  if (round.history.some((item) => item.actorId != null) && participant.actorId != null) return undefined
+
+  const participants = round.task?.participants ?? []
   const userId = idKey(participant.userId)
-  return [...round.history].reverse().find((item) => idKey(item.userId) === userId)
+  const sameUser = participants.filter((item) => idKey(item.userId) === userId)
+  const unlinked = round.history.filter((item) => item.actorId == null && idKey(item.userId) === userId)
+  if (sameUser.length === 1 && unlinked.length === 1) return unlinked[0]
+  return undefined
 }
 
 export function participantState(participant: WfTaskParticipant, round: WfApprovalRound): {
@@ -151,15 +171,49 @@ export function progressParticipants(progress: WfApprovalNodeProgress): WfTaskPa
 }
 
 const COUNTERSIGN_MODES = new Set(['all', 'seq', '2', '3'])
+const APPROVE_ACTION = 1
 
-/** 会签/顺序会签的已同意人数。少于两人、或签、以及已跳过的人不计入。 */
+/** 本轮同意动作。拒绝不算；访问标识不一致的同意不混入这一轮。 */
+function countsAsApproval(round: WfApprovalRound, item: WfHisTask): boolean {
+  if (Number(item.action) !== APPROVE_ACTION) return false
+  const taskId = round.task?.taskId
+  const visitId = round.task?.nodeVisitId
+  if (taskId != null && item.taskId != null && idKey(item.taskId) !== idKey(taskId)) return false
+  if (visitId != null && idKey(item.nodeVisitId) !== idKey(visitId)) return false
+  return true
+}
+
+/** 会签/顺序会签的已同意人数。分母是未跳过的有效办理人，分子只计本轮同意动作。 */
 export function countersignProgress(round: WfApprovalRound): { done: number; total: number } | null {
   if (!COUNTERSIGN_MODES.has(String(round.task?.approvalMode ?? ''))) return null
   const active = (round.task?.participants ?? []).filter((item) => Number(item.status) !== ACTOR_STATUS.skipped)
   if (active.length < 2) return null
   return {
-    done: active.filter((item) => Number(item.status) === ACTOR_STATUS.done).length,
+    done: round.history.filter((item) => countsAsApproval(round, item)).length,
     total: active.length,
+  }
+}
+
+function appendUnattributedHistory(
+  rounds: readonly WfApprovalRound[],
+  groups: Map<'pending' | 'waiting' | 'handled' | 'skipped', Array<{ name: string; action?: string; automatic?: boolean }>>,
+) {
+  for (const round of rounds) {
+    const participants = round.task?.participants ?? []
+    const claimed = new Set(
+      participants
+        .map((participant) => participantHistory(participant, round))
+        .filter((item): item is WfHisTask => item != null),
+    )
+    for (const item of round.history) {
+      if (claimed.has(item)) continue
+      const name = item.operatorName?.trim() || (Number(item.userId) > 0 ? `#${item.userId}` : '')
+      groups.set('handled', [...(groups.get('handled') ?? []), {
+        name,
+        action: normalizeTaskAction(item.action),
+        ...(item.isAutomatic ? { automatic: true } : {}),
+      }])
+    }
   }
 }
 
@@ -182,6 +236,7 @@ export function approvalCardGroups(progress: WfApprovalNodeProgress): Array<{
         groups.set(state.key, [...(groups.get(state.key) ?? []), item])
       })
     })
+    appendUnattributedHistory(progress.currentRounds, groups)
     return (['handled', 'pending', 'waiting', 'skipped'] as const)
       .map((key) => ({ key, items: groups.get(key) ?? [] }))
       .filter((group) => group.items.length > 0)
@@ -190,7 +245,7 @@ export function approvalCardGroups(progress: WfApprovalNodeProgress): Array<{
   const latest = progress.pastRounds.at(-1)
   if (!latest) return []
   if (latest.task?.participants?.length) {
-    const groups = new Map<'handled' | 'skipped', Array<{ name: string; action?: string; automatic?: boolean }>>()
+    const groups = new Map<'pending' | 'waiting' | 'handled' | 'skipped', Array<{ name: string; action?: string; automatic?: boolean }>>()
     latest.task.participants.forEach((participant) => {
       const state = participantState(participant, latest)
       const key = state.key === 'handled' ? 'handled' : 'skipped'
@@ -201,6 +256,7 @@ export function approvalCardGroups(progress: WfApprovalNodeProgress): Array<{
         ...(participantHistory(participant, latest)?.isAutomatic ? { automatic: true } : {}),
       }])
     })
+    appendUnattributedHistory([latest], groups)
     return (['handled', 'skipped'] as const)
       .map((key) => ({ key, items: groups.get(key) ?? [] }))
       .filter((group) => group.items.length > 0)

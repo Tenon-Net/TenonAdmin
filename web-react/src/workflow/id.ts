@@ -20,3 +20,11 @@ export function isPositiveWfId(value: unknown): value is WfId {
 export function wfIdEquals(left: WfId | null | undefined, right: WfId | null | undefined): boolean {
   return left != null && right != null && String(left) === String(right)
 }
+
+/**
+ * 生成契约把部分路径 id 标成 number。断言不把十进制字符串转成 number，
+ * 调用方拿到的仍是 normalizeWfId 认可的原值。
+ */
+export function workflowPathId(id: WfId): number {
+  return id as number
+}

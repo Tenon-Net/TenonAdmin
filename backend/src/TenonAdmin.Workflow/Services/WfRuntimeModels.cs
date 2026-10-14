@@ -615,6 +615,8 @@ public record WfHisTaskOutput
     public string NodeId { get; init; } = "";
     public string? NodeName { get; init; }
     public long UserId { get; init; }
+    /// <summary>产生该动作的办理人分配。旧记录和管理员代操作为空，不能按用户回填。</summary>
+    public long? ActorId { get; init; }
     public string? OperatorName { get; init; }
     /// <summary>动作是否由可靠的超时事件自动触发。</summary>
     public bool IsAutomatic { get; init; }

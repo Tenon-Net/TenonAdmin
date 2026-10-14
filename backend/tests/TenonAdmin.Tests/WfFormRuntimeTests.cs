@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using TenonAdmin.Services;
+using TenonAdmin.SqlSugar;
 using TenonAdmin.Workflow;
 
 namespace TenonAdmin.Tests;
@@ -36,7 +37,7 @@ public class WfFormRuntimeTests
         Assert.False(values.RootElement.TryGetProperty("readonlyRequired", out _));
         Assert.Equal("original", values.RootElement.GetProperty("readonlyValue").GetString());
         Assert.Equal("changed", values.RootElement.GetProperty("editableRequired").GetString());
-        Assert.Equal("default-changed", values.RootElement.GetProperty("defaultEditable").GetString());
+        Assert.False(values.RootElement.TryGetProperty("defaultEditable", out _));
 
         var second = await Start(client, definitionId, InitialValues());
         await SetVariables(factory, second.GetProperty("instanceId").GetInt64(), """{"readonlyValue":"original"}""");
@@ -189,7 +190,10 @@ public class WfFormRuntimeTests
         using var factory = new WorkflowAppFactory();
         var client = await ClientFor(factory, "superAdmin");
         var attachmentId = (await InsertFiles(factory, 1))[0];
-        var definitionId = await Publish(client, "清空单附件", AttachmentModel(multiple: false, required: false));
+        var definitionId = await Publish(client, "清空单附件", AttachmentModel(
+            multiple: false,
+            required: false,
+            formPerms: [new { field = "files", access = "editable" }]));
         var start = await Start(client, definitionId, JsonSerializer.Serialize(new { files = attachmentId }));
 
         var approved = await PostEnvelope(client, "/api/v1/workflow/task/approve", new
@@ -299,7 +303,7 @@ public class WfFormRuntimeTests
         Assert.Equal((int)WfInstanceStatus.Running, pendingData.GetProperty("status").GetInt32());
         Assert.Equal("approval2", pendingData.GetProperty("currentNodeIds")[0].GetString());
         Assert.Equal("原始标题", ParseValues(pendingData).GetProperty("title").GetString());
-        Assert.Equal("travel", ParseValues(pendingData).GetProperty("category").GetString());
+        Assert.Equal("leave", ParseValues(pendingData).GetProperty("category").GetString());
         Assert.Equal(1, ParseValues(pendingData).GetProperty("reviewer").GetInt64());
 
         var firstApproverDetail = await GetEnvelope(firstApprover, $"/api/v1/workflow/instance/{instanceId}");
@@ -325,8 +329,8 @@ public class WfFormRuntimeTests
         var replay = await GetEnvelope(admin, $"/api/v1/workflow/instance/{instanceId}");
         var replayData = replay.GetProperty("data");
         var values = ParseValues(replayData);
-        Assert.Equal("最终标题", values.GetProperty("title").GetString());
-        Assert.Equal("travel", values.GetProperty("category").GetString());
+        Assert.Equal("原始标题", values.GetProperty("title").GetString());
+        Assert.Equal("leave", values.GetProperty("category").GetString());
         // 发起人不是任一审批节点的办理人。字段只在每个审批节点都隐藏时才从详情拿掉,
         // 所以复审仍可读的 reviewer、初审未隐藏的 attachment 要留在表单里。
         Assert.Equal(1, values.GetProperty("reviewer").GetInt64());
@@ -389,6 +393,187 @@ public class WfFormRuntimeTests
         var hidden = await ClientFor(factory, "wf-form-hidden-observer");
         var hiddenDetail = await GetEnvelope(hidden, $"/api/v1/workflow/instance/{instanceId}");
         Assert.Equal(JsonValueKind.Null, hiddenDetail.GetProperty("data").GetProperty("variablesJson").ValueKind);
+    }
+
+    [Fact]
+    public async Task Empty_permission_table_does_not_persist_amount_or_clear_protected_fields()
+    {
+        using var factory = new WorkflowAppFactory();
+        var (admin, approver) = await ApproverPair(factory, "wf-form-empty-perm");
+        var definitionId = await Publish(admin, "空权限表", AmountModel(approver.UserId, []));
+
+        await AssertAmountStays(factory, admin, approver.Client, definitionId, """{"amount":1,"reason":"篡改"}""");
+        await AssertAmountStays(factory, admin, approver.Client, definitionId, """{"amount":null,"reason":""}""");
+        await AssertAmountStays(factory, admin, approver.Client, definitionId, """{"reason":"只改事由"}""");
+    }
+
+    [Fact]
+    public async Task Missing_permission_table_does_not_persist_amount_changes()
+    {
+        using var factory = new WorkflowAppFactory();
+        var (admin, approver) = await ApproverPair(factory, "wf-form-missing-perm");
+        var definitionId = await Publish(admin, "缺权限表", AmountModel(approver.UserId, formPerms: null));
+
+        await AssertAmountStays(factory, admin, approver.Client, definitionId, """{"amount":1,"reason":"篡改"}""");
+    }
+
+    [Fact]
+    public async Task Partial_grant_updates_amount_and_keeps_reason()
+    {
+        using var factory = new WorkflowAppFactory();
+        var (admin, approver) = await ApproverPair(factory, "wf-form-partial-perm");
+        var definitionId = await Publish(admin, "部分授权", AmountModel(approver.UserId,
+        [
+            new { field = "amount", access = "editable" },
+        ]));
+        var started = await Start(admin, definitionId, """{"amount":8000,"reason":"差旅"}""");
+        var instanceId = started.GetProperty("instanceId").GetInt64();
+        var taskId = started.GetProperty("createdTaskId").GetInt64();
+
+        var rejected = await PostEnvelope(approver.Client, "/api/v1/workflow/task/approve", new
+        {
+            taskId,
+            variablesJson = """{"amount":-1,"reason":"篡改"}""",
+        });
+        AssertFormError(rejected, "amount", "rangeInvalid");
+        await AssertStoredAmount(factory, admin, instanceId, 8000, "差旅");
+
+        var approved = await PostEnvelope(approver.Client, "/api/v1/workflow/task/approve", new
+        {
+            taskId,
+            variablesJson = """{"amount":99.5,"reason":"篡改"}""",
+        });
+        Assert.Equal(0, approved.GetProperty("code").GetInt32());
+        await AssertStoredAmount(factory, admin, instanceId, 99.5m, "差旅");
+    }
+
+    [Fact]
+    public async Task Readonly_and_hidden_fields_keep_server_values_when_echoed_or_tampered()
+    {
+        using var factory = new WorkflowAppFactory();
+        var (admin, approver) = await ApproverPair(factory, "wf-form-readonly-perm");
+        var definitionId = await Publish(admin, "只读隐藏", AmountModel(approver.UserId,
+        [
+            new { field = "amount", access = "readonly" },
+            new { field = "reason", access = "hidden" },
+        ]));
+
+        await AssertAmountStays(factory, admin, approver.Client, definitionId, """{"amount":8000,"reason":"差旅"}""");
+        await AssertAmountStays(factory, admin, approver.Client, definitionId, """{"amount":1,"reason":"篡改"}""");
+    }
+
+    [Fact]
+    public async Task Editable_fields_update_and_still_validate()
+    {
+        using var factory = new WorkflowAppFactory();
+        var (admin, approver) = await ApproverPair(factory, "wf-form-editable-perm");
+        var definitionId = await Publish(admin, "明确可编辑", AmountModel(approver.UserId,
+        [
+            new { field = "amount", access = "editable" },
+            new { field = "reason", access = "editable" },
+        ]));
+        var started = await Start(admin, definitionId, """{"amount":8000,"reason":"差旅"}""");
+        var instanceId = started.GetProperty("instanceId").GetInt64();
+        var taskId = started.GetProperty("createdTaskId").GetInt64();
+
+        var rejected = await PostEnvelope(approver.Client, "/api/v1/workflow/task/approve", new
+        {
+            taskId,
+            variablesJson = """{"amount":-2,"reason":"退款"}""",
+        });
+        AssertFormError(rejected, "amount", "rangeInvalid");
+        await AssertStoredAmount(factory, admin, instanceId, 8000, "差旅");
+
+        var approved = await PostEnvelope(approver.Client, "/api/v1/workflow/task/approve", new
+        {
+            taskId,
+            variablesJson = """{"amount":20.5,"reason":"改期"}""",
+        });
+        Assert.Equal(0, approved.GetProperty("code").GetInt32());
+        await AssertStoredAmount(factory, admin, instanceId, 20.5m, "改期");
+    }
+
+    [Fact]
+    public async Task Reject_uses_the_same_field_write_rules_as_approve()
+    {
+        using var factory = new WorkflowAppFactory();
+        var (admin, approver) = await ApproverPair(factory, "wf-form-reject-perm");
+        var definitionId = await Publish(admin, "拒绝同规则", AmountModel(approver.UserId, []));
+        var started = await Start(admin, definitionId, """{"amount":8000,"reason":"差旅"}""");
+        var instanceId = started.GetProperty("instanceId").GetInt64();
+
+        var rejected = await PostEnvelope(approver.Client, "/api/v1/workflow/task/reject", new
+        {
+            taskId = started.GetProperty("createdTaskId").GetInt64(),
+            comment = "金额不对",
+            variablesJson = """{"amount":1,"reason":null}""",
+        });
+        Assert.Equal(0, rejected.GetProperty("code").GetInt32());
+        await AssertStoredAmount(factory, admin, instanceId, 8000, "差旅");
+
+        var editableId = await Publish(admin, "拒绝可改金额", AmountModel(approver.UserId,
+        [
+            new { field = "amount", access = "editable" },
+        ]));
+        var editable = await Start(admin, editableId, """{"amount":8000,"reason":"差旅"}""");
+        var editableInstanceId = editable.GetProperty("instanceId").GetInt64();
+        var changed = await PostEnvelope(approver.Client, "/api/v1/workflow/task/reject", new
+        {
+            taskId = editable.GetProperty("createdTaskId").GetInt64(),
+            comment = "改完再拒",
+            variablesJson = """{"amount":15,"reason":"篡改"}""",
+        });
+        Assert.Equal(0, changed.GetProperty("code").GetInt32());
+        await AssertStoredAmount(factory, admin, editableInstanceId, 15, "差旅");
+    }
+
+    [Fact]
+    public async Task Start_and_legal_resubmit_still_replace_form_values()
+    {
+        using var factory = new WorkflowAppFactory();
+        var (admin, approver) = await ApproverPair(factory, "wf-form-resubmit-perm");
+        var definitionId = await Publish(admin, "发起重提", AmountModel(approver.UserId, []));
+
+        var started = await Start(admin, definitionId, """{"amount":12.5,"reason":"出差"}""");
+        var instanceId = started.GetProperty("instanceId").GetInt64();
+        await AssertStoredAmount(factory, admin, instanceId, 12.5m, "出差");
+
+        var returned = await PostEnvelope(approver.Client, "/api/v1/workflow/task/return", new
+        {
+            taskId = started.GetProperty("createdTaskId").GetInt64(),
+            comment = "补充事由",
+        });
+        Assert.Equal(0, returned.GetProperty("code").GetInt32());
+
+        var resubmitted = await PostEnvelope(admin, "/api/v1/workflow/instance/resubmit", new
+        {
+            instanceId,
+            variablesJson = """{"amount":30,"reason":"改期"}""",
+        });
+        Assert.Equal(0, resubmitted.GetProperty("code").GetInt32());
+        await AssertStoredAmount(factory, admin, instanceId, 30, "改期");
+    }
+
+    [Fact]
+    public async Task Empty_permission_table_does_not_clear_optional_attachment()
+    {
+        using var factory = new WorkflowAppFactory();
+        var client = await ClientFor(factory, "superAdmin");
+        var attachmentId = (await InsertFiles(factory, 1))[0];
+        var definitionId = await Publish(client, "空权限不清附件", AttachmentModel(multiple: false, required: false));
+        var start = await Start(client, definitionId, JsonSerializer.Serialize(new { files = attachmentId }));
+        var instanceId = start.GetProperty("instanceId").GetInt64();
+
+        var approved = await PostEnvelope(client, "/api/v1/workflow/task/approve", new
+        {
+            taskId = start.GetProperty("createdTaskId").GetInt64(),
+            variablesJson = """{"files":null}""",
+        });
+        Assert.Equal(0, approved.GetProperty("code").GetInt32());
+
+        var stored = await StoredVariables(factory, instanceId);
+        using var values = JsonDocument.Parse(stored!);
+        Assert.Equal(attachmentId, values.RootElement.GetProperty("files").GetInt64());
     }
 
     private static object PermissionModel() => Model(new
@@ -505,7 +690,7 @@ public class WfFormRuntimeTests
         },
     };
 
-    private static object AttachmentModel(bool multiple, string? accept = null, bool required = true)
+    private static object AttachmentModel(bool multiple, string? accept = null, bool required = true, object[]? formPerms = null)
     {
         var props = new Dictionary<string, object?> { ["multiple"] = multiple };
         if (accept is not null) props["accept"] = accept;
@@ -516,7 +701,7 @@ public class WfFormRuntimeTests
             {
                 new { key = "files", label = "附件", type = "attachment", required, props },
             },
-        });
+        }, formPerms);
     }
 
     private static object ParallelPermissionModel(long otherUserId, bool bothArmsForInitiator = false)
@@ -745,6 +930,95 @@ public class WfFormRuntimeTests
     private static async Task<string?> VariablesOf(HttpClient client, long instanceId) =>
         (await GetEnvelope(client, $"/api/v1/workflow/instance/{instanceId}"))
         .GetProperty("data").GetProperty("variablesJson").GetString();
+
+    private static object AmountModel(long approverId, object[]? formPerms) => new
+    {
+        version = 1,
+        formSchema = new
+        {
+            version = 1,
+            fields = new object[]
+            {
+                new { key = "amount", label = "金额", type = "money", required = true },
+                new { key = "reason", label = "事由", type = "textarea", required = true },
+            },
+        },
+        root = new
+        {
+            id = "start",
+            type = "start",
+            name = "发起",
+            next = new
+            {
+                id = "approval",
+                type = "approval",
+                name = "审批",
+                props = new
+                {
+                    assignee = new { provider = "user", @params = new { userIds = new[] { approverId } } },
+                    mode = "any",
+                    returnPolicy = "prev",
+                    formPerms,
+                },
+                next = (object?)null,
+            },
+        },
+    };
+
+    private sealed record ApproverSession(HttpClient Client, long UserId);
+
+    private static async Task<(HttpClient Admin, ApproverSession Approver)> ApproverPair(
+        WorkflowAppFactory factory, string account)
+    {
+        var admin = await ClientFor(factory, "superAdmin");
+        var userId = await AddUser(admin, account);
+        return (admin, new ApproverSession(await ClientFor(factory, account), userId));
+    }
+
+    private static async Task AssertAmountStays(
+        WorkflowAppFactory factory,
+        HttpClient admin,
+        HttpClient approver,
+        long definitionId,
+        string variablesJson)
+    {
+        var started = await Start(admin, definitionId, """{"amount":8000,"reason":"差旅"}""");
+        var instanceId = started.GetProperty("instanceId").GetInt64();
+        var approved = await PostEnvelope(approver, "/api/v1/workflow/task/approve", new
+        {
+            taskId = started.GetProperty("createdTaskId").GetInt64(),
+            variablesJson,
+        });
+        Assert.Equal(0, approved.GetProperty("code").GetInt32());
+        await AssertStoredAmount(factory, admin, instanceId, 8000, "差旅");
+    }
+
+    private static async Task AssertStoredAmount(
+        WorkflowAppFactory factory,
+        HttpClient admin,
+        long instanceId,
+        decimal amount,
+        string reason)
+    {
+        var stored = await StoredVariables(factory, instanceId);
+        using var database = JsonDocument.Parse(stored!);
+        Assert.Equal(amount, database.RootElement.GetProperty("amount").GetDecimal());
+        Assert.Equal(reason, database.RootElement.GetProperty("reason").GetString());
+
+        var api = await VariablesOf(admin, instanceId);
+        using var response = JsonDocument.Parse(api!);
+        Assert.Equal(amount, response.RootElement.GetProperty("amount").GetDecimal());
+        if (response.RootElement.TryGetProperty("reason", out var visibleReason))
+            Assert.Equal(reason, visibleReason.GetString());
+    }
+
+    private static async Task<string?> StoredVariables(WorkflowAppFactory factory, long instanceId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var instance = await db.Queryable<WfInstance>().ClearFilter<IOrgScoped>().InSingleAsync(instanceId);
+        return instance?.VariablesJson;
+    }
 
     private static async Task<long> Publish(HttpClient client, string name, object model)
     {

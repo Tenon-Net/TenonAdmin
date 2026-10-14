@@ -1209,6 +1209,7 @@ public class WfInstanceService(
         NodeId = h.NodeId,
         NodeName = h.NodeName,
         UserId = h.UserId,
+        ActorId = h.ActorId,
         Action = h.Action,
         Comment = h.Comment,
         OriginalUserId = h.OriginalUserId,

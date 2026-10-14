@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import { defaultMonitorNodeId, monitorNodeOptions } from './nodes'
 import type { WfInstanceListItem, WfInstanceStatus } from '@/types/workflow'
+import { normalizeWfId, type WfId } from '@/workflow/id'
 import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 
 const { t } = useI18n()
@@ -32,7 +33,7 @@ const showAdmin = ref(false)
 const adminKind = ref<AdminKind>('terminate')
 const adminRow = ref<WfInstanceListItem | null>(null)
 const reason = ref('')
-const toUserId = ref<number | null>(null)
+const toUserId = ref<WfId | null>(null)
 const nodeId = ref<string | null>(null)
 const activeNodes = ref<{ id: string; name: string }[]>([])
 const nodesLoading = ref(false)
@@ -53,10 +54,11 @@ function openAdmin(kind: AdminKind, row: WfInstanceListItem, event: MouseEvent) 
   nodeId.value = null
   activeNodes.value = []
   showAdmin.value = true
-  if (kind === 'terminate' || row.id == null) return
+  const instanceId = normalizeWfId(row.id)
+  if (kind === 'terminate' || instanceId == null) return
   const seq = ++nodeSeq
   nodesLoading.value = true
-  void wfInstanceApi.get(Number(row.id)).then((detail) => {
+  void wfInstanceApi.get(instanceId).then((detail) => {
     if (seq !== nodeSeq) return
     activeNodes.value = monitorNodeOptions(detail)
     nodeId.value = defaultMonitorNodeId(activeNodes.value)
@@ -75,8 +77,16 @@ async function submitAdmin() {
     message.warning(t('workflow.monitor.reasonRequired'))
     return
   }
-  if (adminKind.value === 'transfer' && toUserId.value == null) {
-    message.warning(t('workflow.monitor.admin.issue.targetRequired'))
+  const instanceId = normalizeWfId(row.id)
+  if (instanceId == null) {
+    message.warning(t('workflow.monitor.unsafeId'))
+    return
+  }
+  const userId = normalizeWfId(toUserId.value)
+  if (adminKind.value === 'transfer' && userId == null) {
+    message.warning(t(toUserId.value == null
+      ? 'workflow.monitor.admin.issue.targetRequired'
+      : 'workflow.monitor.unsafeId'))
     return
   }
   if (adminKind.value !== 'terminate' && activeNodes.value.length > 0 && !nodeId.value) {
@@ -85,12 +95,11 @@ async function submitAdmin() {
   }
   submitting.value = true
   try {
-    const instanceId = Number(row.id)
     const node = nodeId.value?.trim() || null
     if (adminKind.value === 'transfer') {
       await wfInstanceApi.forceTransfer({
         instanceId,
-        toUserId: Number(toUserId.value),
+        toUserId: userId!,
         reason: text,
         nodeId: node,
       })

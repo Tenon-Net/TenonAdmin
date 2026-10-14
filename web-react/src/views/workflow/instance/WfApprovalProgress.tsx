@@ -25,9 +25,15 @@ function RoundContent({ round }: { round: WfApprovalRound }) {
   const { t } = useTranslation()
   const participants = [...(round.task?.participants ?? [])]
     .sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0))
+  const attributedIds = new Set(
+    participants
+      .map((participant) => participantHistory(participant, round)?.id)
+      .filter((id) => id != null)
+      .map((id) => String(id)),
+  )
   const detailHistory = round.history.filter((item) => {
-    const participantHandled = participants.some((participant) => String(participant.userId) === String(item.userId))
-    return !participantHandled || ![1, 2].includes(Number(item.action))
+    const shownOnAssignee = attributedIds.has(String(item.id)) && [1, 2].includes(Number(item.action))
+    return !shownOnAssignee
   })
   const ratio = countersignProgress(round)
 
@@ -204,7 +210,13 @@ export function WfApprovalDetailModal({
   )
 }
 
-export function CurrentApprovalSummary({ tasks }: { tasks: readonly WfCurrentTask[] }) {
+export function CurrentApprovalSummary({
+  tasks,
+  progress,
+}: {
+  tasks: readonly WfCurrentTask[]
+  progress?: ReadonlyMap<string, WfApprovalNodeProgress>
+}) {
   const { t } = useTranslation()
   const approvalTasks = tasks.filter((task) => task.approvalMode != null || (task.participants?.length ?? 0) > 0)
   if (!approvalTasks.length) return null
@@ -215,7 +227,10 @@ export function CurrentApprovalSummary({ tasks }: { tasks: readonly WfCurrentTas
       <Space orientation="vertical" size={4} style={{ width: '100%' }}>
         {approvalTasks.map((task) => {
           const pending = (task.participants ?? []).filter((person) => Number(person.status) === PENDING_STATUS)
-          const ratio = countersignProgress({ key: String(task.taskId), current: true, task, history: [] })
+          const round = task.nodeId
+            ? progress?.get(task.nodeId)?.currentRounds.find((item) => String(item.task?.taskId) === String(task.taskId))
+            : undefined
+          const ratio = countersignProgress(round ?? { key: String(task.taskId), current: true, task, history: [] })
           return (
             <Space key={String(task.taskId)} size={8} wrap>
               <Tag color="processing">{task.nodeName || task.nodeId}</Tag>

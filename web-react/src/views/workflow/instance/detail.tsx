@@ -568,7 +568,7 @@ export default function WfInstanceDetailPage() {
                 { key: 'createTime', label: t('workflow.detail.createTime'), children: formatDateTime(detail.createTime) },
               ]}
             />
-            <CurrentApprovalSummary tasks={currentTasks} />
+            <CurrentApprovalSummary tasks={currentTasks} progress={approvalProgress} />
             {variableRows.length > 0 && !formSchema ? (
               <Descriptions
                 size="small" column={1} style={{ marginTop: 12 }}

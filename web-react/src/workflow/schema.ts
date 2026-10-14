@@ -197,6 +197,6 @@ export const WF_M1_NODE_TYPES: ReadonlySet<WfNodeType> = new Set(['start', 'appr
 export const WF_M2A_NODE_TYPES: ReadonlySet<WfNodeType> = new Set(['start', 'approval', 'cc', 'branch'])
 
 /** M3a-2 可发布的节点类型。 */
-export const WF_M3A2_NODE_TYPES: ReadonlySet<WfNodeType> = new Set([...WF_M2A_NODE_TYPES, 'parallel', 'webhook'])
+export const WF_M3A2_NODE_TYPES: ReadonlySet<WfNodeType> = new Set([...WF_M2A_NODE_TYPES, 'parallel', 'webhook', 'aiDecision'])
 
 export type WfInsertableNodeType = Extract<WfNodeType, 'approval' | 'cc' | 'branch' | 'parallel' | 'webhook'>

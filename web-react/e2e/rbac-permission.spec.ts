@@ -36,6 +36,12 @@ test('受限账号只能进入已授权页面,且服务端拒绝未授权接口'
   expect(denied.status()).toBe(403)
 
   await page.goto('/system/user')
-  await expect(page.getByText(/页面不存在|Page not found/i)).toBeVisible()
+  await expect(page.getByText('403')).toBeVisible()
+  await expect(page.getByText(/没有访问权限|You do not have permission to open this page/)).toBeVisible()
+  await expect(page.getByText(/页面不存在|Page not found/)).toHaveCount(0)
+
+  await page.goto('/missing/not-a-page')
+  await expect(page.getByText('404')).toBeVisible()
+  await expect(page.getByText(/页面不存在|Page not found/)).toBeVisible()
   await restrictedContext.close()
 })

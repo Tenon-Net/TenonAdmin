@@ -84,6 +84,7 @@ public class TakeBackTaskOp(
             TaskId = approval.TaskId,
             TokenId = Task.TokenId,
             UserId = UserId,
+            ActorId = approval.ActorId,
             OriginalUserId = approval.OriginalUserId,
             DelegationRuleId = approval.DelegationRuleId,
             DelegationScopeOrgId = approval.DelegationScopeOrgId,

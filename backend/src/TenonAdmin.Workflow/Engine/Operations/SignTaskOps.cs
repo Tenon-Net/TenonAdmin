@@ -101,6 +101,7 @@ internal abstract class SignTaskOp(
             TaskId = task.Id,
             TokenId = task.TokenId,
             UserId = userId,
+            ActorId = actor?.Id,
             OriginalUserId = actor?.OriginalUserId,
             DelegationRuleId = actor?.DelegationRuleId,
             DelegationScopeOrgId = actor?.DelegationScopeOrgId,

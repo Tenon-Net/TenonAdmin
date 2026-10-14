@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WfCurrentTask, WfHisTask } from '@/types/workflow'
-import { approvalCardGroups, buildApprovalProgress } from './approvalProgress'
+import { approvalCardGroups, buildApprovalProgress, countersignProgress, participantHistory } from './approvalProgress'
 
 function task(over: Partial<WfCurrentTask>): WfCurrentTask {
   return {
@@ -183,4 +183,196 @@ describe('approvalProgress', () => {
     expect(progress.pastRounds).toHaveLength(1)
     expect(progress.pastRounds[0]?.history).toHaveLength(1)
   })
+
+  it('同一用户重新加入并同意后，不把新动作套到旧的跳过分配', () => {
+    const past = task({
+      participants: [
+        { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+        { actorId: 2, userId: 102, displayName: '李四', status: 3, sort: 1 },
+        { actorId: 3, userId: 101, displayName: '张三', status: 2, sort: 2 },
+      ],
+    })
+    const history = [
+      { id: 1, taskId: 1, nodeId: 'approve', userId: 101, actorId: 1, action: 3, comment: '转给李四', createTime: '2026-10-12T09:00:00Z' },
+      { id: 2, taskId: 1, nodeId: 'approve', userId: 101, actorId: 3, action: 1, comment: '再次同意', createTime: '2026-10-12T11:00:00Z' },
+    ] as WfHisTask[]
+
+    const progress = buildApprovalProgress([], [past], history).get('approve')!
+    const round = progress.pastRounds[0]!
+    expect(participantHistory(past.participants![0]!, round)).toMatchObject({ action: 3, comment: '转给李四', createTime: '2026-10-12T09:00:00Z' })
+    expect(participantHistory(past.participants![2]!, round)).toMatchObject({ action: 1, comment: '再次同意', createTime: '2026-10-12T11:00:00Z' })
+    expect(approvalCardGroups(progress)).toEqual([
+      { key: 'handled', items: [{ name: '张三', action: 'transfer' }, { name: '张三', action: 'approve' }] },
+      { key: 'skipped', items: [{ name: '李四', action: undefined }] },
+    ])
+  })
+
+  it('减签后重新加签再审批时，跳过的旧分配不显示后来的同意', () => {
+    const past = task({
+      participants: [
+        { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+        { actorId: 2, userId: 102, displayName: '李四', status: 2, sort: 1 },
+        { actorId: 3, userId: 101, displayName: '张三', status: 2, sort: 2 },
+      ],
+    })
+    const history = [
+      { id: 1, taskId: 1, nodeId: 'approve', userId: 102, actorId: 2, action: 9, comment: '减签', createTime: '2026-10-12T09:00:00Z' },
+      { id: 2, taskId: 1, nodeId: 'approve', userId: 101, actorId: 3, action: 1, comment: '补同意', createTime: '2026-10-12T11:00:00Z' },
+    ] as WfHisTask[]
+
+    const progress = buildApprovalProgress([], [past], history).get('approve')!
+    const round = progress.pastRounds[0]!
+    expect(participantHistory(past.participants![0]!, round)).toBeUndefined()
+    expect(participantHistory(past.participants![2]!, round)?.comment).toBe('补同意')
+    expect(round.history.map((item) => item.comment)).toEqual(['减签', '补同意'])
+  })
+
+  it('重新加入且尚未处理时保持待办，不继承上一次动作', () => {
+    const current = task({
+      participants: [
+        { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+        { actorId: 3, userId: 101, displayName: '张三', status: 1, sort: 1 },
+      ],
+    })
+    const history = [
+      { id: 1, taskId: 1, nodeId: 'approve', userId: 102, actorId: 2, action: 9, comment: '减掉', createTime: '2026-10-12T09:00:00Z' },
+    ] as WfHisTask[]
+
+    const progress = buildApprovalProgress([current], [], history).get('approve')!
+    const round = progress.currentRounds[0]!
+    expect(participantHistory(current.participants![1]!, round)).toBeUndefined()
+    expect(approvalCardGroups(progress)).toEqual([
+      { key: 'handled', items: [{ name: '#102', action: 'removeSign' }] },
+      { key: 'pending', items: [{ name: '张三', action: undefined }] },
+      { key: 'skipped', items: [{ name: '张三', action: undefined }] },
+    ])
+  })
+
+  it('旧历史缺少分配身份时不猜测归属，也不丢动作', () => {
+    const past = task({
+      participants: [
+        { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+        { actorId: 3, userId: 101, displayName: '张三', status: 2, sort: 1 },
+      ],
+    })
+    const history = [
+      { id: 1, taskId: 1, nodeId: 'approve', userId: 101, operatorName: '张三', action: 3, comment: '旧转办', createTime: '2026-10-12T09:00:00Z' },
+      { id: 2, taskId: 1, nodeId: 'approve', userId: 101, operatorName: '张三', action: 1, comment: '旧同意', createTime: '2026-10-12T11:00:00Z' },
+    ] as WfHisTask[]
+
+    const progress = buildApprovalProgress([], [past], history).get('approve')!
+    const round = progress.pastRounds[0]!
+    expect(participantHistory(past.participants![0]!, round)).toBeUndefined()
+    expect(participantHistory(past.participants![1]!, round)).toBeUndefined()
+    expect(approvalCardGroups(progress)).toEqual([
+      {
+        key: 'handled',
+        items: [
+          { name: '张三', action: undefined },
+          { name: '张三', action: 'transfer' },
+          { name: '张三', action: 'approve' },
+        ],
+      },
+      { key: 'skipped', items: [{ name: '张三', action: undefined }] },
+    ])
+  })
+
+  it('拒绝后会签继续时已同意数不增加', () => {
+    const round = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 2, sort: 0 },
+      { actorId: 2, userId: 102, displayName: '李四', status: 1, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 0, sort: 2 },
+    ], [{ id: 1, actorId: 1, userId: 101, action: 2 }])
+    expect(countersignProgress(round)).toEqual({ done: 0, total: 3 })
+    expect(progressRatio(round)).toEqual({ done: 0, total: 3 })
+  })
+
+  it('同意和拒绝混合时只计同意，且节点卡与详情一致', () => {
+    const round = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 2, sort: 0 },
+      { actorId: 2, userId: 102, displayName: '李四', status: 2, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [
+      { id: 1, actorId: 1, userId: 101, action: 1 },
+      { id: 2, actorId: 2, userId: 102, action: 2 },
+    ])
+    expect(countersignProgress(round)).toEqual({ done: 1, total: 3 })
+    expect(progressRatio(round)).toEqual(countersignProgress(round))
+  })
+
+  it('未达全员门槛时仍按同意动作而不是已处理人数计数', () => {
+    const round = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 2, sort: 0 },
+      { actorId: 2, userId: 102, displayName: '李四', status: 2, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [{ id: 1, actorId: 1, userId: 101, action: 1 }])
+    expect(countersignProgress(round)).toEqual({ done: 1, total: 3 })
+  })
+
+  it('加签、减签、转办和重新加入后按有效办理人与同意动作计数', () => {
+    const added = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 2, sort: 0 },
+      { actorId: 2, userId: 102, displayName: '李四', status: 1, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [
+      { id: 1, actorId: 1, userId: 101, action: 1 },
+      { id: 2, actorId: 1, userId: 101, action: 8 },
+    ])
+    expect(countersignProgress(added)).toEqual({ done: 1, total: 3 })
+
+    const removed = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+      { actorId: 2, userId: 102, displayName: '李四', status: 1, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [
+      { id: 1, actorId: 1, userId: 101, action: 1 },
+      { id: 2, actorId: 2, userId: 102, action: 9 },
+    ])
+    expect(countersignProgress(removed)).toEqual({ done: 1, total: 2 })
+
+    const transferred = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+      { actorId: 4, userId: 104, displayName: '赵六', status: 1, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [{ id: 1, actorId: 1, userId: 101, action: 3 }])
+    expect(countersignProgress(transferred)).toEqual({ done: 0, total: 2 })
+
+    const rejoined = countersignRound([
+      { actorId: 1, userId: 101, displayName: '张三', status: 3, sort: 0 },
+      { actorId: 5, userId: 101, displayName: '张三', status: 2, sort: 1 },
+      { actorId: 3, userId: 103, displayName: '王五', status: 1, sort: 2 },
+    ], [
+      { id: 1, actorId: 1, userId: 101, action: 3 },
+      { id: 2, actorId: 5, userId: 101, action: 1 },
+    ])
+    expect(countersignProgress(rejoined)).toEqual({ done: 1, total: 2 })
+    expect(progressRatio(rejoined)).toEqual({ done: 1, total: 2 })
+  })
 })
+
+function countersignRound(
+  participants: NonNullable<WfCurrentTask['participants']>,
+  history: WfHisTask[],
+) {
+  const current = task({
+    approvalMode: 'all',
+    participants,
+  })
+  const rows = history.map((item) => ({
+    taskId: 1,
+    tokenId: 10,
+    nodeVisitId: 100,
+    nodeId: 'approve',
+    ...item,
+  })) as WfHisTask[]
+  return buildApprovalProgress([current], [], rows).get('approve')!.currentRounds[0]!
+}
+
+function progressRatio(round: ReturnType<typeof countersignRound>) {
+  const progress = buildApprovalProgress(
+    round.task ? [round.task as WfCurrentTask] : [],
+    [],
+    round.history,
+  ).get(round.task?.nodeId ?? '')
+  return progress?.currentRounds.map((item) => countersignProgress(item)).find((item) => item != null) ?? null
+}
