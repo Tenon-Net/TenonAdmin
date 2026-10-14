@@ -1234,6 +1234,7 @@ export default {
       48048: 'This administrator intervention is not allowed',
       48049: 'Reject and return require a comment',
       48051: 'A process with this name already exists',
+      48052: 'The process is unchanged, so no new version was created',
       49001: 'The integration credential is invalid or no longer active',
       49002: 'The integration app is not granted this endpoint',
       49003: 'The integration app has no binding for the data scope this endpoint declares',

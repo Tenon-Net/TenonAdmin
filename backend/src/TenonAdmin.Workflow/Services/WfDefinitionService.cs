@@ -178,6 +178,27 @@ public class WfDefinitionService(
             ValidateModelForPublish(model);
             await ValidateAssigneeUsersAsync(db, model, cancellationToken);
 
+            if (def.CurrentVersion >= 1)
+            {
+                var published = await db.Queryable<WfDefinitionVersion>()
+                    .Where(v => v.DefinitionId == def.Id && v.Version == def.CurrentVersion)
+                    .FirstAsync();
+                if (published is not null && SamePublishedModel(published.ModelJson, model))
+                {
+                    // 停用后没有单独的启用接口，内容没变时只把状态拨回已发布。
+                    if (def.Status == WfDefinitionStatus.Disabled)
+                    {
+                        def.Status = WfDefinitionStatus.Published;
+                        await db.Updateable(def)
+                            .UpdateColumns(d => new { d.Status, d.UpdateTime, d.UpdateUserId })
+                            .ExecuteCommandAsync();
+                        return def.CurrentVersion;
+                    }
+
+                    throw WorkflowErrorCode.Exception(WorkflowErrorCode.DefinitionUnchanged);
+                }
+            }
+
             var nextVersion = def.CurrentVersion + 1;
             var snapshot = new WfDefinitionVersion
             {
@@ -1054,6 +1075,16 @@ public class WfDefinitionService(
         };
         await versions.InsertAsync(draft);
         return draft;
+    }
+
+    /// <summary>发布快照与校验后的草稿是否是同一份模型。比较规范化 JSON，不看属性顺序。</summary>
+    protected virtual bool SamePublishedModel(string? publishedJson, WfModel draft)
+    {
+        if (string.IsNullOrWhiteSpace(publishedJson))
+            return false;
+        var published = WfModelJson.Deserialize(publishedJson);
+        return published is not null
+            && WfModelJson.Serialize(published) == WfModelJson.Serialize(draft);
     }
 
     /// <summary>

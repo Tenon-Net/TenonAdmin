@@ -164,6 +164,9 @@ public static class WorkflowErrorCode
     /// <summary>同一数据范围内已有未删除的同名流程定义。</summary>
     public const int DefinitionNameExists = 48051;
 
+    /// <summary>草稿与当前已发布版本一致，再次发布不会生成新版本。</summary>
+    public const int DefinitionUnchanged = 48052;
+
     public static AdminException Exception(int code, IReadOnlyDictionary<string, object?>? args = null) =>
         new((ErrorCode)code, args);
 }
