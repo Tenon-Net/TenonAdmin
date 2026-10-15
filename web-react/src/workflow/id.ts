@@ -12,6 +12,12 @@ export function normalizeWfId(value: unknown): WfId | null {
   return null
 }
 
+/** 实例详情路由;id 精度已丢失(不安全 number 或非法值)时返回 null,调用方应拒绝导航(#56)。 */
+export function wfInstanceDetailPath(value: unknown): string | null {
+  const id = normalizeWfId(value)
+  return id == null ? null : `/workflow/instance/${id}/detail`
+}
+
 export function isPositiveWfId(value: unknown): value is WfId {
   return normalizeWfId(value) !== null
 }
