@@ -136,9 +136,14 @@ function updateValue(value: unknown) {
             <span class="wf-condition-child-summary">{{ childSummary(child) }}</span>
           </template>
           <div class="wf-condition-child">
+          <!--
+            naive-ui 2.45 的 CollapseItemContent 以 STABLE 插槽交给内部过渡组件，父级更新不会强制重渲染内容；
+            直接读 v-for 的 child（闭包快照）会让子编辑器永远拿到旧值，输入框每次按键覆盖上一个字符。
+            这里从响应式的 modelValue 读取，让内容区自己追踪依赖并刷新。
+          -->
           <WfConditionEditor
             class="wf-condition-child-editor"
-            :model-value="child"
+            :model-value="modelValue.children![index]!"
             @update:model-value="updateChild(index, $event)"
           />
           <button
