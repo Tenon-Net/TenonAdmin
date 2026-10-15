@@ -43,7 +43,7 @@ vi.mock('naive-ui', async (orig) => {
   }
 })
 
-import { beginVoluntaryLogout, useRealtime } from './useRealtime'
+import { beginVoluntaryLogout, useRealtime, workflowTodoBus, WORKFLOW_TODO_EVENTS } from './useRealtime'
 import { useUserStore } from '@/stores/user'
 
 function mountRealtime() {
@@ -124,6 +124,25 @@ describe('useRealtime force-logout', () => {
 
     expect(useUserStore().accessToken).toBe('')
     expect(warning).not.toHaveBeenCalled()
+    app.unmount()
+  })
+})
+
+// #53:工作流待办相关推送 → workflowTodoBus,待办页据此自动重拉。
+describe('useRealtime workflow todo events', () => {
+  it('注册 workflow-task-assigned/recalled/sign-changed,收到后 emit 事件名', async () => {
+    const { app } = mountRealtime()
+    await nextTick()
+    const got: string[] = []
+    const off = workflowTodoBus.on((evt) => got.push(evt))
+    for (const evt of WORKFLOW_TODO_EVENTS) {
+      expect(handlers[evt]).toBeTruthy()
+      handlers[evt]()
+    }
+    expect(got).toEqual(['workflow-task-assigned', 'workflow-task-recalled', 'workflow-task-sign-changed'])
+    off()
+    handlers['workflow-task-assigned']()
+    expect(got).toHaveLength(3)
     app.unmount()
   })
 })

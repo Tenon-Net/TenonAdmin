@@ -24,6 +24,23 @@ export const noticeBus = {
   },
 }
 
+/** 会改变「待我审批」列表的工作流推送事件(#53)。 */
+export const WORKFLOW_TODO_EVENTS = ['workflow-task-assigned', 'workflow-task-recalled', 'workflow-task-sign-changed'] as const
+
+const todoListeners = new Set<(evt: string) => void>()
+
+/** 待办刷新总线:收到上述推送后 emit(事件名),待办页订阅后重拉列表。 */
+export const workflowTodoBus = {
+  /** 订阅待办变更,返回退订函数。 */
+  on(fn: (evt: string) => void): () => void {
+    todoListeners.add(fn)
+    return () => todoListeners.delete(fn)
+  },
+  emit(evt: string): void {
+    todoListeners.forEach((fn) => fn(evt))
+  },
+}
+
 // 进程内单例连接:鉴权外壳挂载一次即建一条;重复 start 幂等(已连不再建)。
 let connection: HubConnection | null = null
 // 进行中的 start()。协商还没结束就 stop(),@microsoft/signalr 会以 Error 打出
@@ -54,6 +71,7 @@ function start(onForceLogout: Listener, onNoticeChanged: Listener): void {
 
     conn.on('force-logout', onForceLogout)
     conn.on('notice-changed', onNoticeChanged)
+    for (const evt of WORKFLOW_TODO_EVENTS) conn.on(evt, () => workflowTodoBus.emit(evt))
 
     connection = conn
     const pending = conn.start().then(

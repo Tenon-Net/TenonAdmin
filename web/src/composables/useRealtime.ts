@@ -11,6 +11,12 @@ import { useUserStore } from '@/stores/user'
  */
 export const noticeBus = useEventBus<void>('notice-changed')
 
+/** 会改变「待我审批」列表的工作流推送事件(#53)。 */
+export const WORKFLOW_TODO_EVENTS = ['workflow-task-assigned', 'workflow-task-recalled', 'workflow-task-sign-changed'] as const
+
+/** 待办刷新总线:收到上述推送后 emit(事件名),待办页订阅后重拉列表。 */
+export const workflowTodoBus = useEventBus<string>('workflow-todo-changed')
+
 // 进程内单例连接:鉴权外壳(default.vue)挂载一次即建一条;重复 start 幂等(已连不再建)。
 let connection: HubConnection | null = null
 // 主动登出/改密重登:后端 Logout 也走 RevokeAsync → 推 force-logout;本页应静默,勿弹「您已被强制下线」。
@@ -74,6 +80,7 @@ export function useRealtime() {
     })
     // 公告变更:通知 NoticeBell 立即重拉未读(替代最长 30s 轮询延迟)
     conn.on('notice-changed', () => noticeBus.emit())
+    for (const evt of WORKFLOW_TODO_EVENTS) conn.on(evt, () => workflowTodoBus.emit(evt))
 
     connection = conn
     conn.start().catch(() => {

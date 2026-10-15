@@ -42,7 +42,7 @@ vi.mock('@microsoft/signalr', () => ({
   LogLevel: { Warning: 3 },
 }))
 
-import { beginVoluntaryLogout, noticeBus, useRealtime } from './useRealtime'
+import { beginVoluntaryLogout, noticeBus, useRealtime, workflowTodoBus, WORKFLOW_TODO_EVENTS } from './useRealtime'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
@@ -166,5 +166,23 @@ describe('useRealtime force-logout', () => {
     render(createElement(AntdApp, null, createElement(MemoryRouter, null, createElement(Probe))))
     handlers['force-logout']()
     expect(warning).toHaveBeenCalled()
+  })
+})
+
+// #53:工作流待办相关推送 → workflowTodoBus,待办页据此自动重拉。
+describe('useRealtime workflow todo events', () => {
+  it('注册 workflow-task-assigned/recalled/sign-changed,收到后 emit 事件名', () => {
+    useUserStore.setState({ accessToken: 't', refreshToken: 'r', userInfo: { userId: 1, account: 'a', name: 'n', mustChangePassword: false } })
+    render(createElement(AntdApp, null, createElement(MemoryRouter, null, createElement(Probe))))
+    const got: string[] = []
+    const off = workflowTodoBus.on((evt) => got.push(evt))
+    for (const evt of WORKFLOW_TODO_EVENTS) {
+      expect(handlers[evt]).toBeTruthy()
+      handlers[evt]()
+    }
+    expect(got).toEqual(['workflow-task-assigned', 'workflow-task-recalled', 'workflow-task-sign-changed'])
+    off()
+    handlers['workflow-task-assigned']()
+    expect(got).toHaveLength(3)
   })
 })
