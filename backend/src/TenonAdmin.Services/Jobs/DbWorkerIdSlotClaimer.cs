@@ -86,6 +86,8 @@ public sealed class DbWorkerIdSlotClaimer(
     /// </summary>
     public static bool IsLockConflict(Exception ex)
     {
+        if (IsCancellation(ex))
+            return false;
         for (var e = ex; e is not null; e = e.InnerException)
         {
             switch (e)
@@ -115,6 +117,8 @@ public sealed class DbWorkerIdSlotClaimer(
     /// </summary>
     public static bool IsDuplicateKey(Exception ex)
     {
+        if (IsCancellation(ex))
+            return false;
         for (var e = ex; e is not null; e = e.InnerException)
         {
             switch (e)
@@ -125,6 +129,21 @@ public sealed class DbWorkerIdSlotClaimer(
                 case Microsoft.Data.Sqlite.SqliteException lite when lite.SqliteExtendedErrorCode is 1555 or 2067:
                     return true;
             }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 取消优先(F01-C):InnerException 链上任意一层是 <see cref="OperationCanceledException"/>
+    /// 就不按数据库错误分类,让调用方原样抛出——不重试、不跳槽、不当作「槽已被占」。
+    /// 必须先整链检查,不能在外层锁错误码 / 消息兜底命中时提前返回 true。
+    /// </summary>
+    private static bool IsCancellation(Exception ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+        {
+            if (e is OperationCanceledException)
+                return true;
         }
         return false;
     }

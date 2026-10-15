@@ -173,6 +173,132 @@ public sealed class WorkerIdSlotFaultTests : IDisposable
         Assert.Equal(3, inj.Attempts);
     }
 
+
+    // ---------- F01-C:取消优先于数据库分类(QA round4) ----------
+
+    private static OperationCanceledException CancelWrapping(Exception? inner, out CancellationToken token)
+    {
+        token = new CancellationToken(true);
+        return new OperationCanceledException("QA cancelled", inner, token);
+    }
+
+    private void AssertCancelPropagatedUnchanged(Injection inj, Exception injected, OperationCanceledException cancel, CancellationToken token)
+    {
+        var thrown = Record.Exception(() => { using var a = (IDisposable)Claim(inj); });
+        Assert.NotNull(thrown);
+        Assert.Same(injected, thrown);          // 未被吞成 false/跳槽,也未被重新包装
+        Assert.Equal(token, cancel.CancellationToken);
+        Assert.Contains(nameof(OnInsertable), injected.StackTrace); // 原始抛出栈未被重置
+        Assert.Equal(1, inj.Attempts);          // 未重试
+    }
+
+    [Fact]
+    public void Cancel_wrapping_sqlite_busy_propagates_without_retry_or_slot_skip()
+    {
+        var cancel = CancelWrapping(new SqliteException("busy", 5), out var token);
+        var inj = new Injection { Slot = 0, OnAttempt = _ => cancel };
+        AssertCancelPropagatedUnchanged(inj, cancel, cancel, token);
+    }
+
+    [Fact]
+    public void Cancel_wrapping_mysql_deadlock_propagates_without_retry()
+    {
+        var cancel = CancelWrapping(WorkerIdSlotErrorClassificationTests.MySqlError(1213, "40001", "Deadlock found when trying to get lock"), out var token);
+        var inj = new Injection { Slot = 0, OnAttempt = _ => cancel };
+        AssertCancelPropagatedUnchanged(inj, cancel, cancel, token);
+    }
+
+    [Fact]
+    public void Cancel_wrapping_duplicate_key_with_competitor_row_is_not_turned_into_false()
+    {
+        var cancel = CancelWrapping(new SqliteException("pk", 19, 1555), out var token);
+        var inj = new Injection { Slot = 0, InsertCompetitorFirst = true, OnAttempt = _ => cancel };
+        AssertCancelPropagatedUnchanged(inj, cancel, cancel, token);
+    }
+
+    [Fact]
+    public void Cancel_wrapping_mysql_duplicate_with_competitor_row_is_not_turned_into_false()
+    {
+        var cancel = CancelWrapping(WorkerIdSlotErrorClassificationTests.MySqlError(1062, "23000", "Duplicate entry"), out var token);
+        var inj = new Injection { Slot = 0, InsertCompetitorFirst = true, OnAttempt = _ => cancel };
+        AssertCancelPropagatedUnchanged(inj, cancel, cancel, token);
+    }
+
+    [Fact]
+    public void Plain_wrapper_around_cancel_around_lock_propagates_without_retry()
+    {
+        var cancel = CancelWrapping(new SqliteException("busy", 5), out var token);
+        var outer = new InvalidOperationException("QA wrapper", cancel);
+        var inj = new Injection { Slot = 0, OnAttempt = _ => outer };
+        AssertCancelPropagatedUnchanged(inj, outer, cancel, token);
+    }
+
+    [Fact]
+    public void Plain_wrapper_around_cancel_around_duplicate_with_competitor_propagates()
+    {
+        var cancel = CancelWrapping(new SqliteException("pk", 19, 1555), out var token);
+        var outer = new InvalidOperationException("QA wrapper", cancel);
+        var inj = new Injection { Slot = 0, InsertCompetitorFirst = true, OnAttempt = _ => outer };
+        AssertCancelPropagatedUnchanged(inj, outer, cancel, token);
+    }
+
+    [Fact]
+    public void Cancel_with_deadlock_fallback_message_propagates_without_retry()
+    {
+        var token = new CancellationToken(true);
+        var cancel = new OperationCanceledException("Deadlock found when trying to get lock; Lock wait timeout exceeded", token);
+        var inj = new Injection { Slot = 0, OnAttempt = _ => cancel };
+        AssertCancelPropagatedUnchanged(inj, cancel, cancel, token);
+    }
+
+    [Fact]
+    public void Outer_lock_error_with_inner_cancel_propagates_without_retry()
+    {
+        var cancel = CancelWrapping(null, out var token);
+        var outer = new WorkerIdSlotErrorClassificationTests.QaDbException("serialization failure", "40001", cancel);
+        var inj = new Injection { Slot = 0, OnAttempt = _ => outer };
+        AssertCancelPropagatedUnchanged(inj, outer, cancel, token);
+    }
+
+    [Fact]
+    public void Outer_fallback_lock_message_with_inner_cancel_propagates_without_retry()
+    {
+        var cancel = CancelWrapping(null, out var token);
+        var outer = new Exception("Lock wait timeout exceeded; try restarting transaction", cancel);
+        var inj = new Injection { Slot = 0, OnAttempt = _ => outer };
+        AssertCancelPropagatedUnchanged(inj, outer, cancel, token);
+    }
+
+    // ---------- 非取消回归 ----------
+
+    [Fact]
+    public void Duplicate_key_but_slot_missing_rethrows_original()
+    {
+        var dup = new SqliteException("pk", 19, 1555);
+        var inj = new Injection { Slot = 0, OnAttempt = _ => dup };
+        var thrown = Record.Exception(() => { using var a = (IDisposable)Claim(inj); });
+        Assert.Same(dup, thrown);
+        Assert.Equal(1, inj.Attempts);
+    }
+
+    [Fact]
+    public void Mysql_duplicate_with_competitor_row_moves_to_next_slot()
+    {
+        var inj = new Injection { Slot = 0, InsertCompetitorFirst = true, OnAttempt = _ => WorkerIdSlotErrorClassificationTests.MySqlError(1062, "23000", "Duplicate entry") };
+        using var a = (IDisposable)Claim(inj);
+        Assert.Equal(1, ((WorkerIdAssignment)a).WorkerId);
+        Assert.Equal(1, inj.Attempts);
+    }
+
+    [Fact]
+    public void Mysql_lock_wait_timeout_then_success_stays_on_slot()
+    {
+        var inj = new Injection { Slot = 0, OnAttempt = n => n == 1 ? WorkerIdSlotErrorClassificationTests.MySqlError(1205, "HY000", "Lock wait timeout exceeded") : null };
+        using var a = (IDisposable)Claim(inj);
+        Assert.Equal(0, ((WorkerIdAssignment)a).WorkerId);
+        Assert.Equal(2, inj.Attempts);
+    }
+
     private static Exception Unwrap(Exception thrown, Exception expected)
     {
         for (var e = thrown; e is not null; e = e.InnerException)
@@ -217,5 +343,91 @@ public sealed class WorkerIdSlotErrorClassificationTests
         Assert.False(DbWorkerIdSlotClaimer.IsDuplicateKey(new Exception("Duplicate entry '1' for key 'PRIMARY'")));
         Assert.False(DbWorkerIdSlotClaimer.IsLockConflict(new OperationCanceledException()));
         Assert.False(DbWorkerIdSlotClaimer.IsDuplicateKey(new OperationCanceledException()));
+    }
+
+    public sealed class QaDbException(string message, string sqlState, Exception? inner) : System.Data.Common.DbException(message, inner)
+    {
+        public override string SqlState { get; } = sqlState;
+    }
+
+    internal static Microsoft.Data.SqlClient.SqlException SqlServerError(int number)
+    {
+        var asm = typeof(Microsoft.Data.SqlClient.SqlException).Assembly;
+        var errType = asm.GetType("Microsoft.Data.SqlClient.SqlError")!;
+        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        var ctor = errType.GetConstructors(flags).OrderByDescending(c => c.GetParameters().Length).First();
+        var args = ctor.GetParameters().Select((p, i) =>
+            i == 0 ? (object)number :
+            p.ParameterType == typeof(byte) ? (byte)0 :
+            p.ParameterType == typeof(string) ? "qa" :
+            p.ParameterType == typeof(int) ? 0 :
+            p.ParameterType == typeof(uint) ? 0u :
+            p.ParameterType == typeof(Exception) ? null! :
+            p.ParameterType.IsValueType ? Activator.CreateInstance(p.ParameterType)! : null!).ToArray();
+        var error = ctor.Invoke(args);
+        var colType = typeof(Microsoft.Data.SqlClient.SqlErrorCollection);
+        var col = colType.GetConstructors(flags).First(c => c.GetParameters().Length == 0).Invoke(null);
+        colType.GetMethod("Add", flags)!.Invoke(col, new[] { error });
+        var create = typeof(Microsoft.Data.SqlClient.SqlException).GetMethods(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+            .Where(m => m.Name == "CreateException").OrderBy(m => m.GetParameters().Length).First();
+        var cargs = create.GetParameters().Select((p, i) => i == 0 ? col : p.ParameterType == typeof(string) ? "16.0" : p.ParameterType.IsValueType ? Activator.CreateInstance(p.ParameterType) : null).ToArray();
+        return (Microsoft.Data.SqlClient.SqlException)create.Invoke(null, cargs)!;
+    }
+
+    private static Npgsql.PostgresException PgError(string sqlState) => new("qa", "ERROR", "ERROR", sqlState);
+
+    [Fact]
+    public void Non_cancel_structured_codes_across_drivers()
+    {
+        Assert.True(DbWorkerIdSlotClaimer.IsDuplicateKey(MySqlError(1062, "23000", "x")));
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(MySqlError(1213, "40001", "x")));
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(MySqlError(1205, "HY000", "x")));
+        Assert.True(DbWorkerIdSlotClaimer.IsDuplicateKey(PgError("23505")));
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(PgError("40P01")));
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(PgError("55P03")));
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(PgError("40001")));
+        Assert.False(DbWorkerIdSlotClaimer.IsLockConflict(PgError("23505")));
+        Assert.False(DbWorkerIdSlotClaimer.IsDuplicateKey(PgError("40P01")));
+        Assert.Equal(2627, SqlServerError(2627).Number);
+        Assert.True(DbWorkerIdSlotClaimer.IsDuplicateKey(SqlServerError(2627)));
+        Assert.True(DbWorkerIdSlotClaimer.IsDuplicateKey(SqlServerError(2601)));
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(SqlServerError(1205)));
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(SqlServerError(1222)));
+        Assert.False(DbWorkerIdSlotClaimer.IsLockConflict(SqlServerError(2627)));
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(new SqliteException("locked", 6)));
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(new SqliteException("busy", 5)));
+        Assert.False(DbWorkerIdSlotClaimer.IsLockConflict(new SqliteException("pk", 19, 1555)));
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(new Exception("Deadlock found when trying to get lock")));
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(new QaDbException("x", "40001", null)));
+    }
+
+    public static IEnumerable<object[]> CancelChains()
+    {
+        var t = new CancellationToken(true);
+        Exception C(Exception? inner) => new OperationCanceledException("QA cancelled", inner, t);
+        yield return new object[] { "cancel(sqlite busy)", C(new SqliteException("busy", 5)) };
+        yield return new object[] { "cancel(sqlite locked)", C(new SqliteException("locked", 6)) };
+        yield return new object[] { "cancel(sqlite pk)", C(new SqliteException("pk", 19, 1555)) };
+        yield return new object[] { "cancel(mysql 1213)", C(MySqlError(1213, "40001", "x")) };
+        yield return new object[] { "cancel(mysql 1205)", C(MySqlError(1205, "HY000", "x")) };
+        yield return new object[] { "cancel(mysql 1062)", C(MySqlError(1062, "23000", "x")) };
+        yield return new object[] { "cancel(pg 40P01)", C(PgError("40P01")) };
+        yield return new object[] { "cancel(pg 23505)", C(PgError("23505")) };
+        yield return new object[] { "cancel(mssql 1205)", C(SqlServerError(1205)) };
+        yield return new object[] { "cancel(mssql 2627)", C(SqlServerError(2627)) };
+        yield return new object[] { "task-cancel(sqlite busy)", new TaskCanceledException("QA", new SqliteException("busy", 5)) };
+        yield return new object[] { "wrap(cancel(sqlite busy))", new InvalidOperationException("w", C(new SqliteException("busy", 5))) };
+        yield return new object[] { "wrap(cancel(mysql 1062))", new Exception("w", C(MySqlError(1062, "23000", "x"))) };
+        yield return new object[] { "cancel msg fallback", new OperationCanceledException("Deadlock found when trying to get lock", t) };
+        yield return new object[] { "dbex 40001(cancel)", new QaDbException("x", "40001", C(null)) };
+        yield return new object[] { "msg fallback(cancel)", new Exception("Lock wait timeout exceeded", C(null)) };
+    }
+
+    [Theory]
+    [MemberData(nameof(CancelChains))]
+    public void Cancellation_anywhere_in_chain_is_neither_lock_nor_duplicate(string name, Exception ex)
+    {
+        Assert.False(DbWorkerIdSlotClaimer.IsLockConflict(ex), $"IsLockConflict({name})");
+        Assert.False(DbWorkerIdSlotClaimer.IsDuplicateKey(ex), $"IsDuplicateKey({name})");
     }
 }
