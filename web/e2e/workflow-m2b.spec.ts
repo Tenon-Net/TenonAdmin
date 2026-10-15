@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { apiAdminToken, apiCreateUser } from './api'
 
 import { enterBusinessApp, enterSystemApp, login } from './helpers'
 
@@ -101,7 +102,7 @@ async function publishDefinition(page: Page) {
   await expect(page.locator('.n-message').filter({ hasText: /已发布|Published/i }).last()).toBeVisible()
 }
 
-test('M2b verbs: return, cancel, urge, cc read, mine and done', async ({ page }) => {
+test('M2b verbs: return, cancel, urge, cc read, mine and done', async ({ page, request }) => {
   test.setTimeout(240_000)
 
   const suffix = Date.now().toString(36)
@@ -110,13 +111,19 @@ test('M2b verbs: return, cancel, urge, cc read, mine and done', async ({ page })
   const returnKey = `M2B-RET-${suffix}`
   const cancelKey = `M2B-CAN-${suffix}`
   const urgeKey = `M2B-URG-${suffix}`
+  // 催办需要一个非发起人的办理人。#44 起内置数据范围演示账号(如「全部数据」)不再出现在办理人选择器里，
+  // 这里建一个专用账号代替。
+  const urgeApprover = `m2b-urge-${suffix}`
+  await apiCreateUser(request, await apiAdminToken(request), {
+    account: urgeApprover, name: urgeApprover, password: 'M2b@Urge123456', forceTotp: false,
+  })
 
   // 治理页在「系统」应用下;先切应用再开路由,否则动态路由里根本没有这一条。
   await login(page)
   await enterSystemApp(page)
 
   await page.goto('/workflow/definition/designer')
-  await expect(page.getByText(/未打开流程|No workflow opened/i)).toBeVisible()
+  await expect(page.getByText(/还没有打开流程|No workflow is open/i)).toBeVisible()
   await page.getByPlaceholder(/流程名称|Workflow name/i).fill(selfDef)
   await page.getByRole('button', { name: /新建草稿|Create draft/i }).click()
   await expect(page).toHaveURL(/\/workflow\/definition\/designer\?id=\d+/, { timeout: 15_000 })
@@ -146,7 +153,7 @@ test('M2b verbs: return, cancel, urge, cc read, mine and done', async ({ page })
   const urgeStart = page.locator('.wf-tree > .wf-chain > .wf-chain-node').first()
   await addNode(page, urgeStart.locator(':scope > .wf-add .wf-add-btn'), /审批|Approval/i)
   drawer = await visibleDrawer(page)
-  await configureAssignee(page, drawer, /全部数据/)
+  await configureAssignee(page, drawer, new RegExp(urgeApprover))
   await saveDrawer(page, drawer)
   await publishDefinition(page)
 
@@ -156,6 +163,12 @@ test('M2b verbs: return, cancel, urge, cc read, mine and done', async ({ page })
   await startInstance(page, selfDef, returnKey)
   await expect(page.getByRole('button', { name: /^(退回|Return)$/i })).toBeVisible()
   await page.getByRole('button', { name: /^(退回|Return)$/i }).click()
+  // #45 起退回意见必填：空意见点确定，弹窗应保持打开；填写后才能提交。
+  const returnModal = page.locator('.n-modal:visible')
+  await expect(returnModal).toBeVisible()
+  await returnModal.getByRole('button', { name: /确定|Confirm/i }).click()
+  await expect(returnModal).toBeVisible()
+  await returnModal.locator('textarea').first().fill('M2b 退回意见')
   await confirmAction(page)
   await expect(page.locator('.n-tag, .n-timeline').getByText(/^(退回|Return)$/i).first()).toBeVisible({ timeout: 15_000 })
   await page.screenshot({ path: RETURN_SHOT, fullPage: true })

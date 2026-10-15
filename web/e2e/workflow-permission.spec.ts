@@ -21,6 +21,19 @@ test('普通定义管理员创建、重载、发布和重新打开设计器', as
   const id = new URL(page.url()).searchParams.get('id')!
   await page.reload()
   await expect(page.locator('.wf-card.is-root')).toBeVisible()
+  // #49 起只有开始节点的流程不能发布：设计器先在前端拦下并提示，不应发出发布请求。
+  let publishRequests = 0
+  page.on('request', (r) => { if (r.url().endsWith('/workflow/definition/publish')) publishRequests++ })
+  await page.getByRole('button', { name: /^发布$|^Publish$/i }).click()
+  await expect(page.getByText(/流程至少要有一个审批、Webhook 或 AI 决策节点|Add an approval, webhook, or AI decision node/i)).toBeVisible()
+  expect(publishRequests).toBe(0)
+  // 补一个 Webhook 执行节点再发布：不依赖成员选择器，普通定义管理员即可完成；URL 只写入定义，发布不会调用。
+  await page.locator('.wf-tree > .wf-chain > .wf-chain-node').first().locator(':scope > .wf-add .wf-add-btn').click()
+  await page.locator('.n-popover:visible').getByRole('button', { name: /^Webhook$/ }).click()
+  const drawer = page.locator('.n-drawer:visible')
+  await drawer.getByPlaceholder('https://example.com/hooks/workflow').fill('https://example.com/hooks/qa-permission')
+  await drawer.getByRole('button', { name: /保存|Save/i }).click()
+  await expect(drawer).toBeHidden()
   const published = page.waitForResponse((r) => r.url().endsWith('/workflow/definition/publish'))
   await page.getByRole('button', { name: /^发布$|^Publish$/i }).click()
   expect((await (await published).json()).code).toBe(0)
