@@ -23,7 +23,25 @@ public sealed class DbWorkerIdSlotClaimer(
             return WorkerIdAssignment.Resolve(options, onFallback);
 
         var client = OpenBareClient();
-        RetryOnLockConflict(() => { client.CodeFirst.InitTables<SysWorkerLease>(); return true; }, onExhausted: null);
+        try
+        {
+            RetryOnLockConflict(() =>
+            {
+                // #62:SqlSugar 的 InitTables 先跑「系统表权限」探测,该探测吞掉驱动异常后只抛
+                // 「Dbfirst and Codefirst requires system table permissions」(无 InnerException),锁冲突因此无法识别。
+                // SQLite 上先用不吞异常的同类查询探一次,让 BUSY/LOCKED 原样抛出、进入 #52 的有界重试。
+                if (client.CurrentConnectionConfig.DbType == DbType.Sqlite)
+                    client.DbMaintenance.GetTableInfoList(isCache: false);
+                client.CodeFirst.InitTables<SysWorkerLease>();
+                return true;
+            }, onExhausted: null);
+        }
+        catch (Exception ex) when (IsLockConflict(ex))
+        {
+            throw new InvalidOperationException(
+                $"领取 WorkerId 时 sys_worker_lease 所在数据库被其他连接锁住，建表阶段重试 {MaxLockConflictAttempts} 次仍冲突。" +
+                "请确认没有长事务占用该库，或显式配置 TenonAdmin:Id:WorkerId。", ex);
+        }
 
         var machine = Environment.MachineName;
         var pid = Environment.ProcessId;
@@ -174,7 +192,7 @@ public sealed class DbWorkerIdSlotClaimer(
         if (!Enum.TryParse<DbType>(database.DbType, ignoreCase: true, out var dbType))
             throw new InvalidOperationException($"未知 DbType \"{database.DbType}\"，无法领取 WorkerId。");
 
-        return new SqlSugarClient(new ConnectionConfig
+        var client = new SqlSugarClient(new ConnectionConfig
         {
             ConfigId = "TenonAdmin.WorkerIdClaim",
             DbType = dbType,
@@ -182,6 +200,11 @@ public sealed class DbWorkerIdSlotClaimer(
             IsAutoCloseConnection = true,
             MoreSettings = new ConnMoreSettings { SqlServerCodeFirstNvarchar = true },
         });
+        // #62:SqlSugar 默认 CommandTimeOut=300s 会覆盖 Microsoft.Data.Sqlite 的 busy 等待(连接串 Default Timeout),
+        // 锁住时单条语句要等 5 分钟。SQLite 改为沿用连接串里的 Default Timeout(未配时驱动默认 30s);其他库不变。
+        if (dbType == DbType.Sqlite)
+            client.Ado.CommandTimeOut = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(database.ConnectionString).DefaultTimeout;
+        return client;
     }
 
     private bool TryOwnSlot(ISqlSugarClient db, int workerId, string machine, int pid, TimeSpan ttl, string token)
