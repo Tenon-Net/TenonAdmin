@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { apiAdminToken, apiCreateUser } from './api'
 
 import { confirmModal, expectMessage, saveDrawer, tableRow, visibleDrawer } from './antd'
 import { enterBusinessApp, enterSystemApp, login } from './helpers'
@@ -12,7 +13,7 @@ import {
   startInstance,
 } from './workflow'
 
-test('M2b 动词:退回、撤销、催办,以及抄送已读 / 我发起的 / 我已办的', async ({ page }) => {
+test('M2b 动词:退回、撤销、催办,以及抄送已读 / 我发起的 / 我已办的', async ({ page, request }) => {
   test.setTimeout(240_000)
 
   const suffix = Date.now().toString(36)
@@ -21,6 +22,12 @@ test('M2b 动词:退回、撤销、催办,以及抄送已读 / 我发起的 / �
   const returnKey = `M2B-RET-${suffix}`
   const cancelKey = `M2B-CAN-${suffix}`
   const urgeKey = `M2B-URG-${suffix}`
+  // 催办需要一个非发起人的办理人。#44 起内置数据范围演示账号(如「全部数据」)不再出现在办理人选择器里，
+  // 这里建一个专用账号代替。
+  const urgeApprover = `m2b-urge-${suffix}`
+  await apiCreateUser(request, await apiAdminToken(request), {
+    account: urgeApprover, name: urgeApprover, password: 'M2b@Urge123456', forceTotp: false,
+  })
 
   await login(page)
   await enterSystemApp(page)
@@ -47,7 +54,7 @@ test('M2b 动词:退回、撤销、催办,以及抄送已读 / 我发起的 / �
   await createDraft(page, urgeDef)
   await addNode(page, addAfter(page, 0), /^(审批|Approval)$/i)
   drawer = await visibleDrawer(page)
-  await configureAssignee(page, drawer, /全部数据/)
+  await configureAssignee(page, drawer, new RegExp(urgeApprover))
   await saveDrawer(page, drawer)
   await publishDefinition(page)
 
@@ -55,6 +62,12 @@ test('M2b 动词:退回、撤销、催办,以及抄送已读 / 我发起的 / �
 
   await startInstance(page, selfDef, returnKey)
   await page.getByRole('button', { name: /^(退\s*回|Return)$/i }).click()
+  // #45 起退回意见必填：空意见点确定，弹窗应保持打开；填写后才能提交。
+  const returnModal = page.locator('[role="dialog"]:visible')
+  await expect(returnModal).toBeVisible({ timeout: 10_000 })
+  await returnModal.getByRole('button', { name: /^(确\s*定|OK|Confirm)$/i }).click()
+  await expect(returnModal).toBeVisible()
+  await returnModal.locator('textarea').first().fill('M2b 退回意见')
   await confirmModal(page)
   await expect(page.locator('.ant-timeline')).toContainText(/退\s*回|Return/i, { timeout: 20_000 })
 

@@ -29,7 +29,7 @@ export function addAfter(page: Page, index: number) {
 /** 空态建草稿,落在 `?id=` 的设计器上(系统应用)。 */
 export async function createDraft(page: Page, name: string) {
   await page.goto('/workflow/definition/designer')
-  await expect(page.getByText(/尚未打开流程|No workflow opened/i)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText(/还没有打开流程|No workflow is open/i)).toBeVisible({ timeout: 15_000 })
   await page.getByPlaceholder(/流程名称|Workflow name/i).fill(name)
   await page.getByRole('button', { name: /新建草稿|Create draft/i }).click()
   await expect(page).toHaveURL(/\/workflow\/definition\/designer\?id=\d+/, { timeout: 15_000 })

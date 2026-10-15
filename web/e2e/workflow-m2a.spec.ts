@@ -80,7 +80,7 @@ test('M2a branch definition routes high amount to approval and low amount to def
   await login(page)
   await enterSystemApp(page)
   await page.goto('/workflow/definition/designer')
-  await expect(page.getByText(/未打开流程|No workflow opened/i)).toBeVisible()
+  await expect(page.getByText(/还没有打开流程|No workflow is open/i)).toBeVisible()
 
   await page.getByPlaceholder(/流程名称|Workflow name/i).fill(definitionName)
   await page.getByRole('button', { name: /新建草稿|Create draft/i }).click()
