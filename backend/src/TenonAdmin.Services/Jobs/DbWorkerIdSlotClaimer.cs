@@ -86,6 +86,8 @@ public sealed class DbWorkerIdSlotClaimer(
     /// </summary>
     public static bool IsLockConflict(Exception ex)
     {
+        if (IsCancellation(ex))
+            return false;
         for (var e = ex; e is not null; e = e.InnerException)
         {
             switch (e)
@@ -115,6 +117,8 @@ public sealed class DbWorkerIdSlotClaimer(
     /// </summary>
     public static bool IsDuplicateKey(Exception ex)
     {
+        if (IsCancellation(ex))
+            return false;
         for (var e = ex; e is not null; e = e.InnerException)
         {
             switch (e)
@@ -124,6 +128,39 @@ public sealed class DbWorkerIdSlotClaimer(
                 case Microsoft.Data.SqlClient.SqlException ms when ms.Number is 2627 or 2601:
                 case Microsoft.Data.Sqlite.SqliteException lite when lite.SqliteExtendedErrorCode is 1555 or 2067:
                     return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 取消优先(F01-C):InnerException 链上任意一层是 <see cref="OperationCanceledException"/>
+    /// 就不按数据库错误分类,让调用方原样抛出——不重试、不跳槽、不当作「槽已被占」。
+    /// 必须先整链检查,不能在外层锁错误码 / 消息兜底命中时提前返回 true。
+    /// </summary>
+    private static bool IsCancellation(Exception ex)
+    {
+        // 遍历完整结构:InnerException 链 + AggregateException 的全部分支(不只首个)。
+        // 用引用去重防环,并限制节点数防止病态深度。
+        const int maxNodes = 256;
+        var seen = new HashSet<Exception>(ReferenceEqualityComparer.Instance);
+        var pending = new Stack<Exception>();
+        pending.Push(ex);
+        while (pending.Count > 0 && seen.Count < maxNodes)
+        {
+            var e = pending.Pop();
+            if (!seen.Add(e))
+                continue;
+            if (e is OperationCanceledException)
+                return true;
+            if (e is AggregateException agg)
+            {
+                foreach (var inner in agg.InnerExceptions)
+                    if (inner is not null) pending.Push(inner);
+            }
+            else if (e.InnerException is { } next)
+            {
+                pending.Push(next);
             }
         }
         return false;
