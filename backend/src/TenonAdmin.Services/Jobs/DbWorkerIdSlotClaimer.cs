@@ -78,18 +78,53 @@ public sealed class DbWorkerIdSlotClaimer(
         }
     }
 
-    /// <summary>死锁 / 锁等待超时:MySQL 1213(SQLSTATE 40001)/1205,PostgreSQL 40P01,SQL Server 1205(按消息)。</summary>
+    /// <summary>
+    /// 死锁 / 锁等待:优先按驱动结构化错误码判断(沿 InnerException 链):
+    /// MySQL 1213/1205,PostgreSQL SQLSTATE 40P01/55P03,SQL Server 1205/1222,SQLite BUSY(5)/LOCKED(6);
+    /// 其余 <see cref="System.Data.Common.DbException"/> 看 SQLSTATE 40001/40P01。
+    /// 保留 #52 的消息兜底,仅用于驱动包装后丢了错误码的情况。
+    /// </summary>
     public static bool IsLockConflict(Exception ex)
     {
         for (var e = ex; e is not null; e = e.InnerException)
         {
-            if (e is System.Data.Common.DbException db
-                && db.SqlState is "40001" or "40P01")
-                return true;
+            switch (e)
+            {
+                case MySqlConnector.MySqlException my when my.Number is 1213 or 1205:
+                    return true;
+                case Npgsql.PostgresException pg when pg.SqlState is "40P01" or "55P03":
+                    return true;
+                case Microsoft.Data.SqlClient.SqlException ms when ms.Number is 1205 or 1222:
+                    return true;
+                case Microsoft.Data.Sqlite.SqliteException lite when lite.SqliteErrorCode is 5 or 6:
+                    return true;
+                case System.Data.Common.DbException db when db.SqlState is "40001" or "40P01":
+                    return true;
+            }
             if (e.Message.Contains("Deadlock found when trying to get lock", StringComparison.OrdinalIgnoreCase)
                 || e.Message.Contains("Lock wait timeout exceeded", StringComparison.OrdinalIgnoreCase)
                 || e.Message.Contains("was deadlocked on lock", StringComparison.OrdinalIgnoreCase))
                 return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 主键/唯一约束冲突,只认驱动结构化错误码:MySQL 1062,PostgreSQL 23505,SQL Server 2627/2601,
+    /// SQLite CONSTRAINT_PRIMARYKEY(1555)/CONSTRAINT_UNIQUE(2067)。
+    /// </summary>
+    public static bool IsDuplicateKey(Exception ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+        {
+            switch (e)
+            {
+                case MySqlConnector.MySqlException my when my.Number == 1062:
+                case Npgsql.PostgresException pg when pg.SqlState == "23505":
+                case Microsoft.Data.SqlClient.SqlException ms when ms.Number is 2627 or 2601:
+                case Microsoft.Data.Sqlite.SqliteException lite when lite.SqliteExtendedErrorCode is 1555 or 2067:
+                    return true;
+            }
         }
         return false;
     }
@@ -135,8 +170,10 @@ public sealed class DbWorkerIdSlotClaimer(
                 }).ExecuteCommand();
                 return true;
             }
-            catch (Exception)
+            catch (Exception ex) when (IsDuplicateKey(ex))
             {
+                // 只有真实的主键/唯一冲突才算「别人先插了」。锁冲突交给外层 RetryOnLockConflict,
+                // 取消与其它异常原样向上抛(即使事后槽位行已存在),不在这里吞掉。
                 if (db.Queryable<SysWorkerLease>().Where(l => l.WorkerId == workerId).Any())
                     return false;
                 throw;
