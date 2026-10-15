@@ -14,7 +14,7 @@ import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import { defaultMonitorNodeId, monitorNodeOptions } from './nodes'
 import type { WfInstanceListItem, WfInstanceStatus } from '@/types/workflow'
-import { normalizeWfId, type WfId } from '@/workflow/id'
+import { normalizeWfId, wfInstanceDetailPath, type WfId } from '@/workflow/id'
 import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 
 const { t } = useI18n()
@@ -120,7 +120,12 @@ async function submitAdmin() {
 
 function openDetail(r: WfInstanceListItem) {
   if (r.id == null) return
-  void router.push(`/workflow/instance/${r.id}/detail`)
+  const path = wfInstanceDetailPath(r.id)
+  if (path == null) {
+    message.warning(t('workflow.monitor.unsafeId'))
+    return
+  }
+  void router.push(path)
 }
 
 function normalizeStatus(s: WfInstanceStatus | undefined): string {

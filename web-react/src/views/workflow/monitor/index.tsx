@@ -10,7 +10,7 @@ import { DataTable, type DataTableHandle, type PageFetcher } from '@/components/
 import { UserSelect } from '@/components/UserSelect'
 import { wfInstanceApi } from '@/api/workflow'
 import { useHasPerm } from '@/stores/auth'
-import { normalizeWfId } from '@/workflow/id'
+import { normalizeWfId, wfInstanceDetailPath } from '@/workflow/id'
 import { formatDateTime, instanceStatusColor, normalizeInstanceStatus } from '@/workflow/statusLabels'
 import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 import { translateError } from '@/utils/error'
@@ -56,9 +56,14 @@ export default function WfMonitorPage() {
   const openDetail = useCallback(
     (r: WfInstanceListItem) => {
       if (r.id == null) return
-      navigate(`/workflow/instance/${r.id}/detail`)
+      const path = wfInstanceDetailPath(r.id)
+      if (path == null) {
+        message.warning(t('workflow.monitor.unsafeId'))
+        return
+      }
+      navigate(path)
     },
-    [navigate],
+    [message, navigate, t],
   )
 
   const openAdmin = useCallback((next: AdminKind, target: WfInstanceListItem) => {
