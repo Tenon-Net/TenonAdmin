@@ -1,11 +1,12 @@
 // 待我审批列表。菜单 component 填 `workflow/todo/index`。
 // 「办理」进实例详情(`/workflow/instance/:id/detail`);逾期(dueTime 已过)标警示 Tag。
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Button, Space, Tag } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import type { ProColumns } from '@ant-design/pro-components'
-import { DataTable, type PageFetcher } from '@/components/DataTable'
+import { DataTable, type DataTableHandle, type PageFetcher } from '@/components/DataTable'
+import { workflowTodoBus } from '@/composables/useRealtime'
 import { wfTaskApi } from '@/api/workflow'
 import { formatDateTime } from '@/workflow/statusLabels'
 import type { WfTodoItem } from '@/types/workflow'
@@ -19,6 +20,9 @@ function isOverdue(due: string | null | undefined): boolean {
 export default function WfTodoPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const tableRef = useRef<DataTableHandle>(null)
+  // #53:实时推送新待办/撤回/加减签时自动重拉列表,无需手动刷新。
+  useEffect(() => workflowTodoBus.on(() => tableRef.current?.reload()), [])
 
   const fetchTodos: PageFetcher<WfTodoItem> = (q) => wfTaskApi.todo({ page: q.page, pageSize: q.pageSize })
 
@@ -79,6 +83,7 @@ export default function WfTodoPage() {
       columns={columns}
       fetcher={fetchTodos}
       persistKey="workflow-todo"
+      ref={tableRef}
       rowKey="taskId"
       search={false}
     />
