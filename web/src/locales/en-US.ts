@@ -1320,6 +1320,7 @@ export default {
         approvalRequired: 'Add an approval, webhook, or AI decision node',
         conditionFieldUnknown: 'A condition uses a field that is not on the form',
         conditionFieldRequired: 'A condition has no field',
+        conditionGroupEmpty: 'A condition group is empty; add at least one condition',
         allPassRatioInvalid: 'The approval threshold must be an integer from 1 to 100. Sequential approval only allows 100',
         onNode: '{nodeId}: {message}',
       },

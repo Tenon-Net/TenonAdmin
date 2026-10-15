@@ -53,6 +53,8 @@ describe('workflow/model M1 chain', () => {
 
     const branched = createDefaultModel()
     const branch = createBranchNode({ id: 'branch' })
+    // #58:新建分支臂默认是空条件组,发布前必须填条件;这里补一个有效条件,只验证本用例关注的结构。
+    branch.conditions![0]!.expr = { field: 'amount', op: 'gt', value: 1 }
     branch.conditions![0]!.next = createWebhookNode({
       id: 'arm-webhook',
       props: { webhookUrl: 'https://example.com/hook' },
@@ -218,6 +220,8 @@ describe('workflow/model M2a tree', () => {
   it('validates a branch tree and detects duplicate node ids across arm and main chains', () => {
     const model = createDefaultModel()
     const branch = createBranchNode({ id: 'branch' })
+    // #58:新建分支臂默认是空条件组,发布前必须填条件;这里补一个有效条件,只验证本用例关注的结构。
+    branch.conditions![0]!.expr = { field: 'amount', op: 'gt', value: 1 }
     branch.conditions![0]!.next = createApprovalNode({ id: 'shared' })
     branch.next = createCcNode({
       id: 'merge',
@@ -261,7 +265,12 @@ describe('workflow/model M2a tree', () => {
     expect(validateModel(model)).toContainEqual({ code: 'conditionFieldRequired', nodeId: 'branch', armId })
     branch.conditions![0]!.expr = { logic: 'or', children: [{ field: 'amount', op: 'gt', value: 1 }, { logic: 'and', children: [{ field: '', op: 'eq', value: 1 }] }] }
     expect(validateModel(model)).toContainEqual({ code: 'conditionFieldRequired', nodeId: 'branch', armId })
+    // #58:空条件组(含嵌套空组)运行时恒不成立,会静默走默认臂;与后端 conditionGroupEmpty 对齐,发布前拦截。
     branch.conditions![0]!.expr = { logic: 'and', children: [] }
+    expect(validateModel(model)).toContainEqual({ code: 'conditionGroupEmpty', nodeId: 'branch', armId })
+    branch.conditions![0]!.expr = { logic: 'or', children: [{ field: 'amount', op: 'gt', value: 1 }, { logic: 'and', children: [] }] }
+    expect(validateModel(model)).toContainEqual({ code: 'conditionGroupEmpty', nodeId: 'branch', armId })
+    branch.conditions![0]!.expr = { logic: 'and', children: [{ field: 'amount', op: 'gt', value: 1 }] }
     expect(validateModel(model)).toEqual([])
   })
 
@@ -565,6 +574,8 @@ describe('workflow/model M3a-2 webhook', () => {
       props: { assignee: { provider: 'user', params: { userIds: [1] } } },
     })
     const branch = createBranchNode({ id: 'branch' })
+    // #58:新建分支臂默认是空条件组,发布前必须填条件;这里补一个有效条件,只验证本用例关注的结构。
+    branch.conditions![0]!.expr = { field: 'amount', op: 'gt', value: 1 }
     model.root.next = approval
     approval.next = cc
     cc.next = branch

@@ -305,6 +305,7 @@ export interface WfModelIssue {
     | 'approvalRequired'
     | 'conditionFieldUnknown'
     | 'conditionFieldRequired'
+    | 'conditionGroupEmpty'
     | 'allPassRatioInvalid'
     | 'webhookUrlInvalid'
     | 'webhookMethodInvalid'
@@ -343,6 +344,13 @@ function readAllPassRatio(value: unknown): number | undefined {
 function conditionHasLeafWithoutField(expr: WfConditionExpr): boolean {
   if (expr.children == null) return !expr.field?.trim()
   return expr.children.some((child) => child != null && conditionHasLeafWithoutField(child))
+}
+
+/** 条件组（children 非空数组）至少要有一个条件；空组（含嵌套）运行时恒不成立，会静默走默认臂（#58）。与后端 conditionGroupEmpty 对齐。 */
+function conditionHasEmptyGroup(expr: WfConditionExpr): boolean {
+  if (expr.children == null) return false
+  const children = expr.children.filter((child) => child != null)
+  return children.length === 0 || children.some((child) => conditionHasEmptyGroup(child))
 }
 
 /** 有表单字段时，条件只能引用这些键。没有 schema 的旧模型不在这里拦截。 */
@@ -405,6 +413,8 @@ export function validateModel(model: WfModel): WfModelIssue[] {
             issues.push({ code: 'branchArmWithoutExpr', nodeId: node.id, armId: arm.id })
           } else if (!arm.isDefault && arm.expr && conditionHasLeafWithoutField(arm.expr)) {
             issues.push({ code: 'conditionFieldRequired', nodeId: node.id, armId: arm.id })
+          } else if (!arm.isDefault && arm.expr && conditionHasEmptyGroup(arm.expr)) {
+            issues.push({ code: 'conditionGroupEmpty', nodeId: node.id, armId: arm.id })
           }
           if (schemaKeys && conditionUsesUnknownField(arm.expr, schemaKeys)) {
             issues.push({ code: 'conditionFieldUnknown', nodeId: node.id, armId: arm.id })
