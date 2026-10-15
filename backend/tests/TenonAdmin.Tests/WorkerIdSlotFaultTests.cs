@@ -299,6 +299,61 @@ public sealed class WorkerIdSlotFaultTests : IDisposable
         Assert.Equal(2, inj.Attempts);
     }
 
+
+    // ---------- F01-C 补充:AggregateException 多分支中的取消(QA round5) ----------
+
+    [Fact]
+    public void Aggregate_with_cancel_in_non_first_branch_propagates_without_retry()
+    {
+        var token = new CancellationToken(true);
+        var cancel = new OperationCanceledException("QA cancelled", token);
+        var inner = new AggregateException(new SqliteException("busy", 5), new AggregateException(new SqliteException("locked", 6), cancel));
+        var outer = new AggregateException(new SqliteException("busy", 5), inner);
+        var inj = new Injection { Slot = 0, OnAttempt = _ => outer };
+        AssertCancelPropagatedUnchanged(inj, outer, cancel, token);
+    }
+
+    [Fact]
+    public void Aggregate_duplicate_first_then_cancel_with_competitor_is_not_turned_into_false()
+    {
+        var token = new CancellationToken(true);
+        var cancel = new OperationCanceledException("QA cancelled", token);
+        var agg = new AggregateException(new SqliteException("pk", 19, 1555), cancel);
+        var inj = new Injection { Slot = 0, InsertCompetitorFirst = true, OnAttempt = _ => agg };
+        AssertCancelPropagatedUnchanged(inj, agg, cancel, token);
+    }
+
+    [Fact]
+    public void Outer_lock_code_with_inner_aggregate_containing_cancel_propagates_without_retry()
+    {
+        var token = new CancellationToken(true);
+        var cancel = new OperationCanceledException("QA cancelled", token);
+        var outer = new WorkerIdSlotErrorClassificationTests.QaDbException("serialization failure", "40001",
+            new AggregateException(new SqliteException("busy", 5), cancel));
+        var inj = new Injection { Slot = 0, OnAttempt = _ => outer };
+        AssertCancelPropagatedUnchanged(inj, outer, cancel, token);
+    }
+
+    [Fact]
+    public void Outer_deadlock_text_with_inner_aggregate_containing_cancel_propagates_without_retry()
+    {
+        var token = new CancellationToken(true);
+        var cancel = new OperationCanceledException("QA cancelled", token);
+        var outer = new Exception("Deadlock found when trying to get lock",
+            new AggregateException(WorkerIdSlotErrorClassificationTests.MySqlError(1213, "40001", "x"), cancel));
+        var inj = new Injection { Slot = 0, OnAttempt = _ => outer };
+        AssertCancelPropagatedUnchanged(inj, outer, cancel, token);
+    }
+
+    [Fact]
+    public void Task_canceled_wrapping_mysql_deadlock_propagates_without_retry()
+    {
+        var token = new CancellationToken(true);
+        var cancel = new TaskCanceledException("QA task cancelled", WorkerIdSlotErrorClassificationTests.MySqlError(1213, "40001", "Deadlock found when trying to get lock"), token);
+        var inj = new Injection { Slot = 0, OnAttempt = _ => cancel };
+        AssertCancelPropagatedUnchanged(inj, cancel, cancel, token);
+    }
+
     private static Exception Unwrap(Exception thrown, Exception expected)
     {
         for (var e = thrown; e is not null; e = e.InnerException)
@@ -399,6 +454,9 @@ public sealed class WorkerIdSlotErrorClassificationTests
         Assert.False(DbWorkerIdSlotClaimer.IsLockConflict(new SqliteException("pk", 19, 1555)));
         Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(new Exception("Deadlock found when trying to get lock")));
         Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(new QaDbException("x", "40001", null)));
+        // 无取消的聚合仍按首个内层正常分类(QA round5)
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(new AggregateException(new SqliteException("busy", 5), new InvalidOperationException("x"))));
+        Assert.True(DbWorkerIdSlotClaimer.IsDuplicateKey(new AggregateException(new SqliteException("pk", 19, 1555))));
     }
 
     public static IEnumerable<object[]> CancelChains()
@@ -421,6 +479,12 @@ public sealed class WorkerIdSlotErrorClassificationTests
         yield return new object[] { "cancel msg fallback", new OperationCanceledException("Deadlock found when trying to get lock", t) };
         yield return new object[] { "dbex 40001(cancel)", new QaDbException("x", "40001", C(null)) };
         yield return new object[] { "msg fallback(cancel)", new Exception("Lock wait timeout exceeded", C(null)) };
+        yield return new object[] { "agg(busy, cancel)", new AggregateException(new SqliteException("busy", 5), C(null)) };
+        yield return new object[] { "agg(pk, cancel)", new AggregateException(new SqliteException("pk", 19, 1555), C(null)) };
+        yield return new object[] { "agg(busy, agg(1062, cancel))", new AggregateException(new SqliteException("busy", 5), new AggregateException(MySqlError(1062, "23000", "x"), C(null))) };
+        yield return new object[] { "dbex 40001(agg(busy, cancel))", new QaDbException("x", "40001", new AggregateException(new SqliteException("busy", 5), C(null))) };
+        yield return new object[] { "msg fallback(agg(1213, cancel))", new Exception("Deadlock found when trying to get lock", new AggregateException(MySqlError(1213, "40001", "x"), C(null))) };
+        yield return new object[] { "task-cancel(mysql 1213)", new TaskCanceledException("QA", MySqlError(1213, "40001", "x"), t) };
     }
 
     [Theory]

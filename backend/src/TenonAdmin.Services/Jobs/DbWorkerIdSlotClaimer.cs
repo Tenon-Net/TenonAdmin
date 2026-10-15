@@ -140,10 +140,28 @@ public sealed class DbWorkerIdSlotClaimer(
     /// </summary>
     private static bool IsCancellation(Exception ex)
     {
-        for (var e = ex; e is not null; e = e.InnerException)
+        // 遍历完整结构:InnerException 链 + AggregateException 的全部分支(不只首个)。
+        // 用引用去重防环,并限制节点数防止病态深度。
+        const int maxNodes = 256;
+        var seen = new HashSet<Exception>(ReferenceEqualityComparer.Instance);
+        var pending = new Stack<Exception>();
+        pending.Push(ex);
+        while (pending.Count > 0 && seen.Count < maxNodes)
         {
+            var e = pending.Pop();
+            if (!seen.Add(e))
+                continue;
             if (e is OperationCanceledException)
                 return true;
+            if (e is AggregateException agg)
+            {
+                foreach (var inner in agg.InnerExceptions)
+                    if (inner is not null) pending.Push(inner);
+            }
+            else if (e.InnerException is { } next)
+            {
+                pending.Push(next);
+            }
         }
         return false;
     }
