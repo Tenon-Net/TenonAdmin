@@ -9,6 +9,7 @@ import {
   type WfNode,
   type WfParallelArm,
   type WfInsertableNodeType,
+  type WfConditionExpr,
 } from './schema'
 
 let _seq = 0
@@ -303,6 +304,7 @@ export interface WfModelIssue {
     | 'assigneeUsersRequired'
     | 'approvalRequired'
     | 'conditionFieldUnknown'
+    | 'conditionFieldRequired'
     | 'allPassRatioInvalid'
     | 'webhookUrlInvalid'
     | 'webhookMethodInvalid'
@@ -335,6 +337,12 @@ function readAllPassRatio(value: unknown): number | undefined {
   if (value == null || value === '') return undefined
   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
   return Number.isFinite(n) ? n : Number.NaN
+}
+
+/** 条件叶子（children 为空）必须填写字段；空字段运行时恒不成立，会静默走默认臂。与后端 conditionFieldRequired 对齐。 */
+function conditionHasLeafWithoutField(expr: WfConditionExpr): boolean {
+  if (expr.children == null) return !expr.field?.trim()
+  return expr.children.some((child) => child != null && conditionHasLeafWithoutField(child))
 }
 
 /** 有表单字段时，条件只能引用这些键。没有 schema 的旧模型不在这里拦截。 */
@@ -395,6 +403,8 @@ export function validateModel(model: WfModel): WfModelIssue[] {
           armIds.add(arm.id)
           if (!arm.isDefault && arm.expr == null) {
             issues.push({ code: 'branchArmWithoutExpr', nodeId: node.id, armId: arm.id })
+          } else if (!arm.isDefault && arm.expr && conditionHasLeafWithoutField(arm.expr)) {
+            issues.push({ code: 'conditionFieldRequired', nodeId: node.id, armId: arm.id })
           }
           if (schemaKeys && conditionUsesUnknownField(arm.expr, schemaKeys)) {
             issues.push({ code: 'conditionFieldUnknown', nodeId: node.id, armId: arm.id })

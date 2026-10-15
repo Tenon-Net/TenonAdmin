@@ -1045,6 +1045,14 @@ public class WfDefinitionService(
                         ["reason"] = "branchArmWithoutExpr", ["nodeId"] = branch.Id, ["armId"] = arm.Id,
                     });
             }
+            else if (HasConditionLeafWithoutField(arm.Expr))
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?>
+                    {
+                        ["reason"] = "conditionFieldRequired", ["nodeId"] = branch.Id, ["armId"] = arm.Id,
+                    });
+            }
 
             ValidateChain(arm.Next, seen, providerKeys);
         }
@@ -1054,6 +1062,21 @@ public class WfDefinitionService(
             throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
                 new Dictionary<string, object?> { ["reason"] = "branchDefaultArmCount", ["nodeId"] = branch.Id });
         }
+    }
+
+    /// <summary>
+    /// 条件叶子(<see cref="WfConditionExpr.Children"/> 为 null)必须指定字段。空字段在运行时永远取不到值,
+    /// 条件恒不成立,单据会静默落到默认臂,所以发布时直接拒绝(<c>conditionFieldRequired</c>)。
+    /// </summary>
+    protected static bool HasConditionLeafWithoutField(WfConditionExpr expr)
+    {
+        if (expr.Children is null) return string.IsNullOrWhiteSpace(expr.Field);
+        foreach (var child in expr.Children)
+        {
+            if (child is not null && HasConditionLeafWithoutField(child))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>并行节点至少两臂,臂 Id 在节点内非空且唯一,并递归校验臂内节点。</summary>

@@ -191,3 +191,38 @@ describe('WfConditionEditor disclosure', () => {
     expect(advanced?.textContent).toContain('Maximum attempts')
   })
 })
+
+describe('WfConditionEditor field input', () => {
+  it('keeps every typed character in the variable field', async () => {
+    const host = mountEditor({ ...createConditionGroup(), children: [createConditionLeaf()] })
+    await nextTick()
+    const input = () => host.querySelector<HTMLInputElement>('input[placeholder="Field"]')!
+    expect(input()).not.toBeNull()
+    for (const text of ['a', 'am', 'amount']) {
+      input().value = text
+      input().dispatchEvent(new Event('input', { bubbles: true }))
+      await nextTick()
+      await nextTick()
+    }
+    expect(input().value).toBe('amount')
+    expect(host.querySelector('.wf-condition-child-summary')?.textContent).toBe('amount')
+  })
+
+  it('keeps typed characters in a leaf nested inside a sub-group', async () => {
+    const nested = { ...createConditionGroup('or'), children: [createConditionLeaf()] }
+    const host = mountEditor({ ...createConditionGroup(), children: [nested] })
+    await nextTick()
+    const rootItems = directItems(host.querySelector('.wf-condition-children[data-depth="0"]')!)
+    const nestedItems = directItems(rootItems[0]!.querySelector('.wf-condition-children[data-depth="1"]')!)
+    nestedItems[0]!.querySelector<HTMLElement>('.n-collapse-item__header-main')!.click()
+    await nextTick()
+    const input = () => host.querySelector<HTMLInputElement>('input[placeholder="Field"]')!
+    for (const text of ['a', 'am', 'amount']) {
+      input().value = text
+      input().dispatchEvent(new Event('input', { bubbles: true }))
+      await nextTick()
+      await nextTick()
+    }
+    expect(input().value).toBe('amount')
+  })
+})

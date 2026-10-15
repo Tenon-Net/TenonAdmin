@@ -252,6 +252,17 @@ describe('workflow/model M2a tree', () => {
     model.formSchema = null
     branch.conditions![0]!.expr = { field: 'amount', op: 'gt', value: 100 }
     expect(validateModel(model)).toEqual([])
+
+    branch.conditions![0]!.expr = { field: '', op: 'eq', value: '10000' }
+    expect(validateModel(model)).toContainEqual({ code: 'conditionFieldRequired', nodeId: 'branch', armId })
+    branch.conditions![0]!.expr = { field: '   ', op: 'eq', value: '10000' }
+    expect(validateModel(model)).toContainEqual({ code: 'conditionFieldRequired', nodeId: 'branch', armId })
+    branch.conditions![0]!.expr = { op: 'eq', value: '10000' }
+    expect(validateModel(model)).toContainEqual({ code: 'conditionFieldRequired', nodeId: 'branch', armId })
+    branch.conditions![0]!.expr = { logic: 'or', children: [{ field: 'amount', op: 'gt', value: 1 }, { logic: 'and', children: [{ field: '', op: 'eq', value: 1 }] }] }
+    expect(validateModel(model)).toContainEqual({ code: 'conditionFieldRequired', nodeId: 'branch', armId })
+    branch.conditions![0]!.expr = { logic: 'and', children: [] }
+    expect(validateModel(model)).toEqual([])
   })
 
   it('requires branch arms and exactly one default arm', () => {

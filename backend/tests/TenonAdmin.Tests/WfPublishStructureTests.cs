@@ -154,6 +154,25 @@ public class WfPublishStructureTests
         Assert.True(component > 0);
     }
 
+    [Fact]
+    public async Task Condition_leaves_must_name_a_field()
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+
+        await AssertReason(admin, "条件字段为空", BranchModel(fields: null, conditionField: ""),
+            "conditionFieldRequired", "branch1");
+        await AssertReason(admin, "条件字段为空白", BranchModel(fields: null, conditionField: "  "),
+            "conditionFieldRequired", "branch1");
+        await AssertReason(admin, "条件字段缺失", BranchModel(fields: null, conditionField: null),
+            "conditionFieldRequired", "branch1");
+        await AssertReason(admin, "嵌套条件字段为空", BranchModel(fields: ["amount"], conditionField: "amount", nestedField: ""),
+            "conditionFieldRequired", "branch1");
+
+        var filled = await Publish(admin, "条件字段已填", BranchModel(fields: null, conditionField: "amount"));
+        Assert.True(filled > 0);
+    }
+
     private static object WebhookOnly() => new
     {
         version = 1,
@@ -255,7 +274,7 @@ public class WfPublishStructureTests
         },
     };
 
-    private static object BranchModel(string[]? fields, string conditionField, string? nestedField = null, string? formComponent = null)
+    private static object BranchModel(string[]? fields, string? conditionField, string? nestedField = null, string? formComponent = null)
     {
         object expr = nestedField is null
             ? new { field = conditionField, op = "gt", value = 1 }
