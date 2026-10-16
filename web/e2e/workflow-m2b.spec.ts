@@ -1,17 +1,15 @@
-import { fileURLToPath } from 'node:url'
-
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { apiAdminToken, apiCreateUser } from './api'
 
-import { enterBusinessApp, enterSystemApp, login } from './helpers'
+import { enterBusinessApp, enterSystemApp, login, loopShot } from './helpers'
 
-const RETURN_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2b-01-return.png', import.meta.url))
-const CANCEL_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2b-02-cancel.png', import.meta.url))
-const URGE_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2b-03-urge.png', import.meta.url))
-const CC_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2b-04-cc-read.png', import.meta.url))
-const MINE_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2b-05-mine.png', import.meta.url))
-const DONE_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2b-06-done.png', import.meta.url))
-const DRAWER_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2b-07-drawer-advanced.png', import.meta.url))
+const RETURN_SHOT = 'm2b-01-return.png'
+const CANCEL_SHOT = 'm2b-02-cancel.png'
+const URGE_SHOT = 'm2b-03-urge.png'
+const CC_SHOT = 'm2b-04-cc-read.png'
+const MINE_SHOT = 'm2b-05-mine.png'
+const DONE_SHOT = 'm2b-06-done.png'
+const DRAWER_SHOT = 'm2b-07-drawer-advanced.png'
 
 async function chooseNaiveOption(page: Page, select: Locator, option: RegExp) {
   await expect(select).toBeVisible({ timeout: 10_000 })
@@ -142,7 +140,7 @@ test('M2b verbs: return, cancel, urge, cc read, mine and done', async ({ page, r
   await configureAssignee(page, drawer, /superAdmin/i)
   await drawer.locator('.wf-advanced').getByText(/高级|Advanced/i).click()
   await expect(drawer.getByText(/退回策略|Return policy/i)).toBeVisible()
-  await page.screenshot({ path: DRAWER_SHOT, fullPage: true })
+  await page.screenshot({ path: loopShot(DRAWER_SHOT), fullPage: true })
   await saveDrawer(page, drawer)
   await publishDefinition(page)
 
@@ -171,34 +169,34 @@ test('M2b verbs: return, cancel, urge, cc read, mine and done', async ({ page, r
   await returnModal.locator('textarea').first().fill('M2b 退回意见')
   await confirmAction(page)
   await expect(page.locator('.n-tag, .n-timeline').getByText(/^(退回|Return)$/i).first()).toBeVisible({ timeout: 15_000 })
-  await page.screenshot({ path: RETURN_SHOT, fullPage: true })
+  await page.screenshot({ path: loopShot(RETURN_SHOT), fullPage: true })
 
   await startInstance(page, selfDef, cancelKey)
   await expect(page.getByRole('button', { name: /^(撤销|Cancel instance)$/i })).toBeVisible()
   await page.getByRole('button', { name: /^(撤销|Cancel instance)$/i }).click()
   await confirmAction(page)
   await expect(page.locator('.n-descriptions').getByText(/已撤销|Cancelled/i)).toBeVisible({ timeout: 15_000 })
-  await page.screenshot({ path: CANCEL_SHOT, fullPage: true })
+  await page.screenshot({ path: loopShot(CANCEL_SHOT), fullPage: true })
 
   await startInstance(page, urgeDef, urgeKey)
   await expect(page.getByRole('button', { name: /^(催办|Urge)$/i })).toBeVisible()
   await page.getByRole('button', { name: /^(催办|Urge)$/i }).click()
   await confirmAction(page)
   await expect(page.locator('.n-message').filter({ hasText: /成功|Success/i }).last()).toBeVisible({ timeout: 15_000 })
-  await page.screenshot({ path: URGE_SHOT, fullPage: true })
+  await page.screenshot({ path: loopShot(URGE_SHOT), fullPage: true })
 
   await page.goto('/workflow/cc')
   const ccRow = page.locator('.n-data-table-tr').filter({ hasText: returnKey })
   await expect(ccRow).toBeVisible({ timeout: 15_000 })
   await expect(ccRow).toContainText(/已读|Read/i)
-  await page.screenshot({ path: CC_SHOT, fullPage: true })
+  await page.screenshot({ path: loopShot(CC_SHOT), fullPage: true })
 
   await page.goto('/workflow/mine')
   await expect(page.locator('.n-data-table-tr').filter({ hasText: returnKey })).toBeVisible({ timeout: 15_000 })
   await expect(page.locator('.n-data-table-tr').filter({ hasText: cancelKey })).toBeVisible()
-  await page.screenshot({ path: MINE_SHOT, fullPage: true })
+  await page.screenshot({ path: loopShot(MINE_SHOT), fullPage: true })
 
   await page.goto('/workflow/done')
   await expect(page.locator('.n-data-table-tr').filter({ hasText: returnKey })).toBeVisible({ timeout: 15_000 })
-  await page.screenshot({ path: DONE_SHOT, fullPage: true })
+  await page.screenshot({ path: loopShot(DONE_SHOT), fullPage: true })
 })

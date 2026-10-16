@@ -1,12 +1,10 @@
-import { fileURLToPath } from 'node:url'
-
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-import { enterBusinessApp, enterSystemApp, login } from './helpers'
+import { enterBusinessApp, enterSystemApp, login, loopShot } from './helpers'
 
-const DESIGNER_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2a-01-designer-published.png', import.meta.url))
-const HIGH_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2a-02-high-approved.png', import.meta.url))
-const DEFAULT_SHOT = fileURLToPath(new URL('../../.loop/wf-ui-shots/m2a-03-default-approved.png', import.meta.url))
+const DESIGNER_SHOT = 'm2a-01-designer-published.png'
+const HIGH_SHOT = 'm2a-02-high-approved.png'
+const DEFAULT_SHOT = 'm2a-03-default-approved.png'
 
 const APPROVAL_NAME = '总经理审批'
 const CONDITION_FIELD = 'amount'
@@ -145,7 +143,7 @@ test('M2a branch definition routes high amount to approval and low amount to def
   await expect(page.locator('.n-message').filter({ hasText: /已发布|Published/i }).last()).toBeVisible()
   await expect(page.locator('.wf-card.is-branch')).toBeVisible()
   await expect(page.locator('.wf-card.is-approval')).toContainText(APPROVAL_NAME)
-  await page.screenshot({ path: DESIGNER_SHOT, fullPage: true })
+  await page.screenshot({ path: loopShot(DESIGNER_SHOT), fullPage: true })
 
   // 员工侧在「业务中心」:不切应用直开 /workflow/start 会 404。
   await enterBusinessApp(page)
@@ -167,12 +165,12 @@ test('M2a branch definition routes high amount to approval and low amount to def
   await expect(actionModal).toBeHidden()
   await expect(page.locator('.n-descriptions').getByText(/已通过|Approved/i)).toBeVisible({ timeout: 15_000 })
   await expect(page.getByRole('button', { name: /^(同\s*意|Approve)$/i })).toHaveCount(0)
-  await page.screenshot({ path: HIGH_SHOT, fullPage: true })
+  await page.screenshot({ path: loopShot(HIGH_SHOT), fullPage: true })
 
   const defaultInstanceId = await startInstance(page, definitionName, defaultBusinessKey, DEFAULT_AMOUNT)
   expect(defaultInstanceId).not.toBe(highInstanceId)
   await expect(page.locator('.n-descriptions').getByText(/已通过|Approved/i)).toBeVisible()
   await expect(page.getByRole('button', { name: /^(同\s*意|Approve)$/i })).toHaveCount(0)
   await expect(page.getByText(defaultBusinessKey)).toBeVisible()
-  await page.screenshot({ path: DEFAULT_SHOT, fullPage: true })
+  await page.screenshot({ path: loopShot(DEFAULT_SHOT), fullPage: true })
 })

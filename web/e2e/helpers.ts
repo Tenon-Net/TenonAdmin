@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page } from '@playwright/test'
+import { fileURLToPath } from 'node:url'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 /**
  * 三个 spec 共用的登录与「进哪个应用」。
@@ -161,4 +162,14 @@ export async function enterFirstAppIfNeeded(page: Page) {
     await cards.first().click()
     await expect(page).not.toHaveURL(/\/module/, { timeout: 10_000 })
   }
+}
+
+/**
+ * #60:E2E 截图默认写到 Playwright 的 outputDir(test-results/,已被 .gitignore 忽略),不改写仓库里受跟踪的
+ * .loop/wf-ui-shots 基准图。需要刷新这些文档截图时显式设置 TENON_E2E_UPDATE_LOOP_SHOTS=1。
+ */
+export function loopShot(name: string): string {
+  if (process.env.TENON_E2E_UPDATE_LOOP_SHOTS === '1')
+    return fileURLToPath(new URL(`../../.loop/wf-ui-shots/${name}`, import.meta.url))
+  return test.info().outputPath(name)
 }
