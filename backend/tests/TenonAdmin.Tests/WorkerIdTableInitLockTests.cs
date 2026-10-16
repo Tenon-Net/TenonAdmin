@@ -67,17 +67,65 @@ public sealed class WorkerIdTableInitLockTests : IDisposable
     {
         if (TestDb.DbType != "Sqlite") return;
         var holder = HoldExclusive();
+        Exception? releaseError = null;
         // 首次尝试会在 busy timeout(1s)后失败;在重试窗口内释放锁,后续重试应成功。
         // 用独立线程计时释放,避免全量并行跑测时线程池饥饿把释放推迟到重试窗口(约 3 × 1s)之外。
+        // 线程内的异常不吞掉:捕获后回到测试线程报告;holder 一定释放;无论 Claim 成功与否都 Join。
         var release = new Thread(() =>
         {
-            Thread.Sleep(1500);
-            using (var cmd = holder.CreateCommand()) { cmd.CommandText = "COMMIT;"; cmd.ExecuteNonQuery(); }
-            holder.Dispose();
+            try
+            {
+                Thread.Sleep(1500);
+                using var cmd = holder.CreateCommand();
+                cmd.CommandText = "COMMIT;";
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception e)
+            {
+                releaseError = e;
+            }
+            finally
+            {
+                holder.Dispose();
+            }
         }) { IsBackground = true };
         release.Start();
-        using var assignment = await Task.Run(Claim);
-        release.Join();
-        Assert.InRange(assignment.WorkerId, 0, SnowflakeIdGenerator.MaxWorkerId);
+
+        WorkerIdAssignment? assignment = null;
+        try
+        {
+            assignment = await Task.Run(Claim);
+        }
+        finally
+        {
+            release.Join();
+        }
+
+        using (assignment)
+        {
+            if (releaseError is not null)
+                throw new Xunit.Sdk.XunitException($"释放锁线程失败:{releaseError}");
+            Assert.InRange(assignment.WorkerId, 0, SnowflakeIdGenerator.MaxWorkerId);
+        }
+    }
+
+    // ---------- 只有 SQLite 改抛友好异常;其他库原样传播(review #69) ----------
+
+    [Fact]
+    public void Friendly_wrap_applies_to_sqlite_lock_conflicts_only()
+    {
+        Assert.True(DbWorkerIdSlotClaimer.ShouldWrapTableInitLockConflict(global::SqlSugar.DbType.Sqlite, new SqliteException("busy", 5)));
+
+        var mysqlDeadlock = WorkerIdSlotErrorClassificationTests.MySqlError(1213, "40001", "Deadlock found when trying to get lock");
+        Assert.True(DbWorkerIdSlotClaimer.IsLockConflict(mysqlDeadlock)); // 仍按锁冲突重试
+        foreach (var dbType in new[] { global::SqlSugar.DbType.MySql, global::SqlSugar.DbType.PostgreSQL, global::SqlSugar.DbType.SqlServer })
+        {
+            Assert.False(DbWorkerIdSlotClaimer.ShouldWrapTableInitLockConflict(dbType, mysqlDeadlock));
+            Assert.False(DbWorkerIdSlotClaimer.ShouldWrapTableInitLockConflict(dbType, new SqliteException("busy", 5)));
+        }
+
+        // F01-C:取消包住锁错误时不算锁冲突,也不包装。
+        var cancel = new OperationCanceledException("QA cancelled", new SqliteException("busy", 5), new CancellationToken(true));
+        Assert.False(DbWorkerIdSlotClaimer.ShouldWrapTableInitLockConflict(global::SqlSugar.DbType.Sqlite, cancel));
     }
 }

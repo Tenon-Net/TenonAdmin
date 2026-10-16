@@ -36,7 +36,7 @@ public sealed class DbWorkerIdSlotClaimer(
                 return true;
             }, onExhausted: null);
         }
-        catch (Exception ex) when (IsLockConflict(ex))
+        catch (Exception ex) when (ShouldWrapTableInitLockConflict(client.CurrentConnectionConfig.DbType, ex))
         {
             throw new InvalidOperationException(
                 $"领取 WorkerId 时 sys_worker_lease 所在数据库被其他连接锁住，建表阶段重试 {MaxLockConflictAttempts} 次仍冲突。" +
@@ -74,6 +74,15 @@ public sealed class DbWorkerIdSlotClaimer(
     }
 
     internal const int MaxLockConflictAttempts = 3;
+
+    /// <summary>
+    /// 建表阶段锁冲突重试耗尽后,是否改抛带中文说明的 <see cref="InvalidOperationException"/>(#62)。
+    /// 只限 SQLite:SQLite 的锁错误原本会被 SqlSugar 包装成误导性的「需要系统表权限」,需要明确说明。
+    /// MySQL / PostgreSQL / SQL Server 保持基线行为,原样抛出驱动异常,不改变异常类型。
+    /// 取消不在此列(<see cref="IsLockConflict"/> 先排除取消,F01-C)。
+    /// </summary>
+    public static bool ShouldWrapTableInitLockConflict(DbType dbType, Exception ex) =>
+        dbType == DbType.Sqlite && IsLockConflict(ex);
 
     private static bool RetryOnLockConflict(Func<bool> action, bool? onExhausted)
     {
