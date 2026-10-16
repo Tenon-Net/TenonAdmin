@@ -32,7 +32,7 @@ public sealed class DbWorkerIdSlotClaimer(
                 // SQLite 上先用不吞异常的同类查询探一次,让 BUSY/LOCKED 原样抛出、进入 #52 的有界重试。
                 if (client.CurrentConnectionConfig.DbType == DbType.Sqlite)
                     client.DbMaintenance.GetTableInfoList(isCache: false);
-                client.CodeFirst.InitTables<SysWorkerLease>();
+                InitLeaseTablePreservingDriverError(client);
                 return true;
             }, onExhausted: null);
         }
@@ -72,6 +72,40 @@ public sealed class DbWorkerIdSlotClaimer(
             $"机器号 0–{SnowflakeIdGenerator.MaxWorkerId} 在 sys_worker_lease 上已被占满，拒绝发号以避免重复。" +
             "请检查是否有实例未退出，或为各实例显式配置不同的 TenonAdmin:Id:WorkerId。");
     }
+
+    /// <summary>
+    /// #70:SqlSugar 5.1.4.198 的 <c>InitTables</c> 在无外部事务时经 <c>Ado.UseTran</c> 执行建表/改表,
+    /// 失败后只用 ErrorMessage 重新抛出不带 InnerException 的 <c>SqlSugarException</c>,驱动异常类型和错误码丢失,
+    /// 导致 PG 55P03/40P01、SQL Server 1222 等锁冲突无法按错误码识别、不进重试。
+    /// 已有事务时 <c>InitTables</c> 直接执行建表逻辑,驱动异常(<c>AdoProvider</c> 原样重抛)保持原类型。
+    /// 因此这里自行开启事务,效果与 UseTran 相同(成功提交,失败回滚),只是不改写异常。
+    /// </summary>
+    /// <remarks>
+    /// SqlSugar 的 InitTables 内部用进程级静态锁串行化「探测 + 建表 + UseTran 提交」。
+    /// 这里提交移到了 InitTables 之外,须用同等范围的进程级锁把 Begin…Commit 整段串行化:
+    /// 否则在事务性 DDL 的库(PostgreSQL)上,另一线程看不到未提交的建表,会重复 CREATE TABLE(23505)。
+    /// </remarks>
+    private static void InitLeaseTablePreservingDriverError(ISqlSugarClient client)
+    {
+        lock (InitTablesGate)
+        {
+            client.Ado.BeginTran();
+            try
+            {
+                client.CodeFirst.InitTables<SysWorkerLease>();
+                client.Ado.CommitTran();
+            }
+            catch
+            {
+                // 回滚失败(如连接已断)不应掩盖原始异常;原始异常由下面的 throw 原样传播。
+                try { client.Ado.RollbackTran(); }
+                catch { }
+                throw;
+            }
+        }
+    }
+
+    private static readonly object InitTablesGate = new();
 
     internal const int MaxLockConflictAttempts = 3;
 
