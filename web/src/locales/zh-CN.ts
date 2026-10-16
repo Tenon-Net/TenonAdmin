@@ -1325,6 +1325,7 @@ export default {
         approvalRequired: '流程至少要有一个审批、Webhook 或 AI 决策节点',
         conditionFieldUnknown: '条件引用了表单中不存在的字段',
         conditionFieldRequired: '条件未填写变量字段',
+        conditionGroupEmpty: '条件组为空，请至少添加一个条件',
         allPassRatioInvalid: '会签通过比例必须为 1–100 的整数；顺序会签仅允许 100',
         onNode: '{nodeId}：{message}',
       },

@@ -155,6 +155,36 @@ public class WfPublishStructureTests
     }
 
     [Fact]
+    public async Task Empty_condition_groups_are_rejected()
+    {
+        // #58:空条件组运行时恒不成立,单据静默落到默认臂;发布时与 conditionFieldRequired 同样拒绝。
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+
+        await AssertReason(admin, "顶层空条件组",
+            BranchModel(fields: null, conditionField: null, exprOverride: new { logic = "and", children = Array.Empty<object>() }),
+            "conditionGroupEmpty", "branch1");
+        await AssertReason(admin, "嵌套空条件组",
+            BranchModel(fields: null, conditionField: null, exprOverride: new
+            {
+                logic = "or",
+                children = new object[]
+                {
+                    new { field = "amount", op = "gt", value = 1 },
+                    new { logic = "and", children = Array.Empty<object>() },
+                },
+            }),
+            "conditionGroupEmpty", "branch1");
+
+        var grouped = await Publish(admin, "非空条件组", BranchModel(fields: null, conditionField: null, exprOverride: new
+        {
+            logic = "and",
+            children = new object[] { new { field = "amount", op = "gt", value = 1 } },
+        }));
+        Assert.True(grouped > 0);
+    }
+
+    [Fact]
     public async Task Condition_leaves_must_name_a_field()
     {
         using var f = new WorkflowAppFactory();
@@ -274,9 +304,9 @@ public class WfPublishStructureTests
         },
     };
 
-    private static object BranchModel(string[]? fields, string? conditionField, string? nestedField = null, string? formComponent = null)
+    private static object BranchModel(string[]? fields, string? conditionField, string? nestedField = null, string? formComponent = null, object? exprOverride = null)
     {
-        object expr = nestedField is null
+        object expr = exprOverride ?? (nestedField is null
             ? new { field = conditionField, op = "gt", value = 1 }
             : new
             {
@@ -286,7 +316,7 @@ public class WfPublishStructureTests
                     new { field = conditionField, op = "eq", value = "ok" },
                     new { field = nestedField, op = "gt", value = 1 },
                 },
-            };
+            });
         return new
         {
             version = 1,

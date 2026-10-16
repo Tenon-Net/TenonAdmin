@@ -1053,6 +1053,14 @@ public class WfDefinitionService(
                         ["reason"] = "conditionFieldRequired", ["nodeId"] = branch.Id, ["armId"] = arm.Id,
                     });
             }
+            else if (HasEmptyConditionGroup(arm.Expr))
+            {
+                throw WorkflowErrorCode.Exception(WorkflowErrorCode.ModelInvalid,
+                    new Dictionary<string, object?>
+                    {
+                        ["reason"] = "conditionGroupEmpty", ["nodeId"] = branch.Id, ["armId"] = arm.Id,
+                    });
+            }
 
             ValidateChain(arm.Next, seen, providerKeys);
         }
@@ -1077,6 +1085,23 @@ public class WfDefinitionService(
                 return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// 条件组(<see cref="WfConditionExpr.Children"/> 非 null)里至少要有一个条件。空组在运行时恒不成立,
+    /// 单据会静默落到默认臂(#58),与空字段同理在发布时拒绝(<c>conditionGroupEmpty</c>);嵌套的空组同样拒绝。
+    /// </summary>
+    protected static bool HasEmptyConditionGroup(WfConditionExpr expr)
+    {
+        if (expr.Children is null) return false;
+        var any = false;
+        foreach (var child in expr.Children)
+        {
+            if (child is null) continue;
+            any = true;
+            if (HasEmptyConditionGroup(child)) return true;
+        }
+        return !any;
     }
 
     /// <summary>并行节点至少两臂,臂 Id 在节点内非空且唯一,并递归校验臂内节点。</summary>
