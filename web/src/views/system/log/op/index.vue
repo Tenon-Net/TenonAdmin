@@ -17,7 +17,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { logApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { triggerBlobDownload } from '@/utils/download'
-import type { ExportColumnDef, SysOpLog } from '@/types/api'
+import type { ApiId, ExportColumnDef, SysOpLog } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -48,7 +48,7 @@ async function onExport(keys: string[]) {
     const blob = await logApi.opExport({
       title: p.title || undefined,
       success: p.success,
-      operatorId: p.operatorId != null ? Number(p.operatorId) : undefined,
+      operatorId: typeof p.operatorId === 'number' || typeof p.operatorId === 'string' ? p.operatorId : undefined,
       path: p.path || undefined,
       createTime: p.createTime ?? null,
       columns: keys.join(','),
@@ -89,10 +89,10 @@ const columns: ProTableColumn<SysOpLog>[] = [
       label: () => t('log.operator'),
       render: ({ value, setValue, search }) =>
         h(UserSelect, {
-          value: value as number | null,
+          value: value as ApiId | null,
           clearable: true,
           placeholder: t('log.operatorPlaceholder'),
-          'onUpdate:value': (v: number | null) => {
+          'onUpdate:value': (v: ApiId | null) => {
             setValue(v)
             search()
           },

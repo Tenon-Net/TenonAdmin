@@ -4,10 +4,11 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirm } from '@/composables/useConfirm'
+import type { ApiId } from '@/types/api'
 
 export interface UseBatchDeleteOptions {
-  /** 批量删除接口(收 number[] 主键)。 */
-  remove: (ids: number[]) => Promise<unknown>
+  /** 批量删除接口(收 long 主键；超出安全范围时保留十进制字符串)。 */
+  remove: (ids: ApiId[]) => Promise<unknown>
   /** 删除成功后刷新数据。 */
   refresh: () => void
   /** 成功 toast 文案;false = 不弹(另有提示)。缺省用 common.success。 */
@@ -16,7 +17,7 @@ export interface UseBatchDeleteOptions {
    * 自定义确认文案(可异步:删前要先查点东西才能把话说清楚时用,如"这些角色关联了 N 个用户")。
    * 缺省是按条数的通用文案。有此需求的页面若只给行内单删加警告,勾选+批量删就能绕过去。
    */
-  content?: (ids: number[]) => string | Promise<string>
+  content?: (ids: ApiId[]) => string | Promise<string>
 }
 
 export function useBatchDelete(opts: UseBatchDeleteOptions) {
@@ -27,7 +28,7 @@ export function useBatchDelete(opts: UseBatchDeleteOptions) {
   const hasSelection = computed(() => checkedKeys.value.length > 0)
 
   async function run() {
-    const ids = checkedKeys.value.map(Number)
+    const ids = checkedKeys.value.filter((id): id is ApiId => typeof id === 'number' || typeof id === 'string')
     if (ids.length === 0) return
     const ok = await confirm({
       content: (await opts.content?.(ids)) ?? t('common.batchDeleteConfirm', { count: ids.length }),

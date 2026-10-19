@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
-import type { LoginOutput } from '@/types/api'
+import type { ApiId, LoginOutput } from '@/types/api'
 
 interface UserInfo {
-  userId: number
+  userId: ApiId
   account: string
   name: string
   /** 头像 ViewUrl;登录出参不含,由 useModule.enterInitial 经 /personal/profile 回填,profile 页保存时同步。 */
@@ -53,7 +53,7 @@ export const useUserStore = defineStore('user', {
       // Cookie 模式 body 的 refresh 为空串,不进内存也不进 storage
       this.refreshToken = cookie ? '' : (data.refreshToken ?? '')
       this.userInfo = {
-        userId: Number(data.userId),
+        userId: data.userId,
         account: data.account,
         name: data.name,
         mustChangePassword: data.mustChangePassword ?? false,

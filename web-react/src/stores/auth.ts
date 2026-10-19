@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { AppModule, MenuNode } from '@/types/menu'
+import type { ApiId } from '@/types/api'
 import { useTabsStore } from '@/stores/tabs'
 
 function firstLeafPath(tree: MenuNode[]): string | undefined {
@@ -15,9 +16,9 @@ function firstLeafPath(tree: MenuNode[]): string | undefined {
 
 export interface AuthState {
   modules: AppModule[]
-  currentModuleId: number | null
+  currentModuleId: ApiId | null
   /** 后端配置的默认应用，仅用于门户选路和选择页标记。 */
-  defaultModuleId: number | null
+  defaultModuleId: ApiId | null
   menuTree: MenuNode[]
   /** 空集不代表超管；超管身份由 isSuperAdmin 单独判定。 */
   permissionCodes: string[]

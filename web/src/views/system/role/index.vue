@@ -20,8 +20,9 @@ import { useBatchDelete } from '@/composables/useBatchDelete'
 import { roleApi, menuApi, moduleApi, userApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
-import { DataScopeType, type ModuleRow, type RoleInput, type SysRole } from '@/types/api'
+import { DataScopeType, type ApiId, type ModuleRow, type RoleInput, type SysRole } from '@/types/api'
 import type { MenuTreeNode } from '@/types/menu'
+import { parseCustomOrgIds } from './scopeIds'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -46,7 +47,7 @@ onMounted(async () => {
  * 查不到(如只有角色 CRUD、没有用户查询权限的管理员会 403)返回 null → 退回通用文案,不阻断删除:
  * 今天能删的人,改完照样能删,本次改动只加知情,不改变谁能删什么。
  */
-async function countUsers(roleId: number): Promise<number | null> {
+async function countUsers(roleId: ApiId): Promise<number | null> {
   try {
     const { total } = await userApi.page({ page: 1, pageSize: 1, roleId })
     return total
@@ -141,7 +142,7 @@ const columns: ProTableColumn<SysRole>[] = [
 // ── 新增/编辑弹窗 ──
 const show = ref(false)
 const formRef = ref<FormInst | null>(null)
-const editingId = ref<number | null>(null)
+const editingId = ref<ApiId | null>(null)
 const rules: FormRules = {
   code: { required: true, whitespace: true, message: () => t('role.codeRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('role.nameRequired'), trigger: ['input', 'blur'] },
@@ -175,9 +176,9 @@ async function save() {
 // ── 授权菜单抽屉(分组表格 → 全量替换角色授权)──
 const showMenus = ref(false)
 const menuTree = ref<MenuTreeNode[]>([])
-const menuGranted = ref<number[]>([])
-const menuRoleId = ref<number | null>(null)
-const defaultModuleId = ref(UNASSIGNED)
+const menuGranted = ref<ApiId[]>([])
+const menuRoleId = ref<ApiId | null>(null)
+const defaultModuleId = ref<ApiId>(UNASSIGNED)
 
 async function openMenus(r: SysRole) {
   menuRoleId.value = r.id
@@ -191,7 +192,7 @@ async function openMenus(r: SysRole) {
     message.error(translateError(e))
   }
 }
-function onMenuCheckedUpdate(ids: number[]) {
+function onMenuCheckedUpdate(ids: ApiId[]) {
   menuGranted.value = ids
 }
 async function saveMenus() {
@@ -207,7 +208,7 @@ async function saveMenus() {
 
 // ── 授权用户(UserPicker) ──
 const userPickerRef = ref<InstanceType<typeof UserPicker> | null>(null)
-const userRoleId = ref<number | null>(null)
+const userRoleId = ref<ApiId | null>(null)
 
 async function openUsers(r: SysRole) {
   userRoleId.value = r.id
@@ -218,7 +219,7 @@ async function openUsers(r: SysRole) {
     message.error(translateError(e))
   }
 }
-async function onUserConfirm(ids: number[]) {
+async function onUserConfirm(ids: ApiId[]) {
   if (userRoleId.value === null) return
   try {
     await roleApi.setUsers(userRoleId.value, ids)
@@ -232,8 +233,8 @@ async function onUserConfirm(ids: number[]) {
 
 // ── 数据范围抽屉 ──
 const showScope = ref(false)
-const scopeRoleId = ref<number | null>(null)
-const scopeForm = reactive<{ scopeType: DataScopeType; customOrgIds: number[] }>({ scopeType: DataScopeType.Org, customOrgIds: [] })
+const scopeRoleId = ref<ApiId | null>(null)
+const scopeForm = reactive<{ scopeType: DataScopeType; customOrgIds: ApiId[] }>({ scopeType: DataScopeType.Org, customOrgIds: [] })
 const isCustom = computed(() => scopeForm.scopeType === DataScopeType.Custom)
 const scopeOptions = computed(() => [
   { label: t('role.scope.all'), value: DataScopeType.All },
@@ -247,7 +248,7 @@ async function openScope(r: SysRole) {
   try {
     const cfg = await roleApi.getDataScope(r.id)
     scopeForm.scopeType = cfg?.scopeType ?? DataScopeType.Org
-    scopeForm.customOrgIds = cfg?.customOrgIds ? cfg.customOrgIds.split(',').filter(Boolean).map(Number) : []
+    scopeForm.customOrgIds = parseCustomOrgIds(cfg?.customOrgIds)
     showScope.value = true
   } catch (e) {
     message.error(translateError(e))

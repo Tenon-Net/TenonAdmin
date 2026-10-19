@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { personalApi } from '@/api'
 import { describeMenuRoute } from './authMenuRoute'
 import type { MenuNode } from '@/types/menu'
+import type { ApiId } from '@/types/api'
 
 // 所有页面组件:component 字符串 → 对应文件(如 "system/user/index" → /src/views/system/user/index.vue)。
 const views = import.meta.glob('/src/views/**/*.vue') as Record<string, () => Promise<Component>>
@@ -25,7 +26,7 @@ function flatten(nodes: MenuNode[]): MenuNode[] {
 }
 
 /** 拉某应用的菜单树 → 重建动态路由(挂在 layout 下)。 */
-export async function buildRoutesForModule(moduleId: number): Promise<void> {
+export async function buildRoutesForModule(moduleId: ApiId): Promise<void> {
   const auth = useAuthStore()
   const tree = await personalApi.menu(moduleId)
   auth.menuTree = tree

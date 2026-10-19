@@ -8,6 +8,7 @@ import { integrationAppApi } from '@/api/integration'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import type { IntegrationAppRow } from '@/types/integration'
+import type { ApiId } from '@/types/api'
 
 export interface AppFormModalHandle {
   openAdd: () => void
@@ -18,7 +19,7 @@ interface AppForm {
   code: string
   name: string
   description?: string
-  ownerOrgId?: number | null
+  ownerOrgId?: ApiId | null
   rateLimitPerMinute?: number | null
   enabled: boolean
 }
@@ -47,7 +48,7 @@ export const AppFormModal = forwardRef<AppFormModalHandle, { onSaved: () => void
         code: r.code ?? '',
         name: r.name ?? '',
         description: r.description ?? '',
-        ownerOrgId: r.ownerOrgId == null ? null : Number(r.ownerOrgId),
+        ownerOrgId: r.ownerOrgId ?? null,
         rateLimitPerMinute: r.rateLimitPerMinute == null ? null : Number(r.rateLimitPerMinute),
         enabled: !!r.enabled,
       })

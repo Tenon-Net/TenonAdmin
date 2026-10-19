@@ -1,7 +1,7 @@
 import { client } from './client'
 import type { components } from './schema'
 import { fileNameFromContentDisposition } from '@/utils/download'
-import type { AddUserInput, AddUserOutput, ChunkInitOutput, ConfigInput, CronPreviewOutput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, DuplicateStrategy, FileUploadOutput, ImportCommitResult, ImportPreview, ImportRow, JobDashboard, JobHandlersOutput, JobInput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, ServerInfoOutput, SysConfig, SysDictItem, SysDictType, SysExceptionLog, SysFile, SysJob, SysJobLog, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
+import type { AddUserInput, AddUserOutput, ApiId, ChunkInitOutput, ConfigInput, CronPreviewOutput, DashboardSummary, DataScopeType, DictItem, DictItemInput, DictTypeInput, DuplicateStrategy, FileUploadOutput, ImportCommitResult, ImportPreview, ImportRow, JobDashboard, JobHandlersOutput, JobInput, LoginOutput, ModuleInput, ModuleRow, MyModulesOutput, MySessionItem, NoticeMineItem, NoticePublishInput, OnlineSessionItem, OrgInput, PagedList, PermissionRouteItem, PositionInput, RoleInput, ServerInfoOutput, SysConfig, SysDictItem, SysDictType, SysExceptionLog, SysFile, SysJob, SysJobLog, SysLoginLog, SysNotice, SysOpLog, SysOrg, SysPosition, SysRole, SysRoleDataScope, UpdateUserInput, UserDetail, UserItem, UserProfile } from '@/types/api'
 import type { MenuInput, MenuNode, MenuTreeNode } from '@/types/menu'
 
 /** 业务错误(含后端 code / msgKey);视图 catch 后经 translateError 展示。 */
@@ -215,7 +215,7 @@ export const highSensApi = {
     client.GET('/api/v1/sys/mfa/high-sensitivity', {}).then((r) => unwrap<components['schemas']['HighSensitivityPermissionList']>(r)),
   add: (body: components['schemas']['HighSensitivityPermissionInput']) =>
     client.POST('/api/v1/sys/mfa/high-sensitivity', { body }).then((r) => unwrap<components['schemas']['HighSensitivityPermissionItem']>(r)),
-  remove: (id: number) =>
+  remove: (id: ApiId) =>
     client.DELETE('/api/v1/sys/mfa/high-sensitivity/{id}', { params: { path: { id } } }).then((r) => unwrap<void>(r)),
 }
 
@@ -276,9 +276,9 @@ export const dashboardApi = {
 
 export const personalApi = {
   modules: () => client.GET('/api/v1/personal/modules', {}).then((r) => unwrap<MyModulesOutput>(r)),
-  menu: (moduleId: number) =>
+  menu: (moduleId: ApiId) =>
     client.GET('/api/v1/personal/menu', { params: { query: { moduleId } } }).then((r) => unwrap<MenuNode[]>(r)),
-  setDefaultModule: (moduleId: number) =>
+  setDefaultModule: (moduleId: ApiId) =>
     client.PUT('/api/v1/personal/default-module', { body: { moduleId } }).then((r) => unwrap<boolean>(r)),
   profile: () => client.GET('/api/v1/personal/profile', {}).then((r) => unwrap<UserProfile>(r)),
   /** 改自己的资料(全量替换语义:缺字段即置空,前端整表单提交)。 */
@@ -297,7 +297,7 @@ export const personalApi = {
 
 export const userApi = {
   /** 归一后端 PagedList<UserItem>({current,size,total,items}) → ProTable fetcher 契约的 {items,total}。 */
-  page: (params: { page: number; pageSize: number; account?: string; name?: string; orgId?: number; roleId?: number; sortField?: string; sortOrder?: string }) =>
+  page: (params: { page: number; pageSize: number; account?: string; name?: string; orgId?: ApiId; roleId?: ApiId; sortField?: string; sortOrder?: string }) =>
     client
       .GET('/api/v1/sys/user/page', {
         // 查询参数名沿用后端 record 属性(PascalCase);ASP.NET 绑定大小写不敏感,类型要求 PascalCase。
@@ -317,19 +317,19 @@ export const userApi = {
       })
       .then((r) => toPage<UserItem>(r)),
   /** 用户详情(含 roleIds,编辑回显 + 提交时原样带回避免清空角色)。 */
-  detail: (id: number) => client.GET('/api/v1/sys/user/{id}', { params: { path: { id } } }).then((r) => unwrap<UserDetail>(r)),
+  detail: (id: ApiId) => client.GET('/api/v1/sys/user/{id}', { params: { path: { id } } }).then((r) => unwrap<UserDetail>(r)),
   /** 新增用户;返回新 Id + 实际生效的初始口令(留空 password 时后端随机生成,不接住就没人知道这个号的密码)。 */
   add: (body: AddUserInput) => client.POST('/api/v1/sys/user', { body }).then((r) => unwrap<AddUserOutput>(r)),
-  update: (id: number, body: UpdateUserInput) =>
+  update: (id: ApiId, body: UpdateUserInput) =>
     client.PUT('/api/v1/sys/user/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
-  remove: (id: number) => client.DELETE('/api/v1/sys/user/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  remove: (id: ApiId) => client.DELETE('/api/v1/sys/user/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 批量软删除;集合含超管后端整体拒绝(SuperAdminProtected)。 */
-  batchRemove: (ids: number[]) => client.POST('/api/v1/sys/user/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
+  batchRemove: (ids: ApiId[]) => client.POST('/api/v1/sys/user/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
   /** 重置密码;返回实际生效的初始密码(newPassword 留空 = 后端默认初始密码)。 */
-  resetPassword: (id: number, newPassword?: string | null) =>
+  resetPassword: (id: ApiId, newPassword?: string | null) =>
     client.PUT('/api/v1/sys/user/{id}/password', { params: { path: { id } }, body: { newPassword: newPassword || null } }).then((r) => unwrap<string>(r)),
   /** 专用启停端点(非全量 update)。 */
-  setEnabled: (id: number, enabled: boolean) =>
+  setEnabled: (id: ApiId, enabled: boolean) =>
     client.PUT('/api/v1/sys/user/{id}/enabled', { params: { path: { id } }, body: { enabled } }).then((r) => unwrap<boolean>(r)),
 
   // ── 导入 / 导出(excel-ledger §5.1;下载走坑 2,上传走坑 3) ──
@@ -389,8 +389,8 @@ export const userApi = {
   export: (params: {
     account?: string
     name?: string
-    orgId?: number
-    roleId?: number
+    orgId?: ApiId
+    roleId?: ApiId
     enabled?: boolean
     sortField?: string
     sortOrder?: string
@@ -419,13 +419,13 @@ export const userApi = {
 export const orgApi = {
   /** 全部机构(平铺,按 Sort、Id 排序)。前端 buildTree 拼树。R4 下拉 / R9 树表复用。 */
   list: () => client.GET('/api/v1/sys/org/list', {}).then((r) => unwrap<SysOrg[]>(r)),
-  add: (body: OrgInput) => client.POST('/api/v1/sys/org/add', { body }).then((r) => unwrap<number>(r)),
-  update: (id: number, body: OrgInput) =>
+  add: (body: OrgInput) => client.POST('/api/v1/sys/org/add', { body }).then((r) => unwrap<ApiId>(r)),
+  update: (id: ApiId, body: OrgInput) =>
     client.PUT('/api/v1/sys/org/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
-  remove: (id: number) =>
+  remove: (id: ApiId) =>
     client.DELETE('/api/v1/sys/org/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 复制机构子树(整支克隆挂到源节点同级),返回新根 Id。 */
-  copy: (id: number, body?: { name?: string }) =>
+  copy: (id: ApiId, body?: { name?: string }) =>
     client.POST('/api/v1/sys/org/{id}/copy', { params: { path: { id } }, body }).then((r) => unwrap<number>(r)),
 }
 
@@ -444,10 +444,10 @@ export const positionApi = {
         },
       })
       .then((r) => toPage<SysPosition>(r)),
-  add: (body: PositionInput) => client.POST('/api/v1/sys/position/add', { body }).then((r) => unwrap<number>(r)),
-  update: (id: number, body: PositionInput) =>
+  add: (body: PositionInput) => client.POST('/api/v1/sys/position/add', { body }).then((r) => unwrap<ApiId>(r)),
+  update: (id: ApiId, body: PositionInput) =>
     client.PUT('/api/v1/sys/position/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
-  remove: (id: number) =>
+  remove: (id: ApiId) =>
     client.DELETE('/api/v1/sys/position/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
 }
 
@@ -459,38 +459,38 @@ export const roleApi = {
         params: { query: { ...pageParams(params), Name: params.name } },
       })
       .then((r) => toPage<SysRole>(r)),
-  add: (body: RoleInput) => client.POST('/api/v1/sys/role/add', { body }).then((r) => unwrap<number>(r)),
-  update: (id: number, body: RoleInput) =>
+  add: (body: RoleInput) => client.POST('/api/v1/sys/role/add', { body }).then((r) => unwrap<ApiId>(r)),
+  update: (id: ApiId, body: RoleInput) =>
     client.PUT('/api/v1/sys/role/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
-  remove: (id: number) =>
+  remove: (id: ApiId) =>
     client.DELETE('/api/v1/sys/role/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 批量删除角色(各自级联清关联)。 */
-  batchRemove: (ids: number[]) => client.POST('/api/v1/sys/role/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
+  batchRemove: (ids: ApiId[]) => client.POST('/api/v1/sys/role/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
   /** 某角色当前授予的菜单 Id 集合(授权抽屉回显)。 */
-  getMenus: (id: number) => client.GET('/api/v1/sys/role/{id}/menus', { params: { path: { id } } }).then((r) => unwrap<number[]>(r)),
+  getMenus: (id: ApiId) => client.GET('/api/v1/sys/role/{id}/menus', { params: { path: { id } } }).then((r) => unwrap<ApiId[]>(r)),
   /** 全量设置角色授予的菜单(空数组 = 收回全部)。 */
-  setMenus: (roleId: number, menuIds: number[]) =>
+  setMenus: (roleId: ApiId, menuIds: ApiId[]) =>
     client.PUT('/api/v1/sys/role/menu', { body: { roleId, menuIds } }).then((r) => unwrap<boolean>(r)),
   /** 某角色的数据范围配置(未配置返回 null)。 */
-  getDataScope: (id: number) =>
+  getDataScope: (id: ApiId) =>
     client.GET('/api/v1/sys/role/{id}/datascope', { params: { path: { id } } }).then((r) => unwrap<SysRoleDataScope | null>(r)),
   /** 设置角色数据范围;customOrgIds 仅 scopeType=Custom(5)时有意义。 */
-  setDataScope: (roleId: number, scopeType: DataScopeType, customOrgIds?: number[]) =>
+  setDataScope: (roleId: ApiId, scopeType: DataScopeType, customOrgIds?: ApiId[]) =>
     client.PUT('/api/v1/sys/role/datascope', { body: { roleId, scopeType, customOrgIds } }).then((r) => unwrap<boolean>(r)),
   /** 某角色当前关联的用户 Id 集合(授权用户抽屉回显)。 */
-  getUsers: (id: number) =>
-    client.GET('/api/v1/sys/role/{id}/users', { params: { path: { id } } }).then((r) => unwrap<number[]>(r)),
+  getUsers: (id: ApiId) =>
+    client.GET('/api/v1/sys/role/{id}/users', { params: { path: { id } } }).then((r) => unwrap<ApiId[]>(r)),
   /** 全量设置角色关联的用户(空数组 = 收回全部)。 */
-  setUsers: (roleId: number, userIds: number[]) =>
+  setUsers: (roleId: ApiId, userIds: ApiId[]) =>
     client.PUT('/api/v1/sys/role/users', { body: { roleId, userIds } }).then((r) => unwrap<boolean>(r)),
 }
 
 export const moduleApi = {
   list: () => client.GET('/api/v1/sys/module/list', {}).then((r) => unwrap<ModuleRow[]>(r)),
-  add: (body: ModuleInput) => client.POST('/api/v1/sys/module/add', { body }).then((r) => unwrap<number>(r)),
-  update: (id: number, body: ModuleInput) =>
+  add: (body: ModuleInput) => client.POST('/api/v1/sys/module/add', { body }).then((r) => unwrap<ApiId>(r)),
+  update: (id: ApiId, body: ModuleInput) =>
     client.PUT('/api/v1/sys/module/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
-  remove: (id: number) =>
+  remove: (id: ApiId) =>
     client.DELETE('/api/v1/sys/module/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
 }
 
@@ -507,10 +507,10 @@ export const configApi = {
         },
       })
       .then((r) => toPage<SysConfig>(r)),
-  add: (body: ConfigInput) => client.POST('/api/v1/sys/config', { body }).then((r) => unwrap<number>(r)),
-  update: (id: number, body: ConfigInput) =>
+  add: (body: ConfigInput) => client.POST('/api/v1/sys/config', { body }).then((r) => unwrap<ApiId>(r)),
+  update: (id: ApiId, body: ConfigInput) =>
     client.PUT('/api/v1/sys/config/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
-  remove: (id: number) =>
+  remove: (id: ApiId) =>
     client.DELETE('/api/v1/sys/config/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 取某分组下全部配置(完整行,含 id/key/value),供分类配置中心结构化表单回填。 */
   listByGroup: (group: string) =>
@@ -573,7 +573,7 @@ export const logApi = {
   /** 操作日志分页;操作名模糊 + 成败 + 操作人(精确)+ 接口路径(模糊)+ 时间范围——审计要能答"谁在什么时候干了什么"。 */
   opPage: (params: {
     page: number; pageSize: number
-    title?: string; success?: boolean; operatorId?: number; path?: string
+    title?: string; success?: boolean; operatorId?: ApiId; path?: string
     createTime?: [string, string] | null
   }) =>
     client
@@ -597,7 +597,7 @@ export const logApi = {
   opExport: (params: {
     title?: string
     success?: boolean
-    operatorId?: number
+    operatorId?: ApiId
     path?: string
     createTime?: [string, string] | null
     columns?: string
@@ -677,26 +677,26 @@ export const dictAdminApi = {
         params: { query: { ...pageParams(params), Code: params.code, Name: params.name } },
       })
       .then((r) => toPage<SysDictType>(r)),
-  typeAdd: (body: DictTypeInput) => client.POST('/api/v1/sys/dict/type', { body }).then((r) => unwrap<number>(r)),
-  typeUpdate: (id: number, body: DictTypeInput) =>
+  typeAdd: (body: DictTypeInput) => client.POST('/api/v1/sys/dict/type', { body }).then((r) => unwrap<ApiId>(r)),
+  typeUpdate: (id: ApiId, body: DictTypeInput) =>
     client.PUT('/api/v1/sys/dict/type/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
-  typeRemove: (id: number) =>
+  typeRemove: (id: ApiId) =>
     client.DELETE('/api/v1/sys/dict/type/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 批量删除字典类型(各自级联删项)。 */
-  typeBatchRemove: (ids: number[]) => client.POST('/api/v1/sys/dict/type/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
+  typeBatchRemove: (ids: ApiId[]) => client.POST('/api/v1/sys/dict/type/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
   /** 某类型下的字典项(管理端:含停用、带 id;非下拉缓存源)。ponytail: 拉一页 500,字典项数量小,真超再分页。 */
   items: (typeCode: string) =>
     client
       .GET('/api/v1/sys/dict/item/page', { params: { query: { TypeCode: typeCode, Current: 1, Size: 500 } } })
       .then((r) => unwrap<PagedList<SysDictItem>>(r))
       .then((p) => p.items),
-  itemAdd: (body: DictItemInput) => client.POST('/api/v1/sys/dict/item', { body }).then((r) => unwrap<number>(r)),
-  itemUpdate: (id: number, body: DictItemInput) =>
+  itemAdd: (body: DictItemInput) => client.POST('/api/v1/sys/dict/item', { body }).then((r) => unwrap<ApiId>(r)),
+  itemUpdate: (id: ApiId, body: DictItemInput) =>
     client.PUT('/api/v1/sys/dict/item/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
-  itemRemove: (id: number) =>
+  itemRemove: (id: ApiId) =>
     client.DELETE('/api/v1/sys/dict/item/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 批量删除字典项。 */
-  itemBatchRemove: (ids: number[]) => client.POST('/api/v1/sys/dict/item/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
+  itemBatchRemove: (ids: ApiId[]) => client.POST('/api/v1/sys/dict/item/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
 }
 
 export interface FileDownload {
@@ -776,10 +776,10 @@ export const fileApi = {
   download: (id: number | string) => fetchFileDownload(id).then((file) => file.blob),
   /** 下载并带上文件名与媒体类型,供审批附件预览。雪花 Id 保持 string,避免 Number() 丢精度。 */
   fetchDownload: (id: number | string) => fetchFileDownload(id),
-  remove: (id: number) =>
+  remove: (id: ApiId) =>
     client.DELETE('/api/v1/sys/file/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 批量软删除文件记录(物理文件保留)。 */
-  batchRemove: (ids: number[]) => client.POST('/api/v1/sys/file/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
+  batchRemove: (ids: ApiId[]) => client.POST('/api/v1/sys/file/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
   // ── 分片 / 断点续传上传 ──
   /** 分片初始化:秒传探测 + 已收分片(断点续传)。 */
   chunkInit: (body: { fileHash: string; fileName: string; totalSize: number; chunkCount: number }) =>
@@ -824,8 +824,8 @@ export const noticeApi = {
         params: { query: { ...pageParams(params), Title: params.title, Type: params.type } },
       })
       .then((r) => toPage<SysNotice>(r)),
-  publish: (body: NoticePublishInput) => client.POST('/api/v1/sys/notice', { body }).then((r) => unwrap<number>(r)),
-  remove: (id: number) => client.DELETE('/api/v1/sys/notice/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  publish: (body: NoticePublishInput) => client.POST('/api/v1/sys/notice', { body }).then((r) => unwrap<ApiId>(r)),
+  remove: (id: ApiId) => client.DELETE('/api/v1/sys/notice/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   // ── 用户端(任何登录用户) ──
   /** 我的通知分页(含已读标记);onlyUnread 供"未读"页签用。 */
   mine: (params: { page: number; pageSize: number; onlyUnread?: boolean }) =>
@@ -834,7 +834,7 @@ export const noticeApi = {
       .then((r) => toPage<NoticeMineItem>(r)),
   /** 当前用户未读通知数(顶栏角标轮询)。 */
   unreadCount: () => client.GET('/api/v1/sys/notice/unread-count', {}).then((r) => unwrap<number>(r)),
-  markRead: (id: number) => client.PUT('/api/v1/sys/notice/{id}/read', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  markRead: (id: ApiId) => client.PUT('/api/v1/sys/notice/{id}/read', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   markAllRead: () => client.PUT('/api/v1/sys/notice/read-all', {}).then((r) => unwrap<boolean>(r)),
 }
 
@@ -842,10 +842,10 @@ export const menuApi = {
   tree: () => client.GET('/api/v1/sys/menu/tree', {}).then((r) => unwrap<MenuTreeNode[]>(r)),
   /** 可授权路由清单(后端 EndpointDataSource 实时算出,含消费方自建控制器);喂菜单表单「权限码」下拉,免手敲。 */
   routes: () => client.GET('/api/v1/sys/menu/routes', {}).then((r) => unwrap<PermissionRouteItem[]>(r)),
-  add: (body: MenuInput) => client.POST('/api/v1/sys/menu/add', { body }).then((r) => unwrap<number>(r)),
-  update: (id: number, body: MenuInput) =>
+  add: (body: MenuInput) => client.POST('/api/v1/sys/menu/add', { body }).then((r) => unwrap<ApiId>(r)),
+  update: (id: ApiId, body: MenuInput) =>
     client.PUT('/api/v1/sys/menu/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
-  remove: (id: number) =>
+  remove: (id: ApiId) =>
     client.DELETE('/api/v1/sys/menu/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
 }
 
@@ -868,18 +868,18 @@ export const jobApi = {
         },
       })
       .then((r) => toPage<SysJob>(r)),
-  add: (body: JobInput) => client.POST('/api/v1/sys/job', { body }).then((r) => unwrap<number>(r)),
-  update: (id: number, body: JobInput) =>
+  add: (body: JobInput) => client.POST('/api/v1/sys/job', { body }).then((r) => unwrap<ApiId>(r)),
+  update: (id: ApiId, body: JobInput) =>
     client.PUT('/api/v1/sys/job/{id}', { params: { path: { id } }, body }).then((r) => unwrap<boolean>(r)),
-  remove: (id: number) =>
+  remove: (id: ApiId) =>
     client.DELETE('/api/v1/sys/job/{id}', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** 批量删除(命中内置任务后端整批拒绝 47014)。 */
-  batchRemove: (ids: number[]) => client.POST('/api/v1/sys/job/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
+  batchRemove: (ids: ApiId[]) => client.POST('/api/v1/sys/job/batch-delete', { body: { ids } }).then((r) => unwrap<boolean>(r)),
   /** 专用启停端点:true=恢复调度并重算下次执行时刻(顺带清连败计数),false=暂停。 */
-  setEnabled: (id: number, enabled: boolean) =>
+  setEnabled: (id: ApiId, enabled: boolean) =>
     client.PUT('/api/v1/sys/job/{id}/enabled', { params: { path: { id }, query: { enabled } } }).then((r) => unwrap<boolean>(r)),
   /** 执行一次(收到请求的副本本机执行,不经选主、不影响调度节奏)。 */
-  run: (id: number) => client.POST('/api/v1/sys/job/{id}/run', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
+  run: (id: ApiId) => client.POST('/api/v1/sys/job/{id}/run', { params: { path: { id } } }).then((r) => unwrap<boolean>(r)),
   /** cron 预览([ActiveSession] 任何登录用户可用;POST 因 cron 含 `? #` 走 query 有转义坑)。 */
   previewCron: (body: { cron: string; count?: number; from?: string | null }) =>
     client.POST('/api/v1/sys/job/preview-cron', { body }).then((r) => unwrap<CronPreviewOutput>(r)),
@@ -889,7 +889,7 @@ export const jobApi = {
    * 执行记录分页。startRange 是 ProTable daterange 的 [开始, 结束] 日期串,
    * 拆成后端 StartFrom/StartTo,结束日补 23:59:59(同 splitRange 的理由,但参数名不同,不复用)。
    */
-  logPage: (params: { page: number; pageSize: number; jobId?: number; runStatus?: number; startRange?: [string, string] | null; fireInstanceId?: number }) =>
+  logPage: (params: { page: number; pageSize: number; jobId?: ApiId; runStatus?: number; startRange?: [string, string] | null; fireInstanceId?: ApiId }) =>
     client
       .GET('/api/v1/sys/job/log/page', {
         params: {
@@ -905,10 +905,10 @@ export const jobApi = {
       })
       .then((r) => toPage<SysJobLog>(r)),
   /** 终止一次执行(跨节点写终止旗标,目标节点最迟 KillPollSeconds 后停)。 */
-  kill: (logId: number) =>
+  kill: (logId: ApiId) =>
     client.POST('/api/v1/sys/job/log/{id}/kill', { params: { path: { id: logId } } }).then((r) => unwrap<boolean>(r)),
   /** 清空执行记录(硬删;运行中的一律保留),返回删除行数。 */
-  logClear: (body: { beforeDays?: number | null; jobId?: number | null }) =>
+  logClear: (body: { beforeDays?: number | null; jobId?: ApiId | null }) =>
     client.POST('/api/v1/sys/job/log/clear', { body }).then((r) => unwrap<number>(r)),
   /** 监控仪表盘(今日成败/在飞/趋势/即将执行/集群节点)。 */
   dashboard: () => client.GET('/api/v1/sys/job/dashboard', {}).then((r) => unwrap<JobDashboard>(r)),

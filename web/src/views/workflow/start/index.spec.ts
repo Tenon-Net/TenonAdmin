@@ -6,23 +6,29 @@ import StartPage from './index.vue'
 
 const startable = vi.hoisted(() => vi.fn().mockResolvedValue([]))
 const startableDetail = vi.hoisted(() => vi.fn())
+const definitionOptions = vi.hoisted(() => ({ current: [] as Array<{ label: string; value: number | string }> }))
+const routeState = vi.hoisted(() => ({ query: {} as { definitionId?: string } }))
 
 vi.mock('@/api/workflow', () => ({
   wfInstanceApi: { startable, startableDetail, start: vi.fn() },
 }))
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: {} }),
+  useRoute: () => routeState,
   useRouter: () => ({ push: vi.fn() }),
 }))
 vi.mock('naive-ui', async (importOriginal) => ({
   ...await importOriginal<typeof import('naive-ui')>(),
   useMessage: () => ({ error: vi.fn(), success: vi.fn() }),
   NSelect: defineComponent({
+    props: { options: Array },
     emits: ['update:value'],
-    setup: (_, { emit }) => () => h('div', [
-      h('button', { 'data-testid': 'definition-1', onClick: () => emit('update:value', 1) }, 'one'),
-      h('button', { 'data-testid': 'definition-2', onClick: () => emit('update:value', 2) }, 'two'),
-    ]),
+    setup: (props, { emit }) => () => {
+      definitionOptions.current = (props.options ?? []) as Array<{ label: string; value: number | string }>
+      return h('div', [
+        h('button', { 'data-testid': 'definition-1', onClick: () => emit('update:value', 1) }, 'one'),
+        h('button', { 'data-testid': 'definition-2', onClick: () => emit('update:value', 2) }, 'two'),
+      ])
+    },
   }),
 }))
 vi.mock('@/components/AppIcon.vue', () => ({ default: defineComponent({ render: () => h('span') }) }))
@@ -39,6 +45,8 @@ afterEach(() => {
   app?.unmount()
   app = undefined
   startableDetail.mockReset()
+  definitionOptions.current = []
+  routeState.query = {}
   document.body.replaceChildren()
 })
 
@@ -83,5 +91,32 @@ describe('workflow start definition loading', () => {
       expect(host.querySelector('.n-alert')?.textContent).toContain('如果某个节点找不到审批人')
     })
     expect(warnings.join('\n')).not.toContain('n-alert')
+  })
+
+  it('保留超过安全整数范围的流程定义字符串 Id', async () => {
+    const id = '9007199254740993'
+    startable.mockResolvedValueOnce([{ id, name: '大 Id 流程' }])
+    const host = document.createElement('div')
+    document.body.append(host)
+    app = createApp(StartPage)
+    app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
+    app.mount(host)
+
+    await vi.waitFor(() => {
+      expect(definitionOptions.current).toContainEqual(expect.objectContaining({ value: id }))
+    })
+  })
+
+  it('URL 中的安全定义 Id 恢复为 number 并匹配下拉选项', async () => {
+    routeState.query = { definitionId: '42' }
+    startable.mockResolvedValueOnce([{ id: 42, name: '安全 Id 流程' }])
+    startableDetail.mockResolvedValueOnce({ model: null, formComponent: null })
+    const host = document.createElement('div')
+    document.body.append(host)
+    app = createApp(StartPage)
+    app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
+    app.mount(host)
+
+    await vi.waitFor(() => expect(startableDetail).toHaveBeenCalledWith(42))
   })
 })

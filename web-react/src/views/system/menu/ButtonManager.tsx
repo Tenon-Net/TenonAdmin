@@ -15,12 +15,12 @@ import { useHasPerm } from '@/stores/auth'
 import { menuApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { MenuType, type MenuInput, type MenuTreeNode } from '@/types/menu'
-import type { PermissionRouteItem } from '@/types/api'
+import type { ApiId, PermissionRouteItem } from '@/types/api'
 import { belongsToApp, blankMenu, defaultTitleKey, menuRowToInput, routeSeg } from './menuForm'
 
 export interface ButtonManagerProps {
   /** 非 null 即打开列表弹窗;{id,title} 为目标菜单。 */
-  menu: { id: number; title: string } | null
+  menu: { id: ApiId; title: string } | null
   /** 由父页传入并保持响应:父页 CRUD 后重拉 tree,本弹窗的 buttons 随之刷新,无需自己再请求整树。 */
   tree: MenuTreeNode[]
   routes: PermissionRouteItem[]
@@ -32,7 +32,7 @@ export interface ButtonManagerProps {
 }
 
 /** 在整棵树里按 id 找节点(父页传的 tree 含按钮 children)。 */
-function findNode(nodes: MenuTreeNode[], id: number): MenuTreeNode | null {
+function findNode(nodes: MenuTreeNode[], id: ApiId): MenuTreeNode | null {
   for (const n of nodes) {
     if (n.id === id) return n
     const hit = findNode(n.children, id)
@@ -78,7 +78,7 @@ export function ButtonManager({ menu, tree, routes, appPrefix, onClose, onChange
   // 「所属页面」下拉:全部非按钮节点(目录 + 页面),缩进体现层级。不排除目录(如 ping 挂目录)。
   // 按钮是叶子不可能成环,无需像主页 parentOptions 排除自身子树。
   const parentOptions = useMemo(() => {
-    const opts: { label: string; value: number }[] = []
+    const opts: { label: string; value: ApiId }[] = []
     const walk = (nodes: MenuTreeNode[], depth: number) => {
       for (const n of nodes) {
         if (n.type === MenuType.Button) continue
@@ -93,7 +93,7 @@ export function ButtonManager({ menu, tree, routes, appPrefix, onClose, onChange
   // ── 单个新增/编辑 ──
   const [form] = Form.useForm<MenuInput>()
   const [editOpen, setEditOpen] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<ApiId | null>(null)
 
   const openAdd = () => {
     setEditingId(null)

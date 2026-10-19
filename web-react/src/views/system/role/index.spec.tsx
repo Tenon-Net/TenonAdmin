@@ -170,4 +170,16 @@ describe('RolePage 接线', () => {
     fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
     await waitFor(() => expect(roleApi.setDataScope).toHaveBeenCalledWith(1, DataScopeType.Custom, [3, 7]))
   })
+
+  it('数据范围:安全机构 Id 保持数字，大机构 Id 回显和保存均保留字符串', async () => {
+    const largeId = '9007199254740993'
+    vi.mocked(roleApi.getDataScope).mockResolvedValueOnce({ id: 9, roleId: 1, scopeType: DataScopeType.Custom, customOrgIds: `3,${largeId}` })
+    mount()
+    await waitFor(() => expect(dt.columns).toBeTruthy())
+    const dropdown = callRender(col('op'), ROLES[0]).props.children[2] as AnyEl
+    dropdown.props.menu.onClick({ key: 'scope' })
+    await screen.findByText('数据范围')
+    fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
+    await waitFor(() => expect(roleApi.setDataScope).toHaveBeenCalledWith(1, DataScopeType.Custom, [3, largeId]))
+  })
 })

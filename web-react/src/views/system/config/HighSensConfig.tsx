@@ -4,11 +4,12 @@ import { Button, Input, Space, Table, Tag, message } from 'antd'
 import { highSensApi } from '@/api'
 import { t } from '@/locales'
 import { translateError } from '@/utils/error'
+import type { ApiId } from '@/types/api'
 
 export default function HighSensConfig() {
   const [loading, setLoading] = useState(false)
   const [defaults, setDefaults] = useState<string[]>([])
-  const [customs, setCustoms] = useState<{ id: number; permissionCode: string; remark?: string | null }[]>([])
+  const [customs, setCustoms] = useState<{ id: ApiId; permissionCode: string; remark?: string | null }[]>([])
   const [code, setCode] = useState('')
   const [remark, setRemark] = useState('')
   const [saving, setSaving] = useState(false)
@@ -22,7 +23,7 @@ export default function HighSensConfig() {
         (data.customs ?? []).flatMap((item) =>
           item.id == null
             ? []
-            : [{ id: Number(item.id), permissionCode: item.permissionCode ?? '', remark: item.remark }],
+            : [{ id: item.id, permissionCode: item.permissionCode ?? '', remark: item.remark }],
         ),
       )
     } catch (e) {
@@ -55,7 +56,7 @@ export default function HighSensConfig() {
     }
   }
 
-  async function remove(id: number) {
+  async function remove(id: ApiId) {
     setSaving(true)
     try {
       await highSensApi.remove(id)

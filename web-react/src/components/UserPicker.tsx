@@ -6,7 +6,7 @@ import type { ProColumns } from '@ant-design/pro-components'
 import { FormContainer } from '@/components/FormContainer'
 import { orgApi, userApi } from '@/api'
 import { buildTree } from '@/utils/tree'
-import type { SysOrg, UserItem } from '@/types/api'
+import type { ApiId, SysOrg, UserItem } from '@/types/api'
 
 /** 面板里只需要这三个字段;open(ids) 回显时找不到的用户也只造得出这三个(占位)。 */
 export type PickedUser = Pick<UserItem, 'id' | 'name' | 'account'>
@@ -15,12 +15,12 @@ export type PickedUser = Pick<UserItem, 'id' | 'name' | 'account'>
 
 /** 机构树选中 key → orgId 过滤值:根「全部」(key 0)或未选(null)→ undefined(不按部门过滤)。
  *  `|| undefined`:0 与 null 都 falsy → undefined;别写成 `?? undefined`(那会把 key 0「全部」当有效部门传下去)。 */
-export function orgIdFromKey(key: number | null): number | undefined {
+export function orgIdFromKey(key: ApiId | null): ApiId | undefined {
   return key || undefined
 }
 
 /** 追加用户,去重:已在 current 或在 excludeIds 里的跳过。返回新数组(不改原)。 */
-export function addUsers(current: PickedUser[], toAdd: PickedUser[], excludeIds: Set<number>): PickedUser[] {
+export function addUsers(current: PickedUser[], toAdd: PickedUser[], excludeIds: Set<ApiId>): PickedUser[] {
   const has = new Set(current.map((u) => u.id))
   const out = [...current]
   for (const u of toAdd) {
@@ -33,7 +33,7 @@ export function addUsers(current: PickedUser[], toAdd: PickedUser[], excludeIds:
 }
 
 /** 移除指定 id。 */
-export function removeUser(current: PickedUser[], id: number): PickedUser[] {
+export function removeUser(current: PickedUser[], id: ApiId): PickedUser[] {
   return current.filter((u) => u.id !== id)
 }
 
@@ -45,7 +45,7 @@ export function filterSelected(list: PickedUser[], query: string): PickedUser[] 
 }
 
 /** open(ids) 回显:按 ids 顺序,fetched 里找得到的用真数据,找不到的(翻页之外)退回只显 id 的占位行。 */
-export function hydrateSelected(ids: number[], fetched: PickedUser[]): PickedUser[] {
+export function hydrateSelected(ids: ApiId[], fetched: PickedUser[]): PickedUser[] {
   const map = new Map(fetched.map((u) => [u.id, u]))
   return ids.map((id) => map.get(id) ?? { id, account: String(id), name: String(id) })
 }
@@ -54,12 +54,12 @@ export function hydrateSelected(ids: number[], fetched: PickedUser[]): PickedUse
 
 export interface UserPickerHandle {
   /** 打开弹窗;传 ids 则预选回显(命令式,父经 ref 调用)。 */
-  open: (ids?: number[]) => void
+  open: (ids?: ApiId[]) => void
 }
 export interface UserPickerProps {
   /** 排除项(如别处已占用的用户 id):不可再选、行内「添加」置灰。 */
-  excludeIds?: number[]
-  onConfirm: (ids: number[]) => void
+  excludeIds?: ApiId[]
+  onConfirm: (ids: ApiId[]) => void
 }
 
 const panelHeader: CSSProperties = {
@@ -81,7 +81,7 @@ export const UserPicker = forwardRef<UserPickerHandle, UserPickerProps>(function
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [orgFlat, setOrgFlat] = useState<SysOrg[]>([])
-  const [selectedKey, setSelectedKey] = useState<number | null>(null)
+  const [selectedKey, setSelectedKey] = useState<ApiId | null>(null)
   const [selected, setSelected] = useState<PickedUser[]>([])
   const [search, setSearch] = useState('')
   const tableRef = useRef<DataTableHandle>(null)
@@ -93,7 +93,7 @@ export const UserPicker = forwardRef<UserPickerHandle, UserPickerProps>(function
   useImperativeHandle(
     ref,
     () => ({
-      open: async (ids?: number[]) => {
+      open: async (ids?: ApiId[]) => {
         setSelected([])
         setSearch('')
         setSelectedKey(null)
@@ -154,7 +154,7 @@ export const UserPicker = forwardRef<UserPickerHandle, UserPickerProps>(function
     [t, selectedIds, excludeSet],
   )
 
-  const onOrgSelect: TreeProps['onSelect'] = (keys) => setSelectedKey((keys[0] as number) ?? null)
+  const onOrgSelect: TreeProps['onSelect'] = (keys) => setSelectedKey((keys[0] as ApiId) ?? null)
   const filtered = filterSelected(selected, search)
 
   return (

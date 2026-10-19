@@ -13,7 +13,7 @@ import { viewComponentPaths } from '@/composables/useAuthMenu'
 import { menuApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { MenuType, type MenuInput, type MenuTreeNode, toMenuInput } from '@/types/menu'
-import type { ModuleRow } from '@/types/api'
+import type { ApiId, ModuleRow } from '@/types/api'
 
 const props = defineProps<{
   modules: ModuleRow[]
@@ -21,7 +21,7 @@ const props = defineProps<{
   tree: MenuTreeNode[]
   /** 当前应用、已剥按钮的树:父级下拉的候选来源(只在本应用子树里选父级,防跨应用误挂)。 */
   filteredTree: MenuTreeNode[]
-  moduleFilter: number
+  moduleFilter: ApiId
 }>()
 const emit = defineEmits<{ (e: 'saved'): void }>()
 
@@ -38,7 +38,7 @@ const rules: FormRules = {
   // whitespace: 纯空白不算填写
   title: { required: true, whitespace: true, message: () => t('menu.titleRequired'), trigger: ['input', 'blur'] },
 }
-const editingId = ref<number | null>(null)
+const editingId = ref<ApiId | null>(null)
 const blank = (): MenuInput => ({
   parentId: 0, type: MenuType.Menu, title: '', permission: '', sort: 0,
   enabled: true, moduleId: null, path: '', component: '', icon: '', visible: true,
@@ -58,8 +58,8 @@ const moduleOptions = computed(() => props.modules.map((m) => ({ label: m.title,
 const componentOptions = computed(() => viewComponentPaths.map((p) => ({ label: p, value: p })))
 
 /** 收集以 id 为根的子树全部 id(含自身)——编辑时排除,防止把节点挂到自己的子孙下形成环。 */
-function subtreeIds(nodes: MenuTreeNode[], id: number): Set<number> {
-  const out = new Set<number>()
+function subtreeIds(nodes: MenuTreeNode[], id: ApiId): Set<ApiId> {
+  const out = new Set<ApiId>()
   const find = (list: MenuTreeNode[]): MenuTreeNode | null => {
     for (const n of list) {
       if (n.id === id) return n
@@ -79,8 +79,8 @@ function subtreeIds(nodes: MenuTreeNode[], id: number): Set<number> {
 
 /** 父节点下拉:根 + 全部目录/页面(按钮不能当父),缩进体现层级;编辑时排除自身子树。 */
 const parentOptions = computed(() => {
-  const exclude = editingId.value === null ? new Set<number>() : subtreeIds(props.tree, editingId.value)
-  const opts: { label: string; value: number }[] = [{ label: t('menu.parentRoot'), value: 0 }]
+  const exclude = editingId.value === null ? new Set<ApiId>() : subtreeIds(props.tree, editingId.value)
+  const opts: { label: string; value: ApiId }[] = [{ label: t('menu.parentRoot'), value: 0 }]
   const walk = (nodes: MenuTreeNode[], depth: number) => {
     for (const n of nodes) {
       if (n.type !== MenuType.Button && !exclude.has(n.id)) {
@@ -94,7 +94,7 @@ const parentOptions = computed(() => {
   return opts
 })
 
-function openAdd(parentId = 0) {
+function openAdd(parentId: ApiId = 0) {
   editingId.value = null
   // 新建顶级目录时,自动盖上当前筛选的应用(「未分配」「全部」筛选下则留空,交给用户手选)。
   const moduleId = parentId === 0 && props.moduleFilter !== UNASSIGNED && props.moduleFilter !== ALL_MODULES ? props.moduleFilter : null

@@ -37,12 +37,12 @@ describe('useBatchDelete', () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
-  it('有选 + 确认成功:主键 map(Number) 传 remove、清选 + 刷新', async () => {
+  it('有选 + 确认成功:主键原样传 remove、清选 + 刷新', async () => {
     const { remove, refresh, result } = setup()
-    act(() => { result.current.setSelectedKeys(['1', '2', '3']) }) // ProTable 可能给字符串键
+    act(() => { result.current.setSelectedKeys([1, '2', '9007199254740993']) })
     expect(result.current.hasSelection).toBe(true)
     await act(async () => { await result.current.run() })
-    expect(remove).toHaveBeenCalledWith([1, 2, 3]) // 字符串键 → number[](钉住 map(Number))
+    expect(remove).toHaveBeenCalledWith([1, '2', '9007199254740993'])
     expect(confirmMock).toHaveBeenCalledWith(expect.objectContaining({ successMsg: 'ok' }))
     expect(result.current.selectedKeys).toEqual([]) // 成功清选
     expect(refresh).toHaveBeenCalledTimes(1) // 成功刷新

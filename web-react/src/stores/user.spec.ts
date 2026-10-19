@@ -46,6 +46,12 @@ describe('useUserStore', () => {
     expect(isCookieSession(s)).toBe(false)
   })
 
+  it('setSession 保留超出安全整数范围的十进制字符串用户 Id', () => {
+    useUserStore.getState().setSession({ ...LOGIN, userId: '9007199254740993' })
+    expect(useUserStore.getState().userInfo?.userId).toBe('9007199254740993')
+    expect(JSON.parse(localStorage.getItem('user')!).state.userInfo.userId).toBe('9007199254740993')
+  })
+
   it('后端漏给 mustChangePassword 时归一为 false,而不是 undefined', () => {
     // 守卫写的是 `if (mustChangePassword)`,undefined 也能过 —— 但它会被原样持久化,
     // 之后任何 `=== false` 的判断都会静默走错分支。归一在入口做一次。

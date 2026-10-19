@@ -46,7 +46,14 @@ public class WfOutboxService(
                 CompletedAtUtc = o.CompletedAtUtc,
             });
 
-        return await query.ToPagedListAsync(input.Current, input.Size);
+        var page = await query.ToPagedListAsync(input.Current, input.Size);
+        return new PagedList<WfOutboxOutput>
+        {
+            Current = page.Current,
+            Size = page.Size,
+            Total = page.Total,
+            Items = page.Items.Select(ProjectOutput).ToList(),
+        };
     }
 
     public virtual async Task<WfOutboxOutput> ReplayAsync(
@@ -73,7 +80,7 @@ public class WfOutboxService(
         {
             var hit = await receipts.TryBeginAsync(identity, cancellationToken);
             if (hit is not null)
-                return DeserializeReceipt(hit);
+                return ProjectOutput(DeserializeReceipt(hit));
 
             var current = await db.Queryable<WfOutbox>()
                 .Where(o => o.Id == id)
@@ -135,7 +142,7 @@ public class WfOutboxService(
         return (outbox, execution);
     }
 
-    protected virtual WfOutboxOutput ToOutput(WfOutbox row, long instanceId) => new()
+    protected virtual WfOutboxOutput ToOutput(WfOutbox row, long instanceId) => ProjectOutput(new WfOutboxOutput
     {
         Id = row.Id,
         ExecutionId = row.ExecutionId,
@@ -148,6 +155,11 @@ public class WfOutboxService(
         AvailableAtUtc = row.AvailableAtUtc,
         LastError = row.LastError,
         CompletedAtUtc = row.CompletedAtUtc,
+    });
+
+    private static WfOutboxOutput ProjectOutput(WfOutboxOutput output) => output with
+    {
+        PayloadJson = WfClientJson.ProjectExecutionOutboxPayload(output.MessageType, output.PayloadJson),
     };
 
     private static WfOutboxOutput DeserializeReceipt(WfOperationReceipt receipt)

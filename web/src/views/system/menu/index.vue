@@ -14,7 +14,7 @@ import { menuApi, moduleApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { expandableIds, filterTree } from '@/utils/tree'
 import { MenuType, type MenuTreeNode, toMenuInput } from '@/types/menu'
-import type { ModuleRow, PermissionRouteItem } from '@/types/api'
+import type { ApiId, ModuleRow, PermissionRouteItem } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -30,7 +30,7 @@ const UNASSIGNED = 0
  * 别的应用底下新建的菜单会被筛掉、看着像"存了但不见了"(issue #17)——需要一个能看全量的退路。 */
 const ALL_MODULES = -1
 /** 所属应用筛选:默认跟随当前进入的应用,modules 加载后再校正。 */
-const moduleFilter = ref<number>(auth.currentModuleId ?? UNASSIGNED)
+const moduleFilter = ref<ApiId>(auth.currentModuleId ?? UNASSIGNED)
 /** 后端实时路由表(含消费方自建控制器)——权限码下拉的数据源,免手敲 `GET:/api/v1/...`。 */
 const routes = ref<PermissionRouteItem[]>([])
 
@@ -123,7 +123,7 @@ const filteredTree = computed(() =>
  * 「这个权限码归哪个页面」只能靠父页面命中来回答,否则藏起按钮就等于把它搜没了。
  */
 const buttonInfoById = computed(() => {
-  const m = new Map<number, { count: number; perms: string }>()
+  const m = new Map<ApiId, { count: number; perms: string }>()
   const walk = (nodes: MenuTreeNode[]) => {
     for (const n of nodes) {
       const btns = n.children.filter((c) => c.type === MenuType.Button)
@@ -155,7 +155,7 @@ const visibleTree = computed(() => {
 
 // 展开受控:一旦传了 expanded-row-keys,naive 就以它为准,default-expand-all 会被初始值直接覆盖成"全折叠",
 // 所以"默认全展开"得自己播种。data 变了受控 keys 也不会自动跟着变 —— 搜索/切应用后要重算。
-const expandedKeys = ref<number[]>([])
+const expandedKeys = ref<ApiId[]>([])
 watch(visibleTree, (t) => (expandedKeys.value = expandableIds(t)), { immediate: true })
 
 const allExpanded = computed(() => expandedKeys.value.length > 0)
@@ -335,7 +335,7 @@ const columns: ProTableColumn<MenuTreeNode>[] = [
       :indent="26"
       :render-expand-icon="renderExpandIcon"
       :expanded-row-keys="expandedKeys"
-      @update:expanded-row-keys="(keys: number[]) => (expandedKeys = keys)"
+      @update:expanded-row-keys="(keys: ApiId[]) => (expandedKeys = keys)"
     >
       <template #toolbar>
         <n-select

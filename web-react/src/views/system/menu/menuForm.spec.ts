@@ -68,7 +68,7 @@ describe('buildButtonInfo', () => {
 
 describe('subtreeIds', () => {
   it('收集自身 + 全部后代 id', () => {
-    expect([...subtreeIds(TREE, 1)].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5])
+    expect([...subtreeIds(TREE, 1)].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))).toEqual([1, 2, 3, 4, 5])
   })
   it('叶子只含自身', () => {
     expect([...subtreeIds(TREE, 3)]).toEqual([3])

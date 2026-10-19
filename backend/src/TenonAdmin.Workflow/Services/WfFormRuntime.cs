@@ -152,7 +152,10 @@ internal static class WfFormRuntime
         foreach (var field in schema.Fields)
         {
             if (hidden.Contains(field.Key)) continue;
-            if (values.TryGetValue(field.Key, out var value)) visible[field.Key] = value;
+            if (!values.TryGetValue(field.Key, out var value)) continue;
+            visible[field.Key] = field.Type is WfFormFieldType.User or WfFormFieldType.Attachment
+                ? WfClientJson.ProjectIdValue(value)
+                : value;
         }
 
         return visible.Count == 0 ? null : JsonSerializer.Serialize(visible, WfModelJson.Options);

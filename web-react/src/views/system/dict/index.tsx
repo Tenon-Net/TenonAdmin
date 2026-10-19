@@ -15,7 +15,7 @@ import { useHasPerm } from '@/stores/auth'
 import { useDictStore } from '@/stores/dict'
 import { dictAdminApi } from '@/api'
 import { translateError } from '@/utils/error'
-import type { DictItemInput, DictTypeInput, SysDictItem, SysDictType } from '@/types/api'
+import type { ApiId, DictItemInput, DictTypeInput, SysDictItem, SysDictType } from '@/types/api'
 import { blankItem, blankType, itemToInput, typeToInput } from './dictForm'
 
 export default function DictPage() {
@@ -69,7 +69,7 @@ export default function DictPage() {
   // ── 类型 新增/编辑弹窗 ──
   const [typeForm] = Form.useForm<DictTypeInput>()
   const [typeOpen, setTypeOpen] = useState(false)
-  const [typeEditingId, setTypeEditingId] = useState<number | null>(null)
+  const [typeEditingId, setTypeEditingId] = useState<ApiId | null>(null)
 
   const openTypeAdd = useCallback(() => { setTypeEditingId(null); typeForm.setFieldsValue(blankType()); setTypeOpen(true) }, [typeForm])
   const openTypeEdit = useCallback((r: SysDictType) => { setTypeEditingId(r.id); typeForm.setFieldsValue(typeToInput(r)); setTypeOpen(true) }, [typeForm])
@@ -101,7 +101,7 @@ export default function DictPage() {
   // ── 字典项 新增/编辑弹窗 ──
   const [itemForm] = Form.useForm<DictItemInput>()
   const [itemOpen, setItemOpen] = useState(false)
-  const [itemEditingId, setItemEditingId] = useState<number | null>(null)
+  const [itemEditingId, setItemEditingId] = useState<ApiId | null>(null)
 
   const openItemAdd = useCallback(() => {
     if (!selectedType) return

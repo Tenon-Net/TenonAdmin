@@ -10,6 +10,7 @@ import { AppIcon } from '@/components/AppIcon'
 import { authApi } from '@/api'
 import { beginVoluntaryLogout } from '@/composables/useRealtime'
 import { translateError } from '@/utils/error'
+import type { ApiId } from '@/types/api'
 
 /**
  * 应用选择页(门户)。决策阶梯(直接进/进默认/弹这里)在 `useModule.enterInitial`,这里只管**呈现与切换**。
@@ -29,7 +30,7 @@ export default function ModuleChooser() {
 
   // 三个异步动作共用 `busy` 门:任一进行中就不接第二次点击(快连点、进应用途中又点设默认…),
   // 并统一驱动 `Spin`。设默认/登出以前没这道门,rapid click 会重复发。
-  async function pick(id: number) {
+  async function pick(id: ApiId) {
     if (busy) return
     setBusy(true)
     try {
@@ -43,7 +44,7 @@ export default function ModuleChooser() {
     }
   }
 
-  async function onSetDefault(id: number) {
+  async function onSetDefault(id: ApiId) {
     if (busy) return
     setBusy(true)
     try {

@@ -4,13 +4,14 @@ import { useUserStore } from '@/stores/user'
 import { personalApi } from '@/api'
 import { buildRoutesForModule } from './useAuthMenu'
 import { router } from '@/router'
+import type { ApiId } from '@/types/api'
 
-type EnterResult = { chooser: true } | { chooser: false; moduleId: number }
+type EnterResult = { chooser: true } | { chooser: false; moduleId: ApiId }
 
 export function useModule() {
   const auth = useAuthStore()
 
-  async function enter(moduleId: number): Promise<EnterResult> {
+  async function enter(moduleId: ApiId): Promise<EnterResult> {
     await buildRoutesForModule(moduleId)
     return { chooser: false, moduleId }
   }
@@ -38,13 +39,13 @@ export function useModule() {
     return { chooser: true }
   }
 
-  async function switchModule(moduleId: number): Promise<void> {
+  async function switchModule(moduleId: ApiId): Promise<void> {
     await enter(moduleId)
     useTabsStore().clearTabs()
     router.replace(auth.homePath)
   }
 
-  async function setDefault(moduleId: number): Promise<void> {
+  async function setDefault(moduleId: ApiId): Promise<void> {
     await personalApi.setDefaultModule(moduleId)
     auth.defaultModuleId = moduleId
   }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { AppModule, MenuNode } from '@/types/menu'
-import type { UserProfile } from '@/types/api'
+import type { ApiId, UserProfile } from '@/types/api'
 
 vi.mock('@/api', () => ({
   personalApi: { modules: vi.fn(), menu: vi.fn(), permissions: vi.fn(), profile: vi.fn(), setDefaultModule: vi.fn() },
@@ -17,7 +17,7 @@ const permsMock = vi.mocked(personalApi.permissions)
 const profileMock = vi.mocked(personalApi.profile)
 const setDefaultMock = vi.mocked(personalApi.setDefaultModule)
 
-const mod = (id: number): AppModule => ({ id, code: `m${id}`, title: `M${id}`, sort: 0 })
+const mod = (id: ApiId): AppModule => ({ id, code: `m${id}`, title: `M${id}`, sort: 0 })
 const PROFILE: UserProfile = { id: 1, account: 'a', name: 'n', isSuperAdmin: false, avatar: null }
 
 beforeEach(() => {
@@ -60,6 +60,13 @@ describe('enterInitial 决策阶梯', () => {
   it('有默认且有效 → 进默认(无记住、多个应用)', async () => {
     modulesMock.mockResolvedValue({ modules: [mod(3), mod(8)], defaultModuleId: 8 })
     expect(await enterInitial()).toEqual({ chooser: false, moduleId: 8 })
+  })
+
+  it('超出安全整数范围的字符串应用 Id 原样进入菜单请求', async () => {
+    const id = '9007199254740993'
+    modulesMock.mockResolvedValue({ modules: [mod(id)], defaultModuleId: null })
+    expect(await enterInitial()).toEqual({ chooser: false, moduleId: id })
+    expect(menuMock).toHaveBeenCalledWith(id)
   })
 
   it('记住优先于默认:两者都有效且不同 → 进记住的', async () => {

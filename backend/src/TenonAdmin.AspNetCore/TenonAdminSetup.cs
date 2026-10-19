@@ -125,7 +125,8 @@ public static class TenonAdminSetup
         //   SignalR 属 ASP.NET Core 共享框架,零新增 NuGet。关闭时不挂 Hub、不建长连接,Noop 生效 = 维持既有轮询/惰性 401(纯增强)。
         if (options.Realtime.Enabled)
         {
-            services.AddSignalR();
+            services.AddSignalR().AddJsonProtocol(o =>
+                o.PayloadSerializerOptions.Converters.Add(new JavaScriptSafeInt64Converter()));
             services.TryAddSingleton<IRealtimePublisher, SignalRRealtimePublisher>();
         }
 
@@ -209,7 +210,9 @@ public static class TenonAdminSetup
                 o.Filters.Add<ResultEnvelopeFilter>();
                 o.Conventions.Add(new DisabledModuleConvention(options.Api));   // 按配置摘除禁用模块的控制器(§5.4)
             })
-            .AddApplicationPart(typeof(TenonAdminSetup).Assembly);   // 内置控制器
+            .AddApplicationPart(typeof(TenonAdminSetup).Assembly)   // 内置控制器
+            // 追加而非插到首位：消费者预先注册的 JSON converter 仍优先。
+            .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JavaScriptSafeInt64Converter()));
         // 用户业务程序集里的控制器也挂进来,与内置控制器同管道(§5.7)
         foreach (var assembly in options.ApplicationAssemblies.Distinct())
             mvc.AddApplicationPart(assembly);
@@ -266,7 +269,15 @@ public static class TenonAdminSetup
             options.AddSchemaTransformer((schema, context, _) =>
             {
                 var type = context.JsonTypeInfo.Type;
-                if (type == typeof(JsonElement))
+                if ((Nullable.GetUnderlyingType(type) ?? type) == typeof(long))
+                {
+                    // 自定义 converter 的输出有两种形态，契约须与 MVC/SignalR 的实际编码一致。
+                    schema.Type = JsonSchemaType.Integer | JsonSchemaType.String;
+                    if (Nullable.GetUnderlyingType(type) != null)
+                        schema.Type |= JsonSchemaType.Null;
+                    schema.Format = "int64";
+                }
+                else if (type == typeof(JsonElement))
                 {
                     schema.Type = null;
                     schema.AdditionalPropertiesAllowed = true;

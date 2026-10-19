@@ -13,7 +13,7 @@ import { useConfirm } from '@/hooks/useConfirm'
 import { useHasPerm } from '@/stores/auth'
 import { noticeApi, roleApi, userApi } from '@/api'
 import { translateError } from '@/utils/error'
-import { NoticeType, ReceiverType, type NoticePublishInput, type SysNotice } from '@/types/api'
+import { NoticeType, ReceiverType, type ApiId, type NoticePublishInput, type SysNotice } from '@/types/api'
 import { blank, typeLabelKey, typeTagColor, receiverValid } from './noticeForm'
 
 export default function NoticePage() {
@@ -26,8 +26,8 @@ export default function NoticePage() {
   const reload = useCallback(() => tableRef.current?.reload(), [])
 
   // 接收对象下拉源:角色/用户各拉一页足量(同 user 页)。发布弹窗低频,进页面预取;失败静默(配角)。
-  const [roleOptions, setRoleOptions] = useState<{ label: string; value: number }[]>([])
-  const [userOptions, setUserOptions] = useState<{ label: string; value: number }[]>([])
+  const [roleOptions, setRoleOptions] = useState<{ label: string; value: ApiId }[]>([])
+  const [userOptions, setUserOptions] = useState<{ label: string; value: ApiId }[]>([])
   useEffect(() => {
     roleApi.page({ page: 1, pageSize: 200 }).then(({ items }) => setRoleOptions(items.map((r) => ({ label: r.name, value: r.id })))).catch(() => {})
     userApi.page({ page: 1, pageSize: 200 }).then(({ items }) => setUserOptions(items.map((u) => ({ label: `${u.name}(${u.account})`, value: u.id })))).catch(() => {})

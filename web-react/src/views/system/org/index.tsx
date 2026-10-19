@@ -19,7 +19,7 @@ import { useHasPerm } from '@/stores/auth'
 import { orgApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { buildTree, expandableIds, filterTree, type Tree } from '@/utils/tree'
-import type { OrgInput, SysOrg } from '@/types/api'
+import type { ApiId, OrgInput, SysOrg } from '@/types/api'
 import { blankForm, rowToInput } from './orgForm'
 
 export default function OrgPage() {
@@ -31,7 +31,7 @@ export default function OrgPage() {
   const [tree, setTree] = useState<Tree<SysOrg>[]>([])
   const [loading, setLoading] = useState(false)
   const [keyword, setKeyword] = useState('')
-  const [expandedKeys, setExpandedKeys] = useState<number[]>([])
+  const [expandedKeys, setExpandedKeys] = useState<ApiId[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -61,9 +61,9 @@ export default function OrgPage() {
   // ── 新增/编辑弹窗(FormContainer owns loading+close)──
   const [form] = Form.useForm<OrgInput>()
   const [open, setOpen] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<ApiId | null>(null)
 
-  const openAdd = useCallback((parentId = 0) => {
+  const openAdd = useCallback((parentId: ApiId = 0) => {
     setEditingId(null)
     form.setFieldsValue(blankForm(parentId))
     setOpen(true)
@@ -91,7 +91,7 @@ export default function OrgPage() {
 
   // ── 复制弹窗 ──
   const [copyOpen, setCopyOpen] = useState(false)
-  const [copyId, setCopyId] = useState(0)
+  const [copyId, setCopyId] = useState<ApiId>(0)
   const [copySourceName, setCopySourceName] = useState('')
   const [copyName, setCopyName] = useState('')
 
@@ -164,7 +164,7 @@ export default function OrgPage() {
         data={filteredTree}
         loading={loading}
         expandedRowKeys={expandedKeys}
-        onExpandedRowKeysChange={(keys) => setExpandedKeys(keys as number[])}
+        onExpandedRowKeysChange={(keys) => setExpandedKeys(keys as ApiId[])}
         persistKey="sys-org"
         toolbar={
           <Space>

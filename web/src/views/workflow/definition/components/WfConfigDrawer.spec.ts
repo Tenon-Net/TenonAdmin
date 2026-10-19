@@ -16,6 +16,43 @@ afterEach(() => {
 })
 
 describe('WfConfigDrawer form permissions', () => {
+  it('编辑审批人时保留超过安全整数范围的字符串 Id', async () => {
+    const userId = '9007199254740993'
+    const model: WfModel = {
+      version: 1,
+      root: {
+        id: 'start', type: 'start', name: 'Start',
+        next: {
+          id: 'approval', type: 'approval', name: 'Approval',
+          props: { assignee: { provider: 'user', params: { userIds: [userId] } } },
+          next: null,
+        },
+      },
+    }
+    let updated: WfModel | undefined
+    const host = document.createElement('div')
+    document.body.append(host)
+    app = createApp(defineComponent({
+      setup: () => () => h(WfConfigDrawer, {
+        show: true,
+        model,
+        nodeId: 'approval',
+        'onUpdate:model': (value: WfModel) => { updated = value },
+      }),
+    }))
+    app.use(createI18n({ legacy: false, locale: 'en-US', missingWarn: false, fallbackWarn: false }))
+    app.mount(host)
+    await nextTick()
+    await nextTick()
+
+    Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('common.save'))
+      ?.click()
+    await nextTick()
+
+    expect(updated?.root.next?.props?.assignee?.params?.userIds).toEqual([userId])
+  })
+
   it('shows and saves the persisted all-sign ratio', async () => {
     const model: WfModel = {
       version: 1,

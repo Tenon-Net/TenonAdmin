@@ -67,6 +67,14 @@ describe('isCookieSession', () => {
 })
 
 describe('useUserStore Level3 persist', () => {
+  it('保留登录响应中的大用户字符串 Id', () => {
+    const user = mountUserStore(makeMemoryStorage())
+    const userId = '9007199254740993'
+    user.setSession(sample({ userId } as Partial<LoginOutput>))
+
+    expect(user.userInfo?.userId).toBe(userId)
+  })
+
   it('body 模式仍持久化 access/refresh', () => {
     const storage = makeMemoryStorage()
     const user = mountUserStore(storage)

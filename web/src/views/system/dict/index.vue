@@ -18,7 +18,7 @@ import { dictAdminApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useDictStore } from '@/stores/dict'
 import { translateError } from '@/utils/error'
-import type { DictItemInput, DictTypeInput, SysDictItem, SysDictType } from '@/types/api'
+import type { ApiId, DictItemInput, DictTypeInput, SysDictItem, SysDictType } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -143,7 +143,7 @@ const typeColumns: ProTableColumn<SysDictType>[] = [
 // ── 类型 新增/编辑弹窗 ──
 const typeShow = ref(false)
 const typeFormRef = ref<FormInst | null>(null)
-const typeEditingId = ref<number | null>(null)
+const typeEditingId = ref<ApiId | null>(null)
 const typeRules: FormRules = {
   code: { required: true, whitespace: true, message: () => t('dict.codeRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('dict.nameRequired'), trigger: ['input', 'blur'] },
@@ -233,7 +233,7 @@ const itemColumns: DataTableColumns<SysDictItem> = [
 // ── 字典项 新增/编辑弹窗 ──
 const itemShow = ref(false)
 const itemFormRef = ref<FormInst | null>(null)
-const itemEditingId = ref<number | null>(null)
+const itemEditingId = ref<ApiId | null>(null)
 const itemRules: FormRules = {
   label: { required: true, whitespace: true, message: () => t('dict.itemLabelRequired'), trigger: ['input', 'blur'] },
   value: { required: true, whitespace: true, message: () => t('dict.itemValueRequired'), trigger: ['input', 'blur'] },

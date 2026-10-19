@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor } from '@testing-library/react'
-import type { SysOrg } from '@/types/api'
+import type { ApiId, SysOrg } from '@/types/api'
 
 vi.mock('@/api', () => ({ orgApi: { list: vi.fn() } }))
 import { orgApi } from '@/api'
@@ -11,7 +11,7 @@ const org = (id: number, parentId: number, name: string): SysOrg =>
 
 // 1 → 2 → 3(总部→研发→前端组),4 独立(分公司)
 const flat: SysOrg[] = [org(1, 0, '总部'), org(2, 1, '研发'), org(3, 2, '前端组'), org(4, 0, '分公司')]
-const ids = (nodes: { id: number; children?: unknown[] }[]): number[] =>
+const ids = (nodes: { id: ApiId; children?: unknown[] }[]): ApiId[] =>
   nodes.flatMap((n) => [n.id, ...(n.children ? ids(n.children as typeof nodes) : [])])
 
 afterEach(() => {

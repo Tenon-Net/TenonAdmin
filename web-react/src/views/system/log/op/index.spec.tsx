@@ -10,6 +10,11 @@ import { useAuthStore } from '@/stores/auth'
 
 const { reloadSpy, confirmMock } = vi.hoisted(() => ({ reloadSpy: vi.fn(), confirmMock: vi.fn() }))
 vi.mock('@/hooks/useConfirm', () => ({ useConfirm: () => ({ confirm: confirmMock, ask: vi.fn(), run: vi.fn() }) }))
+vi.mock('@/utils/download', () => ({ triggerBlobDownload: vi.fn() }))
+vi.mock('@/components/ExportColumnsModal', () => ({
+  ExportColumnsModal: (props: { open: boolean; onConfirm: (keys: string[]) => Promise<void> }) => props.open
+    ? <button onClick={() => void props.onConfirm(['Title'])}>确认导出</button> : null,
+}))
 // mock DataTable:捕获 columns/fetcher/toolbar,forwardRef 暴露 reload spy(验清空后刷新)。
 let captured: { columns?: ProColumns<Record<string, unknown>>[]; fetcher?: (q: Record<string, unknown>) => Promise<unknown>; toolbar?: ReactNode } = {}
 vi.mock('@/components/DataTable', () => ({
@@ -53,6 +58,19 @@ describe('OpLogPage 接线', () => {
     mount()
     await captured.fetcher!({ page: 1, pageSize: 10 })
     expect(logApi.opPage).toHaveBeenCalledWith({ page: 1, pageSize: 10, title: undefined, path: undefined, success: undefined, operatorId: undefined, createTime: null })
+  })
+
+  it('大操作人 Id 的分页筛选和导出均保留原字符串', async () => {
+    const operatorId = '9007199254740993'
+    vi.spyOn(logApi, 'opExport').mockResolvedValue(new Blob())
+    useAuthStore.setState({ isSuperAdmin: true, permissionsLoaded: true, permissionCodes: [] })
+    mount()
+    await captured.fetcher!({ page: 1, pageSize: 10, operatorId })
+    expect(logApi.opPage).toHaveBeenCalledWith(expect.objectContaining({ operatorId }))
+    render(<AntdApp>{captured.toolbar}</AntdApp>)
+    fireEvent.click(screen.getByRole('button', { name: /^导\s*出$/ }))
+    fireEvent.click(await screen.findByRole('button', { name: '确认导出' }))
+    await vi.waitFor(() => expect(logApi.opExport).toHaveBeenCalledWith(expect.objectContaining({ operatorId, columns: 'Title' })))
   })
 
   it('清空:DELETE 权限门 + 二确 → opClear + reload', async () => {

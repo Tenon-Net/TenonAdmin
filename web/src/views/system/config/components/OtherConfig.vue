@@ -14,7 +14,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { useAuthStore } from '@/stores/auth'
 import { configApi } from '@/api'
 import { translateError } from '@/utils/error'
-import type { ConfigInput, SysConfig } from '@/types/api'
+import type { ApiId, ConfigInput, SysConfig } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -67,7 +67,7 @@ const columns: ProTableColumn<SysConfig>[] = [
 // ── 新增/编辑弹窗(FormContainer:loading/关闭时机按 onConfirm 协议接管)──
 const show = ref(false)
 const formRef = ref<FormInst | null>(null)
-const editingId = ref<number | null>(null)
+const editingId = ref<ApiId | null>(null)
 const rules: FormRules = {
   configKey: { required: true, whitespace: true, message: () => t('config.keyRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('config.nameRequired'), trigger: ['input', 'blur'] },

@@ -43,9 +43,9 @@ export const wfDefinitionApi = {
       })
       .then((r) => toPage<WfDefinitionRow>(r)),
 
-  get: (id: number) =>
+  get: (id: WfId) =>
     client
-      .GET('/api/v1/workflow/definition/{id}', { params: { path: { id } } })
+      .GET('/api/v1/workflow/definition/{id}', { params: { path: { id: workflowPathId(id) } } })
       .then((r) => unwrap<WfDefinitionDetail>(r)),
 
   add: (body: WfDefinitionInput) =>
@@ -58,19 +58,19 @@ export const wfDefinitionApi = {
       .POST('/api/v1/workflow/definition/update', { body })
       .then((r) => unwrap<boolean>(r)),
 
-  publish: (id: number) =>
+  publish: (id: WfId) =>
     client
-      .POST('/api/v1/workflow/definition/publish', { body: { id } })
+      .POST('/api/v1/workflow/definition/publish', { body: { id: workflowPathId(id) } })
       .then((r) => unwrap<number | string>(r)),
 
-  disable: (id: number) =>
+  disable: (id: WfId) =>
     client
-      .POST('/api/v1/workflow/definition/disable', { body: { id } })
+      .POST('/api/v1/workflow/definition/disable', { body: { id: workflowPathId(id) } })
       .then((r) => unwrap<boolean>(r)),
 
-  remove: (id: number) =>
+  remove: (id: WfId) =>
     client
-      .DELETE('/api/v1/workflow/definition/{id}', { params: { path: { id } } })
+      .DELETE('/api/v1/workflow/definition/{id}', { params: { path: { id: workflowPathId(id) } } })
       .then((r) => unwrap<boolean>(r)),
 }
 
@@ -80,9 +80,9 @@ export const wfInstanceApi = {
       .GET('/api/v1/workflow/instance/startable', {})
       .then((r) => unwrap<WfStartableDefinition[]>(r)),
 
-  startableDetail: (id: number) =>
+  startableDetail: (id: WfId) =>
     client
-      .GET('/api/v1/workflow/instance/startable/{id}', { params: { path: { id } } })
+      .GET('/api/v1/workflow/instance/startable/{id}', { params: { path: { id: workflowPathId(id) } } })
       .then((r) => unwrap<WfStartableDefinitionDetail>(r)),
 
   start: (body: WfStartInput) =>
@@ -95,16 +95,16 @@ export const wfInstanceApi = {
       .GET('/api/v1/workflow/instance/{id}', { params: { path: { id: workflowPathId(id) } } })
       .then((r) => unwrap<WfInstanceDetail>(r)),
 
-  history: (id: number) =>
+  history: (id: WfId) =>
     client
-      .GET('/api/v1/workflow/instance/history/{id}', { params: { path: { id } } })
+      .GET('/api/v1/workflow/instance/history/{id}', { params: { path: { id: workflowPathId(id) } } })
       .then((r) => unwrap<WfHistoryItem[]>(r)),
 
   page: (params: {
     page: number
     pageSize: number
     status?: number
-    definitionId?: number
+    definitionId?: WfId
     businessKey?: string
   }) =>
     client
@@ -124,11 +124,11 @@ export const wfInstanceApi = {
     page: number
     pageSize: number
     status?: number
-    definitionId?: number
+    definitionId?: WfId
     businessKey?: string
-    starterUserId?: number
-    actorUserId?: number
-    ccUserId?: number
+    starterUserId?: WfId
+    actorUserId?: WfId
+    ccUserId?: WfId
   }) =>
     client
       .GET('/api/v1/workflow/instance/monitor', {
@@ -167,19 +167,19 @@ export const wfInstanceApi = {
       .POST('/api/v1/workflow/instance/skip', { body })
       .then((r) => unwrap<WfEngineResult>(r)),
 
-  cancel: (body: { instanceId: number; comment?: string | null; requestId?: string | null }) =>
+  cancel: (body: { instanceId: WfId; comment?: string | null; requestId?: string | null }) =>
     client
       .POST('/api/v1/workflow/instance/cancel', { body })
       .then((r) => unwrap<WfEngineResult>(r)),
 
-  resubmit: (body: { instanceId: number; variablesJson?: string | null; requestId?: string | null }) =>
+  resubmit: (body: { instanceId: WfId; variablesJson?: string | null; requestId?: string | null }) =>
     client
       .POST('/api/v1/workflow/instance/resubmit', { body })
       .then((r) => unwrap<WfEngineResult>(r)),
 }
 
 export const wfTaskApi = {
-  todo: (params: { page: number; pageSize: number; definitionId?: number }) =>
+  todo: (params: { page: number; pageSize: number; definitionId?: WfId }) =>
     client
       .GET('/api/v1/workflow/task/todo', {
         params: {
@@ -191,7 +191,7 @@ export const wfTaskApi = {
       })
       .then((r) => toPage<WfTodoItem>(r)),
 
-  done: (params: { page: number; pageSize: number; definitionId?: number }) =>
+  done: (params: { page: number; pageSize: number; definitionId?: WfId }) =>
     client
       .GET('/api/v1/workflow/task/done', {
         params: {
@@ -250,7 +250,7 @@ export const wfTaskApi = {
 }
 
 export const wfDelegationApi = {
-  page: (params: { page: number; pageSize: number; originalUserId?: number; enabled?: boolean }) =>
+  page: (params: { page: number; pageSize: number; originalUserId?: WfId; enabled?: boolean }) =>
     client
       .GET('/api/v1/workflow/delegation/page', {
         params: {
@@ -266,15 +266,15 @@ export const wfDelegationApi = {
   add: (body: WfDelegationRuleInput) =>
     client.POST('/api/v1/workflow/delegation/add', { body }).then((r) => unwrap<WfDelegationRule>(r)),
 
-  update: (id: number, body: WfDelegationRuleInput) =>
+  update: (id: WfId, body: WfDelegationRuleInput) =>
     client
-      .PUT('/api/v1/workflow/delegation/{id}', { params: { path: { id } }, body })
+      .PUT('/api/v1/workflow/delegation/{id}', { params: { path: { id: workflowPathId(id) } }, body })
       .then((r) => unwrap<WfDelegationRule>(r)),
 
-  remove: (id: number, requestId: string) =>
+  remove: (id: WfId, requestId: string) =>
     client
       .DELETE('/api/v1/workflow/delegation/{id}', {
-        params: { path: { id }, query: { requestId } },
+        params: { path: { id: workflowPathId(id) }, query: { requestId } },
       })
       .then((r) => unwrap<boolean>(r)),
 }

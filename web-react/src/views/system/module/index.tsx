@@ -13,7 +13,7 @@ import { useConfirm } from '@/hooks/useConfirm'
 import { useHasPerm } from '@/stores/auth'
 import { moduleApi } from '@/api'
 import { translateError } from '@/utils/error'
-import type { ModuleInput, ModuleRow } from '@/types/api'
+import type { ApiId, ModuleInput, ModuleRow } from '@/types/api'
 import { blankModule, isBuiltin, moduleToInput } from './moduleForm'
 
 export default function ModulePage() {
@@ -40,7 +40,7 @@ export default function ModulePage() {
   // ── 新增/编辑弹窗 ──
   const [form] = Form.useForm<ModuleInput>()
   const [open, setOpen] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<ApiId | null>(null)
 
   const openAdd = useCallback(() => { setEditingId(null); form.setFieldsValue(blankModule()); setOpen(true) }, [form])
   const openEdit = useCallback((r: ModuleRow) => { setEditingId(r.id); form.setFieldsValue(moduleToInput(r)); setOpen(true) }, [form])

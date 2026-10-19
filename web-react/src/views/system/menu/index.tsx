@@ -20,7 +20,7 @@ import { menuApi, moduleApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { expandableIds, filterTree } from '@/utils/tree'
 import { MenuType, type MenuInput, type MenuTreeNode } from '@/types/menu'
-import type { ModuleRow } from '@/types/api'
+import type { ApiId, ModuleRow } from '@/types/api'
 import type { PermissionRouteItem } from '@/types/api'
 import {
   ALL_MODULES, UNASSIGNED, blankMenu, buildButtonInfo, menuRowToInput, stripButtons, subtreeIds,
@@ -38,8 +38,8 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(false)
   const [keyword, setKeyword] = useState('')
   // 默认跟随当前进入的应用;modules 加载后再校正(见下方 effect)。
-  const [moduleFilter, setModuleFilter] = useState<number>(() => useAuthStore.getState().currentModuleId ?? UNASSIGNED)
-  const [expandedKeys, setExpandedKeys] = useState<number[]>([])
+  const [moduleFilter, setModuleFilter] = useState<ApiId>(() => useAuthStore.getState().currentModuleId ?? UNASSIGNED)
+  const [expandedKeys, setExpandedKeys] = useState<ApiId[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -115,15 +115,15 @@ export default function MenuPage() {
   // ── 新增/编辑弹窗 ──
   const [form] = Form.useForm<MenuInput>()
   const [open, setOpen] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<ApiId | null>(null)
   const parentId = Form.useWatch('parentId', form)
   const typeVal = Form.useWatch('type', form)
   const isTopLevel = parentId === 0
 
   // 父级下拉:根 + 当前应用子树的目录/页面(按钮不能当父),缩进体现层级;编辑时排除自身子树防成环。
   const parentOptions = useMemo(() => {
-    const exclude = editingId === null ? new Set<number>() : subtreeIds(tree, editingId)
-    const opts: { label: string; value: number }[] = [{ label: t('menu.parentRoot'), value: 0 }]
+    const exclude = editingId === null ? new Set<ApiId>() : subtreeIds(tree, editingId)
+    const opts: { label: string; value: ApiId }[] = [{ label: t('menu.parentRoot'), value: 0 }]
     const walk = (nodes: MenuTreeNode[], depth: number) => {
       for (const n of nodes) {
         if (n.type !== MenuType.Button && !exclude.has(n.id)) opts.push({ label: `${'　'.repeat(depth)}${n.title}`, value: n.id })
@@ -134,7 +134,7 @@ export default function MenuPage() {
     return opts
   }, [editingId, tree, filteredTree, t])
 
-  const openAdd = useCallback((pid = 0) => {
+  const openAdd = useCallback((pid: ApiId = 0) => {
     setEditingId(null)
     // 新建顶级目录时自动盖上当前筛选的应用(「未分配」「全部」筛选下留空,交给用户手选)。
     const moduleId = pid === 0 && moduleFilter !== UNASSIGNED && moduleFilter !== ALL_MODULES ? moduleFilter : null
@@ -163,7 +163,7 @@ export default function MenuPage() {
   }
 
   // ── 权限按钮弹窗(props 受控:非 null 即开)──
-  const [buttonMgr, setButtonMgr] = useState<{ id: number; title: string } | null>(null)
+  const [buttonMgr, setButtonMgr] = useState<{ id: ApiId; title: string } | null>(null)
   const onButtonsChanged = useCallback(() => { void load(); syncShell() }, [load, syncShell])
 
   const handleDelete = useCallback((r: MenuTreeNode) => {
@@ -247,7 +247,7 @@ export default function MenuPage() {
         data={visibleTree}
         loading={loading}
         expandedRowKeys={expandedKeys}
-        onExpandedRowKeysChange={(keys) => setExpandedKeys(keys as number[])}
+        onExpandedRowKeysChange={(keys) => setExpandedKeys(keys as ApiId[])}
         persistKey="sys-menu"
         toolbar={
           <Space>

@@ -1,5 +1,7 @@
+import type { ApiId } from '@/types/api'
+
 /** 工作流 int64 标识：JSON number 与十进制 string 都可接受，string 不做数值化。 */
-export type WfId = number | string
+export type WfId = ApiId
 
 /** 仅接受安全正整数或正十进制字符串；字符串原样返回，避免雪花 Id 精度丢失。 */
 export function normalizeWfId(value: unknown): WfId | null {
@@ -27,10 +29,7 @@ export function wfIdEquals(left: WfId | null | undefined, right: WfId | null | u
   return left != null && right != null && String(left) === String(right)
 }
 
-/**
- * 生成契约把部分路径 id 标成 number。断言不把十进制字符串转成 number，
- * 调用方拿到的仍是 normalizeWfId 认可的原值。
- */
-export function workflowPathId(id: WfId): number {
-  return id as number
+/** OpenAPI 路径接受 number|string，原样传递十进制字符串。 */
+export function workflowPathId(id: WfId): WfId {
+  return id
 }

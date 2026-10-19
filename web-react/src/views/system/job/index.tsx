@@ -17,7 +17,7 @@ import { useHasPerm } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
 import { jobApi } from '@/api'
 import { translateError } from '@/utils/error'
-import type { SysJob } from '@/types/api'
+import type { ApiId, SysJob } from '@/types/api'
 import { blankJob, describeTrigger, formToInput, hasAdvanced, rowToForm, type JobFormValues } from './jobForm'
 
 /** 表单分节 key:基本/触发/载荷默认展开,高级默认收。 */
@@ -61,7 +61,7 @@ export default function JobPage() {
   // ── 新增/编辑弹窗(FormContainer owns loading+close)──
   const [form] = Form.useForm<JobFormValues>()
   const [open, setOpen] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<ApiId | null>(null)
   const triggerKind = Form.useWatch('triggerKind', form)
   const handlerKind = Form.useWatch('handlerKind', form)
 

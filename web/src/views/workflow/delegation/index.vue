@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 import { wfDelegationApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
+import { normalizeWfId, type WfId } from '@/workflow/id'
 import type { WfDelegationRule, WfDelegationRuleInput } from '@/types/workflow'
 
 const { t } = useI18n()
@@ -17,22 +18,22 @@ const { confirm } = useConfirm()
 const authStore = useAuthStore()
 const tableRef = ref<ProTableInst<WfDelegationRule>>()
 const modalOpen = ref(false)
-const editingId = ref<number | null>(null)
+const editingId = ref<WfId | null>(null)
 const submitting = ref(false)
 const requestKey = useRequestKey()
-const deleteRequestKeys = new Map<number, string>()
+const deleteRequestKeys = new Map<string, string>()
 const form = reactive({
-  originalUserId: null as number | null,
-  delegateUserId: null as number | null,
+  originalUserId: null as WfId | null,
+  delegateUserId: null as WfId | null,
   enabled: true,
   startsAt: Date.now(),
   endsAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
 })
 
 function resetForm(row?: WfDelegationRule) {
-  editingId.value = row?.id == null ? null : Number(row.id)
-  form.originalUserId = row?.originalUserId == null ? null : Number(row.originalUserId)
-  form.delegateUserId = row?.delegateUserId == null ? null : Number(row.delegateUserId)
+  editingId.value = normalizeWfId(row?.id)
+  form.originalUserId = normalizeWfId(row?.originalUserId)
+  form.delegateUserId = normalizeWfId(row?.delegateUserId)
   form.enabled = row?.enabled ?? true
   form.startsAt = row?.startsAt ? new Date(row.startsAt).getTime() : Date.now()
   form.endsAt = row?.endsAt ? new Date(row.endsAt).getTime() : Date.now() + 30 * 24 * 60 * 60 * 1000
@@ -74,9 +75,11 @@ async function save() {
 }
 
 async function remove(row: WfDelegationRule) {
-  const id = Number(row.id)
-  const requestId = deleteRequestKeys.get(id) ?? `delete-${id}-${Date.now()}`
-  deleteRequestKeys.set(id, requestId)
+  const id = normalizeWfId(row.id)
+  if (id == null) return
+  const key = String(id)
+  const requestId = deleteRequestKeys.get(key) ?? `delete-${key}-${Date.now()}`
+  deleteRequestKeys.set(key, requestId)
   const ok = await confirm({
     content: t('workflow.delegation.deleteConfirm'),
     type: 'warning',
@@ -84,7 +87,7 @@ async function remove(row: WfDelegationRule) {
     successMsg: t('workflow.delegation.deleted'),
   })
   if (ok) {
-    deleteRequestKeys.delete(id)
+    deleteRequestKeys.delete(key)
     await tableRef.value?.refresh()
   }
 }

@@ -1,6 +1,7 @@
 // 菜单页纯逻辑:默认表单 / 全量映射 / 剥按钮 / 按钮信息 / 子树 id / 路由应用软过滤 / 方法默认标题。
 // 抽出来做变异钉——index.tsx 与 ButtonManager.tsx 只接线。对齐 Vue 侧 menu/index.vue + ButtonManager.vue。
 import { MenuType, type MenuInput, type MenuTreeNode } from '@/types/menu'
+import type { ApiId } from '@/types/api'
 
 /** 「未分配」哨兵:雪花 id 无 0,用它表示 moduleId==null 的顶级目录分组。 */
 export const UNASSIGNED = 0
@@ -10,7 +11,7 @@ export const UNASSIGNED = 0
 export const ALL_MODULES = -1
 
 /** 新增默认表单。type 默认页面(主表单),按钮弹窗传 MenuType.Button;moduleId 仅顶级目录有效。 */
-export function blankMenu(parentId = 0, moduleId: number | null = null, type: MenuType = MenuType.Menu): MenuInput {
+export function blankMenu(parentId: ApiId = 0, moduleId: ApiId | null = null, type: MenuType = MenuType.Menu): MenuInput {
   return { parentId, type, title: '', permission: '', sort: 0, enabled: true, moduleId, path: '', component: '', icon: '', visible: true }
 }
 
@@ -36,8 +37,8 @@ export function stripButtons(nodes: MenuTreeNode[]): MenuTreeNode[] {
  * count 给「配置权限」列徽标;perms 给关键字搜索——按钮已不在树里,「这个权限码归哪个页面」
  * 只能靠父页面命中来答,否则藏起按钮就等于把它搜没了。
  */
-export function buildButtonInfo(tree: MenuTreeNode[]): Map<number, { count: number; perms: string }> {
-  const m = new Map<number, { count: number; perms: string }>()
+export function buildButtonInfo(tree: MenuTreeNode[]): Map<ApiId, { count: number; perms: string }> {
+  const m = new Map<ApiId, { count: number; perms: string }>()
   const walk = (nodes: MenuTreeNode[]) => {
     for (const n of nodes) {
       const btns = n.children.filter((c) => c.type === MenuType.Button)
@@ -50,8 +51,8 @@ export function buildButtonInfo(tree: MenuTreeNode[]): Map<number, { count: numb
 }
 
 /** 收集以 id 为根的子树全部 id(含自身)——编辑时排除,防把节点挂到自己后代下成环。 */
-export function subtreeIds(nodes: MenuTreeNode[], id: number): Set<number> {
-  const out = new Set<number>()
+export function subtreeIds(nodes: MenuTreeNode[], id: ApiId): Set<ApiId> {
+  const out = new Set<ApiId>()
   const find = (list: MenuTreeNode[]): MenuTreeNode | null => {
     for (const n of list) {
       if (n.id === id) return n

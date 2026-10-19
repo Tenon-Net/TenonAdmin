@@ -53,6 +53,7 @@ import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 import { canResubmitInstance } from '@/workflow/resubmit'
 import { mergeWfFormPermissions, observerHiddenFields } from '@/workflow/formRuntime'
 import { classifyOutcome, useRequestKey } from '@/workflow/useRequestKey'
+import { normalizeWfId, wfIdEquals, type WfId } from '@/workflow/id'
 import { ACTOR_STATUS, approvalRounds, countersignProgress, participantGroups, participantHistory } from '@/workflow/approvalProgress'
 import WfFormMount from '../components/WfFormMount.vue'
 import WfNodeTree from '../definition/components/WfNodeTree.vue'
@@ -73,7 +74,7 @@ const { run } = useConfirm()
 const requestKey = useRequestKey()
 
 const isInline = computed(() => props.id != null)
-const uid = computed(() => Number(props.id ?? route.params.id))
+const uid = computed(() => normalizeWfId(props.id ?? route.params.id))
 
 const user = useUserStore()
 const auth = useAuthStore()
@@ -85,8 +86,8 @@ const history = ref<WfHistoryItem[]>([])
 const formVariablesJson = ref<string | null>(null)
 const formRuntimeRef = ref<{ validate: () => boolean } | null>(null)
 const resubmitFormRef = ref<{ validate: () => boolean } | null>(null)
-const targetTaskId = ref<number | null>(null)
-const selectedPendingTaskId = ref<number | null>(null)
+const targetTaskId = ref<WfId | null>(null)
+const selectedPendingTaskId = ref<WfId | null>(null)
 
 const pendingActionKinds: ActionKind[] = ['approve', 'reject', 'return', 'transfer', 'delegate', 'addSign', 'removeSign']
 
@@ -101,14 +102,14 @@ const myPendingTasks = computed<WfTodoItem[]>(() => {
   return detail.value?.myPendingTask ? [detail.value.myPendingTask as WfTodoItem] : []
 })
 const selectedPendingTask = computed(() =>
-  myPendingTasks.value.find((task) => Number(task.taskId) === selectedPendingTaskId.value)
+  myPendingTasks.value.find((task) => wfIdEquals(task.taskId, selectedPendingTaskId.value))
   ?? myPendingTasks.value[0],
 )
 const requiresPendingTask = computed(() => pendingActionKinds.includes(actionKind.value))
 
 const actionShow = ref(false)
 const actionKind = ref<ActionKind>('approve')
-const actionForm = reactive({ comment: '', toUserId: null as number | null, targetNodeId: null as string | null })
+const actionForm = reactive({ comment: '', toUserId: null as WfId | null, targetNodeId: null as string | null })
 const actionSubmitting = ref(false)
 
 const isStarter = computed(() => {
@@ -121,7 +122,7 @@ const isStarter = computed(() => {
 
 function sameUser(left: number | string | null | undefined, right: number | string | null | undefined) {
   if (left == null || right == null || left === '' || right === '') return false
-  return String(left) === String(right)
+  return wfIdEquals(left, right)
 }
 
 const blockStarter = computed(() =>
@@ -163,7 +164,7 @@ const formPermissions = computed<WfFormFieldPerm[] | null>(() => {
   const ownNodeIds = myPendingTasks.value.length > 0
     ? myPendingTasks.value.map((task) => task.nodeId).filter((id): id is string => Boolean(id))
     : (detail.value?.hisTasks ?? [])
-        .filter((task) => Number(task.userId) === Number(user.userInfo?.userId))
+        .filter((task) => sameUser(task.userId, user.userInfo?.userId))
         .map((task) => task.nodeId)
         .filter((id): id is string => Boolean(id))
   if (ownNodeIds.length > 0) {
@@ -219,10 +220,9 @@ const canResubmit = computed(() => canResubmitInstance({
 }))
 
 const canTakeBack = computed(() => {
-  const me = Number(user.userInfo?.userId ?? 0)
   return isRunning.value
-    && Number(detail.value?.myTakeBackTaskId ?? 0) > 0
-    && me > 0
+    && normalizeWfId(detail.value?.myTakeBackTaskId) != null
+    && normalizeWfId(user.userInfo?.userId) != null
 })
 
 function btnText(kind: keyof WfButtonLabels, fallbackKey: string) {
@@ -398,7 +398,17 @@ const commentPlaceholder = computed(() => {
   return t('workflow.detail.commentHint')
 })
 
-const canRetryLoad = computed(() => Number.isFinite(uid.value) && uid.value > 0)
+const canRetryLoad = computed(() => uid.value != null)
+
+function pendingTaskOption(task: WfTodoItem) {
+  const value = normalizeWfId(task.taskId)
+  return value == null ? [] : [{ label: pendingTaskText(task), value }]
+}
+
+function currentTaskOption(task: WfCurrentTask) {
+  const value = normalizeWfId(task.taskId)
+  return value == null ? [] : [{ label: currentTaskText(task), value }]
+}
 
 function statusLabel(row: { status?: WfInstanceStatus; returnedToStarter?: boolean; blockedNodeIds?: string[]; hasPendingTask?: boolean } | undefined): string {
   const key = row ? runtimeStatusKey(row) ?? normalizeStatus(row.status) : 'unknown'
@@ -598,9 +608,9 @@ function resetActionDraft() {
   actionForm.targetNodeId = null
 }
 
-async function load(id: number) {
+async function load(id: WfId | null) {
   const seq = ++loadSeq
-  if (!Number.isFinite(id) || id <= 0) {
+  if (id == null) {
     detail.value = null
     history.value = []
     loadError.value = t('workflow.detail.loadInvalid')
@@ -619,7 +629,7 @@ async function load(id: number) {
     history.value = loadedHistory
     selectedPendingTaskId.value = myPendingTasks.value[0]?.taskId == null
       ? null
-      : Number(myPendingTasks.value[0].taskId)
+      : normalizeWfId(myPendingTasks.value[0].taskId)
     formVariablesJson.value = detail.value.variablesJson ?? null
     if (!isInline.value) setTabTitle(detail.value.definitionName || t('workflow.detail.title'))
   } catch (e) {
@@ -637,7 +647,7 @@ async function load(id: number) {
 watch(selectedPendingTask, (task) => {
   formVariablesJson.value = detail.value?.variablesJson ?? null
   if (actionShow.value && requiresPendingTask.value)
-    targetTaskId.value = task?.taskId == null ? null : Number(task.taskId)
+    targetTaskId.value = normalizeWfId(task?.taskId)
 })
 
 watch(uid, (id) => {
@@ -670,9 +680,9 @@ function openAction(kind: ActionKind) {
   actionKind.value = kind
   targetTaskId.value = kind === 'urge' || kind === 'takeBack'
     ? kind === 'takeBack'
-      ? Number(detail.value?.myTakeBackTaskId ?? 0) || null
-      : Number(currentTasks.value[0]?.taskId ?? 0) || null
-    : Number(selectedPendingTask.value?.taskId ?? 0) || null
+      ? normalizeWfId(detail.value?.myTakeBackTaskId)
+      : normalizeWfId(currentTasks.value[0]?.taskId)
+    : normalizeWfId(selectedPendingTask.value?.taskId)
   if (kind !== 'urge') requestKey.reset()
   actionShow.value = true
 }
@@ -689,11 +699,11 @@ function onCommentKeydown(e: KeyboardEvent) {
 async function submitAction() {
   if (actionSubmitting.value) return
   const kind = actionKind.value
-  if ((kind === 'transfer' || kind === 'delegate') && (!actionForm.toUserId || actionForm.toUserId <= 0)) {
+  if ((kind === 'transfer' || kind === 'delegate') && normalizeWfId(actionForm.toUserId) == null) {
     message.warning(t(kind === 'delegate' ? 'workflow.detail.delegateRequired' : 'workflow.detail.transferRequired'))
     return
   }
-  if ((kind === 'addSign' || kind === 'removeSign') && (!actionForm.toUserId || actionForm.toUserId <= 0)) {
+  if ((kind === 'addSign' || kind === 'removeSign') && normalizeWfId(actionForm.toUserId) == null) {
     message.warning(t(kind === 'addSign' ? 'workflow.detail.addSignRequired' : 'workflow.detail.removeSignRequired'))
     return
   }
@@ -721,14 +731,14 @@ async function submitAction() {
 
   actionSubmitting.value = true
   try {
-    const taskId = Number(targetTaskId.value ?? 0)
-    if (!['cancel', 'resubmit'].includes(kind) && taskId <= 0) {
+    const taskId = normalizeWfId(targetTaskId.value)
+    if (!['cancel', 'resubmit'].includes(kind) && taskId == null) {
       message.warning(t('workflow.detail.taskRequired'))
       return
     }
     const requestId = kind === 'urge' ? undefined : requestKey.value()
     const body = {
-      taskId,
+      taskId: taskId ?? 0,
       comment: actionForm.comment.trim() || null,
       toUserId: actionForm.toUserId ?? 0,
       targetNodeId: actionForm.targetNodeId,
@@ -746,10 +756,10 @@ async function submitAction() {
       if (kind === 'addSign') return wfTaskApi.addSign(body)
       if (kind === 'removeSign') return wfTaskApi.removeSign(body)
       if (kind === 'takeBack') return wfTaskApi.takeBack(body)
-      if (kind === 'urge') return wfTaskApi.urge({ taskId })
-      if (kind === 'cancel') return wfInstanceApi.cancel({ instanceId: uid.value, requestId })
+      if (kind === 'urge') return wfTaskApi.urge({ taskId: taskId! })
+      if (kind === 'cancel') return wfInstanceApi.cancel({ instanceId: uid.value!, requestId })
       return wfInstanceApi.resubmit({
-        instanceId: uid.value,
+        instanceId: uid.value!,
         variablesJson: formVariablesJson.value,
         requestId,
       })
@@ -937,8 +947,8 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
           :form-schema="formSchema"
           :mode="formMode"
           :permissions="formPermissions"
-          :definition-id="detail.definitionId == null ? undefined : Number(detail.definitionId)"
-          :instance-id="detail.id == null ? undefined : Number(detail.id)"
+          :definition-id="detail.definitionId ?? undefined"
+          :instance-id="detail.id ?? undefined"
           :business-key="detail.businessKey"
           :variables-json="formVariablesJson"
           :status="detail.status"
@@ -1049,14 +1059,14 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
           v-if="requiresPendingTask && myPendingTasks.length > 1"
           v-model:value="selectedPendingTaskId"
           :disabled="actionSubmitting"
-          :options="myPendingTasks.map((task) => ({ label: pendingTaskText(task), value: Number(task.taskId) }))"
+          :options="myPendingTasks.flatMap(pendingTaskOption)"
           :placeholder="t('workflow.detail.targetTask')"
         />
         <n-select
           v-if="actionKind === 'urge' && currentTasks.length > 1"
           v-model:value="targetTaskId"
           :disabled="actionSubmitting"
-          :options="currentTasks.map((task) => ({ label: currentTaskText(task), value: Number(task.taskId) }))"
+          :options="currentTasks.flatMap(currentTaskOption)"
           :placeholder="t('workflow.detail.targetTask')"
         />
         <n-select
@@ -1073,8 +1083,8 @@ function timelineType(item: WfHisTask): 'default' | 'success' | 'error' | 'info'
           :form-schema="formSchema"
           mode="start"
           :permissions="null"
-          :definition-id="detail?.definitionId == null ? undefined : Number(detail.definitionId)"
-          :instance-id="detail?.id == null ? undefined : Number(detail.id)"
+          :definition-id="detail?.definitionId ?? undefined"
+          :instance-id="detail?.id ?? undefined"
           :business-key="detail?.businessKey"
           :variables-json="formVariablesJson"
           :status="detail?.status"

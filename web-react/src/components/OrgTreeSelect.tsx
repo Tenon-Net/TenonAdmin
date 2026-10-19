@@ -2,20 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { TreeSelect, type TreeSelectProps } from 'antd'
 import { orgApi } from '@/api'
 import { buildTree, collectSubtreeIds, type Tree } from '@/utils/tree'
-import type { SysOrg } from '@/types/api'
+import type { ApiId, SysOrg } from '@/types/api'
 
 /**
  * 机构平铺 → 树选项。`excludeSubtreeOf`:编辑机构选上级时剪掉自身子树(防把自己挂到自己后代下成环)——
  * 用户页传 null(不剪),机构页传 editingId。纯逻辑,变异钉;buildTree/collectSubtreeIds 本身在 tree.spec 已测。
  */
-export function orgTreeData(flat: SysOrg[], excludeSubtreeOf?: number | null): Tree<SysOrg>[] {
+export function orgTreeData(flat: SysOrg[], excludeSubtreeOf?: ApiId | null): Tree<SysOrg>[] {
   if (excludeSubtreeOf == null) return buildTree(flat)
   const excluded = collectSubtreeIds(flat, excludeSubtreeOf)
   return buildTree(flat.filter((o) => !excluded.has(o.id)))
 }
 
 export interface OrgTreeSelectProps extends Omit<TreeSelectProps, 'treeData' | 'fieldNames'> {
-  excludeSubtreeOf?: number | null
+  excludeSubtreeOf?: ApiId | null
 }
 
 /**
