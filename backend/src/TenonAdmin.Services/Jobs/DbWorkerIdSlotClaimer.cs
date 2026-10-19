@@ -31,8 +31,16 @@ public sealed class DbWorkerIdSlotClaimer(
                 // 「Dbfirst and Codefirst requires system table permissions」(无 InnerException),锁冲突因此无法识别。
                 // SQLite 上先用不吞异常的同类查询探一次,让 BUSY/LOCKED 原样抛出、进入 #52 的有界重试。
                 if (client.CurrentConnectionConfig.DbType == DbType.Sqlite)
+                {
                     client.DbMaintenance.GetTableInfoList(isCache: false);
-                InitLeaseTablePreservingDriverError(client);
+                    // SQLite 的 BeginTran 会先拿写锁;保留 InitTables 内部先拿 CodeFirst 锁的顺序,
+                    // 避免与 WorkerIdLeaseGuard 等裸 InitTables 调用方发生锁序反转。
+                    client.CodeFirst.InitTables<SysWorkerLease>();
+                }
+                else
+                {
+                    InitLeaseTablePreservingDriverError(client);
+                }
                 return true;
             }, onExhausted: null);
         }
@@ -78,7 +86,7 @@ public sealed class DbWorkerIdSlotClaimer(
     /// 失败后只用 ErrorMessage 重新抛出不带 InnerException 的 <c>SqlSugarException</c>,驱动异常类型和错误码丢失,
     /// 导致 PG 55P03/40P01、SQL Server 1222 等锁冲突无法按错误码识别、不进重试。
     /// 已有事务时 <c>InitTables</c> 直接执行建表逻辑,驱动异常(<c>AdoProvider</c> 原样重抛)保持原类型。
-    /// 因此这里自行开启事务,效果与 UseTran 相同(成功提交,失败回滚),只是不改写异常。
+    /// 因此非 SQLite 在这里自行开启事务,效果与 UseTran 相同(成功提交,失败回滚),只是不改写异常。
     /// </summary>
     /// <remarks>
     /// SqlSugar 的 InitTables 内部用进程级静态锁串行化「探测 + 建表 + UseTran 提交」。
