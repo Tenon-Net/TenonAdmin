@@ -100,9 +100,9 @@ describe('useRealtime force-logout', () => {
     expect(handlers['force-logout']).toBeTruthy()
 
     handlers['force-logout']()
-    await nextTick()
-    // force-logout 里动态 import auth/router 是微任务,再等一拍
-    await Promise.resolve()
+    // #65:force-logout 里动态 import auth/router 需要真正加载模块,只等一拍微任务不够;
+    // 不等它完成,用例结束、环境拆除后模块才加载 → EnvironmentTeardownError、vitest exit 1。
+    await vi.dynamicImportSettled()
     await nextTick()
 
     expect(useUserStore().accessToken).toBe('')
@@ -118,8 +118,7 @@ describe('useRealtime force-logout', () => {
     expect(conn.stop).toHaveBeenCalled()
 
     handlers['force-logout']()
-    await nextTick()
-    await Promise.resolve()
+    await vi.dynamicImportSettled()
     await nextTick()
 
     expect(useUserStore().accessToken).toBe('')
