@@ -255,6 +255,90 @@ public class WfLargeIdJsonTests
         AssertStoredExecutionOutbox(storedJson!);
     }
 
+    [Fact]
+    public async Task Outbox_replay_projects_first_and_legacy_receipt_outputs_but_preserves_safe_and_custom_payloads()
+    {
+        using var factory = new WorkflowAppFactory();
+        var admin = await ClientFor(factory, "superAdmin");
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+
+        var unsafeRow = await InsertOutboxAsync(db, WfOutboxStatus.Failed, "replay-unsafe");
+        const string unsafeRequestId = "large-id-replay-unsafe";
+        var first = await ReplayOutbox(admin, unsafeRow.Id, unsafeRequestId);
+        Assert.Equal(0, first.GetProperty("code").GetInt32());
+        Assert.Equal((int)WfOutboxStatus.Pending, first.GetProperty("data").GetProperty("status").GetInt32());
+        using (var firstPayload = JsonDocument.Parse(
+                   first.GetProperty("data").GetProperty("payloadJson").GetString()!))
+            AssertExecutionOutboxBoundary(firstPayload.RootElement);
+
+        var rawUnsafePayload = await db.Queryable<WfOutbox>()
+            .Where(outbox => outbox.Id == unsafeRow.Id)
+            .Select(outbox => outbox.PayloadJson)
+            .SingleAsync();
+        AssertStoredExecutionOutbox(rawUnsafePayload!);
+
+        var receipt = await db.Queryable<WfOperationReceipt>()
+            .Where(item => item.CommandType == WfCommandType.OutboxReplay
+                           && item.TargetType == WfTargetType.Outbox
+                           && item.TargetId == unsafeRow.Id
+                           && item.RequestKey == unsafeRequestId)
+            .SingleAsync();
+        var receiptOutput = JsonSerializer.Deserialize<WfOutboxOutput>(receipt.ResultJson!, WfModelJson.Options)!;
+        var legacyResultJson = JsonSerializer.Serialize(
+            receiptOutput with { PayloadJson = rawUnsafePayload },
+            WfModelJson.Options);
+        await db.Updateable<WfOperationReceipt>()
+            .SetColumns(item => new WfOperationReceipt { ResultJson = legacyResultJson })
+            .Where(item => item.Id == receipt.Id)
+            .ExecuteCommandAsync();
+
+        var receiptHit = await ReplayOutbox(admin, unsafeRow.Id, unsafeRequestId);
+        Assert.Equal(0, receiptHit.GetProperty("code").GetInt32());
+        using (var hitPayload = JsonDocument.Parse(
+                   receiptHit.GetProperty("data").GetProperty("payloadJson").GetString()!))
+            AssertExecutionOutboxBoundary(hitPayload.RootElement);
+        var storedReceiptJson = await db.Queryable<WfOperationReceipt>()
+            .Where(item => item.Id == receipt.Id)
+            .Select(item => item.ResultJson)
+            .SingleAsync();
+        Assert.Equal(legacyResultJson, storedReceiptJson);
+        using (var storedReceipt = JsonDocument.Parse(storedReceiptJson!))
+            AssertStoredExecutionOutbox(storedReceipt.RootElement.GetProperty("payloadJson").GetString()!);
+
+        var safeRow = await InsertOutboxAsync(
+            db,
+            WfOutboxStatus.Failed,
+            "replay-safe",
+            payloadId: SafeId);
+        var safeReplay = await ReplayOutbox(admin, safeRow.Id, "large-id-replay-safe");
+        Assert.Equal(0, safeReplay.GetProperty("code").GetInt32());
+        using (var safePayload = JsonDocument.Parse(
+                   safeReplay.GetProperty("data").GetProperty("payloadJson").GetString()!))
+            AssertSafeExecutionOutboxBoundary(safePayload.RootElement);
+        var storedSafePayload = await db.Queryable<WfOutbox>()
+            .Where(outbox => outbox.Id == safeRow.Id)
+            .Select(outbox => outbox.PayloadJson)
+            .SingleAsync();
+        AssertSafeStoredExecutionOutbox(storedSafePayload!);
+
+        var customRow = await InsertOutboxAsync(
+            db,
+            WfOutboxStatus.Failed,
+            "replay-custom",
+            "consumer.custom");
+        var customReplay = await ReplayOutbox(admin, customRow.Id, "large-id-replay-custom");
+        Assert.Equal(0, customReplay.GetProperty("code").GetInt32());
+        using var customPayload = JsonDocument.Parse(
+            customReplay.GetProperty("data").GetProperty("payloadJson").GetString()!);
+        Assert.Equal(UnsafeId, customPayload.RootElement.GetProperty("executionId").GetInt64());
+        var storedCustomPayload = await db.Queryable<WfOutbox>()
+            .Where(outbox => outbox.Id == customRow.Id)
+            .Select(outbox => outbox.PayloadJson)
+            .SingleAsync();
+        Assert.Equal(customPayload.RootElement.GetRawText(), storedCustomPayload);
+    }
+
     private static void AssertModelIdBoundary(JsonElement model)
     {
         Assert.Equal(UnsafeId.ToString(), model.GetProperty("nobodyTransferUserId").GetString());
@@ -295,6 +379,17 @@ public class WfLargeIdJsonTests
         Assert.Equal(UnsafeId, payload.GetProperty("businessAmount").GetInt64());
     }
 
+    private static void AssertSafeExecutionOutboxBoundary(JsonElement payload)
+    {
+        foreach (var property in new[]
+                 {
+                     "executionId", "instanceId", "tokenId", "nodeVisitId", "definitionVersionId",
+                 })
+            Assert.Equal(SafeId, payload.GetProperty(property).GetInt64());
+        Assert.Equal(SafeId, payload.GetProperty("fence").GetInt64());
+        Assert.Equal(SafeId, payload.GetProperty("businessAmount").GetInt64());
+    }
+
     private static void AssertStoredExecutionOutbox(string payloadJson)
     {
         using var payload = JsonDocument.Parse(payloadJson);
@@ -305,6 +400,12 @@ public class WfLargeIdJsonTests
         Assert.Equal(UnsafeId, payload.RootElement.GetProperty("definitionVersionId").GetInt64());
         Assert.Equal(UnsafeId, payload.RootElement.GetProperty("fence").GetInt64());
         Assert.Equal(UnsafeId, payload.RootElement.GetProperty("businessAmount").GetInt64());
+    }
+
+    private static void AssertSafeStoredExecutionOutbox(string payloadJson)
+    {
+        using var payload = JsonDocument.Parse(payloadJson);
+        AssertSafeExecutionOutboxBoundary(payload.RootElement);
     }
 
     private static JsonElement ApprovalParams(JsonElement model) =>
@@ -469,7 +570,8 @@ public class WfLargeIdJsonTests
         ISqlSugarClient db,
         WfOutboxStatus status,
         string suffix,
-        string messageType = WfOutboxStore.MessageTypeNodeExecutionCompleted)
+        string messageType = WfOutboxStore.MessageTypeNodeExecutionCompleted,
+        long payloadId = UnsafeId)
     {
         var instance = new WfInstance
         {
@@ -498,7 +600,7 @@ public class WfLargeIdJsonTests
             MessageType = messageType,
             MessageKey = $"{execution.ExecutionKey}:{messageType}",
             PayloadJson = $$"""
-                {"executionId":{{UnsafeId}},"instanceId":{{UnsafeId}},"tokenId":{{UnsafeId}},"nodeVisitId":{{UnsafeId}},"definitionVersionId":{{UnsafeId}},"fence":{{UnsafeId}},"businessAmount":{{UnsafeId}}}
+                {"executionId":{{payloadId}},"instanceId":{{payloadId}},"tokenId":{{payloadId}},"nodeVisitId":{{payloadId}},"definitionVersionId":{{payloadId}},"fence":{{payloadId}},"businessAmount":{{payloadId}}}
                 """,
             Status = status,
             AvailableAtUtc = DateTime.UtcNow.AddMinutes(-1),
@@ -579,6 +681,11 @@ public class WfLargeIdJsonTests
 
     private static async Task<JsonElement> PostEnvelope(HttpClient client, string path, object body) =>
         await (await client.PostJson(path, body)).ReadEnvelope();
+
+    private static async Task<JsonElement> ReplayOutbox(HttpClient client, long outboxId, string requestId) =>
+        await (await client.PostAsync(
+            $"/api/v1/workflow/outbox/{outboxId}/replay?requestId={requestId}",
+            null)).ReadEnvelope();
 
     private sealed class CapturingOutboxTransport : IWfOutboxTransport
     {
