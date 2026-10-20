@@ -35,7 +35,8 @@ public class WfParticipantLookupService(IRepository<SysUser> users) : IWfPartici
         var requested = input.PageSize is > 0 ? input.PageSize.Value : input.Size;
         var size = requested <= 0 ? 20 : Math.Min(requested, MaxPageSize);
         var page = await users.AsQueryable()
-            .Where(u => u.Enabled == true && !hiddenAccounts.Contains(u.Account))
+            // 参数化中文列表，避免 SQL Server 将普通 IN 字面量按非 Unicode 编码转换。
+            .Where(u => u.Enabled == true && !SqlFunc.ContainsArrayUseSqlParameters(hiddenAccounts, u.Account))
             .WhereIF(keyword is not null, u => u.Name.Contains(keyword!) || u.Account.Contains(keyword!))
             .OrderBy(u => u.Id, OrderByType.Asc)
             .Select(u => new { u.Id, u.Name, u.Account })

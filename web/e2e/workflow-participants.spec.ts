@@ -1,15 +1,17 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test'
 import { apiAdminToken, apiCreateViewOnlyUser } from './api'
-import { enterBusinessApp, login } from './helpers'
+import { enterBusinessApp, enterSystemApp, login } from './helpers'
 import type { components } from '../src/api/schema'
 
 type Detail = components['schemas']['WfInstanceDetailOutput']
 type Node = components['schemas']['WfNode']
 type Id = number | string
-type Person = { id: Id; token: string; name: string }
+type Person = { id: Id; token: string; name: string; account: string }
+type ParticipantPage = { items: Array<{ name?: string; account?: string }>; total: number }
 const apiBase = () => process.env.TENON_E2E_API_BASE!
 let admin: string
 let people: Person[]
+const excludedDemoAccounts = ['全部数据', '本机构数据', '本机构及以下', '仅本人数据', '自定义范围'] as const
 
 async function call<T>(request: APIRequestContext, token: string, path: string, data?: unknown): Promise<T> {
   const response = data === undefined
@@ -41,6 +43,54 @@ async function open(page: Page, id: Id) {
 }
 const nodeCard = (page: Page, name: string) => page.locator('.wf-card').filter({ hasText: name })
 
+function formItemByLabel(scope: Locator, label: RegExp) {
+  return scope
+    .locator('.n-form-item-label')
+    .filter({ hasText: label })
+    .first()
+    .locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " n-form-item ")][1]')
+}
+
+async function openDesignerParticipantSelect(page: Page, request: APIRequestContext, suffix: string) {
+  const definitionId = await call<Id>(request, admin, 'workflow/definition/add', {
+    name: `办理人过滤-${suffix}-${Date.now()}`,
+    model: {
+      version: 1,
+      root: {
+        id: 'start', type: 'start', name: '发起人',
+        next: approval('participant', '办理人过滤', []),
+      },
+    },
+  })
+  await enterSystemApp(page)
+  await page.goto(`/workflow/definition/designer?id=${definitionId}`)
+  const card = page.locator('.wf-card.is-approval').filter({ hasText: '办理人过滤' })
+  await expect(card).toBeVisible({ timeout: 15_000 })
+  await card.click()
+  const drawer = page.locator('.n-drawer:visible')
+  await expect(drawer).toHaveCount(1)
+  const select = formItemByLabel(drawer, /^(指定成员|Members)$/).locator('.n-select')
+  await expect(select).toBeVisible()
+  return select
+}
+
+async function searchDesignerParticipants(page: Page, select: Locator, keyword: string) {
+  await select.locator('.n-base-selection').click()
+  const searched = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/v1/workflow/participant/page'
+      && response.request().method() === 'GET'
+      && url.searchParams.get('Keyword') === keyword
+  })
+  await select.locator('input').fill(keyword)
+  const response = await searched
+  expect(response.ok(), `${keyword}: HTTP ${response.status()}`).toBe(true)
+  const body = await response.json() as { code?: number; data?: ParticipantPage }
+  expect(body.code, `${keyword}: participant response`).toBe(0)
+  expect(body.data, `${keyword}: participant data`).toBeDefined()
+  return { data: body.data!, options: page.locator('.n-base-select-option:visible') }
+}
+
 test.beforeAll(async ({ request }) => {
   admin = await apiAdminToken(request)
   people = []
@@ -49,13 +99,34 @@ test.beforeAll(async ({ request }) => {
       prefix: `wf-person-${index}`, name, menuIds: [48050, 48021],
     })
     const auth = await call<{ accessToken: string; userId: Id }>(request, '', 'auth/login', { account: user.account, password: user.password })
-    people.push({ id: auth.userId, token: auth.accessToken, name })
+    people.push({ id: auth.userId, token: auth.accessToken, name, account: user.account })
   }
 })
 
 test.beforeEach(async ({ page }) => {
   await login(page)
   await enterBusinessApp(page)
+})
+
+for (const account of excludedDemoAccounts) {
+  test(`设计器办理人不显示内置数据范围演示账号：${account}`, async ({ page, request }) => {
+    const select = await openDesignerParticipantSelect(page, request, account)
+    const { data, options } = await searchDesignerParticipants(page, select, account)
+    expect(data.items, `${account} 的真实接口候选项应为空`).toEqual([])
+    expect(data.total, `${account} 的真实接口候选数应为 0`).toBe(0)
+    await expect(options, `${account} 不应出现在办理人候选项`).toHaveCount(0)
+  })
+}
+
+test('设计器办理人可检索并选中正常中文姓名账号', async ({ page, request }) => {
+  const select = await openDesignerParticipantSelect(page, request, '正常中文姓名')
+  const { data, options } = await searchDesignerParticipants(page, select, '张三')
+  expect(data.items.some((item) => item.name === '张三' && item.account === people[0]!.account)).toBe(true)
+  const option = options.filter({ hasText: `张三(${people[0]!.account})` })
+  await expect(option).toHaveCount(1)
+  await option.click()
+  await page.keyboard.press('Escape')
+  await expect(select).toContainText('张三')
 })
 
 test('顺序审批展示实际姓名与等待队列，并隔离退回重审轮次', async ({ page, request }, info) => {

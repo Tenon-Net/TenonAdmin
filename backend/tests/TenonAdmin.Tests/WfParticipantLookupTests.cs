@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
+using TenonAdmin.Services;
 using TenonAdmin.Workflow;
 
 namespace TenonAdmin.Tests;
@@ -80,6 +81,56 @@ public class WfParticipantLookupTests
         var items = real.GetProperty("data").GetProperty("items").EnumerateArray().ToList();
         Assert.Contains(items, item => item.GetProperty("id").GetInt64() == realId
                                         && item.GetProperty("account").GetString() == "wf-real-actor");
+    }
+
+    [Theory]
+    [InlineData("全部数据")]
+    [InlineData("本机构数据")]
+    [InlineData("本机构及以下")]
+    [InlineData("仅本人数据")]
+    [InlineData("自定义范围")]
+    public async Task Participant_page_filters_unicode_accounts_before_counting_and_paging(string keyword)
+    {
+        using var f = new WorkflowAppFactory();
+        var admin = await ClientFor(f, "superAdmin");
+        var firstId = await AddUser(admin, "wf-unicode-first", keyword + "正常办理人一");
+        var secondId = await AddUser(admin, "wf-unicode-second", keyword + "正常办理人二");
+        var disabledId = await AddUser(admin, "wf-unicode-disabled", keyword + "停用办理人");
+        var deletedId = await AddUser(admin, "wf-unicode-deleted", keyword + "已删除办理人");
+        var disabled = await admin.PutJson($"/api/v1/sys/user/{disabledId}/enabled", new { enabled = false });
+        Assert.Equal(0, (await disabled.ReadEnvelope()).GetProperty("code").GetInt32());
+        using (var scope = f.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<global::SqlSugar.ISqlSugarClient>();
+            await db.Updateable<SysUser>().SetColumns(u => new SysUser { IsDelete = true })
+                .Where(u => u.Id == deletedId).ExecuteCommandAsync();
+        }
+
+        var actor = await ClientFor(f, "wf-unicode-first");
+        // 演示账号、停用和软删账号都必须在 COUNT 和分页之前排除，正常中文姓名仍能匹配。
+        for (var current = 1; current <= 3; current++)
+        {
+            var response = await actor.GetAsync(
+                $"/api/v1/workflow/participant/page?Current={current}&Size=1&Keyword={Uri.EscapeDataString(keyword)}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var envelope = await response.ReadEnvelope();
+            Assert.Equal(0, envelope.GetProperty("code").GetInt32());
+            var page = envelope.GetProperty("data");
+            Assert.Equal(2, page.GetProperty("total").GetInt32());
+            Assert.Equal(current, page.GetProperty("current").GetInt32());
+            Assert.Equal(1, page.GetProperty("size").GetInt32());
+            var items = page.GetProperty("items").EnumerateArray().ToList();
+            if (current <= 2)
+            {
+                var item = Assert.Single(items);
+                Assert.Equal(current == 1 ? firstId : secondId, item.GetProperty("id").GetInt64());
+                Assert.Equal(current == 1 ? "wf-unicode-first" : "wf-unicode-second", item.GetProperty("account").GetString());
+            }
+            else
+            {
+                Assert.Empty(items);
+            }
+        }
     }
 
     [Fact]
