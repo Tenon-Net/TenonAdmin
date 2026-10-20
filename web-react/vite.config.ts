@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { fileURLToPath, URL } from 'node:url'
 import { readFileSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -83,6 +84,8 @@ export default defineConfig({
     setupFiles: ['src/test-setup.ts'],
     globals: false,
     pool: 'forks',
+    // 限制 DOM 测试的进程争用；低核机器仍预留一个核，不放宽测试超时。
+    maxWorkers: Math.max(1, Math.min(4, availableParallelism() - 1)),
     restoreMocks: true,
     unstubGlobals: true,
   },

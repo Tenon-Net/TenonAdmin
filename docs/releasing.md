@@ -18,7 +18,7 @@ TenonAdmin 前后端同仓、**同版本号一起发**。后端以 NuGet 包发�
    - **`site/.vitepress/config.ts`**：英文 nav 与中文（`zh`）nav **各一处**版本徽章 `{ text: 'X.Y.Z', link: 'https://github.com/Tenon-Net/TenonAdmin/blob/main/CHANGELOG.md' }`（文档站顶栏显示的版本号;漏了会跟实际发布的对不上——0.3.0 发布时就漏过一次）。agent 流程见 `skills/tenon-release.md`（`/tenon-release`）。
    - 核对无残留（PowerShell）：`Select-String -Path web/package*.json,web-react/package*.json -Pattern '"version": "X.Y.<旧>"'` 与 `Select-String -Path site/.vitepress/config.ts -Pattern "'X.Y.<旧>'"` 都应为空；`Select-String -Path site/.vitepress/config.ts -Pattern "text: 'X.Y.Z'"` 应正好 2 处。
 
-3. **本地验绿**(CI 会再跑一遍,但先本地确认省得白打 tag;本机内存紧,**别并发**跑 vue-tsc 和 dotnet test,一次一个)。CI 的 `web-ci.yml`/`web-react-ci.yml` 在 test/build 前还跑 `lint`,本地一起过;`web-react` 的 vitest 是串行配置(`pool: forks`),CI 里为此把单测拆成 3 个 `--shard` 分开跑——不分片直接 `npm test` 会把主进程堆撑爆 OOM(见该 workflow 里的注释),本地也要分片跑:
+3. **本地验绿**(CI 会再跑一遍,但先本地确认省得白打 tag;本机内存紧,**别并发**跑 vue-tsc 和 dotnet test,一次一个)。CI 的 `web-ci.yml`/`web-react-ci.yml` 在 test/build 前还跑 `lint`,本地一起过;两套模板的 Vitest 都使用 `pool: forks`，按 CPU 数量调整 worker、最多 4 个，避免 DOM 测试争用。React CI 保留 3 个 `--shard`，控制各进程的模块图与内存；本地低内存环境也按下面的分片命令验证:
 
    ```powershell
    Push-Location web; try { npm run lint; if ($LASTEXITCODE -ne 0) { throw 'Vue lint failed' }; npm test; if ($LASTEXITCODE -ne 0) { throw 'Vue tests failed' }; npm run build; if ($LASTEXITCODE -ne 0) { throw 'Vue build failed' } } finally { Pop-Location }
