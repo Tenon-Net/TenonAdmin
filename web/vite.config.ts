@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { fileURLToPath, URL } from 'node:url'
 import { readFileSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
@@ -58,6 +59,8 @@ export default defineConfig({
     include: ['src/**/*.spec.ts'], // 必须限定 src:web/e2e 的 Playwright 用例也叫 *.spec.ts,默认 glob 会误吞
     globals: false,
     pool: 'forks',
+    // 限制 DOM 测试的进程争用；低核机器仍预留一个核，不放宽测试超时。
+    maxWorkers: Math.max(1, Math.min(4, availableParallelism() - 1)),
     restoreMocks: true,
     unstubGlobals: true,
   },

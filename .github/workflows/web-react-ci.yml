@@ -58,8 +58,8 @@ jobs:
           kill $DEV_PID 2>/dev/null || true
           echo "smoke OK"
 
-  # 单测拆 3 个 vitest --shard(各自独立进程):web-react 串行配置(pool:forks/maxWorkers:1/fileParallelism:false)
-  # 下全量单跑会把主进程堆撑爆 OOM。用 --shard 而非按目录手列:自动覆盖全部 *.spec,不会漏列某目录致其静默不跑。
+  # 单测拆 3 个 vitest --shard，控制各进程的模块图与内存；每片按 CPU 数量调整 worker，最多 4 个。
+  # 用 --shard 而非按目录手列:自动覆盖全部 *.spec,不会漏列某目录致其静默不跑。
   test:
     runs-on: ubuntu-latest
     defaults:
