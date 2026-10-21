@@ -68,6 +68,16 @@ public class SnowflakeIdGenerator : IIdGenerator
     private long _lastTimestamp = -1;         // 上次发号的毫秒时间戳
     private long _sequence;                   // 当前毫秒内已发序列
 
+    /// <summary>DI 默认路径持有的机器号分配；原有独立构造器不绑定租约，值为 null。</summary>
+    public WorkerIdAssignment? Assignment { get; private init; }
+
+    /// <summary>为已确认的机器号分配创建发号器；数据库租约由组合根先行初始化。</summary>
+    public static SnowflakeIdGenerator ForAssignment(WorkerIdAssignment assignment, TimeProvider? timeProvider = null)
+    {
+        ArgumentNullException.ThrowIfNull(assignment);
+        return new SnowflakeIdGenerator(assignment.WorkerId, timeProvider) { Assignment = assignment };
+    }
+
     /// <param name="workerId">
     /// 机器号(0–63)。DI 路径由组合根传入:显式 <c>TenonAdmin:Id:WorkerId</c>,
     /// 或 <see cref="WorkerIdLease"/> 抢到的槽位。
@@ -86,6 +96,7 @@ public class SnowflakeIdGenerator : IIdGenerator
     {
         lock (_lock)
         {
+            Assignment?.EnsureActive();
             var now = CurrentMillis();
 
             // 时钟回拨处理:小幅自旋追平,大幅直接拒绝(宁可不发号也不发重号)
@@ -111,7 +122,10 @@ public class SnowflakeIdGenerator : IIdGenerator
             }
 
             _lastTimestamp = now;
-            return (now << TIMESTAMP_SHIFT) | (_workerId << WORKER_ID_SHIFT) | _sequence;
+            var id = (now << TIMESTAMP_SHIFT) | (_workerId << WORKER_ID_SHIFT) | _sequence;
+            // 等内部锁或时钟期间可能丢租约；丢弃已计算的 ID，不能把它返回给调用者。
+            Assignment?.EnsureActive();
+            return id;
         }
     }
 

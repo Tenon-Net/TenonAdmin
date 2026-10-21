@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
@@ -10,101 +11,202 @@ namespace TenonAdmin.Services;
 /// 雪花 WorkerId 数据库租约守卫(QA27):启动时争抢租约,周期续租,停止时释放。
 /// 同一 WorkerId 不能被两个活跃实例同时持有——第二个启动的实例在 <see cref="StartAsync"/> 抛异常,
 /// 把静默的主键冲突换成一条可读的启动错误。
+/// <para>直接构造时保留上述领取行为；Services 的托管注册延迟解析最终发号器，只校验并释放其已领取的租约。</para>
 /// <para>租约 TTL = <see cref="AdminJobsOptions.HeartbeatSeconds"/> × 3;续租间隔 = HeartbeatSeconds / 2。</para>
 /// <para>被强杀的进程(调试停止、kill -9、容器重启)来不及释放租约,重启会撞上自己的残留租约。
 /// 这种情况下守卫按 <see cref="OwnerProcessIsGone"/> 判定持有者是否还活着,已退出则直接接管,
 /// 不必干等一个 TTL。</para>
 /// </summary>
-public sealed class WorkerIdLeaseGuard(
-    ISqlSugarClient db,
-    AdminIdOptions idOptions,
-    AdminJobsOptions jobsOptions,
-    ILogger<WorkerIdLeaseGuard> logger,
-    TimeProvider? time = null,
-    WorkerIdAssignment? assignment = null) : IHostedService, IDisposable
+public sealed class WorkerIdLeaseGuard : IHostedLifecycleService, IDisposable
 {
-    private readonly TimeProvider _time = time ?? TimeProvider.System;
+    private readonly IServiceProvider? _services;
+    private readonly ISqlSugarClient? _db;
+    private readonly AdminIdOptions? _idOptions;
+    private readonly AdminJobsOptions? _jobsOptions;
+    private readonly ILogger<WorkerIdLeaseGuard>? _logger;
+    private readonly WorkerIdAssignment? _assignment;
+    private readonly TimeProvider _time;
     private string _instanceToken = Guid.NewGuid().ToString("N")[..8];
-    private CancellationTokenSource? _cts;
-    private Task? _heartbeatTask;
+    private readonly SemaphoreSlim _startGate = new(1, 1);
+    private IWorkerIdLeaseLifetime? _lifetime;
+    private bool _startingCompleted;
+    private bool _startCompleted;
+    private bool _stopped;
+    private long _claimStartedAt;
     private int _workerId;
     private string _nodeName = "";
 
-    private DateTime Now => _time.GetLocalNow().DateTime;
-    private int HeartbeatSeconds => Math.Max(jobsOptions.HeartbeatSeconds, 2);
+    /// <summary>保留给直接使用者的原有构造函数；其 Start/Stop 继续管理指定数据库上的租约。</summary>
+    public WorkerIdLeaseGuard(
+        ISqlSugarClient db,
+        AdminIdOptions idOptions,
+        AdminJobsOptions jobsOptions,
+        ILogger<WorkerIdLeaseGuard> logger,
+        TimeProvider? time = null,
+        WorkerIdAssignment? assignment = null)
+    {
+        _db = db;
+        _idOptions = idOptions;
+        _jobsOptions = jobsOptions;
+        _logger = logger;
+        _assignment = assignment;
+        _time = time ?? TimeProvider.System;
+    }
+
+    internal WorkerIdLeaseGuard(IServiceProvider services)
+    {
+        _services = services;
+        _time = TimeProvider.System;
+    }
+
+    internal static WorkerIdLeaseGuard CreateHosted(IServiceProvider services) => new(services);
+
+    private ISqlSugarClient DirectDb => _db
+        ?? throw new InvalidOperationException("延迟宿主模式不能执行旧版数据库领取路径。");
+    private AdminIdOptions DirectIdOptions => _idOptions
+        ?? throw new InvalidOperationException("延迟宿主模式没有直接 WorkerId 配置。");
+    private AdminJobsOptions DirectJobsOptions => _jobsOptions
+        ?? throw new InvalidOperationException("延迟宿主模式没有直接任务配置。");
+    private ILogger<WorkerIdLeaseGuard> DirectLogger => _logger
+        ?? throw new InvalidOperationException("延迟宿主模式没有直接租约日志器。");
+
+    private int HeartbeatSeconds => Math.Max(DirectJobsOptions.HeartbeatSeconds, 2);
     private TimeSpan LeaseTtl => TimeSpan.FromSeconds(HeartbeatSeconds * 3);
-    private TimeSpan RenewInterval => TimeSpan.FromSeconds(HeartbeatSeconds / 2.0);
+
+    // Host 的 Starting 阶段先于任何普通 HostedService.StartAsync；先领取并启动续租，普通 Start 再在 DDL 后确认。
+    public async Task StartingAsync(CancellationToken cancellationToken)
+    {
+        await _startGate.WaitAsync(cancellationToken);
+        try
+        {
+            ThrowIfStopped();
+            if (_startingCompleted)
+                return;
+
+            await StartCoreAsync(cancellationToken);
+            _startingCompleted = true;
+        }
+        finally
+        {
+            _startGate.Release();
+        }
+    }
+
+    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StoppingAsync(CancellationToken cancellationToken) => StopAsync(cancellationToken);
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        _workerId = (int)(assignment?.WorkerId ?? idOptions.WorkerId ?? 0);
-        if (!string.IsNullOrEmpty(assignment?.InstanceToken))
-            _instanceToken = assignment.InstanceToken;
+        await _startGate.WaitAsync(cancellationToken);
+        try
+        {
+            ThrowIfStopped();
+            if (_startCompleted)
+                return;
+
+            // 直接调用旧版 StartAsync 时仍一次完成领取；Host 则已经在 StartingAsync 完成此步。
+            if (!_startingCompleted)
+            {
+                await StartCoreAsync(cancellationToken);
+                _startingCompleted = true;
+            }
+
+            // SqlSugar 的 DatabaseInitializer 在 Services 注册之前，故普通 Start 到这里时完整 DDL 已结束。
+            // 默认数据库 lifetime 强制做 fresh owner CAS；消费者自定义 lifetime 只沿用公开的本地校验契约。
+            if (_lifetime is DbWorkerIdLeaseLifetime databaseLifetime)
+                await databaseLifetime.ConfirmFreshAsync(cancellationToken);
+            _lifetime?.EnsureActive();
+            _startCompleted = true;
+        }
+        finally
+        {
+            _startGate.Release();
+        }
+    }
+
+    private async Task StartCoreAsync(CancellationToken cancellationToken)
+    {
+        if (_services is not null)
+        {
+            StartHostedMode();
+            return;
+        }
+
+        if (_assignment?.Lifetime is { } existingLifetime)
+        {
+            if (existingLifetime is not DbWorkerIdLeaseLifetime)
+                existingLifetime.EnsureActive();
+            _lifetime = existingLifetime;
+            return;
+        }
+
+        _workerId = (int)(_assignment?.WorkerId ?? DirectIdOptions.WorkerId ?? 0);
+        if (!string.IsNullOrEmpty(_assignment?.InstanceToken))
+            _instanceToken = _assignment.InstanceToken;
         var machineName = Environment.MachineName;
         _nodeName = $"{machineName}#{_workerId}@{_instanceToken}";
         var pid = Environment.ProcessId;
 
-        db.CodeFirst.InitTables<SysWorkerLease>();
-
-        // 读到行与落库之间,持有者可能正好释放、或被另一个实例接管。窗口极窄,重读一次即可收敛;
-        // 还抢不到就是真有人在争同一个号,该报错而不是继续重试。
+        DirectDb.CodeFirst.InitTables<SysWorkerLease>();
         for (var attempt = 1; !await TryClaimAsync(machineName, pid); attempt++)
         {
             if (attempt >= 2)
-            {
                 throw new InvalidOperationException(
-                    $"WorkerId {_workerId} 的租约被其它节点连续抢占,本实例放弃启动。" +
+                    $"WorkerId {_workerId} 的租约被其它节点连续抢占，本实例放弃启动。" +
                     "请为本实例配置不同的 TenonAdmin:Id:WorkerId。");
-            }
         }
 
-        logger.LogInformation("WorkerId {WorkerId} 租约已获取(node={Node}, pid={Pid}, ttl={Ttl}s)。",
+        var lifetime = new DbWorkerIdLeaseLifetime(
+            DirectDb, _workerId, _nodeName, DirectJobsOptions, _time, _claimStartedAt, logger: DirectLogger);
+        try
+        {
+            // 直接领取可能被锁拖过本地确认期限；先新鲜确认，再满足 AttachLifetime 的有效性前置条件。
+            if (_assignment is not null)
+                await lifetime.ConfirmFreshAsync(cancellationToken);
+            _assignment?.AttachLifetime(lifetime);
+            _lifetime = lifetime;
+        }
+        catch
+        {
+            lifetime.Dispose();
+            throw;
+        }
+        DirectLogger.LogInformation("WorkerId {WorkerId} 租约已获取(node={Node}, pid={Pid}, ttl={Ttl}s)。",
             _workerId, _nodeName, pid, LeaseTtl.TotalSeconds);
+    }
 
-        // 自有 CTS,不要 CreateLinkedTokenSource(StartAsync 的 token):
-        // 宿主停机时会先 Dispose 启动链上的 token source,再调 StopAsync——
-        // 链到它的 CTS 已被 Dispose,CancelAsync 会抛 ObjectDisposedException,拖垮整批 WebApplicationFactory 测试。
-        _cts = new CancellationTokenSource();
-        _heartbeatTask = HeartbeatLoopAsync(_cts.Token);
+    private void ThrowIfStopped()
+    {
+        if (_stopped)
+            throw new InvalidOperationException("WorkerId 守卫已停止，不能重新启动已释放的发号器。");
+    }
+
+    private void StartHostedMode()
+    {
+        var services = _services
+            ?? throw new InvalidOperationException("直接模式不能执行延迟宿主启动路径。");
+        var generator = services.GetRequiredService<IIdGenerator>();
+        if (generator is not SnowflakeIdGenerator { Assignment: { } assignment })
+            return;
+
+        _lifetime = assignment.Lifetime
+            ?? throw new InvalidOperationException("默认雪花发号器尚未附加 WorkerId 数据库租约。");
+        // 默认租约可能在 Host.Start 前已暂停，留到普通 Start 做新鲜确认；自定义契约仍立即校验。
+        if (_lifetime is not DbWorkerIdLeaseLifetime)
+            assignment.EnsureActive();
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        var cts = Interlocked.Exchange(ref _cts, null);
-        if (cts is not null)
-        {
-            try { await cts.CancelAsync(); }
-            catch (ObjectDisposedException) { /* already torn down */ }
-
-            if (_heartbeatTask is not null)
-            {
-                // 循环内部已吞掉所有续租异常,唯一还能逃出来的是它那句告警日志本身
-                // (停机期日志提供者可能已释放,同 StopAsync 尾部)。停机不该被它拖垮。
-                try { await _heartbeatTask; }
-                catch { /* 取消或日志提供者已释放 */ }
-            }
-
-            cts.Dispose();
-        }
-
+        // 即使宿主的停机 token 已取消，也要让默认发号器立即失效并释放自有续租任务。
+        await _startGate.WaitAsync();
         try
         {
-            await db.Deleteable<SysWorkerLease>()
-                .Where(l => l.WorkerId == _workerId && l.NodeName == _nodeName)
-                .ExecuteCommandAsync();
-            logger.LogInformation("WorkerId {WorkerId} 租约已释放。", _workerId);
+            _stopped = true;
+            Interlocked.Exchange(ref _lifetime, null)?.Dispose();
         }
-        catch (Exception ex)
-        {
-            // 释放是尽力而为:租约到期会自然回收。停机期日志提供者可能已被释放(Windows EventLog
-            // 就会抛 ObjectDisposedException),所以告警本身也要兜住——任何异常冒出 StopAsync,
-            // Host.StopAsync 都会聚合抛出,连带拖垮正在销毁的 WebApplicationFactory。
-            try
-            {
-                logger.LogWarning(ex, "WorkerId {WorkerId} 租约释放失败(进程退出后租约将自然过期)。", _workerId);
-            }
-            catch { /* 日志提供者已随宿主停机释放,无处可报 */ }
-        }
+        finally { _startGate.Release(); }
     }
 
     /// <summary>
@@ -113,10 +215,11 @@ public sealed class WorkerIdLeaseGuard(
     /// </summary>
     private async Task<bool> TryClaimAsync(string machineName, int pid)
     {
-        var now = Now;
+        _claimStartedAt = _time.GetTimestamp();
+        var now = DbWorkerIdLeaseLifetime.DatabaseNow(DirectDb);
         var expiresAt = now + LeaseTtl;
 
-        var existing = await db.Queryable<SysWorkerLease>()
+        var existing = await DirectDb.Queryable<SysWorkerLease>()
             .Where(l => l.WorkerId == _workerId)
             .FirstAsync();
 
@@ -124,8 +227,10 @@ public sealed class WorkerIdLeaseGuard(
         {
             try
             {
-                await db.Insertable(new SysWorkerLease
+                await DirectDb.Insertable(new SysWorkerLease
                 {
+                    // 租约确认前默认发号器处于 pending；租约表使用固定槽主键，不能触发审计发号。
+                    Id = _workerId + 1,
                     WorkerId = _workerId,
                     NodeName = _nodeName,
                     MachineName = machineName,
@@ -144,7 +249,7 @@ public sealed class WorkerIdLeaseGuard(
                     throw;
                 }
 
-                logger.LogDebug(ex, "WorkerId {WorkerId} 租约插入撞行,重读后再判。", _workerId);
+                DirectLogger.LogDebug(ex, "WorkerId {WorkerId} 租约插入撞行,重读后再判。", _workerId);
                 return false;
             }
         }
@@ -162,14 +267,14 @@ public sealed class WorkerIdLeaseGuard(
                     "若持有者是另一台主机上已被强制结束的进程,等租约到期后重试即可。");
             }
 
-            logger.LogWarning(
+            DirectLogger.LogWarning(
                 "WorkerId {WorkerId} 上有节点 \"{Node}\"(pid={Pid})的残留租约,该进程已退出,本实例直接接管。",
                 _workerId, existing.NodeName, existing.Pid);
         }
 
         // 条件更新代替读-改-写:两个实例同时判定「可以接管」时,只有先落库的那个 rows=1,
         // 另一个 rows=0 → 重读再判,而不是双双认为自己拿到了号。
-        var rows = await db.Updateable<SysWorkerLease>()
+        var rows = await DirectDb.Updateable<SysWorkerLease>()
             .SetColumns(l => new SysWorkerLease
             {
                 NodeName = _nodeName,
@@ -177,14 +282,15 @@ public sealed class WorkerIdLeaseGuard(
                 Pid = pid,
                 LeaseExpiresAt = expiresAt,
             })
-            .Where(l => l.WorkerId == _workerId && l.NodeName == existing.NodeName)
+            .Where(l => l.WorkerId == _workerId && l.NodeName == existing.NodeName
+                        && l.LeaseExpiresAt == existing.LeaseExpiresAt)
             .ExecuteCommandAsync();
 
         return rows > 0;
     }
 
     private async Task<bool> LeaseRowExistsAsync() =>
-        await db.Queryable<SysWorkerLease>().Where(l => l.WorkerId == _workerId).AnyAsync();
+        await DirectDb.Queryable<SysWorkerLease>().Where(l => l.WorkerId == _workerId).AnyAsync();
 
     /// <summary>
     /// 判断租约持有者进程是否已经不在了。跨主机的 pid 没有可比性,因此主机名不同一律当作「还活着」。
@@ -235,33 +341,5 @@ public sealed class WorkerIdLeaseGuard(
         return hash > 0 ? lease.NodeName[..hash] : "";
     }
 
-    private async Task HeartbeatLoopAsync(CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            try
-            {
-                await Task.Delay(RenewInterval, _time, ct);
-                var expiresAt = Now + LeaseTtl;
-                await db.Updateable<SysWorkerLease>()
-                    .SetColumns(l => new SysWorkerLease { LeaseExpiresAt = expiresAt })
-                    .Where(l => l.WorkerId == _workerId && l.NodeName == _nodeName)
-                    .ExecuteCommandAsync();
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "WorkerId {WorkerId} 租约续租失败,下轮重试。", _workerId);
-            }
-        }
-    }
-
-    public void Dispose()
-    {
-        var cts = Interlocked.Exchange(ref _cts, null);
-        cts?.Dispose();
-    }
+    public void Dispose() => StopAsync(CancellationToken.None).GetAwaiter().GetResult();
 }

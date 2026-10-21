@@ -18,6 +18,12 @@ public static class ServicesSetup
     /// <returns>原服务集合</returns>
     public static IServiceCollection AddTenonAdminServices(this IServiceCollection services)
     {
+        // 自动领取在 Host Starting 阶段即开始续租；把守卫放在本层其它 HostedService 之前，
+        // 让它的普通 Start 在 SqlSugar DatabaseInitializer 完成 DDL 后先做一次 fresh owner 确认。
+        services.TryAddSingleton<IWorkerIdSlotClaimer, DbWorkerIdSlotClaimer>();
+        services.TryAddSingleton<IWorkerIdLeaseInitializer, DbWorkerIdSlotClaimer>();
+        services.AddHostedService<WorkerIdLeaseGuard>(WorkerIdLeaseGuard.CreateHosted);
+
         // 在本层其它后台服务启动前验证替换缓存的原子操作契约，不连接外部缓存。
         services.AddHostedService<CacheContractValidator>();
 
@@ -183,10 +189,6 @@ public static class ServicesSetup
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, HttpAdminJob>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, SqlAdminJob>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, JobLogCleanupJob>());
-
-        // 未配 WorkerId 时在 sys_worker_lease 领空闲槽(跨容器);守卫再用同一个号续租
-        services.TryAddSingleton<IWorkerIdSlotClaimer, DbWorkerIdSlotClaimer>();
-        services.AddHostedService<WorkerIdLeaseGuard>();
 
         // 个人中心(§4,T8):当前用户对自己账号的读改(看/改资料、验旧改密)
         services.TryAddScoped<IPersonalService, PersonalService>();

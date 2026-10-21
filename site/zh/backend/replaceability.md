@@ -23,11 +23,10 @@ services.TryAddScoped<IUserService, UserService>();
 
 ```csharp
 // backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs
-services.TryAddSingleton(sp => WorkerIdAssignment.Resolve(sp.GetService<AdminIdOptions>()));
-services.TryAddSingleton<IIdGenerator>(sp =>
-    new SnowflakeIdGenerator(sp.GetRequiredService<WorkerIdAssignment>().WorkerId, sp.GetService<TimeProvider>()));
 services.TryAdd(ServiceDescriptor.Scoped(typeof(IRepository<>), typeof(SqlSugarRepository<>)));
 ```
+
+默认 `IIdGenerator` 也遵循前置注册优先。保留默认雪花实现时，内核会先确认 `WorkerIdAssignment` 的租约，再用 `SnowflakeIdGenerator.ForAssignment(...)` 绑定发号器；租约失效或分配释放后拒绝继续发号。只传机器号的构造函数用于由调用方管理机器号生命周期的独立场景，不参与内核租约保护。
 
 ::: warning `TryAdd` 依赖注册顺序
 消费方必须在 `AddTenonAdmin()` **之前**注册才能赢。写在后面，内置服务已经占了坑，`TryAdd` 会跳过消费方注册。整个过程一声不响，替换却没生效。

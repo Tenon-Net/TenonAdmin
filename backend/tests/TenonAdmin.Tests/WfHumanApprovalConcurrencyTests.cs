@@ -49,6 +49,7 @@ public class WfHumanApprovalConcurrencyTests
         }
 
         var cancel = await cancelTask;
+        Assert.True(gate.ResumedByRelease, "竞态门必须由测试显式 Release 放行，不能靠 40 秒 watchdog 超时退出。");
         await AssertExclusiveCancelAndApproveAsync(f, instanceId, cancel, approve);
     }
 
@@ -84,6 +85,7 @@ public class WfHumanApprovalConcurrencyTests
         }
 
         var cancel = await cancelTask;
+        Assert.True(gate.ResumedByRelease, "竞态门必须由测试显式 Release 放行，不能靠 40 秒 watchdog 超时退出。");
         await AssertExclusiveCancelAndApproveAsync(f, instanceId, cancel, approve);
         if (approve.Ok)
         {
@@ -239,6 +241,7 @@ public class WfHumanApprovalConcurrencyTests
         }
 
         var returned = await returnTask;
+        Assert.True(gate.ResumedByRelease, "竞态门必须由测试显式 Release 放行，不能靠 40 秒 watchdog 超时退出。");
         Assert.False(approve.Ok && returned.Ok, Describe([returned, approve]));
         Assert.True(approve.Ok || returned.Ok, Describe([returned, approve]));
         using var scope = f.Services.CreateScope();
@@ -303,7 +306,8 @@ public class WfHumanApprovalConcurrencyTests
         _ = f.CreateClient();
         using var scope = f.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        await db.Ado.GetScalarAsync("PRAGMA journal_mode=WAL;");
+        var journalMode = await db.Ado.GetScalarAsync("PRAGMA journal_mode=WAL;");
+        Assert.Equal("wal", Convert.ToString(journalMode), ignoreCase: true);
     }
 
     private static object Chain(long[] firstUsers, long second, string modeA = "any") => new
@@ -477,6 +481,8 @@ public class WfHumanApprovalConcurrencyTests
         private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        public bool ResumedByRelease { get; private set; }
+
         public bool PauseCancel { get; init; }
 
         public bool PauseReturn { get; init; }
@@ -489,12 +495,14 @@ public class WfHumanApprovalConcurrencyTests
         {
             _entered.TrySetResult();
             await _release.Task.WaitAsync(TimeSpan.FromSeconds(40));
+            ResumedByRelease = true;
         }
     }
 
     private sealed class RacingWorkflowEngine : WorkflowEngine
     {
         private readonly ApprovalRaceGate _gate;
+        private readonly ISqlSugarClient _db;
         private bool _pauseAgenda;
 
         public RacingWorkflowEngine(
@@ -524,6 +532,60 @@ public class WfHumanApprovalConcurrencyTests
                 delegation)
         {
             _gate = gate;
+            _db = instances.Db;
+        }
+
+        public override async Task<WfEngineResult> ExecuteAsync(
+            IWfCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            // SQLite 默认 BEGIN IMMEDIATE 会在只读 gate 内先占住唯一 writer，使对侧请求只能等到
+            // watchdog 超时。仅暂停侧使用 deferred 事务，让原业务路径真正执行先读、对侧提交、再写的竞态。
+            var needsDeferredTransaction = _db.CurrentConnectionConfig.DbType == DbType.Sqlite
+                && ((_gate.PauseCancel && command is CancelInstanceCmd)
+                    || (_gate.PauseReturn && command is ReturnTaskCmd));
+            if (!needsDeferredTransaction)
+                return await base.ExecuteAsync(command, cancellationToken);
+
+            var connection = (Microsoft.Data.Sqlite.SqliteConnection)_db.Ado.Connection;
+            var openedHere = connection.State != System.Data.ConnectionState.Open;
+            Microsoft.Data.Sqlite.SqliteTransaction? transaction = null;
+            try
+            {
+                if (openedHere)
+                    await connection.OpenAsync(cancellationToken);
+                transaction = connection.BeginTransaction(deferred: true);
+                _db.Ado.Transaction = transaction;
+                // SqlSugar 对已有事务不再 Begin，仍由完整 UseTranAsync 提交或回滚。
+                return await base.ExecuteAsync(command, cancellationToken);
+            }
+            finally
+            {
+                try
+                {
+                    if (transaction is not null)
+                    {
+                        try
+                        {
+                            if (ReferenceEquals(_db.Ado.Transaction, transaction))
+                            {
+                                try
+                                {
+                                    if (transaction.Connection is not null)
+                                        await transaction.RollbackAsync(CancellationToken.None);
+                                }
+                                finally { _db.Ado.Transaction = null; }
+                            }
+                        }
+                        finally { await transaction.DisposeAsync(); }
+                    }
+                }
+                finally
+                {
+                    if (openedHere && connection.State != System.Data.ConnectionState.Closed)
+                        await connection.CloseAsync();
+                }
+            }
         }
 
         protected override async Task<WfExecutionContext> BeginCancelAsync(
@@ -550,13 +612,29 @@ public class WfHumanApprovalConcurrencyTests
 
         protected override async Task RunAgendaAsync(WfExecutionContext ctx, CancellationToken cancellationToken)
         {
-            if (_pauseAgenda)
+            int? previousTimeout = null;
+            try
             {
-                _pauseAgenda = false;
-                await _gate.EnterAsync();
-            }
+                if (_pauseAgenda)
+                {
+                    _pauseAgenda = false;
+                    await _gate.EnterAsync();
+                    if (_db.CurrentConnectionConfig.DbType == DbType.Sqlite)
+                    {
+                        // 对侧已经提交，旧读快照的写升级只能失败；避免驱动对 BUSY_SNAPSHOT 重试 300 秒。
+                        // 仅约束放行后的冲突写入，原 40 秒竞态门和业务断言保持不变。
+                        previousTimeout = _db.Ado.CommandTimeOut;
+                        _db.Ado.CommandTimeOut = 1;
+                    }
+                }
 
-            await base.RunAgendaAsync(ctx, cancellationToken);
+                await base.RunAgendaAsync(ctx, cancellationToken);
+            }
+            finally
+            {
+                if (previousTimeout is { } timeout)
+                    _db.Ado.CommandTimeOut = timeout;
+            }
         }
     }
 }
