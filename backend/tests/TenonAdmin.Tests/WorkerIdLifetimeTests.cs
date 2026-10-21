@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using TenonAdmin.Core;
@@ -55,8 +56,10 @@ public class WorkerIdLifetimeTests
         }
     }
 
-    [Fact]
-    public async Task Default_generator_rejects_ids_after_lease_owner_is_replaced()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4000)]
+    public async Task Default_generator_rejects_ids_after_lease_owner_is_replaced(int renewalDelayMilliseconds)
     {
         var identity = $"wid-life-takeover-{Guid.NewGuid():N}";
         var dbFile = Path.Combine(Path.GetTempPath(), $"tenon-{identity}.db");
@@ -65,11 +68,14 @@ public class WorkerIdLifetimeTests
 
         try
         {
-            provider = BuildDefaultProvider(identity, dbFile, lockDir.Path);
+            var clock = new LeaseConfirmationClock(TimeSpan.FromMilliseconds(renewalDelayMilliseconds));
+            provider = BuildDefaultProvider(identity, dbFile, lockDir.Path, clock);
             var generator = provider.GetRequiredService<IIdGenerator>();
             var assignment = provider.GetRequiredService<WorkerIdAssignment>();
             var db = provider.GetRequiredService<ISqlSugarClient>();
             var workerId = (int)assignment.WorkerId;
+            Assert.True(generator.NextId() > 0);
+            Assert.NotNull(assignment.Lifetime);
 
             var rows = await db.Updateable<SysWorkerLease>()
                 .SetColumns(l => new SysWorkerLease
@@ -83,7 +89,17 @@ public class WorkerIdLifetimeTests
                 .ExecuteCommandAsync();
             Assert.Equal(1, rows);
 
-            await Task.Delay(TimeSpan.FromSeconds(HeartbeatSeconds + 1));
+            // 本地确认期限被冻结；只有后台真实发现 owner 已丢失，才能满足这里的等待。
+            // 等待上限使用真实时间，不能使用注入的冻结时钟。
+            var wait = Stopwatch.StartNew();
+            while (true)
+            {
+                try { assignment.EnsureActive(); }
+                catch (InvalidOperationException) { break; }
+
+                Assert.True(wait.Elapsed < TimeSpan.FromSeconds(10), "后台续租未确认 WorkerId 所有权已丢失。");
+                await Task.Delay(10);
+            }
 
             Assert.Throws<InvalidOperationException>(() => generator.NextId());
         }
@@ -189,12 +205,13 @@ public class WorkerIdLifetimeTests
         }
     }
 
-    private static ServiceProvider BuildDefaultProvider(string identity, string dbFile, string lockDir)
+    private static ServiceProvider BuildDefaultProvider(
+        string identity, string dbFile, string lockDir, TimeProvider? clock = null)
     {
         var database = DatabaseOptions(identity, dbFile);
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(clock ?? TimeProvider.System);
         services.AddSingleton(new AdminIdOptions { WorkerIdLockDir = lockDir });
         services.AddSingleton(JobsOptions());
         services.AddSingleton(new AdminCacheOptions());
@@ -237,6 +254,17 @@ public class WorkerIdLifetimeTests
         HeartbeatSeconds = HeartbeatSeconds,
         SchedulerEnabled = false,
     };
+
+    /// <summary>冻结本地确认期限，避免等待自然过期掩盖后台未发现接管；续租仍使用真实 timer。</summary>
+    private sealed class LeaseConfirmationClock(TimeSpan extraTimerDelay) : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
+
+        public override ITimer CreateTimer(
+            TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            TimeProvider.System.CreateTimer(callback, state,
+                dueTime == Timeout.InfiniteTimeSpan ? dueTime : dueTime + extraTimerDelay, period);
+    }
 
     private sealed class TempLockDir : IDisposable
     {
