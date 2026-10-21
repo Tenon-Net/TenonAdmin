@@ -56,28 +56,49 @@ public static class SqlSugarSetup
         // ── ID 生成器:雪花默认实现(用户可换,见 IIdGenerator)──────────────
         // 显式 WorkerId(含 0)直接用;未配时若有 IWorkerIdSlotClaimer(Services 层)先在库表领槽,
         // 否则只抢同机文件锁。WorkerIdAssignment 必须单例根住,避免 FileStream 被回收提前放锁。
-        services.TryAddSingleton(sp =>
+        // 前置注册自定义发号器时，完整跳过默认 WorkerId 分配及数据库租约副作用。
+        if (!services.Any(d => !d.IsKeyedService && d.ServiceType == typeof(IIdGenerator)))
         {
-            var opts = sp.GetService<AdminIdOptions>();
-            var log = (sp.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance).CreateLogger("TenonAdmin.Id");
-            WorkerIdLockDirFallback onFallback = (preferred, fallback) =>
-                log.LogWarning(
-                    "机器号锁目录 {Preferred} 不可用,退到 {Fallback}。该目录可能被临时文件清理删掉锁文件,同机多进程仍有撞号风险。请设置 TenonAdmin:Id:WorkerIdLockDir,或给首选目录写权限。",
-                    preferred, fallback);
-
-            var claimer = sp.GetService<IWorkerIdSlotClaimer>();
-            if (claimer is not null)
+            services.TryAddSingleton(sp =>
             {
-                var contentRoot = sp.GetService<IHostEnvironment>()?.ContentRootPath;
-                db.ConnectionString = ResolveSqlitePath(db.DbType, db.ConnectionString, contentRoot);
-                EnsureSqliteDirectory(db.DbType, db.ConnectionString);
-                return claimer.Claim(opts, onFallback);
-            }
+                var opts = sp.GetService<AdminIdOptions>();
+                var log = (sp.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance).CreateLogger("TenonAdmin.Id");
+                WorkerIdLockDirFallback onFallback = (preferred, fallback) =>
+                    log.LogWarning(
+                        "机器号锁目录 {Preferred} 不可用,退到 {Fallback}。该目录可能被临时文件清理删掉锁文件,同机多进程仍有撞号风险。请设置 TenonAdmin:Id:WorkerIdLockDir,或给首选目录写权限。",
+                        preferred, fallback);
 
-            return WorkerIdAssignment.Resolve(opts, onFallback);
-        });
-        services.TryAddSingleton<IIdGenerator>(sp =>
-            new SnowflakeIdGenerator(sp.GetRequiredService<WorkerIdAssignment>().WorkerId, sp.GetService<TimeProvider>()));
+                var claimer = sp.GetService<IWorkerIdSlotClaimer>();
+                if (claimer is not null)
+                {
+                    var contentRoot = sp.GetService<IHostEnvironment>()?.ContentRootPath;
+                    db.ConnectionString = ResolveSqlitePath(db.DbType, db.ConnectionString, contentRoot);
+                    EnsureSqliteDirectory(db.DbType, db.ConnectionString);
+                    var assignment = claimer.Claim(opts, onFallback);
+                    try
+                    {
+                        InitializeWorkerLease(sp, assignment);
+                        return assignment;
+                    }
+                    catch
+                    {
+                        // 工厂尚未返回时 DI 不会追踪该实例；必须释放本工厂取得的锁和续租任务。
+                        try { assignment.Dispose(); }
+                        catch { /* 清理错误不覆盖初始化异常。 */ }
+                        throw;
+                    }
+                }
+
+                return WorkerIdAssignment.Resolve(opts, onFallback);
+            });
+            services.TryAddSingleton<IIdGenerator>(sp =>
+            {
+                var assignment = sp.GetRequiredService<WorkerIdAssignment>();
+                // 前置注册 WorkerIdAssignment 会绕过上方工厂；发号前仍确认相同的租约契约。
+                InitializeWorkerLease(sp, assignment);
+                return SnowflakeIdGenerator.ForAssignment(assignment, sp.GetService<TimeProvider>());
+            });
+        }
 
         // ── 数据范围环境载体(§6):授权管道写入、全局过滤器读取;AsyncLocal 单例 ──
         services.TryAddSingleton<IDataScopeContext, DataScopeContext>();
@@ -317,6 +338,21 @@ public static class SqlSugarSetup
             // StaticConfig.CodeFirst_BigString(SqlServer 上解析为 nvarchar(max);见 SysJobLog.ErrorText)。
             MoreSettings = new ConnMoreSettings { SqlServerCodeFirstNvarchar = true },
         };
+
+    private static void InitializeWorkerLease(IServiceProvider services, WorkerIdAssignment assignment)
+    {
+        if (assignment.Lifetime is not null)
+        {
+            assignment.EnsureActive();
+            return;
+        }
+        var initializer = services.GetService<IWorkerIdLeaseInitializer>();
+        if (initializer is null) return; // 单独装配数据层仍只使用文件锁。
+        assignment.RequireLease();
+        initializer.Initialize(assignment);
+        // 消费者替换 initializer 时同样要履行契约，不能空实现后静默发号。
+        assignment.EnsureActive();
+    }
 
     /// <summary>
     /// SQL 参数渲染成 <c>@p0=1, @name=张三</c>。

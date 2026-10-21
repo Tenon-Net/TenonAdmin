@@ -8,8 +8,9 @@ namespace TenonAdmin.Core;
 public interface IWorkerIdSlotClaimer
 {
     /// <summary>
-    /// 显式配置了号则不写库（留给租约守卫去登记）；未配则 <c>INSERT</c> 0–63 中第一个成功的槽，
-    /// 再抢该号的文件锁。
+    /// 默认实现为显式号确认固定槽，未配则领取 0–63 中第一个空闲槽并抢文件锁；
+    /// 返回的分配持有持续续租的生命周期。消费者已有实现仍可返回 Resolve/FromClaimedSlot 的分配，
+    /// 默认发号器会经 <see cref="IWorkerIdLeaseInitializer"/> 接管尚未附加的数据库租约。
     /// </summary>
     WorkerIdAssignment Claim(AdminIdOptions? options, WorkerIdLockDirFallback? onFallback = null);
 }

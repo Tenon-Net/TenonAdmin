@@ -21,11 +21,10 @@ Same pattern in the data layer:
 
 ```csharp
 // backend/src/TenonAdmin.SqlSugar/SqlSugarSetup.cs
-services.TryAddSingleton(sp => WorkerIdAssignment.Resolve(sp.GetService<AdminIdOptions>()));
-services.TryAddSingleton<IIdGenerator>(sp =>
-    new SnowflakeIdGenerator(sp.GetRequiredService<WorkerIdAssignment>().WorkerId, sp.GetService<TimeProvider>()));
 services.TryAdd(ServiceDescriptor.Scoped(typeof(IRepository<>), typeof(SqlSugarRepository<>)));
 ```
+
+The default `IIdGenerator` also respects an earlier registration. When using the built-in Snowflake generator, the kernel confirms the `WorkerIdAssignment` lease before binding the generator with `SnowflakeIdGenerator.ForAssignment(...)`. Generation stops when the lease is lost or the assignment is disposed. The constructor that accepts only a worker ID is for standalone use where the caller manages that ID’s lifetime; it does not participate in the kernel’s lease protection.
 
 ::: warning `TryAdd` depends on registration order
 A consumer must register **before** `AddTenonAdmin()` to win. Register after, and the built-in service has already claimed the slot — `TryAdd` silently skips the consumer's registration. No error is raised; the replacement just silently doesn't take effect.

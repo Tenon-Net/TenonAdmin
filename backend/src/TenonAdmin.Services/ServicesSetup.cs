@@ -184,9 +184,10 @@ public static class ServicesSetup
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, SqlAdminJob>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAdminJob, JobLogCleanupJob>());
 
-        // 未配 WorkerId 时在 sys_worker_lease 领空闲槽(跨容器);守卫再用同一个号续租
+        // 自动领取即开始续租；宿主在普通 HostedService 启动前确认显式号或消费者领取的号。
         services.TryAddSingleton<IWorkerIdSlotClaimer, DbWorkerIdSlotClaimer>();
-        services.AddHostedService<WorkerIdLeaseGuard>();
+        services.TryAddSingleton<IWorkerIdLeaseInitializer, DbWorkerIdSlotClaimer>();
+        services.AddHostedService<WorkerIdLeaseGuard>(WorkerIdLeaseGuard.CreateHosted);
 
         // 个人中心(§4,T8):当前用户对自己账号的读改(看/改资料、验旧改密)
         services.TryAddScoped<IPersonalService, PersonalService>();

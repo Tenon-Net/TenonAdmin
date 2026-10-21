@@ -1,9 +1,8 @@
 namespace TenonAdmin.Core;
 
 /// <summary>
-/// 本进程雪花机器号的分配结果。未显式配置 <c>TenonAdmin:Id:WorkerId</c> 时持有
-/// <see cref="WorkerIdLease"/>，必须由 DI 单例根住——<c>FileStream</c> 被回收会提前放锁，
-/// 进程却还在用那个号发 Id。
+/// 本进程雪花机器号的分配结果，同时根住文件锁和可选的数据库续租生命周期。
+/// 必须由 DI 单例持有，并在释放后停止使用关联的发号器。
 /// </summary>
 public sealed class WorkerIdAssignment : IDisposable
 {
@@ -18,6 +17,60 @@ public sealed class WorkerIdAssignment : IDisposable
     /// 而不是靠 pid（同进程里两个守卫测例会误伤）。
     /// </summary>
     public string? InstanceToken { get; }
+
+    private readonly object _gate = new();
+    private IWorkerIdLeaseLifetime? _lifetime;
+    private bool _requiresLease;
+    private bool _disposed;
+
+    /// <summary>已接管本分配的数据库租约；数据层单独使用文件锁时为 null。</summary>
+    public IWorkerIdLeaseLifetime? Lifetime
+    {
+        get { lock (_gate) return _lifetime; }
+    }
+
+    /// <summary>完整 Services 装配要求先确认数据库租约，才允许默认发号器工作。</summary>
+    public void RequireLease()
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            _requiresLease = true;
+        }
+    }
+
+    /// <summary>将唯一的数据库续租生命周期交给本分配管理；重复接管或释放后接管会失败。</summary>
+    public void AttachLifetime(IWorkerIdLeaseLifetime lifetime)
+    {
+        ArgumentNullException.ThrowIfNull(lifetime);
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (_lifetime is not null)
+                throw new InvalidOperationException("WorkerId 已有数据库租约生命周期，不能重复接管。");
+            lifetime.EnsureActive();
+            _lifetime = lifetime;
+            _requiresLease = true;
+        }
+    }
+
+    /// <summary>默认发号器在计算前后检查；等待内部锁或时钟期间过期的 ID 不得返回给调用者。</summary>
+    public void EnsureActive()
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (_requiresLease && _lifetime is null)
+                throw new InvalidOperationException("WorkerId 数据库租约尚未确认，拒绝生成 ID。");
+            _lifetime?.EnsureActive();
+        }
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+            throw new InvalidOperationException("WorkerId 分配已释放，拒绝生成 ID。");
+    }
 
     private WorkerIdAssignment(long workerId, WorkerIdLease? lease, string? instanceToken = null)
     {
@@ -53,5 +106,16 @@ public sealed class WorkerIdAssignment : IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose() => Lease?.Dispose();
+    public void Dispose()
+    {
+        IWorkerIdLeaseLifetime? lifetime;
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            lifetime = _lifetime;
+        }
+        try { lifetime?.Dispose(); }
+        finally { Lease?.Dispose(); }
+    }
 }

@@ -1,28 +1,203 @@
 using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 using SqlSugar;
 using TenonAdmin.Core;
 
 namespace TenonAdmin.Services;
 
 /// <summary>
-/// 未配 <c>WorkerId</c> 时在 <c>sys_worker_lease</c> 上从 0 试到 63：谁 <c>INSERT</c> 成功谁用谁。
+/// 已配 <c>WorkerId</c> 时领取固定槽；未配时在 <c>sys_worker_lease</c> 上从 0 试到 63。
 /// 用独立短连接，不经过带审计 AOP 的 <see cref="ISqlSugarClient"/>（那个工厂还要发号器）。
 /// </summary>
 public sealed class DbWorkerIdSlotClaimer(
     AdminDatabaseOptions database,
     AdminJobsOptions? jobs = null,
-    TimeProvider? time = null) : IWorkerIdSlotClaimer
+    TimeProvider? time = null) : IWorkerIdSlotClaimer, IWorkerIdLeaseInitializer
 {
     private readonly TimeProvider _time = time ?? TimeProvider.System;
-    private readonly int _heartbeatSeconds = Math.Max(jobs?.HeartbeatSeconds ?? 10, 2);
+    private readonly AdminJobsOptions _jobs = jobs ?? new AdminJobsOptions();
+    private readonly ILogger<DbWorkerIdSlotClaimer>? _logger;
+
+    /// <summary>DI 使用的可观测构造函数；三参数构造函数继续保留给既有消费者。</summary>
+    public DbWorkerIdSlotClaimer(
+        AdminDatabaseOptions database,
+        AdminJobsOptions? jobs,
+        TimeProvider? time,
+        ILogger<DbWorkerIdSlotClaimer> logger)
+        : this(database, jobs, time)
+    {
+        _logger = logger;
+    }
+
+    void IWorkerIdLeaseInitializer.Initialize(WorkerIdAssignment assignment) => ActivateAssignment(assignment);
 
     /// <inheritdoc />
     public WorkerIdAssignment Claim(AdminIdOptions? options, WorkerIdLockDirFallback? onFallback = null)
     {
-        if (options?.WorkerId is not null || options is null)
-            return WorkerIdAssignment.Resolve(options, onFallback);
-
         var client = OpenBareClient();
+        var clientTransferred = false;
+        try
+        {
+            InitializeLeaseTable(client);
+
+            var machine = Environment.MachineName;
+            var pid = Environment.ProcessId;
+            var ttl = TimeSpan.FromSeconds(Math.Max(_jobs.HeartbeatSeconds, 2) * 3);
+            var token = Guid.NewGuid().ToString("N")[..8];
+
+            if (options is null || options.WorkerId is not null)
+            {
+                var workerId = options?.WorkerId ?? 0;
+                var confirmedStartedAt = ClaimFixedSlot(client, workerId, machine, pid, ttl, token);
+                var nodeName = NodeName(machine, workerId, token);
+                WorkerIdAssignment assignment;
+                try
+                {
+                    assignment = WorkerIdAssignment.Resolve(options, onFallback);
+                }
+                catch
+                {
+                    try { ReleaseOwnedSlot(client, workerId, nodeName); }
+                    catch { }
+                    throw;
+                }
+
+                try
+                {
+                    return AttachLifetime(
+                        client,
+                        assignment,
+                        workerId,
+                        nodeName,
+                        confirmedStartedAt,
+                        ref clientTransferred);
+                }
+                catch
+                {
+                    try { assignment.Dispose(); }
+                    catch { }
+                    throw;
+                }
+            }
+
+            for (var n = 0; n <= SnowflakeIdGenerator.MaxWorkerId; n++)
+            {
+                var slot = n;
+                // 多宿主同时抢槽时 MySQL 可能把某条 INSERT 选为死锁牺牲者(1213)。该语句已被整句回滚、不留行,
+                // 原样重试同一槽最多 MaxLockConflictAttempts 次;仍冲突就当没抢到、继续下一个槽(跳槽不影响唯一性)。
+                long confirmedStartedAt = 0;
+                if (!RetryOnLockConflict(
+                        () => TryOwnSlot(client, slot, machine, pid, ttl, token, out confirmedStartedAt),
+                        onExhausted: false))
+                    continue;
+
+                WorkerIdLease? file;
+                try
+                {
+                    file = WorkerIdLease.TryAcquire(n, options.WorkerIdLockDir, onFallback);
+                }
+                catch
+                {
+                    // 文件锁目录解析/创建失败也不能遗留本实例刚领到的数据库行；释放失败时保留原异常。
+                    try { ReleaseOwnedSlot(client, n, NodeName(machine, n, token)); }
+                    catch { }
+                    throw;
+                }
+                if (file is null)
+                {
+                    ReleaseOwnedSlot(client, n, NodeName(machine, n, token));
+                    continue;
+                }
+
+                var nodeName = NodeName(machine, n, token);
+                WorkerIdAssignment assignment;
+                try
+                {
+                    assignment = WorkerIdAssignment.FromClaimedSlot(n, file, token);
+                }
+                catch
+                {
+                    try { file.Dispose(); }
+                    catch { }
+                    try { ReleaseOwnedSlot(client, n, nodeName); }
+                    catch { }
+                    throw;
+                }
+
+                try
+                {
+                    return AttachLifetime(
+                        client,
+                        assignment,
+                        n,
+                        nodeName,
+                        confirmedStartedAt,
+                        ref clientTransferred);
+                }
+                catch
+                {
+                    try { assignment.Dispose(); }
+                    catch { }
+                    throw;
+                }
+            }
+
+            throw new InvalidOperationException(
+                $"机器号 0–{SnowflakeIdGenerator.MaxWorkerId} 在 sys_worker_lease 上已被占满，拒绝发号以避免重复。" +
+                "请检查是否有实例未退出，或为各实例显式配置不同的 TenonAdmin:Id:WorkerId。");
+        }
+        finally
+        {
+            if (!clientTransferred)
+                client.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// 为旧版、自定义或预注册的分配补齐数据库租约。已有生命周期时只校验，不重复启动续租。
+    /// </summary>
+    internal void ActivateAssignment(WorkerIdAssignment assignment)
+    {
+        ArgumentNullException.ThrowIfNull(assignment);
+        lock (assignment)
+        {
+            if (assignment.Lifetime is not null)
+            {
+                assignment.EnsureActive();
+                return;
+            }
+
+            var client = OpenBareClient();
+            var clientTransferred = false;
+            try
+            {
+                InitializeLeaseTable(client);
+                var workerId = checked((int)assignment.WorkerId);
+                var machine = Environment.MachineName;
+                var pid = Environment.ProcessId;
+                var ttl = TimeSpan.FromSeconds(Math.Max(_jobs.HeartbeatSeconds, 2) * 3);
+                var token = string.IsNullOrEmpty(assignment.InstanceToken)
+                    ? Guid.NewGuid().ToString("N")[..8]
+                    : assignment.InstanceToken;
+                var confirmedStartedAt = ClaimFixedSlot(client, workerId, machine, pid, ttl, token);
+                _ = AttachLifetime(
+                    client,
+                    assignment,
+                    workerId,
+                    NodeName(machine, workerId, token),
+                    confirmedStartedAt,
+                    ref clientTransferred);
+            }
+            finally
+            {
+                if (!clientTransferred)
+                    client.Dispose();
+            }
+        }
+    }
+
+    private static void InitializeLeaseTable(ISqlSugarClient client)
+    {
         try
         {
             RetryOnLockConflict(() =>
@@ -48,37 +223,30 @@ public sealed class DbWorkerIdSlotClaimer(
         {
             throw new InvalidOperationException(
                 $"领取 WorkerId 时 sys_worker_lease 所在数据库被其他连接锁住，建表阶段重试 {MaxLockConflictAttempts} 次仍冲突。" +
-                "请确认没有长事务占用该库，或显式配置 TenonAdmin:Id:WorkerId。", ex);
+                "请确认没有长事务占用该库后重试。", ex);
         }
+    }
 
-        var machine = Environment.MachineName;
-        var pid = Environment.ProcessId;
-        var ttl = TimeSpan.FromSeconds(_heartbeatSeconds * 3);
-        var token = Guid.NewGuid().ToString("N")[..8];
-
-        for (var n = 0; n <= SnowflakeIdGenerator.MaxWorkerId; n++)
+    private long ClaimFixedSlot(
+        ISqlSugarClient client,
+        int workerId,
+        string machine,
+        int pid,
+        TimeSpan ttl,
+        string token)
+    {
+        long confirmedStartedAt = 0;
+        var owned = RetryOnLockConflict(
+            () => TryOwnSlot(client, workerId, machine, pid, ttl, token, out confirmedStartedAt),
+            onExhausted: null);
+        if (!owned)
         {
-            var slot = n;
-            // 多宿主同时抢槽时 MySQL 可能把某条 INSERT 选为死锁牺牲者(1213)。该语句已被整句回滚、不留行,
-            // 原样重试同一槽最多 MaxLockConflictAttempts 次;仍冲突就当没抢到、继续下一个槽(跳槽不影响唯一性)。
-            if (!RetryOnLockConflict(() => TryOwnSlot(client, slot, machine, pid, ttl, token), onExhausted: false))
-                continue;
-
-            var file = WorkerIdLease.TryAcquire(n, options.WorkerIdLockDir, onFallback);
-            if (file is null)
-            {
-                client.Deleteable<SysWorkerLease>()
-                    .Where(l => l.WorkerId == n && l.Pid == pid && l.MachineName == machine)
-                    .ExecuteCommand();
-                continue;
-            }
-
-            return WorkerIdAssignment.FromClaimedSlot(n, file, token);
+            throw new InvalidOperationException(
+                $"WorkerId {workerId} 的数据库租约已被其它节点持有，拒绝发号以避免重复。" +
+                "请为本实例配置不同的 TenonAdmin:Id:WorkerId，或等待原租约释放后重试。");
         }
 
-        throw new InvalidOperationException(
-            $"机器号 0–{SnowflakeIdGenerator.MaxWorkerId} 在 sys_worker_lease 上已被占满，拒绝发号以避免重复。" +
-            "请检查是否有实例未退出，或为各实例显式配置不同的 TenonAdmin:Id:WorkerId。");
+        return confirmedStartedAt;
     }
 
     /// <summary>
@@ -243,26 +411,49 @@ public sealed class DbWorkerIdSlotClaimer(
         if (!Enum.TryParse<DbType>(database.DbType, ignoreCase: true, out var dbType))
             throw new InvalidOperationException($"未知 DbType \"{database.DbType}\"，无法领取 WorkerId。");
 
+        Microsoft.Data.Sqlite.SqliteConnectionStringBuilder? sqlite = null;
+        if (dbType == DbType.Sqlite)
+            sqlite = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(database.ConnectionString);
+        var sqliteMemory = sqlite is not null && IsSqliteMemory(sqlite);
         var client = new SqlSugarClient(new ConnectionConfig
         {
             ConfigId = "TenonAdmin.WorkerIdClaim",
             DbType = dbType,
             ConnectionString = database.ConnectionString,
-            IsAutoCloseConnection = true,
+            // SQLite 私有内存库的生命期就是这条连接；领取后会把该客户端直接转交给 lifetime。
+            IsAutoCloseConnection = !sqliteMemory,
             MoreSettings = new ConnMoreSettings { SqlServerCodeFirstNvarchar = true },
         });
         // #62:SqlSugar 默认 CommandTimeOut=300s 会覆盖 Microsoft.Data.Sqlite 的 busy 等待(连接串 Default Timeout),
         // 锁住时单条语句要等 5 分钟。SQLite 改为沿用连接串里的 Default Timeout(未配时驱动默认 30s);其他库不变。
-        if (dbType == DbType.Sqlite)
-            client.Ado.CommandTimeOut = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(database.ConnectionString).DefaultTimeout;
+        if (sqlite is not null)
+        {
+            client.Ado.CommandTimeOut = sqlite.DefaultTimeout;
+            if (sqliteMemory)
+                client.Ado.Open();
+        }
         return client;
     }
 
-    private bool TryOwnSlot(ISqlSugarClient db, int workerId, string machine, int pid, TimeSpan ttl, string token)
+    private static bool IsSqliteMemory(Microsoft.Data.Sqlite.SqliteConnectionStringBuilder sqlite) =>
+        string.Equals(sqlite.DataSource, ":memory:", StringComparison.OrdinalIgnoreCase)
+        || sqlite.Mode == Microsoft.Data.Sqlite.SqliteOpenMode.Memory;
+
+    private bool TryOwnSlot(
+        ISqlSugarClient db,
+        int workerId,
+        string machine,
+        int pid,
+        TimeSpan ttl,
+        string token,
+        out long confirmedStartedAt)
     {
-        var now = _time.GetLocalNow().DateTime;
+        // 本地单调时钟必须在数据库时钟查询前取样。这样即使查询或写入很慢，
+        // 本地确认期限也只会更早到期，不会把网络耗时误算成已确认的租约时间。
+        confirmedStartedAt = _time.GetTimestamp();
+        var now = DbWorkerIdLeaseLifetime.DatabaseNow(db);
         var expiresAt = now + ttl;
-        var nodeName = $"{machine}#{workerId}@{token}";
+        var nodeName = NodeName(machine, workerId, token);
 
         var existing = db.Queryable<SysWorkerLease>().Where(l => l.WorkerId == workerId).First();
         if (existing is null)
@@ -306,9 +497,80 @@ public sealed class DbWorkerIdSlotClaimer(
                 Pid = pid,
                 LeaseExpiresAt = expiresAt,
             })
-            .Where(l => l.WorkerId == workerId && l.NodeName == existing.NodeName)
+            .Where(l => l.WorkerId == workerId
+                && l.NodeName == existing.NodeName
+                && l.LeaseExpiresAt == existing.LeaseExpiresAt)
             .ExecuteCommand();
         return rows > 0;
+    }
+
+    private static string NodeName(string machine, int workerId, string token) =>
+        $"{machine}#{workerId}@{token}";
+
+    private WorkerIdAssignment AttachLifetime(
+        ISqlSugarClient claimClient,
+        WorkerIdAssignment assignment,
+        int workerId,
+        string nodeName,
+        long confirmedStartedAt,
+        ref bool claimClientTransferred)
+    {
+        DbWorkerIdLeaseLifetime? lifetime = null;
+        try
+        {
+            var reuseClaimClient = IsSqliteMemory(claimClient);
+            var leaseClient = reuseClaimClient ? claimClient : OpenBareClient();
+            try
+            {
+                lifetime = new DbWorkerIdLeaseLifetime(
+                    leaseClient,
+                    workerId,
+                    nodeName,
+                    _jobs,
+                    _time,
+                    confirmedStartedAt,
+                    ownsClient: true,
+                    logger: _logger);
+                if (reuseClaimClient)
+                    claimClientTransferred = true;
+            }
+            catch
+            {
+                if (!reuseClaimClient)
+                {
+                    try { leaseClient.Dispose(); }
+                    catch { }
+                }
+                throw;
+            }
+
+            assignment.AttachLifetime(lifetime);
+            return assignment;
+        }
+        catch
+        {
+            try { lifetime?.Dispose(); }
+            catch { }
+            try { ReleaseOwnedSlot(claimClient, workerId, nodeName); }
+            catch { }
+            throw;
+        }
+    }
+
+    private static bool IsSqliteMemory(ISqlSugarClient client)
+    {
+        if (client.CurrentConnectionConfig.DbType != DbType.Sqlite)
+            return false;
+        var sqlite = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(
+            client.CurrentConnectionConfig.ConnectionString);
+        return IsSqliteMemory(sqlite);
+    }
+
+    private static void ReleaseOwnedSlot(ISqlSugarClient db, int workerId, string nodeName)
+    {
+        db.Deleteable<SysWorkerLease>()
+            .Where(l => l.WorkerId == workerId && l.NodeName == nodeName)
+            .ExecuteCommand();
     }
 
     private static bool OwnerProcessIsGone(SysWorkerLease lease)
