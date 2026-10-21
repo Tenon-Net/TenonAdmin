@@ -72,6 +72,7 @@ public sealed class MockPartnerFixture : IAsyncLifetime
 /// G07 普通出站调用:用本地可控第三方验证凭据注入、超时与取消、错误映射、不安全目标、写操作不被底层重发、
 /// 响应上限、秘密不外泄、自定义适配器复用基础设施,以及出站记录的后台查询权限。
 /// </summary>
+[Collection(nameof(OutboundTimingCollection))]
 public class IntegrationOutboundTests(MockPartnerFixture mock) : IClassFixture<MockPartnerFixture>
 {
     private static readonly JsonSerializerOptions RawJson = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -614,3 +615,7 @@ public class IntegrationOutboundTests(MockPartnerFixture mock) : IClassFixture<M
             ValueTask.FromResult<OutboundCredential?>(new OutboundCredential(MockPartnerFixture.Token));
     }
 }
+
+/// <summary>真实网络的耗时断言不与其它测试集合并行，避免线程池竞争延后超时。</summary>
+[CollectionDefinition(nameof(OutboundTimingCollection), DisableParallelization = true)]
+public sealed class OutboundTimingCollection { }
