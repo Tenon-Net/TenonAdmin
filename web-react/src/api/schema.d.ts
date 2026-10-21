@@ -2152,7 +2152,7 @@ export interface paths {
             parameters: {
                 query?: {
                     /** @description 任务 Id(精确,可选) */
-                    JobId?: number | string;
+                    JobId?: null | number | string;
                     /** @description 执行结果(精确,可选) */
                     RunStatus?: components["schemas"]["JobRunStatus"];
                     /** @description 开始时刻下界(可选) */
@@ -2160,7 +2160,7 @@ export interface paths {
                     /** @description 开始时刻上界(可选) */
                     StartTo?: string;
                     /** @description 同一次触发的标识(精确,可选)——取一次触发的全部重试行,详情抽屉按它拉重试列表 */
-                    FireInstanceId?: number | string;
+                    FireInstanceId?: null | number | string;
                     Current?: number | string;
                     Size?: number | string;
                     SortField?: string;
@@ -2807,7 +2807,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    id: number;
+                    id: number | string;
                 };
                 cookie?: never;
             };
@@ -4747,7 +4747,7 @@ export interface paths {
                     /** @description 是否成功(可选,不传则不限) */
                     Success?: boolean;
                     /** @description 操作人用户 Id(精确;日志只存 Id,姓名是读取时回填的,故不做姓名模糊) */
-                    OperatorId?: number | string;
+                    OperatorId?: null | number | string;
                     /** @description 接口路径(模糊,可选;如 `/api/v1/sys/role` 可捞出角色相关的全部动作) */
                     Path?: string;
                     /** @description 操作时间下界(含) */
@@ -4805,7 +4805,7 @@ export interface paths {
                     /** @description 是否成功(可选,不传则不限) */
                     Success?: boolean;
                     /** @description 操作人用户 Id(精确;日志只存 Id,姓名是读取时回填的,故不做姓名模糊) */
-                    OperatorId?: number | string;
+                    OperatorId?: null | number | string;
                     /** @description 接口路径(模糊,可选;如 `/api/v1/sys/role` 可捞出角色相关的全部动作) */
                     Path?: string;
                     /** @description 操作时间下界(含) */
@@ -5548,7 +5548,7 @@ export interface paths {
             parameters: {
                 query?: {
                     /** @description 按用户过滤(可选) */
-                    UserId?: number | string;
+                    UserId?: null | number | string;
                     Current?: number | string;
                     Size?: number | string;
                     SortField?: string;
@@ -5637,9 +5637,9 @@ export interface paths {
                     /** @description 姓名(模糊) */
                     Name?: string;
                     /** @description 主属机构 Id(精确) */
-                    OrgId?: number | string;
+                    OrgId?: null | number | string;
                     /** @description 角色 Id(精确):只返回持有该角色的用户。管理端"这个角色有哪些人"的反查即走此参。 */
-                    RoleId?: number | string;
+                    RoleId?: null | number | string;
                     /** @description 启用状态(null=全部) */
                     Enabled?: boolean;
                     Current?: number | string;
@@ -6182,9 +6182,9 @@ export interface paths {
                     /** @description 姓名(模糊) */
                     Name?: string;
                     /** @description 主属机构 Id(精确) */
-                    OrgId?: number | string;
+                    OrgId?: null | number | string;
                     /** @description 角色 Id(精确):只返回持有该角色的用户。管理端"这个角色有哪些人"的反查即走此参。 */
-                    RoleId?: number | string;
+                    RoleId?: null | number | string;
                     /** @description 启用状态(null=全部) */
                     Enabled?: boolean;
                     Current?: number | string;
@@ -6355,7 +6355,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    DefinitionId?: number | string;
+                    DefinitionId?: null | number | string;
                     OnlyUnread?: boolean;
                     Current?: number | string;
                     Size?: number | string;
@@ -6489,7 +6489,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    id: number;
+                    id: number | string;
                 };
                 cookie?: never;
             };
@@ -6528,7 +6528,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    id: number;
+                    id: number | string;
                 };
                 cookie?: never;
             };
@@ -6554,7 +6554,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    id: number;
+                    id: number | string;
                 };
                 cookie?: never;
             };
@@ -6760,7 +6760,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    OriginalUserId?: number | string;
+                    OriginalUserId?: null | number | string;
                     Enabled?: boolean;
                     Current?: number | string;
                     Size?: number | string;
@@ -6956,7 +6956,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    id: number;
+                    id: number | string;
                 };
                 cookie?: never;
             };
@@ -7037,7 +7037,7 @@ export interface paths {
             parameters: {
                 query?: {
                     Status?: components["schemas"]["WfInstanceStatus"];
-                    DefinitionId?: number | string;
+                    DefinitionId?: null | number | string;
                     BusinessKey?: string;
                     Current?: number | string;
                     Size?: number | string;
@@ -7081,11 +7081,11 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    StarterUserId?: number | string;
-                    ActorUserId?: number | string;
-                    CcUserId?: number | string;
+                    StarterUserId?: null | number | string;
+                    ActorUserId?: null | number | string;
+                    CcUserId?: null | number | string;
                     Status?: components["schemas"]["WfInstanceStatus"];
-                    DefinitionId?: number | string;
+                    DefinitionId?: null | number | string;
                     BusinessKey?: string;
                     Current?: number | string;
                     Size?: number | string;
@@ -7131,7 +7131,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    id: number;
+                    id: number | string;
                 };
                 cookie?: never;
             };
@@ -7170,7 +7170,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    id: number;
+                    id: number | string;
                 };
                 cookie?: never;
             };
@@ -7209,7 +7209,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    id: number;
+                    id: number | string;
                 };
                 cookie?: never;
             };
@@ -7382,7 +7382,7 @@ export interface paths {
                 };
                 header?: never;
                 path: {
-                    id: number;
+                    id: number | string;
                 };
                 cookie?: never;
             };
@@ -7461,7 +7461,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    DefinitionId?: number | string;
+                    DefinitionId?: null | number | string;
                     Current?: number | string;
                     Size?: number | string;
                     SortField?: string;
@@ -7504,7 +7504,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    DefinitionId?: number | string;
+                    DefinitionId?: null | number | string;
                     Current?: number | string;
                     Size?: number | string;
                     SortField?: string;
@@ -9068,7 +9068,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    AppId?: number | string;
+                    AppId?: null | number | string;
                     Route?: string;
                     Outcome?: components["schemas"]["InboundCallOutcome"];
                     TraceId?: string;
@@ -9120,7 +9120,7 @@ export interface paths {
                     Target?: string;
                     Operation?: string;
                     Outcome?: components["schemas"]["OutboundOutcome"];
-                    DeliveryId?: number | string;
+                    DeliveryId?: null | number | string;
                     CallId?: string;
                     TraceId?: string;
                     StartTime?: string;

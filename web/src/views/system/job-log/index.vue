@@ -19,6 +19,8 @@ import { useAuthStore } from '@/stores/auth'
 import { jobApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { JobFireMode, JobRunStatus, type SysJobLog } from '@/types/api'
+import type { ApiId } from '@/types/api'
+import { parseQueryApiId } from '@/utils/id'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -27,7 +29,7 @@ const authStore = useAuthStore()
 const tableRef = ref<ProTableInst<SysJobLog>>()
 
 // 任务下拉(筛选用):拉一页足量。ponytail: 200 覆盖绝大多数系统,真超再上远程搜索
-const jobOptions = ref<{ label: string; value: number }[]>([])
+const jobOptions = ref<{ label: string; value: ApiId }[]>([])
 async function loadJobOptions() {
   try {
     const { items } = await jobApi.page({ page: 1, pageSize: 200 })
@@ -114,7 +116,7 @@ watch(
     // route 是全局的:切到别的页面时 query.jobId 变 undefined,本页被 keep-alive 着的 watcher 照样会响。
     // 不守卫就等于「离开本页 = 清掉筛选并后台发一次没人看的请求」,切回来筛选还没了。
     if (route.path !== '/system/job-log') return
-    const next = jobId == null ? undefined : Number(jobId)
+    const next = parseQueryApiId(jobId)
     if (inst.params.jobId === next) return
     inst.params.jobId = next
     inst.search()

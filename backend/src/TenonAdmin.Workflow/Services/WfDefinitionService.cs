@@ -281,7 +281,7 @@ public class WfDefinitionService(
             Id = v.Id,
             DefinitionId = v.DefinitionId,
             Version = v.Version,
-            ModelJson = v.ModelJson,
+            ModelJson = WfClientJson.ProjectModelJson(v.ModelJson),
             FormSchema = v.FormSchema,
             PublishTime = v.PublishTime,
             PublishUserId = v.PublishUserId,
@@ -1256,7 +1256,7 @@ public class WfDefinitionService(
             CreateUserId = def.CreateUserId,
             UpdateTime = def.UpdateTime,
             UpdateUserId = def.UpdateUserId,
-            Model = model,
+            Model = WfClientJson.ProjectModel(model),
         };
     }
 }

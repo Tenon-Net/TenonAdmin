@@ -21,7 +21,8 @@ import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import { triggerBlobDownload } from '@/utils/download'
 import { buildTree, type Tree } from '@/utils/tree'
-import type { ExportColumnDef, SysOrg, UserItem } from '@/types/api'
+import type { ApiId, ExportColumnDef, SysOrg, UserItem } from '@/types/api'
+import { parseQueryApiId } from '@/utils/id'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -56,16 +57,16 @@ async function clearUserMfa(user: UserItem) {
 
 // 职位/角色/主管下拉:各拉一页足量。ponytail: 200 覆盖绝大多数系统;真超再上分页搜索。
 // roleOptions 一份两用:既喂编辑弹窗,也当列表页「角色」搜索项的选项源(ProTable 支持 Ref 选项源)。
-const positionOptions = ref<{ label: string; value: number }[]>([])
-const roleOptions = ref<{ label: string; value: number }[]>([])
-const directorOptions = ref<{ label: string; value: number }[]>([])
+const positionOptions = ref<{ label: string; value: ApiId }[]>([])
+const roleOptions = ref<{ label: string; value: ApiId }[]>([])
+const directorOptions = ref<{ label: string; value: ApiId }[]>([])
 // 左侧机构树筛选:选中节点即按其机构过滤用户;params 深监听联动 ProTable(回第 1 页重查)。
 const orgTree = ref<Tree<SysOrg>[]>([])
-const selectedOrgId = ref<number | null>(null)
+const selectedOrgId = ref<ApiId | null>(null)
 const tableParams = computed(() => (selectedOrgId.value == null ? {} : { orgId: selectedOrgId.value }))
 function onOrgSelect(keys: (string | number)[]) {
   // 再点选中项 → 取消选中 → 恢复全部
-  selectedOrgId.value = keys.length ? Number(keys[0]) : null
+  selectedOrgId.value = keys.length ? keys[0]! : null
 }
 onMounted(async () => {
   try {
@@ -104,7 +105,7 @@ watch(
   [tableRef, () => route.query.roleId],
   ([inst, roleId]) => {
     if (!inst) return
-    const next = roleId == null ? undefined : Number(roleId)
+    const next = parseQueryApiId(roleId)
     if (inst.params.roleId === next) return // 防抖:实例就绪与 query 变化可能各触发一次
     inst.params.roleId = next
     inst.search() // 回第 1 页重查
@@ -153,8 +154,8 @@ async function onExport(keys: string[]) {
     const blob = await userApi.export({
       account: p.account || undefined,
       name: p.name || undefined,
-      orgId: p.orgId != null ? Number(p.orgId) : undefined,
-      roleId: p.roleId != null ? Number(p.roleId) : undefined,
+      orgId: typeof p.orgId === 'number' || typeof p.orgId === 'string' ? p.orgId : undefined,
+      roleId: typeof p.roleId === 'number' || typeof p.roleId === 'string' ? p.roleId : undefined,
       sortField: p.sortField || undefined,
       sortOrder: p.sortOrder || undefined,
       columns: keys.join(','),

@@ -5,12 +5,13 @@ import { NButton, NDataTable, NInput, NSpace, NTag, useMessage, type DataTableCo
 import { useI18n } from 'vue-i18n'
 import { highSensApi } from '@/api'
 import { translateError } from '@/utils/error'
+import type { ApiId } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
 const loading = ref(false)
 const defaults = ref<string[]>([])
-const customs = ref<{ id: number; permissionCode: string; remark?: string | null }[]>([])
+const customs = ref<{ id: ApiId; permissionCode: string; remark?: string | null }[]>([])
 const newCode = ref('')
 const newRemark = ref('')
 const saving = ref(false)
@@ -23,7 +24,7 @@ async function load() {
     customs.value = (data.customs ?? []).flatMap((item) =>
       item.id == null
         ? []
-        : [{ id: Number(item.id), permissionCode: item.permissionCode ?? '', remark: item.remark }],
+        : [{ id: item.id, permissionCode: item.permissionCode ?? '', remark: item.remark }],
     )
   } catch (e) {
     message.error(translateError(e))
@@ -51,7 +52,7 @@ async function add() {
   }
 }
 
-async function remove(id: number) {
+async function remove(id: ApiId) {
   saving.value = true
   try {
     await highSensApi.remove(id)

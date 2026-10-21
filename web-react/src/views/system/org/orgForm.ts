@@ -1,7 +1,7 @@
-import type { OrgInput, SysOrg } from '@/types/api'
+import type { ApiId, OrgInput, SysOrg } from '@/types/api'
 
 /** 新增机构默认表单(parentId 0=根、启用、sort 0;category 空)。纯逻辑,变异钉。 */
-export function blankForm(parentId = 0): OrgInput {
+export function blankForm(parentId: ApiId = 0): OrgInput {
   return { parentId, name: '', code: '', category: null, sort: 0, enabled: true }
 }
 

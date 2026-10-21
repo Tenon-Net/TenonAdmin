@@ -48,7 +48,7 @@ export const wfDefinitionApi = {
 
   get: (id: WfId) =>
     client
-      .GET('/api/v1/workflow/definition/{id}', { params: { path: { id: id as number } } })
+      .GET('/api/v1/workflow/definition/{id}', { params: { path: { id } } })
       .then((r) => unwrap<WfDefinitionDetail>(r)),
 
   add: (body: WfDefinitionInput) =>
@@ -73,7 +73,7 @@ export const wfDefinitionApi = {
 
   remove: (id: WfId) =>
     client
-      .DELETE('/api/v1/workflow/definition/{id}', { params: { path: { id: id as number } } })
+      .DELETE('/api/v1/workflow/definition/{id}', { params: { path: { id } } })
       .then((r) => unwrap<boolean>(r)),
 }
 
@@ -85,7 +85,7 @@ export const wfInstanceApi = {
 
   startableDetail: (id: WfId) =>
     client
-      .GET('/api/v1/workflow/instance/startable/{id}', { params: { path: { id: id as number } } })
+      .GET('/api/v1/workflow/instance/startable/{id}', { params: { path: { id } } })
       .then((r) => unwrap<WfStartableDefinitionDetail>(r)),
 
   start: (body: WfStartInput) =>
@@ -100,7 +100,7 @@ export const wfInstanceApi = {
 
   history: (id: WfId) =>
     client
-      .GET('/api/v1/workflow/instance/history/{id}', { params: { path: { id: id as number } } })
+      .GET('/api/v1/workflow/instance/history/{id}', { params: { path: { id } } })
       .then((r) => unwrap<WfHistoryItem[]>(r)),
 
   page: (params: {

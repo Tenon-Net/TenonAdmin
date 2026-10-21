@@ -6,7 +6,7 @@ import { Button, Checkbox, Input, Select } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { AppIcon } from '@/components/AppIcon'
 import type { MenuTreeNode } from '@/types/menu'
-import type { ModuleRow } from '@/types/api'
+import type { ApiId, ModuleRow } from '@/types/api'
 import {
   UNASSIGNED, buildGroups, collectChecked, filterByModule, filterBySearch,
   withButtonChecked, withCatalogChecked, withMenuChecked, type CatalogGroup,
@@ -15,10 +15,10 @@ import './GrantMenuTable.css'
 
 export interface GrantMenuTableProps {
   tree: MenuTreeNode[]
-  granted: number[]
+  granted: ApiId[]
   modules: ModuleRow[]
-  defaultModuleId: number
-  onCheckedChange: (ids: number[]) => void
+  defaultModuleId: ApiId
+  onCheckedChange: (ids: ApiId[]) => void
 }
 
 export function GrantMenuTable({ tree, granted, modules, defaultModuleId, onCheckedChange }: GrantMenuTableProps) {
@@ -26,7 +26,7 @@ export function GrantMenuTable({ tree, granted, modules, defaultModuleId, onChec
   const [groups, setGroups] = useState<CatalogGroup[]>([])
   const [moduleId, setModuleId] = useState(defaultModuleId)
   const [search, setSearch] = useState('')
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
+  const [collapsed, setCollapsed] = useState<Set<ApiId>>(new Set())
 
   // tree/granted 变(打开抽屉/换角色)→ 重建组;不上抛(父已持有 granted 初值)。
   useEffect(() => { setGroups(buildGroups(tree, granted)) }, [tree, granted])
@@ -41,11 +41,11 @@ export function GrantMenuTable({ tree, granted, modules, defaultModuleId, onChec
 
   // 切换:从当前 groups 算出新数组 → setGroups + 上抛 collectChecked(用户事件,闭包 groups 恒新鲜)。
   const apply = (next: CatalogGroup[]) => { setGroups(next); onCheckedChange(collectChecked(next)) }
-  const onCatalog = (id: number, val: boolean) => apply(groups.map((g) => (g.id === id ? withCatalogChecked(g, val) : g)))
-  const onMenu = (gid: number, mid: number, val: boolean) => apply(groups.map((g) => (g.id === gid ? withMenuChecked(g, mid, val) : g)))
-  const onButton = (gid: number, mid: number, bid: number, val: boolean) => apply(groups.map((g) => (g.id === gid ? withButtonChecked(g, mid, bid, val) : g)))
+  const onCatalog = (id: ApiId, val: boolean) => apply(groups.map((g) => (g.id === id ? withCatalogChecked(g, val) : g)))
+  const onMenu = (gid: ApiId, mid: ApiId, val: boolean) => apply(groups.map((g) => (g.id === gid ? withMenuChecked(g, mid, val) : g)))
+  const onButton = (gid: ApiId, mid: ApiId, bid: ApiId, val: boolean) => apply(groups.map((g) => (g.id === gid ? withButtonChecked(g, mid, bid, val) : g)))
 
-  const toggleCollapse = (id: number) =>
+  const toggleCollapse = (id: ApiId) =>
     setCollapsed((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const allCollapsed = filtered.length > 0 && filtered.every((g) => collapsed.has(g.id))
   const toggleCollapseAll = () => setCollapsed(allCollapsed ? new Set() : new Set(filtered.map((g) => g.id)))

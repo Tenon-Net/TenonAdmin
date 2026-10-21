@@ -13,13 +13,14 @@ const { warning, error, get, update, publish } = vi.hoisted(() => ({
   update: vi.fn().mockResolvedValue(true),
   publish: vi.fn(),
 }))
+const routeState = vi.hoisted(() => ({ query: { id: '7' } as { id?: string } }))
 
 vi.mock('naive-ui', async (importOriginal) => ({
   ...await importOriginal<typeof import('naive-ui')>(),
   useMessage: () => ({ error, warning, success: vi.fn(), info: vi.fn() }),
 }))
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: { id: '7' }, params: {}, path: '/workflow/definition/designer' }),
+  useRoute: () => ({ query: routeState.query, params: {}, path: '/workflow/definition/designer' }),
   useRouter: () => ({ replace: vi.fn(), back: vi.fn() }),
 }))
 vi.mock('@/api/workflow', () => ({
@@ -46,6 +47,7 @@ let app: App<Element> | undefined
 afterEach(() => {
   app?.unmount()
   app = undefined
+  routeState.query.id = '7'
   document.body.replaceChildren()
 })
 
@@ -67,6 +69,14 @@ function mount() {
 }
 
 describe('workflow designer publish notice', () => {
+  it('按原始十进制字符串 Id 加载大 Id 流程定义', async () => {
+    const id = '9007199254740993'
+    routeState.query.id = id
+    mount()
+
+    await vi.waitFor(() => expect(get).toHaveBeenCalledWith(id))
+  })
+
   it('内容没有变化时用警告提示,其它发布失败仍是错误', async () => {
     warning.mockReset()
     error.mockReset()

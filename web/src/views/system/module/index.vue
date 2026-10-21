@@ -13,7 +13,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { useAuthStore } from '@/stores/auth'
 import { moduleApi } from '@/api'
 import { translateError } from '@/utils/error'
-import type { ModuleInput, ModuleRow } from '@/types/api'
+import type { ApiId, ModuleInput, ModuleRow } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -46,7 +46,7 @@ const rules: FormRules = {
   code: { required: true, whitespace: true, message: () => t('module.codeRequired'), trigger: ['input', 'blur'] },
   title: { required: true, whitespace: true, message: () => t('module.nameRequired'), trigger: ['input', 'blur'] },
 }
-const editingId = ref<number | null>(null)
+const editingId = ref<ApiId | null>(null)
 const blank = (): ModuleInput => ({ code: '', title: '', icon: '', defaultRoute: '', apiPrefix: '', sort: 0, enabled: true, remark: '' })
 const form = reactive<ModuleInput>(blank())
 

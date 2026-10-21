@@ -25,7 +25,7 @@ import { jobApi } from '@/api'
 import { translateError } from '@/utils/error'
 import {
   JobConcurrencyMode, JobHandlerKind, JobMisfireStrategy, JobStatus, JobTriggerKind,
-  type JobInput, type SysJob,
+  type ApiId, type JobInput, type SysJob,
 } from '@/types/api'
 
 const { t } = useI18n()
@@ -207,7 +207,7 @@ interface JobForm {
 
 const show = ref(false)
 const formRef = ref<FormInst | null>(null)
-const editingId = ref<number | null>(null)
+const editingId = ref<ApiId | null>(null)
 const blank = (): JobForm => ({
   code: '', name: '', remark: '',
   // 给个能跑的默认值(每天零点),不留空:CronEditor 的各段控件本来就带默认选中,

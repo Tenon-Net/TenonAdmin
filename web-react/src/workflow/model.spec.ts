@@ -604,6 +604,18 @@ describe('workflow/model M3a-2 webhook', () => {
     expect(validateModel(model)).toEqual([{ code: 'assigneeUsersRequired', nodeId: 'members' }])
 
     model.root.next = createApprovalNode({
+      id: 'members',
+      props: { assignee: { provider: 'user', params: { userId: '9007199254740993' } } },
+    })
+    expect(validateModel(model)).toEqual([])
+
+    model.root.next = createApprovalNode({
+      id: 'members',
+      props: { assignee: { provider: 'user', params: { userId: Number.MAX_SAFE_INTEGER + 2 } } },
+    })
+    expect(validateModel(model)).toEqual([{ code: 'assigneeUsersRequired', nodeId: 'members' }])
+
+    model.root.next = createApprovalNode({
       id: 'leader',
       props: { assignee: { provider: 'leader', params: { level: 1 } } },
     })

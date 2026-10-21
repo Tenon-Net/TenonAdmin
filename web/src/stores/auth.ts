@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import type { AppModule, MenuNode } from '@/types/menu'
 import { useTabsStore } from '@/stores/tabs'
+import type { ApiId } from '@/types/api'
 
 function firstLeafPath(tree: MenuNode[]): string | undefined {
   for (const n of tree) {
@@ -15,9 +16,9 @@ function firstLeafPath(tree: MenuNode[]): string | undefined {
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     modules: [] as AppModule[],
-    currentModuleId: null as number | null,
+    currentModuleId: null as ApiId | null,
     // 后端配置的默认应用，仅用于门户选路和选择页标记。
-    defaultModuleId: null as number | null,
+    defaultModuleId: null as ApiId | null,
     menuTree: [] as MenuNode[],
     // 空集不代表超管；超管身份由 isSuperAdmin 单独判定。
     permissionCodes: [] as string[],

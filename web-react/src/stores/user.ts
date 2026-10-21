@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { LoginOutput } from '@/types/api'
+import type { ApiId, LoginOutput } from '@/types/api'
 
 export interface UserInfo {
-  userId: number
+  userId: ApiId
   account: string
   name: string
   /** 头像 ViewUrl;登录出参不含,由 useModule.enterInitial 经 /personal/profile 回填,profile 页保存时同步。 */

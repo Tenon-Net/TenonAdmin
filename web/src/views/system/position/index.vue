@@ -15,7 +15,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { positionApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
-import type { PositionInput, SysPosition } from '@/types/api'
+import type { ApiId, PositionInput, SysPosition } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -77,7 +77,7 @@ const columns: ProTableColumn<SysPosition>[] = [
 // ── 新增/编辑弹窗 ──
 const show = ref(false)
 const formRef = ref<FormInst | null>(null)
-const editingId = ref<number | null>(null)
+const editingId = ref<ApiId | null>(null)
 const rules: FormRules = {
   name: { required: true, whitespace: true, message: () => t('position.nameRequired'), trigger: ['input', 'blur'] },
 }

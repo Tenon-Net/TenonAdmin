@@ -2,13 +2,16 @@
 import type { AppModule } from './menu'
 import type { components } from '@/api/schema'
 
+/** 后端 long 标识：安全范围内为 JSON number，超出时为十进制 string。 */
+export type ApiId = number | string
+
 /** 登录/刷新出参(后端 LoginOutput)。 */
 export interface LoginOutput {
   accessToken: string
   expiresAt: string
   refreshToken: string
   refreshExpiresAt: string
-  userId: number
+  userId: ApiId
   account: string
   name: string
   /** 是否需强制改密(管理员建号/重置后首登为 true)。 */
@@ -31,16 +34,16 @@ export interface LoginOutput {
 /** 我的应用列表(后端 MyModulesOutput)。 */
 export interface MyModulesOutput {
   modules: AppModule[]
-  defaultModuleId?: number | null
+  defaultModuleId?: ApiId | null
 }
 
 /** 个人资料(后端 UserProfile)。 */
 export interface UserProfile {
-  id: number
+  id: ApiId
   account: string
   name: string
-  orgId?: number | null
-  positionId?: number | null
+  orgId?: ApiId | null
+  positionId?: ApiId | null
   /** 机构名称(未分配/已删则 null) */
   orgName?: string | null
   /** 职位名称(未分配/已删则 null) */
@@ -76,7 +79,7 @@ export interface PagedList<T> {
 
 /** 用户列表项(后端 UserItem;刻意不含密码)。 */
 export interface UserItem {
-  id: number
+  id: ApiId
   account: string
   name: string
   nickname?: string | null
@@ -84,9 +87,9 @@ export interface UserItem {
   email?: string | null
   gender?: string | null
   avatar?: string | null
-  orgId?: number | null
-  positionId?: number | null
-  directorId?: number | null
+  orgId?: ApiId | null
+  positionId?: ApiId | null
+  directorId?: ApiId | null
   orgName?: string | null
   positionName?: string | null
   directorName?: string | null
@@ -101,7 +104,7 @@ export interface UserItem {
 
 /** 模块/应用管理行(后端 SysModule;列表全字段)。 */
 export interface ModuleRow {
-  id: number
+  id: ApiId
   code: string
   title: string
   icon?: string | null
@@ -145,9 +148,9 @@ export interface ModuleInput {
   remark?: string | null
 }
 
-/** 系统配置行(后端 SysConfig;列表返回全字段,int64 收敛为 number)。 */
+/** 系统配置行(后端 SysConfig;列表返回全字段，主键遵循 ApiId)。 */
 export interface SysConfig {
-  id: number
+  id: ApiId
   configKey: string
   configValue?: string | null
   name: string
@@ -167,9 +170,9 @@ export interface ConfigInput {
   remark?: string | null
 }
 
-/** 字典类型行(后端 SysDictType;Code 创建后不可改)。int64 收敛为 number。 */
+/** 字典类型行(后端 SysDictType;Code 创建后不可改，主键遵循 ApiId)。 */
 export interface SysDictType {
-  id: number
+  id: ApiId
   code: string
   name: string
   sort: number
@@ -178,9 +181,9 @@ export interface SysDictType {
   createTime?: string
 }
 
-/** 字典项行(后端 SysDictItem;管理端分页含停用项,带 id——区别于下拉投影 DictItem)。int64 收敛为 number。 */
+/** 字典项行(后端 SysDictItem;管理端分页含停用项，带 ApiId 主键——区别于下拉投影 DictItem)。 */
 export interface SysDictItem {
-  id: number
+  id: ApiId
   dictTypeCode: string
   label: string
   value: string
@@ -207,9 +210,9 @@ export interface DictItemInput {
   enabled: boolean
 }
 
-/** 文件记录行(后端 SysFile;列表返回,int64 收敛为 number)。 */
+/** 文件记录行(后端 SysFile;列表返回，主键遵循 ApiId)。 */
 export interface SysFile {
-  id: number
+  id: ApiId
   originalName: string
   storagePath: string
   extension: string
@@ -220,7 +223,7 @@ export interface SysFile {
 
 /** 上传出参(后端 FileUploadOutput)。 */
 export interface FileUploadOutput {
-  id: number
+  id: ApiId
   originalName: string
   /** 存储层相对路径。**别当 URL 用**:后端默认不静态托管上传目录,当 src 必然坏链。要展示图片用 viewUrl。 */
   storagePath: string
@@ -241,10 +244,10 @@ export interface ChunkInitOutput {
   receivedIndexes: number[]
 }
 
-/** 在线会话行(后端 OnlineSessionItem;只读 + 强退按 sessionId)。int64 收敛为 number。 */
+/** 在线会话行(后端 OnlineSessionItem;只读 + 强退按 sessionId，用户主键遵循 ApiId)。 */
 export interface OnlineSessionItem {
   sessionId: string
-  userId: number
+  userId: ApiId
   account: string
   ip?: string | null
   userAgent?: string | null
@@ -252,13 +255,13 @@ export interface OnlineSessionItem {
   expiresAt?: string
 }
 
-/** 登录日志行(后端 SysLoginLog;只读,int64 收敛为 number)。 */
+/** 登录日志行(后端 SysLoginLog;只读，主键遵循 ApiId)。 */
 export interface SysLoginLog {
-  id: number
+  id: ApiId
   account: string
   success: boolean
   resultCode: number
-  userId?: number | null
+  userId?: ApiId | null
   name?: string | null
   ip?: string | null
   userAgent?: string | null
@@ -267,7 +270,7 @@ export interface SysLoginLog {
 
 /** 操作日志行(后端 SysOpLog;只读,分页项已含全字段,详情抽屉直接用行数据)。 */
 export interface SysOpLog {
-  id: number
+  id: ApiId
   title: string
   httpMethod: string
   path: string
@@ -276,7 +279,7 @@ export interface SysOpLog {
   success: boolean
   exceptionMessage?: string | null
   elapsedMs: number
-  operatorId?: number | null
+  operatorId?: ApiId | null
   operatorName?: string | null
   ip?: string | null
   userAgent?: string | null
@@ -308,24 +311,24 @@ export interface ServerInfoOutput {
 
 /** 异常日志行(后端 SysExceptionLog;未捕获异常留痕,只读,分页项已含全字段)。 */
 export interface SysExceptionLog {
-  id: number
+  id: ApiId
   httpMethod: string
   path: string
   traceId?: string | null
   exceptionType: string
   message?: string | null
   stackTrace?: string | null
-  operatorId?: number | null
+  operatorId?: ApiId | null
   operatorName?: string | null
   ip?: string | null
   userAgent?: string | null
   createTime: string
 }
 
-/** 机构行(后端 SysOrg;平铺,前端 buildTree)。int64 收敛为 number。 */
+/** 机构行(后端 SysOrg;平铺，前端 buildTree，主键遵循 ApiId)。 */
 export interface SysOrg {
-  id: number
-  parentId: number
+  id: ApiId
+  parentId: ApiId
   name: string
   code: string
   category?: string | null
@@ -336,7 +339,7 @@ export interface SysOrg {
 
 /** 机构新增/编辑入参(后端 OrgInput;parentId 0=根,code 编辑禁用)。 */
 export interface OrgInput {
-  parentId: number
+  parentId: ApiId
   name: string
   code: string
   category?: string | null
@@ -344,9 +347,9 @@ export interface OrgInput {
   enabled: boolean
 }
 
-/** 职位行(后端 SysPosition)。int64 收敛为 number。 */
+/** 职位行(后端 SysPosition，主键遵循 ApiId)。 */
 export interface SysPosition {
-  id: number
+  id: ApiId
   name: string
   code: string
   sort: number
@@ -362,9 +365,9 @@ export interface PositionInput {
   enabled: boolean
 }
 
-/** 角色行(后端 SysRole)。int64 收敛为 number。 */
+/** 角色行(后端 SysRole，主键遵循 ApiId)。 */
 export interface SysRole {
-  id: number
+  id: ApiId
   name: string
   code: string
   sort: number
@@ -395,8 +398,8 @@ export enum DataScopeType {
 
 /** 角色数据范围配置(后端 SysRoleDataScope;数据范围抽屉回显)。customOrgIds 逗号分隔。 */
 export interface SysRoleDataScope {
-  id: number
-  roleId: number
+  id: ApiId
+  roleId: ApiId
   scopeType: DataScopeType
   customOrgIds: string
 }
@@ -411,18 +414,18 @@ export interface AddUserInput {
   email?: string | null
   gender?: string | null
   avatar?: string | null
-  orgId?: number | null
-  positionId?: number | null
-  directorId?: number | null
+  orgId?: ApiId | null
+  positionId?: ApiId | null
+  directorId?: ApiId | null
   enabled: boolean
   /** 建号即强制 TOTP。 */
   forceTotp?: boolean
-  roleIds: number[]
+  roleIds: ApiId[]
 }
 
 /** 新增用户出参(后端 AddUserOutput):新 Id + 实际生效的初始口令明文——留空口令时是随机生成的,不展示给管理员就没人知道。 */
 export interface AddUserOutput {
-  id: number
+  id: ApiId
   initialPassword: string
 }
 
@@ -437,17 +440,17 @@ export interface UpdateUserInput {
   email?: string | null
   gender?: string | null
   avatar?: string | null
-  orgId?: number | null
-  positionId?: number | null
-  directorId?: number | null
+  orgId?: ApiId | null
+  positionId?: ApiId | null
+  directorId?: ApiId | null
   enabled: boolean
   forceTotp?: boolean
-  roleIds: number[]
+  roleIds: ApiId[]
 }
 
 /** 用户详情(后端 UserDetail;列表字段 + roleIds,编辑回显用)。 */
 export interface UserDetail {
-  id: number
+  id: ApiId
   account: string
   name: string
   nickname?: string | null
@@ -455,14 +458,14 @@ export interface UserDetail {
   email?: string | null
   gender?: string | null
   avatar?: string | null
-  orgId?: number | null
-  positionId?: number | null
-  directorId?: number | null
+  orgId?: ApiId | null
+  positionId?: ApiId | null
+  directorId?: ApiId | null
   enabled: boolean
   isSuperAdmin: boolean
   forceTotp?: boolean
   totpEnabled?: boolean
-  roleIds: number[]
+  roleIds: ApiId[]
   createTime?: string
 }
 
@@ -480,9 +483,9 @@ export enum ReceiverType {
   User = 2,
 }
 
-/** 通知行(后端 SysNotice;管理端列表全字段,int64 收敛为 number)。 */
+/** 通知行(后端 SysNotice;管理端列表全字段，主键遵循 ApiId)。 */
 export interface SysNotice {
-  id: number
+  id: ApiId
   title: string
   content?: string | null
   type: NoticeType
@@ -491,7 +494,7 @@ export interface SysNotice {
 
 /** 我的通知项(后端 NoticeMineItem;含当前用户已读标记)。 */
 export interface NoticeMineItem {
-  id: number
+  id: ApiId
   title: string
   content?: string | null
   type: NoticeType
@@ -507,7 +510,7 @@ export interface NoticePublishInput {
   /** 接收范围;缺省 All 广播全体。 */
   receiverType: ReceiverType
   /** 接收目标 Id(角色 Id 或用户 Id,取决于 receiverType);All 时忽略。 */
-  receiverIds?: number[]
+  receiverIds?: ApiId[]
 }
 
 // ── 导入 / 导出(excel-ledger §4.3;与后端 Core DTO 对齐;与 web/ 有意重复,零共享) ──
@@ -574,9 +577,9 @@ export interface ImportCommitResult {
 
 // ── 定时任务(G8)────────────────────────────────────────────────
 
-/** 定时任务行(后端 SysJob;page 返回全列,编辑表单直接用行数据)。int64 收敛为 number。 */
+/** 定时任务行(后端 SysJob;page 返回全列，编辑表单直接用行数据，主键遵循 ApiId)。 */
 export interface SysJob {
-  id: number
+  id: ApiId
   /** 任务编码(唯一,创建后不可变;排障锚点) */
   code: string
   name: string
@@ -647,11 +650,11 @@ export interface JobInput {
 
 /** 任务执行记录行(后端 SysJobLog;endTime 为空 = 运行中,同 fireInstanceId 聚合一次触发的各次重试)。 */
 export interface SysJobLog {
-  id: number
-  jobId: number
+  id: ApiId
+  jobId: ApiId
   /** 任务名快照(任务删了记录仍可读) */
   jobName: string
-  fireInstanceId: number
+  fireInstanceId: ApiId
   /** 重试序号,0 = 首次 */
   retryIndex: number
   /** 触发来源:1=调度 2=手动 3=补跑 4=错过跳过 */
@@ -697,7 +700,7 @@ export interface JobTrendPoint {
 
 /** 即将执行的一项。 */
 export interface JobUpcomingItem {
-  jobId: number
+  jobId: ApiId
   name: string
   nextRunTime: string
 }

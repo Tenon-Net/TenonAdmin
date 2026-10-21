@@ -120,7 +120,7 @@ public class WfOutboxDispatcher(
         ExecutionId = claimed.ExecutionId,
         MessageType = claimed.MessageType,
         MessageKey = claimed.MessageKey,
-        PayloadJson = claimed.PayloadJson,
+        PayloadJson = WfClientJson.ProjectExecutionOutboxPayload(claimed.MessageType, claimed.PayloadJson),
         AttemptCount = claimed.AttemptCount,
     };
 }

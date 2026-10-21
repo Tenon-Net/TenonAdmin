@@ -82,7 +82,7 @@ describe('withButtonChecked', () => {
 
 describe('collectChecked', () => {
   it('目录(勾或半勾)+ 菜单(勾)+ 按钮(勾)全收', () => {
-    expect(collectChecked(buildGroups(TREE, [2, 4])).sort((a, b) => a - b)).toEqual([1, 2, 4])
+    expect(collectChecked(buildGroups(TREE, [2, 4])).sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))).toEqual([1, 2, 4])
   })
 })
 

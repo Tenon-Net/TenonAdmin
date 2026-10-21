@@ -13,7 +13,7 @@ import { useConfirm } from '@/hooks/useConfirm'
 import { useHasPerm } from '@/stores/auth'
 import { positionApi } from '@/api'
 import { translateError } from '@/utils/error'
-import type { PositionInput, SysPosition } from '@/types/api'
+import type { ApiId, PositionInput, SysPosition } from '@/types/api'
 import { blankForm, rowToInput } from './positionForm'
 
 export default function PositionPage() {
@@ -39,7 +39,7 @@ export default function PositionPage() {
   // ── 新增/编辑弹窗(FormContainer owns loading+close)──
   const [form] = Form.useForm<PositionInput>()
   const [open, setOpen] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<ApiId | null>(null)
 
   const openAdd = () => {
     setEditingId(null)

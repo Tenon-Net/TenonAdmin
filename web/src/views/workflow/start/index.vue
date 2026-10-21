@@ -24,6 +24,9 @@ import UserSelect from '@/components/UserSelect/index.vue'
 import { wfInstanceApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import type { WfStartableDefinition, WfStartableDefinitionDetail } from '@/types/workflow'
+import type { WfId } from '@/workflow/id'
+import { normalizeWfId, wfInstanceDetailPath } from '@/workflow/id'
+import { parseQueryApiId } from '@/utils/id'
 import { flattenChain } from '@/workflow/model'
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
 import type { WfFormSchema } from '@/workflow/schema'
@@ -44,7 +47,7 @@ const formRef = ref<FormInst | null>(null)
 const submitting = ref(false)
 const defsLoading = ref(false)
 const detailLoading = ref(false)
-const defOptions = ref<{ label: string; value: number; disabled?: boolean }[]>([])
+const defOptions = ref<{ label: string; value: WfId; disabled?: boolean }[]>([])
 const formComponent = ref<string | null>(null)
 const formSchema = ref<WfFormSchema | null>(null)
 const runtimeVariablesJson = ref<string | null>(null)
@@ -54,16 +57,15 @@ const requestKey = useRequestKey()
 let detailRequest = 0
 
 const form = reactive({
-  definitionId: null as number | null,
+  definitionId: null as WfId | null,
   businessKey: '',
   varRows: [{ key: '', value: '' }] as VarRow[],
-  selectedUserIdsByNode: {} as Record<string, number[]>,
+  selectedUserIdsByNode: {} as Record<string, WfId[]>,
 })
 
 const rules: FormRules = {
   definitionId: {
     required: true,
-    type: 'number',
     message: () => t('workflow.start.definitionRequired'),
     trigger: ['change', 'blur'],
   },
@@ -122,7 +124,7 @@ function startableOption(d: WfStartableDefinition) {
   const detail = node && message ? `${node}：${message}` : message || node
   return {
     label: detail ? t('workflow.start.unavailable', { name: d.name ?? '', detail }) : (d.name ?? ''),
-    value: Number(d.id),
+    value: normalizeWfId(d.id),
     disabled: Boolean(reason),
   }
 }
@@ -132,7 +134,7 @@ async function loadPublishedDefs() {
   try {
     defOptions.value = (await wfInstanceApi.startable())
       .map((d) => startableOption(d))
-      .filter((d) => d.value > 0)
+      .filter((d): d is ReturnType<typeof startableOption> & { value: WfId } => d.value != null)
   } catch (e) {
     message.error(translateError(e))
   } finally {
@@ -140,7 +142,7 @@ async function loadPublishedDefs() {
   }
 }
 
-async function onDefinitionChange(id: number | null) {
+async function onDefinitionChange(id: WfId | null) {
   const request = ++detailRequest
   formComponent.value = null
   formSchema.value = null
@@ -172,10 +174,8 @@ watch(
 
 onMounted(async () => {
   await loadPublishedDefs()
-  const q = Number(route.query.definitionId)
-  if (Number.isFinite(q) && q > 0) {
-    form.definitionId = q
-  }
+  const id = parseQueryApiId(route.query.definitionId)
+  if (id != null) form.definitionId = id
 })
 
 async function submit() {
@@ -204,7 +204,8 @@ async function submit() {
     const result = await wfInstanceApi.start(body)
     requestKey.settle('success')
     message.success(t('workflow.start.started'))
-    await router.push(`/workflow/instance/${result.instanceId}/detail`)
+    const path = wfInstanceDetailPath(result.instanceId)
+    if (path) await router.push(path)
   } catch (e) {
     requestKey.settle(classifyOutcome(e))
     message.error(translateError(e))

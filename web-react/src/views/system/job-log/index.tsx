@@ -53,7 +53,12 @@ export default function JobLogPage() {
 
   // 任务页带 jobId 进来 → 任务筛选初始值(挂载时读一次;跳转方 refreshTab 保证缓存页签也重挂)
   const [searchParams] = useSearchParams()
-  const initialJobId = Number(searchParams.get('jobId')) || undefined
+  const rawJobId = searchParams.get('jobId')
+  const numericJobId = Number(rawJobId)
+  // 安全编号与下拉的 number 选项匹配；大编号始终使用原串。
+  const initialJobId = rawJobId && /^\d+$/.test(rawJobId) && /[1-9]/.test(rawJobId)
+    ? Number.isSafeInteger(numericJobId) ? numericJobId : rawJobId
+    : undefined
 
   const modeTag = useCallback((mode: number) => {
     const m = FIRE_MODE[mode]
@@ -69,7 +74,7 @@ export default function JobLogPage() {
     jobApi.logPage({
       page: q.page,
       pageSize: q.pageSize,
-      jobId: typeof q.jobId === 'number' ? q.jobId : undefined,
+      jobId: typeof q.jobId === 'number' || typeof q.jobId === 'string' ? q.jobId : undefined,
       runStatus: typeof q.runStatus === 'number' ? q.runStatus : undefined,
       startTime: (q.startTime as [string, string] | undefined) ?? null,
       sortField: q.sortField,

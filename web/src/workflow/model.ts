@@ -11,6 +11,7 @@ import {
   type WfInsertableNodeType,
   type WfConditionExpr,
 } from './schema'
+import { normalizeWfId, type WfId } from './id'
 
 let _seq = 0
 
@@ -97,7 +98,7 @@ export function createCcNode(partial?: Partial<WfNode>): WfNode {
     type: 'cc',
     name: partial?.name ?? '',
     props: {
-      assignee: { provider: 'user', params: { userIds: [] as number[] } },
+      assignee: { provider: 'user', params: { userIds: [] as WfId[] } },
       ...partial?.props,
     },
     next: partial?.next ?? null,
@@ -318,14 +319,14 @@ export interface WfModelIssue {
 }
 
 /** 指定成员里的正整数用户 Id。数字字符串也认。 */
-function positiveUserIds(params: Record<string, unknown> | undefined): number[] {
+function positiveUserIds(params: Record<string, unknown> | undefined): WfId[] {
   if (!params) return []
   const raw = params.userIds ?? params.userId
   const items = Array.isArray(raw) ? raw : raw == null ? [] : [raw]
-  const ids: number[] = []
+  const ids: WfId[] = []
   for (const item of items) {
-    const n = typeof item === 'number' ? item : typeof item === 'string' ? Number(item) : Number.NaN
-    if (Number.isInteger(n) && n > 0) ids.push(n)
+    const id = normalizeWfId(item)
+    if (id != null) ids.push(id)
   }
   return ids
 }

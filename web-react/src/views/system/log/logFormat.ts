@@ -1,7 +1,8 @@
 // 日志三页共用的**纯逻辑**(变异钉);页面 index.tsx 只做列/抽屉接线。
+import type { ApiId } from '@/types/api'
 
 /** 操作人展示:优先姓名,姓名缺失(用户已删/未解析/匿名端点)回落原始 Id,再无则占位。 */
-export function operatorText(r: { operatorName?: string | null; operatorId?: number | null }): string {
+export function operatorText(r: { operatorName?: string | null; operatorId?: ApiId | null }): string {
   return r.operatorName || (r.operatorId != null ? String(r.operatorId) : '—')
 }
 

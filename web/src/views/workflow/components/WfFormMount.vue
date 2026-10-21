@@ -9,6 +9,7 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { WfInstanceStatus } from '@/types/workflow'
 import type { WfFormFieldPerm, WfFormSchema } from '@/workflow/schema'
+import type { WfId } from '@/workflow/id'
 import { parseWfFormValuesResult, serializeWfFormValues, type WfFormValues } from '@/workflow/formRuntime'
 import WfBuiltinForm from './WfBuiltinForm.vue'
 
@@ -17,8 +18,8 @@ const props = defineProps<{
   formSchema?: WfFormSchema | null
   mode: 'start' | 'approve' | 'view'
   permissions?: WfFormFieldPerm[] | null
-  definitionId?: number
-  instanceId?: number
+  definitionId?: WfId
+  instanceId?: WfId
   businessKey?: string | null
   variablesJson?: string | null
   status?: WfInstanceStatus

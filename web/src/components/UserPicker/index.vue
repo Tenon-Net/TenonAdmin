@@ -8,10 +8,10 @@ import FormContainer from '@/components/FormContainer/index.vue'
 import { orgApi, userApi } from '@/api'
 import { buildTree } from '@/utils/tree'
 import { translateError } from '@/utils/error'
-import type { SysOrg, UserItem } from '@/types/api'
+import type { ApiId, SysOrg, UserItem } from '@/types/api'
 
-const props = defineProps<{ excludeIds?: number[] }>()
-const emit = defineEmits<{ (e: 'confirm', ids: number[]): void }>()
+const props = defineProps<{ excludeIds?: ApiId[] }>()
+const emit = defineEmits<{ (e: 'confirm', ids: ApiId[]): void }>()
 
 const { t } = useI18n()
 const message = useMessage()
@@ -25,7 +25,7 @@ const orgTree = computed(() => {
   const all = { id: 0, parentId: -1, name: t('common.all'), children: buildTree(orgFlat.value) }
   return [all]
 })
-const selectedOrgKey = ref<number | null>(null)
+const selectedOrgKey = ref<ApiId | null>(null)
 const orgId = computed(() => (selectedOrgKey.value && selectedOrgKey.value !== 0 ? selectedOrgKey.value : undefined))
 
 onMounted(async () => {
@@ -33,7 +33,7 @@ onMounted(async () => {
 })
 
 function onOrgSelect(keys: Array<string | number>) {
-  selectedOrgKey.value = (keys[0] as number) ?? null
+  selectedOrgKey.value = (keys[0] as ApiId) ?? null
   tableRef.value?.refresh()
 }
 
@@ -86,7 +86,7 @@ function addChecked() {
   checkedKeys.value = []
 }
 
-function removeUser(id: number) {
+function removeUser(id: ApiId) {
   const idx = selected.findIndex((u) => u.id === id)
   if (idx >= 0) selected.splice(idx, 1)
 }
@@ -96,7 +96,7 @@ function clearSelected() {
 }
 
 // ── 公共 API ──
-async function open(ids?: number[]) {
+async function open(ids?: ApiId[]) {
   selected.splice(0, selected.length)
   checkedKeys.value = []
   selectedSearch.value = ''

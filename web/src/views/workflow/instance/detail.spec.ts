@@ -61,12 +61,12 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-async function mountDetail(detail: Record<string, unknown>, history: unknown[] = []) {
+async function mountDetail(detail: Record<string, unknown>, history: unknown[] = [], id: number | string = 1) {
   getInstance.mockResolvedValueOnce(detail)
   getHistory.mockResolvedValueOnce(history)
   const host = document.createElement('div')
   document.body.append(host)
-  app = createApp(Detail, { id: 1 })
+  app = createApp(Detail, { id })
   app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
   app.mount(host)
   await nextTick()
@@ -75,6 +75,14 @@ async function mountDetail(detail: Record<string, unknown>, history: unknown[] =
 }
 
 describe('workflow instance detail variables', () => {
+  it('用原始十进制字符串 Id 加载详情和历史', async () => {
+    const id = '9007199254740993'
+    await mountDetail({ id, definitionName: '大 Id 流程', status: 1, hisTasks: [] }, [], id)
+
+    expect(getInstance).toHaveBeenCalledWith(id)
+    expect(getHistory).toHaveBeenCalledWith(id)
+  })
+
   it('lets the built-in form exclusively display variables while preserving consumer summaries', async () => {
     const base = {
       id: 1,

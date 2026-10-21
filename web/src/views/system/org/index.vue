@@ -21,7 +21,7 @@ import { orgApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import { buildTree, expandableIds, filterTree, type Tree } from '@/utils/tree'
-import type { OrgInput, SysOrg } from '@/types/api'
+import type { ApiId, OrgInput, SysOrg } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -55,7 +55,7 @@ const filteredTree = computed(() => {
 
 // 展开受控:一旦传了 expanded-row-keys,naive 就以它为准,default-expand-all 会被初始值直接覆盖成"全折叠",
 // 所以"默认全展开"得自己播种。data 变了受控 keys 也不会自动跟着变 —— 搜索后要重算,否则命中结果藏在折叠的祖先里看不见。
-const expandedKeys = ref<number[]>([])
+const expandedKeys = ref<ApiId[]>([])
 watch(filteredTree, (t) => (expandedKeys.value = expandableIds(t)), { immediate: true })
 
 const allExpanded = computed(() => expandedKeys.value.length > 0)
@@ -63,17 +63,17 @@ const toggleExpandAll = () => (expandedKeys.value = allExpanded.value ? [] : exp
 
 // ── 弹窗表单(parentId 可空:OrgTreeSelect clearable → null,save 时归一为 0=根)──
 interface OrgForm {
-  parentId: number | null
+  parentId: ApiId | null
   name: string
   code: string
   category: string | null
   sort: number
   enabled: boolean
-  leaderUserId: number | null
+  leaderUserId: ApiId | null
 }
 const show = ref(false)
 const formRef = ref<FormInst | null>(null)
-const editingId = ref<number | null>(null)
+const editingId = ref<ApiId | null>(null)
 const rules: FormRules = {
   name: { required: true, whitespace: true, message: () => t('org.nameRequired'), trigger: ['input', 'blur'] },
 }
@@ -91,7 +91,7 @@ const toInput = (r: SysOrg): OrgInput => ({
   leaderUserId: r.leaderUserId ?? null,
 })
 
-function openAdd(parentId = 0) {
+function openAdd(parentId: ApiId = 0) {
   editingId.value = null
   Object.assign(form, blank(), { parentId })
   show.value = true
@@ -119,7 +119,7 @@ async function save() {
 
 // ── 复制弹窗 ──────────────────────────────────────────────────────
 const copyShow = ref(false)
-const copyId = ref(0)
+const copyId = ref<ApiId>(0)
 const copySourceName = ref('')
 const copyName = ref('')
 
@@ -216,7 +216,7 @@ const columns: ProTableColumn<Tree<SysOrg>>[] = [
       :toolbar="{ refresh: false }"
       storage-key="sys-org"
       :expanded-row-keys="expandedKeys"
-      @update:expanded-row-keys="(keys: number[]) => (expandedKeys = keys)"
+      @update:expanded-row-keys="(keys: ApiId[]) => (expandedKeys = keys)"
     >
       <template #toolbar>
         <n-input v-model:value="keyword" clearable :placeholder="t('org.searchPlaceholder')" style="width: 220px">

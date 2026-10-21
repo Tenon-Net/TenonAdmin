@@ -15,6 +15,7 @@ import { useAuthStore } from '@/stores/auth'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import type { WfDefinitionRow } from '@/types/workflow'
+import { normalizeWfId } from '@/workflow/id'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -40,29 +41,35 @@ function openDesigner(r?: WfDefinitionRow) {
 }
 
 async function onPublish(r: WfDefinitionRow) {
+  const id = normalizeWfId(r.id)
+  if (id == null) return
   const ok = await confirm({
     content: t('workflow.definition.publishConfirm', { name: r.name ?? '' }),
-    action: () => wfDefinitionApi.publish(Number(r.id)),
+    action: () => wfDefinitionApi.publish(id),
     successMsg: t('workflow.definition.publishOk'),
   })
   if (ok) await tableRef.value?.refresh()
 }
 
 async function onDisable(r: WfDefinitionRow) {
+  const id = normalizeWfId(r.id)
+  if (id == null) return
   const ok = await confirm({
     content: t('workflow.definition.disableConfirm', { name: r.name ?? '' }),
     type: 'warning',
-    action: () => wfDefinitionApi.disable(Number(r.id)),
+    action: () => wfDefinitionApi.disable(id),
     successMsg: t('workflow.definition.disableOk'),
   })
   if (ok) await tableRef.value?.refresh()
 }
 
 async function onDelete(r: WfDefinitionRow) {
+  const id = normalizeWfId(r.id)
+  if (id == null) return
   const ok = await confirm({
     content: t('workflow.definition.deleteConfirm', { name: r.name ?? '' }),
     type: 'warning',
-    action: () => wfDefinitionApi.remove(Number(r.id)),
+    action: () => wfDefinitionApi.remove(id),
     successMsg: t('common.deleted'),
   })
   if (ok) await tableRef.value?.refresh()

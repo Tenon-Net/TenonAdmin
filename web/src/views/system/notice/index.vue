@@ -15,7 +15,7 @@ import MarkdownView from '@/components/MarkdownEditor/MarkdownView.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useAuthStore } from '@/stores/auth'
 import { noticeApi, roleApi, userApi } from '@/api'
-import { NoticeType, ReceiverType, type NoticePublishInput, type SysNotice } from '@/types/api'
+import { NoticeType, ReceiverType, type ApiId, type NoticePublishInput, type SysNotice } from '@/types/api'
 import { translateError } from '@/utils/error'
 
 const { t } = useI18n()
@@ -94,8 +94,8 @@ const receiverTypeOptions = [
   { label: () => t('notice.receiverRole'), value: ReceiverType.Role },
   { label: () => t('notice.receiverUser'), value: ReceiverType.User },
 ]
-const roleOptions = ref<{ label: string; value: number }[]>([])
-const userOptions = ref<{ label: string; value: number }[]>([])
+const roleOptions = ref<{ label: string; value: ApiId }[]>([])
+const userOptions = ref<{ label: string; value: ApiId }[]>([])
 const receiverOptions = computed(() =>
   form.receiverType === ReceiverType.Role ? roleOptions.value
     : form.receiverType === ReceiverType.User ? userOptions.value

@@ -1,7 +1,7 @@
 import { ApiSelect, type ApiFetch, type ApiSelectOption, type ApiSelectProps } from './ApiSelect'
 import { userApi } from '@/api'
 import { wfParticipantApi } from '@/api/workflow'
-import type { UserItem } from '@/types/api'
+import type { ApiId, UserItem } from '@/types/api'
 import { rememberParticipantName } from '@/workflow/participantNames'
 
 /** 用户 → 选项:label「姓名(账号)」,value=id。纯逻辑,变异钉。 */
@@ -26,7 +26,7 @@ export function toParticipantOption(
 
 export interface UserSelectProps extends Omit<ApiSelectProps, 'fetch' | 'reloadOn'> {
   /** 按部门过滤(变化即重拉);不传 = 全员。仅 source=admin 生效。 */
-  orgId?: number | null
+  orgId?: ApiId | null
   pageSize?: number
   /** admin=用户管理分页;workflow=审批选人,普通办理人可用。 */
   source?: 'admin' | 'workflow'

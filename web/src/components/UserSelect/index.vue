@@ -9,14 +9,15 @@ import { userApi } from '@/api'
 import { wfParticipantApi } from '@/api/workflow'
 import { toParticipantOption } from './options'
 import { rememberParticipantName } from '@/workflow/participantNames'
+import type { ApiId } from '@/types/api'
 
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<{
-  orgId?: number | null
+  orgId?: ApiId | null
   pageSize?: number
   source?: 'admin' | 'workflow'
   /** 仍出现在列表里,但不可选。转办/委托用来挡住发起人。 */
-  disabledIds?: Array<number | string | null | undefined>
+  disabledIds?: Array<ApiId | null | undefined>
   /** 禁用项标签后缀,通常是已翻译的原因。 */
   disabledSuffix?: string
 }>(), { pageSize: 50, source: 'admin' })

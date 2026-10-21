@@ -4,22 +4,22 @@ import { NButton, NCheckbox, NInput, NSelect } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
 import { MenuType, type MenuTreeNode } from '@/types/menu'
-import type { ModuleRow } from '@/types/api'
+import type { ApiId, ModuleRow } from '@/types/api'
 
 const UNASSIGNED = 0
 
-interface ButtonItem { id: number; title: string; checked: boolean }
-interface MenuRow { id: number; title: string; checked: boolean; buttons: ButtonItem[] }
-interface CatalogGroup { id: number; title: string; checked: boolean; indeterminate: boolean; menus: MenuRow[] }
+interface ButtonItem { id: ApiId; title: string; checked: boolean }
+interface MenuRow { id: ApiId; title: string; checked: boolean; buttons: ButtonItem[] }
+interface CatalogGroup { id: ApiId; title: string; checked: boolean; indeterminate: boolean; menus: MenuRow[] }
 
 const props = defineProps<{
   tree: MenuTreeNode[]
-  granted: number[]
+  granted: ApiId[]
   modules: ModuleRow[]
-  defaultModuleId: number
+  defaultModuleId: ApiId
 }>()
 
-const emit = defineEmits<{ (e: 'update:checked', ids: number[]): void }>()
+const emit = defineEmits<{ (e: 'update:checked', ids: ApiId[]): void }>()
 
 const { t } = useI18n()
 const search = ref('')
@@ -31,7 +31,7 @@ const moduleOptions = computed(() => [
   { label: t('menu.moduleUnassigned'), value: UNASSIGNED },
 ])
 
-function toMenuRow(m: MenuTreeNode, grantedSet: Set<number>): MenuRow {
+function toMenuRow(m: MenuTreeNode, grantedSet: Set<ApiId>): MenuRow {
   return {
     id: m.id,
     title: m.title,
@@ -42,7 +42,7 @@ function toMenuRow(m: MenuTreeNode, grantedSet: Set<number>): MenuRow {
   }
 }
 
-function buildGroups(tree: MenuTreeNode[], grantedSet: Set<number>): CatalogGroup[] {
+function buildGroups(tree: MenuTreeNode[], grantedSet: Set<ApiId>): CatalogGroup[] {
   return tree.map((node) => {
     // 顶级 Menu（如工作台）：自身就是菜单行，无目录壳
     const menus: MenuRow[] = node.type === MenuType.Menu
@@ -127,8 +127,8 @@ function toggleButton(group: CatalogGroup, menu: MenuRow) {
   emitChecked()
 }
 
-function collectChecked(): number[] {
-  const ids: number[] = []
+function collectChecked(): ApiId[] {
+  const ids: ApiId[] = []
   for (const g of allGroups) {
     if (g.checked || g.indeterminate) ids.push(g.id)
     for (const m of g.menus) {
@@ -146,10 +146,10 @@ function emitChecked() {
 }
 
 // ── 折叠/展开 ──
-const collapsed = reactive(new Set<number>())
+const collapsed = reactive(new Set<ApiId>())
 const allCollapsed = computed(() => filteredGroups.value.length > 0 && filteredGroups.value.every((g) => collapsed.has(g.id)))
 
-function toggleCollapse(id: number) {
+function toggleCollapse(id: ApiId) {
   if (collapsed.has(id)) collapsed.delete(id)
   else collapsed.add(id)
 }

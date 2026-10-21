@@ -16,12 +16,12 @@ import DictSelect from '@/components/DictSelect/index.vue'
 import FileUpload from '@/components/FileUpload/index.vue'
 import { userApi } from '@/api'
 import { translateError } from '@/utils/error'
-import type { AddUserInput, UpdateUserInput, UserItem } from '@/types/api'
+import type { AddUserInput, ApiId, UpdateUserInput, UserItem } from '@/types/api'
 
 const props = defineProps<{
-  positionOptions: { label: string; value: number }[]
-  roleOptions: { label: string; value: number }[]
-  directorOptions: { label: string; value: number }[]
+  positionOptions: { label: string; value: ApiId }[]
+  roleOptions: { label: string; value: ApiId }[]
+  directorOptions: { label: string; value: ApiId }[]
 }>()
 const emit = defineEmits<{
   (e: 'saved'): void
@@ -36,7 +36,7 @@ const initial = (name?: string | null) => (name || '?').slice(0, 1)
 
 const show = ref(false)
 const formRef = ref<FormInst | null>(null)
-const editingId = ref<number | null>(null)
+const editingId = ref<ApiId | null>(null)
 const rules: FormRules = {
   account: { required: true, whitespace: true, message: () => t('user.accountRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('user.nameRequired'), trigger: ['input', 'blur'] },
@@ -53,13 +53,13 @@ interface UserForm {
   email: string
   gender: string | null
   avatar: string | null
-  orgId: number | null
-  positionId: number | null
-  directorId: number | null
+  orgId: ApiId | null
+  positionId: ApiId | null
+  directorId: ApiId | null
   enabled: boolean
   forceTotp: boolean
   totpEnabled: boolean
-  roleIds: number[]
+  roleIds: ApiId[]
 }
 const blank = (): UserForm => ({
   account: '', password: '', name: '', nickname: '', phone: '', email: '',

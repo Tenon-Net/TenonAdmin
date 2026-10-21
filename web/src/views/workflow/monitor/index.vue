@@ -174,10 +174,10 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       render: ({ value, setValue, search }) =>
         h(UserSelect, {
           source: 'workflow',
-          value: value as number | null,
+          value: value as WfId | null,
           clearable: true,
           placeholder: t('workflow.monitor.starter'),
-          'onUpdate:value': (v: number | null) => {
+          'onUpdate:value': (v: WfId | null) => {
             setValue(v)
             search()
           },
@@ -197,10 +197,10 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       render: ({ value, setValue, search }) =>
         h(UserSelect, {
           source: 'workflow',
-          value: value as number | null,
+          value: value as WfId | null,
           clearable: true,
           placeholder: t('workflow.monitor.actor'),
-          'onUpdate:value': (v: number | null) => {
+          'onUpdate:value': (v: WfId | null) => {
             setValue(v)
             search()
           },
@@ -219,10 +219,10 @@ const columns: ProTableColumn<WfInstanceListItem>[] = [
       render: ({ value, setValue, search }) =>
         h(UserSelect, {
           source: 'workflow',
-          value: value as number | null,
+          value: value as WfId | null,
           clearable: true,
           placeholder: t('workflow.monitor.cc'),
-          'onUpdate:value': (v: number | null) => {
+          'onUpdate:value': (v: WfId | null) => {
             setValue(v)
             search()
           },

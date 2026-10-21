@@ -618,12 +618,12 @@ public class WfInstanceService(
             if (property.Value.ValueKind == JsonValueKind.Array)
             {
                 if (IsPrimitiveHistoryArray(property.Value))
-                    projected[property.Name] = property.Value;
+                    projected[property.Name] = WfClientJson.ProjectHistoryValue(property.Name, property.Value);
                 continue;
             }
 
             if (property.Value.ValueKind != JsonValueKind.Object)
-                projected[property.Name] = property.Value;
+                projected[property.Name] = WfClientJson.ProjectHistoryValue(property.Name, property.Value);
         }
         return projected;
     }

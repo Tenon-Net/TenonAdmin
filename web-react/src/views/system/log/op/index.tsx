@@ -15,7 +15,7 @@ import { useConfirm } from '@/hooks/useConfirm'
 import { logApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { triggerBlobDownload } from '@/utils/download'
-import type { ExportColumnDef, SysOpLog } from '@/types/api'
+import type { ApiId, ExportColumnDef, SysOpLog } from '@/types/api'
 import { operatorText, prettyParam } from '../logFormat'
 
 const preStyle: CSSProperties = {
@@ -36,7 +36,7 @@ export default function OpLogPage() {
     title?: string
     path?: string
     success?: boolean
-    operatorId?: number
+    operatorId?: ApiId
     createTime?: [string, string] | null
   }>({})
 
@@ -85,7 +85,7 @@ export default function OpLogPage() {
     const title = typeof q.title === 'string' ? q.title : undefined
     const path = typeof q.path === 'string' ? q.path : undefined
     const success = typeof q.success === 'boolean' ? q.success : undefined
-    const operatorId = typeof q.operatorId === 'number' ? q.operatorId : undefined
+    const operatorId = typeof q.operatorId === 'number' || typeof q.operatorId === 'string' ? q.operatorId : undefined
     const createTime = (q.createTime as [string, string] | undefined) ?? null
     lastQueryRef.current = { title, path, success, operatorId, createTime }
     return logApi.opPage({

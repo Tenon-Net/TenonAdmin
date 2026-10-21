@@ -2,26 +2,27 @@ import { useAuthStore, homePath } from '@/stores/auth'
 import { useUserStore } from '@/stores/user'
 import { useTabsStore } from '@/stores/tabs'
 import { personalApi } from '@/api'
+import type { ApiId } from '@/types/api'
 
-export type EnterResult = { chooser: true } | { chooser: false; moduleId: number }
+export type EnterResult = { chooser: true } | { chooser: false; moduleId: ApiId }
 
 // 模块级函数供守卫和页面复用；React 路由从 menuTree 反应式派生。
 
-export async function enter(moduleId: number): Promise<EnterResult> {
+export async function enter(moduleId: ApiId): Promise<EnterResult> {
   const tree = await personalApi.menu(moduleId)
   useAuthStore.setState({ menuTree: tree, currentModuleId: moduleId, routesReady: true })
   return { chooser: false, moduleId }
 }
 
 // 返回首页，由持有 router 上下文的调用方导航。
-export async function switchModule(moduleId: number): Promise<string> {
+export async function switchModule(moduleId: ApiId): Promise<string> {
   await enter(moduleId)
   // 旧应用的标签在新应用中可能成为死链。
   useTabsStore.getState().clearTabs()
   return homePath(useAuthStore.getState())
 }
 
-export async function setDefault(moduleId: number): Promise<void> {
+export async function setDefault(moduleId: ApiId): Promise<void> {
   await personalApi.setDefaultModule(moduleId)
   useAuthStore.setState({ defaultModuleId: moduleId })
 }

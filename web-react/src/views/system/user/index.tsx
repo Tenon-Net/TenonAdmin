@@ -24,7 +24,7 @@ import { mfaApi, orgApi, positionApi, roleApi, userApi } from '@/api'
 import { buildTree, type Tree as TreeNode } from '@/utils/tree'
 import { translateError } from '@/utils/error'
 import { triggerBlobDownload } from '@/utils/download'
-import type { ExportColumnDef, SysOrg, UserItem } from '@/types/api'
+import type { ApiId, ExportColumnDef, SysOrg, UserItem } from '@/types/api'
 import {
   blankForm, canDelete, canEdit, canReset, canToggleEnabled, detailToForm, toAddInput, toUpdateInput,
   type UserForm,
@@ -44,7 +44,7 @@ export default function UserPage() {
 
   // ── 左侧机构树筛选:选中机构 → 作为 params.orgId 传给表格,变了自动回第 1 页(对齐 Vue 用户页左树)──
   const [orgTree, setOrgTree] = useState<TreeNode<SysOrg>[]>([])
-  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
+  const [selectedOrgId, setSelectedOrgId] = useState<ApiId | null>(null)
   useEffect(() => {
     orgApi.list().then((flat) => setOrgTree(buildTree(flat))).catch((e: unknown) => message.error(translateError(e)))
   }, [message])
@@ -53,7 +53,7 @@ export default function UserPage() {
   const batch = useBatchDelete({ remove: userApi.batchRemove, refresh: reload, successMsg: t('user.deleted') })
 
   // 角色下拉源:拉一页足量(ponytail: 200 覆盖绝大多数系统,真超再上分页搜索)。失败静默不打断列表。
-  const [roleOptions, setRoleOptions] = useState<{ label: string; value: number }[]>([])
+  const [roleOptions, setRoleOptions] = useState<{ label: string; value: ApiId }[]>([])
   useEffect(() => {
     roleApi
       .page({ page: 1, pageSize: 200 })
@@ -62,8 +62,8 @@ export default function UserPage() {
   }, [message])
 
   // 职位/主管下拉源:同上拉一页足量;两者是配角,失败静默不打断列表(对齐 Vue)。
-  const [positionOptions, setPositionOptions] = useState<{ label: string; value: number }[]>([])
-  const [directorOptions, setDirectorOptions] = useState<{ label: string; value: number }[]>([])
+  const [positionOptions, setPositionOptions] = useState<{ label: string; value: ApiId }[]>([])
+  const [directorOptions, setDirectorOptions] = useState<{ label: string; value: ApiId }[]>([])
   useEffect(() => {
     positionApi
       .page({ page: 1, pageSize: 200 })
@@ -84,7 +84,7 @@ export default function UserPage() {
   const lastQueryRef = useRef<{
     account?: string
     name?: string
-    orgId?: number
+    orgId?: ApiId
     sortField?: string
     sortOrder?: string
   }>({})
@@ -150,7 +150,7 @@ export default function UserPage() {
     const account = typeof q.account === 'string' ? q.account : undefined
     const name = typeof q.name === 'string' ? q.name : undefined
     // orgId 来自左侧机构树(经 DataTable 的 params 透传),非搜索表单。
-    const orgId = typeof q.orgId === 'number' ? q.orgId : undefined
+    const orgId = typeof q.orgId === 'number' || typeof q.orgId === 'string' ? q.orgId : undefined
     lastQueryRef.current = {
       account,
       name,
@@ -172,7 +172,7 @@ export default function UserPage() {
   // ── 新增/编辑弹窗(FormContainer:loading/关闭由它按 onConfirm 结果接管)──
   const [form] = Form.useForm<EditableFields>()
   const [open, setOpen] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<ApiId | null>(null)
   // 头像现有上传控件,升级为受控 state(开弹窗同步、上传写回、save 并入 full)。存 viewUrl 签名直链,不存 id/storagePath。
   const [avatar, setAvatar] = useState<string | null>(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
@@ -353,7 +353,7 @@ export default function UserPage() {
             treeData={orgTree as unknown as TreeDataNode[]}
             fieldNames={{ title: 'name', key: 'id', children: 'children' }}
             selectedKeys={selectedOrgId == null ? [] : [selectedOrgId]}
-            onSelect={(keys) => setSelectedOrgId(keys.length ? Number(keys[0]) : null)}
+            onSelect={(keys) => setSelectedOrgId(keys.length ? (keys[0] as ApiId) : null)}
           />
         </Card>
 

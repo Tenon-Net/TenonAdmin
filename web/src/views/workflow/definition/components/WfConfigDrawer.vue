@@ -29,6 +29,7 @@ import type {
 } from '@/workflow/schema'
 import { serializeWfFormSchema, validateWfFormSchema } from '@/workflow/formSchema'
 import { findNode, flattenChain } from '@/workflow/model'
+import { normalizeWfId, type WfId } from '@/workflow/id'
 import {
   applyNodeConfiguration,
   createConditionGroup,
@@ -65,13 +66,13 @@ const form = reactive({
   mode: 'any' as WfApprovalMode,
   allPassRatio: 100,
   level: 1,
-  userIds: [] as number[],
-  roleId: null as number | null,
-  positionId: null as number | null,
-  positionOrgId: null as number | null,
-  initiatorUserIds: [] as Array<number | string>,
-  initiatorRoleIds: [] as Array<number | string>,
-  initiatorOrgIds: [] as Array<number | string>,
+  userIds: [] as WfId[],
+  roleId: null as WfId | null,
+  positionId: null as WfId | null,
+  positionOrgId: null as WfId | null,
+  initiatorUserIds: [] as WfId[],
+  initiatorRoleIds: [] as WfId[],
+  initiatorOrgIds: [] as WfId[],
   armExpressions: {} as Record<string, WfConditionExpr>,
   returnPolicy: 'prev' as WfReturnPolicy,
   returnToNodeId: null as string | null,
@@ -79,7 +80,7 @@ const form = reactive({
   rejectToNodeId: null as string | null,
   timeoutHours: 0,
   timeoutAction: 'remind' as WfTimeoutAction,
-  timeoutTransferUserId: null as number | string | null,
+  timeoutTransferUserId: null as WfId | null,
   labelApprove: '',
   labelReject: '',
   labelReturn: '',
@@ -213,10 +214,11 @@ watch(
     const params = a?.params ?? {}
     form.level = Number(params.level ?? 1) || 1
     const ids = params.userIds
-    form.userIds = Array.isArray(ids) ? ids.map(Number).filter((x) => x > 0) : params.userId ? [Number(params.userId)] : []
-    form.roleId = params.roleId != null ? Number(params.roleId) : Array.isArray(params.roleIds) ? Number(params.roleIds[0]) : null
-    form.positionId = params.positionId != null ? Number(params.positionId) : null
-    form.positionOrgId = params.orgId != null ? Number(params.orgId) : null
+    const normalizedUserIds = Array.isArray(ids) ? ids : params.userId == null ? [] : [params.userId]
+    form.userIds = normalizedUserIds.map(normalizeWfId).filter((id): id is WfId => id != null)
+    form.roleId = normalizeWfId(params.roleId ?? (Array.isArray(params.roleIds) ? params.roleIds[0] : null))
+    form.positionId = normalizeWfId(params.positionId)
+    form.positionOrgId = normalizeWfId(params.orgId)
     const scope = n.props?.initiatorScope ?? []
     form.initiatorUserIds = scope.filter((x) => x.type === 'user').map((x) => x.id)
     form.initiatorRoleIds = scope.filter((x) => x.type === 'role').map((x) => x.id)

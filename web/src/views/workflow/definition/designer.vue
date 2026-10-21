@@ -15,6 +15,7 @@ import { ApiError } from '@/api'
 import { wfDefinitionApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import { withDesignerNodeName } from '@/workflow/designerError'
+import { normalizeWfId, wfIdEquals, workflowPathId, type WfId } from '@/workflow/id'
 import { rememberParticipantNames } from '@/workflow/participantNames'
 import type { WfDefinitionInput } from '@/types/workflow'
 import { cloneModel, createDefaultModel, findNode, validateModel, type WfModelIssue } from '@/workflow/model'
@@ -34,7 +35,7 @@ const setTabTitle = useTabTitle()
 
 const loading = ref(false)
 const saving = ref(false)
-const defId = ref<number | null>(null)
+const defId = ref<WfId | null>(null)
 const name = ref('')
 // 设计器不编辑分组和图标,保存时必须原样带回,否则更新接口会把它们写成空。
 const groupName = ref<string | null>(null)
@@ -98,18 +99,15 @@ function fitZoom() {
   zoom.value = clampZoom(s * 100)
 }
 
-function readId(): number | null {
-  const raw = (route.query.id as string) || (route.params.id as string)
-  if (!raw) return null
-  const n = Number(raw)
-  return Number.isFinite(n) && n > 0 ? n : null
+function readId(): WfId | null {
+  return normalizeWfId(route.query.id ?? route.params.id)
 }
 
-async function load(id: number) {
+async function load(id: WfId) {
   loading.value = true
   try {
     const detail = await wfDefinitionApi.get(id)
-    defId.value = Number(detail.id)
+    defId.value = normalizeWfId(detail.id) ?? id
     name.value = detail.name ?? ''
     groupName.value = detail.groupName ?? null
     icon.value = detail.icon ?? null
@@ -131,8 +129,8 @@ onMounted(() => {
 watch(
   () => route.query.id,
   (v) => {
-    const id = v ? Number(v) : null
-    if (id && id > 0 && id !== defId.value) void load(id)
+    const id = normalizeWfId(v)
+    if (id != null && !wfIdEquals(id, defId.value)) void load(id)
   },
 )
 
@@ -151,7 +149,7 @@ async function save(options?: { quiet?: boolean }): Promise<boolean> {
   saving.value = true
   try {
     await wfDefinitionApi.update({
-      id: defId.value,
+      id: workflowPathId(defId.value),
       name: name.value.trim() || t('workflow.designer.untitled'),
       groupName: groupName.value,
       icon: icon.value,
@@ -195,10 +193,11 @@ async function createDraft() {
   }
   creating.value = true
   try {
-    const id = Number(await wfDefinitionApi.add({
+    const id = normalizeWfId(await wfDefinitionApi.add({
       name: n,
       model: createDefaultModel() as unknown as WfDefinitionInput['model'],
     }))
+    if (id == null) throw new Error('Invalid workflow definition id')
     await router.replace({ query: { ...route.query, id: String(id) } })
     await load(id)
   } catch (e) {

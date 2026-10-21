@@ -11,7 +11,7 @@ import { useConfirm } from '@/hooks/useConfirm'
 import { useHasPerm } from '@/stores/auth'
 import { configApi } from '@/api'
 import { translateError } from '@/utils/error'
-import type { ConfigInput, SysConfig } from '@/types/api'
+import type { ApiId, ConfigInput, SysConfig } from '@/types/api'
 import { STRUCTURED_GROUPS, blankConfig, configToInput } from './configForm'
 
 export default function OtherConfig() {
@@ -44,7 +44,7 @@ export default function OtherConfig() {
   // ── 新增/编辑弹窗 ──
   const [form] = Form.useForm<ConfigInput>()
   const [open, setOpen] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<ApiId | null>(null)
   const openAdd = useCallback(() => { setEditingId(null); form.setFieldsValue(blankConfig()); setOpen(true) }, [form])
   const openEdit = useCallback((r: SysConfig) => { setEditingId(r.id); form.setFieldsValue(configToInput(r)); setOpen(true) }, [form])
   const save = async () => {

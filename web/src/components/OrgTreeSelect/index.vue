@@ -5,10 +5,10 @@ import { computed, onMounted, ref } from 'vue'
 import { NTreeSelect } from 'naive-ui'
 import { orgApi } from '@/api'
 import { buildTree, collectSubtreeIds } from '@/utils/tree'
-import type { SysOrg } from '@/types/api'
+import type { ApiId, SysOrg } from '@/types/api'
 
 defineOptions({ inheritAttrs: false })
-const props = defineProps<{ excludeSubtreeOf?: number | null }>()
+const props = defineProps<{ excludeSubtreeOf?: ApiId | null }>()
 
 const flat = ref<SysOrg[]>([])
 const loading = ref(false)

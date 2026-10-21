@@ -17,7 +17,7 @@ import { useAuthStore } from '@/stores/auth'
 import { menuApi } from '@/api'
 import { translateError } from '@/utils/error'
 import { MenuType, type MenuInput, type MenuTreeNode } from '@/types/menu'
-import type { PermissionRouteItem } from '@/types/api'
+import type { ApiId, PermissionRouteItem } from '@/types/api'
 
 // tree/routes 由父页传入并保持响应:父页 CRUD 后 load() 刷新 tree,本弹窗的 buttons 计算属性随之更新,
 // 无需自己再发一次整树请求。
@@ -41,11 +41,11 @@ const canEdit = computed(() => auth.hasPerm('PUT:/api/v1/sys/menu/{id}'))
 const canDelete = computed(() => auth.hasPerm('DELETE:/api/v1/sys/menu/{id}'))
 
 const show = ref(false)
-const menuId = ref<number | null>(null)
+const menuId = ref<ApiId | null>(null)
 const menuTitle = ref('')
 
 /** 在整棵树里按 id 找节点(父页传的 tree 含按钮 children)。 */
-function findNode(nodes: MenuTreeNode[], id: number): MenuTreeNode | null {
+function findNode(nodes: MenuTreeNode[], id: ApiId): MenuTreeNode | null {
   for (const n of nodes) {
     if (n.id === id) return n
     const hit = findNode(n.children, id)
@@ -98,7 +98,7 @@ const permissionOptions = computed(() => {
  * 按钮是叶子、不可能成环,故无需像主页 parentOptions 那样排除自身子树。
  */
 const parentOptions = computed(() => {
-  const opts: { label: string; value: number }[] = []
+  const opts: { label: string; value: ApiId }[] = []
   const walk = (nodes: MenuTreeNode[], depth: number) => {
     for (const n of nodes) {
       if (n.type === MenuType.Button) continue
@@ -110,7 +110,7 @@ const parentOptions = computed(() => {
   return opts
 })
 
-function open(menu: { id: number; title: string }) {
+function open(menu: { id: ApiId; title: string }) {
   menuId.value = menu.id
   menuTitle.value = menu.title
   show.value = true
@@ -119,7 +119,7 @@ defineExpose({ open })
 
 // ── 单个新增/编辑 ────────────────────────────────────────────────
 const editShow = ref(false)
-const editingId = ref<number | null>(null)
+const editingId = ref<ApiId | null>(null)
 const formRef = ref<FormInst | null>(null)
 const rules: FormRules = {
   title: { required: true, whitespace: true, message: () => t('menu.titleRequired'), trigger: ['input', 'blur'] },

@@ -17,13 +17,13 @@ import { useBatchDelete } from '@/hooks/useBatchDelete'
 import { useAuthStore, useHasPerm } from '@/stores/auth'
 import { menuApi, moduleApi, roleApi, userApi } from '@/api'
 import { translateError } from '@/utils/error'
-import { DataScopeType, type ModuleRow, type RoleInput, type SysRole } from '@/types/api'
+import { DataScopeType, type ApiId, type ModuleRow, type RoleInput, type SysRole } from '@/types/api'
 import type { MenuTreeNode } from '@/types/menu'
 import { UNASSIGNED } from './grantMenu'
 import { blankRole, roleToInput } from './roleForm'
 
 /** 持有该角色的用户数;复用用户分页(Size=1 只要 total)。查不到(如无用户查询权限 403)→ null,退通用文案不阻断删除。 */
-async function countUsers(roleId: number): Promise<number | null> {
+async function countUsers(roleId: ApiId): Promise<number | null> {
   try {
     return (await userApi.page({ page: 1, pageSize: 1, roleId })).total
   } catch {
@@ -74,7 +74,7 @@ export default function RolePage() {
   // ── 新增/编辑弹窗 ──
   const [form] = Form.useForm<RoleInput>()
   const [open, setOpen] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<ApiId | null>(null)
   const openAdd = useCallback(() => { setEditingId(null); form.setFieldsValue(blankRole()); setOpen(true) }, [form])
   const openEdit = useCallback((r: SysRole) => { setEditingId(r.id); form.setFieldsValue(roleToInput(r)); setOpen(true) }, [form])
   const save = async () => {
@@ -93,9 +93,9 @@ export default function RolePage() {
   // ── 授权菜单抽屉 ──
   const [showMenus, setShowMenus] = useState(false)
   const [menuTree, setMenuTree] = useState<MenuTreeNode[]>([])
-  const [menuGranted, setMenuGranted] = useState<number[]>([])
-  const [menuRoleId, setMenuRoleId] = useState<number | null>(null)
-  const [defaultModuleId, setDefaultModuleId] = useState(UNASSIGNED)
+  const [menuGranted, setMenuGranted] = useState<ApiId[]>([])
+  const [menuRoleId, setMenuRoleId] = useState<ApiId | null>(null)
+  const [defaultModuleId, setDefaultModuleId] = useState<ApiId>(UNASSIGNED)
   const openMenus = useCallback(async (r: SysRole) => {
     setMenuRoleId(r.id)
     try {
@@ -121,7 +121,7 @@ export default function RolePage() {
 
   // ── 授权用户(UserPicker,命令式 ref)──
   const userPickerRef = useRef<UserPickerHandle>(null)
-  const [userRoleId, setUserRoleId] = useState<number | null>(null)
+  const [userRoleId, setUserRoleId] = useState<ApiId | null>(null)
   const openUsers = useCallback(async (r: SysRole) => {
     setUserRoleId(r.id)
     try {
@@ -130,7 +130,7 @@ export default function RolePage() {
       message.error(translateError(e))
     }
   }, [message])
-  const onUserConfirm = useCallback(async (ids: number[]) => {
+  const onUserConfirm = useCallback(async (ids: ApiId[]) => {
     if (userRoleId === null) return
     try {
       await roleApi.setUsers(userRoleId, ids)
@@ -142,9 +142,9 @@ export default function RolePage() {
 
   // ── 数据范围抽屉 ──
   const [showScope, setShowScope] = useState(false)
-  const [scopeRoleId, setScopeRoleId] = useState<number | null>(null)
+  const [scopeRoleId, setScopeRoleId] = useState<ApiId | null>(null)
   const [scopeType, setScopeType] = useState<DataScopeType>(DataScopeType.Org)
-  const [customOrgIds, setCustomOrgIds] = useState<number[]>([])
+  const [customOrgIds, setCustomOrgIds] = useState<ApiId[]>([])
   const isCustom = scopeType === DataScopeType.Custom
   const scopeOptions = useMemo(() => [
     { label: t('role.scope.all'), value: DataScopeType.All },
@@ -158,7 +158,11 @@ export default function RolePage() {
     try {
       const cfg = await roleApi.getDataScope(r.id)
       setScopeType(cfg?.scopeType ?? DataScopeType.Org)
-      setCustomOrgIds(cfg?.customOrgIds ? cfg.customOrgIds.split(',').filter(Boolean).map(Number) : [])
+      setCustomOrgIds(cfg?.customOrgIds ? cfg.customOrgIds.split(',').filter(Boolean).map((id) => {
+        // 树节点的小 Id 仍是 number；大 Id 必须保留原串，不能使用已舍入的候选值。
+        const numeric = Number(id)
+        return Number.isSafeInteger(numeric) ? numeric : id
+      }) : [])
       setShowScope(true)
     } catch (e) {
       message.error(translateError(e))
@@ -261,7 +265,7 @@ export default function RolePage() {
           </Form.Item>
           {isCustom && (
             <Form.Item label={t('role.customOrgs')}>
-              <OrgTreeSelect multiple value={customOrgIds} onChange={(v) => setCustomOrgIds((v as number[]) ?? [])} placeholder={t('role.customOrgsHint')} style={{ width: '100%' }} />
+              <OrgTreeSelect multiple value={customOrgIds} onChange={(v) => setCustomOrgIds((v as ApiId[]) ?? [])} placeholder={t('role.customOrgsHint')} style={{ width: '100%' }} />
             </Form.Item>
           )}
         </Form>

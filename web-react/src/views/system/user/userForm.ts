@@ -1,7 +1,7 @@
 // 用户新增/编辑表单的**纯逻辑**:表单模型、空值语义映射、超管/权限判据。
 // 抽出来是为了能被 userForm.spec 变异钉死 —— 页面 index.tsx 只做接线(弹窗/表格),
 // 真正会静默出错的两处(空值语义、超管自锁保护)在这里,单测覆盖。
-import type { AddUserInput, UpdateUserInput, UserDetail } from '@/types/api'
+import type { AddUserInput, ApiId, UpdateUserInput, UserDetail } from '@/types/api'
 
 /**
  * 编辑弹窗的字段模型。账号/姓名/昵称/手机/邮箱/性别/机构/职位/主管/角色/状态都有编辑控件;
@@ -20,10 +20,10 @@ export interface UserForm {
   forceTotp: boolean
   /** 只读回显;不写入 Update 入参 */
   totpEnabled: boolean
-  roleIds: number[]
-  orgId: number | null
-  positionId: number | null
-  directorId: number | null
+  roleIds: ApiId[]
+  orgId: ApiId | null
+  positionId: ApiId | null
+  directorId: ApiId | null
   // 无 Form 控件(受控 state 挂上传组件),save 时并回;仍进模型防全量替换清空
   avatar: string | null
 }

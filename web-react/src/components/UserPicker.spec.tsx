@@ -20,13 +20,13 @@ vi.mock('@/components/DataTable', () => ({
 vi.mock('@/api', () => ({ orgApi: { list: vi.fn() }, userApi: { page: vi.fn() } }))
 
 import { orgApi, userApi } from '@/api'
-import type { UserItem } from '@/types/api'
+import type { ApiId, UserItem } from '@/types/api'
 
 const U = (id: number, name: string, account: string): PickedUser => ({ id, name, account })
 // userApi.page 的返回项是完整 UserItem;测试里只关心这三个字段,其余 cast 掉。
 const row = (id: number, name: string, account: string) => ({ id, name, account }) as unknown as UserItem
 
-function mount(props: { excludeIds?: number[]; onConfirm: (ids: number[]) => void }) {
+function mount(props: { excludeIds?: ApiId[]; onConfirm: (ids: ApiId[]) => void }) {
   const ref = createRef<UserPickerHandle>()
   render(
     <AntdApp>

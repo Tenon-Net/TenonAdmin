@@ -12,6 +12,7 @@ import { resetRouter } from '@/router'
 import { translateError } from '@/utils/error'
 import { authApi } from '@/api'
 import TenonLogo from '@/components/TenonLogo.vue'
+import type { ApiId } from '@/types/api'
 
 const router = useRouter()
 const message = useMessage()
@@ -20,7 +21,7 @@ const auth = useAuthStore()
 const user = useUserStore()
 const busy = ref(false)
 
-async function pick(id: number) {
+async function pick(id: ApiId) {
   busy.value = true
   try {
     // switchModule = 建路由 + 清标签 + 落新应用首页(旧应用的标签在新应用里都是死链)
@@ -41,7 +42,7 @@ async function handleLogout() {
   router.replace('/login')
 }
 
-async function setDefault(id: number) {
+async function setDefault(id: ApiId) {
   try {
     await useModule().setDefault(id)
     message.success(t('common.success'))
