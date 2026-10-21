@@ -29,7 +29,8 @@ public sealed class WorkerIdLeaseGuard : IHostedLifecycleService, IDisposable
     private string _instanceToken = Guid.NewGuid().ToString("N")[..8];
     private readonly SemaphoreSlim _startGate = new(1, 1);
     private IWorkerIdLeaseLifetime? _lifetime;
-    private bool _started;
+    private bool _startingCompleted;
+    private bool _startCompleted;
     private bool _stopped;
     private long _claimStartedAt;
     private int _workerId;
@@ -72,8 +73,25 @@ public sealed class WorkerIdLeaseGuard : IHostedLifecycleService, IDisposable
     private int HeartbeatSeconds => Math.Max(DirectJobsOptions.HeartbeatSeconds, 2);
     private TimeSpan LeaseTtl => TimeSpan.FromSeconds(HeartbeatSeconds * 3);
 
-    // Host 的 Starting 阶段先于任何普通 HostedService.StartAsync；手工调用 StartAsync 仍保持兼容。
-    public Task StartingAsync(CancellationToken cancellationToken) => StartAsync(cancellationToken);
+    // Host 的 Starting 阶段先于任何普通 HostedService.StartAsync；先领取并启动续租，普通 Start 再在 DDL 后确认。
+    public async Task StartingAsync(CancellationToken cancellationToken)
+    {
+        await _startGate.WaitAsync(cancellationToken);
+        try
+        {
+            ThrowIfStopped();
+            if (_startingCompleted)
+                return;
+
+            await StartCoreAsync(cancellationToken);
+            _startingCompleted = true;
+        }
+        finally
+        {
+            _startGate.Release();
+        }
+    }
+
     public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public Task StoppingAsync(CancellationToken cancellationToken) => StopAsync(cancellationToken);
     public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -83,57 +101,85 @@ public sealed class WorkerIdLeaseGuard : IHostedLifecycleService, IDisposable
         await _startGate.WaitAsync(cancellationToken);
         try
         {
-            if (_stopped)
-                throw new InvalidOperationException("WorkerId 守卫已停止，不能重新启动已释放的发号器。");
-            if (_started) return;
-            if (_services is not null)
-            {
-                StartHostedMode();
-                _started = true;
+            ThrowIfStopped();
+            if (_startCompleted)
                 return;
+
+            // 直接调用旧版 StartAsync 时仍一次完成领取；Host 则已经在 StartingAsync 完成此步。
+            if (!_startingCompleted)
+            {
+                await StartCoreAsync(cancellationToken);
+                _startingCompleted = true;
             }
 
-            if (_assignment?.Lifetime is { } existingLifetime)
-            {
-                existingLifetime.EnsureActive();
-                _lifetime = existingLifetime;
-                _started = true;
-                return;
-            }
-
-            _workerId = (int)(_assignment?.WorkerId ?? DirectIdOptions.WorkerId ?? 0);
-            if (!string.IsNullOrEmpty(_assignment?.InstanceToken))
-                _instanceToken = _assignment.InstanceToken;
-            var machineName = Environment.MachineName;
-            _nodeName = $"{machineName}#{_workerId}@{_instanceToken}";
-            var pid = Environment.ProcessId;
-
-            DirectDb.CodeFirst.InitTables<SysWorkerLease>();
-            for (var attempt = 1; !await TryClaimAsync(machineName, pid); attempt++)
-            {
-                if (attempt >= 2)
-                    throw new InvalidOperationException(
-                        $"WorkerId {_workerId} 的租约被其它节点连续抢占，本实例放弃启动。" +
-                        "请为本实例配置不同的 TenonAdmin:Id:WorkerId。");
-            }
-
-            var lifetime = new DbWorkerIdLeaseLifetime(
-                DirectDb, _workerId, _nodeName, DirectJobsOptions, _time, _claimStartedAt, logger: DirectLogger);
-            try
-            {
-                _assignment?.AttachLifetime(lifetime);
-                _lifetime = lifetime;
-                _started = true;
-            }
-            catch
-            {
-                lifetime.Dispose();
-                throw;
-            }
-            DirectLogger.LogInformation("WorkerId {WorkerId} 租约已获取(node={Node}, pid={Pid}, ttl={Ttl}s)。",
-                _workerId, _nodeName, pid, LeaseTtl.TotalSeconds);
+            // SqlSugar 的 DatabaseInitializer 在 Services 注册之前，故普通 Start 到这里时完整 DDL 已结束。
+            // 默认数据库 lifetime 强制做 fresh owner CAS；消费者自定义 lifetime 只沿用公开的本地校验契约。
+            if (_lifetime is DbWorkerIdLeaseLifetime databaseLifetime)
+                await databaseLifetime.ConfirmFreshAsync(cancellationToken);
+            _lifetime?.EnsureActive();
+            _startCompleted = true;
         }
-        finally { _startGate.Release(); }
+        finally
+        {
+            _startGate.Release();
+        }
+    }
+
+    private async Task StartCoreAsync(CancellationToken cancellationToken)
+    {
+        if (_services is not null)
+        {
+            StartHostedMode();
+            return;
+        }
+
+        if (_assignment?.Lifetime is { } existingLifetime)
+        {
+            if (existingLifetime is not DbWorkerIdLeaseLifetime)
+                existingLifetime.EnsureActive();
+            _lifetime = existingLifetime;
+            return;
+        }
+
+        _workerId = (int)(_assignment?.WorkerId ?? DirectIdOptions.WorkerId ?? 0);
+        if (!string.IsNullOrEmpty(_assignment?.InstanceToken))
+            _instanceToken = _assignment.InstanceToken;
+        var machineName = Environment.MachineName;
+        _nodeName = $"{machineName}#{_workerId}@{_instanceToken}";
+        var pid = Environment.ProcessId;
+
+        DirectDb.CodeFirst.InitTables<SysWorkerLease>();
+        for (var attempt = 1; !await TryClaimAsync(machineName, pid); attempt++)
+        {
+            if (attempt >= 2)
+                throw new InvalidOperationException(
+                    $"WorkerId {_workerId} 的租约被其它节点连续抢占，本实例放弃启动。" +
+                    "请为本实例配置不同的 TenonAdmin:Id:WorkerId。");
+        }
+
+        var lifetime = new DbWorkerIdLeaseLifetime(
+            DirectDb, _workerId, _nodeName, DirectJobsOptions, _time, _claimStartedAt, logger: DirectLogger);
+        try
+        {
+            // 直接领取可能被锁拖过本地确认期限；先新鲜确认，再满足 AttachLifetime 的有效性前置条件。
+            if (_assignment is not null)
+                await lifetime.ConfirmFreshAsync(cancellationToken);
+            _assignment?.AttachLifetime(lifetime);
+            _lifetime = lifetime;
+        }
+        catch
+        {
+            lifetime.Dispose();
+            throw;
+        }
+        DirectLogger.LogInformation("WorkerId {WorkerId} 租约已获取(node={Node}, pid={Pid}, ttl={Ttl}s)。",
+            _workerId, _nodeName, pid, LeaseTtl.TotalSeconds);
+    }
+
+    private void ThrowIfStopped()
+    {
+        if (_stopped)
+            throw new InvalidOperationException("WorkerId 守卫已停止，不能重新启动已释放的发号器。");
     }
 
     private void StartHostedMode()
@@ -144,9 +190,11 @@ public sealed class WorkerIdLeaseGuard : IHostedLifecycleService, IDisposable
         if (generator is not SnowflakeIdGenerator { Assignment: { } assignment })
             return;
 
-        assignment.EnsureActive();
         _lifetime = assignment.Lifetime
             ?? throw new InvalidOperationException("默认雪花发号器尚未附加 WorkerId 数据库租约。");
+        // 默认租约可能在 Host.Start 前已暂停，留到普通 Start 做新鲜确认；自定义契约仍立即校验。
+        if (_lifetime is not DbWorkerIdLeaseLifetime)
+            assignment.EnsureActive();
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)

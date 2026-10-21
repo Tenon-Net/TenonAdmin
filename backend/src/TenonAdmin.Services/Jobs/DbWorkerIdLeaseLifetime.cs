@@ -11,9 +11,20 @@ namespace TenonAdmin.Services;
 /// </summary>
 internal sealed class DbWorkerIdLeaseLifetime : IWorkerIdLeaseLifetime
 {
-    private const int Active = 0;
-    private const int Lost = 1;
-    private const int Disposed = 2;
+    private enum LeaseState
+    {
+        Active,
+        Suspended,
+        Lost,
+        Disposed,
+    }
+
+    private enum ConfirmationResult
+    {
+        Confirmed,
+        RetryFresh,
+        Terminal,
+    }
 
     private readonly ISqlSugarClient _db;
     private readonly int _workerId;
@@ -25,10 +36,12 @@ internal sealed class DbWorkerIdLeaseLifetime : IWorkerIdLeaseLifetime
     private readonly bool _ownsClient;
     private readonly ILogger? _logger;
     private readonly CancellationTokenSource _cts = new();
+    private readonly SemaphoreSlim _confirmationGate = new(1, 1);
+    private readonly object _stateSync = new();
     private readonly Task _renewTask;
 
     private long _confirmedStartedAt;
-    private int _state;
+    private LeaseState _state;
 
     public DbWorkerIdLeaseLifetime(
         ISqlSugarClient db,
@@ -76,17 +89,40 @@ internal sealed class DbWorkerIdLeaseLifetime : IWorkerIdLeaseLifetime
     /// <inheritdoc />
     public void EnsureActive()
     {
-        ExpireIfPastConfirmedDeadline();
-        var state = Volatile.Read(ref _state);
-        if (state == Disposed)
-            throw new InvalidOperationException("WorkerId 数据库租约已释放，拒绝继续发号。");
-        if (state != Active)
-            throw new InvalidOperationException("WorkerId 数据库租约已丢失或过期，拒绝继续发号。");
+        // 发号热路径只能读取本地状态，不能在业务事务内再开独立连接确认租约，否则会与调用者自锁。
+        lock (_stateSync)
+        {
+            SuspendIfPastConfirmedDeadlineLocked();
+            if (_state == LeaseState.Disposed)
+                throw new InvalidOperationException("WorkerId 数据库租约已释放，拒绝继续发号。");
+            if (_state != LeaseState.Active)
+                throw new InvalidOperationException("WorkerId 数据库租约已丢失或过期，拒绝继续发号。");
+        }
+    }
+
+    /// <summary>
+    /// 强制完成一次新鲜的 owner CAS。宿主在 CodeFirst 事务结束后调用，避免启动期 DDL 阻塞续租后，
+    /// 第一个业务 HostedService 在后台下一轮确认前先尝试发号。
+    /// </summary>
+    internal async Task ConfirmFreshAsync(CancellationToken cancellationToken)
+    {
+        // 第一次请求可能在 Active 时发出，却在旧确认期限后才返回。它只能把状态推进到 Suspended；
+        // 第二次请求是在已经观察到 Suspended 后发出的 fresh CAS，才有资格恢复 Active。
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var result = await ConfirmOnceAsync(cancellationToken);
+            if (result == ConfirmationResult.Confirmed)
+                return;
+            if (result == ConfirmationResult.Terminal)
+                break;
+        }
+
+        EnsureActive();
     }
 
     private async Task RenewLoopAsync()
     {
-        while (Volatile.Read(ref _state) == Active)
+        while (!IsTerminal())
         {
             try
             {
@@ -97,64 +133,129 @@ internal sealed class DbWorkerIdLeaseLifetime : IWorkerIdLeaseLifetime
                 return;
             }
 
-            if (ExpireIfPastConfirmedDeadline())
-                return;
-
             try
             {
-                // 成功确认的本地起点取在 DB 时钟查询前；查询和更新耗时都会消耗本轮 TTL，
-                // 不能到响应返回时才开始计算，否则卡住的连接会虚增有效期。
-                var attemptStartedAt = _time.GetTimestamp();
-                var databaseNow = DatabaseNow(_db);
-                var expiresAt = databaseNow + _leaseTtl;
-                var rows = _db.Updateable<SysWorkerLease>()
-                    .SetColumns(l => new SysWorkerLease { LeaseExpiresAt = expiresAt })
-                    .Where(l => l.WorkerId == _workerId
-                        && l.NodeName == _nodeName
-                        && l.LeaseExpiresAt > databaseNow)
-                    .ExecuteCommand();
-
-                if (rows == 0)
-                {
-                    MarkLost();
-                    SafeLogWarning("WorkerId {WorkerId} 的数据库租约已被接管或过期，停止续租。", _workerId);
+                if (await ConfirmOnceAsync(_cts.Token) == ConfirmationResult.Terminal)
                     return;
-                }
-
-                // 一旦旧的确认期限已经过去，即使迟到的 UPDATE 成功也不能恢复为有效状态。
-                if (ExpireIfPastConfirmedDeadline())
-                    return;
-
-                if (Volatile.Read(ref _state) == Active)
-                    Interlocked.Exchange(ref _confirmedStartedAt, attemptStartedAt);
+            }
+            catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+            {
+                return;
             }
             catch (Exception ex)
             {
-                // 短暂故障只能容忍到最后一次确认的本地期限；日志只写异常类型，避免泄漏连接信息。
+                // 短暂故障不会直接判定所有权丢失；日志只写异常类型，避免泄漏连接信息。
                 SafeLogWarning(
-                    "WorkerId {WorkerId} 数据库租约续租失败({ErrorType})，将在确认期限内重试。",
+                    "WorkerId {WorkerId} 数据库租约续租失败({ErrorType})；确认期限过后将暂停发号并继续确认。",
                     _workerId,
                     ex.GetType().Name);
-                if (ExpireIfPastConfirmedDeadline())
-                    return;
+                SuspendIfPastConfirmedDeadline();
             }
         }
     }
 
-    private bool ExpireIfPastConfirmedDeadline()
+    private async Task<ConfirmationResult> ConfirmOnceAsync(CancellationToken cancellationToken)
     {
-        if (Volatile.Read(ref _state) != Active)
-            return true;
+        await _confirmationGate.WaitAsync(cancellationToken);
+        try
+        {
+            long attemptStartedAt;
+            bool recoveryAttempt;
+            lock (_stateSync)
+            {
+                if (_state is LeaseState.Lost or LeaseState.Disposed)
+                    return ConfirmationResult.Terminal;
 
-        var confirmed = Interlocked.Read(ref _confirmedStartedAt);
-        if (_time.GetElapsedTime(confirmed) < _localConfirmedTtl)
-            return false;
+                SuspendIfPastConfirmedDeadlineLocked();
+                recoveryAttempt = _state == LeaseState.Suspended;
+                // 起点必须在 DB 时钟查询前；查询和更新耗时都消耗本轮本地确认 TTL。
+                attemptStartedAt = _time.GetTimestamp();
+            }
 
-        MarkLost();
-        return true;
+            var databaseNow = DatabaseNow(_db);
+            var expiresAt = databaseNow + _leaseTtl;
+            var rows = _db.Updateable<SysWorkerLease>()
+                .SetColumns(l => new SysWorkerLease { LeaseExpiresAt = expiresAt })
+                .Where(l => l.WorkerId == _workerId && l.NodeName == _nodeName)
+                .ExecuteCommand();
+
+            // MySQL UseAffectedRows=true 对同值更新返回 0。回读必须同时证明 owner 未变且期限
+            // 已达到本轮目标，不能仅凭 owner 相同接受一条没有续期的行。回读耗时也计入确认期限。
+            var confirmed = rows != 0 || _db.Queryable<SysWorkerLease>()
+                .Any(l => l.WorkerId == _workerId && l.NodeName == _nodeName
+                    && l.LeaseExpiresAt >= expiresAt);
+            var attemptFinishedAt = _time.GetTimestamp();
+
+            if (!confirmed)
+            {
+                lock (_stateSync)
+                {
+                    if (_state is LeaseState.Lost or LeaseState.Disposed)
+                        return ConfirmationResult.Terminal;
+                    _state = LeaseState.Lost;
+                }
+
+                // 消费者 logger 可能执行任意代码，不能放在状态锁内。
+                SafeLogWarning("WorkerId {WorkerId} 的数据库租约已被接管，停止续租。", _workerId);
+                return ConfirmationResult.Terminal;
+            }
+
+            lock (_stateSync)
+            {
+                if (_state is LeaseState.Lost or LeaseState.Disposed)
+                    return ConfirmationResult.Terminal;
+
+                // 先用旧确认推进 Suspended；Active 时发出的迟到响应不能直接把它复活。
+                SuspendIfPastConfirmedDeadlineLocked();
+                if (_time.GetElapsedTime(attemptStartedAt, attemptFinishedAt) >= _localConfirmedTtl)
+                {
+                    if (_state == LeaseState.Active)
+                        _state = LeaseState.Suspended;
+                    return ConfirmationResult.RetryFresh;
+                }
+
+                if (recoveryAttempt)
+                {
+                    _confirmedStartedAt = attemptStartedAt;
+                    _state = LeaseState.Active;
+                    return ConfirmationResult.Confirmed;
+                }
+
+                if (_state == LeaseState.Active)
+                {
+                    _confirmedStartedAt = attemptStartedAt;
+                    return ConfirmationResult.Confirmed;
+                }
+
+                return ConfirmationResult.RetryFresh;
+            }
+        }
+        finally
+        {
+            _confirmationGate.Release();
+        }
     }
 
-    private void MarkLost() => Interlocked.CompareExchange(ref _state, Lost, Active);
+    private bool IsTerminal()
+    {
+        lock (_stateSync)
+            return _state is LeaseState.Lost or LeaseState.Disposed;
+    }
+
+    private void SuspendIfPastConfirmedDeadline()
+    {
+        lock (_stateSync)
+            SuspendIfPastConfirmedDeadlineLocked();
+    }
+
+    private void SuspendIfPastConfirmedDeadlineLocked()
+    {
+        if (_state == LeaseState.Active
+            && _time.GetElapsedTime(_confirmedStartedAt) >= _localConfirmedTtl)
+        {
+            _state = LeaseState.Suspended;
+        }
+    }
 
     /// <summary>读取数据库自己的当前时间，领取、续租和过期比较共用同一时钟。</summary>
     internal static DateTime DatabaseNow(ISqlSugarClient db)
@@ -172,8 +273,12 @@ internal sealed class DbWorkerIdLeaseLifetime : IWorkerIdLeaseLifetime
     /// <inheritdoc />
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _state, Disposed) == Disposed)
-            return;
+        lock (_stateSync)
+        {
+            if (_state == LeaseState.Disposed)
+                return;
+            _state = LeaseState.Disposed;
+        }
 
         try
         {
@@ -194,37 +299,47 @@ internal sealed class DbWorkerIdLeaseLifetime : IWorkerIdLeaseLifetime
                     ex.GetType().Name);
             }
 
+            // 等后台循环退出后再取得同一闸门，确保没有确认请求仍在使用这个独立客户端。
+            _confirmationGate.Wait();
             try
             {
-                _db.Deleteable<SysWorkerLease>()
-                    .Where(l => l.WorkerId == _workerId && l.NodeName == _nodeName)
-                    .ExecuteCommand();
+                try
+                {
+                    _db.Deleteable<SysWorkerLease>()
+                        .Where(l => l.WorkerId == _workerId && l.NodeName == _nodeName)
+                        .ExecuteCommand();
+                }
+                catch (Exception ex)
+                {
+                    SafeLogWarning(
+                        "WorkerId {WorkerId} 数据库租约释放失败({ErrorType})，将等待数据库到期。",
+                        _workerId,
+                        ex.GetType().Name);
+                }
+
+                if (_ownsClient)
+                {
+                    try
+                    {
+                        _db.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        SafeLogWarning(
+                            "WorkerId {WorkerId} 数据库租约连接释放失败({ErrorType})。",
+                            _workerId,
+                            ex.GetType().Name);
+                    }
+                }
             }
-            catch (Exception ex)
+            finally
             {
-                SafeLogWarning(
-                    "WorkerId {WorkerId} 数据库租约释放失败({ErrorType})，将等待数据库到期。",
-                    _workerId,
-                    ex.GetType().Name);
+                _confirmationGate.Release();
             }
         }
         finally
         {
             _cts.Dispose();
-            if (_ownsClient)
-            {
-                try
-                {
-                    _db.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    SafeLogWarning(
-                        "WorkerId {WorkerId} 数据库租约连接释放失败({ErrorType})。",
-                        _workerId,
-                        ex.GetType().Name);
-                }
-            }
         }
     }
 
