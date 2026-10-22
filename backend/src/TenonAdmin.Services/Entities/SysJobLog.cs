@@ -13,6 +13,8 @@ namespace TenonAdmin.Services;
 /// </summary>
 [SugarTable("sys_job_log", TableDescription = "任务执行记录")]
 [SugarIndex("idx_sys_job_log", nameof(JobId), OrderByType.Asc, nameof(AuditEntity.CreateTime), OrderByType.Desc)]
+[SugarIndex("idx_sys_job_log_job_end", nameof(JobId), OrderByType.Asc, nameof(EndTime), OrderByType.Asc)]
+[SugarIndex("idx_sys_job_log_end_start", nameof(EndTime), OrderByType.Asc, nameof(StartTime), OrderByType.Asc)]
 public class SysJobLog : AuditEntity
 {
     [SugarColumn(ColumnDescription = "任务 Id")]

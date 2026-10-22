@@ -127,7 +127,9 @@
 | IsSystem | bool | 内核种子任务 = true,禁删(47014);可暂停、可改触发配置 |
 | Remark | string(512),可空 | |
 
-### 3.3 `sys_job_log`(索引:`idx_sys_job_log(JobId, CreateTime desc)`)
+### 3.3 `sys_job_log`
+
+索引：`idx_sys_job_log(JobId, CreateTime desc)` 支持历史日志查询；`idx_sys_job_log_job_end(JobId, EndTime)` 支持串行任务未闭合检查；`idx_sys_job_log_end_start(EndTime, StartTime)` 支持失联执行回收。旧库补索引见[任务日志调度查询索引升级](upgrades/job-log-indexes.md)。
 
 | 列 | 类型 | 说明 |
 |---|---|---|
