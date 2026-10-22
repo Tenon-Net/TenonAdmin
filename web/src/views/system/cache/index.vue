@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 缓存管理 = 定向失效动作卡片。只清不看:缓存值含明文验证码/一次性令牌、键内嵌手机号/IP(后端故无键浏览/取值端点)。
 // 每张卡二次确认后执行,toast 显被清条数。正常授权变更后端已自动失效,此页面向"直接改库"等旁路场景做手动刷新。
-import { ref } from 'vue'
+import { shallowRef } from 'vue'
 import { NGrid, NGi, NCard, NButton, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
@@ -27,7 +27,7 @@ const actions: CacheAction[] = [
   { key: 'portal', icon: 'ph:squares-four-duotone', perm: 'POST:/api/v1/sys/cache/rebuild-portal', run: cacheApi.rebuildPortal },
 ]
 
-const busy = ref<string | null>(null)
+const busy = shallowRef<string | null>(null)
 
 async function trigger(a: CacheAction) {
   if (!(await ask({ type: 'warning', content: t(`cache.${a.key}Confirm`) }))) return

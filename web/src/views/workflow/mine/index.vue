@@ -3,7 +3,7 @@
  * 我发起的。菜单 component 填 `workflow/mine/index`。
  * 行点击或「查看」进实例详情(`/workflow/instance/:id/detail`)。
  */
-import { h, onActivated, ref } from 'vue'
+import { h, onActivated, shallowRef, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +16,7 @@ import { runtimeStatusKey } from '@/workflow/runtimeStatus'
 const { t } = useI18n()
 const router = useRouter()
 const message = useMessage()
-const tableRef = ref<ProTableInst<WfInstanceListItem>>()
+const tableRef = useTemplateRef<ProTableInst<WfInstanceListItem>>('tableRef')
 
 function openDetail(r: WfInstanceListItem) {
   if (r.id == null) return
@@ -27,7 +27,7 @@ function openDetail(r: WfInstanceListItem) {
 }
 
 // 撤销/重提后实例状态会变,本页被 keep-alive。回到本页时重拉。
-const skipRefresh = ref(true)
+const skipRefresh = shallowRef(true)
 onActivated(() => {
   if (skipRefresh.value) {
     skipRefresh.value = false

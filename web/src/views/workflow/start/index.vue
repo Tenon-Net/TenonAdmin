@@ -3,7 +3,7 @@
  * 发起流程页。菜单 component 填 `workflow/start/index`;
  * 可选 `?definitionId=` 预选已发布定义。含 formComponent 挂载点 + 摘要变量(键值行)。
  */
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch, shallowRef, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NAlert,
@@ -25,7 +25,7 @@ import { wfInstanceApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import type { WfStartableDefinition, WfStartableDefinitionDetail } from '@/types/workflow'
 import type { WfId } from '@/workflow/id'
-import { normalizeWfId, wfInstanceDetailPath } from '@/workflow/id'
+import { isPositiveWfId, normalizeWfId, wfInstanceDetailPath } from '@/workflow/id'
 import { parseQueryApiId } from '@/utils/id'
 import { flattenChain } from '@/workflow/model'
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
@@ -43,15 +43,15 @@ const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 
-const formRef = ref<FormInst | null>(null)
-const submitting = ref(false)
-const defsLoading = ref(false)
-const detailLoading = ref(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
+const submitting = shallowRef(false)
+const defsLoading = shallowRef(false)
+const detailLoading = shallowRef(false)
 const defOptions = ref<{ label: string; value: WfId; disabled?: boolean }[]>([])
-const formComponent = ref<string | null>(null)
+const formComponent = shallowRef<string | null>(null)
 const formSchema = ref<WfFormSchema | null>(null)
-const runtimeVariablesJson = ref<string | null>(null)
-const formRuntimeRef = ref<{ validate: () => boolean } | null>(null)
+const runtimeVariablesJson = shallowRef<string | null>(null)
+const formRuntimeRef = useTemplateRef<{ validate: () => boolean } | null>('formRuntimeRef')
 const snapshot = ref<WfStartableDefinitionDetail | null>(null)
 const requestKey = useRequestKey()
 let detailRequest = 0
@@ -66,6 +66,7 @@ const form = reactive({
 const rules: FormRules = {
   definitionId: {
     required: true,
+    validator: (_rule, value) => isPositiveWfId(value),
     message: () => t('workflow.start.definitionRequired'),
     trigger: ['change', 'blur'],
   },

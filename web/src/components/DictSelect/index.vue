@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 字典下拉:typeCode 取数(经 stores/dict 缓存),其余一切(v-model:value/placeholder/
 // clearable/multiple/size…)经 $attrs 原样透传给 n-select,不重复声明。
-import { computed, ref, watch } from 'vue'
+import { computed, watch, shallowRef } from 'vue'
 import { NSelect } from 'naive-ui'
 import { useDictStore } from '@/stores/dict'
 
@@ -11,7 +11,7 @@ const props = defineProps<{ typeCode: string }>()
 const store = useDictStore()
 // typeCode 可变(级联场景)→ watch 而非一次性加载;loading 用本地 ref 而非「缓存是否存在」,
 // 否则请求失败(缓存永不写入)会无限转圈。失败停转圈留空,typeCode 变化/重挂载时自动重试。
-const loading = ref(false)
+const loading = shallowRef(false)
 watch(
   () => props.typeCode,
   async (code) => {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 可靠投递 = 状态筛选条(带计数)+ ProTable + 详情抽屉。状态语义分明:已受理待确认 ≠ 成功;待核对 = 结果未知且不能自动重发;
 // 重试耗尽、失败需要人工处理。支持 ?deliveryKey= / ?businessKey= 深链(业务页可直接跳到自己的投递)。
-import { computed, h, onActivated, ref } from 'vue'
+import { computed, h, onActivated, ref, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NBadge, NButton, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -19,8 +19,8 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const tableRef = ref<{ refresh: () => void } | null>(null)
-const drawerRef = ref<InstanceType<typeof DeliveryDrawer> | null>(null)
+const tableRef = useTemplateRef<{ refresh: () => void } | null>('tableRef')
+const drawerRef = useTemplateRef<InstanceType<typeof DeliveryDrawer> | null>('drawerRef')
 
 // ── 状态筛选条:计数来自服务端汇总(有权限才取),每次表格加载后(@loaded)刷新;点击即筛选 ──
 const statusOrder = [

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 登录日志 = 只读 ProTable:列驱动搜索(账号/结果)+ 分页;success 列显式红/绿 typeMap 保证「失败=红」。
 // 工具栏一枚「清空」(硬删,不可恢复)走 useConfirm 二次确认(对齐 simpleadmin 日志页)。
-import { ref } from 'vue'
+import { useTemplateRef } from 'vue'
 import { NButton, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
@@ -15,7 +15,7 @@ import type { SysLoginLog } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
-const tableRef = ref<ProTableInst<SysLoginLog>>()
+const tableRef = useTemplateRef<ProTableInst<SysLoginLog>>('tableRef')
 
 const columns: ProTableColumn<SysLoginLog>[] = [
   { key: 'account', title: () => t('log.account'), search: true },

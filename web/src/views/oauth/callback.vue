@@ -6,7 +6,7 @@
 //   ?totpChallenge=id (+ error=40018) SSO 后需 TOTP:带回登录页完成二次验证
 //   ?error=NNNNN       失败:按错误码提示,稍候回登录页
 // 公开路由(未登录也能到);令牌不进 URL,只带票据(见后端 ExternalAuthController)。
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { NSpin } from 'naive-ui'
@@ -23,8 +23,9 @@ const { t } = useI18n()
 const user = useUserStore()
 const auth = useAuthStore()
 
-const state = ref<'processing' | 'error'>('processing')
-const errorText = ref('')
+const state = shallowRef<'processing' | 'error'>('processing')
+const errorText = shallowRef('')
+let redirectTimer: number | undefined
 
 // 后端按 ErrorCode 数字码重定向;这里映射已知 oauth 码到 i18n(与后端 40013–40017 对齐)
 const OAUTH_ERROR_KEYS: Record<number, string> = {
@@ -38,8 +39,11 @@ const OAUTH_ERROR_KEYS: Record<number, string> = {
 function fail(text: string) {
   state.value = 'error'
   errorText.value = text
-  window.setTimeout(() => router.replace('/login'), 2600)
+  window.clearTimeout(redirectTimer)
+  redirectTimer = window.setTimeout(() => router.replace('/login'), 2600)
 }
+
+onBeforeUnmount(() => window.clearTimeout(redirectTimer))
 
 /**
  * 丢掉残留 SPA 会话。解绑后 SSO 会回 pendingLink/totpChallenge → /login;

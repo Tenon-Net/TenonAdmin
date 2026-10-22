@@ -2,7 +2,7 @@
 // 授权与数据范围抽屉:勾选应用可调用的开放端点(默认拒绝),并为端点声明的范围维度绑定取值。
 // 全量须显式勾选「全部数据」;未绑定的范围会让声明它的端点被拒(49003),页面提前提示。
 // 只有本应用的授权(及有权查看的范围)完整加载后才能保存:加载失败或别的应用迟到的响应绝不能当基线写回。
-import { computed, h, reactive, ref } from 'vue'
+import { computed, h, reactive, ref, shallowRef } from 'vue'
 import {
   NAlert, NButton, NCard, NDataTable, NDrawer, NDrawerContent, NEmpty, NInput, NRadio, NRadioGroup, NResult, NSelect,
   NSpace, NSpin, NSwitch, NTag, NTreeSelect, useMessage, type DataTableColumns, type TreeSelectOption,
@@ -22,20 +22,20 @@ const { t } = useI18n()
 const message = useMessage()
 const authStore = useAuthStore()
 
-const show = ref(false)
-const loading = ref(false)
-const saving = ref(false)
+const show = shallowRef(false)
+const loading = shallowRef(false)
+const saving = shallowRef(false)
 const app = ref<IntegrationAppRow | null>(null)
 const endpoints = ref<OpenApiEndpoint[]>([])
 const policies = ref<OpenApiScopePolicy[]>([])
 const checked = ref<string[]>([])
 const stale = ref<string[]>([])
-const keyword = ref('')
+const keyword = shallowRef('')
 /** 完整加载成功的应用;与当前应用不符(加载中、失败、换了应用)一律不许保存。 */
-const loadedAppId = ref<number | string | null>(null)
+const loadedAppId = shallowRef<number | string | null>(null)
 /** 本次加载是否带上了数据范围(没有查看权限就不取,也就不能写回)。 */
-const scopesLoaded = ref(false)
-const loadError = ref<string | null>(null)
+const scopesLoaded = shallowRef(false)
+const loadError = shallowRef<string | null>(null)
 
 interface ScopeState {
   bound: boolean

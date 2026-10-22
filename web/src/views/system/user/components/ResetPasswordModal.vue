@@ -2,7 +2,7 @@
 // 重置密码弹层 + 初始密码结果只读弹层 —— 从 user/index.vue 抽出。
 // 结果弹层被两条路径共用:重置密码后展示新口令,以及新建用户留空口令时展示系统随机口令(父页经 showResult 转交)。
 // 语义相同:明文只此一次,管理员当场转达。
-import { reactive, ref } from 'vue'
+import { reactive, ref, shallowRef } from 'vue'
 import { NButton, NInput, NForm, NFormItem, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import FormContainer from '@/components/FormContainer/index.vue'
@@ -13,13 +13,13 @@ import type { UserItem } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 
-const showReset = ref(false)
+const showReset = shallowRef(false)
 const resetTarget = ref<UserItem | null>(null)
 const resetForm = reactive({ newPassword: '' })
-const showResetResult = ref(false)
-const resetResult = ref('')
+const showResetResult = shallowRef(false)
+const resetResult = shallowRef('')
 /** 结果弹层是"建号后"还是"重置后"打开的,只影响标题文案。 */
-const resultFromCreate = ref(false)
+const resultFromCreate = shallowRef(false)
 
 function openReset(r: UserItem) {
   resetTarget.value = r

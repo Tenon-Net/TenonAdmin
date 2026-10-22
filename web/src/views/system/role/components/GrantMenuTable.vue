@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, shallowRef, watch } from 'vue'
 import { NButton, NCheckbox, NInput, NSelect } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
@@ -22,8 +22,8 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'update:checked', ids: ApiId[]): void }>()
 
 const { t } = useI18n()
-const search = ref('')
-const moduleId = ref(props.defaultModuleId)
+const search = shallowRef('')
+const moduleId = shallowRef(props.defaultModuleId)
 watch(() => props.defaultModuleId, (v) => { moduleId.value = v })
 
 const moduleOptions = computed(() => [

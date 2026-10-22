@@ -1,7 +1,9 @@
 # ApiSelect
 
 通用远程分页下拉,其余远程选择器(UserSelect…)的基座。封 `n-select`,负责:初次加载、远程搜索(防抖)、loading、竞态守卫(只认最新一次)、选项归一。
-`inheritAttrs:false` + `v-bind="$attrs"`:`v-model:value`、`multiple`、`placeholder`、`size`、`disabled` 等一切透传给 `n-select`。错误静默留空,不打断主流程(错误处理留视图层)。
+`inheritAttrs:false` + `v-bind="$attrs"`:`v-model:value`、`multiple`、`placeholder`、`size`、`disabled` 等透传给 `n-select`。加载失败时显示错误与重试入口，并通过 `error` 事件提供原始异常；不弹全局提示。新筛选失败时清空旧选项，避免选到不属于当前筛选的值。
+
+搜索输入或 `reloadOn` 变化会立即废弃旧响应；筛选重载会取消未执行的搜索防抖。KeepAlive 停用时停止防抖并废弃在途响应，恢复后仅对已发起过加载的实例刷新。
 
 ## Props
 

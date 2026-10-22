@@ -3,7 +3,7 @@
  * 流程监控。菜单 component 填 `workflow/monitor/index`。
  * 参与筛选是业务过滤,不是数据权限;行点击进同一详情。
  */
-import { computed, h, ref } from 'vue'
+import { computed, h, ref, shallowRef, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NForm, NFormItem, NInput, NModal, NSelect, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -21,7 +21,7 @@ const { t } = useI18n()
 const router = useRouter()
 const message = useMessage()
 const authStore = useAuthStore()
-const tableRef = ref<ProTableInst<WfInstanceListItem>>()
+const tableRef = useTemplateRef<ProTableInst<WfInstanceListItem>>('tableRef')
 
 type AdminKind = 'transfer' | 'terminate' | 'skip'
 const adminPerm: Record<AdminKind, string> = {
@@ -29,15 +29,15 @@ const adminPerm: Record<AdminKind, string> = {
   terminate: 'POST:/api/v1/workflow/instance/terminate',
   skip: 'POST:/api/v1/workflow/instance/skip',
 }
-const showAdmin = ref(false)
-const adminKind = ref<AdminKind>('terminate')
+const showAdmin = shallowRef(false)
+const adminKind = shallowRef<AdminKind>('terminate')
 const adminRow = ref<WfInstanceListItem | null>(null)
-const reason = ref('')
-const toUserId = ref<WfId | null>(null)
-const nodeId = ref<string | null>(null)
+const reason = shallowRef('')
+const toUserId = shallowRef<WfId | null>(null)
+const nodeId = shallowRef<string | null>(null)
 const activeNodes = ref<{ id: string; name: string }[]>([])
-const nodesLoading = ref(false)
-const submitting = ref(false)
+const nodesLoading = shallowRef(false)
+const submitting = shallowRef(false)
 let nodeSeq = 0
 const modalTitle = computed(() => t(`workflow.monitor.${adminKind.value === 'transfer' ? 'forceTransfer' : adminKind.value}`))
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, watch, shallowRef, useTemplateRef } from 'vue'
 import { RouterView } from 'vue-router'
 import { NWatermark, NDrawer, NDrawerContent, NButton } from 'naive-ui'
 import AppIcon from '@/components/AppIcon.vue'
@@ -33,7 +33,7 @@ onMounted(startRealtime)
 onUnmounted(stopRealtime)
 
 const isMobile = useBreakpoints(breakpointsTailwind).smaller('md')
-const mobileOpen = ref(false)
+const mobileOpen = shallowRef(false)
 
 // 窄屏忽略 layoutMode,统一走 mobile(单列 + 抽屉侧栏)。
 const mode = computed<LayoutMode | 'mobile'>(() => (isMobile.value ? 'mobile' : app.layoutMode))
@@ -96,7 +96,7 @@ const transitionName = computed(() =>
 )
 
 // .page 是各路由共享的滚动容器：按 path 保存缓存页位置，刷新当前标签时归零，关闭标签即清理。
-const pageRef = ref<HTMLElement>()
+const pageRef = useTemplateRef<HTMLElement>('pageRef')
 const scrollMemory = createPageScrollMemory()
 let displayedPageKey = activeKey.value
 function restorePageScroll(key: string) {
@@ -137,7 +137,7 @@ function onMobileSelect(key: string) {
 
 // 刷新标签:store 置目标 route name 到 excludeName；缓存与滚动都按该目标逐出。
 // 只有刷新当前标签才需 v-if 关开重挂，右键刷新后台标签不得扰动当前页。
-const rvShow = ref(true)
+const rvShow = shallowRef(true)
 watch(
   () => tabs.reloadKey,
   async () => {

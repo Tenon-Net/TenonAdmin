@@ -1,20 +1,19 @@
 <script setup lang="ts">
 // 四步导入向导(excel-ledger §9 G6):①上传 ②列映射 ③预览改错(裸 n-data-table)④结果。
 // API 由父级注入(用户导入走 userApi 六方法),组件对资源无感知,可复用到其他档案。
-import { computed, h, ref, watch } from 'vue'
+import { computed, ref, watch, shallowRef } from 'vue'
 import {
   NModal, NSteps, NStep, NUpload, NUploadDragger, NText, NButton, NSpace, NSelect,
-  NDataTable, NInput, NSwitch, NRadioGroup, NRadio, NAlert, NTooltip, NTag, useMessage,
-  type DataTableColumns, type UploadFileInfo,
+  NSwitch, NRadioGroup, NRadio, NAlert, useMessage,
+  type UploadFileInfo,
 } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
-import DictSelect from '@/components/DictSelect/index.vue'
+import ImportPreviewTable from './ImportPreviewTable.vue'
 import { translateError } from '@/utils/error'
 import { triggerBlobDownload } from '@/utils/download'
-import { hardErrorsOf as hardErrors, isDuplicateOnly, isHardError } from '@/utils/importDup'
+import { hardErrorsOf as hardErrors, isDuplicateOnly } from '@/utils/importDup'
 import type {
-  CellError,
   DuplicateStrategy as DupStrategyNum,
   ImportColumn,
   ImportCommitResult,
@@ -50,8 +49,8 @@ const { t } = useI18n()
 const message = useMessage()
 
 // ── 状态 ──
-const step = ref(1) // n-steps 1-based
-const loading = ref(false)
+const step = shallowRef(1) // n-steps 1-based
+const loading = shallowRef(false)
 const file = ref<File | null>(null)
 const fileList = ref<UploadFileInfo[]>([])
 const headers = ref<string[]>([])
@@ -60,12 +59,11 @@ const mapping = ref<Record<string, string>>({})
 const columns = ref<ImportColumn[]>([])
 const rows = ref<ImportRow[]>([])
 const columnErrors = ref<ImportPreview['columnErrors']>([])
-const onlyErrors = ref(false)
-const strategy = ref<DupStrategyNum>(DuplicateStrategy.Skip)
+const onlyErrors = shallowRef(false)
+const strategy = shallowRef<DupStrategyNum>(DuplicateStrategy.Skip)
 const commitResult = ref<ImportCommitResult | null>(null)
 
 // 「已存在」按策略呈现的判定见 utils/importDup(那里也记着与后端的镜像关系)
-const isHard = (e: CellError) => isHardError(e, strategy.value)
 const hardErrorsOf = (r: ImportRow) => hardErrors(r, strategy.value)
 /** 需要用户动手改的行数(不含「已存在」——那些按策略自动处理)。 */
 const errorRows = computed(() => rows.value.filter((r) => hardErrorsOf(r).length > 0).length)
@@ -106,6 +104,7 @@ function applyPreview(p: ImportPreview) {
 }
 
 async function onDownloadTemplate() {
+  if (loading.value) return
   loading.value = true
   try {
     const blob = await props.api.downloadTemplate()
@@ -118,6 +117,7 @@ async function onDownloadTemplate() {
 }
 
 function onFileChange(list: UploadFileInfo[]) {
+  if (loading.value) return
   // 只保留最后选中的一个 xlsx
   fileList.value = list.slice(-1)
   const f = list[list.length - 1]?.file
@@ -125,12 +125,14 @@ function onFileChange(list: UploadFileInfo[]) {
 }
 
 function onFileRemove() {
+  if (loading.value) return
   fileList.value = []
   file.value = null
 }
 
 /** ①→②:带文件预览(mapping 空 = 服务端自动匹配) */
 async function goMapping() {
+  if (loading.value) return
   if (!file.value) {
     message.warning(t('import.needFile'))
     return
@@ -153,6 +155,7 @@ async function goMapping() {
 
 /** ②→③:按用户调整后的映射重新预览 */
 async function goPreview() {
+  if (loading.value) return
   if (!file.value) return
   // 去掉「不映射」空串,只传有效映射
   const map: Record<string, string> = {}
@@ -179,121 +182,16 @@ const targetColumnOptions = computed(() => [
   })),
 ])
 
-function cellError(row: ImportRow, key: string) {
-  return row.errors.find((e) => e.columnKey === key)
-}
-
-function setCell(row: ImportRow, key: string, value: string | null) {
+function setCell(index: number, key: string, value: string | null) {
+  if (loading.value) return
+  const row = rows.value.find((candidate) => candidate.index === index)
+  if (!row) return
   row.cells[key] = value
-  // 就地改后清该列旧错误,等重验;否则红底会误导
-  row.errors = row.errors.filter((e) => e.columnKey !== key)
+  row.errors = row.errors.filter((error) => error.columnKey !== key)
 }
-
-const displayRows = computed(() =>
-  onlyErrors.value ? rows.value.filter((r) => hardErrorsOf(r).length > 0) : rows.value,
-)
-
-const previewColumns = computed<DataTableColumns<ImportRow>>(() => {
-  const cols: DataTableColumns<ImportRow> = [
-    {
-      title: '#',
-      key: '_index',
-      width: 56,
-      fixed: 'left',
-      render: (r) => r.index,
-    },
-  ]
-  for (const col of columns.value) {
-    cols.push({
-      title: () => (col.required ? `${col.title} *` : col.title),
-      key: col.key,
-      minWidth: 120,
-      ellipsis: { tooltip: false },
-      render: (row) => {
-        const err = cellError(row, col.key)
-        // 「已存在」在跳过/覆盖策略下不算错:走警示底色,输入框也不置 error 态
-        const soft = err !== undefined && !isHard(err)
-        const val = row.cells[col.key] ?? null
-        const editor = col.dictTypeCode
-          ? h(DictSelect, {
-              typeCode: col.dictTypeCode,
-              value: val,
-              clearable: !col.required,
-              size: 'small',
-              // 弹层不跟随触发器宽度:向导的列很窄(minWidth 120,实测触发器约 66px),
-              // 跟随会把「启用」「停用」截成「启..」「停..」。普通表单里下拉够宽,
-              // 跟随反而更整齐 —— 所以只在向导关掉,不动共用的 DictSelect。
-              consistentMenuWidth: false,
-              style: { width: '100%' },
-              status: err && !soft ? 'error' : undefined,
-              'onUpdate:value': (v: string | null) => setCell(row, col.key, v),
-            })
-          : h(NInput, {
-              value: val ?? '',
-              size: 'small',
-              status: err && !soft ? 'error' : undefined,
-              onUpdateValue: (v: string) => setCell(row, col.key, v),
-            })
-        const cell = h(
-          'div',
-          {
-            class: !err
-              ? 'import-cell'
-              : soft
-                ? 'import-cell import-cell--dup'
-                : 'import-cell import-cell--error',
-          },
-          [editor],
-        )
-        if (!err) return cell
-        return h(
-          NTooltip,
-          { trigger: 'hover' },
-          {
-            trigger: () => cell,
-            default: () => (soft ? t(`import.dupHint.${strategy.value}`) : translateError(err.code)),
-          },
-        )
-      },
-    })
-  }
-  cols.push({
-    title: () => t('import.errors'),
-    key: '_errors',
-    width: 160,
-    fixed: 'right',
-    render: (r) => {
-      if (r.errors.length === 0) return h(NTag, { size: 'small', type: 'success', bordered: false }, () => t('import.ok'))
-      const hard = hardErrorsOf(r)
-      // 只剩「已存在」:不是要用户改的错,给警示标签 +「将按策略处理」而非红色错误数
-      if (hard.length === 0) {
-        return h(
-          NTooltip,
-          { trigger: 'hover' },
-          {
-            trigger: () =>
-              h(NTag, { size: 'small', type: 'warning', bordered: false }, () => t('import.dupTag')),
-            default: () => t(`import.dupHint.${strategy.value}`),
-          },
-        )
-      }
-      return h(
-        NTooltip,
-        { trigger: 'hover' },
-        {
-          trigger: () =>
-            h(NTag, { size: 'small', type: 'error', bordered: false }, () =>
-              t('import.errorCount', { n: hard.length }),
-            ),
-          default: () => hard.map((e) => `${e.columnKey}: ${translateError(e.code)}`).join('\n'),
-        },
-      )
-    },
-  })
-  return cols
-})
 
 async function revalidate() {
+  if (loading.value) return
   // 变异判据:请求必须带 rows;空数组也是明确失败路径(服务端会返回 0 行)
   loading.value = true
   try {
@@ -315,6 +213,7 @@ async function revalidate() {
 }
 
 async function doCommit() {
+  if (loading.value) return
   loading.value = true
   try {
     const result = await props.api.commit(rows.value, strategy.value)
@@ -330,6 +229,7 @@ async function doCommit() {
 
 /** ④ 失败行接回 ③ 继续改 */
 function backToEditFailures() {
+  if (loading.value) return
   if (!commitResult.value) return
   rows.value = commitResult.value.failures.map((r) => ({
     index: r.index,
@@ -342,6 +242,7 @@ function backToEditFailures() {
 }
 
 async function downloadErrorReport() {
+  if (loading.value) return
   const source =
     step.value === 4 && commitResult.value
       ? commitResult.value.failures
@@ -395,6 +296,7 @@ function close() {
           :max="1"
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           :default-upload="false"
+          :disabled="loading"
           @update:file-list="onFileChange"
           @remove="onFileRemove"
         >
@@ -428,6 +330,7 @@ function close() {
           <span class="import-mapping-header" :title="hdr">{{ hdr }}</span>
           <n-select
             v-model:value="mapping[hdr]"
+            :disabled="loading"
             :options="targetColumnOptions"
             :consistent-menu-width="false"
             size="small"
@@ -458,19 +361,17 @@ function close() {
           </n-button>
         </n-space>
       </n-space>
-      <n-data-table
-        size="small"
-        :columns="previewColumns"
-        :data="displayRows"
-        :row-key="(r: ImportRow) => r.index"
-        :max-height="420"
-        :scroll-x="Math.max(800, columns.length * 140 + 220)"
-        :bordered="true"
-        :single-line="false"
+      <ImportPreviewTable
+        :columns="columns"
+        :rows="rows"
+        :strategy="strategy"
+        :only-errors="onlyErrors"
+        :busy="loading"
+        @edit="setCell"
       />
       <div class="import-strategy">
         <n-text strong style="margin-right: 12px">{{ t('import.strategy') }}</n-text>
-        <n-radio-group v-model:value="strategy" name="dup-strategy">
+        <n-radio-group v-model:value="strategy" :disabled="loading" name="dup-strategy">
           <n-space>
             <n-radio :value="DuplicateStrategy.Skip">{{ t('import.strategySkip') }}</n-radio>
             <n-radio :value="DuplicateStrategy.Overwrite">{{ t('import.strategyOverwrite') }}</n-radio>
@@ -497,6 +398,7 @@ function close() {
         <n-button
           v-if="commitResult && commitResult.failed > 0"
           type="warning"
+          :disabled="loading"
           @click="backToEditFailures"
         >
           {{ t('import.editFailures') }}
@@ -602,18 +504,5 @@ function close() {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-}
-:deep(.import-cell) {
-  padding: 2px;
-  border-radius: 4px;
-}
-:deep(.import-cell--error) {
-  /* 用仓库自己的语义令牌(亮/暗都有定义)。别写 --n-error-color:那是 naive 组件内部的变量,
-     在这层普通 div 上未定义,整条 color-mix() 会被判无效丢弃 —— 红底静默不渲染,而 tsc/lint/build 全绿。 */
-  background: var(--color-danger-bg);
-}
-:deep(.import-cell--dup) {
-  /* 「库里已存在」在跳过/覆盖策略下会被正常处理,用警示色而非错误红——同上,只用语义令牌 */
-  background: var(--color-warning-bg);
 }
 </style>

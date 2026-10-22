@@ -13,6 +13,8 @@ vi.mock('@/router', () => ({
 }))
 
 import { useTabsStore } from './tabs'
+import { useAuthStore } from './auth'
+import { router } from '@/router'
 
 // addTab 只读这几个字段,给个精简的路由替身即可。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -64,5 +66,21 @@ describe('useTabsStore 固定标签(pin)', () => {
     tabs.togglePin('/b')
     tabs.removeTab('/b')
     expect(tabs.tabs.some((t) => t.path === '/b')).toBe(false)
+  })
+})
+
+describe('useTabsStore 关闭当前标签', () => {
+  it('关闭新会话唯一深链标签后回当前应用首页', () => {
+    const auth = useAuthStore()
+    auth.modules = [{ id: 1, code: 'x', title: 'X', sort: 0, defaultRoute: '/workbench' }]
+    auth.currentModuleId = 1
+    const tabs = useTabsStore()
+    tabs.addTab(routeLike('/system/user/5/detail', 'detail-system-user'))
+    router.currentRoute.value.path = '/system/user/5/detail'
+
+    tabs.removeTab('/system/user/5/detail')
+
+    expect(router.push).toHaveBeenCalledWith('/workbench')
+    expect(tabs.tabs).toEqual([])
   })
 })

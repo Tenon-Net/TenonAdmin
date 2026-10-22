@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, shallowRef, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { NCard, NForm, NFormItem, NInput, NButton, NAlert, useMessage, type FormInst, type FormRules } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -18,8 +18,8 @@ const user = useUserStore()
 const auth = useAuthStore()
 
 const model = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
-const saving = ref(false)
-const formRef = ref<FormInst | null>(null)
+const saving = shallowRef(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
 
 // 校验落在表单项上(全站一致),不再用 toast —— toast 飘在角落、不指向出错的那一栏,且会被后续消息挤掉。
 // ponytail: 密码复杂度不进 rules。PasswordStrength 已在输入时逐条实时显示策略清单,后端也强制(弱口令返 passwordTooWeak),

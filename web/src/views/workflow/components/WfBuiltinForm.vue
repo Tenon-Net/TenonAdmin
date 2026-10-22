@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch, shallowRef } from 'vue'
 import {
   NButton,
   NDatePicker,
@@ -32,15 +32,14 @@ import {
 
 const props = defineProps<{
   schema: WfFormSchema
-  modelValue: WfFormValues
   mode: 'start' | 'approve' | 'view'
   permissions?: WfFormFieldPerm[] | null
 }>()
-const emit = defineEmits<{ 'update:modelValue': [value: WfFormValues] }>()
+const modelValue = defineModel<WfFormValues>({ required: true })
 
 const { t } = useI18n()
 const message = useMessage()
-const values = reactive<WfFormValues>({ ...props.modelValue })
+const values = reactive<WfFormValues>({ ...modelValue.value })
 const issues = ref<WfFormValueIssue[]>([])
 const visibleFields = computed(() => props.schema.fields.filter((field) => !isHidden(field)))
 
@@ -48,11 +47,11 @@ const visibleFields = computed(() => props.schema.fields.filter((field) => !isHi
 const attachmentMeta = reactive<Record<string, { name?: string; viewUrl?: string }>>({})
 const attachmentBusy = ref<Record<string, 'preview' | 'download'>>({})
 const attachmentErrors = ref<Record<string, string>>({})
-const previewShow = ref(false)
-const previewTitle = ref('')
-const previewUrl = ref('')
-const previewKind = ref<'image' | 'pdf' | null>(null)
-const previewId = ref<string | null>(null)
+const previewShow = shallowRef(false)
+const previewTitle = shallowRef('')
+const previewUrl = shallowRef('')
+const previewKind = shallowRef<'image' | 'pdf' | null>(null)
+const previewId = shallowRef<string | null>(null)
 let previewObjectUrl: string | null = null
 
 const PREVIEW_BY_EXT: Record<string, 'image' | 'pdf'> = {
@@ -68,7 +67,7 @@ const PREVIEW_BY_MIME: Record<string, 'image' | 'pdf'> = {
 }
 
 watch(
-  () => props.modelValue,
+  () => modelValue.value,
   (next) => {
     const incoming = { ...next }
     for (const key of Object.keys(values)) {
@@ -86,7 +85,7 @@ function updateValue(field: WfFormField, value: unknown) {
   // 金额/数字不再被控件静默夹到最小值;越界立刻标出,而不是等提交。
   if (field.type === 'number' || field.type === 'money') revalidateField(field, next)
   else issues.value = issues.value.filter((issue) => issue.key !== field.key)
-  emit('update:modelValue', next)
+  modelValue.value = next
 }
 
 function revalidateField(field: WfFormField, snapshot: WfFormValues) {

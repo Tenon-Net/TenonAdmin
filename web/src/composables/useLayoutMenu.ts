@@ -1,4 +1,4 @@
-import { computed, h, ref, watch } from 'vue'
+import { computed, h, watch, shallowRef } from 'vue'
 import type { MenuOption } from 'naive-ui'
 import AppIcon from '@/components/AppIcon.vue'
 import { createSharedComposable } from '@vueuse/core'
@@ -75,7 +75,7 @@ function useLayoutMenuImpl() {
   )
 
   const activeKey = computed(() => router.currentRoute.value.path)
-  const selectedL1 = ref<string>()
+  const selectedL1 = shallowRef<string>()
 
   function findActiveL1(path: string): string | undefined {
     const top = menuOptions.value.find((o) => containsKey(o, path))

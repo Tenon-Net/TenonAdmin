@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, reactive, ref } from 'vue'
+import { h, reactive, shallowRef, useTemplateRef } from 'vue'
 import { NButton, NDatePicker, NEmpty, NForm, NFormItem, NModal, NSpace, NSwitch, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
@@ -16,10 +16,10 @@ const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
 const authStore = useAuthStore()
-const tableRef = ref<ProTableInst<WfDelegationRule>>()
-const modalOpen = ref(false)
-const editingId = ref<WfId | null>(null)
-const submitting = ref(false)
+const tableRef = useTemplateRef<ProTableInst<WfDelegationRule>>('tableRef')
+const modalOpen = shallowRef(false)
+const editingId = shallowRef<WfId | null>(null)
+const submitting = shallowRef(false)
 const requestKey = useRequestKey()
 const deleteRequestKeys = new Map<string, string>()
 const form = reactive({

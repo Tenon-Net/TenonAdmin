@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, provide, ref, type InjectionKey } from 'vue'
+import { computed, inject, provide, type InjectionKey, shallowRef } from 'vue'
 import { NCollapse, NCollapseItem, NDynamicTags, NInput, NInputNumber, NSelect } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import type { WfConditionExpr, WfConditionLogic, WfConditionOp } from '@/workflow/schema'
@@ -15,22 +15,17 @@ import {
   setConditionOp,
 } from '@/workflow/configuration'
 
-const props = defineProps<{
-  modelValue: WfConditionExpr
-}>()
-const emit = defineEmits<{
-  'update:modelValue': [WfConditionExpr]
-}>()
+const modelValue = defineModel<WfConditionExpr>({ required: true })
 
 const { t } = useI18n()
 
 const conditionDepthKey: InjectionKey<number> = Symbol.for('wf-condition-depth')
 const depth = inject(conditionDepthKey, 0)
 provide(conditionDepthKey, depth + 1)
-const expandedChild = ref<string | number | null>(depth === 0 ? 'child-0' : null)
+const expandedChild = shallowRef<string | number | null>(depth === 0 ? 'child-0' : null)
 
-const isGroup = computed(() => props.modelValue.children != null)
-const currentOp = computed<WfConditionOp>(() => props.modelValue.op ?? 'eq')
+const isGroup = computed(() => modelValue.value.children != null)
+const currentOp = computed<WfConditionOp>(() => modelValue.value.op ?? 'eq')
 const valueKind = computed(() => classifyConditionOp(currentOp.value))
 const logicOptions = computed(() => (['and', 'or'] as WfConditionLogic[]).map((value) => ({
   label: t(`workflow.condition.logic.${value}`),
@@ -48,40 +43,40 @@ function childSummary(child: WfConditionExpr) {
 
 function updateLogic(value: string | number | null) {
   if (value !== 'and' && value !== 'or') return
-  emit('update:modelValue', { ...props.modelValue, logic: value })
+  modelValue.value = { ...modelValue.value, logic: value }
 }
 
 function addLeaf() {
-  const result = appendConditionChild(props.modelValue, createConditionLeaf())
-  if (result) emit('update:modelValue', result)
+  const result = appendConditionChild(modelValue.value, createConditionLeaf())
+  if (result) modelValue.value = result
 }
 
 function addGroup() {
-  const result = appendConditionChild(props.modelValue, createConditionGroup())
-  if (result) emit('update:modelValue', result)
+  const result = appendConditionChild(modelValue.value, createConditionGroup())
+  if (result) modelValue.value = result
 }
 
 function updateChild(index: number, child: WfConditionExpr) {
-  const result = replaceConditionChild(props.modelValue, index, child)
-  if (result) emit('update:modelValue', result)
+  const result = replaceConditionChild(modelValue.value, index, child)
+  if (result) modelValue.value = result
 }
 
 function removeChild(index: number) {
-  const result = removeConditionChild(props.modelValue, index)
-  if (result) emit('update:modelValue', result)
+  const result = removeConditionChild(modelValue.value, index)
+  if (result) modelValue.value = result
 }
 
 function updateField(field: string) {
-  emit('update:modelValue', { ...props.modelValue, field })
+  modelValue.value = { ...modelValue.value, field }
 }
 
 function updateOp(value: string | number | null) {
   if (!isWfConditionOp(value)) return
-  emit('update:modelValue', setConditionOp(props.modelValue, value))
+  modelValue.value = setConditionOp(modelValue.value, value)
 }
 
 function updateValue(value: unknown) {
-  emit('update:modelValue', { ...props.modelValue, value })
+  modelValue.value = { ...modelValue.value, value }
 }
 </script>
 

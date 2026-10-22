@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, ref } from 'vue'
+import { computed, h, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NAvatar,
@@ -52,8 +52,8 @@ const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
 const { menuOptions, l1Options, l2Options, activeKey, selectedL1, onSelect, onSelectL1 } = useLayoutMenu()
 const flat = useMenuFlat()
 
-const settingsOpen = ref(false)
-const searchOpen = ref(false)
+const settingsOpen = shallowRef(false)
+const searchOpen = shallowRef(false)
 
 const title = computed(() => {
   const m = route.meta.title as string | undefined

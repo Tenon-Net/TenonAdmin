@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 在线会话 = 只读 ProTable + 行内「强制下线」。无表单。踢人走 useConfirm 二次确认(warning),
 // 踢自己的会话置灰(防误踢自己下线)。后端仅按 UserId 过滤,故不设业务搜索列。
-import { h, ref } from 'vue'
+import { h, useTemplateRef } from 'vue'
 import { NButton, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
@@ -18,7 +18,7 @@ const message = useMessage()
 const { confirm } = useConfirm()
 const authStore = useAuthStore()
 const userStore = useUserStore()
-const tableRef = ref<ProTableInst<OnlineSessionItem>>()
+const tableRef = useTemplateRef<ProTableInst<OnlineSessionItem>>('tableRef')
 
 function kick(r: OnlineSessionItem) {
   confirm({

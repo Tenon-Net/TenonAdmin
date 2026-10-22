@@ -8,11 +8,10 @@ import 'md-editor-v3/lib/style.css'
 import { useAppStore } from '@/stores/app'
 import { fileApi } from '@/api'
 
-const props = defineProps<{ value?: string | null }>()
-const emit = defineEmits<{ 'update:value': [v: string] }>()
+const value = defineModel<string | null>('value')
 const app = useAppStore()
 
-const text = computed({ get: () => props.value ?? '', set: (v) => emit('update:value', v) })
+const text = computed({ get: () => value.value ?? '', set: (v: string) => { value.value = v } })
 const theme = computed(() => (app.isDark ? 'dark' : 'light'))
 
 // 图片插的是后端签发的**签名直链**(viewUrl),不是 storagePath —— 后端默认不静态托管上传目录

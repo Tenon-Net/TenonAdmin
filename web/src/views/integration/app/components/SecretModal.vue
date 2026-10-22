@@ -3,7 +3,7 @@
 // 关闭即清空;不写 Pinia / localStorage / sessionStorage,不打任何日志。
 // 既没复制、也没点「我已妥善保存」就要关(Esc / 关闭钮 / 取消)或离开本页时先二次确认,免得凭据就此丢失;
 // 离开本页在导航之前就问:拒绝则留在本页,确认则丢弃凭据再走,弹窗不会残留到下一页。
-import { ref, watch } from 'vue'
+import { watch, shallowRef } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { NAlert, NButton, NInput, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -15,8 +15,8 @@ const { t } = useI18n()
 const message = useMessage()
 const { ask } = useConfirm()
 
-const show = ref(false)
-const apiKey = ref('')
+const show = shallowRef(false)
+const apiKey = shallowRef('')
 let settled = false
 let asking = false
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 接入应用管理 = ProTable(列表/搜索/分页)+ AppFormModal(新增/编辑)+ CredentialDrawer(凭据生命周期)
 // + GrantDrawer(开放端点授权与数据范围)。启停走专用接口:停用即令该应用全部凭据立即失效。
-import { h, ref } from 'vue'
+import { h, shallowRef, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NDropdown, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -24,13 +24,13 @@ const message = useMessage()
 const router = useRouter()
 const { confirm } = useConfirm()
 const authStore = useAuthStore()
-const tableRef = ref<ProTableInst<IntegrationAppRow>>()
-const formRef = ref<InstanceType<typeof AppFormModal> | null>(null)
-const credentialRef = ref<InstanceType<typeof CredentialDrawer> | null>(null)
-const grantRef = ref<InstanceType<typeof GrantDrawer> | null>(null)
+const tableRef = useTemplateRef<ProTableInst<IntegrationAppRow>>('tableRef')
+const formRef = useTemplateRef<InstanceType<typeof AppFormModal> | null>('formRef')
+const credentialRef = useTemplateRef<InstanceType<typeof CredentialDrawer> | null>('credentialRef')
+const grantRef = useTemplateRef<InstanceType<typeof GrantDrawer> | null>('grantRef')
 const refresh = () => tableRef.value?.refresh()
 
-const downloading = ref(false)
+const downloading = shallowRef(false)
 async function downloadDoc() {
   downloading.value = true
   try {

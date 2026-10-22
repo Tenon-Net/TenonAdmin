@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 安全策略 = 结构化表单范式(同 SysBaseConfig):字段绑定固定 config key(GroupCode='security')。
 // 后端经 ISecurityPolicyProvider 读这些键强制执行(登录锁定/密码复杂度/会话令牌时长),改值即时生效、无需重发。
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, shallowRef } from 'vue'
 import { NForm, NFormItemGi, NGrid, NInputNumber, NSwitch, NSelect, NDivider, NButton, NSpin, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
@@ -49,12 +49,12 @@ const RATELIMIT_KEY = 'sys.security.rateLimit.enabled'
 
 const nums = reactive<Record<string, number>>({})
 const bools = reactive<Record<string, boolean>>({})
-const captchaType = ref('char')
+const captchaType = shallowRef('char')
 const captchaTypeOptions = computed(() =>
   ['char', 'path', 'math'].map((v) => ({ label: t('config.security.captcha.types.' + v), value: v })),
 )
-const loading = ref(true)
-const saving = ref(false)
+const loading = shallowRef(true)
+const saving = shallowRef(false)
 
 // 'sys.security.loginLock.maxFailCount' → t('config.security.loginLock.maxFailCount')
 const label = (key: string) => t('config.security.' + key.replace('sys.security.', ''))

@@ -4,7 +4,7 @@
 // 终止是跨节点写旗标,目标节点最迟 KillPollSeconds 后停——所以文案说"已请求终止"而非"已终止"。
 // 详情抽屉里带同 fireInstanceId 的各次尝试列表:走后端的 fireInstanceId 查询参数直取,
 // 不按 jobId 拉一页再前端过滤——翻到老触发时那一页里根本没有它的兄弟行,列表会静默缺项。
-import { computed, h, ref, watch } from 'vue'
+import { computed, h, ref, watch, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NTag, NSelect, NDataTable, NDrawer, NDrawerContent, NDescriptions, NDescriptionsItem,
   useMessage, type DataTableColumns,
@@ -26,7 +26,7 @@ const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
 const authStore = useAuthStore()
-const tableRef = ref<ProTableInst<SysJobLog>>()
+const tableRef = useTemplateRef<ProTableInst<SysJobLog>>('tableRef')
 
 // 任务下拉(筛选用):拉一页足量。ponytail: 200 覆盖绝大多数系统,真超再上远程搜索
 const jobOptions = ref<{ label: string; value: ApiId }[]>([])
@@ -125,10 +125,10 @@ watch(
 )
 
 // ── 详情抽屉(行数据直填 + 同 fireInstanceId 的各次尝试) ──
-const showDetail = ref(false)
+const showDetail = shallowRef(false)
 const detailRow = ref<SysJobLog | null>(null)
 const attempts = ref<SysJobLog[]>([])
-const attemptsLoading = ref(false)
+const attemptsLoading = shallowRef(false)
 
 const runStatusTagType = {
   [JobRunStatus.Running]: 'info',
@@ -187,8 +187,8 @@ function killRun(r: SysJobLog) {
 }
 
 // ── 清空(弹窗选 beforeDays;0 = 全部) ──
-const clearShow = ref(false)
-const clearBeforeDays = ref(0)
+const clearShow = shallowRef(false)
+const clearBeforeDays = shallowRef(0)
 // computed:切语言时选项文案即时生效
 const clearOptions = computed(() => [
   { label: t('job.log.clearAll'), value: 0 },

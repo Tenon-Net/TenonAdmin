@@ -6,11 +6,12 @@ import StartPage from './index.vue'
 
 const startable = vi.hoisted(() => vi.fn().mockResolvedValue([]))
 const startableDetail = vi.hoisted(() => vi.fn())
+const start = vi.hoisted(() => vi.fn().mockResolvedValue({ instanceId: 10 }))
 const definitionOptions = vi.hoisted(() => ({ current: [] as Array<{ label: string; value: number | string }> }))
 const routeState = vi.hoisted(() => ({ query: {} as { definitionId?: string } }))
 
 vi.mock('@/api/workflow', () => ({
-  wfInstanceApi: { startable, startableDetail, start: vi.fn() },
+  wfInstanceApi: { startable, startableDetail, start },
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => routeState,
@@ -27,6 +28,10 @@ vi.mock('naive-ui', async (importOriginal) => ({
       return h('div', [
         h('button', { 'data-testid': 'definition-1', onClick: () => emit('update:value', 1) }, 'one'),
         h('button', { 'data-testid': 'definition-2', onClick: () => emit('update:value', 2) }, 'two'),
+        h('button', {
+          'data-testid': 'definition-large',
+          onClick: () => emit('update:value', '9007199254740993'),
+        }, 'large'),
       ])
     },
   }),
@@ -45,6 +50,7 @@ afterEach(() => {
   app?.unmount()
   app = undefined
   startableDetail.mockReset()
+  start.mockClear()
   definitionOptions.current = []
   routeState.query = {}
   document.body.replaceChildren()
@@ -118,5 +124,29 @@ describe('workflow start definition loading', () => {
     app.mount(host)
 
     await vi.waitFor(() => expect(startableDetail).toHaveBeenCalledWith(42))
+  })
+
+  it.each([
+    ['number', 'definition-1', 1],
+    ['string', 'definition-large', '9007199254740993'],
+  ])('选择 %s 类型的流程定义 Id 后可以提交发起', async (_type, testId, definitionId) => {
+    startableDetail.mockResolvedValueOnce({ model: null, formComponent: null })
+    const host = document.createElement('div')
+    document.body.append(host)
+    app = createApp(StartPage)
+    app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
+    app.mount(host)
+
+    host.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)!.click()
+    await vi.waitFor(() => expect(startableDetail).toHaveBeenCalledWith(definitionId))
+    const submitButton = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('提交发起'))
+    expect(submitButton).toBeDefined()
+    await vi.waitFor(() => expect(submitButton!.disabled).toBe(false))
+    submitButton!.click()
+
+    await vi.waitFor(() => {
+      expect(start).toHaveBeenCalledWith(expect.objectContaining({ definitionId }))
+    })
   })
 })

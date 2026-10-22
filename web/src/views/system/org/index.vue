@@ -2,7 +2,7 @@
 // 机构管理 = 树表:ProTable 静态数据 + children 树模式(无分页)。
 // org list 平铺 → buildTree 拼 children;上级机构用 OrgTreeSelect(剪自身子树防成环);
 // 无独立启停端点,StatusSwitch 走全量 update;删除有子机构后端拒,前端照调由 translateError 弹码。
-import { computed, h, onMounted, reactive, ref, watch } from 'vue'
+import { computed, h, onMounted, reactive, ref, watch, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NSpace, NForm, NFormItem, NInput, NInputNumber, NSwitch,
   NDropdown, NModal, NCard, useMessage, type FormInst, type FormRules,
@@ -28,7 +28,7 @@ const message = useMessage()
 const { run, confirm } = useConfirm()
 const authStore = useAuthStore()
 
-const loading = ref(false)
+const loading = shallowRef(false)
 const tree = ref<Tree<SysOrg>[]>([])
 
 async function load() {
@@ -46,7 +46,7 @@ onMounted(load)
 // ── 搜索 + 展开控制 ───────────────────────────────────────────────
 // ProTable 静态 data 模式不做任何前端过滤(它只在 fetcher 模式下发请求),所以过滤得自己算。
 // 关键字放 #toolbar 而不是用列的 search 配置:树表没有分页,搜索卡片会白占一整块高度。
-const keyword = ref('')
+const keyword = shallowRef('')
 const filteredTree = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return tree.value
@@ -71,9 +71,9 @@ interface OrgForm {
   enabled: boolean
   leaderUserId: ApiId | null
 }
-const show = ref(false)
-const formRef = ref<FormInst | null>(null)
-const editingId = ref<ApiId | null>(null)
+const show = shallowRef(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
+const editingId = shallowRef<ApiId | null>(null)
 const rules: FormRules = {
   name: { required: true, whitespace: true, message: () => t('org.nameRequired'), trigger: ['input', 'blur'] },
 }
@@ -118,10 +118,10 @@ async function save() {
 }
 
 // ── 复制弹窗 ──────────────────────────────────────────────────────
-const copyShow = ref(false)
-const copyId = ref<ApiId>(0)
-const copySourceName = ref('')
-const copyName = ref('')
+const copyShow = shallowRef(false)
+const copyId = shallowRef<ApiId>(0)
+const copySourceName = shallowRef('')
+const copyName = shallowRef('')
 
 function openCopy(r: SysOrg) {
   copyId.value = r.id

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, shallowRef, useTemplateRef } from 'vue'
 import { NGrid, NGi, NCard, NSpin } from 'naive-ui'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
@@ -19,10 +19,10 @@ const app = useAppStore()
 const avatarStyle = computed(() => ({ background: btnGrad(app.accent) }))
 
 const summary = ref<DashboardSummary | null>(null)
-const loading = ref(true)
-const bannerRef = ref<HTMLElement>()
-const statsRef = ref<HTMLElement>()
-const chartsRef = ref<HTMLElement>()
+const loading = shallowRef(true)
+const bannerRef = useTemplateRef<HTMLElement>('bannerRef')
+const statsRef = useTemplateRef<HTMLElement>('statsRef')
+const chartsRef = useTemplateRef<HTMLElement>('chartsRef')
 useFirstMountMotion([bannerRef, statsRef, chartsRef])
 
 onMounted(async () => {

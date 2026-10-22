@@ -4,7 +4,7 @@
  * 「新建」与「设计」都跳设计器(`/workflow/definition/designer`,可带 `?id=`)——
  * 建草稿的逻辑留在设计器的空态里,本页不重复一份。
  */
-import { h, ref } from 'vue'
+import { h, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NDropdown, NEmpty, NSpace, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -22,7 +22,7 @@ const router = useRouter()
 const message = useMessage()
 const { confirm } = useConfirm()
 const authStore = useAuthStore()
-const tableRef = ref<ProTableInst<WfDefinitionRow>>()
+const tableRef = useTemplateRef<ProTableInst<WfDefinitionRow>>('tableRef')
 
 // 后端 WfDefinitionStatus:0 草稿 / 1 已发布 / 2 停用(与 detail.vue 的实例状态同用就地数字表)。
 const DRAFT = 0

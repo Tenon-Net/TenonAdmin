@@ -30,6 +30,11 @@ export const staticRoutes: RouteRecordRaw[] = [
     meta: { title: 'module.choose' },   // i18n 键(与兄弟静态路由 menu.* 同法),不硬编码中文
   },
   {
+    path: '/initialization-error',
+    name: 'initialization-error',
+    component: () => import('./InitializationError.vue'),
+  },
+  {
     path: '/',
     name: 'layout',
     component: () => import('@/layouts/default.vue'),

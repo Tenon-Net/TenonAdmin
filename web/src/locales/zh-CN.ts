@@ -9,6 +9,7 @@ export default {
     more: '更多',
     search: '查询',
     reset: '重置',
+    retry: '重试',
     expandAll: '展开全部',
     collapseAll: '折叠全部',
     add: '新增',

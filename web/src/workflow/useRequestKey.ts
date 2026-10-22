@@ -4,7 +4,7 @@
 //                 让服务端的回执兜住"其实已经成功了"的情况——这是 receipt 存在的意义,不是本 composable 发明的)。
 //   reset()   —— 无条件丢弃,给"打开一个新动作"用(不依赖 settle 是否发生过)。
 // 页面级 composable,不是 store:请求键的生命周期天然绑定单个页面/单个弹窗实例,没有跨组件共享的需求。
-import { ref } from 'vue'
+import { shallowRef } from 'vue'
 import { ApiError } from '@/api'
 
 export type RequestKeyOutcome = 'success' | 'error' | 'network'
@@ -19,7 +19,7 @@ function generateId(): string {
 }
 
 export function useRequestKey() {
-  const key = ref<string | null>(null)
+  const key = shallowRef<string | null>(null)
 
   function value(): string {
     if (key.value == null) key.value = generateId()

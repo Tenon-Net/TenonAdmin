@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, shallowRef } from 'vue'
 import { NForm, NFormItem, NInputNumber, NInput, NButton, NSpin, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
@@ -12,10 +12,10 @@ const KEY_ALERT_EMAILS = 'sys.job.alertEmails'
 const { t } = useI18n()
 const message = useMessage()
 
-const logRetentionDays = ref(30)
-const alertEmails = ref('')
-const loading = ref(true)
-const saving = ref(false)
+const logRetentionDays = shallowRef(30)
+const alertEmails = shallowRef('')
+const loading = shallowRef(true)
+const saving = shallowRef(false)
 
 onMounted(async () => {
   try {

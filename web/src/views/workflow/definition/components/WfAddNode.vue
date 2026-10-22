@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 节点间大圆加号;Popover 提供当前可插入节点。
-import { ref } from 'vue'
+import { shallowRef } from 'vue'
 import { NPopover } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
@@ -11,7 +11,7 @@ const emit = defineEmits<{ add: [type: WfInsertableNodeType] }>()
 /** 默认展示并行;仅并行臂内由父链显式传 false。未传时不能落成 false(Vue 布尔缺省会吞掉菜单项)。 */
 withDefaults(defineProps<{ allowParallel?: boolean }>(), { allowParallel: true })
 const { t } = useI18n()
-const open = ref(false)
+const open = shallowRef(false)
 
 function pick(type: WfInsertableNodeType) {
   open.value = false

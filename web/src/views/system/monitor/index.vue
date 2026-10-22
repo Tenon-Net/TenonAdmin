@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 服务器监控 = 卡片 + 手动刷新(不轮询:CPU 快照后端每次采样 500ms,自动轮询会持续占用)。
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, shallowRef } from 'vue'
 import { NGrid, NGi, NCard, NProgress, NButton, NSpin, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
@@ -11,7 +11,8 @@ import type { ServerInfoOutput } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const info = ref<ServerInfoOutput | null>(null)
-const loading = ref(false)
+const loading = shallowRef(false)
+const readyDisks = computed(() => info.value?.disks.filter((disk) => disk.totalBytes > 0) ?? [])
 
 async function load() {
   loading.value = true
@@ -97,7 +98,7 @@ function usageStatus(p: number): 'success' | 'warning' | 'error' {
         </n-gi>
 
         <!-- 磁盘(过滤掉容量为 0 的未就绪/映射盘,免渲染一张全 0 卡片) -->
-        <n-gi v-for="disk in info.disks.filter((d) => d.totalBytes > 0)" :key="disk.name" span="1 s:2 l:1">
+        <n-gi v-for="disk in readyDisks" :key="disk.name" span="1 s:2 l:1">
           <n-card :title="`${t('monitor.disk')} ${disk.name}`" size="small">
             <div class="metric small">{{ fmtBytes(disk.totalBytes - disk.freeBytes) }} / {{ fmtBytes(disk.totalBytes) }}</div>
             <n-progress

@@ -17,19 +17,21 @@ export function useModule() {
   }
 
   async function enterInitial(): Promise<EnterResult> {
-    // profile 失败沿用登录快照；无快照时按普通用户处理。
-    const [{ modules, defaultModuleId }, perm, profile] = await Promise.all([
+    // 三份启动数据共同决定菜单与按钮权限；任一失败都不能伪装成“空权限初始化成功”。
+    const [{ modules, defaultModuleId }, permissionCodes, profile] = await Promise.all([
       personalApi.modules(),
-      personalApi.permissions().then((codes) => ({ ok: true, codes })).catch(() => ({ ok: false, codes: [] as string[] })),
-      personalApi.profile().then((p) => ({ sadm: p.isSuperAdmin, avatar: p.avatar ?? null })).catch(() => ({ sadm: useUserStore().userInfo?.isSuperAdmin ?? false, avatar: null })),
+      personalApi.permissions(),
+      personalApi.profile(),
     ])
     auth.modules = modules
     auth.defaultModuleId = defaultModuleId ?? null
-    auth.permissionCodes = perm.codes
-    auth.permissionsLoaded = perm.ok
-    auth.isSuperAdmin = profile.sadm
+    auth.permissionCodes = permissionCodes
+    auth.permissionsLoaded = true
+    auth.isSuperAdmin = profile.isSuperAdmin
+    auth.initializationError = ''
+    auth.initializationRedirect = ''
     const user = useUserStore()
-    if (user.userInfo) user.userInfo.avatar = profile.avatar
+    if (user.userInfo) user.userInfo.avatar = profile.avatar ?? null
     if (modules.length === 0) return { chooser: true }
     // 只恢复当前仍有权访问的上次应用。
     const remembered = auth.currentModuleId

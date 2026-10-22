@@ -1,0 +1,12 @@
+export type WfInstanceActionKind =
+  | 'approve'
+  | 'reject'
+  | 'transfer'
+  | 'return'
+  | 'delegate'
+  | 'addSign'
+  | 'removeSign'
+  | 'takeBack'
+  | 'urge'
+  | 'cancel'
+  | 'resubmit'

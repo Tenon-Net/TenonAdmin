@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NSpin, NTag, useMessage } from 'naive-ui'
 import AppIcon from '@/components/AppIcon.vue'
@@ -19,7 +19,7 @@ const message = useMessage()
 const { t } = useI18n()
 const auth = useAuthStore()
 const user = useUserStore()
-const busy = ref(false)
+const busy = shallowRef(false)
 
 async function pick(id: ApiId) {
   busy.value = true

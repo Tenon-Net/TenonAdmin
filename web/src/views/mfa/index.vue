@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NAlert, NButton, NCard, NForm, NFormItem, NInput, NQrCode, NSteps, NStep, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -19,10 +19,10 @@ const userStore = useUserStore()
 const authStore = useAuthStore()
 
 const queryMode = route.query.mode === 'recovery' ? 'recovery' : 'bind'
-const mode = ref<'bind' | 'recovery'>(queryMode)
-const step = ref(1)
-const loading = ref(false)
-const completed = ref(false)
+const mode = shallowRef<'bind' | 'recovery'>(queryMode)
+const step = shallowRef(1)
+const loading = shallowRef(false)
+const completed = shallowRef(false)
 
 const queryAccount = typeof route.query.account === 'string' ? route.query.account : ''
 const knownAccount = queryAccount || userStore.userInfo?.account || ''

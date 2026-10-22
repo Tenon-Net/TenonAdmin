@@ -2,7 +2,7 @@
 // 某个菜单/目录下「权限按钮」的专属管理弹窗 —— 把按钮从主菜单树里剥出来单独管,
 // 树只剩目录/菜单,不再被几十个按钮撑长。按钮就是 type=Button 的 SysMenu 行,
 // 增删改复用 menuApi.add/update/remove(parentId=当前菜单),后端零改动。
-import { computed, h, reactive, ref } from 'vue'
+import { computed, h, reactive, ref, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NSpace, NForm, NFormItemGi, NGrid, NInput, NInputNumber, NSelect, NSwitch,
   NPopconfirm, NCheckbox, NEmpty, useMessage, type FormInst, type FormRules,
@@ -40,9 +40,9 @@ const canAdd = computed(() => auth.hasPerm('POST:/api/v1/sys/menu/add'))
 const canEdit = computed(() => auth.hasPerm('PUT:/api/v1/sys/menu/{id}'))
 const canDelete = computed(() => auth.hasPerm('DELETE:/api/v1/sys/menu/{id}'))
 
-const show = ref(false)
-const menuId = ref<ApiId | null>(null)
-const menuTitle = ref('')
+const show = shallowRef(false)
+const menuId = shallowRef<ApiId | null>(null)
+const menuTitle = shallowRef('')
 
 /** 在整棵树里按 id 找节点(父页传的 tree 含按钮 children)。 */
 function findNode(nodes: MenuTreeNode[], id: ApiId): MenuTreeNode | null {
@@ -75,7 +75,7 @@ const belongsToApp = (path: string) => {
 }
 /** 是否存在「非本应用」的路由 —— 决定要不要展示「显示全部」开关。 */
 const hasOtherRoutes = computed(() => routeSeg.value !== '' && props.routes.some((r) => !belongsToApp(r.path)))
-const showAllRoutes = ref(false)
+const showAllRoutes = shallowRef(false)
 
 // 权限码下拉:label 展示「METHOD /路径」便于辨认,value 就是要写进 permission 的码本身。
 // 无前缀→平铺全量;有前缀且不显示全部→仅本应用;显示全部→按「本应用/其他应用」分组。
@@ -118,9 +118,9 @@ function open(menu: { id: ApiId; title: string }) {
 defineExpose({ open })
 
 // ── 单个新增/编辑 ────────────────────────────────────────────────
-const editShow = ref(false)
-const editingId = ref<ApiId | null>(null)
-const formRef = ref<FormInst | null>(null)
+const editShow = shallowRef(false)
+const editingId = shallowRef<ApiId | null>(null)
+const formRef = useTemplateRef<FormInst | null>('formRef')
 const rules: FormRules = {
   title: { required: true, whitespace: true, message: () => t('menu.titleRequired'), trigger: ['input', 'blur'] },
 }
@@ -167,10 +167,10 @@ async function save() {
 
 // ── 从路由批量添加 ──────────────────────────────────────────────
 type BatchRow = { code: string; method: string; path: string; title: string; checked: boolean }
-const batchShow = ref(false)
+const batchShow = shallowRef(false)
 const batchRows = ref<BatchRow[]>([])
-const batchSaving = ref(false)
-const batchKeyword = ref('')
+const batchSaving = shallowRef(false)
+const batchKeyword = shallowRef('')
 
 /** 搜索过滤:返回 batchRows 里命中的同一批对象引用,勾选/改标题的状态跨搜索保留;
  *  saveBatch 仍以全量 batchRows 的 checked 为准,不会漏掉被过滤隐藏的已勾选行。 */

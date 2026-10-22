@@ -2,7 +2,7 @@
 // 用户「新增/编辑」弹窗 —— 从 user/index.vue 抽出。职位/角色/主管下拉由父页拉好经 props 传入(避免重复请求);
 // 编辑回显走 userApi.detail 拿 roleIds;保存后 emit('saved') 交回父页刷新表格。
 // 新增留空口令时后端生成随机强口令,经 emit('passwordGenerated') 交回父页用同一结果弹层展示(明文仅此一次)。
-import { reactive, ref } from 'vue'
+import { reactive, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NAvatar, NInput, NForm, NFormItemGi, NGrid, NSelect, NSwitch,
   useMessage, type FormInst, type FormRules,
@@ -34,9 +34,9 @@ const message = useMessage()
 // 头像首字母兜底(列表页亦有一份同名工具,各自 3 字符不值得上提)。
 const initial = (name?: string | null) => (name || '?').slice(0, 1)
 
-const show = ref(false)
-const formRef = ref<FormInst | null>(null)
-const editingId = ref<ApiId | null>(null)
+const show = shallowRef(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
+const editingId = shallowRef<ApiId | null>(null)
 const rules: FormRules = {
   account: { required: true, whitespace: true, message: () => t('user.accountRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('user.nameRequired'), trigger: ['input', 'blur'] },
@@ -67,7 +67,7 @@ const blank = (): UserForm => ({
   enabled: true, forceTotp: false, totpEnabled: false, roleIds: [],
 })
 const form = reactive<UserForm>(blank())
-const avatarUploading = ref(false) // 头像上传中:给上传按钮加 spinner,别让用户对着空白干等
+const avatarUploading = shallowRef(false) // 头像上传中:给上传按钮加 spinner,别让用户对着空白干等
 
 function openAdd() {
   editingId.value = null

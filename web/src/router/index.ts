@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
 import { loadingBar } from '@/lib/loadingBar'
 import { ensureAccessToken } from '@/api/client'
+import { resolveInitializationFailure } from './initialization'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -73,6 +74,9 @@ router.beforeEach(async (to) => {
     return to.path === '/personal/password' ? true : { path: '/personal/password', replace: true }
   }
 
+  // 初始化错误页本身是静态路由；保留已认证会话，让用户可明确重试原目标。
+  if (to.name === 'initialization-error') return true
+
   // 刷新白屏守卫:动态路由只活在内存,F5/深链时 routesReady=false → 重建后重解析。
   // 注意:不能用 to.meta.public 短路——未注册的动态路由会先命中 catch-all(404),
   // 若按 public 放行就会错显 404 而非重建。
@@ -95,9 +99,10 @@ router.beforeEach(async (to) => {
         return { name: resolved.name, params: resolved.params, query: to.query, hash: to.hash, replace: true }
       }
       return { path: to.path, query: to.query, hash: to.hash, replace: true }
-    } catch {
-      user.clear()
-      return { path: '/login', replace: true }
+    } catch (error) {
+      // 401 刷新失败会由请求中间件清会话；网络/5xx/资料或权限接口失败仍是有效会话，
+      // 进入可重试错误页，避免把暂时性启动故障误报成登出。
+      return resolveInitializationFailure(auth, user, to.fullPath, error)
     }
   }
 

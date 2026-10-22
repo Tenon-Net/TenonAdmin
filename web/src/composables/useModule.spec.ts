@@ -91,17 +91,20 @@ describe('useModule().enterInitial', () => {
     expect(res).toEqual({ chooser: true })
   })
 
-  it('permissions() reject → permissionsLoaded=false 且不阻断;profile() reject → isSuperAdmin=false', async () => {
+  it.each([
+    ['permissions', () => permissionsMock.mockRejectedValue(new Error('permissions failed'))],
+    ['profile', () => profileMock.mockRejectedValue(new Error('profile failed'))],
+  ])('%s 失败 → 初始化显式失败且不提交半成品授权态', async (_name, rejectRequest) => {
     modulesMock.mockResolvedValue({ modules: [], defaultModuleId: null })
-    permissionsMock.mockRejectedValue(new Error('boom'))
-    profileMock.mockRejectedValue(new Error('boom'))
+    rejectRequest()
 
     const auth = useAuthStore()
-    const res = await useModule().enterInitial()
+    auth.permissionCodes = ['old']
+    auth.permissionsLoaded = true
 
-    expect(res).toEqual({ chooser: true }) // 未被两个 reject 阻断
-    expect(auth.permissionsLoaded).toBe(false)
-    expect(auth.permissionCodes).toEqual([])
+    await expect(useModule().enterInitial()).rejects.toThrow('failed')
+    expect(auth.permissionsLoaded).toBe(true)
+    expect(auth.permissionCodes).toEqual(['old'])
     expect(auth.isSuperAdmin).toBe(false)
   })
 })

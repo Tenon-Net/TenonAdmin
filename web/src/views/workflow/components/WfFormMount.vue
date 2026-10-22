@@ -4,8 +4,7 @@
  * 路径约定与菜单 component 一致,如 `biz/leave/form` → `/src/views/biz/leave/form.vue`。
  * 组件不存在时显示占位提示,不抛错打断审批主流程;非法双配置保留消费者挂载点。
  */
-import { computed, defineAsyncComponent, type Component } from 'vue'
-import { ref, watch } from 'vue'
+import { computed, defineAsyncComponent, type Component, useTemplateRef, shallowRef, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { WfInstanceStatus } from '@/types/workflow'
 import type { WfFormFieldPerm, WfFormSchema } from '@/workflow/schema'
@@ -27,10 +26,10 @@ const props = defineProps<{
 const emit = defineEmits<{ 'variables-change': [value: string | null] }>()
 
 const { t } = useI18n()
-const builtinRef = ref<{ validate: () => boolean } | null>(null)
+const builtinRef = useTemplateRef<{ validate: () => boolean } | null>('builtinRef')
 const initialParse = parseWfFormValuesResult(props.variablesJson)
 const builtinValues = ref<WfFormValues>(initialParse.values)
-const parseError = ref(initialParse.error)
+const parseError = shallowRef(initialParse.error)
 
 watch(() => props.variablesJson, (json) => {
   const result = parseWfFormValuesResult(json)

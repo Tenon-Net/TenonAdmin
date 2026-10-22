@@ -3,7 +3,7 @@
 // 按钮先按权限显示,是否可点只看服务端返回的 allowedActions——页面不自行判断「这次重试安全不安全」;
 // 执行时回传页面看到的栅栏值;记录已被投递器或他人改动(49046)或状态已不允许(49045)时关掉操作弹窗并刷新,
 // 由操作人按最新状态重新判断。
-import { computed, h, reactive, ref } from 'vue'
+import { computed, h, reactive, ref, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NAlert, NButton, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NEmpty, NForm, NFormItem,
@@ -30,8 +30,8 @@ const message = useMessage()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const show = ref(false)
-const loading = ref(false)
+const show = shallowRef(false)
+const loading = shallowRef(false)
 const detail = ref<DeliveryDetail | null>(null)
 let currentId: number | string = 0
 let loadSeq = 0
@@ -83,8 +83,8 @@ const needsNote = (a: DeliveryAction) => a === DeliveryActions.ConfirmSucceeded 
 /** 服务端判定「当前状态不允许」(49045)或「记录已被改动」(49046):页面所见已过期,须刷新后重新审视。 */
 const STALE_VIEW_CODES = [49045, 49046]
 
-const showAction = ref(false)
-const pending = ref<DeliveryAction>(DeliveryActions.Retry)
+const showAction = shallowRef(false)
+const pending = shallowRef<DeliveryAction>(DeliveryActions.Retry)
 const actionForm = reactive({ note: '' })
 function openAction(action: DeliveryAction) {
   pending.value = action

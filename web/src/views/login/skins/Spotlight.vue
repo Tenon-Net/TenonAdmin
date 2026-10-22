@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed, shallowRef } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useStandardPointerMotion } from '@/composables/useStandardPointerMotion'
 import { mix, rgba } from '@/theme/mix'
@@ -8,8 +8,8 @@ import LoginForm from '../LoginForm.vue'
 const app = useAppStore()
 
 // 聚光位置(百分比),默认略偏上居中;鼠标移动时跟随。
-const mx = ref(50)
-const my = ref(38)
+const mx = shallowRef(50)
+const my = shallowRef(38)
 function onMove(e: MouseEvent) {
   mx.value = (e.clientX / window.innerWidth) * 100
   my.value = (e.clientY / window.innerHeight) * 100

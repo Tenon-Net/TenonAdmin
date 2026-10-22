@@ -4,7 +4,7 @@
  * 菜单 component 填 `workflow/definition/designer`;通过 `?id=` 打开已有定义,
  * 无 id 时可新建草稿后进入编辑。
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, NInput, NSpace, NSpin, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -33,22 +33,22 @@ const router = useRouter()
 const message = useMessage()
 const setTabTitle = useTabTitle()
 
-const loading = ref(false)
-const saving = ref(false)
-const defId = ref<WfId | null>(null)
-const name = ref('')
+const loading = shallowRef(false)
+const saving = shallowRef(false)
+const defId = shallowRef<WfId | null>(null)
+const name = shallowRef('')
 // 设计器不编辑分组和图标,保存时必须原样带回,否则更新接口会把它们写成空。
-const groupName = ref<string | null>(null)
-const icon = ref<string | null>(null)
+const groupName = shallowRef<string | null>(null)
+const icon = shallowRef<string | null>(null)
 const model = ref<WfModel>(createDefaultModel())
-const selectedId = ref<string | null>(null)
-const drawerShow = ref(false)
-const creating = ref(false)
-const newName = ref('')
+const selectedId = shallowRef<string | null>(null)
+const drawerShow = shallowRef(false)
+const creating = shallowRef(false)
+const newName = shallowRef('')
 
-const zoom = ref(100)
-const canvasRef = ref<HTMLElement | null>(null)
-const stageRef = ref<HTMLElement | null>(null)
+const zoom = shallowRef(100)
+const canvasRef = useTemplateRef<HTMLElement>('canvasRef')
+const stageRef = useTemplateRef<HTMLElement>('stageRef')
 
 const serverNodeErrors = ref<Record<string, string>>({})
 
@@ -103,10 +103,18 @@ function readId(): WfId | null {
   return normalizeWfId(route.query.id ?? route.params.id)
 }
 
+let loadRequest = 0
+
+function isViewing(id: WfId): boolean {
+  return wfIdEquals(id, readId()) && wfIdEquals(id, defId.value)
+}
+
 async function load(id: WfId) {
+  const request = ++loadRequest
   loading.value = true
   try {
     const detail = await wfDefinitionApi.get(id)
+    if (request !== loadRequest || !wfIdEquals(id, readId())) return
     defId.value = normalizeWfId(detail.id) ?? id
     name.value = detail.name ?? ''
     groupName.value = detail.groupName ?? null
@@ -115,23 +123,34 @@ async function load(id: WfId) {
     model.value = cloneModel((detail.model as unknown as WfModel | undefined) ?? createDefaultModel())
     setTabTitle(detail.name ?? '')
   } catch (e) {
+    if (request !== loadRequest || !wfIdEquals(id, readId())) return
     message.error(translateError(e))
   } finally {
-    loading.value = false
+    if (request === loadRequest) loading.value = false
   }
 }
 
-onMounted(() => {
-  const id = readId()
-  if (id) void load(id)
-})
+onBeforeUnmount(() => { ++loadRequest })
 
 watch(
-  () => route.query.id,
-  (v) => {
-    const id = normalizeWfId(v)
-    if (id != null && !wfIdEquals(id, defId.value)) void load(id)
+  () => readId(),
+  (id) => {
+    if (id == null) {
+      ++loadRequest
+      loading.value = false
+      defId.value = null
+      selectedId.value = null
+      drawerShow.value = false
+      return
+    }
+    if (!wfIdEquals(id, defId.value)) {
+      defId.value = null
+      selectedId.value = null
+      drawerShow.value = false
+      void load(id)
+    }
   },
+  { immediate: true },
 )
 
 function onSelect(node: WfNode) {
@@ -140,26 +159,29 @@ function onSelect(node: WfNode) {
 }
 
 async function save(options?: { quiet?: boolean }): Promise<boolean> {
-  if (!defId.value) return false
+  const targetId = defId.value
+  if (!targetId) return false
   const issues = validateModel(model.value)
   if (issues.length) {
     message.warning(issues.map(issueText).join('；'))
     return false
   }
+  const targetName = name.value
+  const targetModel = model.value
   saving.value = true
   try {
     await wfDefinitionApi.update({
-      id: workflowPathId(defId.value),
-      name: name.value.trim() || t('workflow.designer.untitled'),
+      id: workflowPathId(targetId),
+      name: targetName.trim() || t('workflow.designer.untitled'),
       groupName: groupName.value,
       icon: icon.value,
-      model: model.value as unknown as WfDefinitionInput['model'],
+      model: targetModel as unknown as WfDefinitionInput['model'],
     })
     if (!options?.quiet) message.success(t('common.success'))
-    setTabTitle(name.value)
+    if (isViewing(targetId)) setTabTitle(targetName)
     return true
   } catch (e) {
-    message.error(translateError(withDesignerNodeName(e, model.value.root)))
+    message.error(translateError(withDesignerNodeName(e, targetModel.root)))
     return false
   } finally {
     saving.value = false
@@ -167,16 +189,21 @@ async function save(options?: { quiet?: boolean }): Promise<boolean> {
 }
 
 async function publish() {
-  if (!defId.value) return
+  const targetId = defId.value
+  if (!targetId) return
+  const targetRoot = model.value.root
   serverNodeErrors.value = {}
   // 发布成功自己有提示,这里不再叠一条「操作成功」。
   if (!await save({ quiet: true })) return
+  if (!isViewing(targetId)) return
   try {
-    await wfDefinitionApi.publish(defId.value)
+    await wfDefinitionApi.publish(targetId)
+    if (!isViewing(targetId)) return
     message.success(t('workflow.designer.published'))
-    await load(defId.value)
+    await load(targetId)
   } catch (e) {
-    const named = withDesignerNodeName(e, model.value.root)
+    if (!isViewing(targetId)) return
+    const named = withDesignerNodeName(e, targetRoot)
     const nodeId = e instanceof ApiError ? String(e.args?.nodeId ?? '') : ''
     if (nodeId) serverNodeErrors.value = { [nodeId]: translateError(named) }
     // 内容没变不会生成新版本,这是提示而不是失败。
@@ -199,7 +226,6 @@ async function createDraft() {
     }))
     if (id == null) throw new Error('Invalid workflow definition id')
     await router.replace({ query: { ...route.query, id: String(id) } })
-    await load(id)
   } catch (e) {
     message.error(translateError(e))
   } finally {
