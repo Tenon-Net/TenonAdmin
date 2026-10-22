@@ -66,7 +66,7 @@ app.Run();
 | 3 | `returnedToStarter=false`、`status=1`、`blockedNodeIds` 非空、`hasPendingTask=false` | 阻断；活跃 token 没有关联待办，实例也没有其他待办 | 已阻断 |
 | 4 | 不符合前三项 | 按 `status` 判断；此时 `status=1` 为普通运行中 | 审批中 |
 
-`blockedNodeIds` 是当前实现根据运行时数据推导的标记：它收集活跃、没有关联待办且不在 Start 节点上的 token 所在节点 ID。除了缺少办理人的审批或抄送节点，它也可能包含等待异步执行完成的 Webhook 或 AI Decision 节点。因此，不能只凭这个字段断定审批人缺失或节点执行失败。`hasPendingTask` 表示整个实例是否仍有待办，不是某个节点的属性。`returnedToStarter` 的优先级最高。实例退回后仍是 `status=1`，因为它还可以重提，并未结束。
+`blockedNodeIds` 是当前实现根据运行时数据推导的标记：它收集活跃、没有关联待办且不在 Start 节点上的 token 所在节点 ID。除了缺少办理人的审批节点，它也可能包含等待异步执行完成的 Webhook 或 AI Decision 节点。因此，不能只凭这个字段断定审批人缺失或节点执行失败。`hasPendingTask` 表示整个实例是否仍有待办，不是某个节点的属性。`returnedToStarter` 的优先级最高。实例退回后仍是 `status=1`，因为它还可以重提，并未结束。
 
 管理员监控接口 `GET /api/v1/workflow/instance/monitor` 支持按 `Status`、`DefinitionId`、`BusinessKey`、`StarterUserId`、`ActorUserId` 和 `CcUserId` 筛选。其中业务键为精确匹配；办理人会匹配当前待办办理人或历史办理人。内置监控页面提供状态、业务键、发起人、办理人和抄送人筛选，`DefinitionId` 目前只由接口接收。
 
