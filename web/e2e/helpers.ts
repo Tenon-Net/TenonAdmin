@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url'
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type ElementHandle, type Locator, type Page } from '@playwright/test'
 
 /**
  * 三个 spec 共用的登录与「进哪个应用」。
@@ -14,14 +14,38 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 export const ADMIN_ACCOUNT = process.env.TENON_E2E_ACCOUNT ?? 'superAdmin'
 export const ADMIN_PASSWORD = process.env.TENON_E2E_PASSWORD ?? 'Aa123456'
 
-/**
- * 断言本动作产生的成功/错误文案。Naive UI 会堆叠 .n-message,不能对整类做 strict 单节点断言;
- * 必须按本动作文案过滤,并要求当前只剩这一条——叠两条相同成功提示是产品错误,不是测试该放宽。
- */
+const lastSeenMessages = new WeakMap<Page, Map<string, ElementHandle<HTMLElement>>>()
+
+/** 断言本动作新产生了一条可见消息;Naive UI 退出动画期间允许同文案的新旧消息短暂重叠。 */
 export async function expectAppMessage(page: Page, text: RegExp, timeout = 5_000) {
-  const toast = page.locator('.n-message').filter({ hasText: text })
-  await expect(toast).toHaveCount(1, { timeout })
-  await expect(toast).toBeVisible()
+  const messages = page.locator('.n-message').filter({ hasText: text })
+  const key = text.toString()
+  const seenByText = lastSeenMessages.get(page) ?? new Map<string, ElementHandle<HTMLElement>>()
+  const previous = seenByText.get(key)
+  let current: ElementHandle<HTMLElement> | null = null
+
+  await expect.poll(async () => {
+    const candidate = await messages.last().elementHandle({ timeout: 100 }).catch(() => null)
+    if (!candidate) return false
+    if (!(await candidate.isVisible())) {
+      await candidate.dispose()
+      return false
+    }
+    if (previous) {
+      const alreadySeen = await candidate.evaluate((element, oldElement) => element === oldElement, previous).catch(() => false)
+      if (alreadySeen) {
+        await candidate.dispose()
+        return false
+      }
+    }
+    current = candidate
+    return true
+  }, { timeout, message: `等待本次动作产生消息 ${text}` }).toBe(true)
+
+  if (!current) throw new Error(`未找到本次动作产生的消息 ${text}`)
+  seenByText.set(key, current)
+  lastSeenMessages.set(page, seenByText)
+  await previous?.dispose().catch(() => {})
 }
 
 /** 内置「系统」应用的标题——`/workbench` 与 `/system/*` 都挂在它下面。 */
