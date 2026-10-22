@@ -30,6 +30,7 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ### Fixed
 
+- 将 Oracle 驱动已有的 `System.Security.Cryptography.Pkcs` 传递依赖最低版本提升到 `8.0.2`，修复两项拒绝服务漏洞；安全版本约束随 `TenonAdmin.SqlSugar` NuGet 包传递给消费方。
 - 修复 WorkerId 仅在宿主后台服务运行时才受租约保护的问题。默认发号器与分配结果共同持有数据库租约生命周期，未确认、丢失、过期或已释放的租约会阻止继续发号；完善 SQLite 建表锁冲突、MySQL 死锁、重复键分类、取消和接管处理。
 - 为 `sys_job_log` 补充 `(JobId, EndTime)` 与 `(EndTime, StartTime)` 复合索引，减少串行任务检查和失联执行回收对历史日志的扫描；保留原有日志查询索引和调度语义。
 - 加强工作流定义发布、发起、审批写入、办理人、必填意见、表单权限和历史快照校验，拒绝空条件组及无效办理人配置；修复 SQL Server 中文参与人排除条件。

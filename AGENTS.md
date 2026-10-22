@@ -7,7 +7,7 @@
 TenonAdmin (榫卯) is a distributable .NET 10 admin kernel shipped as NuGet packages. Consumers replace built-in services without forking.
 
 - Preserve replaceability: interface-backed services, overridable `virtual` steps, and `TryAdd*` registration. Consumer registrations before `AddTenonAdmin()` win. The `ReplaceabilityTests` contracts also protect `ApplicationAssemblies` entity/controller discovery.
-- Runtime dependencies in core packages are SqlSugarCore and Microsoft.* only. Manage package versions in `backend/Directory.Packages.props`.
+- Runtime dependencies in core packages are SqlSugarCore and Microsoft.* only. Security fixes may directly pin existing transitive dependencies without adding runtime libraries. Manage package versions in `backend/Directory.Packages.props`.
 - Layering: Core contracts ← SqlSugar data access ← Services domain/entities ← AspNetCore host integration; the TenonAdmin meta-package references AspNetCore. Core has no SqlSugar/ASP.NET dependency.
 - `web/` (Vue/Naive UI) and `web-react/` (React/Ant Design) are independent, self-contained templates against the same API. Their duplication is intentional; no cross-template imports, shared layer, or requirement to bundle both. Work on the requested template; backend contract changes require checking both consumers.
 - Permissions are normalized routes (`VERB:/api/...`); business errors use numeric `ErrorCode`, localized by the frontend. Preserve session revocation, data-scope filters, and automatic audit fields.

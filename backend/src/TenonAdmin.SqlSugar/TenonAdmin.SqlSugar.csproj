@@ -8,6 +8,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="SqlSugarCore" />
+    <!-- 仅抬高已有传递依赖的安全下限；直接引用使 NuGet 消费方也获得 Pkcs 修补版本 -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <!-- 直接引用抬版,盖过 MDS 传递的有漏洞 SQLitePCLRaw(NU1903);用户装本包即得修补后的 e_sqlite3 -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />

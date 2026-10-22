@@ -46,7 +46,7 @@ features:
     details: 本地示例默认使用 SQLite，首次启动自动创建表、菜单和管理员账号。无需先安装数据库服务，即可体验后台。
   - icon: 📦
     title: 极简依赖
-    details: 核心包的运行时依赖限于 SqlSugar 和 Microsoft.*。Excel、工作流等能力通过可选包接入，按业务需要安装。
+    details: 核心包以 SqlSugar 和 Microsoft 平台包为基础，既有传递依赖的安全修补随包提供。Excel、工作流等能力通过可选包接入，按业务需要安装。
   - icon: 🔐
     title: 认证与安全
     details: JWT 鉴权、登录锁定、请求限流、强制下线、日志脱敏，默认全都在。图形验证码内置三种，按需开启。
