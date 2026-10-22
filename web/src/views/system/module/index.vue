@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, onMounted, reactive, ref } from 'vue'
+import { h, onMounted, reactive, ref, shallowRef, useTemplateRef } from 'vue'
 import {
   NCard, NButton, NSpace, NDataTable, NTag, NForm, NFormItem, NInput, NInputNumber, NSwitch,
   NPopconfirm, useMessage, type DataTableColumns, type FormInst, type FormRules,
@@ -20,7 +20,7 @@ const message = useMessage()
 const { run } = useConfirm()
 const authStore = useAuthStore()
 
-const loading = ref(false)
+const loading = shallowRef(false)
 const rows = ref<ModuleRow[]>([])
 
 /** 内置 system 模块受保护(后端 42013),前端据 code 禁删,避免明知不可为的请求。 */
@@ -39,14 +39,14 @@ async function load() {
 onMounted(load)
 
 // ── 新增/编辑弹窗(FormContainer:loading/底栏/关闭时机由容器按 onConfirm 协议接管)──
-const show = ref(false)
-const formRef = ref<FormInst | null>(null)
+const show = shallowRef(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
 const rules: FormRules = {
   // whitespace: 保留原「.trim() 禁用保存」的语义,纯空白不算填写
   code: { required: true, whitespace: true, message: () => t('module.codeRequired'), trigger: ['input', 'blur'] },
   title: { required: true, whitespace: true, message: () => t('module.nameRequired'), trigger: ['input', 'blur'] },
 }
-const editingId = ref<ApiId | null>(null)
+const editingId = shallowRef<ApiId | null>(null)
 const blank = (): ModuleInput => ({ code: '', title: '', icon: '', defaultRoute: '', apiPrefix: '', sort: 0, enabled: true, remark: '' })
 const form = reactive<ModuleInput>(blank())
 

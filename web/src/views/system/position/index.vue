@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 岗位管理 = 普通 ProTable CRUD + 行内启停。岗位与机构无关联(PositionInput 无 orgId)。
 // 后端无独立启停端点 → StatusSwitch 走全量 update(同 module 页);code 编辑禁用。
-import { h, reactive, ref } from 'vue'
+import { h, reactive, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NSpace, NInput, NInputNumber, NPopconfirm, NForm, NFormItem, NSwitch,
   useMessage, type FormInst, type FormRules,
@@ -21,7 +21,7 @@ const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
 const authStore = useAuthStore()
-const tableRef = ref<ProTableInst<SysPosition>>()
+const tableRef = useTemplateRef<ProTableInst<SysPosition>>('tableRef')
 
 // 行数据 → 完整入参:openEdit 回填与 StatusSwitch 行内改状态共用(后端无独立启停端点,均走全量 update)。
 const toInput = (r: SysPosition): PositionInput => ({ name: r.name, code: r.code, sort: r.sort, enabled: r.enabled })
@@ -75,9 +75,9 @@ const columns: ProTableColumn<SysPosition>[] = [
 ]
 
 // ── 新增/编辑弹窗 ──
-const show = ref(false)
-const formRef = ref<FormInst | null>(null)
-const editingId = ref<ApiId | null>(null)
+const show = shallowRef(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
+const editingId = shallowRef<ApiId | null>(null)
 const rules: FormRules = {
   name: { required: true, whitespace: true, message: () => t('position.nameRequired'), trigger: ['input', 'blur'] },
 }

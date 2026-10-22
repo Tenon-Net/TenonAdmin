@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 异常日志 = 只读 ProTable + 详情抽屉。后端无 exception/{id},分页项已含全字段 → 抽屉直接用行数据。
 // 只记未捕获异常(程序缺陷);业务异常不进本表。堆栈保持危险色 <pre>——堆栈非代码,高亮无意义。
-import { h, ref } from 'vue'
+import { h, ref, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NDrawer, NDrawerContent, NDescriptions, NDescriptionsItem, useMessage,
 } from 'naive-ui'
@@ -16,7 +16,7 @@ import type { SysExceptionLog } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
-const tableRef = ref<ProTableInst<SysExceptionLog>>()
+const tableRef = useTemplateRef<ProTableInst<SysExceptionLog>>('tableRef')
 
 const columns: ProTableColumn<SysExceptionLog>[] = [
   { key: 'exceptionType', title: () => t('log.exceptionType'), ellipsis: { tooltip: true }, search: true },
@@ -37,7 +37,7 @@ const columns: ProTableColumn<SysExceptionLog>[] = [
 ]
 
 // ── 详情抽屉(只读,行数据直填)──
-const showDetail = ref(false)
+const showDetail = shallowRef(false)
 const detailRow = ref<SysExceptionLog | null>(null)
 function openDetail(r: SysExceptionLog) {
   detailRow.value = r

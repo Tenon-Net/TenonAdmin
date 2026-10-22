@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 import { NTooltip } from 'naive-ui'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
@@ -19,7 +19,7 @@ function initSkin(): string {
   return DEFAULT_SKIN
 }
 
-const skin = ref(initSkin())
+const skin = shallowRef(initSkin())
 watch(skin, (v) => localStorage.setItem(KEY, v))
 
 const active = computed(() => LOGIN_SKINS.find((s) => s.id === skin.value) ?? LOGIN_SKINS[0])

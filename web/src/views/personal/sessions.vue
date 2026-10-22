@@ -2,7 +2,7 @@
 // 我的会话(个人视角的"登录设备"):[ActiveSession] 人人可用,静态路由不进菜单(理由同 notice)。
 // 数据量受会话并发上限约束(个位数)→ 不用 ProTable,onMounted 拉一次 + n-data-table 静态渲染。
 // 踢当前设备置灰:那等于自杀,请走"退出登录";管理端全量视角在 system/session。
-import { h, onMounted, ref } from 'vue'
+import { h, onMounted, ref, shallowRef } from 'vue'
 import { NCard, NDataTable, NButton, NTag, useMessage, type DataTableColumns } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { personalApi } from '@/api'
@@ -15,7 +15,7 @@ const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
 
-const loading = ref(true)
+const loading = shallowRef(true)
 const rows = ref<MySessionItem[]>([])
 const rowKey = (r: MySessionItem) => r.sessionId
 

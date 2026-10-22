@@ -2,7 +2,7 @@
 // 表格行内启停开关:悲观更新——点击不先翻转,请求成功才 emit;失败不 emit = UI 保持原值即回滚,
 // 没有「闪一下又弹回」的错误视觉;loading 期间 n-switch 自锁防连点。
 // 后端无独立启停端点 → request 由业务传全量 update(行数据转 Input 后改 enabled)。
-import { ref } from 'vue'
+import { shallowRef } from 'vue'
 import { NSwitch, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useConfirm } from '@/composables/useConfirm'
@@ -28,7 +28,7 @@ const emit = defineEmits<{ (e: 'update:value', v: boolean): void }>()
 const { t } = useI18n()
 const { ask } = useConfirm() // h() 渲染进表格列也在 App.vue Provider 树内,inject 可用
 const message = useMessage()
-const loading = ref(false)
+const loading = shallowRef(false)
 
 async function onUpdate(next: boolean) {
   if (props.confirm) {

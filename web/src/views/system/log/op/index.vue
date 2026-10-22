@@ -3,7 +3,7 @@
 // 搜索区要能答审计的三个问题:谁(操作人)、什么时候(时间范围)、干了什么(操作名/路径/成败)。
 // paramJson 走 CodeBlock(json 高亮 + 复制;美化仍是 parse→stringify,失败原样);异常堆栈保持危险色 <pre>——堆栈非代码,高亮无意义。
 // 导出(G6):ExportColumnsModal 选列 + 当前筛选条件。
-import { h, ref } from 'vue'
+import { h, ref, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NTag, NDrawer, NDrawerContent, NDescriptions, NDescriptionsItem, useMessage,
 } from 'naive-ui'
@@ -22,10 +22,10 @@ import type { ApiId, ExportColumnDef, SysOpLog } from '@/types/api'
 const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
-const tableRef = ref<ProTableInst<SysOpLog>>()
+const tableRef = useTemplateRef<ProTableInst<SysOpLog>>('tableRef')
 
-const exportShow = ref(false)
-const exporting = ref(false)
+const exportShow = shallowRef(false)
+const exporting = shallowRef(false)
 
 /** 与后端 OpLogExportProfile.Columns 对齐。 */
 const opExportColumns: ExportColumnDef[] = [
@@ -115,7 +115,7 @@ const columns: ProTableColumn<SysOpLog>[] = [
 ]
 
 // ── 详情抽屉(只读,行数据直填)──
-const showDetail = ref(false)
+const showDetail = shallowRef(false)
 const detailRow = ref<SysOpLog | null>(null)
 function openDetail(r: SysOpLog) {
   detailRow.value = r

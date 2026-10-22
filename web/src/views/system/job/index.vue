@@ -4,7 +4,7 @@
 // Completed(一次性已跑完/过生效窗口)没有未来时刻,后端拒绝恢复(47010),故只给只读 tag 不给开关。
 // 属性包在表单里是键值对 UI,提交时组装成 properties 对象;HTTP 的 headers 子键值对序列化成 JSON 字符串
 // 放 properties.headers——读取时后端把 headers 值掩码成 ********,不改就原样回传即"不改"。
-import { h, reactive, ref } from 'vue'
+import { h, reactive, ref, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NSpace, NTag, NTooltip, NPopconfirm, NForm, NInput, NInputNumber,
   NRadioGroup, NRadio, NSelect, NSwitch, NDatePicker,
@@ -33,7 +33,7 @@ const message = useMessage()
 const router = useRouter()
 const { run, confirm } = useConfirm()
 const authStore = useAuthStore()
-const tableRef = ref<ProTableInst<SysJob>>()
+const tableRef = useTemplateRef<ProTableInst<SysJob>>('tableRef')
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   remove: jobApi.batchRemove,
   refresh: () => tableRef.value?.refresh(),
@@ -205,9 +205,9 @@ interface JobForm {
   alertEmails: string
 }
 
-const show = ref(false)
-const formRef = ref<FormInst | null>(null)
-const editingId = ref<ApiId | null>(null)
+const show = shallowRef(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
+const editingId = shallowRef<ApiId | null>(null)
 const blank = (): JobForm => ({
   code: '', name: '', remark: '',
   // 给个能跑的默认值(每天零点),不留空:CronEditor 的各段控件本来就带默认选中,
@@ -239,7 +239,7 @@ const rules: FormRules = {
 const handlerOptions = ref<{ label: string; value: string }[]>([])
 // SQL 载荷总闸(后端 Jobs:Sql:Enabled)。默认按"开"起手:清单没拉到就不该凭空禁掉一种载荷,
 // 真关着的话保存时后端还有 47008 兜底。
-const sqlEnabled = ref(true)
+const sqlEnabled = shallowRef(true)
 let handlersLoaded = false
 async function ensureHandlers() {
   if (handlersLoaded) return

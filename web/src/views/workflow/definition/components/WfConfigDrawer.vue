@@ -3,7 +3,7 @@
  * 节点配置抽屉。默认可见 ≤5 项,其余进「高级」(设计方案配置纪律)。
  * M3:内置表单存在时,审批高级配置字段权限;无内置表单时保留旧定义值但不生成权限。
  */
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, watch, shallowRef, useTemplateRef } from 'vue'
 import {
   NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber, NSelect,
   NButton, NSpace, NCollapse, NCollapseItem, NRadioButton, NRadioGroup, type FormInst, type FormRules,
@@ -52,7 +52,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const formRef = ref<FormInst | null>(null)
+const formRef = useTemplateRef<FormInst | null>('formRef')
 
 const node = computed(() => (props.nodeId ? findNode(props.model.root, props.nodeId) : null))
 
@@ -94,7 +94,7 @@ const form = reactive({
   webhookOnFailure: 'fail' as WfWebhookFailureAction,
   maxAttempts: 3,
 })
-const expandedArm = ref<string | number | null>(null)
+const expandedArm = shallowRef<string | number | null>(null)
 
 const providerOptions = computed(() =>
   (['user', 'leader', 'multiLeader', 'role', 'position', 'selfSelect', 'initiator', 'orgLeader'] as WfAssigneeProvider[]).map(

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 高敏权限自定义追加:默认集只读展示;追加/删除走 highSensApi(须 reauth 的写路径由后端强制)。
-import { h, onMounted, ref } from 'vue'
+import { h, onMounted, ref, shallowRef } from 'vue'
 import { NButton, NDataTable, NInput, NSpace, NTag, useMessage, type DataTableColumns } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { highSensApi } from '@/api'
@@ -9,12 +9,12 @@ import type { ApiId } from '@/types/api'
 
 const { t } = useI18n()
 const message = useMessage()
-const loading = ref(false)
+const loading = shallowRef(false)
 const defaults = ref<string[]>([])
 const customs = ref<{ id: ApiId; permissionCode: string; remark?: string | null }[]>([])
-const newCode = ref('')
-const newRemark = ref('')
-const saving = ref(false)
+const newCode = shallowRef('')
+const newRemark = shallowRef('')
+const saving = shallowRef(false)
 
 async function load() {
   loading.value = true

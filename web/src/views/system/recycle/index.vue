@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, ref } from 'vue'
+import { h, ref, shallowRef } from 'vue'
 import { NButton, NSpace, NTabs, NTabPane, NPopconfirm, useMessage } from 'naive-ui'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import { useI18n } from 'vue-i18n'
@@ -15,7 +15,7 @@ const authStore = useAuthStore()
 
 const types = ['user', 'role', 'org', 'position', 'module', 'config', 'dict', 'menu', 'job'] as const
 type RecycleType = (typeof types)[number]
-const activeTab = ref<RecycleType>('user')
+const activeTab = shallowRef<RecycleType>('user')
 const tableRefs = ref<Record<string, ProTableInst<RecycleBinItem>>>({})
 
 function setTableRef(type: string) {

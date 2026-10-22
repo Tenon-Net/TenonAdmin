@@ -3,7 +3,7 @@
 // 形态默认跟随全局偏好(app.formStyle,设置抽屉可切),variant 按实例覆盖。
 // onConfirm 协议:返回 Promise → 确认钮自动 loading;reject 或 resolve(false) → 不关闭
 // (n-form 校验放 onConfirm 首行,失败 reject 即挡住关闭);其余情况自动关。
-import { computed, onDeactivated, ref, useId, watch } from 'vue'
+import { computed, onDeactivated, useId, watch, shallowRef } from 'vue'
 import { NModal, NDrawer, NDrawerContent, NButton, NSpace } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useWindowSize } from '@vueuse/core'
@@ -33,7 +33,7 @@ const app = useAppStore()
 const motionPanelId = useId()
 
 const mode = computed(() => props.variant ?? app.formStyle)
-const loading = ref(false)
+const loading = shallowRef(false)
 // 窄屏不溢出:同 SettingsDrawer 惯例,宽度取 min(width, 90vw)。
 const { width: winW } = useWindowSize()
 const w = computed(() => Math.min(props.width ?? 560, Math.round(winW.value * 0.9)))

@@ -2,7 +2,7 @@
 // 个人资料:自己能改的字段全在这(姓名/昵称/性别/手机/邮箱/头像);机构/职位由管理员维护,只读展示。
 // 提交是全量替换语义(后端 UpdateProfileInput):整表单一把梭,别做单字段 PATCH。
 // 手机/邮箱直接改不做二次验证——内核无短信/邮件通道,管理员本可在用户管理任改,操作日志留痕(后端注释同款理由)。
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, shallowRef, useTemplateRef } from 'vue'
 import {
   NCard, NForm, NFormItem, NInput, NButton, NSpin, NAvatar, useMessage,
   type FormInst, type FormRules,
@@ -19,10 +19,10 @@ const { t } = useI18n()
 const message = useMessage()
 const user = useUserStore()
 
-const loading = ref(true)
-const saving = ref(false)
-const avatarUploading = ref(false)
-const formRef = ref<FormInst | null>(null)
+const loading = shallowRef(true)
+const saving = shallowRef(false)
+const avatarUploading = shallowRef(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
 const model = reactive({
   account: '',
   name: '',

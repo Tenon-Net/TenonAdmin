@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Level3 高危写操作再认证弹窗:client 中间件遇 40024 时经 reauthGate 唤起。
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, shallowRef } from 'vue'
 import { NForm, NFormItem, NInput, NModal, NRadio, NRadioGroup, NSpace, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { authApi } from '@/api'
@@ -10,11 +10,11 @@ import { translateError } from '@/utils/error'
 const { t } = useI18n()
 const message = useMessage()
 
-const show = ref(false)
-const submitting = ref(false)
-const method = ref<'totp' | 'password'>('totp')
-const totpCode = ref('')
-const password = ref('')
+const show = shallowRef(false)
+const submitting = shallowRef(false)
+const method = shallowRef<'totp' | 'password'>('totp')
+const totpCode = shallowRef('')
+const password = shallowRef('')
 
 let settle: ((ok: boolean) => void) | null = null
 

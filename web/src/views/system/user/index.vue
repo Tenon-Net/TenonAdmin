@@ -2,7 +2,7 @@
 // 用户管理(写侧)= ProTable(列表/搜索/分页)+ UserFormModal(新增/编辑)+ ResetPasswordModal(重置/初始口令展示)+ 专用启停端点。
 // 超管行(isSuperAdmin)删除/停用置灰防自锁;启停走专用 setEnabled(非全量 update)。
 // 导入导出(G6):ImportWizard 四步向导 + ExportColumnsModal 选列导出(带当前筛选)。
-import { computed, h, onMounted, ref, watch } from 'vue'
+import { computed, h, onMounted, ref, watch, shallowRef, useTemplateRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { NButton, NCard, NTree, NSpace, NTag, NAvatar, NPopconfirm, NDropdown, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -28,7 +28,7 @@ const { t } = useI18n()
 const message = useMessage()
 const { run, confirm } = useConfirm()
 const authStore = useAuthStore()
-const tableRef = ref<ProTableInst<UserItem>>()
+const tableRef = useTemplateRef<ProTableInst<UserItem>>('tableRef')
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   remove: userApi.batchRemove,
   refresh: () => tableRef.value?.refresh(),
@@ -36,10 +36,10 @@ const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
 })
 
 // 新增/编辑弹窗 + 重置密码弹窗(表单/校验/保存均在各自组件内,父页只传下拉选项 + 收 saved/passwordGenerated)。
-const userFormRef = ref<InstanceType<typeof UserFormModal> | null>(null)
-const resetModalRef = ref<InstanceType<typeof ResetPasswordModal> | null>(null)
+const userFormRef = useTemplateRef<InstanceType<typeof UserFormModal> | null>('userFormRef')
+const resetModalRef = useTemplateRef<InstanceType<typeof ResetPasswordModal> | null>('resetModalRef')
 
-const clearMfaLoading = ref(false)
+const clearMfaLoading = shallowRef(false)
 
 async function clearUserMfa(user: UserItem) {
   clearMfaLoading.value = true
@@ -62,7 +62,7 @@ const roleOptions = ref<{ label: string; value: ApiId }[]>([])
 const directorOptions = ref<{ label: string; value: ApiId }[]>([])
 // 左侧机构树筛选:选中节点即按其机构过滤用户;params 深监听联动 ProTable(回第 1 页重查)。
 const orgTree = ref<Tree<SysOrg>[]>([])
-const selectedOrgId = ref<ApiId | null>(null)
+const selectedOrgId = shallowRef<ApiId | null>(null)
 const tableParams = computed(() => (selectedOrgId.value == null ? {} : { orgId: selectedOrgId.value }))
 function onOrgSelect(keys: (string | number)[]) {
   // 再点选中项 → 取消选中 → 恢复全部
@@ -118,9 +118,9 @@ watch(
 const initial = (name?: string | null) => (name || '?').slice(0, 1)
 
 // ── 导入 / 导出 ──
-const importShow = ref(false)
-const exportShow = ref(false)
-const exporting = ref(false)
+const importShow = shallowRef(false)
+const exportShow = shallowRef(false)
+const exporting = shallowRef(false)
 
 /** 与后端 UserExportProfile.Columns 对齐(前端无列清单端点,照档案硬编码)。 */
 const userExportColumns: ExportColumnDef[] = [

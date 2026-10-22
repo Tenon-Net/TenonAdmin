@@ -2,7 +2,7 @@
 // 角色管理 = ProTable CRUD(照职位范式)+ 两个专属抽屉:授权菜单(勾选菜单树)、数据范围(选范围类型 + 自定义机构)。
 // 删角色会**物理**删掉用户↔角色关联(不可恢复)——所以删前先查一次持有人数当面告知,单删与批量删都盖到,
 // 只给行内按钮加警告的话,勾选 + 批量删就绕过去了。
-import { computed, h, onMounted, reactive, ref } from 'vue'
+import { computed, h, onMounted, reactive, ref, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NSpace, NInput, NInputNumber, NSwitch, NForm, NFormItem, NSelect, NDropdown,
   useMessage, type FormInst, type FormRules,
@@ -23,12 +23,13 @@ import { translateError } from '@/utils/error'
 import { DataScopeType, type ApiId, type ModuleRow, type RoleInput, type SysRole } from '@/types/api'
 import type { MenuTreeNode } from '@/types/menu'
 import { parseCustomOrgIds } from './scopeIds'
+import { createLatestRequest } from './latestRequest'
 
 const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
 const auth = useAuthStore()
-const tableRef = ref<ProTableInst<SysRole>>()
+const tableRef = useTemplateRef<ProTableInst<SysRole>>('tableRef')
 
 /** 「未分配」哨兵:雪花 id 无 0,用它表示 moduleId==null 的顶级目录分组。 */
 const UNASSIGNED = 0
@@ -140,9 +141,9 @@ const columns: ProTableColumn<SysRole>[] = [
 ]
 
 // ── 新增/编辑弹窗 ──
-const show = ref(false)
-const formRef = ref<FormInst | null>(null)
-const editingId = ref<ApiId | null>(null)
+const show = shallowRef(false)
+const formRef = useTemplateRef<FormInst>('formRef')
+const editingId = shallowRef<ApiId | null>(null)
 const rules: FormRules = {
   code: { required: true, whitespace: true, message: () => t('role.codeRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('role.nameRequired'), trigger: ['input', 'blur'] },
@@ -174,20 +175,26 @@ async function save() {
 }
 
 // ── 授权菜单抽屉(分组表格 → 全量替换角色授权)──
-const showMenus = ref(false)
+const showMenus = shallowRef(false)
 const menuTree = ref<MenuTreeNode[]>([])
 const menuGranted = ref<ApiId[]>([])
-const menuRoleId = ref<ApiId | null>(null)
-const defaultModuleId = ref<ApiId>(UNASSIGNED)
+const menuRoleId = shallowRef<ApiId | null>(null)
+const defaultModuleId = shallowRef<ApiId>(UNASSIGNED)
+const menuRequest = createLatestRequest()
 
 async function openMenus(r: SysRole) {
-  menuRoleId.value = r.id
+  showMenus.value = false
   try {
-    const [tree, granted] = await Promise.all([menuApi.tree(), roleApi.getMenus(r.id)])
-    menuTree.value = tree
-    menuGranted.value = granted
-    defaultModuleId.value = auth.currentModuleId ?? modules.value[0]?.id ?? UNASSIGNED
-    showMenus.value = true
+    await menuRequest.run(
+      () => Promise.all([menuApi.tree(), roleApi.getMenus(r.id)]),
+      ([tree, granted]) => {
+        menuRoleId.value = r.id
+        menuTree.value = tree
+        menuGranted.value = granted
+        defaultModuleId.value = auth.currentModuleId ?? modules.value[0]?.id ?? UNASSIGNED
+        showMenus.value = true
+      },
+    )
   } catch (e) {
     message.error(translateError(e))
   }
@@ -196,9 +203,11 @@ function onMenuCheckedUpdate(ids: ApiId[]) {
   menuGranted.value = ids
 }
 async function saveMenus() {
-  if (menuRoleId.value === null) return
+  const roleId = menuRoleId.value
+  if (roleId === null) return
+  const granted = [...menuGranted.value]
   try {
-    await roleApi.setMenus(menuRoleId.value, menuGranted.value)
+    await roleApi.setMenus(roleId, granted)
     message.success(t('role.grantSaved'))
   } catch (e) {
     message.error(translateError(e))
@@ -207,22 +216,29 @@ async function saveMenus() {
 }
 
 // ── 授权用户(UserPicker) ──
-const userPickerRef = ref<InstanceType<typeof UserPicker> | null>(null)
-const userRoleId = ref<ApiId | null>(null)
+const userPickerRef = useTemplateRef<InstanceType<typeof UserPicker>>('userPickerRef')
+const userRoleId = shallowRef<ApiId | null>(null)
+const userRequest = createLatestRequest()
 
 async function openUsers(r: SysRole) {
-  userRoleId.value = r.id
   try {
-    const ids = await roleApi.getUsers(r.id)
-    userPickerRef.value?.open(ids)
+    await userRequest.run(
+      () => roleApi.getUsers(r.id),
+      (ids) => {
+        userRoleId.value = r.id
+        userPickerRef.value?.open(ids)
+      },
+    )
   } catch (e) {
     message.error(translateError(e))
   }
 }
 async function onUserConfirm(ids: ApiId[]) {
-  if (userRoleId.value === null) return
+  const roleId = userRoleId.value
+  if (roleId === null) return
+  const selectedIds = [...ids]
   try {
-    await roleApi.setUsers(userRoleId.value, ids)
+    await roleApi.setUsers(roleId, selectedIds)
     // 连续保存时替换上一条同类成功提示,避免两条“用户授权已保存”同时挂在页面上。
     message.destroyAll()
     message.success(t('role.grantUsersSaved'))
@@ -232,9 +248,10 @@ async function onUserConfirm(ids: ApiId[]) {
 }
 
 // ── 数据范围抽屉 ──
-const showScope = ref(false)
-const scopeRoleId = ref<ApiId | null>(null)
+const showScope = shallowRef(false)
+const scopeRoleId = shallowRef<ApiId | null>(null)
 const scopeForm = reactive<{ scopeType: DataScopeType; customOrgIds: ApiId[] }>({ scopeType: DataScopeType.Org, customOrgIds: [] })
+const scopeRequest = createLatestRequest()
 const isCustom = computed(() => scopeForm.scopeType === DataScopeType.Custom)
 const scopeOptions = computed(() => [
   { label: t('role.scope.all'), value: DataScopeType.All },
@@ -244,20 +261,28 @@ const scopeOptions = computed(() => [
   { label: t('role.scope.custom'), value: DataScopeType.Custom },
 ])
 async function openScope(r: SysRole) {
-  scopeRoleId.value = r.id
+  showScope.value = false
   try {
-    const cfg = await roleApi.getDataScope(r.id)
-    scopeForm.scopeType = cfg?.scopeType ?? DataScopeType.Org
-    scopeForm.customOrgIds = parseCustomOrgIds(cfg?.customOrgIds)
-    showScope.value = true
+    await scopeRequest.run(
+      () => roleApi.getDataScope(r.id),
+      (cfg) => {
+        scopeRoleId.value = r.id
+        scopeForm.scopeType = cfg?.scopeType ?? DataScopeType.Org
+        scopeForm.customOrgIds = parseCustomOrgIds(cfg?.customOrgIds)
+        showScope.value = true
+      },
+    )
   } catch (e) {
     message.error(translateError(e))
   }
 }
 async function saveScope() {
-  if (scopeRoleId.value === null) return
+  const roleId = scopeRoleId.value
+  if (roleId === null) return
+  const scopeType = scopeForm.scopeType
+  const customOrgIds = scopeType === DataScopeType.Custom ? [...scopeForm.customOrgIds] : undefined
   try {
-    await roleApi.setDataScope(scopeRoleId.value, scopeForm.scopeType, isCustom.value ? scopeForm.customOrgIds : undefined)
+    await roleApi.setDataScope(roleId, scopeType, customOrgIds)
     message.success(t('role.scopeSaved'))
   } catch (e) {
     message.error(translateError(e))

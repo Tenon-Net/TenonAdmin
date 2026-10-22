@@ -8,6 +8,7 @@ export default {
     more: 'More',
     search: 'Search',
     reset: 'Reset',
+    retry: 'Retry',
     expandAll: 'Expand all',
     collapseAll: 'Collapse all',
     add: 'Add',

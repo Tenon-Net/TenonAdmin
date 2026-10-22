@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref, watch } from 'vue'
+import { computed, h, onMounted, ref, watch, shallowRef, useTemplateRef } from 'vue'
 import { NButton, NSpace, NTag, NInput, NSelect, NDropdown, useMessage } from 'naive-ui'
 import { ProTable, type ProTableColumn } from 'tenon-naive-pro-table'
 import { useI18n } from 'vue-i18n'
@@ -21,7 +21,7 @@ const message = useMessage()
 const { confirm } = useConfirm()
 const auth = useAuthStore()
 
-const loading = ref(false)
+const loading = shallowRef(false)
 const tree = ref<MenuTreeNode[]>([])
 const modules = ref<ModuleRow[]>([])
 /** 「未分配」哨兵:雪花 id 无 0,用它表示 moduleId==null 的顶级目录分组。 */
@@ -30,7 +30,7 @@ const UNASSIGNED = 0
  * 别的应用底下新建的菜单会被筛掉、看着像"存了但不见了"(issue #17)——需要一个能看全量的退路。 */
 const ALL_MODULES = -1
 /** 所属应用筛选:默认跟随当前进入的应用,modules 加载后再校正。 */
-const moduleFilter = ref<ApiId>(auth.currentModuleId ?? UNASSIGNED)
+const moduleFilter = shallowRef<ApiId>(auth.currentModuleId ?? UNASSIGNED)
 /** 后端实时路由表(含消费方自建控制器)——权限码下拉的数据源,免手敲 `GET:/api/v1/...`。 */
 const routes = ref<PermissionRouteItem[]>([])
 
@@ -140,7 +140,7 @@ const buttonInfoById = computed(() => {
 // ProTable 静态 data 模式不做任何前端过滤(它只在 fetcher 模式下发请求),所以过滤得自己算;
 // 关键字放 #toolbar 而不是用列的 search 配置:树表没有分页,搜索卡片会白占一整块高度。
 // 只喂给表格,不喂给 parentOptions —— 父级下拉必须始终是完整的当前应用子树,不能随搜索缩水。
-const keyword = ref('')
+const keyword = shallowRef('')
 const visibleTree = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return filteredTree.value
@@ -168,10 +168,10 @@ const currentAppPrefix = computed(() =>
 )
 
 // ── 新增/编辑弹窗(抽到 MenuFormModal:表单态/父级下拉/保存均在其内,父页只传数据 + 收 saved)──
-const menuFormRef = ref<InstanceType<typeof MenuFormModal> | null>(null)
+const menuFormRef = useTemplateRef<InstanceType<typeof MenuFormModal> | null>('menuFormRef')
 
 // ── 权限按钮弹窗 ────────────────────────────────────────────────
-const buttonMgrRef = ref<InstanceType<typeof ButtonManager> | null>(null)
+const buttonMgrRef = useTemplateRef<InstanceType<typeof ButtonManager> | null>('buttonMgrRef')
 const openButtons = (r: MenuTreeNode) => buttonMgrRef.value?.open({ id: r.id, title: r.title })
 /** 菜单/按钮增删改后:重拉树(刷新徽标)+ 重建壳层(即时反映授权/菜单变更)。表单弹窗与按钮弹窗共用。 */
 const reloadTree = () => Promise.all([load(), syncShell()])

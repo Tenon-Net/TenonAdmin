@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 其他配置 = 分类配置中心的通用兜底:仅列非预置分组的自定义 key-value,避免与结构化 Tab 重复。
 // 列驱动搜索/分页/竞态交 ProTable,新增/编辑弹窗状态手写(与 module 页一致,好评审)。
-import { h, reactive, ref } from 'vue'
+import { h, reactive, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NSpace, NInput, NInputNumber, NPopconfirm, NForm, NFormItem,
   useMessage, type FormInst, type FormRules,
@@ -20,7 +20,7 @@ const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
 const authStore = useAuthStore()
-const tableRef = ref<ProTableInst<SysConfig>>()
+const tableRef = useTemplateRef<ProTableInst<SysConfig>>('tableRef')
 const STRUCTURED_GROUPS = ['sys', 'security', 'upload', 'externalauth', 'job']
 
 // 内置分组有专属结构化表单;此处仍允许消费方自定义任意分组(含空分组),但不再重复展示内置项。
@@ -65,9 +65,9 @@ const columns: ProTableColumn<SysConfig>[] = [
 ]
 
 // ── 新增/编辑弹窗(FormContainer:loading/关闭时机按 onConfirm 协议接管)──
-const show = ref(false)
-const formRef = ref<FormInst | null>(null)
-const editingId = ref<ApiId | null>(null)
+const show = shallowRef(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
+const editingId = shallowRef<ApiId | null>(null)
 const rules: FormRules = {
   configKey: { required: true, whitespace: true, message: () => t('config.keyRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('config.nameRequired'), trigger: ['input', 'blur'] },

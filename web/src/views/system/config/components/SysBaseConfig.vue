@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 系统基础配置 = 分类配置中心「结构化表单」范式:字段绑定固定 config key,运维不需知道 key。
 // 载入走 configApi.listByGroup('sys') 回填,保存走 configApi.saveBatch(仅回写值)。后续加参数=加一个 FIELDS 项 + 一个 n-form-item。
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, shallowRef } from 'vue'
 import { NForm, NFormItem, NInput, NButton, NSpin, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
@@ -24,8 +24,8 @@ const FIELDS = [
 ] as const
 
 const values = reactive<Record<string, string>>({})
-const loading = ref(true)
-const saving = ref(false)
+const loading = shallowRef(true)
+const saving = shallowRef(false)
 
 onMounted(async () => {
   try {

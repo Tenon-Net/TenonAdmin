@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 凭据管理抽屉:发放 / 轮换(新旧有限并存)/ 调整到期 / 撤销。发放与轮换返回的完整凭据交给 SecretModal 一次性展示。
-import { computed, h, reactive, ref } from 'vue'
+import { computed, h, reactive, ref, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NDataTable, NDatePicker, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber,
   NPopconfirm, NRadio, NRadioGroup, NResult, NSpace, NTag, useMessage, type DataTableColumns,
@@ -22,12 +22,12 @@ const message = useMessage()
 const { run } = useConfirm()
 const authStore = useAuthStore()
 
-const show = ref(false)
+const show = shallowRef(false)
 const app = ref<IntegrationAppRow | null>(null)
 const rows = ref<OpenAppCredential[]>([])
-const loading = ref(false)
-const loadError = ref<string | null>(null)
-const secretRef = ref<InstanceType<typeof SecretModal> | null>(null)
+const loading = shallowRef(false)
+const loadError = shallowRef<string | null>(null)
+const secretRef = useTemplateRef<InstanceType<typeof SecretModal> | null>('secretRef')
 let loadSeq = 0
 
 const appId = computed(() => app.value?.id ?? 0)
@@ -79,7 +79,7 @@ function missingDate(mode: ExpiryMode, at: number | null) {
 }
 
 // 发放
-const showIssue = ref(false)
+const showIssue = shallowRef(false)
 const issueForm = reactive({ name: '', mode: 'default' as ExpiryMode, at: null as number | null })
 function openIssue() {
   Object.assign(issueForm, { name: '', mode: 'default', at: null })
@@ -101,7 +101,7 @@ async function doIssue() {
 }
 
 // 轮换:并存窗口留空 = 服务端默认值(null),0 = 旧凭据立即失效,上限由服务端校验(49018)
-const showRotate = ref(false)
+const showRotate = shallowRef(false)
 const rotateTarget = ref<OpenAppCredential | null>(null)
 const rotateForm = reactive({ overlapHours: null as number | null, name: '', mode: 'default' as ExpiryMode, at: null as number | null })
 function openRotate(r: OpenAppCredential) {
@@ -128,7 +128,7 @@ async function doRotate() {
 }
 
 // 调整到期
-const showExpiry = ref(false)
+const showExpiry = shallowRef(false)
 const expiryTarget = ref<OpenAppCredential | null>(null)
 const expiryForm = reactive({ mode: 'date' as Exclude<ExpiryMode, 'default'>, at: null as number | null })
 function openExpiry(r: OpenAppCredential) {

@@ -2,6 +2,8 @@
 
 `create-crud-frontend.md` 覆盖了最常见的 flat ProTable CRUD（Position 模式）。本文档补充树表、主从分栏、侧栏筛选和详情页四种变体。
 
+开始实现前，按 [AGENTS.md：Vue 开发规范](../AGENTS.md#vue-开发规范) 加载基础与相关专项技能。下方示例用于说明项目接入方式，Vue 写法与组件边界遵循该规范。
+
 > **本文各变体均为 `web/`（Vue）实现**。`web-react/` 侧没有单独的变体 skill：树表参考 `web-react/src/components/TreeTable.tsx` 及机构/菜单页（`views/system/org`、`views/system/menu`），详情页参考 `DetailPage.tsx`；组件契约见 `web-react/COMPONENTS.md`。
 
 ## 变体一：树表（Org 模式）

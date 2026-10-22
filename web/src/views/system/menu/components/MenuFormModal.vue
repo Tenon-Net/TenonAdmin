@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 菜单「新增/编辑」弹窗 —— 从 menu/index.vue 抽出。父页拥有 tree/modules 数据并保持响应,
 // 本弹窗只读消费,保存后 emit('saved') 交回父页重拉树 + 重建壳层。
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, shallowRef, useTemplateRef } from 'vue'
 import {
   NForm, NInput, NInputNumber, NSwitch, NSelect, NGrid, NFormItemGi,
   useMessage, type FormInst, type FormRules,
@@ -32,13 +32,13 @@ const message = useMessage()
 const UNASSIGNED = 0
 const ALL_MODULES = -1
 
-const show = ref(false)
-const formRef = ref<FormInst | null>(null)
+const show = shallowRef(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
 const rules: FormRules = {
   // whitespace: 纯空白不算填写
   title: { required: true, whitespace: true, message: () => t('menu.titleRequired'), trigger: ['input', 'blur'] },
 }
-const editingId = ref<ApiId | null>(null)
+const editingId = shallowRef<ApiId | null>(null)
 const blank = (): MenuInput => ({
   parentId: 0, type: MenuType.Menu, title: '', permission: '', sort: 0,
   enabled: true, moduleId: null, path: '', component: '', icon: '', visible: true,

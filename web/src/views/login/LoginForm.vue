@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { reactive, ref, computed, onMounted, onBeforeUnmount, h } from 'vue'
+import { reactive, computed, onMounted, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NAlert, NForm, NFormItem, NInput, NCheckbox, NModal, NDropdown, useMessage, type DropdownOption } from 'naive-ui'
+import { NAlert, NForm, NFormItem, NInput, NCheckbox, NModal, NDropdown, useMessage } from 'naive-ui'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { authApi, externalAuthApi, ApiError } from '@/api'
@@ -12,9 +12,12 @@ import { useAppStore } from '@/stores/app'
 import { useSite } from '@/composables/useSite'
 import { resetRouter } from '@/router'
 import { translateError } from '@/utils/error'
-import { splitLoginProviders, PREVIEW_ALL_SSO_BRANDS, previewAllBrandProviders } from '@/utils/oauthBrand'
 import TenonLogo from '@/components/TenonLogo.vue'
 import BrandIcon from '@/components/oauth/BrandIcon.vue'
+import { useLoginCaptcha } from './useLoginCaptcha'
+import { useLoginSms } from './useLoginSms'
+import { useLoginTotp } from './useLoginTotp'
+import { useLoginSso } from './useLoginSso'
 
 // 皮肤外壳自带品牌栏时(如双栏),不再在卡内重复 logo/标题/页脚(showFooter=false 由外壳自绘版权)。
 withDefaults(defineProps<{ showLogo?: boolean; showTitle?: boolean; showFooter?: boolean }>(), {
@@ -43,9 +46,9 @@ const pendingProvider = computed(() =>
 const pendingDisplayName = computed(() =>
   typeof route.query.displayName === 'string' ? route.query.displayName : '',
 )
-const pendingConfirmShow = ref(false)
-const pendingClaimBusy = ref(false)
-const pendingClaimToken = ref('')
+const pendingConfirmShow = shallowRef(false)
+const pendingClaimBusy = shallowRef(false)
+const pendingClaimToken = shallowRef('')
 
 // ponytail: 开发环境预填超管账号密码,免得每次手敲;生产(build)下 import.meta.env.DEV 为 false,留空。
 // SSO pending-link 场景故意不预填密码:解绑后 GitHub 会落到本页,预填+一点就 claim 看起来像「SSO 直接进了」。
@@ -58,82 +61,54 @@ const model = reactive(
         remember: true,
       },
 )
-const loading = ref(false)
+const accountLoading = shallowRef(false)
 
 // 登录形态:账号密码 / 短信免密 / 短信二次验证(40009) / TOTP 二次验证(40018)
 // 强制 MFA 未绑定(40020)用 Modal 引导,不切 mode,登录页默认也不常驻绑定链接
-const mode = ref<'account' | 'sms' | 'mfa' | 'totp'>('account')
+const mode = shallowRef<'account' | 'sms' | 'mfa' | 'totp'>('account')
 
-// 短信免密登录
-const smsModel = reactive({ phone: '', code: '' })
-// 二次验证挑战(40009 信令 args 下发)
-const mfa = reactive({ challengeId: '', phoneMask: '', code: '' })
-// TOTP 挑战(40018)
-const totp = reactive({ challengeId: '', code: '' })
+const captcha = useLoginCaptcha()
+const sms = useLoginSms()
+const totpFlow = useLoginTotp()
+const sso = useLoginSso()
+const { smsModel, challenge: mfa, countdown } = sms
+const { challenge: totp } = totpFlow
+const {
+  enabled: captchaEnabled,
+  captchaSvg,
+  captchaCode,
+  captchaType,
+  error: captchaError,
+  loading: captchaLoading,
+  ready: captchaReady,
+} = captcha
+const {
+  providers: ssoProviders,
+  displayList: ssoDisplayList,
+  split: ssoSplit,
+  overflowOptions: ssoOverflowOptions,
+} = sso
+const loading = computed(() => accountLoading.value || sms.loading.value || totpFlow.loading.value || captchaLoading.value)
 // 强制 MFA 但未绑定(40020):弹窗 + 带到 /mfa/bind 的账号
-const bindRequiredShow = ref(false)
-const bindAccount = ref('')
-
-// 发码/重发共用倒计时(同一时刻只有一个发码入口可见)
-const countdown = ref(0)
-let timer: number | undefined
-function startCountdown(s: number) {
-  countdown.value = s
-  window.clearInterval(timer)
-  timer = window.setInterval(() => {
-    countdown.value -= 1
-    if (countdown.value <= 0) window.clearInterval(timer)
-  }, 1000)
-}
-onBeforeUnmount(() => window.clearInterval(timer))
-
-// 验证码:是否启用由匿名站点信息(sys.security.captcha.enabled)运行时驱动;启用才拉取并展示。
-// 账号模式护登录,短信模式护发码(发码端点防脚本滥用)。
-const captchaEnabled = ref(false)
-const captchaId = ref('')
-const captchaSvg = ref('')
-const captchaCode = ref('')
-const captchaType = ref('char')
+const bindRequiredShow = shallowRef(false)
+const bindAccount = shallowRef('')
 
 // math 类型需算出结果再输入,提示语不同;其余类型统一“请输入验证码”。
 const captchaHint = computed(() =>
   captchaType.value === 'math' ? t('login.captchaMathPlaceholder') : t('login.captchaPlaceholder'),
 )
 
-async function loadCaptcha() {
-  try {
-    const c = await authApi.captcha()
-    captchaId.value = c.captchaId
-    captchaSvg.value = c.svg
-    captchaType.value = c.type || 'char'
-  } catch {
-    // 拉取失败不阻塞登录页渲染;点击图形可重试
-  }
-}
-
-/** 验证码一次性消费:任何用掉票据的请求失败后必刷新,避免复用作废票据 */
-async function refreshCaptchaAfterUse() {
-  if (captchaEnabled.value) {
-    captchaCode.value = ''
-    await loadCaptcha()
-  }
-}
-
 onMounted(async () => {
   // 站点信息全站共用(useSite 去重);验证码开关据此运行时驱动,启用才拉图。
   await loadSite()
-  if (site.captchaEnabled) {
-    captchaEnabled.value = true
-    await loadCaptcha()
-  }
-  void loadSsoProviders()
+  await captcha.configure(site.captchaEnabled)
+  void sso.load()
 
   // SSO 回调带回的 TOTP 挑战:直接进入 totp 完成态
   const q = router.currentRoute.value.query
   const ch = typeof q.totpChallenge === 'string' ? q.totpChallenge : ''
   if (ch) {
-    totp.challengeId = ch
-    totp.code = ''
+    totpFlow.start(ch)
     mode.value = 'totp'
   }
 })
@@ -142,52 +117,12 @@ onMounted(async () => {
 // 与 web-react 的平面主色按钮对齐(渐变只留给头像,见 DESIGN.md §7.1)。
 const heroStyle = computed(() => ({ background: app.accent }))
 
-// 第三方登录:默认后端 providers 驱动;PREVIEW_ALL_SSO_BRANDS 时铺全品牌图(图标验收)。
-const ssoProviders = ref<{ code: string; displayName: string; icon?: string | null }[]>([])
 const pendingProviderLabel = computed(() => {
   const code = pendingProvider.value
   if (!code) return t('oauth.thirdParty')
   const hit = ssoProviders.value.find((p) => p.code === code)
   return hit?.displayName || code
 })
-const ssoDisplayList = computed(() =>
-  PREVIEW_ALL_SSO_BRANDS ? previewAllBrandProviders() : ssoProviders.value,
-)
-// 预览全图标时不截断;正常模式 N=4 溢出
-const ssoSplit = computed(() =>
-  PREVIEW_ALL_SSO_BRANDS
-    ? { visible: ssoDisplayList.value, overflow: [] as typeof ssoDisplayList.value }
-    : splitLoginProviders(ssoDisplayList.value),
-)
-const ssoOverflowOptions = computed<DropdownOption[]>(() =>
-  ssoSplit.value.overflow.map((p) => ({
-    key: p.code,
-    label: () =>
-      h(
-        'span',
-        {
-          class: 'lf-sso-menu-item',
-          style: { display: 'inline-flex', alignItems: 'center', gap: '8px' },
-        },
-        [h(BrandIcon, { code: p.code, icon: p.icon, size: 20 }), h('span', null, p.displayName)],
-      ),
-  })),
-)
-async function loadSsoProviders() {
-  try {
-    ssoProviders.value = await externalAuthApi.providers()
-  } catch {
-    // 未配置外部登录或拉取失败:整段 SSO 区不显(预览全图标模式仍会显示)
-  }
-}
-/** 顶层跳 IdP(与 Gitee 一样用 <a href>)。预览假项仍给 authorize 链,未配后端会失败。 */
-function ssoHref(code: string) {
-  return externalAuthApi.authorizeUrl(code)
-}
-function onSsoOverflow(key: string | number) {
-  window.location.href = ssoHref(String(key))
-}
-
 async function enterHome() {
   await router.replace('/')
 }
@@ -248,23 +183,26 @@ async function onSubmit() {
     message.warning(t('login.required'))
     return
   }
+  if (!captchaReady.value) {
+    message.error(captchaError.value || t('error._fallback'))
+    return
+  }
   if (captchaEnabled.value && !captchaCode.value) {
     message.warning(t('login.captchaRequired'))
     return
   }
-  loading.value = true
+  accountLoading.value = true
   try {
     const res = await authApi.login({
       account: model.account,
       password: model.password,
-      ...(captchaEnabled.value ? { captchaId: captchaId.value, captchaCode: captchaCode.value } : {}),
+      ...captcha.requestFields(),
     })
     await finishLogin(res)
   } catch (e) {
     // 40018 = 密码已过、需 TOTP 二次验证
     if (e instanceof ApiError && e.code === 40018 && e.args) {
-      totp.challengeId = String(e.args.challengeId ?? '')
-      totp.code = ''
+      totpFlow.start(String(e.args.challengeId ?? ''))
       mode.value = 'totp'
     } else if (e instanceof ApiError && e.code === 40020) {
       // 40020 = 强制 MFA 未绑定 → Modal 引导自助设置(登录页默认不常驻链接)
@@ -272,17 +210,18 @@ async function onSubmit() {
       bindRequiredShow.value = true
     } else if (e instanceof ApiError && e.code === 40009 && e.args) {
       // 40009 = 密码已过、需短信二次验证
-      mfa.challengeId = String(e.args.challengeId ?? '')
-      mfa.phoneMask = String(e.args.phoneMask ?? '')
-      mfa.code = ''
+      sms.startChallenge({
+        challengeId: String(e.args.challengeId ?? ''),
+        phoneMask: String(e.args.phoneMask ?? ''),
+        resendSeconds: Number(e.args.resendSeconds ?? 60),
+      })
       mode.value = 'mfa'
-      startCountdown(Number(e.args.resendSeconds ?? 60))
     } else {
       message.error(translateError(e))
     }
-    await refreshCaptchaAfterUse()
+    await captcha.refreshAfterUse()
   } finally {
-    loading.value = false
+    accountLoading.value = false
   }
 }
 
@@ -306,13 +245,10 @@ async function onMfaSubmit() {
     message.warning(t('login.smsCodePlaceholder'))
     return
   }
-  loading.value = true
   try {
-    await finishLogin(await authApi.smsChallengeLogin({ challengeId: mfa.challengeId, code: mfa.code }))
+    await finishLogin(await sms.submitChallenge())
   } catch (e) {
     message.error(translateError(e))
-  } finally {
-    loading.value = false
   }
 }
 
@@ -321,22 +257,18 @@ async function onTotpSubmit() {
     message.warning(t('login.totpPlaceholder'))
     return
   }
-  loading.value = true
   try {
-    await finishLogin(await authApi.totpChallengeLogin({ challengeId: totp.challengeId, code: totp.code }))
+    await finishLogin(await totpFlow.submit())
   } catch (e) {
     message.error(translateError(e))
-  } finally {
-    loading.value = false
   }
 }
 
 async function onMfaResend() {
   if (countdown.value > 0) return
   try {
-    const r = await authApi.smsChallengeResend({ challengeId: mfa.challengeId })
+    await sms.resendChallenge()
     message.success(t('login.smsSent'))
-    startCountdown(r.resendSeconds)
   } catch (e) {
     message.error(translateError(e))
   }
@@ -344,10 +276,8 @@ async function onMfaResend() {
 
 function backToAccount() {
   mode.value = 'account'
-  mfa.challengeId = ''
-  mfa.code = ''
-  totp.challengeId = ''
-  totp.code = ''
+  sms.resetChallenge()
+  totpFlow.reset()
 }
 
 async function onSendSmsCode() {
@@ -356,21 +286,21 @@ async function onSendSmsCode() {
     message.warning(t('login.phonePlaceholder'))
     return
   }
+  if (!captchaReady.value) {
+    message.error(captchaError.value || t('error._fallback'))
+    return
+  }
   if (captchaEnabled.value && !captchaCode.value) {
     message.warning(t('login.captchaRequired'))
     return
   }
   try {
-    const r = await authApi.smsLoginSend({
-      phone: smsModel.phone,
-      ...(captchaEnabled.value ? { captchaId: captchaId.value, captchaCode: captchaCode.value } : {}),
-    })
+    await sms.sendLoginCode(captcha.requestFields())
     message.success(t('login.smsSent'))
-    startCountdown(r.resendSeconds)
   } catch (e) {
     message.error(translateError(e))
   }
-  await refreshCaptchaAfterUse()
+  await captcha.refreshAfterUse()
 }
 
 async function onSmsSubmit() {
@@ -378,13 +308,10 @@ async function onSmsSubmit() {
     message.warning(t('login.smsRequired'))
     return
   }
-  loading.value = true
   try {
-    await finishLogin(await authApi.smsLogin({ phone: smsModel.phone, code: smsModel.code }))
+    await finishLogin(await sms.submitLogin())
   } catch (e) {
     message.error(translateError(e))
-  } finally {
-    loading.value = false
   }
 }
 </script>
@@ -479,17 +406,24 @@ async function onSmsSubmit() {
           </n-form-item>
         </template>
         <n-form-item v-if="captchaEnabled" :label="t('login.captcha')" path="captcha">
-          <div class="lf-captcha">
+          <n-alert v-if="captchaError" class="lf-captcha-error" type="error" :show-icon="true">
+            <span>{{ captchaError }}</span>
+            <button type="button" class="lf-captcha-retry" :disabled="captchaLoading" @click="captcha.load">
+              {{ t('common.retry') }}
+            </button>
+          </n-alert>
+          <div v-else class="lf-captcha">
             <n-input
               v-model:value="captchaCode"
               :placeholder="captchaHint"
               size="large"
+              :disabled="!captchaReady || captchaLoading"
               @keyup.enter="onSubmit"
             >
               <template #prefix><AppIcon icon="ph:shield-check" /></template>
             </n-input>
             <!-- SVG 来自本站后端;点击重取一张(一次性票据) -->
-            <button type="button" class="lf-captcha-img" :title="t('login.captchaPlaceholder')" @click="loadCaptcha" v-html="captchaSvg" />
+            <button type="button" class="lf-captcha-img" :title="t('login.captchaPlaceholder')" :disabled="captchaLoading" @click="captcha.load" v-html="captchaSvg" />
           </div>
         </n-form-item>
         <n-form-item v-if="mode === 'sms'" :label="t('login.smsCode')" path="code">
@@ -522,7 +456,7 @@ async function onSmsSubmit() {
             v-for="p in ssoSplit.visible"
             :key="p.code"
             class="lf-sso-btn"
-            :href="ssoHref(p.code)"
+            :href="sso.href(p.code)"
             :title="p.displayName"
             :aria-label="p.displayName"
           >
@@ -532,7 +466,7 @@ async function onSmsSubmit() {
             v-if="ssoSplit.overflow.length"
             trigger="click"
             :options="ssoOverflowOptions"
-            @select="onSsoOverflow"
+            @select="sso.selectOverflow"
           >
             <a
               class="lf-sso-btn lf-sso-more"
@@ -665,6 +599,22 @@ async function onSmsSubmit() {
   gap: 10px;
   width: 100%;
   align-items: stretch;
+}
+.lf-captcha-error {
+  width: 100%;
+}
+.lf-captcha-error :deep(.n-alert-body__content) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+.lf-captcha-retry {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
 }
 .lf-captcha-img {
   flex: 0 0 auto;

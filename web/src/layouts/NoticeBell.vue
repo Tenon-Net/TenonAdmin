@@ -2,7 +2,7 @@
 // 顶栏消息通知铃铛。富面板(n-popover):无页签单列表 + 正文弹层。
 // 未读=圆点+加粗+淡主色底,已读=整行变淡;"读没读"是过滤器不是分类,不做成页签(筛选在个人通知页)。
 // 未读数每 30s 轮询(设计 §4 消息中心轮询模型);面板展开时拉取列表。
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NPopover, NBadge, NButton, NTag, NEllipsis, NScrollbar, NText, NEmpty, NModal, NSpin,
@@ -21,9 +21,9 @@ const { t } = useI18n()
 const router = useRouter()
 const message = useMessage()
 
-const unread = ref(0)
+const unread = shallowRef(0)
 const items = ref<NoticeMineItem[]>([])
-const loading = ref(false)
+const loading = shallowRef(false)
 
 async function fetchUnread() {
   try {
@@ -49,7 +49,7 @@ function onShow(show: boolean) {
 }
 
 // 正文弹层:内容随列表取回,直接渲染(Markdown,不能纯文本直出);点条目即标记已读。
-const showNotice = ref(false)
+const showNotice = shallowRef(false)
 const viewNotice = ref<NoticeMineItem | null>(null)
 async function openNotice(item: NoticeMineItem) {
   viewNotice.value = item

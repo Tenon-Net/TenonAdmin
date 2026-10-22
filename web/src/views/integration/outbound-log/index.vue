@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 出站调用记录 = 只读 ProTable + 详情抽屉 + 出站目标清单。记录不含请求/响应正文与任何请求头(出站秘密只在请求头里);
 // 地址不含查询串。支持从「可靠投递」详情带 ?deliveryId= / ?callId= 深链进入(刷新保持筛选)。
-import { computed, h, ref } from 'vue'
+import { computed, h, ref, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NAlert, NButton, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NSpace, NTag, useMessage,
@@ -73,7 +73,7 @@ const columns: ProTableColumn<OutboundLogRow>[] = [
   },
 ]
 
-const showDetail = ref(false)
+const showDetail = shallowRef(false)
 const detailRow = ref<OutboundLogRow | null>(null)
 function openDetail(r: OutboundLogRow) {
   detailRow.value = r
@@ -81,9 +81,9 @@ function openDetail(r: OutboundLogRow) {
 }
 
 // ── 出站目标清单(只回答是否取得到凭据,永不显示凭据)──
-const showTargets = ref(false)
+const showTargets = shallowRef(false)
 const targets = ref<OutboundTarget[]>([])
-const targetsLoading = ref(false)
+const targetsLoading = shallowRef(false)
 async function openTargets() {
   showTargets.value = true
   targetsLoading.value = true

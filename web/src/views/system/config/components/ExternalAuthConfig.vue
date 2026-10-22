@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 第三方登录运营 Tab:预置品牌全展示;未部署/未配密钥的不可打开「登录页显示」。
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, shallowRef } from 'vue'
 import { NAlert, NButton, NEmpty, NSpin, NSwitch, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
@@ -11,8 +11,8 @@ import { translateError } from '@/utils/error'
 
 const { t } = useI18n()
 const message = useMessage()
-const loading = ref(true)
-const saving = ref(false)
+const loading = shallowRef(true)
+const saving = shallowRef(false)
 const rows = ref<ConfigProviderRow[]>([])
 const enabledMap = ref<Record<string, boolean>>({})
 const baseline = ref<Record<string, boolean>>({})

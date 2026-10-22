@@ -3,7 +3,7 @@
  * 待我审批列表。菜单 component 填 `workflow/todo/index`。
  * 行点「办理」进实例详情(`/workflow/instance/:id/detail`)。
  */
-import { h, onActivated, onDeactivated, onScopeDispose, ref } from 'vue'
+import { h, onActivated, onDeactivated, onScopeDispose, shallowRef, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +16,7 @@ import type { WfTodoItem } from '@/types/workflow'
 const { t } = useI18n()
 const router = useRouter()
 const message = useMessage()
-const tableRef = ref<ProTableInst<WfTodoItem>>()
+const tableRef = useTemplateRef<ProTableInst<WfTodoItem>>('tableRef')
 
 function openDetail(r: WfTodoItem) {
   void router.push({
@@ -26,9 +26,9 @@ function openDetail(r: WfTodoItem) {
 }
 
 // 列表被 keep-alive 缓存。首次激活交给 ProTable 自己拉数,从详情办理完再回来时重拉行和总数。
-const skipRefresh = ref(true)
+const skipRefresh = shallowRef(true)
 // #53:实时推送新待办/撤回/加减签时自动重拉;keep-alive 失活期间不拉,重新激活时由 onActivated 刷新。
-const active = ref(true)
+const active = shallowRef(true)
 onDeactivated(() => { active.value = false })
 const offTodo = workflowTodoBus.on(() => { if (active.value) void tableRef.value?.refresh() })
 onScopeDispose(offTodo)

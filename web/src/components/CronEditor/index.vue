@@ -4,23 +4,21 @@
 // 日与周互斥——一侧受限(非 */?)时另一侧自动落 `?`,否则后端直接拒 47003,与其让用户撞墙不如替他落好。
 // 预览走 POST /preview-cron(任何登录用户可用):防抖 400ms,展示归一化结果 + 未来若干次时刻;
 // 非法表达式显示后端 47003 文案;everySecondWarning 只提示不拦截(后端同款态度)。
-import { computed, reactive, ref, watch, onMounted } from 'vue'
+import { computed, reactive, ref, watch, shallowRef } from 'vue'
 import { NTabs, NTabPane, NRadioGroup, NRadio, NInputNumber, NSelect, NInput, NAlert } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
-import { watchDebounced } from '@vueuse/core'
 import { jobApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { CronPreviewOutput } from '@/types/api'
 
+const model = defineModel<string>({ default: '' })
 const props = withDefaults(
   defineProps<{
-    modelValue?: string
     /** 预览条数(透传后端 count,上限 20)。 */
     previewCount?: number
   }>(),
-  { modelValue: '', previewCount: 5 },
+  { previewCount: 5 },
 )
-const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
 
 const { t } = useI18n()
 
@@ -88,8 +86,8 @@ const segs: SegDef[] = [
   { key: 'week', st: states.week, min: 0, max: 6, tab: () => t('job.cron.tabWeek'), listOptions: () => dowOptions.value },
 ]
 
-const activeTab = ref('second')
-const expr = ref(props.modelValue ?? '')
+const activeTab = shallowRef('second')
+const expr = shallowRef(model.value)
 /** parse 期间静音各段 watcher,防止"解析回填 → 重建表达式"把用户正敲到一半的原文改写掉。 */
 let parsing = false
 
@@ -127,7 +125,7 @@ function syncFromStates(edited?: 'day' | 'week') {
 function setExpr(v: string) {
   if (v === expr.value) return
   expr.value = v
-  emit('update:modelValue', v)
+  model.value = v
 }
 
 // ── token → 段(尽力解析;解析不动的形态保留原编辑态,表达式本身不丢) ──
@@ -199,7 +197,7 @@ for (const seg of segs) {
 }
 
 // 外部(表单回填/清空)改 modelValue → 同步进来
-watch(() => props.modelValue, (v) => {
+watch(model, (v) => {
   const next = v ?? ''
   if (next === expr.value) return
   expr.value = next
@@ -215,7 +213,7 @@ if (expr.value.trim()) parse(expr.value)
 
 // ── 预览(防抖 400ms;seq 挡乱序响应) ──
 const previewData = ref<CronPreviewOutput | null>(null)
-const previewError = ref('')
+const previewError = shallowRef('')
 let previewSeq = 0
 
 async function loadPreview(v: string) {
@@ -237,8 +235,17 @@ async function loadPreview(v: string) {
   }
 }
 
-watchDebounced(expr, (v) => void loadPreview(v), { debounce: 400 })
-onMounted(() => void loadPreview(expr.value))
+let firstPreview = true
+watch([expr, () => props.previewCount], ([value], _previous, onCleanup) => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    clearTimeout(timer)
+    previewSeq++
+  })
+  if (firstPreview || !value.trim()) void loadPreview(value)
+  else timer = setTimeout(() => void loadPreview(value), 400)
+  firstPreview = false
+}, { immediate: true })
 </script>
 
 <template>

@@ -2,7 +2,7 @@
 // 字典管理 = 主从:左=类型 ProTable(CRUD),点击行选中 → 右=该类型的字典项(裸 n-data-table + CRUD)。
 // 关键约束:右侧走管理端 dict/item/page(含停用项、带 id);下拉用的 dict/items/{code} 只回启用项且丢 id,不能复用。
 // 任何类型/项的增删改后调 useDictStore().invalidate(code) 失效下拉缓存,变更即时生效。
-import { h, reactive, ref } from 'vue'
+import { h, reactive, ref, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NCard, NSpace, NInput, NInputNumber, NPopconfirm, NForm, NFormItem, NDataTable, NEmpty, NSwitch,
   useMessage, type DataTableColumns, type FormInst, type FormRules,
@@ -25,12 +25,12 @@ const message = useMessage()
 const { run } = useConfirm()
 const authStore = useAuthStore()
 const dictStore = useDictStore()
-const typeTableRef = ref<ProTableInst<SysDictType>>()
+const typeTableRef = useTemplateRef<ProTableInst<SysDictType>>('typeTableRef')
 
 // ── 主从选中态 + 右侧字典项 ──
 const selectedType = ref<SysDictType | null>(null)
 const items = ref<SysDictItem[]>([])
-const itemsLoading = ref(false)
+const itemsLoading = shallowRef(false)
 
 async function loadItems() {
   const code = selectedType.value?.code
@@ -141,9 +141,9 @@ const typeColumns: ProTableColumn<SysDictType>[] = [
 ]
 
 // ── 类型 新增/编辑弹窗 ──
-const typeShow = ref(false)
-const typeFormRef = ref<FormInst | null>(null)
-const typeEditingId = ref<ApiId | null>(null)
+const typeShow = shallowRef(false)
+const typeFormRef = useTemplateRef<FormInst | null>('typeFormRef')
+const typeEditingId = shallowRef<ApiId | null>(null)
 const typeRules: FormRules = {
   code: { required: true, whitespace: true, message: () => t('dict.codeRequired'), trigger: ['input', 'blur'] },
   name: { required: true, whitespace: true, message: () => t('dict.nameRequired'), trigger: ['input', 'blur'] },
@@ -231,9 +231,9 @@ const itemColumns: DataTableColumns<SysDictItem> = [
 ]
 
 // ── 字典项 新增/编辑弹窗 ──
-const itemShow = ref(false)
-const itemFormRef = ref<FormInst | null>(null)
-const itemEditingId = ref<ApiId | null>(null)
+const itemShow = shallowRef(false)
+const itemFormRef = useTemplateRef<FormInst | null>('itemFormRef')
+const itemEditingId = shallowRef<ApiId | null>(null)
 const itemRules: FormRules = {
   label: { required: true, whitespace: true, message: () => t('dict.itemLabelRequired'), trigger: ['input', 'blur'] },
   value: { required: true, whitespace: true, message: () => t('dict.itemValueRequired'), trigger: ['input', 'blur'] },

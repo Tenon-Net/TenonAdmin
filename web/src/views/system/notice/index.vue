@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 消息通知管理(NoticeController 管理端):发布广播通知 + 分页列表 + 删除。
 // 用户侧(未读角标/我的通知/标记已读)在顶栏铃铛(AppHeader.vue),不在本页。
-import { computed, h, onMounted, reactive, ref } from 'vue'
+import { computed, h, onMounted, reactive, ref, shallowRef, useTemplateRef } from 'vue'
 import {
   NButton, NInput, NModal, NPopconfirm, NForm, NFormItem, NSelect, NTag, NSpace,
   useMessage, type FormInst, type FormRules,
@@ -22,7 +22,7 @@ const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
 const authStore = useAuthStore()
-const tableRef = ref<ProTableInst<SysNotice>>()
+const tableRef = useTemplateRef<ProTableInst<SysNotice>>('tableRef')
 
 const typeLabel = (ty: NoticeType) =>
   ty === NoticeType.Announcement ? t('notice.typeAnnouncement')
@@ -69,8 +69,8 @@ const columns: ProTableColumn<SysNotice>[] = [
 ]
 
 // ── 发布弹窗 ──
-const show = ref(false)
-const formRef = ref<FormInst | null>(null)
+const show = shallowRef(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
 const rules: FormRules = {
   title: { required: true, whitespace: true, message: () => t('notice.titleRequired'), trigger: ['input', 'blur'] },
   receiverIds: {
@@ -123,7 +123,7 @@ function openPublish() {
 }
 
 // ── 查看(只读渲染 Markdown 正文)──
-const showView = ref(false)
+const showView = shallowRef(false)
 const viewRow = ref<SysNotice | null>(null)
 function openView(r: SysNotice) {
   viewRow.value = r

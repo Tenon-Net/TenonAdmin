@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, watch, shallowRef, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { NModal, NInput, NScrollbar, NEmpty } from 'naive-ui'
 import AppIcon from '@/components/AppIcon.vue'
@@ -15,9 +15,9 @@ const router = useRouter()
 const { t } = useI18n()
 const leaves = useMenuFlat()
 
-const q = ref('')
-const cursor = ref(0)
-const inputRef = ref<InstanceType<typeof NInput>>()
+const q = shallowRef('')
+const cursor = shallowRef(0)
+const inputRef = useTemplateRef<InstanceType<typeof NInput>>('inputRef')
 
 // 标题含 '.' 视为 i18n key(如 menu.dashboard)、否则为字面量——与 useMenuFlat 同一约定。
 function label(item: MenuLeaf) {

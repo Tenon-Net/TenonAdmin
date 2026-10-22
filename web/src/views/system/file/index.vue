@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 文件管理 = 只读 ProTable(搜索 originalName→FileName)+ 工具栏 FileUpload 触发器 + 行内下载/删除。
 // 下载走 blob(Bearer 自动带)→ createObjectURL + <a download> + revoke;删除走 useConfirm。
-import { h, ref } from 'vue'
+import { h, useTemplateRef } from 'vue'
 import { NButton, NSpace, NPopconfirm, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
@@ -18,7 +18,7 @@ const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
 const authStore = useAuthStore()
-const tableRef = ref<ProTableInst<SysFile>>()
+const tableRef = useTemplateRef<ProTableInst<SysFile>>('tableRef')
 const { checkedKeys, hasSelection, run: batchDelete } = useBatchDelete({
   remove: fileApi.batchRemove,
   refresh: () => tableRef.value?.refresh(),

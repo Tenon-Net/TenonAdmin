@@ -58,8 +58,8 @@ export const useTabsStore = defineStore('tabs', {
       const wasActive = router.currentRoute.value.path === path
       this.tabs.splice(idx, 1)
       if (wasActive) {
-        const next = this.tabs[idx] ?? this.tabs[idx - 1] ?? this.tabs[0]!
-        router.push(next.fullPath)
+        const next = this.tabs[idx] ?? this.tabs[idx - 1] ?? this.tabs[0]
+        router.push(next?.fullPath ?? useAuthStore().homePath)
       }
     },
     closeOthers(path: string) {

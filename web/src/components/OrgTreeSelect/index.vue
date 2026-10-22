@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 机构树下拉:onMounted 拉 orgApi.list()(平铺)→ buildTree 拼树;value/placeholder/size… 一切经 $attrs 透传 n-tree-select。
 // excludeSubtreeOf:编辑机构选上级时剪掉自身子树(防把自己挂到自己后代下成环)——R4 用户页传 null(不剪),R9 机构页传 editingId。
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, shallowRef } from 'vue'
 import { NTreeSelect } from 'naive-ui'
 import { orgApi } from '@/api'
 import { buildTree, collectSubtreeIds } from '@/utils/tree'
@@ -11,7 +11,7 @@ defineOptions({ inheritAttrs: false })
 const props = defineProps<{ excludeSubtreeOf?: ApiId | null }>()
 
 const flat = ref<SysOrg[]>([])
-const loading = ref(false)
+const loading = shallowRef(false)
 onMounted(async () => {
   loading.value = true
   try {

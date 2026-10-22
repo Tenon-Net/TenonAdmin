@@ -87,6 +87,8 @@ describe('useAuthStore.hasPerm', () => {
     auth.modules = [{ id: 1, code: 'x', title: 'X', sort: 0 }]
     auth.currentModuleId = 1
     auth.routesReady = true
+    auth.initializationError = 'network failed'
+    auth.initializationRedirect = '/system/user'
     const tabs = useTabsStore()
     tabs.tabs = [{ path: '/leaf', fullPath: '/leaf', title: 'leaf', name: 'menu-3' }]
 
@@ -100,6 +102,8 @@ describe('useAuthStore.hasPerm', () => {
     expect(auth.permissionsLoaded).toBe(false)
     expect(auth.isSuperAdmin).toBe(false)
     expect(auth.routesReady).toBe(false)
+    expect(auth.initializationError).toBe('')
+    expect(auth.initializationRedirect).toBe('')
     expect(tabs.tabs).toEqual([]) // reset 连带清了 tabs
   })
 })

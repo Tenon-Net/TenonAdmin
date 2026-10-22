@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 账号绑定(个人中心 + 品牌化):启用 providers ∪ 已绑定停用项(B-A);卡片网格与配置 Tab 同风。
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, shallowRef } from 'vue'
 import { NAlert, NButton, NEmpty, NSpin, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { externalAuthApi, type ExternalProvider, type ExternalBinding } from '@/api'
@@ -14,10 +14,10 @@ const { t } = useI18n()
 const message = useMessage()
 const { confirm } = useConfirm()
 
-const loading = ref(true)
+const loading = shallowRef(true)
 const providers = ref<ExternalProvider[]>([])
 const bindings = ref<ExternalBinding[]>([])
-const busyCode = ref<string | null>(null)
+const busyCode = shallowRef<string | null>(null)
 
 const rows = computed(() => mergeBindingRows(providers.value, bindings.value))
 const boundCount = computed(() => rows.value.filter((r) => !!r.binding).length)

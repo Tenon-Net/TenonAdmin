@@ -2,7 +2,7 @@
 // 任务监控(G7)= 4 张 stat 卡 + 近 14 日成败趋势 + 即将执行 + 集群节点,整页吃一个 dashboard 端点。
 // 15 秒轮询:页面被 keep-alive,切走的标签没必要继续打点 → onDeactivated 也要停,回来再启;
 // onUnmounted 兜底清定时器,防组件销毁后计时器泄漏还在发请求。
-import { computed, h, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
+import { computed, h, onActivated, onDeactivated, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 import { NGrid, NGi, NCard, NSpin, NTag, NDataTable, useMessage, type DataTableColumns } from 'naive-ui'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
@@ -11,42 +11,32 @@ import type { EChartsOption } from 'echarts'
 import { jobApi } from '@/api'
 import { translateError } from '@/utils/error'
 import type { JobDashboard, JobNodeItem, JobUpcomingItem } from '@/types/api'
+import { createSerialPoller } from './poller'
 
 const { t } = useI18n()
 const message = useMessage()
 
 const data = ref<JobDashboard | null>(null)
-const loading = ref(true)
+const loading = shallowRef(true)
 
-async function load(silent = true) {
-  try {
-    data.value = await jobApi.dashboard()
-  } catch (e) {
+const poller = createSerialPoller({
+  intervalMs: 15_000,
+  fetch: () => jobApi.dashboard(),
+  apply: (value) => {
+    data.value = value
+    loading.value = false
+  },
+  onError: (e, silent) => {
     // 首次失败要让用户知道;轮询失败静默(网络抖一下不必每 15 秒糊一脸红)
     if (!silent) message.error(translateError(e))
-  } finally {
     loading.value = false
-  }
-}
-
-let timer: number | null = null
-function start() {
-  if (timer != null) return
-  timer = window.setInterval(() => void load(), 15_000)
-}
-function stop() {
-  if (timer != null) {
-    window.clearInterval(timer)
-    timer = null
-  }
-}
-onMounted(() => {
-  void load(false)
-  start()
+  },
 })
-onActivated(start)
-onDeactivated(stop)
-onUnmounted(stop)
+
+onMounted(() => poller.start(false))
+onActivated(() => poller.start(false))
+onDeactivated(poller.stop)
+onUnmounted(poller.stop)
 
 /** 计数未到位时显示 —,而不是先闪个 0。 */
 const num = (v: number | undefined) => (v === undefined ? '—' : v)

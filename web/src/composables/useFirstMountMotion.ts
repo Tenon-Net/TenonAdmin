@@ -13,7 +13,7 @@ export function cssTimeMs(value: string): number {
  * 少量主区块仅首次 mount 入场。KeepAlive 恢复不会再次调用 onMounted；停用、隐藏、
  * 设置切换与卸载都会 cancel 到 CSS 最终态，不依赖动画事件推进业务状态。
  */
-export function useFirstMountMotion(targets: Ref<HTMLElement | undefined>[]) {
+export function useFirstMountMotion(targets: readonly Readonly<Ref<HTMLElement | null | undefined>>[]) {
   const app = useAppStore()
   const owned = new Set<Animation>()
   let active = true

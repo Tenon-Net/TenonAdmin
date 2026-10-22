@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch, shallowRef, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NDropdown, NScrollbar, type DropdownOption } from 'naive-ui'
 import AppIcon from '@/components/AppIcon.vue'
@@ -12,9 +12,9 @@ const router = useRouter()
 const { t, locale } = useI18n()
 
 const activePath = computed(() => route.path)
-const stripRef = ref<HTMLElement>()
-const tabsbarRef = ref<HTMLElement>()
-const indicatorReady = ref(false)
+const stripRef = useTemplateRef<HTMLElement>('stripRef')
+const tabsbarRef = useTemplateRef<HTMLElement>('tabsbarRef')
+const indicatorReady = shallowRef(false)
 const indicatorStyle = ref({ width: '0px', transform: 'translateX(0px)' })
 let resizeObserver: ResizeObserver | undefined
 let scrollContainer: HTMLElement | undefined
@@ -60,9 +60,9 @@ function renderIcon(name: string) {
   return () => h(AppIcon, { icon: name, size: 16 })
 }
 
-const ctxShow = ref(false)
-const ctxX = ref(0)
-const ctxY = ref(0)
+const ctxShow = shallowRef(false)
+const ctxX = shallowRef(0)
+const ctxY = shallowRef(0)
 const ctxTab = ref<TabItem>()
 const ctxOptions = computed<DropdownOption[]>(() => [
   { label: t('tabs.refresh'), key: 'refresh', icon: renderIcon('lucide:rotate-cw') },

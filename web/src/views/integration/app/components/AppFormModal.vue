@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 接入应用新增/编辑。编码创建后不可改(调用记录与排障的稳定锚点);启停走列表行内开关的独立接口。
-import { reactive, ref } from 'vue'
+import { reactive, shallowRef, useTemplateRef } from 'vue'
 import { NForm, NFormItem, NInput, NInputNumber, NSwitch, useMessage, type FormInst, type FormRules } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import FormContainer from '@/components/FormContainer/index.vue'
@@ -16,9 +16,9 @@ const { t } = useI18n()
 const message = useMessage()
 const authStore = useAuthStore()
 
-const show = ref(false)
-const formRef = ref<FormInst | null>(null)
-const editingId = ref<number | string | null>(null)
+const show = shallowRef(false)
+const formRef = useTemplateRef<FormInst | null>('formRef')
+const editingId = shallowRef<number | string | null>(null)
 
 interface AppForm {
   code: string

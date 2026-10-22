@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 上传策略 = 结构化表单:大小上限 + 后缀白名单(GroupCode='upload')。
 // 后端 FileService.UploadAsync 读这两键强制执行,改值即时生效、无需重发。后缀以逗号分隔字符串落库。
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, shallowRef } from 'vue'
 import { NForm, NFormItem, NInputNumber, NDynamicTags, NButton, NSpin, NText, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/AppIcon.vue'
@@ -14,10 +14,10 @@ const KEY_ALLOWED = 'sys.upload.allowedExtensions'
 const { t } = useI18n()
 const message = useMessage()
 
-const maxSizeMb = ref(20)
+const maxSizeMb = shallowRef(20)
 const exts = ref<string[]>([])
-const loading = ref(true)
-const saving = ref(false)
+const loading = shallowRef(true)
+const saving = shallowRef(false)
 
 onMounted(async () => {
   try {

@@ -2,7 +2,7 @@
 // 我的通知(个人页,非管理端):列出发给自己的通知并读正文、标记已读。
 // 走 [ActiveSession] 的 notice/mine —— 任何登录用户可调,故本页注册为静态路由,不进菜单/权限系统。
 // 正文随列表一起返回(NoticeMineItem.content),点"查看"不再发请求。
-import { h, ref } from 'vue'
+import { h, ref, shallowRef, useTemplateRef } from 'vue'
 import { NButton, NModal, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
@@ -16,7 +16,7 @@ import { translateError } from '@/utils/error'
 const { t } = useI18n()
 const message = useMessage()
 const { run } = useConfirm()
-const tableRef = ref<ProTableInst<NoticeMineItem>>()
+const tableRef = useTemplateRef<ProTableInst<NoticeMineItem>>('tableRef')
 
 const columns: ProTableColumn<NoticeMineItem>[] = [
   {
@@ -49,7 +49,7 @@ const columns: ProTableColumn<NoticeMineItem>[] = [
 ]
 
 // ── 查看正文(行里已带 content,不发请求)+ 顺手标记已读 ──
-const showView = ref(false)
+const showView = shallowRef(false)
 const viewRow = ref<NoticeMineItem | null>(null)
 async function openView(r: NoticeMineItem) {
   viewRow.value = r

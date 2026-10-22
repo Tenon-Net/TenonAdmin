@@ -3,7 +3,7 @@
  * 我已办的。菜单 component 填 `workflow/done/index`。
  * 行点击或「查看」进实例详情(`/workflow/instance/:id/detail`)。
  */
-import { h, onActivated, ref } from 'vue'
+import { h, onActivated, shallowRef, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -15,7 +15,7 @@ import type { WfDoneItem, WfInstanceStatus, WfTaskAction } from '@/types/workflo
 const { t } = useI18n()
 const router = useRouter()
 const message = useMessage()
-const tableRef = ref<ProTableInst<WfDoneItem>>()
+const tableRef = useTemplateRef<ProTableInst<WfDoneItem>>('tableRef')
 
 function openDetail(r: WfDoneItem) {
   if (r.instanceId == null) return
@@ -26,7 +26,7 @@ function openDetail(r: WfDoneItem) {
 }
 
 // 列表被 keep-alive 缓存。首次激活交给 ProTable 自己拉数,回到本页时重拉。
-const skipRefresh = ref(true)
+const skipRefresh = shallowRef(true)
 onActivated(() => {
   if (skipRefresh.value) {
     skipRefresh.value = false

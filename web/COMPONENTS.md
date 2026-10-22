@@ -2,6 +2,8 @@
 
 > 约定:后台不设组件演示菜单,组件用法统一沉淀在本文件。完整 API 见各包 README。
 
+Vue 技术规范与技能加载入口见 [AGENTS.md：Vue 开发规范](../AGENTS.md#vue-开发规范)。本文件补充 TenonAdmin 的组件接入契约。
+
 ## 动效约定
 
 - 参数与降级只从 `src/styles/motion.css` 获取；CSS 使用 `--motion-*` 语义变量，JS 动画通过 `getComputedStyle` 读取同一变量，禁止另写毫秒常量。

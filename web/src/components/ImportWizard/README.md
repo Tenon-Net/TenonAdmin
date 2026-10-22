@@ -9,6 +9,8 @@
 
 演示模式下 preview/validate/commit 会被 `DemoModeFilter` 拦成 41002 —— 组件经 `translateError` 给出可读提示(坑 4)。
 
+请求期间锁定文件、列映射、预览单元格与重复策略，避免返回结果覆盖新输入。`ImportPreviewTable.vue` 负责单元格编辑与错误展示，通过类型化事件通知向导修改草稿；向导拥有步骤、校验和提交。
+
 ## Props / Model
 
 | 属性 | 类型 | 说明 |

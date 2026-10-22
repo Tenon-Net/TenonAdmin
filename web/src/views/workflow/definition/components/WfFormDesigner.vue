@@ -22,30 +22,29 @@ import {
   type WfFormSchema,
 } from '@/workflow/schema'
 
-const props = defineProps<{ modelValue: WfFormSchema | null }>()
-const emit = defineEmits<{ 'update:modelValue': [WfFormSchema | null] }>()
+const modelValue = defineModel<WfFormSchema | null>({ required: true })
 const { t } = useI18n()
 
 const typeOptions = computed(() => WF_FORM_FIELD_TYPES.map((value) => ({
   value,
   label: t(`workflow.form.type.${value}`),
 })))
-const issues = computed(() => validateWfFormSchema(props.modelValue))
+const issues = computed(() => validateWfFormSchema(modelValue.value))
 const schemaErrors = computed(() => [...new Set(
   issues.value.filter((issue) => issue.fieldIndex == null).map((issue) => t(`workflow.form.error.${issue.code}`)),
 )])
 
 function updateField(index: number, update: (field: WfFormField) => WfFormField) {
-  if (!props.modelValue) return
-  const fields = [...props.modelValue.fields]
+  if (!modelValue.value) return
+  const fields = [...modelValue.value.fields]
   const field = fields[index]
   if (!field) return
   fields[index] = update(field)
-  emit('update:modelValue', { version: 1, fields })
+  modelValue.value = { version: 1, fields }
 }
 
 function updateProp(index: number, key: string, value: unknown) {
-  const field = props.modelValue?.fields[index]
+  const field = modelValue.value?.fields[index]
   if (!field) return
   updateField(index, (current) => updateWfFormFieldProp(current, key, value))
 }
@@ -74,14 +73,14 @@ function options(field: WfFormField): WfFormOption[] {
 }
 
 function updateOption(fieldIndex: number, optionIndex: number, patch: Partial<WfFormOption>) {
-  const field = props.modelValue?.fields[fieldIndex]
+  const field = modelValue.value?.fields[fieldIndex]
   if (!field) return
   const next = options(field).map((option, index) => index === optionIndex ? { ...option, ...patch } : option)
   updateProp(fieldIndex, 'options', next)
 }
 
 function addOption(fieldIndex: number) {
-  const field = props.modelValue?.fields[fieldIndex]
+  const field = modelValue.value?.fields[fieldIndex]
   if (!field) return
   const current = options(field)
   let n = current.length + 1
@@ -90,12 +89,12 @@ function addOption(fieldIndex: number) {
 }
 
 function removeOption(fieldIndex: number, optionIndex: number) {
-  const field = props.modelValue?.fields[fieldIndex]
+  const field = modelValue.value?.fields[fieldIndex]
   if (field) updateProp(fieldIndex, 'options', options(field).filter((_, index) => index !== optionIndex))
 }
 
 function changeType(index: number, type: WfFormFieldType) {
-  const field = props.modelValue?.fields[index]
+  const field = modelValue.value?.fields[index]
   if (!field) return
   updateField(index, () => ({ ...createWfFormField(type, field.key), label: field.label, required: field.required, placeholder: field.placeholder }))
 }
@@ -105,7 +104,7 @@ function fieldErrors(index: number): string[] {
 }
 
 function addField(type: string) {
-  if (WF_FORM_FIELD_TYPES.includes(type as WfFormFieldType)) emit('update:modelValue', addWfFormField(props.modelValue, type as WfFormFieldType))
+  if (WF_FORM_FIELD_TYPES.includes(type as WfFormFieldType)) modelValue.value = addWfFormField(modelValue.value, type as WfFormFieldType)
 }
 </script>
 
@@ -123,9 +122,9 @@ function addField(type: string) {
       </template>
       <template #header-extra>
         <n-space :size="4">
-          <n-button quaternary circle size="small" :disabled="index === 0" :aria-label="t('workflow.form.moveUp')" @click="emit('update:modelValue', moveWfFormField(modelValue!, index, -1))"><template #icon><AppIcon icon="ph:arrow-up" /></template></n-button>
-          <n-button quaternary circle size="small" :disabled="index === modelValue!.fields.length - 1" :aria-label="t('workflow.form.moveDown')" @click="emit('update:modelValue', moveWfFormField(modelValue!, index, 1))"><template #icon><AppIcon icon="ph:arrow-down" /></template></n-button>
-          <n-button quaternary circle size="small" type="error" :aria-label="t('workflow.form.removeField')" @click="emit('update:modelValue', removeWfFormField(modelValue!, index))"><template #icon><AppIcon icon="ph:trash" /></template></n-button>
+          <n-button quaternary circle size="small" :disabled="index === 0" :aria-label="t('workflow.form.moveUp')" @click="modelValue = moveWfFormField(modelValue!, index, -1)"><template #icon><AppIcon icon="ph:arrow-up" /></template></n-button>
+          <n-button quaternary circle size="small" :disabled="index === modelValue!.fields.length - 1" :aria-label="t('workflow.form.moveDown')" @click="modelValue = moveWfFormField(modelValue!, index, 1)"><template #icon><AppIcon icon="ph:arrow-down" /></template></n-button>
+          <n-button quaternary circle size="small" type="error" :aria-label="t('workflow.form.removeField')" @click="modelValue = removeWfFormField(modelValue!, index)"><template #icon><AppIcon icon="ph:trash" /></template></n-button>
         </n-space>
       </template>
 

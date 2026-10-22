@@ -27,6 +27,9 @@ export const useAuthStore = defineStore('auth', {
     // 超级管理员的按钮权限不受权限码集合限制。
     isSuperAdmin: false,
     routesReady: false,
+    // 动态路由初始化失败时保留会话，并把失败原因交给静态错误页展示/重试。
+    initializationError: '',
+    initializationRedirect: '',
   }),
   getters: {
     // 无可用首页时回到应用选择器，避免跳进其他应用的固定路径。
@@ -49,6 +52,8 @@ export const useAuthStore = defineStore('auth', {
       this.permissionsLoaded = false
       this.isSuperAdmin = false
       this.routesReady = false
+      this.initializationError = ''
+      this.initializationRedirect = ''
       useTabsStore().clearTabs()
     },
   },

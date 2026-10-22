@@ -9,7 +9,7 @@ interface UserInfo {
   avatar?: string | null
   /** 是否需强制改密(管理员建号/重置后首登为 true);路由守卫据此强制跳改密页。 */
   mustChangePassword: boolean
-  /** 登录时快照的超管标记;profile 故障时 v-auth 用此值 fail-open。 */
+  /** 登录时快照的超管标记；启动授权仍以 profile 成功响应为准。 */
   isSuperAdmin?: boolean
 }
 

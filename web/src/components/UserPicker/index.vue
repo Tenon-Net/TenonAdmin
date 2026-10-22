@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onMounted, reactive, ref, unref } from 'vue'
+import { computed, h, onMounted, reactive, ref, unref, shallowRef, useTemplateRef } from 'vue'
 import { NButton, NEmpty, NInput, NTree, useMessage } from 'naive-ui'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import { useI18n } from 'vue-i18n'
@@ -16,8 +16,8 @@ const emit = defineEmits<{ (e: 'confirm', ids: ApiId[]): void }>()
 const { t } = useI18n()
 const message = useMessage()
 
-const show = ref(false)
-const tableRef = ref<ProTableInst<UserItem>>()
+const show = shallowRef(false)
+const tableRef = useTemplateRef<ProTableInst<UserItem>>('tableRef')
 
 // ── 机构树(左面板) ──
 const orgFlat = ref<SysOrg[]>([])
@@ -25,7 +25,7 @@ const orgTree = computed(() => {
   const all = { id: 0, parentId: -1, name: t('common.all'), children: buildTree(orgFlat.value) }
   return [all]
 })
-const selectedOrgKey = ref<ApiId | null>(null)
+const selectedOrgKey = shallowRef<ApiId | null>(null)
 const orgId = computed(() => (selectedOrgKey.value && selectedOrgKey.value !== 0 ? selectedOrgKey.value : undefined))
 
 onMounted(async () => {
@@ -65,7 +65,7 @@ const columns: ProTableColumn<UserItem>[] = [
 // ── 已选用户(右面板) ──
 const selected = reactive<UserItem[]>([])
 const selectedSet = computed(() => new Set(selected.map((u) => u.id)))
-const selectedSearch = ref('')
+const selectedSearch = shallowRef('')
 const filteredSelected = computed(() => {
   const q = selectedSearch.value.trim().toLowerCase()
   if (!q) return selected

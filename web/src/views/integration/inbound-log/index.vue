@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 开放调用记录 = 只读 ProTable + 详情抽屉。记录不含请求/响应正文与任何认证头;凭据只以公开标识出现。
 // 支持从接入应用页带 ?appId= 深链进入(刷新保持筛选)。
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NButton, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NTag, useMessage,
@@ -83,7 +83,7 @@ const columns: ProTableColumn<InboundLogRow>[] = [
   },
 ]
 
-const showDetail = ref(false)
+const showDetail = shallowRef(false)
 const detailRow = ref<InboundLogRow | null>(null)
 function openDetail(r: InboundLogRow) {
   detailRow.value = r
