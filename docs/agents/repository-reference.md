@@ -106,6 +106,10 @@ React 19 + Ant Design (antd 6) + `@ant-design/pro-components` + zustand (persist
 
 ## CI
 
+`backend-ci` 支持手动全量验证：选择包含该入口的 workflow 分支，并传入必填的 `test_sha`（完整 40 位小写提交 SHA）。所有数据库矩阵和模板 smoke 都检出并校验这个提交；SQL Server 四片与 nightly 一样无过滤运行。日志、step summary 及数据库测试 artifact 的 `source-identity.txt` 分别记录 workflow 定义的 SHA 与实际被测源码 SHA，两者可能不同，不能用 Actions 页面的 workflow 提交替代被测提交。手动运行保留现有 check 名与完整矩阵，不触发 nightly 告警。
+
+GitHub 的 `schedule` 只运行默认分支，因此 nightly 不能替代 dev 的全量验收。入口合入 dev 后，可执行 `gh workflow run backend-ci.yml --ref dev -f test_sha="$(git rev-parse origin/dev)"`；执行前先 fetch 并确认目标 SHA。每个测试步骤清除继承的 `TENON_*`，仅记录变量名，再应用本轮配置；MySQL 测试查询并断言版本为 8、`max_connections=1000`。
+
 `.github/workflows/backend-ci.yml` runs on pushes/PRs touching `backend/**`, `templates/**`, the workflow itself, or the two sharding scripts (`scripts/test-backend-shard.py`, `scripts/test_backend_shard_test.py`), with build/test, template smoke, and a SQL Server aggregate check:
 - **`build-test`** — build + test on a `[sqlite, mysql, sqlserver, postgres]` matrix (`fail-fast: false`, so one red leg doesn't mask the others). SQL Server has four independent runner/container shards; the other dialects keep one full-suite leg each. MySQL/SqlServer/PostgreSQL/Redis service containers start on *every* leg; `TestDb.cs` derives an isolated DB per test from the DB-type env vars. `TENON_TEST_REDIS` is set on all legs, so the Redis contract tests actually run instead of silently skipping. **On push/PR the SqlServer leg runs only a dialect-sensitive subset** (`TEST_FILTER` in the Test step) — the other three legs run the full suite; see the SqlServer subsection below.
 - **`sqlserver-check`** — retains the required check name `build-test (sqlserver)` and fails unless the entire build/test matrix succeeds, so one passing shard cannot conceal another failing or cancelled shard.
@@ -115,7 +119,7 @@ React 19 + Ant Design (antd 6) + `@ant-design/pro-components` + zustand (persist
 
 `backend-release.yml` handles NuGet packaging. Required checks depend on changed paths and triggers; inspect the current workflow files and PR checks.
 
-### The sqlserver leg: dialect-sensitive subset on push/PR, full nightly
+### The sqlserver leg: dialect-sensitive subset on push/PR, full nightly or manual
 
 The full SqlServer suite ran **40–60 min** (measured 2026-07-20: 2302 / 2466 / 2748 / 3000 / 3124 / 3277 / 3335 / 3514s, all green) vs 3–5 min for the other three legs. It was never hung — just slow — so don't add a short `timeout-minutes` (under ~90 would turn a green leg red), and don't cancel a nightly SqlServer run for "looking stuck".
 
@@ -130,6 +134,6 @@ The full SqlServer suite ran **40–60 min** (measured 2026-07-20: 2302 / 2466 /
 
 上面的 2026-07-20 刷盘结论属于历史测量。当前 `DatabaseInitializer` 已将 CodeFirst 包在事务里；本地 SQL Server 2022 CU26 的 15 条持久化回归基线中，查询优化累计约 423s，事务日志等待仅 461ms，主要成本是反复建隔离库时 SqlSugar 元数据 SQL 的编译。没有修改数据库耐久性、兼容级别或测试隔离。
 
-当前 CI 用 `scripts/test-backend-shard.py` 先按原 `TEST_FILTER` 调用 VSTest 发现方法，再排序轮询分成四片；Theory 的全部数据行留在同一片。push/PR 的原子集不变，nightly 无过滤发现，四片并集保持全量；新增方法自动参与分片。每片上传 `discovered.txt`、`selected.txt` 和 TRX，保留七天。脚本校验可运行 `python3 -B scripts/test_backend_shard_test.py`。
+当前 CI 用 `scripts/test-backend-shard.py` 先按原 `TEST_FILTER` 调用 VSTest 发现方法，再排序轮询分成四片；Theory 的全部数据行留在同一片。push/PR 的原子集不变，nightly 与手动运行无过滤发现，四片并集保持全量；新增方法自动参与分片。每片上传 `discovered.txt`、`selected.txt` 和 TRX，保留七天。脚本校验可运行 `python3 -B scripts/test_backend_shard_test.py`。
 
 同一组 15 条真实 SQL Server 测试，本地基线总耗时 511.6s（测试报告 8m25s），四个独立容器并行总耗时 156.3s，均 15/15 且逐测试名称/结果一致。该单次对比减少约 69% 等待时间；分片不减少总计算量，GitHub runner 排队和整套测试分布仍影响最终 CI 时间，不能把这个比例直接当成 GitHub 全套实测。旧 PR filter 的 151 个方法与 nightly 的 1121 个方法已通过真实 VSTest 重新发现验证分片无遗漏、无重复；这项检查是覆盖清单核对，不是全套测试通过的声明。
