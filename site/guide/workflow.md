@@ -55,6 +55,23 @@ Regular employees need the relevant menus under Business Center → Approval Cen
 
 Long-term delegation affects newly created tasks after a rule takes effect; it does not reassign existing pending tasks. Transfer or one-time delegation from a task detail is a separate operation.
 
+## Interpret runtime status
+
+`status=1` means that an instance has not reached a terminal state. It does not guarantee that a pending task exists. List and detail responses also include `blockedNodeIds`, `hasPendingTask`, and `returnedToStarter`. Apply the following rules in order to match the Vue and React interfaces:
+
+| Order | Condition | Interpretation | Built-in UI label |
+|---|---|---|---|
+| 1 | `returnedToStarter=true` | Returned to the starter and waiting for edits and resubmission | Returned to starter |
+| 2 | `returnedToStarter=false`, `status=1`, non-empty `blockedNodeIds`, and `hasPendingTask=true` | Partially blocked: at least one active token has no associated pending task while another part of the instance still has one | Running (a node is blocked) |
+| 3 | `returnedToStarter=false`, `status=1`, non-empty `blockedNodeIds`, and `hasPendingTask=false` | Blocked: active tokens have no associated pending task, and the instance has no other pending task | Blocked |
+| 4 | None of the above | Use `status`; `status=1` means an ordinary running instance here | Running |
+
+`blockedNodeIds` is a runtime marker derived by the current implementation. It contains node IDs for active tokens that have no associated pending task and are not at the Start node. Besides approval nodes without an assignee, it may include Webhook or AI Decision nodes waiting for asynchronous execution to finish. Do not treat this field alone as proof of a missing approver or a failed node execution. `hasPendingTask` describes the entire instance, not an individual node. `returnedToStarter` has the highest priority. A returned instance remains at `status=1` because it can be resubmitted and has not ended.
+
+The administrator monitor endpoint, `GET /api/v1/workflow/instance/monitor`, accepts `Status`, `DefinitionId`, `BusinessKey`, `StarterUserId`, `ActorUserId`, and `CcUserId` filters. The business key is an exact match. The actor filter matches either a current pending actor or a historical actor. The bundled monitor pages expose status, business key, starter, actor, and CC filters; `DefinitionId` is currently available through the API only.
+
+The monitor endpoint does not currently provide filters for blocked, partially blocked, or returned instances, and these derived states have no separate enum values. `Status=1` returns every non-terminal instance. A client may classify the current page with the rules above, but the number left after client-side filtering is not a global count.
+
 ## External delivery and AI behavior {#preview-boundaries}
 
 - The default `IWfOutboxTransport` is `NoOpWfOutboxTransport`. To deliver messages to an external system, register a real implementation **before** `AddTenonAdminWorkflow`; otherwise outgoing messages enter a failed state. APIs support listing failed records and replaying them, but there is no full Outbox dead-letter management page yet.
