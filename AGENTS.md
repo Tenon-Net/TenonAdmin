@@ -21,7 +21,7 @@ TenonAdmin (榫卯) is a distributable .NET 10 admin kernel shipped as NuGet pac
 | Task | 按需参考 |
 | --- | --- |
 | Backend services, DI, auth, database, bootstrap | [Repository reference: backend](docs/agents/repository-reference.md#backend-architecture) and relevant tests/callers |
-| Vue pages/components | [web/COMPONENTS.md](web/COMPONENTS.md), [web/DESIGN.md](web/DESIGN.md), [Vue architecture](docs/agents/repository-reference.md#frontend-architecture-web) |
+| Vue 开发、调试、测试与审查 | 先按下方「Vue 开发规范」加载技能，再查阅 [web/COMPONENTS.md](web/COMPONENTS.md)、[web/DESIGN.md](web/DESIGN.md) 和 [Vue architecture](docs/agents/repository-reference.md#frontend-architecture-web) |
 | React pages/components | [web-react/COMPONENTS.md](web-react/COMPONENTS.md), [React architecture](docs/agents/repository-reference.md#frontend-architecture-web-react); use stable zustand selectors and Ant Design 6 APIs |
 | CI, database test performance, template packaging | [Repository reference: CI](docs/agents/repository-reference.md#ci); preserve multi-replica smoke coverage and nightly full SQL Server coverage |
 | New module, entity, CRUD, jobs, import/export, service replacement | Select the recipe in [skills/README.md](skills/README.md); complete modules start at [new-module](skills/new-module.md) |
@@ -29,6 +29,24 @@ TenonAdmin (榫卯) is a distributable .NET 10 admin kernel shipped as NuGet pac
 | Release/version/tag/NuGet | [skills/tenon-release.md](skills/tenon-release.md); human runbook: [docs/releasing.md](docs/releasing.md) |
 | Domain terminology or architecture decisions | [docs/agents/domain.md](docs/agents/domain.md); existing `CONTEXT.md` and relevant ADRs |
 | GitHub issues/PRDs or triage | [issue tracker](docs/agents/issue-tracker.md), [label mapping](docs/agents/triage-labels.md) |
+
+## Vue 开发规范
+
+`web/` 采用已安装的 [vuejs-ai/skills](https://github.com/vuejs-ai/skills) 作为 Vue 技术规范。所有 Vue 开发、调试、测试与代码审查任务，先读取并遵循 [vue-best-practices](.agents/skills/vue-best-practices/SKILL.md) 及其要求的核心参考文档，再按任务加载专项技能：
+
+| 涉及内容 | 专项技能 |
+| --- | --- |
+| Vue Router、导航守卫、路由生命周期 | [vue-router-best-practices](.agents/skills/vue-router-best-practices/SKILL.md) |
+| Pinia、Store、共享状态 | [vue-pinia-best-practices](.agents/skills/vue-pinia-best-practices/SKILL.md) |
+| Vue 组件测试、E2E 测试 | [vue-testing-best-practices](.agents/skills/vue-testing-best-practices/SKILL.md) |
+| Vue 运行时错误、警告、异步异常 | [vue-debug-guides](.agents/skills/vue-debug-guides/SKILL.md) |
+| 可复用、支持响应式输入的 composable | [create-adaptable-composable](.agents/skills/create-adaptable-composable/SKILL.md) |
+| Vue JSX | [vue-jsx-best-practices](.agents/skills/vue-jsx-best-practices/SKILL.md) |
+| 明确要求使用 Options API | [vue-options-api-best-practices](.agents/skills/vue-options-api-best-practices/SKILL.md) |
+
+Vue 通用写法、响应式、组件边界和组合函数设计以这些技能为准；项目现有示例与其不一致时，按技能调整当前任务的实现。TenonAdmin 的产品契约、API/权限/i18n、Naive UI 组件接入与设计系统仍按本仓库约定执行。规范适用于新增和修改的 Vue 代码；全量迁移现有代码作为独立任务。`web-react/` 继续使用 React 规范。
+
+技能正文与参考文档以 `.agents/skills/` 中已安装的版本为准，直接引用，避免复制维护；Claude Code 通过 `.claude/skills/` 对应入口使用同一份内容。
 
 ## Validation commands
 
