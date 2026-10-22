@@ -1,14 +1,27 @@
 name: backend-ci
+run-name: backend-ci (${{ github.event_name }} · ${{ inputs.test_sha || github.sha }})
+
+permissions:
+  contents: read
+
+env:
+  TEST_SOURCE_SHA: ${{ inputs.test_sha || github.sha }}
 
 # Backend CI (design §8): push / PR triggers build + test + template smoke test. Only runs when backend / templates are touched.
 on:
+  workflow_dispatch:
+    inputs:
+      test_sha:
+        description: '待验证提交的完整 40 位小写 SHA（SQL Server 执行全量）'
+        required: true
+        type: string
   push:
     branches: [main, dev]
     paths: ['backend/**', 'templates/**', '.github/workflows/backend-ci.yml', 'scripts/test-backend-shard.py', 'scripts/test_backend_shard_test.py']
   pull_request:
     paths: ['backend/**', 'templates/**', '.github/workflows/backend-ci.yml', 'scripts/test-backend-shard.py', 'scripts/test_backend_shard_test.py']
   # nightly 四库全量；SQL Server 四片并集为完整测试集，push/PR 仍保留原方言子集。
-  # schedule 不受 paths 限制，持续覆盖 PR 子集之外的回归。
+  # schedule 不受 paths 限制；手动入口固定测试 SHA，二者均覆盖 PR 子集之外的回归。
   schedule:
     - cron: '0 18 * * *'   # 02:00 Asia/Shanghai
 
@@ -78,7 +91,21 @@ jobs:
           --health-retries=10
 
     steps:
+      - name: Validate source commit
+        run: '[[ "$TEST_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]'
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TEST_SOURCE_SHA }}
+          persist-credentials: false
+
+      - name: Record verified source commit
+        run: |
+          actual=$(git rev-parse HEAD)
+          test "$actual" = "$TEST_SOURCE_SHA"
+          mkdir -p TestResults
+          printf 'workflow_sha=%s\ntested_sha=%s\n' "$GITHUB_WORKFLOW_SHA" "$actual" \
+            | tee TestResults/source-identity.txt "$GITHUB_STEP_SUMMARY"
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
@@ -98,7 +125,13 @@ jobs:
       # Two levers, both infra-side: raise the server ceiling here, and cap/reap pools via the connection string below.
       - name: Raise MySQL connection ceiling
         if: matrix.db == 'mysql'
-        run: docker exec ${{ job.services.mysql.id }} mysql -uroot -proot -e "SET GLOBAL max_connections = 1000;"
+        run: |
+          mysql_settings=$(docker exec ${{ job.services.mysql.id }} mysql -uroot -proot --batch --skip-column-names \
+            -e 'SET GLOBAL max_connections = 1000; SELECT VERSION(), @@GLOBAL.max_connections;')
+          read -r version max_connections <<< "$mysql_settings"
+          printf 'MySQL version=%s max_connections=%s\n' "$version" "$max_connections"
+          [[ "$version" == 8.* ]]
+          test "$max_connections" = 1000
 
       # Wait until SqlServer accepts logins (sqlserver leg only). The port opens before logins are accepted,
       # so poll with a real login attempt instead — this doesn't depend on whether the DB image/host has sqlcmd
@@ -116,7 +149,12 @@ jobs:
           echo "SQL Server did not become ready in time"; exit 1
 
       - name: Verify test partitioning
-        run: python3 -B scripts/test_backend_shard_test.py
+        run: |
+          while IFS= read -r name; do
+            printf 'Clearing inherited variable: %s\n' "$name"
+            unset "$name"
+          done < <(compgen -v TENON_)
+          python3 -B scripts/test_backend_shard_test.py
 
       # Unit + integration tests (WebApplicationFactory). The DB is selected via env vars (see tests/TestDb.cs):
       #   sqlite leg → each test gets its own temp .db file; mysql leg → each test copies a schema template into its own DB;
@@ -149,18 +187,30 @@ jobs:
           # Chinese into ???, caught by JobSchedulerTests orphan-reape ErrorText asserts / nightly #25;
           # boolean-predicate global filters, T-SQL DDL/bootstrap, Storageable seed SQL, and the scheduler's DateTime
           # equality CAS — datetime rounding is exactly where a silently-never-matching claim would hide). DB-agnostic business logic is
-          # already covered by the full sqlite/mysql/postgres legs on the same PR; the full SqlServer suite runs nightly
-          # (schedule) as the net. Rename a class out of this list and it silently drops to nightly-only — not a coverage
-          # hole, just delayed signal. Other legs and the nightly run are unfiltered.
+          # already covered by the full sqlite/mysql/postgres legs on the same PR.
+          # SQL Server 全量由 nightly 和手动入口覆盖；移出下方列表的测试仍由全量执行。
+          # 其它数据库、nightly 和手动运行不设置过滤条件。
           #
           # 保留全部既有方言/事务/fence 回归；按实际发现的方法分到四个独立 runner，
-          # 每片有自己的 SQL Server。nightly 先无过滤发现，再分片，四片并集仍为全量。
+          # 每片有自己的 SQL Server。nightly 和手动运行均无过滤发现，再分片，四片并集仍为全量。
           # 第三方接入模块的四个持久化契约类同属敏感面：凭据到期与最近使用的条件更新、开放接口机构范围过滤、
           # 投递入队的唯一键与同事务提交、投递领取与回写的栅栏 CAS 与恢复。
           # #70: PR 阶段也执行 WorkerId 的真实驱动锁超时及初始化并发回归,不能只留给 nightly。
           # 办理人中文排除列表必须在 SQL Server PR 矩阵验证，避免非 Unicode 字面量漏到 nightly。
-          TEST_FILTER: ${{ (matrix.db == 'sqlserver' && github.event_name != 'schedule') && 'FullyQualifiedName~DataScopeTests|FullyQualifiedName~SoftDeleteAuditTests|FullyQualifiedName~OrgAuditEntityTests|FullyQualifiedName~SeedUpgradeTests|FullyQualifiedName~CodeFirstNullableUpgradeTests|FullyQualifiedName~RecycleBinTests|FullyQualifiedName~UserCrudTests|FullyQualifiedName~DictCrudTests|FullyQualifiedName~ReplaceabilityTests|FullyQualifiedName~ProductionBootstrapTests|FullyQualifiedName~JobElectionTests|FullyQualifiedName~JobClaimTests|FullyQualifiedName~JobSchedulerTests|FullyQualifiedName~WfPersistenceContractTests|FullyQualifiedName~WfNodeExecutionContractTests|FullyQualifiedName~WfAiDecisionPersistenceContractTests|FullyQualifiedName~WfNodeExecutionEntryTests|FullyQualifiedName~WfNodeExecutionWorkerTests|FullyQualifiedName~WfNodeExecutionExceptionTests|FullyQualifiedName~WfNodeExecutionRecoveryTests|FullyQualifiedName~WfNodeExecutionProductionE2ETests|FullyQualifiedName~WfNodeExecutionRetryPolicyTests|FullyQualifiedName~WfParallelRuntimeTests|FullyQualifiedName~WfParallelPublishValidationTests|FullyQualifiedName~WfParallelPersistenceContractTests|FullyQualifiedName~WfOutboxDispatcherTests|FullyQualifiedName~WfOutboxWorkerTests|FullyQualifiedName~WfOutboxTests|FullyQualifiedName~WfOutboxConsumerTests|FullyQualifiedName~IntegrationCredentialLifecycleTests|FullyQualifiedName~IntegrationOpenApiAuthorizationTests|FullyQualifiedName~IntegrationDeliveryOutboxTests|FullyQualifiedName~IntegrationDeliveryDispatchTests|FullyQualifiedName~WorkerId|FullyQualifiedName~WfParticipantLookupTests' || '' }}
+          TEST_FILTER: ${{ (matrix.db == 'sqlserver' && (github.event_name == 'push' || github.event_name == 'pull_request')) && 'FullyQualifiedName~DataScopeTests|FullyQualifiedName~SoftDeleteAuditTests|FullyQualifiedName~OrgAuditEntityTests|FullyQualifiedName~SeedUpgradeTests|FullyQualifiedName~CodeFirstNullableUpgradeTests|FullyQualifiedName~RecycleBinTests|FullyQualifiedName~UserCrudTests|FullyQualifiedName~DictCrudTests|FullyQualifiedName~ReplaceabilityTests|FullyQualifiedName~ProductionBootstrapTests|FullyQualifiedName~JobElectionTests|FullyQualifiedName~JobClaimTests|FullyQualifiedName~JobSchedulerTests|FullyQualifiedName~WfPersistenceContractTests|FullyQualifiedName~WfNodeExecutionContractTests|FullyQualifiedName~WfAiDecisionPersistenceContractTests|FullyQualifiedName~WfNodeExecutionEntryTests|FullyQualifiedName~WfNodeExecutionWorkerTests|FullyQualifiedName~WfNodeExecutionExceptionTests|FullyQualifiedName~WfNodeExecutionRecoveryTests|FullyQualifiedName~WfNodeExecutionProductionE2ETests|FullyQualifiedName~WfNodeExecutionRetryPolicyTests|FullyQualifiedName~WfParallelRuntimeTests|FullyQualifiedName~WfParallelPublishValidationTests|FullyQualifiedName~WfParallelPersistenceContractTests|FullyQualifiedName~WfOutboxDispatcherTests|FullyQualifiedName~WfOutboxWorkerTests|FullyQualifiedName~WfOutboxTests|FullyQualifiedName~WfOutboxConsumerTests|FullyQualifiedName~IntegrationCredentialLifecycleTests|FullyQualifiedName~IntegrationOpenApiAuthorizationTests|FullyQualifiedName~IntegrationDeliveryOutboxTests|FullyQualifiedName~IntegrationDeliveryDispatchTests|FullyQualifiedName~WorkerId|FullyQualifiedName~WfParticipantLookupTests' || '' }}
         run: |
+          # 先保存本步骤声明的配置，清空继承变量后再显式应用；日志仅输出变量名。
+          declare -A test_config
+          for name in TENON_TEST_DBTYPE TENON_TEST_MYSQL TENON_TEST_MYSQL_TEMPLATE TENON_TEST_SQLSERVER TENON_TEST_SQLSERVER_TEMPLATE TENON_TEST_SQLSERVER_BACKUP_DIR TENON_TEST_POSTGRESQL TENON_TEST_POSTGRESQL_TEMPLATE TENON_TEST_REDIS; do
+            test_config["$name"]=${!name}
+          done
+          while IFS= read -r name; do
+            printf 'Clearing inherited variable: %s\n' "$name"
+            unset "$name"
+          done < <(compgen -v TENON_)
+          for name in "${!test_config[@]}"; do
+            export "$name=${test_config[$name]}"
+          done
           if [ "${{ matrix.db }}" = sqlserver ]; then
             python3 scripts/test-backend-shard.py --shard "${{ matrix.shard }}" --count 4 \
               --results TestResults backend/tests/*/bin/Release/net10.0/*Tests.dll
@@ -197,7 +247,21 @@ jobs:
   template-smoke:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate source commit
+        run: '[[ "$TEST_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]'
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TEST_SOURCE_SHA }}
+          persist-credentials: false
+
+      - name: Record verified source commit
+        run: |
+          actual=$(git rev-parse HEAD)
+          test "$actual" = "$TEST_SOURCE_SHA"
+          mkdir -p TestResults
+          printf 'workflow_sha=%s\ntested_sha=%s\n' "$GITHUB_WORKFLOW_SHA" "$actual" \
+            | tee TestResults/source-identity.txt "$GITHUB_STEP_SUMMARY"
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
@@ -206,13 +270,16 @@ jobs:
 
       - name: dotnet new tenon-app must restore + build
         shell: pwsh
-        run: templates/smoke-test.ps1
+        run: |
+          Get-ChildItem Env:TENON_* | ForEach-Object {
+            Write-Host "Clearing inherited variable: $($_.Name)"
+            Remove-Item "Env:$($_.Name)"
+          }
+          templates/smoke-test.ps1
 
-  # Nightly safety net has teeth only if someone sees it go red. The push/PR SqlServer leg runs a subset;
-  # the full SqlServer suite runs only in the nightly (schedule) run, so a regression that lands outside the
-  # subset surfaces there — but a scheduled run has no PR author watching it. This job turns a red nightly
-  # into a tracked issue (deduped, so a multi-night outage bumps one issue rather than spamming a new one).
-  # Only fires on scheduled runs: push/PR failures already sit in front of their author.
+  # nightly 和手动入口执行 SQL Server 全量；这里只为无人值守的 nightly 创建告警。
+  # 按 nightly-failure 标签复用已有 issue，避免连续失败重复开单。
+  # push/PR 和手动运行由发起者查看结果，不触发此告警。
   nightly-alert:
     needs: [build-test, template-smoke]
     if: failure() && github.event_name == 'schedule'
