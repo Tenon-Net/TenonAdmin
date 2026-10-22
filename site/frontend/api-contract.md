@@ -80,6 +80,14 @@ export function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; tota
 - **Request side** — the frontend's `{ page, pageSize }` becomes the backend record's PascalCase `{ Current, Size }` query params (ASP.NET model binding is case-insensitive on names, but this repo's convention is Pascal). `...pageParams(p)` spreads into each endpoint's own strongly-typed query object, alongside its business filters.
 - **Response side** — the backend's `PagedList<T>` (`{ current, size, total, items }`) becomes `{ items, total }`, exactly the shape ProTable's `fetcher` contract expects.
 
+## The two JSON shapes of a `long` ID
+
+IDs from the default snowflake layout still fit within JavaScript's safe-integer range, but an API contract cannot assume that every backend `long` came from that generator. MVC and SignalR share `JavaScriptSafeInt64Converter`: a safe value is written as a JSON number, while an out-of-range value is written as a decimal string; both shapes are accepted on input. OpenAPI therefore describes `long` as `integer|string`, and generated DTO and path-parameter types carry the same union.
+
+The domain type is `ApiId = number | string`. Do not pass a string ID through `Number()`, `parseInt()`, or unary `+`; those conversions can discard low-order digits before the request is sent. Pass the original value directly as an openapi-fetch path parameter, and use string interpolation only when building a Vue Router path.
+
+URL query parameters start as text. `parseQueryApiId` in `src/utils/id.ts` accepts positive decimal strings, converts them to numbers only when the result is safe, and otherwise returns the original string. The workflow `normalizeWfId` helper likewise preserves a valid string, while `workflowPathId` passes it unchanged to the path parameter. An already-unsafe number is rejected because its lost precision cannot be recovered.
+
 ## How error codes become text
 
 The `ApiError` that `unwrap` throws carries a numeric `code` and a `msgKey`. How those two become a Chinese/English message is the least obvious link in the whole frontend-backend contract.

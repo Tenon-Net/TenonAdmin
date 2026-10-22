@@ -132,13 +132,15 @@ public class DeviceService(IRepository<Device> repo) : IDeviceService
 └───────┴──────────────────────┴───────────┴───────────┘
 ```
 
-低位固定 12 bit（机器 6 位 + 序列 6 位）不是随手选的。41+12=53，ID 恒小于 2^53，落在 JS 的 `Number.MAX_SAFE_INTEGER` 内。前端按数字解析 long 型主键，不会丢精度。容量是 64 台机器、单机单毫秒 64 个 ID。
+低位固定 12 bit（机器 6 位 + 序列 6 位）不是随手选的。41+12=53，默认雪花发出的 ID 恒小于 2^53，落在 JS 的 `Number.MAX_SAFE_INTEGER` 内。容量是 64 台机器、单机单毫秒 64 个 ID。这条保证只属于默认布局；自定义发号器、消费方 DTO 或其他来源的任意 `long` 仍可能越过 JavaScript 安全整数范围。MVC 与 SignalR 遇到这类值时会改用十进制字符串，OpenAPI 也把 `long` 标成 `integer|string`，前端必须按 `number|string` 接收。
 
 这 12 bit 也划出了种子的地盘：`id = 相对纪元毫秒数 × 4096 + 低位`，雪花永远发不出小于 4096 的号，`[1, 999]` 因此可以放心留给内核内置种子。消费方从 `1000` 起取号，上限不是写死的数字。`DatabaseInitializer` 启动时会现算一次「此刻起雪花号最小会是多少」（`SnowflakeIdGenerator.CurrentFloor()`），严格小于它的种子 Id，从这一刻起就再也不会被这台实例真实发出的雪花号追上，因为时钟只会往前走。启动时校验两件事：每个种子 Id 都落在这个动态上限之内，同一实体上不重复。越界的号迟早被雪花追上撞主键，撞号的行会被幂等判存当「已存在」静默跳过。两种情况一律启动即抛，CI 也有对应用例把它们拦在宿主启动之前。
 
-机器号从配置 `TenonAdmin:Id:WorkerId` 注入（范围 0–63）。不配时，同机用文件锁抢 `worker-00.lock` 起的空闲槽：IIS 重叠回收、本机开两份，旧进程占 0、新进程落到 1，不会两个都拿 0。锁目录默认在 Windows 的 `%ProgramData%\TenonAdmin\workerid`、Linux 的 `/var/lock/tenonadmin/workerid`，写不进去再退到临时目录，也可用 `TenonAdmin:Id:WorkerIdLockDir` 指定。释放只关句柄、不删文件。
+机器号从配置 `TenonAdmin:Id:WorkerId` 注入（范围 0–63）。完整的 `AddTenonAdmin()` 宿主先在共享库的 `sys_worker_lease` 上确认数据库租约：显式配置时确认固定槽；未配置时从 0 到 63 依次领取，并为领到的号再取得同机文件锁。这样既挡住跨机器、跨容器的同号实例，也挡住同机重叠回收。只单独装配数据层、没有 Services 租约实现时，才退回只用文件锁的路径。
 
-跨机器、跨容器各有各的磁盘，文件锁帮不上忙。没填 `WorkerId` 时，内核在共享库的 `sys_worker_lease` 上从 0 插到 63，谁插入成功谁用谁，不随机。两个实例硬写成同一个号，后到的起不来。k8s 仍可用 StatefulSet 的 Pod 序号写进配置，重启号不变。
+`WorkerIdAssignment` 以 DI 单例持有文件锁和数据库续租生命周期。`WorkerIdLeaseGuard` 在普通 `HostedService` 启动前解析默认发号器，数据库初始化结束后再做一次新鲜的所有者确认；正常停机时立即让发号器失效、停止续租，并尝试删除本实例持有的租约行，删除失败则交给数据库到期时间回收。`SnowflakeIdGenerator` 在计算 ID 前后都检查这份分配，租约尚未确认、已经丢失或过期、以及分配已经释放时一律拒绝发号。短暂数据库故障可以继续确认，但在最后一次有效确认期限过去后，不会靠旧租约继续生成 ID。
+
+文件锁目录默认在 Windows 的 `%ProgramData%\TenonAdmin\workerid`、Linux 的 `/var/lock/tenonadmin/workerid`，写不进去再退到临时目录，也可用 `TenonAdmin:Id:WorkerIdLockDir` 指定。释放只关句柄、不删文件。k8s 也可以把 StatefulSet 的 Pod 序号写进 `WorkerId`，让实例重启后沿用固定槽。
 
 ```json
 {

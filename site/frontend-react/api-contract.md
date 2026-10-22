@@ -44,7 +44,7 @@ The two shapes map onto the two backend layers:
 - **Business envelope**: `Result<T>`, shaped `{ code, msgKey, args, data }`. A 2xx normal response uses it, and so do business-level failures like missing permission (403) or an invalid token (401). The test is simple: `code !== 0` throws an `ApiError` carrying the backend's numeric code and `msgKey`.
 - **ProblemDetails**: ASP.NET's own error shape, `{ title, detail, ... }`, with no `code` field. It stands for the cases where business code never ran and the framework cut the request off first — model validation failure (400), an unhandled exception (500). These get wrapped into an `ApiError` built from the HTTP status plus `title`/`detail`.
 
-The React template guards one step harder than the Vue one: when the body is not an object, or the envelope's `code` is not a number, `unwrap` throws `Malformed API response` rather than returning something ill-shaped as `data`. Failing loudly on a broken contract beats letting a downstream caller travel further holding an `undefined`.
+Both the Vue and React templates expose a broken contract at this boundary. When the body is not an object, or the envelope's `code` is not a number, `unwrap` throws `Malformed API response` instead of returning an ill-shaped value as `data`.
 
 `ApiError` carries enough to both display and branch on programmatically:
 
@@ -95,6 +95,14 @@ export function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; tota
 - **Response direction**: the backend's `PagedList<T>` (`{ current, size, total, items }`) becomes `{ items, total }` — exactly the shape `DataTable`'s `request` expects (the layer that isolates pro-components). Along the way `toPage` checks that `items` is an array and `total` a number, throwing `Malformed paged API response` if not.
 
 `unwrap`, `ApiError`, `pageParams`, and `toPage` are all exported together as the seam left for consumers. A consumer writing `api/<domain>.ts` imports from here instead of stuffing endpoints into `index.ts`. `index.ts` is upstream's territory: touch it and you resolve a conflict on every upstream merge. That is why these four exports stay even with no in-repo caller — don't strip them as unused.
+
+## The two JSON shapes of a `long` ID
+
+IDs from the default snowflake layout still fit within JavaScript's safe-integer range, but an API contract cannot assume that every backend `long` came from that generator. MVC and SignalR share `JavaScriptSafeInt64Converter`: a safe value is written as a JSON number, while an out-of-range value is written as a decimal string; both shapes are accepted on input. OpenAPI therefore describes `long` as `integer|string`, and generated DTO and path-parameter types carry the same union.
+
+The domain type is `ApiId = number | string`. Do not pass a string ID through `Number()`, `parseInt()`, or unary `+`; those conversions can discard low-order digits before the request is sent. Pass the original value directly as an openapi-fetch path parameter, and use string interpolation only when building a React Router path.
+
+Values read from `URLSearchParams` already arrive as strings. In `web-react/src/workflow/id.ts`, `normalizeWfId` preserves a valid positive decimal string, `workflowPathId` passes it unchanged to a path parameter, and `wfInstanceDetailPath` uses that same value to build the detail route. An already-unsafe number is rejected because its lost precision cannot be recovered.
 
 ## Turning an error code into text
 

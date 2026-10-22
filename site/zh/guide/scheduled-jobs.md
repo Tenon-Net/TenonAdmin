@@ -61,6 +61,12 @@ SQL 任务的开关是 `TenonAdmin:Jobs:Sql:Enabled`，默认 `false`。打开�
 
 记录保留天数在配置中心，键是 `sys.job.logRetentionDays`，默认 30 天，内核自带的清理任务每天 03:30 分批删过期行。它自己就是一条定时任务，你能在界面上看到它、暂停它、改它的时刻。
 
+### 从旧版本补齐日志索引
+
+`0.7.2` 为 `sys_job_log` 增加 `(JobId, EndTime)` 和 `(EndTime, StartTime)` 两个复合索引，分别服务于串行任务检查和失联执行回收。日志保留策略和调度频率不变。
+
+允许 CodeFirst 的环境会在启动时补齐索引；生产环境还需显式启用 `TenonAdmin:Database:EnableCodeFirstInProduction`。关闭结构同步的 MySQL 库可执行 [定向升级脚本](https://github.com/Tenon-Net/TenonAdmin/blob/main/scripts/sql/mysql/job-log-indexes.sql)，已有同类索引的识别与执行计划核对见 [升级说明](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/upgrades/job-log-indexes.md)。请先按数据库维护安排评估建索引所需的空间和元数据锁。
+
 ## 三种存活形态，代码零改动
 
 「不能随着后端停止而停止」这句需求要拆成三层看：
@@ -77,7 +83,7 @@ builder.Services.AddTenonAdminWorker(builder.Configuration);
 await builder.Build().RunAsync();
 ```
 
-Worker 的配置有三条纪律：`TenonAdmin:Id:WorkerId` 与所有其它进程不同（同机未配时文件锁自动抢号；跨机仍要显式给）、建表与种子关掉（schema 归 API 侧所有）、时区与 API 一致。
+Worker 与 API 共用数据库时，未配置的 `TenonAdmin:Id:WorkerId` 会通过共享数据库租约自动领槽；显式指定机器号时，必须与所有其他进程不同。Worker 应关闭建表与种子，由 API 侧维护结构，时区也应与 API 一致。
 
 ## 同一个时刻，全集群只跑一次
 

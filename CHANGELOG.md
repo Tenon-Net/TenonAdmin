@@ -15,6 +15,34 @@ The step-by-step release runbook (version bump, verify, merge to `main`, tag) li
 
 ## Unreleased
 
+## 0.7.2 - 2026-10-22
+
+### Added
+
+- 工作流实例详情展示实际参与人、当前与历史审批轮次、会签进度，以及转办、委托、加减签和自动处理记录；Vue、React 两套模板同步接入。
+- 新增工作流参与人查询和管理员干预接口，支持强制转办、终止实例与跳过节点，保留权限校验和操作日志。
+
+### Changed
+
+- MVC API 与 SignalR 对 JavaScript 安全整数范围内的 `long` 保持数字输出，超出范围使用十进制字符串；OpenAPI 和 Vue、React 的 ID 类型同步支持 `number | string`。
+- 两套前端统一页面、面板、标签页与登录页动效，提供标准、轻量和关闭三档设置，并尊重系统减少动态效果的偏好。
+- Vue 模板采用 `vuejs-ai/skills` 开发规范，拆分登录能力、导入预览与工作流任务操作职责，统一适用的响应式、模板引用和双向绑定写法。
+
+### Fixed
+
+- 修复 WorkerId 仅在宿主后台服务运行时才受租约保护的问题。默认发号器与分配结果共同持有数据库租约生命周期，未确认、丢失、过期或已释放的租约会阻止继续发号；完善 SQLite 建表锁冲突、MySQL 死锁、重复键分类、取消和接管处理。
+- 为 `sys_job_log` 补充 `(JobId, EndTime)` 与 `(EndTime, StartTime)` 复合索引，减少串行任务检查和失联执行回收对历史日志的扫描；保留原有日志查询索引和调度语义。
+- 加强工作流定义发布、发起、审批写入、办理人、必填意见、表单权限和历史快照校验，拒绝空条件组及无效办理人配置；修复 SQL Server 中文参与人排除条件。
+- 修复工作流大整数 ID 在表单、路由、监控和 outbox 重放中的精度丢失，完善阻断、部分阻断和退回发起人状态展示，两套模板的待办列表随工作流实时通知刷新。
+- 修复 Vue 角色授权、设计器加载及保存发布、远程选择器的请求竞态；初始化服务暂时失败时保留有效会话，支持重试恢复原深链。
+- 修复 Vue 导入重新校验覆盖正在编辑的内容、监控轮询重叠、验证码与短信倒计时清理、缓存页弹窗生命周期，以及关闭最后一个深链标签页后的导航问题。
+
+### Upgrade notes
+
+- 自有客户端必须同时接受数字和十进制字符串形式的 ID，避免对字符串 ID 使用 `Number()`、`parseInt()` 等可能丢失精度的转换；升级后端时同步更新所用前端模板。默认雪花号仍在 JavaScript 安全整数范围内，历史导入或自定义发号器生成的大整数也按新契约处理。
+- 使用 CodeFirst 的环境会补齐任务日志索引；生产环境需同时允许 CodeFirst 和生产结构同步。由 DBA 管理的 MySQL 数据库可执行 [定向升级脚本](https://github.com/Tenon-Net/TenonAdmin/blob/main/scripts/sql/mysql/job-log-indexes.sql)，步骤和已有索引处理见 [索引升级说明](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/upgrades/job-log-indexes.md)。
+- 使用默认发号器的部署需保证 WorkerId 数据库租约能够持续续租；升级前检查数据库访问和 `sys_worker_lease` 权限。旧版已发布工作流快照也会在发起时按当前规则校验，应先修正无效办理人等配置并重新发布。
+
 ## 0.7.1 - 2026-09-30
 
 ### Fixed

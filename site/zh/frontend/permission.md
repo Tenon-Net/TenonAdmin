@@ -94,7 +94,7 @@ hasPerm(state): (code: string) => boolean {
 三种状态：
 
 1. **超管（`isSuperAdmin`）→ fail-open。** 全部放行，和后端 `[RolePermission]` 里 `sadm` claim 的绕过逻辑呼应。
-2. **权限码还没加载完（`permissionsLoaded === false`）→ fail-closed。** 所有受权限控制的按钮都藏起来。这不是可以忽略的边角情况。守卫会 await 住 `enterInitial`，所以正常登录不会出现权限码没到位的闪烁窗口。fail-closed 真正兜的是另一种情况，`/personal/permissions` 取码失败。这时候不知道用户到底有没有权限，谎报「有」比谎报「无」糟得多。要是把「未加载」当成「有权限」，所有受控按钮都会先闪一下再消失，包括用户根本没权限的那些。fail-closed 保证用户看到的永远只有自己能用的按钮，不会有一闪而过的越权 UI。
+2. **权限码还没加载完（`permissionsLoaded === false`）→ fail-closed。** 所有受权限控制的按钮都藏起来。守卫会 await 住 `enterInitial`，所以正常登录不会出现权限码没到位的闪烁窗口；`/personal/permissions` 取码失败时则中止初始化，转到错误页，不会渲染业务门户。这个 getter 仍按未知即拒绝处理，避免初始化期间或 store 重置后短暂显示未授权按钮。
 3. **已加载的普通用户 → 按 `permissionCodes` 精确匹配。** 空集合表示没有任何授权，必然匹配不上权限码。超管状态由独立的 `isSuperAdmin` 字段表达，不能从权限集合是否为空推断。
 
 ## 把门控铺到每个操作按钮
@@ -150,7 +150,7 @@ h(StatusSwitch, {
 
 ## 权限码约定
 
-权限码就是规范化后的路由本身，形如 `{METHOD}:/{路由模板}`，例如 `GET:/api/v1/ping`。也就是说，没有另一套独立的字符串词汇要对齐。前端登录进门户时，`useModule().enterInitial()` 并行发两个请求：`GET /personal/permissions` 拉权限码集合，成功后把 `permissionsLoaded` 置真；请求失败则保留 `false`，所有普通权限门控都按 fail-closed 隐藏。`GET /personal/profile` 提供超管标记，失败时沿用登录响应里的用户快照，没有快照才按普通用户处理。
+权限码就是规范化后的路由本身，形如 `{METHOD}:/{路由模板}`，例如 `GET:/api/v1/ping`。也就是说，没有另一套独立的字符串词汇要对齐。前端进入门户时，`useModule().enterInitial()` 用同一个 `Promise.all` 并行拉模块列表、权限码和个人资料。三份数据全部成功后，才写入启动状态并把 `permissionsLoaded` 置真；任一请求失败都会中止初始化。有效会话进入静态错误页重试原地址，失效会话才回登录页，不会渲染一套权限状态不完整的门户。
 
 既然权限码就是路由本身，前端也就没必要自造一套权限词汇。两端的分工也就清楚了。前端只按码决定按钮的显隐与禁用，后端才计算并强制同一个码。后端怎么把路由归一化成权限码、`[RolePermission]` 又怎么校验会话与授权，见[请求管线](/zh/backend/request-pipeline)。想围绕授权环节做替换，比如换权限计算、换会话校验，那部分设计见[可替换性模型](/zh/backend/replaceability)。
 

@@ -44,7 +44,7 @@ export function unwrap<T>(res: { data?: unknown; error?: unknown; response: Resp
 - **业务信封**：`Result<T>`，形状是 `{ code, msgKey, args, data }`。2xx 正常响应走它，缺权限（403）、令牌无效（401）这类业务级失败也走它。判据很简单：`code !== 0` 就抛一个 `ApiError`，带上后端的数字码和 `msgKey`。
 - **ProblemDetails**：ASP.NET 框架自己的错误形状，长这样 `{ title, detail, ... }`，没有 `code` 字段。它对应业务代码根本没跑起来、就被框架拦下的情况，比如模型校验失败（400）、未处理异常（500）。这类被包成一个 `ApiError`，由 HTTP 状态码加 `title`/`detail` 拼出来。
 
-React 版这里比 Vue 版多一道防线：响应体不是对象、或者信封里 `code` 不是数字，`unwrap` 直接抛 `Malformed API response`，而不是把一个形状不对的东西当 `data` 返回。契约错乱时早报错，好过让下游拿着 `undefined` 走更远。
+Vue 与 React 两套模板都会在这里尽早暴露契约错乱：响应体不是对象、或者信封里 `code` 不是数字，`unwrap` 直接抛 `Malformed API response`，不会把形状不对的内容当 `data` 返回。
 
 `ApiError` 携带的信息够展示，也够程序化判断：
 
@@ -95,6 +95,14 @@ export function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; tota
 - **响应方向**：后端的 `PagedList<T>`（`{ current, size, total, items }`）变成 `{ items, total }`。这正是 `DataTable`（隔离 pro-components 的那层）`request` 要的形状。`toPage` 顺手校验 `items` 是数组、`total` 是数字，不是就当 `Malformed paged API response` 抛掉。
 
 `unwrap`、`ApiError`、`pageParams`、`toPage` 这四个一起导出，是留给消费者的接缝。消费者新建 `api/<域>.ts` 从这里 import，就不必把自己的端点塞进 `index.ts`。`index.ts` 是上游自留地，改一次就要在下次合并上游时解一次冲突。所以这四个导出即便站内没有别的调用方，也不能当未使用导出清掉。
+
+## `long` 主键的两种 JSON 形状
+
+默认雪花布局发出的 ID 仍在 JavaScript 安全整数范围内，但接口契约不能假定每个后端 `long` 都来自默认发号器。MVC 与 SignalR 共用 `JavaScriptSafeInt64Converter`：安全范围内写成 JSON number，超出范围就写成十进制 string；读入时两种形状都接受。OpenAPI 因此把 `long` 描述为 `integer|string`，生成的路径参数和 DTO 类型也会带上这个联合类型。
+
+领域类型统一用 `ApiId = number | string`。拿到 string 后不要再调用 `Number()`、`parseInt()` 或一元 `+`，这些转换会在请求发出前就丢掉低位。传给 openapi-fetch 的路径参数时直接保留原值；拼 React Router 路径时也只做字符串插值。
+
+`URLSearchParams` 取出的值本来就是 string。`web-react/src/workflow/id.ts` 的 `normalizeWfId` 会原样保留合法的正十进制 string，`workflowPathId` 再把它原样交给路径参数，`wfInstanceDetailPath` 则用同一个值拼出详情路由。如果输入已经是一个不安全的 number，校验会拒绝它，因为丢掉的精度无法恢复。
 
 ## 错误码怎么变成文案
 

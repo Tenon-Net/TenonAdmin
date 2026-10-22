@@ -61,6 +61,12 @@ Interval jobs bottom out at 5 seconds; 4 is rejected with `47004`. A cron may pu
 
 Retention lives in the config center under `sys.job.logRetentionDays`, 30 days by default, and the kernel's own cleanup job deletes expired rows in batches at 03:30. It is itself a scheduled job: you can see it in the UI, pause it, change its schedule.
 
+### Add the log indexes when upgrading
+
+`0.7.2` adds composite indexes on `(JobId, EndTime)` and `(EndTime, StartTime)` to `sys_job_log` for serial-job checks and orphan-run recovery. Log retention and scheduling frequency stay the same.
+
+Environments that allow CodeFirst add the indexes on startup; production also requires `TenonAdmin:Database:EnableCodeFirstInProduction`. For a MySQL database managed without schema synchronization, use the [targeted upgrade script](https://github.com/Tenon-Net/TenonAdmin/blob/main/scripts/sql/mysql/job-log-indexes.sql). The [upgrade instructions](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/upgrades/job-log-indexes.md) explain how existing equivalent indexes are recognized and how to check execution plans. Assess disk space and metadata locks as part of the database maintenance plan before creating indexes.
+
 ## Three survival shapes, zero code changes
 
 "Jobs must not stop when the backend stops" is really three separate requirements:
@@ -77,7 +83,7 @@ builder.Services.AddTenonAdminWorker(builder.Configuration);
 await builder.Build().RunAsync();
 ```
 
-A worker has three configuration rules: `TenonAdmin:Id:WorkerId` must differ from every other process (unset on the same machine, a file lock claims a free slot; across machines still set it explicitly), table creation and seeding must be off (the API owns the schema), and its timezone must match the API's.
+When the Worker and API share a database, an unset `TenonAdmin:Id:WorkerId` claims a slot through the shared database lease; explicitly configured worker numbers must differ across all processes. Disable table creation and seeding in the Worker because the API owns the schema, and use the same timezone as the API.
 
 ## One occurrence, one run, cluster-wide
 
