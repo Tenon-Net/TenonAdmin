@@ -7,8 +7,11 @@
 ```text
 staticRoutes(router/routes.ts)          buildRoutesForModule(useAuthMenu.ts)
   ├─ /login                                拉 personalApi.menu(moduleId)
-  ├─ /module(应用选择器)                    拍平菜单树
-  └─ /  → layout(default.vue)              对每个 Menu 类型节点:
+  ├─ /oauth/callback                       拍平菜单树
+  ├─ /mfa/bind                             对每个 Menu 类型节点:
+  ├─ /module(应用选择器)
+  ├─ /initialization-error(启动重试页)
+  └─ /  → layout(default.vue)
         ├─ /personal/profile                 component 字符串 → /src/views/**/*.vue
         ├─ /personal/password                 router.addRoute('layout', { name: 'menu-{id}', ... })
         ├─ /personal/notice
@@ -30,21 +33,22 @@ staticRoutes(router/routes.ts)          buildRoutesForModule(useAuthMenu.ts)
 
 ## 静态路由
 
-`router/routes.ts` 只定义一棵顶层树：
+`router/routes.ts` 定义登录、OAuth 回调、MFA、应用选择和启动错误等顶层入口，再挂一棵布局壳。下面保留与动态路由恢复相关的骨架：
 
 ```ts
 export const staticRoutes: RouteRecordRaw[] = [
   { path: '/login', name: 'login', component: () => import('@/views/login/index.vue'), meta: { public: true } },
-  { path: '/module', name: 'module', component: () => import('@/views/module/index.vue'), meta: { title: '选择应用' } },
+  { path: '/oauth/callback', name: 'oauth-callback', component: () => import('@/views/oauth/callback.vue'), meta: { public: true } },
+  { path: '/mfa/bind', name: 'mfa-bind', component: () => import('@/views/mfa/index.vue'), meta: { public: true } },
+  { path: '/module', name: 'module', component: () => import('@/views/module/index.vue'), meta: { title: 'module.choose' } },
+  { path: '/initialization-error', name: 'initialization-error', component: () => import('./InitializationError.vue') },
   {
     path: '/',
     name: 'layout',
     component: () => import('@/layouts/default.vue'),
     children: [
-      { path: '/personal/profile', name: 'personal-profile', component: namedPage('personal-profile', () => import('@/views/personal/profile.vue')) },
-      { path: '/personal/password', name: 'personal-password', component: namedPage('personal-password', () => import('@/views/personal/password.vue')) },
+      { path: '/personal', name: 'personal', component: () => import('@/layouts/PersonalLayout.vue'), children: [/* ... */] },
       { path: '/personal/notice', name: 'personal-notice', component: namedPage('personal-notice', () => import('@/views/personal/notice.vue')) },
-      { path: '/personal/sessions', name: 'personal-sessions', component: namedPage('personal-sessions', () => import('@/views/personal/sessions.vue')) },
       { path: '/:pathMatch(.*)*', name: 'not-found', component: namedPage('not-found', () => import('@/views/error/404.vue')), meta: { public: true } },
     ],
   },
@@ -54,12 +58,13 @@ export const staticRoutes: RouteRecordRaw[] = [
 这里几处取舍都是刻意的：
 
 - **`/` 不设静态 `redirect`。** `redirect` 在路由 resolve 阶段就求值，早于全局守卫。那时菜单树很可能还没建好，算出来的落点必然是错的。`/` 真正落到哪由 `router.beforeEach` 里的守卫决定（见[多应用门户与守卫](/zh/frontend/portal-guards)）。
+- **`/initialization-error` 是静态重试页。** 它不依赖菜单树，动态路由尚未恢复时也能展示启动错误。守卫只在已经认证的会话中放行它。
 - **404 挂在壳内，而非顶层。** 打错一个 URL 时侧边栏、标签栏、退出按钮照样在，不会把人甩到一个光秃秃的页面外面去。
 - **`/personal/notice` 和 `/personal/sessions` 是静态路由，不是菜单项。** 两者在后端都走 `[ActiveSession]`，任何登录用户都能读，不需要具体权限码。若改成菜单项，就必须额外播种并给每个角色授权，却不会增加访问控制能力。入口分别在顶栏通知铃铛的「查看全部」链接和顶栏用户下拉。
 
 ## 动态路由：菜单树→真实路由
 
-`layout` 下除了那四个静态个人页和 404 兜底，其余全部来自 `useAuthMenu.ts` 的 `buildRoutesForModule`：
+`layout` 下除了静态个人页和 404 兜底，其余全部来自 `useAuthMenu.ts` 的 `buildRoutesForModule`：
 
 ```ts
 const views = import.meta.glob('/src/views/**/*.vue') as Record<string, () => Promise<Component>>
@@ -117,6 +122,14 @@ export async function buildRoutesForModule(moduleId: number): Promise<void> {
 **组件缺失时仍会保留原菜单路径。** `node.component` 在 glob 表里找不到对应的键时，`buildRoutesForModule` 会打一条 `console.warn`，并把这条路由落成 `MissingRoute`。用户点进去能直接看到缺失的组件路径，不会被一个没有上下文的 404 误导。`useAuthMenu.ts` 还导出了 `viewComponentPaths`，把合法 glob 键转换成菜单表单需要的 `component` 字符串。菜单管理员用下拉选择路径，通常不会走到这条诊断分支。
 
 每条注册出来的路由都带 `name: 'menu-{id}'` 和 `meta.keepAlive: true`，通过 `router.addRoute('layout', ...)` 挂在 `layout` 下。每个这样加进去的路由名，都会经 `registerDynamic(name)` 登记一下，好在登出或切应用时精确地把它们移除。这段逻辑在 `router/index.ts` 的 `resetRouter` 里。
+
+## 初始化失败与深链重试
+
+硬刷新或直接打开动态深链时，守卫会调用 `useModule().enterInitial()`。它用同一个 `Promise.all` 拉取模块列表、权限码和个人资料，三份数据全部成功后才写入启动状态，再为选中的应用读取菜单并注册动态路由。任一启动请求失败都不会被当成「空权限但初始化成功」。
+
+失败后的去向取决于会话是否仍然有效。401 或刷新令牌失败由请求层清理会话，守卫随后回到登录页；网络错误、5xx 或启动资料接口暂时失败时，`resolveInitializationFailure()` 会保留当前会话，把错误和原始 `to.fullPath` 写入 auth store，再转到静态的 `/initialization-error`。因此一次暂时性故障不会把已登录用户误判为登出。
+
+重试按钮会对保存的原始地址执行 `router.replace(target)`。此时 `routesReady` 仍为 `false`，守卫重新运行整套初始化；成功后用更新过的 matcher 解析原深链，并按真实动态路由名重新进入。查询参数和 hash 都随原地址保留，用户不必从首页重新找回刚才的页面。
 
 ## 外链与内嵌页：没有新的菜单类型
 

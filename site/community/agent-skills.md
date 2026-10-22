@@ -7,6 +7,12 @@ An AI assistant needs the repository contracts, domain vocabulary, and matching 
 
 Neither set is a code generator. Both are rules plus reference templates: the agent reads them, then writes the code your requirement calls for, and the conventions only govern what that code looks like.
 
+## Vue development standards
+
+The `web/` template adopts [vuejs-ai/skills](https://github.com/vuejs-ai/skills) as its Vue engineering standard. Root [`AGENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/AGENTS.md) routes Vue implementation, debugging, testing, and review tasks to the appropriate skill. The installed [`vue-best-practices`](https://github.com/Tenon-Net/TenonAdmin/blob/main/.agents/skills/vue-best-practices/SKILL.md) skill and the references it links are the executable source; `AGENTS.md` selects additional Router, Pinia, testing, or runtime-debugging skills when the task needs them. Linking those sources avoids maintaining a second, stale copy of the rules on the docs site.
+
+The two rule sets govern different layers. The Vue skills cover general Composition API, reactivity, component-boundary, composable, and testing practices. TenonAdmin's repository conventions still define product behavior, OpenAPI-generated types, permission and i18n contracts, Naive UI integration, and the design system in `web/DESIGN.md`. The independent `web-react/` template does not use these Vue standards.
+
 ## Issues / PRDs: via GitHub Issues
 
 The repo's issues and PRDs are all GitHub issues, managed uniformly via the `gh` CLI (see [`docs/agents/issue-tracker.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/issue-tracker.md) for conventions):

@@ -16,20 +16,20 @@ TenonAdmin's shell is a multi-app portal: each user is authorized for some set o
 
 ```ts
 async function enterInitial(): Promise<EnterResult> {
-  const [{ modules, defaultModuleId }, perm, profile] = await Promise.all([
+  const [{ modules, defaultModuleId }, permissionCodes, profile] = await Promise.all([
     personalApi.modules(),
-    personalApi.permissions().then((codes) => ({ ok: true, codes })).catch(() => ({ ok: false, codes: [] as string[] })),
-    personalApi.profile()
-      .then((p) => ({ sadm: p.isSuperAdmin, avatar: p.avatar ?? null }))
-      .catch(() => ({ sadm: useUserStore().userInfo?.isSuperAdmin ?? false, avatar: null })),
+    personalApi.permissions(),
+    personalApi.profile(),
   ])
   auth.modules = modules
   auth.defaultModuleId = defaultModuleId ?? null
-  auth.permissionCodes = perm.codes
-  auth.permissionsLoaded = perm.ok
-  auth.isSuperAdmin = profile.sadm
+  auth.permissionCodes = permissionCodes
+  auth.permissionsLoaded = true
+  auth.isSuperAdmin = profile.isSuperAdmin
+  auth.initializationError = ''
+  auth.initializationRedirect = ''
   const user = useUserStore()
-  if (user.userInfo) user.userInfo.avatar = profile.avatar
+  if (user.userInfo) user.userInfo.avatar = profile.avatar ?? null
   if (modules.length === 0) return { chooser: true }
   const remembered = auth.currentModuleId
   if (remembered && modules.some((m) => m.id === remembered)) return enter(remembered)
@@ -39,7 +39,7 @@ async function enterInitial(): Promise<EnterResult> {
 }
 ```
 
-The module list, permission codes, and profile load in parallel. When `personalApi.permissions()` fails, `permissionsLoaded` remains false and `v-auth` hides ordinary permission-gated buttons. When the profile request fails, the store retains the super-admin snapshot supplied at login; with no snapshot it falls back to an ordinary account. Neither auxiliary failure blocks portal entry. The client uses trusted state it already has or a more conservative default, while the server-side `sadm` claim and permission filters remain the final authorization boundary.
+The module list, permission codes, and profile load in parallel; all three jointly determine the portal, action permissions, and personal information. The store commits this startup state and sets `permissionsLoaded` to `true` only after every request succeeds. A failure aborts the initialization instead of rendering the portal with empty permissions or stale profile data. The server-side `sadm` claim and permission filters remain the final authorization boundary.
 
 Once that data is in, `enterInitial` runs an "which app to enter" ladder, top to bottom, first hit wins:
 
@@ -73,6 +73,8 @@ router.beforeEach(async (to) => {
     return to.path === '/personal/password' ? true : { path: '/personal/password', replace: true }
   }
 
+  if (to.name === 'initialization-error') return true
+
   if (!auth.routesReady) {
     try {
       const { useModule } = await import('@/composables/useModule')
@@ -85,9 +87,8 @@ router.beforeEach(async (to) => {
         return { name: resolved.name, params: resolved.params, query: to.query, hash: to.hash, replace: true }
       }
       return { path: to.path, query: to.query, hash: to.hash, replace: true }
-    } catch {
-      user.clear()
-      return { path: '/login', replace: true }
+    } catch (error) {
+      return resolveInitializationFailure(auth, user, to.fullPath, error)
     }
   }
 
@@ -104,18 +105,20 @@ It handles five states, in order:
 
 **Forced password change.** Once `mustChangePassword` is true (it comes back on the first login after an admin creates or resets an account), every navigation except `/personal/password` itself is intercepted and redirected there. This check is placed deliberately *before* the dynamic-route rebuild below: the password page is a static route and renders without the menu tree, so letting it through first avoids the "rebuild → pick app → bounced back to password again" loop. Once the password change succeeds, the existing flow forces a logout and re-login, and the backend clears the flag.
 
-**Rebuild on refresh or deep link.** Dynamic routes live only in router memory. On a hard refresh or direct deep link, `routesReady` is false, so the guard calls `enterInitial()` to reconstruct routes and module data. A chooser result goes to `/module`, while `/` goes to `homePath`. For an ordinary deep link, the guard runs `router.resolve(to.fullPath)` against the updated matcher and re-enters by the resolved route name; if no real dynamic route matches, it retries the original path. This prevents the navigation from retaining the catch-all record resolved before reconstruction. A failed rebuild clears login state and returns to login.
+**Rebuild on refresh or deep link.** Dynamic routes live only in router memory. On a hard refresh or direct deep link, `routesReady` is false, so the guard calls `enterInitial()` to reconstruct routes and module data. A chooser result goes to `/module`, while `/` goes to `homePath`. For an ordinary deep link, the guard runs `router.resolve(to.fullPath)` against the updated matcher and re-enters by the resolved route name; if no real dynamic route matches, it retries the original path. This prevents the navigation from retaining the catch-all record resolved before reconstruction.
+
+A failed rebuild no longer clears every login state. A 401 or failed token refresh is handled by the request layer, which clears the invalid session and lets the guard return to login. For a network error, 5xx response, or temporarily unavailable startup endpoint, `resolveInitializationFailure()` preserves the valid session and original deep link, then routes to the static `/initialization-error` page. Retry runs initialization again and returns to the original address on success, preserving its query string and hash.
 
 The root path cannot retry itself because Vue Router would flag an infinite redirect. The public-route test also cannot admit `not-found` unconditionally, since that match may be only the temporary catch-all seen before dynamic routes are restored.
 
 **`/` always lands on `auth.homePath`.** On normal navigation with the routes already in place, visiting `/` is likewise handed to the guard to compute the home page. This check can't be written as a static `redirect` on the `layout` route, for the same reason as before — `redirect` is evaluated at resolve time, before this guard runs, when the menu tree (and therefore `homePath`) isn't ready yet, so any landing spot computed there is guaranteed wrong.
 
-After navigation is confirmed, `afterEach` records visited pages as tabs, skipping three categories: anything marked `meta.public`, the three fixed names `login`/`module`/`not-found`, and any route not hung under `layout` (those don't belong to any app's workspace and shouldn't leave a trace in the tab bar):
+After navigation is confirmed, `afterEach` records visited pages as tabs, skipping three categories: anything marked `meta.public`, the four fixed names `login`/`module`/`not-found`/`personal`, and any route not hung under `layout` (those don't belong to any app's workspace and shouldn't leave a trace in the tab bar):
 
 ```ts
 router.afterEach((to) => {
   if (to.meta.public) return
-  if (['login', 'module', 'not-found'].includes(to.name as string)) return
+  if (['login', 'module', 'not-found', 'personal'].includes(to.name as string)) return
   if (!to.matched.some((r) => r.name === 'layout')) return
   useTabsStore().addTab(to)
 })
@@ -123,6 +126,6 @@ router.afterEach((to) => {
 
 ## Verify the guard through four entry paths
 
-After changing the guard, exercise four paths: an unauthenticated deep link must return to login; an account marked for password change may enter only the password page; an account with one app should enter it directly; and an account with several apps but no usable default should remain on the chooser. Finally, reload a dynamic page in the browser. It should return to the same address after rebuilding routes instead of stopping at 404. Together these checks cover authentication, forced password change, app selection, and deep-link restoration.
+After changing the guard, exercise four paths: an unauthenticated deep link must return to login; an account marked for password change may enter only the password page; an account with one app should enter it directly; and an account with several apps but no usable default should remain on the chooser. Finally, reload a dynamic page in the browser. It should return to the same address after rebuilding routes instead of stopping at 404. Make the first module request return one 5xx response as well: the error page must preserve the session, and retry must still restore that deep link. Together these checks cover authentication, forced password change, app selection, and deep-link restoration.
 
 How the dynamic routes actually grow out of the menu tree — how `buildRoutesForModule` turns each menu node's `component` string into a real lazy-loaded component, and how `namedPage` gives it a stable identity so `keep-alive` recognizes it — is the subject of [Routing & Dynamic Menus](/frontend/routing); this page is only about the portal's "which app to enter" decision, and how the guard pulls it in on every navigation.

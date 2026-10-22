@@ -5,6 +5,12 @@ AI 助手只有读到仓库契约、领域词汇和对应开发流程，产出�
 - **参与 TenonAdmin 本体开发**：docs/agents/ 下的一组文档。
 - **在 TenonAdmin 之上开发业务模块**：`skills/` 下的一组开发规范文档，教 agent 按项目既定模式建实体、建 CRUD、替换服务。
 
+## Vue 开发规范
+
+`web/` 已采用 [vuejs-ai/skills](https://github.com/vuejs-ai/skills) 作为 Vue 技术规范。仓库根目录的 [`AGENTS.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/AGENTS.md) 负责把 Vue 开发、调试、测试和审查任务路由到对应技能；实际执行规则以仓库内安装的 [`vue-best-practices`](https://github.com/Tenon-Net/TenonAdmin/blob/main/.agents/skills/vue-best-practices/SKILL.md) 及其引用文件为准。需要 Router、Pinia、测试或运行时调试时，再由 `AGENTS.md` 指向相应专项技能。这样只维护技能入口和上游内容，不在文档站复制一份容易过期的规则。
+
+两套约定各管一层。Vue skills 约束 Composition API、响应式、组件边界、组合函数和测试等通用写法；TenonAdmin 的产品行为、OpenAPI 生成类型、权限与 i18n 契约、Naive UI 接入及 `web/DESIGN.md` 设计系统继续以仓库约定为准。`web-react/` 是独立模板，不套用这组 Vue 规范。
+
 ## Issue / PRD：走 GitHub Issues
 
 仓库的 issue 和 PRD 都是 GitHub issue，统一用 `gh` CLI 操作，约定详见 [`docs/agents/issue-tracker.md`](https://github.com/Tenon-Net/TenonAdmin/blob/main/docs/agents/issue-tracker.md)：

@@ -7,8 +7,11 @@ How the portal decides which app to enter, and how the guards stitch the two sid
 ```text
 staticRoutes (router/routes.ts)         buildRoutesForModule (useAuthMenu.ts)
   ├─ /login                               fetch personalApi.menu(moduleId)
-  ├─ /module  (app chooser)               flatten the menu tree
-  └─ /  → layout (default.vue)            for each Menu-type node:
+  ├─ /oauth/callback                      flatten the menu tree
+  ├─ /mfa/bind                            for each Menu-type node:
+  ├─ /module  (app chooser)
+  ├─ /initialization-error (retry page)
+  └─ /  → layout (default.vue)
         ├─ /personal/profile                component string → /src/views/**/*.vue
         ├─ /personal/password               router.addRoute('layout', { name: 'menu-{id}', ... })
         ├─ /personal/notice
@@ -31,21 +34,22 @@ That one observation contains all three inputs to a dynamic route: the menu supp
 
 ## Static routes
 
-`router/routes.ts` defines exactly one top-level tree:
+`router/routes.ts` defines top-level entry pages for login, OAuth callbacks, MFA, app selection, and initialization errors, then mounts the layout shell. This excerpt keeps the structure relevant to dynamic-route recovery:
 
 ```ts
 export const staticRoutes: RouteRecordRaw[] = [
   { path: '/login', name: 'login', component: () => import('@/views/login/index.vue'), meta: { public: true } },
-  { path: '/module', name: 'module', component: () => import('@/views/module/index.vue'), meta: { title: '选择应用' } },
+  { path: '/oauth/callback', name: 'oauth-callback', component: () => import('@/views/oauth/callback.vue'), meta: { public: true } },
+  { path: '/mfa/bind', name: 'mfa-bind', component: () => import('@/views/mfa/index.vue'), meta: { public: true } },
+  { path: '/module', name: 'module', component: () => import('@/views/module/index.vue'), meta: { title: 'module.choose' } },
+  { path: '/initialization-error', name: 'initialization-error', component: () => import('./InitializationError.vue') },
   {
     path: '/',
     name: 'layout',
     component: () => import('@/layouts/default.vue'),
     children: [
-      { path: '/personal/profile', name: 'personal-profile', component: namedPage('personal-profile', () => import('@/views/personal/profile.vue')) },
-      { path: '/personal/password', name: 'personal-password', component: namedPage('personal-password', () => import('@/views/personal/password.vue')) },
+      { path: '/personal', name: 'personal', component: () => import('@/layouts/PersonalLayout.vue'), children: [/* ... */] },
       { path: '/personal/notice', name: 'personal-notice', component: namedPage('personal-notice', () => import('@/views/personal/notice.vue')) },
-      { path: '/personal/sessions', name: 'personal-sessions', component: namedPage('personal-sessions', () => import('@/views/personal/sessions.vue')) },
       { path: '/:pathMatch(.*)*', name: 'not-found', component: namedPage('not-found', () => import('@/views/error/404.vue')), meta: { public: true } },
     ],
   },
@@ -55,12 +59,13 @@ export const staticRoutes: RouteRecordRaw[] = [
 Several choices here are deliberate:
 
 - **`/` has no static `redirect`.** A `redirect` is evaluated at route-resolve time, which runs *before* the global guard — and at that point the menu tree usually isn't built yet, so any landing spot computed there is guaranteed wrong. Where `/` actually lands is decided by the guard in `router.beforeEach` (see [Multi-App Portal & Router Guards](/frontend/portal-guards)).
+- **`/initialization-error` is a static retry page.** It can display startup failures before the menu tree and dynamic routes have been restored. The guard admits it only for an authenticated session.
 - **The 404 is nested inside the shell, not at the top level.** Mistype a URL and the sidebar, tab bar, and logout button are all still there — the user isn't flung out onto a bare page.
 - **`/personal/notice` and `/personal/sessions` are static routes, not menu items.** Both are guarded on the backend by `[ActiveSession]` (any logged-in user can read them, no specific permission code needed) — making them menus would mean seeding them and then granting them to every role, pure busywork. Their entry points are the "view all" link on the header's notification bell and the header user dropdown.
 
 ## Dynamic routes: menu tree → real routes
 
-Everything under `layout` other than those four static personal pages and the 404 fallback comes from `buildRoutesForModule` in `useAuthMenu.ts`:
+Everything under `layout` other than the static personal pages and the 404 fallback comes from `buildRoutesForModule` in `useAuthMenu.ts`:
 
 ```ts
 const views = import.meta.glob('/src/views/**/*.vue') as Record<string, () => Promise<Component>>
@@ -118,6 +123,14 @@ The whole chain: fetch the current app's menu tree (`personalApi.menu(moduleId)`
 **A missing component keeps the original menu path.** If `node.component` doesn't match any key in the glob map, `buildRoutesForModule` logs one `console.warn` and materializes the route as `MissingRoute`. Following the menu link then shows the missing component path directly instead of an unexplained 404. `useAuthMenu.ts` also exports `viewComponentPaths`, converting every valid glob key back into the `component` string consumed by the menu form. Choosing from that dropdown normally prevents the diagnostic branch from being needed.
 
 Each registered route carries `name: 'menu-{id}'` and `meta.keepAlive: true`, and is hung under the `layout` parent via `router.addRoute('layout', ...)`. Every name added this way is tracked through `registerDynamic(name)`, so it can be torn down precisely on logout or app switch (see `resetRouter` in `router/index.ts`).
+
+## Initialization failures and deep-link retry
+
+On a hard refresh or a direct visit to a dynamic deep link, the guard calls `useModule().enterInitial()`. One `Promise.all` fetches the module list, permission codes, and personal profile. Startup state is committed only after all three succeed, after which the selected application's menu is fetched and its dynamic routes are registered. A failed startup request is never treated as a successful initialization with empty permissions.
+
+The destination after a failure depends on whether the session is still valid. A 401 or failed token refresh is handled by the request layer, which clears the session and lets the guard return to login. For a network error, 5xx response, or temporarily unavailable startup endpoint, `resolveInitializationFailure()` keeps the authenticated session, stores the error and the original `to.fullPath` in the auth store, and redirects to the static `/initialization-error` page. A transient startup failure therefore does not masquerade as a logout.
+
+The retry button runs `router.replace(target)` with that saved address. Because `routesReady` remains `false`, the guard runs the full initialization again. On success it resolves the original deep link against the updated matcher and re-enters it by its real dynamic-route name. The original query string and hash remain intact, so the user does not have to find the interrupted page again from the home screen.
 
 ## External links and embedded pages: no new menu type
 

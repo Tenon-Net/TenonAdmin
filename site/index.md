@@ -46,7 +46,7 @@ features:
     details: The local sample uses SQLite and creates tables, menus, and an administrator account on first startup. Try the admin interface without installing a database server.
   - icon: 📦
     title: Minimal Dependencies
-    details: Core runtime dependencies are limited to SqlSugar and Microsoft.*. Add optional packages such as Excel and workflows when your application needs them.
+    details: Core packages use SqlSugar and Microsoft platform packages, with security fixes for existing transitive dependencies included. Add optional packages such as Excel and workflows when your application needs them.
   - icon: 🔐
     title: Auth & Security
     details: JWT auth, login lockout, rate limiting, forced logout, and log redaction are on by default; three CAPTCHA styles ship built in and switch on when you want them.

@@ -80,6 +80,14 @@ export function toPage<T>(res: Parameters<typeof unwrap>[0]): { items: T[]; tota
 - **请求方向**：前端的 `{ page, pageSize }` 变成后端 record 的 PascalCase `{ Current, Size }` 查询参。ASP.NET 绑定对名字大小写其实不敏感，但本仓库的约定是用 Pascal。`...pageParams(p)` 展开进每个接口自己强类型的查询对象里，和各自的业务过滤条件并排放。
 - **响应方向**：后端的 `PagedList<T>`（`{ current, size, total, items }`）变成 `{ items, total }`。这正是 ProTable `fetcher` 契约要的形状。
 
+## `long` 主键的两种 JSON 形状
+
+默认雪花布局发出的 ID 仍在 JavaScript 安全整数范围内，但接口契约不能假定每个后端 `long` 都来自默认发号器。MVC 与 SignalR 共用 `JavaScriptSafeInt64Converter`：安全范围内写成 JSON number，超出范围就写成十进制 string；读入时两种形状都接受。OpenAPI 因此把 `long` 描述为 `integer|string`，生成的路径参数和 DTO 类型也会带上这个联合类型。
+
+领域类型统一用 `ApiId = number | string`。拿到 string 后不要再调用 `Number()`、`parseInt()` 或一元 `+`，这些转换会在请求发出前就丢掉低位。传给 openapi-fetch 的路径参数时直接保留原值；拼 Vue Router 路径时也只做字符串插值。
+
+URL 查询参数本来就是文本。`src/utils/id.ts` 的 `parseQueryApiId` 只接受正十进制字符串：能安全表示时还原成 number，超出安全范围时返回原 string。工作流的 `normalizeWfId` 同样保留合法 string，`workflowPathId` 再把它原样交给路径参数；如果输入已经是一个不安全的 number，校验会拒绝它，因为丢掉的精度无法恢复。
+
 ## 错误码怎么变成文案
 
 `unwrap` 抛出的 `ApiError` 带着一个数字 `code` 和一个 `msgKey`，把这两样落成一句中文或英文提示，是前后端约定里最不直观的一环。

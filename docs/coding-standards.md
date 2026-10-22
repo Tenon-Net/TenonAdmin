@@ -33,7 +33,7 @@ AspNetCore  宿主集成：AddTenonAdmin/MapTenonAdmin、JWT、过滤器、内�
 TenonAdmin  元包：只引用 AspNetCore，消费方装它即拉全栈。
 ```
 
-- 运行时依赖**仅** SqlSugarCore + Microsoft.\*，核心包不得引入其它第三方框架。
+- 核心包的功能依赖限于 SqlSugarCore + Microsoft.\*，不得引入其它第三方框架。已有传递依赖命中漏洞时，可直接声明修补版本下限，让 NuGet 消费方也获得修复；这类安全约束不增加新的运行时库。
 - 每层装配是一个 `*Setup.cs` 扩展方法：`SqlSugarSetup` → `ServicesSetup` → `TenonAdminSetup`（组合根，`AddTenonAdmin` 逐层向下调）。
 
 ### 1.2 可替换性三件套（`ReplaceabilityTests` 锁定的契约）
