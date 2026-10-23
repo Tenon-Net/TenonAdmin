@@ -102,7 +102,7 @@ internal sealed class DatabaseInitializer(
             logger.LogInformation("TenonAdmin: 种子执行完成(新插入 {Inserted} 行,升级同步 {Synced} 行)", inserted, synced);
         }
 
-        logger.LogInformation("TenonAdmin 数据库就绪:{DbType} / {Conn}", options.DbType, options.ConnectionString);
+        logger.LogInformation("TenonAdmin 数据库就绪:{DbType}", options.DbType);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
