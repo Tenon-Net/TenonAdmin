@@ -14,6 +14,29 @@ afterEach(() => {
 })
 
 describe('WfFormMount', () => {
+  it('does not expose framework workflow components as consumer forms', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    app = createApp(defineComponent({
+      setup: () => () => h('div', [
+        h(WfFormMount, {
+          formComponent: 'workflow/components/WfBuiltinForm',
+          mode: 'start',
+        }),
+        h(WfFormMount, {
+          formComponent: 'workflow/components/WfFormMount',
+          mode: 'start',
+        }),
+      ]),
+    }))
+    app.use(createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }))
+    app.mount(host)
+    await nextTick()
+
+    expect(host.querySelectorAll('.wf-form-missing')).toHaveLength(2)
+    expect(host.querySelector('.wf-builtin-form')).toBeNull()
+  })
+
   it('keeps the consumer mount point authoritative if an invalid model has both forms', async () => {
     const schema: WfFormSchema = {
       version: 1,

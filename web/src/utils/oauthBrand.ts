@@ -10,13 +10,6 @@ export type BrandCode = (typeof BRAND_CODES)[number]
 
 const BRAND_SET = new Set<string>(BRAND_CODES)
 
-/**
- * 登录页临时展示全部品牌圆标(图标验收用)。
- * true:铺全 6 个,不做 N=4 溢出;false:恢复仅后端 enabled providers。
- * 验收完请改回 false。
- */
-export const PREVIEW_ALL_SSO_BRANDS = false
-
 export const BRAND_DISPLAY_NAMES: Record<BrandCode, string> = {
   github: 'GitHub',
   wechat: '微信',
@@ -24,11 +17,6 @@ export const BRAND_DISPLAY_NAMES: Record<BrandCode, string> = {
   dingtalk: '钉钉',
   gitee: 'Gitee',
   qq: 'QQ',
-}
-
-/** 图标预览用的假 provider 列表(与后端是否启用无关)。 */
-export function previewAllBrandProviders(): SsoProviderLike[] {
-  return BRAND_CODES.map((code) => ({ code, displayName: BRAND_DISPLAY_NAMES[code] }))
 }
 
 /** 配置页一行:内置品牌全展示;registered=后端已装包/已配密钥。 */

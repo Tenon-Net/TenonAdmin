@@ -4,7 +4,7 @@
 // 2) 再 Iconify 名
 // 3) 首字母
 import { computed } from 'vue'
-import { OfflineIcon } from 'tenon-naive-iconify-picker'
+import AppIcon from '@/components/AppIcon.vue'
 import { resolveProviderIcon, type BrandCode } from '@/utils/oauthBrand'
 
 const props = withDefaults(
@@ -98,13 +98,13 @@ defineExpose({ isBadge: computed(() => !!badgeUrl.value) })
     :style="{ width: size + 'px', height: size + 'px', color: fallback?.color }"
     aria-hidden="true"
   >
-    <OfflineIcon
+    <AppIcon
       v-if="fallback?.icon"
       :icon="fallback.icon"
       :size="size"
       fallback="ph:link-simple"
     />
-    <OfflineIcon
+    <AppIcon
       v-else-if="resolved.kind === 'iconify'"
       :icon="resolved.name"
       :size="size"

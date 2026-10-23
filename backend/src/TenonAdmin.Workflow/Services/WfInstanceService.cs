@@ -1397,20 +1397,15 @@ public class WfInstanceService(
     private static bool TryReadPositiveTaskId(WfHistory item, out long taskId)
     {
         taskId = 0;
-        if (item.PayloadVersion is not (0 or 1) || string.IsNullOrWhiteSpace(item.PayloadJson))
+        if (!TryParsePayload(item, out var document))
             return false;
-        try
+        using (document)
         {
-            using var document = JsonDocument.Parse(item.PayloadJson);
-            return document.RootElement.ValueKind == JsonValueKind.Object
+            return document!.RootElement.ValueKind == JsonValueKind.Object
                    && document.RootElement.TryGetProperty("taskId", out var property)
                    && property.ValueKind == JsonValueKind.Number
                    && property.TryGetInt64(out taskId)
                    && taskId > 0;
-        }
-        catch (JsonException)
-        {
-            return false;
         }
     }
 
@@ -1425,12 +1420,11 @@ public class WfInstanceService(
     {
         taskId = 0;
         approvalMode = null;
-        if (item.PayloadVersion is not (0 or 1) || string.IsNullOrWhiteSpace(item.PayloadJson))
+        if (!TryParsePayload(item, out var document))
             return false;
-        try
+        using (document)
         {
-            using var document = JsonDocument.Parse(item.PayloadJson);
-            var root = document.RootElement;
+            var root = document!.RootElement;
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("taskId", out var taskProperty)
                 || taskProperty.ValueKind != JsonValueKind.Number
@@ -1454,10 +1448,6 @@ public class WfInstanceService(
                 approvalMode = MapApprovalMode(signMode.Value);
             return true;
         }
-        catch (JsonException)
-        {
-            return false;
-        }
     }
 
     private static bool TryReadCompletedTaskKey(
@@ -1465,13 +1455,17 @@ public class WfInstanceService(
         out (long TaskId, long UserId, WfTaskAction Action) key)
     {
         key = default;
-        if (!TryReadPositiveTaskId(item, out var taskId))
+        if (!TryParsePayload(item, out var document))
             return false;
-        try
+        using (document)
         {
-            using var document = JsonDocument.Parse(item.PayloadJson!);
-            var root = document.RootElement;
-            if (!root.TryGetProperty("userId", out var userProperty)
+            var root = document!.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("taskId", out var taskProperty)
+                || taskProperty.ValueKind != JsonValueKind.Number
+                || !taskProperty.TryGetInt64(out var taskId)
+                || taskId <= 0
+                || !root.TryGetProperty("userId", out var userProperty)
                 || userProperty.ValueKind != JsonValueKind.Number
                 || !userProperty.TryGetInt64(out var userId)
                 || userId <= 0
@@ -1481,6 +1475,18 @@ public class WfInstanceService(
                 || !Enum.IsDefined(action))
                 return false;
             key = (taskId, userId, action);
+            return true;
+        }
+    }
+
+    private static bool TryParsePayload(WfHistory item, out JsonDocument? document)
+    {
+        document = null;
+        if (item.PayloadVersion is not (0 or 1) || string.IsNullOrWhiteSpace(item.PayloadJson))
+            return false;
+        try
+        {
+            document = JsonDocument.Parse(item.PayloadJson);
             return true;
         }
         catch (JsonException)

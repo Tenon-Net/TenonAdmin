@@ -19,7 +19,7 @@ import { setupIcons } from '@/lib/icons'
 import { setupMarkdown } from '@/lib/markdown'
 import App from './App'
 
-// 首屏注册 4 套离线图标集(非阻塞;菜单/AppIcon 在集合就绪后自动重渲染)。
+// 首屏同步注册常用图标子集，完整离线集按需加载。
 setupIcons()
 // Markdown 渲染器允许内联 HTML,在首次渲染前统一挂载 XSS 过滤插件。
 setupMarkdown()

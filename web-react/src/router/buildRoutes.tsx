@@ -23,6 +23,7 @@ export interface RouteHandle {
 
 // 菜单可落地的页面组件:`/src/views/**/*.tsx`,减去几类**不是菜单落点**的文件:
 //   `.spec.tsx`      —— 测试文件(否则 `hasView('x.spec')` 返真、也污染菜单管理下拉)。
+//   `**/components/**`—— 页面内部组件依赖父级上下文，不是独立菜单落点。
 //   `login/**`       —— 登录页是**静态路由**(App 直接 import),不是菜单能配的组件。
 //   `module/**`      —— 应用选择页是 Protected 里的**静态路由**,同理。
 //   `oauth/**`       —— OAuth 回调是 App 里的公开静态路由。
@@ -38,6 +39,7 @@ const lazyComponents = new WeakMap<() => Promise<ViewModule>, LazyExoticComponen
 const views = import.meta.glob<ViewModule>([
   '/src/views/**/*.tsx',
   '!/src/views/**/*.spec.tsx',
+  '!/src/views/**/components/**',
   '!/src/views/login/**',
   '!/src/views/module/**',
   '!/src/views/oauth/**',
@@ -62,6 +64,9 @@ export function viewKeysFrom(glob: ViewGlob): string[] {
   return Object.keys(glob)
     .map((k) => k.replace(/^\/src\/views\//, '').replace(/\.tsx$/, ''))
     .filter((k) => !k.endsWith('/detail'))
+    .filter((k) => !k.split('/').includes('components'))
+    // 历史别名继续可路由，但不再作为新菜单的候选组件。
+    .filter((k) => k !== 'dashboard/index')
     .filter((k) => !NON_PAGE_PREFIXES.some((p) => k.startsWith(p)))
     .sort()
 }

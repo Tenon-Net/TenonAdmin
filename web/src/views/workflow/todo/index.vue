@@ -9,6 +9,7 @@ import { NButton, NEmpty, NSpace, NTag, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import { wfTaskApi } from '@/api/workflow'
+import { formatWorkflowDateTime } from '@/workflow/statusLabels'
 import { workflowTodoBus } from '@/composables/useRealtime'
 import { translateError } from '@/utils/error'
 import type { WfTodoItem } from '@/types/workflow'
@@ -91,7 +92,7 @@ const columns: ProTableColumn<WfTodoItem>[] = [
     width: 170,
     render: (r) => {
       if (!r.dueTime) return '—'
-      const text = r.dueTime.replace('T', ' ').slice(0, 16)
+      const text = formatWorkflowDateTime(r.dueTime, 'minute')
       if (!isOverdue(r)) return text
       return h(NTag, { size: 'small', type: 'warning', bordered: false }, () => `${t('workflow.todo.overdue')} ${text}`)
     },

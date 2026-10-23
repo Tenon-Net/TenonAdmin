@@ -37,7 +37,12 @@ watch(() => props.variablesJson, (json) => {
   parseError.value = result.error
 })
 
-const viewModules = import.meta.glob('/src/views/**/*.vue') as Record<
+// 两个框架入口已由工作流页面静态引用，也不属于消费者业务表单；其余 views 路径保持公开挂载契约。
+const viewModules = import.meta.glob([
+  '/src/views/**/*.vue',
+  '!/src/views/workflow/components/WfBuiltinForm.vue',
+  '!/src/views/workflow/components/WfFormMount.vue',
+]) as Record<
   string,
   () => Promise<{ default: Component }>
 >

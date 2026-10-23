@@ -35,6 +35,9 @@ export type WfFormGlob = Record<string, () => Promise<FormModule>>
 const viewModules = import.meta.glob<FormModule>([
   '/src/views/**/*.tsx',
   '!/src/views/**/*.spec.tsx',
+  // 两个框架入口已被静态引用，也不属于消费者业务表单；其余 views 路径保持公开挂载契约。
+  '!/src/views/workflow/components/WfBuiltinForm.tsx',
+  '!/src/views/workflow/components/WfFormMount.tsx',
 ]) as WfFormGlob
 
 const lazyComponents = new WeakMap<() => Promise<FormModule>, LazyExoticComponent<ComponentType<WfFormComponentProps>>>()
@@ -112,7 +115,7 @@ export const WfFormMount = forwardRef<WfFormMountHandle, WfFormMountProps>(funct
   }), [parsed.error])
 
   if (builtinSchema && parsed.error) {
-    return <Alert type="error" showIcon message={t('workflow.form.runtime.invalidVariables')} />
+    return <Alert type="error" showIcon title={t('workflow.form.runtime.invalidVariables')} />
   }
 
   if (builtinSchema) {
@@ -131,7 +134,7 @@ export const WfFormMount = forwardRef<WfFormMountHandle, WfFormMountProps>(funct
   if (!resolved) return null
 
   if (!resolved.component) {
-    return <Alert type="warning" showIcon message={t('workflow.form.missing', { path: formComponent })} />
+    return <Alert type="warning" showIcon title={t('workflow.form.missing', { path: formComponent })} />
   }
 
   const Consumer = resolved.component

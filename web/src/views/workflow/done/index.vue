@@ -11,6 +11,7 @@ import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pr
 import { wfTaskApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
 import type { WfDoneItem, WfInstanceStatus, WfTaskAction } from '@/types/workflow'
+import { instanceStatusKey, instanceStatusTagType, taskActionKey, taskActionTagType } from '@/workflow/statusLabels'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -35,59 +36,17 @@ onActivated(() => {
   void tableRef.value?.refresh()
 })
 
-/** 与 detail.vue 同一套实例状态 / 动作数字表,不另起体系。 */
-function normalizeStatus(s: WfInstanceStatus | undefined): string {
-  if (s == null) return 'unknown'
-  const map: Record<number, string> = {
-    1: 'running',
-    2: 'approved',
-    3: 'rejected',
-    4: 'cancelled',
-    5: 'terminated',
-  }
-  return map[s] ?? 'unknown'
-}
-
 function statusLabel(s: WfInstanceStatus | undefined): string {
-  return t(`workflow.status.${normalizeStatus(s)}`, String(s ?? ''))
+  return t(`workflow.status.${instanceStatusKey(s)}`, String(s ?? ''))
 }
 
-function statusType(s: WfInstanceStatus | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
-  const key = normalizeStatus(s)
-  if (key === 'approved') return 'success'
-  if (key === 'rejected' || key === 'terminated') return 'error'
-  if (key === 'cancelled') return 'warning'
-  if (key === 'running') return 'info'
-  return 'default'
-}
+const statusType = instanceStatusTagType
 
 function actionLabel(a: WfTaskAction | undefined): string {
-  if (a == null) return t('workflow.action.unknown')
-  const map: Record<number, string> = {
-    1: 'approve',
-    2: 'reject',
-    3: 'transfer',
-    4: 'return',
-    5: 'withdraw',
-    6: 'delegate',
-    8: 'addSign',
-    9: 'removeSign',
-    10: 'takeBack',
-    11: 'nobody',
-    12: 'adminTransfer',
-    13: 'adminSkip',
-    14: 'adminTerminate',
-  }
-  const key = map[a] ?? 'unknown'
-  return t(`workflow.action.${key}`, String(a))
+  return t(`workflow.action.${taskActionKey(a)}`, String(a ?? ''))
 }
 
-function actionTagType(a: WfTaskAction | undefined): 'default' | 'success' | 'error' | 'warning' | 'info' {
-  if (a === 1) return 'success'
-  if (a === 2) return 'error'
-  if (a === 3) return 'warning'
-  return 'info'
-}
+const actionTagType = taskActionTagType
 
 const columns: ProTableColumn<WfDoneItem>[] = [
   { key: 'definitionName', title: () => t('workflow.done.definition'), minWidth: 160, ellipsis: { tooltip: true } },

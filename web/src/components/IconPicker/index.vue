@@ -29,7 +29,7 @@ const labels = computed(() => ({
 </script>
 
 <template>
-  <!-- 选择器 chrome 用已预热的 Lucide;完整图标集仍在对应 Tab 按需加载。 -->
+  <!-- 打开选择器时加载对应集合的完整离线目录。 -->
   <IconPicker
     v-model="model"
     :labels="labels"

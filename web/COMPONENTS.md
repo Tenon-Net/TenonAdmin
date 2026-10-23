@@ -105,4 +105,6 @@ tenon 内接入约定:
 
 离线优先图标选择与渲染,初始化与包装见 `src/lib/icons.ts` 顶部注释、`src/components/IconPicker/index.vue`、`src/components/AppIcon.vue`。
 
+`AppIcon` 支持 `{ icon?, size?, fallback? }`，空值默认显示 `lucide:dot`。首屏同步注册源码和内置菜单使用的图标子集；子集外图标、本地 SVG 和选择器完整目录继续由图标包处理。`npm run dev` / `npm run build` 自动执行 `gen:icons`；新增后端菜单种子图标时同步维护本模板的 `scripts/icon-manifest.json`，消费者自定义图标仍可按需离线加载。
+
 品牌徽标由 `TenonLogo.vue` 渲染 `/tenon-mark.png`,素材来自 `Tenon-Net/Tenon-Brand`;它不走 IconPicker/AppIcon,也不随用户选择的 accent 改色。

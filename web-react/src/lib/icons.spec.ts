@@ -63,6 +63,8 @@ describe('首屏图标子集', () => {
     expect(isCoreIcon('ph:floppy-disk')).toBe(true)
     expect(isCoreIcon('ph:buildings-duotone')).toBe(true)
     expect(isCoreIcon('lucide:settings')).toBe(true)
+    expect(isCoreIcon('ph:flow-arrow-duotone')).toBe(true)
+    expect(isCoreIcon('ph:monitor-duotone')).toBe(true)
   })
 
   it('setupIcons 同步注册子集中的图标', () => {

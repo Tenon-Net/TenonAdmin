@@ -84,7 +84,6 @@ const {
 } = captcha
 const {
   providers: ssoProviders,
-  displayList: ssoDisplayList,
   split: ssoSplit,
   overflowOptions: ssoOverflowOptions,
 } = sso
@@ -448,8 +447,8 @@ async function onSmsSubmit() {
         </button>
       </n-form>
 
-      <!-- 第三方登录:Gitee 风圆标;<a href>。PREVIEW_ALL_SSO_BRANDS 时展示全部品牌图。 -->
-      <template v-if="ssoDisplayList.length">
+      <!-- 第三方登录：仅展示后端启用的提供方。 -->
+      <template v-if="ssoProviders.length">
         <div class="lf-divider"><span>{{ t('login.otherMethods') }}</span></div>
         <div class="lf-sso">
           <a

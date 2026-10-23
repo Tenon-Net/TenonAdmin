@@ -9,7 +9,10 @@ import type { MenuNode } from '@/types/menu'
 import type { ApiId } from '@/types/api'
 
 // 所有页面组件:component 字符串 → 对应文件(如 "system/user/index" → /src/views/system/user/index.vue)。
-const views = import.meta.glob('/src/views/**/*.vue') as Record<string, () => Promise<Component>>
+const views = import.meta.glob([
+  '/src/views/**/*.vue',
+  '!/src/views/**/components/**',
+]) as Record<string, () => Promise<Component>>
 const viewKeys = new Set(Object.keys(views))
 
 /**

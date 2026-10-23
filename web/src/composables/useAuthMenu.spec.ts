@@ -23,7 +23,7 @@ vi.mock('@/router', () => ({
 vi.mock('@/router/detailRoutes', () => ({ registerDetailRoutes: mocks.registerDetailRoutes }))
 vi.mock('@/router/namedPage', () => ({ namedPage: mocks.namedPage }))
 
-import { buildRoutesForModule } from './useAuthMenu'
+import { buildRoutesForModule, viewComponentPaths } from './useAuthMenu'
 
 function missingMenu(): MenuNode {
   return {
@@ -41,6 +41,11 @@ function missingMenu(): MenuNode {
 }
 
 describe('buildRoutesForModule', () => {
+  it('菜单候选包含页面，但不包含页面内部组件', () => {
+    expect(viewComponentPaths).toContain('workflow/definition/designer')
+    expect(viewComponentPaths.some((path) => path.includes('/components/'))).toBe(false)
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.auth.menuTree = []

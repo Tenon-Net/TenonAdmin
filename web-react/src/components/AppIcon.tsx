@@ -28,7 +28,7 @@ export interface AppIconProps {
  * 故渲染后端配的任意 iconify 串(`ph:*`/`lucide:*`/`ep:*`/`ant-design:*`)全离线、不打在线 API。
  * 对应 Vue 侧 `AppIcon.vue`(那边包 tenon-naive-iconify-picker 的 OfflineIcon)。
  *
- * 首屏只带 `icons.generated.json` 小子集;菜单种子里像 `ph:timer-duotone` 这类不在子集的图标,
+ * 首屏只带 `icons.generated.json` 小子集；用户配置子集外的图标时，
  * 要经 `ensureIconLoaded` 懒加载完整前缀包。**加载完成必须 bump 一次重渲染**——`@iconify/react/offline`
  * 在 addCollection 后不会自动叫醒已挂载的 `<Icon>`,否则侧栏会出现"空白,点开目录才出图标"。
  */

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter, useRoutes } from 'react-router-dom'
-import { buildRoutes, viewKeysFrom, type ViewGlob } from './buildRoutes'
+import { buildRoutes, viewComponentPaths, viewKeysFrom, type ViewGlob } from './buildRoutes'
 import { MenuType, type MenuNode } from '@/types/menu'
 
 vi.mock('@/views/embed/iframe', () => ({
@@ -87,7 +87,7 @@ describe('真实 glob(不注入)——堵住"假 glob 掩盖真 glob 失效"的�
   it('buildRoutes 用默认 glob 时,能解析到仓库里真实存在的页面文件', () => {
     // 上面所有用例都注入假 glob,真实 `import.meta.glob(['/src/views/**/*.tsx','!...spec'])` 若因
     // 语法/版本问题匹配为空,一条测试都不会红,而真实 app 会**零动态路由**。这条特意不传 glob,
-    // 用一条指向真文件(`src/views/system/user/index.tsx`,B6b-1 建的占位页)的菜单,证明那条负模式
+    // 用一条指向真实用户管理页的菜单,证明那条负模式
     // 数组 glob 在本 Vite 版本下确实解析到了文件、建出了路由。
     const routes = buildRoutes([node({ id: 1, path: 'system/user', component: 'system/user/index' })])
     expect(routes.map((r) => r.path)).toEqual(['/system/user'])
@@ -100,9 +100,16 @@ describe('真实 glob(不注入)——堵住"假 glob 掩盖真 glob 失效"的�
 })
 
 describe('viewKeysFrom(菜单管理的组件下拉真相源)', () => {
+  it('真实菜单候选不暴露页面内部组件', () => {
+    expect(viewComponentPaths).toContain('workflow/definition/designer')
+    expect(viewComponentPaths.some((path) => path.includes('/components/'))).toBe(false)
+  })
+
   it('glob 键 → component 值(剥前缀后缀),排除非页面目录,排序', () => {
     const withInternals: ViewGlob = {
       ...glob,
+      '/src/views/dashboard/workbench.tsx': async () => ({ default: () => null }),
+      '/src/views/workflow/instance/components/WfTaskActionModal.tsx': async () => ({ default: () => null }),
       '/src/views/oauth/CallbackPage.tsx': async () => ({ default: () => null }),
       '/src/views/error/NotFoundPage.tsx': async () => ({ default: () => null }),
       '/src/views/embed/iframe.tsx': async () => ({ default: () => null }),
@@ -111,6 +118,7 @@ describe('viewKeysFrom(菜单管理的组件下拉真相源)', () => {
     }
     // login/oauth/error(静态路由)、embed/iframe(静态 import 的 iframe 视图)、_placeholder(内部占位)
     // 都不是菜单能配的落点,必须挡在下拉外 —— 选到它们会渲染坏页/占位页。
-    expect(viewKeysFrom(withInternals)).toEqual(['dashboard/index', 'system/user/index'])
+    // 旧 dashboard/index 仅兼容已有菜单，新配置只提供真实工作台入口。
+    expect(viewKeysFrom(withInternals)).toEqual(['dashboard/workbench', 'system/user/index'])
   })
 })

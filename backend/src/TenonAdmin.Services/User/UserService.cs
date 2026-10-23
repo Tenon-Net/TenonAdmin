@@ -184,6 +184,7 @@ public class UserService(
     {
         var u = await users.GetByIdAsync(id);
         AdminException.ThrowIf(u is null, ErrorCode.UserNotFound);
+        ValidateUserInScope(u!);
         var roleIds = await rbac.GetUserRoleIdsAsync(id);
         return new UserDetail
         {
@@ -261,6 +262,7 @@ public class UserService(
     {
         var user = await users.GetByIdAsync(id);
         AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
+        ValidateUserInScope(user!);
         // 超管护栏(与 SetEnabledAsync/DeleteAsync 同源):不可经普通更新面停用/降权超管——
         // 否则被授予用户更新权限码的下位者(或超管误操作)可把 Enabled 置 false + 清空角色,把最高账号锁死(P1-8)。
         AdminException.ThrowIf(user!.IsSuperAdmin && !input.Enabled, ErrorCode.SuperAdminProtected);
@@ -298,6 +300,7 @@ public class UserService(
     {
         var user = await users.GetByIdAsync(id);
         AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
+        ValidateUserInScope(user!);
         AdminException.ThrowIf(user!.IsSuperAdmin, ErrorCode.SuperAdminProtected);
         // QA10: cannot delete self
         AdminException.ThrowIf(currentUser?.UserId == id, ErrorCode.CannotOperateSelf);
@@ -316,6 +319,8 @@ public class UserService(
         if (ids.Count == 0) return;
         var idList = ids.ToList();
         var targets = await users.AsQueryable().Where(u => idList.Contains(u.Id)).ToListAsync();
+        // 整批先校验当前归属，避免混入范围外用户时已经删除了前面的合法目标。
+        foreach (var target in targets) ValidateUserInScope(target);
         // 超管护栏先于自操作护栏:批次含超管时返回更具体的 SuperAdminProtected(与单删同源语义)。
         AdminException.ThrowIf(targets.Any(u => u.IsSuperAdmin), ErrorCode.SuperAdminProtected);
         // QA10: cannot delete self via batch
@@ -337,6 +342,7 @@ public class UserService(
     {
         var user = await users.GetByIdAsync(id);
         AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
+        ValidateUserInScope(user!);
 
         // 仅校验显式提供的口令;未提供时走随机/默认强口令(同 AddAsync 约定)
         if (!string.IsNullOrEmpty(newPassword)) await policy.ValidatePasswordAsync(newPassword);
@@ -364,6 +370,7 @@ public class UserService(
     {
         var user = await users.GetByIdAsync(id);
         AdminException.ThrowIf(user is null, ErrorCode.UserNotFound);
+        ValidateUserInScope(user!);
         AdminException.ThrowIf(!enabled && user!.IsSuperAdmin, ErrorCode.SuperAdminProtected);
         // QA10: cannot enable/disable self
         AdminException.ThrowIf(currentUser?.UserId == id, ErrorCode.CannotOperateSelf);
@@ -375,16 +382,28 @@ public class UserService(
     }
 
     /// <summary>
-    /// QA08: validate that the given org is within the caller's data scope.
-    /// Superadmin and unrestricted scope bypass; null orgId is allowed (unassigned user).
+    /// 按目标用户当前归属校验可见性，与列表一致；受限范围不能操作未归属机构的其他用户。
+    /// IncludeSelf 只补充本人可见性，删除/停用等自操作护栏仍由对应操作检查。
     /// </summary>
-    protected virtual void ValidateOrgInScope(long? orgId)
+    protected virtual void ValidateUserInScope(SysUser user)
     {
-        if (orgId is null) return;
         if (currentUser?.IsSuperAdmin == true) return;
         var scope = dataScope?.Current;
         if (scope is null || scope.IsUnrestricted) return;
-        AdminException.ThrowIf(!scope.OrgIds.Contains(orgId.Value), ErrorCode.OrgOutOfScope);
+        if (scope.IncludeSelf && currentUser?.UserId == user.Id) return;
+        AdminException.ThrowIf(user.OrgId is not long orgId || !scope.OrgIds.Contains(orgId), ErrorCode.OrgOutOfScope);
+    }
+
+    /// <summary>
+    /// 校验新增/更新的目标机构；受限范围不能创建或移入未分配机构的用户。
+    /// 更新已有用户时必须先通过 <see cref="ValidateUserInScope"/> 校验当前归属。
+    /// </summary>
+    protected virtual void ValidateOrgInScope(long? orgId)
+    {
+        if (currentUser?.IsSuperAdmin == true) return;
+        var scope = dataScope?.Current;
+        if (scope is null || scope.IsUnrestricted) return;
+        AdminException.ThrowIf(orgId is null || !scope.OrgIds.Contains(orgId.Value), ErrorCode.OrgOutOfScope);
     }
 
     /// <summary>

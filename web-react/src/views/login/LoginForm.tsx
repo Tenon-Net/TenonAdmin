@@ -7,11 +7,7 @@ import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteStore, appVersion } from '@/stores/site'
 import { translateError } from '@/utils/error'
-import {
-  splitLoginProviders,
-  PREVIEW_ALL_SSO_BRANDS,
-  previewAllBrandProviders,
-} from '@/utils/oauthBrand'
+import { splitLoginProviders } from '@/utils/oauthBrand'
 import { TenonLogo } from '@/components/TenonLogo'
 import { AppIcon } from '@/components/AppIcon'
 import { BrandIcon } from '@/components/oauth/BrandIcon'
@@ -57,19 +53,9 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
   const [pendingClaimToken, setPendingClaimToken] = useState('')
   const [pendingClaimBusy, setPendingClaimBusy] = useState(false)
   const [captcha, setCaptcha] = useState<{ id: string; svg: string; type: string } | null>(null)
-  // 第三方登录:默认后端 providers;PREVIEW_ALL_SSO_BRANDS 时铺全品牌图(图标验收)。
+  // 第三方登录：仅展示后端启用的提供方。
   const [ssoProviders, setSsoProviders] = useState<ExternalProvider[]>([])
-  const ssoDisplayList = useMemo(
-    () => (PREVIEW_ALL_SSO_BRANDS ? previewAllBrandProviders() : ssoProviders),
-    [ssoProviders],
-  )
-  const ssoSplit = useMemo(
-    () =>
-      PREVIEW_ALL_SSO_BRANDS
-        ? { visible: ssoDisplayList, overflow: [] as typeof ssoDisplayList }
-        : splitLoginProviders(ssoDisplayList),
-    [ssoDisplayList],
-  )
+  const ssoSplit = useMemo(() => splitLoginProviders(ssoProviders), [ssoProviders])
   const pendingProviderLabel = useMemo(() => {
     if (!pendingProvider) return t('oauth.thirdParty')
     const hit = ssoProviders.find((p) => p.code === pendingProvider)
@@ -524,8 +510,8 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
             </Button>
           </Form>
 
-          {/* 第三方登录:Gitee 风圆标。PREVIEW_ALL_SSO_BRANDS 时展示全部品牌图。 */}
-          {ssoDisplayList.length > 0 ? (
+          {/* 第三方登录：仅展示后端启用的提供方。 */}
+          {ssoProviders.length > 0 ? (
             <>
               <div className="lf-divider">
                 <span>{t('login.otherMethods')}</span>

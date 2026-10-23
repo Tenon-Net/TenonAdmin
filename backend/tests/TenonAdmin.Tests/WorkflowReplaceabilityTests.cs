@@ -56,6 +56,38 @@ public class WorkflowReplaceabilityTests
         Assert.IsType<FakeEngine>(scope.ServiceProvider.GetRequiredService<IWorkflowEngine>());
     }
 
+    [Theory]
+    [MemberData(nameof(TaskBeginOverridePoints))]
+    public void Task_begin_steps_remain_independently_overridable(
+        string methodName,
+        Type commandType,
+        bool includesSignMode)
+    {
+        var parameterTypes = includesSignMode
+            ? new[] { typeof(global::SqlSugar.ISqlSugarClient), commandType, typeof(bool), typeof(CancellationToken) }
+            : new[] { typeof(global::SqlSugar.ISqlSugarClient), commandType, typeof(CancellationToken) };
+        var method = typeof(WorkflowEngine).GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+            binder: null,
+            types: parameterTypes,
+            modifiers: null);
+
+        Assert.NotNull(method);
+        Assert.True(method.IsFamily);
+        Assert.True(method.IsVirtual);
+        Assert.False(method.IsFinal);
+        Assert.Equal(typeof(Task<WfExecutionContext>), method.ReturnType);
+    }
+
+    public static TheoryData<string, Type, bool> TaskBeginOverridePoints => new()
+    {
+        { "BeginTransferAsync", typeof(TransferTaskCmd), false },
+        { "BeginDelegateAsync", typeof(DelegateTaskCmd), false },
+        { "BeginSignAsync", typeof(SignTaskCmd), true },
+        { "BeginTakeBackAsync", typeof(TakeBackTaskCmd), false },
+    };
+
     /// <summary>变异:WorkflowSetup 里 IWfConditionEvaluator 的 TryAdd 改 Add → 本条红。</summary>
     [Fact]
     public async Task PreRegisteredConditionEvaluator_ShouldWinOverBuiltIn()

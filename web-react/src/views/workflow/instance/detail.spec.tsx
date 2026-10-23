@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App as AntdApp } from 'antd'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@/locales'
 import { ApiError } from '@/api'
 import { createApprovalNode, createDefaultModel } from '@/workflow/model'
 import type { WfId } from '@/workflow/id'
 import type { WfHistoryItem, WfInstanceDetail } from '@/types/workflow'
+
+let currentRouteId = '5'
 
 vi.mock('@/components/AppIcon', () => ({ AppIcon: () => null }))
 vi.mock('@/components/UserSelect', () => ({
@@ -28,8 +30,8 @@ vi.mock('@/api', async () => {
 })
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
-  useLocation: () => ({ pathname: '/workflow/instance/5/detail' }),
-  useParams: () => ({ id: '5' }),
+  useLocation: () => ({ pathname: `/workflow/instance/${currentRouteId}/detail` }),
+  useParams: () => ({ id: currentRouteId }),
 }))
 vi.mock('@/stores/tabs', () => ({
   useTabsStore: (selector: (s: { removeTab: () => null }) => unknown) => selector({ removeTab: () => null }),
@@ -114,7 +116,10 @@ const okButton = () => screen.getByRole('button', { name: /确\s*定/ })
 /** antd 的 confirmLoading 会吞掉点击,重试前先等确定钮退出 loading。 */
 const waitOkIdle = () => waitFor(() => expect(okButton().className).not.toContain('ant-btn-loading'))
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  currentRouteId = '5'
+  vi.clearAllMocks()
+})
 afterEach(cleanup)
 
 describe('WfInstanceDetailPage 动词', () => {
@@ -401,6 +406,83 @@ describe('WfInstanceDetailPage 动词', () => {
     fireEvent.click(okButton())
     await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(2))
     expect(vi.mocked(wfTaskApi.approve).mock.calls[1]![0].requestId).not.toBe(first)
+  })
+
+  it('网络失败后修改业务表单会为新变量换请求键', async () => {
+    const withForm = createDefaultModel()
+    withForm.formSchema = {
+      version: 1,
+      fields: [{ key: 'amount', label: '金额', type: 'money', required: true }],
+    }
+    withForm.root.next = createApprovalNode({
+      id: 'ap1',
+      name: '经理审批',
+      props: { formPerms: [{ field: 'amount', access: 'editable' }] },
+    })
+    mount(detailOf({
+      model: withForm as WfInstanceDetail['model'],
+      variablesJson: '{"amount":8000}',
+      myPendingTasks: [pendingTask(77, '经理审批')],
+      currentTasks: [{ taskId: 77, tokenId: 1, nodeId: 'ap1', nodeName: '经理审批' }],
+    }))
+    vi.mocked(wfTaskApi.approve).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+    fireEvent.click(await screen.findByRole('button', { name: /同\s*意/ }))
+    fireEvent.click(okButton())
+    await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(1))
+    await waitOkIdle()
+    const first = vi.mocked(wfTaskApi.approve).mock.calls[0]![0].requestId
+
+    fireEvent.change(screen.getByLabelText('金额'), { target: { value: '9000' } })
+    await waitFor(() => expect((screen.getByLabelText('金额') as HTMLInputElement).value).toBe('9000.00'))
+    fireEvent.click(okButton())
+
+    await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(wfTaskApi.approve).mock.calls[1]![0]).toMatchObject({ variablesJson: '{"amount":9000}' })
+    expect(vi.mocked(wfTaskApi.approve).mock.calls[1]![0].requestId).not.toBe(first)
+  })
+
+  it('切换实例会隐藏旧操作，旧请求完成后不覆盖新详情或关闭新动作', async () => {
+    let releaseOld!: () => void
+    let releaseNewDetail!: () => void
+    const oldDetail = detailOf({ id: 5, definitionName: '旧流程', myPendingTasks: [pendingTask(77, '旧审批')] })
+    const newDetail = detailOf({
+      id: 6,
+      definitionName: '新流程',
+      myPendingTasks: [pendingTask(88, '新审批')],
+      currentTasks: [{ taskId: 88, tokenId: 2, nodeId: 'ap1', nodeName: '新审批' }],
+    })
+    vi.mocked(wfInstanceApi.get).mockImplementation((instanceId) => {
+      if (String(instanceId) === '5') return Promise.resolve(oldDetail)
+      return new Promise((resolve) => { releaseNewDetail = () => resolve(newDetail) })
+    })
+    vi.mocked(wfInstanceApi.history).mockResolvedValue([])
+    vi.mocked(wfTaskApi.approve).mockImplementationOnce(() => new Promise((resolve) => {
+      releaseOld = () => resolve({ instanceId: 5, instanceStatus: 1 })
+    }))
+
+    const view = render(<AntdApp><WfInstanceDetailPage /></AntdApp>)
+    fireEvent.click(await screen.findByRole('button', { name: /同\s*意/ }))
+    fireEvent.click(okButton())
+    await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(1))
+
+    currentRouteId = '6'
+    view.rerender(<AntdApp><WfInstanceDetailPage /></AntdApp>)
+    await waitFor(() => expect(screen.queryByRole('button', { name: /同\s*意/ })).toBeNull())
+    expect(screen.queryByText('旧流程')).toBeNull()
+
+    await act(async () => { releaseNewDetail() })
+    expect(await screen.findByText('新流程')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /同\s*意/ }))
+    expect(screen.getByPlaceholderText('填写意见（可选，最多 1000 字）')).toBeTruthy()
+
+    await act(async () => { releaseOld() })
+    await waitFor(() => expect(screen.getByPlaceholderText('填写意见（可选，最多 1000 字）')).toBeTruthy())
+    expect(screen.getByText('新流程')).toBeTruthy()
+
+    fireEvent.click(okButton())
+    await waitFor(() => expect(wfTaskApi.approve).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(wfTaskApi.approve).mock.calls[1]![0].taskId).toBe(88)
   })
 
   it('拿回只在服务端给出 myTakeBackTaskId 时出现,并打在那条 task 上', async () => {
