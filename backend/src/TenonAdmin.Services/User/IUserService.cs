@@ -5,7 +5,8 @@ namespace TenonAdmin.Services;
 /// <summary>
 /// 用户管理服务(设计 §4 组织模块)——用户的增删改查分页 + 重置密码 + 启停用 + 角色分配。
 /// <para>安全不变量(实现须守住):密码哈希绝不出接口;<c>IsSuperAdmin</c> 绝不经接口设置(防提权);
-/// 超级管理员不可删除/停用(防自锁死)。类 public、方法 virtual 便于覆写(设计 §5.3)。</para>
+/// 超级管理员不可删除/停用(防自锁死)；按 Id 操作须校验目标当前所属机构的数据范围，更新时同时校验新机构。
+/// 实现类 public、方法 virtual 便于覆写(设计 §5.3)。</para>
 /// </summary>
 public interface IUserService
 {
@@ -34,7 +35,7 @@ public interface IUserService
     /// <summary>软删除用户(超管不可删)</summary>
     Task DeleteAsync(long id);
 
-    /// <summary>批量软删除用户(集合内含超管则整体拒绝,守超管不可删不变量);不存在的 Id 静默跳过。</summary>
+    /// <summary>批量软删除用户(集合内含超管或范围外用户则整体拒绝);不存在的 Id 静默跳过。</summary>
     Task DeleteBatchAsync(IReadOnlyCollection<long> ids);
 
     /// <summary>重置密码为指定值;留空则重置为默认初始密码。返回实际生效的初始密码明文(仅本次返回给管理员转达)。</summary>
