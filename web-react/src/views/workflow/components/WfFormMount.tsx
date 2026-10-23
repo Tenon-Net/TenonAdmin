@@ -115,7 +115,7 @@ export const WfFormMount = forwardRef<WfFormMountHandle, WfFormMountProps>(funct
   }), [parsed.error])
 
   if (builtinSchema && parsed.error) {
-    return <Alert type="error" showIcon message={t('workflow.form.runtime.invalidVariables')} />
+    return <Alert type="error" showIcon title={t('workflow.form.runtime.invalidVariables')} />
   }
 
   if (builtinSchema) {
@@ -134,7 +134,7 @@ export const WfFormMount = forwardRef<WfFormMountHandle, WfFormMountProps>(funct
   if (!resolved) return null
 
   if (!resolved.component) {
-    return <Alert type="warning" showIcon message={t('workflow.form.missing', { path: formComponent })} />
+    return <Alert type="warning" showIcon title={t('workflow.form.missing', { path: formComponent })} />
   }
 
   const Consumer = resolved.component
