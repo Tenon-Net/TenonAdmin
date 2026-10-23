@@ -29,7 +29,7 @@ function Consumer({ mode, businessKey }: WfFormComponentProps) {
 }
 
 const consumerGlob: WfFormGlob = {
-  '/src/views/biz/leave/form.tsx': () => Promise.resolve({ default: Consumer }),
+  '/src/views/workflow/custom/components/form.tsx': () => Promise.resolve({ default: Consumer }),
 }
 
 function Host(props: {
@@ -98,14 +98,25 @@ describe('WfFormMount', () => {
   })
 
   it('formComponent 命中 glob 时挂载消费者组件并透传 props', async () => {
-    render(<Host formComponent="biz/leave/form" viewGlob={consumerGlob} />)
+    render(<Host formComponent="workflow/custom/components/form" viewGlob={consumerGlob} />)
     expect(await screen.findByText('consumer:start:BK-1')).toBeTruthy()
   })
 
   it('双配置属非法定义:保留消费者挂载点,内置表单让位', async () => {
-    render(<Host formComponent="biz/leave/form" formSchema={schema} viewGlob={consumerGlob} />)
+    render(<Host formComponent="workflow/custom/components/form" formSchema={schema} viewGlob={consumerGlob} />)
     expect(await screen.findByText('consumer:start:BK-1')).toBeTruthy()
     expect(screen.queryByLabelText('标题')).toBeNull()
+  })
+
+  it('不把框架内部工作流组件暴露为消费者表单', () => {
+    render(
+      <AntdApp>
+        <WfFormMount formComponent="workflow/components/WfBuiltinForm" mode="start" />
+        <WfFormMount formComponent="workflow/components/WfFormMount" mode="start" />
+      </AntdApp>,
+    )
+    expect(screen.getByText('未找到业务表单组件:workflow/components/WfBuiltinForm')).toBeTruthy()
+    expect(screen.getByText('未找到业务表单组件:workflow/components/WfFormMount')).toBeTruthy()
   })
 
   it('既无 schema 也无 formComponent 时什么都不渲染,validate 放行', () => {

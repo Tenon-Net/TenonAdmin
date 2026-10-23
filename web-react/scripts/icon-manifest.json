@@ -31,5 +31,12 @@
   "ph:app-window-duotone",
   "ph:list-magnifying-glass-duotone",
   "ph:arrow-square-out-duotone",
-  "ph:paper-plane-tilt-duotone"
+  "ph:paper-plane-tilt-duotone",
+  "ph:monitor-duotone",
+  "ph:arrows-left-right-duotone",
+  "ph:flow-arrow-duotone",
+  "ph:check-square-offset-duotone",
+  "ph:copy-duotone",
+  "ph:user-circle-duotone",
+  "ph:archive-duotone"
 ]

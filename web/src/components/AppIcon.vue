@@ -1,12 +1,19 @@
 <script setup lang="ts">
-// tenon 图标渲染器:直接复用 npm 包的 OfflineIcon,仅钉死 tenon 全站的空值兜底图标。
-// 离线集/本地 SVG 已由 main.ts 的 setupIcons() 全局注册。
+// 常用子集直接渲染；完整图标集加载和本地 SVG 仍交给包的 OfflineIcon。
+import { computed } from 'vue'
+import { Icon } from '@iconify/vue'
 import { OfflineIcon } from 'tenon-naive-iconify-picker'
+import { isCoreIcon } from '@/lib/icons'
 
-defineProps<{ icon?: string; size?: number | string }>()
+const props = withDefaults(defineProps<{ icon?: string; size?: number | string; fallback?: string }>(), {
+  size: 18,
+  fallback: 'lucide:dot',
+})
+const name = computed(() => props.icon?.trim() || props.fallback)
 </script>
 
 <template>
   <!-- 兜底与 useLayoutMenu.renderIcon 一致,保证 rail/折叠态也有图标 -->
-  <OfflineIcon :icon="icon" :size="size ?? 18" fallback="lucide:dot" />
+  <Icon v-if="isCoreIcon(name)" :icon="name" :width="size" :height="size" />
+  <OfflineIcon v-else :icon="name" :size="size" />
 </template>

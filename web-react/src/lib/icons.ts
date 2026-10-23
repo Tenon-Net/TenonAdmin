@@ -111,7 +111,7 @@ export function getLocalIconNames(): string[] {
   return localNames
 }
 
-/** 首屏调用一次:异步注册 4 个离线集(非阻塞;<Icon> 在集合就绪后自动重渲染)。本地 svg 已在模块级注册。 */
+/** 首屏调用一次：同步注册常用图标子集；完整集合按需加载。本地 SVG 已在模块级注册。 */
 let coreRegistered = false
 export function setupIcons(): void {
   if (coreRegistered) return

@@ -47,6 +47,6 @@ app.provide(
     }),
   }),
 )
-setupIcons() // 注册离线图标集 + 本地 SVG,预热 ph(非阻塞:注册后 <Icon> 从本地渲染,不命中外部 CDN)
+setupIcons() // 同步注册常用图标和本地 SVG；完整集合按需离线加载。
 setupMarkdown() // 全局给 md-editor-v3 挂 XSS 过滤 + echarts 空 instance(通知正文富文本,默认放行内联 HTML 且会拉 unpkg)
 app.mount('#app')

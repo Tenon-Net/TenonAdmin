@@ -56,6 +56,8 @@ export default defineConfig({
   },
   test: {
     environment: 'happy-dom',
+    // 图标集成测试使用真实离线组件，由 Vite 处理包内的 CSS 导入。
+    server: { deps: { inline: ['tenon-naive-iconify-picker'] } },
     include: ['src/**/*.spec.ts'], // 必须限定 src:web/e2e 的 Playwright 用例也叫 *.spec.ts,默认 glob 会误吞
     globals: false,
     pool: 'forks',

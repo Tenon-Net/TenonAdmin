@@ -54,6 +54,8 @@
 | ImportWizard | 导入四步向导(`Steps`):上传 → 列映射 → 预览改错(**裸 antd `Table`**,可编辑+错误红底 tooltip,勿塞 `DataTable`)→ 结果;api 注入,用户管理已落地。错误格底色用 `--color-danger-bg`(坑 12)。**「已存在」(46010)按重复策略呈现**(警示色 `--color-warning-bg`,不是硬错误)—— 判定在 `src/utils/importDup.ts`。 |
 | ExportColumnsModal | 导出选列弹窗;默认按 `defaultSelected` 勾选,确认后父级带 **当前筛选** 请求 blob 下载;用户管理 / 操作日志已落地。 |
 
+图标子集由 `npm run gen:icons` 扫描本模板源码生成，dev/build 会自动运行。新增后端菜单种子图标时同步维护本模板的 `scripts/icon-manifest.json`；源码和清单外的自定义图标按前缀加载完整离线集合。
+
 ## hooks 约定
 
 `src/hooks/useConfirm.ts` —— 二次确认 + 结果 toast,**仅限组件内调用**(依赖 `App.useApp()`)。`const {ask, confirm, run} = useConfirm()`:

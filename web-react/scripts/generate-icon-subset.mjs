@@ -18,6 +18,7 @@ async function sourceFiles(dir) {
   return out
 }
 
+// 后端菜单种子在本模板内维护镜像清单，单独分发模板时无需依赖 backend/。
 const names = new Set(JSON.parse(await readFile(join(root, 'scripts', 'icon-manifest.json'), 'utf8')))
 for (const file of await sourceFiles(sourceRoot)) {
   const text = await readFile(file, 'utf8')
