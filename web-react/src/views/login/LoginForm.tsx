@@ -25,7 +25,7 @@ interface FormValues {
 /**
  * 共享登录表单(账号密码路径)。移植 Vue `views/login/LoginForm.vue` 的账号密码那条主干。
  *
- * 三套皮肤(Spotlight/SplitPanel/AuroraGlass)各自提供卡片 chrome + 背景,只内嵌这个表单——
+ * 各套皮肤各自提供卡片 chrome + 背景,只内嵌这个表单——
  * 故本组件不再自带 100vh 居中与 Card 外壳,只排版 品牌 / 表单 / 页脚 三段。皮肤外壳自绘品牌栏时
  * (双栏)传 `showBrand={false}` / `showFooter={false}` 关掉卡内重复。文字色走 `--lf-title` / `--lf-hint`
  * 变量(默认跟随应用令牌;深色玻璃皮肤覆写为浅色)。
@@ -34,7 +34,15 @@ interface FormValues {
  * + 密码后短信二次验证(40009) / TOTP 挑战(40018) / 强制 MFA 未绑定引导(40020)。
  * 登录页默认不常驻「设置身份验证器」;自愿绑定走个人中心。
  */
-export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?: boolean; showFooter?: boolean }) {
+export function LoginForm({
+  showBrand = true,
+  showFooter = true,
+  presentation = 'default',
+}: {
+  showBrand?: boolean
+  showFooter?: boolean
+  presentation?: 'default' | 'brand'
+}) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const navigate = useNavigate()
@@ -49,6 +57,8 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
   const pendingDisplayName = searchParams.get('displayName') ?? ''
 
   const [loading, setLoading] = useState(false)
+  // React state 要到下一次 render 才生效；同步 ref 阻止 Enter/双击在同一帧穿透成两次登录请求。
+  const accountSubmitBusyRef = useRef(false)
   const [pendingConfirmOpen, setPendingConfirmOpen] = useState(false)
   const [pendingClaimToken, setPendingClaimToken] = useState('')
   const [pendingClaimBusy, setPendingClaimBusy] = useState(false)
@@ -170,6 +180,8 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
   }
 
   async function onFinish(values: FormValues) {
+    if (accountSubmitBusyRef.current) return
+    accountSubmitBusyRef.current = true
     setLoading(true)
     try {
       const res =
@@ -203,6 +215,7 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
       }
       await refreshCaptchaAfterUse()
     } finally {
+      accountSubmitBusyRef.current = false
       setLoading(false)
     }
   }
@@ -298,7 +311,7 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
     : ''
 
   return (
-    <div className="login-form" data-testid="login-card">
+    <div className={`login-form${presentation === 'brand' ? ' login-form-brand' : ''}`} data-testid="login-card">
       {showBrand ? (
         <>
           <div className="lf-brand">
@@ -352,6 +365,11 @@ export function LoginForm({ showBrand = true, showFooter = true }: { showBrand?:
         <>
           <h2 className="lf-title">{t('login.totpTitle')}</h2>
           <p className="lf-hint-line">{t('login.totpSub')}</p>
+        </>
+      ) : presentation === 'brand' ? (
+        <>
+          <h2 className="lf-title">{t('login.welcome')}</h2>
+          <p className="lf-welcome-sub">{t('login.welcomeSub')}</p>
         </>
       ) : showBrand ? (
         <h2 className="lf-title">{t('login.title')}</h2>

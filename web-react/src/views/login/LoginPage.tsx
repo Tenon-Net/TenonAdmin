@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Tooltip } from 'antd'
+import { Dropdown, Tooltip } from 'antd'
 import { MoonOutlined, SunOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
+import { AppIcon } from '@/components/AppIcon'
 import { useAppStore, isDark } from '@/stores/app'
 import { LOGIN_SKINS, DEFAULT_SKIN } from './skins'
 import './loginshell.css'
@@ -41,25 +42,41 @@ export default function LoginPage() {
   const Skin = active.component
 
   return (
-    <div className="login-shell">
+    <div className={`login-shell${skin === 'light-brand' ? ' login-shell-brand' : ''}`}>
       <Skin />
 
       {/* 右上角工具栏:皮肤切换 + 主题/语言,两枚磨砂药丸并排。 */}
       <div className="login-topbar">
-        <div className="skin-switch" role="tablist" aria-label={t('app.loginStyle')}>
-          {LOGIN_SKINS.map((s) => (
-            <button
-              key={s.id}
-              className={`skin-seg${s.id === skin ? ' active' : ''}`}
-              type="button"
-              role="tab"
-              aria-selected={s.id === skin}
-              onClick={() => pick(s.id)}
-            >
-              {t(s.label)}
+        {skin === 'light-brand' ? (
+          <Dropdown
+            menu={{
+              selectable: true,
+              selectedKeys: [skin],
+              items: LOGIN_SKINS.map((s) => ({ key: s.id, label: t(s.label) })),
+              onClick: ({ key }) => pick(key),
+            }}
+            trigger={['click']}
+          >
+            <button className="tool-btn skin-picker" type="button" aria-label={t('app.loginStyle')} title={t('app.loginStyle')}>
+              <AppIcon icon="ph:palette" size={18} />
             </button>
-          ))}
-        </div>
+          </Dropdown>
+        ) : (
+          <div className="skin-switch" role="tablist" aria-label={t('app.loginStyle')}>
+            {LOGIN_SKINS.map((s) => (
+              <button
+                key={s.id}
+                className={`skin-seg${s.id === skin ? ' active' : ''}`}
+                type="button"
+                role="tab"
+                aria-selected={s.id === skin}
+                onClick={() => pick(s.id)}
+              >
+                {t(s.label)}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="login-tools">
           <Tooltip title={dark ? t('app.light') : t('app.dark')}>

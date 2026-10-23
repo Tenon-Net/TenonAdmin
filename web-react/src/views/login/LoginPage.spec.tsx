@@ -298,6 +298,19 @@ describe('验证码由站点信息运行时驱动', () => {
 })
 
 describe('提交', () => {
+  it('请求未完成时重复提交只发一次登录请求', async () => {
+    let resolveLogin!: (value: typeof SESSION) => void
+    loginMock.mockImplementation(() => new Promise((resolve) => { resolveLogin = resolve }))
+    await mount()
+
+    submit()
+    submit()
+    await waitFor(() => expect(loginMock).toHaveBeenCalledTimes(1))
+
+    resolveLogin(SESSION)
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/', { replace: true }))
+  })
+
   it('成功:落会话 + 跳首页(replace,不留登录页在历史里)', async () => {
     loginMock.mockResolvedValue(SESSION)
     const store = await mount()
@@ -349,7 +362,7 @@ describe('提交', () => {
 })
 
 // ── F1 登录皮肤外壳:皮肤选择阶梯 / 切换持久化 / showBrand·showFooter / SplitPanel i18n / Spotlight 指针 ──
-// 三套皮肤根元素类名互斥(aurora / split / spotlight 各是独立 class token,子元素如 split-panel、
+// 各皮肤根元素类名互斥(aurora / split / light-brand / spotlight 各是独立 class token,子元素如 split-panel、
 // aurora-bg、spot 都是别的 token),据此判定当前渲染的是哪套。皮肤由 LoginPage.initSkin 选中
 // (`?skin=` → localStorage → 默认),故用例在 mount() 前布置 location.search / localStorage。
 describe('登录皮肤外壳(F1)', () => {
@@ -363,13 +376,15 @@ describe('登录皮肤外壳(F1)', () => {
   })
 
   const activeSkin = () =>
-    document.querySelector('.spotlight')
-      ? 'spotlight'
-      : document.querySelector('.split')
-        ? 'split'
-        : document.querySelector('.aurora')
-          ? 'aurora'
-          : null
+    document.querySelector('.light-brand')
+      ? 'light-brand'
+      : document.querySelector('.spotlight')
+        ? 'spotlight'
+        : document.querySelector('.split')
+          ? 'split'
+          : document.querySelector('.aurora')
+            ? 'aurora'
+            : null
 
   describe('皮肤选择阶梯', () => {
     it('默认(无 query、无记忆):渲染默认皮肤 aurora', async () => {
@@ -382,6 +397,16 @@ describe('登录皮肤外壳(F1)', () => {
       await mount()
       expect(activeSkin()).toBe('split')
       expect(localStorage.getItem('login-skin')).toBeNull()
+    })
+
+    it('简约预览:渲染参考稿结构与品牌态表单', async () => {
+      window.history.replaceState(null, '', '/login?skin=light-brand')
+      await mount()
+      expect(activeSkin()).toBe('light-brand')
+      expect(screen.getByText('三行代码，')).toBeTruthy()
+      expect(screen.getByText('业务独立开发')).toBeTruthy()
+      expect(screen.getByText('欢迎回来')).toBeTruthy()
+      expect(screen.getByTestId('login-card').classList.contains('login-form-brand')).toBe(true)
     })
 
     it('?skin= 非法值:回退到默认', async () => {
@@ -443,8 +468,8 @@ describe('登录皮肤外壳(F1)', () => {
     it('卖点与 headline 走 i18n 真串', async () => {
       localStorage.setItem('login-skin', 'split')
       await mount()
-      expect(screen.getByText('RBAC 角色授权')).toBeTruthy()
-      expect(screen.getByText('多机构数据范围')).toBeTruthy()
+      expect(screen.getByText('角色权限')).toBeTruthy()
+      expect(screen.getByText('数据权限')).toBeTruthy()
       expect(screen.getByText('多应用门户')).toBeTruthy()
       // headline 三段(pre/accent/post),accent 段独立 span 染色;整段拼齐才对
       expect(screen.getByText('权限')).toBeTruthy()

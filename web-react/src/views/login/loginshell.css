@@ -71,3 +71,42 @@
 .tool-btn:active {
   transform: scale(var(--motion-press-scale));
 }
+.login-shell-brand {
+  height: auto;
+  min-height: 100svh;
+  overflow: clip;
+}
+.login-shell-brand .login-topbar {
+  position: absolute;
+  top: 28px;
+  right: clamp(24px, 3.4vw, 50px);
+}
+.login-shell-brand .login-tools {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.login-shell-brand .tool-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+}
+.login-shell-brand .tool-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-fill-hover);
+}
+.login-shell-brand .skin-picker {
+  width: 42px;
+  padding-right: 10px;
+  border-right: 1px solid var(--color-border);
+  border-radius: 0;
+}
+@media (max-width: 900px) {
+  .login-shell-brand .login-topbar {
+    top: 24px;
+    right: 20px;
+  }
+}

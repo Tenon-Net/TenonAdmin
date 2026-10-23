@@ -1,242 +1,226 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import AppIcon from '@/components/AppIcon.vue'
 import { useI18n } from 'vue-i18n'
-import { useAppStore } from '@/stores/app'
-import { useSite } from '@/composables/useSite'
-import { mix, rgba } from '@/theme/mix'
+import { NConfigProvider } from 'naive-ui'
+import { loginFormTheme } from '../loginTheme'
+import AppIcon from '@/components/AppIcon.vue'
 import TenonLogo from '@/components/TenonLogo.vue'
+import { useSite } from '@/composables/useSite'
+import { useAppStore } from '@/stores/app'
 import LoginForm from '../LoginForm.vue'
+import lightScene from '@/assets/login/brand-light.webp'
+import darkScene from '@/assets/login/brand-dark.webp'
 
 const { t } = useI18n()
-const app = useAppStore()
 const { site, appVersion } = useSite()
+const app = useAppStore()
 const year = new Date().getFullYear()
-
-// 卖点随语言切换(t 在 computed 内对 locale 响应)。
-const points = computed(() => [t('login.featRbac'), t('login.featScope'), t('login.featPortal')])
-
-const vars = computed(() => ({
-  '--a1': rgba(app.accent, 0.5),
-  '--a2': rgba(mix(app.accent, '#8B5CF6', 0.6), 0.4),
-}))
+const points = computed(() => [
+  { icon: 'ph:shield-check', label: t('login.featRbac') },
+  { icon: 'ph:buildings', label: t('login.featScope') },
+  { icon: 'ph:squares-four', label: t('login.featPortal') },
+])
 </script>
 
 <template>
-  <div class="split" :style="vars">
-    <!-- 左:品牌面板(窄屏隐藏)-->
-    <div class="panel">
-      <div class="panel-aurora motion-decorative" />
-      <div class="panel-inner">
-        <div class="logo">
-          <!-- 站点 logo:后台配了图片地址用 <img>,否则回退内置矢量 logo(与登录卡品牌行一致) -->
-          <img v-if="site.logo" :src="site.logo" :alt="site.title" class="logo-img" />
-          <TenonLogo v-else :size="40" />
-          <span>{{ site.title }}</span>
-        </div>
-        <div class="bar" :style="{ background: app.accent }" />
-        <!-- 标题拆 pre/accent/post 三段以支持 i18n,中间词染 accent 色(整句硬编码中文切不了英文) -->
-        <h1 class="headline">{{ t('login.headlinePre') }}<span :style="{ color: app.accent }">{{ t('login.headlineAccent') }}</span>{{ t('login.headlinePost') }}</h1>
+  <main class="split" :class="{ 'split-dark': app.isDark }">
+    <section class="panel" :aria-label="site.title">
+      <img class="panel-scene" :src="app.isDark ? darkScene : lightScene" alt="" />
+      <div class="brand">
+        <img v-if="site.logo" :src="site.logo" alt="" class="brand-logo" />
+        <TenonLogo v-else :size="38" />
+        <span class="brand-name">{{ site.title }}</span>
+      </div>
+      <div class="panel-copy">
+        <h1 class="headline">
+          <span>{{ t('login.brandHeadlineFirst') }}</span>
+          <span>{{ t('login.brandHeadlineSecond') }}</span>
+        </h1>
         <p class="sub">{{ site.subtitle || t('login.subtitle') }}</p>
         <ul class="points">
-          <li v-for="p in points" :key="p">
-            <AppIcon icon="ph:check-circle-duotone" :size="18" :style="{ color: app.accent }" />{{ p }}
+          <li v-for="point in points" :key="point.icon" class="point">
+            <span class="point-icon"><AppIcon :icon="point.icon" :size="20" /></span>
+            <span>{{ point.label }}</span>
           </li>
         </ul>
       </div>
-    </div>
+      <p class="panel-caption"><span />{{ t('login.brandCaption') }}</p>
+    </section>
 
-    <!-- 右:全高工作区(居中表单 + 版权页脚);主题/语言切换在外壳全局工具药丸 -->
-    <div class="form-wrap">
-      <div class="mid">
-        <div class="form-inner motion-entrance">
-          <p class="greet">{{ t('login.welcome') }}</p>
-          <p class="greet-sub">{{ t('login.welcomeSub') }}</p>
-          <LoginForm :show-logo="false" :show-title="false" :show-footer="false" />
-        </div>
+    <section class="form-wrap" :aria-label="t('login.title')">
+      <div class="form-card">
+        <NConfigProvider :theme-overrides="loginFormTheme">
+          <LoginForm presentation="brand" :show-logo="false" :show-footer="false" />
+        </NConfigProvider>
+        <p class="help-note">{{ t('login.accountHelp') }}</p>
       </div>
-
-      <p class="foot">
-        © {{ year }}
-        <a v-if="site.copyrightUrl" :href="site.copyrightUrl" target="_blank" rel="noopener">{{ site.copyright || site.title }}</a>
-        <template v-else>{{ site.copyright || site.title }}</template>
+      <footer class="foot">
+        <span>© {{ year }}
+          <a v-if="site.copyrightUrl" :href="site.copyrightUrl" target="_blank" rel="noopener">{{ site.copyright || site.title }}</a>
+          <template v-else>{{ site.copyright || site.title }}</template>
+        </span>
         <span v-if="appVersion" class="foot-ver">v{{ appVersion }}</span>
-      </p>
-    </div>
-  </div>
+      </footer>
+    </section>
+  </main>
 </template>
 
 <style scoped>
+/* 参考图 1 的双栏留白；深色借图 2 的石墨材质。度量与表单沿用现有设计系统。 */
 .split {
-  height: 100vh;
+  min-height: 100svh;
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
-  background: var(--color-bg-body);
-}
-/* 左栏 = recessed 品牌面(body 底 + 极光),与右栏 clean container 拉开图/底关系 */
-.panel {
-  position: relative;
-  overflow: hidden;
-  background: var(--color-bg-body);
-  border-right: 1px solid var(--color-border);
-}
-/* 细网格纹理,左上淡出 */
-.panel::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(127, 127, 127, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(127, 127, 127, 0.08) 1px, transparent 1px);
-  background-size: 40px 40px;
-  -webkit-mask-image: radial-gradient(circle at 30% 40%, #000, transparent 72%);
-  mask-image: radial-gradient(circle at 30% 40%, #000, transparent 72%);
-}
-.panel-aurora {
-  position: absolute;
-  inset: -20%;
-  background:
-    radial-gradient(40% 40% at 25% 20%, var(--a1), transparent 68%),
-    radial-gradient(45% 45% at 80% 78%, var(--a2), transparent 70%);
-  filter: blur(45px);
-  opacity: 0.9;
-  animation: panel-move 22s ease-in-out infinite alternate;
-}
-@keyframes panel-move {
-  0% {
-    transform: translate3d(-3%, -2%, 0) scale(1.05);
-  }
-  100% {
-    transform: translate3d(3%, 3%, 0) scale(1.12);
-  }
-}
-.panel-inner {
-  position: relative;
-  z-index: 1;
-  padding: 64px 56px;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  justify-content: center;
-}
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-/* 后台配置的品牌 logo:限高与内置矢量 logo(size=40)齐平,宽度自适应不变形 */
-.logo-img {
-  height: 40px;
-  width: auto;
-  object-fit: contain;
-  display: block;
-}
-.bar {
-  width: 40px;
-  height: 3px;
-  border-radius: 2px;
-  margin: 28px 0 20px;
-}
-.headline {
-  font-size: 42px;
-  line-height: 1.2;
-  font-weight: 800;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-.sub {
-  color: var(--color-text-secondary);
-  margin: 16px 0 28px;
-}
-.points {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.points li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--color-text-secondary);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  background: var(--color-login-canvas);
+  color: var(--color-login-ink);
 }
 
-/* 右栏 = 全高工作区:居中表单 + 页脚(顶栏切换已上移到外壳全局工具) */
-.form-wrap {
+.panel {
   position: relative;
+  min-width: 0;
+  overflow: clip;
+  background: var(--color-login-panel);
+  border-right: 1px solid var(--color-login-line);
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-container);
 }
-.mid {
-  flex: 1;
+.panel-scene {
+  position: absolute;
+  width: 100%;
+  height: 40%;
+  bottom: 0;
+  object-fit: cover;
+  object-position: right bottom;
+  mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 85%, transparent);
+  pointer-events: none;
+}
+.split-dark .panel-scene {
+  height: 100%;
+  object-position: 48% center;
+  opacity: 0.48;
+  mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 80%, transparent);
+}
+.brand {
+  position: relative;
   display: flex;
   align-items: center;
+  gap: var(--space-12);
+  padding: 30px clamp(28px, 4vw, 64px);
+}
+.brand-logo { width: 38px; height: 38px; object-fit: contain; }
+.brand-name { font-size: 20px; font-weight: 650; letter-spacing: -0.5px; overflow-wrap: anywhere; }
+.panel-copy {
+  position: relative;
+  padding: clamp(50px, 9vh, 110px) clamp(32px, 6vw, 88px) 300px;
+}
+.headline {
+  margin: 0;
+  font-size: clamp(32px, 3.25vw, 48px);
+  line-height: 1.32;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.headline span { display: block; }
+.sub { max-width: 390px; margin: 24px 0 32px; font-size: 16px; line-height: 1.8; color: var(--color-login-muted); }
+.points { display: grid; gap: 16px; list-style: none; padding: 0; margin: 0; }
+.point { display: flex; align-items: center; gap: 14px; font-size: 14px; }
+.point-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-login-icon-bg);
+  color: var(--color-login-action);
+}
+.panel-caption {
+  position: absolute;
+  left: clamp(32px, 4vw, 64px);
+  bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-login-muted);
+}
+.panel-caption span { height: 1px; width: 28px; background: var(--color-primary); }
+.form-wrap {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 110px clamp(28px, 4.5vw, 72px) 84px;
+  position: relative;
 }
-.form-inner {
+.form-card {
+  --lf-title: var(--color-login-ink);
+  --lf-link: var(--color-login-action);
+  --lf-hint: var(--color-login-muted);
+  --lf-border: var(--color-login-line);
   width: 100%;
-  max-width: 340px;
-  animation: fade-up var(--motion-duration-panel-enter) var(--motion-ease-standard) both;
+  max-width: 560px;
+  padding: 38px 42px 28px;
+  background: var(--color-login-card);
+  border: 1px solid var(--color-login-line);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-login);
 }
-.greet {
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--color-text-primary);
-  margin: 0 0 6px;
-}
-.greet-sub {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-tertiary);
-  margin: 0 0 26px;
+.help-note {
+  margin: 24px 0 0;
+  color: var(--color-login-muted);
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.8;
 }
 .foot {
-  margin: 0;
-  padding: 18px 24px 22px;
-  text-align: center;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-tertiary);
+  position: absolute;
+  bottom: 28px;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 24px;
+  color: var(--color-login-muted);
+  font-size: 12px;
 }
-.foot a {
-  color: inherit;
-  text-decoration: none;
-}
-.foot a:hover {
-  color: var(--color-primary);
-}
-.foot-ver {
-  margin-left: 8px;
-  opacity: 0.75;
-}
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(var(--motion-distance));
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+.foot a { color: inherit; text-decoration: none; }
+.foot a:hover { color: var(--color-primary); }
+.split-dark :deep(.lf-sso-btn[data-provider="github"] .oauth-brand-badge) { filter: invert(1); }
+.foot-ver { color: var(--color-login-muted); }
+@media (max-width: 1100px) {
+  .panel-copy { padding-left: 40px; padding-right: 32px; }
+  .form-wrap { padding-left: 28px; padding-right: 28px; }
+  .form-card { padding: 36px 28px 28px; }
 }
 @media (max-width: 900px) {
-  .split {
-    grid-template-columns: 1fr;
-  }
-  .panel {
-    display: none;
-  }
+  .split { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .panel { border: 0; background: var(--color-login-canvas); overflow: visible; }
+  .brand { padding: 24px; padding-right: 160px; min-height: 86px; }
+  .brand-name { font-size: 18px; }
+  .panel-copy, .panel-scene, .panel-caption { display: none; }
+  .form-wrap { padding: 38px 24px 28px; justify-content: flex-start; }
+  .foot { position: static; margin-top: auto; padding-top: 40px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .panel-aurora,
-  .form-inner {
-    animation: none;
-  }
+@media (max-width: 480px) {
+  .split { grid-template-rows: auto 1fr; }
+  .brand { padding-left: 20px; gap: 8px; }
+  .brand-name { max-width: 130px; font-size: 16px; }
+  .form-wrap { padding: 38px 20px 24px; }
+  .form-card { padding: 0; border: 0; box-shadow: none; background: transparent; }
+  .help-note { margin-top: 28px; }
+}
+@media (max-height: 800px) and (min-width: 901px) {
+  .panel-copy { padding-top: 30px; padding-bottom: 200px; }
+  .headline { font-size: 36px; }
+  .sub { margin: 20px 0 24px; }
+  .points { gap: 12px; }
+  .form-wrap { padding-top: 76px; padding-bottom: 50px; }
+  .form-card :deep(.n-form-item-feedback-wrapper) { min-height: 12px; }
+  .form-card :deep(.lf-welcome-sub) { margin-bottom: 20px; }
+  .form-card { padding-top: 32px; padding-bottom: 24px; }
 }
 </style>

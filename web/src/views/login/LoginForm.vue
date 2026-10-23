@@ -20,10 +20,16 @@ import { useLoginTotp } from './useLoginTotp'
 import { useLoginSso } from './useLoginSso'
 
 // 皮肤外壳自带品牌栏时(如双栏),不再在卡内重复 logo/标题/页脚(showFooter=false 由外壳自绘版权)。
-withDefaults(defineProps<{ showLogo?: boolean; showTitle?: boolean; showFooter?: boolean }>(), {
+withDefaults(defineProps<{
+  showLogo?: boolean
+  showTitle?: boolean
+  showFooter?: boolean
+  presentation?: 'default' | 'brand'
+}>(), {
   showLogo: true,
   showTitle: true,
   showFooter: true,
+  presentation: 'default',
 })
 
 const router = useRouter()
@@ -174,6 +180,8 @@ async function skipPendingBind() {
 }
 
 async function onSubmit() {
+  // 键盘连续提交与按钮共享忙碌状态，避免重复消耗一次性验证码。
+  if (loading.value) return
   if (mode.value === 'mfa') return onMfaSubmit()
   if (mode.value === 'totp') return onTotpSubmit()
   if (mode.value === 'sms') return onSmsSubmit()
@@ -316,7 +324,7 @@ async function onSmsSubmit() {
 </script>
 
 <template>
-  <div class="login-form">
+  <div class="login-form" :class="{ 'login-form-brand': presentation === 'brand' }">
     <div v-if="showLogo" class="lf-brand">
       <!-- 站点 logo:后台配了图片地址用 <img>,否则回退内置矢量 logo(留空即回退) -->
       <img v-if="site.logo" :src="site.logo" :alt="site.title" class="lf-logo" />
@@ -345,10 +353,10 @@ async function onSmsSubmit() {
           </n-input>
         </n-form-item>
         <div class="row lf-between">
-          <a class="lf-link" @click="backToAccount">{{ t('login.backToPassword') }}</a>
-          <a class="lf-link" :class="{ 'lf-link-disabled': countdown > 0 }" @click="onMfaResend">
+          <button type="button" class="lf-link" @keyup.enter.stop @click="backToAccount">{{ t('login.backToPassword') }}</button>
+          <button type="button" class="lf-link" @keyup.enter.stop :class="{ 'lf-link-disabled': countdown > 0 }" :disabled="countdown > 0" @click="onMfaResend">
             {{ countdown > 0 ? t('login.resendAfter', { s: countdown }) : t('login.sendCode') }}
-          </a>
+          </button>
         </div>
         <button class="hero-btn" type="button" :style="heroStyle" :disabled="loading" @click.prevent="onSubmit">
           {{ loading ? t('common.loading') : t('login.submit') }}
@@ -367,8 +375,8 @@ async function onSmsSubmit() {
           </n-input>
         </n-form-item>
         <div class="row lf-between">
-          <a class="lf-link" @click="backToAccount">{{ t('login.backToPassword') }}</a>
-          <a class="lf-link" @click="goRecovery">{{ t('login.useRecovery') }}</a>
+          <button type="button" class="lf-link" @keyup.enter.stop @click="backToAccount">{{ t('login.backToPassword') }}</button>
+          <button type="button" class="lf-link" @keyup.enter.stop @click="goRecovery">{{ t('login.useRecovery') }}</button>
         </div>
         <button class="hero-btn" type="button" :style="heroStyle" :disabled="loading" @click.prevent="onSubmit">
           {{ loading ? t('common.loading') : t('login.submit') }}
@@ -377,7 +385,8 @@ async function onSmsSubmit() {
     </template>
 
     <template v-else>
-      <h2 v-if="showTitle" class="lf-title">{{ t('login.title') }}</h2>
+      <h2 v-if="showTitle" class="lf-title">{{ t(presentation === 'brand' ? 'login.welcome' : 'login.title') }}</h2>
+      <p v-if="presentation === 'brand'" class="lf-welcome-sub">{{ t('login.welcomeSub') }}</p>
       <n-form :model="mode === 'account' ? model : smsModel" @keyup.enter="onSubmit">
         <template v-if="mode === 'account'">
           <n-form-item :label="t('login.account')" path="account">
@@ -438,9 +447,9 @@ async function onSmsSubmit() {
         <div class="row lf-between">
           <n-checkbox v-if="mode === 'account'" v-model:checked="model.remember">{{ t('login.remember') }}</n-checkbox>
           <span v-else />
-          <a v-if="site.smsLoginEnabled" class="lf-link" @click="mode = mode === 'account' ? 'sms' : 'account'">
+          <button v-if="site.smsLoginEnabled" type="button" class="lf-link" @keyup.enter.stop @click="mode = mode === 'account' ? 'sms' : 'account'">
             {{ mode === 'account' ? t('login.smsLogin') : t('login.accountLogin') }}
-          </a>
+          </button>
         </div>
         <button class="hero-btn" type="button" :style="heroStyle" :disabled="loading" @click.prevent="onSubmit">
           {{ loading ? t('common.loading') : t('login.submit') }}
@@ -455,6 +464,7 @@ async function onSmsSubmit() {
             v-for="p in ssoSplit.visible"
             :key="p.code"
             class="lf-sso-btn"
+            :data-provider="p.code.toLowerCase()"
             :href="sso.href(p.code)"
             :title="p.displayName"
             :aria-label="p.displayName"
@@ -579,8 +589,12 @@ async function onSmsSubmit() {
 }
 /* 模式切换/重发:文字链接,复用主题色 */
 .lf-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-family: inherit;
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--lf-link, var(--color-primary));
   cursor: pointer;
   user-select: none;
 }
@@ -755,5 +769,30 @@ async function onSmsSubmit() {
 }
 .lf-ver {
   opacity: 0.75;
+}
+/* 品牌双栏只改变表单尺度，不改变认证状态与皮肤间的公共结构。 */
+.login-form-brand .lf-title {
+  font-size: 30px;
+  line-height: 1.35;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  margin-bottom: 12px;
+}
+.lf-welcome-sub {
+  margin: 0 0 24px;
+  color: var(--lf-hint, var(--color-text-secondary));
+  font-size: 14px;
+  line-height: 1.7;
+}
+.login-form-brand :deep(.n-form-item-feedback-wrapper) { min-height: 16px; }
+.login-form-brand :deep(.n-form-item-label) { font-weight: 500; }
+.login-form-brand .lf-captcha-img, .login-form-brand .lf-send-btn { height: 46px; }
+.login-form-brand .hero-btn { height: 48px; }
+.login-form-brand .lf-hint-line { margin-top: 0; }
+.login-form-brand .lf-between { gap: 12px; flex-wrap: wrap; }
+.login-form-brand .lf-captcha > :deep(.n-input) { min-width: 0; }
+.hero-btn:focus-visible, .lf-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
 }
 </style>

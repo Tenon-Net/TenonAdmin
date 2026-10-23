@@ -134,3 +134,29 @@
   --shadow-2: 0 10px 30px rgba(0, 0, 0, 0.44);
   --shadow-3: 0 16px 48px rgba(0, 0, 0, 0.52);
 }
+
+/* 登录品牌场景：双栏皮肤的画布、表面与文字。 */
+:root {
+  --color-login-canvas: #f8fafc;
+  --color-login-panel: #f7faff;
+  --color-login-product-panel: #dceaff;
+  --color-login-card: #ffffff;
+  --color-login-ink: #15213b;
+  --color-login-muted: #617087;
+  --color-login-line: #e5eaf2;
+  --color-login-icon-bg: #edf3ff;
+  --color-login-action: var(--color-primary);
+  --shadow-login: 0 20px 70px rgb(31 55 92 / 5%);
+}
+[data-theme="dark"] {
+  --color-login-canvas: #101216;
+  --color-login-panel: #15181e;
+  --color-login-product-panel: #23334e;
+  --color-login-card: #1a1d23;
+  --color-login-ink: #f0f2f7;
+  --color-login-muted: #a4adbc;
+  --color-login-line: #333943;
+  --color-login-icon-bg: #242c3a;
+  --color-login-action: color-mix(in srgb, var(--color-primary), white 24%);
+  --shadow-login: 0 20px 70px rgb(0 0 0 / 16%);
+}

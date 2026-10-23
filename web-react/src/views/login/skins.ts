@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import { AuroraGlass } from './skins/AuroraGlass'
 import { SplitPanel } from './skins/SplitPanel'
 import { Spotlight } from './skins/Spotlight'
+import { LightBrand } from './skins/LightBrand'
 
 /** 登录皮肤注册表(移植 Vue `views/login/skins.ts`)。壳按 id 选择、切换、记忆。 */
 export interface LoginSkin {
@@ -13,6 +14,7 @@ export interface LoginSkin {
 export const LOGIN_SKINS: LoginSkin[] = [
   { id: 'aurora', label: 'login.skinAurora', component: AuroraGlass },
   { id: 'split', label: 'login.skinSplit', component: SplitPanel },
+  { id: 'light-brand', label: 'login.skinLightBrand', component: LightBrand },
   { id: 'spotlight', label: 'login.skinSpotlight', component: Spotlight },
 ]
 

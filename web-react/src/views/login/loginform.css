@@ -28,6 +28,54 @@
   margin: 0 0 22px;
   color: var(--lf-title, var(--color-text-primary));
 }
+.login-form-brand .lf-title {
+  margin-bottom: 8px;
+  text-align: center;
+  font-size: 36px;
+  line-height: 1.35;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+.lf-welcome-sub {
+  margin: 0 0 30px;
+  text-align: center;
+  color: var(--lf-hint, var(--color-text-secondary));
+  font-size: 16px;
+  line-height: 1.7;
+}
+.login-form-brand .ant-input,
+.login-form-brand .ant-input-affix-wrapper,
+.login-form-brand .ant-btn-lg {
+  min-height: 58px;
+}
+.login-form-brand .ant-input-affix-wrapper > .ant-input {
+  min-height: auto;
+}
+.login-form-brand .ant-btn-lg {
+  font-size: 18px;
+}
+.login-form-brand .ant-form-item {
+  margin-bottom: 18px;
+}
+.login-form-brand .ant-form-item-label > label {
+  color: var(--lf-title, var(--color-text-primary));
+  font-weight: 500;
+}
+.login-form-brand .lf-between {
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 30px;
+}
+.login-form-brand .lf-captcha-img,
+.login-form-brand .lf-send-btn {
+  height: 58px;
+}
+.login-form-brand .lf-sso-btn {
+  width: 72px;
+  height: 52px;
+  border: 1px solid var(--lf-border, var(--color-border));
+  border-radius: var(--radius-md);
+}
 /* 二次验证副标题(紧贴标题下方的弱化提示行) */
 .lf-hint-line {
   margin: -14px 0 18px;
