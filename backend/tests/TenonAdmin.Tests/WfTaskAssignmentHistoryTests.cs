@@ -209,6 +209,22 @@ public class WfTaskAssignmentHistoryTests
         Assert.False(history.IsAutomatic);
 
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        foreach (var payloadVersion in new[] { 0, 1 })
+        {
+            await db.Updateable<WfHistory>()
+                .SetColumns(item => new WfHistory
+                {
+                    PayloadJson = "{",
+                    PayloadVersion = payloadVersion,
+                })
+                .Where(item => item.InstanceId == instanceId
+                               && item.EventType == WfHistoryEventType.TaskCompleted)
+                .ExecuteCommandAsync();
+            var malformedPayloadDetail = await scope.ServiceProvider.GetRequiredService<IWfInstanceService>()
+                .GetAsync(instanceId, starterId);
+            Assert.False(Assert.Single(malformedPayloadDetail.HisTasks).IsAutomatic);
+        }
+
         await db.Updateable<WfHisTask>()
             .SetColumns(item => new WfHisTask { TokenId = null })
             .Where(item => item.Id == history.Id)
