@@ -63,7 +63,7 @@ export default defineConfig({
     // 联网机上 TLS 超时拖慢整套件、离线 CI 里则是网络失败噪声。这里从根上关掉外部资源加载(一处堵住所有测试),
     // 并把「已禁用的加载」当成功返回,消掉 teardown 期的 AbortError/NetworkError 噪声。
     // 注:tokens.css 是 Vite `css:true` 内联进 <style> 的,不是外部 link,不受影响(主题桥 spec 照常读得到)。
-    // (应用运行时同样会拉 unpkg —— 那是**产品级**自包含缺口,两模板都有,单列 backlog,不在此处解决。)
+    // 应用入口已通过 Markdown 组件的 no* 配置及 setupMarkdown 禁用外部扩展；测试环境仍保留禁网保护。
     // 同理 iframe(disableIframePageLoading):iframe 视图(router/buildRoutes 的 IframeView)测试里
     // <iframe src=外链>(buildRoutes.spec 的 https://ex.com/r)会被 happy-dom 真去 fetch 那个 URL —— 触网。
     // 关掉它从根上掐断这次请求(src 属性仍在,断言不受影响)。注:handleDisabledFileLoadingAsSuccess 只管

@@ -2,15 +2,12 @@ import { computed, h, ref } from 'vue'
 import type { DropdownOption } from 'naive-ui'
 import { externalAuthApi } from '@/api'
 import BrandIcon from '@/components/oauth/BrandIcon.vue'
-import { PREVIEW_ALL_SSO_BRANDS, previewAllBrandProviders, splitLoginProviders } from '@/utils/oauthBrand'
+import { splitLoginProviders } from '@/utils/oauthBrand'
 
 /** SSO provider 加载与展示策略；登录协调器只处理登录完成后的绑定/导航。 */
 export function useLoginSso() {
   const providers = ref<{ code: string; displayName: string; icon?: string | null }[]>([])
-  const displayList = computed(() => PREVIEW_ALL_SSO_BRANDS ? previewAllBrandProviders() : providers.value)
-  const split = computed(() => PREVIEW_ALL_SSO_BRANDS
-    ? { visible: displayList.value, overflow: [] as typeof displayList.value }
-    : splitLoginProviders(displayList.value))
+  const split = computed(() => splitLoginProviders(providers.value))
   const overflowOptions = computed<DropdownOption[]>(() => split.value.overflow.map((provider) => ({
     key: provider.code,
     label: () => h('span', {
@@ -35,5 +32,5 @@ export function useLoginSso() {
     window.location.href = href(String(key))
   }
 
-  return { providers, displayList, split, overflowOptions, load, href, selectOverflow }
+  return { providers, split, overflowOptions, load, href, selectOverflow }
 }

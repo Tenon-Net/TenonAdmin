@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import '@/locales'
 import { dashboardApi } from '@/api'
 import type { DashboardSummary } from '@/types/api'
@@ -9,6 +10,7 @@ const { chartOptions } = vi.hoisted(() => ({ chartOptions: [] as any[] }))
 vi.mock('@/components/Chart', () => ({ Chart: (p: { option: unknown }) => { chartOptions.push(p.option); return <div data-testid="chart" /> } }))
 
 import Workbench from './workbench'
+import LegacyDashboard from './index'
 
 const SUMMARY: DashboardSummary = {
   roles: 3, users: 12, perms: 40, onlineSessions: 5,
@@ -22,6 +24,12 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 describe('Workbench', () => {
+  it('旧 dashboard/index 菜单仍显示真实工作台', async () => {
+    render(<MemoryRouter><LegacyDashboard /></MemoryRouter>)
+    expect(await screen.findByText('角色总数')).toBeTruthy()
+    await waitFor(() => expect(screen.getByText('12')).toBeTruthy())
+  })
+
   it('4 统计卡按 summary 字段映射(不串字段)', async () => {
     render(<Workbench />)
     await waitFor(() => expect(screen.getByText('3')).toBeTruthy()) // roles

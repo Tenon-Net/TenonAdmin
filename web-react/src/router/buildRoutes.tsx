@@ -65,6 +65,8 @@ export function viewKeysFrom(glob: ViewGlob): string[] {
     .map((k) => k.replace(/^\/src\/views\//, '').replace(/\.tsx$/, ''))
     .filter((k) => !k.endsWith('/detail'))
     .filter((k) => !k.split('/').includes('components'))
+    // 历史别名继续可路由，但不再作为新菜单的候选组件。
+    .filter((k) => k !== 'dashboard/index')
     .filter((k) => !NON_PAGE_PREFIXES.some((p) => k.startsWith(p)))
     .sort()
 }
