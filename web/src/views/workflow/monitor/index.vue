@@ -13,9 +13,9 @@ import { wfInstanceApi } from '@/api/workflow'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/error'
 import { defaultMonitorNodeId, monitorNodeOptions } from './nodes'
-import type { WfInstanceListItem, WfInstanceStatus } from '@/types/workflow'
+import type { WfInstanceListItem } from '@/types/workflow'
 import { normalizeWfId, wfInstanceDetailPath, type WfId } from '@/workflow/id'
-import { runtimeStatusKey } from '@/workflow/runtimeStatus'
+import { displayedInstanceStatusKey, displayedInstanceStatusTagType } from '@/workflow/statusLabels'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -128,32 +128,11 @@ function openDetail(r: WfInstanceListItem) {
   void router.push(path)
 }
 
-function normalizeStatus(s: WfInstanceStatus | undefined): string {
-  if (s == null) return 'unknown'
-  const map: Record<number, string> = {
-    1: 'running',
-    2: 'approved',
-    3: 'rejected',
-    4: 'cancelled',
-    5: 'terminated',
-  }
-  return map[s] ?? 'unknown'
-}
-
 function statusLabel(row: WfInstanceListItem | undefined): string {
-  const key = row ? runtimeStatusKey(row) ?? normalizeStatus(row.status) : 'unknown'
-  return t(`workflow.status.${key}`)
+  return t(`workflow.status.${displayedInstanceStatusKey(row)}`)
 }
 
-function statusType(row: WfInstanceListItem | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
-  if (row && runtimeStatusKey(row)) return 'warning'
-  const key = normalizeStatus(row?.status)
-  if (key === 'approved') return 'success'
-  if (key === 'rejected' || key === 'terminated') return 'error'
-  if (key === 'cancelled') return 'warning'
-  if (key === 'running') return 'info'
-  return 'default'
-}
+const statusType = displayedInstanceStatusTagType
 
 const columns: ProTableColumn<WfInstanceListItem>[] = [
   { key: 'definitionName', title: () => t('workflow.monitor.definition'), minWidth: 160, ellipsis: { tooltip: true } },

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter, useRoutes } from 'react-router-dom'
-import { buildRoutes, viewKeysFrom, type ViewGlob } from './buildRoutes'
+import { buildRoutes, viewComponentPaths, viewKeysFrom, type ViewGlob } from './buildRoutes'
 import { MenuType, type MenuNode } from '@/types/menu'
 
 vi.mock('@/views/embed/iframe', () => ({
@@ -100,9 +100,15 @@ describe('真实 glob(不注入)——堵住"假 glob 掩盖真 glob 失效"的�
 })
 
 describe('viewKeysFrom(菜单管理的组件下拉真相源)', () => {
+  it('真实菜单候选不暴露页面内部组件', () => {
+    expect(viewComponentPaths).toContain('workflow/definition/designer')
+    expect(viewComponentPaths.some((path) => path.includes('/components/'))).toBe(false)
+  })
+
   it('glob 键 → component 值(剥前缀后缀),排除非页面目录,排序', () => {
     const withInternals: ViewGlob = {
       ...glob,
+      '/src/views/workflow/instance/components/WfTaskActionModal.tsx': async () => ({ default: () => null }),
       '/src/views/oauth/CallbackPage.tsx': async () => ({ default: () => null }),
       '/src/views/error/NotFoundPage.tsx': async () => ({ default: () => null }),
       '/src/views/embed/iframe.tsx': async () => ({ default: () => null }),

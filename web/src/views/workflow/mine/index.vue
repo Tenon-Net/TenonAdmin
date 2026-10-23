@@ -10,8 +10,8 @@ import { useI18n } from 'vue-i18n'
 import { ProTable, type ProTableColumn, type ProTableInst } from 'tenon-naive-pro-table'
 import { wfInstanceApi } from '@/api/workflow'
 import { translateError } from '@/utils/error'
-import type { WfInstanceListItem, WfInstanceStatus } from '@/types/workflow'
-import { runtimeStatusKey } from '@/workflow/runtimeStatus'
+import type { WfInstanceListItem } from '@/types/workflow'
+import { displayedInstanceStatusKey, displayedInstanceStatusTagType } from '@/workflow/statusLabels'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -36,33 +36,11 @@ onActivated(() => {
   void tableRef.value?.refresh()
 })
 
-/** 与 detail.vue 同一套实例状态数字表,不另起体系。 */
-function normalizeStatus(s: WfInstanceStatus | undefined): string {
-  if (s == null) return 'unknown'
-  const map: Record<number, string> = {
-    1: 'running',
-    2: 'approved',
-    3: 'rejected',
-    4: 'cancelled',
-    5: 'terminated',
-  }
-  return map[s] ?? 'unknown'
-}
-
 function statusLabel(row: WfInstanceListItem | undefined): string {
-  const key = row ? runtimeStatusKey(row) ?? normalizeStatus(row.status) : 'unknown'
-  return t(`workflow.status.${key}`)
+  return t(`workflow.status.${displayedInstanceStatusKey(row)}`)
 }
 
-function statusType(row: WfInstanceListItem | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
-  if (row && runtimeStatusKey(row)) return 'warning'
-  const key = normalizeStatus(row?.status)
-  if (key === 'approved') return 'success'
-  if (key === 'rejected' || key === 'terminated') return 'error'
-  if (key === 'cancelled') return 'warning'
-  if (key === 'running') return 'info'
-  return 'default'
-}
+const statusType = displayedInstanceStatusTagType
 
 const columns: ProTableColumn<WfInstanceListItem>[] = [
   { key: 'definitionName', title: () => t('workflow.mine.definition'), minWidth: 160, ellipsis: { tooltip: true } },

@@ -43,7 +43,13 @@ import type {
 import type { WfButtonLabels, WfFormFieldPerm, WfFormSchema } from '@/workflow/schema'
 import { projectWfRuntimeModel } from '@/workflow/formSchema'
 import { findNode } from '@/workflow/model'
-import { runtimeStatusKey } from '@/workflow/runtimeStatus'
+import {
+  displayedInstanceStatusKey,
+  displayedInstanceStatusTagType,
+  formatWorkflowDateTime,
+  taskActionKey,
+  taskActionTagType,
+} from '@/workflow/statusLabels'
 import { canResubmitInstance } from '@/workflow/resubmit'
 import { mergeWfFormPermissions, observerHiddenFields } from '@/workflow/formRuntime'
 import { normalizeWfId, wfIdEquals, type WfId } from '@/workflow/id'
@@ -344,64 +350,17 @@ const returnTargetLabel = computed(() => {
 const canRetryLoad = computed(() => uid.value != null)
 
 function statusLabel(row: { status?: WfInstanceStatus; returnedToStarter?: boolean; blockedNodeIds?: string[]; hasPendingTask?: boolean } | undefined): string {
-  const key = row ? runtimeStatusKey(row) ?? normalizeStatus(row.status) : 'unknown'
-  return t(`workflow.status.${key}`)
+  return t(`workflow.status.${displayedInstanceStatusKey(row)}`)
 }
 
-function statusType(row: { status?: WfInstanceStatus; returnedToStarter?: boolean; blockedNodeIds?: string[]; hasPendingTask?: boolean } | undefined): 'default' | 'info' | 'success' | 'error' | 'warning' {
-  if (row && runtimeStatusKey(row)) return 'warning'
-  const key = normalizeStatus(row?.status)
-  if (key === 'approved') return 'success'
-  if (key === 'rejected' || key === 'terminated') return 'error'
-  if (key === 'cancelled') return 'warning'
-  if (key === 'running') return 'info'
-  return 'default'
-}
-
-function normalizeStatus(s: WfInstanceStatus | undefined): string {
-  if (s == null) return 'unknown'
-  const map: Record<number, string> = {
-    1: 'running',
-    2: 'approved',
-    3: 'rejected',
-    4: 'cancelled',
-    5: 'terminated',
-  }
-  return map[s] ?? 'unknown'
-}
+const statusType = displayedInstanceStatusTagType
 
 function actionLabel(a: WfTaskAction | undefined): string {
-  if (a == null) return t('workflow.action.unknown')
-  const map: Record<number, string> = {
-    1: 'approve',
-    2: 'reject',
-    3: 'transfer',
-    4: 'return',
-    5: 'withdraw',
-    6: 'delegate',
-    8: 'addSign',
-    9: 'removeSign',
-    10: 'takeBack',
-    11: 'nobody',
-    12: 'adminTransfer',
-    13: 'adminSkip',
-    14: 'adminTerminate',
-  }
-  const key = map[a] ?? 'unknown'
-  return t(`workflow.action.${key}`, String(a))
+  return t(`workflow.action.${taskActionKey(a)}`, String(a ?? ''))
 }
 
-function actionTagType(a: WfTaskAction | undefined): 'default' | 'success' | 'error' | 'warning' | 'info' {
-  if (a === 1) return 'success'
-  if (a === 2) return 'error'
-  if (a === 3) return 'warning'
-  return 'info'
-}
-
-function formatTime(v?: string | null) {
-  if (!v) return '—'
-  return v.replace('T', ' ').slice(0, 19)
-}
+const actionTagType = taskActionTagType
+const formatTime = formatWorkflowDateTime
 
 function parallelForkStatusLabel(status: WfParallelFork['status']): string {
   const key: Record<number, string> = { 1: 'waiting', 2: 'joined', 3: 'cancelled' }

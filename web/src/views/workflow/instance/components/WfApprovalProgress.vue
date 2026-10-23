@@ -3,17 +3,13 @@ import { NEmpty, NTag } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import type { WfHisTask, WfTaskParticipant } from '@/types/workflow'
 import { ACTOR_STATUS, countersignProgress, participantHistory, type ApprovalRound } from '@/workflow/approvalProgress'
+import { approvalProgressActionTagType, formatWorkflowDateTime, taskActionKey } from '@/workflow/statusLabels'
 
 const props = defineProps<{
   rounds: ApprovalRound[]
 }>()
 
 const { t } = useI18n()
-
-function formatTime(value?: string | null) {
-  if (!value) return '—'
-  return value.replace('T', ' ').slice(0, 19)
-}
 
 function personName(id?: number | string | null, name?: string | null) {
   const displayName = name?.trim()
@@ -75,19 +71,11 @@ function actorStatusType(status: WfTaskParticipant['status'], current: boolean):
 }
 
 function actionLabel(action: WfHisTask['action']) {
-  const key: Record<number, string> = {
-    1: 'approve', 2: 'reject', 3: 'transfer', 4: 'return', 5: 'withdraw',
-    6: 'delegate', 8: 'addSign', 9: 'removeSign', 10: 'takeBack',
-  }
-  return t(`workflow.action.${key[Number(action)] ?? 'unknown'}`)
+  return t(`workflow.action.${taskActionKey(action)}`)
 }
 
-function actionType(action: WfHisTask['action']): 'default' | 'success' | 'error' | 'warning' | 'info' {
-  if (Number(action) === 1) return 'success'
-  if (Number(action) === 2) return 'error'
-  if ([3, 4, 10].includes(Number(action))) return 'warning'
-  return 'info'
-}
+const actionType = approvalProgressActionTagType
+const formatTime = formatWorkflowDateTime
 
 function participantAction(round: ApprovalRound, person: WfTaskParticipant) {
   const status = Number(person.status)
